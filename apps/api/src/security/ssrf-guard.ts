@@ -12,7 +12,11 @@ const BLOCKED_IPV4_CIDRS = [
     '192.168.0.0/16',
     '127.0.0.0/8',
     '169.254.0.0/16',
-    '0.0.0.0/8'
+    '0.0.0.0/8',
+    '100.64.0.0/10',   // CGNAT (RFC6598) — 이 배포의 Tailscale 테일넷 대역 포함
+    '192.0.0.0/24',    // IETF protocol assignments (RFC6890)
+    '198.18.0.0/15',   // 벤치마킹 (RFC2544)
+    '224.0.0.0/3'      // 멀티캐스트(224/4) + 예약(240/4)
 ];
 
 const REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308]);
@@ -48,14 +52,85 @@ function isInIPv4CIDR(ipNum: number, cidr: string): boolean {
     return (ipNum & mask) === (base & mask);
 }
 
-function extractIPv4FromMappedIPv6(address: string): string | null {
-    const lowerAddress = address.toLowerCase();
-    if (!lowerAddress.startsWith('::ffff:')) {
+/**
+ * IPv6 주소를 16바이트 배열로 전개한다 (:: 압축·IPv4 점표기 tail 지원).
+ * 유효하지 않으면 null. 호출 전 isIP()===6 으로 검증된 주소를 가정하되 방어적으로 파싱.
+ */
+function ipv6ToBytes(address: string): number[] | null {
+    const addr = address.toLowerCase().split('%')[0];
+    const halves = addr.split('::');
+    if (halves.length > 2) {
         return null;
     }
 
-    const ipv4Part = lowerAddress.slice('::ffff:'.length);
-    return isIP(ipv4Part) === 4 ? ipv4Part : null;
+    const parseGroups = (segment: string): number[] | null => {
+        if (!segment) {
+            return [];
+        }
+        const bytes: number[] = [];
+        const groups = segment.split(':');
+        for (let i = 0; i < groups.length; i += 1) {
+            const group = groups[i];
+            if (group.includes('.')) {
+                // 마지막 그룹만 IPv4 점표기 허용 (예: ::ffff:127.0.0.1)
+                if (i !== groups.length - 1 || isIP(group) !== 4) {
+                    return null;
+                }
+                for (const octet of group.split('.')) {
+                    bytes.push(Number(octet));
+                }
+            } else {
+                if (!/^[0-9a-f]{1,4}$/.test(group)) {
+                    return null;
+                }
+                const value = Number.parseInt(group, 16);
+                bytes.push((value >> 8) & 0xff, value & 0xff);
+            }
+        }
+        return bytes;
+    };
+
+    if (halves.length === 2) {
+        const head = parseGroups(halves[0]);
+        const tail = parseGroups(halves[1]);
+        if (head === null || tail === null) {
+            return null;
+        }
+        const missing = 16 - head.length - tail.length;
+        if (missing < 0) {
+            return null;
+        }
+        return [...head, ...new Array(missing).fill(0), ...tail];
+    }
+
+    const all = parseGroups(addr);
+    return all && all.length === 16 ? all : null;
+}
+
+/**
+ * IPv4-mapped(::ffff:0:0/96) 또는 IPv4-compatible(::/96) IPv6 에서 내장 IPv4 를 추출.
+ * 점표기(::ffff:127.0.0.1)와 URL 파서가 정규화하는 hex 압축형(::ffff:7f00:1) 을 모두 처리한다.
+ */
+function extractIPv4FromMappedIPv6(address: string): string | null {
+    if (isIP(address) !== 6) {
+        return null;
+    }
+    const bytes = ipv6ToBytes(address);
+    if (!bytes) {
+        return null;
+    }
+
+    const first10Zero = bytes.slice(0, 10).every(b => b === 0);
+    if (!first10Zero) {
+        return null;
+    }
+    const isMapped = bytes[10] === 0xff && bytes[11] === 0xff;
+    const isCompat = bytes[10] === 0 && bytes[11] === 0;
+    if (!isMapped && !isCompat) {
+        return null;
+    }
+
+    return `${bytes[12]}.${bytes[13]}.${bytes[14]}.${bytes[15]}`;
 }
 
 function isBlockedIPv4(address: string): boolean {

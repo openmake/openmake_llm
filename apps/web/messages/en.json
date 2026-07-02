@@ -385,6 +385,7 @@
   "chatSocket": {
     "error": "Error: {message}",
     "unknownError": "Unknown error",
+    "disconnected": "_(Disconnected from the server. Reconnecting — please try sending again shortly.)_",
     "taskIdMissing": "No taskId in the task creation response",
     "agentTaskStartFailed": "Failed to start the agent task: {message}",
     "structuredAborted": "_(Structured answer generation was stopped.)_",

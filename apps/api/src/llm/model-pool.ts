@@ -104,6 +104,13 @@ export function truncateMessagesPreservingSystem(
         kept.push(rest[rest.length - 1]);
     }
 
+    // tool 메시지는 반드시 직전 assistant(tool_calls) 와 페어여야 한다(OpenAI 호환 규칙).
+    // budget 절단 경계가 페어 중간에 걸려 kept 가 고아 tool 로 시작하면 provider 가 400 을
+    // 반환하므로, 선행 assistant 없이 선두에 남은 tool 메시지를 제거한다.
+    while (kept.length > 0 && kept[0].role === 'tool') {
+        kept.shift();
+    }
+
     return systemMsg ? [systemMsg, ...kept] : kept;
 }
 

@@ -385,6 +385,7 @@
   "chatSocket": {
     "error": "エラー: {message}",
     "unknownError": "不明なエラー",
+    "disconnected": "_(サーバーとの接続が切れました。再接続中です。しばらくして再送信してください。)_",
     "taskIdMissing": "タスク作成レスポンスに taskId がありません",
     "agentTaskStartFailed": "エージェントタスクを開始できませんでした: {message}",
     "structuredAborted": "_(構造化回答の生成を中止しました。)_",

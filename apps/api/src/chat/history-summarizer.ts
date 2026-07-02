@@ -141,10 +141,13 @@ export async function summarizeHistory(
             };
         }
 
-        // 요약문을 system 메시지로 삽입 + 최근 메시지 유지
+        // 요약문을 user 메시지로 삽입 + 최근 메시지 유지.
+        // system 으로 넣으면 소비자(options-and-history)가 앞에 붙이는 실제 system 프롬프트와
+        // 합쳐져 '중간 system 메시지'가 되어 vLLM/qwen 템플릿이 400("System message must be at
+        // the beginning")을 낸다. 요약은 대화 맥락이므로 user 발화로 전달해도 의미가 보존된다.
         const summarizedMessages: HistoryMessage[] = [
             {
-                role: 'system',
+                role: 'user',
                 content: `[Previous conversation summary]\n${summary}`,
             },
             ...recentMessages,

@@ -301,7 +301,11 @@ export function authorizeViewer(opts: {
     providedToken: string;
 }): boolean {
     if (opts.visibility === 'link') {
-        return !!opts.shareToken && !!opts.providedToken && opts.providedToken === opts.shareToken;
+        if (!opts.shareToken || !opts.providedToken) return false;
+        // 상수시간 비교 — 인접 HMAC 경로(verifyAccessToken)와 대칭. 타이밍 사이드채널 차단.
+        const a = Buffer.from(opts.providedToken);
+        const b = Buffer.from(opts.shareToken);
+        return a.length === b.length && timingSafeEqual(a, b);
     }
     // authenticated / private → 앱이 발급한 서명 접근토큰
     return verifyAccessToken(opts.pubId, opts.providedToken);

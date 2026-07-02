@@ -30,22 +30,42 @@ const logger = createLogger('ConversationSessions');
 const MAX_SESSIONS = getConfig().maxConversationSessions;
 
 /**
- * 세션 수 제한 적용 (MAX_SESSIONS 초과 시 가장 오래된 세션 삭제)
+ * 세션 수 제한 적용 (소유자별 MAX_SESSIONS 초과 시 그 소유자의 가장 오래된 세션 삭제).
+ *
+ * 캡은 반드시 소유자(user_id 또는 anon_session_id)로 스코프한다. 전역으로 적용하면
+ * 한 사용자/게스트가 총량을 밀어올려 다른 사용자의 오래된 세션(+CASCADE 메시지)을
+ * 축출할 수 있다. 소유자 미상 세션은 캡을 적용하지 않는다.
  */
-async function enforceMaxSessions(): Promise<void> {
+async function enforceMaxSessions(userId?: string, anonSessionId?: string): Promise<void> {
+    // ownerClause 의 컬럼명은 하드코딩(파라미터화 값만 바인딩) — 인젝션 없음
+    let ownerClause: string;
+    let ownerParam: string;
+    if (userId) {
+        ownerClause = 'user_id = $1';
+        ownerParam = userId;
+    } else if (anonSessionId) {
+        ownerClause = 'anon_session_id = $1';
+        ownerParam = anonSessionId;
+    } else {
+        return;
+    }
+
     const pool = getPool();
-    const countResult = await pool.query('SELECT COUNT(*) as cnt FROM conversation_sessions');
+    const countResult = await pool.query(
+        `SELECT COUNT(*) as cnt FROM conversation_sessions WHERE ${ownerClause}`,
+        [ownerParam]
+    );
     const cnt = parseInt(countResult.rows[0].cnt, 10);
     if (cnt <= MAX_SESSIONS) return;
 
     const excess = cnt - MAX_SESSIONS;
     await pool.query(`
         DELETE FROM conversation_sessions WHERE id IN (
-            SELECT id FROM conversation_sessions ORDER BY updated_at ASC LIMIT $1
+            SELECT id FROM conversation_sessions WHERE ${ownerClause} ORDER BY updated_at ASC LIMIT $2
         )
-    `, [excess]);
+    `, [ownerParam, excess]);
 
-    logger.info(`[ConversationSessions] Cleaned ${excess} sessions (limit: ${MAX_SESSIONS})`);
+    logger.info(`[ConversationSessions] Cleaned ${excess} sessions (owner-scoped, limit: ${MAX_SESSIONS})`);
 }
 
 /**
@@ -75,7 +95,7 @@ export async function createSession(
         metadata ? JSON.stringify(metadata) : null
     ]), { operation: 'createSession' });
 
-    await enforceMaxSessions();
+    await enforceMaxSessions(userId, anonSessionId);
 
     return {
         id,

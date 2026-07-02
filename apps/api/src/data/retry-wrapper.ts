@@ -165,7 +165,14 @@ export async function withTransaction<T>(
         await client.query('COMMIT');
         return result;
     } catch (err) {
-        await client.query('ROLLBACK');
+        // ROLLBACK 자체가 실패(연결 사망 등)해도 원본 에러를 가리지 않도록 격리한다.
+        try {
+            await client.query('ROLLBACK');
+        } catch (rollbackErr) {
+            logger.warn(
+                `[Transaction] ROLLBACK 실패 — 원본 에러 유지: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`,
+            );
+        }
         throw err;
     } finally {
         client.release();

@@ -111,9 +111,12 @@ export async function addMessage(
 
     const now = new Date().toISOString();
 
-    // INSERT + 세션 updated_at 갱신을 단일 트랜잭션으로 처리 (원자성 보장)
-    const result = await withTransaction(pool, async (client) => {
-        const insertResult = await withRetry(() => client.query(`
+    // INSERT + 세션 updated_at 갱신을 단일 트랜잭션으로 처리 (원자성 보장).
+    // 재시도는 트랜잭션 '전체'를 감싼다 — 트랜잭션 내부의 단일 statement 만 재시도하면
+    // deadlock/serialization(40001/40P01) 시 트랜잭션이 이미 abort 되어 재시도가 25P02
+    // ("current transaction is aborted")로 오보고된다. 새 BEGIN 부터 다시 시도해야 한다.
+    const result = await withRetry(() => withTransaction(pool, async (client) => {
+        const insertResult = await client.query(`
             INSERT INTO conversation_messages (session_id, role, content, model, thinking, tokens, response_time_ms, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
@@ -126,7 +129,7 @@ export async function addMessage(
             options?.tokensUsed || null,
             options?.responseTime || null,
             now
-        ]), { operation: 'addMessage' });
+        ]);
 
         await client.query(
             'UPDATE conversation_sessions SET updated_at = $1 WHERE id = $2',
@@ -134,7 +137,7 @@ export async function addMessage(
         );
 
         return insertResult;
-    });
+    }), { operation: 'addMessage' });
 
     return {
         id: String((result.rows[0] as { id: number }).id),

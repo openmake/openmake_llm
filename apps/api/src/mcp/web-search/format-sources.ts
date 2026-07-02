@@ -46,15 +46,19 @@ export function formatSearchSources(results: SourceLike[], opts: FormatSourcesOp
     const limited = maxResults > 0 ? results.slice(0, maxResults) : results;
     const lines = limited.map((r, i) => {
         let snip = r.snippet || '';
-        if (maxSnippetChars > 0 && snip.length > maxSnippetChars) {
-            snip = snip.slice(0, maxSnippetChars) + snippetSuffix;
+        // code point 기준 컷 — UTF-16 code unit slice 는 이모지(surrogate pair) 중간을
+        // 잘라 lone surrogate/replacement char 를 남긴다. [...str] 는 code point 이터레이터.
+        if (maxSnippetChars > 0 && [...snip].length > maxSnippetChars) {
+            snip = [...snip].slice(0, maxSnippetChars).join('') + snippetSuffix;
         } else if (snip && snippetSuffix) {
             snip = snip + snippetSuffix;
         }
         const tag = labeled ? `[${sourceWord} ${i + 1}]` : `[${i + 1}]`;
         const urlLine = labeled ? `   URL: ${r.url}` : `   ${r.url}`;
+        // 라벨형이라도 내용이 비면 빈 "내용: " 라벨을 출력하지 않는다(누수 방지).
+        const contentText = snip || emptySnippet;
         const contentLine = labeled
-            ? `\n   ${contentWord}: ${snip || emptySnippet}`
+            ? (contentText ? `\n   ${contentWord}: ${contentText}` : '')
             : (snip ? `\n   ${snip}` : '');
         return `${tag} ${r.title}\n${urlLine}${contentLine}`;
     });

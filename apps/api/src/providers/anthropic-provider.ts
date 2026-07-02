@@ -322,7 +322,10 @@ export class AnthropicProvider implements IProvider {
                 ...(buildThinkingParam() ? { thinking: buildThinkingParam() } : {}),
             };
 
-            const stream = this.client.messages.stream(requestParams as never);
+            const stream = this.client.messages.stream(
+                requestParams as never,
+                opts.abortSignal ? { signal: opts.abortSignal } : undefined,
+            );
 
             let content = '';
             let thinking = '';

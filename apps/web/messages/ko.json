@@ -385,6 +385,7 @@
   "chatSocket": {
     "error": "오류: {message}",
     "unknownError": "알 수 없는 오류",
+    "disconnected": "_(서버와 연결이 끊겼습니다. 재연결 중이니 잠시 후 다시 전송해 주세요.)_",
     "taskIdMissing": "작업 생성 응답에 taskId 가 없습니다",
     "agentTaskStartFailed": "에이전트 작업을 시작하지 못했습니다: {message}",
     "structuredAborted": "_(구조화 답변 생성을 중단했습니다.)_",

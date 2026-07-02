@@ -206,14 +206,12 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
                      return null;
                  }
              } catch (blacklistError) {
-                 // BLACKLIST_FAIL_MODE로 DB 장애 시 정책 선택 (additive: default 'open' = 기존 동작)
-                 const failMode = getConfig().blacklistFailMode;
-                 logger.warn('블랙리스트 DB 접근 실패 (access)',
-                     { jti: preCheck.jti, failMode, error: blacklistError instanceof Error ? blacklistError.message : String(blacklistError) });
-                 if (failMode === 'safe') {
-                     return null;
-                 }
-                 // open: 기존 동작 유지 — 토큰 통과
+                 // access 토큰은 폐기 즉시성 우선 — 블랙리스트 DB 장애 시 항상 fail-safe(거부).
+                 // access 는 단명(15분)이고 refresh 로 재발급해 복구 가능하므로 가용성 영향이
+                 // 제한적이다. (BLACKLIST_FAIL_MODE 는 refresh 경로에만 적용 — 로그인 가용성 보존)
+                 logger.warn('블랙리스트 DB 접근 실패 (access) — fail-safe 거부',
+                     { jti: preCheck.jti, error: blacklistError instanceof Error ? blacklistError.message : String(blacklistError) });
+                 return null;
              }
          }
 

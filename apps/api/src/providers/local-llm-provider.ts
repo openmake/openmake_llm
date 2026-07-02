@@ -218,7 +218,8 @@ export class LocalLLMProvider implements IProvider {
                     ? 'aborted'
                     : toolCalls.length > 0
                         ? 'tool_calls'
-                        : 'stop',
+                        // max_tokens 절단('length')을 보존 — 무고지 절단 관측/UX 신호 유지
+                        : (usage.finish_reason === 'length' ? 'length' : 'stop'),
             };
         } catch (err) {
             if (fastFailTimer) clearTimeout(fastFailTimer);

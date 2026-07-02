@@ -466,7 +466,10 @@ export class OpenAICompatProvider implements IProvider {
                 ...geminiThinkingDisable,
             };
 
-            const stream = await this.client.chat.completions.create(requestParams as never);
+            const stream = await this.client.chat.completions.create(
+                requestParams as never,
+                opts.abortSignal ? { signal: opts.abortSignal } : undefined,
+            );
 
             let content = '';
             const toolBuffers = new Map<number, { id: string; name: string; jsonBuffer: string }>();

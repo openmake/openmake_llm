@@ -385,6 +385,7 @@
   "chatSocket": {
     "error": "错误：{message}",
     "unknownError": "未知错误",
+    "disconnected": "_(与服务器的连接已断开。正在重新连接，请稍后重新发送。)_",
     "taskIdMissing": "任务创建响应中缺少 taskId",
     "agentTaskStartFailed": "无法启动智能体任务：{message}",
     "structuredAborted": "_(已停止生成结构化回答。)_",

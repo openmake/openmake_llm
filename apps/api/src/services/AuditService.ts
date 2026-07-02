@@ -167,13 +167,16 @@ const CRITICAL_ACTIONS: Record<string, 'info' | 'warning' | 'critical'> = {
     'minor_pending_registered': 'warning',
     // GDPR Article 20 — 데이터 export 요청 (operator 인지용)
     'export.requested': 'warning',
-    // 기존 ApiKeyService 패턴 정합
-    'api_key.revoked': 'warning',
+    // ApiKeyService.audit() 가 실제 emit 하는 문자열과 정합 (api_key.<create|update|delete|rotate>).
+    // 키 삭제·회전은 보안 이벤트라 warning 채널(webhook 알림), 생성·수정은 audit 만.
+    'api_key.delete': 'warning',
+    'api_key.rotate': 'warning',
     // info 는 audit 만 (alert webhook 안 보냄)
     // context_overflow 는 사용자 입력 검증 에러(>262K) — 2026-06-15 1M 제거로 흔해져
     // webhook noise 방지 위해 warning→info 강등 (audit 추적 + console 만 유지)
     'chat.context_overflow': 'info',
-    'api_key.created': 'info',
+    'api_key.create': 'info',
+    'api_key.update': 'info',
     'user.register': 'info',
     'consent.granted': 'info',
     'login.failed': 'info',

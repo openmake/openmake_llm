@@ -57,6 +57,9 @@ function StructuredTable({ headers, rows }: { headers: string[]; rows: string[][
  */
 export function StructuredAnswer({ data }: { data: StructuredAnswerData }) {
   const t = useTranslations("chat");
+  // 백엔드가 스키마를 어겨 필드가 누락돼도 렌더 크래시(→ MessageList 전체 사망)를 막는다.
+  const confidence = data.confidence in CONFIDENCE_STYLE ? data.confidence : "medium";
+  const sections = data.sections ?? [];
   return (
     <div className="space-y-3">
       {/* 제목 + confidence 배지 */}
@@ -65,10 +68,10 @@ export function StructuredAnswer({ data }: { data: StructuredAnswerData }) {
         <span
           className={cn(
             "shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium",
-            CONFIDENCE_STYLE[data.confidence],
+            CONFIDENCE_STYLE[confidence],
           )}
         >
-          {t(CONFIDENCE_KEY[data.confidence])}
+          {t(CONFIDENCE_KEY[confidence])}
         </span>
       </div>
 
@@ -88,7 +91,7 @@ export function StructuredAnswer({ data }: { data: StructuredAnswerData }) {
       ) : null}
 
       {/* 본문 섹션 */}
-      {data.sections.map((s, i) => (
+      {sections.map((s, i) => (
         <section key={i} className="space-y-1.5">
           <h4 className="text-sm font-semibold text-fg">{s.heading}</h4>
           {s.body?.trim() ? (

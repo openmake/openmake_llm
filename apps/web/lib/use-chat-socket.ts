@@ -42,6 +42,10 @@ export function useChatSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const [connected, setConnected] = useState(false);
   const reconnectRef = useRef(0);
+  // 언마운트 후 발화하는 재연결 타이머를 취소하기 위한 핸들 + 언마운트 플래그.
+  // (onclose 가 예약한 setTimeout(connect) 가 언마운트 뒤 좀비 소켓을 여는 것을 차단)
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const unmountedRef = useRef(false);
   // 에이전트 작업 taskId → 목표(goal) — agent_task_progress 렌더에 사용
   // 구조화 답변(REST) 진행 중 AbortController — abort() 가 취소할 수 있게 보관
   const structuredAbortRef = useRef<AbortController | null>(null);
@@ -64,12 +68,18 @@ export function useChatSocket() {
 
   const connect = useCallback(() => {
     if (typeof window === "undefined") return;
+    if (unmountedRef.current) return;
     if (wsRef.current && wsRef.current.readyState <= 1) return;
 
     const ws = new WebSocket(resolveWsUrl());
     wsRef.current = ws;
 
     ws.onopen = () => {
+      // 언마운트 후 뒤늦게 열린 소켓이면 즉시 닫아 좀비를 방지.
+      if (unmountedRef.current) {
+        ws.close();
+        return;
+      }
       setConnected(true);
       reconnectRef.current = 0;
     };
@@ -211,14 +221,15 @@ export function useChatSocket() {
     ws.onclose = () => {
       setConnected(false);
       setStreaming(false);
-      // 지수 백오프 재연결 (최대 10회)
+      if (unmountedRef.current) return;
+      // 지수 백오프 재연결 (최대 10회) — 타이머 핸들을 저장해 언마운트 시 취소 가능하게.
       if (reconnectRef.current < 10) {
         const delay = Math.min(
           CLIENT_TIMING.WS_RECONNECT_BASE_MS * 2 ** reconnectRef.current,
           CLIENT_TIMING.WS_RECONNECT_MAX_MS,
         );
         reconnectRef.current += 1;
-        setTimeout(connect, delay);
+        reconnectTimerRef.current = setTimeout(connect, delay);
       }
     };
 
@@ -227,9 +238,14 @@ export function useChatSocket() {
   }, []);
 
   useEffect(() => {
+    unmountedRef.current = false; // StrictMode 재마운트 대비 리셋
     connect();
     return () => {
-      reconnectRef.current = 99; // 언마운트 시 재연결 중단
+      unmountedRef.current = true; // 언마운트 시 재연결 중단
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
       wsRef.current?.close();
     };
   }, [connect]);
@@ -240,6 +256,16 @@ export function useChatSocket() {
       const hasFiles = Array.isArray(files) && files.length > 0;
       // 텍스트가 비어도 첨부 파일만으로 전송 가능
       if ((!message.trim() && !hasFiles) || s.isGenerating) return;
+
+      // 소켓이 OPEN 이 아니면 send() 가 payload 를 조용히 폐기(CLOSED)하거나 throw(CONNECTING)해
+      // done/error 이벤트가 오지 않아 UI 가 "분석 중"으로 영구 정지한다. 상태를 오염시키기 전에
+      // 차단하고 재연결을 유도한다. (전송 실패한 메시지는 유실 대신 입력창에 남는다)
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        appendMessage({ role: "system", content: tRef.current("disconnected") });
+        connect();
+        return;
+      }
 
       // 첨부만 있고 본문이 비면 파일명을 표시용 본문으로 사용
       const displayContent =
@@ -267,9 +293,9 @@ export function useChatSocket() {
         style: s.style,
         enabledTools: s.mcpToolsEnabled,
       };
-      wsRef.current?.send(JSON.stringify(payload));
+      ws.send(JSON.stringify(payload));
     },
-    [appendMessage, setStreaming, setActiveAgent, setActiveSkills],
+    [appendMessage, setStreaming, setActiveAgent, setActiveSkills, connect],
   );
 
   const abort = useCallback(() => {
