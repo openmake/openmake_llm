@@ -72,7 +72,8 @@ export class AgentTaskRepository extends BaseRepository {
         }
         if (updates.checkpoint !== undefined) {
             sets.push(`checkpoint = $${paramIdx++}`);
-            params.push(JSON.stringify(updates.checkpoint));
+            // null 은 SQL NULL 로 저장(완료 시 checkpoint 제거) — 'null'::jsonb 가 아닌 진짜 NULL.
+            params.push(updates.checkpoint === null ? null : JSON.stringify(updates.checkpoint));
         }
         if (updates.sandboxContainerId !== undefined) {
             sets.push(`sandbox_container_id = $${paramIdx++}`);
@@ -113,6 +114,12 @@ export class AgentTaskRepository extends BaseRepository {
                 params.status || 'completed'
             ]
         );
+    }
+
+    /** 작업의 스텝 전체 삭제 — 실패/취소 작업을 처음부터 재실행할 때 이전 시도의 스텝을 비운다
+     *  (stepNumber 0 재시작으로 인한 (task_id, step_number) 중복·표시 혼선 방지). */
+    async deleteAgentTaskSteps(taskId: string): Promise<void> {
+        await this.query('DELETE FROM agent_task_steps WHERE task_id = $1', [taskId]);
     }
 
     async getAgentTaskSteps(taskId: string, limit: number = 1000): Promise<AgentTaskStep[]> {

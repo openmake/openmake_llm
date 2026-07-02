@@ -201,6 +201,10 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
     if (task.status === 'running' || task.status === 'paused') {
         return res.status(400).json(badRequest('이미 실행 중(또는 승인 대기 중)인 작업입니다.'));
     }
+    // 완료 작업 재개 차단 — 신규 완료분은 checkpoint 가 정리되지만 legacy 행 방어.
+    if (task.status === 'completed') {
+        return res.status(400).json(badRequest('이미 완료된 작업입니다. 새 작업을 생성하세요.'));
+    }
     const cp = task.checkpoint as { conversation?: unknown[]; completedTurn?: number } | null | undefined;
     if (!cp || !Array.isArray(cp.conversation) || cp.conversation.length === 0) {
         return res.status(400).json(badRequest('이어할 체크포인트가 없는 작업입니다.'));

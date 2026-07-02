@@ -118,18 +118,6 @@ export class AgentTaskService {
 
         const userCtx: UserContext = { userId, role: userRole };
 
-        // resume: 기존 checkpoint(완전한 end-of-turn conversation)에서 복원, 아니면 새로 시작.
-        // 새 시작 시 system 프롬프트에 활성 스킬(global+user)의 지식(prompt_md)을 주입한다.
-        // resume 의 system 은 old checkpoint 그대로이므로, 작업 중 스킬이 바뀌면 지식(system)과
-        // 도구 바인딩(매 실행 fresh)이 갈릴 수 있다 — 무해, 재개 일관성을 위한 의도된 동작.
-        const conversation: ChatMessage[] = input.resume
-            ? [...input.resume.conversation]
-            : [
-                { role: 'system', content: getAgentTaskSystemPrompt() + (await this.buildSkillPromptBlock(userId)) },
-                { role: 'user', content: goal },
-            ];
-        const startTurn = input.resume?.fromTurn ?? 0;
-
         let stepNumber = input.resume?.fromStep ?? 0;
         let totalTokens = 0;
         let searchCalls = 0;
@@ -163,9 +151,30 @@ export class AgentTaskService {
             }
         };
 
+        // cancel 레이스 봉쇄: 어떤 await 보다 먼저 레지스트리에 등록해 /cancel 이 항상
+        // AbortController 에 도달하게 한다 (기존엔 스킬 조회 await 사이의 취소가 유실됐다).
         AgentTaskService.running.set(taskId, this);
         try {
+            // 레지스트리 등록 전(detached 스케줄링 창)에 접수된 취소는 DB 에만 기록됨 — 시작 전 존중.
+            const preStatus = (await db.getAgentTask(taskId))?.status;
+            if (signal.aborted || preStatus === 'cancelled') throw new AgentTaskAbort('aborted');
+
+            // resume: 기존 checkpoint(완전한 end-of-turn conversation)에서 복원, 아니면 새로 시작.
+            // 새 시작 시 system 프롬프트에 활성 스킬(global+user)의 지식(prompt_md)을 주입한다.
+            // resume 의 system 은 old checkpoint 그대로이므로, 작업 중 스킬이 바뀌면 지식(system)과
+            // 도구 바인딩(매 실행 fresh)이 갈릴 수 있다 — 무해, 재개 일관성을 위한 의도된 동작.
+            const conversation: ChatMessage[] = input.resume
+                ? [...input.resume.conversation]
+                : [
+                    { role: 'system', content: getAgentTaskSystemPrompt() + (await this.buildSkillPromptBlock(userId)) },
+                    { role: 'user', content: goal },
+                ];
+            const startTurn = input.resume?.fromTurn ?? 0;
+
             await update({ status: 'running', progress: 2 });
+            // fresh 재실행(실패/취소 작업을 처음부터): 이전 시도의 스텝을 비워
+            // stepNumber 0 재시작으로 인한 (task_id, step_number) 중복·표시 혼선을 방지.
+            if (!input.resume) await db.deleteAgentTaskSteps(taskId);
 
             // 허용 도구 목록 (LLMTool ≈ ToolDefinition) — 전체 노출
             const allTools = (await mcp.getToolRouter().getLLMTools({
@@ -379,6 +388,7 @@ export class AgentTaskService {
                         status: 'completed',
                         progress: 100,
                         result: stepContent,
+                        checkpoint: null, // 완료 작업은 재개 대상 아님 — checkpoint 잔존 시 resume 허용·저장 팽창
                     });
                     logger.info(`[AgentTask] 완료: ${taskId} (${turn + 1} 턴, ${totalTokens} 토큰, 아티팩트 ${extracted!.artifacts.length}개)`);
                     return;
@@ -454,6 +464,7 @@ export class AgentTaskService {
                         status: 'completed',
                         progress: 100,
                         result: terminateSummary || ex.cleanedContent || '작업을 완료했습니다.',
+                        checkpoint: null,
                     });
                     logger.info(`[AgentTask] terminate 완료: ${taskId} (${turn + 1} 턴)`);
                     return;
@@ -478,6 +489,7 @@ export class AgentTaskService {
                 status: 'completed',
                 progress: 100,
                 result: lastExtracted.cleanedContent || lastRaw,
+                checkpoint: null,
             });
             logger.info(`[AgentTask] 턴 상한 종료: ${taskId} (${turnCeiling} 턴)`);
         } catch (err) {

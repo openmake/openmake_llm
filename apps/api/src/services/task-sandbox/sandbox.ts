@@ -214,6 +214,14 @@ export class TaskSandbox {
         if (this.cfg.network === 'restricted') {
             logger.warn(`[${this.taskId}] network=restricted 는 메인 샌드박스 enforcement 미구현 → fail-safe none 으로 실행`);
         }
+        // 동시 실행 상한 — 실행 중인 omk-task-* 컨테이너 수가 ground truth (재시작에도 정확).
+        // 초과 시 throw → AgentTaskService 가 샌드박스 없이 graceful degrade 로 진행.
+        const ps = await runProcess(this.cfg.dockerPath,
+            ['ps', '-q', '--filter', `name=${CONTAINER_PREFIX}`], { timeoutMs: 10_000, outputCap: 65536 });
+        const active = ps.stdout.split('\n').filter(Boolean).length;
+        if (active >= this.cfg.maxConcurrent) {
+            throw new Error(`동시 task 샌드박스 상한 도달 (${active}/${this.cfg.maxConcurrent})`);
+        }
         await mkdir(this.hostWorkdir, { recursive: true, mode: 0o777 });
         // 동명 잔존 컨테이너 제거(이전 비정상 종료 대비).
         await runProcess(this.cfg.dockerPath, ['rm', '-f', this.containerName],
@@ -230,11 +238,26 @@ export class TaskSandbox {
     /** 컨테이너 내부에서 셸 명령 실행 (bash 도구의 실행 백엔드). */
     async exec(command: string): Promise<ExecResult> {
         this.assertCreated();
+        // 디스크 쿼터 — 컨테이너 내부 쓰기(bash 등)는 가로챌 수 없으므로 각 실행 직전 검사하는
+        // best-effort: 초과 상태면 새 명령을 거부해 LLM 이 파일 정리 후 계속하도록 유도한다.
+        if (await this.isOverQuota()) {
+            return {
+                stdout: '',
+                stderr: `workspace 디스크 쿼터 초과(상한 ${Math.round(this.cfg.workspaceQuota / 1024 / 1024)}MB) — 불필요한 파일을 삭제(file_ops delete)한 후 다시 시도하세요.`,
+                exitCode: -1, truncated: false, timedOut: false, durationMs: 0,
+            };
+        }
         return runProcess(
             this.cfg.dockerPath,
             ['exec', this.containerName, 'sh', '-c', command],
             { timeoutMs: this.cfg.execTimeoutMs, outputCap: this.cfg.outputCap },
         );
+    }
+
+    /** workspace 사용량이 쿼터를 넘었는지 (쿼터+1 에서 조기 중단하는 walk). */
+    private async isOverQuota(): Promise<boolean> {
+        const size = await dirSizeBytes(this.hostWorkdir, this.cfg.workspaceQuota + 1);
+        return size > this.cfg.workspaceQuota;
     }
 
     /** 브라우저 도구 활성 여부. */
@@ -259,9 +282,13 @@ export class TaskSandbox {
         });
     }
 
-    /** workspace 내 파일 쓰기 (호스트 bind-mount 직접). 경로 가드(어휘+실경로) 적용. */
+    /** workspace 내 파일 쓰기 (호스트 bind-mount 직접). 경로 가드(어휘+실경로) + 디스크 쿼터 적용. */
     async writeFile(relPath: string, content: string): Promise<void> {
         const abs = await safeRealWorkspacePath(this.hostWorkdir, relPath);
+        const size = await dirSizeBytes(this.hostWorkdir, this.cfg.workspaceQuota + 1);
+        if (size + Buffer.byteLength(content, 'utf8') > this.cfg.workspaceQuota) {
+            throw new Error(`workspace 디스크 쿼터 초과(상한 ${Math.round(this.cfg.workspaceQuota / 1024 / 1024)}MB) — 불필요한 파일을 삭제한 후 다시 시도하세요.`);
+        }
         await mkdir(dirname(abs), { recursive: true });
         await fsWriteFile(abs, content, 'utf8');
     }
@@ -309,6 +336,31 @@ export class TaskSandbox {
     private assertCreated(): void {
         if (!this.created) throw new Error(`샌드박스 미생성 (${this.taskId}) — create() 선행 필요`);
     }
+}
+
+/**
+ * 디렉토리 사용량(byte) 재귀 합산 — workspace 디스크 쿼터 검사용.
+ * cap 초과가 확정되면 조기 중단한다(반환값은 "cap 이상" 판정에만 유효).
+ * 심링크는 따라가지 않는다(Dirent 는 심링크를 file/dir 로 분류하지 않음).
+ */
+export async function dirSizeBytes(root: string, cap = Number.MAX_SAFE_INTEGER): Promise<number> {
+    let total = 0;
+    async function walk(dir: string): Promise<void> {
+        if (total >= cap) return;
+        let entries;
+        try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
+        for (const e of entries) {
+            if (total >= cap) return;
+            const full = join(dir, e.name);
+            if (e.isDirectory()) {
+                await walk(full);
+            } else if (e.isFile()) {
+                try { total += (await stat(full)).size; } catch { /* 삭제 경합 등 — 무시 */ }
+            }
+        }
+    }
+    await walk(resolve(root));
+    return total;
 }
 
 /**

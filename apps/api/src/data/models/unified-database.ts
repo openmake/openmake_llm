@@ -383,6 +383,10 @@ export class UnifiedDatabase {
         return this.agentTaskRepository.getAgentTaskSteps(taskId);
     }
 
+    async deleteAgentTaskSteps(taskId: string): Promise<void> {
+        return this.agentTaskRepository.deleteAgentTaskSteps(taskId);
+    }
+
     async getUserAgentTasks(userId: string, limit: number = 20): Promise<AgentTask[]> {
         return this.agentTaskRepository.getUserAgentTasks(userId, limit);
     }
