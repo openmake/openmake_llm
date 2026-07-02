@@ -279,10 +279,12 @@ export class AgentTaskService {
             for (let turn = startTurn; turn < turnCeiling; turn++) {
                 this.assertWithinLimits(signal, startedAt, totalTokens);
 
-                await update({
-                    currentTurn: turn + 1,
-                    progress: Math.min(95, 5 + Math.round((turn / turnCeiling) * 90)),
-                });
+                // 진행률: max_turns 는 상한일 뿐 조기 완료가 흔해(예: 2턴), turn/turnCeiling 선형식은
+                // 짧은 작업에서 5%→100% 로 점프하고 승인 대기(paused) 중 낮은 값에 정체돼 멈춘 듯 보였다.
+                // 총 실제 턴 수를 알 수 없으므로, 남은 거리의 고정 비율을 매 턴 채우는 점근 곡선으로 바꾼다
+                // (상한 90 — 완료 100 은 종료 경로가 설정). 총 턴 수와 무관하게 완만히 증가한다.
+                const nextProgress = Math.min(90, curProgress + Math.max(4, Math.round((90 - curProgress) * 0.25)));
+                await update({ currentTurn: turn + 1, progress: nextProgress });
 
                 // 검색류/브라우저 도구 호출이 한도를 넘으면 해당 도구를 제거해 강제로 종합/작성 단계로 유도.
                 // 프롬프트 지시를 LLM 이 무시하더라도 도구 자체가 사라지므로 탐색 폭주가 끊긴다.
