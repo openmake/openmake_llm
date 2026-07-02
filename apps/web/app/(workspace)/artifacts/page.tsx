@@ -7,6 +7,7 @@ import type { ApiSuccess } from "@openmake/shared-types";
 import { PageHeader, Card, Badge } from "@/components/ui/primitives";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { ArtifactShareModal } from "@/components/chat/artifact-share-modal";
+import { ArtifactDetailModal } from "@/components/chat/artifact-detail-modal";
 
 interface GalleryItem {
   artifactId: string;
@@ -33,6 +34,7 @@ export default function ArtifactsGalleryPage() {
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [share, setShare] = useState<{ sessionId: string; artifactId: string; icon: string | null } | null>(null);
+  const [detail, setDetail] = useState<GalleryItem | null>(null);
 
   const load = async () => {
     try {
@@ -82,16 +84,21 @@ export default function ArtifactsGalleryPage() {
               const VisIcon = vis?.icon;
               return (
                 <Card key={`${it.sessionId}:${it.artifactId}`} className="flex flex-col gap-3 p-4">
-                  <div className="flex items-start gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDetail(it)}
+                    className="flex items-start gap-2 text-left"
+                    aria-label={t("openDetail")}
+                  >
                     <span className="text-lg leading-none">{it.icon || "📦"}</span>
                     <div className="min-w-0 flex-1">
-                      <h3 className="truncate text-sm font-medium text-fg">{it.title}</h3>
+                      <h3 className="truncate text-sm font-medium text-fg transition hover:text-accent">{it.title}</h3>
                       <div className="mt-1 flex items-center gap-1.5">
                         <Badge tone="neutral"><span className="font-mono">{it.kind}{it.lang ? `·${it.lang}` : ""}</span></Badge>
                         <span className="font-mono text-[11px] text-faint">v{it.version}</span>
                       </div>
                     </div>
-                  </div>
+                  </button>
 
                   <div className="flex items-center justify-between">
                     {it.published && vis && VisIcon ? (
@@ -138,6 +145,19 @@ export default function ArtifactsGalleryPage() {
             setShare(null);
             load();
           }}
+        />
+      )}
+
+      {detail && (
+        <ArtifactDetailModal
+          target={{
+            sessionId: detail.sessionId,
+            artifactId: detail.artifactId,
+            kind: detail.kind,
+            lang: detail.lang,
+            title: detail.title,
+          }}
+          onCloseAction={() => setDetail(null)}
         />
       )}
     </>

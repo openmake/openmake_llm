@@ -323,7 +323,10 @@
         "private": "非公開",
         "authenticated": "認証公開",
         "link": "リンク公開"
-      }
+      },
+      "openDetail": "詳細を見る",
+      "versionPicker": "バージョン",
+      "close": "閉じる"
     }
   },
   "history": {

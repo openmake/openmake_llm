@@ -323,7 +323,10 @@
         "private": "비공개",
         "authenticated": "인증 공개",
         "link": "링크 공개"
-      }
+      },
+      "openDetail": "상세 보기",
+      "versionPicker": "버전 선택",
+      "close": "닫기"
     }
   },
   "history": {

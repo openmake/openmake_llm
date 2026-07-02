@@ -323,7 +323,10 @@
         "private": "Private",
         "authenticated": "Authenticated",
         "link": "Link"
-      }
+      },
+      "openDetail": "View details",
+      "versionPicker": "Version",
+      "close": "Close"
     }
   },
   "history": {

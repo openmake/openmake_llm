@@ -193,7 +193,7 @@ function CsvTable({ content }: { content: string }) {
   );
 }
 
-function ArtifactBody({
+export function ArtifactBody({
   artifact,
   view,
   sessionId,
