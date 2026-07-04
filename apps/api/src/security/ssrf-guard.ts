@@ -175,6 +175,96 @@ export function isBlockedIP(address: string): boolean {
     return true;
 }
 
+/**
+ * 신뢰 호스트 허용목록 (SSRF_ALLOWED_HOSTS).
+ *
+ * 셀프호스팅 환경에서 사내 RAG 서버·LAN 의 vLLM 처럼 사설망 대역에 있는 "신뢰" 서비스를
+ * 외부 프로바이더 base_url / MCP 서버 URL 로 등록할 수 있도록, 차단 대상 IP 라도 명시적으로
+ * 허용목록에 있으면 통과시킨다.
+ *
+ * 형식: 콤마 구분. 각 항목은 ① hostname(정확 일치) ② IPv4 ③ IPv4 CIDR.
+ *   예) SSRF_ALLOWED_HOSTS=rag.internal,192.168.0.45,10.1.0.0/16
+ *
+ * ⚠️ 미설정(빈 값) 시 항상 false — 기존 차단 동작과 100% 동일(fail-closed). 즉 이 기능은
+ *    opt-in 이며, 설정하지 않는 한 기본 보안 경계는 변하지 않는다.
+ */
+type AllowlistEntry =
+    | { kind: 'hostname'; value: string }
+    | { kind: 'ipv4'; value: string }
+    | { kind: 'cidr'; value: string };
+
+let allowlistCache: { raw: string; entries: AllowlistEntry[] } | null = null;
+
+function parseAllowlist(): AllowlistEntry[] {
+    const raw = process.env.SSRF_ALLOWED_HOSTS ?? '';
+    if (allowlistCache && allowlistCache.raw === raw) {
+        return allowlistCache.entries;
+    }
+
+    const entries: AllowlistEntry[] = [];
+    for (const tokenRaw of raw.split(',')) {
+        const token = tokenRaw.trim();
+        if (!token) {
+            continue;
+        }
+        if (token.includes('/')) {
+            try {
+                parseCIDR(token); // 유효성 검증 (실패 시 throw)
+                entries.push({ kind: 'cidr', value: token });
+            } catch {
+                logger.warn('SSRF allowlist: invalid CIDR ignored', { token });
+            }
+        } else if (isIP(token) === 4) {
+            entries.push({ kind: 'ipv4', value: token });
+        } else {
+            entries.push({ kind: 'hostname', value: token.toLowerCase() });
+        }
+    }
+
+    allowlistCache = { raw, entries };
+    return entries;
+}
+
+/**
+ * URL 의 hostname 또는 resolved 주소가 SSRF_ALLOWED_HOSTS 허용목록에 있으면 true.
+ * 미설정 시 항상 false (fail-closed).
+ */
+export function isAllowlistedHost(hostname: string, address: string): boolean {
+    const entries = parseAllowlist();
+    if (entries.length === 0) {
+        return false;
+    }
+
+    const host = hostname.toLowerCase();
+    const addressIsIPv4 = isIP(address) === 4;
+    const hostnameIsIPv4 = isIP(hostname) === 4;
+
+    for (const entry of entries) {
+        if (entry.kind === 'hostname') {
+            if (host === entry.value) {
+                return true;
+            }
+        } else if (entry.kind === 'ipv4') {
+            if (address === entry.value || hostname === entry.value) {
+                return true;
+            }
+        } else {
+            try {
+                if (addressIsIPv4 && isInIPv4CIDR(ipToNumber(address), entry.value)) {
+                    return true;
+                }
+                if (hostnameIsIPv4 && isInIPv4CIDR(ipToNumber(hostname), entry.value)) {
+                    return true;
+                }
+            } catch {
+                // 파싱 실패는 매칭 실패로 취급 (fail-closed)
+            }
+        }
+    }
+
+    return false;
+}
+
 export async function validateOutboundUrl(rawUrl: string, resolver: DnsResolver = dns.lookup): Promise<URL> {
     const url = new URL(rawUrl);
 
@@ -186,9 +276,13 @@ export async function validateOutboundUrl(rawUrl: string, resolver: DnsResolver 
 
     const { address } = await resolver(url.hostname);
     if (isBlockedIP(address)) {
-        const message = `SSRF blocked: resolved to blocked IP range: ${address}`;
-        logger.warn(message, { rawUrl, hostname: url.hostname, address });
-        throw new Error(message);
+        if (isAllowlistedHost(url.hostname, address)) {
+            logger.info('SSRF allowlist bypass: host explicitly allowed', { rawUrl, hostname: url.hostname, address });
+        } else {
+            const message = `SSRF blocked: resolved to blocked IP range: ${address}`;
+            logger.warn(message, { rawUrl, hostname: url.hostname, address });
+            throw new Error(message);
+        }
     }
 
     return url;
@@ -236,9 +330,13 @@ export async function safeFetch(
 
         const { address } = await resolver(url.hostname);
         if (isBlockedIP(address)) {
-            const message = `SSRF blocked: resolved to blocked IP range: ${address}`;
-            logger.warn(message, { rawUrl: currentUrl, hostname: url.hostname, address });
-            throw new Error(message);
+            if (isAllowlistedHost(url.hostname, address)) {
+                logger.info('SSRF allowlist bypass: host explicitly allowed', { rawUrl: currentUrl, hostname: url.hostname, address });
+            } else {
+                const message = `SSRF blocked: resolved to blocked IP range: ${address}`;
+                logger.warn(message, { rawUrl: currentUrl, hostname: url.hostname, address });
+                throw new Error(message);
+            }
         }
 
         // DNS Rebinding 방어: undici Agent의 connect.lookup으로 resolved IP를 고정.
