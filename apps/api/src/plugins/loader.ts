@@ -16,12 +16,9 @@ import { getRegistry } from './registry';
 import { getConfig } from '../config';
 import { createLogger } from '../utils/logger';
 
-// 새 canonical 경로: ~/.openmake-coder/plugins
-// 기존 사용자 보호 위해 legacy ~/.ollama-coder/plugins 도 함께 읽음 (fallback chain).
+// canonical 경로: ~/.openmake-coder/plugins
 const PLUGINS_DIR = path.join(os.homedir(), '.openmake-coder', 'plugins');
-const LEGACY_PLUGINS_DIR = path.join(os.homedir(), '.ollama-coder', 'plugins');
 const CONFIG_DIR = path.join(os.homedir(), '.openmake-coder');
-const LEGACY_CONFIG_DIR = path.join(os.homedir(), '.ollama-coder');
 const logger = createLogger('PluginLoader');
 
 export class PluginLoader {
@@ -29,44 +26,29 @@ export class PluginLoader {
     private context: PluginContext;
 
     constructor(context?: Partial<PluginContext>) {
-        const llmModel = (context?.llmModel ?? context?.ollamaModel ?? getConfig().llmDefaultModel) as string;
-        // legacy config dir 가 존재하고 새 경로가 없으면 legacy 를 그대로 사용 (호환 우선).
-        const configDirectory = fs.existsSync(CONFIG_DIR) || !fs.existsSync(LEGACY_CONFIG_DIR)
-            ? CONFIG_DIR
-            : LEGACY_CONFIG_DIR;
+        const llmModel = (context?.llmModel ?? getConfig().llmDefaultModel) as string;
         this.context = {
             workingDirectory: process.cwd(),
-            configDirectory,
+            configDirectory: CONFIG_DIR,
             llmModel,
-            ollamaModel: llmModel,  // legacy alias — 기존 플러그인 호환
             ...context
         };
     }
 
     async loadAll(): Promise<void> {
-        const dirs = [PLUGINS_DIR, LEGACY_PLUGINS_DIR].filter((d, i, arr) =>
-            arr.indexOf(d) === i  // dedupe (homedir 동일 시 안전)
-        );
-
-        let foundAny = false;
-        for (const dir of dirs) {
-            if (!fs.existsSync(dir)) continue;
-            foundAny = true;
-            const entries = fs.readdirSync(dir, { withFileTypes: true });
-            for (const entry of entries) {
-                if (entry.isDirectory()) {
-                    try {
-                        await this.loadPlugin(path.join(dir, entry.name));
-                    } catch (error) {
-                        logger.error(`플러그인 로드 실패: ${entry.name}`, error);
-                    }
+        if (!fs.existsSync(PLUGINS_DIR)) {
+            fs.mkdirSync(PLUGINS_DIR, { recursive: true });
+            return;
+        }
+        const entries = fs.readdirSync(PLUGINS_DIR, { withFileTypes: true });
+        for (const entry of entries) {
+            if (entry.isDirectory()) {
+                try {
+                    await this.loadPlugin(path.join(PLUGINS_DIR, entry.name));
+                } catch (error) {
+                    logger.error(`플러그인 로드 실패: ${entry.name}`, error);
                 }
             }
-        }
-
-        if (!foundAny) {
-            // 두 경로 모두 없으면 새 canonical 경로 생성 (legacy 는 건드리지 않음).
-            fs.mkdirSync(PLUGINS_DIR, { recursive: true });
         }
     }
 

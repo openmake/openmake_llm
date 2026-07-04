@@ -3,7 +3,7 @@
  * Reasoning Adapter — think 옵션 ↔ vLLM reasoning_effort 매핑
  * ============================================================
  *
- * Ollama 의 `think: true | 'low' | 'medium' | 'high'` 를
+ * LLMClient 의 `think: true | 'low' | 'medium' | 'high'` 옵션을
  * vLLM/OpenAI `extra_body.reasoning_effort` 로 변환합니다.
  *
  * 주의: vLLM 서버가 `--reasoning-parser` 없이 가동되면 reasoning_effort

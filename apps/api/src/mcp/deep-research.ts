@@ -3,7 +3,7 @@
  * Deep Research MCP 도구
  * ============================================================
  * 
- * ollama-deep-researcher와 유사한 MCP 도구 제공:
+ * deep-researcher 패턴과 유사한 MCP 도구 제공:
  * - research: 심층 연구 시작
  * - get_research_status: 진행 상황 조회
  * - configure_research: 설정 변경
@@ -334,7 +334,7 @@ export const configureResearchTool: MCPToolDefinition = {
                 searchApi: {
                     type: 'string',
                     enum: ['google', 'all'],
-                    description: '웹 검색 API 선택 (legacy "ollama" 값은 "all" 로 normalize)'
+                    description: '웹 검색 API 선택'
                 },
                 maxSearchResults: {
                     type: 'number',
@@ -353,12 +353,9 @@ export const configureResearchTool: MCPToolDefinition = {
             // 타입 캐스팅
             const maxLoops = args.maxLoops as number | undefined;
             const llmModel = args.llmModel as string | undefined;
-            // legacy 'ollama' 값은 'all' 로 normalize (vLLM 마이그레이션 이후 Ollama Cloud /api/web_search 폐기)
             const rawSearchApi = args.searchApi as string | undefined;
             const searchApi: 'google' | 'all' | undefined =
-                rawSearchApi === 'ollama' ? 'all'
-                : (rawSearchApi === 'google' || rawSearchApi === 'all') ? rawSearchApi
-                : undefined;
+                (rawSearchApi === 'google' || rawSearchApi === 'all') ? rawSearchApi : undefined;
             const maxSearchResults = args.maxSearchResults as number | undefined;
             const language = args.language as string | undefined;
 

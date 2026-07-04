@@ -96,7 +96,7 @@ export interface ChatStrategy<TContext extends ChatContext = ChatContext, TResul
  * @extends ChatContext
  */
 export interface DirectStrategyContext extends ChatContext {
-    /** Ollama 클라이언트 인스턴스 */
+    /** LLM 클라이언트 인스턴스 */
     client: LLMClient;
     /** 현재 대화 히스토리 (시스템 프롬프트 + 이전 메시지 + 사용자 메시지) */
     currentHistory: ChatMessage[];
@@ -106,7 +106,7 @@ export interface DirectStrategyContext extends ChatContext {
     allowedTools: ToolDefinition[];
     /** Thinking 깊이 옵션 */
     thinkOption?: 'low' | 'medium' | 'high';
-    /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
+    /** 구조화된 출력 형식 ('json' 또는 JSON Schema 객체) */
     format?: FormatOption;
 }
 
@@ -166,7 +166,7 @@ export interface FallbackHint {
  * @extends ChatContext
  */
 export interface AgentLoopStrategyContext extends ChatContext {
-    /** Ollama 클라이언트 인스턴스 */
+    /** LLM 클라이언트 인스턴스 */
     client: LLMClient;
     /** 현재 대화 히스토리 (루프 진행에 따라 도구 결과가 추가됨) */
     currentHistory: ChatMessage[];
@@ -188,7 +188,7 @@ export interface AgentLoopStrategyContext extends ChatContext {
     currentUserContext: UserContext | null;
     /** 허용된 도구 목록을 반환하는 함수 */
     getAllowedTools: () => ToolDefinition[];
-    /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
+    /** 구조화된 출력 형식 ('json' 또는 JSON Schema 객체) */
     format?: FormatOption;
     /** 전략 간 공유 실행 상태 (폴백 시 소모된 턴 수 추적용, optional) */
     executionState?: ExecutionState;
@@ -207,7 +207,7 @@ export interface AgentLoopStrategyContext extends ChatContext {
 export interface DiscussionStrategyContext extends ChatContext {
     /** 원본 채팅 메시지 요청 */
     req: ChatMessageRequest;
-    /** Ollama 클라이언트 인스턴스 */
+    /** LLM 클라이언트 인스턴스 */
     client: LLMClient;
     /** 토론 진행 상황 콜백 */
     onProgress?: (progress: DiscussionProgress) => void;
@@ -233,7 +233,7 @@ export interface GenerateVerifyStrategyContext extends ChatContext {
     queryType?: QueryType;
     /** 사용자 언어 (Verifier 프롬프트 다국어화용) */
     userLanguage?: string;
-    /** 구조화된 출력 형식 (Ollama format 파라미터) */
+    /** 구조화된 출력 형식 (format 파라미터) */
     format?: FormatOption;
     /** Generator가 사용할 엔진 모델 */
     generatorModel: string;
@@ -269,7 +269,7 @@ export interface GenerateVerifyStrategyResult extends ChatResult {
 export interface DeepResearchStrategyContext extends ChatContext {
     /** 원본 채팅 메시지 요청 */
     req: ChatMessageRequest;
-    /** Ollama 클라이언트 인스턴스 */
+    /** LLM 클라이언트 인스턴스 */
     client: LLMClient;
     /** 연구 진행 상황 콜백 */
     onProgress?: (progress: ResearchProgress) => void;

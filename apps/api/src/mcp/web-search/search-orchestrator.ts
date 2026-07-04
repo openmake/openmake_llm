@@ -3,8 +3,7 @@
  *
  * 다중 검색 프로바이더를 조율하여 통합 웹 검색을 수행합니다.
  * Google CSE / Wikipedia / Google News / DuckDuckGo / Naver News 병렬 수집 후
- * 신뢰도 스코어링 으로 통합. (2026-05-19 이전 Ollama Cloud /api/web_search 우선
- * 단계는 vLLM 마이그레이션 시 제거.)
+ * 신뢰도 스코어링 으로 통합.
  *
  * @module mcp/web-search/search-orchestrator
  */
@@ -26,11 +25,7 @@ import { formatSearchSources } from './format-sources';
 const logger = createLogger('WebSearch');
 
 /**
- * 통합 웹 검색 (Ollama API 우선, 폴백으로 다중 소스 병렬)
- *
- * 2단계 검색 전략:
- * 1. Ollama Web Search API (최우선, 고볼륨이 아니면 성공 시 조기 반환)
- * 2. 다중 소스 병렬 검색 (Google, Wikipedia, News, DuckDuckGo, Naver)
+ * 통합 웹 검색 — 다중 소스 병렬 검색 (Google, Wikipedia, News, DuckDuckGo, Naver)
  *
  * 결과 우선순위: News > Naver > Google > Wiki > DDG
  * URL 정규화를 통해 중복을 제거합니다.
@@ -40,8 +35,6 @@ const logger = createLogger('WebSearch');
  * @param options.globalSearch - 전세계 검색 여부 (기본값: true)
  * @param options.language - 검색 언어 (기본값: 'en')
  * @returns 중복 제거된 SearchResult 배열
- *
- * 변경 이력: 2026-05-19 — Ollama Cloud /api/web_search 폐기로 useOllamaFirst/searchOllamaWebSearch 제거.
  */
 /**
  * 쿼리 관련성 매칭에서 제외할 지시/불용어 (한국어·영어).

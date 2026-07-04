@@ -36,10 +36,8 @@ const router = Router();
 // 토큰 모니터링은 관리자 전용
 router.use(requireAuth, requireAdmin);
 
-// API 키 모니터링 엔드포인트 제거됨 (2026-05-19):
-//   GET /api/monitoring/keys 는 Ollama 시절 API key pool 회전 상태를 표시했으나,
-//   LiteLLM 마이그레이션 후 단일 master key 운영이라 dead UI 였음.
-//   할당량(quota) 조회는 GET /api/monitoring/quota 가 담당.
+// API 키 모니터링 엔드포인트(GET /api/monitoring/keys) 제거됨 — 단일 master key 운영.
+// 할당량(quota) 조회는 GET /api/monitoring/quota 가 담당.
 
 /**
  * GET /api/monitoring/usage/daily
@@ -103,8 +101,7 @@ router.get('/summary', asyncHandler(async (req: Request, res: Response) => {
     res.json(success(usageTracker.getSummary()));
 }));
 
-// POST /api/monitoring/keys/reset 제거됨 (2026-05-19):
-//   Ollama 시절 키 풀 회전 상태 리셋이었으나, LiteLLM 마이그레이션 후 dead.
+// POST /api/monitoring/keys/reset 제거됨 — 단일 master key 운영이라 불필요.
 
 /**
  * GET /api/monitoring/costs
@@ -115,7 +112,7 @@ router.get('/costs', asyncHandler(async (req: Request, res: Response) => {
     const todayStats = usageTracker.getTodayStats();
     const weeklyStats = usageTracker.getWeeklyStats();
 
-    // 모델별 가격 (Ollama Cloud 기준 - 예상치)
+    // 모델별 가격 (예상치)
     const modelPrices = MODEL_PRICING;
 
     // 모델별 비용 계산

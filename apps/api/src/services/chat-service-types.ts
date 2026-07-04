@@ -157,7 +157,7 @@ export type SystemEventCallback = (event: SystemEvent) => void;
  * @interface ChatServiceConfig
  */
 export interface ChatServiceConfig {
-    /** Ollama 클라이언트 인스턴스 */
+    /** LLM 클라이언트 인스턴스 */
     client: LLMClient;
     /** 사용할 모델 이름 */
     model: string;
@@ -214,7 +214,7 @@ export interface ChatMessageRequest {
     abortSignal?: AbortSignal;
     /** 사용자가 설정에서 선택한 선호 언어 (language-policy userPreference) */
     userLanguagePreference?: string;
-    /** 구조화된 출력 형식 (Ollama format 파라미터: 'json' 또는 JSON Schema 객체) */
+    /** 구조화된 출력 형식 ('json' 또는 JSON Schema 객체) */
     format?: import('../llm').FormatOption;
     /**
      * 응답 스타일 (Phase A 2026-05-26): 'concise' | 'default' | 'verbose'.

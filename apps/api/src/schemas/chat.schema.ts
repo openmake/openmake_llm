@@ -94,7 +94,7 @@ const toolChoiceSchema = z.union([
  * @property {string} [docId] - 문서 컨텍스트 ID (문서 Q&A 시)
  * @property {string[]} [images] - Base64 인코딩된 이미지 목록 (Vision 모델용)
  * @property {boolean} [discussionMode] - 다중 모델 토론 모드 활성화
- * @property {boolean} [thinkingMode] - Ollama Native Thinking 활성화
+ * @property {boolean} [thinkingMode] - Native Thinking 활성화
  * @property {string} [thinkingLevel] - 사고 깊이 수준 (low/medium/high)
  * @property {boolean} [webSearch] - 웹 검색 컨텍스트 주입 활성화
  * @property {Array} [tools] - OpenAI 호환 도구 정의 배열 (외부 Tool Calling용)

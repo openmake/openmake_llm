@@ -10,7 +10,7 @@
  * @description
  * - HTTP/REST API 엔드포인트 제공
  * - WebSocket을 통한 실시간 채팅 스트리밍
- * - Ollama 클러스터 관리 및 로드 밸런싱
+ * - LLM 클러스터 관리 및 로드 밸런싱
  * - 문서 업로드/분석/요약 기능
  * - 사용자 인증 및 세션 관리
  * 
@@ -46,7 +46,7 @@ import { startAllSchedulers, stopAllSchedulers } from './schedulers';
 interface DashboardOptions {
     /** 서버 포트 번호 (기본값: .env PORT) */
     port?: number;
-    /** Ollama 클러스터 매니저 인스턴스 */
+    /** LLM 클러스터 매니저 인스턴스 */
     cluster?: ClusterManager;
 }
 
@@ -57,7 +57,7 @@ interface DashboardOptions {
  * OpenMake 대시보드 서버 클래스
  * 
  * Express HTTP 서버와 WebSocket 서버를 통합 관리하며,
- * Ollama 클러스터와 연동하여 AI 채팅 서비스를 제공합니다.
+ * LLM 클러스터와 연동하여 AI 채팅 서비스를 제공합니다.
  * 
  * @class DashboardServer
  * @example
@@ -72,7 +72,7 @@ export class DashboardServer {
     private server: HttpServer;
     /** WebSocket 서버 인스턴스 */
     private wss: WebSocketServer;
-    /** Ollama 클러스터 매니저 */
+    /** LLM 클러스터 매니저 */
     private cluster: ClusterManager;
     /** 서버 포트 번호 */
     private port: number;
@@ -148,7 +148,7 @@ export class DashboardServer {
      * 서버를 시작하고 클라이언트 연결을 수신합니다.
      * 
      * 시작 순서:
-     * 1. Ollama 클러스터 초기화
+     * 1. LLM 클러스터 초기화
      * 2. 세션 정리 스케줄러 시작
      * 3. HTTP/WebSocket 서버 바인딩
      * 

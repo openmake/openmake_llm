@@ -39,7 +39,7 @@ export const WS_ERROR_MESSAGES: Record<string, { quotaExceeded: string; genericE
     fr: { quotaExceeded: 'Quota d\'API dépassé', genericError: 'Une erreur est survenue lors du traitement. Veuillez réessayer ultérieurement.' },
 };
 
-// 외부 provider(Anthropic/OpenRouter/Ollama 등) ProviderError 다국어 메시지
+// 외부 provider(Anthropic/OpenRouter 등) ProviderError 다국어 메시지
 // raw upstream 메시지를 그대로 노출하면 stack/credential 누출 위험 → 코드별 사전 정의 텍스트만 전달
 export const WS_PROVIDER_ERROR_MESSAGES: Record<string, Record<ProviderErrorCode, string>> = {
     ko: {

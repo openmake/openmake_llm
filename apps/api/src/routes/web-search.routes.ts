@@ -11,7 +11,7 @@
  * @description
  * - POST /api/web-search - 웹 검색 + LLM 사실 검증 (검색 결과, 출처 포함)
  *
- * @requires ClusterManager - Ollama 클러스터 관리
+ * @requires ClusterManager - LLM 클러스터 관리
  * @requires performWebSearch - Google Custom Search 실행
  * @requires LLMClient - LLM 생성 클라이언트
  */
@@ -107,7 +107,7 @@ router.post('/web-search', requireAuth, validate(webSearchSchema), asyncHandler(
       logger.info('[WebSearch] LLM에 사실 검증 요청...');
      const result = await client.generate(searchPrompt, {
          temperature: LLM_TEMPERATURES.WEB_SEARCH,
-          num_ctx: CAPACITY.WEB_SEARCH_NUM_CTX  // Ollama 공식 권장: 웹 검색/에이전트 시 최소 64K 토큰
+          num_ctx: CAPACITY.WEB_SEARCH_NUM_CTX  // 웹 검색/에이전트 시 최소 64K 토큰 권장
      });
      const response = result.response;
 

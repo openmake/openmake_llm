@@ -3,13 +3,13 @@
  * LLM Usage Tracker — 토큰 기반 시간/주간 쿼터
  * ============================================================
  *
- * Ollama 시절의 시간/주간 호출 횟수 limit 을 LLM 토큰 사용량 기반으로 재정의합니다.
+ * 시간/주간 LLM 토큰 사용량 한도를 추적합니다 (구 호출 횟수 limit 의 토큰 기반 재정의).
  *
  * 환경변수:
  *   LLM_HOURLY_TOKEN_LIMIT — 1시간 토큰 합산 한도 (기본 300_000)
  *   LLM_WEEKLY_TOKEN_LIMIT — 1주일 토큰 합산 한도 (기본 5_000_000)
  *
- * 호환: 기존 ollama/api-usage-tracker.ts 의 getQuotaStatus() 시그니처 유지 —
+ * 호환: 기존 getQuotaStatus() 시그니처 유지 —
  * routes/usage.routes.ts, services/chat-service-metrics.ts 등 호출자 변경 불필요.
  *
  * @module llm/usage-tracker
@@ -73,13 +73,13 @@ class LLMUsageTracker {
         this.weekly = { startedAt: now, tokens: 0 };
     }
 
-    /** @deprecated 호환을 위해 유지 — Ollama 시절의 호출당 카운팅 호환 메서드 */
+    /** @deprecated 호환을 위해 유지 — 구 호출당 카운팅 no-op (토큰 기반 record 사용) */
     recordRequest(_payload?: unknown): void {
         // 토큰 기반 트래커로 전환됨 — 호출 카운팅 메서드는 no-op
     }
 
     /**
-     * 호환 stub — Ollama 시절의 routes/usage/metrics/monitoring 등이 기대하던 summary 구조.
+     * 호환 stub — routes/usage/metrics/monitoring 이 기대하는 summary 구조.
      * 토큰 기반 트래커이므로 hourly/weekly tokens 와 최소 통계만 반환.
      */
     getSummary(): Record<string, unknown> & {

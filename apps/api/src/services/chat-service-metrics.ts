@@ -40,8 +40,7 @@ export function recordChatMetrics(params: {
     const { fullResponse, startTime, message, model, apiKeyId, selectedAgent, agentSelection } = params;
 
     // 사용량 추적 및 모니터링 메트릭 기록 (실패해도 응답 반환에 영향 없음)
-    // 변경 이력 (2026-05-19): getApiKeyManager / currentKey 사용 제거. Ollama 시절 키 풀
-    // 회전 추적용이었으나 LiteLLM 마이그레이션 후 단일 master key 운영이라 불필요.
+    // (구 getApiKeyManager / currentKey 추적은 제거됨 — 단일 master key 운영.)
     try {
         const usageTracker = getApiUsageTracker();
         const responseTime = Date.now() - startTime;

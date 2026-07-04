@@ -23,7 +23,7 @@ import { detectLanguage } from '../ui/highlight';
 /**
  * 파일의 코드를 LLM으로 리뷰합니다.
  * 코드 품질(1-10점), 문제점, 개선 제안, 장점을 스트리밍 출력합니다.
- * @param client - Ollama 클라이언트 인스턴스
+ * @param client - LLM 클라이언트 인스턴스
  * @param filePath - 리뷰할 파일 경로
  */
 export async function reviewFile(client: LLMClient, filePath: string): Promise<void> {

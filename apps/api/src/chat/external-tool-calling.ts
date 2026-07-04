@@ -64,7 +64,7 @@ export async function processExternalToolCalling(params: {
     // 시스템 프롬프트 구성
     const promptConfig = getPromptConfig(message, detectedLanguage);
 
-    // 대화 히스토리 구성 (OpenAI 형식 → Ollama 형식 변환)
+    // 대화 히스토리 구성 (외부 입력 → 내부 ChatMessage 형식 변환)
     const messages: ChatMessage[] = [
         { role: 'system', content: promptConfig.systemPrompt },
     ];
@@ -77,7 +77,7 @@ export async function processExternalToolCalling(params: {
                 ...(h.images && { images: h.images }),
             };
 
-            // assistant의 tool_calls를 Ollama 형식으로 변환
+            // assistant의 tool_calls를 내부 ChatMessage 형식으로 변환
             if (h.role === 'assistant' && h.tool_calls && h.tool_calls.length > 0) {
                 msg.tool_calls = h.tool_calls.map(tc => ({
                     type: 'function' as const,

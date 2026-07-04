@@ -23,7 +23,7 @@ import { detectLanguage } from '../ui/highlight';
 /**
  * 파일의 코드를 LLM으로 분석하여 상세 설명을 생성합니다.
  * 전체 목적, 주요 함수/클래스, 핵심 로직, 사용 패턴을 스트리밍 출력합니다.
- * @param client - Ollama 클라이언트 인스턴스
+ * @param client - LLM 클라이언트 인스턴스
  * @param filePath - 설명할 파일 경로
  */
 export async function explainFile(client: LLMClient, filePath: string): Promise<void> {

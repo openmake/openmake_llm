@@ -310,10 +310,7 @@ router.post('/cache/clear', requireAdmin, asyncHandler(async (req: Request, res:
     res.json(success({ message: '캐시가 초기화되었습니다.' }));
 }));
 
-// 연결 풀 엔드포인트 제거됨 (2026-05-19):
-//   /api/pool/stats 가 Ollama 시절 connection pool stub 을 노출했으나,
-//   vLLM/LiteLLM 마이그레이션 후 OpenAI SDK 가 자체 connection 관리하므로
-//   항상 0 stats 만 반환하는 dead 엔드포인트였음.
+// 연결 풀 엔드포인트(/api/pool/stats) 제거됨 — OpenAI SDK 가 자체 connection 관리.
 
 // ================================================
 // 시스템 헬스

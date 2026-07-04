@@ -8,8 +8,7 @@
  * messages/tools/streaming 형식은 OpenAI 표준을 따릅니다.
  *
  * SSoT 충돌 방지:
- * - usage 필드: OpenAI 의 prompt_tokens/completion_tokens → Ollama 명명
- *   (prompt_eval_count/eval_count) 으로 정규화
+ * - usage 필드: OpenAI 의 prompt_tokens/completion_tokens 를 UsageMetrics 로 그대로 전달
  * - tool_calls: function-shape → IProvider {id,name,args} 정규화
  *
  * SSRF: base_url 검증은 등록 단계(routes/external-keys.routes.ts)에서 수행됨.
@@ -546,8 +545,8 @@ export class OpenAICompatProvider implements IProvider {
             }
 
             const usage: UsageMetrics = {
-                prompt_eval_count: promptTokens || undefined,
-                eval_count: completionTokens || undefined,
+                prompt_tokens: promptTokens || undefined,
+                completion_tokens: completionTokens || undefined,
                 // OpenRouter 직접 cost (USD) → micros 변환. Math.round 로 정수화 (DB 컬럼이 BIGINT).
                 ...(directCostUsd !== undefined
                     ? { cost_usd_micros: Math.round(directCostUsd * 1_000_000) }

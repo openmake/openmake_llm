@@ -3,7 +3,7 @@
  * LLMClient — vLLM/LiteLLM OpenAI-compatible thin wrapper
  * ============================================================
  *
- * Ollama 시절 LLMClient 의 외부 시그니처를 유지하면서 내부는 OpenAI Node SDK
+ * 기존 LLMClient 외부 시그니처를 유지하면서 내부는 OpenAI Node SDK
  * 호출로 위임합니다 — 호출자 100+ 곳의 변경 최소화가 목표입니다.
  *
  * 위임 원칙:
@@ -164,13 +164,13 @@ export class LLMClient {
                     ? await streamChat(this.openai, request, onToken, extraBody, advancedOptions?.signal)
                     : await nonStreamChat(this.openai, request, extraBody, advancedOptions?.signal);
                 const totalTokens =
-                    (result.metrics?.prompt_eval_count ?? 0) + (result.metrics?.eval_count ?? 0);
+                    (result.metrics?.prompt_tokens ?? 0) + (result.metrics?.completion_tokens ?? 0);
                 if (totalTokens > 0) {
                     getApiUsageTracker().record(totalTokens);  // 전역 aggregate (dashboard 관측용)
                     void recordUserUsage(this.config.userId, totalTokens, Date.now());  // per-user enforcement 누적
                 }
-                span.setAttribute('llm.prompt_eval_count', result.metrics?.prompt_eval_count ?? 0);
-                span.setAttribute('llm.eval_count', result.metrics?.eval_count ?? 0);
+                span.setAttribute('llm.prompt_tokens', result.metrics?.prompt_tokens ?? 0);
+                span.setAttribute('llm.completion_tokens', result.metrics?.completion_tokens ?? 0);
                 span.setAttribute('llm.response_chars', (result.content ?? '').length);
                 return result;
             },

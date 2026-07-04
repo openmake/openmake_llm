@@ -4,8 +4,7 @@
  * ============================================================
  *
  * vLLM/LiteLLM 은 OpenAI 호환 ChatCompletion 외 native web_search/web_fetch 가
- * 부재하므로 (legacy Ollama Cloud 시절의 /api/web_search, /api/web_fetch 와 다름)
- * 기존 mcp/web-search 모듈의 `performWebSearch`, `extractWebpageTool` 로 위임합니다.
+ * 부재하므로 기존 mcp/web-search 모듈의 `performWebSearch`, `extractWebpageTool` 로 위임합니다.
  *
  * - webSearch(query, maxResults) → performWebSearch(query, { maxResults }) → 결과 정규화
  * - webFetch(url)                 → extractWebpageTool.handler({ url })       → 결과 정규화

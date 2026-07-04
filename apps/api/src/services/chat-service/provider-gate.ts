@@ -8,16 +8,16 @@
  * INVALID_MODEL_ID / GUEST_NOT_ALLOWED / NOT_SUPPORTED 등을 strategy 실행
  * 이전에 조기 차단합니다.
  *
- * Ollama 태그 컨벤션('name:tag', 예: 'gemma4:e4b')과 fullId('provider:model')
+ * 모델 태그 컨벤션('name:tag', 예: 'gemma4:e4b')과 fullId('provider:model')
  * 의 충돌을 해결하기 위해 known-provider-prefix 허용목록을 사용합니다.
  *
  * 동작:
- * - 'ollama:*' 또는 'openrouter:*' → fullId 그대로 통과
- * - 그 외 (콜론 없음 또는 알려지지 않은 prefix) → 'ollama:' prefix 자동 보강
+ * - 'local-llm:*' 또는 'openrouter:*' → fullId 그대로 통과
+ * - 그 외 (콜론 없음 또는 알려지지 않은 prefix) → 'local-llm:' prefix 자동 보강
  * - 외부 provider (openrouter 외) → ProviderError 조기 throw
  *
  * 2026-05-08 외부 카탈로그(EXTERNAL_PROVIDER_CATALOG)가 openrouter 단독으로
- * 축소됨에 따라, anthropic 등 기타 prefix 는 ollama 태그로 간주되어 보강 후
+ * 축소됨에 따라, anthropic 등 기타 prefix 는 로컬 모델 태그로 간주되어 보강 후
  * 다운스트림에서 거부됩니다.
  *
  * @module services/chat-service/provider-gate
@@ -34,12 +34,10 @@ import type {
  * fullId 첫 콜론 prefix가 이 목록에 있으면 그대로 fullId로 취급, 아니면
  * 로컬 LLM 모델명(태그 포함)으로 간주하고 'local-llm:' prefix 를 자동 보강합니다.
  *
- * legacy 'ollama:' prefix 도 호환 — parseFullModelId 가 자동 normalize 합니다.
  * 카탈로그(EXTERNAL_PROVIDER_CATALOG) 와 동기화 필수 — 새 provider 추가 시 양쪽 갱신.
  */
 const KNOWN_FULLID_PREFIXES: readonly string[] = [
     'local-llm',
-    'ollama',       // legacy alias — parseFullModelId 가 'local-llm' 으로 normalize
     'openrouter',
 ];
 

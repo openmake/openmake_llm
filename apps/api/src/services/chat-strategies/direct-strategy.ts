@@ -3,7 +3,7 @@
  * DirectStrategy - 단일 LLM 직접 호출 전략
  * ============================================================
  *
- * Ollama 클라이언트를 통해 단일 LLM에 한 번 요청하여
+ * LLM 클라이언트를 통해 단일 LLM에 한 번 요청하여
  * 응답 텍스트와 도구 호출 정보를 반환하는 기본 전략입니다.
  *
  * @module services/chat-strategies/direct-strategy
@@ -34,7 +34,7 @@ export class DirectStrategy implements ChatStrategy<DirectStrategyContext, Direc
      * @returns 응답 텍스트, 어시스턴트 메시지, 도구 호출 목록, 메트릭을 포함한 결과
      */
     async execute(context: DirectStrategyContext): Promise<DirectStrategyResult> {
-        // Ollama 공식 문서 권장: format 지정 시 temperature: 0 (결정론적 JSON 출력)
+        // format 지정 시 temperature: 0 (결정론적 JSON 출력)
         const chatOptions = context.format
             ? { ...context.chatOptions, temperature: LLM_TEMPERATURES.FORMAT_STRICT }
             : context.chatOptions;

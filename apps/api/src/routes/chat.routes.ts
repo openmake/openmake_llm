@@ -12,7 +12,7 @@
  * - POST /api/chat/stream - 스트리밍 채팅 (SSE, ChatService 경유)
  * 
  * @requires ChatRequestHandler - 채팅 요청 통합 핸들러
- * @requires ClusterManager - Ollama 클러스터 관리
+ * @requires ClusterManager - LLM 클러스터 관리
  */
 
 import { Router, Request, Response } from 'express';

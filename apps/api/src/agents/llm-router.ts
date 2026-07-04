@@ -79,7 +79,7 @@ let routerClient: LLMClient | null = null;
  * 라우팅 요청마다 새 클라이언트를 생성하지 않고 단일 인스턴스를 재사용한다.
  * 첫 호출 시 lazy initialization으로 생성된다.
  *
- * @returns {LLMClient} - 라우팅 전용 Ollama 클라이언트 인스턴스
+ * @returns {LLMClient} - 라우팅 전용 LLM 클라이언트 인스턴스
  */
 function getRouterClient(): LLMClient {
     if (!routerClient) {

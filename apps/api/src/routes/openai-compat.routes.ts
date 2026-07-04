@@ -8,7 +8,7 @@ import {
     OpenAICompatService,
 } from '../services/OpenAICompatService';
 import { listAvailableModels } from '../chat/profile-resolver';
-import { parseFullModelId, normalizeProviderId } from '../providers/i-provider';
+import { parseFullModelId } from '../providers/i-provider';
 
 const openaiCompatRouter = Router();
 let clusterManager: ClusterManager;
@@ -103,7 +103,8 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
     // body.model 검증 (2026-05-19): 이전엔 임의 문자열도 buildExecutionPlan() 가 기본 모델로
     // silent override → 운영자/외부 클라이언트가 *잘못된 모델 이름* 을 보내도 알 길 없음.
     // vLLM/OpenAI spec 준수 위해 listAvailableModels() 에 없는 model id 는 404 로 거절.
-    // 호환: 'local-llm:<model>' / 'ollama:<model>' (legacy normalize) 둘 다 허용.
+    // 호환: 'local-llm:<model>' fullId 형식 허용. 그 외 알 수 없는 prefix 는
+    // 아래 available 검증에서 404 로 명시 거절.
     {
         const available = new Set(listAvailableModels().map((m) => m.id));
         const requested = body.model;
@@ -111,7 +112,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
         if (requested.includes(':')) {
             try {
                 const parsed = parseFullModelId(requested);
-                if (normalizeProviderId(parsed.providerId) === 'local-llm') {
+                if (parsed.providerId === 'local-llm') {
                     resolvedModelId = parsed.modelId;
                 }
             } catch { /* invalid fullId 형식 — 그대로 검증 */ }

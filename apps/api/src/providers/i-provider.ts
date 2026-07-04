@@ -17,18 +17,15 @@ import type { ChatMessage, ToolDefinition, UsageMetrics } from '../llm';
 /**
  * 어댑터가 사용하는 SDK 종류 — 디버깅/관측 목적의 메타 정보.
  *
- * - `ollama`: Ollama HTTP API 직접 호출
+ * - `local-llm`: 로컬 vLLM/LiteLLM 진입점 (OpenAI 호환)
  * - `anthropic`: Anthropic SDK
  * - `openai-compatible`: OpenAI Chat Completions 호환 endpoint
  *   (Groq, OpenRouter, Together, vLLM 등)
  */
 /**
  * SDK 타입 식별자 — provider 의 native SDK 종류.
- * 로컬 vLLM/LiteLLM 진입점은 canonical 'local-llm'. ('ollama' 는 2026-05 vLLM 마이그레이션으로
- * 제거 — 외부 키 DB CHECK 는 'anthropic'|'openai-compatible' 만 허용하며 로컬 provider 는 외부 키
- * 테이블에 저장되지 않으므로 sdkType 에 'ollama' 가 필요 없었다.) 저장된 legacy 'ollama:' model ID
- * 입력은 parseFullModelId 가 'local-llm' 으로 normalize 하여 무중단 호환된다 — 그건 모델 ID prefix
- * 정규화이고 sdkType(어댑터 내부 식별자)과는 별개.
+ * 로컬 vLLM/LiteLLM 진입점은 canonical 'local-llm'. (외부 키 DB CHECK 는
+ * 'anthropic'|'openai-compatible' 만 허용하며 로컬 provider 는 외부 키 테이블에 저장되지 않는다.)
  */
 export type SdkType = 'local-llm' | 'anthropic' | 'openai-compatible';
 
@@ -183,13 +180,10 @@ export interface IProvider {
 /**
  * 'provider:model' fullId 파싱.
  * 첫 콜론 기준 분리, 이후 콜론은 모두 model id 에 포함 (모델 태그 호환).
- *
- * Provider id alias 정규화 — legacy 'ollama:<model>' 형식은 canonical 'local-llm' 으로
- * normalize 됩니다. 운영 중 저장된 모델 ID, 외부 클라이언트 호환을 위한 grace period.
+ * provider id alias/normalize 없음 — 입력 그대로 반환됩니다.
  *
  * @example
  *   parseFullModelId('local-llm:qwen3.6-35b-a3b') → { providerId: 'local-llm', modelId: 'qwen3.6-35b-a3b' }
- *   parseFullModelId('ollama:qwen3.6-35b-a3b')   → { providerId: 'local-llm', modelId: 'qwen3.6-35b-a3b' }  // legacy alias
  *   parseFullModelId('anthropic:claude-sonnet-4-5') → { providerId: 'anthropic', modelId: 'claude-sonnet-4-5' }
  *
  * @throws Error if format is invalid
@@ -199,28 +193,14 @@ export function parseFullModelId(fullId: string): { providerId: string; modelId:
     if (idx <= 0 || idx === fullId.length - 1) {
         throw new Error(`Invalid model id format: ${fullId} (expected 'provider:model')`);
     }
-    const rawProviderId = fullId.slice(0, idx);
+    const providerId = fullId.slice(0, idx);
     const modelId = fullId.slice(idx + 1);
-    return { providerId: normalizeProviderId(rawProviderId), modelId };
-}
-
-/**
- * Provider id alias normalize — 'ollama' → 'local-llm' (legacy compat).
- *
- * 다른 provider id 는 그대로 통과합니다. 새 canonical id 가 도입되면 이 함수에
- * mapping 한 줄만 추가하면 됩니다.
- */
-export function normalizeProviderId(providerId: string): string {
-    if (providerId === 'ollama') return 'local-llm';
-    return providerId;
+    return { providerId, modelId };
 }
 
 /**
  * provider id 와 model id 를 결합하여 router 레벨 fullId 생성.
- *
- * legacy 'ollama' 입력도 자동으로 'local-llm' 으로 normalize. 호출자가 canonical id 를
- * 모르고 옛 이름을 넘겨도 출력은 항상 표준 형식.
  */
 export function buildFullModelId(providerId: string, modelId: string): string {
-    return `${normalizeProviderId(providerId)}:${modelId}`;
+    return `${providerId}:${modelId}`;
 }

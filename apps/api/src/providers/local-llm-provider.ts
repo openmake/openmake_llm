@@ -8,15 +8,13 @@
  *
  * 매핑 요약:
  * - chat()           ⇄ streamChat()  (onToken/onThinking 분리, metrics 정규화)
- * - listModels()     ⇄ listModels()  (fullId='local-llm:<name>' 빌드, parseFullModelId 가 legacy 'ollama:' 도 인식)
+ * - listModels()     ⇄ listModels()  (fullId='local-llm:<name>' 빌드)
  * - isAvailable()    ⇄ validateCredentials()
  * - embed()          ⇄ embed()
  *
  * 주의:
- * - PROVIDER_ID 는 canonical 'local-llm' (vLLM/LiteLLM 진입점). buildFullModelId/parseFullModelId
- *   가 legacy 'ollama' 입력을 자동 normalize 하므로 운영 중 저장된 'ollama:<model>' 도 무중단 호환.
- * - sdkType 도 canonical 'local-llm' (2026-05 vLLM 마이그레이션 잔재 정리). 로컬 provider 는 외부 키
- *   테이블에 저장되지 않아 DB CHECK('anthropic'|'openai-compatible')와 무관 — 'ollama' 불필요.
+ * - PROVIDER_ID / sdkType 은 canonical 'local-llm' (vLLM/LiteLLM 진입점). 로컬 provider 는
+ *   외부 키 테이블에 저장되지 않아 DB CHECK('anthropic'|'openai-compatible')와 무관.
  *
  * @module providers/local-llm-provider
  */
@@ -40,7 +38,7 @@ import { createLogger } from '../utils/logger';
 const logger = createLogger('LocalLLMProvider');
 
 /**
- * Canonical provider ID — vLLM/LiteLLM 진입점. parseFullModelId 가 legacy 'ollama:' 도 normalize.
+ * Canonical provider ID — vLLM/LiteLLM 진입점.
  */
 const PROVIDER_ID = 'local-llm';
 const PROVIDER_DISPLAY_NAME = 'Local LLM';
@@ -194,7 +192,7 @@ export class LocalLLMProvider implements IProvider {
                 : await chatPromise;
             if (fastFailTimer) clearTimeout(fastFailTimer);
 
-            // 사용량 메트릭 — UsageMetrics 타입 그대로 노출 (prompt_eval_count/eval_count).
+            // 사용량 메트릭 — UsageMetrics 타입 그대로 노출 (prompt_tokens/completion_tokens).
             const usage: UsageMetrics = result.metrics ?? {};
             callbacks.onUsage?.(usage);
 

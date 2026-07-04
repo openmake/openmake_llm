@@ -4,8 +4,7 @@
  * ============================================================
  *
  * OpenAI 호환 HTTP API 통신에 사용되는 TypeScript 타입을 정의합니다.
- * Ollama 시절의 명명(prompt_eval_count, eval_count 등)을 보존하여 호출자 호환성을 유지합니다 —
- * 응답 매핑은 stream-parser.ts 에서 OpenAI usage → Ollama-style 변환.
+ * usage 필드는 OpenAI 표준 명명(prompt_tokens/completion_tokens)을 사용합니다.
  *
  * @module llm/types
  */
@@ -28,33 +27,20 @@ export interface LLMConfig {
     userId?: string;
 }
 
-// OllamaConfig 호환 alias 제거됨 (2026-05-19): 0 callers 확인 후 제거. 신규 코드는 LLMConfig 사용.
-
 /**
- * LLM 응답 성능 메트릭
- *
- * Ollama API가 반환하는 추론 성능 측정값입니다.
- * 토큰 처리 속도, 모델 로딩 시간 등을 추적할 수 있습니다.
+ * LLM 응답 사용량 메트릭 (OpenAI usage 명명 규약)
  *
  * @interface UsageMetrics
  */
 export interface UsageMetrics {
-    /** 전체 처리 소요 시간 (나노초) */
-    total_duration?: number;
-    /** 모델 로딩 소요 시간 (나노초) */
-    load_duration?: number;
-    /** 프롬프트 평가 토큰 수 (입력 토큰) */
-    prompt_eval_count?: number;
-    /** 프롬프트 평가 소요 시간 (나노초) */
-    prompt_eval_duration?: number;
-    /** 생성된 토큰 수 (출력 토큰) */
-    eval_count?: number;
-    /** 토큰 생성 소요 시간 (나노초) */
-    eval_duration?: number;
+    /** 입력(프롬프트) 토큰 수 */
+    prompt_tokens?: number;
+    /** 출력(생성) 토큰 수 */
+    completion_tokens?: number;
     /**
      * 호출 비용 (USD micros — 1 USD = 1,000,000 micros).
      * OpenRouter 가 응답에 포함시키는 직접 cost — 카탈로그 fallback 보다 정확.
-     * 미지원 provider (Ollama 등) 는 undefined.
+     * cost 미제공 provider 는 undefined.
      */
     cost_usd_micros?: number;
     /**
@@ -62,41 +48,6 @@ export interface UsageMetrics {
      * "length" 가 발생하면 max_tokens 한도에서 절단 — reasoning 모델은 본문 미생성 위험.
      */
     finish_reason?: string;
-}
-
-/**
- * 텍스트 생성 요청 (Ollama /api/generate)
- * @interface GenerateRequest
- */
-export interface GenerateRequest {
-    /** 사용할 모델 이름 */
-    model: string;
-    /** 생성할 텍스트의 프롬프트 */
-    prompt: string;
-    /** Fill-in-the-Middle: 사용자 프롬프트 뒤, 모델 응답 앞에 오는 텍스트 */
-    suffix?: string;
-    /** 이전 대화 컨텍스트 (연속 대화용 토큰 배열) */
-    context?: number[];
-    /** 스트리밍 모드 활성화 여부 */
-    stream?: boolean;
-    /** 모델 추론 옵션 (temperature, top_p 등) */
-    options?: ModelOptions;
-    /** Base64 인코딩된 이미지 배열 (Vision 모델용) */
-    images?: string[];
-    /** Thinking 모드 활성화 (thinking 모델용) */
-    think?: ThinkOption;
-    /** 출력 형식 (JSON 또는 JSON Schema) */
-    format?: FormatOption;
-    /** 시스템 메시지 (Modelfile 설정 오버라이드) */
-    system?: string;
-    /** 프롬프트 템플릿 바이패스 (true 시 raw 프롬프트 직접 전달) */
-    raw?: boolean;
-    /** 모델 메모리 유지 시간 (기본값: '5m', '-1'=영구, '0'=즉시 해제) */
-    keep_alive?: string | number;
-    /** 출력 토큰의 로그 확률 반환 여부 */
-    logprobs?: boolean;
-    /** logprobs 활성화 시 각 토큰 위치에서 반환할 상위 토큰 수 */
-    top_logprobs?: number;
 }
 
 /**
@@ -146,13 +97,13 @@ export interface ModelOptions {
 }
 
 // ============================================
-// Ollama Advanced Capabilities Types
+// Tool Calling / Thinking / Format Types
 // ============================================
 
 /**
  * 도구(Tool) 정의 — LLM이 호출할 수 있는 함수의 스키마
  *
- * Ollama Tool Calling API에서 사용하며, OpenAI 호환 형식을 따릅니다.
+ * OpenAI Tool Calling 호환 형식을 따릅니다.
  * Agent Loop에서 도구 목록을 LLM에 전달할 때 사용합니다.
  *
  * @interface ToolDefinition
@@ -249,19 +200,8 @@ export interface ChatAdvancedOptions {
 }
 
 // ============================================
-// Ollama Web Search API Types
+// Web Search Types (llm/web-search-adapter)
 // ============================================
-
-/**
- * 웹 검색 요청 (Ollama /api/web_search)
- * @interface WebSearchRequest
- */
-export interface WebSearchRequest {
-    /** 검색 쿼리 문자열 */
-    query: string;
-    /** 최대 검색 결과 수 (기본값: 5, 최대: 10) */
-    max_results?: number;
-}
 
 /**
  * 개별 웹 검색 결과 항목
@@ -285,15 +225,6 @@ export interface WebSearchResponse {
     results: WebSearchResult[];
     /** 검색 실패 시 에러 메시지 */
     error?: string;
-}
-
-/**
- * 웹 페이지 가져오기 요청 (Ollama /api/web_fetch)
- * @interface WebFetchRequest
- */
-export interface WebFetchRequest {
-    /** 가져올 웹 페이지 URL */
-    url: string;
 }
 
 /**
@@ -328,7 +259,7 @@ export interface ChatMessage {
     content: string;
     /** Base64 인코딩된 이미지 배열 (Vision 모델 입력용) */
     images?: string[];
-    /** Thinking(추론 과정) 텍스트 (Ollama Native Thinking 기능) */
+    /** Thinking(추론 과정) 텍스트 — reasoning 모델의 사고 채널 */
     thinking?: string;
     /** LLM이 요청한 도구 호출 목록 (assistant 역할에서만 사용) */
     tool_calls?: ToolCall[];
@@ -343,7 +274,7 @@ export interface ChatMessage {
 }
 
 /**
- * 채팅 요청 (Ollama /api/chat)
+ * 채팅 요청 — LLMClient.chat 입력 (stream-parser 가 OpenAI Chat Completions 요청으로 변환)
  * @interface ChatRequest
  */
 export interface ChatRequest {
@@ -375,100 +306,6 @@ export interface ChatRequest {
     logprobs?: boolean;
     /** logprobs 활성화 시 각 토큰 위치에서 반환할 상위 토큰 수 */
     top_logprobs?: number;
-}
-
-/**
- * 채팅 응답 (Ollama /api/chat)
- * @interface ChatResponse
- */
-export interface ChatResponse {
-    /** 응답에 사용된 모델 이름 */
-    model: string;
-    /** 응답 생성 시각 (ISO 8601) */
-    created_at: string;
-    /** 응답 메시지 (assistant 역할) */
-    message: ChatMessage;
-    /** 생성 완료 여부 (스트리밍 시 마지막 청크에서 true) */
-    done: boolean;
-    /** 생성 완료 사유 ('stop', 'load', 'unload') */
-    done_reason?: string;
-    /** 전체 처리 소요 시간 (나노초) */
-    total_duration?: number;
-    /** 모델 로딩 소요 시간 (나노초) */
-    load_duration?: number;
-    /** 프롬프트 평가 토큰 수 */
-    prompt_eval_count?: number;
-    /** 프롬프트 평가 소요 시간 (나노초) */
-    prompt_eval_duration?: number;
-    /** 생성된 토큰 수 */
-    eval_count?: number;
-    /** 토큰 생성 소요 시간 (나노초) */
-    eval_duration?: number;
-    /** 토큰별 로그 확률 (logprobs=true 요청 시) */
-    logprobs?: Logprob[];
-}
-
-/**
- * 개별 토큰의 로그 확률 정보
- * @interface TokenLogprob
- */
-export interface TokenLogprob {
-    /** 토큰 문자열 */
-    token: string;
-    /** 로그 확률 값 */
-    logprob: number;
-    /** 토큰의 UTF-8 바이트 배열 */
-    bytes: number[];
-}
-
-/**
- * 생성된 토큰의 로그 확률 및 상위 대안 토큰 정보
- * @interface Logprob
- */
-export interface Logprob {
-    /** 토큰 문자열 */
-    token: string;
-    /** 로그 확률 값 */
-    logprob: number;
-    /** 토큰의 UTF-8 바이트 배열 */
-    bytes: number[];
-    /** 해당 위치에서 상위 대안 토큰들의 로그 확률 */
-    top_logprobs: TokenLogprob[];
-}
-
-/**
- * 텍스트 생성 응답 (Ollama /api/generate)
- * @interface GenerateResponse
- */
-export interface GenerateResponse {
-    /** 응답에 사용된 모델 이름 */
-    model: string;
-    /** 응답 생성 시각 (ISO 8601) */
-    created_at: string;
-    /** 생성된 텍스트 응답 */
-    response: string;
-    /** 생성 완료 여부 */
-    done: boolean;
-    /** 대화 컨텍스트 토큰 배열 (연속 대화 시 재사용) */
-    context?: number[];
-    /** 전체 처리 소요 시간 (나노초) */
-    total_duration?: number;
-    /** 모델 로딩 소요 시간 (나노초) */
-    load_duration?: number;
-    /** 프롬프트 평가 토큰 수 */
-    prompt_eval_count?: number;
-    /** 프롬프트 평가 소요 시간 (나노초) */
-    prompt_eval_duration?: number;
-    /** 생성된 토큰 수 */
-    eval_count?: number;
-    /** 토큰 생성 소요 시간 (나노초) */
-    eval_duration?: number;
-    /** 생성 완료 사유 ('stop', 'load', 'unload') */
-    done_reason?: string;
-    /** Thinking 추론 과정 텍스트 (think=true 시) */
-    thinking?: string;
-    /** 토큰별 로그 확률 (logprobs=true 요청 시) */
-    logprobs?: Logprob[];
 }
 
 /**
@@ -514,7 +351,7 @@ export interface ModelInfo {
 }
 
 /**
- * 모델 목록 응답 (Ollama /api/tags)
+ * 모델 목록 응답 — LLMClient.listModels 가 LiteLLM /v1/models 를 이 공통 형식으로 변환
  * @interface ListModelsResponse
  */
 export interface ListModelsResponse {
@@ -527,18 +364,7 @@ export interface ListModelsResponse {
 // ============================================
 
 /**
- * 모델 상세 조회 요청 (Ollama POST /api/show)
- * @interface ShowModelRequest
- */
-export interface ShowModelRequest {
-    /** 조회할 모델 이름 */
-    model: string;
-    /** 상세 모델 정보 포함 여부 */
-    verbose?: boolean;
-}
-
-/**
- * 모델 상세 조회 응답 (Ollama POST /api/show)
+ * 모델 상세 조회 응답 (LLMClient.showModel)
  * @interface ShowModelResponse
  */
 export interface ShowModelResponse {
@@ -561,7 +387,7 @@ export interface ShowModelResponse {
 }
 
 /**
- * 실행 중인 모델 정보 (Ollama GET /api/ps)
+ * 실행 중인 모델 정보 (LLMClient.ps)
  * @interface RunningModel
  */
 export interface RunningModel {
@@ -584,7 +410,7 @@ export interface RunningModel {
 }
 
 /**
- * 실행 중인 모델 목록 응답 (Ollama GET /api/ps)
+ * 실행 중인 모델 목록 응답 (LLMClient.ps)
  * @interface PsResponse
  */
 export interface PsResponse {
@@ -650,17 +476,15 @@ export function getGptOssTaskPreset(taskType: 'code' | 'document' | 'json' | 'ch
 /**
  * GPT-OSS 모델의 think 옵션을 정규화합니다.
  *
- * Ollama 공식 문서에 따르면 GPT-OSS는 think: true/false를 무시하고
- * 반드시 'low' | 'medium' | 'high' 문자열 레벨만 허용합니다.
- * 이 함수는 boolean true가 전달되었을 때 자동으로 'medium'으로 변환하고,
- * false는 undefined(비활성화)로 변환합니다.
+ * GPT-OSS는 think: true/false 를 무시하고 'low' | 'medium' | 'high' 문자열
+ * 레벨만 허용합니다. 이 함수는 boolean true 를 'medium' 으로 변환하고,
+ * false 는 undefined(비활성화)로 변환합니다.
  *
  * 비 GPT-OSS 모델에서는 원본 값을 그대로 반환합니다.
  *
  * @param think - 원본 ThinkOption 값
  * @param model - 현재 사용 중인 모델 이름
  * @returns 정규화된 ThinkOption 또는 undefined (비활성화 시)
- * @see https://docs.ollama.com/capabilities/thinking
  */
 export function normalizeThinkOption(think: ThinkOption | undefined, model: string): ThinkOption | undefined {
     if (think === undefined) return undefined;

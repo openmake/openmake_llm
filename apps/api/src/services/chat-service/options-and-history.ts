@@ -58,7 +58,7 @@ export function buildChatOptions(p: BuildChatOptionsParams): ModelOptions {
         chatOptions = { ...docPreset, ...chatOptions };
     }
 
-    // Thinking ON 시 num_predict 최소 보장 — Ollama 의 thinking/content 공유 풀에서
+    // Thinking ON 시 num_predict 최소 보장 — thinking/content 이 출력 토큰 예산을 공유하는 모델에서
     // 작은 cap 으로 thinking 이 토큰을 다 쓰면 message.content 빈 응답 잘림 발생.
     if (p.thinkingMode === true) {
         const minTokens = TOKEN_BUDGETS.THINKING_MIN_TOKENS;

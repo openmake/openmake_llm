@@ -55,7 +55,7 @@ export class ConventionChecker {
         ];
         try {
             const resp = await this.llm.chat(messages);
-            const tokensUsed = resp.metrics?.eval_count ?? 0;
+            const tokensUsed = resp.metrics?.completion_tokens ?? 0;
             const raw = (resp.content ?? '').trim();
             const fence = raw.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
             const candidate = fence ? fence[1] : raw;

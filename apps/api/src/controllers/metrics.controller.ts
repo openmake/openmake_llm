@@ -28,7 +28,7 @@ const log = createLogger('MetricsController');
 export class MetricsController {
     /** Express 라우터 인스턴스 */
     private router: Router;
-    /** Ollama 클러스터 매니저 */
+    /** LLM 클러스터 매니저 */
     private cluster: ClusterManager;
     /** 활성 WebSocket 클라이언트 수 반환 함수 */
     private clientsGetter: () => number;

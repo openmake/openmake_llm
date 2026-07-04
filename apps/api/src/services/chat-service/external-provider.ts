@@ -253,8 +253,8 @@ export async function streamFromExternalProvider(
                     onThinking: (thinking) => onToken('', thinking),
                     onUsage: (usage) => {
                         deps.onUsage?.(usage);
-                        inputTokensTotal += usage.prompt_eval_count ?? 0;
-                        outputTokensTotal += usage.eval_count ?? 0;
+                        inputTokensTotal += usage.prompt_tokens ?? 0;
+                        outputTokensTotal += usage.completion_tokens ?? 0;
                         if (usage.cost_usd_micros !== undefined) {
                             directCostUsdMicrosTotal = (directCostUsdMicrosTotal ?? 0) + usage.cost_usd_micros;
                         }

@@ -294,7 +294,7 @@ program
 
         if (nodes.length === 0) {
             console.log(chalk.gray('  연결된 노드가 없습니다.'));
-            console.log(chalk.gray('  .env 또는 .ollama-cluster.json에 노드를 추가하세요.\n'));
+            console.log(chalk.gray('  .env 또는 .llm-cluster.json에 노드를 추가하세요.\n'));
         } else {
             for (const node of nodes) {
                 const status = node.status === 'online'
@@ -321,7 +321,7 @@ program
     .command('mcp')
     .description('MCP 서버 모드로 실행')
     .action(async () => {
-        const server = createMCPServer('ollama-coder', VERSION);
+        const server = createMCPServer('openmake-coder', VERSION);
         await server.start();
     });
 

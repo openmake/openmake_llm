@@ -102,7 +102,7 @@ export const LLM_TOP_P = {
  * assessComplexity()의 복잡도 점수와 QueryType을 기반으로
  * 권장 num_predict 값을 결정할 때 사용합니다.
  *
- * UNLIMITED(0)은 Ollama에서 제한 없음을 의미합니다.
+ * UNLIMITED(0)은 제한 없음을 의미합니다.
  */
 export const TOKEN_BUDGETS = {
     /** 최소 토큰 보장 (응답 잘림 방지) */
@@ -113,12 +113,12 @@ export const TOKEN_BUDGETS = {
     MEDIUM: Number(process.env.OMK_TOKEN_BUDGET_MEDIUM) || 1024,
     /** 고복잡도 (0.6 <= score < 0.8) 기본 예산 */
     HIGH: Number(process.env.OMK_TOKEN_BUDGET_HIGH) || 2048,
-    /** 최고복잡도 (score >= 0.8) — 0은 제한 없음 (Ollama 기본값 사용) */
+    /** 최고복잡도 (score >= 0.8) — 0은 제한 없음 (백엔드 기본값 사용) */
     UNLIMITED: 0,
     /**
      * Thinking 모드 활성화 시 num_predict 최소 보장 — env: OMK_THINKING_MIN_TOKENS.
      *
-     * 배경: Ollama의 /api/chat 응답은 message.content 와 message.thinking 이
+     * 배경: reasoning 모델 응답은 message.content 와 message.thinking 이
      *      같은 num_predict 토큰 풀을 공유합니다. 작은 cap(예: 512)에서 thinking
      *      모델이 사고에 토큰을 다 쓰면 실제 응답이 비어 나오는 잘림 현상이
      *      발생합니다 (gemma4:e4b 등 8B local 모델에서 특히 빈번).
@@ -336,7 +336,7 @@ export const PROMPT_TYPE_PRESETS: Record<string, typeof MODEL_PRESETS[keyof type
 
 /**
  * ReasoningLevel → GPT-OSS ModelOptions 매핑
- * ollama/types.ts의 getGptOssPreset()에서 참조
+ * llm/types.ts의 getGptOssPreset()에서 참조
  */
 export const GPT_OSS_LEVEL_PRESETS: Record<string, typeof MODEL_PRESETS[keyof typeof MODEL_PRESETS]> = {
     low: MODEL_PRESETS.GPT_OSS_LOW_REASONING,
@@ -346,7 +346,7 @@ export const GPT_OSS_LEVEL_PRESETS: Record<string, typeof MODEL_PRESETS[keyof ty
 
 /**
  * TaskType → GPT-OSS ModelOptions 매핑
- * ollama/types.ts의 getGptOssTaskPreset()에서 참조
+ * llm/types.ts의 getGptOssTaskPreset()에서 참조
  */
 export const GPT_OSS_TASK_PRESETS: Record<string, typeof MODEL_PRESETS[keyof typeof MODEL_PRESETS]> = {
     code: MODEL_PRESETS.GPT_OSS_CODE,

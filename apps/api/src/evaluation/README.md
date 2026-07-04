@@ -122,7 +122,7 @@ npm run eval:routing:strict
     3. `OMK_EVAL_REAL_TIMEOUT_MS` (기본 60s) — `AbortController`로 강제 중단
     4. `OMK_EVAL_REAL_MAX_TOKENS` (기본 2000) — `onToken` 누적 char 수의
        보수적 토큰 추정(`chars/3`)이 한도 초과 시 즉시 abort
-  - 토큰 추정은 휴리스틱 (정확한 prompt_eval_count/eval_count는 ChatService
+  - 토큰 추정은 휴리스틱 (정확한 prompt_tokens/completion_tokens는 ChatService
     외부로 노출되지 않음). 영문 ~4 char/token이 일반적이므로 `/3`은 빨리
     abort 하는 안전 측 추정.
 

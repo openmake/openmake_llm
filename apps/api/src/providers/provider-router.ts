@@ -4,9 +4,8 @@
  * ============================================================
  *
  * 'provider:model' fullId를 파싱하여 해당 IProvider 어댑터와 modelId를 반환합니다.
- * Phase 1: ollama 분기만 활성, 외부는 NOT_SUPPORTED.
- * Phase 3: anthropic 분기 활성 (사용자별 BYO 키 복호화 + AnthropicProvider 인스턴스).
- * Phase 4: openai-compatible 분기 활성 예정.
+ * 'local-llm' 은 로컬 어댑터로, 그 외 provider 는 사용자별 BYO 키 복호화 후
+ * 외부 어댑터(Anthropic / OpenAI-compatible)로 라우팅합니다.
  *
  * @module providers/provider-router
  */
@@ -40,7 +39,7 @@ export interface ResolvedProvider {
 }
 
 export interface ProviderRouterDeps {
-    /** 로컬 vLLM/LiteLLM 진입점 — 기본(ollama provider id) 라우팅 대상. */
+    /** 로컬 vLLM/LiteLLM 진입점 — canonical 'local-llm' 라우팅 대상. */
     localProvider: LocalLLMProvider;
     /** Phase 3+ 외부 키 저장소 — 미주입 시 외부 provider 분기는 NOT_SUPPORTED */
     externalKeysRepo?: ExternalKeysRepository;
@@ -132,8 +131,8 @@ export class ProviderRouter {
         const { providerId, modelId } = parsed;
 
         // Canonical provider id 'local-llm' — vLLM/LiteLLM 진입점.
-        // parseFullModelId 가 legacy 'ollama:' 를 'local-llm' 으로 normalize 하므로
-        // 옛 모델 ID 'ollama:qwen3.6-...' 도 자동으로 이 분기로 들어옴.
+        // 알 수 없는 provider id 는 외부 provider 경로로 떨어져
+        // MISSING_API_KEY/NOT_SUPPORTED 로 명시 거절됨.
         if (providerId === 'local-llm') {
             return {
                 provider: this.deps.localProvider,

@@ -8,8 +8,8 @@
  * 동일한 streamChat / listModels / validateCredentials 규약을 제공합니다.
  *
  * SSoT 충돌 방지:
- * - usage 필드는 Anthropic 의 input_tokens/output_tokens 를 LLM 명명
- *   (prompt_eval_count/eval_count) 으로 매핑한 뒤 IProvider.usage 에 전달
+ * - usage 필드는 Anthropic 의 input_tokens/output_tokens 를 UsageMetrics 명명
+ *   (prompt_tokens/completion_tokens) 으로 매핑한 뒤 IProvider.usage 에 전달
  * - tool_calls/thinking 도 LLM 어댑터 동일 형식으로 정규화
  *
  * Phase 3 범위:
@@ -396,10 +396,10 @@ export class AnthropicProvider implements IProvider {
                 }
             }
 
-            // Ollama 명명 규약(prompt_eval_count/eval_count)으로 정규화 — IProvider.usage 일관성 유지
+            // UsageMetrics(OpenAI usage 명명)로 정규화 — IProvider.usage 일관성 유지
             const usage: UsageMetrics = {
-                prompt_eval_count: inputTokens || undefined,
-                eval_count: outputTokens || undefined,
+                prompt_tokens: inputTokens || undefined,
+                completion_tokens: outputTokens || undefined,
             };
             callbacks.onUsage?.(usage);
 

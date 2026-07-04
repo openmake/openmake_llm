@@ -20,7 +20,7 @@ import { RESEARCH_DEFAULTS } from '../config/runtime-limits';
 export interface ResearchConfig {
     maxLoops: number;            // 최대 반복 횟수 (기본: 5)
     llmModel: string;            // 사용할 LLM 모델
-    searchApi: 'google' | 'all'; // 검색 API ('ollama' legacy 값은 'all' 로 normalize)
+    searchApi: 'google' | 'all'; // 검색 API
     maxSearchResults: number;    // 검색 결과 예산 (기본: 360)
     language: string;              // 출력 언어 (ISO 639-1 코드, 예: 'ko', 'en', 'ja')
     maxTotalSources: number;     // 목표 고유 소스 수 (기본: 80)

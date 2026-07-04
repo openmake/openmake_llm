@@ -65,7 +65,7 @@ export interface CreateResult {
 export interface SkillCreatorOptions {
     pool: Pool;
     /**
-     * Factory creates a per-request LLMClient (memory: project_per_request_ollama_client).
+     * Factory creates a per-request LLMClient (per-request 생성 — 글로벌 singleton 금지).
      * Receives the model id to use; returns an LLMClient configured for that model.
      */
     llmClientFactory: (model: string) => LLMClient;
@@ -252,7 +252,7 @@ export class SkillCreatorService {
                 const client = this.opts.llmClientFactory(modelUsed);
                 const resp = await client.chat(messages);
                 const raw = resp.content ?? '';
-                const tokensUsed = resp.metrics?.eval_count ?? 0;
+                const tokensUsed = resp.metrics?.completion_tokens ?? 0;
 
                 const json = this.extractJson(raw);
                 const parsed = llmSkillManifestSchema.parse(json);

@@ -105,7 +105,7 @@ export class GenerateVerifyStrategy
         const verifierClient = new LLMClient({ model: context.verifierModel });
         let fullVerifiedResponse = '';
 
-        // format 지정 시 temperature: 0 적용 (Ollama 공식 문서 권장)
+        // format 지정 시 temperature: 0 적용 (결정론적 JSON 출력)
         const verifierOptions = context.format
             ? { temperature: LLM_TEMPERATURES.FORMAT_STRICT }
             : { temperature: LLM_TEMPERATURES.GV_VERIFIER };

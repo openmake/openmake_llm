@@ -1,7 +1,7 @@
 /**
- * @fileoverview Ollama 클러스터 관리 모듈
+ * @fileoverview LLM 클러스터 관리 모듈
  *
- * 분산 Ollama 노드들을 관리하는 클러스터 매니저입니다.
+ * 분산 LLM 노드들을 관리하는 클러스터 매니저입니다.
  * 노드 등록/제거, 헬스체크, 레이턴시 기반 최적 노드 선택 기능을 제공합니다.
  *
  * 내부적으로 HealthChecker(헬스체크/레이턴시)와 NodeSelector(노드 선택/페일오버)에
@@ -39,9 +39,9 @@ import { HealthChecker } from './health-checker';
 import { NodeSelector } from './node-selector';
 
 /**
- * Ollama 클러스터 관리자
+ * LLM 클러스터 관리자
  *
- * 여러 Ollama 노드를 관리하고 모니터링합니다.
+ * 여러 LLM 노드를 관리하고 모니터링합니다.
  * EventEmitter를 상속하여 노드 상태 변경 이벤트를 발생시킵니다.
  *
  * @class ClusterManager
@@ -66,7 +66,7 @@ export class ClusterManager extends EventEmitter {
     /** 등록된 노드 맵 (노드ID -> 노드 정보) */
     private nodes: Map<string, ClusterNode> = new Map();
 
-    /** 노드별 Ollama 클라이언트 맵 */
+    /** 노드별 LLM 클라이언트 맵 */
     private clients: Map<string, LLMClient> = new Map();
 
     /** 클러스터 설정 */
@@ -157,7 +157,7 @@ export class ClusterManager extends EventEmitter {
     /**
      * 노드 추가
      *
-     * 새로운 Ollama 노드를 클러스터에 추가합니다.
+     * 새로운 LLM 노드를 클러스터에 추가합니다.
      * 연결 테스트 후 온라인/오프라인 상태를 설정합니다.
      *
      * @param host - 노드 호스트 주소
@@ -182,7 +182,7 @@ export class ClusterManager extends EventEmitter {
 
         const client = createClient({
             baseUrl: `http://${host}:${port}`,
-            // 로컬 노드 헬스체크/모델 목록 수집은 반드시 로컬 Ollama를 보도록
+            // 로컬 노드 헬스체크/모델 목록 수집은 반드시 로컬 LLM 노드를 보도록
             // non-cloud 모델명을 명시해 Cloud 호스트 자동 전환을 막는다.
             model: 'local-probe'
         });
@@ -282,7 +282,7 @@ export class ClusterManager extends EventEmitter {
     }
 
     /**
-     * 노드의 Ollama 클라이언트 가져오기 (싱글톤 -- 공유)
+     * 노드의 LLM 클라이언트 가져오기 (싱글톤 -- 공유)
      *
      * 주의: 이 클라이언트는 싱글톤이므로 setModel()을 호출하면
      * 동시 요청 간 모델이 덮어쓰여질 수 있습니다.

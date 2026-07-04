@@ -10,7 +10,7 @@ import { ClusterManager, getClusterManager } from '../cluster/manager';
 import { success } from '../utils/api-response';
 
 /**
- * Ollama 클러스터 상태 및 노드 관리 컨트롤러
+ * LLM 클러스터 상태 및 노드 관리 컨트롤러
  * 
  * @class ClusterController
  * @description
@@ -21,7 +21,7 @@ import { success } from '../utils/api-response';
 export class ClusterController {
     /** Express 라우터 인스턴스 */
     private router: Router;
-    /** Ollama 클러스터 매니저 */
+    /** LLM 클러스터 매니저 */
     private cluster: ClusterManager;
 
     /**

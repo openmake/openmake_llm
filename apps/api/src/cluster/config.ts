@@ -26,9 +26,8 @@ const DEFAULT_CONFIG: ClusterConfig = {
     nodes: []
 };
 
-// 파일명은 *후방 호환* 위해 유지 — 운영 환경에 .ollama-cluster.json 이 이미 존재할 수 있음.
-// 신규 생성 시에도 동일 이름 사용 — 향후 일괄 rename 마이그레이션이 필요하면 별도 PR.
-const CONFIG_FILENAME = '.ollama-cluster.json';
+// 클러스터 정적 노드 설정 파일명.
+const CONFIG_FILENAME = '.llm-cluster.json';
 
 export function loadClusterConfig(): ClusterConfig {
     // 설정 파일 찾기: 현재 디렉토리 -> 홈 디렉토리
@@ -50,31 +49,8 @@ export function loadClusterConfig(): ClusterConfig {
         }
     }
 
-    // 환경변수에서 정적 노드 추가
-    const envNodes = process.env.OLLAMA_CLUSTER_NODES;
-    if (envNodes) {
-        const nodes = parseNodesFromEnv(envNodes);
-        return { ...DEFAULT_CONFIG, nodes };
-    }
-
-    // .env 파일에서 OLLAMA_BASE_URL 사용 (legacy — Ollama 시절 호환)
-    const baseUrl = process.env.OLLAMA_BASE_URL;
-    if (baseUrl) {
-        try {
-            const url = new URL(baseUrl);
-            const node: StaticNode = {
-                host: url.hostname,
-                port: parseInt(url.port) || 11434,
-                name: 'primary'
-            };
-            return { ...DEFAULT_CONFIG, nodes: [node] };
-        } catch {
-            // URL 파싱 실패
-        }
-    }
-
-    // .env 의 LLM_BASE_URL 사용 — vLLM/LiteLLM 마이그레이션 (2026-05) 이후 표준 endpoint.
-    // OLLAMA_* 가 모두 미설정인 운영 환경에서 cluster nodes 0개로 503 폭발하는 것을 막음.
+    // .env 의 LLM_BASE_URL 사용 — vLLM/LiteLLM 표준 endpoint.
+    // 다중 노드는 설정 파일 nodes[] 로 지정.
     const llmBaseUrl = process.env.LLM_BASE_URL;
     if (llmBaseUrl) {
         try {
@@ -93,17 +69,6 @@ export function loadClusterConfig(): ClusterConfig {
     return DEFAULT_CONFIG;
 }
 
-function parseNodesFromEnv(envNodes: string): StaticNode[] {
-    // 형식: "host1:port1,host2:port2,..."
-    return envNodes.split(',').map(nodeStr => {
-        const [host, portStr] = nodeStr.trim().split(':');
-        return {
-            host,
-            port: parseInt(portStr) || 11434
-        };
-    }).filter(n => n.host);
-}
-
 export function saveClusterConfig(config: ClusterConfig, filePath?: string): void {
     const targetPath = filePath || path.resolve(process.cwd(), CONFIG_FILENAME);
     fs.writeFileSync(targetPath, JSON.stringify(config, null, 2), 'utf-8');
@@ -114,11 +79,10 @@ export function createDefaultConfigFile(): string {
 
     // 기본 노드 설정 우선순위:
     //   1. LLM_BASE_URL (vLLM/LiteLLM, 2026-05 마이그레이션 후 표준)
-    //   2. OLLAMA_DEFAULT_HOST/PORT (legacy 호환)
-    //   3. 빈 배열 (사용자가 직접 설정)
+    //   2. 빈 배열 (사용자가 직접 설정)
     let defaultHost = 'localhost';
     let defaultPort = 8001;
-    let defaultNodeName = 'llm-proxy';
+    const defaultNodeName = 'llm-proxy';
 
     const llmBaseUrl = process.env.LLM_BASE_URL;
     if (llmBaseUrl) {
@@ -127,12 +91,8 @@ export function createDefaultConfigFile(): string {
             defaultHost = url.hostname;
             defaultPort = parseInt(url.port) || (url.protocol === 'https:' ? 443 : 80);
         } catch {
-            // 파싱 실패 시 legacy 폴백으로
+            // 파싱 실패 — localhost 기본값 유지
         }
-    } else if (process.env.OLLAMA_DEFAULT_HOST) {
-        defaultHost = process.env.OLLAMA_DEFAULT_HOST;
-        defaultPort = parseInt(process.env.OLLAMA_DEFAULT_PORT || '11434');
-        defaultNodeName = process.env.OLLAMA_DEFAULT_NODE_NAME || 'primary';
     }
 
     const defaultWithExample: ClusterConfig = {

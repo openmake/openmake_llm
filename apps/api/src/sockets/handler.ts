@@ -31,7 +31,7 @@
  * - 'cluster_event'      - 클러스터 이벤트
  *
  * @requires ChatService - AI 메시지 처리 서비스
- * @requires ClusterManager - Ollama 클러스터 관리
+ * @requires ClusterManager - LLM 클러스터 관리
  */
 import { WebSocket, WebSocketServer } from 'ws';
 import { IncomingMessage } from 'http';
@@ -77,7 +77,7 @@ export class WebSocketHandler {
      * WebSocket 서버와 클러스터 매니저를 연결하고,
      * 연결 핸들러, 클러스터 이벤트, 하트비트를 초기화합니다.
      * @param wss - WebSocket 서버 인스턴스
-     * @param cluster - Ollama 클러스터 매니저
+     * @param cluster - LLM 클러스터 매니저
      */
     constructor(wss: WebSocketServer, cluster: ClusterManager) {
         this.wss = wss;

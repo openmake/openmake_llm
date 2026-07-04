@@ -23,7 +23,7 @@ import { createSpinner } from '../ui/spinner';
 /**
  * 자연어 설명으로 코드를 생성합니다.
  * 스트리밍으로 토큰을 출력하고, 파일 저장 옵션을 제공합니다.
- * @param client - Ollama 클라이언트 인스턴스
+ * @param client - LLM 클라이언트 인스턴스
  * @param description - 코드 생성 요구사항 설명
  * @param options - 생성 옵션 (output: 저장 파일명, language: 프로그래밍 언어)
  */

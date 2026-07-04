@@ -16,7 +16,7 @@
  * @requires ../agents - 에이전트 라우팅 및 시스템 메시지
  * @requires ../chat/model-selector - 최적 모델 자동 선택
  * @requires ../chat/profile-resolver - 요청 모델 → ExecutionPlan 변환
- * @requires ../ollama/client - Ollama HTTP 클라이언트
+ * @requires ../llm/client - LLM HTTP 클라이언트
  */
 import { createLogger } from '../utils/logger';
 import { AGENTS, type AgentSelection } from '../agents';
@@ -123,7 +123,7 @@ function filterRestrictedTools(tools: ToolDefinition[], role?: string): ToolDefi
  * @class ChatService
  */
 export class ChatService {
-    /** Ollama API 통신 클라이언트 */
+    /** LLM API 통신 클라이언트 */
     client: LLMClient;
     /** 외부 LLM provider 검증/해석 라우터 (선택) — 미지정 시 게이트 비활성 (테스트 호환) */
     readonly providerRouter?: ProviderRouter;
@@ -160,7 +160,7 @@ export class ChatService {
     /**
      * ChatService 인스턴스를 생성합니다.
      *
-     * @param client - Ollama HTTP 클라이언트 인스턴스
+     * @param client - LLM HTTP 클라이언트 인스턴스
      * @param providerRouter - 외부 provider 검증 라우터 (선택, 미지정 시 게이트 비활성)
      */
     constructor(client: LLMClient, providerRouter?: ProviderRouter) {
@@ -560,7 +560,7 @@ export class ChatService {
 
     /**
      * 직전 외부 provider 호출의 사용량 메트릭 조회.
-     * Ollama 경로는 strategies → request-handler.ts 가 별도 경로로 처리.
+     * 로컬 경로는 strategies → request-handler.ts 가 별도 경로로 처리.
      */
     getLastProviderUsage(): import('../llm').UsageMetrics | null {
         return this.lastProviderUsage;

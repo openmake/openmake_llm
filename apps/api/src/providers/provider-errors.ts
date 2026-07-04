@@ -3,7 +3,7 @@
  * Provider Error - LLM Provider 추상화 레이어 에러 타입
  * ============================================================
  *
- * IProvider 구현체(Ollama / Anthropic / OpenAI-compatible 등)가
+ * IProvider 구현체(local-llm / Anthropic / OpenAI-compatible 등)가
  * 일관된 형태로 호출 측에 실패 사유를 전달하기 위한 표준 에러 클래스입니다.
  *
  * @module providers/provider-errors

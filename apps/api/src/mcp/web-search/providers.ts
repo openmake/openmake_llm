@@ -1,7 +1,7 @@
 /**
  * Web Search 프로바이더
  *
- * Ollama, Google, Wikipedia, Google News, DuckDuckGo, Naver 등
+ * Google, Wikipedia, Google News, DuckDuckGo, Naver 등
  * 6개 검색 소스의 개별 검색 함수를 구현합니다.
  *
  * @module mcp/web-search/providers

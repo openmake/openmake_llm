@@ -7,8 +7,6 @@
  * 매핑된 함수 실행 → tool 메시지로 컨버세이션에 누적 → 다시 chat() 호출.
  * tool_calls 가 없으면 종료.
  *
- * 호환: 기존 ollama/agent-loop.ts 의 외부 시그니처 유지.
- *
  * @module llm/agent-loop
  */
 import type { LLMClient } from './client';
@@ -77,9 +75,9 @@ export async function runAgentLoop(params: AgentLoopParams): Promise<AgentLoopRe
 
         if (result.metrics) {
             accumulated = {
-                prompt_eval_count:
-                    (accumulated?.prompt_eval_count ?? 0) + (result.metrics.prompt_eval_count ?? 0),
-                eval_count: (accumulated?.eval_count ?? 0) + (result.metrics.eval_count ?? 0),
+                prompt_tokens:
+                    (accumulated?.prompt_tokens ?? 0) + (result.metrics.prompt_tokens ?? 0),
+                completion_tokens: (accumulated?.completion_tokens ?? 0) + (result.metrics.completion_tokens ?? 0),
                 // 마지막 턴의 finish_reason 보존 — 'length'(max_tokens 절단) 신호가 누적 metrics 에서
                 // 사라지면 호출자가 잘린 답변을 정상 완료로 오인함.
                 ...(result.metrics.finish_reason !== undefined && { finish_reason: result.metrics.finish_reason }),

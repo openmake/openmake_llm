@@ -458,7 +458,7 @@ export async function handleChatMessage(
                 keysInCooldown: error.keysInCooldown
             });
         } else if (error instanceof ProviderError) {
-            // 외부 provider(Anthropic/OpenRouter/Ollama) 에러 — 코드별 사용자 친화 메시지로 분류
+            // 외부 provider(Anthropic/OpenRouter) 에러 — 코드별 사용자 친화 메시지로 분류
             // raw upstream 메시지(error.message)는 stack/credential 누출 위험으로 노출하지 않음
             log.warn(`[Chat] 외부 provider 에러 (${error.code}):`, error.message);
             const localizedTable = getLocalizedTemplate(WS_PROVIDER_ERROR_MESSAGES, userLang);

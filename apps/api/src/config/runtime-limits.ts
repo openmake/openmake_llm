@@ -131,7 +131,7 @@ export const CAPACITY = {
     ANALYTICS_MAX_SESSION_LOG: 5000,
     /** Metrics 슬라이딩 윈도우 최대 샘플 수 */
     METRICS_WINDOW_SIZE: 1000,
-    /** 웹 검색 Ollama num_ctx 설정 (에이전트용 최소 64K 토큰) */
+    /** 웹 검색 num_ctx 설정 (에이전트용 최소 64K 토큰) */
     WEB_SEARCH_NUM_CTX: 65536,
     /** MCP 파일 스캔 최대 파일 수 */
     MCP_MAX_SEARCH_FILES: 1000,
@@ -257,7 +257,7 @@ export const DEEP_RESEARCH_CITATION = {
 
 /**
  * 모델별 num_ctx, num_predict 기본값 (토큰 수)
- * model-selector.ts, ollama/types.ts MODEL_PRESETS에서 참조
+ * model-selector.ts, llm/types.ts MODEL_PRESETS에서 참조
  */
 export const MODEL_CONTEXT_DEFAULTS = {
     /** 기본 num_ctx (일반 모델) */
@@ -1074,7 +1074,7 @@ export const GV_METRICS = {
 /**
  * 외부 LLM(Anthropic/OpenAI-compat) 경로에서 노출하지 않는 MCP 도구 목록.
  *
- * 본 도구들은 MCP 사양상 등록되어 있으나, 실제 처리는 Ollama 경로의
+ * 본 도구들은 MCP 사양상 등록되어 있으나, 실제 처리는 로컬 LLM 경로의
  * AgentLoopStrategy 가 가로채서 LLMClient.chat(비전 모델) 으로 위임한다
  * (mcp/tools.ts visionOcrTool/analyzeImageTool 핸들러는 안내 문구만 반환하는 stub).
  *
@@ -1175,7 +1175,7 @@ export const AGENT_TASK_LIMITS = {
      *  기본 10분: HTML/디자인 등 장문 deliverable 생성은 단일 LLM 호출이 수 분 걸릴 수 있음. */
     TOTAL_TIMEOUT_MS: parseInt(process.env.AGENT_TASK_TIMEOUT_MS || '', 10) || 10 * 60 * 1000,
     /** 누적 토큰 상한 (input + output) — runaway 토큰 폭주 방지. AGENT_MAX_TOTAL_TOKENS 로 오버라이드.
-     *  멀티턴 도구 작업은 매 턴 prompt_eval_count(전체 컨텍스트)를 누적 카운트하므로 200k 는
+     *  멀티턴 도구 작업은 매 턴 prompt_tokens(전체 컨텍스트)를 누적 카운트하므로 200k 는
      *  3턴 만에 소진됐다(샌드박스 도구 작업이 terminate 전에 실패). 기본 1M 으로 상향. */
     MAX_TOTAL_TOKENS: parseInt(process.env.AGENT_MAX_TOTAL_TOKENS || '', 10) || 1_000_000,
     /** 검색류 도구 호출 횟수 하드 상한 — 초과 시 다음 턴부터 검색 도구를 제거해 강제 종합.

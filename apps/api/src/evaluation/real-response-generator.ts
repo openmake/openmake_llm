@@ -23,7 +23,7 @@
  *   timeout/budget 메시지로 재throw. ChatService를 직접 수정하지 않습니다.
  *
  * - **토큰 누적은 onToken 콜백 char 누적의 보수적 추정**입니다.
- *   ChatService는 정확한 토큰 카운트(prompt_eval_count/eval_count)를 외부
+ *   ChatService는 정확한 토큰 카운트(prompt_tokens/completion_tokens)를 외부
  *   ResponseGenerator로 노출하지 않으므로, onToken으로 흐르는 응답 chunk의
  *   문자 수를 누적하고 `chars / 3`을 토큰 추정값으로 사용합니다.
  *   - 영문: ~4 char/token (실제 토큰 수보다 estimate가 큼 → 더 일찍 abort)

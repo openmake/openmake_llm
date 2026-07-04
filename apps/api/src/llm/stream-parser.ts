@@ -1,15 +1,15 @@
 /**
  * ============================================================
- * Stream Parser — OpenAI SSE delta → Ollama-style 응답 정규화
+ * Stream Parser — OpenAI SSE delta → LLMClient 응답 정규화
  * ============================================================
  *
  * vLLM/LiteLLM 의 SSE 스트림(`data: {choices:[{delta:{...}}]}`) 을 파싱하여
- * 기존 LLMClient 시그니처와 호환되는 `(content, thinking)` 콜백으로 전달합니다.
+ * LLMClient 시그니처와 호환되는 `(content, thinking)` 콜백으로 전달합니다.
  *
  * - delta.content → onToken(token, undefined)
  * - delta.reasoning → onToken('', thinking) — vLLM `--reasoning-parser` 결과
  * - delta.tool_calls → 누적 후 ChatMessage.tool_calls 로 반환
- * - usage.prompt_tokens/completion_tokens → prompt_eval_count/eval_count
+ * - usage → UsageMetrics.prompt_tokens/completion_tokens
  *
  * @module llm/stream-parser
  */
@@ -80,7 +80,7 @@ type OpenAIChatResponse = {
 };
 
 /**
- * Ollama-style FormatOption → vLLM/OpenAI response_format 변환.
+ * FormatOption → vLLM/OpenAI response_format 변환.
  * vLLM 지원 타입: json_object | json_schema | structural_tag | text (docs.vllm.ai 2026-03 기준).
  */
 function toResponseFormat(f: FormatOption | undefined): Record<string, unknown> | undefined {
@@ -414,8 +414,8 @@ export async function streamChat(
         ...(finalThinking && { thinking: finalThinking }),
         ...(toolCalls.length > 0 && { tool_calls: toolCalls }),
         metrics: {
-            prompt_eval_count: promptTokens,
-            eval_count: completionTokens,
+            prompt_tokens: promptTokens,
+            completion_tokens: completionTokens,
             ...(finishReason && { finish_reason: finishReason }),
         },
     };
@@ -494,8 +494,8 @@ export async function nonStreamChat(
         ...(finalThinking && { thinking: finalThinking }),
         ...(toolCalls.length > 0 && { tool_calls: toolCalls }),
         metrics: {
-            prompt_eval_count: r.usage?.prompt_tokens,
-            eval_count: r.usage?.completion_tokens,
+            prompt_tokens: r.usage?.prompt_tokens,
+            completion_tokens: r.usage?.completion_tokens,
             ...(finishReason && { finish_reason: finishReason }),
         },
     };

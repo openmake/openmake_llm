@@ -32,7 +32,7 @@ export class HealthChecker {
     /**
      * 레이턴시 측정
      *
-     * @param client - 측정 대상 Ollama 클라이언트
+     * @param client - 측정 대상 LLM 클라이언트
      * @returns 레이턴시(ms) 또는 Infinity (연결 실패 시)
      */
     async measureLatency(client: LLMClient): Promise<number> {
@@ -52,7 +52,7 @@ export class HealthChecker {
      * 상태 변경 시 적절한 이벤트를 발생시킵니다.
      *
      * @param node - 업데이트할 노드
-     * @param client - 해당 노드의 Ollama 클라이언트
+     * @param client - 해당 노드의 LLM 클라이언트
      */
     async updateNodeStatus(node: ClusterNode, client: LLMClient): Promise<void> {
         const wasOnline = node.status === 'online';

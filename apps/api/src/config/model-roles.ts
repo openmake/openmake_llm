@@ -8,9 +8,8 @@
  *
  * 환경변수 우선순위:
  *   1. 역할별 env var (OMK_CHAT_MODEL, OMK_CLASSIFIER_MODEL 등)
- *   2. Legacy OLLAMA_DEFAULT_MODEL (호환 — 신 운영자는 OMK_CHAT_MODEL 권장)
- *   3. LLM_DEFAULT_MODEL (메인 모델로 자동 위임, embedding 제외)
- *   4. ROLE_DEFAULTS 하드코딩 기본값
+ *   2. LLM_DEFAULT_MODEL (메인 모델로 자동 위임, embedding 제외)
+ *   3. ROLE_DEFAULTS 하드코딩 기본값
  *
  * @module config/model-roles
  */
@@ -34,10 +33,6 @@ const ROLE_ENV_VAR: Record<ModelRole, string> = {
  * 운영 환경의 .env 가 갱신될 때까지 호환성을 유지하기 위함.
  *
  * 의도적 보존 (whitelisted legacy fallback):
- *   - chat: 'OLLAMA_DEFAULT_MODEL'
- *       Ollama → vLLM 마이그레이션 (2026-05) 이전 운영 .env 에 박혀있는 키.
- *       운영자가 일괄 갱신하기 전까지 graceful fallback. 신규 권장: OMK_CHAT_MODEL
- *       또는 LLM_DEFAULT_MODEL (line 89 의 LLM_DEFAULT_MODEL fallback 이 최후 안전망).
  *   - router: 'OMK_UIR_MODEL'
  *       UIR (Unified Intent Router) 삭제 후 router role 만 별도 시스템(agents/llm-router)
  *       으로 살아남았다. 신규 권장: OMK_ROUTER_MODEL.
@@ -46,7 +41,6 @@ const ROLE_ENV_VAR: Record<ModelRole, string> = {
  * legacy 키는 무시됩니다. 시간이 지나 운영 전수에서 신규 변수가 사용되면 별도 PR 에서 제거 가능.
  */
 const LEGACY_ROLE_ENV_VAR: Partial<Record<ModelRole, string>> = {
-    chat:   'OLLAMA_DEFAULT_MODEL',
     router: 'OMK_UIR_MODEL',
 };
 

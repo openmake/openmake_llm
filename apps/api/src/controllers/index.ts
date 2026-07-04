@@ -8,7 +8,7 @@
  *
  * @module controllers
  * @description
- * - ClusterController: Ollama 클러스터 상태 및 노드 관리
+ * - ClusterController: LLM 클러스터 상태 및 노드 관리
  * - HealthController: 헬스체크 및 레디니스 프로브
  * - MetricsController: 시스템 메트릭 및 사용량 통계
  * - AuthController: 인증 (로그인, 회원가입, OAuth)
