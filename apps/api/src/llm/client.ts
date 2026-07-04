@@ -98,6 +98,11 @@ export class LLMClient {
             keep_alive?: string | number;
             /** OpenAI SDK request cancel — abort 시 upstream HTTP 요청 즉시 종료 (orphan 방지) */
             signal?: AbortSignal;
+            /**
+             * 첫 SSE 청크 수신 시 1회 호출 (streaming 한정) — 호출자의 TTFT
+             * fast-fail 타이머 취소용. tool-call-only 응답에서도 발화한다.
+             */
+            onActivity?: () => void;
         },
     ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
         await this.checkQuota();
@@ -161,7 +166,8 @@ export class LLMClient {
             'llm.chat',
             async (span) => {
                 const result = onToken
-                    ? await streamChat(this.openai, request, onToken, extraBody, advancedOptions?.signal)
+                    ? await streamChat(this.openai, request, onToken, extraBody, advancedOptions?.signal,
+                        undefined, advancedOptions?.onActivity)
                     : await nonStreamChat(this.openai, request, extraBody, advancedOptions?.signal);
                 const totalTokens =
                     (result.metrics?.prompt_tokens ?? 0) + (result.metrics?.completion_tokens ?? 0);

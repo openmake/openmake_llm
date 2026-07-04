@@ -180,9 +180,18 @@ export async function streamChat(
      * 미제공 시 기존 동작 그대로 (backward compat).
      */
     artifactCallbacks?: ArtifactStreamCallbacks,
+    /**
+     * 첫 SSE 청크 수신 시 1회 호출 — "업스트림 생존" 신호.
+     * content 토큰 없이 tool_calls delta 만 오는 응답에서도 발화하므로,
+     * 호출자의 TTFT fast-fail 타이머 취소용으로 onToken 보다 정확하다.
+     * (onToken 은 content/thinking 에만 발화 — tool-call-only 응답에서 fast-fail 이
+     * 정상 스트림을 끊던 결함의 수정 지점, 2026-07-04.)
+     */
+    onActivity?: () => void,
 ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
     const tools = request.tools ? toOpenAITools(request.tools) : undefined;
     const responseFormat = toResponseFormat(request.format);
+    const requestStartedAt = Date.now();
     const stream = await openai.chat.completions.create({
         model: request.model,
         messages: toOpenAIMessages(request.messages),
@@ -245,7 +254,17 @@ export async function streamChat(
     // recovery 가 reasoning+답변 전체를 content 로 승격하는 누수가 발생한다.
     let usesReasoningField = false;
 
+    let activityFired = false;
     for await (const raw of stream as unknown as AsyncIterable<OpenAIChatChunk>) {
+        if (!activityFired) {
+            activityFired = true;
+            // TTFC(first-chunk) 관측 — fast-fail 진단용. 임계 초과 시에만 warn.
+            const ttfcMs = Date.now() - requestStartedAt;
+            if (ttfcMs > 3000) {
+                log.warn(`[TTFC] 첫 SSE 청크 ${ttfcMs}ms — model=${request.model} msgs=${request.messages.length} tools=${request.tools?.length ?? 0}`);
+            }
+            onActivity?.();
+        }
         const choice = raw.choices?.[0];
         // vLLM 0.21+ 는 reasoning 모델 출력을 `delta.reasoning_content` 로 보냄 (Qwen3).
         // 일부 빌드는 `delta.reasoning` 도 사용 — 두 필드 모두 수신하여 호환.

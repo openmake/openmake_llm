@@ -208,16 +208,20 @@ export class ChatService {
         //   역할 미달(게스트 등) 사용자에게 노출하지 않는다(공개 인스턴스 과노출 차단).
         const allTools = filterRestrictedTools(rawTools, reqCtx.userContext.role);
 
-        // enabledTools가 없으면 레거시 호환: 전체 허용 (API 클라이언트 등). skill binding 적용도 skip.
-        if (reqCtx.enabledTools === undefined) return this.applySkillCatalog(allTools, allTools, reqCtx);
+        // enabledTools 미지정(API 클라이언트 등)은 빈 토글로 간주 — 구 "전체 허용" 레거시 분기는
+        // 2026-07-04 제거: 전체 도구(운영 실측 285개, 스키마 345KB)가 그대로 LLM 에 실려
+        // vLLM 프리필이 fast-fail 한도를 초과, 해당 클라이언트의 채팅이 무조건 실패했다.
+        // 미지정 시에도 아래 capped merge(always-on + user MCP auto-on cap + profile/skills)를
+        // 동일 적용해 프론트 요청과 같은 안전한 도구 집합을 노출한다.
+        const enabledToggles = reqCtx.enabledTools ?? {};
 
         // 설치한 user MCP 서버 도구는 "설치=기본 ON" — 채팅 토글 없이 자동 노출(cap 적용).
         // global 외부 도구는 자동 노출 대상 아님(opt-in 유지). 끄려면 /mcp-servers 서버 disable.
         const toolGroups = userIdStr ? toolRouter.getUserPoolToolGroups(userIdStr) : [];
-        const userMcpAutoOn = selectUserMcpAutoOn(allTools, toolGroups, reqCtx.enabledTools, CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, reqCtx.message);
+        const userMcpAutoOn = selectUserMcpAutoOn(allTools, toolGroups, enabledToggles, CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, reqCtx.message);
 
         // 사용자가 명시적으로 활성화한 도구만 추출
-        const userToggled = allTools.filter(t => reqCtx.enabledTools![t.function.name] === true);
+        const userToggled = allTools.filter(t => enabledToggles[t.function.name] === true);
 
         // profile.requiredTools (Vision 프로파일 등) 의 토큰 매칭 → 실제 도구 이름으로 확장
         const profileRequiredNames = (reqCtx.executionPlan?.requiredTools ?? [])

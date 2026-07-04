@@ -156,13 +156,19 @@ export class LocalLLMProvider implements IProvider {
             // LLMClient.chat 의 onToken 콜백은 (token, thinking?) 합쳐서 받음.
             // IProvider 의 분리된 onToken / onThinking 으로 매핑.
             //
-            // Fast-fail 은 TTFT(첫 토큰 수신) 만 race — 첫 토큰 도착 시 timer 취소하여
-            // long-response (긴 답변) 가 5초 넘어도 잘리지 않도록 한다.
-            const onTokenCombined = (token: string, thinking?: string): void => {
-                if (fastFailTimer && (token || thinking)) {
+            // Fast-fail 은 "업스트림 생존" 확인까지만 race — 첫 SSE 청크(onActivity) 도착 시
+            // timer 취소하여 long-response 가 timeout 을 넘어도 잘리지 않도록 한다.
+            // onActivity 는 content 토큰 없이 tool_calls delta 만 오는 응답에서도 발화 —
+            // (구) onToken(content/thinking) 기준 취소는 tool-call-only 응답이 timeout 을
+            // 넘기면 정상 스트림을 끊는 결함이 있었다 (2026-07-04 수정).
+            const clearFastFail = (): void => {
+                if (fastFailTimer) {
                     clearTimeout(fastFailTimer);
                     fastFailTimer = null;
                 }
+            };
+            const onTokenCombined = (token: string, thinking?: string): void => {
+                if (token || thinking) clearFastFail();
                 if (thinking) callbacks.onThinking?.(thinking);
                 if (token) callbacks.onToken?.(token);
             };
@@ -179,6 +185,8 @@ export class LocalLLMProvider implements IProvider {
                         ? true
                         : opts.thinking,
                     tools: opts.tools,
+                    // 첫 SSE 청크 = 업스트림 생존 — fast-fail 취소 (tool-call-only 응답 포함).
+                    onActivity: clearFastFail,
                     // user signal (opts.abortSignal) + self fast-fail signal 결합 전달 — 어느 쪽이
                     // abort 해도 SDK upstream 즉시 종료. catch 분기는 원본 signal 의 aborted 로 구분.
                     ...((fastFailController || opts.abortSignal)
