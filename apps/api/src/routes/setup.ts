@@ -50,6 +50,7 @@ import {
     apiKeysRouter,
     externalKeysRouter,
     artifactsRouter,
+    artifactPublicationRouter,
 } from './index';
 import { setupSwaggerRoutes } from '../swagger';
 import { createClusterController, createHealthController, createAuthController, createAdminController, createSessionController } from '../controllers';
@@ -182,6 +183,8 @@ export function setupApiRoutes(
     app.use('/api/debug-queue', debugQueueRouter);
     // Artifacts (2026-05-26 Phase 1): GET/DELETE /api/sessions/:sid/artifacts/*
     app.use('/api', artifactsRouter);
+    // Artifacts 공유/퍼블리시·뷰어·갤러리 (파일 크기 가드로 분리 — 동일 /api prefix)
+    app.use('/api', artifactPublicationRouter);
 
     // 부트스트랩 서비스 초기화
     bootstrapServices();

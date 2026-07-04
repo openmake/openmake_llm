@@ -38,6 +38,8 @@ export { default as agentSuggestionsRouter } from './agent-suggestions.routes';
 export { default as externalRouter } from './external.routes';
 // 🆕 Artifacts (2026-05-26 Phase 1): claude.ai-style 산출물 영속화
 export { default as artifactsRouter } from './artifacts.routes';
+// Artifacts 공유/퍼블리시·뷰어·갤러리 (artifacts.routes 에서 분리 — 파일 크기 가드)
+export { default as artifactPublicationRouter } from './artifact-publication.routes';
 
 // 🆕 Push 알림 라우트
 export { pushRouter } from './push.routes';
