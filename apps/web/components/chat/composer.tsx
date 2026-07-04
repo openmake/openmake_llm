@@ -252,10 +252,12 @@ export function Composer() {
     }
   };
 
-  // 모델 목록 로드 시 현재 selectedModel 이 목록에 없으면 defaultModel 로 동기화
+  // 모델 목록 로드 시 현재 selectedModel 이 목록에 없으면 defaultModel 로 동기화.
+  // 'default'(자동) 는 유효한 센티널 — 백엔드 ws-chat-handler 가 자동 선택으로 처리하므로
+  // 구체 모델로 강제 치환하지 않는다 (치환 시 설정의 "자동" 선택이 조용히 풀리는 버그).
   useEffect(() => {
     if (!modelsData) return;
-    if (!modelsData.models.some((m) => m.modelId === selectedModel)) {
+    if (selectedModel !== "default" && !modelsData.models.some((m) => m.modelId === selectedModel)) {
       setSelectedModel(modelsData.defaultModel);
     }
     // selectedModel 변동마다 재실행 불필요 — 목록 로드 시점에만 보정
@@ -590,16 +592,28 @@ export function Composer() {
             {tSettings(`responseStyles.${style}`)}
           </button>
 
-          {/* 사용 중인 LLM 모델 — 표시 전용 (변경은 설정 → 모델&응답 → 기본 모델) */}
+          {/* 사용 중인 LLM 모델 — 표시 전용 (변경은 설정 → 모델&응답 → 기본 모델).
+              '자동' 이면 서버 기본모델명을 병기해 실제 사용 모델을 노출한다. */}
           <span
-            className="max-w-[180px] truncate px-2 py-1.5 text-xs font-medium text-muted"
-            title={selectedModel === "default" || !selectedModel ? t("modelAuto") : selectedModel}
+            className="max-w-[200px] truncate px-2 py-1.5 text-xs font-medium text-muted"
+            title={
+              selectedModel === "default" || !selectedModel
+                ? (modelsData?.defaultModel ?? t("modelAuto"))
+                : selectedModel
+            }
             aria-label={t("modelLabel")}
           >
-            {selectedModel === "default" || !selectedModel
-              ? t("modelAuto")
-              : (modelsData?.models.find((m) => m.modelId === selectedModel)?.name ??
-                selectedModel.split(":").slice(1).join(":"))}
+            {(() => {
+              const nameOf = (fullId: string) =>
+                modelsData?.models.find((m) => m.modelId === fullId)?.name ??
+                fullId.split(":").slice(1).join(":");
+              if (selectedModel === "default" || !selectedModel) {
+                return modelsData?.defaultModel
+                  ? `${t("modelAuto")} · ${nameOf(modelsData.defaultModel)}`
+                  : t("modelAuto");
+              }
+              return nameOf(selectedModel);
+            })()}
           </span>
 
           {isGenerating ? (

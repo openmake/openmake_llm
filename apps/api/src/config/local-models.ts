@@ -47,7 +47,8 @@ export interface LocalModelEntry {
 
 /**
  * 기본 카탈로그 — 로컬 채팅 모델은 실질적으로 **단일** (qwen3.6-35b-a3b, 262K).
- * UI(모델 셀렉터)에는 'Local LLM' 단일 항목으로 표기한다.
+ * UI 표시명은 실제 모델명을 그대로 사용한다 (2026-07-04: 구 'Local LLM' 브랜딩 표기는
+ * 멀티 provider 모델 칩/2단계 picker 도입으로 "어느 모델인지" 를 가려서 폐기).
  *
  * gpt-3.5-turbo 는 LiteLLM proxy 의 OpenAI 호환 alias(→ qwen3.6 라우팅)로,
  * 외부 OpenAI SDK 클라이언트 호환 전용이라 앱 UI 카탈로그에는 노출하지 않는다
@@ -61,7 +62,7 @@ export interface LocalModelEntry {
 const DEFAULT_LOCAL_MODELS: LocalModelEntry[] = [
     {
         id: 'qwen3.6-35b-a3b',
-        displayName: 'Local LLM',
+        displayName: 'qwen3.6-35b-a3b',
         description: '로컬 vLLM (Qwen 3.6, 35B-A3B)',
         role: 'chat',
         contextLength: 262144,
