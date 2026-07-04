@@ -88,6 +88,7 @@ function readFileBase64(file: File): Promise<string> {
 
 export function Composer() {
   const t = useTranslations("composer");
+  const tSettings = useTranslations("settings");
   const { sendChat, abort, startAgentTask, sendStructured } = useChatSocket();
   const router = useRouter();
   const [text, setText] = useState("");
@@ -583,10 +584,10 @@ export function Composer() {
 
           <button
             onClick={cycleStyle}
-            className="rounded-md px-2 py-1.5 text-xs font-medium capitalize text-muted hover:bg-surface-2 hover:text-fg"
+            className="rounded-md px-2 py-1.5 text-xs font-medium text-muted hover:bg-surface-2 hover:text-fg"
             title={t("responseStyle")}
           >
-            {style}
+            {tSettings(`responseStyles.${style}`)}
           </button>
 
           {/* 사용 중인 LLM 모델 — 표시 전용 (변경은 설정 → 모델&응답 → 기본 모델) */}
