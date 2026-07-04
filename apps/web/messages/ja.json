@@ -1206,7 +1206,8 @@
     },
     "mock": {
       "productionName": "本番"
-    }
+    },
+    "validationWarning": "キーは保存されましたが、endpoint の検証に失敗しました: {error} — URL/キーを確認して再保存してください。"
   },
   "usage": {
     "title": "使用量",

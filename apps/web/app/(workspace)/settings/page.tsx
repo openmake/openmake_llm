@@ -320,12 +320,15 @@ export default function SettingsPage() {
   const allModels = modelsData?.models ?? [];
   const externalModels = allModels.filter((m) => m.provider !== "local-llm");
   // provider id → 1단계 표시 라벨 (현재 openrouter 만 등록 가능, 그 외 provider 도 일반 처리)
+  const EXTERNAL_PROVIDER_LABELS: Record<string, string> = {
+    openrouter: "🌐 OpenRouter",
+    "ollama-local": "🌐 Ollama (Local)",
+    "ollama-cloud": "🌐 Ollama Cloud",
+  };
   const providerLabel = (provider: string) =>
     provider === "local-llm"
       ? tSettings("modelGroup.local")
-      : provider === "openrouter"
-        ? "🌐 OpenRouter"
-        : `🌐 ${provider}`;
+      : (EXTERNAL_PROVIDER_LABELS[provider] ?? `🌐 ${provider}`);
   // UI 표시 언어 — NEXT_LOCALE 쿠키가 SoT (i18n/request.ts 가 서버 렌더 시 읽음).
   // 로컬 state 중복 없이 쿠키를 직접 구독: 서버 스냅샷 "" → hydration 후 클라 값으로 갱신.
   const language = useSyncExternalStore(

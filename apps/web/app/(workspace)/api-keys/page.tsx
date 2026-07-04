@@ -280,12 +280,24 @@ function AddKeyForm({
     setSaving(true);
     setFormError(null);
     try {
-      await ApiClient.post(`/api/external-keys/${providerId}`, {
+      const res = await ApiClient.post<
+        { success: boolean; data?: { validated?: boolean; validation_error?: string | null } }
+      >(`/api/external-keys/${providerId}`, {
         sdk_type: selected?.sdk_type ?? "openai-compatible",
         display_name: displayName.trim(),
         api_key: apiKey.trim(),
         base_url: baseUrl.trim() || null,
       });
+      // 등록 직후 즉시 검증 결과 — 실패면 저장은 됐지만 endpoint 미도달.
+      // 폼을 유지해 주소/키를 바로 고칠 수 있게 한다 (재저장 = upsert).
+      if (res?.data?.validated === false) {
+        setFormError(
+          t("validationWarning", {
+            error: res.data.validation_error ?? t("serverError"),
+          }),
+        );
+        return;
+      }
       await onSaved();
     } catch (err) {
       setFormError(
@@ -335,6 +347,11 @@ function AddKeyForm({
                   </option>
                 ))}
               </select>
+              {selected?.help_text && (
+                <span className="mt-1 block text-xs leading-relaxed text-muted">
+                  {selected.help_text}
+                </span>
+              )}
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-fg-2">

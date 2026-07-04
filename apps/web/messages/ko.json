@@ -1206,7 +1206,8 @@
     },
     "mock": {
       "productionName": "프로덕션"
-    }
+    },
+    "validationWarning": "키는 저장됐지만 endpoint 검증에 실패했습니다: {error} — 주소/키를 확인 후 다시 저장하세요."
   },
   "usage": {
     "title": "사용량",

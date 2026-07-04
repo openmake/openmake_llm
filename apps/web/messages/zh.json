@@ -1206,7 +1206,8 @@
     },
     "mock": {
       "productionName": "生产"
-    }
+    },
+    "validationWarning": "密钥已保存，但 endpoint 验证失败：{error} — 请检查地址/密钥后重新保存。"
   },
   "usage": {
     "title": "使用量",

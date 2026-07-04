@@ -34,6 +34,12 @@ import {
 import { validateOutboundUrl } from '../security/ssrf-guard';
 import { AnthropicProvider } from '../providers/anthropic-provider';
 import { OpenAICompatProvider } from '../providers/openai-compat-provider';
+
+/** 등록 직후 즉시 검증 타임아웃 (ms) — 죽은 LAN IP 등에서 등록 응답이 hang 되지 않도록 상한.
+ *  env EXTERNAL_KEY_VALIDATION_TIMEOUT_MS 로 오버라이드. */
+const KEY_VALIDATION_TIMEOUT_MS = parseInt(
+    process.env.EXTERNAL_KEY_VALIDATION_TIMEOUT_MS || '8000', 10,
+);
 import type { IProvider } from '../providers/i-provider';
 import { createLogger } from '../utils/logger';
 
@@ -164,7 +170,49 @@ router.post('/:providerId',
         // 키 변경 시 모델 카탈로그 캐시 무효화 (stale 데이터 제거)
         await getRepo().invalidateCachedModels(userId, providerId);
 
-        logger.info(`외부 키 등록: user=${userId} provider=${providerId}`);
+        // 등록 직후 즉시 검증 (2026-07-04): base_url 오타·죽은 endpoint·잘못된 키가
+        // "등록 성공 후 모델 목록이 비는" 지연 실패로 발현되던 것을 조기 피드백.
+        // fail-open — 검증 실패해도 저장은 유지하고 validated=false 로 응답,
+        // 결과는 last_validated_at/last_validation_* 에 기록.
+        let validated = false;
+        let validationError: string | null = null;
+        if (req.body.sdk_type === 'openai-compatible' && resolvedBaseUrl) {
+            try {
+                const provider = new OpenAICompatProvider({
+                    providerId,
+                    apiKey: req.body.api_key,
+                    baseUrl: resolvedBaseUrl,
+                });
+                // listModels 는 내부에서 오류를 삼키고 [] 를 반환하므로 "빈 목록 = 실패" 로
+                // 판정한다. 죽은 IP 에서 SDK 기본 타임아웃(수 분)에 걸리지 않도록 race 상한.
+                const list = await Promise.race([
+                    provider.listModels(),
+                    new Promise<never>((_, reject) => {
+                        const t = setTimeout(
+                            () => reject(new Error(`validation timeout (${KEY_VALIDATION_TIMEOUT_MS}ms)`)),
+                            KEY_VALIDATION_TIMEOUT_MS,
+                        );
+                        t.unref?.();
+                    }),
+                ]);
+                if (list.length > 0) {
+                    validated = true;
+                    logger.info(`외부 키 즉시 검증 OK: provider=${providerId} models=${list.length}`);
+                } else {
+                    validationError = 'endpoint 에서 모델 목록을 가져오지 못했습니다 (주소/키 확인)';
+                    logger.warn(`외부 키 즉시 검증 실패: provider=${providerId} — 모델 0개`);
+                }
+            } catch (err) {
+                validationError = err instanceof Error ? err.message : String(err);
+                logger.warn(`외부 키 즉시 검증 실패: provider=${providerId} — ${validationError}`);
+            }
+            await getRepo().recordValidation(userId, providerId, {
+                ok: validated,
+                error: validationError,
+            });
+        }
+
+        logger.info(`외부 키 등록: user=${userId} provider=${providerId} validated=${validated}`);
         res.status(201).json(
             success({
                 provider_id: row.providerId,
@@ -173,6 +221,8 @@ router.post('/:providerId',
                 base_url: row.baseUrl,
                 created_at: row.createdAt,
                 updated_at: row.updatedAt,
+                validated,
+                validation_error: validationError,
             }),
         );
     }),

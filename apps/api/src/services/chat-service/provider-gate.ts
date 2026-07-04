@@ -39,6 +39,8 @@ import type {
 const KNOWN_FULLID_PREFIXES: readonly string[] = [
     'local-llm',
     'openrouter',
+    'ollama-local',
+    'ollama-cloud',
 ];
 
 export interface ProviderGateInput {

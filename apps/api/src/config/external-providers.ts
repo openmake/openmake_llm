@@ -105,6 +105,46 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             { id: 'deepseek/deepseek-r1',              displayName: 'DeepSeek R1',                 isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true } },
         ],
     },
+    {
+        id: 'ollama-local',
+        displayName: 'Ollama (Local)',
+        sdkType: 'openai-compatible',
+        // Ollama 의 OpenAI 호환 endpoint 는 /v1. 실제 주소는 사용자가 base URL 로 입력
+        // (예: http://192.168.x.x:11434/v1). LAN IP 는 SSRF 가드에 걸리므로 운영자가
+        // .env SSRF_ALLOWED_HOSTS 에 해당 호스트를 등록해야 함 (fail-closed opt-in).
+        defaultBaseUrl: 'http://localhost:11434/v1',
+        validatePath: '/models',
+        enabled: true,
+        sortOrder: 30,
+        helpText:
+            '자체 서빙 중인 Ollama 서버의 OpenAI 호환 endpoint 를 입력하세요 ' +
+            '(예: http://<서버IP>:11434/v1). Ollama 는 API 키가 없으므로 임의 문자열 ' +
+            '8자 이상(예: ollama-no-key)을 입력하면 됩니다. LAN/사설 IP 는 서버 .env 의 ' +
+            'SSRF_ALLOWED_HOSTS 허용목록 등록이 필요합니다. 모델 목록은 해당 서버에 ' +
+            'pull 되어 있는 모델이 자동 표시됩니다.',
+        authMethods: ['api_key'] as const,
+        // 로컬 Ollama 는 설치 모델이 전부 — /v1/models 실패 시 보여줄 공통 모델이 없음
+        fallbackModels: [],
+    },
+    {
+        id: 'ollama-cloud',
+        displayName: 'Ollama Cloud',
+        sdkType: 'openai-compatible',
+        defaultBaseUrl: 'https://ollama.com/v1',
+        validatePath: '/models',
+        enabled: true,
+        sortOrder: 40,
+        helpText:
+            'Ollama Cloud (https://ollama.com/settings/keys) 의 API 키를 입력하세요. ' +
+            '클라우드 호스팅 대형 모델을 OpenAI 호환 API 로 사용합니다. ' +
+            '모델 ID 는 "deepseek-v3.1:671b-cloud" 처럼 :cloud 태그 형식입니다.',
+        authMethods: ['api_key'] as const,
+        fallbackModels: [
+            { id: 'deepseek-v3.1:671b-cloud', displayName: 'DeepSeek V3.1 671B (Cloud)', isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true } },
+            { id: 'gpt-oss:120b-cloud',       displayName: 'GPT-OSS 120B (Cloud)',       isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true } },
+            { id: 'qwen3-coder:480b-cloud',   displayName: 'Qwen3 Coder 480B (Cloud)',   isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
+        ],
+    },
 ] as const;
 
 /**

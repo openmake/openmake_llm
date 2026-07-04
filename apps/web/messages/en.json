@@ -1206,7 +1206,8 @@
     },
     "mock": {
       "productionName": "Production"
-    }
+    },
+    "validationWarning": "Key saved, but endpoint validation failed: {error} — check the URL/key and save again."
   },
   "usage": {
     "title": "Usage",
