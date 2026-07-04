@@ -19,6 +19,29 @@ export const ROUTER_TEMPERATURE =
 export const ROUTER_NUM_PREDICT =
     Number(process.env.OMK_ROUTER_NUM_PREDICT ?? '200');
 
+// ── Agent 라우팅 경량화 (선분류·캐시) — 2026-07-04 ───────────
+// LLM 라우팅은 채팅당 ~2-3s + ~2.7k 토큰 고정 비용. 아래 3단계로 호출을 절감:
+// 캐시 히트 → 키워드 선분류(고신뢰) → 短문장 직행, 그 외에만 LLM 라우팅.
+
+/** 라우팅 결과 LRU 캐시 사용 여부 (env: OMK_AGENT_ROUTE_CACHE_ENABLED, 기본 true) */
+export const AGENT_ROUTE_CACHE_ENABLED =
+    (process.env.OMK_AGENT_ROUTE_CACHE_ENABLED ?? 'true') === 'true';
+
+/** 키워드 라우터 선분류 채택 임계 신뢰도 — 이상이면 LLM 라우팅 스킵
+ *  (env: OMK_AGENT_KEYWORD_PRECLASSIFY_CONFIDENCE, 기본 0.7, 1 초과 값 = 사실상 비활성) */
+export const AGENT_KEYWORD_PRECLASSIFY_CONFIDENCE =
+    Number(process.env.OMK_AGENT_KEYWORD_PRECLASSIFY_CONFIDENCE ?? '0.7');
+
+/** 短문장 직행 길이 상한 — 이 길이 이하 + 키워드 신호 없음이면 'general' 직행
+ *  (env: OMK_AGENT_SHORT_QUERY_MAX_CHARS, 기본 30, 0 = 비활성) */
+export const AGENT_SHORT_QUERY_MAX_CHARS =
+    Number(process.env.OMK_AGENT_SHORT_QUERY_MAX_CHARS ?? '30');
+
+/** 短문장 직행 시 "키워드 신호 없음"으로 간주할 신뢰도 상한 — 키워드 라우터의
+ *  무매칭 기본값(general 0.3) 이하 (env: OMK_AGENT_SHORT_QUERY_KEYWORD_CEILING, 기본 0.3) */
+export const AGENT_SHORT_QUERY_KEYWORD_CEILING =
+    Number(process.env.OMK_AGENT_SHORT_QUERY_KEYWORD_CEILING ?? '0.3');
+
 // ── Complexity Assessor 설정 ─────────────────────────────────
 
 /** GV 건너뛰기 임계값 - 이 점수 미만이면 Generate-Verify 생략 (env: OMK_GV_SKIP_THRESHOLD) */
