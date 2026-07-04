@@ -142,4 +142,9 @@ export const agentTaskGetTool: MCPToolDefinition = {
 export const agentTaskTools: MCPToolDefinition[] = [agentTaskListTool, agentTaskGetTool];
 
 /** 채팅에서 토글 없이 항상 제공되는 도구 이름 — ChatService.getAllowedTools 가 머지에 사용 */
-export const CHAT_ALWAYS_ON_TOOL_NAMES: string[] = [agentTaskListTool.tool.name, agentTaskGetTool.tool.name, 'generate_image'];
+// extract_webpage 를 상시 제공 — URL 사전 분석(현재 메시지에 URL 있을 때만 동작)의 사각지대를
+// 메운다. 후속 턴에서 모델이 페이지/API 를 가져올 정식 수단이 생겨, 접속 결과를 지어내는 환각
+// ("보안 차단됨"·가짜 200 OK 등)을 방지. SSRF 가드(safeFetch)는 이 도구 경로에도 동일 적용된다.
+// 주의: always-on 도구는 곧 아티팩트 생성 turn 의 distractor 이므로 runtime-limits.ts 의
+// ARTIFACT_REQUEST_SUPPRESSED_TOOLS 와 항상 동일 집합을 유지할 것.
+export const CHAT_ALWAYS_ON_TOOL_NAMES: string[] = [agentTaskListTool.tool.name, agentTaskGetTool.tool.name, 'generate_image', 'extract_webpage'];

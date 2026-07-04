@@ -1153,6 +1153,7 @@ export const ARTIFACT_REQUEST_SUPPRESSED_TOOLS: readonly string[] = [
     'generate_image',
     'agent_task_list',
     'agent_task_get',
+    'extract_webpage',
 ] as const;
 
 /** 사용자 메시지가 명시적 아티팩트 생성 요청인지 판정하는 키워드 패턴. */
