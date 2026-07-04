@@ -279,7 +279,11 @@ export function useChatSocket() {
         type: "chat",
         message,
         model: s.selectedModel,
-        history: s.chatHistory.map((m) => ({ role: m.role, content: m.content })),
+        // 표시 전용 안내(notice)는 히스토리에서 제외 — system 메시지가 중간 위치로 새어
+        // 외부 provider 400(위치 위반)을 유발하는 것을 방지.
+        history: s.chatHistory
+          .filter((m) => !m.notice)
+          .map((m) => ({ role: m.role, content: m.content })),
         sessionId: s.currentSessionId,
         anonSessionId: getAnonSessionId(),
         images: images ?? [],
@@ -294,6 +298,12 @@ export function useChatSocket() {
         enabledTools: s.mcpToolsEnabled,
       };
       ws.send(JSON.stringify(payload));
+
+      // 가로채기(bypass) 모드가 켜져 있으면 도구·아티팩트가 이번 응답에 적용되지 않으므로,
+      // 스트리밍 직전에 표시 전용 안내를 삽입한다(notice: true → history payload 제외).
+      if (s.discussionMode || s.deepResearchMode || s.imageMode) {
+        appendMessage({ role: "system", content: tRef.current("interceptNotice"), notice: true });
+      }
     },
     [appendMessage, setStreaming, setActiveAgent, setActiveSkills, connect],
   );
@@ -306,8 +316,10 @@ export function useChatSocket() {
 
   // 에이전트 토글 ON: 메시지를 목표(goal)로 자율 에이전트 작업을 생성·실행한다.
   // (채팅 WS 가 아니라 REST POST /api/agent-tasks + /execute — 진행상황은 '에이전트 작업' 페이지)
+  // 첨부 files 는 백엔드가 텍스트 추출 후 작업 샌드박스 workspace 에 주입,
+  // images(dataURL)는 goal 메시지의 vision 채널로 전달된다.
   const startAgentTask = useCallback(
-    async (message: string) => {
+    async (message: string, files?: WsAttachedFile[], images?: string[]) => {
       const goal = message.trim();
       const s = useAppStore.getState();
       if (!goal || s.isGenerating) return;
@@ -315,7 +327,11 @@ export function useChatSocket() {
       try {
         const created = await ApiClient.post<{ data: { task: { id: string } } }>(
           "/api/agent-tasks",
-          { goal },
+          {
+            goal,
+            ...(files && files.length > 0 ? { files } : {}),
+            ...(images && images.length > 0 ? { images } : {}),
+          },
         );
         const taskId = created?.data?.task?.id;
         if (!taskId) throw new Error(tRef.current("taskIdMissing"));

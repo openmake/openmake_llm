@@ -21,7 +21,7 @@ import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, MAX_TOOL_RESULT_CHARS } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
-import { getAgentTaskSystemPrompt, getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getAgentTaskBrowserLimitNudge, getTaskSandboxGuidance } from '../prompts/agent-task-prompt';
+import { getAgentTaskSystemPrompt, getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getAgentTaskBrowserLimitNudge, getTaskSandboxGuidance, getAgentTaskUploadedFilesNote, getAgentTaskGoalJudgeMessages, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts, type ExtractedArtifact } from '../llm/artifact-parser';
 import { getPushService } from './PushService';
 import { createLogger } from '../utils/logger';
@@ -30,10 +30,11 @@ import { getSkillManager } from '../agents/skill-manager';
 import { routeToAgent } from '../agents/keyword-router';
 import { getAgentSystemMessage } from '../agents/system-prompt';
 import { mergeToolsWithSkills, type ActiveSkillBinding } from './chat-service/tool-merger';
-import { getTaskSandboxConfig } from '../config/task-sandbox';
+import { getTaskSandboxConfig, TASK_UPLOAD_DIR } from '../config/task-sandbox';
 import { TaskRuntime } from './task-sandbox/runtime';
 import { TASK_TERMINATE_SENTINEL } from './task-sandbox/tools';
 import { requiresApproval, getApprovalRegistry } from './task-sandbox/approval-gate';
+import { buildFileContext, type AttachedFileInput } from './chat-service/attach-context';
 
 const logger = createLogger('AgentTaskService');
 
@@ -60,12 +61,24 @@ export class AgentTaskAbort extends Error {
     }
 }
 
+/** 작업 입력 첨부 파일 — 생성 라우트가 doc-extractor 로 추출·저장한 형태 (data 없음). */
+export interface AgentTaskInputFile extends AttachedFileInput {
+    /** 바이너리 문서(PDF/docx 등)에서 추출된 텍스트임 — workspace 기록 시 .txt 확장자 부여 */
+    extracted?: boolean;
+}
+
 export interface AgentTaskRunInput {
     taskId: string;
     goal: string;
     userId: string;
     userRole: UserRole;
     maxTurns: number;
+    /** 입력 첨부 파일(추출 텍스트+원본 base64) — 샌드박스 ON 이면 workspace(uploads/)에 기록,
+     *  OFF 면 goal 메시지에 fileContext 로 주입(신규 시작에 한함). */
+    files?: AgentTaskInputFile[];
+    /** 입력 첨부 이미지(dataURL) — goal 메시지 vision 채널로 주입(신규 시작에 한함),
+     *  샌드박스 ON 이면 uploads/ 에 원본 바이트로도 기록. */
+    images?: string[];
     /** 이 실행에서 사용할 스킬 범위(skill_id 목록). 지정 시 활성 스킬 바인딩을 이 집합으로 제한.
      *  미지정/빈 배열이면 사용자 전체 활성 스킬 사용(기존 동작). */
     allowedSkills?: string[];
@@ -235,6 +248,25 @@ export class AgentTaskService {
                     taskRuntime = null;
                 }
             }
+            // 입력 첨부 주입 — 파일은 샌드박스가 있으면 workspace(uploads/)에 기록해 셸/파이썬으로
+            // 읽게 하고(대화 컨텍스트 팽창 없음), 없으면 goal 메시지에 fileContext 로 직접 주입.
+            // 이미지는 goal 메시지의 vision 채널(images)로 주입하고, 샌드박스가 있으면 원본
+            // 바이트로도 기록. workspace 는 실패/취소 시 삭제되므로 resume 에서도 다시 기록한다
+            // (같은 이름 overwrite — 멱등. goal 주입은 신규 시작에 한함 — resume 은 checkpoint 유지).
+            const inputFiles = (input.files ?? []).filter((f) => !!f && typeof f.name === 'string');
+            const inputImages = (input.images ?? []).filter((s) => typeof s === 'string' && s.length > 0);
+            if (inputFiles.length > 0 || inputImages.length > 0) {
+                const goalMsg = input.resume ? undefined : conversation.find((m) => m.role === 'user');
+                if (goalMsg && inputImages.length > 0) goalMsg.images = inputImages;
+                if (taskRuntime) {
+                    const lines = await this.writeInputFilesToWorkspace(taskRuntime, inputFiles, inputImages);
+                    if (goalMsg && lines.length > 0) goalMsg.content += getAgentTaskUploadedFilesNote(lines);
+                } else if (goalMsg && inputFiles.length > 0) {
+                    // 샌드박스 OFF/degrade — 채팅과 동일한 fileContext 주입(캡 포함).
+                    goalMsg.content += buildFileContext(inputFiles);
+                }
+            }
+
             // 샌드박스(Manus) 활성 시: LLM 에 샌드박스 도구만 노출(셸/파이썬/브라우저/파일/플랜).
             // 전체 MCP 카탈로그(~150 도구)를 함께 넘기면 도구 스키마 union 이 수백 KB 로 부풀어
             // vLLM guided-decoding 문법 컴파일이 100s+ 로 폭주 → LLM_TIMEOUT 초과(Connection error).
@@ -379,11 +411,41 @@ export class AgentTaskService {
                 });
 
                 if (!hasToolCalls) {
+                    // 목표 미달성 선언 판정: 모델이 마커로 "수행 불가"(입력 부재·권한 등)를 밝히면
+                    // completed 대신 failed(goal_incomplete) 로 종료 — 아무것도 못 한 작업이
+                    // "완료"로 표시되던 오표시를 막는다. result 에는 마커를 뗀 사유를 남긴다.
+                    // (턴 0 deliverable 재촉 가드보다 먼저 — 불가 선언을 재촉으로 뭉개지 않음.)
+                    if (stepContent && stepContent.includes(AGENT_TASK_INCOMPLETE_MARKER)) {
+                        await update({
+                            status: 'failed',
+                            error: 'goal_incomplete',
+                            result: stepContent.replace(AGENT_TASK_INCOMPLETE_MARKER, '').trim(),
+                            checkpoint: null,
+                        });
+                        logger.info(`[AgentTask] 목표 미달성 종료: ${taskId} (turn ${turn + 1})`);
+                        return;
+                    }
                     // 턴 0 계획-만 가드: 도구가 필요 없는 목표에서 모델이 계획만 쓰고 멈추면
                     // 결과물 없이 종료된다 — deliverable(artifact) 이 없으면 1회 재촉 후 계속.
                     if (turn === startTurn && extracted!.artifacts.length === 0) {
                         conversation.push({ role: 'user', content: getAgentTaskDeliverableNudge() });
                         continue;
+                    }
+                    // 목표 달성 judge (마커 미준수 보완): 아티팩트 없는 최종 답변만 판정 전용
+                    // LLM 1회 호출로 검증 — deliverable 아티팩트가 실재하면 생략(호출 절약).
+                    // 판정 실패/파싱 불가는 fail-open(완료 유지), 미달성 확정 시에만 실패 처리.
+                    if (extracted!.artifacts.length === 0 && AGENT_TASK_LIMITS.GOAL_JUDGE_ENABLED) {
+                        const achieved = await this.judgeGoalAchieved(goal, stepContent ?? '', callSignal);
+                        if (achieved === false) {
+                            await update({
+                                status: 'failed',
+                                error: 'goal_incomplete',
+                                result: stepContent,
+                                checkpoint: null,
+                            });
+                            logger.info(`[AgentTask] judge 목표 미달성 종료: ${taskId} (turn ${turn + 1})`);
+                            return;
+                        }
                     }
                     stepNumber = await this.persistArtifactSteps(taskId, extracted!.artifacts, stepNumber);
                     await update({
@@ -515,6 +577,97 @@ export class AgentTaskService {
                     logger.warn(`[AgentTask] 샌드박스 정리 실패: ${taskId} — ${e}`));
             }
         }
+    }
+
+    /**
+     * 목표 달성 judge — 판정 전용 LLM 1회 호출. true=달성, false=미달성,
+     * null=판정 불가(호출 실패/파싱 실패) → 호출자가 fail-open(완료 유지) 처리.
+     */
+    private async judgeGoalAchieved(
+        goal: string,
+        answer: string,
+        signal: AbortSignal,
+    ): Promise<boolean | null> {
+        try {
+            const { system, user } = getAgentTaskGoalJudgeMessages(
+                goal,
+                answer.slice(0, AGENT_TASK_LIMITS.GOAL_JUDGE_MAX_ANSWER_CHARS),
+            );
+            const r = await this.client.chat(
+                [{ role: 'system', content: system }, { role: 'user', content: user }],
+                undefined, undefined, { think: false, signal },
+            );
+            const m = (r.content ?? '').match(/"achieved"\s*:\s*(true|false)/);
+            if (!m) {
+                logger.debug(`[AgentTask] judge 응답 파싱 불가 — fail-open: ${(r.content ?? '').slice(0, 200)}`);
+                return null;
+            }
+            return m[1] === 'true';
+        } catch (e) {
+            logger.warn(`[AgentTask] judge 호출 실패 — fail-open: ${e instanceof Error ? e.message : e}`);
+            return null;
+        }
+    }
+
+    /**
+     * 입력 첨부(파일+이미지)를 샌드박스 workspace 의 uploads/ 하위에 기록하고 안내 목록 행을 반환.
+     * 바이너리 원본(data)이 있으면 원본 바이트를 그대로 기록해 에이전트가 openpyxl 등으로
+     * 직접 파싱할 수 있게 하고, 추출 텍스트(content)는 `<원본명>.txt` 로 병행 기록한다.
+     * 이미지(dataURL)는 디코드해 image_N.<ext> 로 기록(vision 채널과 병행 제공).
+     * 파일명은 경로 성분 제거(디렉토리 주입 차단) + 제어문자 치환으로 정규화하고 충돌 시
+     * 인덱스 접두어를 붙인다. 개별 실패는 작업을 죽이지 않는다 — 목록 행에 실패로 표기.
+     */
+    private async writeInputFilesToWorkspace(
+        runtime: TaskRuntime,
+        files: AgentTaskInputFile[],
+        images: string[] = [],
+    ): Promise<string[]> {
+        const lines: string[] = [];
+        const used = new Set<string>();
+        const claim = (candidate: string, i: number): string => {
+            const name = used.has(candidate) ? `${i}_${candidate}` : candidate;
+            used.add(name);
+            return name;
+        };
+        const write = async (rel: string, body: string | Buffer, label: string): Promise<void> => {
+            try {
+                await runtime.writeWorkspaceFile(rel, body);
+                lines.push(`- ${rel}${label}`);
+            } catch (e) {
+                logger.warn(`[AgentTask] 입력 파일 기록 실패 (${rel}): ${e instanceof Error ? e.message : e}`);
+                lines.push(`- (기록 실패로 제외됨: ${rel})`);
+            }
+        };
+        for (const [i, f] of files.entries()) {
+            const base = ((f.name.split(/[\\/]/).pop() ?? '').replace(/\p{Cc}/gu, '_').trim()) || `file_${i}`;
+            const hasData = typeof f.data === 'string' && f.data.length > 0;
+            const hasContent = typeof f.content === 'string' && f.content.length > 0;
+            if (!hasData && !hasContent) {
+                lines.push(`- (내용을 추출하지 못해 제외됨: ${f.name})`);
+                continue;
+            }
+            if (hasData) {
+                // 바이너리 원본 — base64 디코드해 그대로 기록 (직접 파싱용)
+                await write(`${TASK_UPLOAD_DIR}/${claim(base, i)}`, Buffer.from(f.data!, 'base64'), ' (원본 파일)');
+            }
+            if (hasContent) {
+                const label =
+                    (f.extracted ? ` (원본 ${f.name} 에서 추출한 텍스트)` : '') +
+                    (f.truncated ? ' — 길이 제한으로 일부 절단됨' : '');
+                await write(`${TASK_UPLOAD_DIR}/${claim(f.extracted ? `${base}.txt` : base, i)}`, f.content!, label);
+            }
+        }
+        for (const [i, dataUrl] of images.entries()) {
+            const m = dataUrl.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,(.+)$/s);
+            if (!m) {
+                lines.push(`- (형식을 해석하지 못해 제외된 이미지 #${i + 1})`);
+                continue;
+            }
+            const ext = m[1] === 'jpeg' ? 'jpg' : m[1].replace(/[^a-zA-Z0-9]/g, '') || 'img';
+            const rel = `${TASK_UPLOAD_DIR}/${claim(`image_${i + 1}.${ext}`, files.length + i)}`;
+            await write(rel, Buffer.from(m[2], 'base64'), ' (첨부 이미지 — 대화에도 vision 으로 전달됨)');
+        }
+        return lines;
     }
 
     /**

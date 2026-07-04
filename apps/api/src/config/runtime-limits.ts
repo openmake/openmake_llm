@@ -339,6 +339,10 @@ export const FILE_ATTACH_LIMITS = {
     MAX_TOTAL_CHARS: parseInt(process.env.FILE_ATTACH_MAX_TOTAL_CHARS || '10000000', 10),
     /** 파일명 표시 최대 길이 (프롬프트 주입 시 절단) */
     MAX_NAME_LENGTH: 200,
+    /** 메시지/작업당 첨부 이미지 최대 개수 (composer MAX_IMAGES 와 페어) */
+    MAX_IMAGES: parseInt(process.env.FILE_ATTACH_MAX_IMAGES || '20', 10),
+    /** 이미지 dataURL 최대 글자 수 (base64 는 원본의 4/3 — 기본 20M ≈ 15MB 이미지) */
+    MAX_IMAGE_DATAURL_CHARS: parseInt(process.env.FILE_ATTACH_MAX_IMAGE_DATAURL_CHARS || '20000000', 10),
 } as const;
 
 /**
@@ -1186,5 +1190,11 @@ export const AGENT_TASK_LIMITS = {
     /** stuck 감지 — 동일 assistant 응답이 이 횟수만큼 연속되면 전략변경 프롬프트 주입(무한루프 방지).
      *  OpenManus BaseAgent.is_stuck 패턴. AGENT_STUCK_THRESHOLD 로 오버라이드(기본 3). */
     STUCK_THRESHOLD: parseInt(process.env.AGENT_STUCK_THRESHOLD || '3', 10),
+    /** 목표 달성 judge — 아티팩트 없는 최종 답변 완료 시 판정 전용 LLM 1회 호출로 목표 달성
+     *  여부를 검증(마커 미준수 보완). 미달성 판정 시 completed 대신 failed(goal_incomplete).
+     *  판정 실패/파싱 불가는 fail-open(완료 유지). AGENT_TASK_GOAL_JUDGE=false 로 비활성. */
+    GOAL_JUDGE_ENABLED: process.env.AGENT_TASK_GOAL_JUDGE !== 'false',
+    /** judge 에 넘기는 최종 답변 최대 글자 수 (프롬프트 팽창 방지) */
+    GOAL_JUDGE_MAX_ANSWER_CHARS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_MAX_CHARS || '6000', 10),
 } as const;
 

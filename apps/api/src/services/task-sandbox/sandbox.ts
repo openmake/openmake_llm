@@ -282,15 +282,16 @@ export class TaskSandbox {
         });
     }
 
-    /** workspace 내 파일 쓰기 (호스트 bind-mount 직접). 경로 가드(어휘+실경로) + 디스크 쿼터 적용. */
-    async writeFile(relPath: string, content: string): Promise<void> {
+    /** workspace 내 파일 쓰기 (호스트 bind-mount 직접). 경로 가드(어휘+실경로) + 디스크 쿼터 적용.
+     *  Buffer 입력은 바이너리 그대로 기록(입력 첨부 원본 주입용). */
+    async writeFile(relPath: string, content: string | Buffer): Promise<void> {
         const abs = await safeRealWorkspacePath(this.hostWorkdir, relPath);
         const size = await dirSizeBytes(this.hostWorkdir, this.cfg.workspaceQuota + 1);
-        if (size + Buffer.byteLength(content, 'utf8') > this.cfg.workspaceQuota) {
+        if (size + Buffer.byteLength(content) > this.cfg.workspaceQuota) {
             throw new Error(`workspace 디스크 쿼터 초과(상한 ${Math.round(this.cfg.workspaceQuota / 1024 / 1024)}MB) — 불필요한 파일을 삭제한 후 다시 시도하세요.`);
         }
         await mkdir(dirname(abs), { recursive: true });
-        await fsWriteFile(abs, content, 'utf8');
+        await fsWriteFile(abs, content);
     }
 
     /** workspace 내 파일 읽기. 경로 가드(어휘+실경로) 적용. */

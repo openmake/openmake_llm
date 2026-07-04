@@ -20,10 +20,26 @@ export class AgentTaskRepository extends BaseRepository {
         goal: string;
         maxTurns?: number;
         model?: string;
+        /** 입력 첨부 파일(추출 텍스트+원본 base64) — [{name,type,content,data,size,truncated,extracted}] */
+        inputFiles?: unknown;
+        /** 입력 첨부 이미지(dataURL 배열) — vision 주입 + 샌드박스 기록용 */
+        inputImages?: unknown;
     }): Promise<void> {
+        // input_files/input_images 는 첨부가 있을 때만 컬럼에 포함 — 056/057 마이그레이션
+        // 미적용 배포에서도 첨부 없는 기존 생성 경로가 깨지지 않게 한다(2단계 배포 안전).
+        const cols = ['id', 'user_id', 'goal', 'max_turns', 'model'];
+        const values: QueryParam[] = [params.id, params.userId, params.goal, params.maxTurns ?? 10, params.model];
+        if (params.inputFiles !== undefined) {
+            cols.push('input_files');
+            values.push(JSON.stringify(params.inputFiles));
+        }
+        if (params.inputImages !== undefined) {
+            cols.push('input_images');
+            values.push(JSON.stringify(params.inputImages));
+        }
         await this.query(
-            'INSERT INTO agent_tasks (id, user_id, goal, max_turns, model) VALUES ($1, $2, $3, $4, $5)',
-            [params.id, params.userId, params.goal, params.maxTurns ?? 10, params.model]
+            `INSERT INTO agent_tasks (${cols.join(', ')}) VALUES (${values.map((_, i) => `$${i + 1}`).join(', ')})`,
+            values
         );
     }
 

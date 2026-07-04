@@ -176,6 +176,10 @@ export interface AgentTask {
     result?: string;
     error?: string;
     checkpoint?: unknown;
+    /** 입력 첨부 파일(추출 텍스트+원본 base64) — [{name,type,content,data,size,truncated,extracted}] */
+    input_files?: unknown;
+    /** 입력 첨부 이미지(dataURL 배열) — vision 주입 + 샌드박스 기록용 */
+    input_images?: unknown;
     created_at: string;
     updated_at: string;
     completed_at?: string;

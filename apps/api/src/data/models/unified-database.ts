@@ -345,6 +345,8 @@ export class UnifiedDatabase {
         goal: string;
         maxTurns?: number;
         model?: string;
+        inputFiles?: unknown;
+        inputImages?: unknown;
     }): Promise<void> {
         return this.agentTaskRepository.createAgentTask(params);
     }

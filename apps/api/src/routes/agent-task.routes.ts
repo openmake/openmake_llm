@@ -26,10 +26,11 @@ import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { validate } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
-import { AgentTaskService } from '../services/AgentTaskService';
+import { AgentTaskService, type AgentTaskInputFile } from '../services/AgentTaskService';
 import type { ChatMessage } from '../llm/types';
 import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
-import { createAgentTaskSchema } from '../schemas/agent-task.schema';
+import { createAgentTaskSchema, type CreateAgentTaskInput } from '../schemas/agent-task.schema';
+import { extractAttachedDocuments } from '../services/chat-service/doc-extractor';
 import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
 import { safeRealWorkspacePath, listWorkspaceFilesAt } from '../services/task-sandbox/sandbox';
 import { basename } from 'path';
@@ -54,10 +55,15 @@ async function loadOwnedTask(req: Request, res: Response, taskId: string) {
     return task;
 }
 
-/** 응답용 변환: 큰 checkpoint 필드 제거 + resumable 플래그(중단된 작업에 체크포인트 존재) */
+/** 응답용 변환: 큰 checkpoint/input_files/input_images 본문 제거 + resumable 플래그(중단된 작업에 체크포인트 존재).
+ *  input_files 는 내용(content/data)을 뺀 메타(name/type/size)만 노출 — 목록/상세 응답 팽창 방지. */
 function toPublicTask(t: Record<string, unknown>) {
-    const { checkpoint, ...rest } = t;
-    return { ...rest, resumable: !!checkpoint && t.status === 'failed' };
+    const { checkpoint, input_files, input_images, ...rest } = t;
+    void input_images; // dataURL 배열 — 응답에서 제외(팽창 방지)
+    const fileMetas = Array.isArray(input_files)
+        ? (input_files as AgentTaskInputFile[]).map((f) => ({ name: f?.name, type: f?.type, size: f?.size }))
+        : undefined;
+    return { ...rest, ...(fileMetas ? { input_files: fileMetas } : {}), resumable: !!checkpoint && t.status === 'failed' };
 }
 
 /**
@@ -65,11 +71,30 @@ function toPublicTask(t: Record<string, unknown>) {
  * 작업 생성
  */
 router.post('/', validate(createAgentTaskSchema), asyncHandler(async (req: Request, res: Response) => {
-    const { goal, maxTurns } = req.body;
+    const { goal, maxTurns, files, images } = req.body as CreateAgentTaskInput;
 
     const taskId = uuidv4();
     const db = getUnifiedDatabase();
     const userId = String(req.user!.id);
+
+    // 입력 첨부: 바이너리 문서(base64 data)는 지금 텍스트로 추출해 저장한다 —
+    // 실행은 detached 백그라운드라 여기서 추출해야 실패를 생성 응답에서 인지 가능하다.
+    // base64 원본도 함께 보존해 실행 시 샌드박스 uploads/ 에 원본 바이트로 기록
+    // (에이전트가 openpyxl 등으로 직접 파싱). 응답에선 toPublicTask 가 메타만 노출.
+    let inputFiles: AgentTaskInputFile[] | undefined;
+    if (Array.isArray(files) && files.length > 0) {
+        const originalData = files.map((f) => (typeof f.data === 'string' && f.data.length > 0 ? f.data : undefined));
+        await extractAttachedDocuments(files); // in-place: data → content 추출 후 data 제거
+        inputFiles = files.map((f, i) => ({
+            name: f.name,
+            type: f.type,
+            content: f.content,
+            size: f.size,
+            truncated: f.truncated,
+            ...(originalData[i] ? { data: originalData[i] } : {}),
+            ...(originalData[i] && typeof f.content === 'string' ? { extracted: true } : {}),
+        }));
+    }
 
     // 비동기 에이전트 중복 인지(P-6): 이미 진행 중인 작업이 있으면 경고를 함께 반환 —
     // 동일/유사 작업을 중복 실행하기 전에 사용자가 인지하도록(중단/취소 판단). 생성 자체는 막지 않음.
@@ -84,6 +109,8 @@ router.post('/', validate(createAgentTaskSchema), asyncHandler(async (req: Reque
         userId,
         goal,
         maxTurns: maxTurns ?? AGENT_TASK_LIMITS.DEFAULT_MAX_TURNS,
+        inputFiles,
+        inputImages: Array.isArray(images) && images.length > 0 ? images : undefined,
     });
 
     const task = await db.getAgentTask(taskId);
@@ -159,6 +186,8 @@ router.post('/:taskId/execute', asyncHandler(async (req: Request, res: Response)
         userRole: role,
         maxTurns: task.max_turns,
         allowedSkills,
+        files: Array.isArray(task.input_files) ? task.input_files as AgentTaskInputFile[] : undefined,
+        images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
     }).catch((error) => {
         logger.error(`[AgentTaskRoutes] 작업 실행 실패: ${error}`);
     });
@@ -221,6 +250,8 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
         userId: String(req.user!.id),
         userRole: role,
         maxTurns: task.max_turns,
+        files: Array.isArray(task.input_files) ? task.input_files as AgentTaskInputFile[] : undefined,
+        images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
         resume: {
             conversation: cp.conversation as ChatMessage[],
             fromTurn: (cp.completedTurn ?? 0) + 1,

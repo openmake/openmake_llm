@@ -118,6 +118,8 @@ export function setupParsersAndLimiting(app: Application): void {
     //    body parser 는 정적 서빙과 무관하므로 여기(parsers)로 이동해 항상 등록되게 한다.
     app.use('/api/chat', express.json({ limit: '10mb' }));
     app.use('/api/documents', express.json({ limit: '50mb' }));
+    // 에이전트 작업 생성은 입력 첨부(base64 문서 포함)를 받으므로 documents 와 동일 상한
+    app.use('/api/agent-tasks', express.json({ limit: '50mb' }));
     app.use('/api/', express.json({ limit: '1mb' }));
     app.use(express.json({ limit: '1mb' }));
     app.use(cookieParser());

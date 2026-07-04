@@ -18,6 +18,9 @@ export type TaskSandboxNetwork = 'none' | 'restricted';
  */
 export type TaskSandboxApprovalPolicy = 'all' | 'high-risk' | 'none';
 
+/** 입력 첨부 파일이 기록되는 workspace 하위 디렉토리 (에이전트 안내 프롬프트와 공유되는 경로 계약). */
+export const TASK_UPLOAD_DIR = 'uploads';
+
 function intEnv(raw: string | undefined, def: number): number {
     const n = parseInt(raw ?? '', 10);
     return Number.isFinite(n) && n > 0 ? n : def;

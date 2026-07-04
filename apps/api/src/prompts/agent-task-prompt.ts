@@ -5,6 +5,13 @@
  *
  * @module prompts/agent-task-prompt
  */
+
+/**
+ * 목표 미달성 최종 답변 마커 — 시스템 프롬프트 지시와 AgentTaskService 종료 판정이 공유하는 계약.
+ * 모델이 최종 답변에 이 마커를 포함하면 completed 대신 failed(goal_incomplete)로 종료한다.
+ */
+export const AGENT_TASK_INCOMPLETE_MARKER = '[GOAL_INCOMPLETE]';
+
 export function getAgentTaskSystemPrompt(): string {
     return [
         'You are an autonomous task agent operating in the background.',
@@ -47,6 +54,13 @@ export function getAgentTaskSystemPrompt(): string {
         '  output matches the established design tokens/components, and save the finished design',
         '  back via open-design::create_artifact or open-design::write_file.',
         '- Outside the artifact tag, write only a 1-3 sentence closing summary.',
+        '',
+        'If the goal CANNOT be accomplished (required input/files are missing, access is',
+        'insufficient, or the task is impossible): do NOT present the explanation as a normal',
+        `final answer. If an ask_human tool is available, use it to ask the user for what is`,
+        `missing. Otherwise start your final answer with the exact marker ${AGENT_TASK_INCOMPLETE_MARKER}`,
+        'on the first line, followed by what is missing and what the user should do — the task',
+        'will then be recorded as unachieved instead of completed.',
         'Always answer in the same language the goal is written in.',
     ].join('\n');
 }
@@ -83,6 +97,41 @@ export function getTaskSandboxGuidance(): string {
         '  (in_progress/completed/blocked) 갱신해 진행 상황을 가시화하세요.',
         '- 막혔거나 더 진행할 수 없으면 terminate(또는 ask_human)로 깔끔히 마무리하세요.',
     ].join('\n');
+}
+
+/**
+ * 입력 첨부 파일이 샌드박스 workspace 에 기록됐을 때 goal 메시지에 덧붙이는 안내.
+ * fileLines 는 "- uploads/xxx (...)" 형식의 목록 행 — AgentTaskService 가 기록 결과로 조립.
+ */
+export function getAgentTaskUploadedFilesNote(fileLines: string[]): string {
+    return [
+        '',
+        '',
+        '## 📎 업로드 파일',
+        '사용자가 이 작업에 파일을 첨부했습니다. 작업 디렉토리(/workspace)에 저장되어 있습니다:',
+        ...fileLines,
+        'PDF·오피스 문서는 이미 텍스트로 추출되어 있습니다. 먼저 이 파일들을 읽고(cat/python) 내용을 근거로 작업하세요.',
+    ].join('\n');
+}
+
+/**
+ * 목표 달성 judge 프롬프트 — 아티팩트 없는 최종 답변이 목표를 실제로 수행했는지 판정.
+ * 보수적 기준: 답변이 "수행하지 못했음"(입력 부재·불가·되묻기만)을 드러낼 때만 미달성.
+ * 품질 평가가 아니다 — 부실해도 목표를 수행한 답변은 달성으로 본다(오탐 방지).
+ */
+export function getAgentTaskGoalJudgeMessages(goal: string, answer: string): { system: string; user: string } {
+    return {
+        system: [
+            '당신은 자율 에이전트 작업의 결과 심사자입니다.',
+            '목표(GOAL)와 에이전트의 최종 답변(ANSWER)을 보고, 답변이 목표 수행의 결과물인지 판정하세요.',
+            '- 미달성(achieved=false)은 답변이 목표를 수행하지 못했음을 드러낼 때만: 필요한 입력/자료가 없다고 함,',
+            '  할 수 없다고 함, 사용자에게 되묻기만 함, 목표와 무관한 내용만 있음.',
+            '- 품질은 평가하지 마세요 — 내용이 부실하더라도 목표를 수행한 답변이면 달성(achieved=true)입니다.',
+            '- 확신이 없으면 달성(true)으로 판정하세요.',
+            '다른 설명 없이 JSON 한 줄만 출력: {"achieved": true|false, "reason": "한 문장 근거"}',
+        ].join('\n'),
+        user: `## GOAL\n${goal}\n\n## ANSWER\n${answer}\n\n판정 JSON 을 출력하세요.`,
+    };
 }
 
 /** stuck(동일 응답 반복) 감지 시 주입 — 전략 변경 유도(OpenManus handle_stuck_state 패턴). */

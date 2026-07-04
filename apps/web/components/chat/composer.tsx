@@ -21,7 +21,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { WsAttachedFile } from "@openmake/shared-types";
-import { useAppStore } from "@/lib/store";
+import { useAppStore, INTERCEPT_MODE_KEYS } from "@/lib/store";
 import { useChatSocket } from "@/lib/use-chat-socket";
 import { fetchModels } from "@/lib/models-api";
 import {
@@ -263,8 +263,13 @@ export function Composer() {
   const submit = () => {
     if ((!text.trim() && files.length === 0 && images.length === 0) || isGenerating) return;
     if (agentTaskMode) {
-      // 에이전트 토글 ON — 메시지를 목표로 자율 에이전트 작업 실행 (REST). 첨부는 미지원.
-      void startAgentTask(text.trim());
+      // 에이전트 토글 ON — 메시지를 목표로 자율 에이전트 작업 실행 (REST).
+      // 파일 첨부는 작업 workspace 로, 이미지는 vision 채널로 전달.
+      void startAgentTask(
+        text.trim(),
+        files.length ? files : undefined,
+        images.length ? images.map((i) => i.dataUrl) : undefined,
+      );
     } else if (structuredMode) {
       // 구조화 답변 토글 ON — REST /api/chat/structured (비스트리밍, 카드 렌더). 첨부는 미지원.
       void sendStructured(text.trim());
@@ -316,6 +321,11 @@ export function Composer() {
   ];
   const activeModeCount = TOGGLES.filter((m) => m.on).length;
 
+  // 가로채기(bypass) 모드: 켜지면 백엔드가 웹·아티팩트 modifier 를 무시(전용 파이프라인).
+  const INTERCEPT_KEYS = new Set<string>(INTERCEPT_MODE_KEYS);
+  const MODIFIER_KEYS = new Set<string>(["webSearchEnabled", "artifactMode"]);
+  const interceptActive = TOGGLES.some((m) => m.on && INTERCEPT_KEYS.has(m.key));
+
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div
@@ -361,21 +371,33 @@ export function Composer() {
               <p className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-faint">
                 {t("modeHeading")}
               </p>
-              {TOGGLES.map((m) => (
-                <button
-                  key={m.key}
-                  type="button"
-                  onClick={() => toggle(m.key)}
-                  className={cn(
-                    "flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-sm transition",
-                    m.on ? "text-accent" : "text-fg-2 hover:bg-surface-3",
-                  )}
-                >
-                  <m.icon className="h-[18px] w-[18px] shrink-0" />
-                  <span className="flex-1 text-left">{m.label}</span>
-                  {m.on && <Check className="h-4 w-4 shrink-0 text-accent" />}
-                </button>
-              ))}
+              {TOGGLES.map((m) => {
+                const isIntercept = INTERCEPT_KEYS.has(m.key);
+                // 가로채기 모드가 켜져 있으면 웹·아티팩트 modifier 는 무시되므로 흐리게 + "(미적용)".
+                const suppressed = interceptActive && MODIFIER_KEYS.has(m.key);
+                const onColor = isIntercept ? "text-warn" : "text-accent";
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => toggle(m.key)}
+                    title={suppressed ? t("modifierSuppressed", { label: m.label }) : undefined}
+                    className={cn(
+                      "flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-sm transition",
+                      m.on ? onColor : suppressed ? "text-faint" : "text-fg-2 hover:bg-surface-3",
+                    )}
+                  >
+                    <m.icon className="h-[18px] w-[18px] shrink-0" />
+                    <span className="flex-1 text-left">
+                      {m.label}
+                      {suppressed && (
+                        <span className="ml-1.5 text-[11px] text-faint">{t("suppressedTag")}</span>
+                      )}
+                    </span>
+                    {m.on && <Check className={cn("h-4 w-4 shrink-0", onColor)} />}
+                  </button>
+                );
+              })}
             </div>
           </>
         )}
@@ -403,19 +425,28 @@ export function Composer() {
             )}
           </button>
 
-          {TOGGLES.filter((m) => m.on).map((m) => (
-            <button
-              key={m.key}
-              type="button"
-              onClick={() => toggle(m.key)}
-              title={t("toggleOff", { label: m.label })}
-              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-accent bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent transition hover:opacity-80"
-            >
-              <m.icon className="h-3.5 w-3.5" />
-              {m.label}
-              <X className="h-3 w-3 opacity-70" />
-            </button>
-          ))}
+          {TOGGLES.filter((m) => m.on).map((m) => {
+            // 가로채기 모드 칩은 앰버색 — 도구·아티팩트를 무시한다는 시각 신호.
+            const isIntercept = INTERCEPT_KEYS.has(m.key);
+            return (
+              <button
+                key={m.key}
+                type="button"
+                onClick={() => toggle(m.key)}
+                title={t("toggleOff", { label: m.label })}
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition hover:opacity-80",
+                  isIntercept
+                    ? "border-warn bg-warn-soft text-warn"
+                    : "border-accent bg-accent-soft text-accent",
+                )}
+              >
+                <m.icon className="h-3.5 w-3.5" />
+                {m.label}
+                <X className="h-3 w-3 opacity-70" />
+              </button>
+            );
+          })}
         </div>
 
         {/* 첨부 칩 — 이미지 썸네일 + 텍스트/파일 칩 */}
