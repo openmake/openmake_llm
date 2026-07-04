@@ -18,6 +18,7 @@ import { estimateMessageTokens, truncateMessagesPreservingSystem } from '../../l
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { isPersistableUserId } from '../../utils/user-id-validation';
 import { getExternalProviderSystemGuards } from '../../chat/prompt';
+import { getCurrentDate } from '../../utils/datetime';
 import { getStyleGuard, normalizeStyle, type Style } from '../../chat/style';
 import type { ChatMessage, ToolDefinition } from '../../llm';
 import type { ChatMessageRequest } from '../chat-service-types';
@@ -124,6 +125,17 @@ export async function streamFromExternalProvider(
         const langName = langMap[langCode] || langCode;
         systemPromptParts.push(`Respond in ${langName}.`);
     }
+
+    // 시간 컨텍스트 (2026-07-04): 일반 채팅 system 에 현재 날짜가 어디에도 없어, 모델이
+    // 학습 컷오프나 검색 스니펫의 기사 날짜를 "오늘"로 오인하는 팩트 결함이 있었다
+    // (실사례: 7/4 에 "오늘(6월 19일)" 로 응답). answer-composer 경로에만 있던 temporal
+    // context 를 메인 채팅 경로에도 주입한다.
+    const todayStr = getCurrentDate();
+    systemPromptParts.push(
+        langCode && langCode !== 'ko'
+            ? `Today's date is ${todayStr}. Interpret "current/today/recent" relative to this date; for time-sensitive facts after your training cutoff, rely only on the provided search results — never guess dates.`
+            : `오늘 날짜는 ${todayStr} 입니다. "현재/오늘/최근"은 이 날짜를 기준으로 판단하고, 학습 지식 이후의 시의성 정보는 제공된 검색 결과에만 근거하세요. 날짜를 추측해 말하지 마세요.`,
+    );
 
     // 웹검색 컨텍스트가 있을 때 grounding + 반-환각 지시를 시스템 프롬프트에 보강한다.
     // enhancedMessage(user turn)에 검색 컨텍스트가 이미 포함된 경로(message-pipeline)에서는
