@@ -35,7 +35,9 @@ export interface SlashSkill {
     content: string;
 }
 
-const COMMAND_PATTERN = /^\/([a-z0-9][a-z0-9_-]{0,63})\s*([\s\S]*)$/i;
+// 유니코드 문자 허용 (2026-07-04): 한글 등 비ASCII 스킬명의 slug 가 빈 문자열이 되어
+// 슬래시 호출이 불가능하던 결함 수정 — \p{L}\p{N} 로 전체 언어 문자 수용.
+const COMMAND_PATTERN = /^\/([\p{L}\p{N}][\p{L}\p{N}_-]{0,63})\s*([\s\S]*)$/iu;
 
 /**
  * 메시지에서 선행 슬래시 명령을 파싱 (순수). 명령이 아니면 null.
@@ -49,9 +51,9 @@ export function parseSlashCommand(message: string): ParsedSlashCommand | null {
     return { slug: m[1].toLowerCase(), rest: (m[2] ?? '').trim() };
 }
 
-/** 스킬 이름 → slug (소문자, 비영숫자 → '-') */
+/** 스킬 이름 → slug (소문자, 문자/숫자 외 → '-'. 한글 등 유니코드 문자 보존) */
 export function slugify(name: string): string {
-    return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    return name.toLowerCase().trim().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '');
 }
 
 /** 명령 slug 가 스킬과 정확히 매칭되는지 */
@@ -77,10 +79,14 @@ export interface ApplySlashDeps {
     enabled?: boolean;
 }
 
-/** 기본 스킬 해석기 — active 스킬을 검색해 slug 정확 매칭 */
+/** 기본 스킬 해석기 — active 스킬을 검색해 slug 정확 매칭.
+ *  검색어는 slug 의 '-' 를 공백으로 복원 — 스킬 이름은 공백 구분이라 하이픈 그대로는
+ *  ILIKE 검색이 매칭되지 않음 (다단어 스킬명 slash 호출이 불가능하던 결함, 2026-07-04). */
 async function defaultFindSkillBySlug(slug: string): Promise<SlashSkill | null> {
     const { getSkillManager } = await import('../agents/skill-manager');
-    const result = await getSkillManager().searchSkills({ search: slug, status: 'active', limit: 10 });
+    const result = await getSkillManager().searchSkills({
+        search: slug.replace(/-/g, ' '), status: 'active', limit: 10,
+    });
     const matched = result.skills.find((s) => matchesSlug(s.name, slug));
     return matched ? { name: matched.name, content: matched.content } : null;
 }
