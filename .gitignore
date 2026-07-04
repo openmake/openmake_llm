@@ -139,3 +139,9 @@ frontend/web/public/generated/
 *.tar
 *.tar.gz
 *.tgz
+
+# 로컬 curl 응답 덤프 (수동 디버깅 산출물 — 커밋 대상 아님)
+body.txt
+tbody.txt
+up_chat.json
+up_models.json
