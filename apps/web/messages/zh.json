@@ -10,6 +10,7 @@
       "admin": "管理员"
     },
     "items": {
+      "apiAccess": "API 访问",
       "chat": "聊天",
       "research": "深度研究",
       "agentTasks": "智能体任务",
@@ -152,6 +153,52 @@
       "changeFailed": "修改密码失败。"
     }
   },
+  "apiAccess": {
+    "title": "API 访问",
+    "subtitle": "发行并管理用于从外部应用调用 OpenMake API 的开发者 API 密钥。",
+    "createTitle": "创建新的 API 密钥",
+    "namePlaceholder": "密钥名称 (例如 my-app)",
+    "createButton": "创建",
+    "listTitle": "已创建的密钥",
+    "loading": "加载中…",
+    "empty": "尚无 API 密钥。",
+    "neverUsed": "从未使用",
+    "loadFailed": "加载 API 密钥失败。",
+    "createFailed": "创建 API 密钥失败。",
+    "updateFailed": "更新状态失败。",
+    "rotateFailed": "轮换密钥失败。",
+    "deleteFailed": "删除失败。",
+    "rotateConfirm": "轮换密钥「{name}」？旧密钥将立即失效。",
+    "deleteConfirm": "删除密钥「{name}」？此操作无法撤销。",
+    "reveal": {
+      "title": "仅此一次显示的明文密钥",
+      "warning": "此密钥不会再次显示。请立即复制到安全的地方。",
+      "dismiss": "关闭",
+      "copyKey": "复制密钥",
+      "copied": "已复制",
+      "curlTitle": "快速开始 (curl)",
+      "copyCurl": "复制 curl"
+    },
+    "col": {
+      "name": "名称",
+      "key": "密钥",
+      "status": "状态",
+      "created": "创建时间",
+      "lastUsed": "最后使用",
+      "requests": "请求数",
+      "actions": "操作"
+    },
+    "status": {
+      "active": "启用",
+      "inactive": "停用"
+    },
+    "action": {
+      "activate": "启用",
+      "deactivate": "停用",
+      "rotate": "轮换",
+      "delete": "删除"
+    }
+  },
   "composer": {
     "dropToAttach": "将文件拖放到此处以添加",
     "modeHeading": "模式",
@@ -167,6 +214,8 @@
     "stop": "停止",
     "send": "发送",
     "disclaimer": "OpenMake 可能会出错，请核实重要信息。",
+    "suppressedTag": "(未应用)",
+    "modifierSuppressed": "{label} 在拦截模式下不会应用",
     "toggle": {
       "discussion": "讨论",
       "thinking": "思考",
@@ -387,6 +436,7 @@
     }
   },
   "chatSocket": {
+    "interceptNotice": "拦截模式（讨论・深度研究・图像）已开启，本次回复不会应用工具（分析・搜索）与工件。",
     "error": "错误：{message}",
     "unknownError": "未知错误",
     "disconnected": "_(与服务器的连接已断开。正在重新连接，请稍后重新发送。)_",

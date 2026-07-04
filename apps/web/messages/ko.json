@@ -10,6 +10,7 @@
       "admin": "관리자"
     },
     "items": {
+      "apiAccess": "API 액세스",
       "chat": "채팅",
       "research": "딥 리서치",
       "agentTasks": "에이전트 작업",
@@ -152,6 +153,52 @@
       "changeFailed": "비밀번호 변경에 실패했습니다."
     }
   },
+  "apiAccess": {
+    "title": "API 액세스",
+    "subtitle": "외부 애플리케이션에서 OpenMake API를 호출할 개발자 API 키를 발급·관리합니다.",
+    "createTitle": "새 API 키 발급",
+    "namePlaceholder": "키 이름 (예: my-app)",
+    "createButton": "발급",
+    "listTitle": "발급된 키",
+    "loading": "불러오는 중…",
+    "empty": "아직 발급된 API 키가 없습니다.",
+    "neverUsed": "미사용",
+    "loadFailed": "API 키를 불러오지 못했습니다.",
+    "createFailed": "API 키 발급에 실패했습니다.",
+    "updateFailed": "상태 변경에 실패했습니다.",
+    "rotateFailed": "키 순환에 실패했습니다.",
+    "deleteFailed": "삭제에 실패했습니다.",
+    "rotateConfirm": "'{name}' 키를 순환하시겠어요? 기존 키는 즉시 무효화됩니다.",
+    "deleteConfirm": "'{name}' 키를 삭제하시겠어요? 되돌릴 수 없습니다.",
+    "reveal": {
+      "title": "지금만 표시되는 평문 키",
+      "warning": "이 키는 다시 볼 수 없습니다. 지금 안전한 곳에 복사해 두세요.",
+      "dismiss": "닫기",
+      "copyKey": "키 복사",
+      "copied": "복사됨",
+      "curlTitle": "빠른 시작 (curl)",
+      "copyCurl": "curl 복사"
+    },
+    "col": {
+      "name": "이름",
+      "key": "키",
+      "status": "상태",
+      "created": "생성일",
+      "lastUsed": "마지막 사용",
+      "requests": "요청 수",
+      "actions": "작업"
+    },
+    "status": {
+      "active": "활성",
+      "inactive": "비활성"
+    },
+    "action": {
+      "activate": "활성화",
+      "deactivate": "비활성화",
+      "rotate": "순환",
+      "delete": "삭제"
+    }
+  },
   "composer": {
     "dropToAttach": "여기에 파일을 놓아 첨부",
     "modeHeading": "모드",
@@ -167,6 +214,8 @@
     "stop": "중단",
     "send": "전송",
     "disclaimer": "OpenMake 는 실수할 수 있습니다. 중요한 정보는 확인하세요.",
+    "suppressedTag": "(미적용)",
+    "modifierSuppressed": "{label} 은(는) 가로채기 모드에서 적용되지 않습니다",
     "toggle": {
       "discussion": "토론",
       "thinking": "Thinking",
@@ -387,6 +436,7 @@
     }
   },
   "chatSocket": {
+    "interceptNotice": "가로채기 모드(토론·딥리서치·이미지)가 켜져 있어 도구(분석·검색)·아티팩트는 이번 응답에 적용되지 않습니다.",
     "error": "오류: {message}",
     "unknownError": "알 수 없는 오류",
     "disconnected": "_(서버와 연결이 끊겼습니다. 재연결 중이니 잠시 후 다시 전송해 주세요.)_",

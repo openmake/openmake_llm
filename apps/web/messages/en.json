@@ -10,6 +10,7 @@
       "admin": "Admin"
     },
     "items": {
+      "apiAccess": "API Access",
       "chat": "Chat",
       "research": "Deep Research",
       "agentTasks": "Agent Tasks",
@@ -152,6 +153,52 @@
       "changeFailed": "Failed to change password."
     }
   },
+  "apiAccess": {
+    "title": "API Access",
+    "subtitle": "Issue and manage developer API keys for calling the OpenMake API from external apps.",
+    "createTitle": "Create a new API key",
+    "namePlaceholder": "Key name (e.g. my-app)",
+    "createButton": "Create",
+    "listTitle": "Your keys",
+    "loading": "Loading…",
+    "empty": "No API keys yet.",
+    "neverUsed": "Never",
+    "loadFailed": "Failed to load API keys.",
+    "createFailed": "Failed to create the API key.",
+    "updateFailed": "Failed to update the key.",
+    "rotateFailed": "Failed to rotate the key.",
+    "deleteFailed": "Failed to delete the key.",
+    "rotateConfirm": "Rotate the key '{name}'? The old key stops working immediately.",
+    "deleteConfirm": "Delete the key '{name}'? This cannot be undone.",
+    "reveal": {
+      "title": "Plaintext key — shown only once",
+      "warning": "You won't be able to see this key again. Copy it somewhere safe now.",
+      "dismiss": "Dismiss",
+      "copyKey": "Copy key",
+      "copied": "Copied",
+      "curlTitle": "Quick start (curl)",
+      "copyCurl": "Copy curl"
+    },
+    "col": {
+      "name": "Name",
+      "key": "Key",
+      "status": "Status",
+      "created": "Created",
+      "lastUsed": "Last used",
+      "requests": "Requests",
+      "actions": "Actions"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive"
+    },
+    "action": {
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "rotate": "Rotate",
+      "delete": "Delete"
+    }
+  },
   "composer": {
     "dropToAttach": "Drop files here to attach",
     "modeHeading": "Modes",
@@ -167,6 +214,8 @@
     "stop": "Stop",
     "send": "Send",
     "disclaimer": "OpenMake can make mistakes. Verify important information.",
+    "suppressedTag": "(not applied)",
+    "modifierSuppressed": "{label} is not applied while an intercept mode is on",
     "toggle": {
       "discussion": "Discussion",
       "thinking": "Thinking",
@@ -387,6 +436,7 @@
     }
   },
   "chatSocket": {
+    "interceptNotice": "An intercept mode (Discussion / Deep Research / Image) is on, so tools (analysis/search) and artifacts are not applied in this response.",
     "error": "Error: {message}",
     "unknownError": "Unknown error",
     "disconnected": "_(Disconnected from the server. Reconnecting — please try sending again shortly.)_",

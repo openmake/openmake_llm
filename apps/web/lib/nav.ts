@@ -18,6 +18,7 @@ import {
   Sparkles,
   Telescope,
   Boxes,
+  Terminal,
   type LucideIcon,
 } from "lucide-react";
 
@@ -70,6 +71,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { labelKey: "items.settings", href: "/settings", icon: Settings },
       { labelKey: "items.apiKeys", href: "/api-keys", icon: KeyRound },
+      { labelKey: "items.apiAccess", href: "/api-access", icon: Terminal },
       { labelKey: "items.usage", href: "/usage", icon: BarChart3 },
       { labelKey: "items.developerDocs", href: "/developer", icon: ScrollText },
     ],

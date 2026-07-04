@@ -10,6 +10,7 @@
       "admin": "管理者"
     },
     "items": {
+      "apiAccess": "API アクセス",
       "chat": "チャット",
       "research": "ディープリサーチ",
       "agentTasks": "エージェントタスク",
@@ -152,6 +153,52 @@
       "changeFailed": "パスワードの変更に失敗しました。"
     }
   },
+  "apiAccess": {
+    "title": "API アクセス",
+    "subtitle": "外部アプリから OpenMake API を呼び出すための開発者 API キーを発行・管理します。",
+    "createTitle": "新しい API キーを発行",
+    "namePlaceholder": "キー名 (例: my-app)",
+    "createButton": "発行",
+    "listTitle": "発行済みキー",
+    "loading": "読み込み中…",
+    "empty": "まだ API キーがありません。",
+    "neverUsed": "未使用",
+    "loadFailed": "API キーの読み込みに失敗しました。",
+    "createFailed": "API キーの発行に失敗しました。",
+    "updateFailed": "状態の変更に失敗しました。",
+    "rotateFailed": "キーのローテーションに失敗しました。",
+    "deleteFailed": "削除に失敗しました。",
+    "rotateConfirm": "キー「{name}」をローテーションしますか？既存のキーは直ちに無効になります。",
+    "deleteConfirm": "キー「{name}」を削除しますか？元に戻せません。",
+    "reveal": {
+      "title": "今だけ表示される平文キー",
+      "warning": "このキーは二度と表示されません。今すぐ安全な場所にコピーしてください。",
+      "dismiss": "閉じる",
+      "copyKey": "キーをコピー",
+      "copied": "コピー済み",
+      "curlTitle": "クイックスタート (curl)",
+      "copyCurl": "curl をコピー"
+    },
+    "col": {
+      "name": "名前",
+      "key": "キー",
+      "status": "状態",
+      "created": "作成日",
+      "lastUsed": "最終使用",
+      "requests": "リクエスト数",
+      "actions": "操作"
+    },
+    "status": {
+      "active": "有効",
+      "inactive": "無効"
+    },
+    "action": {
+      "activate": "有効化",
+      "deactivate": "無効化",
+      "rotate": "ローテーション",
+      "delete": "削除"
+    }
+  },
   "composer": {
     "dropToAttach": "ここにファイルをドロップして添付",
     "modeHeading": "モード",
@@ -167,6 +214,8 @@
     "stop": "停止",
     "send": "送信",
     "disclaimer": "OpenMake は誤ることがあります。重要な情報は確認してください。",
+    "suppressedTag": "(未適用)",
+    "modifierSuppressed": "{label} はインターセプトモード中は適用されません",
     "toggle": {
       "discussion": "ディスカッション",
       "thinking": "思考",
@@ -387,6 +436,7 @@
     }
   },
   "chatSocket": {
+    "interceptNotice": "インターセプトモード（ディスカッション・ディープリサーチ・画像）が有効なため、ツール（分析・検索）やアーティファクトはこの応答では適用されません。",
     "error": "エラー: {message}",
     "unknownError": "不明なエラー",
     "disconnected": "_(サーバーとの接続が切れました。再接続中です。しばらくして再送信してください。)_",

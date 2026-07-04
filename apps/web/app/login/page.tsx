@@ -38,6 +38,10 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await ApiClient.post("/api/auth/guest");
+      // submit() 과 동일 — router.push 는 remount 가 없어 AuthSync(마운트 1회)가 다시
+      // 돌지 않으므로, 게스트 진입 직후 store 를 직접 동기화해야 사이드바/인증 UI 가 즉시
+      // 반영된다 (하드 리로드 전까지 게스트로 남던 버그 방지).
+      await syncAuthFromServer();
     } catch {
       /* 게스트 실패해도 채팅은 익명 허용 */
     } finally {

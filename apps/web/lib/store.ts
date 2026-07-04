@@ -23,6 +23,8 @@ export interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" 
   approvals?: PendingApproval[];
   /** 에이전트 작업 구조화 상태 — 채팅 인라인 카드(AgentTaskCard)로 렌더(이모지 대신 벡터 아이콘). */
   agentTask?: AgentTaskState;
+  /** 표시 전용 시스템 안내(예: 가로채기 모드 안내) — 백엔드 history payload 에는 제외(스냅샷 전용). */
+  notice?: boolean;
 }
 
 /** 에이전트 작업 인라인 카드 상태. */
@@ -181,6 +183,29 @@ interface AppState {
 
 const STYLE_ORDER: ChatStyle[] = ["default", "concise", "verbose"];
 
+/**
+ * primary(전용) 모드 — 상호배타. 하나를 켜면 나머지는 자동으로 꺼진다.
+ * 백엔드 message-pipeline 은 primary 모드 "하나"만 실행하고 나머지는 조용히 무시하므로,
+ * 동시 활성 시 UI 에는 켜진 것처럼 보이지만 실제로는 안 먹는 착시를 제거하기 위함.
+ */
+export const PRIMARY_MODE_KEYS = [
+  "discussionMode",
+  "deepResearchMode",
+  "imageMode",
+  "agentTaskMode",
+  "structuredMode",
+] as const;
+
+/**
+ * 가로채기(bypass) 모드 — 켜지면 백엔드가 전용 파이프라인을 타며 일반 도구(웹검색·분석)·
+ * 아티팩트를 무시한다. 따라서 UI 에서 앰버 신호 + 웹/아티팩트 modifier "(미적용)" 표시에 사용.
+ */
+export const INTERCEPT_MODE_KEYS = [
+  "discussionMode",
+  "deepResearchMode",
+  "imageMode",
+] as const;
+
 /** SSR(서버 평가) 시 localStorage 부재로 인한 ReferenceError 방지 — 클라에서만 실제 저장소 사용. */
 const noopStorage: StateStorage = {
   getItem: () => null,
@@ -304,7 +329,21 @@ export const useAppStore = create<AppState>()(
       return added.length > 0 ? { artifacts: [...s.artifacts, ...added] } : {};
     }),
 
-  toggle: (key) => set((s) => ({ [key]: !s[key] }) as Partial<AppState>),
+  toggle: (key) =>
+    set((s) => {
+      const next = !s[key];
+      // primary 모드를 켤 때만 나머지 primary 모드를 자동 off (상호배타).
+      // 끄는 경우·비-primary(thinking·web·artifact) 토글은 단순 flip.
+      if (next && (PRIMARY_MODE_KEYS as readonly string[]).includes(key)) {
+        const cleared: Record<string, boolean> = {};
+        for (const k of PRIMARY_MODE_KEYS) {
+          if (k !== key) cleared[k] = false;
+        }
+        cleared[key] = true;
+        return cleared as Partial<AppState>;
+      }
+      return { [key]: next } as Partial<AppState>;
+    }),
   setSelectedModel: (m) => set({ selectedModel: m }),
   cycleStyle: () =>
     set((s) => ({

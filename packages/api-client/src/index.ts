@@ -124,6 +124,12 @@ export const ApiClient = {
       method: "PUT",
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
+  patch: <T>(endpoint: string, body?: unknown, options: ApiRequestOptions = {}) =>
+    request<T>(endpoint, {
+      ...options,
+      method: "PATCH",
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
   del: <T>(endpoint: string, options: ApiRequestOptions = {}) =>
     request<T>(endpoint, { ...options, method: "DELETE" }),
 };
