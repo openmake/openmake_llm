@@ -151,6 +151,13 @@
       "tooShort": "The new password must be at least 8 characters.",
       "changed": "Password changed.",
       "changeFailed": "Failed to change password."
+    },
+    "modelPicker": {
+      "providerAria": "Select provider",
+      "modelAria": "Select model",
+      "searchPlaceholder": "Search models…",
+      "count": "Showing {shown}/{total}",
+      "noMatch": "No matches"
     }
   },
   "apiAccess": {

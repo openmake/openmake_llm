@@ -151,6 +151,13 @@
       "tooShort": "새 비밀번호는 8자 이상이어야 합니다.",
       "changed": "비밀번호가 변경되었습니다.",
       "changeFailed": "비밀번호 변경에 실패했습니다."
+    },
+    "modelPicker": {
+      "providerAria": "모델 제공자 선택",
+      "modelAria": "모델 선택",
+      "searchPlaceholder": "모델 검색…",
+      "count": "{shown}/{total}개 표시",
+      "noMatch": "검색 결과 없음"
     }
   },
   "apiAccess": {

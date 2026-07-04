@@ -151,6 +151,13 @@
       "tooShort": "新密码至少需要 8 个字符。",
       "changed": "密码已修改。",
       "changeFailed": "修改密码失败。"
+    },
+    "modelPicker": {
+      "providerAria": "选择提供方",
+      "modelAria": "选择模型",
+      "searchPlaceholder": "搜索模型…",
+      "count": "显示 {shown}/{total} 个",
+      "noMatch": "无匹配结果"
     }
   },
   "apiAccess": {

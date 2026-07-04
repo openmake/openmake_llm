@@ -151,6 +151,13 @@
       "tooShort": "新しいパスワードは8文字以上にしてください。",
       "changed": "パスワードを変更しました。",
       "changeFailed": "パスワードの変更に失敗しました。"
+    },
+    "modelPicker": {
+      "providerAria": "プロバイダーを選択",
+      "modelAria": "モデルを選択",
+      "searchPlaceholder": "モデルを検索…",
+      "count": "{shown}/{total}件を表示",
+      "noMatch": "該当なし"
     }
   },
   "apiAccess": {
