@@ -239,7 +239,9 @@
       "noResults": "没有匹配的技能",
       "viewAll": "在技能库中查看全部",
       "categoryEtc": "其他"
-    }
+    },
+    "modelLabel": "选择模型",
+    "modelAuto": "自动"
   },
   "chat": {
     "approvals": {

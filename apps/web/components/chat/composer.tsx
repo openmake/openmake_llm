@@ -31,6 +31,7 @@ import {
   type SkillSummary,
 } from "@/lib/skills-api";
 import { SlashSkillMenu } from "@/components/chat/slash-skill-menu";
+import { ModelPicker } from "@/components/model-picker";
 import { cn } from "@/lib/utils";
 
 // 슬래시 스킬 호출: "/" + 공백없는 단일 토큰일 때만 드롭다운 표시.
@@ -156,6 +157,27 @@ export function Composer() {
 
   const removeFile = (id: string) => setFiles((prev) => prev.filter((f) => f.id !== id));
   const removeImage = (id: string) => setImages((prev) => prev.filter((i) => i.id !== id));
+
+  // ── 모델 칩 팝오버 — 현재 사용 모델 표시 + 2단계 picker 로 즉시 변경 ──
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!modelMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) {
+        setModelMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setModelMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [modelMenuOpen]);
 
   // 로컬 vLLM + 등록된 외부 LLM(OpenRouter 등) 통합 모델 목록
   const { data: modelsData } = useQuery({
@@ -558,7 +580,7 @@ export function Composer() {
           className="block w-full resize-none bg-transparent px-4 pt-2.5 text-sm text-fg outline-none placeholder:text-muted"
         />
 
-        {/* 하단: 스타일 + 전송 (모델 선택은 설정 → 기본 모델에서, 채팅창엔 모델명 비표시) */}
+        {/* 하단: 첨부 + 스타일 + 모델 칩 + 전송 */}
         <div className="flex items-center gap-1.5 px-2.5 pb-2.5 pt-1">
           {/* 파일 첨부 */}
           <input
@@ -587,6 +609,31 @@ export function Composer() {
           >
             {style}
           </button>
+
+          {/* 사용 중인 LLM 모델 표시 + 클릭 시 2단계 picker 팝오버 */}
+          <div ref={modelMenuRef} className="relative min-w-0">
+            <button
+              onClick={() => setModelMenuOpen((v) => !v)}
+              className="max-w-[180px] truncate rounded-md px-2 py-1.5 text-xs font-medium text-muted hover:bg-surface-2 hover:text-fg"
+              title={t("modelLabel")}
+              aria-label={t("modelLabel")}
+              aria-expanded={modelMenuOpen}
+            >
+              {selectedModel === "default" || !selectedModel
+                ? t("modelAuto")
+                : (modelsData?.models.find((m) => m.modelId === selectedModel)?.name ??
+                  selectedModel.split(":").slice(1).join(":"))}
+            </button>
+            {modelMenuOpen && (
+              <div className="absolute bottom-full left-0 z-30 mb-2 w-72 rounded-lg border border-border bg-surface p-2 shadow-2">
+                <ModelPicker
+                  models={modelsData?.models ?? []}
+                  value={selectedModel}
+                  onChange={setSelectedModel}
+                />
+              </div>
+            )}
+          </div>
 
           {isGenerating ? (
             <button

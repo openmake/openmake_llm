@@ -239,7 +239,9 @@
       "noResults": "一致するスキルがありません",
       "viewAll": "スキルライブラリですべて表示",
       "categoryEtc": "その他"
-    }
+    },
+    "modelLabel": "モデルを選択",
+    "modelAuto": "自動"
   },
   "chat": {
     "approvals": {

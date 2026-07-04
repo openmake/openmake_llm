@@ -239,7 +239,9 @@
       "noResults": "No matching skills",
       "viewAll": "View all in Skill Library",
       "categoryEtc": "Other"
-    }
+    },
+    "modelLabel": "Select model",
+    "modelAuto": "Auto"
   },
   "chat": {
     "approvals": {

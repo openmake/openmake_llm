@@ -239,7 +239,9 @@
       "noResults": "일치하는 스킬이 없습니다",
       "viewAll": "스킬 라이브러리에서 전체 보기",
       "categoryEtc": "기타"
-    }
+    },
+    "modelLabel": "모델 선택",
+    "modelAuto": "자동"
   },
   "chat": {
     "approvals": {

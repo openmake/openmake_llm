@@ -29,6 +29,7 @@ import { useAppStore } from "@/lib/store";
 import { fetchModels } from "@/lib/models-api";
 import { cn } from "@/lib/utils";
 import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE, isLocale, toBcp47 } from "@/i18n/config";
+import { ModelPicker } from "@/components/model-picker";
 
 /* ── 탭 정의 ────────────────────────────────────────────── */
 type TabId = "general" | "model" | "interface" | "notifications" | "privacy" | "security";
@@ -138,137 +139,6 @@ function Select({
   );
 }
 
-/* ── 기본모델 2단계 선택 (provider → model, 대형 목록 검색 필터) ── */
-/** 2단계 검색 입력을 노출하는 모델 수 임계값 (OpenRouter 340개 등 대형 목록 대응) */
-const MODEL_SEARCH_THRESHOLD = 20;
-/** 1단계 "자동 (서버 기본값)" 센티널 — 저장값 'default' 와 매핑 */
-const PROVIDER_AUTO = "__auto__";
-
-type PickerModel = { name: string; modelId: string; provider: string; isFree?: boolean };
-
-function ModelPicker({
-  models,
-  value,
-  onChange,
-  providerLabel,
-}: {
-  models: PickerModel[];
-  /** 선택된 모델 fullId 또는 'default' (자동) */
-  value: string;
-  onChange: (v: string) => void;
-  /** provider id → 1단계 표시 라벨 */
-  providerLabel: (provider: string) => string;
-}) {
-  const t = useTranslations("settings");
-  const [filter, setFilter] = useState("");
-
-  // provider 목록 — local-llm 우선, 외부는 응답 등장 순서 유지
-  const providers = useMemo(() => {
-    const seen: string[] = [];
-    for (const m of models) if (!seen.includes(m.provider)) seen.push(m.provider);
-    return seen.sort((a, b) => (a === "local-llm" ? -1 : b === "local-llm" ? 1 : 0));
-  }, [models]);
-
-  // 별도 provider state 없이 value(SoT)에서 유도 — 두 select 가 항상 저장값과 일관
-  const currentProvider = useMemo(() => {
-    if (!value || value === "default") return PROVIDER_AUTO;
-    return models.find((m) => m.modelId === value)?.provider ?? PROVIDER_AUTO;
-  }, [models, value]);
-
-  // 현재 provider 의 모델 목록 (무료 우선 안정 정렬)
-  const providerModels = useMemo(() => {
-    if (currentProvider === PROVIDER_AUTO) return [];
-    return models
-      .filter((m) => m.provider === currentProvider)
-      .slice()
-      .sort((a, b) => (b.isFree ? 1 : 0) - (a.isFree ? 1 : 0));
-  }, [models, currentProvider]);
-
-  const searchable = providerModels.length > MODEL_SEARCH_THRESHOLD;
-  const q = filter.trim().toLowerCase();
-  const filtered = q
-    ? providerModels.filter(
-        (m) => m.name.toLowerCase().includes(q) || m.modelId.toLowerCase().includes(q),
-      )
-    : providerModels;
-  // 검색으로 현재 선택이 걸러져도 select 표시값이 어긋나지 않게 상단 고정
-  const selectedEntry = providerModels.find((m) => m.modelId === value);
-  const visible =
-    selectedEntry && !filtered.some((m) => m.modelId === value)
-      ? [selectedEntry, ...filtered]
-      : filtered;
-
-  const changeProvider = (p: string) => {
-    setFilter("");
-    if (p === PROVIDER_AUTO) {
-      onChange("default");
-      return;
-    }
-    // 해당 provider 의 첫 모델(무료 우선)로 즉시 전환 — value 가 SoT 라 2단계도 동기화됨
-    const first = models
-      .filter((m) => m.provider === p)
-      .slice()
-      .sort((a, b) => (b.isFree ? 1 : 0) - (a.isFree ? 1 : 0))[0];
-    if (first) onChange(first.modelId);
-  };
-
-  const freeSuffix = t("freeSuffix");
-  return (
-    <div className="flex flex-col gap-1.5">
-      <select
-        value={currentProvider}
-        onChange={(e) => changeProvider(e.target.value)}
-        aria-label={t("modelPicker.providerAria")}
-        className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm text-fg outline-none transition focus:border-accent"
-      >
-        <option value={PROVIDER_AUTO}>{t("modelGroup.auto")}</option>
-        {providers.map((p) => (
-          <option key={p} value={p}>
-            {providerLabel(p)}
-          </option>
-        ))}
-      </select>
-      {currentProvider !== PROVIDER_AUTO && (
-        <>
-          {searchable && (
-            <input
-              type="text"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              placeholder={t("modelPicker.searchPlaceholder")}
-              aria-label={t("modelPicker.searchPlaceholder")}
-              className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm text-fg outline-none transition placeholder:text-muted focus:border-accent"
-            />
-          )}
-          <select
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            aria-label={t("modelPicker.modelAria")}
-            className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm text-fg outline-none transition focus:border-accent"
-          >
-            {visible.length === 0 ? (
-              <option value={value} disabled>
-                {t("modelPicker.noMatch")}
-              </option>
-            ) : (
-              visible.map((m) => (
-                <option key={m.modelId} value={m.modelId}>
-                  {m.name + (m.isFree ? freeSuffix : "")}
-                </option>
-              ))
-            )}
-          </select>
-          {searchable && (
-            <p className="text-xs text-muted">
-              {t("modelPicker.count", { shown: visible.length, total: providerModels.length })}
-            </p>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
 function Segment<T extends string>({
   value,
   onChange,
@@ -316,19 +186,9 @@ export default function SettingsPage() {
     queryFn: fetchModels,
     staleTime: 60_000,
   });
-  // 기본 모델은 2단계 선택(provider → model, ModelPicker)으로 노출 — provider 라벨만 여기서 정의
+  // 기본 모델은 2단계 선택(provider → model)으로 노출 — components/model-picker.tsx 공용
   const allModels = modelsData?.models ?? [];
   const externalModels = allModels.filter((m) => m.provider !== "local-llm");
-  // provider id → 1단계 표시 라벨 (현재 openrouter 만 등록 가능, 그 외 provider 도 일반 처리)
-  const EXTERNAL_PROVIDER_LABELS: Record<string, string> = {
-    openrouter: "🌐 OpenRouter",
-    "ollama-local": "🌐 Ollama (Local)",
-    "ollama-cloud": "🌐 Ollama Cloud",
-  };
-  const providerLabel = (provider: string) =>
-    provider === "local-llm"
-      ? tSettings("modelGroup.local")
-      : (EXTERNAL_PROVIDER_LABELS[provider] ?? `🌐 ${provider}`);
   // UI 표시 언어 — NEXT_LOCALE 쿠키가 SoT (i18n/request.ts 가 서버 렌더 시 읽음).
   // 로컬 state 중복 없이 쿠키를 직접 구독: 서버 스냅샷 "" → hydration 후 클라 값으로 갱신.
   const language = useSyncExternalStore(
@@ -607,7 +467,6 @@ export default function SettingsPage() {
                           models={allModels}
                           value={selectedModel}
                           onChange={setSelectedModel}
-                          providerLabel={providerLabel}
                         />
                         {externalModels.length === 0 && (
                           <p className="text-xs text-muted">
