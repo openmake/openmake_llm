@@ -41,8 +41,11 @@ export type ApiRequestOptions = RequestInit & {
 
 const MUTATING = new Set<string>(MUTATING_METHODS);
 
-/** 401 자동 refresh 를 건너뛸 endpoint 목록 (무한루프 방지). */
-const SKIP_REFRESH_ENDPOINTS = ["/api/auth/refresh", "/api/auth/login", "/api/auth/me"];
+/** 401 자동 refresh 를 건너뛸 endpoint 목록 (무한루프 방지).
+ *  주의: /api/auth/me 는 목록에 넣지 않는다 — 앱 마운트 인증 동기화가 액세스 토큰
+ *  만료(15분) 시 refresh 없이 곧장 /login 리다이렉트돼 "자동 로그아웃"으로 체감되던
+ *  결함 (2026-07-04). 순수 게스트는 /me 가 200(user 없음)이라 refresh 스팸 없음. */
+const SKIP_REFRESH_ENDPOINTS = ["/api/auth/refresh", "/api/auth/login"];
 
 /**
  * Single-flight refresh: 동시에 401 이 난 여러 요청이 각자 /api/auth/refresh 를 호출하면
