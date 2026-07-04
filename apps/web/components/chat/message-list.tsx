@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { MessagesSquare, Telescope, Brain, Sparkles, FileCode2, ChevronRight, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck } from "lucide-react";
+import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, ChevronRight, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck } from "lucide-react";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "@/lib/store";
 import { ApiClient } from "@/lib/api-client";
 import { Markdown } from "./markdown";
@@ -156,8 +156,9 @@ function ThinkingIndicator({
   skills: string[];
 }) {
   const t = useTranslations("chat");
+  // 에이전트 라벨은 이모지 대신 lucide Bot 아이콘으로 표기 (active-context 바와 일관, 2026-07-04).
   const label = agent
-    ? t("thinking.agentAnalyzing", { agent: `${agent.emoji ? agent.emoji + " " : ""}${agent.name}` })
+    ? t("thinking.agentAnalyzing", { agent: agent.name })
     : skills.length > 0
       ? t("thinking.skillsApplying", { skills: skills.join(", ") })
       : t("thinking.analyzing");
@@ -172,6 +173,7 @@ function ThinkingIndicator({
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted [animation-delay:150ms]" />
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted [animation-delay:300ms]" />
           </span>
+          {agent && <Bot className="h-3.5 w-3.5 shrink-0" aria-hidden />}
           <span>{label}…</span>
         </div>
       </div>
