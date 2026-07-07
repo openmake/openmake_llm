@@ -14,7 +14,7 @@
 #   ./openmake_llm.sh start      # 의존성 → 앱 순서로 기동 (빌드/마이그레이션 X)
 #   ./openmake_llm.sh stop       # 앱 → 의존성 역순으로 정지
 #   ./openmake_llm.sh restart    # PM2 앱만 재시작 (코드 반영 X — 환경변수 변경 등)
-#   ./openmake_llm.sh build      # npm run build (backend tsc + frontend Vite content-hash 번들 → dist)
+#   ./openmake_llm.sh build      # npm run build (backend tsc + frontend Next.js build 산출물 생성)
 #   ./openmake_llm.sh migrate    # DB 마이그레이션 적용 (status로 사전 확인 권장)
 #   ./openmake_llm.sh deploy     # build + migrate + restart (코드 변경 운영 반영)
 #                                # 옵션: --yes (확인 skip), --no-migrate (마이그 생략)
@@ -24,7 +24,7 @@
 #
 # 환경 가정 (macOS):
 #   - PostgreSQL/Redis는 docker compose 로 관리 (2026-06-21 brew postgresql@16 제거 → docker 단독)
-#     · compose 위치: /Volumes/MAC_APP/docker/openmake_llm/ (COMPOSE_FILE env 로 override 가능)
+#     · compose 위치: ./infra/docker-compose.yml (COMPOSE_FILE env 로 override 가능)
 #   - OpenMake LLM 앱은 PM2로 관리
 #   - mise / nvm 등으로 Node 24+ 활성화 상태
 #
@@ -42,11 +42,11 @@ readonly APP_PORT="${PORT:-52416}"
 readonly POSTGRES_PORT="${POSTGRES_PORT:-5432}"
 readonly REDIS_PORT="${REDIS_PORT:-6379}"
 # DB/Redis 는 docker compose 로 운영 (2026-06-21 brew postgresql@16 제거 → docker 단독).
-# COMPOSE_FILE 로 compose 위치 지정. 우선순위: 셸 환경변수 > .env > 기본값(스크립트 경로).
+# COMPOSE_FILE 로 compose 위치 지정. 우선순위: 셸 환경변수 > .env > 기본값(레포의 infra/docker-compose.yml).
 # (.env 는 COMPOSE_FILE 한 줄만 추출, 전체 source 안 함)
 _compose_file_env=""
 [[ -f "$SCRIPT_DIR/.env" ]] && _compose_file_env="$(grep -E '^COMPOSE_FILE=' "$SCRIPT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d ' ')"
-readonly COMPOSE_FILE="${COMPOSE_FILE:-${_compose_file_env:-$SCRIPT_DIR/docker-compose.yml}}"
+readonly COMPOSE_FILE="${COMPOSE_FILE:-${_compose_file_env:-$SCRIPT_DIR/infra/docker-compose.yml}}"
 readonly HEALTH_RETRIES=15
 readonly HEALTH_INTERVAL=2
 
@@ -84,7 +84,7 @@ require_cmd() {
 
 preflight() {
     local missing=0
-    for cmd in docker pm2 curl node; do
+    for cmd in docker pm2 curl node npm lsof; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             log_err "필수 명령 미설치: $cmd"
             missing=1
@@ -161,6 +161,10 @@ ensure_docker_service() {
         log_err "docker 미설치 — docker 를 설치하세요 (DB/Redis 는 docker compose 로 운영)"
         return 2
     fi
+    if [[ ! -f "$COMPOSE_FILE" ]]; then
+        log_err "compose 파일을 찾을 수 없음: $COMPOSE_FILE"
+        return 2
+    fi
     if [[ "$action" == "up" ]]; then
         log_info "$label 시작 중 (docker compose up -d $svc)"
         if ! docker compose -f "$COMPOSE_FILE" up -d "$svc" >/dev/null 2>&1; then
@@ -189,11 +193,11 @@ start_redis() {
 start_app() {
     log_step "Layer 3/3: OpenMake LLM (PM2)"
 
-    # build 산출물 확인 — 백엔드(dist/cli.js) + 프론트(Vite content-hash dist/assets) 둘 다 필요.
-    # 프론트 dist 가 없으면 setup.ts 의 public 폴백으로 동작은 하나 content-hash 캐시버스터가
-    # 미적용되므로(페이지 모듈이 소스 ?v= 서빙) 함께 빌드한다.
-    if [[ ! -f "$SCRIPT_DIR/apps/api/dist/cli.js" ]] || [[ ! -d "$SCRIPT_DIR/apps/legacy-web/dist/assets" ]]; then
-        log_warn "빌드 산출물 없음(backend dist/cli.js 또는 frontend Vite dist/assets) — 'npm run build' 먼저 실행 필요"
+    # build 산출물 확인 — 백엔드(dist/cli.js) + 프론트(apps/web/.next/BUILD_ID) 둘 다 필요.
+    # 프론트가 없으면 ecosystem.config.js 의 openmake-next 가 next start 를 못 올리므로
+    # start/restart 시 함께 빌드하도록 강제한다.
+    if [[ ! -f "$SCRIPT_DIR/apps/api/dist/cli.js" ]] || [[ ! -f "$SCRIPT_DIR/apps/web/.next/BUILD_ID" ]]; then
+        log_warn "빌드 산출물 없음(backend dist/cli.js 또는 frontend apps/web/.next/BUILD_ID) — 'npm run build' 먼저 실행 필요"
         log_info "수행 중: cd $SCRIPT_DIR && npm run build"
         ( cd "$SCRIPT_DIR" && npm run build ) || {
             log_err "빌드 실패"
@@ -271,7 +275,8 @@ show_status() {
     # OpenMake LLM (PM2)
     local pm2_status="not-installed"
     if command -v pm2 >/dev/null 2>&1; then
-        pm2_status="$(pm2 jlist 2>/dev/null | node -e "
+        local pm2_raw=""
+        if pm2_raw="$(pm2 jlist 2>/dev/null | node -e "
             let raw='';process.stdin.on('data',c=>raw+=c).on('end',()=>{
                 try { const arr=JSON.parse(raw||'[]');
                     const app=arr.find(a=>a.name==='$APP_NAME');
@@ -279,7 +284,11 @@ show_status() {
                     console.log(app.pm2_env.status);
                 } catch { console.log('parse-error'); }
             });
-        " 2>/dev/null || echo "query-fail")"
+        " 2>/dev/null)"; then
+            pm2_status="$pm2_raw"
+        else
+            pm2_status="query-fail"
+        fi
     fi
 
     if port_listening "$APP_PORT"; then
@@ -292,6 +301,7 @@ show_status() {
 
 show_health() {
     log_step "Health Check"
+    require_cmd curl || return 1
     local url="http://localhost:$APP_PORT/health"
     log_info "GET $url"
     if curl -fsS --max-time 5 "$url" 2>/dev/null; then
@@ -306,6 +316,7 @@ show_health() {
 
 show_logs() {
     log_step "OpenMake LLM 실시간 로그 (Ctrl+C로 종료)"
+    require_cmd pm2 || return 1
     pm2 logs "$APP_NAME" --lines 50
 }
 
@@ -458,7 +469,7 @@ OpenMake LLM 통합 서비스 매니저
   restart   PM2 앱만 재시작 (코드 반영 X — 환경변수 변경 등)
 
 코드 변경 반영:
-  build     npm run build (backend tsc + frontend Vite content-hash 번들)
+  build     npm run build (backend tsc + frontend Next.js build 산출물 생성)
   migrate   DB 마이그레이션 (status → migrate)
   deploy    build + migrate + restart 통합 (코드 변경 운영 반영)
             옵션: --yes (확인 프롬프트 skip), --no-migrate (마이그 생략)
