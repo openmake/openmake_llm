@@ -142,6 +142,16 @@ export async function streamFromExternalProvider(
             : `오늘 날짜는 ${todayStr} 입니다. "현재/오늘/최근"은 이 날짜를 기준으로 판단하고, 학습 지식 이후의 시의성 정보는 제공된 검색 결과에만 근거하세요. 날짜를 추측해 말하지 마세요. 검증할 수 없는 구체적 수치·통계(인구·경제지표·순위·날짜·건수 등, 특히 최근 값)는 정확한 값을 사실로 단정하지 말고, 불확실성을 밝히거나 공식 출처 확인 또는 웹 검색을 권하세요.`,
     );
 
+    // 반-환각(거짓 전제·미확인 개체) — 로컬 채팅 경로엔 buildSystemPrompt 의 환각방지
+    // systemRules 가 실리지 않아, 존재하지 않는 인물/직함 등 거짓 전제 질문에 그럴듯한
+    // 세부사항을 날조하던 결함 완화(예: "조선 25대 왕 이현종" → 가짜 전기 생성).
+    // 도구 미호출(parametric) 경로에도 적용되도록 tool-error anti-fabrication 과 별개로 상시 주입.
+    systemPromptParts.push(
+        langCode && langCode !== 'ko'
+            ? 'Do not fabricate details about specific people, entities, works, events, or identifiers you cannot verify. If a question assumes a fact that may be false (e.g., a person, title, or work that may not exist), do not invent a plausible-sounding answer — state that it cannot be confirmed and suggest verification or web search when appropriate.'
+            : '확실히 알지 못하는 특정 인물·개체·작품·사건·식별자의 세부사항을 지어내지 마세요. 질문이 거짓일 수 있는 전제(예: 존재하지 않을 수 있는 인물·직함·작품)를 담고 있으면 그럴듯한 답을 만들어내지 말고, 사실이라면 근거를 제시하되 확인되지 않으면 "확인되지 않는다"고 명확히 밝히고 필요 시 검증이나 웹 검색을 권하세요.',
+    );
+
     // 웹검색 컨텍스트가 있을 때 grounding + 반-환각 지시를 시스템 프롬프트에 보강한다.
     // enhancedMessage(user turn)에 검색 컨텍스트가 이미 포함된 경로(message-pipeline)에서는
     // 지시문만 추가해 중복 주입을 피하고, 직접 경로(enhancedMessage 미설정)에서는
