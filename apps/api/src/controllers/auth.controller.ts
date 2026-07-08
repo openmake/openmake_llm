@@ -10,7 +10,7 @@
 import { Request, Response, Router } from 'express';
 import { getAuthService } from '../services/AuthService';
 import { getUserManager } from '../data/user-manager';
-import { requireAuth, extractToken, blacklistToken, setTokenCookie, clearTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken, verifyRefreshToken, removeSessionFromMap } from '../auth';
+import { requireAuth, optionalAuth, extractToken, blacklistToken, setTokenCookie, clearTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken, verifyRefreshToken, removeSessionFromMap } from '../auth';
 import jwt from 'jsonwebtoken';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, unauthorized, conflict, internalError } from '../utils/api-response';
@@ -54,7 +54,7 @@ export class AuthController {
         this.router.post('/register', validate(registerSchema), this.register.bind(this));
         this.router.post('/login', validate(loginSchema), this.login.bind(this));
         this.router.post('/logout', requireAuth, this.logout.bind(this));
-        this.router.get('/me', requireAuth, this.getCurrentUser.bind(this));
+        this.router.get('/me', optionalAuth, this.getCurrentUser.bind(this));
         this.router.put('/password', requireAuth, validate(changePasswordSchema), this.changePassword.bind(this));
 
         // ===== Token Refresh =====
@@ -202,7 +202,19 @@ export class AuthController {
      * #24 연동: 표준 API 응답 형식
      */
     private getCurrentUser(req: Request, res: Response): void {
-        res.json(success({ user: req.user }));
+        if (req.user) {
+            res.json(success({ user: req.user }));
+            return;
+        }
+        // optionalAuth 라 user 없이도 통과. 여기서 토큰 유무로 분기:
+        //  - 토큰이 아예 없음 = 순수 게스트 → 200 {user:null} (프론트 refresh/redirect 스팸 방지)
+        //  - 토큰이 있었으나 user 없음 = 만료/무효 → 401 (ApiClient refresh 흐름으로 세션 복구 유도)
+        const hadToken = !!(req.cookies?.auth_token || req.headers.authorization);
+        if (hadToken) {
+            res.status(401).json(unauthorized('인증이 필요합니다'));
+            return;
+        }
+        res.json(success({ user: null }));
     }
 
     /**
