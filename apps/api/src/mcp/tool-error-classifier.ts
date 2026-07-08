@@ -102,6 +102,20 @@ const DEFAULT_CLASSIFICATION: ToolErrorClassification = {
 };
 
 /**
+ * 도구 실패 시 환각(추측·날조) 방지 지시.
+ *
+ * 근거: 검색/조회 도구가 모두 실패하면 모델이 parametric 지식으로 폴백하며
+ *   확인되지 않은 사실을 지어내는 회귀가 라이브 적대적 테스트에서 재현됨
+ *   (예: 존재하지 않는 인물/CVE 를 도구 실패 후 상세히 날조). 기존 hint 들은
+ *   remediation(재시도·대체도구)만 안내할 뿐 "지어내지 말라"는 지시가 없어
+ *   대체 도구까지 실패하면 방어선이 사라졌다. 모든 도구 오류 결과에 이 지시를
+ *   덧붙여, 도구로 확인 못 한 정보는 날조 대신 "확인 불가"를 명시하게 한다.
+ */
+const ANTI_FABRICATION_GUIDANCE =
+    '⚠️ 이 정보를 도구로 확인하지 못했다면 사실을 추측하거나 지어내지 마세요. ' +
+    '확인할 수 없다는 점을 사용자에게 명확히 알리고, 정확한 답을 위해 필요한 정보를 요청하세요.';
+
+/**
  * raw 에러 메시지를 카테고리로 분류합니다.
  *
  * @param message - 도구가 반환했거나 throw 된 에러 메시지
@@ -131,5 +145,5 @@ export function formatToolError(
 ): string {
     const c = classification ?? classifyToolError(rawMessage);
     const retryLabel = c.retryable ? ', 재시도 가능' : '';
-    return `${rawMessage}\n[오류 유형: ${c.category}${retryLabel}] ${c.hint}`;
+    return `${rawMessage}\n[오류 유형: ${c.category}${retryLabel}] ${c.hint}\n${ANTI_FABRICATION_GUIDANCE}`;
 }
