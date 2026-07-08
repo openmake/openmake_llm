@@ -179,10 +179,18 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
     }
 
     private async safeSpawn(userId: string, serverId: string): Promise<ExternalMCPClient> {
-        // 멱등 가드 — 이미 풀에 살아있는 클라이언트가 있으면 재spawn 하지 않는다
+        // 멱등 가드 — 이미 풀에 "살아있는" 클라이언트가 있으면 재spawn 하지 않는다
         // (로그인 반복 시 자식 프로세스 중복 생성/누수 방지).
+        // self-heal: transport 가 exit/error 로 죽었다고 표시된(status!=='connected')
+        // client 는 evict 후 respawn — 죽은 client 를 그대로 반환해 도구가 영구
+        // "Not connected" 로 남던 갭을 막는다. (조용한 死는 tool-router 의
+        // evict-on-error 가 실제 호출 실패로 보완.)
         const existing = this.userPool.get(userId, serverId);
-        if (existing) return existing;
+        if (existing) {
+            if (existing.getStatus().status === 'connected') return existing;
+            logger.warn(`stale client evict u=${userId} s=${serverId} (status=${existing.getStatus().status}) → respawn`);
+            await this.userPool.remove(userId, serverId);
+        }
         const server = await this.repo.getServerById(serverId);
         if (!server) throw new Error(`server not found: ${serverId}`);
         const env = await this.repo.decryptEnvForSpawn(serverId);

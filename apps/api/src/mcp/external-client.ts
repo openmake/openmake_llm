@@ -27,6 +27,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import type { MCPServerConfig, MCPConnectionStatus, MCPTool, MCPToolResult } from './types';
 import { buildSandboxedCommand } from './sandbox-docker';
+import { isConnectionDeathError } from './tool-error-classifier';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ExternalMCP');
@@ -225,6 +226,15 @@ export class ExternalMCPClient extends EventEmitter {
             return this.sdkResultToMCPToolResult(result);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
+            // self-heal: 연결 사망(컨테이너 死/세션 무효 — "Not connected"/"Session not found")
+            // 은 SDK 가 throw 하지만 isError 결과로 정규화되어 상위 catch 를 타지 않는다.
+            // status 를 'error' 로 내려 supervisor.safeSpawn 의 liveness 가드가 다음
+            // ensureUserServers 에서 이 client 를 evict → fresh respawn 하게 한다.
+            // (이 표시가 없으면 status 는 'connected' 로 남아 도구가 영구 "Not connected".)
+            if (isConnectionDeathError(message)) {
+                this.status = 'error';
+                this.lastError = message;
+            }
             return {
                 content: [{ type: 'text', text: `도구 실행 오류 (${this.config.name}::${name}): ${message}` }],
                 isError: true,

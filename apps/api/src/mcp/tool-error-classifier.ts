@@ -116,6 +116,26 @@ const ANTI_FABRICATION_GUIDANCE =
     '확인할 수 없다는 점을 사용자에게 명확히 알리고, 정확한 답을 위해 필요한 정보를 요청하세요.';
 
 /**
+ * 연결 자체가 죽었음을 뜻하는 에러 신호 패턴.
+ *
+ * stdio 컨테이너가 죽거나(exit 미감지) streamable-http 세션이 무효화되면 풀에
+ * 남은 client 는 status='connected' 로 남아 sync 로는 사망을 감지할 수 없고,
+ * 실제 callTool 실패만이 확정 신호다. 이 패턴에 걸리면 상위(tool-router)가
+ * 죽은 client 를 풀에서 evict → 다음 ensureUserServers 가 fresh respawn 하여
+ * "컨테이너 死 → 앱 재시작 전까지 도구 영구 불능" self-heal 갭을 해소한다.
+ */
+const CONNECTION_DEATH_PATTERN =
+    /not connected|session not found|connection closed|transport closed|client closed|ECONNREFUSED|ECONNRESET|socket hang up|EPIPE|broken pipe/i;
+
+/**
+ * 에러 메시지가 "연결 사망"(재연결/respawn 필요) 신호인지 판별합니다.
+ * 순수 함수 — tool-router 의 evict-on-error self-heal 에서 사용.
+ */
+export function isConnectionDeathError(message: string): boolean {
+    return CONNECTION_DEATH_PATTERN.test(message ?? '');
+}
+
+/**
  * raw 에러 메시지를 카테고리로 분류합니다.
  *
  * @param message - 도구가 반환했거나 throw 된 에러 메시지
