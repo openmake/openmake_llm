@@ -129,8 +129,18 @@ export const TOKEN_BUDGETS = {
     MEDIUM: Number(process.env.OMK_TOKEN_BUDGET_MEDIUM) || 1024,
     /** 고복잡도 (0.6 <= score < 0.8) 기본 예산 */
     HIGH: Number(process.env.OMK_TOKEN_BUDGET_HIGH) || 2048,
-    /** 최고복잡도 (score >= 0.8) — 0은 제한 없음 (백엔드 기본값 사용) */
+    /** 최고복잡도 (score >= 0.8) — 0은 제한 없음 (백엔드 기본값 사용). 2026-07-09 이후 MAX 로 대체 */
     UNLIMITED: 0,
+    /**
+     * 최고복잡도 출력 상한 (유한 ceiling) — env: OMK_TOKEN_BUDGET_MAX.
+     *
+     * 배경: score>=0.8 최고복잡도는 UNLIMITED(0)=무제한이었다. 서버
+     * repetition_penalty 로 반복 루프는 잡히지만, 무제한 출력은 runaway(붕괴 시
+     * 262K 컨텍스트까지 생성)·비용·지연 리스크로 남는다. 긴 정답(대형 리포트·코드·
+     * thinking reasoning+답변)은 넉넉히 담되 무한 생성은 막는 유한 상한으로 대체.
+     * 16384 tokens ≈ 12,000 단어 — 정상 장문 답변에 충분하면서 폭주는 차단.
+     */
+    MAX: Number(process.env.OMK_TOKEN_BUDGET_MAX) || 16384,
     /**
      * Thinking 모드 활성화 시 num_predict 최소 보장 — env: OMK_THINKING_MIN_TOKENS.
      *

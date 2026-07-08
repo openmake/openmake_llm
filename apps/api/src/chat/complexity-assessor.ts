@@ -129,8 +129,8 @@ export function assessComplexity(ctx: ComplexityContext): ComplexityAssessment {
  * 3. MIN_TOKENS 이상 보장 (0=UNLIMITED 제외)
  */
 export function recommendTokenBudget(complexityScore: number, queryType: QueryType): number {
-    // 최고 복잡도: 제한 없음
-    if (complexityScore >= 0.8) return TOKEN_BUDGETS.UNLIMITED;
+    // 최고 복잡도: 유한 상한(runaway/비용 방지). 과거 UNLIMITED(0)=무제한을 대체.
+    if (complexityScore >= 0.8) return TOKEN_BUDGETS.MAX;
 
     // 복잡도 기반 기본 예산
     let budget: number;
