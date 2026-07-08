@@ -101,13 +101,16 @@ export const LLM_TOP_P = {
  *
  * 근거(라이브 UI 재현): qwen 등 로컬 모델이 동일 토큰을 무한 반복("오오오오…")하며
  * 응답이 붕괴하는 결함이 관측됐다. 채팅 경로가 penalty 를 전혀 설정하지 않아
- * vLLM 기본(0=억제 없음)으로 호출되던 것이 원인(안티-디제너레이션 config 는 정의만
- * 되고 미배선). frequency_penalty 는 토큰 출현 "빈도에 비례"해 억제하므로 하드 반복
- * 루프를 겨냥하기에 가장 적합하다(반복이 쌓일수록 penalty↑ → 루프 자동 차단).
- * 0.3 은 정상 텍스트(토큰 소수 반복)에는 거의 영향 없이 degenerate 루프만 끊는 보수적 값.
- * 0 이면 미적용. 외부 provider(Claude/GPT 등)에는 적용하지 않는다(자체 디코딩 안전장치 보유).
+ * vLLM 기본(0=억제 없음)으로 호출되던 것이 원인.
+ *
+ * 2026-07-09: vLLM 서빙 계층에 서버 기본값 repetition_penalty=1.05 가 적용됨
+ * (start_vllm.sh --override-generation-config). 반복 억제 안전망은 이제 서버가
+ * 모든 콜러(penalty 미설정 클라이언트 포함)에 대해 보유하므로, 앱은 이중 억제(품질
+ * 저하 위험)를 피하기 위해 기본 0(서버에 위임)으로 둔다. 서버 값만으로 부족하면
+ * env LLM_FREQUENCY_PENALTY 로 앱 측 추가 억제를 켤 수 있다(단일 소스 원칙상 서버 조정 우선).
+ * 외부 provider(Claude/GPT 등)에는 어차피 미적용(자체 디코딩 안전장치 보유).
  */
-export const LLM_ANTI_DEGENERATION_FREQUENCY_PENALTY = Number(process.env.LLM_FREQUENCY_PENALTY ?? 0.3);
+export const LLM_ANTI_DEGENERATION_FREQUENCY_PENALTY = Number(process.env.LLM_FREQUENCY_PENALTY ?? 0);
 
 /**
  * 복잡도 기반 토큰 예산 (num_predict 동적 제어)
