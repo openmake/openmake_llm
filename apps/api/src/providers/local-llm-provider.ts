@@ -33,6 +33,7 @@ import { ProviderError } from './provider-errors';
 import type { LLMClient } from '../llm';
 import type { ToolCall, UsageMetrics } from '../llm';
 import { matchCapabilityPreset, FALLBACK_CAPABILITIES } from '../config/model-defaults';
+import { LLM_ANTI_DEGENERATION_FREQUENCY_PENALTY } from '../config/llm-parameters';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('LocalLLMProvider');
@@ -178,6 +179,11 @@ export class LocalLLMProvider implements IProvider {
                 {
                     temperature: opts.temperature,
                     num_predict: opts.maxTokens,
+                    // 반복(degeneration) 방지 — 로컬 모델이 동일 토큰을 무한 반복하며
+                    // 응답이 붕괴하는 것을 억제. vLLM native frequency_penalty (0=미적용).
+                    ...(LLM_ANTI_DEGENERATION_FREQUENCY_PENALTY > 0
+                        ? { frequency_penalty: LLM_ANTI_DEGENERATION_FREQUENCY_PENALTY }
+                        : {}),
                 },
                 onTokenCombined,
                 {
