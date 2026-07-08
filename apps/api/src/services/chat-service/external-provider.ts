@@ -133,8 +133,8 @@ export async function streamFromExternalProvider(
     const todayStr = getCurrentDate();
     systemPromptParts.push(
         langCode && langCode !== 'ko'
-            ? `Today's date is ${todayStr}. Interpret "current/today/recent" relative to this date; for time-sensitive facts after your training cutoff, rely only on the provided search results — never guess dates.`
-            : `오늘 날짜는 ${todayStr} 입니다. "현재/오늘/최근"은 이 날짜를 기준으로 판단하고, 학습 지식 이후의 시의성 정보는 제공된 검색 결과에만 근거하세요. 날짜를 추측해 말하지 마세요.`,
+            ? `Today's date is ${todayStr}. Interpret "current/today/recent" relative to this date; for time-sensitive facts after your training cutoff, rely only on the provided search results — never guess dates. When you cannot verify precise figures or statistics (population, economic indicators, rankings, dates, counts) — especially recent ones — do NOT state exact numbers as fact; acknowledge the uncertainty or recommend checking an official source or enabling web search.`
+            : `오늘 날짜는 ${todayStr} 입니다. "현재/오늘/최근"은 이 날짜를 기준으로 판단하고, 학습 지식 이후의 시의성 정보는 제공된 검색 결과에만 근거하세요. 날짜를 추측해 말하지 마세요. 검증할 수 없는 구체적 수치·통계(인구·경제지표·순위·날짜·건수 등, 특히 최근 값)는 정확한 값을 사실로 단정하지 말고, 불확실성을 밝히거나 공식 출처 확인 또는 웹 검색을 권하세요.`,
     );
 
     // 웹검색 컨텍스트가 있을 때 grounding + 반-환각 지시를 시스템 프롬프트에 보강한다.
