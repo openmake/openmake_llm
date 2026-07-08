@@ -21,7 +21,7 @@ RUN apt-get update \
     && mkdir -p /workspace /opt/browser \
     && chown node:node /workspace \
     && cd /opt/browser && npm init -y >/dev/null 2>&1 \
-    && npm install playwright@1.49.0 \
+    && npm install playwright@1.61.1 \
     && npx playwright install --with-deps chromium \
     && chmod -R a+rX /opt/ms-playwright /opt/browser \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
