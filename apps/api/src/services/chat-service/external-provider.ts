@@ -123,7 +123,12 @@ export async function streamFromExternalProvider(
             es: 'Español', fr: 'Français', de: 'Deutsch',
         };
         const langName = langMap[langCode] || langCode;
-        systemPromptParts.push(`Respond in ${langName}.`);
+        // 스크립트 순수성 — qwen 이 한국어 답변에 한자·일본어 문자를 섞는 결함
+        // (예: 값→值, 소련→ソ連, 냉각→冷却) 완화. 대상 언어 고유 문자로만 작성하고
+        // 외래어·고유명사도 대상 언어로 음차한다.
+        systemPromptParts.push(
+            `Respond in ${langName}. Write using only ${langName}'s native script — do not mix in Chinese characters (unless ${langName} is Chinese) or Japanese kana (unless ${langName} is Japanese); transliterate foreign terms and proper nouns into ${langName}.`,
+        );
     }
 
     // 시간 컨텍스트 (2026-07-04): 일반 채팅 system 에 현재 날짜가 어디에도 없어, 모델이
