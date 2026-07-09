@@ -137,8 +137,8 @@
     "pushNotSupported": "This browser does not support push notifications.",
     "pushSwNotReady": "The service worker is not registered, so push notifications are unavailable.",
     "memoryLearning": {
-      "title": "Long-term memory learning",
-      "description": "Extract and store facts such as name, occupation, and preferences from conversations."
+      "title": "Use long-term memory",
+      "description": "References your saved long-term memories in the conversation. Turn off to exclude saved memories from this chat."
     },
     "passwordChange": {
       "title": "Change password"
@@ -178,7 +178,8 @@
       "note": "Under GDPR Art. 7(3) you may withdraw consent at any time. Withdrawal is recorded and may affect your use of the service.",
       "regrant": "Re-consent",
       "granting": "Granting…"
-    }
+    },
+    "guestModelNotice": "Guests can use the default model only. External models such as Ollama and OpenRouter are available after signing in (registering)."
   },
   "apiAccess": {
     "title": "API Access",
@@ -408,7 +409,8 @@
       "openDetail": "View details",
       "versionPicker": "Version",
       "close": "Close"
-    }
+    },
+    "resize": "Resize panel (double-click to reset)"
   },
   "history": {
     "title": "Conversation history",
@@ -732,7 +734,10 @@
         "description": "Catches bugs and simplification opportunities in changed code.",
         "systemPrompt": "You are a meticulous code reviewer..."
       }
-    }
+    },
+    "useInChat": "Use in chat",
+    "inUseDeselect": "In use · Deselect",
+    "deselect": "Deselect agent"
   },
   "research": {
     "pageTitle": "Deep Research History",

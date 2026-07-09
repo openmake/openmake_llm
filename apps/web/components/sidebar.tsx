@@ -41,7 +41,7 @@ export function Sidebar() {
     try {
       const res = await ApiClient.get<
         ApiSuccess<{ messages?: Array<{ role: string; content: string; images?: string[] }> }>
-      >(`/api/chat/sessions/${sid}/messages`);
+      >(appendAnonSessionId(`/api/chat/sessions/${sid}/messages`));
       const msgs = res?.data?.messages ?? [];
       setChatHistory(() =>
         msgs
@@ -81,7 +81,7 @@ export function Sidebar() {
     queryKey: ["conversations"],
     queryFn: async () => {
       const res = await ApiClient.get<ApiSuccess<{ sessions?: SessionRow[] }>>(
-        "/api/chat/conversations",
+        appendAnonSessionId("/api/chat/conversations"),
       );
       return res?.data?.sessions ?? [];
     },

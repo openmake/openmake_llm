@@ -1,6 +1,7 @@
 "use client";
 
-import { Bot, Sparkles } from "lucide-react";
+import { Bot, Sparkles, UserRound, X } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useAppStore } from "@/lib/store";
 
 /**
@@ -11,13 +12,30 @@ import { useAppStore } from "@/lib/store";
  * 에이전트=Bot, 스킬=Sparkles(슬래시 메뉴와 동일) — OS별 이모지 렌더 편차 제거.
  */
 export function ActiveContext() {
+  const t = useTranslations("customAgents");
   const activeAgent = useAppStore((s) => s.activeAgent);
   const activeSkills = useAppStore((s) => s.activeSkills);
+  const activeUserAgent = useAppStore((s) => s.activeUserAgent);
+  const setActiveUserAgent = useAppStore((s) => s.setActiveUserAgent);
 
-  if (!activeAgent && activeSkills.length === 0) return null;
+  if (!activeAgent && !activeUserAgent && activeSkills.length === 0) return null;
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-1.5 px-4 pb-2 text-xs">
+      {activeUserAgent && (
+        <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2.5 py-0.5 font-medium text-accent-fg">
+          <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          {activeUserAgent.name}
+          <button
+            type="button"
+            onClick={() => setActiveUserAgent(null)}
+            aria-label={t("deselect")}
+            className="ml-0.5 rounded-full p-0.5 hover:bg-black/15"
+          >
+            <X className="h-3 w-3 shrink-0" aria-hidden />
+          </button>
+        </span>
+      )}
       {activeAgent && (
         <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2.5 py-0.5 font-medium text-accent">
           <Bot className="h-3.5 w-3.5 shrink-0" aria-hidden />

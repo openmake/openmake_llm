@@ -301,6 +301,8 @@ export function useChatSocket() {
         // 개인정보 설정 — 백엔드(ws-chat-handler)가 존중: false 면 기록 저장/메모리 학습 생략.
         saveHistory: s.saveHistory,
         memoryLearning: s.memoryLearning,
+        // 커스텀 에이전트(페르소나) 적용 — 지정 시 백엔드가 산업 에이전트 자동라우팅을 우회하고 해당 system_prompt 주입.
+        userAgentId: s.activeUserAgent?.id,
       };
       ws.send(JSON.stringify(payload));
 

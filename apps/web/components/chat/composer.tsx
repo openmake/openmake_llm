@@ -17,6 +17,7 @@ import {
   Check,
   Paperclip,
   X,
+  Lock,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -182,7 +183,10 @@ export function Composer() {
     setSelectedModel,
     cycleStyle,
     setInputDraft,
+    auth,
   } = useAppStore();
+  // 게스트(비로그인)는 기본 모델만 사용 가능 — 외부 provider(Ollama/OpenRouter)는 가입 이용자 전용.
+  const isGuest = !auth.currentUser;
 
   // ── 슬래시(/) 스킬 호출 드롭다운 ──
   const [slashActiveIndex, setSlashActiveIndex] = useState(0);
@@ -593,13 +597,17 @@ export function Composer() {
           </button>
 
           {/* 사용 중인 LLM 모델 — 표시 전용 (변경은 설정 → 모델&응답 → 기본 모델).
-              '자동' 이면 서버 기본모델명을 병기해 실제 사용 모델을 노출한다. */}
+              '자동' 이면 서버 기본모델명을 병기해 실제 사용 모델을 노출한다.
+              게스트는 기본 모델만 사용 가능 → 잠금 아이콘 + 고지 tooltip. */}
+          {isGuest && <Lock className="h-3 w-3 shrink-0 text-faint" aria-hidden />}
           <span
             className="max-w-[200px] truncate px-2 py-1.5 text-xs font-medium text-muted"
             title={
-              selectedModel === "default" || !selectedModel
-                ? (modelsData?.defaultModel ?? t("modelAuto"))
-                : selectedModel
+              isGuest
+                ? tSettings("guestModelNotice")
+                : selectedModel === "default" || !selectedModel
+                  ? (modelsData?.defaultModel ?? t("modelAuto"))
+                  : selectedModel
             }
             aria-label={t("modelLabel")}
           >
@@ -636,6 +644,12 @@ export function Composer() {
           )}
         </div>
       </div>
+      {isGuest && (
+        <p className="mt-2 flex items-center justify-center gap-1 text-center text-[11px] text-muted">
+          <Lock className="h-3 w-3 shrink-0" aria-hidden />
+          {tSettings("guestModelNotice")}
+        </p>
+      )}
       <p className="mt-2 text-center text-[11px] text-faint">
         {t("disclaimer")}
       </p>

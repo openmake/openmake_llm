@@ -137,8 +137,8 @@
     "pushNotSupported": "このブラウザはプッシュ通知に対応していません。",
     "pushSwNotReady": "サービスワーカーが登録されていないため、プッシュ通知を利用できません。",
     "memoryLearning": {
-      "title": "長期記憶の学習",
-      "description": "会話から名前・職業・好みなどの事実を抽出して保存します。"
+      "title": "長期記憶の活用",
+      "description": "保存された長期記憶を会話で参照します。オフにするとこの会話で保存済みの記憶を使用しません。"
     },
     "passwordChange": {
       "title": "パスワード変更"
@@ -178,7 +178,8 @@
       "note": "GDPR第7条(3)に基づき、同意はいつでも撤回できます。撤回は記録され、サービス利用に影響する場合があります。",
       "regrant": "再同意",
       "granting": "同意中…"
-    }
+    },
+    "guestModelNotice": "ゲストは既定のモデルのみ利用できます。Ollama・OpenRouter などの外部モデルはログイン(登録)後に利用できます。"
   },
   "apiAccess": {
     "title": "API アクセス",
@@ -408,7 +409,8 @@
       "openDetail": "詳細を見る",
       "versionPicker": "バージョン",
       "close": "閉じる"
-    }
+    },
+    "resize": "パネル幅を調整 (ダブルクリックでリセット)"
   },
   "history": {
     "title": "会話履歴",
@@ -732,7 +734,10 @@
         "description": "変更されたコードのバグや簡素化の余地を指摘します。",
         "systemPrompt": "あなたは厳格なコードレビュアーです..."
       }
-    }
+    },
+    "useInChat": "チャットで使用",
+    "inUseDeselect": "使用中 · 解除",
+    "deselect": "エージェント解除"
   },
   "research": {
     "pageTitle": "ディープリサーチ履歴",

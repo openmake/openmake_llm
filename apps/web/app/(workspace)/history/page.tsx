@@ -142,7 +142,7 @@ export default function HistoryPage() {
     try {
       const res = await ApiClient.get<
         ApiSuccess<{ messages?: Array<{ role: string; content: string; images?: string[] }> }>
-      >(`/api/chat/sessions/${sid}/messages`);
+      >(appendAnonSessionId(`/api/chat/sessions/${sid}/messages`));
       const msgs = res?.data?.messages ?? [];
       setChatHistory(() =>
         msgs
@@ -160,7 +160,7 @@ export default function HistoryPage() {
     (async () => {
       try {
         const res = await ApiClient.get<ConversationsResponse>(
-          "/api/chat/conversations?limit=100",
+          appendAnonSessionId("/api/chat/conversations?limit=100"),
         );
         if (cancelled) return;
         const list = res?.data?.sessions ?? [];

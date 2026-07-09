@@ -38,7 +38,10 @@ export const mcpServerCreateSchema = z.object({
     args: z.array(secureTextSchema({ maxLength: 500, fieldName: 'args', allowNewLines: false, detectMaliciousPatterns: false, specialCharacterRatioLimit: 0.95 })).max(50).optional(),
     env: z.record(z.string(), z.string()).optional(),
     url: z.url('유효한 URL을 입력하세요').optional(),
-    enabled: z.boolean().optional().default(true)
+    enabled: z.boolean().optional().default(true),
+    // visibility 분기 — 미포함 시 Zod 가 strip 하여 핸들러가 항상 global 로 생성(private 요청 무력화) 하던 결함 수정
+    visibility: z.enum(['global', 'user_private', 'user_shared']).optional(),
+    catalog_template_id: z.string().max(200).optional()
 }).superRefine((data, ctx) => {
     if (data.transport_type === 'stdio' && !data.command) {
         ctx.addIssue({

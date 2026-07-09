@@ -265,7 +265,8 @@ export async function handleChatMessage(
             branchFromMessageId: typeof msg.branchFromMessageId === 'string' ? msg.branchFromMessageId : undefined,
             // 사용자가 명시적으로 false 보낼 때만 본문 저장 차단. 미지정/true → 저장 (기본 보존)
             saveHistory: msg.saveHistory !== false,
-            // 메모리 학습 — saveHistory 와 독립. 명시 false 만 차단, 기본 활성
+            // 저장된 장기 메모리 주입 여부 — saveHistory 와 독립. 명시 false 만 차단, 기본 활성.
+            memoryLearning: msg.memoryLearning !== false,
             enabledTools: msg.enabledTools,
             userLanguagePreference: userLangPreference,
             userContext,

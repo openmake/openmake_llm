@@ -116,6 +116,8 @@ interface AppState {
   /** 현재 응답에 선택된 에이전트 + 활성 스킬 (ws agent_selected / skills_activated) */
   activeAgent: { name: string; emoji?: string } | null;
   activeSkills: string[];
+  /** 사용자가 채팅에 적용한 커스텀 에이전트(페르소나). 지정 시 WS userAgentId 로 전송돼 백엔드가 해당 system_prompt 를 주입. 네비게이션·재방문에 유지되도록 영속. */
+  activeUserAgent: { id: string; name: string; icon?: string | null } | null;
   /** 딥리서치 진행상황 (ws research_progress) — 스트리밍 중 상태 배너로 표시, done 시 clear. */
   researchProgress: ResearchProgressInfo | null;
 
@@ -157,6 +159,7 @@ interface AppState {
   setInputDraft: (t: string) => void;
   setActiveAgent: (a: { name: string; emoji?: string } | null) => void;
   setActiveSkills: (s: string[]) => void;
+  setActiveUserAgent: (a: { id: string; name: string; icon?: string | null } | null) => void;
   setResearchProgress: (p: ResearchProgressInfo | null) => void;
   setPrivacyPrefs: (patch: { saveHistory?: boolean; memoryLearning?: boolean }) => void;
   /** WS done 시 마지막 assistant 메시지에 서버 messageId 부여 — 피드백 전송용. */
@@ -231,6 +234,7 @@ export const useAppStore = create<AppState>()(
   inputDraft: "",
   activeAgent: null,
   activeSkills: [],
+  activeUserAgent: null,
   researchProgress: null,
 
   artifacts: [],
@@ -305,6 +309,7 @@ export const useAppStore = create<AppState>()(
   setInputDraft: (t) => set({ inputDraft: t }),
   setActiveAgent: (a) => set({ activeAgent: a }),
   setActiveSkills: (s) => set({ activeSkills: s }),
+  setActiveUserAgent: (a) => set({ activeUserAgent: a }),
   setResearchProgress: (p) => set({ researchProgress: p }),
   clearChat: () =>
     set({
@@ -382,7 +387,7 @@ export const useAppStore = create<AppState>()(
         typeof window !== "undefined" ? window.localStorage : noopStorage,
       ),
       // 사용자 환경설정만 영속화 — 채팅/아티팩트 등 휘발성 세션 상태는 제외
-      partialize: (s) => ({ selectedModel: s.selectedModel, style: s.style }),
+      partialize: (s) => ({ selectedModel: s.selectedModel, style: s.style, activeUserAgent: s.activeUserAgent }),
     },
   ),
 );

@@ -182,6 +182,8 @@ export default function SettingsPage() {
   const responseStyle = useAppStore((s) => s.style);
   const setResponseStyle = useAppStore((s) => s.setStyle);
   const setPrivacyPrefs = useAppStore((s) => s.setPrivacyPrefs);
+  // 게스트(비로그인)는 기본 모델만 사용 가능 — 외부 provider(Ollama/OpenRouter)는 가입 이용자 전용.
+  const isGuest = !useAppStore((s) => s.auth.currentUser);
   const { data: modelsData } = useQuery({
     queryKey: ["models"],
     queryFn: fetchModels,
@@ -574,7 +576,17 @@ export default function SettingsPage() {
                     title={tSettings("defaultModel.title")}
                     description={tSettings("defaultModel.description")}
                   >
-                    {allModels.length ? (
+                    {isGuest ? (
+                      <div className="flex flex-col gap-2">
+                        <div className="flex h-9 items-center rounded-md border border-border bg-surface-2 px-3 text-sm text-muted">
+                          {tSettings("modelGroup.auto")}
+                          {modelsData?.defaultModel ? ` · ${modelsData.defaultModel}` : ""}
+                        </div>
+                        <p className="rounded-md border border-border bg-surface-2/60 px-3 py-2 text-xs leading-relaxed text-muted">
+                          {tSettings("guestModelNotice")}
+                        </p>
+                      </div>
+                    ) : allModels.length ? (
                       <div className="flex flex-col gap-1.5">
                         <ModelPicker
                           models={allModels}

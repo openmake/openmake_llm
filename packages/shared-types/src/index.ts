@@ -111,6 +111,8 @@ export interface WsChatRequest {
   saveHistory?: boolean;
   /** 개인정보: false 면 메모리 학습 비활성 (saveHistory 와 독립). 기본 true */
   memoryLearning?: boolean;
+  /** 커스텀 에이전트(user_agents) id — 지정 시 백엔드가 산업 에이전트 자동라우팅을 우회하고 해당 페르소나 system_prompt 를 prepend */
+  userAgentId?: string;
 }
 
 /** 아티팩트 메타 — 백엔드 llm/artifact-parser.ts ArtifactInfo 와 동일 계약. */

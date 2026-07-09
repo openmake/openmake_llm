@@ -12,6 +12,7 @@ import {
 import { getKeyValueStore } from '../storage';
 import { STORAGE_POLICY, RATE_LIMIT_POLICY } from '../config/security';
 import { ARTIFACT_EXEC } from '../config/artifact-exec';
+import { verifyToken } from '../auth/auth-core';
 
 // ================================================
 // 타입 정의
@@ -60,26 +61,37 @@ function getRequestIP(req: Request): string {
     return req.ip || 'unknown';
 }
 
-function getUserKey(req: Request): string | null {
-    const user = req.user;
-    if (!user) {
-        return null;
+/**
+ * 레이트 리밋 keying 용 사용자 신원 해석.
+ *
+ * ⚠️ 리미터는 미들웨어 체인에서 requireAuth/optionalAuth 보다 **먼저** 실행되므로 이 시점의
+ * `req.user` 는 아직 비어 있다. 이전엔 그래서 `userLimit`·`ADMIN_MULTIPLIER` 가 전혀 적용되지
+ * 않고 모든 인증 사용자가 익명 `ipLimit` 로만 제한되던 결함이 있었다. 여기서 auth_token(쿠키/
+ * Bearer)을 **서명만 검증**(DB 조회 없음)해 keying 목적의 userId/role 을 도출한다.
+ * 위조 토큰은 JWT_SECRET 없이 통과 불가하므로 "더 높은 한도 부여" 목적엔 안전하며, 만료/무효
+ * 토큰은 null → IP 기준으로 폴백한다(기존 동작 유지). 실제 인증 강제는 라우트별 미들웨어가 담당.
+ */
+async function resolveLimiterIdentity(req: Request): Promise<{ userId: string; role: string } | null> {
+    const user = req.user as { userId?: unknown; id?: unknown; role?: unknown } | undefined;
+    if (user) {
+        const uid = user.userId ?? user.id;
+        if (uid !== undefined && uid !== null) {
+            return { userId: String(uid), role: user.role ? String(user.role) : 'user' };
+        }
     }
-
-    if ('userId' in user && user.userId) {
-        return String(user.userId);
+    const authHeader = req.headers.authorization;
+    const bearer = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+    const token = (req.cookies?.auth_token as string | undefined) || bearer;
+    if (!token || typeof token !== 'string') return null;
+    try {
+        const payload = await verifyToken(token);
+        if (payload?.userId) {
+            return { userId: String(payload.userId), role: payload.role ? String(payload.role) : 'user' };
+        }
+    } catch {
+        /* 서명 무효/만료 — 익명 취급(IP 기준 폴백) */
     }
-
-    if ('id' in user && user.id !== undefined && user.id !== null) {
-        return String(user.id);
-    }
-
     return null;
-}
-
-function isAdminUser(req: Request): boolean {
-    const user = req.user;
-    return Boolean(user && user.role === 'admin');
 }
 
 function getEndpointKey(req: Request): string {
@@ -236,11 +248,12 @@ export function createAdvancedRateLimiter(options: AdvancedRateLimiterOptions) {
         if (options.skip?.(req)) { next(); return; }
         const now = Date.now();
         const ip = getRequestIP(req);
-        const userKey = getUserKey(req);
+        const identity = await resolveLimiterIdentity(req);
+        const userKey = identity?.userId ?? null;
         const actorKey = userKey ? `user:${userKey}` : `ip:${ip}`;
 
         // Admin은 높은 배수의 제한 적용 (완전 우회 방지)
-        const effectiveIpLimit = isAdminUser(req) ? options.ipLimit * RATE_LIMIT_POLICY.ADMIN_MULTIPLIER : options.ipLimit;
+        const effectiveIpLimit = identity?.role === 'admin' ? options.ipLimit * RATE_LIMIT_POLICY.ADMIN_MULTIPLIER : options.ipLimit;
 
         const endpointSpecificLimit = getEndpointSpecificLimit(options.endpointRules, req);
         const perEndpointLimit = endpointSpecificLimit ?? effectiveIpLimit;

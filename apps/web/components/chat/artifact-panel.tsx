@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { X, Code2, Eye, Copy, Check, Play, Loader2, Download, Share2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAppStore } from "@/lib/store";
@@ -253,6 +253,62 @@ export function ArtifactPanel() {
   const [versions, setVersions] = useState<{ version: number }[]>([]);
   const [override, setOverride] = useState<{ version: number; artifact: Artifact } | null>(null);
 
+  // ── 패널 가로 리사이즈 (데스크톱) ── 고정 폭 대신 드래그로 조절, localStorage 영속.
+  const PANEL_MIN = 360;
+  const PANEL_DEFAULT = 560;
+  const PANEL_STORAGE_KEY = "omk_artifact_panel_w";
+  const [panelWidth, setPanelWidth] = useState<number>(PANEL_DEFAULT);
+  const draggingRef = useRef(false);
+
+  useEffect(() => {
+    const saved = Number(localStorage.getItem(PANEL_STORAGE_KEY));
+    if (Number.isFinite(saved) && saved >= PANEL_MIN) setPanelWidth(saved);
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PANEL_STORAGE_KEY, String(Math.round(panelWidth)));
+    } catch {
+      /* 저장소 접근 불가 — 무시 */
+    }
+  }, [panelWidth]);
+
+  // 뷰포트가 좁아지면 채팅 영역(최소 400px) 보장 위해 폭 클램프.
+  const clampWidth = useCallback((w: number) => {
+    const maxW = Math.max(PANEL_MIN, window.innerWidth - 400);
+    return Math.min(maxW, Math.max(PANEL_MIN, w));
+  }, []);
+
+  useEffect(() => {
+    const onResize = () => setPanelWidth((w) => clampWidth(w));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [clampWidth]);
+
+  const startResize = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      draggingRef.current = true;
+      const onMove = (ev: MouseEvent) => {
+        if (!draggingRef.current) return;
+        // 패널은 화면 우측 → 폭 = 뷰포트 우측 끝 - 커서 X.
+        setPanelWidth(clampWidth(window.innerWidth - ev.clientX));
+      };
+      const onUp = () => {
+        draggingRef.current = false;
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        document.body.style.userSelect = "";
+        document.body.style.cursor = "";
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+      document.body.style.userSelect = "none";
+      document.body.style.cursor = "col-resize";
+    },
+    [clampWidth],
+  );
+
   // 세션 진입 시 영속 아티팩트 복원 (메모리에 없을 때만 — 라이브 스트림 보호)
   useEffect(() => {
     if (!currentSessionId) return;
@@ -348,7 +404,20 @@ export function ArtifactPanel() {
   const canToggle = previewKindFor(shown.kind, shown.lang) !== null && !active.streaming;
 
   return (
-    <aside className="fixed inset-0 z-40 flex w-full flex-col border-border bg-surface lg:static lg:inset-auto lg:z-auto lg:w-[44%] lg:max-w-[560px] lg:border-l">
+    <aside
+      style={{ ["--panel-w" as string]: `${panelWidth}px` }}
+      className="fixed inset-0 z-40 flex w-full flex-col border-border bg-surface lg:relative lg:inset-auto lg:z-auto lg:w-[var(--panel-w)] lg:border-l"
+    >
+      {/* 가로 리사이즈 핸들 — 데스크톱만. 패널 좌측 가장자리를 드래그. */}
+      <div
+        onMouseDown={startResize}
+        onDoubleClick={() => setPanelWidth(clampWidth(PANEL_DEFAULT))}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={t("resize")}
+        title={t("resize")}
+        className="absolute left-0 top-0 z-20 hidden h-full w-1.5 cursor-col-resize bg-transparent transition-colors hover:bg-accent/40 lg:block"
+      />
       <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
         <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-muted">
           {shown.kind}

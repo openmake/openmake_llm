@@ -137,8 +137,8 @@
     "pushNotSupported": "此浏览器不支持推送通知。",
     "pushSwNotReady": "服务工作线程未注册，无法使用推送通知。",
     "memoryLearning": {
-      "title": "长期记忆学习",
-      "description": "从对话中提取并保存姓名、职业、偏好等事实。"
+      "title": "使用长期记忆",
+      "description": "在对话中参考您已保存的长期记忆。关闭后本次对话将不使用已保存的记忆。"
     },
     "passwordChange": {
       "title": "修改密码"
@@ -178,7 +178,8 @@
       "note": "根据 GDPR 第7条(3)，您可随时撤回同意。撤回将被记录，并可能影响您对服务的使用。",
       "regrant": "重新同意",
       "granting": "同意中…"
-    }
+    },
+    "guestModelNotice": "访客只能使用默认模型。Ollama、OpenRouter 等外部模型需登录（注册）后才能使用。"
   },
   "apiAccess": {
     "title": "API 访问",
@@ -408,7 +409,8 @@
       "openDetail": "查看详情",
       "versionPicker": "版本",
       "close": "关闭"
-    }
+    },
+    "resize": "调整面板宽度（双击重置）"
   },
   "history": {
     "title": "对话历史",
@@ -732,7 +734,10 @@
         "description": "找出变更代码中的缺陷和可简化之处。",
         "systemPrompt": "你是一名严格的代码审查者……"
       }
-    }
+    },
+    "useInChat": "在对话中使用",
+    "inUseDeselect": "使用中 · 取消",
+    "deselect": "取消智能体"
   },
   "research": {
     "pageTitle": "深度研究历史",

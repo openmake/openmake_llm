@@ -45,6 +45,7 @@ const logger = createLogger('MessagePipeline');
  */
 async function buildUserContextBlocks(
     userId: string | undefined,
+    includeMemory = true,
 ): Promise<{ memoryBlock: string; customInstructionsBlock: string }> {
     let customInstructionsBlock = '';
     let memoryBlock = '';
@@ -69,7 +70,9 @@ async function buildUserContextBlocks(
             logger.warn('custom_instructions 조회 실패 (계속 진행):', e);
         }
 
+        // includeMemory=false (설정 "장기 기억" 토글 OFF) → 저장된 메모리를 대화에 주입하지 않음.
         try {
+            if (includeMemory) {
             const { UserMemoryRepository } = await import('../../data/repositories/user-memory-repository');
             const { getPool } = await import('../../data/models/unified-database');
             const memRepo = new UserMemoryRepository(getPool());
@@ -92,6 +95,7 @@ async function buildUserContextBlocks(
                 void memRepo.touchAccessed(kept.map(m => m.id)).catch(e =>
                     logger.warn('memory touch 실패 (무시):', e),
                 );
+            }
             }
         } catch (e) {
             logger.warn('user_memories 조회 실패 (계속 진행):', e);
@@ -343,7 +347,7 @@ export async function runMessagePipeline(svc: ChatService,
         // (회귀: 과거 외부 분기가 memory/CI 조립 코드(strategy 경로 하단)에 도달 못 해
         //  /remember 메모리·커스텀 지시가 기본 채팅에서 전혀 적용되지 않던 버그.)
         const { memoryBlock: extMemoryBlock, customInstructionsBlock: extCustomInstructionsBlock } =
-            await buildUserContextBlocks(userId);
+            await buildUserContextBlocks(userId, req.memoryLearning !== false);
 
         // 2026-05-26 옵션 B 통합 (외부 provider 경로):
         // Custom Agent (user_agents) 활성 시 산업 agent 라우팅 우회 + allowedSkills 주입.
@@ -477,7 +481,7 @@ export async function runMessagePipeline(svc: ChatService,
 
     // Custom Instructions + Cross-conversation Memory prepend (2026-05-26).
     // 헬퍼로 추출되어 외부 provider 분기와 동일 로직 사용 (claude.ai Memory/CI 동등).
-    const { memoryBlock, customInstructionsBlock } = await buildUserContextBlocks(userId);
+    const { memoryBlock, customInstructionsBlock } = await buildUserContextBlocks(userId, req.memoryLearning !== false);
 
     // Phase 2 Custom Agent (2026-05-26): user agent system prompt 가 있으면
     // 18 산업 agentSystemMessage 자리에 우선 적용 (사용자 명시 의도 존중).

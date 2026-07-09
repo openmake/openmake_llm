@@ -18,11 +18,23 @@
 
 ## Overview
 
-**OpenMake LLM** is a self-hosted AI assistant you run on your own hardware. It serves a local model through **vLLM** behind a **LiteLLM proxy** (OpenAI-compatible) and routes the *same* abstraction to external providers (Anthropic, OpenAI-compatible) whenever you want them — so your data stays on your machine by default.
+**OpenMake LLM** is a self-hosted AI assistant you run on your own hardware. It serves a local model through **vLLM** behind a **LiteLLM proxy** (OpenAI-compatible) and routes the *same* abstraction to external providers (Anthropic, OpenAI-compatible, OpenRouter, Ollama) whenever you want them — so your data stays on your machine by default.
 
 Every request flows through a lightweight, deterministic policy layer — **`ExecutionPlanBuilder`** (regex + fast-path classification) — that routes the single local model and assembles options *without* an extra LLM round-trip. Behavior is controlled by orthogonal axes only — **Model · Style · Mode toggles · Custom Agent** — instead of opaque presets. Beyond chat, it adds autonomous agents, a deep-research pipeline, and an MCP tool system — all behind JWT auth and role-based access control.
 
-> **Single-host design:** the app runs under **PM2**, while stateful dependencies (PostgreSQL/Redis) and sandboxed agent/MCP processes run in **Docker** for isolation.
+> **Single-host design:** the application (API + web) runs under **PM2**, while stateful dependencies (PostgreSQL / Redis) and sandboxed agent / MCP / artifact processes run in **Docker** for isolation.
+
+**At a glance**
+
+| | |
+|---|---|
+| 🧠 **1 local model, routed per request** | `qwen3.6-35b-a3b` served via vLLM + LiteLLM, with a 262K context-fit safety net |
+| 🤖 **Autonomous agents** | Manus-style multi-turn agent in a persistent Docker sandbox (shell · Python · browser · files), with human-in-the-loop approval |
+| 🔬 **Deep research** | Fan-out web search → source fetch → claim verification → cited synthesis |
+| 🧩 **22 built-in MCP tools** + external MCP servers | Each external server isolated in Docker (`--cap-drop ALL`, non-root, network policy) |
+| 👤 **Custom agents & 140+ skills** | Project-scoped personas + an auto-selectable skill library |
+| 🌐 **4-language UI** | 한국어 · English · 日本語 · 简体中文 (`next-intl`, cookie locale, browser auto-detect) |
+| 🔒 **Security-first** | JWT (HttpOnly), Google OAuth 2.0, RBAC, per-route rate limiting, SSRF guard, Audit ↔ Alert |
 
 ---
 
@@ -40,9 +52,39 @@ Every request flows through a lightweight, deterministic policy layer — **`Exe
   <img src="assets/i18n-demo.gif" alt="Interface language switching demo (ko / en / ja / zh)" width="920" />
 </p>
 
-| Settings — language & privacy | Skill Library — 143 auto-selectable skills |
+| Settings — language & privacy | Skill Library — auto-selectable skills |
 |---|---|
 | ![Settings page](assets/screenshot-settings.png) | ![Skill Library page](assets/screenshot-skill-library.png) |
+
+---
+
+## Architecture
+
+OpenMake separates **policy** (deciding *how* to answer) from **execution** (actually calling the model) — a SQL planner/executor split. The two layers are kept deliberately independent.
+
+```
+                       WebSocket / REST
+                              │
+                     ┌────────▼─────────┐
+   Query ──────────► │ ExecutionPlanBuilder │  policy — once per request
+                     │  (regex + fast-path  │  · classify intent
+                     │   classification)    │  · resolve profile / custom agent
+                     └────────┬─────────┘   │  · assemble system prompt & tools
+                              │              (no extra LLM round-trip)
+                     ┌────────▼─────────┐
+                     │  strategy dispatch │  local → streamFromExternalProvider (default)
+                     └────────┬─────────┘   external → provider-specific tool loop
+                     ┌────────▼─────────┐
+                     │   LLMClient.chat   │  execution — per call
+                     │  (context-fit net) │  · token estimate → truncate → cap
+                     └────────┬─────────┘   · overflow → 413 + audit + alert
+                              │
+              vLLM serve → LiteLLM proxy (OpenAI-compatible)
+```
+
+- **Context-fit safety net** — on entry, prompt tokens (images included) are estimated; if the effective **262K** window is exceeded, input is truncated → `max_tokens` reduced → in the extreme, a `ContextOverflowError` returns **HTTP 413** with an audit record and an automatic webhook alert.
+- **User customization (4 orthogonal axes)** — **Model** (selector) · **Style** (Concise / Default / Verbose) · **Mode** (Discussion / Thinking / Deep Research / Web / Agent Task) · **Custom Instructions & Agents**. System-prompt assembly order: `memory + custom-instructions + style`.
+- **Cross-conversation memory** — explicit long-term memories are injected into the system prompt; a privacy toggle lets a user exclude them per session.
 
 ---
 
@@ -51,21 +93,21 @@ Every request flows through a lightweight, deterministic policy layer — **`Exe
 **▸ Models & routing**
 - Single local model routed per request by the `ExecutionPlanBuilder` policy layer; behavior controlled by orthogonal axes (Model · Style · Mode · Custom Agent).
 - Self-hosted vLLM + LiteLLM (default `qwen3.6-35b-a3b`) with a context-fit safety net that protects output tokens and degrades gracefully on overflow.
-- Bring-your-own external keys (Anthropic / OpenAI-compatible), AES-256-GCM encrypted at rest.
+- Bring-your-own external keys (Anthropic / OpenAI-compatible / OpenRouter / Ollama), AES-256-GCM encrypted at rest. **Guests use the default local model only** — external providers require sign-in.
 
 **▸ Agents & research**
-- **Autonomous agent tasks** — a Manus-style agent pursues a goal across multiple tool-calling turns inside a **persistent Docker sandbox** (shell, Python, browser, file, planning tools) with human-in-the-loop approval. Produces deliverables including **Excel (.xlsx)** and **PDF** (with Korean/CJK fonts).
+- **Autonomous agent tasks** — a Manus-style agent pursues a goal across multiple tool-calling turns inside a **persistent Docker sandbox** (shell, Python, browser, file, planning tools) with human-in-the-loop approval. It records file attachments, injects images through a vision channel, produces deliverables including **Excel (.xlsx)** and **PDF** (with Korean/CJK fonts), and honestly reports non-achievement (`[GOAL_INCOMPLETE]` marker + goal judge) instead of falsely marking "done".
 - **Deep research** — fan-out web search → source fetch → claim verification → cited synthesis.
-- **Custom agents & skills** — project-scoped agents and an auto-selectable skill library.
+- **Custom agents & skills** — project-scoped agents (claude.ai Projects equivalent) selectable directly from the composer, plus an auto-selectable skill library and 18 built-in industry agents.
 
 **▸ Tools & extensibility**
-- **MCP tool system** — built-in tools plus external MCP servers, each isolated in Docker (`--cap-drop ALL`, non-root, network policy, no host mount).
-- **Artifacts** — live sandboxed iframe rendering, optional Docker code execution, and a separate-origin strict-CSP shared viewer.
-- **Memory & instructions** — persistent cross-conversation memory and always-on custom instructions.
+- **MCP tool system** — 22 built-in tools (web search, fact-check, web scrape/map/crawl, image analysis, agent-task control, skill/agent/MCP git-ingest, …) plus external MCP servers, each isolated in Docker (`--cap-drop ALL`, non-root, `--memory`+`--memory-swap`, network policy, realpath-guarded mounts).
+- **Artifacts** — live sandboxed iframe rendering, optional Docker code execution (Python / JS), a resizable side panel, and a separate-origin strict-CSP shared viewer for publishing.
+- **Memory & instructions** — persistent cross-conversation memory (with a per-session usage toggle) and always-on custom instructions.
 - **Multilingual UI** — Korean, English, Japanese, and Simplified Chinese via `next-intl` (cookie-based locale, browser auto-detect, locale-aware date/number formatting).
 
 **▸ Security**
-- JWT in HttpOnly cookies, Google OAuth 2.0, RBAC, per-route rate limiting, SSRF guard, Helmet headers, and a unified Audit ↔ Alert pipeline.
+- JWT in HttpOnly cookies, Google OAuth 2.0, RBAC, per-user & per-route rate limiting, SSRF guard, Helmet headers, and a unified Audit ↔ Alert pipeline.
 
 ---
 
@@ -74,16 +116,14 @@ Every request flows through a lightweight, deterministic policy layer — **`Exe
 | Layer | Technologies |
 |---|---|
 | **Backend** | Node.js (≥24), Express 5, TypeScript (strict, CommonJS), Zod, Winston |
-| **Frontend** | Next.js 16, React 19, Zustand 5, Tailwind CSS 4 |
+| **Frontend** | Next.js 16, React 19, Zustand 5, Tailwind CSS 4, `next-intl` |
 | **Database** | PostgreSQL via `pg` — raw, parameterized SQL (no ORM) |
 | **Realtime** | WebSocket (`ws`) streaming chat |
 | **LLM backend** | vLLM + LiteLLM (OpenAI-compatible); `@anthropic-ai/sdk`, `openai` for external providers |
 | **Agents / Tools** | Model Context Protocol (`@modelcontextprotocol/sdk`), Docker-isolated sandboxes |
 | **Auth / Security** | `jsonwebtoken`, Google OAuth 2.0, Helmet, AES-256-GCM |
-| **Infra** | PM2 (app) + Docker (PostgreSQL/Redis, MCP & agent sandboxes) |
-| **Testing / CI** | Jest/ts-jest (local), Bun test (CI gate), Playwright, ESLint, GitHub Actions |
-
-> **Pipeline shape:** `ExecutionPlanBuilder.build` (policy, once per request) → strategy dispatch → `LLMClient.chat` (execution, per call) — a SQL planner/executor split; keep the two layers separate.
+| **Infra** | PM2 (app) + Docker (PostgreSQL/Redis, MCP / agent / artifact sandboxes) |
+| **Testing / CI** | Jest/ts-jest, Playwright, ESLint, GitHub Actions (CI Gate) |
 
 ---
 
@@ -92,7 +132,7 @@ Every request flows through a lightweight, deterministic policy layer — **`Exe
 ### Prerequisites
 
 - **Node.js** `>=24 <25`
-- **PostgreSQL** (run via Docker — see below)
+- **Docker** (for PostgreSQL/Redis and the MCP/agent sandboxes)
 - An OpenAI-compatible LLM endpoint: a local **vLLM + LiteLLM** stack, or an external provider key
 
 ### Setup
@@ -144,12 +184,14 @@ npm run lint                # ESLint
 
 ### Database migrations
 
-Files in `db/migrations/` are **not** auto-applied — run them with the CLI:
+Files in `db/migrations/` are **not** auto-applied on boot (only `db/init/` schema is) — run migrations with the CLI:
 
 ```bash
 npx ts-node apps/api/src/data/migrations/cli.ts status    # show pending
 npx ts-node apps/api/src/data/migrations/cli.ts migrate   # apply
 ```
+
+Rollback scripts live under `db/migrations/rollbacks/` (kept out of the forward-migration scan).
 
 ---
 
@@ -162,17 +204,17 @@ openmake_llm/
 │   │   └── src/
 │   │       ├── routes/ controllers/ services/   # REST + business logic
 │   │       ├── chat/                            # ExecutionPlanBuilder, classifiers, prompts
-│   │       ├── agents/                          # industry agents, router, discussion engine
+│   │       ├── agents/                          # 18 industry agents, router, discussion engine
 │   │       ├── llm/ providers/ cluster/         # LLM client, provider abstraction, node routing
-│   │       ├── mcp/                             # MCP tool router, external client, sandboxes
+│   │       ├── mcp/                             # MCP tool router, external client, Docker sandbox
 │   │       ├── sockets/                         # WebSocket chat handler
 │   │       ├── auth/ security/ middlewares/     # JWT/OAuth, SSRF guard, rate limiting
 │   │       └── data/                            # PostgreSQL (raw SQL), migrations, repositories
 │   ├── web/          # Next.js + React frontend (the operating UI)
 │   └── legacy-web/   # Static asset host (e.g. /generated) — legacy SPA retired
-├── db/               # init schema + migrations
+├── db/               # init schema + migrations (+ rollbacks/)
 ├── packages/         # shared-types, config, api-client (shared workspaces)
-├── infra/            # Dockerfiles (mcp-runtime, task-runtime, …)
+├── infra/            # Dockerfiles & compose (mcp-runtime, task-runtime, artifact-viewer, egress-proxy)
 ├── scripts/          # build, deploy, migration, CI scripts
 └── tests/            # Playwright E2E
 ```

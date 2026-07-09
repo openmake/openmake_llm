@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Bot, Plus, Pencil, Trash2, GitBranch, X, Loader2, Check } from "lucide-react";
+import { Bot, Plus, Pencil, Trash2, GitBranch, X, Loader2, Check, MessageSquare } from "lucide-react";
 import {
   Button,
   Badge,
@@ -11,6 +12,7 @@ import {
 } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
+import { useAppStore } from "@/lib/store";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 interface CustomAgent {
@@ -442,6 +444,14 @@ export default function CustomAgentsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showGitIngest, setShowGitIngest] = useState(false);
   const [editingAgent, setEditingAgent] = useState<CustomAgent | null>(null);
+  const router = useRouter();
+  const activeUserAgent = useAppStore((s) => s.activeUserAgent);
+  const setActiveUserAgent = useAppStore((s) => s.setActiveUserAgent);
+
+  function useInChat(agent: CustomAgent) {
+    setActiveUserAgent({ id: agent.id, name: agent.name, icon: agent.emoji });
+    router.push("/");
+  }
 
   const loadAgents = useCallback(async () => {
     try {
@@ -467,6 +477,7 @@ export default function CustomAgentsPage() {
     if (!window.confirm(t("deleteConfirm", { name: agent.name }))) return;
     try {
       await ApiClient.del(`/api/users/me/agents/${agent.id}`);
+      if (activeUserAgent?.id === agent.id) setActiveUserAgent(null);
       await loadAgents();
     } catch (err) {
       alert(t("deleteFailed", { error: err instanceof Error ? err.message : t("genericError") }));
@@ -557,14 +568,27 @@ export default function CustomAgentsPage() {
                   </p>
                 </div>
 
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="flex-1" onClick={() => setEditingAgent(agent)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                    {t("edit")}
-                  </Button>
-                  <Button variant="ghost" size="icon" aria-label={t("deleteAria")} onClick={() => void handleDelete(agent)}>
-                    <Trash2 className="h-4 w-4 text-danger" />
-                  </Button>
+                <div className="flex flex-col gap-2">
+                  {activeUserAgent?.id === agent.id ? (
+                    <Button variant="outline" size="sm" className="w-full" onClick={() => setActiveUserAgent(null)}>
+                      <Check className="h-3.5 w-3.5 text-accent" />
+                      {t("inUseDeselect")}
+                    </Button>
+                  ) : (
+                    <Button size="sm" className="w-full" onClick={() => useInChat(agent)}>
+                      <MessageSquare className="h-3.5 w-3.5" />
+                      {t("useInChat")}
+                    </Button>
+                  )}
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => setEditingAgent(agent)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                      {t("edit")}
+                    </Button>
+                    <Button variant="ghost" size="icon" aria-label={t("deleteAria")} onClick={() => void handleDelete(agent)}>
+                      <Trash2 className="h-4 w-4 text-danger" />
+                    </Button>
+                  </div>
                 </div>
               </Card>
             ))}

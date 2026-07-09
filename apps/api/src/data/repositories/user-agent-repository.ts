@@ -77,8 +77,9 @@ export class UserAgentRepository extends BaseRepository {
     }
 
     async getByIdForUser(id: string, userId: string): Promise<UserAgent | undefined> {
+        // soft-delete 계약: is_active=FALSE 는 삭제된 에이전트 — 조회에서 제외 (listByUser 와 동일)
         const result = await this.query<UserAgent>(
-            'SELECT * FROM user_agents WHERE id = $1 AND user_id = $2',
+            'SELECT * FROM user_agents WHERE id = $1 AND user_id = $2 AND is_active = TRUE',
             [id, userId],
         );
         return result.rows[0] as UserAgent | undefined;
@@ -99,7 +100,7 @@ export class UserAgentRepository extends BaseRepository {
         values.push(id, userId);
         const result = await this.query<UserAgent>(
             `UPDATE user_agents SET ${sets.join(', ')}
-             WHERE id = $${i++} AND user_id = $${i++}
+             WHERE id = $${i++} AND user_id = $${i++} AND is_active = TRUE
              RETURNING *`,
             values,
         );

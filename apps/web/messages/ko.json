@@ -137,8 +137,8 @@
     "pushNotSupported": "이 브라우저는 푸시 알림을 지원하지 않습니다.",
     "pushSwNotReady": "서비스 워커가 등록되지 않아 푸시 알림을 사용할 수 없습니다.",
     "memoryLearning": {
-      "title": "장기 기억 학습",
-      "description": "대화에서 이름·직업·선호 같은 사실을 추출하여 저장합니다."
+      "title": "장기 기억 활용",
+      "description": "저장된 장기 기억을 대화에 참고합니다. 끄면 이번 대화에서 저장된 기억을 사용하지 않습니다."
     },
     "passwordChange": {
       "title": "비밀번호 변경"
@@ -178,7 +178,8 @@
       "note": "GDPR 제7조(3)에 따라 동의는 언제든 철회할 수 있습니다. 철회는 기록되며, 서비스 이용에 영향을 줄 수 있습니다.",
       "regrant": "재동의",
       "granting": "동의 중…"
-    }
+    },
+    "guestModelNotice": "게스트는 기본 모델만 사용할 수 있습니다. Ollama·OpenRouter 등 외부 모델은 로그인(가입) 후 이용할 수 있습니다."
   },
   "apiAccess": {
     "title": "API 액세스",
@@ -408,7 +409,8 @@
       "openDetail": "상세 보기",
       "versionPicker": "버전 선택",
       "close": "닫기"
-    }
+    },
+    "resize": "패널 너비 조절 (더블클릭: 기본값)"
   },
   "history": {
     "title": "대화 히스토리",
@@ -732,7 +734,10 @@
         "description": "변경된 코드의 버그와 단순화 기회를 집어냅니다.",
         "systemPrompt": "당신은 까다로운 코드 리뷰어입니다..."
       }
-    }
+    },
+    "useInChat": "채팅에서 사용",
+    "inUseDeselect": "사용 중 · 해제",
+    "deselect": "에이전트 해제"
   },
   "research": {
     "pageTitle": "딥 리서치 히스토리",

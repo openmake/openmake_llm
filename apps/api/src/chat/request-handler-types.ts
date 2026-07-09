@@ -91,6 +91,12 @@ export interface ChatRequestParams {
      * settings.html saveHistoryToggle 과 연결.
      */
     saveHistory?: boolean;
+    /**
+     * 저장된 장기 메모리(user_memories)를 이 대화의 system 컨텍스트에 주입할지 여부.
+     * undefined/true → 주입 (기본). false → 메모리 블록 미주입 (privacy 제어).
+     * (구 "자동 추출" 의미는 memory-extractor 폐기(2026-05-19)로 무효 — 현재는 주입 게이트.)
+     */
+    memoryLearning?: boolean;
     /** 구조화된 출력 형식 ('json' 또는 JSON Schema 객체 — OpenAI response_format 호환) */
     format?: import('../llm').FormatOption;
     /** 사용자가 활성화한 MCP 도구 목록 (키: 도구명, 값: 활성화 여부) */

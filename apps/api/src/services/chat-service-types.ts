@@ -197,9 +197,9 @@ export interface ChatMessageRequest {
     /** Thinking 깊이 수준 */
     thinkingLevel?: 'low' | 'medium' | 'high';
     /**
-     * 장기 메모리 자동 추출 여부 (settings.html memoryLearningToggle).
-     * undefined/true → 추출 (기본). false → MemoryService 호출 스킵.
-     * saveHistory 와 독립 — saveHistory=false 여도 추출 후 본문 폐기 가능 (Extract-and-Forget).
+     * 저장된 장기 메모리(user_memories) 를 system 컨텍스트에 주입할지 여부 (설정 memoryLearning 토글).
+     * undefined/true → 주입 (기본). false → 메모리 블록 미주입 (privacy 제어). saveHistory 와 독립.
+     * (구 "자동 추출" 의미는 memory-extractor 폐기(2026-05-19)로 무효 — 현재는 주입 게이트.)
      */
     memoryLearning?: boolean;
     /** 요청한 사용자의 ID */
