@@ -235,6 +235,9 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  // 동의(consent) 상태 + 철회/재동의
+  const [consents, setConsents] = useState<{ type: string; granted: boolean; version: string; locale?: string }[]>([]);
+  const [consentBusy, setConsentBusy] = useState<string | null>(null);
 
   // 푸시 지원 여부 및 현재 구독 상태 초기화
   useEffect(() => {
@@ -354,6 +357,23 @@ export default function SettingsPage() {
     };
   }, [setSelectedModel, setResponseStyle, setPrivacyPrefs]);
 
+  // 동의(consent) 상태 로드
+  useEffect(() => {
+    let alive = true;
+    ApiClient.get<ApiSuccess<{ consents: { type: string; granted: boolean; version: string; locale?: string }[] }>>(
+      "/api/users/me/consent",
+    )
+      .then((res) => {
+        if (alive) setConsents(res?.data?.consents ?? []);
+      })
+      .catch(() => {
+        /* 미로그인/실패 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   async function handleSave() {
     setSaving(true);
     try {
@@ -400,6 +420,44 @@ export default function SettingsPage() {
       /* 실패 — 조용히 무시(재시도 가능) */
     } finally {
       setExporting(false);
+    }
+  }
+
+  type ConsentRow = { type: string; granted: boolean; version: string; locale?: string };
+
+  async function reloadConsent() {
+    try {
+      const res = await ApiClient.get<ApiSuccess<{ consents: ConsentRow[] }>>("/api/users/me/consent");
+      setConsents(res?.data?.consents ?? []);
+    } catch {
+      /* 미로그인/실패 */
+    }
+  }
+
+  async function handleWithdraw(c: ConsentRow) {
+    if (consentBusy) return;
+    if (!window.confirm(tSettings("consent.withdrawConfirm"))) return;
+    setConsentBusy(c.type);
+    try {
+      await ApiClient.post("/api/users/me/consent/withdraw", { type: c.type });
+      await reloadConsent();
+    } catch {
+      /* 실패 — 재시도 가능 */
+    } finally {
+      setConsentBusy(null);
+    }
+  }
+
+  async function handleGrant(c: ConsentRow) {
+    if (consentBusy) return;
+    setConsentBusy(c.type);
+    try {
+      await ApiClient.post("/api/users/me/consent", { type: c.type, version: c.version, locale: c.locale ?? "ko" });
+      await reloadConsent();
+    } catch {
+      /* 실패 — 재시도 가능 */
+    } finally {
+      setConsentBusy(null);
     }
   }
 
@@ -695,6 +753,36 @@ export default function SettingsPage() {
                       {exporting ? tSettings("dataExport.exporting") : tSettings("dataExport.button")}
                     </button>
                   </FieldRow>
+                  {consents.map((c) => (
+                    <FieldRow
+                      key={c.type}
+                      title={tSettings(`consent.${c.type}` as "consent.privacy_policy")}
+                      description={c.granted ? tSettings("consent.granted") : tSettings("consent.withdrawn")}
+                    >
+                      {c.granted ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleWithdraw(c)}
+                          disabled={consentBusy === c.type}
+                          className="rounded-md border border-danger/40 px-3 py-1.5 text-sm font-medium text-danger transition hover:bg-danger-soft disabled:opacity-50"
+                        >
+                          {consentBusy === c.type ? tSettings("consent.withdrawing") : tSettings("consent.withdraw")}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void handleGrant(c)}
+                          disabled={consentBusy === c.type}
+                          className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-fg transition hover:bg-surface-2 disabled:opacity-50"
+                        >
+                          {consentBusy === c.type ? tSettings("consent.granting") : tSettings("consent.regrant")}
+                        </button>
+                      )}
+                    </FieldRow>
+                  ))}
+                  {consents.length > 0 && (
+                    <p className="pb-3 pt-1 text-xs text-muted">{tSettings("consent.note")}</p>
+                  )}
                 </CardContent>
               </Card>
             )}

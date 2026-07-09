@@ -31,7 +31,8 @@
       "auditLog": "审计日志",
       "metrics": "指标",
       "alerts": "告警",
-      "mcpCatalogAdmin": "MCP目录管理"
+      "mcpCatalogAdmin": "MCP目录管理",
+      "memory": "记忆"
     }
   },
   "sidebar": {
@@ -164,6 +165,19 @@
       "description": "将账户所有数据导出为JSON文件（GDPR）。",
       "button": "导出",
       "exporting": "正在导出…"
+    },
+    "consent": {
+      "privacy_policy": "隐私政策同意",
+      "terms_of_service": "服务条款同意",
+      "granted": "已同意",
+      "withdrawn": "已撤回",
+      "withdraw": "撤回同意",
+      "withdrawing": "撤回中…",
+      "withdrawnBadge": "已撤回",
+      "withdrawConfirm": "撤回此同意吗？撤回将被记录。",
+      "note": "根据 GDPR 第7条(3)，您可随时撤回同意。撤回将被记录，并可能影响您对服务的使用。",
+      "regrant": "重新同意",
+      "granting": "同意中…"
     }
   },
   "apiAccess": {
@@ -1324,5 +1338,16 @@
         "description": "添加 stream: true 即可通过 SSE 流实时接收 token。"
       }
     }
+  },
+  "memory": {
+    "title": "记忆",
+    "description": "管理跨对话记住的信息。已保存的记忆会注入到新对话的系统提示中。",
+    "add": "添加",
+    "addPlaceholder": "例如：我偏好 Python 和简洁的回答",
+    "empty": "尚未保存记忆。请在上方添加。",
+    "clearAll": "全部删除",
+    "clearConfirm": "删除所有记忆吗？此操作无法撤销。",
+    "deleteAria": "删除记忆",
+    "limitReached": "最多可保存 {max} 条记忆。"
   }
 }

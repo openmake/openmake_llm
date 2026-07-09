@@ -31,7 +31,8 @@
       "auditLog": "Audit Log",
       "metrics": "Metrics",
       "alerts": "Alerts",
-      "mcpCatalogAdmin": "MCP Catalog Admin"
+      "mcpCatalogAdmin": "MCP Catalog Admin",
+      "memory": "Memory"
     }
   },
   "sidebar": {
@@ -164,6 +165,19 @@
       "description": "Download all your account data as a JSON file (GDPR).",
       "button": "Export",
       "exporting": "Exporting…"
+    },
+    "consent": {
+      "privacy_policy": "Privacy Policy consent",
+      "terms_of_service": "Terms of Service consent",
+      "granted": "Granted",
+      "withdrawn": "Withdrawn",
+      "withdraw": "Withdraw",
+      "withdrawing": "Withdrawing…",
+      "withdrawnBadge": "Withdrawn",
+      "withdrawConfirm": "Withdraw this consent? The withdrawal will be recorded.",
+      "note": "Under GDPR Art. 7(3) you may withdraw consent at any time. Withdrawal is recorded and may affect your use of the service.",
+      "regrant": "Re-consent",
+      "granting": "Granting…"
     }
   },
   "apiAccess": {
@@ -1324,5 +1338,16 @@
         "description": "Add stream: true to receive tokens in real time as an SSE stream."
       }
     }
+  },
+  "memory": {
+    "title": "Memory",
+    "description": "Manage information to remember across conversations. Saved memories are injected into the system prompt of new chats.",
+    "add": "Add",
+    "addPlaceholder": "e.g. I prefer Python and concise answers",
+    "empty": "No memories saved yet. Add one above.",
+    "clearAll": "Clear all",
+    "clearConfirm": "Delete all memories? This cannot be undone.",
+    "deleteAria": "Delete memory",
+    "limitReached": "You can save up to {max} memories."
   }
 }

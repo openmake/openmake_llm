@@ -31,7 +31,8 @@
       "auditLog": "監査ログ",
       "metrics": "メトリクス",
       "alerts": "アラート",
-      "mcpCatalogAdmin": "MCPカタログ管理"
+      "mcpCatalogAdmin": "MCPカタログ管理",
+      "memory": "メモリ"
     }
   },
   "sidebar": {
@@ -164,6 +165,19 @@
       "description": "アカウントの全データをJSONファイルでダウンロード（GDPR）。",
       "button": "エクスポート",
       "exporting": "エクスポート中…"
+    },
+    "consent": {
+      "privacy_policy": "プライバシーポリシー同意",
+      "terms_of_service": "利用規約同意",
+      "granted": "同意済み",
+      "withdrawn": "撤回済み",
+      "withdraw": "同意を撤回",
+      "withdrawing": "撤回中…",
+      "withdrawnBadge": "撤回済み",
+      "withdrawConfirm": "この同意を撤回しますか？撤回は記録されます。",
+      "note": "GDPR第7条(3)に基づき、同意はいつでも撤回できます。撤回は記録され、サービス利用に影響する場合があります。",
+      "regrant": "再同意",
+      "granting": "同意中…"
     }
   },
   "apiAccess": {
@@ -1324,5 +1338,16 @@
         "description": "stream: true を追加すると、SSE ストリームでトークンをリアルタイムに受信します。"
       }
     }
+  },
+  "memory": {
+    "title": "メモリ",
+    "description": "会話全体で記憶する情報を管理します。保存されたメモリは新しい会話のシステムプロンプトに注入されます。",
+    "add": "追加",
+    "addPlaceholder": "例: 私はPythonと簡潔な回答を好みます",
+    "empty": "保存されたメモリはありません。上から追加してください。",
+    "clearAll": "すべて削除",
+    "clearConfirm": "すべてのメモリを削除しますか？元に戻せません。",
+    "deleteAria": "メモリを削除",
+    "limitReached": "最大{max}件まで保存できます。"
   }
 }

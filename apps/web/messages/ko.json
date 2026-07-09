@@ -31,7 +31,8 @@
       "auditLog": "감사 로그",
       "metrics": "메트릭",
       "alerts": "알림",
-      "mcpCatalogAdmin": "MCP 카탈로그 관리"
+      "mcpCatalogAdmin": "MCP 카탈로그 관리",
+      "memory": "메모리"
     }
   },
   "sidebar": {
@@ -164,6 +165,19 @@
       "description": "계정의 모든 데이터를 JSON 파일로 다운로드합니다 (GDPR).",
       "button": "내보내기",
       "exporting": "내보내는 중…"
+    },
+    "consent": {
+      "privacy_policy": "개인정보 처리방침 동의",
+      "terms_of_service": "서비스 이용약관 동의",
+      "granted": "동의함",
+      "withdrawn": "철회됨",
+      "withdraw": "동의 철회",
+      "withdrawing": "철회 중…",
+      "withdrawnBadge": "철회됨",
+      "withdrawConfirm": "이 동의를 철회할까요? 철회 기록이 저장됩니다.",
+      "note": "GDPR 제7조(3)에 따라 동의는 언제든 철회할 수 있습니다. 철회는 기록되며, 서비스 이용에 영향을 줄 수 있습니다.",
+      "regrant": "재동의",
+      "granting": "동의 중…"
     }
   },
   "apiAccess": {
@@ -1324,5 +1338,16 @@
         "description": "stream: true 를 추가하면 SSE 스트림으로 토큰을 실시간 수신합니다."
       }
     }
+  },
+  "memory": {
+    "title": "메모리",
+    "description": "대화 전반에서 기억할 정보를 관리합니다. 저장된 메모리는 새 대화의 시스템 프롬프트에 주입됩니다.",
+    "add": "추가",
+    "addPlaceholder": "예: 나는 파이썬과 간결한 답변을 선호한다",
+    "empty": "저장된 메모리가 없습니다. 위에서 추가하세요.",
+    "clearAll": "전체 삭제",
+    "clearConfirm": "모든 메모리를 삭제할까요? 되돌릴 수 없습니다.",
+    "deleteAria": "메모리 삭제",
+    "limitReached": "최대 {max}개까지 저장할 수 있습니다."
   }
 }
