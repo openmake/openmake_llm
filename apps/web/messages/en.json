@@ -623,7 +623,23 @@
     "processFailed": "Processing failed: {message}",
     "cancelFailed": "Cancellation failed: {message}",
     "resumeFailed": "Resume failed: {message}",
-    "deleteFailed": "Deletion failed: {message}"
+    "deleteFailed": "Deletion failed: {message}",
+    "elapsedSec": "{s}s",
+    "elapsedMinSec": "{m}m {s}s",
+    "mock": {
+      "t1Goal": "Analyze pricing on 3 competitor websites and compile a comparison table",
+      "t1Step1": "Confirm target site list",
+      "t1Step2": "Scrape each site's pricing page",
+      "t1Step3": "Normalize price data",
+      "t1Step4": "Build comparison table",
+      "t1Step5": "Write summary report",
+      "t2Goal": "Analyze monthly sales CSV and generate a report",
+      "t2Step1": "Load and validate data",
+      "t2Step2": "Aggregate by month and product",
+      "t2Step3": "Generate trend charts",
+      "t2Step4": "Export PDF report",
+      "t3Goal": "Summarize 5 recent AI papers and extract key points"
+    }
   },
   "customAgents": {
     "pageTitle": "Custom Agents",

@@ -623,7 +623,23 @@
     "processFailed": "처리 실패: {message}",
     "cancelFailed": "취소 실패: {message}",
     "resumeFailed": "이어하기 실패: {message}",
-    "deleteFailed": "삭제 실패: {message}"
+    "deleteFailed": "삭제 실패: {message}",
+    "elapsedSec": "{s}초",
+    "elapsedMinSec": "{m}분 {s}초",
+    "mock": {
+      "t1Goal": "경쟁사 웹사이트 3곳의 가격 정책을 분석해 비교표로 정리",
+      "t1Step1": "대상 사이트 목록 확인",
+      "t1Step2": "각 사이트 가격 페이지 스크래핑",
+      "t1Step3": "가격 데이터 정규화",
+      "t1Step4": "비교표 생성",
+      "t1Step5": "요약 리포트 작성",
+      "t2Goal": "월간 매출 CSV를 분석해 리포트 생성",
+      "t2Step1": "데이터 로드 및 검증",
+      "t2Step2": "월별·제품별 집계",
+      "t2Step3": "추이 차트 생성",
+      "t2Step4": "PDF 리포트 내보내기",
+      "t3Goal": "최신 AI 논문 5편을 요약해 핵심 정리"
+    }
   },
   "customAgents": {
     "pageTitle": "커스텀 에이전트",

@@ -623,7 +623,23 @@
     "processFailed": "処理に失敗しました: {message}",
     "cancelFailed": "キャンセルに失敗しました: {message}",
     "resumeFailed": "再開に失敗しました: {message}",
-    "deleteFailed": "削除に失敗しました: {message}"
+    "deleteFailed": "削除に失敗しました: {message}",
+    "elapsedSec": "{s}秒",
+    "elapsedMinSec": "{m}分{s}秒",
+    "mock": {
+      "t1Goal": "競合サイト3件の価格戦略を分析し比較表にまとめる",
+      "t1Step1": "対象サイト一覧の確認",
+      "t1Step2": "各サイトの価格ページを取得",
+      "t1Step3": "価格データの正規化",
+      "t1Step4": "比較表の作成",
+      "t1Step5": "要約レポートの作成",
+      "t2Goal": "月次売上CSVを分析しレポートを生成",
+      "t2Step1": "データの読み込みと検証",
+      "t2Step2": "月別・製品別の集計",
+      "t2Step3": "推移チャートの生成",
+      "t2Step4": "PDFレポートの出力",
+      "t3Goal": "最新AI論文5本を要約し要点を整理"
+    }
   },
   "customAgents": {
     "pageTitle": "カスタムエージェント",
