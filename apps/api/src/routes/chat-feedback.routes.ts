@@ -53,13 +53,24 @@ router.post(
                 : undefined;
         const feedbackUserId = req.user ? String((req.user as { userId?: string; id?: string | number }).userId ?? (req.user as { id?: string | number }).id ?? '') || undefined : undefined;
         const repo = new FeedbackRepository(getPool());
-        await repo.recordFeedback({
-            messageId,
-            sessionId,
-            userId: feedbackUserId,
-            signal,
-            routingMetadata: safeMetadata,
-        });
+        try {
+            await repo.recordFeedback({
+                messageId,
+                sessionId,
+                userId: feedbackUserId,
+                signal,
+                routingMetadata: safeMetadata,
+            });
+        } catch (err) {
+            // 세션/메시지 미영속(예: saveHistory=false)이면 FK 위반(23503) — 사용자의 피드백
+            // 클릭이 500 으로 깨지지 않도록 graceful no-op 처리(신호는 저장 불가하나 UX 보존).
+            const code = (err as { code?: string })?.code;
+            if (code === '23503') {
+                res.json(success({ recorded: false, reason: 'session_not_persisted' }));
+                return;
+            }
+            throw err;
+        }
 
         // Phase B Phase 2-A (2026-05-26): 피드백 기반 분류 캐시 교정 제거.
         // LLM classifier 와 함께 feedback-cache-corrector 삭제됨.
