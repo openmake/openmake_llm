@@ -234,6 +234,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   // 푸시 지원 여부 및 현재 구독 상태 초기화
   useEffect(() => {
@@ -376,6 +377,29 @@ export default function SettingsPage() {
       setSavedAt(null);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleExport() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      // GET /api/users/me/export 는 Content-Disposition attachment(JSON) — blob 다운로드.
+      const res = await fetch("/api/users/me/export", { credentials: "include" });
+      if (!res.ok) throw new Error(String(res.status));
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `openmake_export_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      /* 실패 — 조용히 무시(재시도 가능) */
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -657,6 +681,19 @@ export default function SettingsPage() {
                     description={tSettings("saveHistory.descriptionPrivacy")}
                   >
                     <Toggle checked={saveHistory} onChange={setSaveHistory} />
+                  </FieldRow>
+                  <FieldRow
+                    title={tSettings("dataExport.title")}
+                    description={tSettings("dataExport.description")}
+                  >
+                    <button
+                      type="button"
+                      onClick={handleExport}
+                      disabled={exporting}
+                      className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-fg transition hover:bg-surface-2 disabled:opacity-50"
+                    >
+                      {exporting ? tSettings("dataExport.exporting") : tSettings("dataExport.button")}
+                    </button>
                   </FieldRow>
                 </CardContent>
               </Card>

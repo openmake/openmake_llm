@@ -158,6 +158,12 @@
       "searchPlaceholder": "Search models…",
       "count": "Showing {shown}/{total}",
       "noMatch": "No matches"
+    },
+    "dataExport": {
+      "title": "Export my data",
+      "description": "Download all your account data as a JSON file (GDPR).",
+      "button": "Export",
+      "exporting": "Exporting…"
     }
   },
   "apiAccess": {

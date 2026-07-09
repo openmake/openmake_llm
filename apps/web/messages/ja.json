@@ -158,6 +158,12 @@
       "searchPlaceholder": "モデルを検索…",
       "count": "{shown}/{total}件を表示",
       "noMatch": "該当なし"
+    },
+    "dataExport": {
+      "title": "データをエクスポート",
+      "description": "アカウントの全データをJSONファイルでダウンロード（GDPR）。",
+      "button": "エクスポート",
+      "exporting": "エクスポート中…"
     }
   },
   "apiAccess": {

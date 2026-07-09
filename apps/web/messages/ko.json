@@ -158,6 +158,12 @@
       "searchPlaceholder": "모델 검색…",
       "count": "{shown}/{total}개 표시",
       "noMatch": "검색 결과 없음"
+    },
+    "dataExport": {
+      "title": "내 데이터 내보내기",
+      "description": "계정의 모든 데이터를 JSON 파일로 다운로드합니다 (GDPR).",
+      "button": "내보내기",
+      "exporting": "내보내는 중…"
     }
   },
   "apiAccess": {
