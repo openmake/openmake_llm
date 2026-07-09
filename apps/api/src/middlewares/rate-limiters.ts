@@ -35,6 +35,8 @@ interface AdvancedRateLimiterOptions {
     userLimit?: number;
     endpointRules?: EndpointRule[];
     message: string;
+    /** true 를 반환하면 이 요청은 카운트/차단하지 않고 통과 (예: 비용 리미터에서 read-only GET 제외) */
+    skip?: (req: Request) => boolean;
 }
 
 interface RateLimitDecision {
@@ -230,6 +232,8 @@ async function performEvaluateAndIncrement(
 
 export function createAdvancedRateLimiter(options: AdvancedRateLimiterOptions) {
     return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        // 비용 리미터 등에서 read-only 요청을 제외 — 카운트/차단 없이 통과.
+        if (options.skip?.(req)) { next(); return; }
         const now = Date.now();
         const ip = getRequestIP(req);
         const userKey = getUserKey(req);
@@ -344,6 +348,10 @@ export const researchLimiter = createAdvancedRateLimiter({
         { path: /^POST:\/api\/research(?:\/|$)/, limit: RL_RESEARCH.researchLimit },
         { path: /^POST:\/api\/research\/deep(?:\/|$)/, limit: RL_RESEARCH.deepLimit },
     ],
+    // 비용은 실행(POST)에서만 발생 — read-only 조회(GET/HEAD: 세션 목록·상세·스텝)는
+    // 리미터 제외. 조회까지 묶여 페이지 몇 번 방문에 429 로 히스토리가 사라지던 결함 방지
+    // (requireAuth 로 여전히 인증 보호됨).
+    skip: (req) => req.method === 'GET' || req.method === 'HEAD',
     message: 'Research 요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
 });
 
