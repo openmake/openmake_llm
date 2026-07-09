@@ -60,6 +60,7 @@ export function useChatSocket() {
     setActiveAgent,
     setActiveSkills,
     setResearchProgress,
+    finalizeLastAssistant,
     startArtifact,
     appendArtifactDelta,
     endArtifact,
@@ -103,6 +104,7 @@ export function useChatSocket() {
           break;
         case "done":
           if (data.sessionId) setCurrentSessionId(data.sessionId);
+          if (data.messageId) finalizeLastAssistant(data.messageId);
           setStreaming(false);
           setResearchProgress(null);
           break;

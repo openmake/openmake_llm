@@ -11,6 +11,8 @@ import type {
  * shared-types ChatMessage 를 기반으로 store 고유 필드(streaming)만 확장한다.
  */
 export interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" | "images"> {
+  /** 서버 messageId (WS done 이벤트) — 메시지 피드백(👍/👎) 전송용 (assistant 메시지). */
+  id?: string;
   /** 스트리밍 진행 중 여부 (assistant 메시지) */
   streaming?: boolean;
   /** 에이전트 작업 메시지 — agent_task_progress 로 라이브 업데이트되는 메시지 식별자 */
@@ -157,6 +159,8 @@ interface AppState {
   setActiveSkills: (s: string[]) => void;
   setResearchProgress: (p: ResearchProgressInfo | null) => void;
   setPrivacyPrefs: (patch: { saveHistory?: boolean; memoryLearning?: boolean }) => void;
+  /** WS done 시 마지막 assistant 메시지에 서버 messageId 부여 — 피드백 전송용. */
+  finalizeLastAssistant: (messageId: string) => void;
   clearChat: () => void;
 
   // 아티팩트 actions
@@ -252,6 +256,17 @@ export const useAppStore = create<AppState>()(
   auth: { currentUser: null, isGuestMode: true },
 
   setPrivacyPrefs: (patch) => set(() => ({ ...patch })),
+  finalizeLastAssistant: (messageId) =>
+    set((s) => {
+      const hist = [...s.chatHistory];
+      for (let i = hist.length - 1; i >= 0; i--) {
+        if (hist[i].role === "assistant") {
+          hist[i] = { ...hist[i], id: messageId };
+          break;
+        }
+      }
+      return { chatHistory: hist };
+    }),
   setChatHistory: (fn) => set((s) => ({ chatHistory: fn(s.chatHistory) })),
   appendMessage: (m) => set((s) => ({ chatHistory: [...s.chatHistory, m] })),
   appendToken: (token) =>

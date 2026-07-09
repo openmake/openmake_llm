@@ -308,7 +308,10 @@
       "conclusion": "結論",
       "risks": "注意点",
       "actionItems": "次のアクション"
-    }
+    },
+    "feedbackUp": "役に立った",
+    "feedbackDown": "いまいち",
+    "feedbackThanks": "フィードバックありがとうございます"
   },
   "artifacts": {
     "exec": {

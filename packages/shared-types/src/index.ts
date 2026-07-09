@@ -125,7 +125,7 @@ export type WsServerEvent =
   | { type: "token"; token: string }
   | { type: "thinking"; token: string; messageId?: string }
   | { type: "session_created"; sessionId: string }
-  | { type: "done"; sessionId?: string; totalTokens?: number }
+  | { type: "done"; sessionId?: string; totalTokens?: number; messageId?: string }
   | { type: "aborted"; message?: string }
   | { type: "error"; message: string }
   | { type: "init"; data?: unknown }

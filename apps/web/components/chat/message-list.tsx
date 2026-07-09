@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, ChevronRight, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck } from "lucide-react";
+import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, ChevronRight, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown } from "lucide-react";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "@/lib/store";
 import { ApiClient } from "@/lib/api-client";
 import { Markdown } from "./markdown";
@@ -308,6 +308,45 @@ function ResearchProgressBanner() {
   );
 }
 
+/** 메시지 피드백(👍/👎) — 백엔드 /api/chat/feedback (thumbs_up/thumbs_down) 전송. */
+function FeedbackButtons({ messageId }: { messageId: string }) {
+  const t = useTranslations("chat");
+  const sessionId = useAppStore((s) => s.currentSessionId);
+  const [sent, setSent] = useState<"thumbs_up" | "thumbs_down" | null>(null);
+  const send = (signal: "thumbs_up" | "thumbs_down") => {
+    if (sent) return;
+    setSent(signal);
+    void ApiClient.post("/api/chat/feedback", { messageId, sessionId: sessionId ?? "", signal }).catch(() => {
+      setSent(null); // 실패 시 재시도 허용
+    });
+  };
+  if (sent) {
+    return <div className="mt-1.5 text-xs text-muted">{t("feedbackThanks")}</div>;
+  }
+  return (
+    <div className="mt-1.5 flex items-center gap-1">
+      <button
+        type="button"
+        aria-label={t("feedbackUp")}
+        title={t("feedbackUp")}
+        onClick={() => send("thumbs_up")}
+        className="rounded-md p-1 text-muted transition hover:bg-surface-2 hover:text-fg"
+      >
+        <ThumbsUp className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        aria-label={t("feedbackDown")}
+        title={t("feedbackDown")}
+        onClick={() => send("thumbs_down")}
+        className="rounded-md p-1 text-muted transition hover:bg-surface-2 hover:text-fg"
+      >
+        <ThumbsDown className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
 export function MessageList() {
   const t = useTranslations("chat");
   const chatHistory = useAppStore((s) => s.chatHistory);
@@ -404,6 +443,9 @@ export function MessageList() {
                   <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent align-text-bottom" />
                 )}
               </div>
+              {m.id && !m.streaming && !m.agentTask && !m.structured && m.content.trim().length > 0 && (
+                <FeedbackButtons messageId={m.id} />
+              )}
             </div>
           </div>
         ),

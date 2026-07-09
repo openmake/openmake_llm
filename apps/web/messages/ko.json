@@ -308,7 +308,10 @@
       "conclusion": "결론",
       "risks": "주의할 점",
       "actionItems": "다음 실행"
-    }
+    },
+    "feedbackUp": "도움이 됐어요",
+    "feedbackDown": "아쉬워요",
+    "feedbackThanks": "피드백 감사합니다"
   },
   "artifacts": {
     "exec": {

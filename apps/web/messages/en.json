@@ -308,7 +308,10 @@
       "conclusion": "Conclusion",
       "risks": "Points to note",
       "actionItems": "Next actions"
-    }
+    },
+    "feedbackUp": "Helpful",
+    "feedbackDown": "Not helpful",
+    "feedbackThanks": "Thanks for your feedback"
   },
   "artifacts": {
     "exec": {

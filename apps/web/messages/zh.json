@@ -308,7 +308,10 @@
       "conclusion": "结论",
       "risks": "注意事项",
       "actionItems": "后续行动"
-    }
+    },
+    "feedbackUp": "有帮助",
+    "feedbackDown": "没帮助",
+    "feedbackThanks": "感谢您的反馈"
   },
   "artifacts": {
     "exec": {
