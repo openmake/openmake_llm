@@ -63,6 +63,30 @@ export class UserRepository extends BaseRepository {
     }
 
     /**
+     * 사용자 앱 설정(preferences JSONB) 조회 — 미설정 시 빈 객체.
+     * 저장 대상: defaultModel/responseStyle/theme/emailAlerts/saveHistory/memoryLearning 등.
+     */
+    async getPreferences(userId: string): Promise<Record<string, unknown>> {
+        const result = await this.query<{ preferences: Record<string, unknown> | null }>(
+            'SELECT preferences FROM users WHERE id = $1',
+            [userId],
+        );
+        return result.rows[0]?.preferences ?? {};
+    }
+
+    /**
+     * 사용자 preferences 부분 갱신(merge) — 전달된 키만 덮어쓰고 나머지는 보존.
+     * jsonb 병합(||)으로 기존 값과 합친다.
+     */
+    async updatePreferences(userId: string, patch: Record<string, unknown>): Promise<Record<string, unknown>> {
+        const result = await this.query<{ preferences: Record<string, unknown> }>(
+            'UPDATE users SET preferences = preferences || $1::jsonb, updated_at = NOW() WHERE id = $2 RETURNING preferences',
+            [JSON.stringify(patch), userId],
+        );
+        return result.rows[0]?.preferences ?? {};
+    }
+
+    /**
      * Artifacts on/off 설정 조회 (Anthropic Settings > Capabilities 동등, 2026-05-26).
      * 미설정 시 기본 true (035 마이그레이션의 DEFAULT TRUE 반영).
      */

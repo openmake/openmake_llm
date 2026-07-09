@@ -27,6 +27,19 @@ export async function syncAuthFromServer(): Promise<boolean> {
     void ApiClient.post("/api/chat/sessions/claim", { anonSessionId: getAnonSessionId() }).catch(() => {
       /* 익명 세션이 없거나 이미 이관됨 */
     });
+    // 개인정보 설정(saveHistory/memoryLearning)을 앱 마운트 시 store 에 로드 — 설정 페이지를
+    // 방문하지 않아도 채팅 WS 메시지가 사용자의 저장/학습 설정을 존중하도록.
+    void ApiClient.get<{ data: { preferences: Record<string, unknown> } }>("/api/users/me/preferences")
+      .then((pres) => {
+        const p = pres?.data?.preferences ?? {};
+        const patch: { saveHistory?: boolean; memoryLearning?: boolean } = {};
+        if (typeof p.saveHistory === "boolean") patch.saveHistory = p.saveHistory;
+        if (typeof p.memoryLearning === "boolean") patch.memoryLearning = p.memoryLearning;
+        if (Object.keys(patch).length > 0) useAppStore.getState().setPrivacyPrefs(patch);
+      })
+      .catch(() => {
+        /* 미설정/실패 — 기본값(true) 유지 */
+      });
     return true;
   } catch {
     /* 비로그인(401) — 게스트 유지 */

@@ -296,6 +296,9 @@ export function useChatSocket() {
         artifactMode: s.artifactMode,
         style: s.style,
         enabledTools: s.mcpToolsEnabled,
+        // 개인정보 설정 — 백엔드(ws-chat-handler)가 존중: false 면 기록 저장/메모리 학습 생략.
+        saveHistory: s.saveHistory,
+        memoryLearning: s.memoryLearning,
       };
       ws.send(JSON.stringify(payload));
 

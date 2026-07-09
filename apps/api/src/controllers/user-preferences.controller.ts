@@ -144,5 +144,57 @@ export function createUserPreferencesController(): Router {
         }
     });
 
+    /**
+     * GET /api/users/me/preferences — 앱 설정 조회.
+     * 미설정 키는 프론트 기본값 적용. { preferences: {...} }
+     */
+    router.get('/preferences', requireAuth, async (req: Request, res: Response) => {
+        const userId = getUserId(req);
+        if (!userId) {
+            res.status(401).json(unauthorized('사용자 식별 실패'));
+            return;
+        }
+        try {
+            const repo = new UserRepository(getPool());
+            const prefs = await repo.getPreferences(userId);
+            res.json(success({ preferences: prefs }));
+        } catch (err) {
+            log.error('preferences 조회 실패:', err);
+            res.status(500).json(internalError('설정 조회 실패'));
+        }
+    });
+
+    /**
+     * PUT /api/users/me/preferences — 앱 설정 부분 갱신(merge).
+     * body: 허용 키만 수용 — 문자열(defaultModel/responseStyle/theme) + 불리언
+     * (emailAlerts/saveHistory/memoryLearning). 알 수 없는 키는 무시.
+     */
+    router.put('/preferences', requireAuth, async (req: Request, res: Response) => {
+        const userId = getUserId(req);
+        if (!userId) {
+            res.status(401).json(unauthorized('사용자 식별 실패'));
+            return;
+        }
+        const body = (req.body ?? {}) as Record<string, unknown>;
+        const STR_KEYS = ['defaultModel', 'responseStyle', 'theme'];
+        const BOOL_KEYS = ['emailAlerts', 'saveHistory', 'memoryLearning'];
+        const patch: Record<string, unknown> = {};
+        for (const k of STR_KEYS) if (typeof body[k] === 'string' && (body[k] as string).length <= 200) patch[k] = body[k];
+        for (const k of BOOL_KEYS) if (typeof body[k] === 'boolean') patch[k] = body[k];
+        if (Object.keys(patch).length === 0) {
+            res.status(400).json({ error: 'INVALID_BODY', detail: '허용된 설정 키(문자열/불리언)가 없습니다' });
+            return;
+        }
+        try {
+            const repo = new UserRepository(getPool());
+            const merged = await repo.updatePreferences(userId, patch);
+            log.info(`preferences 갱신: userId=${userId} keys=${Object.keys(patch).join(',')}`);
+            res.json(success({ saved: true, preferences: merged }));
+        } catch (err) {
+            log.error('preferences 갱신 실패:', err);
+            res.status(500).json(internalError('설정 저장 실패'));
+        }
+    });
+
     return router;
 }

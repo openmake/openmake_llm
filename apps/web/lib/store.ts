@@ -134,6 +134,10 @@ interface AppState {
   structuredMode: boolean;
   mcpToolsEnabled: Record<string, boolean>;
 
+  // 개인정보 설정 (설정 페이지 · 서버 preferences 영속) — 채팅 WS 메시지로 전송돼 백엔드가 존중.
+  saveHistory: boolean; // false 면 서버가 대화 기록 저장 생략
+  memoryLearning: boolean; // false 면 메모리 학습 비활성 (saveHistory 와 독립)
+
   // 모델 / 스타일
   selectedModel: string; // 'default' = 자동
   style: ChatStyle;
@@ -152,6 +156,7 @@ interface AppState {
   setActiveAgent: (a: { name: string; emoji?: string } | null) => void;
   setActiveSkills: (s: string[]) => void;
   setResearchProgress: (p: ResearchProgressInfo | null) => void;
+  setPrivacyPrefs: (patch: { saveHistory?: boolean; memoryLearning?: boolean }) => void;
   clearChat: () => void;
 
   // 아티팩트 actions
@@ -238,11 +243,15 @@ export const useAppStore = create<AppState>()(
   structuredMode: false,
   mcpToolsEnabled: {},
 
+  saveHistory: true,
+  memoryLearning: true,
+
   selectedModel: "default",
   style: "default",
 
   auth: { currentUser: null, isGuestMode: true },
 
+  setPrivacyPrefs: (patch) => set(() => ({ ...patch })),
   setChatHistory: (fn) => set((s) => ({ chatHistory: fn(s.chatHistory) })),
   appendMessage: (m) => set((s) => ({ chatHistory: [...s.chatHistory, m] })),
   appendToken: (token) =>

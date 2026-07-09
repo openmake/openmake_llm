@@ -181,6 +181,7 @@ export default function SettingsPage() {
   // 응답 스타일 — composer 사이클 버튼과 동일한 store.style 을 단일 소스로 사용(영속화됨).
   const responseStyle = useAppStore((s) => s.style);
   const setResponseStyle = useAppStore((s) => s.setStyle);
+  const setPrivacyPrefs = useAppStore((s) => s.setPrivacyPrefs);
   const { data: modelsData } = useQuery({
     queryKey: ["models"],
     queryFn: fetchModels,
@@ -311,7 +312,7 @@ export default function SettingsPage() {
     }
   }
 
-  // custom-instructions 만 실제 API 연동 (나머지는 로컬/목업)
+  // custom-instructions + preferences 서버 로드 (language 는 NEXT_LOCALE 쿠키로 별도 처리)
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -323,6 +324,26 @@ export default function SettingsPage() {
         if (alive && typeof ci === "string") setCustomInstructions(ci);
       } catch {
         // 비로그인/네트워크 실패 — 무시하고 빈 값 유지
+      }
+      try {
+        const pres = await ApiClient.get<ApiSuccess<{ preferences: Record<string, unknown> }>>(
+          "/api/users/me/preferences",
+        );
+        const p = pres?.data?.preferences ?? {};
+        if (alive) {
+          if (typeof p.defaultModel === "string") setSelectedModel(p.defaultModel);
+          if (p.responseStyle === "concise" || p.responseStyle === "default" || p.responseStyle === "verbose")
+            setResponseStyle(p.responseStyle);
+          if (typeof p.theme === "string") setTheme(p.theme);
+          if (typeof p.emailAlerts === "boolean") setEmailAlerts(p.emailAlerts);
+          const sh = typeof p.saveHistory === "boolean" ? p.saveHistory : true;
+          const ml = typeof p.memoryLearning === "boolean" ? p.memoryLearning : true;
+          setSaveHistory(sh);
+          setMemoryLearning(ml);
+          setPrivacyPrefs({ saveHistory: sh, memoryLearning: ml });
+        }
+      } catch {
+        // 미설정/실패 — 기본값 유지
       } finally {
         if (alive) setLoading(false);
       }
@@ -330,7 +351,7 @@ export default function SettingsPage() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [setSelectedModel, setResponseStyle, setPrivacyPrefs]);
 
   async function handleSave() {
     setSaving(true);
@@ -339,7 +360,17 @@ export default function SettingsPage() {
       await ApiClient.put("/api/users/me/custom-instructions", {
         customInstructions: trimmed.length > 0 ? trimmed : null,
       });
-      // TODO: API 연동 — defaultModel/responseStyle/theme/알림/개인정보 영속화 (language 는 NEXT_LOCALE 쿠키로 완료)
+      // defaultModel/responseStyle/theme/알림/개인정보 영속화 (language 는 NEXT_LOCALE 쿠키로 완료).
+      await ApiClient.put("/api/users/me/preferences", {
+        defaultModel: selectedModel,
+        responseStyle,
+        theme,
+        emailAlerts,
+        saveHistory,
+        memoryLearning,
+      });
+      // 개인정보 설정은 채팅 WS 메시지로 전송돼 즉시 적용되도록 store 에 반영.
+      setPrivacyPrefs({ saveHistory, memoryLearning });
       setSavedAt(new Date().toLocaleTimeString(bcp47));
     } catch {
       setSavedAt(null);
