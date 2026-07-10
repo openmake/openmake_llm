@@ -37,5 +37,19 @@ RUN mkdir -p /home/node/.cache/npm /home/node/.cache/uv
 RUN uv tool install mcp-python-repl
 ENV PATH=/home/node/.local/bin:${PATH}
 
+# ── Kakao(Map/Search) MCP 서버 — 이미지에 baked ─────────────────────────────
+# 벤더링된 수정 소스(vendor/kakao-api-mcp-server: deps 정정 + bin/shebang, ATTRIBUTION.md
+# 참고)를 빌드해 /home/node/kakao-mcp 에 설치한다. mcp-python-repl 과 동일하게 이미지에
+# 구워 런타임 npx-fetch 없이 즉시 spawn(빠름) + 네트워크 정책과 무관하게 동작.
+# 카탈로그(db/migrations/063_mcp_kakao_catalog.sql)는
+#   node /home/node/kakao-mcp/dist/index.js --mode=stdio
+# 로 실행. 인증은 KAKAO_REST_API_KEY(컨테이너에 -e 로만 주입).
+# npm install 이 prepare 스크립트(=tsc build)를 트리거해 dist 생성 → 이후 devDeps prune.
+COPY --chown=node:node vendor/kakao-api-mcp-server/ /home/node/kakao-mcp/
+RUN cd /home/node/kakao-mcp \
+    && npm install --no-audit --no-fund \
+    && npm prune --omit=dev \
+    && rm -rf /home/node/.cache/npm/_cacache 2>/dev/null || true
+
 # 진입점 없음 — sandbox-docker 가 `docker run ... <image> <command> <args>` 로
 # 실행할 MCP command(npx/uvx/바이너리/사전설치 바이너리)를 직접 지정한다.
