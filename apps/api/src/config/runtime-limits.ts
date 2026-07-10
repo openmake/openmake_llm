@@ -1177,6 +1177,18 @@ export const MAP_INTENT_PATTERNS: readonly RegExp[] = [
 ] as const;
 
 /**
+ * 길찾기(경로) 의도 판정 패턴. 매칭 시 카카오 find-route 도구를 강제 포함·호출해
+ * 출발/도착 마커 + 경로를 지도에 표시한다. (MAP_INTENT 의 부분집합 — 경로 전용)
+ */
+export const ROUTE_INTENT_PATTERNS: readonly RegExp[] = [
+    /길\s*찾기/,
+    /경로/,
+    /가는\s*(길|법|방법)/,
+    /어떻게\s*가/,
+    /까지\s*(가|어떻게|경로|길)/,
+] as const;
+
+/**
  * 자율 에이전트 작업 (AgentTaskService) runaway 가드 한계.
  * 백그라운드 detached 실행이라 사람이 지켜보지 않으므로 토큰/시간 폭주 방지가 필수.
  */

@@ -71,6 +71,7 @@ const GUIDE_MARKER_RE = /^\s*\[지도 표시용[^\]]*\]\s*$/gm;
 interface MapSegment {
   kind: "map";
   places: { name: string; lat: number; lng: number; address?: string; url?: string }[];
+  route?: { lat: number; lng: number }[];
 }
 interface TextSegment {
   kind: "text";
@@ -84,16 +85,18 @@ function splitSegments(content: string): (MapSegment | TextSegment)[] {
   KAKAOMAP_RE.lastIndex = 0;
   while ((m = KAKAOMAP_RE.exec(content)) !== null) {
     let parsed: MapSegment["places"] | null = null;
+    let parsedRoute: MapSegment["route"];
     try {
       const obj = JSON.parse(m[1].trim());
       if (Array.isArray(obj?.places)) parsed = obj.places;
+      if (Array.isArray(obj?.route)) parsedRoute = obj.route;
     } catch {
       parsed = null;
     }
     if (parsed) {
       const before = content.slice(lastIndex, m.index);
       if (before.trim()) segments.push({ kind: "text", text: before });
-      segments.push({ kind: "map", places: parsed });
+      segments.push({ kind: "map", places: parsed, route: parsedRoute });
       lastIndex = KAKAOMAP_RE.lastIndex;
     }
   }
@@ -123,7 +126,7 @@ export function Markdown({ content }: { content: string }) {
       {segments.map((seg, i) => (
         <Fragment key={i}>
           {seg.kind === "map" ? (
-            <KakaoMap places={seg.places} />
+            <KakaoMap places={seg.places} route={seg.route} />
           ) : (
             <MarkdownText text={seg.text} />
           )}

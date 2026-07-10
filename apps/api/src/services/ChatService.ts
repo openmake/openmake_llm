@@ -27,7 +27,7 @@ import type { UserContext } from '../mcp/user-sandbox';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { CHAT_ALWAYS_ON_TOOL_NAMES } from '../mcp/agent-task-tools';
 import { MCP_META_TOOL_NAMES } from '../mcp/mcp-meta-tools';
-import { CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, MCP_PROGRESSIVE_DISCLOSURE_ENABLED, MAP_INTENT_PATTERNS } from '../config/runtime-limits';
+import { CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, MCP_PROGRESSIVE_DISCLOSURE_ENABLED, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS } from '../config/runtime-limits';
 import { LOAD_SKILL_TOOL_NAME } from '../mcp/load-skill-tool';
 import { LLMClient } from '../llm';
 import { type ChatMessage, type ToolDefinition, type ModelOptions } from '../llm';
@@ -249,15 +249,22 @@ export class ChatService {
         const combined = [...merged, ...alwaysOn, ...userMcpAutoOn.filter(t => !seen.has(t.function.name))];
         logger.debug(`MCP 도구 머지: all=${allTools.length} merged=${merged.length} alwaysOn=${alwaysOn.length} userMcpAutoOn=${userMcpAutoOn.length}`);
 
-        // 지도/위치 의도면 카카오 장소 검색 도구를 강제 포함한다 — cap/relevance 선택에서
-        // 누락돼도 지도 렌더 체인(도구포함→tool_choice강제→블록주입)이 끊기지 않게 한다.
+        // 지도/위치 의도면 카카오 장소 검색 도구를, 길찾기 의도면 find-route 를 강제 포함한다.
+        // cap/relevance 선택에서 누락돼도 지도 렌더 체인(도구포함→tool_choice강제→블록주입)이
+        // 끊기지 않게 한다.
         let finalCombined = combined;
-        if (MAP_INTENT_PATTERNS.some((re) => re.test(reqCtx.message ?? ''))) {
-            const kakaoSearch = allTools.find((t) => t.function.name.includes('search-places'));
-            if (kakaoSearch && !finalCombined.some((t) => t.function.name === kakaoSearch.function.name)) {
-                finalCombined = [...finalCombined, kakaoSearch];
-                logger.info('[Map] 지도 의도 — 카카오 search-places 강제 포함');
+        const forceIncludeKakao = (needle: string, label: string) => {
+            const t = allTools.find((x) => x.function.name.includes(needle));
+            if (t && !finalCombined.some((x) => x.function.name === t.function.name)) {
+                finalCombined = [...finalCombined, t];
+                logger.info(`[Map] ${label} — 카카오 ${needle} 강제 포함`);
             }
+        };
+        if (MAP_INTENT_PATTERNS.some((re) => re.test(reqCtx.message ?? ''))) {
+            forceIncludeKakao('search-places', '지도 의도');
+        }
+        if (ROUTE_INTENT_PATTERNS.some((re) => re.test(reqCtx.message ?? ''))) {
+            forceIncludeKakao('find-route', '길찾기 의도');
         }
         return this.applySkillCatalog(finalCombined, allTools, reqCtx);
     }

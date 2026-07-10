@@ -20,6 +20,11 @@ interface KakaoPlace {
   url?: string;
 }
 
+interface KakaoLatLng {
+  lat: number;
+  lng: number;
+}
+
 // 외부 SDK — 전역 kakao 네임스페이스는 타입 미제공이라 최소 표면만 느슨히 참조한다.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare global {
@@ -56,13 +61,16 @@ function loadKakaoSdk(): Promise<void> {
   return sdkPromise;
 }
 
-export function KakaoMap({ places }: { places: KakaoPlace[] }) {
+export function KakaoMap({ places, route }: { places: KakaoPlace[]; route?: KakaoLatLng[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const valid = (places ?? []).filter(
+      (p) => Number.isFinite(p.lat) && Number.isFinite(p.lng),
+    );
+    const validRoute = (route ?? []).filter(
       (p) => Number.isFinite(p.lat) && Number.isFinite(p.lng),
     );
     if (valid.length === 0) {
@@ -87,6 +95,19 @@ export function KakaoMap({ places }: { places: KakaoPlace[] }) {
           });
           kakao.maps.event.addListener(marker, "click", () => iw.open(map, marker));
         });
+        // 길찾기 경로 폴리라인 — route 좌표가 있으면 지도에 선으로 그린다.
+        // (bounds 는 마커(출발/도착)에만 맞춘다 — 경로에 이상치 좌표가 섞여도 축척이 튀지 않게.)
+        if (validRoute.length > 1) {
+          const linePath = validRoute.map((p) => new kakao.maps.LatLng(p.lat, p.lng));
+          const polyline = new kakao.maps.Polyline({
+            path: linePath,
+            strokeWeight: 5,
+            strokeColor: "#2b6be6",
+            strokeOpacity: 0.85,
+            strokeStyle: "solid",
+          });
+          polyline.setMap(map);
+        }
         if (valid.length > 1) map.setBounds(bounds);
       })
       .catch((e: unknown) => {
@@ -95,7 +116,7 @@ export function KakaoMap({ places }: { places: KakaoPlace[] }) {
     return () => {
       cancelled = true;
     };
-  }, [places]);
+  }, [places, route]);
 
   if (error) {
     return (
