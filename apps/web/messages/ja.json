@@ -858,7 +858,9 @@
       "pdfExtract": "PDF文書からテキスト・表・メタデータを構造化して抽出するスキル。",
       "webResearchName": "Webリサーチスキル",
       "webResearch": "複数ソース検索・引用検証・要約を行うディープリサーチスキル。"
-    }
+    },
+    "credentialsTitle": "インストールするには認証情報を入力してください",
+    "cancel": "キャンセル"
   },
   "mcpMonitoring": {
     "title": "MCP モニタリング",

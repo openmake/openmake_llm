@@ -858,7 +858,9 @@
       "pdfExtract": "从 PDF 文档中结构化提取文本、表格和元数据的技能。",
       "webResearchName": "网络研究技能",
       "webResearch": "执行多源搜索、引用验证和摘要的深度研究技能。"
-    }
+    },
+    "credentialsTitle": "请输入凭据以安装",
+    "cancel": "取消"
   },
   "mcpMonitoring": {
     "title": "MCP 监控",
