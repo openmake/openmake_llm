@@ -117,6 +117,8 @@ export interface ChatStreamOptions {
     thinking?: boolean | { budget: number };
     /** 사용 가능한 도구 목록 */
     tools?: ToolDefinition[];
+    /** 도구 선택 강제 — 특정 도구를 반드시 호출하게 하거나(function) 도구 사용을 강제/차단. vLLM tool_choice 시맨틱. */
+    tool_choice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
     /** 호출 취소 신호 (사용자 중단/타임아웃) */
     abortSignal?: AbortSignal;
     /**

@@ -191,6 +191,7 @@ export class LocalLLMProvider implements IProvider {
                         ? true
                         : opts.thinking,
                     tools: opts.tools,
+                    ...(opts.tool_choice !== undefined ? { tool_choice: opts.tool_choice } : {}),
                     // 첫 SSE 청크 = 업스트림 생존 — fast-fail 취소 (tool-call-only 응답 포함).
                     onActivity: clearFastFail,
                     // user signal (opts.abortSignal) + self fast-fail signal 결합 전달 — 어느 쪽이
