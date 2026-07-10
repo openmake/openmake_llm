@@ -785,7 +785,27 @@ function formatPlacesResponse(data: KakaoKeywordSearchResponse): string {
   }).join("\n---\n");
   
   const pageInfo = data.meta ? ` (결과 수: ${data.meta.pageable_count}, 총 ${data.meta.total_count}개)` : "";
-  return `장소 검색 결과${pageInfo}:\n${places}`;
+
+  // 지도 렌더용 kakaomap 블록 — 좌표(x=lng, y=lat)를 가진 상위 결과를 JSON 으로 동봉한다.
+  // 프론트(markdown.tsx)가 이 fenced 블록을 KakaoMap 컴포넌트로 렌더한다. 도구 결과에
+  // "그대로 포함" 지시를 실어 모델이 블록을 변형 없이 통과시키게 한다(전역 프롬프트 불필요).
+  const mapPoints = data.documents
+    .filter(p => p.x && p.y)
+    .slice(0, 15)
+    .map(p => ({
+      name: p.place_name,
+      lat: Number(p.y),
+      lng: Number(p.x),
+      address: p.address_name,
+      url: p.place_url,
+    }));
+  let mapBlock = "";
+  if (mapPoints.length > 0) {
+    const json = JSON.stringify({ places: mapPoints });
+    mapBlock = `\n\n[지도 표시용 — 아래 kakaomap 블록을 답변에 변형 없이 그대로 포함하세요]\n\`\`\`kakaomap\n${json}\n\`\`\``;
+  }
+
+  return `장소 검색 결과${pageInfo}:\n${places}${mapBlock}`;
 }
 
 function formatAddressResponse(data: KakaoCoord2AddressResponse): string {
