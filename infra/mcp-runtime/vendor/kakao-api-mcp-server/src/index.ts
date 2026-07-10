@@ -335,9 +335,25 @@ const findRouteSchema = z.object({
   origin: z.string().describe('출발지 이름 (예: "강남역")'),
   destination: z.string().describe('목적지 이름 (예: "코엑스")'),
   waypoints: z.array(z.string()).optional().describe('경유지 이름 목록 (선택사항)'),
-  transportation_type: z.enum(["car", "public", "walk"]).default("car").describe("이동 수단 (자동차, 대중교통, 도보)"),
-  priority: z.enum(["RECOMMEND", "TIME", "DISTANCE"]).default("RECOMMEND").describe("경로 탐색 우선순위 (추천, 최단시간, 최단거리)"),
-  traffic_info: z.boolean().default(true).describe("교통 정보 포함 여부")
+  // 아래 3개는 LLM 이 한글값("자동차"/"추천")·문자열("true")을 넘겨 enum/boolean 검증에
+  // 실패(-32602)하던 것을 preprocess 로 canonical 값으로 정규화해 항상 유효하게 만든다.
+  transportation_type: z.preprocess((v) => {
+    const s = String(v ?? "").toLowerCase().trim();
+    if (/(public|대중|transit|버스|지하철)/.test(s)) return "public";
+    if (/(walk|도보|보행|걷)/.test(s)) return "walk";
+    return "car";
+  }, z.enum(["car", "public", "walk"])).describe("이동 수단 (car|public|walk, 기본 car). 자동차/대중교통/도보 한글도 허용"),
+  priority: z.preprocess((v) => {
+    const s = String(v ?? "").toUpperCase().trim();
+    if (s.includes("TIME") || s.includes("시간")) return "TIME";
+    if (s.includes("DISTANCE") || s.includes("거리")) return "DISTANCE";
+    return "RECOMMEND";
+  }, z.enum(["RECOMMEND", "TIME", "DISTANCE"])).describe("경로 우선순위 (RECOMMEND|TIME|DISTANCE, 기본 RECOMMEND)"),
+  traffic_info: z.preprocess((v) => {
+    if (typeof v === "boolean") return v;
+    if (typeof v === "string") return !/^(false|no|0|아니|off)/i.test(v.trim());
+    return true;
+  }, z.boolean()).describe("교통 정보 포함 여부 (기본 true)")
 });
 
 server.tool(
