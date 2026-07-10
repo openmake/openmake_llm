@@ -55,7 +55,45 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
     const summary = tracker.getSummary();
     const uptime = Math.round(process.uptime());
 
-    res.json(success({ ...summary, uptime }));
+    // usage-tracker 는 modelUsage/totalRequests 를 미추적(하드코딩 {}/0)이라 사용량 페이지의
+    // "모델별 사용 비중"·"요청 수"가 비어있었다. 페이지는 allTime.modelUsage/totalRequests 를
+    // 읽으므로(내 계정 기준), 본인 전체 대화(conversation_messages, 일별 차트와 동일 소스)에서
+    // 모델별 토큰 + 요청 수(assistant 메시지 수)를 집계해 채운다.
+    const userId = getUserId(req);
+    let modelUsage: Record<string, number> = {};
+    let totalRequests = 0;
+    let enriched = false;
+    if (userId) {
+        try {
+            const r = await getPool().query(
+                `SELECT COALESCE(m.model, 'default') AS model,
+                        COALESCE(SUM(m.tokens), 0) AS tokens,
+                        COUNT(*) FILTER (WHERE m.role = 'assistant') AS requests
+                 FROM conversation_messages m
+                 JOIN conversation_sessions s ON m.session_id = s.id
+                 WHERE s.user_id = $1
+                 GROUP BY 1`,
+                [userId],
+            );
+            for (const row of r.rows as Array<{ model: string; tokens: string; requests: string }>) {
+                if (Number(row.tokens) > 0) modelUsage[row.model] = Number(row.tokens);
+                totalRequests += Number(row.requests);
+            }
+            enriched = true;
+        } catch { /* 집계 실패 시 tracker 기본값 유지 */ modelUsage = {}; }
+    }
+
+    // allTime 타입엔 modelUsage 가 없어 인라인 조립으로 병합(프론트는 allTime.modelUsage/totalRequests 소비).
+    res.json(success({
+        ...summary,
+        ...(enriched
+            ? {
+                today: { ...summary.today, modelUsage, totalRequests },
+                allTime: { ...summary.allTime, modelUsage, totalRequests },
+            }
+            : {}),
+        uptime,
+    }));
 }));
 
 /**
