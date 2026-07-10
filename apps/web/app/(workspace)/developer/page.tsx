@@ -178,22 +178,15 @@ export default function DeveloperPage() {
                 {`curl https://your-instance/api/models \\
   -H "Authorization: Bearer <YOUR_API_KEY>"`}
               </pre>
+              {/* 구 7 brand alias(pro/fast/think/code/vision) 는 2026-06-28 폐기됨.
+                  실제 사용 가능한 모델 ID 는 위 GET /api/models 로 조회. default 는 기본 모델 별칭. */}
               <div className="rounded-md border border-border bg-surface-2 p-3">
                 <p className="mb-2 text-xs font-medium text-fg-2">{t("models.brandIdLabel")}</p>
-                <div className="grid grid-cols-2 gap-1 text-xs font-mono text-muted">
-                  {[
-                    ["default", "brandModels.default"],
-                    ["pro", "brandModels.pro"],
-                    ["fast", "brandModels.fast"],
-                    ["think", "brandModels.think"],
-                    ["code", "brandModels.code"],
-                    ["vision", "brandModels.vision"],
-                  ].map(([id, labelKey]) => (
-                    <div key={id} className="flex gap-2">
-                      <span className="text-accent">{id}</span>
-                      <span className="text-faint">{t(labelKey)}</span>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-1 gap-1 text-xs font-mono text-muted">
+                  <div className="flex gap-2">
+                    <span className="text-accent">default</span>
+                    <span className="text-faint">{t("brandModels.default")}</span>
+                  </div>
                 </div>
               </div>
             </CardContent>
