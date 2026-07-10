@@ -383,9 +383,11 @@ export default function AdminPage() {
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label={t("stats.totalUsers")} value={stats.total.toLocaleString()} delta={t("stats.totalUsersDelta")} />
-          <StatCard label={t("stats.activeSessions")} value={stats.active.toLocaleString()} delta="+5.2%" />
-          <StatCard label={t("stats.todayRequests")} value={stats.today.toLocaleString()} delta="+18.4%" />
+          {/* 값은 실데이터. 트렌드 델타(+12/+5.2%/+18.4%)는 실 비교 소스가 없어 제거(가짜 표시 방지).
+              시스템 상태의 "모든 노드 정상"은 트렌드가 아니라 실 상태 라벨이라 유지. */}
+          <StatCard label={t("stats.totalUsers")} value={stats.total.toLocaleString()} />
+          <StatCard label={t("stats.activeSessions")} value={stats.active.toLocaleString()} />
+          <StatCard label={t("stats.todayRequests")} value={stats.today.toLocaleString()} />
           <StatCard label={t("stats.systemStatus")} value={stats.status} delta={t("stats.allNodesNormal")} />
         </div>
 

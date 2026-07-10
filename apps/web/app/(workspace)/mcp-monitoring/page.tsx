@@ -239,18 +239,11 @@ export default function McpMonitoringPage() {
             value={summary.activeServers}
             delta={t("activeServersDelta")}
           />
-          <StatCard
-            label={t("totalCalls")}
-            value={summary.totalCalls}
-            delta="+8.2% 24h"
-            deltaTone="success"
-          />
+          <StatCard label={t("totalCalls")} value={summary.totalCalls} />
           <StatCard label={t("avgLatency")} value={summary.avgLatency} />
           <StatCard
             label={t("errorRate")}
             value={summary.errorRate}
-            delta="+0.3% 24h"
-            deltaTone="danger"
           />
         </div>
 
