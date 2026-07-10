@@ -82,66 +82,65 @@ const SUMMARY: SummaryView = {
   errorRate: "1.4%",
 };
 
-const SERVER_USAGE: ServerUsage[] = [
-  { name: "github", calls: 5210, errorRate: 0.008 },
-  { name: "filesystem", calls: 4120, errorRate: 0.002 },
-  { name: "slack-events", calls: 2380, errorRate: 0.021 },
-  { name: "postgres-prod", calls: 980, errorRate: 0.064 },
-  { name: "weather-api", calls: 150, errorRate: 0.12 },
-];
+/** 감사 로그의 mcp_tool_call 항목으로 서버별 호출 분포 + 최근 실행 로그를 구성한다(실데이터).
+ *  백엔드에 전용 집계 엔드포인트가 없어 목업을 쓰던 것을 실 감사 데이터로 대체. */
+interface AuditLogRow {
+  id: number;
+  timestamp: string;
+  action: string;
+  resource_id?: string | null;
+  details?: { server?: string; isError?: boolean; durationMs?: number } | null;
+}
 
-const LOGS: ToolLog[] = [
-  {
-    id: 1,
-    time: "14:32:08",
-    server: "github",
-    tool: "search_issues",
-    durationMs: 212,
-    status: "success",
-  },
-  {
-    id: 2,
-    time: "14:31:55",
-    server: "filesystem",
-    tool: "read_file",
-    durationMs: 9,
-    status: "success",
-  },
-  {
-    id: 3,
-    time: "14:31:40",
-    server: "postgres-prod",
-    tool: "query",
-    durationMs: 1240,
-    status: "error",
-  },
-  {
-    id: 4,
-    time: "14:31:12",
-    server: "slack-events",
-    tool: "send_message",
-    durationMs: 84,
-    status: "success",
-  },
-  {
-    id: 5,
-    time: "14:30:58",
-    server: "github",
-    tool: "create_pr",
-    durationMs: 340,
-    status: "success",
-  },
-  {
-    id: 6,
-    time: "14:30:31",
-    server: "weather-api",
-    tool: "get_forecast",
-    durationMs: 0,
-    status: "error",
-  },
-];
+function parseServerTool(r: AuditLogRow): { server: string; tool: string } {
+  const rid = r.resource_id ?? "";
+  if (rid.includes("::")) {
+    const [server, tool] = rid.split("::");
+    return { server: r.details?.server || server, tool: tool || "-" };
+  }
+  // 내장 도구(mcp_builtin_tool:web_search 등)
+  const tool = rid.includes(":") ? rid.split(":").slice(1).join(":") : rid || "-";
+  return { server: r.details?.server || "builtin", tool };
+}
 
-const maxCalls = Math.max(...SERVER_USAGE.map((s) => s.calls));
+async function fetchToolActivity(
+  locale: string,
+): Promise<{ serverUsage: ServerUsage[]; logs: ToolLog[] } | null> {
+  try {
+    const res = await ApiClient.get<ApiEnvelope<{ logs: AuditLogRow[] }>>("/api/audit?limit=200");
+    const rows = (res?.data?.logs ?? []).filter((r) => r.action === "mcp_tool_call");
+    const byServer = new Map<string, { calls: number; errors: number }>();
+    for (const r of rows) {
+      const { server } = parseServerTool(r);
+      const cur = byServer.get(server) ?? { calls: 0, errors: 0 };
+      cur.calls++;
+      if (r.details?.isError) cur.errors++;
+      byServer.set(server, cur);
+    }
+    const serverUsage: ServerUsage[] = [...byServer.entries()]
+      .map(([name, v]) => ({ name, calls: v.calls, errorRate: v.calls ? v.errors / v.calls : 0 }))
+      .sort((a, b) => b.calls - a.calls)
+      .slice(0, 8);
+    const logs: ToolLog[] = rows.slice(0, 12).map((r) => {
+      const { server, tool } = parseServerTool(r);
+      return {
+        id: r.id,
+        time: new Date(r.timestamp).toLocaleTimeString(locale, {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }),
+        server,
+        tool,
+        durationMs: r.details?.durationMs ?? 0,
+        status: r.details?.isError ? "error" : "success",
+      };
+    });
+    return { serverUsage, logs };
+  } catch {
+    return null;
+  }
+}
 
 /** 요약 통계 조회 — 실패(401/네트워크) 시 null 반환하여 호출측이 목업 유지. */
 async function fetchSummaryView(locale: string): Promise<SummaryView | null> {
@@ -172,6 +171,9 @@ export default function McpMonitoringPage() {
   const [summary, setSummary] = useState<SummaryView>(SUMMARY);
   const [topCrashed, setTopCrashed] = useState<TopCrashedItem[]>([]);
   const [crashTrend, setCrashTrend] = useState<CrashTrendItem[]>([]);
+  const [serverUsage, setServerUsage] = useState<ServerUsage[]>([]);
+  const [logs, setLogs] = useState<ToolLog[]>([]);
+  const maxCalls = Math.max(1, ...serverUsage.map((s) => s.calls));
 
   async function loadExtraStats() {
     try {
@@ -187,6 +189,12 @@ export default function McpMonitoringPage() {
       if (ct.status === "fulfilled") setCrashTrend(ct.value?.data?.timeline ?? []);
     } catch {
       /* 비관리자/실패 시 빈 상태 유지 */
+    }
+    // 서버별 호출 분포 + 최근 도구 실행 로그 — 감사 로그 기반 실데이터.
+    const activity = await fetchToolActivity(locale);
+    if (activity) {
+      setServerUsage(activity.serverUsage);
+      setLogs(activity.logs);
     }
   }
 
@@ -247,14 +255,16 @@ export default function McpMonitoringPage() {
         </div>
 
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
-          {/* 서버별 호출 추이 — 순수 CSS 바 차트.
-              백엔드에 per-server 호출/에러율 집계 엔드포인트가 없어 목업 유지. */}
+          {/* 서버별 호출 추이 — 순수 CSS 바 차트. 감사 로그(mcp_tool_call) 기반 실집계. */}
           <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle>{t("serverDistribution")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {SERVER_USAGE.map((s) => {
+              {serverUsage.length === 0 && (
+                <p className="py-6 text-center text-sm text-muted">{t("noData")}</p>
+              )}
+              {serverUsage.map((s) => {
                 const pct = (s.calls / maxCalls) * 100;
                 const highErr = s.errorRate >= 0.05;
                 return (
@@ -283,8 +293,7 @@ export default function McpMonitoringPage() {
             </CardContent>
           </Card>
 
-          {/* 최근 도구 실행 로그.
-              백엔드에 per-tool 실행 로그 엔드포인트가 없어 목업 유지. */}
+          {/* 최근 도구 실행 로그 — 감사 로그(mcp_tool_call) 기반 실데이터. */}
           <Card className="lg:col-span-3">
             <CardHeader>
               <CardTitle>{t("recentToolLog")}</CardTitle>
@@ -301,7 +310,14 @@ export default function McpMonitoringPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {LOGS.map((l) => (
+                  {logs.length === 0 && (
+                    <tr>
+                      <Td className="py-8 text-center text-sm text-muted" colSpan={5}>
+                        {t("noData")}
+                      </Td>
+                    </tr>
+                  )}
+                  {logs.map((l) => (
                     <tr key={l.id} className="transition hover:bg-surface-2">
                       <Td className="font-mono text-faint">{l.time}</Td>
                       <Td className="font-mono text-fg-2">{l.server}</Td>

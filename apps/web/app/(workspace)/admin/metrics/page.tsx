@@ -141,11 +141,24 @@ export default function AdminMetricsPage() {
       }
       // 에이전트 메트릭 로드
       const [agentSummaryRes, agentMetricsRes] = await Promise.allSettled([
-        ApiClient.get<{ data: { summary: AgentSummary } }>("/api/agents-monitoring/summary"),
+        // 백엔드 응답 형태: { totalRequests, totalSuccess, totalFailures, avgResponseTime, byAgent }.
+        // 프론트 AgentSummary(totalAgents/avgSuccessRate)로 매핑한다 — 미매핑 시 undefined/NaN 노출.
+        ApiClient.get<{ data: { summary: { totalRequests: number; totalSuccess: number; totalFailures: number; avgResponseTime: number; byAgent: Record<string, unknown> } } }>("/api/agents-monitoring/summary"),
         ApiClient.get<{ data: { metrics: Record<string, AgentMetric> } }>("/api/agents-monitoring/metrics"),
       ]);
       if (agentSummaryRes.status === "fulfilled") {
-        setAgentSummary(agentSummaryRes.value?.data?.summary ?? null);
+        const s = agentSummaryRes.value?.data?.summary;
+        setAgentSummary(
+          s
+            ? {
+                totalAgents: s.byAgent ? Object.keys(s.byAgent).length : 0,
+                totalRequests: s.totalRequests ?? 0,
+                avgSuccessRate: (s.totalRequests ?? 0) > 0 ? (s.totalSuccess ?? 0) / s.totalRequests : 0,
+                avgResponseTime: s.avgResponseTime ?? 0,
+                mostUsedAgent: null,
+              }
+            : null,
+        );
       }
       if (agentMetricsRes.status === "fulfilled") {
         const raw = agentMetricsRes.value?.data?.metrics;
