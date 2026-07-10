@@ -122,6 +122,9 @@ export const envSchema = z
         LOCAL_STRATEGY_PATH_ENABLED: z.string().default('false'),
         /** Tail 라우팅 셰도우 모드 — 게이트 결정 계산/적재만, 실행 무변경 (기본 false). */
         TAIL_ROUTING_SHADOW_ENABLED: z.string().default('false'),
+        SEARCH_SEMANTIC_RERANK_SHADOW: z.string().default('false'),
+        SEARCH_SEMANTIC_RERANK_ENABLED: z.string().default('false'),
+        SEARCH_RERANK_EMBED_MODEL: z.string().optional(),
         /**
          * Qwen3 등 reasoning 모델의 `extra_body.chat_template_kwargs.enable_thinking` 토글.
          *

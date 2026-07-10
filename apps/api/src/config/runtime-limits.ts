@@ -786,6 +786,22 @@ export const SEARCH_RELIABILITY = {
     REFERENCE_DOMAINS: ['wikipedia.org', 'namu.wiki', 'britannica.com'] as readonly string[],
     /** 최종 결과에 보장 포함할 백과/레퍼런스 최소 개수. 0 이하면 비활성. env: SEARCH_MIN_REFERENCE. 기본 4. */
     MIN_REFERENCE_RESULTS: Number(process.env.SEARCH_MIN_REFERENCE ?? 4),
+    /**
+     * 시점 민감 쿼리(preferRecent)에서 RECENCY_PENALTY_DAYS 초과 소스에 combinedScore 레벨로
+     * 직접 적용하는 강한 감산. scoreSearchResult 내부 recency(±0.1~0.2)는 RELIABILITY_WEIGHT(0.4)를
+     * 곱하면 실효 ±0.04~0.08 로 미미해, 공식 도메인 부스트(+0.3)에 밀려 오래된 정부/공식 페이지가
+     * 상위를 점유했다(예: '오늘 날씨' 질의에 수년 전 정부 브리핑). preferRecent 가 아니면 40%만 적용.
+     * env: SEARCH_RECENCY_STALE_PENALTY. 기본 0.35.
+     */
+    RECENCY_STALE_PENALTY: Number(process.env.SEARCH_RECENCY_STALE_PENALTY) || 0.35,
+    /**
+     * 쿼리 단어가 제목·스니펫에 전혀 없는(termRelevance ≤ MIN_TERM_RELEVANCE) 무관 소스 감산.
+     * 공식 도메인 부스트(reliability)가 관련성 0 인 소스를 상위로 올리는 것을 막는다
+     * (예: '서울 날씨' 질의에 .go.kr 코로나 브리핑). env: SEARCH_IRRELEVANCE_PENALTY. 기본 0.3.
+     */
+    IRRELEVANCE_PENALTY: Number(process.env.SEARCH_IRRELEVANCE_PENALTY) || 0.3,
+    /** 관련성 하한 — termRelevance 가 이 값 이하면 무관 소스로 간주(기본 0 = 쿼리 단어 전무). env: SEARCH_MIN_TERM_RELEVANCE. */
+    MIN_TERM_RELEVANCE: Number(process.env.SEARCH_MIN_TERM_RELEVANCE ?? 0),
 } as const;
 
 // ============================================

@@ -21,6 +21,8 @@ import {
 import { createLogger } from '../../utils/logger';
 import { SEARCH_RELIABILITY, WEB_SEARCH_INJECTION } from '../../config/runtime-limits';
 import { formatSearchSources } from './format-sources';
+import { getConfig } from '../../config/env';
+import { logSemanticRerankShadow, rerankBySemantics } from './semantic-reranker';
 
 const logger = createLogger('WebSearch');
 
@@ -148,6 +150,19 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
         const relevance = w * termRelevance + (1 - w) * orderRelevance;
         let combinedScore = relevance * SEARCH_RELIABILITY.RELEVANCE_WEIGHT
             + reliability * SEARCH_RELIABILITY.RELIABILITY_WEIGHT;
+        // 관련성 하한 게이트 — 쿼리 단어가 제목·스니펫에 전혀 없으면(termRelevance ≤ 하한) 공식 도메인
+        // 부스트만으로 무관 소스가 상위를 점유하는 것을 막는다. (예: '서울 날씨'에 .go.kr 코로나 브리핑)
+        if (termRelevance <= SEARCH_RELIABILITY.MIN_TERM_RELEVANCE) {
+            combinedScore -= SEARCH_RELIABILITY.IRRELEVANCE_PENALTY;
+        }
+        // recency 를 combinedScore 레벨로 직접 반영 — scoreSearchResult 내부 recency 는 실효 미미(±0.08).
+        // date(또는 스니펫 연도)가 RECENCY_PENALTY_DAYS 를 넘으면 감산해 오래된 문서를 디랭크한다.
+        const ageDays = estimateResultAgeDays(result);
+        if (ageDays !== null && ageDays > SEARCH_RELIABILITY.RECENCY_PENALTY_DAYS) {
+            combinedScore -= preferRecent
+                ? SEARCH_RELIABILITY.RECENCY_STALE_PENALTY
+                : SEARCH_RELIABILITY.RECENCY_STALE_PENALTY * 0.4;
+        }
         // 시점 민감 쿼리: 위키 과거 문서 디랭크 + 최신 뉴스 가산 (현직 인물·직책 정확도 개선)
         if (preferRecent) {
             if (/wikipedia\.org/i.test(result.url)) {
@@ -162,11 +177,21 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
     scored.sort((a, b) => b.combinedScore - a.combinedScore);
 
     const sortedResults = scored.map(s => s.result);
-    const ranked = applyPerDomainCap(
+    let ranked = applyPerDomainCap(
         sortedResults,
         maxResults,
         SEARCH_RELIABILITY.MAX_PER_DOMAIN,
     );
+
+    // 의미 리랭킹 — bge-m3 임베딩으로 상위 소스 순서를 재정렬한다.
+    //  · ENABLED: 실제 적용(동기, 실패 시 기존 랭킹 fallback). critical-path 지연 +0.2~1.4s.
+    //  · SHADOW(ENABLED off 시): fire-and-forget 로깅만(실행 무변경) — 개선폭 측정용.
+    const rerankCfg = getConfig();
+    if (rerankCfg.searchSemanticRerankEnabled) {
+        ranked = await rerankBySemantics(query, ranked);
+    } else if (rerankCfg.searchSemanticRerankShadow) {
+        void logSemanticRerankShadow(query, ranked).catch(() => { /* 셰도우는 흐름을 막지 않음 */ });
+    }
 
     // 시점 민감 쿼리(preferRecent)에서는 위키 강제 보장을 건너뛴다 — 위키 srsearch 가 과거
     // 인물/사건 문서(예: '윤석열 정부')를 반환해, penalty 로 디랭크한 위키가 ensureReferenceResults
@@ -262,6 +287,30 @@ export function applyPerDomainCap(sorted: SearchResult[], maxResults: number, ca
  * @param result - 검색 결과 객체
  * @returns 신뢰도 점수 (0.0~1.0)
  */
+/**
+ * 소스 나이(일) 추정 — 랭킹 recency 디랭크용. date 필드를 우선 파싱하고, 없으면 제목+스니펫의
+ * 명시적 4자리 연도에서 추정한다(보수적). 최근(현재연도-1 이상) 연도가 하나라도 있거나 연도가
+ * 전혀 없으면 null(중립 — 디랭크하지 않음)로 오탐을 억제한다.
+ */
+function estimateResultAgeDays(result: SearchResult): number | null {
+    if (result.date) {
+        const t = Date.parse(result.date);
+        if (!Number.isNaN(t)) {
+            const days = (Date.now() - t) / 86400000;
+            if (days >= 0) return days;
+        }
+    }
+    const nowYear = new Date().getFullYear();
+    const text = `${result.title} ${result.snippet}`;
+    const years = [...text.matchAll(/\b(19\d\d|20\d\d)\b/g)]
+        .map((m) => parseInt(m[1], 10))
+        .filter((y) => y >= 1990 && y <= nowYear);
+    if (years.length === 0) return null;
+    const maxYear = Math.max(...years);
+    if (maxYear >= nowYear - 1) return null; // 최근 연도 언급 있으면 최신 문서로 보고 중립
+    return (nowYear - maxYear) * 365;
+}
+
 function scoreSearchResult(result: SearchResult): number {
     let score = 0.5;
 

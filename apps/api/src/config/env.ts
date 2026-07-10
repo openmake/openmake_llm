@@ -57,6 +57,12 @@ export interface EnvConfig {
     localStrategyPathEnabled: boolean;
     /** Tail 라우팅 셰도우 모드 — 게이트 결정을 계산/적재만 하고 실행은 바꾸지 않음 (기본 false). */
     tailRoutingShadowEnabled: boolean;
+    /** 웹검색 의미 리랭킹 셰도우 — bge-m3 임베딩 리랭킹 결과를 로깅만 하고 실행은 안 바꿈 (기본 false). */
+    searchSemanticRerankShadow: boolean;
+    /** 웹검색 의미 리랭킹 실제 적용 — bge-m3 임베딩으로 상위 소스 순서를 재정렬 (기본 false, critical-path 지연). */
+    searchSemanticRerankEnabled: boolean;
+    /** 웹검색 의미 리랭킹에 쓰는 임베딩 모델명 (LiteLLM 카탈로그). 기본 bge-m3. */
+    searchRerankEmbedModel: string;
 
     // Log
     logLevel: 'debug' | 'info' | 'warn' | 'error';
@@ -169,6 +175,9 @@ const DEFAULT_CONFIG: EnvConfig = {
     llmEnableReasoningEffort: false,
     localStrategyPathEnabled: false,
     tailRoutingShadowEnabled: false,
+    searchSemanticRerankShadow: false,
+    searchSemanticRerankEnabled: false,
+    searchRerankEmbedModel: 'bge-m3',
 
     // Log
     logLevel: 'info',
@@ -381,6 +390,9 @@ export function loadConfig(): EnvConfig {
         LLM_ENABLE_REASONING_EFFORT: env('LLM_ENABLE_REASONING_EFFORT'),
         LOCAL_STRATEGY_PATH_ENABLED: env('LOCAL_STRATEGY_PATH_ENABLED'),
         TAIL_ROUTING_SHADOW_ENABLED: env('TAIL_ROUTING_SHADOW_ENABLED'),
+        SEARCH_SEMANTIC_RERANK_SHADOW: env('SEARCH_SEMANTIC_RERANK_SHADOW'),
+        SEARCH_SEMANTIC_RERANK_ENABLED: env('SEARCH_SEMANTIC_RERANK_ENABLED'),
+        SEARCH_RERANK_EMBED_MODEL: env('SEARCH_RERANK_EMBED_MODEL'),
         LLM_DISABLE_THINKING_BY_DEFAULT: env('LLM_DISABLE_THINKING_BY_DEFAULT'),
         LOG_LEVEL: env('LOG_LEVEL'),
         GEMINI_THINK_ENABLED: env('GEMINI_THINK_ENABLED'),
@@ -481,6 +493,9 @@ export function loadConfig(): EnvConfig {
         llmEnableReasoningEffort: (parsed.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true',
         localStrategyPathEnabled: (parsed.LOCAL_STRATEGY_PATH_ENABLED ?? 'false').toLowerCase() === 'true',
         tailRoutingShadowEnabled: (parsed.TAIL_ROUTING_SHADOW_ENABLED ?? 'false').toLowerCase() === 'true',
+        searchSemanticRerankShadow: (parsed.SEARCH_SEMANTIC_RERANK_SHADOW ?? 'false').toLowerCase() === 'true',
+        searchSemanticRerankEnabled: (parsed.SEARCH_SEMANTIC_RERANK_ENABLED ?? 'false').toLowerCase() === 'true',
+        searchRerankEmbedModel: parsed.SEARCH_RERANK_EMBED_MODEL || DEFAULT_CONFIG.searchRerankEmbedModel,
 
         // Log
         logLevel: parsed.LOG_LEVEL ?? DEFAULT_CONFIG.logLevel,
