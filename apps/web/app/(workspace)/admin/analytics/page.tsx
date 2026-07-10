@@ -438,7 +438,7 @@ export default function AdminAnalyticsPage() {
                         {a.totalRequests.toLocaleString()}
                       </Td>
                       <Td className="text-right font-mono text-fg-2">
-                        {(a.successRate * 100).toFixed(1)}%
+                        {a.successRate.toFixed(1)}%
                       </Td>
                       <Td className="text-right font-mono text-fg-2">
                         {Math.round(a.avgResponseTime)}ms

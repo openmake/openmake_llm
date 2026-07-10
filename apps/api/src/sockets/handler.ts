@@ -47,6 +47,7 @@ import { getBuildId } from '../config/build-id';
 import { handleChatMessage } from './ws-chat-handler';
 import { handleRequestAgents } from './ws-agents-handler';
 import { withSpan } from '../observability/otel';
+import { getAnalyticsSystem } from '../monitoring/analytics';
 import { getEventBus, AGENT_TASK_PROGRESS, type AgentTaskProgressEvent } from '../utils/event-bus';
 import { runWithRequestContext } from '../utils/request-context';
 import { isOriginAllowed } from '../security/cors-policy';
@@ -177,6 +178,11 @@ export class WebSocketHandler {
             extWs._connectedAtMs = Date.now();
             extWs._lastActivityAtMs = Date.now();
             extWs._messageCount = 0;
+            // AnalyticsSystem 세션 시작(WS 연결=세션) — 사용자 행동의 세션 길이·세션당 쿼리 집계.
+            // (회귀 수정 2026-07-11: startSession/endSession/incrementSessionQuery 가 정의만 되고
+            //  호출부가 전무해 avgSessionLength·avgQueriesPerSession 이 영구 0 이던 결함.)
+            extWs._analyticsSessionId = crypto.randomUUID();
+            getAnalyticsSystem().startSession(extWs._analyticsSessionId);
             extWs._messageTimestamps = [];
             extWs._lastExpiryWarningAtMs = 0;
 
@@ -254,6 +260,9 @@ export class WebSocketHandler {
                         log.debug(`[WS] 메시지 수신: type=${msg.type}`);
                         this.touchActivity(extWs);
                         extWs._messageCount = (extWs._messageCount || 0) + 1;
+                        if (extWs._analyticsSessionId) {
+                            getAnalyticsSystem().incrementSessionQuery(extWs._analyticsSessionId);
+                        }
 
                         // 🔒 메시지 빈도 제한: 윈도우 내 최대 메시지 수 초과 시 차단
                         const now = Date.now();
@@ -430,6 +439,12 @@ export class WebSocketHandler {
     private unregisterConnection(ws: WebSocket): void {
         this.clients.delete(ws);
         this.guard.unregisterUser(ws);
+        // AnalyticsSystem 세션 종료 — 모든 종료 경로(정상 close·토큰 만료·rate limit)가 통과하는
+        // 단일 지점. endSession 은 idempotent(!s.end 매칭)라 중복 호출도 안전.
+        const analyticsSessionId = (ws as ExtendedWebSocket)._analyticsSessionId;
+        if (analyticsSessionId) {
+            getAnalyticsSystem().endSession(analyticsSessionId);
+        }
     }
 
     private touchActivity(extWs: ExtendedWebSocket): void {

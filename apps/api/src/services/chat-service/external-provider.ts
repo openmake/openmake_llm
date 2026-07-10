@@ -25,6 +25,7 @@ import type { ChatMessageRequest } from '../chat-service-types';
 import type { UserContext } from '../../mcp/user-sandbox';
 import type { ResolvedProvider } from '../../providers/provider-router';
 import type { ProviderRouter } from '../../providers/provider-router';
+import { WEB_SEARCH_TEMPLATES, getLocalizedTemplate } from '../../sockets/ws-chat-locales';
 
 const logger = createLogger('ChatExternalProvider');
 
@@ -465,6 +466,39 @@ export async function streamFromExternalProvider(
         onToken(appended, undefined);
         finalContent += appended;
         logger.info(`🗺️ 카카오 지도 블록 ${missingMaps.length}개 자동 첨부 (LLM 응답 누락 보정)`);
+    }
+
+    // 웹검색 출처 목록 결정적 첨부 — LLM(qwen)이 프롬프트의 인용 지시를 자주 무시해 근거 소스가
+    // 답변에 안 드러나던 문제 보정. req.webSearchContext(formatSearchSources 포맷)에서 제목·URL 을
+    // 파싱해 응답 끝에 출처 목록을 붙인다(카카오맵 블록과 동일한 결정적 첨부 패턴, 라이브 stream +
+    // 저장 히스토리 양쪽 반영). 모델이 이미 출처 섹션(헤더)을 만든 경우엔 중복 방지로 skip.
+    // 소스 문자열은 message-pipeline 경로에선 req.webSearchContext 가 아니라 ctx.enhancedMessage
+    // (finalEnhancedMessage, context-builder 가 웹검색 컨텍스트를 합친 값)에 실려 온다. 둘 다 fallback.
+    const webSearchCtxText = req.webSearchContext || ctx.enhancedMessage || '';
+    if (/\[[^\]]*?\d+\]\s*.+?\n\s*URL:\s*\S+/.test(webSearchCtxText)) {
+        const srcLang = ctx.resolvedLanguage || req.userLanguagePreference || 'en';
+        const srcLabel = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, srcLang).sourceLabel;
+        const alreadyHasSources = new RegExp(`(^|\\n)\\s*(#{1,3}\\s*|\\*\\*\\s*)${srcLabel}`).test(finalContent);
+        if (!alreadyHasSources) {
+            const entries: string[] = [];
+            const seen = new Set<string>();
+            const re = /\[[^\]]*?(\d+)\]\s*(.+?)\n\s*URL:\s*(\S+)/g;
+            let mm: RegExpExecArray | null;
+            while ((mm = re.exec(webSearchCtxText)) !== null) {
+                const title = mm[2].trim();
+                const url = mm[3].trim();
+                if (url && !seen.has(url)) {
+                    seen.add(url);
+                    entries.push(`${entries.length + 1}. [${title || url}](${url})`);
+                }
+            }
+            if (entries.length > 0) {
+                const block = `\n\n---\n\n**${srcLabel}**\n${entries.join('\n')}`;
+                onToken(block, undefined);
+                finalContent += block;
+                logger.info(`🔗 웹검색 출처 ${entries.length}개 자동 첨부 (LLM 인용 누락 보정)`);
+            }
+        }
     }
 
     return finalContent;
