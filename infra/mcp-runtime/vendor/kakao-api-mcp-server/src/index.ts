@@ -433,6 +433,9 @@ server.tool(
         }
       }
 
+      // 지도 렌더용 경로 폴리라인(자동차 모빌리티 경로에서 추출). 없으면 마커만 표시.
+      let routePath: { lat: number; lng: number }[] = [];
+
       // 이동 수단에 따라 처리 분기
       if (params.transportation_type === "car") {
         // 자동차 경로는 카카오모빌리티 API 사용
@@ -483,7 +486,9 @@ server.tool(
               car_fuel: "GASOLINE",
               alternatives: "false",
               road_details: params.traffic_info ? "true" : "false",
-              summary: "true"
+              // summary=false — sections[].roads[].vertexes(경로 폴리라인 좌표)를 받아 지도에
+              // 실제 경로 선을 그린다. (route.summary 는 그대로 반환되어 거리/시간 표시엔 무영향)
+              summary: "false"
             };
             
             // 경유지가 있는 경우 추가
@@ -504,6 +509,7 @@ server.tool(
               
               if (route.result_code === 0) { // 성공
                 formattedResult = formatMobilityRouteResult(route, origin, destination, waypointsResults, params);
+                routePath = extractRoutePath(route);
               } else {
                 // 길찾기 실패 시 기본 맵 URL로 대체
                 formattedResult = formatBasicRouteResult(origin, destination, waypointsResults, params, mapUrl);
@@ -533,8 +539,28 @@ server.tool(
         formattedResult = formatBasicRouteResult(origin, destination, waypointsResults, params, mapUrl);
       }
       
+      // 지도 렌더용 kakaomap 블록 — 출발/경유/도착 마커(+ 자동차 경로 폴리라인).
+      // search-places 와 동일하게 "그대로 포함" 지시를 실어 프론트가 지도로 렌더한다.
+      const routeMarkers: Array<{ name: string; lat: number; lng: number; address?: string }> = [];
+      if (origin.x && origin.y) {
+        routeMarkers.push({ name: `출발: ${origin.place_name}`, lat: Number(origin.y), lng: Number(origin.x), address: origin.address_name });
+      }
+      for (const wp of waypointsResults) {
+        if (wp.success && wp.x && wp.y) {
+          routeMarkers.push({ name: `경유: ${wp.placeName ?? wp.name}`, lat: Number(wp.y), lng: Number(wp.x), address: wp.addressName });
+        }
+      }
+      if (destination.x && destination.y) {
+        routeMarkers.push({ name: `도착: ${destination.place_name}`, lat: Number(destination.y), lng: Number(destination.x), address: destination.address_name });
+      }
+      let routeMapBlock = "";
+      if (routeMarkers.length > 0) {
+        const json = JSON.stringify({ places: routeMarkers, ...(routePath.length > 1 ? { route: routePath } : {}) });
+        routeMapBlock = `\n\n[지도 표시용 — 아래 kakaomap 블록을 답변에 변형 없이 그대로 포함하세요]\n\`\`\`kakaomap\n${json}\n\`\`\``;
+      }
+
       return {
-        content: [{ type: "text", text: formattedResult }]
+        content: [{ type: "text", text: formattedResult + routeMapBlock }]
       };
     } catch (error: unknown) {
       let errorMessage = "알 수 없는 오류 발생";
@@ -551,6 +577,29 @@ server.tool(
     }
   }
 );
+
+/** 카카오모빌리티 경로 응답에서 폴리라인 좌표(vertexes: [lng,lat,...])를 {lat,lng}[] 로 추출.
+ *  블록 비대화 방지를 위해 최대 MAX_ROUTE_POINTS 로 균등 샘플링한다. */
+function extractRoutePath(route: unknown): { lat: number; lng: number }[] {
+  const MAX_ROUTE_POINTS = 400;
+  const path: { lat: number; lng: number }[] = [];
+  const r = route as { sections?: Array<{ roads?: Array<{ vertexes?: number[] }> }> };
+  for (const section of r.sections ?? []) {
+    for (const road of section.roads ?? []) {
+      const v = road.vertexes ?? [];
+      for (let i = 0; i + 1 < v.length; i += 2) {
+        path.push({ lng: v[i], lat: v[i + 1] });
+      }
+    }
+  }
+  if (path.length <= MAX_ROUTE_POINTS) return path;
+  // 균등 샘플링(시작/끝 보존).
+  const step = path.length / MAX_ROUTE_POINTS;
+  const sampled: { lat: number; lng: number }[] = [];
+  for (let i = 0; i < MAX_ROUTE_POINTS; i++) sampled.push(path[Math.floor(i * step)]);
+  sampled.push(path[path.length - 1]);
+  return sampled;
+}
 
 // Daum 웹 검색 도구
 const webSearchSchema = z.object({

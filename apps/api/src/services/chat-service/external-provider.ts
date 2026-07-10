@@ -13,7 +13,7 @@
  * @module services/chat-service/external-provider
  */
 import { createLogger } from '../../utils/logger';
-import { EXTERNAL_LLM_TOOL_BLACKLIST, LOOP_DETECTION, AGENT_LOOP_LIMITS, MAX_TOOL_RESULT_CHARS, ARTIFACT_REQUEST_SUPPRESSED_TOOLS, ARTIFACT_INTENT_PATTERNS, MAP_INTENT_PATTERNS, EXTERNAL_LLM_INPUT_TOKEN_BUDGET } from '../../config/runtime-limits';
+import { EXTERNAL_LLM_TOOL_BLACKLIST, LOOP_DETECTION, AGENT_LOOP_LIMITS, MAX_TOOL_RESULT_CHARS, ARTIFACT_REQUEST_SUPPRESSED_TOOLS, ARTIFACT_INTENT_PATTERNS, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS, EXTERNAL_LLM_INPUT_TOKEN_BUDGET } from '../../config/runtime-limits';
 import { estimateMessageTokens, truncateMessagesPreservingSystem } from '../../llm/model-pool';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { isPersistableUserId } from '../../utils/user-id-validation';
@@ -180,9 +180,10 @@ export async function streamFromExternalProvider(
     if (wantsMap) {
         systemPromptParts.push(
             '사용자가 국내(한국) 장소·위치·지도·길찾기를 묻고 있습니다. 이런 질문에는 반드시 ' +
-            '카카오 장소 검색 도구(search-places)를 먼저 호출해 실제 데이터를 얻으세요. 웹 검색이나 ' +
-            '이미지 생성으로 좌표·위치를 추측하지 마세요. 도구 결과에 kakaomap 코드 블록이 있으면 ' +
-            '답변에 변형 없이 그대로 포함하세요.',
+            '카카오 도구(장소는 search-places, 길찾기는 find-route)를 먼저 호출해 실제 데이터를 ' +
+            '얻으세요. 웹 검색이나 이미지 생성으로 좌표·위치를 추측하지 마세요. ' +
+            '⚠️ 지도는 시스템이 도구 결과로 자동 표시하니, 당신은 kakaomap 코드 블록이나 좌표(lat/lng) ' +
+            '목록을 절대 직접 작성하지 마세요. 사람이 읽을 요약(장소명·주소·거리·소요시간 등)만 작성하세요.',
         );
     }
 
@@ -244,13 +245,17 @@ export async function streamFromExternalProvider(
     if (wantsMap && caps.toolCalling) {
         logger.info(`[Map] 위치/지도 의도 감지 — generate_image 억제 (잔여 도구 ${tools.length}종)`);
     }
-    // 지도 의도 + 카카오 검색 도구 사용 가능 시 첫 턴에 그 도구를 강제 호출(tool_choice)한다.
-    // 넛지만으론 qwen 이 web_search/자체아티팩트로 이탈 → 강제로 블록 확보 후 결정적 주입.
-    const kakaoSearchToolName = wantsMap && caps.toolCalling
-        ? tools.find((t) => t.function.name.includes('search-places'))?.function.name
+    // 지도/길찾기 의도 시 첫 턴에 카카오 도구를 강제 호출(tool_choice)한다. 길찾기면 find-route,
+    // 그 외 지도면 search-places. 넛지만으론 qwen 이 web_search/자체아티팩트로 이탈 → 강제로
+    // 블록 확보 후 결정적 주입.
+    const routeIntent = ROUTE_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
+    const forcedKakaoToolName = caps.toolCalling
+        ? (routeIntent
+            ? tools.find((t) => t.function.name.includes('find-route'))?.function.name
+            : (wantsMap ? tools.find((t) => t.function.name.includes('search-places'))?.function.name : undefined))
         : undefined;
-    if (kakaoSearchToolName) {
-        logger.info(`[Map] 첫 턴 tool_choice 강제: ${kakaoSearchToolName}`);
+    if (forcedKakaoToolName) {
+        logger.info(`[Map] 첫 턴 tool_choice 강제: ${forcedKakaoToolName}`);
     }
 
     const startedAt = Date.now();
@@ -303,9 +308,9 @@ export async function streamFromExternalProvider(
                     modelId: resolved.modelId,
                     thinking: req.thinkingMode === true,
                     ...(turnTools.length > 0 ? { tools: turnTools } : {}),
-                    // 첫 턴만 카카오 검색 강제 — 이후 턴은 auto(모델이 결과로 답변 작성).
-                    ...(turn === 0 && kakaoSearchToolName && turnTools.length > 0
-                        ? { tool_choice: { type: 'function' as const, function: { name: kakaoSearchToolName } } }
+                    // 첫 턴만 카카오 도구 강제 — 이후 턴은 auto(모델이 결과로 답변 작성).
+                    ...(turn === 0 && forcedKakaoToolName && turnTools.length > 0
+                        ? { tool_choice: { type: 'function' as const, function: { name: forcedKakaoToolName } } }
                         : {}),
                     ...(req.abortSignal ? { abortSignal: req.abortSignal } : {}),
                 },
@@ -392,9 +397,15 @@ export async function streamFromExternalProvider(
                 for (const mm of toolResult.matchAll(/```kakaomap\s*\n[\s\S]*?```/g)) {
                     if (!kakaomapBlocks.includes(mm[0])) kakaomapBlocks.push(mm[0]);
                 }
+                // 모델에게는 블록을 제거한 텍스트만 전달한다 — 큰 경로 JSON 을 컨텍스트에서 보면
+                // qwen 이 블록을 반복 복사(degeneration, 지도 수십개)하는 문제 차단. 지도는 아래
+                // 결정적 주입으로 정확히 1회만 추가한다(모델 복사에 의존하지 않음).
+                const modelFacingResult = toolResult
+                    .replace(/\[지도 표시용[^\]]*\]\s*/g, '')
+                    .replace(/```kakaomap\s*\n[\s\S]*?```/g, '');
                 messages.push({
                     role: 'tool',
-                    content: toolResult,
+                    content: modelFacingResult,
                     tool_name: tc.name,
                     tool_call_id: tc.id,
                 });
