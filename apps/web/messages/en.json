@@ -858,7 +858,9 @@
       "pdfExtract": "A skill that extracts structured text, tables, and metadata from PDF documents.",
       "webResearchName": "Web Research Skill",
       "webResearch": "A deep research skill for multi-source search, citation verification, and summarization."
-    }
+    },
+    "credentialsTitle": "Enter credentials to install",
+    "cancel": "Cancel"
   },
   "mcpMonitoring": {
     "title": "MCP Monitoring",

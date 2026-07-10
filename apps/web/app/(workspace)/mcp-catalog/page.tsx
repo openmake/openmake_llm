@@ -16,6 +16,14 @@ import { ApiClient } from "@/lib/api-client";
 /* ── 타입 ────────────────────────────────────────────────── */
 type CatalogKind = "server" | "skill";
 
+/** 설치 시 입력받아야 하는 필수 자격증명(env) 필드. env_schema 에서 파생. */
+interface EnvField {
+  key: string;
+  title: string;
+  description?: string;
+  secret: boolean;
+}
+
 interface CatalogEntry {
   id: string;
   name: string;
@@ -24,18 +32,37 @@ interface CatalogEntry {
   toolCount: number;
   kind: CatalogKind;
   installed?: boolean;
+  /** 설치 전 입력이 필요한 필수 env 필드 (없으면 즉시 설치). */
+  envFields: EnvField[];
 }
 
 /* ── 백엔드 응답 타입 (GET /api/mcp/catalog) ──────────────── */
+interface ApiEnvSchema {
+  required?: string[];
+  properties?: Record<
+    string,
+    { title?: string; description?: string; secret?: boolean }
+  >;
+}
+
 interface ApiCatalogTemplate {
   id: string;
   display_name: string;
   description?: string;
   transport_type: "stdio" | "sse" | "streamable-http";
   is_enabled?: boolean;
+  env_schema?: ApiEnvSchema;
 }
 
 function mapTemplate(t: ApiCatalogTemplate): CatalogEntry {
+  // env_schema.required 로 지정된 secret/일반 필드를 설치 폼 입력으로 노출한다.
+  const props = t.env_schema?.properties ?? {};
+  const envFields: EnvField[] = (t.env_schema?.required ?? []).map((key) => ({
+    key,
+    title: props[key]?.title || key,
+    description: props[key]?.description,
+    secret: props[key]?.secret === true,
+  }));
   return {
     id: t.id,
     name: t.display_name,
@@ -45,12 +72,13 @@ function mapTemplate(t: ApiCatalogTemplate): CatalogEntry {
     description: t.description || "",
     toolCount: 0,
     kind: "server",
+    envFields,
   };
 }
 
 /* ── 목업 데이터 — TODO: API 연동 (GET /api/mcp/catalog) ──── */
 function buildMockCatalog(t: (key: string) => string): CatalogEntry[] {
-  return [
+  const mock: Omit<CatalogEntry, "envFields">[] = [
     {
       id: "mcp-filesystem",
       name: "Filesystem",
@@ -101,6 +129,7 @@ function buildMockCatalog(t: (key: string) => string): CatalogEntry[] {
       kind: "skill",
     },
   ];
+  return mock.map((e) => ({ ...e, envFields: [] as EnvField[] }));
 }
 
 export default function McpCatalogPage() {
@@ -114,6 +143,9 @@ export default function McpCatalogPage() {
   const [showToolCount, setShowToolCount] = useState(true);
   const [installing, setInstalling] = useState<Record<string, boolean>>({});
   const [installError, setInstallError] = useState<Record<string, string>>({});
+  // 설치 전 자격증명(env) 입력이 필요한 항목의 인라인 폼 상태.
+  const [configuringId, setConfiguringId] = useState<string | null>(null);
+  const [envDraft, setEnvDraft] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -138,21 +170,35 @@ export default function McpCatalogPage() {
     };
   }, []);
 
-  async function handleInstall(e: CatalogEntry) {
+  // 설치 시작: 필수 env 필드가 있으면 인라인 폼을 열고, 없으면 즉시 설치.
+  function beginInstall(e: CatalogEntry) {
+    setInstallError((prev) => ({ ...prev, [e.id]: "" }));
+    if (e.envFields.length > 0) {
+      setConfiguringId(e.id);
+      setEnvDraft(Object.fromEntries(e.envFields.map((f) => [f.key, ""])));
+      return;
+    }
+    void doInstall(e, {});
+  }
+
+  async function doInstall(e: CatalogEntry, env: Record<string, string>) {
     setInstalling((prev) => ({ ...prev, [e.id]: true }));
     setInstallError((prev) => ({ ...prev, [e.id]: "" }));
     try {
       // 카탈로그 설치 전용 라우트 — 백엔드가 template_id 로 command/args/env 를 채운다.
       // (일반 POST /servers 는 stdio 시 command 필수라 400 — from-catalog 가 정답)
+      // env 의 secret 필드는 백엔드 createFromCatalog 가 AES-256-GCM 으로 암호화 저장.
       await ApiClient.post("/api/mcp/servers/from-catalog", {
         template_id: e.id,
         name: e.id.replace(/[^a-zA-Z0-9_-]/g, "-"), // name 은 영숫자/_/- 만 허용
+        ...(Object.keys(env).length > 0 ? { env } : {}),
       });
       setEntries((prev) =>
         prev.map((item) =>
           item.id === e.id ? { ...item, installed: true } : item,
         ),
       );
+      setConfiguringId((cur) => (cur === e.id ? null : cur));
     } catch {
       setInstallError((prev) => ({
         ...prev,
@@ -244,7 +290,7 @@ export default function McpCatalogPage() {
                         <Button
                           size="sm"
                           disabled={installing[e.id]}
-                          onClick={() => handleInstall(e)}
+                          onClick={() => beginInstall(e)}
                         >
                           {installing[e.id] ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -255,6 +301,58 @@ export default function McpCatalogPage() {
                         </Button>
                       )}
                     </div>
+
+                    {/* 필수 자격증명 입력 폼 — env_schema.required 가 있는 서버(Notion·GitHub 등) */}
+                    {configuringId === e.id && (
+                      <div className="flex flex-col gap-2 rounded-md border border-border bg-surface-2 p-3">
+                        <p className="text-xs font-medium text-fg">
+                          {t("credentialsTitle")}
+                        </p>
+                        {e.envFields.map((f) => (
+                          <label key={f.key} className="flex flex-col gap-1">
+                            <span className="text-xs text-fg-2">{f.title}</span>
+                            <input
+                              type={f.secret ? "password" : "text"}
+                              autoComplete="off"
+                              value={envDraft[f.key] ?? ""}
+                              onChange={(ev) =>
+                                setEnvDraft((prev) => ({
+                                  ...prev,
+                                  [f.key]: ev.target.value,
+                                }))
+                              }
+                              placeholder={f.description || f.key}
+                              className="h-8 w-full rounded-md border border-border bg-surface px-2 text-xs text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+                            />
+                          </label>
+                        ))}
+                        <div className="flex items-center justify-end gap-2 pt-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setConfiguringId(null)}
+                          >
+                            {t("cancel")}
+                          </Button>
+                          <Button
+                            size="sm"
+                            disabled={
+                              installing[e.id] ||
+                              e.envFields.some((f) => !envDraft[f.key]?.trim())
+                            }
+                            onClick={() => doInstall(e, envDraft)}
+                          >
+                            {installing[e.id] ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
+                            {t("install")}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
                     {installError[e.id] && (
                       <p className="text-xs text-danger">{installError[e.id]}</p>
                     )}
