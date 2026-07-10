@@ -83,6 +83,21 @@ export async function ensureSession(
  * @param model - 표시용 모델명
  * @param saveHistory - 본문 저장 여부 (기본 true)
  */
+/**
+ * 메시지 토큰 수 근사 추정.
+ *
+ * 정확한 LLM usage 는 ChatService.processMessage 반환값에 실려있지 않아(반환 타입
+ * 변경 시 광범위 회귀 위험), conversation_messages.tokens(오직 일별/애널리틱스
+ * breakdown 쿼리만 소비 — 쿼터/총량은 usage-tracker 별도 소스)를 추정치로 채운다.
+ * 한글/CJK ~1.1 char/token, 영문/기타 ~4 char/token 블렌드 근사.
+ */
+function estimateTokens(text: string): number {
+    if (!text) return 0;
+    const cjk = (text.match(/[ㄱ-힝一-鿿぀-ヿ]/g) || []).length;
+    const rest = text.length - cjk;
+    return Math.max(1, Math.round(cjk / 1.1 + rest / 4));
+}
+
 export async function saveUserMessage(
     sessionId: string,
     userId: string,
@@ -103,7 +118,7 @@ export async function saveUserMessage(
     // 2. 본문 저장 — saveHistory=true 일 때만
     if (saveHistory) {
         const conversationDb = getConversationDB();
-        await conversationDb.addMessage(sessionId, 'user', message, { model });
+        await conversationDb.addMessage(sessionId, 'user', message, { model, tokensUsed: estimateTokens(message) });
     }
 }
 
@@ -142,6 +157,7 @@ export async function saveAssistantMessage(
         await conversationDb.addMessage(sessionId, 'assistant', response, {
             model,
             responseTime,
+            tokensUsed: estimateTokens(response),
         });
     }
 }
