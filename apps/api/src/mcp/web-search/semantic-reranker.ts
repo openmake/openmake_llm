@@ -59,12 +59,15 @@ export async function logSemanticRerankShadow(query: string, results: SearchResu
     const texts = [query, ...top.map((r) => [...`${r.title} ${r.snippet || ''}`].slice(0, SHADOW_TEXT_CHARS).join(''))];
 
     let embs: number[][];
+    const embStart = Date.now();
     try {
         embs = await embedBatch(texts, cfg.searchRerankEmbedModel, cfg.llmBaseUrl, cfg.llmApiKey);
     } catch (e) {
         logger.warn(`임베딩 실패(셰도우 skip): ${e instanceof Error ? e.message : String(e)}`);
         return;
     }
+    // 활성화(ENABLED) 시 이 만큼이 웹검색 critical-path 에 더해진다 — 운영 셰도우로 실지연 관측용.
+    const embMs = Date.now() - embStart;
     if (embs.length !== texts.length) return;
 
     const qv = embs[0];
@@ -83,8 +86,8 @@ export async function logSemanticRerankShadow(query: string, results: SearchResu
     const demotedFromTop5 = top.slice(0, 5).filter((r) => !rerankSet.has(r.url)).length;
 
     logger.info(
-        `q="${query.slice(0, 30)}" orig5=[${origTop.join(', ')}] semantic5=[${semanticTop.join(', ')}] ` +
-        `sim=${simMin}~${simMax} lifted=${liftedIntoTop5} demoted=${demotedFromTop5}`,
+        `q="${query.slice(0, 30)}" embMs=${embMs} n=${top.length} orig5=[${origTop.join(', ')}] ` +
+        `semantic5=[${semanticTop.join(', ')}] sim=${simMin}~${simMax} lifted=${liftedIntoTop5} demoted=${demotedFromTop5}`,
     );
 }
 
