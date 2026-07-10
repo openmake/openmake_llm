@@ -194,10 +194,12 @@ export default function AdminMetricsPage() {
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label={t("stat.cpu")} value={cpu ?? "47%"} delta="load avg / cores" deltaTone="success" />
-          <StatCard label={t("stat.memory")} value={mem?.value ?? "6.2 GB"} delta={mem?.delta ?? t("memoryDelta", { total: "16" })} />
-          <StatCard label={t("stat.requestRate")} value="612/min" delta="+8.4%" />
-          <StatCard label={t("stat.errorRate")} value="0.21%" delta="+0.04%" deltaTone="danger" />
+          {/* CPU·메모리는 실 시스템 지표. 요청률/에러율은 이 페이지에 실 소스가 없어
+              가짜 값(612/min·0.21%)+델타를 제거하고 "—"(데이터 없음)로 표시. */}
+          <StatCard label={t("stat.cpu")} value={cpu ?? "—"} delta="load avg / cores" deltaTone="success" />
+          <StatCard label={t("stat.memory")} value={mem?.value ?? "—"} delta={mem?.delta ?? t("memoryDelta", { total: "16" })} />
+          <StatCard label={t("stat.requestRate")} value="—" />
+          <StatCard label={t("stat.errorRate")} value="—" />
         </div>
 
         <Card className="mt-6">

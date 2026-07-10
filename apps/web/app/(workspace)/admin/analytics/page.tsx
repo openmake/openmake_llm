@@ -264,10 +264,11 @@ export default function AdminAnalyticsPage() {
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label={t("stats.totalConversations")} value={sum.conv} delta="+8.1%" />
-          <StatCard label={t("stats.activeUsers")} value={liveUsers ?? sum.users} delta="+3.4%" />
-          <StatCard label={t("stats.consumedTokens")} value={liveTokens ?? sum.tokens} delta="+12.7%" />
-          <StatCard label={t("stats.avgResponse")} value={sum.latency} delta="-0.06s" deltaTone="success" />
+          {/* 값은 실데이터. 트렌드 델타는 실 비교 소스가 없어 제거(가짜 표시 방지). */}
+          <StatCard label={t("stats.totalConversations")} value={sum.conv} />
+          <StatCard label={t("stats.activeUsers")} value={liveUsers ?? sum.users} />
+          <StatCard label={t("stats.consumedTokens")} value={liveTokens ?? sum.tokens} />
+          <StatCard label={t("stats.avgResponse")} value={sum.latency} />
         </div>
 
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
