@@ -244,6 +244,14 @@ export async function streamFromExternalProvider(
     if (wantsMap && caps.toolCalling) {
         logger.info(`[Map] 위치/지도 의도 감지 — generate_image 억제 (잔여 도구 ${tools.length}종)`);
     }
+    // 지도 의도 + 카카오 검색 도구 사용 가능 시 첫 턴에 그 도구를 강제 호출(tool_choice)한다.
+    // 넛지만으론 qwen 이 web_search/자체아티팩트로 이탈 → 강제로 블록 확보 후 결정적 주입.
+    const kakaoSearchToolName = wantsMap && caps.toolCalling
+        ? tools.find((t) => t.function.name.includes('search-places'))?.function.name
+        : undefined;
+    if (kakaoSearchToolName) {
+        logger.info(`[Map] 첫 턴 tool_choice 강제: ${kakaoSearchToolName}`);
+    }
 
     const startedAt = Date.now();
     let errorCode: string | null = null;
@@ -295,6 +303,10 @@ export async function streamFromExternalProvider(
                     modelId: resolved.modelId,
                     thinking: req.thinkingMode === true,
                     ...(turnTools.length > 0 ? { tools: turnTools } : {}),
+                    // 첫 턴만 카카오 검색 강제 — 이후 턴은 auto(모델이 결과로 답변 작성).
+                    ...(turn === 0 && kakaoSearchToolName && turnTools.length > 0
+                        ? { tool_choice: { type: 'function' as const, function: { name: kakaoSearchToolName } } }
+                        : {}),
                     ...(req.abortSignal ? { abortSignal: req.abortSignal } : {}),
                 },
                 {
