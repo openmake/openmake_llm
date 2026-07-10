@@ -21,6 +21,8 @@ import type { ExecutionPlan } from '../../chat/profile-resolver';
 import type { ResearchProgress } from '../DeepResearchService';
 import { preRequestCheck } from '../../chat/security-hooks';
 import { createRoutingLogEntry } from '../../chat/routing-logger';
+import { evaluateTailGate } from '../../chat/tail-gate';
+import { recordTailShadow } from './tail-shadow-recorder';
 import type { ChatMessageRequest, SystemEventCallback } from '../chat-service-types';
 import { getExecutionPlanBuilder } from '../../chat/execution-plan-builder';
 import type { UnifiedExecutionPlan } from '../../chat/execution-plan-types';
@@ -253,6 +255,22 @@ export async function runMessagePipeline(svc: ChatService,
         },
     });
 
+    // ── Tail 라우팅 셰도우 (Stage 1) ──
+    // 게이트 결정을 계산·적재만 한다. 실행 경로(executionStrategy)는 바꾸지 않는다(사용자 영향 0).
+    // 특수모드(discussion/deep-research/image) 조기 return 이후이므로 일반 채팅 경로만 관측된다.
+    try {
+        if ((await import('../../config/env')).getConfig().tailRoutingShadowEnabled) {
+            recordTailShadow({
+                requestId: routingLog.requestId,
+                userId,
+                queryLength: (message || '').length,
+                decision: evaluateTailGate(message || ''),
+            });
+        }
+    } catch {
+        // 셰도우는 절대 채팅 흐름을 막지 않는다.
+    }
+
     // 자동 토론 활성화 추적 필드는 자동 분기 제거 (2026-05-07) 후 항상 false.
     // 호환성을 위해 routingLog 스키마 자체는 유지하되 자동 결정 메타는 미기록.
 
@@ -335,7 +353,7 @@ export async function runMessagePipeline(svc: ChatService,
     // strategies 우회하지만 agent 페르소나 + buildContextForLLM 결과 + 언어 정책은 통합.
     // tool calling / thinking / discussion / deep research 는 여전히 미지원.
     if (externalResolved) {
-        const { agentSystemMessage: industryAgentSysMsg, selectedAgent } = await agentPromise;
+        const { agentSystemMessage: industryAgentSysMsg, selectedAgent, agentSelection: extAgentSelection } = await agentPromise;
 
         // skill tool_bindings 캐시 — 외부 provider 경로(LOCAL_STRATEGY_PATH OFF 기본이라 로컬 포함)도
         // getAllowedTools() 동기 머지가 skill required/allowed/denied 를 반영하도록 한다.
@@ -394,7 +412,7 @@ export async function runMessagePipeline(svc: ChatService,
             message: message || '',
         });
         const extAnswerFormatBlock = getAnswerFormatGuard(extAnswerFormatProfile, extLang);
-        return await svc.streamFromExternalProvider(externalResolved, req, streamToken, {
+        const externalResponse = await svc.streamFromExternalProvider(externalResolved, req, streamToken, {
             agentSystemMessage: agentSysMsgForExternal,
             enhancedMessage: finalEnhancedMessage,
             resolvedLanguage: languagePolicy?.resolvedLanguage,
@@ -404,6 +422,19 @@ export async function runMessagePipeline(svc: ChatService,
             answerFormatBlock: extAnswerFormatBlock,
             style: req.style,
         }, reqCtx);
+
+        // ── 메트릭 기록 (회귀 수정 2026-07-11): 외부 provider 경로(LOCAL_STRATEGY OFF 기본이라
+        //    로컬 채팅 포함 = 사실상 모든 일반 채팅)도 strategy 경로(Step 6)와 동일하게 관측 지표를
+        //    기록한다. 이 분기가 조기 return 하여 recordMetricsAndVerify 를 건너뛰던 탓에
+        //    AnalyticsSystem(에이전트 성능·피크 시간대·인기 쿼리)·MetricsCollector 가 전부 비어
+        //    있었다. (loadSkillBindings / memory 누락과 동일 계열의 외부-분기 대칭 결함.)
+        svc.recordMetricsAndVerify({
+            fullResponse, startTime, message: message || '', req,
+            selectedAgent, agentSelection: extAgentSelection,
+            securityPreCheck, routingLog,
+        });
+
+        return externalResponse;
     }
 
     // ── Step 4: 통합 실행 계획 구성 (Phase B Routing Unification — Phase 1 위임) ──

@@ -120,6 +120,8 @@ export const envSchema = z
          * 외부 provider(anthropic 등)는 이 값과 무관하게 항상 외부 dispatch.
          */
         LOCAL_STRATEGY_PATH_ENABLED: z.string().default('false'),
+        /** Tail 라우팅 셰도우 모드 — 게이트 결정 계산/적재만, 실행 무변경 (기본 false). */
+        TAIL_ROUTING_SHADOW_ENABLED: z.string().default('false'),
         /**
          * Qwen3 등 reasoning 모델의 `extra_body.chat_template_kwargs.enable_thinking` 토글.
          *

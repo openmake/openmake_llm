@@ -88,4 +88,6 @@ export interface ExtendedWebSocket extends WebSocket {
     _messageCount?: number;
     _messageTimestamps?: number[];
     _lastExpiryWarningAtMs?: number;
+    /** AnalyticsSystem 세션 식별자(WS 연결=세션). 세션 길이·세션당 쿼리 집계용. */
+    _analyticsSessionId?: string;
 }
