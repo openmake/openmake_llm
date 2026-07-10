@@ -207,7 +207,7 @@ export default function AgentLearningPage() {
   const t = useTranslations("agentLearning");
   const locale = toBcp47(useLocale());
   const [items] = useState<LearningItem[]>(ITEMS_FALLBACK);
-  const [collected, setCollected] = useState("1,284");
+  const [collected, setCollected] = useState("0");
   const [agents, setAgents] = useState<ApiSystemAgent[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
 
@@ -251,10 +251,18 @@ export default function AgentLearningPage() {
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         {/* 요약 통계 */}
+        {/* 반영/대기 수치는 아래 학습 항목에서 파생 — 하드코딩 37/12 및 실 수집=0 과 모순되던
+            정적 delta("+126") 제거로 상단 통계 정합성 확보. */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard label={t("collectedFeedback")} value={collected} delta={t("collectedFeedbackDelta")} deltaTone="success" />
-          <StatCard label={t("appliedImprovements")} value="37" />
-          <StatCard label={t("pendingLabel")} value="12" />
+          <StatCard label={t("collectedFeedback")} value={collected} />
+          <StatCard
+            label={t("appliedImprovements")}
+            value={String(items.filter((i) => i.status === "applied").length)}
+          />
+          <StatCard
+            label={t("pendingLabel")}
+            value={String(items.filter((i) => i.status === "pending").length)}
+          />
         </div>
 
         {/* 에이전트별 품질 패널 */}
