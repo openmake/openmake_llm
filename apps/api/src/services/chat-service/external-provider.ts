@@ -13,7 +13,7 @@
  * @module services/chat-service/external-provider
  */
 import { createLogger } from '../../utils/logger';
-import { EXTERNAL_LLM_TOOL_BLACKLIST, LOOP_DETECTION, AGENT_LOOP_LIMITS, MAX_TOOL_RESULT_CHARS, ARTIFACT_REQUEST_SUPPRESSED_TOOLS, ARTIFACT_INTENT_PATTERNS, EXTERNAL_LLM_INPUT_TOKEN_BUDGET } from '../../config/runtime-limits';
+import { EXTERNAL_LLM_TOOL_BLACKLIST, LOOP_DETECTION, AGENT_LOOP_LIMITS, MAX_TOOL_RESULT_CHARS, ARTIFACT_REQUEST_SUPPRESSED_TOOLS, ARTIFACT_INTENT_PATTERNS, MAP_INTENT_PATTERNS, EXTERNAL_LLM_INPUT_TOKEN_BUDGET } from '../../config/runtime-limits';
 import { estimateMessageTokens, truncateMessagesPreservingSystem } from '../../llm/model-pool';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { isPersistableUserId } from '../../utils/user-id-validation';
@@ -174,6 +174,18 @@ export async function streamFromExternalProvider(
         `사용자가 모델/provider 정보를 묻는 경우 위 식별자를 그대로 알려주세요.`,
     );
 
+    // 위치/지도 의도면 카카오 장소 검색 도구를 우선 쓰도록 라우팅 넛지 주입.
+    // (qwen 이 web_search/generate_image 로 이탈하는 문제 보정 — generate_image 는 별도로 도구 목록에서 제외)
+    const wantsMap = MAP_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
+    if (wantsMap) {
+        systemPromptParts.push(
+            '사용자가 국내(한국) 장소·위치·지도·길찾기를 묻고 있습니다. 이런 질문에는 반드시 ' +
+            '카카오 장소 검색 도구(search-places)를 먼저 호출해 실제 데이터를 얻으세요. 웹 검색이나 ' +
+            '이미지 생성으로 좌표·위치를 추측하지 마세요. 도구 결과에 kakaomap 코드 블록이 있으면 ' +
+            '답변에 변형 없이 그대로 포함하세요.',
+        );
+    }
+
     if (systemPromptParts.length > 0) {
         messages.push({ role: 'system', content: systemPromptParts.join('\n\n') });
     }
@@ -218,13 +230,19 @@ export async function streamFromExternalProvider(
     // 쓰도록 유도 (2026-06-23 통제실험 근거).
     const wantsArtifact = req.artifactMode === true
         || ARTIFACT_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
+    // 위치/지도 의도(wantsMap, 위에서 계산)면 generate_image 를 제외 — 모델이 가짜 지도
+    // 이미지를 그리는 대신 카카오 검색 + 네이티브 지도 블록을 쓰도록 유도 (distractor 억제).
     const tools = caps.toolCalling
         ? deps.allowedTools.filter((t) =>
             !EXTERNAL_LLM_TOOL_BLACKLIST.includes(t.function.name)
-            && !(wantsArtifact && ARTIFACT_REQUEST_SUPPRESSED_TOOLS.includes(t.function.name)))
+            && !(wantsArtifact && ARTIFACT_REQUEST_SUPPRESSED_TOOLS.includes(t.function.name))
+            && !(wantsMap && t.function.name === 'generate_image'))
         : [];
     if (wantsArtifact && caps.toolCalling) {
         logger.info(`[Artifact] 명시적 아티팩트 요청 감지 — distractor 도구 억제 (잔여 도구 ${tools.length}종)`);
+    }
+    if (wantsMap && caps.toolCalling) {
+        logger.info(`[Map] 위치/지도 의도 감지 — generate_image 억제 (잔여 도구 ${tools.length}종)`);
     }
 
     const startedAt = Date.now();
@@ -247,6 +265,10 @@ export async function streamFromExternalProvider(
     // 그대로 포함")를 누락해 생성된 이미지가 채팅에 표시되지 않는 문제 보정용.
     // 루프 종료 후 최종 응답에 누락돼 있으면 결정적으로 첨부한다.
     const generatedImageMarkdowns: string[] = [];
+    // 카카오 지도: search-places 도구 결과가 동봉하는 ```kakaomap 블록을 수집한다.
+    // 로컬 모델(qwen)이 블록을 답변에 옮기지 않고 요약해버려 지도가 안 뜨는 문제를
+    // 위 generate_image 와 동일하게 결정적 첨부로 보정한다.
+    const kakaomapBlocks: string[] = [];
 
     try {
         for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
@@ -354,6 +376,10 @@ export async function streamFromExternalProvider(
                         generatedImageMarkdowns.push(m[0]);
                     }
                 }
+                // 카카오 지도 블록 수집(도구명 무관 — 도구 결과에 블록이 있으면).
+                for (const mm of toolResult.matchAll(/```kakaomap\s*\n[\s\S]*?```/g)) {
+                    if (!kakaomapBlocks.includes(mm[0])) kakaomapBlocks.push(mm[0]);
+                }
                 messages.push({
                     role: 'tool',
                     content: toolResult,
@@ -409,6 +435,15 @@ export async function streamFromExternalProvider(
         logger.info(`🖼️ 생성 이미지 ${missingImages.length}개 자동 첨부 (LLM 응답 누락 보정)`);
     }
 
+    // 카카오 지도 블록도 동일하게 — LLM 이 옮기지 않았으면 결정적 첨부(라이브 stream + 저장 히스토리).
+    const missingMaps = kakaomapBlocks.filter((b) => !finalContent.includes(b));
+    if (missingMaps.length > 0) {
+        const appended = (finalContent.trim() ? '\n\n' : '') + missingMaps.join('\n\n');
+        onToken(appended, undefined);
+        finalContent += appended;
+        logger.info(`🗺️ 카카오 지도 블록 ${missingMaps.length}개 자동 첨부 (LLM 응답 누락 보정)`);
+    }
+
     return finalContent;
 }
 
@@ -450,7 +485,20 @@ export async function executeExternalTool(
             return `Error: ${typeof result.content === 'string' ? result.content : JSON.stringify(result.content)}`;
         }
         if (typeof result.content === 'string') return result.content;
-        return JSON.stringify(result.content).slice(0, MAX_TOOL_RESULT_CHARS);
+        // 카카오 지도 블록은 8000자 캡(slice)·JSON.stringify 이스케이프에 소실되지 않도록
+        // 원본 텍스트에서 추출해 반환 문자열 앞에 실제 개행으로 prepend 한다.
+        // (search-places 출력이 길어 블록이 끝에 있으면 캡에 잘리던 문제 — 호출부가 이 블록을 결정적 첨부)
+        let mapPrefix = '';
+        if (Array.isArray(result.content)) {
+            const rawText = result.content
+                .filter((c): c is { type: 'text'; text: string } =>
+                    (c as { type?: unknown }).type === 'text' && typeof (c as { text?: unknown }).text === 'string')
+                .map((c) => c.text)
+                .join('\n');
+            const m = rawText.match(/```kakaomap[\s\S]*?```/);
+            if (m) mapPrefix = `${m[0]}\n\n`;
+        }
+        return mapPrefix + JSON.stringify(result.content).slice(0, MAX_TOOL_RESULT_CHARS);
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         logger.warn(`외부 LLM 도구 실행 실패 (${toolName}): ${msg}`);

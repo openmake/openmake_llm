@@ -1163,6 +1163,20 @@ export const ARTIFACT_INTENT_PATTERNS: readonly RegExp[] = [
 ] as const;
 
 /**
+ * 위치/지도 의도 판정 패턴. 매칭 시 generate_image(distractor)를 도구 목록에서 제외해
+ * 모델이 "지도"를 보고 가짜 지도 이미지를 그리는 대신, 카카오 검색 도구 + 네이티브 지도
+ * 블록(```kakaomap)을 쓰도록 유도한다.
+ */
+export const MAP_INTENT_PATTERNS: readonly RegExp[] = [
+    /지도/,
+    /길\s*찾기/,
+    /좌표/,
+    /위치/,
+    /근처/,
+    /어디\b/,
+] as const;
+
+/**
  * 자율 에이전트 작업 (AgentTaskService) runaway 가드 한계.
  * 백그라운드 detached 실행이라 사람이 지켜보지 않으므로 토큰/시간 폭주 방지가 필수.
  */
