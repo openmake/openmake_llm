@@ -448,7 +448,7 @@ export default function CustomAgentsPage() {
   const activeUserAgent = useAppStore((s) => s.activeUserAgent);
   const setActiveUserAgent = useAppStore((s) => s.setActiveUserAgent);
 
-  function useInChat(agent: CustomAgent) {
+  function selectAgentForChat(agent: CustomAgent) {
     setActiveUserAgent({ id: agent.id, name: agent.name, icon: agent.emoji });
     router.push("/");
   }
@@ -575,7 +575,7 @@ export default function CustomAgentsPage() {
                       {t("inUseDeselect")}
                     </Button>
                   ) : (
-                    <Button size="sm" className="w-full" onClick={() => useInChat(agent)}>
+                    <Button size="sm" className="w-full" onClick={() => selectAgentForChat(agent)}>
                       <MessageSquare className="h-3.5 w-3.5" />
                       {t("useInChat")}
                     </Button>

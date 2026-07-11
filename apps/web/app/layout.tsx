@@ -37,7 +37,9 @@ export default async function RootLayout({
   return (
     <html lang={locale} suppressHydrationWarning className={jetbrainsMono.variable}>
       <head>
-        {/* Pretendard self-host (public/vendor/pretendard) */}
+        {/* Pretendard self-host (public/vendor/pretendard) — 벤더 배포 형태 그대로 서빙하는
+            정적 자산이라 CSS 모듈 import 대상이 아님 (no-css-tags 예외) */}
+        {/* eslint-disable-next-line @next/next/no-css-tags */}
         <link rel="stylesheet" href="/vendor/pretendard/pretendard.css" />
       </head>
       <body className="min-h-dvh bg-app text-fg antialiased">
