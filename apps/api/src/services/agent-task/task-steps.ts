@@ -6,10 +6,16 @@ import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import type { UserContext } from '../../mcp/user-sandbox';
 import type { ExtractedArtifact } from '../../llm/artifact-parser';
-import { MAX_TOOL_RESULT_CHARS } from '../../config/runtime-limits';
+import { MAX_TOOL_RESULT_CHARS, AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentTaskService');
+
+/** tool name 이 검색/정보수집류인지 (키워드 포함 여부) — 검색 폭주 하드 제한용 */
+export function isSearchTool(name: string): boolean {
+    const n = name.toLowerCase();
+    return AGENT_TASK_LIMITS.SEARCH_TOOL_KEYWORDS.some((k) => n.includes(k));
+}
 
 /**
  * 최종 답변에서 추출한 deliverable 아티팩트를 step_type='artifact' 행으로 영속화.

@@ -119,18 +119,27 @@ export function getAgentTaskUploadedFilesNote(fileLines: string[]): string {
  * 보수적 기준: 답변이 "수행하지 못했음"(입력 부재·불가·되묻기만)을 드러낼 때만 미달성.
  * 품질 평가가 아니다 — 부실해도 목표를 수행한 답변은 달성으로 본다(오탐 방지).
  */
-export function getAgentTaskGoalJudgeMessages(goal: string, answer: string): { system: string; user: string } {
+export function getAgentTaskGoalJudgeMessages(
+    goal: string,
+    answer: string,
+    /** 5-3(b): 실행 컨텍스트(계획 상태·사용 도구·턴수) — 판정 정확도 보강. 없으면 기존 동작. */
+    executionContext?: string,
+): { system: string; user: string } {
     return {
         system: [
             '당신은 자율 에이전트 작업의 결과 심사자입니다.',
             '목표(GOAL)와 에이전트의 최종 답변(ANSWER)을 보고, 답변이 목표 수행의 결과물인지 판정하세요.',
             '- 미달성(achieved=false)은 답변이 목표를 수행하지 못했음을 드러낼 때만: 필요한 입력/자료가 없다고 함,',
             '  할 수 없다고 함, 사용자에게 되묻기만 함, 목표와 무관한 내용만 있음.',
+            '- 실행 기록(EXECUTION)이 주어지면 참고하세요: 목표에 필요한 작업(예: 파일 생성·검색·실행)을',
+            '  실제로 수행한 흔적이 전혀 없는데 수행했다고 주장하면 미달성입니다.',
             '- 품질은 평가하지 마세요 — 내용이 부실하더라도 목표를 수행한 답변이면 달성(achieved=true)입니다.',
             '- 확신이 없으면 달성(true)으로 판정하세요.',
             '다른 설명 없이 JSON 한 줄만 출력: {"achieved": true|false, "reason": "한 문장 근거"}',
         ].join('\n'),
-        user: `## GOAL\n${goal}\n\n## ANSWER\n${answer}\n\n판정 JSON 을 출력하세요.`,
+        user: `## GOAL\n${goal}\n\n## ANSWER\n${answer}`
+            + (executionContext ? `\n\n## EXECUTION\n${executionContext}` : '')
+            + '\n\n판정 JSON 을 출력하세요.',
     };
 }
 

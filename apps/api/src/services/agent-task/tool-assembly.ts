@@ -12,6 +12,7 @@ import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { selectRelevantTools } from './tool-selector';
+import { selectRelevantToolsEmbedding } from './tool-selector-embedding';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentTaskService');
@@ -24,13 +25,14 @@ export interface AssembledTools {
 
 /**
  * LLM 에 전달할 도구 세트를 조립. taskRuntime 유무·샌드박스 enabled 여부로 3분기.
+ * (5-4: 임베딩 선별 모드가 비동기라 async — keyword 모드는 즉시 resolve.)
  */
-export function assembleAgentTools(params: {
+export async function assembleAgentTools(params: {
     mcpTools: ToolDefinition[];
     taskRuntime: TaskRuntime | null;
     sandboxCfg: TaskSandboxConfig;
     goal: string;
-}): AssembledTools {
+}): Promise<AssembledTools> {
     const { mcpTools, taskRuntime, sandboxCfg, goal } = params;
     const extraToolNames = new Set<string>();
 
@@ -58,19 +60,19 @@ export function assembleAgentTools(params: {
         const sandboxTools = taskRuntime.getLLMTools();
         const sandboxNames = new Set(sandboxTools.map((t) => t.function.name));
         const staticExtra = buildExtra(sandboxNames);
-        // 2-A 동적 도구: 목표 관련성 top-K MCP 도구를 예산 내에서 합류. 호스트 실행이므로
+        // 2-A/5-4 동적 도구: 목표 관련성 top-K MCP 도구를 예산 내에서 합류. 호스트 실행이므로
         // extraToolNames 에 등록해 디스패치가 extra 도구와 동일하게 HITL 승인 게이트를 적용한다.
-        // 관련성 0 도구는 selectRelevantTools 가 제외 → 문법 컴파일 폭주 재유발 없음.
+        // 관련성/유사도 임계 미만은 제외 → 문법 컴파일 폭주 재유발 없음.
         let dynamicExtra: ToolDefinition[] = [];
         if (AGENT_TASK_LIMITS.DYNAMIC_TOOLS_ENABLED) {
             const budget = AGENT_TASK_LIMITS.DYNAMIC_TOOLS_BUDGET - sandboxTools.length - staticExtra.length;
-            dynamicExtra = selectRelevantTools(goal, mcpTools, {
-                budget,
-                exclude: new Set<string>([...sandboxNames, ...extraToolNames]),
-            });
+            const selectOpts = { budget, exclude: new Set<string>([...sandboxNames, ...extraToolNames]) };
+            dynamicExtra = AGENT_TASK_LIMITS.DYNAMIC_TOOLS_MODE === 'embedding'
+                ? await selectRelevantToolsEmbedding(goal, mcpTools, selectOpts) // 실패 시 내부 키워드 폴백
+                : selectRelevantTools(goal, mcpTools, selectOpts);
             for (const t of dynamicExtra) extraToolNames.add(t.function.name);
             if (dynamicExtra.length > 0) {
-                logger.info(`[AgentTask] 동적 도구 ${dynamicExtra.length}개 합류 (예산 ${budget}, 총 ${sandboxTools.length + staticExtra.length + dynamicExtra.length})`);
+                logger.info(`[AgentTask] 동적 도구 ${dynamicExtra.length}개 합류 (${AGENT_TASK_LIMITS.DYNAMIC_TOOLS_MODE}, 예산 ${budget}, 총 ${sandboxTools.length + staticExtra.length + dynamicExtra.length})`);
             }
         }
         return { tools: [...staticExtra, ...dynamicExtra, ...sandboxTools], extraToolNames };

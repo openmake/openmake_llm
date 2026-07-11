@@ -159,6 +159,29 @@ export class AgentTaskRepository extends BaseRepository {
         return result.rows;
     }
 
+    /** 크로스-task 학습(5-2)용 — 유저 최근 terminal task 의 경량 메타만 조회(checkpoint 등 대형 컬럼 제외). */
+    async getRecentTerminalTaskMetas(userId: string, limit: number): Promise<Array<
+        Pick<AgentTask, 'id' | 'goal' | 'status' | 'error' | 'current_turn'>
+    >> {
+        const result = await this.query<Pick<AgentTask, 'id' | 'goal' | 'status' | 'error' | 'current_turn'>>(
+            `SELECT id, goal, status, error, current_turn FROM agent_tasks
+             WHERE user_id = $1 AND status IN ('completed', 'failed', 'cancelled')
+             ORDER BY created_at DESC LIMIT $2`,
+            [userId, limit]
+        );
+        return result.rows;
+    }
+
+    /** 크로스-task 학습(5-2)용 — task 가 실제 사용한 도구 이름 목록(distinct). */
+    async getTaskToolNames(taskId: string): Promise<string[]> {
+        const result = await this.query<{ tool_name: string }>(
+            `SELECT DISTINCT tool_name FROM agent_task_steps
+             WHERE task_id = $1 AND tool_name IS NOT NULL AND step_type = 'tool_result'`,
+            [taskId]
+        );
+        return result.rows.map((r) => r.tool_name);
+    }
+
     /**
      * 부팅 복구 대상 조회 — 재시작으로 in-process 루프가 소멸한 task.
      * schema-initializer 가 부팅 시 running/paused 를 failed('server restarted') 로 먼저 마킹하므로
