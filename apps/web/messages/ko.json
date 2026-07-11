@@ -18,21 +18,16 @@
       "skillLibrary": "스킬 라이브러리",
       "artifacts": "아티팩트",
       "history": "히스토리",
-      "mcpServers": "MCP 서버",
-      "mcpCatalog": "MCP 카탈로그",
       "mcpMonitoring": "MCP 모니터링",
       "agentLearning": "에이전트 학습",
       "settings": "설정",
-      "apiKeys": "API 키",
       "usage": "사용량",
-      "developerDocs": "개발자 문서",
       "admin": "관리자",
       "analytics": "애널리틱스",
       "auditLog": "감사 로그",
       "metrics": "메트릭",
       "alerts": "알림",
       "mcpCatalogAdmin": "MCP 카탈로그 관리",
-      "memory": "메모리",
       "mcp": "MCP",
       "developer": "개발자"
     }
@@ -1276,7 +1271,6 @@
     "cancel": "취소",
     "save": "저장",
     "registeredKeys": "등록된 공급자 키",
-    "mockDataShown": "목업 데이터 표시 중",
     "loading": "키 목록을 불러오는 중...",
     "emptyTitle": "등록된 외부 키가 없습니다",
     "emptyDesc": "새 키를 추가하면 해당 공급자 모델을 사용할 수 있습니다.",
@@ -1306,9 +1300,6 @@
     "sdkType": {
       "anthropic": "Anthropic",
       "openaiCompatible": "OpenAI 호환"
-    },
-    "mock": {
-      "productionName": "프로덕션"
     },
     "validationWarning": "키는 저장됐지만 endpoint 검증에 실패했습니다: {error} — 주소/키를 확인 후 다시 저장하세요."
   },
@@ -1407,11 +1398,6 @@
     "myServers": "내 서버",
     "catalog": "카탈로그",
     "docs": "문서",
-    "apiAccess": "API 액세스",
-    "dashboard": "대시보드",
-    "analytics": "애널리틱스",
-    "metrics": "메트릭",
-    "mcpMonitoring": "MCP 모니터링",
-    "agentLearning": "에이전트 학습"
+    "dashboard": "대시보드"
   }
 }

@@ -18,21 +18,16 @@
       "skillLibrary": "技能库",
       "artifacts": "工件",
       "history": "历史记录",
-      "mcpServers": "MCP服务器",
-      "mcpCatalog": "MCP目录",
       "mcpMonitoring": "MCP监控",
       "agentLearning": "智能体学习",
       "settings": "设置",
-      "apiKeys": "API密钥",
       "usage": "使用量",
-      "developerDocs": "开发者文档",
       "admin": "管理员",
       "analytics": "分析",
       "auditLog": "审计日志",
       "metrics": "指标",
       "alerts": "告警",
       "mcpCatalogAdmin": "MCP目录管理",
-      "memory": "记忆",
       "mcp": "MCP",
       "developer": "开发者"
     }
@@ -1276,7 +1271,6 @@
     "cancel": "取消",
     "save": "保存",
     "registeredKeys": "已注册的提供商密钥",
-    "mockDataShown": "正在显示模拟数据",
     "loading": "正在加载密钥列表...",
     "emptyTitle": "尚未注册外部密钥",
     "emptyDesc": "添加密钥后即可使用该提供商的模型。",
@@ -1306,9 +1300,6 @@
     "sdkType": {
       "anthropic": "Anthropic",
       "openaiCompatible": "OpenAI 兼容"
-    },
-    "mock": {
-      "productionName": "生产"
     },
     "validationWarning": "密钥已保存，但 endpoint 验证失败：{error} — 请检查地址/密钥后重新保存。"
   },
@@ -1407,11 +1398,6 @@
     "myServers": "我的服务器",
     "catalog": "目录",
     "docs": "文档",
-    "apiAccess": "API 访问",
-    "dashboard": "仪表盘",
-    "analytics": "分析",
-    "metrics": "指标",
-    "mcpMonitoring": "MCP监控",
-    "agentLearning": "智能体学习"
+    "dashboard": "仪表盘"
   }
 }

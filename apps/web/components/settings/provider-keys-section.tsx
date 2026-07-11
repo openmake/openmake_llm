@@ -83,31 +83,9 @@ export function ProviderKeysSection() {
       );
       setProviders(res?.data?.providers ?? []);
     } catch (e) {
-      // TODO: API 연동 — 비로그인/오류 시 목업 카탈로그 노출
+      // 비로그인/오류 — 목업 주입 금지(가짜 '활성' 키가 실제 등록으로 오인됨). 빈 목록 + 에러 표시.
       setError(e instanceof Error ? e.message : t("loadError"));
-      setProviders([
-        {
-          provider_id: "anthropic",
-          display_name: "Anthropic",
-          sdk_type: "anthropic",
-          default_base_url: "https://api.anthropic.com",
-          user_key: {
-            display_name: t("mock.productionName"),
-            key_prefix: "sk-ant-",
-            base_url: null,
-            last_validation_ok: true,
-            last_used_at: "2026-06-18T08:21:00Z",
-            created_at: "2026-05-30T02:10:00Z",
-          },
-        },
-        {
-          provider_id: "openrouter",
-          display_name: "OpenRouter",
-          sdk_type: "openai-compatible",
-          default_base_url: "https://openrouter.ai/api/v1",
-          user_key: null,
-        },
-      ]);
+      setProviders([]);
     } finally {
       setLoading(false);
     }
@@ -157,7 +135,7 @@ export function ProviderKeysSection() {
             {error && (
               <span className="inline-flex items-center gap-1 text-xs text-warn">
                 <AlertTriangle className="h-3.5 w-3.5" />
-                {t("mockDataShown")}
+                {t("loadError")}
               </span>
             )}
             <Button size="sm" onClick={() => setShowForm((v) => !v)}>

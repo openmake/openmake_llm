@@ -18,21 +18,16 @@
       "skillLibrary": "Skill Library",
       "artifacts": "Artifacts",
       "history": "History",
-      "mcpServers": "MCP Servers",
-      "mcpCatalog": "MCP Catalog",
       "mcpMonitoring": "MCP Monitoring",
       "agentLearning": "Agent Learning",
       "settings": "Settings",
-      "apiKeys": "API Keys",
       "usage": "Usage",
-      "developerDocs": "Developer Docs",
       "admin": "Admin",
       "analytics": "Analytics",
       "auditLog": "Audit Log",
       "metrics": "Metrics",
       "alerts": "Alerts",
       "mcpCatalogAdmin": "MCP Catalog Admin",
-      "memory": "Memory",
       "mcp": "MCP",
       "developer": "Developer"
     }
@@ -1276,7 +1271,6 @@
     "cancel": "Cancel",
     "save": "Save",
     "registeredKeys": "Registered Provider Keys",
-    "mockDataShown": "Showing mock data",
     "loading": "Loading key list...",
     "emptyTitle": "No external keys registered",
     "emptyDesc": "Add a key to use that provider's models.",
@@ -1306,9 +1300,6 @@
     "sdkType": {
       "anthropic": "Anthropic",
       "openaiCompatible": "OpenAI-compatible"
-    },
-    "mock": {
-      "productionName": "Production"
     },
     "validationWarning": "Key saved, but endpoint validation failed: {error} — check the URL/key and save again."
   },
@@ -1407,11 +1398,6 @@
     "myServers": "My Servers",
     "catalog": "Catalog",
     "docs": "Docs",
-    "apiAccess": "API Access",
-    "dashboard": "Dashboard",
-    "analytics": "Analytics",
-    "metrics": "Metrics",
-    "mcpMonitoring": "MCP Monitoring",
-    "agentLearning": "Agent Learning"
+    "dashboard": "Dashboard"
   }
 }
