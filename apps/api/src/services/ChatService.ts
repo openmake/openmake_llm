@@ -38,6 +38,7 @@ import { preRequestCheck } from '../chat/security-hooks';
 import type { LanguagePolicyDecision } from '../chat/language-policy';
 import { type RoutingDecisionLog } from '../chat/routing-logger';
 import type { ChatMessageRequest, SystemEventCallback } from './chat-service-types';
+import { filterRestrictedTools } from './chat-service/tool-restrictions';
 import { buildContextForLLM } from './chat-service/context-builder';
 import { selectAndExecuteStrategy } from './chat-service/strategy-executor';
 import { resolveAgent as resolveAgentFn } from './chat-service/agent-resolver';
@@ -67,45 +68,6 @@ export type {
 } from './chat-service-types';
 
 const logger = createLogger('ChatService');
-
-/** 역할 레벨 (게스트<일반<관리자). */
-function roleLevel(role?: string): number {
-    return role === 'admin' ? 2 : role === 'user' ? 1 : 0;
-}
-
-/**
- * 고위험 MCP 서버별 최소 역할 파싱 — env `MCP_RESTRICTED_SERVERS` ("서버명:역할,..").
- * 기본: Python REPL(임의코드)=admin, Playwright Browser=user. (open registration 이라
- * authenticated 는 약해 arbitrary code 는 admin 기본.)
- */
-function parseRestrictedServers(): Map<string, number> {
-    const raw = process.env.MCP_RESTRICTED_SERVERS ?? 'Python REPL:admin,Playwright Browser:user';
-    const m = new Map<string, number>();
-    for (const part of raw.split(',')) {
-        const idx = part.lastIndexOf(':');
-        if (idx <= 0) continue;
-        const name = part.slice(0, idx).trim();
-        const role = part.slice(idx + 1).trim();
-        if (name) m.set(name, roleLevel(role));
-    }
-    return m;
-}
-
-/**
- * 고위험 서버 도구(네임스페이스 "서버명::도구")를 역할 미달 사용자에게서 제거.
- * 외부 공개 인스턴스에서 게스트·저권한 사용자의 위험도구 과노출 차단.
- */
-function filterRestrictedTools(tools: ToolDefinition[], role?: string): ToolDefinition[] {
-    const restricted = parseRestrictedServers();
-    if (restricted.size === 0) return tools;
-    const userLevel = roleLevel(role);
-    return tools.filter((t) => {
-        for (const [serverName, minLevel] of restricted) {
-            if (t.function.name.startsWith(`${serverName}::`) && userLevel < minLevel) return false;
-        }
-        return true;
-    });
-}
 
 /**
  * 중앙 채팅 오케스트레이션 서비스

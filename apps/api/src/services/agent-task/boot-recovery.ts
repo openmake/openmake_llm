@@ -14,7 +14,8 @@
  *
  * @module services/agent-task/boot-recovery
  */
-import { getUnifiedDatabase } from '../../data/models/unified-database';
+import { getUnifiedDatabase, getPool } from '../../data/models/unified-database';
+import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 import { AgentTaskService, type AgentTaskInputFile } from '../AgentTaskService';
@@ -31,10 +32,11 @@ const logger = createLogger('AgentTaskBootRecovery');
 export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number; failed: number }> {
     if (!AGENT_TASK_LIMITS.BOOT_RECOVERY_ENABLED) return { resumed: 0, failed: 0 };
     const db = getUnifiedDatabase();
+    const taskRepo = new AgentTaskRepository(getPool());
 
     let interrupted;
     try {
-        interrupted = await db.getInterruptedAgentTasks();
+        interrupted = await taskRepo.getInterruptedAgentTasks();
     } catch (e) {
         logger.warn(`[BootRecovery] 중단 task 조회 실패 — 건너뜀: ${e instanceof Error ? e.message : e}`);
         return { resumed: 0, failed: 0 };
@@ -47,7 +49,7 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
     for (const task of interrupted) {
         try {
             // 원자적 소유권 획득 — 실패(rowCount=0)면 다른 프로세스가 이미 복구 중이므로 건너뜀.
-            const claimed = await db.claimAgentTaskForRecovery(task.id);
+            const claimed = await taskRepo.claimAgentTaskForRecovery(task.id);
             if (!claimed) continue;
 
             const cp = task.checkpoint as { conversation?: unknown[]; completedTurn?: number } | null | undefined;

@@ -17,6 +17,7 @@ import { checkModelCapability } from '../../chat/model-selector';
 import { assessComplexity } from '../../chat/complexity-assessor';
 import { detectFastPath } from '../../chat/fast-path-detector';
 import { generateImageInline } from './image-mode';
+import { buildArtifactGuideBlock } from './artifact-guide-block';
 import type { ExecutionPlan } from '../../chat/profile-resolver';
 import type { ResearchProgress } from '../DeepResearchService';
 import { preRequestCheck } from '../../chat/security-hooks';
@@ -112,24 +113,6 @@ async function buildUserContextBlocks(
  * 로컬 채팅 LLM 이 가이드를 못 받아 <artifact> 태그/디자인시스템을 무시한다
  * ([[외부 경로 skill/memory 누락]] 와 동일 클래스의 누락 방지).
  */
-async function buildArtifactGuideBlock(userId: string | undefined, language: string): Promise<string> {
-    try {
-        let enabled = true;
-        if (userId && userId !== 'guest') {
-            const { UserRepository } = await import('../../data/repositories/user-repository');
-            const { getPool } = await import('../../data/models/unified-database');
-            enabled = await new UserRepository(getPool()).getArtifactsEnabled(userId);
-        }
-        if (!enabled) return '';
-        const { getArtifactGuide } = await import('../../prompts/artifact-guide');
-        return getArtifactGuide(language);
-    } catch (e) {
-        logger.warn('artifacts_enabled 조회 실패 (기본 활성으로 진행):', e);
-        const { getArtifactGuide } = await import('../../prompts/artifact-guide');
-        return getArtifactGuide(language);
-    }
-}
-
 export async function runMessagePipeline(svc: ChatService,
     req: ChatMessageRequest,
     onToken: (token: string) => void,
