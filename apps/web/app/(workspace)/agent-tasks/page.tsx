@@ -16,6 +16,7 @@ import {
   CalendarClock,
   Plus,
   Play,
+  FileStack,
 } from "lucide-react";
 import {
   Button,
@@ -690,6 +691,107 @@ function SchedulesPanel() {
   );
 }
 
+/* ── 작업 템플릿 패널 (Phase 6-1) ───────────────────────────── */
+interface ApiTemplate {
+  id: string;
+  name: string;
+  goal_template: string;
+  params?: Array<{ name: string; description?: string; default?: string }> | null;
+  max_turns: number;
+}
+type TemplatesResponse = ApiSuccess<{ templates: ApiTemplate[]; total: number }>;
+
+function TemplatesPanel() {
+  const t = useTranslations("agentTasks");
+  const [templates, setTemplates] = useState<ApiTemplate[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [goal, setGoal] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const r = await ApiClient.get<TemplatesResponse>("/api/agent-task-templates");
+      setTemplates(r?.data?.templates ?? []);
+    } catch { /* 401·미배포: 빈 목록 */ }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  async function run(id: string, fn: () => Promise<unknown>) {
+    setBusy(id);
+    try { await fn(); await load(); }
+    catch (err) { alert(t("processFailed", { message: err instanceof Error ? err.message : t("error") })); }
+    finally { setBusy(null); }
+  }
+
+  const create = () => run("new", async () => {
+    await ApiClient.post("/api/agent-task-templates", { name, goalTemplate: goal });
+    setName(""); setGoal(""); setOpen(false);
+  });
+  const instantiate = (tp: ApiTemplate) => run(tp.id, async () => {
+    await ApiClient.post(`/api/agent-task-templates/${tp.id}/instantiate`, {});
+    alert(t("templates.started"));
+  });
+  const remove = (tp: ApiTemplate) => run(tp.id, () => ApiClient.del(`/api/agent-task-templates/${tp.id}`));
+
+  return (
+    <Card className="mb-4 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="flex items-center gap-1.5 text-sm font-medium text-fg-2">
+          <FileStack className="h-4 w-4 text-accent" /> {t("templates.title")}
+        </p>
+        <Button size="sm" variant="outline" onClick={() => setOpen((v) => !v)}>
+          <Plus className="h-3.5 w-3.5" /> {t("templates.create")}
+        </Button>
+      </div>
+      {open && (
+        <div className="mb-3 space-y-2 rounded-md border border-line bg-bg-1 p-3">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={t("templates.namePlaceholder")}
+            className="w-full rounded-md border border-line bg-bg-2 px-2 py-1.5 text-sm text-fg-1"
+          />
+          <textarea
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+            placeholder={t("templates.goalPlaceholder")}
+            rows={2}
+            className="w-full resize-y rounded-md border border-line bg-bg-2 p-2 text-sm text-fg-1"
+          />
+          <div className="flex justify-end">
+            <Button size="sm" disabled={busy === "new" || !name.trim() || !goal.trim()} onClick={create}>
+              {t("templates.add")}
+            </Button>
+          </div>
+        </div>
+      )}
+      {templates.length === 0 ? (
+        <p className="text-xs text-muted">{t("templates.empty")}</p>
+      ) : (
+        <div className="space-y-2">
+          {templates.map((tp) => (
+            <div key={tp.id} className="flex items-center justify-between gap-3 rounded-md border border-line bg-bg-1 p-2">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-medium text-fg-1">{tp.name}</p>
+                <p className="truncate text-xs text-muted">{tp.goal_template}</p>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <Button size="sm" variant="outline" disabled={busy === tp.id} onClick={() => instantiate(tp)} title={t("templates.run")}>
+                  <Play className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="sm" variant="outline" disabled={busy === tp.id} onClick={() => remove(tp)} title={t("templates.delete")}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export default function AgentTasksPage() {
   const t = useTranslations("agentTasks");
   const router = useRouter();
@@ -777,6 +879,7 @@ export default function AgentTasksPage() {
         </Card>
         <ApprovalsPanel />
         <SchedulesPanel />
+        <TemplatesPanel />
         {loading ? (
           <div className="grid place-items-center py-24 text-center">
             <Sparkles className="mb-3 h-8 w-8 animate-pulse text-faint" />

@@ -696,7 +696,18 @@
     "autoApprove": "나머지 모두 승인",
     "autoApproveHint": "이 작업의 이후 도구 실행을 승인 없이 진행합니다 (질문 제외)",
     "tokensUsed": "{count} 토큰",
-    "tokensUsedHint": "이 작업이 사용한 누적 LLM 토큰"
+    "tokensUsedHint": "이 작업이 사용한 누적 LLM 토큰",
+    "templates": {
+      "title": "작업 템플릿",
+      "create": "새 템플릿",
+      "namePlaceholder": "템플릿 이름",
+      "goalPlaceholder": "작업 목표 템플릿… ({{파라미터}} 사용 가능)",
+      "add": "추가",
+      "empty": "등록된 템플릿이 없습니다.",
+      "run": "이 템플릿으로 실행",
+      "delete": "삭제",
+      "started": "템플릿으로 작업을 시작했습니다."
+    }
   },
   "customAgents": {
     "pageTitle": "커스텀 에이전트",

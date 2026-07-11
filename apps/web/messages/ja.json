@@ -696,7 +696,18 @@
     "autoApprove": "残りをすべて承認",
     "autoApproveHint": "このタスクの以降のツール実行を承認なしで進めます（質問は除く）",
     "tokensUsed": "{count} トークン",
-    "tokensUsedHint": "このタスクが使用した累計LLMトークン"
+    "tokensUsedHint": "このタスクが使用した累計LLMトークン",
+    "templates": {
+      "title": "タスクテンプレート",
+      "create": "新規テンプレート",
+      "namePlaceholder": "テンプレート名",
+      "goalPlaceholder": "目標テンプレート… ({{パラメータ}} 使用可)",
+      "add": "追加",
+      "empty": "テンプレートはありません。",
+      "run": "このテンプレートで実行",
+      "delete": "削除",
+      "started": "テンプレートからタスクを開始しました。"
+    }
   },
   "customAgents": {
     "pageTitle": "カスタムエージェント",

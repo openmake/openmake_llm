@@ -696,7 +696,18 @@
     "autoApprove": "Approve rest",
     "autoApproveHint": "Run remaining tool calls of this task without approval (questions excluded)",
     "tokensUsed": "{count} tokens",
-    "tokensUsedHint": "Total LLM tokens used by this task"
+    "tokensUsedHint": "Total LLM tokens used by this task",
+    "templates": {
+      "title": "Task templates",
+      "create": "New template",
+      "namePlaceholder": "Template name",
+      "goalPlaceholder": "Goal template… ({{param}} supported)",
+      "add": "Add",
+      "empty": "No templates yet.",
+      "run": "Run from this template",
+      "delete": "Delete",
+      "started": "Task started from template."
+    }
   },
   "customAgents": {
     "pageTitle": "Custom Agents",

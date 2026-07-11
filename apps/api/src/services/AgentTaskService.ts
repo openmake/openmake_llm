@@ -41,18 +41,12 @@ import { persistArtifactSteps, runTool, isSearchTool } from './agent-task/task-s
 import { assembleAgentTools } from './agent-task/tool-assembly';
 import { verifyCodeArtifacts } from './agent-task/deliverable-verify';
 import { buildLearningBlock } from './agent-task/task-learning';
+import { buildSkillPromptBlock, AGENT_TASK_SKILL_AGENT_ID } from './agent-task/skill-block';
 
 // 기존 import 호환 재노출 — 타입/에러는 services/agent-task/types 로 분리 (파일 크기 가드).
 export { AgentTaskAbort, type AgentTaskRunInput, type AgentTaskInputFile } from './agent-task/types';
 
 const logger = createLogger('AgentTaskService');
-
-/**
- * Agent Task 는 페르소나/산업 agent 를 우회하므로 고유 agentId 가 없다.
- * 스킬 스코프 조회 시 어떤 실제 agent_id(산업 agent id · uuid · __global__ · user:*)
- * 와도 겹치지 않는 sentinel 을 넘겨, __global__ + user:{userId} 스킬만 매칭시킨다.
- */
-const AGENT_TASK_SKILL_AGENT_ID = '__agent_task__';
 
 export class AgentTaskService {
     /** 실행 중 인스턴스 레지스트리 — detached 실행을 cancel 엔드포인트에서 중단하기 위함 */
@@ -160,7 +154,7 @@ export class AgentTaskService {
                     {
                         role: 'system',
                         content: getAgentTaskSystemPrompt()
-                            + (await this.buildSkillPromptBlock(userId))
+                            + (await buildSkillPromptBlock(userId))
                             + (await buildLearningBlock(userId, goal, taskId)),
                     },
                     { role: 'user', content: goal },
@@ -503,6 +497,14 @@ export class AgentTaskService {
                         content: toolResult,
                     });
                     emitStep('tool_result', name, toolResult);
+                    // 턴 중간 체크포인트(6-4, opt-in): 도구 결과 단위로 저장 — 이 시점 conversation 은
+                    // assistant(tool_calls)+실행된 tool 결과들로 유효하며, resume 이 같은 턴(fromTurn=turn)
+                    // 에서 LLM 호출로 자연 이어져 이미 실행된 도구(특히 write)를 재실행하지 않는다.
+                    if (AGENT_TASK_LIMITS.MIDTURN_CHECKPOINT_ENABLED) {
+                        await db.updateAgentTask(taskId, {
+                            checkpoint: { conversation, completedTurn: turn - 1 },
+                        }).catch(() => { /* checkpoint 실패는 실행을 막지 않음 */ });
+                    }
                 }
 
                 // terminate 도구 호출 — 깔끔한 완료 시그널(max_turns 소진 아님).
@@ -578,21 +580,6 @@ export class AgentTaskService {
         }
         if (totalTokens > AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS) {
             throw new AgentTaskAbort('token_limit');
-        }
-    }
-
-    /**
-     * 활성 스킬(global + user)의 prompt_md 지식 블록을 만든다.
-     * execute 의 status 머신(try)이 켜지기 전에 호출되므로 절대 throw 하지 않는다 —
-     * 실패/부재 시 '' 를 반환해 task row 가 stuck 되지 않게 한다.
-     */
-    private async buildSkillPromptBlock(userId: string): Promise<string> {
-        try {
-            const block = await getSkillManager().buildManifestPrompt(AGENT_TASK_SKILL_AGENT_ID, userId);
-            return block ?? '';
-        } catch (e) {
-            logger.debug('[AgentTask] 스킬 프롬프트 주입 실패 — 무시', e);
-            return '';
         }
     }
 

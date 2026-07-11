@@ -13,6 +13,7 @@ import { AgentTaskScheduleRepository, type AgentTaskSchedule } from '../../data/
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 import { AgentTaskService } from '../AgentTaskService';
+import { getPushService } from '../PushService';
 import { dispatchAgentTask } from './task-queue';
 import { computeNextRun } from './schedule-cron';
 import type { AgentTaskUserRole } from './types';
@@ -50,12 +51,25 @@ async function fireSchedule(repo: AgentTaskScheduleRepository, s: AgentTaskSched
             }),
         });
         await repo.markRun(s.id, nextRunAtMs, taskId);
+        // 발화 이력(6-2) — 실패해도 발화 자체를 막지 않음.
+        await repo.recordRun({ scheduleId: s.id, userId: s.user_id, taskId, outcome: 'fired' }).catch(() => { /* noop */ });
         logger.info(`[Schedule] 실행: ${s.id} → task ${taskId} (next=${nextRunAtMs ? new Date(nextRunAtMs).toISOString() : '비활성'})`);
     } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
         // 실패 시 next_run_at 을 앞으로 밀어 무한 재시도 방지 + 연속실패 집계.
         await repo.markFailure(s.id, nextRunAtMs, AGENT_TASK_LIMITS.SCHEDULE_DISABLE_AFTER_FAILURES)
             .catch(() => { /* noop */ });
-        logger.warn(`[Schedule] 실행 실패: ${s.id} — ${e instanceof Error ? e.message : e}`);
+        await repo.recordRun({ scheduleId: s.id, userId: s.user_id, outcome: 'error', error: msg.slice(0, 500) }).catch(() => { /* noop */ });
+        // 실패 알림(6-2) — 스케줄은 사용자가 안 보는 새 도는 백그라운드라 push 로 인지시킨다.
+        // 연속실패 임계 도달(자동 비활성) 여부를 함께 알린다. fire-and-forget.
+        const failures = (s.consecutive_failures ?? 0) + 1;
+        const disabled = failures >= AGENT_TASK_LIMITS.SCHEDULE_DISABLE_AFTER_FAILURES;
+        void getPushService().sendPush(String(s.user_id), {
+            title: 'OpenMake 예약 작업 실패',
+            body: `예약 실행이 실패했습니다(연속 ${failures}회${disabled ? ' — 예약 자동 비활성됨' : ''}): ${s.goal.slice(0, 50)}`,
+            url: '/agent-tasks',
+        }).catch(() => { /* noop */ });
+        logger.warn(`[Schedule] 실행 실패: ${s.id} — ${msg}`);
     }
 }
 
