@@ -85,7 +85,10 @@ export class MCPServerRegistry {
      */
     async initializeFromDB(db: UnifiedDatabase): Promise<void> {
         try {
-            const servers = await db.getMcpServers();
+            // 🔒 전역 서버만 전역 ToolRouter 에 등록. user_private/user_shared 는
+            //   LifecycleSupervisor 가 userId 격리 풀로 spawn 하므로 여기서 제외한다
+            //   (게스트/타 사용자 과노출 차단 + user_private 중복 spawn 제거).
+            const servers = await db.getGlobalMcpServers();
             const enabledServers = servers.filter(s => s.enabled);
 
             logger.info(`Found ${enabledServers.length} enabled MCP servers in DB`);

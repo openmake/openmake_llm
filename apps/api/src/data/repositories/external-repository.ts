@@ -184,6 +184,24 @@ export class ExternalRepository extends BaseRepository {
         })) as MCPServerRow[];
     }
 
+    /**
+     * 전역(visibility='global') MCP 서버만 반환 — 부팅 시 전역 ToolRouter 등록 전용.
+     * user_private/user_shared 서버는 LifecycleSupervisor(사용자 풀)가 userId 격리하여
+     * spawn 하므로 전역 맵에 등록하면 안 된다(게스트/타 사용자 과노출 + 중복 spawn 방지).
+     */
+    async getGlobalMcpServers(): Promise<MCPServerRow[]> {
+        const result = await this.query(
+            "SELECT * FROM mcp_servers WHERE visibility = 'global' ORDER BY created_at DESC LIMIT $1",
+            [QUERY_ROW_LIMITS.MCP_SERVERS_MAX]
+        );
+        return result.rows.map((row: DbRow) => ({
+            ...row,
+            args: (row.args as string[] | null) || null,
+            env: (row.env as Record<string, string> | null) || null,
+            enabled: !!row.enabled
+        })) as MCPServerRow[];
+    }
+
     async getMcpServerById(id: string): Promise<MCPServerRow | null> {
         const result = await this.query('SELECT * FROM mcp_servers WHERE id = $1', [id]);
         const row = result.rows[0] as DbRow | undefined;

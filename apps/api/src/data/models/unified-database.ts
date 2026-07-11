@@ -469,6 +469,10 @@ export class UnifiedDatabase {
         return this.externalRepository.getMcpServers();
     }
 
+    async getGlobalMcpServers(): Promise<MCPServerRow[]> {
+        return this.externalRepository.getGlobalMcpServers();
+    }
+
     async getMcpServerById(id: string): Promise<MCPServerRow | null> {
         return this.externalRepository.getMcpServerById(id);
     }
