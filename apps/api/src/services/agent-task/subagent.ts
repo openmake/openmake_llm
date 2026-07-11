@@ -34,8 +34,10 @@ export interface SubagentParams {
     /** 안전 도구 서브셋 — 부모의 호스트 화이트리스트(extraTools). delegate 류는 호출부가 제외. */
     tools: ToolDefinition[];
     userCtx: UserContext;
+    /** 승인 레지스트리 키(에이전트 작업 taskId). 채팅 경로는 정책 'none' 이라 실사용 안 됨. */
     taskId: string;
-    sandboxCfg: TaskSandboxConfig;
+    /** 승인 정책·대기 상한만 사용 — 채팅 경로는 {approvalPolicy:'none', approvalTimeoutMs:0} 전달. */
+    sandboxCfg: Pick<TaskSandboxConfig, 'approvalPolicy' | 'approvalTimeoutMs'>;
     signal?: AbortSignal;
     /** 서브 LLM 호출 토큰을 부모 누적에 합산. */
     onTokens?: (n: number) => void;

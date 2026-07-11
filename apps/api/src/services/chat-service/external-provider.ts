@@ -19,6 +19,8 @@ import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { isPersistableUserId } from '../../utils/user-id-validation';
 import { type Style } from '../../chat/style';
 import { buildExternalSystemPrompt } from './external-system-prompt';
+import { CHAT_DELEGATE_TOOL_NAME, buildChatDelegateTool, runChatDelegate } from './chat-delegate';
+import { CHAT_SUBAGENT } from '../../config/runtime-limits';
 import type { ChatMessage, ToolDefinition } from '../../llm';
 import type { ChatMessageRequest } from '../chat-service-types';
 import type { UserContext } from '../../mcp/user-sandbox';
@@ -128,6 +130,10 @@ export async function streamFromExternalProvider(
             && !(wantsArtifact && ARTIFACT_REQUEST_SUPPRESSED_TOOLS.includes(t.function.name))
             && !(wantsMap && t.function.name === 'generate_image'))
         : [];
+    // 채팅 서브에이전트(chat-delegate): 전문가 위임 도구 노출 — 스키마 +1 은 문법 컴파일 무해.
+    if (CHAT_SUBAGENT.ENABLED && caps.toolCalling) {
+        tools.push(buildChatDelegateTool());
+    }
     if (wantsArtifact && caps.toolCalling) {
         logger.info(`[Artifact] 명시적 아티팩트 요청 감지 — distractor 도구 억제 (잔여 도구 ${tools.length}종)`);
     }
@@ -162,6 +168,8 @@ export async function streamFromExternalProvider(
     let lastBatchSig: string | null = null;
     let repeatCount = 0;
     let suppressTools = false;
+    // 채팅 서브에이전트 호출 집계 — 메시지당 캡(CHAT_SUBAGENT.MAX_CALLS) 초과 시 위임 거부.
+    let delegateCalls = 0;
 
     // generate_image 결과의 이미지 마크다운 추적 — 일부 모델(qwen 등)이 도구 지시("마크다운
     // 그대로 포함")를 누락해 생성된 이미지가 채팅에 표시되지 않는 문제 보정용.
@@ -275,7 +283,22 @@ export async function streamFromExternalProvider(
             });
 
             for (const tc of result.toolCalls) {
-                const toolResult = await executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>);
+                let toolResult: string;
+                if (tc.name === CHAT_DELEGATE_TOOL_NAME) {
+                    // 서브에이전트 위임 — 부모 채팅 활성 도구 서브셋으로 depth=1 tool-loop.
+                    deps.mcpToolStartCallback?.({ toolName: tc.name });
+                    delegateCalls++;
+                    toolResult = delegateCalls > CHAT_SUBAGENT.MAX_CALLS
+                        ? `Error: 이 메시지의 전문가 위임 한도(${CHAT_SUBAGENT.MAX_CALLS}회)에 도달했습니다. 지금까지의 정보로 직접 답변하세요.`
+                        : await runChatDelegate({
+                            args: tc.args as Record<string, unknown>,
+                            chatTools: tools,
+                            userCtx: deps.currentUserContext ?? { userId: 'guest', role: 'guest' },
+                            ...(req.abortSignal ? { signal: req.abortSignal } : {}),
+                        });
+                } else {
+                    toolResult = await executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>);
+                }
                 if (tc.name === 'generate_image') {
                     const m = toolResult.match(/!\[[^\]]*\]\(\/generated\/[^)]+\)/);
                     if (m && !generatedImageMarkdowns.includes(m[0])) {
