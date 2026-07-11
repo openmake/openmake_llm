@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient, ApiError } from "@/lib/api-client";
+import { DeveloperTabs } from "@/components/hub-tabs";
 
 /* ── 타입 (백엔드 /api/api-keys 응답) ──────────────── */
 interface ApiKeyRow {
@@ -158,6 +159,7 @@ export default function ApiAccessPage() {
   return (
     <div>
       <PageHeader title={t("title")} description={t("subtitle")} />
+      <DeveloperTabs />
 
       <div className="mx-auto max-w-4xl space-y-5 px-6 py-6">
         {error && (

@@ -15,6 +15,7 @@ import {
 import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { McpTabs } from "@/components/hub-tabs";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type Transport = "stdio" | "SSE" | "HTTP";
@@ -385,6 +386,7 @@ export default function McpServersPage() {
           </>
         }
       />
+      <McpTabs />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         {/* 탭 */}

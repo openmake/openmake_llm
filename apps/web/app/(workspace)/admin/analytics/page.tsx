@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { ApiClient } from "@/lib/api-client";
+import { AdminObservabilityTabs } from "@/components/hub-tabs";
 
 type Period = "7d" | "30d" | "90d";
 const PERIODS: { key: Period; labelKey: string }[] = [
@@ -261,6 +262,7 @@ export default function AdminAnalyticsPage() {
           </div>
         }
       />
+      <AdminObservabilityTabs />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

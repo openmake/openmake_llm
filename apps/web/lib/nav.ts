@@ -1,16 +1,10 @@
 import {
-  Activity,
   BarChart3,
   Bell,
   Bot,
-  Brain,
   Clock,
-  Gauge,
-  GraduationCap,
-  KeyRound,
   LayoutGrid,
   Library,
-  LineChart,
   MessageSquare,
   ScrollText,
   Server,
@@ -44,7 +38,14 @@ export interface NavGroup {
   minRole?: NavRole;
 }
 
-/** 사이드바 네비게이션 — 기존 nav-items.js + pages 모듈에 대응. */
+/**
+ * 사이드바 네비게이션 — 2026-07-11 통폐합 (24→15 항목).
+ * 묶인 페이지들은 기존 라우트를 유지하고 페이지 상단 PageTabs 로 오간다:
+ * - MCP: /mcp-servers ↔ /mcp-catalog
+ * - 개발자: /developer ↔ /api-access
+ * - 관리자 관측: /admin ↔ /admin/analytics ↔ /admin/metrics ↔ /mcp-monitoring ↔ /agent-learning
+ * - /memory·/api-keys 는 설정 탭으로 흡수 (구 라우트는 redirect)
+ */
 export const NAV_GROUPS: NavGroup[] = [
   {
     titleKey: "groups.workspace",
@@ -53,7 +54,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { labelKey: "items.research", href: "/research", icon: Telescope },
       { labelKey: "items.agentTasks", href: "/agent-tasks", icon: Sparkles },
       { labelKey: "items.customAgents", href: "/custom-agents", icon: Bot },
-      { labelKey: "items.memory", href: "/memory", icon: Brain },
       { labelKey: "items.skillLibrary", href: "/skill-library", icon: Library },
       { labelKey: "items.artifacts", href: "/artifacts", icon: LayoutGrid },
       { labelKey: "items.history", href: "/history", icon: Clock },
@@ -62,20 +62,15 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     titleKey: "groups.integrations",
     items: [
-      { labelKey: "items.mcpServers", href: "/mcp-servers", icon: Server },
-      { labelKey: "items.mcpCatalog", href: "/mcp-catalog", icon: Boxes },
-      { labelKey: "items.mcpMonitoring", href: "/mcp-monitoring", icon: Activity },
-      { labelKey: "items.agentLearning", href: "/agent-learning", icon: GraduationCap },
+      { labelKey: "items.mcp", href: "/mcp-servers", icon: Server },
     ],
   },
   {
     titleKey: "groups.account",
     items: [
       { labelKey: "items.settings", href: "/settings", icon: Settings },
-      { labelKey: "items.apiKeys", href: "/api-keys", icon: KeyRound },
-      { labelKey: "items.apiAccess", href: "/api-access", icon: Terminal },
       { labelKey: "items.usage", href: "/usage", icon: BarChart3 },
-      { labelKey: "items.developerDocs", href: "/developer", icon: ScrollText },
+      { labelKey: "items.developer", href: "/developer", icon: Terminal },
     ],
   },
   {
@@ -83,9 +78,7 @@ export const NAV_GROUPS: NavGroup[] = [
     minRole: "admin",
     items: [
       { labelKey: "items.admin", href: "/admin", icon: Shield },
-      { labelKey: "items.analytics", href: "/admin/analytics", icon: LineChart },
       { labelKey: "items.auditLog", href: "/admin/audit", icon: ScrollText },
-      { labelKey: "items.metrics", href: "/admin/metrics", icon: Gauge },
       { labelKey: "items.alerts", href: "/admin/alerts", icon: Bell },
       { labelKey: "items.mcpCatalogAdmin", href: "/admin/mcp-catalog", icon: Boxes },
     ],
