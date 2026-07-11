@@ -346,6 +346,28 @@ router.get('/approvals/pending', asyncHandler(async (req: Request, res: Response
 }));
 
 /**
+ * POST /api/agent-tasks/approvals/:approvalId/answer  { text }
+ * ask_human 질문에 자유텍스트로 응답 — 진행(approved)으로 해소하되 답변 본문을 에이전트에 전달.
+ * (승인/거절 이진 응답의 한계를 보완하는 HITL 답변 채널.)
+ * ⚠️ 아래 `/:decision` 라우트보다 반드시 먼저 등록 — 뒤에 두면 'answer' 가 :decision 으로
+ *    매칭돼 400 이 난다(라이브 검증에서 발견된 라우트 순서 버그).
+ */
+router.post('/approvals/:approvalId/answer', asyncHandler(async (req: Request, res: Response) => {
+    const { approvalId } = req.params;
+    const text = String((req.body as { text?: unknown })?.text ?? '').trim();
+    if (!text) return res.status(400).json(badRequest('text 가 필요합니다.'));
+    if (text.length > 4000) return res.status(400).json(badRequest('답변은 4000자를 넘을 수 없습니다.'));
+    const registry = getApprovalRegistry();
+    const pending = registry.get(approvalId);
+    if (!pending) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
+    assertResourceOwnerOrAdmin(pending.userId, String(req.user!.id), req.user!.role || 'user');
+
+    const ok = registry.answer(approvalId, text);
+    if (!ok) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
+    res.json(success({ approvalId, answered: true }));
+}));
+
+/**
  * POST /api/agent-tasks/approvals/:approvalId/:decision  (decision = approve | reject)
  * 대기 중인 도구 호출을 승인/거절 — 해당 approval 의 owner 만 가능.
  */
@@ -362,26 +384,6 @@ router.post('/approvals/:approvalId/:decision', asyncHandler(async (req: Request
     const ok = decision === 'approve' ? registry.approve(approvalId) : registry.reject(approvalId);
     if (!ok) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
     res.json(success({ approvalId, decision }));
-}));
-
-/**
- * POST /api/agent-tasks/approvals/:approvalId/answer  { text }
- * ask_human 질문에 자유텍스트로 응답 — 진행(approved)으로 해소하되 답변 본문을 에이전트에 전달.
- * (승인/거절 이진 응답의 한계를 보완하는 HITL 답변 채널.)
- */
-router.post('/approvals/:approvalId/answer', asyncHandler(async (req: Request, res: Response) => {
-    const { approvalId } = req.params;
-    const text = String((req.body as { text?: unknown })?.text ?? '').trim();
-    if (!text) return res.status(400).json(badRequest('text 가 필요합니다.'));
-    if (text.length > 4000) return res.status(400).json(badRequest('답변은 4000자를 넘을 수 없습니다.'));
-    const registry = getApprovalRegistry();
-    const pending = registry.get(approvalId);
-    if (!pending) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
-    assertResourceOwnerOrAdmin(pending.userId, String(req.user!.id), req.user!.role || 'user');
-
-    const ok = registry.answer(approvalId, text);
-    if (!ok) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
-    res.json(success({ approvalId, answered: true }));
 }));
 
 export { router as agentTaskRouter };

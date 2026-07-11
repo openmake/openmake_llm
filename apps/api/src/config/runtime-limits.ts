@@ -1239,10 +1239,16 @@ export const AGENT_TASK_LIMITS = {
     GOAL_JUDGE_ENABLED: process.env.AGENT_TASK_GOAL_JUDGE !== 'false',
     /** judge 에 넘기는 최종 답변 최대 글자 수 (프롬프트 팽창 방지) */
     GOAL_JUDGE_MAX_ANSWER_CHARS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_MAX_CHARS || '6000', 10),
-    /** 부팅 자동 복구 — 프로세스 재시작으로 in-process 루프가 소멸해 running/paused 로 박제된
-     *  task 를 부팅 시 스윕한다. checkpoint 가 있으면 자동 resume, 없으면 failed(interrupted).
+    /** 부팅 자동 복구 — 프로세스 재시작으로 중단된 task 를 부팅 시 자동 resume 한다.
+     *  주의: schema-initializer 가 부팅 시 running/paused 를 failed('server restarted') 로 먼저
+     *  마킹하므로, 복구 대상은 ①잔존 running/paused(마킹 실패 대비) + ②restart 마킹 + checkpoint
+     *  보유 + 최근 window 내 task. checkpoint 없으면 failed 유지(기존 수동 UX 그대로).
      *  AGENT_TASK_BOOT_RECOVERY=false 로 비활성(기본 on). */
     BOOT_RECOVERY_ENABLED: process.env.AGENT_TASK_BOOT_RECOVERY !== 'false',
+    /** 부팅 복구 인정 window(ms) — '이번 재시작'으로 마킹된 task 만 자동 resume 하고, 과거
+     *  재시작이 남긴 오래된 failed('server restarted') 는 건드리지 않는다(수동 resume 대상).
+     *  AGENT_TASK_BOOT_RECOVERY_WINDOW_MS 로 오버라이드(기본 15분). */
+    BOOT_RECOVERY_WINDOW_MS: parseInt(process.env.AGENT_TASK_BOOT_RECOVERY_WINDOW_MS || '', 10) || 15 * 60_000,
     /** 동적 도구 서브셋팅(Phase 2-A) — 샌드박스 활성 시 목표 관련성 top-K MCP 도구를 예산 내에서
      *  샌드박스 도구에 합류(호스트 실행 + HITL 승인 게이트). 전체 카탈로그(~150)를 넘기면 vLLM
      *  문법 컴파일이 폭주하므로 예산으로 캡한다. ⚠️ 기본 OFF — 활성화 전 문법 컴파일 지연 실측 필수.
