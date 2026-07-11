@@ -363,6 +363,7 @@ export class UnifiedDatabase {
         sandboxContainerId?: string;
         workspacePath?: string;
         plan?: unknown;
+        totalTokens?: number;
     }): Promise<void> {
         return this.agentTaskRepository.updateAgentTask(taskId, updates);
     }

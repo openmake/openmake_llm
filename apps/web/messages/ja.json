@@ -274,7 +274,9 @@
       "question": "エージェントからの質問",
       "answerPlaceholder": "回答を入力してください…",
       "sendAnswer": "回答を送信",
-      "skip": "スキップ"
+      "skip": "スキップ",
+      "autoApprove": "残りをすべて承認",
+      "autoApproveHint": "このタスクの以降のツール実行を承認なしで進めます（質問は除く）"
     },
     "artifactFallback": "アーティファクト",
     "artifactBuilding": "アーティファクトを生成中…",
@@ -690,7 +692,11 @@
       "t2Step3": "推移チャートの生成",
       "t2Step4": "PDFレポートの出力",
       "t3Goal": "最新AI論文5本を要約し要点を整理"
-    }
+    },
+    "autoApprove": "残りをすべて承認",
+    "autoApproveHint": "このタスクの以降のツール実行を承認なしで進めます（質問は除く）",
+    "tokensUsed": "{count} トークン",
+    "tokensUsedHint": "このタスクが使用した累計LLMトークン"
   },
   "customAgents": {
     "pageTitle": "カスタムエージェント",

@@ -48,6 +48,8 @@ interface AgentTask {
   progress: number;
   checklist: ChecklistItem[];
   resumable?: boolean;
+  /** 누적 LLM 토큰(4-4) — terminal 시 기록. */
+  totalTokens?: number;
 }
 
 type PlanStepStatus = "not_started" | "in_progress" | "completed" | "blocked";
@@ -69,6 +71,7 @@ interface ApiAgentTask {
   completed_at?: string;
   resumable?: boolean;
   plan?: PlanStep[] | null;
+  total_tokens?: number | null;
 }
 
 type TaskFilesResponse = ApiSuccess<{ files: string[] }>;
@@ -129,6 +132,7 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
     progress,
     checklist: [],
     resumable: t.resumable,
+    totalTokens: typeof t.total_tokens === "number" ? t.total_tokens : undefined,
   };
 }
 
@@ -442,14 +446,31 @@ function ApprovalsPanel() {
     run(approvalId, () => ApiClient.post(`/api/agent-tasks/approvals/${approvalId}/${decision}`, {}));
   const answer = (approvalId: string) =>
     run(approvalId, () => ApiClient.post(`/api/agent-tasks/approvals/${approvalId}/answer`, { text: answers[approvalId] ?? "" }));
+  // task 자동승인(4-2) — 이후 이 작업의 도구 호출은 승인 없이 진행(ask_human 제외).
+  const autoApprove = (taskId: string, approvalId: string) =>
+    run(approvalId, () => ApiClient.post(`/api/agent-tasks/${taskId}/approvals/auto-approve`, {}));
 
   if (pending.length === 0) return null;
+  const firstToolApproval = pending.find((p) => p.toolName !== "ask_human");
 
   return (
     <Card className="mb-4 p-4">
-      <p className="mb-3 text-sm font-medium text-fg-2">
-        {t("approvalsTitle", { count: pending.length })}
-      </p>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <p className="text-sm font-medium text-fg-2">
+          {t("approvalsTitle", { count: pending.length })}
+        </p>
+        {firstToolApproval && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy !== null}
+            title={t("autoApproveHint")}
+            onClick={() => autoApprove(firstToolApproval.taskId, firstToolApproval.approvalId)}
+          >
+            {t("autoApprove")}
+          </Button>
+        )}
+      </div>
       <div className="space-y-2">
         {pending.map((p) => {
           // ask_human 은 도구 승인이 아니라 사용자 질문 — 자유텍스트 답변 채널을 렌더.
@@ -842,6 +863,11 @@ export default function AgentTasksPage() {
                       <span className="flex items-center gap-1">
                         <Cpu className="h-3.5 w-3.5" />{task.model}
                       </span>
+                      {typeof task.totalTokens === "number" && task.totalTokens > 0 && (
+                        <span className="font-mono tabular-nums" title={t("tokensUsedHint")}>
+                          {t("tokensUsed", { count: task.totalTokens.toLocaleString() })}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-1">
                       {/* 상세 보기 */}

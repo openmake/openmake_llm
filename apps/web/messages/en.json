@@ -274,7 +274,9 @@
       "question": "The agent is asking",
       "answerPlaceholder": "Type your answer…",
       "sendAnswer": "Send answer",
-      "skip": "Skip"
+      "skip": "Skip",
+      "autoApprove": "Approve rest",
+      "autoApproveHint": "Run remaining tool calls of this task without approval (questions excluded)"
     },
     "artifactFallback": "Artifact",
     "artifactBuilding": "Building artifact…",
@@ -690,7 +692,11 @@
       "t2Step3": "Generate trend charts",
       "t2Step4": "Export PDF report",
       "t3Goal": "Summarize 5 recent AI papers and extract key points"
-    }
+    },
+    "autoApprove": "Approve rest",
+    "autoApproveHint": "Run remaining tool calls of this task without approval (questions excluded)",
+    "tokensUsed": "{count} tokens",
+    "tokensUsedHint": "Total LLM tokens used by this task"
   },
   "customAgents": {
     "pageTitle": "Custom Agents",

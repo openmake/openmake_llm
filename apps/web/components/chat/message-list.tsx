@@ -47,12 +47,26 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
     run(a, () => ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/${decision}`, {}));
   const answer = (a: PendingApproval) =>
     run(a, () => ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/answer`, { text: answers[a.approvalId] ?? "" }));
+  // task 자동승인(4-2) — 이후 이 작업의 도구 호출은 승인 없이 진행(ask_human 제외). 대기 중 승인도 즉시 해소.
+  const autoApprove = (a: PendingApproval) =>
+    run(a, () => ApiClient.post(`/api/agent-tasks/${a.taskId}/approvals/auto-approve`, {}));
+  const hasToolApproval = approvals.some((a) => a.toolName !== "ask_human");
 
   return (
     <div className="mt-1 space-y-2 rounded-md border border-warning-soft bg-warning-soft/50 p-2.5">
-      <p className="flex items-center gap-1.5 text-xs font-semibold text-fg-2">
-        <ShieldCheck className="h-3.5 w-3.5 text-warning" /> {t("approvals.title")}
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-fg-2">
+          <ShieldCheck className="h-3.5 w-3.5 text-warning" /> {t("approvals.title")}
+        </p>
+        {hasToolApproval && (
+          <button
+            disabled={busy !== null}
+            onClick={() => autoApprove(approvals.find((a) => a.toolName !== "ask_human")!)}
+            className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted hover:bg-surface-2 disabled:opacity-50"
+            title={t("approvals.autoApproveHint")}
+          >{t("approvals.autoApprove")}</button>
+        )}
+      </div>
       {approvals.map((a) => {
         // ask_human 은 도구 승인이 아니라 사용자 질문 — 자유텍스트 답변 채널을 렌더.
         if (a.toolName === "ask_human") {
@@ -282,6 +296,13 @@ function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; appr
             </div>
             <span className="shrink-0 font-mono text-[11px] tabular-nums text-faint">{pct}% · {t("agentTask.turn", { turn: task.currentTurn ?? 0 })}</span>
           </div>
+        )}
+        {/* 현재 단계(4-5 실시간 스트림) — 실행 중일 때 방금 수행한 스텝을 라이브 표시. */}
+        {showProgress && task.lastStep && (
+          <p className="truncate font-mono text-[11px] text-faint">
+            {task.lastStep.toolName ? `⚙ ${task.lastStep.toolName}` : `✎ ${task.lastStep.stepType}`}
+            {task.lastStep.preview ? ` · ${task.lastStep.preview.slice(0, 80)}` : ""}
+          </p>
         )}
         {task.result && (task.status === "completed" || task.status === "failed") && (
           <div className="border-t border-border pt-2.5 text-[13px] leading-relaxed text-fg-2">

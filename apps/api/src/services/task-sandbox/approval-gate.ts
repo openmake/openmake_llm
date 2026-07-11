@@ -51,6 +51,8 @@ export interface ApprovalResult {
     decision: ApprovalDecision;
     /** answer() 로 해소된 경우에만 채워짐 — ask_human 질문에 대한 사용자 자유텍스트 답변. */
     text?: string;
+    /** 승인 대기에 소요된 시간(ms) — pause-aware 타임아웃(4-1)이 총 예산에서 제외하는 데 사용. */
+    waitedMs: number;
 }
 
 export interface PendingApproval {
@@ -75,6 +77,8 @@ interface Waiter {
 export class ApprovalRegistry {
     private waiters = new Map<string, Waiter>();
     private seq = 0;
+    /** task 자동승인(4-2) — 사용자가 "나머지 모두 승인"을 누른 task 집합. 종료 시 해제. */
+    private autoApproveTasks = new Set<string>();
 
     /** 대기 중인 승인 요청 — owner user 의 task 일시정지 UI/REST 가 조회. */
     list(userId: string): PendingApproval[] {
@@ -88,26 +92,50 @@ export class ApprovalRegistry {
     }
 
     /**
+     * task 자동승인 설정(4-2) — 이후 이 task 의 승인 요청은 즉시 approved 로 해소된다.
+     * ⚠️ ask_human 은 제외(질문의 목적 자체가 사람 응답). 현재 대기 중인 동일 task 의
+     * 승인들도 즉시 해소한다. task 종료 시 clearAutoApprove 로 해제(잔존 방지).
+     */
+    setAutoApprove(taskId: string, enabled: boolean): void {
+        if (!enabled) { this.autoApproveTasks.delete(taskId); return; }
+        this.autoApproveTasks.add(taskId);
+        for (const w of [...this.waiters.values()]) {
+            if (w.pending.taskId === taskId && w.pending.toolName !== 'ask_human') {
+                w.resolve({ decision: 'approved', waitedMs: Date.now() - w.pending.createdAt });
+            }
+        }
+        logger.info(`[${taskId}] 자동승인 활성 — 이후 도구 호출은 승인 없이 진행 (ask_human 제외)`);
+    }
+
+    isAutoApprove(taskId: string): boolean { return this.autoApproveTasks.has(taskId); }
+
+    clearAutoApprove(taskId: string): void { this.autoApproveTasks.delete(taskId); }
+
+    /**
      * 승인을 요청하고 결정(approved/rejected)을 await. timeout/abort 시 'rejected'.
      * onPending 콜백으로 호출부가 알림(web-push/WS)·상태('paused')를 발행한다.
+     * 자동승인 task(ask_human 제외)는 대기 없이 즉시 approved.
      */
     request(
         input: { taskId: string; userId: string; toolName: string; args: Record<string, unknown> },
         opts: { timeoutMs: number; signal?: AbortSignal; onPending?: (p: PendingApproval) => void },
     ): Promise<ApprovalResult> {
+        if (this.autoApproveTasks.has(input.taskId) && input.toolName !== 'ask_human') {
+            return Promise.resolve({ decision: 'approved', waitedMs: 0 });
+        }
         const approvalId = `apv_${input.taskId}_${this.seq++}`;
         const pending: PendingApproval = { approvalId, ...input, createdAt: Date.now() };
         return new Promise<ApprovalResult>((resolvePromise) => {
-            const settle = (r: ApprovalResult) => {
+            const settle = (r: Omit<ApprovalResult, 'waitedMs'>) => {
                 const w = this.waiters.get(approvalId);
                 if (!w) return;
                 clearTimeout(w.timer);
                 this.waiters.delete(approvalId);
                 if (r.decision === 'rejected') logger.info(`[${input.taskId}] 승인 거절/만료: ${input.toolName}`);
-                resolvePromise(r);
+                resolvePromise({ ...r, waitedMs: Date.now() - pending.createdAt });
             };
             const timer = setTimeout(() => settle({ decision: 'rejected' }), opts.timeoutMs);
-            this.waiters.set(approvalId, { pending, resolve: settle, timer });
+            this.waiters.set(approvalId, { pending, resolve: (r) => settle(r), timer });
             if (opts.signal) {
                 if (opts.signal.aborted) { settle({ decision: 'rejected' }); return; }
                 opts.signal.addEventListener('abort', () => settle({ decision: 'rejected' }), { once: true });
@@ -120,7 +148,7 @@ export class ApprovalRegistry {
     approve(approvalId: string): boolean {
         const w = this.waiters.get(approvalId);
         if (!w) return false;
-        w.resolve({ decision: 'approved' });
+        w.resolve({ decision: 'approved', waitedMs: Date.now() - w.pending.createdAt });
         return true;
     }
 
@@ -128,7 +156,7 @@ export class ApprovalRegistry {
     reject(approvalId: string): boolean {
         const w = this.waiters.get(approvalId);
         if (!w) return false;
-        w.resolve({ decision: 'rejected' });
+        w.resolve({ decision: 'rejected', waitedMs: Date.now() - w.pending.createdAt });
         return true;
     }
 
@@ -140,7 +168,7 @@ export class ApprovalRegistry {
     answer(approvalId: string, text: string): boolean {
         const w = this.waiters.get(approvalId);
         if (!w) return false;
-        w.resolve({ decision: 'approved', text });
+        w.resolve({ decision: 'approved', text, waitedMs: Date.now() - w.pending.createdAt });
         return true;
     }
 }

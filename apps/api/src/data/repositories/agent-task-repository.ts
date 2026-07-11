@@ -58,6 +58,7 @@ export class AgentTaskRepository extends BaseRepository {
         sandboxContainerId?: string;
         workspacePath?: string;
         plan?: unknown;
+        totalTokens?: number;
     }): Promise<void> {
         const sets: string[] = ['updated_at = NOW()'];
         const params: QueryParam[] = [];
@@ -102,6 +103,10 @@ export class AgentTaskRepository extends BaseRepository {
         if (updates.plan !== undefined) {
             sets.push(`plan = $${paramIdx++}`);
             params.push(JSON.stringify(updates.plan));
+        }
+        if (updates.totalTokens !== undefined) {
+            sets.push(`total_tokens = $${paramIdx++}`);
+            params.push(updates.totalTokens);
         }
 
         params.push(taskId);

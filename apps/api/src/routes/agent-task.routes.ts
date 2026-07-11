@@ -337,6 +337,21 @@ router.get('/:taskId/files/download', asyncHandler(async (req: Request, res: Res
 }));
 
 /**
+ * POST /api/agent-tasks/:taskId/approvals/auto-approve  { enabled?: boolean }
+ * task 자동승인(4-2) — 이후 이 task 의 도구 승인 요청을 즉시 approved 처리("나머지 모두 승인").
+ * ask_human 은 제외(질문은 항상 사람에게). 현재 대기 중인 승인들도 즉시 해소.
+ * task 종료 시 자동 해제. owner/admin 만 가능.
+ */
+router.post('/:taskId/approvals/auto-approve', asyncHandler(async (req: Request, res: Response) => {
+    const task = await loadOwnedTask(req, res, req.params.taskId);
+    if (!task) return;
+    const enabled = (req.body as { enabled?: unknown })?.enabled !== false;
+    getApprovalRegistry().setAutoApprove(task.id, enabled);
+    logger.info(`[AgentTaskRoutes] 자동승인 ${enabled ? '활성' : '해제'}: ${task.id} (user ${req.user!.id})`);
+    res.json(success({ taskId: task.id, autoApprove: enabled }));
+}));
+
+/**
  * GET /api/agent-tasks/approvals/pending
  * 현재 사용자의 승인 대기 도구 호출 목록 (HITL 게이트 — 전부-승인 정책).
  */

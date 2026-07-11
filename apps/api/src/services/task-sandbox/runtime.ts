@@ -40,6 +40,8 @@ export interface ExecuteTaskToolOpts {
     signal?: AbortSignal;
     /** 승인 대기 진입 시 호출 — 호출부가 status='paused' + web-push/WS 발행. */
     onApprovalPending?: (p: PendingApproval) => void;
+    /** 승인 대기 종료 시 대기시간(ms) 통지 — pause-aware 타임아웃(4-1)이 총 예산에서 제외. */
+    onApprovalWaited?: (ms: number) => void;
 }
 
 export class TaskRuntime {
@@ -100,15 +102,15 @@ export class TaskRuntime {
         const handler = this.handlers.get(name);
         if (!handler) return `Error: 알 수 없는 task 도구 ${name}`;
 
-        // ask_human 은 승인 정책과 무관하게 항상 사용자 응답을 대기한다 — 도구의 목적 자체가
-        // HITL 이므로 승인 레지스트리(pause + push + REST approve/reject)를 응답 채널로 사용.
-        // (자유 텍스트 답변 채널은 미구현 — 승인/거절 이진 응답만 전달된다.)
+        // ask_human 은 승인 정책·자동승인과 무관하게 항상 사용자 응답을 대기한다 — 도구의 목적
+        // 자체가 HITL 이므로 승인 레지스트리(pause + push + REST approve/reject/answer)를 응답 채널로 사용.
         if (name === 'ask_human') {
             const question = String(args.question ?? '');
-            const { decision, text } = await getApprovalRegistry().request(
+            const { decision, text, waitedMs } = await getApprovalRegistry().request(
                 { taskId: this.taskId, userId: this.userId, toolName: name, args },
                 { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending },
             );
+            opts.onApprovalWaited?.(waitedMs);
             if (decision !== 'approved') {
                 return `사용자가 거절했거나 응답 시간이 초과되었습니다(질문: ${question}). 이 방향을 중단하고 대안을 시도하거나 terminate 로 마무리하세요.`;
             }
@@ -119,10 +121,11 @@ export class TaskRuntime {
         }
 
         if (requiresApproval(this.cfg.approvalPolicy, name, args)) {
-            const { decision } = await getApprovalRegistry().request(
+            const { decision, waitedMs } = await getApprovalRegistry().request(
                 { taskId: this.taskId, userId: this.userId, toolName: name, args },
                 { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending },
             );
+            opts.onApprovalWaited?.(waitedMs);
             if (decision !== 'approved') {
                 return `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}). 다른 방법을 시도하거나 작업을 종료하세요.`;
             }
