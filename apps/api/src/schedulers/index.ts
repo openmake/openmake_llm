@@ -74,6 +74,25 @@ export async function startAllSchedulers(): Promise<void> {
         logger.warn('TaskSandbox 정리 실패(무시):', err);
     }
 
+    // 8-B. Agent Task 부팅 자동 복구 — 재시작으로 running/paused 로 박제된 task 를 스윕.
+    //      샌드박스 플래그와 무관하게 실행(비-샌드박스 task 도 좀비가 된다). 반드시 위
+    //      reapOrphanTaskSandboxes() 이후 — 먼저 돌면 resume 이 만든 컨테이너를 reap 이 죽인다.
+    try {
+        const { recoverInterruptedAgentTasks } = await import('../services/agent-task/boot-recovery');
+        const { resumed, failed } = await recoverInterruptedAgentTasks();
+        if (resumed || failed) logger.info(`Agent Task 부팅 복구: 재개 ${resumed} / 실패정리 ${failed}`);
+    } catch (err) {
+        logger.warn('Agent Task 부팅 복구 실패(무시):', err);
+    }
+
+    // 8-C. Agent Task 스케줄/반복 트리거 — 플래그 ON 시 cron/interval due 스캔(tick 주기).
+    try {
+        const { startAgentTaskScheduleScheduler } = await import('../services/agent-task/schedule-runner');
+        if (startAgentTaskScheduleScheduler()) logger.debug('Agent Task 스케줄러 등록 완료');
+    } catch (err) {
+        logger.warn('Agent Task 스케줄러 등록 실패(무시):', err);
+    }
+
     // 9. 아티팩트 실행 히스토리 TTL 스윕 — persistTtlMs 초과 실행 결과 삭제(부팅 + 6h 주기).
     try {
         const { ARTIFACT_EXEC } = await import('../config/artifact-exec');

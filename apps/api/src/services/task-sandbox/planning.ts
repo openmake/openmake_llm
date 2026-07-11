@@ -29,12 +29,20 @@ const STATUS_MARK: Record<PlanStepStatus, string> = {
 export class TaskPlan {
     private steps: PlanStep[] = [];
 
-    /** 계획 생성/교체. 모든 단계 not_started. */
+    /** 계획 생성/교체 — 상태 보존 병합(4-3). 모델이 plan_create 를 재호출해도(라이브에서 관찰된
+     *  행동) 텍스트가 동일한 기존 단계의 status/note 는 보존하고, 신규 단계만 not_started 로
+     *  시작한다. 진행률(plan 완료율)·가시성이 재호출로 리셋되던 문제 방지. */
     create(stepTexts: string[]): void {
+        const prev = new Map(this.steps.map((s) => [s.text.trim(), s]));
         this.steps = stepTexts
             .map((t) => String(t).trim())
             .filter(Boolean)
-            .map((text) => ({ text, status: 'not_started' as PlanStepStatus }));
+            .map((text) => {
+                const old = prev.get(text);
+                return old
+                    ? { text, status: old.status, ...(old.note !== undefined ? { note: old.note } : {}) }
+                    : { text, status: 'not_started' as PlanStepStatus };
+            });
     }
 
     /** 단계 상태 갱신(1-based index). 범위 밖이면 false. */

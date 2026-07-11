@@ -17,20 +17,25 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
   const t = useTranslations("chat");
   const setChatHistory = useAppStore((s) => s.setChatHistory);
   const [busy, setBusy] = useState<string | null>(null);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   if (approvals.length === 0) return null;
 
-  async function decide(a: PendingApproval, decision: "approve" | "reject") {
+  // 낙관적 제거 — 해당 approval 을 메시지에서 뺀다(진행 시 agent_task_progress 가 곧 갱신).
+  function removeApproval(a: PendingApproval) {
+    setChatHistory((prev) =>
+      prev.map((m) =>
+        m.taskId === a.taskId
+          ? { ...m, approvals: (m.approvals ?? []).filter((x) => x.approvalId !== a.approvalId) }
+          : m,
+      ),
+    );
+  }
+
+  async function run(a: PendingApproval, fn: () => Promise<void>) {
     setBusy(a.approvalId);
     try {
-      await ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/${decision}`, {});
-      // 낙관적 제거 — 해당 approval 을 메시지에서 뺀다(승인 시 agent_task_progress 가 곧 갱신).
-      setChatHistory((prev) =>
-        prev.map((m) =>
-          m.taskId === a.taskId
-            ? { ...m, approvals: (m.approvals ?? []).filter((x) => x.approvalId !== a.approvalId) }
-            : m,
-        ),
-      );
+      await fn();
+      removeApproval(a);
     } catch (e) {
       alert(t("approvals.processFailed", { error: e instanceof Error ? e.message : t("approvals.errorFallback") }));
     } finally {
@@ -38,31 +43,83 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
     }
   }
 
+  const decide = (a: PendingApproval, decision: "approve" | "reject") =>
+    run(a, () => ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/${decision}`, {}));
+  const answer = (a: PendingApproval) =>
+    run(a, () => ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/answer`, { text: answers[a.approvalId] ?? "" }));
+  // task 자동승인(4-2) — 이후 이 작업의 도구 호출은 승인 없이 진행(ask_human 제외). 대기 중 승인도 즉시 해소.
+  const autoApprove = (a: PendingApproval) =>
+    run(a, () => ApiClient.post(`/api/agent-tasks/${a.taskId}/approvals/auto-approve`, {}));
+  const hasToolApproval = approvals.some((a) => a.toolName !== "ask_human");
+
   return (
     <div className="mt-1 space-y-2 rounded-md border border-warning-soft bg-warning-soft/50 p-2.5">
-      <p className="flex items-center gap-1.5 text-xs font-semibold text-fg-2">
-        <ShieldCheck className="h-3.5 w-3.5 text-warning" /> {t("approvals.title")}
-      </p>
-      {approvals.map((a) => (
-        <div key={a.approvalId} className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-1 p-2">
-          <div className="min-w-0">
-            <span className="font-mono text-xs text-fg-2">{a.toolName}</span>
-            <span className="ml-2 break-all text-xs text-muted">{JSON.stringify(a.args).slice(0, 90)}</span>
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-fg-2">
+          <ShieldCheck className="h-3.5 w-3.5 text-warning" /> {t("approvals.title")}
+        </p>
+        {hasToolApproval && (
+          <button
+            disabled={busy !== null}
+            onClick={() => autoApprove(approvals.find((a) => a.toolName !== "ask_human")!)}
+            className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted hover:bg-surface-2 disabled:opacity-50"
+            title={t("approvals.autoApproveHint")}
+          >{t("approvals.autoApprove")}</button>
+        )}
+      </div>
+      {approvals.map((a) => {
+        // ask_human 은 도구 승인이 아니라 사용자 질문 — 자유텍스트 답변 채널을 렌더.
+        if (a.toolName === "ask_human") {
+          const question = typeof a.args?.question === "string" ? a.args.question : "";
+          const text = answers[a.approvalId] ?? "";
+          return (
+            <div key={a.approvalId} className="space-y-1.5 rounded-md border border-border bg-surface-1 p-2">
+              <p className="text-xs font-semibold text-fg-2">{t("approvals.question")}</p>
+              {question && <p className="break-words text-xs text-fg-1">{question}</p>}
+              <textarea
+                value={text}
+                onChange={(e) => setAnswers((prev) => ({ ...prev, [a.approvalId]: e.target.value }))}
+                placeholder={t("approvals.answerPlaceholder")}
+                rows={2}
+                disabled={busy === a.approvalId}
+                className="w-full resize-y rounded-md border border-border bg-surface-2 p-1.5 text-xs text-fg-1 disabled:opacity-50"
+              />
+              <div className="flex justify-end gap-1">
+                <button
+                  disabled={busy === a.approvalId}
+                  onClick={() => decide(a, "reject")}
+                  className="rounded-md border border-border px-2.5 py-1 text-xs text-muted hover:bg-surface-2 disabled:opacity-50"
+                >{t("approvals.skip")}</button>
+                <button
+                  disabled={busy === a.approvalId || !text.trim()}
+                  onClick={() => answer(a)}
+                  className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
+                >{t("approvals.sendAnswer")}</button>
+              </div>
+            </div>
+          );
+        }
+        return (
+          <div key={a.approvalId} className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-1 p-2">
+            <div className="min-w-0">
+              <span className="font-mono text-xs text-fg-2">{a.toolName}</span>
+              <span className="ml-2 break-all text-xs text-muted">{JSON.stringify(a.args).slice(0, 90)}</span>
+            </div>
+            <div className="flex shrink-0 gap-1">
+              <button
+                disabled={busy === a.approvalId}
+                onClick={() => decide(a, "reject")}
+                className="rounded-md border border-border px-2.5 py-1 text-xs text-muted hover:bg-surface-2 disabled:opacity-50"
+              >{t("approvals.reject")}</button>
+              <button
+                disabled={busy === a.approvalId}
+                onClick={() => decide(a, "approve")}
+                className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
+              >{t("approvals.approve")}</button>
+            </div>
           </div>
-          <div className="flex shrink-0 gap-1">
-            <button
-              disabled={busy === a.approvalId}
-              onClick={() => decide(a, "reject")}
-              className="rounded-md border border-border px-2.5 py-1 text-xs text-muted hover:bg-surface-2 disabled:opacity-50"
-            >{t("approvals.reject")}</button>
-            <button
-              disabled={busy === a.approvalId}
-              onClick={() => decide(a, "approve")}
-              className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
-            >{t("approvals.approve")}</button>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -239,6 +296,13 @@ function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; appr
             </div>
             <span className="shrink-0 font-mono text-[11px] tabular-nums text-faint">{pct}% · {t("agentTask.turn", { turn: task.currentTurn ?? 0 })}</span>
           </div>
+        )}
+        {/* 현재 단계(4-5 실시간 스트림) — 실행 중일 때 방금 수행한 스텝을 라이브 표시. */}
+        {showProgress && task.lastStep && (
+          <p className="truncate font-mono text-[11px] text-faint">
+            {task.lastStep.toolName ? `⚙ ${task.lastStep.toolName}` : `✎ ${task.lastStep.stepType}`}
+            {task.lastStep.preview ? ` · ${task.lastStep.preview.slice(0, 80)}` : ""}
+          </p>
         )}
         {task.result && (task.status === "completed" || task.status === "failed") && (
           <div className="border-t border-border pt-2.5 text-[13px] leading-relaxed text-fg-2">

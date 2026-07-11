@@ -162,7 +162,7 @@ export interface ResearchStep {
 // 자율 에이전트 작업 (Agent Task) 인터페이스
 // ============================================
 
-export type AgentTaskStatus = 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
+export type AgentTaskStatus = 'pending' | 'queued' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
 
 export interface AgentTask {
     id: string;
@@ -180,6 +180,8 @@ export interface AgentTask {
     input_files?: unknown;
     /** 입력 첨부 이미지(dataURL 배열) — vision 주입 + 샌드박스 기록용 */
     input_images?: unknown;
+    /** 누적 LLM 토큰(prompt+completion) — terminal 전이 시 기록(066), resume 은 통산 */
+    total_tokens?: number;
     created_at: string;
     updated_at: string;
     completed_at?: string;

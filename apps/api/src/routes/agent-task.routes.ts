@@ -32,6 +32,7 @@ import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
 import { createAgentTaskSchema, type CreateAgentTaskInput } from '../schemas/agent-task.schema';
 import { extractAttachedDocuments } from '../services/chat-service/doc-extractor';
 import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
+import { dispatchAgentTask, getAgentTaskQueue } from '../services/agent-task/task-queue';
 import { safeRealWorkspacePath, listWorkspaceFilesAt } from '../services/task-sandbox/sandbox';
 import { basename } from 'path';
 
@@ -160,8 +161,9 @@ router.post('/:taskId/execute', asyncHandler(async (req: Request, res: Response)
     if (!task) return;
 
     // paused = 승인 대기로 일시정지된 채 루프가 살아있는 상태 — 동일 task 이중 실행 차단.
-    if (task.status === 'running' || task.status === 'paused') {
-        return res.status(400).json(badRequest('이미 실행 중(또는 승인 대기 중)인 작업입니다.'));
+    // queued = 이미 큐에 올라 실행 대기 중 — 중복 제출 차단.
+    if (task.status === 'running' || task.status === 'paused' || task.status === 'queued') {
+        return res.status(400).json(badRequest('이미 실행 중(또는 대기·승인 대기 중)인 작업입니다.'));
     }
     if (task.status === 'completed') {
         return res.status(400).json(badRequest('이미 완료된 작업입니다. 새 작업을 생성하세요.'));
@@ -178,22 +180,29 @@ router.post('/:taskId/execute', asyncHandler(async (req: Request, res: Response)
 
     // 백그라운드 detached 실행 (응답은 즉시 반환). AgentTaskService 가 자체
     // AbortController 를 소유하므로 ws.close 와 무관하게 끝까지 진행한다.
+    // 큐(3-B) 활성 시 동시 실행 상한을 넘으면 'queued' 로 대기 후 슬롯이 비면 실행된다.
     const service = new AgentTaskService();
-    service.execute({
+    const outcome = await dispatchAgentTask({
         taskId: task.id,
-        goal: task.goal,
         userId: String(req.user!.id),
-        userRole: role,
-        maxTurns: task.max_turns,
-        allowedSkills,
-        files: Array.isArray(task.input_files) ? task.input_files as AgentTaskInputFile[] : undefined,
-        images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
-    }).catch((error) => {
-        logger.error(`[AgentTaskRoutes] 작업 실행 실패: ${error}`);
+        run: () => service.execute({
+            taskId: task.id,
+            goal: task.goal,
+            userId: String(req.user!.id),
+            userRole: role,
+            maxTurns: task.max_turns,
+            allowedSkills,
+            files: Array.isArray(task.input_files) ? task.input_files as AgentTaskInputFile[] : undefined,
+            images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
+        }),
     });
 
-    logger.info(`[AgentTaskRoutes] 작업 실행 시작: ${task.id}`);
-    res.status(202).json(success({ message: '작업이 시작되었습니다.', taskId: task.id }));
+    logger.info(`[AgentTaskRoutes] 작업 ${outcome === 'queued' ? '대기열 등록' : '실행 시작'}: ${task.id}`);
+    res.status(202).json(success({
+        message: outcome === 'queued' ? '동시 실행 한도로 대기열에 추가되었습니다.' : '작업이 시작되었습니다.',
+        taskId: task.id,
+        queued: outcome === 'queued',
+    }));
 }));
 
 /**
@@ -210,8 +219,11 @@ router.post('/:taskId/cancel', asyncHandler(async (req: Request, res: Response) 
         return res.json(success({ message: '작업 취소를 요청했습니다.', taskId: task.id }));
     }
 
-    // 레지스트리에 없음: DB 상 running 이면 비정상 종료로 보고 상태 정리, 아니면 취소 대상 아님
-    if (task.status === 'running' || task.status === 'pending') {
+    // 실행 전 대기열(queued)에 있으면 큐에서 제거 후 상태 정리(아직 execute 미시작이라 AbortController 없음).
+    const dequeued = getAgentTaskQueue().cancelPending(task.id);
+
+    // 레지스트리에 없음: DB 상 running/queued/pending 이면 상태 정리, 아니면 취소 대상 아님
+    if (dequeued || task.status === 'running' || task.status === 'pending' || task.status === 'queued') {
         const db = getUnifiedDatabase();
         await db.updateAgentTask(task.id, { status: 'cancelled' });
         return res.json(success({ message: '작업이 취소되었습니다.', taskId: task.id }));
@@ -227,8 +239,8 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
     const task = await loadOwnedTask(req, res, req.params.taskId);
     if (!task) return;
 
-    if (task.status === 'running' || task.status === 'paused') {
-        return res.status(400).json(badRequest('이미 실행 중(또는 승인 대기 중)인 작업입니다.'));
+    if (task.status === 'running' || task.status === 'paused' || task.status === 'queued') {
+        return res.status(400).json(badRequest('이미 실행 중(또는 대기·승인 대기 중)인 작업입니다.'));
     }
     // 완료 작업 재개 차단 — 신규 완료분은 checkpoint 가 정리되지만 legacy 행 방어.
     if (task.status === 'completed') {
@@ -244,25 +256,31 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
     const steps = await db.getAgentTaskSteps(task.id);
 
     const service = new AgentTaskService();
-    service.execute({
+    const outcome = await dispatchAgentTask({
         taskId: task.id,
-        goal: task.goal,
         userId: String(req.user!.id),
-        userRole: role,
-        maxTurns: task.max_turns,
-        files: Array.isArray(task.input_files) ? task.input_files as AgentTaskInputFile[] : undefined,
-        images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
-        resume: {
-            conversation: cp.conversation as ChatMessage[],
-            fromTurn: (cp.completedTurn ?? 0) + 1,
-            fromStep: steps.length,
-        },
-    }).catch((error) => {
-        logger.error(`[AgentTaskRoutes] 이어하기 실패: ${error}`);
+        run: () => service.execute({
+            taskId: task.id,
+            goal: task.goal,
+            userId: String(req.user!.id),
+            userRole: role,
+            maxTurns: task.max_turns,
+            files: Array.isArray(task.input_files) ? task.input_files as AgentTaskInputFile[] : undefined,
+            images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
+            resume: {
+                conversation: cp.conversation as ChatMessage[],
+                fromTurn: (cp.completedTurn ?? 0) + 1,
+                fromStep: steps.length,
+            },
+        }),
     });
 
-    logger.info(`[AgentTaskRoutes] 작업 이어하기: ${task.id} (turn ${(cp.completedTurn ?? 0) + 1})`);
-    res.status(202).json(success({ message: '작업을 이어서 시작했습니다.', taskId: task.id }));
+    logger.info(`[AgentTaskRoutes] 작업 이어하기 ${outcome === 'queued' ? '대기열 등록' : '시작'}: ${task.id} (turn ${(cp.completedTurn ?? 0) + 1})`);
+    res.status(202).json(success({
+        message: outcome === 'queued' ? '동시 실행 한도로 대기열에 추가되었습니다.' : '작업을 이어서 시작했습니다.',
+        taskId: task.id,
+        queued: outcome === 'queued',
+    }));
 }));
 
 /**
@@ -319,12 +337,49 @@ router.get('/:taskId/files/download', asyncHandler(async (req: Request, res: Res
 }));
 
 /**
+ * POST /api/agent-tasks/:taskId/approvals/auto-approve  { enabled?: boolean }
+ * task 자동승인(4-2) — 이후 이 task 의 도구 승인 요청을 즉시 approved 처리("나머지 모두 승인").
+ * ask_human 은 제외(질문은 항상 사람에게). 현재 대기 중인 승인들도 즉시 해소.
+ * task 종료 시 자동 해제. owner/admin 만 가능.
+ */
+router.post('/:taskId/approvals/auto-approve', asyncHandler(async (req: Request, res: Response) => {
+    const task = await loadOwnedTask(req, res, req.params.taskId);
+    if (!task) return;
+    const enabled = (req.body as { enabled?: unknown })?.enabled !== false;
+    getApprovalRegistry().setAutoApprove(task.id, enabled);
+    logger.info(`[AgentTaskRoutes] 자동승인 ${enabled ? '활성' : '해제'}: ${task.id} (user ${req.user!.id})`);
+    res.json(success({ taskId: task.id, autoApprove: enabled }));
+}));
+
+/**
  * GET /api/agent-tasks/approvals/pending
  * 현재 사용자의 승인 대기 도구 호출 목록 (HITL 게이트 — 전부-승인 정책).
  */
 router.get('/approvals/pending', asyncHandler(async (req: Request, res: Response) => {
     const pending = getApprovalRegistry().list(String(req.user!.id));
     res.json(success({ pending }));
+}));
+
+/**
+ * POST /api/agent-tasks/approvals/:approvalId/answer  { text }
+ * ask_human 질문에 자유텍스트로 응답 — 진행(approved)으로 해소하되 답변 본문을 에이전트에 전달.
+ * (승인/거절 이진 응답의 한계를 보완하는 HITL 답변 채널.)
+ * ⚠️ 아래 `/:decision` 라우트보다 반드시 먼저 등록 — 뒤에 두면 'answer' 가 :decision 으로
+ *    매칭돼 400 이 난다(라이브 검증에서 발견된 라우트 순서 버그).
+ */
+router.post('/approvals/:approvalId/answer', asyncHandler(async (req: Request, res: Response) => {
+    const { approvalId } = req.params;
+    const text = String((req.body as { text?: unknown })?.text ?? '').trim();
+    if (!text) return res.status(400).json(badRequest('text 가 필요합니다.'));
+    if (text.length > 4000) return res.status(400).json(badRequest('답변은 4000자를 넘을 수 없습니다.'));
+    const registry = getApprovalRegistry();
+    const pending = registry.get(approvalId);
+    if (!pending) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
+    assertResourceOwnerOrAdmin(pending.userId, String(req.user!.id), req.user!.role || 'user');
+
+    const ok = registry.answer(approvalId, text);
+    if (!ok) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
+    res.json(success({ approvalId, answered: true }));
 }));
 
 /**

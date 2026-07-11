@@ -562,6 +562,8 @@ export class WebSocketHandler {
                 status: ev.status,
                 progress: ev.progress,
                 currentTurn: ev.currentTurn,
+                // 방금 기록된 스텝 요약(4-5) — 채팅 인라인 카드의 "현재 단계" 실시간 표시.
+                ...(ev.step ? { step: ev.step } : {}),
             });
         });
     }

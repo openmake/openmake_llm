@@ -25,6 +25,8 @@ export interface AgentTaskProgressEvent {
     status: string;
     progress: number;
     currentTurn: number;
+    /** 방금 기록된 스텝 요약(4-5) — 채팅 인라인 카드가 "현재 단계"를 실시간 표시. 선택적. */
+    step?: { stepType: string; toolName?: string; preview?: string };
 }
 
 const bus = new EventEmitter();

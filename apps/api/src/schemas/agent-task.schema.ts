@@ -43,3 +43,29 @@ export const createAgentTaskSchema = z.object({
 
 /** 에이전트 작업 생성 요청 TypeScript 타입 */
 export type CreateAgentTaskInput = z.infer<typeof createAgentTaskSchema>;
+
+/**
+ * 스케줄(반복 트리거) 생성 스키마 (Phase 3-A).
+ * cron 또는 intervalSeconds 중 정확히 하나만 지정. interval 은 최소 간격 강제(남용 방지).
+ * cron 표현식 유효성은 라우트에서 parseCron 으로 추가 검증.
+ */
+export const createAgentTaskScheduleSchema = z.object({
+    goal: secureTextSchema({ minLength: 1, maxLength: 2000, fieldName: 'goal', detectMaliciousPatterns: false }),
+    cron: z.string().min(1).max(120).optional(),
+    intervalSeconds: z.number().int().min(AGENT_TASK_LIMITS.SCHEDULE_MIN_INTERVAL_SEC).max(365 * 24 * 3600).optional(),
+    maxTurns: z.number().int().min(1).max(AGENT_TASK_LIMITS.MAX_TURNS_CEILING).optional(),
+}).refine((v) => (!!v.cron) !== (v.intervalSeconds !== undefined), {
+    message: 'cron 또는 intervalSeconds 중 정확히 하나를 지정하세요.',
+});
+
+/** 스케줄 부분 수정 스키마 — 제공된 필드만 갱신. */
+export const updateAgentTaskScheduleSchema = z.object({
+    goal: secureTextSchema({ minLength: 1, maxLength: 2000, fieldName: 'goal', detectMaliciousPatterns: false }).optional(),
+    cron: z.string().min(1).max(120).nullable().optional(),
+    intervalSeconds: z.number().int().min(AGENT_TASK_LIMITS.SCHEDULE_MIN_INTERVAL_SEC).max(365 * 24 * 3600).nullable().optional(),
+    maxTurns: z.number().int().min(1).max(AGENT_TASK_LIMITS.MAX_TURNS_CEILING).optional(),
+    enabled: z.boolean().optional(),
+});
+
+export type CreateAgentTaskScheduleInput = z.infer<typeof createAgentTaskScheduleSchema>;
+export type UpdateAgentTaskScheduleInput = z.infer<typeof updateAgentTaskScheduleSchema>;

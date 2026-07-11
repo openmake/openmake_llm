@@ -270,7 +270,13 @@
       "approve": "Approve",
       "reject": "Reject",
       "processFailed": "Failed to process: {error}",
-      "errorFallback": "Error"
+      "errorFallback": "Error",
+      "question": "The agent is asking",
+      "answerPlaceholder": "Type your answer…",
+      "sendAnswer": "Send answer",
+      "skip": "Skip",
+      "autoApprove": "Approve rest",
+      "autoApproveHint": "Run remaining tool calls of this task without approval (questions excluded)"
     },
     "artifactFallback": "Artifact",
     "artifactBuilding": "Building artifact…",
@@ -614,6 +620,24 @@
     "error": "Error",
     "chatCta": "Go to chat",
     "pageTitle": "Agent task management",
+    "schedules": {
+      "title": "Scheduled runs (recurring)",
+      "create": "New schedule",
+      "goalPlaceholder": "Enter the goal to run repeatedly…",
+      "cron": "Cron",
+      "interval": "Interval",
+      "minutes": "min",
+      "add": "Add",
+      "cronHint": "Cron format: min hour day month weekday (e.g. 0 8 * * * = daily at 8am)",
+      "empty": "No schedules yet.",
+      "everyMinutes": "every {min} min",
+      "nextRun": "next run {time}",
+      "disabled": "disabled",
+      "disable": "Pause",
+      "enable": "Enable",
+      "runNow": "Run now",
+      "delete": "Delete"
+    },
     "pageDescription": "Manage the task list, progress, and approvals. Creation and execution happen in the chat's agent mode.",
     "banner": "Create and run agent tasks in the <b>Agent</b> mode of the chat input. This page manages the task list, progress, and approvals.",
     "emptyTitle": "No tasks",
@@ -643,6 +667,10 @@
     "approvalsTitle": "Tool executions awaiting approval ({count})",
     "reject": "Reject",
     "approve": "Approve",
+    "question": "The agent is asking",
+    "answerPlaceholder": "Type your answer…",
+    "sendAnswer": "Send answer",
+    "skip": "Skip",
     "cancelConfirm": "Cancel the task \"{goal}...\"?",
     "deleteConfirm": "Delete the task \"{goal}...\"?",
     "processFailed": "Processing failed: {message}",
@@ -664,7 +692,11 @@
       "t2Step3": "Generate trend charts",
       "t2Step4": "Export PDF report",
       "t3Goal": "Summarize 5 recent AI papers and extract key points"
-    }
+    },
+    "autoApprove": "Approve rest",
+    "autoApproveHint": "Run remaining tool calls of this task without approval (questions excluded)",
+    "tokensUsed": "{count} tokens",
+    "tokensUsedHint": "Total LLM tokens used by this task"
   },
   "customAgents": {
     "pageTitle": "Custom Agents",

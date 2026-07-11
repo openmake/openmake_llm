@@ -21,7 +21,7 @@ import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
-import { getAgentTaskSystemPrompt, getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getAgentTaskBrowserLimitNudge, getTaskSandboxGuidance, getAgentTaskUploadedFilesNote, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
+import { getAgentTaskSystemPrompt, getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getAgentTaskBrowserLimitNudge, getTaskSandboxGuidance, getAgentTaskUploadedFilesNote, getAgentTaskVerifyFailedNudge, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts } from '../llm/artifact-parser';
 import { getPushService } from './PushService';
 import { createLogger } from '../utils/logger';
@@ -39,6 +39,8 @@ import { AgentTaskAbort, type AgentTaskRunInput } from './agent-task/types';
 import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
 import { judgeGoalAchieved } from './agent-task/goal-judge';
 import { persistArtifactSteps, runTool } from './agent-task/task-steps';
+import { assembleAgentTools } from './agent-task/tool-assembly';
+import { verifyCodeArtifacts } from './agent-task/deliverable-verify';
 
 // 기존 import 호환 재노출 — 타입/에러는 services/agent-task/types 로 분리 (파일 크기 가드).
 export { AgentTaskAbort, type AgentTaskRunInput, type AgentTaskInputFile } from './agent-task/types';
@@ -101,6 +103,10 @@ export class AgentTaskService {
 
         let stepNumber = input.resume?.fromStep ?? 0;
         let totalTokens = 0;
+        // pause-aware 타임아웃(4-1): 승인 대기 시간 누적 — 총 타임아웃 예산에서 제외한다.
+        // HITL 이 켜져 있을수록(승인 대기가 길수록) task 가 timeout 으로 죽던 역설 해소.
+        // 개별 대기는 approvalTimeoutMs 가 별도 상한이므로 무한 연장은 불가.
+        let pausedMs = 0;
         let searchCalls = 0;
         let searchLimitNotified = false;
         let browserCalls = 0;
@@ -111,6 +117,7 @@ export class AgentTaskService {
         let taskRuntime: TaskRuntime | null = null;
         const recentSignatures: string[] = [];
         let stuckNotified = false;
+        let verifyRetries = 0;
 
         // DB 갱신 + 진행상황 발행(fire-and-forget). ws 계층이 구독해 owner user 에게 relay.
         // ws 를 직접 참조하지 않으므로 소켓 연결 여부와 무관하게 실행은 끝까지 진행된다.
@@ -118,6 +125,10 @@ export class AgentTaskService {
             curStatus = (u.status ?? curStatus) as string;
             curProgress = u.progress ?? curProgress;
             curTurn = u.currentTurn ?? curTurn;
+            // terminal 전이 시 누적 토큰 영속(4-4) — 목록/상세 UI 의 비용 가시화에 사용.
+            if (u.status === 'completed' || u.status === 'failed' || u.status === 'cancelled') {
+                u = { ...u, totalTokens };
+            }
             await db.updateAgentTask(taskId, u);
             emitAgentTaskProgress({ userId, taskId, status: curStatus, progress: curProgress, currentTurn: curTurn });
             // terminal 상태 → web push (페이지가 닫혀 있어도 알림). fire-and-forget, VAPID 미설정 시 no-op.
@@ -137,8 +148,10 @@ export class AgentTaskService {
         AgentTaskService.running.set(taskId, this);
         try {
             // 레지스트리 등록 전(detached 스케줄링 창)에 접수된 취소는 DB 에만 기록됨 — 시작 전 존중.
-            const preStatus = (await db.getAgentTask(taskId))?.status;
-            if (signal.aborted || preStatus === 'cancelled') throw new AgentTaskAbort('aborted');
+            const preTask = await db.getAgentTask(taskId);
+            if (signal.aborted || preTask?.status === 'cancelled') throw new AgentTaskAbort('aborted');
+            // resume: 이전 실행분 토큰을 이어서 누적(4-4) — runaway 토큰 가드도 통산 기준으로 동작.
+            if (input.resume) totalTokens = Number(preTask?.total_tokens ?? 0);
 
             // resume: 기존 checkpoint(완전한 end-of-turn conversation)에서 복원, 아니면 새로 시작.
             // 새 시작 시 system 프롬프트에 활성 스킬(global+user)의 지식(prompt_md)을 주입한다.
@@ -235,55 +248,34 @@ export class AgentTaskService {
                 }
             }
 
-            // 샌드박스(Manus) 활성 시: LLM 에 샌드박스 도구만 노출(셸/파이썬/브라우저/파일/플랜).
-            // 전체 MCP 카탈로그(~150 도구)를 함께 넘기면 도구 스키마 union 이 수백 KB 로 부풀어
-            // vLLM guided-decoding 문법 컴파일이 100s+ 로 폭주 → LLM_TIMEOUT 초과(Connection error).
-            // Manus 모델에선 에이전트가 컨테이너 셸/브라우저로 작업하므로 외부 MCP 카탈로그가 불필요.
-            // 단, 샌드박스로 대체 불가한 소수 고가치 내장 도구(extraTools 화이트리스트, 예: generate_image,
-            // web_search)는 mcpTools 에서 이름으로 선별해 합류 — 도구 수가 적어 문법 컴파일 폭주가 없다.
-            // extraTools 로 노출된 비-task 도구 이름 집합 — 디스패치에서 호스트 실행 전 승인 게이트 적용에 사용.
-            const extraToolNames = new Set<string>();
-            const buildExtra = (sandboxToolNames: Set<string>): typeof mcpTools => {
-                const extra: typeof mcpTools = [];
-                for (const name of sandboxCfg.extraTools) {
-                    // 샌드박스 도구와 이름 충돌 시 제외(중복 function.name 으로 인한 요청 거부·섀도잉 방지).
-                    if (sandboxToolNames.has(name)) {
-                        logger.warn(`[AgentTask] extraTools '${name}' 가 샌드박스 도구와 이름 충돌 — 무시`);
-                        continue;
-                    }
-                    const tool = mcpTools.find((t) => t.function.name === name);
-                    if (!tool) {
-                        // 오타·스킬 거부 등으로 카탈로그에 없으면 조용히 누락되지 않게 경고.
-                        logger.warn(`[AgentTask] extraTools '${name}' 를 도구 카탈로그에서 찾지 못함 — 노출 생략`);
-                        continue;
-                    }
-                    extra.push(tool);
-                    extraToolNames.add(name);
-                }
-                return extra;
+            // LLM 에 전달할 도구 세트 조립(샌드박스 도구 + extraTools + 2-A 동적 도구). 상세는
+            // agent-task/tool-assembly. extraToolNames = 호스트 실행 도구(디스패치 승인 게이트 대상).
+            const { tools, extraToolNames } = assembleAgentTools({ mcpTools, taskRuntime, sandboxCfg, goal });
+
+            // 스텝 실시간 발행(4-5) — DB 기록 직후 요약을 WS 로 브로드캐스트(채팅 인라인 카드의 "현재 단계").
+            const emitStep = (stepType: string, toolName?: string, content?: string | null): void => {
+                emitAgentTaskProgress({
+                    userId, taskId, status: curStatus, progress: curProgress, currentTurn: curTurn,
+                    step: { stepType, ...(toolName ? { toolName } : {}), preview: (content ?? '').slice(0, 200) },
+                });
             };
-            let tools: typeof mcpTools;
-            if (taskRuntime) {
-                const sandboxTools = taskRuntime.getLLMTools();
-                tools = [...buildExtra(new Set(sandboxTools.map((t) => t.function.name))), ...sandboxTools];
-            } else if (sandboxCfg.enabled) {
-                // 샌드박스 ENABLED 인데 생성 실패(degrade): 전체 카탈로그(~150)는 hang 을 유발하므로
-                // 화이트리스트 도구만으로 진행 — 셸 작업은 불가하나 검색·이미지·작성 작업은 계속 가능.
-                tools = buildExtra(new Set<string>());
-                logger.warn(`[AgentTask] 샌드박스 미가용 — extraTools(${extraToolNames.size}개)만으로 진행 (전체 카탈로그 미전달)`);
-            } else {
-                // 샌드박스 OFF(legacy) 경로 — 기존대로 전체 MCP 도구 사용.
-                tools = mcpTools;
-            }
 
             for (let turn = startTurn; turn < turnCeiling; turn++) {
-                this.assertWithinLimits(signal, startedAt, totalTokens);
+                this.assertWithinLimits(signal, startedAt, pausedMs, totalTokens);
 
-                // 진행률: max_turns 는 상한일 뿐 조기 완료가 흔해(예: 2턴), turn/turnCeiling 선형식은
-                // 짧은 작업에서 5%→100% 로 점프하고 승인 대기(paused) 중 낮은 값에 정체돼 멈춘 듯 보였다.
-                // 총 실제 턴 수를 알 수 없으므로, 남은 거리의 고정 비율을 매 턴 채우는 점근 곡선으로 바꾼다
-                // (상한 90 — 완료 100 은 종료 경로가 설정). 총 턴 수와 무관하게 완만히 증가한다.
-                const nextProgress = Math.min(90, curProgress + Math.max(4, Math.round((90 - curProgress) * 0.25)));
+                // 진행률: 에이전트가 plan 을 세웠으면 실제 단계 완료율(completed/total)을 진척으로 쓴다
+                // — "3/7 단계"처럼 실제 진행을 반영(1-C). plan 이 없으면(턴0·비플래닝 작업) 총 턴 수를
+                // 알 수 없으므로 남은 거리의 고정 비율을 매 턴 채우는 점근 곡선으로 폴백(상한 90, 완료 100 은
+                // 종료 경로가 설정). 둘 다 curProgress 아래로는 내려가지 않게 단조 증가 보장.
+                const planSteps = taskRuntime?.getPlanSnapshot() ?? [];
+                let nextProgress: number;
+                if (planSteps.length > 0) {
+                    const done = planSteps.filter((s) => s.status === 'completed').length;
+                    const planPct = Math.round((done / planSteps.length) * 90);
+                    nextProgress = Math.max(curProgress, Math.min(90, Math.max(2, planPct)));
+                } else {
+                    nextProgress = Math.min(90, curProgress + Math.max(4, Math.round((90 - curProgress) * 0.25)));
+                }
                 await update({ currentTurn: turn + 1, progress: nextProgress });
 
                 // 검색류/브라우저 도구 호출이 한도를 넘으면 해당 도구를 제거해 강제로 종합/작성 단계로 유도.
@@ -313,9 +305,10 @@ export class AgentTaskService {
 
                 // per-call abort: 작업 잔여 예산을 호출에도 바인딩 — 응답이 hang 되면
                 // 턴 사이 assertWithinLimits 까지 도달하지 못하므로 호출 자체를 끊는다.
+                // 승인 대기 누적(pausedMs)은 예산에서 제외(4-1 pause-aware).
                 const remainingMs = Math.max(
                     1_000,
-                    AGENT_TASK_LIMITS.TOTAL_TIMEOUT_MS - (Date.now() - startedAt)
+                    AGENT_TASK_LIMITS.TOTAL_TIMEOUT_MS - (Date.now() - startedAt - pausedMs)
                 );
                 const callSignal = AbortSignal.any([signal, AbortSignal.timeout(remainingMs)]);
 
@@ -377,6 +370,7 @@ export class AgentTaskService {
                     stepType,
                     content: stepContent,
                 });
+                emitStep(stepType, undefined, stepContent);
 
                 if (!hasToolCalls) {
                     // 목표 미달성 선언 판정: 모델이 마커로 "수행 불가"(입력 부재·권한 등)를 밝히면
@@ -415,6 +409,21 @@ export class AgentTaskService {
                             return;
                         }
                     }
+                    // 2-B 산출물 실행 검증: 코드 deliverable 을 완료 전 문법/컴파일 검사(샌드박스 활성 시).
+                    // 실패면 오류 리포트를 주입하고 1회 자가수정 유도(재시도 상한 내). 검사 대상 없음/통과/
+                    // fail-open 이면 그대로 완료. 재시도 상한 초과 시엔 검증을 건너뛰고 완료(무한루프 방지).
+                    if (taskRuntime
+                        && AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_ENABLED
+                        && verifyRetries < AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_MAX_RETRIES
+                        && extracted!.artifacts.length > 0) {
+                        const verify = await verifyCodeArtifacts(taskRuntime, extracted!.artifacts, callSignal);
+                        if (!verify.ok) {
+                            verifyRetries++;
+                            conversation.push({ role: 'user', content: getAgentTaskVerifyFailedNudge(verify.report) });
+                            logger.info(`[AgentTask] 산출물 검증 실패 → 자가수정 유도: ${taskId} (재시도 ${verifyRetries})`);
+                            continue;
+                        }
+                    }
                     stepNumber = await persistArtifactSteps(taskId, extracted!.artifacts, stepNumber);
                     await update({
                         status: 'completed',
@@ -447,9 +456,11 @@ export class AgentTaskService {
                     let toolResult: string;
                     if (taskRuntime?.isTaskTool(name)) {
                         // task 도구 — 승인 게이트 통과 후 영속 샌드박스에서 실행.
+                        // onApprovalWaited: 승인 대기 시간을 pausedMs 로 누적(4-1 pause-aware 타임아웃).
                         toolResult = await taskRuntime.executeTaskTool(name, args, {
                             signal,
                             onApprovalPending: (p) => onApprovalPending(p.toolName),
+                            onApprovalWaited: (ms) => { pausedMs += ms; },
                         });
                         if (curStatus === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
                         if (toolResult.includes(TASK_TERMINATE_SENTINEL)) {
@@ -460,12 +471,15 @@ export class AgentTaskService {
                         // extra(화이트리스트) 도구 — 샌드박스 밖 호스트에서 실행되지만 HITL 승인은 task 도구와 동일 적용.
                         // (이 도구들은 격리 컨테이너가 아니라 API 프로세스에서 실행되므로 승인 우회를 닫는다.)
                         // extraToolNames 는 샌드박스 ENABLED(활성·degrade) 일 때만 채워지므로 legacy OFF 경로엔 영향 없음.
-                        const decision = requiresApproval(sandboxCfg.approvalPolicy, name, args)
-                            ? await getApprovalRegistry().request(
+                        let decision: 'approved' | 'rejected' = 'approved';
+                        if (requiresApproval(sandboxCfg.approvalPolicy, name, args)) {
+                            const r = await getApprovalRegistry().request(
                                 { taskId, userId, toolName: name, args },
                                 { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName) },
-                            )
-                            : 'approved';
+                            );
+                            decision = r.decision;
+                            pausedMs += r.waitedMs; // 4-1 pause-aware
+                        }
                         if (curStatus === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
                         toolResult = decision === 'approved'
                             ? await runTool(mcp, name, args, userCtx)
@@ -486,6 +500,7 @@ export class AgentTaskService {
                         toolName: name,
                         content: toolResult,
                     });
+                    emitStep('tool_result', name, toolResult);
                 }
 
                 // terminate 도구 호출 — 깔끔한 완료 시그널(max_turns 소진 아님).
@@ -538,6 +553,8 @@ export class AgentTaskService {
             logger.warn(`[AgentTask] ${aborted ? '취소' : '실패'}: ${taskId} — ${kind}: ${msg}`);
         } finally {
             AgentTaskService.running.delete(taskId);
+            // task 자동승인(4-2) 해제 — 종료된 task 의 플래그가 레지스트리에 잔존하지 않게.
+            getApprovalRegistry().clearAutoApprove(taskId);
             if (taskRuntime) {
                 // 완료 시 workspace 보존(산출물 다운로드용), 실패/취소 시 삭제. 컨테이너는 항상 제거.
                 const keepWorkspace = curStatus === 'completed';
@@ -550,10 +567,11 @@ export class AgentTaskService {
 
 
 
-    /** runaway 가드 — 한도 초과 시 종류별 AgentTaskAbort throw */
-    private assertWithinLimits(signal: AbortSignal, startedAt: number, totalTokens: number): void {
+    /** runaway 가드 — 한도 초과 시 종류별 AgentTaskAbort throw.
+     *  pausedMs(승인 대기 누적)는 활성 시간이 아니므로 타임아웃 예산에서 제외(4-1). */
+    private assertWithinLimits(signal: AbortSignal, startedAt: number, pausedMs: number, totalTokens: number): void {
         if (signal.aborted) throw new AgentTaskAbort('aborted');
-        if (Date.now() - startedAt > AGENT_TASK_LIMITS.TOTAL_TIMEOUT_MS) {
+        if (Date.now() - startedAt - pausedMs > AGENT_TASK_LIMITS.TOTAL_TIMEOUT_MS) {
             throw new AgentTaskAbort('timeout');
         }
         if (totalTokens > AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS) {

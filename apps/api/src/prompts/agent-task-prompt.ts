@@ -143,3 +143,15 @@ export function getAgentTaskStuckNudge(): string {
 export function getAgentTaskBrowserLimitNudge(): string {
     return '브라우저 탐색 횟수 한도에 도달했습니다. 더 이상 웹을 탐색하지 말고, 지금까지 수집한 정보만으로 최종 결과물을 완성해 작성하세요.';
 }
+
+/** 산출물 문법/컴파일 검사 실패 시 주입(Phase 2-B) — 오류를 근거로 코드 산출물을 1회 자가수정 유도. */
+export function getAgentTaskVerifyFailedNudge(report: string): string {
+    return [
+        '작성한 코드 산출물에 문법/컴파일 오류가 발견되었습니다:',
+        '',
+        report,
+        '',
+        '위 오류를 수정한 완전한 코드 산출물 전문을 다시 <artifact> 태그로 감싸 작성하세요.',
+        '오류 설명이 아니라 수정된 코드 자체를 작성해야 합니다.',
+    ].join('\n');
+}

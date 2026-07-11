@@ -41,6 +41,8 @@ export interface AgentTaskState {
   artifactIds?: string[];
   /** 완료 시 workspace 산출물 파일 경로 목록. */
   files?: string[];
+  /** 방금 실행된 스텝 요약(4-5 실시간 스트림) — "현재 단계" 라인 표시. */
+  lastStep?: { stepType: string; toolName?: string; preview?: string };
 }
 
 /** 에이전트 작업 도구 호출 승인 대기 (백엔드 approval-gate PendingApproval 대응). */

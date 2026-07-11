@@ -270,7 +270,13 @@
       "approve": "批准",
       "reject": "拒绝",
       "processFailed": "处理失败：{error}",
-      "errorFallback": "错误"
+      "errorFallback": "错误",
+      "question": "智能体提问",
+      "answerPlaceholder": "请输入您的回答…",
+      "sendAnswer": "发送回答",
+      "skip": "跳过",
+      "autoApprove": "批准其余全部",
+      "autoApproveHint": "此任务后续的工具调用将无需批准直接执行（提问除外）"
     },
     "artifactFallback": "工件",
     "artifactBuilding": "正在生成工件…",
@@ -614,6 +620,24 @@
     "error": "错误",
     "chatCta": "前往聊天",
     "pageTitle": "智能体任务管理",
+    "schedules": {
+      "title": "定时运行（重复）",
+      "create": "新建定时",
+      "goalPlaceholder": "输入需要重复运行的任务目标…",
+      "cron": "Cron",
+      "interval": "间隔",
+      "minutes": "分钟",
+      "add": "添加",
+      "cronHint": "Cron 格式：分 时 日 月 星期（例如 0 8 * * * = 每天上午8点）",
+      "empty": "暂无定时任务。",
+      "everyMinutes": "每 {min} 分钟",
+      "nextRun": "下次运行 {time}",
+      "disabled": "已禁用",
+      "disable": "暂停",
+      "enable": "启用",
+      "runNow": "立即运行",
+      "delete": "删除"
+    },
     "pageDescription": "管理任务列表、进度和批准。创建和执行在聊天的智能体模式中进行。",
     "banner": "请在聊天输入框的<b>智能体</b>模式中创建和运行智能体任务。此页面用于管理任务列表、进度和批准。",
     "emptyTitle": "暂无任务",
@@ -643,6 +667,10 @@
     "approvalsTitle": "等待批准的工具执行 ({count})",
     "reject": "拒绝",
     "approve": "批准",
+    "question": "智能体提问",
+    "answerPlaceholder": "请输入您的回答…",
+    "sendAnswer": "发送回答",
+    "skip": "跳过",
     "cancelConfirm": "要取消任务“{goal}...”吗？",
     "deleteConfirm": "要删除任务“{goal}...”吗？",
     "processFailed": "处理失败：{message}",
@@ -664,7 +692,11 @@
       "t2Step3": "生成趋势图表",
       "t2Step4": "导出PDF报告",
       "t3Goal": "总结5篇最新AI论文并提炼要点"
-    }
+    },
+    "autoApprove": "批准其余全部",
+    "autoApproveHint": "此任务后续的工具调用将无需批准直接执行（提问除外）",
+    "tokensUsed": "{count} 令牌",
+    "tokensUsedHint": "此任务累计使用的LLM令牌"
   },
   "customAgents": {
     "pageTitle": "自定义智能体",

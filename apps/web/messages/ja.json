@@ -270,7 +270,13 @@
       "approve": "承認",
       "reject": "拒否",
       "processFailed": "処理に失敗しました: {error}",
-      "errorFallback": "エラー"
+      "errorFallback": "エラー",
+      "question": "エージェントからの質問",
+      "answerPlaceholder": "回答を入力してください…",
+      "sendAnswer": "回答を送信",
+      "skip": "スキップ",
+      "autoApprove": "残りをすべて承認",
+      "autoApproveHint": "このタスクの以降のツール実行を承認なしで進めます（質問は除く）"
     },
     "artifactFallback": "アーティファクト",
     "artifactBuilding": "アーティファクトを生成中…",
@@ -614,6 +620,24 @@
     "error": "エラー",
     "chatCta": "チャットへ移動",
     "pageTitle": "エージェントタスク管理",
+    "schedules": {
+      "title": "予約実行（繰り返し）",
+      "create": "新規予約",
+      "goalPlaceholder": "繰り返し実行するタスクの目標を入力…",
+      "cron": "Cron",
+      "interval": "間隔",
+      "minutes": "分ごと",
+      "add": "追加",
+      "cronHint": "Cron形式: 分 時 日 月 曜日 (例: 0 8 * * * = 毎日午前8時)",
+      "empty": "予約はありません。",
+      "everyMinutes": "{min}分ごと",
+      "nextRun": "次回 {time}",
+      "disabled": "無効",
+      "disable": "停止",
+      "enable": "有効化",
+      "runNow": "今すぐ実行",
+      "delete": "削除"
+    },
     "pageDescription": "タスク一覧・進捗・承認を管理します。作成・実行はチャットのエージェントモードで行います。",
     "banner": "エージェントタスクはチャット入力欄の<b>エージェント</b>モードで作成・実行してください。このページではタスク一覧・進捗・承認を管理します。",
     "emptyTitle": "タスクがありません",
@@ -643,6 +667,10 @@
     "approvalsTitle": "承認待ちのツール実行 ({count})",
     "reject": "却下",
     "approve": "承認",
+    "question": "エージェントからの質問",
+    "answerPlaceholder": "回答を入力してください…",
+    "sendAnswer": "回答を送信",
+    "skip": "スキップ",
     "cancelConfirm": "「{goal}...」のタスクをキャンセルしますか？",
     "deleteConfirm": "「{goal}...」のタスクを削除しますか？",
     "processFailed": "処理に失敗しました: {message}",
@@ -664,7 +692,11 @@
       "t2Step3": "推移チャートの生成",
       "t2Step4": "PDFレポートの出力",
       "t3Goal": "最新AI論文5本を要約し要点を整理"
-    }
+    },
+    "autoApprove": "残りをすべて承認",
+    "autoApproveHint": "このタスクの以降のツール実行を承認なしで進めます（質問は除く）",
+    "tokensUsed": "{count} トークン",
+    "tokensUsedHint": "このタスクが使用した累計LLMトークン"
   },
   "customAgents": {
     "pageTitle": "カスタムエージェント",

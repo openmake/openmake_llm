@@ -154,6 +154,8 @@ export type WsServerEvent =
       status: string;
       progress: number;
       currentTurn: number;
+      /** 방금 기록된 스텝 요약(4-5 실시간 스트림) — "현재 단계" 라이브 표시용. */
+      step?: { stepType: string; toolName?: string; preview?: string };
     }
   // 딥리서치 진행상황 (백엔드 ws-chat-handler onResearchProgress)
   | {

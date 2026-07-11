@@ -151,9 +151,13 @@ export function useChatSocket() {
           break;
         case "agent_task_progress": {
           // 에이전트 작업 진행을 구조화 상태(agentTask)로 갱신 → AgentTaskCard 가 벡터 아이콘으로 렌더.
-          const { taskId, status, progress, currentTurn } = data;
+          const { taskId, status, progress, currentTurn, step } = data;
           const terminal =
             status === "completed" || status === "failed" || status === "cancelled";
+          // 스텝 실시간 스트림(4-5) — 있으면 "현재 단계"로 반영(터미널에선 정리).
+          const stepExtra: Partial<AgentTaskState> = step
+            ? { lastStep: step as AgentTaskState["lastStep"] }
+            : {};
           const merge = (extra: Partial<AgentTaskState>, approvals: PendingApproval[] | undefined) =>
             setChatHistory((prev) =>
               prev.map((m) =>
@@ -198,7 +202,7 @@ export function useChatSocket() {
                 const f = await ApiClient.get<{ data: { files: string[] } }>(`/api/agent-tasks/${taskId}/files`);
                 files = f?.data?.files ?? [];
               } catch { /* 파일 없음 */ }
-              merge({ result, artifactIds, files }, undefined);
+              merge({ result, artifactIds, files, lastStep: undefined }, undefined);
             })();
           } else if (status === "paused") {
             // 승인 대기 — 해당 task 의 pending approval 조회 → 카드에 인라인 승인 버튼.
@@ -208,10 +212,10 @@ export function useChatSocket() {
                 const r = await ApiClient.get<{ data: { pending: PendingApproval[] } }>(`/api/agent-tasks/approvals/pending`);
                 mine = (r?.data?.pending ?? []).filter((p) => p.taskId === taskId);
               } catch { /* 조회 실패 — 상태만 */ }
-              merge({}, mine);
+              merge(stepExtra, mine);
             })();
           } else {
-            merge({}, undefined);
+            merge(stepExtra, undefined);
           }
           break;
         }

@@ -335,9 +335,7 @@ export class UnifiedDatabase {
         return this.researchRepository.deleteSessionWithSteps(sessionId);
     }
 
-    // ============================================
     // 🤖 자율 에이전트 작업 메서드
-    // ============================================
 
     async createAgentTask(params: {
         id: string;
@@ -365,6 +363,7 @@ export class UnifiedDatabase {
         sandboxContainerId?: string;
         workspacePath?: string;
         plan?: unknown;
+        totalTokens?: number;
     }): Promise<void> {
         return this.agentTaskRepository.updateAgentTask(taskId, updates);
     }
@@ -397,9 +396,7 @@ export class UnifiedDatabase {
         return this.agentTaskRepository.deleteAgentTaskWithSteps(taskId);
     }
 
-    // ============================================
     // 🔗 외부 서비스 통합 메서드
-    // ============================================
 
     async createExternalConnection(params: {
         id: string;

@@ -58,6 +58,7 @@ export class AgentTaskRepository extends BaseRepository {
         sandboxContainerId?: string;
         workspacePath?: string;
         plan?: unknown;
+        totalTokens?: number;
     }): Promise<void> {
         const sets: string[] = ['updated_at = NOW()'];
         const params: QueryParam[] = [];
@@ -102,6 +103,10 @@ export class AgentTaskRepository extends BaseRepository {
         if (updates.plan !== undefined) {
             sets.push(`plan = $${paramIdx++}`);
             params.push(JSON.stringify(updates.plan));
+        }
+        if (updates.totalTokens !== undefined) {
+            sets.push(`total_tokens = $${paramIdx++}`);
+            params.push(updates.totalTokens);
         }
 
         params.push(taskId);
@@ -152,6 +157,42 @@ export class AgentTaskRepository extends BaseRepository {
             [userId, limit]
         );
         return result.rows;
+    }
+
+    /**
+     * 부팅 복구 대상 조회 — 재시작으로 in-process 루프가 소멸한 task.
+     * schema-initializer 가 부팅 시 running/paused 를 failed('server restarted') 로 먼저 마킹하므로
+     * 실제 대상은 대부분 ②다: ①잔존 running/paused(마킹 실패 대비) ②restart 마킹 + 최근 window 내
+     * (과거 재시작이 남긴 오래된 failed 는 자동 resume 하지 않음 — 수동 resume 대상).
+     * 오래된 것부터 복구(updated_at ASC).
+     */
+    async getInterruptedAgentTasks(windowMs: number): Promise<AgentTask[]> {
+        const result = await this.query<AgentTask>(
+            `SELECT * FROM agent_tasks
+             WHERE status IN ('running', 'paused')
+                OR (status = 'failed' AND error = 'server restarted'
+                    AND completed_at > NOW() - make_interval(secs => $1))
+             ORDER BY updated_at ASC`,
+            [windowMs / 1000]
+        );
+        return result.rows;
+    }
+
+    /**
+     * 복구 소유권 원자적 획득 — 복구 대상 상태인 task 만 pending 으로 전이하고 rowCount 로
+     * 성공 여부 반환. 다중 프로세스가 동시에 복구를 시도해도 조건부 UPDATE 가 한 번만
+     * 성공(나머지는 rowCount=0)해 이중 실행을 막는다. restart 마킹의 error/completed_at 도
+     * 함께 정리(재개 task 가 목록에서 '실패·완료시각'으로 보이지 않게).
+     */
+    async claimAgentTaskForRecovery(taskId: string): Promise<boolean> {
+        const result = await this.query(
+            `UPDATE agent_tasks
+             SET status = 'pending', error = NULL, completed_at = NULL, updated_at = NOW()
+             WHERE id = $1 AND (status IN ('running', 'paused')
+                OR (status = 'failed' AND error = 'server restarted'))`,
+            [taskId]
+        );
+        return (result.rowCount ?? 0) > 0;
     }
 
     async deleteAgentTaskWithSteps(taskId: string): Promise<void> {
