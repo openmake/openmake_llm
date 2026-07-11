@@ -11,7 +11,7 @@
 import type { ToolDefinition } from '../../llm/types';
 import type { MCPToolDefinition } from '../../mcp/types';
 import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
-import { TaskSandbox } from './sandbox';
+import { TaskSandbox, type ExecResult } from './sandbox';
 import { createTaskTools, type DelegateFn } from './tools';
 import { TaskPlan, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval } from './approval-gate';
@@ -79,6 +79,10 @@ export class TaskRuntime {
     /** 입력 첨부 주입 등 호스트 측 workspace 파일 쓰기 — 경로 가드(safeRealWorkspacePath)+쿼터 적용. */
     async writeWorkspaceFile(relPath: string, content: string | Buffer): Promise<void> { return this.sandbox.writeFile(relPath, content); }
 
+    /** 내부 검증용 원시 exec — 승인 게이트 우회(에이전트 도구 호출이 아닌 시스템 산출물 검증).
+     *  컨테이너는 격리(network none·자원 캡)이고 문법/컴파일 검사는 코드를 실행하지 않아 안전. */
+    async execRaw(command: string): Promise<ExecResult> { return this.sandbox.exec(command); }
+
     /** task-scoped 도구를 LLM 형식으로. AgentTaskService 가 effectiveTools 에 합류. */
     getLLMTools(): ToolDefinition[] { return this.defs.map(toLLMTool); }
 
@@ -101,17 +105,21 @@ export class TaskRuntime {
         // (자유 텍스트 답변 채널은 미구현 — 승인/거절 이진 응답만 전달된다.)
         if (name === 'ask_human') {
             const question = String(args.question ?? '');
-            const decision = await getApprovalRegistry().request(
+            const { decision, text } = await getApprovalRegistry().request(
                 { taskId: this.taskId, userId: this.userId, toolName: name, args },
                 { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending },
             );
-            return decision === 'approved'
-                ? `사용자가 승인했습니다(계속 진행). 질문: ${question}`
-                : `사용자가 거절했거나 응답 시간이 초과되었습니다(질문: ${question}). 이 방향을 중단하고 대안을 시도하거나 terminate 로 마무리하세요.`;
+            if (decision !== 'approved') {
+                return `사용자가 거절했거나 응답 시간이 초과되었습니다(질문: ${question}). 이 방향을 중단하고 대안을 시도하거나 terminate 로 마무리하세요.`;
+            }
+            // 자유텍스트 답변이 있으면 그대로 전달(에이전트가 실제 답을 받아 진행), 없으면 단순 승인.
+            return text && text.trim()
+                ? `사용자 답변(질문: ${question}): ${text.trim()}`
+                : `사용자가 승인했습니다(계속 진행). 질문: ${question}`;
         }
 
         if (requiresApproval(this.cfg.approvalPolicy, name, args)) {
-            const decision = await getApprovalRegistry().request(
+            const { decision } = await getApprovalRegistry().request(
                 { taskId: this.taskId, userId: this.userId, toolName: name, args },
                 { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending },
             );

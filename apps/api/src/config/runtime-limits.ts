@@ -1239,5 +1239,42 @@ export const AGENT_TASK_LIMITS = {
     GOAL_JUDGE_ENABLED: process.env.AGENT_TASK_GOAL_JUDGE !== 'false',
     /** judge 에 넘기는 최종 답변 최대 글자 수 (프롬프트 팽창 방지) */
     GOAL_JUDGE_MAX_ANSWER_CHARS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_MAX_CHARS || '6000', 10),
+    /** 부팅 자동 복구 — 프로세스 재시작으로 in-process 루프가 소멸해 running/paused 로 박제된
+     *  task 를 부팅 시 스윕한다. checkpoint 가 있으면 자동 resume, 없으면 failed(interrupted).
+     *  AGENT_TASK_BOOT_RECOVERY=false 로 비활성(기본 on). */
+    BOOT_RECOVERY_ENABLED: process.env.AGENT_TASK_BOOT_RECOVERY !== 'false',
+    /** 동적 도구 서브셋팅(Phase 2-A) — 샌드박스 활성 시 목표 관련성 top-K MCP 도구를 예산 내에서
+     *  샌드박스 도구에 합류(호스트 실행 + HITL 승인 게이트). 전체 카탈로그(~150)를 넘기면 vLLM
+     *  문법 컴파일이 폭주하므로 예산으로 캡한다. ⚠️ 기본 OFF — 활성화 전 문법 컴파일 지연 실측 필수.
+     *  AGENT_TASK_DYNAMIC_TOOLS=true 로 활성. */
+    DYNAMIC_TOOLS_ENABLED: process.env.AGENT_TASK_DYNAMIC_TOOLS === 'true',
+    /** 동적 도구 포함 시 LLM 에 노출하는 총 도구 수 상한(샌드박스+extra+동적). 보수적 기본(30) —
+     *  실측 후 상향. AGENT_TASK_DYNAMIC_TOOLS_BUDGET 로 오버라이드. */
+    DYNAMIC_TOOLS_BUDGET: parseInt(process.env.AGENT_TASK_DYNAMIC_TOOLS_BUDGET || '30', 10),
+    /** 산출물 실행 검증(Phase 2-B) — 샌드박스 활성 시 코드 deliverable 을 완료 전 문법/컴파일
+     *  검사(py_compile·node --check, 코드 미실행). 실패 시 오류 리포트를 주입해 1회 자가수정 유도.
+     *  AGENT_TASK_VERIFY_DELIVERABLE=false 로 비활성(기본 on, 단 샌드박스 활성 시에만 동작). */
+    VERIFY_DELIVERABLE_ENABLED: process.env.AGENT_TASK_VERIFY_DELIVERABLE !== 'false',
+    /** 산출물 검증 실패 시 자가수정 재시도 최대 횟수 — 초과하면 검증을 건너뛰고 완료(무한루프 방지). */
+    VERIFY_DELIVERABLE_MAX_RETRIES: parseInt(process.env.AGENT_TASK_VERIFY_DELIVERABLE_MAX_RETRIES || '1', 10),
+    /** 동시성 큐(Phase 3-B) — /execute·resume·부팅복구가 즉시 발사 대신 큐에 제출. 전역·유저별
+     *  동시 실행 상한을 넘으면 'queued' 로 대기, 슬롯이 비면 dequeue. 기본 OFF(켜면 즉시발사→큐).
+     *  ⚠️ 단일 프로세스 전제(API instances:1). 멀티프로세스 확장 시 Redis 백엔드 필요. */
+    QUEUE_ENABLED: process.env.AGENT_TASK_QUEUE_ENABLED === 'true',
+    /** 전역 동시 실행 상한. AGENT_TASK_QUEUE_GLOBAL_MAX 로 오버라이드(기본 4). */
+    QUEUE_GLOBAL_MAX: parseInt(process.env.AGENT_TASK_QUEUE_GLOBAL_MAX || '4', 10),
+    /** 유저별 동시 실행 상한. AGENT_TASK_QUEUE_USER_MAX 로 오버라이드(기본 2). */
+    QUEUE_USER_MAX: parseInt(process.env.AGENT_TASK_QUEUE_USER_MAX || '2', 10),
+    /** 스케줄/반복 트리거(Phase 3-A) — cron/interval 로 task 를 반복 실행. 기본 OFF.
+     *  AGENT_TASK_SCHEDULES_ENABLED=true 로 활성. 스케줄러 tick 이 due 스케줄을 큐에 제출. */
+    SCHEDULES_ENABLED: process.env.AGENT_TASK_SCHEDULES_ENABLED === 'true',
+    /** 스케줄러 tick 주기(ms) — due 스케줄 스캔 간격. AGENT_TASK_SCHEDULE_TICK_MS(기본 60초). */
+    SCHEDULE_TICK_MS: parseInt(process.env.AGENT_TASK_SCHEDULE_TICK_MS || '', 10) || 60_000,
+    /** 유저당 최대 스케줄 수. AGENT_TASK_SCHEDULE_MAX_PER_USER(기본 10). */
+    SCHEDULE_MAX_PER_USER: parseInt(process.env.AGENT_TASK_SCHEDULE_MAX_PER_USER || '10', 10),
+    /** interval 스케줄 최소 간격(초) — 남용 방지. AGENT_TASK_SCHEDULE_MIN_INTERVAL_SEC(기본 300). */
+    SCHEDULE_MIN_INTERVAL_SEC: parseInt(process.env.AGENT_TASK_SCHEDULE_MIN_INTERVAL_SEC || '300', 10),
+    /** 연속 실패 이 횟수 도달 시 스케줄 자동 비활성(폭주 차단). AGENT_TASK_SCHEDULE_DISABLE_AFTER_FAILURES(기본 5). */
+    SCHEDULE_DISABLE_AFTER_FAILURES: parseInt(process.env.AGENT_TASK_SCHEDULE_DISABLE_AFTER_FAILURES || '5', 10),
 } as const;
 

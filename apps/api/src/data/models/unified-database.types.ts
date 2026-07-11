@@ -162,7 +162,7 @@ export interface ResearchStep {
 // 자율 에이전트 작업 (Agent Task) 인터페이스
 // ============================================
 
-export type AgentTaskStatus = 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
+export type AgentTaskStatus = 'pending' | 'queued' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
 
 export interface AgentTask {
     id: string;

@@ -41,6 +41,7 @@ import {
     auditRouter,
     researchRouter,
     agentTaskRouter,
+    agentTaskScheduleRouter,
     agentSuggestionsRouter,
     externalRouter,
     pushRouter,
@@ -241,6 +242,7 @@ export function setupApiRoutes(
     app.use('/api/audit', auditRouter);
     app.use('/api/research', researchRouter);
     app.use('/api/agent-tasks', agentTaskRouter);
+    app.use('/api/agent-task-schedules', agentTaskScheduleRouter);
     app.use('/api/external', externalRouter);
     app.use('/api/push', pushRouter);
     app.use('/api/docs', developerDocsRouter);

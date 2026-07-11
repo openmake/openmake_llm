@@ -46,6 +46,13 @@ export function requiresApproval(
 
 export type ApprovalDecision = 'approved' | 'rejected';
 
+/** 승인 요청의 해소 결과 — 결정 + (ask_human 자유텍스트 응답 시) 사용자 답변 본문. */
+export interface ApprovalResult {
+    decision: ApprovalDecision;
+    /** answer() 로 해소된 경우에만 채워짐 — ask_human 질문에 대한 사용자 자유텍스트 답변. */
+    text?: string;
+}
+
 export interface PendingApproval {
     approvalId: string;
     taskId: string;
@@ -57,7 +64,7 @@ export interface PendingApproval {
 
 interface Waiter {
     pending: PendingApproval;
-    resolve: (d: ApprovalDecision) => void;
+    resolve: (r: ApprovalResult) => void;
     timer: NodeJS.Timeout;
 }
 
@@ -87,23 +94,23 @@ export class ApprovalRegistry {
     request(
         input: { taskId: string; userId: string; toolName: string; args: Record<string, unknown> },
         opts: { timeoutMs: number; signal?: AbortSignal; onPending?: (p: PendingApproval) => void },
-    ): Promise<ApprovalDecision> {
+    ): Promise<ApprovalResult> {
         const approvalId = `apv_${input.taskId}_${this.seq++}`;
         const pending: PendingApproval = { approvalId, ...input, createdAt: Date.now() };
-        return new Promise<ApprovalDecision>((resolvePromise) => {
-            const settle = (d: ApprovalDecision) => {
+        return new Promise<ApprovalResult>((resolvePromise) => {
+            const settle = (r: ApprovalResult) => {
                 const w = this.waiters.get(approvalId);
                 if (!w) return;
                 clearTimeout(w.timer);
                 this.waiters.delete(approvalId);
-                if (d === 'rejected') logger.info(`[${input.taskId}] 승인 거절/만료: ${input.toolName}`);
-                resolvePromise(d);
+                if (r.decision === 'rejected') logger.info(`[${input.taskId}] 승인 거절/만료: ${input.toolName}`);
+                resolvePromise(r);
             };
-            const timer = setTimeout(() => settle('rejected'), opts.timeoutMs);
+            const timer = setTimeout(() => settle({ decision: 'rejected' }), opts.timeoutMs);
             this.waiters.set(approvalId, { pending, resolve: settle, timer });
             if (opts.signal) {
-                if (opts.signal.aborted) { settle('rejected'); return; }
-                opts.signal.addEventListener('abort', () => settle('rejected'), { once: true });
+                if (opts.signal.aborted) { settle({ decision: 'rejected' }); return; }
+                opts.signal.addEventListener('abort', () => settle({ decision: 'rejected' }), { once: true });
             }
             opts.onPending?.(pending);
         });
@@ -113,7 +120,7 @@ export class ApprovalRegistry {
     approve(approvalId: string): boolean {
         const w = this.waiters.get(approvalId);
         if (!w) return false;
-        w.resolve('approved');
+        w.resolve({ decision: 'approved' });
         return true;
     }
 
@@ -121,7 +128,19 @@ export class ApprovalRegistry {
     reject(approvalId: string): boolean {
         const w = this.waiters.get(approvalId);
         if (!w) return false;
-        w.resolve('rejected');
+        w.resolve({ decision: 'rejected' });
+        return true;
+    }
+
+    /**
+     * REST 자유텍스트 답변 — ask_human 질문에 사용자가 텍스트로 응답. 진행(approved)으로
+     * 해소하되 답변 본문을 함께 전달해 에이전트가 실제 답을 받아 이어가게 한다.
+     * (승인 게이트가 아닌 ask_human 대기에만 의미 있음 — 호출부가 owner 검증.)
+     */
+    answer(approvalId: string, text: string): boolean {
+        const w = this.waiters.get(approvalId);
+        if (!w) return false;
+        w.resolve({ decision: 'approved', text });
         return true;
     }
 }

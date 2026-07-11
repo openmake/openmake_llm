@@ -13,6 +13,9 @@ import {
   Trash2,
   RotateCcw,
   ChevronRight,
+  CalendarClock,
+  Plus,
+  Play,
 } from "lucide-react";
 import {
   Button,
@@ -26,7 +29,7 @@ import { ApiClient } from "@/lib/api-client";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type TaskStatus = "running" | "completed" | "pending";
-type ApiTaskStatus = "pending" | "running" | "paused" | "completed" | "failed" | "cancelled";
+type ApiTaskStatus = "pending" | "queued" | "running" | "paused" | "completed" | "failed" | "cancelled";
 
 interface ChecklistItem {
   label: string;
@@ -259,8 +262,8 @@ function TaskDetailModal({
             if (!cancelled) setFiles(f?.data?.files ?? []);
           } catch { /* ignore */ }
         }
-        // 진행 중이면 계속 폴링.
-        if (!cancelled && (st === "running" || st === "paused" || st === "pending")) {
+        // 진행 중(또는 대기 중)이면 계속 폴링.
+        if (!cancelled && (st === "running" || st === "paused" || st === "pending" || st === "queued")) {
           timer = setTimeout(load, 2500);
         }
       } catch {
@@ -406,6 +409,7 @@ function ApprovalsPanel() {
   const t = useTranslations("agentTasks");
   const [pending, setPending] = useState<PendingApproval[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     try {
@@ -422,10 +426,10 @@ function ApprovalsPanel() {
     return () => clearInterval(id);
   }, [load]);
 
-  async function decide(approvalId: string, decision: "approve" | "reject") {
+  async function run(approvalId: string, fn: () => Promise<void>) {
     setBusy(approvalId);
     try {
-      await ApiClient.post(`/api/agent-tasks/approvals/${approvalId}/${decision}`, {});
+      await fn();
       await load();
     } catch (err) {
       alert(t("processFailed", { message: err instanceof Error ? err.message : t("error") }));
@@ -433,6 +437,11 @@ function ApprovalsPanel() {
       setBusy(null);
     }
   }
+
+  const decide = (approvalId: string, decision: "approve" | "reject") =>
+    run(approvalId, () => ApiClient.post(`/api/agent-tasks/approvals/${approvalId}/${decision}`, {}));
+  const answer = (approvalId: string) =>
+    run(approvalId, () => ApiClient.post(`/api/agent-tasks/approvals/${approvalId}/answer`, { text: answers[approvalId] ?? "" }));
 
   if (pending.length === 0) return null;
 
@@ -442,37 +451,220 @@ function ApprovalsPanel() {
         {t("approvalsTitle", { count: pending.length })}
       </p>
       <div className="space-y-2">
-        {pending.map((p) => (
-          <div
-            key={p.approvalId}
-            className="flex items-center justify-between gap-3 rounded-md border border-line bg-bg-1 p-2"
-          >
-            <div className="min-w-0">
-              <span className="font-mono text-xs text-fg-2">{p.toolName}</span>
-              <span className="ml-2 break-all text-xs text-muted">
-                {JSON.stringify(p.args).slice(0, 100)}
-              </span>
+        {pending.map((p) => {
+          // ask_human 은 도구 승인이 아니라 사용자 질문 — 자유텍스트 답변 채널을 렌더.
+          if (p.toolName === "ask_human") {
+            const question = typeof p.args?.question === "string" ? p.args.question : "";
+            const text = answers[p.approvalId] ?? "";
+            return (
+              <div key={p.approvalId} className="space-y-2 rounded-md border border-line bg-bg-1 p-2">
+                <p className="text-xs font-semibold text-fg-2">{t("question")}</p>
+                {question && <p className="break-words text-xs text-fg-1">{question}</p>}
+                <textarea
+                  value={text}
+                  onChange={(e) => setAnswers((prev) => ({ ...prev, [p.approvalId]: e.target.value }))}
+                  placeholder={t("answerPlaceholder")}
+                  rows={2}
+                  disabled={busy === p.approvalId}
+                  className="w-full resize-y rounded-md border border-line bg-bg-2 p-1.5 text-xs text-fg-1 disabled:opacity-50"
+                />
+                <div className="flex justify-end gap-1">
+                  <Button size="sm" variant="outline" disabled={busy === p.approvalId} onClick={() => decide(p.approvalId, "reject")}>
+                    {t("skip")}
+                  </Button>
+                  <Button size="sm" disabled={busy === p.approvalId || !text.trim()} onClick={() => answer(p.approvalId)}>
+                    {t("sendAnswer")}
+                  </Button>
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div
+              key={p.approvalId}
+              className="flex items-center justify-between gap-3 rounded-md border border-line bg-bg-1 p-2"
+            >
+              <div className="min-w-0">
+                <span className="font-mono text-xs text-fg-2">{p.toolName}</span>
+                <span className="ml-2 break-all text-xs text-muted">
+                  {JSON.stringify(p.args).slice(0, 100)}
+                </span>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy === p.approvalId}
+                  onClick={() => decide(p.approvalId, "reject")}
+                >
+                  {t("reject")}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={busy === p.approvalId}
+                  onClick={() => decide(p.approvalId, "approve")}
+                >
+                  {t("approve")}
+                </Button>
+              </div>
             </div>
-            <div className="flex shrink-0 gap-1">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={busy === p.approvalId}
-                onClick={() => decide(p.approvalId, "reject")}
-              >
-                {t("reject")}
-              </Button>
-              <Button
-                size="sm"
-                disabled={busy === p.approvalId}
-                onClick={() => decide(p.approvalId, "approve")}
-              >
-                {t("approve")}
-              </Button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
+    </Card>
+  );
+}
+
+/* ── 스케줄(반복 트리거) 패널 (Phase 3-A) ───────────────────── */
+interface ApiSchedule {
+  id: string;
+  goal: string;
+  cron?: string | null;
+  interval_seconds?: number | null;
+  max_turns: number;
+  enabled: boolean;
+  next_run_at: string;
+  last_run_at?: string | null;
+  consecutive_failures: number;
+}
+type SchedulesResponse = ApiSuccess<{ schedules: ApiSchedule[]; total: number }>;
+
+function SchedulesPanel() {
+  const t = useTranslations("agentTasks");
+  const [schedules, setSchedules] = useState<ApiSchedule[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [goal, setGoal] = useState("");
+  const [kind, setKind] = useState<"cron" | "interval">("cron");
+  const [cron, setCron] = useState("0 8 * * *");
+  const [intervalMin, setIntervalMin] = useState(60);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await ApiClient.get<SchedulesResponse>("/api/agent-task-schedules");
+      setSchedules(r?.data?.schedules ?? []);
+    } catch {
+      // 401·네트워크·플래그 OFF(404): 빈 목록 유지
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function run(id: string, fn: () => Promise<unknown>) {
+    setBusy(id);
+    try {
+      await fn();
+      await load();
+    } catch (err) {
+      alert(t("processFailed", { message: err instanceof Error ? err.message : t("error") }));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const create = () =>
+    run("new", async () => {
+      const body = kind === "cron" ? { goal, cron } : { goal, intervalSeconds: Math.max(300, intervalMin * 60) };
+      await ApiClient.post("/api/agent-task-schedules", body);
+      setGoal("");
+      setOpen(false);
+    });
+  const toggle = (s: ApiSchedule) =>
+    run(s.id, () => ApiClient.patch(`/api/agent-task-schedules/${s.id}`, { enabled: !s.enabled }));
+  const runNow = (s: ApiSchedule) => run(s.id, () => ApiClient.post(`/api/agent-task-schedules/${s.id}/run`, {}));
+  const remove = (s: ApiSchedule) => run(s.id, () => ApiClient.del(`/api/agent-task-schedules/${s.id}`));
+
+  const timingLabel = (s: ApiSchedule) =>
+    s.cron ? s.cron : s.interval_seconds ? t("schedules.everyMinutes", { min: Math.round(s.interval_seconds / 60) }) : "—";
+
+  return (
+    <Card className="mb-4 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="flex items-center gap-1.5 text-sm font-medium text-fg-2">
+          <CalendarClock className="h-4 w-4 text-accent" /> {t("schedules.title")}
+        </p>
+        <Button size="sm" variant="outline" onClick={() => setOpen((v) => !v)}>
+          <Plus className="h-3.5 w-3.5" /> {t("schedules.create")}
+        </Button>
+      </div>
+
+      {open && (
+        <div className="mb-3 space-y-2 rounded-md border border-line bg-bg-1 p-3">
+          <textarea
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+            placeholder={t("schedules.goalPlaceholder")}
+            rows={2}
+            className="w-full resize-y rounded-md border border-line bg-bg-2 p-2 text-sm text-fg-1"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={kind}
+              onChange={(e) => setKind(e.target.value as "cron" | "interval")}
+              className="rounded-md border border-line bg-bg-2 px-2 py-1 text-xs text-fg-1"
+            >
+              <option value="cron">{t("schedules.cron")}</option>
+              <option value="interval">{t("schedules.interval")}</option>
+            </select>
+            {kind === "cron" ? (
+              <input
+                value={cron}
+                onChange={(e) => setCron(e.target.value)}
+                placeholder="0 8 * * *"
+                className="min-w-40 flex-1 rounded-md border border-line bg-bg-2 px-2 py-1 font-mono text-xs text-fg-1"
+              />
+            ) : (
+              <label className="flex items-center gap-1.5 text-xs text-muted">
+                <input
+                  type="number"
+                  min={5}
+                  value={intervalMin}
+                  onChange={(e) => setIntervalMin(Math.max(5, Number(e.target.value) || 5))}
+                  className="w-20 rounded-md border border-line bg-bg-2 px-2 py-1 text-xs text-fg-1"
+                />
+                {t("schedules.minutes")}
+              </label>
+            )}
+            <Button size="sm" disabled={busy === "new" || !goal.trim()} onClick={create}>
+              {t("schedules.add")}
+            </Button>
+          </div>
+          <p className="text-xs text-faint">{t("schedules.cronHint")}</p>
+        </div>
+      )}
+
+      {schedules.length === 0 ? (
+        <p className="text-xs text-muted">{t("schedules.empty")}</p>
+      ) : (
+        <div className="space-y-2">
+          {schedules.map((s) => (
+            <div key={s.id} className="flex items-center justify-between gap-3 rounded-md border border-line bg-bg-1 p-2">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-medium text-fg-1">{s.goal}</p>
+                <p className="text-xs text-muted">
+                  <span className="font-mono">{timingLabel(s)}</span>
+                  {" · "}
+                  {t("schedules.nextRun", { time: new Date(s.next_run_at).toLocaleString() })}
+                  {!s.enabled && ` · ${t("schedules.disabled")}`}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <Button size="sm" variant="outline" disabled={busy === s.id || !s.enabled} onClick={() => runNow(s)} title={t("schedules.runNow")}>
+                  <Play className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="sm" variant="outline" disabled={busy === s.id} onClick={() => toggle(s)}>
+                  {s.enabled ? t("schedules.disable") : t("schedules.enable")}
+                </Button>
+                <Button size="sm" variant="outline" disabled={busy === s.id} onClick={() => remove(s)} title={t("schedules.delete")}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </Card>
   );
 }
@@ -563,6 +755,7 @@ export default function AgentTasksPage() {
           </Button>
         </Card>
         <ApprovalsPanel />
+        <SchedulesPanel />
         {loading ? (
           <div className="grid place-items-center py-24 text-center">
             <Sparkles className="mb-3 h-8 w-8 animate-pulse text-faint" />

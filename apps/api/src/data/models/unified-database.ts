@@ -393,6 +393,14 @@ export class UnifiedDatabase {
         return this.agentTaskRepository.getUserAgentTasks(userId, limit);
     }
 
+    async getInterruptedAgentTasks(): Promise<AgentTask[]> {
+        return this.agentTaskRepository.getInterruptedAgentTasks();
+    }
+
+    async claimAgentTaskForRecovery(taskId: string): Promise<boolean> {
+        return this.agentTaskRepository.claimAgentTaskForRecovery(taskId);
+    }
+
     async deleteAgentTask(taskId: string): Promise<void> {
         return this.agentTaskRepository.deleteAgentTaskWithSteps(taskId);
     }
