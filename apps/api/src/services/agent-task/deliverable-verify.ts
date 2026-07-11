@@ -5,7 +5,10 @@
  * **문법/컴파일 검사**해 명백한 오류를 잡는다. 실측 근거: 실행 grounding 은 self-critique 보다
  * 값싸고 정확하다(틀린 코드를 "PASS"로 통과시키는 자기평가의 맹점을 실제 컴파일러가 막는다).
  *
- * 코드를 **실행하지 않고 컴파일/문법만** 검사한다(py_compile · node --check) — 부작용·hang 없음.
+ * 검사 모드(5-3, AGENT_TASK_VERIFY_MODE):
+ *  - 'syntax'(기본): 컴파일/문법만(py_compile · node --check) — 부작용·hang 없음.
+ *  - 'run': 샌드박스에서 실제 실행 후 exit code 검사 — 런타임 오류까지 잡는다.
+ *    (network none·자원캡 격리라 안전하나 부작용 있는 코드는 실행됨 — opt-in.)
  * 검사 불가 언어(ts/html/sql 등)나 코드가 아닌 산출물은 통과(ok=true)로 취급. 검사 자체 실패는
  * fail-open(ok=true) — 검증 인프라 문제로 정상 산출물을 막지 않는다.
  *
@@ -13,21 +16,19 @@
  */
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { ExtractedArtifact } from '../../llm/artifact-parser';
+import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentTaskVerify');
 
-/** 언어별 문법/컴파일 검사 — 파일 확장자 + 검사 명령. 코드를 실행하지 않는 것만 등록. */
-interface LangCheck { ext: string; cmd: (file: string) => string; }
+/** 언어별 검사 — cmd=문법/컴파일(코드 미실행) · runCmd=실제 실행(run 모드). */
+interface LangCheck { ext: string; cmd: (file: string) => string; runCmd: (file: string) => string; }
+const PY: LangCheck = { ext: 'py', cmd: (f) => `python3 -m py_compile ${f}`, runCmd: (f) => `python3 ${f}` };
+const jsCheck = (ext: string): LangCheck => ({ ext, cmd: (f) => `node --check ${f}`, runCmd: (f) => `node ${f}` });
 const LANG_CHECKS: Record<string, LangCheck> = {
-    python: { ext: 'py', cmd: (f) => `python3 -m py_compile ${f}` },
-    python3: { ext: 'py', cmd: (f) => `python3 -m py_compile ${f}` },
-    py: { ext: 'py', cmd: (f) => `python3 -m py_compile ${f}` },
-    javascript: { ext: 'js', cmd: (f) => `node --check ${f}` },
-    js: { ext: 'js', cmd: (f) => `node --check ${f}` },
-    node: { ext: 'js', cmd: (f) => `node --check ${f}` },
-    mjs: { ext: 'mjs', cmd: (f) => `node --check ${f}` },
-    cjs: { ext: 'cjs', cmd: (f) => `node --check ${f}` },
+    python: PY, python3: PY, py: PY,
+    javascript: jsCheck('js'), js: jsCheck('js'), node: jsCheck('js'),
+    mjs: jsCheck('mjs'), cjs: jsCheck('cjs'),
 };
 
 export interface VerifyResult {
@@ -55,17 +56,18 @@ export async function verifyCodeArtifacts(
             .filter((x): x is { a: ExtractedArtifact; i: number; check: LangCheck } => !!x.check);
         if (targets.length === 0) return { ok: true, report: '' };
 
+        const mode = AGENT_TASK_LIMITS.VERIFY_MODE;
         const failures: string[] = [];
         for (const { a, i, check } of targets) {
             if (signal?.aborted) break;
             const file = `.verify_${i}.${check.ext}`;
             try {
                 await runtime.writeWorkspaceFile(file, a.content ?? '');
-                const r = await runtime.execRaw(check.cmd(file));
+                const r = await runtime.execRaw(mode === 'run' ? check.runCmd(file) : check.cmd(file));
                 if (r.exitCode !== 0 || r.timedOut) {
                     const err = (r.stderr || r.stdout || '(no output)').trim().slice(0, MAX_REPORT_CHARS);
                     failures.push(`### ${a.title || a.id} (${a.lang})\n${err}`);
-                    logger.info(`[Verify] 산출물 문법 검사 실패: ${a.id} (${a.lang})`);
+                    logger.info(`[Verify] 산출물 ${mode === 'run' ? '실행' : '문법'} 검사 실패: ${a.id} (${a.lang})`);
                 }
             } catch (e) {
                 // 개별 산출물 검사 실패는 통과 취급(fail-open) — 인프라 문제로 완료를 막지 않음.

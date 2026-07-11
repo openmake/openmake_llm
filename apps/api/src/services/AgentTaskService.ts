@@ -27,8 +27,7 @@ import { getPushService } from './PushService';
 import { createLogger } from '../utils/logger';
 import type { UserContext } from '../mcp/user-sandbox';
 import { getSkillManager } from '../agents/skill-manager';
-import { routeToAgent } from '../agents/keyword-router';
-import { getAgentSystemMessage } from '../agents/system-prompt';
+import { buildDelegateFn } from './agent-task/delegate';
 import { mergeToolsWithSkills, type ActiveSkillBinding } from './chat-service/tool-merger';
 import { getTaskSandboxConfig } from '../config/task-sandbox';
 import { TaskRuntime } from './task-sandbox/runtime';
@@ -37,10 +36,11 @@ import { requiresApproval, getApprovalRegistry } from './task-sandbox/approval-g
 import { buildFileContext } from './chat-service/attach-context';
 import { AgentTaskAbort, type AgentTaskRunInput } from './agent-task/types';
 import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
-import { judgeGoalAchieved } from './agent-task/goal-judge';
-import { persistArtifactSteps, runTool } from './agent-task/task-steps';
+import { judgeGoalAchieved, buildJudgeExecutionContext } from './agent-task/goal-judge';
+import { persistArtifactSteps, runTool, isSearchTool } from './agent-task/task-steps';
 import { assembleAgentTools } from './agent-task/tool-assembly';
 import { verifyCodeArtifacts } from './agent-task/deliverable-verify';
+import { buildLearningBlock } from './agent-task/task-learning';
 
 // 기존 import 호환 재노출 — 타입/에러는 services/agent-task/types 로 분리 (파일 크기 가드).
 export { AgentTaskAbort, type AgentTaskRunInput, type AgentTaskInputFile } from './agent-task/types';
@@ -53,12 +53,6 @@ const logger = createLogger('AgentTaskService');
  * 와도 겹치지 않는 sentinel 을 넘겨, __global__ + user:{userId} 스킬만 매칭시킨다.
  */
 const AGENT_TASK_SKILL_AGENT_ID = '__agent_task__';
-
-/** tool name 이 검색/정보수집류인지 (키워드 포함 여부) — 검색 폭주 하드 제한용 */
-function isSearchTool(name: string): boolean {
-    const n = name.toLowerCase();
-    return AGENT_TASK_LIMITS.SEARCH_TOOL_KEYWORDS.some((k) => n.includes(k));
-}
 
 export class AgentTaskService {
     /** 실행 중 인스턴스 레지스트리 — detached 실행을 cancel 엔드포인트에서 중단하기 위함 */
@@ -118,6 +112,8 @@ export class AgentTaskService {
         const recentSignatures: string[] = [];
         let stuckNotified = false;
         let verifyRetries = 0;
+        // 5-3(b): 실제 사용한 도구 추적 — goal judge 의 실행 컨텍스트(수행 흔적)로 전달.
+        const usedTools = new Set<string>();
 
         // DB 갱신 + 진행상황 발행(fire-and-forget). ws 계층이 구독해 owner user 에게 relay.
         // ws 를 직접 참조하지 않으므로 소켓 연결 여부와 무관하게 실행은 끝까지 진행된다.
@@ -157,10 +153,16 @@ export class AgentTaskService {
             // 새 시작 시 system 프롬프트에 활성 스킬(global+user)의 지식(prompt_md)을 주입한다.
             // resume 의 system 은 old checkpoint 그대로이므로, 작업 중 스킬이 바뀌면 지식(system)과
             // 도구 바인딩(매 실행 fresh)이 갈릴 수 있다 — 무해, 재개 일관성을 위한 의도된 동작.
+            // 크로스-task 학습(5-2): 과거 유사 작업 교훈 블록 — 플래그 OFF/실패 시 ''(미주입).
             const conversation: ChatMessage[] = input.resume
                 ? [...input.resume.conversation]
                 : [
-                    { role: 'system', content: getAgentTaskSystemPrompt() + (await this.buildSkillPromptBlock(userId)) },
+                    {
+                        role: 'system',
+                        content: getAgentTaskSystemPrompt()
+                            + (await this.buildSkillPromptBlock(userId))
+                            + (await buildLearningBlock(userId, goal, taskId)),
+                    },
                     { role: 'user', content: goal },
                 ];
             const startTurn = input.resume?.fromTurn ?? 0;
@@ -202,16 +204,13 @@ export class AgentTaskService {
             const sandboxCfg = getTaskSandboxConfig();
             if (sandboxCfg.enabled) {
                 try {
-                    // G4 위임: subgoal 을 적합 산업 전문가 페르소나로 1회 자문(재귀 루프 없음).
-                    const delegateFn = async (subgoal: string, role?: string): Promise<string> => {
-                        const selection = await routeToAgent(role ? `[${role}] ${subgoal}` : subgoal);
-                        const { prompt } = await getAgentSystemMessage(selection, userId);
-                        const r = await this.client.chat(
-                            [{ role: 'system', content: prompt }, { role: 'user', content: subgoal }],
-                            undefined, undefined, { think: false, signal },
-                        );
-                        return r.content ?? '';
-                    };
+                    // G4 위임 — 상세는 agent-task/delegate (SUBAGENT_ENABLED 시 depth=1 tool-loop 승격,
+                    // 토큰·승인대기는 부모 누적에 합산되어 runaway 가드·pause-aware 타임아웃 공유).
+                    const delegateFn = buildDelegateFn({
+                        client: this.client, userId, taskId, userCtx, sandboxCfg, mcpTools, signal,
+                        onTokens: (n) => { totalTokens += n; },
+                        onPausedMs: (ms) => { pausedMs += ms; },
+                    });
                     taskRuntime = new TaskRuntime(taskId, userId, sandboxCfg, delegateFn);
                     await taskRuntime.create();
                     await db.updateAgentTask(taskId, {
@@ -250,7 +249,7 @@ export class AgentTaskService {
 
             // LLM 에 전달할 도구 세트 조립(샌드박스 도구 + extraTools + 2-A 동적 도구). 상세는
             // agent-task/tool-assembly. extraToolNames = 호스트 실행 도구(디스패치 승인 게이트 대상).
-            const { tools, extraToolNames } = assembleAgentTools({ mcpTools, taskRuntime, sandboxCfg, goal });
+            const { tools, extraToolNames } = await assembleAgentTools({ mcpTools, taskRuntime, sandboxCfg, goal });
 
             // 스텝 실시간 발행(4-5) — DB 기록 직후 요약을 WS 로 브로드캐스트(채팅 인라인 카드의 "현재 단계").
             const emitStep = (stepType: string, toolName?: string, content?: string | null): void => {
@@ -396,8 +395,10 @@ export class AgentTaskService {
                     // 목표 달성 judge (마커 미준수 보완): 아티팩트 없는 최종 답변만 판정 전용
                     // LLM 1회 호출로 검증 — deliverable 아티팩트가 실재하면 생략(호출 절약).
                     // 판정 실패/파싱 불가는 fail-open(완료 유지), 미달성 확정 시에만 실패 처리.
+                    // 5-3(b): 실행 컨텍스트(사용 도구·턴수·계획 상태)를 함께 제공해 판정 정확도 보강.
                     if (extracted!.artifacts.length === 0 && AGENT_TASK_LIMITS.GOAL_JUDGE_ENABLED) {
-                        const achieved = await judgeGoalAchieved(this.client, goal, stepContent ?? '', callSignal);
+                        const execCtx = buildJudgeExecutionContext(usedTools, turn + 1, taskRuntime?.getPlanSnapshot() ?? []);
+                        const achieved = await judgeGoalAchieved(this.client, goal, stepContent ?? '', callSignal, execCtx);
                         if (achieved === false) {
                             await update({
                                 status: 'failed',
@@ -450,6 +451,7 @@ export class AgentTaskService {
                 for (const tc of result.tool_calls!) {
                     if (signal.aborted) throw new AgentTaskAbort('aborted');
                     const name = tc.function.name;
+                    usedTools.add(name);
                     if (isSearchTool(name)) searchCalls++;
                     if (name === 'browser') browserCalls++;
                     const args = (tc.function.arguments ?? {}) as Record<string, unknown>;

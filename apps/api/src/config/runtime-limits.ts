@@ -1282,5 +1282,32 @@ export const AGENT_TASK_LIMITS = {
     SCHEDULE_MIN_INTERVAL_SEC: parseInt(process.env.AGENT_TASK_SCHEDULE_MIN_INTERVAL_SEC || '300', 10),
     /** 연속 실패 이 횟수 도달 시 스케줄 자동 비활성(폭주 차단). AGENT_TASK_SCHEDULE_DISABLE_AFTER_FAILURES(기본 5). */
     SCHEDULE_DISABLE_AFTER_FAILURES: parseInt(process.env.AGENT_TASK_SCHEDULE_DISABLE_AFTER_FAILURES || '5', 10),
+    /** 크로스-task 학습(Phase 5-2) — 유저 과거 유사 작업의 결과·도구·실패사유를 새 task system 에
+     *  주입(같은 실수 반복 방지). 무-LLM(키워드 유사도)·기존 테이블 파생. 기본 OFF.
+     *  AGENT_TASK_LEARNING_ENABLED=true 로 활성. */
+    LEARNING_ENABLED: process.env.AGENT_TASK_LEARNING_ENABLED === 'true',
+    /** 학습 조회 대상 — 유저 최근 terminal task 수(기본 30). */
+    LEARNING_LOOKBACK: parseInt(process.env.AGENT_TASK_LEARNING_LOOKBACK || '30', 10),
+    /** 주입할 교훈 최대 건수(기본 3). */
+    LEARNING_MAX_LESSONS: parseInt(process.env.AGENT_TASK_LEARNING_MAX_LESSONS || '3', 10),
+    /** goal 유사도(자카드) 임계 — 미만은 무관 작업으로 간주(기본 0.2). */
+    LEARNING_MIN_SIMILARITY: parseFloat(process.env.AGENT_TASK_LEARNING_MIN_SIMILARITY || '0.2'),
+    /** 산출물 검증 모드(Phase 5-3): 'syntax'(기본 — py_compile·node --check) | 'run'(샌드박스에서
+     *  실제 실행 후 exit code 검사 — network none·자원캡 격리라 안전하나 부작용 있는 코드는 실행됨). */
+    VERIFY_MODE: (process.env.AGENT_TASK_VERIFY_MODE === 'run' ? 'run' : 'syntax') as 'syntax' | 'run',
+    /** 서브에이전트 위임(Phase 5-1) — delegate 를 1-shot 자문에서 depth=1 미니 tool-loop 로 승격.
+     *  기본 OFF(기존 1-shot 유지). AGENT_TASK_SUBAGENT_ENABLED=true 로 활성. */
+    SUBAGENT_ENABLED: process.env.AGENT_TASK_SUBAGENT_ENABLED === 'true',
+    /** 서브에이전트 턴 상한(작게 — 재귀·폭주 방지, 기본 3). */
+    SUBAGENT_MAX_TURNS: parseInt(process.env.AGENT_TASK_SUBAGENT_MAX_TURNS || '3', 10),
+    /** 서브에이전트 1회 위임당 토큰 상한 — 부모 누적에 합산되어 부모 한도도 함께 적용(기본 100k). */
+    SUBAGENT_MAX_TOKENS: parseInt(process.env.AGENT_TASK_SUBAGENT_MAX_TOKENS || '100000', 10),
+    /** 동적 도구 선별 방식(Phase 5-4): 'keyword'(기본 — 무-LLM 오버랩) | 'embedding'(bge-m3 코사인,
+     *  어휘가 달라도 의미 매칭. 실패 시 키워드 폴백). AGENT_TASK_DYNAMIC_TOOLS_MODE. */
+    DYNAMIC_TOOLS_MODE: (process.env.AGENT_TASK_DYNAMIC_TOOLS_MODE === 'embedding' ? 'embedding' : 'keyword') as 'keyword' | 'embedding',
+    /** 임베딩 모드 유사도 임계 — 미만은 예산이 남아도 제외(무관 도구 미주입, 기본 0.35). */
+    DYNAMIC_TOOLS_EMBED_MIN_SIM: parseFloat(process.env.AGENT_TASK_DYNAMIC_TOOLS_EMBED_MIN_SIM || '0.35'),
+    /** 임베딩 선별 전체 타임아웃(ms) — 초과 시 키워드 폴백(기본 3000). */
+    DYNAMIC_TOOLS_EMBED_TIMEOUT_MS: parseInt(process.env.AGENT_TASK_DYNAMIC_TOOLS_EMBED_TIMEOUT_MS || '3000', 10),
 } as const;
 
