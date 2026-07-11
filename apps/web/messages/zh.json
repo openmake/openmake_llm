@@ -696,7 +696,18 @@
     "autoApprove": "批准其余全部",
     "autoApproveHint": "此任务后续的工具调用将无需批准直接执行（提问除外）",
     "tokensUsed": "{count} 令牌",
-    "tokensUsedHint": "此任务累计使用的LLM令牌"
+    "tokensUsedHint": "此任务累计使用的LLM令牌",
+    "templates": {
+      "title": "任务模板",
+      "create": "新建模板",
+      "namePlaceholder": "模板名称",
+      "goalPlaceholder": "目标模板…（支持 {{参数}}）",
+      "add": "添加",
+      "empty": "暂无模板。",
+      "run": "使用此模板运行",
+      "delete": "删除",
+      "started": "已从模板启动任务。"
+    }
   },
   "customAgents": {
     "pageTitle": "自定义智能体",

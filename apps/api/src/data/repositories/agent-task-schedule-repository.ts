@@ -120,5 +120,29 @@ export class AgentTaskScheduleRepository extends BaseRepository {
 
     async delete(id: string): Promise<void> {
         await this.query('DELETE FROM agent_task_schedules WHERE id = $1', [id]);
+        // 이력도 정리(068 은 FK 없이 append-only — 스케줄 삭제 시 함께 비운다).
+        await this.query('DELETE FROM agent_task_schedule_runs WHERE schedule_id = $1', [id])
+            .catch(() => { /* 068 미적용 배포 호환 */ });
+    }
+
+    /** 발화 이력 기록(6-2) — tick 1회 발화당 1행. 기록 실패는 발화를 막지 않는다(호출부 catch). */
+    async recordRun(p: { scheduleId: string; userId?: string; taskId?: string; outcome: 'fired' | 'error'; error?: string }): Promise<void> {
+        await this.query(
+            `INSERT INTO agent_task_schedule_runs (schedule_id, user_id, task_id, outcome, error)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [p.scheduleId, p.userId ?? null, p.taskId ?? null, p.outcome, p.error ?? null],
+        );
+    }
+
+    /** 발화 이력 조회(최신순, 6-2). */
+    async listRuns(scheduleId: string, limit = 20): Promise<Array<{
+        id: number; schedule_id: string; task_id?: string | null; outcome: string; error?: string | null; created_at: string;
+    }>> {
+        const r = await this.query<{ id: number; schedule_id: string; task_id?: string | null; outcome: string; error?: string | null; created_at: string }>(
+            `SELECT id, schedule_id, task_id, outcome, error, created_at
+             FROM agent_task_schedule_runs WHERE schedule_id = $1 ORDER BY created_at DESC LIMIT $2`,
+            [scheduleId, limit],
+        );
+        return r.rows;
     }
 }

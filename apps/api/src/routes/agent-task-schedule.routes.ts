@@ -98,6 +98,14 @@ router.patch('/:id', validate(updateAgentTaskScheduleSchema), asyncHandler(async
     res.json(success({ schedule: await repo().get(s.id) }));
 }));
 
+/** GET /:id/runs — 발화 이력(6-2, 최신순 최대 20건). */
+router.get('/:id/runs', asyncHandler(async (req: Request, res: Response) => {
+    const s = await loadOwned(req, res, req.params.id);
+    if (!s) return;
+    const runs = await repo().listRuns(s.id);
+    res.json(success({ runs, total: runs.length }));
+}));
+
 /** DELETE /:id — 스케줄 삭제. */
 router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
     const s = await loadOwned(req, res, req.params.id);

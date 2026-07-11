@@ -35,6 +35,7 @@ export { default as auditRouter } from './audit.routes';
 export { default as researchRouter } from './research.routes';
 export { default as agentTaskRouter } from './agent-task.routes';
 export { default as agentTaskScheduleRouter } from './agent-task-schedule.routes';
+export { default as agentTaskTemplateRouter } from './agent-task-template.routes';
 export { default as agentSuggestionsRouter } from './agent-suggestions.routes';
 export { default as externalRouter } from './external.routes';
 // 🆕 Artifacts (2026-05-26 Phase 1): claude.ai-style 산출물 영속화

@@ -69,3 +69,31 @@ export const updateAgentTaskScheduleSchema = z.object({
 
 export type CreateAgentTaskScheduleInput = z.infer<typeof createAgentTaskScheduleSchema>;
 export type UpdateAgentTaskScheduleInput = z.infer<typeof updateAgentTaskScheduleSchema>;
+
+/** 템플릿 파라미터 정의(6-1) — {{name}} 자리 치환. */
+const templateParamSchema = z.object({
+    name: z.string().min(1).max(50).regex(/^[A-Za-z0-9_가-힣-]+$/, '파라미터 이름은 영숫자·한글·_·- 만 허용'),
+    description: z.string().max(200).optional(),
+    default: z.string().max(500).optional(),
+});
+
+/** 작업 템플릿 생성 스키마(6-1). goal_template 은 secureText(HTML 태그 금지 등) 적용. */
+export const createAgentTaskTemplateSchema = z.object({
+    name: z.string().min(1).max(100),
+    goalTemplate: secureTextSchema({ minLength: 1, maxLength: 2000, fieldName: 'goalTemplate', detectMaliciousPatterns: false }),
+    params: z.array(templateParamSchema).max(10).optional(),
+    maxTurns: z.number().int().min(1).max(AGENT_TASK_LIMITS.MAX_TURNS_CEILING).optional(),
+});
+
+export const updateAgentTaskTemplateSchema = createAgentTaskTemplateSchema.partial();
+
+/** 템플릿 instantiate 입력 — 파라미터 값 맵. */
+export const instantiateTemplateSchema = z.object({
+    values: z.record(z.string(), z.string().max(2000)).optional(),
+    /** true(기본): 생성 즉시 실행(큐 경유). false: 생성만. */
+    execute: z.boolean().optional(),
+});
+
+export type CreateAgentTaskTemplateInput = z.infer<typeof createAgentTaskTemplateSchema>;
+export type UpdateAgentTaskTemplateInput = z.infer<typeof updateAgentTaskTemplateSchema>;
+export type InstantiateTemplateInput = z.infer<typeof instantiateTemplateSchema>;
