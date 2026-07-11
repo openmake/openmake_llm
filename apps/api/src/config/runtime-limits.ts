@@ -1316,3 +1316,11 @@ export const AGENT_TASK_LIMITS = {
     MIDTURN_CHECKPOINT_ENABLED: process.env.AGENT_TASK_MIDTURN_CHECKPOINT === 'true',
 } as const;
 
+/** 채팅 서브에이전트(delegate_expert) — 채팅 도구 루프에서 전문가 위임(depth=1 tool-loop). */
+export const CHAT_SUBAGENT = {
+    /** 기본 OFF — 지연(위임 1회 = 서브 LLM 최대 3턴) UX 영향을 관찰 후 조정. CHAT_SUBAGENT_ENABLED=true. */
+    ENABLED: process.env.CHAT_SUBAGENT_ENABLED === 'true',
+    /** 메시지당 위임 호출 캡(남용·지연 억제, 기본 1). CHAT_SUBAGENT_MAX_CALLS. */
+    MAX_CALLS: parseInt(process.env.CHAT_SUBAGENT_MAX_CALLS || '1', 10),
+} as const;
+
