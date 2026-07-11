@@ -22,9 +22,6 @@ import {
   Badge,
   PageHeader,
   Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
 } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import type { ApiSuccess } from "@openmake/shared-types";

@@ -175,7 +175,7 @@ export default function McpMonitoringPage() {
   const [logs, setLogs] = useState<ToolLog[]>([]);
   const maxCalls = Math.max(1, ...serverUsage.map((s) => s.calls));
 
-  async function loadExtraStats() {
+  const loadExtraStats = useCallback(async () => {
     try {
       const [tc, ct] = await Promise.allSettled([
         ApiClient.get<ApiEnvelope<{ items: TopCrashedItem[]; limit: number }>>(
@@ -196,13 +196,13 @@ export default function McpMonitoringPage() {
       setServerUsage(activity.serverUsage);
       setLogs(activity.logs);
     }
-  }
+  }, [locale]);
 
   const refresh = useCallback(async () => {
     const view = await fetchSummaryView(locale);
     if (view) setSummary(view);
     await loadExtraStats();
-  }, [locale]);
+  }, [locale, loadExtraStats]);
 
   useEffect(() => {
     let cancelled = false;
@@ -217,7 +217,7 @@ export default function McpMonitoringPage() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [locale]);
+  }, [locale, loadExtraStats]);
 
   return (
     <>

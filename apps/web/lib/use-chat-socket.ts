@@ -46,6 +46,8 @@ export function useChatSocket() {
   // (onclose 가 예약한 setTimeout(connect) 가 언마운트 뒤 좀비 소켓을 여는 것을 차단)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unmountedRef = useRef(false);
+  // connect 자기참조(재연결 예약)용 — useCallback 선언 내부에서 자신을 직접 참조하지 않도록 ref 경유
+  const connectRef = useRef<() => void>(() => {});
   // 에이전트 작업 taskId → 목표(goal) — agent_task_progress 렌더에 사용
   // 구조화 답변(REST) 진행 중 AbortController — abort() 가 취소할 수 있게 보관
   const structuredAbortRef = useRef<AbortController | null>(null);
@@ -235,7 +237,7 @@ export function useChatSocket() {
           CLIENT_TIMING.WS_RECONNECT_MAX_MS,
         );
         reconnectRef.current += 1;
-        reconnectTimerRef.current = setTimeout(connect, delay);
+        reconnectTimerRef.current = setTimeout(() => connectRef.current(), delay);
       }
     };
 
@@ -245,6 +247,7 @@ export function useChatSocket() {
 
   useEffect(() => {
     unmountedRef.current = false; // StrictMode 재마운트 대비 리셋
+    connectRef.current = connect;
     connect();
     return () => {
       unmountedRef.current = true; // 언마운트 시 재연결 중단

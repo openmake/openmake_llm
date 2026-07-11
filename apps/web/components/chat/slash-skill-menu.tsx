@@ -52,7 +52,9 @@ export function SlashSkillMenu({
     el?.scrollIntoView({ block: "nearest" });
   }, [activeIndex]);
 
-  let prevCategory: string | null = null;
+  // 카테고리 헤더: 이전 항목과 비교해 바뀌는 지점에만 표시 (렌더 스코프 변수 재할당 없이 파생)
+  const categoryOf = (idx: number) =>
+    skillCategoryLabel(skills[idx].category) || t("slashMenu.categoryEtc");
 
   return (
     <div className="absolute bottom-full left-0 right-0 z-40 mb-2 flex flex-col overflow-hidden rounded-xl border border-border bg-surface-2 shadow-lg">
@@ -67,9 +69,8 @@ export function SlashSkillMenu({
       ) : (
         <div ref={listRef} className="max-h-72 overflow-y-auto p-1">
           {skills.map((skill, i) => {
-            const cat = skillCategoryLabel(skill.category) || t("slashMenu.categoryEtc");
-            const showHeader = grouped && cat !== prevCategory;
-            prevCategory = cat;
+            const cat = categoryOf(i);
+            const showHeader = grouped && (i === 0 || categoryOf(i - 1) !== cat);
             return (
               <Fragment key={skill.id}>
                 {showHeader && (
