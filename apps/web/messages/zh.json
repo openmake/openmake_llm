@@ -32,7 +32,9 @@
       "metrics": "指标",
       "alerts": "告警",
       "mcpCatalogAdmin": "MCP目录管理",
-      "memory": "记忆"
+      "memory": "记忆",
+      "mcp": "MCP",
+      "developer": "开发者"
     }
   },
   "sidebar": {
@@ -73,7 +75,8 @@
       "interface": "界面",
       "notifications": "通知",
       "privacy": "隐私",
-      "security": "安全"
+      "security": "安全",
+      "memory": "记忆"
     },
     "responseStyles": {
       "concise": "简洁",
@@ -1399,5 +1402,16 @@
     "clearConfirm": "删除所有记忆吗？此操作无法撤销。",
     "deleteAria": "删除记忆",
     "limitReached": "最多可保存 {max} 条记忆。"
+  },
+  "pageTabs": {
+    "myServers": "我的服务器",
+    "catalog": "目录",
+    "docs": "文档",
+    "apiAccess": "API 访问",
+    "dashboard": "仪表盘",
+    "analytics": "分析",
+    "metrics": "指标",
+    "mcpMonitoring": "MCP监控",
+    "agentLearning": "智能体学习"
   }
 }

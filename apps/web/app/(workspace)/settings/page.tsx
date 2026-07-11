@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import {
   Settings,
   Bot,
+  Brain,
   Palette,
   Bell,
   ShieldCheck,
@@ -30,15 +31,18 @@ import { fetchModels } from "@/lib/models-api";
 import { cn } from "@/lib/utils";
 import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE, isLocale, toBcp47 } from "@/i18n/config";
 import { ModelPicker } from "@/components/model-picker";
+import { MemorySection } from "@/components/settings/memory-section";
+import { ProviderKeysSection } from "@/components/settings/provider-keys-section";
 
 /* ── 탭 정의 ────────────────────────────────────────────── */
-type TabId = "general" | "model" | "interface" | "notifications" | "privacy" | "security";
+type TabId = "general" | "model" | "interface" | "notifications" | "memory" | "privacy" | "security";
 
 const TABS: { id: TabId; labelKey: string; icon: LucideIcon }[] = [
   { id: "general", labelKey: "tabs.general", icon: Settings },
   { id: "model", labelKey: "tabs.model", icon: Bot },
   { id: "interface", labelKey: "tabs.interface", icon: Palette },
   { id: "notifications", labelKey: "tabs.notifications", icon: Bell },
+  { id: "memory", labelKey: "tabs.memory", icon: Brain },
   { id: "privacy", labelKey: "tabs.privacy", icon: ShieldCheck },
   { id: "security", labelKey: "tabs.security", icon: ShieldCheck },
 ];
@@ -173,7 +177,12 @@ function Segment<T extends string>({
 export default function SettingsPage() {
   const tSettings = useTranslations("settings");
   const bcp47 = toBcp47(useLocale());
-  const [tab, setTab] = useState<TabId>("general");
+  // /memory·/api-keys 흡수(2026-07-11): 구 라우트 redirect 가 ?tab= 으로 진입한다.
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const [tab, setTab] = useState<TabId>(
+    TABS.some((t) => t.id === tabParam) ? (tabParam as TabId) : "general",
+  );
 
   // 일반 / 모델
   const selectedModel = useAppStore((s) => s.selectedModel);
@@ -567,6 +576,7 @@ export default function SettingsPage() {
             )}
 
             {tab === "model" && (
+              <>
               <Card>
                 <CardHeader>
                   <CardTitle>{tSettings("tabs.model")}</CardTitle>
@@ -593,15 +603,11 @@ export default function SettingsPage() {
                           value={selectedModel}
                           onChange={setSelectedModel}
                         />
+                        {/* 키 등록 섹션이 같은 탭 하단(ProviderKeysSection)으로 흡수됨 — 링크 대신 안내만 */}
                         {externalModels.length === 0 && (
                           <p className="text-xs text-muted">
                             {tSettings("externalLlmHint.prefix")}{" "}
-                            <a
-                              href="/api-keys"
-                              className="text-accent underline underline-offset-2 hover:opacity-80"
-                            >
-                              {tSettings("externalLlmHint.link")}
-                            </a>
+                            <span className="font-medium text-fg-2">{tSettings("externalLlmHint.link")}</span>
                             {tSettings("externalLlmHint.suffix")}
                           </p>
                         )}
@@ -666,6 +672,8 @@ export default function SettingsPage() {
                   </div>
                 </CardContent>
               </Card>
+              <ProviderKeysSection />
+              </>
             )}
 
             {tab === "interface" && (
@@ -730,6 +738,8 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
             )}
+
+            {tab === "memory" && <MemorySection />}
 
             {tab === "privacy" && (
               <Card>

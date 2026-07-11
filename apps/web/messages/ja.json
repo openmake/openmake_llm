@@ -32,7 +32,9 @@
       "metrics": "メトリクス",
       "alerts": "アラート",
       "mcpCatalogAdmin": "MCPカタログ管理",
-      "memory": "メモリ"
+      "memory": "メモリ",
+      "mcp": "MCP",
+      "developer": "開発者"
     }
   },
   "sidebar": {
@@ -73,7 +75,8 @@
       "interface": "インターフェース",
       "notifications": "通知",
       "privacy": "プライバシー",
-      "security": "セキュリティ"
+      "security": "セキュリティ",
+      "memory": "メモリ"
     },
     "responseStyles": {
       "concise": "簡潔",
@@ -1399,5 +1402,16 @@
     "clearConfirm": "すべてのメモリを削除しますか？元に戻せません。",
     "deleteAria": "メモリを削除",
     "limitReached": "最大{max}件まで保存できます。"
+  },
+  "pageTabs": {
+    "myServers": "マイサーバー",
+    "catalog": "カタログ",
+    "docs": "ドキュメント",
+    "apiAccess": "API アクセス",
+    "dashboard": "ダッシュボード",
+    "analytics": "アナリティクス",
+    "metrics": "メトリクス",
+    "mcpMonitoring": "MCPモニタリング",
+    "agentLearning": "エージェント学習"
   }
 }

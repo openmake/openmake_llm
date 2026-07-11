@@ -11,6 +11,7 @@ import {
   CardContent,
 } from "@/components/ui/primitives";
 import { ApiClient } from "@/lib/api-client";
+import { DeveloperTabs } from "@/components/hub-tabs";
 
 interface QuickStartStep {
   step: number;
@@ -93,6 +94,7 @@ export default function DeveloperPage() {
         title={t("pageTitle")}
         description={t("pageDescription")}
       />
+      <DeveloperTabs />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="mx-auto max-w-3xl space-y-6">

@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/primitives";
 import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
+import { McpTabs } from "@/components/hub-tabs";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type CatalogKind = "server" | "skill";
@@ -226,6 +227,7 @@ export default function McpCatalogPage() {
         title={t("pageTitle")}
         description={t("pageDescription")}
       />
+      <McpTabs />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="relative mb-5 max-w-md">

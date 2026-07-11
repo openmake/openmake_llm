@@ -32,7 +32,9 @@
       "metrics": "Metrics",
       "alerts": "Alerts",
       "mcpCatalogAdmin": "MCP Catalog Admin",
-      "memory": "Memory"
+      "memory": "Memory",
+      "mcp": "MCP",
+      "developer": "Developer"
     }
   },
   "sidebar": {
@@ -73,7 +75,8 @@
       "interface": "Interface",
       "notifications": "Notifications",
       "privacy": "Privacy",
-      "security": "Security"
+      "security": "Security",
+      "memory": "Memory"
     },
     "responseStyles": {
       "concise": "Concise",
@@ -1399,5 +1402,16 @@
     "clearConfirm": "Delete all memories? This cannot be undone.",
     "deleteAria": "Delete memory",
     "limitReached": "You can save up to {max} memories."
+  },
+  "pageTabs": {
+    "myServers": "My Servers",
+    "catalog": "Catalog",
+    "docs": "Docs",
+    "apiAccess": "API Access",
+    "dashboard": "Dashboard",
+    "analytics": "Analytics",
+    "metrics": "Metrics",
+    "mcpMonitoring": "MCP Monitoring",
+    "agentLearning": "Agent Learning"
   }
 }

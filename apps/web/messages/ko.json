@@ -32,7 +32,9 @@
       "metrics": "메트릭",
       "alerts": "알림",
       "mcpCatalogAdmin": "MCP 카탈로그 관리",
-      "memory": "메모리"
+      "memory": "메모리",
+      "mcp": "MCP",
+      "developer": "개발자"
     }
   },
   "sidebar": {
@@ -73,7 +75,8 @@
       "interface": "인터페이스",
       "notifications": "알림",
       "privacy": "개인정보",
-      "security": "보안"
+      "security": "보안",
+      "memory": "메모리"
     },
     "responseStyles": {
       "concise": "간결",
@@ -1399,5 +1402,16 @@
     "clearConfirm": "모든 메모리를 삭제할까요? 되돌릴 수 없습니다.",
     "deleteAria": "메모리 삭제",
     "limitReached": "최대 {max}개까지 저장할 수 있습니다."
+  },
+  "pageTabs": {
+    "myServers": "내 서버",
+    "catalog": "카탈로그",
+    "docs": "문서",
+    "apiAccess": "API 액세스",
+    "dashboard": "대시보드",
+    "analytics": "애널리틱스",
+    "metrics": "메트릭",
+    "mcpMonitoring": "MCP 모니터링",
+    "agentLearning": "에이전트 학습"
   }
 }

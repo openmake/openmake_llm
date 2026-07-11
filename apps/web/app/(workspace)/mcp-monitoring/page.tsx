@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/primitives";
 import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
+import { AdminObservabilityTabs } from "@/components/hub-tabs";
 
 /* ── 백엔드 응답 타입 (admin 전용) ───────────────────────── */
 interface ApiMonitoringSummary {
@@ -231,6 +232,7 @@ export default function McpMonitoringPage() {
           </Button>
         }
       />
+      <AdminObservabilityTabs />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
