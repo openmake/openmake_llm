@@ -18,21 +18,16 @@
       "skillLibrary": "スキルライブラリ",
       "artifacts": "アーティファクト",
       "history": "履歴",
-      "mcpServers": "MCPサーバー",
-      "mcpCatalog": "MCPカタログ",
       "mcpMonitoring": "MCPモニタリング",
       "agentLearning": "エージェント学習",
       "settings": "設定",
-      "apiKeys": "APIキー",
       "usage": "使用量",
-      "developerDocs": "開発者ドキュメント",
       "admin": "管理者",
       "analytics": "アナリティクス",
       "auditLog": "監査ログ",
       "metrics": "メトリクス",
       "alerts": "アラート",
       "mcpCatalogAdmin": "MCPカタログ管理",
-      "memory": "メモリ",
       "mcp": "MCP",
       "developer": "開発者"
     }
@@ -1276,7 +1271,6 @@
     "cancel": "キャンセル",
     "save": "保存",
     "registeredKeys": "登録済みプロバイダーキー",
-    "mockDataShown": "モックデータを表示中",
     "loading": "キー一覧を読み込み中...",
     "emptyTitle": "登録された外部キーがありません",
     "emptyDesc": "キーを追加すると、そのプロバイダーのモデルを利用できます。",
@@ -1306,9 +1300,6 @@
     "sdkType": {
       "anthropic": "Anthropic",
       "openaiCompatible": "OpenAI互換"
-    },
-    "mock": {
-      "productionName": "本番"
     },
     "validationWarning": "キーは保存されましたが、endpoint の検証に失敗しました: {error} — URL/キーを確認して再保存してください。"
   },
@@ -1407,11 +1398,6 @@
     "myServers": "マイサーバー",
     "catalog": "カタログ",
     "docs": "ドキュメント",
-    "apiAccess": "API アクセス",
-    "dashboard": "ダッシュボード",
-    "analytics": "アナリティクス",
-    "metrics": "メトリクス",
-    "mcpMonitoring": "MCPモニタリング",
-    "agentLearning": "エージェント学習"
+    "dashboard": "ダッシュボード"
   }
 }

@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { PageTabs } from "@/components/ui/page-tabs";
+import { useAppStore } from "@/lib/store";
 
 /**
  * 사이드바 통폐합(2026-07-11)으로 묶인 허브별 탭 정의.
@@ -21,30 +22,38 @@ export function McpTabs() {
   );
 }
 
-/** 개발자 허브 — 문서 | API 액세스 */
+/** 개발자 허브 — 문서 | API 액세스 (기존 nav.items 라벨 재사용 — 중복 키 방지) */
 export function DeveloperTabs() {
   const t = useTranslations("pageTabs");
+  const tNav = useTranslations("nav");
   return (
     <PageTabs
       tabs={[
         { href: "/developer", label: t("docs") },
-        { href: "/api-access", label: t("apiAccess") },
+        { href: "/api-access", label: tNav("items.apiAccess") },
       ]}
     />
   );
 }
 
-/** 관리자 관측 허브 — 대시보드 | 애널리틱스 | 메트릭 | MCP 모니터링 | 에이전트 학습 */
+/**
+ * 관리자 관측 허브 — 대시보드 | 애널리틱스 | 메트릭 | MCP 모니터링 | 에이전트 학습.
+ * /mcp-monitoring·/agent-learning 은 라우트 가드가 없어 비관리자도 URL 로 도달할 수 있다 —
+ * 그 경우 /admin 계열 링크를 노출하지 않도록 admin 역할에서만 렌더.
+ */
 export function AdminObservabilityTabs() {
   const t = useTranslations("pageTabs");
+  const tNav = useTranslations("nav");
+  const role = useAppStore((s) => s.auth.currentUser?.role);
+  if (role !== "admin") return null;
   return (
     <PageTabs
       tabs={[
         { href: "/admin", label: t("dashboard") },
-        { href: "/admin/analytics", label: t("analytics") },
-        { href: "/admin/metrics", label: t("metrics") },
-        { href: "/mcp-monitoring", label: t("mcpMonitoring") },
-        { href: "/agent-learning", label: t("agentLearning") },
+        { href: "/admin/analytics", label: tNav("items.analytics") },
+        { href: "/admin/metrics", label: tNav("items.metrics") },
+        { href: "/mcp-monitoring", label: tNav("items.mcpMonitoring") },
+        { href: "/agent-learning", label: tNav("items.agentLearning") },
       ]}
     />
   );

@@ -183,6 +183,11 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<TabId>(
     TABS.some((t) => t.id === tabParam) ? (tabParam as TabId) : "general",
   );
+  // 뒤로가기/앞으로가기로 ?tab= 이 바뀌면 상태 동기화 (탭 클릭은 selectTab 이 URL 에 반영)
+  useEffect(() => {
+    const p = searchParams.get("tab");
+    if (p && TABS.some((t) => t.id === p)) setTab(p as TabId);
+  }, [searchParams]);
 
   // 일반 / 모델
   const selectedModel = useAppStore((s) => s.selectedModel);
@@ -530,7 +535,11 @@ export default function SettingsPage() {
                 <button
                   key={t.id}
                   type="button"
-                  onClick={() => setTab(t.id)}
+                  onClick={() => {
+                    setTab(t.id);
+                    // URL 동기화 — 새로고침/뒤로가기가 딥링크 탭으로 되돌리지 않게
+                    router.replace(`/settings?tab=${t.id}`, { scroll: false });
+                  }}
                   className={cn(
                     "flex items-center gap-2 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition",
                     active
