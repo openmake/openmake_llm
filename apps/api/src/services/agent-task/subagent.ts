@@ -26,6 +26,12 @@ import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentTaskSubagent');
 
+/** qwen 이 도구 없는 최종 턴에 raw <tool_call> XML 을 텍스트로 뱉는 결함 정리 —
+ *  XML 만 남으면 빈 문자열이 되어 호출부의 명시적 실패 문구로 대체된다. */
+function stripRawToolCallXml(text: string): string {
+    return text.replace(/<tool_call>[\s\S]*?(<\/tool_call>|$)/g, '').trim();
+}
+
 export interface SubagentParams {
     client: LLMClient;
     /** 전문가 페르소나 system prompt (keyword-router 가 고른 산업 agent). */
@@ -75,6 +81,14 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
             if (p.signal?.aborted) return 'Error: 상위 작업이 중단되었습니다.';
             // 마지막 턴엔 도구를 제거해 최종 답변을 강제(도구 호출로 끝나 결과가 없는 상황 방지).
             const lastTurn = turn === maxTurns - 1;
+            // 마지막 턴 진입을 모델에게 명시 — 도구를 조용히 제거하면 qwen 이 raw <tool_call>
+            // XML 을 텍스트로 뱉어 스텁 결과가 되는 결함 차단(2026-07-12 spawn_agents 라이브 관측).
+            if (lastTurn && turn > 0 && p.tools.length > 0) {
+                conversation.push({
+                    role: 'user',
+                    content: '이제 도구를 더 사용할 수 없습니다. 지금까지 수집한 내용만으로 최종 결과를 바로 작성하세요.',
+                });
+            }
             const result = await p.client.chat(conversation, undefined, undefined, {
                 tools: lastTurn || p.tools.length === 0 ? undefined : p.tools,
                 signal: p.signal,
@@ -94,7 +108,8 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 ...(result.tool_calls && { tool_calls: result.tool_calls }),
             });
             if (!result.tool_calls || result.tool_calls.length === 0) {
-                return result.content || '(서브에이전트가 빈 응답을 반환했습니다)';
+                const finalText = stripRawToolCallXml(result.content || '');
+                return finalText || '(서브에이전트가 빈 응답을 반환했습니다)';
             }
 
             for (const tc of result.tool_calls) {
@@ -118,7 +133,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
         }
         // 턴 소진 — 마지막 assistant 내용 반환.
         const last = [...conversation].reverse().find((m) => m.role === 'assistant');
-        return (last?.content as string) || '(서브에이전트가 턴 상한에 도달했습니다)';
+        return stripRawToolCallXml((last?.content as string) || '') || '(서브에이전트가 턴 상한에 도달했습니다)';
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         logger.warn(`[Subagent] 실행 실패: ${msg}`);

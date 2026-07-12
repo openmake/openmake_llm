@@ -103,6 +103,17 @@ export function buildSpawnSubagentTools(parentTools: ToolDefinition[]): ToolDefi
     return parentTools.filter((t) => !SUBAGENT_EXCLUDED_TOOLS.has(t.function.name));
 }
 
+/** PURE: 채팅 경로 서브 도구 키워드 필터 — 리서치 계열만 남겨 도구폭주를 차단.
+ *  (라이브 관측: 혼합 19종 전달 시 qwen 서브가 무관 도구로 턴을 낭비해 스텁만 반환.)
+ *  매칭 0개면 원본 폴백 — 필터가 서브를 무도구로 만들지 않게. */
+export function filterChatSubTools(parentTools: ToolDefinition[]): ToolDefinition[] {
+    const kept = parentTools.filter((t) => {
+        const name = t.function.name.toLowerCase();
+        return AGENT_SPAWN.SUB_TOOL_KEYWORDS.some((k) => name.includes(k));
+    });
+    return kept.length > 0 ? kept : parentTools;
+}
+
 export interface SpawnAgentsParams {
     /** 도구 호출 인자(raw) — 내부에서 Zod 검증. */
     args: Record<string, unknown>;
@@ -181,7 +192,11 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
         return 'Error: 병렬 서브에이전트 실행이 중단되었습니다.';
     }
 
-    logger.info(`[AgentSpawn] fan-out 완료 (${Date.now() - started}ms, tasks=${tasks.length})`);
+    logger.info(`[AgentSpawn] fan-out 완료 (${Date.now() - started}ms, tasks=${tasks.length}, `
+        + `결과길이=[${results.map((r) => r?.length ?? 0).join(',')}])`);
+    // 서브 결과 품질 관측용 프리뷰(스텁/메타서술 감지) — Phase 2 관측성 배선 전 임시 가시성.
+    results.forEach((r, i) => logger.info(
+        `[AgentSpawn] 태스크 ${i + 1} 결과 프리뷰: ${(r ?? '(null)').slice(0, 160).replace(/\n/g, ' ')}`));
     const sections = tasks.map((task, i) => {
         const header = `### 태스크 ${i + 1}/${tasks.length}${task.role ? ` (role: ${task.role})` : ''}: ${task.prompt.slice(0, 80)}`;
         return `${header}\n${results[i] ?? 'Error: 서브에이전트가 결과를 반환하지 못했습니다.'}`;
@@ -189,7 +204,11 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
     const truncationNote = droppedCount > 0
         ? `\n\n(주의: 태스크 상한 ${AGENT_SPAWN.MAX_TASKS_PER_CALL}개 초과분 ${droppedCount}개는 수행되지 않았습니다.)`
         : '';
-    return `[병렬 서브에이전트 결과 — ${tasks.length}개 태스크]\n\n${sections.join('\n\n')}${truncationNote}`;
+    // 종합 강제 넛지 — 라이브 관측: qwen 이 spawn 결과를 받고도 같은 주제를 재검색하며
+    // 턴 예산을 소진해 최종 종합 턴이 사라짐. 도구 결과 말미의 결정적 지시로 차단.
+    const synthesisNudge = '\n\n지시: 위 서브에이전트 결과만으로 지금 바로 최종 답변을 종합해 작성하세요. '
+        + '같은 주제를 다시 검색하거나 추가 도구를 호출하지 마세요.';
+    return `[병렬 서브에이전트 결과 — ${tasks.length}개 태스크]\n\n${sections.join('\n\n')}${truncationNote}${synthesisNudge}`;
 }
 
 /**
@@ -206,7 +225,7 @@ export async function runChatSpawnAgents(params: {
     return runSpawnAgents({
         args: params.args,
         client: createClient({ model: getModelForRole('chat') }),
-        tools: params.chatTools,
+        tools: filterChatSubTools(params.chatTools),
         userCtx: params.userCtx,
         taskId: '__chat__', // 정책 'none' 이라 승인 레지스트리 미사용 — 식별용 문자열일 뿐
         sandboxCfg: { approvalPolicy: 'none', approvalTimeoutMs: 0 },

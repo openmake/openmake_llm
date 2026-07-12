@@ -1335,5 +1335,10 @@ export const AGENT_SPAWN = {
     MAX_TASKS_PER_CALL: parseInt(process.env.AGENT_SPAWN_MAX_TASKS || '4', 10),
     /** 채팅 메시지당 호출 캡(기본 1) — CHAT_SUBAGENT.MAX_CALLS 관행(남용·지연 억제). AGENT_SPAWN_MAX_CALLS. */
     MAX_CALLS_PER_MESSAGE: parseInt(process.env.AGENT_SPAWN_MAX_CALLS || '1', 10),
+    /** 채팅 경로 서브 도구 이름 키워드 필터(CSV) — 부모 활성 도구 중 이름에 이 키워드가 포함된
+     *  것만 서브에 전달. 라이브 관측: 혼합 19종 전달 시 qwen 서브가 무관 도구(메모리 등)로 턴을
+     *  낭비해 스텁만 반환(도구폭주 패턴). 매칭 0개면 전체 폴백. AGENT_SPAWN_SUB_TOOL_KEYWORDS. */
+    SUB_TOOL_KEYWORDS: (process.env.AGENT_SPAWN_SUB_TOOL_KEYWORDS || 'search,extract,scrape,fetch,crawl,browse')
+        .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
 } as const;
 
