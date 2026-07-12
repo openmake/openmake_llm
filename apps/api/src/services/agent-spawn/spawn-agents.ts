@@ -1,0 +1,244 @@
+/**
+ * ============================================================
+ * spawn_agents 병렬 오케스트레이션 — 하위 작업 N개 병렬 위임
+ * ============================================================
+ *
+ * Claude Code Agent tool 대응: 모델이 독립 하위 작업 N개를 병렬 서브에이전트에
+ * 분담시키는 범용 오케스트레이션. 채팅(external-provider)·에이전트 작업(task-sandbox)
+ * 양 경로가 이 모듈을 공용한다.
+ *
+ * 도구 계약은 **배열 1콜** — qwen 이 병렬 tool_calls 방출을 신뢰성 있게 못 하고
+ * 도구 루프가 순차 실행이므로, tasks 배열을 받아 핸들러 내부에서 parallelBatch 로
+ * 병렬화한다(runSubagent × N).
+ *
+ * 안전 원칙 (delegate/delegate_expert 관행 승계):
+ *  - depth=1 고정: 서브 도구 서브셋에서 spawn_agents·delegate 계열 제외(재귀 구조적 불가).
+ *  - 서브 도구 = 부모가 이미 실행 가능한 도구의 서브셋 — 권한 증분 0.
+ *  - 에이전트 작업 경로는 승인 필요 도구를 서브셋에서 배제 — 병렬 HITL fan-in 회피(Phase 1).
+ *  - 개별 태스크 실패는 해당 결과 문자열로 흡수 — 전체 fan-out 을 죽이지 않음.
+ *  - 태스크 상한 초과분은 잘라내되 결과에 명시(silent cap 금지).
+ *
+ * @module services/agent-spawn/spawn-agents
+ */
+import { z } from 'zod';
+import { createClient, type LLMClient } from '../../llm';
+import type { ToolDefinition } from '../../llm/types';
+import type { UserContext } from '../../mcp/user-sandbox';
+import type { TaskSandboxConfig } from '../../config/task-sandbox';
+import { AGENT_SPAWN } from '../../config/runtime-limits';
+import { getModelForRole } from '../../config/model-roles';
+import { parallelBatch } from '../../workflow/graph-engine';
+import { routeToAgent } from '../../agents/keyword-router';
+import { getAgentSystemMessage } from '../../agents/system-prompt';
+import { requiresApproval } from '../task-sandbox/approval-gate';
+import { runSubagent } from '../agent-task/subagent';
+import type { DelegateFactoryParams } from '../agent-task/delegate';
+import { CHAT_DELEGATE_TOOL_NAME } from '../chat-service/chat-delegate';
+import { SPAWN_AGENT_GENERIC_PROMPT } from '../../prompts/spawn-agent-system';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger('AgentSpawn');
+
+export const SPAWN_AGENTS_TOOL_NAME = 'spawn_agents';
+
+/** 서브에이전트 도구 서브셋에서 제외할 위임 계열 도구 — depth=1 구조 유지(재귀 차단). */
+const SUBAGENT_EXCLUDED_TOOLS = new Set([SPAWN_AGENTS_TOOL_NAME, CHAT_DELEGATE_TOOL_NAME, 'delegate']);
+
+/** spawn_agents 도구 인자 스키마 — tasks 배열(각 태스크는 자기완결 지시 + 선택 전문 분야). */
+export const spawnAgentsArgsSchema = z.object({
+    tasks: z.array(z.object({
+        prompt: z.string().trim().min(1),
+        role: z.string().trim().min(1).optional(),
+    })).min(1),
+});
+
+export type SpawnTask = z.infer<typeof spawnAgentsArgsSchema>['tasks'][number];
+
+export const SPAWN_AGENTS_TOOL_DESCRIPTION =
+    '서로 독립적인 하위 작업 여러 개를 병렬 서브에이전트들에게 분담시켜 동시에 수행합니다. '
+    + '각 태스크는 다른 태스크 결과를 참조할 수 없으므로 자기완결적으로 서술하세요. '
+    + '⚠️ 단순 질문이나 순차 의존적인 작업에는 쓰지 말고 직접 수행하세요 — 독립 하위 작업 2개 이상을 '
+    + '병렬로 나눌 가치가 있을 때만 사용합니다(응답 시간이 늘어납니다). 결과를 받은 뒤 직접 종합하세요.';
+
+/** spawn_agents 파라미터 JSON Schema — task-sandbox MCP 도구 정의(inputSchema)와 공유. */
+export const SPAWN_AGENTS_PARAMETERS_SCHEMA: {
+    type: 'object';
+    properties: Record<string, unknown>;
+    required: string[];
+} = {
+    type: 'object',
+    properties: {
+        tasks: {
+            type: 'array',
+            description: '병렬 수행할 독립 하위 작업 목록 (2개 이상 권장)',
+            items: {
+                type: 'object',
+                properties: {
+                    prompt: { type: 'string', description: '하위 작업의 자기완결적 지시문' },
+                    role: { type: 'string', description: '원하는 전문 분야(선택, 예: finance/legal/engineering)' },
+                },
+                required: ['prompt'],
+            },
+        },
+    },
+    required: ['tasks'],
+};
+
+/** PURE: 채팅 도구 루프에 노출할 spawn_agents 도구 정의. */
+export function buildSpawnAgentsTool(): ToolDefinition {
+    return {
+        type: 'function',
+        function: {
+            name: SPAWN_AGENTS_TOOL_NAME,
+            description: SPAWN_AGENTS_TOOL_DESCRIPTION,
+            // ToolDefinition 의 properties 타입이 중첩 스키마(items)를 표현하지 못해 캐스트
+            // (MCP 도구의 getLLMTools 캐스트와 동일 관행 — 런타임은 JSON 그대로 전달).
+            parameters: SPAWN_AGENTS_PARAMETERS_SCHEMA as unknown as ToolDefinition['function']['parameters'],
+        },
+    };
+}
+
+/** PURE: 서브에이전트에 넘길 도구 서브셋 — 위임 계열(자기 자신 포함) 제외. */
+export function buildSpawnSubagentTools(parentTools: ToolDefinition[]): ToolDefinition[] {
+    return parentTools.filter((t) => !SUBAGENT_EXCLUDED_TOOLS.has(t.function.name));
+}
+
+export interface SpawnAgentsParams {
+    /** 도구 호출 인자(raw) — 내부에서 Zod 검증. */
+    args: Record<string, unknown>;
+    client: LLMClient;
+    /** 서브에이전트 도구 서브셋 — 호출부가 선별을 마친 목록(여기서 위임 계열만 재차 제외). */
+    tools: ToolDefinition[];
+    userCtx: UserContext;
+    /** 승인 레지스트리 키(에이전트 작업 taskId). 채팅 경로는 정책 'none' 이라 식별용일 뿐. */
+    taskId: string;
+    sandboxCfg: Pick<TaskSandboxConfig, 'approvalPolicy' | 'approvalTimeoutMs'>;
+    signal?: AbortSignal;
+    onTokens?: (n: number) => void;
+    onPausedMs?: (ms: number) => void;
+}
+
+/** role 지정 시 산업 전문가 페르소나, 미지정 시 범용 프롬프트. 실패는 범용으로 폴백. */
+async function resolvePersona(task: SpawnTask, userId: string): Promise<string> {
+    if (!task.role) return SPAWN_AGENT_GENERIC_PROMPT;
+    try {
+        const selection = await routeToAgent(`[${task.role}] ${task.prompt}`);
+        const { prompt } = await getAgentSystemMessage(selection, userId);
+        return prompt;
+    } catch (e) {
+        logger.debug(`[AgentSpawn] 페르소나 해석 실패(role=${task.role}) — 범용 폴백`, e);
+        return SPAWN_AGENT_GENERIC_PROMPT;
+    }
+}
+
+/**
+ * spawn_agents 실행 — tasks 를 MAX_PARALLEL 동시성으로 병렬 수행하고 태스크별 결과를
+ * 도구 결과 텍스트로 조립해 반환. 실패는 문자열로 흡수(호출 루프를 죽이지 않음).
+ */
+export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
+    const parsed = spawnAgentsArgsSchema.safeParse(p.args);
+    if (!parsed.success) {
+        return 'Error: tasks 배열([{prompt, role?}, ...], 최소 1개)이 필요합니다.';
+    }
+    const requested = parsed.data.tasks;
+    const tasks = requested.slice(0, AGENT_SPAWN.MAX_TASKS_PER_CALL);
+    const droppedCount = requested.length - tasks.length;
+    const subTools = buildSpawnSubagentTools(p.tools);
+    const userId = String(p.userCtx.userId);
+    const started = Date.now();
+    logger.info(`[AgentSpawn] fan-out 시작: tasks=${tasks.length} (요청 ${requested.length}), `
+        + `parallel=${AGENT_SPAWN.MAX_PARALLEL}, subTools=${subTools.length}`);
+
+    let results: Array<string | null>;
+    try {
+        results = await parallelBatch(
+            tasks,
+            async (task, idx) => {
+                try {
+                    const personaPrompt = await resolvePersona(task, userId);
+                    return await runSubagent({
+                        client: p.client,
+                        personaPrompt,
+                        subgoal: task.prompt,
+                        tools: subTools,
+                        userCtx: p.userCtx,
+                        taskId: p.taskId,
+                        sandboxCfg: p.sandboxCfg,
+                        ...(p.signal ? { signal: p.signal } : {}),
+                        ...(p.onTokens ? { onTokens: p.onTokens } : {}),
+                        ...(p.onPausedMs ? { onPausedMs: p.onPausedMs } : {}),
+                    });
+                } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    logger.warn(`[AgentSpawn] 태스크 ${idx + 1} 실패: ${msg}`);
+                    return `Error: 서브에이전트 실패 — ${msg}`;
+                }
+            },
+            { concurrency: AGENT_SPAWN.MAX_PARALLEL, ...(p.signal ? { signal: p.signal } : {}) },
+        );
+    } catch {
+        // parallelBatch 는 abort 시에만 throw(개별 실패는 null 흡수).
+        return 'Error: 병렬 서브에이전트 실행이 중단되었습니다.';
+    }
+
+    logger.info(`[AgentSpawn] fan-out 완료 (${Date.now() - started}ms, tasks=${tasks.length})`);
+    const sections = tasks.map((task, i) => {
+        const header = `### 태스크 ${i + 1}/${tasks.length}${task.role ? ` (role: ${task.role})` : ''}: ${task.prompt.slice(0, 80)}`;
+        return `${header}\n${results[i] ?? 'Error: 서브에이전트가 결과를 반환하지 못했습니다.'}`;
+    });
+    const truncationNote = droppedCount > 0
+        ? `\n\n(주의: 태스크 상한 ${AGENT_SPAWN.MAX_TASKS_PER_CALL}개 초과분 ${droppedCount}개는 수행되지 않았습니다.)`
+        : '';
+    return `[병렬 서브에이전트 결과 — ${tasks.length}개 태스크]\n\n${sections.join('\n\n')}${truncationNote}`;
+}
+
+/**
+ * 채팅 경로 편의 래퍼 — runChatDelegate 와 대칭. 서브 LLM 은 항상 로컬 모델,
+ * 승인 정책 'none' 고정(채팅 도구는 원래 승인 없이 실행되는 모델과 정합).
+ */
+export async function runChatSpawnAgents(params: {
+    args: Record<string, unknown>;
+    /** 부모 채팅의 활성 도구(자기 자신 포함 가능 — 내부에서 제외). */
+    chatTools: ToolDefinition[];
+    userCtx: UserContext;
+    signal?: AbortSignal;
+}): Promise<string> {
+    return runSpawnAgents({
+        args: params.args,
+        client: createClient({ model: getModelForRole('chat') }),
+        tools: params.chatTools,
+        userCtx: params.userCtx,
+        taskId: '__chat__', // 정책 'none' 이라 승인 레지스트리 미사용 — 식별용 문자열일 뿐
+        sandboxCfg: { approvalPolicy: 'none', approvalTimeoutMs: 0 },
+        ...(params.signal ? { signal: params.signal } : {}),
+        onTokens: (n) => logger.debug(`[AgentSpawn] 채팅 서브 토큰 +${n}`),
+    });
+}
+
+/** 에이전트 작업 경로 spawn 핸들러 — 도구 인자를 받아 결과 텍스트 반환(TaskRuntime 주입용). */
+export type SpawnFn = (args: Record<string, unknown>) => Promise<string>;
+
+/**
+ * 에이전트 작업 경로 factory — buildDelegateFn 과 대칭. 서브 도구는 부모 호스트
+ * 화이트리스트(extraTools)에서 선별하되, 승인 필요 도구는 배제해 병렬 HITL fan-in 을
+ * 구조적으로 회피한다(Phase 1 — 배제된 도구는 승인 게이트에 도달할 수 없음).
+ */
+export function buildTaskSpawnFn(p: DelegateFactoryParams): SpawnFn {
+    return async (args: Record<string, unknown>): Promise<string> => {
+        const subTools = p.sandboxCfg.extraTools
+            .map((n) => p.mcpTools.find((t) => t.function.name === n))
+            .filter((t): t is ToolDefinition => !!t)
+            .filter((t) => !requiresApproval(p.sandboxCfg.approvalPolicy, t.function.name, {}));
+        return runSpawnAgents({
+            args,
+            client: p.client,
+            tools: subTools,
+            userCtx: p.userCtx,
+            taskId: p.taskId,
+            sandboxCfg: p.sandboxCfg,
+            signal: p.signal,
+            onTokens: p.onTokens,
+            onPausedMs: p.onPausedMs,
+        });
+    };
+}

@@ -16,6 +16,14 @@
 import type { MCPToolDefinition, MCPToolResult } from '../../mcp/types';
 import type { TaskSandbox, ExecResult } from './sandbox';
 import { TaskPlan, type PlanStepStatus } from './planning';
+import {
+    SPAWN_AGENTS_TOOL_NAME,
+    SPAWN_AGENTS_TOOL_DESCRIPTION,
+    SPAWN_AGENTS_PARAMETERS_SCHEMA,
+    type SpawnFn,
+} from '../agent-spawn/spawn-agents';
+
+export type { SpawnFn } from '../agent-spawn/spawn-agents';
 
 /** 루프가 인식하는 제어 시그널 sentinel (도구 결과 텍스트 prefix). */
 export const TASK_TERMINATE_SENTINEL = '__TASK_TERMINATE__';
@@ -47,6 +55,7 @@ export function createTaskTools(
     sandbox: TaskSandbox,
     plan: TaskPlan = new TaskPlan(),
     delegate?: DelegateFn,
+    spawn?: SpawnFn,
 ): MCPToolDefinition[] {
     const bash: MCPToolDefinition = {
         tool: {
@@ -309,6 +318,24 @@ export function createTaskTools(
         },
     };
 
+    // ── 병렬 fan-out: spawn_agents — 독립 하위 작업 N개 병렬 위임 (services/agent-spawn).
+    //    AGENT_SPAWN.ENABLED 시에만 AgentTaskService 가 spawn 을 전달 → 미전달이면 도구 자체 미노출. ──
+    const spawnAgentsTool: MCPToolDefinition = {
+        tool: {
+            name: SPAWN_AGENTS_TOOL_NAME,
+            description: SPAWN_AGENTS_TOOL_DESCRIPTION,
+            inputSchema: SPAWN_AGENTS_PARAMETERS_SCHEMA,
+        },
+        handler: async (args): Promise<MCPToolResult> => {
+            if (!spawn) return textResult('병렬 위임 기능을 사용할 수 없습니다.', true);
+            try {
+                return textResult(await spawn(args as Record<string, unknown>));
+            } catch (e) {
+                return textResult(`병렬 위임 실패: ${e instanceof Error ? e.message : String(e)}`, true);
+            }
+        },
+    };
+
     // ── B 흡수: 제어 시그널 도구 (sandbox 무관) ──
     const terminate: MCPToolDefinition = {
         tool: {
@@ -342,5 +369,5 @@ export function createTaskTools(
             textResult(`${TASK_ASK_HUMAN_SENTINEL} ${str(args.question)}`),
     };
 
-    return [bash, pythonExecute, strReplaceEditor, fileOps, browser, planCreate, planUpdate, planView, delegateTool, terminate, askHuman];
+    return [bash, pythonExecute, strReplaceEditor, fileOps, browser, planCreate, planUpdate, planView, delegateTool, ...(spawn ? [spawnAgentsTool] : []), terminate, askHuman];
 }

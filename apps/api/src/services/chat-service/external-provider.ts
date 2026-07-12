@@ -20,7 +20,8 @@ import { isPersistableUserId } from '../../utils/user-id-validation';
 import { type Style } from '../../chat/style';
 import { buildExternalSystemPrompt } from './external-system-prompt';
 import { CHAT_DELEGATE_TOOL_NAME, buildChatDelegateTool, runChatDelegate } from './chat-delegate';
-import { CHAT_SUBAGENT } from '../../config/runtime-limits';
+import { SPAWN_AGENTS_TOOL_NAME, buildSpawnAgentsTool, runChatSpawnAgents } from '../agent-spawn/spawn-agents';
+import { CHAT_SUBAGENT, AGENT_SPAWN } from '../../config/runtime-limits';
 import type { ChatMessage, ToolDefinition } from '../../llm';
 import type { ChatMessageRequest } from '../chat-service-types';
 import type { UserContext } from '../../mcp/user-sandbox';
@@ -134,6 +135,10 @@ export async function streamFromExternalProvider(
     if (CHAT_SUBAGENT.ENABLED && caps.toolCalling) {
         tools.push(buildChatDelegateTool());
     }
+    // 병렬 서브에이전트 fan-out(spawn_agents): 독립 하위 작업 N개 병렬 위임 — agent-spawn 공용 모듈.
+    if (AGENT_SPAWN.ENABLED && caps.toolCalling) {
+        tools.push(buildSpawnAgentsTool());
+    }
     if (wantsArtifact && caps.toolCalling) {
         logger.info(`[Artifact] 명시적 아티팩트 요청 감지 — distractor 도구 억제 (잔여 도구 ${tools.length}종)`);
     }
@@ -170,6 +175,8 @@ export async function streamFromExternalProvider(
     let suppressTools = false;
     // 채팅 서브에이전트 호출 집계 — 메시지당 캡(CHAT_SUBAGENT.MAX_CALLS) 초과 시 위임 거부.
     let delegateCalls = 0;
+    // 병렬 fan-out 호출 집계 — 메시지당 캡(AGENT_SPAWN.MAX_CALLS_PER_MESSAGE) 초과 시 거부.
+    let spawnCalls = 0;
 
     // generate_image 결과의 이미지 마크다운 추적 — 일부 모델(qwen 등)이 도구 지시("마크다운
     // 그대로 포함")를 누락해 생성된 이미지가 채팅에 표시되지 않는 문제 보정용.
@@ -291,6 +298,18 @@ export async function streamFromExternalProvider(
                     toolResult = delegateCalls > CHAT_SUBAGENT.MAX_CALLS
                         ? `Error: 이 메시지의 전문가 위임 한도(${CHAT_SUBAGENT.MAX_CALLS}회)에 도달했습니다. 지금까지의 정보로 직접 답변하세요.`
                         : await runChatDelegate({
+                            args: tc.args as Record<string, unknown>,
+                            chatTools: tools,
+                            userCtx: deps.currentUserContext ?? { userId: 'guest', role: 'guest' },
+                            ...(req.abortSignal ? { signal: req.abortSignal } : {}),
+                        });
+                } else if (tc.name === SPAWN_AGENTS_TOOL_NAME) {
+                    // 병렬 서브에이전트 fan-out — 부모 채팅 활성 도구 서브셋으로 depth=1 × N.
+                    deps.mcpToolStartCallback?.({ toolName: tc.name });
+                    spawnCalls++;
+                    toolResult = spawnCalls > AGENT_SPAWN.MAX_CALLS_PER_MESSAGE
+                        ? `Error: 이 메시지의 병렬 위임 한도(${AGENT_SPAWN.MAX_CALLS_PER_MESSAGE}회)에 도달했습니다. 지금까지의 결과로 직접 답변하세요.`
+                        : await runChatSpawnAgents({
                             args: tc.args as Record<string, unknown>,
                             chatTools: tools,
                             userCtx: deps.currentUserContext ?? { userId: 'guest', role: 'guest' },

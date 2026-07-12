@@ -19,7 +19,7 @@ import type { ChatMessage, ToolDefinition } from '../llm/types';
 import { getModelForRole } from '../config/model-roles';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { getUnifiedDatabase } from '../data/models/unified-database';
-import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
+import { AGENT_TASK_LIMITS, AGENT_SPAWN } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
 import { getAgentTaskSystemPrompt, getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getAgentTaskBrowserLimitNudge, getTaskSandboxGuidance, getAgentTaskUploadedFilesNote, getAgentTaskVerifyFailedNudge, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts } from '../llm/artifact-parser';
@@ -28,6 +28,7 @@ import { createLogger } from '../utils/logger';
 import type { UserContext } from '../mcp/user-sandbox';
 import { getSkillManager } from '../agents/skill-manager';
 import { buildDelegateFn } from './agent-task/delegate';
+import { buildTaskSpawnFn } from './agent-spawn/spawn-agents';
 import { mergeToolsWithSkills, type ActiveSkillBinding } from './chat-service/tool-merger';
 import { getTaskSandboxConfig } from '../config/task-sandbox';
 import { TaskRuntime } from './task-sandbox/runtime';
@@ -205,7 +206,15 @@ export class AgentTaskService {
                         onTokens: (n) => { totalTokens += n; },
                         onPausedMs: (ms) => { pausedMs += ms; },
                     });
-                    taskRuntime = new TaskRuntime(taskId, userId, sandboxCfg, delegateFn);
+                    // 병렬 fan-out(spawn_agents) — 플래그 ON 시에만 도구 노출(undefined 면 미노출).
+                    const spawnFn = AGENT_SPAWN.ENABLED
+                        ? buildTaskSpawnFn({
+                            client: this.client, userId, taskId, userCtx, sandboxCfg, mcpTools, signal,
+                            onTokens: (n) => { totalTokens += n; },
+                            onPausedMs: (ms) => { pausedMs += ms; },
+                        })
+                        : undefined;
+                    taskRuntime = new TaskRuntime(taskId, userId, sandboxCfg, delegateFn, spawnFn);
                     await taskRuntime.create();
                     await db.updateAgentTask(taskId, {
                         sandboxContainerId: taskRuntime.containerName,
