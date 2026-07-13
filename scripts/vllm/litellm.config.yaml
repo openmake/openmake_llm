@@ -47,4 +47,6 @@ general_settings:
 
 litellm_settings:
   drop_params: false
-  request_timeout: 120
+  # 앱 최대 호출(Deep Research 보고서 생성 REPORT_GENERATION_TIMEOUT_MS=900s)을 커버 —
+  # "프록시 timeout ≥ 앱 timeout" 정합 (채팅/서브에이전트는 LLM_TIMEOUT=120s).
+  request_timeout: 900

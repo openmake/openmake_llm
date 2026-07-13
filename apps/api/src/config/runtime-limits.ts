@@ -1324,3 +1324,21 @@ export const CHAT_SUBAGENT = {
     MAX_CALLS: parseInt(process.env.CHAT_SUBAGENT_MAX_CALLS || '1', 10),
 } as const;
 
+/** 병렬 서브에이전트 fan-out(spawn_agents) — 하위 작업 N 개를 병렬 위임하는 범용 오케스트레이션.
+ *  채팅·에이전트 작업 양 경로 공용 (services/agent-spawn). depth=1 — 서브가 재위임 불가. */
+export const AGENT_SPAWN = {
+    /** 기본 OFF — GPU 처리량 분할·지연 영향을 벤치 후 운영 활성화(사용자). AGENT_SPAWN_ENABLED=true. */
+    ENABLED: process.env.AGENT_SPAWN_ENABLED === 'true',
+    /** 동시 실행 서브에이전트 수(기본 2) — vLLM 동시성 벤치 결과로 조정. AGENT_SPAWN_MAX_PARALLEL. */
+    MAX_PARALLEL: parseInt(process.env.AGENT_SPAWN_MAX_PARALLEL || '2', 10),
+    /** 1회 호출당 태스크 상한(기본 4) — 초과분은 잘라내고 결과에 명시(silent cap 금지). AGENT_SPAWN_MAX_TASKS. */
+    MAX_TASKS_PER_CALL: parseInt(process.env.AGENT_SPAWN_MAX_TASKS || '4', 10),
+    /** 채팅 메시지당 호출 캡(기본 1) — CHAT_SUBAGENT.MAX_CALLS 관행(남용·지연 억제). AGENT_SPAWN_MAX_CALLS. */
+    MAX_CALLS_PER_MESSAGE: parseInt(process.env.AGENT_SPAWN_MAX_CALLS || '1', 10),
+    /** 채팅 경로 서브 도구 이름 키워드 필터(CSV) — 부모 활성 도구 중 이름에 이 키워드가 포함된
+     *  것만 서브에 전달. 라이브 관측: 혼합 19종 전달 시 qwen 서브가 무관 도구(메모리 등)로 턴을
+     *  낭비해 스텁만 반환(도구폭주 패턴). 매칭 0개면 전체 폴백. AGENT_SPAWN_SUB_TOOL_KEYWORDS. */
+    SUB_TOOL_KEYWORDS: (process.env.AGENT_SPAWN_SUB_TOOL_KEYWORDS || 'search,extract,scrape,fetch,crawl,browse')
+        .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
+} as const;
+
