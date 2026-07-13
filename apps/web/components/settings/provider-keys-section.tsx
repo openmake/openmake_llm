@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import {
   KeyRound,
@@ -69,6 +70,7 @@ function formatDate(iso: string | null | undefined, locale: string) {
 export function ProviderKeysSection() {
   const t = useTranslations("apiKeys");
   const locale = toBcp47(useLocale());
+  const queryClient = useQueryClient();
   const [providers, setProviders] = useState<ProviderEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -101,6 +103,8 @@ export function ProviderKeysSection() {
     try {
       await ApiClient.del(`/api/external-keys/${providerId}`);
       await load();
+      // 키 삭제로 해당 provider 모델이 목록에서 빠짐 — 기본 모델 picker/컴포저 즉시 반영
+      void queryClient.invalidateQueries({ queryKey: ["models"] });
     } catch (e) {
       window.alert(
         t("deleteFailed", {
@@ -121,6 +125,8 @@ export function ProviderKeysSection() {
           onSaved={async () => {
             setShowForm(false);
             await load();
+            // 키 등록 직후 새 provider 모델이 기본 모델 picker 에 바로 나타나도록
+            void queryClient.invalidateQueries({ queryKey: ["models"] });
           }}
         />
       )}
