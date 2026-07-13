@@ -40,6 +40,7 @@ set -euo pipefail
 
 readonly SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 readonly APP_NAME="openmake-llm"
+readonly FRONT_APP_NAME="openmake-next"
 readonly APP_PORT="${PORT:-52416}"
 readonly POSTGRES_PORT="${POSTGRES_PORT:-5432}"
 readonly REDIS_PORT="${REDIS_PORT:-6379}"
@@ -457,9 +458,18 @@ cmd_deploy() {
             log_err "$APP_NAME restart 실패"
             return 2
         }
+        # 프론트(next start)는 .next 빌드본을 기동 시점에 읽으므로 함께 재시작해야
+        # 새 빌드가 반영된다 (누락 시 옛 프론트가 계속 서빙되는 함정).
+        if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$FRONT_APP_NAME\""; then
+            pm2 restart "$FRONT_APP_NAME" --update-env >/dev/null 2>&1 \
+                && log_ok "$FRONT_APP_NAME 재시작" \
+                || log_warn "$FRONT_APP_NAME restart 실패 — 'pm2 restart $FRONT_APP_NAME' 수동 확인 필요"
+        else
+            log_info "$FRONT_APP_NAME PM2 미등록 — 프론트 재시작 생략"
+        fi
         wait_for_app_with_logs "$APP_PORT" "OpenMake LLM"
     else
-        log_info "$APP_NAME PM2 미등록 — 신규 시작"
+        log_info "$APP_NAME PM2 미등록 — 신규 시작 (ecosystem: 백엔드+프론트 함께 기동)"
         ( cd "$SCRIPT_DIR" && pm2 start ecosystem.config.js ) || return 2
         wait_for_app_with_logs "$APP_PORT" "OpenMake LLM"
     fi
@@ -488,6 +498,7 @@ OpenMake LLM 통합 서비스 매니저
   build     npm run build (backend tsc + frontend Next.js build 산출물 생성)
   migrate   DB 마이그레이션 (status → migrate)
   deploy    build + migrate + restart 통합 (코드 변경 운영 반영)
+            백엔드(openmake-llm)와 프론트(openmake-next) 모두 재시작
             옵션: --yes (확인 프롬프트 skip), --no-migrate (마이그 생략)
 
 관측:
