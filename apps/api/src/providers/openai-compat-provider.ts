@@ -238,6 +238,11 @@ function mapOpenAIError(err: unknown): ProviderError {
     if (err && typeof err === 'object' && 'status' in err) {
         const status = (err as { status?: number }).status;
         if (status === 401 || status === 403) {
+            // 403 중 구독/플랜 미달 응답은 키 문제가 아님 — 별도 코드로 분기
+            // (예: Ollama Cloud "this model requires a subscription, upgrade for access")
+            if (status === 403 && /subscription|upgrade/i.test(message)) {
+                return new ProviderError('SUBSCRIPTION_REQUIRED', `구독 전용 모델: ${message}`, err);
+            }
             return new ProviderError('INVALID_API_KEY', `OpenAI 호환 인증 실패: ${message}`, err);
         }
         if (status === 402) {
