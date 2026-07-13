@@ -12,8 +12,10 @@
 #
 # 사용법:
 #   ./openmake_llm.sh start      # 의존성 → 앱 순서로 기동 (빌드/마이그레이션 X)
+#                                # 기동 후 실시간 로그 스트리밍 지속 (Ctrl+C로 종료)
 #   ./openmake_llm.sh stop       # 앱 → 의존성 역순으로 정지
 #   ./openmake_llm.sh restart    # PM2 앱만 재시작 (코드 반영 X — 환경변수 변경 등)
+#                                # 재시작 후 실시간 로그 스트리밍 지속 (Ctrl+C로 종료)
 #   ./openmake_llm.sh build      # npm run build (backend tsc + frontend Next.js build 산출물 생성)
 #   ./openmake_llm.sh migrate    # DB 마이그레이션 적용 (status로 사전 확인 권장)
 #   ./openmake_llm.sh deploy     # build + migrate + restart (코드 변경 운영 반영)
@@ -320,6 +322,16 @@ show_logs() {
     pm2 logs "$APP_NAME" --lines 50
 }
 
+# 기동 완료 후 로그 스트리밍으로 전환 — 비대화형(CI/백그라운드)에서는
+# 무한 블로킹을 피하기 위해 TTY일 때만 스트리밍한다.
+follow_logs_if_tty() {
+    if [[ -t 1 ]]; then
+        show_logs
+    else
+        log_info "비대화형 환경 — 로그 스트리밍 생략 ('$0 logs' 로 확인)"
+    fi
+}
+
 # ── 메인 디스패처 ────────────────────────────────────────────────────────────
 cmd_start() {
     preflight
@@ -329,6 +341,7 @@ cmd_start() {
     echo ""
     log_ok "전체 3계층 기동 완료"
     show_status
+    follow_logs_if_tty
 }
 
 cmd_stop() {
@@ -348,6 +361,7 @@ cmd_restart() {
     echo ""
     log_ok "OpenMake LLM 앱 재시작 완료 (의존성은 유지)"
     show_status
+    follow_logs_if_tty
 }
 
 # ── build / migrate / deploy ───────────────────────────────────────────────────
@@ -465,8 +479,10 @@ OpenMake LLM 통합 서비스 매니저
 서비스 관리:
   start     PostgreSQL → Redis → OpenMake LLM 순차 기동
             (LLM 추론은 외부 vLLM/LiteLLM 서버 사용 — 로컬 Ollama 기동 안 함)
+            기동 완료 후 실시간 로그 스트리밍 지속 (Ctrl+C로 종료)
   stop      역순 정지
   restart   PM2 앱만 재시작 (코드 반영 X — 환경변수 변경 등)
+            재시작 후 실시간 로그 스트리밍 지속 (Ctrl+C로 종료)
 
 코드 변경 반영:
   build     npm run build (backend tsc + frontend Next.js build 산출물 생성)
