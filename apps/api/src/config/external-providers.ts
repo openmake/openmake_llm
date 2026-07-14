@@ -145,6 +145,28 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             { id: 'qwen3-coder:480b-cloud',   displayName: 'Qwen3 Coder 480B (Cloud)',   isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
         ],
     },
+    {
+        id: 'nvidia',
+        displayName: 'NVIDIA NIM',
+        sdkType: 'openai-compatible',
+        defaultBaseUrl: 'https://integrate.api.nvidia.com/v1',
+        keyPrefixPattern: 'nvapi-',
+        validatePath: '/models',
+        enabled: true,
+        sortOrder: 50,
+        helpText:
+            'NVIDIA NIM (https://build.nvidia.com) 의 API 키(nvapi- 로 시작)를 입력하세요. ' +
+            'NVIDIA GPU 클라우드가 서빙하는 오픈소스 모델(Llama, Qwen, Nemotron 등)을 ' +
+            'OpenAI 호환 API 로 사용합니다. 모델 ID 는 "meta/llama-3.3-70b-instruct" 형식입니다. ' +
+            '주의: NVIDIA 의 모델 목록 API 는 인증이 없어 키 유효성은 첫 채팅에서 확인됩니다.',
+        authMethods: ['api_key'] as const,
+        fallbackModels: [
+            { id: 'meta/llama-3.3-70b-instruct',             displayName: 'Llama 3.3 70B',        isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
+            { id: 'meta/llama-4-maverick-17b-128e-instruct', displayName: 'Llama 4 Maverick 17B', isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: false } },
+            { id: 'qwen/qwen3-next-80b-a3b-instruct',        displayName: 'Qwen3 Next 80B A3B',   isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
+            { id: 'mistralai/mistral-nemotron',              displayName: 'Mistral Nemotron',     isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
+        ],
+    },
 ] as const;
 
 /**

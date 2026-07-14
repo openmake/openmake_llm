@@ -41,6 +41,7 @@ const KNOWN_FULLID_PREFIXES: readonly string[] = [
     'openrouter',
     'ollama-local',
     'ollama-cloud',
+    'nvidia',
 ];
 
 export interface ProviderGateInput {
