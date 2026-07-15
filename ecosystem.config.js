@@ -93,5 +93,29 @@ module.exports = {
         out_file: '/tmp/openmake-next-out.log',
         merge_logs: true,
         log_date_format: 'YYYY-MM-DD HH:mm:ss',
+    }, {
+        // ── Discord Gateway Bot ─────────────────────────────────
+        // Discord 메시지를 /api/v1/chat/completions 로 중계하는 독립 gateway 프로세스.
+        // 선행: 루트 .env 에 DISCORD_BOT_TOKEN·DISCORD_BOT_API_KEY + 접근 제어 설정,
+        //       `npm run build:discord-bot` 으로 dist 생성.
+        // 설정 미비 시 exit 78 로 스스로 내려가며 stop_exit_codes 가 재시작 루프를 막는다.
+        name: 'openmake-discord',
+        script: 'apps/discord-bot/dist/index.js',
+        cwd: __dirname,
+        env: {
+            NODE_ENV: 'production',
+        },
+        instances: 1,
+        exec_mode: 'fork',
+        autorestart: true,
+        stop_exit_codes: [78],          // EX_CONFIG — 설정 미비 정상 정지
+        max_restarts: 10,
+        min_uptime: '10s',
+        restart_delay: 3000,
+        max_memory_restart: '300M',
+        error_file: '/tmp/openmake-discord-error.log',
+        out_file: '/tmp/openmake-discord-out.log',
+        merge_logs: true,
+        log_date_format: 'YYYY-MM-DD HH:mm:ss',
     }],
 };
