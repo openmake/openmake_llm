@@ -20,6 +20,7 @@
  */
 
 import { LLMClient } from '../llm';
+import { getModelForRole } from '../config/model-roles';
 import { sanitizePromptInput, validatePromptInput } from '../utils/input-sanitizer';
 import { AgentCategory } from './types';
 import industryData from './industry-agents.json';
@@ -83,7 +84,8 @@ let routerClient: LLMClient | null = null;
  */
 function getRouterClient(): LLMClient {
     if (!routerClient) {
-        routerClient = new LLMClient();
+        // 'router' role 레지스트리 경유 (OMK_ROUTER_MODEL → legacy OMK_UIR_MODEL → LLM_DEFAULT_MODEL)
+        routerClient = new LLMClient({ model: getModelForRole('router') });
     }
     return routerClient;
 }

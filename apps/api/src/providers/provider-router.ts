@@ -21,7 +21,6 @@ import { LocalLLMProvider } from './local-llm-provider';
 import { AnthropicProvider } from './anthropic-provider';
 import { OpenAICompatProvider } from './openai-compat-provider';
 import type { ExternalKeysRepository, ExternalApiKeyRow } from '../data/repositories/external-keys-repo';
-import type { ModelRole } from '../config/model-roles';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ProviderRouter');
@@ -222,13 +221,5 @@ export class ProviderRouter {
         }
 
         return [...localModels, ...externalModels];
-    }
-
-    /**
-     * sub-LLM(classifier/router/embedding) 역할 → 항상 local (vLLM/LiteLLM) provider.
-     * 외부 provider 는 채팅 전용으로 한정 (사용자 키 비용/지연 회피).
-     */
-    resolveForRole(_role: ModelRole): IProvider {
-        return this.deps.localProvider;
     }
 }
