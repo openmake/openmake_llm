@@ -230,9 +230,11 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
     // UI 는 이 값으로 "이미지 생성 가능" 표시만 한다 (채팅 셀렉터 옵션 아님). 미설정 시 null.
     const imageModel = process.env.IMAGE_GEN_MODEL?.trim() || null;
 
-    // 역할 배정 드롭다운 전용 필터 — 채팅 불가(임베딩/이미지) + 20B 이하 제외.
-    // (컴포저/기본 모델 선택은 이 파라미터 없이 호출 → 전체 노출)
-    const outModels = req.query.forRoleAssignment === '1'
+    // 사용 가능 모델 필터 — 채팅 불가(임베딩/이미지) + 20B 이하 제외.
+    // 역할 배정 드롭다운·기본 모델 선택(설정/컴포저)에서 usableOnly=1 로 호출.
+    // (forRoleAssignment 는 하위호환 별칭)
+    const usableOnly = req.query.usableOnly === '1' || req.query.forRoleAssignment === '1';
+    const outModels = usableOnly
         ? models.filter((m) => isRoleAssignableModel({ modelId: m.modelId, name: m.name, capabilities: m.capabilities as { streaming?: boolean; toolCalling?: boolean; vision?: boolean } }))
         : models;
 

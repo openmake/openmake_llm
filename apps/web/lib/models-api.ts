@@ -22,9 +22,10 @@ export interface ModelsPayload {
  * GET /api/models — 로컬 vLLM 모델 + 인증 사용자가 등록한 외부 LLM(OpenRouter 등 openai-compatible)
  * provider 의 모델을 합산한 통합 목록. (legacy models-api.js 대응)
  */
-export async function fetchModels(opts?: { forRoleAssignment?: boolean }): Promise<ModelsPayload> {
-  // 역할/에이전트 모델 배정용 목록은 서버가 채팅 불가(임베딩/이미지)·20B 이하 모델을 제외한다.
-  const qs = opts?.forRoleAssignment ? "?forRoleAssignment=1" : "";
+export async function fetchModels(opts?: { usableOnly?: boolean }): Promise<ModelsPayload> {
+  // usableOnly: 서버가 채팅 불가(임베딩/이미지)·20B 이하 모델을 제외한 목록을 반환.
+  // 기본 모델 선택·역할/에이전트 모델 배정 드롭다운에서 사용.
+  const qs = opts?.usableOnly ? "?usableOnly=1" : "";
   const res = await ApiClient.get<{ success: boolean; data: ModelsPayload }>(
     `/api/models${qs}`,
   );
