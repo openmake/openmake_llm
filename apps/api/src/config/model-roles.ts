@@ -6,26 +6,53 @@
  * 모든 LLM 호출 경로의 모델 선택을 단일 진입점으로 통합합니다.
  * 새 sub-LLM 추가 시 ModelRole에 한 줄만 추가하면 됩니다.
  *
- * 환경변수 우선순위:
- *   1. 역할별 env var (OMK_CHAT_MODEL, OMK_CLASSIFIER_MODEL 등)
- *   2. LLM_DEFAULT_MODEL (메인 모델로 자동 위임, embedding 제외)
+ * 환경변수 우선순위 (전역 계층 — 사용자별 매핑은 services/model-role-resolver 참조):
+ *   1. 역할별 env var (OMK_CHAT_MODEL, OMK_AGENT_MODEL 등)
+ *   2. LLM_DEFAULT_MODEL (메인 모델로 자동 위임)
  *   3. ROLE_DEFAULTS 하드코딩 기본값
+ *
+ * ⚠️ 전역(env) 계층에는 **로컬 모델만** 허용합니다. 외부 provider fullId
+ * ('openrouter:...' 등)는 서버 공용 키가 없어 동작할 수 없으므로 validateModels
+ * 가 거부합니다. 외부 모델 배정은 사용자별 매핑(user_model_roles, BYOK 키 필요)
+ * 에서만 가능합니다.
  *
  * @module config/model-roles
  */
 
 import { createLogger } from '../utils/logger';
+import { EXTERNAL_PROVIDER_CATALOG } from './external-providers';
 
 const logger = createLogger('ModelRoles');
 
-/** LLM 호출 역할 (embedding role 은 2026-05-19 제거 — vector cache / semantic router 폐기) */
-export type ModelRole = 'chat' | 'classifier' | 'router';
+/**
+ * LLM 호출 역할.
+ *
+ * - chat:     기본 채팅 (ChatService/metrics/model.routes)
+ * - agent:    Agent Task 실행 루프 (AgentTaskService)
+ * - judge:    Agent Task 목표 판정 (goal-judge)
+ * - research: Deep Research 직접 호출 경로 (채팅 진입 시엔 채팅 모델 상속)
+ * - spawn:    spawn_agents 병렬 서브에이전트
+ * - review:   code-review / security-review / plan-mode
+ * - router:   산업 에이전트 라우팅 (agents/llm-router)
+ *
+ * (2026-05-19 embedding 제거 — vector cache / semantic router 폐기.
+ *  2026-07-15 classifier 제거 — Phase B 로 LLM classifier 경로 자체가 사라져 dead.
+ *  동시에 role 목록을 실소비처 기준으로 확장 — Role-based Multi-Agent Orchestration)
+ */
+export type ModelRole = 'chat' | 'agent' | 'judge' | 'research' | 'spawn' | 'review' | 'router';
+
+/** 전체 role 목록 — Zod enum/검증 재사용용 SoT */
+export const MODEL_ROLES: ReadonlyArray<ModelRole> = ['chat', 'agent', 'judge', 'research', 'spawn', 'review', 'router'];
 
 /** 역할별 env var 이름 매핑 — OMK_* 일관 (vLLM/LiteLLM 표준) */
 const ROLE_ENV_VAR: Record<ModelRole, string> = {
-    chat:       'OMK_CHAT_MODEL',
-    classifier: 'OMK_CLASSIFIER_MODEL',
-    router:     'OMK_ROUTER_MODEL',
+    chat:     'OMK_CHAT_MODEL',
+    agent:    'OMK_AGENT_MODEL',
+    judge:    'OMK_JUDGE_MODEL',
+    research: 'OMK_RESEARCH_MODEL',
+    spawn:    'OMK_SPAWN_MODEL',
+    review:   'OMK_REVIEW_MODEL',
+    router:   'OMK_ROUTER_MODEL',
 };
 
 /**
@@ -44,6 +71,35 @@ const LEGACY_ROLE_ENV_VAR: Partial<Record<ModelRole, string>> = {
     router: 'OMK_UIR_MODEL',
 };
 
+/** 로컬 canonical provider prefix — 'local-llm:tag' 형태 허용 (tag 로 해석) */
+const LOCAL_PROVIDER_PREFIX = 'local-llm:';
+
+/**
+ * 값이 외부 provider fullId 인지 판정.
+ * 외부 prefix 는 EXTERNAL_PROVIDER_CATALOG 의 id 목록에서 파생 (SoT 재사용 —
+ * provider-gate 의 KNOWN_FULLID_PREFIXES 와 별도 하드코딩 금지).
+ * prefix 없는 값·미등록 prefix 는 채팅 경로 규칙과 동일하게 로컬 모델 태그로 간주.
+ */
+export function isExternalFullId(value: string): boolean {
+    const idx = value.indexOf(':');
+    if (idx <= 0) return false;
+    const prefix = value.slice(0, idx);
+    if (`${prefix}:` === LOCAL_PROVIDER_PREFIX) return false;
+    return EXTERNAL_PROVIDER_CATALOG.some((p) => p.id === prefix);
+}
+
+/**
+ * 값에서 로컬 모델 태그를 추출.
+ * - 'local-llm:tag' → 'tag'
+ * - 외부 fullId → null (로컬 태그 아님)
+ * - 그 외 → 값 그대로 (로컬 태그)
+ */
+export function toLocalModelTag(value: string): string | null {
+    if (isExternalFullId(value)) return null;
+    if (value.startsWith(LOCAL_PROVIDER_PREFIX)) return value.slice(LOCAL_PROVIDER_PREFIX.length);
+    return value;
+}
+
 /**
  * 역할별 fallback 모델 — env 미설정 시 사용하는 보수적 기본값.
  *
@@ -58,10 +114,25 @@ function roleFallback(_role: ModelRole): string {
 }
 
 /**
- * 주어진 역할에 사용할 모델명을 반환합니다.
+ * 해당 역할에 전역 env 오버라이드가 설정되어 있는지 여부.
+ * (resolver 가 폴백 출처를 'global' vs 'default' 로 라벨링할 때 사용)
+ */
+export function hasRoleEnvOverride(role: ModelRole): boolean {
+    const primary = process.env[ROLE_ENV_VAR[role]];
+    if (primary && primary.trim() !== '') return true;
+    const legacyEnvName = LEGACY_ROLE_ENV_VAR[role];
+    if (legacyEnvName) {
+        const legacyValue = process.env[legacyEnvName];
+        if (legacyValue && legacyValue.trim() !== '') return true;
+    }
+    return false;
+}
+
+/**
+ * 주어진 역할에 사용할 모델명을 반환합니다. (전역 계층)
  *
  * 우선순위:
- *   1. 역할별 env var (OMK_CHAT_MODEL, OMK_CLASSIFIER_MODEL, ...)
+ *   1. 역할별 env var (OMK_CHAT_MODEL, OMK_AGENT_MODEL, ...)
  *   2. Legacy env var (OMK_UIR_MODEL → router)
  *   3. LLM_DEFAULT_MODEL
  */
@@ -95,11 +166,10 @@ export function getModelForRole(role: ModelRole): string {
  * 시작 시 검증 및 디버깅용.
  */
 export function getAllRoleModels(): Record<ModelRole, string> {
-    return {
-        chat:       getModelForRole('chat'),
-        classifier: getModelForRole('classifier'),
-        router:     getModelForRole('router'),
-    };
+    return MODEL_ROLES.reduce((acc, role) => {
+        acc[role] = getModelForRole(role);
+        return acc;
+    }, {} as Record<ModelRole, string>);
 }
 
 /**
@@ -107,8 +177,10 @@ export function getAllRoleModels(): Record<ModelRole, string> {
  *
  * 기능:
  *   1. 모든 역할별 모델 식별 — 중복 제거 후 unique 모델 목록 생성
- *   2. OpenAI 호환 `/v1/models` (또는 `/models`) endpoint 로 ping — 미등록 모델 발견 시
- *      경고 또는 fail-fast. LiteLLM/vLLM 응답: `{ data: [{ id, ... }] }`.
+ *   2. 전역 env 에 외부 provider fullId 가 설정된 경우 거부 — 전역 계층은 서버
+ *      공용 키가 없어 외부 모델이 동작할 수 없다 (failFast 시 throw, 아니면 경고).
+ *   3. 로컬 모델을 OpenAI 호환 `/v1/models` (또는 `/models`) endpoint 로 ping —
+ *      미등록 모델 발견 시 경고 또는 fail-fast. LiteLLM/vLLM 응답: `{ data: [{ id, ... }] }`.
  *
  * @param llmBaseUrl LiteLLM/vLLM proxy base URL (예: http://host:13434)
  * @param failFast true=production 환경에서 미등록 모델 발견 시 throw
@@ -118,9 +190,28 @@ export async function validateModels(
     failFast: boolean = false,
 ): Promise<void> {
     const roleModels = getAllRoleModels();
-    const uniqueModels = Array.from(new Set(Object.values(roleModels))).filter(Boolean);
 
     logger.info(`모델 역할 매핑: ${JSON.stringify(roleModels)}`);
+
+    // 전역 env 의 외부 fullId 거부 — 외부 모델은 사용자별 매핑(BYOK)에서만 허용
+    const externalMisconfigs = Object.entries(roleModels)
+        .filter(([, model]) => model && isExternalFullId(model));
+    if (externalMisconfigs.length > 0) {
+        const msg = `전역 role env 에 외부 provider fullId 는 사용할 수 없습니다 (서버 공용 키 없음): ` +
+            externalMisconfigs.map(([role, model]) => `${role}=${model}`).join(', ') +
+            `. 외부 모델은 사용자별 역할 매핑(BYOK)에서만 배정 가능합니다.`;
+        if (failFast) {
+            logger.error(msg);
+            throw new Error(msg);
+        }
+        logger.warn(msg);
+    }
+
+    const uniqueModels = Array.from(new Set(
+        Object.values(roleModels)
+            .map((m) => (m ? toLocalModelTag(m) : null))
+            .filter((m): m is string => !!m),
+    ));
 
     if (uniqueModels.length === 0) {
         logger.warn('등록된 모델이 없습니다 — LLM_DEFAULT_MODEL 및 OMK_*_MODEL 환경변수를 확인하세요.');
