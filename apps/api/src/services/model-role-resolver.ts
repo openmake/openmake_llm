@@ -39,8 +39,10 @@ import {
     toLocalModelTag,
 } from '../config/model-roles';
 import { EXTERNAL_PROVIDER_CATALOG } from '../config/external-providers';
-import { createClient, LLMClient } from '../llm/client';
-import type { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
+import { createClient, LLMClient } from '../llm';
+import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
+import { UserModelRolesRepository } from '../data/repositories/user-model-roles-repo';
+import { getPool } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ModelRoleResolver');
@@ -189,4 +191,29 @@ export async function resolveRoleClient(
         logger.warn(`role '${role}' 해석 폴백 (user=${opts.userId ?? '-'}): ${degraded}`);
     }
     return buildLocalResolution(role, tag, source, opts.userId, degraded);
+}
+
+/**
+ * 소비처 편의 진입점 — 사용자 매핑/외부 키 repo 를 DB pool 로 자동 구성해
+ * resolveRoleClient 를 호출한다. 플래그 OFF·userId 없음·pool 미초기화(부팅 초기)
+ * 는 전역/기본 티어로 자연 폴백 (fail-open).
+ */
+export async function resolveRoleClientForUser(
+    role: ModelRole,
+    userId?: string,
+): Promise<RoleClientResolution> {
+    if (!userId || !getConfig().userModelRolesEnabled) {
+        return resolveRoleClient(role, { userId });
+    }
+    try {
+        const pool = getPool();
+        return await resolveRoleClient(role, {
+            userId,
+            userMappingLookup: new UserModelRolesRepository(pool),
+            externalKeysRepo: new ExternalKeysRepository(pool),
+        });
+    } catch (err) {
+        logger.warn(`role '${role}' repo 구성 실패 — 전역 티어 폴백: ${err instanceof Error ? err.message : String(err)}`);
+        return resolveRoleClient(role, { userId });
+    }
 }

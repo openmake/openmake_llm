@@ -75,6 +75,16 @@ export class LLMClient {
         return this.config.model;
     }
 
+    /**
+     * 현재 설정(baseUrl/apiKey/model/userId 포함)을 유지한 채 일부만 덮어쓴
+     * 파생 클라이언트를 만든다. role 해석된 외부 endpoint 클라이언트에
+     * 전용 timeout 만 바꿔 쓰는 용도 (report-generator, review 류) —
+     * createClient({ model: client.model }) 재파생은 외부 baseUrl 을 잃는다.
+     */
+    derive(overrides: Partial<LLMConfig>): LLMClient {
+        return new LLMClient({ ...this.config, ...overrides });
+    }
+
     setModel(model: string): void {
         this.config.model = model;
     }

@@ -54,11 +54,18 @@ export class DeepResearchService {
     private config: ResearchConfig;
     private abortController: AbortController | null = null;
 
-    constructor(config?: Partial<ResearchConfig>) {
+    constructor(config?: Partial<ResearchConfig>, client?: LLMClient) {
         this.config = { ...globalConfig, ...config };
+        if (client) {
+            // 'research' role 해석 클라이언트 주입 (외부 BYOK endpoint 포함) — research.routes 경로
+            this.client = client;
+            this.config.llmModel = client.model;
+            return;
+        }
         // 기본 llmModel이 비어있으면 model-roles 레지스트리에서 resolve
+        // ('research' role — 채팅 진입 경로는 deep-research-strategy 가 채팅 모델을 명시 전달)
         if (!this.config.llmModel) {
-            this.config.llmModel = getModelForRole('chat');
+            this.config.llmModel = getModelForRole('research');
             logger.info(`[DeepResearch] llmModel 미지정 → ${this.config.llmModel}`);
         }
         this.client = createClient({ model: this.config.llmModel });
@@ -456,8 +463,8 @@ export function configureResearch(config: Partial<ResearchConfig>): ResearchConf
 /**
  * 서비스 인스턴스 생성
  */
-export function createDeepResearchService(config?: Partial<ResearchConfig>): DeepResearchService {
-    return new DeepResearchService(config);
+export function createDeepResearchService(config?: Partial<ResearchConfig>, client?: LLMClient): DeepResearchService {
+    return new DeepResearchService(config, client);
 }
 
 /**

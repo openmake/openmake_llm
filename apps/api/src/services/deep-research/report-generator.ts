@@ -6,7 +6,7 @@
  * @module services/deep-research/report-generator
  */
 
-import { type LLMClient, createClient } from '../../llm';
+import { type LLMClient } from '../../llm';
 import type { SearchResult } from '../../mcp/web-search';
 import type { ResearchConfig, SubTopic } from '../deep-research-types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
@@ -165,9 +165,9 @@ export async function generateReport(params: {
     const prompt = getReportPrompt(config.language, topic, subTopicGuide, meaningfulFindings, sourceList);
 
     // 보고서 생성은 대형 프롬프트·장문 출력으로 전역 LLM_TIMEOUT(SDK)을 초과한다(라이브 검증 확인).
-    // → 전용 긴 타임아웃 클라이언트 사용. (기존 reportController.signal 은 chat 에 전달되지 않아 무효였음)
-    const reportClient = createClient({
-        model: client.model,
+    // → 전용 긴 타임아웃 파생 클라이언트. derive 는 baseUrl/apiKey 를 보존하므로
+    //   role 해석된 외부 endpoint 클라이언트에서도 안전 (createClient 재파생은 외부 baseUrl 상실).
+    const reportClient = client.derive({
         timeout: LLM_TIMEOUTS.REPORT_GENERATION_TIMEOUT_MS,
     });
 

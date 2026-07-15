@@ -33,6 +33,7 @@ import { validate } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
 import { createDeepResearchService } from '../services/DeepResearchService';
+import { resolveRoleClientForUser } from '../services/model-role-resolver';
 import { detectLanguage } from '../chat/language-policy';
 import { RESEARCH_DEPTH_LOOPS } from '../config/runtime-limits';
 import {
@@ -246,9 +247,11 @@ router.post('/sessions/:sessionId/execute', validate(executeResearchSchema), asy
     // depth에 따른 maxLoops 기본값 설정
     const loops = maxLoops || RESEARCH_DEPTH_LOOPS[session.depth] || RESEARCH_DEPTH_LOOPS.standard;
 
-    // 서비스 생성 및 비동기 실행
+    // 서비스 생성 및 비동기 실행 — 'research' role 해석 클라이언트 주입
+    // (사용자 매핑 → 전역 env → 로컬 default, 외부 매핑은 BYOK 키로 직결)
     const language = detectLanguage(session.topic).language;
-    const service = createDeepResearchService({ maxLoops: loops, language });
+    const resolved = await resolveRoleClientForUser('research', String(req.user!.id));
+    const service = createDeepResearchService({ maxLoops: loops, language }, resolved.client);
 
     // 백그라운드 실행 (응답은 즉시 반환)
     service.executeResearch(sessionId, session.topic).catch((error) => {
