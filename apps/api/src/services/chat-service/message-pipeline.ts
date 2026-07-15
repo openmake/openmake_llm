@@ -224,13 +224,33 @@ export async function runMessagePipeline(svc: ChatService,
         return generateImageInline((req.message ?? '').trim(), onToken);
     }
 
+    // Discussion / Deep Research 모드에 외부 모델 선택을 반영 — externalResolved 가
+    // 있으면(외부 provider 선택) 그 모델의 LLMClient 를 해석해 두 모드의 전략에 주입한다.
+    // (미주입 시 로컬 svc.client 사용 — 기존 동작). 해석 실패는 fail-open 로 로컬 폴백.
+    let modeExternalClient: import('../../llm').LLMClient | undefined;
+    if (externalResolved && req.userId && String(req.userId) !== 'guest'
+        && (effectiveDiscussionMode || deepResearchMode)) {
+        try {
+            const { resolveAssignedModelClient } = await import('../model-role-resolver');
+            const resolved = await resolveAssignedModelClient(externalResolved.fullId, String(req.userId));
+            modeExternalClient = resolved.client;
+            if (resolved.degraded) {
+                logger.warn(`[Mode] 외부 모델 해석 폴백 (${externalResolved.fullId}): ${resolved.degraded}`);
+            } else {
+                logger.info(`[Mode] ${effectiveDiscussionMode ? 'Discussion' : 'DeepResearch'} 외부 모델 사용: ${externalResolved.fullId}`);
+            }
+        } catch (e) {
+            logger.warn('[Mode] 외부 모델 해석 실패 (로컬 폴백):', e);
+        }
+    }
+
     // 토론 모드: 사용자 명시 토글.
     if (effectiveDiscussionMode) {
-        return svc.processMessageWithDiscussion(req, onToken, onDiscussionProgress);
+        return svc.processMessageWithDiscussion(req, onToken, onDiscussionProgress, modeExternalClient);
     }
 
     if (deepResearchMode) {
-        return svc.processMessageWithDeepResearch(req, onToken, onResearchProgress);
+        return svc.processMessageWithDeepResearch(req, onToken, onResearchProgress, modeExternalClient);
     }
 
     const startTime = Date.now();
