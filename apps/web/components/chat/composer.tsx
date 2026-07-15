@@ -163,7 +163,7 @@ export function Composer() {
   // 로컬 vLLM + 등록된 외부 LLM(OpenRouter 등) 통합 모델 목록
   const { data: modelsData } = useQuery({
     queryKey: ["models"],
-    queryFn: fetchModels,
+    queryFn: () => fetchModels(),
     staleTime: 60_000,
   });
   const {
