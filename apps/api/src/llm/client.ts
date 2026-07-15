@@ -184,6 +184,13 @@ export class LLMClient {
                 if (totalTokens > 0) {
                     getApiUsageTracker().record(totalTokens);  // 전역 aggregate (dashboard 관측용)
                     void recordUserUsage(this.config.userId, totalTokens, Date.now());  // per-user enforcement 누적
+                    try {
+                        this.config.onUsage?.({
+                            model: poolDecision.model,
+                            promptTokens: result.metrics?.prompt_tokens ?? 0,
+                            completionTokens: result.metrics?.completion_tokens ?? 0,
+                        });
+                    } catch { /* 관측 훅 실패는 호출 결과에 영향 없음 */ }
                 }
                 span.setAttribute('llm.prompt_tokens', result.metrics?.prompt_tokens ?? 0);
                 span.setAttribute('llm.completion_tokens', result.metrics?.completion_tokens ?? 0);
