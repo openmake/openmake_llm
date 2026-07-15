@@ -31,7 +31,7 @@ import {
     toLocalModelTag,
 } from '../config/model-roles';
 import { EXTERNAL_PROVIDER_CATALOG } from '../config/external-providers';
-import { createClient } from '../llm/client';
+import { createClient } from '../llm';
 import { createLogger } from '../utils/logger';
 import { success, internalError, unauthorized, badRequest, notFound } from '../utils/api-response';
 

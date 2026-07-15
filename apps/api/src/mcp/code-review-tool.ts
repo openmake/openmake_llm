@@ -67,7 +67,10 @@ export const codeReviewTool: MCPToolDefinition = {
         const language = typeof args.language === 'string' ? args.language : undefined;
         const filename = typeof args.filename === 'string' ? args.filename : undefined;
 
-        const result = await reviewCode({ code, language, filename });
+        const result = await reviewCode({
+            code, language, filename,
+            userId: context?.userId ? String(context.userId) : undefined,
+        });
 
         void (async () => {
             try {

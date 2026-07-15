@@ -9,8 +9,8 @@
  * @module services/plan-mode/planner
  */
 
-import { createClient } from '../../llm';
 import { LLM_TIMEOUTS } from '../../config/timeouts';
+import { resolveRoleClientForUser } from '../model-role-resolver';
 import { PLAN_MODE_CONFIG } from '../../config/plan-mode';
 import { buildPlanModeSystemPrompt, buildPlanModeUserMessage } from '../../prompts/plan-mode-system';
 import { createLogger } from '../../utils/logger';
@@ -102,6 +102,8 @@ export function normalizePlan(
 export interface PlanInput {
     task: string;
     context?: string;
+    /** 'review' role 사용자 매핑 해석용 (미지정 시 전역/기본 티어) */
+    userId?: string;
 }
 
 /** 빈 계획 (graceful fallback) */
@@ -116,7 +118,9 @@ export async function createPlan(input: PlanInput): Promise<ImplementationPlan> 
     const system = buildPlanModeSystemPrompt();
     const user = buildPlanModeUserMessage(input.task, input.context);
 
-    const client = createClient({ timeout: LLM_TIMEOUTS.REPORT_GENERATION_TIMEOUT_MS });
+    // 'review' role 해석 (사용자 매핑 → 전역 env → 로컬 default) + 전용 timeout 파생
+    const resolved = await resolveRoleClientForUser('review', input.userId);
+    const client = resolved.client.derive({ timeout: LLM_TIMEOUTS.REPORT_GENERATION_TIMEOUT_MS });
     let raw = '';
     try {
         const response = await client.chat(

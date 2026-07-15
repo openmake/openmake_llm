@@ -21,12 +21,12 @@
  * @module services/agent-spawn/spawn-agents
  */
 import { z } from 'zod';
-import { createClient, type LLMClient } from '../../llm';
+import { type LLMClient } from '../../llm';
 import type { ToolDefinition } from '../../llm/types';
 import type { UserContext } from '../../mcp/user-sandbox';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import { AGENT_SPAWN } from '../../config/runtime-limits';
-import { getModelForRole } from '../../config/model-roles';
+import { resolveRoleClientForUser } from '../model-role-resolver';
 import { parallelBatch } from '../../workflow/graph-engine';
 import { routeToAgent } from '../../agents/keyword-router';
 import { getAgentSystemMessage } from '../../agents/system-prompt';
@@ -212,7 +212,8 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
 }
 
 /**
- * 채팅 경로 편의 래퍼 — runChatDelegate 와 대칭. 서브 LLM 은 항상 로컬 모델,
+ * 채팅 경로 편의 래퍼 — runChatDelegate 와 대칭. 서브 LLM 은 'spawn' role 해석
+ * (사용자 매핑 → 전역 env → 로컬 default, 외부는 BYOK 키 필요 — fail-open 폴백),
  * 승인 정책 'none' 고정(채팅 도구는 원래 승인 없이 실행되는 모델과 정합).
  */
 export async function runChatSpawnAgents(params: {
@@ -222,9 +223,13 @@ export async function runChatSpawnAgents(params: {
     userCtx: UserContext;
     signal?: AbortSignal;
 }): Promise<string> {
+    const resolved = await resolveRoleClientForUser('spawn', String(params.userCtx.userId));
+    if (resolved.degraded) {
+        logger.warn(`[AgentSpawn] spawn role 폴백: ${resolved.degraded}`);
+    }
     return runSpawnAgents({
         args: params.args,
-        client: createClient({ model: getModelForRole('chat') }),
+        client: resolved.client,
         tools: filterChatSubTools(params.chatTools),
         userCtx: params.userCtx,
         taskId: '__chat__', // 정책 'none' 이라 승인 레지스트리 미사용 — 식별용 문자열일 뿐

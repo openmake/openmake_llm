@@ -75,7 +75,10 @@ export const createPlanTool: MCPToolDefinition = {
             ctx = ctx.slice(0, PLAN_MODE_CONFIG.maxContextBytes);
         }
 
-        const plan = await createPlan({ task, context: ctx });
+        const plan = await createPlan({
+            task, context: ctx,
+            userId: context?.userId ? String(context.userId) : undefined,
+        });
 
         void (async () => {
             try {

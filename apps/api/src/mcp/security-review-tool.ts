@@ -68,7 +68,10 @@ export const securityReviewTool: MCPToolDefinition = {
         const language = typeof args.language === 'string' ? args.language : undefined;
         const filename = typeof args.filename === 'string' ? args.filename : undefined;
 
-        const result = await analyzeCode({ code, language, filename });
+        const result = await analyzeCode({
+            code, language, filename,
+            userId: context?.userId ? String(context.userId) : undefined,
+        });
 
         // audit (fire-and-forget, 실패해도 결과 반환)
         void (async () => {
