@@ -14,10 +14,9 @@
  *
  * @module services/AgentTaskService
  */
-import { createClient, type LLMClient } from '../llm';
+import { type LLMClient } from '../llm';
 import type { ChatMessage, ToolDefinition } from '../llm/types';
-import { getModelForRole } from '../config/model-roles';
-import { resolveRoleClientForUser } from './model-role-resolver';
+import { initAgentRoleState, chatTurnWithRoleFallback, judgeClientFor, defaultAgentClient } from './agent-task/role-client';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, AGENT_SPAWN } from '../config/runtime-limits';
@@ -56,14 +55,10 @@ export class AgentTaskService {
 
     private client: LLMClient;
     private readonly abortController = new AbortController();
-    /** 생성자에서 model 명시 시 role 해석을 건너뛴다 (기존 계약 유지) */
-    private readonly explicitModel: boolean;
-    /** role 해석 결과가 외부 provider 인지 — tools 4xx 로컬 폴백 판단용 */
-    private roleClientExternal = false;
-    private roleFallbackDone = false;
+    private readonly explicitModel: boolean; // model 명시 시 role 해석 생략 (기존 계약 유지)
 
     constructor(model?: string) {
-        this.client = createClient({ model: model || getModelForRole('agent') });
+        this.client = defaultAgentClient(model);
         this.explicitModel = !!model;
     }
 
@@ -97,18 +92,9 @@ export class AgentTaskService {
 
         const userCtx: UserContext = { userId, role: userRole };
 
-        // 'agent' role 해석 (사용자 매핑 → 전역 env → 로컬 default, fail-open).
-        // 생성자에서 model 이 명시된 경우는 기존 계약대로 그대로 사용.
-        if (!this.explicitModel) {
-            const resolved = await resolveRoleClientForUser('agent', String(userId));
-            this.client = resolved.client;
-            this.roleClientExternal = resolved.providerId !== 'local-llm';
-            if (resolved.degraded) {
-                logger.warn(`[AgentTask] ${taskId} agent role 폴백: ${resolved.degraded}`);
-            } else if (this.roleClientExternal) {
-                logger.info(`[AgentTask] ${taskId} agent role 외부 모델 사용: ${resolved.fullId}`);
-            }
-        }
+        // 'agent' role 해석 — 상세는 agent-task/role-client (생성자 model 명시 시 그대로 사용)
+        const roleState = await initAgentRoleState(taskId, String(userId), this.explicitModel ? this.client : undefined);
+        this.client = roleState.client;
 
         let stepNumber = input.resume?.fromStep ?? 0;
         let totalTokens = 0;
@@ -334,33 +320,12 @@ export class AgentTaskService {
                 );
                 const callSignal = AbortSignal.any([signal, AbortSignal.timeout(remainingMs)]);
 
-                let result;
-                try {
-                    result = await this.client.chat(conversation, undefined, undefined, {
-                        tools: effectiveTools,
-                        signal: callSignal,
-                        // reasoning OFF — qwen3.6 가 디자인/장문 작업에서 수만 토큰의 thinking 을
-                        // 생성해 토큰 한도를 소진하고 deliverable 을 못 쓰는 폭주 차단.
-                        // 도구 루프의 단계별 reasoning 은 대화 구조 자체가 대신한다.
-                        think: false,
-                    });
-                } catch (chatErr) {
-                    // 외부 role 모델의 4xx(tools 미지원 등 — 예: NVIDIA 소형 모델 tools 400)
-                    // → 로컬 default 로 1회 강등 후 같은 턴 재시도. 재발/그 외 에러는 기존 경로.
-                    const status = (chatErr as { status?: number }).status;
-                    if (this.roleClientExternal && !this.roleFallbackDone
-                        && typeof status === 'number' && status >= 400 && status < 500) {
-                        this.roleFallbackDone = true;
-                        this.roleClientExternal = false;
-                        logger.warn(`[AgentTask] ${taskId} 외부 role 모델 ${status} — 로컬 폴백: ${chatErr instanceof Error ? chatErr.message : chatErr}`);
-                        this.client = createClient({ model: getModelForRole('agent'), userId: String(userId) });
-                        result = await this.client.chat(conversation, undefined, undefined, {
-                            tools: effectiveTools, signal: callSignal, think: false,
-                        });
-                    } else {
-                        throw chatErr;
-                    }
-                }
+                // reasoning OFF + 외부 role 모델 tools 4xx 로컬 폴백 — agent-task/role-client
+                const result = await chatTurnWithRoleFallback(roleState, {
+                    conversation, tools: effectiveTools, signal: callSignal,
+                    taskId, userId: String(userId),
+                });
+                this.client = roleState.client;
                 totalTokens +=
                     (result.metrics?.prompt_tokens ?? 0) + (result.metrics?.completion_tokens ?? 0);
                 // 토큰 상한을 호출 직후 즉시 검사 — 큰 도구 결과로 컨텍스트가 부풀어
@@ -440,9 +405,8 @@ export class AgentTaskService {
                     // 5-3(b): 실행 컨텍스트(사용 도구·턴수·계획 상태)를 함께 제공해 판정 정확도 보강.
                     if (extracted!.artifacts.length === 0 && AGENT_TASK_LIMITS.GOAL_JUDGE_ENABLED) {
                         const execCtx = buildJudgeExecutionContext(usedTools, turn + 1, taskRuntime?.getPlanSnapshot() ?? []);
-                        // 'judge' role 별도 해석 — agent 실행 모델과 판정 모델을 분리 배정 가능.
-                        const judgeResolved = await resolveRoleClientForUser('judge', String(userId));
-                        const achieved = await judgeGoalAchieved(judgeResolved.client, goal, stepContent ?? '', callSignal, execCtx);
+                        const achieved = await judgeGoalAchieved(
+                            await judgeClientFor(String(userId)), goal, stepContent ?? '', callSignal, execCtx);
                         if (achieved === false) {
                             await update({
                                 status: 'failed',
