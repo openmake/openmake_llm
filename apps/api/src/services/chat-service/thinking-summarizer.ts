@@ -39,6 +39,7 @@ export async function summarizeThinking(
     userMessage: string,
     thinking: string,
     userId?: string,
+    mode: 'progress' | 'final' = 'final',
 ): Promise<string | null> {
     if (!getConfig().thinkingSummaryEnabled) return null;
     if (!thinking || thinking.trim().length < 20) return null; // 한두 단어 생각은 요약 무의미
@@ -49,6 +50,7 @@ export async function summarizeThinking(
         const { system, user } = getThinkingSummaryMessages(
             userMessage.slice(0, MAX_USER_MSG_CHARS),
             truncateThinking(thinking),
+            mode,
         );
         const r = await client.chat(
             [{ role: 'system', content: system }, { role: 'user', content: user }],
@@ -63,4 +65,75 @@ export async function summarizeThinking(
         logger.warn(`thinking 요약 실패 (헤드라인 생략): ${e instanceof Error ? e.message : e}`);
         return null;
     }
+}
+
+/* ── 요약 세션 (동적 헤드라인 — 클로드 웹의 진행 중 갱신 대응) ──────────── */
+
+/** 진행 중 첫 중간 요약을 시작하는 생각 누적 길이 — 짧은 생각은 최종 요약만 */
+const PROGRESS_MIN_CHARS = parseInt(process.env.THINKING_SUMMARY_PROGRESS_MIN_CHARS || '800', 10);
+/** 다음 중간 요약까지 필요한 신규 생각 길이 */
+const PROGRESS_STEP_CHARS = parseInt(process.env.THINKING_SUMMARY_PROGRESS_STEP_CHARS || '1500', 10);
+/** 중간 요약 최소 간격 — 요약 호출 폭주 방지 */
+const PROGRESS_MIN_INTERVAL_MS = parseInt(process.env.THINKING_SUMMARY_PROGRESS_INTERVAL_MS || '7000', 10);
+
+export interface ThinkingSummarySession {
+    /** 생각 청크 누적 — 임계값 도달 시 진행형 중간 요약을 비동기 발행 */
+    onThinking(chunk: string): void;
+    /** 누적된 생각 원문 (영속화용) */
+    getThinking(): string;
+    /**
+     * 생각 종료(첫 응답 토큰) — 과거형 최종 요약 시작. 멱등(1회만 시작).
+     * @returns 최종 요약 promise (실패/비활성 시 null resolve)
+     */
+    startFinal(): Promise<string | null>;
+}
+
+/**
+ * 채팅 1건의 생각 요약 세션. 중간(진행형)·최종(과거형) 요약을 onSummary 로 발행 —
+ * 호출부(WS 등)는 도착 순서대로 헤드라인을 덮어쓰면 된다.
+ * in-flight 가드로 요약 호출은 항상 1개만 진행, 최종 시작 후 중간 요약은 중단.
+ */
+export function createThinkingSummarySession(
+    userMessage: string,
+    userId: string | undefined,
+    onSummary: (summary: string) => void,
+): ThinkingSummarySession {
+    let buffer = '';
+    let lastSummarizedLen = 0;
+    let lastSummarizedAt = 0;
+    let inFlight = false;
+    let finalPromise: Promise<string | null> | null = null;
+
+    const run = async (mode: 'progress' | 'final'): Promise<string | null> => {
+        const summary = await summarizeThinking(userMessage, buffer, userId, mode);
+        // 최종 요약이 이미 시작됐으면 늦게 도착한 중간 요약은 발행하지 않음 (역행 방지)
+        if (summary && (mode === 'final' || !finalPromise)) onSummary(summary);
+        return summary;
+    };
+
+    return {
+        onThinking(chunk: string): void {
+            buffer += chunk;
+            if (finalPromise || inFlight) return;
+            if (!getConfig().thinkingSummaryEnabled) return;
+            if (buffer.length < PROGRESS_MIN_CHARS) return;
+            if (lastSummarizedLen > 0 && buffer.length - lastSummarizedLen < PROGRESS_STEP_CHARS) return;
+            if (Date.now() - lastSummarizedAt < PROGRESS_MIN_INTERVAL_MS && lastSummarizedAt > 0) return;
+            inFlight = true;
+            lastSummarizedLen = buffer.length;
+            lastSummarizedAt = Date.now();
+            void run('progress').catch(() => null).finally(() => { inFlight = false; });
+        },
+        getThinking(): string {
+            return buffer;
+        },
+        startFinal(): Promise<string | null> {
+            if (!finalPromise) {
+                finalPromise = buffer.trim().length > 0
+                    ? run('final').catch(() => null)
+                    : Promise.resolve(null);
+            }
+            return finalPromise;
+        },
+    };
 }

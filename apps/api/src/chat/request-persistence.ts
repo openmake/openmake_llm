@@ -139,7 +139,9 @@ export async function saveAssistantMessage(
     model?: string,
     responseTime?: number,
     saveHistory: boolean = true,
-): Promise<void> {
+    /** 생각(추론) 원문 — 재열람 타임라인용. 요약 헤드라인은 비동기 도착이라 별도 UPDATE. */
+    thinking?: string,
+): Promise<string | null> {
     // 1. 감사 로그 — 항상
     await recordAuditLog({
         sessionId,
@@ -151,13 +153,16 @@ export async function saveAssistantMessage(
         contentLength: response.length,
     });
 
-    // 2. 본문 저장 — saveHistory=true 일 때만
+    // 2. 본문 저장 — saveHistory=true 일 때만. 저장된 메시지 id 반환 (요약 헤드라인 후속 UPDATE 용)
     if (saveHistory) {
         const conversationDb = getConversationDB();
-        await conversationDb.addMessage(sessionId, 'assistant', response, {
+        const saved = await conversationDb.addMessage(sessionId, 'assistant', response, {
             model,
             responseTime,
             tokensUsed: estimateTokens(response),
+            ...(thinking ? { thinking } : {}),
         });
+        return saved?.id ?? null;
     }
+    return null;
 }
