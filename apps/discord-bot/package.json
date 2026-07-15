@@ -1,0 +1,22 @@
+{
+    "name": "openmake-discord-bot",
+    "version": "1.5.6",
+    "description": "OpenMake LLM Discord gateway bot — Discord 메시지를 /api/v1/chat/completions 로 중계",
+    "main": "dist/index.js",
+    "scripts": {
+        "build": "tsc",
+        "dev": "ts-node src/index.ts",
+        "start": "node dist/index.js"
+    },
+    "engines": {
+        "node": ">=24 <25"
+    },
+    "dependencies": {
+        "discord.js": "^14.16.3",
+        "dotenv": "^16.4.5"
+    },
+    "devDependencies": {
+        "ts-node": "^10.9.2",
+        "typescript": "^5.3.2"
+    }
+}
