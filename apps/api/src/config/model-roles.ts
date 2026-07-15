@@ -34,22 +34,23 @@ const logger = createLogger('ModelRoles');
  * - spawn:    spawn_agents 병렬 서브에이전트
  * - review:   code-review / security-review / plan-mode
  * - router:   산업 에이전트 라우팅 (agents/llm-router)
+ * - summary:  thinking 요약 헤드라인 (chat-service/thinking-summarizer — 클로드 웹식 표시)
  *
  * (2026-05-19 embedding 제거 — vector cache / semantic router 폐기.
  *  2026-07-15 classifier 제거 — Phase B 로 LLM classifier 경로 자체가 사라져 dead.
  *  동시에 role 목록을 실소비처 기준으로 확장 — Role-based Multi-Agent Orchestration)
  */
-export type ModelRole = 'chat' | 'agent' | 'judge' | 'research' | 'spawn' | 'review' | 'router';
+export type ModelRole = 'chat' | 'agent' | 'judge' | 'research' | 'spawn' | 'review' | 'router' | 'summary';
 
-/** 전체 role 목록 — Zod enum/검증 재사용용 SoT */
-export const MODEL_ROLES: ReadonlyArray<ModelRole> = ['chat', 'agent', 'judge', 'research', 'spawn', 'review', 'router'];
+/** 전체 role 목록 — Zod enum/검증 재사용용 SoT (DB CHECK 정합: 073) */
+export const MODEL_ROLES: ReadonlyArray<ModelRole> = ['chat', 'agent', 'judge', 'research', 'spawn', 'review', 'router', 'summary'];
 
 /**
  * 사용자별 매핑(user_model_roles) 배정을 허용하는 role.
  * - chat 제외: 채팅은 요청별 모델 선택(ModelSelector)이 이미 존재 — 매핑과 중복/충돌
  * - router 제외: agents/llm-router 는 전역 싱글톤 클라이언트 — 사용자별 배정 불가
  */
-export const USER_ASSIGNABLE_MODEL_ROLES: ReadonlyArray<ModelRole> = ['agent', 'judge', 'research', 'spawn', 'review'];
+export const USER_ASSIGNABLE_MODEL_ROLES: ReadonlyArray<ModelRole> = ['agent', 'judge', 'research', 'spawn', 'review', 'summary'];
 
 /** 역할별 env var 이름 매핑 — OMK_* 일관 (vLLM/LiteLLM 표준) */
 const ROLE_ENV_VAR: Record<ModelRole, string> = {
@@ -60,6 +61,7 @@ const ROLE_ENV_VAR: Record<ModelRole, string> = {
     spawn:    'OMK_SPAWN_MODEL',
     review:   'OMK_REVIEW_MODEL',
     router:   'OMK_ROUTER_MODEL',
+    summary:  'OMK_SUMMARY_MODEL',
 };
 
 /**

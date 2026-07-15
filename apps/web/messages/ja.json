@@ -337,7 +337,12 @@
     },
     "feedbackUp": "役に立った",
     "feedbackDown": "いまいち",
-    "feedbackThanks": "フィードバックありがとうございます"
+    "feedbackThanks": "フィードバックありがとうございます",
+    "thinkingTimeline": {
+      "thinking": "思考中",
+      "fallbackLabel": "思考プロセス",
+      "done": "完了"
+    }
   },
   "artifacts": {
     "exec": {
@@ -1338,6 +1343,10 @@
       "review": {
         "label": "コード・セキュリティレビュー",
         "description": "コードレビュー、セキュリティ分析、実装計画のモデル"
+      },
+      "summary": {
+        "label": "思考要約",
+        "description": "思考プロセスのヘッドラインを生成するモデル"
       }
     }
   },

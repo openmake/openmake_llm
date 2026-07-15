@@ -337,7 +337,12 @@
     },
     "feedbackUp": "有帮助",
     "feedbackDown": "没帮助",
-    "feedbackThanks": "感谢您的反馈"
+    "feedbackThanks": "感谢您的反馈",
+    "thinkingTimeline": {
+      "thinking": "思考中",
+      "fallbackLabel": "思考过程",
+      "done": "完成"
+    }
   },
   "artifacts": {
     "exec": {
@@ -1338,6 +1343,10 @@
       "review": {
         "label": "代码与安全审查",
         "description": "代码审查、安全分析与实现计划的模型"
+      },
+      "summary": {
+        "label": "思考摘要",
+        "description": "生成思考过程标题摘要的模型"
       }
     }
   },

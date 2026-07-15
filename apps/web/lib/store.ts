@@ -17,8 +17,10 @@ export interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" 
   streaming?: boolean;
   /** 에이전트 작업 메시지 — agent_task_progress 로 라이브 업데이트되는 메시지 식별자 */
   taskId?: string;
-  /** 추론(thinking) 내용 — ws thinking 이벤트로 누적, 화면에 접이식 블록으로 표시 */
+  /** 추론(thinking) 내용 — ws thinking 이벤트로 누적, 타임라인 블록으로 표시 */
   reasoning?: string;
+  /** 추론 요약 헤드라인 — 생각 종료 시 별도 모델이 생성 (ws thinking_summary, 클로드 웹식) */
+  reasoningSummary?: string;
   /** 구조화 답변 데이터 (structuredMode=true 시 REST /api/chat/structured 응답). 있으면 카드 UI 로 렌더. */
   structured?: StructuredAnswerData;
   /** 에이전트 작업이 승인 대기(paused)일 때 표시할 대기 중 도구 호출 — 채팅 인라인 승인. */
@@ -156,6 +158,7 @@ interface AppState {
   appendMessage: (m: ChatMessage) => void;
   appendToken: (token: string) => void;
   appendThinking: (token: string) => void;
+  setThinkingSummary: (summary: string) => void;
   setStreaming: (v: boolean) => void;
   setCurrentSessionId: (id: string | null) => void;
   setInputDraft: (t: string) => void;
@@ -295,6 +298,18 @@ export const useAppStore = create<AppState>()(
       } else {
         // thinking 은 보통 답변 토큰보다 먼저 도착 — assistant placeholder 를 생성해 누적
         hist.push({ role: "assistant", content: "", reasoning: token, streaming: true });
+      }
+      return { chatHistory: hist };
+    }),
+  setThinkingSummary: (summary) =>
+    set((s) => {
+      // 요약은 스트리밍 중(첫 토큰 직후) 또는 done 직후 도착 — 마지막 assistant 에 부착
+      const hist = [...s.chatHistory];
+      for (let i = hist.length - 1; i >= 0; i--) {
+        if (hist[i].role === "assistant") {
+          hist[i] = { ...hist[i], reasoningSummary: summary };
+          break;
+        }
       }
       return { chatHistory: hist };
     }),

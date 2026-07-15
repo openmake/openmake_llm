@@ -127,6 +127,12 @@ export const envSchema = z
          * 'false'(기본) 면 현행 동작과 동일 — 전역 env/default 만 사용.
          */
         USER_MODEL_ROLES_ENABLED: z.string().default('false'),
+        /**
+         * thinking 요약 헤드라인 (클로드 웹식) — 생각 종료 시 'summary' role 모델이
+         * 한 줄 요약을 생성해 WS thinking_summary 이벤트로 전송. 'false' 면 헤드라인 없이
+         * 타임라인 UI 만 표시 (요약 LLM 호출 없음).
+         */
+        THINKING_SUMMARY_ENABLED: z.string().default('true'),
         /** Tail 라우팅 셰도우 모드 — 게이트 결정 계산/적재만, 실행 무변경 (기본 false). */
         TAIL_ROUTING_SHADOW_ENABLED: z.string().default('false'),
         SEARCH_SEMANTIC_RERANK_SHADOW: z.string().default('false'),

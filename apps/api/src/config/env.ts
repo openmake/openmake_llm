@@ -57,6 +57,8 @@ export interface EnvConfig {
     localStrategyPathEnabled: boolean;
     /** 사용자별 역할→모델 매핑(user_model_roles) 사용 토글 (기본 false=전역 env/default 만). */
     userModelRolesEnabled: boolean;
+    /** thinking 요약 헤드라인 생성 토글 (기본 true — 'summary' role 모델 1회 호출). */
+    thinkingSummaryEnabled: boolean;
     /** Tail 라우팅 셰도우 모드 — 게이트 결정을 계산/적재만 하고 실행은 바꾸지 않음 (기본 false). */
     tailRoutingShadowEnabled: boolean;
     /** 웹검색 의미 리랭킹 셰도우 — bge-m3 임베딩 리랭킹 결과를 로깅만 하고 실행은 안 바꿈 (기본 false). */
@@ -177,6 +179,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     llmEnableReasoningEffort: false,
     localStrategyPathEnabled: false,
     userModelRolesEnabled: false,
+    thinkingSummaryEnabled: true,
     tailRoutingShadowEnabled: false,
     searchSemanticRerankShadow: false,
     searchSemanticRerankEnabled: false,
@@ -393,6 +396,7 @@ export function loadConfig(): EnvConfig {
         LLM_ENABLE_REASONING_EFFORT: env('LLM_ENABLE_REASONING_EFFORT'),
         LOCAL_STRATEGY_PATH_ENABLED: env('LOCAL_STRATEGY_PATH_ENABLED'),
         USER_MODEL_ROLES_ENABLED: env('USER_MODEL_ROLES_ENABLED'),
+        THINKING_SUMMARY_ENABLED: env('THINKING_SUMMARY_ENABLED'),
         TAIL_ROUTING_SHADOW_ENABLED: env('TAIL_ROUTING_SHADOW_ENABLED'),
         SEARCH_SEMANTIC_RERANK_SHADOW: env('SEARCH_SEMANTIC_RERANK_SHADOW'),
         SEARCH_SEMANTIC_RERANK_ENABLED: env('SEARCH_SEMANTIC_RERANK_ENABLED'),
@@ -497,6 +501,7 @@ export function loadConfig(): EnvConfig {
         llmEnableReasoningEffort: (parsed.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true',
         localStrategyPathEnabled: (parsed.LOCAL_STRATEGY_PATH_ENABLED ?? 'false').toLowerCase() === 'true',
         userModelRolesEnabled: (parsed.USER_MODEL_ROLES_ENABLED ?? 'false').toLowerCase() === 'true',
+        thinkingSummaryEnabled: (parsed.THINKING_SUMMARY_ENABLED ?? 'true').toLowerCase() === 'true',
         tailRoutingShadowEnabled: (parsed.TAIL_ROUTING_SHADOW_ENABLED ?? 'false').toLowerCase() === 'true',
         searchSemanticRerankShadow: (parsed.SEARCH_SEMANTIC_RERANK_SHADOW ?? 'false').toLowerCase() === 'true',
         searchSemanticRerankEnabled: (parsed.SEARCH_SEMANTIC_RERANK_ENABLED ?? 'false').toLowerCase() === 'true',

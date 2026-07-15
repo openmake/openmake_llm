@@ -57,6 +57,7 @@ export function useChatSocket() {
     setChatHistory,
     appendToken,
     appendThinking,
+    setThinkingSummary,
     setStreaming,
     setCurrentSessionId,
     setActiveAgent,
@@ -100,6 +101,9 @@ export function useChatSocket() {
           break;
         case "thinking":
           if (data.token) appendThinking(data.token);
+          break;
+        case "thinking_summary":
+          if (typeof data.summary === "string" && data.summary) setThinkingSummary(data.summary);
           break;
         case "session_created":
           if (data.sessionId) setCurrentSessionId(data.sessionId);
