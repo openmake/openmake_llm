@@ -132,7 +132,9 @@ export function ModelRolesSection() {
                         {t(`roles.${role}.label`)}
                       </span>
                       {current !== DEFAULT_VALUE && (
-                        <Badge tone="accent">{t("assignedBadge")}</Badge>
+                        <Badge tone="accent" className="shrink-0 whitespace-nowrap">
+                          {t("assignedBadge")}
+                        </Badge>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
