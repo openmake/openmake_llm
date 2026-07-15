@@ -30,6 +30,7 @@ import type { UnifiedExecutionPlan } from '../../chat/execution-plan-types';
 import { applyStyle, normalizeStyle } from '../../chat/style';
 import { resolveAnswerFormatProfile, applyAnswerFormat, getAnswerFormatGuard } from '../../chat/answer-format';
 import { runProviderGate } from './provider-gate';
+import { applyAgentModelOverride } from './agent-model-override';
 import type { RequestContext } from './request-context';
 import { buildChatOptions, assembleHistoryWithSummary } from './options-and-history';
 import { estimateTokens } from '../../llm/model-pool';
@@ -165,23 +166,10 @@ export async function runMessagePipeline(svc: ChatService,
     const localStrategyPathEnabled = (await import('../../config/env')).getConfig().localStrategyPathEnabled;
     let externalResolved: import('../../providers/provider-router').ResolvedProvider | null = null;
 
-    // Custom Agent 모델 배정 (Phase C): 요청 model 이 자동('default'/빈값)일 때만
-    // 에이전트 정의의 model 로 대체. 게이트 이전 단일 지점 — 로컬/외부 분기 대칭.
-    // countUsage:false — usage_count 는 아래 외부 분기의 본 로드에서만 1회 증가.
-    let gateRequestedModel = executionPlan?.requestedModel;
-    if (req.userAgentId && req.userId && String(req.userId) !== 'guest'
-        && (!gateRequestedModel || gateRequestedModel === 'default')) {
-        try {
-            const preAgent = await getExecutionPlanBuilder()
-                .loadUserAgent(req.userAgentId, String(req.userId), { countUsage: false });
-            if (preAgent?.model) {
-                gateRequestedModel = preAgent.model;
-                logger.info(`[UserAgent] 에이전트 모델 배정 적용: ${preAgent.model} (agent=${preAgent.name})`);
-            }
-        } catch (e) {
-            logger.warn('[UserAgent] 에이전트 모델 조회 실패 (silent — 기본 모델 사용):', e);
-        }
-    }
+    // Custom Agent 모델 배정 (Phase C) — 상세는 agent-model-override (요청 model 자동일 때만 적용)
+    const gateRequestedModel = await applyAgentModelOverride(
+        executionPlan?.requestedModel, req.userAgentId, req.userId,
+    );
 
     if (svc.providerRouter) {
         const resolved = await runProviderGate(svc.providerRouter, {
