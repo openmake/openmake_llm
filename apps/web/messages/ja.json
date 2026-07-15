@@ -28,6 +28,7 @@
       "metrics": "メトリクス",
       "alerts": "アラート",
       "mcpCatalogAdmin": "MCPカタログ管理",
+      "modelRolesAdmin": "ロールモデル管理",
       "mcp": "MCP",
       "developer": "開発者"
     }
@@ -1335,6 +1336,39 @@
         "label": "コード・セキュリティレビュー",
         "description": "コードレビュー、セキュリティ分析、実装計画のモデル"
       }
+    }
+  },
+  "adminModelRoles": {
+    "title": "ロールモデル管理",
+    "description": "グローバルなロール→モデル割り当て(全ユーザーの既定値)とサーバー共有外部キーを管理します。",
+    "loadError": "読み込みに失敗しました。",
+    "saveFailed": "保存に失敗しました。",
+    "keyDeleteConfirm": "'{provider}' のサーバーキーを削除しますか?このプロバイダーのグローバル割り当てはローカルモデルにフォールバックします。",
+    "serverKeys": {
+      "title": "サーバー共有外部キー",
+      "description": "運用者所有のキー — グローバルロール割り当てでのみ使用されます(ユーザー別割り当てとチャットは個人のBYOKキーを使用)。日次トークン上限を超えるとローカルモデルへ自動フォールバックします。",
+      "provider": "プロバイダー",
+      "dailyLimit": "日次トークン上限",
+      "status": "状態",
+      "actions": "操作",
+      "active": "有効",
+      "inactive": "無効",
+      "delete": "削除"
+    },
+    "keyForm": {
+      "provider": "プロバイダー",
+      "apiKeyPlaceholder": "APIキー(登録時に暗号化)",
+      "dailyLimit": "日次トークン上限",
+      "dailyLimitHelp": "日次トークン上限は必須です — 0はロック(使用不可)状態。",
+      "save": "登録"
+    },
+    "globalRoles": {
+      "title": "グローバルロール割り当て",
+      "description": "ロールごとの既定モデルを指定します。ユーザー別割り当てが優先され、空にすると環境変数/既定モデルにフォールバックします。外部モデル(provider:model)にはサーバー共有キーが必要です。",
+      "assigned": "割り当て済み",
+      "save": "保存",
+      "placeholder": "空 = フォールバック ({fallback})",
+      "cacheNote": "変更は再起動なしで最大60秒以内に反映されます。"
     }
   },
   "usage": {

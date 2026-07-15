@@ -13,6 +13,7 @@ import {
   Sparkles,
   Telescope,
   Boxes,
+  UsersRound,
   Terminal,
   type LucideIcon,
 } from "lucide-react";
@@ -81,6 +82,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { labelKey: "items.auditLog", href: "/admin/audit", icon: ScrollText },
       { labelKey: "items.alerts", href: "/admin/alerts", icon: Bell },
       { labelKey: "items.mcpCatalogAdmin", href: "/admin/mcp-catalog", icon: Boxes },
+      { labelKey: "items.modelRolesAdmin", href: "/admin/model-roles", icon: UsersRound },
     ],
   },
 ];

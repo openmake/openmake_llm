@@ -9,8 +9,10 @@
  *   ① 사용자별 매핑 (user_model_roles, USER_MODEL_ROLES_ENABLED=true + userId 필요)
  *      — 외부 provider fullId 허용. 그 사용자의 BYOK 키(user_external_api_keys)로
  *        OpenAI 호환 endpoint 에 직결한 LLMClient 를 생성.
- *   ② 전역 env (OMK_<ROLE>_MODEL — 로컬 모델만, config/model-roles 참조)
- *   ③ LLM_DEFAULT_MODEL (로컬 default)
+ *   ② 전역 DB 매핑 (global_model_roles — Admin UI, 60s 캐시. 외부 fullId 는
+ *      서버 공용 키(server_external_api_keys) 필요)
+ *   ③ 전역 env (OMK_<ROLE>_MODEL — 외부 fullId 는 서버 공용 키 필요)
+ *   ④ LLM_DEFAULT_MODEL (로컬 default)
  *
  * 폴백 정책 = fail-open: 상위 티어 해석 실패(키 삭제·만료·비활성, anthropic sdk,
  * lookup 오류 등)는 throw 하지 않고 사유를 degraded 에 기록한 뒤 다음 티어로
@@ -43,6 +45,7 @@ import { createClient, LLMClient } from '../llm';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { UserModelRolesRepository } from '../data/repositories/user-model-roles-repo';
 import { ServerExternalKeysRepository } from '../data/repositories/server-external-keys-repo';
+import { GlobalModelRolesRepository } from '../data/repositories/global-model-roles-repo';
 import { getPool } from '../data/models/unified-database';
 import { checkServerKeyBudget, recordServerKeyUsage } from './server-key-quota';
 import { createLogger } from '../utils/logger';
@@ -82,6 +85,34 @@ export interface ResolveRoleClientOptions {
      * 전역 매핑 설정 + 서버 키 등록)
      */
     serverKeysRepo?: ServerExternalKeysRepository;
+    /** 전역 DB 매핑(Admin UI, L3) 저장소 — 미주입 시 env 전역 티어로 직행 */
+    globalRolesRepo?: GlobalModelRolesRepository;
+}
+
+/**
+ * 전역 DB 매핑 캐시 — per-call DB 조회 방지. TTL 내 변경은 최대 TTL 만큼 지연 반영
+ * (같은 프로세스의 admin API 변경은 clearGlobalRolesCache 로 즉시 반영).
+ */
+const GLOBAL_ROLES_CACHE_TTL_MS = parseInt(process.env.GLOBAL_MODEL_ROLES_CACHE_TTL_MS || '60000', 10);
+let globalRolesCache: { map: Map<string, string>; fetchedAt: number } | null = null;
+
+export function clearGlobalRolesCache(): void {
+    globalRolesCache = null;
+}
+
+async function getGlobalDbRole(repo: GlobalModelRolesRepository, role: ModelRole): Promise<string | null> {
+    const now = Date.now();
+    if (!globalRolesCache || now - globalRolesCache.fetchedAt > GLOBAL_ROLES_CACHE_TTL_MS) {
+        try {
+            const rows = await repo.list();
+            globalRolesCache = { map: new Map(rows.map((r) => [r.role, r.fullModelId])), fetchedAt: now };
+        } catch (err) {
+            // DB 장애 — fail-open (env/default 티어로). 캐시가 있으면 stale 사용.
+            logger.warn(`전역 DB 매핑 조회 실패: ${err instanceof Error ? err.message : String(err)}`);
+            if (!globalRolesCache) return null;
+        }
+    }
+    return globalRolesCache.map.get(role) ?? null;
 }
 
 function catalogEntry(providerId: string) {
@@ -246,7 +277,34 @@ export async function resolveRoleClient(
         }
     }
 
-    // ② 전역 env / ③ 로컬 default — getModelForRole 이 두 티어를 합쳐 처리
+    // ② 전역 DB 매핑 (Admin UI, L3 — Phase B). env 전역보다 우선.
+    if (opts.globalRolesRepo) {
+        const dbGlobal = await getGlobalDbRole(opts.globalRolesRepo, role);
+        if (dbGlobal) {
+            if (isExternalFullId(dbGlobal)) {
+                if (opts.serverKeysRepo) {
+                    const result = await tryBuildServerKeyResolution(role, dbGlobal, opts.userId, opts.serverKeysRepo)
+                        .catch((err) => `서버 키 해석 실패: ${err instanceof Error ? err.message : String(err)}`);
+                    if (typeof result !== 'string') {
+                        if (degradedReasons.length > 0) result.degraded = degradedReasons.join(' → ');
+                        return result;
+                    }
+                    degradedReasons.push(result);
+                } else {
+                    degradedReasons.push(`전역 DB 매핑 외부 fullId '${dbGlobal}' — 서버 키 저장소 미주입`);
+                }
+            } else {
+                const dbTag = toLocalModelTag(dbGlobal);
+                if (dbTag) {
+                    const degraded = degradedReasons.length > 0 ? degradedReasons.join(' → ') : undefined;
+                    return buildLocalResolution(role, dbTag, 'global', opts.userId, degraded);
+                }
+                degradedReasons.push(`전역 DB 매핑 값 해석 불가: '${dbGlobal}'`);
+            }
+        }
+    }
+
+    // ③ 전역 env / ④ 로컬 default — getModelForRole 이 두 티어를 합쳐 처리
     const globalValue = getModelForRole(role);
     const source: RoleClientResolution['source'] = hasRoleEnvOverride(role) ? 'global' : 'default';
     let tag = toLocalModelTag(globalValue);
@@ -298,8 +356,9 @@ export async function resolveRoleClientForUser(
     const opts: ResolveRoleClientOptions = { userId };
     try {
         const pool = getPool();
-        // 서버 키 티어는 사용자 플래그와 무관 (운영자 opt-in — 전역 매핑 + 키 등록)
+        // 서버 키·전역 DB 매핑 티어는 사용자 플래그와 무관 (운영자 opt-in)
         opts.serverKeysRepo = new ServerExternalKeysRepository(pool);
+        opts.globalRolesRepo = new GlobalModelRolesRepository(pool);
         if (userId && getConfig().userModelRolesEnabled) {
             opts.userMappingLookup = new UserModelRolesRepository(pool);
             opts.externalKeysRepo = new ExternalKeysRepository(pool);

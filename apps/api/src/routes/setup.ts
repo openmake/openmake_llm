@@ -35,6 +35,7 @@ import {
     mcpServerIngestRouter,
     mcpCatalogAdminRouter,
     mcpAdminMonitoringRouter,
+    adminModelRolesRouter,
     usageRouter,
     nodesRouter,
     setNodesCluster,
@@ -180,6 +181,7 @@ export function setupApiRoutes(
         llmClientFactory: (model: string) => new LLMClient(model ? { model } : {}),
     }));
     app.use('/api/admin/mcp', mcpCatalogAdminRouter);
+    app.use('/api/admin', adminModelRolesRouter);
     app.use('/api/admin/mcp', mcpAdminMonitoringRouter);
     // F2 자가개선 — 프롬프트 제안 검토/승인 (관리자)
     app.use('/api/admin/agent-suggestions', agentSuggestionsRouter);
