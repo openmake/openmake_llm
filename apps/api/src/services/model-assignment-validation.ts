@@ -17,6 +17,9 @@ import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ModelAssignmentValidation');
 
+/** 배정 시점 실호출 probe 타임아웃 (ms) — env override */
+const ASSIGNMENT_PROBE_TIMEOUT_MS = Number(process.env.MODEL_ASSIGNMENT_PROBE_TIMEOUT_MS) || 20000;
+
 async function validateExternalAssignment(userId: string, fullId: string): Promise<string | null> {
     const idx = fullId.indexOf(':');
     const providerId = fullId.slice(0, idx);
@@ -33,6 +36,21 @@ async function validateExternalAssignment(userId: string, fullId: string): Promi
     const keyRow = await keysRepo.getByUserAndProvider(userId, providerId);
     if (!keyRow) return `'${providerId}' API 키를 먼저 등록하세요`;
     if (!keyRow.isActive) return `'${providerId}' API 키가 비활성 상태입니다`;
+
+    // 실호출 probe — /models 카탈로그에 있어도 계정별로 추론이 404/403 인 모델이 있다
+    // (NVIDIA 무료티어 등). 실제 역할 수행 불가 모델을 배정 시점에 거부한다.
+    const plaintextKey = await keysRepo.decryptKey(userId, providerId);
+    if (!plaintextKey) return `'${providerId}' 키 복호화 실패`;
+    const baseUrl = keyRow.baseUrl || entry.defaultBaseUrl;
+    try {
+        const client = createClient({ baseUrl, apiKey: plaintextKey, model: modelId, userId });
+        await client.derive({ timeout: ASSIGNMENT_PROBE_TIMEOUT_MS })
+            .chat([{ role: 'user', content: 'ping' }], { num_predict: 1 }, undefined, { think: false });
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.warn(`모델 배정 probe 실패 (${fullId}): ${msg}`);
+        return `'${fullId}' 모델은 현재 이 API 키로 응답하지 않습니다 (역할 수행 불가): ${msg.slice(0, 80)}`;
+    }
     return null;
 }
 

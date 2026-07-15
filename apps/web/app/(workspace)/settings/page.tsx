@@ -201,7 +201,7 @@ export default function SettingsPage() {
   const isGuest = !useAppStore((s) => s.auth.currentUser);
   const { data: modelsData } = useQuery({
     queryKey: ["models"],
-    queryFn: fetchModels,
+    queryFn: () => fetchModels(),
     staleTime: 60_000,
   });
   // 기본 모델은 2단계 선택(provider → model)으로 노출 — components/model-picker.tsx 공용
