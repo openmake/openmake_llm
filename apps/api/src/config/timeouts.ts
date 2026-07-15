@@ -46,6 +46,14 @@ export const LLM_TIMEOUTS = {
      * 정식 LLM 보고서가 timeout 으로 잘려 fallback 되지 않도록 여유 확보(평소엔 거의 미사용).
      */
     REPORT_GENERATION_TIMEOUT_MS: Number(process.env.DEEP_RESEARCH_REPORT_TIMEOUT_MS) || 900000,
+    /**
+     * Fast-fail(TTFT race) 대형 프롬프트 prefill 보정: 입력 1k 토큰 추정치당 가산 시간 (ms).
+     * vLLM 은 prefill 완료 후에야 첫 SSE 청크를 보내므로, 고정 fast-fail 은 대형 첨부(수만 토큰)의
+     * 정상 prefill 을 죽인다. env override: LLM_FAST_FAIL_PREFILL_MS_PER_1K_TOKENS
+     */
+    FAST_FAIL_PREFILL_MS_PER_1K_TOKENS: Number(process.env.LLM_FAST_FAIL_PREFILL_MS_PER_1K_TOKENS) || 1000,
+    /** Fast-fail 유효 타임아웃 상한 (ms) — 전역 LLM_TIMEOUT(기본 120000)과 정렬. env override: LLM_FAST_FAIL_MAX_MS */
+    FAST_FAIL_MAX_MS: Number(process.env.LLM_FAST_FAIL_MAX_MS) || 120000,
 } as const;
 
 // ============================================
