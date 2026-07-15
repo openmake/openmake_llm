@@ -44,6 +44,13 @@ export type ModelRole = 'chat' | 'agent' | 'judge' | 'research' | 'spawn' | 'rev
 /** 전체 role 목록 — Zod enum/검증 재사용용 SoT */
 export const MODEL_ROLES: ReadonlyArray<ModelRole> = ['chat', 'agent', 'judge', 'research', 'spawn', 'review', 'router'];
 
+/**
+ * 사용자별 매핑(user_model_roles) 배정을 허용하는 role.
+ * - chat 제외: 채팅은 요청별 모델 선택(ModelSelector)이 이미 존재 — 매핑과 중복/충돌
+ * - router 제외: agents/llm-router 는 전역 싱글톤 클라이언트 — 사용자별 배정 불가
+ */
+export const USER_ASSIGNABLE_MODEL_ROLES: ReadonlyArray<ModelRole> = ['agent', 'judge', 'research', 'spawn', 'review'];
+
 /** 역할별 env var 이름 매핑 — OMK_* 일관 (vLLM/LiteLLM 표준) */
 const ROLE_ENV_VAR: Record<ModelRole, string> = {
     chat:     'OMK_CHAT_MODEL',
