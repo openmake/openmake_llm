@@ -1303,6 +1303,40 @@
     },
     "validationWarning": "密钥已保存，但 endpoint 验证失败：{error} — 请检查地址/密钥后重新保存。"
   },
+  "modelRoles": {
+    "title": "按角色分配模型",
+    "description": "将已注册的模型(本地或外部API密钥)分配给不同功能角色。未分配的角色将使用服务器默认模型。",
+    "externalNote": "外部模型需要已注册且有效的提供商API密钥;调用失败时会自动回退到本地默认模型。",
+    "loading": "正在加载角色映射…",
+    "loadError": "加载角色映射失败。",
+    "saveFailed": "保存角色映射失败。",
+    "defaultOption": "默认(自动)",
+    "assignedBadge": "已分配",
+    "resetLabel": "恢复默认",
+    "empty": "没有可分配的角色。",
+    "roles": {
+      "agent": {
+        "label": "智能体任务",
+        "description": "后台智能体任务的执行模型"
+      },
+      "judge": {
+        "label": "目标判定",
+        "description": "判定智能体任务是否达成目标的模型"
+      },
+      "research": {
+        "label": "深度研究",
+        "description": "研究流程与报告生成的模型"
+      },
+      "spawn": {
+        "label": "并行子智能体",
+        "description": "并行分支子智能体的模型"
+      },
+      "review": {
+        "label": "代码与安全审查",
+        "description": "代码审查、安全分析与实现计划的模型"
+      }
+    }
+  },
   "usage": {
     "title": "使用量",
     "description": "按账户统计的令牌与请求使用量。",

@@ -1303,6 +1303,40 @@
     },
     "validationWarning": "키는 저장됐지만 endpoint 검증에 실패했습니다: {error} — 주소/키를 확인 후 다시 저장하세요."
   },
+  "modelRoles": {
+    "title": "역할별 모델 배정",
+    "description": "등록된 모델(로컬·외부 API 키)을 기능 역할별로 다르게 배정합니다. 미배정 역할은 서버 기본 모델을 사용합니다.",
+    "externalNote": "외부 모델은 해당 공급자 API 키가 등록·활성 상태여야 하며, 호출 실패 시 로컬 기본 모델로 자동 폴백됩니다.",
+    "loading": "역할 매핑 불러오는 중…",
+    "loadError": "역할 매핑을 불러오지 못했습니다.",
+    "saveFailed": "역할 매핑 저장에 실패했습니다.",
+    "defaultOption": "기본(자동)",
+    "assignedBadge": "배정됨",
+    "resetLabel": "기본값으로 되돌리기",
+    "empty": "배정 가능한 역할이 없습니다.",
+    "roles": {
+      "agent": {
+        "label": "에이전트 작업",
+        "description": "백그라운드 에이전트 작업의 실행 모델"
+      },
+      "judge": {
+        "label": "목표 판정",
+        "description": "에이전트 작업 완료 여부를 판정하는 모델"
+      },
+      "research": {
+        "label": "딥 리서치",
+        "description": "리서치 파이프라인·보고서 생성 모델"
+      },
+      "spawn": {
+        "label": "병렬 서브에이전트",
+        "description": "병렬로 분기되는 서브에이전트 모델"
+      },
+      "review": {
+        "label": "코드·보안 리뷰",
+        "description": "코드 리뷰, 보안 분석, 구현 계획 모델"
+      }
+    }
+  },
   "usage": {
     "title": "사용량",
     "description": "내 계정 기준 토큰·요청 사용량입니다.",
