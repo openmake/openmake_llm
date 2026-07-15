@@ -34,6 +34,8 @@ import type { LLMClient } from '../llm';
 import type { ToolCall, UsageMetrics } from '../llm';
 import { matchCapabilityPreset, FALLBACK_CAPABILITIES } from '../config/model-defaults';
 import { LLM_ANTI_DEGENERATION_FREQUENCY_PENALTY } from '../config/llm-parameters';
+import { LLM_TIMEOUTS } from '../config/timeouts';
+import { estimateMessageTokens } from '../llm/model-pool';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('LocalLLMProvider');
@@ -133,6 +135,11 @@ export class LocalLLMProvider implements IProvider {
         // Fast-fail timeout — retried=false 호출에 한해 짧은 timeout 으로 TTFT race.
         // 정상 모델은 TTFT 가 수백 ms 이내 — default 5s 안전.
         //
+        // 대형 프롬프트 보정 (2026-07-14): vLLM 은 prefill 이 끝나야 첫 SSE 청크를 보내므로
+        // 고정 timeout 은 정상 prefill 중인 요청을 죽인다 (엑셀 10개 첨부 ~55k 토큰이 30s
+        // fast-fail 로 오판 demote → 사용자에겐 "파일을 읽을 수 없음"으로 보이던 회귀).
+        // 입력 토큰 추정치에 비례해 연장하고 FAST_FAIL_MAX_MS 로 상한을 둔다.
+        //
         // 2단 메커니즘:
         //  1) fastFailController.abort() → SDK request cancel (upstream HTTP 즉시 종료, orphan 방지)
         //  2) Promise.race reject → catch 진입 (SDK 의 mid-stream abort 는 silent 종료라
@@ -140,7 +147,13 @@ export class LocalLLMProvider implements IProvider {
         //
         // user signal (opts.abortSignal) 과는 별도 controller — 자체 abort 를 user abort 로
         // 오인하여 fallback 을 건너뛰는 함정 방지.
-        const FAST_FAIL_MS = retried ? 0 : parseInt(process.env.LLM_FAST_FAIL_TIMEOUT_MS || '5000', 10);
+        const FAST_FAIL_BASE_MS = retried ? 0 : parseInt(process.env.LLM_FAST_FAIL_TIMEOUT_MS || '5000', 10);
+        const prefillAllowanceMs = Math.round(
+            (estimateMessageTokens(opts.messages) / 1000) * LLM_TIMEOUTS.FAST_FAIL_PREFILL_MS_PER_1K_TOKENS,
+        );
+        const FAST_FAIL_MS = FAST_FAIL_BASE_MS > 0
+            ? Math.max(FAST_FAIL_BASE_MS, Math.min(FAST_FAIL_BASE_MS + prefillAllowanceMs, LLM_TIMEOUTS.FAST_FAIL_MAX_MS))
+            : 0;
         const fastFailController = FAST_FAIL_MS > 0 ? new AbortController() : null;
         let fastFailTimer: NodeJS.Timeout | null = null;
         const fastFailPromise = fastFailController
