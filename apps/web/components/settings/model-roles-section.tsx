@@ -128,7 +128,7 @@ export function ModelRolesSection() {
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">
+                      <span className="whitespace-nowrap text-sm font-medium">
                         {t(`roles.${role}.label`)}
                       </span>
                       {current !== DEFAULT_VALUE && (
