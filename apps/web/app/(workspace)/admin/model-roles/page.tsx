@@ -99,7 +99,7 @@ function ServerKeyForm({ providers, onSaved }: {
           value={dailyLimit}
           onChange={(e) => setDailyLimit(e.target.value)}
         />
-        <Button size="sm" disabled={saving || apiKey.length < 8} onClick={() => void handleSave()}>
+        <Button size="sm" className="shrink-0 whitespace-nowrap" disabled={saving || apiKey.length < 8} onClick={() => void handleSave()}>
           {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
           {t("keyForm.save")}
         </Button>
@@ -244,7 +244,7 @@ export default function AdminModelRolesPage() {
                 value={drafts[role] ?? ""}
                 onChange={(e) => setDrafts((d) => ({ ...d, [role]: e.target.value }))}
               />
-              <Button size="sm" disabled={busyRole === role} onClick={() => void saveRole(role)}>
+              <Button size="sm" className="shrink-0 whitespace-nowrap" disabled={busyRole === role} onClick={() => void saveRole(role)}>
                 {busyRole === role
                   ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                   : <Save className="h-4 w-4" aria-hidden />}
