@@ -28,6 +28,7 @@
       "metrics": "Metrics",
       "alerts": "Alerts",
       "mcpCatalogAdmin": "MCP Catalog Admin",
+      "modelRolesAdmin": "Model Roles Admin",
       "mcp": "MCP",
       "developer": "Developer"
     }
@@ -1335,6 +1336,39 @@
         "label": "Code & Security Review",
         "description": "Model for code review, security analysis, and planning"
       }
+    }
+  },
+  "adminModelRoles": {
+    "title": "Model Roles Admin",
+    "description": "Manage global role→model mappings (defaults for all users) and server-shared external keys.",
+    "loadError": "Failed to load.",
+    "saveFailed": "Failed to save.",
+    "keyDeleteConfirm": "Delete the server key for '{provider}'? Global mappings for this provider will fall back to the local model.",
+    "serverKeys": {
+      "title": "Server-shared External Keys",
+      "description": "Operator-owned keys — used only by global role mappings (per-user mappings and chat use personal BYOK keys). Calls fall back to the local model when the daily token limit is exceeded.",
+      "provider": "Provider",
+      "dailyLimit": "Daily token limit",
+      "status": "Status",
+      "actions": "Actions",
+      "active": "Active",
+      "inactive": "Inactive",
+      "delete": "Delete"
+    },
+    "keyForm": {
+      "provider": "Provider",
+      "apiKeyPlaceholder": "API key (encrypted at rest)",
+      "dailyLimit": "Daily token limit",
+      "dailyLimitHelp": "A daily token limit is required — 0 locks the key.",
+      "save": "Register"
+    },
+    "globalRoles": {
+      "title": "Global Role Mappings",
+      "description": "Set the default model per role. Per-user mappings take precedence; leave empty to fall back to env/default. External models (provider:model) require a server-shared key.",
+      "assigned": "Assigned",
+      "save": "Save",
+      "placeholder": "Empty = fallback ({fallback})",
+      "cacheNote": "Changes take effect within 60 seconds without a restart."
     }
   },
   "usage": {

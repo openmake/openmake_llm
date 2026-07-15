@@ -28,6 +28,7 @@
       "metrics": "指标",
       "alerts": "告警",
       "mcpCatalogAdmin": "MCP目录管理",
+      "modelRolesAdmin": "角色模型管理",
       "mcp": "MCP",
       "developer": "开发者"
     }
@@ -1335,6 +1336,39 @@
         "label": "代码与安全审查",
         "description": "代码审查、安全分析与实现计划的模型"
       }
+    }
+  },
+  "adminModelRoles": {
+    "title": "角色模型管理",
+    "description": "管理全局角色→模型映射(所有用户的默认值)和服务器共享外部密钥。",
+    "loadError": "加载失败。",
+    "saveFailed": "保存失败。",
+    "keyDeleteConfirm": "删除 '{provider}' 的服务器密钥?该提供商的全局映射将回退到本地模型。",
+    "serverKeys": {
+      "title": "服务器共享外部密钥",
+      "description": "运营者所有的密钥 — 仅用于全局角色映射(按用户映射与聊天使用个人BYOK密钥)。超过每日令牌上限时自动回退到本地模型。",
+      "provider": "提供商",
+      "dailyLimit": "每日令牌上限",
+      "status": "状态",
+      "actions": "操作",
+      "active": "已启用",
+      "inactive": "已停用",
+      "delete": "删除"
+    },
+    "keyForm": {
+      "provider": "提供商",
+      "apiKeyPlaceholder": "API密钥(注册时加密)",
+      "dailyLimit": "每日令牌上限",
+      "dailyLimitHelp": "每日令牌上限为必填 — 0表示锁定(不可用)。",
+      "save": "注册"
+    },
+    "globalRoles": {
+      "title": "全局角色映射",
+      "description": "设置每个角色的默认模型。按用户映射优先;留空则回退到环境变量/默认模型。外部模型(provider:model)需要服务器共享密钥。",
+      "assigned": "已分配",
+      "save": "保存",
+      "placeholder": "留空 = 回退 ({fallback})",
+      "cacheNote": "更改无需重启,最多60秒内生效。"
     }
   },
   "usage": {

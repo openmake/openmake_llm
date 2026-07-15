@@ -18,6 +18,7 @@ export { mcpCatalogRouter } from './mcp-catalog.routes';
 export { mcpServerIngestRouter } from './mcp-server-ingest.routes';
 export { mcpCatalogAdminRouter } from './mcp-catalog-admin.routes';
 export { mcpAdminMonitoringRouter } from './mcp-admin-monitoring.routes';
+export { adminModelRolesRouter } from './admin-model-roles.routes';
 
 // 🆕 리팩토링된 라우트
 export { default as chatRouter, setClusterManager as setChatCluster } from './chat.routes';

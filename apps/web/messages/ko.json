@@ -28,6 +28,7 @@
       "metrics": "메트릭",
       "alerts": "알림",
       "mcpCatalogAdmin": "MCP 카탈로그 관리",
+      "modelRolesAdmin": "역할 모델 관리",
       "mcp": "MCP",
       "developer": "개발자"
     }
@@ -1335,6 +1336,39 @@
         "label": "코드·보안 리뷰",
         "description": "코드 리뷰, 보안 분석, 구현 계획 모델"
       }
+    }
+  },
+  "adminModelRoles": {
+    "title": "역할 모델 관리",
+    "description": "전역 역할→모델 매핑(모든 사용자 기본값)과 서버 공용 외부 키를 관리합니다.",
+    "loadError": "불러오기에 실패했습니다.",
+    "saveFailed": "저장에 실패했습니다.",
+    "keyDeleteConfirm": "'{provider}' 서버 공용 키를 삭제할까요? 해당 provider 의 전역 매핑은 로컬 모델로 폴백됩니다.",
+    "serverKeys": {
+      "title": "서버 공용 외부 키",
+      "description": "운영자 소유 키 — 전역 역할 매핑에서만 사용됩니다(사용자별 매핑·채팅은 개인 BYOK 키 사용). 일 토큰 상한 초과 시 자동으로 로컬 모델로 폴백됩니다.",
+      "provider": "공급자",
+      "dailyLimit": "일 토큰 상한",
+      "status": "상태",
+      "actions": "작업",
+      "active": "활성",
+      "inactive": "비활성",
+      "delete": "삭제"
+    },
+    "keyForm": {
+      "provider": "공급자",
+      "apiKeyPlaceholder": "API 키 (등록 즉시 암호화)",
+      "dailyLimit": "일 토큰 상한",
+      "dailyLimitHelp": "일 토큰 상한은 필수입니다 — 0은 잠금(사용 불가) 상태.",
+      "save": "등록"
+    },
+    "globalRoles": {
+      "title": "전역 역할 매핑",
+      "description": "역할별 기본 모델을 지정합니다. 사용자별 매핑이 있으면 그것이 우선하고, 비우면 환경변수/기본 모델로 폴백됩니다. 외부 모델(provider:model)은 서버 공용 키가 필요합니다.",
+      "assigned": "배정됨",
+      "save": "저장",
+      "placeholder": "비움 = 폴백 ({fallback})",
+      "cacheNote": "변경은 재시작 없이 최대 60초 내에 반영됩니다."
     }
   },
   "usage": {
