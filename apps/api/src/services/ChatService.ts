@@ -494,7 +494,9 @@ export class ChatService {
     async processMessageWithDiscussion(
         req: ChatMessageRequest,
         onToken: (token: string) => void,
-        onProgress?: (progress: DiscussionProgress) => void
+        onProgress?: (progress: DiscussionProgress) => void,
+        /** 외부 모델 선택 시 해석된 LLMClient — 미지정 시 로컬 this.client */
+        externalClient?: LLMClient,
     ): Promise<string> {
         const abortSignal = req.abortSignal;
         const checkAborted = () => {
@@ -504,7 +506,7 @@ export class ChatService {
         };
         const result = await this.discussionStrategy.execute({
             req,
-            client: this.client,
+            client: externalClient ?? this.client,
             onProgress,
             formatDiscussionResult: (discussionResult) => formatDiscussionResult(discussionResult),
             onToken,
@@ -529,11 +531,13 @@ export class ChatService {
     async processMessageWithDeepResearch(
         req: ChatMessageRequest,
         onToken: (token: string) => void,
-        onProgress?: (progress: ResearchProgress) => void
+        onProgress?: (progress: ResearchProgress) => void,
+        /** 외부 모델 선택 시 해석된 LLMClient — 미지정 시 로컬 this.client */
+        externalClient?: LLMClient,
     ): Promise<string> {
         const result = await this.deepResearchStrategy.execute({
             req,
-            client: this.client,
+            client: externalClient ?? this.client,
             onProgress,
             formatResearchResult: (researchResult) => formatResearchResult(researchResult),
             onToken,

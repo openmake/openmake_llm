@@ -54,10 +54,12 @@ export class DeepResearchStrategy implements ChatStrategy<DeepResearchStrategyCo
 
         logger.info('🔬 Deep Research 모드 시작');
 
-        // 사용자 메시지에서 언어 감지 후 연구 서비스 생성
+        // 사용자 메시지에서 언어 감지 후 연구 서비스 생성.
+        // context.client 를 직접 주입 — 외부 모델 선택 시 그 BYOK 클라이언트로 리서치 전 단계
+        // 수행(로컬은 svc.client 로 기존과 동일). 모델명만 넘기면 내부에서 로컬 client 를
+        // 재생성해 외부 모델이 로컬 endpoint 로 404 나던 문제 해소.
         const researchService = new DeepResearchService({
             maxLoops: RESEARCH_STRATEGY_PARAMS.MAX_LOOPS,
-            llmModel: context.client.model,
             searchApi: RESEARCH_STRATEGY_PARAMS.SEARCH_API,
             maxSearchResults: RESEARCH_STRATEGY_PARAMS.MAX_SEARCH_RESULTS,
             language: detectLanguage(message).language,
@@ -66,7 +68,7 @@ export class DeepResearchStrategy implements ChatStrategy<DeepResearchStrategyCo
             maxScrapePerLoop: RESEARCH_STRATEGY_PARAMS.MAX_SCRAPE_PER_LOOP,
             scrapeTimeoutMs: LLM_TIMEOUTS.SCRAPE_TIMEOUT_MS,
             chunkSize: RESEARCH_STRATEGY_PARAMS.CHUNK_SIZE,
-        });
+        }, context.client);
 
         // 연구 세션 ID 생성 및 DB 저장 (추후 조회/이어하기용)
         const sessionId = uuidv4();

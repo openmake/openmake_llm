@@ -31,82 +31,14 @@ import { applyStyle, normalizeStyle } from '../../chat/style';
 import { resolveAnswerFormatProfile, applyAnswerFormat, getAnswerFormatGuard } from '../../chat/answer-format';
 import { runProviderGate } from './provider-gate';
 import { applyAgentModelOverride } from './agent-model-override';
+import { resolveModeExternalClient } from './mode-external-client';
+import { buildUserContextBlocks } from './user-context-blocks';
 import type { RequestContext } from './request-context';
 import { buildChatOptions, assembleHistoryWithSummary } from './options-and-history';
-import { estimateTokens } from '../../llm/model-pool';
-import { USER_CONTEXT_LIMITS, AGENT_LOOP_LIMITS } from '../../config/runtime-limits';
+import { AGENT_LOOP_LIMITS } from '../../config/runtime-limits';
 
 const logger = createLogger('MessagePipeline');
 
-/**
- * Cross-conversation Memory(/remember) + Custom Instructions 블록을 조립한다.
- * strategy 경로와 외부 provider 경로 양쪽에서 동일하게 호출 (claude.ai Memory/CI 동등).
- * 인증 사용자(userId 명시)만 적용 — guest 미적용. 각 조회 실패 시 빈 블록(graceful fallback).
- *
- * 회귀 배경: 과거 strategy 경로에만 인라인되어 있어, 외부 provider 분기
- * (LOCAL_STRATEGY_PATH OFF 기본이라 로컬 채팅 포함)에서 memory/custom instructions 가
- * 전혀 주입되지 않던 버그를 헬퍼 추출로 양 경로 대칭화.
- */
-async function buildUserContextBlocks(
-    userId: string | undefined,
-    includeMemory = true,
-): Promise<{ memoryBlock: string; customInstructionsBlock: string }> {
-    let customInstructionsBlock = '';
-    let memoryBlock = '';
-    if (userId && userId !== 'guest') {
-        try {
-            const { UserRepository } = await import('../../data/repositories/user-repository');
-            const { getPool } = await import('../../data/models/unified-database');
-            const userRepo = new UserRepository(getPool());
-            const ci = await userRepo.getCustomInstructions(userId);
-            if (ci && ci.trim().length > 0) {
-                // 토큰 cap — 매 턴 고정 비용이므로 무제한 prepend 방지 (head 보존 truncate)
-                let ciText = ci.trim();
-                const maxCi = USER_CONTEXT_LIMITS.MAX_CUSTOM_INSTRUCTIONS_TOKENS;
-                if (estimateTokens(ciText) > maxCi) {
-                    const ratio = ciText.length / estimateTokens(ciText);
-                    ciText = ciText.slice(0, Math.floor(maxCi * ratio)).trimEnd() + ' …(생략됨)';
-                    logger.info(`custom_instructions 토큰 cap 적용 (>${maxCi})`);
-                }
-                customInstructionsBlock = `## 👤 User Custom Instructions\n${ciText}\n\n---\n\n`;
-            }
-        } catch (e) {
-            logger.warn('custom_instructions 조회 실패 (계속 진행):', e);
-        }
-
-        // includeMemory=false (설정 "장기 기억" 토글 OFF) → 저장된 메모리를 대화에 주입하지 않음.
-        try {
-            if (includeMemory) {
-            const { UserMemoryRepository } = await import('../../data/repositories/user-memory-repository');
-            const { getPool } = await import('../../data/models/unified-database');
-            const memRepo = new UserMemoryRepository(getPool());
-            const memories = await memRepo.listActiveByUser(userId, 50);
-            if (memories.length > 0) {
-                const maxMem = USER_CONTEXT_LIMITS.MAX_MEMORY_TOKENS;
-                const kept: typeof memories = [];
-                let usedTokens = 0;
-                for (const m of memories) {
-                    const t = estimateTokens(m.content) + 4;
-                    if (usedTokens + t > maxMem && kept.length > 0) break;
-                    kept.push(m);
-                    usedTokens += t;
-                }
-                if (kept.length < memories.length) {
-                    logger.info(`user_memories 토큰 cap 적용 (${kept.length}/${memories.length}, >${maxMem} tok)`);
-                }
-                const lines = kept.map((m, i) => `${i + 1}. ${m.content}`).join('\n');
-                memoryBlock = `## 🧠 User Memory (cross-conversation)\n${lines}\n\n---\n\n`;
-                void memRepo.touchAccessed(kept.map(m => m.id)).catch(e =>
-                    logger.warn('memory touch 실패 (무시):', e),
-                );
-            }
-            }
-        } catch (e) {
-            logger.warn('user_memories 조회 실패 (계속 진행):', e);
-        }
-    }
-    return { memoryBlock, customInstructionsBlock };
-}
 
 /**
  * Artifacts guide 블록 빌드 (사용자 artifacts_enabled 토글 반영, 기본 활성).
@@ -224,13 +156,19 @@ export async function runMessagePipeline(svc: ChatService,
         return generateImageInline((req.message ?? '').trim(), onToken);
     }
 
+    // Discussion / Deep Research 모드에 외부 모델 선택 반영 — 상세는 mode-external-client
+    // (외부 선택 시 그 모델 LLMClient 를 두 모드 전략에 주입, 미주입/실패 시 로컬 svc.client).
+    const modeExternalClient = (effectiveDiscussionMode || deepResearchMode)
+        ? await resolveModeExternalClient(externalResolved, req.userId, effectiveDiscussionMode ? 'Discussion' : 'DeepResearch')
+        : undefined;
+
     // 토론 모드: 사용자 명시 토글.
     if (effectiveDiscussionMode) {
-        return svc.processMessageWithDiscussion(req, onToken, onDiscussionProgress);
+        return svc.processMessageWithDiscussion(req, onToken, onDiscussionProgress, modeExternalClient);
     }
 
     if (deepResearchMode) {
-        return svc.processMessageWithDeepResearch(req, onToken, onResearchProgress);
+        return svc.processMessageWithDeepResearch(req, onToken, onResearchProgress, modeExternalClient);
     }
 
     const startTime = Date.now();
