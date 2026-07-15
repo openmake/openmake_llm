@@ -42,7 +42,9 @@ import { EXTERNAL_PROVIDER_CATALOG } from '../config/external-providers';
 import { createClient, LLMClient } from '../llm';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { UserModelRolesRepository } from '../data/repositories/user-model-roles-repo';
+import { ServerExternalKeysRepository } from '../data/repositories/server-external-keys-repo';
 import { getPool } from '../data/models/unified-database';
+import { checkServerKeyBudget, recordServerKeyUsage } from './server-key-quota';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ModelRoleResolver');
@@ -73,6 +75,13 @@ export interface ResolveRoleClientOptions {
     userMappingLookup?: UserModelRoleLookup;
     /** 외부 BYOK 키 저장소 — 미주입 시 외부 모델 매핑은 폴백 처리 */
     externalKeysRepo?: ExternalKeysRepository;
+    /**
+     * 서버 공용 키 저장소 — 전역(env/DB) 티어의 외부 fullId 실행용.
+     * 미주입 시 전역 외부 fullId 는 종전대로 로컬 강등. (사용자 티어와 무관 —
+     * USER_MODEL_ROLES_ENABLED 플래그의 게이트 대상이 아님, 운영자 opt-in 2중:
+     * 전역 매핑 설정 + 서버 키 등록)
+     */
+    serverKeysRepo?: ServerExternalKeysRepository;
 }
 
 function catalogEntry(providerId: string) {
@@ -130,12 +139,73 @@ async function tryBuildExternalResolution(
 
     const baseUrl = keyRow.baseUrl || entry.defaultBaseUrl;
     return {
-        client: createClient({ baseUrl, apiKey: plaintextKey, model: modelId, userId }),
+        client: createClient({
+            baseUrl, apiKey: plaintextKey, model: modelId, userId,
+            // BYOK 사용량 귀속 — 비용 대시보드(external_provider_usage) 반영 (fire-and-forget)
+            onUsage: (u) => void externalKeysRepo.recordUsage({
+                userId, providerId, modelId: u.model,
+                inputTokens: u.promptTokens, outputTokens: u.completionTokens,
+            }).catch(() => { /* 관측 실패 무시 */ }),
+        }),
         role,
         fullId,
         providerId,
         modelId,
         source: 'user',
+    };
+}
+
+/**
+ * 전역 티어의 외부 fullId 를 서버 공용 키로 실행 클라이언트화.
+ * 실패 시 실패 사유 문자열 반환 (fail-open 폴백용). 상한(hard gate) 포함.
+ */
+async function tryBuildServerKeyResolution(
+    role: ModelRole,
+    fullId: string,
+    userId: string | undefined,
+    serverKeysRepo: ServerExternalKeysRepository,
+): Promise<RoleClientResolution | string> {
+    const idx = fullId.indexOf(':');
+    const providerId = fullId.slice(0, idx);
+    const modelId = fullId.slice(idx + 1);
+    if (!modelId) return `'${fullId}' 모델 id 누락`;
+
+    const entry = catalogEntry(providerId);
+    if (!entry) return `카탈로그에 없는 provider '${providerId}'`;
+    if (entry.sdkType !== 'openai-compatible') {
+        return `provider '${providerId}' sdkType '${entry.sdkType}' 은 role 실행 미지원`;
+    }
+
+    const row = await serverKeysRepo.get(providerId);
+    if (!row) return `서버 공용 키 미등록 ('${providerId}')`;
+    if (!row.isActive) return `서버 공용 키 비활성 ('${providerId}')`;
+
+    const budgetReason = await checkServerKeyBudget(
+        providerId, row.dailyTokenLimit, row.monthlyTokenLimit, Date.now(),
+    );
+    if (budgetReason) return budgetReason;
+
+    const plaintextKey = await serverKeysRepo.decryptKey(providerId);
+    if (!plaintextKey) return `서버 키 복호화 실패 ('${providerId}')`;
+
+    const baseUrl = row.baseUrl || entry.defaultBaseUrl;
+    return {
+        client: createClient({
+            baseUrl, apiKey: plaintextKey, model: modelId, userId,
+            // 서버 키 사용량 귀속(운영자 비용 뷰) + 상한 카운터 누적
+            onUsage: (u) => {
+                void serverKeysRepo.recordUsage({
+                    providerId, modelId: u.model, role, callerUserId: userId,
+                    inputTokens: u.promptTokens, outputTokens: u.completionTokens,
+                });
+                void recordServerKeyUsage(providerId, u.promptTokens + u.completionTokens, Date.now());
+            },
+        }),
+        role,
+        fullId,
+        providerId,
+        modelId,
+        source: 'global',
     };
 }
 
@@ -181,8 +251,18 @@ export async function resolveRoleClient(
     const source: RoleClientResolution['source'] = hasRoleEnvOverride(role) ? 'global' : 'default';
     let tag = toLocalModelTag(globalValue);
     if (!tag) {
-        // 전역 env 에 외부 fullId — 정책 위반 (validateModels 가 부팅 시 경고). 로컬 default 로 강등.
-        degradedReasons.push(`전역 role env 의 외부 fullId '${globalValue}' 는 무시됨 (로컬만 허용)`);
+        // 전역 티어의 외부 fullId — 서버 공용 키가 등록돼 있으면 그 키로 실행 (Phase A).
+        if (opts.serverKeysRepo) {
+            const result = await tryBuildServerKeyResolution(role, globalValue, opts.userId, opts.serverKeysRepo)
+                .catch((err) => `서버 키 해석 실패: ${err instanceof Error ? err.message : String(err)}`);
+            if (typeof result !== 'string') {
+                if (degradedReasons.length > 0) result.degraded = degradedReasons.join(' → ');
+                return result;
+            }
+            degradedReasons.push(result);
+        } else {
+            degradedReasons.push(`전역 role 의 외부 fullId '${globalValue}' — 서버 키 저장소 미주입`);
+        }
         tag = cfg.llmDefaultModel;
     }
 
@@ -215,18 +295,18 @@ export async function resolveRoleClientForUser(
     role: ModelRole,
     userId?: string,
 ): Promise<RoleClientResolution> {
-    if (!userId || !getConfig().userModelRolesEnabled) {
-        return resolveRoleClient(role, { userId });
-    }
+    const opts: ResolveRoleClientOptions = { userId };
     try {
         const pool = getPool();
-        return await resolveRoleClient(role, {
-            userId,
-            userMappingLookup: new UserModelRolesRepository(pool),
-            externalKeysRepo: new ExternalKeysRepository(pool),
-        });
+        // 서버 키 티어는 사용자 플래그와 무관 (운영자 opt-in — 전역 매핑 + 키 등록)
+        opts.serverKeysRepo = new ServerExternalKeysRepository(pool);
+        if (userId && getConfig().userModelRolesEnabled) {
+            opts.userMappingLookup = new UserModelRolesRepository(pool);
+            opts.externalKeysRepo = new ExternalKeysRepository(pool);
+        }
     } catch (err) {
+        // pool 미초기화(부팅 초기) 등 — 전역 env/default 티어만으로 진행 (fail-open)
         logger.warn(`role '${role}' repo 구성 실패 — 전역 티어 폴백: ${err instanceof Error ? err.message : String(err)}`);
-        return resolveRoleClient(role, { userId });
     }
+    return resolveRoleClient(role, opts);
 }

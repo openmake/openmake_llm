@@ -25,6 +25,12 @@ export interface LLMConfig {
     timeout: number;
     /** 요청 사용자 ID — per-user 토큰 쿼터 enforcement 용 (미설정 시 enforcement skip) */
     userId?: string;
+    /**
+     * 호출별 usage 관측 훅 — role 해석된 외부 endpoint 클라이언트의 사용량 귀속용
+     * (BYOK → external_provider_usage, 서버 키 → server_external_key_usage).
+     * 예외는 client 가 삼킨다 (관측 실패가 호출을 죽이지 않음).
+     */
+    onUsage?: (usage: { model: string; promptTokens: number; completionTokens: number }) => void;
 }
 
 /**

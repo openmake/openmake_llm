@@ -200,18 +200,17 @@ export async function validateModels(
 
     logger.info(`모델 역할 매핑: ${JSON.stringify(roleModels)}`);
 
-    // 전역 env 의 외부 fullId 거부 — 외부 모델은 사용자별 매핑(BYOK)에서만 허용
-    const externalMisconfigs = Object.entries(roleModels)
+    // 전역 env 의 외부 fullId — 서버 공용 키(server_external_api_keys) 등록이 전제.
+    // 부팅 시점엔 DB 접근 없이 경고만 남긴다 (config 계층 — data 의존 금지).
+    // 실제 강제는 런타임 resolver: 키 미등록/비활성/상한 초과면 로컬 default 로 강등.
+    const externalGlobals = Object.entries(roleModels)
         .filter(([, model]) => model && isExternalFullId(model));
-    if (externalMisconfigs.length > 0) {
-        const msg = `전역 role env 에 외부 provider fullId 는 사용할 수 없습니다 (서버 공용 키 없음): ` +
-            externalMisconfigs.map(([role, model]) => `${role}=${model}`).join(', ') +
-            `. 외부 모델은 사용자별 역할 매핑(BYOK)에서만 배정 가능합니다.`;
-        if (failFast) {
-            logger.error(msg);
-            throw new Error(msg);
-        }
-        logger.warn(msg);
+    if (externalGlobals.length > 0) {
+        logger.warn(
+            `전역 role 에 외부 provider fullId 설정됨: ` +
+            externalGlobals.map(([role, model]) => `${role}=${model}`).join(', ') +
+            `. 해당 provider 의 서버 공용 키가 등록·활성 상태여야 하며, 아니면 런타임에 로컬로 강등됩니다.`,
+        );
     }
 
     const uniqueModels = Array.from(new Set(
