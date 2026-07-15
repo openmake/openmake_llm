@@ -51,7 +51,7 @@ export function ModelRolesSection() {
     try {
       const [rolesRes, modelsRes] = await Promise.all([
         ApiClient.get<ApiSuccess<ModelRolesPayload>>("/api/users/me/model-roles"),
-        fetchModels({ forRoleAssignment: true }),
+        fetchModels({ usableOnly: true }),
       ]);
       setMappings(rolesRes?.data?.mappings ?? []);
       setRoles(rolesRes?.data?.assignableRoles ?? []);

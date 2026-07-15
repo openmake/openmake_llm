@@ -467,7 +467,10 @@ export async function handleChatMessage(
         } else if (error instanceof ProviderError) {
             // 외부 provider(Anthropic/OpenRouter) 에러 — 코드별 사용자 친화 메시지로 분류
             // raw upstream 메시지(error.message)는 stack/credential 누출 위험으로 노출하지 않음
-            log.warn(`[Chat] 외부 provider 에러 (${error.code}):`, error.message);
+            const causeDetail = error.cause instanceof Error
+                ? `${error.cause.message}${(error.cause as { status?: number }).status ? ` [status=${(error.cause as { status?: number }).status}]` : ''}`
+                : (error.cause ? JSON.stringify(error.cause).slice(0, 300) : '');
+            log.warn(`[Chat] 외부 provider 에러 (${error.code}): ${error.message} | cause: ${causeDetail}`);
             const localizedTable = getLocalizedTemplate(WS_PROVIDER_ERROR_MESSAGES, userLang);
             safeSend({
                 type: 'error',

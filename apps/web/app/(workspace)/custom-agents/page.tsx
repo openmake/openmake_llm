@@ -140,7 +140,7 @@ function AgentForm({
   const isEdit = !!initial;
 
   useEffect(() => {
-    void fetchModels({ forRoleAssignment: true }).then((p) => setModels(p.models)).catch(() => setModels([]));
+    void fetchModels({ usableOnly: true }).then((p) => setModels(p.models)).catch(() => setModels([]));
   }, []);
 
   async function handleSubmit() {
