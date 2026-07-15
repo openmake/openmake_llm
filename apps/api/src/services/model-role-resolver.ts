@@ -345,6 +345,41 @@ export async function resolveRoleClient(
 }
 
 /**
+ * 배정된 모델 fullId 를 실행 클라이언트로 해석 — Custom Agent 모델(user_agents.model)
+ * 등 "role 이 아닌 정의 단위" 배정용. 외부 fullId 는 그 사용자의 BYOK 키로 실행,
+ * 실패는 로컬 default 로 fail-open (degraded 사유 반환).
+ */
+export async function resolveAssignedModelClient(
+    fullId: string,
+    userId: string,
+): Promise<{ client: LLMClient; fullId: string; degraded?: string }> {
+    const cfg = getConfig();
+    const localFallback = (degraded: string) => {
+        logger.warn(`배정 모델 '${fullId}' 해석 폴백 (user=${userId}): ${degraded}`);
+        return {
+            client: createClient({ model: cfg.llmDefaultModel, userId }),
+            fullId: `local-llm:${cfg.llmDefaultModel}`,
+            degraded,
+        };
+    };
+
+    if (isExternalFullId(fullId)) {
+        try {
+            const repo = new ExternalKeysRepository(getPool());
+            const result = await tryBuildExternalResolution('spawn', fullId, userId, repo);
+            if (typeof result !== 'string') {
+                return { client: result.client, fullId };
+            }
+            return localFallback(result);
+        } catch (err) {
+            return localFallback(`외부 클라이언트 구성 실패: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+    const tag = toLocalModelTag(fullId) ?? cfg.llmDefaultModel;
+    return { client: createClient({ model: tag, userId }), fullId: `local-llm:${tag}` };
+}
+
+/**
  * 소비처 편의 진입점 — 사용자 매핑/외부 키 repo 를 DB pool 로 자동 구성해
  * resolveRoleClient 를 호출한다. 플래그 OFF·userId 없음·pool 미초기화(부팅 초기)
  * 는 전역/기본 티어로 자연 폴백 (fail-open).

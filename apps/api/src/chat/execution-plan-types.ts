@@ -63,4 +63,6 @@ export interface ResolvedUserAgent {
     allowedTools: string[];
     allowedSkills: string[];
     icon: string | null;
+    /** 에이전트 전용 모델 fullId (null=상속) — 요청 model 이 자동일 때만 적용 (Phase C) */
+    model: string | null;
 }

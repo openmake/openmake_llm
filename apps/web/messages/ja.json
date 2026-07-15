@@ -779,7 +779,10 @@
     },
     "useInChat": "チャットで使用",
     "inUseDeselect": "使用中 · 解除",
-    "deselect": "エージェント解除"
+    "deselect": "エージェント解除",
+    "modelLabel": "モデル",
+    "modelInherit": "継承(リクエストモデル/既定)",
+    "modelHelp": "指定すると、このエージェントとの会話は常にこのモデルを使用します(チャットで明示的に選んだモデルが優先)。外部モデルにはAPIキー登録が必要です。"
   },
   "research": {
     "pageTitle": "ディープリサーチ履歴",

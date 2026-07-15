@@ -27,6 +27,7 @@ import { requireAuth } from '../auth/middleware';
 import { validate } from '../middlewares/validation';
 import { getPool } from '../data/models/unified-database';
 import { UserAgentRepository } from '../data/repositories/user-agent-repository';
+import { validateModelAssignment } from '../services/model-assignment-validation';
 import { createLogger } from '../utils/logger';
 import { success, internalError, unauthorized, notFound, badRequest } from '../utils/api-response';
 
@@ -41,6 +42,7 @@ const createSchema = z.object({
     allowedTools: z.array(z.string().max(100)).max(50).optional(),
     allowedSkills: z.array(z.string().max(100)).max(50).optional(),
     icon: z.string().min(1).max(8).nullish(),
+    model: z.string().min(1).max(200).nullish(),
 });
 
 const updateSchema = z.object({
@@ -50,6 +52,7 @@ const updateSchema = z.object({
     allowedTools: z.array(z.string().max(100)).max(50).optional(),
     allowedSkills: z.array(z.string().max(100)).max(50).optional(),
     icon: z.string().min(1).max(8).nullish(),
+    model: z.string().min(1).max(200).nullish(),
 });
 
 function getUserId(req: Request): string | null {
@@ -96,6 +99,10 @@ export function createUserAgentsController(): Router {
         if (!userId) { res.status(401).json(unauthorized()); return; }
         try {
             const body = req.body as z.infer<typeof createSchema>;
+            if (body.model) {
+                const reason = await validateModelAssignment(userId, body.model.trim());
+                if (reason) { res.status(400).json(badRequest(reason)); return; }
+            }
             const repo = new UserAgentRepository(getPool());
             const agent = await repo.create({
                 id: uuidv4(),
@@ -106,6 +113,7 @@ export function createUserAgentsController(): Router {
                 allowedTools: body.allowedTools ?? [],
                 allowedSkills: body.allowedSkills ?? [],
                 icon: body.icon ?? null,
+                model: body.model?.trim() ?? null,
             });
             log.info(`agent 생성: userId=${userId} id=${agent.id} name=${agent.name}`);
             res.json(success({ agent }));
@@ -125,6 +133,10 @@ export function createUserAgentsController(): Router {
         if (!userId) { res.status(401).json(unauthorized()); return; }
         try {
             const body = req.body as z.infer<typeof updateSchema>;
+            if (body.model) {
+                const reason = await validateModelAssignment(userId, body.model.trim());
+                if (reason) { res.status(400).json(badRequest(reason)); return; }
+            }
             const repo = new UserAgentRepository(getPool());
             const agent = await repo.update(req.params.id, userId, {
                 name: body.name,
@@ -133,6 +145,7 @@ export function createUserAgentsController(): Router {
                 allowedTools: body.allowedTools,
                 allowedSkills: body.allowedSkills,
                 icon: body.icon === undefined ? undefined : (body.icon ?? null),
+                model: body.model === undefined ? undefined : (body.model?.trim() ?? null),
             });
             if (!agent) { res.status(404).json(notFound('agent 없음')); return; }
             res.json(success({ agent }));

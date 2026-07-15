@@ -779,7 +779,10 @@
     },
     "useInChat": "Use in chat",
     "inUseDeselect": "In use · Deselect",
-    "deselect": "Deselect agent"
+    "deselect": "Deselect agent",
+    "modelLabel": "Model",
+    "modelInherit": "Inherit (request model/default)",
+    "modelHelp": "When set, chats with this agent use this model (an explicit model choice in chat still wins). External models require a registered API key."
   },
   "research": {
     "pageTitle": "Deep Research History",

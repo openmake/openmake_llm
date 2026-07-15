@@ -779,7 +779,10 @@
     },
     "useInChat": "채팅에서 사용",
     "inUseDeselect": "사용 중 · 해제",
-    "deselect": "에이전트 해제"
+    "deselect": "에이전트 해제",
+    "modelLabel": "모델",
+    "modelInherit": "상속(요청 모델/기본값)",
+    "modelHelp": "지정 시 이 에이전트 대화는 항상 이 모델을 사용합니다(채팅에서 다른 모델을 직접 고르면 그 선택이 우선). 외부 모델은 API 키 등록이 필요합니다."
   },
   "research": {
     "pageTitle": "딥 리서치 히스토리",

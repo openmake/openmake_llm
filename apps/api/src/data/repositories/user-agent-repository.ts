@@ -18,6 +18,8 @@ export interface UserAgent {
     allowed_tools: string[];
     allowed_skills: string[];
     icon: string | null;
+    /** 에이전트 전용 모델 fullId (NULL=상속 — 요청 model 자동일 때만 적용, Phase C) */
+    model: string | null;
     is_active: boolean;
     usage_count: number;
     created_at: string;
@@ -33,6 +35,7 @@ export interface UserAgentCreate {
     allowedTools?: string[];
     allowedSkills?: string[];
     icon?: string | null;
+    model?: string | null;
 }
 
 export interface UserAgentUpdate {
@@ -42,6 +45,7 @@ export interface UserAgentUpdate {
     allowedTools?: string[];
     allowedSkills?: string[];
     icon?: string | null;
+    model?: string | null;
 }
 
 export class UserAgentRepository extends BaseRepository {
@@ -49,8 +53,8 @@ export class UserAgentRepository extends BaseRepository {
         const result = await this.query<UserAgent>(
             `INSERT INTO user_agents (
                 id, user_id, name, description, system_prompt,
-                allowed_tools, allowed_skills, icon
-            ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8)
+                allowed_tools, allowed_skills, icon, model
+            ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9)
              RETURNING *`,
             [
                 params.id,
@@ -61,6 +65,7 @@ export class UserAgentRepository extends BaseRepository {
                 JSON.stringify(params.allowedTools ?? []),
                 JSON.stringify(params.allowedSkills ?? []),
                 params.icon ?? null,
+                params.model ?? null,
             ],
         );
         return result.rows[0] as UserAgent;
@@ -95,6 +100,7 @@ export class UserAgentRepository extends BaseRepository {
         if (patch.allowedTools !== undefined) { sets.push(`allowed_tools = $${i++}::jsonb`); values.push(JSON.stringify(patch.allowedTools)); }
         if (patch.allowedSkills !== undefined){ sets.push(`allowed_skills = $${i++}::jsonb`); values.push(JSON.stringify(patch.allowedSkills)); }
         if (patch.icon !== undefined)         { sets.push(`icon = $${i++}`); values.push(patch.icon); }
+        if (patch.model !== undefined)        { sets.push(`model = $${i++}`); values.push(patch.model); }
         if (sets.length === 0) return this.getByIdForUser(id, userId);
         sets.push(`updated_at = NOW()`);
         values.push(id, userId);

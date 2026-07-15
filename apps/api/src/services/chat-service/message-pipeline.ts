@@ -30,6 +30,7 @@ import type { UnifiedExecutionPlan } from '../../chat/execution-plan-types';
 import { applyStyle, normalizeStyle } from '../../chat/style';
 import { resolveAnswerFormatProfile, applyAnswerFormat, getAnswerFormatGuard } from '../../chat/answer-format';
 import { runProviderGate } from './provider-gate';
+import { applyAgentModelOverride } from './agent-model-override';
 import type { RequestContext } from './request-context';
 import { buildChatOptions, assembleHistoryWithSummary } from './options-and-history';
 import { estimateTokens } from '../../llm/model-pool';
@@ -164,9 +165,15 @@ export async function runMessagePipeline(svc: ChatService,
     //      ON: strategy 경로 (ThinkingStrategy/GV/AgentLoop/ExecutionPlanBuilder).
     const localStrategyPathEnabled = (await import('../../config/env')).getConfig().localStrategyPathEnabled;
     let externalResolved: import('../../providers/provider-router').ResolvedProvider | null = null;
+
+    // Custom Agent 모델 배정 (Phase C) — 상세는 agent-model-override (요청 model 자동일 때만 적용)
+    const gateRequestedModel = await applyAgentModelOverride(
+        executionPlan?.requestedModel, req.userAgentId, req.userId,
+    );
+
     if (svc.providerRouter) {
         const resolved = await runProviderGate(svc.providerRouter, {
-            requestedModel: executionPlan?.requestedModel,
+            requestedModel: gateRequestedModel,
             fallbackModel: svc.client.model,
             ctx: { userId: req.userId, userRole: req.userRole },
         });
