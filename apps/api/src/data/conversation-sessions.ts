@@ -132,8 +132,13 @@ export async function getSession(id: string): Promise<ConversationSession | unde
  */
 export async function getSessionsByUserId(userId: string, limit: number = CONVERSATION_LIMITS.SESSION_LIST_DEFAULT): Promise<ConversationSession[]> {
     const pool = getPool();
+    // 메시지 0개 세션 제외 — saveHistory:false 요청은 세션 행만 만들고 본문을 저장하지 않아
+    // (멀티턴 continuation 위해 세션 자체는 유지) 최근 목록에 빈 껍데기로 뜨던 것을 차단.
     const result = await pool.query(
-        'SELECT * FROM conversation_sessions WHERE user_id = $1 ORDER BY updated_at DESC LIMIT $2',
+        `SELECT * FROM conversation_sessions cs
+         WHERE cs.user_id = $1
+           AND EXISTS (SELECT 1 FROM conversation_messages m WHERE m.session_id = cs.id)
+         ORDER BY cs.updated_at DESC LIMIT $2`,
         [userId, limit]
     );
 
@@ -148,7 +153,10 @@ export async function getSessionsByUserId(userId: string, limit: number = CONVER
 export async function getSessionsByAnonId(anonSessionId: string, limit: number = CONVERSATION_LIMITS.SESSION_LIST_DEFAULT): Promise<ConversationSession[]> {
     const pool = getPool();
     const result = await pool.query(
-        'SELECT * FROM conversation_sessions WHERE anon_session_id = $1 ORDER BY updated_at DESC LIMIT $2',
+        `SELECT * FROM conversation_sessions cs
+         WHERE cs.anon_session_id = $1
+           AND EXISTS (SELECT 1 FROM conversation_messages m WHERE m.session_id = cs.id)
+         ORDER BY cs.updated_at DESC LIMIT $2`,
         [anonSessionId, limit]
     );
 
@@ -163,7 +171,9 @@ export async function getSessionsByAnonId(anonSessionId: string, limit: number =
 export async function getAllSessions(limit: number = CONVERSATION_LIMITS.SESSION_LIST_ALL_DEFAULT): Promise<ConversationSession[]> {
     const pool = getPool();
     const result = await pool.query(
-        'SELECT * FROM conversation_sessions ORDER BY updated_at DESC LIMIT $1',
+        `SELECT * FROM conversation_sessions cs
+         WHERE EXISTS (SELECT 1 FROM conversation_messages m WHERE m.session_id = cs.id)
+         ORDER BY cs.updated_at DESC LIMIT $1`,
         [limit]
     );
 
