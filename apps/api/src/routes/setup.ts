@@ -20,6 +20,7 @@ import { createExportController } from '../controllers/export.controller';
 import { createUserPreferencesController } from '../controllers/user-preferences.controller';
 import { createUserAgentsController } from '../controllers/user-agents.controller';
 import { createUserMemoriesController } from '../controllers/user-memories.controller';
+import { createUserModelRolesController } from '../controllers/user-model-roles.controller';
 import debugQueueRouter from './debug-queue.routes';
 import { default as chatRouter, setClusterManager as setChatCluster } from './chat.routes';
 import { setClusterManager as setOpenAICompatCluster } from './openai-compat.routes';
@@ -217,6 +218,7 @@ export function setupApiRoutes(
     // Cross-conversation Memory — REST 로 explicit 저장 (claude.ai/ChatGPT Memory 동등, 2026-05-26)
     // ⚠️ 채팅 `/remember` 슬래시는 미구현 — 저장은 이 엔드포인트(POST)로만.
     app.use('/api/users/me/memories', createUserMemoriesController());
+    app.use('/api/users/me/model-roles', createUserModelRolesController());
 
     // 클러스터 의존성 주입
     setChatCluster(cluster);
