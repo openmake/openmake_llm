@@ -189,6 +189,19 @@ export async function resolveRoleClient(
     const degraded = degradedReasons.length > 0 ? degradedReasons.join(' → ') : undefined;
     if (degraded) {
         logger.warn(`role '${role}' 해석 폴백 (user=${opts.userId ?? '-'}): ${degraded}`);
+        // audit 기록 (fire-and-forget) — 사용자 매핑이 조용히 무시되는 것을 관측 가능하게.
+        // CRITICAL_ACTIONS 미포함이므로 alert 없이 이력만 남는다.
+        void (async () => {
+            try {
+                const { getAuditService } = await import('./AuditService');
+                await getAuditService().logAudit({
+                    action: 'model_role_fallback',
+                    userId: opts.userId,
+                    resourceType: 'model_role',
+                    details: { role, reason: degraded },
+                });
+            } catch { /* audit 실패는 해석 결과에 영향 없음 */ }
+        })();
     }
     return buildLocalResolution(role, tag, source, opts.userId, degraded);
 }
