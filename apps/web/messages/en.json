@@ -1303,6 +1303,40 @@
     },
     "validationWarning": "Key saved, but endpoint validation failed: {error} — check the URL/key and save again."
   },
+  "modelRoles": {
+    "title": "Model Roles",
+    "description": "Assign your registered models (local or external API keys) to functional roles. Unassigned roles use the server default model.",
+    "externalNote": "External models require an active provider API key; failed calls automatically fall back to the local default model.",
+    "loading": "Loading role mappings…",
+    "loadError": "Failed to load role mappings.",
+    "saveFailed": "Failed to save role mapping.",
+    "defaultOption": "Default (auto)",
+    "assignedBadge": "Assigned",
+    "resetLabel": "Reset to default",
+    "empty": "No assignable roles.",
+    "roles": {
+      "agent": {
+        "label": "Agent Tasks",
+        "description": "Execution model for background agent tasks"
+      },
+      "judge": {
+        "label": "Goal Judge",
+        "description": "Model that judges whether an agent task achieved its goal"
+      },
+      "research": {
+        "label": "Deep Research",
+        "description": "Model for the research pipeline and report generation"
+      },
+      "spawn": {
+        "label": "Parallel Subagents",
+        "description": "Model for parallel fan-out subagents"
+      },
+      "review": {
+        "label": "Code & Security Review",
+        "description": "Model for code review, security analysis, and planning"
+      }
+    }
+  },
   "usage": {
     "title": "Usage",
     "description": "Token and request usage for your account.",

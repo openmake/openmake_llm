@@ -33,6 +33,7 @@ import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE, isLocale, toBcp47 } from "@/i18n/
 import { ModelPicker } from "@/components/model-picker";
 import { MemorySection } from "@/components/settings/memory-section";
 import { ProviderKeysSection } from "@/components/settings/provider-keys-section";
+import { ModelRolesSection } from "@/components/settings/model-roles-section";
 
 /* ── 탭 정의 ────────────────────────────────────────────── */
 type TabId = "general" | "model" | "interface" | "notifications" | "memory" | "privacy" | "security";
@@ -682,6 +683,7 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
               <ProviderKeysSection />
+              <ModelRolesSection />
               </>
             )}
 
