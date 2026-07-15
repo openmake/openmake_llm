@@ -337,7 +337,12 @@
     },
     "feedbackUp": "도움이 됐어요",
     "feedbackDown": "아쉬워요",
-    "feedbackThanks": "피드백 감사합니다"
+    "feedbackThanks": "피드백 감사합니다",
+    "thinkingTimeline": {
+      "thinking": "생각하는 중",
+      "fallbackLabel": "생각 과정",
+      "done": "완료"
+    }
   },
   "artifacts": {
     "exec": {
@@ -1338,6 +1343,10 @@
       "review": {
         "label": "코드·보안 리뷰",
         "description": "코드 리뷰, 보안 분석, 구현 계획 모델"
+      },
+      "summary": {
+        "label": "생각 요약",
+        "description": "생각 과정 헤드라인을 생성하는 모델"
       }
     }
   },

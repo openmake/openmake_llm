@@ -337,7 +337,12 @@
     },
     "feedbackUp": "Helpful",
     "feedbackDown": "Not helpful",
-    "feedbackThanks": "Thanks for your feedback"
+    "feedbackThanks": "Thanks for your feedback",
+    "thinkingTimeline": {
+      "thinking": "Thinking",
+      "fallbackLabel": "Thought process",
+      "done": "Done"
+    }
   },
   "artifacts": {
     "exec": {
@@ -1338,6 +1343,10 @@
       "review": {
         "label": "Code & Security Review",
         "description": "Model for code review, security analysis, and planning"
+      },
+      "summary": {
+        "label": "Thinking Summary",
+        "description": "Model that generates thinking headline summaries"
       }
     }
   },

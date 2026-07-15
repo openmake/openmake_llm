@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, ChevronRight, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown } from "lucide-react";
+import { ThinkingTimeline } from "@/components/chat/thinking-timeline";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "@/lib/store";
 import { ApiClient } from "@/lib/api-client";
 import { Markdown } from "./markdown";
@@ -484,16 +485,12 @@ export function MessageList() {
             <div className="min-w-0 flex-1">
               <p className="mb-1 text-xs font-medium text-muted">OpenMake</p>
               {m.reasoning && (
-                <details className="group mb-2 rounded-lg border border-border bg-surface-2/60 text-xs">
-                  <summary className="flex cursor-pointer select-none items-center gap-1.5 px-3 py-1.5 font-medium text-muted list-none [&::-webkit-details-marker]:hidden">
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-90" />
-                    <Brain className="h-3.5 w-3.5 text-accent" />
-                    {t("reasoningLabel")}
-                  </summary>
-                  <div className="whitespace-pre-wrap px-3 pb-2.5 pt-1 leading-relaxed text-muted">
-                    {m.reasoning}
-                  </div>
-                </details>
+                <ThinkingTimeline
+                  reasoning={m.reasoning}
+                  summary={m.reasoningSummary}
+                  thinkingActive={!!m.streaming && m.content.trim().length === 0}
+                  done={!m.streaming || m.content.trim().length > 0}
+                />
               )}
               <div className="text-sm leading-relaxed text-fg">
                 {m.agentTask ? (

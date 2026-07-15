@@ -224,6 +224,26 @@ export async function handleChatMessage(
             },
         });
 
+        // thinking 요약 헤드라인 (클로드 웹식): 생각 스트림을 누적했다가 첫 응답 토큰
+        // 도착(=생각 종료) 시 'summary' role 모델로 1회 요약 → thinking_summary 이벤트.
+        // fire-and-forget — 실패/지연은 헤드라인 생략일 뿐 채팅 스트림에 영향 없음.
+        let thinkingBuffer = '';
+        let thinkingSummaryFired = false;
+        const fireThinkingSummary = () => {
+            if (thinkingSummaryFired || thinkingBuffer.trim().length === 0) return;
+            thinkingSummaryFired = true;
+            const captured = thinkingBuffer;
+            void (async () => {
+                try {
+                    const { summarizeThinking } = await import('../services/chat-service/thinking-summarizer');
+                    const summary = await summarizeThinking(message, captured, String(userContext.userId));
+                    if (summary && ws.readyState === ws.OPEN) {
+                        ws.send(JSON.stringify({ type: 'thinking_summary', summary, messageId }));
+                    }
+                } catch { /* 헤드라인 생략 */ }
+            })();
+        };
+
         const tokenCallback = (token: string) => {
             if (abortController.signal.aborted) {
                 throw new Error('ABORTED');
@@ -233,6 +253,7 @@ export async function handleChatMessage(
                 firstTokenTime = Date.now();
                 const ttfb = firstTokenTime - generationStartTime;
                 log.debug(`[Chat] 첫 번째 토큰 생성됨 (TTFB: ${ttfb}ms)`);
+                fireThinkingSummary(); // 응답 시작 = 생각 종료 시점
             }
             tokenCount++;
             partialAssistantResponse += token;
@@ -275,6 +296,7 @@ export async function handleChatMessage(
             onToken: tokenCallback,
             onThinking: (thinking) => {
                 if (abortController.signal.aborted) throw new Error('ABORTED');
+                thinkingBuffer += thinking;
                 ws.send(JSON.stringify({ type: 'thinking', token: thinking, messageId }));
             },
             format: msg.format as import('../llm').FormatOption,
@@ -385,6 +407,7 @@ export async function handleChatMessage(
         const cleanedContent = (result.artifacts && result.artifacts.length > 0)
             ? result.response
             : undefined;
+        fireThinkingSummary(); // 안전망: 응답 토큰 없이 종료된 경우(도구 전용 등)에도 헤드라인 생성
         ws.send(JSON.stringify({
             type: 'done',
             messageId,
