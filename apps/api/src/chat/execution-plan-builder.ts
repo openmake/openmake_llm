@@ -69,6 +69,10 @@ export class ExecutionPlanBuilder {
     async loadUserAgent(
         userAgentId: string | undefined,
         userId: string | undefined,
+        opts?: {
+            /** false = usage_count 미증가 — 모델 배정 조회 등 보조 로드용 (기본 true) */
+            countUsage?: boolean;
+        },
     ): Promise<ResolvedUserAgent | null> {
         if (!userAgentId || !userId || userId === 'guest') return null;
         try {
@@ -78,9 +82,11 @@ export class ExecutionPlanBuilder {
             const agent = await repo.getByIdForUser(userAgentId, userId);
             if (!agent || !agent.is_active) return null;
             // usage_count 증가는 fire-and-forget — chat 흐름 차단 금지
-            void repo.incrementUsage(agent.id).catch(e =>
-                logger.warn('user_agent usage_count 증가 실패 (무시):', e),
-            );
+            if (opts?.countUsage !== false) {
+                void repo.incrementUsage(agent.id).catch(e =>
+                    logger.warn('user_agent usage_count 증가 실패 (무시):', e),
+                );
+            }
             return {
                 id: agent.id,
                 name: agent.name,
@@ -88,6 +94,7 @@ export class ExecutionPlanBuilder {
                 allowedTools: Array.isArray(agent.allowed_tools) ? agent.allowed_tools : [],
                 allowedSkills: Array.isArray(agent.allowed_skills) ? agent.allowed_skills : [],
                 icon: agent.icon,
+                model: agent.model ?? null,
             };
         } catch (e) {
             logger.warn('user_agent 조회 실패 (silent fallback):', e);

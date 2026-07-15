@@ -49,6 +49,8 @@ export const spawnAgentsArgsSchema = z.object({
     tasks: z.array(z.object({
         prompt: z.string().trim().min(1),
         role: z.string().trim().min(1).optional(),
+        /** 사용자 Custom Agent id — 지정 시 그 에이전트의 페르소나+model 로 실행 (Phase C) */
+        agentId: z.string().trim().min(1).optional(),
     })).min(1),
 });
 
@@ -76,6 +78,7 @@ export const SPAWN_AGENTS_PARAMETERS_SCHEMA: {
                 properties: {
                     prompt: { type: 'string', description: '하위 작업의 자기완결적 지시문' },
                     role: { type: 'string', description: '원하는 전문 분야(선택, 예: finance/legal/engineering)' },
+                    agentId: { type: 'string', description: '사용자가 명시적으로 특정 커스텀 에이전트로 수행을 요청한 경우에만 그 에이전트 id (선택 — 임의 추측 금지)' },
                 },
                 required: ['prompt'],
             },
@@ -143,6 +146,40 @@ async function resolvePersona(task: SpawnTask, userId: string): Promise<string> 
 }
 
 /**
+ * 태스크별 실행 구성 — agentId(Custom Agent) 지정 시 그 에이전트의 페르소나와
+ * model(있으면, BYOK 해석)로 실행. 미지정/실패는 기존 role 페르소나 + 부모 client.
+ * 모델 선택권은 사용자가 정의한 에이전트에만 있음 — LLM 에 자유 model 필드를 열지 않는다.
+ */
+async function resolveTaskExecution(
+    task: SpawnTask,
+    userId: string,
+    parentClient: LLMClient,
+): Promise<{ persona: string; client: LLMClient; modelNote?: string }> {
+    if (task.agentId) {
+        try {
+            const { UserAgentRepository } = await import('../../data/repositories/user-agent-repository');
+            const { getPool } = await import('../../data/models/unified-database');
+            const agent = await new UserAgentRepository(getPool()).getByIdForUser(task.agentId, userId);
+            if (agent) {
+                let client = parentClient;
+                let modelNote: string | undefined;
+                if (agent.model) {
+                    const { resolveAssignedModelClient } = await import('../model-role-resolver');
+                    const resolved = await resolveAssignedModelClient(agent.model, userId);
+                    client = resolved.client;
+                    modelNote = resolved.degraded ? `${agent.model} (폴백: 로컬)` : agent.model;
+                }
+                return { persona: agent.system_prompt, client, modelNote };
+            }
+            logger.debug(`[AgentSpawn] agentId '${task.agentId}' 조회 실패/권한 없음 — role 페르소나 폴백`);
+        } catch (e) {
+            logger.warn(`[AgentSpawn] custom agent 해석 실패 — 폴백:`, e);
+        }
+    }
+    return { persona: await resolvePersona(task, userId), client: parentClient };
+}
+
+/**
  * spawn_agents 실행 — tasks 를 MAX_PARALLEL 동시성으로 병렬 수행하고 태스크별 결과를
  * 도구 결과 텍스트로 조립해 반환. 실패는 문자열로 흡수(호출 루프를 죽이지 않음).
  */
@@ -166,10 +203,13 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
             tasks,
             async (task, idx) => {
                 try {
-                    const personaPrompt = await resolvePersona(task, userId);
+                    const exec = await resolveTaskExecution(task, userId, p.client);
+                    if (exec.modelNote) {
+                        logger.info(`[AgentSpawn] 태스크 ${idx + 1} custom agent 모델: ${exec.modelNote}`);
+                    }
                     return await runSubagent({
-                        client: p.client,
-                        personaPrompt,
+                        client: exec.client,
+                        personaPrompt: exec.persona,
                         subgoal: task.prompt,
                         tools: subTools,
                         userCtx: p.userCtx,

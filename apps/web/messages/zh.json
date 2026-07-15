@@ -779,7 +779,10 @@
     },
     "useInChat": "在对话中使用",
     "inUseDeselect": "使用中 · 取消",
-    "deselect": "取消智能体"
+    "deselect": "取消智能体",
+    "modelLabel": "模型",
+    "modelInherit": "继承(请求模型/默认)",
+    "modelHelp": "设置后,该智能体的对话将始终使用此模型(聊天中明确选择的模型优先)。外部模型需要注册API密钥。"
   },
   "research": {
     "pageTitle": "深度研究历史",

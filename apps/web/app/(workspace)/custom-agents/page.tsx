@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
+import { fetchModels, type ModelEntry } from "@/lib/models-api";
 import { useAppStore } from "@/lib/store";
 
 /* ── 타입 ────────────────────────────────────────────────── */
@@ -21,6 +22,8 @@ interface CustomAgent {
   name: string;
   description: string;
   systemPrompt: string;
+  /** 에이전트 전용 모델 fullId (null=상속) */
+  model: string | null;
   source: "git" | "custom";
 }
 
@@ -30,6 +33,7 @@ interface ApiUserAgent {
   description: string | null;
   system_prompt: string;
   icon: string | null;
+  model: string | null;
 }
 
 type UserAgentsResponse = ApiSuccess<{ agents: ApiUserAgent[] }>;
@@ -51,6 +55,7 @@ function mapAgent(a: ApiUserAgent): CustomAgent {
     name: a.name,
     description: a.description || "",
     systemPrompt: a.system_prompt,
+    model: a.model ?? null,
     source: "custom",
   };
 }
@@ -127,10 +132,16 @@ function AgentForm({
   const [description, setDescription] = useState(initial?.description ?? "");
   const [systemPrompt, setSystemPrompt] = useState(initial?.systemPrompt ?? "");
   const [icon, setIcon] = useState(initial?.emoji ?? "🤖");
+  const [model, setModel] = useState(initial?.model ?? "");
+  const [models, setModels] = useState<ModelEntry[]>([]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   const isEdit = !!initial;
+
+  useEffect(() => {
+    void fetchModels().then((p) => setModels(p.models)).catch(() => setModels([]));
+  }, []);
 
   async function handleSubmit() {
     if (!name.trim()) { setFormError(t("nameRequired")); return; }
@@ -144,6 +155,7 @@ function AgentForm({
           description: description.trim() || null,
           systemPrompt: systemPrompt.trim(),
           icon: icon.trim() || null,
+          model: model || null,
         });
       } else {
         await ApiClient.post("/api/users/me/agents", {
@@ -151,6 +163,7 @@ function AgentForm({
           description: description.trim() || null,
           systemPrompt: systemPrompt.trim(),
           icon: icon.trim() || null,
+          model: model || null,
         });
       }
       await onSaved();
@@ -181,6 +194,19 @@ function AgentForm({
         <input value={description} onChange={(e) => setDescription(e.target.value)}
           placeholder={t("descriptionPlaceholder")}
           className="h-9 w-full rounded-md border border-border bg-surface px-3 text-sm text-fg outline-none focus:border-accent" />
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-xs font-medium text-fg-2">{t("modelLabel")}</span>
+        <select value={model} onChange={(e) => setModel(e.target.value)}
+          className="h-9 w-full rounded-md border border-border bg-surface px-2 text-sm text-fg outline-none focus:border-accent">
+          <option value="">{t("modelInherit")}</option>
+          {models.map((m) => (
+            <option key={m.modelId} value={m.modelId}>
+              {m.name}{m.provider !== "local-llm" ? ` (${m.provider})` : ""}
+            </option>
+          ))}
+        </select>
+        <span className="text-xs text-faint">{t("modelHelp")}</span>
       </label>
       <label className="block">
         <span className="mb-1 block text-xs font-medium text-fg-2">{t("systemPromptLabel")}</span>
@@ -436,6 +462,7 @@ export default function CustomAgentsPage() {
       name: t(m.nameKey),
       description: t(m.descKey),
       systemPrompt: t(m.promptKey),
+      model: null,
       source: m.source,
     })),
   );
