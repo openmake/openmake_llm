@@ -149,3 +149,15 @@ export async function addMessage(
         thinking: options?.thinking || undefined
     };
 }
+
+/**
+ * 메시지의 생각 요약 헤드라인 갱신 — 요약은 저장 후 비동기로 도착하므로 UPDATE 로 반영.
+ * (thinking-summarizer 최종 요약 → request-handler 가 fire-and-forget 호출)
+ */
+export async function updateMessageReasoningSummary(messageId: string, summary: string): Promise<void> {
+    const pool = getPool();
+    await withRetry(() => pool.query(
+        'UPDATE conversation_messages SET reasoning_summary = $1 WHERE id = $2',
+        [summary, parseInt(messageId, 10)]
+    ), { operation: 'updateMessageReasoningSummary' });
+}

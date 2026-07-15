@@ -41,6 +41,8 @@ import { extractAndStripArtifacts } from '../llm/artifact-parser';
 import { ArtifactRepository, ArtifactSizeError, type ArtifactKind } from '../data/repositories/artifact-repository';
 import { processExternalToolCalling } from './external-tool-calling';
 import { ensureSession, saveUserMessage, saveAssistantMessage } from './request-persistence';
+import { createThinkingSummarySession } from '../services/chat-service/thinking-summarizer';
+import { getConversationDB } from '../data/conversation-db';
 import type {
     ChatUserContext,
     ExecutionPlanResult,
@@ -370,15 +372,35 @@ export class ChatRequestHandler {
             format: params.format,
         };
 
+        // 생각 요약 세션 (클로드 웹식 헤드라인): 중간(진행형)·최종(과거형) 요약을
+        // onThinkingSummary 로 발행하고, 누적 원문은 저장 시 thinking 컬럼에 영속화.
+        const summarySession = createThinkingSummarySession(
+            message,
+            userContext.authenticatedUserId ?? undefined,
+            (summary) => params.onThinkingSummary?.(summary),
+        );
+        let sawFirstToken = false;
+        const onTokenWithSummary = (token: string) => {
+            if (!sawFirstToken) {
+                sawFirstToken = true;
+                void summarySession.startFinal(); // 첫 응답 토큰 = 생각 종료 → 최종 요약 시작
+            }
+            onToken(token);
+        };
+        const onThinkingWithSummary = (thinking: string) => {
+            summarySession.onThinking(thinking);
+            params.onThinking?.(thinking);
+        };
+
         const response = await chatService.processMessage(
             chatRequest,
-            onToken,
+            onTokenWithSummary,
             onAgentSelected,
             onDiscussionProgress,
             onResearchProgress,
             plan,
             onSkillsActivated,
-            params.onThinking,
+            onThinkingWithSummary,
             onSystemEvent,
             params.onMcpToolResult,
             params.onMcpToolStart,
@@ -436,14 +458,23 @@ export class ChatRequestHandler {
         }
 
         // 7. AI 응답 저장 — placeholder 적용된 cleanedResponse 사용
-        await saveAssistantMessage(
+        void summarySession.startFinal(); // 안전망: 응답 토큰 없이 종료된 경우에도 최종 요약
+        const savedMessageId = await saveAssistantMessage(
             currentSessionId,
             auditUserId,
             cleanedResponse,
             maskedModel,
             responseTime,
             persistContent,
+            summarySession.getThinking() || undefined,
         );
+        // 요약 헤드라인은 비동기 도착 — 저장된 메시지에 fire-and-forget UPDATE (재열람 표시용)
+        if (savedMessageId) {
+            void summarySession.startFinal().then((summary) => {
+                if (!summary) return;
+                return getConversationDB().updateMessageReasoningSummary(savedMessageId, summary);
+            }).catch((e) => log.warn(`reasoning_summary 영속화 실패 (무시): ${e instanceof Error ? e.message : e}`));
+        }
 
         // 8. 다음 턴을 위한 사전 요약 (백그라운드, fire-and-forget)
         // 새 history = 기존 + user message + cleanedResponse (placeholder 포함).

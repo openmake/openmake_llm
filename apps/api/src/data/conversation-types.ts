@@ -50,6 +50,8 @@ export interface ConversationMessage {
     model?: string;
     /** AI의 사고 과정 */
     thinking?: string;
+    /** 생각 요약 헤드라인 — summary role 모델 생성 (재열람 타임라인용) */
+    reasoningSummary?: string;
 }
 
 /**
@@ -61,6 +63,8 @@ export interface MessageOptions {
     model?: string;
     /** AI 사고 과정 텍스트 */
     thinking?: string;
+    /** 생각 요약 헤드라인 — summary role 모델 생성 (재열람 타임라인용) */
+    reasoningSummary?: string;
     /** 사용된 토큰 수 */
     tokensUsed?: number;
     /** 응답 생성 시간 (밀리초) */
@@ -86,6 +90,7 @@ export interface MessageRow {
     model: string | null;
     agent_id: string | null;
     thinking: string | null;
+    reasoning_summary: string | null;
     tokens: number | null;
     response_time_ms: number | null;
     created_at: string;
@@ -102,7 +107,8 @@ export function rowToMessage(row: MessageRow): ConversationMessage {
         content: row.content,
         timestamp: row.created_at,
         model: row.model || undefined,
-        thinking: row.thinking || undefined
+        thinking: row.thinking || undefined,
+        reasoningSummary: row.reasoning_summary || undefined
     };
 }
 

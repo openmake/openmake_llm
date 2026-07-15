@@ -119,6 +119,8 @@ export interface ChatRequestParams {
     onToken: (token: string) => void;
     /** Thinking 토큰 콜백 (추론 과정 실시간 전달) */
     onThinking?: (thinking: string) => void;
+    /** 생각 요약 헤드라인 (중간·최종) — thinking-summarizer 발행, WS thinking_summary 로 전달 */
+    onThinkingSummary?: (summary: string) => void;
     /** 에이전트 선택 콜백 */
     onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void;
     /** 토론 진행 콜백 */

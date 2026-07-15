@@ -40,13 +40,20 @@ export function Sidebar() {
     setCurrentSessionId(sid);
     try {
       const res = await ApiClient.get<
-        ApiSuccess<{ messages?: Array<{ role: string; content: string; images?: string[] }> }>
+        ApiSuccess<{ messages?: Array<{ role: string; content: string; images?: string[]; thinking?: string; reasoningSummary?: string }> }>
       >(appendAnonSessionId(`/api/chat/sessions/${sid}/messages`));
       const msgs = res?.data?.messages ?? [];
       setChatHistory(() =>
         msgs
           .filter((m) => m.role === "user" || m.role === "assistant" || m.role === "system")
-          .map((m) => ({ role: m.role as ChatRole, content: m.content, images: m.images })),
+          .map((m) => ({
+            role: m.role as ChatRole,
+            content: m.content,
+            images: m.images,
+            // 영속화된 생각 과정 — 재열람 시 타임라인 표시 (접힘 상태)
+            reasoning: m.thinking || undefined,
+            reasoningSummary: m.reasoningSummary || undefined,
+          })),
       );
     } catch {
       /* 조회 실패 — 무시 */

@@ -78,6 +78,7 @@ class ConversationDB {
 
     getMessages = messages.getMessages;
     addMessage = messages.addMessage;
+    updateMessageReasoningSummary = messages.updateMessageReasoningSummary;
 
     // saveMessage 별칭 메서드 (server.ts 호환성)
     saveMessage = messages.addMessage;
