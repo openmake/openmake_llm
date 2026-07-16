@@ -374,6 +374,8 @@ export const DISCUSSION_LABELS: Record<PromptLocaleCode, {
     expertOpinionsSection: string;
     crossReviewResult: string;
     synthesisRequest: string;
+    factCheckSection: string;
+    factCheckInstruction: string;
 }> = {
     ko: {
         discussionTopic: '## 토론 주제',
@@ -385,6 +387,8 @@ export const DISCUSSION_LABELS: Record<PromptLocaleCode, {
         expertOpinionsSection: '## 전문가 의견',
         crossReviewResult: '## 교차 검토 결과',
         synthesisRequest: '위 내용을 종합하여 최종 답변을 작성해주세요:',
+        factCheckSection: '## 사실 검증 자료 (웹 검색)',
+        factCheckInstruction: '위 검색 자료와 배치되는 주장은 수정하거나 불확실함을 명시하고, 자료가 뒷받침하는 내용은 출처 번호 [n]을 인용해주세요.',
     },
     en: {
         discussionTopic: '## Discussion Topic',
@@ -396,6 +400,8 @@ export const DISCUSSION_LABELS: Record<PromptLocaleCode, {
         expertOpinionsSection: '## Expert Opinions',
         crossReviewResult: '## Cross-Review Result',
         synthesisRequest: 'Please synthesize the above into a final answer:',
+        factCheckSection: '## Fact-Check Sources (Web Search)',
+        factCheckInstruction: 'Correct any claims that conflict with the sources above or mark them as uncertain, and cite supporting sources by number [n].',
     },
     ja: {
         discussionTopic: '## 討論トピック',
@@ -407,6 +413,8 @@ export const DISCUSSION_LABELS: Record<PromptLocaleCode, {
         expertOpinionsSection: '## 専門家意見',
         crossReviewResult: '## クロスレビュー結果',
         synthesisRequest: '上記内容を総合して最終回答を作成してください:',
+        factCheckSection: '## 事実検証資料（ウェブ検索）',
+        factCheckInstruction: '上記の検索資料と矛盾する主張は修正するか不確実であることを明記し、資料が裏付ける内容は出典番号[n]を引用してください。',
     },
     zh: {
         discussionTopic: '## 讨论主题',
@@ -418,6 +426,8 @@ export const DISCUSSION_LABELS: Record<PromptLocaleCode, {
         expertOpinionsSection: '## 专家意见',
         crossReviewResult: '## 交叉评审结果',
         synthesisRequest: '请综合以上内容给出最终答案：',
+        factCheckSection: '## 事实核查资料（网络搜索）',
+        factCheckInstruction: '与上述资料相矛盾的主张请修正或注明不确定，并对有资料支持的内容引用来源编号[n]。',
     },
     es: {
         discussionTopic: '## Tema de discusión',
@@ -429,6 +439,8 @@ export const DISCUSSION_LABELS: Record<PromptLocaleCode, {
         expertOpinionsSection: '## Opiniones de expertos',
         crossReviewResult: '## Resultado de revisión cruzada',
         synthesisRequest: 'Por favor, sintetiza lo anterior en una respuesta final:',
+        factCheckSection: '## Fuentes de verificación (búsqueda web)',
+        factCheckInstruction: 'Corrige las afirmaciones que contradigan las fuentes anteriores o márcalas como inciertas, y cita las fuentes de apoyo por número [n].',
     },
     de: {
         discussionTopic: '## Diskussionsthema',
@@ -440,6 +452,8 @@ export const DISCUSSION_LABELS: Record<PromptLocaleCode, {
         expertOpinionsSection: '## Expertenmeinungen',
         crossReviewResult: '## Cross-Review-Ergebnis',
         synthesisRequest: 'Bitte fassen Sie das Obige zu einer finalen Antwort zusammen:',
+        factCheckSection: '## Faktencheck-Quellen (Websuche)',
+        factCheckInstruction: 'Korrigieren Sie Aussagen, die den obigen Quellen widersprechen, oder kennzeichnen Sie sie als unsicher, und zitieren Sie stützende Quellen mit Nummer [n].',
     },
     fr: {
         discussionTopic: '## Sujet de discussion',
@@ -451,6 +465,8 @@ export const DISCUSSION_LABELS: Record<PromptLocaleCode, {
         expertOpinionsSection: '## Avis des experts',
         crossReviewResult: '## Résultat de la révision croisée',
         synthesisRequest: 'Veuillez synthétiser ce qui précède en une réponse finale :',
+        factCheckSection: '## Sources de vérification (recherche web)',
+        factCheckInstruction: 'Corrigez les affirmations contredites par les sources ci-dessus ou signalez-les comme incertaines, et citez les sources à l\'appui par numéro [n].',
     },
 };
 

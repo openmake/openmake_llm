@@ -19,7 +19,7 @@ import type { ChatMessage } from '../../llm';
 import type { ChatStrategy, ChatResult, DiscussionStrategyContext } from './types';
 import { createLogger } from '../../utils/logger';
 import { sanitizePromptInput } from '../../utils/input-sanitizer';
-import { DISCUSSION_TOKEN_BUDGET, MODEL_CONTEXT_DEFAULTS, DISCUSSION_STREAM_ABORT_CHECK_INTERVAL, DISCUSSION_CONCURRENCY } from '../../config/runtime-limits';
+import { DISCUSSION_TOKEN_BUDGET, MODEL_CONTEXT_DEFAULTS, DISCUSSION_STREAM_ABORT_CHECK_INTERVAL, DISCUSSION_CONCURRENCY, DISCUSSION_FACTCHECK } from '../../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { resolvePromptLocale, type PromptLocaleCode } from '../../chat/language-policy';
 import { withSpan } from '../../observability/otel';
@@ -353,6 +353,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
             {
                 maxAgents: DISCUSSION_CONCURRENCY.MAX_PARALLEL_AGENTS,
                 enableCrossReview: true,
+                enableFactCheck: DISCUSSION_FACTCHECK.ENABLED,
                 enableDeepThinking: true,
                 userLanguage: userLanguagePreference,
                 documentContext,
@@ -380,14 +381,16 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
             context.onProgress
         );
 
-        // 웹 검색 기반 사실 검증 함수 로드 (선택적)
+        // 웹 검색 기반 사실 검증 함수 로드 (DISCUSSION_FACTCHECK.ENABLED 게이트)
         let webSearchFn: ((q: string, opts?: { maxResults?: number }) => Promise<DiscussionSearchResult[]>) | undefined;
-        try {
-            const { performWebSearch } = await import('../../mcp');
-            webSearchFn = performWebSearch;
-            logger.info('🔍 웹 검색 사실 검증 활성화');
-        } catch {
-            logger.warn('웹 검색 모듈 로드 실패, 사실 검증 비활성화');
+        if (DISCUSSION_FACTCHECK.ENABLED) {
+            try {
+                const { performWebSearch } = await import('../../mcp');
+                webSearchFn = performWebSearch;
+                logger.info('🔍 웹 검색 사실 검증 활성화');
+            } catch {
+                logger.warn('웹 검색 모듈 로드 실패, 사실 검증 비활성화');
+            }
         }
 
         // 6단계: 토론 실행 및 결과 포맷팅/스트리밍

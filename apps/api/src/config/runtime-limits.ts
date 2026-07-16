@@ -311,6 +311,20 @@ export const DISCUSSION_CONSISTENCY = {
 } as const;
 
 /**
+ * Discussion 팩트체크 (웹 검색 근거를 최종 합성 단계에 주입)
+ * 토론 주제로 웹 검색 1회 → 결과를 synthesizeFinalAnswer 컨텍스트에 근거 자료로 첨부.
+ * factChecked=true 는 "근거가 실제로 합성에 주입됨"을 의미한다 (검색 0건이면 false).
+ */
+export const DISCUSSION_FACTCHECK = {
+    /** 팩트체크 활성화 여부 (kill-switch) */
+    ENABLED: process.env.DISCUSSION_FACTCHECK_ENABLED !== 'false',
+    /** 합성에 주입할 검색 결과 최대 건수 (performWebSearch 기본 30 — 15 초과 시 고볼륨 모드이므로 소량 명시 필수) */
+    MAX_RESULTS: parseInt(process.env.DISCUSSION_FACTCHECK_MAX_RESULTS || '5', 10),
+    /** 결과당 snippet 최대 문자 수 */
+    SNIPPET_MAX_CHARS: parseInt(process.env.DISCUSSION_FACTCHECK_SNIPPET_MAX_CHARS || '300', 10),
+} as const;
+
+/**
  * Discussion 멀티에이전트 동시 실행 상한
  * 라운드 내 에이전트 의견 수집(parallelBatch)의 in-flight LLM 호출 수를 제한합니다.
  * maxAgents=0(무제한, 엔진 내 20 cap) 설정 시에도 동시 요청이 폭증하지 않도록 보호합니다.

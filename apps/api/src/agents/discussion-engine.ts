@@ -34,7 +34,7 @@ import { createContextBuilder } from './discussion-context';
 import { createLogger } from '../utils/logger';
 import { resolvePromptLocale } from '../chat/language-policy';
 import { parallelBatch } from '../workflow/graph-engine';
-import { DISCUSSION_CONFIDENCE, DISCUSSION_CONSISTENCY, DISCUSSION_CONCURRENCY } from '../config/runtime-limits';
+import { DISCUSSION_CONFIDENCE, DISCUSSION_CONSISTENCY, DISCUSSION_CONCURRENCY, DISCUSSION_FACTCHECK } from '../config/runtime-limits';
 /** 토론 엔진에서 사용하는 웹 검색 결과 최소 인터페이스 */
 export interface DiscussionSearchResult {
     title: string;
@@ -240,7 +240,8 @@ ${contextInstructions}
     async function synthesizeFinalAnswer(
         topic: string,
         opinions: AgentOpinion[],
-        crossReview?: string
+        crossReview?: string,
+        factCheckSources?: DiscussionSearchResult[]
     ): Promise<string> {
         const systemPrompt = localizedPrompts.finalSynthesis;
 
@@ -251,6 +252,17 @@ ${contextInstructions}
 
         if (crossReview) {
             contextMessage += `\n${localizedLabels.crossReviewResult}\n${crossReview}\n`;
+        }
+
+        if (factCheckSources && factCheckSources.length > 0) {
+            contextMessage += `\n${localizedLabels.factCheckSection}\n`;
+            factCheckSources.forEach((src, i) => {
+                const snippet = src.snippet
+                    ? ` — ${sanitizePromptInput(src.snippet.substring(0, DISCUSSION_FACTCHECK.SNIPPET_MAX_CHARS))}`
+                    : '';
+                contextMessage += `${i + 1}. ${sanitizePromptInput(src.title)} (${src.url})${snippet}\n`;
+            });
+            contextMessage += `\n${localizedLabels.factCheckInstruction}\n`;
         }
 
         contextMessage += `\n---\n\n${localizedLabels.synthesisRequest}`;
@@ -419,8 +431,10 @@ ${contextInstructions}
             crossReview = await performCrossReview(opinions, topic);
         }
 
-        // 4. 사실 검증 (옵션)
+        // 4. 사실 검증 (옵션) — 검색 결과를 최종 합성 단계에 근거 자료로 주입.
+        //    factChecked=true 는 "근거가 실제로 주입됨"을 의미 (검색 0건이면 false).
         let factChecked = false;
+        let factCheckSources: DiscussionSearchResult[] = [];
         if (enableFactCheck && webSearchFn) {
             onProgress?.({
                 phase: 'reviewing',
@@ -429,8 +443,8 @@ ${contextInstructions}
             });
 
             try {
-                await webSearchFn(topic);
-                factChecked = true;
+                factCheckSources = (await webSearchFn(topic, { maxResults: DISCUSSION_FACTCHECK.MAX_RESULTS })) ?? [];
+                factChecked = factCheckSources.length > 0;
             } catch (e) {
                 logger.warn('사실 검증 실패:', e);
             }
@@ -460,7 +474,7 @@ ${contextInstructions}
             progress: 90
         });
 
-        const finalAnswer = await synthesizeFinalAnswer(topic, opinions, crossReview);
+        const finalAnswer = await synthesizeFinalAnswer(topic, opinions, crossReview, factCheckSources);
 
         // 6. 완료
         onProgress?.({
