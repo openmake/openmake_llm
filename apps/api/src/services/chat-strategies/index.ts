@@ -3,12 +3,12 @@
  * Chat Strategies - 채팅 전략 패턴 배럴 익스포트
  * ============================================================
  *
- * ChatService에서 사용하는 5가지 채팅 전략 클래스와
+ * ChatService에서 사용하는 6가지 채팅 전략 클래스와
  * 관련 타입 정의를 단일 진입점으로 재수출합니다.
  *
  * @module services/chat-strategies
  * @description
- * - 전략 클래스: Direct, GenerateVerify, Discussion, DeepResearch, AgentLoop
+ * - 전략 클래스: Direct, GenerateVerify, Discussion, DeepResearch, AgentLoop, Thinking
  * - 타입: 각 전략별 Context/Result 인터페이스
  */
 export { DirectStrategy } from './direct-strategy';

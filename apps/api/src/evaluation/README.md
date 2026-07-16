@@ -8,15 +8,15 @@
 evaluation/
 ├── README.md                            # 본 문서
 ├── types.ts                             # GoldenCase, Summary 타입
-├── golden-dataset.json                  # 시드 골든셋 (12건)
+├── golden-dataset.json                  # 골든셋 (50건: routing 30 + response 20)
 ├── dataset-loader.ts                    # Zod 검증 + 의미 검증
 ├── router-evaluator.ts                  # 키워드 라우팅 정확도 평가
 ├── response-evaluator.ts                # mustContain/mustNotContain 평가
-├── semantic-augmented-evaluator.ts      # strict + relaxed 이중 평가
+├── citation-evaluator.ts                # 인용 정확도 평가
 ├── real-response-generator.ts           # ChatService 호출 래퍼 (--real)
 ├── run-evaluation.ts                    # CLI: eval:routing
-├── run-augmented-evaluation.ts          # CLI: eval:augmented
-└── run-response-evaluation.ts           # CLI: eval:response
+├── run-response-evaluation.ts           # CLI: eval:response
+└── run-citation-evaluation.ts           # CLI: eval:citation
 ```
 
 ## 빠른 시작
@@ -30,10 +30,10 @@ npm run eval:routing
 # 2) 응답 패턴 (mock generator, LLM 비용 0)
 npm run eval:response
 
-# 3) Augmented (Semantic Router 임베딩 호출 발생, 100건 임베딩 + 케이스별 1건)
-npm run eval:augmented
+# 3) 인용 정확도
+npm run eval:citation
 
-# 4) 라우팅 + 응답 묶음
+# 4) 라우팅 + 응답 + 인용 묶음
 npm run eval:all
 
 # 5) 100% 통과 강제 모드 (CI에서 회귀 즉시 실패)
@@ -45,7 +45,6 @@ npm run eval:routing:strict
 | 변수 | 기본값 | 설명 |
 |---|---|---|
 | `OMK_EVAL_PASS_THRESHOLD` | `0.5` | eval:routing 통과 임계값 |
-| `OMK_EVAL_AUGMENTED_THRESHOLD` | `0.5` | eval:augmented relaxed 임계값 |
 | `OMK_EVAL_RESPONSE_THRESHOLD` | `0.5` | eval:response 통과 임계값 |
 | `OMK_EVAL_REAL_TIMEOUT_MS` | `60000` | --real 모드 케이스당 timeout (ms) |
 | `OMK_EVAL_REAL_MAX_TOKENS` | `2000` | --real 모드 케이스당 추정 토큰 한도 |
@@ -107,11 +106,6 @@ npm run eval:routing:strict
 - **통과율**: `expectedAgentIds` 합집합에 키워드 top-1이 포함된 비율
 - 이 PoC의 베이스라인은 약 50%
 
-### eval:augmented (가장 가치 있는 메트릭)
-- **Strict (top-1)**: 키워드 라우터 절대 정확도
-- **Relaxed (top-3)**: Semantic 후보에 정답이 포함된 비율
-- **Uplift**: 키워드 실패 + Semantic 성공 = **Semantic Router 본격 통합의 ROI**
-
 ### eval:response
 - mock 모드는 `MOCK_RESPONSE_RULES` 룰셋 검증 (평가기 자체 동작 확인)
 - `--real` 모드는 ChatService를 직접 호출하여 실제 LLM 응답 평가
@@ -153,7 +147,6 @@ commit 사이의 통과율 변동을 추적 가능.
 |---|---|---|
 | 골든셋 50건 (routing 30 + response 20) | ✅ v0.4.0 | 한·영 균형 |
 | CI 통합 (Gate 5/6) | ✅ | `.github/workflows/ci.yml` |
-| Semantic 임베딩 디스크 캐시 | ✅ | `OMK_SEMANTIC_DISK_CACHE_ENABLED=true` (기본) |
 | Auto 토론 알림 메타 이벤트 | ✅ | `onSystemEvent({type:'auto-discussion-activated'})` |
 | Promptfoo 통합 | ❌ | 외부 의존성 검토 후 |
 | LLM-as-Judge | ❌ | response-pattern 한계 명확해질 때 |
@@ -163,7 +156,7 @@ commit 사이의 통과율 변동을 추적 가능.
 
 ## 베이스라인 측정값 (v0.4.0)
 
-- `eval:routing`: **50% 통과** (15/30 — Semantic Router 통합으로 개선 예상)
+- `eval:routing`: **50% 통과** (15/30)
 - `eval:response` (mock): **100% 통과** (20/20)
 
 ## 후속 작업 우선순위
@@ -171,4 +164,3 @@ commit 사이의 통과율 변동을 추적 가능.
 1. **eval:response --real** — ChatService wrapping + 토큰 비용 가드 (60s timeout, 케이스당 토큰 한도)
 2. **Phase 2.5 Prompt DB Registry** — 프롬프트 핫스왑 인프라
 3. **운영 오분류 케이스 점진 추가** — 베이스라인 통과율 50%를 지속 향상
-4. **Semantic Router 본격 통합** — keyword confidence 낮을 때 자동 fallback (현재는 shadow only)

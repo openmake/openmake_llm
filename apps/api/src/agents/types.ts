@@ -1,6 +1,6 @@
 /**
  * Agent Types & Interfaces
- * 96개 산업별 에이전트 타입 정의
+ * 산업별 에이전트 타입 정의 (industry-agents.json — 18 카테고리 / 100 에이전트)
  */
 
 import * as fs from 'fs';

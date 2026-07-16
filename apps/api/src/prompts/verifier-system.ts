@@ -9,7 +9,6 @@
  *
  * @module prompts/verifier-system
  * @see services/chat-strategies/generate-verify-strategy.ts
- * @see config/model-defaults.ts - GV_MODEL_MAP
  */
 
 import type { PromptLocaleCode } from '../chat/language-policy';

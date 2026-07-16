@@ -3,11 +3,13 @@
  * GenerateVerifyStrategy - 생성-검증 전략
  * ============================================================
  *
- * Generator(강력 모델)가 1차 응답을 생성하고,
- * Verifier(다른 강력 모델)가 팩트체크·논리검증·보완을 수행합니다.
+ * Generator가 1차 응답을 생성하고,
+ * Verifier가 팩트체크·논리검증·보완을 수행합니다. (2 API 호출)
  *
- * 2 API 호출(Generator + Verifier)로
- * 높은 품질과 교차 검증 효과를 제공합니다.
+ * ⚠️ 현재 배선은 단일 로컬 모델 — generator = verifier = LLM_DEFAULT_MODEL
+ * (services/chat-service/strategy-executor.ts 의 gvModels). 즉 "서로 다른 모델의
+ * 교차 검증"이 아니라 같은 모델의 2-pass self-review 다. 모델 분리 자체는
+ * ExecutionPlan 의 generatorModel/verifierModel 로 override 가능하나 현재 미사용.
  *
  * @module services/chat-strategies/generate-verify-strategy
  * @description
@@ -16,7 +18,6 @@
  * - Generator 실패 → succeeded=false (AgentLoop 폴백)
  * - Verifier 실패 → Generator 응답을 그대로 스트리밍 (graceful degradation)
  *
- * @see config/model-defaults.ts - GV_MODEL_MAP
  * @see prompts/verifier-system.ts - Verifier 시스템 프롬프트
  */
 import { LLMClient } from '../../llm';

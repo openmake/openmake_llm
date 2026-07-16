@@ -4,7 +4,7 @@
 -- 사용자가 직접 system prompt + tools + skills 묶음을 정의하고 재사용.
 --
 -- 도입 배경 (2026-05-26): mainstream gap closure Phase 2.
--- 운영자 정의 18 산업 agent 와 별도 — 사용자별 영구 보관 + 본인 전용.
+-- 운영자 정의 산업 agent (18 카테고리 / 100 agent) 와 별도 — 사용자별 영구 보관 + 본인 전용.
 
 CREATE TABLE IF NOT EXISTS user_agents (
     id             TEXT PRIMARY KEY,                       -- nanoid
