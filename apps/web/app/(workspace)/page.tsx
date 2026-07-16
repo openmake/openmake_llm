@@ -13,9 +13,7 @@ export default async function ChatPage() {
         <header className="flex h-14 items-center justify-between border-b border-border px-5">
           <div className="min-w-0">
             <h1 className="truncate text-sm font-semibold text-fg">{t("sidebar.newChat")}</h1>
-            <p className="truncate text-xs text-faint">
-              {t("nav.groups.workspace")} · {t("nav.items.chat")}
-            </p>
+            <p className="truncate text-xs text-faint">{t("nav.items.chat")}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <ArtifactToggle />

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/primitives";
 import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
-import { AdminObservabilityTabs } from "@/components/hub-tabs";
+import { AdminTabs } from "@/components/hub-tabs";
 
 /* ── 백엔드 응답 타입 ────────────────────────────────────── */
 interface ApiFeedbackStats {
@@ -249,7 +249,7 @@ export default function AgentLearningPage() {
         title={t("title")}
         description={t("description")}
       />
-      <AdminObservabilityTabs />
+      <AdminTabs />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         {/* 요약 통계 */}

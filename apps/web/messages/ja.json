@@ -3,21 +3,13 @@
     "description": "AIベースのインテリジェントチャットアシスタント"
   },
   "nav": {
-    "groups": {
-      "workspace": "ワークスペース",
-      "integrations": "連携",
-      "account": "アカウント",
-      "admin": "管理者"
-    },
     "items": {
       "apiAccess": "API アクセス",
       "chat": "チャット",
-      "research": "ディープリサーチ",
       "agentTasks": "エージェントタスク",
       "customAgents": "カスタムエージェント",
       "skillLibrary": "スキルライブラリ",
       "artifacts": "アーティファクト",
-      "history": "履歴",
       "mcpMonitoring": "MCPモニタリング",
       "agentLearning": "エージェント学習",
       "settings": "設定",
@@ -29,7 +21,6 @@
       "alerts": "アラート",
       "mcpCatalogAdmin": "MCPカタログ管理",
       "modelRolesAdmin": "ロールモデル管理",
-      "mcp": "MCP",
       "developer": "開発者"
     }
   },
@@ -45,11 +36,13 @@
     "selfHosted": "セルフホスト",
     "notLoggedIn": "未ログイン",
     "logout": "ログアウト",
-    "themeToggle": "テーマ切替"
+    "themeToggle": "テーマ切替",
+    "viewAll": "すべて表示",
+    "noResults": "検索結果なし",
+    "accountMenu": "アカウントメニュー"
   },
   "mobileNav": {
     "chat": "チャット",
-    "research": "リサーチ",
     "agent": "エージェント",
     "login": "ログイン",
     "menu": "メニュー",
@@ -72,7 +65,8 @@
       "notifications": "通知",
       "privacy": "プライバシー",
       "security": "セキュリティ",
-      "memory": "メモリ"
+      "memory": "メモリ",
+      "connectors": "コネクタ"
     },
     "responseStyles": {
       "concise": "簡潔",
@@ -1476,8 +1470,9 @@
   },
   "pageTabs": {
     "myServers": "マイサーバー",
-    "catalog": "カタログ",
     "docs": "ドキュメント",
-    "dashboard": "ダッシュボード"
+    "dashboard": "ダッシュボード",
+    "history": "チャット履歴",
+    "research": "ディープリサーチ"
   }
 }

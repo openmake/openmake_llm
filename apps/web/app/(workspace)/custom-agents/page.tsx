@@ -10,6 +10,7 @@ import {
   PageHeader,
   Card,
 } from "@/components/ui/primitives";
+import { AgentsTabs } from "@/components/hub-tabs";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { fetchModels, type ModelEntry } from "@/lib/models-api";
@@ -535,6 +536,7 @@ export default function CustomAgentsPage() {
           </>
         }
       />
+      <AgentsTabs />
 
       {/* 탭 */}
       <div className="flex gap-4 border-b border-border px-6 pt-3">

@@ -21,6 +21,7 @@ import {
   CardTitle,
   CardContent,
 } from "@/components/ui/primitives";
+import { HistoryTabs } from "@/components/hub-tabs";
 import { cn } from "@/lib/utils";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
@@ -306,6 +307,7 @@ export default function ResearchPage() {
         title={t("pageTitle")}
         description={t("pageDescription")}
       />
+      <HistoryTabs />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         {/* 실행 안내 배너 — 생성/실행은 채팅 인라인으로 일원화 */}

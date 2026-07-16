@@ -3,21 +3,13 @@
     "description": "AI-powered intelligent chat assistant"
   },
   "nav": {
-    "groups": {
-      "workspace": "Workspace",
-      "integrations": "Integrations",
-      "account": "Account",
-      "admin": "Admin"
-    },
     "items": {
       "apiAccess": "API Access",
       "chat": "Chat",
-      "research": "Deep Research",
       "agentTasks": "Agent Tasks",
       "customAgents": "Custom Agents",
       "skillLibrary": "Skill Library",
       "artifacts": "Artifacts",
-      "history": "History",
       "mcpMonitoring": "MCP Monitoring",
       "agentLearning": "Agent Learning",
       "settings": "Settings",
@@ -29,7 +21,6 @@
       "alerts": "Alerts",
       "mcpCatalogAdmin": "MCP Catalog Admin",
       "modelRolesAdmin": "Model Roles Admin",
-      "mcp": "MCP",
       "developer": "Developer"
     }
   },
@@ -45,11 +36,13 @@
     "selfHosted": "Self-hosted",
     "notLoggedIn": "Not signed in",
     "logout": "Sign out",
-    "themeToggle": "Toggle theme"
+    "themeToggle": "Toggle theme",
+    "viewAll": "View all",
+    "noResults": "No results",
+    "accountMenu": "Account menu"
   },
   "mobileNav": {
     "chat": "Chat",
-    "research": "Research",
     "agent": "Agents",
     "login": "Sign in",
     "menu": "Menu",
@@ -72,7 +65,8 @@
       "notifications": "Notifications",
       "privacy": "Privacy",
       "security": "Security",
-      "memory": "Memory"
+      "memory": "Memory",
+      "connectors": "Connectors"
     },
     "responseStyles": {
       "concise": "Concise",
@@ -1476,8 +1470,9 @@
   },
   "pageTabs": {
     "myServers": "My Servers",
-    "catalog": "Catalog",
     "docs": "Docs",
-    "dashboard": "Dashboard"
+    "dashboard": "Dashboard",
+    "history": "Chat history",
+    "research": "Deep research"
   }
 }

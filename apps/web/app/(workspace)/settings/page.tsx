@@ -9,6 +9,7 @@ import {
   Brain,
   Palette,
   Bell,
+  Server,
   ShieldCheck,
   Save,
   Loader2,
@@ -32,11 +33,12 @@ import { cn } from "@/lib/utils";
 import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE, isLocale, toBcp47 } from "@/i18n/config";
 import { ModelPicker } from "@/components/model-picker";
 import { MemorySection } from "@/components/settings/memory-section";
+import { ConnectorsSection } from "@/components/settings/connectors-section";
 import { ProviderKeysSection } from "@/components/settings/provider-keys-section";
 import { ModelRolesSection } from "@/components/settings/model-roles-section";
 
 /* ── 탭 정의 ────────────────────────────────────────────── */
-type TabId = "general" | "model" | "interface" | "notifications" | "memory" | "privacy" | "security";
+type TabId = "general" | "model" | "interface" | "notifications" | "memory" | "connectors" | "privacy" | "security";
 
 const TABS: { id: TabId; labelKey: string; icon: LucideIcon }[] = [
   { id: "general", labelKey: "tabs.general", icon: Settings },
@@ -44,6 +46,7 @@ const TABS: { id: TabId; labelKey: string; icon: LucideIcon }[] = [
   { id: "interface", labelKey: "tabs.interface", icon: Palette },
   { id: "notifications", labelKey: "tabs.notifications", icon: Bell },
   { id: "memory", labelKey: "tabs.memory", icon: Brain },
+  { id: "connectors", labelKey: "tabs.connectors", icon: Server },
   { id: "privacy", labelKey: "tabs.privacy", icon: ShieldCheck },
   { id: "security", labelKey: "tabs.security", icon: ShieldCheck },
 ];
@@ -751,6 +754,8 @@ export default function SettingsPage() {
             )}
 
             {tab === "memory" && <MemorySection />}
+
+            {tab === "connectors" && <ConnectorsSection />}
 
             {tab === "privacy" && (
               <Card>

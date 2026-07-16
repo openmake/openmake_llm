@@ -3,21 +3,13 @@
     "description": "AI 기반 지능형 채팅 어시스턴트"
   },
   "nav": {
-    "groups": {
-      "workspace": "워크스페이스",
-      "integrations": "통합",
-      "account": "계정",
-      "admin": "관리자"
-    },
     "items": {
       "apiAccess": "API 액세스",
       "chat": "채팅",
-      "research": "딥 리서치",
       "agentTasks": "에이전트 작업",
       "customAgents": "커스텀 에이전트",
       "skillLibrary": "스킬 라이브러리",
       "artifacts": "아티팩트",
-      "history": "히스토리",
       "mcpMonitoring": "MCP 모니터링",
       "agentLearning": "에이전트 학습",
       "settings": "설정",
@@ -29,7 +21,6 @@
       "alerts": "알림",
       "mcpCatalogAdmin": "MCP 카탈로그 관리",
       "modelRolesAdmin": "역할 모델 관리",
-      "mcp": "MCP",
       "developer": "개발자"
     }
   },
@@ -45,11 +36,13 @@
     "selfHosted": "자가호스팅",
     "notLoggedIn": "로그인 안 됨",
     "logout": "로그아웃",
-    "themeToggle": "테마 전환"
+    "themeToggle": "테마 전환",
+    "viewAll": "모두 보기",
+    "noResults": "검색 결과 없음",
+    "accountMenu": "계정 메뉴"
   },
   "mobileNav": {
     "chat": "채팅",
-    "research": "리서치",
     "agent": "에이전트",
     "login": "로그인",
     "menu": "메뉴",
@@ -72,7 +65,8 @@
       "notifications": "알림",
       "privacy": "개인정보",
       "security": "보안",
-      "memory": "메모리"
+      "memory": "메모리",
+      "connectors": "커넥터"
     },
     "responseStyles": {
       "concise": "간결",
@@ -1476,8 +1470,9 @@
   },
   "pageTabs": {
     "myServers": "내 서버",
-    "catalog": "카탈로그",
     "docs": "문서",
-    "dashboard": "대시보드"
+    "dashboard": "대시보드",
+    "history": "대화 히스토리",
+    "research": "딥 리서치"
   }
 }

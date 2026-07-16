@@ -13,6 +13,7 @@ import {
   Th,
   Td,
 } from "@/components/ui/primitives";
+import { AdminTabs } from "@/components/hub-tabs";
 import { cn } from "@/lib/utils";
 import { toBcp47 } from "@/i18n/config";
 import { ApiClient } from "@/lib/api-client";
@@ -162,6 +163,7 @@ export default function AdminAuditPage() {
           </div>
         }
       />
+      <AdminTabs />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="mb-4 flex flex-wrap items-center gap-2">

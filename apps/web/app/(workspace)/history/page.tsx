@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Clock, Search, MessageSquare, Trash2 } from "lucide-react";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { Badge, PageHeader, Card } from "@/components/ui/primitives";
+import { HistoryTabs } from "@/components/hub-tabs";
 import { ApiClient } from "@/lib/api-client";
 import { toBcp47 } from "@/i18n/config";
 import { appendAnonSessionId } from "@/lib/anon-session";
@@ -197,6 +198,7 @@ export default function HistoryPage() {
         title={t("title")}
         description={t("description")}
       />
+      <HistoryTabs />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         {/* 검색 + 전체 삭제 */}

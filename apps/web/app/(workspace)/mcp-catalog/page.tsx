@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Search, Boxes, Download, Loader2 } from "lucide-react";
+import { Search, Boxes, Download, Loader2, Server } from "lucide-react";
 import {
   Button,
   Badge,
@@ -12,7 +13,6 @@ import {
 } from "@/components/ui/primitives";
 import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
-import { McpTabs } from "@/components/hub-tabs";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type CatalogKind = "server" | "skill";
@@ -135,6 +135,8 @@ function buildMockCatalog(t: (key: string) => string): CatalogEntry[] {
 
 export default function McpCatalogPage() {
   const t = useTranslations("mcpCatalog");
+  const tTabs = useTranslations("pageTabs");
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [entries, setEntries] = useState<CatalogEntry[]>(() =>
     buildMockCatalog(t),
@@ -226,8 +228,14 @@ export default function McpCatalogPage() {
       <PageHeader
         title={t("pageTitle")}
         description={t("pageDescription")}
+        actions={
+          /* 커넥터 관리는 설정 '커넥터' 탭으로 이동 (2026-07-17 사이드바 2차 통폐합 — 구 McpTabs 대체) */
+          <Button variant="outline" size="sm" onClick={() => router.push("/settings?tab=connectors")}>
+            <Server className="h-4 w-4" />
+            {tTabs("myServers")}
+          </Button>
+        }
       />
-      <McpTabs />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="relative mb-5 max-w-md">

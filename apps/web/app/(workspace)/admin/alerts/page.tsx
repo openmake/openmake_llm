@@ -12,6 +12,7 @@ import {
   Badge,
   Button,
 } from "@/components/ui/primitives";
+import { AdminTabs } from "@/components/hub-tabs";
 import { cn } from "@/lib/utils";
 import { toBcp47 } from "@/i18n/config";
 import { ApiClient } from "@/lib/api-client";
@@ -162,6 +163,7 @@ export default function AdminAlertsPage() {
         }
       />
 
+      <AdminTabs />
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card>

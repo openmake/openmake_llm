@@ -13,6 +13,7 @@ import {
   Th,
   Td,
 } from "@/components/ui/primitives";
+import { AdminTabs } from "@/components/hub-tabs";
 import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 
@@ -293,6 +294,7 @@ export default function AdminMcpCatalogPage() {
           </Button>
         }
       />
+      <AdminTabs />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <Card className="overflow-hidden">

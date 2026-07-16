@@ -15,6 +15,7 @@ import {
   Th,
   Td,
 } from "@/components/ui/primitives";
+import { AdminTabs } from "@/components/hub-tabs";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 
@@ -177,6 +178,7 @@ export default function AdminModelRolesPage() {
     <div className="space-y-6">
       <PageHeader title={t("title")} description={t("description")} />
 
+      <AdminTabs />
       {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
 
       <Card>

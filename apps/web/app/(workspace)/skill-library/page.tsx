@@ -23,6 +23,7 @@ import {
   PageHeader,
   Card,
 } from "@/components/ui/primitives";
+import { AgentsTabs } from "@/components/hub-tabs";
 import { cn } from "@/lib/utils";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
@@ -843,6 +844,7 @@ export default function SkillLibraryPage() {
           </>
         }
       />
+      <AgentsTabs />
 
       {/* 탭 */}
       <div className="flex gap-4 border-b border-border px-6 pt-3">

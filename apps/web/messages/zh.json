@@ -3,21 +3,13 @@
     "description": "基于AI的智能聊天助手"
   },
   "nav": {
-    "groups": {
-      "workspace": "工作区",
-      "integrations": "集成",
-      "account": "账户",
-      "admin": "管理员"
-    },
     "items": {
       "apiAccess": "API 访问",
       "chat": "聊天",
-      "research": "深度研究",
       "agentTasks": "智能体任务",
       "customAgents": "自定义智能体",
       "skillLibrary": "技能库",
       "artifacts": "工件",
-      "history": "历史记录",
       "mcpMonitoring": "MCP监控",
       "agentLearning": "智能体学习",
       "settings": "设置",
@@ -29,7 +21,6 @@
       "alerts": "告警",
       "mcpCatalogAdmin": "MCP目录管理",
       "modelRolesAdmin": "角色模型管理",
-      "mcp": "MCP",
       "developer": "开发者"
     }
   },
@@ -45,11 +36,13 @@
     "selfHosted": "自托管",
     "notLoggedIn": "未登录",
     "logout": "退出登录",
-    "themeToggle": "切换主题"
+    "themeToggle": "切换主题",
+    "viewAll": "查看全部",
+    "noResults": "无搜索结果",
+    "accountMenu": "账户菜单"
   },
   "mobileNav": {
     "chat": "聊天",
-    "research": "研究",
     "agent": "智能体",
     "login": "登录",
     "menu": "菜单",
@@ -72,7 +65,8 @@
       "notifications": "通知",
       "privacy": "隐私",
       "security": "安全",
-      "memory": "记忆"
+      "memory": "记忆",
+      "connectors": "连接器"
     },
     "responseStyles": {
       "concise": "简洁",
@@ -1476,8 +1470,9 @@
   },
   "pageTabs": {
     "myServers": "我的服务器",
-    "catalog": "目录",
     "docs": "文档",
-    "dashboard": "仪表盘"
+    "dashboard": "仪表盘",
+    "history": "对话历史",
+    "research": "深度研究"
   }
 }
