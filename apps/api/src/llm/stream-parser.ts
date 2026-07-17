@@ -425,7 +425,8 @@ export async function streamChat(
 
     // 사후 안전망 — finish_reason='length' = max_tokens 도달로 응답 절단됨.
     // ModelPool 의 proactive routing 이 max_tokens 충분히 확보 못한 신호.
-    if (finishReason === 'length') {
+    // (num_predict<=1 은 warmup/probe 의 의도적 1토큰 호출 — 경고 노이즈 제외)
+    if (finishReason === 'length' && !(request.options?.num_predict !== undefined && request.options.num_predict <= 1)) {
         log.warn(`[ModelPool] response truncated at max_tokens — model=${request.model} completion_tokens=${completionTokens}`);
     }
 
@@ -505,8 +506,8 @@ export async function nonStreamChat(
         }
     }
 
-    // 사후 안전망 (nonStream) — Section 5.6
-    if (finishReason === 'length') {
+    // 사후 안전망 (nonStream) — Section 5.6 (num_predict<=1 warmup/probe 노이즈 제외)
+    if (finishReason === 'length' && !(request.options?.num_predict !== undefined && request.options.num_predict <= 1)) {
         log.warn(`[ModelPool] response truncated at max_tokens — model=${request.model} completion_tokens=${r.usage?.completion_tokens ?? '?'}`);
     }
 
