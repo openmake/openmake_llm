@@ -3,11 +3,14 @@
  * ExecutionPlanBuilder — Phase B Routing Unification
  * ============================================================
  *
- * 라우팅 4 layer 를 단일 진입점으로 통합하는 builder. Phase 1 은 위임 단계 —
- * 기존 `buildExecutionPlan` (Layer 2) 과 `selectOptimalModel` (Layer 1+3) 을
- * 그대로 내부 호출합니다. 외부 동작은 변화 없음.
+ * 라우팅을 단일 진입점으로 모으는 builder — 기존 `buildExecutionPlan` 과
+ * `selectOptimalModel` (regex 분류, Phase 2-A 에서 LLM classifier 제거됨) 을
+ * 내부 호출해 UnifiedExecutionPlan 으로 머지하는 위임자입니다.
  *
- * Phase 2 에서 LLM classifier 제거, Layer 2·4 흡수 후 단일 결정자가 됩니다.
+ * ⚠️ 실행 범위 (2026-07-18 현행화): full build() 는 strategy 경로
+ * (LOCAL_STRATEGY_PATH_ENABLED=ON) 전용입니다. 기본 운영 경로(외부 dispatch —
+ * message-pipeline 의 externalResolved 분기, 로컬 채팅 포함) 는 build() 를
+ * 호출하지 않고 loadUserAgent() 단독 + regex 분류(라우팅 로그 대칭)만 사용합니다.
  *
  * @module chat/execution-plan-builder
  * @see chat/execution-plan-types

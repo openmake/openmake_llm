@@ -16,6 +16,7 @@ import { getPromptConfig } from '../../chat/prompt';
 import { checkModelCapability } from '../../chat/model-selector';
 import { assessComplexity } from '../../chat/complexity-assessor';
 import { detectFastPath } from '../../chat/fast-path-detector';
+import { classifyQuery } from '../../chat/query-classifier';
 import { generateImageInline } from './image-mode';
 import { buildArtifactGuideBlock } from './artifact-guide-block';
 import type { ExecutionPlan } from '../../chat/profile-resolver';
@@ -351,6 +352,17 @@ export async function runMessagePipeline(svc: ChatService,
             answerFormatBlock: extAnswerFormatBlock,
             style: req.style,
         }, reqCtx);
+
+        // ── 라우팅 로그 planner 대칭 (2026-07-18): ExecutionPlanBuilder.build() 는 strategy
+        //    경로(Step 4) 전용이라 이 분기는 routingLog 가 queryType='pending'/modelUsed='unknown'
+        //    인 채 기록되어 라우팅 분석이 비어 있던 관측 갭. regex 분류(LLM 호출 0회)만 대칭 수행.
+        const extHasImages = (images && images.length > 0) || documentImages.length > 0;
+        const extClassified = fastPath?.matched
+            ? { type: 'chat' as const, confidence: 1.0 }
+            : classifyQuery(message || '');
+        routingLog.queryFeatures.queryType = extHasImages ? 'vision' : extClassified.type;
+        routingLog.queryFeatures.confidence = extClassified.confidence;
+        routingLog.modelUsed = externalResolved.fullId;
 
         // ── 메트릭 기록 (회귀 수정 2026-07-11): 외부 provider 경로(LOCAL_STRATEGY OFF 기본이라
         //    로컬 채팅 포함 = 사실상 모든 일반 채팅)도 strategy 경로(Step 6)와 동일하게 관측 지표를
