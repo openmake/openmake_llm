@@ -34,6 +34,8 @@
  */
 import { LLMClient } from '../llm';
 import { ChatService } from '../services/ChatService';
+import { ProviderRouter } from '../providers/provider-router';
+import { LocalLLMProvider } from '../providers/local-llm-provider';
 import { createLogger } from '../utils/logger';
 import type { ChatMessageRequest } from '../services/chat-service-types';
 import type { ResponseGenerator } from './response-evaluator';
@@ -86,7 +88,10 @@ export function createRealResponseGenerator(
     const timeoutMs = options.timeoutMs ?? 60_000;
     const maxTokens = options.maxTokensPerCase ?? 2000;
     const abortOnBudgetExceed = options.abortOnBudgetExceed ?? true;
-    const factory = options.chatServiceFactory ?? ((c) => new ChatService(c));
+    // providerRouter 필수 (strategy 계층 폐기 1단계 이후 pipeline 이 provider gate 를 요구).
+    // externalKeysRepo 미주입 — 평가는 로컬 모델만 사용 (외부 provider 는 NOT_SUPPORTED).
+    const factory = options.chatServiceFactory ?? ((c) =>
+        new ChatService(c, new ProviderRouter({ localProvider: new LocalLLMProvider(c) })));
 
     return async (query, language) => {
         // 케이스 간 상태 누수 방지: client/service를 새로 생성

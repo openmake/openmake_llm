@@ -30,9 +30,9 @@ import { MCP_META_TOOL_NAMES } from '../mcp/mcp-meta-tools';
 import { CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, MCP_PROGRESSIVE_DISCLOSURE_ENABLED, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS } from '../config/runtime-limits';
 import { LOAD_SKILL_TOOL_NAME } from '../mcp/load-skill-tool';
 import { LLMClient } from '../llm';
-import { type ChatMessage, type ToolDefinition, type ModelOptions } from '../llm';
+import { type ToolDefinition } from '../llm';
 import type { ResearchProgress } from './DeepResearchService';
-import { AgentLoopStrategy, DeepResearchStrategy, DirectStrategy, DiscussionStrategy, GenerateVerifyStrategy, ThinkingStrategy } from './chat-strategies';
+import { DeepResearchStrategy, DiscussionStrategy } from './chat-strategies';
 import { formatResearchResult, formatDiscussionResult } from './chat-service-formatters';
 import { preRequestCheck } from '../chat/security-hooks';
 import type { LanguagePolicyDecision } from '../chat/language-policy';
@@ -40,7 +40,6 @@ import { type RoutingDecisionLog } from '../chat/routing-logger';
 import type { ChatMessageRequest, SystemEventCallback } from './chat-service-types';
 import { filterRestrictedTools } from './chat-service/tool-restrictions';
 import { buildContextForLLM } from './chat-service/context-builder';
-import { selectAndExecuteStrategy } from './chat-service/strategy-executor';
 import { resolveAgent as resolveAgentFn } from './chat-service/agent-resolver';
 import { resolveLanguagePolicy as resolveLanguagePolicyFn } from './chat-service/language-resolver';
 import { recordMetricsAndVerify as recordMetricsAndVerifyFn } from './chat-service/metrics-recorder';
@@ -72,13 +71,11 @@ const logger = createLogger('ChatService');
 /**
  * 중앙 채팅 오케스트레이션 서비스
  *
- * 사용자 메시지를 수신하여 에이전트 라우팅, 모델 선택, 컨텍스트 구성,
- * 전략 패턴 기반 응답 생성까지 전체 채팅 파이프라인을 조율합니다.
+ * 사용자 메시지를 수신하여 에이전트 라우팅, 컨텍스트 구성, provider dispatch
+ * (streamFromExternalProvider — 로컬/외부 단일 경로)까지 전체 채팅 파이프라인을 조율합니다.
  *
- * 전략 패턴(Strategy Pattern)을 통해 5가지 응답 생성 전략을 지원합니다:
- * - DirectStrategy: 단일 LLM 직접 호출
- * - GenerateVerifyStrategy: Generator→Verifier 2단계 검증
- * - AgentLoopStrategy: Multi-turn 도구 호출 루프
+ * 별도 전략 클래스는 특수 모드 2종만 유지합니다 (구 GV/AgentLoop/Thinking/Direct
+ * 전략은 2026-07-18 strategy 계층 폐기 1단계로 배선 제거):
  * - DiscussionStrategy: 멀티 에이전트 토론
  * - DeepResearchStrategy: 자율적 다단계 리서치
  *
@@ -106,18 +103,10 @@ export class ChatService {
      */
     private currentMcpToolStartCallback?: (event: { toolName: string }) => void;
 
-    /** 단일 LLM 직접 호출 전략 */
-    private readonly directStrategy: DirectStrategy;
-    /** Generate-Verify 생성-검증 전략 */
-    private readonly generateVerifyStrategy: GenerateVerifyStrategy;
     /** 멀티 에이전트 토론 전략 */
     private readonly discussionStrategy: DiscussionStrategy;
     /** 심층 연구 오케스트레이션 전략 */
     private readonly deepResearchStrategy: DeepResearchStrategy;
-    /** Multi-turn 도구 호출 루프 전략 */
-    private readonly agentLoopStrategy: AgentLoopStrategy;
-    /** Sprint Contract 기반 단계별 사고 전략 */
-    private readonly thinkingStrategy: ThinkingStrategy;
 
     /**
      * ChatService 인스턴스를 생성합니다.
@@ -128,12 +117,8 @@ export class ChatService {
     constructor(client: LLMClient, providerRouter?: ProviderRouter) {
         this.client = client;
         this.providerRouter = providerRouter;
-        this.directStrategy = new DirectStrategy();
-        this.generateVerifyStrategy = new GenerateVerifyStrategy();
         this.discussionStrategy = new DiscussionStrategy();
         this.deepResearchStrategy = new DeepResearchStrategy();
-        this.agentLoopStrategy = new AgentLoopStrategy(this.directStrategy);
-        this.thinkingStrategy = new ThinkingStrategy(this.agentLoopStrategy);
     }
 
     /**
@@ -430,48 +415,6 @@ export class ChatService {
 
 
     /**
-     * ExecutionStrategy 기반 응답 전략을 선택하고 실행합니다.
-     * 실제 로직은 chat-service/strategy-executor.ts에 위임합니다.
-     */
-    async selectAndExecuteStrategy(params: {
-        executionPlan: ExecutionPlan | undefined;
-        reqCtx: RequestContext;
-        message: string;
-        modelSelection: import('../chat/model-selector').ModelSelection;
-        routingLog: RoutingDecisionLog;
-        images: string[] | undefined;
-        docId: string | undefined;
-        history: Array<{ role: string; content: string; images?: string[] }> | undefined;
-        currentHistory: ChatMessage[];
-        chatOptions: ModelOptions;
-        maxTurns: number;
-        supportsTools: boolean;
-        supportsThinking: boolean;
-        thinkingMode: boolean | undefined;
-        thinkingLevel: 'low' | 'medium' | 'high' | undefined;
-        languagePolicy: LanguagePolicyDecision | undefined;
-        streamToken: (token: string, thinking?: string) => void;
-        abortSignal?: AbortSignal;
-        checkAborted: () => void;
-        format?: import('../llm').FormatOption;
-    }): Promise<void> {
-        // 사용자 컨텍스트 + skill bindings + enabledTools 는 이 시점에 이미 고정되어 있으므로
-        // 도구 목록을 한 번 pre-resolve 한 뒤 sync 콜백 형태로 전달 (chat-strategies 계약 유지).
-        const resolvedAllowedTools = await this.getAllowedTools(params.reqCtx);
-        return selectAndExecuteStrategy({
-            ...params,
-            generateVerifyStrategy: this.generateVerifyStrategy,
-            agentLoopStrategy: this.agentLoopStrategy,
-            thinkingStrategy: this.thinkingStrategy,
-            client: this.client,
-            currentUserContext: params.reqCtx.userContext,
-            getAllowedTools: () => resolvedAllowedTools,
-            onMcpToolResult: this.currentMcpToolResultCallback,
-            onMcpToolStart: this.currentMcpToolStartCallback,
-        });
-    }
-
-    /**
      * 사용량 메트릭을 기록하고 보안 사후 검사 및 라우팅 로그를 완료합니다.
      * 실제 로직은 chat-service/metrics-recorder.ts에 위임합니다.
      */
@@ -572,8 +515,8 @@ export class ChatService {
 
     private async externalProviderDeps(reqCtx: RequestContext): Promise<ExternalProviderDeps> {
         // getAllowedTools 는 async (tool-router 가 userPool 도구를 비동기로 수집).
-        // 여기서 한 번 resolve 해 ExternalProviderDeps 의 동기 contract 를 유지한다.
-        // (selectAndExecuteStrategy 의 pre-resolve 패턴과 동일 — 단일 turn 내 도구 목록 immutable 가정.)
+        // 여기서 한 번 resolve 해 ExternalProviderDeps 의 동기 contract 를 유지한다
+        // (단일 turn 내 도구 목록 immutable 가정).
         return {
             providerRouter: this.providerRouter,
             currentUserContext: reqCtx.userContext,

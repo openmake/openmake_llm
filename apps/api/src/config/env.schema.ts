@@ -114,13 +114,6 @@ export const envSchema = z
          */
         LLM_ENABLE_REASONING_EFFORT: z.string().default('false'),
         /**
-         * 로컬(local-llm) 채팅을 strategy 계층(ThinkingStrategy/GV/AgentLoop/ExecutionPlanBuilder)
-         * 으로 라우팅할지 토글. 'false'(기본) 면 로컬도 streamFromExternalProvider 직접 dispatch
-         * (2026-05-19 normalize 회귀로 인한 현행 동작 유지). 'true' 면 로컬이 strategy 경로 복귀.
-         * 외부 provider(anthropic 등)는 이 값과 무관하게 항상 외부 dispatch.
-         */
-        LOCAL_STRATEGY_PATH_ENABLED: z.string().default('false'),
-        /**
          * 사용자별 역할→모델 매핑 (Role-based Multi-Agent Orchestration) 토글.
          * 'true' 면 로그인 사용자의 user_model_roles 매핑을 role 해석 1순위로 사용
          * (외부 모델은 BYOK 키 필요, 실패 시 전역 env → 로컬 default 로 fail-open 폴백).

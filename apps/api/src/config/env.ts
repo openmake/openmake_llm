@@ -53,8 +53,6 @@ export interface EnvConfig {
     llmWeeklyTokenLimit: number;
     /** vLLM `--reasoning-parser` 미설정 환경 등에서 extra_body.reasoning_effort 거절 방지 토글. */
     llmEnableReasoningEffort: boolean;
-    /** 로컬(local-llm) 채팅을 strategy 계층으로 라우팅할지 토글 (기본 false=현행 외부 dispatch). */
-    localStrategyPathEnabled: boolean;
     /** 사용자별 역할→모델 매핑(user_model_roles) 사용 토글 (기본 false=전역 env/default 만). */
     userModelRolesEnabled: boolean;
     /** thinking 요약 헤드라인 생성 토글 (기본 true — 'summary' role 모델 1회 호출). */
@@ -177,7 +175,6 @@ const DEFAULT_CONFIG: EnvConfig = {
     llmHourlyTokenLimit: 300000,
     llmWeeklyTokenLimit: 5000000,
     llmEnableReasoningEffort: false,
-    localStrategyPathEnabled: false,
     userModelRolesEnabled: false,
     thinkingSummaryEnabled: true,
     tailRoutingShadowEnabled: false,
@@ -394,7 +391,6 @@ export function loadConfig(): EnvConfig {
         LLM_HOURLY_TOKEN_LIMIT: env('LLM_HOURLY_TOKEN_LIMIT'),
         LLM_WEEKLY_TOKEN_LIMIT: env('LLM_WEEKLY_TOKEN_LIMIT'),
         LLM_ENABLE_REASONING_EFFORT: env('LLM_ENABLE_REASONING_EFFORT'),
-        LOCAL_STRATEGY_PATH_ENABLED: env('LOCAL_STRATEGY_PATH_ENABLED'),
         USER_MODEL_ROLES_ENABLED: env('USER_MODEL_ROLES_ENABLED'),
         THINKING_SUMMARY_ENABLED: env('THINKING_SUMMARY_ENABLED'),
         TAIL_ROUTING_SHADOW_ENABLED: env('TAIL_ROUTING_SHADOW_ENABLED'),
@@ -499,7 +495,6 @@ export function loadConfig(): EnvConfig {
         llmHourlyTokenLimit: parsed.LLM_HOURLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmHourlyTokenLimit,
         llmWeeklyTokenLimit: parsed.LLM_WEEKLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmWeeklyTokenLimit,
         llmEnableReasoningEffort: (parsed.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true',
-        localStrategyPathEnabled: (parsed.LOCAL_STRATEGY_PATH_ENABLED ?? 'false').toLowerCase() === 'true',
         userModelRolesEnabled: (parsed.USER_MODEL_ROLES_ENABLED ?? 'false').toLowerCase() === 'true',
         thinkingSummaryEnabled: (parsed.THINKING_SUMMARY_ENABLED ?? 'true').toLowerCase() === 'true',
         tailRoutingShadowEnabled: (parsed.TAIL_ROUTING_SHADOW_ENABLED ?? 'false').toLowerCase() === 'true',

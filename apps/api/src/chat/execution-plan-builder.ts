@@ -7,10 +7,10 @@
  * `selectOptimalModel` (regex 분류, Phase 2-A 에서 LLM classifier 제거됨) 을
  * 내부 호출해 UnifiedExecutionPlan 으로 머지하는 위임자입니다.
  *
- * ⚠️ 실행 범위 (2026-07-18 현행화): full build() 는 strategy 경로
- * (LOCAL_STRATEGY_PATH_ENABLED=ON) 전용입니다. 기본 운영 경로(외부 dispatch —
- * message-pipeline 의 externalResolved 분기, 로컬 채팅 포함) 는 build() 를
- * 호출하지 않고 loadUserAgent() 단독 + regex 분류(라우팅 로그 대칭)만 사용합니다.
+ * ⚠️ strategy 계층 폐기 1단계 (2026-07-18): 유일한 build() 호출처였던
+ * message-pipeline 의 strategy dispatch 가 제거되어 full build() 는 현재
+ * 호출처 0 (2단계 정리 대상). 채팅 파이프라인은 loadUserAgent() 단독 +
+ * regex 분류(classifyQuery — 라우팅 로그 기록용)만 사용합니다.
  *
  * @module chat/execution-plan-builder
  * @see chat/execution-plan-types
