@@ -27,7 +27,7 @@ import type { UserContext } from '../mcp/user-sandbox';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { CHAT_ALWAYS_ON_TOOL_NAMES } from '../mcp/agent-task-tools';
 import { MCP_META_TOOL_NAMES } from '../mcp/mcp-meta-tools';
-import { CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, MCP_PROGRESSIVE_DISCLOSURE_ENABLED, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS } from '../config/runtime-limits';
+import { CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, MCP_PROGRESSIVE_DISCLOSURE_ENABLED, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS } from '../config/runtime-limits';
 import { LOAD_SKILL_TOOL_NAME } from '../mcp/load-skill-tool';
 import { LLMClient } from '../llm';
 import { type ChatMessage, type ToolDefinition, type ModelOptions } from '../llm';
@@ -227,6 +227,18 @@ export class ChatService {
         }
         if (ROUTE_INTENT_PATTERNS.some((re) => re.test(reqCtx.message ?? ''))) {
             forceIncludeKakao('find-route', '길찾기 의도');
+        }
+        // 명시적 웹 검색 요청이면 web_search 를 강제 포함한다 — web_search 는 always-on 이
+        // 아니라 에이전트 스킬 바인딩 경유로만 노출되므로, 에이전트 매칭이 안 되는 질문
+        // (예: "인터넷 검색해서 날씨 알려줘")은 도구 자체가 목록에 없어 모델이 "검색 불가"
+        // 로 답하던 결함(2026-07-17 Discord) 차단. 포함되면 외부 경로의 첫 턴 tool_choice
+        // 강제(external-provider)까지 연쇄 작동한다. (카카오 강제 포함과 동일 선례)
+        if (WEB_SEARCH_INTENT_PATTERNS.some((re) => re.test(reqCtx.message ?? ''))) {
+            const ws = allTools.find((x) => x.function.name === 'web_search');
+            if (ws && !finalCombined.some((x) => x.function.name === ws.function.name)) {
+                finalCombined = [...finalCombined, ws];
+                logger.info('[WebSearch] 명시적 검색 요청 — web_search 강제 포함');
+            }
         }
         return this.applySkillCatalog(finalCombined, allTools, reqCtx);
     }
