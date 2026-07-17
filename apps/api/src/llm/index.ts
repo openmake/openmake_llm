@@ -11,8 +11,8 @@ export { LLMClient, createClient } from './client';
 
 export * from './types';
 
-export { runAgentLoop } from './agent-loop';
-export type { AgentLoopResult, AgentLoopParams } from './agent-loop';
+// (레거시 runAgentLoop/agent-loop.ts 는 2026-07-18 strategy 계층 폐기 2단계로 삭제 —
+//  도구 호출 루프는 chat-service/external-provider 가 담당.)
 
 export { getApiUsageTracker } from './usage-tracker';
 export type { QuotaStatus } from './usage-tracker';

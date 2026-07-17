@@ -3,21 +3,14 @@
  * Chat Strategy Types - 채팅 전략 패턴 타입 정의
  * ============================================================
  *
- * ChatService에서 사용하는 전략 패턴의 공통 인터페이스와
- * 각 전략별 컨텍스트/결과 타입을 정의합니다.
+ * 특수 모드 전략 2종(Discussion/DeepResearch)의 공통 인터페이스와
+ * 컨텍스트 타입을 정의합니다. (구 Direct/AgentLoop/GenerateVerify/Thinking
+ * 전략 타입은 2026-07-18 strategy 계층 폐기 2단계로 삭제.)
  *
  * @module services/chat-strategies/types
- * @description
- * - 공통 ChatContext/ChatResult 기반 타입
- * - 전략별 컨텍스트 인터페이스 (Direct, AgentLoop, GenerateVerify, Discussion, DeepResearch)
- * - 제네릭 ChatStrategy 인터페이스로 타입 안전한 전략 교체 지원
  */
 import type { DiscussionProgress, DiscussionResult } from '../../agents/discussion-engine';
-import type { QueryType } from '../../chat/model-selector-types';
-import type { ExecutionPlan } from '../../chat/profile-resolver';
-import type { UserContext } from '../../mcp/user-sandbox';
 import type { LLMClient } from '../../llm';
-import type { ChatMessage, FormatOption, ModelOptions, ToolCall, ToolDefinition } from '../../llm';
 import type { ResearchProgress } from '../DeepResearchService';
 import type { ChatMessageRequest } from '../chat-service-types';
 
@@ -88,115 +81,6 @@ export interface ChatStrategy<TContext extends ChatContext = ChatContext, TResul
 }
 
 /**
- * Direct(직접 호출) 전략 컨텍스트
- *
- * 단일 LLM에 한 번 요청하여 응답과 도구 호출 정보를 받는 데 필요한 컨텍스트입니다.
- *
- * @interface DirectStrategyContext
- * @extends ChatContext
- */
-export interface DirectStrategyContext extends ChatContext {
-    /** LLM 클라이언트 인스턴스 */
-    client: LLMClient;
-    /** 현재 대화 히스토리 (시스템 프롬프트 + 이전 메시지 + 사용자 메시지) */
-    currentHistory: ChatMessage[];
-    /** 모델 옵션 */
-    chatOptions: ModelOptions;
-    /** 사용 가능한 도구 정의 목록 */
-    allowedTools: ToolDefinition[];
-    /** Thinking 깊이 옵션 */
-    thinkOption?: 'low' | 'medium' | 'high';
-    /** 구조화된 출력 형식 ('json' 또는 JSON Schema 객체) */
-    format?: FormatOption;
-}
-
-/**
- * Direct 전략 결과
- *
- * @interface DirectStrategyResult
- * @extends ChatResult
- */
-export interface DirectStrategyResult extends ChatResult {
-    /** LLM이 반환한 어시스턴트 메시지 (대화 히스토리에 추가용) */
-    assistantMessage: ChatMessage;
-    /** LLM이 요청한 도구 호출 목록 (빈 배열이면 최종 응답) */
-    toolCalls: ToolCall[];
-}
-
-/**
- * 전략 간 공유 실행 상태 (참조 기반 추적)
- *
- * ThinkingStrategy → AgentLoop 폴백 시 이미 소모된 턴/시간을
- * 참조 객체로 공유하여 폴백 전략이 잔여 자원만 사용하도록 합니다.
- *
- * @interface ExecutionState
- */
-export interface ExecutionState {
-    /** 누적 사용 턴 수 (AgentLoop 내부에서 매 턴마다 증가) */
-    turnsUsed: number;
-    /** 실행 시작 시점 (밀리초 타임스탬프) */
-    startTime: number;
-}
-
-/**
- * Informed Fallback 힌트
- *
- * 이전 전략(GV/Thinking)이 실패한 원인 정보를 폴백 전략(AgentLoop)에 전달합니다.
- * Harness Engineering 원칙: Correct — 실패 원인을 후속 전략에 알려 동일 실수 방지
- *
- * @interface FallbackHint
- */
-export interface FallbackHint {
-    /** 실패한 전략 이름 */
-    failedStrategy: 'generate-verify' | 'thinking' | 'conditional-verify';
-    /** 실패 원인 요약 (로그용, 사람이 읽을 수 있는 형태) */
-    reason: string;
-    /** 실패한 전략이 소모한 턴 수 */
-    turnsConsumed: number;
-    /** 실패한 전략의 경과 시간 (ms) */
-    elapsedMs: number;
-}
-
-/**
- * AgentLoop(Multi-turn 도구 호출) 전략 컨텍스트
- *
- * 도구 호출이 없을 때까지 LLM ↔ 도구 실행을 반복하는 루프에 필요한 컨텍스트입니다.
- *
- * @interface AgentLoopStrategyContext
- * @extends ChatContext
- */
-export interface AgentLoopStrategyContext extends ChatContext {
-    /** LLM 클라이언트 인스턴스 */
-    client: LLMClient;
-    /** 현재 대화 히스토리 (루프 진행에 따라 도구 결과가 추가됨) */
-    currentHistory: ChatMessage[];
-    /** 모델 옵션 */
-    chatOptions: ModelOptions;
-    /** 최대 루프 반복 횟수 (무한 루프 방지) */
-    maxTurns: number;
-    /** 현재 모델의 도구 호출 지원 여부 */
-    supportsTools: boolean;
-    /** 현재 모델의 Thinking 모드 지원 여부 */
-    supportsThinking: boolean;
-    /** Sequential Thinking 모드 활성화 여부 */
-    thinkingMode?: boolean;
-    /** Thinking 깊이 수준 */
-    thinkingLevel?: 'low' | 'medium' | 'high';
-    /** 실행 계획 */
-    executionPlan?: ExecutionPlan;
-    /** 현재 사용자 컨텍스트 (도구 접근 권한 확인용) */
-    currentUserContext: UserContext | null;
-    /** 허용된 도구 목록을 반환하는 함수 */
-    getAllowedTools: () => ToolDefinition[];
-    /** 구조화된 출력 형식 ('json' 또는 JSON Schema 객체) */
-    format?: FormatOption;
-    /** 전략 간 공유 실행 상태 (폴백 시 소모된 턴 수 추적용, optional) */
-    executionState?: ExecutionState;
-    /** Informed Fallback 힌트 — 이전 전략 실패 원인 (Correct 원칙) */
-    fallbackHint?: FallbackHint;
-}
-
-/**
  * Discussion(멀티 에이전트 토론) 전략 컨텍스트
  *
  * 여러 전문가 에이전트가 토론하여 고품질 응답을 생성하는 데 필요한 컨텍스트입니다.
@@ -213,49 +97,6 @@ export interface DiscussionStrategyContext extends ChatContext {
     onProgress?: (progress: DiscussionProgress) => void;
     /** 토론 결과를 마크다운으로 포맷팅하는 함수 */
     formatDiscussionResult: (result: DiscussionResult) => string;
-}
-
-/**
- * Generate-Verify(생성-검증) 전략 컨텍스트
- *
- * Generator(강력 모델)가 1차 응답을 생성하고,
- * Verifier(다른 강력 모델)가 팩트체크·논리검증·보완을 수행합니다.
- *
- * @interface GenerateVerifyStrategyContext
- * @extends ChatContext
- */
-export interface GenerateVerifyStrategyContext extends ChatContext {
-    /** LLM에 전달할 메시지 배열 (시스템 프롬프트 + 대화 이력 + 사용자 메시지) */
-    messages: ChatMessage[];
-    /** 모델 옵션 (temperature, top_p 등) */
-    chatOptions: ModelOptions;
-    /** 질문 유형 (GV 모델 조합 동적 선택용) */
-    queryType?: QueryType;
-    /** 사용자 언어 (Verifier 프롬프트 다국어화용) */
-    userLanguage?: string;
-    /** 구조화된 출력 형식 (format 파라미터) */
-    format?: FormatOption;
-    /** Generator가 사용할 엔진 모델 */
-    generatorModel: string;
-    /** Verifier가 사용할 엔진 모델 */
-    verifierModel: string;
-}
-
-/**
- * Generate-Verify 전략 결과
- *
- * @interface GenerateVerifyStrategyResult
- * @extends ChatResult
- */
-export interface GenerateVerifyStrategyResult extends ChatResult {
-    /** 전략 실행 성공 여부 (실패 시 AgentLoop으로 폴백) */
-    succeeded: boolean;
-    /** Verifier 검증 통과 여부 */
-    verified: boolean;
-    /** Verifier가 발견한 이슈 수 (0이면 원본 응답 유지) */
-    issuesFound: number;
-    /** Generator vs Verifier 응답 변경률 (0.0~1.0, Jaccard distance) */
-    verificationDelta?: number;
 }
 
 /**

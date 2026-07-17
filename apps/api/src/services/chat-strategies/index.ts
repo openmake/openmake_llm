@@ -3,32 +3,19 @@
  * Chat Strategies - 채팅 전략 패턴 배럴 익스포트
  * ============================================================
  *
- * ChatService에서 사용하는 6가지 채팅 전략 클래스와
- * 관련 타입 정의를 단일 진입점으로 재수출합니다.
+ * 특수 모드 전략 2종(Discussion/DeepResearch)과 관련 타입을 단일 진입점으로
+ * 재수출합니다. (구 Direct/GenerateVerify/AgentLoop/Thinking 전략은 2026-07-18
+ * strategy 계층 폐기 2단계로 삭제 — 일반 채팅은 streamFromExternalProvider
+ * 단일 경로. 상세는 CLAUDE.md Phase 용어집.)
  *
  * @module services/chat-strategies
- * @description
- * - 전략 클래스: Direct, GenerateVerify, Discussion, DeepResearch, AgentLoop, Thinking
- * - 타입: 각 전략별 Context/Result 인터페이스
  */
-export { DirectStrategy } from './direct-strategy';
 export { DiscussionStrategy } from './discussion-strategy';
 export { DeepResearchStrategy } from './deep-research-strategy';
-export { AgentLoopStrategy } from './agent-loop-strategy';
-export { GenerateVerifyStrategy } from './generate-verify-strategy';
-export { ThinkingStrategy } from './thinking-strategy';
-export type { ThinkingStrategyContext, ThinkingStrategyResult } from './thinking-strategy';
 export type {
     ChatContext,
     ChatResult,
     ChatStrategy,
-    GenerateVerifyStrategyContext,
-    GenerateVerifyStrategyResult,
-    DirectStrategyContext,
-    DirectStrategyResult,
-    AgentLoopStrategyContext,
     DiscussionStrategyContext,
     DeepResearchStrategyContext,
-    ExecutionState,
-    FallbackHint,
 } from './types';

@@ -818,101 +818,8 @@ export const SEARCH_RELIABILITY = {
     MIN_TERM_RELEVANCE: Number(process.env.SEARCH_MIN_TERM_RELEVANCE ?? 0),
 } as const;
 
-// ============================================
-// Context GC (컨텍스트 윈도우 가비지 컬렉션)
-// ============================================
-
-/**
- * 에이전트 루프 실행 중 컨텍스트 윈도우 압력을 모니터링하고,
- * 불필요한 중간 메시지를 정리하는 가비지 컬렉션 설정
- *
- * Harness Engineering 원칙: Constrain — 컨텍스트 윈도우의 신호 대 잡음 비율을
- * 유지하기 위해 오래된/불필요한 메시지를 적응형으로 정리합니다.
- *
- * services/chat-strategies/context-gc.ts에서 참조
- */
-export const CONTEXT_GC = {
-    /** Context GC 활성화 여부 */
-    ENABLED: process.env.CONTEXT_GC_ENABLED !== 'false',
-    /** 컨텍스트 압력 측정 기준: 최대 허용 문자 수 */
-    MAX_CONTEXT_CHARS: Number(process.env.CONTEXT_GC_MAX_CHARS) || 30000,
-    /** 경고 압력 임계값 (0.0~1.0, 사용률이 이 비율 초과 시 warning) */
-    WARNING_THRESHOLD: parseFloat(process.env.CONTEXT_GC_WARNING || '0.6'),
-    /** 위기 압력 임계값 (0.0~1.0, 사용률이 이 비율 초과 시 critical) */
-    CRITICAL_THRESHOLD: parseFloat(process.env.CONTEXT_GC_CRITICAL || '0.8'),
-    /** 보호할 최근 메시지 수 (system + 최근 N개는 정리 대상에서 제외) */
-    PROTECTED_RECENT_COUNT: Number(process.env.CONTEXT_GC_PROTECTED) || 4,
-    /** assistant 중간 메시지 컴팩션 시 최대 길이 */
-    ASSISTANT_COMPACT_MAX_CHARS: Number(process.env.CONTEXT_GC_ASSIST_MAX) || 300,
-    /** critical 수준에서 tool 결과 압축 최소 문자 수 */
-    TOOL_COMPACT_MIN_CHARS: Number(process.env.CONTEXT_GC_TOOL_COMPACT_MIN) || 100,
-    /** GC 결과를 metrics에 포함할지 여부 */
-    INCLUDE_IN_METRICS: process.env.CONTEXT_GC_INCLUDE_METRICS !== 'false',
-} as const;
-
-// ============================================
-// Eval Pipeline (응답 품질 평가)
-// ============================================
-
-/**
- * 에이전트 응답 품질을 체계적으로 평가하는 파이프라인 설정
- *
- * Harness Engineering 원칙: Verify — 에이전트 응답의 품질을 다차원으로 측정하여
- * 개선 포인트를 식별하고 시스템 최적화에 활용합니다.
- *
- * services/chat-strategies/eval-pipeline.ts에서 참조
- */
-export const EVAL_PIPELINE = {
-    /** Eval Pipeline 활성화 여부 */
-    ENABLED: process.env.EVAL_PIPELINE_ENABLED !== 'false',
-    /** 평가 결과를 metrics에 포함할지 여부 */
-    INCLUDE_IN_METRICS: process.env.EVAL_INCLUDE_METRICS !== 'false',
-    /** 평가를 스킵할 최소 응답 길이 (짧은 인사/단답은 스킵) */
-    MIN_RESPONSE_LENGTH: Number(process.env.EVAL_MIN_RESPONSE_LENGTH) || 50,
-    /** 응답 완전성 평가: 이상적 최소 길이 */
-    COMPLETENESS_IDEAL_MIN: Number(process.env.EVAL_COMPLETENESS_IDEAL_MIN) || 100,
-    /** 응답 완전성 평가: 경고 최대 길이 (초과 시 감점) */
-    COMPLETENESS_WARN_MAX: Number(process.env.EVAL_COMPLETENESS_WARN_MAX) || 10000,
-    /** 안전성 검사: 금지 패턴 목록 */
-    SAFETY_BANNED_PATTERNS: [
-        /\b\d{3}-\d{3,4}-\d{4}\b/,       // 전화번호
-        /\b\d{6}-\d{7}\b/,                // 주민등록번호
-        /\bpassword\s*[:=]\s*\S+/i,       // 비밀번호 노출
-    ] as readonly RegExp[],
-    /** 인용 감지 패턴 */
-    CITATION_PATTERNS: [
-        /\[\d+\]/,                         // [1], [2] 형식
-        /출처\s*:/,                         // 한국어 출처
-        /Source\s*:/i,                      // 영어 Source
-    ] as readonly RegExp[],
-    /** 코드 도메인 감지 패턴 (코드 관련 평가 활성화 여부) */
-    CODE_DOMAIN_PATTERN: /```[\s\S]*?```/,
-} as const;
-
-// ============================================
-// Trace Analyzer (에이전트 루프 실행 추적)
-// ============================================
-
-/**
- * AgentLoop 실행 트레이스 수집 및 분석 설정
- *
- * Harness Engineering 원칙: Inform — 에이전트 실행 과정을 구조화하여 추적하고,
- * 병목 구간과 실패 패턴을 분석하여 시스템 최적화에 활용합니다.
- *
- * services/chat-strategies/trace-analyzer.ts에서 참조
- */
-export const TRACE_ANALYZER = {
-    /** Trace Analyzer 활성화 여부 */
-    ENABLED: process.env.TRACE_ANALYZER_ENABLED !== 'false',
-    /** 병목으로 간주할 평균 도구 실행 시간 임계값 (ms) */
-    BOTTLENECK_THRESHOLD_MS: Number(process.env.TRACE_BOTTLENECK_MS) || 1500,
-    /** 도구 인자 요약 최대 길이 */
-    ARGS_SUMMARY_MAX_LENGTH: Number(process.env.TRACE_ARGS_SUMMARY_MAX) || 256,
-    /** 높은 에러율 경고 임계값 (0.0~1.0) */
-    HIGH_ERROR_RATE_THRESHOLD: parseFloat(process.env.TRACE_HIGH_ERROR_RATE || '0.5'),
-    /** 트레이스 분석 결과를 metrics에 포함할지 여부 */
-    INCLUDE_IN_METRICS: process.env.TRACE_INCLUDE_METRICS !== 'false',
-} as const;
+// (CONTEXT_GC / EVAL_PIPELINE / TRACE_ANALYZER 상수는 2026-07-18 strategy 계층
+//  폐기 2단계로 삭제 — 유일 소비자였던 chat-strategies 하네스 모듈과 함께 제거됨.)
 
 export const THINKING_LIMITS = {
     /** 최대 사고 단계 수 (초과 시 결론 강제) */
@@ -950,7 +857,7 @@ export const THINKING_LIMITS = {
 // ============================================
 
 /**
- * AgentLoop에서 동일 도구 반복 호출(Doom Loop) 감지 설정
+ * 도구 호출 루프에서 동일 도구 반복 호출(Doom Loop) 감지 설정
  *
  * Harness Engineering 원칙: Correct — 에이전트가 같은 실수를 반복할 때
  * 접근법 변경을 유도하고, 최종적으로 루프를 강제 종료합니다.
@@ -958,17 +865,12 @@ export const THINKING_LIMITS = {
  * LangChain LoopDetectionMiddleware 참고:
  * https://blog.langchain.com/improving-deep-agents-with-harness-engineering/
  *
- * services/chat-strategies/agent-loop-strategy.ts에서 참조
+ * services/chat-service/external-provider.ts에서 참조
  */
-/**
- * Agent 도구 호출 루프 최대 턴 수 — 단일 SoT.
- * (이전: external-provider.ts / message-pipeline.ts / agent-loop.ts 에 5/5/10 인라인 분산)
- */
+/** Agent 도구 호출 루프 최대 턴 수 — 단일 SoT. */
 export const AGENT_LOOP_LIMITS = {
-    /** 활성 경로(external dispatch + strategy agent-loop) 최대 도구 턴 */
+    /** external dispatch 도구 호출 루프 최대 턴 */
     MAX_TURNS: Number(process.env.AGENT_MAX_TURNS) || 5,
-    /** LLMClient.runAgentLoop 레거시 경로 기본 반복 (호출자 override 가능) */
-    LEGACY_MAX_ITERATIONS: Number(process.env.AGENT_LEGACY_MAX_ITERATIONS) || 10,
     /**
      * 루프 전체 wall-clock 예산 (ms). 턴 수와 별개로, 느린 도구가 매 턴 타임아웃
      * 직전까지 걸려 단일 요청이 MAX_TURNS × LLM_TIMEOUT 까지 늘어지는 것을 차단.
@@ -992,80 +894,9 @@ export const LOOP_DETECTION = {
     ARGS_HASH_MAX_LENGTH: 500,
 } as const;
 
-// ============================================
-// PreCompletion Checklist (종료 전 검증)
-// ============================================
-
-/**
- * AgentLoop 종료 직전 셀프 검증 체크리스트 설정
- *
- * Harness Engineering 원칙: Verify — 에이전트가 응답을 완료하기 전에
- * 스스로 체크리스트를 수행하여 1차 해결률을 극대화합니다.
- *
- * LangChain PreCompletionChecklistMiddleware 참고:
- * https://blog.langchain.com/improving-deep-agents-with-harness-engineering/
- *
- * services/chat-strategies/agent-loop-strategy.ts에서 참조
- */
-export const PRE_COMPLETION_CHECKLIST = {
-    /** 체크리스트 활성화 여부 (환경변수로 제어) */
-    ENABLED: process.env.ENABLE_PRE_COMPLETION_CHECKLIST !== 'false',
-    /** 체크리스트 실패 시 수정 재시도 최대 횟수 */
-    MAX_RETRY: 1,
-    /** 체크리스트를 스킵할 최소 응답 길이 (짧은 인사/단답은 스킵) */
-    MIN_RESPONSE_LENGTH: parseInt(process.env.CHECKLIST_MIN_LENGTH || '100', 10),
-    /** 체크리스트 검증 LLM 최대 토큰 */
-    MAX_TOKENS: 500,
-    /** 체크리스트를 적용할 queryType 목록 (빈 배열이면 모든 타입에 적용) */
-    APPLICABLE_QUERY_TYPES: [] as readonly string[],
-    /** 코드 도메인 감지용 정규식 패턴 */
-    CODE_DOMAIN_PATTERN: /```|코드|code|function\s|class\s|import\s|const\s|let\s|var\s|def\s|async\s/i,
-} as const;
-
-// ============================================
-// Classification Confidence Gate (분류 신뢰도 게이트)
-// ============================================
-
-/**
- * 분류 신뢰도가 낮을 때 보수적 전략으로 강제 전환하는 게이트 설정
- *
- * Harness Engineering 원칙: Verify + Correct — 분류 결과를 검증하고,
- * 불확실한 경우 더 안전한 실행 경로로 수정합니다.
- *
- * services/chat-service/strategy-executor.ts에서 참조
- */
-export const CONFIDENCE_GATE = {
-    /** 신뢰도 게이트 활성화 여부 */
-    ENABLED: process.env.CONFIDENCE_GATE_ENABLED !== 'false',
-    /** 게이트 발동 임계값 — 이 값 미만이면 보수적 전략으로 전환 */
-    THRESHOLD: parseFloat(process.env.CONFIDENCE_GATE_THRESHOLD || '0.4'),
-    /** 게이트 발동 시 적용할 전략 */
-    FALLBACK_STRATEGY: (process.env.CONFIDENCE_GATE_FALLBACK || 'generate-verify') as
-        'generate-verify' | 'conditional-verify',
-    /** 게이트 발동 시 thinking 모드 강제 활성화 여부 */
-    FORCE_THINKING: process.env.CONFIDENCE_GATE_FORCE_THINKING === 'true',
-    /** 메트릭 기록 여부 */
-    INCLUDE_IN_METRICS: process.env.CONFIDENCE_GATE_INCLUDE_METRICS !== 'false',
-} as const;
-
-// ============================================
-// Informed Fallback (폴백 시 실패 원인 전달)
-// ============================================
-
-/**
- * 이전 전략(GV/Thinking) 실패 시 원인 정보를 AgentLoop에 전달하는 설정
- *
- * Harness Engineering 원칙: Correct — 실패 원인을 후속 전략에 알려
- * 동일 실수를 반복하지 않도록 교정
- *
- * services/chat-strategies/agent-loop-strategy.ts에서 참조
- */
-export const INFORMED_FALLBACK = {
-    /** Informed Fallback 활성화 여부 */
-    ENABLED: process.env.INFORMED_FALLBACK_ENABLED !== 'false',
-    /** 메트릭 기록 여부 */
-    INCLUDE_IN_METRICS: process.env.INFORMED_FALLBACK_INCLUDE_METRICS !== 'false',
-} as const;
+// (PRE_COMPLETION_CHECKLIST / CONFIDENCE_GATE / INFORMED_FALLBACK 상수는
+//  2026-07-18 strategy 계층 폐기 2단계로 삭제 — 유일 소비자였던
+//  agent-loop-strategy / strategy-executor 와 함께 제거됨.)
 
 // ============================================
 // Routing Post-hoc Verification (라우팅 사후 검증)
@@ -1090,12 +921,8 @@ export const ROUTING_VERIFICATION = {
     INCLUDE_IN_METRICS: process.env.ROUTING_VERIFICATION_INCLUDE_METRICS !== 'false',
 } as const;
 
-export const GV_METRICS = {
-    /** 품질 측정 활성화 여부 (환경변수로 제어) */
-    ENABLED: process.env.OMK_GV_METRICS_ENABLED !== 'false',
-    /** 유의미한 수정으로 판단할 최소 변경 비율 (0.0~1.0) */
-    SIGNIFICANT_CHANGE_RATIO: 0.1,
-} as const;
+// (GV_METRICS 상수는 2026-07-18 strategy 계층 폐기 2단계로 삭제 —
+//  유일 소비자였던 generate-verify-strategy 와 함께 제거됨.)
 
 // ============================================
 // 외부 LLM 도구 노출 정책

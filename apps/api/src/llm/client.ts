@@ -46,7 +46,6 @@ import type {
     WebSearchResponse,
     WebFetchResponse,
 } from './types';
-import { runAgentLoop, type AgentLoopResult } from './agent-loop';
 
 const logger = createLogger('LLMClient');
 
@@ -310,31 +309,6 @@ export class LLMClient {
 
     async webFetch(url: string): Promise<WebFetchResponse> {
         return webFetchAdapter(url);
-    }
-
-    async runAgentLoop(
-        messages: ChatMessage[],
-        tools: ToolDefinition[],
-        availableFunctions: Record<string, (args: Record<string, unknown>) => unknown | Promise<unknown>>,
-        options?: {
-            think?: ThinkOption;
-            stream?: boolean;
-            onToken?: (token: string, thinking?: string) => void;
-            onToolCall?: (name: string, args: unknown, result: unknown) => void;
-            maxIterations?: number;
-        },
-    ): Promise<AgentLoopResult> {
-        return runAgentLoop({
-            client: this,
-            messages,
-            tools,
-            availableFunctions,
-            ...(options?.think !== undefined && { think: options.think }),
-            ...(options?.stream !== undefined && { stream: options.stream }),
-            ...(options?.onToken && { onToken: options.onToken }),
-            ...(options?.onToolCall && { onToolCall: options.onToolCall }),
-            ...(options?.maxIterations !== undefined && { maxIterations: options.maxIterations }),
-        });
     }
 }
 
