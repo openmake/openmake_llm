@@ -453,15 +453,22 @@ export async function streamFromExternalProvider(
     if (/\[[^\]]*?\d+\]\s*.+?\n\s*URL:\s*\S+/.test(webSearchCtxText)) {
         const srcLang = ctx.resolvedLanguage || req.userLanguagePreference || 'en';
         const srcLabel = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, srcLang).sourceLabel;
-        const alreadyHasSources = new RegExp(`(^|\\n)\\s*(#{1,3}\\s*|\\*\\*\\s*)${srcLabel}`).test(finalContent);
+        const headerRe = new RegExp(`(^|\\n)\\s*(#{1,3}\\s*|\\*\\*\\s*)${srcLabel}`);
+        const headerIdx = finalContent.search(headerRe);
+        const alreadyHasSources = headerIdx >= 0;
+        // 컨텍스트에서 번호→(제목, URL) 파싱 — 미첨부 시 전체 목록, 링크 누락 보강 시 번호 매칭에 공용.
+        const numToSource = new Map<string, { title: string; url: string }>();
+        const re = /\[[^\]]*?(\d+)\]\s*(.+?)\n\s*URL:\s*(\S+)/g;
+        let mm: RegExpExecArray | null;
+        while ((mm = re.exec(webSearchCtxText)) !== null) {
+            if (!numToSource.has(mm[1])) {
+                numToSource.set(mm[1], { title: mm[2].trim(), url: mm[3].trim() });
+            }
+        }
         if (!alreadyHasSources) {
             const entries: string[] = [];
             const seen = new Set<string>();
-            const re = /\[[^\]]*?(\d+)\]\s*(.+?)\n\s*URL:\s*(\S+)/g;
-            let mm: RegExpExecArray | null;
-            while ((mm = re.exec(webSearchCtxText)) !== null) {
-                const title = mm[2].trim();
-                const url = mm[3].trim();
+            for (const { title, url } of numToSource.values()) {
                 if (url && !seen.has(url)) {
                     seen.add(url);
                     entries.push(`${entries.length + 1}. [${title || url}](${url})`);
@@ -472,6 +479,27 @@ export async function streamFromExternalProvider(
                 onToken(block, undefined);
                 finalContent += block;
                 logger.info(`🔗 웹검색 출처 ${entries.length}개 자동 첨부 (LLM 인용 누락 보정)`);
+            }
+        } else if (!/https?:\/\//.test(finalContent.slice(headerIdx))) {
+            // 모델이 출처 섹션을 직접 만들었지만 URL 없이 제목만 나열한 경우(자주 발생) —
+            // 본문에 인용된 번호([출처 N] 등)를 컨텍스트의 URL 과 매칭해 클릭 가능한 링크
+            // 블록을 덧붙인다. (이미 스트리밍된 본문은 수정 불가하므로 append-only)
+            const citedNums: string[] = [];
+            const citeRe = /\[[^\]\n]*?(\d+)\]/g;
+            let cm: RegExpExecArray | null;
+            while ((cm = citeRe.exec(finalContent)) !== null) {
+                if (numToSource.has(cm[1]) && !citedNums.includes(cm[1])) citedNums.push(cm[1]);
+            }
+            const nums = citedNums.length > 0 ? citedNums : [...numToSource.keys()];
+            const lines = nums.map((n) => {
+                const s = numToSource.get(n)!;
+                return `[${n}] ${s.url}`;
+            });
+            if (lines.length > 0) {
+                const block = `\n\n🔗 **URL**\n${lines.join('\n')}`;
+                onToken(block, undefined);
+                finalContent += block;
+                logger.info(`🔗 출처 링크 ${lines.length}개 보강 (모델 출처 섹션에 URL 누락)`);
             }
         }
     }
