@@ -230,15 +230,16 @@ export async function runMessagePipeline(svc: ChatService,
     // system-prompt.ts 의 buildSkillPrompt (산업 agent skill) 도 자동 우회.
     // effectiveAgentSysMsg 가 어차피 user agent 우선이므로 산업 agent 결과는 dead.
     const userAgentBypass = !!(req.userAgentId && userId && userId !== 'guest');
-    const agentBypassed = !!(req.apiKeyId || fastPath?.matched || userAgentBypass);
+    // 2026-07-17: API Key 요청(Discord 봇 등)도 에이전트 라우팅 수행 — 바이패스 조건에서
+    // req.apiKeyId 제거. 키워드 라우팅은 LLM 호출 없는 regex 라 저비용이며, 이로써
+    // agent_skill_assignments 바인딩 스킬(ECC 22종 등)이 외부 API 경로에도 자동 주입된다.
+    const agentBypassed = !!(fastPath?.matched || userAgentBypass);
     let agentPromise: Promise<AgentResolution>;
 
     if (agentBypassed) {
-        const reason = req.apiKeyId
-            ? '[API Key] 외부 요청 — 에이전트 라우팅 스킵'
-            : userAgentBypass
-                ? '[Custom Agent] 사용자 지정 페르소나 — 산업 agent 라우팅 스킵'
-                : `[Fast-path:${fastPath?.reason}] 단답형 — LLM 라우팅 스킵`;
+        const reason = userAgentBypass
+            ? '[Custom Agent] 사용자 지정 페르소나 — 산업 agent 라우팅 스킵'
+            : `[Fast-path:${fastPath?.reason}] 단답형 — LLM 라우팅 스킵`;
         const bypassAgent = getAgentById('general') || AGENTS['general'];
         agentPromise = Promise.resolve({
             agentSelection: {
