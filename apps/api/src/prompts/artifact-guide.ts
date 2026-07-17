@@ -182,7 +182,15 @@ function App() {
 - ❌ \`\`\`python ... \`\`\` 만 출력 → ❌ artifact 패널에 안 들어감
 - ❌ <artifact id="..."> ... </artifact id> → ❌ 닫는 태그 형식 오류
 - ❌ \`<artifact>\` 외부에 같은 본문 중복 → ❌ 사용자 화면 중복 표시
-- ✅ 위 예시처럼 \`<artifact id="..." kind="..." title="...">본문</artifact>\` 형식 정확히`;
+- ✅ 위 예시처럼 \`<artifact id="..." kind="..." title="...">본문</artifact>\` 형식 정확히
+
+## 🎨 html 디자인 최종 점검 — kind="html" 이면 코드 작성 직전에 반드시 적용
+1. \`:root\` 에 위 **OpenMake 디자인 토큰을 글자 그대로 복사**해 넣고(--bg:#F7F8FA ...) 모든 색·여백·라운드를 \`var(--...)\` 로만 지정했는가
+2. \`body\` 배경은 \`var(--bg)\` **단색** — 🚫 파랑/보라 \`linear-gradient\` 배경 금지, 🚫 \`'Segoe UI'\` 서체 금지 (Pretendard \`@import\` + \`var(--sans)\` 사용)
+3. 카드/표/코드블록은 \`var(--surface)\` + \`var(--border)\` + \`var(--sh-2)\`, 본문 텍스트는 \`var(--fg)\`/보조는 \`var(--muted)\`
+4. \`[data-theme="dark"]\` 토큰 블록 포함 + 상단에 다크모드 토글 버튼(JS 3줄)
+5. 액센트(\`var(--accent)\`)는 링크·버튼·강조 소수 지점에만 — 차분한 그래파이트 톤 유지
+이 5개를 지키지 않은 html 은 미완성으로 간주됩니다. 사용자가 명시적으로 다른 스타일을 요청한 경우에만 예외.`;
 
 const EN_GUIDE = `
 
@@ -282,7 +290,15 @@ the finished design back via \`open-design::create_artifact\` or
 \`open-design::write_file\`. If the tools are absent, just apply the design rules above.
 
 Outside the tag, write only a brief description/context. Do not duplicate
-the artifact body outside — the user will see it twice.`;
+the artifact body outside — the user will see it twice.
+
+## 🎨 html design final check — apply right before writing kind="html" code
+1. Copy the OpenMake design tokens above **verbatim** into \`:root\` (--bg:#F7F8FA ...) and reference colors/spacing/radii only via \`var(--...)\`
+2. \`body\` background is **solid** \`var(--bg)\` — 🚫 no blue/purple \`linear-gradient\` backgrounds, 🚫 no \`'Segoe UI'\` (use Pretendard \`@import\` + \`var(--sans)\`)
+3. Cards/tables/code blocks use \`var(--surface)\` + \`var(--border)\` + \`var(--sh-2)\`; body text \`var(--fg)\`, secondary \`var(--muted)\`
+4. Include the \`[data-theme="dark"]\` token block + a small dark-mode toggle (3 lines of JS)
+5. Use \`var(--accent)\` sparingly (links/buttons/highlights only) — keep the calm graphite tone
+HTML that violates these five is considered unfinished. Deviate only when the user explicitly requests a different style.`;
 
 /**
  * 사용자 언어에 맞는 artifact guide 반환. artifacts_enabled=false 면 호출자가 skip.
