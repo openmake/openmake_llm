@@ -5,6 +5,7 @@ import { ChatRequestError, ChatRequestHandler, ChatUserContext } from '../chat/r
 import { ToolDefinition } from '../llm';
 import {
     OpenAIChatCompletionRequest,
+    OpenAICompatArtifact,
     OpenAICompatService,
 } from '../services/OpenAICompatService';
 import { listAvailableModels } from '../chat/profile-resolver';
@@ -242,6 +243,31 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
         const promptTokens = OpenAICompatService.estimateTokens(promptTextParts.join(' '));
         const completionTokens = OpenAICompatService.estimateTokens(result.response);
 
+        // OpenMake 확장: 추출된 artifacts 를 응답에 동봉 (본문엔 [[artifact:id]] placeholder 만 남음).
+        // publish_artifacts=true(옵트인) 면 link 발행 후 shareUrl 포함 — Discord gateway 등 비 WS 클라이언트용.
+        let artifactsOut: OpenAICompatArtifact[] | undefined;
+        if (result.artifacts && result.artifacts.length > 0) {
+            artifactsOut = result.artifacts.map((a) => ({
+                id: a.id,
+                kind: a.kind,
+                title: a.title,
+                language: a.lang,
+                version: a.version,
+                content: a.content,
+            }));
+            if (body.publish_artifacts === true) {
+                const { publishArtifactAsLink } = await import('../services/artifact-viewer-service');
+                for (const a of artifactsOut) {
+                    const shareUrl = await publishArtifactAsLink(
+                        result.sessionId,
+                        a.id,
+                        userContext.authenticatedUserId ?? null,
+                    );
+                    if (shareUrl) a.shareUrl = shareUrl;
+                }
+            }
+        }
+
         const response = OpenAICompatService.buildResponse({
             id: completionId,
             model: result.model || body.model,
@@ -250,6 +276,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
             promptTokens,
             completionTokens,
             toolCalls: result.tool_calls,
+            artifacts: artifactsOut,
         });
 
         res.json(response);

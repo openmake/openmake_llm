@@ -4,14 +4,20 @@
  */
 import { config } from './config';
 import { ChatTurn } from './session-store';
+import { ResponseArtifact } from './attachments';
 
 interface ModelListResponse {
     data?: Array<{ id: string }>;
 }
 
 interface ChatCompletionResponse {
-    choices?: Array<{ message?: { content?: string } }>;
+    choices?: Array<{ message?: { content?: string; artifacts?: ResponseArtifact[] } }>;
     error?: { message?: string };
+}
+
+export interface ChatAnswer {
+    content: string;
+    artifacts: ResponseArtifact[];
 }
 
 let resolvedModel = config.model;
@@ -34,7 +40,7 @@ export async function resolveModel(): Promise<string> {
     return resolvedModel;
 }
 
-export async function requestChatCompletion(history: ChatTurn[], userContent: string): Promise<string> {
+export async function requestChatCompletion(history: ChatTurn[], userContent: string): Promise<ChatAnswer> {
     const model = await resolveModel();
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), config.requestTimeoutMs);
@@ -48,6 +54,8 @@ export async function requestChatCompletion(history: ChatTurn[], userContent: st
             body: JSON.stringify({
                 model,
                 messages: [...history, { role: 'user', content: userContent }],
+                // OpenMake 확장: 아티팩트를 공유 뷰어에 link 발행해 shareUrl 포함
+                publish_artifacts: true,
             }),
             signal: controller.signal,
         });
@@ -55,11 +63,13 @@ export async function requestChatCompletion(history: ChatTurn[], userContent: st
         if (!res.ok) {
             throw new Error(body.error?.message || `백엔드 오류: HTTP ${res.status}`);
         }
-        const content = body.choices?.[0]?.message?.content;
-        if (!content) {
+        const message = body.choices?.[0]?.message;
+        const artifacts = message?.artifacts ?? [];
+        const content = message?.content;
+        if (!content && artifacts.length === 0) {
             throw new Error('백엔드 응답에 content 가 없습니다.');
         }
-        return content;
+        return { content: content ?? '', artifacts };
     } finally {
         clearTimeout(timer);
     }

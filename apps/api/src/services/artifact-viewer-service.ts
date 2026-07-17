@@ -266,6 +266,42 @@ export function composeShareUrl(pub: ArtifactPublicationRow): string | null {
     return null;
 }
 
+/**
+ * API-key 인증 경로용 link 발행 헬퍼 — v1 chat completions 의 `publish_artifacts` 옵트인 전용
+ * (Discord gateway 등 JWT 없는 클라이언트는 /publish 라우트를 못 부르므로 서버가 대신 발행).
+ * 소유자 검증 후 visibility='link' upsert + 뷰어 export + shareUrl 반환. 실패/비활성은 null (graceful).
+ */
+export async function publishArtifactAsLink(
+    sessionId: string,
+    artifactId: string,
+    ownerUserId: string | null,
+): Promise<string | null> {
+    if (!ARTIFACT_VIEWER.enabled) return null;
+    try {
+        const { ArtifactRepository } = await import('../data/repositories/artifact-repository');
+        const { ArtifactPublicationRepository } = await import('../data/repositories/artifact-publication-repository');
+        const repo = new ArtifactRepository(getPool());
+        const versions = await repo.listVersionsByArtifactId(sessionId, artifactId);
+        if (versions.length === 0) return null;
+        // 방금 이 요청에서 저장된 artifact 만 발행 — 소유자 불일치는 거절
+        if (versions[0].user_id && versions[0].user_id !== ownerUserId) return null;
+        const latest = versions[versions.length - 1];
+        const pubRepo = new ArtifactPublicationRepository(getPool());
+        const pub = await pubRepo.upsert({
+            sessionId,
+            artifactId,
+            ownerUserId: versions[0].user_id || ownerUserId || '',
+            visibility: 'link',
+            title: latest.title,
+        });
+        await exportPublicationViewer(pub, versions);
+        return composeShareUrl(pub);
+    } catch (e) {
+        logger.warn(`link 발행 실패 (graceful): sid=${sessionId} aid=${artifactId}: ${e instanceof Error ? e.message : e}`);
+        return null;
+    }
+}
+
 // ── 접근토큰 (authenticated/private) — HMAC, 쿠키 교차오리진 회피 ──
 
 /** `{pubId}.{expEpoch}.{sig}` 형식 단기 토큰. 앱이 쿠키인증 후 발급, nginx auth_request 가 검증. */

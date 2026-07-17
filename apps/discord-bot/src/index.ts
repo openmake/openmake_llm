@@ -17,6 +17,7 @@ import { isUserAllowed, shouldRespond, stripBotMention } from './access-control'
 import { appendTurns, getHistory, resetSession, sessionKey } from './session-store';
 import { requestChatCompletion, resolveModel } from './openmake-client';
 import { splitForDiscord } from './message-utils';
+import { prepareReply } from './attachments';
 
 const problems = validateConfig();
 if (problems.length > 0) {
@@ -54,9 +55,15 @@ async function handleChat(message: Message, botUserId: string): Promise<void> {
 
     try {
         const answer = await requestChatCompletion(getHistory(key), content);
-        appendTurns(key, content, answer);
-        const chunks = splitForDiscord(answer);
-        await message.reply({ content: chunks[0], allowedMentions: { repliedUser: true, parse: [] } });
+        appendTurns(key, content, answer.content);
+        // 생성 이미지·아티팩트 → 파일 첨부 + 뷰어 링크 (Discord 는 md 이미지/artifact 렌더 불가)
+        const prepared = await prepareReply(answer.content, answer.artifacts);
+        const chunks = splitForDiscord(prepared.content);
+        await message.reply({
+            content: chunks[0],
+            files: prepared.files,
+            allowedMentions: { repliedUser: true, parse: [] },
+        });
         for (const chunk of chunks.slice(1)) {
             if ('send' in channel) {
                 await channel.send({ content: chunk, allowedMentions: { parse: [] } });

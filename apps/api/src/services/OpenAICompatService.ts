@@ -50,6 +50,23 @@ export interface OpenAIChatCompletionRequest {
     presence_penalty?: number;
     frequency_penalty?: number;
     user?: string;
+    /**
+     * OpenMake 확장 (비표준): true 면 응답에서 추출된 artifacts 를 visibility='link' 로
+     * 공유 뷰어에 발행하고 message.artifacts[].shareUrl 로 반환 (Discord gateway 용).
+     */
+    publish_artifacts?: boolean;
+}
+
+/** OpenMake 확장 — 응답에서 추출된 artifact (non-stream 전용, message.artifacts). */
+export interface OpenAICompatArtifact {
+    id: string;
+    kind: string;
+    title: string;
+    language: string | null;
+    version: number;
+    content: string;
+    /** publish_artifacts=true 로 발행된 경우의 공유 뷰어 URL */
+    shareUrl?: string;
 }
 
 export interface OpenAIChatCompletionResponse {
@@ -59,7 +76,7 @@ export interface OpenAIChatCompletionResponse {
     model: string;
     choices: Array<{
         index: number;
-        message: { role: 'assistant'; content: string | null; tool_calls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> };
+        message: { role: 'assistant'; content: string | null; tool_calls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>; artifacts?: OpenAICompatArtifact[] };
         finish_reason: 'stop' | 'tool_calls' | 'length' | null;
     }>;
     usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
@@ -174,6 +191,7 @@ export class OpenAICompatService {
         promptTokens: number;
         completionTokens: number;
         toolCalls?: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>;
+        artifacts?: OpenAICompatArtifact[];
     }): OpenAIChatCompletionResponse {
         return {
             id: params.id,
@@ -187,6 +205,7 @@ export class OpenAICompatService {
                         role: 'assistant',
                         content: params.content,
                         ...(params.toolCalls && params.toolCalls.length > 0 ? { tool_calls: params.toolCalls } : {}),
+                        ...(params.artifacts && params.artifacts.length > 0 ? { artifacts: params.artifacts } : {}),
                     },
                     finish_reason: params.finishReason,
                 },
