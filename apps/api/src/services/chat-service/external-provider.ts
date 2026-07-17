@@ -60,6 +60,8 @@ export interface StreamFromExternalContext {
     style?: Style;
     /** 답변 형식 가드 (구조적 질문에 결론-우선·표·실행항목 분리). prose/concise 면 빈 문자열. */
     answerFormatBlock?: string;
+    /** Tail 라우팅 Stage 2B — factual tail 판정 시 첫 턴 web_search tool_choice 강제. */
+    tailWebGround?: boolean;
 }
 
 /**
@@ -161,11 +163,13 @@ export async function streamFromExternalProvider(
     // "검색 불가/오프라인" 자기 발언 재주입 시 qwen 이 시스템 지시로도 교정되지 않고
     // 도구 호출을 거부하는 환각의 결정적 차단 (카카오 tool_choice 강제와 동일 선례).
     const forcedWebSearchToolName = !forcedKakaoToolName
-        && WEB_SEARCH_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''))
+        && (WEB_SEARCH_INTENT_PATTERNS.some((re) => re.test(req.message ?? '')) || ctx.tailWebGround === true)
         ? tools.find((t) => t.function.name === 'web_search')?.function.name
         : undefined;
     if (forcedWebSearchToolName) {
-        logger.info('[WebSearch] 명시적 검색 요청 — 첫 턴 tool_choice 강제: web_search');
+        logger.info(ctx.tailWebGround === true
+            ? '[TailGate] Stage 2B factual tail — 첫 턴 tool_choice 강제: web_search'
+            : '[WebSearch] 명시적 검색 요청 — 첫 턴 tool_choice 강제: web_search');
     }
     const forcedFirstTurnToolName = forcedKakaoToolName ?? forcedWebSearchToolName;
 

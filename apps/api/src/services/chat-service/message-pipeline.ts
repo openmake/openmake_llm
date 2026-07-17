@@ -163,20 +163,33 @@ export async function runMessagePipeline(svc: ChatService,
         },
     });
 
-    // ── Tail 라우팅 셰도우 (Stage 1) ──
-    // 게이트 결정을 계산·적재만 한다. 실행 경로(executionStrategy)는 바꾸지 않는다(사용자 영향 0).
-    // 특수모드(discussion/deep-research/image) 조기 return 이후이므로 일반 채팅 경로만 관측된다.
+    // ── Tail 라우팅 게이트 (Stage 1 셰도우 + Stage 2B) ──
+    // 셰도우: 게이트 결정을 계산·적재만 한다(사용자 영향 0). Stage 2B(기본 OFF): factual tail
+    // 판정 시 web_search 결정적 주입(강제 포함 + 첫 턴 tool_choice) — 발동은 grounding_fired 로 적재.
+    // 특수모드(discussion/deep-research/image) 조기 return 이후이므로 일반 채팅 경로만 대상이다.
     try {
-        if ((await import('../../config/env')).getConfig().tailRoutingShadowEnabled) {
-            recordTailShadow({
-                requestId: routingLog.requestId,
-                userId,
-                queryLength: (message || '').length,
-                decision: evaluateTailGate(message || ''),
-            });
+        const tailCfg = (await import('../../config/env')).getConfig();
+        if (tailCfg.tailRoutingShadowEnabled || tailCfg.tailRouting2bEnabled) {
+            const tailDecision = evaluateTailGate(message || '');
+            const groundingFired = tailCfg.tailRouting2bEnabled
+                && tailDecision.isTail
+                && tailDecision.verifiability === 'factual';
+            if (groundingFired) {
+                reqCtx.tailWebGround = true;
+                logger.info('[TailGate] Stage 2B factual tail 판정 — web_search 그라운딩 활성');
+            }
+            if (tailCfg.tailRoutingShadowEnabled) {
+                recordTailShadow({
+                    requestId: routingLog.requestId,
+                    userId,
+                    queryLength: (message || '').length,
+                    decision: tailDecision,
+                    groundingFired,
+                });
+            }
         }
     } catch {
-        // 셰도우는 절대 채팅 흐름을 막지 않는다.
+        // 게이트는 절대 채팅 흐름을 막지 않는다.
     }
 
     // 자동 토론 활성화 추적 필드는 자동 분기 제거 (2026-05-07) 후 항상 false.
@@ -322,6 +335,7 @@ export async function runMessagePipeline(svc: ChatService,
         artifactGuideBlock: extArtifactGuide,
         answerFormatBlock: extAnswerFormatBlock,
         style: req.style,
+        tailWebGround: reqCtx.tailWebGround,
     }, reqCtx);
 
     // ── Step 5: 라우팅 로그 + 메트릭 기록 ──

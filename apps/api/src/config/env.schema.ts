@@ -128,6 +128,12 @@ export const envSchema = z
         THINKING_SUMMARY_ENABLED: z.string().default('true'),
         /** Tail 라우팅 셰도우 모드 — 게이트 결정 계산/적재만, 실행 무변경 (기본 false). */
         TAIL_ROUTING_SHADOW_ENABLED: z.string().default('false'),
+        /**
+         * Tail 라우팅 Stage 2B — factual tail(모델이 틀릴 법하고 사실 검증 가능) 판정 시
+         * web_search 를 강제 포함 + 첫 턴 tool_choice 강제(그라운딩). 셰도우로 tail 농축
+         * 확인 후 활성화할 것. 발동 여부는 routing_shadow_decisions.grounding_fired 에 적재.
+         */
+        TAIL_ROUTING_STAGE2B_ENABLED: z.string().default('false'),
         SEARCH_SEMANTIC_RERANK_SHADOW: z.string().default('false'),
         SEARCH_SEMANTIC_RERANK_ENABLED: z.string().default('false'),
         SEARCH_RERANK_EMBED_MODEL: z.string().optional(),

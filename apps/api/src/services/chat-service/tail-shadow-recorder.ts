@@ -22,8 +22,10 @@ export function recordTailShadow(params: {
     userId?: string;
     queryLength: number;
     decision: TailDecision;
+    /** Stage 2B web_search 그라운딩 발동 여부 (2B OFF 면 false) */
+    groundingFired?: boolean;
 }): void {
-    const { requestId, userId, queryLength, decision } = params;
+    const { requestId, userId, queryLength, decision, groundingFired } = params;
     void (async () => {
         try {
             const pool = getPool();
@@ -31,8 +33,9 @@ export function recordTailShadow(params: {
             await pool.query(
                 `INSERT INTO routing_shadow_decisions
                    (request_id, user_id, query_type, confidence, query_length,
-                    error_score, error_signals, verifiability, is_tail, would_route_to)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                    error_score, error_signals, verifiability, is_tail, would_route_to,
+                    grounding_fired)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
                 [
                     requestId ?? null,
                     userId && userId !== 'guest' ? userId : null,
@@ -44,6 +47,7 @@ export function recordTailShadow(params: {
                     decision.verifiability,
                     decision.isTail,
                     decision.wouldRouteTo,
+                    groundingFired ?? false,
                 ],
             );
         } catch (e) {

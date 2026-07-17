@@ -218,11 +218,14 @@ export class ChatService {
         // (예: "인터넷 검색해서 날씨 알려줘")은 도구 자체가 목록에 없어 모델이 "검색 불가"
         // 로 답하던 결함(2026-07-17 Discord) 차단. 포함되면 외부 경로의 첫 턴 tool_choice
         // 강제(external-provider)까지 연쇄 작동한다. (카카오 강제 포함과 동일 선례)
-        if (WEB_SEARCH_INTENT_PATTERNS.some((re) => re.test(reqCtx.message ?? ''))) {
+        if (WEB_SEARCH_INTENT_PATTERNS.some((re) => re.test(reqCtx.message ?? ''))
+            || reqCtx.tailWebGround === true) {
             const ws = allTools.find((x) => x.function.name === 'web_search');
             if (ws && !finalCombined.some((x) => x.function.name === ws.function.name)) {
                 finalCombined = [...finalCombined, ws];
-                logger.info('[WebSearch] 명시적 검색 요청 — web_search 강제 포함');
+                logger.info(reqCtx.tailWebGround === true
+                    ? '[TailGate] Stage 2B factual tail — web_search 강제 포함'
+                    : '[WebSearch] 명시적 검색 요청 — web_search 강제 포함');
             }
         }
         return this.applySkillCatalog(finalCombined, allTools, reqCtx);

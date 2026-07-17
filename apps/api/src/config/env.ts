@@ -59,6 +59,8 @@ export interface EnvConfig {
     thinkingSummaryEnabled: boolean;
     /** Tail 라우팅 셰도우 모드 — 게이트 결정을 계산/적재만 하고 실행은 바꾸지 않음 (기본 false). */
     tailRoutingShadowEnabled: boolean;
+    /** Tail 라우팅 Stage 2B — factual tail 판정 시 web_search 결정적 주입(그라운딩) (기본 false). */
+    tailRouting2bEnabled: boolean;
     /** 웹검색 의미 리랭킹 셰도우 — bge-m3 임베딩 리랭킹 결과를 로깅만 하고 실행은 안 바꿈 (기본 false). */
     searchSemanticRerankShadow: boolean;
     /** 웹검색 의미 리랭킹 실제 적용 — bge-m3 임베딩으로 상위 소스 순서를 재정렬 (기본 false, critical-path 지연). */
@@ -178,6 +180,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     userModelRolesEnabled: false,
     thinkingSummaryEnabled: true,
     tailRoutingShadowEnabled: false,
+    tailRouting2bEnabled: false,
     searchSemanticRerankShadow: false,
     searchSemanticRerankEnabled: false,
     searchRerankEmbedModel: 'bge-m3',
@@ -394,6 +397,7 @@ export function loadConfig(): EnvConfig {
         USER_MODEL_ROLES_ENABLED: env('USER_MODEL_ROLES_ENABLED'),
         THINKING_SUMMARY_ENABLED: env('THINKING_SUMMARY_ENABLED'),
         TAIL_ROUTING_SHADOW_ENABLED: env('TAIL_ROUTING_SHADOW_ENABLED'),
+        TAIL_ROUTING_STAGE2B_ENABLED: env('TAIL_ROUTING_STAGE2B_ENABLED'),
         SEARCH_SEMANTIC_RERANK_SHADOW: env('SEARCH_SEMANTIC_RERANK_SHADOW'),
         SEARCH_SEMANTIC_RERANK_ENABLED: env('SEARCH_SEMANTIC_RERANK_ENABLED'),
         SEARCH_RERANK_EMBED_MODEL: env('SEARCH_RERANK_EMBED_MODEL'),
@@ -498,6 +502,7 @@ export function loadConfig(): EnvConfig {
         userModelRolesEnabled: (parsed.USER_MODEL_ROLES_ENABLED ?? 'false').toLowerCase() === 'true',
         thinkingSummaryEnabled: (parsed.THINKING_SUMMARY_ENABLED ?? 'true').toLowerCase() === 'true',
         tailRoutingShadowEnabled: (parsed.TAIL_ROUTING_SHADOW_ENABLED ?? 'false').toLowerCase() === 'true',
+        tailRouting2bEnabled: (parsed.TAIL_ROUTING_STAGE2B_ENABLED ?? 'false').toLowerCase() === 'true',
         searchSemanticRerankShadow: (parsed.SEARCH_SEMANTIC_RERANK_SHADOW ?? 'false').toLowerCase() === 'true',
         searchSemanticRerankEnabled: (parsed.SEARCH_SEMANTIC_RERANK_ENABLED ?? 'false').toLowerCase() === 'true',
         searchRerankEmbedModel: parsed.SEARCH_RERANK_EMBED_MODEL || DEFAULT_CONFIG.searchRerankEmbedModel,

@@ -26,4 +26,9 @@ export interface RequestContext {
     executionPlan?: ExecutionPlan;
     /** 활성 skill tool_bindings — agent 선택 직후 채워짐 */
     skillBindings: ActiveSkillBinding[];
+    /**
+     * Tail 라우팅 Stage 2B — factual tail 판정 시 true. getAllowedTools 의
+     * web_search 강제 포함 + external-provider 첫 턴 tool_choice 강제로 연쇄.
+     */
+    tailWebGround?: boolean;
 }
