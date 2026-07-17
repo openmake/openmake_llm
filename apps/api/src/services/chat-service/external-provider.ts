@@ -13,7 +13,7 @@
  * @module services/chat-service/external-provider
  */
 import { createLogger } from '../../utils/logger';
-import { EXTERNAL_LLM_TOOL_BLACKLIST, LOOP_DETECTION, AGENT_LOOP_LIMITS, MAX_TOOL_RESULT_CHARS, ARTIFACT_REQUEST_SUPPRESSED_TOOLS, ARTIFACT_INTENT_PATTERNS, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS, EXTERNAL_LLM_INPUT_TOKEN_BUDGET } from '../../config/runtime-limits';
+import { EXTERNAL_LLM_TOOL_BLACKLIST, LOOP_DETECTION, AGENT_LOOP_LIMITS, MAX_TOOL_RESULT_CHARS, ARTIFACT_REQUEST_SUPPRESSED_TOOLS, ARTIFACT_INTENT_PATTERNS, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS, EXTERNAL_LLM_INPUT_TOKEN_BUDGET } from '../../config/runtime-limits';
 import { estimateMessageTokens, truncateMessagesPreservingSystem } from '../../llm/model-pool';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { isPersistableUserId } from '../../utils/user-id-validation';
@@ -157,6 +157,17 @@ export async function streamFromExternalProvider(
     if (forcedKakaoToolName) {
         logger.info(`[Map] 첫 턴 tool_choice 강제: ${forcedKakaoToolName}`);
     }
+    // 명시적 웹 검색 요청이면 첫 턴에 web_search 를 강제한다 — 봇 히스토리에 남은
+    // "검색 불가/오프라인" 자기 발언 재주입 시 qwen 이 시스템 지시로도 교정되지 않고
+    // 도구 호출을 거부하는 환각의 결정적 차단 (카카오 tool_choice 강제와 동일 선례).
+    const forcedWebSearchToolName = !forcedKakaoToolName
+        && WEB_SEARCH_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''))
+        ? tools.find((t) => t.function.name === 'web_search')?.function.name
+        : undefined;
+    if (forcedWebSearchToolName) {
+        logger.info('[WebSearch] 명시적 검색 요청 — 첫 턴 tool_choice 강제: web_search');
+    }
+    const forcedFirstTurnToolName = forcedKakaoToolName ?? forcedWebSearchToolName;
 
     const startedAt = Date.now();
     let errorCode: string | null = null;
@@ -212,9 +223,9 @@ export async function streamFromExternalProvider(
                     modelId: resolved.modelId,
                     thinking: req.thinkingMode === true,
                     ...(turnTools.length > 0 ? { tools: turnTools } : {}),
-                    // 첫 턴만 카카오 도구 강제 — 이후 턴은 auto(모델이 결과로 답변 작성).
-                    ...(turn === 0 && forcedKakaoToolName && turnTools.length > 0
-                        ? { tool_choice: { type: 'function' as const, function: { name: forcedKakaoToolName } } }
+                    // 첫 턴만 도구 강제(카카오 지도 또는 명시적 웹 검색) — 이후 턴은 auto(모델이 결과로 답변 작성).
+                    ...(turn === 0 && forcedFirstTurnToolName && turnTools.length > 0
+                        ? { tool_choice: { type: 'function' as const, function: { name: forcedFirstTurnToolName } } }
                         : {}),
                     ...(req.abortSignal ? { abortSignal: req.abortSignal } : {}),
                 },

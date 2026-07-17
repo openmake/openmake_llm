@@ -1207,6 +1207,19 @@ export const MAP_INTENT_PATTERNS: readonly RegExp[] = [
 ] as const;
 
 /**
+ * 명시적 웹 검색 요청 패턴 — 매칭 + web_search 도구 제공 시 첫 턴 tool_choice 로 web_search
+ * 를 강제한다. 봇 히스토리에 남은 "검색 불가/오프라인" 자기 발언이 재주입되면 qwen 이 시스템
+ * 지시로도 교정되지 않고 도구 호출 자체를 거부하는 환각(2026-07-17 Discord 사례) 의 결정적
+ * 차단 장치. (카카오 지도 tool_choice 강제와 동일 선례 — 넛지·프롬프트만으론 불충분)
+ */
+export const WEB_SEARCH_INTENT_PATTERNS: readonly RegExp[] = [
+    /(인터넷|웹|온라인)[^\n]{0,10}(검색|검샏|찾아)/,
+    /검색(해\s*서|해\s*줘|해\s*봐|으로|해서|해줘|해봐)/,
+    /(최신|오늘|지금|현재)[^\n]{0,12}(뉴스|날씨|시세|가격|환율)[^\n]{0,10}(알려|찾아|검색|조사)/,
+    /web\s*search|search\s+(the\s+)?(web|internet|online)/i,
+] as const;
+
+/**
  * 길찾기(경로) 의도 판정 패턴. 매칭 시 카카오 find-route 도구를 강제 포함·호출해
  * 출발/도착 마커 + 경로를 지도에 표시한다. (MAP_INTENT 의 부분집합 — 경로 전용)
  */
