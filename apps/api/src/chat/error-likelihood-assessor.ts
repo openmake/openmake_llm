@@ -23,12 +23,17 @@ export interface ErrorLikelihood {
 
 /**
  * 쿼리가 모델이 틀릴 법한 유형인지 무-LLM 피처로 평가한다.
+ *
+ * @param weightsOverride - 오프라인 리플레이 튜닝용 가중치 주입 (기본: config SoT)
  */
+export type ErrorLikelihoodWeights = Record<keyof typeof ERROR_LIKELIHOOD_WEIGHTS, number>;
+
 export function assessErrorLikelihood(
     query: string,
     classification: QueryClassification,
+    weightsOverride?: ErrorLikelihoodWeights,
 ): ErrorLikelihood {
-    const W = ERROR_LIKELIHOOD_WEIGHTS;
+    const W = weightsOverride ?? ERROR_LIKELIHOOD_WEIGHTS;
     const P = TAIL_GATE_PATTERNS;
     let score = ERROR_LIKELIHOOD_NEUTRAL;
     const signals: string[] = [];

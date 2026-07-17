@@ -119,8 +119,12 @@ export const ERROR_LIKELIHOOD_WEIGHTS = {
     VERIFIABLE_FACT: 0.20,
     /** novelty/OOD (프로젝트 고유어·비표준 스펙) — 교과서 밖에서만 틀림 */
     NOVELTY_OOD: 0.20,
-    /** 낮은 분류 신뢰도 — 모델도 헷갈림의 프록시 */
-    LOW_CONFIDENCE: 0.15,
+    /**
+     * 낮은 분류 신뢰도 — 모델도 헷갈림의 프록시.
+     * 2026-07-18 judge 라벨 Q4 실측(n=66)으로 강등: fail 60.6% ≈ baseline 54.2%
+     * (변별력 없음). 신호 자체는 계속 발동·적재해 후속 관측은 유지한다.
+     */
+    LOW_CONFIDENCE: 0.05,
     /** 정확 수치 계산 요구 */
     NUMERIC_EXACT: 0.10,
     /** 매우 짧음 길이 임계값 */
