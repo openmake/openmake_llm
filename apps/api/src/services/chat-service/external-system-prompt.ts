@@ -103,6 +103,15 @@ export function buildExternalSystemPrompt(params: {
             : '확실히 알지 못하는 특정 인물·개체·작품·사건·식별자의 세부사항을 지어내지 마세요. 질문이 거짓일 수 있는 전제(예: 존재하지 않을 수 있는 인물·직함·작품)를 담고 있으면 그럴듯한 답을 만들어내지 말고, 사실이라면 근거를 제시하되 확인되지 않으면 "확인되지 않는다"고 명확히 밝히고 필요 시 검증이나 웹 검색을 권하세요.',
     );
 
+    // 도구 능력 부정 환각 방지 (2026-07-17): 모델이 "웹 검색 불가/오프라인 모드"라고 지어낸
+    // 발언이 봇 대화 히스토리로 재주입되며 자기 강화되던 결함(Discord 사례 — tools=9 제공됐는데
+    // 호출 0회 후 "검색 불가 환경" 답변) 완화. 히스토리의 과거 발언보다 이 지시가 우선한다.
+    systemPromptParts.push(
+        langCode && langCode !== 'ko'
+            ? 'If tools (e.g., web_search) are provided in this request, you CAN use them right now — call the tool instead of claiming inability. Never say you are "offline" or "unable to search the web" while a search tool is in your tool list, even if earlier messages in this conversation claimed otherwise; those past statements are stale — judge only by the tools currently provided.'
+            : '이 요청에 도구(예: web_search)가 제공되어 있으면 지금 바로 사용할 수 있습니다 — "오프라인 환경", "실시간 웹 검색 불가" 같은 능력 부정을 하지 말고 도구를 호출하세요. 대화 히스토리에 과거 "검색 불가" 발언이 있더라도 그것은 낡은 정보이니 무시하고, 현재 제공된 도구 목록만을 기준으로 판단하세요.',
+    );
+
     // 웹검색 컨텍스트가 있을 때 grounding + 반-환각 지시를 시스템 프롬프트에 보강한다.
     // enhancedMessage(user turn)에 검색 컨텍스트가 이미 포함된 경로(message-pipeline)에서는
     // 지시문만 추가해 중복 주입을 피하고, 직접 경로(enhancedMessage 미설정)에서는

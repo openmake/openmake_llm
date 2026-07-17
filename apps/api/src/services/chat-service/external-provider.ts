@@ -351,7 +351,7 @@ export async function streamFromExternalProvider(
             logger.warn(`⏳ 외부 LLM 턴 예산 소진(${MAX_TOOL_TURNS}턴) — 도구 비활성 최종 턴으로 답변 강제`);
             messages.push({
                 role: 'user',
-                content: '도구 호출 한도에 도달했습니다. 추가 도구 호출 없이 지금까지 수집한 정보로 사용자 요청에 대한 답변(필요 시 <artifact> 산출물 포함)을 반드시 완성하세요.',
+                content: '도구 호출 한도에 도달했습니다. 추가 도구 호출 없이 지금까지 수집한 정보로 사용자 요청에 대한 답변(필요 시 <artifact> 산출물 포함)을 반드시 완성하세요. (이 제한은 이번 응답 1회에만 적용되는 일시 조치입니다 — 당신의 웹 검색·도구 능력이 사라진 것이 아니므로, 답변에서 "검색 불가/오프라인"이라고 말하지 마세요.)',
             });
             const fittedFinal = estimateMessageTokens(messages) > EXTERNAL_LLM_INPUT_TOKEN_BUDGET
                 ? truncateMessagesPreservingSystem(messages, EXTERNAL_LLM_INPUT_TOKEN_BUDGET)
