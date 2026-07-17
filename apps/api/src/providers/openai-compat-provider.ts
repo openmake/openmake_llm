@@ -542,7 +542,7 @@ export class OpenAICompatProvider implements IProvider {
                 try {
                     args = buf.jsonBuffer ? JSON.parse(buf.jsonBuffer) : {};
                 } catch (parseErr) {
-                    logger.warn(`tool_call arguments 파싱 실패: ${parseErr}`);
+                    logger.warn(`tool_call arguments 파싱 실패 — {} 로 강등: tool=${buf.name} raw=${buf.jsonBuffer.slice(0, 200)} (${parseErr})`);
                 }
                 const call = { id: buf.id, name: buf.name, args };
                 toolCalls.push(call);

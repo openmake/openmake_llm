@@ -356,7 +356,9 @@ export async function streamChat(
         try {
             args = buf.jsonBuffer ? JSON.parse(buf.jsonBuffer) : {};
         } catch {
-            // parsing error — keep empty object
+            // 인자 JSON 절단/불량 — {} 로 강등하되 반드시 관측 로그를 남긴다.
+            // (silent 강등 시 "모델이 인자를 안 보낸 것"과 구분 불가 — 2026-07-17 web_search 사건)
+            log.warn(`tool call 인자 JSON 파싱 실패 — {} 로 강등: tool=${buf.name} raw=${buf.jsonBuffer.slice(0, 200)}`);
         }
         // vLLM 발급 id 보존 — agent-loop 다음 턴에서 tool 메시지 tool_call_id 와 일치 필요.
         toolCalls.push({ type: 'function', id: buf.id, function: { name: buf.name, arguments: args } });
@@ -467,7 +469,8 @@ export async function nonStreamChat(
         try {
             args = JSON.parse(tc.function.arguments);
         } catch {
-            // parsing error — keep empty
+            // 인자 JSON 불량 — {} 강등 + 관측 로그 (스트리밍 경로와 동일 원칙)
+            log.warn(`tool call 인자 JSON 파싱 실패 — {} 로 강등: tool=${tc.function.name} raw=${String(tc.function.arguments).slice(0, 200)}`);
         }
         // vLLM 발급 id 보존 — non-stream 응답에서도 동일 원칙.
         return { type: 'function' as const, id: tc.id, function: { name: tc.function.name, arguments: args } };

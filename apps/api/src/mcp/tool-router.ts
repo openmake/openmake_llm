@@ -275,6 +275,17 @@ export class ToolRouter {
             // 2. 내장 도구 확인
             const builtIn = builtInTools.find((def: MCPToolDefinition) => def.tool.name === name);
             if (builtIn) {
+                // 실행 시점 required 인자 검증 — 지금까지 inputSchema.required 는 LLM 노출용으로만
+                // 쓰여, 모델이 인자 JSON 을 누락/절단해 보내면 핸들러 깊숙이 undefined 가 흘러들어
+                // 런타임 에러로 터졌다 (2026-07-17 web_search query 누락 → performWebSearch
+                // toLowerCase TypeError). 단일 chokepoint 에서 차단하고, 모델이 다음 턴에 자가
+                // 교정할 수 있는 invalid_args 에러로 반환한다. (외부 MCP 도구는 각 서버가 자체
+                // 검증하므로 범위 제외)
+                const missing = (builtIn.tool.inputSchema.required ?? [])
+                    .filter((key) => args[key] === undefined || args[key] === null);
+                if (missing.length > 0) {
+                    return fail(`필수 인자 누락 (${name}): ${missing.join(', ')} — 누락된 인자를 모두 포함해 도구를 다시 호출하세요.`);
+                }
                 try {
                     return finalize(await builtIn.handler(args, context));
                 } catch (error) {

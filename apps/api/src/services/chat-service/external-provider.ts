@@ -343,6 +343,40 @@ export async function streamFromExternalProvider(
             }
         }
         if (!result) throw new Error('streamChat 호출 결과 없음');
+
+        // C. 턴 소진 방어: 마지막 턴까지 도구 호출로 끝나면(리서치형 요청이 전 턴을 도구에
+        // 소진) 최종 답변 본문이 없어 빈/스텁 content 가 반환된다 — wall-clock·doom-loop
+        // 가드와 동일하게 도구를 끈 마무리 턴을 1회 실행해 답변을 강제한다.
+        if (result.toolCalls && result.toolCalls.length > 0) {
+            logger.warn(`⏳ 외부 LLM 턴 예산 소진(${MAX_TOOL_TURNS}턴) — 도구 비활성 최종 턴으로 답변 강제`);
+            messages.push({
+                role: 'user',
+                content: '도구 호출 한도에 도달했습니다. 추가 도구 호출 없이 지금까지 수집한 정보로 사용자 요청에 대한 답변(필요 시 <artifact> 산출물 포함)을 반드시 완성하세요.',
+            });
+            const fittedFinal = estimateMessageTokens(messages) > EXTERNAL_LLM_INPUT_TOKEN_BUDGET
+                ? truncateMessagesPreservingSystem(messages, EXTERNAL_LLM_INPUT_TOKEN_BUDGET)
+                : messages;
+            result = await resolved.provider.streamChat(
+                {
+                    messages: fittedFinal,
+                    modelId: resolved.modelId,
+                    thinking: req.thinkingMode === true,
+                    ...(req.abortSignal ? { abortSignal: req.abortSignal } : {}),
+                },
+                {
+                    onToken: (token) => onToken(token, undefined),
+                    onThinking: (thinking) => onToken('', thinking),
+                    onUsage: (usage) => {
+                        deps.onUsage?.(usage);
+                        inputTokensTotal += usage.prompt_tokens ?? 0;
+                        outputTokensTotal += usage.completion_tokens ?? 0;
+                        if (usage.cost_usd_micros !== undefined) {
+                            directCostUsdMicrosTotal = (directCostUsdMicrosTotal ?? 0) + usage.cost_usd_micros;
+                        }
+                    },
+                },
+            );
+        }
     } catch (err) {
         errorCode = err && typeof err === 'object' && 'code' in err
             ? String((err as { code: unknown }).code)
