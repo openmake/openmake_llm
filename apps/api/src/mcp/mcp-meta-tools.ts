@@ -40,7 +40,14 @@ export const mcpListToolsTool: MCPToolDefinition = {
         const { getUnifiedMCPClient } = await import('./unified-client');
         const router = getUnifiedMCPClient().getToolRouter();
         const groups = router.getUserPoolToolGroups(userId);
-        if (groups.length === 0) return text('설치된 MCP 서버가 없습니다. MCP 카탈로그에서 설치하세요.');
+        // "없습니다"만 반환하면 모델이 "검색/도구 불가 환경"으로 오일반화해 내장 도구까지
+        // 안 쓰는 환각을 확증시킨다(2026-07-17 Discord 사례) — 내장 도구 가용을 함께 명시.
+        if (groups.length === 0) {
+            return text(
+                '설치된 외부 MCP 서버가 없습니다. 단, 기본 내장 도구(현재 도구 목록의 web_search 등)는 '
+                + 'MCP 설치와 무관하게 지금 바로 사용할 수 있습니다. 웹 검색이 필요하면 web_search 도구를 직접 호출하세요.',
+            );
+        }
 
         const server = typeof args.server === 'string' ? args.server.trim() : '';
         if (!server) return text('설치된 MCP 서버: ' + groups.map(g => g.displayName).join(', '));
