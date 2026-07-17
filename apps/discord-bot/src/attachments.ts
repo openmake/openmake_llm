@@ -30,6 +30,8 @@ export interface PreparedReply {
 const GENERATED_IMG_RE = /!?\[([^\]]*)\]\((\/generated\/[^)\s]+)\)/g;
 /** Discord 무료 서버 첨부 상한(10MB)보다 보수적으로 */
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+/** 메시지 전체 첨부 합계 상한 — 개별 캡만으로는 총 업로드 한도 초과로 reply 가 통째로 거절될 수 있음 */
+const MAX_TOTAL_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 /** Discord 메시지당 첨부 파일 상한 */
 const MAX_FILES_PER_MESSAGE = 10;
 
@@ -45,18 +47,17 @@ const KIND_EXT: Record<string, string> = {
     excalidraw: 'json',
 };
 
-/** kind='code' 는 language 를 확장자로 (안전한 토큰만), 그 외 txt */
+const LANG_EXT: Record<string, string> = {
+    typescript: 'ts', javascript: 'js', python: 'py', 'c++': 'cpp', 'c#': 'cs', shell: 'sh', bash: 'sh',
+};
+
+/** kind='code' 는 language 를 확장자로 — 매핑 먼저 적용 후 최종 확장자만 검증 ('c#' 같은 특수문자 언어도 매핑 도달) */
 function extFor(artifact: ResponseArtifact): string {
     const byKind = KIND_EXT[artifact.kind];
     if (byKind) return byKind;
     const lang = (artifact.language || '').toLowerCase().trim();
-    if (/^[a-z0-9+]{1,10}$/.test(lang)) {
-        const LANG_EXT: Record<string, string> = {
-            typescript: 'ts', javascript: 'js', python: 'py', 'c++': 'cpp', 'c#': 'cs', shell: 'sh', bash: 'sh',
-        };
-        return LANG_EXT[lang] || lang;
-    }
-    return 'txt';
+    const mapped = LANG_EXT[lang] || lang;
+    return /^[a-z0-9]{1,10}$/.test(mapped) ? mapped : 'txt';
 }
 
 /** 파일명 안전화 — 경로/제어문자 제거, 길이 제한 */
@@ -95,14 +96,21 @@ export async function prepareReply(answer: string, artifacts: ResponseArtifact[]
         if (!imagePaths.includes(relPath)) imagePaths.push(relPath);
         return ''; // 첨부로 대체 — 본문에서 마크다운 제거
     });
-    for (const relPath of imagePaths) {
-        if (files.length >= MAX_FILES_PER_MESSAGE) break;
-        const buf = await downloadGenerated(relPath);
+    let totalBytes = 0;
+    // 독립 파일이라 병렬 다운로드 — 첨부 여부는 순서대로 캡(개수·합계) 적용
+    const downloads = await Promise.all(
+        imagePaths.slice(0, MAX_FILES_PER_MESSAGE).map(async (relPath) => ({
+            relPath,
+            buf: await downloadGenerated(relPath),
+        })),
+    );
+    for (const { relPath, buf } of downloads) {
         const filename = relPath.split('/').pop() || 'image.png';
-        if (buf) {
+        if (buf && files.length < MAX_FILES_PER_MESSAGE && totalBytes + buf.length <= MAX_TOTAL_ATTACHMENT_BYTES) {
             files.push({ attachment: buf, name: filename });
+            totalBytes += buf.length;
         } else {
-            content += `\n⚠️ 이미지 첨부 실패: \`${filename}\``;
+            content += `\n⚠️ 이미지 첨부 실패/생략: \`${filename}\``;
         }
     }
 
@@ -110,8 +118,13 @@ export async function prepareReply(answer: string, artifacts: ResponseArtifact[]
     for (const a of artifacts) {
         const filename = `${safeFilename(a.title, a.id)}.${extFor(a)}`;
         const buf = Buffer.from(a.content, 'utf8');
-        const attached = buf.length <= MAX_ATTACHMENT_BYTES && files.length < MAX_FILES_PER_MESSAGE;
-        if (attached) files.push({ attachment: buf, name: filename });
+        const attached = buf.length <= MAX_ATTACHMENT_BYTES
+            && files.length < MAX_FILES_PER_MESSAGE
+            && totalBytes + buf.length <= MAX_TOTAL_ATTACHMENT_BYTES;
+        if (attached) {
+            files.push({ attachment: buf, name: filename });
+            totalBytes += buf.length;
+        }
 
         const parts = [`📎 **${a.title || a.id}**`];
         if (a.shareUrl) parts.push(`렌더 보기: ${a.shareUrl}`);

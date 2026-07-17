@@ -90,7 +90,7 @@ export interface OpenAIChatCompletionChunk {
     model: string;
     choices: Array<{
         index: number;
-        delta: { role?: string; content?: string; tool_calls?: unknown[] };
+        delta: { role?: string; content?: string; tool_calls?: unknown[]; artifacts?: OpenAICompatArtifact[] };
         finish_reason: string | null;
     }>;
 }
@@ -221,7 +221,7 @@ export class OpenAICompatService {
     static buildStreamChunk(params: {
         id: string;
         model: string;
-        delta: { role?: string; content?: string; tool_calls?: unknown[] };
+        delta: { role?: string; content?: string; tool_calls?: unknown[]; artifacts?: OpenAICompatArtifact[] };
         finishReason: string | null;
     }): OpenAIChatCompletionChunk {
         return {

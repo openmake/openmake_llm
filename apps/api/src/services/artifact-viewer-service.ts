@@ -295,6 +295,21 @@ export async function publishArtifactAsLink(
             title: latest.title,
         });
         await exportPublicationViewer(pub, versions);
+        // 감사 추적 — JWT /publish 라우트와 동일한 artifact_publish 이벤트 (Audit↔Alert SoT).
+        // fire-and-forget: 감사 실패가 발행 자체를 막지 않게 한다.
+        void import('./AuditService')
+            .then((m) => m.getAuditService().logAudit({
+                action: 'artifact_publish',
+                userId: ownerUserId ?? undefined,
+                details: {
+                    publicationId: pub.publication_id,
+                    artifactId,
+                    visibility: 'link',
+                    sharedVersion: null,
+                    source: 'openai_compat_publish_artifacts',
+                },
+            }))
+            .catch((e) => logger.warn(`artifact_publish 감사 기록 실패: ${e instanceof Error ? e.message : e}`));
         return composeShareUrl(pub);
     } catch (e) {
         logger.warn(`link 발행 실패 (graceful): sid=${sessionId} aid=${artifactId}: ${e instanceof Error ? e.message : e}`);

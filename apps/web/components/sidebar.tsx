@@ -227,14 +227,15 @@ export function Sidebar() {
                 );
               })}
             </ul>
-            <Link
-              href="/history"
-              className="mt-1 flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm text-muted transition hover:bg-surface-3 hover:text-fg"
-            >
-              {t("viewAll")} →
-            </Link>
           </div>
         )}
+        {/* 히스토리 진입점 — 최근 대화 유무와 무관하게 상시 노출 (없으면 이 링크가 /history 유일 경로) */}
+        <Link
+          href="/history"
+          className="mt-1 flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm text-muted transition hover:bg-surface-3 hover:text-fg"
+        >
+          {t("viewAll")} →
+        </Link>
       </nav>
 
       <div ref={menuRef} className="relative flex items-center gap-2.5 border-t border-border px-3 py-3">

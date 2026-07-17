@@ -88,6 +88,39 @@ function openaiError(res: Response, status: number, message: string): void {
     });
 }
 
+/**
+ * OpenMake 확장: 추출된 artifacts 를 응답에 동봉 (본문엔 [[artifact:id]] placeholder 만 남음).
+ * publish_artifacts=true(옵트인) 면 link 발행 후 shareUrl 포함 — Discord gateway 등 비 WS 클라이언트용.
+ * 발행은 아티팩트별 독립이라 병렬 수행.
+ */
+async function buildArtifactsOut(
+    result: { artifacts?: Array<{ id: string; kind: string; title: string; lang: string | null; version: number; content: string }>; sessionId: string },
+    body: OpenAIChatCompletionRequest,
+    userContext: ChatUserContext,
+): Promise<OpenAICompatArtifact[] | undefined> {
+    if (!result.artifacts || result.artifacts.length === 0) return undefined;
+    const artifactsOut: OpenAICompatArtifact[] = result.artifacts.map((a) => ({
+        id: a.id,
+        kind: a.kind,
+        title: a.title,
+        language: a.lang,
+        version: a.version,
+        content: a.content,
+    }));
+    if (body.publish_artifacts === true) {
+        const { publishArtifactAsLink } = await import('../services/artifact-viewer-service');
+        await Promise.all(artifactsOut.map(async (a) => {
+            const shareUrl = await publishArtifactAsLink(
+                result.sessionId,
+                a.id,
+                userContext.authenticatedUserId ?? null,
+            );
+            if (shareUrl) a.shareUrl = shareUrl;
+        }));
+    }
+    return artifactsOut;
+}
+
 openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, res: Response) => {
     const body = req.body as OpenAIChatCompletionRequest;
 
@@ -195,6 +228,19 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
                 }))}\n\n`);
             }
 
+            // OpenMake 확장: 스트리밍에서도 artifacts 를 마지막 delta 로 동봉 — 비스트리밍과 대칭.
+            if (!aborted) {
+                const artifactsOut = await buildArtifactsOut(result, body, userContext);
+                if (artifactsOut) {
+                    res.write(`data: ${JSON.stringify(OpenAICompatService.buildStreamChunk({
+                        id: completionId,
+                        model: resultModel,
+                        delta: { artifacts: artifactsOut },
+                        finishReason: null,
+                    }))}\n\n`);
+                }
+            }
+
             if (!aborted) {
                 res.write(`data: ${JSON.stringify(OpenAICompatService.buildStreamChunk({
                     id: completionId,
@@ -243,30 +289,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
         const promptTokens = OpenAICompatService.estimateTokens(promptTextParts.join(' '));
         const completionTokens = OpenAICompatService.estimateTokens(result.response);
 
-        // OpenMake 확장: 추출된 artifacts 를 응답에 동봉 (본문엔 [[artifact:id]] placeholder 만 남음).
-        // publish_artifacts=true(옵트인) 면 link 발행 후 shareUrl 포함 — Discord gateway 등 비 WS 클라이언트용.
-        let artifactsOut: OpenAICompatArtifact[] | undefined;
-        if (result.artifacts && result.artifacts.length > 0) {
-            artifactsOut = result.artifacts.map((a) => ({
-                id: a.id,
-                kind: a.kind,
-                title: a.title,
-                language: a.lang,
-                version: a.version,
-                content: a.content,
-            }));
-            if (body.publish_artifacts === true) {
-                const { publishArtifactAsLink } = await import('../services/artifact-viewer-service');
-                for (const a of artifactsOut) {
-                    const shareUrl = await publishArtifactAsLink(
-                        result.sessionId,
-                        a.id,
-                        userContext.authenticatedUserId ?? null,
-                    );
-                    if (shareUrl) a.shareUrl = shareUrl;
-                }
-            }
-        }
+        const artifactsOut = await buildArtifactsOut(result, body, userContext);
 
         const response = OpenAICompatService.buildResponse({
             id: completionId,

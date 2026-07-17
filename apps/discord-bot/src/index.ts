@@ -55,15 +55,26 @@ async function handleChat(message: Message, botUserId: string): Promise<void> {
 
     try {
         const answer = await requestChatCompletion(getHistory(key), content);
-        appendTurns(key, content, answer.content);
         // 생성 이미지·아티팩트 → 파일 첨부 + 뷰어 링크 (Discord 는 md 이미지/artifact 렌더 불가)
         const prepared = await prepareReply(answer.content, answer.artifacts);
+        // 아티팩트 전용 응답은 content 가 '' — 빈 assistant 턴이 세션 히스토리를 오염시키지 않게 치환본 저장
+        appendTurns(key, content, answer.content.trim() ? answer.content : prepared.content);
         const chunks = splitForDiscord(prepared.content);
-        await message.reply({
-            content: chunks[0],
-            files: prepared.files,
-            allowedMentions: { repliedUser: true, parse: [] },
-        });
+        try {
+            await message.reply({
+                content: chunks[0],
+                files: prepared.files,
+                allowedMentions: { repliedUser: true, parse: [] },
+            });
+        } catch (sendErr) {
+            // 첨부 거절(업로드 한도 등) 시 답변 텍스트까지 잃지 않게 텍스트만 재전송
+            if (prepared.files.length === 0) throw sendErr;
+            console.warn(`[discord-bot] 첨부 전송 실패 — 텍스트만 재시도 (${key}):`, sendErr instanceof Error ? sendErr.message : sendErr);
+            await message.reply({
+                content: `${chunks[0]}\n⚠️ 첨부 업로드에 실패해 텍스트만 전송합니다.`,
+                allowedMentions: { repliedUser: true, parse: [] },
+            });
+        }
         for (const chunk of chunks.slice(1)) {
             if ('send' in channel) {
                 await channel.send({ content: chunk, allowedMentions: { parse: [] } });
