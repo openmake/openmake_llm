@@ -28,6 +28,7 @@ import { LLMClient, createClient as createDirectClient } from '../llm';
 import { ChatService } from '../services/ChatService';
 import type { ChatMessageRequest } from '../services/ChatService';
 import { buildExecutionPlan } from './profile-resolver';
+import { applySlashCommand } from './slash-command';
 import { detectFastPath } from './fast-path-detector';
 import { historySummaryCache } from '../services/chat-service/history-summary-cache';
 import { summarizeHistory } from './history-summarizer';
@@ -173,7 +174,7 @@ export class ChatRequestHandler {
      */
     static async processChat(params: ChatRequestParams): Promise<ChatResult> {
         const {
-            message,
+            message: rawMessage,
             model,
             nodeId,
             history,
@@ -205,6 +206,14 @@ export class ChatRequestHandler {
             onSystemEvent,
             userLanguagePreference,
         } = params;
+
+        // 슬래시 스킬 명령 대칭 적용 — WS 경로(ws-chat-handler)는 processChat 호출 전에 적용하지만
+        // REST(chat.routes)·OpenAI-compat(Discord 봇) 경로는 누락돼 /스킬명 호출이 무시됐다
+        // (외부 분기 대칭 결함, 2026-07-17). 이미 증강된 메시지는 '/'로 시작하지 않아
+        // 재적용이 no-op(멱등)이므로 WS 이중 적용 걱정 없이 단일 chokepoint 에서 처리한다.
+        const message = await applySlashCommand((rawMessage ?? '').trim(), {
+            ...(userContext.authenticatedUserId ? { userId: String(userContext.authenticatedUserId) } : {}),
+        });
 
         // 1. ExecutionPlan 해석
         const { plan, engineModel } = ChatRequestHandler.buildPlan(model || '');
