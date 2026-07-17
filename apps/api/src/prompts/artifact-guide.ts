@@ -190,7 +190,8 @@ function App() {
 3. 카드/표/코드블록은 \`var(--surface)\` + \`var(--border)\` + \`var(--sh-2)\`, 본문 텍스트는 \`var(--fg)\`/보조는 \`var(--muted)\`
 4. \`[data-theme="dark"]\` 토큰 블록 포함 + 상단에 다크모드 토글 버튼(JS 3줄)
 5. 액센트(\`var(--accent)\`)는 링크·버튼·강조 소수 지점에만 — 차분한 그래파이트 톤 유지
-이 5개를 지키지 않은 html 은 미완성으로 간주됩니다. 사용자가 명시적으로 다른 스타일을 요청한 경우에만 예외.`;
+이 5개를 지키지 않은 html 은 미완성으로 간주됩니다. 사용자가 명시적으로 다른 스타일을 요청한 경우에만 예외.
+⚠️ 대화 히스토리에 이전에 생성한 html(다른 서체·그라데이션 배경 등)이 있어도 **그 스타일을 따라 하지 마세요** — 재작성·새 문서는 항상 위 5항 규칙이 우선입니다.`;
 
 const EN_GUIDE = `
 
@@ -298,7 +299,8 @@ the artifact body outside — the user will see it twice.
 3. Cards/tables/code blocks use \`var(--surface)\` + \`var(--border)\` + \`var(--sh-2)\`; body text \`var(--fg)\`, secondary \`var(--muted)\`
 4. Include the \`[data-theme="dark"]\` token block + a small dark-mode toggle (3 lines of JS)
 5. Use \`var(--accent)\` sparingly (links/buttons/highlights only) — keep the calm graphite tone
-HTML that violates these five is considered unfinished. Deviate only when the user explicitly requests a different style.`;
+HTML that violates these five is considered unfinished. Deviate only when the user explicitly requests a different style.
+⚠️ Even if earlier HTML in this conversation used a different style (other fonts, gradient backgrounds), do NOT imitate it — for rewrites and new documents these five rules always take precedence.`;
 
 /**
  * 사용자 언어에 맞는 artifact guide 반환. artifacts_enabled=false 면 호출자가 skip.
