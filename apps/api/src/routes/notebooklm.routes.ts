@@ -14,7 +14,7 @@
 import { Router, Request, Response } from 'express';
 import LRUCache from 'lru-cache';
 import { requireAuth } from '../auth';
-import { success, notFound } from '../utils/api-response';
+import { success, notFound, error as errorResponse } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { McpCatalogRepository } from '../data/repositories/mcp-catalog-repository';
@@ -83,21 +83,30 @@ notebooklmRouter.get('/notebooklm/notebooks', requireAuth, asyncHandler(async (r
 
     const supervisor = getLifecycleSupervisor();
     if (!supervisor) {
-        res.status(503).json({ success: false, error: { code: 'SUPERVISOR_UNAVAILABLE', message: 'MCP supervisor 미초기화' } });
+        res.status(503).json(errorResponse('SUPERVISOR_UNAVAILABLE', 'MCP supervisor 미초기화'));
         return;
     }
 
-    const client = await supervisor.spawnUserServer(userId, server.id);
-    const result = await client.callTool('notebook_list', {});
-    const text = result.content?.find((c) => c.type === 'text')?.text ?? '';
-    if (result.isError || !text) {
-        // 쿠키 만료 등 — 재연결(카탈로그 재설치) 안내는 프론트 담당
-        logger.warn(`notebook_list 실패 u=${userId} s=${server.id}: ${text.slice(0, 200)}`);
-        res.status(502).json({ success: false, error: { code: 'NOTEBOOKLM_UPSTREAM', message: text.slice(0, 500) || 'notebook_list 실패' } });
+    // spawn·도구호출·파싱 실패는 전부 502(NOTEBOOKLM_UPSTREAM)로 수렴 — 프론트 picker 가
+    // "재연결(쿠키 갱신)/이미지 리빌드" 안내를 띄우는 경로. generic 500 으로 새면 안 된다.
+    // (spawn throw 예: mcp-runtime 이미지 미리빌드로 baked 바이너리 부재, 컨테이너 기동 실패)
+    let text = '';
+    let notebooks: NotebookSummary[];
+    try {
+        const client = await supervisor.spawnUserServer(userId, server.id);
+        const result = await client.callTool('notebook_list', {});
+        text = result.content?.find((c) => c.type === 'text')?.text ?? '';
+        if (result.isError || !text) throw new Error(text || 'notebook_list 빈 응답');
+        // 쿠키 만료 시 isError=false 로 로그인 HTML/에러 문자열이 올 수 있음 — 파싱 실패도 업스트림 오류
+        notebooks = parseNotebookList(text);
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        logger.warn(`notebook_list 실패 u=${userId} s=${server.id}: ${msg.slice(0, 200)} (payload: ${text.slice(0, 120)})`);
+        res.status(502).json(errorResponse('NOTEBOOKLM_UPSTREAM', msg.slice(0, 500)));
         return;
     }
 
-    const payload: CachedList = { notebooks: parseNotebookList(text), fetchedAt: new Date().toISOString() };
+    const payload: CachedList = { notebooks, fetchedAt: new Date().toISOString() };
     listCache.set(userId, payload);
     res.json(success({ ...payload, cached: false }));
 }));
