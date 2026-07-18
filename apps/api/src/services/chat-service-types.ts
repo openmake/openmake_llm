@@ -174,6 +174,8 @@ export interface ChatServiceConfig {
 export interface ChatMessageRequest {
     /** 사용자 입력 메시지 */
     message: string;
+    /** NotebookLM 노트북 컨텍스트 — LLM 전용 enhancedMessage 에만 주입(대화 저장에는 미포함) */
+    notebook?: { id: string; title: string } | null;
     /** 이전 대화 히스토리 배열 */
     history?: Array<{ role: string; content: string; images?: string[] }>;
     /** 참조할 업로드 문서 ID */

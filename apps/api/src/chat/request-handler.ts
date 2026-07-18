@@ -376,6 +376,7 @@ export class ChatRequestHandler {
             apiKeyId: params.apiKeyId,
             userRole: userContext.userRole,
             enabledTools,
+            notebook: params.notebook,
             abortSignal,
             userLanguagePreference,
             format: params.format,

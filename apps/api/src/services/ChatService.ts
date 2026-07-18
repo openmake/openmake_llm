@@ -165,7 +165,11 @@ export class ChatService {
         // 설치한 user MCP 서버 도구는 "설치=기본 ON" — 채팅 토글 없이 자동 노출(cap 적용).
         // global 외부 도구는 자동 노출 대상 아님(opt-in 유지). 끄려면 /mcp-servers 서버 disable.
         const toolGroups = userIdStr ? toolRouter.getUserPoolToolGroups(userIdStr) : [];
-        const userMcpAutoOn = selectUserMcpAutoOn(allTools, toolGroups, enabledToggles, CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, reqCtx.message);
+        // NotebookLM 노트북 컨텍스트 고정 시 notebooklm 서버를 참조된 것으로 취급 —
+        // 프리픽스는 LLM 전용 enhancedMessage 에만 실리므로(reqCtx.message 는 원문)
+        // depth 매칭 힌트를 여기서 보강한다.
+        const mcpSelectMessage = reqCtx.notebook ? `${reqCtx.message ?? ''} notebooklm` : reqCtx.message;
+        const userMcpAutoOn = selectUserMcpAutoOn(allTools, toolGroups, enabledToggles, CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, mcpSelectMessage);
 
         // 사용자가 명시적으로 활성화한 도구만 추출
         const userToggled = allTools.filter(t => enabledToggles[t.function.name] === true);

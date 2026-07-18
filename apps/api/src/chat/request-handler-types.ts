@@ -101,6 +101,8 @@ export interface ChatRequestParams {
     format?: import('../llm').FormatOption;
     /** 사용자가 활성화한 MCP 도구 목록 (키: 도구명, 값: 활성화 여부) */
     enabledTools?: Record<string, boolean>;
+    /** NotebookLM 노트북 컨텍스트 — LLM 전용 enhancedMessage 에만 주입(대화 저장 미포함) */
+    notebook?: { id: string; title: string } | null;
     /** OpenAI 호환 도구 정의 배열 (외부 Tool Calling용) */
     tools?: ToolDefinition[];
     /** 도구 호출 제어 ("auto"|"none"|"required"|{type:"function",function:{name:string}}) */

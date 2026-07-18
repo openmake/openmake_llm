@@ -27,6 +27,7 @@ import { getExecutionPlanBuilder } from '../../chat/execution-plan-builder';
 import { normalizeStyle } from '../../chat/style';
 import { resolveAnswerFormatProfile, getAnswerFormatGuard } from '../../chat/answer-format';
 import { runProviderGate } from './provider-gate';
+import { buildNotebookContextPrefix } from '../../prompts/notebook-context';
 import { applyAgentModelOverride } from './agent-model-override';
 import { resolveModeExternalClient } from './mode-external-client';
 import { buildUserContextBlocks } from './user-context-blocks';
@@ -75,6 +76,7 @@ export async function runMessagePipeline(svc: ChatService,
         message: req.message,
         // API Key 요청에서 enabledTools 미전달 시 내장 MCP 도구 비활성화(외부 서비스는 자체 도구 체계 사용)
         enabledTools: req.apiKeyId && !enabledTools ? {} : enabledTools,
+        notebook: req.notebook,
         executionPlan,
         skillBindings: [],
     };
@@ -267,9 +269,15 @@ export async function runMessagePipeline(svc: ChatService,
     }
 
     // ── Step 3: 컨텍스트 구성 (웹검색) — agent 와 병렬 진행 ──
-    const { finalEnhancedMessage, documentImages } = await svc.buildContextForLLM(
+    const { finalEnhancedMessage: builtEnhancedMessage, documentImages } = await svc.buildContextForLLM(
         message || '', webSearchContext, thinkingMode, req.apiKeyId, fileContext,
     );
+    // NotebookLM 노트북 컨텍스트 — LLM 전용 enhancedMessage 채널에만 프리픽스 주입.
+    // (원문 message 는 대화 저장·말풍선·사이드바 제목에 쓰이므로 오염 금지 —
+    //  webSearchContext 와 동일한 transient 주입 원칙. 도구 노출은 reqCtx.notebook 이 담당)
+    const finalEnhancedMessage = req.notebook
+        ? `${buildNotebookContextPrefix(req.notebook, languagePolicy?.resolvedLanguage || 'ko')}\n\n${builtEnhancedMessage}`
+        : builtEnhancedMessage;
 
     // ── Step 4: 시스템 프롬프트 조립 + dispatch (로컬/외부 단일 경로) ──
     // strategy 계층 폐기 1단계 (2026-07-18) 이후 유일한 실행 경로.
