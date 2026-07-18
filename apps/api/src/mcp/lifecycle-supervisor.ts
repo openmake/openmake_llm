@@ -34,13 +34,15 @@ export interface ServerSpawnConfig {
     lifecycle?: McpLifecycle;
     catalog_template_id?: string;
     sandbox_network?: 'full' | 'none' | 'host';
+    /** 채팅 자동 노출 도구 화이트리스트 — 카탈로그 템플릿(tool_allowlist)에서 spawn 시 복사 */
+    tool_allowlist?: string[];
 }
 
 export type ClientFactory = (config: ServerSpawnConfig) => ExternalMCPClient;
 
 export interface SupervisorDeps {
     userPool: UserMCPPool;
-    repo: Pick<McpCatalogRepository, 'listUserServers' | 'getServerById' | 'decryptEnvForSpawn' | 'recordInstanceTransition'>;
+    repo: Pick<McpCatalogRepository, 'listUserServers' | 'getServerById' | 'decryptEnvForSpawn' | 'recordInstanceTransition' | 'getCatalogTemplate'>;
     clientFactory: ClientFactory;
 }
 
@@ -196,6 +198,15 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
         const env = await this.repo.decryptEnvForSpawn(serverId);
 
         const lifecycle = (server as ServerWithLifecycle).lifecycle ?? 'per_session';
+
+        // 카탈로그 템플릿의 채팅 노출 화이트리스트 — spawn 시점 조회라 카탈로그 수정이
+        // user row snapshot 문제 없이 다음 respawn 부터 반영된다. 실패는 무해(전체 노출).
+        let toolAllowlist: string[] | undefined;
+        if (server.catalog_template_id) {
+            const tpl = await this.repo.getCatalogTemplate(server.catalog_template_id).catch(() => null);
+            if (tpl?.tool_allowlist?.length) toolAllowlist = tpl.tool_allowlist;
+        }
+
         const config: ServerSpawnConfig = {
             id: server.id,
             user_id: userId,
@@ -211,6 +222,7 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
             lifecycle,
             catalog_template_id: server.catalog_template_id ?? undefined,
             sandbox_network: (() => { const n = (server as ServerWithLifecycle).sandbox_network; return n === 'none' || n === 'host' ? n : 'full'; })(),
+            tool_allowlist: toolAllowlist,
         };
 
         await this.repo.recordInstanceTransition(serverId, userId, 'starting').catch(() => { /* noop */ });

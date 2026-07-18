@@ -49,7 +49,7 @@ export class McpCatalogRepository {
     async listCatalog(): Promise<McpCatalogTemplate[]> {
         const result = await this.pool.query<McpCatalogTemplate>(
             `SELECT id, display_name, description, transport_type, command_template,
-                    args_schema, env_schema, url_template, is_enabled
+                    args_schema, env_schema, url_template, is_enabled, tool_allowlist
              FROM mcp_server_catalog
              WHERE is_enabled = TRUE
              ORDER BY display_name`,
@@ -60,7 +60,7 @@ export class McpCatalogRepository {
     async getCatalogTemplate(id: string): Promise<McpCatalogTemplate | null> {
         const result = await this.pool.query<McpCatalogTemplate>(
             `SELECT id, display_name, description, transport_type, command_template,
-                    args_schema, env_schema, url_template, is_enabled
+                    args_schema, env_schema, url_template, is_enabled, tool_allowlist
              FROM mcp_server_catalog
              WHERE id = $1 AND is_enabled = TRUE`,
             [id],
@@ -83,6 +83,18 @@ export class McpCatalogRepository {
             [userId],
         );
         return result.rows.map(this.maskEnv);
+    }
+
+    /** 특정 카탈로그 템플릿으로 설치된 유저 서버 1개 조회 (composer NotebookLM 연동 등) — 최신 설치 우선 */
+    async findUserServerByTemplate(userId: string, templateId: string): Promise<{ id: string; name: string } | null> {
+        const result = await this.pool.query<{ id: string; name: string }>(
+            `SELECT id, name FROM mcp_servers
+             WHERE user_id = $1 AND catalog_template_id = $2 AND enabled = TRUE
+             ORDER BY created_at DESC
+             LIMIT 1`,
+            [userId, templateId],
+        );
+        return result.rows[0] ?? null;
     }
 
     async createFromCatalog(

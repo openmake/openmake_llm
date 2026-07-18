@@ -255,7 +255,20 @@
       "categoryEtc": "Other"
     },
     "modelLabel": "Select model",
-    "modelAuto": "Auto"
+    "modelAuto": "Auto",
+    "notebooks": {
+      "button": "Notebooks",
+      "heading": "NotebookLM notebooks",
+      "loading": "Loading notebooks…",
+      "empty": "No notebooks",
+      "error": "Failed to load notebooks. If your NotebookLM connection (cookies) expired, reconnect it in the catalog.",
+      "notInstalled": "NotebookLM is not connected",
+      "installCta": "Connect in MCP catalog",
+      "refresh": "Refresh",
+      "clear": "Clear notebook context",
+      "sourceCount": "{count} sources",
+      "select": "Select notebook"
+    }
   },
   "chat": {
     "approvals": {

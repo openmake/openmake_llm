@@ -255,7 +255,20 @@
       "categoryEtc": "其他"
     },
     "modelLabel": "选择模型",
-    "modelAuto": "自动"
+    "modelAuto": "自动",
+    "notebooks": {
+      "button": "笔记本",
+      "heading": "NotebookLM 笔记本",
+      "loading": "正在加载笔记本…",
+      "empty": "没有笔记本",
+      "error": "无法获取列表。如果 NotebookLM 连接（Cookie）已过期，请在目录中重新连接。",
+      "notInstalled": "尚未连接 NotebookLM",
+      "installCta": "在 MCP 目录中连接",
+      "refresh": "刷新",
+      "clear": "清除笔记本上下文",
+      "sourceCount": "{count} 个来源",
+      "select": "选择笔记本"
+    }
   },
   "chat": {
     "approvals": {

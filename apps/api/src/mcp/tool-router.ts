@@ -154,14 +154,31 @@ export class ToolRouter {
      */
     getUserPoolToolGroups(userId: string): Array<{ displayName: string; tools: string[]; shortNames: string[] }> {
         if (!this.userPool) return [];
-        const groups = new Map<string, { displayName: string; tools: string[]; shortNames: string[] }>();
+        // 카탈로그 tool_allowlist 는 **채팅 자동 노출 그룹에만** 적용 — 화이트리스트 밖 도구를
+        // 여기서 제외해도 collectUserPoolTools 기반 실행 경로(REST 직접 실행·picker 명시
+        // 활성화)는 전체 도구를 유지한다. 정렬은 allowlist 순서(첫 도구가 round-robin 대표).
+        const groups = new Map<string, { displayName: string; tools: string[]; shortNames: string[]; order: number[] }>();
         for (const e of collectUserPoolTools(this.userPool, userId)) {
-            const g = groups.get(e.serverId) ?? { displayName: e.displayName, tools: [], shortNames: [] };
+            let order = 0;
+            if (e.toolAllowlist?.length) {
+                const idx = e.toolAllowlist.indexOf(e.originalToolName);
+                if (idx === -1) continue; // 화이트리스트 밖 → 자동 노출 제외
+                order = idx;
+            }
+            const g = groups.get(e.serverId) ?? { displayName: e.displayName, tools: [], shortNames: [], order: [] };
             g.tools.push(e.tool.name);
             g.shortNames.push(e.originalToolName);
+            g.order.push(order);
             groups.set(e.serverId, g);
         }
-        return [...groups.values()];
+        return [...groups.values()].map(g => {
+            const sorted = g.order.map((o, i) => ({ o, i })).sort((a, b) => a.o - b.o || a.i - b.i).map(x => x.i);
+            return {
+                displayName: g.displayName,
+                tools: sorted.map(i => g.tools[i]),
+                shortNames: sorted.map(i => g.shortNames[i]),
+            };
+        });
     }
 
     /**

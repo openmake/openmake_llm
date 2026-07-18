@@ -15,6 +15,7 @@ export { default as skillsRouter } from './skills.routes';
 export { default as modelRouter } from './model.routes';
 export { mcpRouter } from './mcp.routes';
 export { mcpCatalogRouter } from './mcp-catalog.routes';
+export { notebooklmRouter } from './notebooklm.routes';
 export { mcpServerIngestRouter } from './mcp-server-ingest.routes';
 export { mcpCatalogAdminRouter } from './mcp-catalog-admin.routes';
 export { mcpAdminMonitoringRouter } from './mcp-admin-monitoring.routes';

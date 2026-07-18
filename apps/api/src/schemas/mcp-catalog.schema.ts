@@ -17,6 +17,8 @@ export const McpCatalogTemplateSchema = z.object({
     env_schema: z.record(z.string(), z.unknown()),
     url_template: z.string().optional(),
     is_enabled: z.boolean(),
+    /** 채팅 자동 노출 도구 화이트리스트(순서=우선순위). null/미정의 = 전체 노출. REST 직접 실행 미적용 */
+    tool_allowlist: z.array(z.string()).nullable().optional(),
 });
 export type McpCatalogTemplate = z.infer<typeof McpCatalogTemplateSchema>;
 

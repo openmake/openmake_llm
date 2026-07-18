@@ -227,6 +227,16 @@ export const mcpRouter = Router();
           res.status(403).json(forbidden('해당 서버를 삭제할 권한이 없습니다'));
           return;
       }
+      // 유저 소유 서버는 유저풀에 spawn 된 클라이언트(샌드박스 컨테이너)도 함께 정리 —
+      // registry.unregisterServer 는 전역 connections 만 해제하므로, 누락 시 삭제된 서버의
+      // 컨테이너가 좀비로 남아 채팅이 구 자격증명(stale env)으로 계속 도구를 호출한다.
+      if (server.user_id) {
+          const supervisor = getLifecycleSupervisor();
+          if (supervisor) {
+              await supervisor.killUserServer(String(server.user_id), id).catch((e: unknown) =>
+                  logger.warn(`서버 삭제 시 유저풀 정리 실패(삭제는 계속): ${id}: ${e instanceof Error ? e.message : String(e)}`));
+          }
+      }
       const registry = getUnifiedMCPClient().getServerRegistry();
       await registry.unregisterServer(id, db);
       res.json(success({ deleted: true }));

@@ -32,6 +32,7 @@ import {
     skillsRouter,
     mcpRouter,
     mcpCatalogRouter,
+    notebooklmRouter,
     mcpServerIngestRouter,
     mcpCatalogAdminRouter,
     mcpAdminMonitoringRouter,
@@ -163,6 +164,7 @@ export function setupApiRoutes(
     app.use('/api/monitoring', tokenMonitoringRouter);
     app.use('/api/mcp', mcpRouter);
     app.use('/api/mcp', mcpCatalogRouter);
+    app.use('/api/mcp', notebooklmRouter);
     const e2eMcpMock = process.env.MCP_INGEST_E2E_MOCK === 'true';
     // E2E 픽스처 모드 — 실제 GitHub API 호출 회피.
     // require() 로 lazy load 하여 production 번들에 mock 코드가 포함되지 않게 함.

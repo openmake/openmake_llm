@@ -255,7 +255,20 @@
       "categoryEtc": "기타"
     },
     "modelLabel": "모델 선택",
-    "modelAuto": "자동"
+    "modelAuto": "자동",
+    "notebooks": {
+      "button": "노트북",
+      "heading": "NotebookLM 노트북",
+      "loading": "노트북 목록 불러오는 중…",
+      "empty": "노트북이 없습니다",
+      "error": "목록을 가져오지 못했습니다. NotebookLM 연결(쿠키)이 만료됐다면 카탈로그에서 재연결하세요.",
+      "notInstalled": "NotebookLM이 연결되어 있지 않습니다",
+      "installCta": "MCP 카탈로그에서 연결",
+      "refresh": "새로고침",
+      "clear": "노트북 컨텍스트 해제",
+      "sourceCount": "소스 {count}개",
+      "select": "노트북 선택"
+    }
   },
   "chat": {
     "approvals": {

@@ -262,6 +262,8 @@ export interface MCPServerConfig {
     catalog_template_id?: string;
     /** stdio docker 샌드박스 정책 ('full'=bridge | 'none'=--network none | 'host'=비격리 호스트 실행). DB sandbox_network 컬럼. */
     sandbox_network?: 'full' | 'none' | 'host';
+    /** 채팅 자동 노출 도구 화이트리스트(순서=우선순위, 카탈로그 tool_allowlist 유래). 미정의=전체 노출. REST 직접 실행 미적용 */
+    tool_allowlist?: string[];
 }
 
 /**

@@ -255,7 +255,20 @@
       "categoryEtc": "その他"
     },
     "modelLabel": "モデルを選択",
-    "modelAuto": "自動"
+    "modelAuto": "自動",
+    "notebooks": {
+      "button": "ノートブック",
+      "heading": "NotebookLM ノートブック",
+      "loading": "ノートブックを読み込み中…",
+      "empty": "ノートブックがありません",
+      "error": "一覧を取得できませんでした。NotebookLM 連携(Cookie)が期限切れの場合はカタログで再連携してください。",
+      "notInstalled": "NotebookLM が連携されていません",
+      "installCta": "MCP カタログで連携",
+      "refresh": "更新",
+      "clear": "ノートブックコンテキストを解除",
+      "sourceCount": "ソース {count}件",
+      "select": "ノートブックを選択"
+    }
   },
   "chat": {
     "approvals": {

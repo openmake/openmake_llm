@@ -37,6 +37,13 @@ RUN mkdir -p /home/node/.cache/npm /home/node/.cache/uv
 RUN uv tool install mcp-python-repl
 ENV PATH=/home/node/.local/bin:${PATH}
 
+# ── NotebookLM MCP 서버(notebooklm-mcp-cli) — 이미지에 baked ─────────────────
+# jacob-bd/notebooklm-mcp-cli (PyPI). 쿠키 기반 내부 RPC 호출이라 런타임 브라우저가
+# 불필요 — 인증은 NOTEBOOKLM_COOKIES env(-e 주입)만으로 초기화된다.
+# 카탈로그(db/migrations/075_mcp_notebooklm_catalog.sql)는 `notebooklm-mcp` 로 실행.
+# 런타임 uvx-fetch 없이 즉시 spawn 하도록 사전설치(버전 고정).
+RUN uv tool install notebooklm-mcp-cli==0.8.9
+
 # ── Kakao(Map/Search) MCP 서버 — 이미지에 baked ─────────────────────────────
 # 벤더링된 수정 소스(vendor/kakao-api-mcp-server: deps 정정 + bin/shebang, ATTRIBUTION.md
 # 참고)를 빌드해 /home/node/kakao-mcp 에 설치한다. mcp-python-repl 과 동일하게 이미지에

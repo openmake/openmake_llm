@@ -18,11 +18,13 @@ import {
   Paperclip,
   X,
   Lock,
+  BookOpen,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { WsAttachedFile } from "@openmake/shared-types";
 import { useAppStore, INTERCEPT_MODE_KEYS } from "@/lib/store";
+import { NotebookPicker, type NotebookRef } from "./notebook-picker";
 import { useChatSocket } from "@/lib/use-chat-socket";
 import { fetchModels } from "@/lib/models-api";
 import {
@@ -100,6 +102,10 @@ export function Composer() {
   const [dragging, setDragging] = useState(false);
   // 모드 시트(모바일 최적화) — 7개 토글을 가로스크롤 칩 대신 '도구' 버튼 + 시트로 수납
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
+  // NotebookLM 노트북 컨텍스트 — 선택 시 메시지 앞에 주입, 해제 전까지 대화 내내 유지.
+  // picker 진입점은 '도구' 모드 시트의 "노트북 선택" 항목 (2단 구조).
+  const [notebook, setNotebook] = useState<NotebookRef | null>(null);
+  const [notebookPickerOpen, setNotebookPickerOpen] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -282,8 +288,13 @@ export function Composer() {
       // 구조화 답변 토글 ON — REST /api/chat/structured (비스트리밍, 카드 렌더). 첨부는 미지원.
       void sendStructured(text.trim());
     } else {
+      // NotebookLM 컨텍스트 주입 — "notebooklm" 언급이 depth 우선 도구 노출을 트리거하고,
+      // notebook_id 로 notebook_query 가 결정적으로 해당 노트북에 grounding 된다.
+      const outgoing = notebook
+        ? `[NotebookLM 컨텍스트] 노트북 "${notebook.title}" (notebook_id: ${notebook.id}) — notebooklm 의 notebook_query 도구로 이 노트북에 질의해 근거 기반으로 답할 것.\n\n${text.trim()}`
+        : text.trim();
       sendChat(
-        text.trim(),
+        outgoing,
         images.length ? images.map((i) => i.dataUrl) : undefined,
         files.length ? files : undefined,
       );
@@ -406,6 +417,29 @@ export function Composer() {
                   </button>
                 );
               })}
+              {/* 노트북 선택 — 토글이 아닌 컨텍스트 선택기(2단): 시트를 닫고 picker 팝오버를 연다.
+                  선택된 노트북은 툴바의 컨텍스트 칩으로 표시·해제. */}
+              <div className="mx-2 my-1 border-t border-border" aria-hidden />
+              <button
+                type="button"
+                onClick={() => {
+                  setModeSheetOpen(false);
+                  setNotebookPickerOpen(true);
+                }}
+                className={cn(
+                  "flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-sm transition",
+                  notebook ? "text-accent" : "text-fg-2 hover:bg-surface-3",
+                )}
+              >
+                <BookOpen className="h-[18px] w-[18px] shrink-0" />
+                <span className="flex-1 truncate text-left">
+                  {t("notebooks.select")}
+                  {notebook && (
+                    <span className="ml-1.5 text-[11px] text-faint">{notebook.title}</span>
+                  )}
+                </span>
+                {notebook && <Check className="h-4 w-4 shrink-0 text-accent" />}
+              </button>
             </div>
           </>
         )}
@@ -432,6 +466,13 @@ export function Composer() {
               </span>
             )}
           </button>
+
+          <NotebookPicker
+            value={notebook}
+            onChange={setNotebook}
+            open={notebookPickerOpen}
+            onOpenChange={setNotebookPickerOpen}
+          />
 
           {TOGGLES.filter((m) => m.on).map((m) => {
             // 가로채기 모드 칩은 앰버색 — 도구·아티팩트를 무시한다는 시각 신호.

@@ -12,6 +12,8 @@ export interface UserPoolToolEntry {
     displayName: string;
     catalogTemplateId?: string;
     originalToolName: string;
+    /** 채팅 자동 노출 화이트리스트(카탈로그 tool_allowlist, 순서=우선순위). 미정의=전체 노출 */
+    toolAllowlist?: string[];
 }
 
 export function collectUserPoolTools(pool: UserMCPPool, userId: string): UserPoolToolEntry[] {
@@ -35,6 +37,7 @@ export function collectUserPoolTools(pool: UserMCPPool, userId: string): UserPoo
                 displayName,
                 catalogTemplateId,
                 originalToolName: tool.name,
+                toolAllowlist: cfg.tool_allowlist,
             });
         }
     }
