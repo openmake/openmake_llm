@@ -85,6 +85,21 @@ export class McpCatalogRepository {
         return result.rows.map(this.maskEnv);
     }
 
+    /**
+     * spawn 시 채팅 노출 화이트리스트 조회 — is_enabled 무관.
+     * getCatalogTemplate(is_enabled=TRUE 필터)을 쓰면 카탈로그 비활성화 시 allowlist 가
+     * 사라져 전체 도구가 노출되는 fail-open 역설이 생긴다(비활성화가 제한을 해제).
+     * 기존 설치 서버의 노출 제한은 카탈로그 활성 여부와 무관하게 유지돼야 한다.
+     */
+    async getCatalogToolAllowlist(templateId: string): Promise<string[] | null> {
+        const result = await this.pool.query<{ tool_allowlist: string[] | null }>(
+            `SELECT tool_allowlist FROM mcp_server_catalog WHERE id = $1`,
+            [templateId],
+        );
+        const list = result.rows[0]?.tool_allowlist;
+        return Array.isArray(list) && list.length > 0 ? list : null;
+    }
+
     /** 특정 카탈로그 템플릿으로 설치된 유저 서버 1개 조회 (composer NotebookLM 연동 등) — 최신 설치 우선 */
     async findUserServerByTemplate(userId: string, templateId: string): Promise<{ id: string; name: string } | null> {
         const result = await this.pool.query<{ id: string; name: string }>(

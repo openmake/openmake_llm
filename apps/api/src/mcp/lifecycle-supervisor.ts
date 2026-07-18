@@ -42,7 +42,7 @@ export type ClientFactory = (config: ServerSpawnConfig) => ExternalMCPClient;
 
 export interface SupervisorDeps {
     userPool: UserMCPPool;
-    repo: Pick<McpCatalogRepository, 'listUserServers' | 'getServerById' | 'decryptEnvForSpawn' | 'recordInstanceTransition' | 'getCatalogTemplate'>;
+    repo: Pick<McpCatalogRepository, 'listUserServers' | 'getServerById' | 'decryptEnvForSpawn' | 'recordInstanceTransition' | 'getCatalogToolAllowlist'>;
     clientFactory: ClientFactory;
 }
 
@@ -200,11 +200,16 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
         const lifecycle = (server as ServerWithLifecycle).lifecycle ?? 'per_session';
 
         // 카탈로그 템플릿의 채팅 노출 화이트리스트 — spawn 시점 조회라 카탈로그 수정이
-        // user row snapshot 문제 없이 다음 respawn 부터 반영된다. 실패는 무해(전체 노출).
+        // user row snapshot 문제 없이 다음 respawn 부터 반영된다. is_enabled 와 무관하게
+        // 조회한다(비활성화된 카탈로그가 오히려 노출 제한을 해제하는 fail-open 방지).
+        // 조회 오류(일시 DB 장애)만 전체 노출로 폴백하고 경고를 남긴다.
         let toolAllowlist: string[] | undefined;
         if (server.catalog_template_id) {
-            const tpl = await this.repo.getCatalogTemplate(server.catalog_template_id).catch(() => null);
-            if (tpl?.tool_allowlist?.length) toolAllowlist = tpl.tool_allowlist;
+            try {
+                toolAllowlist = await this.repo.getCatalogToolAllowlist(server.catalog_template_id) ?? undefined;
+            } catch (e) {
+                logger.warn(`tool_allowlist 조회 실패 — 전체 노출 폴백 s=${serverId}: ${e instanceof Error ? e.message : String(e)}`);
+            }
         }
 
         const config: ServerSpawnConfig = {

@@ -157,26 +157,33 @@ export class ToolRouter {
         // 카탈로그 tool_allowlist 는 **채팅 자동 노출 그룹에만** 적용 — 화이트리스트 밖 도구를
         // 여기서 제외해도 collectUserPoolTools 기반 실행 경로(REST 직접 실행·picker 명시
         // 활성화)는 전체 도구를 유지한다. 정렬은 allowlist 순서(첫 도구가 round-robin 대표).
-        const groups = new Map<string, { displayName: string; tools: string[]; shortNames: string[]; order: number[] }>();
+        // 서버별로 모은 뒤 필터링 — allowlist 가 라이브 도구 이름과 하나도 매칭되지 않으면
+        // (도구 rename·allowlist 오타) 서버가 그룹에서 통째로 소멸해 mcp_list_tools/mcp_call
+        // 메타도구 해석까지 깨지므로, 그 경우 전체 노출로 폴백하고 경고를 남긴다.
+        interface Grp { displayName: string; tools: string[]; shortNames: string[]; allowlist?: string[] }
+        const byServer = new Map<string, Grp>();
         for (const e of collectUserPoolTools(this.userPool, userId)) {
-            let order = 0;
-            if (e.toolAllowlist?.length) {
-                const idx = e.toolAllowlist.indexOf(e.originalToolName);
-                if (idx === -1) continue; // 화이트리스트 밖 → 자동 노출 제외
-                order = idx;
-            }
-            const g = groups.get(e.serverId) ?? { displayName: e.displayName, tools: [], shortNames: [], order: [] };
+            const g = byServer.get(e.serverId) ?? { displayName: e.displayName, tools: [], shortNames: [], allowlist: e.toolAllowlist };
             g.tools.push(e.tool.name);
             g.shortNames.push(e.originalToolName);
-            g.order.push(order);
-            groups.set(e.serverId, g);
+            byServer.set(e.serverId, g);
         }
-        return [...groups.values()].map(g => {
-            const sorted = g.order.map((o, i) => ({ o, i })).sort((a, b) => a.o - b.o || a.i - b.i).map(x => x.i);
+        return [...byServer.values()].map(g => {
+            const allow = g.allowlist;
+            if (!allow?.length) return { displayName: g.displayName, tools: g.tools, shortNames: g.shortNames };
+            const idx = g.shortNames
+                .map((n, i) => ({ o: allow.indexOf(n), i }))
+                .filter(x => x.o !== -1)
+                .sort((a, b) => a.o - b.o || a.i - b.i)
+                .map(x => x.i);
+            if (idx.length === 0) {
+                logger.warn(`tool_allowlist 0매칭 — 전체 노출 폴백: server=${g.displayName} allowlist=[${allow.join(',')}]`);
+                return { displayName: g.displayName, tools: g.tools, shortNames: g.shortNames };
+            }
             return {
                 displayName: g.displayName,
-                tools: sorted.map(i => g.tools[i]),
-                shortNames: sorted.map(i => g.shortNames[i]),
+                tools: idx.map(i => g.tools[i]),
+                shortNames: idx.map(i => g.shortNames[i]),
             };
         });
     }
