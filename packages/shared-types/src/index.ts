@@ -107,6 +107,8 @@ export interface WsChatRequest {
   /** 응답 스타일 — 백엔드 chat/style.ts 가 system prompt 앞에 style guard 를 prepend (concise=간결, verbose=상세) */
   style?: "concise" | "default" | "verbose";
   enabledTools?: Record<string, boolean>;
+  /** NotebookLM 노트북 컨텍스트 — composer picker 선택. 백엔드(ws-chat-handler)가 grounding 프리픽스를 주입 */
+  notebook?: { id: string; title: string } | null;
   /** 개인정보: false 면 백엔드가 대화 기록 저장을 생략 (설정 페이지 토글). 기본 true */
   saveHistory?: boolean;
   /** 개인정보: false 면 메모리 학습 비활성 (saveHistory 와 독립). 기본 true */

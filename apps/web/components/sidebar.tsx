@@ -62,6 +62,8 @@ export function Sidebar() {
     if (!sid) return;
     setArtifacts([]); // 이전 세션 아티팩트 비움 → 패널이 새 세션 것 재복원
     setCurrentSessionId(sid);
+    // 노트북 컨텍스트는 대화 스코프 — 다른 대화로 누수 방지
+    useAppStore.getState().setNotebookContext(null);
     try {
       const res = await ApiClient.get<
         ApiSuccess<{ messages?: Array<{ role: string; content: string; images?: string[]; thinking?: string; reasoningSummary?: string }> }>

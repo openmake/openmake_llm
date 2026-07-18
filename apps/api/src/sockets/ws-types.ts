@@ -61,6 +61,8 @@ export interface WSMessage {
     style?: 'concise' | 'default' | 'verbose';
     /** Phase 2 Custom Agent (2026-05-26): 사용자 정의 agent id */
     userAgentId?: string;
+    /** NotebookLM 노트북 컨텍스트 — composer picker 선택. 백엔드가 프리픽스 주입(prompts/notebook-context) */
+    notebook?: { id: string; title: string } | null;
     /** Phase 3.4 (2026-05-26): 메시지 편집 분기 — 새 session 의 부모 추적 */
     branchFromSessionId?: string;
     branchFromMessageId?: string;

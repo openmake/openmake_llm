@@ -122,6 +122,8 @@ interface AppState {
   activeSkills: string[];
   /** 사용자가 채팅에 적용한 커스텀 에이전트(페르소나). 지정 시 WS userAgentId 로 전송돼 백엔드가 해당 system_prompt 를 주입. 네비게이션·재방문에 유지되도록 영속. */
   activeUserAgent: { id: string; name: string; icon?: string | null } | null;
+  /** NotebookLM 노트북 컨텍스트(composer picker) — 같은 대화 내에서만 유지. 대화 전환/새 대화 시 리셋(clearChat + 로드 지점) — 다른 대화로 누수되면 무관한 질문까지 notebook_query 로 유도된다. */
+  notebookContext: { id: string; title: string } | null;
   /** 딥리서치 진행상황 (ws research_progress) — 스트리밍 중 상태 배너로 표시, done 시 clear. */
   researchProgress: ResearchProgressInfo | null;
 
@@ -165,6 +167,7 @@ interface AppState {
   setActiveAgent: (a: { name: string; emoji?: string } | null) => void;
   setActiveSkills: (s: string[]) => void;
   setActiveUserAgent: (a: { id: string; name: string; icon?: string | null } | null) => void;
+  setNotebookContext: (nb: { id: string; title: string } | null) => void;
   setResearchProgress: (p: ResearchProgressInfo | null) => void;
   setPrivacyPrefs: (patch: { saveHistory?: boolean; memoryLearning?: boolean }) => void;
   /** WS done 시 마지막 assistant 메시지에 서버 messageId 부여 — 피드백 전송용. */
@@ -240,6 +243,7 @@ export const useAppStore = create<AppState>()(
   activeAgent: null,
   activeSkills: [],
   activeUserAgent: null,
+  notebookContext: null,
   researchProgress: null,
 
   artifacts: [],
@@ -327,6 +331,7 @@ export const useAppStore = create<AppState>()(
   setActiveAgent: (a) => set({ activeAgent: a }),
   setActiveSkills: (s) => set({ activeSkills: s }),
   setActiveUserAgent: (a) => set({ activeUserAgent: a }),
+  setNotebookContext: (nb) => set({ notebookContext: nb }),
   setResearchProgress: (p) => set({ researchProgress: p }),
   clearChat: () =>
     set({
@@ -334,6 +339,7 @@ export const useAppStore = create<AppState>()(
       currentSessionId: null,
       activeAgent: null,
       activeSkills: [],
+      notebookContext: null,
       researchProgress: null,
       artifacts: [],
       activeArtifactId: null,

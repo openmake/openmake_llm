@@ -44,11 +44,14 @@ export function NotebookPicker({
   onChange,
   open,
   onOpenChange,
+  suppressed = false,
 }: {
   value: NotebookRef | null;
   onChange: (v: NotebookRef | null) => void;
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  /** 노트북 컨텍스트가 적용되지 않는 모드(에이전트/구조화)에서 칩을 흐림+미적용 표시 */
+  suppressed?: boolean;
 }) {
   const t = useTranslations("composer");
   const router = useRouter();
@@ -76,9 +79,15 @@ export function NotebookPicker({
 
   return (
     <>
-      {/* 선택된 노트북 = 컨텍스트 칩 (모드 칩과 동일 문법). 진입은 '도구' 시트의 "노트북 선택" */}
+      {/* 선택된 노트북 = 컨텍스트 칩 (모드 칩과 동일 문법). 진입은 '도구' 시트의 "노트북 선택".
+          에이전트/구조화 모드에선 notebooklm 도구가 없어 미적용 — 흐림+태그로 표시 */}
       {value && (
-        <span className="inline-flex max-w-[14rem] shrink-0 items-center gap-1 rounded-full border border-accent bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent">
+        <span
+          className={cn(
+            "inline-flex max-w-[14rem] shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium",
+            suppressed ? "border-border text-faint" : "border-accent bg-accent-soft text-accent",
+          )}
+        >
           <BookOpen className="h-3.5 w-3.5 shrink-0" />
           <button
             type="button"
@@ -87,6 +96,7 @@ export function NotebookPicker({
             title={value.title}
           >
             {value.title}
+            {suppressed && <span className="ml-1 text-[11px]">{t("suppressedTag")}</span>}
           </button>
           <button
             type="button"

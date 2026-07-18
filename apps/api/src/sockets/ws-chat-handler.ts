@@ -15,6 +15,7 @@ import { ProviderError } from '../providers/provider-errors';
 import { checkChatRateLimit } from '../middlewares/chat-rate-limiter';
 import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
+import { buildNotebookContextPrefix } from '../prompts/notebook-context';
 import { WS_ERROR_MESSAGES, WS_PROVIDER_ERROR_MESSAGES, getLocalizedTemplate } from './ws-chat-locales';
 import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
 import { applySlashCommand } from '../chat/slash-command';
@@ -53,12 +54,20 @@ export async function handleChatMessage(
     // 슬래시 명령(P-4): `/skill-slug ...` 가 active 스킬과 매칭되면 스킬 컨텍스트를 주입.
     // 비슬래시/미매칭/비활성은 원문 그대로(무영향·무비용), 오류는 graceful(원문 유지).
     const slashUserId = extWs._authenticatedUserId !== undefined ? String(extWs._authenticatedUserId) : undefined;
-    const message = await applySlashCommand((msg.message ?? '').trim(), { userId: slashUserId });
+    let message = await applySlashCommand((msg.message ?? '').trim(), { userId: slashUserId });
 
     // 사용자 언어 감지 — 설정에서 선택한 언어를 우선, 없으면 메시지 기반 자동 감지
+    // (노트북 프리픽스 주입 전의 원문으로 감지해야 프리픽스 언어에 오염되지 않음)
     const userLangPreference = (typeof msg.language === 'string' && msg.language.trim()) ? msg.language.trim() as SupportedLanguageCode : undefined;
     const detectedLang = detectLanguage(message);
     const userLang = userLangPreference || detectedLang.language;
+
+    // NotebookLM 노트북 컨텍스트 — composer picker 선택분을 백엔드에서 프리픽스 주입.
+    // "notebooklm" 포함 프리픽스가 tool-merger depth 매칭을 트리거해 allowlist 도구가 우선 노출된다.
+    const nb = msg.notebook;
+    if (nb && typeof nb.id === 'string' && nb.id.trim() && typeof nb.title === 'string') {
+        message = `${buildNotebookContextPrefix({ id: nb.id.trim().slice(0, 64), title: nb.title }, userLang)}\n\n${message}`;
+    }
 
     // 중단 컨트롤러 생성
     const abortController = new AbortController();

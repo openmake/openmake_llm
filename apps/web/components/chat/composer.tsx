@@ -24,7 +24,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { WsAttachedFile } from "@openmake/shared-types";
 import { useAppStore, INTERCEPT_MODE_KEYS } from "@/lib/store";
-import { NotebookPicker, type NotebookRef } from "./notebook-picker";
+import { NotebookPicker } from "./notebook-picker";
 import { useChatSocket } from "@/lib/use-chat-socket";
 import { fetchModels } from "@/lib/models-api";
 import {
@@ -102,9 +102,11 @@ export function Composer() {
   const [dragging, setDragging] = useState(false);
   // 모드 시트(모바일 최적화) — 7개 토글을 가로스크롤 칩 대신 '도구' 버튼 + 시트로 수납
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
-  // NotebookLM 노트북 컨텍스트 — 선택 시 메시지 앞에 주입, 해제 전까지 대화 내내 유지.
-  // picker 진입점은 '도구' 모드 시트의 "노트북 선택" 항목 (2단 구조).
-  const [notebook, setNotebook] = useState<NotebookRef | null>(null);
+  // NotebookLM 노트북 컨텍스트 — 선택 시 백엔드가 메시지 앞에 grounding 프리픽스 주입,
+  // 해제 전까지 같은 대화 내에서 유지. 상태는 store(notebookContext) — 대화 전환/새 대화
+  // 리셋은 clearChat·대화 로드 지점(sidebar/history)이 담당해 다른 대화로 누수되지 않는다.
+  const notebook = useAppStore((s) => s.notebookContext);
+  const setNotebook = useAppStore((s) => s.setNotebookContext);
   const [notebookPickerOpen, setNotebookPickerOpen] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -288,15 +290,14 @@ export function Composer() {
       // 구조화 답변 토글 ON — REST /api/chat/structured (비스트리밍, 카드 렌더). 첨부는 미지원.
       void sendStructured(text.trim());
     } else {
-      // NotebookLM 컨텍스트 주입 — "notebooklm" 언급이 depth 우선 도구 노출을 트리거하고,
-      // notebook_id 로 notebook_query 가 결정적으로 해당 노트북에 grounding 된다.
-      const outgoing = notebook
-        ? `[NotebookLM 컨텍스트] 노트북 "${notebook.title}" (notebook_id: ${notebook.id}) — notebooklm 의 notebook_query 도구로 이 노트북에 질의해 근거 기반으로 답할 것.\n\n${text.trim()}`
-        : text.trim();
+      // NotebookLM 컨텍스트 — grounding 프리픽스는 백엔드(prompts/notebook-context)가 주입.
+      // 가로채기 모드(토론/딥리서치/이미지)는 도구를 우회하므로 미전송 — 칩은 흐림 표시로 안내.
+      const nbApplies = !discussionMode && !deepResearchMode && !imageMode;
       sendChat(
-        outgoing,
+        text.trim(),
         images.length ? images.map((i) => i.dataUrl) : undefined,
         files.length ? files : undefined,
+        nbApplies ? notebook : null,
       );
     }
     setText("");
@@ -472,6 +473,7 @@ export function Composer() {
             onChange={setNotebook}
             open={notebookPickerOpen}
             onOpenChange={setNotebookPickerOpen}
+            suppressed={interceptActive || agentTaskMode || structuredMode}
           />
 
           {TOGGLES.filter((m) => m.on).map((m) => {

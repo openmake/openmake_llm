@@ -264,7 +264,7 @@ export function useChatSocket() {
   }, [connect]);
 
   const sendChat = useCallback(
-    (message: string, images?: string[], files?: WsAttachedFile[]) => {
+    (message: string, images?: string[], files?: WsAttachedFile[], notebook?: { id: string; title: string } | null) => {
       const s = useAppStore.getState();
       const hasFiles = Array.isArray(files) && files.length > 0;
       // 텍스트가 비어도 첨부 파일만으로 전송 가능
@@ -309,6 +309,8 @@ export function useChatSocket() {
         artifactMode: s.artifactMode,
         style: s.style,
         enabledTools: s.mcpToolsEnabled,
+        // NotebookLM 컨텍스트 — grounding 프리픽스 주입은 백엔드(prompts/notebook-context) 담당
+        notebook: notebook ?? undefined,
         // 개인정보 설정 — 백엔드(ws-chat-handler)가 존중: false 면 기록 저장/메모리 학습 생략.
         saveHistory: s.saveHistory,
         memoryLearning: s.memoryLearning,
