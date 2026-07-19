@@ -84,24 +84,25 @@ Every request flows through a lightweight, deterministic policy layer — **`Exe
 OpenMake separates **policy** (deciding *how* to answer) from **execution** (actually calling the model) — a SQL planner/executor split. The two layers are kept deliberately independent.
 
 ```
-                       WebSocket / REST
-                              │
-                     ┌────────▼─────────┐
-   Query ──────────► │ ExecutionPlanBuilder │  policy — once per request
-                     │  (regex + fast-path  │  · classify intent
-                     │   classification)    │  · resolve profile / custom agent
-                     └────────┬─────────┘   │  · assemble system prompt & tools
-                              │              (no extra LLM round-trip)
-                     ┌────────▼─────────┐
-                     │streamFromExternal- │  single path — local & external alike
-                     │      Provider      │  · always-on MCP tool loop (5 turns)
-                     └────────┬─────────┘   · Discussion / Deep Research intercept earlier
-                     ┌────────▼─────────┐
-                     │   LLMClient.chat   │  execution — per call
-                     │  (context-fit net) │  · token estimate → truncate → cap
-                     └────────┬─────────┘   · overflow → 413 + audit + alert
-                              │
-              vLLM serve → LiteLLM proxy (OpenAI-compatible)
+                          WebSocket / REST
+                                  │
+                    ┌─────────────▼─────────────┐
+  Query ───────────►│    ExecutionPlanBuilder   │  policy — once per request
+                    │    (regex + fast-path)    │  · classify intent
+                    └─────────────┬─────────────┘  · resolve custom agent
+                                  │                · assemble system prompt & tools
+                                  │                  (no extra LLM round-trip)
+                    ┌─────────────▼─────────────┐
+                    │ streamFromExternalProvider│  single path — local & external alike
+                    │   (always-on tool loop)   │  · 5 tool turns max
+                    └─────────────┬─────────────┘  · Discussion / Deep Research intercept earlier
+                                  │
+                    ┌─────────────▼─────────────┐
+                    │       LLMClient.chat      │  execution — per call
+                    │  (context-fit safety net) │  · token estimate → truncate → cap
+                    └─────────────┬─────────────┘  · overflow → 413 + audit + alert
+                                  │
+           vLLM serve → LiteLLM proxy (OpenAI-compatible endpoint)
 ```
 
 - **One execution path** — the former per-strategy layer (generate-verify, agent-loop, thinking, direct) was retired: local and external models now share a single `streamFromExternalProvider` dispatch with an always-on MCP tool loop. Discussion and Deep Research remain separate modes intercepted before dispatch.
