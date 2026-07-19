@@ -95,7 +95,7 @@ OpenMake separates **policy** (deciding *how* to answer) from **execution** (act
                     ┌─────────────▼─────────────┐
                     │ streamFromExternalProvider│  single path — local & external alike
                     │   (always-on tool loop)   │  · 5 tool turns max
-                    └─────────────┬─────────────┘  · Discussion / Deep Research intercept earlier
+                    └─────────────┬─────────────┘  · special modes intercept earlier
                                   │
                     ┌─────────────▼─────────────┐
                     │       LLMClient.chat      │  execution — per call
