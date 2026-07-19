@@ -248,12 +248,17 @@ openmake_llm/
 │   ├── web/          # Next.js + React frontend (the operating UI)
 │   ├── discord-bot/  # Optional Discord gateway bot (relays to /api/v1/chat/completions)
 │   └── legacy-web/   # Static asset host (e.g. /generated) — legacy SPA retired
-├── db/               # init schema + migrations (+ rollbacks/)
+├── db/               # init schema + migrations (+ rollbacks/) — read at runtime
 ├── packages/         # shared-types, config, api-client (shared workspaces)
 ├── infra/            # Dockerfiles & compose (mcp-runtime, task-runtime, artifact-viewer, egress-proxy)
-├── scripts/          # build, deploy, migration, CI scripts
+├── scripts/          # host setup for the LLM backend — vLLM/LiteLLM systemd units,
+│                     # serve scripts, litellm.config.yaml, Caddyfile, diagnostics
 └── tests/            # Playwright E2E
 ```
+
+**What the running server actually needs:** the built `apps/api/dist` + `apps/web/.next`, `db/` (the boot path applies `db/init/`, and the migration CLI resolves `db/migrations/` from the working directory), and `infra/` for the Docker-isolated sandboxes. `scripts/` and `tests/` are *not* loaded by any runtime code — but `scripts/vllm/` and `scripts/caddy/` are the deployment artifacts you copy onto the GPU host when standing up or rebuilding the inference backend, so keep them with the repo.
+
+Build, migration, and CI entry points live elsewhere: build in each workspace's `package.json`, migrations in `apps/api/src/data/migrations/cli.ts`, CI in `.github/workflows/`.
 
 ---
 
