@@ -38,7 +38,7 @@ import { LocalLLMProvider } from '../providers/local-llm-provider';
 import { ProviderRouter } from '../providers/provider-router';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { getPool } from '../data/models/unified-database';
-import { extractAndStripArtifacts } from '../llm/artifact-parser';
+import { extractAndStripArtifacts, findArtifactPlaceholderIds, stripArtifactPlaceholders } from '../llm/artifact-parser';
 import { ArtifactRepository, ArtifactSizeError, type ArtifactKind } from '../data/repositories/artifact-repository';
 import { processExternalToolCalling } from './external-tool-calling';
 import { ensureSession, saveUserMessage, saveAssistantMessage } from './request-persistence';
@@ -465,6 +465,31 @@ export class ChatRequestHandler {
             }
         } catch (e) {
             log.warn(`[Artifact] 후처리 실패 (continue): ${e instanceof Error ? e.message : e}`);
+        }
+
+        // 6.5 유령 placeholder 가드 (2026-07-21): 소형 모델이 히스토리의 [[artifact:id]]
+        // 표기를 모방해 실체 없는 placeholder 를 직접 출력하는 경우가 있다 (Discord 경로
+        // 실측 — 응답 전체가 placeholder 한 줄, artifacts 미생성). 이번 턴 추출분에도
+        // 세션 영속분에도 없는 id 는 본문에서 제거해 클라이언트 원문 노출을 막는다.
+        try {
+            const extractedIds = new Set(extractedArtifacts.map((a) => a.id));
+            const candidateIds = findArtifactPlaceholderIds(cleanedResponse)
+                .filter((id) => !extractedIds.has(id));
+            if (candidateIds.length > 0) {
+                const repo = new ArtifactRepository(getPool());
+                const ghostIds: string[] = [];
+                for (const id of candidateIds) {
+                    const versions = await repo.listVersionsByArtifactId(currentSessionId, id);
+                    if (versions.length === 0) ghostIds.push(id);
+                }
+                if (ghostIds.length > 0) {
+                    log.warn(`[Artifact] 유령 placeholder 제거 (모델 모방 출력): ${ghostIds.join(', ')}`);
+                    cleanedResponse = stripArtifactPlaceholders(cleanedResponse, ghostIds).trim()
+                        || '죄송합니다. 요청하신 산출물 생성에 실패했습니다. 다시 한번 요청해 주세요.';
+                }
+            }
+        } catch (e) {
+            log.warn(`[Artifact] 유령 placeholder 가드 실패 (continue): ${e instanceof Error ? e.message : e}`);
         }
 
         // 7. AI 응답 저장 — placeholder 적용된 cleanedResponse 사용
