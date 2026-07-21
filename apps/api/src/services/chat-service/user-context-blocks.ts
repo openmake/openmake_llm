@@ -11,6 +11,39 @@ import { USER_CONTEXT_LIMITS } from '../../config/runtime-limits';
 
 const logger = createLogger('UserContextBlocks');
 
+/**
+ * Semantic tier — 사용자 cross-conversation 메모리 블록('' 이면 미주입). 토큰 cap 적용.
+ * 채팅(buildUserContextBlocks)과 Agent Task(system 조립) 양쪽에서 재사용(#3 3-tier 배선).
+ * 실패 시 '' graceful. 인증 사용자만(guest 는 호출부에서 걸러짐).
+ */
+export async function buildUserMemoryBlock(userId: string): Promise<string> {
+    try {
+        const { UserMemoryRepository } = await import('../../data/repositories/user-memory-repository');
+        const { getPool } = await import('../../data/models/unified-database');
+        const memRepo = new UserMemoryRepository(getPool());
+        const memories = await memRepo.listActiveByUser(userId, 50);
+        if (memories.length === 0) return '';
+        const maxMem = USER_CONTEXT_LIMITS.MAX_MEMORY_TOKENS;
+        const kept: typeof memories = [];
+        let usedTokens = 0;
+        for (const m of memories) {
+            const t = estimateTokens(m.content) + 4;
+            if (usedTokens + t > maxMem && kept.length > 0) break;
+            kept.push(m);
+            usedTokens += t;
+        }
+        if (kept.length < memories.length) {
+            logger.info(`user_memories 토큰 cap 적용 (${kept.length}/${memories.length}, >${maxMem} tok)`);
+        }
+        const lines = kept.map((m, i) => `${i + 1}. ${m.content}`).join('\n');
+        void memRepo.touchAccessed(kept.map((m) => m.id)).catch((e) => logger.warn('memory touch 실패 (무시):', e));
+        return `## 🧠 User Memory (cross-conversation)\n${lines}\n\n---\n\n`;
+    } catch (e) {
+        logger.warn('user_memories 조회 실패 (계속 진행):', e);
+        return '';
+    }
+}
+
 export async function buildUserContextBlocks(
     userId: string | undefined,
     includeMemory = true,
@@ -39,34 +72,8 @@ export async function buildUserContextBlocks(
         }
 
         // includeMemory=false (설정 "장기 기억" 토글 OFF) → 저장된 메모리를 대화에 주입하지 않음.
-        try {
-            if (includeMemory) {
-                const { UserMemoryRepository } = await import('../../data/repositories/user-memory-repository');
-                const { getPool } = await import('../../data/models/unified-database');
-                const memRepo = new UserMemoryRepository(getPool());
-                const memories = await memRepo.listActiveByUser(userId, 50);
-                if (memories.length > 0) {
-                    const maxMem = USER_CONTEXT_LIMITS.MAX_MEMORY_TOKENS;
-                    const kept: typeof memories = [];
-                    let usedTokens = 0;
-                    for (const m of memories) {
-                        const t = estimateTokens(m.content) + 4;
-                        if (usedTokens + t > maxMem && kept.length > 0) break;
-                        kept.push(m);
-                        usedTokens += t;
-                    }
-                    if (kept.length < memories.length) {
-                        logger.info(`user_memories 토큰 cap 적용 (${kept.length}/${memories.length}, >${maxMem} tok)`);
-                    }
-                    const lines = kept.map((m, i) => `${i + 1}. ${m.content}`).join('\n');
-                    memoryBlock = `## 🧠 User Memory (cross-conversation)\n${lines}\n\n---\n\n`;
-                    void memRepo.touchAccessed(kept.map(m => m.id)).catch(e =>
-                        logger.warn('memory touch 실패 (무시):', e),
-                    );
-                }
-            }
-        } catch (e) {
-            logger.warn('user_memories 조회 실패 (계속 진행):', e);
+        if (includeMemory) {
+            memoryBlock = await buildUserMemoryBlock(userId);
         }
     }
     return { memoryBlock, customInstructionsBlock };
