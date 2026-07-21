@@ -42,6 +42,7 @@ import { persistArtifactSteps, runTool, isSearchTool } from './agent-task/task-s
 import { initWorkspaceBaseline, maybePersistCodeDiff, captureDiffOnCleanup } from './agent-task/code-diff';
 import { getSteeringRegistry, applyPendingSteering } from './agent-task/steering';
 import { setupTaskRepo, maybePushAndOpenPR } from './agent-task/git-ops';
+import { recoverTextToolCalls } from './agent-task/text-tool-calls';
 import { assembleAgentTools } from './agent-task/tool-assembly';
 import { verifyCodeArtifacts } from './agent-task/deliverable-verify';
 import { buildLearningBlock } from './agent-task/task-learning';
@@ -153,11 +154,8 @@ export class AgentTaskService {
             // resume: 이전 실행분 토큰을 이어서 누적(4-4) — runaway 토큰 가드도 통산 기준으로 동작.
             if (input.resume) totalTokens = Number(preTask?.total_tokens ?? 0);
 
-            // resume: 기존 checkpoint(완전한 end-of-turn conversation)에서 복원, 아니면 새로 시작.
-            // 새 시작 시 system 프롬프트에 활성 스킬(global+user)의 지식(prompt_md)을 주입한다.
-            // resume 의 system 은 old checkpoint 그대로이므로, 작업 중 스킬이 바뀌면 지식(system)과
-            // 도구 바인딩(매 실행 fresh)이 갈릴 수 있다 — 무해, 재개 일관성을 위한 의도된 동작.
-            // 크로스-task 학습(5-2): 과거 유사 작업 교훈 블록 — 플래그 OFF/실패 시 ''(미주입).
+            // resume 은 checkpoint(end-of-turn conversation)에서 복원, 새 시작은 system 에 활성 스킬
+            // 지식(prompt_md)+크로스-task 학습(5-2, 플래그 OFF/실패 시 '') 주입. resume 은 old system 유지.
             const conversation: ChatMessage[] = input.resume
                 ? [...input.resume.conversation]
                 : [
@@ -367,6 +365,12 @@ export class AgentTaskService {
                     stuckNotified = false;
                 }
 
+                // qwen 결함 보정: 구조화 tool_calls 없이 도구 호출을 XML 텍스트로 뱉으면 실행이 안 돼
+                // 파일이 안 만들어진다(→ 다운로드할 산출물 없음) — 파싱해 실 tool_calls 로 승격 후 실행.
+                if ((!result.tool_calls || result.tool_calls.length === 0) && result.content) {
+                    const recovered = recoverTextToolCalls(result.content);
+                    if (recovered.length > 0) { result.tool_calls = recovered; result.content = ''; }
+                }
                 const hasToolCalls = !!result.tool_calls && result.tool_calls.length > 0;
 
                 // 최종 답변 턴이면 deliverable(<artifact> 태그) 추출 — 스텝/result 는
@@ -388,10 +392,8 @@ export class AgentTaskService {
                 emitStep(stepType, undefined, stepContent);
 
                 if (!hasToolCalls) {
-                    // 목표 미달성 선언 판정: 모델이 마커로 "수행 불가"(입력 부재·권한 등)를 밝히면
-                    // completed 대신 failed(goal_incomplete) 로 종료 — 아무것도 못 한 작업이
-                    // "완료"로 표시되던 오표시를 막는다. result 에는 마커를 뗀 사유를 남긴다.
-                    // (턴 0 deliverable 재촉 가드보다 먼저 — 불가 선언을 재촉으로 뭉개지 않음.)
+                    // 목표 미달성 선언: 모델이 마커로 "수행 불가"를 밝히면 completed 대신 failed(goal_incomplete)
+                    // 로 종료(오표시 차단), result 엔 마커 뗀 사유. 턴 0 재촉 가드보다 먼저(불가 선언을 안 뭉갬).
                     if (stepContent && stepContent.includes(AGENT_TASK_INCOMPLETE_MARKER)) {
                         await update({
                             status: 'failed',
@@ -408,10 +410,8 @@ export class AgentTaskService {
                         conversation.push({ role: 'user', content: getAgentTaskDeliverableNudge() });
                         continue;
                     }
-                    // 목표 달성 judge (마커 미준수 보완): 아티팩트 없는 최종 답변만 판정 전용
-                    // LLM 1회 호출로 검증 — deliverable 아티팩트가 실재하면 생략(호출 절약).
-                    // 판정 실패/파싱 불가는 fail-open(완료 유지), 미달성 확정 시에만 실패 처리.
-                    // 5-3(b): 실행 컨텍스트(사용 도구·턴수·계획 상태)를 함께 제공해 판정 정확도 보강.
+                    // 목표 달성 judge(마커 미준수 보완): 아티팩트 없는 최종 답변만 판정 LLM 1회 검증(있으면 생략).
+                    // fail-open(완료 유지), 미달성 확정 시만 실패. 5-3(b) 실행 컨텍스트(도구·턴·계획) 제공.
                     if (extracted!.artifacts.length === 0 && AGENT_TASK_LIMITS.GOAL_JUDGE_ENABLED) {
                         const execCtx = buildJudgeExecutionContext(usedTools, turn + 1, taskRuntime?.getPlanSnapshot() ?? []);
                         const achieved = await judgeGoalAchieved(
