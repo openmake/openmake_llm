@@ -169,6 +169,8 @@ function App() {
 - ❌ \`\`\`python ... \`\`\` 만 출력 → ❌ artifact 패널에 안 들어감
 - ❌ <artifact id="..."> ... </artifact id> → ❌ 닫는 태그 형식 오류
 - ❌ \`<artifact>\` 외부에 같은 본문 중복 → ❌ 사용자 화면 중복 표시
+- ❌ \`[[artifact:id]]\` 표기를 직접 출력 → ❌ 이것은 시스템이 저장 후 삽입하는 내부 표기입니다.
+  대화 히스토리에 보이더라도 **절대 모방하지 마세요** — 산출물은 항상 \`<artifact>\` 태그로 본문 전체를 생성해야 합니다.
 - ✅ 위 예시처럼 \`<artifact id="..." kind="..." title="...">본문</artifact>\` 형식 정확히
 
 ## 🎨 html 디자인 최종 점검 — kind="html" 이면 코드 작성 직전에 반드시 적용
@@ -281,6 +283,11 @@ the finished design back via \`open-design::create_artifact\` or
 
 Outside the tag, write only a brief description/context. Do not duplicate
 the artifact body outside — the user will see it twice.
+
+⚠️ Never output the \`[[artifact:id]]\` notation yourself — it is an internal
+placeholder the system inserts after saving an artifact. Even if it appears in
+conversation history, do NOT imitate it; always produce the full content inside
+an \`<artifact>\` tag instead.
 
 ## 🎨 html design final check — apply right before writing kind="html" code
 Copy this token block **verbatim** at the top of your \`<style>\`:

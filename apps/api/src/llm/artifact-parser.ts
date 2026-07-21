@@ -227,6 +227,34 @@ export function extractAndStripArtifacts(raw: string): {
     return { cleanedContent: cleaned, artifacts };
 }
 
+// [[artifact:id]] / [[artifact:id:vN]] placeholder 스캔 — 시스템이 삽입하는 표기와 동일 grammar.
+const PLACEHOLDER_SCAN_PATTERN = /\[\[artifact:([^\]]+?)(?::v\d+)?\]\]/g;
+
+/**
+ * 본문에 등장하는 `[[artifact:id]]` placeholder 의 id 목록 (중복 제거, 등장 순서 유지).
+ *
+ * 유령 placeholder 가드용: 정상 placeholder 는 extractAndStripArtifacts 가 삽입한
+ * 것뿐이므로, 이 목록에서 이번 턴 추출분·세션 영속분에 없는 id 는 모델이
+ * 히스토리 표기를 모방(hallucination)한 것이다.
+ */
+export function findArtifactPlaceholderIds(content: string): string[] {
+    const ids: string[] = [];
+    for (const m of content.matchAll(PLACEHOLDER_SCAN_PATTERN)) {
+        if (!ids.includes(m[1])) ids.push(m[1]);
+    }
+    return ids;
+}
+
+/** 지정 id 들의 placeholder(`[[artifact:id]]`/`[[artifact:id:vN]]`)를 본문에서 제거. */
+export function stripArtifactPlaceholders(content: string, ids: readonly string[]): string {
+    let out = content;
+    for (const id of ids) {
+        const escaped = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        out = out.replace(new RegExp(`\\[\\[artifact:${escaped}(?::v\\d+)?\\]\\]`, 'g'), '');
+    }
+    return out;
+}
+
 function slug(s: string): string {
     return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30) || 'code';
 }
