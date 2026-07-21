@@ -355,6 +355,9 @@
       "placeholder": "방향을 조정할 새 지시를 보내세요… (Cmd/Ctrl+Enter)",
       "sent": "전송됨",
       "failed": "지시 전송 실패: {error}"
+    },
+    "diff": {
+      "files": "파일 {count}개"
     }
   },
   "artifacts": {

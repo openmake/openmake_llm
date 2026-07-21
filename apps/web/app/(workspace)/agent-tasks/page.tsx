@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { SteeringInput } from "@/components/chat/steering-input";
+import { DiffView } from "@/components/chat/diff-view";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type TaskStatus = "running" | "completed" | "pending";
@@ -389,7 +390,7 @@ function TaskDetailModal({
                           {step.tool_name && <span className="font-mono">{step.tool_name}</span>}
                         </div>
                         {body && (isDiff ? (
-                          <DiffBlock text={body.slice(0, 20000)} />
+                          <DiffView text={body.slice(0, 20000)} />
                         ) : (
                           <pre className={cn(
                             "mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded px-2 py-1 text-xs leading-relaxed",
@@ -408,33 +409,6 @@ function TaskDetailModal({
         </>
       )}
     </div>
-  );
-}
-
-/* ── diff 스텝 렌더 (openmake_code v1) — git diff 를 +/− 라인 색상으로 표시 ── */
-function DiffBlock({ text }: { text: string }) {
-  return (
-    <pre className="mt-1 max-h-80 overflow-auto rounded bg-surface-2 px-2 py-1 font-mono text-xs leading-relaxed">
-      {text.split("\n").map((line, i) => (
-        <div
-          key={i}
-          className={cn(
-            "whitespace-pre-wrap break-words",
-            line.startsWith("+") && !line.startsWith("+++")
-              ? "bg-success-soft text-success"
-              : line.startsWith("-") && !line.startsWith("---")
-                ? "bg-danger-soft text-danger"
-                : line.startsWith("@@")
-                  ? "text-accent"
-                  : line.startsWith("diff ")
-                    ? "font-semibold text-fg-2"
-                    : "text-muted",
-          )}
-        >
-          {line || " "}
-        </div>
-      ))}
-    </pre>
   );
 }
 
