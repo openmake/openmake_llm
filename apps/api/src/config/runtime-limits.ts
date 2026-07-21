@@ -1151,6 +1151,13 @@ export const AGENT_TASK_LIMITS = {
     LEARNING_MAX_LESSONS: parseInt(process.env.AGENT_TASK_LEARNING_MAX_LESSONS || '3', 10),
     /** goal 유사도(자카드) 임계 — 미만은 무관 작업으로 간주(기본 0.2). */
     LEARNING_MIN_SIMILARITY: parseFloat(process.env.AGENT_TASK_LEARNING_MIN_SIMILARITY || '0.2'),
+    /** 재생 가능 절차 스킬(#1 Procedural Skill) — 성공한 액션 시퀀스를 저장(skill_save)하고
+     *  유사 goal 에서 LLM 재추론 없이 재생(skill_run). agent_skills(category='procedural') 재사용,
+     *  신규 테이블 없음. skill_run 은 코드/브라우저를 실행하므로 승인 게이트상 high-risk. 기본 OFF.
+     *  AGENT_TASK_PROCEDURAL_SKILLS=true 로 활성. */
+    PROCEDURAL_SKILLS_ENABLED: process.env.AGENT_TASK_PROCEDURAL_SKILLS === 'true',
+    /** 재사용 후보로 system 에 제안할 절차 스킬 최대 건수(기본 3). */
+    PROCEDURAL_MAX_SUGGEST: parseInt(process.env.AGENT_TASK_PROCEDURAL_MAX_SUGGEST || '3', 10),
     /** 산출물 검증 모드(Phase 5-3): 'syntax'(기본 — py_compile·node --check) | 'run'(샌드박스에서
      *  실제 실행 후 exit code 검사 — network none·자원캡 격리라 안전하나 부작용 있는 코드는 실행됨). */
     VERIFY_MODE: (process.env.AGENT_TASK_VERIFY_MODE === 'run' ? 'run' : 'syntax') as 'syntax' | 'run',
