@@ -263,6 +263,9 @@ export class TaskSandbox {
     /** 브라우저 도구 활성 여부. */
     get isBrowserEnabled(): boolean { return this.cfg.browserEnabled; }
 
+    /** 세션 지속(#2 Part A) ON 이면 storageState 파일명, OFF 면 null. */
+    get browserStatePath(): string | null { return this.cfg.browserPersist ? '.browser-state.json' : null; }
+
     /**
      * 브라우저 액션을 별도 일회성 컨테이너(browserNetwork)에서 실행 — 메인 컨테이너(network none)와
      * 분리해 bash/python 인터넷 미접근 보장. workspace 공유(스크린샷 저장). actionsRelPath 는 사전에 쓰여 있어야 함.

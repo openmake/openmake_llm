@@ -10,7 +10,7 @@
  *   (브라우저 레벨 도메인 화이트리스트 — 컨테이너 network=bridge 의 over-reach 를 좁힘).
  */
 import { chromium } from 'playwright';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const WORKSPACE = '/workspace';
@@ -34,6 +34,11 @@ try {
 const actions = Array.isArray(spec.actions) ? spec.actions.slice(0, MAX_ACTIONS) : [];
 const timeout = Number(spec.timeoutMs) > 0 ? Number(spec.timeoutMs) : DEFAULT_TIMEOUT;
 const allowlist = Array.isArray(spec.allowlist) ? spec.allowlist.map(String) : null;
+// 세션 지속(#2 Part A): spec.statePath 가 있으면 storageState(쿠키·localStorage)를 그 파일에서
+// 복원하고 실행 후 다시 저장 → 호출 간 로그인 유지. 파일은 workspace 내(task 격리·정리와 동일 수명).
+const statePath = typeof spec.statePath === 'string' && spec.statePath
+    ? resolve(WORKSPACE, spec.statePath.replace(/[^A-Za-z0-9._-]/g, '_'))
+    : null;
 
 function hostAllowed(url) {
     if (!allowlist) return true;
@@ -54,7 +59,9 @@ try {
         headless: spec.headless !== false,
         ...(proxyServer ? { proxy: { server: proxyServer } } : {}),
     });
-    const context = await browser.newContext();
+    // 이전 세션 상태가 있으면 복원(로그인 유지). 손상 파일은 무시하고 새 세션으로.
+    const restore = statePath && existsSync(statePath) ? { storageState: statePath } : {};
+    const context = await browser.newContext(restore);
     context.setDefaultTimeout(timeout);
     if (allowlist) {
         await context.route('**', (route) => {
@@ -113,7 +120,9 @@ try {
         }
     }
     finalUrl = page.url();
-    out({ ok: results.every((r) => r.ok), finalUrl, results });
+    // 세션 상태 저장(로그인 등) — 액션 일부 실패로 중단됐어도 이전까지의 상태는 보존.
+    if (statePath) { try { await context.storageState({ path: statePath }); } catch { /* 저장 실패는 무시 */ } }
+    out({ ok: results.every((r) => r.ok), finalUrl, results, ...(statePath ? { sessionPersisted: true } : {}) });
 } catch (e) {
     out({ ok: false, error: e.message, results });
 } finally {

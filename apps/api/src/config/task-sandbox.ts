@@ -66,6 +66,12 @@ export interface TaskSandboxConfig {
      * browser 만 별도 일회성 컨테이너(browserNetwork)에서 실행 — bash/python 은 인터넷 미접근.
      */
     browserEnabled: boolean;
+    /**
+     * 브라우저 세션 지속(#2 Part A, 기본 false). ON 시 브라우저 호출 간 storageState(쿠키·localStorage)를
+     * workspace 파일(.browser-state.json)에 저장/복원 → 로그인 유지. 일회성 컨테이너 모델은 무변경
+     * (컨테이너는 계속 --rm, 상태만 workspace 에 영속). 파일은 task 격리·정리와 동일 수명.
+     */
+    browserPersist: boolean;
     /** 브라우저 전용 일회성 컨테이너의 네트워크(기본 bridge — 브라우저는 인터넷 필요). egress 프록시 ON 시 무시. */
     browserNetwork: string;
     /**
@@ -127,6 +133,7 @@ export function getTaskSandboxConfig(): TaskSandboxConfig {
         approvalTimeoutMs: intEnv(process.env.TASK_SANDBOX_APPROVAL_TIMEOUT_MS, 30 * 60_000),
         workspaceTtlMs: intEnv(process.env.TASK_SANDBOX_WORKSPACE_TTL_MS, 24 * 60 * 60_000),
         browserEnabled: process.env.TASK_SANDBOX_BROWSER_ENABLED !== 'false',
+        browserPersist: process.env.TASK_SANDBOX_BROWSER_PERSIST === 'true',
         browserNetwork: process.env.TASK_SANDBOX_BROWSER_NETWORK || 'bridge',
         egressProxyEnabled: process.env.TASK_SANDBOX_EGRESS_PROXY_ENABLED === 'true',
         egressAllowlist: (process.env.TASK_SANDBOX_EGRESS_ALLOWLIST || '')
