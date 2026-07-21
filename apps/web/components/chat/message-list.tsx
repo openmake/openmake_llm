@@ -326,14 +326,18 @@ function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; appr
             </div>
             <div className="flex flex-wrap gap-2">
               {task.files.map((f) => (
-                <a
+                <button
                   key={f}
-                  href={`/api/agent-tasks/${taskId ?? ""}/files/download?path=${encodeURIComponent(f)}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2.5 py-1 text-xs font-medium text-fg-2 hover:bg-surface-3"
+                  type="button"
+                  disabled={!taskId}
+                  onClick={() => void ApiClient.download(
+                    `/api/agent-tasks/${taskId ?? ""}/files/download?path=${encodeURIComponent(f)}`,
+                    f.split("/").pop() || f,
+                  ).catch((e) => alert(t("agentTask.downloadFailed", { error: e instanceof Error ? e.message : "error" })))}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-2.5 py-1 text-xs font-medium text-fg-2 hover:bg-surface-3 disabled:opacity-50"
                 >
                   <FileText className="h-3 w-3" /> {f}
-                </a>
+                </button>
               ))}
             </div>
           </div>

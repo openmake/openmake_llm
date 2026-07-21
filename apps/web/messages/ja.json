@@ -335,7 +335,8 @@
       "turn": "ターン {turn}",
       "goal": "目標",
       "outputs": "成果物",
-      "viewPr": "PR を表示"
+      "viewPr": "PR を表示",
+      "downloadFailed": "ダウンロードに失敗しました: {error}"
     },
     "research": {
       "inProgress": "ディープリサーチ実行中",
@@ -744,7 +745,8 @@
       "delete": "削除",
       "started": "テンプレートからタスクを開始しました。"
     },
-    "viewPr": "PR を表示"
+    "viewPr": "PR を表示",
+    "downloadFailed": "ダウンロードに失敗しました: {error}"
   },
   "customAgents": {
     "pageTitle": "カスタムエージェント",

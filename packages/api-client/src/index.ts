@@ -112,9 +112,44 @@ async function request<T>(endpoint: string, options: ApiRequestOptions = {}, _is
   return json as T;
 }
 
+/**
+ * 인증(401 자동 refresh) 포함 바이너리 fetch — 파일 다운로드용. plain <a href> 다운로드는
+ * ApiClient 를 안 거쳐 15분 만료 시 refresh 없이 401 로 실패한다(사용자 "다운로드 안 됨" 결함).
+ */
+async function requestBlob(endpoint: string, _isRetry = false): Promise<Blob> {
+  const res = await fetch(endpoint, { credentials: "include" });
+  if (!res.ok) {
+    if (
+      res.status === 401 &&
+      !_isRetry &&
+      !SKIP_REFRESH_ENDPOINTS.some((ep) => endpoint === ep || endpoint.startsWith(ep + "?"))
+    ) {
+      const refreshed = await refreshOnce();
+      if (refreshed) return requestBlob(endpoint, true);
+      if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
+    }
+    throw new ApiError(res.status, `다운로드 실패 (${res.status})`, null);
+  }
+  return res.blob();
+}
+
 export const ApiClient = {
   get: <T>(endpoint: string, options: ApiRequestOptions = {}) =>
     request<T>(endpoint, { ...options, method: "GET" }),
+  /** 인증 포함 파일 다운로드 — 만료 시 자동 refresh 후 blob 저장(plain <a> 대비 15분 만료 무관). */
+  download: async (endpoint: string, filename: string): Promise<void> => {
+    const blob = await requestBlob(endpoint);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  },
   post: <T>(endpoint: string, body?: unknown, options: ApiRequestOptions = {}) =>
     request<T>(endpoint, {
       ...options,

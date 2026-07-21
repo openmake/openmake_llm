@@ -335,7 +335,8 @@
       "turn": "第 {turn} 轮",
       "goal": "目标",
       "outputs": "产出",
-      "viewPr": "查看 PR"
+      "viewPr": "查看 PR",
+      "downloadFailed": "下载失败: {error}"
     },
     "research": {
       "inProgress": "深度研究进行中",
@@ -744,7 +745,8 @@
       "delete": "删除",
       "started": "已从模板启动任务。"
     },
-    "viewPr": "查看 PR"
+    "viewPr": "查看 PR",
+    "downloadFailed": "下载失败: {error}"
   },
   "customAgents": {
     "pageTitle": "自定义智能体",

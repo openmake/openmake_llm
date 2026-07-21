@@ -335,7 +335,8 @@
       "turn": "턴 {turn}",
       "goal": "목표",
       "outputs": "산출물",
-      "viewPr": "PR 보기"
+      "viewPr": "PR 보기",
+      "downloadFailed": "다운로드 실패: {error}"
     },
     "research": {
       "inProgress": "딥 리서치 진행 중",
@@ -744,7 +745,8 @@
       "delete": "삭제",
       "started": "템플릿으로 작업을 시작했습니다."
     },
-    "viewPr": "PR 보기"
+    "viewPr": "PR 보기",
+    "downloadFailed": "다운로드 실패: {error}"
   },
   "customAgents": {
     "pageTitle": "커스텀 에이전트",
