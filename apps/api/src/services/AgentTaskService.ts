@@ -35,10 +35,11 @@ import { TaskRuntime } from './task-sandbox/runtime';
 import { TASK_TERMINATE_SENTINEL } from './task-sandbox/tools';
 import { requiresApproval, getApprovalRegistry } from './task-sandbox/approval-gate';
 import { buildFileContext } from './chat-service/attach-context';
-import { AgentTaskAbort, type AgentTaskRunInput } from './agent-task/types';
+import { AgentTaskAbort, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
 import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
 import { judgeGoalAchieved, buildJudgeExecutionContext } from './agent-task/goal-judge';
 import { persistArtifactSteps, runTool, isSearchTool } from './agent-task/task-steps';
+import { initWorkspaceBaseline, maybePersistCodeDiff } from './agent-task/code-diff';
 import { assembleAgentTools } from './agent-task/tool-assembly';
 import { verifyCodeArtifacts } from './agent-task/deliverable-verify';
 import { buildLearningBlock } from './agent-task/task-learning';
@@ -255,6 +256,8 @@ export class AgentTaskService {
                     goalMsg.content += buildFileContext(inputFiles);
                 }
             }
+            // 코드 작업 diff 캡처(openmake_code v1) — 첨부까지 기록된 시점을 git baseline 스냅샷(멱등·fail-open).
+            if (taskRuntime && sandboxCfg.codeDiffEnabled) await initWorkspaceBaseline(taskRuntime);
 
             // LLM 에 전달할 도구 세트 조립(샌드박스 도구 + extraTools + 2-A 동적 도구). 상세는
             // agent-task/tool-assembly. extraToolNames = 호스트 실행 도구(디스패치 승인 게이트 대상).
@@ -269,7 +272,7 @@ export class AgentTaskService {
             };
 
             for (let turn = startTurn; turn < turnCeiling; turn++) {
-                this.assertWithinLimits(signal, startedAt, pausedMs, totalTokens);
+                assertWithinLimits(signal, startedAt, pausedMs, totalTokens);
 
                 // 진행률: 에이전트가 plan 을 세웠으면 실제 단계 완료율(completed/total)을 진척으로 쓴다
                 // — "3/7 단계"처럼 실제 진행을 반영(1-C). plan 이 없으면(턴0·비플래닝 작업) 총 턴 수를
@@ -434,6 +437,7 @@ export class AgentTaskService {
                         }
                     }
                     stepNumber = await persistArtifactSteps(taskId, extracted!.artifacts, stepNumber);
+                    stepNumber = await maybePersistCodeDiff(taskRuntime, sandboxCfg, taskId, stepNumber, emitStep);
                     await update({
                         status: 'completed',
                         progress: 100,
@@ -525,6 +529,7 @@ export class AgentTaskService {
                 if (terminated) {
                     const ex = extractAndStripArtifacts(result.content ?? '');
                     stepNumber = await persistArtifactSteps(taskId, ex.artifacts, stepNumber);
+                    stepNumber = await maybePersistCodeDiff(taskRuntime, sandboxCfg, taskId, stepNumber, emitStep);
                     await update({
                         status: 'completed',
                         progress: 100,
@@ -550,6 +555,7 @@ export class AgentTaskService {
             const lastRaw = (lastAssistant?.content as string) || '(최대 턴에 도달하여 종료되었습니다.)';
             const lastExtracted = extractAndStripArtifacts(lastRaw);
             stepNumber = await persistArtifactSteps(taskId, lastExtracted.artifacts, stepNumber);
+            stepNumber = await maybePersistCodeDiff(taskRuntime, sandboxCfg, taskId, stepNumber, emitStep);
             await update({
                 status: 'completed',
                 progress: 100,
@@ -581,20 +587,4 @@ export class AgentTaskService {
             }
         }
     }
-
-
-
-
-    /** runaway 가드 — 한도 초과 시 종류별 AgentTaskAbort throw.
-     *  pausedMs(승인 대기 누적)는 활성 시간이 아니므로 타임아웃 예산에서 제외(4-1). */
-    private assertWithinLimits(signal: AbortSignal, startedAt: number, pausedMs: number, totalTokens: number): void {
-        if (signal.aborted) throw new AgentTaskAbort('aborted');
-        if (Date.now() - startedAt - pausedMs > AGENT_TASK_LIMITS.TOTAL_TIMEOUT_MS) {
-            throw new AgentTaskAbort('timeout');
-        }
-        if (totalTokens > AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS) {
-            throw new AgentTaskAbort('token_limit');
-        }
-    }
-
 }

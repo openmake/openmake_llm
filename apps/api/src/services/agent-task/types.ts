@@ -4,6 +4,7 @@
  */
 import type { ChatMessage } from '../../llm/types';
 import type { AttachedFileInput } from '../chat-service/attach-context';
+import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 
 export type AgentTaskUserRole = 'admin' | 'user' | 'guest';
 
@@ -12,6 +13,18 @@ export class AgentTaskAbort extends Error {
     constructor(public readonly kind: 'aborted' | 'timeout' | 'token_limit') {
         super(kind);
         this.name = 'AgentTaskAbort';
+    }
+}
+
+/** runaway 가드 — 한도 초과 시 종류별 AgentTaskAbort throw (AgentTaskService 에서 분리 — 파일 크기 가드).
+ *  pausedMs(승인 대기 누적)는 활성 시간이 아니므로 타임아웃 예산에서 제외(4-1). */
+export function assertWithinLimits(signal: AbortSignal, startedAt: number, pausedMs: number, totalTokens: number): void {
+    if (signal.aborted) throw new AgentTaskAbort('aborted');
+    if (Date.now() - startedAt - pausedMs > AGENT_TASK_LIMITS.TOTAL_TIMEOUT_MS) {
+        throw new AgentTaskAbort('timeout');
+    }
+    if (totalTokens > AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS) {
+        throw new AgentTaskAbort('token_limit');
     }
 }
 
