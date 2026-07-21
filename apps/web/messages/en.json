@@ -334,7 +334,8 @@
       "title": "Agent task",
       "turn": "Turn {turn}",
       "goal": "Goal",
-      "outputs": "Outputs"
+      "outputs": "Outputs",
+      "viewPr": "View PR"
     },
     "research": {
       "inProgress": "Deep research in progress",
@@ -742,7 +743,8 @@
       "run": "Run from this template",
       "delete": "Delete",
       "started": "Task started from template."
-    }
+    },
+    "viewPr": "View PR"
   },
   "customAgents": {
     "pageTitle": "Custom Agents",

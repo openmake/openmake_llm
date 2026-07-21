@@ -364,7 +364,7 @@ export class UnifiedDatabase {
         sandboxContainerId?: string;
         workspacePath?: string;
         plan?: unknown;
-        totalTokens?: number;
+        totalTokens?: number; gitPrUrl?: string; gitPushedBranch?: string;
     }): Promise<void> {
         return this.agentTaskRepository.updateAgentTask(taskId, updates);
     }

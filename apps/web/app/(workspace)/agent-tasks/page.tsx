@@ -75,6 +75,7 @@ interface ApiAgentTask {
   resumable?: boolean;
   plan?: PlanStep[] | null;
   total_tokens?: number | null;
+  git_pr_url?: string | null;
 }
 
 type TaskFilesResponse = ApiSuccess<{ files: string[] }>;
@@ -342,6 +343,16 @@ function TaskDetailModal({
                 ))}
               </ul>
             </div>
+          )}
+
+          {/* Phase 2c Git: 생성된 PR 링크 */}
+          {detail.task.git_pr_url && (
+            <a
+              href={detail.task.git_pr_url} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md border border-accent bg-accent-soft px-3 py-1.5 text-xs font-medium text-accent hover:opacity-90"
+            >
+              {t("viewPr")}
+            </a>
           )}
 
           {/* 산출물 파일 (완료 시 workspace 보존) */}

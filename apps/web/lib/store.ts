@@ -45,6 +45,8 @@ export interface AgentTaskState {
   files?: string[];
   /** 완료 시 코드 작업(openmake_code) git diff — 있으면 카드에 DiffView 로 렌더. */
   diff?: string;
+  /** Phase 2c Git: 완료 시 생성된 PR URL — 있으면 카드에 "PR 보기" 링크. */
+  prUrl?: string;
   /** 방금 실행된 스텝 요약(4-5 실시간 스트림) — "현재 단계" 라인 표시. */
   lastStep?: { stepType: string; toolName?: string; preview?: string };
 }

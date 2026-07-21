@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown, GitPullRequest } from "lucide-react";
 import { ThinkingTimeline } from "@/components/chat/thinking-timeline";
 import { SteeringInput } from "@/components/chat/steering-input";
 import { DiffView } from "@/components/chat/diff-view";
@@ -340,6 +340,15 @@ function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; appr
         )}
         {/* 코드 작업(openmake_code) diff — 채팅에서 위임한 코드 변경을 인라인으로 검토·다운로드. */}
         {task.diff && <DiffView text={task.diff} />}
+        {/* Phase 2c Git: 생성된 PR 링크. */}
+        {task.prUrl && (
+          <a
+            href={task.prUrl} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-md border border-accent bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent hover:opacity-90"
+          >
+            <GitPullRequest className="h-3.5 w-3.5" /> {t("agentTask.viewPr")}
+          </a>
+        )}
         {approvals && approvals.length > 0 && <InlineApprovals approvals={approvals} />}
         {/* 실행 중/일시정지 시 방향 지시(steering) 입력 — 취소·재시작 없이 교정. */}
         {(task.status === "running" || task.status === "paused") && <SteeringInput taskId={taskId} />}

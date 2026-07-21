@@ -334,7 +334,8 @@
       "title": "エージェントタスク",
       "turn": "ターン {turn}",
       "goal": "目標",
-      "outputs": "成果物"
+      "outputs": "成果物",
+      "viewPr": "PR を表示"
     },
     "research": {
       "inProgress": "ディープリサーチ実行中",
@@ -742,7 +743,8 @@
       "run": "このテンプレートで実行",
       "delete": "削除",
       "started": "テンプレートからタスクを開始しました。"
-    }
+    },
+    "viewPr": "PR を表示"
   },
   "customAgents": {
     "pageTitle": "カスタムエージェント",

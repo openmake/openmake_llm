@@ -71,6 +71,8 @@ export class AgentTaskRepository extends BaseRepository {
         workspacePath?: string;
         plan?: unknown;
         totalTokens?: number;
+        gitPrUrl?: string;
+        gitPushedBranch?: string;
     }): Promise<void> {
         const sets: string[] = ['updated_at = NOW()'];
         const params: QueryParam[] = [];
@@ -119,6 +121,14 @@ export class AgentTaskRepository extends BaseRepository {
         if (updates.totalTokens !== undefined) {
             sets.push(`total_tokens = $${paramIdx++}`);
             params.push(updates.totalTokens);
+        }
+        if (updates.gitPrUrl !== undefined) {
+            sets.push(`git_pr_url = $${paramIdx++}`);
+            params.push(updates.gitPrUrl);
+        }
+        if (updates.gitPushedBranch !== undefined) {
+            sets.push(`git_pushed_branch = $${paramIdx++}`);
+            params.push(updates.gitPushedBranch);
         }
 
         params.push(taskId);
