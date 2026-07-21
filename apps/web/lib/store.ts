@@ -138,6 +138,8 @@ interface AppState {
   deepResearchMode: boolean;
   webSearchEnabled: boolean;
   agentTaskMode: boolean;
+  /** 에이전트 작업 승인 3모드 — all=Manual(전부 승인·기본)·high-risk=Auto(고위험만)·none=Skip(전부 자동). */
+  agentApprovalMode: "all" | "high-risk" | "none";
   imageMode: boolean;
   artifactMode: boolean;
   /** 구조화 답변 모드 — ON 시 메시지를 REST /api/chat/structured 로 보내 카드 UI 로 렌더(비스트리밍). */
@@ -196,6 +198,7 @@ interface AppState {
       | "structuredMode",
   ) => void;
   setSelectedModel: (m: string) => void;
+  setAgentApprovalMode: (m: "all" | "high-risk" | "none") => void;
   cycleStyle: () => void;
   setStyle: (m: ChatStyle) => void;
   setAuth: (auth: AppState["auth"]) => void;
@@ -255,6 +258,7 @@ export const useAppStore = create<AppState>()(
   deepResearchMode: false,
   webSearchEnabled: false,
   agentTaskMode: false,
+  agentApprovalMode: "all",
   imageMode: false,
   artifactMode: false,
   structuredMode: false,
@@ -397,6 +401,7 @@ export const useAppStore = create<AppState>()(
       return { [key]: next } as Partial<AppState>;
     }),
   setSelectedModel: (m) => set({ selectedModel: m }),
+  setAgentApprovalMode: (m) => set({ agentApprovalMode: m }),
   cycleStyle: () =>
     set((s) => ({
       style: STYLE_ORDER[(STYLE_ORDER.indexOf(s.style) + 1) % STYLE_ORDER.length],

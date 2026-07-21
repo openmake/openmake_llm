@@ -181,6 +181,7 @@ export function Composer() {
     deepResearchMode,
     webSearchEnabled,
     agentTaskMode,
+    agentApprovalMode,
     imageMode,
     artifactMode,
     structuredMode,
@@ -189,6 +190,7 @@ export function Composer() {
     inputDraft,
     toggle,
     setSelectedModel,
+    setAgentApprovalMode,
     cycleStyle,
     setInputDraft,
     auth,
@@ -285,6 +287,7 @@ export function Composer() {
         text.trim(),
         files.length ? files : undefined,
         images.length ? images.map((i) => i.dataUrl) : undefined,
+        agentApprovalMode,
       );
     } else if (structuredMode) {
       // 구조화 답변 토글 ON — REST /api/chat/structured (비스트리밍, 카드 렌더). 첨부는 미지원.
@@ -340,6 +343,13 @@ export function Composer() {
     { key: "structuredMode" as const, on: structuredMode, icon: LayoutList, label: t("toggle.structured") },
   ];
   const activeModeCount = TOGGLES.filter((m) => m.on).length;
+
+  // 승인 3모드 세그먼트 — all=Manual, high-risk=Auto, none=Skip (에이전트 작업 위임 시 노출).
+  const APPROVAL_MODES = [
+    { v: "all" as const, label: t("approvalMode.manual"), hint: t("approvalMode.manualHint") },
+    { v: "high-risk" as const, label: t("approvalMode.auto"), hint: t("approvalMode.autoHint") },
+    { v: "none" as const, label: t("approvalMode.skip"), hint: t("approvalMode.skipHint") },
+  ];
 
   // 가로채기(bypass) 모드: 켜지면 백엔드가 웹·아티팩트 modifier 를 무시(전용 파이프라인).
   const INTERCEPT_KEYS = new Set<string>(INTERCEPT_MODE_KEYS);
@@ -499,6 +509,31 @@ export function Composer() {
             );
           })}
         </div>
+
+        {/* 승인 3모드(Manual/Auto/Skip) — 에이전트 작업 위임 시 이 실행의 도구 승인 정책 선택. */}
+        {agentTaskMode && (
+          <div className="flex items-center gap-2 px-3 pt-2 text-xs">
+            <span className="text-muted">{t("approvalMode.label")}</span>
+            <div className="inline-flex overflow-hidden rounded-md border border-border">
+              {APPROVAL_MODES.map((m) => (
+                <button
+                  key={m.v}
+                  type="button"
+                  onClick={() => setAgentApprovalMode(m.v)}
+                  title={m.hint}
+                  className={cn(
+                    "px-2 py-0.5 font-medium transition",
+                    agentApprovalMode === m.v
+                      ? "bg-accent text-accent-fg"
+                      : "text-muted hover:bg-surface-2",
+                  )}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* 첨부 칩 — 이미지 썸네일 + 텍스트/파일 칩 */}
         {(files.length > 0 || images.length > 0) && (

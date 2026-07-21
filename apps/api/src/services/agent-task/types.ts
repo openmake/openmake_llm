@@ -49,6 +49,9 @@ export interface AgentTaskRunInput {
     /** 입력 첨부 이미지(dataURL) — goal 메시지 vision 채널로 주입(신규 시작에 한함),
      *  샌드박스 ON 이면 uploads/ 에 원본 바이트로도 기록. */
     images?: string[];
+    /** 승인 3모드(Manual/Auto/Skip) — 이 실행에 한해 전역 승인 정책을 override(비영속).
+     *  all=전부 승인, high-risk=고위험만, none=전부 자동. 미지정 시 전역 TASK_SANDBOX_APPROVAL_POLICY. */
+    approvalPolicy?: 'all' | 'high-risk' | 'none';
     /** resume(이어하기): 기존 end-of-turn checkpoint 에서 복원 */
     resume?: {
         conversation: ChatMessage[];
