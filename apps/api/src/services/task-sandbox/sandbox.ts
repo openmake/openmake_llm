@@ -367,6 +367,7 @@ export async function dirSizeBytes(root: string, cap = Number.MAX_SAFE_INTEGER):
 /**
  * 주어진 workspace 디렉토리의 전체 파일을 상대경로로 재귀 나열 (산출물 다운로드 엔드포인트용).
  * 라이브 TaskSandbox 인스턴스 없이도 동작(task 완료 후 workspace_path 로 호출).
+ * `.git` 은 diff 캡처(code-diff)의 내부 메타데이터라 산출물 목록에서 제외한다.
  */
 export async function listWorkspaceFilesAt(root: string, maxFiles = 1000): Promise<string[]> {
     const out: string[] = [];
@@ -377,8 +378,11 @@ export async function listWorkspaceFilesAt(root: string, maxFiles = 1000): Promi
         for (const e of entries) {
             if (out.length >= maxFiles) return;
             const full = join(dir, e.name);
-            if (e.isDirectory()) await walk(full);
-            else out.push(relative(root, full));
+            if (e.isDirectory()) {
+                if (e.name !== '.git') await walk(full);
+            } else {
+                out.push(relative(root, full));
+            }
         }
     }
     await walk(resolve(root));

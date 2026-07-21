@@ -81,6 +81,7 @@ interface ApiTaskStep {
   id: string;
   turn: number;
   type?: string;
+  step_type?: string;
   content?: string;
   tool_name?: string;
   tool_input?: Record<string, unknown>;
@@ -365,7 +366,9 @@ function TaskDetailModal({
               <div className="max-h-96 overflow-y-auto space-y-2 pr-1">
                 {detail.steps.map((step, i) => {
                   const body = step.tool_output || step.content || "";
-                  const isTool = step.type === "tool_result" || !!step.tool_name;
+                  const stepType = step.step_type ?? step.type;
+                  const isDiff = stepType === "diff";
+                  const isTool = stepType === "tool_result" || !!step.tool_name;
                   return (
                     <div key={step.id} className="flex gap-3">
                       <div className="flex flex-col items-center">
@@ -376,17 +379,19 @@ function TaskDetailModal({
                       </div>
                       <div className="pb-3 min-w-0 flex-1">
                         <div className="flex items-center gap-2 text-xs text-muted mb-0.5">
-                          <Badge tone="neutral">{step.type ?? "step"}</Badge>
+                          <Badge tone="neutral">{stepType ?? "step"}</Badge>
                           {step.tool_name && <span className="font-mono">{step.tool_name}</span>}
                         </div>
-                        {body && (
+                        {body && (isDiff ? (
+                          <DiffBlock text={body.slice(0, 20000)} />
+                        ) : (
                           <pre className={cn(
                             "mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded px-2 py-1 text-xs leading-relaxed",
                             isTool ? "bg-surface-2 font-mono text-muted" : "text-fg-2",
                           )}>
                             {body.slice(0, 4000)}
                           </pre>
-                        )}
+                        ))}
                       </div>
                     </div>
                   );
@@ -397,6 +402,33 @@ function TaskDetailModal({
         </>
       )}
     </div>
+  );
+}
+
+/* ── diff 스텝 렌더 (openmake_code v1) — git diff 를 +/− 라인 색상으로 표시 ── */
+function DiffBlock({ text }: { text: string }) {
+  return (
+    <pre className="mt-1 max-h-80 overflow-auto rounded bg-surface-2 px-2 py-1 font-mono text-xs leading-relaxed">
+      {text.split("\n").map((line, i) => (
+        <div
+          key={i}
+          className={cn(
+            "whitespace-pre-wrap break-words",
+            line.startsWith("+") && !line.startsWith("+++")
+              ? "bg-success-soft text-success"
+              : line.startsWith("-") && !line.startsWith("---")
+                ? "bg-danger-soft text-danger"
+                : line.startsWith("@@")
+                  ? "text-accent"
+                  : line.startsWith("diff ")
+                    ? "font-semibold text-fg-2"
+                    : "text-muted",
+          )}
+        >
+          {line || " "}
+        </div>
+      ))}
+    </pre>
   );
 }
 
