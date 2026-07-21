@@ -11,6 +11,7 @@
  * @module services/agent-task/code-diff
  */
 import { getUnifiedDatabase } from '../../data/models/unified-database';
+import { getTaskSandboxConfig } from '../../config/task-sandbox';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import { createLogger } from '../../utils/logger';
 
@@ -77,6 +78,18 @@ export async function maybePersistCodeDiff(
     const next = await persistDiffStep(taskId, diff, stepNumber);
     emit('diff', 'git_diff', diff);
     return next;
+}
+
+/**
+ * 실패/취소 종료 직전(workspace 삭제 전) diff 캡처 — 완료 경로는 maybePersistCodeDiff 로 이미
+ * 캡처되지만, goal_incomplete·에러·취소로 끝난 코드 작업은 workspace 가 삭제돼 변경분을 볼 수 없었다.
+ * diff 스텝은 DB 에 남으므로 workspace 삭제와 무관하게 실패한 작업의 변경분도 검토 가능해진다.
+ * AgentTaskService finally 에서 !keepWorkspace 일 때 호출(fail-open, WS emit 불요 — 종료 후 재조회).
+ */
+export async function captureDiffOnCleanup(runtime: TaskRuntime, taskId: string, stepNumber: number): Promise<void> {
+    if (!getTaskSandboxConfig().codeDiffEnabled) return;
+    const diff = await captureWorkspaceDiff(runtime);
+    if (diff) await persistDiffStep(taskId, diff, stepNumber);
 }
 
 /**
