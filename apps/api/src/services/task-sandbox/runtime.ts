@@ -14,7 +14,7 @@ import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-
 import { TaskSandbox, type ExecResult } from './sandbox';
 import { createTaskTools, type DelegateFn, type SpawnFn, type ProceduralHooks } from './tools';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
-import { saveProceduralSkill, loadProceduralSpec } from '../agent-task/procedural-skill';
+import { saveProceduralSkill, resolveProceduralSpec } from '../agent-task/procedural-skill';
 import { TaskPlan, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval } from './approval-gate';
 import { createLogger } from '../../utils/logger';
@@ -73,7 +73,7 @@ export class TaskRuntime {
                     kind: i.kind, goal: i.description, params: i.params,
                     actions: i.actions, allowlist: i.allowlist, lang: i.lang, code: i.code,
                 }),
-                load: (id) => loadProceduralSpec(this.userId, id),
+                load: (id) => resolveProceduralSpec(this.userId, id),
             }
             : undefined;
         this.defs = createTaskTools(this.sandbox, this.plan, delegate, spawn, procedural);
