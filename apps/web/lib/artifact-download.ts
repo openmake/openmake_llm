@@ -39,8 +39,14 @@ const LANG_EXT: Record<string, string> = {
   css: "css",
 };
 
+/** UUID(v4) 형태 문자열 — title 이 없어 artifact id(UUID)로 폴백된 경우 파일명으로 부적합. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function safeName(title: string): string {
-  return (title || "artifact").replace(/[^\w가-힣.-]+/g, "_").slice(0, 60) || "artifact";
+  const t = (title || "").trim();
+  // 빈 값 또는 UUID(제목 없이 id 로 폴백된 케이스)면 사람이 못 알아보는 파일명이 되므로 'artifact' 로.
+  const base = !t || UUID_RE.test(t) ? "artifact" : t;
+  return base.replace(/[^\w가-힣.-]+/g, "_").slice(0, 60) || "artifact";
 }
 
 function extFor(kind: string, lang: string | null): string {
