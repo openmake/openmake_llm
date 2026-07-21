@@ -249,6 +249,7 @@ export function createTaskTools(
             const spec = {
                 actions,
                 ...(Array.isArray(args.allowlist) ? { allowlist: args.allowlist } : {}),
+                ...(sandbox.browserStatePath ? { statePath: sandbox.browserStatePath } : {}),
             };
             try {
                 await sandbox.writeFile('.browser-actions.json', JSON.stringify(spec));
@@ -450,7 +451,11 @@ export function createTaskTools(
                 if (spec.kind === 'browser') {
                     if (!sandbox.isBrowserEnabled) return textResult('브라우저 기능이 비활성화되어 있습니다 (TASK_SANDBOX_BROWSER_ENABLED=false).', true);
                     const renderedActions = deepSub(spec.actions ?? []);
-                    const specOut = { actions: renderedActions, ...(Array.isArray(spec.allowlist) ? { allowlist: deepSub(spec.allowlist) } : {}) };
+                    const specOut = {
+                        actions: renderedActions,
+                        ...(Array.isArray(spec.allowlist) ? { allowlist: deepSub(spec.allowlist) } : {}),
+                        ...(sandbox.browserStatePath ? { statePath: sandbox.browserStatePath } : {}),
+                    };
                     await sandbox.writeFile('.browser-actions.json', JSON.stringify(specOut));
                     return formatExec(await sandbox.runBrowser('.browser-actions.json'));
                 }
