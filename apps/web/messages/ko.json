@@ -268,6 +268,15 @@
       "clear": "노트북 컨텍스트 해제",
       "sourceCount": "소스 {count}개",
       "select": "노트북 선택"
+    },
+    "approvalMode": {
+      "label": "승인:",
+      "manual": "수동",
+      "auto": "자동",
+      "skip": "건너뜀",
+      "manualHint": "모든 도구 호출을 승인",
+      "autoHint": "고위험 도구만 승인 (셸/파이썬/브라우저/삭제)",
+      "skipHint": "모든 도구를 자동 실행"
     }
   },
   "chat": {
@@ -361,15 +370,6 @@
       "copy": "복사",
       "copied": "복사됨",
       "download": ".patch 다운로드"
-    },
-    "approvalMode": {
-      "label": "승인:",
-      "manual": "수동",
-      "auto": "자동",
-      "skip": "건너뜀",
-      "manualHint": "모든 도구 호출을 승인",
-      "autoHint": "고위험 도구만 승인 (셸/파이썬/브라우저/삭제)",
-      "skipHint": "모든 도구를 자동 실행"
     }
   },
   "artifacts": {

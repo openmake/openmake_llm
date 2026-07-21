@@ -268,6 +268,15 @@
       "clear": "ノートブックコンテキストを解除",
       "sourceCount": "ソース {count}件",
       "select": "ノートブックを選択"
+    },
+    "approvalMode": {
+      "label": "承認:",
+      "manual": "手動",
+      "auto": "自動",
+      "skip": "スキップ",
+      "manualHint": "すべてのツール呼び出しを承認",
+      "autoHint": "高リスクツールのみ承認 (シェル/python/ブラウザ/削除)",
+      "skipHint": "すべてのツールを自動実行"
     }
   },
   "chat": {
@@ -361,15 +370,6 @@
       "copy": "コピー",
       "copied": "コピー済み",
       "download": ".patch をダウンロード"
-    },
-    "approvalMode": {
-      "label": "承認:",
-      "manual": "手動",
-      "auto": "自動",
-      "skip": "スキップ",
-      "manualHint": "すべてのツール呼び出しを承認",
-      "autoHint": "高リスクツールのみ承認 (シェル/python/ブラウザ/削除)",
-      "skipHint": "すべてのツールを自動実行"
     }
   },
   "artifacts": {

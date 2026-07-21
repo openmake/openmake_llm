@@ -268,6 +268,15 @@
       "clear": "清除笔记本上下文",
       "sourceCount": "{count} 个来源",
       "select": "选择笔记本"
+    },
+    "approvalMode": {
+      "label": "审批:",
+      "manual": "手动",
+      "auto": "自动",
+      "skip": "跳过",
+      "manualHint": "批准每次工具调用",
+      "autoHint": "仅批准高风险工具 (shell/python/浏览器/删除)",
+      "skipHint": "自动运行所有工具"
     }
   },
   "chat": {
@@ -361,15 +370,6 @@
       "copy": "复制",
       "copied": "已复制",
       "download": "下载 .patch"
-    },
-    "approvalMode": {
-      "label": "审批:",
-      "manual": "手动",
-      "auto": "自动",
-      "skip": "跳过",
-      "manualHint": "批准每次工具调用",
-      "autoHint": "仅批准高风险工具 (shell/python/浏览器/删除)",
-      "skipHint": "自动运行所有工具"
     }
   },
   "artifacts": {
