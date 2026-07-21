@@ -39,7 +39,7 @@ import { AgentTaskAbort, assertWithinLimits, type AgentTaskRunInput } from './ag
 import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
 import { judgeGoalAchieved, buildJudgeExecutionContext } from './agent-task/goal-judge';
 import { persistArtifactSteps, runTool, isSearchTool } from './agent-task/task-steps';
-import { initWorkspaceBaseline, maybePersistCodeDiff } from './agent-task/code-diff';
+import { initWorkspaceBaseline, maybePersistCodeDiff, captureDiffOnCleanup } from './agent-task/code-diff';
 import { getSteeringRegistry, applyPendingSteering } from './agent-task/steering';
 import { assembleAgentTools } from './agent-task/tool-assembly';
 import { verifyCodeArtifacts } from './agent-task/deliverable-verify';
@@ -589,8 +589,9 @@ export class AgentTaskService {
             // 미소비 steering 정리 — 종료된 task 에 남은 지시가 다음 동명 실행에 새지 않게.
             getSteeringRegistry().clear(taskId);
             if (taskRuntime) {
-                // 완료 시 workspace 보존(산출물 다운로드용), 실패/취소 시 삭제. 컨테이너는 항상 제거.
+                // 완료 시 workspace 보존(다운로드용), 실패/취소 시 삭제 직전 코드 diff 캡처(실패한 코드 작업도 변경분 검토).
                 const keepWorkspace = curStatus === 'completed';
+                if (!keepWorkspace) await captureDiffOnCleanup(taskRuntime, taskId, stepNumber).catch(() => { /* fail-open */ });
                 await taskRuntime.cleanup(!keepWorkspace).catch((e) =>
                     logger.warn(`[AgentTask] 샌드박스 정리 실패: ${taskId} — ${e}`));
             }
