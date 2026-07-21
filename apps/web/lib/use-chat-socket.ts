@@ -191,10 +191,19 @@ export function useChatSocket() {
               let prUrl: string | undefined;
               try {
                 const r = await ApiClient.get<{
-                  data: { task: { result?: string; git_pr_url?: string }; steps?: Array<{ step_type: string; content?: string }> };
+                  data: { task: { result?: string; git_pr_url?: string; git_repo_url?: string }; steps?: Array<{ step_type: string; content?: string }> };
                 }>(`/api/agent-tasks/${taskId}`);
                 result = r?.data?.task?.result ?? "";
                 prUrl = r?.data?.task?.git_pr_url || undefined;
+                // Git 태스크 PR 은 완료 표시 직후(finally, ~수초) 생성된다 — 완료 시점 조회엔 아직
+                // 없을 수 있으므로, repo 태스크인데 PR 이 비면 한 번 지연 재조회해 링크를 채운다.
+                if (r?.data?.task?.git_repo_url && !prUrl) {
+                  setTimeout(() => {
+                    void ApiClient.get<{ data: { task: { git_pr_url?: string } } }>(`/api/agent-tasks/${taskId}`)
+                      .then((r2) => { const p = r2?.data?.task?.git_pr_url; if (p) merge({ prUrl: p }, undefined); })
+                      .catch(() => { /* noop */ });
+                  }, 10_000);
+                }
                 // 코드 작업 diff 스텝 — 채팅 카드에 DiffView 로 인라인 렌더(마지막 diff 사용).
                 diff = (r?.data?.steps ?? []).filter((s) => s.step_type === "diff").pop()?.content || undefined;
                 // deliverable 아티팩트 — store 등록 후 카드가 칩으로 렌더.
