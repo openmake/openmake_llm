@@ -187,11 +187,14 @@ export function useChatSocket() {
               let result = "";
               const artifactIds: string[] = [];
               let files: string[] = [];
+              let diff: string | undefined;
               try {
                 const r = await ApiClient.get<{
                   data: { task: { result?: string }; steps?: Array<{ step_type: string; content?: string }> };
                 }>(`/api/agent-tasks/${taskId}`);
                 result = r?.data?.task?.result ?? "";
+                // 코드 작업 diff 스텝 — 채팅 카드에 DiffView 로 인라인 렌더(마지막 diff 사용).
+                diff = (r?.data?.steps ?? []).filter((s) => s.step_type === "diff").pop()?.content || undefined;
                 // deliverable 아티팩트 — store 등록 후 카드가 칩으로 렌더.
                 const arts = (r?.data?.steps ?? [])
                   .filter((s) => s.step_type === "artifact")
@@ -208,7 +211,7 @@ export function useChatSocket() {
                 const f = await ApiClient.get<{ data: { files: string[] } }>(`/api/agent-tasks/${taskId}/files`);
                 files = f?.data?.files ?? [];
               } catch { /* 파일 없음 */ }
-              merge({ result, artifactIds, files, lastStep: undefined }, undefined);
+              merge({ result, artifactIds, files, diff, lastStep: undefined }, undefined);
             })();
           } else if (status === "paused") {
             // 승인 대기 — 해당 task 의 pending approval 조회 → 카드에 인라인 승인 버튼.
