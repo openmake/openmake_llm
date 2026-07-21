@@ -1508,5 +1508,17 @@
     "dashboard": "대시보드",
     "history": "대화 히스토리",
     "research": "딥 리서치"
+  },
+  "githubConnect": {
+    "title": "GitHub",
+    "description": "Personal Access Token을 연결하면 에이전트 작업이 저장소를 clone하고 PR을 생성할 수 있습니다. 토큰은 암호화되며 작업 샌드박스에 노출되지 않습니다.",
+    "connected": "연결됨",
+    "patLabel": "Personal Access Token",
+    "save": "연결",
+    "disconnect": "연결 해제",
+    "disconnectConfirm": "GitHub 연결을 해제할까요? 에이전트 작업이 더 이상 저장소에 접근할 수 없습니다.",
+    "hint": "repo 권한이 필요합니다. github.com → Settings → Developer settings → Personal access tokens 에서 생성.",
+    "saveFailed": "토큰 저장 실패",
+    "disconnectFailed": "연결 해제 실패"
   }
 }

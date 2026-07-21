@@ -1508,5 +1508,17 @@
     "dashboard": "仪表盘",
     "history": "对话历史",
     "research": "深度研究"
+  },
+  "githubConnect": {
+    "title": "GitHub",
+    "description": "连接个人访问令牌(PAT)后，代理任务即可克隆仓库并创建 PR。令牌已加密，绝不暴露给任务沙箱。",
+    "connected": "已连接",
+    "patLabel": "个人访问令牌",
+    "save": "连接",
+    "disconnect": "断开",
+    "disconnectConfirm": "断开 GitHub？代理任务将无法访问你的仓库。",
+    "hint": "需要 repo 权限。在 github.com → Settings → Developer settings → Personal access tokens 创建。",
+    "saveFailed": "保存令牌失败",
+    "disconnectFailed": "断开失败"
   }
 }
