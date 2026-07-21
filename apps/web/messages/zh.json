@@ -355,6 +355,9 @@
       "placeholder": "发送新指令以调整方向… (Cmd/Ctrl+Enter)",
       "sent": "已发送",
       "failed": "发送指令失败: {error}"
+    },
+    "diff": {
+      "files": "{count} 个文件"
     }
   },
   "artifacts": {

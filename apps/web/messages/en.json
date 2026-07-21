@@ -355,6 +355,9 @@
       "placeholder": "Send a new instruction to adjust direction… (Cmd/Ctrl+Enter)",
       "sent": "Sent",
       "failed": "Failed to send instruction: {error}"
+    },
+    "diff": {
+      "files": "{count} files"
     }
   },
   "artifacts": {
