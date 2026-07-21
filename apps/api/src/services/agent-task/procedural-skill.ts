@@ -111,6 +111,36 @@ export async function loadProceduralSpec(userId: string, skillId: string): Promi
     return parseSpec(skill.content);
 }
 
+/**
+ * id 우선 해석 — 정확한 skill_id 미스 시, 본인 절차 스킬 중 name/goal 퍼지 매칭으로 해석.
+ * 라이브 관찰: 모델이 주입된 exact skill_id 대신 의미 이름("square" 등)을 지어내 호출 →
+ * 퍼지 폴백이 없으면 재생이 전부 실패한다.
+ */
+export async function resolveProceduralSpec(userId: string, idOrName: string): Promise<ProceduralSpec | null> {
+    const exact = await loadProceduralSpec(userId, idOrName);
+    if (exact) return exact;
+    const res = await getRepo()
+        .searchSkills({ userId, category: PROCEDURAL_CATEGORY, status: 'active', limit: 50 })
+        .catch(() => null);
+    if (!res || res.skills.length === 0) return null;
+    const q = idOrName.toLowerCase().replace(/[_-]/g, ' ').trim();
+    const words = q.split(/\s+/).filter((w) => w.length > 2);
+    let best: ProceduralSpec | null = null;
+    let bestScore = 0;
+    for (const s of res.skills) {
+        const spec = parseSpec(s.content);
+        if (!spec) continue;
+        const hay = `${s.name} ${spec.goal ?? ''}`.toLowerCase();
+        const hayWords = hay.split(/\s+/).filter((w) => w.length > 2);
+        // 부분일치 또는 형태변형(접두 5자 공유: square↔squaring) 매칭.
+        const contains = hay.includes(q) || words.some((w) =>
+            hay.includes(w) || hayWords.some((hw) => hw.slice(0, 5) === w.slice(0, 5) && w.length >= 5));
+        const score = Math.max(goalSimilarity(idOrName, spec.goal ?? s.name), contains ? 0.5 : 0);
+        if (score > bestScore) { bestScore = score; best = spec; }
+    }
+    return bestScore >= 0.3 ? best : null;
+}
+
 /** goal 유사 절차 스킬 상위 N(임계 이상). */
 export async function findMatchingSkills(userId: string, goal: string): Promise<MatchedSkill[]> {
     const res = await getRepo()
@@ -153,7 +183,8 @@ export async function buildProceduralSkillBlock(userId: string, goal: string): P
             '',
             '### 지금 재사용 가능한 절차 (skill_run 으로 즉시 재생)',
             '아래는 과거에 성공해 저장된 실행 절차입니다. 목표에 부합하면 처음부터 다시 추론하지 말고',
-            'skill_run 을 skill_id 와 params 로 호출해 그대로 재생하세요. 재생 결과가 목표와 다르면 수동으로 진행하세요.',
+            'skill_run 을 아래 정확한 skill_id(권장) 또는 스킬 이름과 params 로 호출해 그대로 재생하세요.',
+            '재생 결과가 목표와 다르면 수동으로 진행하세요.',
             ...lines,
         ].join('\n');
     } catch (e) {

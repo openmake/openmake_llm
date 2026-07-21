@@ -419,7 +419,7 @@ export function createTaskTools(
             inputSchema: {
                 type: 'object',
                 properties: {
-                    skill_id: { type: 'string', description: '재생할 절차 스킬 id' },
+                    skill_id: { type: 'string', description: '재생할 절차 스킬 id(정확한 skill_id 권장). 미스 시 스킬 이름/설명으로도 매칭됩니다.' },
                     params: { type: 'object', description: '{{param}} 치환값 (예: {"city":"부산","year":"2026"})' },
                 },
                 required: ['skill_id'],
