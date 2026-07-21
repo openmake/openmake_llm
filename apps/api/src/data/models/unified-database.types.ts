@@ -180,6 +180,10 @@ export interface AgentTask {
     input_files?: unknown;
     /** 입력 첨부 이미지(dataURL 배열) — vision 주입 + 샌드박스 기록용 */
     input_images?: unknown;
+    /** Phase 2 Git: 작업 대상 repo URL(077) — 있으면 실행 시 호스트가 workspace 에 clone */
+    git_repo_url?: string;
+    /** Phase 2 Git: clone 할 base 브랜치(077) */
+    git_branch?: string;
     /** 누적 LLM 토큰(prompt+completion) — terminal 전이 시 기록(066), resume 은 통산 */
     total_tokens?: number;
     created_at: string;

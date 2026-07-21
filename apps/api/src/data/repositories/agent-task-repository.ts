@@ -24,9 +24,13 @@ export class AgentTaskRepository extends BaseRepository {
         inputFiles?: unknown;
         /** 입력 첨부 이미지(dataURL 배열) — vision 주입 + 샌드박스 기록용 */
         inputImages?: unknown;
+        /** Phase 2 Git: 작업 대상 repo URL(https://github.com/org/repo) */
+        gitRepoUrl?: string;
+        /** Phase 2 Git: clone 할 base 브랜치 */
+        gitBranch?: string;
     }): Promise<void> {
-        // input_files/input_images 는 첨부가 있을 때만 컬럼에 포함 — 056/057 마이그레이션
-        // 미적용 배포에서도 첨부 없는 기존 생성 경로가 깨지지 않게 한다(2단계 배포 안전).
+        // input_files/input_images/git_* 는 값이 있을 때만 컬럼에 포함 — 056/057/077 마이그레이션
+        // 미적용 배포에서도 해당 값 없는 기존 생성 경로가 깨지지 않게 한다(2단계 배포 안전).
         const cols = ['id', 'user_id', 'goal', 'max_turns', 'model'];
         const values: QueryParam[] = [params.id, params.userId, params.goal, params.maxTurns ?? 10, params.model];
         if (params.inputFiles !== undefined) {
@@ -36,6 +40,14 @@ export class AgentTaskRepository extends BaseRepository {
         if (params.inputImages !== undefined) {
             cols.push('input_images');
             values.push(JSON.stringify(params.inputImages));
+        }
+        if (params.gitRepoUrl !== undefined) {
+            cols.push('git_repo_url');
+            values.push(params.gitRepoUrl);
+        }
+        if (params.gitBranch !== undefined) {
+            cols.push('git_branch');
+            values.push(params.gitBranch);
         }
         await this.query(
             `INSERT INTO agent_tasks (${cols.join(', ')}) VALUES (${values.map((_, i) => `$${i + 1}`).join(', ')})`,

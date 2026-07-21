@@ -277,6 +277,9 @@
       "manualHint": "批准每次工具调用",
       "autoHint": "仅批准高风险工具 (shell/python/浏览器/删除)",
       "skipHint": "自动运行所有工具"
+    },
+    "repo": {
+      "label": "仓库(可选):"
     }
   },
   "chat": {

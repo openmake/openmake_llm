@@ -39,6 +39,10 @@ export const createAgentTaskSchema = z.object({
     images: z.array(
         z.string().startsWith('data:image/').max(FILE_ATTACH_LIMITS.MAX_IMAGE_DATAURL_CHARS)
     ).max(FILE_ATTACH_LIMITS.MAX_IMAGES).optional(),
+    // Phase 2 Git: 작업 대상 repo(https://github.com/org/repo)·브랜치. 있으면 실행 시 호스트가 clone.
+    // 엄격한 형식 검증은 서버 parseGithubRepo 가 수행 — 여기선 prefix·길이·안전문자만.
+    repoUrl: z.string().startsWith('https://github.com/').max(300).optional(),
+    branch: z.string().max(200).regex(/^[A-Za-z0-9._/-]+$/).optional(),
 });
 
 /** 에이전트 작업 생성 요청 TypeScript 타입 */

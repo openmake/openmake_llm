@@ -277,6 +277,9 @@
       "manualHint": "Approve every tool call",
       "autoHint": "Approve only high-risk tools (shell/python/browser/delete)",
       "skipHint": "Run all tools automatically"
+    },
+    "repo": {
+      "label": "Repo (optional):"
     }
   },
   "chat": {

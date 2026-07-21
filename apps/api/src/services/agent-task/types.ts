@@ -52,6 +52,11 @@ export interface AgentTaskRunInput {
     /** 승인 3모드(Manual/Auto/Skip) — 이 실행에 한해 전역 승인 정책을 override(비영속).
      *  all=전부 승인, high-risk=고위험만, none=전부 자동. 미지정 시 전역 TASK_SANDBOX_APPROVAL_POLICY. */
     approvalPolicy?: 'all' | 'high-risk' | 'none';
+    /** Phase 2 Git: 작업 대상 GitHub repo URL(https://github.com/org/repo). 있으면 실행 시
+     *  호스트가 workspace 에 clone(토큰은 사용자 github 연결). 미지정이면 일반 샌드박스 작업. */
+    gitRepoUrl?: string;
+    /** Phase 2 Git: clone 할 브랜치(base). 미지정 시 repo 기본 브랜치. */
+    gitBranch?: string;
     /** resume(이어하기): 기존 end-of-turn checkpoint 에서 복원 */
     resume?: {
         conversation: ChatMessage[];
