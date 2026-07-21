@@ -3,6 +3,9 @@
  * @module services/agent-task/skill-block
  */
 import { getSkillManager } from '../../agents/skill-manager';
+import { getAgentTaskSystemPrompt } from '../../prompts/agent-task-prompt';
+import { buildLearningBlock } from './task-learning';
+import { buildProceduralSkillBlock } from './procedural-skill';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentTaskService');
@@ -27,4 +30,15 @@ export async function buildSkillPromptBlock(userId: string): Promise<string> {
         logger.debug('[AgentTask] 스킬 프롬프트 주입 실패 — 무시', e);
         return '';
     }
+}
+
+/**
+ * 신규 task 의 system 메시지 콘텐츠 조립 — 기본 프롬프트 + 스킬 지식 + 크로스-task 학습 +
+ * 재사용 가능 절차(#1). 각 블록은 실패 시 '' 라 조립을 막지 않는다. (resume 은 old system 유지)
+ */
+export async function buildAgentTaskSystemContent(userId: string, goal: string, taskId: string): Promise<string> {
+    return getAgentTaskSystemPrompt()
+        + (await buildSkillPromptBlock(userId))
+        + (await buildLearningBlock(userId, goal, taskId))
+        + (await buildProceduralSkillBlock(userId, goal));
 }

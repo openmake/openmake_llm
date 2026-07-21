@@ -21,7 +21,7 @@ import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, AGENT_SPAWN } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
-import { getAgentTaskSystemPrompt, getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getAgentTaskBrowserLimitNudge, getTaskSandboxGuidance, getAgentTaskUploadedFilesNote, getAgentTaskVerifyFailedNudge, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
+import { getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getAgentTaskBrowserLimitNudge, getTaskSandboxGuidance, getAgentTaskUploadedFilesNote, getAgentTaskVerifyFailedNudge, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts } from '../llm/artifact-parser';
 import { getPushService } from './PushService';
 import { createLogger } from '../utils/logger';
@@ -45,9 +45,7 @@ import { setupTaskRepo, maybePushAndOpenPR } from './agent-task/git-ops';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
 import { assembleAgentTools } from './agent-task/tool-assembly';
 import { verifyCodeArtifacts } from './agent-task/deliverable-verify';
-import { buildLearningBlock } from './agent-task/task-learning';
-import { buildProceduralSkillBlock } from './agent-task/procedural-skill';
-import { buildSkillPromptBlock, AGENT_TASK_SKILL_AGENT_ID } from './agent-task/skill-block';
+import { buildAgentTaskSystemContent, AGENT_TASK_SKILL_AGENT_ID } from './agent-task/skill-block';
 
 // 기존 import 호환 재노출 — 타입/에러는 services/agent-task/types 로 분리 (파일 크기 가드).
 export { AgentTaskAbort, type AgentTaskRunInput, type AgentTaskInputFile } from './agent-task/types';
@@ -162,10 +160,7 @@ export class AgentTaskService {
                 : [
                     {
                         role: 'system',
-                        content: getAgentTaskSystemPrompt()
-                            + (await buildSkillPromptBlock(userId))
-                            + (await buildLearningBlock(userId, goal, taskId))
-                            + (await buildProceduralSkillBlock(userId, goal)),
+                        content: await buildAgentTaskSystemContent(userId, goal, taskId),
                     },
                     { role: 'user', content: goal },
                 ];
