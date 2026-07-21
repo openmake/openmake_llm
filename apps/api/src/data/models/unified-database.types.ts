@@ -184,6 +184,10 @@ export interface AgentTask {
     git_repo_url?: string;
     /** Phase 2 Git: clone 할 base 브랜치(077) */
     git_branch?: string;
+    /** Phase 2c Git: 완료 시 생성된 PR URL(078) — 카드/상세에 링크 노출 */
+    git_pr_url?: string;
+    /** Phase 2c Git: push 된 작업 브랜치명(078) */
+    git_pushed_branch?: string;
     /** 누적 LLM 토큰(prompt+completion) — terminal 전이 시 기록(066), resume 은 통산 */
     total_tokens?: number;
     created_at: string;

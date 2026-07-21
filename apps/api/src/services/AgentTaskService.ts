@@ -41,7 +41,7 @@ import { judgeGoalAchieved, buildJudgeExecutionContext } from './agent-task/goal
 import { persistArtifactSteps, runTool, isSearchTool } from './agent-task/task-steps';
 import { initWorkspaceBaseline, maybePersistCodeDiff, captureDiffOnCleanup } from './agent-task/code-diff';
 import { getSteeringRegistry, applyPendingSteering } from './agent-task/steering';
-import { setupTaskRepo } from './agent-task/git-ops';
+import { setupTaskRepo, maybePushAndOpenPR } from './agent-task/git-ops';
 import { assembleAgentTools } from './agent-task/tool-assembly';
 import { verifyCodeArtifacts } from './agent-task/deliverable-verify';
 import { buildLearningBlock } from './agent-task/task-learning';
@@ -591,6 +591,7 @@ export class AgentTaskService {
                 // 완료 시 workspace 보존(다운로드용), 실패/취소 시 삭제 직전 코드 diff 캡처(실패한 코드 작업도 변경분 검토).
                 const keepWorkspace = curStatus === 'completed';
                 if (!keepWorkspace) await captureDiffOnCleanup(taskRuntime, taskId, stepNumber).catch(() => { /* fail-open */ });
+                else if (input.gitRepoUrl) await maybePushAndOpenPR(taskRuntime, input, userId, taskId, goal); // 완료+repo: 새 브랜치 push+PR
                 await taskRuntime.cleanup(!keepWorkspace).catch((e) =>
                     logger.warn(`[AgentTask] 샌드박스 정리 실패: ${taskId} — ${e}`));
             }

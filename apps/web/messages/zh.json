@@ -334,7 +334,8 @@
       "title": "智能体任务",
       "turn": "第 {turn} 轮",
       "goal": "目标",
-      "outputs": "产出"
+      "outputs": "产出",
+      "viewPr": "查看 PR"
     },
     "research": {
       "inProgress": "深度研究进行中",
@@ -742,7 +743,8 @@
       "run": "使用此模板运行",
       "delete": "删除",
       "started": "已从模板启动任务。"
-    }
+    },
+    "viewPr": "查看 PR"
   },
   "customAgents": {
     "pageTitle": "自定义智能体",
