@@ -81,6 +81,7 @@ export function createTaskTools(
     delegate?: DelegateFn,
     spawn?: SpawnFn,
     procedural?: ProceduralHooks,
+    browserMetrics?: (stdout: string) => void,
 ): MCPToolDefinition[] {
     const bash: MCPToolDefinition = {
         tool: {
@@ -259,7 +260,9 @@ export function createTaskTools(
                 return textResult(`액션 파일 쓰기 실패: ${e instanceof Error ? e.message : String(e)}`, true);
             }
             // 메인 샌드박스(network none)가 아닌 별도 일회성 컨테이너에서 실행.
-            return formatExec(await sandbox.runBrowser('.browser-actions.json'));
+            const r = await sandbox.runBrowser('.browser-actions.json');
+            browserMetrics?.(r.stdout); // Stage 0 계측(fail-open)
+            return formatExec(r);
         },
     };
 
@@ -459,7 +462,9 @@ export function createTaskTools(
                         ...(sandbox.browserStatePath ? { statePath: sandbox.browserStatePath } : {}),
                     };
                     await sandbox.writeFile('.browser-actions.json', JSON.stringify(specOut));
-                    return formatExec(await sandbox.runBrowser('.browser-actions.json'));
+                    const r = await sandbox.runBrowser('.browser-actions.json');
+                    browserMetrics?.(r.stdout); // Stage 0 계측(fail-open)
+                    return formatExec(r);
                 }
                 // kind === 'script'
                 const code = sub(spec.code ?? '');

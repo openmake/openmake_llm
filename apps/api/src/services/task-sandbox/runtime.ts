@@ -13,6 +13,7 @@ import type { MCPToolDefinition } from '../../mcp/types';
 import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { TaskSandbox, type ExecResult } from './sandbox';
 import { createTaskTools, type DelegateFn, type SpawnFn, type ProceduralHooks } from './tools';
+import { recordBrowserMetric } from './browser-metrics';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { saveProceduralSkill, resolveProceduralSpec } from '../agent-task/procedural-skill';
 import { TaskPlan, type PlanStep } from './planning';
@@ -76,7 +77,11 @@ export class TaskRuntime {
                 load: (id) => resolveProceduralSpec(this.userId, id),
             }
             : undefined;
-        this.defs = createTaskTools(this.sandbox, this.plan, delegate, spawn, procedural);
+        // Computer Use Stage 0: browser 액션 계측을 taskId/userId 로 바인딩해 주입(fire-and-forget).
+        const browserMetrics = AGENT_TASK_LIMITS.BROWSER_METRICS_ENABLED
+            ? (stdout: string) => recordBrowserMetric(this.taskId, this.userId, stdout)
+            : undefined;
+        this.defs = createTaskTools(this.sandbox, this.plan, delegate, spawn, procedural, browserMetrics);
         for (const d of this.defs) this.handlers.set(d.tool.name, d.handler);
     }
 
