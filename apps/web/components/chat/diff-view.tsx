@@ -7,7 +7,7 @@
  */
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { ChevronRight, ChevronDown, Copy, Check, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface DiffFile {
@@ -85,16 +85,50 @@ function FileSection({ file, defaultOpen }: { file: DiffFile; defaultOpen: boole
 
 export function DiffView({ text }: { text: string }) {
   const t = useTranslations("chat");
+  const [copied, setCopied] = useState(false);
   const files = parseUnifiedDiff(text);
   if (files.length === 0) return null;
   const additions = files.reduce((s, f) => s + f.additions, 0);
   const deletions = files.reduce((s, f) => s + f.deletions, 0);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard 미허용 환경 — 무시 */ }
+  };
+  const download = () => {
+    // 사용자가 자신의 repo 에 `git apply changes.patch` 로 적용할 수 있는 표준 패치.
+    const url = URL.createObjectURL(new Blob([text], { type: "text/x-patch" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "changes.patch";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="mt-1 space-y-1">
       <div className="flex items-center gap-2 text-[11px]">
         <span className="text-muted">{t("diff.files", { count: files.length })}</span>
         <span className="font-mono text-success">+{additions}</span>
         <span className="font-mono text-danger">−{deletions}</span>
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            type="button" onClick={copy} title={t("diff.copy")}
+            className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-muted hover:bg-surface-2"
+          >
+            {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
+            {copied ? t("diff.copied") : t("diff.copy")}
+          </button>
+          <button
+            type="button" onClick={download} title={t("diff.download")}
+            className="flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-muted hover:bg-surface-2"
+          >
+            <Download className="h-3 w-3" /> .patch
+          </button>
+        </div>
       </div>
       <div className="space-y-1">
         {files.map((f, i) => (

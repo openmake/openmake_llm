@@ -357,7 +357,10 @@
       "failed": "Failed to send instruction: {error}"
     },
     "diff": {
-      "files": "{count} files"
+      "files": "{count} files",
+      "copy": "Copy",
+      "copied": "Copied",
+      "download": "Download .patch"
     }
   },
   "artifacts": {

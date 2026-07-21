@@ -357,7 +357,10 @@
       "failed": "지시 전송 실패: {error}"
     },
     "diff": {
-      "files": "파일 {count}개"
+      "files": "파일 {count}개",
+      "copy": "복사",
+      "copied": "복사됨",
+      "download": ".patch 다운로드"
     }
   },
   "artifacts": {

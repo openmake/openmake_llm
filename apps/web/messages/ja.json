@@ -357,7 +357,10 @@
       "failed": "指示の送信に失敗しました: {error}"
     },
     "diff": {
-      "files": "{count} ファイル"
+      "files": "{count} ファイル",
+      "copy": "コピー",
+      "copied": "コピー済み",
+      "download": ".patch をダウンロード"
     }
   },
   "artifacts": {
