@@ -182,6 +182,7 @@ export function Composer() {
     webSearchEnabled,
     agentTaskMode,
     agentApprovalMode,
+    agentRepoUrl,
     imageMode,
     artifactMode,
     structuredMode,
@@ -191,6 +192,7 @@ export function Composer() {
     toggle,
     setSelectedModel,
     setAgentApprovalMode,
+    setAgentRepoUrl,
     cycleStyle,
     setInputDraft,
     auth,
@@ -288,6 +290,7 @@ export function Composer() {
         files.length ? files : undefined,
         images.length ? images.map((i) => i.dataUrl) : undefined,
         agentApprovalMode,
+        agentRepoUrl.trim() || undefined,
       );
     } else if (structuredMode) {
       // 구조화 답변 토글 ON — REST /api/chat/structured (비스트리밍, 카드 렌더). 첨부는 미지원.
@@ -510,6 +513,19 @@ export function Composer() {
           })}
         </div>
 
+        {/* Phase 2 Git — repo URL 지정 시 태스크가 해당 repo 를 clone 해 작업 후 PR 생성(선택). */}
+        {agentTaskMode && (
+          <div className="flex items-center gap-2 px-3 pt-2 text-xs">
+            <span className="shrink-0 text-muted">{t("repo.label")}</span>
+            <input
+              type="text"
+              value={agentRepoUrl}
+              onChange={(e) => setAgentRepoUrl(e.target.value)}
+              placeholder="https://github.com/org/repo"
+              className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-2 py-1 font-mono text-xs text-fg-1"
+            />
+          </div>
+        )}
         {/* 승인 3모드(Manual/Auto/Skip) — 에이전트 작업 위임 시 이 실행의 도구 승인 정책 선택. */}
         {agentTaskMode && (
           <div className="flex items-center gap-2 px-3 pt-2 text-xs">

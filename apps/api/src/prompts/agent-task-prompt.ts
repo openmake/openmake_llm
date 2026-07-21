@@ -147,6 +147,20 @@ export function getAgentTaskGoalJudgeMessages(
 }
 
 /**
+ * Phase 2 Git: repo 가 clone 된 작업의 system 안내 — 에이전트에게 /workspace 가 해당 repo 의
+ * 체크아웃임을 알리고, 파일을 직접 편집하면 변경분이 diff·PR 로 회수됨을 안내한다.
+ */
+export function getAgentTaskGitRepoGuidance(ref: { owner: string; repo: string }, branch?: string): string {
+    return [
+        '',
+        '## Git 저장소 작업',
+        `- /workspace 는 GitHub 저장소 ${ref.owner}/${ref.repo}${branch ? ` (브랜치 ${branch})` : ''} 의 체크아웃입니다.`,
+        '- 기존 파일을 직접 편집/추가하세요. 변경분은 완료 시 자동으로 새 브랜치의 Pull Request 로 제출됩니다.',
+        '- `git commit`/`git push` 는 직접 하지 마세요(시스템이 처리). 코드 규약·기존 스타일을 따르세요.',
+    ].join('\n');
+}
+
+/**
  * 실행 중 사용자 중간 지시(steering) 주입 프레이밍 — 다음 턴 conversation 에 user 메시지로 들어간다.
  * 진행 중 작업의 방향을 바꾸는 추가 지시임을 명시해, 모델이 기존 목표에 반영·조정하도록 유도한다.
  */

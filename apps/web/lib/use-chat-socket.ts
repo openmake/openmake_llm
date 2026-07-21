@@ -347,6 +347,7 @@ export function useChatSocket() {
       files?: WsAttachedFile[],
       images?: string[],
       approvalPolicy?: "all" | "high-risk" | "none",
+      repoUrl?: string,
     ) => {
       const goal = message.trim();
       const s = useAppStore.getState();
@@ -359,6 +360,7 @@ export function useChatSocket() {
             goal,
             ...(files && files.length > 0 ? { files } : {}),
             ...(images && images.length > 0 ? { images } : {}),
+            ...(repoUrl && repoUrl.trim() ? { repoUrl: repoUrl.trim() } : {}),
           },
         );
         const taskId = created?.data?.task?.id;

@@ -41,6 +41,7 @@ import { judgeGoalAchieved, buildJudgeExecutionContext } from './agent-task/goal
 import { persistArtifactSteps, runTool, isSearchTool } from './agent-task/task-steps';
 import { initWorkspaceBaseline, maybePersistCodeDiff, captureDiffOnCleanup } from './agent-task/code-diff';
 import { getSteeringRegistry, applyPendingSteering } from './agent-task/steering';
+import { setupTaskRepo } from './agent-task/git-ops';
 import { assembleAgentTools } from './agent-task/tool-assembly';
 import { verifyCodeArtifacts } from './agent-task/deliverable-verify';
 import { buildLearningBlock } from './agent-task/task-learning';
@@ -229,22 +230,20 @@ export class AgentTaskService {
                         sandboxContainerId: taskRuntime.containerName,
                         workspacePath: taskRuntime.workspacePath,
                     });
-                    // 새 대화면 system 에 작업환경(셸+FS)+플랜 도구 안내 주입(workspace-aware).
-                    // resume 는 기존 checkpoint system 유지(일관성).
+                    // 새 대화(resume 아님)면 system 에 작업환경 안내 주입. 이어서 Phase 2 Git: repo 지정 시 호스트 clone(토큰 컨테이너 미주입)+안내.
                     if (!input.resume && conversation[0]?.role === 'system') {
                         conversation[0].content += getTaskSandboxGuidance();
                     }
+                    await setupTaskRepo(taskRuntime, input, userId, conversation);
                     logger.info(`[AgentTask] 샌드박스 활성 (${taskId}, ${taskRuntime.containerName})`);
                 } catch (e) {
                     logger.warn(`[AgentTask] 샌드박스 생성 실패 — 미사용 진행: ${e instanceof Error ? e.message : e}`);
                     taskRuntime = null;
                 }
             }
-            // 입력 첨부 주입 — 파일은 샌드박스가 있으면 workspace(uploads/)에 기록해 셸/파이썬으로
-            // 읽게 하고(대화 컨텍스트 팽창 없음), 없으면 goal 메시지에 fileContext 로 직접 주입.
-            // 이미지는 goal 메시지의 vision 채널(images)로 주입하고, 샌드박스가 있으면 원본
-            // 바이트로도 기록. workspace 는 실패/취소 시 삭제되므로 resume 에서도 다시 기록한다
-            // (같은 이름 overwrite — 멱등. goal 주입은 신규 시작에 한함 — resume 은 checkpoint 유지).
+            // 입력 첨부 주입 — 파일은 샌드박스 있으면 workspace(uploads/)에 기록(셸/파이썬으로 읽음), 없으면
+            // goal 에 fileContext 주입. 이미지는 goal vision 채널(+샌드박스면 원본 바이트도). workspace 는
+            // 실패/취소 시 삭제되므로 resume 에서 재기록(멱등 overwrite). goal 주입은 신규 시작 한정.
             const inputFiles = (input.files ?? []).filter((f) => !!f && typeof f.name === 'string');
             const inputImages = (input.images ?? []).filter((s) => typeof s === 'string' && s.length > 0);
             if (inputFiles.length > 0 || inputImages.length > 0) {

@@ -73,7 +73,7 @@ function toPublicTask(t: Record<string, unknown>) {
  * 작업 생성
  */
 router.post('/', validate(createAgentTaskSchema), asyncHandler(async (req: Request, res: Response) => {
-    const { goal, maxTurns, files, images } = req.body as CreateAgentTaskInput;
+    const { goal, maxTurns, files, images, repoUrl, branch } = req.body as CreateAgentTaskInput;
 
     const taskId = uuidv4();
     const db = getUnifiedDatabase();
@@ -113,6 +113,8 @@ router.post('/', validate(createAgentTaskSchema), asyncHandler(async (req: Reque
         maxTurns: maxTurns ?? AGENT_TASK_LIMITS.DEFAULT_MAX_TURNS,
         inputFiles,
         inputImages: Array.isArray(images) && images.length > 0 ? images : undefined,
+        gitRepoUrl: repoUrl,
+        gitBranch: branch,
     });
 
     const task = await db.getAgentTask(taskId);
@@ -201,6 +203,8 @@ router.post('/:taskId/execute', asyncHandler(async (req: Request, res: Response)
             approvalPolicy,
             files: Array.isArray(task.input_files) ? task.input_files as AgentTaskInputFile[] : undefined,
             images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
+            gitRepoUrl: task.git_repo_url ?? undefined,
+            gitBranch: task.git_branch ?? undefined,
         }),
     });
 
@@ -274,6 +278,8 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
             maxTurns: task.max_turns,
             files: Array.isArray(task.input_files) ? task.input_files as AgentTaskInputFile[] : undefined,
             images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
+            gitRepoUrl: task.git_repo_url ?? undefined,
+            gitBranch: task.git_branch ?? undefined,
             resume: {
                 conversation: cp.conversation as ChatMessage[],
                 fromTurn: (cp.completedTurn ?? 0) + 1,
