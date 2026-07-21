@@ -222,6 +222,8 @@ export function createTaskTools(
             description: '영속 컨테이너 내 chromium 으로 웹 브라우저를 자동화합니다(G2). actions 배열을 순서대로 실행: ' +
                 'goto{url} · click{selector} · fill{selector,text} · press{key} · wait{ms} · waitFor{selector} · ' +
                 'screenshot{path?} · extractText{selector?} · extractHtml{selector?}. 결과를 JSON 으로 반환합니다. ' +
+                'CSS 셀렉터(click/fill)가 실패하면 snapshot 으로 상호작용 요소를 {role,name,index} 목록으로 얻은 뒤 ' +
+                'smartClick{role,name,nth?}·smartFill{role,name,text,nth?} 로 재시도하세요(CSS 변동에 견고). ' +
                 '네트워크는 샌드박스 정책(none/restricted)에 따라 제한됩니다.',
             inputSchema: {
                 type: 'object',
