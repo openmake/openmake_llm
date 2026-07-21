@@ -43,6 +43,8 @@ export interface AgentTaskState {
   artifactIds?: string[];
   /** 완료 시 workspace 산출물 파일 경로 목록. */
   files?: string[];
+  /** 완료 시 코드 작업(openmake_code) git diff — 있으면 카드에 DiffView 로 렌더. */
+  diff?: string;
   /** 방금 실행된 스텝 요약(4-5 실시간 스트림) — "현재 단계" 라인 표시. */
   lastStep?: { stepType: string; toolName?: string; preview?: string };
 }
