@@ -335,7 +335,8 @@
       "turn": "Turn {turn}",
       "goal": "Goal",
       "outputs": "Outputs",
-      "viewPr": "View PR"
+      "viewPr": "View PR",
+      "downloadFailed": "Download failed: {error}"
     },
     "research": {
       "inProgress": "Deep research in progress",
@@ -744,7 +745,8 @@
       "delete": "Delete",
       "started": "Task started from template."
     },
-    "viewPr": "View PR"
+    "viewPr": "View PR",
+    "downloadFailed": "Download failed: {error}"
   },
   "customAgents": {
     "pageTitle": "Custom Agents",

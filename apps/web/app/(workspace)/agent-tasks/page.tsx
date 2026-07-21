@@ -362,13 +362,16 @@ function TaskDetailModal({
               <ul className="space-y-1">
                 {files.map((f) => (
                   <li key={f} className="text-xs">
-                    <a
-                      href={`/api/agent-tasks/${taskId}/files/download?path=${encodeURIComponent(f)}`}
+                    <button
+                      type="button"
+                      onClick={() => void ApiClient.download(
+                        `/api/agent-tasks/${taskId}/files/download?path=${encodeURIComponent(f)}`,
+                        f.split("/").pop() || f,
+                      ).catch((e) => alert(t("downloadFailed", { error: e instanceof Error ? e.message : "error" })))}
                       className="font-mono text-accent hover:underline"
-                      target="_blank" rel="noopener noreferrer"
                     >
                       {f}
-                    </a>
+                    </button>
                   </li>
                 ))}
               </ul>
