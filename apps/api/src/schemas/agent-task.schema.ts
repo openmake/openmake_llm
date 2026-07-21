@@ -45,6 +45,15 @@ export const createAgentTaskSchema = z.object({
 export type CreateAgentTaskInput = z.infer<typeof createAgentTaskSchema>;
 
 /**
+ * 에이전트 작업 실행(execute) 요청 스키마 — 승인 3모드(Manual/Auto/Skip)를 이 실행에 한해 지정.
+ * all=Manual(전부 승인·기본), high-risk=Auto(고위험만), none=Skip(전부 자동). 미지정 시 전역 정책.
+ */
+export const executeAgentTaskSchema = z.object({
+    approvalPolicy: z.enum(['all', 'high-risk', 'none']).optional(),
+});
+export type ExecuteAgentTaskInput = z.infer<typeof executeAgentTaskSchema>;
+
+/**
  * 스케줄(반복 트리거) 생성 스키마 (Phase 3-A).
  * cron 또는 intervalSeconds 중 정확히 하나만 지정. interval 은 최소 간격 강제(남용 방지).
  * cron 표현식 유효성은 라우트에서 parseCron 으로 추가 검증.

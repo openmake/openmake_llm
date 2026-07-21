@@ -201,10 +201,11 @@ export class AgentTaskService {
                 ? mergeToolsWithSkills({ allTools, userToggled: allTools, profileRequired: [], skillBindings })
                 : allTools;
 
-            // 영속 샌드박스(Manus화) — 플래그 ON 일 때만. OFF 면 runtime=null 로 기존 동작 그대로.
-            // 생성 실패는 작업을 죽이지 않고 샌드박스 없이 진행(graceful degrade).
-            // 설정은 한 번만 읽어 enabled 게이트·런타임·extraTools·승인 정책이 동일 스냅샷을 공유.
-            const sandboxCfg = getTaskSandboxConfig();
+            // 영속 샌드박스(Manus화, 플래그 ON 시만). 생성 실패는 샌드박스 없이 진행(graceful degrade).
+            // 설정은 한 번만 읽어 스냅샷 공유. 승인 3모드는 input.approvalPolicy 로 이 실행에만 override
+            // (비영속, resume은 전역 폴백; requiresApproval 호출부 2곳이 이 cfg 를 읽어 단일 지점 주입).
+            const sandboxCfg = input.approvalPolicy
+                ? { ...getTaskSandboxConfig(), approvalPolicy: input.approvalPolicy } : getTaskSandboxConfig();
             if (sandboxCfg.enabled) {
                 try {
                     // G4 위임 — 상세는 agent-task/delegate (SUBAGENT_ENABLED 시 depth=1 tool-loop 승격,

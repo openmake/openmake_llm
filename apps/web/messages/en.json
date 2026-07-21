@@ -361,6 +361,15 @@
       "copy": "Copy",
       "copied": "Copied",
       "download": "Download .patch"
+    },
+    "approvalMode": {
+      "label": "Approval:",
+      "manual": "Manual",
+      "auto": "Auto",
+      "skip": "Skip",
+      "manualHint": "Approve every tool call",
+      "autoHint": "Approve only high-risk tools (shell/python/browser/delete)",
+      "skipHint": "Run all tools automatically"
     }
   },
   "artifacts": {

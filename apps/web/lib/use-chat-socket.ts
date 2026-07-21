@@ -339,7 +339,12 @@ export function useChatSocket() {
   // 첨부 files 는 백엔드가 텍스트 추출 후 작업 샌드박스 workspace 에 주입,
   // images(dataURL)는 goal 메시지의 vision 채널로 전달된다.
   const startAgentTask = useCallback(
-    async (message: string, files?: WsAttachedFile[], images?: string[]) => {
+    async (
+      message: string,
+      files?: WsAttachedFile[],
+      images?: string[],
+      approvalPolicy?: "all" | "high-risk" | "none",
+    ) => {
       const goal = message.trim();
       const s = useAppStore.getState();
       if (!goal || s.isGenerating) return;
@@ -362,7 +367,11 @@ export function useChatSocket() {
           content: "",
           agentTask: { goal, status: "pending", currentTurn: 0, progress: 0 },
         });
-        await ApiClient.post(`/api/agent-tasks/${taskId}/execute`);
+        // 승인 3모드 — all(기본)이면 전역 정책이므로 미전송, 그 외만 이 실행에 override 전달.
+        await ApiClient.post(
+          `/api/agent-tasks/${taskId}/execute`,
+          approvalPolicy && approvalPolicy !== "all" ? { approvalPolicy } : {},
+        );
       } catch (e) {
         appendMessage({
           role: "assistant",

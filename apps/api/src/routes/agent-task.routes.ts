@@ -179,6 +179,11 @@ router.post('/:taskId/execute', asyncHandler(async (req: Request, res: Response)
         ? rawSkills.filter((s): s is string => typeof s === 'string' && s.length > 0 && s.length <= 200).slice(0, 50)
         : undefined;
 
+    // 승인 3모드(Manual/Auto/Skip) — 이 실행에만 적용할 승인 정책(옵션). 유효 enum 만 수용.
+    const rawPolicy = (req.body as { approvalPolicy?: unknown })?.approvalPolicy;
+    const approvalPolicy = rawPolicy === 'all' || rawPolicy === 'high-risk' || rawPolicy === 'none'
+        ? rawPolicy : undefined;
+
     // 백그라운드 detached 실행 (응답은 즉시 반환). AgentTaskService 가 자체
     // AbortController 를 소유하므로 ws.close 와 무관하게 끝까지 진행한다.
     // 큐(3-B) 활성 시 동시 실행 상한을 넘으면 'queued' 로 대기 후 슬롯이 비면 실행된다.
@@ -193,6 +198,7 @@ router.post('/:taskId/execute', asyncHandler(async (req: Request, res: Response)
             userRole: role,
             maxTurns: task.max_turns,
             allowedSkills,
+            approvalPolicy,
             files: Array.isArray(task.input_files) ? task.input_files as AgentTaskInputFile[] : undefined,
             images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
         }),
