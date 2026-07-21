@@ -28,6 +28,29 @@ export interface RepoRef {
     cleanUrl: string;
 }
 
+/**
+ * 저장된 토큰으로 사용자의 GitHub repo 목록 조회(composer 자동완성용). push 권한 있는 것만
+ * (permissions.push) 필터 — clone→편집→PR 대상으로 의미 있는 repo. 실패 시 빈 배열(fail-open).
+ * 최근 업데이트순 최대 100개.
+ */
+export async function listUserRepos(userId: string): Promise<Array<{ fullName: string; url: string; private: boolean }>> {
+    const token = await getUserGithubToken(userId);
+    if (!token) return [];
+    try {
+        const r = await fetch('https://api.github.com/user/repos?per_page=100&sort=updated&affiliation=owner,collaborator,organization_member', {
+            headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'openmake-llm' },
+        });
+        if (!r.ok) return [];
+        const repos = (await r.json()) as Array<{ full_name: string; html_url: string; private: boolean; permissions?: { push?: boolean } }>;
+        return (Array.isArray(repos) ? repos : [])
+            .filter((x) => x?.permissions?.push !== false)
+            .map((x) => ({ fullName: x.full_name, url: x.html_url, private: x.private }));
+    } catch (e) {
+        logger.warn(`repo 목록 조회 실패 (user ${userId}): ${e instanceof Error ? e.message : e}`);
+        return [];
+    }
+}
+
 /** repoUrl 파싱 — https://github.com/owner/repo(.git) 만 허용(ssh·타 호스트 거절). 아니면 null. */
 export function parseGithubRepo(repoUrl: string): RepoRef | null {
     const m = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/.exec((repoUrl || '').trim());

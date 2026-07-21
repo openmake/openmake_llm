@@ -27,6 +27,7 @@ import { useAppStore, INTERCEPT_MODE_KEYS } from "@/lib/store";
 import { NotebookPicker } from "./notebook-picker";
 import { useChatSocket } from "@/lib/use-chat-socket";
 import { fetchModels } from "@/lib/models-api";
+import { ApiClient } from "@/lib/api-client";
 import {
   fetchSkills,
   groupSkillsByCategory,
@@ -221,6 +222,14 @@ export function Composer() {
     enabled: slashCandidate,
     staleTime: 30_000,
   });
+  // Phase 2 Git: 에이전트 모드 시 사용자의 GitHub repo 목록(push 권한) 조회 → repo 입력 자동완성.
+  const { data: repoData } = useQuery({
+    queryKey: ["github-repos"],
+    queryFn: () => ApiClient.get<{ data: { repos: Array<{ fullName: string; url: string }> } }>("/api/agent-tasks/github/repos"),
+    enabled: agentTaskMode,
+    staleTime: 300_000,
+  });
+  const repoSuggestions = repoData?.data?.repos ?? [];
   // 검색어 없으면("/") 카테고리 그룹핑(전체), 있으면 평면 검색 목록
   const slashGrouped = slashDebounced.trim() === "";
   const rawSlashSkills: SkillSummary[] = slashCandidate ? slashSkillsData ?? [] : [];
@@ -522,8 +531,16 @@ export function Composer() {
               value={agentRepoUrl}
               onChange={(e) => setAgentRepoUrl(e.target.value)}
               placeholder="https://github.com/org/repo"
+              list="agent-repo-suggestions"
               className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-2 py-1 font-mono text-xs text-fg-1"
             />
+            {repoSuggestions.length > 0 && (
+              <datalist id="agent-repo-suggestions">
+                {repoSuggestions.map((r) => (
+                  <option key={r.url} value={r.url}>{r.fullName}</option>
+                ))}
+              </datalist>
+            )}
           </div>
         )}
         {/* 승인 3모드(Manual/Auto/Skip) — 에이전트 작업 위임 시 이 실행의 도구 승인 정책 선택. */}

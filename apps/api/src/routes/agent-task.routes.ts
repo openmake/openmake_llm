@@ -33,6 +33,7 @@ import { createAgentTaskSchema, type CreateAgentTaskInput } from '../schemas/age
 import { extractAttachedDocuments } from '../services/chat-service/doc-extractor';
 import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
 import { getSteeringRegistry } from '../services/agent-task/steering';
+import { listUserRepos } from '../services/agent-task/git-ops';
 import { dispatchAgentTask, getAgentTaskQueue } from '../services/agent-task/task-queue';
 import { safeRealWorkspacePath, listWorkspaceFilesAt } from '../services/task-sandbox/sandbox';
 import { basename } from 'path';
@@ -129,6 +130,16 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
     const db = getUnifiedDatabase();
     const tasks = await db.getUserAgentTasks(String(req.user!.id));
     res.json(success({ tasks: tasks.map(t => toPublicTask(t as unknown as Record<string, unknown>)), total: tasks.length }));
+}));
+
+/**
+ * GET /api/agent-tasks/github/repos
+ * 저장된 GitHub 토큰으로 사용자의 repo 목록(push 권한) 조회 — composer repo 자동완성용.
+ * 토큰 미연결이면 빈 배열. ⚠️ GET /:taskId 보다 먼저 등록(github 가 taskId 로 매칭되지 않게).
+ */
+router.get('/github/repos', asyncHandler(async (req: Request, res: Response) => {
+    const repos = await listUserRepos(String(req.user!.id));
+    res.json(success({ repos }));
 }));
 
 /**
