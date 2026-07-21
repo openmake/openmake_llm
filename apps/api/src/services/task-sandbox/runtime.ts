@@ -12,7 +12,9 @@ import type { ToolDefinition } from '../../llm/types';
 import type { MCPToolDefinition } from '../../mcp/types';
 import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { TaskSandbox, type ExecResult } from './sandbox';
-import { createTaskTools, type DelegateFn, type SpawnFn } from './tools';
+import { createTaskTools, type DelegateFn, type SpawnFn, type ProceduralHooks } from './tools';
+import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
+import { saveProceduralSkill, loadProceduralSpec } from '../agent-task/procedural-skill';
 import { TaskPlan, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval } from './approval-gate';
 import { createLogger } from '../../utils/logger';
@@ -64,7 +66,17 @@ export class TaskRuntime {
         this.userId = userId;
         this.cfg = cfg;
         this.sandbox = new TaskSandbox(taskId, cfg);
-        this.defs = createTaskTools(this.sandbox, this.plan, delegate, spawn);
+        // #1 절차 스킬: 저장/조회 훅을 userId 로 바인딩(재생 실행은 tools.ts 가 sandbox 로 수행). 플래그 OFF 면 미노출.
+        const procedural: ProceduralHooks | undefined = AGENT_TASK_LIMITS.PROCEDURAL_SKILLS_ENABLED
+            ? {
+                save: (i) => saveProceduralSkill(this.userId, i.name, i.description, {
+                    kind: i.kind, goal: i.description, params: i.params,
+                    actions: i.actions, allowlist: i.allowlist, lang: i.lang, code: i.code,
+                }),
+                load: (id) => loadProceduralSpec(this.userId, id),
+            }
+            : undefined;
+        this.defs = createTaskTools(this.sandbox, this.plan, delegate, spawn, procedural);
         for (const d of this.defs) this.handlers.set(d.tool.name, d.handler);
     }
 

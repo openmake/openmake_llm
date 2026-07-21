@@ -46,6 +46,7 @@ import { recoverTextToolCalls } from './agent-task/text-tool-calls';
 import { assembleAgentTools } from './agent-task/tool-assembly';
 import { verifyCodeArtifacts } from './agent-task/deliverable-verify';
 import { buildLearningBlock } from './agent-task/task-learning';
+import { buildProceduralSkillBlock } from './agent-task/procedural-skill';
 import { buildSkillPromptBlock, AGENT_TASK_SKILL_AGENT_ID } from './agent-task/skill-block';
 
 // 기존 import 호환 재노출 — 타입/에러는 services/agent-task/types 로 분리 (파일 크기 가드).
@@ -163,7 +164,8 @@ export class AgentTaskService {
                         role: 'system',
                         content: getAgentTaskSystemPrompt()
                             + (await buildSkillPromptBlock(userId))
-                            + (await buildLearningBlock(userId, goal, taskId)),
+                            + (await buildLearningBlock(userId, goal, taskId))
+                            + (await buildProceduralSkillBlock(userId, goal)),
                     },
                     { role: 'user', content: goal },
                 ];

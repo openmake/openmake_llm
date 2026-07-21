@@ -20,8 +20,9 @@ import { createLogger } from '../../utils/logger';
 const logger = createLogger('TaskApprovalGate');
 
 /** 승인이 필요한 고위험 도구(high-risk 정책 시). browser=네트워크 egress.
- *  python_execute 는 임의 코드 실행이라 bash 와 동급 — 제외하면 정책 우회가 된다. */
-const HIGH_RISK_TOOLS = new Set(['bash', 'browser', 'python_execute']);
+ *  python_execute 는 임의 코드 실행이라 bash 와 동급 — 제외하면 정책 우회가 된다.
+ *  skill_run 은 저장된 브라우저/스크립트 절차를 그대로 실행하므로 bash/browser 와 동급(제외 시 우회). */
+const HIGH_RISK_TOOLS = new Set(['bash', 'browser', 'python_execute', 'skill_run']);
 /** 부작용 없는 도구 — 승인 불요(제어 시그널 + 플래닝 + 전문가 자문·병렬 위임).
  *  ask_human 은 이 게이트와 무관하게 TaskRuntime 이 직접 승인 레지스트리로 대기시킨다.
  *  spawn_agents 는 서브 도구를 승인 불요 도구로만 선별(buildTaskSpawnFn)하므로 delegate 와 동급. */
