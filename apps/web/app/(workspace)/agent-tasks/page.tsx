@@ -27,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
+import { SteeringInput } from "@/components/chat/steering-input";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type TaskStatus = "running" | "completed" | "pending";
@@ -308,6 +309,11 @@ function TaskDetailModal({
               <span>{t("turnLabel")} {detail.task.current_turn ?? 0}/{detail.task.max_turns ?? 0}</span>
             </div>
           </div>
+
+          {/* 실행 중/일시정지 시 방향 지시(steering) — 취소·재시작 없이 교정. */}
+          {(detail.task.status === "running" || detail.task.status === "paused") && (
+            <SteeringInput taskId={taskId} />
+          )}
 
           {/* 계획 패널 (G3 plan + G5 실시간 상태) */}
           {plan.length > 0 && (

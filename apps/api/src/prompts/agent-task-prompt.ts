@@ -146,6 +146,18 @@ export function getAgentTaskGoalJudgeMessages(
     };
 }
 
+/**
+ * 실행 중 사용자 중간 지시(steering) 주입 프레이밍 — 다음 턴 conversation 에 user 메시지로 들어간다.
+ * 진행 중 작업의 방향을 바꾸는 추가 지시임을 명시해, 모델이 기존 목표에 반영·조정하도록 유도한다.
+ */
+export function getAgentTaskSteeringInjection(text: string): string {
+    return [
+        '[사용자 추가 지시] 작업 진행 중 사용자가 다음 지시를 보냈습니다. 현재 작업에 이 지시를',
+        '즉시 반영해 방향을 조정하세요(기존 목표와 충돌하면 이 지시를 우선):',
+        text,
+    ].join('\n');
+}
+
 /** stuck(동일 응답 반복) 감지 시 주입 — 전략 변경 유도(OpenManus handle_stuck_state 패턴). */
 export function getAgentTaskStuckNudge(): string {
     return '같은 시도를 반복하고 있습니다. 접근 방식을 바꾸세요: 다른 도구나 다른 입력을 시도하거나, 막혔다면 지금까지의 결과로 작업을 마무리(terminate)하거나 사용자에게 도움을 요청(ask_human)하세요.';

@@ -1173,6 +1173,14 @@ export const AGENT_TASK_LIMITS = {
      *  대화가 크면 도구 호출마다 DB 쓰기가 늘어나므로 기본 OFF(opt-in).
      *  AGENT_TASK_MIDTURN_CHECKPOINT=true 로 활성. */
     MIDTURN_CHECKPOINT_ENABLED: process.env.AGENT_TASK_MIDTURN_CHECKPOINT === 'true',
+    /** 실행 중 중간 지시(steering) — 실행 중 task 에 사용자가 방향 지시를 주입하면 다음 턴 경계에서
+     *  conversation 에 user 메시지로 반영(취소·재시작 없이 교정). steering 은 사용자가 명시적으로
+     *  보낼 때만 동작하므로 기본 ON. AGENT_TASK_STEERING=false 로 비활성. */
+    STEERING_ENABLED: process.env.AGENT_TASK_STEERING !== 'false',
+    /** steering 메시지 1건 최대 글자 수. AGENT_TASK_STEERING_MAX_CHARS(기본 2000). */
+    STEERING_MAX_CHARS: parseInt(process.env.AGENT_TASK_STEERING_MAX_CHARS || '2000', 10),
+    /** task 당 미소비 steering 대기 상한 — 초과 시 429(플러딩 방지). AGENT_TASK_STEERING_MAX_PENDING(기본 10). */
+    STEERING_MAX_PENDING: parseInt(process.env.AGENT_TASK_STEERING_MAX_PENDING || '10', 10),
 } as const;
 
 /** 채팅 서브에이전트(delegate_expert) — 채팅 도구 루프에서 전문가 위임(depth=1 tool-loop). */

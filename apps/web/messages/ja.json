@@ -349,6 +349,12 @@
       "thinking": "思考中",
       "fallbackLabel": "思考プロセス",
       "done": "完了"
+    },
+    "steering": {
+      "label": "タスクへの指示",
+      "placeholder": "方向を調整する新しい指示を送信… (Cmd/Ctrl+Enter)",
+      "sent": "送信済み",
+      "failed": "指示の送信に失敗しました: {error}"
     }
   },
   "artifacts": {

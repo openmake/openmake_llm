@@ -32,6 +32,7 @@ import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
 import { createAgentTaskSchema, type CreateAgentTaskInput } from '../schemas/agent-task.schema';
 import { extractAttachedDocuments } from '../services/chat-service/doc-extractor';
 import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
+import { getSteeringRegistry } from '../services/agent-task/steering';
 import { dispatchAgentTask, getAgentTaskQueue } from '../services/agent-task/task-queue';
 import { safeRealWorkspacePath, listWorkspaceFilesAt } from '../services/task-sandbox/sandbox';
 import { basename } from 'path';
@@ -295,6 +296,31 @@ router.delete('/:taskId', asyncHandler(async (req: Request, res: Response) => {
     const db = getUnifiedDatabase();
     await db.deleteAgentTask(task.id);
     res.json(success({ message: '작업이 삭제되었습니다.', taskId: task.id }));
+}));
+
+/**
+ * POST /api/agent-tasks/:taskId/steer  { message }
+ * 실행 중 중간 지시(steering) — 실행 중 task 에 방향 지시를 주입. 다음 턴 경계에서 conversation
+ * 에 user 메시지로 반영된다(취소·재시작 불요). running/paused/queued 상태에서만 유효. owner/admin 만.
+ */
+router.post('/:taskId/steer', asyncHandler(async (req: Request, res: Response) => {
+    const task = await loadOwnedTask(req, res, req.params.taskId);
+    if (!task) return;
+    if (!AGENT_TASK_LIMITS.STEERING_ENABLED) {
+        return res.status(400).json(badRequest('중간 지시 기능이 비활성화되어 있습니다.'));
+    }
+    if (task.status !== 'running' && task.status !== 'paused' && task.status !== 'queued') {
+        return res.status(400).json(badRequest('실행 중인 작업에만 지시를 보낼 수 있습니다.'));
+    }
+    const message = String((req.body as { message?: unknown })?.message ?? '').trim();
+    if (!message) return res.status(400).json(badRequest('message 가 필요합니다.'));
+    if (message.length > AGENT_TASK_LIMITS.STEERING_MAX_CHARS) {
+        return res.status(400).json(badRequest(`지시는 ${AGENT_TASK_LIMITS.STEERING_MAX_CHARS}자를 넘을 수 없습니다.`));
+    }
+    const ok = getSteeringRegistry().submit(task.id, message, AGENT_TASK_LIMITS.STEERING_MAX_PENDING);
+    if (!ok) return res.status(429).json(badRequest('대기 중인 지시가 너무 많습니다. 반영된 후 다시 시도하세요.'));
+    logger.info(`[AgentTaskRoutes] steering 접수: ${task.id} (user ${req.user!.id})`);
+    res.json(success({ taskId: task.id, queued: getSteeringRegistry().count(task.id) }));
 }));
 
 /**

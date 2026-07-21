@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown } from "lucide-react";
 import { ThinkingTimeline } from "@/components/chat/thinking-timeline";
+import { SteeringInput } from "@/components/chat/steering-input";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "@/lib/store";
 import { ApiClient } from "@/lib/api-client";
 import { Markdown } from "./markdown";
@@ -337,6 +338,8 @@ function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; appr
           </div>
         )}
         {approvals && approvals.length > 0 && <InlineApprovals approvals={approvals} />}
+        {/* 실행 중/일시정지 시 방향 지시(steering) 입력 — 취소·재시작 없이 교정. */}
+        {(task.status === "running" || task.status === "paused") && <SteeringInput taskId={taskId} />}
       </div>
     </div>
   );
