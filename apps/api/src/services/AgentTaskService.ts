@@ -40,6 +40,7 @@ import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
 import { judgeGoalAchieved, buildJudgeExecutionContext } from './agent-task/goal-judge';
 import { persistArtifactSteps, runTool, isSearchTool } from './agent-task/task-steps';
 import { initWorkspaceBaseline, maybePersistCodeDiff } from './agent-task/code-diff';
+import { getSteeringRegistry, applyPendingSteering } from './agent-task/steering';
 import { assembleAgentTools } from './agent-task/tool-assembly';
 import { verifyCodeArtifacts } from './agent-task/deliverable-verify';
 import { buildLearningBlock } from './agent-task/task-learning';
@@ -314,6 +315,11 @@ export class AgentTaskService {
                     browserLimitNotified = true;
                 }
 
+                // 실행 중 사용자 중간 지시(steering) — 이 턴 경계에 도착한 지시를 conversation 에
+                // user 메시지로 주입해 방향을 조정한다. 턴 경계 소비라 tool_call_id 매칭이 유지되고
+                // 다음 checkpoint 에 자연 포함된다(resume 안전). 스텝으로 기록해 상세/카드에 노출.
+                stepNumber = await applyPendingSteering(taskId, turn, conversation, stepNumber, emitStep);
+
                 // per-call abort: 작업 잔여 예산을 호출에도 바인딩 — 응답이 hang 되면
                 // 턴 사이 assertWithinLimits 까지 도달하지 못하므로 호출 자체를 끊는다.
                 // 승인 대기 누적(pausedMs)은 예산에서 제외(4-1 pause-aware).
@@ -579,6 +585,8 @@ export class AgentTaskService {
             AgentTaskService.running.delete(taskId);
             // task 자동승인(4-2) 해제 — 종료된 task 의 플래그가 레지스트리에 잔존하지 않게.
             getApprovalRegistry().clearAutoApprove(taskId);
+            // 미소비 steering 정리 — 종료된 task 에 남은 지시가 다음 동명 실행에 새지 않게.
+            getSteeringRegistry().clear(taskId);
             if (taskRuntime) {
                 // 완료 시 workspace 보존(산출물 다운로드용), 실패/취소 시 삭제. 컨테이너는 항상 제거.
                 const keepWorkspace = curStatus === 'completed';

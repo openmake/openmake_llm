@@ -349,6 +349,12 @@
       "thinking": "思考中",
       "fallbackLabel": "思考过程",
       "done": "完成"
+    },
+    "steering": {
+      "label": "引导此任务",
+      "placeholder": "发送新指令以调整方向… (Cmd/Ctrl+Enter)",
+      "sent": "已发送",
+      "failed": "发送指令失败: {error}"
     }
   },
   "artifacts": {
