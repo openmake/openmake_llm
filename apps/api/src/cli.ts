@@ -359,6 +359,34 @@ program
         }
     });
 
+// backfill-memories 명령어 — 과거 대화(#3 c)에서 사용자 메모리 일회성 추출/저장
+program
+    .command('backfill-memories <userId>')
+    .description('과거 대화에서 사용자 메모리를 LLM 추출해 저장(#3 c). --dry-run 으로 저장 없이 미리보기.')
+    .option('--dry-run', '저장하지 않고 추출 후보만 출력')
+    .option('--max-sessions <n>', '분석할 최근 세션 수', '30')
+    .action(async (userId, options) => {
+        const { backfillUserMemories } = await import('./services/chat-service/memory-backfill');
+        const dryRun = !!options.dryRun;
+        console.log(chalk.cyan(`\n🧠 메모리 백필 ${dryRun ? '(dry-run)' : ''} — user ${userId}\n`));
+        const spinner = createSpinner('과거 세션 분석 중...');
+        spinner.start();
+        try {
+            const r = await backfillUserMemories(userId, { dryRun, maxSessions: parseInt(options.maxSessions, 10) });
+            spinner.succeed(`세션 ${r.sessionsProcessed} 처리 · 후보 ${r.candidateCount} · 신규 ${r.fresh.length} · 저장 ${r.saved} · 중복 ${r.skippedDup}`);
+            if (r.fresh.length > 0) {
+                console.log(chalk.cyan(`\n${dryRun ? '추출 후보(미저장)' : '저장된 메모리'}:`));
+                r.fresh.forEach((m, i) => console.log(chalk.white(`  ${i + 1}. ${m}`)));
+            }
+            console.log('');
+        } catch (e) {
+            spinner.fail('백필 실패');
+            console.log(chalk.red(`\n❌ ${e instanceof Error ? e.message : String(e)}\n`));
+            process.exit(1);
+        }
+        process.exit(0);
+    });
+
 // 기본 명령 (인수 없이 실행 시)
 program
     .action(async () => {
