@@ -31,6 +31,7 @@ import { buildNotebookContextPrefix } from '../../prompts/notebook-context';
 import { applyAgentModelOverride } from './agent-model-override';
 import { resolveModeExternalClient } from './mode-external-client';
 import { buildUserContextBlocks } from './user-context-blocks';
+import { autoFormMemories } from './memory-extraction';
 import type { RequestContext } from './request-context';
 
 const logger = createLogger('MessagePipeline');
@@ -290,6 +291,9 @@ export async function runMessagePipeline(svc: ChatService,
     // Memory + Custom Instructions 주입 (claude.ai Memory/CI 동등).
     const { memoryBlock: extMemoryBlock, customInstructionsBlock: extCustomInstructionsBlock } =
         await buildUserContextBlocks(userId, req.memoryLearning !== false);
+
+    // 자동 기억형성(#3 b) — user 메시지에서 지속적 사실 추출→저장. fire-and-forget(응답 무영향, 플래그 OFF 면 no-op).
+    void autoFormMemories({ userId, message: req.message, client: svc.client });
 
     // Custom Agent (user_agents) 활성 시 산업 agent 라우팅 우회 + allowedSkills 주입.
     // 전체 build() 대신 loadUserAgent 단독 호출 — provider 가 자체 model 처리하므로
