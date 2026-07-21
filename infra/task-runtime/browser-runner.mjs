@@ -17,6 +17,25 @@ const WORKSPACE = '/workspace';
 const MAX_ACTIONS = 40;
 const DEFAULT_TIMEOUT = 20000;
 
+// #2 Part B — a11y 폴백: CSS 셀렉터가 실패하는 페이지에서 상호작용 요소를
+// {role,name} 으로 재해석한다. role/name 은 fresh page 에서도 안정적으로 재해석되므로
+// 일회성 컨테이너(호출 간 page 소멸) 제약과 자연히 양립한다(ref 캐시 불필요).
+const INTERACTIVE_ROLES = new Set([
+    'button', 'link', 'textbox', 'checkbox', 'radio', 'combobox', 'menuitem',
+    'tab', 'switch', 'searchbox', 'slider', 'spinbutton', 'option',
+]);
+
+/** ariaSnapshot() YAML(줄당 `- role "name" [attrs]`)에서 상호작용 요소만 {role,name} 으로 추출.
+ *  (playwright 1.61 은 page.accessibility 를 제거 — ariaSnapshot 이 현행 a11y 조회 API.) */
+function parseAriaSnapshot(yaml) {
+    const acc = [];
+    for (const line of String(yaml).split('\n')) {
+        const m = line.match(/^\s*-\s+([a-z]+)\s+"([^"]*)"/);
+        if (m && INTERACTIVE_ROLES.has(m[1])) acc.push({ role: m[1], name: m[2].slice(0, 120) });
+    }
+    return acc;
+}
+
 function out(obj) { process.stdout.write(JSON.stringify(obj)); }
 
 const argPath = process.argv[2];
@@ -84,6 +103,21 @@ try {
                     results.push({ i, type: a.type, ok: true }); break;
                 case 'fill':
                     await page.fill(a.selector, String(a.text ?? ''), { timeout });
+                    results.push({ i, type: a.type, ok: true }); break;
+                case 'snapshot': {
+                    // 2단 폴백 발견: 상호작용 요소를 {role,name,index} 목록으로 반환 →
+                    // 에이전트가 CSS 대신 안정적인 role/name 으로 smartClick/smartFill 지정.
+                    const yaml = await page.locator('body').ariaSnapshot();
+                    const elements = parseAriaSnapshot(yaml).slice(0, 100).map((e, idx) => ({ index: idx, ...e }));
+                    results.push({ i, type: a.type, ok: true, elements }); break;
+                }
+                case 'smartClick':
+                    // role/name 으로 요소 재해석 후 클릭(CSS 무관). nth 로 동명 요소 구분.
+                    await page.getByRole(a.role, { name: a.name }).nth(Number(a.nth) || 0).click({ timeout });
+                    results.push({ i, type: a.type, ok: true }); break;
+                case 'smartFill':
+                    await page.getByRole(a.role, { name: a.name }).nth(Number(a.nth) || 0)
+                        .fill(String(a.text ?? ''), { timeout });
                     results.push({ i, type: a.type, ok: true }); break;
                 case 'press':
                     await page.keyboard.press(a.key);

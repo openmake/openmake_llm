@@ -1158,6 +1158,10 @@ export const AGENT_TASK_LIMITS = {
     PROCEDURAL_SKILLS_ENABLED: process.env.AGENT_TASK_PROCEDURAL_SKILLS === 'true',
     /** 재사용 후보로 system 에 제안할 절차 스킬 최대 건수(기본 3). */
     PROCEDURAL_MAX_SUGGEST: parseInt(process.env.AGENT_TASK_PROCEDURAL_MAX_SUGGEST || '3', 10),
+    /** Computer Use Stage 0: browser 액션 계측(browser_action_metrics 079)을 기록한다.
+     *  a11y 폴백 실효 + canvas 신호(selector·a11y 동시 실패)를 주-단위로 집계해 Stage 1
+     *  분기(State block vs Vision)를 데이터로 결정. 측정이 목적이라 기본 ON — 끄려면 =false. */
+    BROWSER_METRICS_ENABLED: process.env.AGENT_TASK_BROWSER_METRICS !== 'false',
     /** 산출물 검증 모드(Phase 5-3): 'syntax'(기본 — py_compile·node --check) | 'run'(샌드박스에서
      *  실제 실행 후 exit code 검사 — network none·자원캡 격리라 안전하나 부작용 있는 코드는 실행됨). */
     VERIFY_MODE: (process.env.AGENT_TASK_VERIFY_MODE === 'run' ? 'run' : 'syntax') as 'syntax' | 'run',
