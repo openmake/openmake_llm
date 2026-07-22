@@ -18,9 +18,12 @@ export class AgentTaskAbort extends Error {
 
 /** runaway 가드 — 한도 초과 시 종류별 AgentTaskAbort throw (AgentTaskService 에서 분리 — 파일 크기 가드).
  *  pausedMs(승인 대기 누적)는 활성 시간이 아니므로 타임아웃 예산에서 제외(4-1). */
-export function assertWithinLimits(signal: AbortSignal, startedAt: number, pausedMs: number, totalTokens: number): void {
+export function assertWithinLimits(
+    signal: AbortSignal, startedAt: number, pausedMs: number, totalTokens: number,
+    totalTimeoutMs: number = AGENT_TASK_LIMITS.TOTAL_TIMEOUT_MS,
+): void {
     if (signal.aborted) throw new AgentTaskAbort('aborted');
-    if (Date.now() - startedAt - pausedMs > AGENT_TASK_LIMITS.TOTAL_TIMEOUT_MS) {
+    if (Date.now() - startedAt - pausedMs > totalTimeoutMs) {
         throw new AgentTaskAbort('timeout');
     }
     if (totalTokens > AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS) {
@@ -52,6 +55,9 @@ export interface AgentTaskRunInput {
     /** 승인 3모드(Manual/Auto/Skip) — 이 실행에 한해 전역 승인 정책을 override(비영속).
      *  all=전부 승인, high-risk=고위험만, none=전부 자동. 미지정 시 전역 TASK_SANDBOX_APPROVAL_POLICY. */
     approvalPolicy?: 'all' | 'high-risk' | 'none';
+    /** 이 실행의 총 타임아웃(ms) override — 미지정 시 전역 TOTAL_TIMEOUT_MS. 예약(무인) task 는
+     *  무거운 생성 워크플로우를 위해 더 긴 SCHEDULE_TOTAL_TIMEOUT_MS 를 넘긴다. */
+    totalTimeoutMs?: number;
     /** Phase 2 Git: 작업 대상 GitHub repo URL(https://github.com/org/repo). 있으면 실행 시
      *  호스트가 workspace 에 clone(토큰은 사용자 github 연결). 미지정이면 일반 샌드박스 작업. */
     gitRepoUrl?: string;

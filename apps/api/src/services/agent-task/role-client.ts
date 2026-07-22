@@ -7,6 +7,7 @@ import { createClient, type LLMClient } from '../../llm';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
 import { getModelForRole } from '../../config/model-roles';
 import { resolveRoleClientForUser } from '../model-role-resolver';
+import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentTaskService');
@@ -61,9 +62,14 @@ export async function chatTurnWithRoleFallback(
         userId: string;
     },
 ): Promise<Awaited<ReturnType<LLMClient['chat']>>> {
-    const call = () => state.client.chat(p.conversation, undefined, undefined, {
-        tools: p.tools, signal: p.signal, think: false,
-    });
+    // openai SDK 요청 타임아웃을 task 총 예산에 맞춰 늘린다(파생 클라이언트, baseUrl/model 유지).
+    // 기본 LLM_TIMEOUT(120s)은 채팅용이라, 리포트·디자인 등 장문 생성 턴이 단일 요청에서 120s 를
+    // 넘기면 "Request timed out" 으로 task 가 죽는다. 실제 한계는 p.signal(잔여 예산)이 governor.
+    // SDK 요청 타임아웃 상한은 최대 예산(예약)에 맞춘다 — 실제 한계는 p.signal(잔여 예산)이 governor.
+    const call = () => state.client.derive({ timeout: AGENT_TASK_LIMITS.SCHEDULE_TOTAL_TIMEOUT_MS })
+        .chat(p.conversation, undefined, undefined, {
+            tools: p.tools, signal: p.signal, think: false,
+        });
     try {
         return await call();
     } catch (chatErr) {
