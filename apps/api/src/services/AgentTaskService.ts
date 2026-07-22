@@ -91,6 +91,8 @@ export class AgentTaskService {
         const mcp = getUnifiedMCPClient();
         const signal = this.abortController.signal;
         const startedAt = Date.now();
+        // 총 타임아웃 예산 — 예약(무인) task 는 input.totalTimeoutMs 로 더 긴 예산을 받는다(기본 전역값).
+        const totalTimeoutMs = input.totalTimeoutMs ?? AGENT_TASK_LIMITS.TOTAL_TIMEOUT_MS;
         const turnCeiling = Math.min(maxTurns, AGENT_TASK_LIMITS.MAX_TURNS_CEILING);
 
         const userCtx: UserContext = { userId, role: userRole };
@@ -268,7 +270,7 @@ export class AgentTaskService {
             };
 
             for (let turn = startTurn; turn < turnCeiling; turn++) {
-                assertWithinLimits(signal, startedAt, pausedMs, totalTokens);
+                assertWithinLimits(signal, startedAt, pausedMs, totalTokens, totalTimeoutMs);
 
                 // 진행률: 에이전트가 plan 을 세웠으면 실제 단계 완료율(completed/total)을 진척으로 쓴다
                 // — "3/7 단계"처럼 실제 진행을 반영(1-C). plan 이 없으면(턴0·비플래닝 작업) 총 턴 수를
@@ -320,7 +322,7 @@ export class AgentTaskService {
                 // 승인 대기 누적(pausedMs)은 예산에서 제외(4-1 pause-aware).
                 const remainingMs = Math.max(
                     1_000,
-                    AGENT_TASK_LIMITS.TOTAL_TIMEOUT_MS - (Date.now() - startedAt - pausedMs)
+                    totalTimeoutMs - (Date.now() - startedAt - pausedMs)
                 );
                 const callSignal = AbortSignal.any([signal, AbortSignal.timeout(remainingMs)]);
 

@@ -48,6 +48,11 @@ async function fireSchedule(repo: AgentTaskScheduleRepository, s: AgentTaskSched
             userId: String(s.user_id),
             run: () => service.execute({
                 taskId, goal: s.goal, userId: String(s.user_id), userRole: role, maxTurns: s.max_turns,
+                // 예약 task 는 무인 실행 — 사람이 승인할 수 없으므로 승인정책을 분리(기본 none).
+                // 전역 approvalPolicy='all' 이면 첫 도구서 pause 되어 예약이 영영 멈추는 것을 방지.
+                approvalPolicy: AGENT_TASK_LIMITS.SCHEDULE_APPROVAL_POLICY,
+                // 무거운 리포트 생성은 대화형 10분을 넘길 수 있어 예약 전용 총 예산(기본 20분) 부여.
+                totalTimeoutMs: AGENT_TASK_LIMITS.SCHEDULE_TOTAL_TIMEOUT_MS,
             }),
         });
         await repo.markRun(s.id, nextRunAtMs, taskId);
