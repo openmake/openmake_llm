@@ -20,10 +20,17 @@ export interface UserAgent {
     icon: string | null;
     /** 에이전트 전용 모델 fullId (NULL=상속 — 요청 model 자동일 때만 적용, Phase C) */
     model: string | null;
+    /** 'private'(기본, 소유자 전용) | 'shared'(워크스페이스 전원 사용). 편집/삭제는 shared 여도 소유자 한정. */
+    visibility: 'private' | 'shared';
     is_active: boolean;
     usage_count: number;
     created_at: string;
     updated_at: string;
+}
+
+/** 목록 응답용 — 소유 여부 플래그 부착(다른 사용자의 공유 에이전트 구분). */
+export interface UserAgentWithOwnership extends UserAgent {
+    owned: boolean;
 }
 
 export interface UserAgentCreate {
@@ -86,6 +93,43 @@ export class UserAgentRepository extends BaseRepository {
         const result = await this.query<UserAgent>(
             'SELECT * FROM user_agents WHERE id = $1 AND user_id = $2 AND is_active = TRUE',
             [id, userId],
+        );
+        return result.rows[0] as UserAgent | undefined;
+    }
+
+    /**
+     * 실행/사용 경로용 조회 — 소유 에이전트 OR 워크스페이스 공유 에이전트(다른 소유자).
+     * loadUserAgent 의 유일 choke point 가 이걸 호출해 크로스유저 공유 사용을 연다.
+     * 편집/삭제는 여전히 getByIdForUser·update·softDelete 의 user_id 한정을 통과해야 한다.
+     */
+    async getByIdVisibleToUser(id: string, userId: string): Promise<UserAgent | undefined> {
+        const result = await this.query<UserAgent>(
+            `SELECT * FROM user_agents
+             WHERE id = $1 AND is_active = TRUE
+               AND (user_id = $2 OR visibility = 'shared')`,
+            [id, userId],
+        );
+        return result.rows[0] as UserAgent | undefined;
+    }
+
+    /** 목록 — 본인 소유(전부) + 다른 소유자의 공유 에이전트. owned 플래그로 구분. */
+    async listVisibleToUser(userId: string): Promise<UserAgentWithOwnership[]> {
+        const result = await this.query<UserAgentWithOwnership>(
+            `SELECT *, (user_id = $1) AS owned FROM user_agents
+             WHERE is_active = TRUE AND (user_id = $1 OR visibility = 'shared')
+             ORDER BY owned DESC, updated_at DESC`,
+            [userId],
+        );
+        return result.rows as UserAgentWithOwnership[];
+    }
+
+    /** 공유 상태 전환 — 소유자 전용(user_id 한정). publish/unpublish 양방향. */
+    async setVisibility(id: string, userId: string, visibility: 'private' | 'shared'): Promise<UserAgent | undefined> {
+        const result = await this.query<UserAgent>(
+            `UPDATE user_agents SET visibility = $3, updated_at = NOW()
+             WHERE id = $1 AND user_id = $2 AND is_active = TRUE
+             RETURNING *`,
+            [id, userId, visibility],
         );
         return result.rows[0] as UserAgent | undefined;
     }

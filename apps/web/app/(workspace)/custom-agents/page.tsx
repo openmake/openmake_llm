@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Bot, Plus, Pencil, Trash2, GitBranch, X, Loader2, Check, MessageSquare } from "lucide-react";
+import { Bot, Plus, Pencil, Trash2, GitBranch, X, Loader2, Check, MessageSquare, Users, Share2 } from "lucide-react";
 import {
   Button,
   Badge,
@@ -26,6 +26,10 @@ interface CustomAgent {
   /** 에이전트 전용 모델 fullId (null=상속) */
   model: string | null;
   source: "git" | "custom";
+  /** 'private'(소유자 전용) | 'shared'(워크스페이스 공유) */
+  visibility: "private" | "shared";
+  /** 본인 소유 여부 — false 면 다른 사용자가 공유한 에이전트(편집/삭제 불가, 사용만). */
+  owned: boolean;
 }
 
 interface ApiUserAgent {
@@ -35,6 +39,8 @@ interface ApiUserAgent {
   system_prompt: string;
   icon: string | null;
   model: string | null;
+  visibility?: "private" | "shared";
+  owned?: boolean;
 }
 
 type UserAgentsResponse = ApiSuccess<{ agents: ApiUserAgent[] }>;
@@ -58,6 +64,8 @@ function mapAgent(a: ApiUserAgent): CustomAgent {
     systemPrompt: a.system_prompt,
     model: a.model ?? null,
     source: "custom",
+    visibility: a.visibility ?? "private",
+    owned: a.owned ?? true,
   };
 }
 
@@ -465,6 +473,8 @@ export default function CustomAgentsPage() {
       systemPrompt: t(m.promptKey),
       model: null,
       source: m.source,
+      visibility: "private" as const,
+      owned: true,
     })),
   );
   const [loading, setLoading] = useState(true);
@@ -517,6 +527,16 @@ export default function CustomAgentsPage() {
     setShowGitIngest(false);
     setEditingAgent(null);
     await loadAgents();
+  }
+
+  async function handleToggleVisibility(agent: CustomAgent) {
+    const next = agent.visibility === "shared" ? "private" : "shared";
+    try {
+      await ApiClient.patch(`/api/users/me/agents/${agent.id}/visibility`, { visibility: next });
+      await loadAgents();
+    } catch (err) {
+      alert(t("shareFailed", { error: err instanceof Error ? err.message : t("genericError") }));
+    }
   }
 
   return (
@@ -575,12 +595,20 @@ export default function CustomAgentsPage() {
                   <div className="grid h-10 w-10 place-items-center rounded-md bg-accent-soft text-xl">
                     {agent.emoji}
                   </div>
-                  {agent.source === "git" && (
-                    <Badge tone="neutral">
-                      <GitBranch className="h-3 w-3" />
-                      git
-                    </Badge>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {agent.visibility === "shared" && (
+                      <Badge tone="accent">
+                        <Users className="h-3 w-3" />
+                        {agent.owned ? t("sharedBadge") : t("sharedByOtherBadge")}
+                      </Badge>
+                    )}
+                    {agent.source === "git" && (
+                      <Badge tone="neutral">
+                        <GitBranch className="h-3 w-3" />
+                        git
+                      </Badge>
+                    )}
+                  </div>
                 </div>
 
                 <h3 className="mb-1 text-sm font-semibold text-fg">{agent.name}</h3>
@@ -609,15 +637,26 @@ export default function CustomAgentsPage() {
                       {t("useInChat")}
                     </Button>
                   )}
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1" onClick={() => setEditingAgent(agent)}>
-                      <Pencil className="h-3.5 w-3.5" />
-                      {t("edit")}
-                    </Button>
-                    <Button variant="ghost" size="icon" aria-label={t("deleteAria")} onClick={() => void handleDelete(agent)}>
-                      <Trash2 className="h-4 w-4 text-danger" />
-                    </Button>
-                  </div>
+                  {agent.owned && (
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => setEditingAgent(agent)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                        {t("edit")}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        aria-label={agent.visibility === "shared" ? t("unshareAria") : t("shareAria")}
+                        title={agent.visibility === "shared" ? t("unshare") : t("share")}
+                        onClick={() => void handleToggleVisibility(agent)}
+                      >
+                        <Share2 className={`h-3.5 w-3.5 ${agent.visibility === "shared" ? "text-accent" : ""}`} />
+                      </Button>
+                      <Button variant="ghost" size="icon" aria-label={t("deleteAria")} onClick={() => void handleDelete(agent)}>
+                        <Trash2 className="h-4 w-4 text-danger" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </Card>
             ))}
