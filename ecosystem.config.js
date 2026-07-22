@@ -18,6 +18,40 @@
  *   # /tmp/openmake-llm-*.log 가 10MB 도달 시 회전, 30일 보관, gzip 압축
  *   # 미설정 시 단일 로그 파일이 무한 증가 → 디스크 가득 위험
  */
+const { execSync } = require('child_process');
+const path = require('path');
+
+/**
+ * JVM 위치를 크로스플랫폼으로 탐지한다 (opendataloader-pdf 의 PDF 텍스트 추출에 필요).
+ * 우선순위: 명시적 JAVA_HOME > macOS /usr/libexec/java_home > PATH 의 java 역추적.
+ * 못 찾으면 '' 반환 → 라이브러리가 PATH 의 java 로 자체 탐색(있으면 동작, 없으면 PDF 만 비활성).
+ * (구 하드코딩 /opt/homebrew/opt/openjdk@17 은 Apple Silicon 전용이라 Intel/Linux 에서 부재였음)
+ */
+function resolveJavaHome() {
+    if (process.env.JAVA_HOME) return process.env.JAVA_HOME;
+    try {
+        if (process.platform === 'darwin') {
+            // macOS 내장 — 활성 JDK home 반환 (Intel/ARM 무관). JDK 없으면 exit 1 → catch.
+            return execSync('/usr/libexec/java_home', { stdio: ['ignore', 'pipe', 'ignore'] })
+                .toString().trim();
+        }
+        // Linux/기타 — PATH 의 java 실행파일에서 home 역추적 (…/bin/java → …).
+        const javaBin = execSync('command -v java', { stdio: ['ignore', 'pipe', 'ignore'] })
+            .toString().trim();
+        if (javaBin) {
+            const real = execSync(`readlink -f "${javaBin}"`, { stdio: ['ignore', 'pipe', 'ignore'] })
+                .toString().trim() || javaBin;
+            return path.dirname(path.dirname(real)); // …/bin/java → …
+        }
+    } catch {
+        // java 미설치 — PDF 추출만 비활성, 앱 부팅·기타 기능은 정상.
+    }
+    return '';
+}
+
+const JAVA_HOME = resolveJavaHome();
+const JAVA_PATH_PREFIX = JAVA_HOME ? path.join(JAVA_HOME, 'bin') + path.delimiter : '';
+
 module.exports = {
     apps: [{
         name: 'openmake-llm',
@@ -30,9 +64,9 @@ module.exports = {
             NODE_ENV: 'production',
             PORT: 52416,
             // 문서 첨부 추출(opendataloader-pdf)은 Java 11+ 가 필요하다.
-            // pm2 프로세스가 JVM 을 찾도록 JAVA_HOME 과 PATH 에 openjdk@17 을 주입.
-            JAVA_HOME: '/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home',
-            PATH: '/opt/homebrew/opt/openjdk@17/bin:' + (process.env.PATH || ''),
+            // pm2 프로세스가 JVM 을 찾도록 자동 탐지한 JAVA_HOME 과 PATH 를 주입 (크로스플랫폼).
+            ...(JAVA_HOME ? { JAVA_HOME } : {}),
+            PATH: JAVA_PATH_PREFIX + (process.env.PATH || ''),
         },
         
         // 프로세스 관리

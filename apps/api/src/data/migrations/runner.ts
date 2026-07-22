@@ -182,3 +182,31 @@ export class MigrationRunner {
         );
     }
 }
+
+/** 마이그레이션 직렬화용 전역 advisory lock 키 (앱 전역 유일 고정값 — "omlm" 의 hex). */
+const MIGRATION_ADVISORY_LOCK_KEY = 0x6f6d6c6d;
+
+/**
+ * 부팅 시 pending 마이그레이션을 자동 적용한다 (advisory lock 으로 다중 인스턴스 직렬화).
+ *
+ * 부팅 init(002-schema.sql)은 baseline 테이블만 생성하므로, migrations/ 의 증분 스키마를
+ * 여기서 적용해야 artifacts/user_agents/mcp_server_catalog/skill_* 등이 완성된다.
+ * 여러 인스턴스가 동시에 부팅해도 pg_advisory_lock 으로 한 번에 하나만 실행하고,
+ * 나머지는 락 획득 시점에 이미 적용 완료 상태 → 전부 skip 된다. (마이그레이션은
+ * 전부 멱등 IF NOT EXISTS 이므로 락 없이 재실행돼도 안전하지만, 락으로 경합 로그를 줄인다.)
+ */
+export async function applyPendingWithLock(
+    pool: Pool
+): Promise<{ applied: string[]; skipped: string[] }> {
+    const lockClient = await pool.connect();
+    try {
+        await lockClient.query('SELECT pg_advisory_lock($1)', [MIGRATION_ADVISORY_LOCK_KEY]);
+        try {
+            return await new MigrationRunner(pool).applyPending();
+        } finally {
+            await lockClient.query('SELECT pg_advisory_unlock($1)', [MIGRATION_ADVISORY_LOCK_KEY]);
+        }
+    } finally {
+        lockClient.release();
+    }
+}
