@@ -16,6 +16,7 @@ import {
   SlidersHorizontal,
   Check,
   Paperclip,
+  Scissors,
   X,
   Lock,
   BookOpen,
@@ -36,6 +37,7 @@ import {
 } from "@/lib/skills-api";
 import { SlashSkillMenu } from "@/components/chat/slash-skill-menu";
 import { cn } from "@/lib/utils";
+import { detectFileTaskIntent } from "@/lib/file-task-intent";
 
 // 슬래시 스킬 호출: "/" + 공백없는 단일 토큰일 때만 드롭다운 표시.
 const SLASH_PATTERN = /^\/(\S*)$/;
@@ -304,6 +306,21 @@ export function Composer() {
     } else if (structuredMode) {
       // 구조화 답변 토글 ON — REST /api/chat/structured (비스트리밍, 카드 렌더). 첨부는 미지원.
       void sendStructured(text.trim());
+    } else if (
+      !discussionMode && !deepResearchMode && !imageMode &&
+      files.length > 0 && detectFileTaskIntent(text)
+    ) {
+      // 자동 위임(Option B) — 파일 첨부 + 가공/편집/생성/정밀분석 의도면, 스트리밍 채팅 대신
+      // 에이전트 작업으로 매끄럽게 위임한다. 샌드박스가 원본 파일을 python
+      // (openpyxl/python-docx/reportlab 등)으로 처리 → 진행·결과·생성파일 다운로드는
+      // 인라인 AgentTaskCard 가 그대로 렌더(별도 모드 전환 없음). 순수 읽기/요약은 채팅 유지.
+      void startAgentTask(
+        text.trim(),
+        files,
+        images.length ? images.map((i) => i.dataUrl) : undefined,
+        agentApprovalMode,
+        undefined,
+      );
     } else {
       // NotebookLM 컨텍스트 — grounding 프리픽스는 백엔드(prompts/notebook-context)가 주입.
       // 가로채기 모드(토론/딥리서치/이미지)는 도구를 우회하므로 미전송 — 칩은 흐림 표시로 안내.
@@ -597,7 +614,7 @@ export function Composer() {
               >
                 <Paperclip className="h-3 w-3 shrink-0 text-muted" />
                 <span className="truncate">{f.name}</span>
-                {f.truncated && <span className="shrink-0 text-faint">✂</span>}
+                {f.truncated && <Scissors className="h-3 w-3 shrink-0 text-faint" aria-label={t("attachTruncated", { name: f.name })} />}
                 <button
                   onClick={() => removeFile(f.id)}
                   aria-label={t("removeAttachment", { name: f.name })}
