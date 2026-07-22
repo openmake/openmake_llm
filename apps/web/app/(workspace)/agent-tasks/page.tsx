@@ -17,6 +17,11 @@ import {
   Plus,
   Play,
   FileStack,
+  Circle,
+  CircleDot,
+  CircleCheck,
+  CircleX,
+  type LucideIcon,
 } from "lucide-react";
 import {
   Button,
@@ -237,11 +242,11 @@ function Modal({
 }
 
 /* ── 작업 상세 모달 (스텝 타임라인) ─────────────────────── */
-const PLAN_MARK: Record<PlanStepStatus, string> = {
-  not_started: "○",
-  in_progress: "◐",
-  completed: "●",
-  blocked: "✕",
+const PLAN_MARK: Record<PlanStepStatus, LucideIcon> = {
+  not_started: Circle,
+  in_progress: CircleDot,
+  completed: CircleCheck,
+  blocked: CircleX,
 };
 
 function TaskDetailModal({
@@ -327,12 +332,14 @@ function TaskDetailModal({
                 {plan.map((s, i) => (
                   <li key={i} className="flex items-start gap-2 text-xs">
                     <span className={cn(
-                      "font-mono",
+                      "mt-0.5",
                       s.status === "completed" && "text-success",
                       s.status === "in_progress" && "text-warning",
                       s.status === "blocked" && "text-danger",
                       s.status === "not_started" && "text-faint",
-                    )}>{PLAN_MARK[s.status]}</span>
+                    )}>
+                      {(() => { const Icon = PLAN_MARK[s.status]; return <Icon className="h-3.5 w-3.5" aria-label={s.status} />; })()}
+                    </span>
                     <span className={cn(
                       "min-w-0 flex-1",
                       s.status === "completed" ? "text-muted line-through" : "text-fg-2",
