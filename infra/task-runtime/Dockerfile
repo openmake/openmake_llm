@@ -26,9 +26,21 @@ RUN apt-get update \
     && chmod -R a+rX /opt/ms-playwright /opt/browser \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# 검색 등 일부 도구의 playwright 는 PLAYWRIGHT_BROWSERS_PATH 를 안 물고 기본 캐시
+# (/home/node/.cache/ms-playwright)에서 브라우저를 찾는다 → /opt 설치본으로 심링크해 양쪽 해석.
+RUN mkdir -p /home/node/.cache \
+    && ln -sfn /opt/ms-playwright /home/node/.cache/ms-playwright \
+    && chown -R node:node /home/node/.cache
+
 # 브라우저 액션 러너 — `node /opt/browser/browser-runner.mjs <actions.json>`.
 COPY browser-runner.mjs /opt/browser/browser-runner.mjs
 RUN chmod a+r /opt/browser/browser-runner.mjs
+
+# 리포트 디자인 템플릿(Open Design ai-trend-daily) + 렌더러 — 픽셀-정합 재현용.
+# network=none 샌드박스라 런타임 fetch 불가 → 고정 디자인을 이미지에 베이킹. 에이전트는
+# data.json 만 생성하고 render_report.py 가 {{TOKEN}} 을 결정적으로 치환 → CSS/구조 불변.
+COPY report-template/ /opt/report-template/
+RUN chmod -R a+rX /opt/report-template
 
 # 오피스/PDF 산출물용 파이썬 라이브러리 — 격리 venv 에 빌드타임 베이킹.
 # python_execute 가 실행하는 `python3` 가 이 venv 를 쓰도록 PATH 선두에 배치(코드 변경 0).
