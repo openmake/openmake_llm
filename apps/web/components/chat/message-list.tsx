@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown, GitPullRequest } from "lucide-react";
+import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown, GitPullRequest, Wrench, Pencil } from "lucide-react";
 import { ThinkingTimeline } from "@/components/chat/thinking-timeline";
 import { SteeringInput } from "@/components/chat/steering-input";
 import { DiffView } from "@/components/chat/diff-view";
@@ -303,7 +303,9 @@ function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; appr
         {/* 현재 단계(4-5 실시간 스트림) — 실행 중일 때 방금 수행한 스텝을 라이브 표시. */}
         {showProgress && task.lastStep && (
           <p className="truncate font-mono text-[11px] text-faint">
-            {task.lastStep.toolName ? `⚙ ${task.lastStep.toolName}` : `✎ ${task.lastStep.stepType}`}
+            {task.lastStep.toolName
+              ? <><Wrench className="mr-1 inline h-3 w-3 align-[-1px]" />{task.lastStep.toolName}</>
+              : <><Pencil className="mr-1 inline h-3 w-3 align-[-1px]" />{task.lastStep.stepType}</>}
             {task.lastStep.preview ? ` · ${task.lastStep.preview.slice(0, 80)}` : ""}
           </p>
         )}

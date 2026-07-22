@@ -35,7 +35,9 @@ export function toLLMTool(def: MCPToolDefinition): ToolDefinition {
 }
 
 function resultToString(r: { content: Array<{ text?: string }>; isError?: boolean }, cap = 8000): string {
-    const text = r.content.map((c) => c.text ?? '').join('\n').slice(0, cap);
+    // NUL(0x00) 제거 — 바이너리 파일을 도구로 열람하면 결과에 0x00 이 섞일 수 있고, 이는 모델
+    // 컨텍스트/스텝 저장(Postgres TEXT·JSON)으로 흘러가면 "invalid byte sequence" 로 태스크를 깨뜨린다.
+    const text = r.content.map((c) => c.text ?? '').join('\n').replace(/\u0000/g, '').slice(0, cap);
     return r.isError ? `Error: ${text}` : text;
 }
 
