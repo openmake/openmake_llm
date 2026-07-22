@@ -7,6 +7,7 @@
  *
  * 외부화 (No-Hardcoding L1): 모든 값 env override.
  */
+import * as path from 'path';
 
 /** 뷰어 공개 base URL (별도 오리진). 로컬: http://localhost:8088, 외부: Funnel :8443 URL. */
 const ORIGIN = process.env.ARTIFACT_VIEWER_ORIGIN || 'http://localhost:8088';
@@ -24,7 +25,7 @@ export const ARTIFACT_VIEWER = {
      * 구조: {dataDir}/a/{pubId}/index.html , {dataDir}/vendor/*.js
      */
     dataDir: process.env.ARTIFACT_VIEWER_DATA_DIR
-        || '/Volumes/MAC_APP/docker/openmake_llm/artifact-viewer/data',
+        || path.resolve(process.cwd(), 'data/artifact-viewer'),
 
     /**
      * 뷰어 접근토큰(authenticated/private) 서명 키 — HMAC-SHA256.

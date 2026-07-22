@@ -204,6 +204,23 @@ export class DashboardServer {
             process.exit(1);
         }
 
+        // 부팅 시 pending 마이그레이션 자동 적용 (advisory lock 으로 다중 인스턴스 직렬화).
+        // 부팅 init(002-schema.sql)은 baseline 만 생성 → migrations/ 의 증분 스키마를 여기서
+        // 적용해야 artifacts/user_agents/mcp_server_catalog/skill_* 테이블이 완성된다.
+        // 외부 MCP·스킬 시더가 이 테이블들에 의존하므로 그보다 먼저 실행해야 한다.
+        // (DB_AUTO_MIGRATE=false 로 opt-out — 수동 CLI 운영 시)
+        if (process.env.DB_AUTO_MIGRATE !== 'false') {
+            try {
+                const { applyPendingWithLock } = await import('./data/migrations/runner');
+                const { getPool } = await import('./data/models/unified-database');
+                const { applied, skipped } = await applyPendingWithLock(getPool());
+                console.log(`[Server] 마이그레이션 자동 적용 완료 — 적용 ${applied.length}건, skip ${skipped.length}건`);
+            } catch (err) {
+                console.error('[Server] 마이그레이션 자동 적용 실패 — Fail-Fast:', err);
+                process.exit(1);
+            }
+        }
+
         // 외부 MCP 서버 초기화 (DB에서 설정 로드 → stdio 연결)
         try {
             const { getUnifiedMCPClient } = await import('./mcp');
