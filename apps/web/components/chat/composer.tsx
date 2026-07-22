@@ -314,11 +314,14 @@ export function Composer() {
       // 에이전트 작업으로 매끄럽게 위임한다. 샌드박스가 원본 파일을 python
       // (openpyxl/python-docx/reportlab 등)으로 처리 → 진행·결과·생성파일 다운로드는
       // 인라인 AgentTaskCard 가 그대로 렌더(별도 모드 전환 없음). 순수 읽기/요약은 채팅 유지.
+      // 승인정책: 자동 위임은 매끄러움 우선으로 high-risk(파일 읽기/쓰기는 자동, bash/python/
+      // 파일삭제만 1회 승인). 사용자가 Skip(none, 전부 자동)을 골랐다면 그 의도를 존중.
+      const delegationApproval = agentApprovalMode === "none" ? "none" : "high-risk";
       void startAgentTask(
         text.trim(),
         files,
         images.length ? images.map((i) => i.dataUrl) : undefined,
-        agentApprovalMode,
+        delegationApproval,
         undefined,
       );
     } else {
