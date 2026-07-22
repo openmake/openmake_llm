@@ -822,7 +822,14 @@
     "deselect": "Deselect agent",
     "modelLabel": "Model",
     "modelInherit": "Inherit (request model/default)",
-    "modelHelp": "When set, chats with this agent use this model (an explicit model choice in chat still wins). External models require a registered API key."
+    "modelHelp": "When set, chats with this agent use this model (an explicit model choice in chat still wins). External models require a registered API key.",
+    "sharedBadge": "Shared",
+    "sharedByOtherBadge": "Workspace",
+    "share": "Share to workspace",
+    "unshare": "Unshare",
+    "shareAria": "Share agent to workspace",
+    "unshareAria": "Unshare agent",
+    "shareFailed": "Failed to change sharing: {error}"
   },
   "research": {
     "pageTitle": "Deep Research History",

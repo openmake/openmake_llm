@@ -822,7 +822,14 @@
     "deselect": "取消智能体",
     "modelLabel": "模型",
     "modelInherit": "继承(请求模型/默认)",
-    "modelHelp": "设置后,该智能体的对话将始终使用此模型(聊天中明确选择的模型优先)。外部模型需要注册API密钥。"
+    "modelHelp": "设置后,该智能体的对话将始终使用此模型(聊天中明确选择的模型优先)。外部模型需要注册API密钥。",
+    "sharedBadge": "已共享",
+    "sharedByOtherBadge": "工作区",
+    "share": "共享到工作区",
+    "unshare": "取消共享",
+    "shareAria": "将助手共享到工作区",
+    "unshareAria": "取消共享助手",
+    "shareFailed": "更改共享失败：{error}"
   },
   "research": {
     "pageTitle": "深度研究历史",

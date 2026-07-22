@@ -51,7 +51,8 @@ export class ExecutionPlanBuilder {
             const { UserAgentRepository } = await import('../data/repositories/user-agent-repository');
             const { getPool } = await import('../data/models/unified-database');
             const repo = new UserAgentRepository(getPool());
-            const agent = await repo.getByIdForUser(userAgentId, userId);
+            // 소유 OR 워크스페이스 공유 에이전트 사용 허용 (편집/삭제는 여전히 소유자 한정)
+            const agent = await repo.getByIdVisibleToUser(userAgentId, userId);
             if (!agent || !agent.is_active) return null;
             // usage_count 증가는 fire-and-forget — chat 흐름 차단 금지
             if (opts?.countUsage !== false) {

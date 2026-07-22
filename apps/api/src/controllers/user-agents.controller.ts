@@ -55,6 +55,10 @@ const updateSchema = z.object({
     model: z.string().min(1).max(200).nullish(),
 });
 
+const visibilitySchema = z.object({
+    visibility: z.enum(['private', 'shared']),
+});
+
 function getUserId(req: Request): string | null {
     if (!req.user) return null;
     if ('userId' in req.user && typeof (req.user as { userId?: unknown }).userId === 'string') {
@@ -72,7 +76,9 @@ export function createUserAgentsController(): Router {
         if (!userId) { res.status(401).json(unauthorized()); return; }
         try {
             const repo = new UserAgentRepository(getPool());
-            const agents = await repo.listByUser(userId);
+            // 본인 소유 + 워크스페이스 공유(다른 소유자) 에이전트. 타인 user_id 는 노출하지 않는다.
+            const rows = await repo.listVisibleToUser(userId);
+            const agents = rows.map(({ user_id: _user_id, ...rest }) => rest);
             res.json(success({ agents }));
         } catch (err) {
             log.error('list 실패:', err);
@@ -85,9 +91,11 @@ export function createUserAgentsController(): Router {
         if (!userId) { res.status(401).json(unauthorized()); return; }
         try {
             const repo = new UserAgentRepository(getPool());
-            const agent = await repo.getByIdForUser(req.params.id, userId);
+            // 소유 OR 공유 에이전트 조회 허용
+            const agent = await repo.getByIdVisibleToUser(req.params.id, userId);
             if (!agent) { res.status(404).json(notFound('agent 없음')); return; }
-            res.json(success({ agent }));
+            const { user_id, ...rest } = agent;
+            res.json(success({ agent: { ...rest, owned: user_id === userId } }));
         } catch (err) {
             log.error('get 실패:', err);
             res.status(500).json(internalError('agent 조회 실패'));
@@ -166,6 +174,24 @@ export function createUserAgentsController(): Router {
         } catch (err) {
             log.error('delete 실패:', err);
             res.status(500).json(internalError('agent 삭제 실패'));
+        }
+    });
+
+    // 워크스페이스 공유 전환 (publish/unpublish) — 소유자 전용(setVisibility 가 user_id 한정).
+    router.patch('/:id/visibility', requireAuth, validate(visibilitySchema), async (req, res) => {
+        const userId = getUserId(req);
+        if (!userId) { res.status(401).json(unauthorized()); return; }
+        try {
+            const { visibility } = req.body as z.infer<typeof visibilitySchema>;
+            const repo = new UserAgentRepository(getPool());
+            const agent = await repo.setVisibility(req.params.id, userId, visibility);
+            if (!agent) { res.status(404).json(notFound('agent 없음')); return; }
+            log.info(`agent 공유 전환: userId=${userId} id=${agent.id} visibility=${visibility}`);
+            const { user_id: _user_id, ...rest } = agent;
+            res.json(success({ agent: { ...rest, owned: true } }));
+        } catch (err) {
+            log.error('visibility 전환 실패:', err);
+            res.status(500).json(internalError('agent 공유 전환 실패'));
         }
     });
 
