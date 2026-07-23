@@ -88,6 +88,8 @@ export const envSchema = z
         GOOGLE_CLIENT_SECRET: z.string().default(''),
         GITHUB_CLIENT_ID: z.string().default(''),
         GITHUB_CLIENT_SECRET: z.string().default(''),
+        KAKAO_CLIENT_ID: z.string().default(''),
+        KAKAO_CLIENT_SECRET: z.string().default(''),
         OAUTH_REDIRECT_URI: z.string().default(`http://localhost:${SERVER_CONFIG.DEFAULT_PORT}/api/auth/callback/google`),
 
         // CORS

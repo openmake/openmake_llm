@@ -105,6 +105,33 @@ export interface GitHubUser {
 }
 
 /**
+ * Kakao OAuth 사용자 정보
+ * Kakao /v2/user/me API 응답 (필요한 필드만)
+ * @interface KakaoUserInfo
+ * @see https://developers.kakao.com/docs/ko/kakaologin/rest-api#req-user-info
+ */
+export interface KakaoUserInfo {
+    /** 카카오 회원번호 */
+    id: number;
+    /** 카카오계정 정보 (이메일은 선택 동의라 없을 수 있음) */
+    kakao_account?: {
+        /** 카카오계정 이메일 (동의 시에만 제공) */
+        email?: string;
+        /** 이메일 유효 여부 */
+        is_email_valid?: boolean;
+        /** 이메일 인증 여부 */
+        is_email_verified?: boolean;
+        /** 프로필 정보 */
+        profile?: {
+            /** 닉네임 */
+            nickname?: string;
+            /** 프로필 사진 URL */
+            profile_image_url?: string;
+        };
+    };
+}
+
+/**
  * GitHub 이메일 정보
  * GitHub user/emails API 응답 항목
  * @interface GitHubEmail

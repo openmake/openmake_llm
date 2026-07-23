@@ -116,7 +116,7 @@ export default function LoginPage() {
             <div className="h-px flex-1 bg-border" />
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <a
               href="/api/auth/login/google"
               className="inline-flex h-9 items-center justify-center rounded-md border border-border-strong bg-surface text-sm font-medium text-fg transition hover:bg-surface-2"
@@ -128,6 +128,12 @@ export default function LoginPage() {
               className="inline-flex h-9 items-center justify-center rounded-md border border-border-strong bg-surface text-sm font-medium text-fg transition hover:bg-surface-2"
             >
               GitHub
+            </a>
+            <a
+              href="/api/auth/login/kakao"
+              className="inline-flex h-9 items-center justify-center rounded-md border border-border-strong bg-[#FEE500] text-sm font-medium text-[#191600] transition hover:brightness-95"
+            >
+              Kakao
             </a>
           </div>
 
