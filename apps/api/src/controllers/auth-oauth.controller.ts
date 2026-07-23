@@ -527,9 +527,9 @@ export class AuthOAuthController {
         authUrl.searchParams.set('client_id', clientId);
         authUrl.searchParams.set('redirect_uri', redirectUri);
         authUrl.searchParams.set('response_type', 'code');
-        // 이메일(account_email)은 비즈앱 검수가 필요해 '권한 없음' 상태 → 닉네임(profile_nickname,
-        // 필수 동의)으로 대체. 사용자 식별은 콜백에서 카카오 회원번호(id)로 처리한다.
-        authUrl.searchParams.set('scope', 'profile_nickname');
+        // 비즈앱 전환으로 이메일(account_email) 동의항목 활성화 → 실이메일로 식별(타 provider 병합).
+        // 닉네임(profile_nickname)도 함께 요청. 둘 다 필수 동의라 콤마 구분 scope 로 전달.
+        authUrl.searchParams.set('scope', 'account_email,profile_nickname');
         authUrl.searchParams.set('state', state);
 
         log.info(`[OAuth] Kakao 로그인 리다이렉트 (redirect_uri: ${redirectUri})`);
@@ -593,12 +593,12 @@ export class AuthOAuthController {
 
             const kakaoUser = await userInfoRes.json() as KakaoUserInfo;
 
-            // 카카오 이메일 동의항목은 비즈앱 검수 전이라 '권한 없음' → 회원번호(id)로 식별한다.
-            // 회원번호는 '사용자 아이디 고정'(기본 ON)으로 안정적이며, 기존 email 기반 계정 모델에
-            // 합성 이메일(kakao_<id>@kakao.local)로 매핑한다. 이메일 동의가 열리면 이 매핑만 교체.
+            // 비즈앱 전환으로 이메일(account_email) 필수 동의 활성화 → 실이메일로 식별한다(Google 등
+            // 타 provider 와 동일 이메일이면 계정 병합). 이메일이 없는 예외 케이스만 회원번호(id)
+            // 기반 합성 이메일로 폴백 — 회원번호는 '사용자 아이디 고정'(기본 ON)이라 안정적.
             const kakaoId = kakaoUser.id;
             if (!kakaoId) throw new Error('카카오 사용자 정보를 가져올 수 없습니다');
-            const email = `kakao_${kakaoId}@kakao.local`;
+            const email = kakaoUser.kakao_account?.email || `kakao_${kakaoId}@kakao.local`;
 
             const authService = getAuthService();
             const result = await authService.findOrCreateOAuthUser(email, 'kakao');
