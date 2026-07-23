@@ -290,7 +290,7 @@ export class AuthService {
     /**
      * OAuth 사용자 생성 또는 반환
      */
-    async findOrCreateOAuthUser(email: string, provider: 'google' | 'github'): Promise<AuthResult> {
+    async findOrCreateOAuthUser(email: string, provider: 'google' | 'github' | 'kakao'): Promise<AuthResult> {
         const user = await this.userManager.getUserByEmail(email);
         let publicUser = user ? await this.userManager.getUserById(user.id) : null;
 
@@ -348,6 +348,9 @@ export class AuthService {
         }
         if (config.githubClientId && config.githubClientSecret) {
             providers.push('github');
+        }
+        if (config.kakaoClientId && config.kakaoClientSecret) {
+            providers.push('kakao');
         }
 
         return providers;

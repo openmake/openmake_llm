@@ -2,7 +2,7 @@
  * ============================================================
  * Auth OAuth Controller
  * ============================================================
- * OAuth 인증 관련 API 라우트 (Google, GitHub)
+ * OAuth 인증 관련 API 라우트 (Google, GitHub, Kakao)
  *
  * auth.controller.ts에서 분리됨.
  * OAuth state 관리, 리다이렉트 URI 생성, OAuth 콜백 핸들러를 담당합니다.
@@ -11,13 +11,13 @@
 import { Request, Response, Router } from 'express';
 import * as crypto from 'crypto';
 import { getAuthService } from '../services/AuthService';
-import type { OAuthTokenResponse, GoogleUserInfo, GitHubUser, GitHubEmail } from '../auth/types';
+import type { OAuthTokenResponse, GoogleUserInfo, GitHubUser, GitHubEmail, KakaoUserInfo } from '../auth/types';
 import { setTokenCookie, setRefreshTokenCookie, generateRefreshToken } from '../auth';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, serviceUnavailable } from '../utils/api-response';
 import { getConfig } from '../config/env';
 import { APP_USER_AGENT } from '../config/constants';
-import { GOOGLE_OAUTH, GITHUB_OAUTH, GITHUB_API } from '../config/external-services';
+import { GOOGLE_OAUTH, GITHUB_OAUTH, GITHUB_API, KAKAO_OAUTH } from '../config/external-services';
 
 const log = createLogger('AuthOAuthController');
 
@@ -189,7 +189,7 @@ function validateAndConsumeStateFallback(state: string, expectedProvider: string
  *
  * OAUTH_REDIRECT_URI는 Google용으로 설정되어 있어도 provider 부분을 자동 교체합니다.
  */
-function buildRedirectUri(req: Request, provider: 'google' | 'github', serverPort: number): string {
+function buildRedirectUri(req: Request, provider: 'google' | 'github' | 'kakao', serverPort: number): string {
     const configuredUri = getConfig().oauthRedirectUri;
     // 외부 접속은 리버스 프록시(Next.js rewrites / Nginx)를 거치므로 req.get('host') 는
     // 프록시 destination(예: localhost:52416)이 되어 redirect_uri 가 외부 주소로 생성되지 않는다.
@@ -255,6 +255,7 @@ function sendOAuthSuccessRedirect(res: Response, path: string): void {
  * - OAuth 프로바이더 목록
  * - Google OAuth (로그인 + 콜백)
  * - GitHub OAuth (로그인 + 콜백)
+ * - Kakao OAuth (로그인 + 콜백)
  */
 export class AuthOAuthController {
     /** Express 라우터 인스턴스 */
@@ -276,8 +277,10 @@ export class AuthOAuthController {
         this.router.get('/providers', this.getProviders.bind(this));
         this.router.get('/login/google', this.googleLogin.bind(this));
         this.router.get('/login/github', this.githubLogin.bind(this));
+        this.router.get('/login/kakao', this.kakaoLogin.bind(this));
         this.router.get('/callback/google', this.googleCallback.bind(this));
         this.router.get('/callback/github', this.githubCallback.bind(this));
+        this.router.get('/callback/kakao', this.kakaoCallback.bind(this));
     }
 
     /**
@@ -502,6 +505,111 @@ export class AuthOAuthController {
             sendOAuthSuccessRedirect(res, '/?auth=callback');
         } catch (error) {
             log.error('[OAuth GitHub Callback] 오류:', error);
+            res.redirect('/login?error=oauth_failed');
+        }
+    }
+
+    /**
+     * GET /api/auth/login/kakao - Kakao OAuth 시작
+     */
+    private async kakaoLogin(req: Request, res: Response): Promise<void> {
+        const clientId = getConfig().kakaoClientId;
+        const redirectUri = buildRedirectUri(req, 'kakao', this.serverPort);
+
+        if (!clientId) {
+            res.status(503).json(serviceUnavailable('Kakao OAuth가 설정되지 않았습니다'));
+            return;
+        }
+
+        // 🔒 암호학적으로 안전한 state 생성 (CSRF 방어)
+        const state = await generateSecureState('kakao');
+        const authUrl = new URL(KAKAO_OAUTH.AUTH_URL);
+        authUrl.searchParams.set('client_id', clientId);
+        authUrl.searchParams.set('redirect_uri', redirectUri);
+        authUrl.searchParams.set('response_type', 'code');
+        // 이메일(account_email)은 비즈앱 검수가 필요해 '권한 없음' 상태 → 닉네임(profile_nickname,
+        // 필수 동의)으로 대체. 사용자 식별은 콜백에서 카카오 회원번호(id)로 처리한다.
+        authUrl.searchParams.set('scope', 'profile_nickname');
+        authUrl.searchParams.set('state', state);
+
+        log.info(`[OAuth] Kakao 로그인 리다이렉트 (redirect_uri: ${redirectUri})`);
+        res.redirect(authUrl.toString());
+    }
+
+    /**
+     * GET /api/auth/callback/kakao - Kakao OAuth 콜백
+     */
+    private async kakaoCallback(req: Request, res: Response): Promise<void> {
+        const { code, error: oauthError, state } = req.query;
+
+        if (oauthError) {
+            res.redirect(`/login?error=${encodeURIComponent(String(oauthError))}`);
+            return;
+        }
+
+        if (!state || typeof state !== 'string') {
+            log.error('[OAuth] Kakao callback: Missing state parameter');
+            res.status(400).json(badRequest('OAuth state parameter is required'));
+            return;
+        }
+
+        // 🔒 CSRF 방어: state 검증 (일회성, DB 기반)
+        if (!await validateAndConsumeState(state, 'kakao')) {
+            log.error('[OAuth] Kakao callback: Invalid or expired state');
+            res.redirect('/login?error=invalid_state');
+            return;
+        }
+
+        if (!code) {
+            res.redirect('/login?error=no_code');
+            return;
+        }
+
+        try {
+            const clientId = getConfig().kakaoClientId;
+            const clientSecret = getConfig().kakaoClientSecret;
+            const redirectUri = buildRedirectUri(req, 'kakao', this.serverPort);
+
+            // 토큰 교환 (Kakao 는 client_secret 포함 x-www-form-urlencoded)
+            const tokenRes = await fetch(KAKAO_OAUTH.TOKEN_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    grant_type: 'authorization_code',
+                    client_id: clientId,
+                    client_secret: clientSecret,
+                    redirect_uri: redirectUri,
+                    code: String(code)
+                })
+            });
+
+            const tokenData = await tokenRes.json() as OAuthTokenResponse;
+            if (!tokenData.access_token) throw new Error('토큰 교환 실패');
+
+            // 사용자 정보 가져오기
+            const userInfoRes = await fetch(KAKAO_OAUTH.USERINFO_URL, {
+                headers: { Authorization: `Bearer ${tokenData.access_token}` }
+            });
+
+            const kakaoUser = await userInfoRes.json() as KakaoUserInfo;
+
+            // 카카오 이메일 동의항목은 비즈앱 검수 전이라 '권한 없음' → 회원번호(id)로 식별한다.
+            // 회원번호는 '사용자 아이디 고정'(기본 ON)으로 안정적이며, 기존 email 기반 계정 모델에
+            // 합성 이메일(kakao_<id>@kakao.local)로 매핑한다. 이메일 동의가 열리면 이 매핑만 교체.
+            const kakaoId = kakaoUser.id;
+            if (!kakaoId) throw new Error('카카오 사용자 정보를 가져올 수 없습니다');
+            const email = `kakao_${kakaoId}@kakao.local`;
+
+            const authService = getAuthService();
+            const result = await authService.findOrCreateOAuthUser(email, 'kakao');
+
+            if (!result.success || !result.token || !result.user) throw new Error(result.error || '인증 실패');
+
+            setTokenCookie(res, result.token);
+            setRefreshTokenCookie(res, generateRefreshToken(result.user));
+            sendOAuthSuccessRedirect(res, '/?auth=callback');
+        } catch (error) {
+            log.error('[OAuth Kakao Callback] 오류:', error);
             res.redirect('/login?error=oauth_failed');
         }
     }

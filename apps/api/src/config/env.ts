@@ -38,6 +38,8 @@ export interface EnvConfig {
     googleClientSecret: string;
     githubClientId: string;
     githubClientSecret: string;
+    kakaoClientId: string;
+    kakaoClientSecret: string;
     oauthRedirectUri: string;
 
     // CORS
@@ -163,6 +165,8 @@ const DEFAULT_CONFIG: EnvConfig = {
     googleClientSecret: '',
     githubClientId: '',
     githubClientSecret: '',
+    kakaoClientId: '',
+    kakaoClientSecret: '',
     oauthRedirectUri: `http://localhost:${SERVER_CONFIG.DEFAULT_PORT}/api/auth/callback/google`,
 
     // CORS
@@ -382,6 +386,8 @@ export function loadConfig(): EnvConfig {
         GOOGLE_CLIENT_SECRET: env('GOOGLE_CLIENT_SECRET'),
         GITHUB_CLIENT_ID: env('GITHUB_CLIENT_ID'),
         GITHUB_CLIENT_SECRET: env('GITHUB_CLIENT_SECRET'),
+        KAKAO_CLIENT_ID: env('KAKAO_CLIENT_ID'),
+        KAKAO_CLIENT_SECRET: env('KAKAO_CLIENT_SECRET'),
         OAUTH_REDIRECT_URI: env('OAUTH_REDIRECT_URI'),
         DB_POOL_MAX: env('DB_POOL_MAX'),
         DB_POOL_MIN: env('DB_POOL_MIN'),
@@ -485,6 +491,8 @@ export function loadConfig(): EnvConfig {
         googleClientSecret: parsed.GOOGLE_CLIENT_SECRET ?? DEFAULT_CONFIG.googleClientSecret,
         githubClientId: parsed.GITHUB_CLIENT_ID ?? DEFAULT_CONFIG.githubClientId,
         githubClientSecret: parsed.GITHUB_CLIENT_SECRET ?? DEFAULT_CONFIG.githubClientSecret,
+        kakaoClientId: parsed.KAKAO_CLIENT_ID ?? DEFAULT_CONFIG.kakaoClientId,
+        kakaoClientSecret: parsed.KAKAO_CLIENT_SECRET ?? DEFAULT_CONFIG.kakaoClientSecret,
         oauthRedirectUri: parsed.OAUTH_REDIRECT_URI ?? DEFAULT_CONFIG.oauthRedirectUri,
 
         // CORS

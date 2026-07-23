@@ -59,6 +59,24 @@ export const GITHUB_OAUTH = {
 } as const;
 
 // ============================================
+// Kakao OAuth
+// ============================================
+
+/**
+ * Kakao 로그인 OAuth 2.0 관련 URL
+ * controllers/auth-oauth.controller.ts에서 참조
+ * @see https://developers.kakao.com/docs/ko/kakaologin/rest-api
+ */
+export const KAKAO_OAUTH = {
+    /** Kakao 인가 코드 요청 URL */
+    AUTH_URL: 'https://kauth.kakao.com/oauth/authorize',
+    /** Kakao 토큰 교환 URL */
+    TOKEN_URL: 'https://kauth.kakao.com/oauth/token',
+    /** Kakao 사용자 정보 URL */
+    USERINFO_URL: 'https://kapi.kakao.com/v2/user/me',
+} as const;
+
+// ============================================
 // Swagger UI CDN
 // ============================================
 
