@@ -344,7 +344,7 @@ export class AuthOAuthController {
         const { code, error: oauthError, state } = req.query;
 
         if (oauthError) {
-            res.redirect(`/login.html?error=${encodeURIComponent(String(oauthError))}`);
+            res.redirect(`/login?error=${encodeURIComponent(String(oauthError))}`);
             return;
         }
 
@@ -357,12 +357,12 @@ export class AuthOAuthController {
         // 🔒 Phase 2 CSRF 방어: state 검증 (Phase 3: DB 기반 비동기)
         if (!await validateAndConsumeState(state, 'google')) {
             log.error('[OAuth] Google callback: Invalid or expired state');
-            res.redirect('/login.html?error=invalid_state');
+            res.redirect('/login?error=invalid_state');
             return;
         }
 
         if (!code) {
-            res.redirect('/login.html?error=no_code');
+            res.redirect('/login?error=no_code');
             return;
         }
 
@@ -405,7 +405,7 @@ export class AuthOAuthController {
             sendOAuthSuccessRedirect(res, '/?auth=callback');
         } catch (error) {
             log.error('[OAuth Google Callback] 오류:', error);
-            res.redirect('/login.html?error=oauth_failed');
+            res.redirect('/login?error=oauth_failed');
         }
     }
 
@@ -416,7 +416,7 @@ export class AuthOAuthController {
         const { code, error: oauthError, state } = req.query;
 
         if (oauthError) {
-            res.redirect(`/login.html?error=${encodeURIComponent(String(oauthError))}`);
+            res.redirect(`/login?error=${encodeURIComponent(String(oauthError))}`);
             return;
         }
 
@@ -429,12 +429,12 @@ export class AuthOAuthController {
         // 🔒 Phase 2 CSRF 방어: state 검증 (Phase 3: DB 기반 비동기)
         if (!await validateAndConsumeState(state, 'github')) {
             log.error('[OAuth] GitHub callback: Invalid or expired state');
-            res.redirect('/login.html?error=invalid_state');
+            res.redirect('/login?error=invalid_state');
             return;
         }
 
         if (!code) {
-            res.redirect('/login.html?error=no_code');
+            res.redirect('/login?error=no_code');
             return;
         }
 
@@ -484,7 +484,7 @@ export class AuthOAuthController {
                 // primary 이메일이 없으면 OAuth 프로필에서 public 이메일 사용, 그것도 없으면 거부
                 if (!primaryEmail?.email) {
                     log.warn(`[OAuth GitHub] 이메일 비공개 사용자 로그인 거부: login=${githubUser.login}`);
-                    res.redirect('/login.html?error=email_required');
+                    res.redirect('/login?error=email_required');
                     return;
                 }
                 email = primaryEmail.email;
@@ -500,7 +500,7 @@ export class AuthOAuthController {
             sendOAuthSuccessRedirect(res, '/?auth=callback');
         } catch (error) {
             log.error('[OAuth GitHub Callback] 오류:', error);
-            res.redirect('/login.html?error=oauth_failed');
+            res.redirect('/login?error=oauth_failed');
         }
     }
 
