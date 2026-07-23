@@ -183,8 +183,9 @@ function validateAndConsumeStateFallback(state: string, expectedProvider: string
  * OAuth redirect URI를 생성합니다.
  *
  * 우선순위:
- * 1. OAUTH_REDIRECT_URI 환경변수 (명시적 설정 시) -- Google Console 등록 URI와 일치 보장
- * 2. 요청의 Host/Origin 기반 동적 생성 (폴백)
+ * 1. OAUTH_REDIRECT_URI 환경변수 (명시적 설정 시) -- 요청 host 와 무관하게 이 canonical
+ *    URI 로 항상 고정 (외부 접속을 openmake.cc 단일 origin 으로 수렴)
+ * 2. 요청의 Host/Origin 기반 동적 생성 (개발 환경 localhost 폴백)
  *
  * OAUTH_REDIRECT_URI는 Google용으로 설정되어 있어도 provider 부분을 자동 교체합니다.
  */
@@ -202,20 +203,21 @@ function buildRedirectUri(req: Request, provider: 'google' | 'github', serverPor
     const dynamicRedirectUri = `${requestProtocol}://${requestHost}/api/auth/callback/${provider}`;
     log.info(`[OAuth] host 해석: x-forwarded-host=${forwardedHost ?? '(none)'}, raw-host=${req.get('host') ?? '(none)'}, 사용=${requestHost}`);
 
-    // OAUTH_REDIRECT_URI가 명시적으로 설정된 경우 우선 사용하되,
-    // 현재 요청 Host와 불일치하면 동적 URI를 사용해 redirect_uri_mismatch를 방지합니다.
+    // OAUTH_REDIRECT_URI가 명시적으로 설정된 경우(프로덕션), 요청 host 와 무관하게 항상 이
+    // canonical URI 로 고정한다. ts.net(Funnel)·rasplay 등 다른 host 로 진입하면 리버스 프록시가
+    // 평문이라 proto=http 로 동적 URI 가 만들어져 Google redirect_uri_mismatch 로 실패하던 문제를
+    // 차단한다. 어느 진입점이든 로그인 완료는 openmake.cc 단일 origin 으로 착지한다.
+    // (redirect_uri 를 요청 host 가 아닌 신뢰된 상수로 고정 → open-redirect 관점에서도 더 안전)
     if (configuredUri && !configuredUri.includes('localhost')) {
         try {
             const configured = new URL(configuredUri);
-            if (configured.host === requestHost) {
-                const redirectUri = configuredUri.replace(/\/callback\/\w+$/, `/callback/${provider}`);
+            const redirectUri = configuredUri.replace(/\/callback\/\w+$/, `/callback/${provider}`);
+            if (configured.host !== requestHost) {
+                log.info(`[OAuth] host(${requestHost}) → canonical redirect 고정: ${redirectUri}`);
+            } else {
                 log.info(`[OAuth] Redirect URI (config): ${redirectUri}`);
-                return redirectUri;
             }
-
-            log.warn(`[OAuth] OAUTH_REDIRECT_URI host mismatch (configured=${configured.host}, request=${requestHost}), using dynamic URI`);
-            log.info(`[OAuth] Redirect URI (dynamic): ${dynamicRedirectUri}`);
-            return dynamicRedirectUri;
+            return redirectUri;
         } catch {
             log.warn('[OAuth] Invalid OAUTH_REDIRECT_URI format, using dynamic URI');
             log.info(`[OAuth] Redirect URI (dynamic): ${dynamicRedirectUri}`);
