@@ -11,6 +11,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { timingSafeEqual } from 'crypto';
 import { ArtifactRepository } from '../data/repositories/artifact-repository';
 import {
     ArtifactPublicationRepository,
@@ -36,6 +37,14 @@ import { getAuditService } from '../services/AuditService';
 const router = Router();
 
 const VALID_VISIBILITY: ArtifactVisibility[] = ['private', 'authenticated', 'link'];
+
+/** 공유 링크 토큰 상수시간 비교 — 평문 !== 비교의 타이밍 사이드채널 제거(뷰어 authorizeViewer 와 대칭). */
+function safeTokenEqual(provided: string, expected: string | null | undefined): boolean {
+    if (!expected) return false;
+    const a = Buffer.from(provided);
+    const b = Buffer.from(expected);
+    return a.length === b.length && timingSafeEqual(a, b);
+}
 
 /**
  * POST /api/sessions/:sid/artifacts/:aid/publish
@@ -264,7 +273,7 @@ router.get('/published/:pubId', optionalAuth, asyncHandler(async (req: Request, 
         if (pub.visibility === 'authenticated') {
             if (!userId) { res.status(401).json({ error: 'UNAUTHENTICATED', detail: '로그인이 필요합니다' }); return; }
         } else if (pub.visibility === 'link') {
-            if (!token || token !== pub.share_token) { res.status(403).json({ error: 'FORBIDDEN', detail: 'invalid token' }); return; }
+            if (!token || !safeTokenEqual(token, pub.share_token)) { res.status(403).json({ error: 'FORBIDDEN', detail: 'invalid token' }); return; }
         } else {
             res.status(403).json({ error: 'FORBIDDEN', detail: 'private' });
             return;
