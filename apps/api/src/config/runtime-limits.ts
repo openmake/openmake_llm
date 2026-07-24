@@ -1068,6 +1068,11 @@ export const ROUTE_INTENT_PATTERNS: readonly RegExp[] = [
  * 백그라운드 detached 실행이라 사람이 지켜보지 않으므로 토큰/시간 폭주 방지가 필수.
  */
 export const AGENT_TASK_LIMITS = {
+    /** 작업 생성 요청 body 상한(bytes) — /api/agent-tasks 의 express.json 파서와 validate
+     *  미들웨어(maxBodySizeBytes)가 공유하는 단일 소스(정합 고정: 파서만 크고 검증이 1MB 로
+     *  거부하던 불일치 방지). 첨부는 base64 로 4/3 팽창하므로 원본 파일 실효 상한은 약 3/4.
+     *  AGENT_TASK_BODY_MAX_BYTES(기본 1000MB). */
+    REQUEST_BODY_MAX_BYTES: parseInt(process.env.AGENT_TASK_BODY_MAX_BYTES || '', 10) || 1000 * 1024 * 1024,
     /** 사용자 지정 max_turns 의 절대 상한 */
     MAX_TURNS_CEILING: 20,
     /** 기본 최대 턴 수 */

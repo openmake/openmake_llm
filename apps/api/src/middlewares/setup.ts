@@ -35,6 +35,7 @@ import { requestIdMiddleware } from './request-id';
 import { errorHandler, notFoundHandler } from '../utils/error-handler';
 import { getConfig } from '../config';
 import { buildPermissionsPolicyHeader, HSTS_POLICY } from '../config/security';
+import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
 
 /**
  * 정적 자산(생성 이미지 등) 응답 헤더 — content-type + 캐시 정책.
@@ -118,8 +119,9 @@ export function setupParsersAndLimiting(app: Application): void {
     //    body parser 는 정적 서빙과 무관하므로 여기(parsers)로 이동해 항상 등록되게 한다.
     app.use('/api/chat', express.json({ limit: '10mb' }));
     app.use('/api/documents', express.json({ limit: '50mb' }));
-    // 에이전트 작업 생성은 입력 첨부(base64 문서 포함)를 받으므로 documents 와 동일 상한
-    app.use('/api/agent-tasks', express.json({ limit: '50mb' }));
+    // 에이전트 작업 생성은 입력 첨부(base64 문서 포함)를 받는다 — 파서 상한은
+    // validate 미들웨어(maxBodySizeBytes)와 AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES 를 공유
+    app.use('/api/agent-tasks', express.json({ limit: AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES }));
     app.use('/api/', express.json({ limit: '1mb' }));
     app.use(express.json({ limit: '1mb' }));
     app.use(cookieParser());

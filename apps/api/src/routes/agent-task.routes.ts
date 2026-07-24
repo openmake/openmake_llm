@@ -23,7 +23,7 @@ import { success, badRequest, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
-import { validate } from '../middlewares/validation';
+import { validateWithSecurity } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
 import { AgentTaskService, type AgentTaskInputFile } from '../services/AgentTaskService';
@@ -73,7 +73,11 @@ function toPublicTask(t: Record<string, unknown>) {
  * POST /api/agent-tasks
  * 작업 생성
  */
-router.post('/', validate(createAgentTaskSchema), asyncHandler(async (req: Request, res: Response) => {
+// body 상한은 express.json 파서와 동일 상수 공유 — validate 기본값(1MB)이 파서 상한을
+// 무력화해 대용량 첨부가 "요청 본문이 너무 큽니다" 로 거부되던 정합 버그 방지.
+router.post('/', validateWithSecurity(createAgentTaskSchema, {
+    maxBodySizeBytes: AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES,
+}), asyncHandler(async (req: Request, res: Response) => {
     const { goal, maxTurns, files, images, repoUrl, branch } = req.body as CreateAgentTaskInput;
 
     const taskId = uuidv4();
