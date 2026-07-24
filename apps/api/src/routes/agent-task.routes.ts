@@ -23,7 +23,7 @@ import { success, badRequest, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
-import { validate } from '../middlewares/validation';
+import { validateWithSecurity } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
 import { AgentTaskService, type AgentTaskInputFile } from '../services/AgentTaskService';
@@ -37,6 +37,13 @@ import { listUserRepos } from '../services/agent-task/git-ops';
 import { dispatchAgentTask, getAgentTaskQueue } from '../services/agent-task/task-queue';
 import { safeRealWorkspacePath, listWorkspaceFilesAt } from '../services/task-sandbox/sandbox';
 import { basename } from 'path';
+import multer from 'multer';
+import * as fs from 'fs/promises';
+import { FILE_ATTACH_LIMITS, DOC_EXTRACT_LIMITS } from '../config/runtime-limits';
+import {
+    ensureUploadTmpDir, finalizeUploadedFile, resolveStoredPath,
+    discardTmpFiles, removeTaskFiles, safeBaseName,
+} from '../services/agent-task/upload-store';
 
 const logger = createLogger('AgentTaskRoutes');
 const router = Router();
@@ -71,16 +78,70 @@ function toPublicTask(t: Record<string, unknown>) {
 
 /**
  * POST /api/agent-tasks
- * 작업 생성
+ * 작업 생성 — 두 가지 전송 방식 지원:
+ *
+ * ① application/json  — 기존 계약. 텍스트 content / 소형 바이너리(base64 data).
+ * ② multipart/form-data — 대용량 첨부의 근본 경로. `payload` 필드(JSON: goal 등 +
+ *    텍스트 첨부)와 `files` 파트(바이너리 원본)를 받아 multer 가 디스크로 스트리밍한다.
+ *    base64-in-JSON 과 달리 body 전체를 메모리에 올리지 않고, DB 에는 storedPath 만 남는다.
  */
-router.post('/', validate(createAgentTaskSchema), asyncHandler(async (req: Request, res: Response) => {
-    const { goal, maxTurns, files, images, repoUrl, branch } = req.body as CreateAgentTaskInput;
+const uploadMw = multer({
+    storage: multer.diskStorage({
+        destination: (_req, _file, cb) => {
+            ensureUploadTmpDir().then((d) => cb(null, d), (e) => cb(e as Error, ''));
+        },
+        filename: (_req, _file, cb) => cb(null, uuidv4()),
+    }),
+    limits: { fileSize: AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES, files: FILE_ATTACH_LIMITS.MAX_FILES },
+}).array('files', FILE_ATTACH_LIMITS.MAX_FILES);
+
+// body 상한은 express.json 파서와 동일 상수 공유 — validate 기본값(1MB)이 파서 상한을
+// 무력화해 대용량 첨부가 "요청 본문이 너무 큽니다" 로 거부되던 정합 버그 방지.
+const jsonValidateMw = validateWithSecurity(createAgentTaskSchema, {
+    maxBodySizeBytes: AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES,
+});
+
+router.post('/', (req: Request, res: Response, next) => {
+    if (!req.is('multipart/form-data')) return jsonValidateMw(req, res, next);
+    uploadMw(req, res, (err?: unknown) => {
+        if (!err) return next();
+        const msg = err instanceof multer.MulterError
+            ? (err.code === 'LIMIT_FILE_SIZE'
+                ? `첨부 파일이 너무 큽니다 (최대 ${AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES} bytes)`
+                : `업로드 형식 오류: ${err.code}`)
+            : (err instanceof Error ? err.message : String(err));
+        res.status(400).json(badRequest(msg));
+    });
+}, asyncHandler(async (req: Request, res: Response) => {
+    const parts = (req.files as Express.Multer.File[] | undefined) ?? [];
+
+    // multipart 는 payload 필드(JSON)를 동일 스키마로 검증 — 실패 시 tmp 파일 롤백.
+    let input: CreateAgentTaskInput;
+    if (parts.length > 0 || req.is('multipart/form-data')) {
+        let parsedPayload: unknown;
+        try {
+            parsedPayload = JSON.parse(String((req.body as Record<string, unknown>)?.payload ?? '{}'));
+        } catch {
+            await discardTmpFiles(parts.map((p) => p.path));
+            return res.status(400).json(badRequest('payload 필드가 유효한 JSON 이 아닙니다'));
+        }
+        const v = createAgentTaskSchema.safeParse(parsedPayload);
+        if (!v.success) {
+            await discardTmpFiles(parts.map((p) => p.path));
+            const first = v.error.issues[0];
+            return res.status(400).json(badRequest(`payload 검증 실패: ${first ? `${first.path.join('.')} — ${first.message}` : '알 수 없는 오류'}`));
+        }
+        input = v.data;
+    } else {
+        input = req.body as CreateAgentTaskInput;
+    }
+    const { goal, maxTurns, files, images, repoUrl, branch } = input;
 
     const taskId = uuidv4();
     const db = getUnifiedDatabase();
     const userId = String(req.user!.id);
 
-    // 입력 첨부: 바이너리 문서(base64 data)는 지금 텍스트로 추출해 저장한다 —
+    // 입력 첨부(JSON 경로): 바이너리 문서(base64 data)는 지금 텍스트로 추출해 저장한다 —
     // 실행은 detached 백그라운드라 여기서 추출해야 실패를 생성 응답에서 인지 가능하다.
     // base64 원본도 함께 보존해 실행 시 샌드박스 uploads/ 에 원본 바이트로 기록
     // (에이전트가 openpyxl 등으로 직접 파싱). 응답에선 toPublicTask 가 메타만 노출.
@@ -97,6 +158,36 @@ router.post('/', validate(createAgentTaskSchema), asyncHandler(async (req: Reque
             ...(originalData[i] ? { data: originalData[i] } : {}),
             ...(originalData[i] && typeof f.content === 'string' ? { extracted: true } : {}),
         }));
+    }
+
+    // 입력 첨부(multipart 경로): 스트리밍된 원본을 task 디렉토리로 이동하고 storedPath 로
+    // 참조한다(DB 에 base64 미저장). 추출 상한 이하 문서만 텍스트 추출을 병행 —
+    // 초과 파일은 추출 없이 원본만 샌드박스로 전달돼 에이전트가 직접 파싱한다.
+    if (parts.length > 0) {
+        const stored: AgentTaskInputFile[] = [];
+        for (const [i, p] of parts.entries()) {
+            // busboy 가 latin1 로 넘긴 한글 파일명 복원 (이미 UTF-8 이면 고문자 부재로 무변환)
+            const rawName = /[\u0080-\u00ff]/.test(p.originalname)
+                ? Buffer.from(p.originalname, 'latin1').toString('utf8')
+                : p.originalname;
+            const name = safeBaseName(rawName, `file_${i}`);
+            const storedPath = await finalizeUploadedFile(taskId, p.path, rawName, i);
+            const entry: AgentTaskInputFile = { name, type: p.mimetype, size: p.size, storedPath };
+            if (p.size <= DOC_EXTRACT_LIMITS.MAX_BYTES_PER_FILE) {
+                const probe: AgentTaskInputFile = {
+                    name, type: p.mimetype,
+                    data: (await fs.readFile(resolveStoredPath(storedPath))).toString('base64'),
+                };
+                await extractAttachedDocuments([probe]);
+                if (typeof probe.content === 'string') {
+                    entry.content = probe.content;
+                    entry.truncated = probe.truncated;
+                    entry.extracted = true;
+                }
+            }
+            stored.push(entry);
+        }
+        inputFiles = [...(inputFiles ?? []), ...stored];
     }
 
     // 비동기 에이전트 중복 인지(P-6): 이미 진행 중인 작업이 있으면 경고를 함께 반환 —
@@ -119,7 +210,12 @@ router.post('/', validate(createAgentTaskSchema), asyncHandler(async (req: Reque
     });
 
     const task = await db.getAgentTask(taskId);
-    res.status(201).json(success({ task, concurrentActive: active.length, warnings }));
+    // 목록/상세와 동일하게 메타만 노출 — 첨부 본문(content/data)·내부 경로(storedPath) 응답 제외
+    res.status(201).json(success({
+        task: task ? toPublicTask(task as unknown as Record<string, unknown>) : task,
+        concurrentActive: active.length,
+        warnings,
+    }));
 }));
 
 /**
@@ -318,6 +414,7 @@ router.delete('/:taskId', asyncHandler(async (req: Request, res: Response) => {
     AgentTaskService.cancel(task.id);
     const db = getUnifiedDatabase();
     await db.deleteAgentTask(task.id);
+    await removeTaskFiles(task.id); // multipart 업로드 원본 디스크 정리 (없으면 no-op)
     res.json(success({ message: '작업이 삭제되었습니다.', taskId: task.id }));
 }));
 

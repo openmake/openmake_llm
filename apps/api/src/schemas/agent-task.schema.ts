@@ -7,7 +7,7 @@
  */
 import { z } from 'zod';
 import { secureTextSchema } from './security.schema';
-import { AGENT_TASK_LIMITS, FILE_ATTACH_LIMITS, DOC_EXTRACT_LIMITS } from '../config/runtime-limits';
+import { AGENT_TASK_LIMITS, FILE_ATTACH_LIMITS } from '../config/runtime-limits';
 
 /**
  * 작업 입력 첨부 파일 — 채팅 WS files[](WsAttachedFile) 와 동일 계약.
@@ -19,8 +19,10 @@ const taskInputFileSchema = z.object({
     name: z.string().min(1).max(FILE_ATTACH_LIMITS.MAX_NAME_LENGTH),
     type: z.string().max(100).optional(),
     content: z.string().max(FILE_ATTACH_LIMITS.MAX_CHARS_PER_FILE).optional(),
-    // base64 는 원본 바이트의 4/3 — 추출 상한 바이트 기준으로 환산 캡
-    data: z.string().max(Math.ceil(DOC_EXTRACT_LIMITS.MAX_BYTES_PER_FILE * 4 / 3) + 4).optional(),
+    // 전송 캡은 요청 body 상한과 정합(base64 문자열은 body 보다 클 수 없음) — 텍스트 추출
+    // 가능 여부는 DOC_EXTRACT_LIMITS.MAX_BYTES_PER_FILE 가 별도 결정(초과 시 추출만 생략,
+    // 원본 바이트는 샌드박스 uploads/ 로 전달되어 에이전트가 직접 파싱).
+    data: z.string().max(AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES).optional(),
     size: z.number().int().nonnegative().optional(),
     truncated: z.boolean().optional(),
 });

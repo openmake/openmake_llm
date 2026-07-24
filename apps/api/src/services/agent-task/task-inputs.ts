@@ -5,6 +5,7 @@
 import { TASK_UPLOAD_DIR } from '../../config/task-sandbox';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { AgentTaskInputFile } from './types';
+import { resolveStoredPath } from './upload-store';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentTaskService');
@@ -40,13 +41,24 @@ export async function writeInputFilesToWorkspace(
     };
     for (const [i, f] of files.entries()) {
         const base = ((f.name.split(/[\\/]/).pop() ?? '').replace(/\p{Cc}/gu, '_').trim()) || `file_${i}`;
+        const hasStored = typeof f.storedPath === 'string' && f.storedPath.length > 0;
         const hasData = typeof f.data === 'string' && f.data.length > 0;
         const hasContent = typeof f.content === 'string' && f.content.length > 0;
-        if (!hasData && !hasContent) {
+        if (!hasStored && !hasData && !hasContent) {
             lines.push(`- (내용을 추출하지 못해 제외됨: ${f.name})`);
             continue;
         }
-        if (hasData) {
+        if (hasStored) {
+            // multipart 업로드 원본 — 디스크 스토어에서 fs copy 로 주입 (base64/Buffer 미적재)
+            const rel = `${TASK_UPLOAD_DIR}/${claim(base, i)}`;
+            try {
+                await runtime.importWorkspaceFile(rel, resolveStoredPath(f.storedPath!));
+                lines.push(`- ${rel} (원본 파일)`);
+            } catch (e) {
+                logger.warn(`[AgentTask] 입력 파일 복사 실패 (${rel}): ${e instanceof Error ? e.message : e}`);
+                lines.push(`- (기록 실패로 제외됨: ${rel})`);
+            }
+        } else if (hasData) {
             // 바이너리 원본 — base64 디코드해 그대로 기록 (직접 파싱용)
             await write(`${TASK_UPLOAD_DIR}/${claim(base, i)}`, Buffer.from(f.data!, 'base64'), ' (원본 파일)');
         }

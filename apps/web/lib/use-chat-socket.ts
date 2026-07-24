@@ -4,9 +4,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import type { WsChatRequest, WsServerEvent, WsAttachedFile } from "@openmake/shared-types";
 import { useAppStore, type StructuredAnswerData, type PendingApproval, type AgentTaskState } from "./store";
-import { ApiClient } from "./api-client";
+import { ApiClient, csrfHeaders } from "./api-client";
+
 import { getAnonSessionId } from "./anon-session";
 import { CLIENT_TIMING } from "./config";
+
+/** 첨부 파일 UI 상태 — WS 계약(WsAttachedFile)에 브라우저 File 원본을 얹은 로컬 확장.
+ *  rawFile 이 있으면 에이전트 작업 생성 시 multipart 로 원본을 스트리밍 업로드한다
+ *  (base64-in-JSON 의 메모리/크기 한계 회피). WS 채팅 전송 시에는 제거된다. */
+export type AttachedFileUI = WsAttachedFile & { rawFile?: File };
+
+/** WS/REST 직렬화용 — 브라우저 File(rawFile)을 계약 필드에서 제거한다. */
+function toWireFile(f: AttachedFileUI): WsAttachedFile {
+  const { rawFile, ...rest } = f;
+  void rawFile;
+  return rest;
+}
 
 /**
  * 채팅 WebSocket hook — 백엔드 sockets/ws-chat-handler.ts 프로토콜.
@@ -309,7 +322,7 @@ export function useChatSocket() {
   }, [connect]);
 
   const sendChat = useCallback(
-    (message: string, images?: string[], files?: WsAttachedFile[], notebook?: { id: string; title: string } | null) => {
+    (message: string, images?: string[], files?: AttachedFileUI[], notebook?: { id: string; title: string } | null) => {
       const s = useAppStore.getState();
       const hasFiles = Array.isArray(files) && files.length > 0;
       // 텍스트가 비어도 첨부 파일만으로 전송 가능
@@ -345,7 +358,8 @@ export function useChatSocket() {
         sessionId: s.currentSessionId,
         anonSessionId: getAnonSessionId(),
         images: images ?? [],
-        files: files ?? [],
+        // rawFile(브라우저 File)은 WS 직렬화 불가 — 계약 필드만 전송
+        files: (files ?? []).map(toWireFile),
         webSearch: s.webSearchEnabled,
         deepResearchMode: s.deepResearchMode,
         discussionMode: s.discussionMode,
@@ -386,7 +400,7 @@ export function useChatSocket() {
   const startAgentTask = useCallback(
     async (
       message: string,
-      files?: WsAttachedFile[],
+      files?: AttachedFileUI[],
       images?: string[],
       approvalPolicy?: "all" | "high-risk" | "none",
       repoUrl?: string,
@@ -396,15 +410,47 @@ export function useChatSocket() {
       if (!goal || s.isGenerating) return;
       appendMessage({ role: "user", content: goal });
       try {
-        const created = await ApiClient.post<{ data: { task: { id: string } } }>(
-          "/api/agent-tasks",
-          {
+        // 바이너리 원본(rawFile)이 있으면 multipart 로 스트리밍 업로드 — base64-in-JSON 의
+        // 크기/메모리 한계를 피하는 근본 경로. 텍스트 첨부·이미지는 payload JSON 에 동승.
+        const binaryParts = (files ?? []).filter((f) => f.rawFile);
+        let created: { data?: { task?: { id?: string } } } | null;
+        if (binaryParts.length > 0) {
+          const payloadFiles = (files ?? [])
+            .filter((f) => !f.rawFile)
+            .map(toWireFile);
+          const fd = new FormData();
+          fd.append("payload", JSON.stringify({
             goal,
-            ...(files && files.length > 0 ? { files } : {}),
+            ...(payloadFiles.length > 0 ? { files: payloadFiles } : {}),
             ...(images && images.length > 0 ? { images } : {}),
             ...(repoUrl && repoUrl.trim() ? { repoUrl: repoUrl.trim() } : {}),
-          },
-        );
+          }));
+          for (const f of binaryParts) fd.append("files", f.rawFile!, f.name);
+          const resp = await fetch("/api/agent-tasks", {
+            method: "POST",
+            credentials: "include",
+            headers: { ...(await csrfHeaders()) },
+            body: fd,
+          });
+          const body = await resp.json().catch(() => null);
+          if (!resp.ok) {
+            const detail = (body as { error?: { message?: string } } | null)?.error?.message;
+            throw new Error(detail || `HTTP ${resp.status}`);
+          }
+          created = body as { data?: { task?: { id?: string } } };
+        } else {
+          created = await ApiClient.post<{ data: { task: { id: string } } }>(
+            "/api/agent-tasks",
+            {
+              goal,
+              ...(files && files.length > 0
+                ? { files: files.map(toWireFile) }
+                : {}),
+              ...(images && images.length > 0 ? { images } : {}),
+              ...(repoUrl && repoUrl.trim() ? { repoUrl: repoUrl.trim() } : {}),
+            },
+          );
+        }
         const taskId = created?.data?.task?.id;
         if (!taskId) throw new Error(tRef.current("taskIdMissing"));
         // 진행상황 카드 — agent_task_progress 이벤트로 taskId 로 식별해 라이브 업데이트.

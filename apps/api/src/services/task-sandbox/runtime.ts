@@ -101,6 +101,9 @@ export class TaskRuntime {
     /** 입력 첨부 주입 등 호스트 측 workspace 파일 쓰기 — 경로 가드(safeRealWorkspacePath)+쿼터 적용. */
     async writeWorkspaceFile(relPath: string, content: string | Buffer): Promise<void> { return this.sandbox.writeFile(relPath, content); }
 
+    /** 호스트 파일을 workspace 로 복사 — 대용량 입력 첨부의 스트리밍 주입(Buffer 미적재). */
+    async importWorkspaceFile(relPath: string, srcAbsPath: string): Promise<void> { return this.sandbox.importFile(relPath, srcAbsPath); }
+
     /** 내부 검증용 원시 exec — 승인 게이트 우회(에이전트 도구 호출이 아닌 시스템 산출물 검증).
      *  컨테이너는 격리(network none·자원 캡)이고 문법/컴파일 검사는 코드를 실행하지 않아 안전. */
     async execRaw(command: string): Promise<ExecResult> { return this.sandbox.exec(command); }
