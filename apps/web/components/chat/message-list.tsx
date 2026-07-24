@@ -394,6 +394,53 @@ function ResearchProgressBanner() {
   );
 }
 
+/** 토론 모드 진행 배너 — research 배너와 대칭. phase/에이전트/라운드/진행률 라이브 표시. */
+function DiscussionProgressBanner() {
+  const t = useTranslations("chat");
+  const dp = useAppStore((s) => s.discussionProgress);
+  if (!dp) return null;
+  const filled = Math.round(dp.progress / 10);
+  return (
+    <div className="flex gap-3">
+      <div className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-accent-soft text-accent">
+        <MessagesSquare className="h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2/60 p-3">
+        <div className="mb-1 flex items-center gap-2 text-xs font-medium text-fg-2">
+          <LoaderCircle className="h-3.5 w-3.5 animate-spin text-accent" />
+          {t("discussion.inProgress")}
+          {dp.currentAgent && (
+            <span className="text-faint">· {dp.agentEmoji ? `${dp.agentEmoji} ` : ""}{dp.currentAgent}</span>
+          )}
+          {dp.totalRounds != null && dp.totalRounds > 0 && dp.roundNumber != null && (
+            <span className="text-faint">· {t("discussion.round", { current: dp.roundNumber, total: dp.totalRounds })}</span>
+          )}
+        </div>
+        {dp.message && <p className="mb-1.5 text-xs text-muted">{dp.message}</p>}
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-[11px] text-accent">
+            {"▓".repeat(filled)}{"░".repeat(10 - filled)}
+          </span>
+          <span className="text-[11px] text-faint">{dp.progress}%</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** 도구 실행 인디케이터 — always-on tool loop 중 "실행 중" 표시(스트리밍 멈춘 듯한 혼선 해소). */
+function ToolIndicator() {
+  const t = useTranslations("chat");
+  const tool = useAppStore((s) => s.activeTool);
+  if (!tool) return null;
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted">
+      <Wrench className="h-3.5 w-3.5 animate-pulse text-accent" />
+      {t("tool.running", { tool })}
+    </div>
+  );
+}
+
 /** 메시지 피드백(👍/👎) — 백엔드 /api/chat/feedback (thumbs_up/thumbs_down) 전송. */
 function FeedbackButtons({ messageId }: { messageId: string }) {
   const t = useTranslations("chat");
@@ -441,6 +488,8 @@ export function MessageList() {
   const activeAgent = useAppStore((s) => s.activeAgent);
   const activeSkills = useAppStore((s) => s.activeSkills);
   const researchProgress = useAppStore((s) => s.researchProgress);
+  const discussionProgress = useAppStore((s) => s.discussionProgress);
+  const activeTool = useAppStore((s) => s.activeTool);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // 응답이 진행 중인데 아직 스트리밍 중인 assistant 메시지가 없으면(첫 토큰 전) "분석 중" 표시
@@ -533,6 +582,8 @@ export function MessageList() {
         ),
       )}
       {researchProgress && <ResearchProgressBanner />}
+      {discussionProgress && <DiscussionProgressBanner />}
+      {activeTool && <ToolIndicator />}
       {showThinking && <ThinkingIndicator agent={activeAgent} skills={activeSkills} />}
       <div ref={bottomRef} className={cn("h-px")} />
     </div>
