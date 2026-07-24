@@ -21,7 +21,8 @@
       "alerts": "告警",
       "mcpCatalogAdmin": "MCP目录管理",
       "modelRolesAdmin": "角色模型管理",
-      "developer": "开发者"
+      "developer": "开发者",
+      "schedulesAdmin": "任务计划"
     }
   },
   "sidebar": {
@@ -1430,6 +1431,29 @@
       "save": "保存",
       "placeholder": "留空 = 回退 ({fallback})",
       "cacheNote": "更改无需重启,最多60秒内生效。"
+    }
+  },
+  "adminSchedules": {
+    "title": "任务计划管理",
+    "description": "查看所有用户的智能体任务重复计划。",
+    "listTitle": "全部计划（{count}个）",
+    "refresh": "刷新",
+    "empty": "暂无已注册的计划。",
+    "loadError": "无法加载计划列表。",
+    "intervalSec": "每 {sec} 秒",
+    "status": {
+      "enabled": "启用",
+      "disabled": "停用"
+    },
+    "cols": {
+      "owner": "所有者",
+      "goal": "目标",
+      "trigger": "触发器（cron/间隔）",
+      "enabled": "状态",
+      "nextRun": "下次执行",
+      "lastRun": "上次执行",
+      "lastResult": "上次结果",
+      "failures": "连续失败"
     }
   },
   "usage": {

@@ -21,7 +21,8 @@
       "alerts": "알림",
       "mcpCatalogAdmin": "MCP 카탈로그 관리",
       "modelRolesAdmin": "역할 모델 관리",
-      "developer": "개발자"
+      "developer": "개발자",
+      "schedulesAdmin": "작업 스케줄"
     }
   },
   "sidebar": {
@@ -1430,6 +1431,29 @@
       "save": "저장",
       "placeholder": "비움 = 폴백 ({fallback})",
       "cacheNote": "변경은 재시작 없이 최대 60초 내에 반영됩니다."
+    }
+  },
+  "adminSchedules": {
+    "title": "작업 스케줄 관리",
+    "description": "전체 사용자의 에이전트 작업 반복 스케줄을 조회합니다.",
+    "listTitle": "전체 스케줄 ({count}개)",
+    "refresh": "새로고침",
+    "empty": "등록된 스케줄이 없습니다.",
+    "loadError": "스케줄 목록을 불러오지 못했습니다.",
+    "intervalSec": "{sec}초 간격",
+    "status": {
+      "enabled": "활성",
+      "disabled": "비활성"
+    },
+    "cols": {
+      "owner": "소유자",
+      "goal": "목표",
+      "trigger": "트리거(cron/간격)",
+      "enabled": "상태",
+      "nextRun": "다음 실행",
+      "lastRun": "최근 실행",
+      "lastResult": "최근 결과",
+      "failures": "연속 실패"
     }
   },
   "usage": {

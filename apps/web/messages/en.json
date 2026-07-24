@@ -21,7 +21,8 @@
       "alerts": "Alerts",
       "mcpCatalogAdmin": "MCP Catalog Admin",
       "modelRolesAdmin": "Model Roles Admin",
-      "developer": "Developer"
+      "developer": "Developer",
+      "schedulesAdmin": "Task Schedules"
     }
   },
   "sidebar": {
@@ -1430,6 +1431,29 @@
       "save": "Save",
       "placeholder": "Empty = fallback ({fallback})",
       "cacheNote": "Changes take effect within 60 seconds without a restart."
+    }
+  },
+  "adminSchedules": {
+    "title": "Task Schedule Management",
+    "description": "View recurring agent task schedules across all users.",
+    "listTitle": "All schedules ({count})",
+    "refresh": "Refresh",
+    "empty": "No schedules registered.",
+    "loadError": "Failed to load schedules.",
+    "intervalSec": "every {sec}s",
+    "status": {
+      "enabled": "Enabled",
+      "disabled": "Disabled"
+    },
+    "cols": {
+      "owner": "Owner",
+      "goal": "Goal",
+      "trigger": "Trigger (cron/interval)",
+      "enabled": "Status",
+      "nextRun": "Next run",
+      "lastRun": "Last run",
+      "lastResult": "Last result",
+      "failures": "Consecutive failures"
     }
   },
   "usage": {
