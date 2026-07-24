@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="design-version" content="ai-trend-daily-v1-open-design">
+  <title>AI 트렌드 데일리 · {{RUN_DATE}}</title>
+  <style>
+    :root {
+      --template-version: ai-trend-daily-v1-open-design;
+      --bg: oklch(96% 0.014 255);
+      --paper: oklch(98.6% 0.010 258);
+      --paper-strong: oklch(100% 0.004 258);
+      --ink: oklch(20% 0.03 262);
+      --ink-soft: oklch(34% 0.028 262);
+      --muted: oklch(49% 0.022 264);
+      --faint: oklch(70% 0.016 266);
+      --line: oklch(85% 0.015 260);
+      --line-strong: oklch(71% 0.02 258);
+      --accent: oklch(52% 0.16 268);
+      --accent-soft: oklch(92% 0.043 268);
+      --dom: oklch(50% 0.13 250);
+      --glo: oklch(56% 0.14 300);
+      --signal-blue: oklch(49% 0.12 245);
+      --signal-red: oklch(52% 0.16 25);
+      --signal-green: oklch(49% 0.12 152);
+      --signal-gold: oklch(66% 0.13 82);
+      --invest: oklch(50% 0.13 152);
+      --exec: oklch(52% 0.14 262);
+      --founder: oklch(55% 0.16 32);
+      --shadow: 0 18px 60px oklch(24% 0.03 262 / 0.10);
+      --font-display: "AppleMyungjo", "Noto Serif CJK KR", "Nanum Myeongjo", Georgia, serif;
+      --font-body: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", sans-serif;
+      --font-mono: "SFMono-Regular", "Cascadia Mono", "Menlo", "Consolas", monospace;
+      --page-max: 1080px; --radius-lg: 22px; --radius-md: 16px; --radius-sm: 10px; --gap: 16px;
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--bg); color: var(--ink); font-family: var(--font-body); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+    body { margin: 0; min-width: 320px; background: linear-gradient(90deg, oklch(28% 0.025 262 / 0.03) 1px, transparent 1px), linear-gradient(180deg, oklch(28% 0.025 262 / 0.024) 1px, transparent 1px), radial-gradient(circle at 82% 0%, oklch(93% 0.05 285 / 0.85), transparent 36rem), var(--bg); background-size: 28px 28px, 28px 28px, auto, auto; }
+    a { color: inherit; }
+    .page { width: min(var(--page-max), calc(100% - 32px)); margin: 0 auto; padding: 26px 0 46px; }
+    .masthead { display: grid; grid-template-columns: 1fr auto; gap: 22px; align-items: end; padding: 18px 0 20px; border-bottom: 2px solid var(--ink); }
+    .brand-lockup { display: grid; gap: 8px; }
+    .eyebrow, .section-kicker, .meta-line, .tag, .label, th { font-family: var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+    .eyebrow { color: var(--accent); font-size: 11px; font-weight: 750; }
+    h1, h2, h3, p { margin: 0; }
+    h1 { max-width: 820px; font-family: var(--font-display); font-size: clamp(38px, 6vw, 74px); line-height: 0.97; letter-spacing: -0.015em; text-wrap: balance; }
+    .deckline { max-width: 740px; margin-top: 12px; color: var(--ink-soft); font-size: clamp(15px, 1.5vw, 18px); line-height: 1.65; text-wrap: pretty; }
+    .run-card { width: 258px; padding: 14px; border: 1px solid var(--ink); background: var(--paper-strong); box-shadow: 6px 6px 0 var(--accent-soft); }
+    .run-card strong { display: block; font-size: 13px; line-height: 1.4; }
+    .run-card .meta-line { margin-top: 9px; color: var(--muted); font-size: 10px; line-height: 1.6; }
+    .report { margin-top: 22px; overflow: hidden; border: 1px solid var(--line-strong); border-radius: var(--radius-lg); background: color-mix(in oklch, var(--paper) 92%, white); box-shadow: var(--shadow); }
+    .report-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: start; padding: 24px; border-bottom: 1px solid var(--line); background: linear-gradient(135deg, oklch(100% 0.004 258 / 0.9), oklch(94% 0.02 262 / 0.9)), var(--paper); }
+    .report-title-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .section-kicker { color: var(--accent); font-size: 10px; font-weight: 800; }
+    h2 { margin-top: 7px; font-family: var(--font-display); font-size: clamp(28px, 4.5vw, 46px); line-height: 1.04; letter-spacing: -0.012em; }
+    h3 { font-size: 15px; }
+    .summary { max-width: 780px; margin-top: 12px; color: var(--ink-soft); font-size: 15px; line-height: 1.72; }
+    .source-box { min-width: 224px; padding: 12px; border-left: 2px solid var(--ink); background: oklch(99% 0.006 260 / 0.72); }
+    .source-box .meta-line { color: var(--muted); font-size: 10px; line-height: 1.65; }
+    .tag { display: inline-flex; min-height: 26px; align-items: center; border: 1px solid var(--line-strong); border-radius: 999px; padding: 0 10px; background: var(--paper-strong); color: var(--ink-soft); font-size: 10px; font-weight: 800; }
+    .tag.hot { border-color: color-mix(in oklch, var(--signal-red), var(--line) 35%); color: var(--signal-red); }
+    .tag.dom { border-color: color-mix(in oklch, var(--dom), white 30%); color: var(--dom); }
+    .tag.glo { border-color: color-mix(in oklch, var(--glo), white 30%); color: var(--glo); }
+    .report-body { display: grid; gap: 18px; padding: 18px; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--gap); }
+    .kpi { min-height: 154px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper-strong); padding: 15px; }
+    .label { color: var(--muted); font-size: 10px; font-weight: 800; line-height: 1.45; }
+    .kpi-value { margin-top: 10px; font-family: var(--font-display); font-size: 30px; line-height: 1; letter-spacing: -0.02em; }
+    .kpi-note { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .delta { font-family: var(--font-mono); font-size: 11px; font-weight: 800; white-space: nowrap; }
+    .up { color: var(--signal-red); } .down { color: var(--signal-blue); } .steady { color: var(--signal-green); }
+    .spark { width: 100%; height: 38px; margin-top: 14px; overflow: visible; }
+    .spark polyline { fill: none; stroke: var(--accent); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.4; }
+    .spark .base { stroke: var(--line); stroke-width: 1; }
+    .content-grid { display: grid; grid-template-columns: minmax(0, 1.22fr) minmax(300px, 0.78fr); gap: var(--gap); }
+    .panel { border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper-strong); min-width: 0; }
+    .panel-head { display: flex; min-height: 54px; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 15px; border-bottom: 1px solid var(--line); }
+    .panel-title { font-size: 15px; font-weight: 800; line-height: 1.35; }
+    .panel-sub { color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .chart-body { min-height: 260px; padding: 14px 15px 16px; }
+    .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .compare-col { display: grid; grid-template-rows: auto 1fr; gap: 12px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: oklch(98% 0.009 260); }
+    .compare-col h4 { margin: 0; font-size: 13px; display: flex; align-items: center; gap: 7px; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+    .dot.dom { background: var(--dom); } .dot.glo { background: var(--glo); }
+    .metric-stack { display: grid; gap: 9px; align-content: end; }
+    .metric-line { display: grid; grid-template-columns: 84px 1fr 34px; gap: 9px; align-items: center; color: var(--muted); font-size: 12px; }
+    .track { height: 9px; overflow: hidden; border: 1px solid var(--line); border-radius: 999px; background: var(--accent-soft); }
+    .fill { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+    .fill.dom { background: var(--dom); } .fill.glo { background: var(--glo); }
+    .score { font-family: var(--font-mono); color: var(--ink); font-size: 11px; text-align: right; }
+    .news-list { display: grid; gap: 10px; padding: 14px; }
+    .news-card { padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: color-mix(in oklch, var(--paper-strong), var(--accent-soft) 16%); }
+    .news-card .meta-line { color: var(--muted); font-size: 9px; margin-bottom: 6px; }
+    .news-card strong { display: block; font-size: 14px; line-height: 1.45; text-wrap: pretty; }
+    .news-card p { margin-top: 7px; color: var(--muted); font-size: 12px; line-height: 1.58; }
+    .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper-strong); }
+    table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 13px; }
+    th { position: sticky; top: 0; z-index: 1; padding: 11px 12px; background: oklch(94% 0.016 260); color: var(--muted); font-size: 10px; font-weight: 850; text-align: left; white-space: nowrap; }
+    td { padding: 11px 12px; border-top: 1px solid var(--line); color: var(--ink-soft); line-height: 1.4; vertical-align: top; }
+    tbody tr:nth-child(even) td { background: oklch(98% 0.008 260); }
+    tbody tr:hover td { background: oklch(94.5% 0.022 262); }
+    .num, .time, .badge { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .num { color: var(--ink); white-space: nowrap; }
+    .right { text-align: right; }
+    .badge { display: inline-flex; align-items: center; min-height: 22px; border: 1px solid var(--line-strong); border-radius: 999px; padding: 0 7px; background: var(--paper); color: var(--ink-soft); font-size: 10px; font-weight: 800; white-space: nowrap; }
+    .badge.dom { border-color: color-mix(in oklch, var(--dom), white 25%); color: var(--dom); }
+    .badge.glo { border-color: color-mix(in oklch, var(--glo), white 25%); color: var(--glo); }
+    .badge.red { border-color: color-mix(in oklch, var(--signal-red), white 25%); color: var(--signal-red); }
+    .badge.green { border-color: color-mix(in oklch, var(--signal-green), white 25%); color: var(--signal-green); }
+    .lens-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap); }
+    .lens { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--line); border-top-width: 3px; border-radius: var(--radius-md); background: var(--paper-strong); }
+    .lens.invest { border-top-color: var(--invest); } .lens.exec { border-top-color: var(--exec); } .lens.founder { border-top-color: var(--founder); }
+    .lens-head { display: flex; align-items: center; gap: 9px; }
+    .lens-mark { display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; border-radius: 8px; color: white; font-size: 15px; }
+    .lens.invest .lens-mark { background: var(--invest); } .lens.exec .lens-mark { background: var(--exec); } .lens.founder .lens-mark { background: var(--founder); }
+    .lens-role { font-size: 15px; font-weight: 850; }
+    .lens-role small { display: block; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+    .lens-take { font-size: 13px; line-height: 1.55; color: var(--ink-soft); font-weight: 700; }
+    .lens ul { margin: 0; padding-left: 16px; display: grid; gap: 6px; }
+    .lens li { color: var(--muted); font-size: 12px; line-height: 1.55; }
+    .lens .action { margin-top: 2px; padding: 9px 10px; border-radius: var(--radius-sm); background: color-mix(in oklch, var(--paper), var(--accent-soft) 30%); color: var(--ink-soft); font-size: 12px; line-height: 1.5; }
+    .lens .action b { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); display: block; margin-bottom: 3px; }
+    .strategy { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap); }
+    .horizon { padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: color-mix(in oklch, var(--paper-strong), var(--accent-soft) 12%); }
+    .horizon .label { color: var(--accent); }
+    .horizon strong { display: block; margin-top: 8px; font-size: 14px; line-height: 1.4; }
+    .horizon p { margin-top: 7px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .methodology { border: 1px solid var(--line); border-radius: var(--radius-md); background: color-mix(in oklch, var(--paper-strong), var(--accent-soft) 22%); }
+    .methodology summary { cursor: pointer; padding: 14px 15px; color: var(--ink-soft); font-size: 13px; font-weight: 800; list-style-position: inside; }
+    .methodology p { padding: 0 15px 15px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+    .footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 24px 0 0; color: var(--muted); font-family: var(--font-mono); font-size: 10px; line-height: 1.6; text-transform: uppercase; letter-spacing: 0.08em; }
+    @media (max-width: 900px) { .masthead, .report-header, .content-grid { grid-template-columns: 1fr; } .run-card, .source-box { width: 100%; min-width: 0; } .kpi-grid, .lens-grid, .strategy { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 620px) {
+      .page { width: min(100% - 18px, var(--page-max)); padding-top: 10px; } .masthead { padding-top: 12px; } .report { border-radius: 18px; } .report-header, .report-body { padding: 14px; }
+      .kpi-grid, .lens-grid, .strategy, .comparison { grid-template-columns: 1fr; } .content-grid { gap: 14px; } .table-wrap { overflow: visible; }
+      table, thead, tbody, tr, th, td { display: block; min-width: 0; } thead { display: none; } tbody tr { padding: 11px 12px; border-top: 1px solid var(--line); } tbody tr:first-child { border-top: 0; }
+      tbody tr:nth-child(even) td, tbody tr:hover td { background: transparent; }
+      td { display: flex; justify-content: space-between; gap: 14px; border-top: 0; padding: 5px 0; font-size: 12px; }
+      td::before { content: attr(data-label); flex: 0 0 88px; color: var(--muted); font-family: var(--font-mono); font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+      .right { text-align: left; }
+    }
+    @media print { body { background: var(--paper); } .page { width: 100%; padding: 0; } .report { break-inside: avoid; box-shadow: none; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="masthead">
+      <div class="brand-lockup">
+        <div class="eyebrow">AI Trend Daily Intelligence · 07:00 KST</div>
+        <h1>매일 아침, 국내와 국외 AI 신호를 세 개의 눈으로 읽습니다</h1>
+        <p class="deckline">{{DECKLINE}}</p>
+      </div>
+      <aside class="run-card">
+        <strong>{{RUN_DATE}} · 07:00 KST</strong>
+        <div class="meta-line">국내 vs 국외 · 투자자·경영자·창업자 3관점<br>{{SOURCE_STATUS}}<br>Assets: none · JS: none</div>
+      </aside>
+    </header>
+
+    <article class="report">
+      <header class="report-header">
+        <div>
+          <div class="report-title-row">
+            <span class="section-kicker">Daily Report · Korea × Global AI</span>
+            <span class="tag hot">{{HEADLINE_TAG}}</span>
+            <span class="tag dom">국내</span><span class="tag glo">국외</span>
+          </div>
+          <h2>국내 vs 국외 AI 트렌드 분석</h2>
+          <p class="summary">{{SUMMARY}}</p>
+        </div>
+        <aside class="source-box">
+          <div class="meta-line">Period: {{RUN_DATE}} 07:00 KST<br>Source: 국내외 뉴스 클러스터 · 투자/제품/정책 레이더<br>Status: {{SOURCE_STATUS}}</div>
+        </aside>
+      </header>
+
+      <div class="report-body">
+        <section class="kpi-grid">
+          <div class="kpi"><div class="label">글로벌 투자 열기</div><div class="kpi-value">{{KPI_GLOBAL_VALUE}}</div><div class="kpi-note"><span>{{KPI_GLOBAL_NOTE}}</span><span class="delta {{KPI_GLOBAL_DELTACLASS}}">{{KPI_GLOBAL_DELTA}}</span></div>
+            <svg class="spark" viewBox="0 0 180 42" role="img"><line class="base" x1="0" y1="34" x2="180" y2="34"></line><polyline points="0,34 25,30 50,29 75,21 100,18 125,13 150,12 180,6"></polyline></svg></div>
+          <div class="kpi"><div class="label">국내 도입 속도</div><div class="kpi-value">{{KPI_DOMESTIC_VALUE}}</div><div class="kpi-note"><span>{{KPI_DOMESTIC_NOTE}}</span><span class="delta {{KPI_DOMESTIC_DELTACLASS}}">{{KPI_DOMESTIC_DELTA}}</span></div>
+            <svg class="spark" viewBox="0 0 180 42" role="img"><line class="base" x1="0" y1="34" x2="180" y2="34"></line><polyline points="0,29 28,25 52,26 78,21 104,19 132,15 154,14 180,11"></polyline></svg></div>
+          <div class="kpi"><div class="label">정책·규제 명확성</div><div class="kpi-value">{{KPI_POLICY_VALUE}}</div><div class="kpi-note"><span>{{KPI_POLICY_NOTE}}</span><span class="delta {{KPI_POLICY_DELTACLASS}}">{{KPI_POLICY_DELTA}}</span></div>
+            <svg class="spark" viewBox="0 0 180 42" role="img"><line class="base" x1="0" y1="34" x2="180" y2="34"></line><polyline points="0,27 24,29 50,26 74,23 98,25 124,20 150,19 180,18"></polyline></svg></div>
+          <div class="kpi"><div class="label">인재·생태계 압력</div><div class="kpi-value">{{KPI_TALENT_VALUE}}</div><div class="kpi-note"><span>{{KPI_TALENT_NOTE}}</span><span class="delta {{KPI_TALENT_DELTACLASS}}">{{KPI_TALENT_DELTA}}</span></div>
+            <svg class="spark" viewBox="0 0 180 42" role="img"><line class="base" x1="0" y1="34" x2="180" y2="34"></line><polyline points="0,24 25,22 50,18 75,19 100,15 126,12 151,10 180,9"></polyline></svg></div>
+        </section>
+
+        <section class="content-grid">
+          <div class="panel">
+            <div class="panel-head"><div><div class="panel-title">국내 vs 국외 모멘텀 비교</div><div class="panel-sub">제품화 · 투자 · 정책 · 인재 (0-100)</div></div><span class="badge green">paired view</span></div>
+            <div class="chart-body">
+              <div class="comparison">
+                <div class="compare-col"><h4><span class="dot dom"></span>국내</h4><div class="metric-stack">
+                  <div class="metric-line"><span>제품화</span><span class="track"><span class="fill dom" style="width: {{CMP_DOM_PRODUCT}}%"></span></span><span class="score">{{CMP_DOM_PRODUCT}}</span></div>
+                  <div class="metric-line"><span>투자</span><span class="track"><span class="fill dom" style="width: {{CMP_DOM_INVEST}}%"></span></span><span class="score">{{CMP_DOM_INVEST}}</span></div>
+                  <div class="metric-line"><span>정책</span><span class="track"><span class="fill dom" style="width: {{CMP_DOM_POLICY}}%"></span></span><span class="score">{{CMP_DOM_POLICY}}</span></div>
+                  <div class="metric-line"><span>인재</span><span class="track"><span class="fill dom" style="width: {{CMP_DOM_TALENT}}%"></span></span><span class="score">{{CMP_DOM_TALENT}}</span></div>
+                </div></div>
+                <div class="compare-col"><h4><span class="dot glo"></span>국외</h4><div class="metric-stack">
+                  <div class="metric-line"><span>제품화</span><span class="track"><span class="fill glo" style="width: {{CMP_GLO_PRODUCT}}%"></span></span><span class="score">{{CMP_GLO_PRODUCT}}</span></div>
+                  <div class="metric-line"><span>투자</span><span class="track"><span class="fill glo" style="width: {{CMP_GLO_INVEST}}%"></span></span><span class="score">{{CMP_GLO_INVEST}}</span></div>
+                  <div class="metric-line"><span>정책</span><span class="track"><span class="fill glo" style="width: {{CMP_GLO_POLICY}}%"></span></span><span class="score">{{CMP_GLO_POLICY}}</span></div>
+                  <div class="metric-line"><span>인재</span><span class="track"><span class="fill glo" style="width: {{CMP_GLO_TALENT}}%"></span></span><span class="score">{{CMP_GLO_TALENT}}</span></div>
+                </div></div>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><div><div class="panel-title">오늘의 헤드라인</div><div class="panel-sub">국내·국외 대표 뉴스</div></div></div>
+            <div class="news-list">
+              <div class="news-card"><div class="meta-line">{{NEWS1_REGION}} · {{NEWS1_SRC}}</div><strong>{{NEWS1_TITLE}}</strong><p>{{NEWS1_DESC}}</p></div>
+              <div class="news-card"><div class="meta-line">{{NEWS2_REGION}} · {{NEWS2_SRC}}</div><strong>{{NEWS2_TITLE}}</strong><p>{{NEWS2_DESC}}</p></div>
+              <div class="news-card"><div class="meta-line">{{NEWS3_REGION}} · {{NEWS3_SRC}}</div><strong>{{NEWS3_TITLE}}</strong><p>{{NEWS3_DESC}}</p></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="table-wrap">
+          <table>
+            <thead><tr><th>구분</th><th>관측 신호</th><th class="right">국내</th><th class="right">국외</th><th>해석</th></tr></thead>
+            <tbody>
+              <tr><td data-label="구분"><span class="badge green">Product</span></td><td data-label="관측 신호">엔터프라이즈 AI 적용 속도</td><td class="right num" data-label="국내">{{CMP_DOM_PRODUCT}}</td><td class="right num" data-label="국외">{{CMP_GLO_PRODUCT}}</td><td data-label="해석">{{TBL_PRODUCT_NOTE}}</td></tr>
+              <tr><td data-label="구분"><span class="badge red">Funding</span></td><td data-label="관측 신호">대형 라운드·인프라 투자</td><td class="right num" data-label="국내">{{CMP_DOM_INVEST}}</td><td class="right num" data-label="국외">{{CMP_GLO_INVEST}}</td><td data-label="해석">{{TBL_FUNDING_NOTE}}</td></tr>
+              <tr><td data-label="구분"><span class="badge dom">Policy</span></td><td data-label="관측 신호">규제·공공 조달 명확성</td><td class="right num" data-label="국내">{{CMP_DOM_POLICY}}</td><td class="right num" data-label="국외">{{CMP_GLO_POLICY}}</td><td data-label="해석">{{TBL_POLICY_NOTE}}</td></tr>
+              <tr><td data-label="구분"><span class="badge">Talent</span></td><td data-label="관측 신호">AI 엔지니어 채용 압력</td><td class="right num" data-label="국내">{{CMP_DOM_TALENT}}</td><td class="right num" data-label="국외">{{CMP_GLO_TALENT}}</td><td data-label="해석">{{TBL_TALENT_NOTE}}</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="lens-grid">
+          <div class="lens invest">
+            <div class="lens-head"><span class="lens-mark">&#8361;</span><div class="lens-role">투자자<small>Investor lens</small></div></div>
+            <div class="lens-take">{{LENS_INVEST_TAKE}}</div>
+            <ul><li>{{LENS_INVEST_S1}}</li><li>{{LENS_INVEST_S2}}</li><li>{{LENS_INVEST_S3}}</li></ul>
+            <div class="action"><b>오늘의 액션</b>{{LENS_INVEST_ACTION}}</div>
+          </div>
+          <div class="lens exec">
+            <div class="lens-head"><span class="lens-mark">&#9706;</span><div class="lens-role">경영자<small>Executive lens</small></div></div>
+            <div class="lens-take">{{LENS_EXEC_TAKE}}</div>
+            <ul><li>{{LENS_EXEC_S1}}</li><li>{{LENS_EXEC_S2}}</li><li>{{LENS_EXEC_S3}}</li></ul>
+            <div class="action"><b>오늘의 액션</b>{{LENS_EXEC_ACTION}}</div>
+          </div>
+          <div class="lens founder">
+            <div class="lens-head"><span class="lens-mark">&#10022;</span><div class="lens-role">창업자<small>Founder lens</small></div></div>
+            <div class="lens-take">{{LENS_FOUNDER_TAKE}}</div>
+            <ul><li>{{LENS_FOUNDER_S1}}</li><li>{{LENS_FOUNDER_S2}}</li><li>{{LENS_FOUNDER_S3}}</li></ul>
+            <div class="action"><b>오늘의 액션</b>{{LENS_FOUNDER_ACTION}}</div>
+          </div>
+        </section>
+
+        <section>
+          <div class="panel">
+            <div class="panel-head"><div><div class="panel-title">향후 전략 · 타임 호라이즌</div><div class="panel-sub">오늘 신호가 가리키는 다음 스텝</div></div></div>
+            <div class="chart-body" style="min-height:auto;">
+              <div class="strategy">
+                <div class="horizon"><div class="label">Now · 1주</div><strong>{{STRAT_NOW_TITLE}}</strong><p>{{STRAT_NOW_DESC}}</p></div>
+                <div class="horizon"><div class="label">Next · 1개월</div><strong>{{STRAT_NEXT_TITLE}}</strong><p>{{STRAT_NEXT_DESC}}</p></div>
+                <div class="horizon"><div class="label">Later · 분기</div><strong>{{STRAT_LATER_TITLE}}</strong><p>{{STRAT_LATER_DESC}}</p></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <details class="methodology">
+          <summary>방법론 · 수집 → 검증 → 3관점 분류</summary>
+          <p>국내·국외 AI 뉴스를 수집한 뒤 중복 제거·출처 교차검증을 거쳐 제품화·투자·정책·인재 축을 0-100으로 정규화합니다. 각 신호를 투자자(자본 배분)·경영자(도입 ROI)·창업자(기회·해자) 관점으로 재해석했습니다. 디자인은 고정 Open Design 템플릿을 사용하고 데이터만 치환합니다(정적 HTML, JS·외부 자산 없음).</p>
+        </details>
+      </div>
+    </article>
+
+    <footer class="footer">
+      <span>AI Trend Daily · ai-trend-daily-v1-open-design</span>
+      <span>{{RUN_DATE}} · Static HTML · 07:00 KST</span>
+    </footer>
+  </main>
+</body>
+</html>
