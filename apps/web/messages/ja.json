@@ -21,7 +21,8 @@
       "alerts": "アラート",
       "mcpCatalogAdmin": "MCPカタログ管理",
       "modelRolesAdmin": "ロールモデル管理",
-      "developer": "開発者"
+      "developer": "開発者",
+      "schedulesAdmin": "タスクスケジュール"
     }
   },
   "sidebar": {
@@ -1430,6 +1431,29 @@
       "save": "保存",
       "placeholder": "空 = フォールバック ({fallback})",
       "cacheNote": "変更は再起動なしで最大60秒以内に反映されます。"
+    }
+  },
+  "adminSchedules": {
+    "title": "タスクスケジュール管理",
+    "description": "全ユーザーのエージェントタスクの繰り返しスケジュールを表示します。",
+    "listTitle": "全スケジュール（{count}件）",
+    "refresh": "更新",
+    "empty": "登録されたスケジュールはありません。",
+    "loadError": "スケジュール一覧の読み込みに失敗しました。",
+    "intervalSec": "{sec}秒間隔",
+    "status": {
+      "enabled": "有効",
+      "disabled": "無効"
+    },
+    "cols": {
+      "owner": "所有者",
+      "goal": "目標",
+      "trigger": "トリガー（cron/間隔）",
+      "enabled": "状態",
+      "nextRun": "次回実行",
+      "lastRun": "前回実行",
+      "lastResult": "前回結果",
+      "failures": "連続失敗"
     }
   },
   "usage": {

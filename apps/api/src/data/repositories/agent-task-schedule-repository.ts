@@ -54,6 +54,26 @@ export class AgentTaskScheduleRepository extends BaseRepository {
         return r.rows;
     }
 
+    /** 전체 스케줄 목록 (admin 조회) — 소유자 이메일·최근 task 상태 포함. */
+    async listAllWithOwner(): Promise<Array<AgentTaskSchedule & {
+        owner_email: string | null;
+        last_task_status: string | null;
+        last_task_error: string | null;
+    }>> {
+        const r = await this.query<AgentTaskSchedule & {
+            owner_email: string | null;
+            last_task_status: string | null;
+            last_task_error: string | null;
+        }>(
+            `SELECT s.*, u.email AS owner_email, t.status AS last_task_status, t.error AS last_task_error
+             FROM agent_task_schedules s
+             LEFT JOIN users u ON u.id = s.user_id
+             LEFT JOIN agent_tasks t ON t.id = s.last_task_id
+             ORDER BY s.created_at DESC`,
+        );
+        return r.rows;
+    }
+
     async countByUser(userId: string): Promise<number> {
         const r = await this.query<{ count: string }>(
             'SELECT COUNT(*)::text AS count FROM agent_task_schedules WHERE user_id = $1', [userId]);
