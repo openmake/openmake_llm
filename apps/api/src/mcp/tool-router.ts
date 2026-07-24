@@ -229,6 +229,18 @@ export class ToolRouter {
                 }
                 return ok(result);
             };
+            // 외부 도구 출력 크기 제한(MAX_OUTPUT_SIZE, 1MB) — user-pool(1a)·전역(1b) 두 경로 공통.
+            // 누락 시 대용량 도구 결과가 통째로 LLM 컨텍스트에 주입돼 토큰 예산 폭주/context-fit 조기 발동.
+            const capOutput = (result: MCPToolResult): MCPToolResult => {
+                if (result?.content) {
+                    for (const item of result.content) {
+                        if ('text' in item && typeof item.text === 'string' && item.text.length > MCP_EXTERNAL_TOOL_LIMITS.MAX_OUTPUT_SIZE) {
+                            item.text = item.text.substring(0, MCP_EXTERNAL_TOOL_LIMITS.MAX_OUTPUT_SIZE) + '\n... (출력이 1MB를 초과하여 잘렸습니다)';
+                        }
+                    }
+                }
+                return result;
+            };
 
             // 1. 외부 도구 확인 (:: 네임스페이스)
             if (isExternal) {
@@ -252,7 +264,7 @@ export class ToolRouter {
                                     setTimeout(() => reject(new Error(`외부 도구 타임아웃: ${name} (${MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS}ms 초과)`)), MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS)
                                 ),
                             ]);
-                            return finalize(result);
+                            return finalize(capOutput(result));
                         } catch (e) {
                             const msg = e instanceof Error ? e.message : String(e);
                             return fail(`사용자 풀 도구 실행 실패 (${name}): ${msg}`);
@@ -280,16 +292,7 @@ export class ToolRouter {
                         )
                     ]);
 
-                    // 출력 크기 제한
-                    if (result.content) {
-                        for (const item of result.content) {
-                            if ('text' in item && typeof item.text === 'string' && item.text.length > MCP_EXTERNAL_TOOL_LIMITS.MAX_OUTPUT_SIZE) {
-                                item.text = item.text.substring(0, MCP_EXTERNAL_TOOL_LIMITS.MAX_OUTPUT_SIZE) + '\n... (출력이 1MB를 초과하여 잘렸습니다)';
-                            }
-                        }
-                    }
-
-                    return finalize(result);
+                    return finalize(capOutput(result));
                 } catch (error) {
                     const message = error instanceof Error ? error.message : '외부 도구 실행 실패';
                     return fail(message);

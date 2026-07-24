@@ -342,6 +342,13 @@
       "inProgress": "딥 리서치 진행 중",
       "loop": "루프 {current}/{total}"
     },
+    "discussion": {
+      "inProgress": "토론 진행 중",
+      "round": "라운드 {current}/{total}"
+    },
+    "tool": {
+      "running": "{tool} 실행 중"
+    },
     "emptyState": {
       "title": "무엇을 도와드릴까요?",
       "description": "멀티모델 오케스트레이션 · MCP 도구 · 딥 리서치 · 자율 에이전트. 아래에 질문을 입력하거나 <slash>/</slash> 로 스킬을 호출하세요."

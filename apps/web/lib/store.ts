@@ -68,6 +68,17 @@ export interface ResearchProgressInfo {
   totalLoops: number;
 }
 
+/** 토론 모드 진행상황 (백엔드 discussion_progress 이벤트 — DiscussionProgress 대응). */
+export interface DiscussionProgressInfo {
+  phase: "selecting" | "discussing" | "reviewing" | "synthesizing" | "complete";
+  currentAgent?: string;
+  agentEmoji?: string;
+  message: string;
+  progress: number;
+  roundNumber?: number;
+  totalRounds?: number;
+}
+
 /**
  * 구조화 답변 (백엔드 schemas/structured-answer.schema.ts StructuredAnswer 대응).
  * structuredMode 에서 POST /api/chat/structured 가 반환. content 에는 동일 내용의 markdown 도 함께 저장된다.
@@ -130,6 +141,10 @@ interface AppState {
   notebookContext: { id: string; title: string } | null;
   /** 딥리서치 진행상황 (ws research_progress) — 스트리밍 중 상태 배너로 표시, done 시 clear. */
   researchProgress: ResearchProgressInfo | null;
+  /** 토론 모드 진행상황 (ws discussion_progress) — 스트리밍 중 배너로 표시, done 시 clear. */
+  discussionProgress: DiscussionProgressInfo | null;
+  /** 현재 실행 중인 MCP/내장 도구명 (ws mcp_tool_start→표시, mcp_tool_result/done→clear). */
+  activeTool: string | null;
 
   // 아티팩트
   artifacts: Artifact[];
@@ -177,9 +192,11 @@ interface AppState {
   setActiveUserAgent: (a: { id: string; name: string; icon?: string | null } | null) => void;
   setNotebookContext: (nb: { id: string; title: string } | null) => void;
   setResearchProgress: (p: ResearchProgressInfo | null) => void;
+  setDiscussionProgress: (p: DiscussionProgressInfo | null) => void;
+  setActiveTool: (t: string | null) => void;
   setPrivacyPrefs: (patch: { saveHistory?: boolean; memoryLearning?: boolean }) => void;
-  /** WS done 시 마지막 assistant 메시지에 서버 messageId 부여 — 피드백 전송용. */
-  finalizeLastAssistant: (messageId: string) => void;
+  /** WS done 시 마지막 assistant 메시지에 서버 messageId 부여(+cleanedContent 시 본문 reset) — 피드백 전송용. */
+  finalizeLastAssistant: (messageId: string, cleanedContent?: string) => void;
   clearChat: () => void;
 
   // 아티팩트 actions
@@ -255,6 +272,8 @@ export const useAppStore = create<AppState>()(
   activeUserAgent: null,
   notebookContext: null,
   researchProgress: null,
+  discussionProgress: null,
+  activeTool: null,
 
   artifacts: [],
   activeArtifactId: null,
@@ -281,12 +300,18 @@ export const useAppStore = create<AppState>()(
   auth: { currentUser: null, isGuestMode: true },
 
   setPrivacyPrefs: (patch) => set(() => ({ ...patch })),
-  finalizeLastAssistant: (messageId) =>
+  finalizeLastAssistant: (messageId, cleanedContent) =>
     set((s) => {
       const hist = [...s.chatHistory];
       for (let i = hist.length - 1; i >= 0; i--) {
         if (hist[i].role === "assistant") {
-          hist[i] = { ...hist[i], id: messageId };
+          // cleanedContent: 아티팩트 승격 시 raw 코드펜스가 placeholder 로 치환된 본문 —
+          // 클라가 token 단위로 누적한 원문을 이걸로 reset 해 펜스 원문+아티팩트 칩 이중 렌더를 막는다.
+          hist[i] = {
+            ...hist[i],
+            id: messageId,
+            ...(typeof cleanedContent === "string" ? { content: cleanedContent } : {}),
+          };
           break;
         }
       }
@@ -345,6 +370,8 @@ export const useAppStore = create<AppState>()(
   setActiveUserAgent: (a) => set({ activeUserAgent: a }),
   setNotebookContext: (nb) => set({ notebookContext: nb }),
   setResearchProgress: (p) => set({ researchProgress: p }),
+  setDiscussionProgress: (p) => set({ discussionProgress: p }),
+  setActiveTool: (t) => set({ activeTool: t }),
   clearChat: () =>
     set({
       chatHistory: [],
@@ -353,6 +380,8 @@ export const useAppStore = create<AppState>()(
       activeSkills: [],
       notebookContext: null,
       researchProgress: null,
+      discussionProgress: null,
+      activeTool: null,
       artifacts: [],
       activeArtifactId: null,
       artifactPanelOpen: false,

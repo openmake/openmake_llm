@@ -342,6 +342,13 @@
       "inProgress": "深度研究进行中",
       "loop": "循环 {current}/{total}"
     },
+    "discussion": {
+      "inProgress": "讨论进行中",
+      "round": "第 {current}/{total} 轮"
+    },
+    "tool": {
+      "running": "正在运行 {tool}"
+    },
     "emptyState": {
       "title": "有什么可以帮您的？",
       "description": "多模型编排 · MCP 工具 · 深度研究 · 自主智能体。在下方输入问题，或按 <slash>/</slash> 调用技能。"

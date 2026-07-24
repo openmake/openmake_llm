@@ -130,7 +130,14 @@ export type WsServerEvent =
   | { type: "thinking"; token: string; messageId?: string }
   | { type: "thinking_summary"; summary: string; messageId?: string }
   | { type: "session_created"; sessionId: string }
-  | { type: "done"; sessionId?: string; totalTokens?: number; messageId?: string }
+  | {
+      type: "done";
+      messageId?: string;
+      /** 백엔드 실제 페이로드(ws-chat-handler): 스트리밍 완료 시 토큰 메트릭. */
+      metrics?: { tokensPerSec: number; tokenCount: number };
+      /** 아티팩트가 있으면 raw 코드펜스가 placeholder 로 치환된 본문 — 클라가 누적 본문을 이걸로 reset. */
+      cleanedContent?: string;
+    }
   | { type: "aborted"; message?: string }
   | { type: "error"; message: string }
   | { type: "init"; data?: unknown }
@@ -146,6 +153,22 @@ export type WsServerEvent =
       };
     }
   | { type: "skills_activated"; skillNames: string[] }
+  // MCP 도구 호출 진행 (백엔드 ws-chat-handler onMcpToolStart/onMcpToolResult)
+  | { type: "mcp_tool_start"; toolName: string; messageId?: string }
+  | { type: "mcp_tool_result"; toolName: string; resources?: unknown; messageId?: string }
+  // 토론 모드 진행 (백엔드 ws-chat-handler onDiscussionProgress → DiscussionProgress)
+  | {
+      type: "discussion_progress";
+      progress: {
+        phase: "selecting" | "discussing" | "reviewing" | "synthesizing" | "complete";
+        currentAgent?: string;
+        agentEmoji?: string;
+        message: string;
+        progress: number;
+        roundNumber?: number;
+        totalRounds?: number;
+      };
+    }
   // 아티팩트 스트리밍 (백엔드 ws-chat-handler.ts 송출)
   | { type: "artifact_start"; artifact: ArtifactMeta; messageId?: string }
   | { type: "artifact_chunk"; id: string; delta: string; messageId?: string }

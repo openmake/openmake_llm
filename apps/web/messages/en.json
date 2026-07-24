@@ -342,6 +342,13 @@
       "inProgress": "Deep research in progress",
       "loop": "Loop {current}/{total}"
     },
+    "discussion": {
+      "inProgress": "Discussion in progress",
+      "round": "Round {current}/{total}"
+    },
+    "tool": {
+      "running": "Running {tool}"
+    },
     "emptyState": {
       "title": "How can I help you?",
       "description": "Multi-model orchestration · MCP tools · deep research · autonomous agents. Type your question below, or press <slash>/</slash> to invoke a skill."

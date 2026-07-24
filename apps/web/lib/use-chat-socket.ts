@@ -63,6 +63,8 @@ export function useChatSocket() {
     setActiveAgent,
     setActiveSkills,
     setResearchProgress,
+    setDiscussionProgress,
+    setActiveTool,
     finalizeLastAssistant,
     startArtifact,
     appendArtifactDelta,
@@ -109,14 +111,19 @@ export function useChatSocket() {
           if (data.sessionId) setCurrentSessionId(data.sessionId);
           break;
         case "done":
-          if (data.sessionId) setCurrentSessionId(data.sessionId);
-          if (data.messageId) finalizeLastAssistant(data.messageId);
+          // sessionId 는 session_created 이벤트가 담당(done 페이로드엔 없음).
+          // cleanedContent 가 있으면 누적 본문을 placeholder 치환본으로 reset(아티팩트 이중 렌더 방지).
+          if (data.messageId) finalizeLastAssistant(data.messageId, data.cleanedContent);
           setStreaming(false);
           setResearchProgress(null);
+          setDiscussionProgress(null);
+          setActiveTool(null);
           break;
         case "aborted":
           setStreaming(false);
           setResearchProgress(null);
+          setDiscussionProgress(null);
+          setActiveTool(null);
           break;
         case "error":
           appendMessage({
@@ -127,6 +134,8 @@ export function useChatSocket() {
           });
           setStreaming(false);
           setResearchProgress(null);
+          setDiscussionProgress(null);
+          setActiveTool(null);
           break;
         case "research_progress": {
           // 딥리서치 진행을 채팅 상태 배너로 라이브 표시(스트리밍 시작 전/중).
@@ -140,6 +149,28 @@ export function useChatSocket() {
           });
           break;
         }
+        case "discussion_progress": {
+          // 토론 모드 진행을 배너로 라이브 표시(research_progress 와 대칭).
+          const p = data.progress;
+          setDiscussionProgress({
+            phase: p.phase,
+            currentAgent: p.currentAgent,
+            agentEmoji: p.agentEmoji,
+            message: p.message ?? "",
+            progress: Math.max(0, Math.min(100, Math.round(p.progress ?? 0))),
+            roundNumber: p.roundNumber,
+            totalRounds: p.totalRounds,
+          });
+          break;
+        }
+        case "mcp_tool_start":
+          // 도구 실행 시작 — "🔍 {도구} 실행 중" 인디케이터(스트리밍 멈춘 듯한 혼선 해소).
+          setActiveTool(data.toolName);
+          break;
+        case "mcp_tool_result":
+          // 도구 결과 도착 — 인디케이터 해제(다음 도구 시작 시 다시 표시).
+          setActiveTool(null);
+          break;
         case "agent_selected":
           setActiveAgent({ name: data.agent.name, emoji: data.agent.emoji });
           break;

@@ -342,6 +342,13 @@
       "inProgress": "ディープリサーチ実行中",
       "loop": "ループ {current}/{total}"
     },
+    "discussion": {
+      "inProgress": "ディスカッション進行中",
+      "round": "ラウンド {current}/{total}"
+    },
+    "tool": {
+      "running": "{tool} を実行中"
+    },
     "emptyState": {
       "title": "何かお手伝いしましょうか？",
       "description": "マルチモデルオーケストレーション · MCP ツール · ディープリサーチ · 自律エージェント。下に質問を入力するか、<slash>/</slash> でスキルを呼び出してください。"
