@@ -181,6 +181,10 @@ export class AuthOAuthController {
 
             const userInfo = await userInfoRes.json() as GoogleUserInfo;
             if (!userInfo.email) throw new Error('이메일 정보를 가져올 수 없습니다');
+            // 계정 병합은 이메일 소유권을 신뢰하는 행위 — Google 이 명시적으로 미검증(email_verified===false)
+            // 이라 표시한 이메일은 거부해 크로스-프로바이더 계정 병합 탈취를 막는다(카카오 콜백과 대칭).
+            // (Google 은 통상 검증된 이메일만 릴리스하지만 방어적 하드닝.)
+            if (userInfo.email_verified === false) throw new Error('이메일이 인증되지 않았습니다');
 
             const authService = getAuthService();
             const result = await authService.findOrCreateOAuthUser(userInfo.email, 'google');

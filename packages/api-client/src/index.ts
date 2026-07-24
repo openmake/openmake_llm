@@ -28,6 +28,15 @@ async function ensureCsrf(): Promise<string | null> {
   return t;
 }
 
+/**
+ * mutating 직접 fetch(예: SSE 스트림 — ApiClient 로는 못 다룸)에서 CSRF 헤더를 붙일 때 사용.
+ * ApiClient 를 우회하는 fetch 도 CSRF_PROTECTION=enforce 에서 403 되지 않도록 하는 공용 헬퍼.
+ */
+export async function csrfHeaders(): Promise<Record<string, string>> {
+  const token = await ensureCsrf();
+  return token ? { [CSRF.HEADER_NAME]: token } : {};
+}
+
 export class ApiError extends Error {
   constructor(public status: number, message: string, public body?: unknown) {
     super(message);

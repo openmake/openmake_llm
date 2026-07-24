@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/primitives";
 import { AgentsTabs } from "@/components/hub-tabs";
 import type { ApiSuccess } from "@openmake/shared-types";
-import { ApiClient } from "@/lib/api-client";
+import { ApiClient, csrfHeaders } from "@/lib/api-client";
 import { fetchModels, type ModelEntry } from "@/lib/models-api";
 import { useAppStore } from "@/lib/store";
 
@@ -263,7 +263,7 @@ function AgentGitIngestForm({
     try {
       const resp = await fetch("/api/agents/custom/import-from-git", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+        headers: { "Content-Type": "application/json", "Accept": "text/event-stream", ...(await csrfHeaders()) },
         credentials: "include",
         body: JSON.stringify({
           gitUrl: gitUrl.trim(),
