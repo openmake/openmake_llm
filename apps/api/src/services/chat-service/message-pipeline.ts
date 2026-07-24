@@ -293,7 +293,11 @@ export async function runMessagePipeline(svc: ChatService,
         await buildUserContextBlocks(userId, req.memoryLearning !== false);
 
     // 자동 기억형성(#3 b) — user 메시지에서 지속적 사실 추출→저장. fire-and-forget(응답 무영향, 플래그 OFF 면 no-op).
-    void autoFormMemories({ userId, message: req.message, client: svc.client });
+    // memoryLearning 토글은 "주입"(293행)뿐 아니라 "형성/저장"도 게이팅한다 — OFF 인데 저장이 계속되면
+    // 사용자가 끈 것과 반대로 동작하는 프라이버시 이슈.
+    if (req.memoryLearning !== false) {
+        void autoFormMemories({ userId, message: req.message, client: svc.client });
+    }
 
     // Custom Agent (user_agents) 활성 시 산업 agent 라우팅 우회 + allowedSkills 주입.
     // 전체 build() 대신 loadUserAgent 단독 호출 — provider 가 자체 model 처리하므로
