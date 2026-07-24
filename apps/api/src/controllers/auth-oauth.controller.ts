@@ -376,11 +376,19 @@ export class AuthOAuthController {
             const kakaoUser = await userInfoRes.json() as KakaoUserInfo;
 
             // 비즈앱 전환으로 이메일(account_email) 필수 동의 활성화 → 실이메일로 식별한다(Google 등
-            // 타 provider 와 동일 이메일이면 계정 병합). 이메일이 없는 예외 케이스만 회원번호(id)
-            // 기반 합성 이메일로 폴백 — 회원번호는 '사용자 아이디 고정'(기본 ON)이라 안정적.
+            // 타 provider 와 동일 이메일이면 계정 병합). 단, 계정 병합은 이메일 소유권을 신뢰하는
+            // 행위이므로 카카오가 유효(is_email_valid)하고 인증(is_email_verified)했다고 확인한
+            // 이메일만 병합에 사용한다. 미검증/무효/미동의 이메일은 회원번호(id) 기반 합성 이메일로
+            // 격리 — 이렇게 하지 않으면 공격자가 피해자 이메일을 미검증 상태로 걸어 계정을 탈취할 수 있다.
+            // (회원번호는 '사용자 아이디 고정'(기본 ON)이라 안정적.)
             const kakaoId = kakaoUser.id;
             if (!kakaoId) throw new Error('카카오 사용자 정보를 가져올 수 없습니다');
-            const email = kakaoUser.kakao_account?.email || `kakao_${kakaoId}@kakao.local`;
+            const kakaoAccount = kakaoUser.kakao_account;
+            const hasVerifiedEmail =
+                !!kakaoAccount?.email &&
+                kakaoAccount.is_email_valid === true &&
+                kakaoAccount.is_email_verified === true;
+            const email = hasVerifiedEmail ? kakaoAccount!.email! : `kakao_${kakaoId}@kakao.local`;
 
             const authService = getAuthService();
             const result = await authService.findOrCreateOAuthUser(email, 'kakao');
