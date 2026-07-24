@@ -1073,6 +1073,11 @@ export const AGENT_TASK_LIMITS = {
      *  거부하던 불일치 방지). 첨부는 base64 로 4/3 팽창하므로 원본 파일 실효 상한은 약 3/4.
      *  AGENT_TASK_BODY_MAX_BYTES(기본 1000MB). */
     REQUEST_BODY_MAX_BYTES: parseInt(process.env.AGENT_TASK_BODY_MAX_BYTES || '', 10) || 1000 * 1024 * 1024,
+    /** 입력 첨부 원본 저장 루트(호스트) — multipart 업로드가 디스크로 스트리밍되는 위치.
+     *  base64-in-JSON 경로와 달리 메모리에 body 를 올리지 않는다. task 삭제 시 함께 정리.
+     *  AGENT_TASK_UPLOAD_ROOT(기본 <cwd>/data/uploads/agent-tasks). */
+    UPLOAD_ROOT: process.env.AGENT_TASK_UPLOAD_ROOT
+        || `${process.cwd()}/data/uploads/agent-tasks`,
     /** 사용자 지정 max_turns 의 절대 상한 */
     MAX_TURNS_CEILING: 20,
     /** 기본 최대 턴 수 */

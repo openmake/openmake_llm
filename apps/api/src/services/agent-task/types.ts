@@ -35,6 +35,9 @@ export function assertWithinLimits(
 export interface AgentTaskInputFile extends AttachedFileInput {
     /** 바이너리 문서(PDF/docx 등)에서 추출된 텍스트임 — workspace 기록 시 .txt 확장자 부여 */
     extracted?: boolean;
+    /** multipart 업로드 원본의 디스크 저장 상대 경로(upload-store ROOT 기준) —
+     *  base64(data) 대신 사용. 실행 시 샌드박스 uploads/ 로 스트리밍 복사. */
+    storedPath?: string;
 }
 
 export interface AgentTaskRunInput {

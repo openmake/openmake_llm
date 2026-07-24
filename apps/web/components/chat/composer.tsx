@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import type { WsAttachedFile } from "@openmake/shared-types";
+import type { AttachedFileUI } from "@/lib/use-chat-socket";
 import { useAppStore, INTERCEPT_MODE_KEYS } from "@/lib/store";
 import { NotebookPicker } from "./notebook-picker";
 import { useChatSocket } from "@/lib/use-chat-socket";
@@ -47,6 +47,9 @@ const MAX_FILES = 50;
 const MAX_IMAGES = 20;
 const MAX_CHARS_PER_FILE = 2_000_000;
 const MAX_TOTAL_CHARS = 10_000_000;
+// base64 인라인(채팅 WS 경로 호환) 상한 — 백엔드 DOC_EXTRACT MAX_BYTES_PER_FILE 기본값과 일치.
+// 초과 문서는 rawFile 만 유지 → 에이전트 작업 생성 시 multipart 로 원본 스트리밍(크기 무관).
+const MAX_INLINE_DOC_BYTES = 30 * 1024 * 1024;
 // 모든 파일 타입 허용(accept 미지정). 처리 분기:
 //  - 이미지(image/*) → base64 data URL → vision 채널(images)
 //  - 문서(EXTRACT_EXTS: PDF/Word/Excel/PowerPoint 등) → base64 원본(data) → 백엔드가 텍스트 추출
@@ -98,7 +101,7 @@ export function Composer() {
   const { sendChat, abort, startAgentTask, sendStructured } = useChatSocket();
   const router = useRouter();
   const [text, setText] = useState("");
-  const [files, setFiles] = useState<WsAttachedFile[]>([]);
+  const [files, setFiles] = useState<AttachedFileUI[]>([]);
   // 이미지 첨부 — base64 data URL 로 vision 채널 전송. 미리보기/제거를 위해 메타와 함께 보관.
   const [images, setImages] = useState<{ id: string; name: string; dataUrl: string }[]>([]);
   // 드래그앤드롭 오버레이 표시 상태
@@ -129,16 +132,17 @@ export function Composer() {
         if (!dataUrl) continue;
         nextImages.push({ id: crypto.randomUUID(), name: file.name.slice(0, 200), dataUrl });
       } else if (EXTRACT_EXTS.includes(extOf(file.name))) {
-        // 문서(PDF/Word/Excel/PPT 등) → base64 원본 전송, 백엔드가 텍스트 추출
+        // 문서(PDF/Word/Excel/PPT 등) — File 원본을 유지해 에이전트 작업은 multipart 로
+        // 스트리밍 전송. 추출 상한 이하만 base64 를 병행(채팅 WS 경로에서 백엔드 텍스트 추출용).
         if (nextFiles.length >= MAX_FILES) continue;
-        const data = await readFileBase64(file);
-        if (!data) continue;
+        const data = file.size <= MAX_INLINE_DOC_BYTES ? await readFileBase64(file) : undefined;
         nextFiles.push({
           id: crypto.randomUUID(),
           name: file.name.slice(0, 200),
           type: file.type || "application/octet-stream",
-          data,
+          ...(data ? { data } : {}),
           size: file.size,
+          rawFile: file,
         });
       } else {
         if (nextFiles.length >= MAX_FILES || total >= MAX_TOTAL_CHARS) continue;

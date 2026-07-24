@@ -15,7 +15,7 @@
  * @module services/task-sandbox/sandbox
  */
 import { spawn } from 'child_process';
-import { mkdir, rm, writeFile as fsWriteFile, readFile as fsReadFile, readdir, stat, realpath } from 'fs/promises';
+import { mkdir, rm, writeFile as fsWriteFile, readFile as fsReadFile, readdir, stat, realpath, copyFile as fsCopyFile } from 'fs/promises';
 import { resolve, sep, join, dirname, basename, relative } from 'path';
 import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { createLogger } from '../../utils/logger';
@@ -295,6 +295,19 @@ export class TaskSandbox {
         }
         await mkdir(dirname(abs), { recursive: true });
         await fsWriteFile(abs, content);
+    }
+
+    /** 호스트 파일을 workspace 로 복사 (대용량 입력 첨부 — Buffer 메모리 적재 없이 fs copy).
+     *  경로 가드 + 디스크 쿼터는 writeFile 과 동일하게 적용. */
+    async importFile(relPath: string, srcAbsPath: string): Promise<void> {
+        const abs = await safeRealWorkspacePath(this.hostWorkdir, relPath);
+        const st = await stat(srcAbsPath);
+        const size = await dirSizeBytes(this.hostWorkdir, this.cfg.workspaceQuota + 1);
+        if (size + st.size > this.cfg.workspaceQuota) {
+            throw new Error(`workspace 디스크 쿼터 초과(상한 ${Math.round(this.cfg.workspaceQuota / 1024 / 1024)}MB) — 파일이 너무 큽니다.`);
+        }
+        await mkdir(dirname(abs), { recursive: true });
+        await fsCopyFile(srcAbsPath, abs);
     }
 
     /** workspace 내 파일 읽기. 경로 가드(어휘+실경로) 적용. */
