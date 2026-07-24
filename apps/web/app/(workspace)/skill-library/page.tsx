@@ -26,7 +26,7 @@ import {
 import { AgentsTabs } from "@/components/hub-tabs";
 import { cn } from "@/lib/utils";
 import type { ApiSuccess } from "@openmake/shared-types";
-import { ApiClient } from "@/lib/api-client";
+import { ApiClient, csrfHeaders } from "@/lib/api-client";
 
 /* ── 카테고리 라벨 (id → i18n 키) ──────────────────────────── */
 const CATEGORY_KEYS: Record<string, string> = {
@@ -324,7 +324,7 @@ function AutoCreateForm({
     try {
       const resp = await fetch("/api/agents/skills/auto-create", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+        headers: { "Content-Type": "application/json", "Accept": "text/event-stream", ...(await csrfHeaders()) },
         credentials: "include",
         body: JSON.stringify({ purpose: purpose.trim(), target: target.trim() || undefined, category }),
       });
@@ -457,7 +457,7 @@ function GitIngestForm({
     try {
       const resp = await fetch("/api/agents/skills/import-from-git", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+        headers: { "Content-Type": "application/json", "Accept": "text/event-stream", ...(await csrfHeaders()) },
         credentials: "include",
         body: JSON.stringify({
           gitUrl: gitUrl.trim(),

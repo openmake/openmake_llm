@@ -6,3 +6,5 @@
  * 응답 타입은 @openmake/shared-types 의 ApiResponse 등으로 강제할 수 있다.
  */
 export { ApiClient, ApiError } from "@openmake/api-client";
+// SSE 등 ApiClient 로 처리 못 하는 직접 fetch 에서 CSRF 헤더 주입용(enforce 모드 대비).
+export { csrfHeaders } from "@openmake/api-client";
