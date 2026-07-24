@@ -18,6 +18,21 @@ RUN apt-get update \
     && apt-get purge -y curl \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# ── Chromium(Playwright) 실행 시스템 의존성 — 브라우저 사용 MCP 서버 지원 ──
+# noapi-google-search-mcp 등 playwright 기반 서버가 chromium 을 launch 하려면 공유
+# 라이브러리가 필요하다. 컨테이너는 --read-only + cap-drop ALL 이라 런타임 apt 설치가
+# 불가(2026-07-25 7시 예약 리포트가 "Executable doesn't exist" 로 무산된 원인) → 이미지에
+# 베이킹한다. 브라우저 본체는 서버별 캐시 볼륨(~/.cache/ms-playwright)에 설치·유지되며,
+# 서버 패키지의 playwright 버전이 바뀌면 볼륨에 `python -m playwright install chromium`
+# 재실행이 필요하다(버전-리비전 정합). 폰트는 스크린샷 한글 렌더용.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libglib2.0-0 libnss3 libnspr4 libdbus-1-3 libatk1.0-0 libatk-bridge2.0-0 \
+        libatspi2.0-0 libx11-6 libxcb1 libxext6 libxcomposite1 libxdamage1 libxfixes3 \
+        libxrandr2 libgbm1 libxkbcommon0 libasound2 libcups2 libcairo2 libpango-1.0-0 \
+        fonts-liberation fonts-noto-cjk \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # node:22 이미지 기본 제공 'node' 유저(uid 1000) 사용 — sandbox-docker 의 --user 1000:1000 과 일치.
 # (useradd 로 새 uid 1000 생성하면 node 와 충돌해 실패하므로 기존 유저 재사용)
 USER node
