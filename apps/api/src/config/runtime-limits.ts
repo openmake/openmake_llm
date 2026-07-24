@@ -1141,6 +1141,16 @@ export const AGENT_TASK_LIMITS = {
     SCHEDULE_MIN_INTERVAL_SEC: parseInt(process.env.AGENT_TASK_SCHEDULE_MIN_INTERVAL_SEC || '300', 10),
     /** 연속 실패 이 횟수 도달 시 스케줄 자동 비활성(폭주 차단). AGENT_TASK_SCHEDULE_DISABLE_AFTER_FAILURES(기본 5). */
     SCHEDULE_DISABLE_AFTER_FAILURES: parseInt(process.env.AGENT_TASK_SCHEDULE_DISABLE_AFTER_FAILURES || '5', 10),
+    /** 예약 실행 승인정책 — 예약 task 는 무인(사람 승인 불가)이므로 기본 'none'(전부 자동).
+     *  전역 TASK_SANDBOX_APPROVAL_POLICY='all' 이면 예약 task 가 첫 도구서 pause 되어 멈추므로 분리한다.
+     *  AGENT_TASK_SCHEDULE_APPROVAL_POLICY(기본 'none' | 'high-risk' | 'all'). */
+    SCHEDULE_APPROVAL_POLICY: ((): 'all' | 'high-risk' | 'none' => {
+        const v = process.env.AGENT_TASK_SCHEDULE_APPROVAL_POLICY;
+        return v === 'all' || v === 'high-risk' || v === 'none' ? v : 'none';
+    })(),
+    /** 예약(무인) task 총 타임아웃(ms) — 리포트·디자인 등 무거운 생성 워크플로우는 대화형 기본
+     *  10분을 넘길 수 있어 분리(기본 20분). AGENT_TASK_SCHEDULE_TIMEOUT_MS. */
+    SCHEDULE_TOTAL_TIMEOUT_MS: parseInt(process.env.AGENT_TASK_SCHEDULE_TIMEOUT_MS || '', 10) || 20 * 60 * 1000,
     /** 크로스-task 학습(Phase 5-2) — 유저 과거 유사 작업의 결과·도구·실패사유를 새 task system 에
      *  주입(같은 실수 반복 방지). 무-LLM(키워드 유사도)·기존 테이블 파생. 기본 OFF.
      *  AGENT_TASK_LEARNING_ENABLED=true 로 활성. */
