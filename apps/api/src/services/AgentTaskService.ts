@@ -174,13 +174,10 @@ export class AgentTaskService {
             // stepNumber 0 재시작으로 인한 (task_id, step_number) 중복·표시 혼선을 방지.
             if (!input.resume) await db.deleteAgentTaskSteps(taskId);
 
-            // 허용 도구 목록 (LLMTool ≈ ToolDefinition). 채팅 경로(ChatService.getAllowedTools)와
-            // 동일하게 고위험 전역 서버 도구(Python REPL 등)를 역할 미달 사용자에게서 제거한다 —
-            // 미적용 시 일반 user 가 에이전트 작업으로 admin 전용 도구를 호출할 수 있었다.
-            const rawTools = (await mcp.getToolRouter().getLLMTools({
+            // 역할 게이팅(채팅 경로와 동일) — 고위험 전역 도구(Python REPL 등)를 역할 미달 user 에게서 제거.
+            const allTools = filterRestrictedTools((await mcp.getToolRouter().getLLMTools({
                 userId,
-            })) as unknown as ToolDefinition[];
-            const allTools = filterRestrictedTools(rawTools, userRole);
+            })) as unknown as ToolDefinition[], userRole);
 
             // 활성 스킬(global+user)의 tool_bindings 를 머지.
             // base 가 전체 도구라 실효는 사실상 denied(특정 도구 차단)뿐이다.
