@@ -7,6 +7,7 @@ const { app, BrowserWindow, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const bridge = require('./bridge');
+const updater = require('./updater');
 
 const BACKENDS = {
   external: 'https://chat.openmake.cc',
@@ -63,6 +64,8 @@ function createWindow() {
   buildMenu();
   // 테스트 훅(개발 전용): 폴더가 env 로 지정되면 다이얼로그 없이 자동 연결.
   if (process.env.OMK_BRIDGE_FOLDER) bridge.connectFolder(app, bridgeBackendUrl(), win);
+  // 기동 5초 후 자동 업데이트 확인 — 새 버전 있을 때만 다이얼로그.
+  updater.scheduleStartupCheck(() => bridgeBackendUrl(), () => win);
 }
 
 function switchBackend(b) {
@@ -90,6 +93,8 @@ function buildMenu() {
         { type: 'separator' },
         { label: '새로고침', accelerator: 'CmdOrCtrl+R', click: () => win && win.reload() },
         { label: '강제 새로고침(캐시 무시)', accelerator: 'CmdOrCtrl+Shift+R', click: () => win && win.webContents.reloadIgnoringCache() },
+        { type: 'separator' },
+        { label: `업데이트 확인… (현재 v${app.getVersion()})`, click: () => updater.checkForUpdate(bridgeBackendUrl(), win, true) },
       ],
     },
     {
