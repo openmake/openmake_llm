@@ -26,6 +26,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-openmake}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 를 .env 에 설정하세요 (DATABASE_URL 비번과 동일)}
       POSTGRES_DB: ${POSTGRES_DB:-openmake_llm}
+      # 초기 관리자 계정 (004-admin-user.sh). 미설정 시 계정을 만들지 않는다.
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-}
+      ADMIN_INITIAL_USERNAME: ${ADMIN_INITIAL_USERNAME:-admin}
+      ADMIN_INITIAL_EMAIL: ${ADMIN_INITIAL_EMAIL:-admin@openmake.ai}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
