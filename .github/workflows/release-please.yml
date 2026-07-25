@@ -1,0 +1,36 @@
+# ============================================================
+# Release Please — Conventional Commits 기반 자동 버저닝
+# ============================================================
+# main 에 커밋이 쌓이면 release-please 가 "Release PR" 을 자동으로 만든다.
+#   fix:            → patch (1.5.6 → 1.5.7)
+#   feat:           → minor (1.5.6 → 1.6.0)
+#   feat!: / BREAKING CHANGE: → major (1.5.6 → 2.0.0)
+#
+# 그 Release PR 을 머지하면 → 태그(vX.Y.Z) + GitHub Release + CHANGELOG 반영.
+# 사람이 버전 숫자를 손으로 고치는 일은 없다. 커밋 메시지가 버전을 정한다.
+#
+# 버전 SoT = 루트 package.json (constants.ts APP_VERSION 이 이 값을 읽는다).
+# workspace package.json 들은 release-please-config.json 의 extra-files 로 함께 동기화된다.
+name: release-please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

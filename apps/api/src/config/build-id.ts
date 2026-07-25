@@ -17,6 +17,10 @@ export interface BuildInfo {
     buildTime: string;
     gitHash: string;
     gitDate: string;
+    /** 릴리스 버전 (루트 package.json — release-please 가 bump). 구 build-info 엔 없어 optional. */
+    version?: string;
+    /** 최근 태그 (`git describe --tags`). 태그 부재·얕은 클론 시 빈 문자열. */
+    gitTag?: string;
 }
 
 const FALLBACK_BUILD_ID = 'dev';

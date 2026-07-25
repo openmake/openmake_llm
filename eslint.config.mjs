@@ -13,6 +13,7 @@ export default [
       "**/*.min.js",
       "jest.config.js",
       "ecosystem.config.js",
+      "scripts/build-info.js",
       "playwright.config.ts",
       "tests/e2e/**",
       "**/*.d.ts",

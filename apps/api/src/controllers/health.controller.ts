@@ -6,21 +6,15 @@
  */
 
 import { Request, Response, Router } from 'express';
-import * as fs from 'fs';
-import * as path from 'path';
 import { ClusterManager, getClusterManager } from '../cluster/manager';
 import { getPool } from '../data/models/unified-database';
 import { success } from '../utils/api-response';
 import { DB_POOL_TIMEOUTS } from '../config/timeouts';
 import { getBuildInfo } from '../config/build-id';
+import { APP_VERSION } from '../config/constants';
 
-// package.json에서 버전을 한 번만 읽어 캐시
-const pkgJsonPath = path.resolve(__dirname, '../../package.json');
-let _cachedVersion = '1.0.0';
-try {
-    const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf-8'));
-    _cachedVersion = pkg.version || '1.0.0';
-} catch { /* fallback */ }
+// 버전 SoT = 루트 package.json (release-please 가 bump). 여기서 재구현하지 않는다.
+const _cachedVersion = APP_VERSION;
 
 /**
  * 헬스체크 및 서비스 준비 상태 컨트롤러

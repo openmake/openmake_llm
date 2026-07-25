@@ -94,10 +94,12 @@ backend/api/.ollama-cluster.json
 # Project Documentation
 openmake_prd.md
 
-# Compiled Scripts
+# Compiled Scripts (scripts/*.ts 의 tsc 산출물 — 소스가 아닌 것만 무시)
 scripts/*.js
 scripts/*.map
 scripts/*.d.ts
+# 예외: 아래는 컴파일 산출물이 아니라 소스다 (빌드 파이프라인이 직접 실행 — 커밋 필수)
+!scripts/build-info.js
 
 # Tool-generated plans/specs
 docs/superpowers/

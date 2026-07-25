@@ -9,6 +9,7 @@
 
 import { Application, Request, Response, NextFunction } from 'express';
 import { getConfig } from './config/env';
+import { APP_VERSION } from './config/constants';
 import { createLogger } from './utils/logger';
 import { requireAuth, requireAdmin } from './auth';
 import { SWAGGER_CDN } from './config/external-services';
@@ -34,7 +35,7 @@ AI 채팅 어시스턴트 API 문서
 대부분의 API는 JWT 토큰 인증이 필요합니다.
 \`Authorization: Bearer <token>\` 헤더를 사용하세요.
         `,
-        version: '1.6.0',
+        version: APP_VERSION,
         contact: {
             name: 'API Support',
             email: 'support@example.com'
