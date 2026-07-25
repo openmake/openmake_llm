@@ -24,9 +24,6 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { createLogger } from '../utils/logger';
-
-const logger = createLogger('McpSandbox');
 
 /** 'full'=bridge, 'none'=--network none, 'host'=컨테이너 없이 호스트 직접 실행(opt-out) */
 export type SandboxNetwork = 'full' | 'none' | 'host';
@@ -151,13 +148,6 @@ export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string
     return a;
 }
 
-const warned = new Set<string>();
-function warnOnce(key: string, msg: string): void {
-    if (warned.has(key)) return;
-    warned.add(key);
-    logger.warn(msg);
-}
-
 /**
  * 외부 MCP stdio command 를 docker run 으로 감싼다. 게이트 미충족 시 원본 그대로(no-op).
  * sandboxed=true 이면 env 는 args(-e)에 baked 되므로 호출자는 StdioClientTransport env 를 비워야 한다.
@@ -168,8 +158,12 @@ export function buildSandboxedCommand(input: SandboxInput, cfg: SandboxConfig = 
     if (input.network === 'host') return { command: input.command, args: input.args, sandboxed: false };
     if (!cfg.enabled) return { command: input.command, args: input.args, sandboxed: false };
     if (!cfg.dockerPath) {
-        warnOnce('docker', 'docker 바이너리를 찾지 못해 MCP 샌드박스 미적용(비격리 실행). Docker 설치/실행 확인 필요.');
-        return { command: input.command, args: input.args, sandboxed: false };
+        // fail-closed: 샌드박스가 명시적으로 활성(cfg.enabled)인데 docker 가 없으면 비격리로 조용히
+        // 실행하지 않고 spawn 을 거부한다. 격리를 요구한 서버를 unsandboxed 로 돌리는 fail-open 은
+        // "격리했다"는 오인을 준다. host 네트워크 opt-out(신뢰 서버)은 위에서 이미 통과했고,
+        // 비격리가 필요하면 MCP_SANDBOX_ENABLED=false 또는 서버별 sandbox_network='host' 로 명시한다.
+        // (throw 는 external-client.connect 의 catch 에서 연결 error 로 처리 — 서버 크래시 아님)
+        throw new Error('MCP 샌드박스가 활성화(MCP_SANDBOX_ENABLED)됐으나 docker 바이너리를 찾을 수 없습니다. 비격리 실행을 거부합니다 — Docker 설치/실행을 확인하거나 sandbox_network=host 로 opt-out 하세요.');
     }
     const dockerArgs = buildDockerArgs(input, cfg);
     return { command: cfg.dockerPath, args: dockerArgs, sandboxed: true };
