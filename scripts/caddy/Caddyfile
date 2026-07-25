@@ -45,15 +45,53 @@
 }
 
 # ============================================================
-# 외부 공개 = Tailscale Funnel (2026-06-22)
+# 외부 공개 = Cloudflare Tunnel (chat.openmake.cc)
 # ============================================================
 # rasplay.tplinkdns.com 직접 HTTPS 는 불가:
 #   - TP-Link DDNS 라 DNS 존 제어 불가 → Let's Encrypt DNS-01 불가
 #   - 가정회선 80/443 인바운드 차단 → HTTP-01 / TLS-ALPN-01 불가
 # 따라서 과거의 `rasplay.tplinkdns.com { ... }` wss 우회 블록(자동 HTTPS)은 인증서 발급이
-# 영구 실패하여 폐기했다. 대신 Tailscale Funnel 이 공개 443 에서 TLS 를 종단한 뒤
-# 위 :33000 Caddy 로 평문 프록시하며, 외부 트래픽도 결국 이 :33000 블록(@chatws 라우팅)을
-# 그대로 탄다 (Next HMR /_next/* 제외 가드 포함):
-#   tailscale set --shields-up=false        # Funnel 전제
-#   tailscale funnel --bg 33000             # → https://<machine>.<tailnet>.ts.net
-# OAuth redirect URI 는 .env 의 OAUTH_REDIRECT_URI(=ts.net https) 로 고정한다.
+# 영구 실패하여 폐기했다. 대신 Cloudflare edge 가 공개 443 에서 TLS 를 종단한 뒤
+# cloudflared 가 위 :33000 Caddy 로 평문 프록시하며, 외부 트래픽도 결국 이 :33000
+# 블록(@chatws 라우팅)을 그대로 탄다 (Next HMR /_next/* 제외 가드 포함).
+# cloudflared 터널 설정은 git 에 두지 않는다(운영 호스트 로컬 보관).
+# OAuth redirect URI 는 .env 의 OAUTH_REDIRECT_URI(=https://chat.openmake.cc/...) 로 고정한다.
+
+# ============================================================
+# www.openmake.cc — 마케팅/문서 사이트 (Next.js static export)
+# ============================================================
+# 앱(chat.openmake.cc)과 완전히 분리된 정적 사이트다. API·쿠키·WS 를 쓰지 않으므로
+# 위의 "단일 origin 원칙"(앱을 쪼개지 말 것)에 저촉되지 않는다 — artifacts.openmake.cc 와 동일한 예외 성격.
+#
+# 토폴로지:
+#   [사용자 https://www.openmake.cc]
+#        → [Cloudflare edge : TLS 종단]
+#        → [Cloudflare Tunnel]  (~/.cloudflared/config.yml 의 ingress)
+#        → [Caddy :33001]  ─→ /Volumes/MAC_APP/openmake/www/out (정적 파일)
+#
+# 갱신: www 프로젝트에서 `npm run build` 후 out/ 이 갱신되면 즉시 반영된다(재기동 불필요).
+# 보안 헤더: next.config.ts 의 headers() 는 output:'export' 에서 적용되지 않으므로 여기서 지정한다.
+:33001 {
+	root * /Volumes/MAC_APP/openmake/www/out
+	encode gzip zstd
+
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		X-Content-Type-Options    "nosniff"
+		Referrer-Policy           "strict-origin-when-cross-origin"
+		Permissions-Policy        "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# 해시 붙은 빌드 자산은 불변 → 강한 캐시
+	@immutable path /_next/static/*
+	header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+	file_server
+
+	handle_errors {
+		@notfound expression {err.status_code} == 404
+		rewrite @notfound /404.html
+		file_server
+	}
+}

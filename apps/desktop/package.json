@@ -2,7 +2,8 @@
   "name": "openmake-desktop",
   "version": "1.0.0",
   "private": true,
-  "description": "OpenMake LLM 데스크톱 셸 (macOS) — 운영 백엔드(외부 Tailscale / 로컬)를 네이티브 창으로",
+  "description": "OpenMake LLM 데스크톱 셸 (macOS) — 운영 백엔드(외부 공개 도메인 / 로컬)를 네이티브 창으로",
+  "author": "OpenMake Team",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -15,6 +16,7 @@
   "build": {
     "appId": "ai.openmake.desktop",
     "productName": "OpenMake",
+    "copyright": "Copyright © 2026 OpenMake Team",
     "directories": {
       "output": "dist",
       "buildResources": "assets"

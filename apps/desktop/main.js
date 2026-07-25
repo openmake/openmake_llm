@@ -1,5 +1,5 @@
 // OpenMake LLM 데스크톱 셸 (Electron, macOS)
-// 운영 백엔드(외부 Tailscale Funnel / 로컬 localhost)를 네이티브 창으로 로드한다.
+// 운영 백엔드(외부 공개 도메인 / 로컬 localhost)를 네이티브 창으로 로드한다.
 // 백엔드 자체(API·Docker·vLLM)는 번들하지 않고 기존 운영에 연결만 한다 — 의존성(Docker
 // DB·원격 GPU)을 dmg 에 담을 수 없기 때문. 백엔드 전환은 메뉴 '백엔드' 의 라디오로.
 
@@ -8,7 +8,7 @@ const path = require('path');
 const fs = require('fs');
 
 const BACKENDS = {
-  external: 'https://ijaesang-ui-macmini.tail67d660.ts.net',
+  external: 'https://chat.openmake.cc',
   local: 'http://localhost:3000',
 };
 
@@ -75,7 +75,7 @@ function buildMenu() {
     {
       label: '백엔드',
       submenu: [
-        { label: '외부 (Tailscale)', type: 'radio', checked: current === 'external', click: () => switchBackend('external') },
+        { label: '외부 (chat.openmake.cc)', type: 'radio', checked: current === 'external', click: () => switchBackend('external') },
         { label: '로컬 (localhost:3000)', type: 'radio', checked: current === 'local', click: () => switchBackend('local') },
         { type: 'separator' },
         { label: '새로고침', accelerator: 'CmdOrCtrl+R', click: () => win && win.reload() },

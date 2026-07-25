@@ -20,7 +20,7 @@ publish 된 artifact 를 **self-contained HTML** 로 export → **별도 오리�
 
 ```bash
 ARTIFACT_VIEWER_ENABLED=true
-ARTIFACT_VIEWER_ORIGIN=http://localhost:8088          # 외부공개 시 Funnel :8443 URL 로 교체
+ARTIFACT_VIEWER_ORIGIN=http://localhost:8088          # 외부공개 시 전용 서브도메인 URL 로 교체
 ARTIFACT_VIEWER_DATA_DIR=/Volumes/MAC_APP/docker/openmake_llm/artifact-viewer/data
 ARTIFACT_VIEWER_SIGNING_KEY=<운영 랜덤키>              # 미설정 시 JWT_SECRET 재사용
 # ARTIFACT_VIEWER_TOKEN_TTL_SEC=3600
@@ -42,20 +42,21 @@ docker compose -f infra/artifact-viewer/docker-compose.yml up -d
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8088/vendor/bootstrap.js   # 200
 ```
 
-## 외부 공개 (Tailscale Funnel)
+## 외부 공개 (Cloudflare Tunnel)
 
-별도 오리진은 **포트로 분리**(origin = scheme+host+**port**). Funnel 허용 포트(443/8443/10000) 중
-`:8443` 을 뷰어로:
+앱(`chat.openmake.cc`)과 **별도 서브도메인**(`artifacts.openmake.cc`)으로 분리한다 —
+cloudflared 터널 ingress 에 뷰어용 호스트네임을 하나 더 매핑해 컨테이너 :8088 로 보낸 뒤,
+`ARTIFACT_VIEWER_ORIGIN` 을 그 URL 로 둔다. cloudflared 설정 파일과 DNS 레코드 작업은
+git 에 두지 않는다(운영 호스트 로컬 보관).
 
-```bash
-# Caddy(또는 funnel) 가 :8443 → 컨테이너 :8088 로 라우팅하도록 구성한 뒤
-tailscale funnel --bg --https=8443 http://localhost:8088
-# ARTIFACT_VIEWER_ORIGIN 을 https://<node>.ts.net:8443 로 교체
+```yaml
+# cloudflared ingress (예시)
+  - hostname: artifacts.openmake.cc
+    service: http://localhost:8088
 ```
 
-> ⚠️ 같은 호스트의 다른 포트는 **별도 web origin** 이지만 쿠키는 호스트 단위로 공유될 수 있다.
-> 본 뷰어는 strict CSP(`connect-src 'none'`)로 네트워크를 차단하고 앱 쿠키를 사용하지 않으므로
-> 실질 무해하나, "완전 분리 호스트네임"이 필요하면 별도 DNS 가 필요하다.
+> 포트 분리(`:8443`)가 아니라 호스트네임 분리이므로, 앱 도메인과 쿠키 스코프가 완전히
+> 갈린다. 본 뷰어는 strict CSP(`connect-src 'none'`)로 네트워크도 차단한다.
 
 ## 보안 모델 요약
 

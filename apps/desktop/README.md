@@ -3,7 +3,7 @@
 운영 중인 OpenMake 웹 UI를 네이티브 macOS 창으로 여는 얇은 Electron 셸.
 백엔드(API·Docker DB·원격 vLLM GPU)는 **번들하지 않고** 기존 운영에 연결만 한다.
 
-- 기본 백엔드: 외부 Tailscale Funnel URL
+- 기본 백엔드: 외부 공개 URL (`https://chat.openmake.cc`)
 - 메뉴 `백엔드` 에서 로컬(`localhost:3000`) 전환 (선택은 영속됨)
 
 ## 빌드 (배포자)

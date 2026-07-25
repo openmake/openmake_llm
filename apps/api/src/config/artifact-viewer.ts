@@ -9,7 +9,7 @@
  */
 import * as path from 'path';
 
-/** 뷰어 공개 base URL (별도 오리진). 로컬: http://localhost:8088, 외부: Funnel :8443 URL. */
+/** 뷰어 공개 base URL (별도 오리진). 로컬: http://localhost:8088, 외부: 전용 공개 호스트 URL. */
 const ORIGIN = process.env.ARTIFACT_VIEWER_ORIGIN || 'http://localhost:8088';
 
 export const ARTIFACT_VIEWER = {
