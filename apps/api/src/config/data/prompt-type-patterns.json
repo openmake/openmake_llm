@@ -67,7 +67,7 @@
   ],
   "specialBonuses": [
     { "type": "coder", "source": "api|lib|module|github|이슈|pr", "flags": "i", "bonus": 2 },
-    { "type": "researcher", "source": "최신|뉴스|검색|사례|exa", "flags": "i", "bonus": 2 },
+    { "type": "researcher", "source": "최신|뉴스|검색|사례", "flags": "i", "bonus": 2 },
     { "type": "security", "source": "취약점|해킹|보안|vulnerability", "flags": "i", "bonus": 2 }
   ]
 }
