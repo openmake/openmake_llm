@@ -167,6 +167,17 @@ export const mcpRouter = Router();
           return;
       }
 
+      // 🔒 비-global(user_private/user_shared)은 body 의 임의 command/args/env 를 그대로 spawn 하는
+      // RCE 경로이자 전역 ToolRouter 노출 경로다. 사용자 서버는 command 를 body 가 아닌 카탈로그
+      // 템플릿에서만 취하는 POST /api/mcp/servers/from-catalog 로만 등록해야 한다. 이 레거시 라우트는
+      // admin 이 관리하는 global 서버 등록 전용으로 제한한다.
+      if (visibility !== 'global') {
+          res.status(403).json(forbidden(
+              '사용자 서버(user_private/user_shared)는 POST /api/mcp/servers/from-catalog 로 등록하세요 (임의 stdio command 금지)',
+          ));
+          return;
+      }
+
       // SSRF guard — sse/http URL 등록 시 외부 호스트 검증
       if ((transport_type === 'sse' || transport_type === 'streamable-http') && url) {
           try {
@@ -193,19 +204,8 @@ export const mcpRouter = Router();
 
       const db = getUnifiedDatabase();
       const registry = getUnifiedMCPClient().getServerRegistry();
-      // global 만 즉시 spawn — user_* 는 Phase 7 lifecycle-supervisor 의 hook 으로 위임
-      // (현재 phase 에서는 db.upsertMcpServer 동등 동작으로 fallback. registry.registerServer 는 connect 시도 포함.)
-      const status = visibility === 'global'
-          ? await registry.registerServer(config, db)
-          : await registry.registerServer(config, db);
-      // visibility / user_id / catalog_template_id 컬럼은 ALTER (023) 후 별도 update —
-      // server-registry 의 db.addMcpServer 가 컬럼을 모를 수 있어 수동 UPDATE:
-      if (visibility !== 'global') {
-          await db.getPool().query(
-              `UPDATE mcp_servers SET user_id = $1, visibility = $2, catalog_template_id = $3 WHERE id = $4`,
-              [userId, visibility, catalog_template_id ?? null, id],
-          );
-      }
+      // 여기 도달하면 visibility === 'global' (admin) — 즉시 spawn(connect 포함).
+      const status = await registry.registerServer(config, db);
 
       res.status(201).json(success({ server: config, connectionStatus: status }));
   }));
