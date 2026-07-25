@@ -281,6 +281,12 @@
     },
     "repo": {
       "label": "저장소(선택):"
+    },
+    "localExec": {
+      "label": "로컬 실행:",
+      "off": "서버 샌드박스에서 실행",
+      "on": "로컬 폴더에서 실행: {folder}",
+      "disconnected": "데스크톱 앱 미연결"
     }
   },
   "chat": {
@@ -754,7 +760,8 @@
       "started": "템플릿으로 작업을 시작했습니다."
     },
     "viewPr": "PR 보기",
-    "downloadFailed": "다운로드 실패: {error}"
+    "downloadFailed": "다운로드 실패: {error}",
+    "localBadge": "로컬 폴더 실행"
   },
   "customAgents": {
     "pageTitle": "커스텀 에이전트",

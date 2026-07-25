@@ -281,6 +281,12 @@
     },
     "repo": {
       "label": "仓库(可选):"
+    },
+    "localExec": {
+      "label": "本地执行:",
+      "off": "在服务器沙箱中运行",
+      "on": "在本地文件夹运行: {folder}",
+      "disconnected": "未连接桌面应用"
     }
   },
   "chat": {
@@ -754,7 +760,8 @@
       "started": "已从模板启动任务。"
     },
     "viewPr": "查看 PR",
-    "downloadFailed": "下载失败: {error}"
+    "downloadFailed": "下载失败: {error}",
+    "localBadge": "本地文件夹执行"
   },
   "customAgents": {
     "pageTitle": "自定义智能体",

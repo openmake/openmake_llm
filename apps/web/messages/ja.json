@@ -281,6 +281,12 @@
     },
     "repo": {
       "label": "リポジトリ(任意):"
+    },
+    "localExec": {
+      "label": "ローカル実行:",
+      "off": "サーバーサンドボックスで実行",
+      "on": "ローカルフォルダで実行: {folder}",
+      "disconnected": "デスクトップアプリ未接続"
     }
   },
   "chat": {
@@ -754,7 +760,8 @@
       "started": "テンプレートからタスクを開始しました。"
     },
     "viewPr": "PR を表示",
-    "downloadFailed": "ダウンロードに失敗しました: {error}"
+    "downloadFailed": "ダウンロードに失敗しました: {error}",
+    "localBadge": "ローカルフォルダ実行"
   },
   "customAgents": {
     "pageTitle": "カスタムエージェント",

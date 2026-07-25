@@ -36,6 +36,7 @@ export { default as agentsMonitoringRouter } from './agents-monitoring.routes';
 export { default as auditRouter } from './audit.routes';
 export { default as researchRouter } from './research.routes';
 export { default as agentTaskRouter } from './agent-task.routes';
+export { default as localBridgeRouter } from './local-bridge.routes';
 export { default as agentTaskScheduleRouter } from './agent-task-schedule.routes';
 export { adminAgentTaskSchedulesRouter } from './admin-agent-task-schedules.routes';
 export { default as agentTaskTemplateRouter } from './agent-task-template.routes';

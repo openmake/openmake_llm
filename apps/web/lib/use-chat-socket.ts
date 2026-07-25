@@ -404,6 +404,8 @@ export function useChatSocket() {
       images?: string[],
       approvalPolicy?: "all" | "high-risk" | "none",
       repoUrl?: string,
+      /** Cowork D2: true 면 데스크톱 브리지가 연결한 로컬 폴더에서 실행 (승인은 서버가 'all' 강제) */
+      localExecutor?: boolean,
     ) => {
       const goal = message.trim();
       const s = useAppStore.getState();
@@ -424,6 +426,7 @@ export function useChatSocket() {
             ...(payloadFiles.length > 0 ? { files: payloadFiles } : {}),
             ...(images && images.length > 0 ? { images } : {}),
             ...(repoUrl && repoUrl.trim() ? { repoUrl: repoUrl.trim() } : {}),
+            ...(localExecutor ? { executor: "local" } : {}),
           }));
           for (const f of binaryParts) fd.append("files", f.rawFile!, f.name);
           const resp = await fetch("/api/agent-tasks", {
@@ -448,6 +451,7 @@ export function useChatSocket() {
                 : {}),
               ...(images && images.length > 0 ? { images } : {}),
               ...(repoUrl && repoUrl.trim() ? { repoUrl: repoUrl.trim() } : {}),
+              ...(localExecutor ? { executor: "local" } : {}),
             },
           );
         }
