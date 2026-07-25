@@ -42,6 +42,8 @@ import { persistArtifactSteps, runTool, isSearchTool } from './agent-task/task-s
 import { initWorkspaceBaseline, maybePersistCodeDiff, captureDiffOnCleanup } from './agent-task/code-diff';
 import { getSteeringRegistry, applyPendingSteering } from './agent-task/steering';
 import { setupTaskRepo, maybePushAndOpenPR } from './agent-task/git-ops';
+import { RemoteExecutor } from './local-bridge/remote-executor';
+import { LOCAL_BRIDGE } from '../config/local-bridge';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
 import { assembleAgentTools } from './agent-task/tool-assembly';
 import { verifyCodeArtifacts } from './agent-task/deliverable-verify';
@@ -202,9 +204,14 @@ export class AgentTaskService {
             // 영속 샌드박스(Manus화, 플래그 ON 시만). 생성 실패는 샌드박스 없이 진행(graceful degrade).
             // 설정은 한 번만 읽어 스냅샷 공유. 승인 3모드는 input.approvalPolicy 로 이 실행에만 override
             // (비영속, resume은 전역 폴백; requiresApproval 호출부 2곳이 이 cfg 를 읽어 단일 지점 주입).
-            const sandboxCfg = input.approvalPolicy
-                ? { ...getTaskSandboxConfig(), approvalPolicy: input.approvalPolicy } : getTaskSandboxConfig();
-            if (sandboxCfg.enabled) {
+            // Cowork D1a: 로컬 실행기 — 격리(docker) 없이 사용자 머신에서 실행되므로 승인 'all' 강제
+            // (input.approvalPolicy 보다 우선). 게이트 OFF 면 sandbox 로 폴백(생성 시점에 이미 검증되나 방어).
+            const isLocalExecutor = input.executor === 'local' && LOCAL_BRIDGE.ENABLED;
+            const sandboxCfg = isLocalExecutor
+                ? { ...getTaskSandboxConfig(), approvalPolicy: 'all' as const }
+                : input.approvalPolicy
+                    ? { ...getTaskSandboxConfig(), approvalPolicy: input.approvalPolicy } : getTaskSandboxConfig();
+            if (sandboxCfg.enabled || isLocalExecutor) {
                 try {
                     // G4 위임 — 상세는 agent-task/delegate (SUBAGENT_ENABLED 시 depth=1 tool-loop 승격,
                     // 토큰·승인대기는 부모 누적에 합산되어 runaway 가드·pause-aware 타임아웃 공유).
@@ -221,11 +228,13 @@ export class AgentTaskService {
                             onPausedMs: (ms) => { pausedMs += ms; },
                         })
                         : undefined;
-                    taskRuntime = new TaskRuntime(taskId, userId, sandboxCfg, delegateFn, spawnFn);
+                    // D1a: local 이면 RemoteExecutor 주입(도구 호출이 브리지로 위임), 아니면 기본(docker).
+                    const remoteExecutor = isLocalExecutor ? new RemoteExecutor(taskId, userId) : undefined;
+                    taskRuntime = new TaskRuntime(taskId, userId, sandboxCfg, delegateFn, spawnFn, remoteExecutor);
                     await taskRuntime.create();
                     await db.updateAgentTask(taskId, {
                         sandboxContainerId: taskRuntime.containerName,
-                        workspacePath: taskRuntime.workspacePath,
+                        workspacePath: taskRuntime.localWorkdir ?? undefined,
                     });
                     // 새 대화(resume 아님)면 system 에 작업환경 안내 주입. 이어서 Phase 2 Git: repo 지정 시 호스트 clone(토큰 컨테이너 미주입)+안내.
                     if (!input.resume && conversation[0]?.role === 'system') {

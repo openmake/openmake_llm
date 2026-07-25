@@ -66,6 +66,9 @@ export interface AgentTaskRunInput {
     gitRepoUrl?: string;
     /** Phase 2 Git: clone 할 브랜치(base). 미지정 시 repo 기본 브랜치. */
     gitBranch?: string;
+    /** Cowork D1a: 실행 백엔드 — 'local' 이면 로컬 브리지(RemoteExecutor)로 도구를 위임.
+     *  LOCAL_EXECUTOR_ENABLED + 디바이스 연결 필요, 승인 정책은 'all' 강제. 미지정=sandbox. */
+    executor?: 'sandbox' | 'local';
     /** resume(이어하기): 기존 end-of-turn checkpoint 에서 복원 */
     resume?: {
         conversation: ChatMessage[];

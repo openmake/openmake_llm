@@ -29,6 +29,8 @@ const GIT = 'git -c safe.directory=/workspace -c user.email=agent@openmake.local
  * 것을 막는다.) 입력 첨부(uploads/) 기록 후에 호출해 첨부가 baseline 에 포함되게 한다.
  */
 export async function initWorkspaceBaseline(runtime: TaskRuntime): Promise<void> {
+    // 로컬 실행기(D1a): 사용자 폴더에 git init/commit 을 만들면 안 된다 — diff 캡처 자체를 생략.
+    if (runtime.localWorkdir === null) return;
     try {
         const r = await runtime.execRaw(
             `[ -d .git ] || { ${GIT} init -q && ${GIT} add -A && ${GIT} commit -q --allow-empty -m baseline; }`,
@@ -47,6 +49,8 @@ export async function initWorkspaceBaseline(runtime: TaskRuntime): Promise<void>
  * outputCap 이 적용되며, 잘린 경우 말미에 표식을 덧붙인다.
  */
 export async function captureWorkspaceDiff(runtime: TaskRuntime): Promise<string | null> {
+    // 로컬 실행기(D1a): baseline 미생성(위 가드) — 사용자 폴더에 git 명령을 대지 않는다.
+    if (runtime.localWorkdir === null) return null;
     try {
         const r = await runtime.execRaw(
             `[ -d .git ] && ${GIT} add -A && ${GIT} diff --cached --no-color`,

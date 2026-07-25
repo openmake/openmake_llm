@@ -36,6 +36,13 @@ export interface WSMessage {
      * settings.html 의 saveHistoryToggle UI 와 연결.
      */
     saveHistory?: boolean;
+    /** Local Bridge (Cowork D1a) — bridge_hello 등록 필드 */
+    deviceId?: string;
+    label?: string;
+    folderName?: string;
+    /** Local Bridge — bridge_result 상관관계·결과 */
+    reqId?: string;
+    result?: Record<string, unknown>;
     /**
      * 장기 메모리 자동 추출 여부.
      * 기본 true (생략 시 추출). false 면 MemoryService 호출 자체 스킵.

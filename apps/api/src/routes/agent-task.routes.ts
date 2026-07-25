@@ -25,6 +25,8 @@ import { requireAuth } from '../auth';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { validateWithSecurity } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
+import { LOCAL_BRIDGE } from '../config/local-bridge';
+import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
 import { v4 as uuidv4 } from 'uuid';
 import { AgentTaskService, type AgentTaskInputFile } from '../services/AgentTaskService';
 import type { ChatMessage } from '../llm/types';
@@ -135,11 +137,27 @@ router.post('/', (req: Request, res: Response, next) => {
     } else {
         input = req.body as CreateAgentTaskInput;
     }
-    const { goal, maxTurns, files, images, repoUrl, branch } = input;
+    const { goal, maxTurns, files, images, repoUrl, branch, executor } = input;
 
     const taskId = uuidv4();
     const db = getUnifiedDatabase();
     const userId = String(req.user!.id);
+
+    // Cowork D1a: local 실행은 기능 게이트 + 디바이스 연결 + git repo 미지정(호스트 clone 불가)일 때만.
+    if (executor === 'local') {
+        if (!LOCAL_BRIDGE.ENABLED) {
+            res.status(400).json(badRequest('로컬 실행 기능이 비활성화되어 있습니다 (LOCAL_EXECUTOR_ENABLED)'));
+            return;
+        }
+        if (repoUrl) {
+            res.status(400).json(badRequest('로컬 실행 작업은 git repo 지정을 지원하지 않습니다 — 로컬 폴더가 작업 대상입니다'));
+            return;
+        }
+        if (!getLocalBridgeRegistry().getDevice(userId)) {
+            res.status(400).json(badRequest('연결된 로컬 디바이스가 없습니다 — 데스크톱 앱에서 작업 폴더를 먼저 연결하세요'));
+            return;
+        }
+    }
 
     // 입력 첨부(JSON 경로): 바이너리 문서(base64 data)는 지금 텍스트로 추출해 저장한다 —
     // 실행은 detached 백그라운드라 여기서 추출해야 실패를 생성 응답에서 인지 가능하다.
@@ -207,6 +225,7 @@ router.post('/', (req: Request, res: Response, next) => {
         inputImages: Array.isArray(images) && images.length > 0 ? images : undefined,
         gitRepoUrl: repoUrl,
         gitBranch: branch,
+        executor,
     });
 
     const task = await db.getAgentTask(taskId);
@@ -312,6 +331,7 @@ router.post('/:taskId/execute', asyncHandler(async (req: Request, res: Response)
             images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
             gitRepoUrl: task.git_repo_url ?? undefined,
             gitBranch: task.git_branch ?? undefined,
+            executor: (task.executor === 'local' ? 'local' : undefined),
         }),
     });
 
