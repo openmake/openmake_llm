@@ -7,6 +7,7 @@
 
 import { Request, Response, Router } from 'express';
 import { ClusterManager, getClusterManager } from '../cluster/manager';
+import { requireAuth, requireAdmin } from '../auth';
 import { success } from '../utils/api-response';
 
 /**
@@ -35,6 +36,10 @@ export class ClusterController {
     }
 
     private setupRoutes(): void {
+        // 🔒 내부 노드 토폴로지(host:port)·모델 카탈로그를 노출하므로 admin 전용으로 게이트한다.
+        //   /api/nodes 와 동일 정책. (구 cluster.html 전용이었고 현재 프론트는 미사용)
+        this.router.use(requireAuth, requireAdmin);
+
         // 클러스터 전체 정보
         this.router.get('/', this.getClusterInfo.bind(this));
 
