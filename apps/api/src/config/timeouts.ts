@@ -166,13 +166,13 @@ export const WEBSOCKET_TIMEOUTS = {
  */
 export const WS_LIMITS = {
     /**
-     * WebSocket 프레임 최대 페이로드 (bytes). **0 = 무제한**(ws 는 maxPayload>0 일 때만 검사).
-     * 파일/이미지 업로드 용량 제한을 두지 않기 위해 기본 0(무제한). 단, 무제한은 거대 프레임이
-     * 서버 메모리를 한 번에 점유할 수 있으므로(OOM/DoS 여지), 운영상 상한이 필요하면
-     * 환경변수 WS_MAX_PAYLOAD_BYTES 에 바이트 수를 지정해 재설정한다(예: 67108864=64MB).
-     * 프론트 가드(chat.js WS_MAX_PAYLOAD_BYTES)도 0=무제한 sentinel 로 정합.
+     * WebSocket 프레임 최대 페이로드 (bytes). ws 는 maxPayload>0 일 때만 프레임 단위로 검사한다.
+     * 기본 128MB — 거대 프레임이 char 검사(MAX_MESSAGE_CHARS, 64MB) 이전에 서버 메모리를
+     * 무제한 점유하는 OOM/DoS 를 ws 계층에서 1차 차단한다. base64 첨부(1 byte/char)가 64MB char
+     * 한도를 통과할 때의 바이트 크기를 넉넉히 상회하므로 정상 첨부는 거부되지 않는다.
+     * 무제한이 필요하면 WS_MAX_PAYLOAD_BYTES=0, 다른 상한은 바이트 수로 재설정한다.
      */
-    MAX_PAYLOAD_BYTES: process.env.WS_MAX_PAYLOAD_BYTES !== undefined ? Number(process.env.WS_MAX_PAYLOAD_BYTES) : 0,
+    MAX_PAYLOAD_BYTES: process.env.WS_MAX_PAYLOAD_BYTES !== undefined ? Number(process.env.WS_MAX_PAYLOAD_BYTES) : 128 * 1024 * 1024,
     /**
      * 단일 메시지 문자열 최대 길이(chars). MAX_PAYLOAD_BYTES(0=무제한 sentinel)와 별개로,
      * 메시지 핸들러가 raw.length 로 거대 텍스트 프레임을 즉시 거부하는 가드.
