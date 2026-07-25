@@ -18,7 +18,11 @@ import { spawn } from 'child_process';
 import { mkdir, rm, writeFile as fsWriteFile, readFile as fsReadFile, readdir, stat, realpath, copyFile as fsCopyFile } from 'fs/promises';
 import { resolve, sep, join, dirname, basename, relative } from 'path';
 import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
+import type { TaskExecutor, ExecResult } from './executor';
 import { createLogger } from '../../utils/logger';
+
+// 기존 소비처(runtime/tools 등)가 './sandbox' 에서 ExecResult 를 import 하므로 재노출 유지.
+export type { ExecResult } from './executor';
 
 const logger = createLogger('TaskSandbox');
 
@@ -128,15 +132,6 @@ export async function safeRealWorkspacePath(hostWorkdir: string, userPath: strin
     }
 }
 
-export interface ExecResult {
-    stdout: string;
-    stderr: string;
-    exitCode: number;
-    truncated: boolean;
-    timedOut: boolean;
-    durationMs: number;
-}
-
 /** 자식 프로세스를 실행하고 출력 캡/timeout 을 적용 (docker CLI 호출 공용). */
 function runProcess(
     dockerPath: string,
@@ -192,8 +187,9 @@ function runProcess(
 /**
  * 단일 task 의 영속 샌드박스. create() → exec()/파일 I/O 반복 → cleanup().
  * 파일 I/O 는 bind-mount 된 호스트 workdir 에 직접 수행(빠르고 docker cp 불요).
+ * TaskExecutor 의 Docker 구현체 (D0 — 원격 실행기는 D1 에서 같은 계약으로 추가).
  */
-export class TaskSandbox {
+export class TaskSandbox implements TaskExecutor {
     readonly taskId: string;
     readonly containerName: string;
     readonly hostWorkdir: string;
@@ -259,6 +255,12 @@ export class TaskSandbox {
         const size = await dirSizeBytes(this.hostWorkdir, this.cfg.workspaceQuota + 1);
         return size > this.cfg.workspaceQuota;
     }
+
+    /** TaskExecutor.label — 관측/영속용 식별 라벨 = 컨테이너명. */
+    get label(): string { return this.containerName; }
+
+    /** TaskExecutor.localWorkdir — docker 는 bind-mount 라 호스트 workspace 가 항상 존재. */
+    get localWorkdir(): string { return this.hostWorkdir; }
 
     /** 브라우저 도구 활성 여부. */
     get isBrowserEnabled(): boolean { return this.cfg.browserEnabled; }

@@ -14,7 +14,7 @@
  * @module services/task-sandbox/tools
  */
 import type { MCPToolDefinition, MCPToolResult } from '../../mcp/types';
-import type { TaskSandbox, ExecResult } from './sandbox';
+import type { TaskExecutor, ExecResult } from './executor';
 import { TaskPlan, type PlanStepStatus } from './planning';
 import {
     SPAWN_AGENTS_TOOL_NAME,
@@ -76,7 +76,7 @@ export interface ProceduralHooks {
 }
 
 export function createTaskTools(
-    sandbox: TaskSandbox,
+    sandbox: TaskExecutor,
     plan: TaskPlan = new TaskPlan(),
     delegate?: DelegateFn,
     spawn?: SpawnFn,
