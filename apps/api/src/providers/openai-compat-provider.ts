@@ -29,6 +29,7 @@ import {
 import { ProviderError } from './provider-errors';
 import type { ChatMessage, ToolDefinition, UsageMetrics } from '../llm';
 import { createLogger } from '../utils/logger';
+import { createPinnedFetch } from '../security/ssrf-guard';
 
 const logger = createLogger('OpenAICompatProvider');
 
@@ -306,6 +307,9 @@ export class OpenAICompatProvider implements IProvider {
         this.client = new OpenAI({
             apiKey: opts.apiKey,
             baseURL: opts.baseUrl,
+            // 🔒 SSRF: base_url 은 등록 시 1회만 검증되므로, 런타임 호출은 매번 재검증 + resolved IP
+            //   고정하는 fetch 로 DNS Rebinding(TOCTOU)을 차단한다. hostname 이 보존되어 TLS SNI 정상.
+            fetch: createPinnedFetch(),
             ...(defaultHeaders && Object.keys(defaultHeaders).length > 0
                 ? { defaultHeaders }
                 : {}),

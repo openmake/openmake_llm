@@ -29,6 +29,7 @@ import type { MCPServerConfig, MCPConnectionStatus, MCPTool, MCPToolResult } fro
 import { buildSandboxedCommand } from './sandbox-docker';
 import { isConnectionDeathError } from './tool-error-classifier';
 import { createLogger } from '../utils/logger';
+import { createPinnedFetch } from '../security/ssrf-guard';
 
 const logger = createLogger('ExternalMCP');
 
@@ -337,13 +338,15 @@ export class ExternalMCPClient extends EventEmitter {
                 if (!this.config.url) {
                     throw new Error(`SSE transport requires "url" for server "${this.config.name}"`);
                 }
-                return new SSEClientTransport(new URL(this.config.url));
+                // 🔒 SSRF: URL 은 등록 시 1회만 검증되므로, 런타임 network 는 매번 재검증 + resolved IP
+                //   고정하는 fetch 로 DNS Rebinding(TOCTOU)을 차단한다.
+                return new SSEClientTransport(new URL(this.config.url), { fetch: createPinnedFetch() });
             }
             case 'streamable-http': {
                 if (!this.config.url) {
                     throw new Error(`streamable-http transport requires "url" for server "${this.config.name}"`);
                 }
-                return new StreamableHTTPClientTransport(new URL(this.config.url));
+                return new StreamableHTTPClientTransport(new URL(this.config.url), { fetch: createPinnedFetch() });
             }
             default:
                 throw new Error(`Unknown transport type: ${this.config.transport_type}`);
