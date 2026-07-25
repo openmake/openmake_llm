@@ -5,8 +5,10 @@
  * 사용자 BYO Key 등록 화면에서 노출할 provider 목록과 각 provider 의 SDK 종류,
  * 기본 base URL, 검증 endpoint 등을 정의합니다.
  *
- * 활성: 로컬 LLM (vLLM via LiteLLM, 키 불필요) + openrouter (BYO key, OpenAI 호환 endpoint).
- * 다른 외부 provider 는 2026-05-08 마이그레이션 018 로 카탈로그에서 제외됨.
+ * 활성: 로컬 LLM (vLLM via LiteLLM, 키 불필요) + BYO key provider 4종 —
+ * openrouter / ollama-local / ollama-cloud / nvidia (모두 OpenAI 호환 endpoint).
+ * 2026-05-08 마이그레이션 018 로 openrouter 만 남겼다가, ollama 2종은 2026-07-04,
+ * nvidia 는 2026-07-14 에 재도입됨 (018 은 기존 키 행 정리용 — 스키마는 유지).
  *
  * SSRF 정책: base_url 등록 시 {@link security/ssrf-guard.ts} validateOutboundUrl 로
  * localhost/사설 IP/link-local 차단 (별도 정책 추가 안 함, 기존 SSoT 재사용).
