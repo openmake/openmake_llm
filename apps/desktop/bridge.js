@@ -16,11 +16,15 @@ const WebSocket = require('ws');
 const EXEC_TIMEOUT_MS = 120000;
 const MAX_BUFFER = 1024 * 1024;
 const RECONNECT_MS = 10000;
+// 서버 WS 하트비트는 액세스 토큰 만료 시 연결을 terminate 한다 — 세션 쿠키에서 최신
+// 토큰을 읽어 기존 refresh 프로토콜({type:'refresh'})로 주기 연장해 유휴 플랩을 막는다.
+const REFRESH_MS = parseInt(process.env.OMK_BRIDGE_REFRESH_MS || '300000', 10);
 
 let ws = null;
 let folderRoot = null;       // realpath 확정된 연결 폴더 (null=미연결)
 let wsUrl = null;
 let reconnectTimer = null;
+let refreshTimer = null;
 let statusText = '미연결';
 let onStatusChange = () => {};
 
@@ -105,6 +109,16 @@ async function connect(app, backendUrl) {
       label: `${require('os').hostname()} · ${path.basename(folderRoot)}`,
       folderName: path.basename(folderRoot),
     }));
+    // 유휴 세션 연장 — 5분마다 최신 토큰으로 refresh (실패는 close 가 후속 처리)
+    clearInterval(refreshTimer);
+    refreshTimer = setInterval(async () => {
+      try {
+        const tok = await authToken(backendUrl);
+        if (tok && ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'refresh', authToken: tok }));
+        }
+      } catch { /* noop */ }
+    }, REFRESH_MS);
   }, 300));
 
   ws.on('message', (d) => {
@@ -119,6 +133,7 @@ async function connect(app, backendUrl) {
   });
 
   ws.on('close', () => {
+    clearInterval(refreshTimer);
     if (!folderRoot) { setStatus('미연결'); return; }
     setStatus('끊김 — 재연결 대기');
     clearTimeout(reconnectTimer);
@@ -146,6 +161,7 @@ async function connectFolder(app, backendUrl, win) {
 function disconnectFolder() {
   folderRoot = null;
   clearTimeout(reconnectTimer);
+  clearInterval(refreshTimer);
   try { if (ws) ws.close(); } catch { /* noop */ }
   ws = null;
   setStatus('미연결');
