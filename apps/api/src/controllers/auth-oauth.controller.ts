@@ -270,11 +270,13 @@ export class AuthOAuthController {
                     }
                 });
                 const emails = await emailRes.json() as GitHubEmail[];
-                const primaryEmail = emails.find(e => e.primary);
+                // 🔒 verified 된 primary 이메일만 신뢰 — Google(email_verified)/Kakao(is_email_verified)
+                //   와 대칭. 미검증 이메일로 기존 계정과 병합되는 계정 탈취를 차단한다.
+                const primaryEmail = emails.find(e => e.primary && e.verified);
                 // BUG-R3-003: 가짜 @github.local 도메인 대신 이메일 비공개 사용자는 로그인 거부
-                // primary 이메일이 없으면 OAuth 프로필에서 public 이메일 사용, 그것도 없으면 거부
+                // 검증된 primary 이메일이 없으면 거부(공개 이메일 없거나 미검증 포함)
                 if (!primaryEmail?.email) {
-                    log.warn(`[OAuth GitHub] 이메일 비공개 사용자 로그인 거부: login=${githubUser.login}`);
+                    log.warn(`[OAuth GitHub] 검증된 primary 이메일 없음 — 로그인 거부: login=${githubUser.login}`);
                     res.redirect('/login?error=email_required');
                     return;
                 }
