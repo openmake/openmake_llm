@@ -1,17 +1,10 @@
 -- ============================================
--- OpenMake.Ai - Default Admin User
--- Password: admin123 (bcrypt hashed)
+-- OpenMake.Ai - Seed Data
 -- ============================================
-
-INSERT INTO users (id, username, password_hash, email, role, is_active)
-VALUES (
-    'admin-default-001',
-    'admin',
-    '$2a$10$8K1p/a0dR1xqM0eGJi.sDOQP4RGIhBhEW2.HfGR7BjmJqC6V1Kyuy',
-    'admin@openmake.ai',
-    'admin',
-    TRUE
-) ON CONFLICT (username) DO NOTHING;
+-- 초기 관리자 계정은 이 파일에서 만들지 않는다 — 고정 비밀번호를 저장소에 두면
+-- 모든 배포가 같은 자격증명으로 열리기 때문. 생성은 004-admin-user.sh 가
+-- ADMIN_INITIAL_PASSWORD 환경변수를 받아 처리한다.
+-- ============================================
 
 -- ============================================
 -- 🔌 Default MCP Server: noapi-google-search-mcp

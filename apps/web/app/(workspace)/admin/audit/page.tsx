@@ -41,18 +41,6 @@ const SEV_LABEL_KEY: Record<Severity, string> = {
   info: "status.info",
 };
 
-// TODO: API 연동 (/api/audit) — 응답 실패 시 폴백 목업
-const MOCK_LOGS: AuditLog[] = [
-  { id: "a1", timestamp: "2026-06-21T03:42:11Z", actor: "devops@partner.co.kr", action: "user.delete", target: "u_1031", severity: "critical", ip: "203.0.113.41" },
-  { id: "a2", timestamp: "2026-06-21T03:31:05Z", actor: "system", action: "llm.context_overflow", target: "conv_88412", severity: "warn", ip: "127.0.0.1" },
-  { id: "a3", timestamp: "2026-06-21T02:58:47Z", actor: "minji.kim@openmake.io", action: "apikey.create", target: "key_7f3a", severity: "info", ip: "211.45.12.9" },
-  { id: "a4", timestamp: "2026-06-21T02:40:22Z", actor: "devops@partner.co.kr", action: "user.role_change", target: "u_1040 → admin", severity: "critical", ip: "203.0.113.41" },
-  { id: "a5", timestamp: "2026-06-21T01:55:10Z", actor: "system", action: "alert.dispatched", target: "rule_cpu_high", severity: "warn", ip: "127.0.0.1" },
-  { id: "a6", timestamp: "2026-06-21T01:12:33Z", actor: "sangho.park@openmake.io", action: "auth.login", target: "session_a91", severity: "info", ip: "118.32.74.201" },
-  { id: "a7", timestamp: "2026-06-20T23:48:01Z", actor: "research.lab@yonsei.ac.kr", action: "mcp.server_register", target: "srv_filesystem", severity: "info", ip: "166.104.5.18" },
-  { id: "a8", timestamp: "2026-06-20T22:30:55Z", actor: "system", action: "auth.failed_attempt", target: "unknown@spam.io", severity: "warn", ip: "45.33.21.7" },
-];
-
 const ALL_ACTIONS = "__all__";
 const ACTIONS = [ALL_ACTIONS, "user.delete", "user.role_change", "apikey.create", "auth.login", "auth.failed_attempt", "mcp.server_register", "llm.context_overflow", "alert.dispatched"];
 const SEVERITIES: { key: "all" | Severity; labelKey: string }[] = [
@@ -94,7 +82,8 @@ interface ApiAuditLog {
 export default function AdminAuditPage() {
   const t = useTranslations("adminAudit");
   const locale = toBcp47(useLocale());
-  const [logs, setLogs] = useState<AuditLog[]>(MOCK_LOGS);
+  // 실데이터만 표시 — API 응답이 비면 빈 상태(t("empty"))로 둔다.
+  const [logs, setLogs] = useState<AuditLog[]>([]);
   const [action, setAction] = useState(ALL_ACTIONS);
   const [severity, setSeverity] = useState<"all" | Severity>("all");
   const [period, setPeriod] = useState("days7");

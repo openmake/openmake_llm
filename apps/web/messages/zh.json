@@ -1127,7 +1127,8 @@
       "actions": "操作",
       "edit": "编辑",
       "delete": "删除"
-    }
+    },
+    "empty": "没有可显示的用户。"
   },
   "adminAnalytics": {
     "title": "分析",
@@ -1288,13 +1289,7 @@
         "condition": "user.role_change → admin"
       }
     },
-    "events": {
-      "e1": "检测到管理员权限授予 — u_1040（由 devops@partner.co.kr 执行）",
-      "e2": "redis-kv 节点负载 78% — 可能影响限流一致性",
-      "e3": "1 次 LLM 上下文溢出 — 已对 conv_88412 应用截断",
-      "e4": "每日备份完成 — postgres-primary（2.1GB）",
-      "e5": "12 次异常登录尝试 — 已封禁 45.33.21.7"
-    }
+    "empty": "暂无最近告警。"
   },
   "adminMcpCatalog": {
     "close": "关闭",
