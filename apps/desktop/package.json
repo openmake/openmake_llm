@@ -9,8 +9,11 @@
     "start": "electron .",
     "dist": "electron-builder --mac dmg"
   },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
   "devDependencies": {
-    "electron": "^33.2.1",
+    "electron": "^33.4.11",
     "electron-builder": "^25.1.8"
   },
   "build": {
@@ -22,7 +25,8 @@
       "buildResources": "assets"
     },
     "files": [
-      "main.js"
+      "main.js",
+      "bridge.js"
     ],
     "afterPack": "afterPack.js",
     "mac": {
