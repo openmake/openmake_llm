@@ -37,7 +37,7 @@ let _cached: BuildInfo | null = null;
 
 /**
  * 서버 build-info 전체 반환. 최초 호출 시 1회 파일 read 후 메모리 캐시.
- * @returns {BuildInfo} { buildTime, gitHash, gitDate } — 누락/파싱 실패 시 fallback
+ * @returns {BuildInfo} { buildTime, gitHash, gitDate, version?, gitTag? } — 누락/파싱 실패 시 fallback
  */
 export function getBuildInfo(): BuildInfo {
     if (_cached !== null) {
@@ -52,6 +52,9 @@ export function getBuildInfo(): BuildInfo {
                     ? parsed.gitHash.trim()
                     : FALLBACK_BUILD_ID,
                 gitDate: typeof parsed.gitDate === 'string' ? parsed.gitDate : FALLBACK_BUILD_INFO.gitDate,
+                // version·gitTag 는 구 build-info.json 엔 없으므로 있을 때만 싣는다(undefined 키 미노출).
+                ...(typeof parsed.version === 'string' ? { version: parsed.version } : {}),
+                ...(typeof parsed.gitTag === 'string' && parsed.gitTag !== '' ? { gitTag: parsed.gitTag } : {}),
             };
             return _cached;
         }
