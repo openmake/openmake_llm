@@ -6,6 +6,7 @@
 const { app, BrowserWindow, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const bridge = require('./bridge');
 
 const BACKENDS = {
   external: 'https://chat.openmake.cc',
@@ -58,7 +59,10 @@ function createWindow() {
     ).catch(() => { /* noop */ });
   });
 
+  bridge.setOnStatusChange(() => buildMenu()); // 상태 라벨 갱신
   buildMenu();
+  // 테스트 훅(개발 전용): 폴더가 env 로 지정되면 다이얼로그 없이 자동 연결.
+  if (process.env.OMK_BRIDGE_FOLDER) bridge.connectFolder(app, bridgeBackendUrl(), win);
 }
 
 function switchBackend(b) {
@@ -67,6 +71,12 @@ function switchBackend(b) {
   saveBackend(b);
   buildMenu();
   if (win) win.loadURL(BACKENDS[b]);
+  bridge.onBackendChanged(app, bridgeBackendUrl());
+}
+
+// 브리지 WS 대상 — 로컬 모드는 Next(3000)가 WS 를 프록시하지 못하므로 백엔드(52416) 직결.
+function bridgeBackendUrl() {
+  return current === 'local' ? 'http://localhost:52416' : BACKENDS.external;
 }
 
 function buildMenu() {
@@ -80,6 +90,15 @@ function buildMenu() {
         { type: 'separator' },
         { label: '새로고침', accelerator: 'CmdOrCtrl+R', click: () => win && win.reload() },
         { label: '강제 새로고침(캐시 무시)', accelerator: 'CmdOrCtrl+Shift+R', click: () => win && win.webContents.reloadIgnoringCache() },
+      ],
+    },
+    {
+      label: '로컬 작업',
+      submenu: [
+        { label: `상태: ${bridge.getStatus()}`, enabled: false },
+        { type: 'separator' },
+        { label: '작업 폴더 연결…', click: () => bridge.connectFolder(app, bridgeBackendUrl(), win) },
+        { label: '연결 해제', enabled: bridge.isConnected(), click: () => bridge.disconnectFolder() },
       ],
     },
     { role: 'editMenu' },
