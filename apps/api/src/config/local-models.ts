@@ -225,7 +225,7 @@ async function pingEmbeddingModel(
  *   - Stage 2 ping 실패한 모델: available=false (demote)
  *   - 카탈로그의 explicit available=false 모델: ping 시도조차 안 함 (운영자가 명시적 비활성)
  *
- * @param llmBaseUrl proxy base URL (예: http://rockyhan.duckdns.org:13401)
+ * @param llmBaseUrl proxy base URL (예: http://<llm-host>:13401)
  * @param apiKey proxy API key (LLM_API_KEY)
  * @param timeoutMs ping 호출 timeout (default 8초)
  */
