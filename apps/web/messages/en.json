@@ -281,6 +281,12 @@
     },
     "repo": {
       "label": "Repo (optional):"
+    },
+    "localExec": {
+      "label": "Local run:",
+      "off": "Run in server sandbox",
+      "on": "Run in local folder: {folder}",
+      "disconnected": "Desktop app not connected"
     }
   },
   "chat": {
@@ -754,7 +760,8 @@
       "started": "Task started from template."
     },
     "viewPr": "View PR",
-    "downloadFailed": "Download failed: {error}"
+    "downloadFailed": "Download failed: {error}",
+    "localBadge": "Local folder run"
   },
   "customAgents": {
     "pageTitle": "Custom Agents",

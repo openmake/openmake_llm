@@ -58,6 +58,8 @@ interface AgentTask {
   resumable?: boolean;
   /** 누적 LLM 토큰(4-4) — terminal 시 기록. */
   totalTokens?: number;
+  /** Cowork D2: 'local' 이면 데스크톱 브리지 폴더에서 실행 */
+  executor?: "sandbox" | "local";
 }
 
 type PlanStepStatus = "not_started" | "in_progress" | "completed" | "blocked";
@@ -81,6 +83,8 @@ interface ApiAgentTask {
   plan?: PlanStep[] | null;
   total_tokens?: number | null;
   git_pr_url?: string | null;
+  /** Cowork D2: 실행 백엔드 — 'local' 이면 데스크톱 브리지 폴더에서 실행됨 */
+  executor?: "sandbox" | "local";
 }
 
 type TaskFilesResponse = ApiSuccess<{ files: string[] }>;
@@ -143,6 +147,7 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
     checklist: [],
     resumable: t.resumable,
     totalTokens: typeof t.total_tokens === "number" ? t.total_tokens : undefined,
+    executor: t.executor,
   };
 }
 
@@ -306,6 +311,11 @@ function TaskDetailModal({
           <div className="rounded-md border border-border bg-surface-2 p-4">
             <p className="mb-1 text-xs font-medium text-muted">{t("goalLabel")}</p>
             <p className="text-sm text-fg">{detail.task.goal}</p>
+            {detail.task.executor === "local" && (
+              <span className="mt-2 inline-flex items-center rounded-full border border-accent bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent">
+                {t("localBadge")}
+              </span>
+            )}
             <div className="mt-2 flex items-center gap-3 text-xs text-faint">
               <span className="flex items-center gap-1">
                 {t("stateLabel")} {detail.task.status}
@@ -958,6 +968,11 @@ export default function AgentTasksPage() {
                   >
                     {task.goal}
                   </h3>
+                  {task.executor === "local" && (
+                    <span className="mb-2 inline-flex w-fit items-center rounded-full border border-accent bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent">
+                      {t("localBadge")}
+                    </span>
+                  )}
 
                   {total > 0 ? (
                     <ul className="mb-4 flex-1 space-y-1.5">

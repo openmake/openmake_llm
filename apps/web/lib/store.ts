@@ -161,6 +161,8 @@ interface AppState {
   agentApprovalMode: "all" | "high-risk" | "none";
   /** 에이전트 작업 Git repo URL(Phase 2) — 있으면 태스크가 해당 repo 를 clone 해 작업 후 PR 생성. */
   agentRepoUrl: string;
+  /** Cowork D2: 로컬 실행 토글 — ON 이면 작업이 데스크톱 앱이 연결한 폴더에서 실행(executor='local'). */
+  agentLocalExecutor: boolean;
   imageMode: boolean;
   artifactMode: boolean;
   /** 구조화 답변 모드 — ON 시 메시지를 REST /api/chat/structured 로 보내 카드 UI 로 렌더(비스트리밍). */
@@ -223,6 +225,7 @@ interface AppState {
   setSelectedModel: (m: string) => void;
   setAgentApprovalMode: (m: "all" | "high-risk" | "none") => void;
   setAgentRepoUrl: (u: string) => void;
+  setAgentLocalExecutor: (v: boolean) => void;
   cycleStyle: () => void;
   setStyle: (m: ChatStyle) => void;
   setAuth: (auth: AppState["auth"]) => void;
@@ -286,6 +289,7 @@ export const useAppStore = create<AppState>()(
   agentTaskMode: false,
   agentApprovalMode: "all",
   agentRepoUrl: "",
+  agentLocalExecutor: false,
   imageMode: false,
   artifactMode: false,
   structuredMode: false,
@@ -440,6 +444,7 @@ export const useAppStore = create<AppState>()(
   setSelectedModel: (m) => set({ selectedModel: m }),
   setAgentApprovalMode: (m) => set({ agentApprovalMode: m }),
   setAgentRepoUrl: (u) => set({ agentRepoUrl: u }),
+  setAgentLocalExecutor: (v) => set({ agentLocalExecutor: v }),
   cycleStyle: () =>
     set((s) => ({
       style: STYLE_ORDER[(STYLE_ORDER.indexOf(s.style) + 1) % STYLE_ORDER.length],

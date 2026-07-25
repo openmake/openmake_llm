@@ -190,6 +190,7 @@ export function Composer() {
     agentTaskMode,
     agentApprovalMode,
     agentRepoUrl,
+    agentLocalExecutor,
     imageMode,
     artifactMode,
     structuredMode,
@@ -200,6 +201,7 @@ export function Composer() {
     setSelectedModel,
     setAgentApprovalMode,
     setAgentRepoUrl,
+    setAgentLocalExecutor,
     cycleStyle,
     setInputDraft,
     auth,
@@ -236,6 +238,16 @@ export function Composer() {
     staleTime: 300_000,
   });
   const repoSuggestions = repoData?.data?.repos ?? [];
+  // Cowork D2: 로컬 브리지(데스크톱 앱) 연결 상태 — 토글 활성 판단. 15s 갱신.
+  const { data: bridgeData } = useQuery({
+    queryKey: ["local-bridge-status"],
+    queryFn: () => ApiClient.get<{ data: { enabled: boolean; connected: boolean; folderName: string | null } }>("/api/local-bridge/status"),
+    enabled: agentTaskMode,
+    refetchInterval: 15_000,
+    staleTime: 10_000,
+  });
+  const bridgeConnected = !!bridgeData?.data?.connected;
+  const bridgeFolder = bridgeData?.data?.folderName ?? "";
   // 검색어 없으면("/") 카테고리 그룹핑(전체), 있으면 평면 검색 목록
   const slashGrouped = slashDebounced.trim() === "";
   const rawSlashSkills: SkillSummary[] = slashCandidate ? slashSkillsData ?? [] : [];
@@ -306,6 +318,7 @@ export function Composer() {
         images.length ? images.map((i) => i.dataUrl) : undefined,
         agentApprovalMode,
         agentRepoUrl.trim() || undefined,
+        agentLocalExecutor || undefined,
       );
     } else if (structuredMode) {
       // 구조화 답변 토글 ON — REST /api/chat/structured (비스트리밍, 카드 렌더). 첨부는 미지원.
@@ -565,6 +578,30 @@ export function Composer() {
                 ))}
               </datalist>
             )}
+          </div>
+        )}
+        {/* Cowork D2 — 로컬 실행: 데스크톱 앱이 연결한 폴더에서 작업 실행. repo 지정과는 상호배타. */}
+        {agentTaskMode && (
+          <div className="flex items-center gap-2 px-3 pt-2 text-xs">
+            <span className="shrink-0 text-muted">{t("localExec.label")}</span>
+            <button
+              type="button"
+              onClick={() => setAgentLocalExecutor(!agentLocalExecutor)}
+              disabled={!bridgeConnected || !!agentRepoUrl.trim()}
+              className={cn(
+                "rounded-md border px-2 py-1 text-xs",
+                agentLocalExecutor && bridgeConnected
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-border bg-surface-2 text-fg-1",
+                (!bridgeConnected || !!agentRepoUrl.trim()) && "opacity-50",
+              )}
+            >
+              {!bridgeConnected
+                ? t("localExec.disconnected")
+                : agentLocalExecutor
+                  ? t("localExec.on", { folder: bridgeFolder })
+                  : t("localExec.off")}
+            </button>
           </div>
         )}
         {/* 승인 3모드(Manual/Auto/Skip) — 에이전트 작업 위임 시 이 실행의 도구 승인 정책 선택. */}
