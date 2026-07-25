@@ -196,7 +196,7 @@ export function buildRedirectUri(req: Request, provider: 'google' | 'github' | '
     log.info(`[OAuth] host 해석: x-forwarded-host=${forwardedHost ?? '(none)'}, raw-host=${req.get('host') ?? '(none)'}, 사용=${requestHost}`);
 
     // OAUTH_REDIRECT_URI가 명시적으로 설정된 경우(프로덕션), 요청 host 와 무관하게 항상 이
-    // canonical URI 로 고정한다. ts.net(Funnel)·rasplay 등 다른 host 로 진입하면 리버스 프록시가
+    // canonical URI 로 고정한다. rasplay 등 다른 host 로 진입하면 리버스 프록시가
     // 평문이라 proto=http 로 동적 URI 가 만들어져 Google redirect_uri_mismatch 로 실패하던 문제를
     // 차단한다. 어느 진입점이든 로그인 완료는 chat.openmake.cc 단일 origin 으로 착지한다.
     // (redirect_uri 를 요청 host 가 아닌 신뢰된 상수로 고정 → open-redirect 관점에서도 더 안전)

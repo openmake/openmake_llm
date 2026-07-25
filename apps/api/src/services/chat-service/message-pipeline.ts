@@ -139,8 +139,9 @@ export async function runMessagePipeline(svc: ChatService,
         return generateImageInline((req.message ?? '').trim(), onToken);
     }
 
-    // Discussion / Deep Research 모드에 외부 모델 선택 반영 — 상세는 mode-external-client
-    // (외부 선택 시 그 모델 LLMClient 를 두 모드 전략에 주입, 미주입/실패 시 로컬 svc.client).
+    // Discussion / Deep Research 모드의 모델 해석 — 상세는 mode-external-client
+    // (① 컴포저의 명시적 외부 선택 → ② Deep Research 면 'research' role 배정.
+    //  어느 쪽도 외부가 아니면 undefined → 로컬 svc.client).
     const modeExternalClient = (effectiveDiscussionMode || deepResearchMode)
         ? await resolveModeExternalClient(externalResolved, req.userId, effectiveDiscussionMode ? 'Discussion' : 'DeepResearch')
         : undefined;

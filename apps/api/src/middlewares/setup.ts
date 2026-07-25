@@ -81,7 +81,7 @@ export function setupSecurity(app: Application): void {
     //    등 보안 헤더가 전면 누락(API 응답에 X-Powered-By 노출). 정적 서빙과 무관하므로 항상 실행되는
     //    setupSecurity 로 이동 (body parser 가 같은 early-return 버그로 setupParsersAndLimiting 으로
     //    옮겨진 것과 동일한 수정). setupSecurity 는 server.ts 에서 라우트 마운트보다 먼저 호출된다.
-    // COOP 효과는 HTTPS 환경에서만 유효 — OMK_COOP_ENABLED=true 일 때만 send (외부 공개=Tailscale Funnel HTTPS).
+    // COOP 효과는 HTTPS 환경에서만 유효 — OMK_COOP_ENABLED=true 일 때만 send (외부 공개=Cloudflare Tunnel HTTPS).
     const coopEnabled = process.env.OMK_COOP_ENABLED === 'true';
     app.use(helmet({
         contentSecurityPolicy: false,

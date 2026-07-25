@@ -304,8 +304,8 @@ export function isAdmin(role: UserRole): boolean {
  *
  * COOKIE_SECURE=true 를 기본으로 따르되, 로컬 개발(localhost/127.0.0.1, 평문 http)에서는
  * Secure 를 끈다 — 브라우저는 http 에서 Secure 쿠키를 저장·전송하지 않아 로컬 로그인이 깨지기
- * 때문. req.hostname 은 trust proxy 로 x-forwarded-host 를 반영하므로 외부 Funnel 은 ts.net →
- * Secure 유지, 로컬만 완화된다(운영 Funnel 동작 불변). COOKIE_SECURE=false 면 항상 false.
+ * 때문. req.hostname 은 trust proxy 로 x-forwarded-host 를 반영하므로 외부 공개 도메인
+ * (chat.openmake.cc) 은 Secure 유지, 로컬만 완화된다. COOKIE_SECURE=false 면 항상 false.
  */
 function resolveCookieSecure(res: Response): boolean {
     if (!getConfig().cookieSecure) {
