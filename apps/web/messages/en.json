@@ -1127,7 +1127,8 @@
       "actions": "Actions",
       "edit": "Edit",
       "delete": "Delete"
-    }
+    },
+    "empty": "No users to display."
   },
   "adminAnalytics": {
     "title": "Analytics",
@@ -1288,13 +1289,7 @@
         "condition": "user.role_change → admin"
       }
     },
-    "events": {
-      "e1": "Admin privilege grant detected — u_1040 (by devops@partner.co.kr)",
-      "e2": "redis-kv node load 78% — may affect rate-limit consistency",
-      "e3": "1 LLM context overflow — truncation applied to conv_88412",
-      "e4": "Daily backup complete — postgres-primary (2.1GB)",
-      "e5": "12 abnormal login attempts — 45.33.21.7 blocked"
-    }
+    "empty": "No recent alerts."
   },
   "adminMcpCatalog": {
     "close": "Close",

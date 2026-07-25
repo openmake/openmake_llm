@@ -1127,7 +1127,8 @@
       "actions": "액션",
       "edit": "편집",
       "delete": "삭제"
-    }
+    },
+    "empty": "표시할 사용자가 없습니다."
   },
   "adminAnalytics": {
     "title": "애널리틱스",
@@ -1288,13 +1289,7 @@
         "condition": "user.role_change → admin"
       }
     },
-    "events": {
-      "e1": "관리자 권한 부여 감지 — u_1040 (devops@partner.co.kr 수행)",
-      "e2": "redis-kv 노드 부하 78% — rate-limit 정합 영향 가능",
-      "e3": "LLM 컨텍스트 오버플로 1건 — conv_88412 truncate 적용",
-      "e4": "일일 백업 완료 — postgres-primary (2.1GB)",
-      "e5": "비정상 로그인 시도 12회 — 45.33.21.7 차단됨"
-    }
+    "empty": "최근 발생한 알림이 없습니다."
   },
   "adminMcpCatalog": {
     "close": "닫기",

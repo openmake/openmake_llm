@@ -47,14 +47,6 @@ const ROLE_TONE: Record<string, "danger" | "success" | "neutral"> = {
   guest: "neutral",
 };
 
-const MOCK_USERS: AdminUser[] = [
-  { id: "u_1042", email: "minji.kim@openmake.io", role: "user", is_active: true, created_at: "2026-06-19T09:12:00Z", last_login: "2026-06-21T02:30:00Z" },
-  { id: "u_1041", email: "devops@partner.co.kr", role: "admin", is_active: true, created_at: "2026-06-18T15:40:00Z", last_login: "2026-06-20T22:05:00Z" },
-  { id: "u_1040", email: "guest.trial+93@gmail.com", role: "guest", is_active: false, created_at: "2026-06-18T11:03:00Z", last_login: null },
-  { id: "u_1039", email: "research.lab@yonsei.ac.kr", role: "user", is_active: true, created_at: "2026-06-17T08:22:00Z", last_login: "2026-06-21T01:11:00Z" },
-  { id: "u_1038", email: "sangho.park@openmake.io", role: "user", is_active: true, created_at: "2026-06-16T19:55:00Z", last_login: "2026-06-20T13:48:00Z" },
-];
-
 function fmtDate(s?: string | null) {
   if (!s) return "-";
   const d = new Date(s);
@@ -282,8 +274,9 @@ function DeleteUserModal({
 
 export default function AdminPage() {
   const t = useTranslations("admin");
-  const [users, setUsers] = useState<AdminUser[]>(MOCK_USERS);
-  const [stats, setStats] = useState({ total: 1042, active: 318, today: 4821, status: t("statusNormal") });
+  // 실데이터만 표시 — API 응답 전/실패 시 가짜 값을 실적처럼 보여주지 않는다.
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [stats, setStats] = useState({ total: 0, active: 0, today: 0, status: t("statusNormal") });
   const [guardianPending, setGuardianPending] = useState<GuardianPending[]>([]);
   const [approvingIds, setApprovingIds] = useState<Set<string>>(new Set());
 
@@ -435,6 +428,13 @@ export default function AdminPage() {
                 </tr>
               </thead>
               <tbody>
+                {users.length === 0 && (
+                  <tr>
+                    <Td className="py-8 text-center text-muted" colSpan={7}>
+                      {t("empty")}
+                    </Td>
+                  </tr>
+                )}
                 {users.map((u) => (
                   <tr key={u.id}>
                     <Td className="font-mono text-xs text-muted">{u.id}</Td>

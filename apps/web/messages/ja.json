@@ -1127,7 +1127,8 @@
       "actions": "操作",
       "edit": "編集",
       "delete": "削除"
-    }
+    },
+    "empty": "表示するユーザーがありません。"
   },
   "adminAnalytics": {
     "title": "アナリティクス",
@@ -1288,13 +1289,7 @@
         "condition": "user.role_change → admin"
       }
     },
-    "events": {
-      "e1": "管理者権限の付与を検知 — u_1040（devops@partner.co.kr が実行）",
-      "e2": "redis-kvノード負荷78% — rate-limit整合性に影響の可能性",
-      "e3": "LLMコンテキストオーバーフロー1件 — conv_88412にtruncate適用",
-      "e4": "日次バックアップ完了 — postgres-primary（2.1GB）",
-      "e5": "異常なログイン試行12回 — 45.33.21.7をブロック"
-    }
+    "empty": "最近発生したアラートはありません。"
   },
   "adminMcpCatalog": {
     "close": "閉じる",

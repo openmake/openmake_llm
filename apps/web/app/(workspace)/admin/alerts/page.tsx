@@ -65,14 +65,6 @@ const RULES: AlertRule[] = [
   { id: "r5", nameKey: "rules.roleChange.name", conditionKey: "rules.roleChange.condition", channel: ["webhook", "email"], enabled: true },
 ];
 
-const MOCK_EVENTS: { id: string; severity: Severity; messageKey: string; timestamp: string }[] = [
-  { id: "e1", severity: "critical", messageKey: "events.e1", timestamp: "2026-06-21T03:40:22Z" },
-  { id: "e2", severity: "warning", messageKey: "events.e2", timestamp: "2026-06-21T03:12:00Z" },
-  { id: "e3", severity: "warning", messageKey: "events.e3", timestamp: "2026-06-21T03:31:05Z" },
-  { id: "e4", severity: "info", messageKey: "events.e4", timestamp: "2026-06-21T02:00:00Z" },
-  { id: "e5", severity: "critical", messageKey: "events.e5", timestamp: "2026-06-20T22:31:00Z" },
-];
-
 function fmt(s: string, locale: string) {
   return new Date(s).toLocaleString(locale, {
     month: "2-digit",
@@ -96,14 +88,8 @@ export default function AdminAlertsPage() {
   const t = useTranslations("adminAlerts");
   const locale = toBcp47(useLocale());
   const [rules, setRules] = useState<AlertRule[]>(RULES);
-  const [events, setEvents] = useState<AlertEvent[]>(() =>
-    MOCK_EVENTS.map((e) => ({
-      id: e.id,
-      severity: e.severity,
-      message: t(e.messageKey),
-      timestamp: e.timestamp,
-    })),
-  );
+  // 실데이터만 표시 — alert_history 응답이 비면 빈 상태(t("empty"))로 둔다.
+  const [events, setEvents] = useState<AlertEvent[]>([]);
   const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
   const [ackLoading, setAckLoading] = useState<Set<string>>(new Set());
 
@@ -207,6 +193,7 @@ export default function AdminAlertsPage() {
             </CardHeader>
             <CardContent>
               <ol className="relative space-y-4 border-l border-border pl-5">
+                {events.length === 0 && <li className="py-4 text-sm text-muted">{t("empty")}</li>}
                 {events.map((e) => {
                   const Icon = SEV_ICON[e.severity];
                   const isAcked = acknowledged.has(e.id);
