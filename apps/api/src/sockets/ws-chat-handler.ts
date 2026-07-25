@@ -123,6 +123,7 @@ export async function handleChatMessage(
             extWs._authenticatedUserId,
             userContext.userRole,
             userContext.anonSessionId,
+            extWs._clientIp,
         );
         if (rateLimitError) {
             ws.send(JSON.stringify({ type: 'error', message: rateLimitError }));
