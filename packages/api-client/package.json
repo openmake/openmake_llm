@@ -9,7 +9,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@openmake/shared-types": "1.5.6",
-    "@openmake/config": "1.5.6"
+    "@openmake/shared-types": "*",
+    "@openmake/config": "*"
   }
 }
