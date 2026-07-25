@@ -10,9 +10,9 @@
     "check:i18n": "node scripts/check-i18n-keys.mjs"
   },
   "dependencies": {
-    "@openmake/api-client": "1.5.6",
-    "@openmake/config": "1.5.6",
-    "@openmake/shared-types": "1.5.6",
+    "@openmake/api-client": "*",
+    "@openmake/config": "*",
+    "@openmake/shared-types": "*",
     "@tanstack/react-query": "^5.101.0",
     "clsx": "^2.1.1",
     "katex": "^0.17.0",
