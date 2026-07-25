@@ -13,6 +13,7 @@
  */
 
 import * as jwt from 'jsonwebtoken';
+import type { Algorithm } from 'jsonwebtoken';
 import type { Response } from 'express';
 import { JWTPayload } from './types';
 import { PublicUser, UserRole } from '../data/user-manager';
@@ -178,7 +179,8 @@ export async function verifyRefreshToken(token: string): Promise<JWTPayload | nu
              return null;
          }
 
-         const decoded = jwt.verify(token, JWT_SECRET);
+         // algorithms 화이트리스트 고정(HS256) — alg 혼동 공격 방어(sign 은 대칭 HS256).
+         const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] as Algorithm[] });
          if (!isValidJWTPayload(decoded)) {
              logger.warn('JWT 페이로드 형식 불일치');
              return null;
@@ -222,7 +224,8 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
              return null;
          }
 
-         const decoded = jwt.verify(token, JWT_SECRET);
+         // algorithms 화이트리스트 고정(HS256) — alg 혼동 공격 방어(sign 은 대칭 HS256).
+         const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] as Algorithm[] });
          if (!isValidJWTPayload(decoded)) {
              logger.warn('JWT 페이로드 형식 불일치');
              return null;
