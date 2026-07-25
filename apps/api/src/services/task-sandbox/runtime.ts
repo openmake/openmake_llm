@@ -12,6 +12,7 @@ import type { ToolDefinition } from '../../llm/types';
 import type { MCPToolDefinition } from '../../mcp/types';
 import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { TaskSandbox, type ExecResult } from './sandbox';
+import type { TaskExecutor } from './executor';
 import { createTaskTools, type DelegateFn, type SpawnFn, type ProceduralHooks } from './tools';
 import { recordBrowserMetric } from './browser-metrics';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
@@ -53,7 +54,7 @@ export class TaskRuntime {
     readonly taskId: string;
     readonly userId: string;
     private readonly cfg: TaskSandboxConfig;
-    private readonly sandbox: TaskSandbox;
+    private readonly executor: TaskExecutor;
     private readonly plan = new TaskPlan();
     private readonly handlers = new Map<string, MCPToolDefinition['handler']>();
     private readonly defs: MCPToolDefinition[];
@@ -64,11 +65,13 @@ export class TaskRuntime {
         cfg: TaskSandboxConfig = getTaskSandboxConfig(),
         delegate?: DelegateFn,
         spawn?: SpawnFn,
+        /** 실행 백엔드 주입(D1 원격 실행기용). 미지정 시 현행 Docker 샌드박스. */
+        executor?: TaskExecutor,
     ) {
         this.taskId = taskId;
         this.userId = userId;
         this.cfg = cfg;
-        this.sandbox = new TaskSandbox(taskId, cfg);
+        this.executor = executor ?? new TaskSandbox(taskId, cfg);
         // #1 절차 스킬: 저장/조회 훅을 userId 로 바인딩(재생 실행은 tools.ts 가 sandbox 로 수행). 플래그 OFF 면 미노출.
         const procedural: ProceduralHooks | undefined = AGENT_TASK_LIMITS.PROCEDURAL_SKILLS_ENABLED
             ? {
@@ -83,30 +86,38 @@ export class TaskRuntime {
         const browserMetrics = AGENT_TASK_LIMITS.BROWSER_METRICS_ENABLED
             ? (stdout: string) => recordBrowserMetric(this.taskId, this.userId, stdout)
             : undefined;
-        this.defs = createTaskTools(this.sandbox, this.plan, delegate, spawn, procedural, browserMetrics);
+        this.defs = createTaskTools(this.executor, this.plan, delegate, spawn, procedural, browserMetrics);
         for (const d of this.defs) this.handlers.set(d.tool.name, d.handler);
     }
 
     /** 현재 실행 계획 스냅샷 (진행 가시성·영속용). */
     getPlanSnapshot(): PlanStep[] { return this.plan.snapshot(); }
 
-    get containerName(): string { return this.sandbox.containerName; }
-    get workspacePath(): string { return this.sandbox.hostWorkdir; }
+    /** 관측/영속(sandboxContainerId)용 실행기 라벨 — docker: 컨테이너명, 원격(D1): 디바이스 라벨. */
+    get containerName(): string { return this.executor.label; }
 
-    async create(): Promise<void> { await this.sandbox.create(); }
+    /** 호스트 workspace 절대경로 — 호스트측 git 연산(code-diff·clone·PR)이 의존.
+     *  원격 실행기(D1)는 호스트 workspace 가 없으므로 호출부가 사용 전 가드해야 한다. */
+    get workspacePath(): string {
+        const p = this.executor.localWorkdir;
+        if (p === null) throw new Error(`원격 실행기는 호스트 workspace 가 없습니다 (${this.taskId}) — localWorkdir 가드 필요`);
+        return p;
+    }
+
+    async create(): Promise<void> { await this.executor.create(); }
     /** removeWorkspace=false 면 산출물 다운로드를 위해 workspace 보존(컨테이너만 제거). */
-    async cleanup(removeWorkspace = true): Promise<void> { await this.sandbox.cleanup(removeWorkspace); }
+    async cleanup(removeWorkspace = true): Promise<void> { await this.executor.cleanup(removeWorkspace); }
     /** 산출물 회수용 — workspace 파일 목록(상대경로, 재귀). */
-    async listWorkspace(): Promise<string[]> { return this.sandbox.listWorkspaceFiles(); }
+    async listWorkspace(): Promise<string[]> { return this.executor.listWorkspaceFiles(); }
     /** 입력 첨부 주입 등 호스트 측 workspace 파일 쓰기 — 경로 가드(safeRealWorkspacePath)+쿼터 적용. */
-    async writeWorkspaceFile(relPath: string, content: string | Buffer): Promise<void> { return this.sandbox.writeFile(relPath, content); }
+    async writeWorkspaceFile(relPath: string, content: string | Buffer): Promise<void> { return this.executor.writeFile(relPath, content); }
 
     /** 호스트 파일을 workspace 로 복사 — 대용량 입력 첨부의 스트리밍 주입(Buffer 미적재). */
-    async importWorkspaceFile(relPath: string, srcAbsPath: string): Promise<void> { return this.sandbox.importFile(relPath, srcAbsPath); }
+    async importWorkspaceFile(relPath: string, srcAbsPath: string): Promise<void> { return this.executor.importFile(relPath, srcAbsPath); }
 
     /** 내부 검증용 원시 exec — 승인 게이트 우회(에이전트 도구 호출이 아닌 시스템 산출물 검증).
      *  컨테이너는 격리(network none·자원 캡)이고 문법/컴파일 검사는 코드를 실행하지 않아 안전. */
-    async execRaw(command: string): Promise<ExecResult> { return this.sandbox.exec(command); }
+    async execRaw(command: string): Promise<ExecResult> { return this.executor.exec(command); }
 
     /** task-scoped 도구를 LLM 형식으로. AgentTaskService 가 effectiveTools 에 합류. */
     getLLMTools(): ToolDefinition[] { return this.defs.map(toLLMTool); }
