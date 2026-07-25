@@ -30,7 +30,6 @@ import { getSkillManager } from '../agents/skill-manager';
 import { buildDelegateFn } from './agent-task/delegate';
 import { buildTaskSpawnFn } from './agent-spawn/spawn-agents';
 import { mergeToolsWithSkills, type ActiveSkillBinding } from './chat-service/tool-merger';
-import { getTaskSandboxConfig } from '../config/task-sandbox';
 import { TaskRuntime } from './task-sandbox/runtime';
 import { TASK_TERMINATE_SENTINEL } from './task-sandbox/tools';
 import { requiresApproval, getApprovalRegistry } from './task-sandbox/approval-gate';
@@ -42,6 +41,7 @@ import { persistArtifactSteps, runTool, isSearchTool } from './agent-task/task-s
 import { initWorkspaceBaseline, maybePersistCodeDiff, captureDiffOnCleanup } from './agent-task/code-diff';
 import { getSteeringRegistry, applyPendingSteering } from './agent-task/steering';
 import { setupTaskRepo, maybePushAndOpenPR } from './agent-task/git-ops';
+import { resolveExecutorPlan } from './agent-task/executor-select';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
 import { assembleAgentTools } from './agent-task/tool-assembly';
 import { verifyCodeArtifacts } from './agent-task/deliverable-verify';
@@ -202,9 +202,9 @@ export class AgentTaskService {
             // 영속 샌드박스(Manus화, 플래그 ON 시만). 생성 실패는 샌드박스 없이 진행(graceful degrade).
             // 설정은 한 번만 읽어 스냅샷 공유. 승인 3모드는 input.approvalPolicy 로 이 실행에만 override
             // (비영속, resume은 전역 폴백; requiresApproval 호출부 2곳이 이 cfg 를 읽어 단일 지점 주입).
-            const sandboxCfg = input.approvalPolicy
-                ? { ...getTaskSandboxConfig(), approvalPolicy: input.approvalPolicy } : getTaskSandboxConfig();
-            if (sandboxCfg.enabled) {
+            // Cowork D1a: 실행 백엔드(docker/local)·승인 정책 결정 — 상세는 agent-task/executor-select.
+            const { sandboxCfg, runtimeEnabled, remoteExecutor } = resolveExecutorPlan(input, taskId, userId);
+            if (runtimeEnabled) {
                 try {
                     // G4 위임 — 상세는 agent-task/delegate (SUBAGENT_ENABLED 시 depth=1 tool-loop 승격,
                     // 토큰·승인대기는 부모 누적에 합산되어 runaway 가드·pause-aware 타임아웃 공유).
@@ -221,11 +221,11 @@ export class AgentTaskService {
                             onPausedMs: (ms) => { pausedMs += ms; },
                         })
                         : undefined;
-                    taskRuntime = new TaskRuntime(taskId, userId, sandboxCfg, delegateFn, spawnFn);
+                    taskRuntime = new TaskRuntime(taskId, userId, sandboxCfg, delegateFn, spawnFn, remoteExecutor);
                     await taskRuntime.create();
                     await db.updateAgentTask(taskId, {
                         sandboxContainerId: taskRuntime.containerName,
-                        workspacePath: taskRuntime.workspacePath,
+                        workspacePath: taskRuntime.localWorkdir ?? undefined,
                     });
                     // 새 대화(resume 아님)면 system 에 작업환경 안내 주입. 이어서 Phase 2 Git: repo 지정 시 호스트 clone(토큰 컨테이너 미주입)+안내.
                     if (!input.resume && conversation[0]?.role === 'system') {

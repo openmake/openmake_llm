@@ -28,6 +28,8 @@ export class AgentTaskRepository extends BaseRepository {
         gitRepoUrl?: string;
         /** Phase 2 Git: clone 할 base 브랜치 */
         gitBranch?: string;
+        /** Cowork D1a: 실행 백엔드 — 'sandbox'(기본) | 'local'(로컬 브리지) */
+        executor?: 'sandbox' | 'local';
     }): Promise<void> {
         // input_files/input_images/git_* 는 값이 있을 때만 컬럼에 포함 — 056/057/077 마이그레이션
         // 미적용 배포에서도 해당 값 없는 기존 생성 경로가 깨지지 않게 한다(2단계 배포 안전).
@@ -48,6 +50,10 @@ export class AgentTaskRepository extends BaseRepository {
         if (params.gitBranch !== undefined) {
             cols.push('git_branch');
             values.push(params.gitBranch);
+        }
+        if (params.executor !== undefined) {
+            cols.push('executor');
+            values.push(params.executor);
         }
         await this.query(
             `INSERT INTO agent_tasks (${cols.join(', ')}) VALUES (${values.map((_, i) => `$${i + 1}`).join(', ')})`,

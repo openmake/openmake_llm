@@ -188,6 +188,8 @@ export interface AgentTask {
     git_pr_url?: string;
     /** Phase 2c Git: push 된 작업 브랜치명(078) */
     git_pushed_branch?: string;
+    /** Cowork D1a: 실행 백엔드(081) — 'sandbox'(기본) | 'local'(로컬 브리지) */
+    executor?: 'sandbox' | 'local';
     /** 누적 LLM 토큰(prompt+completion) — terminal 전이 시 기록(066), resume 은 통산 */
     total_tokens?: number;
     created_at: string;

@@ -46,6 +46,8 @@ import { WS_SECURITY } from '../config/security';
 import { getBuildId } from '../config/build-id';
 import { handleChatMessage } from './ws-chat-handler';
 import { handleRequestAgents } from './ws-agents-handler';
+import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
+import { handleBridgeMessage } from './ws-bridge-handler';
 import { withSpan } from '../observability/otel';
 import { getAnalyticsSystem } from '../monitoring/analytics';
 import { getEventBus, AGENT_TASK_PROGRESS, type AgentTaskProgressEvent } from '../utils/event-bus';
@@ -216,6 +218,8 @@ export class WebSocketHandler {
 
             ws.on('close', () => {
                 this.unregisterConnection(ws);
+                // Local Bridge: 이 소켓이 등록한 로컬 실행기 세션 해제(pending 요청 reject).
+                getLocalBridgeRegistry().unregister(ws);
                 // 🔒 Phase 2 보안 패치: 연결 종료 시 진행 중인 AI 생성 중단
                 // GPU/CPU 리소스 해제 및 불필요한 토큰 생성 방지
                 if (extWs._abortController) {
@@ -298,6 +302,14 @@ export class WebSocketHandler {
         }
 
         const typedMsg = msg as WSMessage;
+
+        // Local Bridge (Cowork D1a): 데스크톱 실행기 등록/결과 — 인증된 연결 전용.
+        // 채팅 파이프라인과 무관한 얇은 위임이라 validTypes/span 밖에서 조기 처리(ws-bridge-handler).
+        if (typedMsg.type === 'bridge_hello' || typedMsg.type === 'bridge_result') {
+            await handleBridgeMessage(ws, typedMsg);
+            return;
+        }
+
         const validTypes: WSMessage['type'][] = ['refresh', 'request_agents', 'chat', 'abort'];
         if (!validTypes.includes(typedMsg.type)) {
             log.debug(`[WS] 알 수 없는 메시지 타입: ${typedMsg.type}`);

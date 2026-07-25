@@ -96,6 +96,9 @@ export class TaskRuntime {
     /** 관측/영속(sandboxContainerId)용 실행기 라벨 — docker: 컨테이너명, 원격(D1): 디바이스 라벨. */
     get containerName(): string { return this.executor.label; }
 
+    /** 호스트 workspace 경로 or null(원격 실행기) — 호스트측 소비자(diff·git·영속)의 가드 기준. */
+    get localWorkdir(): string | null { return this.executor.localWorkdir; }
+
     /** 호스트 workspace 절대경로 — 호스트측 git 연산(code-diff·clone·PR)이 의존.
      *  원격 실행기(D1)는 호스트 workspace 가 없으므로 호출부가 사용 전 가드해야 한다. */
     get workspacePath(): string {

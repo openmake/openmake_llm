@@ -37,6 +37,8 @@ const taskInputFileSchema = z.object({
 export const createAgentTaskSchema = z.object({
     goal: secureTextSchema({ minLength: 1, maxLength: 2000, fieldName: 'goal', detectMaliciousPatterns: false }),
     maxTurns: z.number().int().min(1).max(AGENT_TASK_LIMITS.MAX_TURNS_CEILING).optional(),
+    // Cowork D1a: 실행 백엔드 — 'local' 은 LOCAL_EXECUTOR_ENABLED + 디바이스 연결 필요(라우트가 검증).
+    executor: z.enum(['sandbox', 'local']).optional(),
     files: z.array(taskInputFileSchema).max(FILE_ATTACH_LIMITS.MAX_FILES).optional(),
     images: z.array(
         z.string().startsWith('data:image/').max(FILE_ATTACH_LIMITS.MAX_IMAGE_DATAURL_CHARS)
