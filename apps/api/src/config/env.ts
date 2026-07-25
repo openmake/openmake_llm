@@ -245,8 +245,10 @@ const DEFAULT_CONFIG: EnvConfig = {
     // Security — Blacklist Policy (additive; 'open' maintains legacy fail-open behavior)
     blacklistFailMode: 'open' as const,
 
-    // Security — CSRF Double-Submit Cookie (additive; 'warn' logs without blocking)
-    csrfProtection: 'warn' as const,
+    // Security — CSRF Double-Submit Cookie. 프론트(@openmake/api-client)가 mutating 요청에
+    // X-CSRF-Token 을 자동 주입하고 SSE/WS 도 csrfHeaders 를 붙이므로 기본 'enforce'.
+    // 문제 발생 시 CSRF_PROTECTION=warn 으로 즉시 완화 가능.
+    csrfProtection: 'enforce' as const,
 
     // Storage — default memory preserves single-instance in-memory behavior
     storageBackend: 'memory' as const,
