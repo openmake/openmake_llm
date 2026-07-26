@@ -27,6 +27,10 @@ export type { SpawnFn } from '../agent-spawn/spawn-agents';
 
 /** 루프가 인식하는 제어 시그널 sentinel (도구 결과 텍스트 prefix). */
 export const TASK_TERMINATE_SENTINEL = '__TASK_TERMINATE__';
+
+/** file_ops tree 상한 — 실행기(walk/listWorkspaceFilesAt)의 1000개 캡과 일치시킨다. */
+const FILE_TREE_MAX = 1000;
+
 export const TASK_ASK_HUMAN_SENTINEL = '__TASK_ASK_HUMAN__';
 
 function textResult(text: string, isError = false): MCPToolResult {
@@ -191,12 +195,15 @@ export function createTaskTools(
     const fileOps: MCPToolDefinition = {
         tool: {
             name: 'file_ops',
-            description: '/workspace 파일 작업: op=read | write | list | delete.',
+            description:
+                '/workspace 파일 작업: op=read | write | list | tree | delete. '
+                + 'list 는 해당 디렉토리만 보여주며 폴더는 이름 뒤에 "/" 가 붙는다. '
+                + '하위 폴더까지 한 번에 보려면 tree 를 쓴다.',
             inputSchema: {
                 type: 'object',
                 properties: {
-                    op: { type: 'string', description: 'read | write | list | delete' },
-                    path: { type: 'string', description: 'workspace 상대 경로 (list 는 기본 ".")' },
+                    op: { type: 'string', description: 'read | write | list | tree | delete' },
+                    path: { type: 'string', description: 'workspace 상대 경로 (list 는 기본 ".", tree 는 무시)' },
                     content: { type: 'string', description: 'write 시 내용' },
                 },
                 required: ['op'],
@@ -209,6 +216,16 @@ export function createTaskTools(
                 if (op === 'read') return textResult(await sandbox.readFile(path));
                 if (op === 'write') { await sandbox.writeFile(path, str(args.content)); return textResult(`기록됨: ${path}`); }
                 if (op === 'list') return textResult((await sandbox.listDir(path || '.')).join('\n') || '(빈 디렉토리)');
+                if (op === 'tree') {
+                    // 하위 폴더 포함 전체 목록 — list 로 한 단계씩 파고들다 폴더를 놓치는
+                    // 문제를 한 번에 해소한다. 상한(1000)에 걸리면 잘렸음을 명시한다.
+                    const all = await sandbox.listWorkspaceFiles();
+                    if (all.length === 0) return textResult('(빈 workspace)');
+                    const capped = all.length >= FILE_TREE_MAX
+                        ? `\n… 목록이 ${FILE_TREE_MAX}개에서 잘렸습니다. 하위 경로를 list 로 좁혀 확인하세요.`
+                        : '';
+                    return textResult(all.join('\n') + capped);
+                }
                 if (op === 'delete') { await sandbox.deleteFile(path); return textResult(`삭제됨: ${path}`); }
                 return textResult(`알 수 없는 op: ${op}`, true);
             } catch (e) {

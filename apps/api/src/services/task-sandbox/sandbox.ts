@@ -321,7 +321,10 @@ export class TaskSandbox implements TaskExecutor {
     /** workspace 내 디렉토리 목록. 경로 가드(어휘+실경로) 적용. */
     async listDir(relPath = '.'): Promise<string[]> {
         const abs = await safeRealWorkspacePath(this.hostWorkdir, relPath);
-        return readdir(abs);
+        // 디렉토리는 이름 뒤에 '/' — 이름만 주면 모델이 폴더를 파일로 오인해 read 하다
+        // EISDIR 로 실패하고 하위 파일에 영영 못 닿는다(2026-07-26 보고).
+        const entries = await readdir(abs, { withFileTypes: true });
+        return entries.map((e) => (e.isDirectory() ? `${e.name}/` : e.name));
     }
 
     /** 산출물 회수용 — workspace 전체 파일을 상대경로로 재귀 나열. */

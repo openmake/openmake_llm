@@ -179,7 +179,14 @@ async function handleExec(m, done) {
       fs.writeFileSync(abs, Buffer.from(m.contentB64 || '', 'base64'));
       done({ ok: true }); return;
     }
-    case 'list': done({ ok: true, entries: fs.readdirSync(safe(m.path)) }); return;
+    case 'list': {
+      // 디렉토리는 '/' 접미사 — 모델이 폴더를 파일로 오인해 read 하다 EISDIR 로
+      // 실패하고 하위 파일에 못 닿는 문제 방지 (샌드박스 실행기와 동일 규약).
+      const entries = fs.readdirSync(safe(m.path), { withFileTypes: true })
+        .map((e) => (e.isDirectory() ? `${e.name}/` : e.name));
+      done({ ok: true, entries });
+      return;
+    }
     case 'listAll': done({ ok: true, entries: walk(folderRoot, folderRoot, []) }); return;
     case 'delete': {
       const abs = safe(m.path);
@@ -283,6 +290,12 @@ module.exports = {
   disconnectFolder,
   getStatus: () => statusText,
   isConnected: () => !!folderRoot,
+  /**
+   * 연결된 작업 폴더의 **전체 경로**. 어느 폴더에 붙었는지 사용자가 확인할 수단이
+   * 없어(서버에는 basename 만 전달) 같은 이름 폴더를 구분할 수 없던 문제 해소용.
+   * 개인정보(사용자명 등)가 포함되므로 **로컬 UI 표시에만** 쓰고 서버로 보내지 않는다.
+   */
+  getFolderPath: () => folderRoot,
   setOnStatusChange: (fn) => { onStatusChange = fn; },
   /** 백엔드 전환 시 재연결 */
   onBackendChanged: (app, backendUrl) => { if (folderRoot) connect(app, backendUrl); },

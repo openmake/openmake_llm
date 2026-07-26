@@ -119,8 +119,16 @@ function buildMenu() {
       label: '로컬 작업',
       submenu: [
         { label: `상태: ${bridge.getStatus()}`, enabled: false },
+        // 연결 폴더 전체 경로 — 서버에는 basename 만 가므로 같은 이름 폴더를 구분할
+        // 방법이 없었다. 경로는 로컬 메뉴에만 노출한다(개인정보 서버 전송 없음).
+        { label: `폴더: ${bridge.getFolderPath() || '(미연결)'}`, enabled: false },
         { type: 'separator' },
         { label: '작업 폴더 연결…', click: () => bridge.connectFolder(app, bridgeBackendUrl(), win) },
+        {
+          label: 'Finder 에서 열기',
+          enabled: bridge.isConnected(),
+          click: () => { const f = bridge.getFolderPath(); if (f) shell.openPath(f); },
+        },
         { label: '연결 해제', enabled: bridge.isConnected(), click: () => bridge.disconnectFolder() },
       ],
     },
