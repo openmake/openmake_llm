@@ -30,6 +30,7 @@ import { getSkillManager } from '../agents/skill-manager';
 import { buildDelegateFn } from './agent-task/delegate';
 import { buildTaskSpawnFn } from './agent-spawn/spawn-agents';
 import { mergeToolsWithSkills, type ActiveSkillBinding } from './chat-service/tool-merger';
+import { filterRestrictedTools } from './chat-service/tool-restrictions';
 import { TaskRuntime } from './task-sandbox/runtime';
 import { TASK_TERMINATE_SENTINEL } from './task-sandbox/tools';
 import { requiresApproval, getApprovalRegistry } from './task-sandbox/approval-gate';
@@ -173,10 +174,10 @@ export class AgentTaskService {
             // stepNumber 0 재시작으로 인한 (task_id, step_number) 중복·표시 혼선을 방지.
             if (!input.resume) await db.deleteAgentTaskSteps(taskId);
 
-            // 허용 도구 목록 (LLMTool ≈ ToolDefinition) — 전체 노출
-            const allTools = (await mcp.getToolRouter().getLLMTools({
+            // 역할 게이팅(채팅 경로와 동일) — 고위험 전역 도구(Python REPL 등)를 역할 미달 user 에게서 제거.
+            const allTools = filterRestrictedTools((await mcp.getToolRouter().getLLMTools({
                 userId,
-            })) as unknown as ToolDefinition[];
+            })) as unknown as ToolDefinition[], userRole);
 
             // 활성 스킬(global+user)의 tool_bindings 를 머지.
             // base 가 전체 도구라 실효는 사실상 denied(특정 도구 차단)뿐이다.

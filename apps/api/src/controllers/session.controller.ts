@@ -16,6 +16,32 @@ import { historySummaryCache } from '../services/chat-service/history-summary-ca
 const log = createLogger('SessionController');
 
 /**
+ * 세션 접근 권한 판정 (순수 함수 — 단위 테스트 가능).
+ *
+ * ⚠️ 양쪽 비교값이 truthy 일 때만 매칭한다. session 의 userId/anonSessionId 는 서로
+ * 배타적이라 항상 한쪽이 undefined 이고, 요청측도 미인증·무파라미터면 둘 다 undefined 라
+ * `undefined === undefined` 로 통과하는 IDOR 가 발생한다 (artifact-session-access.ts 와 동일 가드).
+ */
+export function evaluateSessionAccess(
+    session: Pick<ConversationSession, 'userId' | 'anonSessionId'> | undefined,
+    ctx: { userId?: string; anonSessionId?: string; isAdmin: boolean },
+): boolean {
+    if (ctx.isAdmin) {
+        return true;
+    }
+    if (!session) {
+        return false;
+    }
+    if (ctx.userId && session.userId === ctx.userId) {
+        return true;
+    }
+    if (ctx.anonSessionId && session.anonSessionId === ctx.anonSessionId) {
+        return true;
+    }
+    return false;
+}
+
+/**
  * 대화 세션 관리 컨트롤러
  * 
  * @class SessionController
@@ -41,22 +67,12 @@ export class SessionController {
 
     private setupRoutes(): void {
         const conversationDb = getConversationDB();
-        const hasSessionAccess = (session: ConversationSession | undefined, req: Request): boolean => {
-            if (req.user?.role === 'admin') {
-                return true;
-            }
-
-            if (!session) {
-                return false;
-            }
-
-            const requestUserId = req.user?.id ? String(req.user.id) : undefined;
-            const requestAnonSessionId = typeof req.query.anonSessionId === 'string'
-                ? req.query.anonSessionId
-                : undefined;
-
-            return session.userId === requestUserId || session.anonSessionId === requestAnonSessionId;
-        };
+        const hasSessionAccess = (session: ConversationSession | undefined, req: Request): boolean =>
+            evaluateSessionAccess(session, {
+                userId: req.user?.id ? String(req.user.id) : undefined,
+                anonSessionId: typeof req.query.anonSessionId === 'string' ? req.query.anonSessionId : undefined,
+                isAdmin: req.user?.role === 'admin',
+            });
 
          // 세션 목록 조회 (사용자 격리 적용)
          this.router.get('/', optionalAuth, asyncHandler(async (req: Request, res: Response) => {

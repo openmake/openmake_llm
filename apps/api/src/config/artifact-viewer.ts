@@ -30,9 +30,10 @@ export const ARTIFACT_VIEWER = {
     /**
      * 뷰어 접근토큰(authenticated/private) 서명 키 — HMAC-SHA256.
      * link visibility 는 share_token(DB) 사용, 그 외는 이 키로 서명한 단기 토큰.
-     * 미설정 시 JWT_SECRET 재사용(별도 운영 키 권장).
+     * 미설정 시 JWT_SECRET 재사용(별도 운영 키 권장). 예측 가능한 하드코딩 fallback 은
+     * 제거 — 토큰 위조를 막기 위해 JWT_SECRET(프로덕션 필수·검증됨)을 최종 fallback 으로 둔다.
      */
-    signingKey: process.env.ARTIFACT_VIEWER_SIGNING_KEY || process.env.JWT_SECRET || 'dev-viewer-key',
+    signingKey: process.env.ARTIFACT_VIEWER_SIGNING_KEY || process.env.JWT_SECRET || '',
 
     /** authenticated/private 접근토큰 TTL (초). 갤러리에서 열 때마다 새로 발급. */
     accessTokenTtlSec: parseInt(process.env.ARTIFACT_VIEWER_TOKEN_TTL_SEC || '3600', 10),

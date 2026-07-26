@@ -212,12 +212,22 @@ export function chatRateLimiter(req: Request, res: Response, next: NextFunction)
 export async function checkChatRateLimit(
     userId: string | null,
     role: string,
-    anonSessionId?: string
+    anonSessionId?: string,
+    clientIp?: string
 ): Promise<string | null> {
     const normalizedAnonSessionId = typeof anonSessionId === 'string' ? anonSessionId.trim() : '';
-    const anonKey = /^[a-zA-Z0-9_-]{8,128}$/.test(normalizedAnonSessionId)
-        ? `anon:${normalizedAnonSessionId}`
-        : 'ws-anonymous';
+    const normalizedIp = typeof clientIp === 'string' ? clientIp.trim() : '';
+    // 게스트 키는 IP 를 우선한다 — anonSessionId 는 클라이언트가 생성/회전할 수 있어 일일 한도를
+    // 리셋하는 우회가 가능했다. IP 가 있으면 IP 로 묶어(회전해도 같은 IP 는 동일 버킷) 비용 남용을 막고,
+    // IP 를 못 얻는 경우에만 기존 anonSessionId 기반으로 폴백한다.
+    let anonKey: string;
+    if (normalizedIp) {
+        anonKey = `anon:ip:${normalizedIp}`;
+    } else if (/^[a-zA-Z0-9_-]{8,128}$/.test(normalizedAnonSessionId)) {
+        anonKey = `anon:${normalizedAnonSessionId}`;
+    } else {
+        anonKey = 'ws-anonymous';
+    }
     const key = userId || anonKey;
     const limit = getDailyLimit(role);
 

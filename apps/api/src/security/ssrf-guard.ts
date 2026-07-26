@@ -363,3 +363,32 @@ export async function safeFetch(
     logger.warn('SSRF blocked: too many redirects', { rawUrl, maxRedirects: SSRF_LIMITS.MAX_REDIRECTS });
     throw new Error('SSRF blocked: too many redirects');
 }
+
+/**
+ * SSRF-safe 한 `fetch` 구현체를 만든다 — OpenAI SDK / MCP SSE·streamable-http transport 처럼
+ * 자체적으로 DNS 를 재조회해 `safeFetch` 를 우회하는 클라이언트에 주입한다.
+ *
+ * 왜 필요한가: base_url / MCP URL 은 등록 시점(`validateOutboundUrl`)에만 1회 검증되므로,
+ * 공격자가 등록 후 DNS 를 사설/메타데이터 IP 로 rebinding 하면 런타임 호출이 내부망에 도달한다
+ * (TOCTOU). 이 fetch 는 매 요청마다 재검증 + resolved IP 고정으로 그 갭을 닫는다.
+ *
+ * 반환 시그니처는 MCP SDK 의 `FetchLike` 및 OpenAI SDK 의 `Fetch` 와 호환된다.
+ */
+export function createPinnedFetch(
+    resolver: DnsResolver = dns.lookup,
+): (input: string | URL | Request, init?: RequestInit) => Promise<Response> {
+    return async (input, init) => {
+        if (typeof input === 'string' || input instanceof URL) {
+            return safeFetch(input.toString(), init, resolver);
+        }
+        // Request 객체로 호출되는 드문 경로 — url/method/headers/body 를 init 로 승격해 위임.
+        const req = input;
+        const merged: RequestInit = {
+            method: req.method,
+            headers: req.headers,
+            ...(req.body ? { body: req.body, duplex: 'half' } as RequestInit : {}),
+            ...init,
+        };
+        return safeFetch(req.url, merged, resolver);
+    };
+}

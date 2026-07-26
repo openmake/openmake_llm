@@ -19,6 +19,7 @@ import { WS_ERROR_MESSAGES, WS_PROVIDER_ERROR_MESSAGES, getLocalizedTemplate } f
 import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
 import { applySlashCommand } from '../chat/slash-command';
 import { WS_LIMITS } from '../config/timeouts';
+import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
 import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
 import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext } from '../services/chat-service/attach-context';
 import { buildWebSearchContext } from '../mcp/web-search/build-search-context';
@@ -45,6 +46,17 @@ export async function handleChatMessage(
 
     if (!hasMessage && !hasImages && !hasFiles) {
         ws.send(JSON.stringify({ type: 'error', message: '메시지가 필요합니다' }));
+        return;
+    }
+
+    // 첨부 개수 상한 — REST/agent-task 스키마(FILE_ATTACH_LIMITS)와 동일 계약을 WS 채팅에도 적용한다.
+    // WS 는 Zod 검증을 거치지 않아 개수 캡이 비어 있었고, 대량 배열로 파이프라인 자원을 소모할 수 있었다.
+    if (hasImages && (msg.images as unknown[]).length > FILE_ATTACH_LIMITS.MAX_IMAGES) {
+        ws.send(JSON.stringify({ type: 'error', message: `이미지는 최대 ${FILE_ATTACH_LIMITS.MAX_IMAGES}개까지 첨부할 수 있습니다` }));
+        return;
+    }
+    if (hasFiles && (msg.files as unknown[]).length > FILE_ATTACH_LIMITS.MAX_FILES) {
+        ws.send(JSON.stringify({ type: 'error', message: `파일은 최대 ${FILE_ATTACH_LIMITS.MAX_FILES}개까지 첨부할 수 있습니다` }));
         return;
     }
 
@@ -111,6 +123,7 @@ export async function handleChatMessage(
             extWs._authenticatedUserId,
             userContext.userRole,
             userContext.anonSessionId,
+            extWs._clientIp,
         );
         if (rateLimitError) {
             ws.send(JSON.stringify({ type: 'error', message: rateLimitError }));

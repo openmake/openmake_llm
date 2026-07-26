@@ -74,8 +74,8 @@ export const envSchema = z
 
         // Security — CSRF Double-Submit Cookie policy (additive)
         // off: disabled / warn: log mismatches, allow / enforce: 403 on mismatch
-        // default 'warn' enables monitoring from deploy without breaking existing clients
-        CSRF_PROTECTION: z.enum(['off', 'warn', 'enforce']).default('warn'),
+        // default 'enforce' — 프론트가 X-CSRF-Token 을 자동 주입(@openmake/api-client). 완화 필요 시 warn.
+        CSRF_PROTECTION: z.enum(['off', 'warn', 'enforce']).default('enforce'),
 
         // Storage backend for rate-limiter and OAuth state (additive; default preserves single-instance)
         // memory: per-instance in-memory (current behavior) / redis: shared across instances
