@@ -407,6 +407,65 @@ export class ExternalKeysRepository extends BaseRepository {
     }
 
     /**
+     * 모델 실사용 가능 여부 기록 (마이그레이션 083).
+     *
+     * provider 의 /v1/models 는 계정 권한과 무관하게 전체 카탈로그를 주므로
+     * (Ollama Cloud 구독 전용 403, NVIDIA 계정별 404 등) 실제 호출 결과로
+     * 사용 가능 여부를 학습해 목록에서 걸러낸다.
+     */
+    async markModelAvailability(input: {
+        userId: string;
+        providerId: string;
+        modelId: string;
+        usable: boolean;
+        reason?: string | null;
+    }): Promise<void> {
+        await this.query(
+            `INSERT INTO external_model_availability
+                (user_id, provider_id, model_id, usable, reason, checked_at)
+             VALUES ($1, $2, $3, $4, $5, now())
+             ON CONFLICT (user_id, provider_id, model_id) DO UPDATE SET
+                usable = EXCLUDED.usable,
+                reason = EXCLUDED.reason,
+                checked_at = now()`,
+            [
+                input.userId,
+                input.providerId,
+                input.modelId,
+                input.usable,
+                input.reason ? input.reason.slice(0, 300) : null,
+            ],
+        );
+    }
+
+    /**
+     * 사용 불가로 판정된 모델 id 집합 (목록 필터용).
+     * providerId 생략 시 사용자 전체 provider 를 대상으로 `provider:model` 키로 반환.
+     */
+    async listUnusableModels(userId: string, providerId?: string): Promise<Set<string>> {
+        const result = providerId
+            ? await this.query<{ provider_id: string; model_id: string }>(
+                `SELECT provider_id, model_id FROM external_model_availability
+                 WHERE user_id = $1 AND provider_id = $2 AND usable = FALSE`,
+                [userId, providerId],
+            )
+            : await this.query<{ provider_id: string; model_id: string }>(
+                `SELECT provider_id, model_id FROM external_model_availability
+                 WHERE user_id = $1 AND usable = FALSE`,
+                [userId],
+            );
+        return new Set(result.rows.map((r) => `${r.provider_id}:${r.model_id}`));
+    }
+
+    /** provider 재등록·키 교체 시 판정 초기화 (권한이 달라질 수 있음) */
+    async clearModelAvailability(userId: string, providerId: string): Promise<void> {
+        await this.query(
+            `DELETE FROM external_model_availability WHERE user_id = $1 AND provider_id = $2`,
+            [userId, providerId],
+        );
+    }
+
+    /**
      * 캐시 무효화 — 키 등록·갱신·삭제 시 호출하여 stale 카탈로그 제거.
      */
     async invalidateCachedModels(userId: string, providerId: string): Promise<void> {

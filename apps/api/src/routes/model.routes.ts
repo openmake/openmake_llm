@@ -150,6 +150,9 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
         try {
             const repo = new ExternalKeysRepository(getPool());
             const userKeys = await repo.listByUser(userId);
+            // 실사용 불가로 판정된 모델 제외 (083) — provider 카탈로그는 계정 권한과
+            // 무관하게 전체를 주므로, 고르면 실패하는 모델이 셀렉터에 남지 않게 한다.
+            const unusable = await repo.listUnusableModels(userId).catch(() => new Set<string>());
             for (const keyRow of userKeys) {
                 // openai-compatible 분기: provider 의 /v1/models 호출 (TTL 캐시 + 실패 격리)
                 if (keyRow.sdkType === 'openai-compatible' && keyRow.baseUrl) {
@@ -205,6 +208,7 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
                         const catalogDisplay = getProviderCatalogEntry(keyRow.providerId)?.displayName ?? keyRow.providerId;
                         if (!list) continue;
                         for (const m of list) {
+                            if (unusable.has(`${keyRow.providerId}:${m.id}`)) continue;
                             const caps = m.capabilities;
                             models.push({
                                 name: m.displayName,
