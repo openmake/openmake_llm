@@ -952,6 +952,29 @@ export const ROUTING_VERIFICATION = {
  * 외부 모델 가용성 프로브 (services/model-availability-probe).
  * provider 카탈로그를 최소 요청으로 찔러 실사용 가능 모델만 남기는 점검의 한도.
  */
+/**
+ * 딥리서치 컨텍스트 (스킬 지식 + MCP 근거 수집).
+ * 리서치는 웹검색 전용 파이프라인이라 도구·스킬이 없었다(2026-07-26 점검) — 이 상수들이
+ * 도구폭주(전체 카탈로그 전달 시 vLLM 문법 컴파일 101s 실측) 없이 붙이기 위한 상한이다.
+ */
+export const RESEARCH_CONTEXT = {
+    /** MCP 근거 수집 단계 게이트 — RESEARCH_MCP_EVIDENCE=false 로 opt-out */
+    MCP_EVIDENCE_ENABLED: process.env.RESEARCH_MCP_EVIDENCE !== 'false',
+    /** LLM 에 노출할 관련 도구 상한 (목표 관련성 top-K). RESEARCH_MCP_TOOL_BUDGET */
+    MCP_TOOL_BUDGET: parseInt(process.env.RESEARCH_MCP_TOOL_BUDGET || '8', 10),
+    /** 1회 수집에서 실행할 도구 호출 상한. RESEARCH_MCP_MAX_CALLS */
+    MCP_MAX_CALLS: parseInt(process.env.RESEARCH_MCP_MAX_CALLS || '3', 10),
+    /** 수집 턴의 출력 토큰 상한 (도구 호출 인자만 필요). RESEARCH_MCP_MAX_TOKENS */
+    MCP_MAX_TOKENS: parseInt(process.env.RESEARCH_MCP_MAX_TOKENS || '1024', 10),
+    MCP_MIN_RESULT_CHARS: parseInt(process.env.RESEARCH_MCP_MIN_RESULT_CHARS || '40', 10),
+    /** 도구 결과 본문 캡 — 합성 컨텍스트 팽창 방지 */
+    MCP_RESULT_CHAR_CAP: parseInt(process.env.RESEARCH_MCP_RESULT_CHAR_CAP || '8000', 10),
+    /** 리서치에 부적합해 제외하는 도구 (웹검색은 파이프라인이 이미 수행) */
+    MCP_EXCLUDED_TOOLS: (process.env.RESEARCH_MCP_EXCLUDED_TOOLS
+        || 'web_search,web_scrape,web_crawl,web_map,extract_webpage,research_topic,generate_image')
+        .split(',').map((s) => s.trim()).filter(Boolean),
+} as const;
+
 export const MODEL_AVAILABILITY_PROBE = {
     /** 모델 1건당 상한 — 초과 시 '판정 보류'(기록 안 함). MODEL_PROBE_TIMEOUT_MS */
     TIMEOUT_MS: parseInt(process.env.MODEL_PROBE_TIMEOUT_MS || '20000', 10),

@@ -28,6 +28,10 @@ export interface ResearchConfig {
     maxScrapePerLoop: number;    // 루프당 최대 스크래핑 수 (기본: 15, env DEEP_RESEARCH_MAX_SCRAPE_PER_LOOP)
     scrapeTimeoutMs: number;     // 개별 스크래핑 타임아웃 (기본: 15000)
     chunkSize: number;           // 중간 요약용 청크 사이즈 (기본: 10)
+    /** 스킬 지식·MCP 근거 수집 대상 사용자 (미지정 시 두 기능 모두 skip) */
+    userId?: string;
+    /** 도구 역할 게이팅용 (기본 'user') */
+    userRole?: 'admin' | 'user' | 'guest';
 }
 
 /** 리서치 진행 상황 */

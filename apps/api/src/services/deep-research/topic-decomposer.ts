@@ -15,6 +15,7 @@ import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { LLM_TIMEOUTS } from '../../config/timeouts';
 import { clampImportance, buildFallbackSubTopics } from '../deep-research-utils';
 import { getDecomposePrompt, getResearchMessage } from '../deep-research-prompts';
+import { withSkillContext } from './research-context';
 import { chatWithAbortTimeout } from './chat-with-timeout';
 
 const logger = createLogger('DeepResearch:TopicDecomposer');
@@ -29,11 +30,13 @@ export async function decomposeTopics(params: {
     sessionId: string;
     abortSignal?: AbortSignal;
     throwIfAborted: () => void;
+    /** 활성 스킬 지식 블록 (research-context) — 있으면 프롬프트 앞에 주입 */
+    skillBlock?: string;
 }): Promise<SubTopic[]> {
     const { client, config, topic, sessionId, abortSignal, throwIfAborted } = params;
 
     throwIfAborted();
-    const prompt = getDecomposePrompt(config.language, topic);
+    const prompt = withSkillContext(getDecomposePrompt(config.language, topic), params.skillBlock ?? '');
 
     try {
         const response = await chatWithAbortTimeout(

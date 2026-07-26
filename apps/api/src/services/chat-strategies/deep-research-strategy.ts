@@ -68,6 +68,9 @@ export class DeepResearchStrategy implements ChatStrategy<DeepResearchStrategyCo
             maxScrapePerLoop: RESEARCH_STRATEGY_PARAMS.MAX_SCRAPE_PER_LOOP,
             scrapeTimeoutMs: LLM_TIMEOUTS.SCRAPE_TIMEOUT_MS,
             chunkSize: RESEARCH_STRATEGY_PARAMS.CHUNK_SIZE,
+            // 스킬 지식·MCP 근거 수집 대상 (research-context) — 게스트/익명은 자동 skip
+            ...(userId ? { userId: String(userId) } : {}),
+            ...(context.req.userRole ? { userRole: context.req.userRole } : {}),
         }, context.client);
 
         // 연구 세션 ID 생성 및 DB 저장 (추후 조회/이어하기용)
