@@ -29,6 +29,8 @@ import { WEB_SEARCH_TEMPLATES, getLocalizedTemplate } from '../../sockets/ws-cha
 
 import { executeExternalTool, recordExternalUsageFireAndForget } from './external-tool-exec';
 
+import { resolveModelCapabilities } from './model-capabilities';
+
 const logger = createLogger('ChatExternalProvider');
 
 export interface ExternalProviderDeps {
@@ -67,7 +69,7 @@ export interface StreamFromExternalContext {
 /**
  * 외부 LLM provider stream + multi-turn tool calling.
  */
-export async function streamFromExternalProvider(
+export async function runExternalStream(
     deps: ExternalProviderDeps,
     resolved: ResolvedProvider,
     req: ChatMessageRequest,
@@ -107,17 +109,30 @@ export async function streamFromExternalProvider(
         ...(req.images ? { images: req.images } : {}),
     });
 
-    const caps = resolved.provider.getCapabilities(resolved.modelId);
+    // capability 는 카탈로그 우선으로 해석한다 — provider.getCapabilities() 는 외부의 경우
+    // 모델 ID 휴리스틱이라 실제 비전 모델을 vision:false 로 오판한다(실측).
+    const { caps, source: capsSource } = await resolveModelCapabilities(
+        resolved, req.userId, deps.providerRouter?.getExternalKeysRepo(),
+    );
 
     const hasImages = (req.images && req.images.length > 0)
         || (req.history ?? []).some((h) => h.images && h.images.length > 0);
     if (hasImages && !caps.vision) {
-        const err = new Error(
-            `Model '${resolved.fullId}' does not support vision input (capabilities.vision=false). ` +
-            'Use a vision-capable model or remove images from the request.',
-        );
-        (err as Error & { statusCode?: number }).statusCode = 400;
-        throw err;
+        // 휴리스틱 기반 '부정' 은 신뢰하지 않는다 — 오차단(진짜 비전 모델 400)이 실제
+        // 장애였다. 이 경우 그대로 진행하고, 정말 미지원이면 upstream 오류 →
+        // 로컬 폴백(withLocalFallback)이 받아낸다.
+        if (capsSource === 'heuristic') {
+            logger.warn(
+                `[Vision] '${resolved.fullId}' vision 판정이 휴리스틱(부정) — 차단하지 않고 진행`,
+            );
+        } else {
+            const err = new Error(
+                `Model '${resolved.fullId}' does not support vision input (capabilities.vision=false, source=${capsSource}). ` +
+                'Use a vision-capable model or remove images from the request.',
+            );
+            (err as Error & { statusCode?: number }).statusCode = 400;
+            throw err;
+        }
     }
 
     // 명시적 아티팩트 생성 요청(사용자 아티팩트 토글 또는 메시지 패턴)이면 distractor
