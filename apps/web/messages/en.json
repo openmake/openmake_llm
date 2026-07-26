@@ -389,7 +389,8 @@
       "copy": "Copy",
       "copied": "Copied",
       "download": "Download .patch"
-    }
+    },
+    "modelFallbackNotice": "The selected model ({from}) did not respond, so the default model ({to}) answered instead."
   },
   "artifacts": {
     "exec": {

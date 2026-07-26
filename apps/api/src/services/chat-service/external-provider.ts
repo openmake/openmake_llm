@@ -44,6 +44,8 @@ export interface ExternalProviderDeps {
     mcpToolStartCallback?: (data: { toolName: string }) => void;
     /** Provider usage 누적 — ChatService.lastProviderUsage setter */
     onUsage?: (usage: import('../../llm').UsageMetrics) => void;
+    /** 시스템 이벤트 콜백 — provider 폴백 고지 등 메타 알림 (WS 'system_event') */
+    onSystemEvent?: (event: { type: string; message: string; metadata?: Record<string, unknown> }) => void;
     /** Allowed tools (agent 매칭 후) */
     allowedTools: ToolDefinition[];
 }

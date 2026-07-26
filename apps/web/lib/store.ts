@@ -29,6 +29,11 @@ export interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" 
   agentTask?: AgentTaskState;
   /** 표시 전용 시스템 안내(예: 가로채기 모드 안내) — 백엔드 history payload 에는 제외(스냅샷 전용). */
   notice?: boolean;
+  /**
+   * 모델 폴백 고지 — 선택한 모델이 실패해 다른 모델이 답한 경우.
+   * 표시가 없으면 사용자가 "선택한 모델이 답했다"고 오인한다(실측).
+   */
+  modelFallback?: { from: string; to: string; reason?: string };
 }
 
 /** 에이전트 작업 인라인 카드 상태. */
@@ -184,6 +189,8 @@ interface AppState {
   setChatHistory: (fn: (prev: ChatMessage[]) => ChatMessage[]) => void;
   appendMessage: (m: ChatMessage) => void;
   appendToken: (token: string) => void;
+  /** 진행 중(또는 마지막) assistant 메시지에 모델 폴백 고지를 부착 */
+  setModelFallback: (info: { from: string; to: string; reason?: string }) => void;
   appendThinking: (token: string) => void;
   setThinkingSummary: (summary: string) => void;
   setStreaming: (v: boolean) => void;
@@ -323,6 +330,19 @@ export const useAppStore = create<AppState>()(
     }),
   setChatHistory: (fn) => set((s) => ({ chatHistory: fn(s.chatHistory) })),
   appendMessage: (m) => set((s) => ({ chatHistory: [...s.chatHistory, m] })),
+  setModelFallback: (info) =>
+    set((s) => {
+      const hist = [...s.chatHistory];
+      // 스트리밍 시작 전에 도착할 수 있으므로, 없으면 자리표시 assistant 를 만들지 않고
+      // 다음 토큰이 붙을 메시지에 적용되도록 빈 assistant 를 하나 준비한다.
+      const last = hist[hist.length - 1];
+      if (last && last.role === "assistant" && last.streaming) {
+        hist[hist.length - 1] = { ...last, modelFallback: info };
+      } else {
+        hist.push({ role: "assistant", content: "", streaming: true, modelFallback: info });
+      }
+      return { chatHistory: hist };
+    }),
   appendToken: (token) =>
     set((s) => {
       const hist = [...s.chatHistory];

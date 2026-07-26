@@ -389,7 +389,8 @@
       "copy": "コピー",
       "copied": "コピー済み",
       "download": ".patch をダウンロード"
-    }
+    },
+    "modelFallbackNotice": "選択したモデル({from})が応答しなかったため、既定のモデル({to})が回答しました。"
   },
   "artifacts": {
     "exec": {
