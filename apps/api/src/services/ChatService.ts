@@ -52,7 +52,7 @@ import {
     streamFromExternalProvider as streamFromExternalProviderFn,
     type ExternalProviderDeps,
     type StreamFromExternalContext,
-} from './chat-service/external-provider';
+} from './chat-service/external-fallback';
 
 // Re-export all types so consumers importing from ChatService don't break
 export type {
