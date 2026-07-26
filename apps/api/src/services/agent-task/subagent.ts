@@ -43,7 +43,7 @@ export interface SubagentParams {
     /** 승인 레지스트리 키(에이전트 작업 taskId). 채팅 경로는 정책 'none' 이라 실사용 안 됨. */
     taskId: string;
     /** 승인 정책·대기 상한만 사용 — 채팅 경로는 {approvalPolicy:'none', approvalTimeoutMs:0} 전달. */
-    sandboxCfg: Pick<TaskSandboxConfig, 'approvalPolicy' | 'approvalTimeoutMs'>;
+    sandboxCfg: Pick<TaskSandboxConfig, 'approvalPolicy' | 'approvalTimeoutMs' | 'deviceGatesShell'>;
     signal?: AbortSignal;
     /** 서브 LLM 호출 토큰을 부모 누적에 합산. */
     onTokens?: (n: number) => void;
@@ -117,7 +117,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
                 // 부모와 동일한 승인 게이트 — 정책 우회 없음(자동승인 task 면 즉시 approved).
                 let approved = true;
-                if (requiresApproval(p.sandboxCfg.approvalPolicy, name, args)) {
+                if (requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) {
                     const r = await getApprovalRegistry().request(
                         { taskId: p.taskId, userId: String(p.userCtx.userId), toolName: name, args },
                         { timeoutMs: p.sandboxCfg.approvalTimeoutMs, signal: p.signal },
