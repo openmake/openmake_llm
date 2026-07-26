@@ -1362,7 +1362,17 @@
       "anthropic": "Anthropic",
       "openaiCompatible": "OpenAI互換"
     },
-    "validationWarning": "キーは保存されましたが、endpoint の検証に失敗しました: {error} — URL/キーを確認して再保存してください。"
+    "validationWarning": "キーは保存されましたが、endpoint の検証に失敗しました: {error} — URL/キーを確認して再保存してください。",
+    "oauthLogin": "ChatGPT でログイン",
+    "oauthStart": "ログイン開始",
+    "oauthHint": "このプロバイダーは API キーの代わりに OAuth ログインを使用します。",
+    "oauthCodeLabel": "認証コード",
+    "oauthInstruction": "以下のリンクを開き、このコードを入力して承認してください。承認が確認されると自動的に接続されます。",
+    "oauthOpenPage": "認証ページを開く",
+    "oauthWaiting": "承認待ち...",
+    "oauthConnected": "接続完了",
+    "oauthFailed": "ログイン失敗: {error}",
+    "oauthAccount": "アカウント"
   },
   "modelRoles": {
     "title": "ロール別モデル割り当て",

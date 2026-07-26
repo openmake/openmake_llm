@@ -11,6 +11,7 @@
 
 import { randomBytes } from 'crypto';
 import type { LLMClient, ChatMessage, ToolDefinition } from '../llm';
+import type { IProvider } from '../providers/i-provider';
 import { getPromptConfig } from './prompt';
 import { determineLanguagePolicy } from './language-policy';
 import { getConfig } from '../config/env';
@@ -30,6 +31,11 @@ export async function processExternalToolCalling(params: {
     tools: ToolDefinition[];
     tool_choice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
     client: LLMClient;
+    /**
+     * 외부 provider dispatch (Phase 2, 2026-07-26) — 요청 모델이 외부 fullId
+     * ('chatgpt:*', 'openrouter:*' 등)로 해석된 경우 로컬 client 대신 이 어댑터로 호출.
+     */
+    externalProvider?: { provider: IProvider; modelId: string };
     onToken: (token: string) => void;
     abortSignal?: AbortSignal;
 }): Promise<{
@@ -37,7 +43,7 @@ export async function processExternalToolCalling(params: {
     tool_calls?: OpenAIToolCall[];
     finish_reason: 'stop' | 'tool_calls';
 }> {
-    const { message, history, images, tools, tool_choice, client, onToken, abortSignal: _abortSignal } = params;
+    const { message, history, images, tools, tool_choice, client, externalProvider, onToken, abortSignal: _abortSignal } = params;
 
     // 언어 정책 결정 (메시지 기반 감지 — 외부 Tool Calling 경로는 userLanguagePreference 없음)
     const config = getConfig();
@@ -100,6 +106,48 @@ export async function processExternalToolCalling(params: {
         content: message,
         ...(images && images.length > 0 && { images }),
     });
+
+    // 외부 provider 경로 — provider.streamChat 로 단일 턴 호출 후 동일 형태로 반환
+    if (externalProvider) {
+        let externalContent = '';
+        const streamResult = await externalProvider.provider.streamChat(
+            {
+                messages,
+                modelId: externalProvider.modelId,
+                ...(effectiveTools ? { tools: effectiveTools } : {}),
+                ...(tool_choice !== undefined && tool_choice !== 'none'
+                    ? { tool_choice }
+                    : {}),
+                ...(_abortSignal ? { abortSignal: _abortSignal } : {}),
+            },
+            {
+                onToken: (token: string) => {
+                    externalContent += token;
+                    onToken(token);
+                },
+            },
+        );
+        if (streamResult.toolCalls && streamResult.toolCalls.length > 0) {
+            return {
+                response: streamResult.content || '',
+                tool_calls: streamResult.toolCalls.map((tc) => ({
+                    id: tc.id || `call_${randomBytes(12).toString('hex')}`,
+                    type: 'function' as const,
+                    function: {
+                        name: tc.name,
+                        arguments: typeof tc.args === 'string'
+                            ? tc.args
+                            : JSON.stringify(tc.args ?? {}),
+                    },
+                })),
+                finish_reason: 'tool_calls',
+            };
+        }
+        return {
+            response: streamResult.content || externalContent,
+            finish_reason: 'stop',
+        };
+    }
 
     // LLM 호출 (단일 턴)
     let fullContent = '';

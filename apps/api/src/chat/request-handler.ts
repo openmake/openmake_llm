@@ -42,6 +42,7 @@ import { extractAndStripArtifacts, findArtifactPlaceholderIds, stripArtifactPlac
 import { ArtifactRepository, ArtifactSizeError, type ArtifactKind } from '../data/repositories/artifact-repository';
 import { processExternalToolCalling } from './external-tool-calling';
 import { ensureSession, saveUserMessage, saveAssistantMessage } from './request-persistence';
+import { getProviderCatalogEntry } from '../config/external-providers';
 import { createThinkingSummarySession } from '../services/chat-service/thinking-summarizer';
 import { getConversationDB } from '../data/conversation-db';
 import type {
@@ -288,6 +289,30 @@ export class ChatRequestHandler {
         // ChatService를 우회하여 단일 턴 LLM 호출 후 tool_calls 반환
         // ═══════════════════════════════════════════════════════
         if (tools && tools.length > 0) {
+            // 외부 provider fullId (Phase 2, 2026-07-26): 'chatgpt:*'/'openrouter:*' 등은
+            // provider gate 로 해석해 외부 어댑터로 dispatch — 이전엔 로컬 client 로
+            // silent fallback 되어 CLI 도구(tools 파라미터) 경로에서 외부 모델이 무시됐다.
+            // 해석 실패(키 미등록 등)는 ProviderError 를 그대로 전파해 명시 거절.
+            let externalProvider: { provider: import('../providers/i-provider').IProvider; modelId: string } | undefined;
+            {
+                const reqModel = (model || '').trim();
+                const colonIdx = reqModel.indexOf(':');
+                const prefix = colonIdx > 0 ? reqModel.slice(0, colonIdx) : '';
+                if (prefix && prefix !== 'local-llm' && getProviderCatalogEntry(prefix)) {
+                    const providerRouter = new ProviderRouter({
+                        localProvider: new LocalLLMProvider(client),
+                        externalKeysRepo: new ExternalKeysRepository(getPool()),
+                    });
+                    const resolved = await providerRouter.resolve(reqModel, {
+                        ...(userContext.authenticatedUserId
+                            ? { userId: userContext.authenticatedUserId }
+                            : {}),
+                        userRole: userContext.userRole,
+                    });
+                    externalProvider = { provider: resolved.provider, modelId: resolved.modelId };
+                }
+            }
+
             const result = await processExternalToolCalling({
                 message,
                 history,
@@ -295,6 +320,7 @@ export class ChatRequestHandler {
                 tools,
                 tool_choice,
                 client,
+                ...(externalProvider ? { externalProvider } : {}),
                 onToken,
                 abortSignal,
             });

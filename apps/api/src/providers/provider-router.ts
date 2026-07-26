@@ -20,6 +20,12 @@ import { ProviderError } from './provider-errors';
 import { LocalLLMProvider } from './local-llm-provider';
 import { AnthropicProvider } from './anthropic-provider';
 import { OpenAICompatProvider } from './openai-compat-provider';
+import { ChatGPTOAuthProvider } from './chatgpt-oauth/provider';
+import {
+    parseSessionPayload,
+    serializeSessionPayload,
+    type ChatGPTOAuthSessionPayload,
+} from './chatgpt-oauth/session';
 import type { ExternalKeysRepository, ExternalApiKeyRow } from '../data/repositories/external-keys-repo';
 import { createLogger } from '../utils/logger';
 
@@ -45,6 +51,12 @@ export interface ProviderRouterDeps {
     // Phase 4: openaiCompatProvider 팩토리
 }
 
+/** 외부 provider 인스턴스화 옵션 — OAuth 세션 갱신 영속화 콜백 등 */
+export interface ExternalProviderInstanceDeps {
+    /** OAuth refresh 후 세션 재암호화 저장 (미지정 시 in-memory 갱신만) */
+    onOAuthSessionUpdate?: (session: ChatGPTOAuthSessionPayload) => Promise<void>;
+}
+
 /**
  * sdk_type → 외부 provider 인스턴스 팩토리 맵.
  * 새 provider 추가 시 이 맵에 한 항목만 등록 (No-Hardcoding: switch/if 체인 금지 → Record lookup).
@@ -52,14 +64,33 @@ export interface ProviderRouterDeps {
  */
 const EXTERNAL_PROVIDER_FACTORIES: Record<
     string,
-    (args: { providerId: string; keyRow: ExternalApiKeyRow; plaintextKey: string }) => IProvider
+    (args: {
+        providerId: string;
+        keyRow: ExternalApiKeyRow;
+        plaintextKey: string;
+        deps?: ExternalProviderInstanceDeps;
+    }) => IProvider
 > = {
     anthropic: ({ keyRow, plaintextKey }) =>
         new AnthropicProvider({
             apiKey: plaintextKey,
             baseUrl: keyRow.baseUrl,
         }),
-    'openai-compatible': ({ providerId, keyRow, plaintextKey }) => {
+    'openai-compatible': ({ providerId, keyRow, plaintextKey, deps }) => {
+        // OAuth 행(ChatGPT 디바이스 플로우) — 평문은 API 키가 아닌 세션 JSON
+        if (keyRow.authMethod === 'oauth') {
+            const session = parseSessionPayload(plaintextKey);
+            if (!session) {
+                throw new ProviderError(
+                    'INVALID_API_KEY',
+                    `'${providerId}' OAuth 세션이 손상되었습니다 — 재로그인이 필요합니다`,
+                );
+            }
+            return new ChatGPTOAuthProvider({
+                session,
+                persistSession: deps?.onOAuthSessionUpdate,
+            });
+        }
         if (!keyRow.baseUrl) {
             throw new ProviderError(
                 'NOT_SUPPORTED',
@@ -75,16 +106,18 @@ const EXTERNAL_PROVIDER_FACTORIES: Record<
 };
 
 /**
- * 외부 provider 인스턴스 생성.
+ * 외부 provider 인스턴스 생성 (공용 진입점).
  *
  * 호출 시점에 해당 사용자의 키를 복호화하여 새 어댑터 인스턴스를 만든다.
  * 캐싱은 의도적으로 도입하지 않음 — 키 변경/삭제 즉시 반영, MVP 단계 단순성 우선.
+ * routes(model.routes / external-keys.routes)에서도 이 함수를 사용해
+ * provider별 분기(OAuth 등)를 한 곳에 유지한다.
  */
-async function instantiateExternalProvider(
-    providerId: string,
+export function createExternalProviderInstance(
     keyRow: ExternalApiKeyRow,
     plaintextKey: string,
-): Promise<IProvider> {
+    deps?: ExternalProviderInstanceDeps,
+): IProvider {
     const factory = EXTERNAL_PROVIDER_FACTORIES[keyRow.sdkType];
     if (!factory) {
         throw new ProviderError(
@@ -92,7 +125,26 @@ async function instantiateExternalProvider(
             `알 수 없는 sdk_type: ${keyRow.sdkType}`,
         );
     }
-    return factory({ providerId, keyRow, plaintextKey });
+    return factory({ providerId: keyRow.providerId, keyRow, plaintextKey, deps });
+}
+
+/**
+ * repo 기반 OAuth 세션 영속화 콜백 빌더 — provider-router / routes 공용.
+ */
+export function buildOAuthSessionPersist(
+    repo: ExternalKeysRepository,
+    userId: string,
+    providerId: string,
+): ExternalProviderInstanceDeps {
+    return {
+        onOAuthSessionUpdate: async (session) => {
+            await repo.updateOAuthSession(userId, providerId, {
+                plaintextSession: serializeSessionPayload(session),
+                oauthExpiresAt: session.expiresAt ? new Date(session.expiresAt) : null,
+                oauthAccountId: session.accountId ?? null,
+            });
+        },
+    };
 }
 
 export class ProviderRouter {
@@ -178,7 +230,13 @@ export class ProviderRouter {
             );
         }
 
-        const provider = await instantiateExternalProvider(providerId, keyRow, plaintextKey);
+        const provider = createExternalProviderInstance(
+            keyRow,
+            plaintextKey,
+            keyRow.authMethod === 'oauth'
+                ? buildOAuthSessionPersist(this.deps.externalKeysRepo, ctx.userId, providerId)
+                : undefined,
+        );
 
         return {
             provider,

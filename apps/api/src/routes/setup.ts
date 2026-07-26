@@ -57,6 +57,7 @@ import {
     chatFeedbackRouter,
     apiKeysRouter,
     externalKeysRouter,
+    externalOAuthRouter,
     artifactsRouter,
     artifactPublicationRouter,
 } from './index';
@@ -261,6 +262,8 @@ export function setupApiRoutes(
     app.use('/api/push', pushRouter);
     app.use('/api/docs', developerDocsRouter);
     app.use('/api/api-keys', apiKeysRouter);
+    // OAuth 디바이스 플로우 (chatgpt) — /:providerId 패턴과 경로 충돌 없도록 선행 마운트
+    app.use('/api/external-keys', externalOAuthRouter);
     app.use('/api/external-keys', externalKeysRouter);
 
     // Swagger 설정

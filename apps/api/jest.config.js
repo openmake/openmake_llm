@@ -28,6 +28,9 @@ module.exports = {
         // ESM-only 패키지를 jest CJS 런타임에서 로드 가능하게 하는 로컬 shim.
         // 개별 테스트의 jest.mock(..., factory)은 그대로 우선 적용된다.
         '^uuid$': '<rootDir>/__mocks__/uuid.js',
+        // @openai-oauth/core 는 ESM-only — 런타임(Node 24)은 require(esm) 로 로드하지만
+        // jest CJS 런타임은 불가. 테스트는 provider 의 transportFactory 주입으로 대체.
+        '^@openai-oauth/core$': '<rootDir>/__mocks__/empty.js',
         '^jsdom$': '<rootDir>/__mocks__/empty.js',
         '^@mozilla/readability$': '<rootDir>/__mocks__/empty.js',
         '^turndown$': '<rootDir>/__mocks__/empty.js',

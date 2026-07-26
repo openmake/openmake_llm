@@ -25,7 +25,17 @@ const logger = createLogger('ExternalKeysRepo');
  */
 const KEY_PREFIX_LENGTH = 12;
 
+/** DB key_prefix 컬럼 상한 (VARCHAR(16), 마이그레이션 016) — 초과 시 INSERT 실패 */
+const KEY_PREFIX_COLUMN_MAX = 16;
+
 export type ExternalSdkType = 'anthropic' | 'openai-compatible';
+
+/**
+ * 키 인증 방식 (마이그레이션 082).
+ * - 'api_key': encrypted_key = 평문 API 키 암호화 (기존 동작)
+ * - 'oauth':   encrypted_key = OAuth 세션 JSON 암호화 (ChatGPT 디바이스 플로우)
+ */
+export type ExternalAuthMethod = 'api_key' | 'oauth';
 
 /**
  * 평문 API 키를 받지 않는 안전 조회 결과 (UI/일반 로직용)
@@ -35,9 +45,14 @@ export interface ExternalApiKeyRow {
     userId: string;
     providerId: string;
     sdkType: ExternalSdkType;
+    authMethod: ExternalAuthMethod;
     displayName: string;
     baseUrl: string | null;
     keyPrefix: string;
+    /** OAuth 계정 식별자 (auth_method='oauth' 전용, 복호화 없이 노출 가능) */
+    oauthAccountId: string | null;
+    /** OAuth access token 만료 시각 (auth_method='oauth' 전용) */
+    oauthExpiresAt: Date | null;
     isActive: boolean;
     lastValidatedAt: Date | null;
     lastValidationOk: boolean | null;
@@ -53,8 +68,14 @@ export interface UpsertExternalApiKeyInput {
     sdkType: ExternalSdkType;
     displayName: string;
     baseUrl?: string | null;
-    /** 평문 API 키 — repo 내부에서 즉시 암호화, 평문 보관 금지 */
+    /** 평문 API 키 또는 OAuth 세션 JSON — repo 내부에서 즉시 암호화, 평문 보관 금지 */
     apiKey: string;
+    /** 인증 방식 — 미지정 시 'api_key' */
+    authMethod?: ExternalAuthMethod;
+    /** OAuth 계정 식별자 (authMethod='oauth' 시) */
+    oauthAccountId?: string | null;
+    /** OAuth access token 만료 시각 (authMethod='oauth' 시) */
+    oauthExpiresAt?: Date | null;
 }
 
 interface DbRow {
@@ -62,10 +83,13 @@ interface DbRow {
     user_id: string;
     provider_id: string;
     sdk_type: ExternalSdkType;
+    auth_method: ExternalAuthMethod;
     display_name: string;
     base_url: string | null;
     encrypted_key: string;
     key_prefix: string;
+    oauth_account_id: string | null;
+    oauth_expires_at: Date | null;
     is_active: boolean;
     last_validated_at: Date | null;
     last_validation_ok: boolean | null;
@@ -89,9 +113,12 @@ function toRow(row: DbRow): ExternalApiKeyRow {
         userId: row.user_id,
         providerId: row.provider_id,
         sdkType: row.sdk_type,
+        authMethod: row.auth_method ?? 'api_key',
         displayName: row.display_name,
         baseUrl: row.base_url,
         keyPrefix: row.key_prefix,
+        oauthAccountId: row.oauth_account_id ?? null,
+        oauthExpiresAt: row.oauth_expires_at ?? null,
         isActive: row.is_active,
         lastValidatedAt: row.last_validated_at,
         lastValidationOk: row.last_validation_ok,
@@ -110,18 +137,27 @@ export class ExternalKeysRepository extends BaseRepository {
      * 평문 키는 즉시 암호화되며 `encrypted_key` 컬럼에만 저장됩니다.
      */
     async upsert(input: UpsertExternalApiKeyInput): Promise<ExternalApiKeyRow> {
+        const authMethod: ExternalAuthMethod = input.authMethod ?? 'api_key';
         const encrypted = encryptToken(input.apiKey);
-        const prefix = buildKeyPrefix(input.apiKey);
+        // OAuth 세션 JSON 은 prefix 로 노출하면 페이로드 조각이 새므로 계정 기반 표시로 대체.
+        // key_prefix 컬럼은 VARCHAR(16) — 'oauth:' (6자) + 계정 앞 10자로 상한을 지킨다.
+        const prefix = authMethod === 'oauth'
+            ? `oauth:${(input.oauthAccountId ?? 'session').slice(0, KEY_PREFIX_COLUMN_MAX - 6)}`
+            : buildKeyPrefix(input.apiKey);
         const result = await this.query<DbRow>(
             `INSERT INTO user_external_api_keys
-                (user_id, provider_id, sdk_type, display_name, base_url, encrypted_key, key_prefix)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+                (user_id, provider_id, sdk_type, display_name, base_url, encrypted_key, key_prefix,
+                 auth_method, oauth_account_id, oauth_expires_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
              ON CONFLICT (user_id, provider_id) DO UPDATE SET
                 sdk_type = EXCLUDED.sdk_type,
                 display_name = EXCLUDED.display_name,
                 base_url = EXCLUDED.base_url,
                 encrypted_key = EXCLUDED.encrypted_key,
                 key_prefix = EXCLUDED.key_prefix,
+                auth_method = EXCLUDED.auth_method,
+                oauth_account_id = EXCLUDED.oauth_account_id,
+                oauth_expires_at = EXCLUDED.oauth_expires_at,
                 is_active = TRUE,
                 last_validated_at = NULL,
                 last_validation_ok = NULL,
@@ -136,6 +172,9 @@ export class ExternalKeysRepository extends BaseRepository {
                 input.baseUrl ?? null,
                 encrypted,
                 prefix,
+                authMethod,
+                input.oauthAccountId ?? null,
+                input.oauthExpiresAt?.toISOString() ?? null,
             ],
         );
         const row = result.rows[0];
@@ -190,6 +229,39 @@ export class ExternalKeysRepository extends BaseRepository {
         const row = result.rows[0];
         if (!row) return null;
         return decryptToken(row.encrypted_key);
+    }
+
+    /**
+     * OAuth 세션 갱신 (refresh token rotate) 후 암호화 페이로드·만료 메타를 갱신합니다.
+     * 평문 세션 JSON 은 즉시 암호화되며 로그에 남기지 않습니다.
+     */
+    async updateOAuthSession(
+        userId: string,
+        providerId: string,
+        input: {
+            /** 평문 OAuth 세션 JSON (repo 내부에서 즉시 암호화) */
+            plaintextSession: string;
+            oauthExpiresAt: Date | null;
+            oauthAccountId?: string | null;
+        },
+    ): Promise<void> {
+        const encrypted = encryptToken(input.plaintextSession);
+        await this.query(
+            `UPDATE user_external_api_keys
+             SET encrypted_key = $3,
+                 oauth_expires_at = $4,
+                 oauth_account_id = COALESCE($5, oauth_account_id),
+                 updated_at = now()
+             WHERE user_id = $1 AND provider_id = $2 AND is_active = TRUE`,
+            [
+                userId,
+                providerId,
+                encrypted,
+                input.oauthExpiresAt?.toISOString() ?? null,
+                input.oauthAccountId ?? null,
+            ],
+        );
+        logger.debug(`OAuth 세션 갱신: user=${userId} provider=${providerId}`);
     }
 
     /**

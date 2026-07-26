@@ -10,6 +10,9 @@ import {
 } from '../services/OpenAICompatService';
 import { listAvailableModels } from '../chat/profile-resolver';
 import { parseFullModelId } from '../providers/i-provider';
+import { getProviderCatalogEntry } from '../config/external-providers';
+import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
+import { getPool } from '../data/models/unified-database';
 
 const openaiCompatRouter = Router();
 let clusterManager: ClusterManager;
@@ -137,21 +140,42 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
     // body.model 검증 (2026-05-19): 이전엔 임의 문자열도 buildExecutionPlan() 가 기본 모델로
     // silent override → 운영자/외부 클라이언트가 *잘못된 모델 이름* 을 보내도 알 길 없음.
     // vLLM/OpenAI spec 준수 위해 listAvailableModels() 에 없는 model id 는 404 로 거절.
-    // 호환: 'local-llm:<model>' fullId 형식 허용. 그 외 알 수 없는 prefix 는
-    // 아래 available 검증에서 404 로 명시 거절.
+    // 호환: 'local-llm:<model>' fullId 형식 허용.
+    // 외부 provider 개방 (2026-07-26 Phase 2): 카탈로그 등록 provider 의 fullId
+    // ('openrouter:*', 'chatgpt:*' 등)는 요청 사용자의 BYO 키/OAuth 세션이 등록돼
+    // 있으면 통과 — CLI/서드파티 OpenAI 호환 클라이언트에서 외부 모델 사용 가능.
+    // 다운스트림 dispatch 는 채팅 단일 경로의 provider gate 가 동일하게 처리한다.
+    // 그 외 알 수 없는 prefix 는 아래 available 검증에서 404 로 명시 거절.
     {
         const available = new Set(listAvailableModels().map((m) => m.id));
         const requested = body.model;
         let resolvedModelId: string = requested;
+        let externalAllowed = false;
         if (requested.includes(':')) {
             try {
                 const parsed = parseFullModelId(requested);
                 if (parsed.providerId === 'local-llm') {
                     resolvedModelId = parsed.modelId;
+                } else if (getProviderCatalogEntry(parsed.providerId)) {
+                    const apiUserId = req.apiKeyRecord?.user_id?.toString() || null;
+                    if (apiUserId) {
+                        const keyRow = await new ExternalKeysRepository(getPool())
+                            .getByUserAndProvider(apiUserId, parsed.providerId);
+                        externalAllowed = !!keyRow;
+                    }
+                    if (!externalAllowed) {
+                        openaiError(
+                            res,
+                            403,
+                            `Model '${requested}' requires a registered '${parsed.providerId}' key for this account. ` +
+                            `Register it in Settings → 외부 LLM 연동.`,
+                        );
+                        return;
+                    }
                 }
             } catch { /* invalid fullId 형식 — 그대로 검증 */ }
         }
-        if (!available.has(requested) && !available.has(resolvedModelId)) {
+        if (!externalAllowed && !available.has(requested) && !available.has(resolvedModelId)) {
             openaiError(
                 res,
                 404,

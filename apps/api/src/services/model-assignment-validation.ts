@@ -12,6 +12,10 @@ import { getPool } from '../data/models/unified-database';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { EXTERNAL_PROVIDER_CATALOG } from '../config/external-providers';
 import { isExternalFullId, toLocalModelTag } from '../config/model-roles';
+import {
+    createExternalProviderInstance,
+    buildOAuthSessionPersist,
+} from '../providers/provider-router';
 import { createClient } from '../llm';
 import { createLogger } from '../utils/logger';
 
@@ -39,13 +43,36 @@ async function validateExternalAssignment(userId: string, fullId: string): Promi
 
     // 실호출 probe — /models 카탈로그에 있어도 계정별로 추론이 404/403 인 모델이 있다
     // (NVIDIA 무료티어 등). 실제 역할 수행 불가 모델을 배정 시점에 거부한다.
+    //
+    // provider 별 호출 규약 차이(OAuth 세션·Responses API 등)는 공용 팩토리가 흡수한다 —
+    // 직접 LLMClient 를 조립하면 ChatGPT(OAuth) 처럼 base_url+Bearer 규약이 아닌
+    // provider 가 Cloudflare 403 으로 떨어진다 (2026-07-26 라이브에서 확인).
     const plaintextKey = await keysRepo.decryptKey(userId, providerId);
     if (!plaintextKey) return `'${providerId}' 키 복호화 실패`;
-    const baseUrl = keyRow.baseUrl || entry.defaultBaseUrl;
     try {
-        const client = createClient({ baseUrl, apiKey: plaintextKey, model: modelId, userId });
-        await client.derive({ timeout: ASSIGNMENT_PROBE_TIMEOUT_MS })
-            .chat([{ role: 'user', content: 'ping' }], { num_predict: 1 }, undefined, { think: false });
+        const provider = createExternalProviderInstance(
+            keyRow,
+            plaintextKey,
+            keyRow.authMethod === 'oauth'
+                ? buildOAuthSessionPersist(keysRepo, userId, providerId)
+                : undefined,
+        );
+        const abort = new AbortController();
+        const timer = setTimeout(() => abort.abort(), ASSIGNMENT_PROBE_TIMEOUT_MS);
+        timer.unref?.();
+        try {
+            await provider.streamChat(
+                {
+                    messages: [{ role: 'user', content: 'ping' }],
+                    modelId,
+                    maxTokens: 1,
+                    abortSignal: abort.signal,
+                },
+                {},
+            );
+        } finally {
+            clearTimeout(timer);
+        }
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         logger.warn(`모델 배정 probe 실패 (${fullId}): ${msg}`);
