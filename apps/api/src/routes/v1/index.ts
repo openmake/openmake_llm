@@ -171,6 +171,8 @@ v1Router.get('/models', asyncHandler(async (req, res) => {
             const repo = new ExternalKeysRepository(getPool());
             const cacheTtlMs = parseInt(process.env.EXTERNAL_MODELS_CACHE_TTL_MS ?? '3600000', 10);
             const keys = await repo.listByUser(apiUserId);
+            // 실사용 불가 모델 제외 (083) — /api/models 와 동일 규칙
+            const unusable = await repo.listUnusableModels(apiUserId).catch(() => new Set<string>());
             for (const keyRow of keys) {
                 const cached = await repo.getCachedModels(apiUserId, keyRow.providerId, cacheTtlMs) as
                     | Array<{ id?: string; fullId?: string }>
@@ -184,6 +186,7 @@ v1Router.get('/models', asyncHandler(async (req, res) => {
                     }));
                 for (const m of entries) {
                     if (!m.fullId) continue;
+                    if (unusable.has(m.fullId)) continue;
                     data.push({
                         id: m.fullId,
                         object: 'model',

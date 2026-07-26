@@ -94,6 +94,17 @@ export async function streamFromExternalProvider(
             `외부 provider 실패 → 로컬 폴백: ${resolved.fullId} → ${localFullId} `
             + `(${err instanceof Error ? err.message.slice(0, 120) : String(err).slice(0, 120)})`,
         );
+        // 사용자 고지 — 폴백은 대화를 살리지만, 알리지 않으면 "선택한 모델이 답했다"고
+        // 오인한다(실측: Ollama Cloud 403 후 로컬이 답했는데 표시가 없었음).
+        deps.onSystemEvent?.({
+            type: 'model_fallback',
+            message: `선택한 모델(${resolved.fullId})이 응답하지 않아 기본 모델로 답변했습니다.`,
+            metadata: {
+                from: resolved.fullId,
+                to: localFullId,
+                reason: err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200),
+            },
+        });
         return runExternalStream(deps, localResolved, req, onToken, ctx);
     }
 }

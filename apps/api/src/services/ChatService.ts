@@ -103,6 +103,13 @@ export class ChatService {
      */
     private currentMcpToolStartCallback?: (event: { toolName: string }) => void;
 
+    /**
+     * 현재 채팅의 시스템 이벤트 콜백 (WS 'system_event' 로 relay).
+     * 외부 provider 실패 → 로컬 폴백처럼 "답변 생성 모델이 바뀐" 사실을 사용자에게
+     * 고지하는 데 쓴다. 고지가 없으면 다른 모델이 답해도 사용자가 알 수 없다.
+     */
+    private currentSystemEventCallback?: SystemEventCallback;
+
     /** 멀티 에이전트 토론 전략 */
     private readonly discussionStrategy: DiscussionStrategy;
     /** 심층 연구 오케스트레이션 전략 */
@@ -311,6 +318,8 @@ export class ChatService {
         this.currentMcpToolResultCallback = onMcpToolResult;
         // MCP tool 시작 콜백 — 도구 실행 직전 진행 표시용 (동일 경로 공유)
         this.currentMcpToolStartCallback = onMcpToolStart;
+        // 시스템 이벤트 콜백 — provider 폴백 고지 등 메타 알림에 사용 (external-fallback)
+        this.currentSystemEventCallback = onSystemEvent;
         // 채팅 요청 전체를 root span으로 추적 (모든 LLM/도구 호출이 자식 span으로 자동 연결)
         return withSpan(
             'chat-service',
@@ -510,6 +519,7 @@ export class ChatService {
             mcpToolResultCallback: this.currentMcpToolResultCallback,
             mcpToolStartCallback: this.currentMcpToolStartCallback,
             onUsage: (usage) => { this.lastProviderUsage = usage; },
+            ...(this.currentSystemEventCallback ? { onSystemEvent: this.currentSystemEventCallback } : {}),
             allowedTools: await this.getAllowedTools(reqCtx),
         };
     }

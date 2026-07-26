@@ -69,6 +69,7 @@ export function useChatSocket() {
     appendMessage,
     setChatHistory,
     appendToken,
+    setModelFallback,
     appendThinking,
     setThinkingSummary,
     setStreaming,
@@ -183,6 +184,17 @@ export function useChatSocket() {
         case "mcp_tool_result":
           // 도구 결과 도착 — 인디케이터 해제(다음 도구 시작 시 다시 표시).
           setActiveTool(null);
+          break;
+        case "system_event":
+          // 백엔드 메타 알림 — 현재는 모델 폴백 고지만 처리한다.
+          if (data.payload?.type === "model_fallback") {
+            const md = (data.payload.metadata ?? {}) as { from?: string; to?: string; reason?: string };
+            setModelFallback({
+              from: String(md.from ?? ""),
+              to: String(md.to ?? ""),
+              ...(md.reason ? { reason: String(md.reason) } : {}),
+            });
+          }
           break;
         case "agent_selected":
           setActiveAgent({ name: data.agent.name, emoji: data.agent.emoji });

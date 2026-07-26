@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown, GitPullRequest, Wrench, Pencil } from "lucide-react";
+import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown, GitPullRequest, Wrench, Pencil, AlertTriangle } from "lucide-react";
 import { ThinkingTimeline } from "@/components/chat/thinking-timeline";
 import { SteeringInput } from "@/components/chat/steering-input";
 import { DiffView } from "@/components/chat/diff-view";
@@ -554,6 +554,20 @@ export function MessageList() {
             <Image src="/logo.png" alt="OpenMake" width={28} height={28} className="mt-0.5 h-7 w-7 shrink-0 rounded-md object-contain" />
             <div className="min-w-0 flex-1">
               <p className="mb-1 text-xs font-medium text-muted">OpenMake</p>
+              {m.modelFallback && (
+                <div
+                  className="mb-2 flex items-start gap-1.5 rounded-md border border-warn/30 bg-warn/5 px-2.5 py-1.5 text-xs text-muted"
+                  title={m.modelFallback.reason}
+                >
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" aria-hidden />
+                  <span>
+                    {t("modelFallbackNotice", {
+                      from: m.modelFallback.from,
+                      to: m.modelFallback.to,
+                    })}
+                  </span>
+                </div>
+              )}
               {m.reasoning && (
                 <ThinkingTimeline
                   reasoning={m.reasoning}

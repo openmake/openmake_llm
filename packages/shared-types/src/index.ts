@@ -130,6 +130,14 @@ export type WsServerEvent =
   | { type: "thinking"; token: string; messageId?: string }
   | { type: "thinking_summary"; summary: string; messageId?: string }
   | { type: "session_created"; sessionId: string }
+  /**
+   * 백엔드 메타 알림 (ws-chat-handler onSystemEvent).
+   * 현재 소비: 'model_fallback' — 선택 모델 실패로 다른 모델이 답했음을 고지.
+   */
+  | {
+      type: "system_event";
+      payload: { type: string; message: string; metadata?: Record<string, unknown> };
+    }
   | {
       type: "done";
       messageId?: string;

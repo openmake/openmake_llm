@@ -948,6 +948,17 @@ export const ROUTING_VERIFICATION = {
  * 구독 한도(429)·세션 만료(401)를 만나면 대화가 통째로 실패했다(2026-07-26 점검).
  * 스트리밍 도중 교체는 답변이 섞이므로, 폴백은 "첫 토큰 이전"에만 수행한다.
  */
+/**
+ * 외부 모델 가용성 프로브 (services/model-availability-probe).
+ * provider 카탈로그를 최소 요청으로 찔러 실사용 가능 모델만 남기는 점검의 한도.
+ */
+export const MODEL_AVAILABILITY_PROBE = {
+    /** 모델 1건당 상한 — 초과 시 '판정 보류'(기록 안 함). MODEL_PROBE_TIMEOUT_MS */
+    TIMEOUT_MS: parseInt(process.env.MODEL_PROBE_TIMEOUT_MS || '20000', 10),
+    /** 동시 프로브 수 — upstream rate limit 회피. MODEL_PROBE_CONCURRENCY */
+    CONCURRENCY: parseInt(process.env.MODEL_PROBE_CONCURRENCY || '6', 10),
+} as const;
+
 export const EXTERNAL_CHAT_FALLBACK = {
     /** 기능 게이트 — 끄려면 EXTERNAL_CHAT_LOCAL_FALLBACK=false */
     ENABLED: process.env.EXTERNAL_CHAT_LOCAL_FALLBACK !== 'false',

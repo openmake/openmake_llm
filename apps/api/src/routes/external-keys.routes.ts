@@ -44,6 +44,7 @@ const KEY_VALIDATION_TIMEOUT_MS = parseInt(
     process.env.EXTERNAL_KEY_VALIDATION_TIMEOUT_MS || '8000', 10,
 );
 import type { IProvider } from '../providers/i-provider';
+import { probeProviderModels } from '../services/model-availability-probe';
 import { createLogger } from '../utils/logger';
 
 const router = Router();
@@ -185,6 +186,9 @@ router.post('/:providerId',
 
         // 키 변경 시 모델 카탈로그 캐시 무효화 (stale 데이터 제거)
         await getRepo().invalidateCachedModels(userId, providerId);
+        // 키가 바뀌면 접근 권한도 달라질 수 있다 — 이전 가용성 판정(083)을 초기화해
+        // 구독 업그레이드 후에도 모델이 계속 숨겨지는 일이 없게 한다.
+        await getRepo().clearModelAvailability(userId, providerId);
 
         // 등록 직후 즉시 검증 (2026-07-04): base_url 오타·죽은 endpoint·잘못된 키가
         // "등록 성공 후 모델 목록이 비는" 지연 실패로 발현되던 것을 조기 피드백.
@@ -397,6 +401,39 @@ router.post('/:providerId/validate',
         }));
     }),
 );
+
+/**
+ * POST /api/external-keys/:providerId/probe
+ * 등록된 provider 의 카탈로그 모델을 일괄 점검해 실사용 불가 모델을 기록한다.
+ *
+ * provider 의 /v1/models 는 계정 권한과 무관하게 전체를 반환하므로(Ollama Cloud
+ * 구독 전용 403, NVIDIA 계정별 404), 이 결과로 모델 목록에서 걸러낸다.
+ * 카탈로그가 크면 수 분이 걸릴 수 있어 동시성·타임아웃 상한을 둔다.
+ */
+router.post('/:providerId/probe', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    if (!userId) {
+        res.status(401).json(unauthorized('User ID not found.'));
+        return;
+    }
+    const providerId = req.params.providerId;
+    if (!getProviderCatalogEntry(providerId)) {
+        res.status(404).json(notFound(`Unknown provider: ${providerId}`));
+        return;
+    }
+    try {
+        const result = await probeProviderModels(userId, providerId, getRepo());
+        // 판정이 바뀌었을 수 있으므로 모델 카탈로그 캐시를 무효화 → 다음 조회에서 재구성
+        await getRepo().invalidateCachedModels(userId, providerId);
+        logger.info(
+            `모델 가용성 프로브: user=${userId} provider=${providerId} `
+            + `usable=${result.usable} unusable=${result.unusable} inconclusive=${result.inconclusive}`,
+        );
+        res.json(success(result));
+    } catch (err) {
+        res.status(400).json(badRequest(err instanceof Error ? err.message : '프로브 실패'));
+    }
+}));
 
 /**
  * GET /api/external-keys/:providerId/models

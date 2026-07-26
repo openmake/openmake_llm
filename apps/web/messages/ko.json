@@ -389,7 +389,8 @@
       "copy": "복사",
       "copied": "복사됨",
       "download": ".patch 다운로드"
-    }
+    },
+    "modelFallbackNotice": "선택한 모델({from})이 응답하지 않아 기본 모델({to})로 답변했습니다."
   },
   "artifacts": {
     "exec": {
