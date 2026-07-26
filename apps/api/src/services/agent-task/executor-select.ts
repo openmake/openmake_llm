@@ -27,8 +27,10 @@ export function resolveExecutorPlan(
     userId: string,
 ): ExecutorPlan {
     const isLocal = input.executor === 'local' && LOCAL_BRIDGE.ENABLED;
+    // 로컬: 파일/기타 도구는 서버 승인 유지(디바이스는 파일에 다이얼로그 없음)하되, 코드 실행
+    // (bash/python_execute)은 디바이스 confirmExec 가 게이트하므로 deviceGatesShell 로 서버 승인 skip.
     const sandboxCfg = isLocal
-        ? { ...getTaskSandboxConfig(), approvalPolicy: 'all' as const }
+        ? { ...getTaskSandboxConfig(), approvalPolicy: 'all' as const, deviceGatesShell: true }
         : input.approvalPolicy
             ? { ...getTaskSandboxConfig(), approvalPolicy: input.approvalPolicy }
             : getTaskSandboxConfig();

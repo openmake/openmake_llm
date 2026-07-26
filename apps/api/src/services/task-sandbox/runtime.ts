@@ -157,7 +157,7 @@ export class TaskRuntime {
                 : `사용자가 승인했습니다(계속 진행). 질문: ${question}`;
         }
 
-        if (requiresApproval(this.cfg.approvalPolicy, name, args)) {
+        if (requiresApproval(this.cfg.approvalPolicy, name, args, { deviceGatesShell: this.cfg.deviceGatesShell })) {
             const { decision, waitedMs } = await getApprovalRegistry().request(
                 { taskId: this.taskId, userId: this.userId, toolName: name, args },
                 { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending },

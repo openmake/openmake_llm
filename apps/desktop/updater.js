@@ -15,6 +15,17 @@ const CHECK_DELAY_MS = 5000;
 // 매니페스트 파일명 화이트리스트 — 교체 스크립트에 문자열로 보간되므로 서버(config/
 // desktop-update.ts)와 같은 패턴을 앱에서도 검증한다(백엔드 전환 가능 → 서버 검증만 의존 불가).
 const FILE_PATTERN = /^OpenMake-[A-Za-z0-9.-]+\.dmg$/;
+const SHA256_PATTERN = /^[0-9a-f]{64}$/i;
+
+// 업데이트는 미서명(ad-hoc) 교체라 무결성 신뢰가 전송 보안에 달려 있다. HTTPS 또는
+// 루프백(로컬 백엔드)에서만 허용해 평문 HTTP MITM 으로 악성 dmg 가 주입되는 것을 막는다.
+function isSecureUpdateOrigin(backendUrl) {
+  try {
+    const u = new URL(backendUrl);
+    if (u.protocol === 'https:') return true;
+    return ['localhost', '127.0.0.1', '::1', '[::1]'].includes(u.hostname);
+  } catch { return false; }
+}
 
 /** "1.2.0" 형태 비교 — a > b 이면 양수. */
 function cmpVersion(a, b) {
@@ -68,9 +79,13 @@ rm -f "$0"
  */
 async function checkForUpdate(backendUrl, win, interactive) {
   try {
+    if (!isSecureUpdateOrigin(backendUrl)) {
+      throw new Error('업데이트는 HTTPS(또는 로컬호스트) 백엔드에서만 허용됩니다');
+    }
     const m = (await fetchJson(`${backendUrl}/api/desktop/latest`)).data;
-    if (!m || !m.version || !FILE_PATTERN.test(String(m.file))) {
-      throw new Error('업데이트 매니페스트 형식이 올바르지 않습니다');
+    // sha256 은 필수 — 없으면(또는 형식 불량) 무결성 검증이 불가하므로 거부한다.
+    if (!m || !m.version || !FILE_PATTERN.test(String(m.file)) || !SHA256_PATTERN.test(String(m.sha256 || ''))) {
+      throw new Error('업데이트 매니페스트 형식이 올바르지 않습니다(version·file·sha256 확인)');
     }
     const current = app.getVersion();
     if (cmpVersion(m.version, current) <= 0) {
@@ -92,7 +107,7 @@ async function checkForUpdate(backendUrl, win, interactive) {
 
     const dmgPath = path.join(os.tmpdir(), m.file);
     const sha = await downloadTo(`${backendUrl}${m.url}`, dmgPath);
-    if (m.sha256 && sha !== m.sha256) {
+    if (sha.toLowerCase() !== String(m.sha256).toLowerCase()) {
       fs.rmSync(dmgPath, { force: true });
       throw new Error('다운로드 무결성 검증 실패(sha256 불일치)');
     }

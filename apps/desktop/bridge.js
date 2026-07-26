@@ -1,10 +1,15 @@
 // Local Bridge (Cowork D1b) — 로컬 실행기: 서버 Agent Task 의 도구 호출을
-// 사용자가 승인·연결한 폴더 스코프 안에서 실행한다. 프로토콜은 서버
+// 사용자가 연결한 폴더를 작업 기준으로 실행한다. 프로토콜은 서버
 // apps/api/src/services/local-bridge/ (D1a) 와 1:1.
 //
 // 보안 불변식:
 //  - 고정 kind 화이트리스트만 처리 (임의 RPC 거부)
-//  - 모든 경로는 연결 폴더 realpath 스코프 안에서만 해석 (심링크 탈출 차단)
+//  - 파일 kind(read/write/list/delete)의 경로는 연결 폴더 realpath 스코프 안에서만
+//    해석 (심링크 탈출 차단)
+//  - ⚠️ exec 는 폴더 스코프에 갇히지 않는다 — 셸 명령은 사용자 계정 권한으로 실행되어
+//    폴더 밖 파일·네트워크에도 접근할 수 있다. 그래서 exec 는 ① 명백히 위험한 패턴을
+//    디바이스에서 hard-block(EXEC_DENYLIST) 하고 ② 나머지는 실행 전 매번 사용자
+//    확인(confirmExec)을 받는다 — 서버 승인 설정과 무관한 비우회 게이트.
 //  - 인증은 앱 세션의 auth_token 쿠키 재사용 (토큰을 디스크에 저장하지 않음)
 const { session, dialog } = require('electron');
 const fs = require('fs');
@@ -16,6 +21,25 @@ const WebSocket = require('ws');
 const EXEC_TIMEOUT_MS = 120000;
 const MAX_BUFFER = 1024 * 1024;
 const RECONNECT_MS = 10000;
+
+// exec 가드레일(보안 경계 아님, 우발·명백 유출 백스톱) — 매칭 시 확인 없이 즉시 거부.
+// 난독화로 우회 가능함을 인정하되, LLM 인젝션·실수로 인한 명백한 파괴/유출을 차단한다.
+const EXEC_DENYLIST = [
+  { re: /(^|[;&|(]|\s)sudo\s/, why: '권한 상승(sudo)' },
+  { re: /(^|[;&|(]|\s)doas\s/, why: '권한 상승(doas)' },
+  { re: /(curl|wget)\s[^|]*\|\s*(sh|bash|zsh)\b/, why: '원격 스크립트 직접 실행(pipe-to-shell)' },
+  { re: /\|\s*(sh|bash|zsh)\b/, why: '파이프-투-셸 실행' },
+  { re: /\brm\s+-\w*\s+(\/|~|\$HOME|\$\{HOME\})(\s|$)/, why: '홈/루트 대량 삭제' },
+  { re: /\.ssh(\/|\b)/, why: 'SSH 키 디렉토리 접근' },
+  { re: /id_rsa|id_ed25519|\.aws\/credentials|\.config\/gcloud/, why: '자격증명 파일 접근' },
+  { re: /:\s*\(\s*\)\s*\{/, why: 'fork bomb' },
+  { re: /\bdd\s+if=|\bmkfs\b|>\s*\/dev\/(disk|sd|rdisk)/, why: '디스크 파괴 연산' },
+];
+function matchDenylist(cmd) {
+  const c = String(cmd);
+  for (const d of EXEC_DENYLIST) if (d.re.test(c)) return d.why;
+  return null;
+}
 // 서버 WS 하트비트는 액세스 토큰 만료 시 연결을 terminate 한다 — 세션 쿠키에서 최신
 // 토큰을 읽어 기존 refresh 프로토콜({type:'refresh'})로 주기 연장해 유휴 플랩을 막는다.
 const REFRESH_MS = parseInt(process.env.OMK_BRIDGE_REFRESH_MS || '300000', 10);
@@ -27,6 +51,24 @@ let reconnectTimer = null;
 let refreshTimer = null;
 let statusText = '미연결';
 let onStatusChange = () => {};
+let mainWin = null;          // exec 확인 다이얼로그의 부모 창
+
+/** exec 실행 전 사용자 확인(비우회). 거부/취소면 false. 실행될 명령 원문을 그대로 보여준다. */
+async function confirmExec(command) {
+  // 테스트 훅(개발/E2E 전용): 다이얼로그 없이 자동 승인 (다른 OMK_BRIDGE_* 훅과 동일 계열).
+  if (process.env.OMK_BRIDGE_AUTO_APPROVE === '1') return true;
+  const preview = command.length > 800 ? command.slice(0, 800) + '…' : command;
+  const r = await dialog.showMessageBox(mainWin || undefined, {
+    type: 'warning',
+    message: '에이전트가 이 셸 명령을 당신의 컴퓨터에서 실행하려고 합니다',
+    detail: `${preview}\n\n연결 폴더: ${folderRoot}\n이 명령은 당신 계정 권한으로 실행되며 폴더 밖 파일·네트워크에도 접근할 수 있습니다.`,
+    buttons: ['실행', '거부'],
+    defaultId: 1,
+    cancelId: 1,
+    noLink: true,
+  });
+  return r.response === 0;
+}
 
 function deviceId(app) {
   const p = path.join(app.getPath('userData'), 'device-id');
@@ -58,13 +100,21 @@ function walk(dir, base, out) {
   return out;
 }
 
-function handleExec(m, done) {
+async function handleExec(m, done) {
   switch (m.kind) {
-    case 'exec':
+    case 'exec': {
+      // ① 명백히 위험한 패턴은 확인 없이 즉시 거부 (guardrail).
+      const denied = matchDenylist(m.command);
+      if (denied) { done({ ok: false, error: `위험 명령으로 차단됨: ${denied}`, exitCode: 126 }); return; }
+      // ② 나머지는 실행 전 사용자 확인 (비우회).
+      if (!(await confirmExec(String(m.command || '')))) {
+        done({ ok: false, error: '사용자가 명령 실행을 거부했습니다', exitCode: 126 }); return;
+      }
       exec(m.command, { cwd: folderRoot, timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_BUFFER }, (err, stdout, stderr) => {
         done({ ok: true, stdout: String(stdout), stderr: String(stderr), exitCode: err ? (err.code ?? 1) : 0 });
       });
       return;
+    }
     case 'read': done({ ok: true, content: fs.readFileSync(safe(m.path), 'utf8') }); return;
     case 'write': {
       const abs = safe(m.path);
@@ -129,7 +179,8 @@ async function connect(app, backendUrl) {
     const done = (result) => {
       try { ws.send(JSON.stringify({ type: 'bridge_result', reqId: m.reqId, result: { durationMs: Date.now() - t0, ...result } })); } catch { /* noop */ }
     };
-    try { handleExec(m, done); } catch (e) { done({ ok: false, error: String(e.message || e) }); }
+    // handleExec 는 async(exec 승인 대기) — sync/async 예외를 모두 done 으로 흡수.
+    Promise.resolve().then(() => handleExec(m, done)).catch((e) => done({ ok: false, error: String(e.message || e) }));
   });
 
   ws.on('close', () => {
@@ -144,11 +195,12 @@ async function connect(app, backendUrl) {
 
 /** 메뉴: 폴더 선택 → 연결. 테스트 훅 OMK_BRIDGE_FOLDER 로 다이얼로그 생략 가능. */
 async function connectFolder(app, backendUrl, win) {
+  mainWin = win || mainWin;
   let folder = process.env.OMK_BRIDGE_FOLDER;
   if (!folder) {
     const r = await dialog.showOpenDialog(win, {
       title: '에이전트 작업에 연결할 폴더 선택',
-      message: '선택한 폴더 안에서만 에이전트가 파일을 읽고 씁니다.',
+      message: '이 폴더를 작업 기준으로 파일을 읽고 씁니다. 셸 명령은 실행 전 매번 확인을 받으며, 승인 시 당신 계정 권한으로 실행됩니다(폴더 밖·네트워크 접근 가능).',
       properties: ['openDirectory', 'createDirectory'],
     });
     if (r.canceled || !r.filePaths[0]) return;

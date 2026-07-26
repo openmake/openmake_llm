@@ -29,16 +29,24 @@ const HIGH_RISK_TOOLS = new Set(['bash', 'browser', 'python_execute', 'skill_run
 const NO_APPROVAL_TOOLS = new Set(['terminate', 'ask_human', 'plan_create', 'plan_update', 'plan_view', 'delegate', 'spawn_agents']);
 /** 고위험으로 보는 file_ops 작업. */
 const HIGH_RISK_FILE_OPS = new Set(['delete']);
+/** 디바이스(로컬 브리지)가 실행 직전 자체 확인하는 코드 실행 도구 — 서버 승인 중복이라 skip 대상. */
+const DEVICE_GATED_SHELL = new Set(['bash', 'python_execute']);
 
-/** PURE: 도구 호출이 승인을 요구하는지 정책에 따라 판정. */
+/** PURE: 도구 호출이 승인을 요구하는지 정책에 따라 판정.
+ *  opts.deviceGatesShell=true(로컬 브리지 실행)면 exec 계열(bash/python_execute)은 디바이스가
+ *  실행 직전 사용자 확인을 강제하므로 서버측 승인을 skip 한다(이중 프롬프트 제거). 파일/기타
+ *  도구는 디바이스가 다이얼로그를 띄우지 않으므로 정책대로 서버 승인을 유지한다. */
 export function requiresApproval(
     policy: TaskSandboxApprovalPolicy,
     toolName: string,
     args: Record<string, unknown>,
+    opts: { deviceGatesShell?: boolean } = {},
 ): boolean {
     if (policy === 'none') return false;
     // 제어 시그널·플래닝은 승인 불요(부작용 없음).
     if (NO_APPROVAL_TOOLS.has(toolName)) return false;
+    // 로컬 브리지: 코드 실행은 디바이스가 게이트 → 서버 승인 중복 제거.
+    if (opts.deviceGatesShell && DEVICE_GATED_SHELL.has(toolName)) return false;
     if (policy === 'all') return true;
     // high-risk
     if (HIGH_RISK_TOOLS.has(toolName)) return true;
