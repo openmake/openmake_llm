@@ -31,7 +31,6 @@ import { buildExecutionPlan } from './profile-resolver';
 import { applySlashCommand } from './slash-command';
 import { detectFastPath } from './fast-path-detector';
 import { historySummaryCache } from '../services/chat-service/history-summary-cache';
-import { servedModelLabel } from '../services/chat-service/provider-gate';
 import { summarizeHistory } from './history-summarizer';
 import { HISTORY_SUMMARIZER } from '../config/runtime-limits';
 import { createLogger } from '../utils/logger';
@@ -41,9 +40,8 @@ import { ExternalKeysRepository } from '../data/repositories/external-keys-repo'
 import { getPool } from '../data/models/unified-database';
 import { extractAndStripArtifacts, findArtifactPlaceholderIds, stripArtifactPlaceholders } from '../llm/artifact-parser';
 import { ArtifactRepository, ArtifactSizeError, type ArtifactKind } from '../data/repositories/artifact-repository';
-import { processExternalToolCalling } from './external-tool-calling';
 import { ensureSession, saveUserMessage, saveAssistantMessage } from './request-persistence';
-import { getProviderCatalogEntry } from '../config/external-providers';
+import { handleToolCallingPath } from './tool-calling-path';
 import { createThinkingSummarySession } from '../services/chat-service/thinking-summarizer';
 import { getConversationDB } from '../data/conversation-db';
 import type {
@@ -293,65 +291,11 @@ export class ChatRequestHandler {
         // ChatService를 우회하여 단일 턴 LLM 호출 후 tool_calls 반환
         // ═══════════════════════════════════════════════════════
         if (tools && tools.length > 0) {
-            // 외부 provider fullId (Phase 2, 2026-07-26): 'chatgpt:*'/'openrouter:*' 등은
-            // provider gate 로 해석해 외부 어댑터로 dispatch — 이전엔 로컬 client 로
-            // silent fallback 되어 CLI 도구(tools 파라미터) 경로에서 외부 모델이 무시됐다.
-            // 해석 실패(키 미등록 등)는 ProviderError 를 그대로 전파해 명시 거절.
-            let externalProvider: { provider: import('../providers/i-provider').IProvider; modelId: string } | undefined;
-            {
-                const reqModel = (model || '').trim();
-                const colonIdx = reqModel.indexOf(':');
-                const prefix = colonIdx > 0 ? reqModel.slice(0, colonIdx) : '';
-                if (prefix && prefix !== 'local-llm' && getProviderCatalogEntry(prefix)) {
-                    const providerRouter = new ProviderRouter({
-                        localProvider: new LocalLLMProvider(client),
-                        externalKeysRepo: new ExternalKeysRepository(getPool()),
-                    });
-                    const resolved = await providerRouter.resolve(reqModel, {
-                        ...(userContext.authenticatedUserId
-                            ? { userId: userContext.authenticatedUserId }
-                            : {}),
-                        userRole: userContext.userRole,
-                    });
-                    externalProvider = { provider: resolved.provider, modelId: resolved.modelId };
-                    servedModel = servedModelLabel(resolved);
-                }
-            }
-
-            const result = await processExternalToolCalling({
-                message,
-                history,
-                images,
-                tools,
-                tool_choice,
-                client,
-                ...(externalProvider ? { externalProvider } : {}),
-                onToken,
-                abortSignal,
+            return handleToolCallingPath({
+                message, history, images, tools, tool_choice, model, client, userContext,
+                sessionId: currentSessionId, auditUserId, persistContent, plan, startTime,
+                onToken, abortSignal,
             });
-
-            const endTime = Date.now();
-            const responseTime = endTime - startTime;
-
-            // AI 응답 저장 (tool_calls인 경우에도 히스토리에 기록)
-            await saveAssistantMessage(
-                currentSessionId,
-                auditUserId,
-                result.response,
-                servedModel,
-                responseTime,
-                persistContent,
-            );
-
-            return {
-                response: result.response,
-                sessionId: currentSessionId,
-                model: servedModel,
-                executionPlan: plan,
-                responseTime,
-                tool_calls: result.tool_calls,
-                finish_reason: result.finish_reason,
-            };
         }
 
         // ═══════════════════════════════════════════════════════
