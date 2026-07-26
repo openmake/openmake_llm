@@ -46,7 +46,7 @@ import { resolveExecutorPlan } from './agent-task/executor-select';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
 import { assembleAgentTools } from './agent-task/tool-assembly';
 import { verifyCodeArtifacts } from './agent-task/deliverable-verify';
-import { buildAgentTaskSystemContent, AGENT_TASK_SKILL_AGENT_ID } from './agent-task/skill-block';
+import { buildAgentTaskSystemContent, resolveSkillToolBindings } from './agent-task/skill-block';
 
 // 기존 import 호환 재노출 — 타입/에러는 services/agent-task/types 로 분리 (파일 크기 가드).
 export { AgentTaskAbort, type AgentTaskRunInput, type AgentTaskInputFile } from './agent-task/types';
@@ -179,26 +179,10 @@ export class AgentTaskService {
                 userId,
             })) as unknown as ToolDefinition[], userRole);
 
-            // 활성 스킬(global+user)의 tool_bindings 를 머지.
-            // base 가 전체 도구라 실효는 사실상 denied(특정 도구 차단)뿐이다.
-            // 조회 실패는 작업을 실패시키지 않고 빈 바인딩으로 흡수.
-            let skillBindings: ActiveSkillBinding[] = [];
-            try {
-                skillBindings = await getSkillManager().getActiveSkillBindings(AGENT_TASK_SKILL_AGENT_ID, userId);
-            } catch (e) {
-                logger.debug('[AgentTask] 스킬 도구 바인딩 조회 실패 — 빈 배열', e);
-            }
-            // 스킬 범위 지정 시(allowedSkills): 활성 바인딩을 해당 skill_id 집합으로 제한.
-            // 미지정/빈 배열이면 전체 사용(기존 동작).
-            if (allowedSkills && allowedSkills.length > 0) {
-                const allow = new Set(allowedSkills);
-                const before = skillBindings.length;
-                skillBindings = skillBindings.filter((b) => allow.has(b.skill_id));
-                logger.debug(`[AgentTask] 스킬 범위 제한: ${before} → ${skillBindings.length} (allowedSkills=${allowedSkills.length})`);
-            }
-            const mcpTools = skillBindings.length > 0
-                ? mergeToolsWithSkills({ allTools, userToggled: allTools, profileRequired: [], skillBindings })
-                : allTools;
+            // 활성 스킬(global+user)의 tool_bindings 머지 — 상세는 agent-task/skill-block.
+            const { mcpTools, skillBindings } = await resolveSkillToolBindings({
+                userId, allTools, ...(allowedSkills ? { allowedSkills } : {}),
+            });
 
             // 영속 샌드박스(Manus화, 플래그 ON 시만). 생성 실패는 샌드박스 없이 진행(graceful degrade).
             // 설정은 한 번만 읽어 스냅샷 공유. 승인 3모드는 input.approvalPolicy 로 이 실행에만 override
@@ -260,7 +244,12 @@ export class AgentTaskService {
 
             // LLM 에 전달할 도구 세트 조립(샌드박스 도구 + extraTools + 2-A 동적 도구). 상세는
             // agent-task/tool-assembly. extraToolNames = 호스트 실행 도구(디스패치 승인 게이트 대상).
-            const { tools, extraToolNames } = await assembleAgentTools({ mcpTools, taskRuntime, sandboxCfg, goal });
+            // injectedSkillIds: 시스템 프롬프트로 전문 주입된 스킬은 load_skill 카탈로그에서 제외
+            // (채팅 경로가 활성 바인딩을 제외하는 것과 동일 규칙 — 중복 노출 방지).
+            const { tools, extraToolNames } = await assembleAgentTools({
+                mcpTools, taskRuntime, sandboxCfg, goal,
+                injectedSkillIds: new Set(skillBindings.map((b) => b.skill_id)),
+            });
 
             // 스텝 실시간 발행(4-5) — DB 기록 직후 요약을 WS 로 브로드캐스트(채팅 인라인 카드의 "현재 단계").
             const emitStep = (stepType: string, toolName?: string, content?: string | null): void => {

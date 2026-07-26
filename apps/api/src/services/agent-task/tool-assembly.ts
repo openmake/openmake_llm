@@ -11,6 +11,8 @@ import type { ToolDefinition } from '../../llm/types';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
+import { applySkillCatalog } from '../skill-catalog-tool';
+import { LOAD_SKILL_TOOL_NAME } from '../../mcp/load-skill-tool';
 import { selectRelevantTools } from './tool-selector';
 import { selectRelevantToolsEmbedding } from './tool-selector-embedding';
 import { createLogger } from '../../utils/logger';
@@ -32,9 +34,38 @@ export async function assembleAgentTools(params: {
     taskRuntime: TaskRuntime | null;
     sandboxCfg: TaskSandboxConfig;
     goal: string;
+    /**
+     * 시스템 프롬프트로 이미 전문 주입된 스킬 id — load_skill 카탈로그에서 제외(중복 방지).
+     * 미지정 시 전체 카탈로그 노출.
+     */
+    injectedSkillIds?: ReadonlySet<string>;
 }): Promise<AssembledTools> {
-    const { mcpTools, taskRuntime, sandboxCfg, goal } = params;
+    const { mcpTools, taskRuntime, sandboxCfg, goal, injectedSkillIds } = params;
     const extraToolNames = new Set<string>();
+
+    /**
+     * 조립된 도구 세트에 load_skill(스킬 카탈로그 포함)을 합류시킨다.
+     *
+     * 에이전트 작업은 산업 agent 페르소나를 우회해 `__agent_task__` 스코프 스킬만
+     * 프롬프트로 주입받는다(실측 1개). 나머지 스킬 라이브러리는 이 도구로만 닿을 수
+     * 있는데, 카탈로그가 없으면 모델이 이름을 몰라 호출 자체를 못 한다 —
+     * 실제로 load_skill 호출이 0건이었다(2026-07-26). 스키마 1종 추가라 도구 예산
+     * 영향은 무시할 수준이고, 기능 OFF(SKILL_AUTO_SELECT_ENABLED != 'true')거나
+     * 카탈로그가 비면 공용 헬퍼가 알아서 제거한다.
+     */
+    const withSkillCatalog = async (tools: ToolDefinition[]): Promise<ToolDefinition[]> => {
+        const before = tools.length;
+        const next = await applySkillCatalog(tools, mcpTools, {
+            ...(injectedSkillIds ? { excludeIds: injectedSkillIds } : {}),
+        });
+        const added = next.some((t) => t.function.name === LOAD_SKILL_TOOL_NAME)
+            && !tools.some((t) => t.function.name === LOAD_SKILL_TOOL_NAME);
+        if (added) {
+            extraToolNames.add(LOAD_SKILL_TOOL_NAME); // 호스트 실행 — 승인 게이트 대상
+            logger.info(`[AgentTask] load_skill 카탈로그 합류 (도구 ${before} → ${next.length})`);
+        }
+        return next;
+    };
 
     // 샌드박스로 대체 불가한 소수 고가치 내장 도구(extraTools 화이트리스트)를 이름으로 선별.
     const buildExtra = (sandboxToolNames: Set<string>): ToolDefinition[] => {
@@ -75,7 +106,10 @@ export async function assembleAgentTools(params: {
                 logger.info(`[AgentTask] 동적 도구 ${dynamicExtra.length}개 합류 (${AGENT_TASK_LIMITS.DYNAMIC_TOOLS_MODE}, 예산 ${budget}, 총 ${sandboxTools.length + staticExtra.length + dynamicExtra.length})`);
             }
         }
-        return { tools: [...staticExtra, ...dynamicExtra, ...sandboxTools], extraToolNames };
+        return {
+            tools: await withSkillCatalog([...staticExtra, ...dynamicExtra, ...sandboxTools]),
+            extraToolNames,
+        };
     }
 
     if (sandboxCfg.enabled) {
@@ -83,9 +117,10 @@ export async function assembleAgentTools(params: {
         // 화이트리스트 도구만으로 진행 — 셸 작업은 불가하나 검색·이미지·작성 작업은 계속 가능.
         const tools = buildExtra(new Set<string>());
         logger.warn(`[AgentTask] 샌드박스 미가용 — extraTools(${extraToolNames.size}개)만으로 진행 (전체 카탈로그 미전달)`);
-        return { tools, extraToolNames };
+        return { tools: await withSkillCatalog(tools), extraToolNames };
     }
 
     // 샌드박스 OFF(legacy) 경로 — 기존대로 전체 MCP 도구 사용.
-    return { tools: mcpTools, extraToolNames };
+    // 이 경로엔 이미 전체 카탈로그(load_skill 포함)가 들어있으므로 카탈로그 주입만 적용.
+    return { tools: await withSkillCatalog(mcpTools), extraToolNames };
 }
