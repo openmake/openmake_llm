@@ -260,7 +260,12 @@ export class AgentTaskService {
 
             // LLM 에 전달할 도구 세트 조립(샌드박스 도구 + extraTools + 2-A 동적 도구). 상세는
             // agent-task/tool-assembly. extraToolNames = 호스트 실행 도구(디스패치 승인 게이트 대상).
-            const { tools, extraToolNames } = await assembleAgentTools({ mcpTools, taskRuntime, sandboxCfg, goal });
+            // injectedSkillIds: 시스템 프롬프트로 전문 주입된 스킬은 load_skill 카탈로그에서 제외
+            // (채팅 경로가 활성 바인딩을 제외하는 것과 동일 규칙 — 중복 노출 방지).
+            const { tools, extraToolNames } = await assembleAgentTools({
+                mcpTools, taskRuntime, sandboxCfg, goal,
+                injectedSkillIds: new Set(skillBindings.map((b) => b.skill_id)),
+            });
 
             // 스텝 실시간 발행(4-5) — DB 기록 직후 요약을 WS 로 브로드캐스트(채팅 인라인 카드의 "현재 단계").
             const emitStep = (stepType: string, toolName?: string, content?: string | null): void => {

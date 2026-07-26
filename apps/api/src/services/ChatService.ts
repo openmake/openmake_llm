@@ -28,7 +28,7 @@ import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { CHAT_ALWAYS_ON_TOOL_NAMES } from '../mcp/agent-task-tools';
 import { MCP_META_TOOL_NAMES } from '../mcp/mcp-meta-tools';
 import { CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, MCP_PROGRESSIVE_DISCLOSURE_ENABLED, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS } from '../config/runtime-limits';
-import { LOAD_SKILL_TOOL_NAME } from '../mcp/load-skill-tool';
+import { applySkillCatalog as applySkillCatalogShared } from './skill-catalog-tool';
 import { LLMClient } from '../llm';
 import { type ToolDefinition } from '../llm';
 import type { ResearchProgress } from './DeepResearchService';
@@ -250,30 +250,10 @@ export class ChatService {
     private async applySkillCatalog(
         tools: ToolDefinition[], allTools: ToolDefinition[], reqCtx: RequestContext,
     ): Promise<ToolDefinition[]> {
-        const without = tools.filter((t) => t.function.name !== LOAD_SKILL_TOOL_NAME);
-        if (process.env.SKILL_AUTO_SELECT_ENABLED !== 'true') return without;
-
-        const base = allTools.find((t) => t.function.name === LOAD_SKILL_TOOL_NAME);
-        if (!base) return without; // load_skill 미등록 — 노출 안 함
-
-        try {
-            const excludeIds = new Set(reqCtx.skillBindings.map((b) => b.skill_id));
-            const { catalog, count } = await getSkillManager().buildSkillCatalog({ excludeIds });
-            if (count === 0) return without;
-
-            const augmented: ToolDefinition = {
-                type: 'function',
-                function: {
-                    name: LOAD_SKILL_TOOL_NAME,
-                    description: `${base.function.description}\n\n## Skill Library (${count})\n${catalog}`,
-                    parameters: base.function.parameters,
-                },
-            };
-            return [...without, augmented];
-        } catch (e) {
-            logger.warn('스킬 카탈로그 주입 실패 (load_skill 제외):', e);
-            return without;
-        }
+        // 구현은 services/skill-catalog-tool 로 추출 (에이전트 작업 경로와 공용 — SSoT)
+        return applySkillCatalogShared(tools, allTools, {
+            excludeIds: new Set(reqCtx.skillBindings.map((b) => b.skill_id)),
+        });
     }
 
     /**
