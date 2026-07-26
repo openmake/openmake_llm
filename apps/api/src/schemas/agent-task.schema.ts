@@ -29,12 +29,17 @@ const taskInputFileSchema = z.object({
 
 /**
  * 에이전트 작업 생성 스키마
+ *
+ * strict — 미선언 키는 strip 이 아니라 400 으로 거절한다. 조용한 strip 은 오타(`maxTurn`)나
+ * 잘못된 위치의 옵션(`approvalPolicy`)을 "요청은 200 인데 설정만 안 먹는" 형태로 감춰서,
+ * 증상만 보고는 원인을 알 수 없다.
+ *
  * @property {string} goal - 작업 목표 (1~2000자, 필수)
  * @property {number} [maxTurns] - 최대 도구 루프 턴 수 (1~상한, 기본값: DEFAULT_MAX_TURNS)
  * @property {Array} [files] - 입력 첨부 파일 (채팅 첨부와 동일 캡)
  * @property {Array} [images] - 입력 첨부 이미지 dataURL (vision 채널 전달)
  */
-export const createAgentTaskSchema = z.object({
+export const createAgentTaskSchema = z.strictObject({
     goal: secureTextSchema({ minLength: 1, maxLength: 2000, fieldName: 'goal', detectMaliciousPatterns: false }),
     maxTurns: z.number().int().min(1).max(AGENT_TASK_LIMITS.MAX_TURNS_CEILING).optional(),
     // Cowork D1a: 실행 백엔드 — 'local' 은 LOCAL_EXECUTOR_ENABLED + 디바이스 연결 필요(라우트가 검증).
@@ -47,6 +52,12 @@ export const createAgentTaskSchema = z.object({
     // 엄격한 형식 검증은 서버 parseGithubRepo 가 수행 — 여기선 prefix·길이·안전문자만.
     repoUrl: z.string().startsWith('https://github.com/').max(300).optional(),
     branch: z.string().max(200).regex(/^[A-Za-z0-9._/-]+$/).optional(),
+    // 승인 정책은 **실행 단위** 옵션이라 생성이 아니라 execute 에 넘긴다. 여기 실리면
+    // 조용히 버려져(비-strict 객체는 미선언 키를 strip) "정책을 none 으로 줬는데 첫 도구에서
+    // 승인 대기" 로만 보인다 — 원인이 드러나지 않으므로 명시적으로 거절한다.
+    approvalPolicy: z.never({
+        error: '승인 정책은 생성이 아니라 POST /api/agent-tasks/:taskId/execute 에 전달하세요',
+    }).optional(),
 });
 
 /** 에이전트 작업 생성 요청 TypeScript 타입 */
@@ -55,9 +66,14 @@ export type CreateAgentTaskInput = z.infer<typeof createAgentTaskSchema>;
 /**
  * 에이전트 작업 실행(execute) 요청 스키마 — 승인 3모드(Manual/Auto/Skip)를 이 실행에 한해 지정.
  * all=Manual(전부 승인·기본), high-risk=Auto(고위험만), none=Skip(전부 자동). 미지정 시 전역 정책.
+ *
+ * 생성 스키마와 같은 이유로 strict. allowedSkills 도 여기 선언해야 한다 — 라우트가 body 에서
+ * 직접 읽으므로 스키마에서 빠지면 미들웨어가 검증된 body 로 치환할 때 통째로 사라진다.
  */
-export const executeAgentTaskSchema = z.object({
+export const executeAgentTaskSchema = z.strictObject({
     approvalPolicy: z.enum(['all', 'high-risk', 'none']).optional(),
+    /** 이 실행에서 쓸 skill_id 목록 — 미지정이면 전체 활성 스킬. */
+    allowedSkills: z.array(z.string().min(1).max(200)).max(AGENT_TASK_LIMITS.EXECUTE_MAX_ALLOWED_SKILLS).optional(),
 });
 export type ExecuteAgentTaskInput = z.infer<typeof executeAgentTaskSchema>;
 

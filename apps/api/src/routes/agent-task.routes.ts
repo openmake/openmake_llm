@@ -23,7 +23,7 @@ import { success, badRequest, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
-import { validateWithSecurity } from '../middlewares/validation';
+import { validate, validateWithSecurity } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { LOCAL_BRIDGE } from '../config/local-bridge';
 import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
@@ -31,7 +31,10 @@ import { v4 as uuidv4 } from 'uuid';
 import { AgentTaskService, type AgentTaskInputFile } from '../services/AgentTaskService';
 import type { ChatMessage } from '../llm/types';
 import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
-import { createAgentTaskSchema, type CreateAgentTaskInput } from '../schemas/agent-task.schema';
+import {
+    createAgentTaskSchema, executeAgentTaskSchema,
+    type CreateAgentTaskInput, type ExecuteAgentTaskInput,
+} from '../schemas/agent-task.schema';
 import { extractAttachedDocuments } from '../services/chat-service/doc-extractor';
 import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
 import { getSteeringRegistry } from '../services/agent-task/steering';
@@ -285,7 +288,7 @@ router.get('/:taskId/steps', asyncHandler(async (req: Request, res: Response) =>
  * POST /api/agent-tasks/:taskId/execute
  * 비동기 실행 (HTTP 202) — detached 백그라운드. 연결과 무관하게 진행.
  */
-router.post('/:taskId/execute', asyncHandler(async (req: Request, res: Response) => {
+router.post('/:taskId/execute', validate(executeAgentTaskSchema), asyncHandler(async (req: Request, res: Response) => {
     const task = await loadOwnedTask(req, res, req.params.taskId);
     if (!task) return;
 
@@ -300,17 +303,9 @@ router.post('/:taskId/execute', asyncHandler(async (req: Request, res: Response)
 
     const role: UserRole = (req.user!.role as UserRole) || 'user';
 
-    // 스킬 범위(allowedSkills): 이 실행에서 쓸 skill_id 목록 — 옵션. 문자열 배열만 수용,
-    // 최대 50개로 캡. 미지정이면 전체 활성 스킬 사용(기존 동작).
-    const rawSkills = (req.body as { allowedSkills?: unknown })?.allowedSkills;
-    const allowedSkills = Array.isArray(rawSkills)
-        ? rawSkills.filter((s): s is string => typeof s === 'string' && s.length > 0 && s.length <= 200).slice(0, 50)
-        : undefined;
-
-    // 승인 3모드(Manual/Auto/Skip) — 이 실행에만 적용할 승인 정책(옵션). 유효 enum 만 수용.
-    const rawPolicy = (req.body as { approvalPolicy?: unknown })?.approvalPolicy;
-    const approvalPolicy = rawPolicy === 'all' || rawPolicy === 'high-risk' || rawPolicy === 'none'
-        ? rawPolicy : undefined;
+    // 스킬 범위(allowedSkills, 미지정이면 전체 활성 스킬)와 승인 3모드(Manual/Auto/Skip)는
+    // executeAgentTaskSchema 가 검증한다 — 잘못된 값은 여기 오기 전에 400 이다.
+    const { allowedSkills, approvalPolicy } = req.body as ExecuteAgentTaskInput;
 
     // 백그라운드 detached 실행 (응답은 즉시 반환). AgentTaskService 가 자체
     // AbortController 를 소유하므로 ws.close 와 무관하게 끝까지 진행한다.
