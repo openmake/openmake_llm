@@ -151,3 +151,6 @@ up_models.json
 # Cloudflare Tunnel 설정 — git 커밋 금지 지침 (라이브: ~/.cloudflared/config.yml)
 scripts/cloudflared/
 data/desktop-updates/
+
+# 도구 세션 상태(run-continuation) — 저장소와 무관
+.omo/
