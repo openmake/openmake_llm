@@ -11,6 +11,7 @@
  */
 import type { ChatMessageRequest } from '../chat-service-types';
 import type { ResolvedProvider } from '../../providers/provider-router';
+import { servedModelLabel } from './provider-gate';
 import { EXTERNAL_CHAT_FALLBACK } from '../../config/runtime-limits';
 import { getConfig } from '../../config/env';
 import { createLogger } from '../../utils/logger';
@@ -105,6 +106,8 @@ export async function streamFromExternalProvider(
                 reason: err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200),
             },
         });
+        // 실제로 답하는 모델이 바뀌었다 — 배지 고지와 같은 이유로 응답의 model 도 갱신한다.
+        req.onServedModel?.(servedModelLabel(localResolved));
         return runExternalStream(deps, localResolved, req, onToken, ctx);
     }
 }

@@ -26,7 +26,7 @@ import type { ChatMessageRequest, SystemEventCallback } from '../chat-service-ty
 import { getExecutionPlanBuilder } from '../../chat/execution-plan-builder';
 import { normalizeStyle } from '../../chat/style';
 import { resolveAnswerFormatProfile, getAnswerFormatGuard } from '../../chat/answer-format';
-import { runProviderGate } from './provider-gate';
+import { runProviderGate, servedModelLabel } from './provider-gate';
 import { buildNotebookContextPrefix } from '../../prompts/notebook-context';
 import { applyAgentModelOverride } from './agent-model-override';
 import { resolveModeExternalClient } from './mode-external-client';
@@ -100,6 +100,9 @@ export async function runMessagePipeline(svc: ChatService,
         fallbackModel: svc.client.model,
         ctx: { userId: req.userId, userRole: req.userRole },
     });
+    // 여기가 "어느 모델이 답하는가"가 확정되는 유일한 지점 — 호출자에게 알려 응답·대화기록의
+    // model 이 요청 모델이 아니라 실제 응답 모델을 싣게 한다. (폴백 시 external-fallback 이 갱신)
+    req.onServedModel?.(servedModelLabel(externalResolved));
 
     // ── 보안 사전 검사 ──
     const securityPreCheck = preRequestCheck(message || '');

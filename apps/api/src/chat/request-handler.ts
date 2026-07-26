@@ -31,6 +31,7 @@ import { buildExecutionPlan } from './profile-resolver';
 import { applySlashCommand } from './slash-command';
 import { detectFastPath } from './fast-path-detector';
 import { historySummaryCache } from '../services/chat-service/history-summary-cache';
+import { servedModelLabel } from '../services/chat-service/provider-gate';
 import { summarizeHistory } from './history-summarizer';
 import { HISTORY_SUMMARIZER } from '../config/runtime-limits';
 import { createLogger } from '../utils/logger';
@@ -276,6 +277,9 @@ export class ChatRequestHandler {
 
         // 4. 사용자 메시지 저장
         const maskedModel = client.model;
+        // 실제로 답한 모델 — provider gate 해석 전이라 일단 로컬 기본값. 아래에서 gate/폴백이
+        // 확정하면 갱신된다. 이 값을 응답과 대화기록에 쓴다(요청 모델이 아니라 응답 모델).
+        let servedModel = maskedModel;
         // 감사 로그용 사용자 식별자 — 인증된 user id 우선, 익명 세션 id, 최종 'anonymous'
         const auditUserId = userContext.authenticatedUserId || userContext.anonSessionId || 'anonymous';
         // saveHistory 미지정 → true (기본 보존)
@@ -310,6 +314,7 @@ export class ChatRequestHandler {
                         userRole: userContext.userRole,
                     });
                     externalProvider = { provider: resolved.provider, modelId: resolved.modelId };
+                    servedModel = servedModelLabel(resolved);
                 }
             }
 
@@ -333,7 +338,7 @@ export class ChatRequestHandler {
                 currentSessionId,
                 auditUserId,
                 result.response,
-                maskedModel,
+                servedModel,
                 responseTime,
                 persistContent,
             );
@@ -341,7 +346,7 @@ export class ChatRequestHandler {
             return {
                 response: result.response,
                 sessionId: currentSessionId,
-                model: maskedModel,
+                model: servedModel,
                 executionPlan: plan,
                 responseTime,
                 tool_calls: result.tool_calls,
@@ -406,6 +411,7 @@ export class ChatRequestHandler {
             abortSignal,
             userLanguagePreference,
             format: params.format,
+            onServedModel: (fullId) => { servedModel = fullId; },
         };
 
         // 생각 요약 세션 (클로드 웹식 헤드라인): 중간(진행형)·최종(과거형) 요약을
@@ -524,7 +530,7 @@ export class ChatRequestHandler {
             currentSessionId,
             auditUserId,
             cleanedResponse,
-            maskedModel,
+            servedModel,
             responseTime,
             persistContent,
             summarySession.getThinking() || undefined,
@@ -566,7 +572,7 @@ export class ChatRequestHandler {
             response: cleanedResponse,
             artifacts: extractedArtifacts.length > 0 ? extractedArtifacts : undefined,
             sessionId: currentSessionId,
-            model: maskedModel,
+            model: servedModel,
             executionPlan: plan,
             responseTime,
             finish_reason: 'stop',

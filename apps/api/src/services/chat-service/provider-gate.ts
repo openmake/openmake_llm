@@ -89,3 +89,14 @@ export async function runProviderGate(
     const fullId = normalizeToFullId(input.requestedModel, input.fallbackModel);
     return router.resolve(fullId, input.ctx);
 }
+
+/**
+ * 응답에 실을 "실제로 답한 모델" 표기.
+ *
+ * 로컬은 기존과 동일하게 bare model id ('qwen3.6-35b-a3b') 를 유지하고, 외부만
+ * fullId ('chatgpt:gpt-5.5') 로 표기한다 — 로컬까지 fullId 로 바꾸면 기존 응답 표기가
+ * 통째로 달라져 model 값을 비교하는 클라이언트를 깨뜨린다.
+ */
+export function servedModelLabel(resolved: ResolvedProvider): string {
+    return resolved.providerId === 'local-llm' ? resolved.modelId : resolved.fullId;
+}
