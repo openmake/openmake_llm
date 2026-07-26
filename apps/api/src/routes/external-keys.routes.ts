@@ -32,8 +32,11 @@ import {
     getProviderCatalogEntry,
 } from '../config/external-providers';
 import { validateOutboundUrl } from '../security/ssrf-guard';
-import { AnthropicProvider } from '../providers/anthropic-provider';
 import { OpenAICompatProvider } from '../providers/openai-compat-provider';
+import {
+    createExternalProviderInstance,
+    buildOAuthSessionPersist,
+} from '../providers/provider-router';
 
 /** 등록 직후 즉시 검증 타임아웃 (ms) — 죽은 LAN IP 등에서 등록 응답이 hang 되지 않도록 상한.
  *  env EXTERNAL_KEY_VALIDATION_TIMEOUT_MS 로 오버라이드. */
@@ -90,6 +93,7 @@ router.get('/',
                 provider_id: entry.id,
                 display_name: entry.displayName,
                 sdk_type: entry.sdkType,
+                auth_methods: entry.authMethods,
                 default_base_url: entry.defaultBaseUrl,
                 key_prefix_pattern: entry.keyPrefixPattern,
                 enabled: entry.enabled,
@@ -100,6 +104,8 @@ router.get('/',
                           display_name: userKey.displayName,
                           key_prefix: userKey.keyPrefix,
                           base_url: userKey.baseUrl,
+                          auth_method: userKey.authMethod,
+                          oauth_account_id: userKey.oauthAccountId,
                           last_validated_at: userKey.lastValidatedAt,
                           last_validation_ok: userKey.lastValidationOk,
                           last_validation_error: userKey.lastValidationError,
@@ -129,6 +135,16 @@ router.post('/:providerId',
         const catalogEntry = getProviderCatalogEntry(providerId);
         if (!catalogEntry) {
             res.status(404).json(notFound(`Unknown provider: ${providerId}`));
+            return;
+        }
+
+        // OAuth 전용 provider (chatgpt) 는 API 키 등록 경로 차단 — 디바이스 로그인 사용
+        if (!catalogEntry.authMethods.includes('api_key')) {
+            res.status(400).json(
+                badRequest(
+                    `Provider '${providerId}' 는 API 키 등록을 지원하지 않습니다 — OAuth 로그인을 사용하세요`,
+                ),
+            );
             return;
         }
 
@@ -340,24 +356,19 @@ router.post('/:providerId/validate',
             return;
         }
 
+        // 공용 팩토리 — OAuth 행(chatgpt) 분기 포함, sdk_type 오류는 ProviderError 로 전파
         let provider: IProvider;
-        if (existing.sdkType === 'anthropic') {
-            provider = new AnthropicProvider({ apiKey: plaintextKey, baseUrl: existing.baseUrl });
-        } else if (existing.sdkType === 'openai-compatible') {
-            if (!existing.baseUrl) {
-                res.status(400).json(
-                    badRequest(`'${providerId}' 키에 base_url 이 등록되지 않았습니다`),
-                );
-                return;
-            }
-            provider = new OpenAICompatProvider({
-                providerId,
-                apiKey: plaintextKey,
-                baseUrl: existing.baseUrl,
-            });
-        } else {
+        try {
+            provider = createExternalProviderInstance(
+                existing,
+                plaintextKey,
+                existing.authMethod === 'oauth'
+                    ? buildOAuthSessionPersist(getRepo(), userId, providerId)
+                    : undefined,
+            );
+        } catch (err) {
             res.status(400).json(
-                badRequest(`알 수 없는 sdk_type: ${existing.sdkType}`),
+                badRequest(err instanceof Error ? err.message : 'provider 인스턴스 생성 실패'),
             );
             return;
         }

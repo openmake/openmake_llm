@@ -1362,7 +1362,17 @@
       "anthropic": "Anthropic",
       "openaiCompatible": "OpenAI 兼容"
     },
-    "validationWarning": "密钥已保存，但 endpoint 验证失败：{error} — 请检查地址/密钥后重新保存。"
+    "validationWarning": "密钥已保存，但 endpoint 验证失败：{error} — 请检查地址/密钥后重新保存。",
+    "oauthLogin": "使用 ChatGPT 登录",
+    "oauthStart": "开始登录",
+    "oauthHint": "此提供商使用 OAuth 登录，无需 API 密钥。",
+    "oauthCodeLabel": "验证码",
+    "oauthInstruction": "打开下方链接，输入此验证码并批准。批准后将自动完成连接。",
+    "oauthOpenPage": "打开验证页面",
+    "oauthWaiting": "等待批准...",
+    "oauthConnected": "连接成功",
+    "oauthFailed": "登录失败：{error}",
+    "oauthAccount": "账户"
   },
   "modelRoles": {
     "title": "按角色分配模型",

@@ -1362,7 +1362,17 @@
       "anthropic": "Anthropic",
       "openaiCompatible": "OpenAI 호환"
     },
-    "validationWarning": "키는 저장됐지만 endpoint 검증에 실패했습니다: {error} — 주소/키를 확인 후 다시 저장하세요."
+    "validationWarning": "키는 저장됐지만 endpoint 검증에 실패했습니다: {error} — 주소/키를 확인 후 다시 저장하세요.",
+    "oauthLogin": "ChatGPT 로그인",
+    "oauthStart": "로그인 시작",
+    "oauthHint": "이 공급자는 API 키 대신 OAuth 로그인을 사용합니다.",
+    "oauthCodeLabel": "인증 코드",
+    "oauthInstruction": "아래 링크를 열고 이 코드를 입력한 뒤 승인하세요. 승인이 확인되면 자동으로 연결됩니다.",
+    "oauthOpenPage": "인증 페이지 열기",
+    "oauthWaiting": "승인 대기 중...",
+    "oauthConnected": "연결 완료",
+    "oauthFailed": "로그인 실패: {error}",
+    "oauthAccount": "계정"
   },
   "modelRoles": {
     "title": "역할별 모델 배정",

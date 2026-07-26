@@ -56,6 +56,7 @@ export { default as apiKeysRouter } from './api-keys.routes';
 
 // 🆕 외부 LLM provider BYO Key 관리 라우트
 export { default as externalKeysRouter } from './external-keys.routes';
+export { default as externalOAuthRouter } from './external-oauth.routes';
 
 // 🆕 Developer Documentation 라우트
 export { default as developerDocsRouter } from './developer-docs.routes';

@@ -39,6 +39,10 @@ import { pushRouter } from '../push.routes';
 import apiKeysRouter from '../api-keys.routes';
 import openaiCompatRouter from '../openai-compat.routes';
 import { listAvailableModels } from '../../chat/profile-resolver';
+import { ExternalKeysRepository } from '../../data/repositories/external-keys-repo';
+import { getPool } from '../../data/models/unified-database';
+import { getProviderCatalogEntry } from '../../config/external-providers';
+import { buildFullModelId } from '../../providers/i-provider';
 import { success, unauthorized } from '../../utils/api-response';
 import { requireApiKey } from '../../middlewares/api-key-auth';
 import { apiKeyRateLimiter, apiKeyTPMLimiter } from '../../middlewares/api-key-limiter';
@@ -144,21 +148,56 @@ v1Router.use('/push', pushRouter);
 v1Router.use('/api-keys', apiKeysRouter);
 
 // §9 모델 목록 (외부 API Key 사용자용)
-v1Router.get('/models', asyncHandler(async (_req, res) => {
+v1Router.get('/models', asyncHandler(async (req, res) => {
     const created = Math.floor(Date.now() / 1000);
     const models = listAvailableModels();
-    res.json({
-        object: 'list',
-        data: models.map(m => ({
-            id: m.id,
-            object: 'model',
-            created,
-            owned_by: 'openmake',
-            name: m.name,
-            description: m.description,
-            capabilities: m.capabilities,
-        })),
-    });
+    const data: Array<Record<string, unknown>> = models.map(m => ({
+        id: m.id,
+        object: 'model',
+        created,
+        owned_by: 'openmake',
+        name: m.name,
+        description: m.description,
+        capabilities: m.capabilities,
+    }));
+
+    // 외부 provider 모델 노출 (Phase 2, 2026-07-26): API 키 사용자가 등록한
+    // BYO/OAuth provider 의 모델을 fullId 로 나열 — CLI/서드파티 클라이언트가
+    // /v1/models 디스커버리만으로 'chatgpt:*' 등을 선택할 수 있게 한다.
+    // 라이브 호출 없이 캐시(external_provider_models_cache) → 카탈로그 fallback 순.
+    const apiUserId = req.apiKeyRecord?.user_id?.toString() || null;
+    if (apiUserId) {
+        try {
+            const repo = new ExternalKeysRepository(getPool());
+            const cacheTtlMs = parseInt(process.env.EXTERNAL_MODELS_CACHE_TTL_MS ?? '3600000', 10);
+            const keys = await repo.listByUser(apiUserId);
+            for (const keyRow of keys) {
+                const cached = await repo.getCachedModels(apiUserId, keyRow.providerId, cacheTtlMs) as
+                    | Array<{ id?: string; fullId?: string }>
+                    | null;
+                const entries = (cached && cached.length > 0)
+                    ? cached.map((m) => ({
+                        fullId: m.fullId ?? buildFullModelId(keyRow.providerId, m.id ?? ''),
+                    }))
+                    : (getProviderCatalogEntry(keyRow.providerId)?.fallbackModels ?? []).map((m) => ({
+                        fullId: buildFullModelId(keyRow.providerId, m.id),
+                    }));
+                for (const m of entries) {
+                    if (!m.fullId) continue;
+                    data.push({
+                        id: m.fullId,
+                        object: 'model',
+                        created,
+                        owned_by: keyRow.providerId,
+                    });
+                }
+            }
+        } catch {
+            // 외부 카탈로그 조회 실패는 로컬 목록 응답을 막지 않는다 (fail-open)
+        }
+    }
+
+    res.json({ object: 'list', data });
 }));
 
 export default v1Router;

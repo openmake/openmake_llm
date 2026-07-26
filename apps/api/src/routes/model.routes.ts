@@ -24,7 +24,10 @@ import { requireAuth, requireAdmin, optionalAuth } from '../auth';
 import { getModelHealthMonitor } from '../services/model-health-monitor';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { getPool } from '../data/models/unified-database';
-import { OpenAICompatProvider } from '../providers/openai-compat-provider';
+import {
+    createExternalProviderInstance,
+    buildOAuthSessionPersist,
+} from '../providers/provider-router';
 import { buildFullModelId } from '../providers/i-provider';
 import { getProviderCatalogEntry } from '../config/external-providers';
 import { isRoleAssignableModel } from '../config/role-model-filter';
@@ -170,11 +173,15 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
                         if (!list || list.length === 0) {
                             const plaintextKey = await repo.decryptKey(userId, keyRow.providerId);
                             if (!plaintextKey) continue;
-                            const provider = new OpenAICompatProvider({
-                                providerId: keyRow.providerId,
-                                apiKey: plaintextKey,
-                                baseUrl: keyRow.baseUrl,
-                            });
+                            // 공용 팩토리 사용 — OAuth 행(chatgpt)은 Codex transport 기반
+                            // ChatGPTOAuthProvider 로 분기된다 (refresh 시 세션 영속화 포함).
+                            const provider = createExternalProviderInstance(
+                                keyRow,
+                                plaintextKey,
+                                keyRow.authMethod === 'oauth'
+                                    ? buildOAuthSessionPersist(repo, userId, keyRow.providerId)
+                                    : undefined,
+                            );
                             const fresh = await provider.listModels();
                             list = fresh.map((m) => ({
                                 id: m.id,

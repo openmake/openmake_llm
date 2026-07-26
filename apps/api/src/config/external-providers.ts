@@ -108,6 +108,29 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
         ],
     },
     {
+        id: 'chatgpt',
+        displayName: 'ChatGPT (구독 로그인)',
+        sdkType: 'openai-compatible',
+        // Codex 백엔드 upstream — 실제 요청 조립은 ChatGPTOAuthProvider 의 transport 가 담당.
+        // api_key 등록 경로가 아니므로 사용자가 base_url 을 입력하지 않는다 (informational).
+        defaultBaseUrl: 'https://chatgpt.com/backend-api/codex',
+        validatePath: '/models',
+        enabled: true,
+        sortOrder: 25,
+        helpText:
+            'ChatGPT Plus/Pro 구독 계정으로 로그인하여 Codex 지원 GPT 모델을 사용합니다. ' +
+            'API 키가 아닌 OAuth 디바이스 로그인 방식입니다 — "로그인" 버튼을 누르고 ' +
+            '표시되는 코드를 OpenAI 인증 페이지에 입력하세요. ' +
+            '⚠️ 비공식 통합: 반드시 본인 계정만 사용해야 하며, OpenAI 정책 변경 시 ' +
+            '중단될 수 있습니다.',
+        authMethods: ['oauth'] as const,
+        // Codex 카탈로그 조회 실패 시 폴백 — 계정 플랜에 따라 실제 목록은 다를 수 있음.
+        fallbackModels: [
+            { id: 'gpt-5.4',      displayName: 'GPT-5.4 (ChatGPT)',      isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true, thinking: true } },
+            { id: 'gpt-5.4-mini', displayName: 'GPT-5.4 Mini (ChatGPT)', isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true, thinking: true } },
+        ],
+    },
+    {
         id: 'ollama-local',
         displayName: 'Ollama (Local)',
         sdkType: 'openai-compatible',

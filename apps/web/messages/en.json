@@ -1362,7 +1362,17 @@
       "anthropic": "Anthropic",
       "openaiCompatible": "OpenAI-compatible"
     },
-    "validationWarning": "Key saved, but endpoint validation failed: {error} — check the URL/key and save again."
+    "validationWarning": "Key saved, but endpoint validation failed: {error} — check the URL/key and save again.",
+    "oauthLogin": "Sign in with ChatGPT",
+    "oauthStart": "Start sign-in",
+    "oauthHint": "This provider uses OAuth sign-in instead of an API key.",
+    "oauthCodeLabel": "Verification code",
+    "oauthInstruction": "Open the link below, enter this code, and approve. The connection completes automatically once approved.",
+    "oauthOpenPage": "Open verification page",
+    "oauthWaiting": "Waiting for approval...",
+    "oauthConnected": "Connected",
+    "oauthFailed": "Sign-in failed: {error}",
+    "oauthAccount": "Account"
   },
   "modelRoles": {
     "title": "Model Roles",

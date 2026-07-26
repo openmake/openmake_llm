@@ -34,6 +34,8 @@ interface UserKey {
   display_name: string;
   key_prefix: string;
   base_url: string | null;
+  auth_method?: "api_key" | "oauth";
+  oauth_account_id?: string | null;
   last_validation_ok: boolean | null;
   last_used_at: string | null;
   created_at: string;
@@ -43,9 +45,18 @@ interface ProviderEntry {
   provider_id: string;
   display_name: string;
   sdk_type: SdkType;
+  auth_methods?: Array<"api_key" | "oauth">;
   default_base_url: string | null;
   help_text?: string;
   user_key: UserKey | null;
+}
+
+/** OAuth 디바이스 플로우 시작 응답 (backend external-oauth.routes) */
+interface OAuthStartData {
+  device_auth_id: string;
+  user_code: string;
+  verification_url: string;
+  interval_sec: number;
 }
 
 /** SdkType → 번역 키 (렌더 시 t() 로 해석) */
@@ -252,6 +263,10 @@ function AddKeyForm({
   const [formError, setFormError] = useState<string | null>(null);
 
   const selected = providers.find((p) => p.provider_id === providerId);
+  const isOAuthOnly =
+    !!selected?.auth_methods &&
+    selected.auth_methods.includes("oauth") &&
+    !selected.auth_methods.includes("api_key");
 
   async function handleSubmit() {
     if (!displayName.trim() || apiKey.trim().length < 8) {
@@ -346,29 +361,35 @@ function AddKeyForm({
               />
             </label>
           </div>
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-fg-2">
-              {t("apiKeyLabel")}
-            </span>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-..."
-              className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 font-mono text-sm text-fg outline-none focus:border-accent"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-fg-2">
-              {t("baseUrlLabel")}
-            </span>
-            <input
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder={selected?.default_base_url ?? "https://..."}
-              className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 font-mono text-sm text-fg outline-none focus:border-accent"
-            />
-          </label>
+          {isOAuthOnly ? (
+            <OAuthConnect providerId={providerId} onConnected={onSaved} />
+          ) : (
+            <>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-fg-2">
+                  {t("apiKeyLabel")}
+                </span>
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="sk-..."
+                  className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 font-mono text-sm text-fg outline-none focus:border-accent"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-fg-2">
+                  {t("baseUrlLabel")}
+                </span>
+                <input
+                  value={baseUrl}
+                  onChange={(e) => setBaseUrl(e.target.value)}
+                  placeholder={selected?.default_base_url ?? "https://..."}
+                  className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 font-mono text-sm text-fg outline-none focus:border-accent"
+                />
+              </label>
+            </>
+          )}
 
           {formError && <p className="text-xs text-danger">{formError}</p>}
 
@@ -376,17 +397,146 @@ function AddKeyForm({
             <Button type="button" variant="outline" onClick={onClose}>
               {t("cancel")}
             </Button>
-            <Button type="submit" disabled={saving}>
-              {saving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              {t("save")}
-            </Button>
+            {!isOAuthOnly && (
+              <Button type="submit" disabled={saving}>
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                {t("save")}
+              </Button>
+            )}
           </div>
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+/* ── OAuth 디바이스 플로우 연결 (ChatGPT) ─────────────────── */
+function OAuthConnect({
+  providerId,
+  onConnected,
+}: {
+  providerId: string;
+  onConnected: () => void | Promise<void>;
+}) {
+  const t = useTranslations("apiKeys");
+  const [start, setStart] = useState<OAuthStartData | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [oauthError, setOauthError] = useState<string | null>(null);
+
+  async function handleStart() {
+    setStarting(true);
+    setOauthError(null);
+    try {
+      const res = await ApiClient.post<ApiSuccess<OAuthStartData>>(
+        `/api/external-keys/${providerId}/oauth/start`,
+        {},
+      );
+      if (!res?.data?.user_code) throw new Error(t("serverError"));
+      setStart(res.data);
+    } catch (e) {
+      setOauthError(
+        t("oauthFailed", {
+          error: e instanceof Error ? e.message : t("serverError"),
+        }),
+      );
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  // 승인 폴링 — start 후 interval_sec 간격으로 poll, complete 시 종료
+  useEffect(() => {
+    if (!start || connected) return;
+    let cancelled = false;
+    const intervalMs = Math.max(start.interval_sec, 1) * 1000;
+    const timer = setInterval(() => {
+      void (async () => {
+        try {
+          const res = await ApiClient.post<
+            ApiSuccess<{ status: "pending" | "complete" }>
+          >(`/api/external-keys/${providerId}/oauth/poll`, {
+            device_auth_id: start.device_auth_id,
+            user_code: start.user_code,
+          });
+          if (cancelled) return;
+          if (res?.data?.status === "complete") {
+            setConnected(true);
+            clearInterval(timer);
+            await onConnected();
+          }
+        } catch (e) {
+          if (cancelled) return;
+          clearInterval(timer);
+          setOauthError(
+            t("oauthFailed", {
+              error: e instanceof Error ? e.message : t("serverError"),
+            }),
+          );
+          setStart(null);
+        }
+      })();
+    }, intervalMs);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [start, connected, providerId, onConnected, t]);
+
+  if (connected) {
+    return (
+      <p className="rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-fg">
+        ✅ {t("oauthConnected")}
+      </p>
+    );
+  }
+
+  if (start) {
+    return (
+      <div className="space-y-3 rounded-md border border-border bg-surface-2 p-4">
+        <p className="text-xs leading-relaxed text-muted">
+          {t("oauthInstruction")}
+        </p>
+        <div>
+          <span className="mb-1 block text-xs font-medium text-fg-2">
+            {t("oauthCodeLabel")}
+          </span>
+          <code className="block select-all rounded-md border border-border-strong bg-surface px-3 py-2 text-center font-mono text-lg tracking-widest text-fg">
+            {start.user_code}
+          </code>
+        </div>
+        <a
+          href={start.verification_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline"
+        >
+          {t("oauthOpenPage")} ↗
+        </a>
+        <p className="flex items-center gap-2 text-xs text-muted">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          {t("oauthWaiting")}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-muted">{t("oauthHint")}</p>
+      <Button type="button" onClick={() => void handleStart()} disabled={starting}>
+        {starting ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <KeyRound className="h-4 w-4" />
+        )}
+        {t("oauthLogin")}
+      </Button>
+      {oauthError && <p className="text-xs text-danger">{oauthError}</p>}
+    </div>
   );
 }
