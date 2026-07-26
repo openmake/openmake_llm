@@ -21,7 +21,8 @@
  */
 import { LLMClient } from '../../llm';
 import type { ChatMessage, ToolDefinition, UsageMetrics } from '../../llm/types';
-import { checkUserQuota } from '../../llm/user-quota';
+import { checkUserQuota, recordUserUsage } from '../../llm/user-quota';
+import { getApiUsageTracker } from '../../llm/usage-tracker';
 import type { IProvider } from '../i-provider';
 import { ProviderError } from '../provider-errors';
 import { createLogger } from '../../utils/logger';
@@ -52,6 +53,12 @@ export interface ProviderRoleClientOptions {
     modelId: string;
     /** 토큰 쿼터 enforcement 대상 사용자 (미지정 시 skip) */
     userId?: string;
+    /**
+     * 사용량 관측 훅 — BYOK 비용 귀속(external_provider_usage)에 쓴다.
+     * API 키 provider 는 LLMClient 가 같은 훅을 호출하지만, 이 어댑터는 LLMClient
+     * 본체를 우회하므로 여기서 직접 발화해야 기록이 남는다(2026-07-26 누락 확인).
+     */
+    onUsage?: (u: { model: string; promptTokens: number; completionTokens: number }) => void;
 }
 
 /**
@@ -72,6 +79,7 @@ function getProviderRoleClientCtor(): new (opts: ProviderRoleClientOptions) => L
         private readonly provider: IProvider;
         private readonly modelId: string;
         private readonly quotaUserId?: string;
+        private readonly onUsage?: ProviderRoleClientOptions['onUsage'];
 
         constructor(opts: ProviderRoleClientOptions) {
             // base LLMClient 는 타입 정체성 유지를 위해서만 초기화한다 (호출 경로는 전부 override).
@@ -79,6 +87,7 @@ function getProviderRoleClientCtor(): new (opts: ProviderRoleClientOptions) => L
             this.provider = opts.provider;
             this.modelId = opts.modelId;
             if (opts.userId) this.quotaUserId = opts.userId;
+            if (opts.onUsage) this.onUsage = opts.onUsage;
         }
 
         /** timeout 등 파생은 provider 계층이 관리 — 동일 인스턴스를 그대로 돌려준다. */
@@ -95,6 +104,7 @@ function getProviderRoleClientCtor(): new (opts: ProviderRoleClientOptions) => L
             // 로컬 경로와 동일한 per-user 토큰 쿼터 규약 유지 (fail-open 은 내부 처리)
             await checkUserQuota(this.quotaUserId, Date.now());
 
+            const onUsage = this.onUsage;
             const tools: ToolDefinition[] | undefined = advancedOptions?.tools;
             try {
                 const result = await this.provider.streamChat(
@@ -112,6 +122,18 @@ function getProviderRoleClientCtor(): new (opts: ProviderRoleClientOptions) => L
                         onThinking: (thinking) => onToken?.('', thinking),
                     },
                 );
+
+                const promptTokens = result.usage?.prompt_tokens ?? 0;
+                const completionTokens = result.usage?.completion_tokens ?? 0;
+                const totalTokens = promptTokens + completionTokens;
+                if (totalTokens > 0) {
+                    // 로컬 경로(LLMClient)와 동일 규약 — 전역 관측 + per-user 누적 + BYOK 귀속
+                    getApiUsageTracker().record(totalTokens);
+                    void recordUserUsage(this.quotaUserId, totalTokens, Date.now());
+                    try {
+                        onUsage?.({ model: this.modelId, promptTokens, completionTokens });
+                    } catch { /* 관측 훅 실패는 호출 결과에 영향 없음 */ }
+                }
 
                 return {
                     role: 'assistant',

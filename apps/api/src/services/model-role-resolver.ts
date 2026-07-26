@@ -184,7 +184,15 @@ async function tryBuildExternalResolution(
                 buildOAuthSessionPersist(externalKeysRepo, userId, providerId),
             );
             return {
-                client: createProviderRoleClient({ provider, modelId, userId }),
+                client: createProviderRoleClient({
+                    provider, modelId, userId,
+                    // BYOK 사용량 귀속 — API 키 provider(아래 createClient 분기)와 동일 규약.
+                    // 이 어댑터는 LLMClient 본체를 우회하므로 훅을 명시 전달해야 기록된다.
+                    onUsage: (u) => void externalKeysRepo.recordUsage({
+                        userId, providerId, modelId: u.model,
+                        inputTokens: u.promptTokens, outputTokens: u.completionTokens,
+                    }).catch(() => { /* 관측 실패 무시 */ }),
+                }),
                 role,
                 fullId,
                 providerId,
