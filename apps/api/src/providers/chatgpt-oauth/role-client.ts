@@ -54,79 +54,105 @@ export interface ProviderRoleClientOptions {
     userId?: string;
 }
 
-export class ProviderRoleClient extends LLMClient {
-    private readonly provider: IProvider;
-    private readonly modelId: string;
-    private readonly quotaUserId?: string;
+/**
+ * 서브클래스 정의를 **모듈 로드 시점이 아니라 최초 생성 시점**으로 미룬다.
+ *
+ * 최상위에서 `class X extends LLMClient` 를 평가하면, 이 모듈을 (전이적으로라도)
+ * import 하는 모든 코드가 실제 LLMClient 클래스에 의존하게 된다. `../llm` 을
+ * 모킹하는 테스트에서 AgentTaskService 를 import 하는 것만으로
+ * "Class extends value undefined" 로 죽는다 (2026-07-26 실측: 3개 스위트).
+ * 지연 평가하면 import 는 안전하고, 실제 사용 시점에만 실 클래스를 요구한다.
+ */
+let CachedCtor: (new (opts: ProviderRoleClientOptions) => LLMClient) | undefined;
 
-    constructor(opts: ProviderRoleClientOptions) {
-        // base LLMClient 는 타입 정체성 유지를 위해서만 초기화한다 (호출 경로는 전부 override).
-        super({ model: opts.modelId, ...(opts.userId ? { userId: opts.userId } : {}) });
-        this.provider = opts.provider;
-        this.modelId = opts.modelId;
-        if (opts.userId) this.quotaUserId = opts.userId;
-    }
+function getProviderRoleClientCtor(): new (opts: ProviderRoleClientOptions) => LLMClient {
+    if (CachedCtor) return CachedCtor;
 
-    /** timeout 등 파생은 provider 계층이 관리 — 동일 인스턴스를 그대로 돌려준다. */
-    override derive(): LLMClient {
-        return this;
-    }
+    class ProviderRoleClientImpl extends LLMClient {
+        private readonly provider: IProvider;
+        private readonly modelId: string;
+        private readonly quotaUserId?: string;
 
-    override async chat(
-        messages: ChatMessage[],
-        options?: Parameters<LLMClient['chat']>[1],
-        onToken?: (token: string, thinking?: string) => void,
-        advancedOptions?: Parameters<LLMClient['chat']>[3],
-    ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
-        // 로컬 경로와 동일한 per-user 토큰 쿼터 규약 유지 (fail-open 은 내부 처리)
-        await checkUserQuota(this.quotaUserId, Date.now());
+        constructor(opts: ProviderRoleClientOptions) {
+            // base LLMClient 는 타입 정체성 유지를 위해서만 초기화한다 (호출 경로는 전부 override).
+            super({ model: opts.modelId, ...(opts.userId ? { userId: opts.userId } : {}) });
+            this.provider = opts.provider;
+            this.modelId = opts.modelId;
+            if (opts.userId) this.quotaUserId = opts.userId;
+        }
 
-        const tools: ToolDefinition[] | undefined = advancedOptions?.tools;
-        try {
-            const result = await this.provider.streamChat(
-                {
-                    messages,
-                    modelId: this.modelId,
-                    ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
-                    ...(options?.num_predict !== undefined ? { maxTokens: options.num_predict } : {}),
-                    ...(tools && tools.length > 0 ? { tools } : {}),
-                    ...(advancedOptions?.tool_choice ? { tool_choice: advancedOptions.tool_choice } : {}),
-                    ...(advancedOptions?.signal ? { abortSignal: advancedOptions.signal } : {}),
-                },
-                {
-                    onToken: (token) => onToken?.(token),
-                    onThinking: (thinking) => onToken?.('', thinking),
-                },
-            );
+        /** timeout 등 파생은 provider 계층이 관리 — 동일 인스턴스를 그대로 돌려준다. */
+        override derive(): LLMClient {
+            return this;
+        }
 
-            return {
-                role: 'assistant',
-                content: result.content,
-                ...(result.thinking ? { thinking: result.thinking } : {}),
-                ...(result.toolCalls && result.toolCalls.length > 0
-                    ? {
-                        tool_calls: result.toolCalls.map((tc) => ({
-                            id: tc.id,
-                            type: 'function' as const,
-                            function: {
-                                name: tc.name,
-                                arguments: (tc.args ?? {}) as Record<string, unknown>,
-                            },
-                        })),
+        override async chat(
+            messages: ChatMessage[],
+            options?: Parameters<LLMClient['chat']>[1],
+            onToken?: (token: string, thinking?: string) => void,
+            advancedOptions?: Parameters<LLMClient['chat']>[3],
+        ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
+            // 로컬 경로와 동일한 per-user 토큰 쿼터 규약 유지 (fail-open 은 내부 처리)
+            await checkUserQuota(this.quotaUserId, Date.now());
+
+            const tools: ToolDefinition[] | undefined = advancedOptions?.tools;
+            try {
+                const result = await this.provider.streamChat(
+                    {
+                        messages,
+                        modelId: this.modelId,
+                        ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
+                        ...(options?.num_predict !== undefined ? { maxTokens: options.num_predict } : {}),
+                        ...(tools && tools.length > 0 ? { tools } : {}),
+                        ...(advancedOptions?.tool_choice ? { tool_choice: advancedOptions.tool_choice } : {}),
+                        ...(advancedOptions?.signal ? { abortSignal: advancedOptions.signal } : {}),
+                    },
+                    {
+                        onToken: (token) => onToken?.(token),
+                        onThinking: (thinking) => onToken?.('', thinking),
+                    },
+                );
+
+                return {
+                    role: 'assistant',
+                    content: result.content,
+                    ...(result.thinking ? { thinking: result.thinking } : {}),
+                    ...(result.toolCalls && result.toolCalls.length > 0
+                        ? {
+                            tool_calls: result.toolCalls.map((tc) => ({
+                                id: tc.id,
+                                type: 'function' as const,
+                                function: {
+                                    name: tc.name,
+                                    arguments: (tc.args ?? {}) as Record<string, unknown>,
+                                },
+                            })),
+                        }
+                        : {}),
+                    metrics: result.usage,
+                };
+            } catch (err) {
+                if (err instanceof ProviderError) {
+                    const status = PROVIDER_ERROR_STATUS[err.code];
+                    if (status !== undefined) {
+                        // 기존 4xx 폴백 규약과 맞물리도록 status 를 부착해 재throw
+                        Object.defineProperty(err, 'status', { value: status, enumerable: false });
                     }
-                    : {}),
-                metrics: result.usage,
-            };
-        } catch (err) {
-            if (err instanceof ProviderError) {
-                const status = PROVIDER_ERROR_STATUS[err.code];
-                if (status !== undefined) {
-                    // 기존 4xx 폴백 규약과 맞물리도록 status 를 부착해 재throw
-                    Object.defineProperty(err, 'status', { value: status, enumerable: false });
+                    logger.warn(`role 경로 provider 호출 실패 (${err.code}): ${err.message.slice(0, 120)}`);
                 }
-                logger.warn(`role 경로 provider 호출 실패 (${err.code}): ${err.message.slice(0, 120)}`);
+                throw err;
             }
-            throw err;
         }
     }
+
+    CachedCtor = ProviderRoleClientImpl;
+    return CachedCtor;
+}
+
+/**
+ * role 실행용 LLMClient 어댑터 생성 (provider dispatch).
+ * 클래스가 아닌 팩토리인 이유는 위 getProviderRoleClientCtor 주석 참고.
+ */
+export function createProviderRoleClient(opts: ProviderRoleClientOptions): LLMClient {
+    return new (getProviderRoleClientCtor())(opts);
 }

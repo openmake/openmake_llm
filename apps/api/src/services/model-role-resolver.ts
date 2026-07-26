@@ -46,7 +46,7 @@ import {
     createExternalProviderInstance,
     buildOAuthSessionPersist,
 } from '../providers/provider-router';
-import { ProviderRoleClient } from '../providers/chatgpt-oauth/role-client';
+import { createProviderRoleClient } from '../providers/chatgpt-oauth/role-client';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { UserModelRolesRepository } from '../data/repositories/user-model-roles-repo';
 import { ServerExternalKeysRepository } from '../data/repositories/server-external-keys-repo';
@@ -184,7 +184,7 @@ async function tryBuildExternalResolution(
                 buildOAuthSessionPersist(externalKeysRepo, userId, providerId),
             );
             return {
-                client: new ProviderRoleClient({ provider, modelId, userId }),
+                client: createProviderRoleClient({ provider, modelId, userId }),
                 role,
                 fullId,
                 providerId,
