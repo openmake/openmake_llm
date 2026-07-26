@@ -941,6 +941,22 @@ export const ROUTING_VERIFICATION = {
  *
  * services/ChatService.ts streamFromExternalProvider 에서 참조한다.
  */
+/**
+ * 채팅 경로의 외부 provider 실패 → 로컬 기본 모델 폴백 정책.
+ *
+ * 역할(role) 경로에는 4xx 강등이 있었으나 채팅에는 없어, 기본 모델을 외부로 둔 사용자가
+ * 구독 한도(429)·세션 만료(401)를 만나면 대화가 통째로 실패했다(2026-07-26 점검).
+ * 스트리밍 도중 교체는 답변이 섞이므로, 폴백은 "첫 토큰 이전"에만 수행한다.
+ */
+export const EXTERNAL_CHAT_FALLBACK = {
+    /** 기능 게이트 — 끄려면 EXTERNAL_CHAT_LOCAL_FALLBACK=false */
+    ENABLED: process.env.EXTERNAL_CHAT_LOCAL_FALLBACK !== 'false',
+    /** status 코드가 없을 때 폴백 대상으로 볼 ProviderError code (CSV 오버라이드 가능) */
+    RETRYABLE_CODES: (process.env.EXTERNAL_CHAT_FALLBACK_CODES
+        || 'INVALID_API_KEY,QUOTA_EXCEEDED,INSUFFICIENT_CREDIT,SUBSCRIPTION_REQUIRED,MODEL_NOT_FOUND,UPSTREAM_ERROR')
+        .split(',').map((s) => s.trim()).filter(Boolean),
+} as const;
+
 export const EXTERNAL_LLM_TOOL_BLACKLIST: readonly string[] = [
     'vision_ocr',
     'analyze_image',
