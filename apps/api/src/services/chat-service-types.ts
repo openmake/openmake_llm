@@ -214,6 +214,14 @@ export interface ChatMessageRequest {
     enabledTools?: Record<string, boolean>;
     /** 요청 중단 시그널 (SSE 연결 종료 시 사용) */
     abortSignal?: AbortSignal;
+    /**
+     * 실제로 답한 모델 통지 — provider gate 해석 직후, 그리고 외부→로컬 폴백이 일어나면
+     * 폴백 모델로 다시 호출된다(마지막 호출값이 실제 응답 모델).
+     *
+     * 파이프라인이 문자열(응답 본문)만 반환해 "요청 모델"과 "응답 모델"을 구분할 방법이
+     * 없었고, 그래서 응답·대화기록의 model 이 항상 로컬 기본 모델로 기록됐다.
+     */
+    onServedModel?: (fullId: string) => void;
     /** 사용자가 설정에서 선택한 선호 언어 (language-policy userPreference) */
     userLanguagePreference?: string;
     /** 구조화된 출력 형식 ('json' 또는 JSON Schema 객체) */
