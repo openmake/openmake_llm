@@ -10,6 +10,7 @@ import { type LLMClient } from '../../llm';
 import type { SearchResult } from '../../mcp/web-search';
 import type { ResearchConfig, SubTopic } from '../deep-research-types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
+import { withSkillContext } from './research-context';
 import { createLogger } from '../../utils/logger';
 import { TRUNCATION } from '../../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
@@ -114,6 +115,8 @@ function buildFallbackReport(lang: string, topic: string, findings: string[], so
  * 최종 보고서 생성
  */
 export async function generateReport(params: {
+    /** 활성 스킬 지식 블록 (research-context) */
+    skillBlock?: string;
     client: LLMClient;
     config: ResearchConfig;
     topic: string;
@@ -176,7 +179,7 @@ export async function generateReport(params: {
         // stall 여부를 가시화한다. onToken 모드에서도 client 는 최종 content 를 누적 반환한다.
         let accumulatedChars = 0;
         const response = await reportClient.chat(
-            [{ role: 'user', content: prompt }],
+            [{ role: 'user', content: withSkillContext(prompt, params.skillBlock ?? '') }],
             { temperature: LLM_TEMPERATURES.RESEARCH_SYNTHESIS },
             (token) => {
                 accumulatedChars += token.length;

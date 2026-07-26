@@ -251,7 +251,10 @@ router.post('/sessions/:sessionId/execute', validate(executeResearchSchema), asy
     // (사용자 매핑 → 전역 env → 로컬 default, 외부 매핑은 BYOK 키로 직결)
     const language = detectLanguage(session.topic).language;
     const resolved = await resolveRoleClientForUser('research', String(req.user!.id));
-    const service = createDeepResearchService({ maxLoops: loops, language }, resolved.client);
+    const service = createDeepResearchService(
+        { maxLoops: loops, language, userId: String(req.user!.id), userRole: 'user' },
+        resolved.client,
+    );
 
     // 백그라운드 실행 (응답은 즉시 반환)
     service.executeResearch(sessionId, session.topic).catch((error) => {

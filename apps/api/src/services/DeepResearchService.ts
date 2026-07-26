@@ -38,6 +38,7 @@ import { searchSubTopics } from './deep-research/source-searcher';
 import { scrapeSources } from './deep-research/content-scraper';
 import { synthesizeFindings, checkNeedsMoreInfo } from './deep-research/findings-synthesizer';
 import { generateReport } from './deep-research/report-generator';
+import { buildResearchSkillBlock, gatherMcpEvidence } from './deep-research/research-context';
 
 // Re-export types so consumers don't break
 export type { ResearchConfig, ResearchProgress, ResearchResult };
@@ -104,7 +105,12 @@ export class DeepResearchService {
             // 1단계: 주제 분해 (0-5%)
             this.throwIfAborted();
             this.reportProgress(onProgress, sessionId, 'running', 0, this.config.maxLoops, 'decompose', 2, getResearchMessage('analyzing', this.config.language));
+            // 스킬 지식(활성 매니페스트) — 분해·합성·보고서 프롬프트에 공통 주입.
+            // 실패 시 '' 라 리서치 흐름을 막지 않는다.
+            const skillBlock = await buildResearchSkillBlock(this.config.userId);
+
             const subTopics = await decomposeTopics({
+                skillBlock,
                 client: this.client,
                 config: this.config,
                 topic,
@@ -162,6 +168,28 @@ export class DeepResearchService {
                     throwIfAborted: () => this.throwIfAborted()
                 });
                 this.throwIfAborted();
+
+                // MCP 근거 수집(루프 1회) — 웹으로 닿지 않는 사내 데이터·노트북·설치 MCP
+                // 서버 자료를 소스로 합류시킨다. 스크래핑 대상에서 제외하려고 URL 을
+                // scrapedUrls 에 미리 등록한다(내용은 이미 확보).
+                if (loopNumber === 1) {
+                    const mcpSources = await gatherMcpEvidence({
+                        client: this.client,
+                        topic,
+                        ...(this.config.userId ? { userId: this.config.userId } : {}),
+                        ...(this.config.userRole ? { userRole: this.config.userRole } : {}),
+                        ...(this.abortController ? { abortSignal: this.abortController.signal } : {}),
+                    });
+                    for (const src of mcpSources) {
+                        if (sourceMap.has(src.url)) continue;
+                        sourceMap.set(src.url, src);
+                        seenUrls.add(src.url);
+                        scrapedUrls.add(src.url);
+                    }
+                    if (mcpSources.length > 0) {
+                        logger.info(`[DeepResearch] MCP 근거 ${mcpSources.length}건 합류`);
+                    }
+                }
 
                 const uniqueSources = Array.from(sourceMap.values());
                 this.reportProgress(
@@ -225,6 +253,7 @@ export class DeepResearchService {
                 );
 
                 const synthesis = await synthesizeFindings({
+                    skillBlock,
                     client: this.client,
                     config: this.config,
                     topic,
@@ -296,6 +325,7 @@ export class DeepResearchService {
             this.throwIfAborted();
             this.reportProgress(onProgress, sessionId, 'running', this.config.maxLoops, this.config.maxLoops, 'report', 85, getResearchMessage('generatingReport', this.config.language));
             const report = await generateReport({
+                skillBlock,
                 client: this.client,
                 config: this.config,
                 topic,

@@ -11,6 +11,7 @@ import type { LLMClient } from '../../llm';
 import type { SearchResult } from '../../mcp/web-search';
 import type { ResearchConfig, SynthesisResult } from '../deep-research-types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
+import { withSkillContext } from './research-context';
 import { createLogger } from '../../utils/logger';
 import { TRUNCATION, RESEARCH_DEFAULTS } from '../../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
@@ -50,6 +51,8 @@ function measureTotalContent(sources: SearchResult[]): number {
  * 검색 결과를 청크로 나눠 LLM 합성
  */
 export async function synthesizeFindings(params: {
+    /** 활성 스킬 지식 블록 (research-context) */
+    skillBlock?: string;
     client: LLMClient;
     config: ResearchConfig;
     topic: string;
@@ -235,6 +238,8 @@ async function singleMerge(params: {
     summaries: string[];
     abortSignal?: AbortSignal;
     throwIfAborted: () => void;
+    /** 활성 스킬 지식 블록 (research-context) */
+    skillBlock?: string;
 }): Promise<string> {
     const { client, config, topic, summaries, abortSignal, throwIfAborted } = params;
 
@@ -243,7 +248,7 @@ async function singleMerge(params: {
     try {
         const response = await chatWithAbortTimeout(
             client,
-            [{ role: 'user', content: mergedPrompt }],
+            [{ role: 'user', content: withSkillContext(mergedPrompt, params.skillBlock ?? '') }],
             { temperature: LLM_TEMPERATURES.RESEARCH_REPORT },
             LLM_TIMEOUTS.SYNTHESIS_MERGE_TIMEOUT_MS,
             abortSignal,
