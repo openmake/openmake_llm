@@ -21,8 +21,6 @@
  */
 import { LLMClient } from '../../llm';
 import type { ChatMessage, ToolDefinition, UsageMetrics } from '../../llm/types';
-import { checkUserQuota, recordUserUsage } from '../../llm/user-quota';
-import { getApiUsageTracker } from '../../llm/usage-tracker';
 import type { IProvider } from '../i-provider';
 import { ProviderError } from '../provider-errors';
 import { createLogger } from '../../utils/logger';
@@ -101,9 +99,6 @@ function getProviderRoleClientCtor(): new (opts: ProviderRoleClientOptions) => L
             onToken?: (token: string, thinking?: string) => void,
             advancedOptions?: Parameters<LLMClient['chat']>[3],
         ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
-            // 로컬 경로와 동일한 per-user 토큰 쿼터 규약 유지 (fail-open 은 내부 처리)
-            await checkUserQuota(this.quotaUserId, Date.now());
-
             const onUsage = this.onUsage;
             const tools: ToolDefinition[] | undefined = advancedOptions?.tools;
             try {
@@ -127,9 +122,8 @@ function getProviderRoleClientCtor(): new (opts: ProviderRoleClientOptions) => L
                 const completionTokens = result.usage?.completion_tokens ?? 0;
                 const totalTokens = promptTokens + completionTokens;
                 if (totalTokens > 0) {
-                    // 로컬 경로(LLMClient)와 동일 규약 — 전역 관측 + per-user 누적 + BYOK 귀속
-                    getApiUsageTracker().record(totalTokens);
-                    void recordUserUsage(this.quotaUserId, totalTokens, Date.now());
+                    // 외부 BYOK 는 로컬 토큰 쿼터 면제 (정책: LLMConfig.quotaExempt) —
+                    // 검사·로컬 누적은 하지 않고 BYOK 비용 귀속만 수행한다.
                     try {
                         onUsage?.({ model: this.modelId, promptTokens, completionTokens });
                     } catch { /* 관측 훅 실패는 호출 결과에 영향 없음 */ }

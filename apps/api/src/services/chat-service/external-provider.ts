@@ -111,6 +111,12 @@ export async function runExternalStream(
         ...(req.images ? { images: req.images } : {}),
     });
 
+    // 토큰 쿼터 정책(2026-07-26 결정): 이 경로는 LLMClient 를 우회하므로 로컬 쿼터
+    // (LLM_HOURLY/WEEKLY_TOKEN_LIMIT)를 타지 않는다. **의도된 면제**다 — 그 한도는 로컬
+    // vLLM 용량 보호용이고 외부 provider 는 사용자 본인 키·과금으로 서버 GPU 를 쓰지 않는다.
+    // 비용 가시성은 external_provider_usage 기록(recordExternalUsageFireAndForget)이 담당.
+    // role 경로도 같은 정책으로 맞춰져 있다 (LLMConfig.quotaExempt).
+
     // capability 는 카탈로그 우선으로 해석한다 — provider.getCapabilities() 는 외부의 경우
     // 모델 ID 휴리스틱이라 실제 비전 모델을 vision:false 로 오판한다(실측).
     const { caps, source: capsSource } = await resolveModelCapabilities(
