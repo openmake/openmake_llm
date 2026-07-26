@@ -2,7 +2,9 @@
  * Agent Task 스킬 프롬프트 블록 — AgentTaskService 에서 분리 (파일 크기 가드).
  * @module services/agent-task/skill-block
  */
-import { getSkillManager } from '../../agents/skill-manager';
+import { getSkillManager, type ActiveSkillBinding } from '../../agents/skill-manager';
+import type { ToolDefinition } from '../../llm/types';
+import { mergeToolsWithSkills } from '../chat-service/tool-merger';
 import { getAgentTaskSystemPrompt } from '../../prompts/agent-task-prompt';
 import { buildLearningBlock } from './task-learning';
 import { buildProceduralSkillBlock } from './procedural-skill';
@@ -45,4 +47,37 @@ export async function buildAgentTaskSystemContent(userId: string, goal: string, 
         + (await buildSkillPromptBlock(userId))
         + (await buildLearningBlock(userId, goal, taskId))
         + (await buildProceduralSkillBlock(userId, goal));
+}
+
+/**
+ * 활성 스킬 바인딩 해석 + 도구 머지 — AgentTaskService 에서 이동 (파일 크기 가드).
+ *
+ * base 가 전체 도구라 바인딩의 실효는 사실상 denied(특정 도구 차단)뿐이다.
+ * 조회 실패는 작업을 실패시키지 않고 빈 바인딩으로 흡수한다.
+ *
+ * @param allowedSkills 범위 지정 시 해당 skill_id 집합으로 제한 (미지정/빈 배열이면 전체)
+ * @returns 머지된 도구 목록과 적용된 바인딩(카탈로그 dedup 용 skill_id 확보)
+ */
+export async function resolveSkillToolBindings(params: {
+    userId: string;
+    allTools: ToolDefinition[];
+    allowedSkills?: string[];
+}): Promise<{ mcpTools: ToolDefinition[]; skillBindings: ActiveSkillBinding[] }> {
+    const { userId, allTools, allowedSkills } = params;
+    let skillBindings: ActiveSkillBinding[] = [];
+    try {
+        skillBindings = await getSkillManager().getActiveSkillBindings(AGENT_TASK_SKILL_AGENT_ID, userId);
+    } catch (e) {
+        logger.debug('[AgentTask] 스킬 도구 바인딩 조회 실패 — 빈 배열', e);
+    }
+    if (allowedSkills && allowedSkills.length > 0) {
+        const allow = new Set(allowedSkills);
+        const before = skillBindings.length;
+        skillBindings = skillBindings.filter((b) => allow.has(b.skill_id));
+        logger.debug(`[AgentTask] 스킬 범위 제한: ${before} → ${skillBindings.length} (allowedSkills=${allowedSkills.length})`);
+    }
+    const mcpTools = skillBindings.length > 0
+        ? mergeToolsWithSkills({ allTools, userToggled: allTools, profileRequired: [], skillBindings })
+        : allTools;
+    return { mcpTools, skillBindings };
 }
