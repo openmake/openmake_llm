@@ -32,6 +32,13 @@ function saveBackend(b) {
 let win;
 let current = 'external';
 
+// 웹 콘텐츠가 여는 URL 은 시스템으로 넘기기 전에 스킴을 제한한다 — file:// 나 임의 커스텀
+// 스킴이 로컬 프로토콜 핸들러를 악용하는 것을 막는다(http/https/mailto 만 허용).
+function isExternallyOpenable(url) {
+  try { return ['https:', 'http:', 'mailto:'].includes(new URL(url).protocol); }
+  catch { return false; }
+}
+
 function createWindow() {
   current = loadBackend();
   win = new BrowserWindow({
@@ -41,22 +48,33 @@ function createWindow() {
     minHeight: 600,
     title: 'OpenMake',
     backgroundColor: '#0e1014',
-    webPreferences: { contextIsolation: true, nodeIntegration: false },
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   win.loadURL(BACKENDS[current]);
 
-  // 앱 내 target=_blank / 외부 도메인 링크는 시스템 기본 브라우저로 연다.
+  // 앱 내 target=_blank / 외부 도메인 링크는 시스템 기본 브라우저로 연다(안전 스킴만).
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (isExternallyOpenable(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
 
-  // 로드 실패(백엔드 미기동 등) 시 간단 안내.
-  win.webContents.on('did-fail-load', (_e, code, desc, url) => {
+  // 최상위 프레임 이동은 http/https 만 허용 — file:// 등 위험 스킴으로의 네비게이션을 차단한다.
+  // (OAuth https 리다이렉트·로컬 백엔드 http·SPA pushState 는 그대로 동작)
+  win.webContents.on('will-navigate', (e, url) => {
+    let proto;
+    try { proto = new URL(url).protocol; } catch { e.preventDefault(); return; }
+    if (proto !== 'https:' && proto !== 'http:') e.preventDefault();
+  });
+
+  // 로드 실패(백엔드 미기동 등) 시 간단 안내. 최상위 프레임만 대상으로 하고, 메시지는
+  // textContent 로 주입해 url/desc 의 HTML/JS 삽입 소면을 없앤다.
+  win.webContents.on('did-fail-load', (_e, code, desc, url, isMainFrame) => {
     if (code === -3) return; // aborted (정상 재로드)
-    const msg = `백엔드에 연결할 수 없습니다.\\n${url}\\n(${desc})\\n\\n메뉴 '백엔드' 에서 외부/로컬을 전환하거나 서버 상태를 확인하세요.`;
+    if (!isMainFrame) return; // 서브프레임 실패는 페이지를 덮어쓰지 않는다
+    const msg = `백엔드에 연결할 수 없습니다.\n${url}\n(${desc})\n\n메뉴 '백엔드' 에서 외부/로컬을 전환하거나 서버 상태를 확인하세요.`;
+    const containerHtml = '<div style="font-family:-apple-system;color:#eceef2;background:#0e1014;height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;white-space:pre-line;padding:24px"></div>';
     win.webContents.executeJavaScript(
-      `document.body.innerHTML='<div style="font-family:-apple-system;color:#eceef2;background:#0e1014;height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;white-space:pre-line;padding:24px">${msg}</div>'`,
+      `document.body.innerHTML=${JSON.stringify(containerHtml)};document.body.firstChild.textContent=${JSON.stringify(msg)};`,
     ).catch(() => { /* noop */ });
   });
 
