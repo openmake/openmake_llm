@@ -53,19 +53,105 @@ async function downloadTo(url, dest) {
   return crypto.createHash('sha256').update(buf).digest('hex');
 }
 
-/** 교체 스크립트 — 앱 종료 후 dmg 마운트 → /Applications 교체 → 격리 해제 → 재실행. */
-function spawnReplaceScript(dmgPath) {
+/**
+ * 현재 실행 중인 .app 번들 경로를 해석한다.
+ *
+ * 교체 대상을 `/Applications` 로 하드코딩하면 `~/Applications` 등 다른 위치에 설치한
+ * 사용자에게서 조용히 어긋난다 — 교체는 엉뚱한 곳에 이뤄지고 원래 앱은 구버전으로
+ * 남으며, 재실행 대상이 없어 앱이 다시 열리지 않는다. 실제 위치를 쓴다.
+ *
+ * @returns {string|null} .app 번들 절대경로 (패키징되지 않은 실행이면 null)
+ */
+function resolveAppBundlePath() {
+  // /path/to/OpenMake.app/Contents/MacOS/OpenMake → /path/to/OpenMake.app
+  const m = /^(.*\.app)\/Contents\/MacOS\/[^/]+$/.exec(process.execPath);
+  return m ? m[1] : null;
+}
+
+/**
+ * 교체 가능 여부를 사전 점검한다. 앱을 종료한 뒤에는 사용자에게 알릴 수단이 없으므로
+ * **종료 전에** 실패 조건을 걸러낸다.
+ *
+ * @returns {{ ok: true, appPath: string } | { ok: false, reason: string }}
+ */
+function checkReplaceable() {
+  const appPath = resolveAppBundlePath();
+  if (!appPath) {
+    return { ok: false, reason: '패키징된 앱에서만 업데이트할 수 있습니다(개발 실행 중).' };
+  }
+  // dmg/외장 볼륨에서 바로 실행 중이면 교체해도 유실된다 — 설치 후 재시도하도록 안내.
+  if (appPath.startsWith('/Volumes/')) {
+    return {
+      ok: false,
+      reason: '디스크 이미지에서 실행 중입니다. 앱을 응용 프로그램 폴더로 옮긴 뒤 다시 시도하세요.',
+    };
+  }
+  const parent = path.dirname(appPath);
+  try {
+    fs.accessSync(parent, fs.constants.W_OK);
+  } catch {
+    return {
+      ok: false,
+      reason: `설치 폴더에 쓸 권한이 없습니다: ${parent}\n관리자 계정으로 실행하거나, 앱을 사용자 폴더(~/Applications)로 옮긴 뒤 다시 시도하세요.`,
+    };
+  }
+  return { ok: true, appPath };
+}
+
+/**
+ * 교체 스크립트 — 앱 종료 후 dmg 마운트 → 실제 설치 경로 교체 → 격리 해제 → 재실행.
+ *
+ * 실패해도 사용자가 알 수 있어야 한다(기존에는 stdio 무시 + 오류 처리 없음이라
+ * "앱이 종료됐는데 안 돌아온다" 로만 보였다):
+ *   - 각 단계 실패 시 osascript 로 네이티브 경고를 띄우고 **원래 앱을 다시 연다**
+ *   - 전 과정 로그를 파일로 남겨 사후 진단이 가능하게 한다
+ */
+function spawnReplaceScript(dmgPath, appPath) {
+  const logPath = path.join(os.tmpdir(), `openmake-update-${Date.now()}.log`);
   const script = `#!/bin/bash
+exec >>"${logPath}" 2>&1
+set -u
+APP="${appPath}"
+DMG="${dmgPath}"
+
+fail() {
+  echo "FAIL: $1"
+  # 앱이 이미 종료된 뒤라 Electron 다이얼로그를 쓸 수 없다 — 네이티브 경고로 알린다.
+  /usr/bin/osascript -e "display alert \\"업데이트 실패\\" message \\"$1\\n\\n로그: ${logPath}\\" as critical" || true
+  [ -d "$APP" ] && open -a "$APP" || true
+  rm -f "$DMG"
+  exit 1
+}
+
 sleep 2
-MNT=$(hdiutil attach -nobrowse "${dmgPath}" | tail -1 | awk '{print $NF}')
-if [ -d "$MNT/OpenMake.app" ]; then
-  rm -rf /Applications/OpenMake.app
-  ditto "$MNT/OpenMake.app" /Applications/OpenMake.app
-  xattr -dr com.apple.quarantine /Applications/OpenMake.app 2>/dev/null
+# 마운트 경로 파싱: hdiutil 출력은 탭 구분이고 볼륨명에 공백이 있을 수 있다.
+# 마지막 필드만 자르면(awk '{print $NF}') 공백에서 끊기므로 /Volumes 이후 전체를 취한다.
+MNT=$(hdiutil attach -nobrowse "$DMG" | grep -o '/Volumes/.*' | tail -1)
+[ -n "$MNT" ] || fail "디스크 이미지를 마운트하지 못했습니다."
+[ -d "$MNT/OpenMake.app" ] || { hdiutil detach "$MNT" -quiet; fail "이미지 안에서 앱을 찾지 못했습니다."; }
+
+# 교체는 임시 이름으로 먼저 복사한 뒤 스왑 — 도중 실패해도 기존 앱이 남는다.
+STAGE="$APP.new"
+rm -rf "$STAGE"
+if ! ditto "$MNT/OpenMake.app" "$STAGE"; then
+  rm -rf "$STAGE"; hdiutil detach "$MNT" -quiet
+  fail "새 버전 복사에 실패했습니다(설치 폴더 권한을 확인하세요)."
 fi
 hdiutil detach "$MNT" -quiet
-rm -f "${dmgPath}"
-open -a /Applications/OpenMake.app
+
+BACKUP="$APP.old"
+rm -rf "$BACKUP"
+mv "$APP" "$BACKUP" || { rm -rf "$STAGE"; fail "기존 앱을 교체할 수 없습니다."; }
+if ! mv "$STAGE" "$APP"; then
+  mv "$BACKUP" "$APP" 2>/dev/null   # 롤백
+  fail "새 버전 설치에 실패해 이전 버전으로 되돌렸습니다."
+fi
+rm -rf "$BACKUP"
+
+xattr -dr com.apple.quarantine "$APP" 2>/dev/null
+rm -f "$DMG"
+open -a "$APP" || fail "업데이트는 됐지만 앱을 다시 열지 못했습니다."
+echo "OK: updated $APP"
 rm -f "$0"
 `;
   const sh = path.join(os.tmpdir(), `openmake-update-${Date.now()}.sh`);
@@ -105,13 +191,18 @@ async function checkForUpdate(backendUrl, win, interactive) {
     });
     if (choice !== 0) return;
 
+    // 교체 가능 여부를 **다운로드 전에** 확인한다 — 앱을 종료한 뒤에는 알릴 수단이 없고,
+    // 못 고칠 조건(권한·dmg 실행 등)이면 100MB 를 받는 것 자체가 낭비다.
+    const pre = checkReplaceable();
+    if (!pre.ok) throw new Error(pre.reason);
+
     const dmgPath = path.join(os.tmpdir(), m.file);
     const sha = await downloadTo(`${backendUrl}${m.url}`, dmgPath);
     if (sha.toLowerCase() !== String(m.sha256).toLowerCase()) {
       fs.rmSync(dmgPath, { force: true });
       throw new Error('다운로드 무결성 검증 실패(sha256 불일치)');
     }
-    spawnReplaceScript(dmgPath);
+    spawnReplaceScript(dmgPath, pre.appPath);
     app.quit();
   } catch (e) {
     if (interactive) {
