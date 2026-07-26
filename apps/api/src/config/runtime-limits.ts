@@ -1262,6 +1262,8 @@ export const AGENT_TASK_LIMITS = {
     STEERING_MAX_CHARS: parseInt(process.env.AGENT_TASK_STEERING_MAX_CHARS || '2000', 10),
     /** task 당 미소비 steering 대기 상한 — 초과 시 429(플러딩 방지). AGENT_TASK_STEERING_MAX_PENDING(기본 10). */
     STEERING_MAX_PENDING: parseInt(process.env.AGENT_TASK_STEERING_MAX_PENDING || '10', 10),
+    /** execute 의 allowedSkills 배열 상한 — 초과 시 400(잘라내지 않는다). AGENT_TASK_EXECUTE_MAX_ALLOWED_SKILLS(기본 50). */
+    EXECUTE_MAX_ALLOWED_SKILLS: parseInt(process.env.AGENT_TASK_EXECUTE_MAX_ALLOWED_SKILLS || '50', 10),
 } as const;
 
 /** 채팅 서브에이전트(delegate_expert) — 채팅 도구 루프에서 전문가 위임(depth=1 tool-loop). */
