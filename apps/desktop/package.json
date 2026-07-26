@@ -1,6 +1,6 @@
 {
   "name": "openmake-desktop",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "private": true,
   "description": "OpenMake LLM 데스크톱 셸 (macOS) — 운영 백엔드(외부 공개 도메인 / 로컬)를 네이티브 창으로",
   "author": "OpenMake Team",
