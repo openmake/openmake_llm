@@ -1,6 +1,6 @@
 {
   "name": "@openmake/shared-types",
-  "version": "1.10.0",
+  "version": "1.11.0",
   "private": true,
   "description": "프론트(apps/web) ↔ 백엔드(apps/api) 공통 TypeScript 타입 계약",
   "types": "src/index.ts",
