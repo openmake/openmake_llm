@@ -42,6 +42,11 @@ import {
 } from '../config/model-roles';
 import { EXTERNAL_PROVIDER_CATALOG } from '../config/external-providers';
 import { createClient, LLMClient } from '../llm';
+import {
+    createExternalProviderInstance,
+    buildOAuthSessionPersist,
+} from '../providers/provider-router';
+import { ProviderRoleClient } from '../providers/chatgpt-oauth/role-client';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { UserModelRolesRepository } from '../data/repositories/user-model-roles-repo';
 import { ServerExternalKeysRepository } from '../data/repositories/server-external-keys-repo';
@@ -167,6 +172,29 @@ async function tryBuildExternalResolution(
 
     const plaintextKey = await externalKeysRepo.decryptKey(userId, providerId);
     if (!plaintextKey) return `'${providerId}' 키 복호화 실패`;
+
+    // OAuth provider(ChatGPT 등)는 baseUrl+Bearer 규약이 아니라 provider 계층이
+    // 호출 규약(세션·Responses API)을 갖는다. LLMClient 로 직결하면 Cloudflare 403
+    // 이 나고 조용히 로컬 폴백되어 배정이 무시된다 (2026-07-26 라이브 확인).
+    if (keyRow.authMethod === 'oauth') {
+        try {
+            const provider = createExternalProviderInstance(
+                keyRow,
+                plaintextKey,
+                buildOAuthSessionPersist(externalKeysRepo, userId, providerId),
+            );
+            return {
+                client: new ProviderRoleClient({ provider, modelId, userId }),
+                role,
+                fullId,
+                providerId,
+                modelId,
+                source: 'user',
+            };
+        } catch (err) {
+            return `'${providerId}' OAuth role 클라이언트 생성 실패: ${err instanceof Error ? err.message : String(err)}`;
+        }
+    }
 
     const baseUrl = keyRow.baseUrl || entry.defaultBaseUrl;
     return {
