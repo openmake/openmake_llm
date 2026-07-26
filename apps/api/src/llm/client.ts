@@ -89,6 +89,8 @@ export class LLMClient {
     }
 
     private async checkQuota(): Promise<void> {
+        // 외부 BYOK provider 는 로컬 vLLM 용량을 쓰지 않으므로 쿼터 면제 (LLMConfig.quotaExempt 참고).
+        if (this.config.quotaExempt) return;
         // per-user enforcement (KVStore 기반, 멀티프로세스 정합). 전역 tracker 는
         // record 경로에서 관측(dashboard)용으로만 누적 — "한 사용자 소진 시 전체 차단" 버그 제거.
         // fail-open 은 checkUserQuota 내부 처리 (QuotaExceededError 만 throw).
@@ -181,8 +183,12 @@ export class LLMClient {
                 const totalTokens =
                     (result.metrics?.prompt_tokens ?? 0) + (result.metrics?.completion_tokens ?? 0);
                 if (totalTokens > 0) {
-                    getApiUsageTracker().record(totalTokens);  // 전역 aggregate (dashboard 관측용)
-                    void recordUserUsage(this.config.userId, totalTokens, Date.now());  // per-user enforcement 누적
+                    // 로컬 사용량 계정: 면제(외부 BYOK)면 로컬 대시보드·쿼터 버킷을 오염시키지
+                    // 않도록 건너뛴다. BYOK 귀속(onUsage)은 면제와 무관하게 항상 수행.
+                    if (!this.config.quotaExempt) {
+                        getApiUsageTracker().record(totalTokens);  // 전역 aggregate (dashboard 관측용)
+                        void recordUserUsage(this.config.userId, totalTokens, Date.now());  // per-user enforcement 누적
+                    }
                     try {
                         this.config.onUsage?.({
                             model: poolDecision.model,

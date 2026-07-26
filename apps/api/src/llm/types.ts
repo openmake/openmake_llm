@@ -31,6 +31,19 @@ export interface LLMConfig {
      * 예외는 client 가 삼킨다 (관측 실패가 호출을 죽이지 않음).
      */
     onUsage?: (usage: { model: string; promptTokens: number; completionTokens: number }) => void;
+    /**
+     * 로컬 토큰 쿼터 면제 (외부 BYOK provider 전용).
+     *
+     * 정책(2026-07-26 결정): `LLM_HOURLY/WEEKLY_TOKEN_LIMIT` 는 **로컬 vLLM 용량을
+     * 보호하기 위한 것**이다. 외부 provider 는 사용자 본인 키·본인 과금으로 돌아가고
+     * 서버 GPU 를 쓰지 않으므로 쿼터 대상이 아니다. 면제 시 검사(checkUserQuota)와
+     * 로컬 누적(recordUserUsage·전역 tracker)을 모두 건너뛰되, **BYOK 비용 귀속
+     * (onUsage → external_provider_usage)은 그대로 수행**한다.
+     *
+     * 채팅 경로(chat-service/external-provider)는 애초에 LLMClient 를 우회하므로
+     * 이미 면제 상태이며, 이 플래그가 role 경로를 같은 정책으로 맞춘다.
+     */
+    quotaExempt?: boolean;
 }
 
 /**
