@@ -20,6 +20,8 @@ export interface AgentTaskSchedule {
     last_run_at?: string | null;
     last_task_id?: string | null;
     consecutive_failures: number;
+    /** 설정 시 완료 산출물을 정적 공개 경로(<slug>/latest.html)로 게시. NULL 이면 게시 안 함. */
+    publish_slug?: string | null;
     created_at: string;
     updated_at: string;
 }

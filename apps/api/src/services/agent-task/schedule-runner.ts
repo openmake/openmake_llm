@@ -15,6 +15,7 @@ import { createLogger } from '../../utils/logger';
 import { AgentTaskService } from '../AgentTaskService';
 import { getPushService } from '../PushService';
 import { dispatchAgentTask } from './task-queue';
+import { publishScheduleOutput } from './schedule-publish';
 import { computeNextRun } from './schedule-cron';
 import type { AgentTaskUserRole } from './types';
 
@@ -33,6 +34,29 @@ async function resolveRole(userId?: string): Promise<AgentTaskUserRole> {
     }
 }
 
+/**
+ * 완료된 예약 task 의 산출물을 게시하고, 소유자에게 링크를 push 한다.
+ * 게시 대상이 아니거나(publish_slug 없음) 실패해도 task 결과에는 영향 없음.
+ */
+async function publishCompleted(taskId: string, s: AgentTaskSchedule): Promise<void> {
+    if (!s.publish_slug) return;
+    try {
+        const task = await getUnifiedDatabase().getAgentTask(taskId);
+        if (task?.status !== 'completed') return;
+        const url = await publishScheduleOutput(s.publish_slug, (task as { workspace_path?: string }).workspace_path);
+        if (!url) return;
+        // 완료 push 는 AgentTaskService 가 이미 보냈지만 목적지가 /agent-tasks 라 무인 실행에는
+        // 쓸모가 적다. 게시된 리포트로 바로 열리는 링크를 한 번 더 보낸다.
+        void getPushService().sendPush(String(s.user_id), {
+            title: 'OpenMake 예약 리포트',
+            body: `오늘의 리포트가 준비되었습니다: ${s.goal.slice(0, 40)}`,
+            url,
+        }).catch(() => { /* noop */ });
+    } catch (e) {
+        logger.warn(`[Schedule] 산출물 게시 실패: ${taskId} — ${e instanceof Error ? e.message : e}`);
+    }
+}
+
 /** 단일 due 스케줄을 실행 — task 생성 + 큐 제출 + next_run_at 갱신. */
 async function fireSchedule(repo: AgentTaskScheduleRepository, s: AgentTaskSchedule, nowMs: number): Promise<void> {
     const timing = { cron: s.cron, intervalSeconds: s.interval_seconds };
@@ -46,14 +70,19 @@ async function fireSchedule(repo: AgentTaskScheduleRepository, s: AgentTaskSched
         await dispatchAgentTask({
             taskId,
             userId: String(s.user_id),
-            run: () => service.execute({
-                taskId, goal: s.goal, userId: String(s.user_id), userRole: role, maxTurns: s.max_turns,
-                // 예약 task 는 무인 실행 — 사람이 승인할 수 없으므로 승인정책을 분리(기본 none).
-                // 전역 approvalPolicy='all' 이면 첫 도구서 pause 되어 예약이 영영 멈추는 것을 방지.
-                approvalPolicy: AGENT_TASK_LIMITS.SCHEDULE_APPROVAL_POLICY,
-                // 무거운 리포트 생성은 대화형 10분을 넘길 수 있어 예약 전용 총 예산(기본 20분) 부여.
-                totalTimeoutMs: AGENT_TASK_LIMITS.SCHEDULE_TOTAL_TIMEOUT_MS,
-            }),
+            run: async () => {
+                await service.execute({
+                    taskId, goal: s.goal, userId: String(s.user_id), userRole: role, maxTurns: s.max_turns,
+                    // 예약 task 는 무인 실행 — 사람이 승인할 수 없으므로 승인정책을 분리(기본 none).
+                    // 전역 approvalPolicy='all' 이면 첫 도구서 pause 되어 예약이 영영 멈추는 것을 방지.
+                    approvalPolicy: AGENT_TASK_LIMITS.SCHEDULE_APPROVAL_POLICY,
+                    // 무거운 리포트 생성은 대화형 10분을 넘길 수 있어 예약 전용 총 예산(기본 20분) 부여.
+                    totalTimeoutMs: AGENT_TASK_LIMITS.SCHEDULE_TOTAL_TIMEOUT_MS,
+                });
+                // 산출물 게시 — 무인 실행은 채팅 세션도 아티팩트도 없어 이 경로가 유일한 도달 수단이다.
+                // 게시 실패가 task 성공을 뒤집지 않게 격리(산출물은 workspace 에 그대로 남는다).
+                await publishCompleted(taskId, s);
+            },
         });
         await repo.markRun(s.id, nextRunAtMs, taskId);
         // 발화 이력(6-2) — 실패해도 발화 자체를 막지 않음.

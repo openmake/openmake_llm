@@ -1211,6 +1211,20 @@ export const AGENT_TASK_LIMITS = {
     /** 예약(무인) task 총 타임아웃(ms) — 리포트·디자인 등 무거운 생성 워크플로우는 대화형 기본
      *  10분을 넘길 수 있어 분리(기본 20분). AGENT_TASK_SCHEDULE_TIMEOUT_MS. */
     SCHEDULE_TOTAL_TIMEOUT_MS: parseInt(process.env.AGENT_TASK_SCHEDULE_TIMEOUT_MS || '', 10) || 20 * 60 * 1000,
+    /** 예약 산출물 게시 루트 — 백엔드가 인증 없이 항상 서빙하는 정적 경로(legacy-web public) 하위.
+     *  publish_slug 가 설정된 스케줄의 결과물이 <루트>/<slug>/{YYYY-MM-DD,latest}.html 로 쌓인다.
+     *  AGENT_TASK_SCHEDULE_PUBLISH_DIR(기본 <cwd>/apps/legacy-web/public/generated/reports). */
+    SCHEDULE_PUBLISH_DIR: process.env.AGENT_TASK_SCHEDULE_PUBLISH_DIR
+        || `${process.cwd()}/apps/legacy-web/public/generated/reports`,
+    /** 게시 URL 접두사 — SCHEDULE_PUBLISH_DIR 이 실제로 서빙되는 경로와 짝을 이룬다.
+     *  AGENT_TASK_SCHEDULE_PUBLISH_URL_PREFIX(기본 /generated/reports). */
+    SCHEDULE_PUBLISH_URL_PREFIX: process.env.AGENT_TASK_SCHEDULE_PUBLISH_URL_PREFIX || '/generated/reports',
+    /** workspace 에서 게시 대상으로 집어올 산출물 파일명.
+     *  AGENT_TASK_SCHEDULE_PUBLISH_FILE(기본 report.html). */
+    SCHEDULE_PUBLISH_FILE: process.env.AGENT_TASK_SCHEDULE_PUBLISH_FILE || 'report.html',
+    /** 게시 파일명 날짜의 기준 TZ — 서버·컨테이너가 UTC 여도 날짜가 하루 밀리지 않게 명시.
+     *  AGENT_TASK_SCHEDULE_PUBLISH_TZ(기본 Asia/Seoul). */
+    SCHEDULE_PUBLISH_TZ: process.env.AGENT_TASK_SCHEDULE_PUBLISH_TZ || 'Asia/Seoul',
     /** 크로스-task 학습(Phase 5-2) — 유저 과거 유사 작업의 결과·도구·실패사유를 새 task system 에
      *  주입(같은 실수 반복 방지). 무-LLM(키워드 유사도)·기존 테이블 파생. 기본 OFF.
      *  AGENT_TASK_LEARNING_ENABLED=true 로 활성. */
