@@ -32,6 +32,9 @@ GROUPS = {
     "NEWS_GLOBAL": "국외",
 }
 EMPTY_CARD = '<div class="news-empty">해당 지역의 신규 기사를 확보하지 못했습니다.</div>'
+# 짧은 라벨 자리의 길이 상한 — 배지가 길어지면 헤더 그리드에서 제목 컬럼을 밀어낸다.
+# CSS 가 아니라 데이터 단에서 자르므로 어떤 값이 와도 레이아웃이 보장된다.
+MAX_LEN = {"HEADLINE_TAG": 24}
 
 
 def computed():
@@ -118,7 +121,12 @@ def main():
         elif k in auto:
             val = auto[k]
         else:
-            val = esc(data.get(k, "—"))
+            raw = str(data.get(k, "—"))
+            cap = MAX_LEN.get(k)
+            if cap and len(raw) > cap:
+                print(f"경고 — {k} 가 {cap}자를 초과해 잘림({len(raw)}자)")
+                raw = raw[: cap - 1] + "…"
+            val = esc(raw)
         html_out = html_out.replace("{{" + k + "}}", str(val))
 
     open(out_path, "w", encoding="utf-8").write(html_out)
