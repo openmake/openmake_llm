@@ -2,7 +2,7 @@
 # ============================================================
 # bge-m3 — multilingual embedding (pooling runner) @ :8003
 # ============================================================
-# 운영 서버(rockyhan) 실측 serve 명령 기준 (2026-05-29 동기화).
+# 운영 서버 실측 serve 명령 기준 (2026-05-29 동기화).
 # venv: /home/smith/vllm/vllm_env (embedding 전용 — qwen 과 별도 venv)
 set -euo pipefail
 
