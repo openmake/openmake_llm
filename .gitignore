@@ -135,6 +135,9 @@ user-guide.md
 
 # AI 생성 이미지 (generate_image 도구 출력)
 frontend/web/public/generated/
+# 모노레포 재편(frontend/web → apps/legacy-web) 후 현행 경로.
+# 생성 이미지 + 예약 리포트 게시 산출물(reports/<slug>/*.html)이 매일 쌓이는 런타임 디렉토리.
+apps/legacy-web/public/generated/
 
 # Archives / temp bundles (e.g. prompt.zip)
 *.zip

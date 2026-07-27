@@ -73,7 +73,8 @@
     .spark { width: 100%; height: 38px; margin-top: 14px; overflow: visible; }
     .spark polyline { fill: none; stroke: var(--accent); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.4; }
     .spark .base { stroke: var(--line); stroke-width: 1; }
-    .content-grid { display: grid; grid-template-columns: minmax(0, 1.22fr) minmax(300px, 0.78fr); gap: var(--gap); }
+    .content-grid { display: grid; grid-template-columns: minmax(0, 1.22fr) minmax(300px, 0.78fr); gap: var(--gap); align-items: start; }
+    .col-stack { display: grid; gap: var(--gap); align-content: start; min-width: 0; }
     .panel { border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper-strong); min-width: 0; }
     .panel-head { display: flex; min-height: 54px; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 15px; border-bottom: 1px solid var(--line); }
     .panel-title { font-size: 15px; font-weight: 800; line-height: 1.35; }
@@ -95,6 +96,7 @@
     .news-card .meta-line { color: var(--muted); font-size: 9px; margin-bottom: 6px; }
     .news-card strong { display: block; font-size: 14px; line-height: 1.45; text-wrap: pretty; }
     .news-card p { margin-top: 7px; color: var(--muted); font-size: 12px; line-height: 1.58; }
+    .news-empty { padding: 14px 15px; color: var(--muted); font-size: 12px; line-height: 1.58; }
     .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--paper-strong); }
     table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 13px; }
     th { position: sticky; top: 0; z-index: 1; padding: 11px 12px; background: oklch(94% 0.016 260); color: var(--muted); font-size: 10px; font-weight: 850; text-align: left; white-space: nowrap; }
@@ -187,6 +189,7 @@
         </section>
 
         <section class="content-grid">
+          <div class="col-stack">
           <div class="panel">
             <div class="panel-head"><div><div class="panel-title">국내 vs 국외 모멘텀 비교</div><div class="panel-sub">제품화 · 투자 · 정책 · 인재 (0-100)</div></div><span class="badge green">paired view</span></div>
             <div class="chart-body">
@@ -207,11 +210,20 @@
             </div>
           </div>
           <div class="panel">
-            <div class="panel-head"><div><div class="panel-title">오늘의 헤드라인</div><div class="panel-sub">국내·국외 대표 뉴스</div></div></div>
+            <div class="panel-head"><div><div class="panel-title">국내 헤드라인</div><div class="panel-sub">한국 AI 대표 뉴스</div></div><span class="badge">{{NEWS_DOMESTIC_COUNT}}건</span></div>
             <div class="news-list">
-              <div class="news-card"><div class="meta-line">{{NEWS1_REGION}} · {{NEWS1_SRC}}</div><strong>{{NEWS1_TITLE}}</strong><p>{{NEWS1_DESC}}</p></div>
-              <div class="news-card"><div class="meta-line">{{NEWS2_REGION}} · {{NEWS2_SRC}}</div><strong>{{NEWS2_TITLE}}</strong><p>{{NEWS2_DESC}}</p></div>
-              <div class="news-card"><div class="meta-line">{{NEWS3_REGION}} · {{NEWS3_SRC}}</div><strong>{{NEWS3_TITLE}}</strong><p>{{NEWS3_DESC}}</p></div>
+              <!-- REPEAT:NEWS_DOMESTIC -->
+              <div class="news-card"><div class="meta-line">{{ITEM_SRC}} · {{ITEM_DATE}}</div><strong>{{ITEM_TITLE}}</strong><p>{{ITEM_DESC}}</p></div>
+              <!-- /REPEAT -->
+            </div>
+          </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><div><div class="panel-title">국외 헤드라인</div><div class="panel-sub">글로벌 AI 대표 뉴스</div></div><span class="badge">{{NEWS_GLOBAL_COUNT}}건</span></div>
+            <div class="news-list">
+              <!-- REPEAT:NEWS_GLOBAL -->
+              <div class="news-card"><div class="meta-line">{{ITEM_SRC}} · {{ITEM_DATE}}</div><strong>{{ITEM_TITLE}}</strong><p>{{ITEM_DESC}}</p></div>
+              <!-- /REPEAT -->
             </div>
           </div>
         </section>
