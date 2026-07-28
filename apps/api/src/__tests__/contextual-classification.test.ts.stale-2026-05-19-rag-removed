@@ -1,0 +1,193 @@
+/**
+ * ============================================================
+ * Contextual Classification — 대화 이력 기반 분류 강화 테스트
+ * ============================================================
+ *
+ * P2 하네스 (Inform): LLM 분류기에 이전 대화 턴 컨텍스트를 제공하여
+ * 대명사/지시어 기반 쿼리 분류 정확도 향상
+ */
+
+const mockContextualClassification = {
+    ENABLED: true,
+    MAX_HISTORY_TURNS: 3,
+    MAX_CHARS_PER_TURN: 200,
+};
+
+jest.mock('../utils/logger', () => ({
+    createLogger: () => ({
+        info: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn(),
+        debug: jest.fn(),
+    }),
+}));
+
+jest.mock('../config/runtime-limits', () => ({
+    CONTEXTUAL_CLASSIFICATION: mockContextualClassification,
+    CACHE_CONFIG: {
+        CLASSIFICATION_CACHE_TTL_MS: 3600000,
+        CLASSIFICATION_CACHE_MAX_SIZE: 1000,
+    },
+}));
+
+jest.mock('../config/routing-config', () => ({
+    CLASSIFIER_MODEL: 'test-model',
+    CONFIDENCE_THRESHOLD: 0.7,
+    CLASSIFIER_TEMPERATURE: 0.1,
+    CLASSIFIER_NUM_CTX: 1024,
+    VECTOR_CACHE_ENABLED: false,
+    EMBEDDING_MODEL: 'test-embed',
+}));
+
+jest.mock('../config/timeouts', () => ({
+    LLM_TIMEOUTS: { CLASSIFIER_TIMEOUT_MS: 5000 },
+}));
+
+jest.mock('../prompts/classifier-system', () => ({
+    CLASSIFICATION_SYSTEM_PROMPT: 'test prompt',
+}));
+
+jest.mock('../llm', () => ({
+    LLMClient: jest.fn(),
+}));
+
+jest.mock('../chat/semantic-cache', () => ({
+    SemanticClassificationCache: jest.fn().mockImplementation(() => ({
+        getExact: jest.fn().mockReturnValue({ hit: null, source: null }),
+        set: jest.fn(),
+        size: jest.fn().mockReturnValue(0),
+        clear: jest.fn(),
+        getStats: jest.fn(),
+    })),
+}));
+
+jest.mock('../chat/vector-cache', () => ({
+    VectorClassificationCache: jest.fn(),
+}));
+
+jest.mock('../chat/model-selector-types', () => ({
+    QUERY_TYPES: ['chat', 'code', 'math', 'creative', 'code-agent', 'code-gen'],
+}));
+
+jest.mock('../config/data/warm-queries.json', () => [], { virtual: true });
+
+describe.skip('Contextual Classification - buildConversationContext', () => {
+    beforeEach(() => {
+        mockContextualClassification.ENABLED = true;
+        mockContextualClassification.MAX_HISTORY_TURNS = 3;
+        mockContextualClassification.MAX_CHARS_PER_TURN = 200;
+    });
+
+    /**
+     * buildConversationContext 로직을 추출하여 직접 테스트합니다.
+     */
+    function buildConversationContext(
+        history?: Array<{ role: string; content: string }>,
+    ): string | undefined {
+        if (!mockContextualClassification.ENABLED || !history || history.length === 0) {
+            return undefined;
+        }
+
+        const maxTurns = mockContextualClassification.MAX_HISTORY_TURNS;
+        const maxChars = mockContextualClassification.MAX_CHARS_PER_TURN;
+
+        const relevantTurns = history
+            .filter(m => m.role === 'user' || m.role === 'assistant')
+            .slice(-maxTurns * 2);
+
+        if (relevantTurns.length === 0) return undefined;
+
+        const lines = relevantTurns.map(m => {
+            const content = typeof m.content === 'string'
+                ? m.content.substring(0, maxChars)
+                : '';
+            return `${m.role}: ${content}`;
+        });
+
+        return lines.join('\n');
+    }
+
+    it('이력이 있으면 컨텍스트 문자열을 생성한다', () => {
+        const history = [
+            { role: 'user', content: '파이썬 리스트 정렬 방법 알려줘' },
+            { role: 'assistant', content: 'sorted()와 .sort() 메서드가 있습니다.' },
+        ];
+
+        const result = buildConversationContext(history);
+
+        expect(result).toBeDefined();
+        expect(result).toContain('user: 파이썬 리스트 정렬');
+        expect(result).toContain('assistant: sorted()');
+    });
+
+    it('이력이 없으면 undefined를 반환한다', () => {
+        expect(buildConversationContext(undefined)).toBeUndefined();
+        expect(buildConversationContext([])).toBeUndefined();
+    });
+
+    it('ENABLED=false이면 undefined를 반환한다', () => {
+        mockContextualClassification.ENABLED = false;
+        const history = [{ role: 'user', content: '테스트' }];
+
+        expect(buildConversationContext(history)).toBeUndefined();
+    });
+
+    it('MAX_HISTORY_TURNS만큼만 추출한다', () => {
+        mockContextualClassification.MAX_HISTORY_TURNS = 1;
+        const history = [
+            { role: 'user', content: '첫번째 질문' },
+            { role: 'assistant', content: '첫번째 답변' },
+            { role: 'user', content: '두번째 질문' },
+            { role: 'assistant', content: '두번째 답변' },
+            { role: 'user', content: '세번째 질문' },
+            { role: 'assistant', content: '세번째 답변' },
+        ];
+
+        const result = buildConversationContext(history);
+
+        // MAX_HISTORY_TURNS=1이면 slice(-2)로 마지막 2개만
+        expect(result).toBeDefined();
+        expect(result).toContain('세번째');
+        expect(result).not.toContain('첫번째');
+    });
+
+    it('MAX_CHARS_PER_TURN으로 긴 메시지를 절단한다', () => {
+        mockContextualClassification.MAX_CHARS_PER_TURN = 10;
+        const history = [
+            { role: 'user', content: '이것은 매우 긴 메시지입니다 잘라야 합니다' },
+        ];
+
+        const result = buildConversationContext(history);
+
+        expect(result).toBeDefined();
+        // 10자로 절단됨
+        expect(result!.length).toBeLessThan(50);
+    });
+
+    it('system 역할 메시지는 제외한다', () => {
+        const history = [
+            { role: 'system', content: '시스템 프롬프트' },
+            { role: 'user', content: '사용자 질문' },
+            { role: 'assistant', content: '답변' },
+        ];
+
+        const result = buildConversationContext(history);
+
+        expect(result).toBeDefined();
+        expect(result).not.toContain('시스템 프롬프트');
+        expect(result).toContain('사용자 질문');
+    });
+
+    it('대명사 포함 쿼리에 컨텍스트가 도움이 된다', () => {
+        // 이전 대화가 코드 관련이었으면 "그거 더 설명해줘"도 코드로 분류 가능
+        const history = [
+            { role: 'user', content: '파이썬 데코레이터 패턴 설명해줘' },
+            { role: 'assistant', content: '@decorator 패턴은 함수를 래핑하는 패턴입니다.' },
+        ];
+
+        const result = buildConversationContext(history);
+
+        expect(result).toBeDefined();
+        expect(result).toContain('데코레이터');
+    });
+});

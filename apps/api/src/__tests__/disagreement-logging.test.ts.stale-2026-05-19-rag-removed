@@ -1,0 +1,164 @@
+/**
+ * ============================================================
+ * Disagreement Logging — 분류 불일치 로깅 단위 테스트
+ * ============================================================
+ *
+ * P1 하네스: Regex vs LLM 분류 결과 불일치를 추적
+ */
+
+const mockWarnFn = jest.fn();
+
+jest.mock('../utils/logger', () => ({
+    createLogger: () => ({
+        info: jest.fn(),
+        warn: mockWarnFn,
+        error: jest.fn(),
+        debug: jest.fn(),
+    }),
+}));
+
+const mockDisagreementConfig = {
+    ENABLED: true,
+    INCLUDE_IN_METRICS: true,
+};
+
+jest.mock('../config/runtime-limits', () => ({
+    DISAGREEMENT_LOGGING: mockDisagreementConfig,
+    CACHE_CONFIG: {
+        CLASSIFICATION_CACHE_TTL_MS: 3600000,
+        CLASSIFICATION_CACHE_MAX_SIZE: 1000,
+    },
+}));
+
+jest.mock('../config/routing-config', () => ({
+    CLASSIFIER_MODEL: 'test-model',
+    CONFIDENCE_THRESHOLD: 0.7,
+    CLASSIFIER_TEMPERATURE: 0.1,
+    CLASSIFIER_NUM_CTX: 1024,
+    VECTOR_CACHE_ENABLED: false,
+    EMBEDDING_MODEL: 'test-embed',
+}));
+
+jest.mock('../config/timeouts', () => ({
+    LLM_TIMEOUTS: { CLASSIFIER_TIMEOUT_MS: 5000 },
+}));
+
+jest.mock('../prompts/classifier-system', () => ({
+    CLASSIFICATION_SYSTEM_PROMPT: 'test prompt',
+}));
+
+jest.mock('../llm', () => ({
+    LLMClient: jest.fn(),
+}));
+
+jest.mock('../chat/semantic-cache', () => ({
+    SemanticClassificationCache: jest.fn().mockImplementation(() => ({
+        getExact: jest.fn().mockReturnValue({ hit: null, source: null }),
+        set: jest.fn(),
+        size: jest.fn().mockReturnValue(0),
+        clear: jest.fn(),
+        getStats: jest.fn(),
+    })),
+}));
+
+jest.mock('../chat/vector-cache', () => ({
+    VectorClassificationCache: jest.fn(),
+}));
+
+jest.mock('../chat/model-selector-types', () => ({
+    QUERY_TYPES: ['chat', 'code', 'math', 'creative'],
+}));
+
+jest.mock('../config/data/warm-queries.json', () => [], { virtual: true });
+
+import { logDisagreementIfAny, getDisagreementStats } from '../chat/llm-classifier';
+
+describe.skip('Disagreement Logging', () => {
+    beforeEach(() => {
+        mockWarnFn.mockClear();
+        mockDisagreementConfig.ENABLED = true;
+        mockDisagreementConfig.INCLUDE_IN_METRICS = true;
+    });
+
+    it('LLM과 Regex 분류가 다르면 경고 로그를 남긴다', () => {
+        logDisagreementIfAny(
+            '파이썬으로 정렬 알고리즘 짜줘',
+            'code', 0.9,
+            'math', 0.6,
+            'code', 'llm',
+        );
+
+        expect(mockWarnFn).toHaveBeenCalledTimes(1);
+        expect(mockWarnFn.mock.calls[0][0]).toContain('분류 불일치');
+        expect(mockWarnFn.mock.calls[0][0]).toContain('LLM=code');
+        expect(mockWarnFn.mock.calls[0][0]).toContain('Regex=math');
+    });
+
+    it('LLM과 Regex 분류가 같으면 로깅하지 않는다', () => {
+        logDisagreementIfAny(
+            '코드 작성해줘',
+            'code', 0.9,
+            'code', 0.7,
+            'code', 'llm',
+        );
+
+        expect(mockWarnFn).not.toHaveBeenCalled();
+    });
+
+    it('ENABLED=false이면 로깅하지 않는다', () => {
+        mockDisagreementConfig.ENABLED = false;
+
+        logDisagreementIfAny(
+            '테스트 쿼리',
+            'code', 0.9,
+            'chat', 0.5,
+            'code', 'llm',
+        );
+
+        expect(mockWarnFn).not.toHaveBeenCalled();
+    });
+
+    it('INCLUDE_IN_METRICS=true이면 구조화 데이터가 로그에 포함된다', () => {
+        logDisagreementIfAny(
+            '복잡한 쿼리',
+            'reasoning', 0.85,
+            'chat', 0.4,
+            'reasoning', 'llm',
+        );
+
+        expect(mockWarnFn).toHaveBeenCalledTimes(1);
+        const logData = mockWarnFn.mock.calls[0][1];
+        expect(logData).toBeDefined();
+        expect(logData.disagreement).toBeDefined();
+        expect(logData.disagreement.llmType).toBe('reasoning');
+        expect(logData.disagreement.regexType).toBe('chat');
+    });
+
+    it('INCLUDE_IN_METRICS=false이면 구조화 데이터가 undefined이다', () => {
+        mockDisagreementConfig.INCLUDE_IN_METRICS = false;
+
+        logDisagreementIfAny(
+            '테스트',
+            'code', 0.9,
+            'chat', 0.5,
+            'code', 'llm',
+        );
+
+        const logData = mockWarnFn.mock.calls[0][1];
+        expect(logData).toBeUndefined();
+    });
+
+    it('긴 쿼리는 200자로 절단된다', () => {
+        const longQuery = 'a'.repeat(500);
+        logDisagreementIfAny(longQuery, 'code', 0.9, 'chat', 0.5, 'code', 'llm');
+
+        const logData = mockWarnFn.mock.calls[0][1];
+        expect(logData.disagreement.query.length).toBe(200);
+    });
+
+    it('불일치 통계가 누적된다', () => {
+        const stats = getDisagreementStats();
+        expect(stats.total).toBeGreaterThanOrEqual(0);
+        expect(stats.logged).toBeGreaterThanOrEqual(0);
+    });
+});
