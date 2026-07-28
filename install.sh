@@ -19,6 +19,9 @@
 #   --skip-build         빌드 산출물이 이미 있을 때
 #   --no-start           설치만 하고 PM2 기동은 하지 않음
 #   --force-env          기존 .env 를 백업하고 새로 생성
+#   --port / --web-port  API(52416) / 웹(3000) 포트 변경
+#   --postgres-port      PostgreSQL 포트 변경 (기본 5432 가 이미 점유된 경우)
+#   --redis-port         Redis 포트 변경 (기본 6379)
 #
 # 재실행 안전(idempotent): 이미 된 단계는 건너뛰거나 갱신만 한다.
 #
@@ -100,6 +103,8 @@ parse_args() {
             --llm-model)     LLM_MODEL="${2:-}"; shift ;;
             --port)          APP_PORT="${2:-}"; shift ;;
             --web-port)      WEB_PORT="${2:-}"; shift ;;
+            --postgres-port) PG_PORT="${2:-}"; shift ;;
+            --redis-port)    RD_PORT="${2:-}"; shift ;;
             -h|--help)       usage; exit 0 ;;
             *) log_err "알 수 없는 옵션: $1"; echo ""; usage; exit 1 ;;
         esac
@@ -254,15 +259,55 @@ ensure_node() {
 # ── 2. Docker ────────────────────────────────────────────────────────────────
 DOCKER_COMPOSE=""   # "docker compose" 또는 "docker-compose"
 
+# Homebrew 의 docker-compose 는 플러그인을 /opt/homebrew/lib/docker/cli-plugins 에 두는데,
+# docker CLI 는 이 경로를 기본으로 보지 않는다 → `docker compose` 가 "unknown command" 로 실패.
+# brew 가 caveat 로 안내하는 대로 ~/.docker/config.json 에 cliPluginsExtraDirs 를 등록한다.
+register_brew_compose_plugin() {
+    has brew || return 1
+    local plugin_dir
+    plugin_dir="$(brew --prefix)/lib/docker/cli-plugins"
+    [[ -e "$plugin_dir/docker-compose" ]] || return 1
+
+    local cfg="$HOME/.docker/config.json"
+    mkdir -p "$HOME/.docker"
+    # 기존 설정을 보존한 채 병합 (node 는 이 시점에 반드시 있다).
+    node -e '
+        const fs = require("fs");
+        const [cfgPath, dir] = process.argv.slice(1);
+        let cfg = {};
+        try { cfg = JSON.parse(fs.readFileSync(cfgPath, "utf8")); } catch {}
+        const dirs = Array.isArray(cfg.cliPluginsExtraDirs) ? cfg.cliPluginsExtraDirs : [];
+        if (!dirs.includes(dir)) dirs.push(dir);
+        cfg.cliPluginsExtraDirs = dirs;
+        fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + "\n");
+    ' "$cfg" "$plugin_dir" 2>/dev/null || return 1
+
+    log_info "docker compose 플러그인 경로 등록 → ~/.docker/config.json ($plugin_dir)"
+    docker compose version >/dev/null 2>&1
+}
+
 detect_compose() {
     if docker compose version >/dev/null 2>&1; then
         DOCKER_COMPOSE="docker compose"
-    elif has docker-compose; then
-        DOCKER_COMPOSE="docker-compose"
-        log_warn "compose v1(docker-compose) 사용 — v2(docker compose) 업그레이드를 권장합니다."
-    else
-        return 1
+        return 0
     fi
+
+    # Homebrew 로 방금 깔았는데 플러그인 등록만 안 된 흔한 상태 — 자동 복구를 시도.
+    if register_brew_compose_plugin; then
+        DOCKER_COMPOSE="docker compose"
+        return 0
+    fi
+
+    if has docker-compose; then
+        DOCKER_COMPOSE="docker-compose"
+        # 진짜 구형 v1 일 때만 경고한다 (brew 의 standalone 바이너리는 최신 Compose 다).
+        case "$(docker-compose version --short 2>/dev/null)" in
+            1.*) log_warn "compose v1(docker-compose) 사용 — v2 이상 업그레이드를 권장합니다." ;;
+        esac
+        return 0
+    fi
+
+    return 1
 }
 
 install_docker() {
@@ -298,7 +343,14 @@ ensure_docker_daemon() {
 
     log_warn "Docker 데몬이 응답하지 않습니다 — 기동을 시도합니다."
     if [[ "$OS" == "macos" ]]; then
-        open -a Docker 2>/dev/null || open -a OrbStack 2>/dev/null || true
+        # colima 는 CLI 로 기동해야 한다 (Docker Desktop/OrbStack 처럼 .app 이 아님).
+        # docker CLI 만 설치하고 colima 를 백엔드로 쓰는 헤드리스 구성이 흔하다.
+        if has colima; then
+            log_info "colima 기동 (colima start)"
+            colima start >/dev/null 2>&1 || true
+        else
+            open -a Docker 2>/dev/null || open -a OrbStack 2>/dev/null || true
+        fi
     else
         sudo systemctl start docker 2>/dev/null || sudo service docker start 2>/dev/null || true
     fi
@@ -507,8 +559,7 @@ start_app() {
 
 # ── 마무리 안내 ──────────────────────────────────────────────────────────────
 summary() {
-    local admin_user admin_pass admin_email llm_url
-    admin_user="$(env_value ADMIN_INITIAL_USERNAME)"
+    local admin_pass admin_email llm_url
     admin_pass="$(env_value ADMIN_PASSWORD)"
     admin_email="$(env_value DEFAULT_ADMIN_EMAIL)"
     llm_url="$(env_value LLM_BASE_URL)"
@@ -520,7 +571,8 @@ summary() {
     echo "  웹 UI     http://localhost:$WEB_PORT"
     echo "  API       http://localhost:$APP_PORT   (health: /health)"
     echo ""
-    echo "  로그인    ${admin_email:-admin@openmake.local}  (또는 사용자명 ${admin_user:-admin})"
+    # 로그인 식별자는 email 이다 (auth.schema.ts loginSchema — username 필드는 없음).
+    echo "  로그인    ${admin_email:-admin@openmake.local}   ← 이메일로 로그인합니다"
     echo "  비밀번호  ${admin_pass:-<.env 의 ADMIN_PASSWORD 참조>}"
     printf "  %s첫 로그인 후 비밀번호를 바꾸세요. 비밀번호는 .env 에 평문으로 저장됩니다.%s\n" "$C_DIM" "$C_RESET"
     echo ""

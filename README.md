@@ -204,7 +204,19 @@ custom / decide later). To skip every prompt:
 
 Re-running `./install.sh` is safe — it repairs rather than overwrites. Useful flags:
 `--skip-docker` (you run Postgres/Redis yourself), `--skip-build`, `--no-start`,
-`--force-env`, `--port` / `--web-port`. See `./install.sh --help`.
+`--force-env`, and the port overrides below. See `./install.sh --help`.
+
+Already running Postgres or Redis on the default ports? Move the containers instead of
+fighting over 5432/6379 — the ports land in `.env`, and `openmake_llm.sh` reads them back:
+
+```bash
+./install.sh --yes --postgres-port 55432 --redis-port 56379
+```
+
+On macOS the installer works with Docker Desktop, OrbStack, or **Colima**
+(`brew install colima docker docker-compose` — headless, no GUI). If Homebrew's compose
+plugin isn't registered with the docker CLI, the installer adds `cliPluginsExtraDirs` to
+`~/.docker/config.json` for you.
 
 ### Prerequisites (handled by the installer)
 

@@ -48,17 +48,28 @@ readonly SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 readonly APP_NAME="openmake-llm"
 readonly FRONT_APP_NAME="openmake-next"
-readonly APP_PORT="${PORT:-52416}"
-readonly POSTGRES_PORT="${POSTGRES_PORT:-5432}"
-readonly REDIS_PORT="${REDIS_PORT:-6379}"
+
+# .env 에서 키 하나만 추출한다 (전체 source 안 함 — 값에 공백/특수문자가 있어도 안전).
+# `|| true` 필수: 키가 없으면 grep 이 1 로 끝나고 pipefail+set -e 가 스크립트를 즉시 종료시킨다.
+env_line() {
+    [[ -f "$SCRIPT_DIR/.env" ]] || return 0
+    grep -E "^$1=" "$SCRIPT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d ' ' || true
+}
+
+# 포트 우선순위: 셸 환경변수 > .env > 기본값.
+# .env 를 봐야 하는 이유 — 기본 포트가 이미 점유돼 install.sh --postgres-port 등으로
+# 다른 포트에 띄운 경우, .env 를 무시하면 status/기동대기가 엉뚱한 포트를 본다.
+_app_port="${PORT:-$(env_line PORT)}"
+_pg_port="${POSTGRES_PORT:-$(env_line POSTGRES_PORT)}"
+_rd_port="${REDIS_PORT:-$(env_line REDIS_PORT)}"
+readonly APP_PORT="${_app_port:-52416}"
+readonly POSTGRES_PORT="${_pg_port:-5432}"
+readonly REDIS_PORT="${_rd_port:-6379}"
+
 # DB/Redis 는 docker compose 로 운영 (2026-06-21 brew postgresql@16 제거 → docker 단독).
 # COMPOSE_FILE 로 compose 위치 지정. 우선순위: 셸 환경변수 > .env > 기본값(레포의 infra/docker-compose.yml).
-# (.env 는 COMPOSE_FILE 한 줄만 추출, 전체 source 안 함)
-_compose_file_env=""
-# `|| true` 필수: COMPOSE_FILE 줄이 없으면 grep 이 1 로 끝나고 pipefail+set -e 가
-# 스크립트를 즉시 종료시킨다 (COMPOSE_FILE 을 안 쓰는 .env 가 정상 케이스).
-[[ -f "$SCRIPT_DIR/.env" ]] && _compose_file_env="$(grep -E '^COMPOSE_FILE=' "$SCRIPT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d ' ' || true)"
-readonly COMPOSE_FILE="${COMPOSE_FILE:-${_compose_file_env:-$SCRIPT_DIR/infra/docker-compose.yml}}"
+_compose_file="${COMPOSE_FILE:-$(env_line COMPOSE_FILE)}"
+readonly COMPOSE_FILE="${_compose_file:-$SCRIPT_DIR/infra/docker-compose.yml}"
 readonly HEALTH_RETRIES=15
 readonly HEALTH_INTERVAL=2
 
@@ -186,7 +197,9 @@ wait_for_app_with_logs() {
 }
 
 # ── docker compose 헬퍼 (DB/Redis 운영) ──────────────────────────────────────
-# compose v2(docker compose) 우선, 없으면 v1(docker-compose) 폴백.
+# 플러그인형(docker compose) 우선, 없으면 standalone 바이너리(docker-compose) 폴백.
+# (Homebrew 는 플러그인을 기본 탐색 경로 밖에 두므로 standalone 폴백이 실제로 쓰인다.
+#  ~/.docker/config.json 자동 등록은 install.sh 담당 — 여기서 사용자 설정을 건드리지 않는다.)
 compose_cmd() {
     if docker compose version >/dev/null 2>&1; then
         echo "docker compose"
