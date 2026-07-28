@@ -10,7 +10,10 @@
  *
  * 격리(컨테이너 기본):
  *  - 파일시스템: 호스트 경로 미마운트 → 호스트 FS·비밀 접근 불가(컨테이너 기본 격리).
- *  - env: config.env 만 `-e` 로 주입(호스트 env 미상속 — #151 과 동일 원칙, 더 강력).
+ *  - env: config.env 만 주입(호스트 env 미상속 — #151 과 동일 원칙, 더 강력).
+ *    값은 `-e KEY=값` 으로 인자에 넣지 않고 `-e KEY`(이름만) + docker 프로세스 env 로 전달한다.
+ *    커맨드라인 인자는 같은 호스트의 모든 사용자가 `ps` 로 읽을 수 있어 API 키·세션 쿠키가
+ *    평문 노출되기 때문(프로세스 env 는 소유자만 접근 가능).
  *  - 네트워크: full(bridge) | none(--unshare 대신 --network none). 서버별 정책.
  *  - 권한: --cap-drop ALL + no-new-privileges + 비-root user + pids/memory 상한(cgroups).
  *  - 내부 loopback(127.0.0.1/localhost) → host.docker.internal 자동 치환
@@ -42,6 +45,11 @@ export interface SandboxResult {
     args: string[];
     /** 실제 docker 로 감쌌는지 (false = no-op 통과) */
     sandboxed: boolean;
+    /**
+     * sandboxed=true 일 때 docker 프로세스에 넘길 env — 컨테이너는 `-e KEY`(이름만) 로
+     * 여기서 값을 상속받는다. 값이 인자에 없으므로 `ps` 에 비밀이 노출되지 않는다.
+     */
+    env?: Record<string, string>;
 }
 
 /** 게이트/프로파일 입력 — 테스트 주입 가능(순수성). */
@@ -116,6 +124,19 @@ export function rewriteLoopback(s: string): string {
     return s.replace(LOOPBACK_RE, 'host.docker.internal');
 }
 
+/**
+ * PURE: 컨테이너에 전달할 env 값 조립 (loopback 치환 적용).
+ * buildDockerArgs 가 `-e KEY`(이름만) 를 넣으므로, 실제 값은 이 결과를 docker 프로세스의
+ * spawn env 로 넘겨야 컨테이너까지 도달한다.
+ */
+export function buildSandboxedEnv(input: SandboxInput): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(input.env ?? {})) {
+        out[k] = rewriteLoopback(String(v));
+    }
+    return out;
+}
+
 /** PURE: docker run 인자 조립 (유닛테스트 대상). */
 export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string[] {
     const net = (input.network ?? 'full') === 'none' ? 'none' : 'bridge';
@@ -139,9 +160,12 @@ export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string
     a.push('-e', 'HOME=/home/node');
     a.push('-e', 'NPM_CONFIG_CACHE=/home/node/.cache/npm');
     a.push('-e', 'UV_CACHE_DIR=/home/node/.cache/uv');
-    // 서버 config.env 만 컨테이너에 주입 (호스트 env 미상속)
-    for (const [k, v] of Object.entries(input.env ?? {})) {
-        a.push('-e', `${k}=${rewriteLoopback(String(v))}`);
+    // 서버 config.env 만 컨테이너에 주입 (호스트 env 미상속).
+    // 🔒 값은 인자에 넣지 않는다 — `-e KEY`(이름만) 형태면 docker 가 호출 프로세스의 env 에서
+    //    값을 읽어 컨테이너로 전달하므로, `ps` 로 읽히는 커맨드라인에 비밀이 남지 않는다.
+    //    값 자체는 buildSandboxedEnv() 가 돌려주고 호출자가 spawn env 로 넘긴다.
+    for (const k of Object.keys(input.env ?? {})) {
+        a.push('-e', k);
     }
     a.push(cfg.image);
     a.push(rewriteLoopback(input.command), ...input.args.map((x) => rewriteLoopback(String(x))));
@@ -150,7 +174,8 @@ export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string
 
 /**
  * 외부 MCP stdio command 를 docker run 으로 감싼다. 게이트 미충족 시 원본 그대로(no-op).
- * sandboxed=true 이면 env 는 args(-e)에 baked 되므로 호출자는 StdioClientTransport env 를 비워야 한다.
+ * sandboxed=true 이면 인자엔 `-e KEY`(이름만) 가 들어가므로, 호출자는 반환된 `env` 를
+ * StdioClientTransport env 로 넘겨야 한다(값이 docker 프로세스를 거쳐 컨테이너에 전달됨).
  */
 export function buildSandboxedCommand(input: SandboxInput, cfg: SandboxConfig = defaultSandboxConfig()): SandboxResult {
     // per-server opt-out — 호스트 설치 바이너리 의존 등으로 컨테이너 미동작인 신뢰 서버는
@@ -166,5 +191,5 @@ export function buildSandboxedCommand(input: SandboxInput, cfg: SandboxConfig = 
         throw new Error('MCP 샌드박스가 활성화(MCP_SANDBOX_ENABLED)됐으나 docker 바이너리를 찾을 수 없습니다. 비격리 실행을 거부합니다 — Docker 설치/실행을 확인하거나 sandbox_network=host 로 opt-out 하세요.');
     }
     const dockerArgs = buildDockerArgs(input, cfg);
-    return { command: cfg.dockerPath, args: dockerArgs, sandboxed: true };
+    return { command: cfg.dockerPath, args: dockerArgs, sandboxed: true, env: buildSandboxedEnv(input) };
 }
