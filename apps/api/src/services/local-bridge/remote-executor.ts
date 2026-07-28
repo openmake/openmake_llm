@@ -34,7 +34,13 @@ function toExecResult(r: BridgeResult): ExecResult {
 export class RemoteExecutor implements TaskExecutor {
     readonly taskId: string;
     readonly localWorkdir = null;
-    readonly isBrowserEnabled = false;
+    /**
+     * D3 — 로컬 브라우저 게이트. 서버 샌드박스의 TASK_SANDBOX_BROWSER_ENABLED 와 **별개**로
+     * LOCAL_BRIDGE_BROWSER_ENABLED 를 본다. false 면 tools.ts 의 browser 핸들러가 진입 단계에서
+     * 막으므로 runBrowser 까지 오지 않는다(D1 시절 하드코딩 false 로 인해 실제로 그랬다).
+     */
+    readonly isBrowserEnabled = LOCAL_BRIDGE.BROWSER_ENABLED;
+    /** 세션 영속은 데스크톱 파티션(persist:openmake-agent)이 담당 — 서버측 상태 파일 불필요. */
     readonly browserStatePath = null;
     private readonly userId: string;
     private deviceLabel = 'local-device';
