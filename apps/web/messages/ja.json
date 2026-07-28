@@ -950,7 +950,7 @@
     "envUnchangedPlaceholder": "変更しない",
     "envSave": "保存",
     "envSaved": "認証情報を変更しました。",
-    "envSavedRespawn": "認証情報を変更しました。既存の接続は終了し、次のチャット開始時に新しい値で再接続されます。",
+    "envSavedRespawn": "認証情報を変更しました。既存の接続は終了し、再接続時に新しい値が適用されます。",
     "envUpdateError": "認証情報の変更に失敗しました"
   },
   "mcpCatalog": {

@@ -282,9 +282,12 @@ export const mcpRouter = Router();
           return;
       }
 
-      // 이미 떠 있는 컨테이너는 구 자격증명(stale env)을 그대로 들고 있다. 정리하지 않으면
-      // 키를 바꿨는데도 채팅이 옛 값으로 계속 도구를 호출한다(삭제 경로와 동일한 이유).
-      // 재spawn 은 다음 ensureUserServers(채팅 시작) 가 멱등 처리한다.
+      // 이미 떠 있는 클라이언트는 구 자격증명(stale env)을 그대로 들고 있다. 정리하지 않으면
+      // 키를 바꿔도 옛 값으로 계속 도구를 호출한다(삭제 경로와 동일한 이유).
+      // 소유 주체에 따라 붙어 있는 풀이 다르므로 양쪽 모두 끊어야 한다 —
+      //   user 소유: userPool(lifecycle-supervisor) → 다음 ensureUserServers 가 멱등 respawn
+      //   global   : 전역 registry → 자동 respawn 경로가 없어 수동 [연결] 이 필요
+      // 어느 쪽이든 "다시 연결해야 새 값이 적용된다"는 뜻이므로 respawnRequired=true 로 알린다.
       let respawnRequired = false;
       if (server.user_id) {
           const supervisor = getLifecycleSupervisor();
@@ -293,6 +296,10 @@ export const mcpRouter = Router();
               await supervisor.killUserServer(String(server.user_id), id).catch((e: unknown) =>
                   logger.warn(`env 변경 후 유저풀 정리 실패(변경은 유지): ${id}: ${e instanceof Error ? e.message : String(e)}`));
           }
+      } else {
+          respawnRequired = true;
+          await getUnifiedMCPClient().getServerRegistry().disconnectServer(id).catch((e: unknown) =>
+              logger.warn(`env 변경 후 전역 registry 정리 실패(변경은 유지): ${id}: ${e instanceof Error ? e.message : String(e)}`));
       }
 
       // 자격증명 변경은 감사 대상 — 키 이름만 남기고 값은 절대 기록하지 않는다.
@@ -397,7 +404,10 @@ export const mcpRouter = Router();
       if (target.visibility !== 'global') {
           const supervisor = getLifecycleSupervisor();
           if (supervisor) {
-              await supervisor.killUserServer(String(target.user_id ?? userId), id);
+              // 정리 실패로 500 을 내지 않는다 — PATCH/DELETE 경로와 동일하게 경고만 남기고
+              // 나머지 정리를 계속한다(해제 요청 자체는 최대한 진행시키는 편이 낫다).
+              await supervisor.killUserServer(String(target.user_id ?? userId), id).catch((e: unknown) =>
+                  logger.warn(`연결 해제 시 유저풀 정리 실패: ${id}: ${e instanceof Error ? e.message : String(e)}`));
           }
           // 과거 경로로 registry 에 등록됐을 수 있으니 함께 정리(멱등).
           await getUnifiedMCPClient().getServerRegistry().disconnectServer(id).catch(() => { /* 미등록이면 무시 */ });

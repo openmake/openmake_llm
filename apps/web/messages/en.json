@@ -950,7 +950,7 @@
     "envUnchangedPlaceholder": "unchanged",
     "envSave": "Save",
     "envSaved": "Credentials updated.",
-    "envSavedRespawn": "Credentials updated. The existing connection was closed and will reconnect with the new values on your next chat.",
+    "envSavedRespawn": "Credentials updated. The existing connection was closed; the new values apply once it reconnects.",
     "envUpdateError": "Failed to update credentials"
   },
   "mcpCatalog": {
