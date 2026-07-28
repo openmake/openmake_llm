@@ -4,6 +4,8 @@
 //
 // 보안 불변식:
 //  - 고정 kind 화이트리스트만 처리 (임의 RPC 거부)
+//  - browser kind(D3): 전용 세션 파티션의 Electron 내장 Chromium. 개인 브라우저와 분리,
+//    http(s) 외 스킴·비allowlist 호스트 차단, 다운로드는 연결 폴더 안으로만
 //  - 파일 kind(read/write/list/delete)의 경로는 연결 폴더 realpath 스코프 안에서만
 //    해석 (심링크 탈출 차단)
 //  - exec 3단 방어: ① 명백히 위험한 패턴을 디바이스에서 hard-block(EXEC_DENYLIST)
@@ -18,6 +20,7 @@ const path = require('path');
 const { execFile } = require('child_process');
 const crypto = require('crypto');
 const WebSocket = require('ws');
+const agentBrowser = require('./agent-browser');
 
 const EXEC_TIMEOUT_MS = 120000;
 const MAX_BUFFER = 1024 * 1024;
@@ -194,7 +197,22 @@ async function handleExec(m, done) {
       fs.rmSync(abs, { recursive: true, force: true });
       done({ ok: true }); return;
     }
-    case 'task_end': done({ ok: true }); return;
+    case 'browser': {
+      // 로컬 브라우저(D3) — Electron 내장 Chromium 에서 액션 실행.
+      // 전용 세션 파티션이라 사용자 개인 브라우저와 분리되고, 화면에 보이는 패널로 뜬다.
+      try {
+        agentBrowser.configure({ getWindow: () => mainWin, getFolderRoot: () => folderRoot });
+        const out = await agentBrowser.runActions(m.spec || {});
+        // 컨테이너 runner 와 동일하게 stdout 에 JSON 을 싣는다(서버 파싱 재사용).
+        done({ ok: true, stdout: JSON.stringify(out), exitCode: out.ok ? 0 : 1 });
+      } catch (e) {
+        done({ ok: false, error: `로컬 브라우저 실행 실패: ${e.message}` });
+      }
+      return;
+    }
+    case 'task_end':
+      agentBrowser.closeAll();   // 작업 종료 시 브라우저 패널 정리
+      done({ ok: true }); return;
     default: done({ ok: false, error: `지원하지 않는 kind: ${m.kind}` });
   }
 }
