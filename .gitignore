@@ -111,12 +111,11 @@ docs/superpowers/
 bun.lock
 bunfig.toml
 
-# Tests & Dev Configs
-**/__tests__/
-tests/
-*.test.ts
-*.spec.ts
-playwright.config.ts
+# Dev Configs
+# 테스트(**/__tests__/, *.test.ts, *.spec.ts, tests/, playwright.config.ts)는 2026-07-29 부터
+# 추적한다. 이전에는 제외돼 있어 CI 가 회귀를 **한 건도** 검증하지 못했다(Gate 1 이 파일 없음을
+# 감지해 skip → "CI 초록"이 회귀 방어를 뜻하지 않았음). 전수 스캔 결과 테스트에 실제 키·토큰·
+# 운영 호스트명은 없었고, 소스는 이미 공개이므로 테스트만 가려서 얻는 보호도 없었다.
 .eslintignore
 .eslintrc.json
 

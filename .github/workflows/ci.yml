@@ -45,53 +45,24 @@ jobs:
           node-version-file: '.node-version'
           cache: 'npm'
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
       # 모노레포 npm workspaces — 루트 npm ci 한 번이면 모든 workspace 설치 + hoisting.
       # (apps/api 에서 중복 npm ci 하면 hoisting 이 깨져 web-scraper 의 playwright-core
       #  dynamic import 가 tsc 에서 TS2307 로 실패함 — 루트 설치만 유지)
       - name: Install dependencies
         run: npm ci
 
-      # ─── Gate 1: Bun Test ───
-      # agent-loop.test.ts 제외 (Ollama 실제 연결 시도로 CI에서 hang 발생)
-      # 각 파일을 개별 bun test 프로세스로 실행하여 mock 격리 보장
-      - name: "Gate 1: Bun Test (per-file isolation)"
-        working-directory: apps/api
-        run: |
-          TEST_FAILED=0
-          TEST_PASSED=0
-          TEST_ERRORS=""
-          CI_EXCLUDE="agent-loop.test.ts"
-
-          # 테스트는 git-ignored(로컬 보관 방침) — repo 에 파일이 없으면 게이트 skip.
-          # 로컬/향후 포함 시 자동 실행. 글롭 비매치를 literal 로 돌리지 않도록 nullglob 적용.
-          shopt -s nullglob
-          TEST_FILES=(src/__tests__/*.test.ts)
-          if [ ${#TEST_FILES[@]} -eq 0 ]; then
-            echo "ℹ️ 테스트 파일 없음 (git-ignored, 로컬 npm test 전용) — Bun Test 게이트 skip"
-            exit 0
-          fi
-
-          for f in "${TEST_FILES[@]}"; do
-            fname=$(basename "$f")
-            case "$fname" in $CI_EXCLUDE) continue ;; esac
-            if timeout 30 bun test --timeout 15000 "$f" > /dev/null 2>&1; then
-              TEST_PASSED=$((TEST_PASSED + 1))
-            else
-              TEST_FAILED=$((TEST_FAILED + 1))
-              TEST_ERRORS="$TEST_ERRORS $fname"
-            fi
-          done
-
-          echo "✅ $TEST_PASSED passed, ❌ $TEST_FAILED failed"
-          if [ $TEST_FAILED -gt 0 ]; then
-            echo "실패 파일:$TEST_ERRORS"
-            exit 1
-          fi
+      # ─── Gate 1: Jest ───
+      # 로컬 `npm test` 와 **같은 러너**로 돈다. 이전에는 bun test 로 돌렸는데, 로컬은 jest 라
+      # 러너가 갈라져 있었다 — bun 은 jest.resetModules 등 일부 API 를 지원하지 않아 실측 시
+      # 12개가 러너 차이만으로 실패했다. 게다가 대상이 src/__tests__ **직속**(비재귀)이라
+      # 서브디렉토리·인라인 테스트 86개는 애초에 게이트 밖이었다. jest 로 통일해 전량을 본다.
+      #
+      # DB 가 필요한 테스트는 DATABASE_URL 부재 시 스스로 describe.skip 한다(러너에서 제외 불필요).
+      - name: "Gate 1: Jest"
+        run: npm test
+        env:
+          # supertest 반복 호출이 rate limit 에 걸리지 않도록 — jest.setup.ts 와 같은 축
+          CI: 'true'
 
       # ─── Gate 2: TypeScript Build ───
       - name: "Gate 2: TypeScript Build"
