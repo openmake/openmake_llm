@@ -313,8 +313,8 @@ export const mcpRouter = Router();
       const role = req.user?.role ?? 'user';
       const actor = { id: userId, role };
       const { id } = req.params;
+      const repo = new McpCatalogRepository(getUnifiedDatabase().getPool());
       {
-          const repo = new McpCatalogRepository(getUnifiedDatabase().getPool());
           const server = await repo.getServerById(id);
           if (!server) {
               res.status(404).json(notFound('서버'));
@@ -333,6 +333,13 @@ export const mcpRouter = Router();
           return;
       }
 
+      // getMcpServerById 는 DB 원본(암호문 v1:)을 그대로 돌려주므로 복호화가 필수다.
+      // 빠뜨리면 암호문이 그대로 자식 프로세스 env 로 들어가 서버는 뜨고 도구 목록도
+      // 정상 등록되지만(연결 자체는 자격증명을 안 쓴다) 실제 API 호출만 401 로 실패한다.
+      // lifecycle-supervisor.safeSpawn 은 decryptEnvForSpawn 을 쓰므로 자동 spawn 경로는
+      // 정상이고, 수동 [연결] 경로만 갈라져 있었다.
+      const decryptedEnv = await repo.decryptEnvForSpawn(id);
+
       const registry = getUnifiedMCPClient().getServerRegistry();
       await registry.connectServer(id, {
           id: server.id,
@@ -340,7 +347,7 @@ export const mcpRouter = Router();
           transport_type: server.transport_type as MCPTransportType,
           command: server.command || undefined,
           args: server.args || undefined,
-          env: server.env || undefined,
+          env: Object.keys(decryptedEnv).length > 0 ? decryptedEnv : undefined,
           url: server.url || undefined,
           enabled: server.enabled,
           created_at: server.created_at,
