@@ -3,12 +3,16 @@
 # 목적: 호스트 brew(postgresql@16, redis) 대신 버전 고정·격리·이식 가능한 컨테이너로 운영.
 # 애플리케이션(apps/api, apps/web)은 여전히 PM2 + 직접 배포 (이 compose 에 포함하지 않음).
 #
-# 사용:
-#   docker compose up -d                 # DB+Redis 기동
-#   docker compose ps                    # 상태
-#   docker compose logs -f postgres      # 로그
-#   docker compose down                  # 정지 (볼륨 유지)
-#   docker compose down -v               # 정지 + 데이터 볼륨 삭제(주의)
+# 사용 (레포 루트에서):
+#   docker compose --env-file .env -f infra/docker-compose.yml up -d       # DB+Redis 기동
+#   docker compose --env-file .env -f infra/docker-compose.yml ps          # 상태
+#   docker compose --env-file .env -f infra/docker-compose.yml logs -f postgres
+#   docker compose --env-file .env -f infra/docker-compose.yml down        # 정지 (볼륨 유지)
+#   docker compose --env-file .env -f infra/docker-compose.yml down -v     # 정지 + 볼륨 삭제(주의)
+#
+# ⚠ --env-file 은 선택이 아니다: compose 는 기본 .env 를 "compose 파일이 있는 디렉터리"
+#   (= infra/) 기준으로 찾는다. 루트 .env 를 명시하지 않으면 POSTGRES_PASSWORD 가 비어
+#   `:?` 검증에 걸려 기동이 실패한다. (install.sh / openmake_llm.sh 는 자동으로 붙인다.)
 #
 # 선행: .env 에 POSTGRES_PASSWORD 를 DATABASE_URL 의 비밀번호와 동일하게 설정.
 #   (DATABASE_URL=postgresql://openmake:<PW>@127.0.0.1:5432/openmake_llm ↔ POSTGRES_PASSWORD=<PW>)

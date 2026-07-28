@@ -2,8 +2,11 @@
 .env
 .env.local
 .env.*.local
-# 운영 .env 백업 — 실제 시크릿이 들어 있어 절대 커밋 금지
+# 운영 .env 백업 (gen-env.mjs --force 백업 포함) — 실제 시크릿이 들어 있어 절대 커밋 금지
 .env.bak*
+
+# install.sh 가 만든 로컬 toolchain (홈에 설치한 Node/PM2 의 PATH 등)
+/.openmake/
 # Docker is permanently excluded from this project (PM2 + direct deploy only)
 
 # Dependencies
