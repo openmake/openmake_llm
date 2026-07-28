@@ -309,7 +309,7 @@ export class ExternalMCPClient extends EventEmitter {
                     throw new Error(`stdio transport requires "command" for server "${this.config.name}"`);
                 }
                 // 🔒 OS 격리: docker 컨테이너로 command/args 를 감싼다(게이트 미충족 시 원본 no-op).
-                //   env 는 sandboxed 시 컨테이너에 -e 로 baked 되므로, 그 경우 SDK env 는 비운다.
+                //   sandboxed 시 인자엔 `-e KEY`(이름만) 만 들어가고 값은 sb.env 로 온다.
                 const sb = buildSandboxedCommand({
                     command: this.config.command,
                     args: this.config.args || [],
@@ -326,10 +326,11 @@ export class ExternalMCPClient extends EventEmitter {
                     // 🔒 보안: process.env 전체 상속 금지 — 외부(승인) MCP 서버가 호스트 비밀
                     //   (DATABASE_URL/JWT_SECRET/TOKEN_ENCRYPTION_KEY/LLM_API_KEY/GOOGLE_* 등)에
                     //   접근하던 누출을 차단. SDK 가 getDefaultEnvironment()(PATH/HOME 등 안전
-                    //   부분집합)를 base 로 병합한다. sandboxed(docker) 시엔 env 가 컨테이너 -e 로
-                    //   들어가므로 여기선 undefined(docker 프로세스는 PATH 만 있으면 됨).
+                    //   부분집합)를 base 로 병합한다. sandboxed(docker) 시엔 sb.env 를 넘겨 docker
+                    //   프로세스가 `-e KEY` 로 컨테이너에 전달하게 한다 — 값을 인자에 baked 하면
+                    //   같은 호스트의 아무 프로세스나 `ps` 로 비밀을 읽을 수 있다.
                     env: sb.sandboxed
-                        ? undefined
+                        ? sb.env
                         : (this.config.env ? { ...this.config.env } as Record<string, string> : undefined),
                     stderr: 'pipe',
                 });
