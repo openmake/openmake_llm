@@ -942,7 +942,16 @@
     "riskWarning": "⚠️ 风险",
     "emptyDrafts": "没有草稿。请通过 Git URL 注册服务器。",
     "approve": "批准",
-    "reject": "拒绝"
+    "reject": "拒绝",
+    "envEdit": "凭据",
+    "envEditTitle": "更新凭据",
+    "envEditHint": "仅输入需要更改的值。留空的字段将保留当前值。",
+    "envSecretHint": "已加密存储",
+    "envUnchangedPlaceholder": "不更改",
+    "envSave": "保存",
+    "envSaved": "凭据已更新。",
+    "envSavedRespawn": "凭据已更新。现有连接已关闭，将在下次对话开始时使用新值重新连接。",
+    "envUpdateError": "更新凭据失败"
   },
   "mcpCatalog": {
     "pageTitle": "MCP 目录",

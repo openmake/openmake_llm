@@ -942,7 +942,16 @@
     "riskWarning": "⚠️ 위험",
     "emptyDrafts": "Draft가 없습니다. Git URL로 서버를 등록하세요.",
     "approve": "승인",
-    "reject": "거부"
+    "reject": "거부",
+    "envEdit": "자격증명",
+    "envEditTitle": "자격증명 변경",
+    "envEditHint": "변경할 값만 입력하세요. 비워 둔 항목은 기존 값이 그대로 유지됩니다.",
+    "envSecretHint": "암호화 저장됨",
+    "envUnchangedPlaceholder": "변경하지 않음",
+    "envSave": "저장",
+    "envSaved": "자격증명을 변경했습니다.",
+    "envSavedRespawn": "자격증명을 변경했습니다. 기존 연결이 종료되었으며 다음 대화 시작 시 새 값으로 다시 연결됩니다.",
+    "envUpdateError": "자격증명 변경에 실패했습니다"
   },
   "mcpCatalog": {
     "pageTitle": "MCP 카탈로그",

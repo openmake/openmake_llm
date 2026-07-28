@@ -59,7 +59,24 @@ export const mcpServerCreateSchema = z.object({
     }
 });
 
+/**
+ * 기존 MCP 서버의 env 교체 (자격증명 로테이션) 요청 스키마.
+ *
+ * 부분 갱신이라 전달된 키만 바뀐다. 빈 문자열은 거부 — "값을 지운다"와 "안 바꾼다"가
+ * 구분되지 않아 실수로 자격증명을 날리는 경로가 되기 때문이며, 안 바꿀 키는 아예 빼면 된다.
+ * 키 이름은 환경변수 관례(영문 대문자/숫자/밑줄)로 제한해 spawn 인자 오염을 차단한다.
+ */
+export const mcpServerEnvUpdateSchema = z.object({
+    env: z.record(
+        z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, '환경변수 키 형식이 올바르지 않습니다').max(100),
+        z.string().min(1, '값은 비울 수 없습니다').max(10000),
+    ).refine((v) => Object.keys(v).length > 0, { message: '변경할 환경변수를 1개 이상 지정하세요' })
+        .refine((v) => Object.keys(v).length <= 30, { message: '한 번에 최대 30개까지 변경할 수 있습니다' }),
+});
+
 /** MCP 도구 실행 요청 TypeScript 타입 */
 export type McpToolExecuteInput = z.infer<typeof mcpToolExecuteSchema>;
 /** MCP 서버 등록 요청 TypeScript 타입 */
 export type McpServerCreateInput = z.infer<typeof mcpServerCreateSchema>;
+/** MCP 서버 env 교체 요청 TypeScript 타입 */
+export type McpServerEnvUpdateInput = z.infer<typeof mcpServerEnvUpdateSchema>;

@@ -54,3 +54,12 @@ export function canStartStopServer(actor: Actor, server: UserMcpServerRow): bool
     if (actor.role === 'admin') return true;
     return server.user_id === actor.id;
 }
+
+/**
+ * env(자격증명) 교체 권한 — 소유자 + admin.
+ * user_shared 서버라도 공유 대상자는 값을 바꿀 수 없다(조회 권한과 분리).
+ */
+export function canUpdateServerEnv(actor: Actor, server: UserMcpServerRow): boolean {
+    if (actor.role === 'admin') return true;
+    return server.user_id === actor.id;
+}

@@ -942,7 +942,16 @@
     "riskWarning": "⚠️ リスク",
     "emptyDrafts": "ドラフトがありません。Git URLからサーバーを登録してください。",
     "approve": "承認",
-    "reject": "却下"
+    "reject": "却下",
+    "envEdit": "認証情報",
+    "envEditTitle": "認証情報の変更",
+    "envEditHint": "変更する値のみ入力してください。空欄の項目は現在の値が保持されます。",
+    "envSecretHint": "暗号化して保存",
+    "envUnchangedPlaceholder": "変更しない",
+    "envSave": "保存",
+    "envSaved": "認証情報を変更しました。",
+    "envSavedRespawn": "認証情報を変更しました。既存の接続は終了し、次のチャット開始時に新しい値で再接続されます。",
+    "envUpdateError": "認証情報の変更に失敗しました"
   },
   "mcpCatalog": {
     "pageTitle": "MCPカタログ",
