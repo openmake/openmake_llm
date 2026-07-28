@@ -154,6 +154,14 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
         }
     }
 
+    /**
+     * 단일 유저 서버 spawn — killUserServer 의 대칭(수동 [연결] 경로용).
+     *
+     * user 소유 서버는 **반드시 이 경로(userPool)** 로 띄워야 한다. 전역 server-registry
+     * 로 띄우면 tool-router 의 전역 externalTools fallback(visibility=global 전용)에
+     * 도구가 등록돼 **다른 사용자도 그 도구를 실행**할 수 있다(= 남의 자격증명으로
+     * 접근하는 데이터가 유출).
+     */
     async spawnUserServer(userId: string, serverId: string): Promise<ExternalMCPClient> {
         const existing = this.userPool.get(userId, serverId);
         if (existing) return existing;
