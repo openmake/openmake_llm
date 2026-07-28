@@ -26,3 +26,6 @@ export const PORTS = {
 
 /** 변경(mutating) 메서드 — CSRF 헤더 주입 대상. */
 export const MUTATING_METHODS = ["POST", "PUT", "PATCH", "DELETE"] as const;
+
+/** 아티팩트 코드 실행 가능성 판정 (샌드박스 표준 라이브러리 기준). */
+export { checkRunnable, type RunnableVerdict } from "./artifact-runnable";

@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { X, Code2, Eye, Copy, Check, Play, Loader2, Download, Share2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { X, Code2, Eye, Copy, Check, Play, Loader2, Download, Share2, PackageX } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAppStore } from "@/lib/store";
 import type { Artifact } from "@/lib/store";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { buildArtifactSrcDoc, previewKindFor } from "@/lib/artifact-render";
+import { checkRunnable } from "@openmake/config";
 import { appendAnonSessionId } from "@/lib/anon-session";
 import { ArtifactFrame } from "./artifact-frame";
 import { ArtifactShareModal } from "./artifact-share-modal";
@@ -35,8 +36,8 @@ interface ExecResult {
   truncated: boolean;
 }
 
-/** 서버 실행 가능 언어 (백엔드 ARTIFACT_EXEC_RUNTIMES 와 정합). */
-const RUNNABLE_LANGS = new Set(["python", "py", "python3", "javascript", "js", "node", "nodejs"]);
+// 실행 가능 언어 판정 + import 정적 분석은 lib/artifact-runnable 로 분리.
+// 언어만 보고 버튼을 노출하면 django 같은 외부 의존 코드에서 ModuleNotFoundError 만 보게 된다.
 
 function CodeArtifactView({
   artifact,
@@ -49,7 +50,10 @@ function CodeArtifactView({
 }) {
   const t = useTranslations("artifacts");
   const lang = (artifact.lang ?? "").toLowerCase().trim();
-  const runnable = RUNNABLE_LANGS.has(lang);
+  const verdict = useMemo(() => checkRunnable(lang, artifact.content), [lang, artifact.content]);
+  const runnable = verdict.runnable;
+  // 언어는 지원하지만 외부 패키지 의존이라 실행이 불가능한 경우 — 버튼 대신 이유를 보여준다.
+  const blockedDeps = !verdict.runnable && verdict.reason === "external-deps" ? verdict.packages : null;
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<ExecResult | null>(null);
   const [restored, setRestored] = useState(false);
@@ -121,6 +125,12 @@ function CodeArtifactView({
             {running ? t("run.running") : t("run.run")}
           </button>
           <span className="text-[11px] text-faint">{t("run.sandbox", { lang })}</span>
+        </div>
+      )}
+      {blockedDeps && (
+        <div className="flex items-start gap-1.5 border-b border-border px-3 py-1.5 text-[11px] text-faint">
+          <PackageX className="mt-px h-3.5 w-3.5 shrink-0" />
+          <span>{t("run.externalDeps", { packages: blockedDeps.join(", ") })}</span>
         </div>
       )}
       <div className="min-h-0 flex-1 overflow-auto px-3">

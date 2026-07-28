@@ -404,7 +404,8 @@
       "running": "실행 중…",
       "run": "실행",
       "sandbox": "샌드박스(네트워크 차단) · {lang}",
-      "restored": "이전 실행 결과"
+      "restored": "이전 실행 결과",
+      "externalDeps": "{packages} 패키지가 필요해 샌드박스에서 실행할 수 없습니다 (표준 라이브러리만 지원)."
     },
     "output": {
       "title": "출력",

@@ -404,7 +404,8 @@
       "running": "Running…",
       "run": "Run",
       "sandbox": "Sandbox (network blocked) · {lang}",
-      "restored": "last run"
+      "restored": "last run",
+      "externalDeps": "Cannot run in the sandbox — requires {packages} (standard library only)."
     },
     "output": {
       "title": "Output",
