@@ -404,7 +404,8 @@
       "running": "执行中…",
       "run": "执行",
       "sandbox": "沙箱（网络已阻断） · {lang}",
-      "restored": "上次运行结果"
+      "restored": "上次运行结果",
+      "externalDeps": "无法在沙箱中运行 — 需要 {packages}（仅支持标准库）。"
     },
     "output": {
       "title": "输出",

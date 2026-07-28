@@ -404,7 +404,8 @@
       "running": "実行中…",
       "run": "実行",
       "sandbox": "サンドボックス（ネットワーク遮断） · {lang}",
-      "restored": "前回の実行結果"
+      "restored": "前回の実行結果",
+      "externalDeps": "{packages} が必要なためサンドボックスでは実行できません（標準ライブラリのみ対応）。"
     },
     "output": {
       "title": "出力",
