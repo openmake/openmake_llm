@@ -314,17 +314,34 @@ export const mcpRouter = Router();
       const actor = { id: userId, role };
       const { id } = req.params;
       const repo = new McpCatalogRepository(getUnifiedDatabase().getPool());
-      {
-          const server = await repo.getServerById(id);
-          if (!server) {
-              res.status(404).json(notFound('서버'));
-              return;
-          }
-          if (!canStartStopServer(actor, server)) {
-              res.status(403).json(forbidden('해당 서버를 연결할 권한이 없습니다'));
-              return;
-          }
+      const target = await repo.getServerById(id);
+      if (!target) {
+          res.status(404).json(notFound('서버'));
+          return;
       }
+      if (!canStartStopServer(actor, target)) {
+          res.status(403).json(forbidden('해당 서버를 연결할 권한이 없습니다'));
+          return;
+      }
+
+      // 🔒 user 소유 서버는 전역 registry 가 아니라 소유자의 userPool 로 띄운다.
+      //    registry 로 띄우면 tool-router 의 전역 externalTools fallback
+      //    (visibility=global 전용)에 도구가 등록돼 **다른 사용자도 그 도구를 실행**할 수
+      //    있다(= 남의 자격증명으로 접근하는 데이터가 유출). 부팅 로드 경로에는 이미
+      //    visibility 필터가 있었으나 이 수동 경로만 우회하고 있었다.
+      //    부수 효과로 자동 spawn(userPool)과 풀이 일치해 컨테이너 중복도 사라진다.
+      if (target.visibility !== 'global') {
+          const supervisor = getLifecycleSupervisor();
+          if (!supervisor) {
+              res.status(503).json(internalError('MCP lifecycle supervisor 가 초기화되지 않았습니다'));
+              return;
+          }
+          const ownerId = String(target.user_id ?? userId);
+          const client = await supervisor.spawnUserServer(ownerId, id);
+          res.json(success({ status: client.getStatus() }));
+          return;
+      }
+
       const db = getUnifiedDatabase();
       const server = await db.getMcpServerById(id);
 
@@ -364,18 +381,30 @@ export const mcpRouter = Router();
       const role = req.user?.role ?? 'user';
       const actor = { id: userId, role };
       const { id } = req.params;
-      {
-          const repo = new McpCatalogRepository(getUnifiedDatabase().getPool());
-          const server = await repo.getServerById(id);
-          if (!server) {
-              res.status(404).json(notFound('서버'));
-              return;
-          }
-          if (!canStartStopServer(actor, server)) {
-              res.status(403).json(forbidden('해당 서버를 연결 해제할 권한이 없습니다'));
-              return;
-          }
+      const repo = new McpCatalogRepository(getUnifiedDatabase().getPool());
+      const target = await repo.getServerById(id);
+      if (!target) {
+          res.status(404).json(notFound('서버'));
+          return;
       }
+      if (!canStartStopServer(actor, target)) {
+          res.status(403).json(forbidden('해당 서버를 연결 해제할 권한이 없습니다'));
+          return;
+      }
+
+      // connect 와 대칭 — user 소유 서버는 userPool 에 떠 있으므로 registry 만 정리하면
+      // 컨테이너가 살아남아 "해제했는데 계속 동작"하게 된다.
+      if (target.visibility !== 'global') {
+          const supervisor = getLifecycleSupervisor();
+          if (supervisor) {
+              await supervisor.killUserServer(String(target.user_id ?? userId), id);
+          }
+          // 과거 경로로 registry 에 등록됐을 수 있으니 함께 정리(멱등).
+          await getUnifiedMCPClient().getServerRegistry().disconnectServer(id).catch(() => { /* 미등록이면 무시 */ });
+          res.json(success({ disconnected: true }));
+          return;
+      }
+
       const registry = getUnifiedMCPClient().getServerRegistry();
       await registry.disconnectServer(id);
 
