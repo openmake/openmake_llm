@@ -20,6 +20,9 @@ concurrency:
 env:
   NODE_ENV: test
   JWT_SECRET: ci-test-secret-for-testing-only
+  # 암호화 경로 테스트용 더미 키(hex 32B). 미설정이면 token-crypto 가 test 환경에서 no-op 이
+  # 되어 "secret 을 암호화한다" 류 테스트가 실패한다. **운영 키와 무관한 고정 더미값**이다.
+  TOKEN_ENCRYPTION_KEY: '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'
 
 jobs:
   ci:
