@@ -7,6 +7,7 @@ const { app, BrowserWindow, Menu, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const bridge = require('./bridge');
+const agentBrowser = require('./agent-browser');
 const updater = require('./updater');
 
 const BACKENDS = {
@@ -130,6 +131,9 @@ function buildMenu() {
           click: () => { const f = bridge.getFolderPath(); if (f) shell.openPath(f); },
         },
         { label: '연결 해제', enabled: bridge.isConnected(), click: () => bridge.disconnectFolder() },
+        { type: 'separator' },
+        // D3 — 에이전트 브라우저는 작업 중 화면 하단에 뜬다. 사용자가 언제든 닫을 수 있어야 한다.
+        { label: '에이전트 브라우저 닫기', click: () => agentBrowser.closeAll() },
       ],
     },
     { role: 'editMenu' },

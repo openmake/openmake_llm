@@ -19,4 +19,14 @@ export const LOCAL_BRIDGE = {
 
     /** read/exec 결과 수신 캡(chars) — 모델 컨텍스트/스텝 저장 보호(샌드박스 outputCap 관행과 동일 축). */
     OUTPUT_CAP: parseInt(process.env.LOCAL_BRIDGE_OUTPUT_CAP || '65536', 10),
+
+    /**
+     * 로컬 브라우저(D3a) — 데스크톱 Electron 내장 Chromium 에서 browser 도구를 실행한다.
+     * 서버 컨테이너 브라우저와 달리 **사용자 화면에 보이는** 패널로 뜨고, 전용 세션 파티션이라
+     * 개인 Chrome 쿠키·로그인에 접근하지 않는다. 기본 OFF — 켤 때 위 ENABLED 도 함께 필요.
+     */
+    BROWSER_ENABLED: process.env.LOCAL_BRIDGE_BROWSER_ENABLED === 'true',
+
+    /** 브라우저 액션 배열 1회 실행 상한(ms). 컨테이너 runner 기본값과 같은 축. */
+    BROWSER_TIMEOUT_MS: parseInt(process.env.LOCAL_BRIDGE_BROWSER_TIMEOUT_MS || '60000', 10),
 } as const;

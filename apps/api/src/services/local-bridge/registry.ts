@@ -23,11 +23,13 @@ import { createLogger } from '../../utils/logger';
 const logger = createLogger('LocalBridge');
 
 /** 서버→디바이스 도구 요청 종류 — 이 외의 kind 는 존재하지 않는다(임의 RPC 금지). */
-export type BridgeKind = 'exec' | 'read' | 'write' | 'list' | 'listAll' | 'delete' | 'task_end';
+export type BridgeKind = 'exec' | 'read' | 'write' | 'list' | 'listAll' | 'delete' | 'task_end' | 'browser';
 
 export interface BridgeRequestPayload {
     kind: BridgeKind;
     command?: string;
+    /** browser 전용 — 액션 spec({actions,allowlist,timeoutMs}). 데스크톱이 내장 Chromium 으로 실행. */
+    spec?: Record<string, unknown>;
     path?: string;
     /** write 전용 — base64 본문 (바이너리 안전). */
     contentB64?: string;
