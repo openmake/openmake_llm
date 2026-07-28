@@ -24,6 +24,7 @@ import { ExternalMCPClient } from './external-client';
 import { ToolRouter } from './tool-router';
 import type { MCPServerConfig, MCPConnectionStatus } from './types';
 import type { UnifiedDatabase, MCPServerRow } from '../data/models/unified-database';
+import { decryptToken } from '../utils/token-crypto';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('MCPRegistry');
@@ -36,6 +37,32 @@ const logger = createLogger('MCPRegistry');
  * @param row - DB에서 조회한 MCP 서버 행
  * @returns MCPServerConfig 형식의 서버 설정
  */
+/**
+ * env 값 중 암호문(v1:)만 복호화. 평문 값은 그대로 둔다.
+ *
+ * ⚠️ decryptToken 은 fail-open 이다 — 키 부재나 포맷 오류 시 예외 대신 **암호문을 그대로
+ * 반환**한다(token-crypto.ts). 그대로 넘기면 암호문이 자식 프로세스 env 에 주입돼,
+ * 서버는 뜨고 도구 목록도 등록되지만 실제 API 호출만 인증 실패하는 형태로 조용히 깨진다.
+ * 그래서 복호화 후에도 v1: 이 남아 있으면 실패로 보고 throw 한다(fail-closed).
+ * 호출자(initializeFromDB)가 서버 단위로 잡아 그 서버만 건너뛴다.
+ */
+function decryptEnvValues(env: Record<string, string> | null | undefined): Record<string, string> | undefined {
+    if (!env) return undefined;
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(env)) {
+        if (typeof v !== 'string' || !v.startsWith('v1:')) {
+            out[k] = v;
+            continue;
+        }
+        const decrypted = decryptToken(v);
+        if (decrypted.startsWith('v1:')) {
+            throw new Error(`env "${k}" 복호화 실패 — 암호문이 그대로 남았습니다 (TOKEN_ENCRYPTION_KEY 설정 및 저장값 포맷을 확인하세요)`);
+        }
+        out[k] = decrypted;
+    }
+    return out;
+}
+
 function rowToConfig(row: MCPServerRow): MCPServerConfig {
     return {
         id: row.id,
@@ -43,7 +70,11 @@ function rowToConfig(row: MCPServerRow): MCPServerConfig {
         transport_type: row.transport_type as MCPServerConfig['transport_type'],
         command: row.command || undefined,
         args: row.args || undefined,
-        env: row.env || undefined,
+        // DB 원본은 secret 이 암호문(v1:)으로 저장돼 있으므로 복호화해서 넘긴다.
+        // 빠뜨리면 암호문이 그대로 자식 프로세스 env 로 들어가, 서버는 뜨고 도구 목록도
+        // 정상 등록되지만 실제 API 호출만 인증 실패하는 형태로 조용히 깨진다
+        // (사용자풀 경로의 decryptEnvForSpawn 과 동일한 처리).
+        env: decryptEnvValues(row.env),
         url: row.url || undefined,
         enabled: row.enabled,
         created_at: row.created_at,
@@ -94,12 +125,15 @@ export class MCPServerRegistry {
             logger.info(`Found ${enabledServers.length} enabled MCP servers in DB`);
 
             for (const server of enabledServers) {
-                const config = rowToConfig(server);
+                // rowToConfig 도 try 안에서 호출한다 — env 복호화가 실패하면 그 서버만
+                // 건너뛰어야 하고, 루프 밖이면 예외가 바깥 catch 로 빠져 나머지 서버까지
+                // 통째로 초기화되지 않는다.
                 try {
+                    const config = rowToConfig(server);
                     await this.connectServer(config.id, config);
                 } catch (error) {
                     const msg = error instanceof Error ? error.message : String(error);
-                    logger.error(`Failed to connect "${config.name}" during init:`, msg);
+                    logger.error(`Failed to connect "${server.name}" during init:`, msg);
                     // 초기화 실패는 전체를 중단하지 않음
                 }
             }
