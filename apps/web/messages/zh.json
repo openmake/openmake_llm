@@ -950,7 +950,7 @@
     "envUnchangedPlaceholder": "不更改",
     "envSave": "保存",
     "envSaved": "凭据已更新。",
-    "envSavedRespawn": "凭据已更新。现有连接已关闭，将在下次对话开始时使用新值重新连接。",
+    "envSavedRespawn": "凭据已更新。现有连接已关闭，重新连接后将使用新值。",
     "envUpdateError": "更新凭据失败"
   },
   "mcpCatalog": {

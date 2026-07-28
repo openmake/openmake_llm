@@ -411,6 +411,14 @@ export class McpCatalogRepository {
     /**
      * spawn 시점에 child process env 로 전달할 평문 env 복호화.
      * 응답 마스킹 (maskEnv) 과 분리 — 본 메서드는 lifecycle-supervisor (Phase 7) 가 호출.
+     *
+     * ⚠️ decryptToken 은 fail-open 이다 — 키 부재나 포맷 오류 시 예외 대신 **암호문을
+     * 그대로 반환**한다(token-crypto.ts). 그대로 넘기면 암호문이 자식 프로세스 env 에
+     * 주입돼, 서버는 뜨고 도구 목록도 등록되지만 실제 API 호출만 인증 실패하는 형태로
+     * 조용히 깨진다(진단이 어려운 실패 모드). 복호화 후에도 v1: 이 남아 있으면 실패로
+     * 보고 throw 한다(fail-closed) — safeSpawn 호출자가 서버 단위로 처리한다.
+     *
+     * @throws {Error} 복호화 실패 시 (TOKEN_ENCRYPTION_KEY 부재/불일치, 저장값 손상)
      */
     async decryptEnvForSpawn(serverId: string): Promise<Record<string, string>> {
         const result = await this.pool.query<{ env: Record<string, string> | null }>(
@@ -421,11 +429,16 @@ export class McpCatalogRepository {
         if (!env) return {};
         const decrypted: Record<string, string> = {};
         for (const [k, v] of Object.entries(env)) {
-            if (typeof v === 'string' && v.startsWith('v1:')) {
-                decrypted[k] = decryptToken(v);
-            } else if (typeof v === 'string') {
+            if (typeof v !== 'string') continue;
+            if (!v.startsWith('v1:')) {
                 decrypted[k] = v;
+                continue;
             }
+            const plain = decryptToken(v);
+            if (plain.startsWith('v1:')) {
+                throw new Error(`env "${k}" 복호화 실패 — 암호문이 그대로 남았습니다 (TOKEN_ENCRYPTION_KEY 설정 및 저장값 포맷을 확인하세요)`);
+            }
+            decrypted[k] = plain;
         }
         return decrypted;
     }

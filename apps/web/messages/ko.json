@@ -950,7 +950,7 @@
     "envUnchangedPlaceholder": "변경하지 않음",
     "envSave": "저장",
     "envSaved": "자격증명을 변경했습니다.",
-    "envSavedRespawn": "자격증명을 변경했습니다. 기존 연결이 종료되었으며 다음 대화 시작 시 새 값으로 다시 연결됩니다.",
+    "envSavedRespawn": "자격증명을 변경했습니다. 기존 연결이 종료되었으며, 다시 연결되면 새 값이 적용됩니다.",
     "envUpdateError": "자격증명 변경에 실패했습니다"
   },
   "mcpCatalog": {
