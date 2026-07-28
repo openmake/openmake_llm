@@ -9,7 +9,7 @@
  * @see db/migrations/070_server_external_api_keys.sql
  */
 import { BaseRepository } from './base-repository';
-import { encryptToken, decryptToken } from '../../utils/token-crypto';
+import { encryptToken, decryptToken, isDecryptionFailure } from '../../utils/token-crypto';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('ServerExternalKeysRepo');
@@ -73,7 +73,15 @@ export class ServerExternalKeysRepository extends BaseRepository {
         const enc = result.rows[0]?.encrypted_key;
         if (!enc) return null;
         try {
-            return decryptToken(enc);
+            const plain = decryptToken(enc);
+            // decryptToken 은 fail-open — 키 부재·포맷 오류 시 예외 대신 암호문을 그대로
+            // 돌려주므로 아래 catch 가 발동하지 않는다. 그대로 반환하면 암호문이 API 키로
+            // 쓰여 조용한 인증 실패가 된다. 명시적으로 판별해 의도대로 null 을 돌려준다.
+            if (isDecryptionFailure(plain)) {
+                logger.error(`서버 키 복호화 실패 (${providerId}): 암호문이 그대로 남았습니다 — TOKEN_ENCRYPTION_KEY 확인 필요`);
+                return null;
+            }
+            return plain;
         } catch (err) {
             logger.error(`서버 키 복호화 실패 (${providerId}):`, err);
             return null;

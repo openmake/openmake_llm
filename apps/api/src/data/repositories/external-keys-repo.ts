@@ -15,7 +15,7 @@
  * @see db/migrations/016_external_provider_integration.sql
  */
 import { BaseRepository } from './base-repository';
-import { encryptToken, decryptToken } from '../../utils/token-crypto';
+import { encryptToken, decryptToken, isDecryptionFailure } from '../../utils/token-crypto';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('ExternalKeysRepo');
@@ -228,7 +228,16 @@ export class ExternalKeysRepository extends BaseRepository {
         );
         const row = result.rows[0];
         if (!row) return null;
-        return decryptToken(row.encrypted_key);
+        const plain = decryptToken(row.encrypted_key);
+        // decryptToken 은 fail-open — 키 부재·포맷 오류 시 예외 대신 암호문을 그대로 돌려준다.
+        // 그대로 반환하면 암호문이 provider API 키로 쓰여 조용한 인증 실패가 된다.
+        // 호출자 6곳이 모두 null 을 "키 없음/복호화 실패"로 처리하므로 null 로 내린다
+        // (throw 로 올리면 model.routes 의 provider 단위 skip 이 목록 전체 실패로 바뀐다).
+        if (isDecryptionFailure(plain)) {
+            logger.error(`외부 키 복호화 실패 (user=${userId}, provider=${providerId}): 암호문이 그대로 남았습니다 — TOKEN_ENCRYPTION_KEY 확인 필요`);
+            return null;
+        }
+        return plain;
     }
 
     /**

@@ -8,8 +8,31 @@
  */
 import { BaseRepository, QueryParam } from './base-repository';
 import type { ExternalConnection, ExternalFile, ExternalServiceType, MCPServerRow } from '../models/unified-database.types';
-import { encryptToken, decryptToken } from '../../utils/token-crypto';
+import { encryptToken, decryptToken, isDecryptionFailure } from '../../utils/token-crypto';
 import { QUERY_ROW_LIMITS } from '../../config/runtime-limits';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger('ExternalRepository');
+
+/**
+ * OAuth 토큰 1개 복호화 — 실패 시 null.
+ *
+ * decryptToken 은 fail-open 이라 키 부재·포맷 오류 시 예외 대신 암호문을 그대로 돌려준다.
+ * 그 값을 그대로 반환하면 암호문이 그대로 Bearer 토큰으로 쓰여(services/github-token.ts)
+ * 외부 API 가 401 을 내는 조용한 실패가 된다. null 로 내리면 소비자들이 이미 갖춘
+ * "토큰 없음" 폴백(clone/push/PR skip)으로 자연스럽게 degrade 된다.
+ *
+ * 커넥션 단위로만 무효화하므로 목록 조회에서 한 건이 손상돼도 나머지는 정상 반환된다.
+ */
+function decryptTokenField(value: unknown, field: string, connectionId?: unknown): string | undefined {
+    if (value == null) return undefined;
+    const plain = decryptToken(value as string);
+    if (isDecryptionFailure(plain)) {
+        logger.error(`OAuth ${field} 복호화 실패 (connection=${String(connectionId ?? 'unknown')}): 암호문이 그대로 남았습니다 — TOKEN_ENCRYPTION_KEY 확인 필요`);
+        return undefined;
+    }
+    return plain;
+}
 
 type DbRow = Record<string, unknown>;
 
@@ -59,8 +82,8 @@ export class ExternalRepository extends BaseRepository {
         );
         return result.rows.map((row) => ({
             ...row,
-            access_token: row.access_token != null ? decryptToken(row.access_token as string) : row.access_token,
-            refresh_token: row.refresh_token != null ? decryptToken(row.refresh_token as string) : row.refresh_token,
+            access_token: decryptTokenField(row.access_token, 'access_token', row.id),
+            refresh_token: decryptTokenField(row.refresh_token, 'refresh_token', row.id),
             is_active: !!row.is_active,
             metadata: row.metadata || {}
         }));
@@ -73,8 +96,8 @@ export class ExternalRepository extends BaseRepository {
 
         return {
             ...row,
-            access_token: row.access_token != null ? decryptToken(row.access_token as unknown as string) : row.access_token,
-            refresh_token: row.refresh_token != null ? decryptToken(row.refresh_token as unknown as string) : row.refresh_token,
+            access_token: decryptTokenField(row.access_token, 'access_token', row.id),
+            refresh_token: decryptTokenField(row.refresh_token, 'refresh_token', row.id),
             is_active: !!row.is_active,
             metadata: row.metadata || {}
         };
@@ -90,8 +113,8 @@ export class ExternalRepository extends BaseRepository {
 
         return {
             ...row,
-            access_token: row.access_token != null ? decryptToken(row.access_token as unknown as string) : row.access_token,
-            refresh_token: row.refresh_token != null ? decryptToken(row.refresh_token as unknown as string) : row.refresh_token,
+            access_token: decryptTokenField(row.access_token, 'access_token', row.id),
+            refresh_token: decryptTokenField(row.refresh_token, 'refresh_token', row.id),
             is_active: !!row.is_active,
             metadata: row.metadata || {}
         };

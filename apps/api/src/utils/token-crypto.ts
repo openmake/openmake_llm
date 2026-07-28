@@ -110,9 +110,31 @@ export function encryptToken(plaintext: string): string {
 }
 
 /**
+ * 복호화 결과가 실패인지 판별합니다.
+ *
+ * decryptToken 은 fail-open 이라 키 부재·포맷 오류 시 예외 없이 **암호문을 그대로**
+ * 돌려줍니다. 따라서 "decryptToken 을 호출했다"가 "평문을 얻었다"를 보장하지 않습니다.
+ * 반환값이 여전히 v1: 로 시작하면 복호화가 되지 않은 것이므로, 그 값을 실제 자격증명처럼
+ * 쓰면 안 됩니다(자식 프로세스 env 주입·외부 API 호출 등에서 조용한 인증 실패로 나타남).
+ *
+ * 호출 관용구:
+ *   const plain = decryptToken(v);
+ *   if (isDecryptionFailure(plain)) { ...실패 처리... }
+ *
+ * @param decrypted - decryptToken 의 반환값
+ * @returns 복호화되지 않은(암호문이 그대로 남은) 값이면 true
+ */
+export function isDecryptionFailure(decrypted: string): boolean {
+    return typeof decrypted === 'string' && decrypted.startsWith(ENCRYPTED_PREFIX);
+}
+
+/**
  * 암호화된 토큰을 복호화합니다.
  * v1: prefix가 없으면 레거시 평문 토큰으로 간주하고 그대로 반환합니다.
  * TOKEN_ENCRYPTION_KEY가 없으면 값을 그대로 반환합니다.
+ *
+ * ⚠️ fail-open — 실패해도 throw 하지 않고 입력을 그대로 반환합니다. 반환값을 자격증명으로
+ * 쓰기 전에 {@link isDecryptionFailure} 로 검사하세요.
  */
 export function decryptToken(value: string): string {
     if (!value) return value;
