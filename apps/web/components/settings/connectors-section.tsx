@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Server, Boxes, Plus, Loader2, X } from "lucide-react";
+import { Server, Boxes, Plus, Loader2, X, KeyRound } from "lucide-react";
 import {
   Button,
   Badge,
@@ -37,6 +37,10 @@ interface McpServer {
   status: ConnStatus;
   latencyMs: number | null;
   lastChecked: string;
+  /** 편집 가능한 env 키 목록 (값은 서버가 마스킹하므로 키만 다룬다) */
+  envKeys: string[];
+  /** 그중 암호화 저장된(민감) 키 — 입력 시 password 필드로 렌더 */
+  secretKeys: string[];
 }
 
 /* ── 백엔드 응답 타입 (GET /api/mcp/servers) ──────────────── */
@@ -47,6 +51,8 @@ interface ApiMcpServer {
   connectionStatus?: string;
   toolCount?: number;
   lastPing?: string | null;
+  /** 백엔드가 마스킹해서 내려주는 env — 암호화된 값은 "***" 로 치환돼 있다(원문 미노출). */
+  env?: Record<string, string> | null;
 }
 
 const TRANSPORT_MAP: Record<ApiMcpServer["transport_type"], Transport> = {
@@ -84,6 +90,10 @@ function mapServer(s: ApiMcpServer, t: Translator): McpServer {
     // 백엔드는 지연(latency) 수치를 제공하지 않음 — 표시 생략
     latencyMs: null,
     lastChecked: relativeTime(s.lastPing, t),
+    envKeys: Object.keys(s.env ?? {}),
+    secretKeys: Object.entries(s.env ?? {})
+      .filter(([, v]) => v === "***")
+      .map(([k]) => k),
   };
 }
 
@@ -96,6 +106,111 @@ interface DraftServer {
   manifest_meta?: {
     conventionFindings?: { severity: string }[];
   };
+}
+
+/* ── 자격증명(env) 변경 모달 ────────────────────────────────── */
+function EnvEditModal({
+  server,
+  onClose,
+  onSuccess,
+}: {
+  server: McpServer | null;
+  onClose: () => void;
+  onSuccess: (respawnRequired: boolean) => void;
+}) {
+  const t = useTranslations("mcpServers");
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // 서버가 바뀌면 입력값 초기화 — 이전 서버에 입력하던 값이 남아 다른 서버로
+  // 전송되는 사고를 막는다.
+  useEffect(() => {
+    setValues({});
+    setError(null);
+  }, [server?.id]);
+
+  if (!server) return null;
+
+  // 값을 입력한 키만 전송한다(부분 갱신). 빈 칸 = 기존 값 유지.
+  const filled = Object.entries(values).filter(([, v]) => v.trim().length > 0);
+
+  async function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!server || filled.length === 0) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await ApiClient.patch<ApiEnvelope<{ respawnRequired: boolean }>>(
+        `/api/mcp/servers/${server.id}/env`,
+        { env: Object.fromEntries(filled) },
+      );
+      onClose();
+      onSuccess(res?.data?.respawnRequired ?? false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("envUpdateError"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-xl border border-border bg-surface p-6 shadow-xl">
+        <div className="mb-1 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-fg">{t("envEditTitle")}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1 text-muted hover:bg-surface-2 hover:text-fg"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <p className="mb-4 text-xs text-muted">{server.name}</p>
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+          <p className="rounded-md bg-surface-2 px-3 py-2 text-xs text-fg-2">
+            {t("envEditHint")}
+          </p>
+          {server.envKeys.map((key) => {
+            const isSecret = server.secretKeys.includes(key);
+            return (
+              <div key={key}>
+                <label className="mb-1 block font-mono text-xs font-medium text-fg-2">
+                  {key}
+                  {isSecret && (
+                    <span className="ml-2 font-sans text-[10px] text-faint">
+                      {t("envSecretHint")}
+                    </span>
+                  )}
+                </label>
+                <input
+                  type={isSecret ? "password" : "text"}
+                  autoComplete="off"
+                  value={values[key] ?? ""}
+                  onChange={(e) =>
+                    setValues((prev) => ({ ...prev, [key]: e.target.value }))
+                  }
+                  placeholder={t("envUnchangedPlaceholder")}
+                  className="h-9 w-full rounded-md border border-border-strong bg-app px-3 text-sm text-fg outline-none transition focus:border-accent"
+                />
+              </div>
+            );
+          })}
+          {error && <p className="text-xs text-danger">{error}</p>}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="outline" size="sm" onClick={onClose}>
+              {t("cancel")}
+            </Button>
+            <Button type="submit" size="sm" disabled={submitting || filled.length === 0}>
+              {submitting && <Loader2 className="h-3 w-3 animate-spin" />}
+              {t("envSave")}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }
 
 /* ── Git URL 등록 모달 ──────────────────────────────────────── */
@@ -206,6 +321,8 @@ function buildMockServers(t: Translator): McpServer[] {
     status: "connected",
     latencyMs: 12,
     lastChecked: t("justNow"),
+    envKeys: [],
+    secretKeys: [],
   },
   {
     id: "github",
@@ -215,6 +332,8 @@ function buildMockServers(t: Translator): McpServer[] {
     status: "connected",
     latencyMs: 184,
     lastChecked: t("minutesAgo", { count: 1 }),
+    envKeys: [],
+    secretKeys: [],
   },
   {
     id: "postgres-prod",
@@ -224,6 +343,8 @@ function buildMockServers(t: Translator): McpServer[] {
     status: "degraded",
     latencyMs: 842,
     lastChecked: t("minutesAgo", { count: 2 }),
+    envKeys: [],
+    secretKeys: [],
   },
   {
     id: "slack-events",
@@ -233,6 +354,8 @@ function buildMockServers(t: Translator): McpServer[] {
     status: "connected",
     latencyMs: 76,
     lastChecked: t("minutesAgo", { count: 3 }),
+    envKeys: [],
+    secretKeys: [],
   },
   {
     id: "weather-api",
@@ -242,6 +365,8 @@ function buildMockServers(t: Translator): McpServer[] {
     status: "disconnected",
     latencyMs: null,
     lastChecked: t("minutesAgo", { count: 12 }),
+    envKeys: [],
+    secretKeys: [],
   },
   ];
 }
@@ -274,6 +399,8 @@ export function ConnectorsSection() {
   const [drafts, setDrafts] = useState<DraftServer[]>([]);
   const [draftsLoading, setDraftsLoading] = useState(false);
   const [draftActionLoading, setDraftActionLoading] = useState<Record<string, boolean>>({});
+  const [envEditTarget, setEnvEditTarget] = useState<McpServer | null>(null);
+  const [envNotice, setEnvNotice] = useState<string | null>(null);
 
   async function loadDrafts() {
     setDraftsLoading(true);
@@ -310,6 +437,16 @@ export function ConnectorsSection() {
       /* 실패 시 현상 유지 */
     } finally {
       setDraftActionLoading((prev) => ({ ...prev, [id]: false }));
+    }
+  }
+
+  // env 교체 성공 — 백엔드가 기존 컨테이너를 정리했으므로(stale env 방지) 재연결 안내.
+  function handleEnvUpdated(respawnRequired: boolean) {
+    setEnvNotice(respawnRequired ? t("envSavedRespawn") : t("envSaved"));
+    if (respawnRequired) {
+      setServers((prev) =>
+        prev.map((s) => (s.id === envEditTarget?.id ? { ...s, status: "disconnected" } : s)),
+      );
     }
   }
 
@@ -379,6 +516,11 @@ export function ConnectorsSection() {
           void loadDrafts();
         }}
       />
+      <EnvEditModal
+        server={envEditTarget}
+        onClose={() => setEnvEditTarget(null)}
+        onSuccess={handleEnvUpdated}
+      />
       <CardHeader className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <CardTitle>{t("title")}</CardTitle>
@@ -397,6 +539,18 @@ export function ConnectorsSection() {
       </CardHeader>
 
       <CardContent>
+        {envNotice && (
+          <div className="mb-4 flex items-start justify-between gap-3 rounded-md border border-border bg-surface-2 px-3 py-2 text-xs text-fg-2">
+            <span>{envNotice}</span>
+            <button
+              type="button"
+              onClick={() => setEnvNotice(null)}
+              className="rounded p-0.5 text-muted hover:text-fg"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
         {/* 탭 */}
         <div className="mb-4 inline-flex rounded-pill border border-border bg-surface-2 p-1">
           {(["servers", "drafts"] as TabId[]).map((tabId) => (
@@ -485,6 +639,17 @@ export function ConnectorsSection() {
                       <Td className="text-faint">{s.lastChecked}</Td>
                       <Td>
                         <div className="flex items-center gap-1">
+                          {s.envKeys.length > 0 && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setEnvEditTarget(s)}
+                              title={t("envEditTitle")}
+                            >
+                              <KeyRound className="h-3 w-3" />
+                              {t("envEdit")}
+                            </Button>
+                          )}
                           {s.status === "connected" ? (
                             <Button
                               variant="outline"

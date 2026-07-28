@@ -160,6 +160,56 @@ export class McpCatalogRepository {
         return (result.rowCount ?? 0) > 0;
     }
 
+    /**
+     * 기존 서버의 env 값 교체 (자격증명 로테이션).
+     *
+     * 부분 갱신 — patch 에 담긴 키만 바꾸고 나머지 기존 값은 보존한다. 새 키 추가는 막는다
+     * (허용 키 = 카탈로그 env_schema.properties ∪ 기존 env 키): 임의 키를 넣어 spawn 환경을
+     * 오염시키는 경로를 차단하기 위함.
+     *
+     * secret 판정은 createFromCatalog 의 encryptEnv 와 같은 기준(env_schema.secret)에 더해
+     * **기존 값이 이미 암호문(v1:)이면 secret 으로 간주**한다 — 템플릿이 없거나(수동 등록)
+     * 스키마가 바뀐 서버에서 암호문이 평문으로 격하되는 것을 막는다.
+     *
+     * @throws {Error} 허용되지 않은 키가 patch 에 포함된 경우 (라우터가 400 으로 변환)
+     */
+    async updateEnv(
+        serverId: string,
+        patch: Record<string, string>,
+        template: McpCatalogTemplate | null,
+    ): Promise<UserMcpServerRow | null> {
+        const current = await this.pool.query<{ env: Record<string, string> | null }>(
+            `SELECT env FROM mcp_servers WHERE id = $1`,
+            [serverId],
+        );
+        if (current.rowCount === 0) return null;
+        const existing = current.rows[0]?.env ?? {};
+
+        const envSchema = (template?.env_schema ?? {}) as { properties?: Record<string, { secret?: boolean }> };
+        const allowed = new Set([...Object.keys(envSchema.properties ?? {}), ...Object.keys(existing)]);
+        const rejected = Object.keys(patch).filter((k) => !allowed.has(k));
+        if (rejected.length > 0) {
+            throw new Error(`허용되지 않은 환경변수 키: ${rejected.join(', ')}`);
+        }
+
+        const merged: Record<string, string> = { ...existing };
+        for (const [k, v] of Object.entries(patch)) {
+            const isSecret = envSchema.properties?.[k]?.secret === true
+                || (typeof existing[k] === 'string' && existing[k].startsWith('v1:'));
+            merged[k] = isSecret ? encryptToken(v) : v;
+        }
+
+        const result = await this.pool.query<UserMcpServerRow>(
+            `UPDATE mcp_servers SET env = $2::jsonb, updated_at = NOW()
+             WHERE id = $1
+             RETURNING id, user_id, name, transport_type, command, args, env, url,
+                       visibility, catalog_template_id, auto_spawn, enabled, sandbox_network,
+                       created_at::text, updated_at::text`,
+            [serverId, JSON.stringify(merged)],
+        );
+        return result.rows[0] ? this.maskEnv(result.rows[0]) : null;
+    }
+
     async getServerById(serverId: string): Promise<UserMcpServerRow | null> {
         const result = await this.pool.query<UserMcpServerRow>(
             `SELECT id, user_id, name, transport_type, command, args, env, url,

@@ -35,9 +35,10 @@ import type { MCPTransportType, MCPConnectionStatus } from '../mcp/types';
 import { getLifecycleSupervisor } from '../mcp/lifecycle-supervisor';
 import { createLogger } from '../utils/logger';
 import { validate } from '../middlewares/validation';
-import { mcpToolExecuteSchema, mcpServerCreateSchema } from '../schemas/mcp.schema';
+import { mcpToolExecuteSchema, mcpServerCreateSchema, mcpServerEnvUpdateSchema } from '../schemas/mcp.schema';
 import { McpCatalogRepository } from '../data/repositories/mcp-catalog-repository';
-import { canRegisterServer, canViewServer, canDeleteServer, canStartStopServer } from './mcp-visibility';
+import { canRegisterServer, canViewServer, canDeleteServer, canStartStopServer, canUpdateServerEnv } from './mcp-visibility';
+import { getAuditService } from '../services/AuditService';
 import { validateOutboundUrl } from '../security/ssrf-guard';
 
 const logger = createLogger('McpRoutes');
@@ -240,6 +241,70 @@ export const mcpRouter = Router();
       const registry = getUnifiedMCPClient().getServerRegistry();
       await registry.unregisterServer(id, db);
       res.json(success({ deleted: true }));
+  }));
+
+  // env(자격증명) 교체 (PATCH) — 소유자 + admin.
+  // 로테이션 전용 부분 갱신: 전달한 키만 바뀌고 나머지는 보존된다. secret 값은 저장 시
+  // 암호화(v1:)되며 응답에는 마스킹된 env 만 실린다.
+  mcpRouter.patch('/servers/:id/env', requireAuth, validate(mcpServerEnvUpdateSchema), asyncHandler(async (req: Request, res: Response) => {
+      const userId = String(req.user?.id ?? '');
+      const role = req.user?.role ?? 'user';
+      const actor = { id: userId, role };
+      const { id } = req.params;
+      const { env } = req.body as { env: Record<string, string> };
+
+      const db = getUnifiedDatabase();
+      const repo = new McpCatalogRepository(db.getPool());
+      const server = await repo.getServerById(id);
+      if (!server) {
+          res.status(404).json(notFound('서버'));
+          return;
+      }
+      if (!canUpdateServerEnv(actor, server)) {
+          res.status(403).json(forbidden('해당 서버의 환경변수를 변경할 권한이 없습니다'));
+          return;
+      }
+
+      const template = server.catalog_template_id
+          ? await repo.getCatalogTemplate(server.catalog_template_id)
+          : null;
+
+      let updated;
+      try {
+          updated = await repo.updateEnv(id, env, template);
+      } catch (e) {
+          // updateEnv 는 허용되지 않은 키에 대해 throw — 클라이언트 입력 오류이므로 400.
+          res.status(400).json(badRequest(e instanceof Error ? e.message : '환경변수 변경에 실패했습니다'));
+          return;
+      }
+      if (!updated) {
+          res.status(404).json(notFound('서버'));
+          return;
+      }
+
+      // 이미 떠 있는 컨테이너는 구 자격증명(stale env)을 그대로 들고 있다. 정리하지 않으면
+      // 키를 바꿨는데도 채팅이 옛 값으로 계속 도구를 호출한다(삭제 경로와 동일한 이유).
+      // 재spawn 은 다음 ensureUserServers(채팅 시작) 가 멱등 처리한다.
+      let respawnRequired = false;
+      if (server.user_id) {
+          const supervisor = getLifecycleSupervisor();
+          if (supervisor) {
+              respawnRequired = true;
+              await supervisor.killUserServer(String(server.user_id), id).catch((e: unknown) =>
+                  logger.warn(`env 변경 후 유저풀 정리 실패(변경은 유지): ${id}: ${e instanceof Error ? e.message : String(e)}`));
+          }
+      }
+
+      // 자격증명 변경은 감사 대상 — 키 이름만 남기고 값은 절대 기록하지 않는다.
+      void getAuditService().logAudit({
+          action: 'mcp_server_env_update',
+          userId,
+          resourceType: 'mcp_server',
+          resourceId: id,
+          details: { serverName: server.name, keys: Object.keys(env) },
+      }).catch(() => { /* audit 실패는 응답에 영향 없음 */ });
+
+      res.json(success({ server: updated, respawnRequired }));
   }));
 
   // 서버 수동 연결 (POST) — 소유자 + admin

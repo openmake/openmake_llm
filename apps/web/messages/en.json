@@ -942,7 +942,16 @@
     "riskWarning": "⚠️ Risk",
     "emptyDrafts": "No drafts. Register a server from a Git URL.",
     "approve": "Approve",
-    "reject": "Reject"
+    "reject": "Reject",
+    "envEdit": "Credentials",
+    "envEditTitle": "Update credentials",
+    "envEditHint": "Enter only the values you want to change. Fields left blank keep their current value.",
+    "envSecretHint": "stored encrypted",
+    "envUnchangedPlaceholder": "unchanged",
+    "envSave": "Save",
+    "envSaved": "Credentials updated.",
+    "envSavedRespawn": "Credentials updated. The existing connection was closed and will reconnect with the new values on your next chat.",
+    "envUpdateError": "Failed to update credentials"
   },
   "mcpCatalog": {
     "pageTitle": "MCP Catalog",
