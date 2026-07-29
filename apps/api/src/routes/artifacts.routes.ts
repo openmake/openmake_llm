@@ -14,6 +14,7 @@ import { Router, Request, Response } from 'express';
 import { ArtifactRepository } from '../data/repositories/artifact-repository';
 import { ArtifactExecutionRepository } from '../data/repositories/artifact-execution-repository';
 import { getPool } from '../data/models/unified-database';
+import { getSessionMeta } from '../data/conversation-sessions';
 import { success, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import {
@@ -48,17 +49,12 @@ router.get('/sessions/:sid/meta', requireAuth, asyncHandler(async (req: Request,
     const userId = req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString();
     const isAdmin = req.user?.role === 'admin';
 
-    const pool = getPool();
-    const r = await pool.query<{ user_id: string | null; metadata: Record<string, unknown> | null; title: string | null }>(
-        'SELECT user_id, metadata, title FROM conversation_sessions WHERE id = $1',
-        [sessionId]
-    );
-    if (r.rows.length === 0) {
+    const row = await getSessionMeta(sessionId);
+    if (!row) {
         res.status(404).json(notFound('session'));
         return;
     }
-    const row = r.rows[0];
-    if (!isAdmin && row.user_id && row.user_id !== userId) {
+    if (!isAdmin && row.userId && row.userId !== userId) {
         res.status(403).json({ error: 'FORBIDDEN', detail: 'not owner' });
         return;
     }

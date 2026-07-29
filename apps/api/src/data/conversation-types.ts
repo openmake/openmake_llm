@@ -82,6 +82,18 @@ export interface SessionRow {
     metadata: Record<string, unknown> | null;
 }
 
+/**
+ * 세션 메타 (메시지 미포함) — 소유권 검증 / metadata 응답 전용.
+ * DB 의 NULL 을 undefined 로 바꾸지 않는다: 소유자 비교(`user_id === userId`) 의
+ * 기존 의미를 그대로 유지하기 위함.
+ */
+export interface SessionMeta {
+    userId: string | null;
+    anonSessionId: string | null;
+    title: string | null;
+    metadata: Record<string, unknown> | null;
+}
+
 export interface MessageRow {
     id: number;
     session_id: string;

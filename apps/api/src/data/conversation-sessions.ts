@@ -17,6 +17,7 @@ import { withRetry } from './retry-wrapper';
 import {
     ConversationSession,
     SessionRow,
+    SessionMeta,
     MessageRow,
     rowToMessage,
     rowToSession
@@ -125,6 +126,30 @@ export async function getSession(id: string): Promise<ConversationSession | unde
 
     const messages = (msgResult.rows as MessageRow[]).map(mr => rowToMessage(mr));
     return rowToSession(row, messages);
+}
+
+/**
+ * 세션 메타 단건 조회 (메시지 미포함).
+ *
+ * 소유권 검증이나 metadata 만 필요한 경로용. getSession() 은 메시지까지 추가로
+ * 조회하므로 그 목적에는 과하다. 라우트가 직접 SQL 을 실행하던 두 곳
+ * (artifact-session-access.assertSessionAccess, GET /api/sessions/:sid/meta)이
+ * 이 함수를 공유한다.
+ */
+export async function getSessionMeta(id: string): Promise<SessionMeta | undefined> {
+    const pool = getPool();
+    const result = await pool.query<Pick<SessionRow, 'user_id' | 'anon_session_id' | 'title' | 'metadata'>>(
+        'SELECT user_id, anon_session_id, title, metadata FROM conversation_sessions WHERE id = $1',
+        [id]
+    );
+    const row = result.rows[0];
+    if (!row) return undefined;
+    return {
+        userId: row.user_id,
+        anonSessionId: row.anon_session_id,
+        title: row.title,
+        metadata: row.metadata,
+    };
 }
 
 /**
