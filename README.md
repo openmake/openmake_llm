@@ -8,7 +8,7 @@
 <p align="center">
   <a href="https://github.com/openmake/openmake_llm/actions/workflows/ci.yml"><img src="https://github.com/openmake/openmake_llm/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
-  <img src="https://img.shields.io/badge/version-1.5.6-green.svg" alt="Version" />
+  <img src="https://img.shields.io/github/package-json/v/openmake/openmake_llm?label=version&color=green" alt="Version" />
   <img src="https://img.shields.io/badge/node-%3E%3D24%20%3C25-brightgreen.svg" alt="Node >=24 <25" />
   <img src="https://img.shields.io/badge/TypeScript-strict-3178c6.svg" alt="TypeScript strict" />
   <img src="https://img.shields.io/badge/Next.js-16-black.svg" alt="Next.js 16" />
@@ -222,7 +222,7 @@ npm run lint                # ESLint
 
 ### Database migrations
 
-Files in `db/migrations/` are **not** auto-applied on boot (only `db/init/` schema is) — run migrations with the CLI:
+Files in `db/migrations/` are applied **automatically on boot** — after the `db/init/` baseline schema, pending migrations run under a PostgreSQL advisory lock (serializing multi-instance startups) and failures fail fast. Set `DB_AUTO_MIGRATE=false` to opt out and run them manually with the CLI:
 
 ```bash
 npx ts-node apps/api/src/data/migrations/cli.ts status    # show pending
