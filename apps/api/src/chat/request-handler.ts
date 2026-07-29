@@ -39,6 +39,7 @@ import { ProviderRouter } from '../providers/provider-router';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { getPool } from '../data/models/unified-database';
 import { extractAndStripArtifacts, findArtifactPlaceholderIds, stripArtifactPlaceholders } from '../llm/artifact-parser';
+import { takeReportSource } from '../services/chat-service/report-block';
 import { ArtifactRepository, ArtifactSizeError, type ArtifactKind } from '../data/repositories/artifact-repository';
 import { ensureSession, saveUserMessage, saveAssistantMessage } from './request-persistence';
 import { handleToolCallingPath } from './tool-calling-path';
@@ -411,6 +412,8 @@ export class ChatRequestHandler {
                         log.warn(`[Artifact] 구문 검증 실패 id=${a.id} kind=${a.kind} lang=${a.lang}: ${a.validation.issues.join('; ')}`);
                     }
                     try {
+                        // 보고서 아티팩트면 reportdata 원본을 함께 영속 — docx 등 구조 기반 export 용.
+                        const sourceData = takeReportSource(a.id);
                         const row = await repo.insertArtifact({
                             artifactId: a.id,
                             sessionId: currentSessionId,
@@ -419,6 +422,7 @@ export class ChatRequestHandler {
                             title: a.title,
                             language: a.lang,
                             content: a.content,
+                            ...(sourceData ? { sourceData } : {}),
                         });
                         log.info(`[Artifact] saved id=${a.id} v=${row.version} kind=${a.kind} bytes=${a.content.length}`);
                         extractedArtifacts.push({

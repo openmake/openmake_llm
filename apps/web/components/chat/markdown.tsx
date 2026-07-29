@@ -4,6 +4,7 @@ import { Fragment } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
+import { useTranslations } from "next-intl";
 import { KakaoMap } from "./kakao-map";
 
 /**
@@ -13,6 +14,11 @@ import { KakaoMap } from "./kakao-map";
  *
  * 추가: ```kakaomap 펜스 블록(장소 좌표 JSON)은 KakaoMap 컴포넌트로 렌더한다.
  * 카카오 도구 결과가 동봉한 블록으로, 채팅 안에 실제 카카오 지도를 표시한다.
+ *
+ * 추가(P1 보고서 파이프라인): ```reportdata 펜스 블록(보고서 데이터 JSON)은 대형 JSON 이
+ * 그대로 노출되지 않게 접는다. 스트리밍 중(미닫힘)은 진행 칩, 닫힌 블록은 접힌 details —
+ * 정상 경로에선 done 시 서버 cleanedContent 가 블록을 제거하므로 details 는 렌더 실패
+ * fail-open 잔존분에만 나타난다.
  */
 
 const MD_COMPONENTS: Components = {
@@ -63,6 +69,10 @@ const MD_COMPONENTS: Components = {
   ),
 };
 
+// ```reportdata\n{json}\n``` 닫힌 블록 + 스트리밍 중 미닫힘 잔여(문서 끝까지).
+const REPORTDATA_CLOSED_RE = /```reportdata\s*\n([\s\S]*?)```/g;
+const REPORTDATA_OPEN_RE = /```reportdata(?:\s*\n[\s\S]*)?$/;
+
 // ```kakaomap\n{json}\n``` 블록 추출. 스트리밍 중 닫히지 않은 블록은 매칭 안 돼 원문 유지.
 const KAKAOMAP_RE = /```kakaomap\s*\n([\s\S]*?)```/g;
 // 도구가 실어보내는 안내 마커 라인 — 모델이 그대로 옮겨도 표시되지 않게 제거.
@@ -76,6 +86,37 @@ interface MapSegment {
 interface TextSegment {
   kind: "text";
   text: string;
+}
+interface ReportSegment {
+  kind: "report";
+  /** 닫힌 블록의 JSON 원문 (미닫힘 스트리밍 중엔 빈 문자열) */
+  json: string;
+  /** true = 스트리밍 중 미닫힘 (진행 칩), false = 닫힌 블록 (접힌 details) */
+  streaming: boolean;
+}
+
+/** reportdata 블록을 본문에서 분리 — 대형 JSON 원문이 채팅에 그대로 노출되지 않게. */
+function splitReportSegments(content: string): (TextSegment | ReportSegment)[] {
+  const segments: (TextSegment | ReportSegment)[] = [];
+  let lastIndex = 0;
+  let m: RegExpExecArray | null;
+  REPORTDATA_CLOSED_RE.lastIndex = 0;
+  while ((m = REPORTDATA_CLOSED_RE.exec(content)) !== null) {
+    const before = content.slice(lastIndex, m.index);
+    if (before.trim()) segments.push({ kind: "text", text: before });
+    segments.push({ kind: "report", json: m[1].trim(), streaming: false });
+    lastIndex = REPORTDATA_CLOSED_RE.lastIndex;
+  }
+  const rest = content.slice(lastIndex);
+  const open = REPORTDATA_OPEN_RE.exec(rest);
+  if (open) {
+    const before = rest.slice(0, open.index);
+    if (before.trim()) segments.push({ kind: "text", text: before });
+    segments.push({ kind: "report", json: "", streaming: true });
+  } else if (rest.trim() || segments.length === 0) {
+    segments.push({ kind: "text", text: rest });
+  }
+  return segments;
 }
 
 function splitSegments(content: string): (MapSegment | TextSegment)[] {
@@ -119,16 +160,45 @@ function MarkdownText({ text }: { text: string }) {
   );
 }
 
+/** reportdata 블록 표시 — 스트리밍 중엔 진행 칩, 잔존(렌더 실패 fail-open)은 접힌 JSON. */
+function ReportDataBlock({ seg }: { seg: ReportSegment }) {
+  const t = useTranslations("chat");
+  if (seg.streaming) {
+    return (
+      <div className="my-2 inline-flex items-center gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-muted">
+        <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent" />
+        📊 {t("reportBuilding")}
+      </div>
+    );
+  }
+  return (
+    <details className="my-2 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm">
+      <summary className="cursor-pointer select-none text-muted">📊 {t("reportData")}</summary>
+      <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-muted">
+        {seg.json}
+      </pre>
+    </details>
+  );
+}
+
 export function Markdown({ content }: { content: string }) {
-  const segments = splitSegments(content);
+  const reportSegments = splitReportSegments(content);
   return (
     <div className="prose-chat break-words">
-      {segments.map((seg, i) => (
-        <Fragment key={i}>
-          {seg.kind === "map" ? (
-            <KakaoMap places={seg.places} route={seg.route} />
+      {reportSegments.map((rseg, ri) => (
+        <Fragment key={ri}>
+          {rseg.kind === "report" ? (
+            <ReportDataBlock seg={rseg} />
           ) : (
-            <MarkdownText text={seg.text} />
+            splitSegments(rseg.text).map((seg, i) => (
+              <Fragment key={i}>
+                {seg.kind === "map" ? (
+                  <KakaoMap places={seg.places} route={seg.route} />
+                ) : (
+                  <MarkdownText text={seg.text} />
+                )}
+              </Fragment>
+            ))
           )}
         </Fragment>
       ))}

@@ -52,6 +52,11 @@ export function buildExternalSystemPrompt(params: {
     if (ctx.artifactGuideBlock) {
         systemPromptParts.push(ctx.artifactGuideBlock.trim());
     }
+    // 보고서 데이터 계약 (P1 파이프라인) — 보고서 의도 턴에만 존재. artifact guide 뒤에 두어
+    // 이번 턴의 산출물 형식(reportdata JSON)이 일반 가이드보다 우선 적용되게 한다.
+    if (ctx.reportGuideBlock) {
+        systemPromptParts.push(ctx.reportGuideBlock.trim());
+    }
 
     // ──────────────────── DYNAMIC BOUNDARY ────────────────────
     // 아래는 요청/사용자/세션별 가변 콘텐츠. prefix 캐시 보존을 위해 반드시 정적 헌법 뒤에 배치한다.

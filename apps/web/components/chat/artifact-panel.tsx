@@ -259,6 +259,9 @@ export function ArtifactPanel() {
   const [view, setView] = useState<"preview" | "code">("preview");
   const [copied, setCopied] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  // pdf/docx 서버 변환 상태 (P1 Phase 3) — busy 중 중복 클릭 차단, 실패 메시지는 헤더 밑 1줄.
+  const [exportBusy, setExportBusy] = useState<"pdf" | "docx" | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   // 버전 피커 — 활성 artifact 의 전체 버전 + 표시중 버전 override.
   const [versions, setVersions] = useState<{ version: number }[]>([]);
   const [override, setOverride] = useState<{ version: number; artifact: Artifact } | null>(null);
@@ -413,6 +416,28 @@ export function ArtifactPanel() {
 
   const canToggle = previewKindFor(shown.kind, shown.lang) !== null && !active.streaming;
 
+  // 서버 변환 export (pdf/docx) — html 아티팩트에서, 영속 세션(채팅) 또는 task 산출물일 때 노출.
+  const canExport = (!!currentSessionId || !!active.taskId) && !active.streaming && shown.kind === "html";
+  const runExport = async (format: "pdf" | "docx") => {
+    if ((!currentSessionId && !active.taskId) || exportBusy) return;
+    setExportBusy(format);
+    setExportError(null);
+    try {
+      const { downloadExportedArtifact } = await import("@/lib/artifact-download");
+      await downloadExportedArtifact({
+        ...(active.taskId ? { taskId: active.taskId } : { sessionId: currentSessionId ?? "" }),
+        artifactId: active.id, format, title: shown.title,
+      });
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) setExportError(t("exportNoSource"));
+      else if (e instanceof ApiError && e.status === 429) setExportError(t("exportRateLimited"));
+      else if (e instanceof ApiError && e.status === 503) setExportError(t("exportDisabled"));
+      else setExportError(t("exportFailed"));
+    } finally {
+      setExportBusy(null);
+    }
+  };
+
   return (
     <aside
       style={{ ["--panel-w" as string]: `${panelWidth}px` }}
@@ -467,6 +492,28 @@ export function ArtifactPanel() {
         >
           <Download className="h-4 w-4" />
         </button>
+        {canExport && (
+          <>
+            <button
+              type="button"
+              onClick={() => runExport("pdf")}
+              disabled={exportBusy !== null}
+              aria-label={t("exportPdf")}
+              className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted transition hover:bg-surface-3 hover:text-fg disabled:opacity-50"
+            >
+              {exportBusy === "pdf" ? "…" : "PDF"}
+            </button>
+            <button
+              type="button"
+              onClick={() => runExport("docx")}
+              disabled={exportBusy !== null}
+              aria-label={t("exportDocx")}
+              className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted transition hover:bg-surface-3 hover:text-fg disabled:opacity-50"
+            >
+              {exportBusy === "docx" ? "…" : "DOCX"}
+            </button>
+          </>
+        )}
         {canShare && (
           <button
             type="button"
@@ -494,6 +541,12 @@ export function ArtifactPanel() {
           <X className="h-4 w-4" />
         </button>
       </div>
+
+      {exportError && (
+        <div className="border-b border-border bg-surface-2 px-3 py-1.5 text-[11px] text-danger" role="alert">
+          {exportError}
+        </div>
+      )}
 
       {shareOpen && currentSessionId && (
         <ArtifactShareModal

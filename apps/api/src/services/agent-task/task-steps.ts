@@ -6,6 +6,7 @@ import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import type { UserContext } from '../../mcp/user-sandbox';
 import type { ExtractedArtifact } from '../../llm/artifact-parser';
+import { takeReportSource } from '../chat-service/report-block';
 import { MAX_TOOL_RESULT_CHARS, AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 
@@ -30,12 +31,16 @@ export async function persistArtifactSteps(
     const db = getUnifiedDatabase();
     for (const artifact of artifacts) {
         try {
+            // 보고서 아티팩트면 reportdata 원본을 스텝 JSON 에 동봉 — task 아티팩트의
+            // docx export 용(채팅 경로의 artifacts.source_data 대응물). 회수(take)로
+            // 렌더 대기열(pendingReportSources)의 잔존도 함께 정리된다.
+            const sourceData = takeReportSource(artifact.id);
             await db.addAgentTaskStep({
                 taskId,
                 stepNumber: stepNumber++,
                 stepType: 'artifact',
                 toolName: artifact.kind,
-                content: JSON.stringify(artifact),
+                content: JSON.stringify(sourceData ? { ...artifact, sourceData } : artifact),
             });
         } catch (e) {
             logger.warn(`[AgentTask] 아티팩트 스텝 저장 실패: ${taskId} — ${e}`);

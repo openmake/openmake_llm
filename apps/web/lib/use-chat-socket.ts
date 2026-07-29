@@ -269,7 +269,9 @@ export function useChatSocket() {
                   .filter((a): a is { id: string; kind: string; title?: string; lang?: string | null; content?: string } => !!a?.id);
                 if (arts.length > 0) {
                   registerArtifacts(arts.map((a) => ({
-                    id: a.id, kind: a.kind, title: a.title ?? a.id, lang: a.lang ?? null, content: a.content ?? "", streaming: false,
+                    // taskId: task 산출물은 artifacts 테이블이 아닌 스텝 저장분 — 패널의
+                    // pdf/docx export 가 task 전용 엔드포인트로 라우팅하는 판별자.
+                    id: a.id, kind: a.kind, title: a.title ?? a.id, lang: a.lang ?? null, content: a.content ?? "", streaming: false, taskId,
                   })));
                   for (const a of arts) artifactIds.push(a.id);
                 }

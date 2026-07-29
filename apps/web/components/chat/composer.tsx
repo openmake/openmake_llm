@@ -38,6 +38,7 @@ import {
 import { SlashSkillMenu } from "@/components/chat/slash-skill-menu";
 import { cn } from "@/lib/utils";
 import { detectFileTaskIntent } from "@/lib/file-task-intent";
+import { detectReportTaskIntent } from "@/lib/report-task-intent";
 
 // 슬래시 스킬 호출: "/" + 공백없는 단일 토큰일 때만 드롭다운 표시.
 const SLASH_PATTERN = /^\/(\S*)$/;
@@ -341,6 +342,16 @@ export function Composer() {
         delegationApproval,
         undefined,
       );
+    } else if (
+      !discussionMode && !deepResearchMode && !imageMode &&
+      files.length === 0 && images.length === 0 && detectReportTaskIntent(text)
+    ) {
+      // 조사형 보고서 자동 위임(P1 Phase 2) — "X를 조사해서 보고서로" 류 self-contained
+      // 요청은 채팅(도구 5턴 예산) 대신 에이전트 작업으로. 백엔드가 goal 의 보고서 의도를
+      // 감지해 reportdata 계약 주입 → 완료 시 고정 템플릿 아티팩트가 칩으로 인라인 도착.
+      // 승인정책은 Option B 와 동일(high-risk — web_search 등 조사 도구는 자동).
+      const reportApproval = agentApprovalMode === "none" ? "none" : "high-risk";
+      void startAgentTask(text.trim(), undefined, undefined, reportApproval, undefined);
     } else {
       // NotebookLM 컨텍스트 — grounding 프리픽스는 백엔드(prompts/notebook-context)가 주입.
       // 가로채기 모드(토론/딥리서치/이미지)는 도구를 우회하므로 미전송 — 칩은 흐림 표시로 안내.

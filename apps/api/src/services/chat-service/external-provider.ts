@@ -13,7 +13,8 @@
  * @module services/chat-service/external-provider
  */
 import { createLogger } from '../../utils/logger';
-import { EXTERNAL_LLM_TOOL_BLACKLIST, LOOP_DETECTION, AGENT_LOOP_LIMITS, ARTIFACT_REQUEST_SUPPRESSED_TOOLS, ARTIFACT_INTENT_PATTERNS, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS, EXTERNAL_LLM_INPUT_TOKEN_BUDGET } from '../../config/runtime-limits';
+import { EXTERNAL_LLM_TOOL_BLACKLIST, LOOP_DETECTION, AGENT_LOOP_LIMITS, ARTIFACT_REQUEST_SUPPRESSED_TOOLS, ARTIFACT_INTENT_PATTERNS, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS, EXTERNAL_LLM_INPUT_TOKEN_BUDGET, REPORT_PIPELINE, REPORT_INTENT_PATTERNS } from '../../config/runtime-limits';
+import { tryRenderReportBlock } from './report-block';
 import { estimateMessageTokens, truncateMessagesPreservingSystem } from '../../llm/model-pool';
 import { type Style } from '../../chat/style';
 import { buildExternalSystemPrompt } from './external-system-prompt';
@@ -66,6 +67,8 @@ export interface StreamFromExternalContext {
     answerFormatBlock?: string;
     /** Tail 라우팅 Stage 2B — factual tail 판정 시 첫 턴 web_search tool_choice 강제. */
     tailWebGround?: boolean;
+    /** P1 보고서 파이프라인 — 보고서 의도 턴에만 주입되는 reportdata 데이터 계약 가이드. */
+    reportGuideBlock?: string;
 }
 
 /**
@@ -146,7 +149,12 @@ export async function runExternalStream(
     // 명시적 아티팩트 생성 요청(사용자 아티팩트 토글 또는 메시지 패턴)이면 distractor
     // always-on 도구(generate_image 등)를 제외해 모델이 도구 호출 대신 <artifact> 산출물을
     // 쓰도록 유도 (2026-06-23 통제실험 근거).
+    // 보고서 의도(P1 파이프라인)는 산출물이 reportdata→아티팩트이므로 아티팩트 의도와
+    // 동일하게 distractor 를 억제한다 (web_search 는 억제 목록에 없어 조사 가능).
+    const wantsReport = REPORT_PIPELINE.ENABLED
+        && REPORT_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
     const wantsArtifact = req.artifactMode === true
+        || wantsReport
         || ARTIFACT_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
     // 위치/지도 의도(wantsMap, 위에서 계산)면 generate_image 를 제외 — 모델이 가짜 지도
     // 이미지를 그리는 대신 카카오 검색 + 네이티브 지도 블록을 쓰도록 유도 (distractor 억제).
@@ -532,6 +540,18 @@ export async function runExternalStream(
                 finalContent += block;
                 logger.info(`🔗 출처 링크 ${lines.length}개 보강 (모델 출처 섹션에 URL 누락)`);
             }
+        }
+    }
+
+    // 보고서 결정적 렌더 (P1 파이프라인) — 모델이 출력한 ```reportdata JSON 블록을 고정
+    // 템플릿으로 렌더해 <artifact> 로 첨부한다(카카오맵·출처와 동일한 결정적 첨부 패턴).
+    // 원문 JSON 블록은 히스토리에서 제거 — 라이브 스트림에 이미 나간 블록은 프론트가 접는다.
+    if (REPORT_PIPELINE.ENABLED) {
+        const report = tryRenderReportBlock(finalContent);
+        if (report) {
+            onToken(report.artifactAppend, undefined);
+            finalContent = report.content + report.artifactAppend;
+            logger.info(`📊 보고서 아티팩트 결정적 첨부: "${report.title}"`);
         }
     }
 

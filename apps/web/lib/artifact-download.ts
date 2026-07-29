@@ -57,12 +57,46 @@ function extFor(kind: string, lang: string | null): string {
 export function downloadArtifact(opts: { title: string; kind: string; lang: string | null; content: string }) {
   const ext = extFor(opts.kind, opts.lang);
   const blob = new Blob([opts.content], { type: "text/plain;charset=utf-8" });
+  triggerBlobDownload(blob, `${safeName(opts.title)}.${ext}`);
+}
+
+function triggerBlobDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${safeName(opts.title)}.${ext}`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * 서버 변환 export (P1 Phase 3) — html 아티팩트를 pdf/docx 로 변환해 다운로드.
+ * pdf 는 모든 html 아티팩트, docx 는 보고서 아티팩트(reportdata 원본 보유)만 (서버 409).
+ * 오류는 throw — 호출부(패널)가 상태 메시지로 표시.
+ */
+export async function downloadExportedArtifact(opts: {
+  /** 채팅 아티팩트(artifacts 테이블)용 — taskId 미지정 시 필수 */
+  sessionId?: string;
+  /** Agent Task 산출물(스텝 저장분)용 — 지정 시 task 전용 엔드포인트로 라우팅 */
+  taskId?: string;
+  artifactId: string;
+  format: "pdf" | "docx";
+  title: string;
+}): Promise<void> {
+  const { ApiClient } = await import("./api-client");
+  const url = opts.taskId
+    ? `/api/agent-tasks/${encodeURIComponent(opts.taskId)}/artifacts/${encodeURIComponent(opts.artifactId)}/export`
+    : `/api/sessions/${encodeURIComponent(opts.sessionId ?? "")}/artifacts/${encodeURIComponent(opts.artifactId)}/export`;
+  const res = await ApiClient.post<{ data: { filename: string; mime: string; dataBase64: string } }>(
+    url,
+    { format: opts.format },
+  );
+  const d = res.data;
+  const bin = atob(d.dataBase64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const blob = new Blob([bytes], { type: d.mime });
+  triggerBlobDownload(blob, d.filename || `${safeName(opts.title)}.${opts.format}`);
 }

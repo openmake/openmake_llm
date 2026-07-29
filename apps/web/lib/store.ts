@@ -118,6 +118,9 @@ export interface Artifact {
   content: string;
   /** 스트리밍 진행 중 (artifact_start ~ artifact_end) */
   streaming?: boolean;
+  /** Agent Task 산출물이면 원본 task id — 세션 artifacts 테이블이 아닌 스텝 저장분이라
+   *  export(pdf/docx)가 task 전용 엔드포인트를 타야 한다. 채팅 아티팩트는 미설정. */
+  taskId?: string;
 }
 
 export type ChatStyle = "concise" | "default" | "verbose";

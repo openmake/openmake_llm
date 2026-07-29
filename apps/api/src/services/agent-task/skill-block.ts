@@ -6,6 +6,8 @@ import { getSkillManager, type ActiveSkillBinding } from '../../agents/skill-man
 import type { ToolDefinition } from '../../llm/types';
 import { mergeToolsWithSkills } from '../chat-service/tool-merger';
 import { getAgentTaskSystemPrompt } from '../../prompts/agent-task-prompt';
+import { getReportGuideForTask } from '../../prompts/report-guide';
+import { REPORT_PIPELINE, REPORT_INTENT_PATTERNS } from '../../config/runtime-limits';
 import { buildLearningBlock } from './task-learning';
 import { buildProceduralSkillBlock } from './procedural-skill';
 import { buildUserMemoryBlock } from '../chat-service/user-context-blocks';
@@ -42,7 +44,14 @@ export async function buildSkillPromptBlock(userId: string): Promise<string> {
  */
 export async function buildAgentTaskSystemContent(userId: string, goal: string, taskId: string): Promise<string> {
     const memory = userId && userId !== 'guest' ? await buildUserMemoryBlock(userId) : '';
+    // 보고서 파이프라인 (P1 Phase 2): goal 이 보고서 의도면 reportdata 계약 가이드를 주입한다.
+    // 최종 답변의 reportdata 블록은 AgentTaskService 가 applyReportRender 로 렌더해 아티팩트화.
+    const reportGuide = REPORT_PIPELINE.ENABLED && REPORT_INTENT_PATTERNS.some((re) => re.test(goal))
+        ? getReportGuideForTask(/[가-힣]/.test(goal) ? 'ko' : 'en')
+        : '';
+    if (reportGuide) logger.info(`[AgentTask] 보고서 의도 goal — reportdata 계약 가이드 주입: ${taskId}`);
     return getAgentTaskSystemPrompt()
+        + reportGuide
         + memory
         + (await buildSkillPromptBlock(userId))
         + (await buildLearningBlock(userId, goal, taskId))
