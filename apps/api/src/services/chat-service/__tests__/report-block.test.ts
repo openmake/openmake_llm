@@ -1,6 +1,13 @@
 /**
  * reportdata 결정적 렌더 주입 테스트 — fence 감지·fail-open·본문 정리 계약.
  */
+// env 파생 플래그 고정 — CI 엔 .env 가 없어 REPORT_PIPELINE_ENABLED 미설정(false)이라
+// applyReportRender 가 no-op 이 된다. 테스트는 기능 ON 계약을 검증하므로 mock 으로 고정.
+jest.mock('../../../config/runtime-limits', () => ({
+    ...jest.requireActual('../../../config/runtime-limits'),
+    REPORT_PIPELINE: { ENABLED: true },
+}));
+
 import { tryRenderReportBlock, applyReportRender } from '../report-block';
 
 const VALID_DATA = {

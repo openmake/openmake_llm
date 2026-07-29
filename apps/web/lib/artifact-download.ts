@@ -77,14 +77,20 @@ function triggerBlobDownload(blob: Blob, filename: string) {
  * 오류는 throw — 호출부(패널)가 상태 메시지로 표시.
  */
 export async function downloadExportedArtifact(opts: {
-  sessionId: string;
+  /** 채팅 아티팩트(artifacts 테이블)용 — taskId 미지정 시 필수 */
+  sessionId?: string;
+  /** Agent Task 산출물(스텝 저장분)용 — 지정 시 task 전용 엔드포인트로 라우팅 */
+  taskId?: string;
   artifactId: string;
   format: "pdf" | "docx";
   title: string;
 }): Promise<void> {
   const { ApiClient } = await import("./api-client");
+  const url = opts.taskId
+    ? `/api/agent-tasks/${encodeURIComponent(opts.taskId)}/artifacts/${encodeURIComponent(opts.artifactId)}/export`
+    : `/api/sessions/${encodeURIComponent(opts.sessionId ?? "")}/artifacts/${encodeURIComponent(opts.artifactId)}/export`;
   const res = await ApiClient.post<{ data: { filename: string; mime: string; dataBase64: string } }>(
-    `/api/sessions/${encodeURIComponent(opts.sessionId)}/artifacts/${encodeURIComponent(opts.artifactId)}/export`,
+    url,
     { format: opts.format },
   );
   const d = res.data;

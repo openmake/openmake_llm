@@ -416,15 +416,18 @@ export function ArtifactPanel() {
 
   const canToggle = previewKindFor(shown.kind, shown.lang) !== null && !active.streaming;
 
-  // 서버 변환 export (pdf/docx) — html 아티팩트 + 영속 세션에서만 노출.
-  const canExport = !!currentSessionId && !active.streaming && shown.kind === "html";
+  // 서버 변환 export (pdf/docx) — html 아티팩트에서, 영속 세션(채팅) 또는 task 산출물일 때 노출.
+  const canExport = (!!currentSessionId || !!active.taskId) && !active.streaming && shown.kind === "html";
   const runExport = async (format: "pdf" | "docx") => {
-    if (!currentSessionId || exportBusy) return;
+    if ((!currentSessionId && !active.taskId) || exportBusy) return;
     setExportBusy(format);
     setExportError(null);
     try {
       const { downloadExportedArtifact } = await import("@/lib/artifact-download");
-      await downloadExportedArtifact({ sessionId: currentSessionId, artifactId: active.id, format, title: shown.title });
+      await downloadExportedArtifact({
+        ...(active.taskId ? { taskId: active.taskId } : { sessionId: currentSessionId ?? "" }),
+        artifactId: active.id, format, title: shown.title,
+      });
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) setExportError(t("exportNoSource"));
       else if (e instanceof ApiError && e.status === 429) setExportError(t("exportRateLimited"));
