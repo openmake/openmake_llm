@@ -1,0 +1,22 @@
+{
+    // packages/* 공통 컴파일 기준. apps/api 는 자체 tsconfig 를 유지한다(빌드 파이프라인이 다름).
+    //
+    // packages 를 빌드 산출물(dist)로 배포하는 이유: 백엔드(apps/api)는 CommonJS 로 컴파일돼
+    // 실행되므로 `main: src/index.ts` 인 패키지를 런타임에 require 할 수 없다. 그래서 종전에는
+    // type-only import 만 가능했고, 런타임 값(CSRF 상수 등)은 양쪽에 손으로 복사돼 있었다.
+    // dist(CJS + .d.ts)를 내보내면 프론트·백엔드가 같은 계약을 실제로 공유한다.
+    "compilerOptions": {
+        "target": "ES2022",
+        "module": "CommonJS",
+        "lib": [
+            "ES2022"
+        ],
+        "strict": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+        "declaration": true,
+        "declarationMap": true,
+        "sourceMap": true
+    }
+}

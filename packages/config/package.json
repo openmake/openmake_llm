@@ -3,9 +3,15 @@
   "version": "1.16.1",
   "private": true,
   "description": "프론트/백엔드 공통 상수·계약 (CSRF, 포트, 응답 코드)",
-  "types": "src/index.ts",
-  "main": "src/index.ts",
+  "types": "dist/index.d.ts",
+  "main": "dist/index.js",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
   }
 }

@@ -25,6 +25,11 @@ module.exports = {
     coverageReporters: ['text', 'lcov', 'html'],
     moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/src/$1',
+        // workspace 패키지는 dist(빌드 산출물)를 main 으로 내보내지만, CI 는 build 보다
+        // test 를 먼저 돌린다. 테스트는 항상 소스를 직접 읽게 매핑해 빌드 의존을 없앤다.
+        '^@openmake/shared-types$': '<rootDir>/../../packages/shared-types/src/index.ts',
+        '^@openmake/config$': '<rootDir>/../../packages/config/src/index.ts',
+        '^@openmake/api-client$': '<rootDir>/../../packages/api-client/src/index.ts',
         // ESM-only 패키지를 jest CJS 런타임에서 로드 가능하게 하는 로컬 shim.
         // 개별 테스트의 jest.mock(..., factory)은 그대로 우선 적용된다.
         '^uuid$': '<rootDir>/__mocks__/uuid.js',

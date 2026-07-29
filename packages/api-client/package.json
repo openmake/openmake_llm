@@ -3,10 +3,16 @@
   "version": "1.16.1",
   "private": true,
   "description": "shared-types 기반 타입 안전 API 클라이언트 (브라우저, apps/web 용)",
-  "types": "src/index.ts",
-  "main": "src/index.ts",
+  "types": "dist/index.d.ts",
+  "main": "dist/index.js",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@openmake/shared-types": "*",

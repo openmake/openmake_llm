@@ -3,9 +3,15 @@
   "version": "1.16.1",
   "private": true,
   "description": "프론트(apps/web) ↔ 백엔드(apps/api) 공통 TypeScript 타입 계약",
-  "types": "src/index.ts",
-  "main": "src/index.ts",
+  "types": "dist/index.d.ts",
+  "main": "dist/index.js",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
   }
 }

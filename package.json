@@ -4,7 +4,8 @@
     "description": "OpenMake - AI Assistant Platform",
     "main": "apps/api/dist/server.js",
     "scripts": {
-        "build": "npm run build:backend && npm run build:frontend-next",
+        "build": "npm run build:packages && npm run build:backend && npm run build:frontend-next",
+    "build:packages": "npm run build --workspace=@openmake/shared-types && npm run build --workspace=@openmake/config && npm run build --workspace=@openmake/api-client",
         "build:database": "echo 'No separate database build needed'",
         "build:backend": "cd apps/api && npm run build",
         "build:frontend-next": "cd apps/web && npm run build",
