@@ -90,7 +90,9 @@
       .report { border-radius: 18px; } .report-header, .report-body { padding: 14px; }
       .metric-line { grid-template-columns: minmax(60px, 90px) 1fr 52px; }
     }
-    @media print { body { background: var(--paper); } .page { width: 100%; padding: 0; } .report { break-inside: avoid; box-shadow: none; } }
+    /* print: .report 전체에 break-inside:avoid 를 걸면 카드가 한 페이지보다 길 때
+       첫 페이지가 통째로 비는 결함(pdf export 실측) — 회피 단위는 작은 블록(kpi/panel)로 한정. */
+    @media print { body { background: var(--paper); } .page { width: 100%; padding: 0; } .report { box-shadow: none; } .kpi, .panel, .masthead { break-inside: avoid; } }
   </style>
 </head>
 <body>

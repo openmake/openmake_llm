@@ -17,6 +17,7 @@
  */
 import { renderReport } from '../report/report-renderer';
 import { REPORT_TEMPLATES } from '../../config/report-templates';
+import { REPORT_PIPELINE } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('ChatReportBlock');
@@ -32,8 +33,45 @@ export interface ReportBlockResult {
     title: string;
 }
 
+/**
+ * 렌더된 보고서 아티팩트의 reportdata 원본 대기열 — artifact 영속화 시점
+ * (request-handler insertArtifact)에 takeReportSource 로 회수해 source_data 로 저장한다.
+ * 렌더와 영속화가 같은 요청 흐름이라 프로세스-로컬 Map 으로 충분. 영속화가 실패해도
+ * 누수되지 않게 상한을 두고 오래된 항목부터 버린다.
+ */
+const pendingReportSources = new Map<string, Record<string, unknown>>();
+const PENDING_SOURCES_MAX = 50;
+
+function rememberReportSource(artifactId: string, source: Record<string, unknown>): void {
+    if (pendingReportSources.size >= PENDING_SOURCES_MAX) {
+        const oldest = pendingReportSources.keys().next().value;
+        if (oldest) pendingReportSources.delete(oldest);
+    }
+    pendingReportSources.set(artifactId, source);
+}
+
+/** 아티팩트 id 의 reportdata 원본을 회수(1회성). 보고서 아티팩트가 아니면 null. */
+export function takeReportSource(artifactId: string): Record<string, unknown> | null {
+    const v = pendingReportSources.get(artifactId) ?? null;
+    if (v) pendingReportSources.delete(artifactId);
+    return v;
+}
+
 function isRecord(v: unknown): v is Record<string, unknown> {
     return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/**
+ * 원문 문자열에 reportdata 렌더를 적용해 <artifact> 가 포함된 본문으로 변환.
+ *
+ * Agent Task 완료 경로용 — 이후의 extractAndStripArtifacts 가 아티팩트를 추출·영속화한다.
+ * 렌더하지 않으면 fence-fallback(≥15줄)이 원본 JSON 을 code 아티팩트로 잘못 영속화하므로,
+ * 반드시 추출 **전에** 호출해야 한다. 플래그 OFF·블록 없음·렌더 실패면 원문 그대로 반환.
+ */
+export function applyReportRender(raw: string): string {
+    if (!REPORT_PIPELINE.ENABLED || !raw) return raw;
+    const r = tryRenderReportBlock(raw);
+    return r ? r.content + r.artifactAppend : raw;
 }
 
 /**
@@ -63,6 +101,8 @@ export function tryRenderReportBlock(finalContent: string): ReportBlockResult | 
         // 아티팩트 시작 태그 속성은 "..." 파싱 — 제목의 큰따옴표는 작은따옴표로 강등.
         const safeTitle = title.replace(/"/g, "'").slice(0, 200);
         const artifactId = `report-${Date.now().toString(36)}`;
+        // reportdata 원본 보존 — 영속화 시점에 source_data 로 저장(docx 등 구조 기반 export 용).
+        rememberReportSource(artifactId, { template: templateId, data });
         const artifactAppend = `\n\n<artifact id="${artifactId}" kind="html" title="${safeTitle}">\n${html}\n</artifact>`;
 
         // 원문 블록 제거 (첫 블록만 — 계약상 1개). 제거로 생긴 3연속 개행은 정리.

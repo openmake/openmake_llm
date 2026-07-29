@@ -1,7 +1,7 @@
 /**
  * reportdata 결정적 렌더 주입 테스트 — fence 감지·fail-open·본문 정리 계약.
  */
-import { tryRenderReportBlock } from '../report-block';
+import { tryRenderReportBlock, applyReportRender } from '../report-block';
 
 const VALID_DATA = {
     template: 'generic-report',
@@ -56,6 +56,15 @@ describe('tryRenderReportBlock', () => {
         const r = tryRenderReportBlock(fence(JSON.stringify(payload)));
         expect(r).not.toBeNull();
         expect(r!.artifactAppend).toContain('generic-report-v1-open-design');
+    });
+
+    it('applyReportRender — 렌더 성공 시 fence 제거 + <artifact> 포함 본문, 실패 시 원문 유지', () => {
+        const content = `안내.\n\n${fence(JSON.stringify(VALID_DATA))}`;
+        const out = applyReportRender(content);
+        expect(out).not.toContain('```reportdata');
+        expect(out).toContain('<artifact id="report-');
+        const broken = '설명만 있는 응답';
+        expect(applyReportRender(broken)).toBe(broken);
     });
 
     it('제목의 큰따옴표는 작은따옴표로 강등 (artifact 속성 파서 보호)', () => {

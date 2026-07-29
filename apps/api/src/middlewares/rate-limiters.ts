@@ -12,6 +12,7 @@ import {
 import { getKeyValueStore } from '../storage';
 import { STORAGE_POLICY, RATE_LIMIT_POLICY } from '../config/security';
 import { ARTIFACT_EXEC } from '../config/artifact-exec';
+import { ARTIFACT_EXPORT } from '../config/artifact-export';
 import { verifyToken } from '../auth/auth-core';
 
 // ================================================
@@ -470,4 +471,14 @@ export const artifactExecLimiter = createAdvancedRateLimiter({
     ipLimit: ARTIFACT_EXEC.rateIpLimit,
     userLimit: ARTIFACT_EXEC.rateUserLimit,
     message: '코드 실행 요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
+});
+
+/**
+ * 아티팩트 export(pdf/docx) 레이트 리미터 — 컨테이너 변환은 비용이 커 보수적으로 제한.
+ */
+export const artifactExportLimiter = createAdvancedRateLimiter({
+    windowMs: ARTIFACT_EXPORT.rateWindowMs,
+    ipLimit: ARTIFACT_EXPORT.rateIpLimit,
+    userLimit: ARTIFACT_EXPORT.rateUserLimit,
+    message: '문서 변환 요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
 });

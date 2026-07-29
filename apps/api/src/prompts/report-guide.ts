@@ -74,3 +74,19 @@ Notes:
 - Do not emit <artifact> tags, raw HTML, or markdown tables as the deliverable — the system
   renders this block and publishes the artifact automatically.`;
 }
+
+/**
+ * Agent Task 용 보고서 가이드 — 기본 가이드에 DELIVERABLE 규칙 override 를 덧붙인다.
+ *
+ * task 시스템 프롬프트(agent-task-prompt)는 최종 산출물을 <artifact> 로 감싸라고 지시하는데,
+ * 채팅 경로에서 이런 형식 지시와 reportdata 계약이 동시 주입되면 qwen 이 kebab-case id
+ * 문자열만 출력하고 종료하는 충돌이 라이브 재현됐다(2026-07-30). task 프롬프트는 공용이라
+ * 제거할 수 없으므로, 이 가이드가 명시적으로 우선함을 선언한다.
+ */
+export function getReportGuideForTask(language?: string, templateId: string = DEFAULT_TEMPLATE_ID): string {
+    const base = getReportGuide(language, templateId);
+    if (!base) return '';
+    return base + (language === 'ko'
+        ? '\n\n⚠️ 이 작업의 최종 산출물 형식은 위 reportdata 블록이며, 앞서 제시된 DELIVERABLE 규칙의 <artifact> 태그 지시보다 **우선**합니다. <artifact> 태그를 쓰지 말고 ```reportdata 블록으로 최종 답변을 작성하세요.'
+        : '\n\n⚠️ For THIS task the final deliverable format is the reportdata block above, which takes **precedence** over the earlier DELIVERABLE rules about <artifact> tags. Do not use <artifact> tags — finish with a ```reportdata block.');
+}

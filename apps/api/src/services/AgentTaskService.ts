@@ -23,6 +23,7 @@ import { AGENT_TASK_LIMITS, AGENT_SPAWN } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
 import { getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getAgentTaskBrowserLimitNudge, getTaskSandboxGuidance, getAgentTaskUploadedFilesNote, getAgentTaskVerifyFailedNudge, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts } from '../llm/artifact-parser';
+import { applyReportRender } from './chat-service/report-block';
 import { getPushService } from './PushService';
 import { createLogger } from '../utils/logger';
 import type { UserContext } from '../mcp/user-sandbox';
@@ -364,7 +365,9 @@ export class AgentTaskService {
 
                 // 최종 답변 턴이면 deliverable(<artifact> 태그) 추출 — 스텝/result 는
                 // cleaned 본문으로 기록하고, 아티팩트는 step_type='artifact' 행으로 영속화.
-                const extracted = hasToolCalls ? null : extractAndStripArtifacts(result.content ?? '');
+                // reportdata 블록은 추출 **전에** 고정 템플릿으로 렌더해 <artifact> 로 변환
+                // (P1 Phase 2 — 렌더 없인 fence-fallback 이 원본 JSON 을 code 아티팩트로 오영속).
+                const extracted = hasToolCalls ? null : extractAndStripArtifacts(applyReportRender(result.content ?? ''));
                 const stepContent = extracted ? extracted.cleanedContent : result.content;
 
                 // 스텝 기록(display용). 첫 턴은 목표 분해 계획(plan)으로 표시.
@@ -522,7 +525,7 @@ export class AgentTaskService {
 
                 // terminate 도구 호출 — 깔끔한 완료 시그널(max_turns 소진 아님).
                 if (terminated) {
-                    const ex = extractAndStripArtifacts(result.content ?? '');
+                    const ex = extractAndStripArtifacts(applyReportRender(result.content ?? ''));
                     stepNumber = await persistArtifactSteps(taskId, ex.artifacts, stepNumber);
                     stepNumber = await maybePersistCodeDiff(taskRuntime, sandboxCfg, taskId, stepNumber, emitStep);
                     await update({
@@ -548,7 +551,7 @@ export class AgentTaskService {
             // 턴 상한 도달 — 마지막 assistant 내용을 결과로 보존 (deliverable 태그가 있으면 추출)
             const lastAssistant = [...conversation].reverse().find((m) => m.role === 'assistant');
             const lastRaw = (lastAssistant?.content as string) || '(최대 턴에 도달하여 종료되었습니다.)';
-            const lastExtracted = extractAndStripArtifacts(lastRaw);
+            const lastExtracted = extractAndStripArtifacts(applyReportRender(lastRaw));
             stepNumber = await persistArtifactSteps(taskId, lastExtracted.artifacts, stepNumber);
             stepNumber = await maybePersistCodeDiff(taskRuntime, sandboxCfg, taskId, stepNumber, emitStep);
             await update({

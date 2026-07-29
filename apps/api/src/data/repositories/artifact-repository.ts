@@ -57,6 +57,8 @@ export interface InsertArtifactInput {
     language?: string | null;
     content: string;
     deps?: Record<string, unknown> | null;
+    /** 보고서 아티팩트의 reportdata 원본(JSON) — docx 등 구조 기반 export 용 (085). */
+    sourceData?: Record<string, unknown> | null;
 }
 
 export class ArtifactSizeError extends Error {
@@ -118,17 +120,32 @@ export class ArtifactRepository extends BaseRepository {
             input.language ?? null,
             input.content,
             input.deps ? JSON.stringify(input.deps) : null,
+            input.sourceData ? JSON.stringify(input.sourceData) : null,
         ];
         const r = await this.query<ArtifactRow>(
             `INSERT INTO artifacts
                 (artifact_id, version, session_id, message_id, user_id,
-                 kind, title, language, content, deps)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                 kind, title, language, content, deps, source_data)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
              RETURNING pk_id, artifact_id, version, session_id, message_id, user_id,
                        kind, title, language, content, deps, created_at`,
             params
         );
         return r.rows[0];
+    }
+
+    /**
+     * 최신 버전의 reportdata 원본(source_data) 조회 — docx export 용.
+     * 보고서 아티팩트가 아니면(일반 아티팩트) null.
+     */
+    async getLatestSourceData(sessionId: string, artifactId: string): Promise<Record<string, unknown> | null> {
+        const r = await this.query<{ source_data: Record<string, unknown> | null }>(
+            `SELECT source_data FROM artifacts
+              WHERE session_id = $1 AND artifact_id = $2
+              ORDER BY version DESC LIMIT 1`,
+            [sessionId, artifactId]
+        );
+        return r.rows[0]?.source_data ?? null;
     }
 
     /**
