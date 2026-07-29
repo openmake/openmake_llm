@@ -8,6 +8,11 @@
  * @module config/security
  */
 
+// 프론트(@openmake/api-client)와 공유하는 계약은 @openmake/config 가 단일 정의처다.
+// 종전엔 같은 리터럴을 양쪽에 손으로 복사하고 주석으로 "1:1" 이라 적어 두었을 뿐이라,
+// 한쪽만 바꾸면 CSRF 검증이 조용히 실패했다(컴파일·테스트에 걸리지 않음).
+import { CSRF, AUTH } from '@openmake/config';
+
 export const SSRF_LIMITS = {
     /** safeFetch redirect chain 최대 허용 횟수 */
     MAX_REDIRECTS: 5,
@@ -124,9 +129,9 @@ export const STORAGE_POLICY = {
 
 export const CSRF_POLICY = {
     /** 쿠키 이름 (JS 읽기 가능, non-HttpOnly — Double-Submit Cookie 패턴 요건) */
-    COOKIE_NAME: 'csrf_token',
+    COOKIE_NAME: CSRF.COOKIE_NAME,
     /** 요청 헤더 이름 (표준 convention) */
-    HEADER_NAME: 'X-CSRF-Token',
+    HEADER_NAME: CSRF.HEADER_NAME,
     /** 토큰 바이트 수 (32바이트 = 256비트 → base64url 43자) */
     TOKEN_BYTES: 32,
     /** 쿠키 수명 (24시간 — 세션 길이와 비슷하게) */
@@ -136,7 +141,7 @@ export const CSRF_POLICY = {
     /** 검증 스킵 경로 prefix (OAuth 콜백은 제3자 redirect, 자체 state 파라미터로 보호됨) */
     SKIP_PATHS: [
         '/api/auth/callback/',
-        '/api/csrf-token',
+        CSRF.TOKEN_ENDPOINT,
     ] as const,
     /** 쿠키 옵션 — JS 읽기 가능해야 Double-Submit 패턴 성립 (httpOnly:false 필수) */
     COOKIE_OPTIONS: {
@@ -145,4 +150,15 @@ export const CSRF_POLICY = {
         /** 쿠키 적용 path — 앱 전체 */
         PATH: '/',
     },
+} as const;
+
+/**
+ * 인증 쿠키 이름 — 발급(res.cookie)과 판독(req.cookies)이 반드시 같은 값을 써야 하므로
+ * 리터럴을 흩뿌리지 않고 여기서만 노출한다. 이름 자체는 @openmake/config 가 SoT.
+ */
+export const AUTH_COOKIES = {
+    /** 액세스 토큰 (HttpOnly) */
+    ACCESS: AUTH.COOKIE_NAME,
+    /** 리프레시 토큰 (HttpOnly, path=/api/auth/refresh) */
+    REFRESH: AUTH.REFRESH_COOKIE_NAME,
 } as const;

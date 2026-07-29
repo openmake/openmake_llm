@@ -19,6 +19,7 @@ import { Request, Response, NextFunction } from 'express';
 import { extractToken, verifyToken, hasPermission, isAdmin, clearTokenCookie } from './auth-core';
 import { getUserManager, PublicUser, UserRole } from '../data/user-manager';
 import { unauthorized, forbidden } from '../utils/api-response';
+import { AUTH_COOKIES } from '../config/security';
 
 import { createLogger } from '../utils/logger';
 const log = createLogger('AuthMiddleware');
@@ -86,7 +87,7 @@ declare global {
 export async function optionalAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
     // Cookie first (httpOnly), then Authorization header (backward compat)
     const authHeader = req.headers.authorization;
-    const cookieToken = req.cookies?.auth_token;
+    const cookieToken = req.cookies?.[AUTH_COOKIES.ACCESS];
     const token = cookieToken || extractToken(authHeader);
 
     // 🔍 DEBUG: 쿠키 수신 상태 로깅 (인증 문제 디버깅용)
@@ -113,7 +114,7 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
             }
         } else {
             // 검증 실패 (만료/변조) — 잘못된 쿠키 정리
-            if (req.cookies?.auth_token) {
+            if (req.cookies?.[AUTH_COOKIES.ACCESS]) {
                 clearTokenCookie(res);
             }
         }
@@ -129,7 +130,7 @@ export async function optionalAuth(req: Request, res: Response, next: NextFuncti
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
     // Cookie first (httpOnly), then Authorization header (backward compat)
     const authHeader = req.headers.authorization;
-    const token = (req.cookies?.auth_token) || extractToken(authHeader);
+    const token = (req.cookies?.[AUTH_COOKIES.ACCESS]) || extractToken(authHeader);
 
     if (!token) {
         res.status(401).json(unauthorized('인증이 필요합니다'));

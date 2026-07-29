@@ -7,6 +7,7 @@ import { IncomingMessage } from 'http';
 import { verifyToken } from '../auth';
 import { createLogger } from '../utils/logger';
 import { isOriginAllowed } from '../security/cors-policy';
+import { AUTH_COOKIES } from '../config/security';
 
 export interface WebSocketAuthResult {
     userId: string | null;
@@ -86,7 +87,7 @@ export async function authenticateWebSocket(
         const cookies = req.headers.cookie || '';
         const authCookie = cookies.split(';')
             .map(c => c.trim())
-            .find(c => c.startsWith('auth_token='));
+            .find(c => c.startsWith(`${AUTH_COOKIES.ACCESS}=`));
         // split('=')[1] 은 토큰 값에 '=' 가 있으면(예: base64 패딩) 잘림 → 첫 '=' 이후 전체를 취함
         const cookieToken = authCookie ? authCookie.slice(authCookie.indexOf('=') + 1) : null;
 

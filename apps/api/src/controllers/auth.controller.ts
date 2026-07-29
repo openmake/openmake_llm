@@ -15,6 +15,7 @@ import jwt from 'jsonwebtoken';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, unauthorized, conflict, internalError } from '../utils/api-response';
 import { getConfig } from '../config/env';
+import { AUTH_COOKIES } from '../config/security';
 import { validate } from '../middlewares/validation';
 import { loginSchema, registerSchema, changePasswordSchema } from '../schemas';
 import { createAuthOAuthController } from './auth-oauth.controller';
@@ -173,7 +174,7 @@ export class AuthController {
             }
         }
         // 쿠키 토큰도 블랙리스트에 추가
-        const cookieToken = req.cookies?.auth_token;
+        const cookieToken = req.cookies?.[AUTH_COOKIES.ACCESS];
         if (cookieToken) {
             blacklistToken(cookieToken);
         }
@@ -209,7 +210,7 @@ export class AuthController {
         // optionalAuth 라 user 없이도 통과. 여기서 토큰 유무로 분기:
         //  - 토큰이 아예 없음 = 순수 게스트 → 200 {user:null} (프론트 refresh/redirect 스팸 방지)
         //  - 토큰이 있었으나 user 없음 = 만료/무효 → 401 (ApiClient refresh 흐름으로 세션 복구 유도)
-        const hadToken = !!(req.cookies?.auth_token || req.headers.authorization);
+        const hadToken = !!(req.cookies?.[AUTH_COOKIES.ACCESS] || req.headers.authorization);
         if (hadToken) {
             res.status(401).json(unauthorized('인증이 필요합니다'));
             return;
