@@ -305,6 +305,8 @@
     },
     "artifactFallback": "아티팩트",
     "artifactBuilding": "아티팩트 생성 중…",
+    "reportBuilding": "보고서 생성 중…",
+    "reportData": "보고서 데이터",
     "reasoningLabel": "생각 과정",
     "thinking": {
       "agentAnalyzing": "{agent}가 분석 중",

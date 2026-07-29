@@ -1074,6 +1074,25 @@ export const ARTIFACT_INTENT_PATTERNS: readonly RegExp[] = [
     /웹\s?페이지(로|를)?\s*(만들|작성|생성|정리)/,
 ] as const;
 
+/** P1 보고서 파이프라인 — 보고서 의도 시 reportdata 데이터 계약 주입 + 결정적 템플릿 렌더. */
+export const REPORT_PIPELINE = {
+    /** 기본 OFF — 운영 .env 에서 REPORT_PIPELINE_ENABLED=true 로 활성화(카나리아 후 상시 ON). */
+    ENABLED: process.env.REPORT_PIPELINE_ENABLED === 'true',
+} as const;
+
+/**
+ * 보고서 작성 의도 판정 패턴. 매칭 시 ① report-guide(reportdata JSON 계약) 시스템 프롬프트
+ * 주입 ② 아티팩트 의도와 동일한 distractor 도구 억제. 실사용 문구 기반(운영 로그 2026-07):
+ * "html 로 보고서를 작성해서 보고해", "보고서 형식으로 만들어줘", "리포트 작성해줘" 류.
+ * "보고해"(구두 보고)만으로는 매칭하지 않는다 — 문서 산출 명사(보고서/리포트)가 필수.
+ */
+export const REPORT_INTENT_PATTERNS: readonly RegExp[] = [
+    /(보고서|리포트)[^\n.?!]{0,16}(작성|만들|생성|정리|써\s*줘|써줘|뽑아)/,
+    /(작성|만들|생성|정리)[^\n.?!]{0,10}(보고서|리포트)/,
+    /\breport\b[^\n.?!]{0,24}\b(write|create|make|generate|produce)/i,
+    /\b(write|create|make|generate|produce)\b[^\n.?!]{0,24}\breport\b/i,
+] as const;
+
 /**
  * 위치/지도 의도 판정 패턴. 매칭 시 generate_image(distractor)를 도구 목록에서 제외해
  * 모델이 "지도"를 보고 가짜 지도 이미지를 그리는 대신, 카카오 검색 도구 + 네이티브 지도

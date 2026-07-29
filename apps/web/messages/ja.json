@@ -305,6 +305,8 @@
     },
     "artifactFallback": "アーティファクト",
     "artifactBuilding": "アーティファクトを生成中…",
+    "reportBuilding": "レポートを生成中…",
+    "reportData": "レポートデータ",
     "reasoningLabel": "思考プロセス",
     "thinking": {
       "agentAnalyzing": "{agent} が分析中",

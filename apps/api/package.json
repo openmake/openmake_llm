@@ -4,8 +4,9 @@
     "description": "OpenMake API Server",
     "main": "dist/server.js",
     "scripts": {
-        "build": "tsc && npm run copy-agent-data && npm run build-info",
+        "build": "tsc && npm run copy-agent-data && npm run copy-report-templates && npm run build-info",
         "copy-agent-data": "mkdir -p dist/agents/data && cp -R src/agents/data/. dist/agents/data/",
+        "copy-report-templates": "mkdir -p dist/report-templates && cp -R src/report-templates/. dist/report-templates/",
         "build-info": "node ../../scripts/build-info.js",
         "dev": "ts-node --files src/server.ts",
         "start": "node dist/server.js",

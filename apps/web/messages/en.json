@@ -305,6 +305,8 @@
     },
     "artifactFallback": "Artifact",
     "artifactBuilding": "Building artifact…",
+    "reportBuilding": "Building report…",
+    "reportData": "Report data",
     "reasoningLabel": "Reasoning",
     "thinking": {
       "agentAnalyzing": "{agent} is analyzing",

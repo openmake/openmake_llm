@@ -305,6 +305,8 @@
     },
     "artifactFallback": "工件",
     "artifactBuilding": "正在生成工件…",
+    "reportBuilding": "正在生成报告…",
+    "reportData": "报告数据",
     "reasoningLabel": "思考过程",
     "thinking": {
       "agentAnalyzing": "{agent} 正在分析",

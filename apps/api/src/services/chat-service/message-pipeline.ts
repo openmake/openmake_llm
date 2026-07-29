@@ -26,6 +26,7 @@ import type { ChatMessageRequest, SystemEventCallback } from '../chat-service-ty
 import { getExecutionPlanBuilder } from '../../chat/execution-plan-builder';
 import { normalizeStyle } from '../../chat/style';
 import { resolveAnswerFormatProfile, getAnswerFormatGuard } from '../../chat/answer-format';
+import { REPORT_PIPELINE, REPORT_INTENT_PATTERNS } from '../../config/runtime-limits';
 import { runProviderGate, servedModelLabel } from './provider-gate';
 import { buildNotebookContextPrefix } from '../../prompts/notebook-context';
 import { applyAgentModelOverride } from './agent-model-override';
@@ -346,6 +347,18 @@ export async function runMessagePipeline(svc: ChatService,
         message: message || '',
     });
     const extAnswerFormatBlock = getAnswerFormatGuard(extAnswerFormatProfile, extLang);
+    // 보고서 파이프라인 (P1): 보고서 의도 턴에만 reportdata 데이터 계약 가이드를 주입한다.
+    // 모델은 데이터(JSON)만 만들고 렌더는 백엔드 고정 템플릿이 담당 (renderer owns design).
+    // 이때 artifact 가이드는 제거한다 — 두 가이드를 함께 주입하면 qwen 이 <artifact> 형식
+    // (kebab-case id)과 reportdata 계약 사이에서 혼란해 id 문자열만 출력하고 종료하는
+    // 결함이 라이브에서 재현됨(2026-07-30 E2E 2회 — "kosdaq_report_v2" 24토큰 응답).
+    let extReportGuide = '';
+    if (REPORT_PIPELINE.ENABLED && REPORT_INTENT_PATTERNS.some((re) => re.test(message || ''))) {
+        const { getReportGuide } = await import('../../prompts/report-guide');
+        extReportGuide = getReportGuide(extLang);
+        extArtifactGuide = '';
+        logger.info('[Report] 보고서 의도 감지 — reportdata 계약 가이드 주입 (artifact 가이드 대체)');
+    }
     const externalResponse = await svc.streamFromExternalProvider(externalResolved, req, streamToken, {
         agentSystemMessage: agentSysMsgForExternal,
         enhancedMessage: finalEnhancedMessage,
@@ -356,6 +369,7 @@ export async function runMessagePipeline(svc: ChatService,
         answerFormatBlock: extAnswerFormatBlock,
         style: req.style,
         tailWebGround: reqCtx.tailWebGround,
+        ...(extReportGuide ? { reportGuideBlock: extReportGuide } : {}),
     }, reqCtx);
 
     // ── Step 5: 라우팅 로그 + 메트릭 기록 ──
