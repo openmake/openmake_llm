@@ -10,7 +10,7 @@
  */
 
 import { Request, Response } from 'express';
-import { getPool } from '../data/models/unified-database';
+import { getSessionMeta } from '../data/conversation-sessions';
 import { notFound, unauthorized, forbidden } from '../utils/api-response';
 
 /** 요청에서 userId 추출 (JWT userId 또는 id). 미인증이면 undefined. */
@@ -27,21 +27,16 @@ export function resolveAnonSessionId(req: Request): string | undefined {
 export async function assertSessionAccess(req: Request, sessionId: string): Promise<void> {
     if (req.user?.role === 'admin') return;
 
-    const pool = getPool();
-    const result = await pool.query<{ user_id: string | null; anon_session_id: string | null }>(
-        'SELECT user_id, anon_session_id FROM conversation_sessions WHERE id = $1',
-        [sessionId]
-    );
-    const session = result.rows[0];
+    const session = await getSessionMeta(sessionId);
     if (!session) {
         throw Object.assign(new Error('SESSION_NOT_FOUND'), { statusCode: 404 });
     }
 
     const userId = resolveUserId(req);
-    if (userId && session.user_id === userId) return;
+    if (userId && session.userId === userId) return;
 
     const anonSessionId = resolveAnonSessionId(req);
-    if (anonSessionId && session.anon_session_id === anonSessionId) return;
+    if (anonSessionId && session.anonSessionId === anonSessionId) return;
 
     throw Object.assign(new Error(userId || anonSessionId ? 'SESSION_FORBIDDEN' : 'SESSION_UNAUTHORIZED'), {
         statusCode: userId || anonSessionId ? 403 : 401,

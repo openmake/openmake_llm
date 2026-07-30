@@ -13,6 +13,22 @@ const eslintConfig = defineConfig([
       // 전환하는 대규모 행동보존 리팩터가 필요해 실익 대비 회귀 위험이 커 비활성.
       // (데이터 페칭 레이어(react-query 등) 또는 React Compiler 도입 시 재검토)
       "react-hooks/set-state-in-effect": "off",
+      // 계층 경계 — 프론트는 백엔드 소스를 직접 참조하지 않는다(현재 위반 0).
+      // 공유가 필요한 타입·상수는 @openmake/shared-types · @openmake/config 를 거친다.
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              // 주의: 패턴은 import 문자열을 매칭한다(해석된 경로가 아님). 현실적인 침범
+              // 경로는 `../../api/src/...` 처럼 'apps/' 가 빠진 상대경로이므로 둘 다 막는다.
+              group: ["**/apps/api/**", "**/api/src/**"],
+              message:
+                "apps/web 은 apps/api 소스를 직접 import 하지 않는다 — 공유 계약은 @openmake/shared-types / @openmake/config 를 경유할 것.",
+            },
+          ],
+        },
+      ],
     },
   },
   // Override default ignores of eslint-config-next.

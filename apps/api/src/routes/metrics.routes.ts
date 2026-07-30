@@ -42,6 +42,7 @@ import { success } from '../utils/api-response';
 import { requireAuth, requireAdmin } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
 import { getPool } from '../data/models/unified-database';
+import { ConversationRepository } from '../data/repositories/conversation-repository';
 
 /** days 쿼리 파라미터 정수 파싱 + clamp(1~365). interval 인젝션 방지를 위해 항상 정수 반환. */
 function parseDays(raw: unknown, fallback = 7): number {
@@ -191,17 +192,8 @@ router.get('/usage/daily', asyncHandler(async (req: Request, res: Response) => {
  */
 router.get('/analytics/daily-conversations', asyncHandler(async (req: Request, res: Response) => {
     const days = parseDays(req.query.days);
-    const r = await getPool().query(
-        `SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS date,
-                COUNT(*) AS messages,
-                COUNT(DISTINCT session_id) AS sessions
-         FROM conversation_messages
-         WHERE created_at >= NOW() - ($1 || ' days')::interval
-         GROUP BY 1
-         ORDER BY 1`,
-        [String(days)]
-    );
-    const daily = r.rows.map((row: { date: string; messages: string; sessions: string }) => ({
+    const rows = await new ConversationRepository(getPool()).getDailyConversationCounts(days);
+    const daily = rows.map((row) => ({
         date: row.date,
         messages: Number(row.messages),
         sessions: Number(row.sessions),
@@ -215,17 +207,8 @@ router.get('/analytics/daily-conversations', asyncHandler(async (req: Request, r
  */
 router.get('/analytics/model-usage', asyncHandler(async (req: Request, res: Response) => {
     const days = parseDays(req.query.days);
-    const r = await getPool().query(
-        `SELECT COALESCE(model, '(unknown)') AS model,
-                COUNT(*) AS count
-         FROM conversation_messages
-         WHERE created_at >= NOW() - ($1 || ' days')::interval
-           AND role = 'assistant'
-         GROUP BY 1
-         ORDER BY count DESC`,
-        [String(days)]
-    );
-    const models = r.rows.map((row: { model: string; count: string }) => ({
+    const rows = await new ConversationRepository(getPool()).getModelUsageCounts(days);
+    const models = rows.map((row) => ({
         model: row.model,
         count: Number(row.count),
     }));

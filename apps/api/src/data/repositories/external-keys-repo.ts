@@ -393,6 +393,30 @@ export class ExternalKeysRepository extends BaseRepository {
     }
 
     /**
+     * 모델 카탈로그 캐시 row 조회 — TTL 판정 없이 저장된 그대로 반환.
+     *
+     * TTL 이 적용된 조회는 getCachedModels 를 쓴다. 캐시 나이를 응답에 실어야 하는
+     * 경로(GET /api/external-keys/:providerId/models)가 이 메서드를 쓴다.
+     *
+     * @returns 캐시 row, 미스 시 null
+     */
+    async getCachedModelsRow(
+        userId: string,
+        providerId: string,
+    ): Promise<{ models: unknown; cachedAt: Date } | null> {
+        const result = await this.query<{ models_json: unknown; cached_at: Date }>(
+            `SELECT models_json, cached_at FROM external_provider_models_cache
+             WHERE user_id = $1 AND provider_id = $2`,
+            [userId, providerId],
+        );
+        const row = result.rows[0];
+        if (!row) return null;
+        // models_json 은 저장된 그대로 반환한다(배열 판정은 호출자 몫) — 기존
+        // getCachedModels 의 "비배열이면 miss(null)" 의미를 바꾸지 않기 위함.
+        return { models: row.models_json, cachedAt: row.cached_at };
+    }
+
+    /**
      * 외부 provider 모델 카탈로그 캐시 조회 (external_provider_models_cache).
      *
      * @param ttlMs 캐시 TTL — 이보다 오래된 항목은 stale 처리 (null 반환)
@@ -403,16 +427,11 @@ export class ExternalKeysRepository extends BaseRepository {
         providerId: string,
         ttlMs: number,
     ): Promise<unknown[] | null> {
-        const result = await this.query<{ models_json: unknown[]; cached_at: Date }>(
-            `SELECT models_json, cached_at FROM external_provider_models_cache
-             WHERE user_id = $1 AND provider_id = $2`,
-            [userId, providerId],
-        );
-        const row = result.rows[0];
+        const row = await this.getCachedModelsRow(userId, providerId);
         if (!row) return null;
-        const ageMs = Date.now() - new Date(row.cached_at).getTime();
+        const ageMs = Date.now() - new Date(row.cachedAt).getTime();
         if (ageMs > ttlMs) return null;
-        return Array.isArray(row.models_json) ? row.models_json : null;
+        return Array.isArray(row.models) ? row.models : null;
     }
 
     /**

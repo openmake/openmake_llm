@@ -449,19 +449,14 @@ router.get('/:providerId/models', requireAuth, asyncHandler(async (req: Request,
         return;
     }
     const providerId = req.params.providerId;
-    const pool = getPool();
-    const r = await pool.query<{ models_json: unknown; cached_at: Date }>(
-        'SELECT models_json, cached_at FROM external_provider_models_cache WHERE user_id = $1 AND provider_id = $2',
-        [userId, providerId]
-    );
-    if (r.rows.length === 0) {
+    const row = await getRepo().getCachedModelsRow(userId, providerId);
+    if (!row) {
         res.json(success({ models: [], cached_at: null, source: 'empty' }));
         return;
     }
-    const row = r.rows[0];
     res.json(success({
-        models: row.models_json,
-        cached_at: row.cached_at,
+        models: row.models,
+        cached_at: row.cachedAt,
         source: 'cache',
     }));
 }));

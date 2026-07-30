@@ -21,6 +21,7 @@ import * as crypto from 'crypto';
 import { getTokenBlacklist } from '../data/models/token-blacklist';
 import { getConfig } from '../config/env';
 import { AUTH_CONFIG } from '../config/constants';
+import { AUTH_COOKIES } from '../config/security';
 import { createLogger } from '../utils/logger';
 
 // JWT 비밀키 (환경변수 필수)
@@ -323,7 +324,7 @@ function resolveCookieSecure(res: Response): boolean {
  * 🔒 Phase 2: 액세스 토큰 쿠키 (15분 만료)
  */
 export function setTokenCookie(res: Response, token: string): void {
-    res.cookie('auth_token', token, {
+    res.cookie(AUTH_COOKIES.ACCESS, token, {
         httpOnly: true,
         secure: resolveCookieSecure(res),
         sameSite: 'lax',
@@ -336,7 +337,7 @@ export function setTokenCookie(res: Response, token: string): void {
  * 🔒 Phase 2: 리프레시 토큰을 httpOnly 쿠키에 설정 (7일 만료)
  */
 export function setRefreshTokenCookie(res: Response, refreshToken: string): void {
-    res.cookie('refresh_token', refreshToken, {
+    res.cookie(AUTH_COOKIES.REFRESH, refreshToken, {
         httpOnly: true,
         secure: resolveCookieSecure(res),
         sameSite: 'lax',
@@ -350,6 +351,6 @@ export function setRefreshTokenCookie(res: Response, refreshToken: string): void
  * 🔒 Phase 2: 액세스 + 리프레시 쿠키 모두 삭제
  */
 export function clearTokenCookie(res: Response): void {
-    res.clearCookie('auth_token', { path: '/' });
-    res.clearCookie('refresh_token', { path: '/api/auth/refresh' });
+    res.clearCookie(AUTH_COOKIES.ACCESS, { path: '/' });
+    res.clearCookie(AUTH_COOKIES.REFRESH, { path: '/api/auth/refresh' });
 }

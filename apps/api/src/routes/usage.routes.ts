@@ -21,6 +21,7 @@ import { success } from '../utils/api-response';
 import { requireAuth } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
 import { getPool } from '../data/models/unified-database';
+import { ConversationRepository } from '../data/repositories/conversation-repository';
 
 const router = Router();
 
@@ -65,17 +66,8 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
     let enriched = false;
     if (userId) {
         try {
-            const r = await getPool().query(
-                `SELECT COALESCE(m.model, 'default') AS model,
-                        COALESCE(SUM(m.tokens), 0) AS tokens,
-                        COUNT(*) FILTER (WHERE m.role = 'assistant') AS requests
-                 FROM conversation_messages m
-                 JOIN conversation_sessions s ON m.session_id = s.id
-                 WHERE s.user_id = $1
-                 GROUP BY 1`,
-                [userId],
-            );
-            for (const row of r.rows as Array<{ model: string; tokens: string; requests: string }>) {
+            const rows = await new ConversationRepository(getPool()).getUserModelUsage(userId);
+            for (const row of rows) {
                 if (Number(row.tokens) > 0) modelUsage[row.model] = Number(row.tokens);
                 totalRequests += Number(row.requests);
             }
@@ -110,19 +102,8 @@ router.get('/daily', asyncHandler(async (req: Request, res: Response) => {
         return;
     }
     const days = parseDays(req.query.days);
-    const r = await getPool().query(
-        `SELECT to_char(date_trunc('day', m.created_at), 'YYYY-MM-DD') AS date,
-                COALESCE(SUM(m.tokens), 0) AS tokens,
-                COUNT(*) AS messages
-         FROM conversation_messages m
-         JOIN conversation_sessions s ON m.session_id = s.id
-         WHERE s.user_id = $1
-           AND m.created_at >= NOW() - ($2 || ' days')::interval
-         GROUP BY 1
-         ORDER BY 1`,
-        [userId, String(days)]
-    );
-    const daily = r.rows.map((row: { date: string; tokens: string; messages: string }) => ({
+    const rows = await new ConversationRepository(getPool()).getUserDailyUsage(userId, days);
+    const daily = rows.map((row) => ({
         date: row.date,
         tokens: Number(row.tokens),
         messages: Number(row.messages),

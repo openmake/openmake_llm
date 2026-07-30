@@ -10,7 +10,7 @@ import {
     RL_WEB_SEARCH, RL_MEMORY, RL_MCP, RL_API_KEY_MGMT, RL_PUSH, RL_ADMIN
 } from '../config/rate-limits';
 import { getKeyValueStore } from '../storage';
-import { STORAGE_POLICY, RATE_LIMIT_POLICY } from '../config/security';
+import { STORAGE_POLICY, RATE_LIMIT_POLICY, AUTH_COOKIES } from '../config/security';
 import { ARTIFACT_EXEC } from '../config/artifact-exec';
 import { ARTIFACT_EXPORT } from '../config/artifact-export';
 import { verifyToken } from '../auth/auth-core';
@@ -82,7 +82,7 @@ async function resolveLimiterIdentity(req: Request): Promise<{ userId: string; r
     }
     const authHeader = req.headers.authorization;
     const bearer = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
-    const token = (req.cookies?.auth_token as string | undefined) || bearer;
+    const token = (req.cookies?.[AUTH_COOKIES.ACCESS] as string | undefined) || bearer;
     if (!token || typeof token !== 'string') return null;
     try {
         const payload = await verifyToken(token);

@@ -71,4 +71,71 @@ export class ConversationRepository extends BaseRepository {
         const result = await this.query('DELETE FROM conversation_sessions WHERE id = $1', [sessionId]);
         return { changes: result.rowCount || 0 };
     }
+
+    // ── 분석 집계 ─────────────────────────────────────────────────────
+    // 라우트(metrics/usage)가 직접 실행하던 집계 SQL 을 옮겨온 것. 여기로 오면
+    // BaseRepository.query 의 withRetry 가 적용돼 다른 DB 접근과 동일하게 동작한다.
+    // 숫자 파싱(COUNT/SUM 은 문자열로 옴)은 응답 조립부에 남겨 둔다.
+
+    /** 전체 일별 대화량 (메시지 수 + 고유 세션 수) — 관리자 대시보드 */
+    async getDailyConversationCounts(days: number): Promise<Array<{ date: string; messages: string; sessions: string }>> {
+        const result = await this.query<{ date: string; messages: string; sessions: string }>(
+            `SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS date,
+                    COUNT(*) AS messages,
+                    COUNT(DISTINCT session_id) AS sessions
+             FROM conversation_messages
+             WHERE created_at >= NOW() - ($1 || ' days')::interval
+             GROUP BY 1
+             ORDER BY 1`,
+            [String(days)]
+        );
+        return result.rows;
+    }
+
+    /** 모델별 assistant 응답 수 (전체) — 관리자 대시보드 */
+    async getModelUsageCounts(days: number): Promise<Array<{ model: string; count: string }>> {
+        const result = await this.query<{ model: string; count: string }>(
+            `SELECT COALESCE(model, '(unknown)') AS model,
+                    COUNT(*) AS count
+             FROM conversation_messages
+             WHERE created_at >= NOW() - ($1 || ' days')::interval
+               AND role = 'assistant'
+             GROUP BY 1
+             ORDER BY count DESC`,
+            [String(days)]
+        );
+        return result.rows;
+    }
+
+    /** 본인 모델별 토큰 합계 + 요청 수(assistant 메시지 수) */
+    async getUserModelUsage(userId: string): Promise<Array<{ model: string; tokens: string; requests: string }>> {
+        const result = await this.query<{ model: string; tokens: string; requests: string }>(
+            `SELECT COALESCE(m.model, 'default') AS model,
+                    COALESCE(SUM(m.tokens), 0) AS tokens,
+                    COUNT(*) FILTER (WHERE m.role = 'assistant') AS requests
+             FROM conversation_messages m
+             JOIN conversation_sessions s ON m.session_id = s.id
+             WHERE s.user_id = $1
+             GROUP BY 1`,
+            [userId]
+        );
+        return result.rows;
+    }
+
+    /** 본인 일별 토큰/메시지 통계 */
+    async getUserDailyUsage(userId: string, days: number): Promise<Array<{ date: string; tokens: string; messages: string }>> {
+        const result = await this.query<{ date: string; tokens: string; messages: string }>(
+            `SELECT to_char(date_trunc('day', m.created_at), 'YYYY-MM-DD') AS date,
+                    COALESCE(SUM(m.tokens), 0) AS tokens,
+                    COUNT(*) AS messages
+             FROM conversation_messages m
+             JOIN conversation_sessions s ON m.session_id = s.id
+             WHERE s.user_id = $1
+               AND m.created_at >= NOW() - ($2 || ' days')::interval
+             GROUP BY 1
+             ORDER BY 1`,
+            [userId, String(days)]
+        );
+        return result.rows;
+    }
 }
