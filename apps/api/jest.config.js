@@ -25,8 +25,11 @@ module.exports = {
     coverageReporters: ['text', 'lcov', 'html'],
     moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/src/$1',
-        // workspace 패키지는 dist(빌드 산출물)를 main 으로 내보내지만, CI 는 build 보다
-        // test 를 먼저 돌린다. 테스트는 항상 소스를 직접 읽게 매핑해 빌드 의존을 없앤다.
+        // workspace 패키지의 **런타임** 해석을 소스로 직결한다(dist 없이도 require 가능).
+        // ⚠️ 이것만으로는 부족하다 — ts-jest 는 타입 검사도 하고, 타입은 package.json 의
+        // types(=dist/index.d.ts)로 해석되므로 dist 가 없으면 TS2307 로 죽는다. 그래서
+        // 루트 `npm test` 가 build:packages 를 선행한다. (tsconfig paths 로 타입을 src 에
+        // 물리면 tsc 빌드가 rootDir 위반 TS6059 로 깨지므로 그 방법은 쓸 수 없다.)
         '^@openmake/shared-types$': '<rootDir>/../../packages/shared-types/src/index.ts',
         '^@openmake/config$': '<rootDir>/../../packages/config/src/index.ts',
         '^@openmake/api-client$': '<rootDir>/../../packages/api-client/src/index.ts',
