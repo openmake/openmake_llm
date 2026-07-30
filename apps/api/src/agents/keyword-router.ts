@@ -50,6 +50,12 @@ export async function routeToAgent(message: string): Promise<AgentSelection> {
     const lowerMessage = message.toLowerCase();
     const words = lowerMessage.split(/\s+/);
 
+    // 라틴 문자 키워드의 단어 경계 매칭용 토큰 집합 (구두점 제거, node.js/c++ 는 보존).
+    // 부분 문자열 매칭을 라틴 키워드에 그대로 쓰면 영어 질의에서 오염된다 —
+    // 'ess'(ESS)가 "ingress" 에, 'sla'(SLA)가 "translate" 에 걸려 Kubernetes 질문이
+    // 재생에너지 엔지니어로, 번역 요청이 재무 분석가로 가던 결함(2026-07-30 실측).
+    const asciiTokens = new Set(lowerMessage.split(/[^a-z0-9+#.]+/).filter(Boolean));
+
     // 동의어 확장: 쿼리 단어의 동의어를 미리 수집
     const expandedQueryTerms = new Set<string>(words);
     for (const word of words) {
@@ -121,8 +127,10 @@ export async function routeToAgent(message: string): Promise<AgentSelection> {
                         matched = true;
                     }
                 } else {
-                    // 3글자 이상은 부분 일치 허용
-                    if (lowerMessage.includes(keywordLower)) {
+                    // 단일 라틴 토큰 키워드(sql, ess, sla ...)는 단어 경계 일치만 허용한다.
+                    // 한국어·공백 포함 키워드는 조사 결합·구 단위라 부분 일치를 유지한다.
+                    const isLatinToken = /^[a-z0-9][a-z0-9+#._-]*$/.test(keywordLower);
+                    if (isLatinToken ? asciiTokens.has(keywordLower) : lowerMessage.includes(keywordLower)) {
                         score += 2 * idf * categoryWeight * tierMultiplier;
                         matched = true;
                     }
@@ -142,6 +150,10 @@ export async function routeToAgent(message: string): Promise<AgentSelection> {
                 }
             }
 
+            // 키워드 매칭이 0건이면 부스트만으로 선택되므로(카테고리 내 동점 → JSON 첫 번째)
+            // "근거 없으면 general" 가드를 넣어봤으나 골든셋에서 오히려 나빠져 반려했다
+            // (가드 66.7% vs 미적용 70.0%). 토픽 분석 패턴의 단어 경계를 고친 뒤로는
+            // 부스트 자체가 신뢰할 만해져, 부스트 단독 선택이 general 폴백보다 낫다.
             if (score > highestScore) {
                 highestScore = score;
                 bestMatch = {

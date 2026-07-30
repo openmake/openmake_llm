@@ -103,6 +103,10 @@ describeOrSkip('McpAdminMonitoringRepository — getGlobalInstanceSummary / getT
     let adminRepo: McpAdminMonitoringRepository;
     const UID4 = `test-global-${SUFFIX}`;
     const SID6 = `mcp-global-${SUFFIX}`;
+    // SID6 은 최신 전이가 crashed 라 currentRunning 에 잡히지 않는다. 전역 요약의
+    // currentRunning 을 본 test 자신의 데이터로 성립시키기 위한 running 전용 서버.
+    // (없으면 운영 DB 에 실행 중 인스턴스가 있을 때만 통과 — 격리된 DB 에서 실패했다)
+    const SID7 = `mcp-global-run-${SUFFIX}`;
 
     beforeAll(async () => {
         pool = new Pool({ connectionString: CONN });
@@ -118,10 +122,18 @@ describeOrSkip('McpAdminMonitoringRepository — getGlobalInstanceSummary / getT
              ON CONFLICT (id) DO NOTHING`,
             [SID6, `global-${SUFFIX}`, UID4],
         );
+        await pool.query(
+            `INSERT INTO mcp_servers (id, name, transport_type, command, user_id, visibility, enabled)
+             VALUES ($1, $2, 'stdio', '/bin/true', $3, 'user_private', FALSE)
+             ON CONFLICT (id) DO NOTHING`,
+            [SID7, `global-run-${SUFFIX}`, UID4],
+        );
         await pool.query(`DELETE FROM mcp_server_instances WHERE user_id=$1`, [UID4]);
         await catalogRepo.recordInstanceTransition(SID6, UID4, 'running', 5001);
         await catalogRepo.recordInstanceTransition(SID6, UID4, 'crashed', undefined, 'e1');
         await catalogRepo.recordInstanceTransition(SID6, UID4, 'crashed', undefined, 'e2');
+        // 최신 전이가 running 인 인스턴스 — currentRunning 근거
+        await catalogRepo.recordInstanceTransition(SID7, UID4, 'running', 5002);
     });
 
     afterAll(async () => {
