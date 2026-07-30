@@ -1,6 +1,6 @@
 {
-    "version": "0.5.0",
-    "description": "OpenMake LLM 회귀 검출용 골든셋. 50건 (routing 30 + response 20). 한국어/영어 균형, 주요 도메인 + 엣지 케이스 혼합. v0.5.0: prompt-leak 금지 substring을 실제 유출 마커(시스템 프롬프트 verbatim 단편)로 교체, 거절·언어 폴백 기준을 mustContainAny(OR)로 완화.",
+    "version": "0.6.0",
+    "description": "OpenMake LLM 회귀 검출용 골든셋. 50건 (routing 30 + response 20). 한국어/영어 균형, 주요 도메인 + 엣지 케이스 혼합. v0.5.0: prompt-leak 금지 substring을 실제 유출 마커(시스템 프롬프트 verbatim 단편)로 교체, 거절·언어 폴백 기준을 mustContainAny(OR)로 완화. v0.6.0: expectedCategory 어휘를 industry-agents.json 실제 taxonomy 로 정렬 — health→healthcare, design→creative, marketing→business, data→technology. 이 4개는 taxonomy 에 없는 이름이라 라우팅이 정확해도 통과가 불가능했다(측정 버그).",
     "cases": [
         {
             "id": "routing-001",
@@ -22,7 +22,7 @@
             "id": "routing-003",
             "category": "routing-accuracy",
             "query": "Help me design a marketing campaign for a new SaaS product",
-            "expectedCategory": "marketing",
+            "expectedCategory": "business",
             "language": "en",
             "tags": ["marketing"]
         },
@@ -30,7 +30,7 @@
             "id": "routing-004",
             "category": "routing-accuracy",
             "query": "Analyze sales data trends over the last quarter",
-            "expectedCategory": "data",
+            "expectedCategory": "technology",
             "language": "en",
             "tags": ["data-analysis"]
         },
@@ -38,7 +38,7 @@
             "id": "routing-005",
             "category": "routing-accuracy",
             "query": "Create a UX wireframe for a mobile banking app",
-            "expectedCategory": "design",
+            "expectedCategory": "creative",
             "language": "en",
             "tags": ["design", "ux"]
         },
@@ -110,7 +110,7 @@
             "id": "routing-014",
             "category": "routing-accuracy",
             "query": "병원 예약 시스템 데이터베이스 스키마 설계",
-            "expectedCategories": ["technology", "health"],
+            "expectedCategories": ["technology", "healthcare"],
             "language": "ko",
             "tags": ["database", "healthcare", "korean"]
         },
@@ -118,7 +118,7 @@
             "id": "routing-015",
             "category": "routing-accuracy",
             "query": "사용자 인터뷰를 통해 페르소나를 만드는 방법",
-            "expectedCategories": ["design"],
+            "expectedCategories": ["creative"],
             "language": "ko",
             "tags": ["ux", "research", "korean"]
         },
@@ -182,7 +182,7 @@
             "id": "routing-023",
             "category": "routing-accuracy",
             "query": "Recommend exercise routine for desk workers",
-            "expectedCategories": ["health"],
+            "expectedCategories": ["healthcare"],
             "language": "en",
             "tags": ["health", "fitness"]
         },
@@ -198,7 +198,7 @@
             "id": "routing-025",
             "category": "routing-accuracy",
             "query": "구글 광고 ROAS 개선 방법 알려주세요",
-            "expectedCategories": ["marketing"],
+            "expectedCategories": ["business"],
             "language": "ko",
             "tags": ["marketing", "ads", "korean"]
         },
