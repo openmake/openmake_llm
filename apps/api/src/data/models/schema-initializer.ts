@@ -99,6 +99,22 @@ export async function initSchema(pool: Pool): Promise<void> {
         // 테이블 미존재(최초 부팅) 등 — 무시
     }
 
+    // 좀비 리서치 정리: Deep Research 는 큐·워커 없이 in-process 파이프라인으로 돌기 때문에
+    // (세션 생성 직후 같은 흐름에서 running 으로 전이) 이전 프로세스의 pending/running 세션은
+    // 아무도 이어받지 못한다. 마킹하지 않으면 프론트에 영구 '진행 중' 으로 남는다.
+    // 2026-07-30 실측: 7/26 중단으로 running 3건이 나흘째 방치돼 있었다(51건 중 3건).
+    // agent_tasks 와 달리 resume 이 없어 error 컬럼도 없으므로 status/completed_at 만 정리한다.
+    try {
+        const r = await pool.query(
+            `UPDATE research_sessions SET status = 'failed', completed_at = NOW() WHERE status IN ('pending', 'running')`,
+        );
+        if (r.rowCount) {
+            logger.info(`중단된 리서치 세션 ${r.rowCount}건을 failed 로 정리`);
+        }
+    } catch {
+        // 테이블 미존재(최초 부팅) 등 — 무시
+    }
+
     // pg_trgm GIN 인덱스 (확장 미지원 환경에서는 skip)
     try {
         await pool.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
