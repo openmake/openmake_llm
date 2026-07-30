@@ -1,6 +1,6 @@
 {
-    "version": "0.6.0",
-    "description": "OpenMake LLM 회귀 검출용 골든셋. 50건 (routing 30 + response 20). 한국어/영어 균형, 주요 도메인 + 엣지 케이스 혼합. v0.5.0: prompt-leak 금지 substring을 실제 유출 마커(시스템 프롬프트 verbatim 단편)로 교체, 거절·언어 폴백 기준을 mustContainAny(OR)로 완화. v0.6.0: expectedCategory 어휘를 industry-agents.json 실제 taxonomy 로 정렬 — health→healthcare, design→creative, marketing→business, data→technology. 이 4개는 taxonomy 에 없는 이름이라 라우팅이 정확해도 통과가 불가능했다(측정 버그).",
+    "version": "0.7.0",
+    "description": "OpenMake LLM 회귀 검출용 골든셋. 50건 (routing 30 + response 20). 한국어/영어 균형, 주요 도메인 + 엣지 케이스 혼합. v0.5.0: prompt-leak 금지 substring을 실제 유출 마커(시스템 프롬프트 verbatim 단편)로 교체, 거절·언어 폴백 기준을 mustContainAny(OR)로 완화. v0.6.0: expectedCategory 어휘를 industry-agents.json 실제 taxonomy 로 정렬 — health→healthcare, design→creative, marketing→business, data→technology. 이 4개는 taxonomy 에 없는 이름이라 라우팅이 정확해도 통과가 불가능했다(측정 버그). v0.7.0: routing-027(ESG 경영 KPI) 기대에 energy 추가 — sustainability-consultant 가 taxonomy 상 energy 소속이며 ESG 전문 에이전트다. 경영 KPI·ESG 양쪽으로 읽히는 질의라 둘 다 정답으로 인정한다.",
     "cases": [
         {
             "id": "routing-001",
@@ -214,7 +214,7 @@
             "id": "routing-027",
             "category": "routing-accuracy",
             "query": "ESG 경영의 핵심 KPI는 무엇인가요?",
-            "expectedCategories": ["business"],
+            "expectedCategories": ["business", "energy"],
             "language": "ko",
             "tags": ["business", "sustainability", "korean"]
         },
