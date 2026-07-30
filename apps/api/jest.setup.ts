@@ -20,6 +20,25 @@ dotenv.config({ path: ENV_PATH });
 // jest 실행 시 NODE_ENV 강제 — token-crypto / config validator 가 test 모드로 작동
 process.env.NODE_ENV = 'test';
 
+// 테스트는 운영 DB 를 건드리지 않는다.
+//
+// UnifiedDatabase 생성자가 initSchema 를 즉시 실행하므로(data/models/unified-database.ts),
+// supertest 로 앱을 띄우기만 해도 .env 의 DATABASE_URL(=운영 DB)에 DDL/DML 이 나간다.
+// 실제로 부팅 좀비 정리 UPDATE 가 운영 데이터에 적용된 사례가 있다(2026-07-30 21:51 KST,
+// research_sessions 4건). 의도와 결과가 우연히 일치했을 뿐 위험한 구조다.
+//
+// DB 가 필요한 테스트는 DATABASE_URL 부재 시 스스로 describe.skip 한다(.github/workflows/ci.yml
+// 참고 — CI 는 변수를 아예 주지 않아 이 경로로 스킵된다). 그래서 기본값은 "변수 제거"다.
+// 잘못된 DB 를 가리키게 두면 변수는 존재하므로 테스트가 실행돼 연결 오류로 실패한다.
+//
+// 로컬에서 DB 통합 테스트까지 돌리려면 TEST_DATABASE_URL 에 전용 DB 를 지정한다.
+// ⚠️ 운영 DB 를 넣지 말 것 — 스키마 초기화가 그대로 적용된다.
+if (process.env.TEST_DATABASE_URL) {
+    process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+} else {
+    delete process.env.DATABASE_URL;
+}
+
 // RL_MCP_INGEST 테스트 한도 상향 (supertest 반복 호출 대응)
 process.env.RL_MCP_INGEST_FREE = process.env.RL_MCP_INGEST_FREE && process.env.RL_MCP_INGEST_FREE !== '5'
     ? process.env.RL_MCP_INGEST_FREE
