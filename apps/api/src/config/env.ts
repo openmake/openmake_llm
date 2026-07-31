@@ -69,6 +69,13 @@ export interface EnvConfig {
     searchSemanticRerankEnabled: boolean;
     /** 웹검색 의미 리랭킹에 쓰는 임베딩 모델명 (LiteLLM 카탈로그). 기본 bge-m3. */
     searchRerankEmbedModel: string;
+    /**
+     * LiteLLM 통합 게이트웨이로 inference 를 라우팅할 외부 provider id 목록
+     * (콤마 구분). 빈값(기본) = 전부 direct 호출. provider별 롤백은 목록에서
+     * 해당 id 제거 + 재시작. ollama-local(사용자별 동적 endpoint)·OAuth(chatgpt)
+     * 는 목록에 있어도 direct 유지 (arch.md §4-3·§5-3).
+     */
+    llmGatewayProviders: string[];
 
     // Log
     logLevel: 'debug' | 'info' | 'warn' | 'error';
@@ -188,6 +195,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     searchSemanticRerankShadow: false,
     searchSemanticRerankEnabled: false,
     searchRerankEmbedModel: 'bge-m3',
+    llmGatewayProviders: [] as string[],
 
     // Log
     logLevel: 'info',
@@ -409,6 +417,7 @@ export function loadConfig(): EnvConfig {
         SEARCH_SEMANTIC_RERANK_SHADOW: env('SEARCH_SEMANTIC_RERANK_SHADOW'),
         SEARCH_SEMANTIC_RERANK_ENABLED: env('SEARCH_SEMANTIC_RERANK_ENABLED'),
         SEARCH_RERANK_EMBED_MODEL: env('SEARCH_RERANK_EMBED_MODEL'),
+        LLM_GATEWAY_PROVIDERS: env('LLM_GATEWAY_PROVIDERS'),
         LLM_DISABLE_THINKING_BY_DEFAULT: env('LLM_DISABLE_THINKING_BY_DEFAULT'),
         LOG_LEVEL: env('LOG_LEVEL'),
         GEMINI_THINK_ENABLED: env('GEMINI_THINK_ENABLED'),
@@ -516,6 +525,10 @@ export function loadConfig(): EnvConfig {
         searchSemanticRerankShadow: (parsed.SEARCH_SEMANTIC_RERANK_SHADOW ?? 'false').toLowerCase() === 'true',
         searchSemanticRerankEnabled: (parsed.SEARCH_SEMANTIC_RERANK_ENABLED ?? 'false').toLowerCase() === 'true',
         searchRerankEmbedModel: parsed.SEARCH_RERANK_EMBED_MODEL || DEFAULT_CONFIG.searchRerankEmbedModel,
+        llmGatewayProviders: (parsed.LLM_GATEWAY_PROVIDERS ?? '')
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean),
 
         // Log
         logLevel: parsed.LOG_LEVEL ?? DEFAULT_CONFIG.logLevel,

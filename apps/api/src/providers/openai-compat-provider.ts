@@ -288,15 +288,37 @@ function buildOpenRouterHeaders(): Record<string, string> {
     return headers;
 }
 
+/**
+ * LiteLLM 통합 게이트웨이 경유 옵션 (arch.md 2026-07-31 이전).
+ *
+ * - url: 게이트웨이 base URL (서버 config `llmBaseUrl` — 사용자 입력 아님)
+ * - masterKey: 게이트웨이 인증 키 (`Authorization: Bearer` 로 전달)
+ * - modelPrefix: 게이트웨이 wildcard deployment prefix (예: 'openrouter' →
+ *   model 'openrouter/<modelId>')
+ *
+ * 헤더 계약 (LiteLLM 1.89.4 + forward_llm_provider_auth_headers, 2026-07-31 라이브 검증):
+ * - `Authorization: Bearer <masterKey>` — 게이트웨이 인증. upstream 으로 전달되지 않음
+ *   (사용자 키를 Authorization 에 실으면 upstream 에 "Missing Authentication header" 401).
+ * - `x-api-key: <사용자 BYOK>` — LiteLLM 이 upstream provider 인증으로 전달.
+ *   openrouter/ollama-cloud/nvidia 3사 모두 이 조합으로 200 확인.
+ */
+export interface GatewayRouteOptions {
+    url: string;
+    masterKey: string;
+    modelPrefix: string;
+}
+
 export class OpenAICompatProvider implements IProvider {
     readonly id: string;
     readonly sdkType: SdkType = 'openai-compatible';
     readonly displayName = PROVIDER_DISPLAY_NAME;
 
     private client: OpenAI;
+    private catalogClient: OpenAI;
     private baseUrl: string;
+    private modelPrefix?: string;
 
-    constructor(opts: { providerId: string; apiKey: string; baseUrl: string }) {
+    constructor(opts: { providerId: string; apiKey: string; baseUrl: string; gateway?: GatewayRouteOptions }) {
         this.id = opts.providerId;
         this.baseUrl = opts.baseUrl;
         // OpenRouter 호출 시 권장 attribution 헤더를 디폴트로 첨부한다.
@@ -304,7 +326,9 @@ export class OpenAICompatProvider implements IProvider {
         const defaultHeaders = opts.providerId === 'openrouter'
             ? buildOpenRouterHeaders()
             : undefined;
-        this.client = new OpenAI({
+        // 모델 카탈로그·credential 검증은 항상 provider endpoint direct
+        // (게이트웨이 /v1/models 는 wildcard 라 provider 별 목록을 주지 못함).
+        this.catalogClient = new OpenAI({
             apiKey: opts.apiKey,
             baseURL: opts.baseUrl,
             // 🔒 SSRF: base_url 은 등록 시 1회만 검증되므로, 런타임 호출은 매번 재검증 + resolved IP
@@ -314,6 +338,22 @@ export class OpenAICompatProvider implements IProvider {
                 ? { defaultHeaders }
                 : {}),
         });
+        if (opts.gateway) {
+            // inference 는 LiteLLM 게이트웨이 경유 — 게이트웨이 인증은 Authorization(master),
+            // 사용자 BYOK 는 x-api-key 헤더 (LiteLLM 이 upstream 인증으로 전달, 위 계약 참고).
+            // 게이트웨이 URL 은 서버 config 값(loopback)이라 SSRF pinned fetch 미적용.
+            this.modelPrefix = opts.gateway.modelPrefix;
+            this.client = new OpenAI({
+                apiKey: opts.gateway.masterKey,
+                baseURL: `${opts.gateway.url.replace(/\/+$/, '')}/v1`,
+                defaultHeaders: {
+                    ...(defaultHeaders ?? {}),
+                    'x-api-key': opts.apiKey,
+                },
+            });
+        } else {
+            this.client = this.catalogClient;
+        }
     }
 
     getCapabilities(modelId: string): ProviderCapabilities {
@@ -325,7 +365,7 @@ export class OpenAICompatProvider implements IProvider {
             return this.listOpenRouterModels();
         }
         try {
-            const list = await this.client.models.list();
+            const list = await this.catalogClient.models.list();
             return list.data.map((m) => ({
                 id: m.id,
                 fullId: buildFullModelId(this.id, m.id),
@@ -362,7 +402,7 @@ export class OpenAICompatProvider implements IProvider {
      */
     private async listOpenRouterModels(): Promise<ProviderModel[]> {
         try {
-            const list = await this.client.models.list();
+            const list = await this.catalogClient.models.list();
             return list.data.map((raw) => {
                 const m = raw as unknown as {
                     id: string;
@@ -416,7 +456,7 @@ export class OpenAICompatProvider implements IProvider {
     async validateCredentials(): Promise<{ ok: boolean; error?: string; latencyMs?: number }> {
         const start = Date.now();
         try {
-            await this.client.models.list();
+            await this.catalogClient.models.list();
             return { ok: true, latencyMs: Date.now() - start };
         } catch (err) {
             return {
@@ -463,7 +503,8 @@ export class OpenAICompatProvider implements IProvider {
             } : {};
 
             const requestParams = {
-                model: opts.modelId,
+                // 게이트웨이 경유 시 wildcard deployment prefix 부착 (예: openrouter/openai/gpt-5)
+                model: this.modelPrefix ? `${this.modelPrefix}/${opts.modelId}` : opts.modelId,
                 messages,
                 stream: true as const,
                 stream_options: { include_usage: true },
