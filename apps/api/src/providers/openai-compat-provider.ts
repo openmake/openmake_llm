@@ -30,6 +30,7 @@ import { ProviderError } from './provider-errors';
 import type { ChatMessage, ToolDefinition, UsageMetrics } from '../llm';
 import { createLogger } from '../utils/logger';
 import { createPinnedFetch } from '../security/ssrf-guard';
+import { needsExplicitPromptCache, toOpenAIMessages, toOpenAITools } from './openai-compat-mapping';
 
 const logger = createLogger('OpenAICompatProvider');
 
@@ -111,129 +112,6 @@ function inferCapabilitiesFromModelId(
     return caps;
 }
 
-/**
- * OpenAI 형식 메시지로 변환.
- *
- * - role 매핑: system/user/assistant/tool 그대로 유지
- * - images: content 배열에 image_url 블록으로 추가 (OpenAI Vision 표준)
- * - tool_calls: assistant role 에 그대로 첨부
- * - tool: tool_call_id + content 형식
- */
-type OpenAIContentBlock = {
-    type: string;
-    text?: string;
-    image_url?: { url: string };
-    /**
-     * OpenRouter prompt caching marker — Anthropic Claude / Alibaba Qwen 처럼
-     * 명시적 cache breakpoint 가 필요한 모델에 첨부.
-     * 자동 cache provider (OpenAI/Gemini/Groq 등) 는 무시.
-     */
-    cache_control?: { type: 'ephemeral' };
-};
-
-type OpenAIMessage = {
-    role: 'system' | 'user' | 'assistant' | 'tool';
-    content?: string | OpenAIContentBlock[];
-    tool_calls?: Array<{
-        id: string;
-        type: 'function';
-        function: { name: string; arguments: string };
-    }>;
-    tool_call_id?: string;
-};
-
-/**
- * 모델 ID 가 OpenRouter 명시적 prompt caching 이 필요한 모델인지 판단.
- *
- * OpenRouter docs (guides/best-practices/prompt-caching) 에 따르면:
- * - 자동 cache: OpenAI / Gemini / DeepSeek / Grok / Moonshot / Groq → 추가 설정 불필요
- * - 명시 cache_control 필요: Anthropic Claude / Alibaba Qwen 일부 / DeepSeek V3.2
- *
- * 본 함수는 명시적 cache 가 필요한 케이스만 true 반환 — system 메시지에
- * cache_control: { type: 'ephemeral' } 첨부 대상.
- */
-function needsExplicitPromptCache(providerId: string, modelId: string): boolean {
-    if (providerId !== 'openrouter') return false;
-    const lower = modelId.toLowerCase();
-    if (lower.includes('claude')) return true;
-    if (/\bqwen3-coder\b|\bqwen-plus\b|\bqwen3-max\b|\bqwen3\.6-plus\b|\bdeepseek-v3\.2\b/.test(lower)) return true;
-    return false;
-}
-
-// inferImageMime 은 utils/image-mime.ts 의 공용 helper 로 이전 (2026-05-19):
-// stream-parser.ts 와 동일 로직 공유 — JPEG/WebP/GIF 등 MIME 매핑 일관성 보장.
-import { inferImageMime } from '../utils/image-mime';
-
-function toOpenAIMessages(
-    messages: ChatMessage[],
-    opts?: { cacheSystemPrompt?: boolean },
-): OpenAIMessage[] {
-    return messages.map((msg, idx): OpenAIMessage => {
-        if (msg.role === 'tool') {
-            return {
-                role: 'tool',
-                content: msg.content,
-                // 진짜 tool_call_id (직전 assistant.tool_calls[].id) 우선,
-                // 누락 시 tool_name 또는 tool_${idx} 합성 — spec 준수와 외부 history 호환.
-                tool_call_id: msg.tool_call_id ?? msg.tool_name ?? `tool_${idx}`,
-            };
-        }
-
-        if (msg.images && msg.images.length > 0 && (msg.role === 'user' || msg.role === 'system')) {
-            const blocks: OpenAIContentBlock[] = [];
-            if (msg.content) blocks.push({ type: 'text', text: msg.content });
-            for (const img of msg.images) {
-                const url = img.startsWith('data:') ? img : `data:${inferImageMime(img)};base64,${img}`;
-                blocks.push({ type: 'image_url', image_url: { url } });
-            }
-            return { role: msg.role, content: blocks };
-        }
-
-        // System prompt cache breakpoint — Anthropic / Qwen 류 명시적 caching 모델 한정.
-        // content 를 array 로 변환하고 cache_control 첨부 (TTL 5분, OpenRouter 가 sticky routing 으로 cache hit 최대화).
-        if (msg.role === 'system' && opts?.cacheSystemPrompt && typeof msg.content === 'string' && msg.content.length > 0) {
-            return {
-                role: 'system',
-                content: [
-                    { type: 'text', text: msg.content, cache_control: { type: 'ephemeral' } },
-                ],
-            };
-        }
-
-        if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
-            return {
-                role: 'assistant',
-                content: msg.content || '',
-                tool_calls: msg.tool_calls.map((tc, i) => ({
-                    // provider 발급 id (Anthropic/OpenAI/Gemini) 우선 — fake 합성은 fallback 만.
-                    id: tc.id ?? `call_${tc.function.name}_${i}`,
-                    type: 'function' as const,
-                    function: {
-                        name: tc.function.name,
-                        arguments: JSON.stringify(tc.function.arguments),
-                    },
-                })),
-            };
-        }
-
-        return { role: msg.role, content: msg.content };
-    });
-}
-
-function toOpenAITools(tools: ToolDefinition[]): Array<{
-    type: 'function';
-    function: { name: string; description: string; parameters: unknown };
-}> {
-    return tools.map((t) => ({
-        type: 'function' as const,
-        function: {
-            name: t.function.name,
-            description: t.function.description,
-            parameters: t.function.parameters,
-        },
-    }));
-}
-
 function mapOpenAIError(err: unknown): ProviderError {
     const message = err instanceof Error ? err.message : String(err);
     if (err && typeof err === 'object' && 'status' in err) {
@@ -288,15 +166,37 @@ function buildOpenRouterHeaders(): Record<string, string> {
     return headers;
 }
 
+/**
+ * LiteLLM 통합 게이트웨이 경유 옵션 (arch.md 2026-07-31 이전).
+ *
+ * - url: 게이트웨이 base URL (서버 config `llmBaseUrl` — 사용자 입력 아님)
+ * - masterKey: 게이트웨이 인증 키 (`Authorization: Bearer` 로 전달)
+ * - modelPrefix: 게이트웨이 wildcard deployment prefix (예: 'openrouter' →
+ *   model 'openrouter/<modelId>')
+ *
+ * 헤더 계약 (LiteLLM 1.89.4 + forward_llm_provider_auth_headers, 2026-07-31 라이브 검증):
+ * - `Authorization: Bearer <masterKey>` — 게이트웨이 인증. upstream 으로 전달되지 않음
+ *   (사용자 키를 Authorization 에 실으면 upstream 에 "Missing Authentication header" 401).
+ * - `x-api-key: <사용자 BYOK>` — LiteLLM 이 upstream provider 인증으로 전달.
+ *   openrouter/ollama-cloud/nvidia 3사 모두 이 조합으로 200 확인.
+ */
+export interface GatewayRouteOptions {
+    url: string;
+    masterKey: string;
+    modelPrefix: string;
+}
+
 export class OpenAICompatProvider implements IProvider {
     readonly id: string;
     readonly sdkType: SdkType = 'openai-compatible';
     readonly displayName = PROVIDER_DISPLAY_NAME;
 
     private client: OpenAI;
+    private catalogClient: OpenAI;
     private baseUrl: string;
+    private modelPrefix?: string;
 
-    constructor(opts: { providerId: string; apiKey: string; baseUrl: string }) {
+    constructor(opts: { providerId: string; apiKey: string; baseUrl: string; gateway?: GatewayRouteOptions }) {
         this.id = opts.providerId;
         this.baseUrl = opts.baseUrl;
         // OpenRouter 호출 시 권장 attribution 헤더를 디폴트로 첨부한다.
@@ -304,7 +204,9 @@ export class OpenAICompatProvider implements IProvider {
         const defaultHeaders = opts.providerId === 'openrouter'
             ? buildOpenRouterHeaders()
             : undefined;
-        this.client = new OpenAI({
+        // 모델 카탈로그·credential 검증은 항상 provider endpoint direct
+        // (게이트웨이 /v1/models 는 wildcard 라 provider 별 목록을 주지 못함).
+        this.catalogClient = new OpenAI({
             apiKey: opts.apiKey,
             baseURL: opts.baseUrl,
             // 🔒 SSRF: base_url 은 등록 시 1회만 검증되므로, 런타임 호출은 매번 재검증 + resolved IP
@@ -314,6 +216,22 @@ export class OpenAICompatProvider implements IProvider {
                 ? { defaultHeaders }
                 : {}),
         });
+        if (opts.gateway) {
+            // inference 는 LiteLLM 게이트웨이 경유 — 게이트웨이 인증은 Authorization(master),
+            // 사용자 BYOK 는 x-api-key 헤더 (LiteLLM 이 upstream 인증으로 전달, 위 계약 참고).
+            // 게이트웨이 URL 은 서버 config 값(loopback)이라 SSRF pinned fetch 미적용.
+            this.modelPrefix = opts.gateway.modelPrefix;
+            this.client = new OpenAI({
+                apiKey: opts.gateway.masterKey,
+                baseURL: `${opts.gateway.url.replace(/\/+$/, '')}/v1`,
+                defaultHeaders: {
+                    ...(defaultHeaders ?? {}),
+                    'x-api-key': opts.apiKey,
+                },
+            });
+        } else {
+            this.client = this.catalogClient;
+        }
     }
 
     getCapabilities(modelId: string): ProviderCapabilities {
@@ -325,7 +243,7 @@ export class OpenAICompatProvider implements IProvider {
             return this.listOpenRouterModels();
         }
         try {
-            const list = await this.client.models.list();
+            const list = await this.catalogClient.models.list();
             return list.data.map((m) => ({
                 id: m.id,
                 fullId: buildFullModelId(this.id, m.id),
@@ -362,7 +280,7 @@ export class OpenAICompatProvider implements IProvider {
      */
     private async listOpenRouterModels(): Promise<ProviderModel[]> {
         try {
-            const list = await this.client.models.list();
+            const list = await this.catalogClient.models.list();
             return list.data.map((raw) => {
                 const m = raw as unknown as {
                     id: string;
@@ -416,7 +334,7 @@ export class OpenAICompatProvider implements IProvider {
     async validateCredentials(): Promise<{ ok: boolean; error?: string; latencyMs?: number }> {
         const start = Date.now();
         try {
-            await this.client.models.list();
+            await this.catalogClient.models.list();
             return { ok: true, latencyMs: Date.now() - start };
         } catch (err) {
             return {
@@ -463,7 +381,8 @@ export class OpenAICompatProvider implements IProvider {
             } : {};
 
             const requestParams = {
-                model: opts.modelId,
+                // 게이트웨이 경유 시 wildcard deployment prefix 부착 (예: openrouter/openai/gpt-5)
+                model: this.modelPrefix ? `${this.modelPrefix}/${opts.modelId}` : opts.modelId,
                 messages,
                 stream: true as const,
                 stream_options: { include_usage: true },

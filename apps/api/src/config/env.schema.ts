@@ -140,6 +140,12 @@ export const envSchema = z
         SEARCH_SEMANTIC_RERANK_ENABLED: z.string().default('false'),
         SEARCH_RERANK_EMBED_MODEL: z.string().optional(),
         /**
+         * LiteLLM 통합 게이트웨이로 inference 를 라우팅할 외부 provider id 콤마 목록
+         * (예: 'openrouter,ollama-cloud,nvidia'). 빈값(기본) = 전부 direct.
+         * ollama-local·OAuth provider 는 목록과 무관하게 direct 유지.
+         */
+        LLM_GATEWAY_PROVIDERS: z.string().optional(),
+        /**
          * Qwen3 등 reasoning 모델의 `extra_body.chat_template_kwargs.enable_thinking` 토글.
          *
          * reasoning 모델은 `enable_thinking` 기본값에 따라 매 응답 reasoning 을 발생시켜

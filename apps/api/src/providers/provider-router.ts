@@ -19,7 +19,8 @@ import {
 import { ProviderError } from './provider-errors';
 import { LocalLLMProvider } from './local-llm-provider';
 import { AnthropicProvider } from './anthropic-provider';
-import { OpenAICompatProvider } from './openai-compat-provider';
+import { OpenAICompatProvider, GatewayRouteOptions } from './openai-compat-provider';
+import { getConfig } from '../config';
 import { ChatGPTOAuthProvider } from './chatgpt-oauth/provider';
 import {
     parseSessionPayload,
@@ -55,6 +56,29 @@ export interface ProviderRouterDeps {
 export interface ExternalProviderInstanceDeps {
     /** OAuth refresh 후 세션 재암호화 저장 (미지정 시 in-memory 갱신만) */
     onOAuthSessionUpdate?: (session: ChatGPTOAuthSessionPayload) => Promise<void>;
+}
+
+/**
+ * 게이트웨이 라우팅 제외 provider — LLM_GATEWAY_PROVIDERS 에 있어도 direct 유지.
+ * ollama-local: 사용자별 동적 endpoint 라 정적 게이트웨이 deployment 로 표현 불가
+ * (arch.md §4-3 — 게이트웨이 api_base 는 서버 통제 값만 허용).
+ */
+const GATEWAY_EXCLUDED_PROVIDERS = new Set(['ollama-local']);
+
+/**
+ * providerId 가 LiteLLM 게이트웨이 경유 대상이면 GatewayRouteOptions 반환.
+ * OAuth 행(chatgpt)은 사용자별 세션 격리 미해결로 항상 direct (arch.md §5-3).
+ */
+function resolveGatewayRoute(providerId: string, authMethod: string): GatewayRouteOptions | undefined {
+    if (authMethod === 'oauth') return undefined;
+    if (GATEWAY_EXCLUDED_PROVIDERS.has(providerId)) return undefined;
+    const cfg = getConfig();
+    if (!cfg.llmGatewayProviders.includes(providerId)) return undefined;
+    return {
+        url: cfg.llmBaseUrl,
+        masterKey: cfg.llmApiKey,
+        modelPrefix: providerId,
+    };
 }
 
 /**
@@ -101,6 +125,7 @@ const EXTERNAL_PROVIDER_FACTORIES: Record<
             providerId,
             apiKey: plaintextKey,
             baseUrl: keyRow.baseUrl,
+            gateway: resolveGatewayRoute(providerId, keyRow.authMethod),
         });
     },
 };
