@@ -15,6 +15,9 @@ import { createLogger } from '../utils/logger';
 
 const logger = createLogger('NodeSelector');
 
+/** 노드 모델 목록 로그 프리뷰 상한 — wildcard 확장 카탈로그 전체 나열 방지 */
+const NODE_MODELS_LOG_PREVIEW = 8;
+
 /**
  * 노드 선택 및 페일오버 담당
  *
@@ -39,7 +42,13 @@ export class NodeSelector {
     getBestNode(modelName?: string): ClusterNode | undefined {
         let candidates = this.getOnlineNodes();
         logger.info(`getBestNode 호출 - model: ${modelName}, online nodes: ${candidates.length}`);
-        candidates.forEach(n => logger.info(`  - ${n.id}: ${n.status}, models: ${n.models.join(', ')}`));
+        // 게이트웨이 /v1/models 는 wildcard 확장으로 수백 개가 될 수 있어 전체 나열 금지
+        // (LiteLLM Mac 이전 후 매 요청 ~30KB 로그 노이즈 실측) — 개수 + 앞 N개만 기록.
+        candidates.forEach(n => {
+            const preview = n.models.slice(0, NODE_MODELS_LOG_PREVIEW);
+            const rest = n.models.length - preview.length;
+            logger.info(`  - ${n.id}: ${n.status}, models(${n.models.length}): ${preview.join(', ')}${rest > 0 ? ` 외 ${rest}개` : ''}`);
+        });
 
         candidates = this.filterByModel(candidates, modelName);
 
