@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # ============================================================
-# bge-m3 — multilingual embedding (pooling runner) @ :8003
+# flux2-klein — 이미지 생성 (vLLM-Omni, /v1/images/generations) @ :8005
 # ============================================================
-# DGX 실측 serve 명령 기준 (2026-07-31 동기화 — LiteLLM Mac 이전 후 vLLM 전용 plane).
-# 실행 주체: DGX 의 PM2 (vllm-embed). venv: /home/smith/vllm/vllm_env (embedding 전용).
+# DGX 실측 serve 명령 기준 (2026-07-31 — 수동 프로세스에서 PM2 `flux` 로 영속화).
+# venv: /home/smith/imagegen/venv (vLLM-Omni). 앱은 generate_image 도구가
+# LiteLLM flux2-klein 모델로 호출.
 # 보안·바인딩 원칙은 qwen-serve.sh 헤더 참고 (VLLM_API_KEY env / VLLM_BIND_HOST Tailscale).
-set -euo pipefail
-
-MODEL_DIR="${BGE_MODEL_DIR:-/home/smith/models/bge-m3}"
+export CUDA_HOME=/usr/local/cuda-13.0
+export PATH="/home/smith/imagegen/venv/bin:$CUDA_HOME/bin:$PATH"
+export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"
 
 set -a; [ -f /home/smith/vllm/vllm.env ] && . /home/smith/vllm/vllm.env; set +a
 
@@ -19,10 +20,9 @@ if [ "$VLLM_BIND_HOST" != "127.0.0.1" ] && [ "$VLLM_BIND_HOST" != "0.0.0.0" ]; t
   done
 fi
 
-exec vllm serve "$MODEL_DIR" \
-  --runner pooling \
-  --port 8003 \
+exec vllm serve \
+  black-forest-labs/FLUX.2-klein-9B \
+  --omni \
+  --port 8005 \
   --host "$VLLM_BIND_HOST" \
-  --served-model-name bge-m3 \
-  --enforce-eager \
-  --gpu-memory-utilization 0.05
+  --served-model-name flux2-klein

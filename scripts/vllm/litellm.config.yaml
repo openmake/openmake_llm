@@ -1,52 +1,79 @@
 # ============================================================
-# LiteLLM Proxy config — 운영 서버 라이브 토폴로지 기준
+# LiteLLM 통합 게이트웨이 config — Mac mini 운영 기준 (2026-07-31 DGX→Mac 이전)
 # ============================================================
-# 2026-05-29 동기화: 운영 LiteLLM /model/info 응답을 그대로 전사.
-#   qwen3.6-35b-a3b      → vLLM :8002 (기본 채팅, 262K)
-#   bge-m3               → vLLM :8003 (multilingual embedding)
-#   gpt-3.5-turbo        → :8002 alias (OpenAI 호환 클라이언트 → qwen3.6 라우팅)
+# 배포 위치: 운영 Mac 의 /Volumes/MAC_APP/litellm/litellm.config.yaml
+# 실행: PM2 `litellm` (start_litellm.sh 가 litellm.env 를 source 후 127.0.0.1:13401 바인딩)
 #
-# 각 model_name 은 클라이언트(LLM_BASE_URL)가 body.model 로 호출하는 식별자.
-# litellm_params.model 의 openai/<name> 은 vLLM 의 --served-model-name 과 일치해야 함
-# (HF weights 경로가 아니라 served name). 실제 vLLM serve 명령은 *-serve.sh 참고.
+# 토폴로지:
+#   앱(LLM_BASE_URL=http://127.0.0.1:13401) → 이 게이트웨이
+#     ├─ 로컬: Tailscale → DGX vLLM (:8002 qwen / :8003 bge / :8005 flux)
+#     └─ 외부: openrouter/* · ollama-cloud/* · nvidia/* wildcard (사용자 BYOK 는 요청 헤더)
+#
+# 헤더 계약 (LiteLLM 1.89.4 라이브 검증):
+#   Authorization: Bearer <LITELLM_MASTER_KEY>  → 게이트웨이 인증 (upstream 미전달)
+#   x-api-key: <사용자 BYOK>                    → upstream provider 인증으로 전달
+#   (forward_llm_provider_auth_headers: true 필요)
+#
+# ⚠️ 공개 저장소 — 실제 Tailscale IP·키를 기재하지 않는다. api_base host 는
+#    전용 env 파일(0600, litellm.env)의 *_API_BASE 로 주입.
 
 model_list:
+  # ---------- 로컬 (DGX vLLM inference plane) — 모델명 무프리픽스 유지 (앱 콜사이트 변경 0) ----------
   - model_name: qwen3.6-35b-a3b
     litellm_params:
       model: openai/qwen3.6-35b-a3b
-      api_base: http://localhost:8002/v1
+      api_base: os.environ/QWEN_VLLM_API_BASE      # http://<VLLM_TAILSCALE_HOST>:8002/v1
       api_key: os.environ/VLLM_API_KEY
 
   - model_name: bge-m3
     litellm_params:
       model: openai/bge-m3
-      api_base: http://localhost:8003/v1
+      api_base: os.environ/BGE_VLLM_API_BASE       # http://<VLLM_TAILSCALE_HOST>:8003/v1
       api_key: os.environ/VLLM_API_KEY
 
-  # OpenAI 호환 alias — 표준 model ID 로 호출 시 qwen3.6-35b-a3b 로 라우팅
+  # OpenAI 호환 alias — 표준 model ID 로 호출 시 qwen3.6 라우팅
   - model_name: gpt-3.5-turbo
     litellm_params:
       model: openai/qwen3.6-35b-a3b
-      api_base: http://localhost:8002/v1
+      api_base: os.environ/QWEN_VLLM_API_BASE
       api_key: os.environ/VLLM_API_KEY
 
-  # 이미지 생성 — vLLM-Omni FLUX.2-klein-9B (:8005, /v1/images/generations)
-  # 2026-06-12: vllm-1m(:8004) 중지로 확보한 메모리에 배포 (1m 라우팅 실적 0건).
-  # serve: /home/smith/imagegen/venv/bin/vllm serve black-forest-labs/FLUX.2-klein-9B --omni
+  # 이미지 생성 — vLLM-Omni FLUX.2-klein (/v1/images/generations)
   - model_name: flux2-klein
     litellm_params:
       model: openai/flux2-klein
-      api_base: http://localhost:8005/v1
+      api_base: os.environ/FLUX_VLLM_API_BASE      # http://<VLLM_TAILSCALE_HOST>:8005/v1
       api_key: os.environ/VLLM_API_KEY
     model_info:
       mode: image_generation
 
+  # ---------- 외부 provider (사용자 BYOK — 요청 헤더 x-api-key 로 전달) ----------
+  # api_key placeholder 는 config 로드용 — 실제 인증은 요청별 헤더가 우선.
+  # ollama-local(사용자별 동적 endpoint)·chatgpt(OAuth) 는 게이트웨이 미편입 (앱 direct).
+  - model_name: openrouter/*
+    litellm_params:
+      model: openrouter/*
+      api_key: os.environ/DUMMY_UPSTREAM_KEY
+
+  - model_name: ollama-cloud/*
+    litellm_params:
+      model: openai/*
+      api_base: https://ollama.com/v1
+      api_key: os.environ/DUMMY_UPSTREAM_KEY
+
+  - model_name: nvidia/*
+    litellm_params:
+      model: nvidia_nim/*
+      api_key: os.environ/DUMMY_UPSTREAM_KEY
+
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
-  database_url: os.environ/DATABASE_URL
+  # 사용자 BYOK 를 요청 헤더에서 upstream 인증으로 전달 (BYOK 를 config 에 저장 금지)
+  # ⚠️ database_url 미주입 — 앱 DB 오상속 방지 (arch.md §7-3)
+  forward_llm_provider_auth_headers: true
 
 litellm_settings:
   drop_params: false
-  # 앱 최대 호출(Deep Research 보고서 생성 REPORT_GENERATION_TIMEOUT_MS=900s)을 커버 —
+  # 앱 최대 호출(Deep Research 900s) + FLUX 이미지 생성(실측 17s+) 커버 —
   # "프록시 timeout ≥ 앱 timeout" 정합 (채팅/서브에이전트는 LLM_TIMEOUT=120s).
   request_timeout: 900
