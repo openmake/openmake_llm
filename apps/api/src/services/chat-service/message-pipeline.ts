@@ -34,6 +34,9 @@ import { resolveModeExternalClient } from './mode-external-client';
 import { buildUserContextBlocks } from './user-context-blocks';
 import { autoFormMemories } from './memory-extraction';
 import type { RequestContext } from './request-context';
+import { recordOrchestrationDispatch } from './orchestration-shadow-recorder';
+import { detectOrchestrationIntents } from './external-tool-plan';
+import { ORCHESTRATION_DISPATCH } from '../../config/runtime-limits';
 
 const logger = createLogger('MessagePipeline');
 
@@ -150,12 +153,29 @@ export async function runMessagePipeline(svc: ChatService,
         ? await resolveModeExternalClient(externalResolved, req.userId, effectiveDiscussionMode ? 'Discussion' : 'DeepResearch')
         : undefined;
 
+    // Stage 2 셰도우 — 사용자 토글 턴에서 의도 패턴이 잡히는지(재현율 프록시) 적재.
+    const recordToggleShadow = (userMode: 'discussion' | 'deep-research') => {
+        if (!ORCHESTRATION_DISPATCH.ENABLED) return;
+        const intents = detectOrchestrationIntents(message);
+        recordOrchestrationDispatch({
+            userId, queryLength: (message || '').length,
+            telemetry: {
+                discussionIntent: intents.discussion,
+                taskDelegateIntent: intents.taskDelegate,
+                exposed: [],
+            },
+            userMode,
+        });
+    };
+
     // 토론 모드: 사용자 명시 토글.
     if (effectiveDiscussionMode) {
+        recordToggleShadow('discussion');
         return svc.processMessageWithDiscussion(req, onToken, onDiscussionProgress, modeExternalClient);
     }
 
     if (deepResearchMode) {
+        recordToggleShadow('deep-research');
         return svc.processMessageWithDeepResearch(req, onToken, onResearchProgress, modeExternalClient);
     }
 
@@ -359,7 +379,8 @@ export async function runMessagePipeline(svc: ChatService,
         extArtifactGuide = '';
         logger.info('[Report] 보고서 의도 감지 — reportdata 계약 가이드 주입 (artifact 가이드 대체)');
     }
-    const externalResponse = await svc.streamFromExternalProvider(externalResolved, req, streamToken, {
+    // 명명된 ctx — external-provider 가 orchestrationTelemetry(Stage 2)를 여기에 되돌려준다.
+    const extStreamCtx: import('./external-provider').StreamFromExternalContext = {
         agentSystemMessage: agentSysMsgForExternal,
         enhancedMessage: finalEnhancedMessage,
         resolvedLanguage: languagePolicy?.resolvedLanguage,
@@ -370,7 +391,8 @@ export async function runMessagePipeline(svc: ChatService,
         style: req.style,
         tailWebGround: reqCtx.tailWebGround,
         ...(extReportGuide ? { reportGuideBlock: extReportGuide } : {}),
-    }, reqCtx);
+    };
+    const externalResponse = await svc.streamFromExternalProvider(externalResolved, req, streamToken, extStreamCtx, reqCtx);
 
     // ── Step 5: 라우팅 로그 + 메트릭 기록 ──
     // regex 분류(LLM 호출 0회)로 queryType/모델을 채워 라우팅 분석 관측 확보 (2026-07-18).
@@ -381,6 +403,17 @@ export async function runMessagePipeline(svc: ChatService,
     routingLog.queryFeatures.queryType = extHasImages ? 'vision' : extClassified.type;
     routingLog.queryFeatures.confidence = extClassified.confidence;
     routingLog.modelUsed = externalResolved.fullId;
+
+    // Stage 2 셰도우 — 오케스트레이션 의도 매칭 턴의 노출·호출·성공을 적재
+    // (external-provider 가 ctx 에 되돌려준 텔레메트리, 미매칭 턴은 undefined).
+    if (extStreamCtx.orchestrationTelemetry) {
+        recordOrchestrationDispatch({
+            ...(routingLog.requestId ? { requestId: routingLog.requestId } : {}),
+            userId, queryLength: (message || '').length,
+            telemetry: extStreamCtx.orchestrationTelemetry,
+            userMode: 'none',
+        });
+    }
 
     svc.recordMetricsAndVerify({
         fullResponse, startTime, message: message || '', req,

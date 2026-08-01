@@ -71,6 +71,9 @@ export interface StreamFromExternalContext {
     tailWebGround?: boolean;
     /** P1 보고서 파이프라인 — 보고서 의도 턴에만 주입되는 reportdata 데이터 계약 가이드. */
     reportGuideBlock?: string;
+    /** 오케스트레이션 배정 텔레메트리(Stage 2) — 스트림 종료 시 external-provider 가 채워
+     *  되돌려준다(호출부가 셰도우 적재). 의도 미매칭 턴은 undefined 유지. */
+    orchestrationTelemetry?: import('./orchestration-shadow-recorder').OrchestrationTelemetry;
 }
 
 /**
@@ -159,6 +162,14 @@ export async function runExternalStream(
         ...(ctx.tailWebGround !== undefined ? { tailWebGround: ctx.tailWebGround } : {}),
         orchestration,
     });
+    // Stage 2 셰도우 계측 — 의도 매칭 턴만 텔레메트리를 초기화(호출 시 아래 루프가 갱신).
+    if (orchestration.discussion || orchestration.taskDelegate) {
+        ctx.orchestrationTelemetry = {
+            discussionIntent: orchestration.discussion,
+            taskDelegateIntent: orchestration.taskDelegate,
+            exposed: tools.filter((t) => isOrchestrationTool(t.function.name)).map((t) => t.function.name),
+        };
+    }
 
     const startedAt = Date.now();
     let errorCode: string | null = null;
@@ -332,6 +343,11 @@ export async function runExternalStream(
                             ...(req.userLanguagePreference ? { userLanguage: req.userLanguagePreference } : {}),
                             ...(req.abortSignal ? { signal: req.abortSignal } : {}),
                         });
+                    // Stage 2 셰도우 계측 — 첫 호출의 도구명·성공 여부 기록.
+                    if (ctx.orchestrationTelemetry && !ctx.orchestrationTelemetry.called) {
+                        ctx.orchestrationTelemetry.called = tc.name;
+                        ctx.orchestrationTelemetry.success = !toolResult.startsWith('Error');
+                    }
                 } else {
                     toolResult = await executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>);
                 }
