@@ -13,6 +13,7 @@
  * - audit_logs                      : AUDIT_PII_RETENTION_DAYS(기본 90일) 초과 ip/ua NULL + details.actor 제거
  * - alert_history                   : ALERT_PII_RETENTION_DAYS(기본 90일) 초과 data.actor/ipAddress/userAgent 제거
  * - mcp_server_instances            : MCP_INSTANCE_RETENTION_DAYS(기본 30일) 초과 transition 이력 삭제 (각 server·user 의 최신 transition 은 보존)
+ * - orchestration_dispatch_decisions: ORCH_PREVIEW_RETENTION_DAYS(기본 30일) 초과 query_preview NULL (집계 지표는 METRICS_RETENTION_DAYS 까지 보존)
  *
  * @module data/db-retention
  */
@@ -190,6 +191,30 @@ async function runRetention(): Promise<void> {
                     // 테이블 미생성(마이그레이션 이전 인스턴스) 등은 무시 — 다른 정리를 막지 않는다.
                     logger.warn(`[DbRetention] ${table} 정리 건너뜀: ${e instanceof Error ? e.message : e}`);
                 }
+            }
+        }
+
+        // 10. 오케스트레이션 셰도우 질의 프리뷰 익명화 (087, 기본 30일)
+        // query_preview 는 description 문구 튜닝의 반례 진단용 텍스트라 집계 지표보다
+        // 짧게 보존한다 — 행 자체(호출률·재현율)는 위 METRICS_RETENTION_DAYS 까지 유지.
+        const orchPreviewRetentionDays = parseInt(
+            process.env.ORCH_PREVIEW_RETENTION_DAYS ?? '30',
+            10,
+        );
+        if (Number.isFinite(orchPreviewRetentionDays) && orchPreviewRetentionDays > 0) {
+            try {
+                const previewResult = await pool.query(
+                    `UPDATE orchestration_dispatch_decisions
+                     SET query_preview = NULL
+                     WHERE created_at < NOW() - ($1 || ' days')::interval
+                       AND query_preview IS NOT NULL`,
+                    [orchPreviewRetentionDays.toString()],
+                );
+                if ((previewResult.rowCount ?? 0) > 0) {
+                    logger.info(`[DbRetention] 오케스트레이션 질의 프리뷰 ${previewResult.rowCount}건 익명화 완료 (${orchPreviewRetentionDays}일 초과)`);
+                }
+            } catch (e) {
+                logger.warn(`[DbRetention] query_preview 익명화 건너뜀: ${e instanceof Error ? e.message : e}`);
             }
         }
 
