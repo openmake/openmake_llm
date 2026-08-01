@@ -1325,6 +1325,43 @@ export const AGENT_SPAWN = {
         .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
 } as const;
 
+/**
+ * 오케스트레이션 자동 배정 (Stage 1, 2026-08-01) — 모델이 토론(start_discussion)·
+ * 백그라운드 작업(delegate_agent_task)을 도구 호출로 직접 배정한다.
+ *
+ * 설계 원칙 (실측 근거):
+ *  - 앞단 라우터 LLM 금지(Phase B 제거 이력) — 메인 모델의 tool_choice:auto 한 턴으로 결정.
+ *  - 도구 상시 노출 금지(도구폭주 함정) — 아래 *_INTENT_PATTERNS 프리필터에 걸릴 때만 노출.
+ *  - 고비용 경로 가드 — delegate 작업은 기존 승인 정책(TASK_SANDBOX_APPROVAL_POLICY)을
+ *    그대로 타고, 토론은 축소 프로파일(전문가 수·라운드 캡)로 실행.
+ */
+export const ORCHESTRATION_DISPATCH = {
+    /** 기본 OFF — 셰도우 관찰(노출·호출 로그) 후 운영 활성화. ORCHESTRATION_AUTO_DISPATCH=true. */
+    ENABLED: process.env.ORCHESTRATION_AUTO_DISPATCH === 'true',
+    /** 도구 경유 토론의 전문가 수 캡(기본 3) — 토글 토론(기본 10)보다 축소해 채팅 지연 억제. */
+    DISCUSSION_MAX_AGENTS: parseInt(process.env.ORCH_DISCUSSION_MAX_AGENTS || '3', 10),
+    /** 도구 경유 토론 시간 상한(ms, 기본 120초) — 초과 시 도구 결과로 오류 반환. */
+    DISCUSSION_TIMEOUT_MS: parseInt(process.env.ORCH_DISCUSSION_TIMEOUT_MS || '120000', 10),
+    /** 도구 결과 문자열 캡 — 토론 합성 결과의 컨텍스트 폭주 방지. */
+    RESULT_CAP_CHARS: parseInt(process.env.ORCH_RESULT_CAP_CHARS || '8000', 10),
+    /** 메시지당 오케스트레이션 도구 호출 캡(종류 무관 합산, 기본 1). */
+    MAX_CALLS_PER_MESSAGE: parseInt(process.env.ORCH_MAX_CALLS_PER_MESSAGE || '1', 10),
+} as const;
+
+/** 토론 의도 프리필터 — start_discussion 노출 게이트 (매칭 시에만 도구 노출). */
+export const DISCUSSION_INTENT_PATTERNS: readonly RegExp[] = [
+    /토론|찬반|논쟁|양쪽\s*(의견|입장)|여러\s*(관점|시각)|다각도|전문가.{0,6}(의견|관점|시각)/i,
+    /debate|pros\s+and\s+cons|multiple\s+perspectives/i,
+];
+
+/** 백그라운드 작업 위임 의도 프리필터 — delegate_agent_task 노출 게이트.
+ *  ⚠️ '보고서' 는 P1 인라인 보고서 파이프라인과 충돌하므로 의도적으로 제외.
+ *  프론트 Option B(파일 첨부+연산 → 자동 위임)와 상보적 — 여긴 텍스트-온리 중작업 커버. */
+export const TASK_DELEGATE_INTENT_PATTERNS: readonly RegExp[] = [
+    /백그라운드|에이전트\s*작업|(파일|엑셀|xlsx|csv|pdf|pptx?|스크립트)\s*(로|으로)?\s*(만들|생성|저장|변환)|코드를?\s*(실행|돌려)|장시간|오래\s*걸리/i,
+    /in\s+the\s+background|as\s+an?\s+agent\s+task|(create|generate|build)\s+(a\s+)?(file|excel|csv|pdf|script)/i,
+];
+
 
 /**
  * NotebookLM composer 연동 (routes/notebooklm.routes.ts).
