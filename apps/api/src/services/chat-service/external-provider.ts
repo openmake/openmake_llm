@@ -13,14 +13,16 @@
  * @module services/chat-service/external-provider
  */
 import { createLogger } from '../../utils/logger';
-import { EXTERNAL_LLM_TOOL_BLACKLIST, LOOP_DETECTION, AGENT_LOOP_LIMITS, ARTIFACT_REQUEST_SUPPRESSED_TOOLS, ARTIFACT_INTENT_PATTERNS, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS, EXTERNAL_LLM_INPUT_TOKEN_BUDGET, REPORT_PIPELINE, REPORT_INTENT_PATTERNS } from '../../config/runtime-limits';
+import { LOOP_DETECTION, AGENT_LOOP_LIMITS, MAP_INTENT_PATTERNS, EXTERNAL_LLM_INPUT_TOKEN_BUDGET, REPORT_PIPELINE, ORCHESTRATION_DISPATCH } from '../../config/runtime-limits';
 import { tryRenderReportBlock } from './report-block';
 import { estimateMessageTokens, truncateMessagesPreservingSystem } from '../../llm/model-pool';
 import { type Style } from '../../chat/style';
 import { buildExternalSystemPrompt } from './external-system-prompt';
-import { CHAT_DELEGATE_TOOL_NAME, buildChatDelegateTool, runChatDelegate } from './chat-delegate';
-import { SPAWN_AGENTS_TOOL_NAME, buildSpawnAgentsTool, runChatSpawnAgents } from '../agent-spawn/spawn-agents';
+import { CHAT_DELEGATE_TOOL_NAME, runChatDelegate } from './chat-delegate';
+import { SPAWN_AGENTS_TOOL_NAME, runChatSpawnAgents } from '../agent-spawn/spawn-agents';
 import { CHAT_SUBAGENT, AGENT_SPAWN } from '../../config/runtime-limits';
+import { buildExternalToolPlan, detectOrchestrationIntents } from './external-tool-plan';
+import { isOrchestrationTool, runOrchestrationTool } from './orchestration-dispatch';
 import type { ChatMessage, ToolDefinition } from '../../llm';
 import type { ChatMessageRequest } from '../chat-service-types';
 import type { UserContext } from '../../mcp/user-sandbox';
@@ -85,9 +87,11 @@ export async function runExternalStream(
 
     // 위치/지도 의도면 카카오 도구 우선 라우팅 — 시스템 프롬프트 넛지 + 도구 강제 주입에 함께 쓰인다.
     const wantsMap = MAP_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
+    // 오케스트레이션 자동 배정 의도 — 프롬프트 가이드 주입(아래)과 도구 노출(플랜)이 공유.
+    const orchestration = detectOrchestrationIntents(req.message);
 
     // 시스템 프롬프트 조립(정적 헌법 → DYNAMIC → 가변)은 external-system-prompt 로 분리.
-    const systemContent = buildExternalSystemPrompt({ req, resolved, ctx, wantsMap });
+    const systemContent = buildExternalSystemPrompt({ req, resolved, ctx, wantsMap, orchestration });
     if (systemContent) {
         messages.push({ role: 'system', content: systemContent });
     }
@@ -146,63 +150,15 @@ export async function runExternalStream(
         }
     }
 
-    // 명시적 아티팩트 생성 요청(사용자 아티팩트 토글 또는 메시지 패턴)이면 distractor
-    // always-on 도구(generate_image 등)를 제외해 모델이 도구 호출 대신 <artifact> 산출물을
-    // 쓰도록 유도 (2026-06-23 통제실험 근거).
-    // 보고서 의도(P1 파이프라인)는 산출물이 reportdata→아티팩트이므로 아티팩트 의도와
-    // 동일하게 distractor 를 억제한다 (web_search 는 억제 목록에 없어 조사 가능).
-    const wantsReport = REPORT_PIPELINE.ENABLED
-        && REPORT_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
-    const wantsArtifact = req.artifactMode === true
-        || wantsReport
-        || ARTIFACT_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
-    // 위치/지도 의도(wantsMap, 위에서 계산)면 generate_image 를 제외 — 모델이 가짜 지도
-    // 이미지를 그리는 대신 카카오 검색 + 네이티브 지도 블록을 쓰도록 유도 (distractor 억제).
-    const tools = caps.toolCalling
-        ? deps.allowedTools.filter((t) =>
-            !EXTERNAL_LLM_TOOL_BLACKLIST.includes(t.function.name)
-            && !(wantsArtifact && ARTIFACT_REQUEST_SUPPRESSED_TOOLS.includes(t.function.name))
-            && !(wantsMap && t.function.name === 'generate_image'))
-        : [];
-    // 채팅 서브에이전트(chat-delegate): 전문가 위임 도구 노출 — 스키마 +1 은 문법 컴파일 무해.
-    if (CHAT_SUBAGENT.ENABLED && caps.toolCalling) {
-        tools.push(buildChatDelegateTool());
-    }
-    // 병렬 서브에이전트 fan-out(spawn_agents): 독립 하위 작업 N개 병렬 위임 — agent-spawn 공용 모듈.
-    if (AGENT_SPAWN.ENABLED && caps.toolCalling) {
-        tools.push(buildSpawnAgentsTool());
-    }
-    if (wantsArtifact && caps.toolCalling) {
-        logger.info(`[Artifact] 명시적 아티팩트 요청 감지 — distractor 도구 억제 (잔여 도구 ${tools.length}종)`);
-    }
-    if (wantsMap && caps.toolCalling) {
-        logger.info(`[Map] 위치/지도 의도 감지 — generate_image 억제 (잔여 도구 ${tools.length}종)`);
-    }
-    // 지도/길찾기 의도 시 첫 턴에 카카오 도구를 강제 호출(tool_choice)한다. 길찾기면 find-route,
-    // 그 외 지도면 search-places. 넛지만으론 qwen 이 web_search/자체아티팩트로 이탈 → 강제로
-    // 블록 확보 후 결정적 주입.
-    const routeIntent = ROUTE_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
-    const forcedKakaoToolName = caps.toolCalling
-        ? (routeIntent
-            ? tools.find((t) => t.function.name.includes('find-route'))?.function.name
-            : (wantsMap ? tools.find((t) => t.function.name.includes('search-places'))?.function.name : undefined))
-        : undefined;
-    if (forcedKakaoToolName) {
-        logger.info(`[Map] 첫 턴 tool_choice 강제: ${forcedKakaoToolName}`);
-    }
-    // 명시적 웹 검색 요청이면 첫 턴에 web_search 를 강제한다 — 봇 히스토리에 남은
-    // "검색 불가/오프라인" 자기 발언 재주입 시 qwen 이 시스템 지시로도 교정되지 않고
-    // 도구 호출을 거부하는 환각의 결정적 차단 (카카오 tool_choice 강제와 동일 선례).
-    const forcedWebSearchToolName = !forcedKakaoToolName
-        && (WEB_SEARCH_INTENT_PATTERNS.some((re) => re.test(req.message ?? '')) || ctx.tailWebGround === true)
-        ? tools.find((t) => t.function.name === 'web_search')?.function.name
-        : undefined;
-    if (forcedWebSearchToolName) {
-        logger.info(ctx.tailWebGround === true
-            ? '[TailGate] Stage 2B factual tail — 첫 턴 tool_choice 강제: web_search'
-            : '[WebSearch] 명시적 검색 요청 — 첫 턴 tool_choice 강제: web_search');
-    }
-    const forcedFirstTurnToolName = forcedKakaoToolName ?? forcedWebSearchToolName;
+    // 도구 노출·억제·첫 턴 강제 결정은 external-tool-plan 으로 분리 (동작 동일).
+    const { tools, forcedFirstTurnToolName } = buildExternalToolPlan({
+        allowedTools: deps.allowedTools,
+        req,
+        toolCalling: caps.toolCalling,
+        wantsMap,
+        ...(ctx.tailWebGround !== undefined ? { tailWebGround: ctx.tailWebGround } : {}),
+        orchestration,
+    });
 
     const startedAt = Date.now();
     let errorCode: string | null = null;
@@ -223,6 +179,8 @@ export async function runExternalStream(
     let delegateCalls = 0;
     // 병렬 fan-out 호출 집계 — 메시지당 캡(AGENT_SPAWN.MAX_CALLS_PER_MESSAGE) 초과 시 거부.
     let spawnCalls = 0;
+    // 오케스트레이션 배정 호출 집계 — 메시지당 캡(ORCHESTRATION_DISPATCH.MAX_CALLS_PER_MESSAGE).
+    let orchestrationCalls = 0;
 
     // generate_image 결과의 이미지 마크다운 추적 — 일부 모델(qwen 등)이 도구 지시("마크다운
     // 그대로 포함")를 누락해 생성된 이미지가 채팅에 표시되지 않는 문제 보정용.
@@ -359,6 +317,19 @@ export async function runExternalStream(
                             args: tc.args as Record<string, unknown>,
                             chatTools: tools,
                             userCtx: deps.currentUserContext ?? { userId: 'guest', role: 'guest' },
+                            ...(req.abortSignal ? { signal: req.abortSignal } : {}),
+                        });
+                } else if (isOrchestrationTool(tc.name)) {
+                    // 오케스트레이션 자동 배정 — 토론 인라인 실행 / 백그라운드 작업 위임.
+                    deps.mcpToolStartCallback?.({ toolName: tc.name });
+                    orchestrationCalls++;
+                    toolResult = orchestrationCalls > ORCHESTRATION_DISPATCH.MAX_CALLS_PER_MESSAGE
+                        ? `Error: 이 메시지의 오케스트레이션 호출 한도(${ORCHESTRATION_DISPATCH.MAX_CALLS_PER_MESSAGE}회)에 도달했습니다. 지금까지의 결과로 직접 답변하세요.`
+                        : await runOrchestrationTool({
+                            name: tc.name,
+                            args: tc.args as Record<string, unknown>,
+                            userCtx: deps.currentUserContext ?? { userId: 'guest', role: 'guest' },
+                            ...(req.userLanguagePreference ? { userLanguage: req.userLanguagePreference } : {}),
                             ...(req.abortSignal ? { signal: req.abortSignal } : {}),
                         });
                 } else {

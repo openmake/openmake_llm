@@ -12,6 +12,7 @@ import type { ResolvedProvider } from '../../providers/provider-router';
 import { getExternalProviderSystemGuards } from '../../chat/prompt';
 import { getCurrentDate } from '../../utils/datetime';
 import { getStyleGuard, normalizeStyle } from '../../chat/style';
+import { ORCHESTRATION_PROMPT_GUIDE } from './orchestration-dispatch';
 import type { StreamFromExternalContext } from './external-provider';
 
 /**
@@ -23,8 +24,10 @@ export function buildExternalSystemPrompt(params: {
     resolved: ResolvedProvider;
     ctx: StreamFromExternalContext;
     wantsMap: boolean;
+    /** 오케스트레이션 자동 배정 의도(external-tool-plan 과 공유) — 매칭 턴에만 가이드 주입. */
+    orchestration?: { discussion: boolean; taskDelegate: boolean };
 }): string {
-    const { req, resolved, ctx, wantsMap } = params;
+    const { req, resolved, ctx, wantsMap, orchestration } = params;
     const systemPromptParts: string[] = [];
 
     // ════════════════════════════════════════════════════════════════════
@@ -149,6 +152,12 @@ export function buildExternalSystemPrompt(params: {
             '⚠️ 지도는 시스템이 도구 결과로 자동 표시하니, 당신은 kakaomap 코드 블록이나 좌표(lat/lng) ' +
             '목록을 절대 직접 작성하지 마세요. 사람이 읽을 요약(장소명·주소·거리·소요시간 등)만 작성하세요.',
         );
+    }
+
+    // 오케스트레이션 자동 배정(Stage 1) — 해당 의도 프리필터 매칭 턴에만 배정 가이드 주입
+    // (도구 노출과 동일 조건 공유 — external-tool-plan.detectOrchestrationIntents).
+    if (orchestration && (orchestration.discussion || orchestration.taskDelegate)) {
+        systemPromptParts.push(ORCHESTRATION_PROMPT_GUIDE.trim());
     }
 
     return systemPromptParts.join('\n\n');
