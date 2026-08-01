@@ -54,6 +54,7 @@ import { getEventBus, AGENT_TASK_PROGRESS, type AgentTaskProgressEvent } from '.
 import { runWithRequestContext } from '../utils/request-context';
 import { isOriginAllowed } from '../security/cors-policy';
 import { WsConnectionGuard } from './ws-connection-guard';
+import { broadcastWithBackpressure, sendToConnections, sweepHeartbeat } from './ws-broadcast';
 
 const log = createLogger('WebSocketHandler');
 
@@ -417,17 +418,7 @@ export class WebSocketHandler {
     private startHeartbeat(): void {
         this.heartbeatInterval = setInterval(() => {
             // 🔒 Phase 3: 순회 중 삭제 방지 — 먼저 좀비 연결을 수집 후 일괄 처리
-            const deadConnections: WebSocket[] = [];
-
-            for (const ws of this.clients) {
-                const extWs = ws as ExtendedWebSocket;
-                if (!extWs._isAlive || this.isTokenExpired(extWs)) {
-                    deadConnections.push(ws);
-                } else if (ws.readyState === WebSocket.OPEN) {
-                    extWs._isAlive = false;
-                    ws.ping();
-                }
-            }
+            const deadConnections = sweepHeartbeat(this.clients, (w: ExtendedWebSocket) => this.isTokenExpired(w));
 
             // 수집된 좀비 연결 일괄 종료 (Set 순회 완료 후)
             for (const ws of deadConnections) {
@@ -522,43 +513,7 @@ export class WebSocketHandler {
      * @param data - 전송할 JSON 직렬화 가능 데이터
      */
     public broadcast(data: Record<string, unknown>): void {
-        const message = JSON.stringify(data);
-        const threshold = WS_LIMITS.BROADCAST_BACKPRESSURE_THRESHOLD_BYTES;
-        const terminateAfter = WS_LIMITS.BROADCAST_BACKPRESSURE_TERMINATE_AFTER;
-        let skipped = 0;
-        let terminated = 0;
-
-        for (const client of this.clients) {
-            if (client.readyState !== WebSocket.OPEN) continue;
-
-            // 슬로우 클라이언트 감지 — bufferedAmount 가 임계 초과
-            if (client.bufferedAmount > threshold) {
-                const count = (this.slowClientCounters.get(client) ?? 0) + 1;
-                this.slowClientCounters.set(client, count);
-                skipped++;
-
-                if (terminateAfter > 0 && count >= terminateAfter) {
-                    // 만성적 stall — 강제 종료 (close 핸들러가 cleanup 처리)
-                    client.terminate();
-                    this.slowClientCounters.delete(client);
-                    terminated++;
-                }
-                continue;
-            }
-
-            // 정상 송신 — slow 카운터 리셋
-            if (this.slowClientCounters.has(client)) {
-                this.slowClientCounters.delete(client);
-            }
-            client.send(message);
-        }
-
-        if (skipped > 0 || terminated > 0) {
-            log.warn(
-                `broadcast backpressure: skipped=${skipped}, terminated=${terminated} ` +
-                `(threshold=${threshold}B, terminateAfter=${terminateAfter})`
-            );
-        }
+        broadcastWithBackpressure(this.clients, this.slowClientCounters, data);
     }
 
     /**
@@ -588,11 +543,6 @@ export class WebSocketHandler {
         if (!userId) return;
         const connections = this.guard.getUserConnections(userId);
         if (connections.size === 0) return;
-        const message = JSON.stringify(data);
-        for (const client of connections) {
-            if (client.readyState === WebSocket.OPEN) {
-                client.send(message);
-            }
-        }
+        sendToConnections(connections, data);
     }
 }
