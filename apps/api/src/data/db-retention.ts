@@ -167,6 +167,32 @@ async function runRetention(): Promise<void> {
             }
         }
 
+        // 9. 관측 메트릭·셰도우 테이블 보존 (기본 90일)
+        // model_pool_metrics(context-fit 안전망 관측)·routing_shadow_decisions(tail 게이트
+        // 셰도우)·orchestration_dispatch_decisions(배정 셰도우)는 append-only 로 무한 증가한다.
+        // 분석은 최근 구간만 쓰므로 오래된 행은 삭제한다 (테이블별 env 없이 공통 상수 —
+        // 세분화가 필요해지면 그때 분리).
+        const metricsRetentionDays = parseInt(
+            process.env.METRICS_RETENTION_DAYS ?? '90',
+            10,
+        );
+        if (Number.isFinite(metricsRetentionDays) && metricsRetentionDays > 0) {
+            for (const table of ['model_pool_metrics', 'routing_shadow_decisions', 'orchestration_dispatch_decisions']) {
+                try {
+                    const r = await pool.query(
+                        `DELETE FROM ${table} WHERE created_at < NOW() - ($1 || ' days')::interval`,
+                        [metricsRetentionDays.toString()],
+                    );
+                    if ((r.rowCount ?? 0) > 0) {
+                        logger.info(`[DbRetention] ${table} ${r.rowCount}건 정리 완료 (${metricsRetentionDays}일 초과)`);
+                    }
+                } catch (e) {
+                    // 테이블 미생성(마이그레이션 이전 인스턴스) 등은 무시 — 다른 정리를 막지 않는다.
+                    logger.warn(`[DbRetention] ${table} 정리 건너뜀: ${e instanceof Error ? e.message : e}`);
+                }
+            }
+        }
+
     } catch (err) {
         logger.error('[DbRetention] 정리 작업 중 오류 발생:', err);
     }
