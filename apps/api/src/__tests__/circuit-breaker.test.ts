@@ -100,12 +100,12 @@ describe('CircuitBreaker', () => {
         test('resetTimeout 경과 후 getState()가 HALF_OPEN 반환', async () => {
             const cb = new CircuitBreaker('test', {
                 failureThreshold: 1,
-                resetTimeout: 10   // 10ms
+                resetTimeout: 100   // 느린 CI 러너에서도 OPEN 판정이 앞서도록 여유 확보
             });
             await cb.execute(fail).catch(() => {});
             expect(cb.getState()).toBe('OPEN');
 
-            await new Promise(r => setTimeout(r, 20));
+            await new Promise(r => setTimeout(r, 150));
             expect(cb.getState()).toBe('HALF_OPEN');
         });
 
@@ -119,14 +119,20 @@ describe('CircuitBreaker', () => {
         });
 
         test('HALF_OPEN에서 실패 → OPEN 복귀', async () => {
+            // ⚠️ resetTimeout 은 넉넉히 잡는다(2026-08-01 CI 플레이키 수정).
+            // getState() 는 "OPEN + resetTimeout 경과" 를 보면 HALF_OPEN 으로 **전이시키는**
+            // 부수효과가 있다. 10ms 로 두면 느린 러너에서 마지막 execute→getState 사이가
+            // 10ms 를 넘겨 OPEN 이 즉시 HALF_OPEN 으로 되돌아가 간헐 실패했다.
             const cb = new CircuitBreaker('test', {
                 failureThreshold: 1,
-                resetTimeout: 10
+                resetTimeout: 200
             });
             await cb.execute(fail).catch(() => {});
-            await new Promise(r => setTimeout(r, 20));
+            await new Promise(r => setTimeout(r, 250));
             expect(cb.getState()).toBe('HALF_OPEN');
 
+            // HALF_OPEN 에서 실패 → OPEN. 이후 판정은 resetTimeout(200ms) 안에 끝나므로
+            // 자동 재전이 없이 안정적이다.
             await cb.execute(fail).catch(() => {});
             expect(cb.getState()).toBe('OPEN');
         });
