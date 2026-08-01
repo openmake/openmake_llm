@@ -165,6 +165,7 @@ export async function runMessagePipeline(svc: ChatService,
                 exposed: [],
             },
             userMode,
+            ...(message ? { message } : {}),
         });
     };
 
@@ -412,6 +413,7 @@ export async function runMessagePipeline(svc: ChatService,
             userId, queryLength: (message || '').length,
             telemetry: extStreamCtx.orchestrationTelemetry,
             userMode: 'none',
+            ...(message ? { message } : {}),
         });
     }
 
