@@ -40,18 +40,21 @@ export function isOrchestrationTool(name: string): boolean {
 /** 시스템 프롬프트에 주입하는 배정 가이드 — 해당 의도 프리필터 매칭 턴에만 주입된다. */
 export const ORCHESTRATION_PROMPT_GUIDE =
     '\n\n[오케스트레이션 배정]\n'
-    + '- 다각 관점 비교·찬반 논쟁이 명확히 유용한 질문이고 start_discussion 도구가 제공된 경우에만 그 도구로 전문가 토론을 실행해 결과를 종합하세요.\n'
-    + '- 파일 생성·코드 실행·장시간 처리가 필요한 요청이고 delegate_agent_task 도구가 제공된 경우 백그라운드 작업으로 위임하고, 작업 id 와 확인 방법을 사용자에게 안내하세요.\n'
-    + '- 그 외에는 도구 없이 직접 답하는 것이 기본입니다 — 단순 질문에 오케스트레이션을 쓰지 마세요.';
+    + '- 이 턴에 제공된 오케스트레이션 도구는 사용자 요청 유형과 이미 일치한다고 판단되어 노출된 것입니다. '
+    + '해당 도구가 다루는 작업이면 그 도구로 처리하고, 결과를 사용자에게 정리해 전달하세요.\n'
+    + '- start_discussion 은 관점이 갈리는 주제의 결론을 만들 때, delegate_agent_task 는 파일 산출·코드 실행이 '
+    + '필요할 때 사용합니다.\n'
+    + '- 도구가 다루지 않는 요청이면 평소처럼 직접 답하세요.';
 
 export function buildStartDiscussionTool(): ToolDefinition {
     return {
         type: 'function',
         function: {
             name: START_DISCUSSION_TOOL_NAME,
-            description: '주제에 대해 전문가 에이전트 여러 명의 토론을 실행하고 합성된 결론을 반환합니다. '
-                + '찬반·다각 관점 비교가 답변 품질을 실제로 바꾸는 경우에만 사용하세요 '
-                + `(실행에 수십 초가 걸립니다). 전문가는 최대 ${ORCHESTRATION_DISPATCH.DISCUSSION_MAX_AGENTS}명이 자동 선정됩니다.`,
+            description: '여러 전문가의 서로 다른 관점을 모아 결론을 내야 하는 질문에 사용합니다. '
+                + '찬반·장단점·다각도 비교가 요구되면 이 도구로 토론을 실행하세요 — '
+                + `전문가 ${ORCHESTRATION_DISPATCH.DISCUSSION_MAX_AGENTS}명이 자동 선정되어 토론 후 합성된 결론을 반환합니다. `
+                + '단순 사실 질문·설명 요청에는 사용하지 마세요.',
             parameters: {
                 type: 'object',
                 properties: {
@@ -68,9 +71,10 @@ export function buildDelegateAgentTaskTool(): ToolDefinition {
         type: 'function',
         function: {
             name: DELEGATE_AGENT_TASK_TOOL_NAME,
-            description: '파일 생성·코드 실행·다단계 장시간 처리가 필요한 요청을 백그라운드 에이전트 작업으로 위임합니다. '
-                + '작업은 샌드박스에서 실행되며 위험 도구는 사용자 승인(HITL)을 거칩니다. '
-                + '즉시 답할 수 있는 질문에는 사용하지 말고 직접 답하세요.',
+            description: '파일을 만들거나 코드를 실행해야 하는 요청에 사용합니다 — 백그라운드 에이전트가 '
+                + '샌드박스에서 작업을 수행하고 산출물을 남깁니다(위험 도구는 사용자 승인을 거칩니다). '
+                + '엑셀·CSV·스크립트·텍스트 파일 생성 요청이면 이 도구로 위임하세요. '
+                + '즉시 말로 답할 수 있는 질문에는 사용하지 마세요.',
             parameters: {
                 type: 'object',
                 properties: {
