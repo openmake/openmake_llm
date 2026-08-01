@@ -1348,18 +1348,34 @@ export const ORCHESTRATION_DISPATCH = {
     MAX_CALLS_PER_MESSAGE: parseInt(process.env.ORCH_MAX_CALLS_PER_MESSAGE || '1', 10),
 } as const;
 
-/** 토론 의도 프리필터 — start_discussion 노출 게이트 (매칭 시에만 도구 노출). */
+/** 토론 의도 프리필터 — start_discussion 노출 게이트 (매칭 시에만 도구 노출).
+ *
+ *  2026-08-01 벤치마크(32건 라벨셋) 기반 교정: 초판은 재현율 65%·오탐 0 이었다.
+ *  오탐 여유가 있어 표현 변형을 넓혔다 — '찬성과 반대', '다양한/다각적 관점', '장단점',
+ *  'A와 B 중 뭐가 나은지' 형태를 추가(미탐이던 실제 질의 패턴). */
 export const DISCUSSION_INTENT_PATTERNS: readonly RegExp[] = [
-    /토론|찬반|논쟁|양쪽\s*(의견|입장)|여러\s*(관점|시각)|다각도|전문가.{0,6}(의견|관점|시각)/i,
-    /debate|pros\s+and\s+cons|multiple\s+perspectives/i,
+    /토론|찬반|논쟁|양쪽\s*(의견|입장)|다각도|전문가.{0,6}(의견|관점|시각)/i,
+    /찬성.{0,6}반대|반대.{0,6}찬성/i,
+    /(여러|다양한|다각적|여러가지|폭넓은)\s*(관점|시각|의견|입장|각도)/i,
+    /장단점|(긍정|부정)\s*(적)?\s*(측면|면)|상반된\s*(의견|주장)/i,
+    /(중|가운데)\s*(뭐가|무엇이|어느\s*쪽이)\s*(나은|좋은|맞는)/i,
+    /debate|pros\s+and\s+cons|multiple\s+perspectives|different\s+viewpoints/i,
 ];
 
 /** 백그라운드 작업 위임 의도 프리필터 — delegate_agent_task 노출 게이트.
  *  ⚠️ '보고서' 는 P1 인라인 보고서 파이프라인과 충돌하므로 의도적으로 제외.
- *  프론트 Option B(파일 첨부+연산 → 자동 위임)와 상보적 — 여긴 텍스트-온리 중작업 커버. */
+ *  프론트 Option B(파일 첨부+연산 → 자동 위임)와 상보적 — 여긴 텍스트-온리 중작업 커버.
+ *
+ *  2026-08-01 벤치마크 교정: 초판은 산출물 명사와 생성 동사가 **인접**해야만 매칭돼
+ *  "xlsx 파일을 만들어줘"(조사)·"스크립트를 만들어서 돌려줘"·"텍스트 파일로 회의록을 생성"
+ *  같은 실제 어순을 놓쳤다(미탐 5건). 명사~동사 사이 최대 20자를 허용하되 동사는
+ *  생성 계열로 한정해 "이 파일 설명해줘" 류 조회 질의는 계속 배제한다. */
 export const TASK_DELEGATE_INTENT_PATTERNS: readonly RegExp[] = [
-    /백그라운드|에이전트\s*작업|(파일|엑셀|xlsx|csv|pdf|pptx?|스크립트)\s*(로|으로)?\s*(만들|생성|저장|변환)|코드를?\s*(실행|돌려)|장시간|오래\s*걸리/i,
-    /in\s+the\s+background|as\s+an?\s+agent\s+task|(create|generate|build)\s+(a\s+)?(file|excel|csv|pdf|script)/i,
+    /백그라운드|에이전트\s*작업/i,
+    /(파일|엑셀|스프레드시트|xlsx|csv|pdf|pptx?|docx?|스크립트|프로그램)[^\n]{0,20}?(만들|생성|작성|저장|변환|출력)/i,
+    /코드를?\s*(실행|돌려|구동)|스크립트를?\s*(실행|돌려|구동)/i,
+    /장시간|(시간이?\s*)?오래\s*걸(리|려)|시간\s*오래/i,
+    /in\s+the\s+background|as\s+an?\s+agent\s+task|(create|generate|build|write)\s+(a\s+)?[^\n]{0,15}?(file|excel|csv|pdf|script)/i,
 ];
 
 
