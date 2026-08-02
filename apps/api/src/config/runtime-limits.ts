@@ -1231,6 +1231,15 @@ export const AGENT_TASK_LIMITS = {
         || `${process.cwd()}/data/uploads/agent-tasks`,
     /** 사용자 지정 max_turns 의 절대 상한 */
     MAX_TURNS_CEILING: 20,
+    /**
+     * 작업 목표(goal) 최대 길이. 종전 2,000자는 스키마에 하드코딩돼 있었고 근거가 없었다 —
+     * 채팅 message 는 100,000자, tool arguments 는 200,000자를 받는데 goal 만 50배 좁았다.
+     * 설계 문서를 그대로 작업 지시로 넣는 사용(2026-08-02, 약 11,000자)이 막혔고,
+     * 채팅→작업 자동 위임 경로에서는 긴 메시지가 그대로 goal 이 되므로 같은 실패가 난다.
+     * goal 은 매 턴 시스템 프롬프트에 실리므로 무제한은 곤란하다 — 20,000자면 약 1만 토큰,
+     * 262K 컨텍스트의 4% 수준이라 안전하다.
+     */
+    GOAL_MAX_CHARS: parseInt(process.env.AGENT_TASK_GOAL_MAX_CHARS || '', 10) || 20000,
     /** 기본 최대 턴 수 */
     DEFAULT_MAX_TURNS: 10,
     /** 작업 전체 타임아웃 (ms) — AGENT_TASK_TIMEOUT_MS 환경변수로 오버라이드.
