@@ -247,11 +247,14 @@ ${applyPromptPlaceholders(promptTemplate.workingOn, { phase: getPhaseLabel(selec
     let hasDbSkills = false;
     const skillNames: string[] = [];
     try {
-        const manifestPrompt = await getSkillManager().buildManifestPrompt(agent.id, userId, agent.category);
-        if (manifestPrompt) {
-            result += manifestPrompt;
+        const manifest = await getSkillManager().buildManifestPrompt(agent.id, userId, agent.category);
+        if (manifest) {
+            result += manifest.prompt;
             hasDbSkills = true;
-            logger.info(`Manifest 스킬 주입됨: ${agent.name} (${agent.id})`);
+            // 주입된 스킬 이름을 반드시 돌려준다 — 종전에는 여기서 이름을 버려 호출부의
+            // onSkillsActivated 가 한 번도 호출되지 않았다(프론트 "스킬 활성화" 미표시).
+            skillNames.push(...manifest.skillNames);
+            logger.info(`Manifest 스킬 주입됨: ${agent.name} (${agent.id}) [${manifest.skillNames.join(', ')}]`);
         } else {
             // legacy fallback
             const skills = await getSkillManager().getSkillsForAgent(agent.id, userId, agent.category);

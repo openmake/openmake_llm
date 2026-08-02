@@ -42,7 +42,8 @@ beforeEach(() => {
 
 describe('buildResearchSkillBlock / withSkillContext', () => {
     it('활성 스킬 매니페스트를 반환하고 프롬프트 앞에 붙인다', async () => {
-        buildManifestPromptMock.mockResolvedValue('## 적용된 스킬\n내용');
+        // 2026-08-02: 반환이 { prompt, skillNames } 로 바뀌었다(주입된 스킬 이름 유실 수정).
+        buildManifestPromptMock.mockResolvedValue({ prompt: '## 적용된 스킬\n내용', skillNames: ['s1'] });
         const block = await buildResearchSkillBlock('u1');
         expect(block).toContain('적용된 스킬');
         expect(withSkillContext('원본 프롬프트', block)).toBe('## 적용된 스킬\n내용\n\n---\n\n원본 프롬프트');
