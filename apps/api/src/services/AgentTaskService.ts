@@ -548,19 +548,28 @@ export class AgentTaskService {
                 });
             }
 
-            // 턴 상한 도달 — 마지막 assistant 내용을 결과로 보존 (deliverable 태그가 있으면 추출)
+            // 턴 상한 도달 — **완주가 아니다**. terminate 경로(위)와 달리 모델이 작업을 끝냈다고
+            // 선언한 적이 없고, 마지막 턴이 문장 중간에서 끊기는 것이 보통이다.
+            // 종전에는 이 경로도 completed·progress 100·checkpoint null 로 기록해서
+            //   ① 사용자에게 빈/절단된 결과가 "완료"로 표시되고
+            //   ② resumable(= checkpoint 존재 && status==='failed', agent-task.routes)이 false 가 되어
+            //      턴이 모자라 끊긴 작업을 **이어할 수조차 없었다**
+            // (2026-08-02 실측: 9.5K 자 설계 문서 작업이 10턴·233K 토큰을 쓰고 "JSON이 유효한지
+            //  검증하겠습니다." 에서 끊겼는데 completed 로 기록됨).
+            // goal judge 의 "아무것도 못 했는데 완료" 차단과 같은 원칙으로 failed 로 기록하고,
+            // 체크포인트를 남겨 이어하기를 연다(마지막 end-of-turn checkpoint 는 위 루프에서 저장됨).
             const lastAssistant = [...conversation].reverse().find((m) => m.role === 'assistant');
             const lastRaw = (lastAssistant?.content as string) || '(최대 턴에 도달하여 종료되었습니다.)';
             const lastExtracted = extractAndStripArtifacts(applyReportRender(lastRaw));
             stepNumber = await persistArtifactSteps(taskId, lastExtracted.artifacts, stepNumber);
             stepNumber = await maybePersistCodeDiff(taskRuntime, sandboxCfg, taskId, stepNumber, emitStep);
             await update({
-                status: 'completed',
-                progress: 100,
+                status: 'failed',
+                error: 'max_turns_exhausted',
                 result: lastExtracted.cleanedContent || lastRaw,
-                checkpoint: null,
             });
-            logger.info(`[AgentTask] 턴 상한 종료: ${taskId} (${turnCeiling} 턴)`);
+            logger.warn(`[AgentTask] 턴 상한 종료(미완주): ${taskId} (${turnCeiling} 턴) — `
+                + '재개하려면 max_turns 를 올려 resume 하세요.');
         } catch (err) {
             // signal.aborted 가 true 면 client.chat() 호출 도중 던져진 AbortError
             // ("Request was aborted") 도 사용자 취소로 분류 — 턴 사이 abort 뿐 아니라
