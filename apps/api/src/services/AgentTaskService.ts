@@ -315,6 +315,13 @@ export class AgentTaskService {
                 if (finalTurnReason && !finalTurnNotified) {
                     conversation.push({ role: 'user', content: getAgentTaskFinalTurnNudge(finalTurnReason) });
                     finalTurnNotified = true;
+                    // 스텝으로 남긴다 — ① 사용자에겐 "왜 도구가 갑자기 멈췄는지"의 설명이 되고
+                    // ② 발동 빈도·사유를 DB 로 집계할 수 있다(로그만으론 재기동 시 유실).
+                    const note = `자원 상한 임박(${finalTurnReason === 'tokens' ? '토큰 예산' : '남은 턴'})`
+                        + ` — 도구를 중단하고 최종 정리로 전환 (턴 ${turn + 1}/${turnCeiling}, 누적 ${totalTokens} 토큰)`;
+                    await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'final_turn', content: note })
+                        .catch(() => { /* 관측 실패가 작업을 죽이지 않게 fail-open */ });
+                    emitStep('final_turn', undefined, note);
                     logger.info(`[AgentTask] 마무리 턴 전환: ${taskId} (사유=${finalTurnReason}, `
                         + `턴 ${turn + 1}/${turnCeiling}, 누적 ${totalTokens} 토큰)`);
                 }

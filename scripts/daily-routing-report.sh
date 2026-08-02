@@ -31,6 +31,12 @@ OUT="$OUT_DIR/$(date +%Y-%m-%d).txt"
     echo "────────────────────────────────────────────"
     echo
     bash "$REPO/scripts/analyze-chat-timing.sh" 2>&1 || echo "(TTFT 집계 실패)"
+    echo
+    echo "────────────────────────────────────────────"
+    echo
+    # 에이전트 작업 비용(2026-08-03 추가) — 이 파일은 이름만 routing 이고 실제로는 '일일 집계'다.
+    # 파일명·PM2 등록명을 바꾸면 cron 재등록이 필요해 그대로 두고 섹션만 늘린다.
+    bash "$REPO/scripts/agent-cost-report.sh" 2>&1 || echo "(에이전트 비용 집계 실패)"
 } > "$OUT"
 
 # 보관 30일 — 무한 증가 방지
