@@ -37,7 +37,7 @@ import type { RequestContext } from './request-context';
 import { recordOrchestrationDispatch } from './orchestration-shadow-recorder';
 import { detectOrchestrationIntents } from './external-tool-plan';
 import { ORCHESTRATION_DISPATCH } from '../../config/runtime-limits';
-import { repairScriptMixing } from './script-purity';
+import { CHAT_RESULT_PROCESSORS, runResultProcessors } from '../../chat/processors';
 
 const logger = createLogger('MessagePipeline');
 
@@ -446,10 +446,17 @@ export async function runMessagePipeline(svc: ChatService,
         );
     }
 
-    // 스크립트 순수성 교정 — 검색·도구 결과 언어에 끌려 한글 문장에 섞인 한자·가나를
-    // 후단에서 제거한다(프롬프트로는 잡히지 않음이 A/B 로 확인됨). fail-open: null 이면 원문.
+    // 응답 후처리 체인 — 등록된 프로세서를 순서대로 적용한다(chat/processors/index.ts).
+    // 새 후처리를 추가할 때 이 호출부는 고치지 않는다. fail-open 은 파이프라인이 보장한다.
     // 스트리밍 클라이언트는 이미 원문을 받았으므로, WS 는 done 페이로드의 cleanedContent 로
     // 최종본을 교체한다(ws-chat-handler).
-    const purified = await repairScriptMixing(externalResponse, languagePolicy?.resolvedLanguage, userId);
-    return purified ?? externalResponse;
+    const processed = await runResultProcessors(
+        externalResponse,
+        { langCode: languagePolicy?.resolvedLanguage, userId },
+        CHAT_RESULT_PROCESSORS,
+    );
+    if (processed.applied.length > 0) {
+        logger.info(`[ResultPipeline] 후처리 적용: ${processed.applied.join(', ')}`);
+    }
+    return processed.content;
 }
