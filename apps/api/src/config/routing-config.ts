@@ -30,6 +30,24 @@ export const ROUTER_NUM_PREDICT =
 // 비교 지표는 TTFT 와 응답 품질이되, 에이전트 선택이 스킬 바인딩(=도구 노출)까지
 // 결정하므로(agents/system-prompt.ts) 품질 쪽에 "도구 사용 여부"를 반드시 포함할 것.
 // 실측 2026-08-02(2일, 라우팅 54회): 短문장 직행 63% · LLM 호출 26% · 키워드 7% · 캐시 4%.
+//
+// ── A/B 대조군 실측 (2026-08-02, 골든셋 routing-accuracy 21건) ──────────────
+//   방법: OMK_AGENT_ROUTE_CACHE_ENABLED=false 로 캐시를 끄고 별도 프로세스 2개로 실행.
+//         A = 현재(임계 0.7), B = OMK_AGENT_KEYWORD_PRECLASSIFY_CONFIDENCE=0(LLM 0회).
+//
+//              정확도        라우팅 소요(합계)   LLM 발동
+//     A(LLM)   18/21  86%    34,413ms           17/21
+//     B(키워드) 20/21  95%       294ms            0/21
+//
+//   → LLM 라우팅이 **더 느리고 더 부정확**했다(117배 느리고 정확도 9%p 낮음).
+//     차이 4건 중 3건은 키워드가 이겼다. LLM 은 과하게 구체적인 에이전트를 고르는
+//     경향을 보였다(routing-015 product-manager↔ui-ux-designer, routing-016 physicist↔general).
+//     반대로 키워드가 general 로 놓친 1건(routing-023 nutritionist)은 LLM 이 잡았다.
+//   운영 측 비용: [ChatTiming] prep 기준 요청의 22.2% 에서 발동, 발동 시 p90 1,955ms.
+//
+//   ⚠️ 아직 제거를 확정할 근거는 아니다 — 표본 21건이고, 골든셋 라벨이 카테고리 위주이며,
+//   위 주석이 요구한 "도구 사용 여부(스킬 바인딩) 품질"은 측정하지 않았다. 골든셋 질의는
+//   LLM 발동률이 81% 로 운영(22%)보다 편향돼 있다. 제거하려면 그 축을 마저 재고 결정할 것.
 
 /** 라우팅 결과 LRU 캐시 사용 여부 (env: OMK_AGENT_ROUTE_CACHE_ENABLED, 기본 true) */
 export const AGENT_ROUTE_CACHE_ENABLED =
