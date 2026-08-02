@@ -1,6 +1,16 @@
 /**
  * agent-resolver 경량화 3단계 (캐시 → 키워드 선분류 → 短문장 직행 → LLM → 폴백) 검증.
  */
+
+// env 파생 상수 고정 — 이 테스트는 임계 0.7 을 전제로 "중간 신뢰(0.5)면 LLM 발동"을
+// 검증한다. 운영 .env 에서 OMK_AGENT_KEYWORD_PRECLASSIFY_CONFIDENCE 를 0.35 로 낮추면
+// 0.5 ≥ 0.35 라 키워드가 채택돼 테스트가 깨진다(2026-08-02 실제 발생).
+// 임계값 자체의 튜닝과 경로 분기 로직 검증을 분리하기 위해 여기서 고정한다.
+jest.mock('../../../config/routing-config', () => {
+    const actual = jest.requireActual('../../../config/routing-config');
+    return { ...actual, AGENT_KEYWORD_PRECLASSIFY_CONFIDENCE: 0.7 };
+});
+
 import { resolveAgent } from '../agent-resolver';
 import { routeWithLLM } from '../../../agents/llm-router';
 import { routeToAgent } from '../../../agents';
