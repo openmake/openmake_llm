@@ -21,7 +21,7 @@ import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, AGENT_SPAWN } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
-import { getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getAgentTaskBrowserLimitNudge, getTaskSandboxGuidance, getAgentTaskUploadedFilesNote, getAgentTaskVerifyFailedNudge, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
+import { getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getAgentTaskBrowserLimitNudge, getAgentTaskFinalTurnNudge, getTaskSandboxGuidance, getAgentTaskUploadedFilesNote, getAgentTaskVerifyFailedNudge, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts } from '../llm/artifact-parser';
 import { applyReportRender } from './chat-service/report-block';
 import { getPushService } from './PushService';
@@ -113,6 +113,7 @@ export class AgentTaskService {
         let searchLimitNotified = false;
         let browserCalls = 0;
         let browserLimitNotified = false;
+        let finalTurnNotified = false;
         let curStatus = 'pending';
         let curProgress = 0;
         let curTurn = 0;
@@ -283,14 +284,40 @@ export class AgentTaskService {
                 // browser 는 SEARCH_TOOL_KEYWORDS 에 안 잡혀 검색 throttle 로 제어 불가하므로 별도 cap.
                 const overSearchLimit = searchCalls >= AGENT_TASK_LIMITS.MAX_SEARCH_CALLS;
                 const overBrowserLimit = browserCalls >= AGENT_TASK_LIMITS.MAX_BROWSER_CALLS;
-                const effectiveTools = (overSearchLimit || overBrowserLimit)
-                    ? tools.filter((t) => {
-                        const n = t.function.name;
-                        if (overSearchLimit && isSearchTool(n)) return false;
-                        if (overBrowserLimit && n === 'browser') return false;
-                        return true;
-                    })
-                    : tools;
+
+                // 마무리 턴 — 자원 상한에 **닿기 전에** 도구를 전부 끊어 종합 답변을 받는다.
+                // 상한에서 그냥 끊으면 산출물을 이미 만든 작업도 사족에서 절단돼 결과가 남지 않는다
+                // (2026-08-03: 예약 리포트 20/20 3건 중 2건이 리포트 생성 후 검증 사족에서 절단).
+                // 도구가 사라지면 모델은 최종 답변을 낼 수밖에 없고, 그러면 terminate 완료 경로 +
+                // goal judge 판정을 정상적으로 탄다(달성이면 completed, 아니면 goal_incomplete).
+                // 턴 사유는 **도구를 쓸 턴이 최소 하나 있었을 때만** 건다 — maxTurns=1 이면
+                // 유일한 턴이 곧 마지막이라 조건 없이 걸면 도구를 한 번도 못 쓴다.
+                // 토큰 사유엔 이 가드가 없다: 누적이 임계를 넘었다는 건 resume 으로 이미 예산을
+                // 소진하고 들어왔다는 뜻이라, 첫 턴부터 마무리로 보내는 것이 맞다.
+                const finalTurnReason = !AGENT_TASK_LIMITS.FINAL_TURN_NUDGE_ENABLED
+                    ? null
+                    : totalTokens >= AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS * AGENT_TASK_LIMITS.TOKEN_SOFT_RATIO
+                        ? 'tokens' as const
+                        : (turn > startTurn && turn === turnCeiling - 1)
+                            ? 'turns' as const
+                            : null;
+
+                const effectiveTools = finalTurnReason
+                    ? []
+                    : (overSearchLimit || overBrowserLimit)
+                        ? tools.filter((t) => {
+                            const n = t.function.name;
+                            if (overSearchLimit && isSearchTool(n)) return false;
+                            if (overBrowserLimit && n === 'browser') return false;
+                            return true;
+                        })
+                        : tools;
+                if (finalTurnReason && !finalTurnNotified) {
+                    conversation.push({ role: 'user', content: getAgentTaskFinalTurnNudge(finalTurnReason) });
+                    finalTurnNotified = true;
+                    logger.info(`[AgentTask] 마무리 턴 전환: ${taskId} (사유=${finalTurnReason}, `
+                        + `턴 ${turn + 1}/${turnCeiling}, 누적 ${totalTokens} 토큰)`);
+                }
                 if (overSearchLimit && !searchLimitNotified) {
                     conversation.push({
                         role: 'user',
@@ -558,6 +585,12 @@ export class AgentTaskService {
             //  검증하겠습니다." 에서 끊겼는데 completed 로 기록됨).
             // goal judge 의 "아무것도 못 했는데 완료" 차단과 같은 원칙으로 failed 로 기록하고,
             // 체크포인트를 남겨 이어하기를 연다(마지막 end-of-turn checkpoint 는 위 루프에서 저장됨).
+            //
+            // ⚠️ 2026-08-03 이후 이 경로는 **드물다** — 마지막 턴은 도구를 뺀 마무리 턴으로 전환되므로
+            // 모델이 최종 답변을 내고 위 완료 경로에서 return 하는 것이 정상이다. 여기 도달한다는 건
+            // 마무리 턴에서도 도구 호출을 시도했거나(도구가 없으니 이례적) 응답이 비었다는 뜻이라
+            // failed 가 맞다. 마무리 턴 도입 전에는 산출물을 만든 작업까지 이 경로로 떨어져
+            // 사족에서 절단됐다(예약 리포트 20/20 3건 중 2건).
             const lastAssistant = [...conversation].reverse().find((m) => m.role === 'assistant');
             const lastRaw = (lastAssistant?.content as string) || '(최대 턴에 도달하여 종료되었습니다.)';
             const lastExtracted = extractAndStripArtifacts(applyReportRender(lastRaw));

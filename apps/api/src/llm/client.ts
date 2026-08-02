@@ -167,8 +167,15 @@ export class LLMClient {
             options: effectiveOptions,
             ...(advancedOptions?.think !== undefined && { think: advancedOptions.think }),
             ...(advancedOptions?.format && { format: advancedOptions.format }),
-            ...(advancedOptions?.tools && { tools: advancedOptions.tools }),
-            ...(advancedOptions?.tool_choice !== undefined && { tool_choice: advancedOptions.tool_choice }),
+            // 빈 배열은 **보내지 않는다** — 업스트림이 400 으로 거절한다(2026-08-03 라이브 실측:
+            // "`tools` must not be an empty array. Either provide at least one tool or omit the
+            // field entirely."). 호출부가 도구를 전부 걸러낸 경우(자원 상한 도달 시 마무리 턴 등)
+            // `[]` 가 그대로 실려 요청 자체가 실패하므로 length 로 판정한다. tool_choice 도 함께
+            // 생략 — 도구 없는 요청에 tool_choice 만 남으면 같은 계열의 거절을 부른다.
+            ...(advancedOptions?.tools?.length && {
+                tools: advancedOptions.tools,
+                ...(advancedOptions.tool_choice !== undefined && { tool_choice: advancedOptions.tool_choice }),
+            }),
         };
         const extraBody = buildExtraBody(advancedOptions?.think);
 

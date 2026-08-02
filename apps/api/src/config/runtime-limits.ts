@@ -1249,6 +1249,30 @@ export const AGENT_TASK_LIMITS = {
      *  멀티턴 도구 작업은 매 턴 prompt_tokens(전체 컨텍스트)를 누적 카운트하므로 200k 는
      *  3턴 만에 소진됐다(샌드박스 도구 작업이 terminate 전에 실패). 기본 1M 으로 상향. */
     MAX_TOTAL_TOKENS: parseInt(process.env.AGENT_MAX_TOTAL_TOKENS || '', 10) || 1_000_000,
+    /**
+     * 마무리 턴 강제(2026-08-03) — 자원 상한에 **닿기 전에** 도구를 끊고 종합 답변을 받는다.
+     *
+     * 하드 상한(MAX_TOTAL_TOKENS·max_turns)은 폭주를 끊을 뿐 산출을 남기지 못한다. 30일 실측:
+     * 예약 리포트 20/20 턴 3건 중 2건이 리포트 파일을 이미 만든 뒤 검증 사족("Let me verify
+     * the file exists")에서 절단됐고, 마지막 응답이 35~96자라 결과로 쓸 수 없었다.
+     * 남은 턴이 1 이거나 누적 토큰이 하드 상한의 SOFT_RATIO 에 닿으면 도구를 제거하고
+     * 마무리 지시(getAgentTaskFinalTurnNudge)를 1회 주입해 정상 완료 경로로 유도한다.
+     *
+     * 하드 상한 자체는 낮추지 않는다 — 완료 작업 p95 가 538K, 최대 618K 로 1M 은 정상 작업을
+     * 죽이지 않는 안전망이며, 실제 제어는 이 소프트 경계가 맡는다.
+     * AGENT_TASK_FINAL_TURN_NUDGE=false 로 비활성.
+     */
+    FINAL_TURN_NUDGE_ENABLED: process.env.AGENT_TASK_FINAL_TURN_NUDGE !== 'false',
+    /**
+     * 마무리 턴 전환 토큰 비율 (MAX_TOTAL_TOKENS 대비). AGENT_TASK_TOKEN_SOFT_RATIO 로 오버라이드.
+     *
+     * 0.7 인 이유는 **마무리 턴 한 번이 하드 상한 안에 반드시 들어오게** 하기 위해서다.
+     * 남는 여유가 300K 로 모델 컨텍스트(262K)보다 크므로, 마무리 턴이 전체 컨텍스트를 다시
+     * 실어도 하드 상한에 걸려 죽지 않는다. 0.8(여유 200K)이면 컨텍스트가 큰 작업의 마무리 턴이
+     * 상한을 넘겨, 정리시키려던 턴에서 오히려 산출 없이 종료될 수 있다.
+     * 완료 작업 실측(30일) p95 538K·최대 618K 가 700K 아래라 정상 작업은 이 경계에 닿지 않는다.
+     */
+    TOKEN_SOFT_RATIO: parseFloat(process.env.AGENT_TASK_TOKEN_SOFT_RATIO || '') || 0.7,
     /** 검색류 도구 호출 횟수 하드 상한 — 초과 시 다음 턴부터 검색 도구를 제거해 강제 종합.
      *  AGENT_MAX_SEARCH_CALLS 환경변수로 오버라이드 가능 (기본 5). */
     MAX_SEARCH_CALLS: parseInt(process.env.AGENT_MAX_SEARCH_CALLS || '5', 10),
