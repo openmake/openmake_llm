@@ -7,7 +7,7 @@
  *  - start_discussion: 다각 관점 토론(discussion engine 축소 프로파일)을 인라인 실행
  *  - delegate_agent_task: 장시간·파일 산출 작업을 백그라운드 에이전트 작업으로 위임
  *
- * 설계 원칙 (arch.md §4-5 정합):
+ * 설계 원칙 (오케스트레이션은 앱 자체 구현 유지 — 게이트웨이는 모델 호출만 담당):
  *  - 별도 라우터 LLM 없음 — 메인 모델의 tool_choice:auto 가 같은 턴에 결정.
  *  - 상시 노출 금지 — DISCUSSION/TASK_DELEGATE_INTENT_PATTERNS 매칭 시에만 노출(도구폭주 방지).
  *  - 비용 가드 — 토론은 전문가·시간 캡, 위임 작업은 기존 승인 정책(HITL)·큐·goal judge 를 그대로 탄다.
@@ -21,7 +21,8 @@ import type { ChatMessage } from '../../llm';
 import type { ToolDefinition } from '../../llm/types';
 import type { UserContext } from '../../mcp/user-sandbox';
 import { getModelForRole } from '../../config/model-roles';
-import { createDiscussionEngine } from '../../agents/discussion-engine';
+import { createDiscussionEngine, type DiscussionSearchResult } from '../../agents/discussion-engine';
+import { buildDiscussionSourcesBlock, wrapDiscussionSources } from '../../agents/discussion-sources';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { AgentTaskService } from '../AgentTaskService';
 import { dispatchAgentTask } from '../agent-task/task-queue';
@@ -115,22 +116,44 @@ async function runStartDiscussion(params: {
         maxAgents: ORCHESTRATION_DISPATCH.DISCUSSION_MAX_AGENTS,
         maxRounds: 1,
         enableCrossReview: false,
-        enableFactCheck: false,
+        enableFactCheck: ORCHESTRATION_DISPATCH.DISCUSSION_EVIDENCE,
         enableDeepThinking: false,
         ...(params.userLanguage ? { userLanguage: params.userLanguage } : {}),
     });
 
+    // Evidence Package 수집용 검색 함수 — 토글 경로(discussion-strategy)와 대칭.
+    // 미주입 시 엔진이 근거 없이 토론하므로(종전 동작) 여기서 반드시 넘긴다.
+    let webSearchFn: ((q: string, opts?: { maxResults?: number }) => Promise<DiscussionSearchResult[]>) | undefined;
+    if (ORCHESTRATION_DISPATCH.DISCUSSION_EVIDENCE) {
+        try {
+            ({ performWebSearch: webSearchFn } = await import('../../mcp'));
+        } catch {
+            // fail-open — 검색 모듈이 없어도 토론 자체는 진행한다.
+            logger.warn('[start_discussion] 웹 검색 모듈 로드 실패 — 근거 없이 진행');
+        }
+    }
+
     const started = Date.now();
     try {
         const result = await Promise.race([
-            engine.startDiscussion(topic),
+            engine.startDiscussion(topic, webSearchFn),
             new Promise<never>((_, rej) => setTimeout(
                 () => rej(new Error(`토론 시간 상한(${ORCHESTRATION_DISPATCH.DISCUSSION_TIMEOUT_MS}ms) 초과`)),
                 ORCHESTRATION_DISPATCH.DISCUSSION_TIMEOUT_MS,
             )),
         ]);
         logger.info(`[start_discussion] 완료 ${Date.now() - started}ms, 참여 ${result.participants.length}명`);
-        const body = `참여 전문가: ${result.participants.join(', ')}\n\n${result.finalAnswer}`;
+        // 출처는 마커로 감싸 전달한다 — 모델이 도구 결과를 요약하며 버리므로,
+        // external-provider 가 이를 뽑아 최종 응답에 결정적으로 1회 붙인다.
+        const sourcesBlock = wrapDiscussionSources(
+            buildDiscussionSourcesBlock(result.finalAnswer, result.sources, params.userLanguage),
+        );
+        // 축소 완료(최소 인원 미달)면 모델에게 알린다 — 복수 관점이 성립하지 않았으므로
+        // "전문가들이 합의했다" 식으로 단정하지 않도록.
+        const degradedNote = result.degraded
+            ? `\n(주의: 참여 전문가가 ${result.participants.length}명뿐이라 복수 관점 비교가 제한적입니다. 합의로 단정하지 마세요.)`
+            : '';
+        const body = `참여 전문가: ${result.participants.join(', ')}${degradedNote}\n\n${result.finalAnswer}${sourcesBlock}`;
         return body.length > ORCHESTRATION_DISPATCH.RESULT_CAP_CHARS
             ? `${body.slice(0, ORCHESTRATION_DISPATCH.RESULT_CAP_CHARS)}\n...(길이 상한으로 잘림)`
             : body;

@@ -56,6 +56,13 @@ export interface AgentOpinion {
  * 토론 결과 인터페이스
  * startDiscussion()의 최종 반환값입니다.
  */
+/** 토론 근거 자료 1건 (Evidence Package 구성 요소). */
+export interface DiscussionSource {
+    title: string;
+    url: string;
+    snippet?: string;
+}
+
 export interface DiscussionResult {
     /** 토론 요약 메시지 (참여 인원, 라운드 수 등) */
     discussionSummary: string;
@@ -69,6 +76,17 @@ export interface DiscussionResult {
     totalTime: number;
     /** 웹 검색 사실 검증 수행 여부 */
     factChecked?: boolean;
+    /**
+     * 최소 인원(DISCUSSION_MIN_PROPOSERS) 미만으로 완료된 축소 토론 여부.
+     * 복수 관점이 성립하지 않았다는 뜻이므로 호출부가 결과에 이를 알린다.
+     */
+    degraded?: boolean;
+    /**
+     * 전문가들이 공유한 Evidence Package (선수집 검색 결과).
+     * 호출부가 출처 목록을 결정적으로 첨부하는 데 쓴다 — 모델이 인용 지시를 자주
+     * 무시하므로 프롬프트가 아니라 응답 조립부에서 붙인다(채팅 경로와 동일 선례).
+     */
+    sources?: DiscussionSource[];
     /** Self-Consistency Score (0.0~1.0, 에이전트 간 합의도) */
     consistencyScore?: number;
     /** 합의 사항 목록 */

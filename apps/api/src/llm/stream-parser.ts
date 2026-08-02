@@ -25,6 +25,7 @@ import { buildImageDataUrl } from '../utils/image-mime';
 import { parseReasoningTags } from './reasoning-tag-parser';
 import { ArtifactStreamParser, type ArtifactStreamCallbacks } from './artifact-parser';
 import { extractCoTFromContent } from './cot-extractor';
+import { PseudoToolCallGate, stripPseudoToolCalls } from './pseudo-tool-call-parser';
 import { createLogger } from '../utils/logger';
 
 const log = createLogger('StreamParser');
@@ -254,6 +255,22 @@ export async function streamChat(
     // recovery 가 reasoning+답변 전체를 content 로 승격하는 누수가 발생한다.
     let usesReasoningField = false;
 
+    // 텍스트로 새어나온 툴콜(`<tool_call><function=...>`) 게이트 — vLLM 이 tools 없는 요청에
+    // 툴 파서를 적용하지 않아 원문이 content 로 흘러나오는 경우의 안전망. 캡처분은 사용자에게
+    // 방출하지 않고, 스트림 종료 시 실제 tool_calls 로 복구한다.
+    const pseudoGate = new PseudoToolCallGate();
+    /** 게이트를 통과한 텍스트만 아티팩트 파서/사용자 채널로 내보낸다. */
+    const pushVisible = (visible: string) => {
+        if (!visible) return;
+        if (artifactParser) {
+            artifactParser.feed(visible);
+        } else {
+            content += visible;
+            onToken(visible, undefined);
+        }
+    };
+    const emitContent = (text: string) => pushVisible(pseudoGate.feed(text));
+
     let activityFired = false;
     for await (const raw of stream as unknown as AsyncIterable<OpenAIChatChunk>) {
         if (!activityFired) {
@@ -289,14 +306,7 @@ export async function streamChat(
                         onToken('', reasoningPart);
                     }
                     inReasoning = false;
-                    if (contentPart) {
-                        if (artifactParser) {
-                            artifactParser.feed(contentPart);
-                        } else {
-                            content += contentPart;
-                            onToken(contentPart, undefined);
-                        }
-                    }
+                    if (contentPart) emitContent(contentPart);
                     pendingReasoning = '';
                 } else if (pendingReasoning.length > THINK_CLOSE.length) {
                     // 마지막 THINK_CLOSE.length 바이트는 부분 태그일 수 있어 유보, 나머지만 emit.
@@ -306,12 +316,7 @@ export async function streamChat(
                     pendingReasoning = pendingReasoning.slice(-THINK_CLOSE.length);
                 }
             } else {
-                if (artifactParser) {
-                    artifactParser.feed(incoming);
-                } else {
-                    content += incoming;
-                    onToken(incoming, undefined);
-                }
+                emitContent(incoming);
             }
         }
         if (choice?.delta?.tool_calls) {
@@ -347,6 +352,15 @@ export async function streamChat(
         pendingReasoning = '';
     }
 
+    // Pseudo tool call 게이트 flush — 유보 꼬리 방출 + 캡처분에서 tool call 복구.
+    // (artifact flush 보다 먼저 — 잔여 텍스트가 아티팩트 파서를 거치도록)
+    const pseudoFlush = pseudoGate.flush();
+    pushVisible(pseudoFlush.emit);
+    if (pseudoFlush.unparsedRaw) {
+        log.warn('[PseudoToolCall] 텍스트 툴콜 블록 복구 실패 — 본문 노출 차단 후 폐기: '
+            + `raw=${pseudoFlush.unparsedRaw.slice(0, 200)}`);
+    }
+
     // Artifact parser flush — 닫는 태그 없이 끝난 partial 도 emit
     artifactParser?.flush();
 
@@ -362,6 +376,16 @@ export async function streamChat(
         }
         // vLLM 발급 id 보존 — agent-loop 다음 턴에서 tool 메시지 tool_call_id 와 일치 필요.
         toolCalls.push({ type: 'function', id: buf.id, function: { name: buf.name, arguments: args } });
+    }
+
+    // 네이티브 tool_calls 가 하나도 없을 때만 텍스트 툴콜을 승격한다 — 정상 파싱된 호출과
+    // 중복 실행되지 않도록. 승격된 호출은 상위 tool loop 에서 실제로 실행된다.
+    if (toolCalls.length === 0 && pseudoFlush.toolCalls.length > 0) {
+        log.warn(`[PseudoToolCall] 텍스트로 새어나온 툴콜 ${pseudoFlush.toolCalls.length}건 복구 — `
+            + `tools=${pseudoFlush.toolCalls.map((c) => c.name).join(',')} (요청 tools=${request.tools?.length ?? 0}종)`);
+        for (const c of pseudoFlush.toolCalls) {
+            toolCalls.push({ type: 'function', id: c.id, function: { name: c.name, arguments: c.args } });
+        }
     }
 
     // Defensive client-side reasoning-tag split (2026-05-19):
@@ -485,6 +509,22 @@ export async function nonStreamChat(
     let combinedThinking = serverReasoning
         ? (reasoningSplit.thinking ? `${serverReasoning}\n${reasoningSplit.thinking}` : serverReasoning)
         : reasoningSplit.thinking;
+
+    // 텍스트로 새어나온 툴콜 안전망 (non-stream 동일 원칙 — streamChat 의 게이트와 같은 계층).
+    // CoT 판정 이전에 떼어낸다 — 툴콜 XML 이 평문 CoT 휴리스틱을 교란하지 않도록.
+    const pseudoNS = stripPseudoToolCalls(reasoningSplit.content);
+    if (pseudoNS.unparsedRaw) {
+        log.warn('[PseudoToolCall] non-stream 텍스트 툴콜 복구 실패 — 본문 노출 차단 후 폐기: '
+            + `raw=${pseudoNS.unparsedRaw.slice(0, 200)}`);
+    }
+    reasoningSplit.content = pseudoNS.content;
+    if (toolCalls.length === 0 && pseudoNS.toolCalls.length > 0) {
+        log.warn(`[PseudoToolCall] non-stream 텍스트 툴콜 ${pseudoNS.toolCalls.length}건 복구 — `
+            + `tools=${pseudoNS.toolCalls.map((c) => c.name).join(',')} (요청 tools=${request.tools?.length ?? 0}종)`);
+        for (const c of pseudoNS.toolCalls) {
+            toolCalls.push({ type: 'function', id: c.id, function: { name: c.name, arguments: c.args } });
+        }
+    }
 
     // 2026-05-26: 평문 CoT 안전망 (non-stream 동일 — streamChat 의 동일 원칙).
     const cotNS = extractCoTFromContent(reasoningSplit.content);

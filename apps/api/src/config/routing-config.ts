@@ -22,6 +22,14 @@ export const ROUTER_NUM_PREDICT =
 // ── Agent 라우팅 경량화 (선분류·캐시) — 2026-07-04 ───────────
 // LLM 라우팅은 채팅당 ~2-3s + ~2.7k 토큰 고정 비용. 아래 3단계로 호출을 절감:
 // 캐시 히트 → 키워드 선분류(고신뢰) → 短문장 직행, 그 외에만 LLM 라우팅.
+//
+// ⚠️ 이 LLM 라우팅은 레포에 유일하게 남은 **앞단 판단형** LLM 호출이다
+// (CLAUDE.md "LLM 판단 경계" 참고). 유지/제거는 실측으로 결정한다 —
+// **A/B 대조군에 새 플래그가 필요 없다**: `OMK_AGENT_KEYWORD_PRECLASSIFY_CONFIDENCE=0`
+// 으로 두면 키워드 결과가 항상 채택돼 LLM 라우팅 호출이 0 이 된다(폴백 경로와 동일 동작).
+// 비교 지표는 TTFT 와 응답 품질이되, 에이전트 선택이 스킬 바인딩(=도구 노출)까지
+// 결정하므로(agents/system-prompt.ts) 품질 쪽에 "도구 사용 여부"를 반드시 포함할 것.
+// 실측 2026-08-02(2일, 라우팅 54회): 短문장 직행 63% · LLM 호출 26% · 키워드 7% · 캐시 4%.
 
 /** 라우팅 결과 LRU 캐시 사용 여부 (env: OMK_AGENT_ROUTE_CACHE_ENABLED, 기본 true) */
 export const AGENT_ROUTE_CACHE_ENABLED =

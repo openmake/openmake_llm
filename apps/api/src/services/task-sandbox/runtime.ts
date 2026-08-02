@@ -15,7 +15,7 @@ import { TaskSandbox, type ExecResult } from './sandbox';
 import type { TaskExecutor } from './executor';
 import { createTaskTools, type DelegateFn, type SpawnFn, type ProceduralHooks } from './tools';
 import { recordBrowserMetric } from './browser-metrics';
-import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
+import { AGENT_TASK_LIMITS, ORCHESTRATION_DISPATCH } from '../../config/runtime-limits';
 import { saveProceduralSkill, resolveProceduralSpec } from '../agent-task/procedural-skill';
 import { TaskPlan, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval } from './approval-gate';
@@ -86,7 +86,22 @@ export class TaskRuntime {
         const browserMetrics = AGENT_TASK_LIMITS.BROWSER_METRICS_ENABLED
             ? (stdout: string) => recordBrowserMetric(this.taskId, this.userId, stdout)
             : undefined;
-        this.defs = createTaskTools(this.executor, this.plan, delegate, spawn, procedural, browserMetrics);
+        // 갭 C: 작업 스텝에서도 복수 전문가 토론(MoA)을 호출할 수 있게 한다.
+        // orchestration-dispatch 는 AgentTaskService 를 import 하므로 정적 import 하면
+        // 순환이 된다 — 호출 시점 동적 import 로 끊는다.
+        // 전용 플래그(AGENT_TASK_DISCUSSION, 기본 OFF) — 작업 도구는 11종으로 고정 관리되며
+        // 켜면 12종이 된다. 수요·도구폭주 근거는 config 주석 참고.
+        const discuss = ORCHESTRATION_DISPATCH.TASK_DISCUSSION
+            ? async (topic: string): Promise<string> => {
+                const { runOrchestrationTool } = await import('../chat-service/orchestration-dispatch');
+                return runOrchestrationTool({
+                    name: 'start_discussion',
+                    args: { topic },
+                    userCtx: { userId: this.userId, role: 'user' },
+                });
+            }
+            : undefined;
+        this.defs = createTaskTools(this.executor, this.plan, delegate, spawn, procedural, browserMetrics, discuss);
         for (const d of this.defs) this.handlers.set(d.tool.name, d.handler);
     }
 

@@ -77,7 +77,7 @@ export interface EnvConfig {
      * LiteLLM 통합 게이트웨이로 inference 를 라우팅할 외부 provider id 목록
      * (콤마 구분). 빈값(기본) = 전부 direct 호출. provider별 롤백은 목록에서
      * 해당 id 제거 + 재시작. ollama-local(사용자별 동적 endpoint)·OAuth(chatgpt)
-     * 는 목록에 있어도 direct 유지 (arch.md §4-3·§5-3).
+     * 는 목록에 있어도 direct 유지 (게이트웨이 이전 ADR — ollama-local 은 동적 endpoint, chatgpt 는 OAuth 격리 때문).
      */
     llmGatewayProviders: string[];
 

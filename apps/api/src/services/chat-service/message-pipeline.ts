@@ -37,6 +37,7 @@ import type { RequestContext } from './request-context';
 import { recordOrchestrationDispatch } from './orchestration-shadow-recorder';
 import { detectOrchestrationIntents } from './external-tool-plan';
 import { ORCHESTRATION_DISPATCH } from '../../config/runtime-limits';
+import { repairScriptMixing } from './script-purity';
 
 const logger = createLogger('MessagePipeline');
 
@@ -423,5 +424,32 @@ export async function runMessagePipeline(svc: ChatService,
         securityPreCheck, routingLog,
     });
 
-    return externalResponse;
+    // TTFT 분해 관측 (2026-08-02) — 종전 ttfb 하나로는 "왜 느린지"를 가릴 수 없었다.
+    // prep=요청 수신~첫 LLM 호출(에이전트 라우팅·프롬프트 조립·도구 계획),
+    // ttfc=첫 LLM 호출~첫 청크(모델 큐잉+prefill), tool=도구 실행 누적, turns=도구 루프 턴.
+    const tm = extStreamCtx.timings;
+    if (tm && tm.firstLlmCallAt > 0) {
+        const prepMs = tm.firstLlmCallAt - startTime;
+        const ttfcMs = tm.firstChunkAt > 0 ? tm.firstChunkAt - tm.firstLlmCallAt : -1;
+        logger.info(
+            `[ChatTiming] prep=${prepMs}ms ttfc=${ttfcMs}ms tool=${tm.toolMs}ms turns=${tm.turns} `
+            + `total=${Date.now() - startTime}ms model=${externalResolved.fullId}`,
+            {
+                event: 'chat_timing',
+                prep_ms: prepMs,
+                ttfc_ms: ttfcMs,
+                tool_ms: tm.toolMs,
+                turns: tm.turns,
+                total_ms: Date.now() - startTime,
+                model: externalResolved.fullId,
+            },
+        );
+    }
+
+    // 스크립트 순수성 교정 — 검색·도구 결과 언어에 끌려 한글 문장에 섞인 한자·가나를
+    // 후단에서 제거한다(프롬프트로는 잡히지 않음이 A/B 로 확인됨). fail-open: null 이면 원문.
+    // 스트리밍 클라이언트는 이미 원문을 받았으므로, WS 는 done 페이로드의 cleanedContent 로
+    // 최종본을 교체한다(ws-chat-handler).
+    const purified = await repairScriptMixing(externalResponse, languagePolicy?.resolvedLanguage, userId);
+    return purified ?? externalResponse;
 }

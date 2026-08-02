@@ -18,6 +18,7 @@ import { tryRenderReportBlock } from './report-block';
 import { estimateMessageTokens, truncateMessagesPreservingSystem } from '../../llm/model-pool';
 import { type Style } from '../../chat/style';
 import { buildExternalSystemPrompt } from './external-system-prompt';
+import { extractDiscussionSources } from '../../agents/discussion-sources';
 import { CHAT_DELEGATE_TOOL_NAME, runChatDelegate } from './chat-delegate';
 import { SPAWN_AGENTS_TOOL_NAME, runChatSpawnAgents } from '../agent-spawn/spawn-agents';
 import { CHAT_SUBAGENT, AGENT_SPAWN } from '../../config/runtime-limits';
@@ -53,6 +54,26 @@ export interface ExternalProviderDeps {
     allowedTools: ToolDefinition[];
 }
 
+/**
+ * TTFT 분해 계측 (2026-08-02).
+ *
+ * 종전 `[ChatMetrics] ttfb` 하나에 전처리·모델 prefill·도구 실행이 전부 뭉쳐 있어
+ * "왜 느린지"를 가릴 수 없었다(실측 p50 4.2초인데 원인 미상). 절대 시각을 담아
+ * 호출부가 구간을 계산하도록 한다 — external-provider 는 상위 시작 시각을 모르므로.
+ */
+export interface ChatTimings {
+    /** external-provider 진입 시각 */
+    enteredAt: number;
+    /** 첫 LLM 호출 직전 시각 (이 앞은 프롬프트 조립·도구 계획) */
+    firstLlmCallAt: number;
+    /** 첫 응답 청크(content 또는 thinking) 도착 시각 — 모델 큐잉+prefill 종료점 */
+    firstChunkAt: number;
+    /** 도구 실행 누적(ms) — 웹검색·토론 등 */
+    toolMs: number;
+    /** 도구 루프 턴 수 */
+    turns: number;
+}
+
 export interface StreamFromExternalContext {
     agentSystemMessage?: string;
     enhancedMessage?: string;
@@ -74,6 +95,8 @@ export interface StreamFromExternalContext {
     /** 오케스트레이션 배정 텔레메트리(Stage 2) — 스트림 종료 시 external-provider 가 채워
      *  되돌려준다(호출부가 셰도우 적재). 의도 미매칭 턴은 undefined 유지. */
     orchestrationTelemetry?: import('./orchestration-shadow-recorder').OrchestrationTelemetry;
+    /** TTFT 분해 계측 — external-provider 가 채워 되돌려준다(호출부가 구간 계산·로깅). */
+    timings?: ChatTimings;
 }
 
 /**
@@ -86,6 +109,8 @@ export async function runExternalStream(
     onToken: (token: string, thinking?: string) => void,
     ctx: StreamFromExternalContext = {},
 ): Promise<string> {
+    // TTFT 분해 계측 기준점 — 이 뒤로 프롬프트 조립·도구 계획이 진행된다.
+    const enteredAtMs = Date.now();
     const messages: ChatMessage[] = [];
 
     // 위치/지도 의도면 카카오 도구 우선 라우팅 — 시스템 프롬프트 넛지 + 도구 강제 주입에 함께 쓰인다.
@@ -172,6 +197,11 @@ export async function runExternalStream(
     }
 
     const startedAt = Date.now();
+    // TTFT 분해 계측 — 구간 계산은 호출부(ws-chat-handler)가 상위 시작 시각과 함께 수행.
+    const timings: ChatTimings = {
+        enteredAt: enteredAtMs, firstLlmCallAt: 0, firstChunkAt: 0, toolMs: 0, turns: 0,
+    };
+    ctx.timings = timings;
     let errorCode: string | null = null;
     let result: import('../../providers/i-provider').ChatStreamResult | undefined;
     let inputTokensTotal = 0;
@@ -186,6 +216,10 @@ export async function runExternalStream(
     let lastBatchSig: string | null = null;
     let repeatCount = 0;
     let suppressTools = false;
+    /** 도구명별 누적 호출 수 — 인자를 바꿔가며 같은 도구를 반복하는 경우를 잡는다. */
+    const toolUseCounts = new Map<string, number>();
+    /** 도구별 과다 사용 경고를 이미 넣었는지 (중복 주입 방지). */
+    const warnedTools = new Set<string>();
     // 채팅 서브에이전트 호출 집계 — 메시지당 캡(CHAT_SUBAGENT.MAX_CALLS) 초과 시 위임 거부.
     let delegateCalls = 0;
     // 병렬 fan-out 호출 집계 — 메시지당 캡(AGENT_SPAWN.MAX_CALLS_PER_MESSAGE) 초과 시 거부.
@@ -201,6 +235,9 @@ export async function runExternalStream(
     // 로컬 모델(qwen)이 블록을 답변에 옮기지 않고 요약해버려 지도가 안 뜨는 문제를
     // 위 generate_image 와 동일하게 결정적 첨부로 보정한다.
     const kakaomapBlocks: string[] = [];
+    // 도구 경유 토론(start_discussion)의 출처 목록 — 모델이 도구 결과를 요약하며 버리므로
+    // 마커로 실려 온 블록을 모아 최종 응답에 결정적으로 첨부한다(카카오 지도와 동일 패턴).
+    const discussionSourceBlocks: string[] = [];
 
     try {
         for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
@@ -221,6 +258,8 @@ export async function runExternalStream(
             const fittedMessages = estimateMessageTokens(messages) > EXTERNAL_LLM_INPUT_TOKEN_BUDGET
                 ? truncateMessagesPreservingSystem(messages, EXTERNAL_LLM_INPUT_TOKEN_BUDGET)
                 : messages;
+            if (!timings.firstLlmCallAt) timings.firstLlmCallAt = Date.now();
+            timings.turns++;
             result = await resolved.provider.streamChat(
                 {
                     messages: fittedMessages,
@@ -234,8 +273,15 @@ export async function runExternalStream(
                     ...(req.abortSignal ? { abortSignal: req.abortSignal } : {}),
                 },
                 {
-                    onToken: (token) => onToken(token, undefined),
-                    onThinking: (thinking) => onToken('', thinking),
+                    // 첫 청크는 content·thinking 중 먼저 오는 쪽 — 모델 큐잉+prefill 종료점.
+                    onToken: (token) => {
+                        if (!timings.firstChunkAt) timings.firstChunkAt = Date.now();
+                        onToken(token, undefined);
+                    },
+                    onThinking: (thinking) => {
+                        if (!timings.firstChunkAt) timings.firstChunkAt = Date.now();
+                        onToken('', thinking);
+                    },
                     onUsage: (usage) => {
                         deps.onUsage?.(usage);
                         inputTokensTotal += usage.prompt_tokens ?? 0;
@@ -304,6 +350,8 @@ export async function runExternalStream(
                 })),
             });
 
+            // 도구 실행 시간 누적 — TTFT 분해에서 "모델이 느린가 / 도구가 느린가"를 가른다.
+            const toolBatchStartedAt = Date.now();
             for (const tc of result.toolCalls) {
                 let toolResult: string;
                 if (tc.name === CHAT_DELEGATE_TOOL_NAME) {
@@ -361,6 +409,12 @@ export async function runExternalStream(
                 for (const mm of toolResult.matchAll(/```kakaomap\s*\n[\s\S]*?```/g)) {
                     if (!kakaomapBlocks.includes(mm[0])) kakaomapBlocks.push(mm[0]);
                 }
+                // 토론 출처 블록 추출 — 모델에게 보낼 텍스트에서는 걷어낸다(요약 대상에서 제외).
+                const extracted = extractDiscussionSources(toolResult);
+                for (const b of extracted.blocks) {
+                    if (!discussionSourceBlocks.includes(b)) discussionSourceBlocks.push(b);
+                }
+                toolResult = extracted.modelFacing;
                 // 모델에게는 블록을 제거한 텍스트만 전달한다 — 큰 경로 JSON 을 컨텍스트에서 보면
                 // qwen 이 블록을 반복 복사(degeneration, 지도 수십개)하는 문제 차단. 지도는 아래
                 // 결정적 주입으로 정확히 1회만 추가한다(모델 복사에 의존하지 않음).
@@ -372,6 +426,42 @@ export async function runExternalStream(
                     content: modelFacingResult,
                     tool_name: tc.name,
                     tool_call_id: tc.id,
+                });
+            }
+            timings.toolMs += Date.now() - toolBatchStartedAt;
+
+            // 같은 도구 반복 사용 가드 (인자 무관) — 검색어만 바꿔가며 부르는 패턴은
+            // 위 doom-loop(도구+인자 해시)에 걸리지 않아 최대 턴까지 소진된다.
+            // 매 턴 모델 prefill 이 누적되므로 지연의 지배 요인이다(2026-08-02 실측).
+            for (const tc of result.toolCalls) {
+                toolUseCounts.set(tc.name, (toolUseCounts.get(tc.name) ?? 0) + 1);
+            }
+            const overusedTool = [...toolUseCounts.entries()]
+                .find(([, n]) => n >= LOOP_DETECTION.SAME_TOOL_BREAK_AT);
+            if (overusedTool) {
+                logger.warn(`🔁 도구 과다 사용 — ${overusedTool[0]} ${overusedTool[1]}회 `
+                    + `(상한 ${LOOP_DETECTION.SAME_TOOL_BREAK_AT}) — 도구 비활성 최종 턴으로 전환`);
+                suppressTools = true;
+                messages.push({
+                    role: 'user',
+                    content: `${overusedTool[0]} 도구를 ${overusedTool[1]}회 호출했습니다. `
+                        + '더 검색하지 말고 지금까지 수집한 정보로 답변을 완성하세요. '
+                        + '확인되지 않은 부분은 모른다고 밝히면 됩니다. '
+                        + '(이 제한은 이번 응답에만 적용됩니다 — 당신의 도구 능력이 사라진 것이 아니므로 '
+                        + '"검색 불가"라고 말하지 마세요.)',
+                });
+                continue;
+            }
+            const warnTool = [...toolUseCounts.entries()]
+                .find(([name, n]) => n >= LOOP_DETECTION.SAME_TOOL_WARN_AT && !warnedTools.has(name));
+            if (warnTool) {
+                warnedTools.add(warnTool[0]);
+                logger.info(`⚠️ 도구 반복 경고 — ${warnTool[0]} ${warnTool[1]}회 (마무리 유도)`);
+                messages.push({
+                    role: 'user',
+                    content: `${warnTool[0]} 도구를 이미 ${warnTool[1]}회 호출했습니다. `
+                        + '검색어를 바꿔 다시 시도하기보다, 지금까지의 결과로 답변을 정리하세요. '
+                        + '정말 필요한 경우에만 한 번 더 호출하세요.',
                 });
             }
         }
@@ -467,6 +557,16 @@ export async function runExternalStream(
         onToken(appended, undefined);
         finalContent += appended;
         logger.info(`🗺️ 카카오 지도 블록 ${missingMaps.length}개 자동 첨부 (LLM 응답 누락 보정)`);
+    }
+
+    // 토론 출처 목록 결정적 첨부 — 도구 결과에 실려 온 블록을 모델이 옮기지 않으므로
+    // (요약 과정에서 유실) 최종 응답에 1회 붙인다. URL 이 이미 본문에 있으면 건너뛴다.
+    const missingSources = discussionSourceBlocks.filter((b) => !finalContent.includes(b));
+    if (missingSources.length > 0) {
+        const appended = (finalContent.trim() ? '\n\n' : '') + missingSources.join('\n\n');
+        onToken(appended, undefined);
+        finalContent += appended;
+        logger.info(`🔗 토론 출처 ${missingSources.length}블록 자동 첨부 (LLM 요약 누락 보정)`);
     }
 
     // 웹검색 출처 목록 결정적 첨부 — LLM(qwen)이 프롬프트의 인용 지시를 자주 무시해 근거 소스가

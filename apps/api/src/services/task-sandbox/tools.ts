@@ -86,6 +86,8 @@ export function createTaskTools(
     spawn?: SpawnFn,
     procedural?: ProceduralHooks,
     browserMetrics?: (stdout: string) => void,
+    /** 복수 전문가 토론(MoA) 실행 — 미주입이면 도구 자체를 노출하지 않는다. */
+    discuss?: (topic: string) => Promise<string>,
 ): MCPToolDefinition[] {
     const bash: MCPToolDefinition = {
         tool: {
@@ -384,6 +386,34 @@ export function createTaskTools(
         },
     };
 
+    // ── 복수 전문가 토론(MoA): start_discussion — 판단이 갈리는 결정에만 사용 ──
+    //    채팅 경로와 같은 discussion-engine 을 쓴다(Evidence Package 공유 + 출처 첨부).
+    //    한 번에 40~50초가 들고 도구 스키마도 늘어나므로, AgentTaskService 가
+    //    ORCHESTRATION_DISPATCH.ENABLED 일 때만 discuss 를 주입 → 미주입이면 미노출.
+    const discussTool: MCPToolDefinition = {
+        tool: {
+            name: 'start_discussion',
+            description: '여러 분야 전문가가 토론해 결론을 냅니다. 판단 기준이 상충하거나 선택지 비교가 필요한 ' +
+                '결정(설계 방식 선택, 트레이드오프 평가 등)에만 쓰세요. 사실 조회나 단순 실행에는 쓰지 마세요 — ' +
+                '수십 초가 걸립니다.',
+            inputSchema: {
+                type: 'object',
+                properties: { topic: { type: 'string', description: '토론 주제 (한 문장으로 명확히)' } },
+                required: ['topic'],
+            },
+        },
+        handler: async (args): Promise<MCPToolResult> => {
+            if (!discuss) return textResult('토론 기능을 사용할 수 없습니다.', true);
+            const topic = str(args.topic);
+            if (!topic) return textResult('topic 이 필요합니다.', true);
+            try {
+                return textResult(await discuss(topic));
+            } catch (e) {
+                return textResult(`토론 실패: ${e instanceof Error ? e.message : String(e)}`, true);
+            }
+        },
+    };
+
     // ── #1 절차 스킬: 성공한 실행 절차를 저장(save)하고 LLM 재추론 없이 재생(run) ──
     const skillSave: MCPToolDefinition = {
         tool: {
@@ -530,5 +560,5 @@ export function createTaskTools(
             textResult(`${TASK_ASK_HUMAN_SENTINEL} ${str(args.question)}`),
     };
 
-    return [bash, pythonExecute, strReplaceEditor, fileOps, browser, planCreate, planUpdate, planView, delegateTool, ...(spawn ? [spawnAgentsTool] : []), ...(procedural ? [skillSave, skillRun] : []), terminate, askHuman];
+    return [bash, pythonExecute, strReplaceEditor, fileOps, browser, planCreate, planUpdate, planView, delegateTool, ...(spawn ? [spawnAgentsTool] : []), ...(discuss ? [discussTool] : []), ...(procedural ? [skillSave, skillRun] : []), terminate, askHuman];
 }

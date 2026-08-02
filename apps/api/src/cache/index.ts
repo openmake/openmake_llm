@@ -68,12 +68,19 @@ export class CacheSystem {
             updateAgeOnGet: true
         });
 
+        // 라우팅 캐시는 응답 캐시와 수명·용량이 다르다 (CACHE_CONFIG.ROUTING_* 참고 —
+        // 매핑이 상하지 않고 미스 비용은 LLM 라우팅 왕복이라 길게 잡는다).
+        // 2026-08-02: 종전 `maxSize*2 / ttlMs*2` 하드코딩이 이 상수들을 dead 로 만들고
+        // 있었다 — 배선 복구.
         this.routingCache = new LRUCache<string, CachedRouting>({
-            max: maxSize * 2, // 라우팅은 더 많이 캐싱
-            ttl: ttlMs * 2    // 라우팅 결과는 더 오래 유지
+            max: CACHE_CONFIG.ROUTING_CACHE_MAX_SIZE,
+            ttl: CACHE_CONFIG.ROUTING_CACHE_TTL_MS
         });
 
-        logger.info(`캐시 시스템 초기화 (maxSize: ${maxSize}, TTL: ${ttlMs}ms)`);
+        logger.info(
+            `캐시 시스템 초기화 (응답 maxSize: ${maxSize}, TTL: ${ttlMs}ms / `
+            + `라우팅 maxSize: ${CACHE_CONFIG.ROUTING_CACHE_MAX_SIZE}, TTL: ${CACHE_CONFIG.ROUTING_CACHE_TTL_MS}ms)`,
+        );
     }
 
     /**

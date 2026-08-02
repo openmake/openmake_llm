@@ -256,7 +256,10 @@ describe('startDiscussion() - opinions 0개 시 조기 종료', () => {
         expect(result.opinions).toHaveLength(0);
         expect(result.finalAnswer).toContain('AI model server');
         expect(result.factChecked).toBe(false);
-        expect(result.participants).toHaveLength(2);
+        // 2026-08-02 계약 변경: participants 는 *실제로 의견을 낸* 전문가만 담는다.
+        // 종전에는 선택된 전문가를 그대로 내보내, 아무도 의견을 못 냈는데도
+        // "참여 전문가: A, B" 로 표시되는 오표시가 있었다.
+        expect(result.participants).toHaveLength(0);
     });
 
     test('조기 종료 시 complete progress 콜백 호출됨', async () => {

@@ -459,7 +459,7 @@ export class ChatService {
             req,
             client: externalClient ?? this.client,
             onProgress,
-            formatDiscussionResult: (discussionResult) => formatDiscussionResult(discussionResult),
+            formatDiscussionResult: (discussionResult) => formatDiscussionResult(discussionResult, req.userLanguagePreference),
             onToken,
             abortSignal,
             checkAborted,

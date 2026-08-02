@@ -1,7 +1,7 @@
 /**
  * LiteLLM 통합 게이트웨이 라우팅 (LLM_GATEWAY_PROVIDERS) 단위 테스트.
  *
- * arch.md 2026-07-31 이전 계약:
+ * 2026-07-31 LiteLLM Mac 이전 계약:
  * - 목록에 있는 API key provider → inference client 가 게이트웨이(baseURL=llmBaseUrl/v1)
  *   + x-litellm-api-key 헤더 + model prefix
  * - 목록에 없거나 ollama-local → 기존 direct 동작 무변경

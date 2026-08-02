@@ -22,6 +22,7 @@ import { WS_LIMITS } from '../config/timeouts';
 import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
 import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
 import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext } from '../services/chat-service/attach-context';
+import { hasScriptMixing } from '../services/chat-service/script-purity';
 import { buildWebSearchContext } from '../mcp/web-search/build-search-context';
 
 /**
@@ -410,9 +411,16 @@ export async function handleChatMessage(
         // Phase 1.F.2 (2026-05-26): cleanedContent 를 done 페이로드에 동봉.
         // 클라이언트가 token 단위로 누적한 raw 본문을 backend 의 placeholder 적용 본문으로
         // reset 하기 위함. artifact 가 없으면 undefined — 변경 없음.
+        // 스크립트 순수성 교정(script-purity)이 실제로 적용된 경우에도 본문을 교체한다 —
+        // 스트리밍으로 이미 나간 화면엔 한자 혼입이 남아 있고 최종본만 교정돼 있으므로,
+        // 그 차이가 있을 때만 정확히 겨냥해 reset 한다(그 외 턴은 기존대로 undefined).
         const cleanedContent = (result.artifacts && result.artifacts.length > 0)
             ? result.response
-            : undefined;
+            : (result.response
+                && hasScriptMixing(partialAssistantResponse)
+                && !hasScriptMixing(result.response)
+                ? result.response
+                : undefined);
         ws.send(JSON.stringify({
             type: 'done',
             messageId,
