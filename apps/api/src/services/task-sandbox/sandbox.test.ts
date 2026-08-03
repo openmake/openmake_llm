@@ -36,6 +36,18 @@ describe('task-sandbox pure functions', () => {
         it('prefix 유사 디렉토리 탈출 차단 (task1-evil)', () => {
             expect(() => safeResolveWorkspacePath(root, '../task1-evil/x')).toThrow('탈출 차단');
         });
+        // 컨테이너 마운트 지점 표기 — 에이전트가 컨테이너 안에서 보는 실제 경로다(2026-08-03).
+        // 종전에는 탈출로 차단돼 예약 리포트가 /workspace/data.json 쓰기에 반복 실패했다.
+        it('컨테이너 절대경로(/workspace/...)는 같은 대상으로 해석', () => {
+            expect(safeResolveWorkspacePath(root, '/workspace/data.json')).toBe('/tmp/ws/task1/data.json');
+            expect(safeResolveWorkspacePath(root, '/workspace/sub/report.html')).toBe('/tmp/ws/task1/sub/report.html');
+            expect(safeResolveWorkspacePath(root, '/workspace')).toBe('/tmp/ws/task1');
+            expect(safeResolveWorkspacePath(root, '/workspace/')).toBe('/tmp/ws/task1');
+        });
+        it('정규화 후에도 탈출은 차단 — /workspace/../ 와 prefix 유사 경로', () => {
+            expect(() => safeResolveWorkspacePath(root, '/workspace/../etc/passwd')).toThrow('탈출 차단');
+            expect(() => safeResolveWorkspacePath(root, '/workspace-evil/x')).toThrow('탈출 차단');
+        });
     });
 
     describe('safeRealWorkspacePath (심링크 탈출 차단 — 실제 FS)', () => {
