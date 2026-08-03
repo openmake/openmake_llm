@@ -8,6 +8,12 @@ import { ApiClient, csrfHeaders } from "./api-client";
 
 import { getAnonSessionId } from "./anon-session";
 import { CLIENT_TIMING } from "./config";
+import { encodeMcpResources, type McpResourcePayload } from "@/components/chat/mcp-resource-card";
+
+// 배포 감지·토큰 갱신 상태는 소켓 재연결/훅 재마운트 간에도 유지되어야 하므로 모듈 레벨에 둔다.
+let moduleKnownBuildId: string | null = null;
+let moduleTokenRefreshing = false;
+let moduleReloadPending = false;
 
 /** 첨부 파일 UI 상태 — WS 계약(WsAttachedFile)에 브라우저 File 원본을 얹은 로컬 확장.
  *  rawFile 이 있으면 에이전트 작업 생성 시 multipart 로 원본을 스트리밍 업로드한다
@@ -64,6 +70,11 @@ export function useChatSocket() {
   // 에이전트 작업 taskId → 목표(goal) — agent_task_progress 렌더에 사용
   // 구조화 답변(REST) 진행 중 AbortController — abort() 가 취소할 수 있게 보관
   const structuredAbortRef = useRef<AbortController | null>(null);
+  // token_warning 갱신이 스트리밍 중 도착하면 스트림 종료 후 재연결하기 위한 예약 플래그.
+  const reconnectAfterRefreshRef = useRef(false);
+  // MCP 도구 결과 resource — 스트리밍 중 append 하면 응답이 조각나므로(appendToken 이 카드를
+  // 마지막 메시지로 오인) 버퍼에 모았다가 스트림 종료 시 flush 한다.
+  const pendingMcpResourcesRef = useRef<McpResourcePayload[]>([]);
 
   const {
     appendMessage,
@@ -104,6 +115,59 @@ export function useChatSocket() {
       reconnectRef.current = 0;
     };
 
+    // 버퍼에 모인 MCP resource 를 system(notice) 메시지로 flush — 스트림 종료 후에만 호출.
+    const flushPendingMcpResources = () => {
+      const pending = pendingMcpResourcesRef.current;
+      if (pending.length === 0) return;
+      pendingMcpResourcesRef.current = [];
+      for (const p of pending) {
+        // notice:true → 히스토리 payload 제외(백엔드로 안 샘). content 는 sentinel+JSON,
+        // message-list 가 프리픽스를 감지해 McpResourceCard 로 렌더한다.
+        appendMessage({ role: "system", notice: true, content: encodeMcpResources(p) });
+      }
+    };
+
+    // 명시적 즉시 재연결 — 현재 소켓을 닫으면 onclose 가 짧은 지연 후 새 핸드셰이크를 연다.
+    const reconnectNow = () => {
+      reconnectRef.current = 0;
+      try {
+        wsRef.current?.close();
+      } catch {
+        /* already closed */
+      }
+    };
+
+    // 스트림 종료(done/aborted/error) 후 지연된 배포 reload / 토큰 갱신 재연결을 실행.
+    const runDeferredAfterStream = () => {
+      if (moduleReloadPending) {
+        moduleReloadPending = false;
+        location.reload();
+        return;
+      }
+      if (reconnectAfterRefreshRef.current) {
+        reconnectAfterRefreshRef.current = false;
+        reconnectNow();
+      }
+    };
+
+    // token_warning 처리 — 웹은 HttpOnly 쿠키라 토큰을 못 읽으므로 REST refresh(쿠키 회전) 후
+    // WS 를 재연결(새 핸드셰이크가 새 쿠키로 재인증)한다. 스트리밍 중이면 종료 후로 미룬다.
+    const refreshAndReconnect = () => {
+      if (moduleTokenRefreshing) return;
+      moduleTokenRefreshing = true;
+      void ApiClient.post("/api/auth/refresh", undefined, { redirectOnUnauthorized: false })
+        .then(() => {
+          if (useAppStore.getState().isGenerating) reconnectAfterRefreshRef.current = true;
+          else reconnectNow();
+        })
+        .catch(() => {
+          /* 갱신 실패(세션 만료 등) — 다음 만료 경고/REST 401 인터셉트 흐름에 위임 */
+        })
+        .finally(() => {
+          moduleTokenRefreshing = false;
+        });
+    };
+
     ws.onmessage = (ev) => {
       let data: WsServerEvent;
       try {
@@ -132,25 +196,39 @@ export function useChatSocket() {
           setResearchProgress(null);
           setDiscussionProgress(null);
           setActiveTool(null);
+          flushPendingMcpResources();
+          runDeferredAfterStream();
           break;
         case "aborted":
           setStreaming(false);
           setResearchProgress(null);
           setDiscussionProgress(null);
           setActiveTool(null);
+          flushPendingMcpResources();
+          runDeferredAfterStream();
           break;
-        case "error":
+        case "error": {
+          // 스트리밍 assistant 의 streaming 플래그를 먼저 해소한다(setStreaming 은 마지막
+          // 메시지가 assistant 일 때만 clear) — 이후 system 안내를 append 하면 마지막이
+          // system 이 되어 잔존 플래그를 못 집는다(커서 깜빡임·피드백 버튼 미표시 회귀).
+          setStreaming(false);
+          flushPendingMcpResources();
+          let errMsg = data.message ?? tRef.current("unknownError");
+          if (typeof data.retryAfter === "number" && data.retryAfter > 0) {
+            const sec = Math.ceil(data.retryAfter);
+            errMsg += ` (약 ${sec}초 후 재시도 가능 / retry in ~${sec}s)`;
+          }
           appendMessage({
             role: "system",
-            content: tRef.current("error", {
-              message: data.message ?? tRef.current("unknownError"),
-            }),
+            notice: true,
+            content: tRef.current("error", { message: errMsg }),
           });
-          setStreaming(false);
           setResearchProgress(null);
           setDiscussionProgress(null);
           setActiveTool(null);
+          runDeferredAfterStream();
           break;
+        }
         case "research_progress": {
           // 딥리서치 진행을 채팅 상태 배너로 라이브 표시(스트리밍 시작 전/중).
           const p = data.progress ?? {};
@@ -184,6 +262,37 @@ export function useChatSocket() {
         case "mcp_tool_result":
           // 도구 결과 도착 — 인디케이터 해제(다음 도구 시작 시 다시 표시).
           setActiveTool(null);
+          // resource content 가 있으면 폐기하지 않고 버퍼링 → 스트림 종료 시 카드로 렌더.
+          if (Array.isArray(data.resources) && data.resources.length > 0) {
+            pendingMcpResourcesRef.current.push({
+              toolName: data.toolName,
+              resources: data.resources,
+            });
+          }
+          break;
+        case "build_id":
+          // 배포 감지 — 최초 buildId 를 기억하고, 이후 다른 buildId 재수신 시(재연결로 새 핸드셰이크)
+          // 서버가 재배포된 것이므로 구버전 탭을 새로고침한다(스트리밍 중이면 종료 후).
+          if (data.buildId) {
+            if (moduleKnownBuildId === null) {
+              moduleKnownBuildId = data.buildId;
+            } else if (moduleKnownBuildId !== data.buildId) {
+              if (useAppStore.getState().isGenerating) moduleReloadPending = true;
+              else location.reload();
+            }
+          }
+          break;
+        case "token_warning":
+          // 토큰 만료 임박 — REST refresh(쿠키 회전) 후 재연결로 세션 갱신.
+          refreshAndReconnect();
+          break;
+        case "debug_retained":
+          // 오류 본문 임시 보관 고지 — 사용자에게 보이는 안내(히스토리 제외).
+          appendMessage({
+            role: "system",
+            notice: true,
+            content: `대화 오류가 디버깅을 위해 약 ${data.ttlHours}시간 보관됩니다. / Error details retained ~${data.ttlHours}h for debugging.`,
+          });
           break;
         case "system_event":
           // 백엔드 메타 알림 — 현재는 모델 폴백 고지만 처리한다.
@@ -298,7 +407,7 @@ export function useChatSocket() {
           break;
         }
         default:
-          break; // init / token_warning 등은 추후
+          break; // init / stats / update 등 비채팅 메타는 무시
       }
     };
 
@@ -347,7 +456,7 @@ export function useChatSocket() {
       // 차단하고 재연결을 유도한다. (전송 실패한 메시지는 유실 대신 입력창에 남는다)
       const ws = wsRef.current;
       if (!ws || ws.readyState !== WebSocket.OPEN) {
-        appendMessage({ role: "system", content: tRef.current("disconnected") });
+        appendMessage({ role: "system", notice: true, content: tRef.current("disconnected") });
         connect();
         return;
       }

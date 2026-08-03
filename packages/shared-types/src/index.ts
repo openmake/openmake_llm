@@ -125,11 +125,27 @@ export interface ArtifactMeta {
   lang: string | null;
 }
 
+/** MCP 도구 결과의 resource content (백엔드 external-tool-exec 가 추출해 emit). */
+export interface McpToolResource {
+  uri: string;
+  mimeType?: string;
+  text?: string;
+}
+
 export type WsServerEvent =
   | { type: "token"; token: string }
   | { type: "thinking"; token: string; messageId?: string }
   | { type: "thinking_summary"; summary: string; messageId?: string }
   | { type: "session_created"; sessionId: string }
+  /** 연결 직후 서버 build id — 클라가 기억해 두고 다른 build 재수신 시 배포로 간주(reload). */
+  | { type: "build_id"; buildId: string }
+  /**
+   * 인증 토큰 만료 임박 경고(쿨다운 있음). 웹은 HttpOnly 쿠키라 토큰을 못 읽으므로
+   * REST refresh(쿠키 회전) 후 WS 재연결(새 핸드셰이크)로 갱신한다.
+   */
+  | { type: "token_warning"; message: string }
+  /** 오류 시 디버그 본문 24h 임시 보관 고지(saveHistory=false 여도 재현용). */
+  | { type: "debug_retained"; captureId: string; expiresAt: string; ttlHours: number }
   /**
    * 백엔드 메타 알림 (ws-chat-handler onSystemEvent).
    * 현재 소비: 'model_fallback' — 선택 모델 실패로 다른 모델이 답했음을 고지.
@@ -141,13 +157,24 @@ export type WsServerEvent =
   | {
       type: "done";
       messageId?: string;
-      /** 백엔드 실제 페이로드(ws-chat-handler): 스트리밍 완료 시 토큰 메트릭. */
-      metrics?: { tokensPerSec: number; tokenCount: number };
+      /** 백엔드 실제 페이로드(ws-chat-handler): 스트리밍 완료 시 토큰 메트릭. tokensPerSec 는 toFixed(2) 문자열. */
+      metrics?: { tokensPerSec: string; tokenCount: number };
       /** 아티팩트가 있으면 raw 코드펜스가 placeholder 로 치환된 본문 — 클라가 누적 본문을 이걸로 reset. */
       cleanedContent?: string;
     }
   | { type: "aborted"; message?: string }
-  | { type: "error"; message: string }
+  | {
+      type: "error";
+      message: string;
+      /** 에러 분류(quota_exceeded / api_keys_exhausted / provider code 등) */
+      errorType?: string;
+      /** 재시도 가능까지 남은 초(quota/키 소진). */
+      retryAfter?: number;
+      /** 키 쿨다운 해제 시각(ISO) — api_keys_exhausted. */
+      resetTime?: string;
+      totalKeys?: number;
+      keysInCooldown?: number;
+    }
   | { type: "init"; data?: unknown }
   | {
       type: "agent_selected";
@@ -163,7 +190,7 @@ export type WsServerEvent =
   | { type: "skills_activated"; skillNames: string[] }
   // MCP 도구 호출 진행 (백엔드 ws-chat-handler onMcpToolStart/onMcpToolResult)
   | { type: "mcp_tool_start"; toolName: string; messageId?: string }
-  | { type: "mcp_tool_result"; toolName: string; resources?: unknown; messageId?: string }
+  | { type: "mcp_tool_result"; toolName: string; resources?: McpToolResource[]; messageId?: string }
   // 토론 모드 진행 (백엔드 ws-chat-handler onDiscussionProgress → DiscussionProgress)
   | {
       type: "discussion_progress";
