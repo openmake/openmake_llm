@@ -13,8 +13,7 @@
  * @module services/chat-service/external-provider
  */
 import { createLogger } from '../../utils/logger';
-import { LOOP_DETECTION, AGENT_LOOP_LIMITS, MAP_INTENT_PATTERNS, EXTERNAL_LLM_INPUT_TOKEN_BUDGET, REPORT_PIPELINE, ORCHESTRATION_DISPATCH } from '../../config/runtime-limits';
-import { tryRenderReportBlock } from './report-block';
+import { LOOP_DETECTION, AGENT_LOOP_LIMITS, MAP_INTENT_PATTERNS, EXTERNAL_LLM_INPUT_TOKEN_BUDGET, ORCHESTRATION_DISPATCH } from '../../config/runtime-limits';
 import { estimateMessageTokens, truncateMessagesPreservingSystem } from '../../llm/model-pool';
 import { type Style } from '../../chat/style';
 import { buildExternalSystemPrompt } from './external-system-prompt';
@@ -29,11 +28,12 @@ import type { ChatMessageRequest } from '../chat-service-types';
 import type { UserContext } from '../../mcp/user-sandbox';
 import type { ResolvedProvider } from '../../providers/provider-router';
 import type { ProviderRouter } from '../../providers/provider-router';
-import { WEB_SEARCH_TEMPLATES, getLocalizedTemplate } from '../../sockets/ws-chat-locales';
 
 import { executeExternalTool, recordExternalUsageFireAndForget } from './external-tool-exec';
 
 import { resolveModelCapabilities } from './model-capabilities';
+import { markModelUnusableFireAndForget } from './external-model-availability';
+import { appendDeterministicBlocks } from './external-deterministic-append';
 
 const logger = createLogger('ChatExternalProvider');
 
@@ -535,149 +535,20 @@ export async function runExternalStream(
         ...(directCostUsdMicrosTotal !== undefined ? { directCostUsdMicros: directCostUsdMicrosTotal } : {}),
     });
 
-    // generate_image 가 성공했으나 LLM 이 최종 응답에 이미지 마크다운을 누락한 경우 결정적 첨부.
-    // (qwen 등 로컬 모델이 도구 지시를 따르지 않아 생성 이미지가 채팅에 표시 안 되던 문제 보정.
-    //  onToken = 라이브 스트림, 반환값 = 저장 히스토리 — 양쪽에 반영해 reload 후에도 유지.)
-    let finalContent = result.content || '';
-    const missingImages = generatedImageMarkdowns.filter((md) => {
-        const pathMatch = md.match(/\(([^)]+)\)/);
-        return !pathMatch || !finalContent.includes(pathMatch[1]);
+    // 도구 루프 중 수집한 블록(생성 이미지·카카오 지도·토론 출처·웹검색 출처·보고서)을 최종
+    // 응답에 결정적으로 첨부 — 상세는 external-deterministic-append (LLM 의 도구/인용 지시 누락 보정).
+    const finalContent = appendDeterministicBlocks({
+        finalContent: result.content || '',
+        onToken,
+        generatedImageMarkdowns,
+        kakaomapBlocks,
+        discussionSourceBlocks,
+        req,
+        ctx,
     });
-    if (missingImages.length > 0) {
-        const appended = (finalContent.trim() ? '\n\n' : '') + missingImages.join('\n\n');
-        onToken(appended, undefined);
-        finalContent += appended;
-        logger.info(`🖼️ 생성 이미지 ${missingImages.length}개 자동 첨부 (LLM 응답 누락 보정)`);
-    }
-
-    // 카카오 지도 블록도 동일하게 — LLM 이 옮기지 않았으면 결정적 첨부(라이브 stream + 저장 히스토리).
-    const missingMaps = kakaomapBlocks.filter((b) => !finalContent.includes(b));
-    if (missingMaps.length > 0) {
-        const appended = (finalContent.trim() ? '\n\n' : '') + missingMaps.join('\n\n');
-        onToken(appended, undefined);
-        finalContent += appended;
-        logger.info(`🗺️ 카카오 지도 블록 ${missingMaps.length}개 자동 첨부 (LLM 응답 누락 보정)`);
-    }
-
-    // 토론 출처 목록 결정적 첨부 — 도구 결과에 실려 온 블록을 모델이 옮기지 않으므로
-    // (요약 과정에서 유실) 최종 응답에 1회 붙인다. URL 이 이미 본문에 있으면 건너뛴다.
-    const missingSources = discussionSourceBlocks.filter((b) => !finalContent.includes(b));
-    if (missingSources.length > 0) {
-        const appended = (finalContent.trim() ? '\n\n' : '') + missingSources.join('\n\n');
-        onToken(appended, undefined);
-        finalContent += appended;
-        logger.info(`🔗 토론 출처 ${missingSources.length}블록 자동 첨부 (LLM 요약 누락 보정)`);
-    }
-
-    // 웹검색 출처 목록 결정적 첨부 — LLM(qwen)이 프롬프트의 인용 지시를 자주 무시해 근거 소스가
-    // 답변에 안 드러나던 문제 보정. req.webSearchContext(formatSearchSources 포맷)에서 제목·URL 을
-    // 파싱해 응답 끝에 출처 목록을 붙인다(카카오맵 블록과 동일한 결정적 첨부 패턴, 라이브 stream +
-    // 저장 히스토리 양쪽 반영). 모델이 이미 출처 섹션(헤더)을 만든 경우엔 중복 방지로 skip.
-    // 소스 문자열은 message-pipeline 경로에선 req.webSearchContext 가 아니라 ctx.enhancedMessage
-    // (finalEnhancedMessage, context-builder 가 웹검색 컨텍스트를 합친 값)에 실려 온다. 둘 다 fallback.
-    const webSearchCtxText = req.webSearchContext || ctx.enhancedMessage || '';
-    if (/\[[^\]]*?\d+\]\s*.+?\n\s*URL:\s*\S+/.test(webSearchCtxText)) {
-        const srcLang = ctx.resolvedLanguage || req.userLanguagePreference || 'en';
-        const srcLabel = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, srcLang).sourceLabel;
-        const headerRe = new RegExp(`(^|\\n)\\s*(#{1,3}\\s*|\\*\\*\\s*)${srcLabel}`);
-        const headerIdx = finalContent.search(headerRe);
-        const alreadyHasSources = headerIdx >= 0;
-        // 컨텍스트에서 번호→(제목, URL) 파싱 — 미첨부 시 전체 목록, 링크 누락 보강 시 번호 매칭에 공용.
-        const numToSource = new Map<string, { title: string; url: string }>();
-        const re = /\[[^\]]*?(\d+)\]\s*(.+?)\n\s*URL:\s*(\S+)/g;
-        let mm: RegExpExecArray | null;
-        while ((mm = re.exec(webSearchCtxText)) !== null) {
-            if (!numToSource.has(mm[1])) {
-                numToSource.set(mm[1], { title: mm[2].trim(), url: mm[3].trim() });
-            }
-        }
-        if (!alreadyHasSources) {
-            const entries: string[] = [];
-            const seen = new Set<string>();
-            for (const { title, url } of numToSource.values()) {
-                if (url && !seen.has(url)) {
-                    seen.add(url);
-                    entries.push(`${entries.length + 1}. [${title || url}](${url})`);
-                }
-            }
-            if (entries.length > 0) {
-                const block = `\n\n---\n\n**${srcLabel}**\n${entries.join('\n')}`;
-                onToken(block, undefined);
-                finalContent += block;
-                logger.info(`🔗 웹검색 출처 ${entries.length}개 자동 첨부 (LLM 인용 누락 보정)`);
-            }
-        } else if (!/https?:\/\//.test(finalContent.slice(headerIdx))) {
-            // 모델이 출처 섹션을 직접 만들었지만 URL 없이 제목만 나열한 경우(자주 발생) —
-            // 본문에 인용된 번호([출처 N] 등)를 컨텍스트의 URL 과 매칭해 클릭 가능한 링크
-            // 블록을 덧붙인다. (이미 스트리밍된 본문은 수정 불가하므로 append-only)
-            const citedNums: string[] = [];
-            const citeRe = /\[[^\]\n]*?(\d+)\]/g;
-            let cm: RegExpExecArray | null;
-            while ((cm = citeRe.exec(finalContent)) !== null) {
-                if (numToSource.has(cm[1]) && !citedNums.includes(cm[1])) citedNums.push(cm[1]);
-            }
-            const nums = citedNums.length > 0 ? citedNums : [...numToSource.keys()];
-            const lines = nums.map((n) => {
-                const s = numToSource.get(n)!;
-                return `[${n}] ${s.url}`;
-            });
-            if (lines.length > 0) {
-                const block = `\n\n🔗 **URL**\n${lines.join('\n')}`;
-                onToken(block, undefined);
-                finalContent += block;
-                logger.info(`🔗 출처 링크 ${lines.length}개 보강 (모델 출처 섹션에 URL 누락)`);
-            }
-        }
-    }
-
-    // 보고서 결정적 렌더 (P1 파이프라인) — 모델이 출력한 ```reportdata JSON 블록을 고정
-    // 템플릿으로 렌더해 <artifact> 로 첨부한다(카카오맵·출처와 동일한 결정적 첨부 패턴).
-    // 원문 JSON 블록은 히스토리에서 제거 — 라이브 스트림에 이미 나간 블록은 프론트가 접는다.
-    if (REPORT_PIPELINE.ENABLED) {
-        const report = tryRenderReportBlock(finalContent);
-        if (report) {
-            onToken(report.artifactAppend, undefined);
-            finalContent = report.content + report.artifactAppend;
-            logger.info(`📊 보고서 아티팩트 결정적 첨부: "${report.title}"`);
-        }
-    }
 
     return finalContent;
 }
 
 // 도구 실행·사용량 기록은 external-tool-exec.ts 로 분리(600줄 CI 가드) — 기존 import 경로 호환 재노출.
 export { executeExternalTool, recordExternalUsageFireAndForget };
-
-/** 목록에서 제외할 근거가 되는 실패 코드 — 일시 오류(타임아웃·5xx)는 제외한다. */
-const UNUSABLE_ERROR_CODES: ReadonlySet<string> = new Set([
-    'SUBSCRIPTION_REQUIRED',
-    'MODEL_NOT_FOUND',
-    'NOT_SUPPORTED',
-]);
-
-/**
- * 접근 불가 모델을 영속화 (fire-and-forget).
- * 일시적 실패(한도·인증·업스트림 장애)는 모델 자체 문제가 아니므로 기록하지 않는다 —
- * 잘못 기록하면 멀쩡한 모델이 목록에서 사라진다.
- */
-function markModelUnusableFireAndForget(
-    deps: ExternalProviderDeps,
-    userId: string | undefined,
-    resolved: ResolvedProvider,
-    errorCode: string,
-    err: unknown,
-): void {
-    if (!userId || resolved.providerId === 'local-llm') return;
-    if (!UNUSABLE_ERROR_CODES.has(errorCode)) return;
-    const repo = deps.providerRouter?.getExternalKeysRepo();
-    if (!repo) return;
-    void repo.markModelAvailability({
-        userId: String(userId),
-        providerId: resolved.providerId,
-        modelId: resolved.modelId,
-        usable: false,
-        reason: `${errorCode}: ${err instanceof Error ? err.message : String(err)}`,
-    }).then(() => {
-        logger.info(`[Availability] 사용 불가 기록: ${resolved.fullId} (${errorCode})`);
-    }).catch(() => { /* 관측 실패 무시 */ });
-}
