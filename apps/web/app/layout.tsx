@@ -3,6 +3,7 @@ import { JetBrains_Mono } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
 import "./globals.css";
+import { GoogleAnalytics } from "@/components/google-analytics";
 import { Providers } from "./providers";
 
 const jetbrainsMono = JetBrains_Mono({
@@ -43,6 +44,7 @@ export default async function RootLayout({
         <link rel="stylesheet" href="/vendor/pretendard/pretendard.css" />
       </head>
       <body className="min-h-dvh bg-app text-fg antialiased">
+        <GoogleAnalytics />
         <NextIntlClientProvider>
           <Providers>{children}</Providers>
         </NextIntlClientProvider>

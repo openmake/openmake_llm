@@ -11,6 +11,7 @@ import {
   Link,
   TriangleAlert,
   ChevronDown,
+  Trash2,
 } from "lucide-react";
 import {
   Button,
@@ -254,6 +255,22 @@ export default function ResearchPage() {
     if (!TERMINAL.includes(s.status)) poll(s.id);
   };
 
+  // 지난 리서치 삭제 — 확인 후 DELETE, 목록에서 제거. 열려있는 세션이면 상세를 닫는다.
+  const deleteSession = async (s: ApiResearchSession) => {
+    if (!window.confirm(t("deleteConfirm", { topic: s.topic.slice(0, 40) }))) return;
+    try {
+      await ApiClient.del(`/api/research/sessions/${s.id}`);
+      setSessionList((prev) => prev.filter((p) => p.id !== s.id));
+      if (activeSession?.id === s.id) {
+        if (pollRef.current) clearTimeout(pollRef.current);
+        setActiveSession(null);
+        setStatus(null);
+      }
+    } catch (err) {
+      alert(t("deleteFailed", { message: err instanceof Error ? err.message : t("status.failed") }));
+    }
+  };
+
   // 진행 중인 세션을 폴링 — 완료/실패/취소면 중단.
   const poll = async (sid: string) => {
     if (!aliveRef.current) return;
@@ -338,27 +355,40 @@ export default function ResearchPage() {
                   <p className="py-4 text-center text-xs text-muted">{t("sessionEmpty")}</p>
                 ) : (
                   sessionList.map((s) => (
-                    <button
+                    <div
                       key={s.id}
-                      type="button"
-                      onClick={() => selectSession(s)}
                       className={cn(
-                        "w-full rounded-md border px-3 py-2 text-left transition",
+                        "group relative flex items-stretch rounded-md border transition",
                         s.id === activeSession?.id
                           ? "border-accent bg-accent-soft"
                           : "border-border bg-surface-2 hover:bg-surface-3",
                       )}
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="min-w-0 flex-1 truncate text-sm text-fg">{s.topic}</span>
-                        <Badge tone={STATUS_TONE[s.status]}>{t(STATUS_LABEL_KEY[s.status])}</Badge>
-                      </div>
-                      <div className="mt-0.5 flex items-center gap-2 text-[11px] text-faint">
-                        <span>{fmtDate(s.created_at)}</span>
-                        <span>·</span>
-                        <span>{Math.round(s.progress)}%</span>
-                      </div>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => selectSession(s)}
+                        className="min-w-0 flex-1 px-3 py-2 text-left"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="min-w-0 flex-1 truncate text-sm text-fg">{s.topic}</span>
+                          <Badge tone={STATUS_TONE[s.status]}>{t(STATUS_LABEL_KEY[s.status])}</Badge>
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-2 text-[11px] text-faint">
+                          <span>{fmtDate(s.created_at)}</span>
+                          <span>·</span>
+                          <span>{Math.round(s.progress)}%</span>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void deleteSession(s)}
+                        title={t("deleteTitle")}
+                        aria-label={t("deleteTitle")}
+                        className="flex w-8 shrink-0 items-center justify-center rounded-r-md text-faint opacity-0 transition hover:bg-danger-soft hover:text-danger focus:opacity-100 group-hover:opacity-100"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   ))
                 )}
               </CardContent>

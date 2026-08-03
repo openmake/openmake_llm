@@ -88,10 +88,23 @@ export function buildBrowserRunArgs(
  * PURE: workspace 내부로만 해석되는 안전 경로 반환 (유닛테스트 대상).
  * `..`/절대경로 표기 탈출을 차단하는 **어휘적(1차)** 가드 — 심링크는 해석하지 않으므로
  * 실제 파일 I/O 전에는 반드시 safeRealWorkspacePath 로 실경로까지 검증할 것.
+ *
+ * 컨테이너 절대경로(`/workspace/...`)는 **탈출이 아니라 같은 파일의 다른 표기**다. 에이전트는
+ * 컨테이너 안에서 bash 로 작업하므로 `/workspace/data.json` 이 눈에 보이는 정확한 경로이고,
+ * 실제로 그렇게 쓴다 — 그런데 이 검사는 호스트 경로(hostWorkdir) 기준이라 탈출로 판정했다.
+ * 2026-07-22 ~ 08-02 사이 예약 리포트가 `/workspace/data.json`·`/workspace/report.html` 로
+ * 반복 차단당하며 턴을 낭비했고, 08-03 실행은 마지막 턴에 이 차단을 맞아 재시도할 턴이 없어
+ * 리포트 없이 끝났다. 마운트 지점을 상대경로로 정규화해 같은 대상을 같게 해석한다.
+ * 정규화 뒤에도 검사는 그대로 적용되므로 `/workspace/../etc/passwd` 는 여전히 차단된다.
  */
 export function safeResolveWorkspacePath(hostWorkdir: string, userPath: string): string {
     const root = resolve(hostWorkdir);
-    const abs = resolve(root, userPath);
+    const normalized = userPath === WORKSPACE
+        ? '.'
+        : userPath.startsWith(WORKSPACE + '/')
+            ? userPath.slice(WORKSPACE.length + 1) || '.'
+            : userPath;
+    const abs = resolve(root, normalized);
     if (abs !== root && !abs.startsWith(root + sep)) {
         throw new Error(`workspace 경로 탈출 차단: ${userPath}`);
     }

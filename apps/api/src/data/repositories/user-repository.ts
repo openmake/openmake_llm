@@ -98,13 +98,4 @@ export class UserRepository extends BaseRepository {
         return result.rows[0]?.artifacts_enabled ?? true;
     }
 
-    /**
-     * Artifacts on/off 설정 갱신 (Settings UI 의 토글).
-     */
-    async updateArtifactsEnabled(userId: string, enabled: boolean): Promise<void> {
-        await this.query(
-            'UPDATE users SET artifacts_enabled = $1, updated_at = NOW() WHERE id = $2',
-            [enabled, userId],
-        );
-    }
 }

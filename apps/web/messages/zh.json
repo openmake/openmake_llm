@@ -238,6 +238,7 @@
     "disclaimer": "OpenMake 可能会出错，请核实重要信息。",
     "suppressedTag": "(未应用)",
     "modifierSuppressed": "{label} 在拦截模式下不会应用",
+    "externalLocalModeNotice": "讨论和深度研究将使用本地模型运行（不会使用所选的外部模型）。",
     "toggle": {
       "discussion": "讨论",
       "thinking": "思考",
@@ -771,7 +772,14 @@
     },
     "viewPr": "查看 PR",
     "downloadFailed": "下载失败: {error}",
-    "localBadge": "本地文件夹执行"
+    "localBadge": "本地文件夹执行",
+    "errorReason": {
+      "label": "失败原因:",
+      "goal_incomplete": "目标未达成",
+      "max_turns_exhausted": "已达轮次/资源上限",
+      "interrupted": "因服务器重启而中断",
+      "resumableHint": "可继续执行"
+    }
   },
   "customAgents": {
     "pageTitle": "自定义智能体",
@@ -871,6 +879,9 @@
     "sourceCount": "{count} 条",
     "verified": "已验证",
     "unverified": "未验证",
+    "deleteTitle": "删除",
+    "deleteConfirm": "确定删除研究「{topic}...」吗？",
+    "deleteFailed": "删除失败: {message}",
     "status": {
       "pending": "待处理",
       "running": "进行中",
@@ -1342,6 +1353,14 @@
     "disabled": "已禁用",
     "editAction": "编辑",
     "deleteAction": "删除"
+  },
+  "providerKeys": {
+    "validate": "验证",
+    "validating": "验证中",
+    "validateOk": "验证成功",
+    "validateFailed": "验证失败：{error}",
+    "usageSummary": "近{days}天 · {calls}次调用 · {tokens} 令牌",
+    "error": "错误"
   },
   "apiKeys": {
     "title": "API 密钥",

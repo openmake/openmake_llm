@@ -11,6 +11,7 @@ import { useAppStore, type PendingApproval, type AgentTaskState } from "@/lib/st
 import { ApiClient } from "@/lib/api-client";
 import { Markdown } from "./markdown";
 import { StructuredAnswer } from "./structured-answer";
+import { McpResourceCard, decodeMcpResources } from "@/components/chat/mcp-resource-card";
 import { cn } from "@/lib/utils";
 
 const ARTIFACT_PLACEHOLDER = /\[\[artifact:([^\]]+)\]\]/g;
@@ -157,6 +158,25 @@ function ArtifactBuilding() {
       <FileCode2 className="h-4 w-4 animate-pulse text-accent" />
       {t("artifactBuilding")}
     </span>
+  );
+}
+
+/** system 메시지 — MCP 도구 resource 카드(sentinel content) 이거나 일반 안내/오류 텍스트. */
+function SystemMessage({ content }: { content: string }) {
+  const mcp = decodeMcpResources(content);
+  if (mcp) {
+    return (
+      <div className="flex justify-start">
+        <div className="w-full max-w-2xl">
+          <McpResourceCard payload={mcp} />
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex justify-center">
+      <div className="rounded-md bg-danger-soft px-3 py-1.5 text-xs text-danger">{content}</div>
+    </div>
   );
 }
 
@@ -447,12 +467,15 @@ function FeedbackButtons({ messageId }: { messageId: string }) {
   const sessionId = useAppStore((s) => s.currentSessionId);
   const [sent, setSent] = useState<"thumbs_up" | "thumbs_down" | null>(null);
   const send = (signal: "thumbs_up" | "thumbs_down") => {
-    if (sent) return;
+    // sessionId 가 없으면 백엔드 Zod min(1) 검증에 걸려 400 이므로 전송 자체를 스킵.
+    if (sent || !sessionId) return;
     setSent(signal);
-    void ApiClient.post("/api/chat/feedback", { messageId, sessionId: sessionId ?? "", signal }).catch(() => {
+    void ApiClient.post("/api/chat/feedback", { messageId, sessionId, signal }).catch(() => {
       setSent(null); // 실패 시 재시도 허용
     });
   };
+  // 세션이 없으면 피드백을 저장할 수 없다(백엔드가 sessionId 필수) — 버튼을 감춘다.
+  if (!sessionId) return null;
   if (sent) {
     return <div className="mt-1.5 text-xs text-muted">{t("feedbackThanks")}</div>;
   }
@@ -544,11 +567,7 @@ export function MessageList() {
             </div>
           </div>
         ) : m.role === "system" ? (
-          <div key={i} className="flex justify-center">
-            <div className="rounded-md bg-danger-soft px-3 py-1.5 text-xs text-danger">
-              {m.content}
-            </div>
-          </div>
+          <SystemMessage key={i} content={m.content} />
         ) : (
           <div key={i} className="flex gap-3">
             <Image src="/logo.png" alt="OpenMake" width={28} height={28} className="mt-0.5 h-7 w-7 shrink-0 rounded-md object-contain" />
