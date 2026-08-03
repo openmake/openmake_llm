@@ -99,6 +99,16 @@ export const RL_UPLOAD = {
 } as const;
 
 /**
+ * 청크 업로드 레이트 리밋 — 파일 하나가 청크 수십 개(예: 1GB = 32MB×32)로 쪼개져
+ * 오므로 일반 업로드보다 훨씬 높은 요청 수를 허용해야 한다(15분 창 기준 약 9GB 분량).
+ */
+export const RL_CHUNK_UPLOAD = {
+    windowMs: WINDOW_15M,
+    ipLimit: Number(process.env.RL_CHUNK_UPLOAD_IP) || 300,
+    userLimit: Number(process.env.RL_CHUNK_UPLOAD_USER) || 300,
+} as const;
+
+/**
  * 웹 검색 레이트 리밋 (외부 API 호출 — 비용 높음)
  */
 export const RL_WEB_SEARCH = {

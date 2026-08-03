@@ -49,6 +49,7 @@ import {
     ensureUploadTmpDir, finalizeUploadedFile, resolveStoredPath,
     discardTmpFiles, removeTaskFiles, safeBaseName,
 } from '../services/agent-task/upload-store';
+import { claimUploadsAsInputFiles, ChunkStoreError } from '../services/agent-task/chunk-store';
 
 const logger = createLogger('AgentTaskRoutes');
 const router = Router();
@@ -167,10 +168,12 @@ router.post('/', (req: Request, res: Response, next) => {
     // base64 원본도 함께 보존해 실행 시 샌드박스 uploads/ 에 원본 바이트로 기록
     // (에이전트가 openpyxl 등으로 직접 파싱). 응답에선 toPublicTask 가 메타만 노출.
     let inputFiles: AgentTaskInputFile[] | undefined;
-    if (Array.isArray(files) && files.length > 0) {
-        const originalData = files.map((f) => (typeof f.data === 'string' && f.data.length > 0 ? f.data : undefined));
-        await extractAttachedDocuments(files); // in-place: data → content 추출 후 data 제거
-        inputFiles = files.map((f, i) => ({
+    const inlineFiles = Array.isArray(files) ? files.filter((f) => !f.uploadId) : [];
+    const uploadRefs = Array.isArray(files) ? files.filter((f) => !!f.uploadId) : [];
+    if (inlineFiles.length > 0) {
+        const originalData = inlineFiles.map((f) => (typeof f.data === 'string' && f.data.length > 0 ? f.data : undefined));
+        await extractAttachedDocuments(inlineFiles); // in-place: data → content 추출 후 data 제거
+        inputFiles = inlineFiles.map((f, i) => ({
             name: f.name,
             type: f.type,
             content: f.content,
@@ -179,6 +182,21 @@ router.post('/', (req: Request, res: Response, next) => {
             ...(originalData[i] ? { data: originalData[i] } : {}),
             ...(originalData[i] && typeof f.content === 'string' ? { extracted: true } : {}),
         }));
+    }
+
+    // 입력 첨부(청크 업로드 참조 경로): /api/agent-task-uploads 로 완료된 업로드를
+    // task 디렉토리로 소모(claim) — Cloudflare 요청당 100MB 상한 우회의 마지막 단계.
+    if (uploadRefs.length > 0) {
+        try {
+            const claimed = await claimUploadsAsInputFiles(
+                uploadRefs.map((f) => ({ uploadId: f.uploadId!, type: f.type })), userId, taskId);
+            inputFiles = [...(inputFiles ?? []), ...claimed];
+        } catch (e) {
+            await removeTaskFiles(taskId); // 앞서 클레임된 파일 롤백
+            const status = e instanceof ChunkStoreError ? e.statusCode : 500;
+            res.status(status).json(badRequest(`업로드 참조 처리 실패: ${e instanceof Error ? e.message : String(e)}`));
+            return;
+        }
     }
 
     // 입력 첨부(multipart 경로): 스트리밍된 원본을 task 디렉토리로 이동하고 storedPath 로

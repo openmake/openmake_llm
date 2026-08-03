@@ -6,7 +6,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { rateLimited } from '../utils/api-response';
 import {
-    RL_GENERAL, RL_AUTH, RL_CHAT, RL_RESEARCH, RL_UPLOAD,
+    RL_GENERAL, RL_AUTH, RL_CHAT, RL_RESEARCH, RL_UPLOAD, RL_CHUNK_UPLOAD,
     RL_WEB_SEARCH, RL_MEMORY, RL_MCP, RL_API_KEY_MGMT, RL_PUSH, RL_ADMIN,
     RL_AGENT_TASK,
 } from '../config/rate-limits';
@@ -396,6 +396,17 @@ export const uploadLimiter = createAdvancedRateLimiter({
         { path: /^POST:\/api\/documents\/upload(?:\/|$)/, limit: RL_UPLOAD.uploadLimit },
     ],
     message: '업로드 요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
+});
+
+/**
+ * 청크 업로드 (agent-task 대용량 첨부) 레이트 리미터 — 파일 하나가 청크 수십 개로
+ * 나뉘어 도착하므로 uploadLimiter(30/15분)와 별도로 높은 상한을 갖는다.
+ */
+export const chunkUploadLimiter = createAdvancedRateLimiter({
+    windowMs: RL_CHUNK_UPLOAD.windowMs,
+    ipLimit: RL_CHUNK_UPLOAD.ipLimit,
+    userLimit: RL_CHUNK_UPLOAD.userLimit,
+    message: '청크 업로드 요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
 });
 
 /**

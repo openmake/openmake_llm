@@ -44,6 +44,7 @@ import {
     auditRouter,
     researchRouter,
     agentTaskRouter,
+    agentTaskUploadRouter,
     localBridgeRouter,
     desktopUpdateRouter,
     agentTaskScheduleRouter,
@@ -257,6 +258,8 @@ export function setupApiRoutes(
     app.use('/api/audit', auditRouter);
     app.use('/api/research', researchRouter);
     app.use('/api/agent-tasks', agentTaskRouter);
+    // 청크 업로드 — Cloudflare 요청당 100MB 상한 우회 (대용량 첨부는 조각으로 수신)
+    app.use('/api/agent-task-uploads', agentTaskUploadRouter);
     app.use('/api/local-bridge', localBridgeRouter);
     app.use('/api/desktop', desktopUpdateRouter);
     app.use('/api/agent-task-schedules', agentTaskScheduleRouter);

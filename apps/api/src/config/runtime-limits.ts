@@ -1231,6 +1231,20 @@ export const AGENT_TASK_LIMITS = {
      *  AGENT_TASK_UPLOAD_ROOT(기본 <cwd>/data/uploads/agent-tasks). */
     UPLOAD_ROOT: process.env.AGENT_TASK_UPLOAD_ROOT
         || `${process.cwd()}/data/uploads/agent-tasks`,
+    /**
+     * 청크 업로드(2026-08-04) — chat.openmake.cc 외부 경로는 Cloudflare 무료 플랜의
+     * 요청당 100MB 상한이 있어 단일 multipart/json 으로는 대용량 첨부가 edge 413 으로
+     * 거절된다. 파일을 청크로 나눠 /api/agent-task-uploads 로 올린 뒤 uploadId 참조로
+     * 작업을 생성하면 요청당 크기가 CHUNK_MAX_BYTES 이하로 유지돼 상한을 우회한다.
+     */
+    /** 청크 1개 최대 크기(bytes) — Cloudflare 100MB 상한 대비 충분한 여유.
+     *  AGENT_TASK_CHUNK_MAX_BYTES(기본 32MB). */
+    CHUNK_MAX_BYTES: parseInt(process.env.AGENT_TASK_CHUNK_MAX_BYTES || '', 10) || 32 * 1024 * 1024,
+    /** 업로드당 청크 수 상한 — REQUEST_BODY_MAX_BYTES(1000MB)/최소 실용 청크 기준 여유값. */
+    CHUNK_MAX_COUNT: parseInt(process.env.AGENT_TASK_CHUNK_MAX_COUNT || '', 10) || 256,
+    /** 미완성(미클레임) 청크 업로드 보관 시한(ms) — init 시 지난 것을 기회적으로 청소.
+     *  AGENT_TASK_CHUNK_TTL_MS(기본 24h). */
+    CHUNK_UPLOAD_TTL_MS: parseInt(process.env.AGENT_TASK_CHUNK_TTL_MS || '', 10) || 24 * 60 * 60 * 1000,
     /** 사용자 지정 max_turns 의 절대 상한 */
     MAX_TURNS_CEILING: 20,
     /**
