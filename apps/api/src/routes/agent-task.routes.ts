@@ -212,6 +212,9 @@ router.post('/', (req: Request, res: Response, next) => {
             const name = safeBaseName(rawName, `file_${i}`);
             const storedPath = await finalizeUploadedFile(taskId, p.path, rawName, i);
             const entry: AgentTaskInputFile = { name, type: p.mimetype, size: p.size, storedPath };
+            // 생성 시점 추출은 30MB 이내만 — 대형 스캔 PDF OCR(파일당 ~2분)을 여기서 돌리면
+            // 생성 응답이 Cloudflare 응답 한도(100s, 524)를 초과한다. 대형 파일 텍스트화는
+            // 샌드박스 내 tesseract(에이전트 직접 OCR)가 담당.
             if (p.size <= DOC_EXTRACT_LIMITS.MAX_BYTES_PER_FILE) {
                 const probe: AgentTaskInputFile = {
                     name, type: p.mimetype,

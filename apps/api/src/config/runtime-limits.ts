@@ -405,6 +405,22 @@ export const DOC_EXTRACT_LIMITS = {
     OCR_TIMEOUT_MS: parseInt(process.env.DOC_EXTRACT_OCR_TIMEOUT_MS || '120000', 10),
     /** OCR 언어 (tesseract 코드, '+' 로 다중 — 기본 영어+한국어) */
     OCR_LANGS: process.env.DOC_EXTRACT_OCR_LANGS || 'eng+kor',
+    /**
+     * 네이티브 OCR (pdftoppm+tesseract, 2026-08-04) — 구 sips+tesseract.js 폴백은 첫
+     * 페이지만 인식하는 1페이지 한계가 있었다. 호스트에 poppler/tesseract 가 있으면
+     * 다중 페이지 병렬 OCR 로 대체하고, 없으면 구 경로로 자동 폴백(graceful).
+     * 생성 시점 동기 추출이므로 페이지·시간 예산으로 상한을 건다 — 예산 밖 잔여
+     * 페이지는 원본이 샌드박스로 전달돼 에이전트가 컨테이너 내 tesseract 로 직접 처리.
+     */
+    /** 생성 시점 OCR 최대 페이지 수 (한국어 OCR 실측 약 2~7초/페이지 — 예산 내 상한) */
+    OCR_MAX_PAGES: parseInt(process.env.DOC_EXTRACT_OCR_MAX_PAGES || '50', 10),
+    /** OCR 래스터화 해상도 (dpi) — 인쇄물 텍스트는 200 이면 충분, 300 은 2배 이상 느림 */
+    OCR_DPI: parseInt(process.env.DOC_EXTRACT_OCR_DPI || '200', 10),
+    /** OCR 페이지 병렬도 (tesseract 프로세스 동시 실행 수) */
+    OCR_PARALLEL: parseInt(process.env.DOC_EXTRACT_OCR_PARALLEL || '4', 10),
+    /** PDF OCR 경로 전용 크기 상한 — MAX_BYTES_PER_FILE(JVM 보호용 30MB) 초과 스캔본도
+     *  이 상한까지는 OCR 를 시도한다(opendataloader 만 생략, 디스크 경유라 메모리 안전) */
+    OCR_MAX_BYTES: parseInt(process.env.DOC_EXTRACT_OCR_MAX_BYTES || String(300 * 1024 * 1024), 10),
 } as const;
 
 /**
