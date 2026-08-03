@@ -1596,5 +1596,10 @@
     "hint": "Needs repo scope. Create at github.com → Settings → Developer settings → Personal access tokens.",
     "saveFailed": "Failed to save token",
     "disconnectFailed": "Failed to disconnect"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "description": "The page you are looking for doesn't exist or has been moved.",
+    "backHome": "Back to home"
   }
 }

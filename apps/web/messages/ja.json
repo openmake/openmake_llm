@@ -1596,5 +1596,10 @@
     "hint": "repo スコープが必要です。github.com → Settings → Developer settings → Personal access tokens で作成。",
     "saveFailed": "トークンの保存に失敗しました",
     "disconnectFailed": "切断に失敗しました"
+  },
+  "notFound": {
+    "title": "ページが見つかりません",
+    "description": "お探しのページは存在しないか、移動された可能性があります。",
+    "backHome": "ホームに戻る"
   }
 }
