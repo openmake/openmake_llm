@@ -1,5 +1,45 @@
 # Changelog
 
+## [1.20.0](https://github.com/openmake/openmake_llm/compare/v1.19.0...v1.20.0) (2026-08-03)
+
+
+### ✨ 기능
+
+* **agent-task:** 청크 업로드 — Cloudflare 요청당 100MB 상한 우회 ([f77e48e](https://github.com/openmake/openmake_llm/commit/f77e48e749099f410045687b680a0e8c094e1f59))
+* **agent-task:** 청크 업로드 — Cloudflare 요청당 100MB 상한 우회 ([ef3b154](https://github.com/openmake/openmake_llm/commit/ef3b1540ea30538fb2b29f01922f51567e2db95a))
+* **chat:** 응답 신뢰성·관측 개선 — 툴콜 누수·언어 혼입·토론 근거·TTFT 분해 ([83ade02](https://github.com/openmake/openmake_llm/commit/83ade02c89074b7ed7eb5b936aa286fb66fcac60))
+* **chat:** 응답 신뢰성·관측 개선 — 툴콜 누수·언어 혼입·토론 근거·TTFT 분해 ([3b78bf7](https://github.com/openmake/openmake_llm/commit/3b78bf737e5c04be18c741bf9d7e1a684383fa6a))
+* **observability:** 에이전트 작업 비용 집계 + 마무리 턴 발동 관측 ([e3757e7](https://github.com/openmake/openmake_llm/commit/e3757e70cba338b2dfb30118e730c8bacc89b272))
+* **ocr:** 스캔 PDF 처리 — 샌드박스 OCR 도구 + 네이티브 추출 폴백 ([25cab92](https://github.com/openmake/openmake_llm/commit/25cab925d5e9203f734a8ec275c474a6f1fb7732))
+* **ocr:** 스캔 PDF 처리 2축 — 샌드박스 OCR 도구 + 네이티브 추출 폴백 ([8629454](https://github.com/openmake/openmake_llm/commit/8629454f401d4a8daaf2316cb40ce67cdb930b6d))
+* **security:** SSRF IPv6 대역 보강 + agent-tasks 전용 리미터 + 뷰어 서명키 fail-closed ([169838c](https://github.com/openmake/openmake_llm/commit/169838c2a0f9f50b8b297bc7c642575bfa61c1e7))
+* **web/api:** 외부 키 검증·사용량 UI + OAuth 경로 일반화 + 죽은 엔드포인트 제거 ([ab13e22](https://github.com/openmake/openmake_llm/commit/ab13e226a326900f6bd78e052d285be00647b994))
+* **web:** GA4 이중 측정 ID 전송 — 데모 전용 + 홈페이지 교차 도메인 통합 ([bf15bc8](https://github.com/openmake/openmake_llm/commit/bf15bc8ed479b58e9a1cb7fa92915c959c6aa725))
+* **web:** 라우트 에러 바운더리·404 폴백 추가 ([31301ae](https://github.com/openmake/openmake_llm/commit/31301aecbe6addb0355084612185c318e85d5390))
+* **web:** 백엔드 기능 미반영 3건 — 작업 실패 사유·리서치 삭제·모드 안내 ([5c867b7](https://github.com/openmake/openmake_llm/commit/5c867b719a98eaf1338418c1b09892314e51f616))
+
+
+### 🐛 버그 수정
+
+* **agent-task:** goal 길이 상한 2,000 → 20,000자 (config 외부화) ([e6b9744](https://github.com/openmake/openmake_llm/commit/e6b9744ff1d67398b7f895c7d8d23ee597a55a49))
+* **agent-task:** goal 에 코드 블록·제네릭 허용 (allowHtmlLikeContent) ([2d16463](https://github.com/openmake/openmake_llm/commit/2d1646390158f9272bcc95ec2c2f33e323c722d8))
+* **agent-task:** 자원 상한 도달 시 마무리 턴 강제 — 산출물 절단 차단 ([3408727](https://github.com/openmake/openmake_llm/commit/3408727d62058dada637435468f8a7c1f4bf0300))
+* **agent-task:** 턴 상한 소진을 completed 로 오표시하던 문제 — failed + 재개 가능 ([a835bbc](https://github.com/openmake/openmake_llm/commit/a835bbc864b09615ef6d1d91d77f116a25be0bd8))
+* **agents:** manifest 스킬 주입 시 스킬 이름 유실 — onSkillsActivated 미호출 수정 ([7182230](https://github.com/openmake/openmake_llm/commit/718223020b66b0c0bea4e4bd22353b4a34be3d4f))
+* **chat:** 비스트리밍 이미지 누락·부분 응답 유실·특수모드 후처리 비대칭 수정 ([d9f049c](https://github.com/openmake/openmake_llm/commit/d9f049c1c23485205dc6250ee777cf2b4b5c3d99))
+* **config:** RL_CHUNK_UPLOAD 을 windowMs 불변식 레지스트리에 등록 ([b7393bc](https://github.com/openmake/openmake_llm/commit/b7393bc225d3822e12f89f3923ac3385c7f3a474))
+* **sandbox:** 컨테이너 절대경로(/workspace/...)를 탈출로 오판하던 문제 ([7a5846f](https://github.com/openmake/openmake_llm/commit/7a5846fca311cb1f2bf5b573f2a876a1e97b258a))
+* **test:** agent-resolver 테스트를 env 임계값에서 분리 ([7bd1d36](https://github.com/openmake/openmake_llm/commit/7bd1d3609c053547cd5a5324c31fca63da7c5c10))
+* **web:** WS 계약 갭 해소 — 토큰 갱신·배포 감지·리소스 카드·에러 처리 ([09b6f31](https://github.com/openmake/openmake_llm/commit/09b6f31e51e543a8c8c5e9219aed2f612a0fdbac))
+* **web:** 백엔드↔프론트 정합 점검 후속 — WS 계약 갭·미반영 기능·백엔드 정리 ([a61423c](https://github.com/openmake/openmake_llm/commit/a61423c8f19a82c15dd733b98141acd919305183))
+
+
+### ♻️ 리팩터링
+
+* **agent-task:** AgentTaskService 600줄 가드 분할 (641→599) + 마무리 턴 도구 차단 ([61bf8aa](https://github.com/openmake/openmake_llm/commit/61bf8aa81c29a7bcfd9e6c96bb06759fbccea274))
+* **chat:** external-provider 600줄 가드 분할 (683→554) ([6d98078](https://github.com/openmake/openmake_llm/commit/6d9807816efaa0f0c375dbc6851294f2694c1f5c))
+* **chat:** 응답 후처리를 프로세서 파이프라인으로 정리 ([2268014](https://github.com/openmake/openmake_llm/commit/22680144e31c0ac8b44444542048a0bc19dcc6a4))
+
 ## [1.19.0](https://github.com/openmake/openmake_llm/compare/v1.18.0...v1.19.0) (2026-08-01)
 
 
