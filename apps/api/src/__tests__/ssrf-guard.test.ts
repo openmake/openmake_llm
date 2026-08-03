@@ -76,6 +76,59 @@ describe('isBlockedIP', () => {
     test('allows ::ffff:8.8.8.8 (IPv4-mapped public)', () => {
         expect(isBlockedIP('::ffff:8.8.8.8')).toBe(false);
     });
+
+    // IPv6 차단 대역 보강 (2026-08-03)
+    test('blocks :: (IPv6 unspecified)', () => {
+        expect(isBlockedIP('::')).toBe(true);
+    });
+
+    test('blocks 64:ff9b::7f00:1 (NAT64 embedding loopback)', () => {
+        expect(isBlockedIP('64:ff9b::7f00:1')).toBe(true);
+    });
+
+    test('blocks 64:ff9b::a9fe:a9fe (NAT64 embedding metadata 169.254.169.254)', () => {
+        expect(isBlockedIP('64:ff9b::a9fe:a9fe')).toBe(true);
+    });
+
+    test('allows 64:ff9b::808:808 (NAT64 embedding public 8.8.8.8)', () => {
+        expect(isBlockedIP('64:ff9b::808:808')).toBe(false);
+    });
+
+    test('blocks 2002:7f00:1:: (6to4 embedding loopback)', () => {
+        expect(isBlockedIP('2002:7f00:1::')).toBe(true);
+    });
+
+    test('allows 2002:808:808:: (6to4 embedding public 8.8.8.8)', () => {
+        expect(isBlockedIP('2002:808:808::')).toBe(false);
+    });
+
+    test('blocks 2001::1 (Teredo)', () => {
+        expect(isBlockedIP('2001::1')).toBe(true);
+    });
+
+    test('blocks 2001:db8::1 (documentation range)', () => {
+        expect(isBlockedIP('2001:db8::1')).toBe(true);
+    });
+
+    test('blocks 100:: (discard-only)', () => {
+        expect(isBlockedIP('100::')).toBe(true);
+    });
+
+    test('blocks fec0::1 (deprecated site-local)', () => {
+        expect(isBlockedIP('fec0::1')).toBe(true);
+    });
+
+    test('blocks ff02::1 (multicast)', () => {
+        expect(isBlockedIP('ff02::1')).toBe(true);
+    });
+
+    test('allows 2606:4700:4700::1111 (Cloudflare public IPv6)', () => {
+        expect(isBlockedIP('2606:4700:4700::1111')).toBe(false);
+    });
+
+    test('allows 2001:4860:4860::8888 (Google public IPv6 — 2001::/32 아님)', () => {
+        expect(isBlockedIP('2001:4860:4860::8888')).toBe(false);
+    });
 });
 
 describe('validateOutboundUrl', () => {
