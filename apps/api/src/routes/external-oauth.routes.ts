@@ -6,10 +6,10 @@
  * ChatGPT Plus/Pro 계정을 OAuth 디바이스 코드 플로우로 연결한다.
  * localhost 콜백이 필요 없어 웹/CLI 어디서든 동작:
  *
- *   1. POST /api/external-keys/chatgpt/oauth/start
+ *   1. POST /api/external-keys/:providerId/oauth/start
  *      → OpenAI deviceauth 에서 user_code 발급, 검증 URL 과 함께 반환
  *   2. 사용자가 verification_url(auth.openai.com/codex/device)에서 코드 입력
- *   3. POST /api/external-keys/chatgpt/oauth/poll  (프론트가 interval 간격 반복 호출)
+ *   3. POST /api/external-keys/:providerId/oauth/poll  (프론트가 interval 간격 반복 호출)
  *      → 승인 전: { status: 'pending' }
  *      → 승인 후: authorization_code 교환 → 세션 암호화 저장 → { status: 'complete' }
  *
@@ -26,12 +26,11 @@ import { z } from 'zod';
 import { requireAuth } from '../auth';
 import { validate } from '../middlewares/validation';
 import { asyncHandler } from '../utils/error-handler';
-import { success, badRequest, unauthorized } from '../utils/api-response';
+import { success, badRequest, unauthorized, notFound } from '../utils/api-response';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { getPool } from '../data/models/unified-database';
 import {
     CHATGPT_OAUTH,
-    CHATGPT_PROVIDER_ID,
     chatgptDeviceVerifyUrl,
 } from '../config/chatgpt-oauth';
 import { getProviderCatalogEntry } from '../config/external-providers';
@@ -63,9 +62,29 @@ function getUserId(req: Request): string | null {
 }
 
 /**
- * POST /chatgpt/oauth/start — 디바이스 코드 발급
+ * 제네릭 `:providerId` 경로 가드 — 카탈로그에 존재하고 authMethods 에 'oauth' 를
+ * 포함하는 provider 만 통과시킨다. 아니면 res 에 404 를 쓰고 null 반환.
+ *
+ * 현재 oauth provider 는 chatgpt 하나뿐이라 디바이스 플로우 구현은 CHATGPT_OAUTH
+ * 를 그대로 재사용한다 — 경로만 프론트의 제네릭 호출(`/:providerId/oauth/*`)에 맞춰
+ * 일반화했다(시한 결합 제거).
  */
-router.post('/chatgpt/oauth/start',
+function resolveOAuthProviderOr404(req: Request, res: Response): string | null {
+    const providerId = req.params.providerId;
+    const catalogEntry = getProviderCatalogEntry(providerId);
+    if (!catalogEntry || !catalogEntry.authMethods.includes('oauth')) {
+        res.status(404).json(
+            notFound(`Provider '${providerId}' 는 OAuth 로그인을 지원하지 않습니다`),
+        );
+        return null;
+    }
+    return providerId;
+}
+
+/**
+ * POST /:providerId/oauth/start — 디바이스 코드 발급 (oauth provider 만)
+ */
+router.post('/:providerId/oauth/start',
     requireAuth,
     asyncHandler(async (req: Request, res: Response) => {
         const userId = getUserId(req);
@@ -73,6 +92,7 @@ router.post('/chatgpt/oauth/start',
             res.status(401).json(unauthorized('User ID not found.'));
             return;
         }
+        if (!resolveOAuthProviderOr404(req, res)) return;
 
         const response = await fetch(
             `${CHATGPT_OAUTH.ISSUER}/api/accounts/deviceauth/usercode`,
@@ -121,9 +141,9 @@ const pollSchema = z.object({
 });
 
 /**
- * POST /chatgpt/oauth/poll — 승인 확인 (1회 폴링) + 완료 시 토큰 교환·저장
+ * POST /:providerId/oauth/poll — 승인 확인 (1회 폴링) + 완료 시 토큰 교환·저장
  */
-router.post('/chatgpt/oauth/poll',
+router.post('/:providerId/oauth/poll',
     requireAuth,
     validate(pollSchema),
     asyncHandler(async (req: Request, res: Response) => {
@@ -132,6 +152,8 @@ router.post('/chatgpt/oauth/poll',
             res.status(401).json(unauthorized('User ID not found.'));
             return;
         }
+        const providerId = resolveOAuthProviderOr404(req, res);
+        if (!providerId) return;
         const { device_auth_id, user_code } = req.body as z.infer<typeof pollSchema>;
 
         const pollResponse = await fetch(
@@ -200,11 +222,11 @@ router.post('/chatgpt/oauth/poll',
         const expiresAt = new Date(
             Date.now() + (tokens.expires_in ?? CHATGPT_OAUTH.DEFAULT_ACCESS_TOKEN_TTL_SEC) * 1000,
         );
-        const catalogEntry = getProviderCatalogEntry(CHATGPT_PROVIDER_ID);
+        const catalogEntry = getProviderCatalogEntry(providerId);
 
         await getRepo().upsert({
             userId,
-            providerId: CHATGPT_PROVIDER_ID,
+            providerId,
             sdkType: 'openai-compatible',
             displayName: catalogEntry?.displayName ?? 'ChatGPT',
             baseUrl: catalogEntry?.defaultBaseUrl ?? CHATGPT_OAUTH.CODEX_BASE_URL,
@@ -218,14 +240,14 @@ router.post('/chatgpt/oauth/poll',
             oauthAccountId: accountId ?? null,
             oauthExpiresAt: expiresAt,
         });
-        await getRepo().invalidateCachedModels(userId, CHATGPT_PROVIDER_ID);
+        await getRepo().invalidateCachedModels(userId, providerId);
 
         logger.info(
-            `ChatGPT OAuth 연결 완료: user=${userId} account=${accountId ?? 'unknown'}`,
+            `ChatGPT OAuth 연결 완료: user=${userId} provider=${providerId} account=${accountId ?? 'unknown'}`,
         );
         res.json(success({
             status: 'complete',
-            provider_id: CHATGPT_PROVIDER_ID,
+            provider_id: providerId,
             account_id: accountId ?? null,
         }));
     }),

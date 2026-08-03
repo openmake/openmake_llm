@@ -11,6 +11,7 @@ import {
   X,
   Save,
   AlertTriangle,
+  ShieldCheck,
 } from "lucide-react";
 import {
   Button,
@@ -59,6 +60,23 @@ interface OAuthStartData {
   interval_sec: number;
 }
 
+/** 사용량 요약 응답 (backend GET /api/external-keys/usage/summary) */
+interface UsageSummaryData {
+  days: number;
+  totals_by_provider: Array<{
+    provider_id: string;
+    call_count: number;
+    input_tokens: number;
+    output_tokens: number;
+  }>;
+}
+
+/** provider_id → 최근 사용량 (표시용 집계) */
+interface ProviderUsage {
+  calls: number;
+  tokens: number;
+}
+
 /** SdkType → 번역 키 (렌더 시 t() 로 해석) */
 const SDK_LABEL_KEY: Record<SdkType, string> = {
   anthropic: "sdkType.anthropic",
@@ -80,12 +98,19 @@ function formatDate(iso: string | null | undefined, locale: string) {
  */
 export function ProviderKeysSection() {
   const t = useTranslations("apiKeys");
+  const pt = useTranslations("providerKeys");
   const locale = toBcp47(useLocale());
   const queryClient = useQueryClient();
   const [providers, setProviders] = useState<ProviderEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [usage, setUsage] = useState<Record<string, ProviderUsage>>({});
+  const [usageDays, setUsageDays] = useState(30);
+  const [validating, setValidating] = useState<Record<string, boolean>>({});
+  const [validateMsg, setValidateMsg] = useState<
+    Record<string, { ok: boolean; text: string }>
+  >({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -102,8 +127,58 @@ export function ProviderKeysSection() {
     } finally {
       setLoading(false);
     }
+    // 사용량 요약은 부가 정보 — 실패해도 키 목록 표시를 막지 않는다(fail-soft).
+    try {
+      const u = await ApiClient.get<ApiSuccess<UsageSummaryData>>(
+        "/api/external-keys/usage/summary",
+      );
+      const map: Record<string, ProviderUsage> = {};
+      for (const row of u?.data?.totals_by_provider ?? []) {
+        map[row.provider_id] = {
+          calls: row.call_count,
+          tokens: row.input_tokens + row.output_tokens,
+        };
+      }
+      setUsage(map);
+      if (u?.data?.days) setUsageDays(u.data.days);
+    } catch {
+      setUsage({});
+    }
     // locale 변경(t) 시 목업 폴백 라벨 재생성
   }, [t]);
+
+  const handleValidate = useCallback(
+    async (providerId: string) => {
+      setValidating((v) => ({ ...v, [providerId]: true }));
+      setValidateMsg((m) => {
+        const next = { ...m };
+        delete next[providerId];
+        return next;
+      });
+      try {
+        await ApiClient.post(`/api/external-keys/${providerId}/validate`, {});
+        setValidateMsg((m) => ({
+          ...m,
+          [providerId]: { ok: true, text: pt("validateOk") },
+        }));
+      } catch (e) {
+        setValidateMsg((m) => ({
+          ...m,
+          [providerId]: {
+            ok: false,
+            text: pt("validateFailed", {
+              error: e instanceof Error ? e.message : pt("error"),
+            }),
+          },
+        }));
+      } finally {
+        setValidating((v) => ({ ...v, [providerId]: false }));
+        // 검증 결과가 last_validation_ok 에 기록됨 — 상태 뱃지 갱신 위해 재조회.
+        await load();
+      }
+    },
+    [pt, load],
+  );
 
   useEffect(() => {
     queueMicrotask(() => void load());
@@ -191,6 +266,8 @@ export function ProviderKeysSection() {
                     {registered.map((p) => {
                       const k = p.user_key!;
                       const ok = k.last_validation_ok;
+                      const u = usage[p.provider_id];
+                      const vMsg = validateMsg[p.provider_id];
                       return (
                         <tr key={p.provider_id}>
                           <Td className="text-fg">
@@ -198,6 +275,15 @@ export function ProviderKeysSection() {
                             <div className="text-xs text-faint">
                               {t(SDK_LABEL_KEY[p.sdk_type])}
                             </div>
+                            {u && u.calls > 0 && (
+                              <div className="mt-0.5 text-xs text-muted">
+                                {pt("usageSummary", {
+                                  days: usageDays,
+                                  calls: u.calls.toLocaleString(locale),
+                                  tokens: u.tokens.toLocaleString(locale),
+                                })}
+                              </div>
+                            )}
                           </Td>
                           <Td>{k.display_name}</Td>
                           <Td className="font-mono text-xs">
@@ -219,16 +305,40 @@ export function ProviderKeysSection() {
                             )}
                           </Td>
                           <Td className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              aria-label={t("deleteAria")}
-                              onClick={() =>
-                                handleDelete(p.provider_id, p.display_name)
-                              }
-                            >
-                              <Trash2 className="h-4 w-4 text-danger" />
-                            </Button>
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={validating[p.provider_id]}
+                                onClick={() => void handleValidate(p.provider_id)}
+                              >
+                                {validating[p.provider_id] ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <ShieldCheck className="h-4 w-4" />
+                                )}
+                                {pt("validate")}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label={t("deleteAria")}
+                                onClick={() =>
+                                  handleDelete(p.provider_id, p.display_name)
+                                }
+                              >
+                                <Trash2 className="h-4 w-4 text-danger" />
+                              </Button>
+                            </div>
+                            {vMsg && (
+                              <p
+                                className={`mt-1 text-xs ${
+                                  vMsg.ok ? "text-success" : "text-danger"
+                                }`}
+                              >
+                                {vMsg.text}
+                              </p>
+                            )}
                           </Td>
                         </tr>
                       );
