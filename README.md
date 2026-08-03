@@ -1,8 +1,8 @@
 <h1 align="center">OpenMake LLM</h1>
 
 <p align="center">
-  <strong>A self-hosted, multi-model AI assistant platform.</strong><br/>
-  Private vLLM/LiteLLM inference · autonomous agents · MCP tools · deep research.
+  <strong>An open-source, local-first, self-hosted AI workspace for open-weight and BYOK models.</strong><br/>
+  vLLM/LiteLLM inference · autonomous AI agents · MCP tools · deep research · Docker sandboxes.
 </p>
 
 <p align="center">
