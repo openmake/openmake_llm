@@ -707,8 +707,10 @@ export const TOOL_RESULT_COMPACTION = {
     COMPACTED_MAX_CHARS: 200,
     /** 의미론적 요약 활성화 여부 (소형 모델로 요약, 기본 비활성) */
     USE_SEMANTIC: process.env.ENABLE_SEMANTIC_COMPACTION === 'true',
-    /** 의미론적 요약 사용 소형 모델 */
-    COMPACTOR_MODEL: process.env.COMPACTOR_MODEL || 'phi3:mini',
+    /** 의미론적 요약 사용 모델 — 빈 값이면 LLM_DEFAULT_MODEL.
+     * (구 기본 'phi3:mini' 는 Ollama 시절 모델로 vLLM/LiteLLM 카탈로그에 없어
+     *  활성화 시 404→절단 폴백만 타던 죽은 기본값 — 2026-08-03 제거) */
+    COMPACTOR_MODEL: process.env.COMPACTOR_MODEL || '',
     /** 의미론적 요약 시 결과 최대 토큰 수 */
     SEMANTIC_MAX_TOKENS: 150,
     /** 의미론적 요약 대상 최소 길이 (이보다 짧으면 단순 절단) */

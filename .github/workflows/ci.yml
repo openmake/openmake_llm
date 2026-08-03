@@ -1,7 +1,8 @@
 # ==============================================================
-# GitHub Actions CI Pipeline — scripts/ci-test.sh 미러링
+# GitHub Actions CI Pipeline
 # ==============================================================
-# 6 게이트: Bun Test → TypeScript Build → File Size Guard → ESLint → Routing Eval → Response Eval
+# 6 게이트: Jest → TypeScript Build → File Size Guard → ESLint → Routing Eval → Response Eval
+# 로컬 `npm test`/`npm run build`/`npm run lint` 와 같은 스크립트로 돈다(별도 미러 스크립트 없음).
 # Docker 사용 없음 (프로젝트 방침 영구 제외)
 # ==============================================================
 
@@ -28,7 +29,10 @@ jobs:
   ci:
     name: CI Gate (Test → Build → Size → Lint)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 15 → 25 (2026-08-01): 게이트 6종 총 소요가 13~15분으로 상한에 붙어,
+    # 모든 게이트가 success 인데도 15분 02초에 job 이 cancelled 된 사례가 있었다(#421 1차).
+    # 실제 실행 시간 단축(Jest 병렬화·게이트 분리)은 별도 과제.
+    timeout-minutes: 25
 
     # GITHUB_TOKEN 권한 명시 (PR 코멘트 게시용)
     # - contents: read  → 체크아웃에 필요
