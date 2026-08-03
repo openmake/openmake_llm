@@ -260,6 +260,7 @@ const _windowMsInvariant = [
     { name: 'RL_RESEARCH', cfg: RL_RESEARCH },
     { name: 'RL_AGENT_TASK', cfg: RL_AGENT_TASK },
     { name: 'RL_UPLOAD', cfg: RL_UPLOAD },
+    { name: 'RL_CHUNK_UPLOAD', cfg: RL_CHUNK_UPLOAD },
     { name: 'RL_WEB_SEARCH', cfg: RL_WEB_SEARCH },
     { name: 'RL_MEMORY', cfg: RL_MEMORY },
     { name: 'RL_MCP', cfg: RL_MCP },
