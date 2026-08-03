@@ -7,7 +7,8 @@ import { Request, Response, NextFunction } from 'express';
 import { rateLimited } from '../utils/api-response';
 import {
     RL_GENERAL, RL_AUTH, RL_CHAT, RL_RESEARCH, RL_UPLOAD,
-    RL_WEB_SEARCH, RL_MEMORY, RL_MCP, RL_API_KEY_MGMT, RL_PUSH, RL_ADMIN
+    RL_WEB_SEARCH, RL_MEMORY, RL_MCP, RL_API_KEY_MGMT, RL_PUSH, RL_ADMIN,
+    RL_AGENT_TASK,
 } from '../config/rate-limits';
 import { getKeyValueStore } from '../storage';
 import { STORAGE_POLICY, RATE_LIMIT_POLICY, AUTH_COOKIES } from '../config/security';
@@ -367,6 +368,21 @@ export const researchLimiter = createAdvancedRateLimiter({
     // (requireAuth 로 여전히 인증 보호됨).
     skip: (req) => req.method === 'GET' || req.method === 'HEAD',
     message: 'Research 요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
+});
+
+/**
+ * 에이전트 작업 레이트 리미터 (Docker 샌드박스 spawn + LLM 루프 — 비용 최상급).
+ * 실행 비용은 생성(POST)에서 발생 — 진행 폴링(GET/HEAD)은 제외 (research 와 동일 정책).
+ */
+export const agentTaskLimiter = createAdvancedRateLimiter({
+    windowMs: RL_AGENT_TASK.windowMs,
+    ipLimit: RL_AGENT_TASK.ipLimit,
+    userLimit: RL_AGENT_TASK.userLimit,
+    endpointRules: [
+        { path: /^POST:\/api\/agent-tasks\/?$/, limit: RL_AGENT_TASK.createLimit },
+    ],
+    skip: (req) => req.method === 'GET' || req.method === 'HEAD',
+    message: '에이전트 작업 요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
 });
 
 /**

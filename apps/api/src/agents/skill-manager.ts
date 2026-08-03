@@ -410,7 +410,16 @@ export class SkillManager {
      * `buildSkillPrompt` 로 fallback.
      *
      */
-    async buildManifestPrompt(agentId: string, userId?: string, agentCategory?: string): Promise<string | null> {
+    /**
+     * @returns prompt - 주입할 스킬 컨텍스트, skillNames - 실제로 주입된 스킬 이름(없으면 id).
+     *
+     * 종전에는 프롬프트 문자열만 돌려주고 어떤 스킬이 붙었는지는 버렸다. 그 탓에 호출부
+     * (system-prompt)의 skillNames 가 항상 비었고 onSkillsActivated 콜백이 한 번도 호출되지
+     * 않아 프론트의 "스킬 활성화" 표시가 뜨지 않았다(2026-08-02 실측: 21/21 주입인데 이름 0개).
+     */
+    async buildManifestPrompt(
+        agentId: string, userId?: string, agentCategory?: string,
+    ): Promise<{ prompt: string; skillNames: string[] } | null> {
         let pool: Pool;
         try {
             await this.ensureInitialized();
@@ -463,7 +472,12 @@ export class SkillManager {
             const safeId = r.id.replace(/[<>"&]/g, '');
             return `<skill_context name="${safeId}">\n${r.prompt_md}\n</skill_context>`;
         });
-        return `\n\n## 적용된 스킬 (manifest)\n${blocks.join('\n\n')}`;
+        // 표시용 이름 — manifest_yaml 의 name 을 쓰고, 없으면 id 로 대체(category 추출과 같은 방식).
+        const skillNames = filtered.map(r => {
+            const m = /^---[\s\S]*?\bname:\s*([^\n]+)/.exec(r.manifest_yaml);
+            return m?.[1]?.trim().replace(/^['"]|['"]$/g, '') || r.id;
+        });
+        return { prompt: `\n\n## 적용된 스킬 (manifest)\n${blocks.join('\n\n')}`, skillNames };
     }
 
     async getActiveSkillBindings(agentId: string, userId?: string): Promise<ActiveSkillBinding[]> {

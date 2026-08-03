@@ -27,7 +27,8 @@ export {
     mcpLimiter,
     apiKeyManagementLimiter,
     pushLimiter,
-    adminLimiter
+    adminLimiter,
+    agentTaskLimiter
 } from './rate-limiters';
 
 // ================================================

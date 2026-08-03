@@ -2,6 +2,8 @@
 .env
 .env.local
 .env.*.local
+# 운영 .env 백업 — 실제 시크릿이 들어 있어 절대 커밋 금지
+.env.bak*
 # Docker is permanently excluded from this project (PM2 + direct deploy only)
 
 # Dependencies

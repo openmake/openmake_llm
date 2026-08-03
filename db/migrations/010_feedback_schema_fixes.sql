@@ -31,7 +31,7 @@ ON CONFLICT (version) DO NOTHING;
 -- conversation_messages.id (INTEGER SERIAL)와 매핑 불가능한 orphan이므로 삭제.
 -- 운영 데이터 손실 가능성 → 사전 dump 권장.
 -- (정정 2026-07-31: openmake_llm.sh deploy 는 자동 백업을 수행하지 않는다 —
---  백업은 별도 일일 pg_dump 스케줄 체계가 담당. arch.md §13 참고)
+--  백업은 별도 일일 pg_dump 스케줄 체계가 담당. 2026-07-31 백업 체계 도입)
 DELETE FROM message_feedback
  WHERE message_id IS NOT NULL
    AND message_id !~ '^[0-9]+$';

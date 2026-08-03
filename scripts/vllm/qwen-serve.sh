@@ -2,7 +2,17 @@
 # ============================================================
 # qwen3.6-35b-a3b — 기본 채팅 (262K context) @ :8002
 # ============================================================
-# DGX 실측 serve 명령 기준 (2026-07-31 동기화 — LiteLLM Mac 이전 후 vLLM 전용 plane).
+# DGX 실측 serve 명령 기준 (2026-08-02 동기화 — prefix caching 추가).
+#
+# --enable-prefix-caching (2026-08-02 추가):
+#   앱은 이 기능을 전제로 프롬프트를 배치한다 — external-system-prompt.ts 가 정적 헌법을
+#   맨 앞(CACHE PREFIX)에 두는 이유가 그것인데, 서버에서 꺼져 있어 설계 의도가 무효였다.
+#   도구 루프 N턴이면 시스템 프롬프트를 N번 재계산하므로 지연에 직결된다.
+#   ⚠️ 이 모델은 Mamba 하이브리드(Qwen3_5MoeForConditionalGeneration)라 vLLM 이
+#   Mamba cache 'align' 모드로 전환하며 "experimental" 경고를 낸다. 활성화 후에도
+#   `Prefix cache hit rate` 지표는 0.0% 로 표시된다(SSM 레이어는 KV 캐시가 없음).
+#   앱 실측(표본 4건)은 3건 개선·1건 악화로 유의성 미확보 — [ChatTiming] 로그 축적 후 재판단.
+#   문제 시 이 플래그만 제거하면 종전 동작으로 복귀한다.
 # 실행 주체: DGX 의 PM2 (`pm2-<user>.service` 아래 vllm-chat) — systemd 개별 유닛 아님.
 # venv: /home/smith/vllm/rebuild/vllm_env.023 (qwen3.6 지원 rebuild)
 #
@@ -40,4 +50,5 @@ exec vllm serve "$MODEL_DIR" \
   --limit-mm-per-prompt '{"image": 4}' \
   --speculative-config '{"method": "mtp", "num_speculative_tokens": 1}' \
   --kv-cache-dtype fp8 \
+  --enable-prefix-caching \
   --override-generation-config '{"repetition_penalty": 1.05}'

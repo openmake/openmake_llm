@@ -36,7 +36,10 @@ export async function semanticCompact(toolName: string, content: string): Promis
     }
 
     try {
-        const client = new LLMClient({ model: TOOL_RESULT_COMPACTION.COMPACTOR_MODEL });
+        // COMPACTOR_MODEL 미설정(빈 값) 시 LLMClient 가 LLM_DEFAULT_MODEL 로 해석한다
+        const client = TOOL_RESULT_COMPACTION.COMPACTOR_MODEL
+            ? new LLMClient({ model: TOOL_RESULT_COMPACTION.COMPACTOR_MODEL })
+            : new LLMClient();
         const result = await client.chat(
             [
                 { role: 'system', content: SEMANTIC_COMPACTOR_SYSTEM_PROMPT },

@@ -44,8 +44,8 @@ export async function buildResearchSkillBlock(userId?: string): Promise<string> 
     if (!userId || userId === 'guest') return '';
     try {
         const block = await getSkillManager().buildManifestPrompt(RESEARCH_SKILL_AGENT_ID, userId);
-        if (block) logger.info('[DeepResearch] 스킬 지식 주입');
-        return block ?? '';
+        if (block) logger.info(`[DeepResearch] 스킬 지식 주입 [${block.skillNames.join(', ')}]`);
+        return block?.prompt ?? '';
     } catch (e) {
         logger.debug(`스킬 주입 실패 — 무시: ${e instanceof Error ? e.message : e}`);
         return '';

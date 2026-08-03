@@ -31,6 +31,7 @@ import type { ChatMessage, ToolDefinition, UsageMetrics } from '../llm';
 import { createLogger } from '../utils/logger';
 import { createPinnedFetch } from '../security/ssrf-guard';
 import { needsExplicitPromptCache, toOpenAIMessages, toOpenAITools } from './openai-compat-mapping';
+import { PseudoToolCallGate } from '../llm/pseudo-tool-call-parser';
 
 const logger = createLogger('OpenAICompatProvider');
 
@@ -167,7 +168,7 @@ function buildOpenRouterHeaders(): Record<string, string> {
 }
 
 /**
- * LiteLLM 통합 게이트웨이 경유 옵션 (arch.md 2026-07-31 이전).
+ * LiteLLM 통합 게이트웨이 경유 옵션 (2026-07-31 LiteLLM Mac 이전).
  *
  * - url: 게이트웨이 base URL (서버 config `llmBaseUrl` — 사용자 입력 아님)
  * - masterKey: 게이트웨이 인증 키 (`Authorization: Bearer` 로 전달)
@@ -399,6 +400,7 @@ export class OpenAICompatProvider implements IProvider {
             );
 
             let content = '';
+            const pseudoGate = new PseudoToolCallGate();
             const toolBuffers = new Map<number, { id: string; name: string; jsonBuffer: string }>();
             let promptTokens = 0;
             let completionTokens = 0;
@@ -430,8 +432,13 @@ export class OpenAICompatProvider implements IProvider {
 
                 const choice = chunk.choices?.[0];
                 if (choice?.delta?.content) {
-                    content += choice.delta.content;
-                    callbacks.onToken?.(choice.delta.content);
+                    // 텍스트로 새어나온 툴콜은 사용자 채널로 방출하지 않고 캡처 — 스트림 종료 시
+                    // 실제 tool call 로 복구한다 (로컬 경로 stream-parser 와 동일 안전망).
+                    const visible = pseudoGate.feed(choice.delta.content);
+                    if (visible) {
+                        content += visible;
+                        callbacks.onToken?.(visible);
+                    }
                 }
                 if (choice?.delta?.reasoning) {
                     // reasoning chunk — i-provider 의 onThinking 콜백으로 전달
@@ -459,6 +466,17 @@ export class OpenAICompatProvider implements IProvider {
                 }
             }
 
+            // Pseudo tool call 게이트 flush — 유보 꼬리 방출 + 캡처분에서 tool call 복구.
+            const pseudoFlush = pseudoGate.flush();
+            if (pseudoFlush.emit) {
+                content += pseudoFlush.emit;
+                callbacks.onToken?.(pseudoFlush.emit);
+            }
+            if (pseudoFlush.unparsedRaw) {
+                logger.warn('[PseudoToolCall] 텍스트 툴콜 블록 복구 실패 — 본문 노출 차단 후 폐기: '
+                    + `raw=${pseudoFlush.unparsedRaw.slice(0, 200)}`);
+            }
+
             const toolCalls: Array<{ id: string; name: string; args: unknown }> = [];
             for (const buf of toolBuffers.values()) {
                 let args: unknown = {};
@@ -470,6 +488,16 @@ export class OpenAICompatProvider implements IProvider {
                 const call = { id: buf.id, name: buf.name, args };
                 toolCalls.push(call);
                 callbacks.onToolCall?.(call);
+            }
+            // 네이티브 tool_calls 가 없을 때만 승격 — 정상 호출과 중복 실행 방지.
+            if (toolCalls.length === 0 && pseudoFlush.toolCalls.length > 0) {
+                logger.warn(`[PseudoToolCall] 텍스트로 새어나온 툴콜 ${pseudoFlush.toolCalls.length}건 복구 — `
+                    + `tools=${pseudoFlush.toolCalls.map((c) => c.name).join(',')}`);
+                for (const c of pseudoFlush.toolCalls) {
+                    const call = { id: c.id, name: c.name, args: c.args as unknown };
+                    toolCalls.push(call);
+                    callbacks.onToolCall?.(call);
+                }
             }
 
             const usage: UsageMetrics = {

@@ -34,7 +34,19 @@ import { createContextBuilder } from './discussion-context';
 import { createLogger } from '../utils/logger';
 import { resolvePromptLocale } from '../chat/language-policy';
 import { parallelBatch } from '../workflow/graph-engine';
-import { DISCUSSION_CONFIDENCE, DISCUSSION_CONSISTENCY, DISCUSSION_CONCURRENCY, DISCUSSION_FACTCHECK } from '../config/runtime-limits';
+import { DISCUSSION_CONFIDENCE, DISCUSSION_CONSISTENCY, DISCUSSION_CONCURRENCY, DISCUSSION_FACTCHECK, DISCUSSION_MIN_PROPOSERS } from '../config/runtime-limits';
+/**
+ * 토론 주제 → 검색 쿼리 정규화.
+ *
+ * 주제는 모델이 작성하므로 "…분석하라. 주요 쟁점은 다음과 같다: 1) … 2) …" 처럼 수백 자가
+ * 되는 경우가 있고, 그대로 검색하면 모든 백엔드가 0건을 반환한다(라이브 확인).
+ * 첫 문장만 취하고 상한으로 자른다 — 핵심 키워드는 대개 첫 문장에 있다.
+ */
+export function toEvidenceQuery(topic: string): string {
+    const head = (topic || '').split(/[.?!\n:]/)[0]?.trim() || (topic || '').trim();
+    return head.slice(0, DISCUSSION_FACTCHECK.QUERY_MAX_CHARS).trim();
+}
+
 /** 토론 엔진에서 사용하는 웹 검색 결과 최소 인터페이스 */
 export interface DiscussionSearchResult {
     title: string;
@@ -153,7 +165,9 @@ export function createDiscussionEngine(
     async function generateAgentOpinion(
         agent: Agent,
         topic: string,
-        previousOpinions: AgentOpinion[]
+        previousOpinions: AgentOpinion[],
+        /** 모든 전문가가 공유하는 Evidence Package (선수집 검색 결과). */
+        evidence: DiscussionSearchResult[] = []
     ): Promise<AgentOpinion | null> {
         try {
             // 🆕 Deep Thinking 모드에 따른 프롬프트 차별화
@@ -176,6 +190,17 @@ ${contextInstructions}
 `;
 
             let contextMessage = `${localizedLabels.discussionTopic}\n<topic>${sanitizePromptInput(topic)}</topic>\n\n`;
+
+            // Evidence Package — 전 전문가 공통 근거. 의견을 이 자료에 기반해 작성하게 한다
+            // (같은 자료를 보므로 판단 비교가 가능해지고, 시의성 주제의 환각이 줄어든다).
+            if (evidence.length > 0) {
+                contextMessage += `${localizedLabels.factCheckSection}\n`;
+                evidence.forEach((src, i) => {
+                    const snippet = (src.snippet ?? '').slice(0, DISCUSSION_FACTCHECK.SNIPPET_MAX_CHARS);
+                    contextMessage += `${i + 1}. ${src.title}\n   ${snippet}\n   (${src.url})\n`;
+                });
+                contextMessage += `\n${localizedLabels.factCheckInstruction}\n\n`;
+            }
 
             if (previousOpinions.length > 0) {
                 contextMessage += `${localizedLabels.previousOpinions}\n`;
@@ -343,7 +368,28 @@ ${contextInstructions}
         });
 
         const experts = await selectExpertAgents(topic);
-        const participants = experts.map(e => e.name);
+
+        // 1.5. Evidence Package 선수집 (2026-08-02) — 검색을 *의견 생성 전에* 1회 수행해
+        // 모든 전문가에게 **같은 근거**를 제공한다. 종전에는 의견을 다 낸 뒤(교차검토 후)에야
+        // 검색해 최종 합성에만 주입했기 때문에, 전문가들은 파라메트릭 지식만으로 시의성
+        // 주제를 논했다(라이브 확인: "2026년 반도체 리스크" 토론 41초 동안 검색 0건).
+        // 검색 횟수는 종전과 같은 1회 — 시점만 앞당겨 근거 기반 판단과 재현성을 확보한다.
+        let evidence: DiscussionSearchResult[] = [];
+        if (enableFactCheck && webSearchFn) {
+            onProgress?.({
+                phase: 'selecting',
+                message: localizedProgressMessages.factChecking,
+                progress: 8
+            });
+            try {
+                const query = toEvidenceQuery(topic);
+                evidence = (await webSearchFn(query, { maxResults: DISCUSSION_FACTCHECK.MAX_RESULTS })) ?? [];
+                logger.info(`Evidence Package 수집: ${evidence.length}건 (전문가 ${experts.length}명 공유, 쿼리="${query}")`);
+            } catch (e) {
+                // fail-open — 근거 없이도 토론은 진행한다(종전 동작).
+                logger.warn('Evidence 수집 실패, 근거 없이 진행:', e);
+            }
+        }
 
         // 2. 라운드별 토론 (라운드 내 에이전트 의견 병렬 수집)
         let consecutiveRoundFailures = 0;
@@ -375,7 +421,7 @@ ${contextInstructions}
                             roundNumber: round + 1,
                             totalRounds: maxRounds
                         });
-                        return generateAgentOpinion(agent, topic, previousForRound);
+                        return generateAgentOpinion(agent, topic, previousForRound, evidence);
                     },
                     { concurrency: Math.min(experts.length, DISCUSSION_CONCURRENCY.MAX_PARALLEL_AGENTS) }
                 );
@@ -384,7 +430,32 @@ ${contextInstructions}
                 roundResults = [];
             }
 
-            const roundSuccessCount = roundResults.filter(r => r !== null).length;
+            // 부분 실패 보정 — 성공 수가 최소 인원에 못 미치면 *실패한 에이전트만* 1회 재시도한다.
+            // (전원 재시도가 아니라 실패분만 — 성공한 의견을 버리지 않고 비용도 최소화)
+            // 토론은 복수 관점이 성립해야 의미가 있으므로, 1명만 성공한 결과를 그대로 "토론"으로
+            // 내보내지 않기 위한 장치다. 전원 실패(0명)는 아래 기존 경로가 처리한다.
+            const minProposers = Math.min(DISCUSSION_MIN_PROPOSERS, experts.length);
+            let successCount = roundResults.filter(r => r !== null).length;
+            if (successCount > 0 && successCount < minProposers) {
+                const failedExperts = experts.filter((_, i) => !roundResults[i]);
+                logger.warn(`Round ${round + 1}: 성공 ${successCount}/${experts.length}명 — `
+                    + `최소 ${minProposers}명 미달, 실패한 ${failedExperts.length}명 재시도`);
+                try {
+                    const retried = await parallelBatch<Agent, AgentOpinion | null>(
+                        failedExperts,
+                        async (agent) => generateAgentOpinion(agent, topic, previousForRound, evidence),
+                        { concurrency: Math.min(failedExperts.length, DISCUSSION_CONCURRENCY.MAX_PARALLEL_AGENTS) }
+                    );
+                    for (const r of retried) if (r) roundResults.push(r);
+                    successCount = roundResults.filter(r => r !== null).length;
+                    logger.info(`Round ${round + 1}: 재시도 후 성공 ${successCount}/${experts.length}명`);
+                } catch (e) {
+                    // fail-open — 재시도 실패는 원래 결과로 진행한다.
+                    logger.warn('부분 실패 재시도 중 오류, 기존 의견으로 진행:', e);
+                }
+            }
+
+            const roundSuccessCount = successCount;
             if (roundSuccessCount === 0) {
                 consecutiveRoundFailures++;
                 logger.warn(`Round ${round + 1}: 전체 에이전트 의견 생성 실패 (연속 ${consecutiveRoundFailures}회)`);
@@ -412,7 +483,9 @@ ${contextInstructions}
             return {
                 discussionSummary: localizedErrorMessages.discussionFailureSummary,
                 finalAnswer: localizedErrorMessages.connectionErrorDetail,
-                participants,
+                // 아무도 의견을 내지 못했으므로 참여자는 없다(선택된 전문가 목록을 그대로
+                // 내보내면 "참여했다"는 오표시가 된다).
+                participants: [],
                 opinions: [],
                 totalTime: Date.now() - startTime,
                 factChecked: false
@@ -431,24 +504,12 @@ ${contextInstructions}
             crossReview = await performCrossReview(opinions, topic);
         }
 
-        // 4. 사실 검증 (옵션) — 검색 결과를 최종 합성 단계에 근거 자료로 주입.
+        // 4. 사실 검증 — 1.5 에서 선수집한 Evidence Package 를 그대로 재사용한다.
+        //    (종전에는 여기서 검색을 처음 수행했다. 시점을 앞당겨 전문가 의견 생성에도
+        //     같은 근거가 쓰이도록 바꾼 것 — 검색 호출 횟수는 1회로 동일.)
         //    factChecked=true 는 "근거가 실제로 주입됨"을 의미 (검색 0건이면 false).
-        let factChecked = false;
-        let factCheckSources: DiscussionSearchResult[] = [];
-        if (enableFactCheck && webSearchFn) {
-            onProgress?.({
-                phase: 'reviewing',
-                message: localizedProgressMessages.factChecking,
-                progress: 80
-            });
-
-            try {
-                factCheckSources = (await webSearchFn(topic, { maxResults: DISCUSSION_FACTCHECK.MAX_RESULTS })) ?? [];
-                factChecked = factCheckSources.length > 0;
-            } catch (e) {
-                logger.warn('사실 검증 실패:', e);
-            }
-        }
+        const factCheckSources: DiscussionSearchResult[] = evidence;
+        const factChecked = evidence.length > 0;
 
         // 4.5. Self-Consistency Score 측정 (에이전트 간 합의도)
         let consistencyScore: number | undefined;
@@ -476,6 +537,16 @@ ${contextInstructions}
 
         const finalAnswer = await synthesizeFinalAnswer(topic, opinions, crossReview, factCheckSources);
 
+        // 참여자는 *실제로 의견을 낸* 전문가만 집계한다(라운드가 여럿이면 중복 제거).
+        // 종전엔 선택된 전문가 전원을 그대로 내보내, 일부가 실패해도 전원이 참여한 것처럼
+        // 표시됐다 — 도구 결과의 "참여 전문가: A, B, C" 문구가 사실과 달라지는 오표시였다.
+        const participants = [...new Set(opinions.map(o => o.agentName))];
+        const degraded = participants.length < Math.min(DISCUSSION_MIN_PROPOSERS, experts.length);
+        if (degraded) {
+            logger.warn(`토론 축소 완료 — 참여 ${participants.length}명 `
+                + `(선택 ${experts.length}명, 최소 ${DISCUSSION_MIN_PROPOSERS}명)`);
+        }
+
         // 6. 완료
         onProgress?.({
             phase: 'complete',
@@ -490,6 +561,9 @@ ${contextInstructions}
             opinions,
             totalTime: Date.now() - startTime,
             factChecked,
+            ...(degraded ? { degraded: true } : {}),
+            // 호출부가 출처 목록을 결정적으로 첨부할 수 있도록 근거를 그대로 돌려준다.
+            ...(evidence.length > 0 ? { sources: evidence } : {}),
             consistencyScore,
             consensusPoints,
             conflictPoints,

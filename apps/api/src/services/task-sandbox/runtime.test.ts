@@ -1,3 +1,14 @@
+// env 파생 상수 고정 — 운영 .env 에서 AGENT_TASK_DISCUSSION 을 켜면 도구가 12종이 되어
+// 아래 base 11종 단언이 깨진다. 기본(OFF) 계약을 검증하는 테스트이므로 env 와 무관하게 고정한다.
+// (start_discussion 노출 자체는 task-tools-discussion.test.ts 가 콜백 주입으로 검증)
+jest.mock('../../config/runtime-limits', () => {
+    const actual = jest.requireActual('../../config/runtime-limits');
+    return {
+        ...actual,
+        ORCHESTRATION_DISPATCH: { ...actual.ORCHESTRATION_DISPATCH, TASK_DISCUSSION: false },
+    };
+});
+
 import { toLLMTool, TaskRuntime } from './runtime';
 import { getApprovalRegistry } from './approval-gate';
 import { getTaskSandboxConfig } from '../../config/task-sandbox';

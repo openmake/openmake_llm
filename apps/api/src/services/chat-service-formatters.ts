@@ -10,6 +10,7 @@
  */
 import type { DiscussionResult } from '../agents/discussion-engine';
 import { DISCUSSION_CONSISTENCY } from '../config/runtime-limits';
+import { buildDiscussionSourcesBlock } from '../agents/discussion-sources';
 
 /**
  * 심층 연구 결과를 마크다운 형식으로 포맷팅합니다.
@@ -48,12 +49,18 @@ export function formatResearchResult(result: {
  * @param result - 토론 결과 객체 (전문가 의견, 최종 답변, 토론 요약 포함)
  * @returns 마크다운 형식의 토론 결과 문자열
  */
-export function formatDiscussionResult(result: DiscussionResult): string {
+export function formatDiscussionResult(result: DiscussionResult, userLanguage?: string): string {
     let formatted = '';
 
     formatted += '## 🎯 멀티 에이전트 토론 결과\n\n';
     formatted += `> ${result.discussionSummary}\n\n`;
     formatted += '---\n\n';
+
+    // 축소 완료(최소 인원 미달) 고지 — 복수 관점 비교가 성립하지 않았음을 사용자에게 알린다.
+    if (result.degraded) {
+        formatted += `> ⚠️ 일부 전문가의 의견 생성이 실패해 ${result.participants.length}명만 참여했습니다. `
+            + '복수 관점 비교가 제한적입니다.\n\n';
+    }
 
     formatted += '## 📋 전문가별 분석\n\n';
 
@@ -96,6 +103,10 @@ export function formatDiscussionResult(result: DiscussionResult): string {
     formatted += '<details open>\n<summary>💡 <strong>종합 답변</strong> (전문가 의견 종합)</summary>\n\n';
     formatted += result.finalAnswer;
     formatted += '\n\n</details>';
+
+    // 출처 결정적 첨부 — 도구 경유 경로(orchestration-dispatch)와 대칭.
+    // details 블록 밖에 두어 접힘 상태와 무관하게 근거가 보이도록 한다.
+    formatted += buildDiscussionSourcesBlock(result.finalAnswer, result.sources, userLanguage);
 
     return formatted;
 }

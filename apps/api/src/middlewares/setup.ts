@@ -29,6 +29,7 @@ import {
     apiKeyManagementLimiter,
     pushLimiter,
     adminLimiter,
+    agentTaskLimiter,
     corsMiddleware
 } from './index';
 import { requestIdMiddleware } from './request-id';
@@ -142,11 +143,14 @@ export function setupParsersAndLimiting(app: Application): void {
     app.use('/api/api-keys', apiKeyManagementLimiter);
     app.use('/api/push', pushLimiter);
     app.use('/api/admin', adminLimiter);
+    // 에이전트 작업 — Docker 샌드박스 spawn + LLM 루프라 비용 최상급, 전용 리미터로 생성을 제한
+    app.use('/api/agent-tasks', agentTaskLimiter);
     // generalLimiter는 전용 리미터가 없는 경로에만 적용 (이중 카운팅 방지)
     const dedicatedLimiterPrefixes = [
         '/api/auth/', '/api/chat', '/api/research', '/api/upload',
         '/api/web-search', '/api/users/me/memories', '/api/mcp',
         '/api/api-keys', '/api/push', '/api/admin', '/api/monitoring', '/api/metrics',
+        '/api/agent-tasks',
     ];
     app.use('/api/', (req, res, next) => {
         const url = req.originalUrl;

@@ -74,6 +74,21 @@ export const RL_RESEARCH = {
 } as const;
 
 /**
+ * 에이전트 작업 레이트 리밋 (Docker 샌드박스 spawn + LLM 루프 — 비용 최상급).
+ *
+ * ipLimit/userLimit 은 endpointRules 미매칭 요청(HITL 승인·resume 등 액션)의 기본 한도.
+ * 생성(POST /api/agent-tasks)만 createLimit 으로 보수적으로 별도 제한한다.
+ * GET/HEAD(목록·상세 폴링)는 리미터 제외 — 프론트 진행 폴링이 빈번해 묶으면 429 로
+ * 진행 표시가 죽는다(research 리미터와 동일 정책).
+ */
+export const RL_AGENT_TASK = {
+    windowMs: WINDOW_15M,
+    ipLimit: Number(process.env.RL_AGENT_TASK_IP) || 60,
+    userLimit: Number(process.env.RL_AGENT_TASK_USER) || 120,
+    createLimit: Number(process.env.RL_AGENT_TASK_CREATE) || 10,
+} as const;
+
+/**
  * 대용량 업로드 레이트 리밋
  */
 export const RL_UPLOAD = {
@@ -233,6 +248,7 @@ const _windowMsInvariant = [
     { name: 'RL_AUTH', cfg: RL_AUTH },
     { name: 'RL_CHAT', cfg: RL_CHAT },
     { name: 'RL_RESEARCH', cfg: RL_RESEARCH },
+    { name: 'RL_AGENT_TASK', cfg: RL_AGENT_TASK },
     { name: 'RL_UPLOAD', cfg: RL_UPLOAD },
     { name: 'RL_WEB_SEARCH', cfg: RL_WEB_SEARCH },
     { name: 'RL_MEMORY', cfg: RL_MEMORY },

@@ -30,7 +30,7 @@ export const AGENT_TASK_SKILL_AGENT_ID = '__agent_task__';
 export async function buildSkillPromptBlock(userId: string): Promise<string> {
     try {
         const block = await getSkillManager().buildManifestPrompt(AGENT_TASK_SKILL_AGENT_ID, userId);
-        return block ?? '';
+        return block?.prompt ?? '';
     } catch (e) {
         logger.debug('[AgentTask] 스킬 프롬프트 주입 실패 — 무시', e);
         return '';

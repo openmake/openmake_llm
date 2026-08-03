@@ -37,6 +37,7 @@ import type { RequestContext } from './request-context';
 import { recordOrchestrationDispatch } from './orchestration-shadow-recorder';
 import { detectOrchestrationIntents } from './external-tool-plan';
 import { ORCHESTRATION_DISPATCH } from '../../config/runtime-limits';
+import { CHAT_RESULT_PROCESSORS, runResultProcessors } from '../../chat/processors';
 
 const logger = createLogger('MessagePipeline');
 
@@ -123,6 +124,20 @@ export async function runMessagePipeline(svc: ChatService,
     // ── Step 1: 언어 정책 결정 ──
     const languagePolicy = svc.resolveLanguagePolicy(message || '', userLanguagePreference);
 
+    // 응답 후처리 체인 적용 헬퍼 — 일반 경로와 특수모드(Discussion/DeepResearch) 조기
+    // return 이 동일하게 통과한다(조기 return 분기 조립 누락 함정 방지 — 2026-08-03 대칭화).
+    const applyResultProcessors = async (content: string): Promise<string> => {
+        const processed = await runResultProcessors(
+            content,
+            { langCode: languagePolicy?.resolvedLanguage, userId },
+            CHAT_RESULT_PROCESSORS,
+        );
+        if (processed.applied.length > 0) {
+            logger.info(`[ResultPipeline] 후처리 적용: ${processed.applied.join(', ')}`);
+        }
+        return processed.content;
+    };
+
     // 특수 모드 조기 분기: Discussion 또는 DeepResearch 모드는 별도 전략으로 위임
     // languagePolicy.resolvedLanguage를 req에 반영하여 감지된 언어가 전략에 전달되도록 함
     if (languagePolicy?.resolvedLanguage) {
@@ -172,12 +187,16 @@ export async function runMessagePipeline(svc: ChatService,
     // 토론 모드: 사용자 명시 토글.
     if (effectiveDiscussionMode) {
         recordToggleShadow('discussion');
-        return svc.processMessageWithDiscussion(req, onToken, onDiscussionProgress, modeExternalClient);
+        return applyResultProcessors(
+            await svc.processMessageWithDiscussion(req, onToken, onDiscussionProgress, modeExternalClient),
+        );
     }
 
     if (deepResearchMode) {
         recordToggleShadow('deep-research');
-        return svc.processMessageWithDeepResearch(req, onToken, onResearchProgress, modeExternalClient);
+        return applyResultProcessors(
+            await svc.processMessageWithDeepResearch(req, onToken, onResearchProgress, modeExternalClient),
+        );
     }
 
     const startTime = Date.now();
@@ -423,5 +442,31 @@ export async function runMessagePipeline(svc: ChatService,
         securityPreCheck, routingLog,
     });
 
-    return externalResponse;
+    // TTFT 분해 관측 (2026-08-02) — 종전 ttfb 하나로는 "왜 느린지"를 가릴 수 없었다.
+    // prep=요청 수신~첫 LLM 호출(에이전트 라우팅·프롬프트 조립·도구 계획),
+    // ttfc=첫 LLM 호출~첫 청크(모델 큐잉+prefill), tool=도구 실행 누적, turns=도구 루프 턴.
+    const tm = extStreamCtx.timings;
+    if (tm && tm.firstLlmCallAt > 0) {
+        const prepMs = tm.firstLlmCallAt - startTime;
+        const ttfcMs = tm.firstChunkAt > 0 ? tm.firstChunkAt - tm.firstLlmCallAt : -1;
+        logger.info(
+            `[ChatTiming] prep=${prepMs}ms ttfc=${ttfcMs}ms tool=${tm.toolMs}ms turns=${tm.turns} `
+            + `total=${Date.now() - startTime}ms model=${externalResolved.fullId}`,
+            {
+                event: 'chat_timing',
+                prep_ms: prepMs,
+                ttfc_ms: ttfcMs,
+                tool_ms: tm.toolMs,
+                turns: tm.turns,
+                total_ms: Date.now() - startTime,
+                model: externalResolved.fullId,
+            },
+        );
+    }
+
+    // 응답 후처리 체인 — 등록된 프로세서를 순서대로 적용한다(chat/processors/index.ts).
+    // 새 후처리를 추가할 때 이 호출부는 고치지 않는다. fail-open 은 파이프라인이 보장한다.
+    // 스트리밍 클라이언트는 이미 원문을 받았으므로, WS 는 done 페이로드의 cleanedContent 로
+    // 최종본을 교체한다(ws-chat-handler).
+    return applyResultProcessors(externalResponse);
 }

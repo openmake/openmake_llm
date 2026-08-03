@@ -13,6 +13,7 @@ import { getExternalProviderSystemGuards } from '../../chat/prompt';
 import { getCurrentDate } from '../../utils/datetime';
 import { getStyleGuard, normalizeStyle } from '../../chat/style';
 import { ORCHESTRATION_PROMPT_GUIDE } from './orchestration-dispatch';
+import { LANGUAGE_DISPLAY_NAMES, resolvePromptLocale, type SupportedLanguageCode } from '../../chat/language-policy';
 import type { StreamFromExternalContext } from './external-provider';
 
 /**
@@ -76,19 +77,6 @@ export function buildExternalSystemPrompt(params: {
     }
 
     const langCode = ctx.resolvedLanguage || req.userLanguagePreference;
-    if (langCode) {
-        const langMap: Record<string, string> = {
-            ko: '한국어', en: 'English', ja: '日本語', zh: '中文',
-            es: 'Español', fr: 'Français', de: 'Deutsch',
-        };
-        const langName = langMap[langCode] || langCode;
-        // 스크립트 순수성 — qwen 이 한국어 답변에 한자·일본어 문자를 섞는 결함
-        // (예: 값→值, 소련→ソ連, 냉각→冷却) 완화. 대상 언어 고유 문자로만 작성하고
-        // 외래어·고유명사도 대상 언어로 음차한다.
-        systemPromptParts.push(
-            `Respond in ${langName}. Write using only ${langName}'s native script — do not mix in Chinese characters (unless ${langName} is Chinese) or Japanese kana (unless ${langName} is Japanese); transliterate foreign terms and proper nouns into ${langName}.`,
-        );
-    }
 
     // 시간 컨텍스트 (2026-07-04): 일반 채팅 system 에 현재 날짜가 어디에도 없어, 모델이
     // 학습 컷오프나 검색 스니펫의 기사 날짜를 "오늘"로 오인하는 팩트 결함이 있었다
@@ -160,5 +148,41 @@ export function buildExternalSystemPrompt(params: {
         systemPromptParts.push(ORCHESTRATION_PROMPT_GUIDE.trim());
     }
 
+    // 응답 언어 — 시스템 프롬프트 맨 끝에 배치(가장 최근 = attention 우위).
+    // ⚠️ 이 지시만으로 스크립트 혼입(한글 문장에 한자·간체자)은 해결되지 않는다.
+    // 2026-08-02 A/B: 지시를 대상 언어로 바꾸고 맨 끝으로 옮겨도 혼입률이 50%→45% 로
+    // 노이즈 수준 변동에 그쳤고, 도구 결과 뒤 리마인더 주입도 효과가 없었다.
+    // 실제 제거는 후단 교정(services/chat-service/script-purity.ts)이 담당하며,
+    // 이 지시는 그 앞단의 (비용 0 인) 1차 방어로만 유지한다.
+    if (langCode) {
+        systemPromptParts.push(buildLanguageDirective(langCode));
+    }
+
     return systemPromptParts.join('\n\n');
+}
+
+/**
+ * 응답 언어 지시문. 대상 언어로 작성해야 모델이 그 언어로 출력할 확률이 높아지므로
+ * 한국어는 한국어로, 그 외는 영어로 쓴다(혼입 실사례가 관측된 것은 한국어 경로).
+ *
+ * @param langCode - resolvedLanguage (regex 감지 또는 사용자 설정)
+ */
+function buildLanguageDirective(langCode: string): string {
+    const langName = LANGUAGE_DISPLAY_NAMES[langCode as SupportedLanguageCode] || langCode;
+    if (resolvePromptLocale(langCode) === 'ko') {
+        return [
+            '**[필수] 응답 언어: 한국어**',
+            '- 답변 전체를 한국어로 작성하세요. 검색 결과·도구 결과·참고 자료가 다른 언어(중국어·일본어·영어)여도 반드시 한국어로 옮겨 쓰세요.',
+            '- 한글 이외의 문자(한자·중국어 간체자·일본어 가나)를 문장 안에 섞지 마세요.',
+            '  잘못된 예: "하반期", "부실化和", "搜索结果에 따르면", "거래日是", "상황을 冷静하게"',
+            '  올바른 예: "하반기", "부실화와", "검색 결과에 따르면", "거래일은", "상황을 냉정하게"',
+            '- 고유명사·외래어도 한글로 음차하세요(荷 → 네덜란드). 기술 용어만 괄호로 원어를 병기할 수 있습니다.',
+        ].join('\n');
+    }
+    return [
+        `**[REQUIRED] Response language: ${langName}**`,
+        `- Write the entire answer in ${langName}, even when search results, tool output, or references are in another language — translate them.`,
+        `- Use only ${langName}'s native script; do not mix in characters from other writing systems mid-sentence.`,
+        `- Transliterate foreign terms and proper nouns into ${langName}; only technical terms may carry the original in parentheses.`,
+    ].join('\n');
 }

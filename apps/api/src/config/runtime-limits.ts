@@ -322,6 +322,12 @@ export const DISCUSSION_FACTCHECK = {
     MAX_RESULTS: parseInt(process.env.DISCUSSION_FACTCHECK_MAX_RESULTS || '5', 10),
     /** 결과당 snippet 최대 문자 수 */
     SNIPPET_MAX_CHARS: parseInt(process.env.DISCUSSION_FACTCHECK_SNIPPET_MAX_CHARS || '300', 10),
+    /**
+     * 검색 쿼리 최대 문자 수. 토론 주제는 모델이 쓰기 때문에 쟁점 목록까지 붙은 수백 자
+     * 장문이 되는 경우가 있고, 그대로 검색하면 전 백엔드가 0건을 반환한다
+     * (라이브 확인: 500자 주제 → SearXNG·Wiki·News·DDG 모두 0개).
+     */
+    QUERY_MAX_CHARS: parseInt(process.env.DISCUSSION_FACTCHECK_QUERY_MAX_CHARS || '80', 10),
 } as const;
 
 /**
@@ -332,6 +338,17 @@ export const DISCUSSION_FACTCHECK = {
  *
  * agents/discussion-engine.ts에서 참조
  */
+/**
+ * 토론 성립에 필요한 최소 의견 수 (2026-08-02).
+ *
+ * 종전에는 전원 실패(0명)만 처리하고 부분 실패는 그대로 통과시켜, 3명 중 1명만
+ * 성공해도 "3명이 참여한 토론"으로 표시됐다(participants 를 선택된 전문가 기준으로
+ * 산출했기 때문). 복수 관점이 없으면 토론이 아니므로, 미달 시 실패분만 1회 재시도하고
+ * 그래도 미달이면 결과에 degraded 를 표시한다(전원 실패는 기존 조기 종료 경로).
+ * 실측: 현 로그 범위에서 의견 생성 실패 0건 — 드물지만 발생 시 오표시를 막는 안전장치.
+ */
+export const DISCUSSION_MIN_PROPOSERS = parseInt(process.env.DISCUSSION_MIN_PROPOSERS || '2', 10);
+
 export const DISCUSSION_CONCURRENCY = {
     /** 라운드 내 동시 에이전트 LLM 호출 최대 수 */
     MAX_PARALLEL_AGENTS: parseInt(process.env.DISCUSSION_MAX_PARALLEL_AGENTS || '5', 10),
@@ -502,10 +519,21 @@ export const CACHE_CONFIG = {
     QUERY_CACHE_TTL_MS: 10 * 60 * 1000,
     /** 쿼리 응답 캐시 최대 항목 수 */
     QUERY_CACHE_MAX_SIZE: 200,
-    /** 라우팅 캐시 TTL (ms) — 기본 5분 */
-    ROUTING_CACHE_TTL_MS: 5 * 60 * 1000,
-    /** 라우팅 캐시 최대 항목 수 */
-    ROUTING_CACHE_MAX_SIZE: 100,
+    /**
+     * 라우팅 캐시 TTL (ms) — 기본 24시간 (env: OMK_ROUTING_CACHE_TTL_MS).
+     *
+     * 응답 캐시(10분)와 달리 길게 잡는다: 캐시 대상이 "질문 → 담당 에이전트"
+     * 매핑이라 시간이 지나도 상하지 않는다(에이전트 목록은 industry-agents.json
+     * 정적 데이터). 반면 미스 1건의 비용은 LLM 라우팅 왕복(~2-3s + ~2.7k 토큰)이라
+     * 비대칭적으로 비싸다.
+     *
+     * 실측 근거(2026-08-02): 60일 사용자 질문 779건의 정규화 후 중복률 27.2% 인데
+     * 캐시 적중은 4% 였다 — 반복 질문이 종전 TTL(20분) 안에 다시 오지 않았을 뿐이다.
+     * (같은 실측에서 구두점 제거 정규화는 중복률을 +0.7%p 만 올려 기각.)
+     */
+    ROUTING_CACHE_TTL_MS: parseInt(process.env.OMK_ROUTING_CACHE_TTL_MS || String(24 * 60 * 60 * 1000), 10),
+    /** 라우팅 캐시 최대 항목 수 (env: OMK_ROUTING_CACHE_MAX_SIZE) — 엔트리가 작아(agentId·confidence·ts) 넉넉히 잡는다 */
+    ROUTING_CACHE_MAX_SIZE: parseInt(process.env.OMK_ROUTING_CACHE_MAX_SIZE || '500', 10),
     /** 메모리 서비스 컨텍스트 캐시 TTL (ms) — 기본 5분 */
     MEMORY_CACHE_TTL_MS: 5 * 60 * 1000,
     /** 메모리 서비스 컨텍스트 캐시 최대 항목 수 */
@@ -679,8 +707,10 @@ export const TOOL_RESULT_COMPACTION = {
     COMPACTED_MAX_CHARS: 200,
     /** 의미론적 요약 활성화 여부 (소형 모델로 요약, 기본 비활성) */
     USE_SEMANTIC: process.env.ENABLE_SEMANTIC_COMPACTION === 'true',
-    /** 의미론적 요약 사용 소형 모델 */
-    COMPACTOR_MODEL: process.env.COMPACTOR_MODEL || 'phi3:mini',
+    /** 의미론적 요약 사용 모델 — 빈 값이면 LLM_DEFAULT_MODEL.
+     * (구 기본 'phi3:mini' 는 Ollama 시절 모델로 vLLM/LiteLLM 카탈로그에 없어
+     *  활성화 시 404→절단 폴백만 타던 죽은 기본값 — 2026-08-03 제거) */
+    COMPACTOR_MODEL: process.env.COMPACTOR_MODEL || '',
     /** 의미론적 요약 시 결과 최대 토큰 수 */
     SEMANTIC_MAX_TOKENS: 150,
     /** 의미론적 요약 대상 최소 길이 (이보다 짧으면 단순 절단) */
@@ -884,6 +914,18 @@ export const LOOP_DETECTION = {
     SAME_CALL_WARN_AT: Number(process.env.LOOP_SAME_CALL_WARN) || 3,
     /** 동일 도구+인자 반복 시 루프 강제 종료 임계값 */
     SAME_CALL_BREAK_AT: Number(process.env.LOOP_SAME_CALL_BREAK) || 5,
+    /**
+     * 같은 도구를 **인자 무관** 으로 반복 호출한 누적 횟수 임계값 (경고 주입).
+     *
+     * 기존 SAME_CALL_* 은 "도구+인자" 해시 기준이라, 검색어만 조금씩 바꿔 부르면
+     * 영원히 걸리지 않는다. 실측(2026-08-02): 검색성 질의 6건 중 3건이 쿼리를
+     * 갈아가며 최대 턴(5)을 소진했고 — "주식코드" → "엔비디아 주가" →
+     * "엔비디아 NVDA 주가 오늘" → "nvda stock price today" → … —
+     * 매 턴 모델 prefill(≈1.8초)이 누적돼 총 37초가 걸렸다.
+     */
+    SAME_TOOL_WARN_AT: Number(process.env.LOOP_SAME_TOOL_WARN) || 3,
+    /** 같은 도구 반복 누적이 이 횟수에 도달하면 도구를 끄고 마무리 턴으로 전환. */
+    SAME_TOOL_BREAK_AT: Number(process.env.LOOP_SAME_TOOL_BREAK) || 5,
     /** 동일 에러 메시지 반복 감지 임계값 (이 횟수 도달 시 경고 메시지 주입) */
     SAME_ERROR_WARN_AT: Number(process.env.LOOP_SAME_ERROR_WARN) || 3,
     /** 동일 에러 반복 시 루프 강제 종료 임계값 */
@@ -1118,7 +1160,49 @@ export const WEB_SEARCH_INTENT_PATTERNS: readonly RegExp[] = [
     /검색(해\s*서|해\s*줘|해\s*봐|으로|해서|해줘|해봐)/,
     /(최신|오늘|지금|현재)[^\n]{0,12}(뉴스|날씨|시세|가격|환율)[^\n]{0,10}(알려|찾아|검색|조사)/,
     /web\s*search|search\s+(the\s+)?(web|internet|online)/i,
+    // 시의성 질의는 "검색" 이라는 단어 없이 오는 경우가 더 많다 — 시점어 + 시황/지표만으로도
+    // 매칭시킨다. ("코스피 지수랑 ... 어제 어떻게 됐어?" 가 위 3개 패턴에 모두 걸리지 않아
+    // web_search 가 도구 목록에서 빠졌고, 모델이 텍스트 툴콜을 뱉어 본문에 노출된 2026-08-01 사례)
+    /(어제|오늘|지금|현재|최근|최신|이번\s*주)[^\n]{0,20}(종가|지수|주가|시세|환율|금리|코스피|코스닥|나스닥|비트코인|날씨|뉴스|순위)/,
+    /(종가|주가|시세|환율|금리|코스피|코스닥|나스닥|비트코인)[^\n]{0,15}(얼마|어때|어떻게|알려|현황)/,
 ] as const;
+
+/**
+ * 응답 스크립트 순수성 교정 (2026-08-02) — 한글 문장에 섞인 한자·가나를 후단에서 교정.
+ * 프롬프트 강화로는 혼입률이 내려가지 않아(A/B 45% 유지) 후단 교정으로 처리한다.
+ * 상세 근거는 services/chat-service/script-purity.ts 참고.
+ */
+export const SCRIPT_PURITY = {
+    /** false 면 교정 LLM 호출 자체를 하지 않음(전체 비활성). */
+    ENABLED: process.env.CHAT_SCRIPT_PURITY_REPAIR !== 'false',
+    /** 혼입 줄이 이보다 많으면 교정 생략 — 줄 단위 교정의 이점이 사라지는 구간. */
+    MAX_LINES: parseInt(process.env.CHAT_SCRIPT_PURITY_MAX_LINES || '20', 10),
+    /** 교정 호출 전용 타임아웃 — 응답 완료 후 추가 지연이므로 짧게. */
+    TIMEOUT_MS: parseInt(process.env.CHAT_SCRIPT_PURITY_TIMEOUT_MS || '20000', 10),
+    /** 교정 출력 상한. 혼입 줄만 되돌려받으므로 본문 전체보다 훨씬 작다. */
+    MAX_OUTPUT_TOKENS: parseInt(process.env.CHAT_SCRIPT_PURITY_MAX_TOKENS || '1200', 10),
+    /** 교정본이 원문 대비 이 비율보다 짧으면 내용 유실로 보고 그 줄은 원문 유지. */
+    MIN_LENGTH_RATIO: 0.5,
+    /**
+     * 교정 프롬프트. 성공 기준("하나라도 남으면 실패")과 단어 단위 매핑 예시가 핵심 —
+     * 이 둘이 없던 초기 문구는 어려운 케이스(중국어 단어가 통째로 섞인 경우)를 0/5 로
+     * 전혀 고치지 못했고, 추가 후 5/5 로 바뀌었다(2026-08-02 A/B).
+     * 예시는 라이브에서 실제 교정에 실패했던 문장들에서 뽑았다.
+     */
+    SYSTEM_PROMPT: [
+        '당신은 한국어 교정기입니다. 각 줄에서 한글이 아닌 문자(한자·중국어 간체자·일본어 가나)를',
+        '문맥에 맞는 한국어로 빠짐없이 바꾸세요. 출력에 한자가 하나라도 남아 있으면 실패입니다.',
+        '',
+        '중국어 단어가 통째로 섞인 경우가 많습니다. 글자마다 음차하지 말고 단어 전체를 한국어로 옮기세요:',
+        '- 주도下的 기술 → 주도하는 기술',
+        '- 전交易日 → 전 거래일',
+        '- 前次会议 → 지난 회의',
+        '- 影响 → 영향,  除外 → 제외,  开发商 → 개발사,  当天 → 당일,  支出 → 지출',
+        '',
+        '그 외의 내용·수치·마크다운 서식은 절대 바꾸지 마세요.',
+        '입력과 같은 "번호. 내용" 형식으로, 입력된 줄 수만큼만 출력하세요. 설명은 붙이지 마세요.',
+    ].join('\n'),
+} as const;
 
 /**
  * 길찾기(경로) 의도 판정 패턴. 매칭 시 카카오 find-route 도구를 강제 포함·호출해
@@ -1149,6 +1233,15 @@ export const AGENT_TASK_LIMITS = {
         || `${process.cwd()}/data/uploads/agent-tasks`,
     /** 사용자 지정 max_turns 의 절대 상한 */
     MAX_TURNS_CEILING: 20,
+    /**
+     * 작업 목표(goal) 최대 길이. 종전 2,000자는 스키마에 하드코딩돼 있었고 근거가 없었다 —
+     * 채팅 message 는 100,000자, tool arguments 는 200,000자를 받는데 goal 만 50배 좁았다.
+     * 설계 문서를 그대로 작업 지시로 넣는 사용(2026-08-02, 약 11,000자)이 막혔고,
+     * 채팅→작업 자동 위임 경로에서는 긴 메시지가 그대로 goal 이 되므로 같은 실패가 난다.
+     * goal 은 매 턴 시스템 프롬프트에 실리므로 무제한은 곤란하다 — 20,000자면 약 1만 토큰,
+     * 262K 컨텍스트의 4% 수준이라 안전하다.
+     */
+    GOAL_MAX_CHARS: parseInt(process.env.AGENT_TASK_GOAL_MAX_CHARS || '', 10) || 20000,
     /** 기본 최대 턴 수 */
     DEFAULT_MAX_TURNS: 10,
     /** 작업 전체 타임아웃 (ms) — AGENT_TASK_TIMEOUT_MS 환경변수로 오버라이드.
@@ -1158,6 +1251,30 @@ export const AGENT_TASK_LIMITS = {
      *  멀티턴 도구 작업은 매 턴 prompt_tokens(전체 컨텍스트)를 누적 카운트하므로 200k 는
      *  3턴 만에 소진됐다(샌드박스 도구 작업이 terminate 전에 실패). 기본 1M 으로 상향. */
     MAX_TOTAL_TOKENS: parseInt(process.env.AGENT_MAX_TOTAL_TOKENS || '', 10) || 1_000_000,
+    /**
+     * 마무리 턴 강제(2026-08-03) — 자원 상한에 **닿기 전에** 도구를 끊고 종합 답변을 받는다.
+     *
+     * 하드 상한(MAX_TOTAL_TOKENS·max_turns)은 폭주를 끊을 뿐 산출을 남기지 못한다. 30일 실측:
+     * 예약 리포트 20/20 턴 3건 중 2건이 리포트 파일을 이미 만든 뒤 검증 사족("Let me verify
+     * the file exists")에서 절단됐고, 마지막 응답이 35~96자라 결과로 쓸 수 없었다.
+     * 남은 턴이 1 이거나 누적 토큰이 하드 상한의 SOFT_RATIO 에 닿으면 도구를 제거하고
+     * 마무리 지시(getAgentTaskFinalTurnNudge)를 1회 주입해 정상 완료 경로로 유도한다.
+     *
+     * 하드 상한 자체는 낮추지 않는다 — 완료 작업 p95 가 538K, 최대 618K 로 1M 은 정상 작업을
+     * 죽이지 않는 안전망이며, 실제 제어는 이 소프트 경계가 맡는다.
+     * AGENT_TASK_FINAL_TURN_NUDGE=false 로 비활성.
+     */
+    FINAL_TURN_NUDGE_ENABLED: process.env.AGENT_TASK_FINAL_TURN_NUDGE !== 'false',
+    /**
+     * 마무리 턴 전환 토큰 비율 (MAX_TOTAL_TOKENS 대비). AGENT_TASK_TOKEN_SOFT_RATIO 로 오버라이드.
+     *
+     * 0.7 인 이유는 **마무리 턴 한 번이 하드 상한 안에 반드시 들어오게** 하기 위해서다.
+     * 남는 여유가 300K 로 모델 컨텍스트(262K)보다 크므로, 마무리 턴이 전체 컨텍스트를 다시
+     * 실어도 하드 상한에 걸려 죽지 않는다. 0.8(여유 200K)이면 컨텍스트가 큰 작업의 마무리 턴이
+     * 상한을 넘겨, 정리시키려던 턴에서 오히려 산출 없이 종료될 수 있다.
+     * 완료 작업 실측(30일) p95 538K·최대 618K 가 700K 아래라 정상 작업은 이 경계에 닿지 않는다.
+     */
+    TOKEN_SOFT_RATIO: parseFloat(process.env.AGENT_TASK_TOKEN_SOFT_RATIO || '') || 0.7,
     /** 검색류 도구 호출 횟수 하드 상한 — 초과 시 다음 턴부터 검색 도구를 제거해 강제 종합.
      *  AGENT_MAX_SEARCH_CALLS 환경변수로 오버라이드 가능 (기본 5). */
     MAX_SEARCH_CALLS: parseInt(process.env.AGENT_MAX_SEARCH_CALLS || '5', 10),
@@ -1342,10 +1459,29 @@ export const ORCHESTRATION_DISPATCH = {
     DISCUSSION_MAX_AGENTS: parseInt(process.env.ORCH_DISCUSSION_MAX_AGENTS || '3', 10),
     /** 도구 경유 토론 시간 상한(ms, 기본 120초) — 초과 시 도구 결과로 오류 반환. */
     DISCUSSION_TIMEOUT_MS: parseInt(process.env.ORCH_DISCUSSION_TIMEOUT_MS || '120000', 10),
+    /**
+     * 도구 경유 토론의 근거 수집(Evidence Package) 여부. 기본 true.
+     * 종전엔 이 경로만 enableFactCheck=false + webSearchFn 미주입이라 검색 0건으로
+     * 토론했다(토글 경로는 켜져 있어 비대칭). 라이브 확인: "2026년 반도체 리스크"
+     * 토론 41초 동안 검색 0건 — 시의성 주제를 파라메트릭 지식만으로 논함.
+     * 검색 1회(~3-5초)가 추가되므로 지연이 문제면 false 로 끈다.
+     */
+    DISCUSSION_EVIDENCE: process.env.ORCH_DISCUSSION_EVIDENCE !== 'false',
     /** 도구 결과 문자열 캡 — 토론 합성 결과의 컨텍스트 폭주 방지. */
     RESULT_CAP_CHARS: parseInt(process.env.ORCH_RESULT_CAP_CHARS || '8000', 10),
     /** 메시지당 오케스트레이션 도구 호출 캡(종류 무관 합산, 기본 1). */
     MAX_CALLS_PER_MESSAGE: parseInt(process.env.ORCH_MAX_CALLS_PER_MESSAGE || '1', 10),
+    /**
+     * Agent Task 스텝에서 start_discussion 노출 여부. **기본 OFF**.
+     *
+     * 채팅 배정(ENABLED)과 분리한 이유:
+     *  ① 수요 미확인 — 유사 기능인 spawn_agents 는 Agent Task 에서 역대 호출 0건이고,
+     *     실측 상위는 bash(247)·plan_update(179)·web_search(103) 로 위임/토론류가 없다.
+     *  ② 도구 수는 의식적으로 관리된다 — 작업 도구는 11종으로 고정돼 있고 테스트가 이를
+     *     단언한다(도구폭주 시 vLLM 문법 컴파일 101초 타임아웃 선례).
+     * 켜면 12종이 되므로, 필요한 운영에서만 명시적으로 활성화한다.
+     */
+    TASK_DISCUSSION: process.env.AGENT_TASK_DISCUSSION === 'true',
 } as const;
 
 /** 토론 의도 프리필터 — start_discussion 노출 게이트 (매칭 시에만 도구 노출).

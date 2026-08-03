@@ -34,13 +34,13 @@ const taskInputFileSchema = z.object({
  * 잘못된 위치의 옵션(`approvalPolicy`)을 "요청은 200 인데 설정만 안 먹는" 형태로 감춰서,
  * 증상만 보고는 원인을 알 수 없다.
  *
- * @property {string} goal - 작업 목표 (1~2000자, 필수)
+ * @property {string} goal - 작업 목표 (1자~AGENT_TASK_LIMITS.GOAL_MAX_CHARS, 필수)
  * @property {number} [maxTurns] - 최대 도구 루프 턴 수 (1~상한, 기본값: DEFAULT_MAX_TURNS)
  * @property {Array} [files] - 입력 첨부 파일 (채팅 첨부와 동일 캡)
  * @property {Array} [images] - 입력 첨부 이미지 dataURL (vision 채널 전달)
  */
 export const createAgentTaskSchema = z.strictObject({
-    goal: secureTextSchema({ minLength: 1, maxLength: 2000, fieldName: 'goal', detectMaliciousPatterns: false }),
+    goal: secureTextSchema({ minLength: 1, maxLength: AGENT_TASK_LIMITS.GOAL_MAX_CHARS, fieldName: 'goal', allowHtmlLikeContent: true, detectMaliciousPatterns: false }),
     maxTurns: z.number().int().min(1).max(AGENT_TASK_LIMITS.MAX_TURNS_CEILING).optional(),
     // Cowork D1a: 실행 백엔드 — 'local' 은 LOCAL_EXECUTOR_ENABLED + 디바이스 연결 필요(라우트가 검증).
     executor: z.enum(['sandbox', 'local']).optional(),
@@ -83,7 +83,7 @@ export type ExecuteAgentTaskInput = z.infer<typeof executeAgentTaskSchema>;
  * cron 표현식 유효성은 라우트에서 parseCron 으로 추가 검증.
  */
 export const createAgentTaskScheduleSchema = z.object({
-    goal: secureTextSchema({ minLength: 1, maxLength: 2000, fieldName: 'goal', detectMaliciousPatterns: false }),
+    goal: secureTextSchema({ minLength: 1, maxLength: AGENT_TASK_LIMITS.GOAL_MAX_CHARS, fieldName: 'goal', allowHtmlLikeContent: true, detectMaliciousPatterns: false }),
     cron: z.string().min(1).max(120).optional(),
     intervalSeconds: z.number().int().min(AGENT_TASK_LIMITS.SCHEDULE_MIN_INTERVAL_SEC).max(365 * 24 * 3600).optional(),
     maxTurns: z.number().int().min(1).max(AGENT_TASK_LIMITS.MAX_TURNS_CEILING).optional(),
@@ -93,7 +93,7 @@ export const createAgentTaskScheduleSchema = z.object({
 
 /** 스케줄 부분 수정 스키마 — 제공된 필드만 갱신. */
 export const updateAgentTaskScheduleSchema = z.object({
-    goal: secureTextSchema({ minLength: 1, maxLength: 2000, fieldName: 'goal', detectMaliciousPatterns: false }).optional(),
+    goal: secureTextSchema({ minLength: 1, maxLength: AGENT_TASK_LIMITS.GOAL_MAX_CHARS, fieldName: 'goal', allowHtmlLikeContent: true, detectMaliciousPatterns: false }).optional(),
     cron: z.string().min(1).max(120).nullable().optional(),
     intervalSeconds: z.number().int().min(AGENT_TASK_LIMITS.SCHEDULE_MIN_INTERVAL_SEC).max(365 * 24 * 3600).nullable().optional(),
     maxTurns: z.number().int().min(1).max(AGENT_TASK_LIMITS.MAX_TURNS_CEILING).optional(),
@@ -113,7 +113,7 @@ const templateParamSchema = z.object({
 /** 작업 템플릿 생성 스키마(6-1). goal_template 은 secureText(HTML 태그 금지 등) 적용. */
 export const createAgentTaskTemplateSchema = z.object({
     name: z.string().min(1).max(100),
-    goalTemplate: secureTextSchema({ minLength: 1, maxLength: 2000, fieldName: 'goalTemplate', detectMaliciousPatterns: false }),
+    goalTemplate: secureTextSchema({ minLength: 1, maxLength: AGENT_TASK_LIMITS.GOAL_MAX_CHARS, fieldName: 'goalTemplate', allowHtmlLikeContent: true, detectMaliciousPatterns: false }),
     params: z.array(templateParamSchema).max(10).optional(),
     maxTurns: z.number().int().min(1).max(AGENT_TASK_LIMITS.MAX_TURNS_CEILING).optional(),
 });

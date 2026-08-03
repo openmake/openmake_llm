@@ -80,7 +80,12 @@ describe('AgentTaskService 스킬 연결', () => {
     });
 
     it('활성 스킬이 있으면 system 에 지식 주입 + denied 도구 제거', async () => {
-        buildManifestPrompt.mockResolvedValue('\n\n## 적용된 스킬 (manifest)\n<skill_context name="s1">SKILL_KNOWLEDGE_MARK</skill_context>');
+        // buildManifestPrompt 는 2026-08-02 부터 { prompt, skillNames } 를 돌려준다
+        // (종전엔 문자열만 반환해 주입된 스킬 이름이 호출부에서 유실됐다).
+        buildManifestPrompt.mockResolvedValue({
+            prompt: '\n\n## 적용된 스킬 (manifest)\n<skill_context name="s1">SKILL_KNOWLEDGE_MARK</skill_context>',
+            skillNames: ['s1'],
+        });
         getActiveSkillBindings.mockResolvedValue([
             { skill_id: 's1', skill_version: '1.0.0', tool_name: 'web_search', binding_mode: 'denied' },
         ]);

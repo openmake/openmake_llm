@@ -21,7 +21,7 @@ import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, AGENT_SPAWN } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
-import { getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getAgentTaskBrowserLimitNudge, getTaskSandboxGuidance, getAgentTaskUploadedFilesNote, getAgentTaskVerifyFailedNudge, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
+import { getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getAgentTaskBrowserLimitNudge, getAgentTaskFinalTurnNudge, getTaskSandboxGuidance, getAgentTaskUploadedFilesNote, getAgentTaskVerifyFailedNudge, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts } from '../llm/artifact-parser';
 import { applyReportRender } from './chat-service/report-block';
 import { getPushService } from './PushService';
@@ -33,18 +33,18 @@ import { buildTaskSpawnFn } from './agent-spawn/spawn-agents';
 import { mergeToolsWithSkills, type ActiveSkillBinding } from './chat-service/tool-merger';
 import { filterRestrictedTools } from './chat-service/tool-restrictions';
 import { TaskRuntime } from './task-sandbox/runtime';
-import { TASK_TERMINATE_SENTINEL } from './task-sandbox/tools';
-import { requiresApproval, getApprovalRegistry } from './task-sandbox/approval-gate';
+import { getApprovalRegistry } from './task-sandbox/approval-gate';
 import { buildFileContext } from './chat-service/attach-context';
 import { AgentTaskAbort, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
 import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
 import { judgeGoalAchieved, buildJudgeExecutionContext } from './agent-task/goal-judge';
-import { persistArtifactSteps, runTool, isSearchTool } from './agent-task/task-steps';
+import { persistArtifactSteps, isSearchTool } from './agent-task/task-steps';
 import { initWorkspaceBaseline, maybePersistCodeDiff, captureDiffOnCleanup } from './agent-task/code-diff';
 import { getSteeringRegistry, applyPendingSteering } from './agent-task/steering';
 import { setupTaskRepo, maybePushAndOpenPR } from './agent-task/git-ops';
 import { resolveExecutorPlan } from './agent-task/executor-select';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
+import { executeTurnToolCalls } from './agent-task/turn-executor';
 import { assembleAgentTools } from './agent-task/tool-assembly';
 import { verifyCodeArtifacts } from './agent-task/deliverable-verify';
 import { buildAgentTaskSystemContent, resolveSkillToolBindings } from './agent-task/skill-block';
@@ -113,6 +113,7 @@ export class AgentTaskService {
         let searchLimitNotified = false;
         let browserCalls = 0;
         let browserLimitNotified = false;
+        let finalTurnNotified = false;
         let curStatus = 'pending';
         let curProgress = 0;
         let curTurn = 0;
@@ -283,14 +284,47 @@ export class AgentTaskService {
                 // browser 는 SEARCH_TOOL_KEYWORDS 에 안 잡혀 검색 throttle 로 제어 불가하므로 별도 cap.
                 const overSearchLimit = searchCalls >= AGENT_TASK_LIMITS.MAX_SEARCH_CALLS;
                 const overBrowserLimit = browserCalls >= AGENT_TASK_LIMITS.MAX_BROWSER_CALLS;
-                const effectiveTools = (overSearchLimit || overBrowserLimit)
-                    ? tools.filter((t) => {
-                        const n = t.function.name;
-                        if (overSearchLimit && isSearchTool(n)) return false;
-                        if (overBrowserLimit && n === 'browser') return false;
-                        return true;
-                    })
-                    : tools;
+
+                // 마무리 턴 — 자원 상한에 **닿기 전에** 도구를 전부 끊어 종합 답변을 받는다.
+                // 상한에서 그냥 끊으면 산출물을 이미 만든 작업도 사족에서 절단돼 결과가 남지 않는다
+                // (2026-08-03: 예약 리포트 20/20 3건 중 2건이 리포트 생성 후 검증 사족에서 절단).
+                // 도구가 사라지면 모델은 최종 답변을 낼 수밖에 없고, 그러면 terminate 완료 경로 +
+                // goal judge 판정을 정상적으로 탄다(달성이면 completed, 아니면 goal_incomplete).
+                // 턴 사유는 **도구를 쓸 턴이 최소 하나 있었을 때만** 건다 — maxTurns=1 이면
+                // 유일한 턴이 곧 마지막이라 조건 없이 걸면 도구를 한 번도 못 쓴다.
+                // 토큰 사유엔 이 가드가 없다: 누적이 임계를 넘었다는 건 resume 으로 이미 예산을
+                // 소진하고 들어왔다는 뜻이라, 첫 턴부터 마무리로 보내는 것이 맞다.
+                const finalTurnReason = !AGENT_TASK_LIMITS.FINAL_TURN_NUDGE_ENABLED
+                    ? null
+                    : totalTokens >= AGENT_TASK_LIMITS.MAX_TOTAL_TOKENS * AGENT_TASK_LIMITS.TOKEN_SOFT_RATIO
+                        ? 'tokens' as const
+                        : (turn > startTurn && turn === turnCeiling - 1)
+                            ? 'turns' as const
+                            : null;
+
+                const effectiveTools = finalTurnReason
+                    ? []
+                    : (overSearchLimit || overBrowserLimit)
+                        ? tools.filter((t) => {
+                            const n = t.function.name;
+                            if (overSearchLimit && isSearchTool(n)) return false;
+                            if (overBrowserLimit && n === 'browser') return false;
+                            return true;
+                        })
+                        : tools;
+                if (finalTurnReason && !finalTurnNotified) {
+                    conversation.push({ role: 'user', content: getAgentTaskFinalTurnNudge(finalTurnReason) });
+                    finalTurnNotified = true;
+                    // 스텝으로 남긴다 — ① 사용자에겐 "왜 도구가 갑자기 멈췄는지"의 설명이 되고
+                    // ② 발동 빈도·사유를 DB 로 집계할 수 있다(로그만으론 재기동 시 유실).
+                    const note = `자원 상한 임박(${finalTurnReason === 'tokens' ? '토큰 예산' : '남은 턴'})`
+                        + ` — 도구를 중단하고 최종 정리로 전환 (턴 ${turn + 1}/${turnCeiling}, 누적 ${totalTokens} 토큰)`;
+                    await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'final_turn', content: note })
+                        .catch(() => { /* 관측 실패가 작업을 죽이지 않게 fail-open */ });
+                    emitStep('final_turn', undefined, note);
+                    logger.info(`[AgentTask] 마무리 턴 전환: ${taskId} (사유=${finalTurnReason}, `
+                        + `턴 ${turn + 1}/${turnCeiling}, 누적 ${totalTokens} 토큰)`);
+                }
                 if (overSearchLimit && !searchLimitNotified) {
                     conversation.push({
                         role: 'user',
@@ -331,6 +365,24 @@ export class AgentTaskService {
                     throw new AgentTaskAbort('token_limit');
                 }
 
+                // 마무리 턴(도구 차단): effectiveTools=[] 로 호출했어도 모델이 native tool_calls 를
+                // 뱉거나 XML 텍스트로 도구를 호출(아래 recoverTextToolCalls 가 승격)하면 도구가 실행돼
+                // 최종 정리가 무산된다. finalTurnReason 이면 그 호출을 실행하지 않는다 — 남은 턴이
+                // 있으면(토큰 사유) 도구 없는 다음 턴에서 답변을 유도하고, 마지막 턴이면 도구 없이 끝나
+                // turn 상한 종료(재개 가능)로 떨어진다(도구만 부른 응답을 "완료"로 오표시하지 않음).
+                // tool_calls 는 남기지 않는다 — tool 결과 없이 dangling 되면 resume/렌더 정합이 깨진다.
+                const finalTurnHasNativeTools = !!(result.tool_calls && result.tool_calls.length > 0);
+                const finalTurnHasTextTools = !!finalTurnReason && !finalTurnHasNativeTools
+                    && !!result.content && recoverTextToolCalls(result.content).length > 0;
+                if (finalTurnReason && (finalTurnHasNativeTools || finalTurnHasTextTools)) {
+                    logger.info(`[AgentTask] 마무리 턴 도구 호출 무시: ${taskId} (turn ${turn + 1})`);
+                    conversation.push({ role: 'assistant', content: result.content });
+                    const stType = turn === 0 ? 'plan' : 'assistant';
+                    await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: stType, content: result.content });
+                    emitStep(stType, undefined, result.content);
+                    continue;
+                }
+
                 conversation.push({
                     role: 'assistant',
                     content: result.content,
@@ -357,6 +409,7 @@ export class AgentTaskService {
 
                 // qwen 결함 보정: 구조화 tool_calls 없이 도구 호출을 XML 텍스트로 뱉으면 실행이 안 돼
                 // 파일이 안 만들어진다(→ 다운로드할 산출물 없음) — 파싱해 실 tool_calls 로 승격 후 실행.
+                // 마무리 턴은 위 도구 차단 가드에서 이미 continue 로 처리되므로 여기 도달하지 않는다.
                 if ((!result.tool_calls || result.tool_calls.length === 0) && result.content) {
                     const recovered = recoverTextToolCalls(result.content);
                     if (recovered.length > 0) { result.tool_calls = recovered; result.content = ''; }
@@ -446,82 +499,21 @@ export class AgentTaskService {
                     return;
                 }
 
-                // 도구 실행 + 체크포인트
-                let terminated = false;
-                let terminateSummary = '';
-                // 승인 대기 진입 콜백 — task 도구·extra 도구 공용(status='paused' + web-push).
-                const onApprovalPending = (toolName: string) => {
-                    void update({ status: 'paused' }).catch(() => { /* noop */ });
-                    void getPushService().sendPush(userId, {
-                        title: 'OpenMake 에이전트 — 승인 필요',
-                        body: `도구 실행 승인을 기다립니다: ${toolName}`,
-                        url: '/agent-tasks',
-                    }).catch(() => { /* noop */ });
-                };
-                for (const tc of result.tool_calls!) {
-                    if (signal.aborted) throw new AgentTaskAbort('aborted');
-                    const name = tc.function.name;
-                    usedTools.add(name);
-                    if (isSearchTool(name)) searchCalls++;
-                    if (name === 'browser') browserCalls++;
-                    const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
-                    let toolResult: string;
-                    if (taskRuntime?.isTaskTool(name)) {
-                        // task 도구 — 승인 게이트 통과 후 영속 샌드박스에서 실행.
-                        // onApprovalWaited: 승인 대기 시간을 pausedMs 로 누적(4-1 pause-aware 타임아웃).
-                        toolResult = await taskRuntime.executeTaskTool(name, args, {
-                            signal,
-                            onApprovalPending: (p) => onApprovalPending(p.toolName),
-                            onApprovalWaited: (ms) => { pausedMs += ms; },
-                        });
-                        if (curStatus === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
-                        if (toolResult.includes(TASK_TERMINATE_SENTINEL)) {
-                            terminated = true;
-                            terminateSummary = String(args.summary ?? '');
-                        }
-                    } else if (extraToolNames.has(name)) {
-                        // extra(화이트리스트) 도구 — 샌드박스 밖 호스트에서 실행되지만 HITL 승인은 task 도구와 동일 적용.
-                        // (이 도구들은 격리 컨테이너가 아니라 API 프로세스에서 실행되므로 승인 우회를 닫는다.)
-                        // extraToolNames 는 샌드박스 ENABLED(활성·degrade) 일 때만 채워지므로 legacy OFF 경로엔 영향 없음.
-                        let decision: 'approved' | 'rejected' = 'approved';
-                        if (requiresApproval(sandboxCfg.approvalPolicy, name, args)) {
-                            const r = await getApprovalRegistry().request(
-                                { taskId, userId, toolName: name, args },
-                                { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName) },
-                            );
-                            decision = r.decision;
-                            pausedMs += r.waitedMs; // 4-1 pause-aware
-                        }
-                        if (curStatus === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
-                        toolResult = decision === 'approved'
-                            ? await runTool(mcp, name, args, userCtx)
-                            : `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}). 다른 방법을 시도하거나 작업을 종료하세요.`;
-                    } else {
-                        toolResult = await runTool(mcp, name, args, userCtx);
-                    }
-                    conversation.push({
-                        role: 'tool',
-                        content: toolResult,
-                        tool_name: name,
-                        tool_call_id: tc.id,
-                    });
-                    await db.addAgentTaskStep({
-                        taskId,
-                        stepNumber: stepNumber++,
-                        stepType: 'tool_result',
-                        toolName: name,
-                        content: toolResult,
-                    });
-                    emitStep('tool_result', name, toolResult);
-                    // 턴 중간 체크포인트(6-4, opt-in): 도구 결과 단위로 저장 — 이 시점 conversation 은
-                    // assistant(tool_calls)+실행된 tool 결과들로 유효하며, resume 이 같은 턴(fromTurn=turn)
-                    // 에서 LLM 호출로 자연 이어져 이미 실행된 도구(특히 write)를 재실행하지 않는다.
-                    if (AGENT_TASK_LIMITS.MIDTURN_CHECKPOINT_ENABLED) {
-                        await db.updateAgentTask(taskId, {
-                            checkpoint: { conversation, completedTurn: turn - 1 },
-                        }).catch(() => { /* checkpoint 실패는 실행을 막지 않음 */ });
-                    }
-                }
+                // 도구 실행 + 체크포인트 — 승인 게이트·terminate 감지·스텝 영속은 agent-task/turn-executor.
+                // conversation·usedTools 는 제자리 갱신, 카운터/terminate 상태는 반환값으로 넘겨받는다.
+                const turnExec = await executeTurnToolCalls({
+                    toolCalls: result.tool_calls!,
+                    taskRuntime, sandboxCfg, extraToolNames, mcp, userCtx,
+                    userId: String(userId), taskId, turn, conversation, usedTools, signal,
+                    stepNumber, searchCalls, browserCalls, pausedMs,
+                    getCurStatus: () => curStatus,
+                    update, emitStep,
+                });
+                stepNumber = turnExec.stepNumber;
+                searchCalls = turnExec.searchCalls;
+                browserCalls = turnExec.browserCalls;
+                pausedMs = turnExec.pausedMs;
+                const { terminated, terminateSummary } = turnExec;
 
                 // terminate 도구 호출 — 깔끔한 완료 시그널(max_turns 소진 아님).
                 if (terminated) {
@@ -548,19 +540,34 @@ export class AgentTaskService {
                 });
             }
 
-            // 턴 상한 도달 — 마지막 assistant 내용을 결과로 보존 (deliverable 태그가 있으면 추출)
+            // 턴 상한 도달 — **완주가 아니다**. terminate 경로(위)와 달리 모델이 작업을 끝냈다고
+            // 선언한 적이 없고, 마지막 턴이 문장 중간에서 끊기는 것이 보통이다.
+            // 종전에는 이 경로도 completed·progress 100·checkpoint null 로 기록해서
+            //   ① 사용자에게 빈/절단된 결과가 "완료"로 표시되고
+            //   ② resumable(= checkpoint 존재 && status==='failed', agent-task.routes)이 false 가 되어
+            //      턴이 모자라 끊긴 작업을 **이어할 수조차 없었다**
+            // (2026-08-02 실측: 9.5K 자 설계 문서 작업이 10턴·233K 토큰을 쓰고 "JSON이 유효한지
+            //  검증하겠습니다." 에서 끊겼는데 completed 로 기록됨).
+            // goal judge 의 "아무것도 못 했는데 완료" 차단과 같은 원칙으로 failed 로 기록하고,
+            // 체크포인트를 남겨 이어하기를 연다(마지막 end-of-turn checkpoint 는 위 루프에서 저장됨).
+            //
+            // ⚠️ 2026-08-03 이후 이 경로는 **드물다** — 마지막 턴은 도구를 뺀 마무리 턴으로 전환되므로
+            // 모델이 최종 답변을 내고 위 완료 경로에서 return 하는 것이 정상이다. 여기 도달한다는 건
+            // 마무리 턴에서도 도구 호출을 시도했거나(도구가 없으니 이례적) 응답이 비었다는 뜻이라
+            // failed 가 맞다. 마무리 턴 도입 전에는 산출물을 만든 작업까지 이 경로로 떨어져
+            // 사족에서 절단됐다(예약 리포트 20/20 3건 중 2건).
             const lastAssistant = [...conversation].reverse().find((m) => m.role === 'assistant');
             const lastRaw = (lastAssistant?.content as string) || '(최대 턴에 도달하여 종료되었습니다.)';
             const lastExtracted = extractAndStripArtifacts(applyReportRender(lastRaw));
             stepNumber = await persistArtifactSteps(taskId, lastExtracted.artifacts, stepNumber);
             stepNumber = await maybePersistCodeDiff(taskRuntime, sandboxCfg, taskId, stepNumber, emitStep);
             await update({
-                status: 'completed',
-                progress: 100,
+                status: 'failed',
+                error: 'max_turns_exhausted',
                 result: lastExtracted.cleanedContent || lastRaw,
-                checkpoint: null,
             });
-            logger.info(`[AgentTask] 턴 상한 종료: ${taskId} (${turnCeiling} 턴)`);
+            logger.warn(`[AgentTask] 턴 상한 종료(미완주): ${taskId} (${turnCeiling} 턴) — `
+                + '재개하려면 max_turns 를 올려 resume 하세요.');
         } catch (err) {
             // signal.aborted 가 true 면 client.chat() 호출 도중 던져진 AbortError
             // ("Request was aborted") 도 사용자 취소로 분류 — 턴 사이 abort 뿐 아니라

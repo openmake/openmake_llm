@@ -319,8 +319,23 @@ export async function publishArtifactAsLink(
 
 // ── 접근토큰 (authenticated/private) — HMAC, 쿠키 교차오리진 회피 ──
 
+/**
+ * 서명 키 존재 가드 — ARTIFACT_VIEWER_SIGNING_KEY·JWT_SECRET 둘 다 미설정이면 빈 키가 되는데,
+ * 빈 키 HMAC 은 누구나 위조 가능하므로 발급/검증 모두 거부한다(fail-closed). 1회만 경고.
+ */
+let warnedEmptySigningKey = false;
+function requireSigningKey(): boolean {
+    if (ARTIFACT_VIEWER.signingKey) return true;
+    if (!warnedEmptySigningKey) {
+        warnedEmptySigningKey = true;
+        logger.warn('ARTIFACT_VIEWER_SIGNING_KEY/JWT_SECRET 미설정 — 뷰어 접근토큰 발급/검증을 거부합니다 (빈 키 HMAC 위조 방지)');
+    }
+    return false;
+}
+
 /** `{pubId}.{expEpoch}.{sig}` 형식 단기 토큰. 앱이 쿠키인증 후 발급, nginx auth_request 가 검증. */
 export function mintAccessToken(pubId: string): string {
+    if (!requireSigningKey()) return '';
     const exp = Math.floor(Date.now() / 1000) + ARTIFACT_VIEWER.accessTokenTtlSec;
     const payload = `${pubId}.${exp}`;
     const sig = createHmac('sha256', ARTIFACT_VIEWER.signingKey).update(payload).digest('base64url');
@@ -329,6 +344,7 @@ export function mintAccessToken(pubId: string): string {
 
 /** 접근토큰 검증 — pubId 일치 + 미만료 + 서명일치. */
 export function verifyAccessToken(pubId: string, token: string): boolean {
+    if (!requireSigningKey()) return false;
     const parts = token.split('.');
     if (parts.length !== 3) return false;
     const [tokPub, expStr, sig] = parts;

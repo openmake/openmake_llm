@@ -151,22 +151,52 @@ export function isBlockedIP(address: string): boolean {
     }
 
     if (version === 6) {
-        const normalized = address.toLowerCase();
-        if (normalized === '::1') {
+        const bytes = ipv6ToBytes(address.toLowerCase());
+        if (!bytes) {
+            return true; // 파싱 불가 — fail-closed
+        }
+
+        // 미지정(::)·루프백(::1)
+        if (bytes.slice(0, 15).every(b => b === 0) && (bytes[15] === 0 || bytes[15] === 1)) {
             return true;
         }
 
-        const firstSegmentRaw = normalized.split(':')[0];
-        const firstSegment = Number.parseInt(firstSegmentRaw || '0', 16);
+        // NAT64 well-known prefix(64:ff9b::/96) — 내장 IPv4 를 추출해 v4 대역으로 재검사
+        if (bytes[0] === 0x00 && bytes[1] === 0x64 && bytes[2] === 0xff && bytes[3] === 0x9b
+            && bytes.slice(4, 12).every(b => b === 0)) {
+            return isBlockedIPv4(`${bytes[12]}.${bytes[13]}.${bytes[14]}.${bytes[15]}`);
+        }
 
-        if (!Number.isNaN(firstSegment)) {
-            if (firstSegment >= 0xfc00 && firstSegment <= 0xfdff) {
-                return true;
-            }
+        // 6to4(2002::/16) — 내장 IPv4(2~5바이트)를 추출해 v4 대역으로 재검사
+        if (bytes[0] === 0x20 && bytes[1] === 0x02) {
+            return isBlockedIPv4(`${bytes[2]}.${bytes[3]}.${bytes[4]}.${bytes[5]}`);
+        }
 
-            if (firstSegment >= 0xfe80 && firstSegment <= 0xfebf) {
-                return true;
-            }
+        const firstSegment = ((bytes[0] ?? 0) << 8) | (bytes[1] ?? 0);
+
+        // Teredo(2001::/32) — 내장 IPv4 가 XOR 난독화돼 있어 디코딩 대신 전면 차단
+        if (firstSegment === 0x2001 && bytes[2] === 0x00 && bytes[3] === 0x00) {
+            return true;
+        }
+        // 문서화 대역(2001:db8::/32) — 실주소 아님
+        if (firstSegment === 0x2001 && bytes[2] === 0x0d && bytes[3] === 0xb8) {
+            return true;
+        }
+        // discard-only(100::/64)
+        if (firstSegment === 0x0100 && bytes.slice(2, 8).every(b => b === 0)) {
+            return true;
+        }
+        // ULA(fc00::/7)
+        if (firstSegment >= 0xfc00 && firstSegment <= 0xfdff) {
+            return true;
+        }
+        // link-local(fe80::/10) + deprecated site-local(fec0::/10)
+        if (firstSegment >= 0xfe80 && firstSegment <= 0xfeff) {
+            return true;
+        }
+        // multicast(ff00::/8)
+        if (firstSegment >= 0xff00) {
+            return true;
         }
 
         return false;
