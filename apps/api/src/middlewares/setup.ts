@@ -23,6 +23,7 @@ import {
     authLimiter,
     researchLimiter,
     uploadLimiter,
+    chunkUploadLimiter,
     webSearchLimiter,
     memoryLimiter,
     mcpLimiter,
@@ -137,6 +138,8 @@ export function setupParsersAndLimiting(app: Application): void {
     app.use('/api/chat', chatLimiter);
     app.use('/api/research', researchLimiter);
     app.use('/api/upload', uploadLimiter);
+    // 청크 업로드 — 파일 하나가 청크 수십 개로 쪼개져 오므로 전용(고상한) 리미터
+    app.use('/api/agent-task-uploads', chunkUploadLimiter);
     app.use('/api/web-search', webSearchLimiter);
     app.use('/api/users/me/memories', memoryLimiter);
     app.use('/api/mcp', mcpLimiter);

@@ -22,6 +22,7 @@ export {
     chatLimiter,
     researchLimiter,
     uploadLimiter,
+    chunkUploadLimiter,
     webSearchLimiter,
     memoryLimiter,
     mcpLimiter,

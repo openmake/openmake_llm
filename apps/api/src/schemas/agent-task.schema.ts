@@ -23,9 +23,24 @@ const taskInputFileSchema = z.object({
     // 가능 여부는 DOC_EXTRACT_LIMITS.MAX_BYTES_PER_FILE 가 별도 결정(초과 시 추출만 생략,
     // 원본 바이트는 샌드박스 uploads/ 로 전달되어 에이전트가 직접 파싱).
     data: z.string().max(AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES).optional(),
+    // 청크 업로드 참조 — /api/agent-task-uploads 로 완료(complete)된 업로드의 id.
+    // 지정 시 content/data 대신 서버 디스크의 조립 원본을 storedPath 로 소모(claim)한다.
+    uploadId: z.uuid().optional(),
     size: z.number().int().nonnegative().optional(),
     truncated: z.boolean().optional(),
 });
+
+/**
+ * 청크 업로드 세션 시작(init) 스키마 — 파일 선언(이름·크기·청크 수).
+ * 청크당 크기 상한은 AGENT_TASK_LIMITS.CHUNK_MAX_BYTES(라우트 raw 파서와 스토어가 이중 검증).
+ */
+export const chunkedUploadInitSchema = z.strictObject({
+    name: z.string().min(1).max(FILE_ATTACH_LIMITS.MAX_NAME_LENGTH),
+    type: z.string().max(100).optional(),
+    size: z.number().int().positive().max(AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES),
+    totalChunks: z.number().int().min(1).max(AGENT_TASK_LIMITS.CHUNK_MAX_COUNT),
+});
+export type ChunkedUploadInitInput = z.infer<typeof chunkedUploadInitSchema>;
 
 /**
  * 에이전트 작업 생성 스키마

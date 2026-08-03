@@ -27,6 +27,42 @@ function toWireFile(f: AttachedFileUI): WsAttachedFile {
   return rest;
 }
 
+/** 청크 업로드 임계값 — chat.openmake.cc 는 Cloudflare 무료 플랜이라 요청당 100MB 상한.
+ *  바이너리 합계가 이를 넘보면 단일 multipart 대신 청크 경로로 전환한다(여유 마진 포함). */
+const CHUNKED_UPLOAD_THRESHOLD_BYTES = 60 * 1024 * 1024;
+/** 청크 크기 — Cloudflare 상한(100MB) 대비 충분히 작게. 서버 상한(기본 32MB) 이하여야 한다. */
+const CHUNK_SIZE_BYTES = 24 * 1024 * 1024;
+
+/** 파일 하나를 청크로 나눠 업로드(init → PUT×N → complete)하고 uploadId 를 반환.
+ *  각 요청이 CHUNK_SIZE 이하라 Cloudflare 100MB 상한에 걸리지 않는다. */
+async function uploadFileInChunks(file: File): Promise<string> {
+  const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE_BYTES));
+  const init = await ApiClient.post<{ data: { uploadId: string } }>(
+    "/api/agent-task-uploads",
+    { name: file.name, type: file.type || undefined, size: file.size, totalChunks },
+  );
+  const uploadId = init?.data?.uploadId;
+  if (!uploadId) throw new Error("업로드 세션 생성 실패");
+  for (let i = 0; i < totalChunks; i++) {
+    const blob = file.slice(i * CHUNK_SIZE_BYTES, Math.min((i + 1) * CHUNK_SIZE_BYTES, file.size));
+    const resp = await fetch(`/api/agent-task-uploads/${uploadId}/chunks/${i}`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/octet-stream", ...(await csrfHeaders()) },
+      body: blob,
+    });
+    if (!resp.ok) throw new Error(`청크 ${i + 1}/${totalChunks} 업로드 실패 (HTTP ${resp.status})`);
+  }
+  const done = await fetch(`/api/agent-task-uploads/${uploadId}/complete`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...(await csrfHeaders()) },
+    body: "{}",
+  });
+  if (!done.ok) throw new Error(`업로드 완료 처리 실패 (HTTP ${done.status})`);
+  return uploadId;
+}
+
 /**
  * 채팅 WebSocket hook — 백엔드 sockets/ws-chat-handler.ts 프로토콜.
  *
@@ -537,9 +573,29 @@ export function useChatSocket() {
       try {
         // 바이너리 원본(rawFile)이 있으면 multipart 로 스트리밍 업로드 — base64-in-JSON 의
         // 크기/메모리 한계를 피하는 근본 경로. 텍스트 첨부·이미지는 payload JSON 에 동승.
+        // 단, 합계가 Cloudflare 요청당 상한(100MB)을 넘보면 청크 업로드로 전환 —
+        // 파일별로 조각 업로드 후 uploadId 참조만 담은 JSON 으로 작업을 생성한다.
         const binaryParts = (files ?? []).filter((f) => f.rawFile);
+        const totalBinaryBytes = binaryParts.reduce((sum, f) => sum + (f.rawFile?.size ?? 0), 0);
         let created: { data?: { task?: { id?: string } } } | null;
-        if (binaryParts.length > 0) {
+        if (totalBinaryBytes > CHUNKED_UPLOAD_THRESHOLD_BYTES) {
+          const uploadRefs = [];
+          for (const f of binaryParts) {
+            const uploadId = await uploadFileInChunks(f.rawFile!);
+            uploadRefs.push({ name: f.name, type: f.type, size: f.rawFile!.size, uploadId });
+          }
+          const payloadFiles = (files ?? []).filter((f) => !f.rawFile).map(toWireFile);
+          created = await ApiClient.post<{ data: { task: { id: string } } }>(
+            "/api/agent-tasks",
+            {
+              goal,
+              files: [...payloadFiles, ...uploadRefs],
+              ...(images && images.length > 0 ? { images } : {}),
+              ...(repoUrl && repoUrl.trim() ? { repoUrl: repoUrl.trim() } : {}),
+              ...(localExecutor ? { executor: "local" } : {}),
+            },
+          );
+        } else if (binaryParts.length > 0) {
           const payloadFiles = (files ?? [])
             .filter((f) => !f.rawFile)
             .map(toWireFile);
