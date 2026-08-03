@@ -60,6 +60,8 @@ interface AgentTask {
   totalTokens?: number;
   /** Cowork D2: 'local' 이면 데스크톱 브리지 폴더에서 실행 */
   executor?: "sandbox" | "local";
+  /** 실패 사유 — 코드(goal_incomplete/max_turns_exhausted/interrupted) 또는 자유 텍스트. */
+  error?: string;
 }
 
 type PlanStepStatus = "not_started" | "in_progress" | "completed" | "blocked";
@@ -85,6 +87,8 @@ interface ApiAgentTask {
   git_pr_url?: string | null;
   /** Cowork D2: 실행 백엔드 — 'local' 이면 데스크톱 브리지 폴더에서 실행됨 */
   executor?: "sandbox" | "local";
+  /** 실패 사유 (toPublicTask 가 노출하는 error 컬럼) */
+  error?: string;
 }
 
 type TaskFilesResponse = ApiSuccess<{ files: string[] }>;
@@ -148,7 +152,20 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
     resumable: t.resumable,
     totalTokens: typeof t.total_tokens === "number" ? t.total_tokens : undefined,
     executor: t.executor,
+    error: t.error || undefined,
   };
+}
+
+/** 실패 사유 코드 — i18n 번역 대상. 그 외 값은 자유 텍스트로 원문 표시. */
+const KNOWN_ERROR_CODES = new Set(["goal_incomplete", "max_turns_exhausted", "interrupted"]);
+/** 재개 가능한 사유 — resume 버튼과 시각적으로 연결. */
+const RESUMABLE_ERROR_CODES = new Set(["max_turns_exhausted", "interrupted"]);
+
+/** 실패 사유 라벨: 알려진 코드는 번역, 그 외는 원문 축약(전문은 tooltip). */
+function errorReasonLabel(tr: TFn, error: string): string {
+  return KNOWN_ERROR_CODES.has(error)
+    ? tr(`errorReason.${error}`)
+    : error.length > 48 ? `${error.slice(0, 48)}…` : error;
 }
 
 /* ── 목업 폴백 ─────────────────────────────────────────────── */
@@ -325,6 +342,21 @@ function TaskDetailModal({
               </span>
               <span>{t("turnLabel")} {detail.task.current_turn ?? 0}/{detail.task.max_turns ?? 0}</span>
             </div>
+            {/* 실패 사유 — 상세에도 노출(카드와 동일 규칙) */}
+            {detail.task.status === "failed" && detail.task.error && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="text-muted">{t("errorReason.label")}</span>
+                <span
+                  className="inline-flex items-center rounded-md border border-danger/40 bg-danger-soft px-2 py-0.5 font-medium text-danger"
+                  title={detail.task.error}
+                >
+                  {errorReasonLabel(t, detail.task.error)}
+                </span>
+                {RESUMABLE_ERROR_CODES.has(detail.task.error) && (
+                  <span className="text-faint">{t("errorReason.resumableHint")}</span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 실행 중/일시정지 시 방향 지시(steering) — 취소·재시작 없이 교정. */}
@@ -961,6 +993,21 @@ export default function AgentTasksPage() {
                       {t("turnShort", { current: task.currentTurn, max: task.maxTurns })}
                     </span>
                   </div>
+
+                  {/* 실패 사유 — 알려진 코드는 번역, 재개 가능 사유는 resume 안내 병기 */}
+                  {task.rawStatus === "failed" && task.error && (
+                    <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs">
+                      <span
+                        className="inline-flex items-center rounded-md border border-danger/40 bg-danger-soft px-2 py-0.5 font-medium text-danger"
+                        title={task.error}
+                      >
+                        {errorReasonLabel(t, task.error)}
+                      </span>
+                      {RESUMABLE_ERROR_CODES.has(task.error) && task.resumable && (
+                        <span className="text-faint">{t("errorReason.resumableHint")}</span>
+                      )}
+                    </div>
+                  )}
 
                   <h3
                     className="mb-4 line-clamp-2 cursor-pointer text-sm font-semibold leading-snug text-fg hover:underline"

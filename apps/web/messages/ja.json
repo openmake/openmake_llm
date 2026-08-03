@@ -238,6 +238,7 @@
     "disclaimer": "OpenMake は誤ることがあります。重要な情報は確認してください。",
     "suppressedTag": "(未適用)",
     "modifierSuppressed": "{label} はインターセプトモード中は適用されません",
+    "externalLocalModeNotice": "ディスカッション・ディープリサーチはローカルモデルで実行されます（選択した外部モデルは使用されません）。",
     "toggle": {
       "discussion": "ディスカッション",
       "thinking": "思考",
@@ -771,7 +772,14 @@
     },
     "viewPr": "PR を表示",
     "downloadFailed": "ダウンロードに失敗しました: {error}",
-    "localBadge": "ローカルフォルダ実行"
+    "localBadge": "ローカルフォルダ実行",
+    "errorReason": {
+      "label": "失敗理由:",
+      "goal_incomplete": "目標未達成",
+      "max_turns_exhausted": "ターン・リソース上限に到達",
+      "interrupted": "サーバー再起動により中断",
+      "resumableHint": "再開できます"
+    }
   },
   "customAgents": {
     "pageTitle": "カスタムエージェント",
@@ -871,6 +879,9 @@
     "sourceCount": "{count}件",
     "verified": "検証済み",
     "unverified": "未検証",
+    "deleteTitle": "削除",
+    "deleteConfirm": "リサーチ「{topic}...」を削除しますか？",
+    "deleteFailed": "削除に失敗しました: {message}",
     "status": {
       "pending": "待機",
       "running": "実行中",
@@ -1342,6 +1353,14 @@
     "disabled": "無効",
     "editAction": "編集",
     "deleteAction": "削除"
+  },
+  "providerKeys": {
+    "validate": "検証",
+    "validating": "検証中",
+    "validateOk": "検証に成功しました",
+    "validateFailed": "検証に失敗しました: {error}",
+    "usageSummary": "直近{days}日 · {calls}回呼び出し · {tokens}トークン",
+    "error": "エラー"
   },
   "apiKeys": {
     "title": "APIキー",

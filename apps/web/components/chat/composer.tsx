@@ -416,6 +416,17 @@ export function Composer() {
   const MODIFIER_KEYS = new Set<string>(["webSearchEnabled", "artifactMode"]);
   const interceptActive = TOGGLES.some((m) => m.on && INTERCEPT_KEYS.has(m.key));
 
+  // 외부 provider 모델 판별 — 모델 목록의 provider 필드가 SoT('local-llm' 이 로컬).
+  // 목록 미로드 시 fullId prefix('provider:model', local-llm 제외)로 폴백 판별.
+  const selectedModelIsExternal = (() => {
+    if (!selectedModel || selectedModel === "default") return false;
+    const entry = modelsData?.models.find((m) => m.modelId === selectedModel);
+    if (entry) return entry.provider !== "local-llm";
+    return selectedModel.includes(":") && !selectedModel.startsWith("local-llm:");
+  })();
+  // 토론·딥 리서치는 전용 파이프라인이라 외부 모델을 무시하고 로컬 모델로 강제 실행된다.
+  const externalLocalModeNotice = selectedModelIsExternal && (discussionMode || deepResearchMode);
+
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div
@@ -569,6 +580,13 @@ export function Composer() {
             );
           })}
         </div>
+
+        {/* 외부 모델 + 토론/딥리서치 조합 안내 — 이 모드는 로컬 모델로 강제 실행됨. */}
+        {externalLocalModeNotice && (
+          <p className="px-3 pt-2 text-[11px] text-warn">
+            {t("externalLocalModeNotice")}
+          </p>
+        )}
 
         {/* Phase 2 Git — repo URL 지정 시 태스크가 해당 repo 를 clone 해 작업 후 PR 생성(선택). */}
         {agentTaskMode && (

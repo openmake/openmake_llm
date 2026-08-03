@@ -238,6 +238,7 @@
     "disclaimer": "OpenMake can make mistakes. Verify important information.",
     "suppressedTag": "(not applied)",
     "modifierSuppressed": "{label} is not applied while an intercept mode is on",
+    "externalLocalModeNotice": "Discussion and Deep Research run on the local model (the selected external model is not used).",
     "toggle": {
       "discussion": "Discussion",
       "thinking": "Thinking",
@@ -771,7 +772,14 @@
     },
     "viewPr": "View PR",
     "downloadFailed": "Download failed: {error}",
-    "localBadge": "Local folder run"
+    "localBadge": "Local folder run",
+    "errorReason": {
+      "label": "Failure reason:",
+      "goal_incomplete": "Goal not met",
+      "max_turns_exhausted": "Turn/resource limit reached",
+      "interrupted": "Interrupted by server restart",
+      "resumableHint": "Can be resumed"
+    }
   },
   "customAgents": {
     "pageTitle": "Custom Agents",
@@ -871,6 +879,9 @@
     "sourceCount": "{count, plural, one {# item} other {# items}}",
     "verified": "Verified",
     "unverified": "Unverified",
+    "deleteTitle": "Delete",
+    "deleteConfirm": "Delete the research \"{topic}...\"?",
+    "deleteFailed": "Delete failed: {message}",
     "status": {
       "pending": "Pending",
       "running": "Running",
@@ -1342,6 +1353,14 @@
     "disabled": "Disabled",
     "editAction": "Edit",
     "deleteAction": "Delete"
+  },
+  "providerKeys": {
+    "validate": "Verify",
+    "validating": "Verifying",
+    "validateOk": "Verification succeeded",
+    "validateFailed": "Verification failed: {error}",
+    "usageSummary": "Last {days}d · {calls} calls · {tokens} tokens",
+    "error": "Error"
   },
   "apiKeys": {
     "title": "API Keys",
