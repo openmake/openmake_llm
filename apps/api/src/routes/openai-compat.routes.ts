@@ -292,6 +292,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
             message: converted.message,
             model: body.model,
             history: converted.history,
+            ...(converted.images && converted.images.length > 0 ? { images: converted.images } : {}),
             tools,
             tool_choice: body.tool_choice,
             userContext,

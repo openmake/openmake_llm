@@ -23,6 +23,7 @@ import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
 import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
 import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext } from '../services/chat-service/attach-context';
 import { hasScriptMixing } from '../services/chat-service/script-purity';
+import { saveAssistantMessage } from '../chat/request-persistence';
 import { buildWebSearchContext } from '../mcp/web-search/build-search-context';
 
 /**
@@ -437,6 +438,23 @@ export async function handleChatMessage(
             log.info('[Chat] 사용자에 의해 중단됨');
             // aborted 메시지는 handleAbort에서 이미 전송됨
             return;
+        }
+
+        // 부분 응답 보존 (2026-08-03): 스트림 도중 실패 시 이미 화면에 나간 partial 을
+        // 히스토리에 저장 — 사용자가 본 내용이 새로고침으로 소실되는 단절을 막는다.
+        // saveHistory=false(프라이버시)는 기존 정책대로 미저장. 신규 세션 첫 턴은
+        // 세션 id 를 모르는 채 실패한 경우라 제외(사용자 메시지도 새 세션에 있음).
+        if (partialAssistantResponse.length > 0 && validSessionId && msg.saveHistory !== false) {
+            const partialNotice = getLocalizedTemplate(WS_ERROR_MESSAGES, userLang).partialInterrupted;
+            const partialAuditUserId = extWs._authenticatedUserId || anonSessionId || 'anonymous';
+            void saveAssistantMessage(
+                validSessionId,
+                partialAuditUserId,
+                `${partialAssistantResponse}\n\n> ⚠️ ${partialNotice}`,
+                selectedModel,
+                Date.now() - generationStartTime,
+                true,
+            ).catch((e) => log.warn('[Chat] 부분 응답 저장 실패:', e));
         }
 
         // 구조화 LLM 호출 이벤트 (성공 경로와 통일 스키마 event=chat_llm_call — 에러 가시성/집계용).

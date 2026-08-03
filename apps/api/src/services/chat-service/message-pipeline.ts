@@ -124,6 +124,20 @@ export async function runMessagePipeline(svc: ChatService,
     // ── Step 1: 언어 정책 결정 ──
     const languagePolicy = svc.resolveLanguagePolicy(message || '', userLanguagePreference);
 
+    // 응답 후처리 체인 적용 헬퍼 — 일반 경로와 특수모드(Discussion/DeepResearch) 조기
+    // return 이 동일하게 통과한다(조기 return 분기 조립 누락 함정 방지 — 2026-08-03 대칭화).
+    const applyResultProcessors = async (content: string): Promise<string> => {
+        const processed = await runResultProcessors(
+            content,
+            { langCode: languagePolicy?.resolvedLanguage, userId },
+            CHAT_RESULT_PROCESSORS,
+        );
+        if (processed.applied.length > 0) {
+            logger.info(`[ResultPipeline] 후처리 적용: ${processed.applied.join(', ')}`);
+        }
+        return processed.content;
+    };
+
     // 특수 모드 조기 분기: Discussion 또는 DeepResearch 모드는 별도 전략으로 위임
     // languagePolicy.resolvedLanguage를 req에 반영하여 감지된 언어가 전략에 전달되도록 함
     if (languagePolicy?.resolvedLanguage) {
@@ -173,12 +187,16 @@ export async function runMessagePipeline(svc: ChatService,
     // 토론 모드: 사용자 명시 토글.
     if (effectiveDiscussionMode) {
         recordToggleShadow('discussion');
-        return svc.processMessageWithDiscussion(req, onToken, onDiscussionProgress, modeExternalClient);
+        return applyResultProcessors(
+            await svc.processMessageWithDiscussion(req, onToken, onDiscussionProgress, modeExternalClient),
+        );
     }
 
     if (deepResearchMode) {
         recordToggleShadow('deep-research');
-        return svc.processMessageWithDeepResearch(req, onToken, onResearchProgress, modeExternalClient);
+        return applyResultProcessors(
+            await svc.processMessageWithDeepResearch(req, onToken, onResearchProgress, modeExternalClient),
+        );
     }
 
     const startTime = Date.now();
@@ -450,13 +468,5 @@ export async function runMessagePipeline(svc: ChatService,
     // 새 후처리를 추가할 때 이 호출부는 고치지 않는다. fail-open 은 파이프라인이 보장한다.
     // 스트리밍 클라이언트는 이미 원문을 받았으므로, WS 는 done 페이로드의 cleanedContent 로
     // 최종본을 교체한다(ws-chat-handler).
-    const processed = await runResultProcessors(
-        externalResponse,
-        { langCode: languagePolicy?.resolvedLanguage, userId },
-        CHAT_RESULT_PROCESSORS,
-    );
-    if (processed.applied.length > 0) {
-        logger.info(`[ResultPipeline] 후처리 적용: ${processed.applied.join(', ')}`);
-    }
-    return processed.content;
+    return applyResultProcessors(externalResponse);
 }

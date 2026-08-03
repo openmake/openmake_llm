@@ -29,14 +29,14 @@ export const WEB_SEARCH_TEMPLATES: Record<string, { header: string; instruction:
 };
 
 // 다국어 에러 메시지 템플릿
-export const WS_ERROR_MESSAGES: Record<string, { quotaExceeded: string; genericError: string }> = {
-    ko: { quotaExceeded: 'API 할당량이 초과되었습니다', genericError: '처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.' },
-    en: { quotaExceeded: 'API quota exceeded', genericError: 'An error occurred while processing. Please try again later.' },
-    ja: { quotaExceeded: 'API割り当て量を超過しました', genericError: '処理中にエラーが発生しました。しばらくしてからもう一度お試しください。' },
-    zh: { quotaExceeded: 'API配额已超出', genericError: '处理过程中发生错误，请稍后重试。' },
-    es: { quotaExceeded: 'Se ha superado la cuota de API', genericError: 'Se produjo un error durante el procesamiento. Por favor, inténtelo de nuevo más tarde.' },
-    de: { quotaExceeded: 'API-Kontingent überschritten', genericError: 'Bei der Verarbeitung ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut.' },
-    fr: { quotaExceeded: 'Quota d\'API dépassé', genericError: 'Une erreur est survenue lors du traitement. Veuillez réessayer ultérieurement.' },
+export const WS_ERROR_MESSAGES: Record<string, { quotaExceeded: string; genericError: string; partialInterrupted: string }> = {
+    ko: { quotaExceeded: 'API 할당량이 초과되었습니다', genericError: '처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.', partialInterrupted: '오류로 응답이 중단되었습니다. 위 내용은 중단 시점까지의 부분 응답입니다.' },
+    en: { quotaExceeded: 'API quota exceeded', genericError: 'An error occurred while processing. Please try again later.', partialInterrupted: 'The response was interrupted by an error. The content above is partial, up to the point of interruption.' },
+    ja: { quotaExceeded: 'API割り当て量を超過しました', genericError: '処理中にエラーが発生しました。しばらくしてからもう一度お試しください。', partialInterrupted: 'エラーにより応答が中断されました。上記は中断時点までの部分的な応答です。' },
+    zh: { quotaExceeded: 'API配额已超出', genericError: '处理过程中发生错误，请稍后重试。', partialInterrupted: '响应因错误而中断。以上内容为中断时点之前的部分响应。' },
+    es: { quotaExceeded: 'Se ha superado la cuota de API', genericError: 'Se produjo un error durante el procesamiento. Por favor, inténtelo de nuevo más tarde.', partialInterrupted: 'La respuesta fue interrumpida por un error. El contenido anterior es parcial, hasta el punto de la interrupción.' },
+    de: { quotaExceeded: 'API-Kontingent überschritten', genericError: 'Bei der Verarbeitung ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut.', partialInterrupted: 'Die Antwort wurde durch einen Fehler unterbrochen. Der obige Inhalt ist eine Teilantwort bis zum Zeitpunkt der Unterbrechung.' },
+    fr: { quotaExceeded: 'Quota d\'API dépassé', genericError: 'Une erreur est survenue lors du traitement. Veuillez réessayer ultérieurement.', partialInterrupted: 'La réponse a été interrompue par une erreur. Le contenu ci-dessus est partiel, jusqu\'au point d\'interruption.' },
 };
 
 // 외부 provider(Anthropic/OpenRouter 등) ProviderError 다국어 메시지
