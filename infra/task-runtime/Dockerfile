@@ -16,8 +16,11 @@ USER root
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
 
 # 실작업 상시 도구 + playwright chromium(+OS 의존성). root 설치 후 비-root 복귀.
+# tesseract-ocr(+kor): 스캔 PDF OCR — 텍스트 레이어 없는 문서(이미지 스캔본)는 pypdf 로
+# 추출이 불가능해 goal_incomplete 로 실패하던 갭(2026-08-04, 2040인천 도시기본계획 688p 실사례).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git curl ca-certificates ripgrep fonts-nanum \
+       tesseract-ocr tesseract-ocr-kor \
     && mkdir -p /workspace /opt/browser \
     && chown node:node /workspace \
     && cd /opt/browser && npm init -y >/dev/null 2>&1 \
@@ -48,8 +51,10 @@ RUN chmod -R a+rX /opt/report-template
 # openpyxl=.xlsx 읽기/쓰기/편집, python-docx=.docx 읽기/쓰기/편집, python-pptx=.pptx 읽기/쓰기/편집,
 # reportlab/fpdf2=PDF 생성, pypdf=PDF 조작(병합/분할/회전/워터마크/폼). lxml·Pillow(docx/pptx 의존)는
 # manylinux wheel 로 시스템 의존성 없이 설치.
+# PyMuPDF=PDF 페이지→이미지 렌더(poppler 불요, 스캔본 OCR 전처리), pytesseract=tesseract 바인딩.
 RUN uv venv /opt/pyenv \
     && VIRTUAL_ENV=/opt/pyenv uv pip install --no-cache openpyxl reportlab fpdf2 python-docx python-pptx pypdf \
+       PyMuPDF pytesseract \
     && chmod -R a+rX /opt/pyenv
 ENV PATH=/opt/pyenv/bin:${PATH}
 

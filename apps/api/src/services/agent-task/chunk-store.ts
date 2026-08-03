@@ -197,6 +197,8 @@ export async function claimUploadsAsInputFiles(
     for (const [i, ref] of refs.entries()) {
         const c = await claimChunkedUpload(ref.uploadId, userId, taskId, 1000 + i);
         const entry: AgentTaskInputFile = { name: c.name, type: c.type ?? ref.type, size: c.size, storedPath: c.storedPath };
+        // 생성 시점 추출은 30MB 이내만 — 대형 스캔 OCR 로 생성 응답이 CF 100s(524)를 넘지
+        // 않도록. 대형 파일은 샌드박스 내 tesseract 로 에이전트가 직접 OCR(운영 철학: LLM 주체).
         if (c.size <= DOC_EXTRACT_LIMITS.MAX_BYTES_PER_FILE) {
             const probe: AgentTaskInputFile = {
                 name: c.name, type: entry.type,

@@ -29,6 +29,18 @@ function extOf(name: string): string {
 }
 
 /**
+ * 이 이름/크기 조합이 생성 시점 추출 대상인지 — 라우트(multipart)·chunk-store(claim)의
+ * 사전 게이트용 단일 규칙. 일반 상한(MAX_BYTES_PER_FILE) 이내이거나, PDF+OCR 활성이면
+ * OCR_MAX_BYTES 까지 허용(본문 루프의 ocrOnly 분기와 동일 기준 — 비대칭 금지).
+ */
+export function isExtractableSize(name: string, size: number): boolean {
+    if (size <= 0) return false;
+    if (size <= DOC_EXTRACT_LIMITS.MAX_BYTES_PER_FILE) return true;
+    return DOC_EXTRACT_LIMITS.PDF_EXTS.includes(extOf(name)) && DOC_EXTRACT_LIMITS.OCR_ENABLED
+        && size <= DOC_EXTRACT_LIMITS.OCR_MAX_BYTES;
+}
+
+/**
  * Promise 에 타임아웃을 건다. 초과 시 reject (원 작업은 백그라운드에 남을 수 있으나 호출자가 graceful 처리).
  * PDF 는 JVM child process 라 강제 종료가 어려워, 과대 파일은 MAX_BYTES_PER_FILE 로 사전 차단한다.
  */
@@ -72,14 +84,68 @@ async function extractPdf(buf: Buffer): Promise<string> {
     }
 }
 
+/** 네이티브 OCR 바이너리(pdftoppm+tesseract) 가용성 — 1회 검사 후 캐시. */
+let nativeOcrAvailable: Promise<boolean> | null = null;
+function checkNativeOcr(): Promise<boolean> {
+    if (!nativeOcrAvailable) {
+        nativeOcrAvailable = Promise.all([
+            execFileAsync('pdftoppm', ['-v']),
+            execFileAsync('tesseract', ['--version']),
+        ]).then(() => true, () => {
+            logger.warn('[DocExtract] pdftoppm/tesseract 미설치 — 스캔본 OCR 은 구 경로(sips+tesseract.js, 첫 페이지만)로 폴백');
+            return false;
+        });
+    }
+    return nativeOcrAvailable;
+}
+
 /**
- * 스캔본 PDF → text (sips 로 페이지 래스터화 후 tesseract.js OCR).
+ * 스캔본 PDF → text (네이티브 pdftoppm 래스터화 + tesseract 병렬 OCR, 다중 페이지).
+ * 생성 시점 동기 경로이므로 OCR_MAX_PAGES·OCR_TIMEOUT_MS 예산 안에서만 처리 —
+ * 잔여 페이지는 원본이 샌드박스로 전달돼 에이전트가 컨테이너 내 tesseract 로 이어서 처리.
+ */
+async function extractPdfOcrNative(buf: Buffer): Promise<string> {
+    const dir = path.join(os.tmpdir(), `om-ocr-${crypto.randomUUID()}`);
+    await fs.mkdir(dir, { recursive: true });
+    try {
+        const pdf = path.join(dir, 'in.pdf');
+        await fs.writeFile(pdf, buf);
+        await execFileAsync('pdftoppm', [
+            '-r', String(DOC_EXTRACT_LIMITS.OCR_DPI), '-gray', '-jpeg',
+            '-f', '1', '-l', String(DOC_EXTRACT_LIMITS.OCR_MAX_PAGES),
+            pdf, path.join(dir, 'p'),
+        ], { timeout: DOC_EXTRACT_LIMITS.PDF_TIMEOUT_MS });
+        const pages = (await fs.readdir(dir)).filter((f) => f.endsWith('.jpg')).sort();
+        if (pages.length === 0) return '';
+
+        const { parallelBatch } = await import('../../workflow/graph-engine');
+        const run = parallelBatch(pages, async (img) => {
+            const base = path.join(dir, img.replace(/\.jpg$/, ''));
+            await execFileAsync('tesseract', [
+                path.join(dir, img), base, '-l', DOC_EXTRACT_LIMITS.OCR_LANGS, '--psm', '3',
+            ], { timeout: DOC_EXTRACT_LIMITS.OCR_TIMEOUT_MS });
+            return `--- PAGE ${img.replace(/^p-0*|\.jpg$/g, '')} ---\n${await fs.readFile(`${base}.txt`, 'utf8')}`;
+        }, { concurrency: DOC_EXTRACT_LIMITS.OCR_PARALLEL });
+        const results = await withTimeout(run, DOC_EXTRACT_LIMITS.OCR_TIMEOUT_MS, 'PDF OCR(native)');
+        return results.filter((r): r is string => typeof r === 'string').join('\n');
+    } finally {
+        await fs.rm(dir, { recursive: true, force: true }).catch(() => { /* noop */ });
+    }
+}
+
+/** OCR 디스패처 — 네이티브 가능 시 다중 페이지, 아니면 구 경로(첫 페이지). */
+async function extractPdfOcr(buf: Buffer): Promise<string> {
+    return (await checkNativeOcr()) ? extractPdfOcrNative(buf) : extractPdfOcrLegacy(buf);
+}
+
+/**
+ * [구 경로] 스캔본 PDF → text (sips 로 페이지 래스터화 후 tesseract.js OCR).
  * officeparser 의 PDF OCR 은 페이지를 통째로 래스터화하지 않아(임베드 이미지 객체만 처리)
  * 스캔본을 못 읽으므로, macOS 내장 sips 로 PDF→PNG 변환 후 tesseract 로 직접 인식한다.
  * (운영 서버가 macOS 확정 — opendataloader JVM 과 동일하게 환경 종속. 다중 페이지 PDF 는
  * sips 가 첫 페이지만 변환하므로 첫 페이지 위주로 인식된다.)
  */
-async function extractPdfOcr(buf: Buffer): Promise<string> {
+async function extractPdfOcrLegacy(buf: Buffer): Promise<string> {
     const id = crypto.randomUUID();
     const tmpPdf = path.join(os.tmpdir(), `om-ocr-${id}.pdf`);
     const tmpPng = path.join(os.tmpdir(), `om-ocr-${id}.png`);
@@ -147,14 +213,22 @@ export async function extractAttachedDocuments(files: AttachedFileInput[] | unde
         if (!isPdf && !isOffice) { delete f.data; continue; }
 
         const buf = Buffer.from(f.data, 'base64');
-        if (buf.length === 0 || buf.length > DOC_EXTRACT_LIMITS.MAX_BYTES_PER_FILE) {
+        // PDF 는 MAX_BYTES_PER_FILE(JVM 보호) 초과라도 OCR_MAX_BYTES 까지는 OCR 직행 허용 —
+        // opendataloader 만 생략(디스크 경유 래스터화라 메모리 안전). 스캔 대형 문서가
+        // "추출 생략 → 빈 컨텍스트" 로 떨어지던 갭 해소(2026-08-04).
+        // (에이전트 작업의 대형 첨부는 라우트/claim 이 30MB 게이트로 이 함수 호출 자체를
+        //  생략한다 — 생성 응답이 CF 100s 를 넘지 않도록. 여기 ocrOnly 는 그 이하 경로용.)
+        const withinFull = buf.length <= DOC_EXTRACT_LIMITS.MAX_BYTES_PER_FILE;
+        if (buf.length === 0 || !isExtractableSize(typeof f.name === 'string' ? f.name : '', buf.length)) {
             logger.warn(`[DocExtract] ${f.name}: 크기 초과/빈 파일 (${buf.length}B) — 추출 생략`);
             delete f.data;
             continue;
         }
 
         try {
-            const text = isPdf ? await extractPdf(buf) : await extractOffice(buf, ext);
+            const text = isPdf
+                ? (withinFull ? await extractPdf(buf) : await extractPdfOcr(buf))
+                : await extractOffice(buf, ext);
             const trimmed = (text || '').trim();
             if (trimmed.length > 0) {
                 f.content = trimmed.slice(0, FILE_ATTACH_LIMITS.MAX_CHARS_PER_FILE);
