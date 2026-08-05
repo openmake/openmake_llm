@@ -25,6 +25,17 @@ const STATUS_MARK: Record<PlanStepStatus, string> = {
     blocked: '[!]',
 };
 
+/**
+ * PURE: 스텝→플랜 노드 귀속(088) — 현재 in_progress 단계의 0-base 인덱스.
+ * 엄격 판정: 모델이 in_progress 로 마킹한 단계가 없으면 undefined(NULL 저장) —
+ * "첫 미완료 단계" 같은 추정 귀속은 하지 않는다(정합률 계측이 목적이므로 날조 금지).
+ * in_progress 가 복수면 첫 번째(모델이 순차 마킹하는 정상 흐름 기준).
+ */
+export function currentPlanStepIndex(steps: PlanStep[]): number | undefined {
+    const i = steps.findIndex((s) => s.status === 'in_progress');
+    return i < 0 ? undefined : i;
+}
+
 /** task 실행 계획. 단계 목록 + 상태. 순수 로직(유닛테스트 대상). */
 export class TaskPlan {
     private steps: PlanStep[] = [];

@@ -13,6 +13,7 @@ import { getPushService } from '../PushService';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { TASK_TERMINATE_SENTINEL } from '../task-sandbox/tools';
 import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-gate';
+import { currentPlanStepIndex } from '../task-sandbox/planning';
 import { runTool, isSearchTool } from './task-steps';
 import { AgentTaskAbort } from './types';
 import type { TaskRuntime } from '../task-sandbox/runtime';
@@ -149,6 +150,8 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             stepType: 'tool_result',
             toolName: name,
             content: toolResult,
+            // 스텝→플랜 노드 귀속(088) — plan_update 직후엔 갱신된 스냅샷 기준(새 단계로 귀속).
+            planStepIndex: taskRuntime ? currentPlanStepIndex(taskRuntime.getPlanSnapshot()) : undefined,
         });
         emitStep('tool_result', name, toolResult);
         // 턴 중간 체크포인트(6-4, opt-in): 도구 결과 단위로 저장 — 이 시점 conversation 은

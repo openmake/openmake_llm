@@ -34,6 +34,7 @@ import { mergeToolsWithSkills, type ActiveSkillBinding } from './chat-service/to
 import { filterRestrictedTools } from './chat-service/tool-restrictions';
 import { TaskRuntime } from './task-sandbox/runtime';
 import { getApprovalRegistry } from './task-sandbox/approval-gate';
+import { currentPlanStepIndex } from './task-sandbox/planning';
 import { applyTurnResourceGates, type TurnGateFlags } from './agent-task/turn-gate';
 import { buildFileContext } from './chat-service/attach-context';
 import { AgentTaskAbort, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
@@ -128,6 +129,9 @@ export class AgentTaskService {
         let verifyRetries = 0;
         // 5-3(b): 실제 사용한 도구 추적 — goal judge 의 실행 컨텍스트(수행 흔적)로 전달.
         const usedTools = new Set<string>();
+        // 스텝→플랜 노드 귀속(088): 기록 시점의 in_progress 단계 인덱스(결정적, 추정 귀속 없음).
+        const planIdx = (): number | undefined =>
+            taskRuntime ? currentPlanStepIndex(taskRuntime.getPlanSnapshot()) : undefined;
 
         // DB 갱신 + 진행상황 발행(fire-and-forget). ws 계층이 구독해 owner user 에게 relay.
         // ws 를 직접 참조하지 않으므로 소켓 연결 여부와 무관하게 실행은 끝까지 진행된다.
@@ -315,7 +319,7 @@ export class AgentTaskService {
                     // 일시적 오류 재시도를 스텝으로 남긴다 — 발동 빈도·사유를 DB 로 집계(fail-open).
                     onRetry: ({ attempt, maxAttempts, error }) => {
                         const note = `일시적 LLM 오류 — 재시도 ${attempt}/${maxAttempts}: ${error}`;
-                        void db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'retry', content: note })
+                        void db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'retry', content: note, planStepIndex: planIdx() })
                             .catch(() => { /* 관측 실패가 작업을 죽이지 않게 fail-open */ });
                         emitStep('retry', undefined, note);
                     },
@@ -403,6 +407,7 @@ export class AgentTaskService {
                     stepType,
                     toolName: turnToolNames,
                     content: stepContent,
+                    planStepIndex: planIdx(),
                 });
                 emitStep(stepType, turnToolNames, stepContent);
 

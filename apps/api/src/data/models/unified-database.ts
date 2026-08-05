@@ -369,15 +369,8 @@ export class UnifiedDatabase {
         return this.agentTaskRepository.updateAgentTask(taskId, updates);
     }
 
-    async addAgentTaskStep(params: {
-        taskId: string;
-        stepNumber: number;
-        stepType: string;
-        toolName?: string;
-        content?: string;
-        messagesSnapshot?: unknown;
-        status?: string;
-    }): Promise<void> {
+    // 파라미터 계약은 repository 가 SoT — 중복 선언하면 필드 추가 시 양쪽이 어긋난다(088 에서 정리).
+    async addAgentTaskStep(params: Parameters<AgentTaskRepository['addAgentTaskStep']>[0]): Promise<void> {
         return this.agentTaskRepository.addAgentTaskStep(params);
     }
 
