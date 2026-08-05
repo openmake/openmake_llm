@@ -175,39 +175,103 @@ OpenMake separates **policy** (deciding *how* to answer) from **execution** (act
 
 ## Getting Started
 
-### Prerequisites
+Supported platforms: **Linux** and **macOS** (Intel & Apple Silicon).
 
-- **Node.js** `>=24 <25`
-- **Docker** (for PostgreSQL/Redis and the MCP/agent sandboxes)
-- An OpenAI-compatible LLM endpoint: a local **vLLM + LiteLLM** stack, or an external provider key
-
-### Setup
+### Install (one command)
 
 ```bash
-# 1. Clone & install (npm workspaces)
 git clone https://github.com/openmake/openmake_llm.git
 cd openmake_llm
-npm install
-
-# 2. Configure environment
-cp .env.example .env      # then fill in the values below
-
-# 3. Start PostgreSQL (schema auto-generates on first launch)
-docker compose -f infra/docker-compose.yml up -d postgres
+./install.sh
 ```
 
-Minimum `.env` values (see `.env.example` for the full list):
+That's it. The installer checks your toolchain (Node 24, Docker, PM2 — installing what's
+missing, without `sudo` where possible), generates a `.env` with freshly random secrets,
+installs dependencies, starts PostgreSQL + Redis, applies all migrations, builds both apps,
+launches them under PM2, and waits for `/health`. It prints your web URL and the generated
+admin password at the end.
+
+It asks one question — which OpenAI-compatible LLM endpoint to use (Ollama / OpenRouter /
+custom / decide later). To skip every prompt:
+
+```bash
+./install.sh --yes                                    # placeholder LLM, fill in .env later
+./install.sh --yes \
+  --llm-base-url https://openrouter.ai/api/v1 \
+  --llm-api-key  sk-or-... \
+  --llm-model    qwen/qwen3-235b-a22b
+```
+
+Re-running `./install.sh` is safe — it repairs rather than overwrites. Useful flags:
+`--skip-docker` (you run Postgres/Redis yourself), `--skip-build`, `--no-start`,
+`--force-env`, and the port overrides below. See `./install.sh --help`.
+
+Already running Postgres or Redis on the default ports? Move the containers instead of
+fighting over 5432/6379 — the ports land in `.env`, and `openmake_llm.sh` reads them back:
+
+```bash
+./install.sh --yes --postgres-port 55432 --redis-port 56379
+```
+
+On macOS the installer works with Docker Desktop, OrbStack, or **Colima**
+(`brew install colima docker docker-compose` — headless, no GUI). If Homebrew's compose
+plugin isn't registered with the docker CLI, the installer adds `cliPluginsExtraDirs` to
+`~/.docker/config.json` for you.
+
+### Prerequisites (handled by the installer)
+
+- **Node.js** `>=24 <25` — provisioned via `mise`/`fnm`/`nvm`, Homebrew, or a local
+  `~/.openmake/node` tarball if none of those exist
+- **Docker** — required for PostgreSQL/Redis and the MCP/agent sandboxes. On Linux the
+  installer offers to run the official `get.docker.com` script; on macOS you need
+  Docker Desktop or OrbStack
+- An OpenAI-compatible LLM endpoint: a local **vLLM + LiteLLM** stack, **Ollama**, or an
+  external provider key
+
+### Manual setup
+
+If you'd rather wire it up yourself, `install.sh` is a readable transcript of these steps:
+
+```bash
+npm install
+node scripts/setup/gen-env.mjs        # minimal .env with generated secrets
+docker compose --env-file .env -f infra/docker-compose.yml up -d postgres redis
+npx ts-node apps/api/src/data/migrations/cli.ts migrate
+npm run build && pm2 start ecosystem.config.js
+```
+
+> The `--env-file .env` is not optional: Compose resolves its default `.env` relative to the
+> compose file's directory (`infra/`), so without it `POSTGRES_PASSWORD` is empty and startup fails.
+
+`gen-env.mjs` writes only the keys required to boot. `.env.example` is the full reference —
+copy optional blocks (OAuth, web search, MCP sandbox, Discord bot) out of it as you need them:
 
 | Variable | Purpose |
 |---|---|
 | `PORT` | API port (default `52416`) |
-| `DATABASE_URL` | PostgreSQL connection string |
-| `JWT_SECRET` | JWT signing secret |
-| `TOKEN_ENCRYPTION_KEY` | AES-256-GCM key for external provider credentials |
+| `DATABASE_URL` | PostgreSQL connection string (password must match `POSTGRES_PASSWORD`) |
+| `JWT_SECRET` | JWT signing secret (≥32 chars) |
+| `API_KEY_PEPPER` | API-key hashing pepper — required in production |
+| `TOKEN_ENCRYPTION_KEY` | AES-256-GCM key for external provider credentials (exactly 64 hex) |
+| `ADMIN_PASSWORD` | Bootstrap admin account password — required in production |
 | `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_DEFAULT_MODEL` | LiteLLM proxy endpoint, master key, default model |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth (optional) |
 
 ### Run
+
+Day-to-day operation goes through `openmake_llm.sh`, which sequences the three layers
+(PostgreSQL → Redis → app) on both Linux and macOS:
+
+```bash
+./openmake_llm.sh start     # bring everything up, then stream logs
+./openmake_llm.sh status    # port + docker + PM2 state for every layer
+./openmake_llm.sh logs      # live PM2 logs
+./openmake_llm.sh health    # GET /health
+./openmake_llm.sh deploy    # build + migrate + restart (apply code changes)
+./openmake_llm.sh stop      # reverse-order shutdown
+```
+
+Or drive the pieces directly:
 
 ```bash
 # Development
@@ -220,6 +284,9 @@ npm run build               # backend + frontend
 npm start                   # node apps/api/dist/server.js
 ```
 
+To survive reboots, register PM2 with your init system — `pm2 startup` (prints a command to
+run: `launchd` on macOS, `systemd` on Linux), then `pm2 save`.
+
 ### Test & lint
 
 ```bash
@@ -227,6 +294,9 @@ npm test                    # Jest unit tests (apps/api)
 npm run test:e2e            # Playwright (chromium + webkit)
 npm run lint                # ESLint
 ```
+
+> `apps/api` unit tests are git-ignored (local-only), so `npm test` reports "0 matches" on a
+> fresh clone — that's expected, not a broken install. CI skips the gate the same way.
 
 ### Database migrations
 
@@ -262,9 +332,12 @@ openmake_llm/
 ├── db/               # init schema + migrations (+ rollbacks/) — read at runtime
 ├── packages/         # shared-types, config, api-client (shared workspaces)
 ├── infra/            # Dockerfiles & compose (mcp-runtime, task-runtime, artifact-viewer, egress-proxy)
-├── scripts/          # host setup for the LLM backend — vLLM/LiteLLM systemd units,
-│                     # serve scripts, litellm.config.yaml, Caddyfile, diagnostics
-└── tests/            # Playwright E2E
+├── scripts/          # setup/ (gen-env.mjs) + host setup for the LLM backend — vLLM/LiteLLM
+│                     # systemd units, serve scripts, litellm.config.yaml, Caddyfile, diagnostics
+├── tests/            # Playwright E2E
+├── install.sh        # one-shot installer (Linux/macOS): toolchain → .env → DB → build → PM2
+├── openmake_llm.sh   # service manager: start/stop/restart/deploy/status/logs/health
+└── ecosystem.config.js  # PM2 process definitions (API, Next frontend, optional Discord bot)
 ```
 
 **What the running server actually needs:** the built `apps/api/dist` + `apps/web/.next`, `db/` (the boot path applies `db/init/`, and the migration CLI resolves `db/migrations/` from the working directory), and `infra/` for the Docker-isolated sandboxes. `scripts/` and `tests/` are *not* loaded by any runtime code — but `scripts/vllm/` and `scripts/caddy/` are the deployment artifacts you copy onto the GPU host when standing up or rebuilding the inference backend, so keep them with the repo.

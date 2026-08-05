@@ -11,6 +11,7 @@
 #       로컬 Ollama 데몬은 더 이상 기동하지 않는다. `LLM_*` 환경변수 참조.
 #
 # 사용법:
+#   ./openmake_llm.sh install    # 최초 1회 원샷 설치 (install.sh 위임)
 #   ./openmake_llm.sh start      # 의존성 → 앱 순서로 기동 (빌드/마이그레이션 X)
 #                                # 기동 후 실시간 로그 스트리밍 지속 (Ctrl+C로 종료)
 #   ./openmake_llm.sh stop       # 앱 → 의존성 역순으로 정지
@@ -24,11 +25,11 @@
 #   ./openmake_llm.sh logs       # OpenMake LLM 실시간 로그
 #   ./openmake_llm.sh health     # /health 엔드포인트 응답 확인
 #
-# 환경 가정 (macOS):
+# 환경 가정 (Linux / macOS 공통):
 #   - PostgreSQL/Redis는 docker compose 로 관리 (2026-06-21 brew postgresql@16 제거 → docker 단독)
 #     · compose 위치: ./infra/docker-compose.yml (COMPOSE_FILE env 로 override 가능)
 #   - OpenMake LLM 앱은 PM2로 관리
-#   - mise / nvm 등으로 Node 24+ 활성화 상태
+#   - Node 24+ 활성화 상태 (mise / nvm / fnm, 또는 install.sh 가 준비한 .openmake/toolchain.env)
 #
 # 종료 코드:
 #   0  성공
@@ -39,17 +40,36 @@
 set -euo pipefail
 
 readonly SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+# install.sh 가 홈 디렉터리에 Node/PM2 를 설치한 경우 그 PATH 를 이어받는다.
+# (시스템에 Node 24 / pm2 가 없어도 이 스크립트가 그대로 동작하도록.)
+# shellcheck source=/dev/null
+[[ -f "$SCRIPT_DIR/.openmake/toolchain.env" ]] && . "$SCRIPT_DIR/.openmake/toolchain.env"
+
 readonly APP_NAME="openmake-llm"
 readonly FRONT_APP_NAME="openmake-next"
-readonly APP_PORT="${PORT:-52416}"
-readonly POSTGRES_PORT="${POSTGRES_PORT:-5432}"
-readonly REDIS_PORT="${REDIS_PORT:-6379}"
+
+# .env 에서 키 하나만 추출한다 (전체 source 안 함 — 값에 공백/특수문자가 있어도 안전).
+# `|| true` 필수: 키가 없으면 grep 이 1 로 끝나고 pipefail+set -e 가 스크립트를 즉시 종료시킨다.
+env_line() {
+    [[ -f "$SCRIPT_DIR/.env" ]] || return 0
+    grep -E "^$1=" "$SCRIPT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d ' ' || true
+}
+
+# 포트 우선순위: 셸 환경변수 > .env > 기본값.
+# .env 를 봐야 하는 이유 — 기본 포트가 이미 점유돼 install.sh --postgres-port 등으로
+# 다른 포트에 띄운 경우, .env 를 무시하면 status/기동대기가 엉뚱한 포트를 본다.
+_app_port="${PORT:-$(env_line PORT)}"
+_pg_port="${POSTGRES_PORT:-$(env_line POSTGRES_PORT)}"
+_rd_port="${REDIS_PORT:-$(env_line REDIS_PORT)}"
+readonly APP_PORT="${_app_port:-52416}"
+readonly POSTGRES_PORT="${_pg_port:-5432}"
+readonly REDIS_PORT="${_rd_port:-6379}"
+
 # DB/Redis 는 docker compose 로 운영 (2026-06-21 brew postgresql@16 제거 → docker 단독).
 # COMPOSE_FILE 로 compose 위치 지정. 우선순위: 셸 환경변수 > .env > 기본값(레포의 infra/docker-compose.yml).
-# (.env 는 COMPOSE_FILE 한 줄만 추출, 전체 source 안 함)
-_compose_file_env=""
-[[ -f "$SCRIPT_DIR/.env" ]] && _compose_file_env="$(grep -E '^COMPOSE_FILE=' "$SCRIPT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d ' ')"
-readonly COMPOSE_FILE="${COMPOSE_FILE:-${_compose_file_env:-$SCRIPT_DIR/infra/docker-compose.yml}}"
+_compose_file="${COMPOSE_FILE:-$(env_line COMPOSE_FILE)}"
+readonly COMPOSE_FILE="${_compose_file:-$SCRIPT_DIR/infra/docker-compose.yml}"
 readonly HEALTH_RETRIES=15
 readonly HEALTH_INTERVAL=2
 
@@ -87,20 +107,40 @@ require_cmd() {
 
 preflight() {
     local missing=0
-    for cmd in docker pm2 curl node npm lsof; do
+    # lsof 는 필수가 아니다 — 리눅스 최소 이미지에는 없는 경우가 많아
+    # port_listening 이 ss/netstat//dev/tcp 로 대체한다.
+    for cmd in docker pm2 curl node npm; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             log_err "필수 명령 미설치: $cmd"
             missing=1
         fi
     done
-    [[ $missing -eq 0 ]] || exit 1
+    if [[ $missing -ne 0 ]]; then
+        log_info "최초 설치라면 './install.sh' 를 먼저 실행하세요."
+        exit 1
+    fi
 }
 
 # ── 포트 점검 헬퍼 ────────────────────────────────────────────────────────────
+# 도구 가용성이 배포판마다 달라 4단계로 폴백한다:
+#   lsof(macOS 기본) → ss(최신 리눅스) → netstat(구형) → bash /dev/tcp(무도구)
 port_listening() {
     local port="$1"
-    # nc는 macOS 기본 미설치 가능 — lsof로 대체
-    lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 && return 0
+        return 1
+    fi
+    if command -v ss >/dev/null 2>&1; then
+        ss -ltn "sport = :$port" 2>/dev/null | grep -q LISTEN && return 0
+        return 1
+    fi
+    if command -v netstat >/dev/null 2>&1; then
+        netstat -an 2>/dev/null | grep -qE "[.:]$port[[:space:]].*LISTEN" && return 0
+        return 1
+    fi
+    # 마지막 수단 — 실제 연결을 시도한다 (localhost 바인딩만 감지 가능).
+    (exec 3<>/dev/tcp/127.0.0.1/"$port") >/dev/null 2>&1 && return 0
+    return 1
 }
 
 wait_for_port() {
@@ -157,6 +197,19 @@ wait_for_app_with_logs() {
 }
 
 # ── docker compose 헬퍼 (DB/Redis 운영) ──────────────────────────────────────
+# 플러그인형(docker compose) 우선, 없으면 standalone 바이너리(docker-compose) 폴백.
+# (Homebrew 는 플러그인을 기본 탐색 경로 밖에 두므로 standalone 폴백이 실제로 쓰인다.
+#  ~/.docker/config.json 자동 등록은 install.sh 담당 — 여기서 사용자 설정을 건드리지 않는다.)
+compose_cmd() {
+    if docker compose version >/dev/null 2>&1; then
+        echo "docker compose"
+    elif command -v docker-compose >/dev/null 2>&1; then
+        echo "docker-compose"
+    else
+        return 1
+    fi
+}
+
 ensure_docker_service() {
     # $1=up|down  $2=service  $3=label
     local action="$1" svc="$2" label="$3"
@@ -168,15 +221,28 @@ ensure_docker_service() {
         log_err "compose 파일을 찾을 수 없음: $COMPOSE_FILE"
         return 2
     fi
+
+    local dc
+    if ! dc="$(compose_cmd)"; then
+        log_err "docker compose 를 찾을 수 없음 (Compose v2 설치 필요)"
+        return 2
+    fi
+
+    # compose 파일이 infra/ 에 있으면 project directory 도 infra/ 라서 compose 가 infra/.env 를
+    # 찾는다 → 루트 .env 의 POSTGRES_PASSWORD 가 안 읽혀 `:?` 로 기동이 실패한다.
+    # 루트 .env 를 명시적으로 넘겨 이 함정을 없앤다.
+    local env_args=()
+    [[ -f "$SCRIPT_DIR/.env" ]] && env_args=(--env-file "$SCRIPT_DIR/.env")
+
     if [[ "$action" == "up" ]]; then
-        log_info "$label 시작 중 (docker compose up -d $svc)"
-        if ! docker compose -f "$COMPOSE_FILE" up -d "$svc" >/dev/null 2>&1; then
-            log_err "$label docker 기동 실패 — docker compose -f $COMPOSE_FILE logs $svc 확인"
+        log_info "$label 시작 중 ($dc up -d $svc)"
+        if ! $dc ${env_args[@]+"${env_args[@]}"} -f "$COMPOSE_FILE" up -d "$svc" >/dev/null 2>&1; then
+            log_err "$label docker 기동 실패 — $dc -f $COMPOSE_FILE logs $svc 확인"
             return 2
         fi
     else
-        log_info "$label 정지 중 (docker compose stop $svc)"
-        docker compose -f "$COMPOSE_FILE" stop "$svc" >/dev/null 2>&1 || log_warn "$label docker 정지 실패(이미 정지일 수 있음)"
+        log_info "$label 정지 중 ($dc stop $svc)"
+        $dc ${env_args[@]+"${env_args[@]}"} -f "$COMPOSE_FILE" stop "$svc" >/dev/null 2>&1 || log_warn "$label docker 정지 실패(이미 정지일 수 있음)"
     fi
 }
 
@@ -479,12 +545,23 @@ cmd_deploy() {
     show_status
 }
 
+cmd_install() {
+    local installer="$SCRIPT_DIR/install.sh"
+    [[ -x "$installer" ]] || { log_err "install.sh 를 찾을 수 없음: $installer"; return 2; }
+    log_step "원샷 설치 (install.sh 위임)"
+    exec "$installer" "$@"
+}
+
 usage() {
     cat <<EOF
 OpenMake LLM 통합 서비스 매니저
 
 사용법:
   $0 <command> [options]
+
+최초 설치:
+  install   toolchain 점검 → .env → 의존성 → DB → 빌드 → 기동 (install.sh 위임)
+            옵션은 './install.sh --help' 참고
 
 서비스 관리:
   start     PostgreSQL → Redis → OpenMake LLM 순차 기동
@@ -507,9 +584,9 @@ OpenMake LLM 통합 서비스 매니저
   logs      OpenMake LLM 실시간 로그 (PM2)
 
 환경 가정:
-  - macOS (DB/Redis 는 docker compose, 앱은 PM2 로 관리)
-  - PM2 전역 설치 (npm i -g pm2)
-  - Node 24+ (mise/nvm으로 활성)
+  - Linux / macOS (DB/Redis 는 docker compose, 앱은 PM2 로 관리)
+  - PM2 설치 (npm i -g pm2 — install.sh 가 자동 처리)
+  - Node 24+ (mise/nvm/fnm 또는 install.sh 가 만든 .openmake/toolchain.env)
 
 오버라이드 환경변수:
   PORT (기본 52416), POSTGRES_PORT (5432), REDIS_PORT (6379)
@@ -528,6 +605,7 @@ main() {
     local cmd="${1:-}"
     shift || true
     case "$cmd" in
+        install)  cmd_install "$@" ;;
         start)    cmd_start ;;
         stop)     cmd_stop ;;
         restart)  cmd_restart ;;

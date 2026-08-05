@@ -19,7 +19,32 @@
  *   # 미설정 시 단일 로그 파일이 무한 증가 → 디스크 가득 위험
  */
 const { execSync } = require('child_process');
+const fs = require('fs');
 const path = require('path');
+
+/** 포트/로그 위치는 .env 나 셸 환경으로 덮어쓸 수 있다 (No-Hardcoding). */
+const API_PORT = process.env.PORT || '52416';
+const WEB_PORT = process.env.OMK_WEB_PORT || '3000';
+/**
+ * 로그 디렉터리. 기본은 기존 동작 유지(/tmp)지만, 여러 사용자가 쓰는 리눅스 호스트에서는
+ * /tmp/openmake-*.log 소유자 충돌로 PM2 가 EACCES 로 죽는다 → OMK_LOG_DIR 로 분리 가능.
+ */
+const LOG_DIR = process.env.OMK_LOG_DIR || '/tmp';
+const logFile = (name) => path.join(LOG_DIR, name);
+
+/**
+ * Next 실행 파일 경로 해석.
+ * npm workspaces 는 next 를 루트 node_modules 로 hoist 하므로 apps/web/node_modules/next 는
+ * 보통 존재하지 않는다(신규 클론에서 프론트가 안 뜨던 원인). require.resolve 로 hoist/nested
+ * 양쪽을 모두 처리한다.
+ */
+function resolveNextBin(webDir) {
+    try {
+        return require.resolve('next/dist/bin/next', { paths: [webDir, __dirname] });
+    } catch {
+        return './node_modules/next/dist/bin/next'; // 마지막 수단 — 기존 동작
+    }
+}
 
 /**
  * JVM 위치를 크로스플랫폼으로 탐지한다 (opendataloader-pdf 의 PDF 텍스트 추출에 필요).
@@ -52,17 +77,19 @@ function resolveJavaHome() {
 const JAVA_HOME = resolveJavaHome();
 const JAVA_PATH_PREFIX = JAVA_HOME ? path.join(JAVA_HOME, 'bin') + path.delimiter : '';
 
-module.exports = {
-    apps: [{
+const WEB_DIR = path.join(__dirname, 'apps/web');
+const DISCORD_ENTRY = path.join(__dirname, 'apps/discord-bot/dist/index.js');
+
+const apps = [{
         name: 'openmake-llm',
         script: 'apps/api/dist/cli.js',
-        args: 'cluster --port 52416',
+        args: `cluster --port ${API_PORT}`,
         cwd: __dirname,
-        
+
         // 환경 설정
         env: {
             NODE_ENV: 'production',
-            PORT: 52416,
+            PORT: API_PORT,
             // 문서 첨부 추출(opendataloader-pdf)은 Java 11+ 가 필요하다.
             // pm2 프로세스가 JVM 을 찾도록 자동 탐지한 JAVA_HOME 과 PATH 를 주입 (크로스플랫폼).
             ...(JAVA_HOME ? { JAVA_HOME } : {}),
@@ -82,8 +109,8 @@ module.exports = {
         
         // 로그 설정
         log_date_format: 'YYYY-MM-DD HH:mm:ss',
-        error_file: '/tmp/openmake-llm-error.log',
-        out_file: '/tmp/openmake-llm-out.log',
+        error_file: logFile('openmake-llm-error.log'),
+        out_file: logFile('openmake-llm-out.log'),
         merge_logs: true,
         log_type: 'json',
         
@@ -106,13 +133,14 @@ module.exports = {
         // 운영: Nginx 가 / 를 이 앱(:3000)으로, /api·/ws 를 openmake-llm(:52416)으로 프록시.
         // 선행: `npm run build:frontend-next` 로 apps/web/.next 생성 필요.
         name: 'openmake-next',
-        cwd: __dirname + '/apps/web',
+        cwd: WEB_DIR,
         // npm 을 fork 하면 pm2 ProcessContainerFork 가 crash → next 바이너리를 직접 node 로 실행.
-        script: './node_modules/next/dist/bin/next',
-        args: 'start -p 3000',
+        // (workspaces hoist 때문에 경로는 require.resolve 로 찾는다 — resolveNextBin 주석 참고)
+        script: resolveNextBin(WEB_DIR),
+        args: `start -p ${WEB_PORT}`,
         env: {
             NODE_ENV: 'production',
-            PORT: 3000,
+            PORT: WEB_PORT,
             // 운영은 same-origin Nginx 프록시이므로 WS 도 same-origin(미설정 시 location.host).
             // API_PROXY_TARGET 은 dev 전용(.env.local). 운영에서 Next rewrites 를 쓰려면 여기서 지정.
         },
@@ -123,11 +151,18 @@ module.exports = {
         min_uptime: '10s',
         restart_delay: 3000,
         max_memory_restart: '1G',
-        error_file: '/tmp/openmake-next-error.log',
-        out_file: '/tmp/openmake-next-out.log',
+        error_file: logFile('openmake-next-error.log'),
+        out_file: logFile('openmake-next-out.log'),
         merge_logs: true,
         log_date_format: 'YYYY-MM-DD HH:mm:ss',
-    }, {
+    }];
+
+// ── Discord Gateway Bot (선택) ────────────────────────────────────────────
+// dist 가 없으면 PM2 가 MODULE_NOT_FOUND 로 재시작 루프를 돌다 errored 로 남는다
+// (신규 설치는 `npm run build` 에 discord-bot 이 포함되지 않아 항상 이 상태였음).
+// 빌드 산출물이 실제로 있을 때만 등록한다.
+if (fs.existsSync(DISCORD_ENTRY)) {
+    apps.push({
         // ── Discord Gateway Bot ─────────────────────────────────
         // Discord 메시지를 /api/v1/chat/completions 로 중계하는 독립 gateway 프로세스.
         // 선행: 루트 .env 에 DISCORD_BOT_TOKEN·DISCORD_BOT_API_KEY + 접근 제어 설정,
@@ -147,9 +182,11 @@ module.exports = {
         min_uptime: '10s',
         restart_delay: 3000,
         max_memory_restart: '300M',
-        error_file: '/tmp/openmake-discord-error.log',
-        out_file: '/tmp/openmake-discord-out.log',
+        error_file: logFile('openmake-discord-error.log'),
+        out_file: logFile('openmake-discord-out.log'),
         merge_logs: true,
         log_date_format: 'YYYY-MM-DD HH:mm:ss',
-    }],
-};
+    });
+}
+
+module.exports = { apps };
