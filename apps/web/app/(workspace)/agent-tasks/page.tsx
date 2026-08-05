@@ -895,6 +895,13 @@ export default function AgentTasksPage() {
     return () => { cancelled = true; };
   }, [loadTasks]);
 
+  // 히스토리 목록 등 외부 진입 딥링크(?task=<id>) — 마운트 시 1회 상세 모달 직행.
+  // (전면 클라이언트 페이지라 useSearchParams 대신 location 직독 — Suspense 경계 불필요)
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("task");
+    if (id) setDetailTaskId(id);
+  }, []);
+
   async function handleCancel(task: AgentTask) {
     if (!window.confirm(t("cancelConfirm", { goal: task.goal.slice(0, 40) }))) return;
     setActionLoading(task.id);

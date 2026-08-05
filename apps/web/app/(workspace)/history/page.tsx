@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Clock, Search, MessageSquare, Trash2 } from "lucide-react";
+import { Clock, Search, MessageSquare, Trash2, Bot } from "lucide-react";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { Badge, PageHeader, Card } from "@/components/ui/primitives";
 import { HistoryTabs } from "@/components/hub-tabs";
@@ -19,11 +19,17 @@ type DateGroup = "today" | "yesterday" | "week" | "older";
 
 interface Session {
   id: string;
+  /** 'chat' = 대화 세션, 'task' = 에이전트 작업(읽기 전용 항목 — 클릭 시 작업 상세로 이동) */
+  kind: "chat" | "task";
   title: string;
   preview: string;
   time: string;
+  /** 그룹 내 최신순 정렬용 epoch ms */
+  ts: number;
   model: string;
   group: DateGroup;
+  /** kind='task' 전용 — chat.status.* 라벨 키 */
+  status?: string;
 }
 
 /* ── 백엔드 응답 타입 (GET /api/chat/conversations → res.data.sessions, camelCase) ──
@@ -39,6 +45,18 @@ interface ApiConversation {
 }
 
 type ConversationsResponse = ApiSuccess<{ sessions: ApiConversation[] }>;
+
+/* ── 에이전트 작업 목록 (GET /api/agent-tasks → res.data.tasks, snake_case — toPublicTask 메타만) ── */
+interface ApiAgentTask {
+  id: string;
+  goal: string;
+  status: string;
+  model?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+type AgentTasksResponse = ApiSuccess<{ tasks: ApiAgentTask[] }>;
 
 type TFn = ReturnType<typeof useTranslations>;
 
@@ -65,15 +83,41 @@ function formatTime(iso: string | undefined, locale: string): string {
   return d.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
 }
 
+function toEpoch(iso?: string): number {
+  if (!iso) return 0;
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? 0 : t;
+}
+
 function mapConversation(c: ApiConversation, t: TFn, locale: string): Session {
   const ts = c.updatedAt || c.createdAt;
   return {
     id: c.id,
+    kind: "chat",
     title: c.title?.trim() || t("untitledConversation"),
     preview: t("messageCount", { count: c.messageCount ?? 0 }),
     time: formatTime(ts, locale),
+    ts: toEpoch(ts),
     model: c.model || "Auto",
     group: bucketByDate(ts),
+  };
+}
+
+/** chat.status.* 에 라벨이 있는 상태만 t() — 그 외(queued 등)는 원문 표시(누락 키 경고 방지) */
+const LABELED_TASK_STATUS = new Set(["pending", "running", "paused", "completed", "failed", "cancelled"]);
+
+function mapAgentTask(a: ApiAgentTask, tChat: TFn, locale: string): Session {
+  const ts = a.updated_at || a.created_at;
+  return {
+    id: a.id,
+    kind: "task",
+    title: a.goal.trim(),
+    preview: LABELED_TASK_STATUS.has(a.status) ? tChat(`status.${a.status}`) : a.status,
+    time: formatTime(ts, locale),
+    ts: toEpoch(ts),
+    model: a.model || "Auto",
+    group: bucketByDate(ts),
+    status: a.status,
   };
 }
 
@@ -91,6 +135,7 @@ const GROUP_ORDER: DateGroup[] = ["today", "yesterday", "week", "older"];
 
 export default function HistoryPage() {
   const t = useTranslations("history");
+  const tChat = useTranslations("chat"); // 작업 상태·"에이전트 작업" 라벨 재사용 (nav 라벨 재사용 관행)
   const locale = toBcp47(useLocale());
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -100,9 +145,11 @@ export default function HistoryPage() {
     () =>
       MOCK_META.map((m) => ({
         ...m,
+        kind: "chat" as const,
         title: t(`mock.${m.id}.title`),
         preview: t(`mock.${m.id}.preview`),
         time: t(`mock.${m.id}.time`),
+        ts: 0,
       })),
     [t],
   );
@@ -124,11 +171,13 @@ export default function HistoryPage() {
   };
 
   // 전체 삭제 — 백엔드 DELETE /api/chat/sessions (requireAuth, 로그인 사용자 전용).
+  // 대화만 삭제한다 — 작업 항목은 read-only 표시이므로 유지(삭제는 작업 페이지에서).
+  const chatCount = sessions.filter((s) => s.kind === "chat").length;
   const deleteAll = async () => {
-    if (!window.confirm(t("deleteAllConfirm", { count: sessions.length }))) return;
+    if (!window.confirm(t("deleteAllConfirm", { count: chatCount }))) return;
     try {
       await ApiClient.del("/api/chat/sessions");
-      setSessions([]);
+      setSessions((prev) => prev.filter((s) => s.kind === "task"));
       clearChat();
       void queryClient.invalidateQueries({ queryKey: ["conversations"] });
     } catch {
@@ -161,25 +210,30 @@ export default function HistoryPage() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const res = await ApiClient.get<ConversationsResponse>(
-          appendAnonSessionId("/api/chat/conversations?limit=100"),
-        );
-        if (cancelled) return;
-        const list = res?.data?.sessions ?? [];
+      // 대화·에이전트 작업을 병렬 조회해 한 목록으로 합친다(B 방식 — 데이터 이동 없는 read-only 조합).
+      // 각각 개별 실패 허용: 작업 API 는 익명 401 이 정상이므로 빈 배열 폴백.
+      const [convRes, taskRes] = await Promise.allSettled([
+        ApiClient.get<ConversationsResponse>(appendAnonSessionId("/api/chat/conversations?limit=100")),
+        ApiClient.get<AgentTasksResponse>("/api/agent-tasks"),
+      ]);
+      if (cancelled) return;
+      const convs = convRes.status === "fulfilled" ? (convRes.value?.data?.sessions ?? []) : null;
+      const taskItems = taskRes.status === "fulfilled" ? (taskRes.value?.data?.tasks ?? []) : [];
+      if (convs !== null || taskItems.length > 0) {
         // 실제 데이터가 오면 우선 표시 (빈 배열도 실제 상태로 존중)
-        setSessions(list.map((c) => mapConversation(c, t, locale)));
-      } catch {
-        // 401·네트워크 실패: 목업 폴백 유지 (초기 state 그대로)
-      } finally {
-        if (!cancelled) setLoading(false);
+        setSessions([
+          ...(convs ?? []).map((c) => mapConversation(c, t, locale)),
+          ...taskItems.map((a) => mapAgentTask(a, tChat, locale)),
+        ]);
       }
+      // 둘 다 실패(401·네트워크): 목업 폴백 유지 (초기 state 그대로)
+      setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
     // locale/t 변경 시 라벨 재매핑 위해 재조회
-  }, [t, locale]);
+  }, [t, tChat, locale]);
 
   const grouped = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -188,7 +242,8 @@ export default function HistoryPage() {
       : sessions;
     return GROUP_ORDER.map((g) => ({
       group: g,
-      items: filtered.filter((s) => s.group === g),
+      // 대화·작업이 각각 API 순서로 합쳐지므로 그룹 안에서 최신순 재정렬
+      items: filtered.filter((s) => s.group === g).sort((a, b) => b.ts - a.ts),
     })).filter((g) => g.items.length > 0);
   }, [sessions, query]);
 
@@ -214,7 +269,7 @@ export default function HistoryPage() {
               className="h-9 w-full bg-transparent text-sm text-fg outline-none placeholder:text-muted"
             />
           </div>
-          {auth.currentUser && !loading && sessions.length > 0 && (
+          {auth.currentUser && !loading && chatCount > 0 && (
             <button
               type="button"
               onClick={() => void deleteAll()}
@@ -249,12 +304,16 @@ export default function HistoryPage() {
                 <div className="space-y-2">
                   {g.items.map((s) => (
                     <Card
-                      key={s.id}
-                      onClick={() => void openSession(s.id)}
+                      key={`${s.kind}-${s.id}`}
+                      onClick={() =>
+                        s.kind === "task"
+                          ? router.push(`/agent-tasks?task=${s.id}`)
+                          : void openSession(s.id)
+                      }
                       className="group flex cursor-pointer items-start gap-3 p-4 transition hover:border-border-strong hover:shadow-2"
                     >
                       <div className="mt-0.5 grid h-8 w-8 flex-shrink-0 place-items-center rounded-md bg-surface-2 text-faint">
-                        <MessageSquare className="h-4 w-4" />
+                        {s.kind === "task" ? <Bot className="h-4 w-4" /> : <MessageSquare className="h-4 w-4" />}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
@@ -268,23 +327,30 @@ export default function HistoryPage() {
                         <p className="mt-0.5 truncate text-xs text-muted">
                           {s.preview}
                         </p>
-                        <div className="mt-2">
+                        <div className="mt-2 flex items-center gap-1.5">
+                          {s.kind === "task" && (
+                            <Badge tone={s.status === "failed" ? "danger" : "accent"}>
+                              {tChat("agentTask.title")}
+                            </Badge>
+                          )}
                           <Badge tone="neutral">
                             <span className="font-mono">{s.model}</span>
                           </Badge>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        aria-label={t("deleteAria")}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void deleteSession(s);
-                        }}
-                        className="mt-0.5 grid h-8 w-8 flex-shrink-0 place-items-center rounded-md text-faint opacity-0 transition group-hover:opacity-100 hover:bg-surface-3 hover:text-danger"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {s.kind === "chat" && (
+                        <button
+                          type="button"
+                          aria-label={t("deleteAria")}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void deleteSession(s);
+                          }}
+                          className="mt-0.5 grid h-8 w-8 flex-shrink-0 place-items-center rounded-md text-faint opacity-0 transition group-hover:opacity-100 hover:bg-surface-3 hover:text-danger"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </Card>
                   ))}
                 </div>
