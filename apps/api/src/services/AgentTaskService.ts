@@ -355,6 +355,13 @@ export class AgentTaskService {
                 const result = await chatTurnWithRoleFallback(roleState, {
                     conversation, tools: effectiveTools, signal: callSignal,
                     taskId, userId: String(userId),
+                    // 일시적 오류 재시도를 스텝으로 남긴다 — 발동 빈도·사유를 DB 로 집계(fail-open).
+                    onRetry: ({ attempt, maxAttempts, error }) => {
+                        const note = `일시적 LLM 오류 — 재시도 ${attempt}/${maxAttempts}: ${error}`;
+                        void db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'retry', content: note })
+                            .catch(() => { /* 관측 실패가 작업을 죽이지 않게 fail-open */ });
+                        emitStep('retry', undefined, note);
+                    },
                 });
                 this.client = roleState.client;
                 totalTokens +=
