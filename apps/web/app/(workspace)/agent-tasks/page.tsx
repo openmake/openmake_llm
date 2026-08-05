@@ -102,6 +102,8 @@ interface ApiTaskStep {
   tool_name?: string;
   tool_input?: Record<string, unknown>;
   tool_output?: string;
+  /** 스텝 기록 시점의 플랜 단계 인덱스(0-base, 088) — 없으면 플랜 외 구간 */
+  plan_step_index?: number | null;
   created_at?: string;
 }
 
@@ -450,6 +452,9 @@ function TaskDetailModal({
                       <div className="pb-3 min-w-0 flex-1">
                         <div className="flex items-center gap-2 text-xs text-muted mb-0.5">
                           <Badge tone="neutral">{stepType ?? "step"}</Badge>
+                          {typeof step.plan_step_index === "number" && (
+                            <Badge tone="accent">{t("planNode", { n: step.plan_step_index + 1 })}</Badge>
+                          )}
                           {step.tool_name && <span className="font-mono">{step.tool_name}</span>}
                         </div>
                         {body && (isDiff ? (

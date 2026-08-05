@@ -780,7 +780,8 @@
       "max_turns_exhausted": "Turn/resource limit reached",
       "interrupted": "Interrupted by server restart",
       "resumableHint": "Can be resumed"
-    }
+    },
+    "planNode": "Step {n}"
   },
   "customAgents": {
     "pageTitle": "Custom Agents",

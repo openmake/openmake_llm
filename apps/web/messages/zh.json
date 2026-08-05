@@ -780,7 +780,8 @@
       "max_turns_exhausted": "已达轮次/资源上限",
       "interrupted": "因服务器重启而中断",
       "resumableHint": "可继续执行"
-    }
+    },
+    "planNode": "步骤{n}"
   },
   "customAgents": {
     "pageTitle": "自定义智能体",

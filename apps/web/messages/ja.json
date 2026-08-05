@@ -780,7 +780,8 @@
       "max_turns_exhausted": "ターン・リソース上限に到達",
       "interrupted": "サーバー再起動により中断",
       "resumableHint": "再開できます"
-    }
+    },
+    "planNode": "ステップ{n}"
   },
   "customAgents": {
     "pageTitle": "カスタムエージェント",
