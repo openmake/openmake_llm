@@ -428,13 +428,19 @@ export class AgentTaskService {
                 const stepType = turn === 0
                     ? 'plan'
                     : (hasToolCalls ? 'assistant_tool_call' : 'assistant');
+                // 턴이 호출한 도구명 기록(콤마 결합) — 실행 결과는 tool_result 행에 남지만,
+                // 중단/거부로 실행되지 않은 호출 의도까지 남겨 턴 단위 집계를 가능하게 한다.
+                const turnToolNames = hasToolCalls
+                    ? result.tool_calls!.map((tc) => tc.function.name).join(',')
+                    : undefined;
                 await db.addAgentTaskStep({
                     taskId,
                     stepNumber: stepNumber++,
                     stepType,
+                    toolName: turnToolNames,
                     content: stepContent,
                 });
-                emitStep(stepType, undefined, stepContent);
+                emitStep(stepType, turnToolNames, stepContent);
 
                 if (!hasToolCalls) {
                     // 목표 미달성 선언: 모델이 마커로 "수행 불가"를 밝히면 completed 대신 failed(goal_incomplete)
