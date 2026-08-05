@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.21.0](https://github.com/openmake/openmake_llm/compare/v1.20.0...v1.21.0) (2026-08-05)
+
+
+### ✨ 기능
+
+* **agent-task:** Execution Graph 증분 1 — 스텝 도구의도 영속 + 턴 재시도 + HITL 무응답 강등 ([bbc78ec](https://github.com/openmake/openmake_llm/commit/bbc78ecaf111e1fbdf508ffeea3070ac87a1c4d1))
+* **agent-task:** HITL 무응답 강등 — 승인 timeout 연속 시 승인 필요 도구 제거 후 마무리 유도 ([34d10a8](https://github.com/openmake/openmake_llm/commit/34d10a814cc4804ce1e5a2bb322e702b3861ca14))
+* **agent-task:** 턴 LLM 호출 일시적 오류 지수 백오프 재시도 (노드 retry 정책 1단계) ([8b45df6](https://github.com/openmake/openmake_llm/commit/8b45df60282c758e44d68891d4bba46196675190))
+* **agent-task:** 턴 도구 호출 의도를 스텝 tool_name 으로 영속화 ([150127a](https://github.com/openmake/openmake_llm/commit/150127a4a3624948f4ec8e4290d7c28c13fc9f7b))
+* **web:** 히스토리 최근대화에 에이전트 작업 항목 통합 ([d74fabc](https://github.com/openmake/openmake_llm/commit/d74fabcc3234e9dffd89c3f4e61ef2c66cf4216b))
+* **web:** 히스토리 최근대화에 에이전트 작업 항목 통합 (B 방식 — read-only 조합) ([f3a08fb](https://github.com/openmake/openmake_llm/commit/f3a08fb15c066f545f3c944281ab9eb2cf2989d5))
+
+
+### ♻️ 리팩터링
+
+* **agent-task:** 턴 자원 가드를 turn-gate 모듈로 분리 (파일 크기 가드) ([e6bf66b](https://github.com/openmake/openmake_llm/commit/e6bf66b69fc7ad32f941cf78786fab4fa7cf13d8))
+
 ## [1.20.0](https://github.com/openmake/openmake_llm/compare/v1.19.0...v1.20.0) (2026-08-03)
 
 
