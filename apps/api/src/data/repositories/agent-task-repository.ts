@@ -149,14 +149,16 @@ export class AgentTaskRepository extends BaseRepository {
         content?: string;
         messagesSnapshot?: unknown;
         status?: string;
+        /** 스텝 기록 시점의 in_progress 플랜 단계 인덱스(0-base) — 노드별 비용/정합 집계(088). */
+        planStepIndex?: number;
     }): Promise<void> {
         // NUL(0x00) 제거 — 바이너리 파일을 도구로 열람하면 도구 결과에 0x00 이 섞일 수 있고,
         // Postgres TEXT/JSON 은 이를 거부한다("invalid byte sequence for encoding UTF8: 0x00").
         // 저장 backstop 으로 content·messages_snapshot 모두 정화한다(resultToString 소스 차단과 병행).
         const stripNul = (s: string): string => s.replace(/\u0000/g, '');
         await this.query(
-            `INSERT INTO agent_task_steps (task_id, step_number, step_type, tool_name, content, messages_snapshot, status)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            `INSERT INTO agent_task_steps (task_id, step_number, step_type, tool_name, content, messages_snapshot, status, plan_step_index)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
             [
                 params.taskId,
                 params.stepNumber,
@@ -164,7 +166,8 @@ export class AgentTaskRepository extends BaseRepository {
                 params.toolName,
                 params.content != null ? stripNul(params.content) : params.content,
                 params.messagesSnapshot !== undefined ? stripNul(JSON.stringify(params.messagesSnapshot)) : null,
-                params.status || 'completed'
+                params.status || 'completed',
+                params.planStepIndex ?? null
             ]
         );
     }

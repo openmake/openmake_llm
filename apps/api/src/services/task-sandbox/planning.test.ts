@@ -1,4 +1,4 @@
-import { TaskPlan } from './planning';
+import { TaskPlan, currentPlanStepIndex } from './planning';
 
 describe('TaskPlan', () => {
     it('create → 모든 단계 not_started, 빈 문자열 제거', () => {
@@ -61,5 +61,24 @@ describe('TaskPlan', () => {
         expect(s[1]).toMatchObject({ text: 'B', status: 'in_progress', note: '진행중' });
         expect(s[2]).toMatchObject({ text: 'D', status: 'not_started' });
         expect(p.length).toBe(3);
+    });
+});
+
+describe('currentPlanStepIndex (088 스텝→플랜 노드 귀속)', () => {
+    const step = (status: 'not_started' | 'in_progress' | 'completed' | 'blocked') =>
+        ({ text: 's', status });
+
+    it('첫 in_progress 단계의 0-base 인덱스', () => {
+        expect(currentPlanStepIndex([step('completed'), step('in_progress'), step('not_started')])).toBe(1);
+    });
+
+    it('in_progress 복수면 첫 번째', () => {
+        expect(currentPlanStepIndex([step('in_progress'), step('in_progress')])).toBe(0);
+    });
+
+    it('in_progress 없으면 undefined — 추정 귀속(첫 미완료 등) 금지', () => {
+        expect(currentPlanStepIndex([step('completed'), step('not_started')])).toBeUndefined();
+        expect(currentPlanStepIndex([step('blocked')])).toBeUndefined();
+        expect(currentPlanStepIndex([])).toBeUndefined();
     });
 });

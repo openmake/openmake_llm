@@ -377,6 +377,8 @@ export class UnifiedDatabase {
         content?: string;
         messagesSnapshot?: unknown;
         status?: string;
+        /** 스텝 기록 시점의 in_progress 플랜 단계 인덱스(0-base) — 노드별 비용/정합 집계(088). */
+        planStepIndex?: number;
     }): Promise<void> {
         return this.agentTaskRepository.addAgentTaskStep(params);
     }
