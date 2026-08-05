@@ -361,7 +361,8 @@
     },
     "emptyState": {
       "title": "How can I help you?",
-      "description": "Multi-model orchestration · MCP tools · deep research · autonomous agents. Type your question below, or press <slash>/</slash> to invoke a skill."
+      "description": "Multi-model orchestration · MCP tools · deep research · autonomous agents. Type your question below, or press <slash>/</slash> to invoke a skill.",
+      "languageHint": "Ask in any language — you'll get the answer in that language."
     },
     "structured": {
       "confidence": {

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown, GitPullRequest, Wrench, Pencil, AlertTriangle } from "lucide-react";
+import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown, GitPullRequest, Wrench, Pencil, AlertTriangle, Languages } from "lucide-react";
 import { ThinkingTimeline } from "@/components/chat/thinking-timeline";
 import { SteeringInput } from "@/components/chat/steering-input";
 import { DiffView } from "@/components/chat/diff-view";
@@ -508,6 +508,7 @@ export function MessageList() {
   const chatHistory = useAppStore((s) => s.chatHistory);
   const setInputDraft = useAppStore((s) => s.setInputDraft);
   const isGenerating = useAppStore((s) => s.isGenerating);
+  const isGuest = useAppStore((s) => !s.auth.currentUser);
   const activeAgent = useAppStore((s) => s.activeAgent);
   const activeSkills = useAppStore((s) => s.activeSkills);
   const researchProgress = useAppStore((s) => s.researchProgress);
@@ -540,6 +541,14 @@ export function MessageList() {
             slash: (chunks) => <span className="font-mono text-accent">{chunks}</span>,
           })}
         </p>
+        {/* 게스트 다국어 안내 — UI 언어가 Accept-Language 자동 감지라 방문자 언어로 렌더되어
+            "이 언어로 물으면 이 언어로 답한다"를 그 자체로 보여준다(백엔드 language-policy 실동작). */}
+        {isGuest && (
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-faint">
+            <Languages className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            {t("emptyState.languageHint")}
+          </p>
+        )}
 
         <div className="mt-7 grid w-full max-w-md grid-cols-2 gap-2.5">
           {QUICK_STARTS.map((q) => (
