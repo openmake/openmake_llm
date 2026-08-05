@@ -1281,6 +1281,19 @@ export const AGENT_TASK_LIMITS = {
      *  멀티턴 도구 작업은 매 턴 prompt_tokens(전체 컨텍스트)를 누적 카운트하므로 200k 는
      *  3턴 만에 소진됐다(샌드박스 도구 작업이 terminate 전에 실패). 기본 1M 으로 상향. */
     MAX_TOTAL_TOKENS: parseInt(process.env.AGENT_MAX_TOTAL_TOKENS || '', 10) || 1_000_000,
+    /** 턴 LLM 호출의 일시적 오류(5xx·408·429·connection/timeout) 재시도 횟수 — 후향 실측
+     *  (2026-08-05, failed 20건 중 6~7건이 timeout/connection 류)에 근거한 노드 retry 정책 1단계.
+     *  0 이면 비활성. 사용자 취소·예산 소진(signal abort)은 재시도하지 않는다.
+     *  AGENT_TASK_TURN_RETRY_MAX 로 오버라이드(기본 2). */
+    TURN_RETRY_MAX: parseInt(process.env.AGENT_TASK_TURN_RETRY_MAX || '2', 10),
+    /** 턴 재시도 지수 백오프 기저(ms) — n번째 재시도 전 기저 × 2^(n-1) 대기(abort 시 즉시 중단).
+     *  AGENT_TASK_TURN_RETRY_BACKOFF_MS 로 오버라이드(기본 2초). */
+    TURN_RETRY_BACKOFF_MS: parseInt(process.env.AGENT_TASK_TURN_RETRY_BACKOFF_MS || '', 10) || 2_000,
+    /** HITL 무응답 강등 — 승인 무응답(timeout, 명시 거절 아님)이 이 횟수에 달하면 이후 턴에서
+     *  승인 필요 도구(+ask_human)를 제거하고 확보한 정보로 마무리를 유도한다. 후향 실측: 방치
+     *  task 가 승인 대기(30분)×N 반복으로 예산만 소진하고 산출물 0 으로 종결되던 패턴 차단.
+     *  0 이면 비활성. AGENT_TASK_HITL_TIMEOUT_DEGRADE_AFTER 로 오버라이드(기본 2). */
+    HITL_TIMEOUT_DEGRADE_AFTER: parseInt(process.env.AGENT_TASK_HITL_TIMEOUT_DEGRADE_AFTER || '2', 10),
     /**
      * 마무리 턴 강제(2026-08-03) — 자원 상한에 **닿기 전에** 도구를 끊고 종합 답변을 받는다.
      *
