@@ -18,7 +18,7 @@ import { recordBrowserMetric } from './browser-metrics';
 import { AGENT_TASK_LIMITS, ORCHESTRATION_DISPATCH } from '../../config/runtime-limits';
 import { saveProceduralSkill, resolveProceduralSpec } from '../agent-task/procedural-skill';
 import { TaskPlan, type PlanStep } from './planning';
-import { requiresApproval, getApprovalRegistry, type PendingApproval } from './approval-gate';
+import { requiresApproval, getApprovalRegistry, type PendingApproval, type ApprovalRejectReason } from './approval-gate';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('TaskRuntime');
@@ -48,6 +48,8 @@ export interface ExecuteTaskToolOpts {
     onApprovalPending?: (p: PendingApproval) => void;
     /** 승인 대기 종료 시 대기시간(ms) 통지 — pause-aware 타임아웃(4-1)이 총 예산에서 제외. */
     onApprovalWaited?: (ms: number) => void;
+    /** 승인 거절 시 사유 통지 — 호출부가 무응답('timeout') 연속 횟수를 세어 HITL 강등 판단. */
+    onApprovalRejected?: (info: { toolName: string; reason: ApprovalRejectReason }) => void;
 }
 
 export class TaskRuntime {
@@ -158,13 +160,16 @@ export class TaskRuntime {
         // 자체가 HITL 이므로 승인 레지스트리(pause + push + REST approve/reject/answer)를 응답 채널로 사용.
         if (name === 'ask_human') {
             const question = String(args.question ?? '');
-            const { decision, text, waitedMs } = await getApprovalRegistry().request(
+            const { decision, reason, text, waitedMs } = await getApprovalRegistry().request(
                 { taskId: this.taskId, userId: this.userId, toolName: name, args },
                 { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending },
             );
             opts.onApprovalWaited?.(waitedMs);
             if (decision !== 'approved') {
-                return `사용자가 거절했거나 응답 시간이 초과되었습니다(질문: ${question}). 이 방향을 중단하고 대안을 시도하거나 terminate 로 마무리하세요.`;
+                opts.onApprovalRejected?.({ toolName: name, reason: reason ?? 'user' });
+                return reason === 'timeout'
+                    ? `사용자가 응답하지 않았습니다(대기 시간 초과, 질문: ${question}). 사용자가 자리를 비운 것으로 보입니다 — 다시 질문하지 말고, 합리적인 가정을 명시한 뒤 지금까지 확보한 정보로 작업을 이어가거나 마무리하세요.`
+                    : `사용자가 거절했거나 응답 시간이 초과되었습니다(질문: ${question}). 이 방향을 중단하고 대안을 시도하거나 terminate 로 마무리하세요.`;
             }
             // 자유텍스트 답변이 있으면 그대로 전달(에이전트가 실제 답을 받아 진행), 없으면 단순 승인.
             return text && text.trim()
@@ -173,13 +178,16 @@ export class TaskRuntime {
         }
 
         if (requiresApproval(this.cfg.approvalPolicy, name, args, { deviceGatesShell: this.cfg.deviceGatesShell })) {
-            const { decision, waitedMs } = await getApprovalRegistry().request(
+            const { decision, reason, waitedMs } = await getApprovalRegistry().request(
                 { taskId: this.taskId, userId: this.userId, toolName: name, args },
                 { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending },
             );
             opts.onApprovalWaited?.(waitedMs);
             if (decision !== 'approved') {
-                return `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}). 다른 방법을 시도하거나 작업을 종료하세요.`;
+                opts.onApprovalRejected?.({ toolName: name, reason: reason ?? 'user' });
+                return reason === 'timeout'
+                    ? `Error: 승인 대기 시간이 초과되었습니다(무응답, ${name}). 사용자가 자리를 비운 것으로 보입니다 — 승인이 필요 없는 방법으로 진행하거나, 지금까지 확보한 결과로 최종 산출물을 작성하세요.`
+                    : `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}). 다른 방법을 시도하거나 작업을 종료하세요.`;
             }
         }
 

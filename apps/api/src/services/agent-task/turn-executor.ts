@@ -43,6 +43,8 @@ export interface TurnToolExecInput {
     searchCalls: number;
     browserCalls: number;
     pausedMs: number;
+    /** 승인 무응답(timeout) 누적 횟수 — HITL 강등 판단(호출부). */
+    approvalTimeouts: number;
     /** 상태 전이(paused↔running) 판단용 — 최신 curStatus 를 읽는다. */
     getCurStatus: () => string;
     update: (u: AgentTaskUpdatePayload) => Promise<void>;
@@ -57,6 +59,7 @@ export interface TurnToolExecResult {
     searchCalls: number;
     browserCalls: number;
     pausedMs: number;
+    approvalTimeouts: number;
 }
 
 /**
@@ -69,7 +72,11 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         turn, conversation, usedTools, signal, getCurStatus, update, emitStep,
     } = input;
     const db = getUnifiedDatabase();
-    let { stepNumber, searchCalls, browserCalls, pausedMs } = input;
+    let { stepNumber, searchCalls, browserCalls, pausedMs, approvalTimeouts } = input;
+    // 승인 무응답 카운트 — task 도구(runtime 내부 게이트)·extra 도구(아래 명시 게이트) 공용.
+    const onApprovalRejected = (info: { toolName: string; reason: string }): void => {
+        if (info.reason === 'timeout') approvalTimeouts++;
+    };
 
     // 도구 실행 + 체크포인트
     let terminated = false;
@@ -98,6 +105,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
                 signal,
                 onApprovalPending: (p) => onApprovalPending(p.toolName),
                 onApprovalWaited: (ms) => { pausedMs += ms; },
+                onApprovalRejected,
             });
             if (getCurStatus() === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
             if (toolResult.includes(TASK_TERMINATE_SENTINEL)) {
@@ -109,18 +117,23 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             // (이 도구들은 격리 컨테이너가 아니라 API 프로세스에서 실행되므로 승인 우회를 닫는다.)
             // extraToolNames 는 샌드박스 ENABLED(활성·degrade) 일 때만 채워지므로 legacy OFF 경로엔 영향 없음.
             let decision: 'approved' | 'rejected' = 'approved';
+            let rejectReason: string | undefined;
             if (requiresApproval(sandboxCfg.approvalPolicy, name, args)) {
                 const r = await getApprovalRegistry().request(
                     { taskId, userId, toolName: name, args },
                     { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName) },
                 );
                 decision = r.decision;
+                rejectReason = r.reason;
                 pausedMs += r.waitedMs; // 4-1 pause-aware
+                if (decision === 'rejected') onApprovalRejected({ toolName: name, reason: rejectReason ?? 'user' });
             }
             if (getCurStatus() === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
             toolResult = decision === 'approved'
                 ? await runTool(mcp, name, args, userCtx)
-                : `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}). 다른 방법을 시도하거나 작업을 종료하세요.`;
+                : rejectReason === 'timeout'
+                    ? `Error: 승인 대기 시간이 초과되었습니다(무응답, ${name}). 사용자가 자리를 비운 것으로 보입니다 — 승인이 필요 없는 방법으로 진행하거나, 지금까지 확보한 결과로 최종 산출물을 작성하세요.`
+                    : `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}). 다른 방법을 시도하거나 작업을 종료하세요.`;
         } else {
             toolResult = await runTool(mcp, name, args, userCtx);
         }
@@ -148,5 +161,5 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         }
     }
 
-    return { terminated, terminateSummary, stepNumber, searchCalls, browserCalls, pausedMs };
+    return { terminated, terminateSummary, stepNumber, searchCalls, browserCalls, pausedMs, approvalTimeouts };
 }

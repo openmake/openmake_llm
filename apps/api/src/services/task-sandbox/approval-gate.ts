@@ -55,14 +55,35 @@ export function requiresApproval(
 }
 
 export type ApprovalDecision = 'approved' | 'rejected';
+/** 거절 사유 — 'timeout'(무응답 만료) 은 사용자 부재 신호로, 명시 거절('user')과 달리
+ *  HITL 무응답 강등(연속 N회 시 승인 필요 도구 제거 → 산출물 유도)의 카운트 대상이다. */
+export type ApprovalRejectReason = 'timeout' | 'user' | 'abort';
 
 /** 승인 요청의 해소 결과 — 결정 + (ask_human 자유텍스트 응답 시) 사용자 답변 본문. */
 export interface ApprovalResult {
     decision: ApprovalDecision;
+    /** rejected 인 경우에만 채워짐 — 무응답 만료/명시 거절/실행 중단 구분. */
+    reason?: ApprovalRejectReason;
     /** answer() 로 해소된 경우에만 채워짐 — ask_human 질문에 대한 사용자 자유텍스트 답변. */
     text?: string;
     /** 승인 대기에 소요된 시간(ms) — pause-aware 타임아웃(4-1)이 총 예산에서 제외하는 데 사용. */
     waitedMs: number;
+}
+
+/**
+ * PURE: HITL 무응답 강등 — 승인을 요구할 도구(+승인 정책과 무관하게 항상 사람을 기다리는
+ * ask_human)를 도구 세트에서 제거한다. 사용자 부재 시 남은 턴을 승인 불요 경로로 강제해
+ * "대기→만료 반복으로 예산만 소진하고 산출물 0" 대신 확보한 정보로 마무리하게 한다.
+ * ⚠️ args 미지 상태의 보수 판정({}) — high-risk 정책의 file_ops(delete 만 승인 대상)처럼
+ * 인자 의존 도구는 남는다(해당 호출은 여전히 게이트에서 거절되고, 강등 nudge 가 우회를 지시).
+ */
+export function stripApprovalGatedTools<T extends { function: { name: string } }>(
+    tools: T[],
+    policy: TaskSandboxApprovalPolicy,
+    opts: { deviceGatesShell?: boolean } = {},
+): T[] {
+    return tools.filter((t) => t.function.name !== 'ask_human'
+        && !requiresApproval(policy, t.function.name, {}, opts));
 }
 
 export interface PendingApproval {
@@ -141,14 +162,14 @@ export class ApprovalRegistry {
                 if (!w) return;
                 clearTimeout(w.timer);
                 this.waiters.delete(approvalId);
-                if (r.decision === 'rejected') logger.info(`[${input.taskId}] 승인 거절/만료: ${input.toolName}`);
+                if (r.decision === 'rejected') logger.info(`[${input.taskId}] 승인 거절/만료(${r.reason}): ${input.toolName}`);
                 resolvePromise({ ...r, waitedMs: Date.now() - pending.createdAt });
             };
-            const timer = setTimeout(() => settle({ decision: 'rejected' }), opts.timeoutMs);
+            const timer = setTimeout(() => settle({ decision: 'rejected', reason: 'timeout' }), opts.timeoutMs);
             this.waiters.set(approvalId, { pending, resolve: (r) => settle(r), timer });
             if (opts.signal) {
-                if (opts.signal.aborted) { settle({ decision: 'rejected' }); return; }
-                opts.signal.addEventListener('abort', () => settle({ decision: 'rejected' }), { once: true });
+                if (opts.signal.aborted) { settle({ decision: 'rejected', reason: 'abort' }); return; }
+                opts.signal.addEventListener('abort', () => settle({ decision: 'rejected', reason: 'abort' }), { once: true });
             }
             opts.onPending?.(pending);
         });
@@ -166,7 +187,7 @@ export class ApprovalRegistry {
     reject(approvalId: string): boolean {
         const w = this.waiters.get(approvalId);
         if (!w) return false;
-        w.resolve({ decision: 'rejected', waitedMs: Date.now() - w.pending.createdAt });
+        w.resolve({ decision: 'rejected', reason: 'user', waitedMs: Date.now() - w.pending.createdAt });
         return true;
     }
 

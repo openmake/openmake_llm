@@ -207,6 +207,21 @@ export function getAgentTaskFinalTurnNudge(reason: 'turns' | 'tokens'): string {
     ].join('\n');
 }
 
+/**
+ * HITL 무응답 강등 시 주입 — 승인 무응답이 연속 임계에 달하면 승인 필요 도구를 제거하고
+ * 이 지시를 준다. 후향 실측(2026-08-05): 방치된 task 가 승인 대기(30분)×N 을 반복하며
+ * 예산만 소진하고 산출물 0 으로 종결되던 패턴의 차단 — 사용자 부재 시에도 확보한 정보로
+ * 최선의 산출물을 남기게 한다(명시 거절은 이 경로가 아님 — 거절은 모델이 대안 모색).
+ */
+export function getAgentTaskApprovalTimeoutNudge(): string {
+    return [
+        '사용자가 승인 요청에 반복해서 응답하지 않고 있습니다(자리 비움으로 판단). 승인이 필요한 도구는 더 이상 사용할 수 없습니다.',
+        '승인을 다시 기다리거나 질문하지 말고, 지금까지 확보한 정보와 이미 만든 산출물만으로 목표에 최대한 가까운 최종 결과물을 작성하세요.',
+        '수행하지 못한 부분이 있다면 어떤 승인이 없어서 무엇을 못 했는지 결과에 명시하세요.',
+        '목표를 달성하지 못했다면 첫 줄에 [GOAL_INCOMPLETE] 를 쓰고, 무엇까지 했고 무엇이 남았는지 적으세요.',
+    ].join('\n');
+}
+
 /** 산출물 문법/컴파일 검사 실패 시 주입(Phase 2-B) — 오류를 근거로 코드 산출물을 1회 자가수정 유도. */
 export function getAgentTaskVerifyFailedNudge(report: string): string {
     return [

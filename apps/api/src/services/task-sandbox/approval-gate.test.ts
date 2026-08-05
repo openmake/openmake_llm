@@ -1,4 +1,4 @@
-import { requiresApproval, ApprovalRegistry } from './approval-gate';
+import { requiresApproval, stripApprovalGatedTools, ApprovalRegistry } from './approval-gate';
 
 describe('requiresApproval', () => {
     it("정책 all — 부작용 도구 전부 승인, 제어 시그널 제외", () => {
@@ -31,6 +31,32 @@ describe('requiresApproval', () => {
     });
 });
 
+describe('stripApprovalGatedTools (HITL 무응답 강등)', () => {
+    const tool = (name: string) => ({ function: { name } });
+    const names = (ts: Array<{ function: { name: string } }>) => ts.map((t) => t.function.name);
+
+    it("정책 all — 승인 불요 도구(플래닝·terminate 등)만 남고 ask_human 도 제거", () => {
+        const tools = ['bash', 'str_replace_editor', 'plan_update', 'terminate', 'ask_human', 'delegate'].map(tool);
+        expect(names(stripApprovalGatedTools(tools, 'all'))).toEqual(['plan_update', 'terminate', 'delegate']);
+    });
+
+    it('정책 high-risk — bash·browser·python·skill_run 제거, 나머지(+인자 의존 file_ops)는 유지', () => {
+        const tools = ['bash', 'browser', 'python_execute', 'skill_run', 'file_ops', 'str_replace_editor', 'ask_human'].map(tool);
+        expect(names(stripApprovalGatedTools(tools, 'high-risk'))).toEqual(['file_ops', 'str_replace_editor']);
+    });
+
+    it('정책 none — ask_human 만 제거(항상 사람 대기라 부재 시 무의미)', () => {
+        const tools = ['bash', 'ask_human'].map(tool);
+        expect(names(stripApprovalGatedTools(tools, 'none'))).toEqual(['bash']);
+    });
+
+    it('deviceGatesShell — 디바이스가 게이트하는 exec 계열은 유지', () => {
+        const tools = ['bash', 'python_execute', 'str_replace_editor'].map(tool);
+        expect(names(stripApprovalGatedTools(tools, 'all', { deviceGatesShell: true })))
+            .toEqual(['bash', 'python_execute']);
+    });
+});
+
 describe('ApprovalRegistry', () => {
     const baseInput = { taskId: 't1', userId: 'u1', toolName: 'bash', args: { command: 'ls' } };
 
@@ -45,12 +71,12 @@ describe('ApprovalRegistry', () => {
         expect(reg.list('u1')).toHaveLength(0); // 정리됨
     });
 
-    it('reject 시 rejected 로 resolve', async () => {
+    it("reject 시 rejected(reason='user') 로 resolve", async () => {
         const reg = new ApprovalRegistry();
         let id = '';
         const p = reg.request(baseInput, { timeoutMs: 5000, onPending: (pa) => { id = pa.approvalId; } });
         expect(reg.reject(id)).toBe(true);
-        await expect(p).resolves.toMatchObject({ decision: 'rejected' });
+        await expect(p).resolves.toMatchObject({ decision: 'rejected', reason: 'user' });
     });
 
     it('answer 시 approved + 자유텍스트로 resolve', async () => {
@@ -69,18 +95,18 @@ describe('ApprovalRegistry', () => {
         expect(new ApprovalRegistry().answer('nope', 'x')).toBe(false);
     });
 
-    it('timeout 시 자동 rejected', async () => {
+    it("timeout 시 자동 rejected(reason='timeout') — HITL 강등 카운트 대상", async () => {
         const reg = new ApprovalRegistry();
         const p = reg.request(baseInput, { timeoutMs: 30 });
-        await expect(p).resolves.toMatchObject({ decision: 'rejected' });
+        await expect(p).resolves.toMatchObject({ decision: 'rejected', reason: 'timeout' });
     });
 
-    it('abort signal 시 rejected', async () => {
+    it("abort signal 시 rejected(reason='abort') — 강등 카운트 비대상", async () => {
         const reg = new ApprovalRegistry();
         const ac = new AbortController();
         const p = reg.request(baseInput, { timeoutMs: 5000, signal: ac.signal });
         ac.abort();
-        await expect(p).resolves.toMatchObject({ decision: 'rejected' });
+        await expect(p).resolves.toMatchObject({ decision: 'rejected', reason: 'abort' });
     });
 
     it('자동승인(4-2): 활성 시 즉시 approved, ask_human 은 여전히 대기', async () => {

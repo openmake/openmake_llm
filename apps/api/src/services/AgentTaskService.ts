@@ -21,7 +21,7 @@ import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, AGENT_SPAWN } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
-import { getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getAgentTaskBrowserLimitNudge, getAgentTaskFinalTurnNudge, getTaskSandboxGuidance, getAgentTaskUploadedFilesNote, getAgentTaskVerifyFailedNudge, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
+import { getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getAgentTaskBrowserLimitNudge, getAgentTaskFinalTurnNudge, getAgentTaskApprovalTimeoutNudge, getTaskSandboxGuidance, getAgentTaskUploadedFilesNote, getAgentTaskVerifyFailedNudge, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts } from '../llm/artifact-parser';
 import { applyReportRender } from './chat-service/report-block';
 import { getPushService } from './PushService';
@@ -33,7 +33,7 @@ import { buildTaskSpawnFn } from './agent-spawn/spawn-agents';
 import { mergeToolsWithSkills, type ActiveSkillBinding } from './chat-service/tool-merger';
 import { filterRestrictedTools } from './chat-service/tool-restrictions';
 import { TaskRuntime } from './task-sandbox/runtime';
-import { getApprovalRegistry } from './task-sandbox/approval-gate';
+import { getApprovalRegistry, stripApprovalGatedTools } from './task-sandbox/approval-gate';
 import { buildFileContext } from './chat-service/attach-context';
 import { AgentTaskAbort, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
 import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
@@ -114,6 +114,9 @@ export class AgentTaskService {
         let browserCalls = 0;
         let browserLimitNotified = false;
         let finalTurnNotified = false;
+        // HITL 무응답 강등: 승인 timeout(명시 거절 아님) 누적 — 임계 도달 시 승인 필요 도구 제거.
+        let approvalTimeouts = 0;
+        let approvalDegradeNotified = false;
         let curStatus = 'pending';
         let curProgress = 0;
         let curTurn = 0;
@@ -284,6 +287,10 @@ export class AgentTaskService {
                 // browser 는 SEARCH_TOOL_KEYWORDS 에 안 잡혀 검색 throttle 로 제어 불가하므로 별도 cap.
                 const overSearchLimit = searchCalls >= AGENT_TASK_LIMITS.MAX_SEARCH_CALLS;
                 const overBrowserLimit = browserCalls >= AGENT_TASK_LIMITS.MAX_BROWSER_CALLS;
+                // HITL 무응답 강등 — 승인 timeout 이 임계에 달하면 승인 필요 도구를 제거해
+                // 대기-소진 반복 대신 확보한 정보로 마무리를 강제한다(명시 거절은 카운트 안 함).
+                const hitlDegraded = AGENT_TASK_LIMITS.HITL_TIMEOUT_DEGRADE_AFTER > 0
+                    && approvalTimeouts >= AGENT_TASK_LIMITS.HITL_TIMEOUT_DEGRADE_AFTER;
 
                 // 마무리 턴 — 자원 상한에 **닿기 전에** 도구를 전부 끊어 종합 답변을 받는다.
                 // 상한에서 그냥 끊으면 산출물을 이미 만든 작업도 사족에서 절단돼 결과가 남지 않는다
@@ -302,7 +309,7 @@ export class AgentTaskService {
                             ? 'turns' as const
                             : null;
 
-                const effectiveTools = finalTurnReason
+                const cappedTools = finalTurnReason
                     ? []
                     : (overSearchLimit || overBrowserLimit)
                         ? tools.filter((t) => {
@@ -312,6 +319,10 @@ export class AgentTaskService {
                             return true;
                         })
                         : tools;
+                const effectiveTools = hitlDegraded
+                    ? stripApprovalGatedTools(cappedTools, sandboxCfg.approvalPolicy,
+                        { deviceGatesShell: sandboxCfg.deviceGatesShell })
+                    : cappedTools;
                 if (finalTurnReason && !finalTurnNotified) {
                     conversation.push({ role: 'user', content: getAgentTaskFinalTurnNudge(finalTurnReason) });
                     finalTurnNotified = true;
@@ -324,6 +335,16 @@ export class AgentTaskService {
                     emitStep('final_turn', undefined, note);
                     logger.info(`[AgentTask] 마무리 턴 전환: ${taskId} (사유=${finalTurnReason}, `
                         + `턴 ${turn + 1}/${turnCeiling}, 누적 ${totalTokens} 토큰)`);
+                }
+                if (hitlDegraded && !approvalDegradeNotified) {
+                    conversation.push({ role: 'user', content: getAgentTaskApprovalTimeoutNudge() });
+                    approvalDegradeNotified = true;
+                    // 스텝으로 남긴다 — 발동 빈도·시점을 DB 로 집계(final_turn 과 동일 관측 패턴).
+                    const note = `승인 무응답 ${approvalTimeouts}회 — 승인 필요 도구를 제거하고 확보한 정보로 마무리 전환 (턴 ${turn + 1}/${turnCeiling})`;
+                    await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: 'hitl_degrade', content: note })
+                        .catch(() => { /* 관측 실패가 작업을 죽이지 않게 fail-open */ });
+                    emitStep('hitl_degrade', undefined, note);
+                    logger.info(`[AgentTask] HITL 무응답 강등: ${taskId} (timeouts=${approvalTimeouts}, 턴 ${turn + 1})`);
                 }
                 if (overSearchLimit && !searchLimitNotified) {
                     conversation.push({
@@ -518,7 +539,7 @@ export class AgentTaskService {
                     toolCalls: result.tool_calls!,
                     taskRuntime, sandboxCfg, extraToolNames, mcp, userCtx,
                     userId: String(userId), taskId, turn, conversation, usedTools, signal,
-                    stepNumber, searchCalls, browserCalls, pausedMs,
+                    stepNumber, searchCalls, browserCalls, pausedMs, approvalTimeouts,
                     getCurStatus: () => curStatus,
                     update, emitStep,
                 });
@@ -526,6 +547,7 @@ export class AgentTaskService {
                 searchCalls = turnExec.searchCalls;
                 browserCalls = turnExec.browserCalls;
                 pausedMs = turnExec.pausedMs;
+                approvalTimeouts = turnExec.approvalTimeouts;
                 const { terminated, terminateSummary } = turnExec;
 
                 // terminate 도구 호출 — 깔끔한 완료 시그널(max_turns 소진 아님).
