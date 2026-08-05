@@ -1289,6 +1289,11 @@ export const AGENT_TASK_LIMITS = {
     /** 턴 재시도 지수 백오프 기저(ms) — n번째 재시도 전 기저 × 2^(n-1) 대기(abort 시 즉시 중단).
      *  AGENT_TASK_TURN_RETRY_BACKOFF_MS 로 오버라이드(기본 2초). */
     TURN_RETRY_BACKOFF_MS: parseInt(process.env.AGENT_TASK_TURN_RETRY_BACKOFF_MS || '', 10) || 2_000,
+    /** 플랜 자동 진행(088 증분 3) — 단계 완료/차단 후 in_progress 가 없으면 첫 not_started 를
+     *  결정적으로 승격. 모델이 [~] 마킹을 생략해도(후향 60%, 명시 지시에도 라이브 재현)
+     *  스텝→노드 귀속(plan_step_index)·진행 표시가 비지 않게 한다. 모델의 명시 마킹이 우선.
+     *  AGENT_TASK_PLAN_AUTO_ADVANCE=false 로 비활성(기본 on). */
+    PLAN_AUTO_ADVANCE: process.env.AGENT_TASK_PLAN_AUTO_ADVANCE !== 'false',
     /** HITL 무응답 강등 — 승인 무응답(timeout, 명시 거절 아님)이 이 횟수에 달하면 이후 턴에서
      *  승인 필요 도구(+ask_human)를 제거하고 확보한 정보로 마무리를 유도한다. 후향 실측: 방치
      *  task 가 승인 대기(30분)×N 반복으로 예산만 소진하고 산출물 0 으로 종결되던 패턴 차단.

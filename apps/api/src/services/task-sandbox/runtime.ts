@@ -57,7 +57,7 @@ export class TaskRuntime {
     readonly userId: string;
     private readonly cfg: TaskSandboxConfig;
     private readonly executor: TaskExecutor;
-    private readonly plan = new TaskPlan();
+    private readonly plan = new TaskPlan({ autoAdvance: AGENT_TASK_LIMITS.PLAN_AUTO_ADVANCE });
     private readonly handlers = new Map<string, MCPToolDefinition['handler']>();
     private readonly defs: MCPToolDefinition[];
 

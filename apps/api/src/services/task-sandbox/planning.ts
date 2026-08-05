@@ -40,6 +40,19 @@ export function currentPlanStepIndex(steps: PlanStep[]): number | undefined {
 export class TaskPlan {
     private steps: PlanStep[] = [];
 
+    /** autoAdvance(088 증분 3): 모델이 [~] 마킹을 생략해도(후향 실측 60%, 명시 지시에도
+     *  라이브 재현) 활성 단계가 비지 않게, 상태 변화 후 in_progress 가 없으면 첫 not_started
+     *  를 결정적으로 승격한다. 선형 실행 가정(모델의 정상 흐름) — 모델의 명시 마킹이 항상 우선. */
+    constructor(private readonly opts: { autoAdvance?: boolean } = {}) {}
+
+    /** in_progress 부재 시 첫 not_started 승격 — create/완료·차단 전이 후에만 호출(명시 강등은 존중). */
+    private maybeAdvance(): void {
+        if (!this.opts.autoAdvance) return;
+        if (this.steps.some((s) => s.status === 'in_progress')) return;
+        const next = this.steps.find((s) => s.status === 'not_started');
+        if (next) next.status = 'in_progress';
+    }
+
     /** 계획 생성/교체 — 상태 보존 병합(4-3). 모델이 plan_create 를 재호출해도(라이브에서 관찰된
      *  행동) 텍스트가 동일한 기존 단계의 status/note 는 보존하고, 신규 단계만 not_started 로
      *  시작한다. 진행률(plan 완료율)·가시성이 재호출로 리셋되던 문제 방지. */
@@ -54,6 +67,7 @@ export class TaskPlan {
                     ? { text, status: old.status, ...(old.note !== undefined ? { note: old.note } : {}) }
                     : { text, status: 'not_started' as PlanStepStatus };
             });
+        this.maybeAdvance();
     }
 
     /** 단계 상태 갱신(1-based index). 범위 밖이면 false. */
@@ -62,6 +76,8 @@ export class TaskPlan {
         if (idx < 0 || idx >= this.steps.length) return false;
         this.steps[idx].status = status;
         if (note !== undefined) this.steps[idx].note = note;
+        // 완료/차단 전이 후에만 자동 승격 — 명시 not_started 강등은 존중(재승격 안 함).
+        if (status === 'completed' || status === 'blocked') this.maybeAdvance();
         return true;
     }
 

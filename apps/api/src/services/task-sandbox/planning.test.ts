@@ -82,3 +82,47 @@ describe('currentPlanStepIndex (088 스텝→플랜 노드 귀속)', () => {
         expect(currentPlanStepIndex([])).toBeUndefined();
     });
 });
+
+describe('TaskPlan autoAdvance (088 증분 3 — 마킹 공백 자동 승격)', () => {
+    it('create 직후 첫 단계가 in_progress 로 승격', () => {
+        const p = new TaskPlan({ autoAdvance: true });
+        p.create(['A', 'B']);
+        expect(p.snapshot().map((s) => s.status)).toEqual(['in_progress', 'not_started']);
+    });
+
+    it('completed 전이 후 in_progress 부재면 다음 not_started 승격 — [~] 생략 흐름 보정', () => {
+        const p = new TaskPlan({ autoAdvance: true });
+        p.create(['A', 'B', 'C']);
+        p.update(1, 'completed'); // 모델이 2를 in_progress 마킹 안 해도
+        expect(p.snapshot().map((s) => s.status)).toEqual(['completed', 'in_progress', 'not_started']);
+    });
+
+    it('모델의 명시 in_progress 마킹이 우선 — 이미 있으면 승격 안 함', () => {
+        const p = new TaskPlan({ autoAdvance: true });
+        p.create(['A', 'B', 'C']);
+        p.update(3, 'in_progress'); // 모델이 순서를 건너뛰어 3을 지목
+        p.update(1, 'completed');
+        expect(p.snapshot().map((s) => s.status)).toEqual(['completed', 'not_started', 'in_progress']);
+    });
+
+    it('blocked 전이 후에도 다음 단계 승격(선형 진행 유지)', () => {
+        const p = new TaskPlan({ autoAdvance: true });
+        p.create(['A', 'B']);
+        p.update(1, 'blocked');
+        expect(p.snapshot().map((s) => s.status)).toEqual(['blocked', 'in_progress']);
+    });
+
+    it('명시 not_started 강등은 존중 — 재승격 안 함', () => {
+        const p = new TaskPlan({ autoAdvance: true });
+        p.create(['A', 'B']);
+        p.update(1, 'not_started'); // 강등(in_progress 전이가 아니므로 advance 미호출)
+        expect(p.snapshot()[0].status).toBe('not_started');
+    });
+
+    it('autoAdvance 미설정(기본) — 기존 동작 그대로', () => {
+        const p = new TaskPlan();
+        p.create(['A', 'B']);
+        p.update(1, 'completed');
+        expect(p.snapshot().map((s) => s.status)).toEqual(['completed', 'not_started']);
+    });
+});
