@@ -14,13 +14,21 @@
   <img src="https://img.shields.io/badge/Next.js-16-black.svg" alt="Next.js 16" />
 </p>
 
+<p align="center">
+  <a href="https://openmake.cc/en/">Homepage</a> ·
+  <a href="https://chat.openmake.cc">Live demo</a> ·
+  <a href="https://openmake.cc/en/docs/">Self-hosting guide</a> ·
+  <a href="https://openmake.cc/ko/">한국어</a> ·
+  <a href="https://openmake.cc/ja/">日本語</a>
+</p>
+
 ---
 
 ## Overview
 
 **OpenMake LLM** is a self-hosted AI assistant you run on your own hardware. It serves a local model through **vLLM** behind a **LiteLLM proxy** (OpenAI-compatible) and routes the *same* abstraction to external providers you register with your own keys (**OpenRouter, NVIDIA NIM, Ollama** local/cloud — all OpenAI-compatible; an Anthropic adapter is also built in) — so your data stays on your machine by default.
 
-Every request flows through a lightweight, deterministic policy layer — **`ExecutionPlanBuilder`** (regex + fast-path classification) — that routes the single local model and assembles options *without* an extra LLM round-trip. Behavior is controlled by orthogonal axes only — **Model · Style · Mode toggles · Custom Agent** — instead of opaque presets. Power users can go further with **role-based model orchestration** — assigning a different model (local or external) to each functional role (agent, judge, research, parallel sub-agents, review, thinking-summary). Beyond chat, it adds autonomous agents, a deep-research pipeline, and an MCP tool system — all behind JWT auth and role-based access control.
+Every request flows through a lightweight **message pipeline** that applies the provider gate, security and language policy, and prompt/tool assembly *without* an extra LLM routing round-trip. Local and external models then share the same execution path and always-on tool loop. The current **`ExecutionPlanBuilder`** is intentionally narrow: it loads an authorized custom agent when one is selected. Behavior is controlled by orthogonal axes only — **Model · Style · Mode toggles · Custom Agent** — instead of opaque presets. Power users can go further with **role-based model orchestration** — assigning a different model (local or external) to each functional role (agent, judge, research, parallel sub-agents, review, thinking-summary). Beyond chat, it adds autonomous agents, a deep-research pipeline, and an MCP tool system — all behind JWT auth and role-based access control.
 
 > **Single-host design:** the application (API + web) runs under **PM2**, while stateful dependencies (PostgreSQL / Redis) and sandboxed agent / MCP / artifact processes run in **Docker** for isolation.
 
@@ -88,11 +96,11 @@ OpenMake separates **policy** (deciding *how* to answer) from **execution** (act
                           WebSocket / REST
                                   │
                     ┌─────────────▼─────────────┐
-  Query ───────────►│    ExecutionPlanBuilder   │  policy — once per request
-                    │    (regex + fast-path)    │  · classify intent
-                    └─────────────┬─────────────┘  · resolve custom agent
-                                  │                · assemble system prompt & tools
-                                  │                  (no extra LLM round-trip)
+  Query ───────────►│      message-pipeline     │  request processing
+                    │                           │  · provider gate
+                    └─────────────┬─────────────┘  · security & language policy
+                                  │                · prompt & tool assembly
+                                  │                · authorized custom-agent load
                     ┌─────────────▼─────────────┐
                     │ streamFromExternalProvider│  single path — local & external alike
                     │   (always-on tool loop)   │  · 5 tool turns max
@@ -106,7 +114,7 @@ OpenMake separates **policy** (deciding *how* to answer) from **execution** (act
            vLLM serve → LiteLLM proxy (OpenAI-compatible endpoint)
 ```
 
-- **One execution path** — the former per-strategy layer (generate-verify, agent-loop, thinking, direct) was retired: local and external models now share a single `streamFromExternalProvider` dispatch with an always-on MCP tool loop. Discussion and Deep Research remain separate modes intercepted before dispatch.
+- **One execution path** — the former per-strategy layer (generate-verify, agent-loop, thinking, direct) was retired: `message-pipeline` sends local and external models through a single `streamFromExternalProvider` dispatch with an always-on MCP tool loop. `ExecutionPlanBuilder` now only loads an authorized custom agent. Discussion and Deep Research remain separate modes intercepted before dispatch.
 - **Context-fit safety net** — on entry, prompt tokens (images included) are estimated; if the effective **262K** window is exceeded, input is truncated → `max_tokens` reduced → in the extreme, a `ContextOverflowError` returns **HTTP 413** with an audit record and an automatic webhook alert.
 - **User customization (4 orthogonal axes)** — **Model** (selector) · **Style** (Concise / Default / Verbose) · **Mode** (Discussion / Thinking / Deep Research / Web / Agent Task) · **Custom Instructions & Agents**. System-prompt assembly order: `memory + custom-instructions + style`.
 - **Role-based model orchestration** — every LLM-calling subsystem resolves its model through a single role registry with a fail-open fallback chain: per-user mapping → admin-set global (DB) → global env → local default. External models per role run on the user's BYOK key, or on a server-shared operator key (with daily/monthly token budgets) for global roles. Custom agents can also pin their own model.
@@ -118,7 +126,7 @@ OpenMake separates **policy** (deciding *how* to answer) from **execution** (act
 ## Features
 
 **▸ Models & routing**
-- Single local model routed per request by the `ExecutionPlanBuilder` policy layer; behavior controlled by orthogonal axes (Model · Style · Mode · Custom Agent).
+- Local and external models share the provider-gated `message-pipeline` and tool loop; behavior is controlled by orthogonal axes (Model · Style · Mode · Custom Agent).
 - Self-hosted vLLM + LiteLLM (default `qwen3.6-35b-a3b`) with a context-fit safety net that protects output tokens and degrades gracefully on overflow.
 - Bring-your-own external keys — **OpenRouter, NVIDIA NIM, Ollama** (local + cloud), all OpenAI-compatible (an Anthropic adapter is built into the provider abstraction) — AES-256-GCM encrypted at rest. **Guests use the default local model only** — external providers require sign-in.
 - **Role-based model orchestration** — assign a different model (local or BYOK external) to each functional role (`agent`, `judge`, `research`, `spawn`, `review`, `summary`) via Settings; admins set org-wide defaults and register server-shared external keys with per-key token budgets in an admin console. Resolution is fail-open (falls back to the local default on any failure). Model lists filter down to what is actually reachable and role-capable.
