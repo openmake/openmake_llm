@@ -780,7 +780,8 @@
       "max_turns_exhausted": "턴·자원 상한 소진",
       "interrupted": "서버 재시작으로 중단",
       "resumableHint": "이어하기로 재개할 수 있습니다"
-    }
+    },
+    "planNode": "{n}단계"
   },
   "customAgents": {
     "pageTitle": "커스텀 에이전트",
