@@ -361,7 +361,8 @@
     },
     "emptyState": {
       "title": "有什么可以帮您的？",
-      "description": "多模型编排 · MCP 工具 · 深度研究 · 自主智能体。在下方输入问题，或按 <slash>/</slash> 调用技能。"
+      "description": "多模型编排 · MCP 工具 · 深度研究 · 自主智能体。在下方输入问题，或按 <slash>/</slash> 调用技能。",
+      "languageHint": "用任何语言提问，都会以相同的语言回答。"
     },
     "structured": {
       "confidence": {

@@ -361,7 +361,8 @@
     },
     "emptyState": {
       "title": "무엇을 도와드릴까요?",
-      "description": "멀티모델 오케스트레이션 · MCP 도구 · 딥 리서치 · 자율 에이전트. 아래에 질문을 입력하거나 <slash>/</slash> 로 스킬을 호출하세요."
+      "description": "멀티모델 오케스트레이션 · MCP 도구 · 딥 리서치 · 자율 에이전트. 아래에 질문을 입력하거나 <slash>/</slash> 로 스킬을 호출하세요.",
+      "languageHint": "어떤 언어로 질문해도 같은 언어로 답변합니다."
     },
     "structured": {
       "confidence": {
