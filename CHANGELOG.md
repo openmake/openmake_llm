@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.22.1](https://github.com/openmake/openmake_llm/compare/v1.22.0...v1.22.1) (2026-08-07)
+
+
+### 🐛 버그 수정
+
+* **live-check:** G3 task 도구 계측 사각 + 작업 아티팩트 버전조회 404 소음 제거 ([31ae430](https://github.com/openmake/openmake_llm/commit/31ae43023ec25ff253a9cf237b49b3c5cd16d3d4))
+* **live-check:** G3 task 도구 계측 사각 + 작업 아티팩트 버전조회 404 소음 제거 ([4702f0e](https://github.com/openmake/openmake_llm/commit/4702f0efa7facbaa0b4dd1bc33294a1f72097dc7))
+
 ## [1.22.0](https://github.com/openmake/openmake_llm/compare/v1.21.0...v1.22.0) (2026-08-07)
 
 
