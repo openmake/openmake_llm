@@ -56,6 +56,24 @@ export const spawnAgentsArgsSchema = z.object({
 
 export type SpawnTask = z.infer<typeof spawnAgentsArgsSchema>['tasks'][number];
 
+/**
+ * PURE: 모델이 자주 흘리는 인자 형태를 스키마에 맞게 감싼다(계약 유지 — 값을 버리거나
+ * 바꾸지 않고 형태만 정규화). ① `tasks` 가 단일 객체면 배열로, ② `tasks` 키 없이
+ * `{prompt, ...}` 를 직접 넘긴 경우 `{tasks:[그것]}` 로. 그 외는 원본을 그대로 통과시켜
+ * 검증이 정상적으로 거부하게 둔다.
+ */
+export function normalizeSpawnArgs(raw: unknown): unknown {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw;
+    const o = raw as Record<string, unknown>;
+    if (o.tasks && typeof o.tasks === 'object' && !Array.isArray(o.tasks)) {
+        return { ...o, tasks: [o.tasks] };
+    }
+    if (!('tasks' in o) && typeof o.prompt === 'string') {
+        return { tasks: [o] };
+    }
+    return raw;
+}
+
 export const SPAWN_AGENTS_TOOL_DESCRIPTION =
     '서로 독립적인 하위 작업 여러 개를 병렬 서브에이전트들에게 분담시켜 동시에 수행합니다. '
     + '각 태스크는 다른 태스크 결과를 참조할 수 없으므로 자기완결적으로 서술하세요. '
@@ -185,7 +203,7 @@ async function resolveTaskExecution(
  * 도구 결과 텍스트로 조립해 반환. 실패는 문자열로 흡수(호출 루프를 죽이지 않음).
  */
 export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
-    const parsed = spawnAgentsArgsSchema.safeParse(p.args);
+    const parsed = spawnAgentsArgsSchema.safeParse(normalizeSpawnArgs(p.args));
     if (!parsed.success) {
         return 'Error: tasks 배열([{prompt, role?}, ...], 최소 1개)이 필요합니다.';
     }

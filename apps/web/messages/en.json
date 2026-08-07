@@ -1327,6 +1327,18 @@
       "requests": "Requests",
       "successRate": "Success Rate",
       "avgResponseTime": "Avg Response Time"
+    },
+    "toolError": {
+      "title": "Task Tool Errors (last {days} days)",
+      "errorRate": "Tool Error Rate",
+      "errorCount": "Errors",
+      "ofTotal": "of {total} total",
+      "affectedTasks": "Affected Tasks",
+      "taskStatus": "Task Outcome",
+      "th": {
+        "signature": "Error Signature",
+        "count": "Count"
+      }
     }
   },
   "adminAlerts": {

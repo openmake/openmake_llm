@@ -92,6 +92,11 @@ export function getTaskSandboxGuidance(): string {
         '  ⚠️ PDF 에 한글 등 비-라틴 문자가 들어가면 기본 폰트(helvetica)는 실패합니다. 반드시 번들된 한글 폰트를 등록하세요:',
         '  fpdf2 → pdf.add_font("Nanum","","/usr/share/fonts/truetype/nanum/NanumGothic.ttf"); pdf.set_font("Nanum", size=12)',
         '  reportlab → pdfmetrics.registerFont(TTFont("Nanum","/usr/share/fonts/truetype/nanum/NanumGothic.ttf")) 후 해당 폰트 사용.',
+        '- ⚠️ 파일 도구(str_replace_editor·file_ops)는 /workspace 내부만 접근합니다. /opt/report-template 같은',
+        '  컨테이너 내부 경로를 파일 도구로 읽거나 편집하려 하면 "경로 탈출 차단" 오류가 반복됩니다 —',
+        '  그 경로의 파일을 보거나 고쳐야 하면 먼저 bash 로 `cp -r /opt/report-template/. ./tpl/` 처럼',
+        '  workspace 에 복사한 뒤 그 사본을 여세요. 실행만 하면 되는 스크립트는 복사 없이 bash 로 바로',
+        '  `python3 /opt/report-template/render_report.py ...` 처럼 실행하면 됩니다.',
         '- 코드 작업: git 과 ripgrep(rg) 이 설치되어 있습니다. 업로드된 코드의 수정 작업은 /workspace 의',
         '  파일을 직접 편집하세요 — 변경분은 완료 시 자동으로 diff 로 기록되어 사용자에게 표시됩니다',
         '  (커밋은 직접 하지 않아도 됩니다).',
@@ -116,6 +121,8 @@ export function getAgentTaskUploadedFilesNote(fileLines: string[]): string {
         '사용자가 이 작업에 파일을 첨부했습니다. 작업 디렉토리(/workspace)에 저장되어 있습니다:',
         ...fileLines,
         'PDF·오피스 문서는 이미 텍스트로 추출되어 있습니다. 먼저 이 파일들을 읽고(cat/python) 내용을 근거로 작업하세요.',
+        '원본(.xlsx 등) 파싱이 실패하면(웹/JS 로 생성된 엑셀은 스타일 결함으로 openpyxl 로드가 자주 실패합니다)',
+        '같은 파일을 반복해서 열지 말고, 함께 기록된 `<원본명>.txt` 추출 텍스트를 사용해 작업하세요.',
     ].join('\n');
 }
 

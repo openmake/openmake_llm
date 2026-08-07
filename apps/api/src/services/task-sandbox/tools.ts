@@ -174,7 +174,7 @@ export function createTaskTools(
                     if (!oldStr) return textResult('old_str 가 필요합니다.', true);
                     const content = await sandbox.readFile(path);
                     const count = content.split(oldStr).length - 1;
-                    if (count === 0) return textResult(`old_str 를 찾을 수 없습니다: ${path}`, true);
+                    if (count === 0) return textResult(`old_str 를 찾을 수 없습니다: ${path} — old_str 는 공백·들여쓰기까지 파일 내용과 정확히 일치해야 합니다. command:view 로 현재 내용을 확인한 뒤 그대로 복사해 쓰세요.`, true);
                     if (count > 1) return textResult(`old_str 가 ${count}회 중복 — 유일해야 합니다.`, true);
                     await sandbox.writeFile(path, content.replace(oldStr, str(args.new_str)));
                     return textResult(`치환 완료: ${path}`);
@@ -264,9 +264,15 @@ export function createTaskTools(
             if (!sandbox.isBrowserEnabled) {
                 return textResult('브라우저 기능이 비활성화되어 있습니다 (TASK_SANDBOX_BROWSER_ENABLED=false).', true);
             }
-            const actions = args.actions;
-            if (!Array.isArray(actions) || actions.length === 0) {
-                return textResult('actions 배열이 필요합니다.', true);
+            // 단일 액션 객체를 넘기는 실수는 배열로 감싼다(계약 유지).
+            const actions = Array.isArray(args.actions)
+                ? args.actions
+                : (args.actions && typeof args.actions === 'object' ? [args.actions] : null);
+            if (!actions || actions.length === 0) {
+                return textResult(
+                    'actions 배열이 필요합니다 — 예: [{"type":"goto","url":"https://example.com"},{"type":"extractText"}].',
+                    true,
+                );
             }
             const spec = {
                 actions,
@@ -299,10 +305,14 @@ export function createTaskTools(
             },
         },
         handler: async (args): Promise<MCPToolResult> => {
-            if (!Array.isArray(args.steps) || args.steps.length === 0) {
-                return textResult('steps 배열이 필요합니다.', true);
+            // 단일 문자열을 넘기는 흔한 실수는 배열로 감싼다(계약 유지 — 값을 버리지 않음).
+            const steps = Array.isArray(args.steps)
+                ? args.steps
+                : (typeof args.steps === 'string' && args.steps.trim() ? [args.steps] : null);
+            if (!steps || steps.length === 0) {
+                return textResult('steps 배열이 필요합니다 — 예: {"steps":["자료 조사","초안 작성","검토"]}.', true);
             }
-            plan.create(args.steps.map(String));
+            plan.create(steps.map(String));
             return textResult(plan.render());
         },
     };
@@ -325,7 +335,15 @@ export function createTaskTools(
             const status = str(args.status);
             if (!VALID_STATUS.has(status)) return textResult(`status 는 ${[...VALID_STATUS].join('|')} 여야 합니다.`, true);
             const ok = plan.update(Number(args.step), status as PlanStepStatus, args.note !== undefined ? str(args.note) : undefined);
-            if (!ok) return textResult(`단계 ${args.step} 가 범위를 벗어났습니다(계획 ${plan.length}단계).`, true);
+            if (!ok) {
+                return textResult(
+                    plan.length === 0
+                        ? '아직 계획이 없습니다 — 먼저 plan_create 로 단계를 세우세요.'
+                        : `단계 ${args.step} 가 범위를 벗어났습니다 — 현재 계획은 ${plan.length}단계입니다`
+                          + `(유효 step: 1..${plan.length}). plan_view 로 계획을 확인하세요.`,
+                    true,
+                );
+            }
             return textResult(plan.render());
         },
     };

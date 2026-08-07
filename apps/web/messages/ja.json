@@ -1327,6 +1327,18 @@
       "requests": "リクエスト数",
       "successRate": "成功率",
       "avgResponseTime": "平均応答時間"
+    },
+    "toolError": {
+      "title": "タスクツールエラー (直近{days}日)",
+      "errorRate": "ツールエラー率",
+      "errorCount": "エラー数",
+      "ofTotal": "全{total}回中",
+      "affectedTasks": "エラー発生タスク",
+      "taskStatus": "タスク結果",
+      "th": {
+        "signature": "エラーシグネチャ",
+        "count": "件数"
+      }
     }
   },
   "adminAlerts": {

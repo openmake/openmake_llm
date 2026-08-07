@@ -48,6 +48,7 @@ import {
     runSpawnAgents,
     runChatSpawnAgents,
     buildTaskSpawnFn,
+    normalizeSpawnArgs,
 } from './spawn-agents';
 import { SPAWN_AGENT_GENERIC_PROMPT } from '../../prompts/spawn-agent-system';
 
@@ -83,6 +84,24 @@ describe('spawnAgentsArgsSchema / runSpawnAgents 인자 검증', () => {
     it('빈 배열·빈 prompt 도 거부한다', async () => {
         expect(await runSpawnAgents({ ...baseParams, args: { tasks: [] } })).toMatch(/^Error:/);
         expect(await runSpawnAgents({ ...baseParams, args: { tasks: [{ prompt: '  ' }] } })).toMatch(/^Error:/);
+    });
+});
+
+describe('normalizeSpawnArgs (인자 형태 관용 정규화)', () => {
+    it('tasks 가 단일 객체면 배열로 감싼다', () => {
+        expect(normalizeSpawnArgs({ tasks: { prompt: 'a' } })).toEqual({ tasks: [{ prompt: 'a' }] });
+    });
+    it('tasks 키 없이 {prompt} 를 직접 넘기면 tasks 배열로 감싼다', () => {
+        expect(normalizeSpawnArgs({ prompt: 'a', role: 'finance' })).toEqual({ tasks: [{ prompt: 'a', role: 'finance' }] });
+    });
+    it('이미 배열이면 원본을 그대로 통과시킨다', () => {
+        const raw = { tasks: [{ prompt: 'a' }] };
+        expect(normalizeSpawnArgs(raw)).toBe(raw);
+    });
+    it('감싼 형태를 스키마가 수용해 실행된다', async () => {
+        const out = await runSpawnAgents({ ...baseParams, args: { tasks: { prompt: 'solo' } } });
+        expect(out).not.toMatch(/^Error:/);
+        expect(runSubagentMock).toHaveBeenCalled();
     });
 });
 

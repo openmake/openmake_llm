@@ -134,6 +134,37 @@ describe('task-sandbox tools', () => {
             const r = await byName(createTaskTools(fakeSandbox()), 'browser').handler({ actions: [] });
             expect(r.isError).toBe(true);
         });
+        it('단일 액션 객체는 배열로 감싼다', async () => {
+            const sb = fakeSandbox();
+            await byName(createTaskTools(sb), 'browser').handler({ actions: { type: 'goto', url: 'https://example.com' } });
+            const spec = JSON.parse(sb.files.get('.browser-actions.json') as string);
+            expect(spec.actions).toEqual([{ type: 'goto', url: 'https://example.com' }]);
+        });
+    });
+
+    describe('plan_create / plan_update 인자 관용', () => {
+        it('plan_create: 단일 문자열도 배열로 감싼다', async () => {
+            const tools = createTaskTools(fakeSandbox());
+            const r = await byName(tools, 'plan_create').handler({ steps: '조사하기' });
+            expect(r.isError).toBeFalsy();
+            expect(txt(r)).toContain('조사하기');
+        });
+        it('plan_create: 빈 steps 거절', async () => {
+            const r = await byName(createTaskTools(fakeSandbox()), 'plan_create').handler({ steps: [] });
+            expect(r.isError).toBe(true);
+        });
+        it('plan_update: 계획 없을 때 안내 메시지', async () => {
+            const r = await byName(createTaskTools(fakeSandbox()), 'plan_update').handler({ step: 1, status: 'completed' });
+            expect(r.isError).toBe(true);
+            expect(txt(r)).toContain('먼저 plan_create');
+        });
+        it('plan_update: 범위 초과 시 유효 범위를 안내한다', async () => {
+            const tools = createTaskTools(fakeSandbox());
+            await byName(tools, 'plan_create').handler({ steps: ['a', 'b'] });
+            const r = await byName(tools, 'plan_update').handler({ step: 5, status: 'completed' });
+            expect(r.isError).toBe(true);
+            expect(txt(r)).toContain('1..2');
+        });
     });
 
     it('terminate 는 sentinel 반환', async () => {
