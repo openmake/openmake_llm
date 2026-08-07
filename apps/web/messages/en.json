@@ -1230,6 +1230,29 @@
       "loading": "Loading messages…",
       "empty": "No messages",
       "close": "Close"
+    },
+    "tabs": {
+      "conversations": "Conversations",
+      "tasks": "Agent Tasks",
+      "research": "Deep Research"
+    },
+    "tasksEmpty": "No agent tasks",
+    "researchEmpty": "No research sessions",
+    "taskTh": {
+      "goal": "Goal",
+      "owner": "User",
+      "status": "Status",
+      "createdAt": "Created"
+    },
+    "researchTh": {
+      "topic": "Topic",
+      "owner": "User",
+      "status": "Status",
+      "createdAt": "Created"
+    },
+    "researchDetail": {
+      "empty": "No research steps",
+      "step": "Step {n}"
     }
   },
   "adminAudit": {

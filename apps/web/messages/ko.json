@@ -1230,6 +1230,29 @@
       "loading": "메시지를 불러오는 중…",
       "empty": "메시지가 없습니다",
       "close": "닫기"
+    },
+    "tabs": {
+      "conversations": "대화",
+      "tasks": "에이전트 작업",
+      "research": "딥 리서치"
+    },
+    "tasksEmpty": "에이전트 작업이 없습니다",
+    "researchEmpty": "리서치 세션이 없습니다",
+    "taskTh": {
+      "goal": "목표",
+      "owner": "사용자",
+      "status": "상태",
+      "createdAt": "생성일"
+    },
+    "researchTh": {
+      "topic": "주제",
+      "owner": "사용자",
+      "status": "상태",
+      "createdAt": "생성일"
+    },
+    "researchDetail": {
+      "empty": "리서치 스텝이 없습니다",
+      "step": "스텝 {n}"
     }
   },
   "adminAudit": {

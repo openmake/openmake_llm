@@ -26,6 +26,7 @@ import { chatRateLimiter } from '../middlewares/chat-rate-limiter';
 import { validate } from '../middlewares/validation';
 import { chatRequestSchema } from '../schemas';
 import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
+import { ensureSession, saveUserMessage, saveAssistantMessage } from '../chat/request-persistence';
 import { createClient } from '../llm/client';
 import { AppError } from '../utils/error-handler';
 import { parseFullModelId } from '../providers/i-provider';
@@ -240,7 +241,7 @@ router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validate(c
  * 응답: { intent, structured(StructuredAnswer JSON), markdown }.
  */
 router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncHandler(async (req: Request, res: Response) => {
-    const { message } = req.body;
+    const { message, sessionId } = req.body;
     if (typeof message !== 'string' || !message.trim()) {
         res.status(400).json({ error: 'message 는 필수입니다' });
         return;
@@ -250,6 +251,16 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
     if (!userContext) {
         res.status(401).json(unauthorized('인증이 필요합니다'));
         return;
+    }
+
+    // 세션 소유권 검증 (IDOR 방지) — /chat·/chat/stream 과 동일 정책.
+    if (sessionId && isPersistableUserId(userContext.userId)) {
+        const convDB = getConversationDB();
+        const session = await convDB.getSession(sessionId);
+        if (session && String(session.userId) !== String(userContext.userId)) {
+            res.status(403).json({ error: '이 세션에 접근할 권한이 없습니다' });
+            return;
+        }
     }
 
     // 출력 언어: 명시적 선호(userLanguage) 우선, 없으면 메시지 내용으로 감지.
@@ -320,6 +331,7 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
             signal: abortController.signal,
         });
 
+        const startTime = Date.now();
         const composed = await composeStructuredAnswer({
             message,
             userLanguage,
@@ -328,11 +340,42 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
             currentDate: getCurrentDate(),
         });
         settled = true;
+
+        // 대화 기록 저장 (fail-open) — 원 질문 + 구조화 답변을 conversation DB 에 영속.
+        // 스트리밍 경로(request-handler)와 동일한 request-persistence 헬퍼를 재사용해
+        // sessionId 미지정 시 ensureSession 이 자동 생성한다. saveHistory === false 는
+        // 본문 저장 생략(감사 로그만) — 기존 정책과 동일. 저장 실패는 응답을 죽이지 않는다.
+        let savedSessionId: string | undefined;
+        try {
+            const auditUserId = userContext.authenticatedUserId || userContext.anonSessionId || 'anonymous';
+            const persistContent = req.body.saveHistory !== false;
+            const currentSessionId = await ensureSession(
+                sessionId,
+                userContext.authenticatedUserId,
+                message,
+                userContext.anonSessionId,
+                userContext.userRole,
+            );
+            await saveUserMessage(currentSessionId, auditUserId, message, usedModel, persistContent);
+            // 히스토리 재열람 시 JSON blob 이 아니라 완성 답변이 보이도록 렌더된 마크다운을
+            // 본문으로 저장한다. (markdown 은 항상 string 이나 방어적으로 직렬화 폴백.)
+            const assistantContent = typeof composed.markdown === 'string'
+                ? composed.markdown
+                : JSON.stringify(composed.markdown);
+            await saveAssistantMessage(
+                currentSessionId, auditUserId, assistantContent, usedModel, Date.now() - startTime, persistContent,
+            );
+            savedSessionId = currentSessionId;
+        } catch (persistErr) {
+            logger.warn(`[structured] 대화 기록 저장 실패 (continue): ${persistErr instanceof Error ? persistErr.message : persistErr}`);
+        }
+
         res.json(success({
             intent: composed.intent,
             structured: composed.structured,
             markdown: composed.markdown,
             model: usedModel,
+            ...(savedSessionId ? { sessionId: savedSessionId } : {}),
         }));
     } catch (err) {
         settled = true;

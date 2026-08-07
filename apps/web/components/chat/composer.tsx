@@ -722,6 +722,15 @@ export function Composer() {
             e.target.style.height = "auto";
             e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px";
           }}
+          onPaste={(e) => {
+            // 클립보드에 파일이 있으면(스크린샷 캡처·Finder 파일 복사) 드롭과 동일하게
+            // addFiles 로 첨부한다. preventDefault 로 파일명 텍스트가 입력창에 붙는 것을
+            // 막고, 파일이 없는 일반 텍스트 붙여넣기는 기본 동작 그대로 둔다.
+            if (e.clipboardData?.files?.length) {
+              e.preventDefault();
+              void addFiles(e.clipboardData.files);
+            }
+          }}
           onKeyDown={(e) => {
             // 슬래시 메뉴가 열려 있으면 네비게이션/선택 우선 처리.
             // 활성 인덱스는 스킬(0..n-1) + "전체 보기"(n) 를 순회.

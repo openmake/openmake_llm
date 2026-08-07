@@ -1230,6 +1230,29 @@
       "loading": "正在加载消息…",
       "empty": "暂无消息",
       "close": "关闭"
+    },
+    "tabs": {
+      "conversations": "对话",
+      "tasks": "智能体任务",
+      "research": "深度研究"
+    },
+    "tasksEmpty": "暂无智能体任务",
+    "researchEmpty": "暂无研究会话",
+    "taskTh": {
+      "goal": "目标",
+      "owner": "用户",
+      "status": "状态",
+      "createdAt": "创建时间"
+    },
+    "researchTh": {
+      "topic": "主题",
+      "owner": "用户",
+      "status": "状态",
+      "createdAt": "创建时间"
+    },
+    "researchDetail": {
+      "empty": "暂无研究步骤",
+      "step": "步骤 {n}"
     }
   },
   "adminAudit": {

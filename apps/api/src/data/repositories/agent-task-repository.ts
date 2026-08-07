@@ -194,6 +194,15 @@ export class AgentTaskRepository extends BaseRepository {
         return result.rows;
     }
 
+    /** 관리자 전체 조회(/admin/conversations) — user_id 포함, 최신순. */
+    async getAllAgentTasks(limit: number = 200): Promise<AgentTask[]> {
+        const result = await this.query<AgentTask>(
+            'SELECT * FROM agent_tasks ORDER BY created_at DESC LIMIT $1',
+            [limit]
+        );
+        return result.rows;
+    }
+
     /** 크로스-task 학습(5-2)용 — 유저 최근 terminal task 의 경량 메타만 조회(checkpoint 등 대형 컬럼 제외). */
     async getRecentTerminalTaskMetas(userId: string, limit: number): Promise<Array<
         Pick<AgentTask, 'id' | 'goal' | 'status' | 'error' | 'current_turn'>

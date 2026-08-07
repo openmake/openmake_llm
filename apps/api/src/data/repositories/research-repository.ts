@@ -121,6 +121,19 @@ export class ResearchRepository extends BaseRepository {
         }));
     }
 
+    /** 관리자 전체 조회(/admin/conversations) — user_id 포함, 최신순. */
+    async getAllResearchSessions(limit: number = 200): Promise<ResearchSession[]> {
+        const result = await this.query<ResearchSession>(
+            'SELECT * FROM research_sessions ORDER BY created_at DESC LIMIT $1',
+            [limit]
+        );
+        return result.rows.map((row) => ({
+            ...row,
+            key_findings: row.key_findings || [],
+            sources: row.sources || []
+        }));
+    }
+
     async deleteSessionWithSteps(sessionId: string): Promise<void> {
         const client = await this.pool.connect();
 

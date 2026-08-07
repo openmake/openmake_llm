@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { createHash } from 'crypto';
 import { ClusterManager } from '../cluster/manager';
 import { asyncHandler } from '../utils/error-handler';
 import { ChatRequestError, ChatRequestHandler, ChatUserContext } from '../chat/request-handler';
@@ -12,9 +13,13 @@ import { listAvailableModels } from '../chat/profile-resolver';
 import { parseFullModelId } from '../providers/i-provider';
 import { getProviderCatalogEntry } from '../config/external-providers';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
+import { OpenAICompatSessionRepository } from '../data/repositories/oaicompat-session-repo';
 import { getPool } from '../data/models/unified-database';
+import { OPENAI_COMPAT_SESSION } from '../config/openai-compat';
+import { createLogger } from '../utils/logger';
 
 const openaiCompatRouter = Router();
+const log = createLogger('OpenAICompatRoute');
 let clusterManager: ClusterManager;
 
 export function setClusterManager(cluster: ClusterManager): void {
@@ -80,6 +85,87 @@ function buildUserContext(req: Request): ChatUserContext {
         userRole: 'user',
         userId: req.apiKeyRecord?.user_id?.toString() || `apikey_${req.apiKeyId}`,
     };
+}
+
+/**
+ * OpenAI 호환 요청으로부터 결정적(deterministic) 세션 키를 유도한다.
+ *
+ * 같은 (owner, requestUser, UTC 날짜) 조합은 항상 같은 키를 반환하므로 동일 클라이언트의
+ * 연속 호출이 하나의 세션에 누적된다. 세션 키에 UTC 날짜(YYYYMMDD)를 포함해 하루 단위로
+ * 새 세션이 되도록 하여, 세션이 영원히 한 줄로 이어져 무한히 길어지는 것을 막는다
+ * (일자 파편화 vs 무한 세션 트레이드오프).
+ *
+ * @param owner       계정 스코프 식별자 — 인증된 user id, 없으면 API key 스코프 문자열
+ * @param requestUser OpenAI 요청 body 의 `user` 필드 (없으면 'default')
+ * @param date        키 유도 기준 시각 (기본 현재) — UTC 날짜만 사용
+ */
+export function deriveOpenAICompatSessionKey(
+    owner: string,
+    requestUser: string | undefined,
+    date: Date = new Date(),
+): string {
+    const utcDate = date.toISOString().slice(0, 10).replace(/-/g, ''); // YYYYMMDD (UTC)
+    const material = `${owner}:${requestUser || 'default'}:${utcDate}`;
+    const hex = createHash('sha256')
+        .update(material)
+        .digest('hex')
+        .slice(0, OPENAI_COMPAT_SESSION.HASH_HEX_LENGTH);
+    return `${OPENAI_COMPAT_SESSION.KEY_PREFIX}${hex}`;
+}
+
+interface SessionContinuity {
+    /** 재사용할 기존 세션 ID (없으면 새 세션이 생성됨) */
+    reuseSessionId: string | undefined;
+    /** 유도된 세션 키 — 새 세션 생성 후 metadata 태깅에 사용 */
+    sessionKey: string;
+}
+
+/**
+ * 결정적 세션 키로 기존 conversation 세션을 조회한다.
+ *
+ * 인증 사용자는 user_id 로, 비인증(API key 에 user 없음)은 anon_session_id(=세션 키)로
+ * 소유권을 스코프한다. 비인증 경로는 재사용 세션이 ensureSession 의 익명 소유권 검증을
+ * 통과하도록 userContext.anonSessionId 를 세션 키로 채운다.
+ */
+async function resolveSessionContinuity(
+    body: OpenAIChatCompletionRequest,
+    userContext: ChatUserContext,
+    apiKeyId: string | undefined,
+): Promise<SessionContinuity> {
+    const authUserId = userContext.authenticatedUserId;
+    const owner = authUserId ?? `apikey:${apiKeyId ?? 'unknown'}`;
+    const sessionKey = deriveOpenAICompatSessionKey(owner, body.user);
+
+    // 비인증 경로: 재사용 세션이 ensureSession 익명 소유권 검증을 통과하도록 anon id 를 세션 키로 고정.
+    if (!authUserId) {
+        userContext.anonSessionId = sessionKey;
+    }
+
+    // 연속성 조회 실패는 fail-open — 세션 재사용만 포기하고 새 세션으로 정상 진행.
+    // (조회가 processChat 앞단에 있어, 여기서 throw 하면 DB 순단이 응답 전체를 500 으로 만든다.)
+    let reuseSessionId: string | undefined;
+    try {
+        const repo = new OpenAICompatSessionRepository(getPool());
+        reuseSessionId = authUserId
+            ? await repo.findByKeyForUser(sessionKey, authUserId)
+            : await repo.findByKeyForAnon(sessionKey);
+    } catch (e) {
+        log.warn(`세션 연속성 조회 실패 (새 세션으로 진행): ${e instanceof Error ? e.message : e}`);
+    }
+
+    return { reuseSessionId, sessionKey };
+}
+
+/**
+ * 새로 생성된 세션에 세션 키를 metadata 로 태깅한다 (다음 호출의 조회 대상).
+ * 태깅 실패는 세션 연속성만 잃을 뿐 응답을 막지 않으므로 warn 후 무시(fail-open).
+ */
+async function tagSessionKey(sessionId: string, sessionKey: string): Promise<void> {
+    try {
+        await new OpenAICompatSessionRepository(getPool()).tagKey(sessionId, sessionKey);
+    } catch (e) {
+        log.warn(`세션 키 태깅 실패 (연속성 유실, 응답은 정상): ${e instanceof Error ? e.message : e}`);
+    }
 }
 
 function openaiError(res: Response, status: number, message: string): void {
@@ -195,6 +281,11 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
     const userContext = buildUserContext(req);
     const tools = convertTools(body);
 
+    // 세션 연속성: OpenAI 호환 클라이언트의 연속 호출을 결정적 세션 키로 하나의 세션에 누적.
+    // 매 호출마다 새 세션이 파편 생성되던 문제 해소 (createSession 이 클라이언트 id 를 받지 않아
+    // metadata lookup 방식 채택 — 기존 세션이 있으면 그 실제 id 를 재사용, 없으면 생성 후 태깅).
+    const { reuseSessionId, sessionKey } = await resolveSessionContinuity(body, userContext, req.apiKeyId);
+
     if (body.stream === true) {
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
@@ -221,6 +312,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
                 message: converted.message,
                 model: body.model,
                 history: converted.history,
+                sessionId: reuseSessionId,
                 ...(converted.images && converted.images.length > 0 ? { images: converted.images } : {}),
                 tools,
                 tool_choice: body.tool_choice,
@@ -242,6 +334,11 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
             });
 
             const resultModel = result.model || body.model;
+
+            // 새로 생성된 세션이면 세션 키를 태깅 — 다음 호출이 이 세션을 재사용하도록.
+            if (!reuseSessionId && result.sessionId) {
+                await tagSessionKey(result.sessionId, sessionKey);
+            }
 
             if (!aborted && result.tool_calls && result.tool_calls.length > 0) {
                 res.write(`data: ${JSON.stringify(OpenAICompatService.buildStreamChunk({
@@ -292,6 +389,7 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
             message: converted.message,
             model: body.model,
             history: converted.history,
+            sessionId: reuseSessionId,
             ...(converted.images && converted.images.length > 0 ? { images: converted.images } : {}),
             tools,
             tool_choice: body.tool_choice,
@@ -302,6 +400,11 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
                 // non-streaming endpoint intentionally ignores token events
             },
         });
+
+        // 새로 생성된 세션이면 세션 키를 태깅 — 다음 호출이 이 세션을 재사용하도록.
+        if (!reuseSessionId && result.sessionId) {
+            await tagSessionKey(result.sessionId, sessionKey);
+        }
 
         // content array 가 섞여 있어도 안전하게 텍스트만 추출 — string 인 경우만 join, 배열인 경우 text 블록 합산
         const promptTextParts: string[] = [];

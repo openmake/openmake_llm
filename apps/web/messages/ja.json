@@ -1230,6 +1230,29 @@
       "loading": "メッセージを読み込み中…",
       "empty": "メッセージがありません",
       "close": "閉じる"
+    },
+    "tabs": {
+      "conversations": "会話",
+      "tasks": "エージェント作業",
+      "research": "ディープリサーチ"
+    },
+    "tasksEmpty": "エージェント作業がありません",
+    "researchEmpty": "リサーチセッションがありません",
+    "taskTh": {
+      "goal": "目標",
+      "owner": "ユーザー",
+      "status": "ステータス",
+      "createdAt": "作成日"
+    },
+    "researchTh": {
+      "topic": "トピック",
+      "owner": "ユーザー",
+      "status": "ステータス",
+      "createdAt": "作成日"
+    },
+    "researchDetail": {
+      "empty": "リサーチステップがありません",
+      "step": "ステップ {n}"
     }
   },
   "adminAudit": {
