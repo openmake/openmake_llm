@@ -332,9 +332,7 @@ export class UnifiedDatabase {
     }
 
     /** 관리자 전체 조회(/admin/conversations) — user_id 포함, 최신순. */
-    async getAllResearchSessions(limit: number = 200): Promise<ResearchSession[]> {
-        return this.researchRepository.getAllResearchSessions(limit);
-    }
+    async getAllResearchSessions(limit: number = 200): Promise<ResearchSession[]> { return this.researchRepository.getAllResearchSessions(limit); }
 
     async deleteResearchSession(sessionId: string): Promise<void> {
         return this.researchRepository.deleteSessionWithSteps(sessionId);
@@ -392,9 +390,7 @@ export class UnifiedDatabase {
     }
 
     /** 관리자 전체 조회(/admin/conversations) — user_id 포함, 최신순. */
-    async getAllAgentTasks(limit: number = 200): Promise<AgentTask[]> {
-        return this.agentTaskRepository.getAllAgentTasks(limit);
-    }
+    async getAllAgentTasks(limit: number = 200): Promise<AgentTask[]> { return this.agentTaskRepository.getAllAgentTasks(limit); }
 
     async deleteAgentTask(taskId: string): Promise<void> {
         return this.agentTaskRepository.deleteAgentTaskWithSteps(taskId);
