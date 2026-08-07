@@ -58,5 +58,31 @@ RUN uv venv /opt/pyenv \
     && chmod -R a+rX /opt/pyenv
 ENV PATH=/opt/pyenv/bin:${PATH}
 
+# 고품질 PDF 본문 추출(opendataloader-pdf, Java CLI) — 호스트 doc-extractor 와 동일 엔진.
+# 생성 시점 서버 추출이 생략되는 대형 PDF(>30MB, CF 100s 가드)를 에이전트가 컨테이너 안에서
+# 레이아웃·표 인식 품질로 직접 추출하는 용도(pypdf 는 단순 텍스트라 표/헤딩 구조가 깨짐).
+# network=none 이라 빌드타임 베이킹. 버전은 apps/api 의존성과 동기 유지(2.5.0).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openjdk-17-jre-headless \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /opt/pdf && cd /opt/pdf && npm init -y >/dev/null 2>&1 \
+    && npm install @opendataloader/pdf@2.5.0 \
+    && ln -s /opt/pdf/node_modules/.bin/opendataloader-pdf /usr/local/bin/opendataloader-pdf \
+    && chmod -R a+rX /opt/pdf
+
+# 다국어 분석·산출 (2026-08-08) — 어떤 언어의 문서든 OCR(분석)·PDF 생성·브라우저 렌더가 되도록.
+# - tesseract-ocr-all: 전체 언어팩(기존 eng+kor 뿐 → 호스트 brew 163개와 정합). 스캔 PDF 다국어 OCR.
+# - fonts-noto-core: 아랍·히브리·타이·인도계 등 비라틴 전 스크립트 TTF (CJK 는 playwright deps 의
+#   fonts-noto-cjk 로 기설치, 한글 TTF 는 fonts-nanum).
+# - ttf-mscorefonts-installer(contrib, EULA preseed): 정식 Arial/Times New Roman 등 MS 코어 폰트 —
+#   재배포 금지 라이선스라 빌드타임 다운로드 방식만 허용됨. metric-호환 Liberation Sans 는 기설치라
+#   이 레이어가 실패해도 대체 가능.
+RUN sed -i 's/Components: main/Components: main contrib/' /etc/apt/sources.list.d/debian.sources \
+    && echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends tesseract-ocr-all fonts-noto-core ttf-mscorefonts-installer \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* \
+    && fc-cache -f
+
 USER node
 WORKDIR /workspace
