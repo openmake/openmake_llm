@@ -1217,6 +1217,7 @@
     "countBadge": "{count}개 세션",
     "searchPlaceholder": "제목·사용자 검색",
     "guest": "게스트",
+    "cliSource": "CLI",
     "untitled": "제목 없는 대화",
     "empty": "대화가 없습니다",
     "th": {

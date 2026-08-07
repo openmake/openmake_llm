@@ -25,8 +25,7 @@
  * └── {userId}/
  *     ├── workspace/    # 작업 디렉토리 (fs_read_file 등의 기준)
  *     ├── data/          # 사용자 DB 및 데이터 파일
- *     │   ├── user.db
- *     │   └── conversations.db
+ *     │   └── user.db
  *     ├── temp/          # 임시 파일 (자동 정리 대상)
  *     └── config.json    # 사용자 설정
  * ```
@@ -226,17 +225,6 @@ export class UserSandbox {
         // 디렉토리 초기화 (존재하지 않으면 생성)
         await this.initUserDirs(userId);
         return path.resolve(getUserDataRoot(), String(userId), 'data', 'user.db');
-    }
-
-    /**
-     * 사용자별 대화 DB 파일 경로 반환
-     *
-     * @param userId - 사용자 ID
-     * @returns DB 파일 절대 경로 (data/conversations.db)
-     */
-    static async getUserConversationDbPath(userId: string | number): Promise<string> {
-        await this.initUserDirs(userId);
-        return path.resolve(getUserDataRoot(), String(userId), 'data', 'conversations.db');
     }
 
     /**

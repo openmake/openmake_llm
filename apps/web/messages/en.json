@@ -1217,6 +1217,7 @@
     "countBadge": "{count} sessions",
     "searchPlaceholder": "Search title or user",
     "guest": "Guest",
+    "cliSource": "CLI",
     "untitled": "Untitled conversation",
     "empty": "No conversations",
     "th": {

@@ -1217,6 +1217,7 @@
     "countBadge": "{count} 个会话",
     "searchPlaceholder": "搜索标题或用户",
     "guest": "访客",
+    "cliSource": "CLI",
     "untitled": "无标题对话",
     "empty": "暂无对话",
     "th": {
