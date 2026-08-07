@@ -45,6 +45,23 @@ export const SCRAPER_CONFIG = {
 
     /** python3 실행 경로 (curl_cffi 호출용) */
     PYTHON_BIN: process.env.SCRAPER_PYTHON_BIN || 'python3',
+
+    /** 스크랩 결과 KVStore 캐시 (기본 on) — 동일 URL 반복 fetch 방지 (G1, 2026-08-08) */
+    CACHE_ENABLED: process.env.SCRAPER_CACHE_ENABLED !== 'false',
+
+    /** 스크랩 캐시 TTL (ms, 기본 30분) */
+    CACHE_TTL_MS: parseInt(process.env.SCRAPER_CACHE_TTL_MS || String(30 * 60 * 1000), 10),
+
+    /** 캐시 저장 상한 (bytes) — 초과 결과는 캐시하지 않음 (redis 메모리 보호) */
+    CACHE_MAX_BYTES: parseInt(process.env.SCRAPER_CACHE_MAX_BYTES || '1000000', 10),
+
+    /**
+     * URL 정규화 시 제거할 트래킹 쿼리 파라미터 (G4). `*` 종결 항목은 prefix 매칭.
+     * fragment(#...) 는 항목과 무관하게 항상 제거된다.
+     */
+    TRACKING_PARAMS: (process.env.SCRAPER_TRACKING_PARAMS
+        || 'utm_*,gclid,fbclid,igshid,mc_cid,mc_eid,ref_src,spm,si,ck_subscriber_id')
+        .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
 } as const;
 
 /**

@@ -32,7 +32,7 @@ import {
     buildReasoningPrompt
 } from './context-engineering-presets';
 import { resolvePromptLocale } from './language-policy';
-import { resolveBasePromptLang, buildBasePrompt, IDENTITY_GUARD_TEXTS, RESPONSE_DISCIPLINE_TEXTS } from './prompt-locales';
+import { resolveBasePromptLang, buildBasePrompt, IDENTITY_GUARD_TEXTS, RESPONSE_DISCIPLINE_TEXTS, UNTRUSTED_CONTENT_GUARD_TEXTS } from './prompt-locales';
 import type { PromptLanguageCode } from './prompt-locales';
 export type { PromptLanguageCode } from './prompt-locales';
 
@@ -108,7 +108,17 @@ function getResponseDiscipline(userLanguage: string): string {
  * 가드 적용.
  */
 export function getExternalProviderSystemGuards(userLanguage: string): string {
-    return getIdentityGuard(userLanguage) + getResponseDiscipline(userLanguage);
+    return getIdentityGuard(userLanguage) + getResponseDiscipline(userLanguage) + getUntrustedContentGuard(userLanguage);
+}
+
+/**
+ * 신뢰 불가 외부 콘텐츠 경계 가드 (G2, 2026-08-08) — 웹/검색/외부 MCP 도구 결과 안의
+ * 지시문(prompt injection)을 따르지 않게 하는 정적 보안 경계. 도구 always-on 채팅
+ * 단일 경로의 정적 prefix 에 포함된다 (본문은 prompt-locales 외부화).
+ */
+function getUntrustedContentGuard(userLanguage: string): string {
+    const locale = resolvePromptLocale(userLanguage);
+    return locale === 'ko' ? UNTRUSTED_CONTENT_GUARD_TEXTS.ko : UNTRUSTED_CONTENT_GUARD_TEXTS.en;
 }
 
 /**
