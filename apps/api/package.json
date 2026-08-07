@@ -25,7 +25,7 @@
         "@modelcontextprotocol/sdk": "^1.25.3",
         "@mozilla/readability": "^0.6.0",
         "@openai-oauth/core": "^2.0.0",
-        "@opendataloader/pdf": "^2.4.7",
+        "@opendataloader/pdf": "^2.5.0",
         "@openmake/config": "*",
         "@openmake/shared-types": "*",
         "@opentelemetry/api": "^1.9.1",
