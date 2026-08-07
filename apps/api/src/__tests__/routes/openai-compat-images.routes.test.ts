@@ -15,6 +15,16 @@ jest.mock('../../chat/profile-resolver', () => ({
     listAvailableModels: () => [{ id: 'test-model' }],
 }));
 
+// 세션 연속성 조회는 실제 pg pool 에 닿는다 — DB 없는 CI 에선 연결 시도가 hang 해
+// jest 타임아웃을 초과하므로(로컬은 빠른 실패 → fail-open 통과) repository 를 격리한다.
+jest.mock('../../data/repositories/oaicompat-session-repo', () => ({
+    OpenAICompatSessionRepository: jest.fn().mockImplementation(() => ({
+        findByKeyForUser: jest.fn().mockResolvedValue(undefined),
+        findByKeyForAnon: jest.fn().mockResolvedValue(undefined),
+        tagKey: jest.fn().mockResolvedValue(undefined),
+    })),
+}));
+
 import openaiCompatRouter, { setClusterManager } from '../../routes/openai-compat.routes';
 
 const IMAGE_DATA_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==';
