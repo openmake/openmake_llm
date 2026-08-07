@@ -11,11 +11,13 @@
  * @see security/ssrf-guard.ts - SSRF 방어 (safeFetch)
  */
 
+import * as crypto from 'crypto';
 import { JSDOM } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 import { safeFetch, validateOutboundUrl } from '../security/ssrf-guard';
+import { getKeyValueStore } from '../storage';
 import { createLogger } from './logger';
 import { LLM_TIMEOUTS } from '../config/timeouts';
 import { SCRAPER_CONFIG, browserHeaders } from '../config/web-scraper';
@@ -127,19 +129,76 @@ export interface CrawlOptions {
 // ============================================
 
 /**
- * URL에서 웹 콘텐츠를 마크다운으로 추출
+ * URL 정규화 (G4, 2026-08-08) — fragment 제거 + 트래킹 파라미터(SCRAPER_CONFIG.TRACKING_PARAMS)
+ * 제거 + 호스트 소문자화. 캐시 키·crawl dedup 의 변형 URL 중복을 줄인다.
+ * 파싱 불가 입력은 원문 반환 (검증은 validateOutboundUrl 담당 — 여기선 어휘적 정리만).
+ */
+export function normalizeScrapeUrl(raw: string): string {
+    try {
+        const u = new URL(raw);
+        u.hash = '';
+        for (const key of [...u.searchParams.keys()]) {
+            const k = key.toLowerCase();
+            const tracked = SCRAPER_CONFIG.TRACKING_PARAMS.some((t) =>
+                t.endsWith('*') ? k.startsWith(t.slice(0, -1)) : k === t,
+            );
+            if (tracked) u.searchParams.delete(key);
+        }
+        u.hostname = u.hostname.toLowerCase();
+        // searchParams 삭제 후 잔여 '?' 정리는 URL 이 처리. 후행 슬래시는 crawl dedup 관례 유지.
+        return u.toString();
+    } catch {
+        return raw;
+    }
+}
+
+/**
+ * URL에서 웹 콘텐츠를 마크다운으로 추출 (KVStore 캐시 래퍼, G1 2026-08-08)
  *
- * 2단계 fallback:
- * 1. safeFetch + Readability + Turndown (정적 사이트)
- * 2. Playwright 렌더링 + Readability (SPA fallback)
+ * 정규화 URL 기준 캐시 조회 → 미스 시 실스크랩(scrapePageLive) → 성공 결과 TTL 캐시.
+ * 캐시 히트는 서킷 브레이커·네트워크를 타지 않는다. 캐시 계층 오류는 fail-open.
  *
  * @param url - 스크래핑할 URL
  * @param options - 스크래핑 옵션
  * @returns 마크다운 콘텐츠, 제목, 링크 목록
  */
 export async function scrapePage(url: string, options: ScrapeOptions = {}): Promise<ScrapeResult> {
+    const normalized = normalizeScrapeUrl(url);
+    await validateOutboundUrl(normalized);
+
+    const wantsMain = options.onlyMainContent !== false;
+    const cacheKey = `web:scrape:${crypto.createHash('sha256').update(`${normalized}|main=${wantsMain}`).digest('hex')}`;
+
+    if (SCRAPER_CONFIG.CACHE_ENABLED) {
+        try {
+            const hit = await getKeyValueStore().get<ScrapeResult>(cacheKey);
+            if (hit && typeof hit.markdown === 'string' && hit.markdown.trim().length > 0) {
+                logger.info(`[${normalized}] 스크랩 캐시 히트`);
+                return hit;
+            }
+        } catch (e) {
+            logger.warn(`스크랩 캐시 조회 실패(무시): ${e instanceof Error ? e.message : e}`);
+        }
+    }
+
+    const result = await scrapePageLive(normalized, options);
+
+    if (SCRAPER_CONFIG.CACHE_ENABLED && result.markdown.trim().length > 0) {
+        try {
+            const size = Buffer.byteLength(result.markdown, 'utf8');
+            if (size <= SCRAPER_CONFIG.CACHE_MAX_BYTES) {
+                await getKeyValueStore().set(cacheKey, result, SCRAPER_CONFIG.CACHE_TTL_MS);
+            }
+        } catch (e) {
+            logger.warn(`스크랩 캐시 저장 실패(무시): ${e instanceof Error ? e.message : e}`);
+        }
+    }
+    return result;
+}
+
+/** 실스크랩 본체 — 0~3단계 fallback. 호출 전 URL 검증·정규화 완료 전제 (scrapePage 래퍼 경유). */
+async function scrapePageLive(url: string, options: ScrapeOptions = {}): Promise<ScrapeResult> {
     checkCircuitBreaker();
-    await validateOutboundUrl(url);
 
     const timeoutMs = options.timeoutMs ?? LLM_TIMEOUTS.WEB_SCRAPE_TIMEOUT_MS;
     const onlyMainContent = options.onlyMainContent !== false;
@@ -442,7 +501,8 @@ export async function crawlSite(
         if (options.signal?.aborted) break;
 
         const current = queue.shift()!;
-        const normalizedUrl = current.url.replace(/\/$/, '');
+        // G4: 트래킹 파라미터·fragment 변형이 같은 페이지를 중복 방문하지 않도록 정규화 후 dedup
+        const normalizedUrl = normalizeScrapeUrl(current.url).replace(/\/$/, '');
 
         if (visited.has(normalizedUrl)) continue;
         visited.add(normalizedUrl);
@@ -469,8 +529,9 @@ export async function crawlSite(
             // 다음 깊이의 링크를 큐에 추가
             if (current.depth < maxDepth) {
                 for (const link of result.links) {
-                    if (link.startsWith(baseOrigin) && !visited.has(link.replace(/\/$/, ''))) {
-                        queue.push({ url: link, depth: current.depth + 1 });
+                    const normalizedLink = normalizeScrapeUrl(link);
+                    if (normalizedLink.startsWith(baseOrigin) && !visited.has(normalizedLink.replace(/\/$/, ''))) {
+                        queue.push({ url: normalizedLink, depth: current.depth + 1 });
                     }
                 }
             }
