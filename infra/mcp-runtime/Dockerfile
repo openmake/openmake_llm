@@ -49,7 +49,9 @@ RUN mkdir -p /home/node/.cache/npm /home/node/.cache/uv
 # 컨테이너로 격리하면 런타임 uvx 다운로드가 불가하므로 이미지에 미리 설치한다.
 # uv tool install 은 /home/node/.local 에 self-contained venv 로 설치 →
 # 런타임에 볼륨 마운트되는 /home/node/.cache 와 분리되어 net=none(오프라인)에도 동작.
-RUN uv tool install mcp-python-repl
+# --with 'mcp<2': mcp-python-repl 은 상한 없는 `mcp>=1.7.0` 선언이라 mcp 2.x 가 설치되면
+# `mcp.server.fastmcp` 제거로 기동 실패(2026-08-08 no-cache 재빌드에서 실측) — noapi 와 동일 회피.
+RUN uv tool install --with 'mcp<2' mcp-python-repl
 ENV PATH=/home/node/.local/bin:${PATH}
 
 # ── NotebookLM MCP 서버(notebooklm-mcp-cli) — 이미지에 baked ─────────────────
