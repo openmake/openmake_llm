@@ -1217,6 +1217,7 @@
     "countBadge": "{count}件のセッション",
     "searchPlaceholder": "タイトル・ユーザーを検索",
     "guest": "ゲスト",
+    "cliSource": "CLI",
     "untitled": "無題の会話",
     "empty": "会話がありません",
     "th": {

@@ -30,6 +30,8 @@ interface ApiConversation {
   createdAt?: string;
   model?: string;
   messageCount?: number;
+  /** 세션 출처 마커 — source='cli' 는 서버 CLI 채팅 (게스트와 구분해 표시) */
+  metadata?: { source?: string } | null;
 }
 
 type ConversationsResponse = ApiSuccess<{ sessions: ApiConversation[] }>;
@@ -171,7 +173,8 @@ export default function AdminConversationsPage() {
     return t("guest");
   };
 
-  const ownerLabel = (s: ApiConversation): string => ownerLabelById(s.userId);
+  const ownerLabel = (s: ApiConversation): string =>
+    !s.userId && s.metadata?.source === "cli" ? t("cliSource") : ownerLabelById(s.userId);
 
   const filteredConversations = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -329,7 +332,9 @@ export default function AdminConversationsPage() {
                           {s.userId ? (
                             ownerLabel(s)
                           ) : (
-                            <Badge tone="neutral">{t("guest")}</Badge>
+                            <Badge tone="neutral">
+                              {s.metadata?.source === "cli" ? t("cliSource") : t("guest")}
+                            </Badge>
                           )}
                         </Td>
                         <Td>{s.messageCount ?? 0}</Td>
