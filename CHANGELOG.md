@@ -1,5 +1,52 @@
 # Changelog
 
+## [1.22.0](https://github.com/openmake/openmake_llm/compare/v1.21.0...v1.22.0) (2026-08-07)
+
+
+### ✨ 기능
+
+* **admin:** 관리자 전용 전체 대화 조회 화면 분리 ([a01ff44](https://github.com/openmake/openmake_llm/commit/a01ff44ec21108ce3676123544df94a093138262))
+* **admin:** 관리자 전용 전체 대화 조회 화면 분리 ([28e2ab5](https://github.com/openmake/openmake_llm/commit/28e2ab508d8e54979b9d8bfa805ad60a99ff991d))
+* **agent-task:** 실행 스텝→플랜 노드 귀속 계측 (Execution Graph 증분 2) ([a72280f](https://github.com/openmake/openmake_llm/commit/a72280f240d4f1316f30096208ecb0dec99bfeba))
+* **agent-task:** 실행 스텝을 플랜 노드에 귀속 — plan_step_index 계측 (Execution Graph 증분 2) ([ad42acc](https://github.com/openmake/openmake_llm/commit/ad42accd07d2d55ebbc95dc028440575706f0e38))
+* **agent-task:** 플랜 자동 진행 — 마킹 공백 결정적 승격 (Execution Graph 증분 3) ([58a37c6](https://github.com/openmake/openmake_llm/commit/58a37c6165ef505795b44b023def6d97ce5c81e4))
+* **agent-task:** 플랜 자동 진행 — 완료/차단 후 다음 단계 결정적 in_progress 승격 (증분 3) ([e6d2d96](https://github.com/openmake/openmake_llm/commit/e6d2d962de69da5bfced73c4b17dfdd710763aab))
+* **cli:** CLI 채팅 히스토리 저장 + MCP 샌드박스 대화 데드코드 정리 ([accd7ca](https://github.com/openmake/openmake_llm/commit/accd7ca8a6287dafe7bbc2afe8546d7f5d861aca))
+* **cli:** CLI 채팅 히스토리 저장 + MCP 샌드박스 대화 데드코드 정리 ([c400ada](https://github.com/openmake/openmake_llm/commit/c400adaebd673a81ec49b96ac5e6df6d5075ae8c))
+* **history:** 히스토리 커버리지 확장 — structured 저장·관리자 작업/리서치 탭·OpenAI 호환 세션 연속성 ([9d4f297](https://github.com/openmake/openmake_llm/commit/9d4f297beff796469d4362b4e49ec7cb77f15b59))
+* **history:** 히스토리 커버리지 확장 — structured 저장·관리자 작업/리서치 탭·OpenAI 호환 세션 연속성 ([08ff479](https://github.com/openmake/openmake_llm/commit/08ff479f0833fdaffedb33059fc610070b5cf2ec))
+* **install:** Linux/macOS 원샷 설치 스크립트 (installer 브랜치 부활 rebase) ([51c134e](https://github.com/openmake/openmake_llm/commit/51c134e0beb0e0f873d1e446d30e8f7933407122))
+* **install:** Linux/macOS 원샷 설치 스크립트 + 신규 클론 부팅 차단 버그 수정 ([644f880](https://github.com/openmake/openmake_llm/commit/644f88010ec36faf50ab7f42e185f81f37c4e085))
+* **metrics:** 도구 결과 절단 셰도우 계측 (G3, measure-first) ([0c01c56](https://github.com/openmake/openmake_llm/commit/0c01c5615b3285bee1a4a29be5c3542df02c4722))
+* **metrics:** 도구 결과 절단 셰도우 계측 (G3, measure-first) ([c82408e](https://github.com/openmake/openmake_llm/commit/c82408e05583312bda003d1b904a2244cab8ac75))
+* **pdf:** opendataloader 2.5.0 업그레이드 + task 샌드박스 다국어 분석·산출 베이킹 ([c7b9f34](https://github.com/openmake/openmake_llm/commit/c7b9f3430d4e546ff81ba021fa31c25bb7bf152d))
+* **pdf:** opendataloader 2.5.0 업그레이드 + task 샌드박스 다국어 분석·산출 베이킹 ([d60bf40](https://github.com/openmake/openmake_llm/commit/d60bf40bab2139fdd528c16f18aaa565bfcc8ed3))
+* **web-search:** web_search 도구 결과에 검색 소스 라벨 표시 ([e6aa914](https://github.com/openmake/openmake_llm/commit/e6aa914bb71c94d4f8b540f58626b164dba9f53c))
+* **web-search:** web_search 도구 결과에 검색 소스 라벨 표시 ([eedc5c9](https://github.com/openmake/openmake_llm/commit/eedc5c95c902764a2a32b681868a8fbba3a14f5e))
+* **web:** 게스트 채팅 첫 화면에 다국어 응답 안내 ([102e128](https://github.com/openmake/openmake_llm/commit/102e128171a69cc9bf9ecd7c102ae0e47961a839))
+* **web:** 게스트 채팅 첫 화면에 다국어 응답 안내 추가 ([ab8e14d](https://github.com/openmake/openmake_llm/commit/ab8e14d312b01d3bb5a155d64e1790a8102737a2))
+* **web:** 스크랩 캐시(G1)·URL 정규화(G4)·외부 콘텐츠 경계 가드(G2) ([a96db79](https://github.com/openmake/openmake_llm/commit/a96db794789530ddadb2e28c7cf07bbe89422ec5))
+* **web:** 스크랩 캐시(G1)·URL 정규화(G4)·외부 콘텐츠 경계 가드(G2) ([696e209](https://github.com/openmake/openmake_llm/commit/696e209ee3de735b42f10473d7e69a38fce23295))
+* **web:** 작업 상세 스텝에 플랜 노드 뱃지 (plan_step_index 가시화) ([b98efb6](https://github.com/openmake/openmake_llm/commit/b98efb656ecdf194e2b7dc177f6fb5ad40f60e69))
+* **web:** 작업 상세 스텝에 플랜 노드 뱃지 표시 (plan_step_index 가시화) ([88bd2c8](https://github.com/openmake/openmake_llm/commit/88bd2c801c4bc39406213a6342c53c522c7c7442))
+* **web:** 채팅 입력창 클립보드 붙여넣기 첨부 (⌘V/Ctrl+V) ([f62608d](https://github.com/openmake/openmake_llm/commit/f62608d72807535c32d4846ec12b06c4926a283b))
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 샌드박스 도구 오류 5대 원인 해소 — 안내·관용화·오류 관측 ([5cf6f7d](https://github.com/openmake/openmake_llm/commit/5cf6f7d4eed9349b27c0408714cb15ec27120733))
+* **agent-task:** 샌드박스 도구 오류 5대 원인 해소 — 안내·관용화·오류 관측 ([6a019d1](https://github.com/openmake/openmake_llm/commit/6a019d182617759e336230c5059350d30065094d))
+* **install:** 실제 신규 설치 검증 — 마이그레이션 011 실패·포트/compose 이슈 수정 ([545fde0](https://github.com/openmake/openmake_llm/commit/545fde0bae7de5aae9ebc22afd6f3f96d1fe44e2))
+* **mcp:** mcp-python-repl 에 mcp&lt;2 제약 — mcp 2.x fastmcp 제거로 기동 실패 회피 ([9b0e08a](https://github.com/openmake/openmake_llm/commit/9b0e08ac5921f5ffbed5ff5e4ee7cdc9ed4b396b))
+* **mcp:** mcp-python-repl 에 mcp&lt;2 제약 — mcp 2.x fastmcp 제거로 기동 실패 회피 ([33d3e91](https://github.com/openmake/openmake_llm/commit/33d3e912dd794425b4c7092e817d2995d71d02f6))
+* **web-search:** 소스 라벨 비도메인 식별자(searxng) 정규화 ([ffd5ec3](https://github.com/openmake/openmake_llm/commit/ffd5ec34bdd8d40158a24bce2f752bd2e0e42e4c))
+* **web-search:** 소스 라벨 비도메인 식별자(searxng) 정규화 ([68a9cf4](https://github.com/openmake/openmake_llm/commit/68a9cf4a444f39db679d9a06d535845e8b01619a))
+
+
+### ♻️ 리팩터링
+
+* **data:** addAgentTaskStep 래퍼 파라미터 타입을 repository 참조로 (파일 크기 가드) ([eca38d1](https://github.com/openmake/openmake_llm/commit/eca38d1f88ac640befd2b4c40507e7eef1c7800e))
+
 ## [1.21.0](https://github.com/openmake/openmake_llm/compare/v1.20.0...v1.21.0) (2026-08-05)
 
 
