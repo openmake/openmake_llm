@@ -59,6 +59,26 @@ describe('formatSearchSources', () => {
         expect(out.trim().endsWith('URL: http://c')).toBe(true);
     });
 
+    it('showSource=true 는 제목 옆에 소스 도메인 표시, source 없는 결과는 제목만', () => {
+        const out = formatSearchSources(
+            [
+                { title: 'N', url: 'http://n', snippet: 's', source: 'naver.com' },
+                { title: 'X', url: 'http://x', snippet: 's' },
+            ],
+            { showSource: true },
+        );
+        expect(out).toContain('[1] N · naver.com');
+        expect(out).toContain('[2] X\n');
+    });
+
+    it('showSource 미지정(기본 false)은 기존 포맷 유지 — source 가 있어도 표시 안 함', () => {
+        const out = formatSearchSources(
+            [{ title: 'N', url: 'http://n', snippet: 's', source: 'naver.com' }],
+        );
+        expect(out).toContain('[1] N\n');
+        expect(out).not.toContain('naver.com');
+    });
+
     it('snippet 컷이 surrogate pair(이모지) 중간을 분할하지 않는다', () => {
         // '😀' = U+1F600 (surrogate pair, 길이 2). 캡 3 이면 코드포인트 3개까지 = 'ab😀'
         const out = formatSearchSources([{ title: 'E', url: 'http://e', snippet: 'ab😀cd' }], { maxSnippetChars: 3 });
