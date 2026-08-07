@@ -65,6 +65,7 @@ export function AdminTabs() {
     <PageTabs
       tabs={[
         { href: "/admin", label: t("dashboard") },
+        { href: "/admin/conversations", label: tNav("items.conversationsAdmin") },
         { href: "/admin/analytics", label: tNav("items.analytics") },
         { href: "/admin/metrics", label: tNav("items.metrics") },
         { href: "/mcp-monitoring", label: tNav("items.mcpMonitoring") },

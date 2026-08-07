@@ -1,4 +1,4 @@
-import { evaluateSessionAccess } from '../session.controller';
+import { evaluateSessionAccess, resolveSessionListScope } from '../session.controller';
 
 type SessionLike = { userId?: string; anonSessionId?: string };
 
@@ -40,5 +40,29 @@ describe('evaluateSessionAccess — IDOR 회귀', () => {
 
     test('세션이 없으면 (비-admin) 접근 불가', () => {
         expect(evaluateSessionAccess(undefined, { userId: 'u-owner', isAdmin: false })).toBe(false);
+    });
+});
+
+describe('resolveSessionListScope — 관리자 전체 조회 옵트인', () => {
+    // 🔴 회귀 방어: 과거엔 관리자 기본이 전체 조회라 개인 히스토리·사이드바에
+    // 모든 사용자의 대화가 섞여 노출됐다. 전체 조회는 viewAll=true 옵트인만 허용.
+    test('관리자도 viewAll 없이는 자신의 세션만', () => {
+        expect(resolveSessionListScope({ isAdmin: true, viewAll: false, userId: 'u-admin' })).toBe('user');
+    });
+
+    test('관리자 + viewAll=true 는 전체 조회', () => {
+        expect(resolveSessionListScope({ isAdmin: true, viewAll: true, userId: 'u-admin' })).toBe('all');
+    });
+
+    test('비관리자의 viewAll 은 무시 — 자신의 세션만', () => {
+        expect(resolveSessionListScope({ isAdmin: false, viewAll: true, userId: 'u-user' })).toBe('user');
+    });
+
+    test('비로그인 + anonSessionId 는 익명 스코프', () => {
+        expect(resolveSessionListScope({ isAdmin: false, viewAll: false, anonSessionId: 'anon-abc' })).toBe('anon');
+    });
+
+    test('비로그인 + viewAll 도 무시 — 인증 정보 없으면 none', () => {
+        expect(resolveSessionListScope({ isAdmin: false, viewAll: true })).toBe('none');
     });
 });
