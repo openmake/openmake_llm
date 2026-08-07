@@ -31,11 +31,12 @@ import { requireAuth } from '../auth';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { validate } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
+import { resolveSessionListScope } from '../controllers/session.controller';
 import { v4 as uuidv4 } from 'uuid';
 import { createDeepResearchService } from '../services/DeepResearchService';
 import { resolveRoleClientForUser } from '../services/model-role-resolver';
 import { detectLanguage } from '../chat/language-policy';
-import { RESEARCH_DEPTH_LOOPS } from '../config/runtime-limits';
+import { RESEARCH_DEPTH_LOOPS, RESEARCH_SESSION_LIST_ALL_DEFAULT } from '../config/runtime-limits';
 import {
     createResearchSessionSchema,
     addResearchStepSchema,
@@ -80,13 +81,23 @@ router.post('/sessions', validate(createResearchSessionSchema), asyncHandler(asy
 
 /**
  * GET /api/research/sessions
- * 사용자의 리서치 세션 목록 조회
+ * 사용자의 리서치 세션 목록 조회. 관리자 전용 화면(/admin/conversations)은 ?viewAll=true 로
+ * 전체 사용자 세션을 옵트인 조회한다(비관리자의 viewAll 은 무시 — session.controller 동일 관용구).
+ * 세션 row 는 user_id 를 포함하므로 소유자 식별에 별도 필드가 필요 없다.
  */
 router.get('/sessions', asyncHandler(async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string, 10) || 20;
 
     const db = getUnifiedDatabase();
-    const sessions = await db.getUserResearchSessions(String(req.user!.id), limit);
+    const userId = String(req.user!.id);
+    const scope = resolveSessionListScope({
+        isAdmin: req.user!.role === 'admin',
+        viewAll: req.query.viewAll === 'true',
+        userId,
+    });
+    const sessions = scope === 'all'
+        ? await db.getAllResearchSessions(RESEARCH_SESSION_LIST_ALL_DEFAULT)
+        : await db.getUserResearchSessions(userId, limit);
 
     res.json(success({ sessions, total: sessions.length }));
 }));

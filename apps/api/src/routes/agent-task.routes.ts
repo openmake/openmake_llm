@@ -25,6 +25,7 @@ import { requireAuth } from '../auth';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { validate, validateWithSecurity } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
+import { resolveSessionListScope } from '../controllers/session.controller';
 import { LOCAL_BRIDGE } from '../config/local-bridge';
 import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
 import { v4 as uuidv4 } from 'uuid';
@@ -263,11 +264,21 @@ router.post('/', (req: Request, res: Response, next) => {
 
 /**
  * GET /api/agent-tasks
- * 사용자의 작업 목록
+ * 사용자의 작업 목록. 관리자 전용 화면(/admin/conversations)은 ?viewAll=true 로
+ * 전체 사용자 작업을 옵트인 조회한다(비관리자의 viewAll 은 무시 — session.controller 동일 관용구).
+ * toPublicTask 는 user_id 를 그대로 노출하므로 소유자 식별에 별도 필드가 필요 없다.
  */
 router.get('/', asyncHandler(async (req: Request, res: Response) => {
     const db = getUnifiedDatabase();
-    const tasks = await db.getUserAgentTasks(String(req.user!.id));
+    const userId = String(req.user!.id);
+    const scope = resolveSessionListScope({
+        isAdmin: req.user!.role === 'admin',
+        viewAll: req.query.viewAll === 'true',
+        userId,
+    });
+    const tasks = scope === 'all'
+        ? await db.getAllAgentTasks(AGENT_TASK_LIMITS.LIST_ALL_DEFAULT)
+        : await db.getUserAgentTasks(userId);
     res.json(success({ tasks: tasks.map(t => toPublicTask(t as unknown as Record<string, unknown>)), total: tasks.length }));
 }));
 

@@ -227,6 +227,11 @@ export const RESEARCH_DEPTH_LOOPS: Record<string, number> = {
     deep: 4,
 };
 
+/** 관리자 전체 조회(/admin/conversations 리서치 탭, ?viewAll=true) 기본 목록 상한.
+ *  RESEARCH_LIST_ALL_DEFAULT 로 오버라이드(기본 200). */
+export const RESEARCH_SESSION_LIST_ALL_DEFAULT =
+    parseInt(process.env.RESEARCH_LIST_ALL_DEFAULT || '', 10) || 200;
+
 /**
  * Deep Research 인용 검증 (A3)
  *
@@ -1274,6 +1279,9 @@ export const AGENT_TASK_LIMITS = {
     GOAL_MAX_CHARS: parseInt(process.env.AGENT_TASK_GOAL_MAX_CHARS || '', 10) || 20000,
     /** 기본 최대 턴 수 */
     DEFAULT_MAX_TURNS: 10,
+    /** 관리자 전체 조회(/admin/conversations 작업 탭, ?viewAll=true) 기본 목록 상한.
+     *  AGENT_TASK_LIST_ALL_DEFAULT 로 오버라이드(기본 200). */
+    LIST_ALL_DEFAULT: parseInt(process.env.AGENT_TASK_LIST_ALL_DEFAULT || '', 10) || 200,
     /** 작업 전체 타임아웃 (ms) — AGENT_TASK_TIMEOUT_MS 환경변수로 오버라이드.
      *  기본 10분: HTML/디자인 등 장문 deliverable 생성은 단일 LLM 호출이 수 분 걸릴 수 있음. */
     TOTAL_TIMEOUT_MS: parseInt(process.env.AGENT_TASK_TIMEOUT_MS || '', 10) || 10 * 60 * 1000,
