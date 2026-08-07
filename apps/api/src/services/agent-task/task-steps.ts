@@ -8,6 +8,7 @@ import type { UserContext } from '../../mcp/user-sandbox';
 import type { ExtractedArtifact } from '../../llm/artifact-parser';
 import { takeReportSource } from '../chat-service/report-block';
 import { MAX_TOOL_RESULT_CHARS, AGENT_TASK_LIMITS } from '../../config/runtime-limits';
+import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentTaskService');
@@ -61,6 +62,10 @@ export async function runTool(
         // 문자열/JSON 양쪽 모두 캡 적용 — 대형 결과가 통째로 대화에 들어가면
         // 컨텍스트·체크포인트가 부풀어 token_limit abort 로 작업이 실패한다.
         const raw = typeof r.content === 'string' ? r.content : JSON.stringify(r.content);
+        // G3 셰도우 계측 — 절단 발생률/폭 실측 (chunk-요약 도입 판단 게이트, fire-and-forget)
+        recordToolResultTruncation({
+            path: 'agent_task', toolName: name, rawChars: raw.length, capChars: MAX_TOOL_RESULT_CHARS,
+        });
         const text = raw.length > MAX_TOOL_RESULT_CHARS
             ? raw.slice(0, MAX_TOOL_RESULT_CHARS) + '\n...[결과가 길어 잘렸습니다]'
             : raw;

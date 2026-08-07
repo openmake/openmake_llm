@@ -178,7 +178,7 @@ async function runRetention(): Promise<void> {
             10,
         );
         if (Number.isFinite(metricsRetentionDays) && metricsRetentionDays > 0) {
-            for (const table of ['model_pool_metrics', 'routing_shadow_decisions', 'orchestration_dispatch_decisions']) {
+            for (const table of ['model_pool_metrics', 'routing_shadow_decisions', 'orchestration_dispatch_decisions', 'tool_result_truncations']) {
                 try {
                     const r = await pool.query(
                         `DELETE FROM ${table} WHERE created_at < NOW() - ($1 || ' days')::interval`,

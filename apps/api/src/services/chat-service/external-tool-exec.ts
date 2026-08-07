@@ -12,6 +12,7 @@
  */
 import { createLogger } from '../../utils/logger';
 import { MAX_TOOL_RESULT_CHARS } from '../../config/runtime-limits';
+import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { isPersistableUserId } from '../../utils/user-id-validation';
 import type { ResolvedProvider } from '../../providers/provider-router';
@@ -56,7 +57,14 @@ export async function executeExternalTool(
         if (result.isError) {
             return `Error: ${typeof result.content === 'string' ? result.content : JSON.stringify(result.content)}`;
         }
-        if (typeof result.content === 'string') return result.content;
+        if (typeof result.content === 'string') {
+            // 문자열 분기는 캡 미적용 — 분모 확보를 위해 동일하게 계측한다 (G3).
+            const contentStr: string = result.content;
+            recordToolResultTruncation({
+                path: 'chat', toolName, rawChars: contentStr.length, capChars: MAX_TOOL_RESULT_CHARS,
+            });
+            return contentStr;
+        }
         // 카카오 지도 블록은 8000자 캡(slice)·JSON.stringify 이스케이프에 소실되지 않도록
         // 원본 텍스트에서 추출해 반환 문자열 앞에 실제 개행으로 prepend 한다.
         // (search-places 출력이 길어 블록이 끝에 있으면 캡에 잘리던 문제 — 호출부가 이 블록을 결정적 첨부)
@@ -70,7 +78,12 @@ export async function executeExternalTool(
             const m = rawText.match(/```kakaomap[\s\S]*?```/);
             if (m) mapPrefix = `${m[0]}\n\n`;
         }
-        return mapPrefix + JSON.stringify(result.content).slice(0, MAX_TOOL_RESULT_CHARS);
+        const serialized = JSON.stringify(result.content);
+        // G3 셰도우 계측 — 8000자 절단 발생률/폭 실측 (chunk-요약 도입 판단 게이트)
+        recordToolResultTruncation({
+            path: 'chat', toolName, rawChars: serialized.length, capChars: MAX_TOOL_RESULT_CHARS,
+        });
+        return mapPrefix + serialized.slice(0, MAX_TOOL_RESULT_CHARS);
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         logger.warn(`외부 LLM 도구 실행 실패 (${toolName}): ${msg}`);
