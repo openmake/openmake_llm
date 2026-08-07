@@ -16,6 +16,7 @@
       "usage": "使用量",
       "admin": "管理者",
       "analytics": "アナリティクス",
+      "conversationsAdmin": "会話一覧",
       "auditLog": "監査ログ",
       "metrics": "メトリクス",
       "alerts": "アラート",
@@ -1208,6 +1209,27 @@
       "4": "木",
       "5": "金",
       "6": "土"
+    }
+  },
+  "adminConversations": {
+    "title": "全会話の閲覧",
+    "description": "すべてのユーザー・ゲストの会話履歴を閲覧します",
+    "countBadge": "{count}件のセッション",
+    "searchPlaceholder": "タイトル・ユーザーを検索",
+    "guest": "ゲスト",
+    "untitled": "無題の会話",
+    "empty": "会話がありません",
+    "th": {
+      "title": "タイトル",
+      "owner": "ユーザー",
+      "messages": "メッセージ",
+      "model": "モデル",
+      "updatedAt": "最終アクティビティ"
+    },
+    "detail": {
+      "loading": "メッセージを読み込み中…",
+      "empty": "メッセージがありません",
+      "close": "閉じる"
     }
   },
   "adminAudit": {

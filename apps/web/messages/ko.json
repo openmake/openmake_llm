@@ -16,6 +16,7 @@
       "usage": "사용량",
       "admin": "관리자",
       "analytics": "애널리틱스",
+      "conversationsAdmin": "전체 대화",
       "auditLog": "감사 로그",
       "metrics": "메트릭",
       "alerts": "알림",
@@ -1208,6 +1209,27 @@
       "4": "목",
       "5": "금",
       "6": "토"
+    }
+  },
+  "adminConversations": {
+    "title": "전체 대화 조회",
+    "description": "모든 사용자·게스트의 대화 히스토리를 조회합니다",
+    "countBadge": "{count}개 세션",
+    "searchPlaceholder": "제목·사용자 검색",
+    "guest": "게스트",
+    "untitled": "제목 없는 대화",
+    "empty": "대화가 없습니다",
+    "th": {
+      "title": "제목",
+      "owner": "사용자",
+      "messages": "메시지",
+      "model": "모델",
+      "updatedAt": "마지막 활동"
+    },
+    "detail": {
+      "loading": "메시지를 불러오는 중…",
+      "empty": "메시지가 없습니다",
+      "close": "닫기"
     }
   },
   "adminAudit": {

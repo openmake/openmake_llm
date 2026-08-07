@@ -16,6 +16,7 @@
       "usage": "Usage",
       "admin": "Admin",
       "analytics": "Analytics",
+      "conversationsAdmin": "Conversations",
       "auditLog": "Audit Log",
       "metrics": "Metrics",
       "alerts": "Alerts",
@@ -1208,6 +1209,27 @@
       "4": "Thu",
       "5": "Fri",
       "6": "Sat"
+    }
+  },
+  "adminConversations": {
+    "title": "All Conversations",
+    "description": "Browse conversation history across all users and guests",
+    "countBadge": "{count} sessions",
+    "searchPlaceholder": "Search title or user",
+    "guest": "Guest",
+    "untitled": "Untitled conversation",
+    "empty": "No conversations",
+    "th": {
+      "title": "Title",
+      "owner": "User",
+      "messages": "Messages",
+      "model": "Model",
+      "updatedAt": "Last activity"
+    },
+    "detail": {
+      "loading": "Loading messages…",
+      "empty": "No messages",
+      "close": "Close"
     }
   },
   "adminAudit": {

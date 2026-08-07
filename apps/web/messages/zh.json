@@ -16,6 +16,7 @@
       "usage": "使用量",
       "admin": "管理员",
       "analytics": "分析",
+      "conversationsAdmin": "全部对话",
       "auditLog": "审计日志",
       "metrics": "指标",
       "alerts": "告警",
@@ -1208,6 +1209,27 @@
       "4": "周四",
       "5": "周五",
       "6": "周六"
+    }
+  },
+  "adminConversations": {
+    "title": "全部对话查看",
+    "description": "查看所有用户和访客的对话历史",
+    "countBadge": "{count} 个会话",
+    "searchPlaceholder": "搜索标题或用户",
+    "guest": "访客",
+    "untitled": "无标题对话",
+    "empty": "暂无对话",
+    "th": {
+      "title": "标题",
+      "owner": "用户",
+      "messages": "消息",
+      "model": "模型",
+      "updatedAt": "最后活动"
+    },
+    "detail": {
+      "loading": "正在加载消息…",
+      "empty": "暂无消息",
+      "close": "关闭"
     }
   },
   "adminAudit": {

@@ -41,6 +41,31 @@ export function evaluateSessionAccess(
     return false;
 }
 
+/** 세션 목록 조회 범위 (순수 함수 — 단위 테스트 가능) */
+export type SessionListScope = 'all' | 'user' | 'anon' | 'none';
+
+/**
+ * 세션 목록 조회 범위 판정.
+ *
+ * 관리자 전체 조회는 명시적 옵트인(`viewAll=true`, 관리자 전용 화면 /admin/conversations 사용)
+ * 으로만 허용한다 — 과거엔 관리자 기본이 전체 조회라 개인 히스토리·사이드바에
+ * 모든 사용자의 대화가 섞여 노출됐다. 비관리자의 viewAll 은 무시된다.
+ */
+export function resolveSessionListScope(
+    ctx: { isAdmin: boolean; viewAll: boolean; userId?: string; anonSessionId?: string },
+): SessionListScope {
+    if (ctx.isAdmin && ctx.viewAll) {
+        return 'all';
+    }
+    if (ctx.userId) {
+        return 'user';
+    }
+    if (ctx.anonSessionId) {
+        return 'anon';
+    }
+    return 'none';
+}
+
 /**
  * 대화 세션 관리 컨트롤러
  * 
@@ -78,24 +103,26 @@ export class SessionController {
          this.router.get('/', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
              const user = req.user;
              const anonSessionId = req.query.anonSessionId as string;
-             const viewMineOnly = req.query.viewMineOnly === 'true';
              const limit = parseInt(req.query.limit as string) || 50;
 
-             // 🔒 Phase 3: DEBUG 로그 제거 (프로덕션 정리)
+             const userIdStr = user?.id ? String(user.id) : undefined;
+             const scope = resolveSessionListScope({
+                 isAdmin: user?.role === 'admin',
+                 viewAll: req.query.viewAll === 'true',
+                 userId: userIdStr,
+                 anonSessionId: typeof anonSessionId === 'string' ? anonSessionId : undefined,
+             });
 
              let sessions: ConversationSession[];
-             const isAdminUser = user?.role === 'admin';
-
-             // 🔑 관리자: 기본적으로 전체 조회 (viewMineOnly=true면 자신만)
-             if (isAdminUser && !viewMineOnly) {
+             if (scope === 'all') {
+                 // 🔑 관리자 전용 화면(/admin/conversations)의 명시적 전체 조회
                  sessions = await conversationDb.getAllSessions(limit);
                  log.info(`[Chat Sessions] 관리자 전체 조회: ${sessions.length}개`);
-             } else if (user?.id) {
-                 // 🔐 로그인 사용자: 자신의 대화만 (userId를 문자열로 변환하여 비교)
-                 const userIdStr = String(user.id);
-                 sessions = await conversationDb.getSessionsByUserId(userIdStr, limit);
+             } else if (scope === 'user') {
+                 // 🔐 로그인 사용자: 자신의 대화만 (관리자도 개인 화면에선 동일)
+                 sessions = await conversationDb.getSessionsByUserId(userIdStr!, limit);
                  log.info(`[Chat Sessions] 사용자 ${userIdStr} 조회: ${sessions.length}개`);
-             } else if (anonSessionId) {
+             } else if (scope === 'anon') {
                  // 🔒 비로그인 사용자: 해당 익명 세션만
                  sessions = await conversationDb.getSessionsByAnonId(anonSessionId, limit);
                  log.info(`[Chat Sessions] 익명 세션 ${anonSessionId} 조회: ${sessions.length}개`);
