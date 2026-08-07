@@ -71,6 +71,23 @@ describe('formatSearchSources', () => {
         expect(out).toContain('[2] X\n');
     });
 
+    it('showSource: 도메인 아닌 source(searxng 등)는 결과 URL 호스트명으로 정규화', () => {
+        const out = formatSearchSources(
+            [{ title: 'S', url: 'https://blog.example.co.kr/post/1', snippet: 's', source: 'searxng' }],
+            { showSource: true },
+        );
+        expect(out).toContain('[1] S · blog.example.co.kr');
+        expect(out).not.toContain('searxng');
+    });
+
+    it('showSource: URL 파싱 실패 시 source 원문으로 폴백', () => {
+        const out = formatSearchSources(
+            [{ title: 'B', url: 'not-a-url', snippet: 's', source: 'searxng' }],
+            { showSource: true },
+        );
+        expect(out).toContain('[1] B · searxng');
+    });
+
     it('showSource 미지정(기본 false)은 기존 포맷 유지 — source 가 있어도 표시 안 함', () => {
         const out = formatSearchSources(
             [{ title: 'N', url: 'http://n', snippet: 's', source: 'naver.com' }],

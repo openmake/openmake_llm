@@ -33,6 +33,21 @@ export interface FormatSourcesOptions {
 
 type SourceLike = Pick<SearchResult, 'title' | 'url' | 'snippet'> & Partial<Pick<SearchResult, 'source'>>;
 
+/**
+ * showSource 표시용 라벨 정규화 — source 가 도메인 형태가 아니면(searxng 같은 엔진
+ * 식별자) 결과 URL 의 호스트명으로 대체한다. google(displayLink=결과 사이트 도메인) 등
+ * 다른 provider 라벨과 표기(도메인)를 일관되게 유지하기 위함.
+ */
+function displaySourceLabel(source: string | undefined, url: string): string | undefined {
+    if (!source) return undefined;
+    if (source.includes('.')) return source;
+    try {
+        return new URL(url).hostname || source;
+    } catch {
+        return source;
+    }
+}
+
 /** 검색 결과 배열을 주입용 문자열로 포맷 (결과 수·snippet 길이 캡 적용). */
 export function formatSearchSources(results: SourceLike[], opts: FormatSourcesOptions = {}): string {
     const {
@@ -58,7 +73,8 @@ export function formatSearchSources(results: SourceLike[], opts: FormatSourcesOp
             snip = snip + snippetSuffix;
         }
         const tag = labeled ? `[${sourceWord} ${i + 1}]` : `[${i + 1}]`;
-        const title = showSource && r.source ? `${r.title} · ${r.source}` : r.title;
+        const sourceLabel = showSource ? displaySourceLabel(r.source, r.url) : undefined;
+        const title = sourceLabel ? `${r.title} · ${sourceLabel}` : r.title;
         const urlLine = labeled ? `   URL: ${r.url}` : `   ${r.url}`;
         // 라벨형이라도 내용이 비면 빈 "내용: " 라벨을 출력하지 않는다(누수 방지).
         const contentText = snip || emptySnippet;
