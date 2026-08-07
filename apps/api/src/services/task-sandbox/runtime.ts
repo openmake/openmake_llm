@@ -15,7 +15,8 @@ import { TaskSandbox, type ExecResult } from './sandbox';
 import type { TaskExecutor } from './executor';
 import { createTaskTools, type DelegateFn, type SpawnFn, type ProceduralHooks } from './tools';
 import { recordBrowserMetric } from './browser-metrics';
-import { AGENT_TASK_LIMITS, ORCHESTRATION_DISPATCH } from '../../config/runtime-limits';
+import { AGENT_TASK_LIMITS, ORCHESTRATION_DISPATCH, MAX_TOOL_RESULT_CHARS } from '../../config/runtime-limits';
+import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
 import { saveProceduralSkill, resolveProceduralSpec } from '../agent-task/procedural-skill';
 import { TaskPlan, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval, type ApprovalRejectReason } from './approval-gate';
@@ -35,7 +36,7 @@ export function toLLMTool(def: MCPToolDefinition): ToolDefinition {
     };
 }
 
-function resultToString(r: { content: Array<{ text?: string }>; isError?: boolean }, cap = 8000): string {
+function resultToString(r: { content: Array<{ text?: string }>; isError?: boolean }, cap = MAX_TOOL_RESULT_CHARS): string {
     // NUL(0x00) 제거 — 바이너리 파일을 도구로 열람하면 결과에 0x00 이 섞일 수 있고, 이는 모델
     // 컨텍스트/스텝 저장(Postgres TEXT·JSON)으로 흘러가면 "invalid byte sequence" 로 태스크를 깨뜨린다.
     const text = r.content.map((c) => c.text ?? '').join('\n').replace(/\u0000/g, '').slice(0, cap);
@@ -193,7 +194,15 @@ export class TaskRuntime {
 
         try {
             const r = await handler(args, { userId: this.userId, role: 'user' });
-            return resultToString(r as { content: Array<{ text?: string }>; isError?: boolean });
+            const typed = r as { content: Array<{ text?: string }>; isError?: boolean };
+            // G3 셰도우 계측 — task 도구는 turn-executor 의 runTool 을 타지 않아(이 경로가 캡 지점)
+            // 여기서 적재한다 (2026-08-08 라이브 점검에서 발견된 계측 사각).
+            recordToolResultTruncation({
+                path: 'agent_task', toolName: name,
+                rawChars: typed.content.map((c) => c.text ?? '').join('\n').length,
+                capChars: MAX_TOOL_RESULT_CHARS,
+            });
+            return resultToString(typed);
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             logger.warn(`[${this.taskId}] task 도구 실행 실패 (${name}): ${msg}`);

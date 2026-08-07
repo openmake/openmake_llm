@@ -359,10 +359,11 @@ export function ArtifactPanel() {
   const active = artifacts.find((a) => a.id === activeArtifactId) ?? artifacts[artifacts.length - 1];
 
   // 활성 artifact 변경 시 버전 목록 로드 + override 초기화.
+  // Agent Task 산출물(taskId)은 세션 artifacts 테이블에 없어 버전 조회가 404 — 요청 자체를 생략.
   useEffect(() => {
     setOverride(null);
     setVersions([]);
-    if (!currentSessionId || !active || active.streaming) return;
+    if (!currentSessionId || !active || active.streaming || active.taskId) return;
     let alive = true;
     (async () => {
       try {
