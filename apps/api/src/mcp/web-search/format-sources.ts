@@ -26,9 +26,12 @@ export interface FormatSourcesOptions {
     emptySnippet?: string;
     /** 간결형에서 snippet 뒤에 붙일 접미사 (예: '...') */
     snippetSuffix?: string;
+    /** true: 제목 뒤에 검색 소스 도메인 표시 (예: `제목 · naver.com`) — 결과가 어느 엔진에서
+     *  왔는지 구분용. 기본 false (프롬프트 주입 경로의 기존 포맷·인용 파서 영향 없음). */
+    showSource?: boolean;
 }
 
-type SourceLike = Pick<SearchResult, 'title' | 'url' | 'snippet'>;
+type SourceLike = Pick<SearchResult, 'title' | 'url' | 'snippet'> & Partial<Pick<SearchResult, 'source'>>;
 
 /** 검색 결과 배열을 주입용 문자열로 포맷 (결과 수·snippet 길이 캡 적용). */
 export function formatSearchSources(results: SourceLike[], opts: FormatSourcesOptions = {}): string {
@@ -41,6 +44,7 @@ export function formatSearchSources(results: SourceLike[], opts: FormatSourcesOp
         separator = '\n\n',
         emptySnippet = '',
         snippetSuffix = '',
+        showSource = false,
     } = opts;
 
     const limited = maxResults > 0 ? results.slice(0, maxResults) : results;
@@ -54,13 +58,14 @@ export function formatSearchSources(results: SourceLike[], opts: FormatSourcesOp
             snip = snip + snippetSuffix;
         }
         const tag = labeled ? `[${sourceWord} ${i + 1}]` : `[${i + 1}]`;
+        const title = showSource && r.source ? `${r.title} · ${r.source}` : r.title;
         const urlLine = labeled ? `   URL: ${r.url}` : `   ${r.url}`;
         // 라벨형이라도 내용이 비면 빈 "내용: " 라벨을 출력하지 않는다(누수 방지).
         const contentText = snip || emptySnippet;
         const contentLine = labeled
             ? (contentText ? `\n   ${contentWord}: ${contentText}` : '')
             : (snip ? `\n   ${snip}` : '');
-        return `${tag} ${r.title}\n${urlLine}${contentLine}`;
+        return `${tag} ${title}\n${urlLine}${contentLine}`;
     });
     return lines.join(separator);
 }

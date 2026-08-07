@@ -41,9 +41,10 @@ export const webSearchTool: MCPToolDefinition = {
             return { content: [{ type: 'text', text: `검색 결과 없음: "${query}"` }] };
         }
 
-        // MCP 도구 출력(사용자 직접 표시) — 주입 캡 미적용, snippet 100자 요약만 유지
+        // MCP 도구 출력(사용자 직접 표시) — 주입 캡 미적용, snippet 100자 요약만 유지.
+        // showSource: 결과가 어느 검색엔진(naver.com·google.com 등)에서 왔는지 제목 옆에 표시.
         const output = `검색 결과 (${results.length}개)\n\n` +
-            formatSearchSources(results, { maxSnippetChars: 100, snippetSuffix: '...' });
+            formatSearchSources(results, { maxSnippetChars: 100, snippetSuffix: '...', showSource: true });
 
         return { content: [{ type: 'text', text: output }] };
     }
