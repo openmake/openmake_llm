@@ -106,7 +106,11 @@ export function safeResolveWorkspacePath(hostWorkdir: string, userPath: string):
             : userPath;
     const abs = resolve(root, normalized);
     if (abs !== root && !abs.startsWith(root + sep)) {
-        throw new Error(`workspace 경로 탈출 차단: ${userPath}`);
+        throw new Error(
+            `workspace 경로 탈출 차단: ${userPath}`
+            + ' (파일 도구는 /workspace 내부만 접근 가능 — /opt/... 같은 컨테이너 경로는'
+            + ' bash 로 `cp -r <경로> ./` 하여 workspace 에 복사한 뒤 사본을 여세요)',
+        );
     }
     return abs;
 }

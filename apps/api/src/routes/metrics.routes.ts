@@ -43,6 +43,7 @@ import { requireAuth, requireAdmin } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
 import { getPool } from '../data/models/unified-database';
 import { ConversationRepository } from '../data/repositories/conversation-repository';
+import { AgentTaskMetricsRepository } from '../data/repositories/agent-task-metrics-repository';
 
 /** days 쿼리 파라미터 정수 파싱 + clamp(1~365). interval 인젝션 방지를 위해 항상 정수 반환. */
 function parseDays(raw: unknown, fallback = 7): number {
@@ -213,6 +214,49 @@ router.get('/analytics/model-usage', asyncHandler(async (req: Request, res: Resp
         count: Number(row.count),
     }));
     res.json(success({ models }));
+}));
+
+/**
+ * GET /api/metrics/agent-tasks/tool-errors?days=N
+ * 에이전트 작업 도구 실행 오류 관측 (관리자). 기본 30일.
+ * 총 도구 실행 수·오류 수·오류율, 오류 발생 작업 수와 상태 분포,
+ * 오류 시그니처 상위 N(기본 10), tool_name 별 오류 수를 반환.
+ */
+router.get('/agent-tasks/tool-errors', asyncHandler(async (req: Request, res: Response) => {
+    const days = parseDays(req.query.days, 30);
+    const repo = new AgentTaskMetricsRepository(getPool());
+    const [summaryRow, statusRows, signatureRows, byToolRows] = await Promise.all([
+        repo.getToolErrorSummary(days),
+        repo.getToolErrorTaskStatusDistribution(days),
+        repo.getToolErrorSignatures(days, 10),
+        repo.getToolErrorByToolName(days, 10),
+    ]);
+
+    const totalToolExecutions = Number(summaryRow.total_tool_executions);
+    const errorCount = Number(summaryRow.error_count);
+    const errorRate = totalToolExecutions > 0 ? errorCount / totalToolExecutions : 0;
+
+    res.json(success({
+        days,
+        summary: {
+            totalToolExecutions,
+            errorCount,
+            errorRate,
+            affectedTasks: Number(summaryRow.affected_tasks),
+        },
+        affectedTaskStatus: statusRows.map((r) => ({
+            status: r.status,
+            tasks: Number(r.tasks),
+        })),
+        topSignatures: signatureRows.map((r) => ({
+            signature: r.signature,
+            count: Number(r.count),
+        })),
+        byToolName: byToolRows.map((r) => ({
+            toolName: r.tool_name,
+            count: Number(r.count),
+        })),
+    }));
 }));
 
 /**

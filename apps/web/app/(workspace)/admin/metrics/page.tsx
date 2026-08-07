@@ -83,6 +83,20 @@ const STATUS_MAP: Record<string, NodeStatus> = {
   unknown: "degraded",
 };
 
+/* ── 작업 도구 오류 타입 ───────────────────────────────────── */
+interface ToolErrorData {
+  days: number;
+  summary: {
+    totalToolExecutions: number;
+    errorCount: number;
+    errorRate: number;
+    affectedTasks: number;
+  };
+  affectedTaskStatus: { status: string; tasks: number }[];
+  topSignatures: { signature: string; count: number }[];
+  byToolName: { toolName: string; count: number }[];
+}
+
 export default function AdminMetricsPage() {
   const t = useTranslations("adminMetrics");
   const locale = toBcp47(useLocale());
@@ -92,6 +106,7 @@ export default function AdminMetricsPage() {
   const [mem, setMem] = useState<{ value: string; delta: string } | null>(null);
   const [agentSummary, setAgentSummary] = useState<AgentSummary | null>(null);
   const [agentMetrics, setAgentMetrics] = useState<AgentMetric[] | null>(null);
+  const [toolErrors, setToolErrors] = useState<ToolErrorData | null>(null);
   const maxV = Math.max(...TIMESERIES.map((t) => t.value));
 
   const load = useCallback(async () => {
@@ -166,6 +181,13 @@ export default function AdminMetricsPage() {
         if (raw) {
           setAgentMetrics(Object.values(raw));
         }
+      }
+      // 작업 도구 오류 로드 (기본 30일)
+      const toolErrRes = await ApiClient.get<{ data: ToolErrorData }>(
+        "/api/metrics/agent-tasks/tool-errors",
+      ).catch(() => null);
+      if (toolErrRes?.data) {
+        setToolErrors(toolErrRes.data);
       }
     } catch {
       /* 401/실패 시 목업 유지 */
@@ -325,6 +347,77 @@ export default function AdminMetricsPage() {
                     })}
                   </tbody>
                 </Table>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 작업 도구 오류 */}
+        {toolErrors && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>
+                {t("toolError.title", { days: toolErrors.days })}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <StatCard
+                  label={t("toolError.errorRate")}
+                  value={`${(toolErrors.summary.errorRate * 100).toFixed(1)}%`}
+                />
+                <StatCard
+                  label={t("toolError.errorCount")}
+                  value={toolErrors.summary.errorCount.toLocaleString()}
+                  delta={t("toolError.ofTotal", {
+                    total: toolErrors.summary.totalToolExecutions.toLocaleString(),
+                  })}
+                />
+                <StatCard
+                  label={t("toolError.affectedTasks")}
+                  value={toolErrors.summary.affectedTasks.toLocaleString()}
+                />
+                <StatCard
+                  label={t("toolError.taskStatus")}
+                  value={
+                    toolErrors.affectedTaskStatus.length > 0
+                      ? toolErrors.affectedTaskStatus
+                          .map((s) => `${s.status} ${s.tasks}`)
+                          .join(" · ")
+                      : "—"
+                  }
+                />
+              </div>
+              {toolErrors.topSignatures.length > 0 && (
+                <Table>
+                  <thead>
+                    <tr>
+                      <Th>{t("toolError.th.signature")}</Th>
+                      <Th className="text-right">{t("toolError.th.count")}</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {toolErrors.topSignatures.map((s, i) => (
+                      <tr key={i}>
+                        <Td className="max-w-0 truncate font-mono text-xs text-fg-2" title={s.signature}>
+                          {s.signature}
+                        </Td>
+                        <Td className="text-right font-mono text-fg-2">
+                          {s.count.toLocaleString()}
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              )}
+              {toolErrors.byToolName.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {toolErrors.byToolName.map((tool) => (
+                    <Badge key={tool.toolName} tone="warn">
+                      {tool.toolName} · {tool.count.toLocaleString()}
+                    </Badge>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>

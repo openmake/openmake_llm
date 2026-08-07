@@ -1327,6 +1327,18 @@
       "requests": "请求数",
       "successRate": "成功率",
       "avgResponseTime": "平均响应时间"
+    },
+    "toolError": {
+      "title": "任务工具错误（最近 {days} 天）",
+      "errorRate": "工具错误率",
+      "errorCount": "错误数",
+      "ofTotal": "共 {total} 次中",
+      "affectedTasks": "受影响任务",
+      "taskStatus": "任务结果",
+      "th": {
+        "signature": "错误签名",
+        "count": "次数"
+      }
     }
   },
   "adminAlerts": {

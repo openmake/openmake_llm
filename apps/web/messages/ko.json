@@ -1327,6 +1327,18 @@
       "requests": "요청 수",
       "successRate": "성공률",
       "avgResponseTime": "평균 응답시간"
+    },
+    "toolError": {
+      "title": "작업 도구 오류 (최근 {days}일)",
+      "errorRate": "도구 오류율",
+      "errorCount": "오류 수",
+      "ofTotal": "총 {total}회 중",
+      "affectedTasks": "오류 발생 작업",
+      "taskStatus": "작업 결말",
+      "th": {
+        "signature": "오류 시그니처",
+        "count": "건수"
+      }
     }
   },
   "adminAlerts": {
