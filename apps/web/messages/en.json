@@ -541,7 +541,9 @@
         "preview": "Read the key trends from the attached chart",
         "time": "Sunday"
       }
-    }
+    },
+    "viewAllToggle": "All users",
+    "ownerBadge": "User {id}"
   },
   "chatSocket": {
     "interceptNotice": "An intercept mode (Discussion / Deep Research / Image) is on, so tools (analysis/search) and artifacts are not applied in this response.",
@@ -936,7 +938,9 @@
       "source3": "Enterprise LLM Adoption Case Study",
       "source4": "Autonomous Agent Safety Guidelines",
       "source5": "RAG vs Long-Context Comparison Benchmark"
-    }
+    },
+    "viewAllToggle": "All users",
+    "ownerBadge": "User {id}"
   },
   "mcpServers": {
     "justNow": "Just now",

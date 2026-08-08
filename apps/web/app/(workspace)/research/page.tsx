@@ -12,6 +12,7 @@ import {
   TriangleAlert,
   ChevronDown,
   Trash2,
+  Users,
 } from "lucide-react";
 import {
   Button,
@@ -27,6 +28,7 @@ import { cn } from "@/lib/utils";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { CLIENT_TIMING } from "@/lib/config";
+import { useAppStore } from "@/lib/store";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type StageStatus = "done" | "running" | "pending";
@@ -71,6 +73,8 @@ interface ApiResearchSession {
   key_findings?: string[];
   sources?: string[];
   created_at?: string;
+  /** 소유자 — admin 전체 보기(viewAll)에서 소유자 뱃지용 (세션 row 가 그대로 노출) */
+  user_id?: string | number;
 }
 
 type ResearchSessionsResponse = ApiSuccess<{
@@ -316,6 +320,27 @@ export default function ResearchPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // admin 전체 보기 — 백엔드 ?viewAll=true 재사용(비관리자는 서버가 무시). 시스템 관리자
+  // 모니터링 용도: 목록만 갱신하고 활성 세션·폴링은 유지한다.
+  const isAdmin = useAppStore((s) => s.auth.currentUser?.role === "admin");
+  const myUserId = useAppStore((s) => s.auth.currentUser?.id);
+  const [viewAll, setViewAll] = useState(false);
+  const viewAllAppliedRef = useRef(false);
+  useEffect(() => {
+    if (viewAllAppliedRef.current === viewAll) return; // 초기 렌더(마운트 로드와 중복) 스킵
+    viewAllAppliedRef.current = viewAll;
+    (async () => {
+      try {
+        const res = await ApiClient.get<ResearchSessionsResponse>(
+          viewAll ? "/api/research/sessions?limit=20&viewAll=true" : "/api/research/sessions?limit=20",
+        );
+        if (aliveRef.current) setSessionList(res?.data?.sessions ?? []);
+      } catch {
+        /* 실패 시 기존 목록 유지 */
+      }
+    })();
+  }, [viewAll]);
+
   const isRunning = status === "running" || status === "pending";
 
   return (
@@ -336,9 +361,22 @@ export default function ResearchPage() {
               ),
             })}
           </p>
-          <Button size="sm" variant="outline" onClick={() => router.push("/")}>
-            {t("goToChat")}
-          </Button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setViewAll((v) => !v)}
+                className={cn(viewAll && "border-accent text-accent")}
+              >
+                <Users className="mr-1.5 h-3.5 w-3.5" />
+                {t("viewAllToggle")}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => router.push("/")}>
+              {t("goToChat")}
+            </Button>
+          </div>
         </Card>
 
         {/* 보고서 중심 레이아웃: 좌측 지난 리서치 레일 + 메인(진행 stepper · 메트릭 · 보고서 · 소스) */}
@@ -377,6 +415,13 @@ export default function ResearchPage() {
                           <span>{fmtDate(s.created_at)}</span>
                           <span>·</span>
                           <span>{Math.round(s.progress)}%</span>
+                          {/* 전체 보기에서 타 사용자 세션 구분 */}
+                          {viewAll && s.user_id != null && String(s.user_id) !== String(myUserId ?? "") && (
+                            <>
+                              <span>·</span>
+                              <span className="text-accent">{t("ownerBadge", { id: String(s.user_id) })}</span>
+                            </>
+                          )}
                         </div>
                       </button>
                       <button
