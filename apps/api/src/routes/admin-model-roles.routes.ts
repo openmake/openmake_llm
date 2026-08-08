@@ -59,13 +59,19 @@ function adminUserId(req: Request): string | undefined {
     return req.user?.id !== undefined ? String(req.user.id) : undefined;
 }
 
-function auditChange(req: Request, action: string, details: Record<string, unknown>): void {
-    void getAuditService().logAudit({
-        action,
-        userId: adminUserId(req),
-        resourceType: 'model_role',
-        details,
-    }).catch(() => { /* audit 실패는 응답에 영향 없음 */ });
+async function auditChange(req: Request, action: string, details: Record<string, unknown>): Promise<void> {
+    try {
+        await getAuditService().logAudit({
+            action,
+            userId: adminUserId(req),
+            resourceType: 'model_role',
+            details,
+        });
+    } catch (err) {
+        // 감사 실패가 배정 자체를 되돌리진 않지만, 조용히 삼키지 않고 details(previous 포함)와
+        // 함께 남겨 '배정은 됐는데 기록은 없는' 추적 갭에서 최소한 애플리케이션 로그로 복원 가능하게 한다.
+        logger.error('모델 역할 감사 기록 실패 (변경은 반영됨):', { action, details, err });
+    }
 }
 
 export const adminModelRolesRouter = Router();
@@ -110,11 +116,10 @@ adminModelRolesRouter.put('/model-roles/:role', validate(putRoleSchema), asyncHa
     }
 
     const repo = new GlobalModelRolesRepository(getPool());
-    // previous 기록 — 2026-08-08 배정 전체 소실 사건의 추적 갭 해소(소실 시 복원 근거)
-    const previous = (await repo.list()).find((m) => m.role === role)?.fullModelId ?? null;
-    const mapping = await repo.upsert(role, fullId);
+    // previous 는 upsert 트랜잭션에서 원자적으로 캡처된다 — 2026-08-08 배정 소실 사건의 복원 근거.
+    const { mapping, previous } = await repo.upsert(role, fullId);
     clearGlobalRolesCache();
-    auditChange(req, 'admin_global_model_role_set', { role, model: fullId, previous });
+    await auditChange(req, 'admin_global_model_role_set', { role, model: fullId, previous });
     logger.info(`전역 역할 매핑 저장: role=${role} model=${fullId}`);
     res.json(success({ mapping }));
 }));
@@ -126,14 +131,13 @@ adminModelRolesRouter.delete('/model-roles/:role', asyncHandler(async (req: Requ
         return;
     }
     const repo = new GlobalModelRolesRepository(getPool());
-    const previous = (await repo.list()).find((m) => m.role === role)?.fullModelId ?? null;
-    const deleted = await repo.delete(role);
+    const { deleted, previous } = await repo.delete(role);
     if (!deleted) {
         res.status(404).json(notFound('매핑 없음'));
         return;
     }
     clearGlobalRolesCache();
-    auditChange(req, 'admin_global_model_role_unset', { role, previous });
+    await auditChange(req, 'admin_global_model_role_unset', { role, previous });
     res.json(success({ deleted: true }));
 }));
 
@@ -167,7 +171,7 @@ adminModelRolesRouter.put('/server-external-keys/:providerId', validate(putServe
         dailyTokenLimit: body.dailyTokenLimit,
         monthlyTokenLimit: body.monthlyTokenLimit ?? null,
     });
-    auditChange(req, 'admin_server_external_key_set', {
+    await auditChange(req, 'admin_server_external_key_set', {
         providerId, dailyTokenLimit: body.dailyTokenLimit, monthlyTokenLimit: body.monthlyTokenLimit ?? null,
     });
     logger.info(`서버 공용 키 등록: provider=${providerId} daily=${body.dailyTokenLimit}`);
@@ -181,6 +185,6 @@ adminModelRolesRouter.delete('/server-external-keys/:providerId', asyncHandler(a
         res.status(404).json(notFound('서버 키 없음'));
         return;
     }
-    auditChange(req, 'admin_server_external_key_delete', { providerId: req.params.providerId });
+    await auditChange(req, 'admin_server_external_key_delete', { providerId: req.params.providerId });
     res.json(success({ deleted: true }));
 }));
