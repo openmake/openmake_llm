@@ -334,6 +334,25 @@ router.post('/:taskId/execute', validate(executeAgentTaskSchema), asyncHandler(a
         return res.status(400).json(badRequest('이미 완료된 작업입니다. 새 작업을 생성하세요.'));
     }
 
+    // 로컬 실행 작업 재실행 가드 — create 와 동일 검증. execute 재진입(재시도) 경로에
+    // 이 가드가 없으면 디바이스 미연결 시 명시 400 대신 조용한 degrade 실행으로 빠진다.
+    if (task.executor === 'local') {
+        if (!LOCAL_BRIDGE.ENABLED) {
+            return res.status(400).json(badRequest('로컬 실행 기능이 비활성화되어 있습니다 (LOCAL_EXECUTOR_ENABLED)'));
+        }
+        if (!getLocalBridgeRegistry().getDevice(String(req.user!.id))) {
+            return res.status(400).json(badRequest('연결된 로컬 디바이스가 없습니다 — 데스크톱 앱에서 작업 폴더를 먼저 연결하세요'));
+        }
+    }
+
+    // 실패/취소 작업 재실행(재시도): dispatch 전에 DB 상태를 pending 으로 되돌린다 —
+    // 실행 시작 가드(AgentTaskService: preTask.status==='cancelled' 즉시 abort)가 이전
+    // 실행의 취소 기록을 새 실행에 대한 취소로 오인해 즉시 중단되는 것을 막고(라이브 실측),
+    // 재시도 직후 목록 조회도 pending 으로 보여 이중 클릭 창을 줄인다.
+    if (task.status === 'failed' || task.status === 'cancelled') {
+        await getUnifiedDatabase().updateAgentTask(task.id, { status: 'pending', progress: 0 });
+    }
+
     const role: UserRole = (req.user!.role as UserRole) || 'user';
 
     // 스킬 범위(allowedSkills, 미지정이면 전체 활성 스킬)와 승인 3모드(Manual/Auto/Skip)는

@@ -12,6 +12,7 @@ import {
   X,
   Trash2,
   RotateCcw,
+  RefreshCw,
   ChevronRight,
   CalendarClock,
   Plus,
@@ -924,9 +925,43 @@ export default function AgentTasksPage() {
     setActionLoading(task.id);
     try {
       await ApiClient.post(`/api/agent-tasks/${task.id}/resume`, {});
-      await loadTasks();
+      // 낙관적 갱신 — retry 와 동일: detached 시작 직후 GET 은 아직 failed 라
+      // resume 버튼이 남아 이중 실행 클릭이 가능하던 창을 닫는다.
+      setTasks((prev) =>
+        prev.map((x) =>
+          x.id === task.id
+            ? { ...x, rawStatus: "pending" as ApiTaskStatus, status: mapStatus("pending"), error: undefined }
+            : x,
+        ),
+      );
+      setTimeout(() => void loadTasks(), 2000);
     } catch (err) {
       alert(t("resumeFailed", { message: err instanceof Error ? err.message : t("error") }));
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  // 처음부터 재시도 — 백엔드 execute 가 failed/cancelled 작업의 fresh 재실행을 지원
+  // (이전 스텝 초기화 후 동일 goal·입력으로 turn 1 부터). 토큰을 다시 쓰므로 확인 후 실행.
+  async function handleRetry(task: AgentTask) {
+    if (!window.confirm(t("retryConfirm", { goal: task.goal.slice(0, 40) }))) return;
+    setActionLoading(task.id);
+    try {
+      await ApiClient.post(`/api/agent-tasks/${task.id}/execute`, {});
+      // 낙관적 갱신 — execute 는 detached 라 직후 GET 은 아직 failed 를 반환한다.
+      // pending 으로 바꿔 retry 버튼을 즉시 감춰(이중 실행 방지) 시작 피드백을 주고,
+      // 잠시 후 실상태로 동기화한다.
+      setTasks((prev) =>
+        prev.map((x) =>
+          x.id === task.id
+            ? { ...x, rawStatus: "pending" as ApiTaskStatus, status: mapStatus("pending"), error: undefined }
+            : x,
+        ),
+      );
+      setTimeout(() => void loadTasks(), 2000);
+    } catch (err) {
+      alert(t("retryFailed", { message: err instanceof Error ? err.message : t("error") }));
     } finally {
       setActionLoading(null);
     }
@@ -1095,6 +1130,16 @@ export default function AgentTasksPage() {
                           title={t("resumeTitle")}
                           className="flex h-7 w-7 items-center justify-center rounded-md text-faint transition hover:bg-accent-soft hover:text-accent disabled:opacity-40">
                           <RotateCcw className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {/* Retry from scratch (failed/cancelled) — resume 과 별개로 처음부터 재실행 */}
+                      {(task.rawStatus === "failed" || task.rawStatus === "cancelled") && (
+                        <button
+                          onClick={() => void handleRetry(task)}
+                          disabled={isActing}
+                          title={t("retryTitle")}
+                          className="flex h-7 w-7 items-center justify-center rounded-md text-faint transition hover:bg-accent-soft hover:text-accent disabled:opacity-40">
+                          <RefreshCw className="h-3.5 w-3.5" />
                         </button>
                       )}
                       {/* Cancel (running/pending) */}

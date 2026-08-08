@@ -180,7 +180,9 @@ export class AgentTaskService {
                 ];
             const startTurn = input.resume?.fromTurn ?? 0;
 
-            await update({ status: 'running', progress: 2 });
+            // fresh 재실행 시 이전 시도의 checkpoint 도 함께 리셋 — 남겨두면 turn 1 완료 전
+            // 재실패 시 resumable=true 로 남아 Resume 이 예전 대화를 이어가는 혼선이 생긴다.
+            await update({ status: 'running', progress: 2, ...(input.resume ? {} : { checkpoint: null }) });
             // fresh 재실행(실패/취소 작업을 처음부터): 이전 시도의 스텝을 비워
             // stepNumber 0 재시작으로 인한 (task_id, step_number) 중복·표시 혼선을 방지.
             if (!input.resume) await db.deleteAgentTaskSteps(taskId);
