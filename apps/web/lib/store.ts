@@ -29,6 +29,8 @@ export interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" 
   agentTask?: AgentTaskState;
   /** 표시 전용 시스템 안내(예: 가로채기 모드 안내) — 백엔드 history payload 에는 제외(스냅샷 전용). */
   notice?: boolean;
+  /** user 메시지에 파일 첨부가 있었음 — 첨부 원본은 히스토리 미보존이라 재생성 대상에서 제외. */
+  hasAttachments?: boolean;
   /**
    * 모델 폴백 고지 — 선택한 모델이 실패해 다른 모델이 답한 경우.
    * 표시가 없으면 사용자가 "선택한 모델이 답했다"고 오인한다(실측).
@@ -153,6 +155,11 @@ interface AppState {
   discussionProgress: DiscussionProgressInfo | null;
   /** 현재 실행 중인 MCP/내장 도구명 (ws mcp_tool_start→표시, mcp_tool_result/done→clear). */
   activeTool: string | null;
+  /**
+   * 재생성 요청 — MessageList(소켓 미보유)가 등록하고 Composer(단일 소켓 보유)가 처리.
+   * fromIndex 이후 히스토리를 잘라낸 뒤 content/images 를 재전송한다.
+   */
+  resendRequest: { fromIndex: number; content: string; images?: string[] } | null;
 
   // 아티팩트
   artifacts: Artifact[];
@@ -206,6 +213,8 @@ interface AppState {
   setResearchProgress: (p: ResearchProgressInfo | null) => void;
   setDiscussionProgress: (p: DiscussionProgressInfo | null) => void;
   setActiveTool: (t: string | null) => void;
+  requestResend: (r: { fromIndex: number; content: string; images?: string[] }) => void;
+  clearResendRequest: () => void;
   setPrivacyPrefs: (patch: { saveHistory?: boolean; memoryLearning?: boolean }) => void;
   /** WS done 시 마지막 assistant 메시지에 서버 messageId 부여(+cleanedContent 시 본문 reset) — 피드백 전송용. */
   finalizeLastAssistant: (messageId: string, cleanedContent?: string) => void;
@@ -287,6 +296,7 @@ export const useAppStore = create<AppState>()(
   researchProgress: null,
   discussionProgress: null,
   activeTool: null,
+  resendRequest: null,
 
   artifacts: [],
   activeArtifactId: null,
@@ -399,6 +409,8 @@ export const useAppStore = create<AppState>()(
   setResearchProgress: (p) => set({ researchProgress: p }),
   setDiscussionProgress: (p) => set({ discussionProgress: p }),
   setActiveTool: (t) => set({ activeTool: t }),
+  requestResend: (r) => set({ resendRequest: r }),
+  clearResendRequest: () => set({ resendRequest: null }),
   clearChat: () =>
     set({
       chatHistory: [],
@@ -409,6 +421,7 @@ export const useAppStore = create<AppState>()(
       researchProgress: null,
       discussionProgress: null,
       activeTool: null,
+      resendRequest: null,
       artifacts: [],
       activeArtifactId: null,
       artifactPanelOpen: false,
