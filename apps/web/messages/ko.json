@@ -1613,7 +1613,21 @@
       "tokens": "토큰",
       "share": "비중",
       "distribution": "분포"
-    }
+    },
+    "costTitle": "가상 비용 환산",
+    "costSubtitle": "상용 API 단가로 지불했다면 (실제 과금 아님)",
+    "costToday": "오늘",
+    "costMonth": "이번 달",
+    "costTotal": "누적 전체",
+    "costTabDay": "일별",
+    "costTabMonth": "월별",
+    "costTabYear": "연도별",
+    "costColPeriod": "기간",
+    "costColTokens": "토큰",
+    "costColUsd": "USD",
+    "costColKrw": "KRW",
+    "costRateNote": "단가 가정: 입력 ${input}/1M · 출력 ${output}/1M (출력 비중 {ratio}%) · 환율 ₩{fx}/$ — 서버 환경변수로 조정 가능",
+    "costNoData": "집계할 사용량이 없습니다"
   },
   "developer": {
     "pageTitle": "개발자 문서",
