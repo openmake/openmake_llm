@@ -747,6 +747,8 @@
     "retryTitle": "다시 시도(처음부터)",
     "retryConfirm": "\"{goal}...\" 작업을 처음부터 다시 실행하시겠습니까?",
     "retryFailed": "재시도 실패: {message}",
+    "viewAllToggle": "모든 사용자 작업",
+    "ownerBadge": "사용자 {id}",
     "deleteFailed": "삭제 실패: {message}",
     "elapsedSec": "{s}초",
     "elapsedMinSec": "{m}분 {s}초",

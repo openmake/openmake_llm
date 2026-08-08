@@ -747,6 +747,8 @@
     "retryTitle": "最初からやり直す",
     "retryConfirm": "\"{goal}...\" を最初から再実行しますか？",
     "retryFailed": "再試行に失敗しました: {message}",
+    "viewAllToggle": "全ユーザーの作業",
+    "ownerBadge": "ユーザー {id}",
     "deleteFailed": "削除に失敗しました: {message}",
     "elapsedSec": "{s}秒",
     "elapsedMinSec": "{m}分{s}秒",

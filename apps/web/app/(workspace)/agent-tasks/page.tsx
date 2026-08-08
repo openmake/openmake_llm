@@ -13,6 +13,7 @@ import {
   Trash2,
   RotateCcw,
   RefreshCw,
+  Users,
   ChevronRight,
   CalendarClock,
   Plus,
@@ -31,6 +32,7 @@ import {
   Card,
 } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
+import { useAppStore } from "@/lib/store";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { SteeringInput } from "@/components/chat/steering-input";
@@ -63,6 +65,8 @@ interface AgentTask {
   executor?: "sandbox" | "local";
   /** 실패 사유 — 코드(goal_incomplete/max_turns_exhausted/interrupted) 또는 자유 텍스트. */
   error?: string;
+  /** 소유자 id — admin 전체 보기(viewAll)에서 타 사용자 작업 뱃지 표시용. */
+  ownerId?: string;
 }
 
 type PlanStepStatus = "not_started" | "in_progress" | "completed" | "blocked";
@@ -90,6 +94,8 @@ interface ApiAgentTask {
   executor?: "sandbox" | "local";
   /** 실패 사유 (toPublicTask 가 노출하는 error 컬럼) */
   error?: string;
+  /** 소유자 (toPublicTask 가 user_id 그대로 노출 — admin viewAll 에서 소유자 뱃지용) */
+  user_id?: string | number;
 }
 
 type TaskFilesResponse = ApiSuccess<{ files: string[] }>;
@@ -156,6 +162,7 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
     totalTokens: typeof t.total_tokens === "number" ? t.total_tokens : undefined,
     executor: t.executor,
     error: t.error || undefined,
+    ownerId: t.user_id != null ? String(t.user_id) : undefined,
   };
 }
 
@@ -881,16 +888,24 @@ export default function AgentTasksPage() {
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null); // taskId being acted on
 
+  // admin 전체 보기 — 백엔드 ?viewAll=true 재사용 (비관리자의 viewAll 은 서버가 무시).
+  // 다른 계정(예: 디스코드 봇 계정) 작업을 이관 없이 함께 열람하는 용도.
+  const isAdmin = useAppStore((s) => s.auth.currentUser?.role === "admin");
+  const myUserId = useAppStore((s) => s.auth.currentUser?.id);
+  const [viewAll, setViewAll] = useState(false);
+
   const loadTasks = useCallback(async () => {
     try {
-      const res = await ApiClient.get<AgentTasksResponse>("/api/agent-tasks");
+      const res = await ApiClient.get<AgentTasksResponse>(
+        viewAll ? "/api/agent-tasks?viewAll=true" : "/api/agent-tasks",
+      );
       setTasks((res?.data?.tasks ?? []).map((task) => mapTask(t, task)));
     } catch {
       // 401·네트워크 실패: 목업 폴백 유지
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [t, viewAll]);
 
   useEffect(() => {
     let cancelled = false;
@@ -995,9 +1010,22 @@ export default function AgentTasksPage() {
               b: (chunks) => <span className="font-medium text-fg-2">{chunks}</span>,
             })}
           </p>
-          <Button size="sm" variant="outline" onClick={() => router.push("/")}>
-            {t("chatCta")}
-          </Button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setViewAll((v) => !v)}
+                className={cn(viewAll && "border-accent text-accent")}
+              >
+                <Users className="mr-1.5 h-3.5 w-3.5" />
+                {t("viewAllToggle")}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => router.push("/")}>
+              {t("chatCta")}
+            </Button>
+          </div>
         </Card>
         <ApprovalsPanel />
         <SchedulesPanel />
@@ -1028,14 +1056,20 @@ export default function AgentTasksPage() {
               return (
                 <Card key={task.id} className="flex flex-col p-5">
                   <div className="mb-3 flex items-start justify-between gap-2">
-                    <Badge tone={meta.tone}>
-                      {task.status === "running" && (
-                        <LoaderCircle className="h-3 w-3 animate-spin" />
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <Badge tone={meta.tone}>
+                        {task.status === "running" && (
+                          <LoaderCircle className="h-3 w-3 animate-spin" />
+                        )}
+                        {t(meta.labelKey)}
+                        {task.rawStatus === "failed" && ` (${t("failedTag")})`}
+                        {task.rawStatus === "cancelled" && ` (${t("cancelledTag")})`}
+                      </Badge>
+                      {/* 전체 보기에서 타 사용자 작업 구분 뱃지 */}
+                      {viewAll && task.ownerId && task.ownerId !== String(myUserId ?? "") && (
+                        <Badge tone="neutral">{t("ownerBadge", { id: task.ownerId })}</Badge>
                       )}
-                      {t(meta.labelKey)}
-                      {task.rawStatus === "failed" && ` (${t("failedTag")})`}
-                      {task.rawStatus === "cancelled" && ` (${t("cancelledTag")})`}
-                    </Badge>
+                    </span>
                     <span className="font-mono text-xs text-faint">
                       {t("turnShort", { current: task.currentTurn, max: task.maxTurns })}
                     </span>

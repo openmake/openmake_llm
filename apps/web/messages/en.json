@@ -747,6 +747,8 @@
     "retryTitle": "Retry from scratch",
     "retryConfirm": "Re-run \"{goal}...\" from the beginning?",
     "retryFailed": "Retry failed: {message}",
+    "viewAllToggle": "All users' tasks",
+    "ownerBadge": "User {id}",
     "deleteFailed": "Deletion failed: {message}",
     "elapsedSec": "{s}s",
     "elapsedMinSec": "{m}m {s}s",
