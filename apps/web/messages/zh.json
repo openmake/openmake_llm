@@ -1627,7 +1627,8 @@
     "costColUsd": "USD",
     "costColKrw": "KRW",
     "costRateNote": "价格假设：输入 ${input}/1M · 输出 ${output}/1M（输出占比 {ratio}%）· 汇率 ₩{fx}/$ — 可通过服务器环境变量调整",
-    "costNoData": "没有可汇总的使用量"
+    "costNoData": "没有可汇总的使用量",
+    "costCoverage": "统计范围：{since} 之后的记录（此前用量无令牌记录，未包含）"
   },
   "developer": {
     "pageTitle": "开发者文档",

@@ -1627,7 +1627,8 @@
     "costColUsd": "USD",
     "costColKrw": "KRW",
     "costRateNote": "単価の仮定: 入力 ${input}/1M · 出力 ${output}/1M（出力比率 {ratio}%）· 為替 ₩{fx}/$ — サーバー環境変数で調整可能",
-    "costNoData": "集計する使用量がありません"
+    "costNoData": "集計する使用量がありません",
+    "costCoverage": "集計範囲: {since} 以降の記録（それ以前はトークン記録がなく未含）"
   },
   "developer": {
     "pageTitle": "開発者ドキュメント",
