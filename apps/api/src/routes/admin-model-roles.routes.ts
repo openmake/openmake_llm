@@ -110,9 +110,11 @@ adminModelRolesRouter.put('/model-roles/:role', validate(putRoleSchema), asyncHa
     }
 
     const repo = new GlobalModelRolesRepository(getPool());
+    // previous 기록 — 2026-08-08 배정 전체 소실 사건의 추적 갭 해소(소실 시 복원 근거)
+    const previous = (await repo.list()).find((m) => m.role === role)?.fullModelId ?? null;
     const mapping = await repo.upsert(role, fullId);
     clearGlobalRolesCache();
-    auditChange(req, 'admin_global_model_role_set', { role, model: fullId });
+    auditChange(req, 'admin_global_model_role_set', { role, model: fullId, previous });
     logger.info(`전역 역할 매핑 저장: role=${role} model=${fullId}`);
     res.json(success({ mapping }));
 }));
@@ -124,13 +126,14 @@ adminModelRolesRouter.delete('/model-roles/:role', asyncHandler(async (req: Requ
         return;
     }
     const repo = new GlobalModelRolesRepository(getPool());
+    const previous = (await repo.list()).find((m) => m.role === role)?.fullModelId ?? null;
     const deleted = await repo.delete(role);
     if (!deleted) {
         res.status(404).json(notFound('매핑 없음'));
         return;
     }
     clearGlobalRolesCache();
-    auditChange(req, 'admin_global_model_role_unset', { role });
+    auditChange(req, 'admin_global_model_role_unset', { role, previous });
     res.json(success({ deleted: true }));
 }));
 
