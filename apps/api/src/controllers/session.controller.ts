@@ -99,11 +99,13 @@ export class SessionController {
                 isAdmin: req.user?.role === 'admin',
             });
 
-         // 세션 목록 조회 (사용자 격리 적용)
+         // 세션 목록 조회 (사용자 격리 적용). ?q= 지정 시 제목+메시지 본문 검색
+         // (user/anon 스코프 전용 — admin viewAll 전체 목록에는 미적용).
          this.router.get('/', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
              const user = req.user;
              const anonSessionId = req.query.anonSessionId as string;
              const limit = parseInt(req.query.limit as string) || 50;
+             const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
 
              const userIdStr = user?.id ? String(user.id) : undefined;
              const scope = resolveSessionListScope({
@@ -114,7 +116,16 @@ export class SessionController {
              });
 
              let sessions: ConversationSession[];
-             if (scope === 'all') {
+             let snippets: Record<string, string> = {};
+             if (q && (scope === 'user' || scope === 'anon')) {
+                 const hit = await conversationDb.searchSessionsByOwner(
+                     scope === 'user' ? { userId: userIdStr } : { anonSessionId },
+                     q, limit,
+                 );
+                 sessions = hit.sessions;
+                 snippets = hit.snippets;
+                 log.info(`[Chat Sessions] 검색(${scope}) "${q.slice(0, 40)}": ${sessions.length}개`);
+             } else if (scope === 'all') {
                  // 🔑 관리자 전용 화면(/admin/conversations)의 명시적 전체 조회
                  sessions = await conversationDb.getAllSessions(limit);
                  log.info(`[Chat Sessions] 관리자 전체 조회: ${sessions.length}개`);
@@ -143,7 +154,9 @@ export class SessionController {
                  metadata: s.metadata,
                  messageCount: s.messages?.length || 0,
                  // 🆕 첫 번째 메시지에서 모델 정보 추출 (모델명으로 표시)
-                 model: s.messages?.[0]?.model || 'OpenMake LLM Auto'
+                 model: s.messages?.[0]?.model || 'OpenMake LLM Auto',
+                 // 본문 검색(?q=) 매칭 시 발췌 — 비검색 응답에는 항상 undefined (하위 호환)
+                 ...(snippets[s.id] ? { snippet: snippets[s.id] } : {}),
              }));
 
              res.json(success({ sessions: formattedSessions }));

@@ -4,8 +4,10 @@
  * ============================================================
  * CLI Entry - OpenMake 명령행 인터페이스
  * ============================================================
- * 채팅/코드리뷰/코드생성/설명/클러스터/MCP/플러그인 관리 명령을
- * Commander 기반으로 등록하고 실행합니다.
+ * 서버 운영 명령(cluster/nodes/mcp/backfill-memories)을 Commander 기반으로
+ * 등록하고 실행합니다. 프로덕션 진입점은 `cli.js cluster --port <port>`.
+ * (구 coder 개발용 서브커맨드(chat/ask/review/generate/explain/models/connect/plugins)는
+ *  2026-08-08 제거 — 서버 경로 미사용, ~/.openmake-coder 플러그인 실재 0)
  *
  * @module cli
  */
@@ -33,21 +35,13 @@ for (const envPath of envPaths) {
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import { createClient } from './llm';
-import { startChat } from './chat';
-import { reviewFile } from './commands/review';
-import { generateCode } from './commands/generate';
-import { explainFile } from './commands/explain';
 import { showBanner } from './ui/banner';
 import { createSpinner } from './ui/spinner';
 import { createMCPServer } from './mcp/server';
-import { createPluginLoader } from './plugins/loader';
 import { getConfig, APP_VERSION } from './config';
-import { QUERY_TYPE_PARAMS } from './config/llm-parameters';
 
 const VERSION = APP_VERSION;
 const envConfig = getConfig();
-const DEFAULT_MODEL = envConfig.llmDefaultModel;
 /** cluster.start() 후 노드 상태 동기화를 기다리는 짧은 지연 (ms) */
 const CLUSTER_STATUS_REFRESH_DELAY_MS = 1000;
 
@@ -57,181 +51,6 @@ program
     .name('openmake-coder')
     .description('AI 어시스턴트 - vLLM/LiteLLM LLM 백엔드')
     .version(VERSION);
-
-// chat 명령어
-program
-    .command('chat')
-    .description('대화형 AI 어시스턴트 시작')
-    .option('-m, --model <model>', '사용할 모델', DEFAULT_MODEL)
-    .action(async (options) => {
-        showBanner(VERSION);
-
-        const client = createClient({ model: options.model });
-
-        const spinner = createSpinner('LLM 서버 연결 확인 중...');
-        spinner.start();
-
-        const available = await client.isAvailable();
-        if (!available) {
-            spinner.fail('LLM 서버 (vLLM/LiteLLM) 에 연결할 수 없습니다');
-            console.log(chalk.yellow('\n💡 vLLM/LiteLLM 을 시작하고 .env 의 LLM_BASE_URL 을 확인하세요.\n'));
-            process.exit(1);
-        }
-
-        spinner.succeed('LLM 서버 연결됨');
-
-        // 플러그인 로드
-        const loader = createPluginLoader({ llmModel: options.model });
-        await loader.loadAll();
-
-        const plugins = loader.getLoadedPlugins();
-        if (plugins.length > 0) {
-            console.log(chalk.gray(`\n📦 ${plugins.length}개 플러그인 로드됨`));
-        }
-
-        await startChat(client, { model: options.model });
-    });
-
-// ask 명령어
-program
-    .command('ask <question>')
-    .description('단일 질문하기')
-    .option('-m, --model <model>', '사용할 모델', DEFAULT_MODEL)
-    .action(async (question, options) => {
-        const client = createClient({ model: options.model });
-
-        const spinner = createSpinner('생각 중...');
-        spinner.start();
-
-        try {
-            let firstToken = true;
-
-            await client.generate(
-                question,
-                { temperature: QUERY_TYPE_PARAMS.DEFAULT_TEMP_FALLBACK },
-                (token) => {
-                    if (firstToken) {
-                        spinner.stop();
-                        console.log(chalk.cyan('\n🤖 AI: '));
-                        firstToken = false;
-                    }
-                    process.stdout.write(token);
-                }
-            );
-
-            console.log('\n');
-        } catch (error) {
-            spinner.fail('응답 생성 실패');
-            if (error instanceof Error) {
-                console.log(chalk.red(`\n❌ 오류: ${error.message}\n`));
-            }
-        }
-    });
-
-// review 명령어
-program
-    .command('review <file>')
-    .description('코드 파일 리뷰')
-    .option('-m, --model <model>', '사용할 모델', DEFAULT_MODEL)
-    .action(async (file, options) => {
-        const client = createClient({ model: options.model });
-        await reviewFile(client, file);
-    });
-
-// generate 명령어
-program
-    .command('generate <description>')
-    .description('설명에서 코드 생성')
-    .option('-m, --model <model>', '사용할 모델', DEFAULT_MODEL)
-    .option('-o, --output <file>', '출력 파일')
-    .option('-l, --language <lang>', '프로그래밍 언어')
-    .action(async (description, options) => {
-        const client = createClient({ model: options.model });
-        await generateCode(client, description, {
-            output: options.output,
-            language: options.language
-        });
-    });
-
-// explain 명령어
-program
-    .command('explain <file>')
-    .description('코드 파일 설명')
-    .option('-m, --model <model>', '사용할 모델', DEFAULT_MODEL)
-    .action(async (file, options) => {
-        const client = createClient({ model: options.model });
-        await explainFile(client, file);
-    });
-
-// models 명령어
-program
-    .command('models')
-    .description('사용 가능한 모델 목록')
-    .action(async () => {
-        const client = createClient();
-
-        const spinner = createSpinner('모델 목록 조회 중...');
-        spinner.start();
-
-        try {
-            const response = await client.listModels();
-            spinner.stop();
-
-            console.log(chalk.cyan('\n📦 사용 가능한 모델:\n'));
-
-            for (const model of response.models) {
-                const size = (model.size / 1024 / 1024 / 1024).toFixed(1);
-                console.log(chalk.white(`  • ${model.name}`) + chalk.gray(` (${size} GB)`));
-            }
-
-            console.log(chalk.gray(`\n현재 기본 모델: ${DEFAULT_MODEL}\n`));
-        } catch (error) {
-            spinner.fail('모델 목록 조회 실패');
-            if (error instanceof Error) {
-                console.log(chalk.red(`\n❌ 오류: ${error.message}\n`));
-            }
-        }
-    });
-
-// connect 명령어 (연결 테스트)
-program
-    .command('connect')
-    .description('LLM 서버 (vLLM/LiteLLM) 연결 테스트')
-    .action(async () => {
-        console.log(chalk.cyan('\n🔗 LLM 서버 연결 테스트\n'));
-        console.log(chalk.gray(`   서버 URL: ${envConfig.llmBaseUrl}`));
-        console.log(chalk.gray(`   기본 모델: ${envConfig.llmDefaultModel}`));
-        console.log('');
-
-        const spinner = createSpinner('연결 확인 중...');
-        spinner.start();
-
-        const client = createClient();
-        const available = await client.isAvailable();
-
-        if (available) {
-            spinner.succeed('LLM 서버 연결 성공!');
-
-            try {
-                const models = await client.listModels();
-                console.log(chalk.green(`\n✅ ${models.models.length}개 모델 발견:\n`));
-                for (const model of models.models) {
-                    const size = (model.size / 1024 / 1024 / 1024).toFixed(1);
-                    console.log(chalk.white(`   • ${model.name}`) + chalk.gray(` (${size} GB)`));
-                }
-            } catch {
-                console.log(chalk.yellow('\n⚠️ 모델 목록 조회 실패'));
-            }
-        } else {
-            spinner.fail('LLM 서버 연결 실패 (vLLM/LiteLLM)');
-            console.log(chalk.yellow(`\n💡 다음 사항을 확인하세요:`));
-            console.log(chalk.gray(`   1. vLLM/LiteLLM 서버가 실행 중인지 확인`));
-            console.log(chalk.gray(`   2. 원격 서버인 경우: vllm serve --host 0.0.0.0 ...`));
-            console.log(chalk.gray(`   3. 방화벽에서 LiteLLM 포트 (기본 8001 또는 외부 NAT 포트) 허용`));
-            console.log(chalk.gray(`   4. .env 파일에서 LLM_BASE_URL 확인`));
-        }
-        console.log('');
-    });
 
 // cluster 명령어
 program
@@ -323,40 +142,6 @@ program
     .action(async () => {
         const server = createMCPServer('openmake-coder', VERSION);
         await server.start();
-    });
-
-// plugins 명령어
-program
-    .command('plugins')
-    .description('플러그인 관리')
-    .option('--list', '설치된 플러그인 목록')
-    .option('--dir', '플러그인 디렉토리 표시')
-    .action(async (options) => {
-        const loader = createPluginLoader();
-
-        if (options.dir) {
-            console.log(chalk.cyan('\n📁 플러그인 디렉토리:'));
-            console.log(`   ${loader.getPluginsDirectory()}\n`);
-            return;
-        }
-
-        await loader.loadAll();
-        const plugins = loader.getLoadedPlugins();
-
-        console.log(chalk.cyan('\n🔌 설치된 플러그인:\n'));
-
-        if (plugins.length === 0) {
-            console.log(chalk.gray('  플러그인이 없습니다.'));
-            console.log(chalk.gray(`  플러그인 디렉토리: ${loader.getPluginsDirectory()}\n`));
-        } else {
-            for (const plugin of plugins) {
-                console.log(chalk.white(`  • ${plugin.name}`) + chalk.gray(` v${plugin.version}`));
-                if (plugin.description) {
-                    console.log(chalk.gray(`    ${plugin.description}`));
-                }
-            }
-            console.log('');
-        }
     });
 
 // backfill-memories 명령어 — 과거 대화(#3 c)에서 사용자 메모리 일회성 추출/저장

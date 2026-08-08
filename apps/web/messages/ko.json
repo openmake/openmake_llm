@@ -379,6 +379,9 @@
     "feedbackUp": "도움이 됐어요",
     "feedbackDown": "아쉬워요",
     "feedbackThanks": "피드백 감사합니다",
+    "copyMessage": "메시지 복사",
+    "copiedMessage": "복사됨",
+    "regenerate": "다시 생성",
     "thinkingTimeline": {
       "thinking": "생각하는 중",
       "fallbackLabel": "생각 과정",
@@ -538,7 +541,9 @@
         "preview": "첨부한 차트에서 주요 트렌드를 읽어줘",
         "time": "일요일"
       }
-    }
+    },
+    "viewAllToggle": "모든 사용자",
+    "ownerBadge": "사용자 {id}"
   },
   "chatSocket": {
     "interceptNotice": "가로채기 모드(토론·딥리서치·이미지)가 켜져 있어 도구(분석·검색)·아티팩트는 이번 응답에 적용되지 않습니다.",
@@ -741,6 +746,11 @@
     "processFailed": "처리 실패: {message}",
     "cancelFailed": "취소 실패: {message}",
     "resumeFailed": "이어하기 실패: {message}",
+    "retryTitle": "다시 시도(처음부터)",
+    "retryConfirm": "\"{goal}...\" 작업을 처음부터 다시 실행하시겠습니까?",
+    "retryFailed": "재시도 실패: {message}",
+    "viewAllToggle": "모든 사용자 작업",
+    "ownerBadge": "사용자 {id}",
     "deleteFailed": "삭제 실패: {message}",
     "elapsedSec": "{s}초",
     "elapsedMinSec": "{m}분 {s}초",
@@ -928,7 +938,9 @@
       "source3": "엔터프라이즈 LLM 도입 사례 연구",
       "source4": "자율 에이전트 안전성 가이드라인",
       "source5": "RAG vs 장기 컨텍스트 비교 벤치마크"
-    }
+    },
+    "viewAllToggle": "모든 사용자",
+    "ownerBadge": "사용자 {id}"
   },
   "mcpServers": {
     "justNow": "방금 전",

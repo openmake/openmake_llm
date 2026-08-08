@@ -379,6 +379,9 @@
     "feedbackUp": "Helpful",
     "feedbackDown": "Not helpful",
     "feedbackThanks": "Thanks for your feedback",
+    "copyMessage": "Copy message",
+    "copiedMessage": "Copied",
+    "regenerate": "Regenerate",
     "thinkingTimeline": {
       "thinking": "Thinking",
       "fallbackLabel": "Thought process",
@@ -538,7 +541,9 @@
         "preview": "Read the key trends from the attached chart",
         "time": "Sunday"
       }
-    }
+    },
+    "viewAllToggle": "All users",
+    "ownerBadge": "User {id}"
   },
   "chatSocket": {
     "interceptNotice": "An intercept mode (Discussion / Deep Research / Image) is on, so tools (analysis/search) and artifacts are not applied in this response.",
@@ -741,6 +746,11 @@
     "processFailed": "Processing failed: {message}",
     "cancelFailed": "Cancellation failed: {message}",
     "resumeFailed": "Resume failed: {message}",
+    "retryTitle": "Retry from scratch",
+    "retryConfirm": "Re-run \"{goal}...\" from the beginning?",
+    "retryFailed": "Retry failed: {message}",
+    "viewAllToggle": "All users' tasks",
+    "ownerBadge": "User {id}",
     "deleteFailed": "Deletion failed: {message}",
     "elapsedSec": "{s}s",
     "elapsedMinSec": "{m}m {s}s",
@@ -928,7 +938,9 @@
       "source3": "Enterprise LLM Adoption Case Study",
       "source4": "Autonomous Agent Safety Guidelines",
       "source5": "RAG vs Long-Context Comparison Benchmark"
-    }
+    },
+    "viewAllToggle": "All users",
+    "ownerBadge": "User {id}"
   },
   "mcpServers": {
     "justNow": "Just now",

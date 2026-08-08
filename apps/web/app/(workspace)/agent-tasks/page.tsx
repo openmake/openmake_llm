@@ -12,6 +12,8 @@ import {
   X,
   Trash2,
   RotateCcw,
+  RefreshCw,
+  Users,
   ChevronRight,
   CalendarClock,
   Plus,
@@ -30,6 +32,7 @@ import {
   Card,
 } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
+import { useAppStore } from "@/lib/store";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { SteeringInput } from "@/components/chat/steering-input";
@@ -62,6 +65,8 @@ interface AgentTask {
   executor?: "sandbox" | "local";
   /** 실패 사유 — 코드(goal_incomplete/max_turns_exhausted/interrupted) 또는 자유 텍스트. */
   error?: string;
+  /** 소유자 id — admin 전체 보기(viewAll)에서 타 사용자 작업 뱃지 표시용. */
+  ownerId?: string;
 }
 
 type PlanStepStatus = "not_started" | "in_progress" | "completed" | "blocked";
@@ -89,6 +94,8 @@ interface ApiAgentTask {
   executor?: "sandbox" | "local";
   /** 실패 사유 (toPublicTask 가 노출하는 error 컬럼) */
   error?: string;
+  /** 소유자 (toPublicTask 가 user_id 그대로 노출 — admin viewAll 에서 소유자 뱃지용) */
+  user_id?: string | number;
 }
 
 type TaskFilesResponse = ApiSuccess<{ files: string[] }>;
@@ -155,6 +162,7 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
     totalTokens: typeof t.total_tokens === "number" ? t.total_tokens : undefined,
     executor: t.executor,
     error: t.error || undefined,
+    ownerId: t.user_id != null ? String(t.user_id) : undefined,
   };
 }
 
@@ -880,16 +888,24 @@ export default function AgentTasksPage() {
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null); // taskId being acted on
 
+  // admin 전체 보기 — 백엔드 ?viewAll=true 재사용 (비관리자의 viewAll 은 서버가 무시).
+  // 다른 계정(예: 디스코드 봇 계정) 작업을 이관 없이 함께 열람하는 용도.
+  const isAdmin = useAppStore((s) => s.auth.currentUser?.role === "admin");
+  const myUserId = useAppStore((s) => s.auth.currentUser?.id);
+  const [viewAll, setViewAll] = useState(false);
+
   const loadTasks = useCallback(async () => {
     try {
-      const res = await ApiClient.get<AgentTasksResponse>("/api/agent-tasks");
+      const res = await ApiClient.get<AgentTasksResponse>(
+        viewAll ? "/api/agent-tasks?viewAll=true" : "/api/agent-tasks",
+      );
       setTasks((res?.data?.tasks ?? []).map((task) => mapTask(t, task)));
     } catch {
       // 401·네트워크 실패: 목업 폴백 유지
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [t, viewAll]);
 
   useEffect(() => {
     let cancelled = false;
@@ -924,9 +940,43 @@ export default function AgentTasksPage() {
     setActionLoading(task.id);
     try {
       await ApiClient.post(`/api/agent-tasks/${task.id}/resume`, {});
-      await loadTasks();
+      // 낙관적 갱신 — retry 와 동일: detached 시작 직후 GET 은 아직 failed 라
+      // resume 버튼이 남아 이중 실행 클릭이 가능하던 창을 닫는다.
+      setTasks((prev) =>
+        prev.map((x) =>
+          x.id === task.id
+            ? { ...x, rawStatus: "pending" as ApiTaskStatus, status: mapStatus("pending"), error: undefined }
+            : x,
+        ),
+      );
+      setTimeout(() => void loadTasks(), 2000);
     } catch (err) {
       alert(t("resumeFailed", { message: err instanceof Error ? err.message : t("error") }));
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  // 처음부터 재시도 — 백엔드 execute 가 failed/cancelled 작업의 fresh 재실행을 지원
+  // (이전 스텝 초기화 후 동일 goal·입력으로 turn 1 부터). 토큰을 다시 쓰므로 확인 후 실행.
+  async function handleRetry(task: AgentTask) {
+    if (!window.confirm(t("retryConfirm", { goal: task.goal.slice(0, 40) }))) return;
+    setActionLoading(task.id);
+    try {
+      await ApiClient.post(`/api/agent-tasks/${task.id}/execute`, {});
+      // 낙관적 갱신 — execute 는 detached 라 직후 GET 은 아직 failed 를 반환한다.
+      // pending 으로 바꿔 retry 버튼을 즉시 감춰(이중 실행 방지) 시작 피드백을 주고,
+      // 잠시 후 실상태로 동기화한다.
+      setTasks((prev) =>
+        prev.map((x) =>
+          x.id === task.id
+            ? { ...x, rawStatus: "pending" as ApiTaskStatus, status: mapStatus("pending"), error: undefined }
+            : x,
+        ),
+      );
+      setTimeout(() => void loadTasks(), 2000);
+    } catch (err) {
+      alert(t("retryFailed", { message: err instanceof Error ? err.message : t("error") }));
     } finally {
       setActionLoading(null);
     }
@@ -960,9 +1010,22 @@ export default function AgentTasksPage() {
               b: (chunks) => <span className="font-medium text-fg-2">{chunks}</span>,
             })}
           </p>
-          <Button size="sm" variant="outline" onClick={() => router.push("/")}>
-            {t("chatCta")}
-          </Button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setViewAll((v) => !v)}
+                className={cn(viewAll && "border-accent text-accent")}
+              >
+                <Users className="mr-1.5 h-3.5 w-3.5" />
+                {t("viewAllToggle")}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onClick={() => router.push("/")}>
+              {t("chatCta")}
+            </Button>
+          </div>
         </Card>
         <ApprovalsPanel />
         <SchedulesPanel />
@@ -993,14 +1056,20 @@ export default function AgentTasksPage() {
               return (
                 <Card key={task.id} className="flex flex-col p-5">
                   <div className="mb-3 flex items-start justify-between gap-2">
-                    <Badge tone={meta.tone}>
-                      {task.status === "running" && (
-                        <LoaderCircle className="h-3 w-3 animate-spin" />
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <Badge tone={meta.tone}>
+                        {task.status === "running" && (
+                          <LoaderCircle className="h-3 w-3 animate-spin" />
+                        )}
+                        {t(meta.labelKey)}
+                        {task.rawStatus === "failed" && ` (${t("failedTag")})`}
+                        {task.rawStatus === "cancelled" && ` (${t("cancelledTag")})`}
+                      </Badge>
+                      {/* 전체 보기에서 타 사용자 작업 구분 뱃지 */}
+                      {viewAll && task.ownerId && task.ownerId !== String(myUserId ?? "") && (
+                        <Badge tone="neutral">{t("ownerBadge", { id: task.ownerId })}</Badge>
                       )}
-                      {t(meta.labelKey)}
-                      {task.rawStatus === "failed" && ` (${t("failedTag")})`}
-                      {task.rawStatus === "cancelled" && ` (${t("cancelledTag")})`}
-                    </Badge>
+                    </span>
                     <span className="font-mono text-xs text-faint">
                       {t("turnShort", { current: task.currentTurn, max: task.maxTurns })}
                     </span>
@@ -1095,6 +1164,16 @@ export default function AgentTasksPage() {
                           title={t("resumeTitle")}
                           className="flex h-7 w-7 items-center justify-center rounded-md text-faint transition hover:bg-accent-soft hover:text-accent disabled:opacity-40">
                           <RotateCcw className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {/* Retry from scratch (failed/cancelled) — resume 과 별개로 처음부터 재실행 */}
+                      {(task.rawStatus === "failed" || task.rawStatus === "cancelled") && (
+                        <button
+                          onClick={() => void handleRetry(task)}
+                          disabled={isActing}
+                          title={t("retryTitle")}
+                          className="flex h-7 w-7 items-center justify-center rounded-md text-faint transition hover:bg-accent-soft hover:text-accent disabled:opacity-40">
+                          <RefreshCw className="h-3.5 w-3.5" />
                         </button>
                       )}
                       {/* Cancel (running/pending) */}

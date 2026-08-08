@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Clock, Search, MessageSquare, Trash2, Bot } from "lucide-react";
+import { Clock, Search, MessageSquare, Trash2, Bot, Users } from "lucide-react";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { Badge, PageHeader, Card } from "@/components/ui/primitives";
 import { HistoryTabs } from "@/components/hub-tabs";
@@ -30,6 +30,8 @@ interface Session {
   group: DateGroup;
   /** kind='task' 전용 — chat.status.* 라벨 키 */
   status?: string;
+  /** 소유자 id — admin 전체 보기(viewAll)에서 타 사용자 항목 구분용 */
+  ownerId?: string;
 }
 
 /* ── 백엔드 응답 타입 (GET /api/chat/conversations → res.data.sessions, camelCase) ──
@@ -38,10 +40,13 @@ interface Session {
 interface ApiConversation {
   id: string;
   title: string | null;
+  userId?: string | number | null;
   updatedAt?: string;
   createdAt?: string;
   model?: string;
   messageCount?: number;
+  /** ?q= 본문 검색 시 매칭 메시지 발췌 (비검색 응답엔 없음) */
+  snippet?: string;
 }
 
 type ConversationsResponse = ApiSuccess<{ sessions: ApiConversation[] }>;
@@ -54,6 +59,7 @@ interface ApiAgentTask {
   model?: string | null;
   created_at?: string;
   updated_at?: string;
+  user_id?: string | number;
 }
 
 type AgentTasksResponse = ApiSuccess<{ tasks: ApiAgentTask[] }>;
@@ -100,6 +106,7 @@ function mapConversation(c: ApiConversation, t: TFn, locale: string): Session {
     ts: toEpoch(ts),
     model: c.model || "Auto",
     group: bucketByDate(ts),
+    ownerId: c.userId != null ? String(c.userId) : undefined,
   };
 }
 
@@ -118,6 +125,7 @@ function mapAgentTask(a: ApiAgentTask, tChat: TFn, locale: string): Session {
     model: a.model || "Auto",
     group: bucketByDate(ts),
     status: a.status,
+    ownerId: a.user_id != null ? String(a.user_id) : undefined,
   };
 }
 
@@ -156,6 +164,11 @@ export default function HistoryPage() {
   const [sessions, setSessions] = useState<Session[]>(mockSessions);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  // admin 전체 보기 — 대화·작업 목록 모두 ?viewAll=true 로 조회(비관리자는 서버가 무시).
+  // 시스템 관리자 모니터링 용도 (agent-tasks 페이지 토글과 동일 관용구).
+  const isAdmin = auth.currentUser?.role === "admin";
+  const myUserId = auth.currentUser?.id;
+  const [viewAll, setViewAll] = useState(false);
 
   // 세션 단건 삭제 — 백엔드 DELETE /api/chat/sessions/:sid (소유자/익명 소유 검증).
   const deleteSession = async (s: Session) => {
@@ -213,8 +226,10 @@ export default function HistoryPage() {
       // 대화·에이전트 작업을 병렬 조회해 한 목록으로 합친다(B 방식 — 데이터 이동 없는 read-only 조합).
       // 각각 개별 실패 허용: 작업 API 는 익명 401 이 정상이므로 빈 배열 폴백.
       const [convRes, taskRes] = await Promise.allSettled([
-        ApiClient.get<ConversationsResponse>(appendAnonSessionId("/api/chat/conversations?limit=100")),
-        ApiClient.get<AgentTasksResponse>("/api/agent-tasks"),
+        ApiClient.get<ConversationsResponse>(
+          appendAnonSessionId(`/api/chat/conversations?limit=100${viewAll ? "&viewAll=true" : ""}`),
+        ),
+        ApiClient.get<AgentTasksResponse>(viewAll ? "/api/agent-tasks?viewAll=true" : "/api/agent-tasks"),
       ]);
       if (cancelled) return;
       const convs = convRes.status === "fulfilled" ? (convRes.value?.data?.sessions ?? []) : null;
@@ -232,20 +247,64 @@ export default function HistoryPage() {
     return () => {
       cancelled = true;
     };
-    // locale/t 변경 시 라벨 재매핑 위해 재조회
-  }, [t, tChat, locale]);
+    // locale/t 변경 시 라벨 재매핑 위해 재조회, viewAll 토글 시 범위 재조회
+  }, [t, tChat, locale, viewAll]);
+
+  // 본문 검색 — 서버 ?q= (제목+메시지 ILIKE). 제목 클라 필터에 매칭 세션 id 를 합류시키고,
+  // 메인 목록(limit=100) 밖의 매칭 세션은 별도(searchExtras)로 목록에 병합한다.
+  // 2자 미만은 클라 제목 필터만(왕복 절약), 실패 시에도 제목 필터는 유지되므로 fail-open.
+  const [bodyHits, setBodyHits] = useState<Record<string, string | null>>({});
+  const [searchExtras, setSearchExtras] = useState<Session[]>([]);
+  useEffect(() => {
+    // 검색어가 바뀌면 이전 검색 결과를 즉시 무효화 — stale 매칭이 debounce 동안 잔존 방지
+    setBodyHits({});
+    setSearchExtras([]);
+    const q = query.trim();
+    if (q.length < 2) return;
+    // 전체 보기(admin viewAll)에선 서버 본문 검색이 user/anon 스코프 전용이라 미지원 —
+    // 클라 제목 필터만 동작한다.
+    if (viewAll) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await ApiClient.get<ConversationsResponse>(
+          appendAnonSessionId(`/api/chat/conversations?limit=100&q=${encodeURIComponent(q)}`),
+        );
+        if (cancelled) return;
+        const list = res?.data?.sessions ?? [];
+        const hits: Record<string, string | null> = {};
+        for (const s of list) hits[s.id] = s.snippet ?? null;
+        setBodyHits(hits);
+        setSearchExtras(list.map((c) => mapConversation(c, t, locale)));
+      } catch {
+        /* 검색 실패 — 제목 필터만 동작 */
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query, t, locale, viewAll]);
 
   const grouped = useMemo(() => {
     const q = query.trim().toLowerCase();
     const filtered = q
-      ? sessions.filter((s) => s.title.toLowerCase().includes(q))
+      ? [
+          ...sessions.filter(
+            (s) => s.title.toLowerCase().includes(q) || (s.kind === "chat" && s.id in bodyHits),
+          ),
+          // 메인 목록(상위 100) 밖에서 본문 매칭된 오래된 세션 병합 (중복 제외)
+          ...searchExtras.filter(
+            (s) => !sessions.some((x) => x.kind === "chat" && x.id === s.id),
+          ),
+        ]
       : sessions;
     return GROUP_ORDER.map((g) => ({
       group: g,
       // 대화·작업이 각각 API 순서로 합쳐지므로 그룹 안에서 최신순 재정렬
       items: filtered.filter((s) => s.group === g).sort((a, b) => b.ts - a.ts),
     })).filter((g) => g.items.length > 0);
-  }, [sessions, query]);
+  }, [sessions, query, bodyHits, searchExtras]);
 
   const isEmpty = grouped.length === 0;
 
@@ -269,6 +328,20 @@ export default function HistoryPage() {
               className="h-9 w-full bg-transparent text-sm text-fg outline-none placeholder:text-muted"
             />
           </div>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setViewAll((v) => !v)}
+              className={`flex h-9 flex-shrink-0 items-center gap-1.5 rounded-md border px-3 text-sm transition ${
+                viewAll
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-border-strong bg-surface-2 text-muted hover:text-fg"
+              }`}
+            >
+              <Users className="h-4 w-4" />
+              {t("viewAllToggle")}
+            </button>
+          )}
           {auth.currentUser && !loading && chatCount > 0 && (
             <button
               type="button"
@@ -325,7 +398,7 @@ export default function HistoryPage() {
                           </span>
                         </div>
                         <p className="mt-0.5 truncate text-xs text-muted">
-                          {s.preview}
+                          {s.kind === "chat" && bodyHits[s.id] ? bodyHits[s.id] : s.preview}
                         </p>
                         <div className="mt-2 flex items-center gap-1.5">
                           {s.kind === "task" && (
@@ -336,6 +409,10 @@ export default function HistoryPage() {
                           <Badge tone="neutral">
                             <span className="font-mono">{s.model}</span>
                           </Badge>
+                          {/* 전체 보기에서 타 사용자 항목 구분 */}
+                          {viewAll && s.ownerId && s.ownerId !== String(myUserId ?? "") && (
+                            <Badge tone="accent">{t("ownerBadge", { id: s.ownerId })}</Badge>
+                          )}
                         </div>
                       </div>
                       {s.kind === "chat" && (

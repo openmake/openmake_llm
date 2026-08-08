@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
-import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown, GitPullRequest, Wrench, Pencil, AlertTriangle, Languages } from "lucide-react";
+import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown, GitPullRequest, Wrench, Pencil, AlertTriangle, Languages, Copy, Check, RefreshCw } from "lucide-react";
 import { ThinkingTimeline } from "@/components/chat/thinking-timeline";
 import { SteeringInput } from "@/components/chat/steering-input";
 import { DiffView } from "@/components/chat/diff-view";
@@ -461,6 +461,55 @@ function ToolIndicator() {
   );
 }
 
+/** 메시지 액션 — 본문 복사(완료된 assistant 메시지 공통) + 재생성(마지막 assistant 메시지 한정). */
+function MessageActions({
+  content,
+  canRegenerate,
+  onRegenerate,
+}: {
+  content: string;
+  canRegenerate: boolean;
+  onRegenerate: () => void;
+}) {
+  const t = useTranslations("chat");
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    // 비보안 컨텍스트(LAN http 직접 접속)에선 clipboard API 부재 — 동기 throw 방지 가드
+    if (!navigator.clipboard?.writeText) return;
+    void navigator.clipboard
+      .writeText(content)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      })
+      .catch(() => {});
+  };
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={t("copyMessage")}
+        title={copied ? t("copiedMessage") : t("copyMessage")}
+        onClick={copy}
+        className="rounded-md p-1 text-muted transition hover:bg-surface-2 hover:text-fg"
+      >
+        {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
+      {canRegenerate && (
+        <button
+          type="button"
+          aria-label={t("regenerate")}
+          title={t("regenerate")}
+          onClick={onRegenerate}
+          className="rounded-md p-1 text-muted transition hover:bg-surface-2 hover:text-fg"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </>
+  );
+}
+
 /** 메시지 피드백(👍/👎) — 백엔드 /api/chat/feedback (thumbs_up/thumbs_down) 전송. */
 function FeedbackButtons({ messageId }: { messageId: string }) {
   const t = useTranslations("chat");
@@ -477,10 +526,10 @@ function FeedbackButtons({ messageId }: { messageId: string }) {
   // 세션이 없으면 피드백을 저장할 수 없다(백엔드가 sessionId 필수) — 버튼을 감춘다.
   if (!sessionId) return null;
   if (sent) {
-    return <div className="mt-1.5 text-xs text-muted">{t("feedbackThanks")}</div>;
+    return <div className="text-xs text-muted">{t("feedbackThanks")}</div>;
   }
   return (
-    <div className="mt-1.5 flex items-center gap-1">
+    <div className="flex items-center gap-1">
       <button
         type="button"
         aria-label={t("feedbackUp")}
@@ -508,6 +557,7 @@ export function MessageList() {
   const chatHistory = useAppStore((s) => s.chatHistory);
   const setInputDraft = useAppStore((s) => s.setInputDraft);
   const isGenerating = useAppStore((s) => s.isGenerating);
+  const requestResend = useAppStore((s) => s.requestResend);
   const isGuest = useAppStore((s) => !s.auth.currentUser);
   const activeAgent = useAppStore((s) => s.activeAgent);
   const activeSkills = useAppStore((s) => s.activeSkills);
@@ -524,6 +574,31 @@ export function MessageList() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatHistory, showThinking]);
+
+  // 마지막 assistant 메시지만 재생성 대상 — 중간 메시지 재생성은 이후 문맥을 무효화하므로 미허용.
+  // 직전 user 메시지에 파일 첨부가 있었으면(hasAttachments) 제외 — 첨부 원본은 히스토리에
+  // 보존되지 않아 파일명 텍스트만 재전송돼 엉뚱한 답이 나온다.
+  let lastAssistantIndex = -1;
+  let regenSourceIndex = -1;
+  for (let i = chatHistory.length - 1; i >= 0; i--) {
+    if (chatHistory[i].role === "assistant") {
+      lastAssistantIndex = i;
+      break;
+    }
+  }
+  for (let j = lastAssistantIndex - 1; j >= 0; j--) {
+    const um = chatHistory[j];
+    if (um.role === "user") {
+      if (!um.hasAttachments) regenSourceIndex = j;
+      break;
+    }
+  }
+  // 직전 사용자 질문 지점부터 히스토리를 되감고 재전송 요청(처리는 Composer).
+  const regenerate = () => {
+    if (regenSourceIndex < 0 || useAppStore.getState().isGenerating) return;
+    const um = chatHistory[regenSourceIndex];
+    requestResend({ fromIndex: regenSourceIndex, content: um.content, images: um.images });
+  };
 
   if (chatHistory.length === 0) {
     return (
@@ -616,8 +691,15 @@ export function MessageList() {
                   <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent align-text-bottom" />
                 )}
               </div>
-              {m.id && !m.streaming && !m.agentTask && !m.structured && m.content.trim().length > 0 && (
-                <FeedbackButtons messageId={m.id} />
+              {!m.streaming && !m.agentTask && !m.structured && m.content.trim().length > 0 && (
+                <div className="mt-1.5 flex items-center gap-1">
+                  <MessageActions
+                    content={m.content.replace(new RegExp(ARTIFACT_PLACEHOLDER), "").trim()}
+                    canRegenerate={i === lastAssistantIndex && regenSourceIndex >= 0 && !isGenerating}
+                    onRegenerate={regenerate}
+                  />
+                  {m.id && <FeedbackButtons messageId={m.id} />}
+                </div>
               )}
             </div>
           </div>

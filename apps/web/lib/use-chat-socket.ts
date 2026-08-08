@@ -480,12 +480,13 @@ export function useChatSocket() {
     };
   }, [connect]);
 
+  // 반환값: 실제 전송 여부 — 재생성(resend) 경로가 히스토리 되감기 원복 판단에 사용.
   const sendChat = useCallback(
-    (message: string, images?: string[], files?: AttachedFileUI[], notebook?: { id: string; title: string } | null) => {
+    (message: string, images?: string[], files?: AttachedFileUI[], notebook?: { id: string; title: string } | null): boolean => {
       const s = useAppStore.getState();
       const hasFiles = Array.isArray(files) && files.length > 0;
       // 텍스트가 비어도 첨부 파일만으로 전송 가능
-      if ((!message.trim() && !hasFiles) || s.isGenerating) return;
+      if ((!message.trim() && !hasFiles) || s.isGenerating) return false;
 
       // 소켓이 OPEN 이 아니면 send() 가 payload 를 조용히 폐기(CLOSED)하거나 throw(CONNECTING)해
       // done/error 이벤트가 오지 않아 UI 가 "분석 중"으로 영구 정지한다. 상태를 오염시키기 전에
@@ -494,13 +495,14 @@ export function useChatSocket() {
       if (!ws || ws.readyState !== WebSocket.OPEN) {
         appendMessage({ role: "system", notice: true, content: tRef.current("disconnected") });
         connect();
-        return;
+        return false;
       }
 
       // 첨부만 있고 본문이 비면 파일명을 표시용 본문으로 사용
       const displayContent =
         message.trim() || (hasFiles ? files!.map((f) => f.name).join(", ") : "");
-      appendMessage({ role: "user", content: displayContent, images });
+      // hasAttachments: 첨부 원본은 히스토리에 보존되지 않으므로 재생성 대상에서 제외하는 표식
+      appendMessage({ role: "user", content: displayContent, images, ...(hasFiles ? { hasAttachments: true } : {}) });
       setActiveAgent(null); // 새 질문 — 이전 에이전트/스킬 표시 초기화
       setActiveSkills([]);
       setStreaming(true); // assistant placeholder 는 첫 token 에서 생성, isGenerating=true
@@ -542,6 +544,7 @@ export function useChatSocket() {
       if (s.discussionMode || s.deepResearchMode || s.imageMode) {
         appendMessage({ role: "system", content: tRef.current("interceptNotice"), notice: true });
       }
+      return true;
     },
     [appendMessage, setStreaming, setActiveAgent, setActiveSkills, connect],
   );

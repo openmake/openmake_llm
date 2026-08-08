@@ -308,6 +308,25 @@ export function Composer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelsData]);
 
+  // 재생성 요청(MessageList) 처리 — 소켓은 이 컴포넌트만 보유하므로 여기서 히스토리를
+  // fromIndex 이전으로 되돌린 뒤 원 질문을 재전송한다(사용자 말풍선은 sendChat 이 다시 추가).
+  // 전송 실패(소켓 닫힘 등) 시 되감은 대화를 원복해 질문·답변 쌍이 증발하지 않게 한다
+  // (sendChat 이 남긴 disconnected notice 는 유지).
+  const resendRequest = useAppStore((s) => s.resendRequest);
+  useEffect(() => {
+    if (!resendRequest) return;
+    const s = useAppStore.getState();
+    s.clearResendRequest();
+    if (s.isGenerating) return;
+    const snapshot = s.chatHistory;
+    s.setChatHistory((prev) => prev.slice(0, resendRequest.fromIndex));
+    if (!sendChat(resendRequest.content, resendRequest.images)) {
+      useAppStore
+        .getState()
+        .setChatHistory((prev) => [...snapshot, ...prev.slice(resendRequest.fromIndex)]);
+    }
+  }, [resendRequest, sendChat]);
+
   const submit = () => {
     if ((!text.trim() && files.length === 0 && images.length === 0) || isGenerating) return;
     if (agentTaskMode) {

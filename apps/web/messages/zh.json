@@ -379,6 +379,9 @@
     "feedbackUp": "有帮助",
     "feedbackDown": "没帮助",
     "feedbackThanks": "感谢您的反馈",
+    "copyMessage": "复制消息",
+    "copiedMessage": "已复制",
+    "regenerate": "重新生成",
     "thinkingTimeline": {
       "thinking": "思考中",
       "fallbackLabel": "思考过程",
@@ -538,7 +541,9 @@
         "preview": "从附加的图表中解读主要趋势",
         "time": "周日"
       }
-    }
+    },
+    "viewAllToggle": "所有用户",
+    "ownerBadge": "用户 {id}"
   },
   "chatSocket": {
     "interceptNotice": "拦截模式（讨论・深度研究・图像）已开启，本次回复不会应用工具（分析・搜索）与工件。",
@@ -741,6 +746,11 @@
     "processFailed": "处理失败：{message}",
     "cancelFailed": "取消失败：{message}",
     "resumeFailed": "继续失败：{message}",
+    "retryTitle": "从头重试",
+    "retryConfirm": "从头重新运行 \"{goal}...\" 吗？",
+    "retryFailed": "重试失败：{message}",
+    "viewAllToggle": "所有用户的任务",
+    "ownerBadge": "用户 {id}",
     "deleteFailed": "删除失败：{message}",
     "elapsedSec": "{s}秒",
     "elapsedMinSec": "{m}分{s}秒",
@@ -928,7 +938,9 @@
       "source3": "企业级 LLM 采用案例研究",
       "source4": "自主智能体安全指南",
       "source5": "RAG 与长上下文对比基准"
-    }
+    },
+    "viewAllToggle": "所有用户",
+    "ownerBadge": "用户 {id}"
   },
   "mcpServers": {
     "justNow": "刚刚",
