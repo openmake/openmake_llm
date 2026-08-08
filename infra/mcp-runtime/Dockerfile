@@ -52,6 +52,11 @@ RUN mkdir -p /home/node/.cache/npm /home/node/.cache/uv
 # --with 'mcp<2': mcp-python-repl 은 상한 없는 `mcp>=1.7.0` 선언이라 mcp 2.x 가 설치되면
 # `mcp.server.fastmcp` 제거로 기동 실패(2026-08-08 no-cache 재빌드에서 실측) — noapi 와 동일 회피.
 RUN uv tool install --with 'mcp<2' mcp-python-repl
+
+# UTF-8 로케일 — 기본 POSIX 로케일에선 JVM(sun.jnu.encoding=ANSI)이 한글 등 비ASCII
+# 파일명을 열지 못한다(2026-08-08 실측: opendataloader-pdf 가 한글 파일명 PDF 무산출로
+# 대형 문서 task 실패). task-runtime 등 파생 이미지도 이 ENV 를 상속한다.
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 ENV PATH=/home/node/.local/bin:${PATH}
 
 # ── NotebookLM MCP 서버(notebooklm-mcp-cli) — 이미지에 baked ─────────────────

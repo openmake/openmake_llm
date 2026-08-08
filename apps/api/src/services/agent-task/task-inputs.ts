@@ -7,6 +7,23 @@ import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { AgentTaskInputFile } from './types';
 import { resolveStoredPath } from './upload-store';
 import { createLogger } from '../../utils/logger';
+import { AGENT_TASK_LIMITS, DOC_EXTRACT_LIMITS } from '../../config/runtime-limits';
+
+/**
+ * 작업 생성 시 기본 턴 수 결정 — 명시 maxTurns 우선. 대형 첨부(생성 시점 추출 상한 초과
+ * → 샌드박스에서 에이전트가 직접 파싱/OCR)는 기본 10턴으로 수백 페이지 처리가 안 돼
+ * goal_incomplete 로 실패하므로(2026-08-08 실측) LARGE_INPUT_MAX_TURNS 를 적용한다.
+ */
+export function resolveDefaultMaxTurns(
+    explicit: number | undefined,
+    files: AgentTaskInputFile[] | undefined,
+): number {
+    if (explicit) return explicit;
+    const hasLargeInput = (files ?? []).some(
+        (f) => (f.size ?? 0) > DOC_EXTRACT_LIMITS.MAX_BYTES_PER_FILE,
+    );
+    return hasLargeInput ? AGENT_TASK_LIMITS.LARGE_INPUT_MAX_TURNS : AGENT_TASK_LIMITS.DEFAULT_MAX_TURNS;
+}
 
 const logger = createLogger('AgentTaskService');
 

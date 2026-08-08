@@ -45,6 +45,28 @@ export function Sidebar() {
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  // 승인 대기 배지 — 위임된 작업이 HITL 승인에서 멈춘 것을 어느 화면/재접속 후에도 발견할 수 있게
+  // (WS 인라인 프롬프트는 연결 끊김·세션 이동 시 유실 — 2026-08-08 대형 PDF "인식 못함" 오인 사례).
+  const [pendingApprovals, setPendingApprovals] = useState(0);
+  useEffect(() => {
+    if (!user) { setPendingApprovals(0); return; }
+    let alive = true;
+    const poll = async () => {
+      try {
+        const r = await ApiClient.get<{ data: { pending: unknown[] } }>(
+          "/api/agent-tasks/approvals/pending",
+          { redirectOnUnauthorized: false },
+        );
+        if (alive) setPendingApprovals(r.data?.pending?.length ?? 0);
+      } catch {
+        /* 미인증/일시 오류 — 배지 유지 안 함 */
+        if (alive) setPendingApprovals(0);
+      }
+    };
+    void poll();
+    const timer = setInterval(poll, 30_000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [user]);
 
   // 라우트 이동·바깥 클릭 시 프로필 메뉴 닫기
   useEffect(() => setMenuOpen(false), [pathname]);
@@ -183,6 +205,14 @@ export function Sidebar() {
               >
                 <item.icon className="h-[18px] w-[18px]" />
                 {tNav(item.labelKey)}
+                {item.href === "/agent-tasks" && pendingApprovals > 0 && (
+                  <span
+                    className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[11px] font-semibold text-white"
+                    title={tNav("pendingApprovals", { count: pendingApprovals })}
+                  >
+                    {pendingApprovals}
+                  </span>
+                )}
               </Link>
             </li>
           ))}

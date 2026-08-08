@@ -24,7 +24,8 @@
       "modelRolesAdmin": "角色模型管理",
       "developer": "开发者",
       "schedulesAdmin": "任务计划"
-    }
+    },
+    "pendingApprovals": "{count} 个待批准 — 代理任务正在等待您的批准"
   },
   "sidebar": {
     "newChat": "新对话",

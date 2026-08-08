@@ -24,7 +24,8 @@
       "modelRolesAdmin": "Model Roles Admin",
       "developer": "Developer",
       "schedulesAdmin": "Task Schedules"
-    }
+    },
+    "pendingApprovals": "{count} pending approval(s) — agent tasks are waiting for your approval"
   },
   "sidebar": {
     "newChat": "New chat",
