@@ -57,13 +57,19 @@ function parseAssignableRole(value: string): ModelRole | null {
  * 원인 추적이 불가했던 갭 해소. previous 를 함께 남겨 소실 시 복원 근거로 쓴다.
  * (admin-model-roles.routes 의 auditChange 와 동일 관용구 — 실패는 응답에 영향 없음)
  */
-function auditChange(userId: string, action: string, details: Record<string, unknown>): void {
-    void getAuditService().logAudit({
-        action,
-        userId,
-        resourceType: 'model_role',
-        details,
-    }).catch(() => { /* audit 실패는 응답에 영향 없음 */ });
+async function auditChange(userId: string, action: string, details: Record<string, unknown>): Promise<void> {
+    try {
+        await getAuditService().logAudit({
+            action,
+            userId,
+            resourceType: 'model_role',
+            details,
+        });
+    } catch (err) {
+        // 감사 실패가 배정 자체를 되돌리진 않지만, 조용히 삼키지 않고 details(previous 포함)와
+        // 함께 남겨 '배정은 됐는데 기록은 없는' 추적 갭에서 최소한 애플리케이션 로그로 복원 가능하게 한다.
+        log.error('배정 감사 기록 실패 (배정은 반영됨):', { action, details, err });
+    }
 }
 
 export function createUserModelRolesController(): Router {
@@ -106,10 +112,9 @@ export function createUserModelRolesController(): Router {
             }
 
             const repo = new UserModelRolesRepository(getPool());
-            const previous = (await repo.listByUser(userId)).find((m) => m.role === role)?.fullModelId ?? null;
-            const mapping = await repo.upsert(userId, role, fullId);
+            const { mapping, previous } = await repo.upsert(userId, role, fullId);
             log.info(`역할 매핑 저장: userId=${userId} role=${role} model=${fullId}`);
-            auditChange(userId, 'user_model_role_set', { role, model: fullId, previous });
+            await auditChange(userId, 'user_model_role_set', { role, model: fullId, previous });
             res.json(success({ mapping }));
         } catch (err) {
             log.error('upsert 실패:', err);
@@ -127,11 +132,10 @@ export function createUserModelRolesController(): Router {
         }
         try {
             const repo = new UserModelRolesRepository(getPool());
-            const previous = (await repo.listByUser(userId)).find((m) => m.role === role)?.fullModelId ?? null;
-            const deleted = await repo.delete(userId, role);
+            const { deleted, previous } = await repo.delete(userId, role);
             if (!deleted) { res.status(404).json(notFound('매핑 없음')); return; }
             log.info(`역할 매핑 해제: userId=${userId} role=${role}`);
-            auditChange(userId, 'user_model_role_unset', { role, previous });
+            await auditChange(userId, 'user_model_role_unset', { role, previous });
             res.json(success({ deleted: true }));
         } catch (err) {
             log.error('delete 실패:', err);
