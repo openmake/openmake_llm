@@ -31,7 +31,6 @@ import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
 import { v4 as uuidv4 } from 'uuid';
 import { AgentTaskService, type AgentTaskInputFile } from '../services/AgentTaskService';
 import type { ChatMessage } from '../llm/types';
-import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
 import {
     createAgentTaskSchema, executeAgentTaskSchema,
     type CreateAgentTaskInput, type ExecuteAgentTaskInput,
@@ -45,12 +44,13 @@ import { safeRealWorkspacePath, listWorkspaceFilesAt } from '../services/task-sa
 import { basename } from 'path';
 import multer from 'multer';
 import * as fs from 'fs/promises';
-import { FILE_ATTACH_LIMITS, DOC_EXTRACT_LIMITS } from '../config/runtime-limits';
+import { AGENT_TASK_LIMITS, FILE_ATTACH_LIMITS, DOC_EXTRACT_LIMITS } from '../config/runtime-limits';
 import {
     ensureUploadTmpDir, finalizeUploadedFile, resolveStoredPath,
     discardTmpFiles, removeTaskFiles, safeBaseName,
 } from '../services/agent-task/upload-store';
 import { claimUploadsAsInputFiles, ChunkStoreError } from '../services/agent-task/chunk-store';
+import { resolveDefaultMaxTurns } from '../services/agent-task/task-inputs';
 
 const logger = createLogger('AgentTaskRoutes');
 const router = Router();
@@ -241,18 +241,12 @@ router.post('/', (req: Request, res: Response, next) => {
         ? [`진행 중인 에이전트 작업이 ${active.length}건 있습니다. 중복 실행이 아닌지 확인하세요.`]
         : [];
 
-    // 대형 첨부(추출 상한 초과 → 샌드박스 자체 파싱 필요)는 기본 턴 예산을 상향 —
-    // 기본 10턴으로는 수백 페이지 문서 읽기+정리가 안 돼 goal_incomplete 로 실패한다.
-    const hasLargeInput = (inputFiles ?? []).some(
-        (f) => (f.size ?? 0) > DOC_EXTRACT_LIMITS.MAX_BYTES_PER_FILE,
-    );
     await db.createAgentTask({
         id: taskId,
         userId,
         goal,
-        maxTurns: maxTurns ?? (hasLargeInput
-            ? AGENT_TASK_LIMITS.LARGE_INPUT_MAX_TURNS
-            : AGENT_TASK_LIMITS.DEFAULT_MAX_TURNS),
+        // 대형 첨부는 기본 턴 상향(LARGE_INPUT_MAX_TURNS) — resolveDefaultMaxTurns 주석 참고
+        maxTurns: resolveDefaultMaxTurns(maxTurns, inputFiles),
         inputFiles,
         inputImages: Array.isArray(images) && images.length > 0 ? images : undefined,
         gitRepoUrl: repoUrl,
