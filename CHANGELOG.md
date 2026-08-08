@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.22.2](https://github.com/openmake/openmake_llm/compare/v1.22.1...v1.22.2) (2026-08-08)
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 600줄 가드 준수 — maxTurns 결정 로직을 task-inputs 로 이동 ([5fb5d3a](https://github.com/openmake/openmake_llm/commit/5fb5d3a3554f43b78db8e8622f0c9b474b3af09d))
+* **agent-task:** 대형 PDF 워크플로우 3중 결함 — 한글 파일명·턴 예산·승인 대기 가시성 ([8d4be98](https://github.com/openmake/openmake_llm/commit/8d4be98e7ddc4f5bcf4a523bc76298a3e9e1d783))
+* **agent-task:** 대형 PDF 워크플로우 3중 결함 — 한글 파일명·턴 예산·승인 대기 가시성 ([aea8bd4](https://github.com/openmake/openmake_llm/commit/aea8bd4e1f1ca4d2a312da0347a396cdc1f0d334))
+* **agent-task:** 추출 실패 문서도 턴 예산 상향 대상에 포함 ([ac0afff](https://github.com/openmake/openmake_llm/commit/ac0afff778746bddc4ddbb15748c91c605acfb08))
+* **agent-task:** 추출 실패 문서도 턴 예산 상향 대상에 포함 ([9d12e7d](https://github.com/openmake/openmake_llm/commit/9d12e7d5066fa0c513f6cf27dcc123ec883038cb))
+
 ## [1.22.1](https://github.com/openmake/openmake_llm/compare/v1.22.0...v1.22.1) (2026-08-07)
 
 
