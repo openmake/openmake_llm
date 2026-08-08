@@ -122,6 +122,45 @@ export class ConversationRepository extends BaseRepository {
         return result.rows;
     }
 
+    /**
+     * 본인 토큰 사용량 기간 버킷 집계 — 가상 비용 환산(usage /cost)용.
+     *
+     * 소스는 대화(conversation_messages.tokens) + 에이전트 작업(agent_tasks.total_tokens) 합산 —
+     * 실측상 작업 토큰이 지배적(18.8M vs 0.3M)이라 대화만 집계하면 비용이 크게 과소평가된다.
+     * granularity: 'day'(최근 30일) | 'month'(최근 12개월) | 'year'(전체).
+     */
+    async getUserTokenBuckets(
+        userId: string,
+        granularity: 'day' | 'month' | 'year',
+    ): Promise<Array<{ period: string; tokens: string }>> {
+        // 컬럼/포맷은 granularity 별 하드코딩 상수 선택(값 바인딩만 파라미터) — 인젝션 없음
+        const spec = {
+            day: { trunc: 'day', fmt: 'YYYY-MM-DD', since: `NOW() - interval '30 days'` },
+            month: { trunc: 'month', fmt: 'YYYY-MM', since: `NOW() - interval '12 months'` },
+            year: { trunc: 'year', fmt: 'YYYY', since: `'epoch'::timestamptz` },
+        }[granularity];
+        const result = await this.query<{ period: string; tokens: string }>(
+            `WITH tok AS (
+                 SELECT m.created_at AS ts, m.tokens AS tokens
+                 FROM conversation_messages m
+                 JOIN conversation_sessions s ON m.session_id = s.id
+                 WHERE s.user_id = $1 AND m.tokens > 0
+                 UNION ALL
+                 SELECT t.created_at AS ts, t.total_tokens AS tokens
+                 FROM agent_tasks t
+                 WHERE t.user_id = $1 AND t.total_tokens > 0
+             )
+             SELECT to_char(date_trunc('${spec.trunc}', ts), '${spec.fmt}') AS period,
+                    COALESCE(SUM(tokens), 0) AS tokens
+             FROM tok
+             WHERE ts >= ${spec.since}
+             GROUP BY 1
+             ORDER BY 1`,
+            [userId]
+        );
+        return result.rows;
+    }
+
     /** 본인 일별 토큰/메시지 통계 */
     async getUserDailyUsage(userId: string, days: number): Promise<Array<{ date: string; tokens: string; messages: string }>> {
         const result = await this.query<{ date: string; tokens: string; messages: string }>(

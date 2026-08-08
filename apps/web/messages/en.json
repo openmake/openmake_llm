@@ -1613,7 +1613,21 @@
       "tokens": "Tokens",
       "share": "Share",
       "distribution": "Distribution"
-    }
+    },
+    "costTitle": "Hypothetical Cost",
+    "costSubtitle": "If billed at commercial API rates (not actual charges)",
+    "costToday": "Today",
+    "costMonth": "This month",
+    "costTotal": "All time",
+    "costTabDay": "Daily",
+    "costTabMonth": "Monthly",
+    "costTabYear": "Yearly",
+    "costColPeriod": "Period",
+    "costColTokens": "Tokens",
+    "costColUsd": "USD",
+    "costColKrw": "KRW",
+    "costRateNote": "Assumed rates: input ${input}/1M · output ${output}/1M (output share {ratio}%) · FX ₩{fx}/$ — adjustable via server env",
+    "costNoData": "No usage to aggregate"
   },
   "developer": {
     "pageTitle": "Developer Docs",

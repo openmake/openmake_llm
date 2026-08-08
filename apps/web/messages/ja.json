@@ -1613,7 +1613,21 @@
       "tokens": "トークン",
       "share": "割合",
       "distribution": "分布"
-    }
+    },
+    "costTitle": "仮想コスト換算",
+    "costSubtitle": "商用APIの単価で支払った場合（実際の課金ではありません）",
+    "costToday": "今日",
+    "costMonth": "今月",
+    "costTotal": "累計",
+    "costTabDay": "日別",
+    "costTabMonth": "月別",
+    "costTabYear": "年別",
+    "costColPeriod": "期間",
+    "costColTokens": "トークン",
+    "costColUsd": "USD",
+    "costColKrw": "KRW",
+    "costRateNote": "単価の仮定: 入力 ${input}/1M · 出力 ${output}/1M（出力比率 {ratio}%）· 為替 ₩{fx}/$ — サーバー環境変数で調整可能",
+    "costNoData": "集計する使用量がありません"
   },
   "developer": {
     "pageTitle": "開発者ドキュメント",

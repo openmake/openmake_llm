@@ -68,6 +68,128 @@ const fmtMs = (n?: number) => (n != null && n > 0 ? `${Math.round(n)}ms` : "-");
 const fmtCost = (n?: number) =>
   n != null ? `$${n.toFixed(4)}` : "-";
 
+/* ── 가상 비용 환산 섹션 (일/월/년) — "상용 API 였다면 얼마" (실제 과금 아님) ── */
+interface CostBucket {
+  period: string;
+  tokens: number;
+  costUsd: number;
+  costKrw: number;
+}
+interface CostEstimate {
+  rates: { INPUT_USD_PER_1M: number; OUTPUT_USD_PER_1M: number; OUTPUT_RATIO: number; USD_KRW: number };
+  day: CostBucket[];
+  month: CostBucket[];
+  year: CostBucket[];
+  total: { tokens: number; costUsd: number; costKrw: number };
+}
+type CostGranularity = "day" | "month" | "year";
+
+function CostEstimateSection() {
+  const t = useTranslations("usage");
+  const locale = toBcp47(useLocale());
+  const [data, setData] = useState<CostEstimate | null>(null);
+  const [gran, setGran] = useState<CostGranularity>("day");
+
+  useEffect(() => {
+    let alive = true;
+    void ApiClient.get<ApiSuccess<CostEstimate>>("/api/usage/cost")
+      .then((res) => {
+        if (alive) setData(res?.data ?? null);
+      })
+      .catch(() => {
+        /* 비로그인/오류 — 섹션 미표시 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (!data) return null;
+
+  const fmtKrw = (n: number) => `₩${Math.round(n).toLocaleString(locale)}`;
+  const fmtUsd = (n: number) => `$${n.toFixed(2)}`;
+  // 오늘/이번 달 카드 — 버킷 키(UTC 기준 date_trunc)와 매칭
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const monthKey = todayKey.slice(0, 7);
+  const todayRow = data.day.find((r) => r.period === todayKey);
+  const monthRow = data.month.find((r) => r.period === monthKey);
+  const rows = [...data[gran]].reverse(); // 최신 우선
+  const TABS: Array<{ key: CostGranularity; labelKey: string }> = [
+    { key: "day", labelKey: "costTabDay" },
+    { key: "month", labelKey: "costTabMonth" },
+    { key: "year", labelKey: "costTabYear" },
+  ];
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <CardTitle>{t("costTitle")}</CardTitle>
+          <p className="mt-0.5 text-xs text-muted">{t("costSubtitle")}</p>
+        </div>
+        <div className="flex gap-1">
+          {TABS.map(({ key, labelKey }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setGran(key)}
+              className={cn(
+                "rounded-md border px-2.5 py-1 text-xs transition",
+                gran === key
+                  ? "border-accent bg-accent-soft text-accent"
+                  : "border-border text-muted hover:text-fg",
+              )}
+            >
+              {t(labelKey)}
+            </button>
+          ))}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-3 gap-4">
+          <StatCard label={t("costToday")} value={fmtKrw(todayRow?.costKrw ?? 0)} delta={fmtUsd(todayRow?.costUsd ?? 0)} />
+          <StatCard label={t("costMonth")} value={fmtKrw(monthRow?.costKrw ?? 0)} delta={fmtUsd(monthRow?.costUsd ?? 0)} />
+          <StatCard label={t("costTotal")} value={fmtKrw(data.total.costKrw)} delta={fmtUsd(data.total.costUsd)} />
+        </div>
+        {rows.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted">{t("costNoData")}</p>
+        ) : (
+          <div className="max-h-72 overflow-y-auto">
+            <Table>
+              <thead>
+                <tr>
+                  <Th>{t("costColPeriod")}</Th>
+                  <Th>{t("costColTokens")}</Th>
+                  <Th>{t("costColUsd")}</Th>
+                  <Th>{t("costColKrw")}</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.period}>
+                    <Td className="font-mono">{r.period}</Td>
+                    <Td>{r.tokens.toLocaleString(locale)}</Td>
+                    <Td>{fmtUsd(r.costUsd)}</Td>
+                    <Td>{fmtKrw(r.costKrw)}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+        )}
+        <p className="text-[11px] text-faint">
+          {t("costRateNote", {
+            input: data.rates.INPUT_USD_PER_1M,
+            output: data.rates.OUTPUT_USD_PER_1M,
+            ratio: Math.round(data.rates.OUTPUT_RATIO * 100),
+            fx: data.rates.USD_KRW,
+          })}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 /* ── 시스템 토큰 모니터링 섹션 (관리자 전용) ────────────────── */
 interface MonitoringCosts {
   today: {
@@ -357,6 +479,9 @@ export default function UsagePage() {
                   deltaTone={month?.totalErrors ? "danger" : "success"}
                 />
               </div>
+
+              {/* 가상 비용 환산 (일/월/년) — 상용 API 였다면 얼마 */}
+              <CostEstimateSection />
 
               {/* 일별 사용량 추이 (CSS 바 차트) */}
               <Card>

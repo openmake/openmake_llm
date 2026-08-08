@@ -1613,7 +1613,21 @@
       "tokens": "令牌",
       "share": "占比",
       "distribution": "分布"
-    }
+    },
+    "costTitle": "虚拟成本换算",
+    "costSubtitle": "若按商用API价格付费（非实际收费）",
+    "costToday": "今天",
+    "costMonth": "本月",
+    "costTotal": "累计",
+    "costTabDay": "按日",
+    "costTabMonth": "按月",
+    "costTabYear": "按年",
+    "costColPeriod": "期间",
+    "costColTokens": "令牌",
+    "costColUsd": "USD",
+    "costColKrw": "KRW",
+    "costRateNote": "价格假设：输入 ${input}/1M · 输出 ${output}/1M（输出占比 {ratio}%）· 汇率 ₩{fx}/$ — 可通过服务器环境变量调整",
+    "costNoData": "没有可汇总的使用量"
   },
   "developer": {
     "pageTitle": "开发者文档",
