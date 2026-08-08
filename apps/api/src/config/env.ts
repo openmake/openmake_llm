@@ -95,6 +95,10 @@ export interface EnvConfig {
     googleCseId: string;
     naverClientId: string;
     naverClientSecret: string;
+    naverApiHubKeyId: string;
+    naverApiHubKey: string;
+    /** 네이버 검색 API 일일 호출 한도(무료 한도 가드, 0=무제한) */
+    naverApiDailyLimit: number;
     githubToken: string;
 
     // Documents
@@ -215,6 +219,9 @@ const DEFAULT_CONFIG: EnvConfig = {
     googleCseId: '',
     naverClientId: '',
     naverClientSecret: '',
+    naverApiHubKeyId: '',
+    naverApiHubKey: '',
+    naverApiDailyLimit: 25000,
     githubToken: '',
 
     // Documents
@@ -467,6 +474,9 @@ export function loadConfig(): EnvConfig {
         googleCseId: parsed.GOOGLE_CSE_ID ?? DEFAULT_CONFIG.googleCseId,
         naverClientId: parsed.NAVER_CLIENT_ID ?? DEFAULT_CONFIG.naverClientId,
         naverClientSecret: parsed.NAVER_CLIENT_SECRET ?? DEFAULT_CONFIG.naverClientSecret,
+        naverApiHubKeyId: parsed.NAVER_API_HUB_KEY_ID ?? DEFAULT_CONFIG.naverApiHubKeyId,
+        naverApiHubKey: parsed.NAVER_API_HUB_KEY ?? DEFAULT_CONFIG.naverApiHubKey,
+        naverApiDailyLimit: parsed.NAVER_API_DAILY_LIMIT ?? DEFAULT_CONFIG.naverApiDailyLimit,
         githubToken: parsed.GITHUB_TOKEN ?? DEFAULT_CONFIG.githubToken,
 
         // Documents

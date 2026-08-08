@@ -171,6 +171,10 @@ export const envSchema = z
         GOOGLE_CSE_ID: z.string().default(''),
         NAVER_CLIENT_ID: z.string().default(''),
         NAVER_CLIENT_SECRET: z.string().default(''),
+        // NAVER API HUB (NCP 이관, 2026-06-29 공지) — 설정 시 legacy 대신 HUB 경로 사용
+        NAVER_API_HUB_KEY_ID: z.string().default(''),
+        NAVER_API_HUB_KEY: z.string().default(''),
+        NAVER_API_DAILY_LIMIT: z.coerce.number().int().min(0).default(25000),
         GITHUB_TOKEN: z.string().default(''),
         VAPID_PUBLIC_KEY: z.string().default(''),
         VAPID_PRIVATE_KEY: z.string().default(''),

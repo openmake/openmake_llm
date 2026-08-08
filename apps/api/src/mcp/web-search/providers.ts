@@ -13,15 +13,12 @@ import { createLogger } from '../../utils/logger';
 import { CAPACITY } from '../../config/runtime-limits';
 import { LLM_TIMEOUTS } from '../../config/timeouts';
 import { getSearchLocale } from '../../i18n/search-locale';
+import { buildNaverSearchRequest } from './naver-client';
 
 /** Google Custom Search API 키 */
 const GOOGLE_API_KEY = getConfig().googleApiKey;
 /** Google Custom Search Engine ID */
 const GOOGLE_CSE_ID = getConfig().googleCseId;
-/** Naver 검색 API Client ID (웹문서 검색) */
-const NAVER_CLIENT_ID = getConfig().naverClientId;
-/** Naver 검색 API Client Secret */
-const NAVER_CLIENT_SECRET = getConfig().naverClientSecret;
 /** Logger instance */
 const logger = createLogger('WebSearch');
 
@@ -328,24 +325,17 @@ export async function searchDuckDuckGoAPI(query: string, signal?: AbortSignal): 
 export async function searchNaverNews(query: string, maxResults: number = 5, signal?: AbortSignal): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
 
-    if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
-        return results;
-    }
-
     try {
         const display = Math.min(Math.max(maxResults, 1), 100);
-        const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(query)}&display=${display}&sort=date`;
+        // legacy ↔ NAVER API HUB 듀얼 경로 + 일일 한도 가드 — 키 미설정/한도 도달 시 null → 빈 배열 graceful
+        const req = await buildNaverSearchRequest('news', `query=${encodeURIComponent(query)}&display=${display}&sort=date`);
+        if (!req) return results;
 
-        const response = await searchFetch(url, signal, {
-            headers: {
-                'X-Naver-Client-Id': NAVER_CLIENT_ID,
-                'X-Naver-Client-Secret': NAVER_CLIENT_SECRET,
-            },
-        });
+        const response = await searchFetch(req.url, signal, { headers: req.headers });
 
         if (!response.ok) {
-            // 403 = 등록 앱에 '검색' API 미설정 (개발자센터 > Application > API 설정에서 활성화).
-            logger.error(`네이버 뉴스 API 오류: ${response.status}${response.status === 403 ? ' (앱 검색 API 미설정 가능성)' : ''}`);
+            // 403 = 등록 앱에 '검색' API 미설정, 429 = 일일 허용량 초과 (HUB 문서 명시).
+            logger.error(`네이버 뉴스 API 오류(${req.route}): ${response.status}${response.status === 403 ? ' (앱 검색 API 미설정 가능성)' : response.status === 429 ? ' (일일 허용량 초과)' : ''}`);
             return results;
         }
 
@@ -396,24 +386,17 @@ function stripNaverTags(text: string): string {
 export async function searchNaverWeb(query: string, maxResults: number = 10, signal?: AbortSignal): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
 
-    if (!NAVER_CLIENT_ID || !NAVER_CLIENT_SECRET) {
-        return results;
-    }
-
     try {
         const display = Math.min(Math.max(maxResults, 1), 100);
-        const url = `https://openapi.naver.com/v1/search/webkr.json?query=${encodeURIComponent(query)}&display=${display}`;
+        // legacy ↔ NAVER API HUB 듀얼 경로 + 일일 한도 가드 — 키 미설정/한도 도달 시 null → 빈 배열 graceful
+        const req = await buildNaverSearchRequest('webkr', `query=${encodeURIComponent(query)}&display=${display}`);
+        if (!req) return results;
 
-        const response = await searchFetch(url, signal, {
-            headers: {
-                'X-Naver-Client-Id': NAVER_CLIENT_ID,
-                'X-Naver-Client-Secret': NAVER_CLIENT_SECRET,
-            },
-        });
+        const response = await searchFetch(req.url, signal, { headers: req.headers });
 
         if (!response.ok) {
-            // 403 = 등록 앱에 '검색' API 미설정 (개발자센터 > Application > API 설정에서 활성화).
-            logger.error(`네이버 웹문서 API 오류: ${response.status}${response.status === 403 ? ' (앱 검색 API 미설정 가능성)' : ''}`);
+            // 403 = 등록 앱에 '검색' API 미설정, 429 = 일일 허용량 초과 (HUB 문서 명시).
+            logger.error(`네이버 웹문서 API 오류(${req.route}): ${response.status}${response.status === 403 ? ' (앱 검색 API 미설정 가능성)' : response.status === 429 ? ' (일일 허용량 초과)' : ''}`);
             return results;
         }
 
