@@ -81,6 +81,8 @@ interface CostEstimate {
   month: CostBucket[];
   year: CostBucket[];
   total: { tokens: number; costUsd: number; costKrw: number };
+  /** 토큰 기록 최초 일자 — 그 이전 사용분은 기록 부재로 미포함 */
+  coverage?: { since: string | null };
 }
 type CostGranularity = "day" | "month" | "year";
 
@@ -178,6 +180,12 @@ function CostEstimateSection() {
           </div>
         )}
         <p className="text-[11px] text-faint">
+          {data.coverage?.since && (
+            <>
+              {t("costCoverage", { since: data.coverage.since })}
+              <br />
+            </>
+          )}
           {t("costRateNote", {
             input: data.rates.INPUT_USD_PER_1M,
             output: data.rates.OUTPUT_USD_PER_1M,

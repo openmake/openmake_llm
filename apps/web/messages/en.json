@@ -1627,7 +1627,8 @@
     "costColUsd": "USD",
     "costColKrw": "KRW",
     "costRateNote": "Assumed rates: input ${input}/1M · output ${output}/1M (output share {ratio}%) · FX ₩{fx}/$ — adjustable via server env",
-    "costNoData": "No usage to aggregate"
+    "costNoData": "No usage to aggregate",
+    "costCoverage": "Coverage: records since {since} (earlier usage not included — no token records)"
   },
   "developer": {
     "pageTitle": "Developer Docs",

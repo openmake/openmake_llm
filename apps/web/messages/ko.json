@@ -1627,7 +1627,8 @@
     "costColUsd": "USD",
     "costColKrw": "KRW",
     "costRateNote": "단가 가정: 입력 ${input}/1M · 출력 ${output}/1M (출력 비중 {ratio}%) · 환율 ₩{fx}/$ — 서버 환경변수로 조정 가능",
-    "costNoData": "집계할 사용량이 없습니다"
+    "costNoData": "집계할 사용량이 없습니다",
+    "costCoverage": "집계 범위: {since} 이후 기록 기준 (그 이전 사용분은 토큰 기록 부재로 미포함)"
   },
   "developer": {
     "pageTitle": "개발자 문서",

@@ -137,10 +137,11 @@ router.get('/cost', asyncHandler(async (req: Request, res: Response) => {
     };
 
     const repo = new ConversationRepository(getPool());
-    const [day, month, year] = await Promise.all([
+    const [day, month, year, since] = await Promise.all([
         repo.getUserTokenBuckets(userId, 'day'),
         repo.getUserTokenBuckets(userId, 'month'),
         repo.getUserTokenBuckets(userId, 'year'),
+        repo.getUserTokenSince(userId),
     ]);
     const yearRows = year.map(toCost);
     const totalTokens = yearRows.reduce((n, x) => n + x.tokens, 0);
@@ -152,6 +153,8 @@ router.get('/cost', asyncHandler(async (req: Request, res: Response) => {
         month: month.map(toCost),
         year: yearRows,
         total: { tokens: totalTokens, costUsd: totalUsd, costKrw: totalUsd * r.USD_KRW },
+        // 집계 시작일 — 토큰 기록이 존재하는 최초 일자(전체 사용 이력 아님을 명시)
+        coverage: { since },
     }));
 }));
 

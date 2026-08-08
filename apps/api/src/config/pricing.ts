@@ -41,14 +41,14 @@ export const MODEL_PRICING: Readonly<Record<string, { input: number; output: num
  *
  * usage 대시보드의 일/월/년 비용 환산에 사용. 저장된 토큰이 입력/출력 미구분(총합)이라
  * OUTPUT_RATIO 가정으로 혼합 단가를 만든다. 기본값은 실제 Qwen 요금표(Alibaba Cloud
- * Model Studio, Qwen3-30B-A3B 급 — qwen3.6-35b-a3b 와 동급 A3B MoE) 공시가.
+ * Model Studio, Qwen3.8-Max 공시가: 입력 $2 / 출력 $6 per 1M) 기준.
  * 배포별 조정은 env 로 (No-Hardcoding L1).
  */
 export const REFERENCE_COST = {
     /** 입력 토큰 단가 (USD per 1M tokens) */
-    INPUT_USD_PER_1M: parseFloat(process.env.TOKEN_COST_INPUT_USD_PER_1M || '0.20'),
+    INPUT_USD_PER_1M: parseFloat(process.env.TOKEN_COST_INPUT_USD_PER_1M || '2.00'),
     /** 출력 토큰 단가 (USD per 1M tokens) */
-    OUTPUT_USD_PER_1M: parseFloat(process.env.TOKEN_COST_OUTPUT_USD_PER_1M || '0.80'),
+    OUTPUT_USD_PER_1M: parseFloat(process.env.TOKEN_COST_OUTPUT_USD_PER_1M || '6.00'),
     /** 총 토큰 중 출력 비중 가정 (입출력 분리 데이터 부재 보정) */
     OUTPUT_RATIO: parseFloat(process.env.TOKEN_COST_OUTPUT_RATIO || '0.25'),
     /** 원화 환산 환율 */

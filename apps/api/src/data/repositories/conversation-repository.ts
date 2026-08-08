@@ -161,6 +161,28 @@ export class ConversationRepository extends BaseRepository {
         return result.rows;
     }
 
+    /**
+     * 본인 토큰 기록의 최초 일자 — 비용 환산 화면의 "집계 시작일" 안내용.
+     * (대화 30일 롤링 삭제 + 토큰 영속 도입(2026-07) 이전 기록 부재로, 집계가
+     *  전체 사용 이력이 아님을 사용자에게 명시하기 위함.)
+     */
+    async getUserTokenSince(userId: string): Promise<string | null> {
+        const result = await this.query<{ since: string | null }>(
+            `WITH tok AS (
+                 SELECT m.created_at AS ts
+                 FROM conversation_messages m
+                 JOIN conversation_sessions s ON m.session_id = s.id
+                 WHERE s.user_id = $1 AND m.tokens > 0
+                 UNION ALL
+                 SELECT t.created_at FROM agent_tasks t
+                 WHERE t.user_id = $1 AND t.total_tokens > 0
+             )
+             SELECT to_char(MIN(ts), 'YYYY-MM-DD') AS since FROM tok`,
+            [userId]
+        );
+        return result.rows[0]?.since ?? null;
+    }
+
     /** 본인 일별 토큰/메시지 통계 */
     async getUserDailyUsage(userId: string, days: number): Promise<Array<{ date: string; tokens: string; messages: string }>> {
         const result = await this.query<{ date: string; tokens: string; messages: string }>(
