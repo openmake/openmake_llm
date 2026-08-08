@@ -20,6 +20,9 @@ const nextConfig: NextConfig = {
     "@openmake/api-client",
     "@openmake/config",
   ],
+  // 기술 스택 식별 헤더(X-Powered-By: Next.js) 제거 — 백엔드 helmet 은 이미 숨기지만
+  // Next 가 서빙하는 HTML 응답엔 기본 노출된다(정보 노출, CWE-200).
+  poweredByHeader: false,
   // Next 16 dev: 외부 origin(rasplay) 에서 /_next/* (HMR 등) 접근을 기본 차단 → HMR WS 실패로
   // 클라이언트 hydration 이 죽어 게스트로 표시됨. 외부 공개 dev 접속을 허용한다.
   // (운영은 next build + next start 권장 — production 은 HMR 자체가 없어 이 문제 무관.)
@@ -45,6 +48,12 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+          // HSTS — Next 가 서빙하는 HTML 경로엔 백엔드 helmet 의 HSTS 가 닿지 않아 누락됐다.
+          // 백엔드 HSTS_POLICY(2년·includeSubDomains, preload 미포함=롤백 여지)와 값을 맞춘다.
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=63072000; includeSubDomains",
+          },
         ],
       },
     ];
