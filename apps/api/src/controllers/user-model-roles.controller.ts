@@ -25,6 +25,7 @@ import { getPool } from '../data/models/unified-database';
 import { UserModelRolesRepository } from '../data/repositories/user-model-roles-repo';
 import { ModelRole, USER_ASSIGNABLE_MODEL_ROLES } from '../config/model-roles';
 import { validateModelAssignment } from '../services/model-assignment-validation';
+import { getAuditService } from '../services/AuditService';
 import { createLogger } from '../utils/logger';
 import { success, internalError, unauthorized, badRequest, notFound } from '../utils/api-response';
 
@@ -49,6 +50,20 @@ function parseAssignableRole(value: string): ModelRole | null {
     return (USER_ASSIGNABLE_MODEL_ROLES as readonly string[]).includes(value)
         ? (value as ModelRole)
         : null;
+}
+
+/**
+ * 배정 변경 감사 기록 — 2026-08-08 배정 전체 소실(0행) 사건에서 변경 이력이 없어
+ * 원인 추적이 불가했던 갭 해소. previous 를 함께 남겨 소실 시 복원 근거로 쓴다.
+ * (admin-model-roles.routes 의 auditChange 와 동일 관용구 — 실패는 응답에 영향 없음)
+ */
+function auditChange(userId: string, action: string, details: Record<string, unknown>): void {
+    void getAuditService().logAudit({
+        action,
+        userId,
+        resourceType: 'model_role',
+        details,
+    }).catch(() => { /* audit 실패는 응답에 영향 없음 */ });
 }
 
 export function createUserModelRolesController(): Router {
@@ -91,8 +106,10 @@ export function createUserModelRolesController(): Router {
             }
 
             const repo = new UserModelRolesRepository(getPool());
+            const previous = (await repo.listByUser(userId)).find((m) => m.role === role)?.fullModelId ?? null;
             const mapping = await repo.upsert(userId, role, fullId);
             log.info(`역할 매핑 저장: userId=${userId} role=${role} model=${fullId}`);
+            auditChange(userId, 'user_model_role_set', { role, model: fullId, previous });
             res.json(success({ mapping }));
         } catch (err) {
             log.error('upsert 실패:', err);
@@ -110,9 +127,11 @@ export function createUserModelRolesController(): Router {
         }
         try {
             const repo = new UserModelRolesRepository(getPool());
+            const previous = (await repo.listByUser(userId)).find((m) => m.role === role)?.fullModelId ?? null;
             const deleted = await repo.delete(userId, role);
             if (!deleted) { res.status(404).json(notFound('매핑 없음')); return; }
             log.info(`역할 매핑 해제: userId=${userId} role=${role}`);
+            auditChange(userId, 'user_model_role_unset', { role, previous });
             res.json(success({ deleted: true }));
         } catch (err) {
             log.error('delete 실패:', err);
