@@ -761,6 +761,8 @@ export const CONVERSATION_LIMITS = {
     LIST_MESSAGES_PER_SESSION: parseInt(process.env.CONVERSATION_LIST_MESSAGES_PER_SESSION || '50', 10),
     /** getAllSessions() 전체 세션 목록 기본 조회 수 */
     SESSION_LIST_ALL_DEFAULT: parseInt(process.env.CONVERSATION_SESSION_LIST_ALL_DEFAULT || '100', 10),
+    /** 본문 검색 발췌(snippet)의 매칭 지점 전후 문자 수 */
+    SEARCH_SNIPPET_RADIUS: parseInt(process.env.CONVERSATION_SEARCH_SNIPPET_RADIUS || '60', 10),
 } as const;
 
 // ============================================

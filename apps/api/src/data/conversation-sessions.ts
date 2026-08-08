@@ -191,6 +191,60 @@ export async function getSessionsByAnonId(anonSessionId: string, limit: number =
 }
 
 /**
+ * 세션 검색 (제목 + 메시지 본문) — history 검색이 제목만 필터하던 갭 해소.
+ *
+ * 소유자(userId 또는 anonSessionId) 스코프에서 제목 ILIKE 또는 메시지 content ILIKE
+ * 매칭 세션을 반환하고, 본문 매칭 세션에는 최신 매칭 메시지의 발췌(snippet)를 함께 담는다.
+ * (ILIKE 순차 스캔 — 현 규모(월 수천 메시지)에선 충분. 대규모화 시 pg_trgm 인덱스 후보.)
+ */
+export async function searchSessionsByOwner(
+    owner: { userId?: string; anonSessionId?: string },
+    query: string,
+    limit: number = CONVERSATION_LIMITS.SESSION_LIST_DEFAULT,
+): Promise<{ sessions: ConversationSession[]; snippets: Record<string, string> }> {
+    const ownerVal = owner.userId ?? owner.anonSessionId;
+    if (!ownerVal || !query.trim()) return { sessions: [], snippets: {} };
+    // ownerClause 의 컬럼명은 하드코딩(파라미터화 값만 바인딩) — enforceMaxSessions 동일 관용구
+    const ownerClause = owner.userId ? 'cs.user_id = $1' : 'cs.anon_session_id = $1';
+    // ILIKE 메타문자(\ % _) 이스케이프 — 검색어가 패턴으로 해석되는 것을 차단
+    const pattern = '%' + query.trim().replace(/[\\%_]/g, (c) => '\\' + c) + '%';
+
+    const pool = getPool();
+    const result = await pool.query(
+        `SELECT cs.*, hit.snippet FROM conversation_sessions cs
+         LEFT JOIN LATERAL (
+             SELECT m.content AS snippet FROM conversation_messages m
+             WHERE m.session_id = cs.id AND m.content ILIKE $2
+             ORDER BY m.created_at DESC LIMIT 1
+         ) hit ON true
+         WHERE ${ownerClause}
+           AND (cs.title ILIKE $2 OR hit.snippet IS NOT NULL)
+           AND EXISTS (SELECT 1 FROM conversation_messages m WHERE m.session_id = cs.id)
+         ORDER BY cs.updated_at DESC LIMIT $3`,
+        [ownerVal, pattern, limit]
+    );
+
+    const rows = result.rows as (SessionRow & { snippet: string | null })[];
+    const snippets: Record<string, string> = {};
+    for (const row of rows) {
+        if (typeof row.snippet === 'string' && row.snippet.length > 0) {
+            snippets[row.id] = excerptAround(row.snippet, query.trim());
+        }
+    }
+    const sessions = await loadMessagesForSessions(rows, { maxMessagesPerSession: CONVERSATION_LIMITS.LIST_MESSAGES_PER_SESSION });
+    return { sessions, snippets };
+}
+
+/** 매칭 지점 주변 발췌 — 목록에서 "왜 검색됐는지" 문맥을 보여준다. */
+function excerptAround(content: string, query: string, radius: number = CONVERSATION_LIMITS.SEARCH_SNIPPET_RADIUS): string {
+    const idx = content.toLowerCase().indexOf(query.toLowerCase());
+    if (idx < 0) return content.slice(0, radius * 2);
+    const start = Math.max(0, idx - radius);
+    const end = Math.min(content.length, idx + query.length + radius);
+    return `${start > 0 ? '…' : ''}${content.slice(start, end)}${end < content.length ? '…' : ''}`;
+}
+
+/**
  * 전체 세션 목록 조회
  */
 export async function getAllSessions(limit: number = CONVERSATION_LIMITS.SESSION_LIST_ALL_DEFAULT): Promise<ConversationSession[]> {

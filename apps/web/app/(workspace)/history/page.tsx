@@ -42,6 +42,8 @@ interface ApiConversation {
   createdAt?: string;
   model?: string;
   messageCount?: number;
+  /** ?q= 본문 검색 시 매칭 메시지 발췌 (비검색 응답엔 없음) */
+  snippet?: string;
 }
 
 type ConversationsResponse = ApiSuccess<{ sessions: ApiConversation[] }>;
@@ -235,17 +237,58 @@ export default function HistoryPage() {
     // locale/t 변경 시 라벨 재매핑 위해 재조회
   }, [t, tChat, locale]);
 
+  // 본문 검색 — 서버 ?q= (제목+메시지 ILIKE). 제목 클라 필터에 매칭 세션 id 를 합류시키고,
+  // 메인 목록(limit=100) 밖의 매칭 세션은 별도(searchExtras)로 목록에 병합한다.
+  // 2자 미만은 클라 제목 필터만(왕복 절약), 실패 시에도 제목 필터는 유지되므로 fail-open.
+  const [bodyHits, setBodyHits] = useState<Record<string, string | null>>({});
+  const [searchExtras, setSearchExtras] = useState<Session[]>([]);
+  useEffect(() => {
+    // 검색어가 바뀌면 이전 검색 결과를 즉시 무효화 — stale 매칭이 debounce 동안 잔존 방지
+    setBodyHits({});
+    setSearchExtras([]);
+    const q = query.trim();
+    if (q.length < 2) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await ApiClient.get<ConversationsResponse>(
+          appendAnonSessionId(`/api/chat/conversations?limit=100&q=${encodeURIComponent(q)}`),
+        );
+        if (cancelled) return;
+        const list = res?.data?.sessions ?? [];
+        const hits: Record<string, string | null> = {};
+        for (const s of list) hits[s.id] = s.snippet ?? null;
+        setBodyHits(hits);
+        setSearchExtras(list.map((c) => mapConversation(c, t, locale)));
+      } catch {
+        /* 검색 실패 — 제목 필터만 동작 */
+      }
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query, t, locale]);
+
   const grouped = useMemo(() => {
     const q = query.trim().toLowerCase();
     const filtered = q
-      ? sessions.filter((s) => s.title.toLowerCase().includes(q))
+      ? [
+          ...sessions.filter(
+            (s) => s.title.toLowerCase().includes(q) || (s.kind === "chat" && s.id in bodyHits),
+          ),
+          // 메인 목록(상위 100) 밖에서 본문 매칭된 오래된 세션 병합 (중복 제외)
+          ...searchExtras.filter(
+            (s) => !sessions.some((x) => x.kind === "chat" && x.id === s.id),
+          ),
+        ]
       : sessions;
     return GROUP_ORDER.map((g) => ({
       group: g,
       // 대화·작업이 각각 API 순서로 합쳐지므로 그룹 안에서 최신순 재정렬
       items: filtered.filter((s) => s.group === g).sort((a, b) => b.ts - a.ts),
     })).filter((g) => g.items.length > 0);
-  }, [sessions, query]);
+  }, [sessions, query, bodyHits, searchExtras]);
 
   const isEmpty = grouped.length === 0;
 
@@ -325,7 +368,7 @@ export default function HistoryPage() {
                           </span>
                         </div>
                         <p className="mt-0.5 truncate text-xs text-muted">
-                          {s.preview}
+                          {s.kind === "chat" && bodyHits[s.id] ? bodyHits[s.id] : s.preview}
                         </p>
                         <div className="mt-2 flex items-center gap-1.5">
                           {s.kind === "task" && (
