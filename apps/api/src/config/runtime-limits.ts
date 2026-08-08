@@ -1279,6 +1279,13 @@ export const AGENT_TASK_LIMITS = {
     GOAL_MAX_CHARS: parseInt(process.env.AGENT_TASK_GOAL_MAX_CHARS || '', 10) || 20000,
     /** 기본 최대 턴 수 */
     DEFAULT_MAX_TURNS: 10,
+    /**
+     * 대형 첨부(생성 시점 추출 상한 초과 — 샌드박스에서 에이전트가 직접 파싱/OCR) 시 기본 턴 수.
+     * 기본 10턴은 수백 페이지 문서의 읽기+정리에 부족해 goal_incomplete 로 실패한다
+     * (2026-08-08 실측: 66MB 스캔 PDF 가 턴 10/10 소진, 57MB 도 10/10 턱걸이 완주).
+     * 명시 maxTurns 가 오면 그 값이 우선.
+     */
+    LARGE_INPUT_MAX_TURNS: parseInt(process.env.AGENT_TASK_LARGE_INPUT_MAX_TURNS || '', 10) || 20,
     /** 관리자 전체 조회(/admin/conversations 작업 탭, ?viewAll=true) 기본 목록 상한.
      *  AGENT_TASK_LIST_ALL_DEFAULT 로 오버라이드(기본 200). */
     LIST_ALL_DEFAULT: parseInt(process.env.AGENT_TASK_LIST_ALL_DEFAULT || '', 10) || 200,

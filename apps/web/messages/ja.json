@@ -24,7 +24,8 @@
       "modelRolesAdmin": "ロールモデル管理",
       "developer": "開発者",
       "schedulesAdmin": "タスクスケジュール"
-    }
+    },
+    "pendingApprovals": "承認待ち {count}件 — エージェント作業がユーザーの承認を待っています"
   },
   "sidebar": {
     "newChat": "新しいチャット",

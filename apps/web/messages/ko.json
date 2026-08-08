@@ -24,7 +24,8 @@
       "modelRolesAdmin": "역할 모델 관리",
       "developer": "개발자",
       "schedulesAdmin": "작업 스케줄"
-    }
+    },
+    "pendingApprovals": "승인 대기 {count}건 — 에이전트 작업이 사용자 승인을 기다리고 있습니다"
   },
   "sidebar": {
     "newChat": "새 대화",
