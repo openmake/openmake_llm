@@ -19,10 +19,16 @@ export function resolveDefaultMaxTurns(
     files: AgentTaskInputFile[] | undefined,
 ): number {
     if (explicit) return explicit;
-    const hasLargeInput = (files ?? []).some(
-        (f) => (f.size ?? 0) > DOC_EXTRACT_LIMITS.MAX_BYTES_PER_FILE,
-    );
-    return hasLargeInput ? AGENT_TASK_LIMITS.LARGE_INPUT_MAX_TURNS : AGENT_TASK_LIMITS.DEFAULT_MAX_TURNS;
+    // 크기 초과뿐 아니라 "추출 텍스트를 확보하지 못한 문서"(스캔본·추출 타임아웃 등)도
+    // 샌드박스 자체 파싱이 필요해 동일하게 턴 예산을 상향한다 (2026-08-08 13MB 스캔 PDF
+    // 추출 60s 타임아웃 → 10턴 소진 실측).
+    const needsSandboxParsing = (files ?? []).some((f) => {
+        if ((f.size ?? 0) > DOC_EXTRACT_LIMITS.MAX_BYTES_PER_FILE) return true;
+        const ext = (f.name ?? '').toLowerCase().split('.').pop() ?? '';
+        const isDoc = DOC_EXTRACT_LIMITS.PDF_EXTS.includes(ext) || DOC_EXTRACT_LIMITS.OFFICE_EXTS.includes(ext);
+        return isDoc && typeof f.content !== 'string';
+    });
+    return needsSandboxParsing ? AGENT_TASK_LIMITS.LARGE_INPUT_MAX_TURNS : AGENT_TASK_LIMITS.DEFAULT_MAX_TURNS;
 }
 
 const logger = createLogger('AgentTaskService');
