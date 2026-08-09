@@ -132,6 +132,10 @@ function buildMenu() {
         },
         { label: '연결 해제', enabled: bridge.isConnected(), click: () => bridge.disconnectFolder() },
         { type: 'separator' },
+        // 셸 명령 일괄 승인 상태 — 켜져 있으면 사용자가 반드시 인지·회수할 수 있어야 한다.
+        { label: `명령 일괄 승인: ${bridge.autoApprovedCount() > 0 ? `${bridge.autoApprovedCount()}개 작업` : '없음'}`, enabled: false },
+        { label: '일괄 승인 모두 해제', enabled: bridge.autoApprovedCount() > 0, click: () => bridge.clearAutoApprove() },
+        { type: 'separator' },
         // D3 — 에이전트 브라우저는 작업 중 화면 하단에 뜬다. 사용자가 언제든 닫을 수 있어야 한다.
         { label: '에이전트 브라우저 닫기', click: () => agentBrowser.closeAll() },
       ],

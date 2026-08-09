@@ -120,7 +120,7 @@ describe('worktree 격리 실패 시 폴백', () => {
         await ex.create();
         requests.length = 0;
         await ex.cleanup();
-        expect(requests).toEqual([{ kind: 'task_end' }]);
+        expect(requests).toEqual([{ kind: 'task_end', taskId: 'task-abcdef12' }]);
     });
 
     it('디바이스 미연결이면 create 가 throw 한다 (기존 계약 유지)', async () => {

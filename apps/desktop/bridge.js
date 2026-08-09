@@ -9,7 +9,9 @@
 //  - 파일 kind(read/write/list/delete)의 경로는 연결 폴더 realpath 스코프 안에서만
 //    해석 (심링크 탈출 차단)
 //  - exec 3단 방어: ① 명백히 위험한 패턴을 디바이스에서 hard-block(EXEC_DENYLIST)
-//    ② 나머지는 실행 전 매번 사용자 확인(confirmExec) — 서버 승인 설정과 무관한 비우회 게이트
+//    ② 나머지는 실행 전 사용자 확인(confirmExec) — 서버 승인 설정과 무관한 비우회 게이트.
+//       사용자가 원하면 **그 작업 동안만** 일괄 승인할 수 있고(작업 종료·연결 해제 시 회수),
+//       서버가 임의로 켤 수는 없다(선택 주체가 항상 사용자)
 //    ③ 승인된 명령도 OS 샌드박스(sandbox-exec)로 감싸 폴더 밖 쓰기·비밀 읽기를 커널이 차단
 //    (읽기 일반·네트워크는 허용 — 개발 명령 호환. 막는 축은 '파괴'와 '비밀 유출')
 //  - 인증은 앱 세션의 auth_token 쿠키 재사용 (토큰을 디스크에 저장하지 않음)
@@ -17,7 +19,7 @@ const { session, dialog } = require('electron');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFile } = require('child_process');
+const { execFile, execFileSync } = require('child_process');
 const crypto = require('crypto');
 const WebSocket = require('ws');
 const agentBrowser = require('./agent-browser');
@@ -69,24 +71,43 @@ let statusText = '미연결';
 let onStatusChange = () => {};
 let mainWin = null;          // exec 확인 다이얼로그의 부모 창
 
+/**
+ * 작업 단위 일괄 승인 — 사용자가 "이 작업 동안 모두 실행"을 고른 taskId 집합.
+ *
+ * 에이전트 작업 하나가 셸 명령을 수십 번 부르므로 매번 묻는 것은 실사용이 어렵다(2026-08-09
+ * GUI 검증에서 확인). 범위를 **그 작업으로 한정**해 다른 작업까지 열리지 않게 하고, 작업 종료
+ * (task_end)·폴더 연결 해제 시 즉시 비운다. 나머지 방어(EXEC_DENYLIST hard-block, OS
+ * 샌드박스의 폴더 밖 쓰기·비밀 읽기 차단)는 자동 승인이어도 그대로 적용된다.
+ */
+const autoApproveTasks = new Set();
+
 /** exec 실행 전 사용자 확인(비우회). 거부/취소면 false. 실행될 명령 원문을 그대로 보여준다. */
-async function confirmExec(command) {
+async function confirmExec(command, taskId) {
   // 테스트 훅(개발/E2E 전용): 다이얼로그 없이 자동 승인 (다른 OMK_BRIDGE_* 훅과 동일 계열).
   if (process.env.OMK_BRIDGE_AUTO_APPROVE === '1') return true;
+  if (taskId && autoApproveTasks.has(taskId)) return true;
   const preview = command.length > 800 ? command.slice(0, 800) + '…' : command;
   const r = await dialog.showMessageBox(mainWin || undefined, {
     type: 'warning',
     message: '에이전트가 이 셸 명령을 당신의 컴퓨터에서 실행하려고 합니다',
     detail: `${preview}\n\n연결 폴더: ${folderRoot}\n${SANDBOX_ENABLED && sandboxProfilePath
       ? 'OS 샌드박스 적용: 폴더 밖 쓰기와 비밀 파일(.ssh/.aws 등) 읽기는 차단됩니다. 그 외 읽기·네트워크는 허용됩니다.'
-      : '⚠️ 샌드박스 미적용: 이 명령은 당신 계정 권한으로 폴더 밖 파일·네트워크에 접근할 수 있습니다.'}`,
-    buttons: ['실행', '거부'],
-    defaultId: 1,
-    cancelId: 1,
+      : '⚠️ 샌드박스 미적용: 이 명령은 당신 계정 권한으로 폴더 밖 파일·네트워크에 접근할 수 있습니다.'}${
+      taskId ? '\n\n"이 작업 동안 모두 실행"을 고르면 이 작업이 끝날 때까지 다시 묻지 않습니다(다른 작업에는 적용되지 않습니다).' : ''}`,
+    buttons: taskId ? ['실행', '이 작업 동안 모두 실행', '거부'] : ['실행', '거부'],
+    defaultId: taskId ? 2 : 1,
+    cancelId: taskId ? 2 : 1,
     noLink: true,
   });
+  if (taskId && r.response === 1) { autoApproveTasks.add(taskId); buildMenuHook(); return true; }
   return r.response === 0;
 }
+
+/** 메뉴 라벨(자동 승인 중 표시) 갱신 훅 — main.js 가 setOnStatusChange 로 주입한 콜백 재사용. */
+function buildMenuHook() { try { onStatusChange(statusText); } catch { /* noop */ } }
+
+/** 현재 일괄 승인 중인 작업 수 — 메뉴 표시용(사용자가 상태를 인지할 수 있게). */
+function autoApprovedCount() { return autoApproveTasks.size; }
 
 function deviceId(app) {
   const p = path.join(app.getPath('userData'), 'device-id');
@@ -104,7 +125,22 @@ function sbq(p) { return `"${String(p).replace(/\\/g, '\\\\').replace(/"/g, '\\"
  * 정책: 기본 allow → 쓰기는 폴더·임시·툴캐시로 제한, 비밀 경로는 읽기 차단.
  * (SBPL 은 last-match-wins 이라 deny 뒤에 allow 를 두어야 예외가 성립한다.)
  */
-function writeSandboxProfile(app, root) {
+/**
+ * 연결 폴더가 git 레포(하위 폴더 포함)면 레포의 .git 절대경로, 아니면 null.
+ * 레포 **하위 폴더**를 연결하면 .git 이 폴더 밖에 있어 샌드박스가 git 쓰기를 막았다 —
+ * 레포 루트를 연결했을 때는 이미 허용되던 쓰기라, 허용해도 권한이 새로 넓어지지 않는다
+ * (같은 레포인데 연결 지점에 따라 동작이 갈리던 비일관성 해소. worktree 커밋의 index.lock 이
+ * `.git/worktrees/<name>/` 에 생겨 2026-08-09 GUI 검증에서 실제 실패로 드러났다).
+ */
+function detectGitDir(root) {
+  try {
+    const out = execFileSync('git', ['rev-parse', '--absolute-git-dir'],
+      { cwd: root, encoding: 'utf8', timeout: 5000 }).trim();
+    return out || null;
+  } catch { return null; }
+}
+
+function writeSandboxProfile(app, root, gitDir) {
     try {
         const home = fs.realpathSync(os.homedir());
         const sub = (base, list) => list.map((d) => `(subpath ${sbq(path.join(base, d))})`).join(' ');
@@ -113,6 +149,8 @@ function writeSandboxProfile(app, root) {
             '(allow default)',
             '(deny file-write*)',
             `(allow file-write* (subpath ${sbq(root)}))`,
+            // 레포 하위 폴더 연결 시 .git 은 폴더 밖 — git(커밋·인덱스) 쓰기를 열어준다(위 detectGitDir 주석).
+            ...(gitDir ? [`(allow file-write* (subpath ${sbq(gitDir)}))`] : []),
             '(allow file-write* (subpath "/private/tmp") (subpath "/private/var/folders") (subpath "/dev"))',
             `(allow file-write* ${sub(home, CACHE_SUBPATHS)})`,
             `(deny file-read* ${sub(home, SECRET_SUBPATHS)})`,
@@ -285,8 +323,8 @@ async function handleExec(m, done) {
       // ① 명백히 위험한 패턴은 확인 없이 즉시 거부 (guardrail).
       const denied = matchDenylist(m.command);
       if (denied) { done({ ok: false, error: `위험 명령으로 차단됨: ${denied}`, exitCode: 126 }); return; }
-      // ② 나머지는 실행 전 사용자 확인 (비우회).
-      if (!(await confirmExec(String(m.command || '')))) {
+      // ② 나머지는 실행 전 사용자 확인 (비우회). 같은 작업 안에서는 사용자가 일괄 승인할 수 있다.
+      if (!(await confirmExec(String(m.command || ''), m.taskId))) {
         done({ ok: false, error: '사용자가 명령 실행을 거부했습니다', exitCode: 126 }); return;
       }
       // ③ OS 샌드박스로 감싸 실행 — 폴더 밖 쓰기·비밀 읽기를 커널이 차단한다.
@@ -345,6 +383,8 @@ async function handleExec(m, done) {
       await handleWorktree(m, done); return;
     case 'task_end':
       agentBrowser.closeAll();   // 작업 종료 시 브라우저 패널 정리
+      // 일괄 승인은 그 작업에만 유효 — 종료 즉시 회수한다.
+      if (m.taskId && autoApproveTasks.delete(m.taskId)) buildMenuHook();
       done({ ok: true }); return;
     default: done({ ok: false, error: `지원하지 않는 kind: ${m.kind}` });
   }
@@ -423,7 +463,7 @@ async function connectFolder(app, backendUrl, win) {
   }
   folderRoot = fs.realpathSync(folder);
   // 연결 폴더 기준으로 exec 샌드박스 프로파일 갱신 (폴더가 바뀌면 스코프도 바뀐다).
-  sandboxProfilePath = SANDBOX_ENABLED ? writeSandboxProfile(app, folderRoot) : null;
+  sandboxProfilePath = SANDBOX_ENABLED ? writeSandboxProfile(app, folderRoot, detectGitDir(folderRoot)) : null;
   await connect(app, backendUrl);
 }
 
@@ -431,6 +471,7 @@ function disconnectFolder() {
   folderRoot = null;
   clearTimeout(reconnectTimer);
   clearInterval(refreshTimer);
+  autoApproveTasks.clear();   // 연결이 끊기면 일괄 승인도 회수한다(다음 연결로 새지 않게).
   try { if (ws) ws.close(); } catch { /* noop */ }
   ws = null;
   setStatus('미연결');
@@ -447,6 +488,10 @@ module.exports = {
    * 개인정보(사용자명 등)가 포함되므로 **로컬 UI 표시에만** 쓰고 서버로 보내지 않는다.
    */
   getFolderPath: () => folderRoot,
+  /** 일괄 승인 중인 작업 수 — 메뉴에 노출해 사용자가 상태를 인지하게 한다. */
+  autoApprovedCount,
+  /** 일괄 승인 전체 해제 — 메뉴에서 즉시 회수할 수 있어야 한다. */
+  clearAutoApprove: () => { autoApproveTasks.clear(); buildMenuHook(); },
   setOnStatusChange: (fn) => { onStatusChange = fn; },
   /** 백엔드 전환 시 재연결 */
   onBackendChanged: (app, backendUrl) => { if (folderRoot) connect(app, backendUrl); },

@@ -99,7 +99,9 @@ export class RemoteExecutor implements TaskExecutor {
         // 디바이스는 cwd=연결 폴더로 실행하므로, 격리 시 worktree 로 이동해 수행한다.
         // (감싼 문자열이 사용자 확인 창에 그대로 보이므로 어디서 실행되는지 투명하다.)
         const scopedCommand = this.worktreeRel ? `cd ${this.worktreeRel} && ${command}` : command;
-        return toExecResult(await this.req({ kind: 'exec', command: scopedCommand }));
+        // taskId 를 함께 보낸다 — 디바이스가 승인 게이트를 **작업 단위**로 일괄 처리할 수 있게
+        // (에이전트 작업 하나가 셸 명령을 수십 번 부르므로 매번 확인은 실사용이 어렵다).
+        return toExecResult(await this.req({ kind: 'exec', command: scopedCommand, taskId: this.taskId }));
     }
 
     /**
@@ -204,7 +206,8 @@ export class RemoteExecutor implements TaskExecutor {
                 logger.info(`[${this.taskId}] worktree ${r.kept ? `보존 (branch=${this.worktreeBranch})` : '정리 완료'}`);
             }
         }
-        await this.req({ kind: 'task_end' }).catch(() => { /* best-effort */ });
+        // taskId 포함 — 디바이스가 이 작업의 일괄 승인을 즉시 회수한다.
+        await this.req({ kind: 'task_end', taskId: this.taskId }).catch(() => { /* best-effort */ });
         logger.info(`[${this.taskId}] 로컬 실행기 세션 종료 통지`);
     }
 }
