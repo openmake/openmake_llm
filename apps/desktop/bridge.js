@@ -180,6 +180,38 @@ function excludeWorktreeDir(gitDir) {
   } catch { /* 제외 등록 실패는 치명적이지 않다(사용자 status 에 보일 뿐) */ }
 }
 
+/**
+ * diff 기준점(worktree 생성 시점 커밋) 저장·조회.
+ *
+ * worktree 메타 디렉토리(`.git/worktrees/<name>/`)에 둔다 — 작업트리 밖이라 diff·status 에
+ * 잡히지 않고, `git worktree remove` 시 함께 정리된다. 읽기 실패 시 'HEAD' 로 폴백한다
+ * (커밋이 있었다면 그 변경은 놓치지만, diff 캡처 자체가 죽지는 않는다).
+ */
+async function worktreeMetaDir(wtAbs) {
+  const r = await git(['rev-parse', '--absolute-git-dir'], wtAbs);
+  return r.code === 0 ? r.stdout.trim() : null;
+}
+
+async function writeBaseSha(wtAbs) {
+  try {
+    const meta = await worktreeMetaDir(wtAbs);
+    const head = await git(['rev-parse', 'HEAD'], wtAbs);
+    if (meta && head.code === 0) fs.writeFileSync(path.join(meta, 'omk-base'), head.stdout.trim());
+  } catch { /* 기준점 기록 실패는 치명적이지 않다(HEAD 폴백) */ }
+}
+
+async function readBaseSha(wtAbs) {
+  try {
+    const meta = await worktreeMetaDir(wtAbs);
+    const p = meta && path.join(meta, 'omk-base');
+    if (p && fs.existsSync(p)) {
+      const sha = fs.readFileSync(p, 'utf8').trim();
+      if (/^[0-9a-f]{7,40}$/.test(sha)) return sha;
+    }
+  } catch { /* noop */ }
+  return 'HEAD';
+}
+
 async function handleWorktree(m, done) {
   if (!folderRoot) { done({ ok: false, error: '폴더가 연결되지 않았습니다' }); return; }
   const taskId = String(m.taskId || '');
@@ -201,6 +233,7 @@ async function handleWorktree(m, done) {
     if (fs.existsSync(abs)) { done({ ok: true, worktreeRel: workRel, branch }); return; } // 재개 시 재사용
     const r = await git(['worktree', 'add', abs, '-b', branch], folderRoot);
     if (r.code !== 0) { done({ ok: false, error: `worktree 생성 실패: ${(r.stderr || r.stdout).trim().slice(0, 300)}` }); return; }
+    await writeBaseSha(abs);
     done({ ok: true, worktreeRel: workRel, branch });
     return;
   }
@@ -209,7 +242,10 @@ async function handleWorktree(m, done) {
     if (!fs.existsSync(abs)) { done({ ok: false, error: 'worktree 없음' }); return; }
     // -N: 새 파일을 인덱스에 '의도만' 등록해 diff 에 포함시킨다(실제 스테이징·커밋은 하지 않음).
     await git(['add', '-A', '-N', '.'], abs);
-    const r = await git(['diff', 'HEAD'], abs);
+    // 기준점은 **worktree 생성 시점의 커밋**이다. HEAD 를 쓰면 에이전트가 중간에 커밋했을 때
+    // 그 변경이 diff 에서 사라진다(2026-08-09 라이브 E2E 에서 실제 발생 — 모델이 작업을 커밋해
+    // diff 에 마지막 미커밋 파일 하나만 남았다).
+    const r = await git(['diff', await readBaseSha(abs)], abs);
     if (r.code !== 0) { done({ ok: false, error: `diff 실패: ${(r.stderr || '').trim().slice(0, 200)}` }); return; }
     done({ ok: true, stdout: r.stdout, branch });
     return;
@@ -218,8 +254,11 @@ async function handleWorktree(m, done) {
   if (m.op === 'remove') {
     if (!fs.existsSync(abs)) { done({ ok: true, kept: false }); return; }
     // 변경분이 남아 있으면 **지우지 않는다** — 사용자 디스크의 작업 결과를 임의 삭제하지 않는다.
+    // 미커밋 변경뿐 아니라 **에이전트가 만든 커밋**도 보존 대상이다(HEAD 가 기준점에서 움직였는지).
     const st = await git(['status', '--porcelain'], abs);
-    if (st.code === 0 && st.stdout.trim() !== '') { done({ ok: true, kept: true, branch }); return; }
+    const head = await git(['rev-parse', 'HEAD'], abs);
+    const moved = head.code === 0 && head.stdout.trim() !== (await readBaseSha(abs));
+    if ((st.code === 0 && st.stdout.trim() !== '') || moved) { done({ ok: true, kept: true, branch }); return; }
     const r = await git(['worktree', 'remove', '--force', abs], folderRoot);
     if (r.code !== 0) { done({ ok: true, kept: true, branch }); return; } // 제거 실패도 보존으로 취급
     await git(['branch', '-D', branch], folderRoot); // 변경 없는 빈 브랜치 정리(실패 무시)
