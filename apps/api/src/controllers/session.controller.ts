@@ -105,6 +105,8 @@ export class SessionController {
              const user = req.user;
              const anonSessionId = req.query.anonSessionId as string;
              const limit = parseInt(req.query.limit as string) || 50;
+             // offset 은 관리자 전체 조회(scope 'all') 페이지네이션 전용 — 음수/비정상 입력은 0
+             const offset = Math.max(0, parseInt(req.query.offset as string) || 0);
              const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
 
              const userIdStr = user?.id ? String(user.id) : undefined;
@@ -117,6 +119,8 @@ export class SessionController {
 
              let sessions: ConversationSession[];
              let snippets: Record<string, string> = {};
+             // 관리자 전체 조회의 총 건수 — 페이지네이션 UI 용 (다른 scope 는 undefined 유지, 하위 호환)
+             let total: number | undefined;
              if (q && (scope === 'user' || scope === 'anon')) {
                  const hit = await conversationDb.searchSessionsByOwner(
                      scope === 'user' ? { userId: userIdStr } : { anonSessionId },
@@ -126,9 +130,12 @@ export class SessionController {
                  snippets = hit.snippets;
                  log.info(`[Chat Sessions] 검색(${scope}) "${q.slice(0, 40)}": ${sessions.length}개`);
              } else if (scope === 'all') {
-                 // 🔑 관리자 전용 화면(/admin/conversations)의 명시적 전체 조회
-                 sessions = await conversationDb.getAllSessions(limit);
-                 log.info(`[Chat Sessions] 관리자 전체 조회: ${sessions.length}개`);
+                 // 🔑 관리자 전용 화면(/admin/conversations)의 명시적 전체 조회 — offset 페이지네이션
+                 [sessions, total] = await Promise.all([
+                     conversationDb.getAllSessions(limit, offset),
+                     conversationDb.countAllSessions(),
+                 ]);
+                 log.info(`[Chat Sessions] 관리자 전체 조회: ${sessions.length}개 (offset=${offset}, total=${total})`);
              } else if (scope === 'user') {
                  // 🔐 로그인 사용자: 자신의 대화만 (관리자도 개인 화면에선 동일)
                  sessions = await conversationDb.getSessionsByUserId(userIdStr!, limit);
@@ -159,7 +166,8 @@ export class SessionController {
                  ...(snippets[s.id] ? { snippet: snippets[s.id] } : {}),
              }));
 
-             res.json(success({ sessions: formattedSessions }));
+             // total 은 관리자 전체 조회(scope 'all')에만 실림 — 기존 소비처(사이드바/히스토리) 무영향
+             res.json(success({ sessions: formattedSessions, ...(total !== undefined ? { total } : {}) }));
          }));
 
          // 🆕 익명 세션 이관: 로그인 후 기존 익명 대화를 사용자에게 귀속

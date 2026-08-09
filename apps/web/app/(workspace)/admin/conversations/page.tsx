@@ -34,7 +34,11 @@ interface ApiConversation {
   metadata?: { source?: string } | null;
 }
 
-type ConversationsResponse = ApiSuccess<{ sessions: ApiConversation[] }>;
+/** total 은 viewAll(관리자 전체 조회) 응답에만 실린다 — 페이지네이션 계산용 */
+type ConversationsResponse = ApiSuccess<{ sessions: ApiConversation[]; total?: number }>;
+
+/** 대화 목록 페이지 크기 — 서버 offset 페이지네이션과 쌍 */
+const CONV_PAGE_SIZE = 50;
 
 /* GET /api/agent-tasks?viewAll=true → res.data.tasks (toPublicTask, snake_case). */
 interface ApiAgentTask {
@@ -121,10 +125,15 @@ export default function AdminConversationsPage() {
   const [tab, setTab] = useState<TabKey>("conversations");
 
   const [sessions, setSessions] = useState<ApiConversation[]>([]);
+  // 대화 탭 페이지네이션 — 0-base 페이지 번호 + 서버가 준 총 건수
+  const [convPage, setConvPage] = useState(0);
+  const [convTotal, setConvTotal] = useState(0);
   const [tasks, setTasks] = useState<ApiAgentTask[]>([]);
   const [research, setResearch] = useState<ApiResearchSession[]>([]);
   const [userMap, setUserMap] = useState<Record<string, AdminUserLite>>({});
   const [loading, setLoading] = useState(true);
+  // 작업·리서치 탭 로딩 — 대화 탭(loading, 페이지네이션 재조회)과 분리
+  const [sideLoading, setSideLoading] = useState(true);
   const [query, setQuery] = useState("");
 
   // 상세 모달 — 대화(메시지 전문) / 리서치(스텝 전문)
@@ -136,18 +145,15 @@ export default function AdminConversationsPage() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      // 세 목록(admin 옵트인)과 사용자 목록(이메일 매핑용)을 병렬 조회.
+      // 작업·리서치 목록(admin 옵트인)과 사용자 목록(이메일 매핑용)을 병렬 조회.
       // 사용자 목록 실패는 허용 — 그 경우 원 userId 로 표시.
-      const [convRes, taskRes, researchRes, usersRes] = await Promise.allSettled([
-        ApiClient.get<ConversationsResponse>("/api/chat/conversations?viewAll=true&limit=200"),
+      // (대화 목록은 페이지네이션 때문에 아래 convPage 효과에서 별도 조회)
+      const [taskRes, researchRes, usersRes] = await Promise.allSettled([
         ApiClient.get<AgentTasksResponse>("/api/agent-tasks?viewAll=true"),
         ApiClient.get<ResearchListResponse>("/api/research/sessions?viewAll=true"),
         ApiClient.get<ApiSuccess<{ users?: AdminUserLite[] }>>("/api/admin/users?limit=500"),
       ]);
       if (!alive) return;
-      if (convRes.status === "fulfilled") {
-        setSessions(convRes.value?.data?.sessions ?? []);
-      }
       if (taskRes.status === "fulfilled") {
         setTasks(taskRes.value?.data?.tasks ?? []);
       }
@@ -158,12 +164,36 @@ export default function AdminConversationsPage() {
         const users = usersRes.value?.data?.users ?? [];
         setUserMap(Object.fromEntries(users.map((u) => [String(u.id), u])));
       }
-      setLoading(false);
+      setSideLoading(false);
     })();
     return () => {
       alive = false;
     };
   }, []);
+
+  // 대화 목록 — 서버 offset 페이지네이션 (페이지 이동 시 재조회)
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    (async () => {
+      try {
+        const res = await ApiClient.get<ConversationsResponse>(
+          `/api/chat/conversations?viewAll=true&limit=${CONV_PAGE_SIZE}&offset=${convPage * CONV_PAGE_SIZE}`,
+        );
+        if (!alive) return;
+        setSessions(res?.data?.sessions ?? []);
+        setConvTotal(res?.data?.total ?? 0);
+      } catch {
+        if (!alive) return;
+        setSessions([]);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [convPage]);
 
   const ownerLabelById = (userId: string | null | undefined): string => {
     if (userId) {
@@ -347,6 +377,36 @@ export default function AdminConversationsPage() {
               </Table>
             )}
 
+            {tab === "conversations" && convTotal > CONV_PAGE_SIZE && (
+              <div className="flex items-center justify-between border-t border-border px-4 py-3 text-sm text-muted">
+                <span>
+                  {t("pagination.info", {
+                    page: convPage + 1,
+                    pages: Math.max(1, Math.ceil(convTotal / CONV_PAGE_SIZE)),
+                    total: convTotal,
+                  })}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={loading || convPage === 0}
+                    onClick={() => setConvPage((p) => Math.max(0, p - 1))}
+                    className="rounded-md border border-border px-3 py-1 transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {t("pagination.prev")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={loading || (convPage + 1) * CONV_PAGE_SIZE >= convTotal}
+                    onClick={() => setConvPage((p) => p + 1)}
+                    className="rounded-md border border-border px-3 py-1 transition hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {t("pagination.next")}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {tab === "tasks" && (
               <Table>
                 <thead>
@@ -358,7 +418,7 @@ export default function AdminConversationsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {loading ? (
+                  {sideLoading ? (
                     <tr>
                       <Td className="py-8 text-center text-muted" colSpan={4}>
                         <Loader2 className="mx-auto h-5 w-5 animate-spin" />
@@ -403,7 +463,7 @@ export default function AdminConversationsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {loading ? (
+                  {sideLoading ? (
                     <tr>
                       <Td className="py-8 text-center text-muted" colSpan={4}>
                         <Loader2 className="mx-auto h-5 w-5 animate-spin" />

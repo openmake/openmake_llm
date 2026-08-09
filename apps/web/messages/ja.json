@@ -1267,6 +1267,11 @@
     "researchDetail": {
       "empty": "リサーチステップがありません",
       "step": "ステップ {n}"
+    },
+    "pagination": {
+      "info": "全{total}件 · {page}/{pages}ページ",
+      "prev": "前へ",
+      "next": "次へ"
     }
   },
   "adminAudit": {

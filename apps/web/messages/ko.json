@@ -1267,6 +1267,11 @@
     "researchDetail": {
       "empty": "리서치 스텝이 없습니다",
       "step": "스텝 {n}"
+    },
+    "pagination": {
+      "info": "총 {total}건 · {page}/{pages} 페이지",
+      "prev": "이전",
+      "next": "다음"
     }
   },
   "adminAudit": {

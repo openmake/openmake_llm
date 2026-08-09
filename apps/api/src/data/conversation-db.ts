@@ -66,6 +66,7 @@ class ConversationDB {
     getSessionsByUserId = sessions.getSessionsByUserId;
     getSessionsByAnonId = sessions.getSessionsByAnonId;
     getAllSessions = sessions.getAllSessions;
+    countAllSessions = sessions.countAllSessions;
     searchSessionsByOwner = sessions.searchSessionsByOwner;
     getSessions = sessions.getSessions;
     getUserSessions = sessions.getUserSessions;
