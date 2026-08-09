@@ -44,6 +44,13 @@ export class RemoteExecutor implements TaskExecutor {
     readonly browserStatePath = null;
     private readonly userId: string;
     private deviceLabel = 'local-device';
+    /**
+     * worktree 격리 시 연결 폴더 기준 상대경로(예: `.openmake/worktrees/<taskId>`). null 이면
+     * 격리 없이 연결 폴더에서 직접 작업하는 기존 동작이다(git 레포가 아니거나 생성 실패).
+     */
+    private worktreeRel: string | null = null;
+    /** worktree 작업 브랜치명 — 사용자 안내·결과 보고용. */
+    private worktreeBranch: string | null = null;
 
     constructor(taskId: string, userId: string) {
         this.taskId = taskId;
@@ -52,20 +59,62 @@ export class RemoteExecutor implements TaskExecutor {
 
     get label(): string { return `local:${this.deviceLabel}`; }
 
-    /** 실행 준비 = 디바이스 연결 확인(도구 왕복 없음). 미연결이면 throw → 호출부 graceful degrade. */
+    /** worktree 격리가 실제로 적용됐는지(호출부 안내·diff 캡처 판단용). */
+    get isolatedBranch(): string | null { return this.worktreeBranch; }
+
+    /**
+     * 실행 준비 = 디바이스 연결 확인 + worktree 격리 시도.
+     * 미연결이면 throw → 호출부 graceful degrade. worktree 실패는 throw 하지 않는다(fail-open).
+     */
     async create(): Promise<void> {
         const dev = getLocalBridgeRegistry().getDevice(this.userId);
         if (!dev) throw new Error('연결된 로컬 디바이스가 없습니다 — 데스크톱 앱에서 작업 폴더를 먼저 연결하세요.');
         this.deviceLabel = `${dev.label}`;
         logger.info(`[${this.taskId}] 로컬 실행기 준비 (device=${dev.deviceId}, folder="${dev.folderName}")`);
+
+        if (!LOCAL_BRIDGE.WORKTREE_ENABLED) return;
+        const r = await this.req({ kind: 'worktree', op: 'add', taskId: this.taskId });
+        if (r.ok && r.worktreeRel) {
+            this.worktreeRel = r.worktreeRel;
+            this.worktreeBranch = r.branch ?? null;
+            logger.info(`[${this.taskId}] worktree 격리 활성 (${r.worktreeRel}, branch=${r.branch})`);
+        } else {
+            // git 레포가 아니거나 생성 실패 — 격리 없이 진행한다(기존 동작 유지).
+            logger.info(`[${this.taskId}] worktree 격리 미적용: ${r.error ?? 'worktreeRel 없음'}`);
+        }
     }
 
     private req(payload: BridgeRequestPayload): Promise<BridgeResult> {
         return getLocalBridgeRegistry().request(this.userId, payload);
     }
 
+    /** 파일 경로를 worktree 기준으로 변환. 격리가 없으면 원래 경로 그대로. */
+    private scoped(relPath: string): string {
+        if (!this.worktreeRel) return relPath;
+        const clean = (relPath ?? '.').replace(/^\.\/+/, '');
+        return clean === '' || clean === '.' ? this.worktreeRel : `${this.worktreeRel}/${clean}`;
+    }
+
     async exec(command: string): Promise<ExecResult> {
-        return toExecResult(await this.req({ kind: 'exec', command }));
+        // 디바이스는 cwd=연결 폴더로 실행하므로, 격리 시 worktree 로 이동해 수행한다.
+        // (감싼 문자열이 사용자 확인 창에 그대로 보이므로 어디서 실행되는지 투명하다.)
+        const scopedCommand = this.worktreeRel ? `cd ${this.worktreeRel} && ${command}` : command;
+        return toExecResult(await this.req({ kind: 'exec', command: scopedCommand }));
+    }
+
+    /**
+     * worktree 변경분 diff — 레포의 실제 HEAD 가 기준점이라 인위적 baseline 커밋이 필요 없다.
+     * 격리가 없거나 실패하면 null(호출부는 diff 스텝을 남기지 않는다).
+     */
+    async captureDiff(): Promise<string | null> {
+        if (!this.worktreeRel) return null;
+        const r = await this.req({ kind: 'worktree', op: 'diff', taskId: this.taskId });
+        if (!r.ok) {
+            logger.warn(`[${this.taskId}] worktree diff 실패: ${r.error}`);
+            return null;
+        }
+        const out = (r.stdout ?? '').slice(0, LOCAL_BRIDGE.OUTPUT_CAP);
+        return out.trim() === '' ? null : out;
     }
 
     /**
@@ -103,7 +152,7 @@ export class RemoteExecutor implements TaskExecutor {
         if (buf.byteLength > LOCAL_BRIDGE.MAX_WRITE_BYTES) {
             throw new Error(`파일이 너무 큽니다 (${buf.byteLength}b > ${LOCAL_BRIDGE.MAX_WRITE_BYTES}b)`);
         }
-        const r = await this.req({ kind: 'write', path: relPath, contentB64: buf.toString('base64') });
+        const r = await this.req({ kind: 'write', path: this.scoped(relPath), contentB64: buf.toString('base64') });
         if (!r.ok) throw new Error(r.error ?? '로컬 파일 쓰기 실패');
     }
 
@@ -117,29 +166,44 @@ export class RemoteExecutor implements TaskExecutor {
     }
 
     async readFile(relPath: string): Promise<string> {
-        const r = await this.req({ kind: 'read', path: relPath });
+        const r = await this.req({ kind: 'read', path: this.scoped(relPath) });
         if (!r.ok) throw new Error(r.error ?? '로컬 파일 읽기 실패');
         return (r.content ?? '').slice(0, LOCAL_BRIDGE.OUTPUT_CAP);
     }
 
     async listDir(relPath = '.'): Promise<string[]> {
-        const r = await this.req({ kind: 'list', path: relPath });
+        const r = await this.req({ kind: 'list', path: this.scoped(relPath) });
         if (!r.ok) throw new Error(r.error ?? '로컬 디렉토리 조회 실패');
         return r.entries ?? [];
     }
 
+    /** listAll 은 연결 폴더 전체를 훑으므로, 격리 시 worktree 하위만 남기고 prefix 를 벗긴다. */
     async listWorkspaceFiles(): Promise<string[]> {
         const r = await this.req({ kind: 'listAll' });
-        return r.ok ? (r.entries ?? []) : [];
+        const all = r.ok ? (r.entries ?? []) : [];
+        if (!this.worktreeRel) return all;
+        const prefix = `${this.worktreeRel}/`;
+        return all.filter((p) => p.startsWith(prefix)).map((p) => p.slice(prefix.length));
     }
 
     async deleteFile(relPath: string): Promise<void> {
-        const r = await this.req({ kind: 'delete', path: relPath });
+        const r = await this.req({ kind: 'delete', path: this.scoped(relPath) });
         if (!r.ok) throw new Error(r.error ?? '로컬 파일 삭제 실패');
     }
 
-    /** 종료 통지만 — 사용자 폴더는 절대 삭제하지 않는다(removeWorkspace 무시). */
+    /**
+     * 종료 통지 + worktree 정리 — 사용자 폴더는 절대 삭제하지 않는다(removeWorkspace 무시).
+     * worktree 도 **변경분이 없을 때만** 제거한다(디바이스가 판단). 변경이 남아 있으면 브랜치와
+     * 함께 보존해 사용자가 검토·머지할 수 있게 한다.
+     */
     async cleanup(): Promise<void> {
+        if (this.worktreeRel) {
+            const r = await this.req({ kind: 'worktree', op: 'remove', taskId: this.taskId })
+                .catch(() => ({ ok: false } as BridgeResult));
+            if (r.ok) {
+                logger.info(`[${this.taskId}] worktree ${r.kept ? `보존 (branch=${this.worktreeBranch})` : '정리 완료'}`);
+            }
+        }
         await this.req({ kind: 'task_end' }).catch(() => { /* best-effort */ });
         logger.info(`[${this.taskId}] 로컬 실행기 세션 종료 통지`);
     }

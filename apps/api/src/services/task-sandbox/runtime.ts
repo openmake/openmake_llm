@@ -117,6 +117,11 @@ export class TaskRuntime {
     /** 호스트 workspace 경로 or null(원격 실행기) — 호스트측 소비자(diff·git·영속)의 가드 기준. */
     get localWorkdir(): string | null { return this.executor.localWorkdir; }
 
+    /** 실행기 자체 diff(로컬 worktree). 미지원이면 null → 호출부가 workspace git 캡처로 폴백. */
+    async captureExecutorDiff(): Promise<string | null> {
+        return this.executor.captureDiff ? this.executor.captureDiff() : null;
+    }
+
     /** 호스트 workspace 절대경로 — 호스트측 git 연산(code-diff·clone·PR)이 의존.
      *  원격 실행기(D1)는 호스트 workspace 가 없으므로 호출부가 사용 전 가드해야 한다. */
     get workspacePath(): string {

@@ -138,6 +138,98 @@ function safe(rel) {
   return abs;
 }
 
+// ── worktree 격리 (로컬 실행기) ──────────────────────────────────────────
+// 에이전트가 사용자의 현재 작업트리·브랜치를 직접 건드리지 않도록, 연결 폴더가 git 레포면
+// 별도 worktree(=별도 디렉토리 + 별도 브랜치)를 만들어 그 안에서만 작업하게 한다.
+//
+// 왜 연결 폴더 '안'인가: exec 는 sandbox-exec 로 폴더 밖 쓰기가 커널 차단되고, 파일 kind 는
+// safe() 스코프에 걸린다. 폴더 밖에 만들면 두 방어에 모두 막혀 아무것도 못 한다.
+// 대신 .git/info/exclude 에 등록해 사용자의 git status·.gitignore 를 오염시키지 않는다.
+//
+// git 명령은 **서버 문자열을 쓰지 않고 여기서 인자 배열로 조립**한다(명령 주입 차단).
+// 그래서 confirmExec(사용자 확인) 없이 수행해도 안전하다 — 실행 대상이 고정된 git 연산뿐이다.
+const WORKTREE_DIR = '.openmake/worktrees';
+const WORKTREE_BRANCH_PREFIX = 'omk-task/';
+/** taskId 재검증 — 경로·브랜치명에 들어가므로 UUID 문자만 허용(디렉토리 탈출·옵션 주입 차단). */
+const TASK_ID_RE = /^[a-zA-Z0-9-]{8,64}$/;
+
+function git(args, cwd) {
+  return new Promise((resolve) => {
+    execFile('git', args, { cwd, timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_BUFFER }, (err, stdout, stderr) => {
+      resolve({ code: err ? (err.code ?? 1) : 0, stdout: String(stdout), stderr: String(stderr) });
+    });
+  });
+}
+
+/** 연결 폴더가 git 작업트리인지. worktree 안에서 재연결한 경우도 정상 동작한다. */
+async function isGitRepo() {
+  const r = await git(['rev-parse', '--is-inside-work-tree'], folderRoot);
+  return r.code === 0 && r.stdout.trim() === 'true';
+}
+
+/** worktree 디렉토리를 로컬 전용 제외 목록에 등록 — 사용자의 .gitignore 는 건드리지 않는다. */
+function excludeWorktreeDir(gitDir) {
+  try {
+    const infoDir = path.join(gitDir, 'info');
+    fs.mkdirSync(infoDir, { recursive: true });
+    const p = path.join(infoDir, 'exclude');
+    const cur = fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
+    if (!cur.split('\n').some((l) => l.trim() === '.openmake/')) {
+      fs.appendFileSync(p, `${cur.endsWith('\n') || cur === '' ? '' : '\n'}.openmake/\n`);
+    }
+  } catch { /* 제외 등록 실패는 치명적이지 않다(사용자 status 에 보일 뿐) */ }
+}
+
+async function handleWorktree(m, done) {
+  if (!folderRoot) { done({ ok: false, error: '폴더가 연결되지 않았습니다' }); return; }
+  const taskId = String(m.taskId || '');
+  if (!TASK_ID_RE.test(taskId)) { done({ ok: false, error: '잘못된 taskId 형식' }); return; }
+  const rel = `${WORKTREE_DIR}/${taskId}`;
+  const abs = path.join(folderRoot, rel);
+  const branch = `${WORKTREE_BRANCH_PREFIX}${taskId.slice(0, 8)}`;
+
+  if (m.op === 'add') {
+    if (!(await isGitRepo())) { done({ ok: false, error: 'git 레포가 아닙니다' }); return; }
+    // worktree 는 **레포 전체**를 체크아웃한다. 연결 폴더가 레포 루트가 아니라 하위 디렉토리면
+    // (예: 레포 /repo 를 두고 /repo/apps/web 을 연결) worktree 루트는 /repo 에 대응하므로,
+    // 에이전트의 상대경로가 그대로면 다른 위치를 가리킨다. show-prefix 만큼 더 내려가 맞춘다.
+    const prefixR = await git(['rev-parse', '--show-prefix'], folderRoot);
+    const sub = prefixR.code === 0 ? prefixR.stdout.trim().replace(/\/+$/, '') : '';
+    const workRel = sub ? `${rel}/${sub}` : rel;
+    const gitDirR = await git(['rev-parse', '--absolute-git-dir'], folderRoot);
+    if (gitDirR.code === 0) excludeWorktreeDir(gitDirR.stdout.trim());
+    if (fs.existsSync(abs)) { done({ ok: true, worktreeRel: workRel, branch }); return; } // 재개 시 재사용
+    const r = await git(['worktree', 'add', abs, '-b', branch], folderRoot);
+    if (r.code !== 0) { done({ ok: false, error: `worktree 생성 실패: ${(r.stderr || r.stdout).trim().slice(0, 300)}` }); return; }
+    done({ ok: true, worktreeRel: workRel, branch });
+    return;
+  }
+
+  if (m.op === 'diff') {
+    if (!fs.existsSync(abs)) { done({ ok: false, error: 'worktree 없음' }); return; }
+    // -N: 새 파일을 인덱스에 '의도만' 등록해 diff 에 포함시킨다(실제 스테이징·커밋은 하지 않음).
+    await git(['add', '-A', '-N', '.'], abs);
+    const r = await git(['diff', 'HEAD'], abs);
+    if (r.code !== 0) { done({ ok: false, error: `diff 실패: ${(r.stderr || '').trim().slice(0, 200)}` }); return; }
+    done({ ok: true, stdout: r.stdout, branch });
+    return;
+  }
+
+  if (m.op === 'remove') {
+    if (!fs.existsSync(abs)) { done({ ok: true, kept: false }); return; }
+    // 변경분이 남아 있으면 **지우지 않는다** — 사용자 디스크의 작업 결과를 임의 삭제하지 않는다.
+    const st = await git(['status', '--porcelain'], abs);
+    if (st.code === 0 && st.stdout.trim() !== '') { done({ ok: true, kept: true, branch }); return; }
+    const r = await git(['worktree', 'remove', '--force', abs], folderRoot);
+    if (r.code !== 0) { done({ ok: true, kept: true, branch }); return; } // 제거 실패도 보존으로 취급
+    await git(['branch', '-D', branch], folderRoot); // 변경 없는 빈 브랜치 정리(실패 무시)
+    done({ ok: true, kept: false, branch });
+    return;
+  }
+
+  done({ ok: false, error: `지원하지 않는 worktree op: ${m.op}` });
+}
+
 function walk(dir, base, out) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
@@ -210,6 +302,8 @@ async function handleExec(m, done) {
       }
       return;
     }
+    case 'worktree':
+      await handleWorktree(m, done); return;
     case 'task_end':
       agentBrowser.closeAll();   // 작업 종료 시 브라우저 패널 정리
       done({ ok: true }); return;

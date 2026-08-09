@@ -21,7 +21,7 @@ import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, AGENT_SPAWN } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
-import { getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getTaskSandboxGuidance, getAgentTaskUploadedFilesNote, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
+import { getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getTaskSandboxGuidance, getWorktreeIsolationNote, getAgentTaskUploadedFilesNote, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts } from '../llm/artifact-parser';
 import { applyReportRender } from './chat-service/report-block';
 import { getPushService } from './PushService';
@@ -228,6 +228,9 @@ export class AgentTaskService {
                     // 새 대화(resume 아님)면 system 에 작업환경 안내 주입. 이어서 Phase 2 Git: repo 지정 시 호스트 clone(토큰 컨테이너 미주입)+안내.
                     if (!input.resume && conversation[0]?.role === 'system') {
                         conversation[0].content += getTaskSandboxGuidance();
+                        // 로컬 실행기 worktree 격리가 걸렸으면 작업 브랜치를 알린다(사용자 검토 지점).
+                        const isolated = remoteExecutor?.isolatedBranch;
+                        if (isolated) conversation[0].content += getWorktreeIsolationNote(isolated);
                     }
                     await setupTaskRepo(taskRuntime, input, userId, conversation);
                     logger.info(`[AgentTask] 샌드박스 활성 (${taskId}, ${taskRuntime.containerName})`);

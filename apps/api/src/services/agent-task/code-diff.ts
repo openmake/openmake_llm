@@ -49,6 +49,13 @@ export async function initWorkspaceBaseline(runtime: TaskRuntime): Promise<void>
  * outputCap 이 적용되며, 잘린 경우 말미에 표식을 덧붙인다.
  */
 export async function captureWorkspaceDiff(runtime: TaskRuntime): Promise<string | null> {
+    // 실행기가 자체 diff 를 제공하면 우선(로컬 브리지 worktree — 레포 HEAD 기준 변경분).
+    try {
+        const fromExecutor = await runtime.captureExecutorDiff();
+        if (fromExecutor) return fromExecutor;
+    } catch (e) {
+        logger.warn(`[AgentTask] 실행기 diff 캡처 실패: ${e instanceof Error ? e.message : e}`);
+    }
     // 로컬 실행기(D1a): baseline 미생성(위 가드) — 사용자 폴더에 git 명령을 대지 않는다.
     if (runtime.localWorkdir === null) return null;
     try {
