@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.23.0](https://github.com/openmake/openmake_llm/compare/v1.22.2...v1.23.0) (2026-08-09)
+
+
+### ✨ 기능
+
+* **admin:** history·딥리서치에도 전체 사용자 보기 토글 — 시스템 모니터링 ([47b14e7](https://github.com/openmake/openmake_llm/commit/47b14e7ce6161d6d2ec0e908826373b2a2f114aa))
+* **admin:** 전체 대화 조회 서버 페이지네이션 — 상한 없이 전 대화 열람 ([abd30a7](https://github.com/openmake/openmake_llm/commit/abd30a7c536cc1dfd3175c42abb4b0de24812e5f))
+* **agent-task:** admin 전체 사용자 작업 보기 토글 + 소유자 뱃지 ([5b79f7d](https://github.com/openmake/openmake_llm/commit/5b79f7da8776fc8eed65fe69caaf6955a69da218))
+* **agent-task:** 실패·취소 작업 재시도(처음부터) 지원 ([9872b46](https://github.com/openmake/openmake_llm/commit/9872b464173f5b25456e152f2f8943b82e9424ed))
+* **chat:** 메시지 복사·재생성 버튼 추가 ([1584bd9](https://github.com/openmake/openmake_llm/commit/1584bd9bb502c8570568b79cb0e5701717c6a925))
+* **history:** 대화 본문 검색(?q=) — 제목+메시지 ILIKE, 매칭 발췌 표시 ([4c90a33](https://github.com/openmake/openmake_llm/commit/4c90a33d7b027852164b5a9c1efed676f7c9060d))
+* **model-roles:** 배정 변경 감사 로그 추가 (previous 포함) ([8a2bdea](https://github.com/openmake/openmake_llm/commit/8a2bdea407c94e02d743c45efa7d4a55f35bae27))
+* **model-roles:** 배정 변경 감사 로그 추가 (previous 포함) ([dce28b2](https://github.com/openmake/openmake_llm/commit/dce28b2e2a75fcbf56a0585cfdf3ea0a03fec80b))
+* **usage:** 비용 환산에 집계 시작일(coverage) 명시 ([80b1aab](https://github.com/openmake/openmake_llm/commit/80b1aab419dd229443dfd7fbf895a6f100e62d9e))
+* **usage:** 비용 환산에 집계 시작일(coverage) 명시 ([2c5579f](https://github.com/openmake/openmake_llm/commit/2c5579f53fb82ec397ab6f05773251660a52ba71))
+* **usage:** 토큰 사용량 가상 비용 환산 — 일/월/년 ([2e9e35c](https://github.com/openmake/openmake_llm/commit/2e9e35c4dba3c921e0d23b659c4f205c32ac40af))
+* **usage:** 토큰 사용량 가상 비용 환산 — 일/월/년 (실제 과금 아님) ([4d4dd14](https://github.com/openmake/openmake_llm/commit/4d4dd145716f88d88d847fbae854611ed2fdd31e))
+* **web-search:** 네이버 검색 NAVER API HUB 듀얼 경로 + 무료 한도 가드 ([e3040e6](https://github.com/openmake/openmake_llm/commit/e3040e6c05b0f9087f8a0b14313ba741b3950d97))
+* **web-search:** 네이버 검색 NAVER API HUB 듀얼 경로 + 일일 무료 한도 가드 ([4b57493](https://github.com/openmake/openmake_llm/commit/4b57493a61f6b8e2129cded457bc48d319d573ce))
+* 사용자 만족도 개선 배치 — 메시지 재생성·작업 재시도·본문 검색 + 잔재 정리 ([4a731bc](https://github.com/openmake/openmake_llm/commit/4a731bc5e133ae755ef83e8b4bd6828238dda1f1))
+
+
+### 🐛 버그 수정
+
+* **chat:** 게스트 히스토리 즉시 반영 + 관리자 전체 대화 서버 페이지네이션 ([68e727a](https://github.com/openmake/openmake_llm/commit/68e727abb0155487c6397ee445c77e56bbf87008))
+* **model-roles:** 배정 감사 previous 를 쓰기와 원자적으로 캡처 ([756becc](https://github.com/openmake/openmake_llm/commit/756beccb40b9c086862d9574e8a040e2d373f84e))
+* **pricing:** 가상 비용 기본 단가를 Qwen3.8-Max 공시가로 교체 ([3896dd9](https://github.com/openmake/openmake_llm/commit/3896dd9e093cb74c7ee80fe8eca250641678273f))
+* **web:** HTML 응답에 HSTS 추가 + X-Powered-By 제거 ([38a235f](https://github.com/openmake/openmake_llm/commit/38a235f00c6a68777b1bedf722dd22d1ffd375df))
+* **web:** 채팅 스트림 종료 시 대화 목록 캐시 무효화 — 게스트 히스토리 즉시 반영 ([e54c587](https://github.com/openmake/openmake_llm/commit/e54c587cd54ac6c91ce1fcb2464c2369ce83d574))
+* 모델 역할 배정 감사 원자성 + HTML HSTS/X-Powered-By 하드닝 ([d433490](https://github.com/openmake/openmake_llm/commit/d43349038def7f231538fd662ad9d53637edb46b))
+
+
+### ♻️ 리팩터링
+
+* **agent-task:** 라우트 헬퍼 분리 — 600줄 CI 가드 준수 ([04b4bb4](https://github.com/openmake/openmake_llm/commit/04b4bb40c5c16db56c94761b79076d1b734021ab))
+
 ## [1.22.2](https://github.com/openmake/openmake_llm/compare/v1.22.1...v1.22.2) (2026-08-08)
 
 
