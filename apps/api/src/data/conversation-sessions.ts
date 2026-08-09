@@ -245,20 +245,36 @@ function excerptAround(content: string, query: string, radius: number = CONVERSA
 }
 
 /**
- * 전체 세션 목록 조회
+ * 전체 세션 목록 조회 (관리자 전용 화면 — offset 페이지네이션 지원)
  */
-export async function getAllSessions(limit: number = CONVERSATION_LIMITS.SESSION_LIST_ALL_DEFAULT): Promise<ConversationSession[]> {
+export async function getAllSessions(
+    limit: number = CONVERSATION_LIMITS.SESSION_LIST_ALL_DEFAULT,
+    offset: number = 0,
+): Promise<ConversationSession[]> {
     const pool = getPool();
     const result = await pool.query(
         `SELECT * FROM conversation_sessions cs
          WHERE EXISTS (SELECT 1 FROM conversation_messages m WHERE m.session_id = cs.id)
-         ORDER BY cs.updated_at DESC LIMIT $1`,
-        [limit]
+         ORDER BY cs.updated_at DESC LIMIT $1 OFFSET $2`,
+        [limit, offset]
     );
 
     // list view: 세션당 최근 50개만 — 5K+ 메시지 사용자의 메모리 spike 방지.
     // single-session detail 은 getSession() 의 LIMIT 500 으로 별도 로드.
     return loadMessagesForSessions(result.rows as SessionRow[], { maxMessagesPerSession: CONVERSATION_LIMITS.LIST_MESSAGES_PER_SESSION });
+}
+
+/**
+ * 전체 세션 총 건수 — getAllSessions 와 동일 필터(메시지 있는 세션만).
+ * 관리자 화면 페이지네이션의 전체 페이지 수 계산에 사용.
+ */
+export async function countAllSessions(): Promise<number> {
+    const pool = getPool();
+    const result = await pool.query<{ count: string }>(
+        `SELECT COUNT(*) AS count FROM conversation_sessions cs
+         WHERE EXISTS (SELECT 1 FROM conversation_messages m WHERE m.session_id = cs.id)`
+    );
+    return parseInt(result.rows[0]?.count ?? '0', 10);
 }
 
 /**

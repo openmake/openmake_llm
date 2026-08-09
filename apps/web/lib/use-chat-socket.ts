@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import type { WsChatRequest, WsServerEvent, WsAttachedFile } from "@openmake/shared-types";
 import { useAppStore, type StructuredAnswerData, type PendingApproval, type AgentTaskState } from "./store";
@@ -87,6 +88,10 @@ function resolveWsUrl(): string {
 
 export function useChatSocket() {
   const t = useTranslations("chatSocket");
+  // 스트림 종료 시 사이드바/히스토리의 대화 목록 캐시를 무효화하기 위한 핸들.
+  // (없으면 방금 만든 세션이 새로고침 전까지 "최근 대화"에 안 보임 — 게스트는 목록이
+  // 비어 있어 "히스토리에 안 남는다"로 체감되던 결함)
+  const queryClient = useQueryClient();
   // 콜백들이 stale deps(useCallback([]) 등)로 메모이즈되어 t 가 클로저에 갇히므로
   // ref 로 최신 t 를 참조한다(렌더 중 ref 쓰기 금지 규칙이라 effect 에서 갱신).
   const tRef = useRef(t);
@@ -175,6 +180,9 @@ export function useChatSocket() {
 
     // 스트림 종료(done/aborted/error) 후 지연된 배포 reload / 토큰 갱신 재연결을 실행.
     const runDeferredAfterStream = () => {
+      // 대화 목록 캐시 무효화 — 이번 턴이 만든/갱신한 세션이 사이드바 "최근 대화"에
+      // 즉시 반영되게 한다(게스트 포함). 실패해도 다음 마운트 fetch 가 복구하므로 fire-and-forget.
+      void queryClient.invalidateQueries({ queryKey: ["conversations"] });
       if (moduleReloadPending) {
         moduleReloadPending = false;
         location.reload();

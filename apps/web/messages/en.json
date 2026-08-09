@@ -1267,6 +1267,11 @@
     "researchDetail": {
       "empty": "No research steps",
       "step": "Step {n}"
+    },
+    "pagination": {
+      "info": "{total} total · page {page}/{pages}",
+      "prev": "Previous",
+      "next": "Next"
     }
   },
   "adminAudit": {
