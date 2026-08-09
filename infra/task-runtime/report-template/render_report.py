@@ -132,8 +132,13 @@ def main():
     open(out_path, "w", encoding="utf-8").write(html_out)
 
     grouped = sum(counts.values())
-    print(f"렌더 완료: {out_path} ({len(html_out)} bytes, 토큰 {len(ks)}개, "
-          f"기사 {grouped}건 {counts})")
+    # 종전 "토큰 N개" 는 **치환에 성공한** 토큰 수인데, 에이전트가 매번 "미해결 N개"로 읽었다
+    # (2026-08-09: 정상 렌더된 리포트에 [GOAL_INCOMPLETE] 마커를 붙여 실패 기록·게시 누락).
+    # 성공/실패를 문구로 단정해 오해의 여지를 없앤다 — 미치환 수를 실제로 세서 함께 보고한다.
+    leftover = len(TOKEN_RE.findall(html_out))
+    status = "정상" if leftover == 0 else f"미치환 {leftover}개 남음"
+    print(f"렌더 완료({status}): {out_path} ({len(html_out)} bytes, "
+          f"치환 {len(ks)}개·미치환 {leftover}개, 기사 {grouped}건 {counts})")
     missing = [k for k in ks if not k.endswith("_COUNT") and k not in auto and k not in data]
     if missing:
         print("경고 — data.json 미제공 키(—로 채움): " + ", ".join(missing))

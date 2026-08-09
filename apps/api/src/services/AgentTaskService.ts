@@ -16,12 +16,12 @@
  */
 import { type LLMClient } from '../llm';
 import type { ChatMessage, ToolDefinition } from '../llm/types';
-import { initAgentRoleState, chatTurnWithRoleFallback, judgeClientFor, defaultAgentClient } from './agent-task/role-client';
+import { initAgentRoleState, chatTurnWithRoleFallback, defaultAgentClient } from './agent-task/role-client';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, AGENT_SPAWN } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
-import { getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getTaskSandboxGuidance, getAgentTaskUploadedFilesNote, getAgentTaskVerifyFailedNudge, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
+import { getAgentTaskDeliverableNudge, getAgentTaskStuckNudge, getTaskSandboxGuidance, getAgentTaskUploadedFilesNote, AGENT_TASK_INCOMPLETE_MARKER } from '../prompts/agent-task-prompt';
 import { extractAndStripArtifacts } from '../llm/artifact-parser';
 import { applyReportRender } from './chat-service/report-block';
 import { getPushService } from './PushService';
@@ -35,11 +35,11 @@ import { filterRestrictedTools } from './chat-service/tool-restrictions';
 import { TaskRuntime } from './task-sandbox/runtime';
 import { getApprovalRegistry } from './task-sandbox/approval-gate';
 import { currentPlanStepIndex } from './task-sandbox/planning';
-import { applyTurnResourceGates, type TurnGateFlags } from './agent-task/turn-gate';
+import { applyTurnResourceGates, shouldAdoptFinalTurnAnswer, type TurnGateFlags } from './agent-task/turn-gate';
 import { buildFileContext } from './chat-service/attach-context';
 import { AgentTaskAbort, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
 import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
-import { judgeGoalAchieved, buildJudgeExecutionContext } from './agent-task/goal-judge';
+import { finalizeTask } from './agent-task/finalize';
 import { persistArtifactSteps } from './agent-task/task-steps';
 import { initWorkspaceBaseline, maybePersistCodeDiff, captureDiffOnCleanup } from './agent-task/code-diff';
 import { getSteeringRegistry, applyPendingSteering } from './agent-task/steering';
@@ -47,8 +47,8 @@ import { setupTaskRepo, maybePushAndOpenPR } from './agent-task/git-ops';
 import { resolveExecutorPlan } from './agent-task/executor-select';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
 import { executeTurnToolCalls } from './agent-task/turn-executor';
+import { prepareToolArgs } from './agent-task/tool-args';
 import { assembleAgentTools } from './agent-task/tool-assembly';
-import { verifyCodeArtifacts } from './agent-task/deliverable-verify';
 import { buildAgentTaskSystemContent, resolveSkillToolBindings } from './agent-task/skill-block';
 
 // 기존 import 호환 재노출 — 타입/에러는 services/agent-task/types 로 분리 (파일 크기 가드).
@@ -344,13 +344,31 @@ export class AgentTaskService {
                 const finalTurnHasNativeTools = !!(result.tool_calls && result.tool_calls.length > 0);
                 const finalTurnHasTextTools = !!finalTurnReason && !finalTurnHasNativeTools
                     && !!result.content && recoverTextToolCalls(result.content).length > 0;
-                if (finalTurnReason && (finalTurnHasNativeTools || finalTurnHasTextTools)) {
+                // 실질 답변 채택: 도구 호출이 섞였어도 본문이 충분하면 그 텍스트를 최종 답변으로 삼는다.
+                // 종전엔 응답 전체를 버려서, 산출물을 다 만들어 놓고 마지막 턴에 도구를 한 번 더 부르려 한
+                // 작업이 max_turns_exhausted 로 실패 기록됐다(2026-08-08 예약 리포트: 렌더 완료된 36KB
+                // report.html 이 게시되지 못하고 workspace 와 함께 폐기). 텍스트 도구 호출(XML) 케이스는
+                // 본문 자체가 도구 호출문이라 채택하지 않는다 — native tool_calls 만 버리고 본문을 살린다.
+                const finalTurnAnswerLen = (result.content ?? '').trim().length;
+                const finalTurnAnswerUsable = shouldAdoptFinalTurnAnswer({
+                    finalTurn: !!finalTurnReason,
+                    hasNativeTools: finalTurnHasNativeTools,
+                    hasTextTools: finalTurnHasTextTools,
+                    answerLength: finalTurnAnswerLen,
+                });
+                if (finalTurnReason && (finalTurnHasNativeTools || finalTurnHasTextTools) && !finalTurnAnswerUsable) {
                     logger.info(`[AgentTask] 마무리 턴 도구 호출 무시: ${taskId} (turn ${turn + 1})`);
                     conversation.push({ role: 'assistant', content: result.content });
                     const stType = turn === 0 ? 'plan' : 'assistant';
                     await db.addAgentTaskStep({ taskId, stepNumber: stepNumber++, stepType: stType, content: result.content });
                     emitStep(stType, undefined, result.content);
                     continue;
+                }
+                if (finalTurnAnswerUsable) {
+                    // 도구 호출만 떨궈 아래 최종 답변 경로(finalize 관문)로 자연 진입시킨다.
+                    logger.info(`[AgentTask] 마무리 턴 도구 호출 폐기·본문 채택: ${taskId} `
+                        + `(turn ${turn + 1}, ${finalTurnAnswerLen}자, 폐기 ${result.tool_calls!.length}건)`);
+                    result.tool_calls = undefined;
                 }
 
                 conversation.push({
@@ -410,69 +428,37 @@ export class AgentTaskService {
                     toolName: turnToolNames,
                     content: stepContent,
                     planStepIndex: planIdx(),
+                    // 호출 의도의 인자까지 영속(091) — 중단·거부로 실행되지 않아 tool_result 행이
+                    // 남지 않는 호출도 사후에 복기할 수 있게 한다(tool_name 영속과 같은 취지).
+                    toolArgs: hasToolCalls
+                        ? prepareToolArgs(result.tool_calls!.map((tc) => ({ name: tc.function.name, args: tc.function.arguments })))
+                        : undefined,
                 });
                 emitStep(stepType, turnToolNames, stepContent);
 
                 if (!hasToolCalls) {
-                    // 목표 미달성 선언: 모델이 마커로 "수행 불가"를 밝히면 completed 대신 failed(goal_incomplete)
-                    // 로 종료(오표시 차단), result 엔 마커 뗀 사유. 턴 0 재촉 가드보다 먼저(불가 선언을 안 뭉갬).
-                    if (stepContent && stepContent.includes(AGENT_TASK_INCOMPLETE_MARKER)) {
-                        await update({
-                            status: 'failed',
-                            error: 'goal_incomplete',
-                            result: stepContent.replace(AGENT_TASK_INCOMPLETE_MARKER, '').trim(),
-                            checkpoint: null,
-                        });
-                        logger.info(`[AgentTask] 목표 미달성 종료: ${taskId} (turn ${turn + 1})`);
-                        return;
-                    }
                     // 턴 0 계획-만 가드: 도구가 필요 없는 목표에서 모델이 계획만 쓰고 멈추면
                     // 결과물 없이 종료된다 — deliverable(artifact) 이 없으면 1회 재촉 후 계속.
-                    if (turn === startTurn && extracted!.artifacts.length === 0) {
+                    // 단 모델이 수행 불가를 선언(마커)했으면 재촉하지 않고 관문으로 보낸다
+                    // (재촉이 불가 선언을 뭉개면 미달성이 completed 로 흘러간다).
+                    if (turn === startTurn && extracted!.artifacts.length === 0
+                        && !(stepContent && stepContent.includes(AGENT_TASK_INCOMPLETE_MARKER))) {
                         conversation.push({ role: 'user', content: getAgentTaskDeliverableNudge() });
                         continue;
                     }
-                    // 목표 달성 judge(마커 미준수 보완): 아티팩트 없는 최종 답변만 판정 LLM 1회 검증(있으면 생략).
-                    // fail-open(완료 유지), 미달성 확정 시만 실패. 5-3(b) 실행 컨텍스트(도구·턴·계획) 제공.
-                    if (extracted!.artifacts.length === 0 && AGENT_TASK_LIMITS.GOAL_JUDGE_ENABLED) {
-                        const execCtx = buildJudgeExecutionContext(usedTools, turn + 1, taskRuntime?.getPlanSnapshot() ?? []);
-                        const achieved = await judgeGoalAchieved(
-                            await judgeClientFor(String(userId)), goal, stepContent ?? '', callSignal, execCtx);
-                        if (achieved === false) {
-                            await update({
-                                status: 'failed',
-                                error: 'goal_incomplete',
-                                result: stepContent,
-                                checkpoint: null,
-                            });
-                            logger.info(`[AgentTask] judge 목표 미달성 종료: ${taskId} (turn ${turn + 1})`);
-                            return;
-                        }
-                    }
-                    // 2-B 산출물 실행 검증: 코드 deliverable 을 완료 전 문법/컴파일 검사(샌드박스 활성 시).
-                    // 실패면 오류 리포트를 주입하고 1회 자가수정 유도(재시도 상한 내). 검사 대상 없음/통과/
-                    // fail-open 이면 그대로 완료. 재시도 상한 초과 시엔 검증을 건너뛰고 완료(무한루프 방지).
-                    if (taskRuntime
-                        && AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_ENABLED
-                        && verifyRetries < AGENT_TASK_LIMITS.VERIFY_DELIVERABLE_MAX_RETRIES
-                        && extracted!.artifacts.length > 0) {
-                        const verify = await verifyCodeArtifacts(taskRuntime, extracted!.artifacts, callSignal);
-                        if (!verify.ok) {
-                            verifyRetries++;
-                            conversation.push({ role: 'user', content: getAgentTaskVerifyFailedNudge(verify.report) });
-                            logger.info(`[AgentTask] 산출물 검증 실패 → 자가수정 유도: ${taskId} (재시도 ${verifyRetries})`);
-                            continue;
-                        }
-                    }
-                    stepNumber = await persistArtifactSteps(taskId, extracted!.artifacts, stepNumber);
-                    stepNumber = await maybePersistCodeDiff(taskRuntime, sandboxCfg, taskId, stepNumber, emitStep);
-                    await update({
-                        status: 'completed',
-                        progress: 100,
-                        result: stepContent,
-                        checkpoint: null, // 완료 작업은 재개 대상 아님 — checkpoint 잔존 시 resume 허용·저장 팽창
+                    // 완료 판정은 finalizeTask 단일 관문 — 마커·verify·judge·산출물 영속(091).
+                    const fin = await finalizeTask({
+                        taskId, goal, userId: String(userId), path: 'final_answer',
+                        rawContent: result.content ?? '',
+                        taskRuntime, sandboxCfg, usedTools, turn, stepNumber, verifyRetries,
+                        signal: callSignal, update, emitStep,
                     });
-                    logger.info(`[AgentTask] 완료: ${taskId} (${turn + 1} 턴, ${totalTokens} 토큰, 아티팩트 ${extracted!.artifacts.length}개)`);
+                    stepNumber = fin.stepNumber;
+                    if (fin.kind === 'verify_retry') {
+                        verifyRetries++;
+                        conversation.push({ role: 'user', content: fin.nudge });
+                        continue;
+                    }
                     return;
                 }
 
@@ -494,17 +480,21 @@ export class AgentTaskService {
                 const { terminated, terminateSummary } = turnExec;
 
                 // terminate 도구 호출 — 깔끔한 완료 시그널(max_turns 소진 아님).
+                // 종전엔 이 경로가 판정 없이 바로 completed 였다(빈 terminate 로 산출물 0 완료가
+                // 라이브 재현). 최종 답변 경로와 같은 관문을 지나게 한다(091).
                 if (terminated) {
-                    const ex = extractAndStripArtifacts(applyReportRender(result.content ?? ''));
-                    stepNumber = await persistArtifactSteps(taskId, ex.artifacts, stepNumber);
-                    stepNumber = await maybePersistCodeDiff(taskRuntime, sandboxCfg, taskId, stepNumber, emitStep);
-                    await update({
-                        status: 'completed',
-                        progress: 100,
-                        result: terminateSummary || ex.cleanedContent || '작업을 완료했습니다.',
-                        checkpoint: null,
+                    const fin = await finalizeTask({
+                        taskId, goal, userId: String(userId), path: 'terminate',
+                        rawContent: result.content ?? '', terminateSummary,
+                        taskRuntime, sandboxCfg, usedTools, turn, stepNumber, verifyRetries,
+                        signal: callSignal, update, emitStep,
                     });
-                    logger.info(`[AgentTask] terminate 완료: ${taskId} (${turn + 1} 턴)`);
+                    stepNumber = fin.stepNumber;
+                    if (fin.kind === 'verify_retry') {
+                        verifyRetries++;
+                        conversation.push({ role: 'user', content: fin.nudge });
+                        continue;
+                    }
                     return;
                 }
 

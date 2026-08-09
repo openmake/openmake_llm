@@ -1268,8 +1268,14 @@ export const AGENT_TASK_LIMITS = {
     /** 미완성(미클레임) 청크 업로드 보관 시한(ms) — init 시 지난 것을 기회적으로 청소.
      *  AGENT_TASK_CHUNK_TTL_MS(기본 24h). */
     CHUNK_UPLOAD_TTL_MS: parseInt(process.env.AGENT_TASK_CHUNK_TTL_MS || '', 10) || 24 * 60 * 60 * 1000,
-    /** 사용자 지정 max_turns 의 절대 상한 */
-    MAX_TURNS_CEILING: 20,
+    /** 사용자 지정 max_turns 의 절대 상한(Zod 입력 검증 상한도 이 값을 참조).
+     *  20 은 조사→데이터 생성→렌더→검증이 이어지는 작업엔 부족하다 — 2026-08-09 실측: 예약
+     *  리포트 최근 5회가 **전부 20/20 을 소진**했고, 성공한 회차조차 마진이 0이라 조금만 흔들리면
+     *  실패했다. 천장만 올리는 것이라 요청 maxTurns 가 작은 작업(기본 10)에는 영향이 없다.
+     *  ⚠️ 턴을 늘려도 MAX_TOTAL_TOKENS(1M)·TOKEN_SOFT_RATIO 가 먼저 걸릴 수 있다 — 토큰 사유로
+     *  마무리 턴에 들어가면 shouldAdoptFinalTurnAnswer 가 본문을 살린다.
+     *  AGENT_TASK_MAX_TURNS_CEILING 로 오버라이드. */
+    MAX_TURNS_CEILING: parseInt(process.env.AGENT_TASK_MAX_TURNS_CEILING || '', 10) || 32,
     /**
      * 작업 목표(goal) 최대 길이. 종전 2,000자는 스키마에 하드코딩돼 있었고 근거가 없었다 —
      * 채팅 message 는 100,000자, tool arguments 는 200,000자를 받는데 goal 만 50배 좁았다.
@@ -1383,6 +1389,19 @@ export const AGENT_TASK_LIMITS = {
     VERIFY_DELIVERABLE_ENABLED: process.env.AGENT_TASK_VERIFY_DELIVERABLE !== 'false',
     /** 산출물 검증 실패 시 자가수정 재시도 최대 횟수 — 초과하면 검증을 건너뛰고 완료(무한루프 방지). */
     VERIFY_DELIVERABLE_MAX_RETRIES: parseInt(process.env.AGENT_TASK_VERIFY_DELIVERABLE_MAX_RETRIES || '1', 10),
+    /** 마무리 턴 본문 채택 임계(글자) — 자원 상한으로 도구를 막은 턴에서 모델이 도구 호출과 본문을
+     *  함께 뱉었을 때, 본문이 이 길이 이상이면 최종 답변으로 채택해 완료 관문으로 보낸다.
+     *  (미만이면 종전대로 응답을 버리고 다음 턴/턴상한 종료 — "산출물 다 만들고 실패 기록" 방지와
+     *  "의도 선언만 하고 완료 오표시" 방지의 경계. 2026-08-09 예약 리포트 실측: 실패 사례의 의도
+     *  선언문은 100자 안팎, 정상 최종 정리는 수백 자.) AGENT_TASK_FINAL_TURN_MIN_ANSWER 로 오버라이드. */
+    FINAL_TURN_MIN_ANSWER_CHARS: parseInt(process.env.AGENT_TASK_FINAL_TURN_MIN_ANSWER || '200', 10),
+    /** 도구 호출 인자 영속(091) — tool_result 스텝에 마스킹된 args 를 남겨 사후 원인 분석을 연다.
+     *  (종전엔 tool_name 만 남아 "어떤 인자로 호출해서 실패했는가"를 복기할 수 없었다.)
+     *  AGENT_TASK_TOOL_ARGS_PERSIST=false 로 비활성(기본 on). */
+    TOOL_ARGS_PERSIST_ENABLED: process.env.AGENT_TASK_TOOL_ARGS_PERSIST !== 'false',
+    /** 영속하는 인자 JSON 의 최대 글자 수 — 초과 시 절단 표식으로 대체(저장 팽창 방지).
+     *  파일 내용을 통째로 넘기는 write 계열 인자가 있어 캡이 필요하다. */
+    TOOL_ARGS_MAX_CHARS: parseInt(process.env.AGENT_TASK_TOOL_ARGS_MAX_CHARS || '2000', 10),
     /** 동시성 큐(Phase 3-B) — /execute·resume·부팅복구가 즉시 발사 대신 큐에 제출. 전역·유저별
      *  동시 실행 상한을 넘으면 'queued' 로 대기, 슬롯이 비면 dequeue. 기본 OFF(켜면 즉시발사→큐).
      *  ⚠️ 단일 프로세스 전제(API instances:1). 멀티프로세스 확장 시 Redis 백엔드 필요. */

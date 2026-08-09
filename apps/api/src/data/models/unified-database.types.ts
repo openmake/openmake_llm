@@ -192,6 +192,10 @@ export interface AgentTask {
     executor?: 'sandbox' | 'local';
     /** 누적 LLM 토큰(prompt+completion) — terminal 전이 시 기록(066), resume 은 통산 */
     total_tokens?: number;
+    /** 완료 출구 구분(091) — 'final_answer' | 'terminate'. 미완료/기존 행은 NULL */
+    completion_path?: string;
+    /** goal judge 결과(091) — 'achieved' | 'not_achieved' | 'unknown' | 'skipped' */
+    judge_verdict?: string;
     created_at: string;
     updated_at: string;
     completed_at?: string;
@@ -206,6 +210,8 @@ export interface AgentTaskStep {
     content?: string;
     messages_snapshot?: unknown;
     status: string;
+    /** 도구 호출 인자(091) — 민감 키 마스킹·크기 캡 적용. 사후 원인 분석용 */
+    tool_args?: unknown;
     created_at: string;
 }
 
