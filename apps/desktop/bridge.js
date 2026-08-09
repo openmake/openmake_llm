@@ -190,12 +190,18 @@ async function handleWorktree(m, done) {
 
   if (m.op === 'add') {
     if (!(await isGitRepo())) { done({ ok: false, error: 'git 레포가 아닙니다' }); return; }
+    // worktree 는 **레포 전체**를 체크아웃한다. 연결 폴더가 레포 루트가 아니라 하위 디렉토리면
+    // (예: 레포 /repo 를 두고 /repo/apps/web 을 연결) worktree 루트는 /repo 에 대응하므로,
+    // 에이전트의 상대경로가 그대로면 다른 위치를 가리킨다. show-prefix 만큼 더 내려가 맞춘다.
+    const prefixR = await git(['rev-parse', '--show-prefix'], folderRoot);
+    const sub = prefixR.code === 0 ? prefixR.stdout.trim().replace(/\/+$/, '') : '';
+    const workRel = sub ? `${rel}/${sub}` : rel;
     const gitDirR = await git(['rev-parse', '--absolute-git-dir'], folderRoot);
     if (gitDirR.code === 0) excludeWorktreeDir(gitDirR.stdout.trim());
-    if (fs.existsSync(abs)) { done({ ok: true, worktreeRel: rel, branch }); return; } // 재개 시 재사용
+    if (fs.existsSync(abs)) { done({ ok: true, worktreeRel: workRel, branch }); return; } // 재개 시 재사용
     const r = await git(['worktree', 'add', abs, '-b', branch], folderRoot);
     if (r.code !== 0) { done({ ok: false, error: `worktree 생성 실패: ${(r.stderr || r.stdout).trim().slice(0, 300)}` }); return; }
-    done({ ok: true, worktreeRel: rel, branch });
+    done({ ok: true, worktreeRel: workRel, branch });
     return;
   }
 
