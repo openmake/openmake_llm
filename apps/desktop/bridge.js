@@ -154,6 +154,12 @@ function writeSandboxProfile(app, root, gitDir) {
             '(allow file-write* (subpath "/private/tmp") (subpath "/private/var/folders") (subpath "/dev"))',
             `(allow file-write* ${sub(home, CACHE_SUBPATHS)})`,
             `(deny file-read* ${sub(home, SECRET_SUBPATHS)})`,
+            // 훅·config 는 커밋에 불필요하면서 영구 코드주입 벡터다 — 에이전트가 .git/hooks 나
+            // core.hooksPath 를 심으면 사용자가 나중에 git 을 쓸 때 **샌드박스 밖에서** 실행된다.
+            // SBPL 은 last-match-wins 라 이 deny 를 **프로파일 맨 끝**에 둔다(레포가 상위 allow
+            // 경로 안에 있어도 확실히 이기도록 — /private/tmp 아래 레포로 실측 검증).
+            // identity 설정이 필요하면 `git -c user.email=...` 인라인을 쓰면 된다.
+            ...(gitDir ? [`(deny file-write* (subpath ${sbq(path.join(gitDir, 'hooks'))}) (literal ${sbq(path.join(gitDir, 'config'))}))`] : []),
             '',
         ].join('\n');
         const p = path.join(app.getPath('userData'), 'exec-sandbox.sb');
