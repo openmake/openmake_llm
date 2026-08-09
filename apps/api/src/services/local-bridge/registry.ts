@@ -23,7 +23,10 @@ import { createLogger } from '../../utils/logger';
 const logger = createLogger('LocalBridge');
 
 /** 서버→디바이스 도구 요청 종류 — 이 외의 kind 는 존재하지 않는다(임의 RPC 금지). */
-export type BridgeKind = 'exec' | 'read' | 'write' | 'list' | 'listAll' | 'delete' | 'task_end' | 'browser';
+export type BridgeKind = 'exec' | 'read' | 'write' | 'list' | 'listAll' | 'delete' | 'task_end' | 'browser' | 'worktree';
+
+/** worktree 연산 — 서버는 op 만 지정하고 git 명령은 디바이스가 고정 인자로 조립한다(명령 주입 차단). */
+export type WorktreeOp = 'add' | 'diff' | 'remove';
 
 export interface BridgeRequestPayload {
     kind: BridgeKind;
@@ -33,6 +36,10 @@ export interface BridgeRequestPayload {
     path?: string;
     /** write 전용 — base64 본문 (바이너리 안전). */
     contentB64?: string;
+    /** worktree 전용 — 수행할 연산. */
+    op?: WorktreeOp;
+    /** worktree 전용 — task 식별자(디렉토리·브랜치명 파생). 디바이스가 형식을 재검증한다. */
+    taskId?: string;
 }
 
 /** 디바이스가 돌려주는 결과 (bridge_result). */
@@ -47,6 +54,12 @@ export interface BridgeResult {
     entries?: string[];
     error?: string;
     durationMs?: number;
+    /** worktree add 결과 — 연결 폴더 기준 상대경로(서버는 이 prefix 로 파일·exec 를 라우팅). */
+    worktreeRel?: string;
+    /** worktree add 결과 — 생성된 작업 브랜치명(사용자 안내용). */
+    branch?: string;
+    /** worktree remove 결과 — 변경분이 남아 보존했으면 true. */
+    kept?: boolean;
 }
 
 export interface DeviceSession {

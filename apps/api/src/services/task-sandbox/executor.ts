@@ -56,6 +56,13 @@ export interface TaskExecutor {
     /** 실행 환경 준비 (docker: 컨테이너 기동 / 원격: 디바이스 세션 확립). 멱등. */
     create(): Promise<void>;
 
+    /**
+     * 실행기가 자체적으로 변경분 diff 를 제공하면 구현한다(로컬 브리지의 worktree — 레포의 실제
+     * HEAD 가 기준점이라 인위적 baseline 커밋이 필요 없다). 미구현이면 호스트측 workspace git
+     * 캡처(code-diff)로 폴백한다. 변경 없음·불가는 null.
+     */
+    captureDiff?(): Promise<string | null>;
+
     /** 셸 명령 실행 — bash 도구의 실행 백엔드. */
     exec(command: string): Promise<ExecResult>;
 

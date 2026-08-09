@@ -82,6 +82,21 @@ export function getAgentTaskDeliverableNudge(): string {
  * 영속 샌드박스(Manus화) 활성 시 system 에 덧붙이는 안내 — 작업 환경(셸+파일시스템) 인지 +
  * 구조화 플랜 도구 사용 유도(G3). 샌드박스 비활성 시 미주입.
  */
+/**
+ * 로컬 실행기 worktree 격리 안내 — 사용자의 현재 브랜치·작업트리를 건드리지 않고 별도 브랜치에서
+ * 작업 중임을 모델에게 알려, 최종 답변에 브랜치명을 명시하게 한다(사용자가 검토·머지할 지점).
+ */
+export function getWorktreeIsolationNote(branch: string): string {
+    return [
+        '',
+        '## 작업 브랜치 (격리)',
+        `- 당신의 변경은 사용자 저장소의 별도 작업 브랜치 \`${branch}\` 에서만 이뤄집니다.`,
+        '  사용자의 현재 브랜치·작업 중인 파일은 영향을 받지 않습니다.',
+        '- 브랜치를 직접 바꾸거나(checkout/switch) 병합하지 마세요 — 검토·병합은 사용자가 합니다.',
+        `- 최종 답변에 작업 브랜치명(\`${branch}\`)을 반드시 밝히세요.`,
+    ].join('\n');
+}
+
 export function getTaskSandboxGuidance(): string {
     return [
         '',

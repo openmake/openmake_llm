@@ -29,4 +29,13 @@ export const LOCAL_BRIDGE = {
 
     /** 브라우저 액션 배열 1회 실행 상한(ms). 컨테이너 runner 기본값과 같은 축. */
     BROWSER_TIMEOUT_MS: parseInt(process.env.LOCAL_BRIDGE_BROWSER_TIMEOUT_MS || '60000', 10),
+
+    /**
+     * worktree 격리 — 연결 폴더가 git 레포면 별도 worktree(디렉토리+브랜치)를 만들어 그 안에서만
+     * 작업한다. 사용자의 현재 작업트리·브랜치가 오염되지 않고, 작업 결과를 `git diff HEAD` 로
+     * 정확히 캡처할 수 있다(샌드박스와 달리 인위적 baseline 커밋이 필요 없다 — 레포의 실제
+     * HEAD 가 기준점이다). git 레포가 아니거나 생성 실패면 기존 동작으로 폴백(fail-open).
+     * 기본 ON — LOCAL_EXECUTOR_ENABLED 자체가 기본 OFF 라 이 값만으로 동작이 바뀌지 않는다.
+     */
+    WORKTREE_ENABLED: process.env.LOCAL_BRIDGE_WORKTREE !== 'false',
 } as const;
