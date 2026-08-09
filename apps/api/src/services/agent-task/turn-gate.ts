@@ -138,3 +138,25 @@ export async function applyTurnResourceGates(p: TurnGateInput): Promise<TurnGate
 
     return { effectiveTools, finalTurnReason, stepNumber };
 }
+
+/**
+ * 마무리 턴(자원 상한으로 도구를 막은 턴)에서 모델이 도구 호출과 본문을 함께 뱉었을 때,
+ * 본문을 최종 답변으로 채택할지 판정한다.
+ *
+ * 종전엔 도구 호출이 섞이면 응답 전체를 버려서, 산출물을 다 만들어 놓고 마지막 턴에 확인용
+ * 도구를 한 번 더 부르려 한 작업이 `max_turns_exhausted` 로 실패 기록됐다(2026-08-08 예약
+ * 리포트 — 렌더 완료된 report.html 이 게시되지 못하고 workspace 와 함께 폐기).
+ *
+ * 텍스트 도구 호출(XML) 케이스는 본문 자체가 도구 호출문이라 채택하지 않는다.
+ */
+export function shouldAdoptFinalTurnAnswer(p: {
+    /** 자원 상한으로 도구를 막은 턴인가(finalTurnReason 유무). */
+    finalTurn: boolean;
+    hasNativeTools: boolean;
+    hasTextTools: boolean;
+    /** 본문 trim 후 길이. */
+    answerLength: number;
+}): boolean {
+    if (!p.finalTurn || !p.hasNativeTools || p.hasTextTools) return false;
+    return p.answerLength >= AGENT_TASK_LIMITS.FINAL_TURN_MIN_ANSWER_CHARS;
+}

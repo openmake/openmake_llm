@@ -54,7 +54,6 @@ import type {
     UserApiKey,
     UserApiKeyPublic,
     AgentTask,
-    AgentTaskStatus,
     AgentTaskStep,
 } from './unified-database.types';
 import { API_KEY_LIMITS as _API_KEY_LIMITS } from './unified-database.types';
@@ -357,18 +356,8 @@ export class UnifiedDatabase {
         return this.agentTaskRepository.getAgentTask(taskId);
     }
 
-    async updateAgentTask(taskId: string, updates: {
-        status?: AgentTaskStatus;
-        progress?: number;
-        currentTurn?: number;
-        result?: string;
-        error?: string;
-        checkpoint?: unknown;
-        sandboxContainerId?: string;
-        workspacePath?: string;
-        plan?: unknown;
-        totalTokens?: number; gitPrUrl?: string; gitPushedBranch?: string;
-    }): Promise<void> {
+    // 파라미터 계약은 repository 가 SoT — 중복 선언하면 필드 추가 시 양쪽이 어긋난다(091 에서 정리).
+    async updateAgentTask(taskId: string, updates: Parameters<AgentTaskRepository['updateAgentTask']>[1]): Promise<void> {
         return this.agentTaskRepository.updateAgentTask(taskId, updates);
     }
 
