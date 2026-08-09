@@ -38,7 +38,10 @@ export interface BridgeRequestPayload {
     contentB64?: string;
     /** worktree 전용 — 수행할 연산. */
     op?: WorktreeOp;
-    /** worktree 전용 — task 식별자(디렉토리·브랜치명 파생). 디바이스가 형식을 재검증한다. */
+    /**
+     * task 식별자. worktree(디렉토리·브랜치명 파생, 디바이스가 형식 재검증)와 exec·task_end
+     * (디바이스의 **작업 단위 일괄 승인** 범위 식별)에 쓰인다.
+     */
     taskId?: string;
 }
 
