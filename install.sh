@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# OpenMake LLM — 원샷 설치 스크립트 (Linux / macOS)
+# OpenMake LLM — 원샷 설치 스크립트 (Linux / macOS / Windows→WSL2)
 # ==============================================================================
 # 클론 직후 이 스크립트 하나만 실행하면 바로 쓸 수 있는 상태까지 만든다:
 #
-#   toolchain 점검(Node 24 / Docker / PM2) → .env 생성 → 의존성 설치
-#   → PostgreSQL·Redis 기동 → DB 마이그레이션 → 빌드 → PM2 기동 → health check
+#   OS 판정(macOS/Linux/WSL/Windows) → toolchain 점검(Node 24 / Docker / PM2)
+#   → .env 생성 → 의존성 설치 → PostgreSQL·Redis 기동 → DB 마이그레이션
+#   → 빌드 → PM2 기동 → health check
+#
+# Windows: 네이티브(Git Bash/PowerShell) 실행은 지원하지 않는다 — 스크립트가
+#   Windows 를 감지하면 WSL2(Ubuntu) 설치·실행 절차를 안내하고 종료한다.
+#   WSL2 안에서는 Linux 와 동일하게 이 스크립트 하나로 설치된다.
 #
 # 사용:
 #   ./install.sh                     # 대화형 (LLM 엔드포인트를 물어봄)
@@ -113,16 +118,55 @@ parse_args() {
 }
 
 # ── 플랫폼 감지 ──────────────────────────────────────────────────────────────
-OS=""          # linux | macos
+OS=""          # linux | macos | windows
 ARCH=""        # x64 | arm64
 PKG=""         # brew | apt | dnf | yum | pacman | zypper | ""
+IS_WSL=0       # 1 이면 WSL(Windows Subsystem for Linux) 안의 Linux
+
+# Windows 네이티브(Git Bash/MSYS/Cygwin)에서 실행된 경우 — 앱 스택(bash 운영
+# 스크립트·PM2 ecosystem·Docker bind mount)이 POSIX 전제라 네이티브 Windows 는
+# 지원하지 않는다. WSL2 로 가는 정확한 절차를 안내하고 종료한다.
+windows_guide() {
+    echo ""
+    log_err "Windows 가 감지되었습니다 — 네이티브 Windows(Git Bash) 설치는 지원하지 않습니다."
+    echo ""
+    echo "  OpenMake LLM 은 Windows 에서 WSL2(Ubuntu) 위에 설치합니다:"
+    echo ""
+    echo "  1) PowerShell(관리자 권한)에서 WSL2 + Ubuntu 설치:"
+    echo "       wsl --install -d Ubuntu"
+    echo "     설치 후 PC 를 재부팅하고, Ubuntu 최초 실행에서 사용자 계정을 만드세요."
+    echo ""
+    echo "  2) Ubuntu 터미널에서 소스를 받아 설치 (WSL 내부 홈 디렉터리 권장 — /mnt/c 는 느림):"
+    echo "       git clone https://github.com/openmake/openmake_llm.git"
+    echo "       cd openmake_llm && ./install.sh"
+    echo ""
+    echo "  3) Docker 는 둘 중 하나면 됩니다:"
+    echo "     - install.sh 가 WSL 안에 Docker Engine 을 설치하도록 승인 (기본, 추가 설치 불필요)"
+    echo "     - 또는 Windows 에 Docker Desktop 설치 후 Settings → Resources →"
+    echo "       WSL integration 에서 Ubuntu 를 켜기"
+    echo ""
+    if has wsl.exe && [[ -n "$(wsl.exe -l -q 2>/dev/null | tr -d '\0\r' | head -1)" ]]; then
+        log_info "이미 WSL 배포판이 설치되어 있습니다 — Ubuntu 터미널을 열어 2) 부터 진행하세요."
+    fi
+    exit 1
+}
 
 detect_platform() {
     case "$(uname -s)" in
-        Darwin) OS="macos" ;;
-        Linux)  OS="linux" ;;
-        *) log_err "지원하지 않는 OS: $(uname -s) (Linux / macOS 만 지원)"; exit 1 ;;
+        Darwin)                    OS="macos" ;;
+        Linux)                     OS="linux" ;;
+        MINGW*|MSYS*|CYGWIN*)      OS="windows" ;;
+        *) log_err "판정할 수 없는 OS: $(uname -s) (macOS / Linux / Windows-WSL2 지원)"; exit 1 ;;
     esac
+
+    if [[ "$OS" == "windows" ]]; then
+        windows_guide   # 안내 후 exit 1
+    fi
+
+    # WSL 은 uname 상 Linux — Docker 안내가 달라지므로 구분해 둔다.
+    if [[ "$OS" == "linux" ]] && grep -qi microsoft /proc/version 2>/dev/null; then
+        IS_WSL=1
+    fi
 
     case "$(uname -m)" in
         x86_64|amd64)  ARCH="x64" ;;
@@ -138,7 +182,29 @@ detect_platform() {
     elif has zypper;  then PKG="zypper"
     fi
 
-    log_ok "플랫폼: $OS/$ARCH${PKG:+ (패키지 관리자: $PKG)}"
+    local wsl_tag=""
+    [[ $IS_WSL -eq 1 ]] && wsl_tag=" (WSL)"
+    log_ok "플랫폼: $OS/$ARCH$wsl_tag${PKG:+ (패키지 관리자: $PKG)}"
+}
+
+# 클론 직후 실행이 전제지만, zip 다운로드·최소 설치 환경까지 커버한다.
+# curl 은 Node/Docker 자동 설치와 health check 에 필수 — Linux 는 패키지
+# 관리자로 설치를 시도하고, macOS 는 기본 탑재라 도달하지 않는다.
+ensure_basics() {
+    if ! has curl && [[ "$OS" == "linux" ]] && [[ -n "$PKG" ]]; then
+        if confirm "curl 미설치 — 패키지 관리자($PKG)로 설치할까요? (sudo 필요)"; then
+            case "$PKG" in
+                apt)    sudo apt-get update -qq && sudo apt-get install -y curl ca-certificates ;;
+                dnf)    sudo dnf install -y curl ;;
+                yum)    sudo yum install -y curl ;;
+                pacman) sudo pacman -Sy --noconfirm curl ;;
+                zypper) sudo zypper install -y curl ;;
+            esac || log_warn "curl 자동 설치 실패 — 직접 설치가 필요할 수 있습니다."
+        fi
+    fi
+    has curl || log_warn "curl 미설치 — Node/Docker 자동 설치와 health check 가 실패할 수 있습니다."
+    # git 은 없어도 설치는 진행된다 (build-info 는 'unknown' 으로 fallback).
+    has git || log_warn "git 미설치 — 빌드 메타(git hash)가 'unknown' 으로 기록됩니다."
 }
 
 # 설치 중에만 유효한 PATH 를 파일로 남겨 openmake_llm.sh 가 이어받게 한다.
@@ -310,6 +376,28 @@ detect_compose() {
     return 1
 }
 
+# brew 가 없는 순정 Mac 용 — Docker Desktop 공식 dmg 를 받아 설치한다.
+# (docs.docker.com 이 안내하는 command-line install 절차 그대로. sudo 필요.)
+install_docker_dmg() {
+    local dl_arch="arm64"
+    [[ "$ARCH" == "x64" ]] && dl_arch="amd64"
+    local url="https://desktop.docker.com/mac/main/$dl_arch/Docker.dmg"
+    local dmg="$TOOLCHAIN_DIR/Docker.dmg"
+
+    has curl || die "curl 이 필요합니다 (Docker Desktop 다운로드용)."
+    mkdir -p "$TOOLCHAIN_DIR"
+    log_info "Docker Desktop 다운로드 (수백 MB — 시간이 걸립니다): $url"
+    curl -fL --progress-bar -o "$dmg" "$url" || die "Docker Desktop 다운로드 실패"
+    log_info "설치 중 (sudo 필요)"
+    sudo hdiutil attach "$dmg" -nobrowse -quiet || die "Docker.dmg 마운트 실패"
+    sudo /Volumes/Docker/Docker.app/Contents/MacOS/install --accept-license --user="$USER" \
+        || { sudo hdiutil detach /Volumes/Docker -quiet 2>/dev/null || true; die "Docker Desktop 설치 실패"; }
+    sudo hdiutil detach /Volumes/Docker -quiet 2>/dev/null || true
+    rm -f "$dmg"
+    log_ok "Docker Desktop 설치 완료"
+    open -a Docker || true
+}
+
 install_docker() {
     if [[ "$OS" == "macos" ]]; then
         log_err "Docker 가 없습니다. macOS 는 Docker Desktop 또는 OrbStack 이 필요합니다."
@@ -319,11 +407,20 @@ install_docker() {
             open -a Docker || true
             return 0
         fi
+        # 순정 Mac(brew 없음) — 공식 dmg 직접 설치로 폴백.
+        if confirm "Docker Desktop 공식 dmg 를 내려받아 설치할까요? (sudo 필요)"; then
+            install_docker_dmg
+            return 0
+        fi
         echo "  설치: https://www.docker.com/products/docker-desktop/  또는  brew install --cask docker"
         exit 2
     fi
 
     log_err "Docker 가 없습니다."
+    if [[ $IS_WSL -eq 1 ]]; then
+        log_info "WSL 감지 — 대안: Windows 의 Docker Desktop 을 설치하고 Settings → Resources →"
+        log_info "WSL integration 에서 이 배포판을 켜면 별도 설치 없이 docker 를 쓸 수 있습니다."
+    fi
     if confirm "공식 스크립트로 Docker 를 설치할까요? (sudo 필요: curl -fsSL https://get.docker.com | sudo sh)"; then
         has curl || die "curl 이 필요합니다."
         curl -fsSL https://get.docker.com -o "$TOOLCHAIN_DIR/get-docker.sh" || die "Docker 설치 스크립트 다운로드 실패"
@@ -360,6 +457,13 @@ ensure_docker_daemon() {
         docker info >/dev/null 2>&1 && { log_ok "Docker 데몬 준비 완료 (~$((i * 2))s)"; return 0; }
         sleep 2
     done
+    if [[ $IS_WSL -eq 1 ]]; then
+        log_err "WSL 에서 Docker 데몬 기동 실패. 다음 중 하나를 확인하세요:"
+        echo "  - WSL 안 Docker Engine:  sudo service docker start  (systemd 미사용 배포판)"
+        echo "  - Docker Desktop 사용 시: Windows 에서 Docker Desktop 실행 후"
+        echo "    Settings → Resources → WSL integration 에서 이 배포판 활성화"
+        exit 2
+    fi
     die "Docker 데몬 기동 실패 — Docker 를 직접 실행한 뒤 재시도하세요 (linux: sudo systemctl start docker)."
 }
 
@@ -599,11 +703,12 @@ main() {
     parse_args "$@"
 
     printf "\n%s╔══════════════════════════════════════════════════╗%s\n" "$C_INFO" "$C_RESET"
-    printf "%s║        OpenMake LLM — 원샷 설치 (Linux/macOS)     ║%s\n" "$C_INFO" "$C_RESET"
+    printf "%s║   OpenMake LLM — 원샷 설치 (macOS/Linux/WSL2)     ║%s\n" "$C_INFO" "$C_RESET"
     printf "%s╚══════════════════════════════════════════════════╝%s\n" "$C_INFO" "$C_RESET"
 
+    # OS 판정이 가장 먼저다 — Windows 네이티브는 여기서 WSL2 안내 후 종료된다.
     detect_platform
-    has curl || log_warn "curl 미설치 — health check 를 건너뛰게 됩니다."
+    ensure_basics
 
     ensure_node
     ensure_docker
