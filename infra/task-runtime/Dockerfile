@@ -52,9 +52,12 @@ RUN chmod -R a+rX /opt/report-template
 # reportlab/fpdf2=PDF 생성, pypdf=PDF 조작(병합/분할/회전/워터마크/폼). lxml·Pillow(docx/pptx 의존)는
 # manylinux wheel 로 시스템 의존성 없이 설치.
 # PyMuPDF=PDF 페이지→이미지 렌더(poppler 불요, 스캔본 OCR 전처리), pytesseract=tesseract 바인딩.
+# pandas/pdfplumber/olefile/requests=운영 실측 보강(2026-08-11, agent_task_steps 의
+# ModuleNotFoundError 집계 상위 — 데이터 분석·PDF 표 추출·HWP/OLE 파싱에서 부재 실패).
 RUN uv venv /opt/pyenv \
     && VIRTUAL_ENV=/opt/pyenv uv pip install --no-cache openpyxl reportlab fpdf2 python-docx python-pptx pypdf \
        PyMuPDF pytesseract \
+       pandas pdfplumber olefile requests \
     && chmod -R a+rX /opt/pyenv
 ENV PATH=/opt/pyenv/bin:${PATH}
 
