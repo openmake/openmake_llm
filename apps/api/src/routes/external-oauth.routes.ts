@@ -38,10 +38,19 @@ import {
     serializeSessionPayload,
     extractAccountId,
 } from '../providers/chatgpt-oauth/session';
+import {
+    createExternalProviderInstance,
+    buildOAuthSessionPersist,
+} from '../providers/provider-router';
 import { createLogger } from '../utils/logger';
 
 const router = Router();
 const logger = createLogger('ExternalOAuthRoutes');
+
+/** 연결 직후 즉시 검증 타임아웃 (ms) — external-keys.routes.ts 의 등록 검증과 같은 env 공유 */
+const KEY_VALIDATION_TIMEOUT_MS = parseInt(
+    process.env.EXTERNAL_KEY_VALIDATION_TIMEOUT_MS || '8000', 10,
+);
 
 let repoInstance: ExternalKeysRepository | null = null;
 function getRepo(): ExternalKeysRepository {
@@ -242,13 +251,54 @@ router.post('/:providerId/oauth/poll',
         });
         await getRepo().invalidateCachedModels(userId, providerId);
 
+        // 연결 직후 즉시 검증 (fail-open) — API 키 등록 경로(external-keys.routes.ts)와 대칭.
+        // 미기록 시 last_validation_ok=NULL 로 남아 설정 UI 가 "미검증" 으로 표시된다.
+        let validated = false;
+        let validationError: string | null = null;
+        try {
+            const row = await getRepo().getByUserAndProvider(userId, providerId);
+            const plaintextKey = await getRepo().decryptKey(userId, providerId);
+            if (row && plaintextKey) {
+                const provider = createExternalProviderInstance(
+                    row,
+                    plaintextKey,
+                    buildOAuthSessionPersist(getRepo(), userId, providerId),
+                );
+                const result = await Promise.race([
+                    provider.validateCredentials(),
+                    new Promise<never>((_, reject) => {
+                        const t = setTimeout(
+                            () => reject(new Error(`validation timeout (${KEY_VALIDATION_TIMEOUT_MS}ms)`)),
+                            KEY_VALIDATION_TIMEOUT_MS,
+                        );
+                        t.unref?.();
+                    }),
+                ]);
+                validated = result.ok;
+                validationError = result.ok ? null : (result.error ?? 'Validation failed');
+            } else {
+                validationError = '저장 직후 키 조회 실패';
+            }
+        } catch (err) {
+            validationError = err instanceof Error ? err.message : String(err);
+        }
+        await getRepo().recordValidation(userId, providerId, {
+            ok: validated,
+            error: validationError,
+        });
+        if (!validated) {
+            logger.warn(`ChatGPT OAuth 즉시 검증 실패: user=${userId} — ${validationError}`);
+        }
+
         logger.info(
-            `ChatGPT OAuth 연결 완료: user=${userId} provider=${providerId} account=${accountId ?? 'unknown'}`,
+            `ChatGPT OAuth 연결 완료: user=${userId} provider=${providerId} `
+            + `account=${accountId ?? 'unknown'} validated=${validated}`,
         );
         res.json(success({
             status: 'complete',
             provider_id: providerId,
             account_id: accountId ?? null,
+            validated,
         }));
     }),
 );
