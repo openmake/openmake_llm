@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { ArrowRight, LoaderCircle } from "lucide-react";
 import Image from "next/image";
 import { ApiClient, ApiError } from "@/lib/api-client";
+import { gaEvent, GA_EVENTS, markOAuthLoginPending } from "@/lib/analytics";
 import { syncAuthFromServer } from "@/lib/auth-sync";
 import { Button } from "@/components/ui/primitives";
 
@@ -23,6 +24,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await ApiClient.post("/api/auth/login", { email, password });
+      gaEvent(GA_EVENTS.login, { method: "password" });
       // router.push 는 remount 가 없어 AuthSync(마운트 1회)가 다시 돌지 않는다 —
       // 로그인 직후 store 동기화(+익명 세션 이관)를 직접 수행해야 사이드바가 즉시 반영.
       await syncAuthFromServer();
@@ -38,6 +40,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await ApiClient.post("/api/auth/guest");
+      gaEvent(GA_EVENTS.login, { method: "guest" });
       // submit() 과 동일 — router.push 는 remount 가 없어 AuthSync(마운트 1회)가 다시
       // 돌지 않으므로, 게스트 진입 직후 store 를 직접 동기화해야 사이드바/인증 UI 가 즉시
       // 반영된다 (하드 리로드 전까지 게스트로 남던 버그 방지).
@@ -119,18 +122,21 @@ export default function LoginPage() {
           <div className="grid grid-cols-3 gap-2">
             <a
               href="/api/auth/login/google"
+              onClick={() => markOAuthLoginPending("google")}
               className="inline-flex h-9 items-center justify-center rounded-md border border-border-strong bg-surface text-sm font-medium text-fg transition hover:bg-surface-2"
             >
               Google
             </a>
             <a
               href="/api/auth/login/github"
+              onClick={() => markOAuthLoginPending("github")}
               className="inline-flex h-9 items-center justify-center rounded-md border border-border-strong bg-surface text-sm font-medium text-fg transition hover:bg-surface-2"
             >
               GitHub
             </a>
             <a
               href="/api/auth/login/kakao"
+              onClick={() => markOAuthLoginPending("kakao")}
               className="inline-flex h-9 items-center justify-center rounded-md border border-border-strong bg-[#FEE500] text-sm font-medium text-[#191600] transition hover:brightness-95"
             >
               Kakao

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ArrowRight, LoaderCircle } from "lucide-react";
 import { ApiClient, ApiError } from "@/lib/api-client";
+import { gaEvent, GA_EVENTS } from "@/lib/analytics";
 import { Button } from "@/components/ui/primitives";
 
 export default function RegisterPage() {
@@ -36,6 +37,7 @@ export default function RegisterPage() {
         agreedToTerms: true,
         agreedToPrivacy: true,
       });
+      gaEvent(GA_EVENTS.signUp, { method: "password" });
       router.push("/login");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("registerFailed"));

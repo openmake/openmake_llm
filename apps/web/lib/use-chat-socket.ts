@@ -7,6 +7,7 @@ import type { WsChatRequest, WsServerEvent, WsAttachedFile } from "@openmake/sha
 import { useAppStore, type StructuredAnswerData, type PendingApproval, type AgentTaskState } from "./store";
 import { ApiClient, csrfHeaders } from "./api-client";
 
+import { gaEvent, GA_EVENTS } from "./analytics";
 import { getAnonSessionId } from "./anon-session";
 import { CLIENT_TIMING } from "./config";
 import { encodeMcpResources, type McpResourcePayload } from "@/components/chat/mcp-resource-card";
@@ -547,6 +548,22 @@ export function useChatSocket() {
       };
       ws.send(JSON.stringify(payload));
 
+      // GA4 핵심 인게이지먼트 — 방문자의 채팅 사용을 모드/모델 차원으로 계측(PII 없음).
+      gaEvent(GA_EVENTS.chatMessageSent, {
+        chat_mode: s.imageMode
+          ? "image"
+          : s.deepResearchMode
+            ? "deep_research"
+            : s.discussionMode
+              ? "discussion"
+              : s.thinkingEnabled
+                ? "thinking"
+                : "default",
+        model_id: s.selectedModel,
+        web_search: s.webSearchEnabled ? "on" : "off",
+        with_attachment: hasFiles || (images?.length ?? 0) > 0 ? "yes" : "no",
+      });
+
       // 가로채기(bypass) 모드가 켜져 있으면 도구·아티팩트가 이번 응답에 적용되지 않으므로,
       // 스트리밍 직전에 표시 전용 안내를 삽입한다(notice: true → history payload 제외).
       if (s.discussionMode || s.deepResearchMode || s.imageMode) {
@@ -647,6 +664,10 @@ export function useChatSocket() {
         }
         const taskId = created?.data?.task?.id;
         if (!taskId) throw new Error(tRef.current("taskIdMissing"));
+        gaEvent(GA_EVENTS.agentTaskCreated, {
+          executor: localExecutor ? "local" : "sandbox",
+          with_attachment: (files?.length ?? 0) > 0 || (images?.length ?? 0) > 0 ? "yes" : "no",
+        });
         // 진행상황 카드 — agent_task_progress 이벤트로 taskId 로 식별해 라이브 업데이트.
         appendMessage({
           role: "assistant",

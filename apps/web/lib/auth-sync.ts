@@ -1,6 +1,7 @@
 import type { ApiSuccess, MePayload } from "@openmake/shared-types";
 import { ApiClient } from "./api-client";
 import { getAnonSessionId } from "./anon-session";
+import { flushOAuthLoginPending, gaSetVisitor } from "./analytics";
 import { useAppStore } from "./store";
 
 /**
@@ -14,7 +15,11 @@ export async function syncAuthFromServer(): Promise<boolean> {
   try {
     const res = await ApiClient.get<ApiSuccess<MePayload>>("/api/auth/me");
     const u = res?.data?.user;
-    if (!u) return false;
+    if (!u) {
+      // 비로그인은 200 + user:null 로 온다(401 아님) — 게스트 라벨링은 이 분기가 본선.
+      gaSetVisitor(null, "guest");
+      return false;
+    }
     useAppStore.getState().setAuth({
       currentUser: {
         id: String(u.id),
@@ -24,6 +29,10 @@ export async function syncAuthFromServer(): Promise<boolean> {
       },
       isGuestMode: false,
     });
+    // GA4 방문자 식별 — user_id + user_type(admin/user/guest). OAuth 복귀 시 login 이벤트 flush.
+    const role = u.role === "admin" || u.role === "guest" ? u.role : "user";
+    gaSetVisitor(String(u.id), role);
+    flushOAuthLoginPending();
     void ApiClient.post("/api/chat/sessions/claim", { anonSessionId: getAnonSessionId() }).catch(() => {
       /* 익명 세션이 없거나 이미 이관됨 */
     });
@@ -43,6 +52,7 @@ export async function syncAuthFromServer(): Promise<boolean> {
     return true;
   } catch {
     /* 비로그인(401) — 게스트 유지 */
+    gaSetVisitor(null, "guest");
     return false;
   }
 }
