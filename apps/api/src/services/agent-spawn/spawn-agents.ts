@@ -80,6 +80,16 @@ export const SPAWN_AGENTS_TOOL_DESCRIPTION =
     + '⚠️ 단순 질문이나 순차 의존적인 작업에는 쓰지 말고 직접 수행하세요 — 독립 하위 작업 2개 이상을 '
     + '병렬로 나눌 가치가 있을 때만 사용합니다(응답 시간이 늘어납니다). 결과를 받은 뒤 직접 종합하세요.';
 
+/** 시스템 프롬프트 주입 가이드 — SPAWN_INTENT_PATTERNS 매칭 턴에만 주입한다(상시 주입 금지).
+ *  description 의 보수적 경고가 과작동해 자발 채택이 0 이던 갭 보완: 병렬 의도가 명시된
+ *  턴에는 "이 요청은 병렬 분담 대상"이라는 긍정 신호를 줘서 경고와 균형을 맞춘다. */
+export const SPAWN_PROMPT_GUIDE =
+    '\n\n[병렬 위임]\n'
+    + '- 이 요청은 독립 하위 작업 병렬 처리 의도로 판단됩니다. 서로 의존하지 않는 하위 작업 '
+    + '2개 이상으로 나눌 수 있으면 spawn_agents 도구로 병렬 분담하세요 — 각 태스크는 '
+    + '자기완결적으로 서술하고, 결과를 받은 뒤 직접 종합해 답하세요.\n'
+    + '- 하위 작업으로 나눌 수 없는 순차 작업이면 평소처럼 직접 수행하세요.';
+
 /** spawn_agents 파라미터 JSON Schema — task-sandbox MCP 도구 정의(inputSchema)와 공유. */
 export const SPAWN_AGENTS_PARAMETERS_SCHEMA: {
     type: 'object';

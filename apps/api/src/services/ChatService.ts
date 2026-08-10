@@ -27,7 +27,7 @@ import type { UserContext } from '../mcp/user-sandbox';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { CHAT_ALWAYS_ON_TOOL_NAMES } from '../mcp/agent-task-tools';
 import { MCP_META_TOOL_NAMES } from '../mcp/mcp-meta-tools';
-import { CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, MCP_PROGRESSIVE_DISCLOSURE_ENABLED, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS } from '../config/runtime-limits';
+import { CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, MCP_PROGRESSIVE_DISCLOSURE_ENABLED, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS, PLAN_INTENT_PATTERNS } from '../config/runtime-limits';
 import { applySkillCatalog as applySkillCatalogShared } from './skill-catalog-tool';
 import { LLMClient } from '../llm';
 import { type ToolDefinition } from '../llm';
@@ -237,6 +237,17 @@ export class ChatService {
                 logger.info(reqCtx.tailWebGround === true
                     ? '[TailGate] Stage 2B factual tail — web_search 강제 포함'
                     : '[WebSearch] 명시적 검색 요청 — web_search 강제 포함');
+            }
+        }
+        // 명시적 계획수립 요청이면 create_plan 을 강제 포함한다 — create_plan(review role
+        // 소비처)은 always-on 도, 스킬 바인딩도, 토글 UI 도 없어 채팅에서 도달 불가능하던
+        // 갭 차단 (web_search 강제 포함과 동일 선례). 포함되면 외부 경로의 첫 턴
+        // tool_choice 강제(external-tool-plan)까지 연쇄 작동한다.
+        if (PLAN_INTENT_PATTERNS.some((re) => re.test(reqCtx.message ?? ''))) {
+            const cp = allTools.find((x) => x.function.name === 'create_plan');
+            if (cp && !finalCombined.some((x) => x.function.name === cp.function.name)) {
+                finalCombined = [...finalCombined, cp];
+                logger.info('[PlanMode] 계획수립 의도 — create_plan 강제 포함');
             }
         }
         return this.applySkillCatalog(finalCombined, allTools, reqCtx);

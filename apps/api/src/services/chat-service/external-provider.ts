@@ -13,7 +13,7 @@
  * @module services/chat-service/external-provider
  */
 import { createLogger } from '../../utils/logger';
-import { LOOP_DETECTION, AGENT_LOOP_LIMITS, MAP_INTENT_PATTERNS, EXTERNAL_LLM_INPUT_TOKEN_BUDGET, ORCHESTRATION_DISPATCH } from '../../config/runtime-limits';
+import { LOOP_DETECTION, AGENT_LOOP_LIMITS, MAP_INTENT_PATTERNS, SPAWN_INTENT_PATTERNS, EXTERNAL_LLM_INPUT_TOKEN_BUDGET, ORCHESTRATION_DISPATCH } from '../../config/runtime-limits';
 import { estimateMessageTokens, truncateMessagesPreservingSystem } from '../../llm/model-pool';
 import { type Style } from '../../chat/style';
 import { buildExternalSystemPrompt } from './external-system-prompt';
@@ -117,9 +117,13 @@ export async function runExternalStream(
     const wantsMap = MAP_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
     // 오케스트레이션 자동 배정 의도 — 프롬프트 가이드 주입(아래)과 도구 노출(플랜)이 공유.
     const orchestration = detectOrchestrationIntents(req.message);
+    // 병렬 위임 의도 — 매칭 턴에만 spawn_agents 사용 가이드를 주입한다 (도구는 상시 노출이나
+    // description 의 보수적 경고 탓에 자발 채택이 0 이던 갭 보완).
+    const wantsSpawn = AGENT_SPAWN.ENABLED
+        && SPAWN_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
 
     // 시스템 프롬프트 조립(정적 헌법 → DYNAMIC → 가변)은 external-system-prompt 로 분리.
-    const systemContent = buildExternalSystemPrompt({ req, resolved, ctx, wantsMap, orchestration });
+    const systemContent = buildExternalSystemPrompt({ req, resolved, ctx, wantsMap, orchestration, wantsSpawn });
     if (systemContent) {
         messages.push({ role: 'system', content: systemContent });
     }

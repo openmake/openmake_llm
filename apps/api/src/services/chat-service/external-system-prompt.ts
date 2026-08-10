@@ -13,6 +13,7 @@ import { getExternalProviderSystemGuards } from '../../chat/prompt';
 import { getCurrentDate } from '../../utils/datetime';
 import { getStyleGuard, normalizeStyle } from '../../chat/style';
 import { ORCHESTRATION_PROMPT_GUIDE } from './orchestration-dispatch';
+import { SPAWN_PROMPT_GUIDE } from '../agent-spawn/spawn-agents';
 import { LANGUAGE_DISPLAY_NAMES, resolvePromptLocale, type SupportedLanguageCode } from '../../chat/language-policy';
 import type { StreamFromExternalContext } from './external-provider';
 
@@ -27,8 +28,10 @@ export function buildExternalSystemPrompt(params: {
     wantsMap: boolean;
     /** 오케스트레이션 자동 배정 의도(external-tool-plan 과 공유) — 매칭 턴에만 가이드 주입. */
     orchestration?: { discussion: boolean; taskDelegate: boolean };
+    /** 병렬 위임 의도(SPAWN_INTENT_PATTERNS) — 매칭 턴에만 spawn_agents 가이드 주입. */
+    wantsSpawn?: boolean;
 }): string {
-    const { req, resolved, ctx, wantsMap, orchestration } = params;
+    const { req, resolved, ctx, wantsMap, orchestration, wantsSpawn } = params;
     const systemPromptParts: string[] = [];
 
     // ════════════════════════════════════════════════════════════════════
@@ -146,6 +149,12 @@ export function buildExternalSystemPrompt(params: {
     // (도구 노출과 동일 조건 공유 — external-tool-plan.detectOrchestrationIntents).
     if (orchestration && (orchestration.discussion || orchestration.taskDelegate)) {
         systemPromptParts.push(ORCHESTRATION_PROMPT_GUIDE.trim());
+    }
+
+    // 병렬 위임 의도 — 매칭 턴에만 spawn_agents 사용 가이드 주입 (오케스트레이션 가이드와
+    // 동일 관용구: 상시 주입 금지, 도구 description 의 보수적 경고와 균형).
+    if (wantsSpawn) {
+        systemPromptParts.push(SPAWN_PROMPT_GUIDE.trim());
     }
 
     // 응답 언어 — 시스템 프롬프트 맨 끝에 배치(가장 최근 = attention 우위).

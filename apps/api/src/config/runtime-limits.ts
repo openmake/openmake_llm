@@ -1598,6 +1598,28 @@ export const TASK_DELEGATE_INTENT_PATTERNS: readonly RegExp[] = [
     /in\s+the\s+background|as\s+an?\s+agent\s+task|(create|generate|build|write)\s+(a\s+)?[^\n]{0,15}?(file|excel|csv|pdf|script)/i,
 ];
 
+/** 계획수립 의도 프리필터 — create_plan 강제 포함 + 첫 턴 tool_choice 강제 게이트.
+ *  create_plan(review role 소비처)은 always-on/스킬바인딩/토글 어디에도 없어 채팅에서
+ *  도달 불가능했다(2026-08-11 진단). 구현/개발 계획의 명시 요청만 매칭 — "여행 계획" 같은
+ *  일반 계획은 배제해 tool_choice 강제 오탐(도구 이탈)을 막는다. */
+export const PLAN_INTENT_PATTERNS: readonly RegExp[] = [
+    /(구현|개발|실행|작업|리팩터링|마이그레이션)\s*계획[^\n]{0,10}?(세워|수립|짜|만들|작성)/i,
+    /(기능|시스템|모듈|서비스|프로젝트)[^\n]{0,25}?계획[^\n]{0,10}?(세워|수립|짜|만들|작성)/i,
+    /create_plan/i,
+    /implementation\s+plan/i,
+];
+
+/** 병렬 위임 의도 프리필터 — spawn_agents 사용 가이드 주입 게이트 (도구는 상시 노출).
+ *  spawn 자발 채택 0 의 원인 = description 의 보수적 경고 + 사용 가이드 부재
+ *  (2026-08-11 진단, 명시 유도 시엔 fan-out 정상 동작 실증 2026-07-17). */
+export const SPAWN_INTENT_PATTERNS: readonly RegExp[] = [
+    /(병렬|동시)(로|에)?\s*(조사|검색|리서치|분석|처리|수행|실행|진행)/i,
+    /(서브|하위)\s*에이전트|subagent|sub-agent/i,
+    /spawn_agents/i,
+    /(각각|나눠서|나누어)\s*(조사|검색|분석|알아보)/i,
+    /in\s+parallel|parallel\s+(research|search|tasks)/i,
+];
+
 
 /**
  * NotebookLM composer 연동 (routes/notebooklm.routes.ts).

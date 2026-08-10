@@ -18,6 +18,7 @@ import {
     EXTERNAL_LLM_TOOL_BLACKLIST, ARTIFACT_REQUEST_SUPPRESSED_TOOLS, ARTIFACT_INTENT_PATTERNS,
     ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS, REPORT_PIPELINE, REPORT_INTENT_PATTERNS,
     CHAT_SUBAGENT, AGENT_SPAWN, ORCHESTRATION_DISPATCH, DISCUSSION_INTENT_PATTERNS, TASK_DELEGATE_INTENT_PATTERNS,
+    PLAN_INTENT_PATTERNS,
 } from '../../config/runtime-limits';
 import { buildChatDelegateTool } from './chat-delegate';
 import { buildSpawnAgentsTool } from '../agent-spawn/spawn-agents';
@@ -128,7 +129,17 @@ export function buildExternalToolPlan(params: {
             ? '[TailGate] Stage 2B factual tail — 첫 턴 tool_choice 강제: web_search'
             : '[WebSearch] 명시적 검색 요청 — 첫 턴 tool_choice 강제: web_search');
     }
-    const forcedFirstTurnToolName = forcedKakaoToolName ?? forcedWebSearchToolName;
+    // 명시적 계획수립 요청이면 첫 턴에 create_plan 을 강제한다 — 넛지만으론 qwen 이
+    // 도구 대신 자체 계획 텍스트로 이탈해 review role(계획 모델 배정)이 발동하지 않는다
+    // (web_search tool_choice 강제와 동일 선례). 도구는 getAllowedTools 강제 포함으로 실려온다.
+    const forcedPlanToolName = !forcedKakaoToolName && !forcedWebSearchToolName
+        && PLAN_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''))
+        ? tools.find((t) => t.function.name === 'create_plan')?.function.name
+        : undefined;
+    if (forcedPlanToolName) {
+        logger.info('[PlanMode] 계획수립 의도 — 첫 턴 tool_choice 강제: create_plan');
+    }
+    const forcedFirstTurnToolName = forcedKakaoToolName ?? forcedWebSearchToolName ?? forcedPlanToolName;
 
     return {
         tools,
