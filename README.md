@@ -220,11 +220,17 @@ plugin isn't registered with the docker CLI, the installer adds `cliPluginsExtra
 
 ### Prerequisites (handled by the installer)
 
+- **git** — on a fresh macOS, the very first `git clone` triggers the Xcode Command
+  Line Tools install dialog; approve it once (or download the source as a zip instead).
+  `install.sh` itself tolerates a missing git (build metadata falls back to `unknown`)
 - **Node.js** `>=24 <25` — provisioned via `mise`/`fnm`/`nvm`, Homebrew, or a local
   `~/.openmake/node` tarball if none of those exist
 - **Docker** — required for PostgreSQL/Redis and the MCP/agent sandboxes. On Linux the
   installer offers to run the official `get.docker.com` script; on macOS you need
-  Docker Desktop or OrbStack
+  Docker Desktop or OrbStack. Note: Docker Desktop's **first launch** may ask for GUI
+  approval (privileged helper) and can outlast the installer's ~60s daemon wait — if
+  that happens, wait for Docker to finish starting and re-run `./install.sh` (safe to
+  repeat)
 - An OpenAI-compatible LLM endpoint: a local **vLLM + LiteLLM** stack, **Ollama**, or an
   external provider key
 
