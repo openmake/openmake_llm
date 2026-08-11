@@ -15,18 +15,11 @@ import { LLM_TIMEOUTS } from '../../config/timeouts';
 import { getSearchLocale } from '../../i18n/search-locale';
 import { buildNaverSearchRequest } from './naver-client';
 
-/** Google Custom Search API 키 */
-const GOOGLE_API_KEY = getConfig().googleApiKey;
-/** Google Custom Search Engine ID */
-const GOOGLE_CSE_ID = getConfig().googleCseId;
 /** Logger instance */
 const logger = createLogger('WebSearch');
 
-// API 키 미설정 경고
-if (!GOOGLE_API_KEY || !GOOGLE_CSE_ID) {
-    logger.warn('GOOGLE_API_KEY 또는 GOOGLE_CSE_ID가 설정되지 않았습니다.');
-    logger.warn('Google 검색 기능이 비활성화됩니다. .env 파일에 설정하세요.');
-}
+// API 키 미설정 경고 1회 발행 여부 — 키는 런타임 변경(admin 설정) 반영을 위해 호출마다 getConfig() 로 읽는다
+let googleKeyWarned = false;
 
 /**
  * 검색 프로바이더용 fetch — 개별 timeout 과 외부 abort signal 을 결합한다.
@@ -92,14 +85,19 @@ function decodeXmlEntities(text: string): string {
 export async function searchGoogle(query: string, maxResults: number = 10, globalSearch: boolean = true, language: string = 'en', signal?: AbortSignal): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
 
-    if (!GOOGLE_API_KEY || !GOOGLE_CSE_ID) {
+    const { googleApiKey, googleCseId } = getConfig();
+    if (!googleApiKey || !googleCseId) {
+        if (!googleKeyWarned) {
+            googleKeyWarned = true;
+            logger.warn('GOOGLE_API_KEY 또는 GOOGLE_CSE_ID가 설정되지 않아 Google 검색이 비활성화됩니다.');
+        }
         return results;
     }
 
     try {
         // 전세계 검색: 언어/지역 제한 없음
         // 한국어 검색: gl=kr&lr=lang_ko 추가
-        let url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CSE_ID}&q=${encodeURIComponent(query)}&num=${Math.min(maxResults, 10)}`;
+        let url = `https://www.googleapis.com/customsearch/v1?key=${googleApiKey}&cx=${googleCseId}&q=${encodeURIComponent(query)}&num=${Math.min(maxResults, 10)}`;
 
         if (!globalSearch) {
             url += getSearchLocale(language).googleParams;

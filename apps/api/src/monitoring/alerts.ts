@@ -21,8 +21,33 @@ import nodemailer, { type Transporter } from 'nodemailer';
 import type { Pool } from 'pg';
 import { createLogger } from '../utils/logger';
 import { ALERT_THRESHOLDS } from '../config/timeouts';
+import { getConfig } from '../config/env';
 
 const logger = createLogger('AlertSystem');
+
+/**
+ * config(env + system settings overlay)에서 운영자 webhook URL 을 해석합니다.
+ * getConfig 는 미설정을 '' 로 반환하므로 undefined 로 정규화한다
+ * (webhookUrlBySeverity 는 `?? fallback` 체인이라 '' 가 남으면 fallback 이 죽는다).
+ */
+function resolveOperatorWebhooks(): {
+    url?: string;
+    bySeverity: { info?: string; warning?: string; critical?: string };
+} {
+    const cfg = getConfig();
+    const norm = (s: string): string | undefined => s.trim() || undefined;
+    const url = norm(cfg.operatorWebhookUrl);
+    return {
+        url,
+        bySeverity: {
+            // info 는 명시 시만 발송 (default 미설정 — Slack noise 차단)
+            info: norm(cfg.operatorWebhookUrlInfo),
+            // warning/critical 은 specific 우선, legacy fallback
+            warning: norm(cfg.operatorWebhookUrlWarning) ?? url,
+            critical: norm(cfg.operatorWebhookUrlCritical) ?? url,
+        },
+    };
+}
 
 /** 알림 발송 채널 타입 */
 type AlertChannel = 'console' | 'email' | 'webhook';
@@ -151,14 +176,11 @@ export class AlertSystem {
      * @param config - 알림 설정 (부분 지정 가능, 미지정 항목은 기본값 사용)
      */
     constructor(config?: Partial<AlertConfig>) {
-        // env-driven defaults — config 미지정 시 환경변수로 자동 활성.
+        // env-driven defaults — config 미지정 시 환경변수(getConfig, system settings overlay 포함)로 자동 활성.
         // OPERATOR_WEBHOOK_URL (Slack/Discord incoming webhook) 가 있으면 webhook 채널 자동 추가.
         // severity 별 URL (CRITICAL/WARNING/INFO) 우선, 없으면 legacy 단일 URL fallback.
-        const envWebhookUrl = process.env.OPERATOR_WEBHOOK_URL?.trim();
-        const envWebhookCritical = process.env.OPERATOR_WEBHOOK_URL_CRITICAL?.trim();
-        const envWebhookWarning = process.env.OPERATOR_WEBHOOK_URL_WARNING?.trim();
-        const envWebhookInfo = process.env.OPERATOR_WEBHOOK_URL_INFO?.trim();
-        const anyWebhook = envWebhookUrl || envWebhookCritical || envWebhookWarning || envWebhookInfo;
+        const hooks = resolveOperatorWebhooks();
+        const anyWebhook = hooks.url || hooks.bySeverity.info || hooks.bySeverity.warning || hooks.bySeverity.critical;
         const defaultChannels: ('console' | 'email' | 'webhook')[] = ['console'];
         if (anyWebhook) defaultChannels.push('webhook');
 
@@ -173,14 +195,8 @@ export class AlertSystem {
             },
             cooldownMinutes: config?.cooldownMinutes ?? 15,
             emailConfig: config?.emailConfig,
-            webhookUrl: config?.webhookUrl ?? envWebhookUrl,
-            webhookUrlBySeverity: config?.webhookUrlBySeverity ?? {
-                // info 는 env 명시 시만 발송 (default 미설정 — Slack noise 차단)
-                info: envWebhookInfo,
-                // warning/critical 은 specific 우선, legacy fallback
-                warning: envWebhookWarning ?? envWebhookUrl,
-                critical: envWebhookCritical ?? envWebhookUrl,
-            },
+            webhookUrl: config?.webhookUrl ?? hooks.url,
+            webhookUrlBySeverity: config?.webhookUrlBySeverity ?? hooks.bySeverity,
             cooldownBySeverity: config?.cooldownBySeverity ?? {
                 info: parseInt(process.env.ALERT_COOLDOWN_INFO_MIN ?? '60', 10),
                 warning: parseInt(process.env.ALERT_COOLDOWN_WARNING_MIN ?? '15', 10),
@@ -199,6 +215,25 @@ export class AlertSystem {
         }
 
         logger.info('알림 시스템 초기화됨', { channels: this.config.channels });
+    }
+
+    /**
+     * webhook 채널 구성을 config(env + system settings overlay)에서 다시 해석합니다.
+     *
+     * admin 시스템 설정에서 OPERATOR_WEBHOOK_URL* 변경 시 호출 — 싱글톤이 생성자에서
+     * 1회 읽은 URL 을 재시작 없이 갱신한다. 생성자에 명시 전달된 webhookUrl 설정도
+     * 덮어쓰므로, 런타임 설정 변경 경로에서만 호출할 것.
+     */
+    reloadWebhookChannels(): void {
+        const hooks = resolveOperatorWebhooks();
+        this.config.webhookUrl = hooks.url;
+        this.config.webhookUrlBySeverity = hooks.bySeverity;
+
+        const anyWebhook = !!(hooks.url || hooks.bySeverity.info || hooks.bySeverity.warning || hooks.bySeverity.critical);
+        const idx = this.config.channels.indexOf('webhook');
+        if (anyWebhook && idx < 0) this.config.channels.push('webhook');
+        if (!anyWebhook && idx >= 0) this.config.channels.splice(idx, 1);
+        logger.info('AlertSystem: webhook 채널 재구성됨', { channels: this.config.channels });
     }
 
     /**

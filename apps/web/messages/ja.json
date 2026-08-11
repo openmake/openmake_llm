@@ -22,6 +22,7 @@
       "alerts": "アラート",
       "mcpCatalogAdmin": "MCPカタログ管理",
       "modelRolesAdmin": "ロールモデル管理",
+      "systemSettingsAdmin": "システム設定",
       "developer": "開発者",
       "schedulesAdmin": "タスクスケジュール"
     },
@@ -1559,6 +1560,47 @@
       "save": "保存",
       "placeholder": "空 = フォールバック ({fallback})",
       "cacheNote": "変更は再起動なしで最大60秒以内に反映されます。"
+    }
+  },
+  "adminSystemSettings": {
+    "title": "システム設定",
+    "description": "運用設定（OAuth・検索・通知・プッシュ・LLM ゲートウェイ）を管理します。ここで保存した値（DB）が .env より優先されます。",
+    "loadError": "読み込みに失敗しました。",
+    "saveFailed": "保存に失敗しました。",
+    "save": "保存",
+    "reset": "リセット",
+    "resetHelp": "DB の値を削除し、.env／デフォルトに戻します。",
+    "resetConfirm": "'{key}' を削除して env／デフォルトに戻しますか？",
+    "sourceDb": "DB 設定済み",
+    "sourceEnv": "env 継承",
+    "sourceDefault": "デフォルト",
+    "secretSetPlaceholder": "●●●● 設定済み — 変更するには新しい値を入力",
+    "secretUnsetPlaceholder": "未設定 — 値を入力してください",
+    "valuePlaceholder": "値を入力してください",
+    "restartRequired": "再起動が必要",
+    "restartNotice": "保存しました。次の設定はサーバー再起動後に反映されます: {keys}",
+    "priorityNote": "優先順位: DB（この画面）> .env > デフォルト。シークレット値は保存後に再表示できず、すべての変更は監査ログに記録されます。",
+    "groups": {
+      "llm": {
+        "title": "LLM ゲートウェイ",
+        "description": "LiteLLM ゲートウェイの URL・キー・デフォルトモデル。URL／キーの変更は再起動後に反映されます。"
+      },
+      "oauth": {
+        "title": "ソーシャルログイン (OAuth)",
+        "description": "Google/GitHub/Kakao の資格情報。未設定のプロバイダはログイン画面に表示されません。"
+      },
+      "search": {
+        "title": "ウェブ検索",
+        "description": "Google Custom Search・Naver 検索 API キー。未設定の場合は該当ソースのみ無効になります。"
+      },
+      "alerts": {
+        "title": "運用アラート",
+        "description": "Slack/Discord incoming webhook URL。重大度別 URL が優先され、なければ単一 URL に送信されます。"
+      },
+      "push": {
+        "title": "ウェブプッシュ (VAPID)",
+        "description": "ブラウザプッシュ通知用の VAPID キー。公開鍵／秘密鍵のペアを一緒に設定してください。"
+      }
     }
   },
   "adminSchedules": {

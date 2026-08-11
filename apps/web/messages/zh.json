@@ -22,6 +22,7 @@
       "alerts": "告警",
       "mcpCatalogAdmin": "MCP目录管理",
       "modelRolesAdmin": "角色模型管理",
+      "systemSettingsAdmin": "系统设置",
       "developer": "开发者",
       "schedulesAdmin": "任务计划"
     },
@@ -1559,6 +1560,47 @@
       "save": "保存",
       "placeholder": "留空 = 回退 ({fallback})",
       "cacheNote": "更改无需重启,最多60秒内生效。"
+    }
+  },
+  "adminSystemSettings": {
+    "title": "系统设置",
+    "description": "管理运营设置（OAuth、搜索、通知、推送、LLM 网关）。此处保存的值（DB）优先于 .env。",
+    "loadError": "加载失败。",
+    "saveFailed": "保存失败。",
+    "save": "保存",
+    "reset": "重置",
+    "resetHelp": "删除 DB 中的值并回退到 .env/默认值。",
+    "resetConfirm": "删除 '{key}' 并回退到 env/默认值吗？",
+    "sourceDb": "已在 DB 设置",
+    "sourceEnv": "继承自 env",
+    "sourceDefault": "默认值",
+    "secretSetPlaceholder": "●●●● 已设置 — 输入新值以更改",
+    "secretUnsetPlaceholder": "未设置 — 请输入值",
+    "valuePlaceholder": "请输入值",
+    "restartRequired": "需要重启",
+    "restartNotice": "已保存。以下设置将在服务器重启后生效: {keys}",
+    "priorityNote": "优先级: DB（本页面）> .env > 默认值。密钥值保存后无法再次查看，所有更改都会记录到审计日志。",
+    "groups": {
+      "llm": {
+        "title": "LLM 网关",
+        "description": "LiteLLM 网关地址、密钥与默认模型。地址/密钥更改需重启服务器后生效。"
+      },
+      "oauth": {
+        "title": "社交登录 (OAuth)",
+        "description": "Google/GitHub/Kakao 凭据。未配置的提供商不会显示登录按钮。"
+      },
+      "search": {
+        "title": "网页搜索",
+        "description": "Google Custom Search 与 Naver 搜索 API 密钥。未设置时仅禁用对应搜索源。"
+      },
+      "alerts": {
+        "title": "运营通知",
+        "description": "Slack/Discord incoming webhook URL。按严重级别的 URL 优先，否则使用单一 URL。"
+      },
+      "push": {
+        "title": "网页推送 (VAPID)",
+        "description": "浏览器推送通知的 VAPID 密钥。请同时设置公钥/私钥对。"
+      }
     }
   },
   "adminSchedules": {

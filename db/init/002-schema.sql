@@ -662,3 +662,15 @@ END $$;
 
 -- (구 UIR 스키마(uir_shadow_log/uir_rollout_config/uir_perf_stats)는 090 에서 최종 제거 —
 --  017 이 DROP 했지만 이 baseline 의 CREATE 가 부팅마다 되살리던 결함 해소.)
+
+-- ============================================
+-- system_settings — 운영 설정 DB 이관 (092 와 한 쌍, admin UI 관리·env 폴백)
+-- 우선순위 DB > env > 기본값. 허용 키는 config/system-settings-registry.ts
+-- ============================================
+CREATE TABLE IF NOT EXISTS system_settings (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    is_secret   BOOLEAN NOT NULL DEFAULT false,
+    updated_by  TEXT REFERENCES users(id) ON DELETE SET NULL,
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
