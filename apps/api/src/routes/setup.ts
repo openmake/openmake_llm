@@ -37,6 +37,7 @@ import {
     mcpCatalogAdminRouter,
     mcpAdminMonitoringRouter,
     adminModelRolesRouter,
+    adminSystemSettingsRouter,
     usageRouter,
     nodesRouter,
     setNodesCluster,
@@ -190,6 +191,7 @@ export function setupApiRoutes(
     }));
     app.use('/api/admin/mcp', mcpCatalogAdminRouter);
     app.use('/api/admin', adminModelRolesRouter);
+    app.use('/api/admin', adminSystemSettingsRouter);
     app.use('/api/admin/mcp', mcpAdminMonitoringRouter);
     app.use('/api/admin/agent-task-schedules', adminAgentTaskSchedulesRouter);
     // F2 자가개선 — 프롬프트 제안 검토/승인 (관리자)

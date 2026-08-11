@@ -179,6 +179,11 @@ export const envSchema = z
         VAPID_PUBLIC_KEY: z.string().default(''),
         VAPID_PRIVATE_KEY: z.string().default(''),
         VAPID_SUBJECT: z.string().default('mailto:admin@openmake.ai'),
+        // 운영자 알림 webhook (Slack/Discord incoming) — severity 별 URL 우선, 없으면 단일 URL fallback
+        OPERATOR_WEBHOOK_URL: z.string().default(''),
+        OPERATOR_WEBHOOK_URL_CRITICAL: z.string().default(''),
+        OPERATOR_WEBHOOK_URL_WARNING: z.string().default(''),
+        OPERATOR_WEBHOOK_URL_INFO: z.string().default(''),
 
         // Database Pool
         DB_POOL_MAX: positiveIntWithDefault(20),

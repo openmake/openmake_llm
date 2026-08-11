@@ -22,6 +22,7 @@
       "alerts": "알림",
       "mcpCatalogAdmin": "MCP 카탈로그 관리",
       "modelRolesAdmin": "역할 모델 관리",
+      "systemSettingsAdmin": "시스템 설정",
       "developer": "개발자",
       "schedulesAdmin": "작업 스케줄"
     },
@@ -1559,6 +1560,47 @@
       "save": "저장",
       "placeholder": "비움 = 폴백 ({fallback})",
       "cacheNote": "변경은 재시작 없이 최대 60초 내에 반영됩니다."
+    }
+  },
+  "adminSystemSettings": {
+    "title": "시스템 설정",
+    "description": "운영 설정(OAuth·검색·알림·푸시·LLM 게이트웨이)을 관리합니다. UI 저장값(DB)이 .env 보다 우선합니다.",
+    "loadError": "불러오기에 실패했습니다.",
+    "saveFailed": "저장에 실패했습니다.",
+    "save": "저장",
+    "reset": "초기화",
+    "resetHelp": "DB 설정을 삭제하고 .env/기본값으로 복귀합니다.",
+    "resetConfirm": "'{key}' 설정을 삭제하고 env/기본값으로 복귀할까요?",
+    "sourceDb": "DB 설정됨",
+    "sourceEnv": "env 상속",
+    "sourceDefault": "기본값",
+    "secretSetPlaceholder": "●●●● 설정됨 — 변경하려면 새 값 입력",
+    "secretUnsetPlaceholder": "미설정 — 값을 입력하세요",
+    "valuePlaceholder": "값을 입력하세요",
+    "restartRequired": "재시작 필요",
+    "restartNotice": "저장되었습니다. 다음 설정은 서버 재시작 후 반영됩니다: {keys}",
+    "priorityNote": "우선순위: DB(이 화면) > .env > 기본값. 시크릿 값은 저장 후 다시 조회할 수 없으며, 모든 변경은 감사 로그에 기록됩니다.",
+    "groups": {
+      "llm": {
+        "title": "LLM 게이트웨이",
+        "description": "LiteLLM 게이트웨이 주소·키·기본 모델. 주소/키 변경은 서버 재시작 후 반영됩니다."
+      },
+      "oauth": {
+        "title": "소셜 로그인 (OAuth)",
+        "description": "Google/GitHub/Kakao 로그인 자격증명. 미설정 provider 는 로그인 버튼이 표시되지 않습니다."
+      },
+      "search": {
+        "title": "웹 검색",
+        "description": "Google Custom Search·Naver 검색 API 키. 미설정 시 해당 검색 소스만 비활성화됩니다."
+      },
+      "alerts": {
+        "title": "운영 알림",
+        "description": "Slack/Discord incoming webhook URL. 심각도별 URL 이 우선하며, 없으면 단일 URL 로 발송됩니다."
+      },
+      "push": {
+        "title": "웹 푸시 (VAPID)",
+        "description": "브라우저 푸시 알림용 VAPID 키. 공개키/비밀키 쌍을 함께 설정하세요."
+      }
     }
   },
   "adminSchedules": {

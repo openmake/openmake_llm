@@ -117,6 +117,12 @@ export interface EnvConfig {
     vapidPrivateKey: string;
     vapidSubject: string;
 
+    // 운영자 알림 webhook (monitoring/alerts) — severity 별 URL 우선, 없으면 단일 URL fallback
+    operatorWebhookUrl: string;
+    operatorWebhookUrlCritical: string;
+    operatorWebhookUrlWarning: string;
+    operatorWebhookUrlInfo: string;
+
     // Swagger
     swaggerBaseUrl: string;
 
@@ -239,6 +245,10 @@ const DEFAULT_CONFIG: EnvConfig = {
     vapidPublicKey: '',
     vapidPrivateKey: '',
     vapidSubject: 'mailto:admin@openmake.ai',
+    operatorWebhookUrl: '',
+    operatorWebhookUrlCritical: '',
+    operatorWebhookUrlWarning: '',
+    operatorWebhookUrlInfo: '',
 
     // Swagger
     swaggerBaseUrl: '',
@@ -303,15 +313,37 @@ function parseEnvFile(filePath: string): Record<string, string> {
     return env;
 }
 
+/**
+ * system_settings(DB) overlay — admin 시스템 설정이 env 보다 우선한다.
+ * services/system-settings-service 가 부팅 후·설정 변경 시 applySettingsOverlay 로 주입.
+ * config 모듈은 DB 를 직접 import 하지 않는다 (순환 의존 차단, late-binding).
+ */
+let settingsOverlay: Record<string, string> = {};
+
+/** DB 설정 overlay 교체 + 캐시 무효화 — 이후 getConfig() 호출자부터 새 값 반영 */
+export function applySettingsOverlay(overlay: Record<string, string>): void {
+    settingsOverlay = { ...overlay };
+    resetConfig();
+}
+
+/** overlay 를 제외한 env 원값 (process.env > .env 파일) — 설정 출처(env/기본값) 판별용 */
+export function readRawEnvValue(key: string): string | undefined {
+    const envPath = path.resolve(process.cwd(), '.env');
+    const projectEnvPath = path.resolve(__dirname, '../../.env');
+    const fileEnv = parseEnvFile(fs.existsSync(envPath) ? envPath : projectEnvPath);
+    return process.env[key] || fileEnv[key] || undefined;
+}
+
 export function loadConfig(): EnvConfig {
     // 프로젝트 루트에서 .env 파일 찾기
     const envPath = path.resolve(process.cwd(), '.env');
     const projectEnvPath = path.resolve(__dirname, '../../.env');
 
-    // 환경변수 우선순위: process.env > .env 파일 > 기본값
+    // 환경변수 우선순위: DB overlay(system_settings) > process.env > .env 파일 > 기본값
     const fileEnv = parseEnvFile(fs.existsSync(envPath) ? envPath : projectEnvPath);
 
-    const env = (key: string): string | undefined => process.env[key] || fileEnv[key];
+    const env = (key: string): string | undefined =>
+        settingsOverlay[key] ?? (process.env[key] || fileEnv[key]);
 
     const parsedResult = envSchema.safeParse({
         NODE_ENV: env('NODE_ENV'),
@@ -358,6 +390,9 @@ export function loadConfig(): EnvConfig {
         GOOGLE_CSE_ID: env('GOOGLE_CSE_ID'),
         NAVER_CLIENT_ID: env('NAVER_CLIENT_ID'),
         NAVER_CLIENT_SECRET: env('NAVER_CLIENT_SECRET'),
+        NAVER_API_HUB_KEY_ID: env('NAVER_API_HUB_KEY_ID'),
+        NAVER_API_HUB_KEY: env('NAVER_API_HUB_KEY'),
+        NAVER_API_DAILY_LIMIT: env('NAVER_API_DAILY_LIMIT'),
         GITHUB_TOKEN: env('GITHUB_TOKEN'),
         DOCUMENT_TTL_HOURS: env('DOCUMENT_TTL_HOURS'),
         MAX_UPLOADED_DOCUMENTS: env('MAX_UPLOADED_DOCUMENTS'),
@@ -367,6 +402,10 @@ export function loadConfig(): EnvConfig {
         VAPID_PUBLIC_KEY: env('VAPID_PUBLIC_KEY'),
         VAPID_PRIVATE_KEY: env('VAPID_PRIVATE_KEY'),
         VAPID_SUBJECT: env('VAPID_SUBJECT'),
+        OPERATOR_WEBHOOK_URL: env('OPERATOR_WEBHOOK_URL'),
+        OPERATOR_WEBHOOK_URL_CRITICAL: env('OPERATOR_WEBHOOK_URL_CRITICAL'),
+        OPERATOR_WEBHOOK_URL_WARNING: env('OPERATOR_WEBHOOK_URL_WARNING'),
+        OPERATOR_WEBHOOK_URL_INFO: env('OPERATOR_WEBHOOK_URL_INFO'),
         SWAGGER_BASE_URL: env('SWAGGER_BASE_URL'),
         API_KEY_PEPPER: env('API_KEY_PEPPER'),
         API_KEY_MAX_PER_USER: env('API_KEY_MAX_PER_USER'),
@@ -494,6 +533,12 @@ export function loadConfig(): EnvConfig {
         vapidPublicKey: parsed.VAPID_PUBLIC_KEY ?? DEFAULT_CONFIG.vapidPublicKey,
         vapidPrivateKey: parsed.VAPID_PRIVATE_KEY ?? DEFAULT_CONFIG.vapidPrivateKey,
         vapidSubject: parsed.VAPID_SUBJECT ?? DEFAULT_CONFIG.vapidSubject,
+
+        // Operator webhook
+        operatorWebhookUrl: parsed.OPERATOR_WEBHOOK_URL ?? DEFAULT_CONFIG.operatorWebhookUrl,
+        operatorWebhookUrlCritical: parsed.OPERATOR_WEBHOOK_URL_CRITICAL ?? DEFAULT_CONFIG.operatorWebhookUrlCritical,
+        operatorWebhookUrlWarning: parsed.OPERATOR_WEBHOOK_URL_WARNING ?? DEFAULT_CONFIG.operatorWebhookUrlWarning,
+        operatorWebhookUrlInfo: parsed.OPERATOR_WEBHOOK_URL_INFO ?? DEFAULT_CONFIG.operatorWebhookUrlInfo,
 
         // Swagger
         swaggerBaseUrl: parsed.SWAGGER_BASE_URL ?? DEFAULT_CONFIG.swaggerBaseUrl,

@@ -22,6 +22,7 @@
       "alerts": "Alerts",
       "mcpCatalogAdmin": "MCP Catalog Admin",
       "modelRolesAdmin": "Model Roles Admin",
+      "systemSettingsAdmin": "System Settings",
       "developer": "Developer",
       "schedulesAdmin": "Task Schedules"
     },
@@ -1559,6 +1560,47 @@
       "save": "Save",
       "placeholder": "Empty = fallback ({fallback})",
       "cacheNote": "Changes take effect within 60 seconds without a restart."
+    }
+  },
+  "adminSystemSettings": {
+    "title": "System Settings",
+    "description": "Manage operational settings (OAuth, search, alerts, push, LLM gateway). Values saved here (DB) take precedence over .env.",
+    "loadError": "Failed to load.",
+    "saveFailed": "Failed to save.",
+    "save": "Save",
+    "reset": "Reset",
+    "resetHelp": "Delete the DB value and fall back to .env/default.",
+    "resetConfirm": "Delete '{key}' and fall back to env/default?",
+    "sourceDb": "Set in DB",
+    "sourceEnv": "From env",
+    "sourceDefault": "Default",
+    "secretSetPlaceholder": "●●●● set — enter a new value to change",
+    "secretUnsetPlaceholder": "Not set — enter a value",
+    "valuePlaceholder": "Enter a value",
+    "restartRequired": "Restart required",
+    "restartNotice": "Saved. These settings take effect after a server restart: {keys}",
+    "priorityNote": "Precedence: DB (this page) > .env > defaults. Secret values cannot be viewed after saving; every change is audit-logged.",
+    "groups": {
+      "llm": {
+        "title": "LLM Gateway",
+        "description": "LiteLLM gateway URL, key, and default model. URL/key changes apply after a server restart."
+      },
+      "oauth": {
+        "title": "Social Login (OAuth)",
+        "description": "Google/GitHub/Kakao credentials. Providers without credentials are hidden from the login page."
+      },
+      "search": {
+        "title": "Web Search",
+        "description": "Google Custom Search and Naver API keys. Unset keys only disable that search source."
+      },
+      "alerts": {
+        "title": "Operator Alerts",
+        "description": "Slack/Discord incoming webhook URLs. Severity-specific URLs win; otherwise the single URL is used."
+      },
+      "push": {
+        "title": "Web Push (VAPID)",
+        "description": "VAPID keys for browser push notifications. Set the public/private key pair together."
+      }
     }
   },
   "adminSchedules": {

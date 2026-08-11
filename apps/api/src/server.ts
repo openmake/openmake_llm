@@ -221,6 +221,15 @@ export class DashboardServer {
             }
         }
 
+        // 시스템 설정(DB system_settings) 로드 → config overlay 적용 (DB > env > 기본값).
+        // 마이그레이션 직후·소비자 초기화 전에 실행. fail-open — 실패해도 env 만으로 부팅 지속.
+        try {
+            const { getSystemSettingsService } = await import('./services/system-settings-service');
+            await getSystemSettingsService().loadAndApply();
+        } catch (err) {
+            console.error('[Server] 시스템 설정 로드 실패 (env 폴백으로 계속):', err);
+        }
+
         // 외부 MCP 서버 초기화 (DB에서 설정 로드 → stdio 연결)
         try {
             const { getUnifiedMCPClient } = await import('./mcp');

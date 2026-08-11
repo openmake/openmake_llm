@@ -171,6 +171,9 @@ const CRITICAL_ACTIONS: Record<string, 'info' | 'warning' | 'critical'> = {
     // 키 삭제·회전은 보안 이벤트라 warning 채널(webhook 알림), 생성·수정은 audit 만.
     'api_key.delete': 'warning',
     'api_key.rotate': 'warning',
+    // admin 시스템 설정 변경 (routes/admin-system-settings) — 운영 설정 변조 감지용
+    'system_settings.updated': 'warning',
+    'system_settings.reset': 'warning',
     // info 는 audit 만 (alert webhook 안 보냄)
     // context_overflow 는 사용자 입력 검증 에러(>262K) — 2026-06-15 1M 제거로 흔해져
     // webhook noise 방지 위해 warning→info 강등 (audit 추적 + console 만 유지)
