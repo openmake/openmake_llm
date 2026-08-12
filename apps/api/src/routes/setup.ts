@@ -38,6 +38,7 @@ import {
     mcpAdminMonitoringRouter,
     adminModelRolesRouter,
     adminSystemSettingsRouter,
+    firstRunSetupRouter,
     usageRouter,
     nodesRouter,
     setNodesCluster,
@@ -72,6 +73,7 @@ import { getConfig } from '../config';
 import { success } from '../utils/api-response';
 import { getPool } from '../data/models/unified-database';
 import { csrfProtectionMiddleware, csrfTokenIssuer } from '../middlewares/csrf-protection';
+import { authLimiter } from '../middlewares/rate-limiters';
 import { GitFetcher } from '../agents/git-ingest/git-fetcher';
 import { LLMClient } from '../llm/client';
 import { MCP_INGEST } from '../config/constants';
@@ -221,6 +223,8 @@ export function setupApiRoutes(
     app.use('/', createHealthController(cluster));
     app.use('/api/cluster', createClusterController(cluster));
     app.use('/api/auth', createAuthController(getConfig().port));
+    // 첫 실행 셋업 마법사 (admin 0명일 때만 동작하는 일회성 공개 엔드포인트, auth 계열 리미터)
+    app.use('/api/setup', authLimiter, firstRunSetupRouter);
     app.use('/api/admin', createAdminController());
     // GDPR Phase B Fix 6 (B7) — 동의 조회/철회 API
     app.use('/api/users/me/consent', createConsentController());

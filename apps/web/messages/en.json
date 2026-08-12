@@ -1603,6 +1603,25 @@
       }
     }
   },
+  "setup": {
+    "title": "Initial Setup",
+    "subtitle": "First run of OpenMake LLM — create an admin account and connect the LLM gateway.",
+    "adminSection": "Admin Account",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "passwordHint": "8+ characters with at least one uppercase letter, number, and symbol",
+    "passwordConfirmLabel": "Confirm password",
+    "passwordMismatch": "Passwords do not match.",
+    "llmSection": "LLM Gateway (optional)",
+    "llmOptionalHint": "You can change this later in Admin → System Settings.",
+    "llmBaseUrlLabel": "Gateway URL",
+    "llmApiKeyLabel": "API key",
+    "submit": "Complete setup",
+    "failed": "Setup failed.",
+    "doneTitle": "Setup complete!",
+    "doneDesc": "The admin account has been created. Please sign in.",
+    "goLogin": "Go to login"
+  },
   "adminSchedules": {
     "title": "Task Schedule Management",
     "description": "View recurring agent task schedules across all users.",

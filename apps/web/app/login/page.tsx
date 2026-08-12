@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -18,6 +18,18 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 첫 실행(admin 0명)이면 셋업 마법사로 유도 — 실패 시 로그인 폼 그대로 (fail-open)
+  useEffect(() => {
+    void (async () => {
+      try {
+        const r = await ApiClient.get<{ data?: { setupNeeded?: boolean } }>("/api/setup/status");
+        if (r?.data?.setupNeeded) router.replace("/setup");
+      } catch {
+        /* noop */
+      }
+    })();
+  }, [router]);
 
   const submit = async () => {
     setLoading(true);
