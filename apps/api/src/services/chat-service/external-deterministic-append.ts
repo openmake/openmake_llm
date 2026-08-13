@@ -126,10 +126,12 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
         logger.info(`🔗 토론 출처 ${missingSources.length}블록 자동 첨부 (LLM 요약 누락 보정)`);
     }
 
-    // 웹검색 출처 목록 결정적 첨부 — LLM(qwen)이 프롬프트의 인용 지시를 자주 무시해 근거 소스가
-    // 답변에 안 드러나던 문제 보정. req.webSearchContext(formatSearchSources 포맷)에서 제목·URL 을
-    // 파싱해 응답 끝에 출처 목록을 붙인다(카카오맵 블록과 동일한 결정적 첨부 패턴, 라이브 stream +
-    // 저장 히스토리 양쪽 반영). 모델이 이미 출처 섹션(헤더)을 만든 경우엔 중복 방지로 skip.
+    // 웹검색 출처 목록 결정적 첨부 (서버 canonical 출처, 2026-08-14 강화) — 출처 목록의
+    // 정합성을 모델(qwen) 재량에 맡기지 않는다. 프롬프트는 "[출처 N] 인라인 마커만, 목록 작성
+    // 금지"로 지시하고(ws-chat-locales), 목록은 서버가 실제 수집한 (번호→제목·URL) 매핑으로
+    // 생성한다. 모델이 지시를 무시하고 목록을 만들었으면(비순응 상습) 인용 번호별 URL 존재를
+    // 검증해 누락분만 보강 — 인용 [출처 3]·[출처 8]이 목록에서 빠지던 라이브 결함의 재발 차단.
+    // (이미 스트리밍된 본문은 수정 불가 → 모든 교정은 append-only.)
     // 소스 문자열은 message-pipeline 경로에선 req.webSearchContext 가 아니라 ctx.enhancedMessage
     // (finalEnhancedMessage, context-builder 가 웹검색 컨텍스트를 합친 값)에 실려 온다. 둘 다 fallback.
     const webSearchCtxText = req.webSearchContext || ctx.enhancedMessage || '';
@@ -139,7 +141,7 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
         const headerRe = new RegExp(`(^|\\n)\\s*(#{1,3}\\s*|\\*\\*\\s*)${srcLabel}`);
         const headerIdx = finalContent.search(headerRe);
         const alreadyHasSources = headerIdx >= 0;
-        // 컨텍스트에서 번호→(제목, URL) 파싱 — 미첨부 시 전체 목록, 링크 누락 보강 시 번호 매칭에 공용.
+        // 컨텍스트에서 번호→(제목, URL) 파싱 — canonical 목록 생성·누락 검증에 공용.
         const numToSource = new Map<string, { title: string; url: string }>();
         const re = /\[[^\]]*?(\d+)\]\s*(.+?)\n\s*URL:\s*(\S+)/g;
         let mm: RegExpExecArray | null;
@@ -148,41 +150,48 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
                 numToSource.set(mm[1], { title: mm[2].trim(), url: mm[3].trim() });
             }
         }
+        // 본문에 인용된 소스 번호 ([출처 N]/[Source N]/[N] — 수집 목록에 있는 번호만 인정)
+        const citedNums: string[] = [];
+        const citeRe = /\[[^\]\n]*?(\d+)\]/g;
+        let cm: RegExpExecArray | null;
+        while ((cm = citeRe.exec(finalContent)) !== null) {
+            if (numToSource.has(cm[1]) && !citedNums.includes(cm[1])) citedNums.push(cm[1]);
+        }
         if (!alreadyHasSources) {
+            // canonical 목록 첨부 — 인용된 번호가 있으면 그 소스만(정밀), 없으면 전체(기존 동작).
+            // 번호는 인라인 인용과 일치하도록 원본 소스 번호를 유지한다 (재번호 시 [출처 3]↔목록 불일치).
+            const targetNums = citedNums.length > 0 ? citedNums : [...numToSource.keys()];
             const entries: string[] = [];
             const seen = new Set<string>();
-            for (const { title, url } of numToSource.values()) {
+            for (const n of targetNums) {
+                const { title, url } = numToSource.get(n)!;
                 if (url && !seen.has(url)) {
                     seen.add(url);
-                    entries.push(`${entries.length + 1}. [${title || url}](${url})`);
+                    entries.push(`${n}. [${title || url}](${url})`);
                 }
             }
             if (entries.length > 0) {
                 const block = `\n\n---\n\n**${srcLabel}**\n${entries.join('\n')}`;
                 onToken(block, undefined);
                 finalContent += block;
-                logger.info(`🔗 웹검색 출처 ${entries.length}개 자동 첨부 (LLM 인용 누락 보정)`);
+                logger.info(`🔗 웹검색 출처 ${entries.length}개 자동 첨부 (서버 canonical${citedNums.length > 0 ? ', 인용 기반' : ''})`);
             }
-        } else if (!/https?:\/\//.test(finalContent.slice(headerIdx))) {
-            // 모델이 출처 섹션을 직접 만들었지만 URL 없이 제목만 나열한 경우(자주 발생) —
-            // 본문에 인용된 번호([출처 N] 등)를 컨텍스트의 URL 과 매칭해 클릭 가능한 링크
-            // 블록을 덧붙인다. (이미 스트리밍된 본문은 수정 불가하므로 append-only)
-            const citedNums: string[] = [];
-            const citeRe = /\[[^\]\n]*?(\d+)\]/g;
-            let cm: RegExpExecArray | null;
-            while ((cm = citeRe.exec(finalContent)) !== null) {
-                if (numToSource.has(cm[1]) && !citedNums.includes(cm[1])) citedNums.push(cm[1]);
-            }
-            const nums = citedNums.length > 0 ? citedNums : [...numToSource.keys()];
-            const lines = nums.map((n) => {
-                const s = numToSource.get(n)!;
-                return `[${n}] ${s.url}`;
-            });
+        } else {
+            // 모델이 목록 작성 금지 지시를 무시하고 섹션을 만든 경우 — 인용 번호별로 해당
+            // 소스 URL 이 본문 어딘가에 존재하는지 검증, 누락분만 보강. 인용이 전혀 없는데
+            // 섹션에 URL 도 없으면(제목만 나열) 전체 번호 보강 (기존 동작 유지).
+            const missingNums = citedNums.filter((n) => !finalContent.includes(numToSource.get(n)!.url));
+            const nums = missingNums.length > 0
+                ? missingNums
+                : citedNums.length === 0 && !/https?:\/\//.test(finalContent.slice(headerIdx))
+                    ? [...numToSource.keys()]
+                    : [];
+            const lines = nums.map((n) => `[${n}] ${numToSource.get(n)!.url}`);
             if (lines.length > 0) {
                 const block = `\n\n🔗 **URL**\n${lines.join('\n')}`;
                 onToken(block, undefined);
                 finalContent += block;
-                logger.info(`🔗 출처 링크 ${lines.length}개 보강 (모델 출처 섹션에 URL 누락)`);
+                logger.info(`🔗 출처 링크 ${lines.length}개 보강 (모델 출처 섹션 누락 검증)`);
             }
         }
     }

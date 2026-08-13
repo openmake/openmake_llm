@@ -48,4 +48,23 @@ describe('External Provider — 출처 링크 보강', () => {
         expect(result).toContain('(https://a.example.com/1)');
         expect(result).toContain('(https://c.example.com/3)');
     });
+
+    it('모델 섹션에 URL 이 있어도 인용 번호의 소스가 누락되면 그 번호만 보강 (2026-08-14 라이브 결함 회귀)', async () => {
+        // 실사례: 본문에 [출처 3] 인용 + 모델이 만든 목록에는 3번 항목 통째 누락
+        const result = await streamFromExternalProvider(
+            deps,
+            makeResolved('본문 [출처 1] [출처 3].\n\n**출처**\n[출처 1] [제목A](https://a.example.com/1)'),
+            req, () => {}, ctx,
+        );
+        expect(result).toContain('🔗 **URL**');
+        expect(result).toContain('[3] https://c.example.com/3');
+        expect(result).not.toContain('[1] https://a.example.com/1'); // 이미 있는 번호는 보강 안 함
+    });
+
+    it('섹션 미작성 + 인용 있음 → 인용된 소스만, 원본 번호 유지 (재번호 금지)', async () => {
+        const result = await streamFromExternalProvider(deps, makeResolved('답 [출처 2] 기반.'), req, () => {}, ctx);
+        expect(result).toContain('**출처**');
+        expect(result).toContain('2. [제목B](https://b.example.com/2)'); // 원본 번호 2 유지
+        expect(result).not.toContain('https://a.example.com/1'); // 미인용 소스 제외
+    });
 });
