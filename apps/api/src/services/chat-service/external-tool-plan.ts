@@ -61,8 +61,11 @@ export function buildExternalToolPlan(params: {
     wantsMap: boolean;
     tailWebGround?: boolean;
     orchestration: OrchestrationIntents;
+    /** 활성 스킬이 required 로 바인딩한 도구 이름 — distractor 억제에서 면제. */
+    skillRequiredToolNames?: readonly string[];
 }): ExternalToolPlan {
     const { allowedTools, req, toolCalling, wantsMap, tailWebGround, orchestration } = params;
+    const skillRequired = new Set(params.skillRequiredToolNames ?? []);
 
     // 명시적 아티팩트 생성 요청(사용자 아티팩트 토글 또는 메시지 패턴)이면 distractor
     // always-on 도구(generate_image 등)를 제외해 모델이 도구 호출 대신 <artifact> 산출물을
@@ -76,11 +79,14 @@ export function buildExternalToolPlan(params: {
         || ARTIFACT_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
     // 위치/지도 의도(wantsMap)면 generate_image 를 제외 — 모델이 가짜 지도
     // 이미지를 그리는 대신 카카오 검색 + 네이티브 지도 블록을 쓰도록 유도 (distractor 억제).
+    // 단, 활성 스킬이 required 로 바인딩한 도구는 억제 면제 — 스킬의 명시 의도(예:
+    // 발표자료 스킬의 generate_image 삽화 생성)가 일반화된 distractor 휴리스틱보다 우선.
     const tools = toolCalling
         ? allowedTools.filter((t) =>
-            !EXTERNAL_LLM_TOOL_BLACKLIST.includes(t.function.name)
-            && !(wantsArtifact && ARTIFACT_REQUEST_SUPPRESSED_TOOLS.includes(t.function.name))
-            && !(wantsMap && t.function.name === 'generate_image'))
+            skillRequired.has(t.function.name)
+            || (!EXTERNAL_LLM_TOOL_BLACKLIST.includes(t.function.name)
+                && !(wantsArtifact && ARTIFACT_REQUEST_SUPPRESSED_TOOLS.includes(t.function.name))
+                && !(wantsMap && t.function.name === 'generate_image')))
         : [];
     // 채팅 서브에이전트(chat-delegate): 전문가 위임 도구 노출 — 스키마 +1 은 문법 컴파일 무해.
     if (CHAT_SUBAGENT.ENABLED && toolCalling) {

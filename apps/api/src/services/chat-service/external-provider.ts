@@ -34,7 +34,8 @@ import { executeExternalTool, recordExternalUsageFireAndForget } from './externa
 import { resolveModelCapabilities } from './model-capabilities';
 import { markModelUnusableFireAndForget } from './external-model-availability';
 import { appendDeterministicBlocks, captureOdArtifactHtml, normalizeOdToolCall, type OdArtifactCapture } from './external-deterministic-append';
-import { OD_ARTIFACT_ECHO } from '../../config/runtime-limits';
+import { OD_ARTIFACT_ECHO, IMAGE_GEN_PARALLEL } from '../../config/runtime-limits';
+import { parallelBatch } from '../../workflow/graph-engine';
 
 const logger = createLogger('ChatExternalProvider');
 
@@ -53,6 +54,8 @@ export interface ExternalProviderDeps {
     onSystemEvent?: (event: { type: string; message: string; metadata?: Record<string, unknown> }) => void;
     /** Allowed tools (agent 매칭 후) */
     allowedTools: ToolDefinition[];
+    /** 활성 스킬이 required 로 바인딩한 도구 이름 — 도구 플랜의 distractor 억제 면제용 */
+    skillRequiredToolNames?: readonly string[];
 }
 
 /**
@@ -191,6 +194,7 @@ export async function runExternalStream(
         wantsMap,
         ...(ctx.tailWebGround !== undefined ? { tailWebGround: ctx.tailWebGround } : {}),
         orchestration,
+        ...(deps.skillRequiredToolNames ? { skillRequiredToolNames: deps.skillRequiredToolNames } : {}),
     });
     // Stage 2 셰도우 계측 — 의도 매칭 턴만 텔레메트리를 초기화(호출 시 아래 루프가 갱신).
     if (orchestration.discussion || orchestration.taskDelegate) {
@@ -360,6 +364,26 @@ export async function runExternalStream(
 
             // 도구 실행 시간 누적 — TTFT 분해에서 "모델이 느린가 / 도구가 느린가"를 가른다.
             const toolBatchStartedAt = Date.now();
+            // 이미지 생성 병렬화 — 같은 턴의 generate_image 다중 호출(발표자료 삽화 등)은
+            // FLUX 디퓨전(수십 초/장)이 지배하므로 동시 실행해 배치 시간을 1장 수준으로
+            // 줄인다. executeExternalTool 은 콜백·에러를 자체 처리(실패는 'Error:' 문자열)
+            // 하므로 동시 실행에 안전하고, 결과는 아래 순차 루프가 원래 호출 순서대로
+            // tool 메시지에 배치한다.
+            const parallelImageResults = new Map<string, string>();
+            const imageCalls = result.toolCalls.filter((tc) => tc.name === 'generate_image');
+            if (IMAGE_GEN_PARALLEL.ENABLED && imageCalls.length >= 2) {
+                logger.info(`🎨 generate_image ${imageCalls.length}건 병렬 실행 (동시 상한 ${IMAGE_GEN_PARALLEL.MAX_CONCURRENT})`);
+                await parallelBatch(
+                    imageCalls,
+                    async (tc) => {
+                        parallelImageResults.set(
+                            tc.id,
+                            await executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>),
+                        );
+                    },
+                    { concurrency: IMAGE_GEN_PARALLEL.MAX_CONCURRENT },
+                );
+            }
             for (const tc of result.toolCalls) {
                 let toolResult: string;
                 if (tc.name === CHAT_DELEGATE_TOOL_NAME) {
@@ -405,7 +429,9 @@ export async function runExternalStream(
                         ctx.orchestrationTelemetry.success = !toolResult.startsWith('Error');
                     }
                 } else {
-                    toolResult = await executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>);
+                    // 병렬 선실행된 이미지 결과가 있으면 재실행 없이 소비.
+                    toolResult = parallelImageResults.get(tc.id)
+                        ?? await executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>);
                 }
                 if (tc.name === 'generate_image') {
                     const m = toolResult.match(/!\[[^\]]*\]\(\/generated\/[^)]+\)/);
