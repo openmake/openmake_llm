@@ -690,6 +690,12 @@ compose_up() {
 
 run_migrations() {
     log_step "7/8 DB 마이그레이션"
+    # 마이그레이션 CLI(ts-node)가 @openmake/shared-types 의 dist/ 를 import 한다 —
+    # 전체 빌드(8단계) 전에 워크스페이스 패키지만 먼저 빌드해 둔다.
+    if [[ ! -f "$SCRIPT_DIR/packages/shared-types/dist/index.js" ]]; then
+        log_info "워크스페이스 패키지 빌드 (npm run build:packages)"
+        ( cd "$SCRIPT_DIR" && npm run build:packages ) || die "워크스페이스 패키지 빌드 실패"
+    fi
     ( cd "$SCRIPT_DIR/apps/api" && npx ts-node src/data/migrations/cli.ts migrate ) \
         || die "마이그레이션 실패 — DATABASE_URL 과 POSTGRES_PASSWORD 가 일치하는지 확인하세요."
     log_ok "마이그레이션 완료"
