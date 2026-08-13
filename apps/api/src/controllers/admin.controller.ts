@@ -310,9 +310,14 @@ export class AdminController {
         try {
             const userManager = getUserManager();
             const userId = req.params.id;
-            const { email, role, is_active } = req.body;
+            const { email, role, is_active, password } = req.body as { email?: string; role?: UserRole; is_active?: boolean; password?: string };
 
-            const user = await userManager.updateUser(userId, { email, role, is_active });
+            if (password !== undefined && (typeof password !== 'string' || password.length < 6)) {
+                res.status(400).json(badRequest('비밀번호는 6자 이상이어야 합니다'));
+                return;
+            }
+
+            const user = await userManager.updateUser(userId, { email, role, is_active, password });
 
             if (!user) {
                 res.status(404).json(notFound('사용자'));

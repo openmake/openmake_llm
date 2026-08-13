@@ -308,12 +308,14 @@ class UserManagerImpl {
 
     async getUserByEmail(email: string): Promise<{ id: string; email: string; password: string; role: UserRole } | null> {
         const pool = getPool();
-        const result = await pool.query('SELECT * FROM users WHERE username = $1', [email]);
+        // username 이 email 과 다르게 변경된 계정도 찾아야 하므로 email OR username 으로 조회
+        // (createUser 의 중복 체크와 동일 기준 — 기준이 달라 OAuth 로그인이 막히던 결함, 2026-08-13)
+        const result = await pool.query('SELECT * FROM users WHERE email = $1 OR username = $1', [email]);
         const row = result.rows[0] as UserRow | undefined;
         if (!row) return null;
         return {
             id: row.id,
-            email: row.username,
+            email: row.email ?? row.username,
             password: row.password_hash,
             role: row.role as UserRole
         };
@@ -383,7 +385,7 @@ class UserManagerImpl {
         return row ? this.rowToPublicUser(row) : null;
     }
 
-    async updateUser(userId: string, updates: { email?: string; role?: UserRole; is_active?: boolean }): Promise<PublicUser | null> {
+    async updateUser(userId: string, updates: { email?: string; role?: UserRole; is_active?: boolean; password?: string }): Promise<PublicUser | null> {
         const pool = getPool();
         const sets: string[] = ['updated_at = $1'];
         const params: (string | number | boolean)[] = [new Date().toISOString()];
@@ -402,6 +404,10 @@ class UserManagerImpl {
         if (updates.is_active !== undefined) {
             sets.push(`is_active = $${paramIdx++}`);
             params.push(updates.is_active);
+        }
+        if (updates.password !== undefined) {
+            sets.push(`password_hash = $${paramIdx++}`);
+            params.push(await bcrypt.hash(updates.password, BCRYPT_ROUNDS));
         }
 
         params.push(userId);
