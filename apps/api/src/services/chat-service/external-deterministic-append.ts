@@ -11,6 +11,11 @@
 import { createLogger } from '../../utils/logger';
 import { REPORT_PIPELINE } from '../../config/runtime-limits';
 import { tryRenderReportBlock } from './report-block';
+import { basename } from 'path';
+import { MCP_NAMESPACE_SEPARATOR } from '../../mcp/types';
+import { MCP_META_TOOL_NAMES } from '../../mcp/mcp-meta-tools';
+
+const MCP_CALL_TOOL_NAME = MCP_META_TOOL_NAMES[1]; // 'mcp_call'
 import { WEB_SEARCH_TEMPLATES, getLocalizedTemplate } from '../../sockets/ws-chat-locales';
 import type { ChatMessageRequest } from '../chat-service-types';
 import type { StreamFromExternalContext } from './external-provider';
@@ -28,8 +33,57 @@ export interface DeterministicAppendInput {
     kakaomapBlocks: string[];
     /** start_discussion 출처 블록. */
     discussionSourceBlocks: string[];
+    /** 오픈디자인 도구로 저장한 HTML 산출물 (마지막 저장본 — captureOdArtifactHtml 참고). */
+    odArtifact?: OdArtifactCapture | null;
     req: ChatMessageRequest;
     ctx: StreamFromExternalContext;
+}
+
+/** open-design 도구 인자에서 캡처한 HTML 산출물. */
+export interface OdArtifactCapture {
+    id: string;
+    title: string;
+    html: string;
+}
+
+/**
+ * mcp_call 메타 도구 경유 간접 호출을 실제 도구 호출로 정규화한다.
+ * mcp_call(server, tool, args) → { name: "server::tool", args } — 직접 호출은 그대로 반환.
+ * (진행적 공개 경로로 open-design 을 부르면 tc.name 이 'mcp_call' 이라 캡처를 놓치는 갭 보정.)
+ */
+export function normalizeOdToolCall(
+    name: string,
+    args: Record<string, unknown>,
+): { name: string; args: Record<string, unknown> } {
+    if (name !== MCP_CALL_TOOL_NAME) return { name, args };
+    const inner = args.args && typeof args.args === 'object'
+        ? args.args as Record<string, unknown> : {};
+    return {
+        name: `${String(args.server ?? '')}${MCP_NAMESPACE_SEPARATOR}${String(args.tool ?? '')}`,
+        args: inner,
+    };
+}
+
+/**
+ * open-design create_artifact/write_file 호출 인자에서 자체완결 HTML 을 캡처한다.
+ * CSS/JSX 등 부속 파일이나 실패한 호출은 null — 호출부는 마지막 캡처만 유지한다(수정본 우선).
+ */
+export function captureOdArtifactHtml(
+    args: Record<string, unknown>,
+    toolResult: string,
+): OdArtifactCapture | null {
+    if (toolResult.startsWith('Error')) return null;
+    const content = typeof args.content === 'string' ? args.content : '';
+    const head = content.trimStart().slice(0, 15).toLowerCase();
+    if (!head.startsWith('<!doctype') && !head.startsWith('<html')) return null;
+    const fileName = typeof args.name === 'string' ? args.name
+        : typeof args.path === 'string' ? args.path : '';
+    const base = basename(fileName).replace(/\.[a-z0-9]+$/i, '') || 'design';
+    const titleTag = /<title[^>]*>([^<]{1,200})<\/title>/i.exec(content)?.[1]?.trim();
+    // 아티팩트 시작 태그 속성은 "..." 파싱 — 제목의 큰따옴표는 작은따옴표로 강등(report-block 동일).
+    const title = (titleTag || base).replace(/"/g, "'").slice(0, 200);
+    const id = `${base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'design'}-${Date.now().toString(36)}`;
+    return { id, title, html: content };
 }
 
 /**
@@ -131,6 +185,17 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
                 logger.info(`🔗 출처 링크 ${lines.length}개 보강 (모델 출처 섹션에 URL 누락)`);
             }
         }
+    }
+
+    // 오픈디자인 산출물 결정적 첨부 — create_artifact 로 워크스페이스에 저장한 HTML 덱을
+    // 모델이 최종 응답 <artifact> 로 옮기지 않으면(말로만 안내, 2026-08-14 라이브 실측) 서버가
+    // 1회 첨부한다. 모델이 이미 html 아티팩트를 출력했으면 중복 첨부하지 않는다.
+    if (input.odArtifact && !/<artifact\b[^>]*kind="html"/.test(finalContent)) {
+        const a = input.odArtifact;
+        const block = `\n\n<artifact id="${a.id}" kind="html" title="${a.title}">\n${a.html}\n</artifact>`;
+        onToken(block, undefined);
+        finalContent += block;
+        logger.info(`🎨 오픈디자인 아티팩트 결정적 첨부: "${a.title}" (${a.html.length}B)`);
     }
 
     // 보고서 결정적 렌더 (P1 파이프라인) — 모델이 출력한 ```reportdata JSON 블록을 고정

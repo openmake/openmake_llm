@@ -35,3 +35,29 @@ export function detectFileTaskIntent(text: string): boolean {
   if (!t) return false;
   return FILE_TASK_INTENT_TOKENS.some((tok) => t.includes(tok));
 }
+
+/**
+ * 발표자료(프레젠테이션) 제작 의도를 나타내는 토큰 — 매칭 시 자동 위임하지 않고
+ * 채팅에 남긴다. 채팅 경로에만 presentation-designer 스킬(open-design MCP 도구
+ * required 바인딩)이 배선되어 있어, 위임하면 디자인 워크플로우를 잃는다.
+ */
+export const PRESENTATION_CHAT_TOKENS: readonly string[] = [
+  "발표자료", "발표 자료", "발표용", "프레젠테이션", "슬라이드", "피치덱", "피치 덱",
+  "presentation", "slide", "pitch deck",
+];
+
+/**
+ * 명시적 .pptx 파일 산출 요청 — 진짜 파일이 필요하므로 발표 의도라도 에이전트
+ * 작업(샌드박스 python-pptx)으로 위임을 유지한다. ("pptx", "ppt 파일(로)")
+ */
+const EXPLICIT_PPTX_FILE_RE = /pptx|ppt\s*파일/i;
+
+/**
+ * 발표자료 제작 요청이라 채팅에 남겨야 하는지 판정.
+ * 명시적 pptx 파일 요청은 예외 — 위임 유지(true 아님).
+ */
+export function detectPresentationChatIntent(text: string): boolean {
+  const t = text.trim().toLowerCase();
+  if (!t || EXPLICIT_PPTX_FILE_RE.test(t)) return false;
+  return PRESENTATION_CHAT_TOKENS.some((tok) => t.includes(tok));
+}

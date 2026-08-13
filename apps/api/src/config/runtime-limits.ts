@@ -1146,6 +1146,21 @@ export const REPORT_PIPELINE = {
 } as const;
 
 /**
+ * 오픈디자인(open-design MCP) 산출물 결정적 에코 — 도구 루프에서 create_artifact 로
+ * 워크스페이스에 저장한 HTML 을 모델이 최종 응답 <artifact> 로 옮기지 않는 문제(말로만
+ * "아래에서 확인하세요" 안내, 2026-08-14 라이브 실측)의 보정. 생성 이미지·카카오맵·웹검색
+ * 출처·reportdata 와 동일한 결정적 첨부 패턴 — external-deterministic-append 참고.
+ */
+export const OD_ARTIFACT_ECHO = {
+    /** 기본 ON — OD_ARTIFACT_ECHO_ENABLED=false 로 비활성화. */
+    ENABLED: process.env.OD_ARTIFACT_ECHO_ENABLED !== 'false',
+    /** HTML 캡처 대상 도구 이름 콤마 목록 (네임스페이스 포함 전체 이름). */
+    TOOL_NAMES: (process.env.OD_ARTIFACT_ECHO_TOOLS
+        ?? 'open-design::create_artifact,open-design::write_file')
+        .split(',').map((s) => s.trim()).filter(Boolean),
+} as const;
+
+/**
  * 보고서 작성 의도 판정 패턴. 매칭 시 ① report-guide(reportdata JSON 계약) 시스템 프롬프트
  * 주입 ② 아티팩트 의도와 동일한 distractor 도구 억제. 실사용 문구 기반(운영 로그 2026-07):
  * "html 로 보고서를 작성해서 보고해", "보고서 형식으로 만들어줘", "리포트 작성해줘" 류.
