@@ -37,6 +37,8 @@ export interface SettingView {
     isSet: boolean;
     /** 비시크릿 키의 표시값 (db 또는 env 값). 시크릿은 항상 미포함 */
     value?: string;
+    /** 키 발급 콘솔 URL — UI 바로가기 링크용 (registry 정의, 없으면 미포함) */
+    issueUrl?: string;
 }
 
 export class SystemSettingsService {
@@ -109,6 +111,7 @@ export class SystemSettingsService {
                 source,
                 isSet: effective !== undefined && effective !== '',
                 ...(def.secret ? {} : effective !== undefined ? { value: effective } : {}),
+                ...(def.issueUrl ? { issueUrl: def.issueUrl } : {}),
             };
         });
     }

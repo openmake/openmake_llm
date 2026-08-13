@@ -1571,6 +1571,7 @@
     "reset": "Reset",
     "resetHelp": "Delete the DB value and fall back to .env/default.",
     "resetConfirm": "Delete '{key}' and fall back to env/default?",
+    "issueLink": "Get key",
     "sourceDb": "Set in DB",
     "sourceEnv": "From env",
     "sourceDefault": "Default",

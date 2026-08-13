@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { KeyRound, Search, Bell, BellRing, Cpu, Save, RotateCcw, Loader2, AlertTriangle } from "lucide-react";
+import { KeyRound, Search, Bell, BellRing, Cpu, Save, RotateCcw, Loader2, AlertTriangle, ExternalLink } from "lucide-react";
 import {
   PageHeader,
   Card,
@@ -26,6 +26,8 @@ interface SettingView {
   source: "db" | "env" | "default";
   isSet: boolean;
   value?: string;
+  /** 키 발급 콘솔 URL — 있으면 바로가기 링크 노출 */
+  issueUrl?: string;
 }
 interface SettingsPayload {
   settings: SettingView[];
@@ -67,6 +69,18 @@ function SettingRow({ setting, busy, onSave, onReset }: {
     <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center">
       <div className="flex min-w-72 flex-wrap items-center gap-2">
         <code className="text-xs font-medium">{setting.key}</code>
+        {setting.issueUrl && (
+          <a
+            href={setting.issueUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-1 text-xs text-accent hover:underline"
+            title={setting.issueUrl}
+          >
+            <ExternalLink className="h-3 w-3" aria-hidden />
+            {t("issueLink")}
+          </a>
+        )}
         <Badge tone={sourceTone} className="shrink-0 whitespace-nowrap">{sourceLabel}</Badge>
         {setting.requiresRestart && (
           <Badge tone="warn" className="shrink-0 whitespace-nowrap">{t("restartRequired")}</Badge>

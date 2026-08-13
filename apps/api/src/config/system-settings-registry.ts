@@ -27,6 +27,8 @@ export interface SystemSettingDef {
     requiresRestart: boolean;
     /** 키별 형식 검증 — 빈 문자열 저장 금지 (해제는 DELETE 로 env 폴백 복귀) */
     validate: z.ZodType<string>;
+    /** 키 발급 콘솔 URL — admin UI 가 입력란 옆에 바로가기 링크로 노출 (발급처 없는 키는 생략) */
+    issueUrl?: string;
 }
 
 const nonEmpty = z.string().trim().min(1, '값이 비어 있습니다').max(2000, '2000자 이하여야 합니다');
@@ -41,24 +43,39 @@ const mailtoOrHttps = nonEmpty.refine(
     'mailto: 또는 https:// 형식이어야 합니다',
 );
 
+/** 발급 콘솔 URL — 같은 콘솔을 쓰는 키(ID/SECRET 쌍)가 공유 */
+const ISSUE_URLS = {
+    googleCloud: 'https://console.cloud.google.com/apis/credentials',
+    googleCse: 'https://programmablesearchengine.google.com/controlpanel/all',
+    github: 'https://github.com/settings/developers',
+    kakao: 'https://developers.kakao.com/console/app',
+    naverDev: 'https://developers.naver.com/apps',
+    ncpHub: 'https://console.ncloud.com/naver-api-hub/application',
+    exa: 'https://dashboard.exa.ai/api-keys',
+    tavily: 'https://app.tavily.com/home',
+} as const;
+
 export const SYSTEM_SETTINGS_REGISTRY: SystemSettingDef[] = [
     // ── OAuth (소셜 로그인) — 미설정 시 해당 provider 로그인 비활성 ──
-    { key: 'GOOGLE_CLIENT_ID', group: 'oauth', secret: false, requiresRestart: false, validate: nonEmpty },
-    { key: 'GOOGLE_CLIENT_SECRET', group: 'oauth', secret: true, requiresRestart: false, validate: nonEmpty },
+    { key: 'GOOGLE_CLIENT_ID', group: 'oauth', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.googleCloud },
+    { key: 'GOOGLE_CLIENT_SECRET', group: 'oauth', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.googleCloud },
     { key: 'OAUTH_REDIRECT_URI', group: 'oauth', secret: false, requiresRestart: false, validate: httpUrl },
-    { key: 'GITHUB_CLIENT_ID', group: 'oauth', secret: false, requiresRestart: false, validate: nonEmpty },
-    { key: 'GITHUB_CLIENT_SECRET', group: 'oauth', secret: true, requiresRestart: false, validate: nonEmpty },
-    { key: 'KAKAO_CLIENT_ID', group: 'oauth', secret: false, requiresRestart: false, validate: nonEmpty },
-    { key: 'KAKAO_CLIENT_SECRET', group: 'oauth', secret: true, requiresRestart: false, validate: nonEmpty },
+    { key: 'GITHUB_CLIENT_ID', group: 'oauth', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.github },
+    { key: 'GITHUB_CLIENT_SECRET', group: 'oauth', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.github },
+    { key: 'KAKAO_CLIENT_ID', group: 'oauth', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.kakao },
+    { key: 'KAKAO_CLIENT_SECRET', group: 'oauth', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.kakao },
 
     // ── 웹 검색 (Google CSE / Naver) — 미설정 시 해당 검색 소스만 비활성 ──
-    { key: 'GOOGLE_API_KEY', group: 'search', secret: true, requiresRestart: false, validate: nonEmpty },
-    { key: 'GOOGLE_CSE_ID', group: 'search', secret: false, requiresRestart: false, validate: nonEmpty },
-    { key: 'NAVER_CLIENT_ID', group: 'search', secret: false, requiresRestart: false, validate: nonEmpty },
-    { key: 'NAVER_CLIENT_SECRET', group: 'search', secret: true, requiresRestart: false, validate: nonEmpty },
-    { key: 'NAVER_API_HUB_KEY_ID', group: 'search', secret: false, requiresRestart: false, validate: nonEmpty },
-    { key: 'NAVER_API_HUB_KEY', group: 'search', secret: true, requiresRestart: false, validate: nonEmpty },
+    { key: 'GOOGLE_API_KEY', group: 'search', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.googleCloud },
+    { key: 'GOOGLE_CSE_ID', group: 'search', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.googleCse },
+    { key: 'NAVER_CLIENT_ID', group: 'search', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.naverDev },
+    { key: 'NAVER_CLIENT_SECRET', group: 'search', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.naverDev },
+    { key: 'NAVER_API_HUB_KEY_ID', group: 'search', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.ncpHub },
+    { key: 'NAVER_API_HUB_KEY', group: 'search', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.ncpHub },
     { key: 'NAVER_API_DAILY_LIMIT', group: 'search', secret: false, requiresRestart: false, validate: nonNegativeIntString },
+    { key: 'KAKAO_REST_API_KEY', group: 'search', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.kakao },
+    { key: 'EXA_API_KEY', group: 'search', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.exa },
+    { key: 'TAVILY_API_KEY', group: 'search', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.tavily },
 
     // ── 운영 알림 webhook — URL 자체가 발송 자격증명이라 전부 secret ──
     { key: 'OPERATOR_WEBHOOK_URL', group: 'alerts', secret: true, requiresRestart: false, validate: httpsUrl },
