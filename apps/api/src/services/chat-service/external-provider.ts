@@ -33,7 +33,8 @@ import { executeExternalTool, recordExternalUsageFireAndForget } from './externa
 
 import { resolveModelCapabilities } from './model-capabilities';
 import { markModelUnusableFireAndForget } from './external-model-availability';
-import { appendDeterministicBlocks } from './external-deterministic-append';
+import { appendDeterministicBlocks, captureOdArtifactHtml, normalizeOdToolCall, type OdArtifactCapture } from './external-deterministic-append';
+import { OD_ARTIFACT_ECHO } from '../../config/runtime-limits';
 
 const logger = createLogger('ChatExternalProvider');
 
@@ -242,6 +243,9 @@ export async function runExternalStream(
     // 도구 경유 토론(start_discussion)의 출처 목록 — 모델이 도구 결과를 요약하며 버리므로
     // 마커로 실려 온 블록을 모아 최종 응답에 결정적으로 첨부한다(카카오 지도와 동일 패턴).
     const discussionSourceBlocks: string[] = [];
+    // 오픈디자인 산출물(HTML) — create_artifact/write_file 인자에서 캡처, 마지막 저장본 유지.
+    // 모델이 최종 응답에 <artifact> 를 생략하면 결정적 첨부한다(위 블록들과 동일 패턴).
+    let odArtifact: OdArtifactCapture | null = null;
 
     try {
         for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
@@ -409,6 +413,15 @@ export async function runExternalStream(
                         generatedImageMarkdowns.push(m[0]);
                     }
                 }
+                // 오픈디자인 HTML 산출물 캡처 — 저장 성공한 자체완결 HTML 만, 마지막 것 유지.
+                // mcp_call 메타 도구 경유 간접 호출도 server::tool 로 정규화해 동일 캡처한다.
+                if (OD_ARTIFACT_ECHO.ENABLED) {
+                    const eff = normalizeOdToolCall(tc.name, tc.args as Record<string, unknown>);
+                    if (OD_ARTIFACT_ECHO.TOOL_NAMES.includes(eff.name)) {
+                        const captured = captureOdArtifactHtml(eff.args, toolResult);
+                        if (captured) odArtifact = captured;
+                    }
+                }
                 // 카카오 지도 블록 수집(도구명 무관 — 도구 결과에 블록이 있으면).
                 for (const mm of toolResult.matchAll(/```kakaomap\s*\n[\s\S]*?```/g)) {
                     if (!kakaomapBlocks.includes(mm[0])) kakaomapBlocks.push(mm[0]);
@@ -547,6 +560,7 @@ export async function runExternalStream(
         generatedImageMarkdowns,
         kakaomapBlocks,
         discussionSourceBlocks,
+        odArtifact,
         req,
         ctx,
     });

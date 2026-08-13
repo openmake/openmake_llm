@@ -37,7 +37,7 @@ import {
 } from "@/lib/skills-api";
 import { SlashSkillMenu } from "@/components/chat/slash-skill-menu";
 import { cn } from "@/lib/utils";
-import { detectFileTaskIntent } from "@/lib/file-task-intent";
+import { detectFileTaskIntent, detectPresentationChatIntent } from "@/lib/file-task-intent";
 import { detectReportTaskIntent } from "@/lib/report-task-intent";
 
 // 슬래시 스킬 호출: "/" + 공백없는 단일 토큰일 때만 드롭다운 표시.
@@ -345,8 +345,11 @@ export function Composer() {
       void sendStructured(text.trim());
     } else if (
       !discussionMode && !deepResearchMode && !imageMode &&
-      files.length > 0 && detectFileTaskIntent(text)
+      files.length > 0 && detectFileTaskIntent(text) && !detectPresentationChatIntent(text)
     ) {
+      // 발표자료 제작 요청은 위임하지 않고 채팅 유지 — presentation-designer 스킬
+      // (open-design 디자인 워크플로우)이 채팅 경로에 배선되어 있다. 단 명시적 pptx
+      // 파일 요청은 detectPresentationChatIntent 가 false 라 기존대로 위임된다.
       // 자동 위임(Option B) — 파일 첨부 + 가공/편집/생성/정밀분석 의도면, 스트리밍 채팅 대신
       // 에이전트 작업으로 매끄럽게 위임한다. 샌드박스가 원본 파일을 python
       // (openpyxl/python-docx/reportlab 등)으로 처리 → 진행·결과·생성파일 다운로드는
