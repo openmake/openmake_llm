@@ -16,10 +16,13 @@ import {
     searchDuckDuckGoAPI,
     searchNaverNews,
     searchNaverWeb,
+    searchNaverEncyc,
+    searchDaumWeb,
     searchSearxng
 } from './providers';
+import { searchExa } from './external-search-apis';
 import { createLogger } from '../../utils/logger';
-import { SEARCH_RELIABILITY, WEB_SEARCH_INJECTION } from '../../config/runtime-limits';
+import { SEARCH_ESCALATION, SEARCH_RELIABILITY, SEARXNG_CATEGORY_SCOPE, WEB_SEARCH_INJECTION } from '../../config/runtime-limits';
 import { formatSearchSources } from './format-sources';
 import { getConfig } from '../../config/env';
 import { logSemanticRerankShadow, rerankBySemantics } from './semantic-reranker';
@@ -49,6 +52,20 @@ const QUERY_STOPWORDS = new Set<string>([
     'the', 'what', 'who', 'is', 'are', 'now', 'today', 'about', 'please', 'tell',
     'me', 'a', 'an', 'of', 'in', 'on', 'and', 'to', 'search', 'web', 'result', 'results',
 ]);
+
+/**
+ * 질의 성격에 맞는 SearXNG 카테고리를 결정한다 (결정적 regex — LLM 판단 아님).
+ * 기술/학술 패턴 매칭 시 `it`/`science` 를 general 에 추가해 github·arxiv 등 권위 소스를 유입시킨다.
+ * 비매칭 시 undefined (기본 general — 기존 동작 무변경).
+ */
+export function detectSearxngCategories(query: string): string | undefined {
+    const it = SEARXNG_CATEGORY_SCOPE.IT_PATTERN.test(query);
+    const science = SEARXNG_CATEGORY_SCOPE.SCIENCE_PATTERN.test(query);
+    if (it && science) return 'general,it,science';
+    if (it) return 'general,it';
+    if (science) return 'general,science';
+    return undefined;
+}
 
 /** 쿼리를 콘텐츠 단어로 토큰화 — 2자 이상, 불용어 제외, 중복 제거. */
 function tokenizeQueryTerms(query: string): string[] {
@@ -95,9 +112,16 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
         searchWikipedia(query, language, signal),
         searchGoogleNews(query, language, signal),
         searchDuckDuckGoAPI(query, signal),
-        searchSearxng(query, 15, language, signal),   // SearXNG 메타검색 (항상, index 4)
-        // 한국어 쿼리: 네이버 뉴스(모바일 스크래핑) + 웹문서(공식 검색 API) 병렬 수집
-        ...(language === 'ko' ? [searchNaverNews(query, 5, signal), searchNaverWeb(query, 10, signal)] : [])
+        searchSearxng(query, 15, language, signal, detectSearxngCategories(query)),   // SearXNG 메타검색 (항상, index 4)
+        // 한국어 쿼리: 네이버(뉴스+웹문서+백과) + 카카오 Daum 웹문서(색인이 다른 2공급원) 병렬 수집
+        ...(language === 'ko'
+            ? [
+                searchNaverNews(query, 5, signal),
+                searchNaverWeb(query, 10, signal),
+                searchNaverEncyc(query, 5, signal),
+                searchDaumWeb(query, 10, signal),
+            ]
+            : [])
     ];
 
     const allSearchResults = await Promise.all(searchPromises);
@@ -106,7 +130,7 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
     const newsResults = allSearchResults[2] || [];
     const ddgResults = allSearchResults[3] || [];
     const searxngResults = allSearchResults[4] || [];
-    // index 5 이후는 전부 네이버 소스(뉴스+웹문서) — 개수 변동에 견고하게 합산
+    // index 5 이후는 전부 한국어 소스(네이버 뉴스/웹문서/백과 + Daum 웹문서) — 개수 변동에 견고하게 합산
     const naverResults = allSearchResults.slice(5).flat();
 
     // 결과 합치기 (우선순위: SearXNG 메타 > 뉴스 > Naver > Google > Wikipedia > DDG)
@@ -129,6 +153,22 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
     });
 
     logger.info(`총 ${uniqueResults.length}개 (SearXNG:${searxngResults.length}, Google:${googleResults.length}, Wiki:${wikiResults.length}, News:${newsResults.length}, DDG:${ddgResults.length}, Naver:${naverResults.length})`);
+
+    // Tier 1 escalation — 무료(Tier 0) 수집이 부족할 때만 Exa 공식 API 로 보강한다.
+    // 결정적 개수 비교뿐(LLM 판단 아님), EXA_API_KEY 미설정이면 searchExa 가 즉시 빈 배열.
+    if (SEARCH_ESCALATION.MIN_RESULTS > 0 && uniqueResults.length < SEARCH_ESCALATION.MIN_RESULTS) {
+        const tier0Count = uniqueResults.length;
+        const exaResults = await searchExa(query, SEARCH_ESCALATION.EXA_NUM_RESULTS, signal);
+        for (const r of exaResults) {
+            const normalizedUrl = r.url.replace(/\/$/, '').replace(/^https?:\/\//, '').toLowerCase();
+            if (seen.has(normalizedUrl)) continue;
+            seen.add(normalizedUrl);
+            uniqueResults.push(r);
+        }
+        if (exaResults.length > 0) {
+            logger.info(`Tier1 escalation: Tier0 ${tier0Count}개 부족 → Exa ${exaResults.length}개 보강 (총 ${uniqueResults.length}개)`);
+        }
+    }
 
     // 시점 민감 쿼리(preferRecent) 랭킹 보정용 — 뉴스 소스(News/Naver) URL 집합.
     const newsUrlSet = preferRecent

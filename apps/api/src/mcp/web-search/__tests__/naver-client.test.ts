@@ -78,6 +78,20 @@ describe('buildNaverSearchRequest — 듀얼 경로', () => {
         setConfig({});
         expect(await buildNaverSearchRequest('news', 'query=x')).toBeNull();
     });
+
+    it('encyc 엔드포인트 — HUB URL 조립', async () => {
+        setConfig({ naverApiHubKeyId: 'hub-id', naverApiHubKey: 'hub-secret' });
+        const req = await buildNaverSearchRequest('encyc', 'query=ai&display=5');
+        expect(req!.route).toBe('hub');
+        expect(req!.url).toBe('https://naverapihub.apigw.ntruss.com/search/v1/encyc?query=ai&display=5');
+    });
+
+    it('encyc 엔드포인트 — legacy URL(.json) 조립', async () => {
+        setConfig({ naverClientId: 'legacy-id', naverClientSecret: 'legacy-secret' });
+        const req = await buildNaverSearchRequest('encyc', 'query=ai&display=5');
+        expect(req!.route).toBe('legacy');
+        expect(req!.url).toBe('https://openapi.naver.com/v1/search/encyc.json?query=ai&display=5');
+    });
 });
 
 describe('buildNaverSearchRequest — 일일 한도 가드', () => {

@@ -175,6 +175,12 @@ export const envSchema = z
         NAVER_API_HUB_KEY_ID: z.string().default(''),
         NAVER_API_HUB_KEY: z.string().default(''),
         NAVER_API_DAILY_LIMIT: z.coerce.number().int().min(0).default(25000),
+        // 카카오(Daum) 검색 API — 웹문서 검색 (KakaoAK REST 키, 미설정 시 비활성)
+        KAKAO_REST_API_KEY: z.string().default(''),
+        // Exa 검색 API — Tier0 수집 부족 시 escalation 전용 (미설정 시 비활성)
+        EXA_API_KEY: z.string().default(''),
+        // Tavily 검색 API — Deep Research 전용 (미설정 시 비활성)
+        TAVILY_API_KEY: z.string().default(''),
         GITHUB_TOKEN: z.string().default(''),
         VAPID_PUBLIC_KEY: z.string().default(''),
         VAPID_PRIVATE_KEY: z.string().default(''),

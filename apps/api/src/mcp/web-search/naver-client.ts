@@ -37,7 +37,7 @@ function dayKey(now: number): string {
     return `naverq:d:${Math.floor((now + KST_OFFSET_MS) / DAY_MS)}`;
 }
 
-export type NaverSearchEndpoint = 'news' | 'webkr';
+export type NaverSearchEndpoint = 'news' | 'webkr' | 'encyc';
 
 export interface NaverSearchRequest {
     url: string;

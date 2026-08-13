@@ -9,10 +9,11 @@
 import type { LLMClient } from '../../llm';
 import type { SearchResult } from '../../mcp/web-search';
 import { performWebSearch } from '../../mcp/web-search';
+import { searchTavily } from '../../mcp/web-search/external-search-apis';
 import type { ResearchConfig, SubTopic } from '../deep-research-types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
-import { CAPACITY, RESEARCH_DEFAULTS } from '../../config/runtime-limits';
+import { CAPACITY, RESEARCH_DEFAULTS, RESEARCH_TAVILY } from '../../config/runtime-limits';
 import { normalizeUrl } from '../deep-research-utils';
 import { parallelBatch } from '../../workflow/graph-engine';
 
@@ -82,11 +83,19 @@ export async function searchSubTopics(params: {
             if (sourceMap.size >= config.maxTotalSources) return;
 
             try {
-                const results = await performWebSearch(query, {
-                    maxResults: resultsPerQuery,
-                    language: config.language,
-                    signal: abortSignal
-                });
+                // Tavily 는 Deep Research 전용 보강 — 정제 본문(content)이 실려 와 스크랩 실패를
+                // 줄인다. TAVILY_API_KEY 미설정/MAX_RESULTS=0 이면 빈 배열 graceful (기존 동작 무변경).
+                const [webResults, tavilyResults] = await Promise.all([
+                    performWebSearch(query, {
+                        maxResults: resultsPerQuery,
+                        language: config.language,
+                        signal: abortSignal
+                    }),
+                    RESEARCH_TAVILY.MAX_RESULTS > 0
+                        ? searchTavily(query, RESEARCH_TAVILY.MAX_RESULTS, RESEARCH_TAVILY.SEARCH_DEPTH, abortSignal)
+                        : Promise.resolve([]),
+                ]);
+                const results = [...tavilyResults, ...webResults];
                 // abort 시 performWebSearch 는 빈/부분 결과를 반환하므로, 검색 스텝을
                 // completed 로 오기록하지 않도록 결과 처리 전에 중단을 확인한다.
                 throwIfAborted();
