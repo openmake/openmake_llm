@@ -180,10 +180,23 @@ Supported platforms: **Linux** and **macOS** (Intel & Apple Silicon).
 ### Install (one command)
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh | bash
+```
+
+No clone needed — when the installer detects it is running outside the repo, it fetches
+the source into `~/openmake_llm` (override with `OMK_HOME=...`; `OMK_REF=...` picks a
+branch or tag) and re-enters itself there. Piped runs still prompt you interactively via
+`/dev/tty`; in a non-terminal context (CI) prompts are auto-approved. Prefer the classic
+way? It works exactly as before:
+
+```bash
 git clone https://github.com/openmake/openmake_llm.git
 cd openmake_llm
 ./install.sh
 ```
+
+On **Windows**, run the same one-liner inside **WSL2** (Ubuntu) — the installer detects
+native Windows shells and prints the WSL2 setup steps instead.
 
 That's it. The installer checks your toolchain (Node 24, Docker, PM2 — installing what's
 missing, without `sudo` where possible), generates a `.env` with freshly random secrets,
@@ -195,6 +208,9 @@ It asks one question — which OpenAI-compatible LLM endpoint to use (Ollama / O
 custom / decide later). To skip every prompt:
 
 ```bash
+# flags pass straight through the one-liner too:
+curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh | bash -s -- --yes
+
 ./install.sh --yes                                    # placeholder LLM, fill in .env later
 ./install.sh --yes \
   --llm-base-url https://openrouter.ai/api/v1 \
