@@ -206,6 +206,8 @@ export async function runExternalStream(
     }
 
     const startedAt = Date.now();
+    // 이미지 생성 소요시간 누적 — wall-clock 예산 공제용 (상한 WALL_CLOCK_CREDIT_MAX_MS).
+    let imageGenCreditMs = 0;
     // TTFT 분해 계측 — 구간 계산은 호출부(ws-chat-handler)가 상위 시작 시각과 함께 수행.
     const timings: ChatTimings = {
         enteredAt: enteredAtMs, firstLlmCallAt: 0, firstChunkAt: 0, toolMs: 0, turns: 0,
@@ -253,9 +255,12 @@ export async function runExternalStream(
 
     try {
         for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
-            // Wall-clock 예산 가드 — 턴 수와 별개로 누적 시간 초과 시 도구 끄고 최종 응답 유도
+            // Wall-clock 예산 가드 — 턴 수와 별개로 누적 시간 초과 시 도구 끄고 최종 응답 유도.
+            // 이미지 생성(디퓨전 수십 초~수 분) 소요시간은 공제(imageGenCreditMs) — 예산의
+            // 목적(모델/도구 폭주 차단)과 무관한 정상 대기가 후속 턴(덱 저장 등)을 잘라내던
+            // 결함 보정 (2026-08-14 라이브 실측: 3장 배치 166s → 도구 비활성 전환).
             if (!suppressTools && AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS > 0
-                && Date.now() - startedAt > AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS) {
+                && Date.now() - startedAt - imageGenCreditMs > AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS) {
                 logger.warn(`⏱️ 외부 LLM 루프 wall-clock 예산 초과 (${AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS}ms) — 도구 비활성 최종 턴으로 전환`);
                 suppressTools = true;
                 messages.push({
@@ -373,6 +378,7 @@ export async function runExternalStream(
             const imageCalls = result.toolCalls.filter((tc) => tc.name === 'generate_image');
             if (IMAGE_GEN_PARALLEL.ENABLED && imageCalls.length >= 2) {
                 logger.info(`🎨 generate_image ${imageCalls.length}건 병렬 실행 (동시 상한 ${IMAGE_GEN_PARALLEL.MAX_CONCURRENT})`);
+                const imageBatchStartedAt = Date.now();
                 await parallelBatch(
                     imageCalls,
                     async (tc) => {
@@ -382,6 +388,10 @@ export async function runExternalStream(
                         );
                     },
                     { concurrency: IMAGE_GEN_PARALLEL.MAX_CONCURRENT },
+                );
+                imageGenCreditMs = Math.min(
+                    imageGenCreditMs + (Date.now() - imageBatchStartedAt),
+                    IMAGE_GEN_PARALLEL.WALL_CLOCK_CREDIT_MAX_MS,
                 );
             }
             for (const tc of result.toolCalls) {
@@ -430,8 +440,17 @@ export async function runExternalStream(
                     }
                 } else {
                     // 병렬 선실행된 이미지 결과가 있으면 재실행 없이 소비.
+                    // 단건 이미지 생성도 소요시간을 공제 누적한다 (배치와 동일 근거).
+                    const singleImageStartedAt = tc.name === 'generate_image' && !parallelImageResults.has(tc.id)
+                        ? Date.now() : 0;
                     toolResult = parallelImageResults.get(tc.id)
                         ?? await executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>);
+                    if (singleImageStartedAt > 0) {
+                        imageGenCreditMs = Math.min(
+                            imageGenCreditMs + (Date.now() - singleImageStartedAt),
+                            IMAGE_GEN_PARALLEL.WALL_CLOCK_CREDIT_MAX_MS,
+                        );
+                    }
                 }
                 if (tc.name === 'generate_image') {
                     const m = toolResult.match(/!\[[^\]]*\]\(\/generated\/[^)]+\)/);
