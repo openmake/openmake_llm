@@ -85,14 +85,8 @@ export async function buildNaverSearchRequest(
 ): Promise<NaverSearchRequest | null> {
     const cfg = getConfig();
 
-    // encyc(백과사전) 한시 예외 — HUB Application 에 '백과사전' API 가 활성화돼 있지 않아
-    // HUB 경로는 401(2026-08-14 실측). legacy 키가 있으면 legacy 를 우선한다 (2027-06-30
-    // legacy 종료 전까지 유효). NCP 콘솔에서 백과사전 API 활성화 후 이 예외를 제거해
-    // HUB 로 통일할 것 — 그 외 엔드포인트는 기존 택일(HUB 우선) 구조 그대로.
-    const preferLegacy = endpoint === 'encyc' && !!(cfg.naverClientId && cfg.naverClientSecret);
-
     let req: NaverSearchRequest;
-    if (!preferLegacy && cfg.naverApiHubKeyId && cfg.naverApiHubKey) {
+    if (cfg.naverApiHubKeyId && cfg.naverApiHubKey) {
         req = {
             url: `${HUB_BASE_URL}/${endpoint}?${queryString}`,
             headers: {

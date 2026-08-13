@@ -93,16 +93,13 @@ describe('buildNaverSearchRequest — 듀얼 경로', () => {
         expect(req!.url).toBe('https://openapi.naver.com/v1/search/encyc.json?query=ai&display=5');
     });
 
-    it('encyc 는 HUB·legacy 키가 모두 있으면 legacy 우선 (HUB 앱 백과사전 미활성 한시 예외)', async () => {
+    it('encyc 도 HUB 키가 있으면 HUB 우선 (2026-08-14 콘솔 백과사전 활성화 후 통일)', async () => {
         setConfig({
             naverClientId: 'legacy-id', naverClientSecret: 'legacy-secret',
             naverApiHubKeyId: 'hub-id', naverApiHubKey: 'hub-secret',
         });
         const encyc = await buildNaverSearchRequest('encyc', 'query=x');
-        expect(encyc!.route).toBe('legacy');
-        // 다른 엔드포인트는 기존대로 HUB 우선 유지
-        const webkr = await buildNaverSearchRequest('webkr', 'query=x');
-        expect(webkr!.route).toBe('hub');
+        expect(encyc!.route).toBe('hub');
     });
 });
 
