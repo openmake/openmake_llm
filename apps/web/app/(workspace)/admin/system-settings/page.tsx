@@ -28,6 +28,10 @@ interface SettingView {
   value?: string;
   /** 키 발급 콘솔 URL — 있으면 바로가기 링크 노출 */
   issueUrl?: string;
+  /** 외부 provider 연동 키 — 관리자 본인의 BYOK 행이 활성이면 true (설정 화면 등록분 포함) */
+  byokActive?: boolean;
+  /** byokActive 시 해당 키 prefix (마스킹 표시) */
+  byokKeyPrefix?: string;
 }
 interface SettingsPayload {
   settings: SettingView[];
@@ -82,6 +86,11 @@ function SettingRow({ setting, busy, onSave, onReset }: {
           </a>
         )}
         <Badge tone={sourceTone} className="shrink-0 whitespace-nowrap">{sourceLabel}</Badge>
+        {setting.byokActive && (
+          <Badge tone="accent" className="shrink-0 whitespace-nowrap" title={setting.byokKeyPrefix}>
+            {t("byokLinked")}
+          </Badge>
+        )}
         {setting.requiresRestart && (
           <Badge tone="warn" className="shrink-0 whitespace-nowrap">{t("restartRequired")}</Badge>
         )}
@@ -92,7 +101,7 @@ function SettingRow({ setting, busy, onSave, onReset }: {
         autoComplete="off"
         placeholder={
           setting.secret
-            ? setting.isSet ? t("secretSetPlaceholder") : t("secretUnsetPlaceholder")
+            ? (setting.isSet || setting.byokActive) ? t("secretSetPlaceholder") : t("secretUnsetPlaceholder")
             : t("valuePlaceholder")
         }
         value={draft}

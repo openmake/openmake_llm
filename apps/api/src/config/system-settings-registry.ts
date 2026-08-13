@@ -53,6 +53,9 @@ const ISSUE_URLS = {
     ncpHub: 'https://console.ncloud.com/naver-api-hub/application',
     exa: 'https://dashboard.exa.ai/api-keys',
     tavily: 'https://app.tavily.com/home',
+    openrouter: 'https://openrouter.ai/settings/keys',
+    ollamaCloud: 'https://ollama.com/settings/keys',
+    nvidiaNim: 'https://build.nvidia.com/settings/api-keys',
 } as const;
 
 export const SYSTEM_SETTINGS_REGISTRY: SystemSettingDef[] = [
@@ -92,6 +95,13 @@ export const SYSTEM_SETTINGS_REGISTRY: SystemSettingDef[] = [
     { key: 'LLM_BASE_URL', group: 'llm', secret: false, requiresRestart: true, validate: httpUrl },
     { key: 'LLM_API_KEY', group: 'llm', secret: true, requiresRestart: true, validate: nonEmpty },
     { key: 'LLM_DEFAULT_MODEL', group: 'llm', secret: false, requiresRestart: false, validate: nonEmpty },
+
+    // ── 외부 LLM provider 키 — 저장/삭제 시 "관리자 본인"의 user_external_api_keys(BYOK)로
+    //    연동된다 (admin-system-settings.routes 의 syncAdminProviderKey). 런타임 키 해석 경로는
+    //    기존 사용자별 BYOK 그대로 — 다른 사용자에게 공용 키를 열지 않는다 (비용 격리 유지). ──
+    { key: 'OPENROUTER_API_KEY', group: 'llm', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.openrouter },
+    { key: 'OLLAMA_CLOUD_API_KEY', group: 'llm', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.ollamaCloud },
+    { key: 'NVIDIA_API_KEY', group: 'llm', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.nvidiaNim },
 ];
 
 export const SETTING_DEFS_BY_KEY: ReadonlyMap<string, SystemSettingDef> = new Map(

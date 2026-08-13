@@ -1571,6 +1571,7 @@
     "reset": "重置",
     "resetHelp": "删除 DB 中的值并回退到 .env/默认值。",
     "resetConfirm": "删除 '{key}' 并回退到 env/默认值吗？",
+    "byokLinked": "已关联我的密钥",
     "issueLink": "获取密钥",
     "sourceDb": "已在 DB 设置",
     "sourceEnv": "继承自 env",
