@@ -169,10 +169,14 @@ export default function AdminSystemSettingsPage() {
   }, [settings]);
 
   return (
-    <div className="space-y-6">
+    <>
       <PageHeader title={t("title")} description={t("description")} />
 
       <AdminTabs />
+      {/* workspace layout(main)이 overflow-hidden 이라 페이지가 자체 스크롤 컨테이너를 가져야 함
+          (admin/alerts 등과 동일 관용구 — 누락 시 뷰포트 아래 내용 접근 불가) */}
+      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+        <div className="space-y-6">
       {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
       {restartKeys.length > 0 && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm" role="status">
@@ -204,6 +208,8 @@ export default function AdminSystemSettingsPage() {
       })}
 
       <p className="text-xs text-muted-foreground">{t("priorityNote")}</p>
-    </div>
+        </div>
+      </div>
+    </>
   );
 }
