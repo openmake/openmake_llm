@@ -1161,6 +1161,19 @@ export const OD_ARTIFACT_ECHO = {
 } as const;
 
 /**
+ * 이미지 생성 병렬화 — 같은 턴에 generate_image 가 2회 이상 호출되면 순차 await 대신
+ * 동시 실행한다. FLUX 디퓨전 1장이 수십 초라 다중 이미지(발표자료 삽화 등)에서 도구 배치
+ * 시간이 장수에 비례해 늘던 것을 1장 수준으로 줄인다. 다른 도구는 순차 유지(부수효과·
+ * 메시지 순서 보존), 결과는 원래 호출 순서대로 tool 메시지에 배치된다.
+ */
+export const IMAGE_GEN_PARALLEL = {
+    /** 기본 ON — IMAGE_GEN_PARALLEL_ENABLED=false 로 비활성화(순차 복귀). */
+    ENABLED: process.env.IMAGE_GEN_PARALLEL_ENABLED !== 'false',
+    /** 동시 생성 상한 — vLLM-Omni FLUX 서버 큐 과점유 방지. */
+    MAX_CONCURRENT: parseInt(process.env.IMAGE_GEN_PARALLEL_MAX || '3', 10),
+} as const;
+
+/**
  * 보고서 작성 의도 판정 패턴. 매칭 시 ① report-guide(reportdata JSON 계약) 시스템 프롬프트
  * 주입 ② 아티팩트 의도와 동일한 distractor 도구 억제. 실사용 문구 기반(운영 로그 2026-07):
  * "html 로 보고서를 작성해서 보고해", "보고서 형식으로 만들어줘", "리포트 작성해줘" 류.
