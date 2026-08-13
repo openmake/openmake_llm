@@ -1603,6 +1603,25 @@
       }
     }
   },
+  "setup": {
+    "title": "초기 설정",
+    "subtitle": "OpenMake LLM 첫 실행 — 관리자 계정을 만들고 LLM 게이트웨이를 연결하세요.",
+    "adminSection": "관리자 계정",
+    "emailLabel": "이메일",
+    "passwordLabel": "비밀번호",
+    "passwordHint": "8자 이상, 대문자·숫자·특수문자 각 1자 이상",
+    "passwordConfirmLabel": "비밀번호 확인",
+    "passwordMismatch": "비밀번호가 일치하지 않습니다.",
+    "llmSection": "LLM 게이트웨이 (선택)",
+    "llmOptionalHint": "나중에 관리자 → 시스템 설정에서도 변경할 수 있습니다.",
+    "llmBaseUrlLabel": "게이트웨이 주소",
+    "llmApiKeyLabel": "API 키",
+    "submit": "설정 완료",
+    "failed": "설정에 실패했습니다.",
+    "doneTitle": "설정 완료!",
+    "doneDesc": "관리자 계정이 생성되었습니다. 로그인해 주세요.",
+    "goLogin": "로그인으로 이동"
+  },
   "adminSchedules": {
     "title": "작업 스케줄 관리",
     "description": "전체 사용자의 에이전트 작업 반복 스케줄을 조회합니다.",

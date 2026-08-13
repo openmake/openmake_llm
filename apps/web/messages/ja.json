@@ -1603,6 +1603,25 @@
       }
     }
   },
+  "setup": {
+    "title": "初期設定",
+    "subtitle": "OpenMake LLM の初回起動 — 管理者アカウントを作成し、LLM ゲートウェイを接続します。",
+    "adminSection": "管理者アカウント",
+    "emailLabel": "メールアドレス",
+    "passwordLabel": "パスワード",
+    "passwordHint": "8文字以上、大文字・数字・記号を各1文字以上",
+    "passwordConfirmLabel": "パスワード（確認）",
+    "passwordMismatch": "パスワードが一致しません。",
+    "llmSection": "LLM ゲートウェイ（任意）",
+    "llmOptionalHint": "後で管理者 → システム設定からも変更できます。",
+    "llmBaseUrlLabel": "ゲートウェイ URL",
+    "llmApiKeyLabel": "API キー",
+    "submit": "設定を完了",
+    "failed": "設定に失敗しました。",
+    "doneTitle": "設定完了！",
+    "doneDesc": "管理者アカウントを作成しました。ログインしてください。",
+    "goLogin": "ログインへ"
+  },
   "adminSchedules": {
     "title": "タスクスケジュール管理",
     "description": "全ユーザーのエージェントタスクの繰り返しスケジュールを表示します。",

@@ -187,29 +187,20 @@ class UserManagerImpl {
         );
         if (result.rows.length > 0) return;
 
-        // 🔒 보안 강화: 환경변수 필수화, 기본 비밀번호 제거
+        // ADMIN_PASSWORD 미설정이면 자동 생성하지 않는다 — 관리자 계정은 첫 실행
+        // 셋업 마법사(/setup, admin 0명일 때만 활성)가 담당한다. 구 동작이던
+        // production throw(부팅 중단)와 dev 랜덤 비밀번호 admin(비밀번호를 알 수 없어
+        // 사용 불가 + 존재만으로 마법사를 막음)은 마법사 도입으로 제거 (2026-08-12).
         const cfgAdminPassword = getConfig().adminPassword;
         if (!cfgAdminPassword) {
-            logger.warn('[UserManager] ⚠️ ADMIN_PASSWORD 환경변수가 설정되지 않았습니다!');
-            logger.warn('[UserManager] 기본 관리자 계정이 생성되지 않습니다. .env 파일에 ADMIN_PASSWORD를 설정하세요.');
-            if (getConfig().nodeEnv === 'production') {
-                throw new Error('[UserManager] 프로덕션 환경에서는 ADMIN_PASSWORD 환경변수가 필수입니다!');
-            }
-            // 개발 환경에서만 임시 비밀번호 생성 (랜덤)
-            const tempPassword = require('crypto').randomBytes(16).toString('hex');
-            logger.warn('[UserManager] 개발 환경: 랜덤 임시 비밀번호가 생성되었습니다. 프로덕션에서는 ADMIN_PASSWORD를 설정하세요.');
-            await this.createUser({
-                email: adminEmail,
-                password: tempPassword,
-                role: 'admin'
-            });
-        } else {
-            await this.createUser({
-                email: adminEmail,
-                password: cfgAdminPassword,
-                role: 'admin'
-            });
+            logger.info('[UserManager] ADMIN_PASSWORD 미설정 — 관리자 계정은 첫 실행 셋업 마법사(/setup)에서 생성됩니다.');
+            return;
         }
+        await this.createUser({
+            email: adminEmail,
+            password: cfgAdminPassword,
+            role: 'admin'
+        });
     }
 
     /**
@@ -242,6 +233,12 @@ class UserManagerImpl {
             created_at: row.created_at,
             last_login: row.last_login || undefined
         };
+    }
+
+    /** admin 역할 사용자 존재 여부 — 첫 실행 셋업 마법사(/setup) 발동 판정용 */
+    async hasAdminUser(): Promise<boolean> {
+        const result = await getPool().query(`SELECT 1 FROM users WHERE role = 'admin' LIMIT 1`);
+        return result.rows.length > 0;
     }
 
     async createUser(input: CreateUserInput): Promise<PublicUser | null> {

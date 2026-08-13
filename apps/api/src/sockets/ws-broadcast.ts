@@ -87,16 +87,23 @@ export function sendToConnections(
 /**
  * 하트비트 1회 스윕 — 좀비 연결을 수집해 반환하고, 살아있는 연결엔 ping 을 보낸다.
  * ⚠️ 순회 중 삭제 금지(Set 변경) — 종료 처리는 호출부가 반환된 목록으로 수행한다.
+ *
+ * 종료 사유를 구분해 반환한다(로그 오진 방지 — 토큰 만료가 "하트비트 미응답"으로 찍혀
+ * 네트워크 문제로 오진되던 결함, 2026-08-13). 토큰 만료라도 **진행 중 AI 생성이 있으면
+ * 이번 스윕은 유예**한다 — 답변 생성이 access token(15분) 만료 시각을 걸치면 생성째
+ * 중단돼 답변이 통째로 유실되던 결함. 생성 완료 후 다음 스윕(≤30초)에서 종료된다.
  */
 export function sweepHeartbeat(
     clients: Iterable<WebSocket>,
     isTokenExpired: (ws: ExtendedWebSocket) => boolean,
-): WebSocket[] {
-    const dead: WebSocket[] = [];
+): Array<{ ws: WebSocket; reason: 'heartbeat' | 'token_expired' }> {
+    const dead: Array<{ ws: WebSocket; reason: 'heartbeat' | 'token_expired' }> = [];
     for (const ws of clients) {
         const extWs = ws as ExtendedWebSocket;
-        if (!extWs._isAlive || isTokenExpired(extWs)) {
-            dead.push(ws);
+        if (!extWs._isAlive) {
+            dead.push({ ws, reason: 'heartbeat' });
+        } else if (isTokenExpired(extWs) && !extWs._abortController) {
+            dead.push({ ws, reason: 'token_expired' });
         } else if (ws.readyState === WebSocket.OPEN) {
             extWs._isAlive = false;
             ws.ping();

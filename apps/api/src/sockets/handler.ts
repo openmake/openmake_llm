@@ -421,9 +421,11 @@ export class WebSocketHandler {
             const deadConnections = sweepHeartbeat(this.clients, (w: ExtendedWebSocket) => this.isTokenExpired(w));
 
             // 수집된 좀비 연결 일괄 종료 (Set 순회 완료 후)
-            for (const ws of deadConnections) {
+            for (const { ws, reason } of deadConnections) {
                 const extWs = ws as ExtendedWebSocket;
-                log.info(`[WS] 하트비트 미응답 → 연결 종료: userId=${extWs._authenticatedUserId || 'anonymous'}`);
+                log.info(reason === 'token_expired'
+                    ? `[WS] 인증 토큰 만료 → 연결 종료: userId=${extWs._authenticatedUserId || 'anonymous'}`
+                    : `[WS] 하트비트 미응답 → 연결 종료: userId=${extWs._authenticatedUserId || 'anonymous'}`);
                 // 진행 중인 AI 생성도 중단
                 if (extWs._abortController) {
                     extWs._abortController.abort();

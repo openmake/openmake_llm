@@ -21,7 +21,11 @@
 // Load environment variables BEFORE any other imports
 import * as dotenv from 'dotenv';
 import * as pathModule from 'path';
+// 부팅 시크릿 자동 생성 — auth-core 가 모듈 로드 시 JWT_SECRET 을 읽으므로
+// 반드시 다른 앱 import 이전(dotenv 직후)에 실행한다 (boot/ensure-secrets 참고)
+import { ensureBootSecrets } from './boot/ensure-secrets';
 dotenv.config({ path: pathModule.resolve(__dirname, '../../../.env') });
+ensureBootSecrets(pathModule.resolve(__dirname, '../../../.env'));
 
 import express, { Application } from 'express';
 import { Server as HttpServer, createServer } from 'http';

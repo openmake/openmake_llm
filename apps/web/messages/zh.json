@@ -1603,6 +1603,25 @@
       }
     }
   },
+  "setup": {
+    "title": "初始设置",
+    "subtitle": "OpenMake LLM 首次运行 — 创建管理员账户并连接 LLM 网关。",
+    "adminSection": "管理员账户",
+    "emailLabel": "邮箱",
+    "passwordLabel": "密码",
+    "passwordHint": "8 位以上，至少包含大写字母、数字、特殊字符各 1 个",
+    "passwordConfirmLabel": "确认密码",
+    "passwordMismatch": "两次输入的密码不一致。",
+    "llmSection": "LLM 网关（可选）",
+    "llmOptionalHint": "之后也可以在 管理员 → 系统设置 中更改。",
+    "llmBaseUrlLabel": "网关地址",
+    "llmApiKeyLabel": "API 密钥",
+    "submit": "完成设置",
+    "failed": "设置失败。",
+    "doneTitle": "设置完成！",
+    "doneDesc": "管理员账户已创建，请登录。",
+    "goLogin": "前往登录"
+  },
   "adminSchedules": {
     "title": "任务计划管理",
     "description": "查看所有用户的智能体任务重复计划。",
