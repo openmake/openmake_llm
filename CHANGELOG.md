@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.24.0](https://github.com/openmake/openmake_llm/compare/v1.23.0...v1.24.0) (2026-08-14)
+
+
+### ✨ 기능
+
+* **admin:** 운영 설정 DB 이관(system_settings) + 관리자 시스템 설정 UI ([#473](https://github.com/openmake/openmake_llm/issues/473)) ([34e497d](https://github.com/openmake/openmake_llm/commit/34e497d60dfed720bb05a06baa6e8265d019af27))
+* **agent-task:** 완료 판정 관문 단일화 + 판정 관측 영속(091) ([#467](https://github.com/openmake/openmake_llm/issues/467)) ([eec29e0](https://github.com/openmake/openmake_llm/commit/eec29e0977f2d4b25ba2ce01059ba6d5eedbc832))
+* **chat:** 계획수립·병렬위임 의도 프리필터 — create_plan 노출 개통 + spawn 가이드 주입 ([7848246](https://github.com/openmake/openmake_llm/commit/7848246b5d3e3fccd846a3fe26c8d92d37a50cdd))
+* **chat:** 발표자료 디자인 워크플로우 — OD 아티팩트 결정적 에코 + 발표 의도 위임 예외 ([#475](https://github.com/openmake/openmake_llm/issues/475)) ([f3c72d9](https://github.com/openmake/openmake_llm/commit/f3c72d90bac0fa994ac1d90190342f4f7df57992))
+* **chat:** 이미지 생성 병렬화 + 스킬 required 도구 distractor 억제 면제 ([#476](https://github.com/openmake/openmake_llm/issues/476)) ([34b4ba2](https://github.com/openmake/openmake_llm/commit/34b4ba29d7261aa408d4dd427b6423892589d0d4))
+* **install:** curl 원라이너 부트스트랩 + 마이그레이션 순서 수정 + uninstall.sh ([#479](https://github.com/openmake/openmake_llm/issues/479)) ([f82409d](https://github.com/openmake/openmake_llm/commit/f82409d8953498165f1b04444ee3627d8fb4fb05))
+* **install:** OS 판정 선행 + Windows→WSL2 안내·순정 환경 폴백 보강 ([99d43e9](https://github.com/openmake/openmake_llm/commit/99d43e91c4d24794e2176556d25976645bbcfec4))
+* **local-bridge:** 로컬 실행기 worktree 격리 + 변경분 diff 캡처 ([#469](https://github.com/openmake/openmake_llm/issues/469)) ([630bedb](https://github.com/openmake/openmake_llm/commit/630bedbc58c46d1418d120e550f42168aa01856d))
+* **local-bridge:** 셸 명령 작업 단위 일괄 승인 + 레포 .git 샌드박스 쓰기 허용 ([#471](https://github.com/openmake/openmake_llm/issues/471)) ([e10710b](https://github.com/openmake/openmake_llm/commit/e10710ba15f6316235ac6826cb6ec446700c0ca2))
+* **oauth:** ChatGPT OAuth 연결 직후 fail-open 자동 검증 ([#472](https://github.com/openmake/openmake_llm/issues/472)) ([79a9fda](https://github.com/openmake/openmake_llm/commit/79a9fda9094af03d158c470bebb1067f9d1587dc))
+* **setup:** 부팅 시크릿 자동 생성 + 첫 실행 셋업 마법사 ([#474](https://github.com/openmake/openmake_llm/issues/474)) ([e3358e7](https://github.com/openmake/openmake_llm/commit/e3358e77cffb1c3e8ec4e72153e04bd31d13f36d))
+* **task-sandbox:** 실측 기반 python 패키지 베이킹 — pandas·pdfplumber·olefile·requests ([c9bab87](https://github.com/openmake/openmake_llm/commit/c9bab872231018a2c4eb40af0b43138ffc66dcb3))
+* **web:** GA4 방문자 분석 계측 — user_id 식별 + 행동 이벤트 4종, 랜딩 page_view 유실 수정 ([e10fb0e](https://github.com/openmake/openmake_llm/commit/e10fb0ef0721a5d3274e54c3c05f9c90cc71b01d))
+* 미머지 로컬 배치 일괄 반영 — curl 부트스트랩·검색 provider 보강·admin 키 통합 외 수정 5건 ([#484](https://github.com/openmake/openmake_llm/issues/484)) ([48d3142](https://github.com/openmake/openmake_llm/commit/48d3142c8ce8a8210bfe4dd63141bf0a601f5740))
+
+
+### 🐛 버그 수정
+
+* **chat:** 이미지 생성 소요시간을 루프 wall-clock 예산에서 공제 ([#477](https://github.com/openmake/openmake_llm/issues/477)) ([d2786e2](https://github.com/openmake/openmake_llm/commit/d2786e23cdebaf526667b56a9f7e198717e6fc54))
+* **install:** 포트 충돌 자동 회피 + 외부 접속 확인 프롬프트 ([#480](https://github.com/openmake/openmake_llm/issues/480)) ([4cefc5f](https://github.com/openmake/openmake_llm/commit/4cefc5fae7b4811fbc10ae80544ffebee2dbf948))
+* **local-bridge:** worktree diff 기준점을 생성 시점 커밋으로 고정 ([#470](https://github.com/openmake/openmake_llm/issues/470)) ([8afe78b](https://github.com/openmake/openmake_llm/commit/8afe78bda95da0ef8ef5a68f8fe20e5d9af50dd1))
+* **ops:** port_listening 의 조기 return 이 폴백 체인을 끊던 버그 수정 ([#483](https://github.com/openmake/openmake_llm/issues/483)) ([4495bd4](https://github.com/openmake/openmake_llm/commit/4495bd429f5bee9a1729355bebecbf6271245c0b))
+* **web:** WS 직접 연결 포트 하드코딩 제거 — 포트 이동 시 연결 끊김 수정 ([#481](https://github.com/openmake/openmake_llm/issues/481)) ([81e6255](https://github.com/openmake/openmake_llm/commit/81e6255e651601ff101ada70ce987ac6f1fa9d4e))
+
 ## [1.23.0](https://github.com/openmake/openmake_llm/compare/v1.22.2...v1.23.0) (2026-08-09)
 
 
