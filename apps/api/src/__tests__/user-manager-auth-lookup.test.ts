@@ -54,12 +54,23 @@ describe('UserManager 계정 조회·비밀번호 변경', () => {
     });
 
     describe('getUserByEmail', () => {
-        test('email OR username 으로 조회해야 한다 (username 변경 계정의 OAuth 로그인 차단 방지)', async () => {
+        test('email 일치 + username 폴백으로 조회해야 한다 (username 변경 계정의 OAuth 로그인 차단 방지)', async () => {
             await manager.getUserByEmail('rockyhan@iexcello.com');
-            const lookup = queries.find(q => q.sql.startsWith('SELECT * FROM users'));
+            const lookup = queries.find(q => q.sql.trimStart().startsWith('SELECT * FROM users'));
             expect(lookup).toBeDefined();
-            expect(lookup!.sql).toContain('email = $1 OR username = $1');
+            expect(lookup!.sql).toContain('email = $1');
+            expect(lookup!.sql).toContain('username = $1');
             expect(lookup!.params).toEqual(['rockyhan@iexcello.com']);
+        });
+
+        test('username 폴백은 email 이 빈 행만 인정하고 결정적으로 1행을 선택해야 한다 (계정 탈취 차단)', async () => {
+            // email 은 UNIQUE 가 아님 — 타인 계정이 username 만 이 email 로 등록돼 있어도
+            // (email 컬럼에 다른 주소 보유) OAuth 로그인이 그 계정에 바인딩되면 안 된다.
+            await manager.getUserByEmail('victim@example.com');
+            const lookup = queries.find(q => q.sql.trimStart().startsWith('SELECT * FROM users'));
+            expect(lookup!.sql).toMatch(/username = \$1 AND \(email IS NULL OR email = ''\)/);
+            expect(lookup!.sql).toContain('ORDER BY');
+            expect(lookup!.sql).toContain('LIMIT 1');
         });
 
         test('username≠email 계정도 email 컬럼 값으로 반환해야 한다', async () => {

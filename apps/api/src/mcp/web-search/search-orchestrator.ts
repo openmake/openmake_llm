@@ -156,9 +156,19 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
 
     // Tier 1 escalation — 무료(Tier 0) 수집이 부족할 때만 Exa 공식 API 로 보강한다.
     // 결정적 개수 비교뿐(LLM 판단 아님), EXA_API_KEY 미설정이면 searchExa 가 즉시 빈 배열.
+    // 병렬 배치 이후의 직렬 호출이라 TTFT 에 직결 — TIMEOUT_MS 로 지연 상한을 캡한다
+    // (초과 시 보강 포기, Tier 0 결과만으로 진행. 뒤늦게 도착한 결과는 버려질 뿐 무해).
     if (SEARCH_ESCALATION.MIN_RESULTS > 0 && uniqueResults.length < SEARCH_ESCALATION.MIN_RESULTS) {
         const tier0Count = uniqueResults.length;
-        const exaResults = await searchExa(query, SEARCH_ESCALATION.EXA_NUM_RESULTS, signal);
+        const exaPromise = searchExa(query, SEARCH_ESCALATION.EXA_NUM_RESULTS, signal);
+        const exaResults = SEARCH_ESCALATION.TIMEOUT_MS > 0
+            ? await Promise.race([
+                exaPromise,
+                new Promise<SearchResult[]>((resolve) => {
+                    setTimeout(() => resolve([]), SEARCH_ESCALATION.TIMEOUT_MS).unref?.();
+                }),
+            ])
+            : await exaPromise;
         for (const r of exaResults) {
             const normalizedUrl = r.url.replace(/\/$/, '').replace(/^https?:\/\//, '').toLowerCase();
             if (seen.has(normalizedUrl)) continue;

@@ -150,12 +150,16 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
                 numToSource.set(mm[1], { title: mm[2].trim(), url: mm[3].trim() });
             }
         }
-        // 본문에 인용된 소스 번호 ([출처 N]/[Source N]/[N] — 수집 목록에 있는 번호만 인정)
+        // 본문에 인용된 소스 번호 ([출처 N]/[Source N]/[N] — 수집 목록에 있는 번호만 인정).
+        // 대괄호 안 숫자를 전부 인정 — `[출처 3, 8]` 복합 인용에서 마지막 숫자만 잡혀 앞 번호
+        // 출처가 목록에서 빠지던 결함 방지.
         const citedNums: string[] = [];
-        const citeRe = /\[[^\]\n]*?(\d+)\]/g;
+        const citeRe = /\[[^\]\n]*\d[^\]\n]*\]/g;
         let cm: RegExpExecArray | null;
         while ((cm = citeRe.exec(finalContent)) !== null) {
-            if (numToSource.has(cm[1]) && !citedNums.includes(cm[1])) citedNums.push(cm[1]);
+            for (const num of cm[0].match(/\d+/g) ?? []) {
+                if (numToSource.has(num) && !citedNums.includes(num)) citedNums.push(num);
+            }
         }
         if (!alreadyHasSources) {
             // canonical 목록 첨부 — 인용된 번호가 있으면 그 소스만(정밀), 없으면 전체(기존 동작).
@@ -178,9 +182,16 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
             }
         } else {
             // 모델이 목록 작성 금지 지시를 무시하고 섹션을 만든 경우 — 인용 번호별로 해당
-            // 소스 URL 이 본문 어딘가에 존재하는지 검증, 누락분만 보강. 인용이 전혀 없는데
+            // 소스 URL 이 **출처 섹션 안에** 존재하는지 검증, 누락분만 보강. 인용이 전혀 없는데
             // 섹션에 URL 도 없으면(제목만 나열) 전체 번호 보강 (기존 동작 유지).
-            const missingNums = citedNums.filter((n) => !finalContent.includes(numToSource.get(n)!.url));
+            // 검사는 섹션 스코프(본문 산문의 URL 언급이 섹션 누락을 가리지 않게) + URL 정규화
+            // (프로토콜·트레일링 슬래시·대소문자 변형이 중복 첨부로 이어지지 않게) 비교.
+            const normalizeUrl = (u: string) =>
+                u.replace(/[),.\]]+$/, '').replace(/\/$/, '').replace(/^https?:\/\//i, '').toLowerCase();
+            const sectionUrls = new Set(
+                (finalContent.slice(headerIdx).match(/https?:\/\/[^\s)\]]+/g) ?? []).map(normalizeUrl),
+            );
+            const missingNums = citedNums.filter((n) => !sectionUrls.has(normalizeUrl(numToSource.get(n)!.url)));
             const nums = missingNums.length > 0
                 ? missingNums
                 : citedNums.length === 0 && !/https?:\/\//.test(finalContent.slice(headerIdx))

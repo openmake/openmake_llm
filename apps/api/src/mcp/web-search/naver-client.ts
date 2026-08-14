@@ -17,6 +17,7 @@
  * @module mcp/web-search/naver-client
  */
 import { getConfig } from '../../config';
+import { NAVER_QUOTA } from '../../config/runtime-limits';
 import { getKeyValueStore } from '../../storage';
 import { createLogger } from '../../utils/logger';
 
@@ -49,8 +50,12 @@ export interface NaverSearchRequest {
 /**
  * 오늘 버킷에 1 증가 후 한도 검사. 한도 도달이면 false (요청 차단).
  * 증가가 먼저라 race-free — 한도 초과 시 카운터가 한도를 넘겨 있지만 요청은 안 나간다.
+ *
+ * 보조 endpoint(supplementary=encyc)는 소프트 컷(한도×SUPPLEMENTARY_RATIO)에서 먼저 중단해
+ * 핵심(news/webkr) 쿼터 잠식을 막는다 — 차단 시 요청이 안 나가므로 카운트를 환불해
+ * 잔여 쿼터 집계를 실제 발신 요청 수와 일치시킨다.
  */
-async function underDailyLimit(now: number): Promise<boolean> {
+async function underDailyLimit(now: number, supplementary: boolean): Promise<boolean> {
     const limit = getConfig().naverApiDailyLimit;
     if (limit <= 0) return true; // 0 = 무제한 (가드 해제)
     try {
@@ -58,9 +63,14 @@ async function underDailyLimit(now: number): Promise<boolean> {
         const key = dayKey(now);
         const used = await store.incrBy(key, 1);
         void store.expire(key, DAY_TTL_MS);
-        if (used > limit) {
-            // 하루 한 번만 경고가 도배되지 않도록 초과 직후 구간만 로그
-            if (used <= limit + 3) {
+        const effectiveLimit = supplementary
+            ? Math.floor(limit * NAVER_QUOTA.SUPPLEMENTARY_RATIO)
+            : limit;
+        if (used > effectiveLimit) {
+            if (supplementary) {
+                void store.incrBy(key, -1); // 미발신분 환불
+            } else if (used <= limit + 3) {
+                // 하루 한 번만 경고가 도배되지 않도록 초과 직후 구간만 로그
                 logger.warn(`네이버 검색 일일 한도(${limit}) 도달 — 오늘 호출 차단 (KST 자정 리셋)`);
             }
             return false;
@@ -108,6 +118,6 @@ export async function buildNaverSearchRequest(
         return null; // 키 미설정 — 기존 graceful 동작 유지
     }
 
-    if (!(await underDailyLimit(now))) return null;
+    if (!(await underDailyLimit(now, endpoint === 'encyc'))) return null;
     return req;
 }
