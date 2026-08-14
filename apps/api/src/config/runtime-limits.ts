@@ -1171,6 +1171,15 @@ export const IMAGE_GEN_PARALLEL = {
     ENABLED: process.env.IMAGE_GEN_PARALLEL_ENABLED !== 'false',
     /** 동시 생성 상한 — vLLM-Omni FLUX 서버 큐 과점유 방지. */
     MAX_CONCURRENT: parseInt(process.env.IMAGE_GEN_PARALLEL_MAX || '3', 10),
+    /**
+     * 루프 wall-clock 예산에서 공제할 이미지 생성 소요시간 상한 (ms).
+     *
+     * 이미지 3장 배치(실측 166s, FLUX 직렬 큐)가 AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS
+     * (180s)를 잠식해 후속 덱 저장 턴이 "도구 비활성 최종 턴"으로 강제 전환되던 결함
+     * (2026-08-14 라이브 실측) 보정 — 디퓨전 대기는 모델/도구 폭주가 아니므로 예산에서
+     * 공제하되, 상한을 둬 최악 요청 시간을 예산+상한으로 묶는다.
+     */
+    WALL_CLOCK_CREDIT_MAX_MS: parseInt(process.env.IMAGE_GEN_CREDIT_MAX_MS || '180000', 10),
 } as const;
 
 /**
