@@ -609,6 +609,25 @@ update_env_port() { # $1=POSTGRES_PORT|REDIS_PORT $2=새 포트
     mv "$tmp" "$envf"
 }
 
+update_env_app_port() { # API 포트 변경: PORT= 와 URL 류의 :old 를 :new 로
+    local envf="$SCRIPT_DIR/.env" tmp
+    [[ -f "$envf" ]] || return 0
+    tmp="$(mktemp)"
+    sed -E "s|^PORT=.*|PORT=$2|; /^(CORS_ORIGINS|SWAGGER_BASE_URL)=/s|:$1|:$2|g" "$envf" > "$tmp"
+    mv "$tmp" "$envf"
+}
+
+update_env_web_port() { # 웹 포트 변경: 공개 주소/CORS 의 :old 를 :new 로
+    local envf="$SCRIPT_DIR/.env" tmp
+    [[ -f "$envf" ]] || return 0
+    tmp="$(mktemp)"
+    sed -E "/^(CORS_ORIGINS|OMK_APP_URL)=/s|:$1|:$2|g" "$envf" > "$tmp"
+    mv "$tmp" "$envf"
+}
+
+# PM2 에 등록된 우리 앱이면 재실행 케이스 — pm2 restart 가 포트를 이어받는다.
+pm2_has_app() { "${PM2_BIN:-pm2}" describe "$1" >/dev/null 2>&1; }
+
 ensure_ports() {
     [[ $SKIP_DOCKER -eq 1 ]] && return 0
 
@@ -617,7 +636,26 @@ ensure_ports() {
     v="$(env_value POSTGRES_PORT)"; [[ -n "$v" ]] && PG_PORT="$v"
     v="$(env_value REDIS_PORT)";    [[ -n "$v" ]] && RD_PORT="$v"
 
+    # 앱(API)/웹 포트 — PM2 로 도는 호스트 프로세스라 소유 판정은 PM2 등록 여부로 한다.
+    v="$(env_value PORT)"; [[ -n "$v" ]] && APP_PORT="$v"
+    v="$(env_value OMK_APP_URL | sed -nE 's|.*:([0-9]+)/?$|\1|p')"; [[ -n "$v" ]] && WEB_PORT="$v"
+
     local alt
+    if port_in_use "$APP_PORT" && ! pm2_has_app openmake-llm; then
+        alt="$(find_free_port $((APP_PORT + 1)))" \
+            || die "API 대체 포트 탐색 실패 — --port 로 직접 지정하세요."
+        log_warn "호스트 포트 $APP_PORT 을 다른 프로세스가 사용 중 — API 를 $alt 로 대체합니다."
+        update_env_app_port "$APP_PORT" "$alt"
+        APP_PORT="$alt"
+    fi
+    if port_in_use "$WEB_PORT" && ! pm2_has_app openmake-next; then
+        alt="$(find_free_port 13000)" \
+            || die "웹 대체 포트 탐색 실패 (13000~) — --web-port 로 직접 지정하세요."
+        log_warn "호스트 포트 $WEB_PORT 을 다른 프로세스가 사용 중 — 웹 UI 를 $alt 로 대체합니다."
+        update_env_web_port "$WEB_PORT" "$alt"
+        WEB_PORT="$alt"
+    fi
+
     if port_in_use "$PG_PORT" && ! port_owned_by openmake-postgres "$PG_PORT"; then
         alt="$(find_free_port 15432)" \
             || die "PostgreSQL 대체 포트 탐색 실패 (15432~) — --postgres-port 로 직접 지정하세요."
@@ -778,7 +816,10 @@ start_app() {
     fi
 
     log_info "PM2 기동 (ecosystem.config.js)"
-    ( cd "$SCRIPT_DIR" && "$PM2_BIN" start ecosystem.config.js --update-env ) || die "PM2 기동 실패"
+    # ecosystem.config.js 는 시작 시점 셸 환경의 PORT/OMK_WEB_PORT 를 읽는다 —
+    # 명시적으로 넘겨야 --port/--web-port/자동 대체 포트가 PM2 에 반영된다.
+    ( cd "$SCRIPT_DIR" && PORT="$APP_PORT" OMK_WEB_PORT="$WEB_PORT" \
+        "$PM2_BIN" start ecosystem.config.js --update-env ) || die "PM2 기동 실패"
 
     log_info "health check 대기 (최대 $((HEALTH_RETRIES * HEALTH_INTERVAL))s)"
     local i
