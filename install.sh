@@ -13,10 +13,21 @@
 #   WSL2 안에서는 Linux 와 동일하게 이 스크립트 하나로 설치된다.
 #
 # 사용:
+#   # curl 원라이너 — 클론 없이 한 줄. 레포 밖 실행을 감지하면 소스를
+#   # $HOME/openmake_llm 으로 받아온 뒤 자동으로 재진입한다. 터미널에서
+#   # 실행하면 파이프여도 /dev/tty 로 질문한다 (CI 등 tty 없으면 자동 승인).
+#   curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh | bash -s -- --yes
+#
 #   ./install.sh                     # 대화형 (LLM 엔드포인트를 물어봄)
 #   ./install.sh --yes               # 비대화형 (기본값으로 진행, 프롬프트 없음)
 #   ./install.sh --llm-base-url https://openrouter.ai/api/v1 \
 #                --llm-api-key sk-or-... --llm-model qwen/qwen3-235b-a22b --yes
+#
+# 부트스트랩 환경변수 (curl 원라이너일 때만 의미 있음):
+#   OMK_HOME       소스를 받을 위치 (기본 $HOME/openmake_llm)
+#   OMK_REPO_URL   클론할 레포 (기본 https://github.com/openmake/openmake_llm.git)
+#   OMK_REF        브랜치/태그 (기본 main)
 #
 # 주요 옵션 (--help 로 전체 확인):
 #   --yes, -y            모든 확인을 자동 승인 (비대화형)
@@ -35,8 +46,11 @@
 # ==============================================================================
 set -euo pipefail
 
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+# curl | bash 파이프 실행에서는 BASH_SOURCE 가 비어 있다 — 이때 SCRIPT_DIR 는
+# 현재 디렉터리가 되고, 아래 bootstrap_source 가 레포 밖임을 감지해 소스를 받는다.
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]:-$0}" )" && pwd )"
 readonly SCRIPT_DIR
+readonly DEFAULT_REPO_URL="https://github.com/openmake/openmake_llm.git"
 readonly NODE_MAJOR_MIN=24
 readonly NODE_PINNED_VERSION="24.16.0"   # mise.toml / .node-version 과 동일
 readonly TOOLCHAIN_DIR="$SCRIPT_DIR/.openmake"
@@ -74,15 +88,23 @@ log_step() { printf "\n%s━━ %s ━━%s\n" "$C_INFO" "$*" "$C_RESET"; }
 
 die() { log_err "$*"; exit 2; }
 
-# y/N 확인. --yes 또는 비대화형(파이프 실행)이면 자동 승인.
+# 대화형 판정: stdin 이 tty 가 아니어도(curl | bash) 제어 터미널(/dev/tty)이
+# 열리면 사용자에게 물을 수 있다. CI 처럼 둘 다 없을 때만 비대화형이다.
+TTY_DEV=""
+if [[ -t 0 ]] || { : < /dev/tty; } 2>/dev/null; then
+    TTY_DEV="/dev/tty"
+fi
+readonly TTY_DEV
+
+# y/N 확인. --yes 또는 비대화형(tty 없음)이면 자동 승인.
 confirm() {
     local prompt="$1"
-    if [[ $ASSUME_YES -eq 1 ]] || [[ ! -t 0 ]]; then
+    if [[ $ASSUME_YES -eq 1 ]] || [[ -z "$TTY_DEV" ]]; then
         log_info "$prompt → 자동 승인"
         return 0
     fi
     local reply=""
-    read -r -p "$(printf '%s%s%s [y/N]: ' "$C_WARN" "$prompt" "$C_RESET")" reply || true
+    read -r -p "$(printf '%s%s%s [y/N]: ' "$C_WARN" "$prompt" "$C_RESET")" reply < "$TTY_DEV" || true
     case "$reply" in [yY]|[yY][eE][sS]) return 0 ;; *) return 1 ;; esac
 }
 
@@ -91,7 +113,53 @@ has() { command -v "$1" >/dev/null 2>&1; }
 usage() {
     # 파일 상단 주석 블록(셔뱅 다음 ~ 첫 비주석 줄 전)을 그대로 사용법으로 출력한다.
     # 헤더를 고쳐도 --help 가 자동으로 따라오도록 줄 번호를 하드코딩하지 않는다.
-    sed -n '2,/^[^#]/p' "${BASH_SOURCE[0]}" | sed '$d' | sed 's/^# \{0,1\}//'
+    local self="${BASH_SOURCE[0]:-}"
+    if [[ -f "$self" ]]; then
+        sed -n '2,/^[^#]/p' "$self" | sed '$d' | sed 's/^# \{0,1\}//'
+    else
+        # 파이프 실행 등 원본 파일에 접근할 수 없는 경우의 짧은 폴백.
+        echo "전체 도움말: 클론된 레포에서 ./install.sh --help"
+    fi
+}
+
+# ── 부트스트랩 (curl | bash) ─────────────────────────────────────────────────
+# 레포 밖에서 실행되면 (curl 파이프·단독 다운로드) 소스를 먼저 받아온 뒤
+# 그 안의 install.sh 로 exec 재진입한다. 레포 안에서는 아무것도 하지 않는다.
+bootstrap_source() {
+    # 클론된 레포 안이면 할 일 없음 — 기존 ./install.sh 경로 그대로.
+    [[ -f "$SCRIPT_DIR/package.json" && -f "$SCRIPT_DIR/openmake_llm.sh" ]] && return 0
+    # Windows 네이티브는 detect_platform 이 WSL2 안내 후 종료한다 — 클론 낭비 방지.
+    case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) return 0 ;; esac
+
+    local repo_url="${OMK_REPO_URL:-$DEFAULT_REPO_URL}"
+    local ref="${OMK_REF:-main}"
+    local target="${OMK_HOME:-$HOME/openmake_llm}"
+
+    log_step "부트스트랩 — 소스 다운로드"
+    log_info "설치 위치: $target  (변경: OMK_HOME / 레포: OMK_REPO_URL / 브랜치·태그: OMK_REF)"
+
+    if [[ -f "$target/package.json" && -f "$target/install.sh" ]]; then
+        log_ok "기존 소스 재사용 — 최신화하려면: git -C \"$target\" pull"
+    elif [[ -d "$target" ]] && [[ -n "$(ls -A "$target" 2>/dev/null)" ]]; then
+        die "$target 이 비어있지 않은데 OpenMake LLM 소스가 아닙니다 — OMK_HOME 으로 다른 경로를 지정하세요."
+    elif has git; then
+        log_info "git clone --depth 1 --branch $ref $repo_url"
+        git clone --depth 1 --branch "$ref" "$repo_url" "$target" \
+            || die "git clone 실패 ($repo_url @ $ref)"
+    else
+        # git 없는 최소 환경 — GitHub tarball 폴백 (기본 레포일 때만 URL 을 안다).
+        [[ "$repo_url" == "$DEFAULT_REPO_URL" ]] \
+            || die "git 미설치 상태에서는 OMK_REPO_URL 을 지원하지 않습니다 — git 을 먼저 설치하세요."
+        has curl || die "git 과 curl 이 모두 없습니다 — 둘 중 하나를 설치한 뒤 재실행하세요."
+        local tarball="https://codeload.github.com/openmake/openmake_llm/tar.gz/$ref"
+        log_info "git 미설치 — GitHub tarball 로 대체: $tarball"
+        mkdir -p "$target"
+        curl -fsSL "$tarball" | tar -xz -C "$target" --strip-components=1 \
+            || die "tarball 다운로드/해제 실패 ($tarball)"
+    fi
+
+    log_ok "소스 준비 완료 → $target/install.sh 로 재진입"
+    exec bash "$target/install.sh" "$@"
 }
 
 # ── 인자 파싱 ────────────────────────────────────────────────────────────────
@@ -136,7 +204,9 @@ windows_guide() {
     echo "       wsl --install -d Ubuntu"
     echo "     설치 후 PC 를 재부팅하고, Ubuntu 최초 실행에서 사용자 계정을 만드세요."
     echo ""
-    echo "  2) Ubuntu 터미널에서 소스를 받아 설치 (WSL 내부 홈 디렉터리 권장 — /mnt/c 는 느림):"
+    echo "  2) Ubuntu 터미널에서 한 줄로 설치 (WSL 내부 홈 디렉터리에 받는다 — /mnt/c 는 느림):"
+    echo "       curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh | bash"
+    echo "     또는 직접 클론:"
     echo "       git clone https://github.com/openmake/openmake_llm.git"
     echo "       cd openmake_llm && ./install.sh"
     echo ""
@@ -510,7 +580,7 @@ ensure_pm2() {
 # 대화형으로 LLM 엔드포인트를 고른다. --llm-* 플래그가 있으면 건너뛴다.
 prompt_llm() {
     [[ -n "$LLM_BASE_URL" ]] && return 0
-    if [[ $ASSUME_YES -eq 1 ]] || [[ ! -t 0 ]]; then
+    if [[ $ASSUME_YES -eq 1 ]] || [[ -z "$TTY_DEV" ]]; then
         log_warn "LLM 엔드포인트 미지정 — 자리표시자(http://localhost:4000)로 설정합니다."
         log_warn "채팅을 쓰려면 나중에 .env 의 LLM_BASE_URL / LLM_API_KEY / LLM_DEFAULT_MODEL 을 채우세요."
         return 0
@@ -523,25 +593,25 @@ prompt_llm() {
     echo "    3) 직접 입력             LiteLLM/vLLM 등 OpenAI 호환 주소"
     echo "    4) 나중에 설정           지금은 자리표시자만 채움"
     local choice=""
-    read -r -p "  선택 [1-4] (기본 4): " choice || true
+    read -r -p "  선택 [1-4] (기본 4): " choice < "$TTY_DEV" || true
     case "${choice:-4}" in
         1)
             LLM_BASE_URL="http://localhost:11434/v1"
             LLM_API_KEY="ollama"
-            read -r -p "  모델 ID (기본 qwen3:8b): " LLM_MODEL || true
+            read -r -p "  모델 ID (기본 qwen3:8b): " LLM_MODEL < "$TTY_DEV" || true
             LLM_MODEL="${LLM_MODEL:-qwen3:8b}"
             has ollama || log_warn "ollama 가 설치되어 있지 않습니다 — https://ollama.com 에서 설치 후 'ollama pull $LLM_MODEL'"
             ;;
         2)
             LLM_BASE_URL="https://openrouter.ai/api/v1"
-            read -r -p "  OpenRouter API 키: " LLM_API_KEY || true
-            read -r -p "  모델 ID (기본 qwen/qwen3-235b-a22b): " LLM_MODEL || true
+            read -r -p "  OpenRouter API 키: " LLM_API_KEY < "$TTY_DEV" || true
+            read -r -p "  모델 ID (기본 qwen/qwen3-235b-a22b): " LLM_MODEL < "$TTY_DEV" || true
             LLM_MODEL="${LLM_MODEL:-qwen/qwen3-235b-a22b}"
             ;;
         3)
-            read -r -p "  Base URL (예: http://localhost:4000): " LLM_BASE_URL || true
-            read -r -p "  API 키 (없으면 엔터): " LLM_API_KEY || true
-            read -r -p "  모델 ID: " LLM_MODEL || true
+            read -r -p "  Base URL (예: http://localhost:4000): " LLM_BASE_URL < "$TTY_DEV" || true
+            read -r -p "  API 키 (없으면 엔터): " LLM_API_KEY < "$TTY_DEV" || true
+            read -r -p "  모델 ID: " LLM_MODEL < "$TTY_DEV" || true
             ;;
         *)
             log_info "LLM 설정을 건너뜁니다 — .env 에서 나중에 채우세요."
@@ -620,6 +690,12 @@ compose_up() {
 
 run_migrations() {
     log_step "7/8 DB 마이그레이션"
+    # 마이그레이션 CLI(ts-node)가 @openmake/shared-types 의 dist/ 를 import 한다 —
+    # 전체 빌드(8단계) 전에 워크스페이스 패키지만 먼저 빌드해 둔다.
+    if [[ ! -f "$SCRIPT_DIR/packages/shared-types/dist/index.js" ]]; then
+        log_info "워크스페이스 패키지 빌드 (npm run build:packages)"
+        ( cd "$SCRIPT_DIR" && npm run build:packages ) || die "워크스페이스 패키지 빌드 실패"
+    fi
     ( cd "$SCRIPT_DIR/apps/api" && npx ts-node src/data/migrations/cli.ts migrate ) \
         || die "마이그레이션 실패 — DATABASE_URL 과 POSTGRES_PASSWORD 가 일치하는지 확인하세요."
     log_ok "마이그레이션 완료"
@@ -700,6 +776,10 @@ summary() {
 
 # ── main ─────────────────────────────────────────────────────────────────────
 main() {
+    # curl | bash 등 레포 밖 실행이면 소스를 받아 그 안의 install.sh 로 exec 재진입.
+    # (--help 포함 모든 인자는 재진입한 스크립트가 처리한다.)
+    bootstrap_source "$@"
+
     parse_args "$@"
 
     printf "\n%s╔══════════════════════════════════════════════════╗%s\n" "$C_INFO" "$C_RESET"
