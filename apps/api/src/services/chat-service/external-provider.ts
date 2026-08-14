@@ -22,6 +22,7 @@ import { CHAT_DELEGATE_TOOL_NAME, runChatDelegate } from './chat-delegate';
 import { SPAWN_AGENTS_TOOL_NAME, runChatSpawnAgents } from '../agent-spawn/spawn-agents';
 import { CHAT_SUBAGENT, AGENT_SPAWN } from '../../config/runtime-limits';
 import { buildExternalToolPlan, detectOrchestrationIntents } from './external-tool-plan';
+import { applyWallClockGuard, applyToolOveruseGuard } from './external-loop-guards';
 import { isOrchestrationTool, runOrchestrationTool } from './orchestration-dispatch';
 import type { ChatMessage, ToolDefinition } from '../../llm';
 import type { ChatMessageRequest } from '../chat-service-types';
@@ -255,18 +256,9 @@ export async function runExternalStream(
 
     try {
         for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
-            // Wall-clock 예산 가드 — 턴 수와 별개로 누적 시간 초과 시 도구 끄고 최종 응답 유도.
-            // 이미지 생성(디퓨전 수십 초~수 분) 소요시간은 공제(imageGenCreditMs) — 예산의
-            // 목적(모델/도구 폭주 차단)과 무관한 정상 대기가 후속 턴(덱 저장 등)을 잘라내던
-            // 결함 보정 (2026-08-14 라이브 실측: 3장 배치 166s → 도구 비활성 전환).
-            if (!suppressTools && AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS > 0
-                && Date.now() - startedAt - imageGenCreditMs > AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS) {
-                logger.warn(`⏱️ 외부 LLM 루프 wall-clock 예산 초과 (${AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS}ms) — 도구 비활성 최종 턴으로 전환`);
+            // Wall-clock 예산 가드(이미지 생성 소요시간 공제) — 상세는 external-loop-guards.
+            if (!suppressTools && applyWallClockGuard({ startedAt, imageGenCreditMs, messages })) {
                 suppressTools = true;
-                messages.push({
-                    role: 'user',
-                    content: '처리 시간이 초과되었습니다. 추가 도구 호출 없이 현재까지 수집한 정보로 답변을 완성하세요.',
-                });
             }
             const turnTools = suppressTools ? [] : tools;
             // A. context-fit 안전망: external 경로는 LLMClient.chat 의 model-pool truncate 를
@@ -492,39 +484,10 @@ export async function runExternalStream(
             }
             timings.toolMs += Date.now() - toolBatchStartedAt;
 
-            // 같은 도구 반복 사용 가드 (인자 무관) — 검색어만 바꿔가며 부르는 패턴은
-            // 위 doom-loop(도구+인자 해시)에 걸리지 않아 최대 턴까지 소진된다.
-            // 매 턴 모델 prefill 이 누적되므로 지연의 지배 요인이다(2026-08-02 실측).
-            for (const tc of result.toolCalls) {
-                toolUseCounts.set(tc.name, (toolUseCounts.get(tc.name) ?? 0) + 1);
-            }
-            const overusedTool = [...toolUseCounts.entries()]
-                .find(([, n]) => n >= LOOP_DETECTION.SAME_TOOL_BREAK_AT);
-            if (overusedTool) {
-                logger.warn(`🔁 도구 과다 사용 — ${overusedTool[0]} ${overusedTool[1]}회 `
-                    + `(상한 ${LOOP_DETECTION.SAME_TOOL_BREAK_AT}) — 도구 비활성 최종 턴으로 전환`);
+            // 같은 도구 반복 사용 가드 (인자 무관, WARN/BREAK) — 상세는 external-loop-guards.
+            if (applyToolOveruseGuard({ toolCalls: result.toolCalls, toolUseCounts, warnedTools, messages })) {
                 suppressTools = true;
-                messages.push({
-                    role: 'user',
-                    content: `${overusedTool[0]} 도구를 ${overusedTool[1]}회 호출했습니다. `
-                        + '더 검색하지 말고 지금까지 수집한 정보로 답변을 완성하세요. '
-                        + '확인되지 않은 부분은 모른다고 밝히면 됩니다. '
-                        + '(이 제한은 이번 응답에만 적용됩니다 — 당신의 도구 능력이 사라진 것이 아니므로 '
-                        + '"검색 불가"라고 말하지 마세요.)',
-                });
                 continue;
-            }
-            const warnTool = [...toolUseCounts.entries()]
-                .find(([name, n]) => n >= LOOP_DETECTION.SAME_TOOL_WARN_AT && !warnedTools.has(name));
-            if (warnTool) {
-                warnedTools.add(warnTool[0]);
-                logger.info(`⚠️ 도구 반복 경고 — ${warnTool[0]} ${warnTool[1]}회 (마무리 유도)`);
-                messages.push({
-                    role: 'user',
-                    content: `${warnTool[0]} 도구를 이미 ${warnTool[1]}회 호출했습니다. `
-                        + '검색어를 바꿔 다시 시도하기보다, 지금까지의 결과로 답변을 정리하세요. '
-                        + '정말 필요한 경우에만 한 번 더 호출하세요.',
-                });
             }
         }
         if (!result) throw new Error('streamChat 호출 결과 없음');
