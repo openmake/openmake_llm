@@ -23,6 +23,7 @@ import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
 import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
 import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext } from '../services/chat-service/attach-context';
 import { hasScriptMixing } from '../services/chat-service/script-purity';
+import { citationMarkersWereCleaned } from '../services/chat-service/external-deterministic-append';
 import { saveAssistantMessage } from '../chat/request-persistence';
 import { buildWebSearchContext } from '../mcp/web-search/build-search-context';
 
@@ -415,11 +416,13 @@ export async function handleChatMessage(
         // 스크립트 순수성 교정(script-purity)이 실제로 적용된 경우에도 본문을 교체한다 —
         // 스트리밍으로 이미 나간 화면엔 한자 혼입이 남아 있고 최종본만 교정돼 있으므로,
         // 그 차이가 있을 때만 정확히 겨냥해 reset 한다(그 외 턴은 기존대로 undefined).
+        // 죽은 인용 마커 제거(external-deterministic-append)가 적용된 턴도 동일 패턴으로 교체 —
+        // 스트리밍 화면에 남은 [출처 N](수집 목록 밖 번호) 마커를 완료 시점에 정리한다.
         const cleanedContent = (result.artifacts && result.artifacts.length > 0)
             ? result.response
             : (result.response
-                && hasScriptMixing(partialAssistantResponse)
-                && !hasScriptMixing(result.response)
+                && ((hasScriptMixing(partialAssistantResponse) && !hasScriptMixing(result.response))
+                    || citationMarkersWereCleaned(partialAssistantResponse, result.response))
                 ? result.response
                 : undefined);
         ws.send(JSON.stringify({

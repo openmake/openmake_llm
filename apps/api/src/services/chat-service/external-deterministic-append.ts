@@ -22,6 +22,50 @@ import type { StreamFromExternalContext } from './external-provider';
 
 const logger = createLogger('ChatExternalProvider');
 
+/** 7개 언어 sourceLabel 의 정규식 alternation (중복 제거·이스케이프) — 템플릿이 SoT */
+const SOURCE_LABEL_ALT = [...new Set(Object.values(WEB_SEARCH_TEMPLATES).map((t) => t.sourceLabel))]
+    .map((l) => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|');
+/** 라벨 인용 마커 소스 — `[출처 3]`·`[Source 1, 2]` 형태. 라벨 없는 `[3]` 은 각주/코드 오탐 위험으로 제외. */
+const CITATION_MARKER_SRC = `\\[\\s*(?:${SOURCE_LABEL_ALT})\\s*\\d+(?:\\s*[,·、]\\s*\\d+)*\\s*\\]`;
+
+/**
+ * 수집 목록(validNums)에 없는 번호의 죽은 인용 마커를 제거한다 — 모델(qwen)이 주입 상한을
+ * 넘는 번호([출처 11]~)를 지어내는 비순응의 결정적 후처리 (프롬프트 지시 단독 73% 순응, 2026-08-15 실측).
+ * 전부 무효면 마커 삭제(선행 공백 1개 포함), 일부만 유효면 유효 번호로 재작성.
+ */
+export function stripDeadCitationMarkers(
+    content: string,
+    validNums: ReadonlySet<string>,
+): { content: string; removed: number } {
+    let removed = 0;
+    const out = content.replace(new RegExp(`\\s?${CITATION_MARKER_SRC}`, 'gi'), (match) => {
+        const nums = match.match(/\d+/g) ?? [];
+        const valid = nums.filter((n) => validNums.has(n));
+        if (valid.length === nums.length) return match;
+        removed++;
+        if (valid.length === 0) return '';
+        const label = new RegExp(`(${SOURCE_LABEL_ALT})`, 'i').exec(match)?.[1] ?? '출처';
+        return `${match.startsWith(' ') ? ' ' : ''}[${label} ${valid.join(', ')}]`;
+    });
+    return { content: out, removed };
+}
+
+/**
+ * 스트리밍 본문(streamed)에 있던 인용 마커가 최종본(final)에서 제거/축소됐는지 감지 —
+ * ws-chat-handler 가 done.cleanedContent 로 화면 본문을 교체할지 판정하는 데 사용
+ * (artifact placeholder·script-purity 교체와 동일 패턴: 차이가 있는 턴만 정확히 겨냥).
+ */
+export function citationMarkersWereCleaned(streamed: string, final: string): boolean {
+    const collect = (s: string) =>
+        new Set((s.match(new RegExp(CITATION_MARKER_SRC, 'gi')) ?? []).map((m) => m.replace(/\s+/g, '')));
+    const before = collect(streamed);
+    if (before.size === 0) return false;
+    const after = collect(final);
+    for (const m of before) if (!after.has(m)) return true;
+    return false;
+}
+
 export interface DeterministicAppendInput {
     /** 모델이 만든 최종 본문 (이미 라이브 스트리밍된 텍스트). */
     finalContent: string;
@@ -149,6 +193,13 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
             if (!numToSource.has(mm[1])) {
                 numToSource.set(mm[1], { title: mm[2].trim(), url: mm[3].trim() });
             }
+        }
+        // 수집 목록에 없는 번호의 죽은 인용 마커 결정적 제거 — 저장 히스토리(반환값)가 대상.
+        // 이미 스트리밍된 화면은 ws-chat-handler 의 done.cleanedContent 교체가 완료 시점에 정리.
+        const stripRes = stripDeadCitationMarkers(finalContent, new Set(numToSource.keys()));
+        if (stripRes.removed > 0) {
+            finalContent = stripRes.content;
+            logger.info(`🧹 죽은 인용 마커 ${stripRes.removed}개 제거 (수집 목록 밖 번호)`);
         }
         // 본문에 인용된 소스 번호 ([출처 N]/[Source N]/[N] — 수집 목록에 있는 번호만 인정).
         // 대괄호 안 숫자를 전부 인정 — `[출처 3, 8]` 복합 인용에서 마지막 숫자만 잡혀 앞 번호
