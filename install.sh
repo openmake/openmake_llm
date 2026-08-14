@@ -577,6 +577,101 @@ ensure_pm2() {
 }
 
 # ── 4. .env ──────────────────────────────────────────────────────────────────
+# ── 5.5 포트 충돌 회피 ───────────────────────────────────────────────────────
+# 대상 머신에 PostgreSQL/Redis 가 이미 떠 있으면 (호스트 설치본 postgres, 다른
+# 컨테이너 등) compose 의 호스트 포트 바인딩이 "port is already allocated" 로
+# 실패한다 — .env 생성 전에 감지해서 빈 포트로 자동 이동한다.
+port_in_use() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+
+# 그 포트를 점유한 것이 우리 컨테이너($1)인가 — 재실행 케이스라 충돌이 아니다.
+port_owned_by() {
+    has docker && docker port "$1" 2>/dev/null | grep -q ":$2\$"
+}
+
+find_free_port() {
+    local p
+    for ((p = $1; p < $1 + 200; p++)); do
+        port_in_use "$p" || { echo "$p"; return 0; }
+    done
+    return 1
+}
+
+# 재실행으로 .env 가 이미 있으면 바뀐 포트를 .env 에도 반영한다 (연결 URL 포함).
+update_env_port() { # $1=POSTGRES_PORT|REDIS_PORT $2=새 포트
+    local envf="$SCRIPT_DIR/.env" tmp
+    [[ -f "$envf" ]] || return 0
+    tmp="$(mktemp)"
+    if [[ "$1" == "POSTGRES_PORT" ]]; then
+        sed -E "s|^POSTGRES_PORT=.*|POSTGRES_PORT=$2|; s|^(DATABASE_URL=.*@[^:/]+:)[0-9]+|\1$2|" "$envf" > "$tmp"
+    else
+        sed -E "s|^REDIS_PORT=.*|REDIS_PORT=$2|; s|^(REDIS_URL=redis://[^:/]+:)[0-9]+|\1$2|" "$envf" > "$tmp"
+    fi
+    mv "$tmp" "$envf"
+}
+
+update_env_app_port() { # API 포트 변경: PORT= 와 URL 류의 :old 를 :new 로
+    local envf="$SCRIPT_DIR/.env" tmp
+    [[ -f "$envf" ]] || return 0
+    tmp="$(mktemp)"
+    sed -E "s|^PORT=.*|PORT=$2|; /^(CORS_ORIGINS|SWAGGER_BASE_URL)=/s|:$1|:$2|g" "$envf" > "$tmp"
+    mv "$tmp" "$envf"
+}
+
+update_env_web_port() { # 웹 포트 변경: 공개 주소/CORS 의 :old 를 :new 로
+    local envf="$SCRIPT_DIR/.env" tmp
+    [[ -f "$envf" ]] || return 0
+    tmp="$(mktemp)"
+    sed -E "/^(CORS_ORIGINS|OMK_APP_URL)=/s|:$1|:$2|g" "$envf" > "$tmp"
+    mv "$tmp" "$envf"
+}
+
+# PM2 에 등록된 우리 앱이면 재실행 케이스 — pm2 restart 가 포트를 이어받는다.
+pm2_has_app() { "${PM2_BIN:-pm2}" describe "$1" >/dev/null 2>&1; }
+
+ensure_ports() {
+    [[ $SKIP_DOCKER -eq 1 ]] && return 0
+
+    # 재실행이면 기존 .env 에 적힌 포트가 진실 — 거기서 이어받는다.
+    local v
+    v="$(env_value POSTGRES_PORT)"; [[ -n "$v" ]] && PG_PORT="$v"
+    v="$(env_value REDIS_PORT)";    [[ -n "$v" ]] && RD_PORT="$v"
+
+    # 앱(API)/웹 포트 — PM2 로 도는 호스트 프로세스라 소유 판정은 PM2 등록 여부로 한다.
+    v="$(env_value PORT)"; [[ -n "$v" ]] && APP_PORT="$v"
+    v="$(env_value OMK_APP_URL | sed -nE 's|.*:([0-9]+)/?$|\1|p')"; [[ -n "$v" ]] && WEB_PORT="$v"
+
+    local alt
+    if port_in_use "$APP_PORT" && ! pm2_has_app openmake-llm; then
+        alt="$(find_free_port $((APP_PORT + 1)))" \
+            || die "API 대체 포트 탐색 실패 — --port 로 직접 지정하세요."
+        log_warn "호스트 포트 $APP_PORT 을 다른 프로세스가 사용 중 — API 를 $alt 로 대체합니다."
+        update_env_app_port "$APP_PORT" "$alt"
+        APP_PORT="$alt"
+    fi
+    if port_in_use "$WEB_PORT" && ! pm2_has_app openmake-next; then
+        alt="$(find_free_port 13000)" \
+            || die "웹 대체 포트 탐색 실패 (13000~) — --web-port 로 직접 지정하세요."
+        log_warn "호스트 포트 $WEB_PORT 을 다른 프로세스가 사용 중 — 웹 UI 를 $alt 로 대체합니다."
+        update_env_web_port "$WEB_PORT" "$alt"
+        WEB_PORT="$alt"
+    fi
+
+    if port_in_use "$PG_PORT" && ! port_owned_by openmake-postgres "$PG_PORT"; then
+        alt="$(find_free_port 15432)" \
+            || die "PostgreSQL 대체 포트 탐색 실패 (15432~) — --postgres-port 로 직접 지정하세요."
+        log_warn "호스트 포트 $PG_PORT 을 다른 프로세스가 사용 중 (기존 PostgreSQL?) — $alt 로 대체합니다."
+        PG_PORT="$alt"
+        update_env_port POSTGRES_PORT "$alt"
+    fi
+    if port_in_use "$RD_PORT" && ! port_owned_by openmake-redis "$RD_PORT"; then
+        alt="$(find_free_port 16379)" \
+            || die "Redis 대체 포트 탐색 실패 (16379~) — --redis-port 로 직접 지정하세요."
+        log_warn "호스트 포트 $RD_PORT 을 다른 프로세스가 사용 중 (기존 Redis?) — $alt 로 대체합니다."
+        RD_PORT="$alt"
+        update_env_port REDIS_PORT "$alt"
+    fi
+}
+
 # 대화형으로 LLM 엔드포인트를 고른다. --llm-* 플래그가 있으면 건너뛴다.
 prompt_llm() {
     [[ -n "$LLM_BASE_URL" ]] && return 0
@@ -669,7 +764,8 @@ compose_up() {
     # compose 파일이 infra/ 에 있으므로 project directory 도 infra/ 가 된다.
     # → 루트 .env 를 --env-file 로 명시하지 않으면 POSTGRES_PASSWORD 가 비어 기동이 실패한다.
     $DOCKER_COMPOSE --env-file "$SCRIPT_DIR/.env" -f "$SCRIPT_DIR/infra/docker-compose.yml" \
-        up -d postgres redis || die "PostgreSQL/Redis 기동 실패"
+        up -d postgres redis \
+        || die "PostgreSQL/Redis 기동 실패 — 포트 충돌(port is already allocated)이면 --postgres-port / --redis-port 로 다른 포트를 지정하세요."
 
     log_info "PostgreSQL 준비 대기"
     local i
@@ -720,7 +816,10 @@ start_app() {
     fi
 
     log_info "PM2 기동 (ecosystem.config.js)"
-    ( cd "$SCRIPT_DIR" && "$PM2_BIN" start ecosystem.config.js --update-env ) || die "PM2 기동 실패"
+    # ecosystem.config.js 는 시작 시점 셸 환경의 PORT/OMK_WEB_PORT 를 읽는다 —
+    # 명시적으로 넘겨야 --port/--web-port/자동 대체 포트가 PM2 에 반영된다.
+    ( cd "$SCRIPT_DIR" && PORT="$APP_PORT" OMK_WEB_PORT="$WEB_PORT" \
+        "$PM2_BIN" start ecosystem.config.js --update-env ) || die "PM2 기동 실패"
 
     log_info "health check 대기 (최대 $((HEALTH_RETRIES * HEALTH_INTERVAL))s)"
     local i
@@ -737,6 +836,54 @@ start_app() {
     exit 3
 }
 
+# ── 외부 접속 설정 ───────────────────────────────────────────────────────────
+# 설치 완료 후 다른 기기/네트워크에서 접속할지 물어본다. 승인하면 .env 의
+# OMK_APP_URL(공개 주소)과 CORS_ORIGINS(허용 origin)에 외부 주소를 반영하고
+# API 를 재시작한다. SERVER_HOST 는 이미 0.0.0.0 이라 바인딩은 열려 있다.
+EXTERNAL_URL=""
+
+detect_lan_ip() {
+    if [[ "$OS" == "macos" ]]; then
+        ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true
+    else
+        hostname -I 2>/dev/null | awk '{print $1}' || true
+    fi
+}
+
+prompt_external_access() {
+    # 비대화형(--yes / tty 없음)은 로컬 전용으로 두고, 방법만 summary 에서 안내.
+    [[ $ASSUME_YES -eq 1 || -z "$TTY_DEV" ]] && return 0
+    echo ""
+    confirm "외부(다른 기기/네트워크)에서 이 서비스에 접속하시겠습니까?" || return 0
+
+    local lan_ip host
+    lan_ip="$(detect_lan_ip)"
+    read -r -p "  접속에 쓸 IP 또는 도메인 [기본 ${lan_ip:-없음}]: " host < "$TTY_DEV" || true
+    host="${host:-$lan_ip}"
+    if [[ -z "$host" ]]; then
+        log_warn "주소가 없어 로컬 전용으로 둡니다 — 나중에 .env 의 OMK_APP_URL/CORS_ORIGINS 를 수정하세요."
+        return 0
+    fi
+
+    local web_origin="http://${host}:${WEB_PORT}" api_origin="http://${host}:${APP_PORT}"
+    local envf="$SCRIPT_DIR/.env" tmp
+    tmp="$(mktemp)"
+    sed -E "s|^OMK_APP_URL=.*|OMK_APP_URL=${web_origin}|" "$envf" > "$tmp" && mv "$tmp" "$envf"
+    if ! grep -qE "^CORS_ORIGINS=.*${web_origin}" "$envf"; then
+        tmp="$(mktemp)"
+        sed -E "s|^CORS_ORIGINS=(.*)|CORS_ORIGINS=\1,${web_origin},${api_origin}|" "$envf" > "$tmp" && mv "$tmp" "$envf"
+    fi
+    EXTERNAL_URL="$web_origin"
+
+    if [[ $NO_START -eq 0 ]]; then
+        log_info "설정 반영을 위해 API 재시작"
+        "${PM2_BIN:-pm2}" restart openmake-llm --update-env >/dev/null 2>&1 \
+            || log_warn "재시작 실패 — 수동으로: pm2 restart openmake-llm"
+    fi
+    log_ok "외부 접속 설정 완료 — $web_origin"
+    log_warn "HTTP 평문 통신입니다. 인터넷에 공개한다면 HTTPS(Caddy 등)를 앞에 두고 .env 의 COOKIE_SECURE=true / ALLOW_INSECURE_COOKIES=false 로 바꾸세요."
+}
+
 # ── 마무리 안내 ──────────────────────────────────────────────────────────────
 summary() {
     local admin_pass admin_email llm_url
@@ -750,6 +897,11 @@ summary() {
 
     echo "  웹 UI     http://localhost:$WEB_PORT"
     echo "  API       http://localhost:$APP_PORT   (health: /health)"
+    if [[ -n "$EXTERNAL_URL" ]]; then
+        echo "  외부 접속 $EXTERNAL_URL"
+    else
+        printf "  %s외부 접속을 열려면: .env 의 OMK_APP_URL 과 CORS_ORIGINS 에 외부 주소를 추가 후 재시작%s\n" "$C_DIM" "$C_RESET"
+    fi
     echo ""
     # 로그인 식별자는 email 이다 (auth.schema.ts loginSchema — username 필드는 없음).
     echo "  로그인    ${admin_email:-admin@openmake.local}   ← 이메일로 로그인합니다"
@@ -793,12 +945,14 @@ main() {
     ensure_node
     ensure_docker
     ensure_pm2
+    ensure_ports
     setup_env
     install_deps
     compose_up
     run_migrations
     build_app
     start_app
+    prompt_external_access
     summary
 }
 
