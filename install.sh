@@ -577,6 +577,63 @@ ensure_pm2() {
 }
 
 # ── 4. .env ──────────────────────────────────────────────────────────────────
+# ── 5.5 포트 충돌 회피 ───────────────────────────────────────────────────────
+# 대상 머신에 PostgreSQL/Redis 가 이미 떠 있으면 (호스트 설치본 postgres, 다른
+# 컨테이너 등) compose 의 호스트 포트 바인딩이 "port is already allocated" 로
+# 실패한다 — .env 생성 전에 감지해서 빈 포트로 자동 이동한다.
+port_in_use() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+
+# 그 포트를 점유한 것이 우리 컨테이너($1)인가 — 재실행 케이스라 충돌이 아니다.
+port_owned_by() {
+    has docker && docker port "$1" 2>/dev/null | grep -q ":$2\$"
+}
+
+find_free_port() {
+    local p
+    for ((p = $1; p < $1 + 200; p++)); do
+        port_in_use "$p" || { echo "$p"; return 0; }
+    done
+    return 1
+}
+
+# 재실행으로 .env 가 이미 있으면 바뀐 포트를 .env 에도 반영한다 (연결 URL 포함).
+update_env_port() { # $1=POSTGRES_PORT|REDIS_PORT $2=새 포트
+    local envf="$SCRIPT_DIR/.env" tmp
+    [[ -f "$envf" ]] || return 0
+    tmp="$(mktemp)"
+    if [[ "$1" == "POSTGRES_PORT" ]]; then
+        sed -E "s|^POSTGRES_PORT=.*|POSTGRES_PORT=$2|; s|^(DATABASE_URL=.*@[^:/]+:)[0-9]+|\1$2|" "$envf" > "$tmp"
+    else
+        sed -E "s|^REDIS_PORT=.*|REDIS_PORT=$2|; s|^(REDIS_URL=redis://[^:/]+:)[0-9]+|\1$2|" "$envf" > "$tmp"
+    fi
+    mv "$tmp" "$envf"
+}
+
+ensure_ports() {
+    [[ $SKIP_DOCKER -eq 1 ]] && return 0
+
+    # 재실행이면 기존 .env 에 적힌 포트가 진실 — 거기서 이어받는다.
+    local v
+    v="$(env_value POSTGRES_PORT)"; [[ -n "$v" ]] && PG_PORT="$v"
+    v="$(env_value REDIS_PORT)";    [[ -n "$v" ]] && RD_PORT="$v"
+
+    local alt
+    if port_in_use "$PG_PORT" && ! port_owned_by openmake-postgres "$PG_PORT"; then
+        alt="$(find_free_port 15432)" \
+            || die "PostgreSQL 대체 포트 탐색 실패 (15432~) — --postgres-port 로 직접 지정하세요."
+        log_warn "호스트 포트 $PG_PORT 을 다른 프로세스가 사용 중 (기존 PostgreSQL?) — $alt 로 대체합니다."
+        PG_PORT="$alt"
+        update_env_port POSTGRES_PORT "$alt"
+    fi
+    if port_in_use "$RD_PORT" && ! port_owned_by openmake-redis "$RD_PORT"; then
+        alt="$(find_free_port 16379)" \
+            || die "Redis 대체 포트 탐색 실패 (16379~) — --redis-port 로 직접 지정하세요."
+        log_warn "호스트 포트 $RD_PORT 을 다른 프로세스가 사용 중 (기존 Redis?) — $alt 로 대체합니다."
+        RD_PORT="$alt"
+        update_env_port REDIS_PORT "$alt"
+    fi
+}
+
 # 대화형으로 LLM 엔드포인트를 고른다. --llm-* 플래그가 있으면 건너뛴다.
 prompt_llm() {
     [[ -n "$LLM_BASE_URL" ]] && return 0
@@ -669,7 +726,8 @@ compose_up() {
     # compose 파일이 infra/ 에 있으므로 project directory 도 infra/ 가 된다.
     # → 루트 .env 를 --env-file 로 명시하지 않으면 POSTGRES_PASSWORD 가 비어 기동이 실패한다.
     $DOCKER_COMPOSE --env-file "$SCRIPT_DIR/.env" -f "$SCRIPT_DIR/infra/docker-compose.yml" \
-        up -d postgres redis || die "PostgreSQL/Redis 기동 실패"
+        up -d postgres redis \
+        || die "PostgreSQL/Redis 기동 실패 — 포트 충돌(port is already allocated)이면 --postgres-port / --redis-port 로 다른 포트를 지정하세요."
 
     log_info "PostgreSQL 준비 대기"
     local i
@@ -793,6 +851,7 @@ main() {
     ensure_node
     ensure_docker
     ensure_pm2
+    ensure_ports
     setup_env
     install_deps
     compose_up
