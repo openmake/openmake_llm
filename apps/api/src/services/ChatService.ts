@@ -532,6 +532,11 @@ export class ChatService {
             onUsage: (usage) => { this.lastProviderUsage = usage; },
             ...(this.currentSystemEventCallback ? { onSystemEvent: this.currentSystemEventCallback } : {}),
             allowedTools: await this.getAllowedTools(reqCtx),
+            // 스킬 required 바인딩 도구는 도구 플랜의 distractor 억제(아티팩트/지도 의도)에서
+            // 면제된다 — 스킬의 명시 의도가 일반화 휴리스틱보다 우선 (external-tool-plan).
+            skillRequiredToolNames: reqCtx.skillBindings
+                .filter((b) => b.binding_mode === 'required')
+                .map((b) => b.tool_name),
         };
     }
 

@@ -126,19 +126,20 @@ preflight() {
 #   lsof(macOS 기본) → ss(최신 리눅스) → netstat(구형) → bash /dev/tcp(무도구)
 port_listening() {
     local port="$1"
+    # 각 도구의 "못 찾음"은 단정이 아니다 — 비루트 lsof 는 root 소유
+    # docker-proxy 소켓을 못 봐서, 여기서 return 1 로 끊으면 컨테이너 포트가
+    # 항상 미응답으로 오판된다 (start 가 postgres 대기에서 죽던 원인).
+    # 긍정(발견)만 즉시 반환하고, 부정은 다음 도구로 계속 내려간다.
     if command -v lsof >/dev/null 2>&1; then
         lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 && return 0
-        return 1
     fi
     if command -v ss >/dev/null 2>&1; then
         ss -ltn "sport = :$port" 2>/dev/null | grep -q LISTEN && return 0
-        return 1
     fi
     if command -v netstat >/dev/null 2>&1; then
         netstat -an 2>/dev/null | grep -qE "[.:]$port[[:space:]].*LISTEN" && return 0
-        return 1
     fi
-    # 마지막 수단 — 실제 연결을 시도한다 (localhost 바인딩만 감지 가능).
+    # 최종 판정 — 실제 연결을 시도한다 (localhost 바인딩만 감지 가능).
     (exec 3<>/dev/tcp/127.0.0.1/"$port") >/dev/null 2>&1 && return 0
     return 1
 }

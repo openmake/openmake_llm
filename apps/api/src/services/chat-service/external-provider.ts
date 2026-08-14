@@ -22,6 +22,7 @@ import { CHAT_DELEGATE_TOOL_NAME, runChatDelegate } from './chat-delegate';
 import { SPAWN_AGENTS_TOOL_NAME, runChatSpawnAgents } from '../agent-spawn/spawn-agents';
 import { CHAT_SUBAGENT, AGENT_SPAWN } from '../../config/runtime-limits';
 import { buildExternalToolPlan, detectOrchestrationIntents } from './external-tool-plan';
+import { applyWallClockGuard, applyToolOveruseGuard } from './external-loop-guards';
 import { isOrchestrationTool, runOrchestrationTool } from './orchestration-dispatch';
 import type { ChatMessage, ToolDefinition } from '../../llm';
 import type { ChatMessageRequest } from '../chat-service-types';
@@ -34,7 +35,8 @@ import { executeExternalTool, recordExternalUsageFireAndForget } from './externa
 import { resolveModelCapabilities } from './model-capabilities';
 import { markModelUnusableFireAndForget } from './external-model-availability';
 import { appendDeterministicBlocks, captureOdArtifactHtml, normalizeOdToolCall, type OdArtifactCapture } from './external-deterministic-append';
-import { OD_ARTIFACT_ECHO } from '../../config/runtime-limits';
+import { OD_ARTIFACT_ECHO, IMAGE_GEN_PARALLEL } from '../../config/runtime-limits';
+import { parallelBatch } from '../../workflow/graph-engine';
 
 const logger = createLogger('ChatExternalProvider');
 
@@ -53,6 +55,8 @@ export interface ExternalProviderDeps {
     onSystemEvent?: (event: { type: string; message: string; metadata?: Record<string, unknown> }) => void;
     /** Allowed tools (agent 매칭 후) */
     allowedTools: ToolDefinition[];
+    /** 활성 스킬이 required 로 바인딩한 도구 이름 — 도구 플랜의 distractor 억제 면제용 */
+    skillRequiredToolNames?: readonly string[];
 }
 
 /**
@@ -191,6 +195,7 @@ export async function runExternalStream(
         wantsMap,
         ...(ctx.tailWebGround !== undefined ? { tailWebGround: ctx.tailWebGround } : {}),
         orchestration,
+        ...(deps.skillRequiredToolNames ? { skillRequiredToolNames: deps.skillRequiredToolNames } : {}),
     });
     // Stage 2 셰도우 계측 — 의도 매칭 턴만 텔레메트리를 초기화(호출 시 아래 루프가 갱신).
     if (orchestration.discussion || orchestration.taskDelegate) {
@@ -202,6 +207,8 @@ export async function runExternalStream(
     }
 
     const startedAt = Date.now();
+    // 이미지 생성 소요시간 누적 — wall-clock 예산 공제용 (상한 WALL_CLOCK_CREDIT_MAX_MS).
+    let imageGenCreditMs = 0;
     // TTFT 분해 계측 — 구간 계산은 호출부(ws-chat-handler)가 상위 시작 시각과 함께 수행.
     const timings: ChatTimings = {
         enteredAt: enteredAtMs, firstLlmCallAt: 0, firstChunkAt: 0, toolMs: 0, turns: 0,
@@ -249,15 +256,9 @@ export async function runExternalStream(
 
     try {
         for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
-            // Wall-clock 예산 가드 — 턴 수와 별개로 누적 시간 초과 시 도구 끄고 최종 응답 유도
-            if (!suppressTools && AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS > 0
-                && Date.now() - startedAt > AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS) {
-                logger.warn(`⏱️ 외부 LLM 루프 wall-clock 예산 초과 (${AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS}ms) — 도구 비활성 최종 턴으로 전환`);
+            // Wall-clock 예산 가드(이미지 생성 소요시간 공제) — 상세는 external-loop-guards.
+            if (!suppressTools && applyWallClockGuard({ startedAt, imageGenCreditMs, messages })) {
                 suppressTools = true;
-                messages.push({
-                    role: 'user',
-                    content: '처리 시간이 초과되었습니다. 추가 도구 호출 없이 현재까지 수집한 정보로 답변을 완성하세요.',
-                });
             }
             const turnTools = suppressTools ? [] : tools;
             // A. context-fit 안전망: external 경로는 LLMClient.chat 의 model-pool truncate 를
@@ -360,6 +361,31 @@ export async function runExternalStream(
 
             // 도구 실행 시간 누적 — TTFT 분해에서 "모델이 느린가 / 도구가 느린가"를 가른다.
             const toolBatchStartedAt = Date.now();
+            // 이미지 생성 병렬화 — 같은 턴의 generate_image 다중 호출(발표자료 삽화 등)은
+            // FLUX 디퓨전(수십 초/장)이 지배하므로 동시 실행해 배치 시간을 1장 수준으로
+            // 줄인다. executeExternalTool 은 콜백·에러를 자체 처리(실패는 'Error:' 문자열)
+            // 하므로 동시 실행에 안전하고, 결과는 아래 순차 루프가 원래 호출 순서대로
+            // tool 메시지에 배치한다.
+            const parallelImageResults = new Map<string, string>();
+            const imageCalls = result.toolCalls.filter((tc) => tc.name === 'generate_image');
+            if (IMAGE_GEN_PARALLEL.ENABLED && imageCalls.length >= 2) {
+                logger.info(`🎨 generate_image ${imageCalls.length}건 병렬 실행 (동시 상한 ${IMAGE_GEN_PARALLEL.MAX_CONCURRENT})`);
+                const imageBatchStartedAt = Date.now();
+                await parallelBatch(
+                    imageCalls,
+                    async (tc) => {
+                        parallelImageResults.set(
+                            tc.id,
+                            await executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>),
+                        );
+                    },
+                    { concurrency: IMAGE_GEN_PARALLEL.MAX_CONCURRENT },
+                );
+                imageGenCreditMs = Math.min(
+                    imageGenCreditMs + (Date.now() - imageBatchStartedAt),
+                    IMAGE_GEN_PARALLEL.WALL_CLOCK_CREDIT_MAX_MS,
+                );
+            }
             for (const tc of result.toolCalls) {
                 let toolResult: string;
                 if (tc.name === CHAT_DELEGATE_TOOL_NAME) {
@@ -405,7 +431,18 @@ export async function runExternalStream(
                         ctx.orchestrationTelemetry.success = !toolResult.startsWith('Error');
                     }
                 } else {
-                    toolResult = await executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>);
+                    // 병렬 선실행된 이미지 결과가 있으면 재실행 없이 소비.
+                    // 단건 이미지 생성도 소요시간을 공제 누적한다 (배치와 동일 근거).
+                    const singleImageStartedAt = tc.name === 'generate_image' && !parallelImageResults.has(tc.id)
+                        ? Date.now() : 0;
+                    toolResult = parallelImageResults.get(tc.id)
+                        ?? await executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>);
+                    if (singleImageStartedAt > 0) {
+                        imageGenCreditMs = Math.min(
+                            imageGenCreditMs + (Date.now() - singleImageStartedAt),
+                            IMAGE_GEN_PARALLEL.WALL_CLOCK_CREDIT_MAX_MS,
+                        );
+                    }
                 }
                 if (tc.name === 'generate_image') {
                     const m = toolResult.match(/!\[[^\]]*\]\(\/generated\/[^)]+\)/);
@@ -447,39 +484,10 @@ export async function runExternalStream(
             }
             timings.toolMs += Date.now() - toolBatchStartedAt;
 
-            // 같은 도구 반복 사용 가드 (인자 무관) — 검색어만 바꿔가며 부르는 패턴은
-            // 위 doom-loop(도구+인자 해시)에 걸리지 않아 최대 턴까지 소진된다.
-            // 매 턴 모델 prefill 이 누적되므로 지연의 지배 요인이다(2026-08-02 실측).
-            for (const tc of result.toolCalls) {
-                toolUseCounts.set(tc.name, (toolUseCounts.get(tc.name) ?? 0) + 1);
-            }
-            const overusedTool = [...toolUseCounts.entries()]
-                .find(([, n]) => n >= LOOP_DETECTION.SAME_TOOL_BREAK_AT);
-            if (overusedTool) {
-                logger.warn(`🔁 도구 과다 사용 — ${overusedTool[0]} ${overusedTool[1]}회 `
-                    + `(상한 ${LOOP_DETECTION.SAME_TOOL_BREAK_AT}) — 도구 비활성 최종 턴으로 전환`);
+            // 같은 도구 반복 사용 가드 (인자 무관, WARN/BREAK) — 상세는 external-loop-guards.
+            if (applyToolOveruseGuard({ toolCalls: result.toolCalls, toolUseCounts, warnedTools, messages })) {
                 suppressTools = true;
-                messages.push({
-                    role: 'user',
-                    content: `${overusedTool[0]} 도구를 ${overusedTool[1]}회 호출했습니다. `
-                        + '더 검색하지 말고 지금까지 수집한 정보로 답변을 완성하세요. '
-                        + '확인되지 않은 부분은 모른다고 밝히면 됩니다. '
-                        + '(이 제한은 이번 응답에만 적용됩니다 — 당신의 도구 능력이 사라진 것이 아니므로 '
-                        + '"검색 불가"라고 말하지 마세요.)',
-                });
                 continue;
-            }
-            const warnTool = [...toolUseCounts.entries()]
-                .find(([name, n]) => n >= LOOP_DETECTION.SAME_TOOL_WARN_AT && !warnedTools.has(name));
-            if (warnTool) {
-                warnedTools.add(warnTool[0]);
-                logger.info(`⚠️ 도구 반복 경고 — ${warnTool[0]} ${warnTool[1]}회 (마무리 유도)`);
-                messages.push({
-                    role: 'user',
-                    content: `${warnTool[0]} 도구를 이미 ${warnTool[1]}회 호출했습니다. `
-                        + '검색어를 바꿔 다시 시도하기보다, 지금까지의 결과로 답변을 정리하세요. '
-                        + '정말 필요한 경우에만 한 번 더 호출하세요.',
-                });
             }
         }
         if (!result) throw new Error('streamChat 호출 결과 없음');

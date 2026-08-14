@@ -1197,6 +1197,28 @@ export const OD_ARTIFACT_ECHO = {
 } as const;
 
 /**
+ * 이미지 생성 병렬화 — 같은 턴에 generate_image 가 2회 이상 호출되면 순차 await 대신
+ * 동시 실행한다. FLUX 디퓨전 1장이 수십 초라 다중 이미지(발표자료 삽화 등)에서 도구 배치
+ * 시간이 장수에 비례해 늘던 것을 1장 수준으로 줄인다. 다른 도구는 순차 유지(부수효과·
+ * 메시지 순서 보존), 결과는 원래 호출 순서대로 tool 메시지에 배치된다.
+ */
+export const IMAGE_GEN_PARALLEL = {
+    /** 기본 ON — IMAGE_GEN_PARALLEL_ENABLED=false 로 비활성화(순차 복귀). */
+    ENABLED: process.env.IMAGE_GEN_PARALLEL_ENABLED !== 'false',
+    /** 동시 생성 상한 — vLLM-Omni FLUX 서버 큐 과점유 방지. */
+    MAX_CONCURRENT: parseInt(process.env.IMAGE_GEN_PARALLEL_MAX || '3', 10),
+    /**
+     * 루프 wall-clock 예산에서 공제할 이미지 생성 소요시간 상한 (ms).
+     *
+     * 이미지 3장 배치(실측 166s, FLUX 직렬 큐)가 AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS
+     * (180s)를 잠식해 후속 덱 저장 턴이 "도구 비활성 최종 턴"으로 강제 전환되던 결함
+     * (2026-08-14 라이브 실측) 보정 — 디퓨전 대기는 모델/도구 폭주가 아니므로 예산에서
+     * 공제하되, 상한을 둬 최악 요청 시간을 예산+상한으로 묶는다.
+     */
+    WALL_CLOCK_CREDIT_MAX_MS: parseInt(process.env.IMAGE_GEN_CREDIT_MAX_MS || '180000', 10),
+} as const;
+
+/**
  * 보고서 작성 의도 판정 패턴. 매칭 시 ① report-guide(reportdata JSON 계약) 시스템 프롬프트
  * 주입 ② 아티팩트 의도와 동일한 distractor 도구 억제. 실사용 문구 기반(운영 로그 2026-07):
  * "html 로 보고서를 작성해서 보고해", "보고서 형식으로 만들어줘", "리포트 작성해줘" 류.

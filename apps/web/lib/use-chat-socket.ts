@@ -78,11 +78,15 @@ function resolveWsUrl(): string {
   const env = process.env.NEXT_PUBLIC_WS_URL;
   if (env) return env;
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
-  // Next dev 직접(:3000, Caddy 미경유)일 때만 백엔드 WS 포트(:52416)로 직접 연결.
-  // 그 외(Caddy 경유 :33000 — 로컬 테스트/외부 공개)는 same-origin → Caddy 가 WS upgrade 를
-  // 백엔드로 프록시한다. (Next.js rewrites 는 WS 를 프록시하지 못하므로 프록시 계층이 필수.)
-  if (location.port === "3000") {
-    return `${proto}//${location.hostname}:52416`;
+  // Next 직접 서빙(Caddy/Nginx 미경유)일 때만 백엔드 WS 포트로 직접 연결.
+  // 그 외(프록시 경유)는 same-origin → 프록시가 WS upgrade 를 백엔드로 넘긴다.
+  // (Next.js rewrites 는 WS 를 프록시하지 못하므로 프록시 계층이 필수.)
+  // 포트는 빌드 시점에 주입된다 — install.sh 가 포트 충돌로 3000/52416 을 옮겨도
+  // (예: 웹 :13000) 직접 연결 판정과 백엔드 포트가 함께 따라온다.
+  const webPort = process.env.NEXT_PUBLIC_WEB_PORT || "3000";
+  const wsPort = process.env.NEXT_PUBLIC_WS_PORT || "52416";
+  if (location.port === webPort) {
+    return `${proto}//${location.hostname}:${wsPort}`;
   }
   return `${proto}//${location.host}`;
 }
