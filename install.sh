@@ -795,6 +795,54 @@ start_app() {
     exit 3
 }
 
+# ── 외부 접속 설정 ───────────────────────────────────────────────────────────
+# 설치 완료 후 다른 기기/네트워크에서 접속할지 물어본다. 승인하면 .env 의
+# OMK_APP_URL(공개 주소)과 CORS_ORIGINS(허용 origin)에 외부 주소를 반영하고
+# API 를 재시작한다. SERVER_HOST 는 이미 0.0.0.0 이라 바인딩은 열려 있다.
+EXTERNAL_URL=""
+
+detect_lan_ip() {
+    if [[ "$OS" == "macos" ]]; then
+        ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true
+    else
+        hostname -I 2>/dev/null | awk '{print $1}' || true
+    fi
+}
+
+prompt_external_access() {
+    # 비대화형(--yes / tty 없음)은 로컬 전용으로 두고, 방법만 summary 에서 안내.
+    [[ $ASSUME_YES -eq 1 || -z "$TTY_DEV" ]] && return 0
+    echo ""
+    confirm "외부(다른 기기/네트워크)에서 이 서비스에 접속하시겠습니까?" || return 0
+
+    local lan_ip host
+    lan_ip="$(detect_lan_ip)"
+    read -r -p "  접속에 쓸 IP 또는 도메인 [기본 ${lan_ip:-없음}]: " host < "$TTY_DEV" || true
+    host="${host:-$lan_ip}"
+    if [[ -z "$host" ]]; then
+        log_warn "주소가 없어 로컬 전용으로 둡니다 — 나중에 .env 의 OMK_APP_URL/CORS_ORIGINS 를 수정하세요."
+        return 0
+    fi
+
+    local web_origin="http://${host}:${WEB_PORT}" api_origin="http://${host}:${APP_PORT}"
+    local envf="$SCRIPT_DIR/.env" tmp
+    tmp="$(mktemp)"
+    sed -E "s|^OMK_APP_URL=.*|OMK_APP_URL=${web_origin}|" "$envf" > "$tmp" && mv "$tmp" "$envf"
+    if ! grep -qE "^CORS_ORIGINS=.*${web_origin}" "$envf"; then
+        tmp="$(mktemp)"
+        sed -E "s|^CORS_ORIGINS=(.*)|CORS_ORIGINS=\1,${web_origin},${api_origin}|" "$envf" > "$tmp" && mv "$tmp" "$envf"
+    fi
+    EXTERNAL_URL="$web_origin"
+
+    if [[ $NO_START -eq 0 ]]; then
+        log_info "설정 반영을 위해 API 재시작"
+        "${PM2_BIN:-pm2}" restart openmake-llm --update-env >/dev/null 2>&1 \
+            || log_warn "재시작 실패 — 수동으로: pm2 restart openmake-llm"
+    fi
+    log_ok "외부 접속 설정 완료 — $web_origin"
+    log_warn "HTTP 평문 통신입니다. 인터넷에 공개한다면 HTTPS(Caddy 등)를 앞에 두고 .env 의 COOKIE_SECURE=true / ALLOW_INSECURE_COOKIES=false 로 바꾸세요."
+}
+
 # ── 마무리 안내 ──────────────────────────────────────────────────────────────
 summary() {
     local admin_pass admin_email llm_url
@@ -808,6 +856,11 @@ summary() {
 
     echo "  웹 UI     http://localhost:$WEB_PORT"
     echo "  API       http://localhost:$APP_PORT   (health: /health)"
+    if [[ -n "$EXTERNAL_URL" ]]; then
+        echo "  외부 접속 $EXTERNAL_URL"
+    else
+        printf "  %s외부 접속을 열려면: .env 의 OMK_APP_URL 과 CORS_ORIGINS 에 외부 주소를 추가 후 재시작%s\n" "$C_DIM" "$C_RESET"
+    fi
     echo ""
     # 로그인 식별자는 email 이다 (auth.schema.ts loginSchema — username 필드는 없음).
     echo "  로그인    ${admin_email:-admin@openmake.local}   ← 이메일로 로그인합니다"
@@ -858,6 +911,7 @@ main() {
     run_migrations
     build_app
     start_app
+    prompt_external_access
     summary
 }
 
