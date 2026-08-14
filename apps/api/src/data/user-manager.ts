@@ -308,9 +308,18 @@ class UserManagerImpl {
 
     async getUserByEmail(email: string): Promise<{ id: string; email: string; password: string; role: UserRole } | null> {
         const pool = getPool();
-        // username 이 email 과 다르게 변경된 계정도 찾아야 하므로 email OR username 으로 조회
-        // (createUser 의 중복 체크와 동일 기준 — 기준이 달라 OAuth 로그인이 막히던 결함, 2026-08-13)
-        const result = await pool.query('SELECT * FROM users WHERE email = $1 OR username = $1', [email]);
+        // username 이 email 로 남아있는 legacy 계정(email 컬럼 미기입)도 찾아야 하므로 username 폴백 조회
+        // (createUser 의 중복 체크와 기준이 달라 OAuth 로그인이 막히던 결함, 2026-08-13).
+        // ⚠️ email 은 UNIQUE 가 아니므로: ① email 정확 일치 우선 ② username 일치는 email 이 빈 행만
+        // 인정 — 다른 이메일이 등록된 계정(username 만 이 email 인 타인 계정)에 OAuth 로그인이
+        // 비밀번호 검증 없이 바인딩되는 계정 탈취를 차단한다. ③ ORDER BY + LIMIT 1 로 결정적 선택.
+        const result = await pool.query(
+            `SELECT * FROM users
+             WHERE email = $1 OR (username = $1 AND (email IS NULL OR email = ''))
+             ORDER BY (email = $1) DESC NULLS LAST, created_at ASC
+             LIMIT 1`,
+            [email]
+        );
         const row = result.rows[0] as UserRow | undefined;
         if (!row) return null;
         return {

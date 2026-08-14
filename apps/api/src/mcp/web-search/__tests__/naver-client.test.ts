@@ -13,6 +13,11 @@ jest.mock('../../../config', () => ({
 jest.mock('../../../storage', () => ({
     getKeyValueStore: jest.fn(),
 }));
+// env 파생 상수 고정 (project_jest_env_dependent_tests 관용구)
+jest.mock('../../../config/runtime-limits', () => ({
+    ...jest.requireActual('../../../config/runtime-limits'),
+    NAVER_QUOTA: { SUPPLEMENTARY_RATIO: 0.9 },
+}));
 
 const mockGetConfig = getConfig as jest.Mock;
 const mockGetStore = getKeyValueStore as jest.Mock;
@@ -130,6 +135,16 @@ describe('buildNaverSearchRequest — 일일 한도 가드', () => {
     it('KVStore 장애 시 fail-open (요청 허용)', async () => {
         setConfig({ naverClientId: 'id', naverClientSecret: 'sec', naverApiDailyLimit: 100 });
         mockGetStore.mockImplementation(() => { throw new Error('redis down'); });
+        expect(await buildNaverSearchRequest('news', 'query=x')).not.toBeNull();
+    });
+
+    it('보조 endpoint(encyc)는 소프트 컷(한도×비율) 초과 시 차단 + 카운트 환불, 핵심은 계속 허용', async () => {
+        setConfig({ naverClientId: 'id', naverClientSecret: 'sec', naverApiDailyLimit: 100 });
+        const incrBy = jest.fn().mockResolvedValue(95); // 소프트 컷(90) 초과, 하드 한도(100) 이내
+        mockGetStore.mockReturnValue({ incrBy, expire: jest.fn().mockResolvedValue(true) });
+        expect(await buildNaverSearchRequest('encyc', 'query=x')).toBeNull();
+        expect(incrBy).toHaveBeenCalledWith(expect.any(String), -1); // 미발신분 환불
+        expect(await buildNaverSearchRequest('webkr', 'query=x')).not.toBeNull();
         expect(await buildNaverSearchRequest('news', 'query=x')).not.toBeNull();
     });
 

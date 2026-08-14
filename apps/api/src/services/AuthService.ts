@@ -83,7 +83,7 @@ export interface AuthResult {
  * - At least one number
  * - At least one special character
  */
-function validatePasswordComplexity(password: string): { valid: boolean; errors: string[] } {
+export function validatePasswordComplexity(password: string): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
 
     if (password.length < PASSWORD_POLICY.MIN_LENGTH) {

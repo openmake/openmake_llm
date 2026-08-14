@@ -12,6 +12,7 @@ import { requireAuth, requireAdmin } from '../auth';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, notFound, internalError } from '../utils/api-response';
 import { CAPACITY } from '../config/runtime-limits';
+import { validatePasswordComplexity } from '../services/AuthService';
 import { listAlertHistory, exportAlertHistoryCsv, getAlertStats, getLlmPoolStats, acknowledgeAlert } from './admin-alerts.controller';
 
 const log = createLogger('AdminController');
@@ -247,8 +248,14 @@ export class AdminController {
                 res.status(400).json(badRequest('유효한 이메일을 입력하세요'));
                 return;
             }
-            if (!password || password.length < 6) {
-                res.status(400).json(badRequest('비밀번호는 6자 이상이어야 합니다'));
+            // 자체 가입과 동일한 비밀번호 정책 적용 (updateUser 와 동일 — 인라인 6자 기준 제거)
+            if (!password) {
+                res.status(400).json(badRequest('비밀번호를 입력하세요'));
+                return;
+            }
+            const passwordValidation = validatePasswordComplexity(password);
+            if (!passwordValidation.valid) {
+                res.status(400).json(badRequest(passwordValidation.errors.join(', ')));
                 return;
             }
             const userRole: UserRole = isUserRole(role) ? role : USER_ROLES.USER;
@@ -312,9 +319,18 @@ export class AdminController {
             const userId = req.params.id;
             const { email, role, is_active, password } = req.body as { email?: string; role?: UserRole; is_active?: boolean; password?: string };
 
-            if (password !== undefined && (typeof password !== 'string' || password.length < 6)) {
-                res.status(400).json(badRequest('비밀번호는 6자 이상이어야 합니다'));
-                return;
+            // 자체 가입과 동일한 비밀번호 정책(PASSWORD_POLICY 길이+복잡도) 적용 — 관리자 경로만
+            // 느슨한 인라인 기준(6자)이 남아 정책이 갈라지던 것을 통일.
+            if (password !== undefined) {
+                if (typeof password !== 'string') {
+                    res.status(400).json(badRequest('비밀번호 형식이 올바르지 않습니다'));
+                    return;
+                }
+                const passwordValidation = validatePasswordComplexity(password);
+                if (!passwordValidation.valid) {
+                    res.status(400).json(badRequest(passwordValidation.errors.join(', ')));
+                    return;
+                }
             }
 
             const user = await userManager.updateUser(userId, { email, role, is_active, password });

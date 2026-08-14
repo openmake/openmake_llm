@@ -57,12 +57,15 @@ async function syncAdminProviderKey(adminId: string | null, settingKey: string, 
             if (!entry) return;
             // 카탈로그 sdkType 은 넓은 SdkType — BYOK 테이블은 외부 2종만 허용하므로 내로잉
             if (entry.sdkType !== 'anthropic' && entry.sdkType !== 'openai-compatible') return;
+            // 기존 행의 custom baseUrl 보존 — upsert 가 base_url = EXCLUDED.base_url 이라
+            // 카탈로그 기본값을 넣으면 BYOK 화면에서 설정한 커스텀 endpoint 가 조용히 되돌아간다.
+            const existing = await repo.getByUserAndProvider(adminId, providerId);
             await repo.upsert({
                 userId: adminId,
                 providerId,
                 sdkType: entry.sdkType,
                 displayName: entry.displayName,
-                baseUrl: entry.defaultBaseUrl ?? null,
+                baseUrl: existing?.baseUrl ?? entry.defaultBaseUrl ?? null,
                 apiKey: value,
             });
             // BYOK 등록 경로(external-keys.routes)와 동일한 캐시 무효화 — stale 모델 목록/가용성 제거

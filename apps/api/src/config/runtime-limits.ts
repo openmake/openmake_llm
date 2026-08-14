@@ -512,6 +512,25 @@ export const SEARCH_ESCALATION = {
     MIN_RESULTS: parseInjectLimit(process.env.SEARCH_ESCALATION_MIN_RESULTS, 5),
     /** escalation 시 Exa 요청 결과 수. env: SEARCH_ESCALATION_EXA_RESULTS */
     EXA_NUM_RESULTS: parseInjectLimit(process.env.SEARCH_ESCALATION_EXA_RESULTS, 10),
+    /**
+     * escalation Exa 호출 지연 상한(ms) — 병렬 배치 이후의 **직렬** 호출이라 채팅 TTFT 에
+     * 그대로 가산되므로 provider fetch timeout(~12s)보다 훨씬 짧게 캡한다. 초과 시 보강 포기
+     * (Tier 0 결과만으로 진행). 0 = 상한 없음. env: SEARCH_ESCALATION_TIMEOUT_MS
+     */
+    TIMEOUT_MS: parseInjectLimit(process.env.SEARCH_ESCALATION_TIMEOUT_MS, 4000),
+} as const;
+
+/**
+ * 네이버 검색 일일 쿼터 배분 — 보조 endpoint(encyc)는 일일 한도의 이 비율(0~1)까지만 소모한다.
+ * 백과 추가로 KO 쿼리당 네이버 호출이 2→3회가 되며 같은 일일 한도를 잠식하던 것을 완화 —
+ * 소프트 컷 도달 시 encyc 만 먼저 중단되고 핵심(news/webkr)은 하드 한도까지 계속 동작한다.
+ * env: NAVER_SUPPLEMENTARY_QUOTA_RATIO
+ */
+export const NAVER_QUOTA = {
+    SUPPLEMENTARY_RATIO: (() => {
+        const n = Number(process.env.NAVER_SUPPLEMENTARY_QUOTA_RATIO ?? 0.9);
+        return Number.isFinite(n) && n >= 0 && n <= 1 ? n : 0.9;
+    })(),
 } as const;
 
 /**
@@ -526,10 +545,12 @@ export const RESEARCH_TAVILY = {
 } as const;
 
 export const SEARXNG_CATEGORY_SCOPE = {
-    /** 기술/개발 질의 → `it` 카테고리 (github·stackoverflow·mdn·pypi·docker hub) */
-    IT_PATTERN: /(에러|오류|버그|디버깅|코드|코딩|라이브러리|프레임워크|컴파일|리액트|백엔드|프론트엔드|데이터베이스|프로그래밍|소스\s?코드|개발\s?환경|\bapi\b|\bsdk\b|\bnpm\b|\bpip\b|docker|kubernetes|github|typescript|javascript|python|\bjava\b|\brust\b|golang|react|next\.?js|node\.?js|\bsql\b)/i,
-    /** 학술/논문 질의 → `science` 카테고리 (arxiv·pubmed·google scholar·semantic scholar) */
-    SCIENCE_PATTERN: /(논문|학술|저널|피인용|임상|의학\s?연구|arxiv|pubmed|scholar|preprint|\bpaper\b|research\s+paper|\bstudy\b)/i,
+    /** 기술/개발 질의 → `it` 카테고리 (github·stackoverflow·mdn·pypi·docker hub).
+     *  ⚠️ 단독 `코드` 같은 일반어 토큰 금지 — '할인 코드' 류 비기술 질의가 매칭돼 카테고리를 오염시킨다. */
+    IT_PATTERN: /(에러|오류|버그|디버깅|코드\s?리뷰|코딩|라이브러리|프레임워크|컴파일|리액트|백엔드|프론트엔드|데이터베이스|프로그래밍|소스\s?코드|개발\s?환경|\bapi\b|\bsdk\b|\bnpm\b|\bpip\b|docker|kubernetes|github|typescript|javascript|python|\bjava\b|\brust\b|golang|react|next\.?js|node\.?js|\bsql\b)/i,
+    /** 학술/논문 질의 → `science` 카테고리 (arxiv·pubmed·google scholar·semantic scholar).
+     *  ⚠️ 단독 `paper`/`study` 금지 — 'paper towel'·'study cafe' 류 일반 질의 오매칭. */
+    SCIENCE_PATTERN: /(논문|학술|저널|피인용|임상|의학\s?연구|arxiv|pubmed|scholar|preprint|research\s+paper|academic\s+paper|clinical\s+(trial|study))/i,
 } as const;
 
 /**
