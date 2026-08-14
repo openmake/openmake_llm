@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { KeyRound, Search, Bell, BellRing, Cpu, Save, RotateCcw, Loader2, AlertTriangle } from "lucide-react";
+import { KeyRound, Search, Bell, BellRing, Cpu, Save, RotateCcw, Loader2, AlertTriangle, ExternalLink } from "lucide-react";
 import {
   PageHeader,
   Card,
@@ -26,6 +26,12 @@ interface SettingView {
   source: "db" | "env" | "default";
   isSet: boolean;
   value?: string;
+  /** 키 발급 콘솔 URL — 있으면 바로가기 링크 노출 */
+  issueUrl?: string;
+  /** 외부 provider 연동 키 — 관리자 본인의 BYOK 행이 활성이면 true (설정 화면 등록분 포함) */
+  byokActive?: boolean;
+  /** byokActive 시 해당 키 prefix (마스킹 표시) */
+  byokKeyPrefix?: string;
 }
 interface SettingsPayload {
   settings: SettingView[];
@@ -67,7 +73,24 @@ function SettingRow({ setting, busy, onSave, onReset }: {
     <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center">
       <div className="flex min-w-72 flex-wrap items-center gap-2">
         <code className="text-xs font-medium">{setting.key}</code>
+        {setting.issueUrl && (
+          <a
+            href={setting.issueUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex shrink-0 items-center gap-1 text-xs text-accent hover:underline"
+            title={setting.issueUrl}
+          >
+            <ExternalLink className="h-3 w-3" aria-hidden />
+            {t("issueLink")}
+          </a>
+        )}
         <Badge tone={sourceTone} className="shrink-0 whitespace-nowrap">{sourceLabel}</Badge>
+        {setting.byokActive && (
+          <Badge tone="accent" className="shrink-0 whitespace-nowrap" title={setting.byokKeyPrefix}>
+            {t("byokLinked")}
+          </Badge>
+        )}
         {setting.requiresRestart && (
           <Badge tone="warn" className="shrink-0 whitespace-nowrap">{t("restartRequired")}</Badge>
         )}
@@ -78,7 +101,7 @@ function SettingRow({ setting, busy, onSave, onReset }: {
         autoComplete="off"
         placeholder={
           setting.secret
-            ? setting.isSet ? t("secretSetPlaceholder") : t("secretUnsetPlaceholder")
+            ? (setting.isSet || setting.byokActive) ? t("secretSetPlaceholder") : t("secretUnsetPlaceholder")
             : t("valuePlaceholder")
         }
         value={draft}
@@ -169,10 +192,14 @@ export default function AdminSystemSettingsPage() {
   }, [settings]);
 
   return (
-    <div className="space-y-6">
+    <>
       <PageHeader title={t("title")} description={t("description")} />
 
       <AdminTabs />
+      {/* workspace layout(main)이 overflow-hidden 이라 페이지가 자체 스크롤 컨테이너를 가져야 함
+          (admin/alerts 등과 동일 관용구 — 누락 시 뷰포트 아래 내용 접근 불가) */}
+      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+        <div className="space-y-6">
       {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
       {restartKeys.length > 0 && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm" role="status">
@@ -204,6 +231,8 @@ export default function AdminSystemSettingsPage() {
       })}
 
       <p className="text-xs text-muted-foreground">{t("priorityNote")}</p>
-    </div>
+        </div>
+      </div>
+    </>
   );
 }

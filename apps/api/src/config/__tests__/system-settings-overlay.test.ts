@@ -3,6 +3,7 @@
  */
 import { applySettingsOverlay, getConfig, resetConfig, loadConfig } from '../env';
 import { SYSTEM_SETTINGS_REGISTRY, SETTING_DEFS_BY_KEY } from '../system-settings-registry';
+import { ADMIN_SYNCED_PROVIDER_KEYS } from '../external-providers';
 
 describe('applySettingsOverlay', () => {
     const ORIGINAL_CSE = process.env.GOOGLE_CSE_ID;
@@ -51,8 +52,13 @@ describe('system-settings-registry', () => {
     it('모든 레지스트리 키가 loadConfig 의 safeParse 입력에 배선되어 있다', () => {
         // 배선 누락(과거 NAVER_API_HUB_* 실버그) 회귀 방지 — overlay 로 넣은 값이
         // 실제 config 에 도달하는지 키마다 확인한다. 값 검증이 있는 키는 형식을 맞춘다.
+        // 예외: ADMIN_SYNCED_PROVIDER_KEYS — config 소비자가 아니라 저장 시 관리자 본인
+        // BYOK(user_external_api_keys) 행으로 연동되는 키 (admin-system-settings.routes).
+        const wiringTargets = SYSTEM_SETTINGS_REGISTRY.filter(
+            (def) => !(def.key in ADMIN_SYNCED_PROVIDER_KEYS),
+        );
         const sample: Record<string, string> = {};
-        for (const def of SYSTEM_SETTINGS_REGISTRY) {
+        for (const def of wiringTargets) {
             if (def.key === 'NAVER_API_DAILY_LIMIT') sample[def.key] = '777';
             else if (def.key.startsWith('OPERATOR_WEBHOOK') || def.key === 'OAUTH_REDIRECT_URI' || def.key === 'LLM_BASE_URL')
                 sample[def.key] = 'https://example.com/wired';
@@ -63,7 +69,7 @@ describe('system-settings-registry', () => {
         try {
             const cfg = loadConfig();
             const flat = JSON.stringify(cfg);
-            for (const def of SYSTEM_SETTINGS_REGISTRY) {
+            for (const def of wiringTargets) {
                 expect(flat).toContain(sample[def.key]);
             }
         } finally {

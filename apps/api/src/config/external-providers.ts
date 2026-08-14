@@ -203,3 +203,15 @@ export function getProviderCatalogEntry(
     return EXTERNAL_PROVIDER_CATALOG.find((entry) => entry.id === providerId);
 }
 
+/**
+ * admin system-settings 에서 관리하는 외부 provider 키 → providerId 매핑.
+ * 해당 설정 키 저장/삭제 시 "관리자 본인"의 user_external_api_keys(BYOK) 행으로 연동된다
+ * (admin-system-settings.routes 의 syncAdminProviderKey). 런타임 키 해석은 기존 사용자별
+ * BYOK 경로 그대로라, 다른 사용자가 이 키로 비용을 발생시킬 수 없다.
+ */
+export const ADMIN_SYNCED_PROVIDER_KEYS: Readonly<Record<string, string>> = {
+    OPENROUTER_API_KEY: 'openrouter',
+    OLLAMA_CLOUD_API_KEY: 'ollama-cloud',
+    NVIDIA_API_KEY: 'nvidia',
+};
+

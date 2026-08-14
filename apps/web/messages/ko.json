@@ -1571,6 +1571,8 @@
     "reset": "초기화",
     "resetHelp": "DB 설정을 삭제하고 .env/기본값으로 복귀합니다.",
     "resetConfirm": "'{key}' 설정을 삭제하고 env/기본값으로 복귀할까요?",
+    "byokLinked": "내 키 연동됨",
+    "issueLink": "발급 페이지",
     "sourceDb": "DB 설정됨",
     "sourceEnv": "env 상속",
     "sourceDefault": "기본값",

@@ -11,6 +11,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { envSchema } from './env.schema';
+import { parseEnvFile } from './env-file';
 import { validateConfig } from './env-validate';
 import { SERVER_CONFIG } from './constants';
 import type { SupportedLanguageCode } from '../chat/language-policy';
@@ -99,6 +100,12 @@ export interface EnvConfig {
     naverApiHubKey: string;
     /** 네이버 검색 API 일일 호출 한도(무료 한도 가드, 0=무제한) */
     naverApiDailyLimit: number;
+    /** 카카오(Daum) 검색 API REST 키 — 웹문서 검색용 (KakaoAK 헤더) */
+    kakaoRestApiKey: string;
+    /** Exa 검색 API 키 — Tier0 수집 부족 시 escalation 전용 (미설정 시 비활성) */
+    exaApiKey: string;
+    /** Tavily 검색 API 키 — Deep Research 전용 (미설정 시 비활성) */
+    tavilyApiKey: string;
     githubToken: string;
 
     // Documents
@@ -228,6 +235,9 @@ const DEFAULT_CONFIG: EnvConfig = {
     naverApiHubKeyId: '',
     naverApiHubKey: '',
     naverApiDailyLimit: 25000,
+    kakaoRestApiKey: '',
+    exaApiKey: '',
+    tavilyApiKey: '',
     githubToken: '',
 
     // Documents
@@ -284,34 +294,6 @@ const DEFAULT_CONFIG: EnvConfig = {
     redisUrl: '',
 };
 
-function parseEnvFile(filePath: string): Record<string, string> {
-    const env: Record<string, string> = {};
-
-    if (!fs.existsSync(filePath)) {
-        return env;
-    }
-
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const lines = content.split('\n');
-
-    for (const line of lines) {
-        const trimmed = line.trim();
-
-        // 빈 줄이나 주석 건너뛰기
-        if (!trimmed || trimmed.startsWith('#')) {
-            continue;
-        }
-
-        const equalIndex = trimmed.indexOf('=');
-        if (equalIndex > 0) {
-            const key = trimmed.substring(0, equalIndex).trim();
-            const value = trimmed.substring(equalIndex + 1).trim();
-            env[key] = value;
-        }
-    }
-
-    return env;
-}
 
 /**
  * system_settings(DB) overlay — admin 시스템 설정이 env 보다 우선한다.
@@ -393,6 +375,9 @@ export function loadConfig(): EnvConfig {
         NAVER_API_HUB_KEY_ID: env('NAVER_API_HUB_KEY_ID'),
         NAVER_API_HUB_KEY: env('NAVER_API_HUB_KEY'),
         NAVER_API_DAILY_LIMIT: env('NAVER_API_DAILY_LIMIT'),
+        KAKAO_REST_API_KEY: env('KAKAO_REST_API_KEY'),
+        EXA_API_KEY: env('EXA_API_KEY'),
+        TAVILY_API_KEY: env('TAVILY_API_KEY'),
         GITHUB_TOKEN: env('GITHUB_TOKEN'),
         DOCUMENT_TTL_HOURS: env('DOCUMENT_TTL_HOURS'),
         MAX_UPLOADED_DOCUMENTS: env('MAX_UPLOADED_DOCUMENTS'),
@@ -516,6 +501,9 @@ export function loadConfig(): EnvConfig {
         naverApiHubKeyId: parsed.NAVER_API_HUB_KEY_ID ?? DEFAULT_CONFIG.naverApiHubKeyId,
         naverApiHubKey: parsed.NAVER_API_HUB_KEY ?? DEFAULT_CONFIG.naverApiHubKey,
         naverApiDailyLimit: parsed.NAVER_API_DAILY_LIMIT ?? DEFAULT_CONFIG.naverApiDailyLimit,
+        kakaoRestApiKey: parsed.KAKAO_REST_API_KEY ?? DEFAULT_CONFIG.kakaoRestApiKey,
+        exaApiKey: parsed.EXA_API_KEY ?? DEFAULT_CONFIG.exaApiKey,
+        tavilyApiKey: parsed.TAVILY_API_KEY ?? DEFAULT_CONFIG.tavilyApiKey,
         githubToken: parsed.GITHUB_TOKEN ?? DEFAULT_CONFIG.githubToken,
 
         // Documents

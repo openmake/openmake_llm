@@ -1571,6 +1571,8 @@
     "reset": "リセット",
     "resetHelp": "DB の値を削除し、.env／デフォルトに戻します。",
     "resetConfirm": "'{key}' を削除して env／デフォルトに戻しますか？",
+    "byokLinked": "自分のキーと連動中",
+    "issueLink": "発行ページ",
     "sourceDb": "DB 設定済み",
     "sourceEnv": "env 継承",
     "sourceDefault": "デフォルト",

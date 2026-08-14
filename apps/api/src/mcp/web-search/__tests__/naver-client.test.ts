@@ -78,6 +78,29 @@ describe('buildNaverSearchRequest — 듀얼 경로', () => {
         setConfig({});
         expect(await buildNaverSearchRequest('news', 'query=x')).toBeNull();
     });
+
+    it('encyc 엔드포인트 — HUB URL 조립', async () => {
+        setConfig({ naverApiHubKeyId: 'hub-id', naverApiHubKey: 'hub-secret' });
+        const req = await buildNaverSearchRequest('encyc', 'query=ai&display=5');
+        expect(req!.route).toBe('hub');
+        expect(req!.url).toBe('https://naverapihub.apigw.ntruss.com/search/v1/encyc?query=ai&display=5');
+    });
+
+    it('encyc 엔드포인트 — legacy URL(.json) 조립', async () => {
+        setConfig({ naverClientId: 'legacy-id', naverClientSecret: 'legacy-secret' });
+        const req = await buildNaverSearchRequest('encyc', 'query=ai&display=5');
+        expect(req!.route).toBe('legacy');
+        expect(req!.url).toBe('https://openapi.naver.com/v1/search/encyc.json?query=ai&display=5');
+    });
+
+    it('encyc 도 HUB 키가 있으면 HUB 우선 (2026-08-14 콘솔 백과사전 활성화 후 통일)', async () => {
+        setConfig({
+            naverClientId: 'legacy-id', naverClientSecret: 'legacy-secret',
+            naverApiHubKeyId: 'hub-id', naverApiHubKey: 'hub-secret',
+        });
+        const encyc = await buildNaverSearchRequest('encyc', 'query=x');
+        expect(encyc!.route).toBe('hub');
+    });
 });
 
 describe('buildNaverSearchRequest — 일일 한도 가드', () => {

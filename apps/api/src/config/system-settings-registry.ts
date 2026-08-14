@@ -27,9 +27,13 @@ export interface SystemSettingDef {
     requiresRestart: boolean;
     /** 키별 형식 검증 — 빈 문자열 저장 금지 (해제는 DELETE 로 env 폴백 복귀) */
     validate: z.ZodType<string>;
+    /** 키 발급 콘솔 URL — admin UI 가 입력란 옆에 바로가기 링크로 노출 (발급처 없는 키는 생략) */
+    issueUrl?: string;
 }
 
 const nonEmpty = z.string().trim().min(1, '값이 비어 있습니다').max(2000, '2000자 이하여야 합니다');
+/** API 키 필드용 — 발급 페이지 URL 을 키로 착각해 붙여넣는 실수 차단 (실사례: EXA_API_KEY 에 URL 등록 → 조용한 0건) */
+const apiKeyLike = nonEmpty.refine((v) => !/^https?:\/\//i.test(v), 'URL 이 아니라 발급받은 API 키 값을 입력하세요');
 const httpUrl = nonEmpty.refine((v) => /^https?:\/\//.test(v), 'http(s):// URL 이어야 합니다');
 const httpsUrl = nonEmpty.refine((v) => /^https:\/\//.test(v), 'https:// URL 이어야 합니다');
 const nonNegativeIntString = z
@@ -41,24 +45,42 @@ const mailtoOrHttps = nonEmpty.refine(
     'mailto: 또는 https:// 형식이어야 합니다',
 );
 
+/** 발급 콘솔 URL — 같은 콘솔을 쓰는 키(ID/SECRET 쌍)가 공유 */
+const ISSUE_URLS = {
+    googleCloud: 'https://console.cloud.google.com/apis/credentials',
+    googleCse: 'https://programmablesearchengine.google.com/controlpanel/all',
+    github: 'https://github.com/settings/developers',
+    kakao: 'https://developers.kakao.com/console/app',
+    naverDev: 'https://developers.naver.com/apps',
+    ncpHub: 'https://console.ncloud.com/naver-api-hub/application',
+    exa: 'https://dashboard.exa.ai/api-keys',
+    tavily: 'https://app.tavily.com/home',
+    openrouter: 'https://openrouter.ai/settings/keys',
+    ollamaCloud: 'https://ollama.com/settings/keys',
+    nvidiaNim: 'https://build.nvidia.com/settings/api-keys',
+} as const;
+
 export const SYSTEM_SETTINGS_REGISTRY: SystemSettingDef[] = [
     // ── OAuth (소셜 로그인) — 미설정 시 해당 provider 로그인 비활성 ──
-    { key: 'GOOGLE_CLIENT_ID', group: 'oauth', secret: false, requiresRestart: false, validate: nonEmpty },
-    { key: 'GOOGLE_CLIENT_SECRET', group: 'oauth', secret: true, requiresRestart: false, validate: nonEmpty },
+    { key: 'GOOGLE_CLIENT_ID', group: 'oauth', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.googleCloud },
+    { key: 'GOOGLE_CLIENT_SECRET', group: 'oauth', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.googleCloud },
     { key: 'OAUTH_REDIRECT_URI', group: 'oauth', secret: false, requiresRestart: false, validate: httpUrl },
-    { key: 'GITHUB_CLIENT_ID', group: 'oauth', secret: false, requiresRestart: false, validate: nonEmpty },
-    { key: 'GITHUB_CLIENT_SECRET', group: 'oauth', secret: true, requiresRestart: false, validate: nonEmpty },
-    { key: 'KAKAO_CLIENT_ID', group: 'oauth', secret: false, requiresRestart: false, validate: nonEmpty },
-    { key: 'KAKAO_CLIENT_SECRET', group: 'oauth', secret: true, requiresRestart: false, validate: nonEmpty },
+    { key: 'GITHUB_CLIENT_ID', group: 'oauth', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.github },
+    { key: 'GITHUB_CLIENT_SECRET', group: 'oauth', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.github },
+    { key: 'KAKAO_CLIENT_ID', group: 'oauth', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.kakao },
+    { key: 'KAKAO_CLIENT_SECRET', group: 'oauth', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.kakao },
 
     // ── 웹 검색 (Google CSE / Naver) — 미설정 시 해당 검색 소스만 비활성 ──
-    { key: 'GOOGLE_API_KEY', group: 'search', secret: true, requiresRestart: false, validate: nonEmpty },
-    { key: 'GOOGLE_CSE_ID', group: 'search', secret: false, requiresRestart: false, validate: nonEmpty },
-    { key: 'NAVER_CLIENT_ID', group: 'search', secret: false, requiresRestart: false, validate: nonEmpty },
-    { key: 'NAVER_CLIENT_SECRET', group: 'search', secret: true, requiresRestart: false, validate: nonEmpty },
-    { key: 'NAVER_API_HUB_KEY_ID', group: 'search', secret: false, requiresRestart: false, validate: nonEmpty },
-    { key: 'NAVER_API_HUB_KEY', group: 'search', secret: true, requiresRestart: false, validate: nonEmpty },
+    { key: 'GOOGLE_API_KEY', group: 'search', secret: true, requiresRestart: false, validate: apiKeyLike, issueUrl: ISSUE_URLS.googleCloud },
+    { key: 'GOOGLE_CSE_ID', group: 'search', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.googleCse },
+    { key: 'NAVER_CLIENT_ID', group: 'search', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.naverDev },
+    { key: 'NAVER_CLIENT_SECRET', group: 'search', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.naverDev },
+    { key: 'NAVER_API_HUB_KEY_ID', group: 'search', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.ncpHub },
+    { key: 'NAVER_API_HUB_KEY', group: 'search', secret: true, requiresRestart: false, validate: apiKeyLike, issueUrl: ISSUE_URLS.ncpHub },
     { key: 'NAVER_API_DAILY_LIMIT', group: 'search', secret: false, requiresRestart: false, validate: nonNegativeIntString },
+    { key: 'KAKAO_REST_API_KEY', group: 'search', secret: true, requiresRestart: false, validate: apiKeyLike, issueUrl: ISSUE_URLS.kakao },
+    { key: 'EXA_API_KEY', group: 'search', secret: true, requiresRestart: false, validate: apiKeyLike, issueUrl: ISSUE_URLS.exa },
+    { key: 'TAVILY_API_KEY', group: 'search', secret: true, requiresRestart: false, validate: apiKeyLike, issueUrl: ISSUE_URLS.tavily },
 
     // ── 운영 알림 webhook — URL 자체가 발송 자격증명이라 전부 secret ──
     { key: 'OPERATOR_WEBHOOK_URL', group: 'alerts', secret: true, requiresRestart: false, validate: httpsUrl },
@@ -73,8 +95,15 @@ export const SYSTEM_SETTINGS_REGISTRY: SystemSettingDef[] = [
 
     // ── LLM 게이트웨이 — base URL/key 는 cluster manager 가 부팅 시 구성 → 재시작 필요 ──
     { key: 'LLM_BASE_URL', group: 'llm', secret: false, requiresRestart: true, validate: httpUrl },
-    { key: 'LLM_API_KEY', group: 'llm', secret: true, requiresRestart: true, validate: nonEmpty },
+    { key: 'LLM_API_KEY', group: 'llm', secret: true, requiresRestart: true, validate: apiKeyLike },
     { key: 'LLM_DEFAULT_MODEL', group: 'llm', secret: false, requiresRestart: false, validate: nonEmpty },
+
+    // ── 외부 LLM provider 키 — 저장/삭제 시 "관리자 본인"의 user_external_api_keys(BYOK)로
+    //    연동된다 (admin-system-settings.routes 의 syncAdminProviderKey). 런타임 키 해석 경로는
+    //    기존 사용자별 BYOK 그대로 — 다른 사용자에게 공용 키를 열지 않는다 (비용 격리 유지). ──
+    { key: 'OPENROUTER_API_KEY', group: 'llm', secret: true, requiresRestart: false, validate: apiKeyLike, issueUrl: ISSUE_URLS.openrouter },
+    { key: 'OLLAMA_CLOUD_API_KEY', group: 'llm', secret: true, requiresRestart: false, validate: apiKeyLike, issueUrl: ISSUE_URLS.ollamaCloud },
+    { key: 'NVIDIA_API_KEY', group: 'llm', secret: true, requiresRestart: false, validate: apiKeyLike, issueUrl: ISSUE_URLS.nvidiaNim },
 ];
 
 export const SETTING_DEFS_BY_KEY: ReadonlyMap<string, SystemSettingDef> = new Map(

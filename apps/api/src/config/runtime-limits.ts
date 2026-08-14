@@ -497,6 +497,42 @@ export const WEB_SEARCH_INJECTION = {
 } as const;
 
 /**
+ * SearXNG 카테고리 스코프 — 질의 성격에 맞는 카테고리를 추가 요청해 권위 소스를 보강한다.
+ * (기본 general 은 google cse+ddg 뿐이라 블로그 위주 — `it` 은 github/mdn/docker hub,
+ *  `science` 는 arxiv/pubmed/scholar 가 유입됨. 2026-08-14 인스턴스 실측.)
+ * 감지는 결정적 regex 만 사용 (LLM 판단 경계 A형 금지 — CLAUDE.md).
+ */
+/**
+ * 검색 escalation (Tier 1) — 무료 Tier 0 수집이 부족할 때만 공식 API(Exa)로 보강한다.
+ * 판단은 결정적 개수 비교뿐 (LLM 판단 아님). Exa 무료 크레딧(월 $10 ≈ 1,400회) 절약을 위해
+ * 평시(수집 충분)에는 절대 호출하지 않는다. EXA_API_KEY 미설정 시 전체 비활성.
+ */
+export const SEARCH_ESCALATION = {
+    /** dedupe 후 수집 결과가 이 값 미만이면 Exa 보강. 0 = 비활성. env: SEARCH_ESCALATION_MIN_RESULTS */
+    MIN_RESULTS: parseInjectLimit(process.env.SEARCH_ESCALATION_MIN_RESULTS, 5),
+    /** escalation 시 Exa 요청 결과 수. env: SEARCH_ESCALATION_EXA_RESULTS */
+    EXA_NUM_RESULTS: parseInjectLimit(process.env.SEARCH_ESCALATION_EXA_RESULTS, 10),
+} as const;
+
+/**
+ * Deep Research 전용 Tavily 보강 — 일반 검색에는 쓰지 않는다 (무료 월 1,000 크레딧 절약).
+ * advanced 는 쿼리당 2 크레딧이지만 정제 본문(content)이 실려 와 스크랩 실패를 줄인다.
+ */
+export const RESEARCH_TAVILY = {
+    /** 쿼리당 Tavily 결과 수. 0 = 비활성. env: RESEARCH_TAVILY_MAX_RESULTS */
+    MAX_RESULTS: parseInjectLimit(process.env.RESEARCH_TAVILY_MAX_RESULTS, 5),
+    /** 검색 깊이 basic(1크레딧)/advanced(2크레딧). env: RESEARCH_TAVILY_DEPTH */
+    SEARCH_DEPTH: (process.env.RESEARCH_TAVILY_DEPTH === 'basic' ? 'basic' : 'advanced') as 'basic' | 'advanced',
+} as const;
+
+export const SEARXNG_CATEGORY_SCOPE = {
+    /** 기술/개발 질의 → `it` 카테고리 (github·stackoverflow·mdn·pypi·docker hub) */
+    IT_PATTERN: /(에러|오류|버그|디버깅|코드|코딩|라이브러리|프레임워크|컴파일|리액트|백엔드|프론트엔드|데이터베이스|프로그래밍|소스\s?코드|개발\s?환경|\bapi\b|\bsdk\b|\bnpm\b|\bpip\b|docker|kubernetes|github|typescript|javascript|python|\bjava\b|\brust\b|golang|react|next\.?js|node\.?js|\bsql\b)/i,
+    /** 학술/논문 질의 → `science` 카테고리 (arxiv·pubmed·google scholar·semantic scholar) */
+    SCIENCE_PATTERN: /(논문|학술|저널|피인용|임상|의학\s?연구|arxiv|pubmed|scholar|preprint|\bpaper\b|research\s+paper|\bstudy\b)/i,
+} as const;
+
+/**
  * LLM 라우터 신뢰도 기본값
  * agents/llm-router.ts에서 참조
  */
@@ -850,7 +886,7 @@ export const SEARCH_RELIABILITY = {
      * 현직 인물·직책 같은 사실 질문에서 백과 본문(예: "제21대 대선 이재명 당선")이 LLM 입력에서
      * 누락되지 않도록, 최종 결과에 최소 MIN_REFERENCE_RESULTS 개를 보장 포함한다.
      */
-    REFERENCE_DOMAINS: ['wikipedia.org', 'namu.wiki', 'britannica.com'] as readonly string[],
+    REFERENCE_DOMAINS: ['wikipedia.org', 'namu.wiki', 'britannica.com', 'terms.naver.com'] as readonly string[],
     /** 최종 결과에 보장 포함할 백과/레퍼런스 최소 개수. 0 이하면 비활성. env: SEARCH_MIN_REFERENCE. 기본 4. */
     MIN_REFERENCE_RESULTS: Number(process.env.SEARCH_MIN_REFERENCE ?? 4),
     /**
