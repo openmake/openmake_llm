@@ -805,7 +805,10 @@ build_app() {
         return 0
     fi
     log_info "npm run build (백엔드 tsc + 프론트 Next.js) — 수 분 걸릴 수 있습니다"
-    ( cd "$SCRIPT_DIR" && npm run build ) || die "빌드 실패"
+    # NEXT_PUBLIC_* 는 Next 빌드 시점에 번들로 인라인된다 — 포트 충돌 회피로
+    # 3000/52416 이 옮겨진 경우 프론트의 WS 직접 연결 판정이 따라오도록 주입.
+    ( cd "$SCRIPT_DIR" && NEXT_PUBLIC_WEB_PORT="$WEB_PORT" NEXT_PUBLIC_WS_PORT="$APP_PORT" \
+        npm run build ) || die "빌드 실패"
     log_ok "빌드 완료"
 }
 
@@ -818,7 +821,10 @@ start_app() {
     log_info "PM2 기동 (ecosystem.config.js)"
     # ecosystem.config.js 는 시작 시점 셸 환경의 PORT/OMK_WEB_PORT 를 읽는다 —
     # 명시적으로 넘겨야 --port/--web-port/자동 대체 포트가 PM2 에 반영된다.
+    # API_PROXY_TARGET: Next rewrites(/api, /generated)의 런타임 백엔드 주소 —
+    # API 포트가 대체된 경우에도 REST 프록시가 올바른 포트를 가리키게 한다.
     ( cd "$SCRIPT_DIR" && PORT="$APP_PORT" OMK_WEB_PORT="$WEB_PORT" \
+        API_PROXY_TARGET="http://localhost:$APP_PORT" \
         "$PM2_BIN" start ecosystem.config.js --update-env ) || die "PM2 기동 실패"
 
     log_info "health check 대기 (최대 $((HEALTH_RETRIES * HEALTH_INTERVAL))s)"
