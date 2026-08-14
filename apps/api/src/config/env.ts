@@ -11,6 +11,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { envSchema } from './env.schema';
+import { parseEnvFile } from './env-file';
 import { validateConfig } from './env-validate';
 import { SERVER_CONFIG } from './constants';
 import type { SupportedLanguageCode } from '../chat/language-policy';
@@ -293,34 +294,6 @@ const DEFAULT_CONFIG: EnvConfig = {
     redisUrl: '',
 };
 
-function parseEnvFile(filePath: string): Record<string, string> {
-    const env: Record<string, string> = {};
-
-    if (!fs.existsSync(filePath)) {
-        return env;
-    }
-
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const lines = content.split('\n');
-
-    for (const line of lines) {
-        const trimmed = line.trim();
-
-        // 빈 줄이나 주석 건너뛰기
-        if (!trimmed || trimmed.startsWith('#')) {
-            continue;
-        }
-
-        const equalIndex = trimmed.indexOf('=');
-        if (equalIndex > 0) {
-            const key = trimmed.substring(0, equalIndex).trim();
-            const value = trimmed.substring(equalIndex + 1).trim();
-            env[key] = value;
-        }
-    }
-
-    return env;
-}
 
 /**
  * system_settings(DB) overlay — admin 시스템 설정이 env 보다 우선한다.
