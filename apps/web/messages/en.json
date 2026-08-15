@@ -1801,6 +1801,14 @@
       "draft": "Pending approval",
       "archived": "Archived",
       "disabled": "Disabled"
+    },
+    "update": {
+      "checkAria": "Check for updates",
+      "latest": "Up to date",
+      "available": "v{version} available",
+      "availableNoVersion": "Update available",
+      "failed": "Check failed",
+      "hint": "Ask in chat: \"Update this extension\" to replace it with the new version (old components are archived)."
     }
   }
 }

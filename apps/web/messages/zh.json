@@ -1801,6 +1801,14 @@
       "draft": "待批准",
       "archived": "已归档",
       "disabled": "已停用"
+    },
+    "update": {
+      "checkAria": "检查更新",
+      "latest": "已是最新",
+      "available": "可更新到 v{version}",
+      "availableNoVersion": "有可用更新",
+      "failed": "检查失败",
+      "hint": "在聊天中请求\"更新这个扩展\"即可替换为新版本(旧组件将被归档)。"
     }
   }
 }

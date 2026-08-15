@@ -68,8 +68,8 @@ describe('ExtensionIngestService', () => {
         mockFetcher.fetchFile.mockResolvedValueOnce(PLUGIN_MCP_ONLY);
         const q = mockPool.query as jest.Mock;
         q.mockResolvedValueOnce({ rows: [] });                    // findRecentByHash
-        q.mockResolvedValueOnce({ rows: [{ count: '0' }] });      // countActiveForUser
         q.mockResolvedValueOnce({ rows: [] });                    // findActiveByName
+        q.mockResolvedValueOnce({ rows: [{ count: '0' }] });      // countActiveForUser
         (mockLLM.chat as jest.Mock).mockResolvedValueOnce({       // ConventionChecker LLM
             content: JSON.stringify({ findings: [] }), metrics: { completion_tokens: 30 },
         });
@@ -109,8 +109,8 @@ describe('ExtensionIngestService', () => {
         }));
         const q = mockPool.query as jest.Mock;
         q.mockResolvedValueOnce({ rows: [] });                    // dedupe
-        q.mockResolvedValueOnce({ rows: [{ count: '0' }] });      // count
         q.mockResolvedValueOnce({ rows: [] });                    // findActiveByName
+        q.mockResolvedValueOnce({ rows: [{ count: '0' }] });      // count
         (mockLLM.chat as jest.Mock).mockResolvedValueOnce({
             content: JSON.stringify({ findings: [] }), metrics: { completion_tokens: 30 },
         });
@@ -173,14 +173,13 @@ describe('ExtensionIngestService', () => {
         expect(r.mcpServers[0].serverId).toBe('mcp-old');
     });
 
-    it('EXTENSION_ALREADY_INSTALLED: 동명 active 설치 존재', async () => {
+    it('EXTENSION_ALREADY_INSTALLED: 동명 active 설치가 다른 소스면 충돌', async () => {
         mockFetcher.resolveRef.mockResolvedValueOnce('abc123');
         mockFetcher.listTree.mockResolvedValueOnce(treeOf('plugin.json'));
         mockFetcher.fetchFile.mockResolvedValueOnce(PLUGIN_MCP_ONLY);
         const q = mockPool.query as jest.Mock;
         q.mockResolvedValueOnce({ rows: [] });                    // dedupe miss
-        q.mockResolvedValueOnce({ rows: [{ count: '0' }] });      // count
-        q.mockResolvedValueOnce({ rows: [{ id: 'user-ext-dup' }] });  // findActiveByName hit
+        q.mockResolvedValueOnce({ rows: [{ id: 'user-ext-dup', source_url: 'other/elsewhere', source_ref: 'zzz' }] });  // findActiveByName hit (다른 repo)
 
         const svc = makeService();
         await expect(svc.import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar' }))
@@ -193,11 +192,97 @@ describe('ExtensionIngestService', () => {
         mockFetcher.fetchFile.mockResolvedValueOnce(JSON.stringify({ name: 'empty-pack', version: '1.0.0' }));
         const q = mockPool.query as jest.Mock;
         q.mockResolvedValueOnce({ rows: [] });                    // dedupe
-        q.mockResolvedValueOnce({ rows: [{ count: '0' }] });      // count
         q.mockResolvedValueOnce({ rows: [] });                    // findActiveByName
+        q.mockResolvedValueOnce({ rows: [{ count: '0' }] });      // count
 
         const svc = makeService();
         await expect(svc.import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar' }))
             .rejects.toThrow('NO_COMPONENTS_INSTALLED');
+    });
+
+    it('upToDate: 동일 소스·동일 sha 재설치 → 변경 없음', async () => {
+        mockFetcher.resolveRef.mockResolvedValueOnce('abc123');
+        mockFetcher.listTree.mockResolvedValueOnce(treeOf('plugin.json'));
+        mockFetcher.fetchFile.mockResolvedValueOnce(PLUGIN_MCP_ONLY);
+        const q = mockPool.query as jest.Mock;
+        q.mockResolvedValueOnce({ rows: [] });                    // dedupe (24h 지난 재설치 가정)
+        q.mockResolvedValueOnce({ rows: [{                        // findActiveByName — 같은 repo, 같은 sha
+            id: 'user-ext-same', name: 'tool-pack', version: '1.0.0', description: null,
+            source_url: 'foo/bar', source_ref: 'abc123', source_path: 'plugin.json',
+            manifest: { components: { skills: [], mcpServers: [] } },
+        }] });
+
+        const svc = makeService();
+        const r = await svc.import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar' });
+        if ('selectionRequired' in r && r.selectionRequired) throw new Error('expected single');
+        expect(r.upToDate).toBe(true);
+        expect(r.extensionId).toBe('user-ext-same');
+    });
+
+    it('update: 동일 소스·새 sha 재설치 → 구 구성요소 archive + 기존 id 유지 갱신', async () => {
+        mockFetcher.resolveRef.mockResolvedValueOnce('newsha1');
+        mockFetcher.listTree.mockResolvedValueOnce(treeOf('plugin.json'));
+        mockFetcher.fetchFile.mockResolvedValueOnce(JSON.stringify({
+            name: 'tool-pack', version: '1.1.0',
+            mcpServers: { pg: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-postgres'] } },
+        }));
+        const q = mockPool.query as jest.Mock;
+        q.mockResolvedValueOnce({ rows: [] });                    // dedupe
+        q.mockResolvedValueOnce({ rows: [{                        // findActiveByName — 같은 repo, 구 sha
+            id: 'user-ext-u1', name: 'tool-pack', version: '1.0.0', description: null,
+            source_url: 'foo/bar', source_ref: 'oldsha1', source_path: 'plugin.json',
+            manifest: { components: {} },
+        }] });
+        (mockLLM.chat as jest.Mock).mockResolvedValueOnce({
+            content: JSON.stringify({ findings: [] }), metrics: { completion_tokens: 30 },
+        });
+        q.mockResolvedValueOnce({ rows: [] });                    // resolveUniqueServerName
+        q.mockResolvedValueOnce({ rows: [{ id: 'mcp-new1' }] });  // insertDraft
+        q.mockResolvedValueOnce({ rows: [] });                    // archive skills
+        q.mockResolvedValueOnce({ rows: [] });                    // archive mcp
+        q.mockResolvedValueOnce({ rows: [{                        // updateAfterReinstall RETURNING
+            id: 'user-ext-u1', name: 'tool-pack', version: '1.1.0', status: 'active',
+        }] });
+        q.mockResolvedValueOnce({ rows: [] });                    // linkComponents (mcp)
+
+        const svc = makeService();
+        const r = await svc.import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar' });
+        if ('selectionRequired' in r && r.selectionRequired) throw new Error('expected single');
+        expect(r.updated).toBe(true);
+        expect(r.previousVersion).toBe('1.0.0');
+        expect(r.version).toBe('1.1.0');
+        expect(r.extensionId).toBe('user-ext-u1');
+        // 구 구성요소 archive UPDATE 가 실행됐는지
+        const archiveCalls = q.mock.calls.filter((c: unknown[]) => String(c[0]).includes("SET status='archived'"));
+        expect(archiveCalls.length).toBe(2);
+    });
+
+    describe('checkForUpdate', () => {
+        it('sha 동일 → updateAvailable=false', async () => {
+            mockFetcher.resolveRef.mockResolvedValueOnce('abc123');
+            const svc = makeService();
+            const r = await svc.checkForUpdate({ sourceUrl: 'foo/bar', sourcePath: 'plugin.json', currentRef: 'abc123' });
+            expect(r.updateAvailable).toBe(false);
+            expect(r.latestVersion).toBeNull();
+        });
+
+        it('sha 다름 → updateAvailable=true + 최신 plugin.json version', async () => {
+            mockFetcher.resolveRef.mockResolvedValueOnce('newsha1');
+            mockFetcher.fetchFile.mockResolvedValueOnce(JSON.stringify({ name: 'tool-pack', version: '2.0.0' }));
+            const svc = makeService();
+            const r = await svc.checkForUpdate({ sourceUrl: 'foo/bar', sourcePath: 'plugin.json', currentRef: 'oldsha1', trackingRef: null });
+            expect(r.updateAvailable).toBe(true);
+            expect(r.latestRef).toBe('newsha1');
+            expect(r.latestVersion).toBe('2.0.0');
+        });
+
+        it('최신 plugin.json 조회 실패 → latestVersion null (판정은 유지)', async () => {
+            mockFetcher.resolveRef.mockResolvedValueOnce('newsha1');
+            mockFetcher.fetchFile.mockRejectedValueOnce(new Error('404'));
+            const svc = makeService();
+            const r = await svc.checkForUpdate({ sourceUrl: 'foo/bar', sourcePath: 'plugin.json', currentRef: 'oldsha1' });
+            expect(r.updateAvailable).toBe(true);
+            expect(r.latestVersion).toBeNull();
+        });
     });
 });

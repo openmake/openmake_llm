@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Package, Trash2, Loader2, ChevronDown, Puzzle, Server } from "lucide-react";
+import { Package, Trash2, Loader2, ChevronDown, Puzzle, Server, RefreshCw } from "lucide-react";
 import { Button, Card, CardHeader, CardTitle, CardContent } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
@@ -22,6 +22,12 @@ interface ExtensionComponents {
   mcpServers: Array<{ id: string; name: string; status: string; enabled: boolean }>;
 }
 
+type UpdateCheckState =
+  | { state: "checking" }
+  | { state: "latest" }
+  | { state: "available"; latestVersion: string | null }
+  | { state: "failed" };
+
 /**
  * 확장 번들 (Agent Plugins v1) 관리 — 설치는 채팅 도구 import_extension_from_git,
  * 여기서는 설치 목록/구성요소 상태 조회와 번들 단위 제거만 제공한다 (PR #499 백엔드).
@@ -33,6 +39,7 @@ export function ExtensionsSection() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [components, setComponents] = useState<Record<string, ExtensionComponents>>({});
   const [detailLoading, setDetailLoading] = useState(false);
+  const [updateChecks, setUpdateChecks] = useState<Record<string, UpdateCheckState>>({});
 
   const load = useCallback(async () => {
     try {
@@ -69,6 +76,23 @@ export function ExtensionsSection() {
       } finally {
         setDetailLoading(false);
       }
+    }
+  }
+
+  async function checkUpdate(id: string) {
+    setUpdateChecks((prev) => ({ ...prev, [id]: { state: "checking" } }));
+    try {
+      const res = await ApiClient.post<ApiSuccess<{ updateAvailable: boolean; latestVersion: string | null }>>(
+        `/api/users/me/extensions/${id}/update-check`,
+        {},
+      );
+      if (res?.data?.updateAvailable) {
+        setUpdateChecks((prev) => ({ ...prev, [id]: { state: "available", latestVersion: res.data.latestVersion } }));
+      } else {
+        setUpdateChecks((prev) => ({ ...prev, [id]: { state: "latest" } }));
+      }
+    } catch {
+      setUpdateChecks((prev) => ({ ...prev, [id]: { state: "failed" } }));
     }
   }
 
@@ -120,6 +144,7 @@ export function ExtensionsSection() {
             {extensions.map((ext) => {
               const open = openId === ext.id;
               const comp = components[ext.id];
+              const check = updateChecks[ext.id];
               return (
                 <li key={ext.id} className="rounded-lg border border-border">
                   <div className="flex items-center gap-3 p-3.5">
@@ -141,6 +166,34 @@ export function ExtensionsSection() {
                     <ChevronDown
                       className={`h-4 w-4 shrink-0 text-muted transition-transform ${open ? "rotate-180" : ""}`}
                     />
+                    {check && check.state !== "checking" && (
+                      <span
+                        className={`shrink-0 whitespace-nowrap text-xs ${
+                          check.state === "available" ? "text-warn" : check.state === "latest" ? "text-success" : "text-muted"
+                        }`}
+                      >
+                        {check.state === "available"
+                          ? check.latestVersion
+                            ? t("update.available", { version: check.latestVersion })
+                            : t("update.availableNoVersion")
+                          : check.state === "latest"
+                          ? t("update.latest")
+                          : t("update.failed")}
+                      </span>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t("update.checkAria")}
+                      disabled={check?.state === "checking"}
+                      onClick={() => void checkUpdate(ext.id)}
+                    >
+                      {check?.state === "checking" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -150,6 +203,9 @@ export function ExtensionsSection() {
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
+                  {check?.state === "available" && (
+                    <p className="border-t border-border px-3.5 py-2 text-xs text-warn">{t("update.hint")}</p>
+                  )}
                   {open && (
                     <div className="space-y-3 border-t border-border px-3.5 py-3">
                       {detailLoading && !comp ? (

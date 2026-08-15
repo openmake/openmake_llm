@@ -1801,6 +1801,14 @@
       "draft": "승인 대기",
       "archived": "보관됨",
       "disabled": "비활성"
+    },
+    "update": {
+      "checkAria": "업데이트 확인",
+      "latest": "최신 상태",
+      "available": "v{version} 업데이트 가능",
+      "availableNoVersion": "업데이트 가능",
+      "failed": "확인 실패",
+      "hint": "채팅에서 \"이 확장 업데이트해줘\" 라고 요청하면 새 버전으로 교체됩니다 (구버전 구성요소는 보관 처리)."
     }
   }
 }

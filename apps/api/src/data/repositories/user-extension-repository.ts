@@ -23,6 +23,7 @@ export interface UserExtensionRow {
     source_ref: string;
     source_path: string;
     source_hash: string;
+    tracking_ref: string | null;
     manifest: Record<string, unknown>;
     status: 'active' | 'removed';
     created_at: Date;
@@ -38,6 +39,7 @@ export interface InsertExtensionInput {
     sourceRef: string;
     sourcePath: string;
     sourceHash: string;
+    trackingRef?: string | null;
     manifest: Record<string, unknown>;
 }
 
@@ -46,8 +48,8 @@ export class UserExtensionRepository extends BaseRepository {
         const id = `user-ext-${uuidv4()}`;
         const r = await this.query<UserExtensionRow>(
             `INSERT INTO user_extensions
-               (id, user_id, name, version, description, source_url, source_ref, source_path, source_hash, manifest, status)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, 'active')
+               (id, user_id, name, version, description, source_url, source_ref, source_path, source_hash, tracking_ref, manifest, status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, 'active')
              RETURNING *`,
             [
                 id,
@@ -59,10 +61,53 @@ export class UserExtensionRepository extends BaseRepository {
                 input.sourceRef,
                 input.sourcePath,
                 input.sourceHash,
+                input.trackingRef ?? null,
                 JSON.stringify(input.manifest),
             ]
         );
         return r.rows[0];
+    }
+
+    /** 재설치(업데이트) — 기존 id 유지, 버전/ref/manifest 갱신. */
+    async updateAfterReinstall(id: string, input: {
+        version: string;
+        description?: string | null;
+        sourceRef: string;
+        sourcePath: string;
+        sourceHash: string;
+        trackingRef?: string | null;
+        manifest: Record<string, unknown>;
+    }): Promise<UserExtensionRow | null> {
+        const r = await this.query<UserExtensionRow>(
+            `UPDATE user_extensions
+                SET version=$1, description=$2, source_ref=$3, source_path=$4,
+                    source_hash=$5, tracking_ref=$6, manifest=$7::jsonb, updated_at=NOW()
+              WHERE id=$8 AND status='active'
+              RETURNING *`,
+            [
+                input.version,
+                input.description ?? null,
+                input.sourceRef,
+                input.sourcePath,
+                input.sourceHash,
+                input.trackingRef ?? null,
+                JSON.stringify(input.manifest),
+                id,
+            ]
+        );
+        return r.rows[0] ?? null;
+    }
+
+    /** 링크 구성요소 archive (업데이트 시 구버전 정리 — remove 와 동일 규칙, 링크는 해제). */
+    async archiveLinkedComponents(extensionId: string): Promise<void> {
+        await this.query(
+            `UPDATE agent_skills SET status='archived', extension_id=NULL WHERE extension_id=$1`,
+            [extensionId]
+        );
+        await this.query(
+            `UPDATE mcp_servers SET status='archived', enabled=FALSE, extension_id=NULL, updated_at=NOW() WHERE extension_id=$1`,
+            [extensionId]
+        );
     }
 
     async getByIdForUser(id: string, userId: string, isAdmin: boolean): Promise<UserExtensionRow | null> {
