@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.24.1](https://github.com/openmake/openmake_llm/compare/v1.24.0...v1.24.1) (2026-08-15)
+
+
+### 🐛 버그 수정
+
+* **agent-task:** goal judge false negative 완화 — 도구 결과 증거 제공 + 계획 0완료 오용 차단 ([#494](https://github.com/openmake/openmake_llm/issues/494)) ([2dab411](https://github.com/openmake/openmake_llm/commit/2dab41125d39d01d841f3f19701ac2570a42944d))
+* **chat:** 수집 목록 밖 죽은 인용 마커 결정적 제거 + done 시 화면 정리 ([#490](https://github.com/openmake/openmake_llm/issues/490)) ([542a514](https://github.com/openmake/openmake_llm/commit/542a514406dcd7fe3a0db587140c0bf1d73ea0b9))
+* **chat:** 웹검색 인용 지시에 실존 출처 번호만 인용 제약 추가 (7개 언어) ([#489](https://github.com/openmake/openmake_llm/issues/489)) ([01e2569](https://github.com/openmake/openmake_llm/commit/01e2569febc283aefc9d422b328df9d51f1d57dc))
+* **web,auth:** 만료-purge 된 액세스 토큰의 세션 자동 복원 — 마운트 시 refresh 선시도 ([#495](https://github.com/openmake/openmake_llm/issues/495)) ([84eaa8f](https://github.com/openmake/openmake_llm/commit/84eaa8f2e8b14c33922dc76e64259a294cc04773))
+* 세션 refresh CSRF 403 원복 해소·데스크톱 exec PATH 보강(v1.8.1)·OpenWork형 사이드바 ([#493](https://github.com/openmake/openmake_llm/issues/493)) ([5943750](https://github.com/openmake/openmake_llm/commit/5943750ce68d294a7e51d36182e02aaa2e2005cd))
+* 코드리뷰([#484](https://github.com/openmake/openmake_llm/issues/484) 배치) 후속 9건 수정 — OAuth 계정 바인딩 보안·검색 출처/쿼터 보강 ([#486](https://github.com/openmake/openmake_llm/issues/486)) ([6be4ca8](https://github.com/openmake/openmake_llm/commit/6be4ca889b823fc835675d3edd4eecc156d6c1eb))
+
 ## [1.24.0](https://github.com/openmake/openmake_llm/compare/v1.23.0...v1.24.0) (2026-08-14)
 
 
