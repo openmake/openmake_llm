@@ -1809,6 +1809,21 @@
       "availableNoVersion": "Update available",
       "failed": "Check failed",
       "hint": "Ask in chat: \"Update this extension\" to replace it with the new version (old components are archived)."
+    },
+    "share": {
+      "toggleAria": "Toggle workspace sharing",
+      "shared": "Shared"
+    },
+    "gallery": {
+      "title": "Workspace gallery",
+      "description": "Install extensions shared by teammates into your account. Components are created as your own drafts and activate after approval.",
+      "empty": "No shared extensions.",
+      "install": "Install",
+      "installed": "Installed",
+      "updatedDone": "Updated",
+      "upToDate": "Up to date",
+      "failed": "Install failed",
+      "owned": "(yours)"
     }
   }
 }

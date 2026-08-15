@@ -1809,6 +1809,21 @@
       "availableNoVersion": "업데이트 가능",
       "failed": "확인 실패",
       "hint": "채팅에서 \"이 확장 업데이트해줘\" 라고 요청하면 새 버전으로 교체됩니다 (구버전 구성요소는 보관 처리)."
+    },
+    "share": {
+      "toggleAria": "워크스페이스 공유 전환",
+      "shared": "공유됨"
+    },
+    "gallery": {
+      "title": "워크스페이스 갤러리",
+      "description": "동료가 공유한 확장을 내 계정으로 설치합니다. 구성요소는 내 소유 draft로 생성되어 승인 후 활성화됩니다.",
+      "empty": "공유된 확장이 없습니다.",
+      "install": "설치",
+      "installed": "설치됨",
+      "updatedDone": "업데이트됨",
+      "upToDate": "이미 최신",
+      "failed": "설치 실패",
+      "owned": "(내 공유)"
     }
   }
 }
