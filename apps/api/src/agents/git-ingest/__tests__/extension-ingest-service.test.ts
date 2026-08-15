@@ -270,6 +270,76 @@ describe('ExtensionIngestService', () => {
         expect(archiveCalls.length).toBe(2);
     });
 
+    describe('marketplace 인덱스', () => {
+        const MARKETPLACE = JSON.stringify({
+            name: 'my-market',
+            plugins: [
+                {
+                    name: 'core',
+                    description: 'core plugin',
+                    source: { source: 'git-subdir', url: 'https://github.com/foo/bar.git', path: 'src/capabilities/core', ref: 'core-v1' },
+                },
+                { name: 'extra', description: 'extra plugin', source: './extra' },
+            ],
+        });
+
+        it('plugin 미지정 → 플러그인 목록 반환 (selectionRequired + marketplace)', async () => {
+            mockFetcher.resolveRef.mockResolvedValueOnce('abc123');
+            mockFetcher.listTree.mockResolvedValueOnce(treeOf('.claude-plugin/marketplace.json', 'src/capabilities/core/.claude-plugin/plugin.json'));
+            mockFetcher.fetchFile.mockResolvedValueOnce(MARKETPLACE);
+
+            const svc = makeService();
+            const r = await svc.import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar' });
+            expect('selectionRequired' in r && r.selectionRequired).toBe(true);
+            if (!('selectionRequired' in r && r.selectionRequired)) return;
+            expect(r.marketplace?.name).toBe('my-market');
+            expect(r.marketplace?.plugins.map(p => p.name)).toEqual(['core', 'extra']);
+        });
+
+        it('plugin 지정 → 고정 ref 로 해당 플러그인 설치 (tracking_ref=엔트리 ref)', async () => {
+            mockFetcher.resolveRef.mockResolvedValueOnce('abc123');   // HEAD
+            mockFetcher.listTree.mockResolvedValueOnce(treeOf('.claude-plugin/marketplace.json'));
+            mockFetcher.fetchFile.mockResolvedValueOnce(MARKETPLACE); // marketplace.json
+            mockFetcher.resolveRef.mockResolvedValueOnce('tagsha1');  // entry.ref 'core-v1'
+            mockFetcher.listTree.mockResolvedValueOnce(treeOf('src/capabilities/core/.claude-plugin/plugin.json'));
+            mockFetcher.fetchFile.mockResolvedValueOnce(JSON.stringify({
+                name: 'core-pack', version: '1.0.2',
+                mcpServers: { srv: { command: 'uvx', args: ['core'] } },
+            }));
+            const q = mockPool.query as jest.Mock;
+            q.mockResolvedValueOnce({ rows: [] });                    // dedupe
+            q.mockResolvedValueOnce({ rows: [] });                    // findActiveByName
+            q.mockResolvedValueOnce({ rows: [{ count: '0' }] });      // count
+            (mockLLM.chat as jest.Mock).mockResolvedValueOnce({
+                content: JSON.stringify({ findings: [] }), metrics: { completion_tokens: 30 },
+            });
+            q.mockResolvedValueOnce({ rows: [] });                    // unique name
+            q.mockResolvedValueOnce({ rows: [{ id: 'mcp-m1' }] });    // insertDraft
+            q.mockResolvedValueOnce({ rows: [{ id: 'user-ext-m1', name: 'core-pack', version: '1.0.2', status: 'active' }] });  // ext INSERT
+            q.mockResolvedValueOnce({ rows: [] });                    // link
+
+            const svc = makeService();
+            const r = await svc.import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar', plugin: 'core' });
+            if ('selectionRequired' in r && r.selectionRequired) throw new Error('expected single');
+            expect(r.gitRef).toBe('tagsha1');
+            expect(r.gitPath).toBe('src/capabilities/core/.claude-plugin/plugin.json');
+            expect(r.mcpServers[0].serverId).toBe('mcp-m1');
+            // user_extensions INSERT 의 tracking_ref 파라미터가 엔트리 고정 ref
+            const insertCall = q.mock.calls.find((c: unknown[]) => String(c[0]).includes('INSERT INTO user_extensions'));
+            expect(insertCall![1]).toContain('core-v1');
+        });
+
+        it('plugin 이 목록에 없으면 PLUGIN_NOT_IN_MARKETPLACE', async () => {
+            mockFetcher.resolveRef.mockResolvedValueOnce('abc123');
+            mockFetcher.listTree.mockResolvedValueOnce(treeOf('.claude-plugin/marketplace.json'));
+            mockFetcher.fetchFile.mockResolvedValueOnce(MARKETPLACE);
+
+            const svc = makeService();
+            await expect(svc.import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar', plugin: 'nope' }))
+                .rejects.toThrow('PLUGIN_NOT_IN_MARKETPLACE');
+        });
+    });
+
     describe('checkForUpdate', () => {
         it('sha 동일 → updateAvailable=false', async () => {
             mockFetcher.resolveRef.mockResolvedValueOnce('abc123');

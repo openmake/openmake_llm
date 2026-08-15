@@ -119,6 +119,87 @@ export function validateExtensionManifest(jsonText: string): ValidationResult {
     };
 }
 
+// ── marketplace.json (Claude Code 마켓플레이스 인덱스) ──────────────────────
+
+const marketplaceSourceSchema = z.union([
+    // 상대 경로 축약형 ("./plugins/foo")
+    z.string().min(1).max(500),
+    // git-subdir 등 객체형 ({ source, url, path, ref })
+    z.object({
+        source: z.string().max(50).optional(),
+        url: z.string().max(500).optional(),
+        path: z.string().max(500).optional(),
+        ref: z.string().max(200).optional(),
+    }),
+]);
+
+const marketplaceSchema = z.object({
+    name: z.string().min(1).max(120),
+    plugins: z.array(z.object({
+        name: z.string().min(1).max(120),
+        description: z.string().max(2000).optional(),
+        source: marketplaceSourceSchema.optional(),
+    })).max(100),
+});
+
+export interface MarketplacePluginEntry {
+    name: string;
+    description?: string;
+    /** 다른 저장소를 가리키는 경우 (git-subdir url) */
+    url?: string;
+    /** 플러그인 루트 디렉토리 (저장소 상대 경로, './' 정규화됨) */
+    path?: string;
+    /** 고정 ref (태그/브랜치/SHA) — 설치 시 tracking_ref 로 영속 */
+    ref?: string;
+}
+
+export interface MarketplaceIndex {
+    name: string;
+    plugins: MarketplacePluginEntry[];
+}
+
+export type MarketplaceParseResult =
+    | { ok: true; marketplace: MarketplaceIndex }
+    | { ok: false; errors: string[] };
+
+/** marketplace.json 파싱 + 엔트리 정규화 (path traversal 차단). */
+export function parseMarketplaceFile(jsonText: string): MarketplaceParseResult {
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(jsonText);
+    } catch {
+        return { ok: false, errors: ['marketplace.json 이 유효한 JSON 이 아님'] };
+    }
+    const result = marketplaceSchema.safeParse(parsed);
+    if (!result.success) {
+        return { ok: false, errors: result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`) };
+    }
+    const plugins: MarketplacePluginEntry[] = [];
+    const errors: string[] = [];
+    for (const p of result.data.plugins) {
+        let url: string | undefined;
+        let path: string | undefined;
+        let ref: string | undefined;
+        if (typeof p.source === 'string') {
+            path = p.source;
+        } else if (p.source) {
+            url = p.source.url;
+            path = p.source.path;
+            ref = p.source.ref;
+        }
+        path = path?.replace(/^\.\//, '').replace(/\/+$/, '');
+        if (path && path.includes('..')) {
+            errors.push(`${p.name}: path traversal 차단 — .. 미허용`);
+            continue;
+        }
+        plugins.push({ name: p.name, description: p.description, url, path, ref });
+    }
+    if (plugins.length === 0) {
+        return { ok: false, errors: errors.length > 0 ? errors : ['plugins 목록이 비어있음'] };
+    }
+    return { ok: true, marketplace: { name: result.data.name, plugins } };
+}
+
 /**
  * 별도 mcp.json 파싱 ({ mcpServers: {...} } 또는 최상위가 곧 server record 인 축약형).
  * plugin.json 에 mcpServers 가 이미 있으면 호출하지 않는다 (plugin.json 우선).

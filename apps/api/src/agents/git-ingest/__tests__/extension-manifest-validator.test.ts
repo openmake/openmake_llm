@@ -2,6 +2,7 @@ import {
     validateExtensionManifest,
     parseMcpJsonFile,
     normalizeMcpServers,
+    parseMarketplaceFile,
 } from '../extension-manifest-validator';
 
 describe('extension-manifest-validator', () => {
@@ -80,6 +81,50 @@ describe('extension-manifest-validator', () => {
             const r = normalizeMcpServers({ broken: {} });
             expect(r.servers).toHaveLength(0);
             expect(r.errors[0]).toContain('command 또는 url 필수');
+        });
+    });
+
+    describe('parseMarketplaceFile', () => {
+        it('git-subdir 객체 소스 + 상대 경로 문자열 소스 정규화', () => {
+            const r = parseMarketplaceFile(JSON.stringify({
+                name: 'my-market',
+                plugins: [
+                    {
+                        name: 'core',
+                        description: 'core plugin',
+                        source: { source: 'git-subdir', url: 'https://github.com/o/r.git', path: 'src/capabilities/core', ref: 'core-v1.0.2' },
+                    },
+                    { name: 'local', source: './plugins/local/' },
+                ],
+            }));
+            expect(r.ok).toBe(true);
+            if (!r.ok) return;
+            expect(r.marketplace.name).toBe('my-market');
+            expect(r.marketplace.plugins[0]).toEqual({
+                name: 'core', description: 'core plugin',
+                url: 'https://github.com/o/r.git', path: 'src/capabilities/core', ref: 'core-v1.0.2',
+            });
+            expect(r.marketplace.plugins[1]).toEqual({
+                name: 'local', description: undefined, url: undefined, path: 'plugins/local', ref: undefined,
+            });
+        });
+
+        it('path traversal 엔트리는 제외', () => {
+            const r = parseMarketplaceFile(JSON.stringify({
+                name: 'm',
+                plugins: [
+                    { name: 'evil', source: '../../etc' },
+                    { name: 'ok', source: './fine' },
+                ],
+            }));
+            expect(r.ok).toBe(true);
+            if (!r.ok) return;
+            expect(r.marketplace.plugins.map(p => p.name)).toEqual(['ok']);
+        });
+
+        it('plugins 전량 무효 또는 빈 목록이면 실패', () => {
+            expect(parseMarketplaceFile(JSON.stringify({ name: 'm', plugins: [] })).ok).toBe(false);
+            expect(parseMarketplaceFile('nope').ok).toBe(false);
         });
     });
 

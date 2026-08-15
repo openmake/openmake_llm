@@ -104,6 +104,20 @@ export function scanForExtensionManifests(tree: TreeEntry[], explicitPath?: stri
 }
 
 /**
+ * marketplace.json (Claude Code 마켓플레이스 인덱스) 탐지.
+ * .claude-plugin/marketplace.json (표준) 또는 root marketplace.json.
+ * root 에 가까운 순(경로 길이 오름차순)으로 정렬 — 첫 항목이 대표 인덱스.
+ */
+const MARKETPLACE_MANIFEST_PATTERN = /(^|\/)(\.claude-plugin\/)?marketplace\.json$/;
+
+export function scanForMarketplaceManifests(tree: TreeEntry[]): ManifestCandidate[] {
+    return tree
+        .filter(e => MARKETPLACE_MANIFEST_PATTERN.test(e.path))
+        .map(e => ({ path: e.path, sha: e.sha, size: e.size }))
+        .sort((a, b) => a.path.length - b.path.length);
+}
+
+/**
  * plugin.json 경로 → 확장 루트 디렉토리 prefix ('' = repo root, 아니면 'dir/').
  * Claude Code 마켓플레이스 레이아웃(.claude-plugin/plugin.json)은 그 부모가 루트.
  */

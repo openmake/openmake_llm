@@ -63,9 +63,25 @@ export class GitFetcher {
         if (/^[0-9a-f]{7,40}$/i.test(ref)) return ref;
         // GitHub API 는 `/git/refs/heads/HEAD` 를 인식 못 함 (404). HEAD 면 default_branch 조회 후 그 이름으로 재시도.
         const effectiveRef = ref === 'HEAD' || !ref ? await this.getDefaultBranch(owner, repo) : ref;
-        const res = await this.req(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/refs/heads/${encodeURIComponent(effectiveRef)}`);
-        const data = await res.json() as { object?: { sha: string } };
+        const repoPath = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+        let data: { object?: { sha: string; type?: string } };
+        try {
+            const res = await this.req(`${repoPath}/git/refs/heads/${encodeURIComponent(effectiveRef)}`);
+            data = await res.json() as typeof data;
+        } catch (e) {
+            // 브랜치가 아니면 태그 폴백 (릴리스 태그 고정 ref — marketplace 엔트리 등)
+            if (!(e instanceof Error && e.message.startsWith('REPO_NOT_FOUND'))) throw e;
+            const res = await this.req(`${repoPath}/git/refs/tags/${encodeURIComponent(effectiveRef)}`);
+            data = await res.json() as typeof data;
+        }
         if (!data.object?.sha) throw new Error(`INVALID_REF: ${ref}`);
+        // annotated tag 는 tag object 를 가리킴 — commit sha 로 역참조
+        if (data.object.type === 'tag') {
+            const res = await this.req(`${repoPath}/git/tags/${data.object.sha}`);
+            const tagData = await res.json() as { object?: { sha: string } };
+            if (!tagData.object?.sha) throw new Error(`INVALID_REF: ${ref} (annotated tag dereference 실패)`);
+            return tagData.object.sha;
+        }
         return data.object.sha;
     }
 
