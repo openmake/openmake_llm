@@ -23,12 +23,13 @@ interface ImportExtensionFromGitArgs extends Record<string, unknown> {
     gitRef?: string;
     gitPath?: string;
     accessToken?: string;
+    plugin?: string;
 }
 
 export const importExtensionFromGitTool: MCPToolDefinition<ImportExtensionFromGitArgs> = {
     tool: {
         name: 'import_extension_from_git',
-        description: 'GitHub URL 의 plugin.json (Agent Plugins v1) 확장 번들을 설치합니다 — skills/*/SKILL.md 와 MCP 서버 정의를 한 번에 draft 로 가져옵니다. 같은 저장소의 이미 설치된 확장을 다시 요청하면 최신 ref 로 업데이트합니다 (구 구성요소는 archive). 사용자가 명시적으로 "이 확장/플러그인 설치해줘", "이 확장 업데이트해줘" 같은 요청을 했을 때만 호출하세요. plugin.json 이 여러 개면 후보 목록만 반환 (재호출에서 gitPath 명시 필요). 단일 스킬/에이전트/MCP 서버만 가져올 때는 import_skill_from_git / import_agent_from_git / import_mcp_server_from_git 를 대신 사용하세요.',
+        description: 'GitHub URL 의 plugin.json (Agent Plugins v1) 확장 번들을 설치합니다 — skills/*/SKILL.md 와 MCP 서버 정의를 한 번에 draft 로 가져옵니다. 마켓플레이스 저장소(.claude-plugin/marketplace.json)면 먼저 플러그인 목록을 반환하고, plugin 인자로 이름을 지정해 재호출하면 해당 플러그인을 설치합니다 (엔트리의 고정 ref 추적). 같은 저장소의 이미 설치된 확장을 다시 요청하면 최신 ref 로 업데이트합니다 (구 구성요소는 archive). 사용자가 명시적으로 "이 확장/플러그인 설치해줘", "이 확장 업데이트해줘" 같은 요청을 했을 때만 호출하세요. plugin.json 이 여러 개면 후보 목록만 반환 (재호출에서 gitPath 명시 필요). 단일 스킬/에이전트/MCP 서버만 가져올 때는 import_skill_from_git / import_agent_from_git / import_mcp_server_from_git 를 대신 사용하세요.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -47,6 +48,10 @@ export const importExtensionFromGitTool: MCPToolDefinition<ImportExtensionFromGi
                 accessToken: {
                     type: 'string',
                     description: 'GitHub access token (선택). private repo 접근 또는 rate limit 우회 (60→5000/hr). 요청 한정 — DB 미저장.',
+                },
+                plugin: {
+                    type: 'string',
+                    description: '마켓플레이스 저장소(.claude-plugin/marketplace.json 보유)에서 설치할 플러그인 이름 (선택). 미지정 시 마켓플레이스 목록만 반환 — 목록에서 이름을 골라 이 인자로 재호출.',
                 },
             },
             required: ['gitUrl'],
@@ -89,7 +94,18 @@ export const importExtensionFromGitTool: MCPToolDefinition<ImportExtensionFromGi
                 gitRef: args.gitRef,
                 gitPath: args.gitPath,
                 accessToken: args.accessToken,
+                plugin: args.plugin,
             });
+
+            // marketplace 인덱스 — 플러그인 목록 반환 (plugin 인자로 재호출 유도)
+            if ('selectionRequired' in result && result.selectionRequired && result.marketplace) {
+                const list = result.marketplace.plugins
+                    .map((p, i) => `  ${i + 1}. ${p.name}${p.description ? ` — ${p.description.slice(0, 120)}` : ''}`)
+                    .join('\n');
+                const text = `마켓플레이스 "${result.marketplace.name}" 발견 — 플러그인 ${result.totalCandidates}개. 설치할 플러그인 이름을 \`plugin\` 인자로 지정해 재호출하세요:\n\n${list}\n\n예: \`import_extension_from_git({ gitUrl: "${args.gitUrl}", plugin: "${result.marketplace.plugins[0].name}" })\``;
+                logger.info(`MCP import_extension_from_git marketplace listing: ${result.totalCandidates} (user=${userId}, gitUrl=${args.gitUrl})`);
+                return { content: [{ type: 'text', text }] };
+            }
 
             // multi-candidate — 후보 목록 반환
             if ('selectionRequired' in result && result.selectionRequired) {

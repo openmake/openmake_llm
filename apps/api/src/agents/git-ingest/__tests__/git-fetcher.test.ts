@@ -68,10 +68,38 @@ describe('GitFetcher', () => {
         expect(content).toBe('# Hello\n');
     });
 
-    it('404 → throws REPO_NOT_FOUND', async () => {
-        mockFetch.mockResolvedValueOnce({ ok: false, status: 404, headers: mkHeaders() });
+    it('404 → throws REPO_NOT_FOUND (heads 404 후 tags 폴백도 404)', async () => {
+        mockFetch.mockResolvedValueOnce({ ok: false, status: 404, headers: mkHeaders() });  // refs/heads
+        mockFetch.mockResolvedValueOnce({ ok: false, status: 404, headers: mkHeaders() });  // refs/tags 폴백
         const f = new GitFetcher();
         await expect(f.resolveRef('foo', 'missing', 'main')).rejects.toThrow(/REPO_NOT_FOUND/);
+    });
+
+    it('resolveRef: 브랜치 404 → 태그 폴백 (lightweight tag)', async () => {
+        mockFetch.mockResolvedValueOnce({ ok: false, status: 404, headers: mkHeaders() });  // refs/heads 404
+        mockFetch.mockResolvedValueOnce({
+            ok: true, status: 200,
+            json: async () => ({ object: { sha: 'tagsha1234', type: 'commit' } }),
+            headers: mkHeaders(),
+        });  // refs/tags
+        const f = new GitFetcher();
+        await expect(f.resolveRef('foo', 'bar', 'v1.0.2')).resolves.toBe('tagsha1234');
+    });
+
+    it('resolveRef: annotated tag 는 commit sha 로 역참조', async () => {
+        mockFetch.mockResolvedValueOnce({ ok: false, status: 404, headers: mkHeaders() });  // refs/heads 404
+        mockFetch.mockResolvedValueOnce({
+            ok: true, status: 200,
+            json: async () => ({ object: { sha: 'tagobj111', type: 'tag' } }),
+            headers: mkHeaders(),
+        });  // refs/tags → tag object
+        mockFetch.mockResolvedValueOnce({
+            ok: true, status: 200,
+            json: async () => ({ object: { sha: 'commitsha222' } }),
+            headers: mkHeaders(),
+        });  // git/tags/{sha} 역참조
+        const f = new GitFetcher();
+        await expect(f.resolveRef('foo', 'bar', 'v2.0.0')).resolves.toBe('commitsha222');
     });
 
     it('403 + rate-limit-remaining 0 → throws GITHUB_RATE_LIMITED', async () => {

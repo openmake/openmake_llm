@@ -26,10 +26,11 @@ import { createLogger } from '../../utils/logger';
 import { parseGitUrl } from '../../schemas/git-ingest.schema';
 import type { ImportExtensionFromGitInput } from '../../schemas/extension-ingest.schema';
 import { GitFetcher } from './git-fetcher';
-import { scanForExtensionManifests, resolveExtensionRoot, type ManifestCandidate } from './repo-scanner';
+import { scanForExtensionManifests, scanForMarketplaceManifests, resolveExtensionRoot, type ManifestCandidate } from './repo-scanner';
 import {
     validateExtensionManifest,
     parseMcpJsonFile,
+    parseMarketplaceFile,
     type NormalizedMcpServer,
 } from './extension-manifest-validator';
 import { ConventionChecker, type ConventionFinding } from './convention-checker';
@@ -99,6 +100,11 @@ export interface CandidateListResult {
     candidates: ManifestCandidate[];
     totalCandidates: number;
     selectionRequired: true;
+    /** marketplace.json 인덱스 발견 시 — plugin 인자로 이름을 지정해 재호출 */
+    marketplace?: {
+        name: string;
+        plugins: Array<{ name: string; description?: string }>;
+    };
 }
 
 export interface ExtensionIngestOptions {
@@ -118,30 +124,91 @@ export class ExtensionIngestService {
         // (1) URL parse
         const parsed = parseGitUrl(input.gitUrl);
         if (!parsed) throw new Error(`INVALID_GIT_URL: ${input.gitUrl}`);
-        const { owner, repo } = parsed;
+        let { owner, repo } = parsed;
+        // marketplace 엔트리가 다른 저장소/고정 ref 를 가리킬 수 있어 effective 값으로 관리
+        let effectiveGitUrl = input.gitUrl;
+        let effectiveTrackingRef: string | null = input.gitRef ?? null;
 
         // (2) fetcher
         const fetcher = this.opts.fetcherFactory({ accessToken: input.accessToken });
-        const sha = await fetcher.resolveRef(owner, repo, input.gitRef ?? 'HEAD');
+        let sha = await fetcher.resolveRef(owner, repo, input.gitRef ?? 'HEAD');
 
-        // (3) tree → candidates
-        const tree = await fetcher.listTree(owner, repo, sha, SKILL_CREATOR.gitMaxTreeEntries);
-        const candidates = scanForExtensionManifests(tree.entries, input.gitPath);
-        if (candidates.length === 0) {
-            throw new Error(`NO_EXTENSION_FOUND: tree 에 plugin.json 후보 없음 (gitUrl=${input.gitUrl}, ref=${sha})`);
+        // (3) tree
+        let tree = await fetcher.listTree(owner, repo, sha, SKILL_CREATOR.gitMaxTreeEntries);
+        let candidate: ManifestCandidate | undefined;
+
+        // (3-a) marketplace.json 인덱스 (gitPath 미지정 시) — Claude Code 마켓플레이스 저장소
+        if (!input.gitPath) {
+            const mkCandidates = scanForMarketplaceManifests(tree.entries);
+            if (mkCandidates.length > 0) {
+                const mkRaw = await fetcher.fetchFile(owner, repo, sha, mkCandidates[0].path, EXTENSION_INGEST.manifestMaxBytes);
+                const mk = parseMarketplaceFile(mkRaw);
+                if (mk.ok && !input.plugin) {
+                    // 목록만 반환 — plugin 인자로 재호출 유도
+                    return {
+                        gitUrl: input.gitUrl,
+                        gitRef: sha,
+                        candidates: [],
+                        totalCandidates: mk.marketplace.plugins.length,
+                        selectionRequired: true,
+                        marketplace: {
+                            name: mk.marketplace.name,
+                            plugins: mk.marketplace.plugins.map(p => ({ name: p.name, description: p.description })),
+                        },
+                    };
+                }
+                if (mk.ok && input.plugin) {
+                    const entry = mk.marketplace.plugins.find(p => p.name === input.plugin);
+                    if (!entry) {
+                        throw new Error(`PLUGIN_NOT_IN_MARKETPLACE: "${input.plugin}" — 가능한 플러그인: ${mk.marketplace.plugins.map(p => p.name).join(', ')}`);
+                    }
+                    // 다른 저장소를 가리키는 엔트리 (git-subdir url)
+                    if (entry.url) {
+                        const p2 = parseGitUrl(entry.url);
+                        if (p2 && (p2.owner !== owner || p2.repo !== repo)) {
+                            owner = p2.owner;
+                            repo = p2.repo;
+                            effectiveGitUrl = entry.url;
+                        }
+                    }
+                    // 고정 ref (릴리스 태그) 또는 저장소 변경 시 tree 재조회
+                    if (entry.ref || effectiveGitUrl !== input.gitUrl) {
+                        sha = await fetcher.resolveRef(owner, repo, entry.ref ?? 'HEAD');
+                        tree = await fetcher.listTree(owner, repo, sha, SKILL_CREATOR.gitMaxTreeEntries);
+                    }
+                    if (entry.ref) effectiveTrackingRef = entry.ref;
+                    const prefix = entry.path ? `${entry.path}/` : '';
+                    const pj = tree.entries.find(e => e.path === `${prefix}.claude-plugin/plugin.json`)
+                        ?? tree.entries.find(e => e.path === `${prefix}plugin.json`);
+                    if (!pj) {
+                        throw new Error(`MARKETPLACE_PLUGIN_MANIFEST_NOT_FOUND: "${input.plugin}" (path=${entry.path || '.'}, ref=${sha.slice(0, 7)})`);
+                    }
+                    candidate = { path: pj.path, sha: pj.sha, size: pj.size };
+                    logger.info(`marketplace plugin resolved: ${input.plugin} → ${owner}/${repo}@${sha.slice(0, 7)}:${pj.path}`);
+                }
+                // mk 파싱 실패 → 일반 plugin.json 스캔으로 폴백
+            }
         }
-        if (candidates.length > 1 && !input.gitPath) {
-            return {
-                gitUrl: input.gitUrl,
-                gitRef: sha,
-                candidates,
-                totalCandidates: candidates.length,
-                selectionRequired: true,
-            };
+
+        // (3-b) 일반 plugin.json 스캔 (marketplace 미해당)
+        if (!candidate) {
+            const candidates = scanForExtensionManifests(tree.entries, input.gitPath);
+            if (candidates.length === 0) {
+                throw new Error(`NO_EXTENSION_FOUND: tree 에 plugin.json 후보 없음 (gitUrl=${input.gitUrl}, ref=${sha})`);
+            }
+            if (candidates.length > 1 && !input.gitPath) {
+                return {
+                    gitUrl: input.gitUrl,
+                    gitRef: sha,
+                    candidates,
+                    totalCandidates: candidates.length,
+                    selectionRequired: true,
+                };
+            }
+            candidate = candidates[0];
         }
 
         // (4) plugin.json fetch + validate
-        const candidate = candidates[0];
         const manifestRaw = await fetcher.fetchFile(owner, repo, sha, candidate.path, EXTENSION_INGEST.manifestMaxBytes);
         const validation = validateExtensionManifest(manifestRaw);
         if (!validation.ok) {
@@ -152,7 +219,7 @@ export class ExtensionIngestService {
 
         // (5) dedupe + 상한 + 동명 충돌
         const sourceHash = 'sha256:' + crypto.createHash('sha256')
-            .update(JSON.stringify({ uid: input.userId, url: input.gitUrl, sha, path: candidate.path }))
+            .update(JSON.stringify({ uid: input.userId, url: effectiveGitUrl, sha, path: candidate.path }))
             .digest('hex');
         const extRepo = new UserExtensionRepository(this.opts.pool);
 
@@ -205,7 +272,7 @@ export class ExtensionIngestService {
                 const r = await skillService.import({
                     userId: input.userId,
                     isAdmin: input.isAdmin,
-                    gitUrl: input.gitUrl,
+                    gitUrl: effectiveGitUrl,
                     gitRef: sha,
                     gitPath: path,
                     accessToken: input.accessToken,
@@ -266,7 +333,7 @@ export class ExtensionIngestService {
                             version: '1.0',
                             source: 'extension',
                             createdAt: new Date().toISOString(),
-                            gitUrl: input.gitUrl,
+                            gitUrl: effectiveGitUrl,
                             gitRef: sha,
                             gitPath: candidate.path,
                             extensionName: manifest.name,
@@ -316,7 +383,7 @@ export class ExtensionIngestService {
                 sourceRef: sha,
                 sourcePath: candidate.path,
                 sourceHash,
-                trackingRef: input.gitRef ?? null,
+                trackingRef: effectiveTrackingRef,
                 manifest: componentManifest,
             });
             if (!row) throw new Error(`EXTENSION_UPDATE_FAILED: ${updateTarget.id} 갱신 실패`);
@@ -326,11 +393,11 @@ export class ExtensionIngestService {
                 name: manifest.name,
                 version: manifest.version,
                 description: manifest.description ?? null,
-                sourceUrl: input.gitUrl,
+                sourceUrl: effectiveGitUrl,
                 sourceRef: sha,
                 sourcePath: candidate.path,
                 sourceHash,
-                trackingRef: input.gitRef ?? null,
+                trackingRef: effectiveTrackingRef,
                 manifest: componentManifest,
             });
         }
@@ -348,7 +415,7 @@ export class ExtensionIngestService {
             description: manifest.description ?? '',
             status: 'active',
             source: 'git-url',
-            gitUrl: input.gitUrl,
+            gitUrl: effectiveGitUrl,
             gitRef: sha,
             gitPath: candidate.path,
             skills: skillResults,
