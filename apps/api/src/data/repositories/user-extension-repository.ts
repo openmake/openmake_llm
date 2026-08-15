@@ -26,6 +26,7 @@ export interface UserExtensionRow {
     tracking_ref: string | null;
     manifest: Record<string, unknown>;
     status: 'active' | 'removed';
+    visibility: 'private' | 'shared';
     created_at: Date;
     updated_at: Date;
 }
@@ -182,6 +183,40 @@ export class UserExtensionRepository extends BaseRepository {
                 [extensionId, serverId]
             );
         }
+    }
+
+    /** visibility 변경 — 소유자 한정 (Phase 3 공유). */
+    async setVisibility(id: string, userId: string, visibility: 'private' | 'shared'): Promise<UserExtensionRow | null> {
+        const r = await this.query<UserExtensionRow>(
+            `UPDATE user_extensions SET visibility=$1, updated_at=NOW()
+              WHERE id=$2 AND user_id=$3 AND status='active'
+              RETURNING *`,
+            [visibility, id, userId]
+        );
+        return r.rows[0] ?? null;
+    }
+
+    /** 워크스페이스 갤러리 — shared + active 전체 (소유자 무관). */
+    async listShared(limit: number = 100): Promise<UserExtensionRow[]> {
+        const r = await this.query<UserExtensionRow>(
+            `SELECT * FROM user_extensions
+              WHERE visibility='shared' AND status='active'
+              ORDER BY updated_at DESC
+              LIMIT $1`,
+            [limit]
+        );
+        return r.rows;
+    }
+
+    /** 갤러리 설치 대상 조회 — shared 이거나 본인 소유인 active row. */
+    async getInstallableById(id: string, userId: string): Promise<UserExtensionRow | null> {
+        const r = await this.query<UserExtensionRow>(
+            `SELECT * FROM user_extensions
+              WHERE id=$1 AND status='active' AND (visibility='shared' OR user_id=$2)
+              LIMIT 1`,
+            [id, userId]
+        );
+        return r.rows[0] ?? null;
     }
 
     /** 링크된 구성요소의 현재 상태 (상세 조회용). */

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Package, Trash2, Loader2, ChevronDown, Puzzle, Server, RefreshCw } from "lucide-react";
+import { Package, Trash2, Loader2, ChevronDown, Puzzle, Server, RefreshCw, Share2, Download } from "lucide-react";
 import { Button, Card, CardHeader, CardTitle, CardContent } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
@@ -14,8 +14,18 @@ interface UserExtension {
   description: string | null;
   source_url: string;
   source_ref: string;
+  visibility?: "private" | "shared";
   created_at?: string;
 }
+
+interface GalleryExtension extends UserExtension {
+  owned: boolean;
+}
+
+type GalleryInstallState =
+  | { state: "installing" }
+  | { state: "installed"; updated: boolean; upToDate: boolean }
+  | { state: "failed" };
 
 interface ExtensionComponents {
   skills: Array<{ id: string; name: string; status: string }>;
@@ -40,6 +50,9 @@ export function ExtensionsSection() {
   const [components, setComponents] = useState<Record<string, ExtensionComponents>>({});
   const [detailLoading, setDetailLoading] = useState(false);
   const [updateChecks, setUpdateChecks] = useState<Record<string, UpdateCheckState>>({});
+  const [gallery, setGallery] = useState<GalleryExtension[]>([]);
+  const [galleryInstalls, setGalleryInstalls] = useState<Record<string, GalleryInstallState>>({});
+  const [sharing, setSharing] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -52,9 +65,21 @@ export function ExtensionsSection() {
     }
   }, []);
 
+  const loadGallery = useCallback(async () => {
+    try {
+      const res = await ApiClient.get<ApiSuccess<{ extensions: GalleryExtension[] }>>(
+        "/api/users/me/extensions/gallery",
+      );
+      setGallery(res?.data?.extensions ?? []);
+    } catch {
+      /* 실패 — 빈 갤러리 유지 */
+    }
+  }, []);
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadGallery();
+  }, [load, loadGallery]);
 
   async function toggleDetail(id: string) {
     if (openId === id) {
@@ -93,6 +118,38 @@ export function ExtensionsSection() {
       }
     } catch {
       setUpdateChecks((prev) => ({ ...prev, [id]: { state: "failed" } }));
+    }
+  }
+
+  async function toggleShare(ext: UserExtension) {
+    if (sharing) return;
+    setSharing(ext.id);
+    const next = ext.visibility === "shared" ? "private" : "shared";
+    try {
+      await ApiClient.patch(`/api/users/me/extensions/${ext.id}/visibility`, { visibility: next });
+      setExtensions((list) => list.map((e) => (e.id === ext.id ? { ...e, visibility: next } : e)));
+      void loadGallery();
+    } catch {
+      /* 실패 — 상태 유지 */
+    } finally {
+      setSharing(null);
+    }
+  }
+
+  async function installFromGallery(id: string) {
+    setGalleryInstalls((prev) => ({ ...prev, [id]: { state: "installing" } }));
+    try {
+      const res = await ApiClient.post<ApiSuccess<{ updated: boolean; upToDate: boolean }>>(
+        `/api/users/me/extensions/gallery/${id}/install`,
+        {},
+      );
+      setGalleryInstalls((prev) => ({
+        ...prev,
+        [id]: { state: "installed", updated: !!res?.data?.updated, upToDate: !!res?.data?.upToDate },
+      }));
+      void load();
+    } catch {
+      setGalleryInstalls((prev) => ({ ...prev, [id]: { state: "failed" } }));
     }
   }
 
@@ -181,6 +238,22 @@ export function ExtensionsSection() {
                           : t("update.failed")}
                       </span>
                     )}
+                    {ext.visibility === "shared" && (
+                      <span className="shrink-0 whitespace-nowrap text-xs text-accent">{t("share.shared")}</span>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t("share.toggleAria")}
+                      disabled={sharing === ext.id}
+                      onClick={() => void toggleShare(ext)}
+                    >
+                      {sharing === ext.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Share2 className={`h-4 w-4 ${ext.visibility === "shared" ? "text-accent" : ""}`} />
+                      )}
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -260,6 +333,62 @@ export function ExtensionsSection() {
             })}
           </ul>
         )}
+
+        {/* 워크스페이스 갤러리 (Phase 3) — shared 확장, 설치는 본인 계정 ingest 재실행 */}
+        <div className="border-t border-border pt-4">
+          <p className="mb-1 text-sm font-medium text-fg">{t("gallery.title")}</p>
+          <p className="mb-3 text-xs text-muted">{t("gallery.description")}</p>
+          {gallery.length === 0 ? (
+            <p className="text-xs text-muted">{t("gallery.empty")}</p>
+          ) : (
+            <ul className="space-y-2">
+              {gallery.map((g) => {
+                const install = galleryInstalls[g.id];
+                return (
+                  <li key={g.id} className="flex items-center gap-3 rounded-lg border border-border p-3.5">
+                    <Share2 className="h-4 w-4 shrink-0 text-accent" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-fg">
+                        {g.name}
+                        <span className="ml-1.5 font-mono text-xs text-muted">v{g.version}</span>
+                        {g.owned && <span className="ml-1.5 text-xs text-muted">{t("gallery.owned")}</span>}
+                      </p>
+                      <p className="mt-0.5 truncate text-xs text-muted">
+                        {g.description || g.source_url}
+                        <span className="ml-1.5 font-mono">@{g.source_ref.slice(0, 7)}</span>
+                      </p>
+                    </div>
+                    {install?.state === "installed" && (
+                      <span className="shrink-0 whitespace-nowrap text-xs text-success">
+                        {install.upToDate
+                          ? t("gallery.upToDate")
+                          : install.updated
+                          ? t("gallery.updatedDone")
+                          : t("gallery.installed")}
+                      </span>
+                    )}
+                    {install?.state === "failed" && (
+                      <span className="shrink-0 whitespace-nowrap text-xs text-muted">{t("gallery.failed")}</span>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={install?.state === "installing"}
+                      onClick={() => void installFromGallery(g.id)}
+                    >
+                      {install?.state === "installing" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Download className="h-4 w-4" />
+                      )}
+                      {t("gallery.install")}
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

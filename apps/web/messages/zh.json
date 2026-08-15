@@ -1809,6 +1809,21 @@
       "availableNoVersion": "有可用更新",
       "failed": "检查失败",
       "hint": "在聊天中请求\"更新这个扩展\"即可替换为新版本(旧组件将被归档)。"
+    },
+    "share": {
+      "toggleAria": "切换工作区共享",
+      "shared": "已共享"
+    },
+    "gallery": {
+      "title": "工作区画廊",
+      "description": "将同事共享的扩展安装到自己的账户。组件将作为你自己的draft创建,批准后启用。",
+      "empty": "暂无共享的扩展。",
+      "install": "安装",
+      "installed": "已安装",
+      "updatedDone": "已更新",
+      "upToDate": "已是最新",
+      "failed": "安装失败",
+      "owned": "(我的共享)"
     }
   }
 }
