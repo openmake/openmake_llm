@@ -1,4 +1,4 @@
-import { ExtensionIngestService } from '../extension-ingest-service';
+import { ExtensionIngestService, buildSkillDiscoveryPattern } from '../extension-ingest-service';
 import { resolveExtensionRoot, scanForExtensionManifests } from '../repo-scanner';
 import type { Pool } from 'pg';
 import type { LLMClient } from '../../../llm/client';
@@ -26,6 +26,19 @@ describe('repo-scanner (extension)', () => {
         expect(resolveExtensionRoot('packs/a/plugin.json')).toBe('packs/a/');
         expect(resolveExtensionRoot('.claude-plugin/plugin.json')).toBe('');
         expect(resolveExtensionRoot('b/.claude-plugin/plugin.json')).toBe('b/');
+    });
+
+    it('buildSkillDiscoveryPattern: skills/<dir>/ · skill/ 단수 · skills/ 직하 레이아웃', () => {
+        const rootPat = buildSkillDiscoveryPattern('');
+        expect(rootPat.test('skills/foo/SKILL.md')).toBe(true);    // Agent Plugins v1
+        expect(rootPat.test('skill/SKILL.md')).toBe(true);         // Qwen-MM-Plugins 단수 레이아웃
+        expect(rootPat.test('skills/SKILL.md')).toBe(true);        // 직하
+        expect(rootPat.test('skills/a/b/SKILL.md')).toBe(false);   // 2단계 중첩 미지원
+        expect(rootPat.test('other/SKILL.md')).toBe(false);
+        // 확장 루트가 서브디렉토리인 경우 (Qwen-MM-Plugins capability)
+        const subPat = buildSkillDiscoveryPattern('src/capabilities/core/');
+        expect(subPat.test('src/capabilities/core/skill/SKILL.md')).toBe(true);
+        expect(subPat.test('src/capabilities/blender/skill/SKILL.md')).toBe(false);
     });
 });
 

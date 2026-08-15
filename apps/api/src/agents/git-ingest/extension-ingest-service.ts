@@ -188,7 +188,7 @@ export class ExtensionIngestService {
         const warnings: string[] = [];
 
         // (6-a) skills — <root>skills/<dir>/SKILL.md (Agent Plugins v1: 직계 하위만)
-        const skillPattern = new RegExp(`^${escapeRegExp(root)}skills/[^/]+/SKILL\\.md$`, 'i');
+        const skillPattern = buildSkillDiscoveryPattern(root);
         let skillPaths = tree.entries.filter(e => skillPattern.test(e.path)).map(e => e.path);
         if (skillPaths.length > EXTENSION_INGEST.maxSkillsPerExtension) {
             warnings.push(`SKILLS_TRUNCATED: ${skillPaths.length}개 중 ${EXTENSION_INGEST.maxSkillsPerExtension}개만 설치`);
@@ -433,4 +433,13 @@ export class ExtensionIngestService {
 
 function escapeRegExp(s: string): string {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * 확장 루트 기준 SKILL.md 탐지 패턴 (순수 함수 — 테스트용 export).
+ * 매칭: skills/<dir>/SKILL.md (Agent Plugins v1) · skill/SKILL.md (Qwen-MM-Plugins 등
+ * 단수 레이아웃) · skills/SKILL.md. 하위 디렉토리 중첩은 1단계까지만.
+ */
+export function buildSkillDiscoveryPattern(root: string): RegExp {
+    return new RegExp(`^${escapeRegExp(root)}skills?/(?:[^/]+/)?SKILL\\.md$`, 'i');
 }
