@@ -1459,6 +1459,11 @@ export const AGENT_TASK_LIMITS = {
     GOAL_JUDGE_ENABLED: process.env.AGENT_TASK_GOAL_JUDGE !== 'false',
     /** judge 에 넘기는 최종 답변 최대 글자 수 (프롬프트 팽창 방지) */
     GOAL_JUDGE_MAX_ANSWER_CHARS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_MAX_CHARS || '6000', 10),
+    /** judge 실행 컨텍스트에 싣는 최근 도구 결과 수 — 성공 증거 부재로 완수 작업을 미달성
+     *  판정하던 false negative(2026-08-09 예약리포트·2026-08-15 로컬실행, 실측 2회) 완화. */
+    GOAL_JUDGE_EVIDENCE_MAX_ITEMS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_EVIDENCE_MAX_ITEMS || '5', 10),
+    /** judge 도구 결과 항목당 글자 캡 (프롬프트 팽창 방지) */
+    GOAL_JUDGE_EVIDENCE_ITEM_CHARS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_EVIDENCE_ITEM_CHARS || '160', 10),
     /** 부팅 자동 복구 — 프로세스 재시작으로 중단된 task 를 부팅 시 자동 resume 한다.
      *  주의: schema-initializer 가 부팅 시 running/paused 를 failed('server restarted') 로 먼저
      *  마킹하므로, 복구 대상은 ①잔존 running/paused(마킹 실패 대비) + ②restart 마킹 + checkpoint

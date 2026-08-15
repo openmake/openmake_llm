@@ -57,6 +57,8 @@ export interface FinalizeInput {
     sandboxCfg: TaskSandboxConfig;
     /** 실행 중 사용한 도구 — judge 실행 컨텍스트. */
     usedTools: ReadonlySet<string>;
+    /** 최근 도구 실행 결과 요약(buildJudgeToolEvidence) — judge false negative 완화용 수행 증거. */
+    toolEvidence?: string;
     /** 0-base 턴 인덱스. */
     turn: number;
     stepNumber: number;
@@ -82,7 +84,7 @@ export type FinalizeOutcome =
 export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcome> {
     const {
         taskId, goal, userId, path, rawContent, terminateSummary,
-        taskRuntime, sandboxCfg, usedTools, turn, signal, update, emitStep,
+        taskRuntime, sandboxCfg, usedTools, toolEvidence, turn, signal, update, emitStep,
     } = input;
     let stepNumber = input.stepNumber;
 
@@ -122,7 +124,7 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     // 3. goal judge — 아티팩트 없는 완료만 LLM 1회 검증(마커 미준수 보완). 결과는 관측 컬럼에 남긴다.
     let verdict: JudgeVerdict = 'skipped';
     if (artifacts.length === 0 && AGENT_TASK_LIMITS.GOAL_JUDGE_ENABLED) {
-        const execCtx = buildJudgeExecutionContext(usedTools, turn + 1, taskRuntime?.getPlanSnapshot() ?? []);
+        const execCtx = buildJudgeExecutionContext(usedTools, turn + 1, taskRuntime?.getPlanSnapshot() ?? [], toolEvidence);
         const achieved = await judgeGoalAchieved(
             await judgeClientFor(userId), goal, body ?? '', signal, execCtx);
         verdict = achieved === null ? 'unknown' : achieved ? 'achieved' : 'not_achieved';
