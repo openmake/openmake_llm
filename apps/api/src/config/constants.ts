@@ -236,6 +236,30 @@ export const MCP_INGEST = {
     ] as RiskyCommandRule[],
 };
 
+// ============================================================
+// EXTENSION_INGEST — 확장 번들 (Agent Plugins v1) ingest 설정
+// ============================================================
+
+/**
+ * EXTENSION_INGEST — plugin.json 확장 번들 git ingest 파이프라인 설정.
+ *
+ * 환경변수 오버라이드:
+ *   - EXTENSION_INGEST_ENABLED=false          (기본 true)
+ *   - EXTENSION_INGEST_MAX_PER_USER=20        (기본 20 — active 설치 상한)
+ *   - EXTENSION_INGEST_DEDUPE_HOURS=24        (기본 24)
+ *   - EXTENSION_INGEST_MAX_SKILLS=10          (기본 10 — 번들당 skill 상한)
+ *   - EXTENSION_INGEST_MAX_MCP_SERVERS=5      (기본 5 — 번들당 MCP 서버 상한)
+ *   - EXTENSION_INGEST_MANIFEST_MAX_BYTES=65536 (기본 64KB — plugin.json/mcp.json 크기 상한)
+ */
+export const EXTENSION_INGEST = {
+    enabled: process.env.EXTENSION_INGEST_ENABLED !== 'false',
+    maxPerUser: parseInt(process.env.EXTENSION_INGEST_MAX_PER_USER || '20', 10),
+    dedupeWindowHours: parseInt(process.env.EXTENSION_INGEST_DEDUPE_HOURS || '24', 10),
+    maxSkillsPerExtension: parseInt(process.env.EXTENSION_INGEST_MAX_SKILLS || '10', 10),
+    maxMcpServersPerExtension: parseInt(process.env.EXTENSION_INGEST_MAX_MCP_SERVERS || '5', 10),
+    manifestMaxBytes: parseInt(process.env.EXTENSION_INGEST_MANIFEST_MAX_BYTES || '65536', 10),
+} as const;
+
 // ============================================
 // 모델 선택
 // ============================================

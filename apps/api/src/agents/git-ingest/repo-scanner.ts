@@ -83,3 +83,35 @@ export function scanForMcpServerManifests(tree: TreeEntry[], explicitPath?: stri
         .filter(e => MCP_SERVER_MANIFEST_PATTERNS.some(re => re.test(e.path)))
         .map(e => ({ path: e.path, sha: e.sha, size: e.size }));
 }
+
+/**
+ * plugin.json (Agent Plugins v1 확장 번들) 후보 탐지.
+ *
+ * 자동 탐지 규칙:
+ *   1. 명시 explicitPath 지정 시 그것만
+ *   2. tree 어디든 plugin.json (root, 서브디렉토리, .claude-plugin/ 포함)
+ */
+const EXTENSION_MANIFEST_PATTERN = /(^|\/)plugin\.json$/;
+
+export function scanForExtensionManifests(tree: TreeEntry[], explicitPath?: string): ManifestCandidate[] {
+    if (explicitPath) {
+        const hit = tree.find(e => e.path === explicitPath);
+        return hit ? [{ path: hit.path, sha: hit.sha, size: hit.size }] : [];
+    }
+    return tree
+        .filter(e => EXTENSION_MANIFEST_PATTERN.test(e.path))
+        .map(e => ({ path: e.path, sha: e.sha, size: e.size }));
+}
+
+/**
+ * plugin.json 경로 → 확장 루트 디렉토리 prefix ('' = repo root, 아니면 'dir/').
+ * Claude Code 마켓플레이스 레이아웃(.claude-plugin/plugin.json)은 그 부모가 루트.
+ */
+export function resolveExtensionRoot(manifestPath: string): string {
+    const dir = manifestPath.includes('/')
+        ? manifestPath.slice(0, manifestPath.lastIndexOf('/'))
+        : '';
+    if (dir === '.claude-plugin') return '';
+    if (dir.endsWith('/.claude-plugin')) return dir.slice(0, -'.claude-plugin'.length);
+    return dir === '' ? '' : `${dir}/`;
+}

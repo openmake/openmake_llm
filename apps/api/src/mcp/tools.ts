@@ -128,6 +128,8 @@ import { importSkillFromGitTool } from './git-ingest-tool';
 import { importAgentFromGitTool } from './agent-ingest-tool';
 // Git URL → MCP server 매니페스트 ingest (Phase 4.5) — 3중 잠금 draft + 위험 명령 차단
 import { importMcpServerFromGitTool } from './mcp-server-ingest-tool';
+// Git URL → 확장 번들 (plugin.json, Agent Plugins v1) ingest — skill/MCP 서버 묶음 설치
+import { importExtensionFromGitTool } from './extension-ingest-tool';
 // 보안 리뷰 (P-2) — 코드 취약점 분석 (읽기 전용)
 import { securityReviewTool } from './security-review-tool';
 // Plan Mode (P-3) — 구현 전 읽기 전용 실행 계획 생성
@@ -163,6 +165,7 @@ export const builtInTools: MCPToolDefinition[] = [
     importSkillFromGitTool as MCPToolDefinition,
     importAgentFromGitTool as MCPToolDefinition,
     importMcpServerFromGitTool as MCPToolDefinition,
+    importExtensionFromGitTool as MCPToolDefinition,
     securityReviewTool,
     createPlanTool,
     codeReviewTool,
