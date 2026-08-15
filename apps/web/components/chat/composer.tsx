@@ -754,6 +754,10 @@ export function Composer() {
             }
           }}
           onKeyDown={(e) => {
+            // 한글 등 IME 조합 중 Enter 는 조합 확정 이벤트가 keydown 을 한 번 더 발생시켜
+            // 제출이 2회 실행된다(조합 중이던 음절만 담긴 유령 메시지/작업 생성 실측).
+            // keyCode 229 는 isComposing 이 false 로 오는 WebKit 조합 커밋 케이스 보강.
+            if (e.key === "Enter" && (e.nativeEvent.isComposing || e.keyCode === 229)) return;
             // 슬래시 메뉴가 열려 있으면 네비게이션/선택 우선 처리.
             // 활성 인덱스는 스킬(0..n-1) + "전체 보기"(n) 를 순회.
             if (slashMenuOpen) {
