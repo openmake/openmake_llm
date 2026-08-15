@@ -1,8 +1,45 @@
 import type { ApiSuccess, MePayload } from "@openmake/shared-types";
-import { ApiClient } from "./api-client";
+import { ApiClient, csrfHeaders } from "./api-client";
 import { getAnonSessionId } from "./anon-session";
 import { flushOAuthLoginPending, gaSetVisitor } from "./analytics";
 import { useAppStore } from "./store";
+
+/**
+ * "이 브라우저에서 로그인한 적 있음" 흔적 — 만료된 auth_token 쿠키는 브라우저가 purge 해
+ * /api/auth/me 가 401 이 아닌 200(게스트)로 오고, 401 트리거가 없어 자동 refresh 가 돌지
+ * 않는다(2026-08-15 실측: 앱 재시작 후 refresh_token 이 살아 있는데 게스트로 표시). 이
+ * 흔적이 있을 때만 마운트 동기화에서 refresh 를 1회 선시도한다 — 순수 게스트는 흔적이
+ * 없어 불필요한 refresh 요청이 나가지 않는다.
+ */
+const HAD_SESSION_KEY = "omk_had_session";
+
+function hadSession(): boolean {
+  try { return localStorage.getItem(HAD_SESSION_KEY) === "1"; } catch { return false; }
+}
+
+function markHadSession(): void {
+  try { localStorage.setItem(HAD_SESSION_KEY, "1"); } catch { /* storage 불가 — 선시도만 포기 */ }
+}
+
+/** 로그아웃/refresh 실패(세션 수명 종료) 시 흔적 제거 — 다음 마운트의 헛 refresh 방지. */
+export function clearHadSession(): void {
+  try { localStorage.removeItem(HAD_SESSION_KEY); } catch { /* noop */ }
+}
+
+/** refresh 1회 시도(CSRF 이중제출 포함) — 성공 시 새 auth_token 쿠키가 심긴다. */
+async function tryRefresh(): Promise<boolean> {
+  try {
+    const headers = await csrfHeaders();
+    const r = await fetch("/api/auth/refresh", { method: "POST", credentials: "include", headers });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+function fetchMe(): Promise<ApiSuccess<MePayload>> {
+  return ApiClient.get<ApiSuccess<MePayload>>("/api/auth/me");
+}
 
 /**
  * /api/auth/me 로 현재 로그인 사용자를 store 에 동기화하고 익명 세션을 이관.
@@ -13,13 +50,24 @@ import { useAppStore } from "./store";
  */
 export async function syncAuthFromServer(): Promise<boolean> {
   try {
-    const res = await ApiClient.get<ApiSuccess<MePayload>>("/api/auth/me");
-    const u = res?.data?.user;
+    let res = await fetchMe();
+    let u = res?.data?.user;
+    if (!u && hadSession()) {
+      // 로그인 흔적이 있는데 게스트로 왔다 = auth_token 쿠키가 만료-purge 된 상태일 수 있다.
+      // refresh_token(7일) 이 살아 있으면 1회 선시도로 세션을 복원한다(위 HAD_SESSION_KEY 주석).
+      if (await tryRefresh()) {
+        res = await fetchMe();
+        u = res?.data?.user;
+      } else {
+        clearHadSession(); // refresh 수명도 끝 — 다음 마운트부터 헛 시도 없음
+      }
+    }
     if (!u) {
       // 비로그인은 200 + user:null 로 온다(401 아님) — 게스트 라벨링은 이 분기가 본선.
       gaSetVisitor(null, "guest");
       return false;
     }
+    markHadSession();
     useAppStore.getState().setAuth({
       currentUser: {
         id: String(u.id),
