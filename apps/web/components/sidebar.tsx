@@ -30,6 +30,25 @@ interface SessionRow {
   sessionId?: string;
   title?: string;
   name?: string;
+  updatedAt?: string;
+  createdAt?: string;
+}
+
+/** OpenWork형 날짜 그룹 — 최근 대화를 시간대별로 묶어 밀도 있게 표시. */
+type SessionGroupKey = "today" | "yesterday" | "previous7Days" | "older";
+const SESSION_GROUP_ORDER: SessionGroupKey[] = ["today", "yesterday", "previous7Days", "older"];
+
+function sessionGroupKey(updatedAt?: string): SessionGroupKey {
+  if (!updatedAt) return "older";
+  const ts = new Date(updatedAt).getTime();
+  if (!Number.isFinite(ts)) return "older";
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const dayMs = 86_400_000;
+  if (ts >= startOfToday) return "today";
+  if (ts >= startOfToday - dayMs) return "yesterday";
+  if (ts >= startOfToday - 7 * dayMs) return "previous7Days";
+  return "older";
 }
 
 export function Sidebar() {
@@ -154,6 +173,12 @@ export function Sidebar() {
       )
     : sessions;
 
+  // OpenWork형 시간대 그룹핑 — 최신순 20개를 today/yesterday/previous7Days/older 로 묶는다.
+  const groupedSessions = SESSION_GROUP_ORDER.map((key) => ({
+    key,
+    rows: filteredSessions.slice(0, 20).filter((s) => sessionGroupKey(s.updatedAt ?? s.createdAt) === key),
+  })).filter((g) => g.rows.length > 0);
+
   return (
     <aside className="flex h-full w-[264px] flex-col border-r border-border bg-surface-2/60">
       <Link href="/" className="flex items-center gap-2 px-4 pt-4 transition hover:opacity-80">
@@ -197,7 +222,7 @@ export function Sidebar() {
               <Link
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm transition",
+                  "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] transition",
                   isActive(item.href)
                     ? "bg-accent-soft font-medium text-accent"
                     : "text-fg-2 hover:bg-surface-3 hover:text-fg",
@@ -220,45 +245,50 @@ export function Sidebar() {
 
         {sessions.length > 0 && (
           <div className="pt-3">
-            <p className="px-1 pb-1 text-[11px] font-medium uppercase tracking-wider text-faint">
-              {t("recentChats")}
-            </p>
             {filteredSessions.length === 0 && (
               <p className="px-2.5 py-1.5 text-sm text-faint">{t("noResults")}</p>
             )}
-            <ul className="space-y-0.5">
-              {filteredSessions.slice(0, 20).map((s, i) => {
-                const sid = s.id ?? s.sessionId;
-                const active = !!sid && sid === currentSessionId;
-                const title = s.title ?? s.name ?? t("untitledChat");
-                return (
-                  <li key={sid ?? i} className="group relative">
-                    <button
-                      type="button"
-                      onClick={() => openSession(sid)}
-                      className={cn(
-                        "w-full truncate rounded-md px-2.5 py-1.5 text-left text-sm transition group-hover:pr-8",
-                        active
-                          ? "bg-accent-soft font-medium text-accent"
-                          : "text-muted hover:bg-surface-3 hover:text-fg",
-                      )}
-                    >
-                      {title}
-                    </button>
-                    {sid && (
-                      <button
-                        type="button"
-                        aria-label={t("deleteChat")}
-                        onClick={() => void deleteSession(sid, title)}
-                        className="absolute right-1 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-faint opacity-0 transition group-hover:opacity-100 hover:bg-surface-3 hover:text-danger"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+            {groupedSessions.map((group) => (
+              <div key={group.key} className="pb-2">
+                <p className="flex items-center gap-1.5 px-1 pb-1 text-[11px] font-medium uppercase tracking-wider text-faint">
+                  <span className="h-1.5 w-1.5 rounded-full bg-accent/50" />
+                  {t(`groups.${group.key}`)}
+                </p>
+                <ul className="space-y-px">
+                  {group.rows.map((s, i) => {
+                    const sid = s.id ?? s.sessionId;
+                    const active = !!sid && sid === currentSessionId;
+                    const title = s.title ?? s.name ?? t("untitledChat");
+                    return (
+                      <li key={sid ?? i} className="group relative">
+                        <button
+                          type="button"
+                          onClick={() => openSession(sid)}
+                          className={cn(
+                            "w-full truncate rounded-md px-2.5 py-1.5 text-left text-[13px] leading-tight transition group-hover:pr-8",
+                            active
+                              ? "bg-accent-soft font-medium text-accent"
+                              : "text-muted hover:bg-surface-3 hover:text-fg",
+                          )}
+                        >
+                          {title}
+                        </button>
+                        {sid && (
+                          <button
+                            type="button"
+                            aria-label={t("deleteChat")}
+                            onClick={() => void deleteSession(sid, title)}
+                            className="absolute right-1 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-faint opacity-0 transition group-hover:opacity-100 hover:bg-surface-3 hover:text-danger"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
           </div>
         )}
         {/* 히스토리 진입점 — 최근 대화 유무와 무관하게 상시 노출 (없으면 이 링크가 /history 유일 경로) */}

@@ -43,7 +43,13 @@
     "themeToggle": "테마 전환",
     "viewAll": "모두 보기",
     "noResults": "검색 결과 없음",
-    "accountMenu": "계정 메뉴"
+    "accountMenu": "계정 메뉴",
+    "groups": {
+      "today": "오늘",
+      "yesterday": "어제",
+      "previous7Days": "지난 7일",
+      "older": "이전"
+    }
   },
   "mobileNav": {
     "chat": "채팅",

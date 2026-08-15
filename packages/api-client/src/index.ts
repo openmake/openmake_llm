@@ -66,7 +66,10 @@ let refreshInFlight: Promise<boolean> | null = null;
 
 function refreshOnce(): Promise<boolean> {
   if (!refreshInFlight) {
-    refreshInFlight = fetch("/api/auth/refresh", { method: "POST", credentials: "include" })
+    // CSRF_PROTECTION=enforce 에서 헤더 없는 refresh 는 403 — 만료 후 첫 401 인터셉트가
+    // 항상 실패해 /login 으로 원복되던 결함 (2026-08-15). 헤더를 붙여 호출한다.
+    refreshInFlight = csrfHeaders()
+      .then((headers) => fetch("/api/auth/refresh", { method: "POST", credentials: "include", headers }))
       .then((r) => r.ok)
       .catch(() => false)
       .finally(() => {

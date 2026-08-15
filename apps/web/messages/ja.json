@@ -43,7 +43,13 @@
     "themeToggle": "テーマ切替",
     "viewAll": "すべて表示",
     "noResults": "検索結果なし",
-    "accountMenu": "アカウントメニュー"
+    "accountMenu": "アカウントメニュー",
+    "groups": {
+      "today": "今日",
+      "yesterday": "昨日",
+      "previous7Days": "過去7日間",
+      "older": "それ以前"
+    }
   },
   "mobileNav": {
     "chat": "チャット",
