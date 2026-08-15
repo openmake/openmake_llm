@@ -51,6 +51,26 @@ describe('validateManifest', () => {
         }
     });
 
+    test('category 누락 시 general 기본값 (Claude Code 마켓플레이스 SKILL.md 호환)', async () => {
+        // Anthropic/Claude Code 생태계 SKILL.md 형식 — category 없음 + 미정의 키 다수
+        const marketplaceSkill = `---
+name: golang-code-style
+description: "Golang code style conventions"
+user-invocable: true
+license: MIT
+metadata:
+  author: someone
+---
+
+Go 코드 스타일 규약을 따르세요. 가독성과 명료함을 우선합니다.`;
+        const parsed = parseSkillFile(marketplaceSkill);
+        const result = await validateManifest(parsed, { availableToolNames: new Set() });
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+            expect(result.manifest.category).toBe('general');
+        }
+    });
+
     test('존재하지 않는 도구는 거부', async () => {
         const parsed = parseSkillFile(VALID_SKILL);
         const result = await validateManifest(parsed, {
@@ -81,7 +101,8 @@ describe('validateManifest', () => {
         expect(result.ok).toBe(false);
         if (!result.ok) {
             expect(result.errors.some(e => /description/.test(e))).toBe(true);
-            expect(result.errors.some(e => /category/.test(e))).toBe(true);
+            // category 는 더 이상 필수 아님 — 누락 시 'general' 기본값 (마켓플레이스 호환)
+            expect(result.errors.some(e => /category/.test(e))).toBe(false);
         }
     });
 });
