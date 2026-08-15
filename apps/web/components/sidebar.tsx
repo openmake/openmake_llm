@@ -21,6 +21,7 @@ import type { ChatRole } from "@/lib/store";
 import { visibleNavItems } from "@/lib/nav";
 import { ApiClient } from "@/lib/api-client";
 import { appendAnonSessionId } from "@/lib/anon-session";
+import { clearHadSession } from "@/lib/auth-sync";
 import Image from "next/image";
 import { ThemeToggle } from "./theme-toggle";
 import { cn } from "@/lib/utils";
@@ -146,6 +147,7 @@ export function Sidebar() {
     } catch {
       /* 실패해도 진행 */
     }
+    clearHadSession(); // 로그인 흔적 제거 — 다음 마운트의 refresh 선시도 방지
     setAuth({ currentUser: null, isGuestMode: true });
     router.push("/login");
   };
