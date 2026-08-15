@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Save,
   Loader2,
+  Package,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -37,9 +38,10 @@ import { ConnectorsSection } from "@/components/settings/connectors-section";
 import { GithubConnectSection } from "@/components/settings/github-connect-section";
 import { ProviderKeysSection } from "@/components/settings/provider-keys-section";
 import { ModelRolesSection } from "@/components/settings/model-roles-section";
+import { ExtensionsSection } from "@/components/settings/extensions-section";
 
 /* ── 탭 정의 ────────────────────────────────────────────── */
-type TabId = "general" | "model" | "interface" | "notifications" | "memory" | "connectors" | "privacy" | "security";
+type TabId = "general" | "model" | "interface" | "notifications" | "memory" | "extensions" | "connectors" | "privacy" | "security";
 
 const TABS: { id: TabId; labelKey: string; icon: LucideIcon }[] = [
   { id: "general", labelKey: "tabs.general", icon: Settings },
@@ -47,6 +49,7 @@ const TABS: { id: TabId; labelKey: string; icon: LucideIcon }[] = [
   { id: "interface", labelKey: "tabs.interface", icon: Palette },
   { id: "notifications", labelKey: "tabs.notifications", icon: Bell },
   { id: "memory", labelKey: "tabs.memory", icon: Brain },
+  { id: "extensions", labelKey: "tabs.extensions", icon: Package },
   { id: "connectors", labelKey: "tabs.connectors", icon: Server },
   { id: "privacy", labelKey: "tabs.privacy", icon: ShieldCheck },
   { id: "security", labelKey: "tabs.security", icon: ShieldCheck },
@@ -755,6 +758,8 @@ export default function SettingsPage() {
             )}
 
             {tab === "memory" && <MemorySection />}
+
+            {tab === "extensions" && <ExtensionsSection />}
 
             {tab === "connectors" && (
               <div className="space-y-6">

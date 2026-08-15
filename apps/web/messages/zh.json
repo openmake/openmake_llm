@@ -76,7 +76,8 @@
       "privacy": "隐私",
       "security": "安全",
       "memory": "记忆",
-      "connectors": "连接器"
+      "connectors": "连接器",
+      "extensions": "扩展"
     },
     "responseStyles": {
       "concise": "简洁",
@@ -1782,5 +1783,24 @@
     "title": "找不到页面",
     "description": "您访问的页面不存在或已被移动。",
     "backHome": "返回首页"
+  },
+  "extensions": {
+    "title": "扩展管理",
+    "description": "查看并移除已安装的扩展包(技能与 MCP 服务器)。",
+    "installHint": "安装方式:在聊天中请求\"安装这个扩展: github.com/owner/repo\"。各组件需审核批准后才会启用。",
+    "empty": "暂无已安装的扩展。",
+    "skills": "技能",
+    "mcpServers": "MCP 服务器",
+    "none": "无",
+    "approvalHint": "draft 状态的组件需在技能库/MCP 服务器页面批准后才会启用。",
+    "detailFailed": "组件信息加载失败。",
+    "removeConfirm": "确定移除此扩展吗?其包含的技能与 MCP 服务器将被归档。",
+    "removeAria": "移除扩展",
+    "status": {
+      "active": "已启用",
+      "draft": "待批准",
+      "archived": "已归档",
+      "disabled": "已停用"
+    }
   }
 }
