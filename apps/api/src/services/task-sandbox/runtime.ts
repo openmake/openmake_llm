@@ -138,6 +138,9 @@ export class TaskRuntime {
     /** 입력 첨부 주입 등 호스트 측 workspace 파일 쓰기 — 경로 가드(safeRealWorkspacePath)+쿼터 적용. */
     async writeWorkspaceFile(relPath: string, content: string | Buffer): Promise<void> { return this.executor.writeFile(relPath, content); }
 
+    /** 시스템 임시 파일(검증 프로브 등) 정리 — 로컬 실행기에선 workspace 가 사용자 폴더다. */
+    async deleteWorkspaceFile(relPath: string): Promise<void> { return this.executor.deleteFile(relPath); }
+
     /** 호스트 파일을 workspace 로 복사 — 대용량 입력 첨부의 스트리밍 주입(Buffer 미적재). */
     async importWorkspaceFile(relPath: string, srcAbsPath: string): Promise<void> { return this.executor.importFile(relPath, srcAbsPath); }
 

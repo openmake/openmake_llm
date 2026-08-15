@@ -22,9 +22,11 @@ function fakeRuntime(execImpl: (cmd: string) => ExecResult): {
     runtime: TaskRuntime;
     writes: Array<{ path: string; content: string }>;
     cmds: string[];
+    deletes: string[];
 } {
     const writes: Array<{ path: string; content: string }> = [];
     const cmds: string[] = [];
+    const deletes: string[] = [];
     const runtime = {
         writeWorkspaceFile: async (path: string, content: string | Buffer) => {
             writes.push({ path, content: String(content) });
@@ -33,8 +35,11 @@ function fakeRuntime(execImpl: (cmd: string) => ExecResult): {
             cmds.push(cmd);
             return execImpl(cmd);
         },
+        deleteWorkspaceFile: async (path: string) => {
+            deletes.push(path);
+        },
     } as unknown as TaskRuntime;
-    return { runtime, writes, cmds };
+    return { runtime, writes, cmds, deletes };
 }
 
 const OK: ExecResult = { stdout: '', stderr: '', exitCode: 0, truncated: false, timedOut: false, durationMs: 5 };
@@ -61,6 +66,15 @@ describe('verifyCodeArtifacts', () => {
         expect(r.ok).toBe(false);
         expect(r.report).toContain('SyntaxError');
         expect(r.report).toContain('분석 스크립트');
+    });
+
+    it('검증 프로브 파일은 검사 후 삭제된다 (성공·실패 모두)', async () => {
+        const ok = fakeRuntime(() => OK);
+        await verifyCodeArtifacts(ok.runtime, [artifact({ lang: 'python' })]);
+        expect(ok.deletes).toEqual(['.verify_0.py']);
+        const fail = fakeRuntime(() => FAIL);
+        await verifyCodeArtifacts(fail.runtime, [artifact({ lang: 'python' })]);
+        expect(fail.deletes).toEqual(['.verify_0.py']);
     });
 
     it('js 는 node --check 로 검사', async () => {

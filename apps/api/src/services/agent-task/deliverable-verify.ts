@@ -72,6 +72,9 @@ export async function verifyCodeArtifacts(
             } catch (e) {
                 // 개별 산출물 검사 실패는 통과 취급(fail-open) — 인프라 문제로 완료를 막지 않음.
                 logger.debug(`[Verify] 검사 스킵(${a.id}): ${e instanceof Error ? e.message : e}`);
+            } finally {
+                // 검증 프로브 정리 — 로컬 실행기에선 workspace 가 사용자 연결 폴더라 잔재가 남는다.
+                try { await runtime.deleteWorkspaceFile(file); } catch { /* 정리 실패 무시 */ }
             }
         }
         if (failures.length === 0) return { ok: true, report: '' };
