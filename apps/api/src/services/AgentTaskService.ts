@@ -40,6 +40,7 @@ import { buildFileContext } from './chat-service/attach-context';
 import { AgentTaskAbort, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
 import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
 import { finalizeTask } from './agent-task/finalize';
+import { buildJudgeToolEvidence } from './agent-task/goal-judge';
 import { persistArtifactSteps } from './agent-task/task-steps';
 import { initWorkspaceBaseline, maybePersistCodeDiff, captureDiffOnCleanup } from './agent-task/code-diff';
 import { getSteeringRegistry, applyPendingSteering } from './agent-task/steering';
@@ -453,7 +454,7 @@ export class AgentTaskService {
                     const fin = await finalizeTask({
                         taskId, goal, userId: String(userId), path: 'final_answer',
                         rawContent: result.content ?? '',
-                        taskRuntime, sandboxCfg, usedTools, turn, stepNumber, verifyRetries,
+                        taskRuntime, sandboxCfg, usedTools, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries,
                         signal: callSignal, update, emitStep,
                     });
                     stepNumber = fin.stepNumber;
@@ -489,7 +490,7 @@ export class AgentTaskService {
                     const fin = await finalizeTask({
                         taskId, goal, userId: String(userId), path: 'terminate',
                         rawContent: result.content ?? '', terminateSummary,
-                        taskRuntime, sandboxCfg, usedTools, turn, stepNumber, verifyRetries,
+                        taskRuntime, sandboxCfg, usedTools, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries,
                         signal: callSignal, update, emitStep,
                     });
                     stepNumber = fin.stepNumber;
