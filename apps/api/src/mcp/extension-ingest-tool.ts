@@ -28,7 +28,7 @@ interface ImportExtensionFromGitArgs extends Record<string, unknown> {
 export const importExtensionFromGitTool: MCPToolDefinition<ImportExtensionFromGitArgs> = {
     tool: {
         name: 'import_extension_from_git',
-        description: 'GitHub URL 의 plugin.json (Agent Plugins v1) 확장 번들을 설치합니다 — skills/*/SKILL.md 와 MCP 서버 정의를 한 번에 draft 로 가져옵니다. 사용자가 명시적으로 "이 확장/플러그인 설치해줘", "이 저장소를 확장으로 import 해줘" 같은 요청을 했을 때만 호출하세요. plugin.json 이 여러 개면 후보 목록만 반환 (재호출에서 gitPath 명시 필요). 단일 스킬/에이전트/MCP 서버만 가져올 때는 import_skill_from_git / import_agent_from_git / import_mcp_server_from_git 를 대신 사용하세요.',
+        description: 'GitHub URL 의 plugin.json (Agent Plugins v1) 확장 번들을 설치합니다 — skills/*/SKILL.md 와 MCP 서버 정의를 한 번에 draft 로 가져옵니다. 같은 저장소의 이미 설치된 확장을 다시 요청하면 최신 ref 로 업데이트합니다 (구 구성요소는 archive). 사용자가 명시적으로 "이 확장/플러그인 설치해줘", "이 확장 업데이트해줘" 같은 요청을 했을 때만 호출하세요. plugin.json 이 여러 개면 후보 목록만 반환 (재호출에서 gitPath 명시 필요). 단일 스킬/에이전트/MCP 서버만 가져올 때는 import_skill_from_git / import_agent_from_git / import_mcp_server_from_git 를 대신 사용하세요.',
         inputSchema: {
             type: 'object',
             properties: {
@@ -118,8 +118,15 @@ export const importExtensionFromGitTool: MCPToolDefinition<ImportExtensionFromGi
                 mcpServers: result.mcpServers,
                 validationWarnings: result.validationWarnings,
                 deduped: result.deduped,
+                upToDate: result.upToDate,
+                updated: result.updated,
+                previousVersion: result.previousVersion,
             };
-            const assistantText = result.deduped
+            const assistantText = result.upToDate
+                ? `확장 "${result.name}@${result.version}" 은 이미 최신 상태입니다 (변경 없음).`
+                : result.updated
+                ? `확장 "${result.name}" 을 v${result.previousVersion} → v${result.version} 으로 업데이트했습니다 — skill ${okSkills.length}개, MCP 서버 ${okServers.length}개 (모두 draft, 구버전 구성요소는 보관 처리). 각 구성요소를 검토·승인해야 활성화됩니다.`
+                : result.deduped
                 ? `24시간 내 동일 git ref 라 기존 설치 "${result.name}@${result.version}" 를 재사용했습니다.`
                 : `확장 "${result.name}@${result.version}" 을 설치했습니다 — skill ${okSkills.length}개, MCP 서버 ${okServers.length}개 (모두 draft). 각 구성요소를 검토·승인해야 활성화됩니다.`;
             const failSuffix = (failedSkills.length + failedServers.length) > 0
@@ -129,7 +136,9 @@ export const importExtensionFromGitTool: MCPToolDefinition<ImportExtensionFromGi
                 ? `\n\n⚠ MCP 서버 ${blockedServers.length}개가 위험 명령 패턴으로 차단 표시 — 승인 전 반드시 검토하세요.`
                 : '';
 
-            const llmText = `Installed extension ${result.extensionId} "${result.name}@${result.version}" from ${result.gitUrl}@${result.gitRef.slice(0, 7)} — skills: ${okSkills.length} ok/${failedSkills.length} failed, mcpServers: ${okServers.length} ok/${failedServers.length} failed/${blockedServers.length} convention-blocked. All components are drafts requiring user approval.`;
+            const llmText = result.upToDate
+                ? `Extension ${result.extensionId} "${result.name}@${result.version}" is already up to date (ref ${result.gitRef.slice(0, 7)}). No changes made.`
+                : `${result.updated ? `Updated extension ${result.extensionId} "${result.name}" v${result.previousVersion} -> v${result.version}` : `Installed extension ${result.extensionId} "${result.name}@${result.version}"`} from ${result.gitUrl}@${result.gitRef.slice(0, 7)} — skills: ${okSkills.length} ok/${failedSkills.length} failed, mcpServers: ${okServers.length} ok/${failedServers.length} failed/${blockedServers.length} convention-blocked. All components are drafts requiring user approval.`;
 
             logger.info(`MCP import_extension_from_git: ${result.extensionId} (user=${userId}, gitUrl=${args.gitUrl}, deduped=${result.deduped})`);
             return {

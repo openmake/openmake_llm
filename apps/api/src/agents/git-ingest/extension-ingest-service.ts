@@ -76,8 +76,21 @@ export interface ImportResult {
     mcpServers: McpServerInstallResult[];
     validationWarnings: string[];
     deduped: boolean;
+    /** 동일 소스 재설치인데 source_ref 가 이미 최신 — 아무것도 변경 안 함 */
+    upToDate?: boolean;
+    /** 동일 이름·동일 소스 재설치 → 기존 설치를 새 ref 로 교체 (구 구성요소 archive) */
+    updated?: boolean;
+    previousVersion?: string;
     selectionRequired?: false;
     candidates?: never;
+}
+
+export interface UpdateCheckResult {
+    updateAvailable: boolean;
+    currentRef: string;
+    latestRef: string;
+    /** 최신 ref 의 plugin.json version (조회 실패 시 null) */
+    latestVersion: string | null;
 }
 
 export interface CandidateListResult {
@@ -149,13 +162,27 @@ export class ExtensionIngestService {
             return this.shapeFromRow(existing, true);
         }
 
-        const activeCount = await extRepo.countActiveForUser(input.userId);
-        if (activeCount >= EXTENSION_INGEST.maxPerUser) {
-            throw new Error(`EXTENSION_LIMIT_EXCEEDED: ${activeCount}/${EXTENSION_INGEST.maxPerUser}`);
-        }
+        // 동일 이름 active 설치: 같은 repo 면 업데이트 모드, 다른 소스면 충돌
         const sameName = await extRepo.findActiveByName(input.userId, manifest.name);
+        let updateTarget: typeof sameName = null;
         if (sameName) {
-            throw new Error(`EXTENSION_ALREADY_INSTALLED: "${manifest.name}" 이 이미 설치됨 (${sameName.id}) — 먼저 제거 후 재설치하세요`);
+            const prevParsed = parseGitUrl(sameName.source_url);
+            if (prevParsed && prevParsed.owner === owner && prevParsed.repo === repo) {
+                if (sameName.source_ref === sha) {
+                    // 이미 최신 — 변경 없음
+                    return { ...this.shapeFromRow(sameName, false), upToDate: true };
+                }
+                updateTarget = sameName;
+            } else {
+                throw new Error(`EXTENSION_ALREADY_INSTALLED: "${manifest.name}" 이 다른 소스(${sameName.source_url})로 이미 설치됨 (${sameName.id}) — 먼저 제거 후 재설치하세요`);
+            }
+        }
+
+        if (!updateTarget) {
+            const activeCount = await extRepo.countActiveForUser(input.userId);
+            if (activeCount >= EXTENSION_INGEST.maxPerUser) {
+                throw new Error(`EXTENSION_LIMIT_EXCEEDED: ${activeCount}/${EXTENSION_INGEST.maxPerUser}`);
+            }
         }
 
         const warnings: string[] = [];
@@ -273,28 +300,47 @@ export class ExtensionIngestService {
             throw new Error(`NO_COMPONENTS_INSTALLED: 설치 가능한 구성요소 없음${detail ? ` (${detail})` : ''}`);
         }
 
-        // (8) user_extensions INSERT + 링크
-        const row = await extRepo.insert({
-            userId: input.userId,
-            name: manifest.name,
-            version: manifest.version,
-            description: manifest.description ?? null,
-            sourceUrl: input.gitUrl,
-            sourceRef: sha,
-            sourcePath: candidate.path,
-            sourceHash,
-            manifest: {
-                plugin: manifest.raw,
-                components: { skills: skillResults, mcpServers: mcpResults },
-            },
-        });
+        // (8) user_extensions INSERT(신규) 또는 UPDATE(재설치) + 링크
+        const componentManifest = {
+            plugin: manifest.raw,
+            components: { skills: skillResults, mcpServers: mcpResults },
+        };
+        let row;
+        let previousVersion: string | undefined;
+        if (updateTarget) {
+            previousVersion = updateTarget.version;
+            await extRepo.archiveLinkedComponents(updateTarget.id);
+            row = await extRepo.updateAfterReinstall(updateTarget.id, {
+                version: manifest.version,
+                description: manifest.description ?? null,
+                sourceRef: sha,
+                sourcePath: candidate.path,
+                sourceHash,
+                trackingRef: input.gitRef ?? null,
+                manifest: componentManifest,
+            });
+            if (!row) throw new Error(`EXTENSION_UPDATE_FAILED: ${updateTarget.id} 갱신 실패`);
+        } else {
+            row = await extRepo.insert({
+                userId: input.userId,
+                name: manifest.name,
+                version: manifest.version,
+                description: manifest.description ?? null,
+                sourceUrl: input.gitUrl,
+                sourceRef: sha,
+                sourcePath: candidate.path,
+                sourceHash,
+                trackingRef: input.gitRef ?? null,
+                manifest: componentManifest,
+            });
+        }
         await extRepo.linkComponents(
             row.id,
             okSkills.map(r => r.skillId!),
             okServers.map(r => r.serverId!),
         );
 
-        logger.info(`extension-ingest created: ${row.id} "${manifest.name}@${manifest.version}" (${owner}/${repo}@${sha.slice(0, 7)}, skills=${okSkills.length}, mcp=${okServers.length})`);
+        logger.info(`extension-ingest ${updateTarget ? 'updated' : 'created'}: ${row.id} "${manifest.name}@${manifest.version}"${previousVersion ? ` (from ${previousVersion})` : ''} (${owner}/${repo}@${sha.slice(0, 7)}, skills=${okSkills.length}, mcp=${okServers.length})`);
         return {
             extensionId: row.id,
             name: manifest.name,
@@ -309,7 +355,37 @@ export class ExtensionIngestService {
             mcpServers: mcpResults,
             validationWarnings: warnings,
             deduped: false,
+            ...(updateTarget ? { updated: true, previousVersion } : {}),
         };
+    }
+
+    /**
+     * 업데이트 확인 — tracking_ref(NULL=HEAD)를 다시 resolve 해 설치된 source_ref 와 비교.
+     * 변경이 있으면 최신 ref 의 plugin.json version 도 조회 (실패 시 null, fail-open).
+     */
+    async checkForUpdate(input: {
+        sourceUrl: string;
+        sourcePath: string;
+        currentRef: string;
+        trackingRef?: string | null;
+        accessToken?: string;
+    }): Promise<UpdateCheckResult> {
+        const parsed = parseGitUrl(input.sourceUrl);
+        if (!parsed) throw new Error(`INVALID_GIT_URL: ${input.sourceUrl}`);
+        const fetcher = this.opts.fetcherFactory({ accessToken: input.accessToken });
+        const latestRef = await fetcher.resolveRef(parsed.owner, parsed.repo, input.trackingRef ?? 'HEAD');
+        if (latestRef === input.currentRef) {
+            return { updateAvailable: false, currentRef: input.currentRef, latestRef, latestVersion: null };
+        }
+        let latestVersion: string | null = null;
+        try {
+            const raw = await fetcher.fetchFile(parsed.owner, parsed.repo, latestRef, input.sourcePath, EXTENSION_INGEST.manifestMaxBytes);
+            const validation = validateExtensionManifest(raw);
+            if (validation.ok) latestVersion = validation.manifest.version;
+        } catch {
+            /* 최신 버전 조회 실패 — updateAvailable 판정에는 영향 없음 */
+        }
+        return { updateAvailable: true, currentRef: input.currentRef, latestRef, latestVersion };
     }
 
     /** mcp_servers (user_id, name) unique 충돌 회피 — McpServerIngestService 관용구 동형. */

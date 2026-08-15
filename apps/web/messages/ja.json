@@ -1801,6 +1801,14 @@
       "draft": "承認待ち",
       "archived": "アーカイブ済み",
       "disabled": "無効"
+    },
+    "update": {
+      "checkAria": "更新を確認",
+      "latest": "最新です",
+      "available": "v{version} が利用可能",
+      "availableNoVersion": "更新があります",
+      "failed": "確認失敗",
+      "hint": "チャットで「この拡張を更新して」と依頼すると新バージョンに置き換わります(旧コンポーネントはアーカイブされます)。"
     }
   }
 }
