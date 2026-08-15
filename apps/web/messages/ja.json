@@ -76,7 +76,8 @@
       "privacy": "プライバシー",
       "security": "セキュリティ",
       "memory": "メモリ",
-      "connectors": "コネクタ"
+      "connectors": "コネクタ",
+      "extensions": "拡張機能"
     },
     "responseStyles": {
       "concise": "簡潔",
@@ -1782,5 +1783,24 @@
     "title": "ページが見つかりません",
     "description": "お探しのページは存在しないか、移動された可能性があります。",
     "backHome": "ホームに戻る"
+  },
+  "extensions": {
+    "title": "拡張機能の管理",
+    "description": "インストール済みの拡張バンドル(スキル・MCPサーバー)を確認・削除します。",
+    "installHint": "インストールはチャットで「この拡張をインストールして: github.com/owner/repo」と依頼してください。各コンポーネントは承認後に有効化されます。",
+    "empty": "インストール済みの拡張はありません。",
+    "skills": "スキル",
+    "mcpServers": "MCPサーバー",
+    "none": "なし",
+    "approvalHint": "draft 状態のコンポーネントはスキルライブラリ・MCPサーバーページで承認すると有効化されます。",
+    "detailFailed": "コンポーネント情報の取得に失敗しました。",
+    "removeConfirm": "この拡張を削除しますか?含まれるスキル・MCPサーバーはアーカイブされます。",
+    "removeAria": "拡張を削除",
+    "status": {
+      "active": "有効",
+      "draft": "承認待ち",
+      "archived": "アーカイブ済み",
+      "disabled": "無効"
+    }
   }
 }

@@ -76,7 +76,8 @@
       "privacy": "개인정보",
       "security": "보안",
       "memory": "메모리",
-      "connectors": "커넥터"
+      "connectors": "커넥터",
+      "extensions": "확장"
     },
     "responseStyles": {
       "concise": "간결",
@@ -1782,5 +1783,24 @@
     "title": "페이지를 찾을 수 없습니다",
     "description": "요청하신 페이지가 존재하지 않거나 이동되었습니다.",
     "backHome": "홈으로 돌아가기"
+  },
+  "extensions": {
+    "title": "확장 관리",
+    "description": "설치된 확장 번들(스킬·MCP 서버 묶음)을 조회하고 제거합니다.",
+    "installHint": "설치는 채팅에서 \"이 확장 설치해줘: github.com/owner/repo\" 처럼 요청하세요. 구성요소는 각각 검토·승인 후 활성화됩니다.",
+    "empty": "설치된 확장이 없습니다.",
+    "skills": "스킬",
+    "mcpServers": "MCP 서버",
+    "none": "없음",
+    "approvalHint": "draft 상태 구성요소는 스킬 라이브러리·MCP 서버 페이지에서 승인해야 활성화됩니다.",
+    "detailFailed": "구성요소 정보를 불러오지 못했습니다.",
+    "removeConfirm": "이 확장을 제거할까요? 포함된 스킬·MCP 서버가 함께 보관 처리됩니다.",
+    "removeAria": "확장 제거",
+    "status": {
+      "active": "활성",
+      "draft": "승인 대기",
+      "archived": "보관됨",
+      "disabled": "비활성"
+    }
   }
 }

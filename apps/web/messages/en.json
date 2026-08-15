@@ -76,7 +76,8 @@
       "privacy": "Privacy",
       "security": "Security",
       "memory": "Memory",
-      "connectors": "Connectors"
+      "connectors": "Connectors",
+      "extensions": "Extensions"
     },
     "responseStyles": {
       "concise": "Concise",
@@ -1782,5 +1783,24 @@
     "title": "Page not found",
     "description": "The page you are looking for doesn't exist or has been moved.",
     "backHome": "Back to home"
+  },
+  "extensions": {
+    "title": "Extensions",
+    "description": "View and remove installed extension bundles (skills + MCP servers).",
+    "installHint": "To install, ask in chat: \"Install this extension: github.com/owner/repo\". Each component activates after review and approval.",
+    "empty": "No extensions installed.",
+    "skills": "Skills",
+    "mcpServers": "MCP servers",
+    "none": "None",
+    "approvalHint": "Draft components must be approved in the Skill Library / MCP Servers pages before activation.",
+    "detailFailed": "Failed to load component details.",
+    "removeConfirm": "Remove this extension? Its skills and MCP servers will be archived.",
+    "removeAria": "Remove extension",
+    "status": {
+      "active": "Active",
+      "draft": "Pending approval",
+      "archived": "Archived",
+      "disabled": "Disabled"
+    }
   }
 }
