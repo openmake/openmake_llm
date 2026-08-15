@@ -27,6 +27,37 @@ const agentBrowser = require('./agent-browser');
 const EXEC_TIMEOUT_MS = 120000;
 const MAX_BUFFER = 1024 * 1024;
 const RECONNECT_MS = 10000;
+const PATH_PROBE_TIMEOUT_MS = 5000;
+
+// ── exec PATH 보강 ───────────────────────────────────────────────────────
+// Finder 기동 GUI 앱은 로그인 셸 PATH 를 물려받지 못해 mise/Homebrew 런타임(node·npm 등)을
+// 못 찾는다 (2026-08-15 실측: 최소 PATH 에서 `node: command not found`). ① 로그인 셸 PATH
+// 캡처 ② mise 도구 경로(activate 가 zshrc 전용이라 ①에도 안 잡힘 — bin-paths 직접 조회,
+// cwd=연결 폴더라 프로젝트 버전 반영) ③ 표준 설치 경로 폴백을 병합한다. 폴더 연결 시 1회
+// 계산하고, 각 단계 실패는 다음 폴백으로 넘어간다(exec 자체를 막지 않음).
+let execPathCache = null;
+function resolveExecPath() {
+  if (execPathCache) return execPathCache;
+  const parts = [];
+  try {
+    parts.push(...execFileSync(process.env.SHELL || '/bin/zsh', ['-lc', 'echo -n "$PATH"'],
+      { encoding: 'utf8', timeout: PATH_PROBE_TIMEOUT_MS }).trim().split(':'));
+  } catch { /* 로그인 셸 실패 → 아래 폴백만 사용 */ }
+  parts.push(...(process.env.PATH || '').split(':'));
+  parts.push('/opt/homebrew/bin', '/usr/local/bin',
+    path.join(os.homedir(), '.local/bin'), path.join(os.homedir(), '.local/share/mise/shims'));
+  const base = [...new Set(parts.filter(Boolean))].join(':');
+  let merged = base;
+  try {
+    const misePaths = execFileSync('mise', ['bin-paths'],
+      { encoding: 'utf8', timeout: PATH_PROBE_TIMEOUT_MS, cwd: folderRoot || os.homedir(), env: { ...process.env, PATH: base } })
+      .trim().split('\n').filter(Boolean);
+    // 프로젝트 버전이 이기도록 mise 경로를 앞에 둔다.
+    merged = [...new Set([...misePaths, ...base.split(':')])].join(':');
+  } catch { /* mise 부재/미신뢰 설정 — base 만 사용 */ }
+  execPathCache = merged;
+  return execPathCache;
+}
 
 // ── exec OS 샌드박스 (macOS sandbox-exec) ───────────────────────────────
 // 승인된 명령이라도 OS 레벨에서 ① 연결 폴더 밖 쓰기 ② 비밀 파일 읽기를 차단한다.
@@ -339,7 +370,7 @@ async function handleExec(m, done) {
         done({ ok: false, error: 'exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다(폴더 재연결 필요). 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 앱을 실행하세요.', exitCode: 126 });
         return;
       }
-      const opts = { cwd: folderRoot, timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_BUFFER };
+      const opts = { cwd: folderRoot, timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_BUFFER, env: { ...process.env, PATH: resolveExecPath() } };
       const cb = (err, stdout, stderr) => {
         done({ ok: true, stdout: String(stdout), stderr: String(stderr), exitCode: err ? (err.code ?? 1) : 0 });
       };
@@ -468,6 +499,7 @@ async function connectFolder(app, backendUrl, win) {
     folder = r.filePaths[0];
   }
   folderRoot = fs.realpathSync(folder);
+  execPathCache = null; // 폴더가 바뀌면 mise 프로젝트 버전도 바뀔 수 있다 — PATH 재계산.
   // 연결 폴더 기준으로 exec 샌드박스 프로파일 갱신 (폴더가 바뀌면 스코프도 바뀐다).
   sandboxProfilePath = SANDBOX_ENABLED ? writeSandboxProfile(app, folderRoot, detectGitDir(folderRoot)) : null;
   await connect(app, backendUrl);

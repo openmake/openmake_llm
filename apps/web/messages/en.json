@@ -43,7 +43,13 @@
     "themeToggle": "Toggle theme",
     "viewAll": "View all",
     "noResults": "No results",
-    "accountMenu": "Account menu"
+    "accountMenu": "Account menu",
+    "groups": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "previous7Days": "Previous 7 days",
+      "older": "Older"
+    }
   },
   "mobileNav": {
     "chat": "Chat",
