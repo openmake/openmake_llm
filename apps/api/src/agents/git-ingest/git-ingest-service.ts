@@ -68,6 +68,8 @@ export interface GitIngestOptions {
     pool: Pool;
     llmClientFactory: (model: string) => LLMClient;
     fetcherFactory: (opts: { accessToken?: string }) => GitFetcher;
+    /** tree 상한 override — 확장 번들 체인이 거대 마켓플레이스 repo 용으로 상향 주입 (기본: 스킬 ingest 상한) */
+    maxTreeEntries?: number;
 }
 
 export class GitIngestService {
@@ -94,7 +96,7 @@ export class GitIngestService {
         const sha = await fetcher.resolveRef(owner, repo, input.gitRef ?? 'HEAD');
 
         // (4) tree → candidates
-        const tree = await fetcher.listTree(owner, repo, sha, SKILL_CREATOR.gitMaxTreeEntries);
+        const tree = await fetcher.listTree(owner, repo, sha, this.opts.maxTreeEntries ?? SKILL_CREATOR.gitMaxTreeEntries);
         const candidates = scanForSkillManifests(tree.entries, input.gitPath);
 
         if (candidates.length === 0) {

@@ -297,6 +297,8 @@ export class ExtensionIngestService {
             llmClientFactory: this.opts.llmClientFactory,
             // 아카이브 소스면 이미 로드된 동일 ArchiveFetcher 재사용 (재다운로드 방지)
             fetcherFactory: isArchive ? () => fetcher : this.opts.fetcherFactory,
+            // 거대 마켓플레이스 repo — 확장 경로 상한으로 재조회 (스킬 ingest 기본 상한이면 REPO_TOO_LARGE)
+            maxTreeEntries: EXTENSION_INGEST.maxTreeEntries,
         });
         for (const path of skillPaths) {
             try {
