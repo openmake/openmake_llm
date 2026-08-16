@@ -55,14 +55,20 @@ struct LumenDot: View {
     var pulsing = false
 
     @State private var dim = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Circle()
             .fill(color)
             .frame(width: size, height: size)
-            .opacity(pulsing && dim ? 0.25 : 1)
-            .scaleEffect(pulsing && dim ? 0.7 : 1)
-            .animation(pulsing ? .easeInOut(duration: 0.6).repeatForever(autoreverses: true) : .default, value: dim)
-            .onAppear { if pulsing { dim = true } }
+            .opacity(pulsing && dim && !reduceMotion ? 0.25 : 1)
+            .scaleEffect(pulsing && dim && !reduceMotion ? 0.7 : 1)
+            .animation(
+                pulsing && !reduceMotion
+                    ? .easeInOut(duration: 0.6).repeatForever(autoreverses: true)
+                    : .default,
+                value: dim)
+            .onAppear { if pulsing && !reduceMotion { dim = true } }
+            .accessibilityHidden(true)
     }
 }

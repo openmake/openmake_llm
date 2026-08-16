@@ -1,42 +1,54 @@
 // 마크다운 렌더러 — 서드파티 0 원칙: 코드펜스는 수동 분리, 인라인은 AttributedString(markdown:)
 import SwiftUI
 import UIKit
+import OpenMakeKit
 
 struct MarkdownText: View {
     let content: String
 
-    private enum Segment {
+    private enum BlockSegment {
         case text(String)
         case code(language: String?, body: String)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+            ForEach(Array(MarkdownContentParser.segments(in: content).enumerated()), id: \.offset) { _, segment in
                 switch segment {
                 case .text(let text):
-                    Text(inlineAttributed(text))
-                        .font(.system(size: 15))
-                        .lineSpacing(3)
-                        .foregroundStyle(Lumen.fg)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                case .code(let language, let body):
-                    CodeBlockView(language: language, code: body)
+                    textBlocks(text)
+                case .image(let alt, let source):
+                    GeneratedImageView(alt: alt, source: source)
                 }
             }
         }
     }
 
-    /// ``` 펜스 기준 텍스트/코드 분리
-    private var segments: [Segment] {
-        var result: [Segment] = []
+    @ViewBuilder
+    private func textBlocks(_ text: String) -> some View {
+        ForEach(Array(blocks(in: text).enumerated()), id: \.offset) { _, segment in
+            switch segment {
+            case .text(let text):
+                Text(inlineAttributed(text))
+                    .font(.system(size: 15))
+                    .lineSpacing(3)
+                    .foregroundStyle(Lumen.fg)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            case .code(let language, let body):
+                CodeBlockView(language: language, code: body)
+            }
+        }
+    }
+
+    private func blocks(in text: String) -> [BlockSegment] {
+        var result: [BlockSegment] = []
         var currentText: [String] = []
         var codeLines: [String] = []
         var codeLanguage: String?
         var inCode = false
 
-        for line in content.components(separatedBy: "\n") {
+        for line in text.components(separatedBy: "\n") {
             if line.hasPrefix("```") {
                 if inCode {
                     result.append(.code(language: codeLanguage, body: codeLines.joined(separator: "\n")))
@@ -75,6 +87,43 @@ struct MarkdownText: View {
     }
 }
 
+private struct GeneratedImageView: View {
+    let alt: String
+    let source: String
+
+    var body: some View {
+        AsyncImage(url: imageURL) { phase in
+            switch phase {
+            case .empty:
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Lumen.surface2)
+                    .aspectRatio(4 / 3, contentMode: .fit)
+                    .overlay { ProgressView().tint(Lumen.accent) }
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Lumen.border))
+            case .failure:
+                ContentUnavailableView(
+                    "이미지를 불러오지 못했습니다",
+                    systemImage: "photo.badge.exclamationmark",
+                    description: Text(source))
+                    .frame(minHeight: 160)
+                    .background(Lumen.surface2, in: RoundedRectangle(cornerRadius: 12))
+            @unknown default:
+                EmptyView()
+            }
+        }
+        .accessibilityLabel(alt.isEmpty ? "생성된 이미지" : alt)
+    }
+
+    private var imageURL: URL? {
+        GeneratedImageURLResolver.resolve(source: source, serverURL: AppConfig.serverURL)
+    }
+}
+
 struct CodeBlockView: View {
     let language: String?
     let code: String
@@ -92,10 +141,11 @@ struct CodeBlockView: View {
                     Image(systemName: "doc.on.doc")
                         .font(.caption2)
                         .foregroundStyle(Lumen.muted)
+                        .frame(width: 44, height: 44)
                 }
+                .accessibilityLabel("코드 복사")
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.leading, 12)
             .background(Lumen.surface2)
 
             ScrollView(.horizontal, showsIndicators: false) {

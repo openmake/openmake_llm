@@ -12,6 +12,8 @@ declare module 'jsonwebtoken' {
         expiresIn?: string | number;
         jwtid?: string;
         algorithm?: Algorithm;
+        issuer?: string;
+        keyid?: string;
     }
 
     export interface VerifyOptions {

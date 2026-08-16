@@ -32,6 +32,7 @@ final class AppModel {
         var artifact = false
         var discussion = false
         var deepResearch = false
+        var agentTask = false
         var style: Style = .styleDefault
 
         var activeLabels: [String] {
@@ -42,6 +43,7 @@ final class AppModel {
             if artifact { labels.append("아티팩트") }
             if discussion { labels.append("토론") }
             if deepResearch { labels.append("딥리서치") }
+            if agentTask { labels.append("에이전트 작업") }
             return labels
         }
     }
@@ -59,6 +61,7 @@ final class AppModel {
         self.client = client ?? OpenMakeClient(
             configuration: .init(serverURL: AppConfig.serverURL),
             tokenStore: store)
+        NotificationManager.shared.bind(client: self.client)
     }
 
     /// 앱 시작 시 저장된 세션 확인 (Keychain 토큰 → me)
@@ -89,12 +92,14 @@ final class AppModel {
     func login(email: String, password: String) async throws {
         let user = try await client.login(email: email, password: password)
         authState = .loggedIn(user)
+        await NotificationManager.shared.activate()
     }
 
     /// OAuth exchange code → 로그인 (축 2 계약 — `openmake://auth/callback?code=` 수신 후)
     func exchangeLogin(code: String) async throws {
         let user = try await client.exchange(code: code)
         authState = .loggedIn(user)
+        await NotificationManager.shared.activate()
     }
 
     func logout() async {
