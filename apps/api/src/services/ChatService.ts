@@ -280,8 +280,10 @@ export class ChatService {
         tools: ToolDefinition[], allTools: ToolDefinition[], reqCtx: RequestContext,
     ): Promise<ToolDefinition[]> {
         // 구현은 services/skill-catalog-tool 로 추출 (에이전트 작업 경로와 공용 — SSoT)
+        const rawUserId = reqCtx.userContext.userId;
         return applySkillCatalogShared(tools, allTools, {
             excludeIds: new Set(reqCtx.skillBindings.map((b) => b.skill_id)),
+            ...(rawUserId !== undefined && rawUserId !== null ? { userId: String(rawUserId) } : {}),
         });
     }
 

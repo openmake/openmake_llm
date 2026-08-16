@@ -39,8 +39,10 @@ export async function assembleAgentTools(params: {
      * 미지정 시 전체 카탈로그 노출.
      */
     injectedSkillIds?: ReadonlySet<string>;
+    /** 작업 소유자 id — 본인 소유 비공개 스킬(확장 설치분 등)을 카탈로그에 포함. */
+    userId?: string;
 }): Promise<AssembledTools> {
-    const { mcpTools, taskRuntime, sandboxCfg, goal, injectedSkillIds } = params;
+    const { mcpTools, taskRuntime, sandboxCfg, goal, injectedSkillIds, userId } = params;
     const extraToolNames = new Set<string>();
 
     /**
@@ -57,6 +59,7 @@ export async function assembleAgentTools(params: {
         const before = tools.length;
         const next = await applySkillCatalog(tools, mcpTools, {
             ...(injectedSkillIds ? { excludeIds: injectedSkillIds } : {}),
+            ...(userId ? { userId } : {}),
         });
         const added = next.some((t) => t.function.name === LOAD_SKILL_TOOL_NAME)
             && !tools.some((t) => t.function.name === LOAD_SKILL_TOOL_NAME);

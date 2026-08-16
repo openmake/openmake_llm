@@ -316,9 +316,11 @@ export class SkillManager {
      *
      * @param opts.excludeIds \uc774\ubbf8 \uc8fc\uc785\ub41c \ubc14\uc778\ub529 \uc2a4\ud0ac \u2014 \uc774\uc911 \ub178\ucd9c \ubc29\uc9c0(dedup)
      */
-    async buildSkillCatalog(opts: { excludeIds?: ReadonlySet<string> } = {}): Promise<{ catalog: string; count: number }> {
+    async buildSkillCatalog(opts: { excludeIds?: ReadonlySet<string>; userId?: string } = {}): Promise<{ catalog: string; count: number }> {
         const repo = await this.ensureInitialized();
-        const result = await repo.searchSkills({ status: 'active', sortBy: 'name', limit: SKILL_CATALOG_MAX_ITEMS });
+        // userId 전달 시 본인 소유 비공개 스킬 포함(public OR own) — 미전달이면 public 전용.
+        // 확장 설치 스킬(전부 비공개)이 카탈로그에 안 실려 자동 호출이 불가능하던 갭 (2026-08-16).
+        const result = await repo.searchSkills({ status: 'active', sortBy: 'name', limit: SKILL_CATALOG_MAX_ITEMS, userId: opts.userId });
         const lines: string[] = [];
         for (const s of result.skills) {
             if (opts.excludeIds?.has(s.id)) continue;
@@ -339,7 +341,8 @@ export class SkillManager {
     ): Promise<{ prompt: string; matched: string[] }> {
         if (!Array.isArray(names) || names.length === 0) return { prompt: '', matched: [] };
         const repo = await this.ensureInitialized();
-        const result = await repo.searchSkills({ status: 'active', limit: SKILL_CATALOG_MAX_ITEMS });
+        // userId 전달로 본인 소유 비공개 스킬도 검색 대상에 포함 — 아래 visible 필터와 동일 규칙.
+        const result = await repo.searchSkills({ status: 'active', limit: SKILL_CATALOG_MAX_ITEMS, userId });
         const wanted = names.slice(0, Math.max(1, topK)).map((n) => String(n).toLowerCase().trim()).filter(Boolean);
         const seen = new Set<string>();
         const picked: AgentSkill[] = [];
@@ -477,6 +480,29 @@ export class SkillManager {
             const m = /^---[\s\S]*?\bname:\s*([^\n]+)/.exec(r.manifest_yaml);
             return m?.[1]?.trim().replace(/^['"]|['"]$/g, '') || r.id;
         });
+
+        // 개인 지정(user-assign) 스킬 중 manifest 미보유분 union — 확장 설치 스킬 등은
+        // agent_skills 에만 존재하는데, manifest 스킬이 하나라도 있으면 legacy fallback 이
+        // 실행되지 않아 지정해도 조용히 누락되던 갭 (2026-08-16). agent/global 스킬은
+        // 기존대로 manifest 가 지배하고, 개인 지정분만 보충한다 (전체 15개 상한 유지).
+        if (userId) {
+            try {
+                const manifestIds = new Set(rows.map(r => r.id));
+                const userSkills = (await this.getUserSkills(userId)).filter(s =>
+                    !manifestIds.has(s.id) &&
+                    (!agentCategory || s.category === agentCategory || s.category === 'general'));
+                for (const s of userSkills.slice(0, Math.max(0, 15 - blocks.length))) {
+                    const safeName = s.name.replace(/[<>"&]/g, '');
+                    const content = s.content.length > MAX_SKILL_CONTENT_LENGTH
+                        ? s.content.slice(0, MAX_SKILL_CONTENT_LENGTH) + '\n... (truncated)'
+                        : s.content;
+                    blocks.push(`<skill_context name="${safeName}">\n${content}\n</skill_context>`);
+                    skillNames.push(s.name);
+                }
+            } catch (e) {
+                logger.debug('개인 지정 스킬 union 실패 (manifest 분만 주입)', e);
+            }
+        }
         return { prompt: `\n\n## 적용된 스킬 (manifest)\n${blocks.join('\n\n')}`, skillNames };
     }
 
