@@ -1824,6 +1824,28 @@
       "upToDate": "이미 최신",
       "failed": "설치 실패",
       "owned": "(내 공유)"
+    },
+    "catalog": {
+      "title": "큐레이션 카탈로그",
+      "description": "관리자가 등록한 확장 소스입니다. 설치하면 내 계정의 draft로 생성되어 승인 후 활성화됩니다.",
+      "empty": "등록된 카탈로그 소스가 없습니다.",
+      "urlPlaceholder": "github.com/owner/repo 또는 .zip URL",
+      "register": "등록",
+      "syncAria": "카탈로그 동기화",
+      "removeAria": "카탈로그 소스 삭제",
+      "removeConfirm": "이 카탈로그 소스를 삭제할까요? (설치된 확장은 영향 없음)",
+      "installableCount": "(설치 가능 {count}/{total})",
+      "noneInstallable": "설치 가능한 플러그인이 없습니다 (커스텀 명령 전용 소스).",
+      "categoryAria": "카테고리 필터",
+      "categoryAll": "전체 ({count})",
+      "uncategorized": "미분류",
+      "pageInfo": "{page} / {total}",
+      "prevPageAria": "이전 페이지",
+      "nextPageAria": "다음 페이지",
+      "sourceAria": "소스 필터",
+      "sourceAll": "전체 소스 ({count})",
+      "searchAria": "키워드 검색",
+      "searchPlaceholder": "이름·설명 검색"
     }
   }
 }

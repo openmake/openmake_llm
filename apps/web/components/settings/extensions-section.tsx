@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
-import { Package, Trash2, Loader2, ChevronDown, Puzzle, Server, RefreshCw, Share2, Download } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
+import { Package, Trash2, Loader2, ChevronDown, ChevronLeft, ChevronRight, Puzzle, Server, RefreshCw, Share2, Download, Store, Plus } from "lucide-react";
 import { Button, Card, CardHeader, CardTitle, CardContent } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
+import { useAppStore } from "@/lib/store";
 
 interface UserExtension {
   id: string;
@@ -26,6 +27,34 @@ type GalleryInstallState =
   | { state: "installing" }
   | { state: "installed"; updated: boolean; upToDate: boolean }
   | { state: "failed" };
+
+interface CatalogPlugin {
+  name: string;
+  description?: string;
+  version?: string;
+  /** 동기화 시점 사전 판정 — false 면 설치 구성요소(스킬/MCP) 없음 → UI 미노출 */
+  installable?: boolean;
+  /** 마켓플레이스 분류 (marketplace.json category) — 카테고리 필터용 */
+  category?: string;
+  /** 설명 한국어 번역 (동기화 후단 배치) — ko 로케일에서 우선 노출, 없으면 원문 */
+  description_ko?: string;
+}
+
+/** 카탈로그 페이지 크기 — 대형 마켓플레이스(수백 개) 스크롤 방지 */
+const CATALOG_PAGE_SIZE = 20;
+/** category 미보유 플러그인의 필터 버킷 키 */
+const UNCATEGORIZED = "__none__";
+const CATALOG_SELECT_CLS =
+  "min-w-0 flex-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-fg outline-none focus:border-border-strong sm:max-w-[240px]";
+
+interface CatalogSource {
+  id: string;
+  url: string;
+  name: string;
+  description: string | null;
+  plugins: CatalogPlugin[];
+  last_synced_at?: string;
+}
 
 interface ExtensionComponents {
   skills: Array<{ id: string; name: string; status: string }>;
@@ -53,6 +82,48 @@ export function ExtensionsSection() {
   const [gallery, setGallery] = useState<GalleryExtension[]>([]);
   const [galleryInstalls, setGalleryInstalls] = useState<Record<string, GalleryInstallState>>({});
   const [sharing, setSharing] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<CatalogSource[]>([]);
+  const [catalogInstalls, setCatalogInstalls] = useState<Record<string, GalleryInstallState>>({});
+  const [catalogUrl, setCatalogUrl] = useState("");
+  const [catalogBusy, setCatalogBusy] = useState<string | null>(null);
+  // 카탈로그 단일 브라우저 — 소스/카테고리 셀렉트 + 키워드 검색 + 페이지 (16개 소스 스택 대신 한 리스트)
+  const [catalogSource, setCatalogSource] = useState("");
+  const [catalogCategory, setCatalogCategory] = useState("");
+  const [catalogSearch, setCatalogSearch] = useState("");
+  const [catalogPage, setCatalogPage] = useState(0);
+  const isAdmin = useAppStore((s) => s.auth.currentUser?.role === "admin");
+  const locale = useLocale();
+
+  // 파생값: 설치 가능 항목 평면화 → 소스 필터 → 카테고리 필터 → 페이지
+  const catalogEntries = catalog.flatMap((src) =>
+    src.plugins
+      .filter((p) => p.installable !== false)
+      .map((p) => ({ plugin: p, srcId: src.id, srcName: src.name, multiPlugin: src.plugins.length > 1 })),
+  );
+  const sourceScoped = catalogSource ? catalogEntries.filter((e) => e.srcId === catalogSource) : catalogEntries;
+  const catalogCategoryCounts = new Map<string, number>();
+  for (const e of sourceScoped) {
+    const c = e.plugin.category ?? UNCATEGORIZED;
+    catalogCategoryCounts.set(c, (catalogCategoryCounts.get(c) ?? 0) + 1);
+  }
+  const catalogCategories = [...catalogCategoryCounts.keys()].sort();
+  const categoryScoped = catalogCategory
+    ? sourceScoped.filter((e) => (e.plugin.category ?? UNCATEGORIZED) === catalogCategory)
+    : sourceScoped;
+  const searchQuery = catalogSearch.trim().toLowerCase();
+  const catalogFiltered = searchQuery
+    ? categoryScoped.filter((e) =>
+        [e.plugin.name, e.plugin.description, e.plugin.description_ko, e.plugin.category]
+          .some((v) => v?.toLowerCase().includes(searchQuery)),
+      )
+    : categoryScoped;
+  const catalogTotalPages = Math.max(1, Math.ceil(catalogFiltered.length / CATALOG_PAGE_SIZE));
+  const catalogPageClamped = Math.min(catalogPage, catalogTotalPages - 1);
+  const catalogPageEntries = catalogFiltered.slice(
+    catalogPageClamped * CATALOG_PAGE_SIZE,
+    (catalogPageClamped + 1) * CATALOG_PAGE_SIZE,
+  );
+  const selectedSource = catalogSource ? catalog.find((s) => s.id === catalogSource) : undefined;
 
   const load = useCallback(async () => {
     try {
@@ -67,10 +138,11 @@ export function ExtensionsSection() {
 
   const loadGallery = useCallback(async () => {
     try {
-      const res = await ApiClient.get<ApiSuccess<{ extensions: GalleryExtension[] }>>(
+      const res = await ApiClient.get<ApiSuccess<{ extensions: GalleryExtension[]; catalog?: CatalogSource[] }>>(
         "/api/users/me/extensions/gallery",
       );
       setGallery(res?.data?.extensions ?? []);
+      setCatalog(res?.data?.catalog ?? []);
     } catch {
       /* 실패 — 빈 갤러리 유지 */
     }
@@ -150,6 +222,62 @@ export function ExtensionsSection() {
       void load();
     } catch {
       setGalleryInstalls((prev) => ({ ...prev, [id]: { state: "failed" } }));
+    }
+  }
+
+  async function installFromCatalog(sourceId: string, plugin?: string) {
+    const key = `${sourceId}:${plugin ?? ""}`;
+    setCatalogInstalls((prev) => ({ ...prev, [key]: { state: "installing" } }));
+    try {
+      const res = await ApiClient.post<ApiSuccess<{ updated: boolean; upToDate: boolean }>>(
+        `/api/users/me/extensions/catalog/${sourceId}/install`,
+        plugin ? { plugin } : {},
+      );
+      setCatalogInstalls((prev) => ({
+        ...prev,
+        [key]: { state: "installed", updated: !!res?.data?.updated, upToDate: !!res?.data?.upToDate },
+      }));
+      void load();
+    } catch {
+      setCatalogInstalls((prev) => ({ ...prev, [key]: { state: "failed" } }));
+    }
+  }
+
+  async function registerCatalogSource() {
+    const url = catalogUrl.trim();
+    if (!url || catalogBusy) return;
+    setCatalogBusy("register");
+    try {
+      await ApiClient.post("/api/users/me/extensions/catalog", { url });
+      setCatalogUrl("");
+      void loadGallery();
+    } catch {
+      /* 실패 — 입력 유지, 재시도 가능 */
+    } finally {
+      setCatalogBusy(null);
+    }
+  }
+
+  async function syncCatalogSource(id: string) {
+    if (catalogBusy) return;
+    setCatalogBusy(id);
+    try {
+      await ApiClient.post(`/api/users/me/extensions/catalog/${id}/sync`, {});
+      void loadGallery();
+    } catch {
+      /* 실패 */
+    } finally {
+      setCatalogBusy(null);
+    }
+  }
+
+  async function removeCatalogSource(id: string) {
+    if (!window.confirm(t("catalog.removeConfirm"))) return;
+    try {
+      await ApiClient.del(`/api/users/me/extensions/catalog/${id}`);
+      setCatalog((list) => list.filter((s) => s.id !== id));
+    } catch {
+      /* 실패 */
     }
   }
 
@@ -387,6 +515,204 @@ export function ExtensionsSection() {
                 );
               })}
             </ul>
+          )}
+        </div>
+
+        {/* admin 큐레이션 카탈로그 — 등록된 소스의 플러그인 목록, 설치는 본인 계정 ingest */}
+        <div className="border-t border-border pt-4">
+          <p className="mb-1 flex items-center gap-1.5 text-sm font-medium text-fg">
+            <Store className="h-4 w-4 text-accent" /> {t("catalog.title")}
+          </p>
+          <p className="mb-3 text-xs text-muted">{t("catalog.description")}</p>
+
+          {isAdmin && (
+            <div className="mb-3 flex items-center gap-2">
+              <input
+                value={catalogUrl}
+                onChange={(e) => setCatalogUrl(e.target.value)}
+                placeholder={t("catalog.urlPlaceholder")}
+                className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none placeholder:text-muted focus:border-border-strong"
+              />
+              <Button
+                size="sm"
+                disabled={catalogBusy === "register" || !catalogUrl.trim()}
+                onClick={() => void registerCatalogSource()}
+              >
+                {catalogBusy === "register" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                {t("catalog.register")}
+              </Button>
+            </div>
+          )}
+
+          {catalog.length === 0 ? (
+            <p className="text-xs text-muted">{t("catalog.empty")}</p>
+          ) : (
+            <div className="rounded-lg border border-border">
+              {/* 소스·카테고리 셀렉트 — 16개 소스 스택 대신 한 화면 단일 리스트 */}
+              <div className="flex flex-wrap items-center gap-2 border-b border-border px-3.5 py-2.5">
+                <select
+                  value={catalogSource}
+                  aria-label={t("catalog.sourceAria")}
+                  onChange={(e) => {
+                    setCatalogSource(e.target.value);
+                    setCatalogCategory("");
+                    setCatalogPage(0);
+                  }}
+                  className={CATALOG_SELECT_CLS}
+                >
+                  <option value="">{t("catalog.sourceAll", { count: catalogEntries.length })}</option>
+                  {catalog.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.plugins.filter((p) => p.installable !== false).length})
+                    </option>
+                  ))}
+                </select>
+                {catalogCategories.length > 1 && (
+                  <select
+                    value={catalogCategory}
+                    aria-label={t("catalog.categoryAria")}
+                    onChange={(e) => {
+                      setCatalogCategory(e.target.value);
+                      setCatalogPage(0);
+                    }}
+                    className={CATALOG_SELECT_CLS}
+                  >
+                    <option value="">{t("catalog.categoryAll", { count: sourceScoped.length })}</option>
+                    {catalogCategories.map((c) => (
+                      <option key={c} value={c}>
+                        {c === UNCATEGORIZED ? t("catalog.uncategorized") : c} ({catalogCategoryCounts.get(c)})
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <input
+                  value={catalogSearch}
+                  aria-label={t("catalog.searchAria")}
+                  placeholder={t("catalog.searchPlaceholder")}
+                  onChange={(e) => {
+                    setCatalogSearch(e.target.value);
+                    setCatalogPage(0);
+                  }}
+                  className={CATALOG_SELECT_CLS + " placeholder:text-muted"}
+                />
+                {isAdmin && selectedSource && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t("catalog.syncAria")}
+                      disabled={catalogBusy === selectedSource.id}
+                      onClick={() => void syncCatalogSource(selectedSource.id)}
+                    >
+                      {catalogBusy === selectedSource.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t("catalog.removeAria")}
+                      onClick={() => void removeCatalogSource(selectedSource.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
+              {selectedSource && (
+                <p className="truncate border-b border-border px-3.5 py-1.5 font-mono text-[11px] text-muted">
+                  {selectedSource.url}
+                  <span className="ml-1.5 font-sans">
+                    {t("catalog.installableCount", {
+                      count: sourceScoped.length,
+                      total: selectedSource.plugins.length,
+                    })}
+                  </span>
+                </p>
+              )}
+              {catalogFiltered.length === 0 ? (
+                <p className="px-3.5 py-2.5 text-xs text-muted">{t("catalog.noneInstallable")}</p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {catalogPageEntries.map((e) => {
+                    const p = e.plugin;
+                    const key = `${e.srcId}:${e.multiPlugin ? p.name : ""}`;
+                    const st = catalogInstalls[key];
+                    return (
+                      <li key={`${e.srcId}:${p.name}`} className="flex items-center gap-3 px-3.5 py-2.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm text-fg">
+                            {p.name}
+                            {p.version && <span className="ml-1.5 font-mono text-xs text-muted">v{p.version}</span>}
+                            {!catalogSource && (
+                              <span className="ml-1.5 rounded bg-surface px-1.5 py-0.5 text-[11px] text-muted">
+                                {e.srcName}
+                              </span>
+                            )}
+                          </p>
+                          {(p.description || p.description_ko) && (
+                            <p
+                              className="mt-0.5 line-clamp-2 text-xs text-muted"
+                              title={locale === "ko" && p.description_ko ? p.description : undefined}
+                            >
+                              {locale === "ko" && p.description_ko ? p.description_ko : p.description}
+                            </p>
+                          )}
+                        </div>
+                        {st?.state === "installed" && (
+                          <span className="shrink-0 whitespace-nowrap text-xs text-success">
+                            {st.upToDate ? t("gallery.upToDate") : st.updated ? t("gallery.updatedDone") : t("gallery.installed")}
+                          </span>
+                        )}
+                        {st?.state === "failed" && (
+                          <span className="shrink-0 whitespace-nowrap text-xs text-muted">{t("gallery.failed")}</span>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={st?.state === "installing"}
+                          onClick={() => void installFromCatalog(e.srcId, e.multiPlugin ? p.name : undefined)}
+                        >
+                          {st?.state === "installing" ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4" />
+                          )}
+                          {t("gallery.install")}
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {catalogTotalPages > 1 && (
+                <div className="flex items-center justify-center gap-1 border-t border-border px-3.5 py-1.5">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={t("catalog.prevPageAria")}
+                    disabled={catalogPageClamped === 0}
+                    onClick={() => setCatalogPage(catalogPageClamped - 1)}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-xs tabular-nums text-muted">
+                    {t("catalog.pageInfo", { page: catalogPageClamped + 1, total: catalogTotalPages })}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={t("catalog.nextPageAria")}
+                    disabled={catalogPageClamped >= catalogTotalPages - 1}
+                    onClick={() => setCatalogPage(catalogPageClamped + 1)}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </CardContent>

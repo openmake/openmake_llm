@@ -85,13 +85,14 @@ export function scanForMcpServerManifests(tree: TreeEntry[], explicitPath?: stri
 }
 
 /**
- * plugin.json (Agent Plugins v1 확장 번들) 후보 탐지.
+ * 확장 매니페스트 후보 탐지 — plugin.json (Agent Plugins v1) + gemini-extension.json
+ * (Gemini CLI 확장 — name/version/mcpServers 동형 스키마, 2026-08-16 실측 호환).
  *
  * 자동 탐지 규칙:
  *   1. 명시 explicitPath 지정 시 그것만
- *   2. tree 어디든 plugin.json (root, 서브디렉토리, .claude-plugin/ 포함)
+ *   2. tree 어디든 plugin.json / gemini-extension.json (root, 서브디렉토리, .claude-plugin/ 포함)
  */
-const EXTENSION_MANIFEST_PATTERN = /(^|\/)plugin\.json$/;
+const EXTENSION_MANIFEST_PATTERN = /(^|\/)(plugin|gemini-extension)\.json$/;
 
 export function scanForExtensionManifests(tree: TreeEntry[], explicitPath?: string): ManifestCandidate[] {
     if (explicitPath) {
