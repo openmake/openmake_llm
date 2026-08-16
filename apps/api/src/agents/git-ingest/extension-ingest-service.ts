@@ -194,6 +194,12 @@ export class ExtensionIngestService {
         if (!candidate) {
             const candidates = scanForExtensionManifests(tree.entries, input.gitPath);
             if (candidates.length === 0) {
+                // 잘못된 gitPath 로 마켓플레이스 분기를 우회한 경우 — plugin 인자 사용을 안내해
+                // 도구 루프 내 자가 교정 유도 (2026-08-16 라이브 실측: 모델이 gitPath 를 지어냄)
+                const mk = scanForMarketplaceManifests(tree.entries);
+                if (mk.length > 0) {
+                    throw new Error(`NO_EXTENSION_FOUND: 해당 gitPath 에 plugin.json 없음. 이 저장소는 마켓플레이스(.claude-plugin/marketplace.json)입니다 — gitPath 대신 plugin 인자로 플러그인 이름을 지정해 재호출하세요. 예: import_extension_from_git({ gitUrl: "${input.gitUrl}", plugin: "<플러그인 이름>" }) (gitPath/gitRef 는 생략)`);
+                }
                 throw new Error(`NO_EXTENSION_FOUND: tree 에 plugin.json 후보 없음 (gitUrl=${input.gitUrl}, ref=${sha})`);
             }
             if (candidates.length > 1 && !input.gitPath) {
