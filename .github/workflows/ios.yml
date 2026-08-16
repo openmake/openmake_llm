@@ -1,0 +1,67 @@
+# ==============================================================
+# iOS CI (축 3 Step 7)
+# ==============================================================
+# path-filter: apps/ios 또는 계약 산출물(packages/api-contracts) 변경 시에만 실행 —
+# 계약이 바뀌었는데 iOS 생성 코드(Generated) 재생성이 누락된 커밋도 여기서 잡는다.
+# 서명 없는 시뮬레이터 빌드만 수행 (서명 비밀을 공개 리포 CI 에 두지 않음 — TestFlight 은 로컬 수동).
+# 기존 CI Gate(ci.yml)와 독립 — 백엔드/웹 변경에는 실행되지 않는다.
+# ==============================================================
+
+name: iOS
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/ios/**'
+      - 'packages/api-contracts/**'
+      - '.github/workflows/ios.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'apps/ios/**'
+      - 'packages/api-contracts/**'
+      - '.github/workflows/ios.yml'
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    name: iOS (Kit tests → Codegen drift → App build)
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ─── Gate 1: OpenMakeKit 단위 테스트 (macOS) ───
+      # LiveSmokeTests 는 OPENMAKE_LIVE_BEARER 미설정 시 XCTSkip — CI 무영향.
+      - name: "Gate 1: OpenMakeKit tests"
+        run: swift test --package-path apps/ios/Packages/OpenMakeKit
+
+      # ─── Gate 2: Codegen drift ───
+      # 계약(packages/api-contracts) → Generated/*.swift 재생성 후 diff 검사.
+      # 생성기(exact 1.13.0)·quicktype(@26.0.0) 버전 고정으로 출력 결정성 보장.
+      - name: "Gate 2: Codegen drift"
+        run: |
+          ./apps/ios/scripts/generate-openmakekit.sh
+          DRIFT=$(git status --porcelain -- apps/ios/Packages/OpenMakeKit/Sources/OpenMakeKit/Generated)
+          if [ -n "$DRIFT" ]; then
+            echo "::error::iOS 생성 코드 drift — 계약 변경 후 apps/ios/scripts/generate-openmakekit.sh 를 실행해 Generated 를 함께 커밋하세요"
+            echo "$DRIFT"
+            git diff -- apps/ios/Packages/OpenMakeKit/Sources/OpenMakeKit/Generated | head -80
+            exit 1
+          fi
+          echo "iOS 생성 코드 최신 상태 확인"
+
+      # ─── Gate 3: 앱 빌드 (시뮬레이터, 무서명) ───
+      - name: "Gate 3: App build (simulator)"
+        run: |
+          xcodebuild -project apps/ios/OpenMakeApp.xcodeproj \
+            -scheme OpenMakeApp \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build
