@@ -9,8 +9,11 @@ final class ChatStreamStateTests: XCTestCase {
 
     func testTokenAccumulationEndsThinking() {
         var state = ChatStreamState()
+        state.begin()
+        XCTAssertEqual(state.statusText, "요청을 분석하고 있어요")
         state.apply(event(#"{"type":"thinking","token":"…"}"#))
         XCTAssertTrue(state.isThinking)
+        XCTAssertEqual(state.statusText, "답변을 생각하고 있어요")
         state.apply(event(#"{"type":"token","token":"안녕"}"#))
         state.apply(event(#"{"type":"token","token":"하세요"}"#))
         XCTAssertEqual(state.streamingText, "안녕하세요")
@@ -25,8 +28,11 @@ final class ChatStreamStateTests: XCTestCase {
 
     func testDoneCarriesMetrics() {
         var state = ChatStreamState()
-        state.apply(event(#"{"type":"done","messageId":"m1","metrics":{"tokenCount":42,"tokensPerSec":"12.50"}}"#))
+        state.begin()
+        state.apply(event(#"{"type":"done","messageId":"m1","cleanedContent":"정리된 답변","metrics":{"tokenCount":42,"tokensPerSec":"12.50"}}"#))
         XCTAssertTrue(state.isDone)
+        XCTAssertEqual(state.streamingText, "정리된 답변")
+        XCTAssertNil(state.statusText)
         XCTAssertEqual(state.metrics, ChatStreamMetrics(tokenCount: 42, tokensPerSec: "12.50"))
     }
 
@@ -53,8 +59,55 @@ final class ChatStreamStateTests: XCTestCase {
     func testIrrelevantEventsAreNoops() {
         var state = ChatStreamState()
         state.apply(event(#"{"type":"build_id","buildId":"b1"}"#))
-        state.apply(event(#"{"type":"skills_activated","skillNames":["a"]}"#))
         XCTAssertEqual(state.streamingText, "")
         XCTAssertFalse(state.isDone)
+    }
+
+    func testAgentAndResearchEventsExposeOneSafeActivityLine() {
+        var state = ChatStreamState()
+        state.apply(event(#"{"type":"agent_selected","agent":{"name":"Researcher","type":"researcher"}}"#))
+        XCTAssertEqual(state.statusText, "Researcher 에이전트가 작업을 준비하고 있어요")
+        XCTAssertEqual(state.activityKind, .agent)
+
+        state.apply(event(#"{"type":"research_progress","message":"자료를 찾는 중\n  2 / 5"}"#))
+        XCTAssertEqual(state.statusText, "자료를 찾는 중 2 / 5")
+        XCTAssertEqual(state.activityKind, .research)
+    }
+
+    func testActivatedSkillsAreVisibleUntilNextQuestion() {
+        var state = ChatStreamState()
+        state.begin()
+        state.apply(event(#"{"type":"skills_activated","skillNames":[" web-search ","report","web-search",""]}"#))
+
+        XCTAssertEqual(state.activeSkillNames, ["web-search", "report"])
+        XCTAssertEqual(state.statusText, "web-search, report 적용 중")
+        XCTAssertEqual(state.activityKind, .agent)
+
+        state.apply(event(#"{"type":"token","token":"결과"}"#))
+        XCTAssertNil(state.statusText)
+        XCTAssertEqual(state.activeSkillNames, ["web-search", "report"])
+
+        state.begin()
+        XCTAssertTrue(state.activeSkillNames.isEmpty)
+    }
+
+    func testAgentTaskProgressUsesStepPreviewWithoutMultilineOutput() {
+        var state = ChatStreamState()
+        state.apply(event(#"{"type":"agent_task_progress","taskId":"task-1","currentTurn":2,"status":"running","step":{"stepType":"tool_result","toolName":"web_search","preview":"공식 문서를\n확인했어요"}}"#))
+        XCTAssertEqual(state.statusText, "공식 문서를 확인했어요")
+        XCTAssertEqual(state.activityKind, .agent)
+    }
+
+    func testArtifactLifecycleAccumulatesContent() {
+        var state = ChatStreamState()
+        state.apply(event(#"{"type":"artifact_start","artifact":{"id":"a1","kind":"code","lang":"swift","title":"Sample.swift"}}"#))
+        state.apply(event(#"{"type":"artifact_chunk","id":"a1","delta":"let answer = "}"#))
+        state.apply(event(#"{"type":"artifact_chunk","id":"a1","delta":"42"}"#))
+        XCTAssertEqual(state.artifacts.first?.content, "let answer = 42")
+        XCTAssertFalse(state.artifacts.first?.isComplete ?? true)
+
+        state.apply(event(#"{"type":"artifact_end","id":"a1"}"#))
+        XCTAssertTrue(state.artifacts.first?.isComplete ?? false)
+        XCTAssertEqual(state.statusText, "답변을 정리하고 있어요")
     }
 }

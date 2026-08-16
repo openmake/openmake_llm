@@ -2,6 +2,7 @@ import { getPool } from '../data/models/unified-database';
 import webPush from 'web-push';
 import { getVapidKeys } from '../utils/vapid';
 import { createLogger } from '../utils/logger';
+import { getNativePushService } from './NativePushService';
 
 const logger = createLogger('PushService');
 
@@ -82,12 +83,23 @@ export class PushService {
      * 410 Gone / 404 (만료 구독)은 자동 정리. fire-and-forget 호출 전제.
      */
     async sendPush(userId: string, payload: { title: string; body: string; url?: string }): Promise<void> {
+        const nativeDelivery = getNativePushService().sendPush(userId, payload).catch((error) => {
+            logger.warn('native_push.dispatch_failed', {
+                error: error instanceof Error ? error.message : String(error),
+            });
+        });
         const { publicKey, privateKey } = getVapidKeys(); // setVapidDetails 보장
-        if (!publicKey || !privateKey) return; // VAPID 미설정 — 발송 불가, no-op
+        if (!publicKey || !privateKey) {
+            await nativeDelivery;
+            return;
+        }
         const subs = await this.getActiveSubscriptions(userId);
-        if (subs.length === 0) return;
+        if (subs.length === 0) {
+            await nativeDelivery;
+            return;
+        }
         const data = JSON.stringify(payload);
-        await Promise.all(subs.map(async (sub) => {
+        await Promise.all([nativeDelivery, ...subs.map(async (sub) => {
             try {
                 await webPush.sendNotification(
                     { endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth } },
@@ -103,7 +115,7 @@ export class PushService {
                     logger.warn(`push 발송 실패 (user=${userId}, code=${code ?? 'n/a'}): ${(err as Error)?.message ?? err}`);
                 }
             }
-        }));
+        })]);
     }
 
     async listStoredSubscriptions(): Promise<StoredPushSubscription[]> {

@@ -4,6 +4,8 @@ import {
     matchesSlug,
     buildAugmentedMessage,
     applySlashCommand,
+    mergeActivatedSkillNames,
+    type ApplySlashDeps,
 } from '../slash-command';
 
 describe('parseSlashCommand', () => {
@@ -79,6 +81,30 @@ describe('applySlashCommand', () => {
         const find = jest.fn().mockRejectedValue(new Error('db down'));
         const out = await applySlashCommand('/billing x', { findSkillBySlug: find, enabled: true });
         expect(out).toBe('/billing x');
+    });
+});
+
+describe('slash skill activation metadata', () => {
+    it('명시 호출된 스킬 이름을 활성화 이벤트용 콜백으로 전달한다', async () => {
+        const find = jest.fn().mockResolvedValue({ name: 'Billing Guide', content: 'rules' });
+        const onSkillApplied = jest.fn();
+        const deps: ApplySlashDeps & { onSkillApplied: (skillName: string) => void } = {
+            findSkillBySlug: find,
+            enabled: true,
+            onSkillApplied,
+        };
+
+        const message = await applySlashCommand('/billing-guide 환불', deps);
+
+        expect(message).toContain('rules');
+        expect(onSkillApplied).toHaveBeenCalledWith('Billing Guide');
+    });
+
+    it('명시 호출과 자동 선택 스킬을 순서 보존·중복 제거해 병합한다', () => {
+        expect(mergeActivatedSkillNames(
+            [' Billing Guide ', 'web-search'],
+            ['web-search', 'Report', ''],
+        )).toEqual(['Billing Guide', 'web-search', 'Report']);
     });
 });
 

@@ -75,8 +75,13 @@ export interface ApplySlashDeps {
     userId?: string;
     /** slug 로 active 스킬을 찾는 함수 (없으면 기본 구현 — skill-manager) */
     findSkillBySlug?: (slug: string, userId?: string) => Promise<SlashSkill | null>;
+    onSkillApplied?: (skillName: string) => void;
     /** 강제 on/off (테스트용). 기본 SLASH_COMMANDS_ENABLED */
     enabled?: boolean;
+}
+
+export function mergeActivatedSkillNames(...groups: string[][]): string[] {
+    return [...new Set(groups.flatMap((names) => names.map((name) => name.trim()).filter(Boolean)))];
 }
 
 /** 기본 스킬 해석기 — active 스킬을 검색해 slug 정확 매칭.
@@ -115,6 +120,7 @@ export async function applySlashCommand(message: string, deps: ApplySlashDeps = 
         const skill = await find(parsed.slug, deps.userId);
         if (!skill) return message; // 미매칭 — 원문 유지(일반 텍스트로 취급)
         logger.info(`슬래시 명령 적용: /${parsed.slug} → 스킬 "${skill.name}"`);
+        deps.onSkillApplied?.(skill.name);
         return buildAugmentedMessage(skill, parsed.rest);
     } catch (e) {
         logger.warn(`슬래시 명령 처리 실패 (원문 유지): ${e instanceof Error ? e.message : String(e)}`);

@@ -40,6 +40,20 @@ cd apps/ios && xcodebuild -project OpenMakeApp.xcodeproj -scheme OpenMakeApp \
 번들 ID `cc.openmake.chat` · 최소 iOS 17 · 서드파티 의존 0 (Apple 공식 swift-openapi-runtime 만).
 app scheme 은 서버 `MOBILE_AUTH.APP_SCHEME`(기본 `openmake`) 와 일치해야 한다 (축 2).
 
+## 알림
+
+알림 권한, 로컬 완료 알림, APNs 토큰 등록 클라이언트와 서버 발송 경로가 포함되어 있다.
+현재 개인 개발 팀 서명을 유지하기 위해 `Info.plist`의 `OpenMakeRemotePushEnabled` 기본값은 `false`다.
+
+원격 푸시를 켤 때는 다음을 함께 적용한다.
+
+1. Apple Developer Program의 App ID와 Xcode 타깃에서 Push Notifications capability를 활성화한다.
+2. `Info.plist`의 `OpenMakeRemotePushEnabled`를 `true`로 바꾼다.
+3. 서버에 `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_PRIVATE_KEY`를 설정한다.
+4. `db/migrations/098_mobile_push_tokens.sql`을 배포 DB에 적용한다.
+
+APNs 키가 비어 있으면 서버의 기존 Web Push는 그대로 동작하고 APNs 발송만 no-op이다.
+
 ## TestFlight (Step 8 — 로컬 수동, 서명 비밀은 CI 금지)
 
 1회 선행: ① Apple Developer Program 계정으로 Xcode > Settings > Accounts 로그인

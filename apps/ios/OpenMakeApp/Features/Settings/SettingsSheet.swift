@@ -5,6 +5,7 @@ import OpenMakeKit
 struct SettingsSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @State private var notifications = NotificationManager.shared
 
     var body: some View {
         @Bindable var model = model
@@ -33,6 +34,27 @@ struct SettingsSheet: View {
                     }
                 }
 
+                Section("알림") {
+                    LabeledContent("상태", value: notifications.statusText)
+                    Button(notifications.authorizationStatus == .notDetermined ? "알림 허용" : "알림 권한 다시 확인") {
+                        Task { await notifications.requestAuthorization() }
+                    }
+                    if notifications.authorizationStatus == .authorized {
+                        Button("테스트 알림 보내기") {
+                            Task {
+                                await notifications.schedule(
+                                    title: "OpenMake 알림",
+                                    body: "에이전트 작업과 딥리서치 완료를 알려드릴게요")
+                            }
+                        }
+                    }
+                    if !notifications.remotePushEnabled {
+                        Text("현재 서명은 로컬 알림 모드입니다. Apple Push capability를 활성화하면 원격 푸시 등록을 켤 수 있습니다.")
+                            .font(.footnote)
+                            .foregroundStyle(Lumen.muted)
+                    }
+                }
+
                 Section {
                     Button("로그아웃", role: .destructive) {
                         Task {
@@ -53,6 +75,7 @@ struct SettingsSheet: View {
                     Button("완료") { dismiss() }
                 }
             }
+            .task { await notifications.refreshStatus() }
         }
     }
 

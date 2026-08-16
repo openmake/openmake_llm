@@ -79,6 +79,21 @@ final class OpenMakeClientTests: XCTestCase {
         MockURLProtocol.script("/api/csrf-token", .init(status: 200, json: #"{"token":"csrf-1"}"#))
     }
 
+    private func bodyData(from request: URLRequest?) -> Data? {
+        if let data = request?.httpBody { return data }
+        guard let stream = request?.httpBodyStream else { return nil }
+        stream.open()
+        defer { stream.close() }
+        var result = Data()
+        var buffer = [UInt8](repeating: 0, count: 1024)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count <= 0 { break }
+            result.append(buffer, count: count)
+        }
+        return result
+    }
+
     func testLoginStoresTokensAndSendsCsrfHeader() async throws {
         scriptCsrf()
         MockURLProtocol.script("/api/auth/login", .init(status: 200, json:
@@ -200,6 +215,64 @@ final class OpenMakeClientTests: XCTestCase {
         let agents = try await client.userAgents()
         XCTAssertEqual(agents.first?.name, "도우미")
         XCTAssertEqual(agents.first?.icon, "🤖")
+    }
+
+    func testAgentTaskCreateAndExecuteUseDetachedAPI() async throws {
+        store.save(AuthTokens(access: "at", refresh: "rt"))
+        MockURLProtocol.script("/api/agent-tasks", .init(status: 201, json:
+            #"{"success":true,"data":{"task":{"id":"t1","goal":"앱을 점검해줘","status":"pending","progress":0,"current_turn":0,"max_turns":10,"created_at":"2026-08-16T00:00:00.000Z","updated_at":"2026-08-16T00:00:00.000Z","resumable":false},"concurrentActive":0,"warnings":[]},"meta":\#(Self.meta)}"#))
+        MockURLProtocol.script("/api/agent-tasks/t1/execute", .init(status: 202, json:
+            #"{"success":true,"data":{"message":"작업이 시작되었습니다.","taskId":"t1","queued":false},"meta":\#(Self.meta)}"#))
+
+        let created = try await client.createAgentTask(goal: "앱을 점검해줘")
+        XCTAssertEqual(created.task.id, "t1")
+        XCTAssertEqual(created.task.status, .pending)
+        let execution = try await client.executeAgentTask(id: "t1", approvalPolicy: .highRisk)
+        XCTAssertFalse(execution.queued)
+
+        let request = MockURLProtocol.requests(to: "/api/agent-tasks/t1/execute").first
+        let body = try XCTUnwrap(bodyData(from: request))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
+        XCTAssertEqual(json["approvalPolicy"], "high-risk")
+    }
+
+    func testAgentTaskDetailDecodesSteps() async throws {
+        store.save(AuthTokens(access: "at", refresh: "rt"))
+        MockURLProtocol.script("/api/agent-tasks/t1", .init(status: 200, json:
+            #"{"success":true,"data":{"task":{"id":"t1","goal":"조사","status":"running","progress":35,"current_turn":2,"max_turns":10,"created_at":"2026-08-16T00:00:00.000Z","updated_at":"2026-08-16T00:01:00.000Z","resumable":false},"steps":[{"id":1,"task_id":"t1","step_number":0,"step_type":"tool_result","tool_name":"web_search","content":"공식 문서 확인","status":"completed","created_at":"2026-08-16T00:01:00.000Z"}]},"meta":\#(Self.meta)}"#))
+
+        let detail = try await client.agentTask(id: "t1")
+        XCTAssertEqual(detail.task.currentTurn, 2)
+        XCTAssertEqual(detail.steps.first?.toolName, "web_search")
+    }
+
+    func testArtifactsListDecodesLatestContent() async throws {
+        store.save(AuthTokens(access: "at", refresh: "rt"))
+        MockURLProtocol.script("/api/sessions/s1/artifacts", .init(status: 200, json:
+            #"{"success":true,"data":{"artifacts":[{"pk_id":1,"artifact_id":"a1","version":2,"session_id":"s1","message_id":"m1","user_id":"u1","kind":"code","title":"Sample.swift","language":"swift","content":"let answer = 42","deps":null,"created_at":"2026-08-16T00:00:00.000Z"}],"total":1},"meta":\#(Self.meta)}"#))
+
+        let artifacts = try await client.artifacts(sessionId: "s1")
+        XCTAssertEqual(artifacts.first?.id, "a1")
+        XCTAssertEqual(artifacts.first?.content, "let answer = 42")
+        XCTAssertEqual(artifacts.first?.version, 2)
+    }
+
+    func testNativePushTokenRegistrationUsesAuthenticatedEndpoint() async throws {
+        store.save(AuthTokens(access: "at", refresh: "rt"))
+        MockURLProtocol.script("/api/push/native/subscribe", .init(status: 200, json:
+            #"{"success":true,"data":{"message":"등록됨"},"meta":\#(Self.meta)}"#))
+
+        try await client.registerNativePushToken(
+            "abc123abc123abc123",
+            environment: .development,
+            bundleId: "cc.openmake.chat")
+
+        let request = MockURLProtocol.requests(to: "/api/push/native/subscribe").first
+        XCTAssertEqual(request?.value(forHTTPHeaderField: "Authorization"), "Bearer at")
+        let body = try XCTUnwrap(bodyData(from: request))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
+        XCTAssertEqual(json["environment"], "development")
+        XCTAssertEqual(json["bundleId"], "cc.openmake.chat")
     }
 
     func testNoSessionThrowsNotAuthenticated() async {

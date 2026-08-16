@@ -6,6 +6,19 @@ struct ContentView: View {
     @State private var model = AppModel()
 
     var body: some View {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["OPENMAKE_DESIGN_SHOWCASE"] == "1" {
+            DesignSystemShowcase()
+        } else {
+            authenticatedContent
+        }
+        #else
+        authenticatedContent
+        #endif
+    }
+
+    @ViewBuilder
+    private var authenticatedContent: some View {
         Group {
             switch model.authState {
             case .checking:
@@ -17,7 +30,10 @@ struct ContentView: View {
             }
         }
         .environment(model)
-        .task { await model.bootstrap() }
+        .task {
+            await model.bootstrap()
+            await NotificationManager.shared.activate()
+        }
     }
 }
 

@@ -4,11 +4,15 @@ import OpenMakeKit
 
 struct ConversationListView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var sessions: [OpenMakeClient.SessionSummary] = []
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showNewChat = false
     @State private var showSettings = false
+    @State private var showDrawer = false
+    @State private var showAgentTasks = false
+    @State private var selectedSession: OpenMakeClient.SessionSummary?
     @State private var searchText = ""
     @State private var autoChatFired = false
 
@@ -81,8 +85,8 @@ struct ConversationListView: View {
                     Wordmark(size: 18)
                 }
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("설정", systemImage: "gearshape") {
-                        showSettings = true
+                    Button("메뉴", systemImage: "line.3.horizontal") {
+                        setDrawerPresented(true)
                     }
                     .tint(Lumen.fg2)
                 }
@@ -94,6 +98,17 @@ struct ConversationListView: View {
             }
             .navigationDestination(isPresented: $showNewChat) {
                 ConversationDetailView(session: nil)
+            }
+            .navigationDestination(isPresented: $showAgentTasks) {
+                AgentTaskListView()
+            }
+            .navigationDestination(isPresented: Binding(
+                get: { selectedSession != nil },
+                set: { if !$0 { selectedSession = nil } }
+            )) {
+                if let selectedSession {
+                    ConversationDetailView(session: selectedSession)
+                }
             }
             .sheet(isPresented: $showSettings) {
                 SettingsSheet()
@@ -111,8 +126,81 @@ struct ConversationListView: View {
                 }
                 #endif
             }
+            .onReceive(NotificationCenter.default.publisher(for: .openMakeNotificationURL)) { notification in
+                guard let url = notification.object as? String else { return }
+                handleNotificationURL(url)
+            }
         }
         .tint(Lumen.accent)
+        .overlay {
+            if showDrawer {
+                LumenDrawer(
+                    sessions: sessions,
+                    email: accountEmail,
+                    onDismiss: { setDrawerPresented(false) },
+                    onNewChat: {
+                        showDrawer = false
+                        showNewChat = true
+                    },
+                    onAgentTasks: {
+                        showDrawer = false
+                        showAgentTasks = true
+                    },
+                    onDeepResearch: {
+                        model.modes.deepResearch = true
+                        model.modes.agentTask = false
+                        showDrawer = false
+                        showNewChat = true
+                    },
+                    onConversation: { session in
+                        showDrawer = false
+                        selectedSession = session
+                    },
+                    onSettings: {
+                        showDrawer = false
+                        showSettings = true
+                    })
+            }
+        }
+    }
+
+    private var accountEmail: String? {
+        if case .loggedIn(let user) = model.authState { return user.email }
+        return nil
+    }
+
+    private func setDrawerPresented(_ presented: Bool) {
+        if reduceMotion {
+            showDrawer = presented
+        } else {
+            withAnimation(.easeOut(duration: 0.2)) {
+                showDrawer = presented
+            }
+        }
+    }
+
+    private func handleNotificationURL(_ url: String) {
+        showDrawer = false
+        if url.hasPrefix("/agent-tasks") {
+            selectedSession = nil
+            showNewChat = false
+            showAgentTasks = true
+            return
+        }
+        let chatPrefix = "/chat/"
+        guard url.hasPrefix(chatPrefix) else { return }
+        let sessionId = String(url.dropFirst(chatPrefix.count))
+        guard !sessionId.isEmpty else { return }
+        showAgentTasks = false
+        showNewChat = false
+        if let session = sessions.first(where: { $0.id == sessionId }) {
+            selectedSession = session
+            return
+        }
+        Task {
+            await load()
+            selectedSession = sessions.first { $0.id == sessionId }
+        }
     }
 
     /// "local-llm:qwen3.6-35b-a3b" → "qwen3.6-35b-a3b" (provider prefix 제거)

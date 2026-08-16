@@ -17,7 +17,7 @@ import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
 import { WS_ERROR_MESSAGES, WS_PROVIDER_ERROR_MESSAGES, getLocalizedTemplate } from './ws-chat-locales';
 import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
-import { applySlashCommand } from '../chat/slash-command';
+import { applySlashCommand, mergeActivatedSkillNames } from '../chat/slash-command';
 import { WS_LIMITS } from '../config/timeouts';
 import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
 import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
@@ -68,7 +68,11 @@ export async function handleChatMessage(
     // 슬래시 명령(P-4): `/skill-slug ...` 가 active 스킬과 매칭되면 스킬 컨텍스트를 주입.
     // 비슬래시/미매칭/비활성은 원문 그대로(무영향·무비용), 오류는 graceful(원문 유지).
     const slashUserId = extWs._authenticatedUserId !== undefined ? String(extWs._authenticatedUserId) : undefined;
-    const message = await applySlashCommand((msg.message ?? '').trim(), { userId: slashUserId });
+    const explicitSkillNames: string[] = [];
+    const message = await applySlashCommand((msg.message ?? '').trim(), {
+        userId: slashUserId,
+        onSkillApplied: (skillName) => explicitSkillNames.push(skillName),
+    });
 
     // 사용자 언어 감지 — 설정에서 선택한 언어를 우선, 없으면 메시지 기반 자동 감지
     const userLangPreference = (typeof msg.language === 'string' && msg.language.trim()) ? msg.language.trim() as SupportedLanguageCode : undefined;
@@ -132,7 +136,6 @@ export async function handleChatMessage(
             ws.send(JSON.stringify({ type: 'error', message: rateLimitError }));
             return;
         }
-
         // 첨부 파일(이미지 외) → LLM 주입용 컨텍스트 (transient — DB 미저장, webSearchContext 와 동급 채널)
         // 레이트 리밋 통과 후 조립 — 거부될 요청에 최대 300k 자 문자열 조립 비용을 쓰지 않는다.
         // 바이너리 문서(PDF/docx/xlsx/pptx 등)는 base64(data)를 텍스트로 추출해 content 를 채운다.
@@ -266,6 +269,10 @@ export async function handleChatMessage(
             artifactStreamParser.feed(token);
         };
 
+        if (explicitSkillNames.length > 0) {
+            ws.send(JSON.stringify({ type: 'skills_activated', skillNames: explicitSkillNames }));
+        }
+
         // ChatRequestHandler.processChat으로 통합 처리
         const result = await ChatRequestHandler.processChat({
             message,
@@ -312,7 +319,10 @@ export async function handleChatMessage(
             onAgentSelected: (agent) => ws.send(JSON.stringify({ type: 'agent_selected', agent })),
             onDiscussionProgress: (progress) => ws.send(JSON.stringify({ type: 'discussion_progress', progress })),
             onResearchProgress: (progress) => ws.send(JSON.stringify({ type: 'research_progress', progress })),
-            onSkillsActivated: (skillNames) => ws.send(JSON.stringify({ type: 'skills_activated', skillNames })),
+            onSkillsActivated: (skillNames) => ws.send(JSON.stringify({
+                type: 'skills_activated',
+                skillNames: mergeActivatedSkillNames(explicitSkillNames, skillNames),
+            })),
             // MCP tool 호출 결과의 resource content 를 frontend 로 emit
             // (예: create_skill → openmake://skill-draft/{id} → chat.js 가 인라인 카드 렌더)
             onMcpToolResult: (event) => {
