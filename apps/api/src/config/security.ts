@@ -162,3 +162,26 @@ export const AUTH_COOKIES = {
     /** 리프레시 토큰 (HttpOnly, path=/api/auth/refresh) */
     REFRESH: AUTH.REFRESH_COOKIE_NAME,
 } as const;
+
+/**
+ * 모바일 인증 (iOS 축 2) — OAuth exchange code 흐름.
+ *
+ * ASWebAuthenticationSession 은 앱 URLSession 과 쿠키 저장소가 분리되어 쿠키로는
+ * 토큰이 앱에 도달하지 못한다. 콜백에서 단명 일회성 코드를 app scheme 으로 전달하고
+ * `POST /api/auth/mobile/exchange` 에서 토큰으로 교환한다. app scheme URL 은 로그·타 앱
+ * 가로채기에 노출될 수 있어 refresh token 을 직접 싣지 않는다.
+ */
+export const MOBILE_AUTH = {
+    /** 앱 URL scheme — iOS Xcode URL Types 와 동일해야 함 */
+    APP_SCHEME: process.env.MOBILE_APP_SCHEME || 'openmake',
+    /** scheme 뒤 콜백 경로 — `openmake://auth/callback?code=...` */
+    CALLBACK_HOST_PATH: 'auth/callback',
+    /** exchange code 만료 (ms, 기본 60초) */
+    EXCHANGE_CODE_TTL_MS: Number(process.env.MOBILE_EXCHANGE_CODE_TTL_MS) || 60 * 1000,
+    /** KVStore 키 prefix */
+    EXCHANGE_KEY_PREFIX: 'mobile_exchange:',
+    /** code 엔트로피 (bytes → hex 2배 길이) */
+    EXCHANGE_CODE_BYTES: 32,
+    /** 허용 클라이언트 식별자 화이트리스트 (`?client=`) */
+    ALLOWED_CLIENTS: ['ios'],
+} as const;
