@@ -1843,7 +1843,9 @@
       "prevPageAria": "Previous page",
       "nextPageAria": "Next page",
       "sourceAria": "Source filter",
-      "sourceAll": "All sources ({count})"
+      "sourceAll": "All sources ({count})",
+      "searchAria": "Keyword search",
+      "searchPlaceholder": "Search name/description"
     }
   }
 }

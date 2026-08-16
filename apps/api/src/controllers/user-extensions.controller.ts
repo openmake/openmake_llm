@@ -209,6 +209,10 @@ export function createUserExtensionsController(): Router {
             });
             log.info(`카탈로그 소스 등록: ${row.id} "${row.name}" (${row.plugins.length} plugins, by=${userId})`);
             res.json(success({ source: row }));
+            // 설명 한국어 번역 — 응답 후 백그라운드 (LLM 배치가 CF 100s 상한을 넘을 수 있어 동기 금지, fail-open)
+            void service.translateCatalogSnapshot(snapshot)
+                .then(() => repo.updateSnapshot(row.id, snapshot))
+                .catch((e) => log.warn(`catalog 번역 실패 (등록은 완료): ${e instanceof Error ? e.message : String(e)}`));
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             log.warn(`catalog 등록 실패: ${msg}`);
@@ -225,9 +229,14 @@ export function createUserExtensionsController(): Router {
             // accessToken(요청 한정): GitHub API 무인증 rate limit(60/hr) 회피 (2026-08-16 실측)
             const body = req.body as z.infer<typeof galleryInstallSchema>;
             const snapshot = await service.fetchCatalogSnapshot(row.url, body.accessToken);
+            // 기존 번역 재사용 (name+description 일치) — 재동기화 시 신규/변경분만 LLM 대상
             const updated = await repo.updateSnapshot(row.id, snapshot);
             log.info(`카탈로그 동기화: ${row.id} (${snapshot.plugins.length} plugins)`);
             res.json(success({ source: updated }));
+            // 설명 한국어 번역 — 응답 후 백그라운드 (CF 100s 상한 회피, fail-open)
+            void service.translateCatalogSnapshot(snapshot, row.plugins)
+                .then(() => repo.updateSnapshot(row.id, snapshot))
+                .catch((e) => log.warn(`catalog 번역 실패 (동기화는 완료): ${e instanceof Error ? e.message : String(e)}`));
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             log.warn(`catalog 동기화 실패: ${msg}`);

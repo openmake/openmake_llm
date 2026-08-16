@@ -1843,7 +1843,9 @@
       "prevPageAria": "上一页",
       "nextPageAria": "下一页",
       "sourceAria": "来源筛选",
-      "sourceAll": "全部来源 ({count})"
+      "sourceAll": "全部来源 ({count})",
+      "searchAria": "关键词搜索",
+      "searchPlaceholder": "搜索名称/描述"
     }
   }
 }

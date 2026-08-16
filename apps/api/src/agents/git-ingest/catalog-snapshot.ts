@@ -25,7 +25,7 @@ import { EXTENSION_INGEST } from '../../config/constants';
 export interface CatalogSnapshot {
     name: string;
     description: string | null;
-    plugins: Array<{ name: string; description?: string; version?: string; installable?: boolean; category?: string }>;
+    plugins: Array<{ name: string; description?: string; version?: string; installable?: boolean; category?: string; description_ko?: string }>;
 }
 
 export interface CatalogSnapshotDeps {

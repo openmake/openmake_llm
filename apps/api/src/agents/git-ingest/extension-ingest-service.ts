@@ -28,6 +28,7 @@ import type { ImportExtensionFromGitInput } from '../../schemas/extension-ingest
 import { GitFetcher } from './git-fetcher';
 import { ArchiveFetcher, isArchiveUrl, archivePseudoRepo } from './archive-fetcher';
 import { fetchCatalogSnapshot as fetchCatalogSnapshotImpl, buildSkillDiscoveryPattern, type CatalogSnapshot } from './catalog-snapshot';
+import { translateCatalogDescriptions } from './catalog-translator';
 // 기존 import 경로 호환 재노출 (테스트 등이 이 모듈에서 import)
 export { buildSkillDiscoveryPattern } from './catalog-snapshot';
 import { scanForExtensionManifests, scanForMarketplaceManifests, resolveExtensionRoot, type ManifestCandidate } from './repo-scanner';
@@ -498,6 +499,18 @@ export class ExtensionIngestService {
             fetcherFactory: this.opts.fetcherFactory,
             archiveFetcherFor: (u) => this.makeArchiveFetcher(u),
         }, url, accessToken);
+    }
+
+    /**
+     * 카탈로그 설명 한국어 번역 — catalog-translator.ts 위임 (fail-open, snapshot mutate).
+     * previous 를 주면 (name, description) 일치 항목의 기존 번역을 재사용한다.
+     */
+    async translateCatalogSnapshot(
+        snapshot: CatalogSnapshot,
+        previous?: Array<{ name: string; description?: string; description_ko?: string }>,
+    ): Promise<void> {
+        const llm = this.opts.llmClientFactory(SKILL_CREATOR.authorModel);
+        await translateCatalogDescriptions(llm, snapshot.plugins, previous);
     }
 
     /** mcp_servers (user_id, name) unique 충돌 회피 — McpServerIngestService 관용구 동형. */

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Package, Trash2, Loader2, ChevronDown, ChevronLeft, ChevronRight, Puzzle, Server, RefreshCw, Share2, Download, Store, Plus } from "lucide-react";
 import { Button, Card, CardHeader, CardTitle, CardContent } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
@@ -36,6 +36,8 @@ interface CatalogPlugin {
   installable?: boolean;
   /** 마켓플레이스 분류 (marketplace.json category) — 카테고리 필터용 */
   category?: string;
+  /** 설명 한국어 번역 (동기화 후단 배치) — ko 로케일에서 우선 노출, 없으면 원문 */
+  description_ko?: string;
 }
 
 /** 카탈로그 페이지 크기 — 대형 마켓플레이스(수백 개) 스크롤 방지 */
@@ -84,11 +86,13 @@ export function ExtensionsSection() {
   const [catalogInstalls, setCatalogInstalls] = useState<Record<string, GalleryInstallState>>({});
   const [catalogUrl, setCatalogUrl] = useState("");
   const [catalogBusy, setCatalogBusy] = useState<string | null>(null);
-  // 카탈로그 단일 브라우저 — 소스/카테고리 셀렉트 + 페이지 (16개 소스 스택 대신 한 리스트)
+  // 카탈로그 단일 브라우저 — 소스/카테고리 셀렉트 + 키워드 검색 + 페이지 (16개 소스 스택 대신 한 리스트)
   const [catalogSource, setCatalogSource] = useState("");
   const [catalogCategory, setCatalogCategory] = useState("");
+  const [catalogSearch, setCatalogSearch] = useState("");
   const [catalogPage, setCatalogPage] = useState(0);
   const isAdmin = useAppStore((s) => s.auth.currentUser?.role === "admin");
+  const locale = useLocale();
 
   // 파생값: 설치 가능 항목 평면화 → 소스 필터 → 카테고리 필터 → 페이지
   const catalogEntries = catalog.flatMap((src) =>
@@ -103,9 +107,16 @@ export function ExtensionsSection() {
     catalogCategoryCounts.set(c, (catalogCategoryCounts.get(c) ?? 0) + 1);
   }
   const catalogCategories = [...catalogCategoryCounts.keys()].sort();
-  const catalogFiltered = catalogCategory
+  const categoryScoped = catalogCategory
     ? sourceScoped.filter((e) => (e.plugin.category ?? UNCATEGORIZED) === catalogCategory)
     : sourceScoped;
+  const searchQuery = catalogSearch.trim().toLowerCase();
+  const catalogFiltered = searchQuery
+    ? categoryScoped.filter((e) =>
+        [e.plugin.name, e.plugin.description, e.plugin.description_ko, e.plugin.category]
+          .some((v) => v?.toLowerCase().includes(searchQuery)),
+      )
+    : categoryScoped;
   const catalogTotalPages = Math.max(1, Math.ceil(catalogFiltered.length / CATALOG_PAGE_SIZE));
   const catalogPageClamped = Math.min(catalogPage, catalogTotalPages - 1);
   const catalogPageEntries = catalogFiltered.slice(
@@ -574,6 +585,16 @@ export function ExtensionsSection() {
                     ))}
                   </select>
                 )}
+                <input
+                  value={catalogSearch}
+                  aria-label={t("catalog.searchAria")}
+                  placeholder={t("catalog.searchPlaceholder")}
+                  onChange={(e) => {
+                    setCatalogSearch(e.target.value);
+                    setCatalogPage(0);
+                  }}
+                  className={CATALOG_SELECT_CLS + " placeholder:text-muted"}
+                />
                 {isAdmin && selectedSource && (
                   <>
                     <Button
@@ -631,7 +652,14 @@ export function ExtensionsSection() {
                               </span>
                             )}
                           </p>
-                          {p.description && <p className="mt-0.5 truncate text-xs text-muted">{p.description}</p>}
+                          {(p.description || p.description_ko) && (
+                            <p
+                              className="mt-0.5 line-clamp-2 text-xs text-muted"
+                              title={locale === "ko" && p.description_ko ? p.description : undefined}
+                            >
+                              {locale === "ko" && p.description_ko ? p.description_ko : p.description}
+                            </p>
+                          )}
                         </div>
                         {st?.state === "installed" && (
                           <span className="shrink-0 whitespace-nowrap text-xs text-success">

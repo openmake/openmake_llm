@@ -1843,7 +1843,9 @@
       "prevPageAria": "이전 페이지",
       "nextPageAria": "다음 페이지",
       "sourceAria": "소스 필터",
-      "sourceAll": "전체 소스 ({count})"
+      "sourceAll": "전체 소스 ({count})",
+      "searchAria": "키워드 검색",
+      "searchPlaceholder": "이름·설명 검색"
     }
   }
 }

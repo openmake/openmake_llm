@@ -1843,7 +1843,9 @@
       "prevPageAria": "前のページ",
       "nextPageAria": "次のページ",
       "sourceAria": "ソースフィルター",
-      "sourceAll": "すべてのソース ({count})"
+      "sourceAll": "すべてのソース ({count})",
+      "searchAria": "キーワード検索",
+      "searchPlaceholder": "名前・説明を検索"
     }
   }
 }

@@ -17,6 +17,8 @@ export interface CatalogPluginEntry {
     installable?: boolean;
     /** 마켓플레이스 분류 (marketplace.json category — 카탈로그 UI 필터용) */
     category?: string;
+    /** 설명 한국어 번역 (동기화 후단 배치 — catalog-translator.ts, 없으면 원문 노출) */
+    description_ko?: string;
 }
 
 export interface ExtensionCatalogRow {
