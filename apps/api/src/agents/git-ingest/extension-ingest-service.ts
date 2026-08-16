@@ -486,6 +486,59 @@ export class ExtensionIngestService {
         return { updateAvailable: true, currentRef: input.currentRef, latestRef, latestVersion };
     }
 
+    /**
+     * 카탈로그 스냅샷 (admin 큐레이션 갤러리) — 소스 URL 의 플러그인 목록만 조회.
+     * marketplace.json 이 있으면 그 목록, 없으면 plugin.json 스캔(상위 10개) 결과.
+     * 설치는 하지 않는다 (extension_catalog_sources.plugins 스냅샷용).
+     */
+    async fetchCatalogSnapshot(url: string, accessToken?: string): Promise<{
+        name: string;
+        description: string | null;
+        plugins: Array<{ name: string; description?: string; version?: string }>;
+    }> {
+        const isArchive = isArchiveUrl(url);
+        const parsed = isArchive ? archivePseudoRepo(url) : parseGitUrl(url);
+        if (!parsed) throw new Error(`INVALID_GIT_URL: ${url}`);
+        const fetcher = isArchive ? this.makeArchiveFetcher(url) : this.opts.fetcherFactory({ accessToken });
+        const sha = await fetcher.resolveRef(parsed.owner, parsed.repo, 'HEAD');
+        const tree = await fetcher.listTree(parsed.owner, parsed.repo, sha, SKILL_CREATOR.gitMaxTreeEntries);
+
+        const mkCandidates = scanForMarketplaceManifests(tree.entries);
+        if (mkCandidates.length > 0) {
+            const mkRaw = await fetcher.fetchFile(parsed.owner, parsed.repo, sha, mkCandidates[0].path, EXTENSION_INGEST.manifestMaxBytes);
+            const mk = parseMarketplaceFile(mkRaw);
+            if (mk.ok) {
+                return {
+                    name: mk.marketplace.name,
+                    description: null,
+                    plugins: mk.marketplace.plugins.map(p => ({ name: p.name, description: p.description })),
+                };
+            }
+        }
+
+        // marketplace 없음 — plugin.json 후보 스캔 (상위 10개)
+        const candidates = scanForExtensionManifests(tree.entries).slice(0, 10);
+        if (candidates.length === 0) {
+            throw new Error(`NO_EXTENSION_FOUND: 소스에 marketplace.json/plugin.json 없음 (${url})`);
+        }
+        const plugins: Array<{ name: string; description?: string; version?: string }> = [];
+        for (const c of candidates) {
+            try {
+                const raw = await fetcher.fetchFile(parsed.owner, parsed.repo, sha, c.path, EXTENSION_INGEST.manifestMaxBytes);
+                const v = validateExtensionManifest(raw);
+                if (v.ok) plugins.push({ name: v.manifest.name, description: v.manifest.description, version: v.manifest.version });
+            } catch {
+                /* 개별 후보 실패 — 건너뜀 */
+            }
+        }
+        if (plugins.length === 0) throw new Error(`NO_EXTENSION_FOUND: 유효한 plugin.json 없음 (${url})`);
+        return {
+            name: plugins[0].name,
+            description: plugins[0].description ?? null,
+            plugins,
+        };
+    }
+
     /** mcp_servers (user_id, name) unique 충돌 회피 — McpServerIngestService 관용구 동형. */
     private async resolveUniqueServerName(userId: string, name: string): Promise<string> {
         const base = name.slice(0, 100);

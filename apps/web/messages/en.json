@@ -1824,6 +1824,16 @@
       "upToDate": "Up to date",
       "failed": "Install failed",
       "owned": "(yours)"
+    },
+    "catalog": {
+      "title": "Curated catalog",
+      "description": "Extension sources registered by an admin. Installing creates drafts in your account, activated after approval.",
+      "empty": "No catalog sources registered.",
+      "urlPlaceholder": "github.com/owner/repo or .zip URL",
+      "register": "Register",
+      "syncAria": "Sync catalog",
+      "removeAria": "Remove catalog source",
+      "removeConfirm": "Remove this catalog source? (Installed extensions are unaffected)"
     }
   }
 }

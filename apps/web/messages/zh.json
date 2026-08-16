@@ -1824,6 +1824,16 @@
       "upToDate": "已是最新",
       "failed": "安装失败",
       "owned": "(我的共享)"
+    },
+    "catalog": {
+      "title": "精选目录",
+      "description": "由管理员注册的扩展源。安装后将在你的账户中创建draft,批准后启用。",
+      "empty": "暂无已注册的目录源。",
+      "urlPlaceholder": "github.com/owner/repo 或 .zip URL",
+      "register": "注册",
+      "syncAria": "同步目录",
+      "removeAria": "删除目录源",
+      "removeConfirm": "确定删除此目录源吗?(不影响已安装的扩展)"
     }
   }
 }

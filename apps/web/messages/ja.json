@@ -1824,6 +1824,16 @@
       "upToDate": "最新です",
       "failed": "インストール失敗",
       "owned": "(自分の共有)"
+    },
+    "catalog": {
+      "title": "キュレーションカタログ",
+      "description": "管理者が登録した拡張ソースです。インストールすると自分のアカウントにdraftが作成され、承認後に有効化されます。",
+      "empty": "登録されたカタログソースはありません。",
+      "urlPlaceholder": "github.com/owner/repo または .zip URL",
+      "register": "登録",
+      "syncAria": "カタログを同期",
+      "removeAria": "カタログソースを削除",
+      "removeConfirm": "このカタログソースを削除しますか?(インストール済みの拡張には影響しません)"
     }
   }
 }

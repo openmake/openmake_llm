@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Package, Trash2, Loader2, ChevronDown, Puzzle, Server, RefreshCw, Share2, Download } from "lucide-react";
+import { Package, Trash2, Loader2, ChevronDown, Puzzle, Server, RefreshCw, Share2, Download, Store, Plus } from "lucide-react";
 import { Button, Card, CardHeader, CardTitle, CardContent } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
+import { useAppStore } from "@/lib/store";
 
 interface UserExtension {
   id: string;
@@ -26,6 +27,21 @@ type GalleryInstallState =
   | { state: "installing" }
   | { state: "installed"; updated: boolean; upToDate: boolean }
   | { state: "failed" };
+
+interface CatalogPlugin {
+  name: string;
+  description?: string;
+  version?: string;
+}
+
+interface CatalogSource {
+  id: string;
+  url: string;
+  name: string;
+  description: string | null;
+  plugins: CatalogPlugin[];
+  last_synced_at?: string;
+}
 
 interface ExtensionComponents {
   skills: Array<{ id: string; name: string; status: string }>;
@@ -53,6 +69,11 @@ export function ExtensionsSection() {
   const [gallery, setGallery] = useState<GalleryExtension[]>([]);
   const [galleryInstalls, setGalleryInstalls] = useState<Record<string, GalleryInstallState>>({});
   const [sharing, setSharing] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<CatalogSource[]>([]);
+  const [catalogInstalls, setCatalogInstalls] = useState<Record<string, GalleryInstallState>>({});
+  const [catalogUrl, setCatalogUrl] = useState("");
+  const [catalogBusy, setCatalogBusy] = useState<string | null>(null);
+  const isAdmin = useAppStore((s) => s.auth.currentUser?.role === "admin");
 
   const load = useCallback(async () => {
     try {
@@ -67,10 +88,11 @@ export function ExtensionsSection() {
 
   const loadGallery = useCallback(async () => {
     try {
-      const res = await ApiClient.get<ApiSuccess<{ extensions: GalleryExtension[] }>>(
+      const res = await ApiClient.get<ApiSuccess<{ extensions: GalleryExtension[]; catalog?: CatalogSource[] }>>(
         "/api/users/me/extensions/gallery",
       );
       setGallery(res?.data?.extensions ?? []);
+      setCatalog(res?.data?.catalog ?? []);
     } catch {
       /* 실패 — 빈 갤러리 유지 */
     }
@@ -150,6 +172,62 @@ export function ExtensionsSection() {
       void load();
     } catch {
       setGalleryInstalls((prev) => ({ ...prev, [id]: { state: "failed" } }));
+    }
+  }
+
+  async function installFromCatalog(sourceId: string, plugin?: string) {
+    const key = `${sourceId}:${plugin ?? ""}`;
+    setCatalogInstalls((prev) => ({ ...prev, [key]: { state: "installing" } }));
+    try {
+      const res = await ApiClient.post<ApiSuccess<{ updated: boolean; upToDate: boolean }>>(
+        `/api/users/me/extensions/catalog/${sourceId}/install`,
+        plugin ? { plugin } : {},
+      );
+      setCatalogInstalls((prev) => ({
+        ...prev,
+        [key]: { state: "installed", updated: !!res?.data?.updated, upToDate: !!res?.data?.upToDate },
+      }));
+      void load();
+    } catch {
+      setCatalogInstalls((prev) => ({ ...prev, [key]: { state: "failed" } }));
+    }
+  }
+
+  async function registerCatalogSource() {
+    const url = catalogUrl.trim();
+    if (!url || catalogBusy) return;
+    setCatalogBusy("register");
+    try {
+      await ApiClient.post("/api/users/me/extensions/catalog", { url });
+      setCatalogUrl("");
+      void loadGallery();
+    } catch {
+      /* 실패 — 입력 유지, 재시도 가능 */
+    } finally {
+      setCatalogBusy(null);
+    }
+  }
+
+  async function syncCatalogSource(id: string) {
+    if (catalogBusy) return;
+    setCatalogBusy(id);
+    try {
+      await ApiClient.post(`/api/users/me/extensions/catalog/${id}/sync`, {});
+      void loadGallery();
+    } catch {
+      /* 실패 */
+    } finally {
+      setCatalogBusy(null);
+    }
+  }
+
+  async function removeCatalogSource(id: string) {
+    if (!window.confirm(t("catalog.removeConfirm"))) return;
+    try {
+      await ApiClient.del(`/api/users/me/extensions/catalog/${id}`);
+      setCatalog((list) => list.filter((s) => s.id !== id));
+    } catch {
+      /* 실패 */
     }
   }
 
@@ -386,6 +464,113 @@ export function ExtensionsSection() {
                   </li>
                 );
               })}
+            </ul>
+          )}
+        </div>
+
+        {/* admin 큐레이션 카탈로그 — 등록된 소스의 플러그인 목록, 설치는 본인 계정 ingest */}
+        <div className="border-t border-border pt-4">
+          <p className="mb-1 flex items-center gap-1.5 text-sm font-medium text-fg">
+            <Store className="h-4 w-4 text-accent" /> {t("catalog.title")}
+          </p>
+          <p className="mb-3 text-xs text-muted">{t("catalog.description")}</p>
+
+          {isAdmin && (
+            <div className="mb-3 flex items-center gap-2">
+              <input
+                value={catalogUrl}
+                onChange={(e) => setCatalogUrl(e.target.value)}
+                placeholder={t("catalog.urlPlaceholder")}
+                className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none placeholder:text-muted focus:border-border-strong"
+              />
+              <Button
+                size="sm"
+                disabled={catalogBusy === "register" || !catalogUrl.trim()}
+                onClick={() => void registerCatalogSource()}
+              >
+                {catalogBusy === "register" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                {t("catalog.register")}
+              </Button>
+            </div>
+          )}
+
+          {catalog.length === 0 ? (
+            <p className="text-xs text-muted">{t("catalog.empty")}</p>
+          ) : (
+            <ul className="space-y-3">
+              {catalog.map((src) => (
+                <li key={src.id} className="rounded-lg border border-border">
+                  <div className="flex items-center gap-2 border-b border-border px-3.5 py-2.5">
+                    <p className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
+                      {src.name}
+                      <span className="ml-1.5 truncate font-mono text-[11px] text-muted">{src.url}</span>
+                    </p>
+                    {isAdmin && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={t("catalog.syncAria")}
+                          disabled={catalogBusy === src.id}
+                          onClick={() => void syncCatalogSource(src.id)}
+                        >
+                          {catalogBusy === src.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={t("catalog.removeAria")}
+                          onClick={() => void removeCatalogSource(src.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  <ul className="divide-y divide-border">
+                    {src.plugins.map((p) => {
+                      const key = `${src.id}:${src.plugins.length > 1 ? p.name : ""}`;
+                      const st = catalogInstalls[key];
+                      return (
+                        <li key={p.name} className="flex items-center gap-3 px-3.5 py-2.5">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm text-fg">
+                              {p.name}
+                              {p.version && <span className="ml-1.5 font-mono text-xs text-muted">v{p.version}</span>}
+                            </p>
+                            {p.description && <p className="mt-0.5 truncate text-xs text-muted">{p.description}</p>}
+                          </div>
+                          {st?.state === "installed" && (
+                            <span className="shrink-0 whitespace-nowrap text-xs text-success">
+                              {st.upToDate ? t("gallery.upToDate") : st.updated ? t("gallery.updatedDone") : t("gallery.installed")}
+                            </span>
+                          )}
+                          {st?.state === "failed" && (
+                            <span className="shrink-0 whitespace-nowrap text-xs text-muted">{t("gallery.failed")}</span>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={st?.state === "installing"}
+                            onClick={() => void installFromCatalog(src.id, src.plugins.length > 1 ? p.name : undefined)}
+                          >
+                            {st?.state === "installing" ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
+                            {t("gallery.install")}
+                          </Button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </li>
+              ))}
             </ul>
           )}
         </div>
