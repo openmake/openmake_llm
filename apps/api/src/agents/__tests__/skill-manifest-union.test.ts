@@ -14,9 +14,12 @@ const MANIFEST_ROWS = [{
     manifest_yaml: '---\nname: presentation-designer\ncategory: design\n---',
 }];
 
+const capturedSql: string[] = [];
 jest.mock('../../data/models/unified-database', () => ({
     getUnifiedDatabase: () => ({
-        getPool: () => ({ query: async () => ({ rows: MANIFEST_ROWS }) }),
+        getPool: () => ({
+            query: async (sql: string) => { capturedSql.push(sql); return { rows: MANIFEST_ROWS }; },
+        }),
     }),
 }));
 
@@ -72,5 +75,12 @@ describe('buildManifestPrompt — 개인 지정 스킬 union', () => {
         ]);
         const out = await mgr.buildManifestPrompt('ui-ux-designer', undefined, 'design');
         expect(out!.skillNames).toEqual(['presentation-designer']);
+    });
+
+    it("manifest 조회는 agent_skills.status='active' 게이트를 포함한다 — draft(승인 전)·archived(확장 제거) 주입 차단", async () => {
+        const mgr = managerWithUserSkills([]);
+        await mgr.buildManifestPrompt('ui-ux-designer', '3', 'design');
+        const manifestSql = capturedSql.find((q) => q.includes('FROM skill_manifests'));
+        expect(manifestSql).toContain("ags.status = 'active'");
     });
 });
