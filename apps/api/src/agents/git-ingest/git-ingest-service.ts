@@ -184,6 +184,32 @@ export class GitIngestService {
                 JSON.stringify(manifestMeta),
             ]
         );
+
+        // (10) skill_manifests 동시 생성 — 시스템 프롬프트 주입의 SoT 는
+        // buildManifestPrompt(skill_manifests JOIN)라, agent_skills 만 만들면 manifest
+        // 스킬이 하나라도 활성일 때 legacy fallback 이 실행되지 않아 지정해도 조용히
+        // 누락된다(2026-08-16 라이브 실측). buildManifestPrompt 의 status='active' 게이트가
+        // draft 주입을 막으므로 승인 전 노출은 없다. 실패는 fail-soft — ingest 는 유지되고
+        // 개인 지정 union(스킬매니저)이 안전망으로 커버한다.
+        try {
+            await this.opts.pool.query(
+                `INSERT INTO skill_manifests
+                   (id, version, manifest_yaml, prompt_md, checksum, signature, created_by, is_public, created_at)
+                 VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, NOW())
+                 ON CONFLICT (id, version) DO NOTHING`,
+                [
+                    skillId,
+                    validation.manifest.version,
+                    validation.raw_yaml,
+                    validation.prompt_md,
+                    validation.checksum,
+                    effectiveTarget === 'system' ? null : input.userId,
+                    effectiveTarget === 'system',
+                ]
+            );
+        } catch (e) {
+            logger.warn(`skill_manifests 생성 실패 (fail-soft, union 안전망 커버): ${skillId}`, e);
+        }
         logger.info(`git-ingest created: ${skillId} (${owner}/${repo}@${sha.slice(0, 7)}:${candidate.path})`);
 
         return {
