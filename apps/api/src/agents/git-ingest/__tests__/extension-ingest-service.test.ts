@@ -340,6 +340,79 @@ describe('ExtensionIngestService', () => {
         });
     });
 
+    describe('.zip 아카이브 소스', () => {
+        function makeArchiveService(archiveFetcher: unknown) {
+            return new ExtensionIngestService({
+                pool: mockPool,
+                llmClientFactory: () => mockLLM as LLMClient,
+                fetcherFactory: () => { throw new Error('git fetcher 는 아카이브 경로에서 미사용'); },
+                archiveFetcherFactory: () => archiveFetcher as GitFetcher,
+            });
+        }
+
+        it('아카이브 설치 — tracking_ref=null, source_ref=sha256, git fetcher 미사용', async () => {
+            const archiveSha = 'a'.repeat(64);
+            mockFetcher.resolveRef.mockResolvedValueOnce(archiveSha);
+            mockFetcher.listTree.mockResolvedValueOnce(treeOf('plugin.json'));
+            mockFetcher.fetchFile.mockResolvedValueOnce(PLUGIN_MCP_ONLY);
+            const q = mockPool.query as jest.Mock;
+            q.mockResolvedValueOnce({ rows: [] });                    // dedupe
+            q.mockResolvedValueOnce({ rows: [] });                    // findActiveByName
+            q.mockResolvedValueOnce({ rows: [{ count: '0' }] });      // count
+            (mockLLM.chat as jest.Mock).mockResolvedValueOnce({
+                content: JSON.stringify({ findings: [] }), metrics: { completion_tokens: 30 },
+            });
+            q.mockResolvedValueOnce({ rows: [] });                    // unique name
+            q.mockResolvedValueOnce({ rows: [{ id: 'mcp-a1' }] });    // insertDraft
+            q.mockResolvedValueOnce({ rows: [{ id: 'user-ext-a1', name: 'tool-pack', version: '1.0.0', status: 'active' }] });
+            q.mockResolvedValueOnce({ rows: [] });                    // link
+
+            const svc = makeArchiveService(mockFetcher);
+            const r = await svc.import({ userId: 'user-1', isAdmin: false, gitUrl: 'https://example.com/pack.zip' });
+            if ('selectionRequired' in r && r.selectionRequired) throw new Error('expected single');
+            expect(r.gitRef).toBe(archiveSha);
+            expect(r.gitUrl).toBe('https://example.com/pack.zip');
+            // INSERT 파라미터: sourceUrl=zip URL, trackingRef=null
+            const insertCall = q.mock.calls.find((c: unknown[]) => String(c[0]).includes('INSERT INTO user_extensions'));
+            expect(insertCall![1]).toContain('https://example.com/pack.zip');
+            const trackingRefParam = (insertCall![1] as unknown[])[9];
+            expect(trackingRefParam).toBeNull();
+        });
+
+        it('동일 아카이브 URL·동일 sha 재설치 → upToDate', async () => {
+            const archiveSha = 'b'.repeat(64);
+            mockFetcher.resolveRef.mockResolvedValueOnce(archiveSha);
+            mockFetcher.listTree.mockResolvedValueOnce(treeOf('plugin.json'));
+            mockFetcher.fetchFile.mockResolvedValueOnce(PLUGIN_MCP_ONLY);
+            const q = mockPool.query as jest.Mock;
+            q.mockResolvedValueOnce({ rows: [] });                    // dedupe (24h 경과 가정)
+            q.mockResolvedValueOnce({ rows: [{                        // findActiveByName — 같은 zip URL, 같은 sha
+                id: 'user-ext-a2', name: 'tool-pack', version: '1.0.0', description: null,
+                source_url: 'https://example.com/pack.zip', source_ref: archiveSha, source_path: 'plugin.json',
+                manifest: { components: { skills: [], mcpServers: [] } },
+            }] });
+
+            const svc = makeArchiveService(mockFetcher);
+            const r = await svc.import({ userId: 'user-1', isAdmin: false, gitUrl: 'https://example.com/pack.zip' });
+            if ('selectionRequired' in r && r.selectionRequired) throw new Error('expected single');
+            expect(r.upToDate).toBe(true);
+        });
+
+        it('checkForUpdate — 재다운로드 해시 비교', async () => {
+            mockFetcher.resolveRef.mockResolvedValueOnce('c'.repeat(64));  // 새 해시
+            mockFetcher.fetchFile.mockResolvedValueOnce(JSON.stringify({ name: 'tool-pack', version: '2.0.0' }));
+            const svc = makeArchiveService(mockFetcher);
+            const r = await svc.checkForUpdate({
+                sourceUrl: 'https://example.com/pack.zip',
+                sourcePath: 'plugin.json',
+                currentRef: 'b'.repeat(64),
+                trackingRef: null,
+            });
+            expect(r.updateAvailable).toBe(true);
+            expect(r.latestVersion).toBe('2.0.0');
+        });
+    });
+
     describe('checkForUpdate', () => {
         it('sha 동일 → updateAvailable=false', async () => {
             mockFetcher.resolveRef.mockResolvedValueOnce('abc123');

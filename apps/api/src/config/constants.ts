@@ -258,6 +258,10 @@ export const EXTENSION_INGEST = {
     maxSkillsPerExtension: parseInt(process.env.EXTENSION_INGEST_MAX_SKILLS || '10', 10),
     maxMcpServersPerExtension: parseInt(process.env.EXTENSION_INGEST_MAX_MCP_SERVERS || '5', 10),
     manifestMaxBytes: parseInt(process.env.EXTENSION_INGEST_MANIFEST_MAX_BYTES || '65536', 10),
+    // .zip 아카이브 소스 (archive-fetcher.ts — safeFetch + 압축 폭탄 방어 상한)
+    archiveMaxBytes: parseInt(process.env.EXTENSION_INGEST_ARCHIVE_MAX_BYTES || String(10 * 1024 * 1024), 10),
+    archiveMaxEntries: parseInt(process.env.EXTENSION_INGEST_ARCHIVE_MAX_ENTRIES || '2000', 10),
+    archiveMaxTotalBytes: parseInt(process.env.EXTENSION_INGEST_ARCHIVE_MAX_TOTAL_BYTES || String(50 * 1024 * 1024), 10),
 } as const;
 
 // ============================================

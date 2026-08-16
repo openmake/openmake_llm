@@ -26,6 +26,7 @@ import { createLogger } from '../../utils/logger';
 import { parseGitUrl } from '../../schemas/git-ingest.schema';
 import type { ImportExtensionFromGitInput } from '../../schemas/extension-ingest.schema';
 import { GitFetcher } from './git-fetcher';
+import { ArchiveFetcher, isArchiveUrl, archivePseudoRepo } from './archive-fetcher';
 import { scanForExtensionManifests, scanForMarketplaceManifests, resolveExtensionRoot, type ManifestCandidate } from './repo-scanner';
 import {
     validateExtensionManifest,
@@ -111,26 +112,42 @@ export interface ExtensionIngestOptions {
     pool: Pool;
     llmClientFactory: (model: string) => LLMClient;
     fetcherFactory: (opts: { accessToken?: string }) => GitFetcher;
+    /** .zip 아카이브 소스용 fetcher (테스트 주입용 — 기본은 ArchiveFetcher) */
+    archiveFetcherFactory?: (url: string) => GitFetcher;
 }
 
 export class ExtensionIngestService {
     constructor(private opts: ExtensionIngestOptions) {}
+
+    /** .zip 아카이브 fetcher 생성 — GitFetcher 동형 (duck-typed). */
+    private makeArchiveFetcher(url: string): GitFetcher {
+        if (this.opts.archiveFetcherFactory) return this.opts.archiveFetcherFactory(url);
+        return new ArchiveFetcher(url, {
+            maxArchiveBytes: EXTENSION_INGEST.archiveMaxBytes,
+            maxEntries: EXTENSION_INGEST.archiveMaxEntries,
+            maxTotalBytes: EXTENSION_INGEST.archiveMaxTotalBytes,
+        }) as unknown as GitFetcher;
+    }
 
     async import(input: ImportInput): Promise<ImportResult | CandidateListResult> {
         if (!EXTENSION_INGEST.enabled) {
             throw new Error('EXTENSION_INGEST_DISABLED');
         }
 
-        // (1) URL parse
-        const parsed = parseGitUrl(input.gitUrl);
+        // (1) URL parse — .zip 아카이브 URL 은 pseudo repo (ArchiveFetcher 가 owner/repo 무시)
+        const isArchive = isArchiveUrl(input.gitUrl);
+        const parsed = isArchive ? archivePseudoRepo(input.gitUrl) : parseGitUrl(input.gitUrl);
         if (!parsed) throw new Error(`INVALID_GIT_URL: ${input.gitUrl}`);
         let { owner, repo } = parsed;
         // marketplace 엔트리가 다른 저장소/고정 ref 를 가리킬 수 있어 effective 값으로 관리
         let effectiveGitUrl = input.gitUrl;
-        let effectiveTrackingRef: string | null = input.gitRef ?? null;
+        // 아카이브는 ref 개념이 없음 — tracking_ref=null, 업데이트 확인은 재다운로드 해시 비교
+        let effectiveTrackingRef: string | null = isArchive ? null : (input.gitRef ?? null);
 
-        // (2) fetcher
-        const fetcher = this.opts.fetcherFactory({ accessToken: input.accessToken });
+        // (2) fetcher — 아카이브면 safeFetch 기반 ArchiveFetcher (SSRF 가드 + 압축 폭탄 방어)
+        const fetcher = isArchive
+            ? this.makeArchiveFetcher(input.gitUrl)
+            : this.opts.fetcherFactory({ accessToken: input.accessToken });
         let sha = await fetcher.resolveRef(owner, repo, input.gitRef ?? 'HEAD');
 
         // (3) tree
@@ -235,12 +252,15 @@ export class ExtensionIngestService {
             return this.shapeFromRow(existing, true);
         }
 
-        // 동일 이름 active 설치: 같은 repo 면 업데이트 모드, 다른 소스면 충돌
+        // 동일 이름 active 설치: 같은 소스(같은 repo 또는 같은 아카이브 URL)면 업데이트 모드, 다른 소스면 충돌
         const sameName = await extRepo.findActiveByName(input.userId, manifest.name);
         let updateTarget: typeof sameName = null;
         if (sameName) {
-            const prevParsed = parseGitUrl(sameName.source_url);
-            if (prevParsed && prevParsed.owner === owner && prevParsed.repo === repo) {
+            const prevParsed = isArchive ? null : parseGitUrl(sameName.source_url);
+            const sameSource = isArchive
+                ? sameName.source_url === effectiveGitUrl
+                : !!(prevParsed && prevParsed.owner === owner && prevParsed.repo === repo);
+            if (sameSource) {
                 if (sameName.source_ref === sha) {
                     // 이미 최신 — 변경 없음
                     return { ...this.shapeFromRow(sameName, false), upToDate: true };
@@ -271,7 +291,8 @@ export class ExtensionIngestService {
         const skillService = new GitIngestService({
             pool: this.opts.pool,
             llmClientFactory: this.opts.llmClientFactory,
-            fetcherFactory: this.opts.fetcherFactory,
+            // 아카이브 소스면 이미 로드된 동일 ArchiveFetcher 재사용 (재다운로드 방지)
+            fetcherFactory: isArchive ? () => fetcher : this.opts.fetcherFactory,
         });
         for (const path of skillPaths) {
             try {
@@ -443,9 +464,13 @@ export class ExtensionIngestService {
         trackingRef?: string | null;
         accessToken?: string;
     }): Promise<UpdateCheckResult> {
-        const parsed = parseGitUrl(input.sourceUrl);
+        // 아카이브 소스: 재다운로드 sha256 을 latestRef 로 사용 (내용 변경 감지)
+        const isArchive = isArchiveUrl(input.sourceUrl);
+        const parsed = isArchive ? archivePseudoRepo(input.sourceUrl) : parseGitUrl(input.sourceUrl);
         if (!parsed) throw new Error(`INVALID_GIT_URL: ${input.sourceUrl}`);
-        const fetcher = this.opts.fetcherFactory({ accessToken: input.accessToken });
+        const fetcher = isArchive
+            ? this.makeArchiveFetcher(input.sourceUrl)
+            : this.opts.fetcherFactory({ accessToken: input.accessToken });
         const latestRef = await fetcher.resolveRef(parsed.owner, parsed.repo, input.trackingRef ?? 'HEAD');
         if (latestRef === input.currentRef) {
             return { updateAvailable: false, currentRef: input.currentRef, latestRef, latestVersion: null };
