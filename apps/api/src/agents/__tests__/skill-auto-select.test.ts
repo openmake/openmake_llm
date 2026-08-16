@@ -128,3 +128,24 @@ describe('buildSkillPromptForIds 권한 필터 (camelCase 회귀)', () => {
         expect(await mgr.buildSkillPromptForIds(['g1'], 'anyone')).toContain('OPEN');
     });
 });
+
+describe('searchSkills userId 전파 (비공개 확장 스킬 포함, 2026-08-16)', () => {
+    function managerWithSpy(skills: AgentSkill[]) {
+        const mgr = new SkillManager();
+        const searchSkills = jest.fn(async () => ({ skills, total: skills.length, limit: 200, offset: 0 }));
+        (mgr as unknown as { repo: unknown }).repo = { searchSkills };
+        return { mgr, searchSkills };
+    }
+
+    it('buildSkillCatalog 이 userId 를 repo 검색에 전달한다', async () => {
+        const { mgr, searchSkills } = managerWithSpy([skill({ id: 's1', name: 'A' })]);
+        await mgr.buildSkillCatalog({ userId: 'u3' });
+        expect(searchSkills).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u3' }));
+    });
+
+    it('buildSkillPromptForNames 가 userId 를 repo 검색에 전달한다', async () => {
+        const { mgr, searchSkills } = managerWithSpy([skill({ id: 's1', name: 'A' })]);
+        await mgr.buildSkillPromptForNames(['A'], 'u3');
+        expect(searchSkills).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u3' }));
+    });
+});

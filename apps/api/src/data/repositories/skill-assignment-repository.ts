@@ -37,7 +37,7 @@ export class SkillAssignmentRepository extends BaseRepository {
     /**
      * 에이전트에 연결된 스킬 목록 반환.
      *   - 에이전트 고유 스킬 + '__global__' 가상 에이전트 스킬
-     *   - userId 가 주어지면 'user:{userId}' 개인 스킬도 포함 (카테고리 일치 시)
+     *   - userId 가 주어지면 'user:{userId}' 개인 스킬도 포함 (카테고리 일치 또는 'general')
      *   - status='active' 만 (draft/archived 는 prompt 주입 경로에서 차단)
      */
     async getSkillsForAgent(agentId: string, userId?: string, agentCategory?: string): Promise<AgentSkill[]> {
@@ -46,7 +46,10 @@ export class SkillAssignmentRepository extends BaseRepository {
 
         if (userId) {
             if (agentCategory) {
-                conditions.push(`(a.agent_id = $${params.length + 1} AND s.category = $${params.length + 2})`);
+                // 'general' 은 카테고리 무관 통과 — 확장 설치 스킬 등 기본 카테고리가 general 이라
+                // 에이전트 선택 턴마다 제외돼 개인 지정(user-assign)이 무의미하던 갭 (2026-08-16).
+                // 지정은 사용자의 명시적 opt-in 이고 아래 LIMIT 캡이 과주입을 막는다.
+                conditions.push(`(a.agent_id = $${params.length + 1} AND (s.category = $${params.length + 2} OR s.category = 'general'))`);
                 params.push(`user:${userId}`, agentCategory);
             } else {
                 conditions.push(`a.agent_id = $${params.length + 1}`);

@@ -26,6 +26,8 @@ export interface SkillCatalogOptions {
      * 채팅은 활성 바인딩, 에이전트 작업은 매니페스트 주입분이 해당.
      */
     excludeIds?: ReadonlySet<string>;
+    /** 본인 소유 비공개 스킬(확장 설치분 등)을 카탈로그에 포함하기 위한 사용자 id. */
+    userId?: string;
 }
 
 /**
@@ -50,9 +52,10 @@ export async function applySkillCatalog(
     if (!base) return without; // load_skill 미등록 — 노출 안 함
 
     try {
-        const { catalog, count } = await getSkillManager().buildSkillCatalog(
-            opts.excludeIds ? { excludeIds: opts.excludeIds } : {},
-        );
+        const { catalog, count } = await getSkillManager().buildSkillCatalog({
+            ...(opts.excludeIds ? { excludeIds: opts.excludeIds } : {}),
+            ...(opts.userId ? { userId: opts.userId } : {}),
+        });
         if (count === 0) return without;
 
         const augmented: ToolDefinition = {

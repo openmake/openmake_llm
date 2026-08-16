@@ -266,6 +266,7 @@ export class AgentTaskService {
             const { tools, extraToolNames } = await assembleAgentTools({
                 mcpTools, taskRuntime, sandboxCfg, goal,
                 injectedSkillIds: new Set(skillBindings.map((b) => b.skill_id)),
+                userId,
             });
 
             // 스텝 실시간 발행(4-5) — DB 기록 직후 요약을 WS 로 브로드캐스트(채팅 인라인 카드의 "현재 단계").

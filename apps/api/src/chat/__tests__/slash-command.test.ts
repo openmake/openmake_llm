@@ -82,6 +82,27 @@ describe('applySlashCommand', () => {
     });
 });
 
+describe('기본 해석기 — userId 전달·하이픈 이름 재검색 (2026-08-16)', () => {
+    it('searchSkills 에 userId 가 전달되고, 공백 복원 검색이 놓친 하이픈 이름을 원 slug 로 재검색해 매칭한다', async () => {
+        const searchSkills = jest.fn()
+            // 1차: 'design critique' (공백 복원) — 하이픈 이름이라 미매칭
+            .mockResolvedValueOnce({ skills: [], total: 0, limit: 10, offset: 0 })
+            // 2차: 'design-critique' (원 slug) — 매칭
+            .mockResolvedValueOnce({
+                skills: [{ name: 'design-critique', content: 'CRITIQUE_RULES' }],
+                total: 1, limit: 10, offset: 0,
+            });
+        jest.doMock('../../agents/skill-manager', () => ({ getSkillManager: () => ({ searchSkills }) }));
+
+        const out = await applySlashCommand('/design-critique 버튼 평가', { userId: 'u3' });
+        expect(out).toContain('CRITIQUE_RULES');
+        expect(searchSkills).toHaveBeenNthCalledWith(1, expect.objectContaining({ search: 'design critique', userId: 'u3' }));
+        expect(searchSkills).toHaveBeenNthCalledWith(2, expect.objectContaining({ search: 'design-critique', userId: 'u3' }));
+
+        jest.dontMock('../../agents/skill-manager');
+    });
+});
+
 describe('한글 스킬명 slug (2026-07-04 유니코드 대응)', () => {
     it('한글 이름이 빈 slug 로 붕괴하지 않는다', () => {
         expect(slugify('데이터 시각화 가이드')).toBe('데이터-시각화-가이드');
