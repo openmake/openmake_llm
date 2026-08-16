@@ -147,6 +147,12 @@ export class AuthController {
                 return;
             }
 
+            // 모바일(iOS) 신호: returnRefreshToken=true 면 쿠키 미설정, refresh token 을 body 로 반환 (축 2)
+            const mobileMode = req.body?.returnRefreshToken === true;
+            if (result.token && result.user && mobileMode) {
+                res.json(success({ ...result, refreshToken: generateRefreshToken(result.user) }));
+                return;
+            }
             if (result.token) {
                 setTokenCookie(res, result.token);
                 if (result.user) {
@@ -179,8 +185,10 @@ export class AuthController {
             blacklistToken(cookieToken);
         }
         // Refresh 토큰: 블랙리스트 + activeSessionMap 정리 (bug_004)
-        const refreshToken = req.cookies?.refresh_token;
-        if (refreshToken) {
+        // 모바일(iOS)은 쿠키가 없어 body.refreshToken 으로 전달 (축 2) — 웹 쿠키와 병존, 둘 다 폐기
+        const bodyRefreshToken = typeof req.body?.refreshToken === 'string' ? req.body.refreshToken : undefined;
+        for (const refreshToken of new Set([req.cookies?.refresh_token, bodyRefreshToken])) {
+            if (!refreshToken) continue;
             const decoded = jwt.decode(refreshToken) as { userId?: string | number; jti?: string } | null;
             if (decoded?.userId && decoded.jti) {
                 removeSessionFromMap(String(decoded.userId), decoded.jti);
@@ -281,7 +289,11 @@ export class AuthController {
      * 리프레시 토큰 로테이션: 사용된 리프레시 토큰은 블랙리스트 처리
      */
     private async refresh(req: Request, res: Response): Promise<void> {
-        const refreshToken = req.cookies?.refresh_token;
+        // 모바일(iOS) 모드: body.refreshToken 존재 자체가 신호 (축 2) — 쿠키 미설정,
+        // 새 refresh token 을 body 로 반환 (앱은 Keychain 저장). 웹 쿠키 흐름과 병존.
+        const bodyRefreshToken = typeof req.body?.refreshToken === 'string' ? req.body.refreshToken : undefined;
+        const mobileMode = !!bodyRefreshToken;
+        const refreshToken = bodyRefreshToken ?? req.cookies?.refresh_token;
 
         if (!refreshToken) {
             res.status(401).json(unauthorized('리프레시 토큰이 없습니다'));
@@ -318,6 +330,12 @@ export class AuthController {
             // 새 액세스 + 리프레시 토큰 발급
             const newAccessToken = generateToken(user);
             const newRefreshToken = generateRefreshToken(user);
+
+            if (mobileMode) {
+                log.info(`[Auth] 토큰 갱신 성공 (mobile): ${user.email}`);
+                res.json(success({ token: newAccessToken, refreshToken: newRefreshToken, user }));
+                return;
+            }
 
             setTokenCookie(res, newAccessToken);
             setRefreshTokenCookie(res, newRefreshToken);

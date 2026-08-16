@@ -384,6 +384,8 @@ CREATE TABLE IF NOT EXISTS user_api_keys (
 CREATE TABLE IF NOT EXISTS oauth_states (
     state TEXT PRIMARY KEY,
     provider TEXT NOT NULL,
+    -- 모바일 클라이언트 식별 ('ios' 등). NULL = 웹 — 콜백에서 쿠키/exchange code 분기 (097)
+    client TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

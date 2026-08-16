@@ -18,7 +18,9 @@ import { secureTextSchema } from './security.schema';
  */
 export const loginSchema = z.object({
     email: z.string().trim().email('유효한 이메일 주소를 입력하세요'),
-    password: z.string().min(1, '비밀번호를 입력하세요')
+    password: z.string().min(1, '비밀번호를 입력하세요'),
+    // 모바일(iOS) 신호: true 면 refresh token 을 쿠키 대신 응답 body 로 반환 (축 2 — 앱은 Keychain 저장)
+    returnRefreshToken: z.boolean().optional()
 });
 
 /**
@@ -42,6 +44,14 @@ export const registerSchema = z.object({
     birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '생년월일은 YYYY-MM-DD 형식이어야 합니다'),
     // 14세 미만 시 server-side enforce — locale 별 임계값 미달 시 필수.
     guardianEmail: z.string().email().optional(),
+});
+
+/**
+ * 모바일 exchange code 교환 요청 스키마 (iOS 축 2)
+ * @property {string} code - OAuth 콜백이 발급한 일회성 hex 코드 (32B → 64자)
+ */
+export const mobileExchangeSchema = z.object({
+    code: z.string().regex(/^[0-9a-f]{64}$/, '유효하지 않은 코드 형식입니다')
 });
 
 /**

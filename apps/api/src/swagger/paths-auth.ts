@@ -19,7 +19,7 @@ export const authPaths = {
         post: {
             tags: ['Auth'],
             summary: '로그인',
-            description: '이메일과 비밀번호로 로그인합니다. access token 은 응답 body 와 HttpOnly 쿠키 양쪽에 발급됩니다 (refresh token 은 쿠키 전용 — 모바일 body 모드는 축 2 도입 예정). 사전 인증 POST 이므로 CSRF 부트스트랩 필요 (모듈 설명 참고).',
+            description: '이메일과 비밀번호로 로그인합니다. access token 은 응답 body 와 HttpOnly 쿠키 양쪽에 발급됩니다. `returnRefreshToken: true`(모바일) 지정 시 쿠키를 설정하지 않고 refresh token 을 body 로 반환합니다 (앱은 Keychain 저장). 사전 인증 POST 이므로 CSRF 부트스트랩 필요 (모듈 설명 참고).',
             security: [],
             requestBody: {
                 required: true,
@@ -30,7 +30,8 @@ export const authPaths = {
                             required: ['email', 'password'],
                             properties: {
                                 email: { type: 'string', format: 'email' },
-                                password: { type: 'string' }
+                                password: { type: 'string' },
+                                returnRefreshToken: { type: 'boolean', description: '모바일 신호 — true 면 쿠키 미설정, refresh token body 반환' }
                             }
                         }
                     }
@@ -47,6 +48,7 @@ export const authPaths = {
                                 properties: {
                                     success: { type: 'boolean', enum: [true] },
                                     token: { type: 'string', description: 'JWT access token' },
+                                    refreshToken: { type: 'string', description: 'returnRefreshToken=true 요청에만 존재' },
                                     user: { $ref: '#/components/schemas/PublicUser' }
                                 }
                             })
@@ -158,8 +160,21 @@ export const authPaths = {
         post: {
             tags: ['Auth'],
             summary: '토큰 갱신 (rotation)',
-            description: 'refresh token 쿠키(`path=/api/auth/refresh`)로 새 access token 을 발급합니다. 구 refresh token 은 블랙리스트 처리되고 새 refresh token 이 쿠키로 회전 발급됩니다. 사전 인증 POST 이므로 CSRF 부트스트랩 필요. (모바일 body 모드 — body.refreshToken 수용·반환 — 는 축 2 도입 후 본 계약에 반영.)',
+            description: 'refresh token 으로 새 access token 을 발급합니다 — 웹은 쿠키(`path=/api/auth/refresh`), 모바일은 `body.refreshToken`(존재 자체가 모바일 신호 — 쿠키 미설정, 새 refresh token 을 body 로 반환). 구 refresh token 은 블랙리스트 처리(rotation). 사전 인증 POST 이므로 CSRF 부트스트랩 필요.',
             security: [],
+            requestBody: {
+                required: false,
+                content: {
+                    'application/json': {
+                        schema: {
+                            type: 'object',
+                            properties: {
+                                refreshToken: { type: 'string', description: '모바일 모드 — 쿠키 대신 body 로 전달' }
+                            }
+                        }
+                    }
+                }
+            },
             responses: {
                 '200': {
                     description: '갱신 성공',
@@ -170,6 +185,7 @@ export const authPaths = {
                                 required: ['token', 'user'],
                                 properties: {
                                     token: { type: 'string', description: '새 JWT access token' },
+                                    refreshToken: { type: 'string', description: '모바일 모드 요청에만 존재 — 새 refresh token' },
                                     user: { $ref: '#/components/schemas/PublicUser' }
                                 }
                             })
@@ -212,11 +228,63 @@ export const authPaths = {
         get: {
             tags: ['Auth'],
             summary: 'Google OAuth 시작',
-            description: 'Google 인가 페이지로 302 리다이렉트합니다. 완료 시 서버 콜백(`/api/auth/callback/google` — 서버↔IdP 표면이라 본 계약 비노출)이 인증 쿠키를 설정하고 웹으로 리다이렉트합니다. (모바일 `?client=ios` + exchange code 흐름은 축 2 도입 후 반영.)',
+            description: 'Google 인가 페이지로 302 리다이렉트합니다. 완료 시 서버 콜백(`/api/auth/callback/google` — 서버↔IdP 표면이라 본 계약 비노출)이 웹은 인증 쿠키 + 웹 리다이렉트, `?client=ios` 는 일회성 exchange code 를 app scheme(`openmake://auth/callback?code=...`)으로 전달합니다. 앱은 `/api/auth/mobile/exchange` 로 교환.',
             security: [],
+            parameters: [
+                {
+                    name: 'client',
+                    in: 'query',
+                    required: false,
+                    schema: { type: 'string', enum: ['ios'] },
+                    description: '모바일 클라이언트 식별 — 지정 시 콜백이 exchange code 흐름으로 분기'
+                }
+            ],
             responses: {
                 '302': { description: 'Google 인가 URL 로 리다이렉트' },
-                '500': failureResponse('OAuth 미설정 (client id 없음)')
+                '503': failureResponse('OAuth 미설정 (client id 없음)')
+            }
+        }
+    },
+    '/api/auth/mobile/exchange': {
+        post: {
+            tags: ['Auth'],
+            summary: '모바일 exchange code → 토큰 교환',
+            description: 'OAuth 콜백(`?client=ios`)이 app scheme 으로 전달한 일회성 코드(TTL 60s)를 access/refresh token 으로 교환합니다. 응답은 body 전용 — 쿠키 미설정 (앱은 Keychain 저장). 코드는 소비 즉시 무효화(재사용 불가). 사전 인증 POST 이므로 CSRF 부트스트랩 필요.',
+            security: [],
+            requestBody: {
+                required: true,
+                content: {
+                    'application/json': {
+                        schema: {
+                            type: 'object',
+                            required: ['code'],
+                            properties: {
+                                code: { type: 'string', pattern: '^[0-9a-f]{64}$', description: '일회성 hex 코드 (64자)' }
+                            }
+                        }
+                    }
+                }
+            },
+            responses: {
+                '200': {
+                    description: '교환 성공',
+                    content: {
+                        'application/json': {
+                            schema: envelope({
+                                type: 'object',
+                                required: ['token', 'refreshToken', 'user'],
+                                properties: {
+                                    token: { type: 'string', description: 'JWT access token' },
+                                    refreshToken: { type: 'string', description: 'refresh token (Keychain 저장)' },
+                                    user: { $ref: '#/components/schemas/PublicUser' }
+                                }
+                            })
+                        }
+                    }
+                },
+                '400': failureResponse('코드 형식 오류'),
+                '401': failureResponse('유효하지 않거나 만료/재사용된 코드'),
+                '429': failureResponse('요청 과다 (authLimiter)')
             }
         }
     },
