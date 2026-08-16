@@ -16,9 +16,10 @@ describe('repo-scanner (extension)', () => {
             entry('b/.claude-plugin/plugin.json'),
             entry('README.md'),
             entry('some-plugin.json'),   // suffix 불일치 — 매칭 안 됨
+            entry('gemini-extension.json'),  // Gemini CLI 확장 매니페스트 — 매칭됨
         ];
         const hits = scanForExtensionManifests(tree).map(c => c.path);
-        expect(hits).toEqual(['plugin.json', 'packs/a/plugin.json', 'b/.claude-plugin/plugin.json']);
+        expect(hits).toEqual(['plugin.json', 'packs/a/plugin.json', 'b/.claude-plugin/plugin.json', 'gemini-extension.json']);
     });
 
     it('resolveExtensionRoot: root / 서브디렉토리 / .claude-plugin 레이아웃', () => {

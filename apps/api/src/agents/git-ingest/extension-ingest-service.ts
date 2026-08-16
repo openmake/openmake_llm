@@ -158,7 +158,7 @@ export class ExtensionIngestService {
         if (!input.gitPath) {
             const mkCandidates = scanForMarketplaceManifests(tree.entries);
             if (mkCandidates.length > 0) {
-                const mkRaw = await fetcher.fetchFile(owner, repo, sha, mkCandidates[0].path, EXTENSION_INGEST.manifestMaxBytes);
+                const mkRaw = await fetcher.fetchFile(owner, repo, sha, mkCandidates[0].path, EXTENSION_INGEST.marketplaceMaxBytes);
                 const mk = parseMarketplaceFile(mkRaw);
                 if (mk.ok && !input.plugin) {
                     // 목록만 반환 — plugin 인자로 재호출 유도
@@ -501,11 +501,30 @@ export class ExtensionIngestService {
         if (!parsed) throw new Error(`INVALID_GIT_URL: ${url}`);
         const fetcher = isArchive ? this.makeArchiveFetcher(url) : this.opts.fetcherFactory({ accessToken });
         const sha = await fetcher.resolveRef(parsed.owner, parsed.repo, 'HEAD');
+
+        // (a) marketplace.json 표준 경로 직접 조회 — 거대 repo 의 listTree 상한(gitMaxTreeEntries)
+        //     우회 (jeremylongshore 22,982 blobs 실측). 실패 시 tree 스캔 폴백.
+        for (const mkPath of ['.claude-plugin/marketplace.json', 'marketplace.json']) {
+            try {
+                const mkRaw = await fetcher.fetchFile(parsed.owner, parsed.repo, sha, mkPath, EXTENSION_INGEST.marketplaceMaxBytes);
+                const mk = parseMarketplaceFile(mkRaw);
+                if (mk.ok) {
+                    return {
+                        name: mk.marketplace.name,
+                        description: null,
+                        plugins: mk.marketplace.plugins.map(p => ({ name: p.name, description: p.description })),
+                    };
+                }
+            } catch {
+                /* 해당 경로 없음 — 다음 후보/폴백 */
+            }
+        }
+
         const tree = await fetcher.listTree(parsed.owner, parsed.repo, sha, SKILL_CREATOR.gitMaxTreeEntries);
 
         const mkCandidates = scanForMarketplaceManifests(tree.entries);
         if (mkCandidates.length > 0) {
-            const mkRaw = await fetcher.fetchFile(parsed.owner, parsed.repo, sha, mkCandidates[0].path, EXTENSION_INGEST.manifestMaxBytes);
+            const mkRaw = await fetcher.fetchFile(parsed.owner, parsed.repo, sha, mkCandidates[0].path, EXTENSION_INGEST.marketplaceMaxBytes);
             const mk = parseMarketplaceFile(mkRaw);
             if (mk.ok) {
                 return {

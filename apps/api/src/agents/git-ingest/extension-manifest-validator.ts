@@ -139,7 +139,7 @@ const marketplaceSchema = z.object({
         name: z.string().min(1).max(120),
         description: z.string().max(2000).optional(),
         source: marketplaceSourceSchema.optional(),
-    })).max(100),
+    })).max(500),
 });
 
 export interface MarketplacePluginEntry {
