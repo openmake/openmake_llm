@@ -47,6 +47,7 @@
         "dotenv": "^17.2.3",
         "express": "^5.2.1",
         "express-rate-limit": "^8.2.1",
+        "fflate": "^0.8.3",
         "helmet": "^8.1.0",
         "inquirer": "^13.2.2",
         "ioredis": "^5.10.1",
