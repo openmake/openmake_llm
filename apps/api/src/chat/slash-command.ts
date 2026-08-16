@@ -81,14 +81,20 @@ export interface ApplySlashDeps {
 
 /** 기본 스킬 해석기 — active 스킬을 검색해 slug 정확 매칭.
  *  검색어는 slug 의 '-' 를 공백으로 복원 — 스킬 이름은 공백 구분이라 하이픈 그대로는
- *  ILIKE 검색이 매칭되지 않음 (다단어 스킬명 slash 호출이 불가능하던 결함, 2026-07-04). */
-async function defaultFindSkillBySlug(slug: string): Promise<SlashSkill | null> {
+ *  ILIKE 검색이 매칭되지 않음 (다단어 스킬명 slash 호출이 불가능하던 결함, 2026-07-04).
+ *  하이픈 이름(확장 스킬 등)은 공백 복원 검색이 name ILIKE 를 놓치므로 원 slug 로도 검색.
+ *  userId 를 전달해야 본인 소유 비공개 스킬이 검색됨 — 미전달 시 public 전용이라
+ *  확장 설치 스킬(전부 비공개)의 슬래시 호출이 불가능하던 결함 (2026-08-16). */
+async function defaultFindSkillBySlug(slug: string, userId?: string): Promise<SlashSkill | null> {
     const { getSkillManager } = await import('../agents/skill-manager');
-    const result = await getSkillManager().searchSkills({
-        search: slug.replace(/-/g, ' '), status: 'active', limit: 10,
-    });
-    const matched = result.skills.find((s) => matchesSlug(s.name, slug));
-    return matched ? { name: matched.name, content: matched.content } : null;
+    const manager = getSkillManager();
+    for (const search of [slug.replace(/-/g, ' '), slug]) {
+        const result = await manager.searchSkills({ search, status: 'active', limit: 10, userId });
+        const matched = result.skills.find((s) => matchesSlug(s.name, slug));
+        if (matched) return { name: matched.name, content: matched.content };
+        if (!slug.includes('-')) break; // 하이픈 없으면 두 검색어가 동일 — 재검색 불필요
+    }
+    return null;
 }
 
 /**
