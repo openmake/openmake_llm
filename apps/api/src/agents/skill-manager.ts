@@ -440,10 +440,15 @@ export class SkillManager {
             params.push(`user:${userId}`);
         }
 
+        // agent_skills.status='active' 게이트 — git-ingest 가 draft 시점에 manifest 를 함께
+        // 만들므로(2026-08-16 근본 개선) 승인 전 draft·확장 제거/업데이트로 archived 된
+        // 스킬의 잔존 manifest 가 주입되지 않게 막는다. 할당된 manifest 는 전부
+        // agent_skills 행을 가진다(ManifestImporter placeholder·git-ingest 동시 INSERT).
         const sql = `
             SELECT sm.id, sm.prompt_md, sm.manifest_yaml
             FROM skill_manifests sm
             INNER JOIN agent_skill_assignments asa ON asa.skill_id = sm.id
+            INNER JOIN agent_skills ags ON ags.id = sm.id AND ags.status = 'active'
             WHERE (asa.agent_id = $1 OR asa.agent_id = $2${userClause})
               AND sm.version = (
                   SELECT MAX(version) FROM skill_manifests WHERE id = sm.id
@@ -475,9 +480,11 @@ export class SkillManager {
             const safeId = r.id.replace(/[<>"&]/g, '');
             return `<skill_context name="${safeId}">\n${r.prompt_md}\n</skill_context>`;
         });
-        // 표시용 이름 — manifest_yaml 의 name 을 쓰고, 없으면 id 로 대체(category 추출과 같은 방식).
+        // 표시용 이름 — manifest_yaml 의 name 을 쓰고, 없으면 id 로 대체.
+        // 저장된 manifest_yaml 은 fence('---') 없는 순수 yaml 이라 '^---' 전제 정규식은
+        // 항상 실패해 uuid id 가 그대로 표시되던 결함 수정 — 최상위 name: 키를 multiline 매칭.
         const skillNames = filtered.map(r => {
-            const m = /^---[\s\S]*?\bname:\s*([^\n]+)/.exec(r.manifest_yaml);
+            const m = /^name:\s*([^\n]+)/m.exec(r.manifest_yaml);
             return m?.[1]?.trim().replace(/^['"]|['"]$/g, '') || r.id;
         });
 

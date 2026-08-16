@@ -123,4 +123,61 @@ This is a test skill body for unit testing.`;
         expect(r.target).toBe('user');
         expect(r.validationWarnings).toContain('ADMIN_REQUIRED');
     });
+
+    it('ingest 시 skill_manifests 행도 함께 생성한다 (2026-08-16 근본 개선)', async () => {
+        mockFetcher.resolveRef.mockResolvedValueOnce('abc123');
+        mockFetcher.listTree.mockResolvedValueOnce({
+            sha: 'abc123',
+            entries: [{ path: 'SKILL.md', sha: 'def456', size: 500, type: 'blob' }],
+            truncated: false, rateLimitRemaining: 4999,
+        });
+        mockFetcher.fetchFile.mockResolvedValueOnce(validSkillMd);
+        (mockLLM.chat as jest.Mock).mockResolvedValueOnce({
+            content: JSON.stringify({ findings: [] }), metrics: { completion_tokens: 10 },
+        });
+        (mockPool.query as jest.Mock)
+            .mockResolvedValueOnce({ rows: [] })                  // dedupe lookup
+            .mockResolvedValueOnce({ rows: [{ count: '0' }] })    // draft count
+            .mockResolvedValueOnce({ rows: [] })                  // agent_skills INSERT
+            .mockResolvedValueOnce({ rows: [] });                 // skill_manifests INSERT
+
+        const svc = makeService();
+        const r = await svc.import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar', target: 'user' });
+        if ('selectionRequired' in r && r.selectionRequired) throw new Error('expected single');
+
+        const manifestCall = (mockPool.query as jest.Mock).mock.calls
+            .find(([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO skill_manifests'));
+        expect(manifestCall).toBeDefined();
+        const [, params] = manifestCall!;
+        expect(params[0]).toBe(r.skillId);            // id = agent_skills 와 동일
+        expect(params[1]).toBe('1.0.0');              // version (frontmatter)
+        expect(params[2]).toContain('name: Legal Skill'); // manifest_yaml = 원본 frontmatter
+        expect(params[3]).toContain('This is a test skill body'); // prompt_md
+        expect(params[5]).toBe('user-1');             // created_by
+        expect(params[6]).toBe(false);                // is_public (user target)
+    });
+
+    it('skill_manifests INSERT 실패는 fail-soft — ingest 결과는 정상 반환', async () => {
+        mockFetcher.resolveRef.mockResolvedValueOnce('abc123');
+        mockFetcher.listTree.mockResolvedValueOnce({
+            sha: 'abc123',
+            entries: [{ path: 'SKILL.md', sha: 'def456', size: 500, type: 'blob' }],
+            truncated: false, rateLimitRemaining: 4999,
+        });
+        mockFetcher.fetchFile.mockResolvedValueOnce(validSkillMd);
+        (mockLLM.chat as jest.Mock).mockResolvedValueOnce({
+            content: JSON.stringify({ findings: [] }), metrics: { completion_tokens: 10 },
+        });
+        (mockPool.query as jest.Mock)
+            .mockResolvedValueOnce({ rows: [] })
+            .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+            .mockResolvedValueOnce({ rows: [] })
+            .mockRejectedValueOnce(new Error('manifest table down')); // skill_manifests INSERT 실패
+
+        const svc = makeService();
+        const r = await svc.import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar', target: 'user' });
+        if ('selectionRequired' in r && r.selectionRequired) throw new Error('expected single');
+        expect(r.skillId).toMatch(/^user-skill-/);
+        expect(r.status).toBe('draft');
+    });
 });
