@@ -27,7 +27,7 @@ import type { UserContext } from '../mcp/user-sandbox';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { CHAT_ALWAYS_ON_TOOL_NAMES } from '../mcp/agent-task-tools';
 import { MCP_META_TOOL_NAMES } from '../mcp/mcp-meta-tools';
-import { CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, MCP_PROGRESSIVE_DISCLOSURE_ENABLED, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS, PLAN_INTENT_PATTERNS } from '../config/runtime-limits';
+import { CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, MCP_PROGRESSIVE_DISCLOSURE_ENABLED, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS, PLAN_INTENT_PATTERNS, EXTENSION_IMPORT_INTENT_PATTERNS } from '../config/runtime-limits';
 import { applySkillCatalog as applySkillCatalogShared } from './skill-catalog-tool';
 import { LLMClient } from '../llm';
 import { type ToolDefinition } from '../llm';
@@ -248,6 +248,17 @@ export class ChatService {
             if (cp && !finalCombined.some((x) => x.function.name === cp.function.name)) {
                 finalCombined = [...finalCombined, cp];
                 logger.info('[PlanMode] 계획수립 의도 — create_plan 강제 포함');
+            }
+        }
+        // 확장/플러그인 설치 요청이면 import_extension_from_git 을 강제 포함한다 — import 계열은
+        // always-on 이 아니라 토글로만 노출되는데, Settings 확장 탭 안내는 "채팅에서 요청" 이
+        // 계약이라 노출 없이는 모델이 다른 도구로 이탈한다(2026-08-16 라이브 실측). 동일 선례:
+        // web_search/create_plan 강제 포함.
+        if (EXTENSION_IMPORT_INTENT_PATTERNS.some((re) => re.test(reqCtx.message ?? ''))) {
+            const ie = allTools.find((x) => x.function.name === 'import_extension_from_git');
+            if (ie && !finalCombined.some((x) => x.function.name === ie.function.name)) {
+                finalCombined = [...finalCombined, ie];
+                logger.info('[Extension] 확장 설치 의도 — import_extension_from_git 강제 포함');
             }
         }
         return this.applySkillCatalog(finalCombined, allTools, reqCtx);

@@ -1708,6 +1708,18 @@ export const PLAN_INTENT_PATTERNS: readonly RegExp[] = [
     /implementation\s+plan/i,
 ];
 
+/** 확장 설치 의도 프리필터 — import_extension_from_git 강제 포함 게이트.
+ *  확장/플러그인/마켓플레이스 설치는 always-on/토글 어디에도 없어 채팅에서 도달
+ *  불가능했다(2026-08-16 라이브 실측 — 모델이 filesystem MCP 로 이탈). Settings
+ *  확장 탭의 안내("채팅에서 '이 확장 설치해줘: URL' 로 요청")와 UX 계약을 맞춘다.
+ *  git URL/저장소 언급 + 설치/업데이트 동사의 결합만 매칭 (오탐 억제). */
+export const EXTENSION_IMPORT_INTENT_PATTERNS: readonly RegExp[] = [
+    /(확장|플러그인|extension|plugin)[^\n]{0,40}?(설치|추가|가져와|업데이트|install|import|update)/i,
+    /(설치|추가|install)[^\n]{0,20}?(확장|플러그인|extension|plugin)/i,
+    /(마켓플레이스|marketplace)[^\n]{0,30}?(설치|목록|보여|열어|install|list)/i,
+    /import_extension_from_git/i,
+];
+
 /** 병렬 위임 의도 프리필터 — spawn_agents 사용 가이드 주입 게이트 (도구는 상시 노출).
  *  spawn 자발 채택 0 의 원인 = description 의 보수적 경고 + 사용 가이드 부재
  *  (2026-08-11 진단, 명시 유도 시엔 fan-out 정상 동작 실증 2026-07-17). */
