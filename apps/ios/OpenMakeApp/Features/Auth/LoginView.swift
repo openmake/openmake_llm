@@ -16,11 +16,11 @@ struct LoginView: View {
         VStack(spacing: 12) {
             Spacer()
 
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Lumen.accent)
-                .frame(width: 52, height: 52)
-                .overlay(Circle().fill(Lumen.accentFg).frame(width: 14, height: 14))
-                .shadow(color: Lumen.accent.opacity(0.3), radius: 12, y: 4)
+            // 웹과 동일 로고 (apps/web/public/logo.png — 기어+열쇠구멍)
+            Image("logo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 72, height: 72)
                 .padding(.bottom, 6)
 
             Wordmark(size: 26)
