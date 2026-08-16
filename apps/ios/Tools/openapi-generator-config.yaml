@@ -1,0 +1,11 @@
+# OpenMakeKit REST 타입 생성 설정 — 입력: packages/api-contracts/openapi.v1.json
+# (scripts/generate-openmakekit.sh 가 사용. 축 1 PoC 와 동일 설정)
+generate:
+  - types
+accessModifier: public
+filter:
+  tags:
+    - Auth
+    - Chat
+    - Models
+    - User Agents

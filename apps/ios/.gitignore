@@ -1,0 +1,9 @@
+# Xcode
+xcuserdata/
+*.xcresult
+DerivedData/
+
+# SPM (Package.resolved 는 재현 가능 빌드를 위해 커밋)
+.build/
+.swiftpm/
+build/
