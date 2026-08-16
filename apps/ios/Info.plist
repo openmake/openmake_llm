@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- OAuth exchange 콜백 스킴 — 서버 MOBILE_AUTH.APP_SCHEME(기본 openmake)와 일치 (축 2) -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>cc.openmake.chat.oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>openmake</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
