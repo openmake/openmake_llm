@@ -39,3 +39,15 @@ cd apps/ios && xcodebuild -project OpenMakeApp.xcodeproj -scheme OpenMakeApp \
 
 번들 ID `cc.openmake.chat` · 최소 iOS 17 · 서드파티 의존 0 (Apple 공식 swift-openapi-runtime 만).
 app scheme 은 서버 `MOBILE_AUTH.APP_SCHEME`(기본 `openmake`) 와 일치해야 한다 (축 2).
+
+## TestFlight (Step 8 — 로컬 수동, 서명 비밀은 CI 금지)
+
+1회 선행: ① Apple Developer Program 계정으로 Xcode > Settings > Accounts 로그인
+② App Store Connect 에 앱 등록 (번들 ID `cc.openmake.chat`) ③ Team ID 확인.
+
+```bash
+DEVELOPMENT_TEAM=<TEAMID> ./apps/ios/scripts/archive-testflight.sh
+```
+
+아카이브(Release, Automatic signing + `-allowProvisioningUpdates`) 후
+`ExportOptions.plist(destination=upload)` 로 App Store Connect 에 직접 업로드된다.
