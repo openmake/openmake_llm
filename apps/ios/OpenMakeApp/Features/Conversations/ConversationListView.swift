@@ -1,4 +1,4 @@
-// 대화 목록 (축 3 Step 3) — pull-to-refresh · 스와이프 삭제 · 이력 내비게이션
+// 대화 목록 — ChatGPT 스타일: 검색·새 대화·설정, pull-to-refresh·스와이프 삭제
 import SwiftUI
 import OpenMakeKit
 
@@ -8,7 +8,15 @@ struct ConversationListView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showNewChat = false
+    @State private var showSettings = false
+    @State private var searchText = ""
     @State private var autoChatFired = false
+
+    private var filtered: [OpenMakeClient.SessionSummary] {
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return sessions }
+        return sessions.filter { $0.title.localizedCaseInsensitiveContains(query) }
+    }
 
     var body: some View {
         NavigationStack {
@@ -23,25 +31,29 @@ struct ConversationListView: View {
                         description: Text("웹에서 시작한 대화도 여기 표시됩니다"))
                 } else {
                     List {
-                        ForEach(sessions, id: \.id) { session in
+                        ForEach(filtered, id: \.id) { session in
                             NavigationLink(value: session) {
-                                VStack(alignment: .leading, spacing: 4) {
+                                VStack(alignment: .leading, spacing: 3) {
                                     Text(session.title)
                                         .font(.body)
                                         .lineLimit(1)
                                     Text("\(session.model) · 메시지 \(session.messageCount)")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
+                                        .lineLimit(1)
                                 }
+                                .padding(.vertical, 2)
                             }
                         }
                         .onDelete { offsets in
                             Task { await delete(at: offsets) }
                         }
                     }
+                    .listStyle(.plain)
                 }
             }
-            .navigationTitle("대화")
+            .navigationTitle("OpenMake")
+            .searchable(text: $searchText, prompt: "대화 검색")
             .navigationDestination(for: OpenMakeClient.SessionSummary.self) { session in
                 ConversationDetailView(session: session)
             }
@@ -52,13 +64,16 @@ struct ConversationListView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("로그아웃", systemImage: "rectangle.portrait.and.arrow.right") {
-                        Task { await model.logout() }
+                    Button("설정", systemImage: "gearshape") {
+                        showSettings = true
                     }
                 }
             }
             .navigationDestination(isPresented: $showNewChat) {
                 ConversationDetailView(session: nil)
+            }
+            .sheet(isPresented: $showSettings) {
+                SettingsSheet()
             }
             .refreshable { await load() }
             .task {
@@ -94,7 +109,7 @@ struct ConversationListView: View {
     }
 
     private func delete(at offsets: IndexSet) async {
-        let targets = offsets.map { sessions[$0] }
+        let targets = offsets.map { filtered[$0] }
         for target in targets {
             do {
                 try await model.client.deleteSession(id: target.id)

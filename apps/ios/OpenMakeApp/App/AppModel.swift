@@ -22,6 +22,30 @@ final class AppModel {
     var selectedModelId: String?
     var selectedAgentId: String?
 
+    /// 채팅 모드 토글 — 서버 계약(WsChatRequest) 필드 그대로 (웹의 Mode 토글·Style 대응)
+    var modes = ChatModes()
+
+    struct ChatModes {
+        var webSearch = false
+        var thinking = false
+        var imageGen = false
+        var artifact = false
+        var discussion = false
+        var deepResearch = false
+        var style: Style = .styleDefault
+
+        var activeLabels: [String] {
+            var labels: [String] = []
+            if webSearch { labels.append("웹 검색") }
+            if thinking { labels.append("추론") }
+            if imageGen { labels.append("이미지") }
+            if artifact { labels.append("아티팩트") }
+            if discussion { labels.append("토론") }
+            if deepResearch { labels.append("딥리서치") }
+            return labels
+        }
+    }
+
     init(client: OpenMakeClient? = nil) {
         var store: TokenStore = KeychainTokenStore()
         #if DEBUG
