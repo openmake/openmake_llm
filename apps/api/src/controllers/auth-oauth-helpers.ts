@@ -10,6 +10,7 @@ import { Request, Response } from 'express';
 import * as crypto from 'crypto';
 import { createLogger } from '../utils/logger';
 import { getConfig } from '../config/env';
+import { MOBILE_AUTH } from '../config/security';
 
 const log = createLogger('AuthOAuthHelpers');
 
@@ -20,7 +21,7 @@ const STATE_TTL_MS = Number(process.env.OAUTH_STATE_TTL_MS) || 5 * 60 * 1000; //
 const STATE_CLEANUP_INTERVAL_MS = Number(process.env.OAUTH_STATE_CLEANUP_INTERVAL_MS) || 60 * 1000; // 기본 60초
 
 // 인메모리 폴백: DB 연결 실패 시 임시 사용 (단일 프로세스 한정)
-const oauthStatesFallback = new Map<string, { provider: string; createdAt: number }>();
+const oauthStatesFallback = new Map<string, { provider: string; client: string | null; createdAt: number }>();
 
 /**
  * DB 기반 OAuth state 저장소 헬퍼 (안전 폴백)
@@ -36,9 +37,12 @@ async function ensureOauthStateTable(): Promise<void> {
             CREATE TABLE IF NOT EXISTS oauth_states (
                 state TEXT PRIMARY KEY,
                 provider TEXT NOT NULL,
+                client TEXT,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         `);
+        // 구 스키마 폴백 (097 마이그레이션 미적용 부팅 대비 — 멱등)
+        await pool.query('ALTER TABLE oauth_states ADD COLUMN IF NOT EXISTS client TEXT');
     } catch (e) {
         log.warn('[OAuth] oauth_states 테이블 생성 실패 (폴백 사용):', e);
     }
@@ -87,36 +91,46 @@ export function stopOAuthCleanup(): void {
 }
 
 /**
- * 🔒 보안 강화된 OAuth state 생성 (DB 저장)
+ * state 검증 결과 — client 는 OAuth 시작 시 귀속된 모바일 클라이언트 식별자 (null = 웹)
  */
-export async function generateSecureState(provider: string): Promise<string> {
+export interface OAuthStateResult {
+    valid: boolean;
+    client: string | null;
+}
+
+/**
+ * 🔒 보안 강화된 OAuth state 생성 (DB 저장)
+ * @param client 모바일 클라이언트 식별자 ('ios' 등, 화이트리스트 검증은 호출부) — 콜백 분기용
+ */
+export async function generateSecureState(provider: string, client?: string): Promise<string> {
     const state = crypto.randomBytes(32).toString('hex');
     try {
         const { getPool } = await import('../data/models/unified-database');
         const pool = getPool();
         await pool.query(
-            'INSERT INTO oauth_states (state, provider) VALUES ($1, $2)',
-            [state, provider]
+            'INSERT INTO oauth_states (state, provider, client) VALUES ($1, $2, $3)',
+            [state, provider, client ?? null]
         );
     } catch (e) {
         log.warn('[OAuth] DB state 저장 실패, 인메모리 폴백 사용:', e);
-        oauthStatesFallback.set(state, { provider, createdAt: Date.now() });
+        oauthStatesFallback.set(state, { provider, client: client ?? null, createdAt: Date.now() });
     }
     return state;
 }
 
 /**
  * 🔒 OAuth state 검증 및 소비 (일회성, DB 기반)
+ * @returns valid + 시작 시 귀속된 client (웹이면 null)
  */
-export async function validateAndConsumeState(state: string | undefined, expectedProvider: string): Promise<boolean> {
-    if (!state) return false;
+export async function validateAndConsumeState(state: string | undefined, expectedProvider: string): Promise<OAuthStateResult> {
+    if (!state) return { valid: false, client: null };
 
     try {
         const { getPool } = await import('../data/models/unified-database');
         const pool = getPool();
         // 일회성: DELETE ... RETURNING으로 조회 + 삭제 원자적 처리
         const result = await pool.query(
-            'DELETE FROM oauth_states WHERE state = $1 RETURNING provider, created_at',
+            'DELETE FROM oauth_states WHERE state = $1 RETURNING provider, client, created_at',
             [state]
         );
 
@@ -130,16 +144,16 @@ export async function validateAndConsumeState(state: string | undefined, expecte
         // 만료 체크
         if (Date.now() - new Date(row.created_at).getTime() > STATE_TTL_MS) {
             log.error('[OAuth] State expired');
-            return false;
+            return { valid: false, client: null };
         }
 
         // Provider 일치 체크
         if (row.provider !== expectedProvider) {
             log.error(`[OAuth] Provider mismatch: expected ${expectedProvider}, got ${row.provider}`);
-            return false;
+            return { valid: false, client: null };
         }
 
-        return true;
+        return { valid: true, client: row.client ?? null };
     } catch (e) {
         log.warn('[OAuth] DB state 검증 실패, 인메모리 폴백 사용:', e);
         return validateAndConsumeStateFallback(state, expectedProvider);
@@ -149,26 +163,26 @@ export async function validateAndConsumeState(state: string | undefined, expecte
 /**
  * 인메모리 폴백 state 검증 (DB 장애 시)
  */
-function validateAndConsumeStateFallback(state: string, expectedProvider: string): boolean {
+function validateAndConsumeStateFallback(state: string, expectedProvider: string): OAuthStateResult {
     const data = oauthStatesFallback.get(state);
     if (!data) {
         log.error(`[OAuth] State not found: ${state?.substring(0, 10)}...`);
-        return false;
+        return { valid: false, client: null };
     }
 
     oauthStatesFallback.delete(state);
 
     if (Date.now() - data.createdAt > STATE_TTL_MS) {
         log.error('[OAuth] State expired (fallback)');
-        return false;
+        return { valid: false, client: null };
     }
 
     if (data.provider !== expectedProvider) {
         log.error(`[OAuth] Provider mismatch (fallback): expected ${expectedProvider}, got ${data.provider}`);
-        return false;
+        return { valid: false, client: null };
     }
 
-    return true;
+    return { valid: true, client: data.client };
 }
 
 /**
@@ -230,6 +244,40 @@ export function buildRedirectUri(req: Request, provider: 'google' | 'github' | '
  * 게스트로 떨어지던 문제를 우회한다. 200 응답의 Set-Cookie 는 정상 전파됨.
  * path 는 내부 고정 경로만 전달 (open redirect / XSS 불가).
  */
+/**
+ * 모바일(iOS) OAuth 완료 — 일회성 exchange code 를 발급하고 app scheme 으로 리다이렉트.
+ *
+ * app scheme URL 은 로그·타 앱 가로채기에 노출될 수 있으므로 토큰을 직접 싣지 않고
+ * 단명(기본 60s)·일회성 코드만 전달한다. 앱은 `POST /api/auth/mobile/exchange` 로 교환.
+ * (config/security.ts MOBILE_AUTH 참고 — iOS 축 2)
+ */
+export async function issueMobileExchangeRedirect(res: Response, userId: string, provider: string): Promise<void> {
+    const { getKeyValueStore } = await import('../storage');
+    const code = crypto.randomBytes(MOBILE_AUTH.EXCHANGE_CODE_BYTES).toString('hex');
+    await getKeyValueStore().set(
+        MOBILE_AUTH.EXCHANGE_KEY_PREFIX + code,
+        { userId, provider },
+        MOBILE_AUTH.EXCHANGE_CODE_TTL_MS,
+    );
+    const target = `${MOBILE_AUTH.APP_SCHEME}://${MOBILE_AUTH.CALLBACK_HOST_PATH}?code=${code}`;
+    log.info(`[OAuth] 모바일 exchange code 발급 (provider=${provider}, user=${userId})`);
+    res.redirect(target);
+}
+
+/**
+ * exchange code 소비 (일회성) — 유효하면 payload 반환 후 즉시 삭제, 아니면 null.
+ * get→del 이 비원자적이지만 단일 프로세스 운영 + 60s TTL + 암호학적 코드라 위험은 미미.
+ */
+export async function consumeMobileExchangeCode(code: string): Promise<{ userId: string; provider: string } | null> {
+    const { getKeyValueStore } = await import('../storage');
+    const store = getKeyValueStore();
+    const key = MOBILE_AUTH.EXCHANGE_KEY_PREFIX + code;
+    const entry = await store.get<{ userId: string; provider: string }>(key);
+    if (!entry || typeof entry.userId !== 'string') return null;
+    await store.del(key);
+    return entry;
+}
+
 export function sendOAuthSuccessRedirect(res: Response, path: string): void {
     res.status(200).type('html').send(
         '<!DOCTYPE html><html lang="ko"><head><meta charset="utf-8">' +

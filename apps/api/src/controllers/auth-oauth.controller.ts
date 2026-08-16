@@ -11,17 +11,24 @@
 import { Request, Response, Router } from 'express';
 import { getAuthService } from '../services/AuthService';
 import type { OAuthTokenResponse, GoogleUserInfo, GitHubUser, GitHubEmail, KakaoUserInfo } from '../auth/types';
-import { setTokenCookie, setRefreshTokenCookie, generateRefreshToken } from '../auth';
+import { setTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken } from '../auth';
+import { getUserManager } from '../data/user-manager';
 import { createLogger } from '../utils/logger';
-import { success, badRequest, serviceUnavailable } from '../utils/api-response';
+import { success, badRequest, unauthorized, serviceUnavailable, internalError } from '../utils/api-response';
 import { getConfig } from '../config/env';
 import { APP_USER_AGENT } from '../config/constants';
+import { MOBILE_AUTH } from '../config/security';
 import { GOOGLE_OAUTH, GITHUB_OAUTH, GITHUB_API, KAKAO_OAUTH } from '../config/external-services';
+import { authLimiter } from '../middlewares/rate-limiters';
+import { validate } from '../middlewares/validation';
+import { mobileExchangeSchema } from '../schemas';
 import {
     generateSecureState,
     validateAndConsumeState,
     buildRedirectUri,
     sendOAuthSuccessRedirect,
+    issueMobileExchangeRedirect,
+    consumeMobileExchangeCode,
 } from './auth-oauth-helpers';
 
 // server.ts 종료 훅이 참조하는 정리 함수 (auth.controller.ts 경유 re-export 체인 유지)
@@ -63,6 +70,73 @@ export class AuthOAuthController {
         this.router.get('/callback/google', this.googleCallback.bind(this));
         this.router.get('/callback/github', this.githubCallback.bind(this));
         this.router.get('/callback/kakao', this.kakaoCallback.bind(this));
+        // 모바일(iOS) 전용: OAuth exchange code → 토큰 교환 (사전 인증 POST — CSRF 부트스트랩 대상)
+        this.router.post('/mobile/exchange', authLimiter, validate(mobileExchangeSchema), this.mobileExchange.bind(this));
+    }
+
+    /**
+     * `?client=` 화이트리스트 해석 — 허용 목록 외 값은 웹으로 취급 (undefined)
+     */
+    private resolveMobileClient(req: Request): string | undefined {
+        const client = req.query.client;
+        return typeof client === 'string' && (MOBILE_AUTH.ALLOWED_CLIENTS as readonly string[]).includes(client)
+            ? client
+            : undefined;
+    }
+
+    /**
+     * POST /api/auth/mobile/exchange - exchange code → 토큰 교환 (iOS 축 2)
+     *
+     * OAuth 콜백이 발급한 일회성 코드(60s TTL)를 access/refresh token 으로 교환한다.
+     * 응답은 body 전용 — 쿠키 미설정 (앱은 Keychain 에 저장).
+     */
+    private async mobileExchange(req: Request, res: Response): Promise<void> {
+        const { code } = req.body as { code: string };
+        try {
+            const entry = await consumeMobileExchangeCode(code);
+            if (!entry) {
+                this.auditMobileExchange(req, false, undefined, 'invalid_or_expired_code');
+                res.status(401).json(unauthorized('유효하지 않거나 만료된 코드입니다'));
+                return;
+            }
+
+            const user = await getUserManager().getUserById(entry.userId);
+            if (!user || !user.is_active) {
+                this.auditMobileExchange(req, false, entry.userId, 'user_not_found_or_inactive');
+                res.status(401).json(unauthorized('사용자를 찾을 수 없습니다'));
+                return;
+            }
+
+            const token = generateToken(user);
+            const refreshToken = generateRefreshToken(user);
+            this.auditMobileExchange(req, true, user.id, entry.provider);
+            log.info(`[OAuth] 모바일 exchange 성공: ${user.email} (${entry.provider})`);
+            res.json(success({ token, refreshToken, user }));
+        } catch (error) {
+            log.error('[OAuth] 모바일 exchange 오류:', error);
+            res.status(500).json(internalError('토큰 교환 중 오류가 발생했습니다'));
+        }
+    }
+
+    /**
+     * mobile exchange 감사 로그 (login.failed 패턴과 대칭 — fire-and-forget)
+     */
+    private auditMobileExchange(req: Request, ok: boolean, userId: string | undefined, detail: string): void {
+        void (async () => {
+            try {
+                const { getAuditService } = await import('../services/AuditService');
+                await getAuditService().logAudit({
+                    action: ok ? 'auth.mobile_exchange' : 'auth.mobile_exchange_failed',
+                    userId,
+                    resourceType: 'auth',
+                    details: { detail },
+                    ipAddress: req.ip,
+                    userAgent: req.headers['user-agent'],
+                });
+            } catch (e) {
+                log.warn('[audit] mobile_exchange 기록 실패:', e);
+            }
+        })();
     }
 
     /**
@@ -85,8 +159,8 @@ export class AuthOAuthController {
             return;
         }
 
-        // 🔒 Phase 2 보안 패치: 암호학적으로 안전한 state 생성
-        const state = await generateSecureState('google');
+        // 🔒 Phase 2 보안 패치: 암호학적으로 안전한 state 생성 (?client=ios 는 state 에 귀속 — 콜백 분기용)
+        const state = await generateSecureState('google', this.resolveMobileClient(req));
         const authUrl = new URL(GOOGLE_OAUTH.AUTH_URL);
         authUrl.searchParams.set('client_id', clientId);
         authUrl.searchParams.set('redirect_uri', redirectUri);
@@ -112,8 +186,8 @@ export class AuthOAuthController {
             return;
         }
 
-        // 🔒 Phase 2 보안 패치: 암호학적으로 안전한 state 생성
-        const state = await generateSecureState('github');
+        // 🔒 Phase 2 보안 패치: 암호학적으로 안전한 state 생성 (?client=ios 는 state 에 귀속 — 콜백 분기용)
+        const state = await generateSecureState('github', this.resolveMobileClient(req));
         const authUrl = new URL(GITHUB_OAUTH.AUTH_URL);
         authUrl.searchParams.set('client_id', clientId);
         authUrl.searchParams.set('redirect_uri', redirectUri);
@@ -142,7 +216,8 @@ export class AuthOAuthController {
         }
 
         // 🔒 Phase 2 CSRF 방어: state 검증 (Phase 3: DB 기반 비동기)
-        if (!await validateAndConsumeState(state, 'google')) {
+        const stateResult = await validateAndConsumeState(state, 'google');
+        if (!stateResult.valid) {
             log.error('[OAuth] Google callback: Invalid or expired state');
             res.redirect('/login?error=invalid_state');
             return;
@@ -191,6 +266,11 @@ export class AuthOAuthController {
 
             if (!result.success || !result.token || !result.user) throw new Error(result.error || '인증 실패');
 
+            if (stateResult.client) {
+                // 모바일: 쿠키 대신 일회성 exchange code 를 app scheme 으로 전달 (iOS 축 2)
+                await issueMobileExchangeRedirect(res, String(result.user.id), 'google');
+                return;
+            }
             setTokenCookie(res, result.token);
             setRefreshTokenCookie(res, generateRefreshToken(result.user));
             sendOAuthSuccessRedirect(res, '/?auth=callback');
@@ -218,7 +298,8 @@ export class AuthOAuthController {
         }
 
         // 🔒 Phase 2 CSRF 방어: state 검증 (Phase 3: DB 기반 비동기)
-        if (!await validateAndConsumeState(state, 'github')) {
+        const stateResult = await validateAndConsumeState(state, 'github');
+        if (!stateResult.valid) {
             log.error('[OAuth] GitHub callback: Invalid or expired state');
             res.redirect('/login?error=invalid_state');
             return;
@@ -288,6 +369,11 @@ export class AuthOAuthController {
 
             if (!result.success || !result.token || !result.user) throw new Error(result.error || '인증 실패');
 
+            if (stateResult.client) {
+                // 모바일: 쿠키 대신 일회성 exchange code 를 app scheme 으로 전달 (iOS 축 2)
+                await issueMobileExchangeRedirect(res, String(result.user.id), 'github');
+                return;
+            }
             setTokenCookie(res, result.token);
             setRefreshTokenCookie(res, generateRefreshToken(result.user));
             sendOAuthSuccessRedirect(res, '/?auth=callback');
@@ -309,8 +395,8 @@ export class AuthOAuthController {
             return;
         }
 
-        // 🔒 암호학적으로 안전한 state 생성 (CSRF 방어)
-        const state = await generateSecureState('kakao');
+        // 🔒 암호학적으로 안전한 state 생성 (CSRF 방어, ?client=ios 는 state 에 귀속 — 콜백 분기용)
+        const state = await generateSecureState('kakao', this.resolveMobileClient(req));
         const authUrl = new URL(KAKAO_OAUTH.AUTH_URL);
         authUrl.searchParams.set('client_id', clientId);
         authUrl.searchParams.set('redirect_uri', redirectUri);
@@ -342,7 +428,8 @@ export class AuthOAuthController {
         }
 
         // 🔒 CSRF 방어: state 검증 (일회성, DB 기반)
-        if (!await validateAndConsumeState(state, 'kakao')) {
+        const stateResult = await validateAndConsumeState(state, 'kakao');
+        if (!stateResult.valid) {
             log.error('[OAuth] Kakao callback: Invalid or expired state');
             res.redirect('/login?error=invalid_state');
             return;
@@ -401,6 +488,11 @@ export class AuthOAuthController {
 
             if (!result.success || !result.token || !result.user) throw new Error(result.error || '인증 실패');
 
+            if (stateResult.client) {
+                // 모바일: 쿠키 대신 일회성 exchange code 를 app scheme 으로 전달 (iOS 축 2)
+                await issueMobileExchangeRedirect(res, String(result.user.id), 'kakao');
+                return;
+            }
             setTokenCookie(res, result.token);
             setRefreshTokenCookie(res, generateRefreshToken(result.user));
             sendOAuthSuccessRedirect(res, '/?auth=callback');
