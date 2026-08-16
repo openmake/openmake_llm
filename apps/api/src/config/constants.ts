@@ -250,6 +250,7 @@ export const MCP_INGEST = {
  *   - EXTENSION_INGEST_MAX_SKILLS=10          (기본 10 — 번들당 skill 상한)
  *   - EXTENSION_INGEST_MAX_MCP_SERVERS=5      (기본 5 — 번들당 MCP 서버 상한)
  *   - EXTENSION_INGEST_MANIFEST_MAX_BYTES=65536 (기본 64KB — plugin.json/mcp.json 크기 상한)
+ *   - EXTENSION_INGEST_MAX_TREE_ENTRIES=50000  (기본 50000 — 확장 ingest 경로 tree 상한)
  */
 export const EXTENSION_INGEST = {
     enabled: process.env.EXTENSION_INGEST_ENABLED !== 'false',
@@ -260,6 +261,9 @@ export const EXTENSION_INGEST = {
     manifestMaxBytes: parseInt(process.env.EXTENSION_INGEST_MANIFEST_MAX_BYTES || '65536', 10),
     // marketplace.json 은 플러그인 수백 개 인덱스라 크다 (anthropics 공식 489KB 실측) — 별도 상한
     marketplaceMaxBytes: parseInt(process.env.EXTENSION_INGEST_MARKETPLACE_MAX_BYTES || String(1024 * 1024), 10),
+    // 확장 ingest 경로 전용 tree 상한 — 스킬 ingest(SKILL_CREATOR.gitMaxTreeEntries)보다 크게 잡아
+    // 거대 마켓플레이스 repo 의 카탈로그 판정·설치 허용 (jeremylongshore 22,982 blobs 실측)
+    maxTreeEntries: parseInt(process.env.EXTENSION_INGEST_MAX_TREE_ENTRIES || '50000', 10),
     // .zip 아카이브 소스 (archive-fetcher.ts — safeFetch + 압축 폭탄 방어 상한)
     archiveMaxBytes: parseInt(process.env.EXTENSION_INGEST_ARCHIVE_MAX_BYTES || String(10 * 1024 * 1024), 10),
     archiveMaxEntries: parseInt(process.env.EXTENSION_INGEST_ARCHIVE_MAX_ENTRIES || '2000', 10),

@@ -151,7 +151,7 @@ export class ExtensionIngestService {
         let sha = await fetcher.resolveRef(owner, repo, input.gitRef ?? 'HEAD');
 
         // (3) tree
-        let tree = await fetcher.listTree(owner, repo, sha, SKILL_CREATOR.gitMaxTreeEntries);
+        let tree = await fetcher.listTree(owner, repo, sha, EXTENSION_INGEST.maxTreeEntries);
         let candidate: ManifestCandidate | undefined;
 
         // (3-a) marketplace.json 인덱스 (gitPath 미지정 시) — Claude Code 마켓플레이스 저장소
@@ -191,7 +191,7 @@ export class ExtensionIngestService {
                     // 고정 ref (릴리스 태그) 또는 저장소 변경 시 tree 재조회
                     if (entry.ref || effectiveGitUrl !== input.gitUrl) {
                         sha = await fetcher.resolveRef(owner, repo, entry.ref ?? 'HEAD');
-                        tree = await fetcher.listTree(owner, repo, sha, SKILL_CREATOR.gitMaxTreeEntries);
+                        tree = await fetcher.listTree(owner, repo, sha, EXTENSION_INGEST.maxTreeEntries);
                     }
                     if (entry.ref) effectiveTrackingRef = entry.ref;
                     const prefix = entry.path ? `${entry.path}/` : '';
@@ -496,6 +496,8 @@ export class ExtensionIngestService {
      *   ② .mcp.json / mcp.json 존재
      *   ③ 매니페스트(plugin.json 등)에 mcpServers 선언
      *   커스텀 명령(commands/)만 있는 플러그인은 설치 구성요소가 없어 false.
+     *   교차 저장소 엔트리는 accessToken 있을 때만 대상 repo 를 프로브한다
+     *   (무인증 GitHub API 60/hr 실측 — 토큰 없으면 판정 미상 유지).
      */
     async fetchCatalogSnapshot(url: string, accessToken?: string): Promise<{
         name: string;
@@ -524,7 +526,7 @@ export class ExtensionIngestService {
             }
         }
         if (!marketplace) {
-            const tree = await fetcher.listTree(parsed.owner, parsed.repo, sha, SKILL_CREATOR.gitMaxTreeEntries);
+            const tree = await fetcher.listTree(parsed.owner, parsed.repo, sha, EXTENSION_INGEST.maxTreeEntries);
             treeEntries = tree.entries;
             const mkCandidates = scanForMarketplaceManifests(tree.entries);
             if (mkCandidates.length > 0) {
@@ -537,45 +539,33 @@ export class ExtensionIngestService {
         if (marketplace?.ok) {
             if (!treeEntries) {
                 try {
-                    treeEntries = (await fetcher.listTree(parsed.owner, parsed.repo, sha, SKILL_CREATOR.gitMaxTreeEntries)).entries;
+                    treeEntries = (await fetcher.listTree(parsed.owner, parsed.repo, sha, EXTENSION_INGEST.maxTreeEntries)).entries;
                 } catch {
                     /* 거대 repo — 매니페스트 기반 판정만 수행 */
                 }
             }
             const entries = marketplace.marketplace.plugins;
             const enriched: Array<{ name: string; description?: string; installable?: boolean }> = [];
+            // 교차 저장소 repo 별 resolveRef/listTree 재사용 캐시 (한 sync 실행 한정)
+            const externalCache = new Map<string, { sha: string; treeEntries: TreeEntry[] | null } | 'notfound' | 'error'>();
             // 소규모 동시성 배치 — raw fetch 위주라 rate limit 부담 낮음
             const BATCH = 8;
             for (let i = 0; i < entries.length; i += BATCH) {
                 const batch = entries.slice(i, i + BATCH);
                 const results = await Promise.all(batch.map(async (p) => {
-                    // 교차 저장소 엔트리는 프로브 생략 (판정 미상 — installable undefined 로 노출 유지)
+                    // 교차 저장소 엔트리 — 토큰 있으면 대상 repo 프로브, 없으면 판정 미상 유지
                     if (p.url) {
                         const p2 = parseGitUrl(p.url);
                         if (p2 && (p2.owner !== parsed.owner || p2.repo !== parsed.repo)) {
-                            return { name: p.name, description: p.description };
+                            if (!accessToken) return { name: p.name, description: p.description };
+                            const installable = await this.probeExternalEntry(fetcher, p2.owner, p2.repo, p.ref, p.path, externalCache);
+                            return installable === undefined
+                                ? { name: p.name, description: p.description }
+                                : { name: p.name, description: p.description, installable };
                         }
                     }
                     const prefix = p.path ? `${p.path}/` : '';
-                    let installable = false;
-                    if (treeEntries) {
-                        const skillPat = buildSkillDiscoveryPattern(prefix);
-                        installable = treeEntries.some(e =>
-                            skillPat.test(e.path) || e.path === `${prefix}.mcp.json` || e.path === `${prefix}mcp.json`);
-                    }
-                    if (!installable) {
-                        // 매니페스트의 mcpServers 선언 검사 (raw 직접 조회)
-                        for (const mp of [`${prefix}.claude-plugin/plugin.json`, `${prefix}plugin.json`, `${prefix}gemini-extension.json`]) {
-                            try {
-                                const raw = await fetcher.fetchFile(parsed.owner, parsed.repo, sha, mp, EXTENSION_INGEST.manifestMaxBytes);
-                                const v = validateExtensionManifest(raw);
-                                if (v.ok && v.manifest.mcpServers.length > 0) { installable = true; }
-                                break;  // 매니페스트를 찾았으면 (성공/실패 무관) 다음 경로 시도 불필요
-                            } catch {
-                                /* 해당 경로 없음 — 다음 후보 */
-                            }
-                        }
-                    }
+                    const installable = await this.probeInstallableAt(fetcher, parsed.owner, parsed.repo, sha, prefix, treeEntries);
                     return { name: p.name, description: p.description, installable };
                 }));
                 enriched.push(...results);
@@ -585,7 +575,7 @@ export class ExtensionIngestService {
 
         // marketplace 없음 — plugin.json/gemini-extension.json 후보 스캔 (상위 10개)
         if (!treeEntries) {
-            treeEntries = (await fetcher.listTree(parsed.owner, parsed.repo, sha, SKILL_CREATOR.gitMaxTreeEntries)).entries;
+            treeEntries = (await fetcher.listTree(parsed.owner, parsed.repo, sha, EXTENSION_INGEST.maxTreeEntries)).entries;
         }
         const candidates = scanForExtensionManifests(treeEntries).slice(0, 10);
         if (candidates.length === 0) {
@@ -613,6 +603,78 @@ export class ExtensionIngestService {
             description: plugins[0].description ?? null,
             plugins,
         };
+    }
+
+    /**
+     * 플러그인 경로(prefix)의 설치 가능성 프로브 — fetchCatalogSnapshot 판정 규칙 ①②③.
+     * treeEntries 가 없으면(거대 repo) 매니페스트 mcpServers 검사만 수행.
+     */
+    private async probeInstallableAt(
+        fetcher: GitFetcher,
+        owner: string,
+        repo: string,
+        sha: string,
+        prefix: string,
+        treeEntries: TreeEntry[] | null,
+    ): Promise<boolean> {
+        if (treeEntries) {
+            const skillPat = buildSkillDiscoveryPattern(prefix);
+            if (treeEntries.some(e =>
+                skillPat.test(e.path) || e.path === `${prefix}.mcp.json` || e.path === `${prefix}mcp.json`)) {
+                return true;
+            }
+        }
+        // 매니페스트의 mcpServers 선언 검사 (raw 직접 조회)
+        for (const mp of [`${prefix}.claude-plugin/plugin.json`, `${prefix}plugin.json`, `${prefix}gemini-extension.json`]) {
+            try {
+                const raw = await fetcher.fetchFile(owner, repo, sha, mp, EXTENSION_INGEST.manifestMaxBytes);
+                const v = validateExtensionManifest(raw);
+                return v.ok && v.manifest.mcpServers.length > 0;  // 매니페스트를 찾았으면 다음 경로 시도 불필요
+            } catch {
+                /* 해당 경로 없음 — 다음 후보 */
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 교차 저장소 marketplace 엔트리 판정 — 대상 repo 를 resolveRef+listTree 후 동일 규칙 프로브.
+     * repo@ref 단위 캐시로 같은 외부 repo 를 가리키는 엔트리 간 API 호출 재사용.
+     * 반환: true/false = 판정 확정, undefined = 판정 미상(일시 오류 등 — 노출 유지).
+     */
+    private async probeExternalEntry(
+        fetcher: GitFetcher,
+        owner: string,
+        repo: string,
+        ref: string | undefined,
+        path: string | undefined,
+        cache: Map<string, { sha: string; treeEntries: TreeEntry[] | null } | 'notfound' | 'error'>,
+    ): Promise<boolean | undefined> {
+        const key = `${owner}/${repo}@${ref ?? 'HEAD'}`;
+        let resolved = cache.get(key);
+        if (!resolved) {
+            try {
+                const extSha = await fetcher.resolveRef(owner, repo, ref ?? 'HEAD');
+                let extTree: TreeEntry[] | null = null;
+                try {
+                    extTree = (await fetcher.listTree(owner, repo, extSha, EXTENSION_INGEST.maxTreeEntries)).entries;
+                } catch {
+                    /* 거대 repo — 매니페스트 기반 판정만 수행 */
+                }
+                resolved = { sha: extSha, treeEntries: extTree };
+            } catch (e) {
+                resolved = e instanceof Error && e.message.startsWith('REPO_NOT_FOUND') ? 'notfound' : 'error';
+            }
+            cache.set(key, resolved);
+        }
+        if (resolved === 'notfound') return false;  // 삭제/비공개 repo — 설치 불가 확정
+        if (resolved === 'error') return undefined; // 일시 오류 — 판정 미상 유지
+        try {
+            const prefix = path ? `${path}/` : '';
+            return await this.probeInstallableAt(fetcher, owner, repo, resolved.sha, prefix, resolved.treeEntries);
+        } catch {
+            return undefined;
+        }
     }
 
     /** mcp_servers (user_id, name) unique 충돌 회피 — McpServerIngestService 관용구 동형. */
