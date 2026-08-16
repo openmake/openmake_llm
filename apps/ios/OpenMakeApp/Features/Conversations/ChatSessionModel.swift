@@ -16,6 +16,8 @@ final class ChatSessionModel {
     private(set) var isThinking = false
     private(set) var isStreaming = false
     private(set) var errorMessage: String?
+    /// 도구/리서치/토론 진행 한 줄 (ChatStreamState.statusText)
+    private(set) var statusText: String?
 
     init(client: OpenMakeClient, serverURL: URL, sessionId: String?) {
         self.client = client
@@ -37,7 +39,8 @@ final class ChatSessionModel {
         model: String? = nil,
         userAgentId: String? = nil,
         images: [String] = [],
-        files: [WsAttachedFile] = []
+        files: [WsAttachedFile] = [],
+        modes: AppModel.ChatModes = .init()
     ) async {
         errorMessage = nil
         messages.append(.init(
@@ -70,6 +73,13 @@ final class ChatSessionModel {
                 history: Array(history),
                 images: images.isEmpty ? nil : images,
                 files: files.isEmpty ? nil : files,
+                webSearch: modes.webSearch ? true : nil,
+                thinkingMode: modes.thinking ? true : nil,
+                imageMode: modes.imageGen ? true : nil,
+                artifactMode: modes.artifact ? true : nil,
+                discussionMode: modes.discussion ? true : nil,
+                deepResearchMode: modes.deepResearch ? true : nil,
+                style: modes.style == .styleDefault ? nil : modes.style,
                 userAgentId: userAgentId))
 
             var state = ChatStreamState()
@@ -77,6 +87,7 @@ final class ChatSessionModel {
                 state.apply(event)
                 streamingText = state.streamingText
                 isThinking = state.isThinking
+                statusText = state.statusText
                 if let sid = state.sessionId { sessionId = sid }
                 if state.needsTokenRefresh {
                     // 웹과 동일 규약: REST refresh — 다음 재연결이 새 토큰 사용
@@ -109,5 +120,6 @@ final class ChatSessionModel {
         }
         streamingText = ""
         isThinking = false
+        statusText = nil
     }
 }

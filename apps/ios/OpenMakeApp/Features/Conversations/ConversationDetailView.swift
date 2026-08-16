@@ -1,4 +1,4 @@
-// 대화 화면 (축 3 Step 3~5) — 이력 + WS 스트리밍 + 모델/에이전트 선택 + 첨부
+// 대화 화면 — LUMEN 시안 ③④ : 도트 헤더 · user 버블(테일) · 캡슐 컴포저 · 모드 칩
 import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
@@ -20,13 +20,25 @@ struct ConversationDetailView: View {
                 ProgressView()
             }
         }
-        .navigationTitle(session?.title ?? "새 대화")
-        .navigationBarTitleDisplayMode(.inline)
+        .background(Lumen.bg)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                VStack(spacing: 1) {
+                    Text(session?.title ?? "새 대화")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Lumen.fg)
+                        .lineLimit(1)
+                    Text(activeModelName)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Lumen.muted)
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 ModelAgentMenu()
+                    .tint(Lumen.fg2)
             }
         }
+        .navigationBarTitleDisplayMode(.inline)
         .task {
             if chat == nil {
                 let chatModel = ChatSessionModel(
@@ -35,16 +47,34 @@ struct ConversationDetailView: View {
                     sessionId: session?.id)
                 chat = chatModel
                 await chatModel.loadHistory()
+                #if DEBUG
+                // 시뮬레이터 스모크: 새 대화에 자동 전송 (Release 미포함)
+                if session == nil,
+                   let message = ProcessInfo.processInfo.environment["OPENMAKE_UITEST_MESSAGE"],
+                   !message.isEmpty, chatModel.messages.isEmpty {
+                    await chatModel.send(message, model: model.selectedModelId, modes: model.modes)
+                }
+                #endif
             }
         }
         .onDisappear {
             chat?.teardown()
         }
     }
+
+    private var activeModelName: String {
+        let full = model.selectedModelId ?? model.modelCatalog?.defaultModel ?? ""
+        let short = full.split(separator: ":").last.map(String.init) ?? full
+        if model.selectedAgentId != nil,
+           let agent = model.agents.first(where: { $0.id == model.selectedAgentId }) {
+            return "\(short) · \(agent.name)"
+        }
+        return short.isEmpty ? "OpenMake" : short
+    }
 }
 
 /// 모델/에이전트 선택 메뉴 — nil 선택 = 서버 기본/에이전트 미지정
-private struct ModelAgentMenu: View {
+struct ModelAgentMenu: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
@@ -121,11 +151,18 @@ private struct ChatTranscriptView: View {
                 Text(error)
                     .font(.footnote)
                     .foregroundStyle(.red)
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 4)
             }
 
-            attachmentChips
-            composer
+            ChatComposer(
+                draft: $draft,
+                photoItems: $photoItems,
+                pendingImages: $pendingImages,
+                pendingFiles: $pendingFiles,
+                showFileImporter: $showFileImporter,
+                isStreaming: chat.isStreaming,
+                onSubmit: submit)
         }
         .fileImporter(
             isPresented: $showFileImporter,
@@ -144,100 +181,36 @@ private struct ChatTranscriptView: View {
     private var transcript: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(spacing: 10) {
+                LazyVStack(alignment: .leading, spacing: 18) {
                     ForEach(Array(chat.messages.enumerated()), id: \.offset) { _, message in
-                        MessageBubble(message: message)
+                        MessageRow(message: message)
+                    }
+
+                    if let status = chat.statusText {
+                        StatusLine(text: status, color: Lumen.success)
                     }
                     if chat.isThinking {
-                        HStack {
-                            ProgressView()
-                            Text("생각 중…")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 4)
+                        StatusLine(text: "생각 중…", color: Lumen.warn)
                     }
                     if !chat.streamingText.isEmpty {
-                        MessageBubble(message: .init(
-                            role: .assistant, content: chat.streamingText,
-                            model: nil, tokens: nil, images: nil, created_at: nil))
+                        VStack(alignment: .leading, spacing: 6) {
+                            AssistantHead()
+                            MarkdownText(content: chat.streamingText + " ▍")
+                        }
                     }
                     Color.clear.frame(height: 1).id("bottom")
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
+            .scrollDismissesKeyboard(.interactively)
             .onChange(of: chat.streamingText) {
-                proxy.scrollTo("bottom", anchor: .bottom)
+                withAnimation(.easeOut(duration: 0.1)) { proxy.scrollTo("bottom", anchor: .bottom) }
             }
             .onChange(of: chat.messages.count) {
                 proxy.scrollTo("bottom", anchor: .bottom)
             }
         }
-    }
-
-    @ViewBuilder
-    private var attachmentChips: some View {
-        if !pendingImages.isEmpty || !pendingFiles.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    if !pendingImages.isEmpty {
-                        chip(label: "🖼️ 사진 \(pendingImages.count)장") { pendingImages.removeAll() }
-                    }
-                    ForEach(pendingFiles, id: \.id) { file in
-                        chip(label: "📄 \(file.name)") {
-                            pendingFiles.removeAll { $0.id == file.id }
-                        }
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 4)
-            }
-        }
-    }
-
-    private func chip(label: String, onRemove: @escaping () -> Void) -> some View {
-        HStack(spacing: 4) {
-            Text(label).font(.caption)
-            Button(action: onRemove) {
-                Image(systemName: "xmark.circle.fill").font(.caption)
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(.fill.tertiary, in: Capsule())
-    }
-
-    private var composer: some View {
-        HStack(spacing: 8) {
-            Menu {
-                PhotosPicker(selection: $photoItems, maxSelectionCount: 3, matching: .images) {
-                    Label("사진", systemImage: "photo")
-                }
-                Button {
-                    showFileImporter = true
-                } label: {
-                    Label("파일", systemImage: "doc")
-                }
-            } label: {
-                Image(systemName: "plus.circle")
-                    .font(.title2)
-            }
-
-            TextField("메시지 입력…", text: $draft, axis: .vertical)
-                .lineLimit(1...4)
-                .textFieldStyle(.roundedBorder)
-
-            Button {
-                submit()
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.title2)
-            }
-            .disabled(chat.isStreaming || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
-        .padding(12)
     }
 
     private func submit() {
@@ -255,7 +228,8 @@ private struct ChatTranscriptView: View {
                 model: model.selectedModelId,
                 userAgentId: model.selectedAgentId,
                 images: images,
-                files: files)
+                files: files,
+                modes: model.modes)
         }
     }
 
@@ -294,31 +268,204 @@ private struct ChatTranscriptView: View {
     }
 }
 
-struct MessageBubble: View {
-    let message: OpenMakeClient.ChatMessage
-
-    private var isUser: Bool { message.role == .user }
+/// assistant 응답 헤더 — 시그니처 도트 + 워드마크 캡션
+private struct AssistantHead: View {
+    var pulsing = true
 
     var body: some View {
-        HStack {
-            if isUser { Spacer(minLength: 40) }
-            VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
-                if let images = message.images, !images.isEmpty {
-                    Text("🖼️ 사진 \(images.count)장")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Text(message.content)
-                    .font(.body)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(
-                        isUser ? AnyShapeStyle(.tint) : AnyShapeStyle(.fill.secondary),
-                        in: RoundedRectangle(cornerRadius: 14))
-                    .foregroundStyle(isUser ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
-            }
-            .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
-            if !isUser { Spacer(minLength: 40) }
+        HStack(spacing: 6) {
+            LumenDot(pulsing: pulsing)
+            Text("OpenMake")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Lumen.muted)
         }
+    }
+}
+
+/// LUMEN 메시지 행 — user 는 테일 버블(우측), assistant 는 도트 헤더 + 전체폭 마크다운
+private struct MessageRow: View {
+    let message: OpenMakeClient.ChatMessage
+
+    var body: some View {
+        if message.role == .user {
+            HStack(alignment: .bottom) {
+                Spacer(minLength: 48)
+                VStack(alignment: .trailing, spacing: 4) {
+                    if let images = message.images, !images.isEmpty {
+                        Text("🖼️ 사진 \(images.count)장")
+                            .font(.caption2)
+                            .foregroundStyle(Lumen.muted)
+                    }
+                    Text(message.content)
+                        .font(.system(size: 15))
+                        .textSelection(.enabled)
+                        .foregroundStyle(Lumen.fg)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(
+                            Lumen.surface2,
+                            in: UnevenRoundedRectangle(
+                                topLeadingRadius: 18, bottomLeadingRadius: 18,
+                                bottomTrailingRadius: 4, topTrailingRadius: 18))
+                }
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                AssistantHead(pulsing: false)
+                MarkdownText(content: message.content)
+            }
+        }
+    }
+}
+
+private struct StatusLine: View {
+    let text: String
+    var color: Color = Lumen.accent
+
+    var body: some View {
+        HStack(spacing: 7) {
+            LumenDot(color: color, size: 6, pulsing: true)
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundStyle(Lumen.muted)
+        }
+        .transition(.opacity)
+    }
+}
+
+/// LUMEN 컴포저 — accent-soft + 버튼, surface 입력 카드, 모드 칩(도트)
+private struct ChatComposer: View {
+    @Environment(AppModel.self) private var model
+    @Binding var draft: String
+    @Binding var photoItems: [PhotosPickerItem]
+    @Binding var pendingImages: [String]
+    @Binding var pendingFiles: [WsAttachedFile]
+    @Binding var showFileImporter: Bool
+    let isStreaming: Bool
+    let onSubmit: () -> Void
+
+    private var canSend: Bool {
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isStreaming
+    }
+
+    var body: some View {
+        @Bindable var model = model
+        VStack(spacing: 8) {
+            attachmentChips
+            modeChips
+
+            HStack(alignment: .bottom, spacing: 8) {
+                Menu {
+                    Section("첨부") {
+                        PhotosPicker(selection: $photoItems, maxSelectionCount: 3, matching: .images) {
+                            Label("사진", systemImage: "photo")
+                        }
+                        Button { showFileImporter = true } label: {
+                            Label("파일", systemImage: "doc")
+                        }
+                    }
+                    Section("모드") {
+                        Toggle("웹 검색", systemImage: "globe", isOn: $model.modes.webSearch)
+                        Toggle("추론", systemImage: "brain", isOn: $model.modes.thinking)
+                        Toggle("이미지 생성", systemImage: "photo.badge.plus", isOn: $model.modes.imageGen)
+                        Toggle("아티팩트", systemImage: "doc.richtext", isOn: $model.modes.artifact)
+                        Toggle("토론", systemImage: "person.2.wave.2", isOn: $model.modes.discussion)
+                        Toggle("딥리서치", systemImage: "magnifyingglass.circle", isOn: $model.modes.deepResearch)
+                    }
+                    Picker("응답 스타일", systemImage: "text.alignleft", selection: $model.modes.style) {
+                        Text("간결").tag(Style.concise)
+                        Text("기본").tag(Style.styleDefault)
+                        Text("상세").tag(Style.verbose)
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(Lumen.accent)
+                        .frame(width: 36, height: 36)
+                        .background(Lumen.accentSoft, in: Circle())
+                }
+
+                HStack(alignment: .bottom, spacing: 6) {
+                    TextField("무엇이든 물어보세요", text: $draft, axis: .vertical)
+                        .font(.system(size: 15))
+                        .lineLimit(1...5)
+                        .padding(.leading, 14)
+                        .padding(.vertical, 9)
+
+                    Button(action: onSubmit) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(canSend ? Lumen.accentFg : Lumen.faint)
+                            .frame(width: 30, height: 30)
+                            .background(canSend ? Lumen.accent : Lumen.surface3, in: Circle())
+                    }
+                    .disabled(!canSend)
+                    .padding(.trailing, 4)
+                    .padding(.bottom, 3)
+                }
+                .background(Lumen.surface, in: RoundedRectangle(cornerRadius: 22))
+                .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Lumen.border))
+                .shadow(color: .black.opacity(0.06), radius: 8, y: 2)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
+        .background(Lumen.bg)
+    }
+
+    @ViewBuilder
+    private var modeChips: some View {
+        let labels = model.modes.activeLabels
+        if !labels.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(labels, id: \.self) { label in
+                        HStack(spacing: 5) {
+                            LumenDot(size: 5)
+                            Text(label)
+                        }
+                        .font(.system(size: 11, weight: .semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Lumen.accentSoft, in: Capsule())
+                        .foregroundStyle(Lumen.accent)
+                    }
+                }
+                .padding(.horizontal, 4)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var attachmentChips: some View {
+        if !pendingImages.isEmpty || !pendingFiles.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    if !pendingImages.isEmpty {
+                        chip(label: "🖼️ 사진 \(pendingImages.count)장") { pendingImages.removeAll() }
+                    }
+                    ForEach(pendingFiles, id: \.id) { file in
+                        chip(label: "📄 \(file.name)") {
+                            pendingFiles.removeAll { $0.id == file.id }
+                        }
+                    }
+                }
+                .padding(.horizontal, 4)
+            }
+        }
+    }
+
+    private func chip(label: String, onRemove: @escaping () -> Void) -> some View {
+        HStack(spacing: 4) {
+            Text(label).font(.caption)
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill").font(.caption)
+            }
+        }
+        .foregroundStyle(Lumen.fg2)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Lumen.surface2, in: Capsule())
     }
 }

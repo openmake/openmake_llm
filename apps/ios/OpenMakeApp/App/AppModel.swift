@@ -14,6 +14,7 @@ final class AppModel {
 
     private(set) var authState: AuthState = .checking
     let client: OpenMakeClient
+    private let tokenStore: TokenStore
 
     // 모델/에이전트 선택 (축 3 Step 5) — nil = 서버 기본/에이전트 미지정
     private(set) var modelCatalog: ModelCatalog?
@@ -21,14 +22,55 @@ final class AppModel {
     var selectedModelId: String?
     var selectedAgentId: String?
 
+    /// 채팅 모드 토글 — 서버 계약(WsChatRequest) 필드 그대로 (웹의 Mode 토글·Style 대응)
+    var modes = ChatModes()
+
+    struct ChatModes {
+        var webSearch = false
+        var thinking = false
+        var imageGen = false
+        var artifact = false
+        var discussion = false
+        var deepResearch = false
+        var style: Style = .styleDefault
+
+        var activeLabels: [String] {
+            var labels: [String] = []
+            if webSearch { labels.append("웹 검색") }
+            if thinking { labels.append("추론") }
+            if imageGen { labels.append("이미지") }
+            if artifact { labels.append("아티팩트") }
+            if discussion { labels.append("토론") }
+            if deepResearch { labels.append("딥리서치") }
+            return labels
+        }
+    }
+
     init(client: OpenMakeClient? = nil) {
+        var store: TokenStore = KeychainTokenStore()
+        #if DEBUG
+        // 시뮬레이터 스모크: 무서명/ad-hoc 빌드는 Keychain entitlement 부재(-34018)로
+        // SecItem 접근이 실패하므로 토큰 주입 모드에선 인메모리 저장을 쓴다. Release 미포함.
+        if ProcessInfo.processInfo.environment["OPENMAKE_TEST_ACCESS"]?.isEmpty == false {
+            store = InMemoryTokenStore()
+        }
+        #endif
+        self.tokenStore = store
         self.client = client ?? OpenMakeClient(
             configuration: .init(serverURL: AppConfig.serverURL),
-            tokenStore: KeychainTokenStore())
+            tokenStore: store)
     }
 
     /// 앱 시작 시 저장된 세션 확인 (Keychain 토큰 → me)
     func bootstrap() async {
+        #if DEBUG
+        // 시뮬레이터 스모크용 세션 주입 (mint 토큰 — 비밀번호 미보유 환경). Release 미포함.
+        if let access = ProcessInfo.processInfo.environment["OPENMAKE_TEST_ACCESS"],
+           let refresh = ProcessInfo.processInfo.environment["OPENMAKE_TEST_REFRESH"],
+           !access.isEmpty {
+            tokenStore.save(AuthTokens(access: access, refresh: refresh))
+        }
+        #endif
         guard await client.isAuthenticated else {
             authState = .loggedOut
             return

@@ -108,7 +108,7 @@ public actor WsChatSocket {
 }
 
 public extension WsChatRequest {
-    /// MVP 채팅 요청 빌더 — 기본값은 텍스트 채팅 (모드 토글은 2차)
+    /// 채팅 요청 빌더 — 모드 토글은 계약 필드 그대로 노출 (nil = 서버 기본)
     static func chat(
         message: String,
         sessionId: String? = nil,
@@ -116,19 +116,26 @@ public extension WsChatRequest {
         history: [History] = [],
         images: [String]? = nil,
         files: [WsAttachedFile]? = nil,
+        webSearch: Bool? = nil,
+        thinkingMode: Bool? = nil,
+        imageMode: Bool? = nil,
+        artifactMode: Bool? = nil,
+        discussionMode: Bool? = nil,
+        deepResearchMode: Bool? = nil,
+        style: Style? = nil,
         saveHistory: Bool? = nil,
         memoryLearning: Bool? = nil,
         userAgentId: String? = nil
     ) -> WsChatRequest {
         WsChatRequest(
             anonSessionID: nil,
-            artifactMode: nil,
-            deepResearchMode: nil,
-            discussionMode: nil,
+            artifactMode: artifactMode,
+            deepResearchMode: deepResearchMode,
+            discussionMode: discussionMode,
             enabledTools: nil,
             files: files,
             history: history.isEmpty ? nil : history,
-            imageMode: nil,
+            imageMode: imageMode,
             images: images,
             memoryLearning: memoryLearning,
             message: message,
@@ -136,10 +143,10 @@ public extension WsChatRequest {
             notebook: nil,
             saveHistory: saveHistory,
             sessionID: sessionId,
-            style: nil,
-            thinkingMode: nil,
+            style: style,
+            thinkingMode: thinkingMode,
             type: .chat,
             userAgentID: userAgentId,
-            webSearch: nil)
+            webSearch: webSearch)
     }
 }
