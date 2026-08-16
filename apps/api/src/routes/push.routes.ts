@@ -22,8 +22,14 @@ import { success, serviceUnavailable } from '../utils/api-response';
 import { createLogger } from '../utils/logger';
 import { asyncHandler } from '../utils/error-handler';
 import { validate } from '../middlewares/validation';
-import { pushSubscribeSchema, pushUnsubscribeSchema } from '../schemas/push.schema';
+import {
+    nativePushSubscribeSchema,
+    nativePushUnsubscribeSchema,
+    pushSubscribeSchema,
+    pushUnsubscribeSchema,
+} from '../schemas/push.schema';
 import { getPushService, PushSubscription } from '../services/PushService';
+import { getNativePushService } from '../services/NativePushService';
 
 const logger = createLogger('PushRoutes');
 
@@ -108,6 +114,26 @@ router.post('/unsubscribe', requireAuth, validate(pushUnsubscribeSchema), asyncH
     void pushService.unsubscribe(String(req.user!.id), endpoint).catch(err => logger.error('[Push] DB 구독 삭제 실패:', err));
     
     res.json(success({ message: deleted ? 'Push 구독이 해제되었습니다.' : '해당 구독을 찾을 수 없습니다.' }));
+}));
+
+router.post('/native/subscribe', requireAuth, validate(nativePushSubscribeSchema), asyncHandler(async (req: Request, res: Response) => {
+    const { deviceToken, environment, bundleId } = req.body as {
+        deviceToken: string;
+        environment: 'development' | 'production';
+        bundleId: string;
+    };
+    await getNativePushService().subscribe(String(req.user!.id), {
+        deviceToken: deviceToken.toLowerCase(),
+        environment,
+        bundleId,
+    });
+    res.json(success({ message: 'iOS 푸시 토큰이 등록되었습니다.' }));
+}));
+
+router.post('/native/unsubscribe', requireAuth, validate(nativePushUnsubscribeSchema), asyncHandler(async (req: Request, res: Response) => {
+    const { deviceToken } = req.body as { deviceToken: string };
+    await getNativePushService().unsubscribe(String(req.user!.id), deviceToken.toLowerCase());
+    res.json(success({ message: 'iOS 푸시 토큰이 해제되었습니다.' }));
 }));
 
 export default router;

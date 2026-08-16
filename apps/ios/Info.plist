@@ -14,5 +14,7 @@
 			</array>
 		</dict>
 	</array>
+	<key>OpenMakeRemotePushEnabled</key>
+	<false/>
 </dict>
 </plist>

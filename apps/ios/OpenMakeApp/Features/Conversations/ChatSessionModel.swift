@@ -18,6 +18,9 @@ final class ChatSessionModel {
     private(set) var errorMessage: String?
     /// 도구/리서치/토론 진행 한 줄 (ChatStreamState.statusText)
     private(set) var statusText: String?
+    private(set) var activityKind: ChatActivityKind = .preparing
+    private(set) var artifacts: [ArtifactDocument] = []
+    private(set) var activeAgentTask: AgentTaskDetail?
 
     init(client: OpenMakeClient, serverURL: URL, sessionId: String?) {
         self.client = client
@@ -29,6 +32,7 @@ final class ChatSessionModel {
         guard let sessionId else { return }
         do {
             messages = try await client.messages(sessionId: sessionId)
+            artifacts = (try? await client.artifacts(sessionId: sessionId).map(ArtifactDocument.init(stored:))) ?? []
         } catch {
             errorMessage = "이력을 불러오지 못했습니다"
         }
@@ -46,8 +50,18 @@ final class ChatSessionModel {
         messages.append(.init(
             role: .user, content: text, model: nil, tokens: nil,
             images: images.isEmpty ? nil : images, created_at: nil))
+
+        if modes.agentTask {
+            await startAgentTask(goal: text, images: images, files: files)
+            return
+        }
+
         isStreaming = true
         defer { isStreaming = false }
+
+        var state = ChatStreamState()
+        state.begin()
+        apply(state)
 
         do {
             guard let bearer = await client.accessToken else {
@@ -82,12 +96,9 @@ final class ChatSessionModel {
                 style: modes.style == .styleDefault ? nil : modes.style,
                 userAgentId: userAgentId))
 
-            var state = ChatStreamState()
             for await event in events {
                 state.apply(event)
-                streamingText = state.streamingText
-                isThinking = state.isThinking
-                statusText = state.statusText
+                apply(state)
                 if let sid = state.sessionId { sessionId = sid }
                 if state.needsTokenRefresh {
                     // 웹과 동일 규약: REST refresh — 다음 재연결이 새 토큰 사용
@@ -100,6 +111,12 @@ final class ChatSessionModel {
                 errorMessage = error
             }
             finalizeAssistantMessage()
+            if modes.deepResearch, state.errorMessage == nil {
+                await NotificationManager.shared.schedule(
+                    title: "딥리서치 완료",
+                    body: "요청하신 조사 결과가 준비되었습니다",
+                    url: sessionId.map { "/chat/\($0)" })
+            }
         } catch {
             errorMessage = "연결에 실패했습니다"
             finalizeAssistantMessage()
@@ -107,10 +124,108 @@ final class ChatSessionModel {
     }
 
     func teardown() {
+        agentPollTask?.cancel()
         Task { [socket] in await socket.disconnect() }
     }
 
     private var currentEvents: AsyncStream<WsServerEvent>?
+    private var agentPollTask: Task<Void, Never>?
+
+    private func apply(_ state: ChatStreamState) {
+        streamingText = state.streamingText
+        isThinking = state.isThinking
+        statusText = state.statusText
+        activityKind = state.activityKind ?? .preparing
+        for artifact in state.artifacts {
+            let document = ArtifactDocument(streamed: artifact)
+            if let index = artifacts.firstIndex(where: { $0.id == document.id }) {
+                artifacts[index] = document
+            } else {
+                artifacts.append(document)
+            }
+        }
+    }
+
+    private func startAgentTask(
+        goal: String,
+        images: [String],
+        files: [WsAttachedFile]
+    ) async {
+        isStreaming = true
+        statusText = "에이전트 작업을 만들고 있어요"
+        activityKind = .agent
+        defer { isStreaming = false }
+        do {
+            let creation = try await client.createAgentTask(
+                goal: goal,
+                files: files,
+                images: images)
+            activeAgentTask = AgentTaskDetail(task: creation.task, steps: [])
+            let execution = try await client.executeAgentTask(id: creation.task.id)
+            await NotificationManager.shared.requestAuthorization()
+            statusText = execution.queued
+                ? "에이전트 작업이 실행 대기 중이에요"
+                : "에이전트가 첫 단계를 준비하고 있어요"
+            agentPollTask?.cancel()
+            agentPollTask = Task { [weak self] in
+                await self?.pollAgentTask(id: creation.task.id)
+            }
+        } catch let error as OpenMakeAPIError {
+            errorMessage = apiErrorText(error)
+            statusText = nil
+        } catch {
+            errorMessage = "에이전트 작업을 시작하지 못했습니다"
+            statusText = nil
+        }
+    }
+
+    private func pollAgentTask(id: String) async {
+        while !Task.isCancelled {
+            do {
+                let detail = try await client.agentTask(id: id)
+                activeAgentTask = detail
+                switch detail.task.status {
+                case .completed, .failed, .cancelled:
+                    statusText = nil
+                    await NotificationManager.shared.notifyAgentTaskFinished(detail.task)
+                    return
+                case .paused:
+                    statusText = "승인을 기다리고 있어요"
+                case .queued:
+                    statusText = "에이전트 작업이 실행 대기 중이에요"
+                case .pending, .running:
+                    if let latest = detail.steps.last?.content, !latest.isEmpty {
+                        statusText = oneLine(latest)
+                    } else {
+                        statusText = "에이전트가 \(max(detail.task.currentTurn, 1))번째 단계를 진행하고 있어요"
+                    }
+                }
+            } catch {
+                errorMessage = "에이전트 작업 상태를 불러오지 못했습니다"
+                return
+            }
+            do {
+                try await Task.sleep(for: .seconds(2))
+            } catch {
+                return
+            }
+        }
+    }
+
+    private func oneLine(_ value: String) -> String {
+        String(value
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+            .prefix(120))
+    }
+
+    private func apiErrorText(_ error: OpenMakeAPIError) -> String {
+        if case .server(_, _, let message) = error, let message, !message.isEmpty {
+            return message
+        }
+        return "에이전트 작업을 시작하지 못했습니다"
+    }
 
     private func finalizeAssistantMessage() {
         if !streamingText.isEmpty {

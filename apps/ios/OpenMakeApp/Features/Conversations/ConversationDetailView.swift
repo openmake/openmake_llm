@@ -142,6 +142,8 @@ private struct ChatTranscriptView: View {
     @State private var pendingFiles: [WsAttachedFile] = []
     @State private var showFileImporter = false
     @State private var attachError: String?
+    @State private var selectedArtifact: ArtifactDocument?
+    @State private var selectedAgentTaskId: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -176,6 +178,17 @@ private struct ChatTranscriptView: View {
         .onChange(of: photoItems) {
             Task { await loadPhotos() }
         }
+        .sheet(item: $selectedArtifact) { artifact in
+            ArtifactViewer(document: artifact)
+        }
+        .navigationDestination(isPresented: Binding(
+            get: { selectedAgentTaskId != nil },
+            set: { if !$0 { selectedAgentTaskId = nil } }
+        )) {
+            if let selectedAgentTaskId {
+                AgentTaskDetailView(taskId: selectedAgentTaskId)
+            }
+        }
     }
 
     private var transcript: some View {
@@ -186,11 +199,24 @@ private struct ChatTranscriptView: View {
                         MessageRow(message: message)
                     }
 
-                    if let status = chat.statusText {
-                        StatusLine(text: status, color: Lumen.success)
+                    if let task = chat.activeAgentTask {
+                        AgentTaskCard(task: task.task, latestStep: task.steps.last) {
+                            selectedAgentTaskId = task.task.id
+                        }
                     }
-                    if chat.isThinking {
-                        StatusLine(text: "생각 중…", color: Lumen.warn)
+
+                    ForEach(chat.artifacts) { artifact in
+                        ArtifactCard(document: artifact) {
+                            selectedArtifact = artifact
+                        }
+                    }
+
+                    if chat.streamingText.isEmpty {
+                        if let status = chat.statusText {
+                            ActivityStatusLine(text: status, kind: chat.activityKind)
+                        } else if chat.isThinking {
+                            ActivityStatusLine(text: "답변을 생각하고 있어요", kind: .thinking)
+                        }
                     }
                     if !chat.streamingText.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
@@ -292,7 +318,7 @@ private struct MessageRow: View {
                 Spacer(minLength: 48)
                 VStack(alignment: .trailing, spacing: 4) {
                     if let images = message.images, !images.isEmpty {
-                        Text("🖼️ 사진 \(images.count)장")
+                        Label("사진 \(images.count)장", systemImage: "photo.on.rectangle")
                             .font(.caption2)
                             .foregroundStyle(Lumen.muted)
                     }
@@ -315,21 +341,6 @@ private struct MessageRow: View {
                 MarkdownText(content: message.content)
             }
         }
-    }
-}
-
-private struct StatusLine: View {
-    let text: String
-    var color: Color = Lumen.accent
-
-    var body: some View {
-        HStack(spacing: 7) {
-            LumenDot(color: color, size: 6, pulsing: true)
-            Text(text)
-                .font(.system(size: 12))
-                .foregroundStyle(Lumen.muted)
-        }
-        .transition(.opacity)
     }
 }
 
@@ -371,6 +382,7 @@ private struct ChatComposer: View {
                         Toggle("아티팩트", systemImage: "doc.richtext", isOn: $model.modes.artifact)
                         Toggle("토론", systemImage: "person.2.wave.2", isOn: $model.modes.discussion)
                         Toggle("딥리서치", systemImage: "magnifyingglass.circle", isOn: $model.modes.deepResearch)
+                        Toggle("에이전트 작업", systemImage: "wand.and.stars", isOn: $model.modes.agentTask)
                     }
                     Picker("응답 스타일", systemImage: "text.alignleft", selection: $model.modes.style) {
                         Text("간결").tag(Style.concise)
@@ -421,15 +433,7 @@ private struct ChatComposer: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     ForEach(labels, id: \.self) { label in
-                        HStack(spacing: 5) {
-                            LumenDot(size: 5)
-                            Text(label)
-                        }
-                        .font(.system(size: 11, weight: .semibold))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Lumen.accentSoft, in: Capsule())
-                        .foregroundStyle(Lumen.accent)
+                        ModeChip(label: label, systemImage: modeSymbol(label))
                     }
                 }
                 .padding(.horizontal, 4)
@@ -443,10 +447,12 @@ private struct ChatComposer: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     if !pendingImages.isEmpty {
-                        chip(label: "🖼️ 사진 \(pendingImages.count)장") { pendingImages.removeAll() }
+                        chip(label: "사진 \(pendingImages.count)장", systemImage: "photo.on.rectangle") {
+                            pendingImages.removeAll()
+                        }
                     }
                     ForEach(pendingFiles, id: \.id) { file in
-                        chip(label: "📄 \(file.name)") {
+                        chip(label: file.name, systemImage: "doc") {
                             pendingFiles.removeAll { $0.id == file.id }
                         }
                     }
@@ -456,8 +462,9 @@ private struct ChatComposer: View {
         }
     }
 
-    private func chip(label: String, onRemove: @escaping () -> Void) -> some View {
+    private func chip(label: String, systemImage: String, onRemove: @escaping () -> Void) -> some View {
         HStack(spacing: 4) {
+            Image(systemName: systemImage).font(.caption)
             Text(label).font(.caption)
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill").font(.caption)
@@ -467,5 +474,18 @@ private struct ChatComposer: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(Lumen.surface2, in: Capsule())
+    }
+
+    private func modeSymbol(_ label: String) -> String? {
+        switch label {
+        case "웹 검색": "globe"
+        case "추론": "brain"
+        case "이미지": "photo.badge.plus"
+        case "아티팩트": "doc.richtext"
+        case "토론": "person.2.wave.2"
+        case "딥리서치": "magnifyingglass.circle"
+        case "에이전트 작업": "wand.and.stars"
+        default: nil
+        }
     }
 }
