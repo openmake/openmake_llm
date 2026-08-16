@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.25.0](https://github.com/openmake/openmake_llm/compare/v1.24.1...v1.25.0) (2026-08-16)
+
+
+### ✨ 기능
+
+* **extensions:** .zip 아카이브 소스 지원 — Phase 2 잔여 ([#506](https://github.com/openmake/openmake_llm/issues/506)) ([92a4eee](https://github.com/openmake/openmake_llm/commit/92a4eee08b12b37a2190a16c769a76bb972e8cf5))
+* **extensions:** admin 큐레이션 카탈로그 — 등록/동기화/설치 + 설치 가능성 판정 + 탐색 UX(검색·번역) ([#507](https://github.com/openmake/openmake_llm/issues/507)) ([a4971a8](https://github.com/openmake/openmake_llm/commit/a4971a8f4c61e07184793d10fb82fee093296eda))
+* **extensions:** marketplace.json 인덱스 지원 — Claude Code/Qwen 마켓플레이스 설치 ([#504](https://github.com/openmake/openmake_llm/issues/504)) ([423367d](https://github.com/openmake/openmake_llm/commit/423367d5a2b22e23d987757cf814e6bcae306dc3))
+* **extensions:** Phase 2 — 버전/업데이트 확인 + 재설치 업데이트 ([#501](https://github.com/openmake/openmake_llm/issues/501)) ([adac69e](https://github.com/openmake/openmake_llm/commit/adac69e1346e02ca749f443b75bb84077830f0e9))
+* **extensions:** Phase 3 — 워크스페이스 공유/갤러리 ([#502](https://github.com/openmake/openmake_llm/issues/502)) ([c9ee9c8](https://github.com/openmake/openmake_llm/commit/c9ee9c80636eaebe14f639c6b70d4e7714d49517))
+* **extensions:** 확장 번들 설치 레이어 (Agent Plugins v1 호환) Phase 1 ([#499](https://github.com/openmake/openmake_llm/issues/499)) ([bfe6188](https://github.com/openmake/openmake_llm/commit/bfe6188a6ce80358fd9fcc5357a01b9c6e9a44d5))
+* **skills:** git-ingest 시 skill_manifests 동시 생성 — manifest 경로 근본 개선 ([#511](https://github.com/openmake/openmake_llm/issues/511)) ([f01d943](https://github.com/openmake/openmake_llm/commit/f01d9434ce8d05b97ddc62003df2b6dce00af247))
+* **web:** Settings 확장 관리 탭 — 설치 목록/구성요소 상태/번들 제거 ([#500](https://github.com/openmake/openmake_llm/issues/500)) ([5836f21](https://github.com/openmake/openmake_llm/commit/5836f21803510c9a4ff51e9af7af89ab8cb93136))
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 산출물 검증 프로브 파일(.verify_*) 검사 후 정리 ([#498](https://github.com/openmake/openmake_llm/issues/498)) ([545bff5](https://github.com/openmake/openmake_llm/commit/545bff54846f381811cf07cf08ef5ed3774c9f4c))
+* **extensions:** 거대 repo 스킬 설치 실패 — 위임 GitIngestService tree 상한 주입 ([#508](https://github.com/openmake/openmake_llm/issues/508)) ([4eb97c7](https://github.com/openmake/openmake_llm/commit/4eb97c79b54ff7457ca3526dfefd2a4618aed2db))
+* **extensions:** 채팅 설치 UX — 의도 프리필터 강제 포함 + 마켓플레이스 오호출 자가 교정 ([#505](https://github.com/openmake/openmake_llm/issues/505)) ([1176c42](https://github.com/openmake/openmake_llm/commit/1176c426315e4bb49534aa11eeae339862ef6cc2))
+* **skills:** 확장 설치 스킬 채팅 노출 4결함 — userId 전파·general 통과·manifest union ([#510](https://github.com/openmake/openmake_llm/issues/510)) ([9439a27](https://github.com/openmake/openmake_llm/commit/9439a27cf95d5e2062f6e8284bd6d1e22918c89e))
+* **web:** composer 한글 IME Enter 이중 제출 가드 ([#496](https://github.com/openmake/openmake_llm/issues/496)) ([b1ad493](https://github.com/openmake/openmake_llm/commit/b1ad493452cdb899a2dfac39bea554d1685b9766))
+
 ## [1.24.1](https://github.com/openmake/openmake_llm/compare/v1.24.0...v1.24.1) (2026-08-15)
 
 
