@@ -38,10 +38,12 @@ interface CatalogPlugin {
   category?: string;
 }
 
-/** 카탈로그 소스별 페이지 크기 — 대형 마켓플레이스(수백 개) 스크롤 방지 */
+/** 카탈로그 페이지 크기 — 대형 마켓플레이스(수백 개) 스크롤 방지 */
 const CATALOG_PAGE_SIZE = 20;
 /** category 미보유 플러그인의 필터 버킷 키 */
 const UNCATEGORIZED = "__none__";
+const CATALOG_SELECT_CLS =
+  "min-w-0 flex-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-fg outline-none focus:border-border-strong sm:max-w-[240px]";
 
 interface CatalogSource {
   id: string;
@@ -82,9 +84,35 @@ export function ExtensionsSection() {
   const [catalogInstalls, setCatalogInstalls] = useState<Record<string, GalleryInstallState>>({});
   const [catalogUrl, setCatalogUrl] = useState("");
   const [catalogBusy, setCatalogBusy] = useState<string | null>(null);
-  // 소스별 카테고리 필터·페이지 (대형 마켓플레이스 탐색용 — 미지정 시 전체/1페이지)
-  const [catalogView, setCatalogView] = useState<Record<string, { category: string; page: number }>>({});
+  // 카탈로그 단일 브라우저 — 소스/카테고리 셀렉트 + 페이지 (16개 소스 스택 대신 한 리스트)
+  const [catalogSource, setCatalogSource] = useState("");
+  const [catalogCategory, setCatalogCategory] = useState("");
+  const [catalogPage, setCatalogPage] = useState(0);
   const isAdmin = useAppStore((s) => s.auth.currentUser?.role === "admin");
+
+  // 파생값: 설치 가능 항목 평면화 → 소스 필터 → 카테고리 필터 → 페이지
+  const catalogEntries = catalog.flatMap((src) =>
+    src.plugins
+      .filter((p) => p.installable !== false)
+      .map((p) => ({ plugin: p, srcId: src.id, srcName: src.name, multiPlugin: src.plugins.length > 1 })),
+  );
+  const sourceScoped = catalogSource ? catalogEntries.filter((e) => e.srcId === catalogSource) : catalogEntries;
+  const catalogCategoryCounts = new Map<string, number>();
+  for (const e of sourceScoped) {
+    const c = e.plugin.category ?? UNCATEGORIZED;
+    catalogCategoryCounts.set(c, (catalogCategoryCounts.get(c) ?? 0) + 1);
+  }
+  const catalogCategories = [...catalogCategoryCounts.keys()].sort();
+  const catalogFiltered = catalogCategory
+    ? sourceScoped.filter((e) => (e.plugin.category ?? UNCATEGORIZED) === catalogCategory)
+    : sourceScoped;
+  const catalogTotalPages = Math.max(1, Math.ceil(catalogFiltered.length / CATALOG_PAGE_SIZE));
+  const catalogPageClamped = Math.min(catalogPage, catalogTotalPages - 1);
+  const catalogPageEntries = catalogFiltered.slice(
+    catalogPageClamped * CATALOG_PAGE_SIZE,
+    (catalogPageClamped + 1) * CATALOG_PAGE_SIZE,
+  );
+  const selectedSource = catalogSource ? catalog.find((s) => s.id === catalogSource) : undefined;
 
   const load = useCallback(async () => {
     try {
@@ -508,154 +536,155 @@ export function ExtensionsSection() {
           {catalog.length === 0 ? (
             <p className="text-xs text-muted">{t("catalog.empty")}</p>
           ) : (
-            <ul className="space-y-3">
-              {catalog.map((src) => {
-                // 설치 가능(스킬/MCP 보유) 항목만 노출 — 사전 판정은 동기화 시점에 수행됨
-                const visiblePlugins = src.plugins.filter((p) => p.installable !== false);
-                const view = catalogView[src.id] ?? { category: "", page: 0 };
-                const categoryCounts = new Map<string, number>();
-                for (const p of visiblePlugins) {
-                  const c = p.category ?? UNCATEGORIZED;
-                  categoryCounts.set(c, (categoryCounts.get(c) ?? 0) + 1);
-                }
-                const categories = [...categoryCounts.keys()].sort();
-                const filtered = view.category
-                  ? visiblePlugins.filter((p) => (p.category ?? UNCATEGORIZED) === view.category)
-                  : visiblePlugins;
-                const totalPages = Math.max(1, Math.ceil(filtered.length / CATALOG_PAGE_SIZE));
-                const page = Math.min(view.page, totalPages - 1);
-                const pagePlugins = filtered.slice(page * CATALOG_PAGE_SIZE, (page + 1) * CATALOG_PAGE_SIZE);
-                // 소규모 소스는 컨트롤 없이 기존 그대로 — 한 페이지를 넘는 소스에만 노출
-                const showControls = visiblePlugins.length > CATALOG_PAGE_SIZE;
-                return (
-                <li key={src.id} className="rounded-lg border border-border">
-                  <div className="flex items-center gap-2 border-b border-border px-3.5 py-2.5">
-                    <p className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
-                      {src.name}
-                      <span className="ml-1.5 text-xs text-muted">
-                        {t("catalog.installableCount", { count: visiblePlugins.length, total: src.plugins.length })}
-                      </span>
-                      <span className="ml-1.5 truncate font-mono text-[11px] text-muted">{src.url}</span>
-                    </p>
-                    {isAdmin && (
-                      <>
+            <div className="rounded-lg border border-border">
+              {/* 소스·카테고리 셀렉트 — 16개 소스 스택 대신 한 화면 단일 리스트 */}
+              <div className="flex flex-wrap items-center gap-2 border-b border-border px-3.5 py-2.5">
+                <select
+                  value={catalogSource}
+                  aria-label={t("catalog.sourceAria")}
+                  onChange={(e) => {
+                    setCatalogSource(e.target.value);
+                    setCatalogCategory("");
+                    setCatalogPage(0);
+                  }}
+                  className={CATALOG_SELECT_CLS}
+                >
+                  <option value="">{t("catalog.sourceAll", { count: catalogEntries.length })}</option>
+                  {catalog.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.plugins.filter((p) => p.installable !== false).length})
+                    </option>
+                  ))}
+                </select>
+                {catalogCategories.length > 1 && (
+                  <select
+                    value={catalogCategory}
+                    aria-label={t("catalog.categoryAria")}
+                    onChange={(e) => {
+                      setCatalogCategory(e.target.value);
+                      setCatalogPage(0);
+                    }}
+                    className={CATALOG_SELECT_CLS}
+                  >
+                    <option value="">{t("catalog.categoryAll", { count: sourceScoped.length })}</option>
+                    {catalogCategories.map((c) => (
+                      <option key={c} value={c}>
+                        {c === UNCATEGORIZED ? t("catalog.uncategorized") : c} ({catalogCategoryCounts.get(c)})
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {isAdmin && selectedSource && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t("catalog.syncAria")}
+                      disabled={catalogBusy === selectedSource.id}
+                      onClick={() => void syncCatalogSource(selectedSource.id)}
+                    >
+                      {catalogBusy === selectedSource.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t("catalog.removeAria")}
+                      onClick={() => void removeCatalogSource(selectedSource.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </>
+                )}
+              </div>
+              {selectedSource && (
+                <p className="truncate border-b border-border px-3.5 py-1.5 font-mono text-[11px] text-muted">
+                  {selectedSource.url}
+                  <span className="ml-1.5 font-sans">
+                    {t("catalog.installableCount", {
+                      count: sourceScoped.length,
+                      total: selectedSource.plugins.length,
+                    })}
+                  </span>
+                </p>
+              )}
+              {catalogFiltered.length === 0 ? (
+                <p className="px-3.5 py-2.5 text-xs text-muted">{t("catalog.noneInstallable")}</p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {catalogPageEntries.map((e) => {
+                    const p = e.plugin;
+                    const key = `${e.srcId}:${e.multiPlugin ? p.name : ""}`;
+                    const st = catalogInstalls[key];
+                    return (
+                      <li key={`${e.srcId}:${p.name}`} className="flex items-center gap-3 px-3.5 py-2.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm text-fg">
+                            {p.name}
+                            {p.version && <span className="ml-1.5 font-mono text-xs text-muted">v{p.version}</span>}
+                            {!catalogSource && (
+                              <span className="ml-1.5 rounded bg-surface px-1.5 py-0.5 text-[11px] text-muted">
+                                {e.srcName}
+                              </span>
+                            )}
+                          </p>
+                          {p.description && <p className="mt-0.5 truncate text-xs text-muted">{p.description}</p>}
+                        </div>
+                        {st?.state === "installed" && (
+                          <span className="shrink-0 whitespace-nowrap text-xs text-success">
+                            {st.upToDate ? t("gallery.upToDate") : st.updated ? t("gallery.updatedDone") : t("gallery.installed")}
+                          </span>
+                        )}
+                        {st?.state === "failed" && (
+                          <span className="shrink-0 whitespace-nowrap text-xs text-muted">{t("gallery.failed")}</span>
+                        )}
                         <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={t("catalog.syncAria")}
-                          disabled={catalogBusy === src.id}
-                          onClick={() => void syncCatalogSource(src.id)}
+                          variant="outline"
+                          size="sm"
+                          disabled={st?.state === "installing"}
+                          onClick={() => void installFromCatalog(e.srcId, e.multiPlugin ? p.name : undefined)}
                         >
-                          {catalogBusy === src.id ? (
+                          {st?.state === "installing" ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : (
-                            <RefreshCw className="h-4 w-4" />
+                            <Download className="h-4 w-4" />
                           )}
+                          {t("gallery.install")}
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={t("catalog.removeAria")}
-                          onClick={() => void removeCatalogSource(src.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                  {visiblePlugins.length === 0 && (
-                    <p className="px-3.5 py-2.5 text-xs text-muted">{t("catalog.noneInstallable")}</p>
-                  )}
-                  {showControls && categories.length > 1 && (
-                    <div className="border-b border-border px-3.5 py-2">
-                      <select
-                        value={view.category}
-                        aria-label={t("catalog.categoryAria")}
-                        onChange={(e) =>
-                          setCatalogView((prev) => ({ ...prev, [src.id]: { category: e.target.value, page: 0 } }))
-                        }
-                        className="w-full max-w-xs rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-fg outline-none focus:border-border-strong"
-                      >
-                        <option value="">{t("catalog.categoryAll", { count: visiblePlugins.length })}</option>
-                        {categories.map((c) => (
-                          <option key={c} value={c}>
-                            {c === UNCATEGORIZED ? t("catalog.uncategorized") : c} ({categoryCounts.get(c)})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  <ul className="divide-y divide-border">
-                    {pagePlugins.map((p) => {
-                      const key = `${src.id}:${src.plugins.length > 1 ? p.name : ""}`;
-                      const st = catalogInstalls[key];
-                      return (
-                        <li key={p.name} className="flex items-center gap-3 px-3.5 py-2.5">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm text-fg">
-                              {p.name}
-                              {p.version && <span className="ml-1.5 font-mono text-xs text-muted">v{p.version}</span>}
-                            </p>
-                            {p.description && <p className="mt-0.5 truncate text-xs text-muted">{p.description}</p>}
-                          </div>
-                          {st?.state === "installed" && (
-                            <span className="shrink-0 whitespace-nowrap text-xs text-success">
-                              {st.upToDate ? t("gallery.upToDate") : st.updated ? t("gallery.updatedDone") : t("gallery.installed")}
-                            </span>
-                          )}
-                          {st?.state === "failed" && (
-                            <span className="shrink-0 whitespace-nowrap text-xs text-muted">{t("gallery.failed")}</span>
-                          )}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={st?.state === "installing"}
-                            onClick={() => void installFromCatalog(src.id, src.plugins.length > 1 ? p.name : undefined)}
-                          >
-                            {st?.state === "installing" ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Download className="h-4 w-4" />
-                            )}
-                            {t("gallery.install")}
-                          </Button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  {showControls && totalPages > 1 && (
-                    <div className="flex items-center justify-center gap-1 border-t border-border px-3.5 py-1.5">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={t("catalog.prevPageAria")}
-                        disabled={page === 0}
-                        onClick={() =>
-                          setCatalogView((prev) => ({ ...prev, [src.id]: { ...view, page: page - 1 } }))
-                        }
-                      >
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-                      <span className="text-xs tabular-nums text-muted">
-                        {t("catalog.pageInfo", { page: page + 1, total: totalPages })}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={t("catalog.nextPageAria")}
-                        disabled={page >= totalPages - 1}
-                        onClick={() =>
-                          setCatalogView((prev) => ({ ...prev, [src.id]: { ...view, page: page + 1 } }))
-                        }
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  )}
-                </li>
-                );
-              })}
-            </ul>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {catalogTotalPages > 1 && (
+                <div className="flex items-center justify-center gap-1 border-t border-border px-3.5 py-1.5">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={t("catalog.prevPageAria")}
+                    disabled={catalogPageClamped === 0}
+                    onClick={() => setCatalogPage(catalogPageClamped - 1)}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-xs tabular-nums text-muted">
+                    {t("catalog.pageInfo", { page: catalogPageClamped + 1, total: catalogTotalPages })}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={t("catalog.nextPageAria")}
+                    disabled={catalogPageClamped >= catalogTotalPages - 1}
+                    onClick={() => setCatalogPage(catalogPageClamped + 1)}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </CardContent>

@@ -1841,7 +1841,9 @@
       "uncategorized": "未分類",
       "pageInfo": "{page} / {total}",
       "prevPageAria": "前のページ",
-      "nextPageAria": "次のページ"
+      "nextPageAria": "次のページ",
+      "sourceAria": "ソースフィルター",
+      "sourceAll": "すべてのソース ({count})"
     }
   }
 }

@@ -1841,7 +1841,9 @@
       "uncategorized": "Uncategorized",
       "pageInfo": "{page} / {total}",
       "prevPageAria": "Previous page",
-      "nextPageAria": "Next page"
+      "nextPageAria": "Next page",
+      "sourceAria": "Source filter",
+      "sourceAll": "All sources ({count})"
     }
   }
 }
