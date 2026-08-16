@@ -1,0 +1,787 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "openmake-ws-chat",
+  "description": "WS 채팅 프로토콜 계약 — SoT: packages/shared-types (WsChatRequest 송신 / WsServerEvent 수신). 클라이언트는 미지 이벤트 type 을 무시해야 한다 (forward-compat).",
+  "version": "1.0.0",
+  "definitions": {
+    "ArtifactMeta": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "lang": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "title",
+        "lang"
+      ],
+      "description": "아티팩트 메타 — 백엔드 llm/artifact-parser.ts ArtifactInfo 와 동일 계약."
+    },
+    "ChatRole": {
+      "type": "string",
+      "enum": [
+        "user",
+        "assistant",
+        "system"
+      ]
+    },
+    "McpToolResource": {
+      "type": "object",
+      "properties": {
+        "uri": {
+          "type": "string"
+        },
+        "mimeType": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uri"
+      ],
+      "description": "MCP 도구 결과의 resource content (백엔드 external-tool-exec 가 추출해 emit)."
+    },
+    "WsAttachedFile": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string",
+          "description": "텍스트 내용 (바이너리는 미전송). 클라이언트가 캡 초과 시 절단"
+        },
+        "data": {
+          "type": "string",
+          "description": "추출 대상 바이너리 문서(PDF/docx/xlsx/pptx 등)의 base64 원본. 백엔드가 텍스트로 추출해 content 를 채운다"
+        },
+        "size": {
+          "type": "number"
+        },
+        "truncated": {
+          "type": "boolean",
+          "description": "전송 전 캡으로 내용을 절단했음"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "type"
+      ],
+      "description": "첨부 텍스트 파일 (백엔드 ws-chat-handler files[] · attach-context AttachedFileInput 호환)"
+    },
+    "WsChatRequest": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "chat"
+        },
+        "message": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "$ref": "#/definitions/ChatRole"
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "role",
+              "content"
+            ]
+          }
+        },
+        "sessionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "anonSessionId": {
+          "type": "string",
+          "description": "Browser-scoped anonymous owner id for guest sessions."
+        },
+        "images": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WsAttachedFile"
+          },
+          "description": "첨부 텍스트 파일 — 백엔드가 fileContext 채널로 LLM 에 주입"
+        },
+        "webSearch": {
+          "type": "boolean"
+        },
+        "deepResearchMode": {
+          "type": "boolean"
+        },
+        "discussionMode": {
+          "type": "boolean",
+          "description": "멀티 에이전트 토론 모드"
+        },
+        "thinkingMode": {
+          "type": "boolean",
+          "description": "Sequential Thinking 모드 (UI thinkingEnabled 토글)"
+        },
+        "imageMode": {
+          "type": "boolean",
+          "description": "이미지 생성 모드 — ON 이면 메시지를 프롬프트로 이미지를 직접 생성"
+        },
+        "artifactMode": {
+          "type": "boolean",
+          "description": "아티팩트 모드 — ON 이면 모델이 <artifact> 산출물을 생성하도록 유도"
+        },
+        "style": {
+          "type": "string",
+          "enum": [
+            "concise",
+            "default",
+            "verbose"
+          ],
+          "description": "응답 스타일 — 백엔드 chat/style.ts 가 system prompt 앞에 style guard 를 prepend (concise=간결, verbose=상세)"
+        },
+        "enabledTools": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          }
+        },
+        "notebook": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "title"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "NotebookLM 노트북 컨텍스트 — composer picker 선택. 백엔드(ws-chat-handler)가 grounding 프리픽스를 주입"
+        },
+        "saveHistory": {
+          "type": "boolean",
+          "description": "개인정보: false 면 백엔드가 대화 기록 저장을 생략 (설정 페이지 토글). 기본 true"
+        },
+        "memoryLearning": {
+          "type": "boolean",
+          "description": "개인정보: false 면 메모리 학습 비활성 (saveHistory 와 독립). 기본 true"
+        },
+        "userAgentId": {
+          "type": "string",
+          "description": "커스텀 에이전트(user_agents) id — 지정 시 백엔드가 산업 에이전트 자동라우팅을 우회하고 해당 페르소나 system_prompt 를 prepend"
+        }
+      },
+      "required": [
+        "type",
+        "message"
+      ]
+    },
+    "WsServerEvent": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "token"
+            },
+            "token": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "token"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "thinking"
+            },
+            "token": {
+              "type": "string"
+            },
+            "messageId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "token"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "thinking_summary"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "messageId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "summary"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "session_created"
+            },
+            "sessionId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "sessionId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "build_id"
+            },
+            "buildId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "buildId"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "token_warning"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "message"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "debug_retained"
+            },
+            "captureId": {
+              "type": "string"
+            },
+            "expiresAt": {
+              "type": "string"
+            },
+            "ttlHours": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "type",
+            "captureId",
+            "expiresAt",
+            "ttlHours"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "system_event"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              },
+              "required": [
+                "type",
+                "message"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "payload"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "done"
+            },
+            "messageId": {
+              "type": "string"
+            },
+            "metrics": {
+              "type": "object",
+              "properties": {
+                "tokensPerSec": {
+                  "type": "string"
+                },
+                "tokenCount": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "tokensPerSec",
+                "tokenCount"
+              ],
+              "description": "백엔드 실제 페이로드(ws-chat-handler): 스트리밍 완료 시 토큰 메트릭. tokensPerSec 는 toFixed(2) 문자열."
+            },
+            "cleanedContent": {
+              "type": "string",
+              "description": "아티팩트가 있으면 raw 코드펜스가 placeholder 로 치환된 본문 — 클라가 누적 본문을 이걸로 reset."
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "aborted"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "error"
+            },
+            "message": {
+              "type": "string"
+            },
+            "errorType": {
+              "type": "string",
+              "description": "에러 분류(quota_exceeded / api_keys_exhausted / provider code 등)"
+            },
+            "retryAfter": {
+              "type": "number",
+              "description": "재시도 가능까지 남은 초(quota/키 소진)."
+            },
+            "resetTime": {
+              "type": "string",
+              "description": "키 쿨다운 해제 시각(ISO) — api_keys_exhausted."
+            },
+            "totalKeys": {
+              "type": "number"
+            },
+            "keysInCooldown": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "type",
+            "message"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "init"
+            },
+            "data": {}
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "agent_selected"
+            },
+            "agent": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "emoji": {
+                  "type": "string"
+                },
+                "phase": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "confidence": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "type",
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "agent"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "skills_activated"
+            },
+            "skillNames": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "type",
+            "skillNames"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "mcp_tool_start"
+            },
+            "toolName": {
+              "type": "string"
+            },
+            "messageId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "toolName"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "mcp_tool_result"
+            },
+            "toolName": {
+              "type": "string"
+            },
+            "resources": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/McpToolResource"
+              }
+            },
+            "messageId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "toolName"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "discussion_progress"
+            },
+            "progress": {
+              "type": "object",
+              "properties": {
+                "phase": {
+                  "type": "string",
+                  "enum": [
+                    "selecting",
+                    "discussing",
+                    "reviewing",
+                    "synthesizing",
+                    "complete"
+                  ]
+                },
+                "currentAgent": {
+                  "type": "string"
+                },
+                "agentEmoji": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "progress": {
+                  "type": "number"
+                },
+                "roundNumber": {
+                  "type": "number"
+                },
+                "totalRounds": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "phase",
+                "message",
+                "progress"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "progress"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "artifact_start"
+            },
+            "artifact": {
+              "$ref": "#/definitions/ArtifactMeta"
+            },
+            "messageId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "artifact"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "artifact_chunk"
+            },
+            "id": {
+              "type": "string"
+            },
+            "delta": {
+              "type": "string"
+            },
+            "messageId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "delta"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "artifact_end"
+            },
+            "id": {
+              "type": "string"
+            },
+            "messageId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "agent_task_progress"
+            },
+            "taskId": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "progress": {
+              "type": "number"
+            },
+            "currentTurn": {
+              "type": "number"
+            },
+            "step": {
+              "type": "object",
+              "properties": {
+                "stepType": {
+                  "type": "string"
+                },
+                "toolName": {
+                  "type": "string"
+                },
+                "preview": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "stepType"
+              ],
+              "description": "방금 기록된 스텝 요약(4-5 실시간 스트림) — \"현재 단계\" 라이브 표시용."
+            }
+          },
+          "required": [
+            "type",
+            "taskId",
+            "status",
+            "progress",
+            "currentTurn"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "research_progress"
+            },
+            "progress": {
+              "type": "object",
+              "properties": {
+                "sessionId": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "currentLoop": {
+                  "type": "number"
+                },
+                "totalLoops": {
+                  "type": "number"
+                },
+                "currentStep": {
+                  "type": "string"
+                },
+                "progress": {
+                  "type": "number"
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "required": [
+            "type",
+            "progress"
+          ]
+        }
+      ]
+    }
+  }
+}

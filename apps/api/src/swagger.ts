@@ -13,8 +13,7 @@ import { APP_VERSION } from './config/constants';
 import { createLogger } from './utils/logger';
 import { requireAuth, requireAdmin } from './auth';
 import { SWAGGER_CDN } from './config/external-services';
-import { chatPaths } from './swagger/paths-chat';
-import { platformPaths } from './swagger/paths-platform';
+import { API_DESCRIPTION, specTags, specPaths, specComponents } from './swagger/spec-core';
 
 const logger = createLogger('Swagger');
 
@@ -22,19 +21,7 @@ export const openApiSpec = {
     openapi: '3.0.3',
     info: {
         title: 'OpenMake.Ai API',
-        description: `
-AI 채팅 어시스턴트 API 문서
-
-## 기능
-- 채팅 메시지 전송 및 스트리밍 응답
-- 파일 업로드 및 문서 분석
-- 클러스터 관리
-- 사용자 인증
-
-## 인증
-대부분의 API는 JWT 토큰 인증이 필요합니다.
-\`Authorization: Bearer <token>\` 헤더를 사용하세요.
-        `,
+        description: API_DESCRIPTION,
         version: APP_VERSION,
         contact: {
             name: 'API Support',
@@ -47,38 +34,9 @@ AI 채팅 어시스턴트 API 문서
             description: '개발 서버'
         }
     ],
-    tags: [
-        { name: 'Auth', description: '인증 관련 API' },
-        { name: 'Chat', description: '채팅 관련 API' },
-        { name: 'Documents', description: '문서 업로드 및 분석' },
-        { name: 'Knowledge Base', description: 'Knowledge Base 관리 (N:M)' },
-        { name: 'Agents', description: 'AI 에이전트 관련 API' },
-        { name: 'MCP', description: 'MCP 서버 및 도구 관리' },
-        { name: 'Tools', description: '도구 API (웹 검색 등)' },
-        { name: 'Cluster', description: '클러스터 관리' },
-        { name: 'System', description: '시스템 정보 및 상태' },
-        { name: 'API Keys', description: 'API Key 관리 (외부 개발자용)' },
-        { name: 'Models', description: '모델 목록' }
-    ],
-    paths: {
-        ...chatPaths,
-        ...platformPaths,
-    },
-    components: {
-        securitySchemes: {
-            bearerAuth: {
-                type: 'http',
-                scheme: 'bearer',
-                bearerFormat: 'JWT'
-            },
-            apiKeyAuth: {
-                type: 'apiKey',
-                in: 'header',
-                name: 'X-API-Key',
-                description: 'API Key (omk_live_...) — X-API-Key 헤더 또는 Authorization: Bearer'
-            }
-        }
-    },
+    tags: specTags,
+    paths: specPaths,
+    components: specComponents,
     security: [
         { bearerAuth: [] },
         { apiKeyAuth: [] }
