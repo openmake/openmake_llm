@@ -7,23 +7,32 @@
  *
  * Endpoints (모두 requireAuth):
  *   GET    /api/users/me/extensions                     — 본인 active 설치 목록
- *   GET    /api/users/me/extensions/gallery             — 워크스페이스 갤러리 (shared 확장, Phase 3)
+ *   GET    /api/users/me/extensions/gallery             — 워크스페이스 갤러리 (shared 확장 + admin 큐레이션 카탈로그)
  *   POST   /api/users/me/extensions/gallery/:id/install — 갤러리 확장을 본인 계정으로 설치 (ingest 재실행)
+ *   POST   /api/users/me/extensions/catalog/:id/install — 카탈로그 소스의 플러그인을 본인 계정으로 설치
  *   GET    /api/users/me/extensions/:id                 — 상세 (구성요소 현재 상태 포함, 본인 소유)
  *   PATCH  /api/users/me/extensions/:id/visibility      — 공유 토글 (소유자 한정, Phase 3)
  *   POST   /api/users/me/extensions/:id/update-check    — 원격 ref 비교 업데이트 확인 (Phase 2)
  *   DELETE /api/users/me/extensions/:id                 — 제거 (구성요소 archive + soft remove, 소유자 한정)
  *
- * ⚠️ 라우트 등록 순서: '/gallery*' 가 '/:id' 보다 먼저여야 한다 (Express 순차 매칭).
+ * Admin (requireAdmin — 큐레이션 카탈로그 관리):
+ *   GET    /api/users/me/extensions/catalog/admin       — 전체 소스 목록 (disabled 포함)
+ *   POST   /api/users/me/extensions/catalog             — 소스 등록 + 스냅샷 동기화
+ *   POST   /api/users/me/extensions/catalog/:id/sync    — 스냅샷 재동기화
+ *   DELETE /api/users/me/extensions/catalog/:id         — 소스 삭제
+ *
+ * ⚠️ 라우트 등록 순서: '/gallery*'·'/catalog*' 가 '/:id' 보다 먼저여야 한다 (Express 순차 매칭).
  *
  * @see data/repositories/user-extension-repository
+ * @see data/repositories/extension-catalog-repository
  */
 import { Router, Request } from 'express';
 import { z } from 'zod';
-import { requireAuth } from '../auth/middleware';
+import { requireAuth, requireAdmin } from '../auth/middleware';
 import { validate } from '../middlewares/validation';
 import { getPool } from '../data/models/unified-database';
 import { UserExtensionRepository, type UserExtensionRow } from '../data/repositories/user-extension-repository';
+import { ExtensionCatalogRepository } from '../data/repositories/extension-catalog-repository';
 import { createLogger } from '../utils/logger';
 import { success, internalError, unauthorized, notFound, badRequest } from '../utils/api-response';
 
@@ -38,6 +47,17 @@ const visibilitySchema = z.object({
 
 const galleryInstallSchema = z.object({
     // 공유 확장이 private repo 인 경우 설치자 본인의 token (요청 한정 — DB 미저장)
+    accessToken: z.string().max(200).optional(),
+});
+
+const catalogRegisterSchema = z.object({
+    url: z.string().min(3).max(500),
+    accessToken: z.string().max(200).optional(),
+});
+
+const catalogInstallSchema = z.object({
+    // marketplace 소스면 플러그인 이름 필수, 단일 plugin.json 소스면 생략 가능
+    plugin: z.string().max(120).optional(),
     accessToken: z.string().max(200).optional(),
 });
 
@@ -96,7 +116,18 @@ export function createUserExtensionsController(): Router {
             const rows = await repo.listShared();
             // 타인 user_id 는 노출하지 않고 owned 플래그만 제공 (user_agents 관용구 동형)
             const extensions = rows.map((r) => ({ ...toPublic(r), owned: r.user_id === userId }));
-            res.json(success({ extensions }));
+            // admin 큐레이션 카탈로그 (enabled 소스만) — 실패해도 갤러리 자체는 응답 (fail-open)
+            let catalog: Array<Record<string, unknown>> = [];
+            try {
+                const catRepo = new ExtensionCatalogRepository(getPool());
+                catalog = (await catRepo.listEnabled()).map((c) => ({
+                    id: c.id, url: c.url, name: c.name, description: c.description,
+                    plugins: c.plugins, last_synced_at: c.last_synced_at,
+                }));
+            } catch (err) {
+                log.warn('catalog 조회 실패 (갤러리는 계속):', err);
+            }
+            res.json(success({ extensions, catalog }));
         } catch (err) {
             log.error('gallery 실패:', err);
             res.status(500).json(internalError('갤러리 조회 실패'));
@@ -143,6 +174,127 @@ export function createUserExtensionsController(): Router {
             const msg = err instanceof Error ? err.message : String(err);
             log.warn(`gallery install 실패: ${msg}`);
             res.status(400).json(badRequest(`갤러리 설치 실패: ${msg}`));
+        }
+    });
+
+    // ── admin 큐레이션 카탈로그 (⚠️ '/:id' 보다 먼저 등록) ─────────────────────
+
+    router.get('/catalog/admin', requireAuth, requireAdmin, async (_req, res) => {
+        try {
+            const repo = new ExtensionCatalogRepository(getPool());
+            res.json(success({ sources: await repo.listAll() }));
+        } catch (err) {
+            log.error('catalog admin list 실패:', err);
+            res.status(500).json(internalError('카탈로그 목록 조회 실패'));
+        }
+    });
+
+    router.post('/catalog', requireAuth, requireAdmin, validate(catalogRegisterSchema), async (req, res) => {
+        const userId = getUserId(req);
+        if (!userId) { res.status(401).json(unauthorized()); return; }
+        try {
+            const body = req.body as z.infer<typeof catalogRegisterSchema>;
+            const repo = new ExtensionCatalogRepository(getPool());
+            const dup = await repo.findByUrl(body.url.trim());
+            if (dup) { res.status(400).json(badRequest(`이미 등록된 소스입니다 (${dup.id})`)); return; }
+
+            const service = await buildIngestService();
+            const snapshot = await service.fetchCatalogSnapshot(body.url.trim(), body.accessToken);
+            const row = await repo.insert({
+                url: body.url.trim(),
+                name: snapshot.name,
+                description: snapshot.description,
+                plugins: snapshot.plugins,
+                addedBy: userId,
+            });
+            log.info(`카탈로그 소스 등록: ${row.id} "${row.name}" (${row.plugins.length} plugins, by=${userId})`);
+            res.json(success({ source: row }));
+            // 설명 한국어 번역 — 응답 후 백그라운드 (LLM 배치가 CF 100s 상한을 넘을 수 있어 동기 금지, fail-open)
+            void service.translateCatalogSnapshot(snapshot)
+                .then(() => repo.updateSnapshot(row.id, snapshot))
+                .catch((e) => log.warn(`catalog 번역 실패 (등록은 완료): ${e instanceof Error ? e.message : String(e)}`));
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            log.warn(`catalog 등록 실패: ${msg}`);
+            res.status(400).json(badRequest(`카탈로그 등록 실패: ${msg}`));
+        }
+    });
+
+    router.post('/catalog/:id/sync', requireAuth, requireAdmin, validate(galleryInstallSchema), async (req, res) => {
+        try {
+            const repo = new ExtensionCatalogRepository(getPool());
+            const row = await repo.getById(req.params.id);
+            if (!row) { res.status(404).json(notFound('카탈로그 소스 없음')); return; }
+            const service = await buildIngestService();
+            // accessToken(요청 한정): GitHub API 무인증 rate limit(60/hr) 회피 (2026-08-16 실측)
+            const body = req.body as z.infer<typeof galleryInstallSchema>;
+            const snapshot = await service.fetchCatalogSnapshot(row.url, body.accessToken);
+            // 기존 번역 재사용 (name+description 일치) — 재동기화 시 신규/변경분만 LLM 대상
+            const updated = await repo.updateSnapshot(row.id, snapshot);
+            log.info(`카탈로그 동기화: ${row.id} (${snapshot.plugins.length} plugins)`);
+            res.json(success({ source: updated }));
+            // 설명 한국어 번역 — 응답 후 백그라운드 (CF 100s 상한 회피, fail-open)
+            void service.translateCatalogSnapshot(snapshot, row.plugins)
+                .then(() => repo.updateSnapshot(row.id, snapshot))
+                .catch((e) => log.warn(`catalog 번역 실패 (동기화는 완료): ${e instanceof Error ? e.message : String(e)}`));
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            log.warn(`catalog 동기화 실패: ${msg}`);
+            res.status(400).json(badRequest(`카탈로그 동기화 실패: ${msg}`));
+        }
+    });
+
+    router.delete('/catalog/:id', requireAuth, requireAdmin, async (req, res) => {
+        try {
+            const repo = new ExtensionCatalogRepository(getPool());
+            const ok = await repo.remove(req.params.id);
+            if (!ok) { res.status(404).json(notFound('카탈로그 소스 없음')); return; }
+            log.info(`카탈로그 소스 삭제: ${req.params.id}`);
+            res.json(success({ removed: true }));
+        } catch (err) {
+            log.error('catalog 삭제 실패:', err);
+            res.status(500).json(internalError('카탈로그 삭제 실패'));
+        }
+    });
+
+    router.post('/catalog/:id/install', requireAuth, validate(catalogInstallSchema), async (req, res) => {
+        const userId = getUserId(req);
+        if (!userId) { res.status(401).json(unauthorized()); return; }
+        try {
+            const repo = new ExtensionCatalogRepository(getPool());
+            const source = await repo.getById(req.params.id);
+            if (!source || !source.enabled) { res.status(404).json(notFound('카탈로그 소스 없음')); return; }
+
+            const body = req.body as z.infer<typeof catalogInstallSchema>;
+            const service = await buildIngestService();
+            // 설치자 본인 계정으로 ingest — 갤러리 설치와 동일 시맨틱 (권한 상승 없음)
+            const result = await service.import({
+                userId,
+                isAdmin: false,
+                gitUrl: source.url,
+                plugin: body.plugin,
+                accessToken: body.accessToken,
+            });
+            if ('selectionRequired' in result && result.selectionRequired) {
+                const names = result.marketplace?.plugins.map(p => p.name).join(', ');
+                res.status(400).json(badRequest(`플러그인 이름을 지정하세요${names ? ` — 가능: ${names}` : ''}`));
+                return;
+            }
+            log.info(`catalog install: ${source.id}/${body.plugin ?? '(single)'} → ${result.extensionId} (user=${userId})`);
+            res.json(success({
+                extensionId: result.extensionId,
+                name: result.name,
+                version: result.version,
+                updated: result.updated ?? false,
+                upToDate: (result.upToDate ?? false) || result.deduped,
+                skills: result.skills,
+                mcpServers: result.mcpServers,
+                validationWarnings: result.validationWarnings,
+            }));
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            log.warn(`catalog install 실패: ${msg}`);
+            res.status(400).json(badRequest(`카탈로그 설치 실패: ${msg}`));
         }
     });
 

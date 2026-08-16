@@ -16,9 +16,10 @@ describe('repo-scanner (extension)', () => {
             entry('b/.claude-plugin/plugin.json'),
             entry('README.md'),
             entry('some-plugin.json'),   // suffix 불일치 — 매칭 안 됨
+            entry('gemini-extension.json'),  // Gemini CLI 확장 매니페스트 — 매칭됨
         ];
         const hits = scanForExtensionManifests(tree).map(c => c.path);
-        expect(hits).toEqual(['plugin.json', 'packs/a/plugin.json', 'b/.claude-plugin/plugin.json']);
+        expect(hits).toEqual(['plugin.json', 'packs/a/plugin.json', 'b/.claude-plugin/plugin.json', 'gemini-extension.json']);
     });
 
     it('resolveExtensionRoot: root / 서브디렉토리 / .claude-plugin 레이아웃', () => {
@@ -337,6 +338,54 @@ describe('ExtensionIngestService', () => {
             const svc = makeService();
             await expect(svc.import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar', plugin: 'nope' }))
                 .rejects.toThrow('PLUGIN_NOT_IN_MARKETPLACE');
+        });
+    });
+
+    describe('fetchCatalogSnapshot 교차 저장소 판정', () => {
+        const MARKETPLACE_X = JSON.stringify({
+            name: 'x-market',
+            plugins: [
+                { name: 'local', source: './local' },
+                { name: 'ext-ok', source: { source: 'git-subdir', url: 'https://github.com/ext/skillrepo.git' } },
+                { name: 'ext-gone', source: { source: 'git-subdir', url: 'https://github.com/ext/gone.git' } },
+            ],
+        });
+
+        beforeEach(() => {
+            mockFetcher.fetchFile.mockImplementation(async (_o, _r, _s, path) => {
+                if (path === '.claude-plugin/marketplace.json') return MARKETPLACE_X;
+                throw new Error(`UPSTREAM_FETCH_FAIL: 404 ${path}`);
+            });
+            mockFetcher.resolveRef.mockImplementation(async (owner, repo) => {
+                if (owner === 'foo' && repo === 'bar') return 'abc123';
+                if (owner === 'ext' && repo === 'skillrepo') return 'def456';
+                throw new Error(`REPO_NOT_FOUND: /repos/${owner}/${repo}`);
+            });
+            mockFetcher.listTree.mockImplementation(async (owner, repo) => {
+                if (owner === 'foo' && repo === 'bar') return treeOf('.claude-plugin/marketplace.json', 'local/skills/a/SKILL.md');
+                if (owner === 'ext' && repo === 'skillrepo') return treeOf('skills/y/SKILL.md');
+                throw new Error(`REPO_NOT_FOUND: /repos/${owner}/${repo}`);
+            });
+        });
+
+        it('accessToken 있으면 교차 저장소 프로브 — 스킬 보유 true / 소실 repo false', async () => {
+            const svc = makeService();
+            const r = await svc.fetchCatalogSnapshot('foo/bar', 'gh-token');
+            const byName = Object.fromEntries(r.plugins.map(p => [p.name, p.installable]));
+            expect(byName['local']).toBe(true);
+            expect(byName['ext-ok']).toBe(true);
+            expect(byName['ext-gone']).toBe(false);
+        });
+
+        it('accessToken 없으면 교차 저장소는 판정 미상 (installable undefined) 유지', async () => {
+            const svc = makeService();
+            const r = await svc.fetchCatalogSnapshot('foo/bar');
+            const byName = Object.fromEntries(r.plugins.map(p => [p.name, p.installable]));
+            expect(byName['local']).toBe(true);
+            expect(byName['ext-ok']).toBeUndefined();
+            expect(byName['ext-gone']).toBeUndefined();
+            // 외부 repo 로의 resolveRef 시도 자체가 없어야 한다 (무인증 rate limit 보호)
+            expect(mockFetcher.resolveRef.mock.calls.every(c => c[0] === 'foo')).toBe(true);
         });
     });
 

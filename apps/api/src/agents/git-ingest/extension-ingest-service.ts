@@ -27,6 +27,10 @@ import { parseGitUrl } from '../../schemas/git-ingest.schema';
 import type { ImportExtensionFromGitInput } from '../../schemas/extension-ingest.schema';
 import { GitFetcher } from './git-fetcher';
 import { ArchiveFetcher, isArchiveUrl, archivePseudoRepo } from './archive-fetcher';
+import { fetchCatalogSnapshot as fetchCatalogSnapshotImpl, buildSkillDiscoveryPattern, type CatalogSnapshot } from './catalog-snapshot';
+import { translateCatalogDescriptions } from './catalog-translator';
+// 기존 import 경로 호환 재노출 (테스트 등이 이 모듈에서 import)
+export { buildSkillDiscoveryPattern } from './catalog-snapshot';
 import { scanForExtensionManifests, scanForMarketplaceManifests, resolveExtensionRoot, type ManifestCandidate } from './repo-scanner';
 import {
     validateExtensionManifest,
@@ -151,14 +155,14 @@ export class ExtensionIngestService {
         let sha = await fetcher.resolveRef(owner, repo, input.gitRef ?? 'HEAD');
 
         // (3) tree
-        let tree = await fetcher.listTree(owner, repo, sha, SKILL_CREATOR.gitMaxTreeEntries);
+        let tree = await fetcher.listTree(owner, repo, sha, EXTENSION_INGEST.maxTreeEntries);
         let candidate: ManifestCandidate | undefined;
 
         // (3-a) marketplace.json 인덱스 (gitPath 미지정 시) — Claude Code 마켓플레이스 저장소
         if (!input.gitPath) {
             const mkCandidates = scanForMarketplaceManifests(tree.entries);
             if (mkCandidates.length > 0) {
-                const mkRaw = await fetcher.fetchFile(owner, repo, sha, mkCandidates[0].path, EXTENSION_INGEST.manifestMaxBytes);
+                const mkRaw = await fetcher.fetchFile(owner, repo, sha, mkCandidates[0].path, EXTENSION_INGEST.marketplaceMaxBytes);
                 const mk = parseMarketplaceFile(mkRaw);
                 if (mk.ok && !input.plugin) {
                     // 목록만 반환 — plugin 인자로 재호출 유도
@@ -191,7 +195,7 @@ export class ExtensionIngestService {
                     // 고정 ref (릴리스 태그) 또는 저장소 변경 시 tree 재조회
                     if (entry.ref || effectiveGitUrl !== input.gitUrl) {
                         sha = await fetcher.resolveRef(owner, repo, entry.ref ?? 'HEAD');
-                        tree = await fetcher.listTree(owner, repo, sha, SKILL_CREATOR.gitMaxTreeEntries);
+                        tree = await fetcher.listTree(owner, repo, sha, EXTENSION_INGEST.maxTreeEntries);
                     }
                     if (entry.ref) effectiveTrackingRef = entry.ref;
                     const prefix = entry.path ? `${entry.path}/` : '';
@@ -486,6 +490,29 @@ export class ExtensionIngestService {
         return { updateAvailable: true, currentRef: input.currentRef, latestRef, latestVersion };
     }
 
+    /**
+     * 카탈로그 스냅샷 (admin 큐레이션 갤러리) — catalog-snapshot.ts 위임.
+     * 판정 규칙·형식은 그 모듈 doc 참고 (600줄 파일 가드 분할).
+     */
+    async fetchCatalogSnapshot(url: string, accessToken?: string): Promise<CatalogSnapshot> {
+        return fetchCatalogSnapshotImpl({
+            fetcherFactory: this.opts.fetcherFactory,
+            archiveFetcherFor: (u) => this.makeArchiveFetcher(u),
+        }, url, accessToken);
+    }
+
+    /**
+     * 카탈로그 설명 한국어 번역 — catalog-translator.ts 위임 (fail-open, snapshot mutate).
+     * previous 를 주면 (name, description) 일치 항목의 기존 번역을 재사용한다.
+     */
+    async translateCatalogSnapshot(
+        snapshot: CatalogSnapshot,
+        previous?: Array<{ name: string; description?: string; description_ko?: string }>,
+    ): Promise<void> {
+        const llm = this.opts.llmClientFactory(SKILL_CREATOR.authorModel);
+        await translateCatalogDescriptions(llm, snapshot.plugins, previous);
+    }
+
     /** mcp_servers (user_id, name) unique 충돌 회피 — McpServerIngestService 관용구 동형. */
     private async resolveUniqueServerName(userId: string, name: string): Promise<string> {
         const base = name.slice(0, 100);
@@ -527,17 +554,4 @@ export class ExtensionIngestService {
             deduped,
         };
     }
-}
-
-function escapeRegExp(s: string): string {
-    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * 확장 루트 기준 SKILL.md 탐지 패턴 (순수 함수 — 테스트용 export).
- * 매칭: skills/<dir>/SKILL.md (Agent Plugins v1) · skill/SKILL.md (Qwen-MM-Plugins 등
- * 단수 레이아웃) · skills/SKILL.md. 하위 디렉토리 중첩은 1단계까지만.
- */
-export function buildSkillDiscoveryPattern(root: string): RegExp {
-    return new RegExp(`^${escapeRegExp(root)}skills?/(?:[^/]+/)?SKILL\\.md$`, 'i');
 }
