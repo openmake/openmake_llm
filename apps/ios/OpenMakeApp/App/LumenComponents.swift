@@ -56,6 +56,41 @@ struct ModeChip: View {
     }
 }
 
+struct SkillChip: View {
+    let name: String
+
+    var body: some View {
+        Label(name, systemImage: "sparkles")
+            .font(.system(size: 11, weight: .medium))
+            .lineLimit(1)
+            .foregroundStyle(Lumen.muted)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Lumen.surface2, in: Capsule())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("사용 스킬 \(name)")
+    }
+}
+
+struct ActiveSkillBar: View {
+    let skills: [String]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(skills, id: \.self) { skill in
+                    SkillChip(name: skill)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        }
+        .background(Lumen.bg)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("사용 스킬")
+    }
+}
+
 #if DEBUG
 struct DesignSystemShowcase: View {
     @State private var showDrawer = ProcessInfo.processInfo.environment["OPENMAKE_DESIGN_DRAWER"] == "1"
@@ -80,6 +115,11 @@ struct DesignSystemShowcase: View {
                             ModeChip(label: "에이전트 작업", systemImage: "wand.and.stars")
                             ModeChip(label: "딥리서치", systemImage: "magnifyingglass.circle")
                         }
+                    }
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("사용 스킬")
+                            .font(.headline)
+                        ActiveSkillBar(skills: ["web-search", "report", "artifact"])
                     }
                     AgentTaskCard(task: sampleTask, latestStep: sampleStep)
                     ArtifactCard(document: sampleArtifact) {

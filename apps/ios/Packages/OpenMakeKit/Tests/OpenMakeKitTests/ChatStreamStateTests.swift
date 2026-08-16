@@ -74,6 +74,23 @@ final class ChatStreamStateTests: XCTestCase {
         XCTAssertEqual(state.activityKind, .research)
     }
 
+    func testActivatedSkillsAreVisibleUntilNextQuestion() {
+        var state = ChatStreamState()
+        state.begin()
+        state.apply(event(#"{"type":"skills_activated","skillNames":[" web-search ","report","web-search",""]}"#))
+
+        XCTAssertEqual(state.activeSkillNames, ["web-search", "report"])
+        XCTAssertEqual(state.statusText, "web-search, report 적용 중")
+        XCTAssertEqual(state.activityKind, .agent)
+
+        state.apply(event(#"{"type":"token","token":"결과"}"#))
+        XCTAssertNil(state.statusText)
+        XCTAssertEqual(state.activeSkillNames, ["web-search", "report"])
+
+        state.begin()
+        XCTAssertTrue(state.activeSkillNames.isEmpty)
+    }
+
     func testAgentTaskProgressUsesStepPreviewWithoutMultilineOutput() {
         var state = ChatStreamState()
         state.apply(event(#"{"type":"agent_task_progress","taskId":"task-1","currentTurn":2,"status":"running","step":{"stepType":"tool_result","toolName":"web_search","preview":"공식 문서를\n확인했어요"}}"#))

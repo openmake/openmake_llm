@@ -56,11 +56,13 @@ public struct ChatStreamState: Sendable {
     /// 진행 상태 한 줄 (도구 실행·리서치/토론 진행 등) — token 수신 시 자동 해제
     public private(set) var statusText: String?
     public private(set) var activityKind: ChatActivityKind?
+    public private(set) var activeSkillNames: [String] = []
     public private(set) var artifacts: [ChatArtifact] = []
 
     public init() {}
 
     public mutating func begin() {
+        activeSkillNames = []
         statusText = "요청을 분석하고 있어요"
         activityKind = .preparing
     }
@@ -86,7 +88,12 @@ public struct ChatStreamState: Sendable {
                 setActivity("에이전트가 작업을 준비하고 있어요", kind: .agent)
             }
         case .skillsActivated:
-            setActivity("필요한 기능을 준비하고 있어요", kind: .agent)
+            activeSkillNames = normalizedSkillNames(event.skillNames ?? [])
+            if activeSkillNames.isEmpty {
+                setActivity("필요한 기능을 준비하고 있어요", kind: .agent)
+            } else {
+                setActivity("\(activeSkillNames.joined(separator: ", ")) 적용 중", kind: .agent)
+            }
         case .agentTaskProgress:
             if let preview = event.step?.preview, !preview.isEmpty {
                 setActivity(preview, kind: .agent)
@@ -172,5 +179,14 @@ public struct ChatStreamState: Sendable {
             return "결과물을 작성하고 있어요"
         }
         return "\(toolName) 도구를 사용하고 있어요"
+    }
+
+    private func normalizedSkillNames(_ names: [String]) -> [String] {
+        var seen = Set<String>()
+        return names.compactMap { name in
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, seen.insert(trimmed).inserted else { return nil }
+            return trimmed
+        }
     }
 }

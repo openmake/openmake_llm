@@ -19,6 +19,7 @@ final class ChatSessionModel {
     /// 도구/리서치/토론 진행 한 줄 (ChatStreamState.statusText)
     private(set) var statusText: String?
     private(set) var activityKind: ChatActivityKind = .preparing
+    private(set) var activeSkills: [String] = []
     private(set) var artifacts: [ArtifactDocument] = []
     private(set) var activeAgentTask: AgentTaskDetail?
 
@@ -47,6 +48,7 @@ final class ChatSessionModel {
         modes: AppModel.ChatModes = .init()
     ) async {
         errorMessage = nil
+        activeSkills = []
         messages.append(.init(
             role: .user, content: text, model: nil, tokens: nil,
             images: images.isEmpty ? nil : images, created_at: nil))
@@ -136,6 +138,7 @@ final class ChatSessionModel {
         isThinking = state.isThinking
         statusText = state.statusText
         activityKind = state.activityKind ?? .preparing
+        activeSkills = state.activeSkillNames
         for artifact in state.artifacts {
             let document = ArtifactDocument(streamed: artifact)
             if let index = artifacts.firstIndex(where: { $0.id == document.id }) {

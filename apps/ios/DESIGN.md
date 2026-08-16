@@ -61,6 +61,8 @@ System red is reserved for destructive actions and errors.
 
 - `ActivityStatusLine`: exactly one short line with a pulsing dot. States: preparing, agent, tool, research, artifact, finalizing, paused, and error. New activity replaces the previous line.
 - `ModeChip`: active composer mode with symbol, label, accent-soft background, and an accessibility value of “켜짐”.
+- `SkillChip`: a non-interactive label for a skill selected for the current question, using the `sparkles` symbol and secondary surface colors.
+- `ActiveSkillBar`: a horizontally scrollable row of `SkillChip` values above the composer. It resets when a new question is sent and remains visible after streaming completes until the next question.
 - `AgentTaskCard`: goal, status, progress, current/max turn, latest step, and relevant action. Completed cards reveal the result; failed cards reveal the error.
 - `ArtifactCard`: kind symbol, title, language/kind metadata, and open action. Streaming artifacts show a progress state without presenting partial HTML as executable content.
 
@@ -78,7 +80,7 @@ System red is reserved for destructive actions and errors.
 
 - **Empty:** explain the next action in one sentence and provide a direct primary action where useful.
 - **Loading:** retain navigation and show a single `ActivityStatusLine`; do not replace the entire screen unless no prior content exists.
-- **Streaming:** show the assistant header, current status until the first answer token, then the partial answer. The status line must disappear when output begins.
+- **Streaming:** show the assistant header, current status until the first answer token, then the partial answer. When skills are activated, the status names them with “적용 중” and `ActiveSkillBar` keeps the same context visible after output begins. The status line must disappear when output begins.
 - **Completed:** stop motion, use success color only for a durable completion label, and surface artifacts next to the response that produced them.
 - **Paused:** use warning color and show the approval or resume action.
 - **Failed:** show a plain-language error and retry/resume only when the server state supports it.
@@ -87,6 +89,7 @@ System red is reserved for destructive actions and errors.
 ## 8. Accessibility, motion, and content rules
 
 - Every icon-only button has an accessibility label. Decorative dots are hidden from VoiceOver; status text carries the semantic announcement.
+- Skill chips announce “사용 스킬” followed by the skill name; the horizontal bar remains readable without requiring interaction.
 - Important status changes use polite live announcements and never repeat on every token.
 - Honor Reduce Motion: replace dot scaling with a static dot and avoid automatic drawer or progress animations.
 - Maintain readable contrast in both appearances; never encode task state by color alone.

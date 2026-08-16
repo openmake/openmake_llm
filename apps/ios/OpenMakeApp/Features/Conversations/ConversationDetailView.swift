@@ -157,6 +157,11 @@ private struct ChatTranscriptView: View {
                     .padding(.bottom, 4)
             }
 
+            if !chat.activeSkills.isEmpty {
+                ActiveSkillBar(skills: chat.activeSkills)
+                    .transition(.opacity)
+            }
+
             ChatComposer(
                 draft: $draft,
                 photoItems: $photoItems,
