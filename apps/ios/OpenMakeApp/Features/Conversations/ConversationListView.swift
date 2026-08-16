@@ -1,4 +1,4 @@
-// 대화 목록 — ChatGPT 스타일: 검색·새 대화·설정, pull-to-refresh·스와이프 삭제
+// 대화 목록 — LUMEN 시안 ② : 워드마크 네비 · 도트 메타 · accent FAB
 import SwiftUI
 import OpenMakeKit
 
@@ -20,54 +20,77 @@ struct ConversationListView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if let errorMessage {
-                    ContentUnavailableView(
-                        "불러오기 실패", systemImage: "wifi.exclamationmark",
-                        description: Text(errorMessage))
-                } else if sessions.isEmpty && !isLoading {
-                    ContentUnavailableView(
-                        "대화가 없습니다", systemImage: "bubble.left.and.bubble.right",
-                        description: Text("웹에서 시작한 대화도 여기 표시됩니다"))
-                } else {
-                    List {
-                        ForEach(filtered, id: \.id) { session in
-                            NavigationLink(value: session) {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(session.title)
-                                        .font(.body)
-                                        .lineLimit(1)
-                                    Text("\(session.model) · 메시지 \(session.messageCount)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
+            ZStack(alignment: .bottomTrailing) {
+                Group {
+                    if let errorMessage {
+                        ContentUnavailableView(
+                            "불러오기 실패", systemImage: "wifi.exclamationmark",
+                            description: Text(errorMessage))
+                    } else if sessions.isEmpty && !isLoading {
+                        ContentUnavailableView(
+                            "대화가 없습니다", systemImage: "bubble.left.and.bubble.right",
+                            description: Text("웹에서 시작한 대화도 여기 표시됩니다"))
+                    } else {
+                        List {
+                            ForEach(filtered, id: \.id) { session in
+                                NavigationLink(value: session) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(session.title)
+                                            .font(.system(size: 15, weight: .semibold))
+                                            .foregroundStyle(Lumen.fg)
+                                            .lineLimit(1)
+                                        HStack(spacing: 6) {
+                                            LumenDot(size: 6)
+                                            Text("\(shortModel(session.model)) · 메시지 \(session.messageCount)")
+                                                .font(.caption)
+                                                .foregroundStyle(Lumen.muted)
+                                                .lineLimit(1)
+                                        }
+                                    }
+                                    .padding(.vertical, 4)
                                 }
-                                .padding(.vertical, 2)
+                                .listRowBackground(Lumen.bg)
+                                .listRowSeparatorTint(Lumen.border)
+                            }
+                            .onDelete { offsets in
+                                Task { await delete(at: offsets) }
                             }
                         }
-                        .onDelete { offsets in
-                            Task { await delete(at: offsets) }
-                        }
+                        .listStyle(.plain)
+                        .scrollContentBackground(.hidden)
                     }
-                    .listStyle(.plain)
                 }
+
+                Button {
+                    showNewChat = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 21, weight: .medium))
+                        .foregroundStyle(Lumen.accentFg)
+                        .frame(width: 52, height: 52)
+                        .background(Lumen.accent, in: Circle())
+                        .shadow(color: Lumen.accent.opacity(0.35), radius: 10, y: 4)
+                }
+                .padding(.trailing, 18)
+                .padding(.bottom, 10)
+                .accessibilityLabel("새 대화")
             }
-            .navigationTitle("OpenMake")
-            .searchable(text: $searchText, prompt: "대화 검색")
-            .navigationDestination(for: OpenMakeClient.SessionSummary.self) { session in
-                ConversationDetailView(session: session)
-            }
+            .background(Lumen.bg)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("새 대화", systemImage: "square.and.pencil") {
-                        showNewChat = true
-                    }
+                ToolbarItem(placement: .principal) {
+                    Wordmark(size: 18)
                 }
                 ToolbarItem(placement: .topBarLeading) {
                     Button("설정", systemImage: "gearshape") {
                         showSettings = true
                     }
+                    .tint(Lumen.fg2)
                 }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $searchText, prompt: "대화 검색")
+            .navigationDestination(for: OpenMakeClient.SessionSummary.self) { session in
+                ConversationDetailView(session: session)
             }
             .navigationDestination(isPresented: $showNewChat) {
                 ConversationDetailView(session: nil)
@@ -89,6 +112,12 @@ struct ConversationListView: View {
                 #endif
             }
         }
+        .tint(Lumen.accent)
+    }
+
+    /// "local-llm:qwen3.6-35b-a3b" → "qwen3.6-35b-a3b" (provider prefix 제거)
+    private func shortModel(_ model: String) -> String {
+        model.split(separator: ":").last.map(String.init) ?? model
     }
 
     private func load() async {

@@ -1,4 +1,4 @@
-// 로그인 화면 (MVP — 이메일/비밀번호 + Google OAuth)
+// 로그인 — LUMEN 시안 ① (openmake-ios-lumen/index.html)
 import SwiftUI
 import AuthenticationServices
 import OpenMakeKit
@@ -13,24 +13,34 @@ struct LoginView: View {
     @State private var providers: [String] = []
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 12) {
             Spacer()
-            Image(systemName: "bubble.left.and.bubble.right.fill")
-                .font(.system(size: 44))
-                .foregroundStyle(.tint)
-            Text("OpenMake")
-                .font(.largeTitle.bold())
+
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Lumen.accent)
+                .frame(width: 52, height: 52)
+                .overlay(Circle().fill(Lumen.accentFg).frame(width: 14, height: 14))
+                .shadow(color: Lumen.accent.opacity(0.3), radius: 12, y: 4)
+                .padding(.bottom, 6)
+
+            Wordmark(size: 26)
+            Text("나의 서버, 나의 AI")
+                .font(.footnote)
+                .foregroundStyle(Lumen.muted)
+                .padding(.bottom, 16)
 
             VStack(spacing: 12) {
-                TextField("이메일", text: $email)
-                    .textContentType(.emailAddress)
-                    .keyboardType(.emailAddress)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .textFieldStyle(.roundedBorder)
-                SecureField("비밀번호", text: $password)
-                    .textContentType(.password)
-                    .textFieldStyle(.roundedBorder)
+                lumenField {
+                    TextField("이메일", text: $email)
+                        .textContentType(.emailAddress)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+                lumenField {
+                    SecureField("비밀번호", text: $password)
+                        .textContentType(.password)
+                }
             }
 
             if let errorMessage {
@@ -42,38 +52,82 @@ struct LoginView: View {
             Button {
                 Task { await submit() }
             } label: {
-                if isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                } else {
-                    Text("로그인")
-                        .frame(maxWidth: .infinity)
+                Group {
+                    if isLoading {
+                        ProgressView().tint(Lumen.accentFg)
+                    } else {
+                        Text("로그인").fontWeight(.semibold)
+                    }
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Lumen.accent, in: RoundedRectangle(cornerRadius: 14))
+                .foregroundStyle(Lumen.accentFg)
             }
-            .buttonStyle(.borderedProminent)
             .disabled(isLoading || email.isEmpty || password.isEmpty)
+            .opacity(email.isEmpty || password.isEmpty ? 0.5 : 1)
 
             if providers.contains("google") {
+                HStack(spacing: 10) {
+                    Rectangle().fill(Lumen.border).frame(height: 1)
+                    Text("또는").font(.caption2).foregroundStyle(Lumen.faint)
+                    Rectangle().fill(Lumen.border).frame(height: 1)
+                }
+                .padding(.vertical, 2)
+
                 Button {
                     Task { await googleLogin() }
                 } label: {
-                    Label("Google로 로그인", systemImage: "globe")
+                    Text("Google로 계속하기")
+                        .fontWeight(.medium)
                         .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Lumen.surface, in: RoundedRectangle(cornerRadius: 14))
+                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Lumen.border))
+                        .foregroundStyle(Lumen.fg2)
                 }
-                .buttonStyle(.bordered)
                 .disabled(isLoading)
             }
 
             Spacer()
+            Spacer()
         }
-        .padding(24)
+        .padding(.horizontal, 24)
+        .background(Lumen.bg)
         .task {
             providers = (try? await model.client.oauthProviders()) ?? []
         }
     }
 
-    /// Google OAuth (축 2 exchange code 흐름) —
-    /// ASWebAuthenticationSession → `openmake://auth/callback?code=` → 토큰 교환
+    private func lumenField(@ViewBuilder content: () -> some View) -> some View {
+        content()
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .background(Lumen.surface, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Lumen.border))
+    }
+
+    private func submit() async {
+        isLoading = true
+        defer { isLoading = false }
+        errorMessage = nil
+        do {
+            try await model.login(email: email, password: password)
+        } catch let error as OpenMakeAPIError {
+            switch error {
+            case .server(_, _, let message):
+                errorMessage = message ?? "로그인에 실패했습니다"
+            case .notAuthenticated:
+                errorMessage = "로그인에 실패했습니다"
+            case .invalidResponse:
+                errorMessage = "서버 응답을 처리할 수 없습니다"
+            }
+        } catch {
+            errorMessage = "네트워크 오류: \(error.localizedDescription)"
+        }
+    }
+
+    /// Google OAuth (축 2 exchange code 흐름)
     private func googleLogin() async {
         isLoading = true
         defer { isLoading = false }
@@ -102,26 +156,6 @@ struct LoginView: View {
             }
         } catch {
             errorMessage = "로그인에 실패했습니다: \(error.localizedDescription)"
-        }
-    }
-
-    private func submit() async {
-        isLoading = true
-        defer { isLoading = false }
-        errorMessage = nil
-        do {
-            try await model.login(email: email, password: password)
-        } catch let error as OpenMakeAPIError {
-            switch error {
-            case .server(_, _, let message):
-                errorMessage = message ?? "로그인에 실패했습니다"
-            case .notAuthenticated:
-                errorMessage = "로그인에 실패했습니다"
-            case .invalidResponse:
-                errorMessage = "서버 응답을 처리할 수 없습니다"
-            }
-        } catch {
-            errorMessage = "네트워크 오류: \(error.localizedDescription)"
         }
     }
 }

@@ -16,6 +16,9 @@ struct MarkdownText: View {
                 switch segment {
                 case .text(let text):
                     Text(inlineAttributed(text))
+                        .font(.system(size: 15))
+                        .lineSpacing(3)
+                        .foregroundStyle(Lumen.fg)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 case .code(let language, let body):
@@ -81,29 +84,30 @@ struct CodeBlockView: View {
             HStack {
                 Text(language ?? "code")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Lumen.muted)
                 Spacer()
                 Button {
                     UIPasteboard.general.string = code
                 } label: {
                     Image(systemName: "doc.on.doc")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Lumen.muted)
                 }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .background(.fill.quaternary)
+            .background(Lumen.surface2)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(code)
                     .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(Lumen.fg2)
                     .textSelection(.enabled)
                     .padding(12)
             }
         }
-        .background(.fill.quinary)
+        .background(Lumen.surface)
         .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.separator.opacity(0.5)))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Lumen.border))
     }
 }

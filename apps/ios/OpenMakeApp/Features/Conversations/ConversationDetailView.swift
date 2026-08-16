@@ -1,4 +1,4 @@
-// 대화 화면 — ChatGPT 스타일: assistant 전체폭 마크다운, user 버블, 캡슐 컴포저 + 모드 칩
+// 대화 화면 — LUMEN 시안 ③④ : 도트 헤더 · user 버블(테일) · 캡슐 컴포저 · 모드 칩
 import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
@@ -20,13 +20,25 @@ struct ConversationDetailView: View {
                 ProgressView()
             }
         }
-        .navigationTitle(session?.title ?? "새 대화")
-        .navigationBarTitleDisplayMode(.inline)
+        .background(Lumen.bg)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                VStack(spacing: 1) {
+                    Text(session?.title ?? "새 대화")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Lumen.fg)
+                        .lineLimit(1)
+                    Text(activeModelName)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Lumen.muted)
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 ModelAgentMenu()
+                    .tint(Lumen.fg2)
             }
         }
+        .navigationBarTitleDisplayMode(.inline)
         .task {
             if chat == nil {
                 let chatModel = ChatSessionModel(
@@ -40,7 +52,7 @@ struct ConversationDetailView: View {
                 if session == nil,
                    let message = ProcessInfo.processInfo.environment["OPENMAKE_UITEST_MESSAGE"],
                    !message.isEmpty, chatModel.messages.isEmpty {
-                    await chatModel.send(message, model: model.selectedModelId)
+                    await chatModel.send(message, model: model.selectedModelId, modes: model.modes)
                 }
                 #endif
             }
@@ -48,6 +60,16 @@ struct ConversationDetailView: View {
         .onDisappear {
             chat?.teardown()
         }
+    }
+
+    private var activeModelName: String {
+        let full = model.selectedModelId ?? model.modelCatalog?.defaultModel ?? ""
+        let short = full.split(separator: ":").last.map(String.init) ?? full
+        if model.selectedAgentId != nil,
+           let agent = model.agents.first(where: { $0.id == model.selectedAgentId }) {
+            return "\(short) · \(agent.name)"
+        }
+        return short.isEmpty ? "OpenMake" : short
     }
 }
 
@@ -142,7 +164,6 @@ private struct ChatTranscriptView: View {
                 isStreaming: chat.isStreaming,
                 onSubmit: submit)
         }
-        .background(Color(.systemBackground))
         .fileImporter(
             isPresented: $showFileImporter,
             allowedContentTypes: [.pdf, .plainText, .commaSeparatedText, .json, .data],
@@ -166,13 +187,14 @@ private struct ChatTranscriptView: View {
                     }
 
                     if let status = chat.statusText {
-                        StatusLine(icon: "gearshape.2", text: status)
+                        StatusLine(text: status, color: Lumen.success)
                     }
                     if chat.isThinking {
-                        StatusLine(icon: "brain", text: "생각 중…")
+                        StatusLine(text: "생각 중…", color: Lumen.warn)
                     }
                     if !chat.streamingText.isEmpty {
-                        VStack(alignment: .leading, spacing: 0) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            AssistantHead()
                             MarkdownText(content: chat.streamingText + " ▍")
                         }
                     }
@@ -246,7 +268,21 @@ private struct ChatTranscriptView: View {
     }
 }
 
-/// ChatGPT 스타일 메시지 행 — user 는 우측 버블, assistant 는 전체폭 마크다운
+/// assistant 응답 헤더 — 시그니처 도트 + 워드마크 캡션
+private struct AssistantHead: View {
+    var pulsing = true
+
+    var body: some View {
+        HStack(spacing: 6) {
+            LumenDot(pulsing: pulsing)
+            Text("OpenMake")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Lumen.muted)
+        }
+    }
+}
+
+/// LUMEN 메시지 행 — user 는 테일 버블(우측), assistant 는 도트 헤더 + 전체폭 마크다운
 private struct MessageRow: View {
     let message: OpenMakeClient.ChatMessage
 
@@ -258,38 +294,46 @@ private struct MessageRow: View {
                     if let images = message.images, !images.isEmpty {
                         Text("🖼️ 사진 \(images.count)장")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Lumen.muted)
                     }
                     Text(message.content)
+                        .font(.system(size: 15))
                         .textSelection(.enabled)
+                        .foregroundStyle(Lumen.fg)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 9)
-                        .background(.fill.secondary, in: RoundedRectangle(cornerRadius: 18))
+                        .background(
+                            Lumen.surface2,
+                            in: UnevenRoundedRectangle(
+                                topLeadingRadius: 18, bottomLeadingRadius: 18,
+                                bottomTrailingRadius: 4, topTrailingRadius: 18))
                 }
             }
         } else {
-            MarkdownText(content: message.content)
+            VStack(alignment: .leading, spacing: 6) {
+                AssistantHead(pulsing: false)
+                MarkdownText(content: message.content)
+            }
         }
     }
 }
 
 private struct StatusLine: View {
-    let icon: String
     let text: String
+    var color: Color = Lumen.accent
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.caption)
+        HStack(spacing: 7) {
+            LumenDot(color: color, size: 6, pulsing: true)
             Text(text)
-                .font(.caption)
+                .font(.system(size: 12))
+                .foregroundStyle(Lumen.muted)
         }
-        .foregroundStyle(.secondary)
         .transition(.opacity)
     }
 }
 
-/// 캡슐형 컴포저 — + 메뉴(첨부·모드 토글), 활성 모드 칩, 전송 버튼
+/// LUMEN 컴포저 — accent-soft + 버튼, surface 입력 카드, 모드 칩(도트)
 private struct ChatComposer: View {
     @Environment(AppModel.self) private var model
     @Binding var draft: String
@@ -300,13 +344,17 @@ private struct ChatComposer: View {
     let isStreaming: Bool
     let onSubmit: () -> Void
 
+    private var canSend: Bool {
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isStreaming
+    }
+
     var body: some View {
         @Bindable var model = model
         VStack(spacing: 8) {
             attachmentChips
             modeChips
 
-            HStack(alignment: .bottom, spacing: 10) {
+            HStack(alignment: .bottom, spacing: 8) {
                 Menu {
                     Section("첨부") {
                         PhotosPicker(selection: $photoItems, maxSelectionCount: 3, matching: .images) {
@@ -332,39 +380,38 @@ private struct ChatComposer: View {
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 17, weight: .medium))
-                        .frame(width: 34, height: 34)
-                        .background(.fill.secondary, in: Circle())
+                        .foregroundStyle(Lumen.accent)
+                        .frame(width: 36, height: 36)
+                        .background(Lumen.accentSoft, in: Circle())
                 }
 
                 HStack(alignment: .bottom, spacing: 6) {
                     TextField("무엇이든 물어보세요", text: $draft, axis: .vertical)
+                        .font(.system(size: 15))
                         .lineLimit(1...5)
                         .padding(.leading, 14)
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 9)
 
                     Button(action: onSubmit) {
                         Image(systemName: "arrow.up")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(canSend ? Lumen.accentFg : Lumen.faint)
                             .frame(width: 30, height: 30)
-                            .background(
-                                draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isStreaming
-                                    ? AnyShapeStyle(.fill.tertiary)
-                                    : AnyShapeStyle(.tint),
-                                in: Circle())
+                            .background(canSend ? Lumen.accent : Lumen.surface3, in: Circle())
                     }
-                    .disabled(isStreaming || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(!canSend)
                     .padding(.trailing, 4)
                     .padding(.bottom, 3)
                 }
-                .background(.fill.quinary, in: RoundedRectangle(cornerRadius: 22))
-                .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(.separator.opacity(0.6)))
+                .background(Lumen.surface, in: RoundedRectangle(cornerRadius: 22))
+                .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Lumen.border))
+                .shadow(color: .black.opacity(0.06), radius: 8, y: 2)
             }
         }
         .padding(.horizontal, 12)
         .padding(.top, 6)
         .padding(.bottom, 8)
-        .background(.bar)
+        .background(Lumen.bg)
     }
 
     @ViewBuilder
@@ -374,12 +421,15 @@ private struct ChatComposer: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     ForEach(labels, id: \.self) { label in
-                        Text(label)
-                            .font(.caption)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(.tint.opacity(0.12), in: Capsule())
-                            .foregroundStyle(.tint)
+                        HStack(spacing: 5) {
+                            LumenDot(size: 5)
+                            Text(label)
+                        }
+                        .font(.system(size: 11, weight: .semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Lumen.accentSoft, in: Capsule())
+                        .foregroundStyle(Lumen.accent)
                     }
                 }
                 .padding(.horizontal, 4)
@@ -413,8 +463,9 @@ private struct ChatComposer: View {
                 Image(systemName: "xmark.circle.fill").font(.caption)
             }
         }
+        .foregroundStyle(Lumen.fg2)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(.fill.tertiary, in: Capsule())
+        .background(Lumen.surface2, in: Capsule())
     }
 }
