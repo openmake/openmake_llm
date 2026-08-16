@@ -8,6 +8,7 @@ struct ConversationListView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showNewChat = false
+    @State private var autoChatFired = false
 
     var body: some View {
         NavigationStack {
@@ -63,6 +64,14 @@ struct ConversationListView: View {
             .task {
                 await load()
                 await model.loadCatalog()
+                #if DEBUG
+                // 시뮬레이터 스모크: 자동으로 새 대화 진입 (Release 미포함)
+                if ProcessInfo.processInfo.environment["OPENMAKE_UITEST_MESSAGE"]?.isEmpty == false,
+                   !autoChatFired {
+                    autoChatFired = true
+                    showNewChat = true
+                }
+                #endif
             }
         }
     }

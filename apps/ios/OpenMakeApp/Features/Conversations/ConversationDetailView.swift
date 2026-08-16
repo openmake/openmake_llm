@@ -35,6 +35,14 @@ struct ConversationDetailView: View {
                     sessionId: session?.id)
                 chat = chatModel
                 await chatModel.loadHistory()
+                #if DEBUG
+                // 시뮬레이터 스모크: 새 대화에 자동 전송 (Release 미포함)
+                if session == nil,
+                   let message = ProcessInfo.processInfo.environment["OPENMAKE_UITEST_MESSAGE"],
+                   !message.isEmpty, chatModel.messages.isEmpty {
+                    await chatModel.send(message, model: model.selectedModelId)
+                }
+                #endif
             }
         }
         .onDisappear {
