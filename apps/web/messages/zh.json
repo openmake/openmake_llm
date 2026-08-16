@@ -1833,7 +1833,9 @@
       "register": "注册",
       "syncAria": "同步目录",
       "removeAria": "删除目录源",
-      "removeConfirm": "确定删除此目录源吗?(不影响已安装的扩展)"
+      "removeConfirm": "确定删除此目录源吗?(不影响已安装的扩展)",
+      "installableCount": "(可安装 {count}/{total})",
+      "noneInstallable": "没有可安装的插件(仅含命令的源)。"
     }
   }
 }

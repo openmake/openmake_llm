@@ -1833,7 +1833,9 @@
       "register": "등록",
       "syncAria": "카탈로그 동기화",
       "removeAria": "카탈로그 소스 삭제",
-      "removeConfirm": "이 카탈로그 소스를 삭제할까요? (설치된 확장은 영향 없음)"
+      "removeConfirm": "이 카탈로그 소스를 삭제할까요? (설치된 확장은 영향 없음)",
+      "installableCount": "(설치 가능 {count}/{total})",
+      "noneInstallable": "설치 가능한 플러그인이 없습니다 (커스텀 명령 전용 소스)."
     }
   }
 }

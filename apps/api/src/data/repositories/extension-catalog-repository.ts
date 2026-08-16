@@ -13,6 +13,8 @@ export interface CatalogPluginEntry {
     name: string;
     description?: string;
     version?: string;
+    /** 동기화 시점 사전 판정 — 스킬/MCP 서버 보유 여부. undefined = 판정 미상(교차 저장소 등) */
+    installable?: boolean;
 }
 
 export interface ExtensionCatalogRow {

@@ -25,7 +25,7 @@ import type { LLMClient } from '../../llm/client';
 import { createLogger } from '../../utils/logger';
 import { parseGitUrl } from '../../schemas/git-ingest.schema';
 import type { ImportExtensionFromGitInput } from '../../schemas/extension-ingest.schema';
-import { GitFetcher } from './git-fetcher';
+import { GitFetcher, type TreeEntry } from './git-fetcher';
 import { ArchiveFetcher, isArchiveUrl, archivePseudoRepo } from './archive-fetcher';
 import { scanForExtensionManifests, scanForMarketplaceManifests, resolveExtensionRoot, type ManifestCandidate } from './repo-scanner';
 import {
@@ -487,14 +487,20 @@ export class ExtensionIngestService {
     }
 
     /**
-     * 카탈로그 스냅샷 (admin 큐레이션 갤러리) — 소스 URL 의 플러그인 목록만 조회.
+     * 카탈로그 스냅샷 (admin 큐레이션 갤러리) — 소스 URL 의 플러그인 목록 + 설치 가능성 사전 판정.
      * marketplace.json 이 있으면 그 목록, 없으면 plugin.json 스캔(상위 10개) 결과.
      * 설치는 하지 않는다 (extension_catalog_sources.plugins 스냅샷용).
+     *
+     * installable 판정 (동기화 시점 사전 계산 — UI 는 설치 가능만 노출):
+     *   ① 플러그인 경로에 skills(/skill)/SKILL.md 존재
+     *   ② .mcp.json / mcp.json 존재
+     *   ③ 매니페스트(plugin.json 등)에 mcpServers 선언
+     *   커스텀 명령(commands/)만 있는 플러그인은 설치 구성요소가 없어 false.
      */
     async fetchCatalogSnapshot(url: string, accessToken?: string): Promise<{
         name: string;
         description: string | null;
-        plugins: Array<{ name: string; description?: string; version?: string }>;
+        plugins: Array<{ name: string; description?: string; version?: string; installable?: boolean }>;
     }> {
         const isArchive = isArchiveUrl(url);
         const parsed = isArchive ? archivePseudoRepo(url) : parseGitUrl(url);
@@ -502,50 +508,101 @@ export class ExtensionIngestService {
         const fetcher = isArchive ? this.makeArchiveFetcher(url) : this.opts.fetcherFactory({ accessToken });
         const sha = await fetcher.resolveRef(parsed.owner, parsed.repo, 'HEAD');
 
+        // tree 는 있으면 skills/.mcp.json 판정에 사용 (거대 repo 는 실패 허용 — 매니페스트 판정만)
+        let treeEntries: TreeEntry[] | null = null;
+
         // (a) marketplace.json 표준 경로 직접 조회 — 거대 repo 의 listTree 상한(gitMaxTreeEntries)
         //     우회 (jeremylongshore 22,982 blobs 실측). 실패 시 tree 스캔 폴백.
+        let marketplace: ReturnType<typeof parseMarketplaceFile> | null = null;
         for (const mkPath of ['.claude-plugin/marketplace.json', 'marketplace.json']) {
             try {
                 const mkRaw = await fetcher.fetchFile(parsed.owner, parsed.repo, sha, mkPath, EXTENSION_INGEST.marketplaceMaxBytes);
                 const mk = parseMarketplaceFile(mkRaw);
-                if (mk.ok) {
-                    return {
-                        name: mk.marketplace.name,
-                        description: null,
-                        plugins: mk.marketplace.plugins.map(p => ({ name: p.name, description: p.description })),
-                    };
-                }
+                if (mk.ok) { marketplace = mk; break; }
             } catch {
                 /* 해당 경로 없음 — 다음 후보/폴백 */
             }
         }
-
-        const tree = await fetcher.listTree(parsed.owner, parsed.repo, sha, SKILL_CREATOR.gitMaxTreeEntries);
-
-        const mkCandidates = scanForMarketplaceManifests(tree.entries);
-        if (mkCandidates.length > 0) {
-            const mkRaw = await fetcher.fetchFile(parsed.owner, parsed.repo, sha, mkCandidates[0].path, EXTENSION_INGEST.marketplaceMaxBytes);
-            const mk = parseMarketplaceFile(mkRaw);
-            if (mk.ok) {
-                return {
-                    name: mk.marketplace.name,
-                    description: null,
-                    plugins: mk.marketplace.plugins.map(p => ({ name: p.name, description: p.description })),
-                };
+        if (!marketplace) {
+            const tree = await fetcher.listTree(parsed.owner, parsed.repo, sha, SKILL_CREATOR.gitMaxTreeEntries);
+            treeEntries = tree.entries;
+            const mkCandidates = scanForMarketplaceManifests(tree.entries);
+            if (mkCandidates.length > 0) {
+                const mkRaw = await fetcher.fetchFile(parsed.owner, parsed.repo, sha, mkCandidates[0].path, EXTENSION_INGEST.marketplaceMaxBytes);
+                const mk = parseMarketplaceFile(mkRaw);
+                if (mk.ok) marketplace = mk;
             }
         }
 
-        // marketplace 없음 — plugin.json 후보 스캔 (상위 10개)
-        const candidates = scanForExtensionManifests(tree.entries).slice(0, 10);
+        if (marketplace?.ok) {
+            if (!treeEntries) {
+                try {
+                    treeEntries = (await fetcher.listTree(parsed.owner, parsed.repo, sha, SKILL_CREATOR.gitMaxTreeEntries)).entries;
+                } catch {
+                    /* 거대 repo — 매니페스트 기반 판정만 수행 */
+                }
+            }
+            const entries = marketplace.marketplace.plugins;
+            const enriched: Array<{ name: string; description?: string; installable?: boolean }> = [];
+            // 소규모 동시성 배치 — raw fetch 위주라 rate limit 부담 낮음
+            const BATCH = 8;
+            for (let i = 0; i < entries.length; i += BATCH) {
+                const batch = entries.slice(i, i + BATCH);
+                const results = await Promise.all(batch.map(async (p) => {
+                    // 교차 저장소 엔트리는 프로브 생략 (판정 미상 — installable undefined 로 노출 유지)
+                    if (p.url) {
+                        const p2 = parseGitUrl(p.url);
+                        if (p2 && (p2.owner !== parsed.owner || p2.repo !== parsed.repo)) {
+                            return { name: p.name, description: p.description };
+                        }
+                    }
+                    const prefix = p.path ? `${p.path}/` : '';
+                    let installable = false;
+                    if (treeEntries) {
+                        const skillPat = buildSkillDiscoveryPattern(prefix);
+                        installable = treeEntries.some(e =>
+                            skillPat.test(e.path) || e.path === `${prefix}.mcp.json` || e.path === `${prefix}mcp.json`);
+                    }
+                    if (!installable) {
+                        // 매니페스트의 mcpServers 선언 검사 (raw 직접 조회)
+                        for (const mp of [`${prefix}.claude-plugin/plugin.json`, `${prefix}plugin.json`, `${prefix}gemini-extension.json`]) {
+                            try {
+                                const raw = await fetcher.fetchFile(parsed.owner, parsed.repo, sha, mp, EXTENSION_INGEST.manifestMaxBytes);
+                                const v = validateExtensionManifest(raw);
+                                if (v.ok && v.manifest.mcpServers.length > 0) { installable = true; }
+                                break;  // 매니페스트를 찾았으면 (성공/실패 무관) 다음 경로 시도 불필요
+                            } catch {
+                                /* 해당 경로 없음 — 다음 후보 */
+                            }
+                        }
+                    }
+                    return { name: p.name, description: p.description, installable };
+                }));
+                enriched.push(...results);
+            }
+            return { name: marketplace.marketplace.name, description: null, plugins: enriched };
+        }
+
+        // marketplace 없음 — plugin.json/gemini-extension.json 후보 스캔 (상위 10개)
+        if (!treeEntries) {
+            treeEntries = (await fetcher.listTree(parsed.owner, parsed.repo, sha, SKILL_CREATOR.gitMaxTreeEntries)).entries;
+        }
+        const candidates = scanForExtensionManifests(treeEntries).slice(0, 10);
         if (candidates.length === 0) {
             throw new Error(`NO_EXTENSION_FOUND: 소스에 marketplace.json/plugin.json 없음 (${url})`);
         }
-        const plugins: Array<{ name: string; description?: string; version?: string }> = [];
+        const plugins: Array<{ name: string; description?: string; version?: string; installable?: boolean }> = [];
         for (const c of candidates) {
             try {
                 const raw = await fetcher.fetchFile(parsed.owner, parsed.repo, sha, c.path, EXTENSION_INGEST.manifestMaxBytes);
                 const v = validateExtensionManifest(raw);
-                if (v.ok) plugins.push({ name: v.manifest.name, description: v.manifest.description, version: v.manifest.version });
+                if (v.ok) {
+                    const root = resolveExtensionRoot(c.path);
+                    const skillPat = buildSkillDiscoveryPattern(root);
+                    const installable = v.manifest.mcpServers.length > 0
+                        || treeEntries.some(e => skillPat.test(e.path) || e.path === `${root}.mcp.json` || e.path === `${root}mcp.json`);
+                    plugins.push({ name: v.manifest.name, description: v.manifest.description, version: v.manifest.version, installable });
+                }
             } catch {
                 /* 개별 후보 실패 — 건너뜀 */
             }

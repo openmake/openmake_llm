@@ -216,13 +216,15 @@ export function createUserExtensionsController(): Router {
         }
     });
 
-    router.post('/catalog/:id/sync', requireAuth, requireAdmin, async (req, res) => {
+    router.post('/catalog/:id/sync', requireAuth, requireAdmin, validate(galleryInstallSchema), async (req, res) => {
         try {
             const repo = new ExtensionCatalogRepository(getPool());
             const row = await repo.getById(req.params.id);
             if (!row) { res.status(404).json(notFound('카탈로그 소스 없음')); return; }
             const service = await buildIngestService();
-            const snapshot = await service.fetchCatalogSnapshot(row.url);
+            // accessToken(요청 한정): GitHub API 무인증 rate limit(60/hr) 회피 (2026-08-16 실측)
+            const body = req.body as z.infer<typeof galleryInstallSchema>;
+            const snapshot = await service.fetchCatalogSnapshot(row.url, body.accessToken);
             const updated = await repo.updateSnapshot(row.id, snapshot);
             log.info(`카탈로그 동기화: ${row.id} (${snapshot.plugins.length} plugins)`);
             res.json(success({ source: updated }));

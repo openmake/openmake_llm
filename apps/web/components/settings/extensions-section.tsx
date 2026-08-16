@@ -32,6 +32,8 @@ interface CatalogPlugin {
   name: string;
   description?: string;
   version?: string;
+  /** 동기화 시점 사전 판정 — false 면 설치 구성요소(스킬/MCP) 없음 → UI 미노출 */
+  installable?: boolean;
 }
 
 interface CatalogSource {
@@ -498,11 +500,17 @@ export function ExtensionsSection() {
             <p className="text-xs text-muted">{t("catalog.empty")}</p>
           ) : (
             <ul className="space-y-3">
-              {catalog.map((src) => (
+              {catalog.map((src) => {
+                // 설치 가능(스킬/MCP 보유) 항목만 노출 — 사전 판정은 동기화 시점에 수행됨
+                const visiblePlugins = src.plugins.filter((p) => p.installable !== false);
+                return (
                 <li key={src.id} className="rounded-lg border border-border">
                   <div className="flex items-center gap-2 border-b border-border px-3.5 py-2.5">
                     <p className="min-w-0 flex-1 truncate text-sm font-medium text-fg">
                       {src.name}
+                      <span className="ml-1.5 text-xs text-muted">
+                        {t("catalog.installableCount", { count: visiblePlugins.length, total: src.plugins.length })}
+                      </span>
                       <span className="ml-1.5 truncate font-mono text-[11px] text-muted">{src.url}</span>
                     </p>
                     {isAdmin && (
@@ -531,8 +539,11 @@ export function ExtensionsSection() {
                       </>
                     )}
                   </div>
+                  {visiblePlugins.length === 0 && (
+                    <p className="px-3.5 py-2.5 text-xs text-muted">{t("catalog.noneInstallable")}</p>
+                  )}
                   <ul className="divide-y divide-border">
-                    {src.plugins.map((p) => {
+                    {visiblePlugins.map((p) => {
                       const key = `${src.id}:${src.plugins.length > 1 ? p.name : ""}`;
                       const st = catalogInstalls[key];
                       return (
@@ -570,7 +581,8 @@ export function ExtensionsSection() {
                     })}
                   </ul>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </div>

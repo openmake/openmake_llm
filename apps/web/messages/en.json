@@ -1833,7 +1833,9 @@
       "register": "Register",
       "syncAria": "Sync catalog",
       "removeAria": "Remove catalog source",
-      "removeConfirm": "Remove this catalog source? (Installed extensions are unaffected)"
+      "removeConfirm": "Remove this catalog source? (Installed extensions are unaffected)",
+      "installableCount": "({count}/{total} installable)",
+      "noneInstallable": "No installable plugins (commands-only source)."
     }
   }
 }
