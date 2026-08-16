@@ -20,6 +20,7 @@
         "test:e2e": "npx playwright test",
         "test:e2e:ui": "npx playwright test --ui",
         "lint": "eslint .",
+        "contracts:export": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' ts-node --transpile-only scripts/export-openapi.ts",
         "clean": "rm -rf */dist **/dist",
         "version": "node -e \"const v=require('./package.json').version;const fs=require('fs');['apps/api/package.json','apps/web/package.json'].forEach(f=>{const p=JSON.parse(fs.readFileSync(f,'utf8'));p.version=v;fs.writeFileSync(f,JSON.stringify(p,null,4)+'\\n')});console.log('✅ 모든 workspace 버전 동기화 완료:',v)\" && git add apps/api/package.json apps/web/package.json",
         "build:discord-bot": "cd apps/discord-bot && npm run build"
@@ -52,6 +53,7 @@
         "jest": "^30.4.2",
         "playwright": "^1.58.0",
         "supertest": "^7.2.2",
+        "ts-json-schema-generator": "^2.9.0",
         "typescript": "^5.3.2",
         "typescript-eslint": "^8.56.1"
     },

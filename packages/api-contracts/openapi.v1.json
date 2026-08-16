@@ -1,0 +1,2519 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "OpenMake.Ai API",
+    "description": "\nAI 채팅 어시스턴트 API 문서\n\n## 기능\n- 채팅 메시지 전송 및 스트리밍 응답\n- 파일 업로드 및 문서 분석\n- 클러스터 관리\n- 사용자 인증\n\n## 인증\n대부분의 API는 JWT 토큰 인증이 필요합니다.\n`Authorization: Bearer <token>` 헤더를 사용하세요.\n\n## CSRF (비브라우저 클라이언트)\nBearer 헤더 요청은 CSRF 검증에서 면제됩니다. 단 **사전 인증 mutating 요청**\n(login/register/refresh)은 `GET /api/csrf-token` 으로 토큰을 발급받아\n발급 쿠키와 `X-CSRF-Token` 헤더를 함께 보내야 합니다 (Double-Submit).\n",
+    "version": "1.0.0"
+  },
+  "tags": [
+    {
+      "name": "Auth",
+      "description": "인증 관련 API"
+    },
+    {
+      "name": "Chat",
+      "description": "채팅 관련 API"
+    },
+    {
+      "name": "Documents",
+      "description": "문서 업로드 및 분석"
+    },
+    {
+      "name": "Knowledge Base",
+      "description": "Knowledge Base 관리 (N:M)"
+    },
+    {
+      "name": "Agents",
+      "description": "AI 에이전트 관련 API"
+    },
+    {
+      "name": "MCP",
+      "description": "MCP 서버 및 도구 관리"
+    },
+    {
+      "name": "Tools",
+      "description": "도구 API (웹 검색 등)"
+    },
+    {
+      "name": "Cluster",
+      "description": "클러스터 관리"
+    },
+    {
+      "name": "System",
+      "description": "시스템 정보 및 상태"
+    },
+    {
+      "name": "API Keys",
+      "description": "API Key 관리 (외부 개발자용)"
+    },
+    {
+      "name": "Models",
+      "description": "모델 목록"
+    },
+    {
+      "name": "User Agents",
+      "description": "커스텀 에이전트 (user_agents)"
+    }
+  ],
+  "paths": {
+    "/api/chat": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "채팅 메시지 전송",
+        "description": "AI에게 메시지를 전송하고 응답을 받습니다.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "message"
+                ],
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "description": "사용자 메시지"
+                  },
+                  "model": {
+                    "type": "string",
+                    "description": "사용할 모델",
+                    "default": "default"
+                  },
+                  "memory": {
+                    "type": "array",
+                    "description": "대화 히스토리",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "role": {
+                          "type": "string"
+                        },
+                        "content": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "webSearch": {
+                    "type": "boolean",
+                    "description": "웹 검색 활성화",
+                    "default": false
+                  },
+                  "thinking": {
+                    "type": "boolean",
+                    "description": "Sequential Thinking 활성화",
+                    "default": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "response": {
+                      "type": "string"
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "tokensUsed": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "잘못된 요청"
+          },
+          "401": {
+            "description": "인증 필요"
+          },
+          "500": {
+            "description": "서버 오류"
+          }
+        }
+      }
+    },
+    "/api/upload": {
+      "post": {
+        "tags": [
+          "Documents"
+        ],
+        "summary": "파일 업로드",
+        "description": "문서 파일을 업로드하고 분석합니다.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "업로드할 파일"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "업로드 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "documentId": {
+                      "type": "string"
+                    },
+                    "filename": {
+                      "type": "string"
+                    },
+                    "textLength": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "파일 크기 초과"
+          },
+          "415": {
+            "description": "지원하지 않는 파일 형식"
+          }
+        }
+      }
+    },
+    "/api/v1/chat/completions": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "OpenAI-compatible chat completions",
+        "description": "OpenAI Python SDK compatible endpoint. Supports streaming (SSE) and non-streaming responses.",
+        "security": [
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "model",
+                  "messages"
+                ],
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "description": "Model ID (e.g., openmake_llm)"
+                  },
+                  "messages": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "system",
+                            "user",
+                            "assistant",
+                            "tool"
+                          ]
+                        },
+                        "content": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "stream": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "temperature": {
+                    "type": "number"
+                  },
+                  "max_tokens": {
+                    "type": "integer"
+                  },
+                  "tools": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  },
+                  "tool_choice": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Chat completion response (OpenAI format)"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "API Key required"
+          }
+        }
+      }
+    },
+    "/api/cluster/status": {
+      "get": {
+        "tags": [
+          "Cluster"
+        ],
+        "summary": "클러스터 상태 조회",
+        "description": "모든 클러스터 노드의 상태를 조회합니다.",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "nodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "online",
+                              "offline"
+                            ]
+                          },
+                          "latency": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "stats": {
+                      "type": "object",
+                      "properties": {
+                        "totalNodes": {
+                          "type": "integer"
+                        },
+                        "onlineNodes": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/metrics": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "시스템 메트릭 조회",
+        "description": "시스템 성능 메트릭을 조회합니다.",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "chat": {
+                      "type": "object",
+                      "properties": {
+                        "totalRequests": {
+                          "type": "integer"
+                        },
+                        "avgResponseTime": {
+                          "type": "number"
+                        },
+                        "totalTokens": {
+                          "type": "integer"
+                        }
+                      }
+                    },
+                    "system": {
+                      "type": "object",
+                      "properties": {
+                        "uptime": {
+                          "type": "number"
+                        },
+                        "memoryUsage": {
+                          "type": "object"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/model": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "현재 모델 정보",
+        "description": "현재 사용 중인 AI 모델 정보를 조회합니다.",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents": {
+      "get": {
+        "tags": [
+          "Agents"
+        ],
+        "summary": "에이전트 목록",
+        "description": "사용 가능한 AI 에이전트 목록을 조회합니다.",
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "agents": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "emoji": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mcp/servers": {
+      "get": {
+        "tags": [
+          "MCP"
+        ],
+        "summary": "MCP 서버 목록",
+        "description": "연결된 MCP 서버 목록을 조회합니다.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "servers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "connected",
+                              "disconnected",
+                              "error"
+                            ]
+                          },
+                          "toolCount": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/mcp/tools": {
+      "get": {
+        "tags": [
+          "MCP"
+        ],
+        "summary": "MCP 도구 목록",
+        "description": "사용 가능한 MCP 도구 목록을 조회합니다.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tools": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "inputSchema": {
+                            "type": "object"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/web-search": {
+      "post": {
+        "tags": [
+          "Tools"
+        ],
+        "summary": "웹 검색",
+        "description": "웹 검색을 수행합니다.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "query"
+                ],
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "검색어"
+                  },
+                  "maxResults": {
+                    "type": "integer",
+                    "default": 5,
+                    "description": "최대 결과 수"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "title": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "snippet": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/models": {
+      "get": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "OpenAI-compatible model list",
+        "description": "OpenAI format 모델 목록을 반환합니다. object=list, data[].object=model 구조를 따릅니다.",
+        "responses": {
+          "200": {
+            "description": "모델 목록",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "example": "list"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "example": "openmake_llm"
+                          },
+                          "object": {
+                            "type": "string",
+                            "example": "model"
+                          },
+                          "created": {
+                            "type": "integer",
+                            "example": 1700000000
+                          },
+                          "owned_by": {
+                            "type": "string",
+                            "example": "openmake"
+                          },
+                          "name": {
+                            "type": "string",
+                            "example": "OpenMake LLM"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "capabilities": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kb": {
+      "post": {
+        "tags": [
+          "Knowledge Base"
+        ],
+        "summary": "Create knowledge base",
+        "description": "Create a new knowledge base collection",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "enum": [
+                      "private",
+                      "team",
+                      "public"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Knowledge base created"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "401": {
+            "description": "Authentication required"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Knowledge Base"
+        ],
+        "summary": "List knowledge bases",
+        "description": "List knowledge base collections available to the user",
+        "responses": {
+          "200": {
+            "description": "Knowledge base list"
+          },
+          "401": {
+            "description": "Authentication required"
+          }
+        }
+      }
+    },
+    "/api/v1/api-keys": {
+      "post": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "새 API Key 생성",
+        "description": "새 API Key를 발급합니다. 평문 키는 이 응답에서만 반환됩니다.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "description": "API Key 이름"
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "default": [
+                      "*"
+                    ]
+                  },
+                  "allowed_models": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "default": [
+                      "*"
+                    ]
+                  },
+                  "expires_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "API Key 생성 성공 (평문 키 포함)"
+          },
+          "401": {
+            "description": "인증 필요"
+          },
+          "429": {
+            "description": "키 한도 초과"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "API Key 목록 조회",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API Key 목록"
+          },
+          "401": {
+            "description": "인증 필요"
+          }
+        }
+      }
+    },
+    "/api/v1/api-keys/{id}": {
+      "get": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "단일 API Key 상세",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API Key 상세 정보"
+          },
+          "404": {
+            "description": "키를 찾을 수 없음"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "API Key 수정",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "is_active": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "수정 성공"
+          },
+          "404": {
+            "description": "키를 찾을 수 없음"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "API Key 삭제",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "삭제 성공"
+          },
+          "404": {
+            "description": "키를 찾을 수 없음"
+          }
+        }
+      }
+    },
+    "/api/v1/api-keys/{id}/rotate": {
+      "post": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "API Key 순환 (rotate)",
+        "description": "기존 키를 무효화하고 새 키를 발급합니다.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "새 평문 키 반환"
+          },
+          "404": {
+            "description": "키를 찾을 수 없음"
+          }
+        }
+      }
+    },
+    "/api/v1/usage": {
+      "get": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "API Key 사용량 요약",
+        "description": "현재 API Key의 전체 사용량 통계를 반환합니다.",
+        "security": [
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "사용량 통계"
+          },
+          "401": {
+            "description": "API Key 인증 필요"
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "헬스 체크",
+        "description": "서버 상태를 확인합니다.",
+        "responses": {
+          "200": {
+            "description": "서버 정상",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "로그인",
+        "description": "이메일과 비밀번호로 로그인합니다. access token 은 응답 body 와 HttpOnly 쿠키 양쪽에 발급됩니다 (refresh token 은 쿠키 전용 — 모바일 body 모드는 축 2 도입 예정). 사전 인증 POST 이므로 CSRF 부트스트랩 필요 (모듈 설명 참고).",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "로그인 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "success"
+                      ],
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        },
+                        "token": {
+                          "type": "string",
+                          "description": "JWT access token"
+                        },
+                        "user": {
+                          "$ref": "#/components/schemas/PublicUser"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 실패 (이메일/비밀번호 불일치)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF 검증 실패 (CSRF_TOKEN_MISMATCH)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "회원가입",
+        "description": "새로운 사용자 계정을 생성합니다. 사전 인증 POST 이므로 CSRF 부트스트랩 필요.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "description": "비밀번호 (8자 이상, 대소문자/숫자/특수문자 포함)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "회원가입 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "success"
+                      ],
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        },
+                        "user": {
+                          "$ref": "#/components/schemas/PublicUser"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "유효성 검사 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "이미 존재하는 이메일",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "로그아웃",
+        "description": "현재 access token (Bearer 헤더 + 쿠키) 을 블랙리스트에 추가하고 인증 쿠키를 제거합니다.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "로그아웃 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "message"
+                      ],
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 필요",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "현재 사용자 정보",
+        "description": "인증 상태 확인 규약: 토큰이 아예 없으면(순수 게스트) 200 + `{user: null}`, 토큰이 있었으나 만료/무효면 401 (클라이언트는 refresh 흐름으로 세션 복구).",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ],
+        "responses": {
+          "200": {
+            "description": "성공 (미인증 게스트는 user=null)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "user"
+                      ],
+                      "properties": {
+                        "user": {
+                          "oneOf": [
+                            {
+                              "$ref": "#/components/schemas/PublicUser"
+                            },
+                            {
+                              "type": "object",
+                              "nullable": true,
+                              "enum": [
+                                null
+                              ]
+                            }
+                          ],
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "토큰 만료/무효 — refresh 필요",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "토큰 갱신 (rotation)",
+        "description": "refresh token 쿠키(`path=/api/auth/refresh`)로 새 access token 을 발급합니다. 구 refresh token 은 블랙리스트 처리되고 새 refresh token 이 쿠키로 회전 발급됩니다. 사전 인증 POST 이므로 CSRF 부트스트랩 필요. (모바일 body 모드 — body.refreshToken 수용·반환 — 는 축 2 도입 후 본 계약에 반영.)",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "갱신 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "token",
+                        "user"
+                      ],
+                      "properties": {
+                        "token": {
+                          "type": "string",
+                          "description": "새 JWT access token"
+                        },
+                        "user": {
+                          "$ref": "#/components/schemas/PublicUser"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "refresh token 없음/만료/무효 — 재로그인 필요",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF 검증 실패 (CSRF_TOKEN_MISMATCH)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/providers": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "OAuth 프로바이더 목록",
+        "description": "서버에 설정된 OAuth 프로바이더 id 목록을 반환합니다.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "providers"
+                      ],
+                      "properties": {
+                        "providers": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "google",
+                              "github",
+                              "kakao"
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login/google": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Google OAuth 시작",
+        "description": "Google 인가 페이지로 302 리다이렉트합니다. 완료 시 서버 콜백(`/api/auth/callback/google` — 서버↔IdP 표면이라 본 계약 비노출)이 인증 쿠키를 설정하고 웹으로 리다이렉트합니다. (모바일 `?client=ios` + exchange code 흐름은 축 2 도입 후 반영.)",
+        "security": [],
+        "responses": {
+          "302": {
+            "description": "Google 인가 URL 로 리다이렉트"
+          },
+          "500": {
+            "description": "OAuth 미설정 (client id 없음)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/csrf-token": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "CSRF 토큰 발급 (Double-Submit 부트스트랩)",
+        "description": "non-HttpOnly 쿠키와 응답 body 로 CSRF 토큰을 발급합니다. 이후 사전 인증 mutating 요청에 쿠키 + `X-CSRF-Token` 헤더를 함께 보냅니다. ⚠️ 이 응답은 envelope 미적용 raw JSON 입니다.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "발급 성공 (envelope 미적용)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "token"
+                  ],
+                  "properties": {
+                    "token": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/sessions": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "세션 목록 조회",
+        "description": "사용자의 채팅 세션 목록을 조회합니다. `?q=` 지정 시 제목+본문 검색 (결과에 snippet 포함). cursor 페이지네이션 없음 (limit-only).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            },
+            "description": "최대 조회 개수"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "제목+메시지 본문 검색어"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "sessions"
+                      ],
+                      "properties": {
+                        "sessions": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/SessionSummary"
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 필요",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "새 세션 생성",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "description": "세션 제목 (선택)"
+                  },
+                  "model": {
+                    "type": "string",
+                    "description": "모델 id (선택)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "생성 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "session"
+                      ],
+                      "properties": {
+                        "session": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "title",
+                            "createdAt",
+                            "updatedAt"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "userId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "anonSessionId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "title": {
+                              "type": "string"
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "updatedAt": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 필요",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/sessions/{sessionId}": {
+      "patch": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "세션 제목 변경",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "세션 ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "title"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "변경 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "updated"
+                      ],
+                      "properties": {
+                        "updated": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "접근 권한 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "세션 삭제",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "세션 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "삭제 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "deleted"
+                      ],
+                      "properties": {
+                        "deleted": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "접근 권한 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/sessions/{sessionId}/messages": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "세션 메시지 이력 조회",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "세션 ID"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 100
+            },
+            "description": "최대 조회 개수"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "messages"
+                      ],
+                      "properties": {
+                        "messages": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ChatMessage"
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "접근 권한 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/models": {
+      "get": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "사용 가능 모델 목록",
+        "description": "로컬 모델 카탈로그(기본 모델이 첫 entry) + 인증 사용자의 외부 provider 등록 모델을 반환합니다. 비인증도 로컬 카탈로그는 조회 가능.",
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "usableOnly",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "1 이면 역할 배정 가능(streaming+toolCalling) 모델만 반환"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "defaultModel",
+                        "models"
+                      ],
+                      "properties": {
+                        "defaultModel": {
+                          "type": "string",
+                          "description": "기본 chat 모델 full id"
+                        },
+                        "models": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ModelEntry"
+                          }
+                        },
+                        "imageModel": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "이미지 생성 모델 id (미설정 시 null)"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "모델 카탈로그 조회 실패",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/agents": {
+      "get": {
+        "tags": [
+          "User Agents"
+        ],
+        "summary": "커스텀 에이전트 목록",
+        "description": "본인 소유 + 워크스페이스 공유 에이전트 목록을 반환합니다 (타인 user_id 비노출). 채팅에서 `userAgentId` 로 지정하면 산업 에이전트 자동 라우팅을 우회합니다.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "agents"
+                      ],
+                      "properties": {
+                        "agents": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/UserAgent"
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 필요",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ApiMeta": {
+        "type": "object",
+        "required": [
+          "timestamp"
+        ],
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requestId": {
+            "type": "string"
+          }
+        }
+      },
+      "ApiFailure": {
+        "type": "object",
+        "required": [
+          "success",
+          "error",
+          "meta"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {}
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ApiMeta"
+          }
+        }
+      },
+      "PublicUser": {
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "role",
+          "created_at",
+          "is_active"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "user",
+              "guest"
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "last_login": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SessionSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "createdAt",
+          "updatedAt",
+          "messageCount",
+          "model"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string",
+            "nullable": true
+          },
+          "anonSessionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true
+          },
+          "messageCount": {
+            "type": "integer"
+          },
+          "model": {
+            "type": "string",
+            "description": "첫 메시지의 모델명 (없으면 기본 표시명)"
+          },
+          "snippet": {
+            "type": "string",
+            "description": "본문 검색(?q=) 매칭 발췌 — 검색 응답에만 존재"
+          }
+        }
+      },
+      "ChatMessage": {
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant",
+              "system"
+            ]
+          },
+          "content": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "tokens": {
+            "type": "integer"
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "dataURL 이미지 목록"
+          },
+          "created_at": {
+            "type": "string"
+          }
+        }
+      },
+      "ModelCapabilities": {
+        "type": "object",
+        "required": [
+          "executionStrategy",
+          "thinking",
+          "discussion",
+          "vision",
+          "toolCalling",
+          "streaming"
+        ],
+        "properties": {
+          "executionStrategy": {
+            "type": "string",
+            "enum": [
+              "single"
+            ]
+          },
+          "thinking": {
+            "type": "string",
+            "enum": [
+              "off",
+              "medium"
+            ]
+          },
+          "discussion": {
+            "type": "boolean"
+          },
+          "vision": {
+            "type": "boolean"
+          },
+          "toolCalling": {
+            "type": "boolean"
+          },
+          "streaming": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ModelEntry": {
+        "type": "object",
+        "required": [
+          "name",
+          "modelId",
+          "description",
+          "provider",
+          "capabilities"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": "string",
+            "description": "provider prefix 포함 full model id"
+          },
+          "description": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/ModelCapabilities"
+          },
+          "available": {
+            "type": "boolean",
+            "description": "startup probe 결과 — false 면 UI dimmed"
+          },
+          "unavailableReason": {
+            "type": "string"
+          },
+          "isFree": {
+            "type": "boolean"
+          },
+          "pricing": {
+            "type": "object",
+            "properties": {
+              "input": {
+                "type": "number"
+              },
+              "output": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      },
+      "UserAgent": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "system_prompt",
+          "visibility",
+          "is_active",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "system_prompt": {
+            "type": "string"
+          },
+          "allowed_tools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allowed_skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "icon": {
+            "type": "string",
+            "nullable": true
+          },
+          "model": {
+            "type": "string",
+            "nullable": true,
+            "description": "에이전트 전용 모델 fullId (null=상속)"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "shared"
+            ]
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "usage_count": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "apiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "API Key (omk_live_...) — X-API-Key 헤더 또는 Authorization: Bearer"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    },
+    {
+      "apiKeyAuth": []
+    }
+  ]
+}

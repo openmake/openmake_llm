@@ -1,0 +1,10 @@
+{
+    "name": "@openmake/api-contracts",
+    "version": "1.0.0",
+    "private": true,
+    "description": "OpenMake API 계약 산출물 (OpenAPI + WS JSON Schema) — 수기 편집 금지, npm run contracts:export 로 재생성",
+    "files": [
+        "openapi.v1.json",
+        "events"
+    ]
+}

@@ -1,7 +1,7 @@
 # ==============================================================
 # GitHub Actions CI Pipeline
 # ==============================================================
-# 6 게이트: Jest → TypeScript Build → File Size Guard → ESLint → Routing Eval → Response Eval
+# 7 게이트: Contract Drift → Jest → TypeScript Build → File Size Guard → ESLint → Routing Eval → Response Eval
 # 로컬 `npm test`/`npm run build`/`npm run lint` 와 같은 스크립트로 돈다(별도 미러 스크립트 없음).
 # Docker 사용 없음 (프로젝트 방침 영구 제외)
 # ==============================================================
@@ -57,6 +57,23 @@ jobs:
       #  dynamic import 가 tsc 에서 TS2307 로 실패함 — 루트 설치만 유지)
       - name: Install dependencies
         run: npm ci
+
+      # ─── Gate 0: API Contract Drift ───
+      # packages/api-contracts 산출물이 TS SoT(swagger/spec-core·shared-types)와 일치하는지 검사.
+      # 스펙 변경 후 `npm run contracts:export` 재생성을 누락한 커밋을 차단한다 (iOS 축 1 Step 5).
+      # git diff 가 아니라 porcelain 인 이유: 신규 산출물 파일(미추적)도 drift 로 잡아야 함.
+      # 수 초짜리 검사라 무거운 게이트들보다 앞에 둔다 (fail-fast, 기존 게이트 번호 유지 위해 Gate 0).
+      - name: "Gate 0: API Contract Drift"
+        run: |
+          npm run contracts:export
+          DRIFT=$(git status --porcelain -- packages/api-contracts)
+          if [ -n "$DRIFT" ]; then
+            echo "::error::계약 산출물 drift 감지 — 스펙(TS SoT) 변경 후 'npm run contracts:export' 를 실행해 산출물을 함께 커밋하세요"
+            echo "$DRIFT"
+            git diff -- packages/api-contracts | head -100
+            exit 1
+          fi
+          echo "계약 산출물 최신 상태 확인"
 
       # ─── Gate 1: Jest ───
       # 로컬 `npm test` 와 **같은 러너**로 돈다. 이전에는 bun test 로 돌렸는데, 로컬은 jest 라
