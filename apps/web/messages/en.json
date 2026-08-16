@@ -1835,7 +1835,13 @@
       "removeAria": "Remove catalog source",
       "removeConfirm": "Remove this catalog source? (Installed extensions are unaffected)",
       "installableCount": "({count}/{total} installable)",
-      "noneInstallable": "No installable plugins (commands-only source)."
+      "noneInstallable": "No installable plugins (commands-only source).",
+      "categoryAria": "Category filter",
+      "categoryAll": "All ({count})",
+      "uncategorized": "Uncategorized",
+      "pageInfo": "{page} / {total}",
+      "prevPageAria": "Previous page",
+      "nextPageAria": "Next page"
     }
   }
 }

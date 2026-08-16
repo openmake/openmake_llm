@@ -25,7 +25,7 @@ import { EXTENSION_INGEST } from '../../config/constants';
 export interface CatalogSnapshot {
     name: string;
     description: string | null;
-    plugins: Array<{ name: string; description?: string; version?: string; installable?: boolean }>;
+    plugins: Array<{ name: string; description?: string; version?: string; installable?: boolean; category?: string }>;
 }
 
 export interface CatalogSnapshotDeps {
@@ -82,7 +82,7 @@ export async function fetchCatalogSnapshot(
             }
         }
         const entries = marketplace.marketplace.plugins;
-        const enriched: Array<{ name: string; description?: string; installable?: boolean }> = [];
+        const enriched: Array<{ name: string; description?: string; installable?: boolean; category?: string }> = [];
         // 교차 저장소 repo 별 resolveRef/listTree 재사용 캐시 (한 sync 실행 한정)
         const externalCache: ExternalRepoCache = new Map();
         // 소규모 동시성 배치 — raw fetch 위주라 rate limit 부담 낮음
@@ -94,16 +94,16 @@ export async function fetchCatalogSnapshot(
                 if (p.url) {
                     const p2 = parseGitUrl(p.url);
                     if (p2 && (p2.owner !== parsed.owner || p2.repo !== parsed.repo)) {
-                        if (!accessToken) return { name: p.name, description: p.description };
+                        if (!accessToken) return { name: p.name, description: p.description, category: p.category };
                         const installable = await probeExternalEntry(fetcher, p2.owner, p2.repo, p.ref, p.path, externalCache);
                         return installable === undefined
-                            ? { name: p.name, description: p.description }
-                            : { name: p.name, description: p.description, installable };
+                            ? { name: p.name, description: p.description, category: p.category }
+                            : { name: p.name, description: p.description, installable, category: p.category };
                     }
                 }
                 const prefix = p.path ? `${p.path}/` : '';
                 const installable = await probeInstallableAt(fetcher, parsed.owner, parsed.repo, sha, prefix, treeEntries);
-                return { name: p.name, description: p.description, installable };
+                return { name: p.name, description: p.description, installable, category: p.category };
             }));
             enriched.push(...results);
         }

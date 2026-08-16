@@ -1835,7 +1835,13 @@
       "removeAria": "カタログソースを削除",
       "removeConfirm": "このカタログソースを削除しますか?(インストール済みの拡張には影響しません)",
       "installableCount": "(インストール可能 {count}/{total})",
-      "noneInstallable": "インストール可能なプラグインがありません(コマンド専用ソース)。"
+      "noneInstallable": "インストール可能なプラグインがありません(コマンド専用ソース)。",
+      "categoryAria": "カテゴリフィルター",
+      "categoryAll": "すべて ({count})",
+      "uncategorized": "未分類",
+      "pageInfo": "{page} / {total}",
+      "prevPageAria": "前のページ",
+      "nextPageAria": "次のページ"
     }
   }
 }

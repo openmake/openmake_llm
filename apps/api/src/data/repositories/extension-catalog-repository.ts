@@ -15,6 +15,8 @@ export interface CatalogPluginEntry {
     version?: string;
     /** 동기화 시점 사전 판정 — 스킬/MCP 서버 보유 여부. undefined = 판정 미상(교차 저장소 등) */
     installable?: boolean;
+    /** 마켓플레이스 분류 (marketplace.json category — 카탈로그 UI 필터용) */
+    category?: string;
 }
 
 export interface ExtensionCatalogRow {

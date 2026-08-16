@@ -1835,7 +1835,13 @@
       "removeAria": "删除目录源",
       "removeConfirm": "确定删除此目录源吗?(不影响已安装的扩展)",
       "installableCount": "(可安装 {count}/{total})",
-      "noneInstallable": "没有可安装的插件(仅含命令的源)。"
+      "noneInstallable": "没有可安装的插件(仅含命令的源)。",
+      "categoryAria": "分类筛选",
+      "categoryAll": "全部 ({count})",
+      "uncategorized": "未分类",
+      "pageInfo": "{page} / {total}",
+      "prevPageAria": "上一页",
+      "nextPageAria": "下一页"
     }
   }
 }

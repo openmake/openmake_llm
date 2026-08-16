@@ -139,6 +139,7 @@ const marketplaceSchema = z.object({
         name: z.string().min(1).max(120),
         description: z.string().max(2000).optional(),
         source: marketplaceSourceSchema.optional(),
+        category: z.string().max(100).optional(),
     })).max(500),
 });
 
@@ -151,6 +152,8 @@ export interface MarketplacePluginEntry {
     path?: string;
     /** 고정 ref (태그/브랜치/SHA) — 설치 시 tracking_ref 로 영속 */
     ref?: string;
+    /** 마켓플레이스 분류 (카탈로그 UI 필터용 — 자유 문자열) */
+    category?: string;
 }
 
 export interface MarketplaceIndex {
@@ -192,7 +195,7 @@ export function parseMarketplaceFile(jsonText: string): MarketplaceParseResult {
             errors.push(`${p.name}: path traversal 차단 — .. 미허용`);
             continue;
         }
-        plugins.push({ name: p.name, description: p.description, url, path, ref });
+        plugins.push({ name: p.name, description: p.description, url, path, ref, category: p.category });
     }
     if (plugins.length === 0) {
         return { ok: false, errors: errors.length > 0 ? errors : ['plugins 목록이 비어있음'] };

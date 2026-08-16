@@ -1835,7 +1835,13 @@
       "removeAria": "카탈로그 소스 삭제",
       "removeConfirm": "이 카탈로그 소스를 삭제할까요? (설치된 확장은 영향 없음)",
       "installableCount": "(설치 가능 {count}/{total})",
-      "noneInstallable": "설치 가능한 플러그인이 없습니다 (커스텀 명령 전용 소스)."
+      "noneInstallable": "설치 가능한 플러그인이 없습니다 (커스텀 명령 전용 소스).",
+      "categoryAria": "카테고리 필터",
+      "categoryAll": "전체 ({count})",
+      "uncategorized": "미분류",
+      "pageInfo": "{page} / {total}",
+      "prevPageAria": "이전 페이지",
+      "nextPageAria": "다음 페이지"
     }
   }
 }
