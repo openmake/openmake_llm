@@ -92,26 +92,16 @@ export function assessSkillOverload(
     return { overloaded: reasons.length > 0, activeCount, totalChars, reasons };
 }
 
-/** triggers 활성화에 사용할 노출 상한 (프롬프트 비대화 방지) */
-const SKILL_TRIGGER_HINT_MAX = Number(process.env.SKILL_TRIGGER_HINT_MAX) || 8;
+// 스킬 triggers 파싱·주입 게이트는 skill-triggers.ts 로 분리 (파일 크기 가드).
+// 기존 사용처 호환을 위해 여기서 re-export 한다.
+import {
+    formatTriggerHint,
+    parseManifestTriggers,
+    readMetaTriggers,
+    matchesSkillTriggers,
+} from './skill-triggers';
 
-/**
- * manifestMeta.triggers 를 스킬 블록에 넣을 "적용 상황" 힌트 문자열로 변환 (순수 함수).
- * triggers 가 없거나 비면 빈 문자열(기존 동작과 동일).
- *
- * @param manifestMeta - 스킬 manifest 메타 (triggers 배열 보유 가능)
- * @returns " (적용 상황: a, b, c)" 형태 또는 ''
- */
-export function formatTriggerHint(manifestMeta?: Record<string, unknown>): string {
-    const raw = manifestMeta?.triggers;
-    if (!Array.isArray(raw)) return '';
-    const triggers = raw
-        .filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
-        .map(t => t.trim().replace(/[<>"&]/g, ''))
-        .slice(0, SKILL_TRIGGER_HINT_MAX);
-    if (triggers.length === 0) return '';
-    return ` (적용 상황: ${triggers.join(', ')})`;
-}
+export { formatTriggerHint, parseManifestTriggers, readMetaTriggers, matchesSkillTriggers };
 
 // ========================================
 // SkillManager 클래스
@@ -421,7 +411,7 @@ export class SkillManager {
      * 않아 프론트의 "스킬 활성화" 표시가 뜨지 않았다(2026-08-02 실측: 21/21 주입인데 이름 0개).
      */
     async buildManifestPrompt(
-        agentId: string, userId?: string, agentCategory?: string,
+        agentId: string, userId?: string, agentCategory?: string, query?: string,
     ): Promise<{ prompt: string; skillNames: string[] } | null> {
         let pool: Pool;
         try {
@@ -469,6 +459,9 @@ export class SkillManager {
         // agentCategory 필터: manifest_yaml 의 category 가 agent.category 와 일치하거나
         // user-* prefix (사용자 개인 manifest) 인 경우만 포함 — 무관한 skill 의 프롬프트 오염 방지.
         const filtered = rows.filter(r => {
+            // triggers 선언 스킬은 관련 턴에만 주입 — 개인 스킬의 카테고리 우회(아래)와
+            // 결합돼 무관한 질의까지 오염시키던 경로를 막는다. 미선언 스킬은 종전 동작.
+            if (!matchesSkillTriggers(parseManifestTriggers(r.manifest_yaml), query)) return false;
             if (!agentCategory) return true;
             if (r.id.startsWith('user-')) return true;
             const cat = /^---[\s\S]*?\bcategory:\s*([^\n]+)/.exec(r.manifest_yaml);
@@ -497,6 +490,7 @@ export class SkillManager {
                 const manifestIds = new Set(rows.map(r => r.id));
                 const userSkills = (await this.getUserSkills(userId)).filter(s =>
                     !manifestIds.has(s.id) &&
+                    matchesSkillTriggers(readMetaTriggers(s.manifestMeta), query) &&
                     (!agentCategory || s.category === agentCategory || s.category === 'general'));
                 for (const s of userSkills.slice(0, Math.max(0, 15 - blocks.length))) {
                     const safeName = s.name.replace(/[<>"&]/g, '');
