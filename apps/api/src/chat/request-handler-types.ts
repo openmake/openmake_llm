@@ -119,6 +119,12 @@ export interface ChatRequestParams {
     clusterManager: ClusterManager;
     /** 요청 중단 시그널 */
     abortSignal?: AbortSignal;
+    /**
+     * 클라이언트에 발급한 message id (WS 스트리밍 상관용 UUID).
+     * assistant 메시지 행에 함께 저장돼 이후 피드백 신호를 그 응답에 되짚는 조인 키가 된다
+     * (자가개선 F2 귀속). 미전달이면 귀속 없이 기존과 동일하게 동작한다.
+     */
+    clientMessageId?: string;
     /** 스트리밍 토큰 콜백 */
     onToken: (token: string) => void;
     /** Thinking 토큰 콜백 (추론 과정 실시간 전달) */

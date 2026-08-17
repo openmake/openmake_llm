@@ -199,4 +199,33 @@ export class ConversationRepository extends BaseRepository {
         );
         return result.rows;
     }
+
+    /**
+     * 클라이언트에 발급한 message id 로 assistant 메시지를 되짚는다 (자가개선 F2 귀속).
+     * client_message_id 는 마이그 099 에서 추가됐으므로 그 이전 메시지는 조회되지 않는다(NULL).
+     */
+    async getAssistantMessageByClientId(
+        clientMessageId: string,
+    ): Promise<{ id: number; session_id: string; agent_id: string | null; content: string } | null> {
+        const result = await this.query<{ id: number; session_id: string; agent_id: string | null; content: string }>(
+            `SELECT id, session_id, agent_id, content
+               FROM conversation_messages
+              WHERE client_message_id = $1 AND role = 'assistant'
+              ORDER BY created_at DESC
+              LIMIT 1`,
+            [clientMessageId]
+        );
+        return result.rows[0] ?? null;
+    }
+
+    /** 특정 메시지 직전의 user 메시지 본문 — 그 응답을 유발한 질의 (자가개선 F2 귀속). */
+    async getPrecedingUserMessage(sessionId: string, beforeMessageId: number): Promise<string | null> {
+        const result = await this.query<{ content: string }>(
+            `SELECT content FROM conversation_messages
+              WHERE session_id = $1 AND role = 'user' AND id < $2
+              ORDER BY id DESC LIMIT 1`,
+            [sessionId, beforeMessageId]
+        );
+        return result.rows[0]?.content ?? null;
+    }
 }

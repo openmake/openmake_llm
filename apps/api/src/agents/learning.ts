@@ -21,6 +21,7 @@
 
 import crypto from 'node:crypto';
 import { createLogger } from '../utils/logger';
+import { AGENT_SELF_IMPROVE } from '../config/runtime-limits';
 import {
     type PromptSuggestionRow,
     persistSuggestions as storePersistSuggestions,
@@ -104,6 +105,46 @@ export class AgentLearningSystem {
     }
 
     /**
+     * 부팅 시 DB(agent_feedback)에서 최근 피드백을 인메모리 배열로 복원한다.
+     *
+     * 이게 없어서 재시작마다 피드백이 전부 사라졌고, 자가개선 사이클이 훑을 대상이
+     * "이번 프로세스에서 들어온 피드백"뿐이었다 — 재시작이 잦은 환경에선 사실상 빈 배열.
+     * 멱등(중복 호출 시 재로드), DB 오류는 graceful(빈 배열 유지).
+     *
+     * @returns 복원한 피드백 수
+     */
+    async hydrateFromDb(limit: number = AGENT_SELF_IMPROVE.HYDRATE_LIMIT): Promise<number> {
+        try {
+            const pool = this.getPool();
+            const result = await pool.query(
+                `SELECT id, agent_id, user_id, rating, comment, query, response, tags, created_at
+                   FROM agent_feedback
+                  ORDER BY created_at DESC
+                  LIMIT $1`,
+                [limit],
+            );
+            // 배열은 시간 오름차순 유지 (calculateQualityScore 가 정렬을 다시 하지만
+            // analyzeFailurePatterns 등 순서 의존 로직과의 정합을 위해 뒤집어 담는다)
+            this.feedbacks = result.rows.reverse().map((r: Record<string, unknown>) => ({
+                feedbackId: String(r.id),
+                agentId: String(r.agent_id),
+                userId: r.user_id != null ? String(r.user_id) : undefined,
+                rating: Number(r.rating) as 1 | 2 | 3 | 4 | 5,
+                comment: r.comment != null ? String(r.comment) : undefined,
+                query: r.query != null ? String(r.query) : '',
+                response: r.response != null ? String(r.response) : '',
+                timestamp: r.created_at instanceof Date ? r.created_at : new Date(String(r.created_at)),
+                tags: Array.isArray(r.tags) ? (r.tags as string[]) : undefined,
+            }));
+            logger.info(`피드백 복원: ${this.feedbacks.length}건 (agent_feedback)`);
+            return this.feedbacks.length;
+        } catch (error) {
+            logger.warn('피드백 복원 실패 (graceful — 빈 배열로 계속):', error);
+            return 0;
+        }
+    }
+
+    /**
      * 피드백 수집 (async — DB 영속화 포함)
      * 로컬 배열에 즉시 저장하고 DB에도 비동기로 저장합니다.
      */
@@ -123,8 +164,11 @@ export class AgentLearningSystem {
             timestamp: new Date()
         };
 
-        // 로컬 배열에 즉시 저장
+        // 로컬 배열에 즉시 저장 (상한 초과분은 오래된 것부터 버린다 — 무한 증가 방지)
         this.feedbacks.push(feedback);
+        if (this.feedbacks.length > AGENT_SELF_IMPROVE.HYDRATE_LIMIT) {
+            this.feedbacks.splice(0, this.feedbacks.length - AGENT_SELF_IMPROVE.HYDRATE_LIMIT);
+        }
 
         // DB에 비동기 영속화 (실패해도 로컬은 유지)
         try {

@@ -141,6 +141,12 @@ export async function saveAssistantMessage(
     saveHistory: boolean = true,
     /** 생각(추론) 원문 — 재열람 타임라인용. 요약 헤드라인은 비동기 도착이라 별도 UPDATE. */
     thinking?: string,
+    /**
+     * 자가개선(F2) 귀속용 메타.
+     * - agentId: 이 응답을 담당한 에이전트 (없으면 미기록)
+     * - clientMessageId: 클라이언트에 발급한 message id — 피드백 신호를 이 행에 되짚는 조인 키
+     */
+    attribution?: { agentId?: string; clientMessageId?: string },
 ): Promise<string | null> {
     // 1. 감사 로그 — 항상
     await recordAuditLog({
@@ -161,6 +167,8 @@ export async function saveAssistantMessage(
             responseTime,
             tokensUsed: estimateTokens(response),
             ...(thinking ? { thinking } : {}),
+            ...(attribution?.agentId ? { agentId: attribution.agentId } : {}),
+            ...(attribution?.clientMessageId ? { clientMessageId: attribution.clientMessageId } : {}),
         });
         return saved?.id ?? null;
     }

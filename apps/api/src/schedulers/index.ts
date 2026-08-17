@@ -254,7 +254,9 @@ async function startDebugQueueScheduler(): Promise<void> {
 async function startAgentLearningScheduler(): Promise<void> {
     try {
         const { getAgentLearningSystem } = await import('../agents/learning');
-        const learningTimer = setInterval(async () => {
+        const { AGENT_SELF_IMPROVE } = await import('../config/runtime-limits');
+
+        const runCycle = async (): Promise<void> => {
             try {
                 const result = await getAgentLearningSystem().runSelfImprovementCycle();
                 if (result.suggestions > 0) {
@@ -263,10 +265,27 @@ async function startAgentLearningScheduler(): Promise<void> {
             } catch (e) {
                 logger.error('[SelfImprove] 자기개선 사이클 실패:', e);
             }
-        }, 24 * 60 * 60 * 1000);
+        };
+
+        // 부팅 시 인메모리 피드백 복원 — 이게 없으면 사이클이 훑을 대상이 이번 프로세스
+        // 유입분뿐이라, 재시작이 잦은 환경에선 사실상 아무것도 분석하지 못한다.
+        const hydrateTimer = setTimeout(() => {
+            void (async () => {
+                await getAgentLearningSystem().hydrateFromDb();
+                // 복원 직후 1회 실행 — 구 구현은 24h setInterval 뿐이라 프로세스가 24시간을
+                // 넘기지 못하는 환경에서 사이클이 한 번도 돌지 않았다.
+                await runCycle();
+            })();
+        }, AGENT_SELF_IMPROVE.FIRST_RUN_DELAY_MS);
+        hydrateTimer.unref();
+        activeTimers.push(hydrateTimer);
+
+        const learningTimer = setInterval(() => { void runCycle(); }, AGENT_SELF_IMPROVE.INTERVAL_MS);
         learningTimer.unref();
         activeTimers.push(learningTimer);
-        logger.debug('자기개선 스케줄러 시작 완료');
+        logger.debug(
+            `자기개선 스케줄러 시작 완료 (첫 실행 ${AGENT_SELF_IMPROVE.FIRST_RUN_DELAY_MS}ms 후, 주기 ${AGENT_SELF_IMPROVE.INTERVAL_MS}ms)`,
+        );
     } catch (err) {
         logger.error('자기개선 스케줄러 시작 실패:', err);
     }
