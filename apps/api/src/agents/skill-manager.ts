@@ -113,6 +113,59 @@ export function formatTriggerHint(manifestMeta?: Record<string, unknown>): strin
     return ` (적용 상황: ${triggers.join(', ')})`;
 }
 
+/**
+ * manifest yaml 의 `triggers:` 블록을 문자열 배열로 파싱 (순수 함수).
+ * 저장된 manifest_yaml 은 fence 없는 순수 yaml 이라 최상위 키를 multiline 으로 매칭한다.
+ *
+ * 지원 형태:
+ *   triggers: [발표자료, 슬라이드]
+ *   triggers:
+ *     - 발표자료
+ *     - "슬라이드"
+ */
+export function parseManifestTriggers(manifestYaml: string): string[] {
+    const inline = /^triggers:\s*\[([^\]]*)\]\s*$/m.exec(manifestYaml);
+    if (inline) {
+        return inline[1].split(',')
+            .map(t => t.trim().replace(/^['"]|['"]$/g, ''))
+            .filter(Boolean);
+    }
+    const block = /^triggers:\s*\n((?:\s*-\s*[^\n]+\n?)+)/m.exec(manifestYaml);
+    if (!block) return [];
+    return block[1].split('\n')
+        .map(line => /^\s*-\s*(.+)$/.exec(line)?.[1]?.trim().replace(/^['"]|['"]$/g, '') ?? '')
+        .filter(Boolean);
+}
+
+/**
+ * 스킬 주입 관련성 게이트 (순수 함수, LLM 호출 없음).
+ *
+ * 개인 지정 스킬은 카테고리 필터를 우회해 모든 대화에 주입되므로, 스킬 하나가 무관한
+ * 질의까지 자기 워크플로우로 끌어가는 오염이 생긴다 — 발표자료 스킬이 클라우드 비교
+ * 질문의 답을 슬라이드 아티팩트로 만들어버린 실측 사례(2026-08-18).
+ *
+ * 스킬이 `triggers` 를 **선언한 경우에만** 게이트한다. 미선언 스킬은 종전대로 항상 주입해
+ * 기존 배포에 회귀가 없다. 트리거는 대소문자 무관 부분일치.
+ *
+ * @param triggers - 스킬이 선언한 적용 상황 키워드
+ * @param query - 이번 턴의 사용자 질의 (없으면 게이트하지 않음 — 판단 근거 부재)
+ */
+export function readMetaTriggers(manifestMeta?: Record<string, unknown>): string[] {
+    const raw = manifestMeta?.triggers;
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((t): t is string => typeof t === 'string' && t.trim().length > 0).map(t => t.trim());
+}
+
+export function matchesSkillTriggers(triggers: string[], query?: string): boolean {
+    if (triggers.length === 0) return true;
+    if (!query || query.trim().length === 0) return true;
+    const haystack = query.toLowerCase();
+    return triggers.some(t => {
+        const needle = t.toLowerCase().trim();
+        return needle.length > 0 && haystack.includes(needle);
+    });
+}
+
 // ========================================
 // SkillManager 클래스
 // ========================================
@@ -421,7 +474,7 @@ export class SkillManager {
      * 않아 프론트의 "스킬 활성화" 표시가 뜨지 않았다(2026-08-02 실측: 21/21 주입인데 이름 0개).
      */
     async buildManifestPrompt(
-        agentId: string, userId?: string, agentCategory?: string,
+        agentId: string, userId?: string, agentCategory?: string, query?: string,
     ): Promise<{ prompt: string; skillNames: string[] } | null> {
         let pool: Pool;
         try {
@@ -469,6 +522,9 @@ export class SkillManager {
         // agentCategory 필터: manifest_yaml 의 category 가 agent.category 와 일치하거나
         // user-* prefix (사용자 개인 manifest) 인 경우만 포함 — 무관한 skill 의 프롬프트 오염 방지.
         const filtered = rows.filter(r => {
+            // triggers 선언 스킬은 관련 턴에만 주입 — 개인 스킬의 카테고리 우회(아래)와
+            // 결합돼 무관한 질의까지 오염시키던 경로를 막는다. 미선언 스킬은 종전 동작.
+            if (!matchesSkillTriggers(parseManifestTriggers(r.manifest_yaml), query)) return false;
             if (!agentCategory) return true;
             if (r.id.startsWith('user-')) return true;
             const cat = /^---[\s\S]*?\bcategory:\s*([^\n]+)/.exec(r.manifest_yaml);
@@ -497,6 +553,7 @@ export class SkillManager {
                 const manifestIds = new Set(rows.map(r => r.id));
                 const userSkills = (await this.getUserSkills(userId)).filter(s =>
                     !manifestIds.has(s.id) &&
+                    matchesSkillTriggers(readMetaTriggers(s.manifestMeta), query) &&
                     (!agentCategory || s.category === agentCategory || s.category === 'general'));
                 for (const s of userSkills.slice(0, Math.max(0, 15 - blocks.length))) {
                     const safeName = s.name.replace(/[<>"&]/g, '');

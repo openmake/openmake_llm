@@ -214,7 +214,12 @@ function applyPromptPlaceholders(template: string, values: Record<string, string
  * @param userId - 사용자 ID (개인 스킬 포함 여부 결정)
  * @returns {Promise<{ prompt: string; skillNames: string[] }>} - 조합된 프롬프트와 활성 스킬 이름 목록
  */
-export async function getAgentSystemMessage(selection: AgentSelection, userId?: string, languageCode: string = 'en'): Promise<{ prompt: string; skillNames: string[] }> {
+export async function getAgentSystemMessage(
+    selection: AgentSelection,
+    userId?: string,
+    languageCode: string = 'en',
+    query?: string,
+): Promise<{ prompt: string; skillNames: string[] }> {
     const agent = AGENTS[selection.primaryAgent];
     if (!agent) {
         return { prompt: getDefaultSystemPrompt(languageCode), skillNames: [] };
@@ -247,7 +252,7 @@ ${applyPromptPlaceholders(promptTemplate.workingOn, { phase: getPhaseLabel(selec
     let hasDbSkills = false;
     const skillNames: string[] = [];
     try {
-        const manifest = await getSkillManager().buildManifestPrompt(agent.id, userId, agent.category);
+        const manifest = await getSkillManager().buildManifestPrompt(agent.id, userId, agent.category, query);
         if (manifest) {
             result += manifest.prompt;
             hasDbSkills = true;
