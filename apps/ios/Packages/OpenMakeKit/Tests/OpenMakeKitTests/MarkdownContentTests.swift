@@ -37,3 +37,24 @@ final class MarkdownContentTests: XCTestCase {
             serverURL: serverURL))
     }
 }
+
+final class ArtifactPlaceholderTests: XCTestCase {
+    func testStripsPlaceholderAndCollapsesBlankLine() {
+        let content = "결론입니다.\n\n[[artifact:k8s-swarm-comparison]]\n\n자세한 내용은 카드에 있습니다."
+        let cleaned = MarkdownContentParser.strippingArtifactPlaceholders(content)
+        XCTAssertFalse(cleaned.contains("[[artifact:"))
+        XCTAssertTrue(cleaned.contains("결론입니다."))
+        XCTAssertTrue(cleaned.contains("자세한 내용은"))
+        XCTAssertFalse(cleaned.contains("\n\n\n"), "연속 빈 줄이 남지 않는다")
+    }
+
+    func testVersionedPlaceholderAlsoStripped() {
+        let cleaned = MarkdownContentParser.strippingArtifactPlaceholders("본문 [[artifact:report:v2]] 끝")
+        XCTAssertEqual(cleaned, "본문  끝")
+    }
+
+    func testContentWithoutPlaceholderIsUnchanged() {
+        let content = "표\n| A | B |\n|---|---|\n| 1 | 2 |"
+        XCTAssertEqual(MarkdownContentParser.strippingArtifactPlaceholders(content), content)
+    }
+}
