@@ -12,8 +12,10 @@ struct MarkdownText: View {
     }
 
     var body: some View {
+        // 아티팩트 placeholder 는 걷어낸다 — 아티팩트는 별도 카드로 표시된다
+        let source = MarkdownContentParser.strippingArtifactPlaceholders(content)
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(MarkdownContentParser.segments(in: content).enumerated()), id: \.offset) { _, segment in
+            ForEach(Array(MarkdownContentParser.segments(in: source).enumerated()), id: \.offset) { _, segment in
                 switch segment {
                 case .text(let text):
                     textBlocks(text)
