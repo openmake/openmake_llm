@@ -150,6 +150,8 @@ public extension WsChatRequest {
         WsChatRequest(
             anonSessionID: nil,
             artifactMode: artifactMode,
+            // 좁은 화면 표면 — 서버가 답변 형식에 폭 제약(표 3열 이하·짧은 문단)을 덧붙인다
+            client: .ios,
             deepResearchMode: deepResearchMode,
             discussionMode: discussionMode,
             enabledTools: nil,

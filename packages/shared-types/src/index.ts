@@ -115,6 +115,12 @@ export interface WsChatRequest {
   memoryLearning?: boolean;
   /** 커스텀 에이전트(user_agents) id — 지정 시 백엔드가 산업 에이전트 자동라우팅을 우회하고 해당 페르소나 system_prompt 를 prepend */
   userAgentId?: string;
+  /**
+   * 클라이언트 표면 — 좁은 화면(모바일 네이티브)에 맞는 답변 형식을 요청할 때 'ios'.
+   * 미지정은 기존 동작(데스크톱 기준). 서버는 이 값으로 answer-format 에 화면 폭
+   * 지시를 덧붙일 뿐, 내용/기능 분기는 하지 않는다.
+   */
+  client?: "ios";
 }
 
 /** 아티팩트 메타 — 백엔드 llm/artifact-parser.ts ArtifactInfo 와 동일 계약. */

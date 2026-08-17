@@ -25,7 +25,7 @@
  */
 
 import { resolvePromptLocale } from './language-policy';
-import { ANSWER_FORMAT_TEXTS } from './prompt-locales';
+import { ANSWER_FORMAT_TEXTS, COMPACT_SCREEN_TEXTS } from './prompt-locales';
 import { detectPromptType } from './prompt-templates';
 import type { PromptType } from './prompt-templates';
 import type { Style } from './style';
@@ -69,10 +69,23 @@ export function resolveAnswerFormatProfile(opts: {
 /**
  * profile 별 prepend 텍스트. 'prose' 는 빈 문자열(overhead 0).
  */
-export function getAnswerFormatGuard(profile: AnswerFormatProfile, userLanguage: string): string {
-    if (profile === 'prose') return '';
+export function getAnswerFormatGuard(
+    profile: AnswerFormatProfile,
+    userLanguage: string,
+    opts: { compactScreen?: boolean } = {},
+): string {
     const locale = resolvePromptLocale(userLanguage);
-    return locale === 'ko' ? ANSWER_FORMAT_TEXTS.ko : ANSWER_FORMAT_TEXTS.en;
+    const compact = opts.compactScreen === true;
+    // prose 프로파일(일상 대화)에도 화면 폭 제약은 유효하다 — 표/문단 길이만 알린다.
+    if (profile === 'prose') {
+        return compact ? `## 📱 화면\n${compactText(locale)}\n` : '';
+    }
+    const base = locale === 'ko' ? ANSWER_FORMAT_TEXTS.ko : ANSWER_FORMAT_TEXTS.en;
+    return compact ? `${base}${compactText(locale)}\n` : base;
+}
+
+function compactText(locale: string): string {
+    return locale === 'ko' ? COMPACT_SCREEN_TEXTS.ko : COMPACT_SCREEN_TEXTS.en;
 }
 
 /**

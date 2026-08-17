@@ -92,10 +92,111 @@ private struct RichTextBlock: View {
         var id: String { String(describing: self) + UUID().uuidString }
     }
 
+    /// 접힌 섹션 제목 — 헤딩 탭으로 토글. 긴 답변에서 필요한 부분만 펼쳐 읽는다.
+    @State private var collapsed: Set<String> = []
+
     var body: some View {
+        let lines = parse()
+        let sections = sectionize(lines)
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(parse().enumerated()), id: \.offset) { _, line in
-                switch line {
+            ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
+                if let heading = section.heading {
+                    sectionHeader(heading, key: section.key, hasBody: !section.body.isEmpty)
+                }
+                if section.heading == nil || !collapsed.contains(section.key) {
+                    ForEach(Array(section.body.enumerated()), id: \.offset) { _, line in
+                        render(line)
+                    }
+                }
+            }
+        }
+    }
+
+    private struct Section {
+        let heading: (level: Int, text: String)?
+        let body: [Line]
+        /// 접힘 상태 키 — 같은 제목이 반복돼도 순서로 구분
+        let key: String
+    }
+
+    /// 헤딩 기준 섹션 묶기 — 헤딩 앞 도입부는 heading nil 섹션으로 항상 펼쳐 둔다.
+    private func sectionize(_ lines: [Line]) -> [Section] {
+        var sections: [Section] = []
+        var currentHeading: (level: Int, text: String)?
+        var buffer: [Line] = []
+        var index = 0
+
+        func flush() {
+            guard currentHeading != nil || !buffer.isEmpty else { return }
+            sections.append(Section(
+                heading: currentHeading,
+                body: buffer,
+                key: "\(index)-\(currentHeading?.text ?? "")"))
+            index += 1
+            buffer = []
+        }
+
+        for line in lines {
+            if case .heading(let level, let text) = line {
+                flush()
+                currentHeading = (level, text)
+            } else {
+                buffer.append(line)
+            }
+        }
+        flush()
+        return sections
+    }
+
+    /// 헤딩 + 접기 chevron. 섹션이 비어 있으면 토글하지 않는다.
+    @ViewBuilder
+    private func sectionHeader(_ heading: (level: Int, text: String), key: String, hasBody: Bool) -> some View {
+        let isCollapsed = collapsed.contains(key)
+        Button {
+            guard hasBody else { return }
+            withAnimation(.easeInOut(duration: 0.15)) {
+                if isCollapsed { collapsed.remove(key) } else { collapsed.insert(key) }
+            }
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(inline(heading.text))
+                    .font(.system(
+                        size: heading.level <= 1 ? 20 : (heading.level == 2 ? 17.5 : 16),
+                        weight: .bold))
+                    .foregroundStyle(Lumen.fg)
+                    .multilineTextAlignment(.leading)
+                if hasBody {
+                    Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Lumen.faint)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.top, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(hasBody ? (isCollapsed ? "펼치기" : "접기") : "")
+    }
+
+    @ViewBuilder
+    private func render(_ line: Line) -> some View {
+        switch line {
+        case .heading(let level, let text):
+            Text(inline(text))
+                .font(.system(size: level <= 1 ? 20 : (level == 2 ? 17.5 : 16), weight: .bold))
+                .foregroundStyle(Lumen.fg)
+                .padding(.top, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        default:
+            legacyRender(line)
+        }
+    }
+
+    @ViewBuilder
+    private func legacyRender(_ line: Line) -> some View {
+        Group {
+            switch line {
                 case .heading(let level, let text):
                     Text(inline(text))
                         .font(.system(size: level <= 1 ? 20 : (level == 2 ? 17.5 : 16), weight: .bold))
@@ -125,7 +226,6 @@ private struct RichTextBlock: View {
                     MarkdownTableView(table: table)
                 }
             }
-        }
     }
 
     private func listRow(marker: String, text: String, depth: Int) -> some View {
