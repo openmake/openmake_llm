@@ -24,7 +24,8 @@
       "modelRolesAdmin": "Model Roles Admin",
       "systemSettingsAdmin": "System Settings",
       "developer": "Developer",
-      "schedulesAdmin": "Task Schedules"
+      "schedulesAdmin": "Task Schedules",
+      "agentSuggestionsAdmin": "Prompt suggestions"
     },
     "pendingApprovals": "{count} pending approval(s) — agent tasks are waiting for your approval"
   },
@@ -995,7 +996,8 @@
     "envSave": "Save",
     "envSaved": "Credentials updated.",
     "envSavedRespawn": "Credentials updated. The existing connection was closed; the new values apply once it reconnects.",
-    "envUpdateError": "Failed to update credentials"
+    "envUpdateError": "Failed to update credentials",
+    "tabInstances": "Instances"
   },
   "mcpCatalog": {
     "pageTitle": "MCP Catalog",
@@ -1703,7 +1705,15 @@
     "costColKrw": "KRW",
     "costRateNote": "Assumed rates: input ${input}/1M · output ${output}/1M (output share {ratio}%) · FX ₩{fx}/$ — adjustable via server env",
     "costNoData": "No usage to aggregate",
-    "costCoverage": "Coverage: records since {since} (earlier usage not included — no token records)"
+    "costCoverage": "Coverage: records since {since} (earlier usage not included — no token records)",
+    "quotaTitle": "My token quota",
+    "quotaSubtitle": "This is what actually blocks requests. New responses are refused once it runs out.",
+    "quotaHourly": "Hourly",
+    "quotaWeekly": "Weekly",
+    "quotaResetAt": "Resets at {time}",
+    "quotaExceeded": "You have used up the hourly quota. You can send requests again after the reset time.",
+    "globalQuotaTitle": "Global quota usage (server-wide)",
+    "globalQuotaNote": "Server-wide observation that resets on process restart — separate from your personal quota"
   },
   "developer": {
     "pageTitle": "Developer Docs",
@@ -1847,5 +1857,59 @@
       "searchAria": "Keyword search",
       "searchPlaceholder": "Search name/description"
     }
+  },
+  "adminSuggestions": {
+    "title": "Prompt suggestion review",
+    "description": "Approve or reject agent prompt improvements produced by the self-improvement cycle.",
+    "note": "Only approved suggestions are injected into that agent's system prompt. Rejected ones are not proposed again.",
+    "listTitle": "Suggestions ({count})",
+    "refresh": "Refresh",
+    "empty": "No suggestions with this status.",
+    "loadError": "Failed to load suggestions.",
+    "actionError": "Failed to change status.",
+    "approve": "Approve",
+    "reject": "Reject",
+    "sourcePatterns": "Source patterns: {patterns}",
+    "filter": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "all": "All"
+    },
+    "cols": {
+      "agent": "Agent",
+      "suggestion": "Suggestion",
+      "quality": "Quality",
+      "status": "Status",
+      "createdAt": "Created",
+      "action": "Action"
+    }
+  },
+  "mcpInstances": {
+    "selectServer": "Select a server…",
+    "pickServer": "Select a server.",
+    "empty": "No instance history.",
+    "start": "Start",
+    "stop": "Stop",
+    "healthCheck": "Health check",
+    "refresh": "Refresh",
+    "healthCheckTitle": "Verify that pids of running instances are actually alive",
+    "autoRefresh": "Auto-refreshes every 15s",
+    "confirmStop": "Stop the server process?",
+    "startRequested": "Start requested.",
+    "stopRequested": "Stop requested.",
+    "healthResult": "{verified} verified · {dead} marked dead · {missing} without pid",
+    "loadError": "Failed to load instance data.",
+    "actionError": "Request failed.",
+    "metricRunning": "Running",
+    "metricSpawned": "Total spawned",
+    "metricCrashed": "Crashes (24h)",
+    "metricUptime": "Avg uptime",
+    "lastError": "Last error ({at}): {message}",
+    "colStatus": "Status",
+    "colPid": "PID",
+    "colStarted": "Started",
+    "colStopped": "Stopped",
+    "colError": "Error"
   }
 }

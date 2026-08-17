@@ -198,6 +198,108 @@ function CostEstimateSection() {
   );
 }
 
+/* ── 내 토큰 쿼터 섹션 (per-user, GET /api/usage/quota) ───────
+   LLMClient 가 실제 검사하는 llm/user-quota 버킷을 그대로 읽는다.
+   quota=null(비인증·KVStore 장애) 또는 limit<=0(무제한) 이면 섹션 미표시. */
+interface QuotaWindow {
+  used: number;
+  limit: number;
+  remaining: number;
+  resetAt: number;
+}
+interface QuotaStatus {
+  hourly: QuotaWindow;
+  weekly: QuotaWindow;
+}
+
+function QuotaBar({
+  label,
+  win,
+  locale,
+  resetLabel,
+}: {
+  label: string;
+  win: QuotaWindow;
+  locale: string;
+  resetLabel: string;
+}) {
+  const pct = win.limit > 0 ? Math.min(100, Math.round((win.used / win.limit) * 100)) : 0;
+  const tone = pct >= 90 ? "bg-danger" : pct >= 70 ? "bg-warn" : "bg-accent";
+  return (
+    <div>
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <span className="text-xs font-medium text-fg-2">{label}</span>
+        <span className="font-mono text-xs text-muted">
+          {fmtNum(win.used, locale)} / {fmtNum(win.limit, locale)} ({pct}%)
+        </span>
+      </div>
+      <div className="h-2 w-full overflow-hidden rounded-pill bg-surface-2">
+        <div className={cn("h-full rounded-pill transition-[width]", tone)} style={{ width: `${Math.max(1, pct)}%` }} />
+      </div>
+      <p className="mt-1 text-[11px] text-faint">{resetLabel}</p>
+    </div>
+  );
+}
+
+function MyQuotaSection() {
+  const t = useTranslations("usage");
+  const locale = toBcp47(useLocale());
+  const [quota, setQuota] = useState<QuotaStatus | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void ApiClient.get<ApiSuccess<{ quota: QuotaStatus | null }>>("/api/usage/quota")
+      .then((res) => {
+        if (alive) setQuota(res?.data?.quota ?? null);
+      })
+      .catch(() => {
+        /* 비로그인/오류 — 섹션 미표시 */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // 두 윈도우 모두 무제한이면 보여줄 것이 없다
+  if (!quota || (quota.hourly.limit <= 0 && quota.weekly.limit <= 0)) return null;
+
+  const fmtReset = (ms: number) =>
+    t("quotaResetAt", { time: new Date(ms).toLocaleTimeString(locale) });
+  const exceeded = quota.hourly.remaining === 0 && quota.hourly.limit > 0;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t("quotaTitle")}</CardTitle>
+        <p className="mt-0.5 text-xs text-muted">{t("quotaSubtitle")}</p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {quota.hourly.limit > 0 && (
+          <QuotaBar
+            label={t("quotaHourly")}
+            win={quota.hourly}
+            locale={locale}
+            resetLabel={fmtReset(quota.hourly.resetAt)}
+          />
+        )}
+        {quota.weekly.limit > 0 && (
+          <QuotaBar
+            label={t("quotaWeekly")}
+            win={quota.weekly}
+            locale={locale}
+            resetLabel={fmtReset(quota.weekly.resetAt)}
+          />
+        )}
+        {exceeded && (
+          <p className="rounded-md border border-danger/40 bg-danger-soft px-3 py-2 text-xs text-danger" role="alert">
+            {t("quotaExceeded")}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 /* ── 시스템 토큰 모니터링 섹션 (관리자 전용) ────────────────── */
 interface MonitoringCosts {
   today: {
@@ -231,27 +333,36 @@ interface MonitoringHourly {
   datasets: { requests: number[]; tokens: number[] };
 }
 
+/** 전역 tracker 기준 쿼터(GET /api/monitoring/quota) — per-user 와 다른 관측치라 admin 섹션에만 둔다. */
+interface MonitoringQuota {
+  hourly: { used: number; limit: number; remaining: number };
+  weekly: { used: number; limit: number; remaining: number };
+}
+
 function SystemTokenMonitor() {
   const t = useTranslations("usage");
   const locale = toBcp47(useLocale());
   const [costs, setCosts] = useState<MonitoringCosts | null>(null);
   const [daily, setDaily] = useState<MonitoringDaily | null>(null);
   const [hourly, setHourly] = useState<MonitoringHourly | null>(null);
+  const [quota, setQuota] = useState<MonitoringQuota | null>(null);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const [costsRes, dailyRes, hourlyRes] = await Promise.all([
+        const [costsRes, dailyRes, hourlyRes, quotaRes] = await Promise.all([
           ApiClient.get<{ data: MonitoringCosts }>("/api/monitoring/costs"),
           ApiClient.get<{ data: MonitoringDaily }>("/api/monitoring/usage/daily?days=7"),
           ApiClient.get<{ data: MonitoringHourly }>("/api/monitoring/usage/hourly"),
+          ApiClient.get<{ data: MonitoringQuota }>("/api/monitoring/quota"),
         ]);
         if (!alive) return;
         setCosts(costsRes?.data ?? null);
         setDaily(dailyRes?.data ?? null);
         setHourly(hourlyRes?.data ?? null);
+        setQuota(quotaRes?.data ?? null);
         setVisible(true);
       } catch {
         // 401/비관리자 → 섹션 숨김
@@ -296,6 +407,29 @@ function SystemTokenMonitor() {
               label={t("stat.weekEstCost")}
               value={fmtCost(costs.weekly.estimatedCost)}
             />
+          </div>
+        )}
+
+        {/* 전역 쿼터 소진율 (서버 전체 기준 — 개인 쿼터와 별개) */}
+        {quota && (quota.hourly.limit > 0 || quota.weekly.limit > 0) && (
+          <div className="space-y-4">
+            <p className="text-xs font-medium text-fg-2">{t("globalQuotaTitle")}</p>
+            {quota.hourly.limit > 0 && (
+              <QuotaBar
+                label={t("quotaHourly")}
+                win={{ ...quota.hourly, resetAt: 0 }}
+                locale={locale}
+                resetLabel={t("globalQuotaNote")}
+              />
+            )}
+            {quota.weekly.limit > 0 && (
+              <QuotaBar
+                label={t("quotaWeekly")}
+                win={{ ...quota.weekly, resetAt: 0 }}
+                locale={locale}
+                resetLabel={t("globalQuotaNote")}
+              />
+            )}
           </div>
         )}
 
@@ -487,6 +621,9 @@ export default function UsagePage() {
                   deltaTone={month?.totalErrors ? "danger" : "success"}
                 />
               </div>
+
+              {/* 내 토큰 쿼터 잔여 (per-user, 실제 enforcement 소스) */}
+              <MyQuotaSection />
 
               {/* 가상 비용 환산 (일/월/년) — 상용 API 였다면 얼마 */}
               <CostEstimateSection />
