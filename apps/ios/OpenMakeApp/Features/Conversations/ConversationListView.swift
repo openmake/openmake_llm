@@ -124,6 +124,12 @@ struct ConversationListView: View {
                     autoChatFired = true
                     showNewChat = true
                 }
+                // 시뮬레이터 스모크: 최신 대화 자동 열기 (기존 대화 렌더 검증용)
+                if let raw = ProcessInfo.processInfo.environment["OPENMAKE_UITEST_OPEN_LATEST"],
+                   let index = Int(raw), !autoChatFired, sessions.indices.contains(index) {
+                    autoChatFired = true
+                    selectedSession = sessions[index]
+                }
                 #endif
             }
             .onReceive(NotificationCenter.default.publisher(for: .openMakeNotificationURL)) { notification in
