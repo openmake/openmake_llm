@@ -238,4 +238,6 @@ export interface ChatMessageRequest {
      * claude.ai Projects / ChatGPT Custom GPTs 동등.
      */
     userAgentId?: string;
+    /** 클라이언트 표면 — 'ios' 면 좁은 화면용 답변 형식 지시 추가 (2026-08-18) */
+    client?: 'ios';
 }

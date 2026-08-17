@@ -68,3 +68,28 @@ describe('answer-format: applyAnswerFormat', () => {
         expect(out.indexOf('답변 형식')).toBeLessThan(out.indexOf(base));
     });
 });
+
+describe('answer-format: compactScreen (모바일 클라이언트)', () => {
+    it('structured + compact 는 기존 가드 뒤에 화면 폭 지시를 덧붙인다', () => {
+        const plain = getAnswerFormatGuard('structured', 'ko');
+        const compact = getAnswerFormatGuard('structured', 'ko', { compactScreen: true });
+        expect(compact.startsWith(plain)).toBe(true);
+        expect(compact).toContain("열은 3개 이하");
+    });
+
+    it('prose + compact 는 폭 지시만 주입 (구조 강제 없음)', () => {
+        const compact = getAnswerFormatGuard('prose', 'ko', { compactScreen: true });
+        expect(compact).toContain("열은 3개 이하");
+        expect(compact).not.toContain('결론을 가장 먼저');
+    });
+
+    it('compact 미지정은 기존 동작 유지 (overhead 0)', () => {
+        expect(getAnswerFormatGuard('prose', 'ko')).toBe('');
+        expect(getAnswerFormatGuard('prose', 'en')).toBe('');
+    });
+
+    it('영어 로케일도 폭 지시를 제공', () => {
+        const compact = getAnswerFormatGuard('structured', 'en', { compactScreen: true });
+        expect(compact).toContain("three columns or fewer");
+    });
+});

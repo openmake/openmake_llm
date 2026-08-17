@@ -386,7 +386,9 @@ export async function runMessagePipeline(svc: ChatService,
         style: normalizeStyle(req.style),
         message: message || '',
     });
-    const extAnswerFormatBlock = getAnswerFormatGuard(extAnswerFormatProfile, extLang);
+    const extAnswerFormatBlock = getAnswerFormatGuard(extAnswerFormatProfile, extLang, {
+        compactScreen: req.client === 'ios',
+    });
     // 보고서 파이프라인 (P1): 보고서 의도 턴에만 reportdata 데이터 계약 가이드를 주입한다.
     // 모델은 데이터(JSON)만 만들고 렌더는 백엔드 고정 템플릿이 담당 (renderer owns design).
     // 이때 artifact 가이드는 제거한다 — 두 가이드를 함께 주입하면 qwen 이 <artifact> 형식
