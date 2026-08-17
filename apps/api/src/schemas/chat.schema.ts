@@ -121,6 +121,8 @@ export const chatRequestSchema = z.object({
     style: z.enum(['concise', 'default', 'verbose']).optional(),
     /** Phase 2 Custom Agent (2026-05-26): 사용자 정의 agent id (claude.ai Projects / ChatGPT Custom GPTs 동등) */
     userAgentId: z.string().max(64).optional(),
+    /** 클라이언트 표면 — 'ios' 면 좁은 화면용 답변 형식 지시 추가 (REST 경로 대비) */
+    client: z.enum(['ios']).optional(),
 });
 
 /** 채팅 요청 TypeScript 타입 (Zod 스키마로부터 추론) */

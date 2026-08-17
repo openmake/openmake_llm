@@ -68,6 +68,8 @@ export interface WSMessage {
     style?: 'concise' | 'default' | 'verbose';
     /** Phase 2 Custom Agent (2026-05-26): 사용자 정의 agent id */
     userAgentId?: string;
+    /** 클라이언트 표면 — 'ios' 면 좁은 화면용 답변 형식 지시를 덧붙인다 (2026-08-18) */
+    client?: 'ios';
     /** NotebookLM 노트북 컨텍스트 — composer picker 선택. 백엔드가 프리픽스 주입(prompts/notebook-context) */
     notebook?: { id: string; title: string } | null;
     /** Phase 3.4 (2026-05-26): 메시지 편집 분기 — 새 session 의 부모 추적 */

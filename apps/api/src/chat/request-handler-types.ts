@@ -85,6 +85,8 @@ export interface ChatRequestParams {
      * 명시 시 18 산업 agent 자동 라우팅 우회 + agent.system_prompt 적용.
      */
     userAgentId?: string;
+    /** 클라이언트 표면 — 'ios' 면 좁은 화면용 답변 형식 지시 추가 (2026-08-18) */
+    client?: 'ios';
     /**
      * 메시지 본문을 conversation_messages 에 저장할지 여부.
      * undefined/true → 저장 (기본). false → 본문 저장 스킵, audit log 만 기록.

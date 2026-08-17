@@ -291,6 +291,8 @@ export async function handleChatMessage(
             thinkingLevel: (msg.thinkingLevel || 'high') as 'low' | 'medium' | 'high',
             style: msg.style,
             userAgentId: msg.userAgentId,
+            // 좁은 화면 클라이언트(iOS 앱) — 답변 형식에 폭 제약만 덧붙인다
+            client: msg.client === 'ios' ? 'ios' : undefined,
             // Phase 3.4 (2026-05-26): 메시지 편집 분기 — 새 session 생성 시 부모 추적
             branchFromSessionId: typeof msg.branchFromSessionId === 'string' ? msg.branchFromSessionId : undefined,
             branchFromMessageId: typeof msg.branchFromMessageId === 'string' ? msg.branchFromMessageId : undefined,

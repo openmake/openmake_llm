@@ -799,6 +799,9 @@ public struct WsChatRequest: Codable {
     public let anonSessionID: String?
     /// 아티팩트 모드 — ON 이면 모델이 <artifact> 산출물을 생성하도록 유도
     public let artifactMode: Bool?
+    /// 클라이언트 표면 — 좁은 화면(모바일 네이티브)에 맞는 답변 형식을 요청할 때 'ios'. 미지정은 기존 동작(데스크톱 기준). 서버는 이 값으로
+    /// answer-format 에 화면 폭 지시를 덧붙일 뿐, 내용/기능 분기는 하지 않는다.
+    public let client: Client?
     public let deepResearchMode: Bool?
     /// 멀티 에이전트 토론 모드
     public let discussionMode: Bool?
@@ -831,6 +834,7 @@ public struct WsChatRequest: Codable {
     public enum CodingKeys: String, CodingKey {
         case anonSessionID = "anonSessionId"
         case artifactMode = "artifactMode"
+        case client = "client"
         case deepResearchMode = "deepResearchMode"
         case discussionMode = "discussionMode"
         case enabledTools = "enabledTools"
@@ -851,9 +855,10 @@ public struct WsChatRequest: Codable {
         case webSearch = "webSearch"
     }
 
-    public init(anonSessionID: String?, artifactMode: Bool?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, memoryLearning: Bool?, message: String, model: String?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, webSearch: Bool?) {
+    public init(anonSessionID: String?, artifactMode: Bool?, client: Client?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, memoryLearning: Bool?, message: String, model: String?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, webSearch: Bool?) {
         self.anonSessionID = anonSessionID
         self.artifactMode = artifactMode
+        self.client = client
         self.deepResearchMode = deepResearchMode
         self.discussionMode = discussionMode
         self.enabledTools = enabledTools
@@ -896,6 +901,7 @@ public extension WsChatRequest {
     func with(
         anonSessionID: String?? = nil,
         artifactMode: Bool?? = nil,
+        client: Client?? = nil,
         deepResearchMode: Bool?? = nil,
         discussionMode: Bool?? = nil,
         enabledTools: [String: Bool]?? = nil,
@@ -918,6 +924,7 @@ public extension WsChatRequest {
         return WsChatRequest(
             anonSessionID: anonSessionID ?? self.anonSessionID,
             artifactMode: artifactMode ?? self.artifactMode,
+            client: client ?? self.client,
             deepResearchMode: deepResearchMode ?? self.deepResearchMode,
             discussionMode: discussionMode ?? self.discussionMode,
             enabledTools: enabledTools ?? self.enabledTools,
@@ -946,6 +953,10 @@ public extension WsChatRequest {
     func jsonString(encoding: String.Encoding = .utf8) throws -> String? {
         return String(data: try self.jsonData(), encoding: encoding)
     }
+}
+
+public enum Client: String, Codable {
+    case ios = "ios"
 }
 
 /// 첨부 텍스트 파일 (백엔드 ws-chat-handler files[] · attach-context AttachedFileInput 호환)
