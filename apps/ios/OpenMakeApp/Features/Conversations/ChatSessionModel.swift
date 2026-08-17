@@ -62,7 +62,11 @@ final class ChatSessionModel {
         defer { isStreaming = false }
 
         var state = ChatStreamState()
-        state.begin()
+        // 첫 프레임까지 수십 초 걸리는 모드는 무엇을 기다리는지 알려준다
+        state.begin(hint: modes.imageGen ? "이미지를 생성하고 있어요 (최대 1분)"
+            : modes.deepResearch ? "자료를 조사하고 있어요"
+            : modes.discussion ? "에이전트들이 토론을 준비하고 있어요"
+            : nil)
         apply(state)
 
         do {
@@ -111,6 +115,12 @@ final class ChatSessionModel {
 
             if let error = state.errorMessage {
                 errorMessage = error
+            } else if !state.isDone {
+                // done 없이 스트림이 끝남(연결 끊김·타임아웃) — 이전엔 메시지도 오류도 없이
+                // 조용히 사라져 "응답이 오지 않는" 것처럼 보였다 (2026-08-17).
+                errorMessage = streamingText.isEmpty
+                    ? "응답이 중단됐어요. 다시 보내주세요."
+                    : "응답이 중간에 끊겼어요. 이어서 다시 물어봐 주세요."
             }
             finalizeAssistantMessage()
             if modes.deepResearch, state.errorMessage == nil {

@@ -61,9 +61,12 @@ public struct ChatStreamState: Sendable {
 
     public init() {}
 
-    public mutating func begin() {
+    /// 전송 직후 초기 상태.
+    /// - Parameter hint: 모드별 안내 문구. 이미지 생성·딥리서치처럼 첫 프레임까지
+    ///   수십 초가 걸리는 요청은 이 문구가 없으면 멈춘 것처럼 보인다.
+    public mutating func begin(hint: String? = nil) {
         activeSkillNames = []
-        statusText = "요청을 분석하고 있어요"
+        statusText = hint ?? "요청을 분석하고 있어요"
         activityKind = .preparing
     }
 

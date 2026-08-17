@@ -73,6 +73,18 @@ final class AppModel {
            !access.isEmpty {
             tokenStore.save(AuthTokens(access: access, refresh: refresh))
         }
+        // 모드 토글 스모크 — OPENMAKE_UITEST_MODES=image,websearch 형식
+        if let raw = ProcessInfo.processInfo.environment["OPENMAKE_UITEST_MODES"] {
+            for mode in raw.split(separator: ",").map({ $0.trimmingCharacters(in: .whitespaces) }) {
+                switch mode {
+                case "image": modes.imageGen = true
+                case "websearch": modes.webSearch = true
+                case "thinking": modes.thinking = true
+                case "deepresearch": modes.deepResearch = true
+                default: break
+                }
+            }
+        }
         #endif
         guard await client.isAuthenticated else {
             authState = .loggedOut

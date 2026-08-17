@@ -20,6 +20,24 @@ final class ChatStreamStateTests: XCTestCase {
         XCTAssertFalse(state.isThinking)
     }
 
+    func testBeginHintExplainsLongRunningModes() {
+        var state = ChatStreamState()
+        state.begin(hint: "이미지를 생성하고 있어요 (최대 1분)")
+        XCTAssertEqual(state.statusText, "이미지를 생성하고 있어요 (최대 1분)")
+        XCTAssertFalse(state.isDone)
+    }
+
+    func testStreamWithoutDoneStaysIncomplete() {
+        // done 이 오기 전 연결이 끊기면 isDone 은 false 로 남아야 한다
+        // (호출자가 이 조건으로 "응답 중단" 을 사용자에게 알린다 — 조용한 실패 방지)
+        var state = ChatStreamState()
+        state.begin()
+        state.apply(event(#"{"type":"token","token":"부분"}"#))
+        XCTAssertFalse(state.isDone)
+        XCTAssertEqual(state.streamingText, "부분")
+        XCTAssertNil(state.errorMessage)
+    }
+
     func testSessionCreatedAdoptsId() {
         var state = ChatStreamState()
         state.apply(event(#"{"type":"session_created","sessionId":"s-new"}"#))

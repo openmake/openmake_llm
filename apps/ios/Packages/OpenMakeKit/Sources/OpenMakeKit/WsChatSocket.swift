@@ -16,9 +16,23 @@ public actor WsChatSocket {
     private var task: URLSessionWebSocketTask?
     private var continuation: AsyncStream<WsServerEvent>.Continuation?
 
+    /// 첫 프레임까지 대기 상한. 이미지 생성(FLUX)·딥리서치는 수십 초간 서버→클라 프레임이
+    /// 전혀 없다 — URLSession 기본 60s 로는 그 구간에서 조용히 끊겨 "응답이 오지 않는" 증상이
+    /// 된다 (2026-08-17 실측: 이미지 생성 50s+). 넉넉히 잡되 무한 대기는 피한다.
+    public static let requestTimeout: TimeInterval = 300
+    public static let resourceTimeout: TimeInterval = 900
+
     public init(serverURL: URL, session: URLSession? = nil) {
         self.serverURL = serverURL
-        self.session = session ?? URLSession(configuration: .ephemeral)
+        if let session {
+            self.session = session
+        } else {
+            let config = URLSessionConfiguration.ephemeral
+            config.timeoutIntervalForRequest = Self.requestTimeout
+            config.timeoutIntervalForResource = Self.resourceTimeout
+            config.waitsForConnectivity = true
+            self.session = URLSession(configuration: config)
+        }
     }
 
     public var isConnected: Bool { task != nil }
