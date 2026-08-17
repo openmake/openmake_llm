@@ -16,12 +16,18 @@ final class ChatSessionModel {
     private(set) var isThinking = false
     private(set) var isStreaming = false
     private(set) var errorMessage: String?
+    /// 오류가 아닌 안내 (중단 등) — 회색으로 표시
+    private(set) var noticeText: String?
     /// 도구/리서치/토론 진행 한 줄 (ChatStreamState.statusText)
     private(set) var statusText: String?
     private(set) var activityKind: ChatActivityKind = .preparing
     private(set) var activeSkills: [String] = []
     private(set) var artifacts: [ArtifactDocument] = []
     private(set) var activeAgentTask: AgentTaskDetail?
+    /// 이번 응답에서 지나온 단계 이력 — 진행 카드에서 펼쳐 본다
+    private(set) var activityLog: [ChatActivityEntry] = []
+    /// 스트리밍 시작 시각 — 경과 시간 표시(멈춤/진행 구분)의 기준
+    private(set) var streamStartedAt: Date?
 
     init(client: OpenMakeClient, serverURL: URL, sessionId: String?) {
         self.client = client
@@ -48,6 +54,7 @@ final class ChatSessionModel {
         modes: AppModel.ChatModes = .init()
     ) async {
         errorMessage = nil
+        noticeText = nil
         activeSkills = []
         messages.append(.init(
             role: .user, content: text, model: nil, tokens: nil,
@@ -59,10 +66,18 @@ final class ChatSessionModel {
         }
 
         isStreaming = true
-        defer { isStreaming = false }
+        streamStartedAt = Date()
+        defer {
+            isStreaming = false
+            streamStartedAt = nil
+        }
 
         var state = ChatStreamState()
-        state.begin()
+        // 첫 프레임까지 수십 초 걸리는 모드는 무엇을 기다리는지 알려준다
+        state.begin(hint: modes.imageGen ? "이미지를 생성하고 있어요 (최대 1분)"
+            : modes.deepResearch ? "자료를 조사하고 있어요"
+            : modes.discussion ? "에이전트들이 토론을 준비하고 있어요"
+            : nil)
         apply(state)
 
         do {
@@ -111,6 +126,16 @@ final class ChatSessionModel {
 
             if let error = state.errorMessage {
                 errorMessage = error
+            } else if state.wasAborted {
+                noticeText = streamingText.isEmpty
+                    ? "응답을 중단했어요"
+                    : "여기까지 받고 중단했어요"
+            } else if !state.isDone {
+                // done 없이 스트림이 끝남(연결 끊김·타임아웃) — 이전엔 메시지도 오류도 없이
+                // 조용히 사라져 "응답이 오지 않는" 것처럼 보였다 (2026-08-17).
+                errorMessage = streamingText.isEmpty
+                    ? "응답이 중단됐어요. 다시 보내주세요."
+                    : "응답이 중간에 끊겼어요. 이어서 다시 물어봐 주세요."
             }
             finalizeAssistantMessage()
             if modes.deepResearch, state.errorMessage == nil {
@@ -123,6 +148,13 @@ final class ChatSessionModel {
             errorMessage = "연결에 실패했습니다"
             finalizeAssistantMessage()
         }
+    }
+
+    /// 진행 중 응답 중단 — 서버에 abort 를 보내고 aborted 이벤트로 스트림이 닫힌다
+    func stopStreaming() async {
+        guard isStreaming else { return }
+        statusText = "중단하고 있어요"
+        await socket.abort()
     }
 
     func teardown() {
@@ -139,6 +171,7 @@ final class ChatSessionModel {
         statusText = state.statusText
         activityKind = state.activityKind ?? .preparing
         activeSkills = state.activeSkillNames
+        activityLog = state.activityLog
         for artifact in state.artifacts {
             let document = ArtifactDocument(streamed: artifact)
             if let index = artifacts.firstIndex(where: { $0.id == document.id }) {

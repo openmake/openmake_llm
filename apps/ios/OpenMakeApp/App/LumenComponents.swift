@@ -31,6 +31,107 @@ struct ActivityStatusLine: View {
     }
 }
 
+/// 진행 카드 — 현재 단계 + 경과 시간 + 지나온 단계(펼치기) + 중단 버튼.
+/// 상태 한 줄만으로는 "멈춘 것인지" 알 수 없다는 피드백(2026-08-17)에 대한 응답으로,
+/// 경과 초를 1초마다 갱신해 살아있음을 보이고 이력으로 무엇을 했는지 남긴다.
+struct ActivityProgressCard: View {
+    let statusText: String
+    let kind: ChatActivityKind
+    let startedAt: Date?
+    let log: [ChatActivityEntry]
+    let onStop: () -> Void
+
+    @State private var expanded = false
+
+    private var color: Color {
+        switch kind {
+        case .thinking: Lumen.warn
+        case .agent, .research, .tool, .artifact: Lumen.accent
+        case .preparing, .finalizing: Lumen.success
+        }
+    }
+
+    /// 이미 지나간 단계 (현재 단계 제외)
+    private var pastEntries: [ChatActivityEntry] {
+        log.count > 1 ? Array(log.dropLast().reversed()) : []
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                LumenDot(color: color, size: 7, pulsing: true)
+
+                Text(statusText)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(Lumen.fg2)
+                    .lineLimit(2)
+
+                if let startedAt {
+                    TimelineView(.periodic(from: startedAt, by: 1)) { context in
+                        Text(elapsedText(now: context.date, from: startedAt))
+                            .font(.system(size: 11.5, design: .monospaced))
+                            .foregroundStyle(Lumen.faint)
+                            .monospacedDigit()
+                    }
+                }
+
+                Spacer(minLength: 4)
+
+                if !pastEntries.isEmpty {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) { expanded.toggle() }
+                    } label: {
+                        Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Lumen.faint)
+                    }
+                    .accessibilityLabel(expanded ? "진행 단계 접기" : "진행 단계 펼치기")
+                }
+
+                Button(action: onStop) {
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Lumen.muted)
+                        .frame(width: 22, height: 22)
+                        .background(Lumen.surface2, in: Circle())
+                }
+                .accessibilityLabel("응답 중단")
+            }
+
+            if expanded {
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(pastEntries) { entry in
+                        HStack(spacing: 7) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(Lumen.success)
+                            Text(entry.text)
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(Lumen.faint)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                .padding(.leading, 2)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Lumen.surface, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Lumen.border))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("진행 상태: \(statusText)")
+    }
+
+    private func elapsedText(now: Date, from start: Date) -> String {
+        let seconds = max(0, Int(now.timeIntervalSince(start)))
+        if seconds < 60 { return "\(seconds)초" }
+        return "\(seconds / 60)분 \(seconds % 60)초"
+    }
+}
+
 struct ModeChip: View {
     let label: String
     var systemImage: String?

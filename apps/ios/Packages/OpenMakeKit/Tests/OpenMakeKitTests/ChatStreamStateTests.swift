@@ -20,6 +20,24 @@ final class ChatStreamStateTests: XCTestCase {
         XCTAssertFalse(state.isThinking)
     }
 
+    func testBeginHintExplainsLongRunningModes() {
+        var state = ChatStreamState()
+        state.begin(hint: "이미지를 생성하고 있어요 (최대 1분)")
+        XCTAssertEqual(state.statusText, "이미지를 생성하고 있어요 (최대 1분)")
+        XCTAssertFalse(state.isDone)
+    }
+
+    func testStreamWithoutDoneStaysIncomplete() {
+        // done 이 오기 전 연결이 끊기면 isDone 은 false 로 남아야 한다
+        // (호출자가 이 조건으로 "응답 중단" 을 사용자에게 알린다 — 조용한 실패 방지)
+        var state = ChatStreamState()
+        state.begin()
+        state.apply(event(#"{"type":"token","token":"부분"}"#))
+        XCTAssertFalse(state.isDone)
+        XCTAssertEqual(state.streamingText, "부분")
+        XCTAssertNil(state.errorMessage)
+    }
+
     func testSessionCreatedAdoptsId() {
         var state = ChatStreamState()
         state.apply(event(#"{"type":"session_created","sessionId":"s-new"}"#))
@@ -83,12 +101,37 @@ final class ChatStreamStateTests: XCTestCase {
         XCTAssertEqual(state.statusText, "web-search, report 적용 중")
         XCTAssertEqual(state.activityKind, .agent)
 
+        // 본문이 오기 시작하면 상태는 "작성 중" 으로 바뀐다 (비우면 화면이 정적이 되어 멈춘 것처럼 보임)
         state.apply(event(#"{"type":"token","token":"결과"}"#))
-        XCTAssertNil(state.statusText)
+        XCTAssertEqual(state.statusText, "응답을 작성하고 있어요")
         XCTAssertEqual(state.activeSkillNames, ["web-search", "report"])
 
         state.begin()
         XCTAssertTrue(state.activeSkillNames.isEmpty)
+        XCTAssertEqual(state.activityLog.count, 1, "새 질문은 이력을 초기화한다")
+    }
+
+    func testAbortMarksWasAbortedForNotice() {
+        var state = ChatStreamState()
+        state.begin()
+        state.apply(event(#"{"type":"aborted"}"#))
+        XCTAssertTrue(state.isDone)
+        XCTAssertTrue(state.wasAborted, "중단은 오류가 아니라 안내로 구분해 표시한다")
+        XCTAssertNil(state.errorMessage)
+    }
+
+    func testActivityLogAccumulatesDistinctSteps() {
+        var state = ChatStreamState()
+        state.begin()
+        state.apply(event(#"{"type":"agent_selected","agent":{"name":"Researcher","type":"researcher"}}"#))
+        state.apply(event(#"{"type":"mcp_tool_start","toolName":"web_search"}"#))
+        state.apply(event(#"{"type":"mcp_tool_start","toolName":"web_search"}"#)) // 중복 — 이력 증가 없음
+        state.apply(event(#"{"type":"token","token":"답"}"#))
+
+        let texts = state.activityLog.map(\.text)
+        XCTAssertEqual(texts.first, "요청을 분석하고 있어요")
+        XCTAssertEqual(texts.last, "응답을 작성하고 있어요")
+        XCTAssertEqual(texts.count, Set(texts).count, "연속 중복 단계는 이력에 쌓이지 않는다")
     }
 
     func testAgentTaskProgressUsesStepPreviewWithoutMultilineOutput() {

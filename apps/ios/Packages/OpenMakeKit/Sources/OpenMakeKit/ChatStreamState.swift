@@ -44,11 +44,27 @@ public struct ChatArtifact: Identifiable, Equatable, Sendable {
     }
 }
 
+/// 진행 단계 한 건 — 지나간 단계도 남겨 "무엇을 하고 있었는지" 를 보여준다.
+/// (상태 한 줄만 갈아끼우면 사용자는 멈춘 것인지 진행 중인지 알 수 없다 — 2026-08-17 피드백)
+public struct ChatActivityEntry: Identifiable, Equatable, Sendable {
+    public let id: UUID
+    public let text: String
+    public let kind: ChatActivityKind
+
+    init(text: String, kind: ChatActivityKind) {
+        self.id = UUID()
+        self.text = text
+        self.kind = kind
+    }
+}
+
 public struct ChatStreamState: Sendable {
     public private(set) var streamingText = ""
     public private(set) var isThinking = false
     public private(set) var sessionId: String?
     public private(set) var isDone = false
+    /// 사용자가 중단(abort)해서 끝났는지 — 조용히 사라지지 않게 안내를 남기는 판단 기준
+    public private(set) var wasAborted = false
     public private(set) var metrics: ChatStreamMetrics?
     public private(set) var errorMessage: String?
     /// 인증 토큰 만료 임박 — 호출자는 REST refresh 후 재연결 (웹과 동일 규약)
@@ -58,21 +74,31 @@ public struct ChatStreamState: Sendable {
     public private(set) var activityKind: ChatActivityKind?
     public private(set) var activeSkillNames: [String] = []
     public private(set) var artifacts: [ChatArtifact] = []
+    /// 이번 응답에서 지나온 단계 이력 (최신이 마지막). 진행 카드에서 펼쳐 보여준다.
+    public private(set) var activityLog: [ChatActivityEntry] = []
+    /// 본문 토큰을 한 자라도 받았는지 — "응답 작성 중" 표시 판단용
+    public var hasStartedAnswer: Bool { !streamingText.isEmpty }
 
     public init() {}
 
-    public mutating func begin() {
+    /// 전송 직후 초기 상태.
+    /// - Parameter hint: 모드별 안내 문구. 이미지 생성·딥리서치처럼 첫 프레임까지
+    ///   수십 초가 걸리는 요청은 이 문구가 없으면 멈춘 것처럼 보인다.
+    public mutating func begin(hint: String? = nil) {
         activeSkillNames = []
-        statusText = "요청을 분석하고 있어요"
-        activityKind = .preparing
+        activityLog = []
+        setActivity(hint ?? "요청을 분석하고 있어요", kind: .preparing)
     }
 
     public mutating func apply(_ event: WsServerEvent) {
         switch event.type {
         case .token:
             isThinking = false
-            statusText = nil
-            activityKind = nil
+            // 본문이 오기 시작하면 상태 줄은 "응답 작성 중" 으로 바꾼다 —
+            // nil 로 비우면 화면이 정적이 되어 멈춘 것처럼 보인다.
+            if statusText != Self.writingText {
+                setActivity(Self.writingText, kind: .finalizing)
+            }
             streamingText += event.token ?? ""
         case .thinking:
             isThinking = true
@@ -141,6 +167,7 @@ public struct ChatStreamState: Sendable {
             }
         case .aborted:
             isDone = true
+            wasAborted = true
             isThinking = false
             statusText = nil
             activityKind = nil
@@ -157,6 +184,9 @@ public struct ChatStreamState: Sendable {
         }
     }
 
+    /// 본문 스트리밍 중 상태 문구 (토큰 수신 시 setActivity 재호출을 막기 위한 비교 기준)
+    static let writingText = "응답을 작성하고 있어요"
+
     private mutating func setActivity(_ text: String, kind: ChatActivityKind) {
         let oneLine = text
             .components(separatedBy: .whitespacesAndNewlines)
@@ -164,6 +194,10 @@ public struct ChatStreamState: Sendable {
             .joined(separator: " ")
         statusText = oneLine.isEmpty ? nil : String(oneLine.prefix(120))
         activityKind = statusText == nil ? nil : kind
+        // 같은 문구가 연달아 오면 이력을 늘리지 않는다 (진행률 갱신형 이벤트 대비)
+        if let statusText, activityLog.last?.text != statusText {
+            activityLog.append(ChatActivityEntry(text: statusText, kind: kind))
+        }
     }
 
     private func toolActivity(_ toolName: String?) -> String {
