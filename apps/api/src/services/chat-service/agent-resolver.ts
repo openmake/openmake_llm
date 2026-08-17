@@ -129,7 +129,9 @@ export async function resolveAgent(
 ): Promise<AgentResolutionResult> {
     const agentSelection: AgentSelection = await selectAgent(message);
 
-    const { prompt: agentSystemMessage, skillNames } = await getAgentSystemMessage(agentSelection, userId || undefined, languageCode);
+    // query 전달 — triggers 를 선언한 스킬은 관련 턴에만 주입된다(skill-manager 게이트).
+    const { prompt: agentSystemMessage, skillNames } = await getAgentSystemMessage(
+        agentSelection, userId || undefined, languageCode, message);
     const selectedAgent = AGENTS[agentSelection.primaryAgent];
     logger.info(`에이전트: ${selectedAgent.emoji} ${selectedAgent.name}`);
 
