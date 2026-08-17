@@ -101,12 +101,28 @@ final class ChatStreamStateTests: XCTestCase {
         XCTAssertEqual(state.statusText, "web-search, report 적용 중")
         XCTAssertEqual(state.activityKind, .agent)
 
+        // 본문이 오기 시작하면 상태는 "작성 중" 으로 바뀐다 (비우면 화면이 정적이 되어 멈춘 것처럼 보임)
         state.apply(event(#"{"type":"token","token":"결과"}"#))
-        XCTAssertNil(state.statusText)
+        XCTAssertEqual(state.statusText, "응답을 작성하고 있어요")
         XCTAssertEqual(state.activeSkillNames, ["web-search", "report"])
 
         state.begin()
         XCTAssertTrue(state.activeSkillNames.isEmpty)
+        XCTAssertEqual(state.activityLog.count, 1, "새 질문은 이력을 초기화한다")
+    }
+
+    func testActivityLogAccumulatesDistinctSteps() {
+        var state = ChatStreamState()
+        state.begin()
+        state.apply(event(#"{"type":"agent_selected","agent":{"name":"Researcher","type":"researcher"}}"#))
+        state.apply(event(#"{"type":"mcp_tool_start","toolName":"web_search"}"#))
+        state.apply(event(#"{"type":"mcp_tool_start","toolName":"web_search"}"#)) // 중복 — 이력 증가 없음
+        state.apply(event(#"{"type":"token","token":"답"}"#))
+
+        let texts = state.activityLog.map(\.text)
+        XCTAssertEqual(texts.first, "요청을 분석하고 있어요")
+        XCTAssertEqual(texts.last, "응답을 작성하고 있어요")
+        XCTAssertEqual(texts.count, Set(texts).count, "연속 중복 단계는 이력에 쌓이지 않는다")
     }
 
     func testAgentTaskProgressUsesStepPreviewWithoutMultilineOutput() {

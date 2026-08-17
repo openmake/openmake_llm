@@ -73,6 +73,12 @@ public actor WsChatSocket {
         try await task.send(.string(text))
     }
 
+    /// 진행 중 생성 중단 요청 — 서버(handler.ts 'abort')가 aborted 이벤트로 응답한다.
+    public func abort() async {
+        guard let task else { return }
+        try? await task.send(.string(#"{"type":"abort"}"#))
+    }
+
     public func disconnect() {
         task?.cancel(with: .normalClosure, reason: nil)
         task = nil

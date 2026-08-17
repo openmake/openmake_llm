@@ -22,6 +22,10 @@ final class ChatSessionModel {
     private(set) var activeSkills: [String] = []
     private(set) var artifacts: [ArtifactDocument] = []
     private(set) var activeAgentTask: AgentTaskDetail?
+    /// 이번 응답에서 지나온 단계 이력 — 진행 카드에서 펼쳐 본다
+    private(set) var activityLog: [ChatActivityEntry] = []
+    /// 스트리밍 시작 시각 — 경과 시간 표시(멈춤/진행 구분)의 기준
+    private(set) var streamStartedAt: Date?
 
     init(client: OpenMakeClient, serverURL: URL, sessionId: String?) {
         self.client = client
@@ -59,7 +63,11 @@ final class ChatSessionModel {
         }
 
         isStreaming = true
-        defer { isStreaming = false }
+        streamStartedAt = Date()
+        defer {
+            isStreaming = false
+            streamStartedAt = nil
+        }
 
         var state = ChatStreamState()
         // 첫 프레임까지 수십 초 걸리는 모드는 무엇을 기다리는지 알려준다
@@ -135,6 +143,13 @@ final class ChatSessionModel {
         }
     }
 
+    /// 진행 중 응답 중단 — 서버에 abort 를 보내고 aborted 이벤트로 스트림이 닫힌다
+    func stopStreaming() async {
+        guard isStreaming else { return }
+        statusText = "중단하고 있어요"
+        await socket.abort()
+    }
+
     func teardown() {
         agentPollTask?.cancel()
         Task { [socket] in await socket.disconnect() }
@@ -149,6 +164,7 @@ final class ChatSessionModel {
         statusText = state.statusText
         activityKind = state.activityKind ?? .preparing
         activeSkills = state.activeSkillNames
+        activityLog = state.activityLog
         for artifact in state.artifacts {
             let document = ArtifactDocument(streamed: artifact)
             if let index = artifacts.firstIndex(where: { $0.id == document.id }) {

@@ -216,18 +216,20 @@ private struct ChatTranscriptView: View {
                         }
                     }
 
-                    if chat.streamingText.isEmpty {
-                        if let status = chat.statusText {
-                            ActivityStatusLine(text: status, kind: chat.activityKind)
-                        } else if chat.isThinking {
-                            ActivityStatusLine(text: "답변을 생각하고 있어요", kind: .thinking)
-                        }
-                    }
                     if !chat.streamingText.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
                             AssistantHead()
                             MarkdownText(content: chat.streamingText + " ▍")
                         }
+                    }
+                    // 진행 카드 — 스트리밍 중에는 본문 아래에도 계속 보여 "살아있음" 을 알린다
+                    if chat.isStreaming {
+                        ActivityProgressCard(
+                            statusText: chat.statusText ?? (chat.isThinking ? "답변을 생각하고 있어요" : "응답을 기다리고 있어요"),
+                            kind: chat.activityKind,
+                            startedAt: chat.streamStartedAt,
+                            log: chat.activityLog,
+                            onStop: { Task { await chat.stopStreaming() } })
                     }
                     Color.clear.frame(height: 1).id("bottom")
                 }
