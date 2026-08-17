@@ -111,6 +111,15 @@ final class ChatStreamStateTests: XCTestCase {
         XCTAssertEqual(state.activityLog.count, 1, "새 질문은 이력을 초기화한다")
     }
 
+    func testAbortMarksWasAbortedForNotice() {
+        var state = ChatStreamState()
+        state.begin()
+        state.apply(event(#"{"type":"aborted"}"#))
+        XCTAssertTrue(state.isDone)
+        XCTAssertTrue(state.wasAborted, "중단은 오류가 아니라 안내로 구분해 표시한다")
+        XCTAssertNil(state.errorMessage)
+    }
+
     func testActivityLogAccumulatesDistinctSteps() {
         var state = ChatStreamState()
         state.begin()

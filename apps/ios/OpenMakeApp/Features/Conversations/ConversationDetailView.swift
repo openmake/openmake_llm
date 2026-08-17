@@ -149,6 +149,13 @@ private struct ChatTranscriptView: View {
         VStack(spacing: 0) {
             transcript
 
+            if let notice = chat.noticeText, chat.errorMessage == nil, attachError == nil {
+                Text(notice)
+                    .font(.footnote)
+                    .foregroundStyle(Lumen.muted)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 4)
+            }
             if let error = chat.errorMessage ?? attachError {
                 Text(error)
                     .font(.footnote)

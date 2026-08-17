@@ -16,6 +16,8 @@ final class ChatSessionModel {
     private(set) var isThinking = false
     private(set) var isStreaming = false
     private(set) var errorMessage: String?
+    /// 오류가 아닌 안내 (중단 등) — 회색으로 표시
+    private(set) var noticeText: String?
     /// 도구/리서치/토론 진행 한 줄 (ChatStreamState.statusText)
     private(set) var statusText: String?
     private(set) var activityKind: ChatActivityKind = .preparing
@@ -52,6 +54,7 @@ final class ChatSessionModel {
         modes: AppModel.ChatModes = .init()
     ) async {
         errorMessage = nil
+        noticeText = nil
         activeSkills = []
         messages.append(.init(
             role: .user, content: text, model: nil, tokens: nil,
@@ -123,6 +126,10 @@ final class ChatSessionModel {
 
             if let error = state.errorMessage {
                 errorMessage = error
+            } else if state.wasAborted {
+                noticeText = streamingText.isEmpty
+                    ? "응답을 중단했어요"
+                    : "여기까지 받고 중단했어요"
             } else if !state.isDone {
                 // done 없이 스트림이 끝남(연결 끊김·타임아웃) — 이전엔 메시지도 오류도 없이
                 // 조용히 사라져 "응답이 오지 않는" 것처럼 보였다 (2026-08-17).

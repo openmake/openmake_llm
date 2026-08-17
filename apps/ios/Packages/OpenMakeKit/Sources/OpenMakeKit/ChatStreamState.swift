@@ -63,6 +63,8 @@ public struct ChatStreamState: Sendable {
     public private(set) var isThinking = false
     public private(set) var sessionId: String?
     public private(set) var isDone = false
+    /// 사용자가 중단(abort)해서 끝났는지 — 조용히 사라지지 않게 안내를 남기는 판단 기준
+    public private(set) var wasAborted = false
     public private(set) var metrics: ChatStreamMetrics?
     public private(set) var errorMessage: String?
     /// 인증 토큰 만료 임박 — 호출자는 REST refresh 후 재연결 (웹과 동일 규약)
@@ -165,6 +167,7 @@ public struct ChatStreamState: Sendable {
             }
         case .aborted:
             isDone = true
+            wasAborted = true
             isThinking = false
             statusText = nil
             activityKind = nil
