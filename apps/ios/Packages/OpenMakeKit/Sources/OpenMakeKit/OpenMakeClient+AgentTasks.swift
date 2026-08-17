@@ -162,11 +162,71 @@ public struct AgentTaskApproval: Decodable, Identifiable, Sendable, Equatable {
     public let id: String
     public let taskId: String
     public let toolName: String
+    /// 승인 대상 도구의 인자 — 스칼라 값만 문자열로 평탄화해 보관한다.
+    /// 서버(approval-gate PendingApproval.args)는 예전부터 내려주고 있었는데 앱이 버려서,
+    /// bash 가 무엇을 실행하는지·ask_human 이 무엇을 묻는지 모른 채 승인해야 했다.
+    public let args: [String: String]
+
+    public init(id: String, taskId: String, toolName: String, args: [String: String] = [:]) {
+        self.id = id
+        self.taskId = taskId
+        self.toolName = toolName
+        self.args = args
+    }
 
     enum CodingKeys: String, CodingKey {
         case id = "approvalId"
         case taskId
         case toolName
+        case args
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        taskId = try container.decode(String.self, forKey: .taskId)
+        toolName = try container.decode(String.self, forKey: .toolName)
+        args = (try? container.decode(ScalarDictionary.self, forKey: .args).values) ?? [:]
+    }
+
+    /// 사용자에게 보여줄 인자 요약 — 도구별 핵심 키를 우선하고, 없으면 첫 스칼라 인자.
+    public var argumentSummary: String? {
+        for key in ["question", "command", "code", "path", "url", "query", "topic", "op"] {
+            if let value = args[key]?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
+                return value
+            }
+        }
+        return args.sorted { $0.key < $1.key }.first.map { "\($0.key): \($0.value)" }
+    }
+}
+
+/// JSON 오브젝트에서 스칼라(문자열/숫자/불리언) 값만 문자열로 뽑는 경량 디코더.
+/// 중첩 오브젝트·배열은 표시 목적상 불필요하므로 버린다(서드파티 AnyCodable 도입 회피).
+struct ScalarDictionary: Decodable {
+    let values: [String: String]
+
+    private struct AnyKey: CodingKey {
+        let stringValue: String
+        var intValue: Int? { nil }
+        init?(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: AnyKey.self)
+        var result: [String: String] = [:]
+        for key in container.allKeys {
+            if let text = try? container.decode(String.self, forKey: key) {
+                result[key.stringValue] = text
+            } else if let number = try? container.decode(Double.self, forKey: key) {
+                result[key.stringValue] = number == number.rounded()
+                    ? String(Int(number))
+                    : String(number)
+            } else if let flag = try? container.decode(Bool.self, forKey: key) {
+                result[key.stringValue] = flag ? "true" : "false"
+            }
+        }
+        values = result
     }
 }
 

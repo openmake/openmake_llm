@@ -80,8 +80,16 @@ struct AgentTaskCard: View {
 
     private var detailText: String? {
         if task.status == .failed { return task.error }
-        if task.status == .completed { return task.result }
-        return latestStep?.content
+        if task.status == .completed {
+            guard let result = task.result else { return nil }
+            let cleaned = MarkdownContentParser.strippingArtifactPlaceholders(result)
+            return cleaned.isEmpty ? nil : cleaned
+        }
+        guard let latestStep else { return nil }
+        return AgentTaskStepPresenter.body(
+            stepType: latestStep.stepType,
+            toolName: latestStep.toolName,
+            content: latestStep.content)
     }
 }
 
@@ -232,7 +240,9 @@ private struct NewAgentTaskSheet: View {
 
     private func submit() async {
         let trimmed = goal.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        // 버튼 disabled 반영 전에 탭이 두 번 들어오면 같은 시트에서 작업이 두 건 생성된다
+        // (조각 goal 이 별도 작업으로 남은 과거 기록의 유력한 경로).
+        guard !trimmed.isEmpty, !isSubmitting else { return }
         isSubmitting = true
         defer { isSubmitting = false }
         do {
@@ -290,10 +300,15 @@ struct AgentTaskDetailView: View {
                                     LumenDot(color: Lumen.faint, size: 5)
                                         .padding(.top, 6)
                                     VStack(alignment: .leading, spacing: 2) {
-                                        Text(step.toolName ?? step.stepType)
+                                        Text(AgentTaskStepPresenter.label(
+                                            stepType: step.stepType,
+                                            toolName: step.toolName))
                                             .font(.caption.weight(.semibold))
                                             .foregroundStyle(Lumen.fg2)
-                                        if let content = step.content, !content.isEmpty {
+                                        if let content = AgentTaskStepPresenter.body(
+                                            stepType: step.stepType,
+                                            toolName: step.toolName,
+                                            content: step.content) {
                                             Text(content)
                                                 .font(.caption)
                                                 .foregroundStyle(Lumen.muted)
@@ -420,6 +435,20 @@ private struct AgentTaskApprovalCard: View {
             Text(approval.toolName)
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(Lumen.muted)
+            // 무엇을 승인하는지 — bash 는 실행할 명령, ask_human 은 질문 본문.
+            if let summary = approval.argumentSummary {
+                Text(summary)
+                    .font(.system(
+                        size: approval.toolName == "ask_human" ? 15 : 13,
+                        weight: approval.toolName == "ask_human" ? .semibold : .regular,
+                        design: approval.toolName == "ask_human" ? .default : .monospaced))
+                    .foregroundStyle(Lumen.fg)
+                    .lineLimit(6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(10)
+                    .background(Lumen.bg, in: RoundedRectangle(cornerRadius: 10))
+                    .textSelection(.enabled)
+            }
             if approval.toolName == "ask_human" {
                 TextField("에이전트에게 답변", text: $answer)
                     .textFieldStyle(.roundedBorder)
