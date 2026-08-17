@@ -87,6 +87,7 @@ private struct RichTextBlock: View {
         case quote(text: String)
         case divider
         case paragraph(text: String)
+        case table(MarkdownTable)
 
         var id: String { String(describing: self) + UUID().uuidString }
     }
@@ -120,6 +121,8 @@ private struct RichTextBlock: View {
                         .padding(.vertical, 4)
                 case .paragraph(let text):
                     body(text)
+                case .table(let table):
+                    MarkdownTableView(table: table)
                 }
             }
         }
@@ -165,13 +168,24 @@ private struct RichTextBlock: View {
             paragraph = []
         }
 
-        for rawLine in text.components(separatedBy: "\n") {
+        let rawLines = text.components(separatedBy: "\n")
+        var index = 0
+        while index < rawLines.count {
+            let rawLine = rawLines[index]
+            index += 1
             let indent = rawLine.prefix { $0 == " " || $0 == "\t" }.count
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             let depth = min(indent / 2, 3)
 
             if line.isEmpty {
                 flush()
+                continue
+            }
+            // 표: 헤더 + |---| 구분행 — 폰에서는 카드로 재구성 (MarkdownTableView)
+            if let parsed = MarkdownTableParser.parse(rawLines, from: index - 1) {
+                flush()
+                result.append(.table(parsed.table))
+                index = (index - 1) + parsed.consumed
                 continue
             }
             // 구분선: ---, ***, ___ (3자 이상)
@@ -255,6 +269,74 @@ private struct GeneratedImageView: View {
 
     private var imageURL: URL? {
         GeneratedImageURLResolver.resolve(source: source, serverURL: AppConfig.serverURL)
+    }
+}
+
+/// 표 → 폰 화면용 카드 목록.
+/// 좁은 화면에서 열을 그대로 그리면 글자가 잘려 읽을 수 없으므로, 행을 카드로 세워
+/// 첫 열을 제목, 나머지를 "헤더 · 값" 줄로 편다. 2열 표는 라벨-값 한 줄로 압축한다.
+struct MarkdownTableView: View {
+    let table: MarkdownTable
+
+    private var isPair: Bool { table.headers.count == 2 }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: isPair ? 6 : 8) {
+            if isPair {
+                ForEach(Array(table.rows.enumerated()), id: \.offset) { _, row in
+                    HStack(alignment: .top, spacing: 8) {
+                        Text(inline(row.first ?? ""))
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Lumen.fg)
+                            .frame(minWidth: 72, alignment: .leading)
+                        Text(inline(row.count > 1 ? row[1] : ""))
+                            .font(.system(size: 14))
+                            .foregroundStyle(Lumen.fg2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.vertical, 2)
+                }
+            } else {
+                ForEach(Array(table.rows.enumerated()), id: \.offset) { _, row in
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(inline(row.first ?? ""))
+                            .font(.system(size: 14.5, weight: .bold))
+                            .foregroundStyle(Lumen.fg)
+                        ForEach(Array(table.fields(of: row, skippingFirst: true).enumerated()), id: \.offset) { _, field in
+                            HStack(alignment: .top, spacing: 6) {
+                                Text(field.header)
+                                    .font(.system(size: 11.5, weight: .semibold))
+                                    .foregroundStyle(Lumen.accent)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Lumen.accentSoft, in: RoundedRectangle(cornerRadius: 5))
+                                Text(inline(field.value))
+                                    .font(.system(size: 13.5))
+                                    .lineSpacing(2)
+                                    .foregroundStyle(Lumen.fg2)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Lumen.surface, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Lumen.border))
+                }
+            }
+        }
+        .textSelection(.enabled)
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("표 \(table.rows.count)행")
+    }
+
+    private func inline(_ text: String) -> AttributedString {
+        (try? AttributedString(
+            markdown: text,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)))
+            ?? AttributedString(text)
     }
 }
 
