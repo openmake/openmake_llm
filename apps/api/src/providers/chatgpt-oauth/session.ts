@@ -70,7 +70,7 @@ export function parseJwtClaims(token: string): Record<string, unknown> | undefin
 
 /**
  * 토큰 응답에서 ChatGPT 계정 ID 추출.
- * id_token 우선, access_token fallback — opencode 와 동일한 클레임 위치.
+ * id_token 우선, access_token fallback — 두 토큰 모두에서 계정 ID 클레임을 탐색한다.
  */
 export function extractAccountId(tokens: {
     id_token?: string;

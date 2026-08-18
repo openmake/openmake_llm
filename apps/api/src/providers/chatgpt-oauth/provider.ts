@@ -8,10 +8,9 @@
  * responses-lite 등)는 @openai-oauth/core 의 transport fetch 가 담당하고,
  * 본 클래스는 IProvider 계약 ↔ Responses API 변환만 수행한다.
  *
- * ⚠️ Codex 백엔드는 Chat Completions 미지원 — **Responses API 전용**
- *    (opencode·openai-oauth 소스로 교차 확인, 2026-07-26).
+ * ⚠️ Codex 백엔드는 Chat Completions 미지원 — **Responses API 전용**.
  * ⚠️ temperature/max_output_tokens 는 Codex 가 거부할 수 있어 전달하지 않는다
- *    (opencode 의 chat.params 처리와 동일).
+ *    (Codex Responses API 제약에 맞춤).
  *
  * ESM 주의: @openai-oauth/core 는 ESM-only. Node 24 의 require(esm) 로 로드
  * 가능하지만 Jest CJS 런타임은 불가 — moduleNameMapper 로 shim 처리되며,

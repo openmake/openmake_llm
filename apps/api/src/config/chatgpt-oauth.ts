@@ -3,14 +3,13 @@
  * @description ChatGPT OAuth (Codex device flow) 설정 — L2 config + env override
  *
  * ChatGPT Plus/Pro 구독 계정으로 Codex 지원 GPT 모델을 사용하는 OAuth 통합.
- * 공식 Codex CLI 의 OAuth 클라이언트를 차용하는 방식으로, opencode ·
+ * 공식 Codex CLI 의 OAuth 클라이언트를 차용하는 방식으로,
  * openai-oauth(EvanZhouDev) 와 동일 계열 기법이다.
  *
  * ⚠️ 비공식 endpoint — OpenAI 가 언제든 변경/차단할 수 있다. 값이 바뀌면
  * env 로 무중단 오버라이드 가능하도록 전부 외부화한다.
  *
  * @see https://github.com/EvanZhouDev/openai-oauth (packages/core)
- * @see https://github.com/anomalyco/opencode (packages/opencode/src/plugin/openai/codex.ts)
  */
 
 /** 카탈로그 provider id — fullId prefix ('chatgpt:gpt-5.x') */
