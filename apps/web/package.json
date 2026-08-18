@@ -15,7 +15,6 @@
     "@openmake/shared-types": "*",
     "@tanstack/react-query": "^5.101.0",
     "clsx": "^2.1.1",
-    "katex": "^0.17.0",
     "lucide-react": "^1.21.0",
     "next": "16.2.9",
     "next-intl": "^4.13.1",
@@ -24,8 +23,6 @@
     "react-dom": "19.2.4",
     "react-markdown": "^10.1.0",
     "rehype-highlight": "^7.0.2",
-    "rehype-katex": "^7.0.1",
-    "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.6.0",
     "zustand": "^5.0.14"
