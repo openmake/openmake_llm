@@ -228,8 +228,11 @@ export function setupApiRoutes(
     // 첫 실행 셋업 마법사 (admin 0명일 때만 동작하는 일회성 공개 엔드포인트, auth 계열 리미터)
     app.use('/api/setup', authLimiter, firstRunSetupRouter);
 
-    // 카카오 지도 임베드 HTML — 네이티브 앱 WKWebView 전용, /api 스코프 밖(인증·CSRF 무관).
-    app.use('/embed', kakaoMapEmbedRouter);
+    // 카카오 지도 임베드 HTML — 네이티브 앱 WKWebView 전용.
+    // /api 하위에 둔다: 운영 프록시(Caddy/Next)가 /api 만 백엔드로 보내므로 그 밖이면
+    // 외부 경로에서 404 가 된다(2026-08-18 실측). GET 이라 CSRF 는 스킵되고, /api 스코프
+    // 미들웨어는 Deprecation 헤더만 붙일 뿐 인증을 강제하지 않는다.
+    app.use('/api/embed', kakaoMapEmbedRouter);
     app.use('/api/admin', createAdminController());
     // GDPR Phase B Fix 6 (B7) — 동의 조회/철회 API
     app.use('/api/users/me/consent', createConsentController());
