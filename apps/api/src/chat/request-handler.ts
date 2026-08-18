@@ -208,6 +208,15 @@ export class ChatRequestHandler {
             userLanguagePreference,
         } = params;
 
+        // 자가개선(F2) 귀속 — 어떤 에이전트가 이 응답을 담당했는지는 onAgentSelected 로만 흘러나가고
+        // 핸들러가 보관하지 않아 conversation_messages.agent_id 가 전량 NULL 이었다.
+        // 콜백을 감싸 값만 붙잡아 두고(전달은 그대로) 저장 시 함께 기록한다.
+        let resolvedAgentId: string | undefined;
+        const onAgentSelectedCapture: typeof onAgentSelected = (agent) => {
+            resolvedAgentId = agent?.type || undefined;
+            onAgentSelected?.(agent);
+        };
+
         // 슬래시 스킬 명령 대칭 적용 — WS 경로(ws-chat-handler)는 processChat 호출 전에 적용하지만
         // REST(chat.routes)·OpenAI-compat(Discord 봇) 경로는 누락돼 /스킬명 호출이 무시됐다
         // (외부 분기 대칭 결함, 2026-07-17). 이미 증강된 메시지는 '/'로 시작하지 않아
@@ -382,7 +391,7 @@ export class ChatRequestHandler {
         const response = await chatService.processMessage(
             chatRequest,
             onTokenWithSummary,
-            onAgentSelected,
+            onAgentSelectedCapture,
             onDiscussionProgress,
             onResearchProgress,
             plan,
@@ -482,6 +491,7 @@ export class ChatRequestHandler {
             responseTime,
             persistContent,
             summarySession.getThinking() || undefined,
+            { agentId: resolvedAgentId, clientMessageId: params.clientMessageId },
         );
         // 요약 헤드라인은 비동기 도착 — 저장된 메시지에 fire-and-forget UPDATE (재열람 표시용)
         if (savedMessageId) {

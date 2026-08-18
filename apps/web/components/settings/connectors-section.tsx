@@ -18,6 +18,7 @@ import {
 import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { McpInstancesPanel } from "@/components/settings/mcp-instances-panel";
 
 /**
  * MCP 서버(커넥터) 관리 — 구 /mcp-servers 페이지 본문을 설정 '커넥터' 탭으로 흡수한 것
@@ -386,7 +387,7 @@ const TRANSPORT_TONE: Record<Transport, "accent" | "neutral"> = {
   HTTP: "accent",
 };
 
-type TabId = "servers" | "drafts";
+type TabId = "servers" | "drafts" | "instances";
 
 export function ConnectorsSection() {
   const t = useTranslations("mcpServers");
@@ -553,7 +554,7 @@ export function ConnectorsSection() {
         )}
         {/* 탭 */}
         <div className="mb-4 inline-flex rounded-pill border border-border bg-surface-2 p-1">
-          {(["servers", "drafts"] as TabId[]).map((tabId) => (
+          {(["servers", "drafts", "instances"] as TabId[]).map((tabId) => (
             <button
               key={tabId}
               type="button"
@@ -565,7 +566,7 @@ export function ConnectorsSection() {
                   : "text-muted hover:text-fg",
               )}
             >
-              {tabId === "servers" ? t("tabServers") : "Draft"}
+              {tabId === "servers" ? t("tabServers") : tabId === "drafts" ? "Draft" : t("tabInstances")}
             </button>
           ))}
         </div>
@@ -787,6 +788,11 @@ export function ConnectorsSection() {
               </tbody>
             </Table>
           </div>
+        )}
+
+        {/* 인스턴스 상태 탭 — 프로세스 lifecycle(시작·중지·pid 헬스체크) */}
+        {tab === "instances" && (
+          <McpInstancesPanel servers={servers.map((s) => ({ id: s.id, name: s.name }))} />
         )}
       </CardContent>
     </Card>

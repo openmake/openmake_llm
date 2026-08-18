@@ -24,7 +24,8 @@
       "modelRolesAdmin": "ロールモデル管理",
       "systemSettingsAdmin": "システム設定",
       "developer": "開発者",
-      "schedulesAdmin": "タスクスケジュール"
+      "schedulesAdmin": "タスクスケジュール",
+      "agentSuggestionsAdmin": "プロンプト提案"
     },
     "pendingApprovals": "承認待ち {count}件 — エージェント作業がユーザーの承認を待っています"
   },
@@ -995,7 +996,8 @@
     "envSave": "保存",
     "envSaved": "認証情報を変更しました。",
     "envSavedRespawn": "認証情報を変更しました。既存の接続は終了し、再接続時に新しい値が適用されます。",
-    "envUpdateError": "認証情報の変更に失敗しました"
+    "envUpdateError": "認証情報の変更に失敗しました",
+    "tabInstances": "インスタンス状態"
   },
   "mcpCatalog": {
     "pageTitle": "MCPカタログ",
@@ -1703,7 +1705,15 @@
     "costColKrw": "KRW",
     "costRateNote": "単価の仮定: 入力 ${input}/1M · 出力 ${output}/1M（出力比率 {ratio}%）· 為替 ₩{fx}/$ — サーバー環境変数で調整可能",
     "costNoData": "集計する使用量がありません",
-    "costCoverage": "集計範囲: {since} 以降の記録（それ以前はトークン記録がなく未含）"
+    "costCoverage": "集計範囲: {since} 以降の記録（それ以前はトークン記録がなく未含）",
+    "quotaTitle": "自分のトークンクォータ",
+    "quotaSubtitle": "リクエストが実際に遮断される基準です。使い切ると新しい応答が拒否されます。",
+    "quotaHourly": "1時間あたり",
+    "quotaWeekly": "週間",
+    "quotaResetAt": "{time} にリセット",
+    "quotaExceeded": "1時間あたりのクォータを使い切りました。リセット時刻以降に再度リクエストできます。",
+    "globalQuotaTitle": "グローバルクォータ消費率 (サーバー全体)",
+    "globalQuotaNote": "プロセス再起動でリセットされる全体観測値 — 個人クォータとは別"
   },
   "developer": {
     "pageTitle": "開発者ドキュメント",
@@ -1847,5 +1857,59 @@
       "searchAria": "キーワード検索",
       "searchPlaceholder": "名前・説明を検索"
     }
+  },
+  "adminSuggestions": {
+    "title": "プロンプト提案のレビュー",
+    "description": "自己改善サイクルが生成したエージェントのプロンプト改善提案を承認/却下します。",
+    "note": "承認された提案のみが該当エージェントのシステムプロンプトに注入されます。却下した提案は再提案されません。",
+    "listTitle": "提案 ({count}件)",
+    "refresh": "更新",
+    "empty": "この状態の提案はありません。",
+    "loadError": "提案一覧を読み込めませんでした。",
+    "actionError": "状態の変更に失敗しました。",
+    "approve": "承認",
+    "reject": "却下",
+    "sourcePatterns": "根拠パターン: {patterns}",
+    "filter": {
+      "pending": "保留",
+      "approved": "承認済み",
+      "rejected": "却下済み",
+      "all": "すべて"
+    },
+    "cols": {
+      "agent": "エージェント",
+      "suggestion": "提案内容",
+      "quality": "品質スコア",
+      "status": "状態",
+      "createdAt": "作成",
+      "action": "処理"
+    }
+  },
+  "mcpInstances": {
+    "selectServer": "サーバーを選択…",
+    "pickServer": "サーバーを選択してください。",
+    "empty": "インスタンス履歴がありません。",
+    "start": "開始",
+    "stop": "停止",
+    "healthCheck": "ヘルスチェック",
+    "refresh": "更新",
+    "healthCheckTitle": "running 状態インスタンスの pid が実際に生存しているか検証します",
+    "autoRefresh": "15秒ごとに自動更新",
+    "confirmStop": "サーバープロセスを停止しますか？",
+    "startRequested": "開始を要求しました。",
+    "stopRequested": "停止を要求しました。",
+    "healthResult": "検証 {verified}件 · 終了処理 {dead}件 · pid なし {missing}件",
+    "loadError": "インスタンス情報を読み込めませんでした。",
+    "actionError": "リクエストに失敗しました。",
+    "metricRunning": "実行中",
+    "metricSpawned": "累計起動",
+    "metricCrashed": "24時間クラッシュ",
+    "metricUptime": "平均稼働",
+    "lastError": "最近のエラー({at}): {message}",
+    "colStatus": "状態",
+    "colPid": "PID",
+    "colStarted": "開始",
+    "colStopped": "終了",
+    "colError": "エラー"
   }
 }

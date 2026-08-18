@@ -24,7 +24,8 @@
       "modelRolesAdmin": "역할 모델 관리",
       "systemSettingsAdmin": "시스템 설정",
       "developer": "개발자",
-      "schedulesAdmin": "작업 스케줄"
+      "schedulesAdmin": "작업 스케줄",
+      "agentSuggestionsAdmin": "프롬프트 제안"
     },
     "pendingApprovals": "승인 대기 {count}건 — 에이전트 작업이 사용자 승인을 기다리고 있습니다"
   },
@@ -995,7 +996,8 @@
     "envSave": "저장",
     "envSaved": "자격증명을 변경했습니다.",
     "envSavedRespawn": "자격증명을 변경했습니다. 기존 연결이 종료되었으며, 다시 연결되면 새 값이 적용됩니다.",
-    "envUpdateError": "자격증명 변경에 실패했습니다"
+    "envUpdateError": "자격증명 변경에 실패했습니다",
+    "tabInstances": "인스턴스 상태"
   },
   "mcpCatalog": {
     "pageTitle": "MCP 카탈로그",
@@ -1703,7 +1705,15 @@
     "costColKrw": "KRW",
     "costRateNote": "단가 가정: 입력 ${input}/1M · 출력 ${output}/1M (출력 비중 {ratio}%) · 환율 ₩{fx}/$ — 서버 환경변수로 조정 가능",
     "costNoData": "집계할 사용량이 없습니다",
-    "costCoverage": "집계 범위: {since} 이후 기록 기준 (그 이전 사용분은 토큰 기록 부재로 미포함)"
+    "costCoverage": "집계 범위: {since} 이후 기록 기준 (그 이전 사용분은 토큰 기록 부재로 미포함)",
+    "quotaTitle": "내 토큰 쿼터",
+    "quotaSubtitle": "요청이 실제로 차단되는 기준입니다. 소진 시 새 응답이 거부됩니다.",
+    "quotaHourly": "시간당",
+    "quotaWeekly": "주간",
+    "quotaResetAt": "{time}에 초기화",
+    "quotaExceeded": "시간당 쿼터를 모두 사용했습니다. 초기화 시각 이후 다시 요청할 수 있습니다.",
+    "globalQuotaTitle": "전역 쿼터 소진율 (서버 전체)",
+    "globalQuotaNote": "프로세스 재시작 시 초기화되는 전역 관측치 — 개인 쿼터와 별개"
   },
   "developer": {
     "pageTitle": "개발자 문서",
@@ -1847,5 +1857,59 @@
       "searchAria": "키워드 검색",
       "searchPlaceholder": "이름·설명 검색"
     }
+  },
+  "adminSuggestions": {
+    "title": "프롬프트 제안 검토",
+    "description": "자가개선 사이클이 만든 에이전트 프롬프트 개선 제안을 승인/거부합니다.",
+    "note": "승인된 제안만 해당 에이전트의 시스템 프롬프트에 주입됩니다. 거부한 제안은 다시 제안되지 않습니다.",
+    "listTitle": "제안 ({count}건)",
+    "refresh": "새로고침",
+    "empty": "해당 상태의 제안이 없습니다.",
+    "loadError": "제안 목록을 불러오지 못했습니다.",
+    "actionError": "상태 변경에 실패했습니다.",
+    "approve": "승인",
+    "reject": "거부",
+    "sourcePatterns": "근거 패턴: {patterns}",
+    "filter": {
+      "pending": "대기",
+      "approved": "승인됨",
+      "rejected": "거부됨",
+      "all": "전체"
+    },
+    "cols": {
+      "agent": "에이전트",
+      "suggestion": "제안 내용",
+      "quality": "품질 점수",
+      "status": "상태",
+      "createdAt": "생성",
+      "action": "처리"
+    }
+  },
+  "mcpInstances": {
+    "selectServer": "서버 선택…",
+    "pickServer": "서버를 선택하세요.",
+    "empty": "인스턴스 기록이 없습니다.",
+    "start": "시작",
+    "stop": "중지",
+    "healthCheck": "헬스체크",
+    "refresh": "새로고침",
+    "healthCheckTitle": "running 상태 인스턴스의 pid 가 실제 살아있는지 검증합니다",
+    "autoRefresh": "15초마다 자동 갱신",
+    "confirmStop": "서버 프로세스를 중지하시겠습니까?",
+    "startRequested": "시작을 요청했습니다.",
+    "stopRequested": "중지를 요청했습니다.",
+    "healthResult": "검증 {verified}건 · 종료 처리 {dead}건 · pid 없음 {missing}건",
+    "loadError": "인스턴스 정보를 불러오지 못했습니다.",
+    "actionError": "요청에 실패했습니다.",
+    "metricRunning": "실행 중",
+    "metricSpawned": "누적 기동",
+    "metricCrashed": "24시간 크래시",
+    "metricUptime": "평균 가동",
+    "lastError": "최근 오류({at}): {message}",
+    "colStatus": "상태",
+    "colPid": "PID",
+    "colStarted": "시작",
+    "colStopped": "종료",
+    "colError": "오류"
   }
 }

@@ -1746,3 +1746,29 @@ export const NOTEBOOKLM_INTEGRATION = {
     LIST_CACHE_TTL_MS: parseInt(process.env.NOTEBOOKLM_LIST_CACHE_TTL_MS || '300000', 10),
     LIST_CACHE_MAX: parseInt(process.env.NOTEBOOKLM_LIST_CACHE_MAX || '500', 10),
 } as const;
+
+
+/**
+ * 에이전트 자가개선 루프 (F2) — 피드백 수집 → 품질 분석 → 프롬프트 제안 → 관리자 승인 → 주입.
+ *
+ * 운영에서 제안이 0건이던 원인이 세 갈래였다(마이그 099 주석 + 아래 항목):
+ *   ① 입력 부재 — 채팅 thumbs 신호가 학습 시스템으로 흘러들지 않았다 (SIGNAL_RATING 배선으로 해소).
+ *   ② 휘발 — 피드백이 인메모리 배열에만 있고 부팅 시 복원되지 않았다 (HYDRATE_LIMIT).
+ *   ③ 미실행 — 24h setInterval 뿐이라 재시작이 잦은 환경에선 사실상 돌지 않았다 (FIRST_RUN_DELAY_MS).
+ *
+ * SIGNAL_RATING: 채팅 피드백 신호를 학습 시스템의 1~5 평점으로 환산하는 매핑.
+ *   regenerate 는 명시적 불만은 아니나 재생성을 부른 응답이므로 낮게 둔다.
+ * HYDRATE_LIMIT: 부팅 시 agent_feedback 에서 복원할 최근 피드백 수 (인메모리 상한도 겸함).
+ * FIRST_RUN_DELAY_MS: 부팅 후 첫 사이클까지의 지연 — 부팅 폭주를 피하면서도 24h 를 기다리지 않는다.
+ * INTERVAL_MS: 이후 사이클 주기.
+ */
+export const AGENT_SELF_IMPROVE = {
+    SIGNAL_RATING: {
+        thumbs_up: 5,
+        thumbs_down: 1,
+        regenerate: 2,
+    } as Record<string, 1 | 2 | 3 | 4 | 5>,
+    HYDRATE_LIMIT: parseInt(process.env.AGENT_SELF_IMPROVE_HYDRATE_LIMIT || '2000', 10),
+    FIRST_RUN_DELAY_MS: parseInt(process.env.AGENT_SELF_IMPROVE_FIRST_RUN_DELAY_MS || '300000', 10),
+    INTERVAL_MS: parseInt(process.env.AGENT_SELF_IMPROVE_INTERVAL_MS || String(6 * 60 * 60 * 1000), 10),
+} as const;

@@ -69,6 +69,10 @@ export interface MessageOptions {
     tokensUsed?: number;
     /** 응답 생성 시간 (밀리초) */
     responseTime?: number;
+    /** 이 응답을 담당한 에이전트 id (AGENTS 맵 키). 자가개선 루프의 피드백 귀속에 쓰인다. */
+    agentId?: string;
+    /** WS/REST 가 클라이언트에 발급한 message id — 피드백 신호를 이 행에 되짚기 위한 조인 키. */
+    clientMessageId?: string;
 }
 
 // Internal row types for PostgreSQL mapping

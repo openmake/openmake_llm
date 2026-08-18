@@ -24,7 +24,8 @@
       "modelRolesAdmin": "角色模型管理",
       "systemSettingsAdmin": "系统设置",
       "developer": "开发者",
-      "schedulesAdmin": "任务计划"
+      "schedulesAdmin": "任务计划",
+      "agentSuggestionsAdmin": "提示词建议"
     },
     "pendingApprovals": "{count} 个待批准 — 代理任务正在等待您的批准"
   },
@@ -995,7 +996,8 @@
     "envSave": "保存",
     "envSaved": "凭据已更新。",
     "envSavedRespawn": "凭据已更新。现有连接已关闭，重新连接后将使用新值。",
-    "envUpdateError": "更新凭据失败"
+    "envUpdateError": "更新凭据失败",
+    "tabInstances": "实例状态"
   },
   "mcpCatalog": {
     "pageTitle": "MCP 目录",
@@ -1703,7 +1705,15 @@
     "costColKrw": "KRW",
     "costRateNote": "价格假设：输入 ${input}/1M · 输出 ${output}/1M（输出占比 {ratio}%）· 汇率 ₩{fx}/$ — 可通过服务器环境变量调整",
     "costNoData": "没有可汇总的使用量",
-    "costCoverage": "统计范围：{since} 之后的记录（此前用量无令牌记录，未包含）"
+    "costCoverage": "统计范围：{since} 之后的记录（此前用量无令牌记录，未包含）",
+    "quotaTitle": "我的令牌配额",
+    "quotaSubtitle": "这是请求实际被拦截的依据。用尽后将拒绝新的响应。",
+    "quotaHourly": "每小时",
+    "quotaWeekly": "每周",
+    "quotaResetAt": "{time} 重置",
+    "quotaExceeded": "每小时配额已用尽。请在重置时间之后重新发送请求。",
+    "globalQuotaTitle": "全局配额消耗 (服务器整体)",
+    "globalQuotaNote": "进程重启即重置的全局观测值 — 与个人配额无关"
   },
   "developer": {
     "pageTitle": "开发者文档",
@@ -1847,5 +1857,59 @@
       "searchAria": "关键词搜索",
       "searchPlaceholder": "搜索名称/描述"
     }
+  },
+  "adminSuggestions": {
+    "title": "提示词建议审核",
+    "description": "审批自我改进循环生成的智能体提示词改进建议。",
+    "note": "只有已批准的建议才会注入到该智能体的系统提示词中。已拒绝的建议不会再次提出。",
+    "listTitle": "建议 ({count} 条)",
+    "refresh": "刷新",
+    "empty": "没有该状态的建议。",
+    "loadError": "无法加载建议列表。",
+    "actionError": "状态变更失败。",
+    "approve": "批准",
+    "reject": "拒绝",
+    "sourcePatterns": "依据模式: {patterns}",
+    "filter": {
+      "pending": "待处理",
+      "approved": "已批准",
+      "rejected": "已拒绝",
+      "all": "全部"
+    },
+    "cols": {
+      "agent": "智能体",
+      "suggestion": "建议内容",
+      "quality": "质量分",
+      "status": "状态",
+      "createdAt": "创建",
+      "action": "操作"
+    }
+  },
+  "mcpInstances": {
+    "selectServer": "选择服务器…",
+    "pickServer": "请选择服务器。",
+    "empty": "没有实例记录。",
+    "start": "启动",
+    "stop": "停止",
+    "healthCheck": "健康检查",
+    "refresh": "刷新",
+    "healthCheckTitle": "验证 running 状态实例的 pid 是否真实存活",
+    "autoRefresh": "每 15 秒自动刷新",
+    "confirmStop": "确定要停止该服务器进程吗？",
+    "startRequested": "已请求启动。",
+    "stopRequested": "已请求停止。",
+    "healthResult": "已验证 {verified} · 判定终止 {dead} · 无 pid {missing}",
+    "loadError": "无法加载实例信息。",
+    "actionError": "请求失败。",
+    "metricRunning": "运行中",
+    "metricSpawned": "累计启动",
+    "metricCrashed": "24 小时崩溃",
+    "metricUptime": "平均运行",
+    "lastError": "最近错误({at}): {message}",
+    "colStatus": "状态",
+    "colPid": "PID",
+    "colStarted": "启动",
+    "colStopped": "结束",
+    "colError": "错误"
   }
 }
