@@ -33,7 +33,12 @@ struct MarkdownText: View {
             case .text(let text):
                 RichTextBlock(text: text)
             case .code(let language, let body):
-                CodeBlockView(language: language, code: body)
+                // ```kakaomap 은 지도 카드로 — 그대로 두면 좌표 JSON 이 노출된다
+                if language == KakaoMapBlock.language, let payload = KakaoMapBlock.parse(body) {
+                    KakaoMapCard(payload: payload)
+                } else {
+                    CodeBlockView(language: language, code: body)
+                }
             }
         }
     }
