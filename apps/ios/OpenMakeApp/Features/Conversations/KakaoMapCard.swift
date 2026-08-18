@@ -125,7 +125,7 @@ private extension KakaoMapPayload {
     }
 }
 
-/// 서버가 내려주는 카카오 지도 임베드(`/embed/kakao-map`)를 띄우는 웹뷰.
+/// 서버가 내려주는 카카오 지도 임베드(`/api/embed/kakao-map`)를 띄우는 웹뷰.
 ///
 /// 앱이 카카오 SDK 를 직접 부르려면 JS 키를 바이너리에 넣어야 하고 콘솔의 도메인 제한과도
 /// 어긋난다. 서버 HTML 을 그대로 로드하면 키는 서버에만 남고 origin 도 서버 도메인이 된다.
@@ -147,7 +147,7 @@ private struct KakaoMapWebView: UIViewRepresentable {
         webView.backgroundColor = .clear
         webView.scrollView.isScrollEnabled = false   // 카드 안이라 지도 제스처만 남긴다
 
-        var request = URLRequest(url: AppConfig.serverURL.appendingPathComponent("embed/kakao-map"))
+        var request = URLRequest(url: AppConfig.serverURL.appendingPathComponent("api/embed/kakao-map"))
         request.timeoutInterval = Coordinator.loadTimeout
         webView.load(request)
         context.coordinator.startWatchdog()

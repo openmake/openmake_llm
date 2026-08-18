@@ -16,7 +16,7 @@ import { KAKAO_MAP_EMBED } from '../config/runtime-limits';
 const router = Router();
 
 /**
- * GET /embed/kakao-map
+ * GET /api/embed/kakao-map
  * 인증 없이 제공한다 — 담긴 비밀은 JS 키뿐이고, 그 키는 웹 번들에도 이미 들어 있으며
  * 카카오 콘솔의 도메인 제한으로 보호된다. 장소 데이터는 응답에 포함되지 않는다.
  */
