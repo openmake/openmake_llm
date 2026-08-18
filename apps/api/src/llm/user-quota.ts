@@ -35,6 +35,62 @@ function weekKey(userId: string, now: number): string {
     return `llmq:${userId}:w:${Math.floor(now / WEEK_MS)}`;
 }
 
+/** 조회용 윈도우 상태 — resetAt 은 현재 calendar bucket 이 넘어가는 시각(ms epoch). */
+export interface UserQuotaWindow {
+    used: number;
+    limit: number;
+    remaining: number;
+    resetAt: number;
+}
+
+export interface UserQuotaStatus {
+    hourly: UserQuotaWindow;
+    weekly: UserQuotaWindow;
+}
+
+function toWindow(used: number, limit: number, resetAt: number): UserQuotaWindow {
+    return {
+        used,
+        limit,
+        // limit<=0 은 무제한 — remaining 을 0 으로 만들면 소진처럼 보이므로 used 와 무관하게 0 유지
+        remaining: limit > 0 ? Math.max(0, limit - used) : 0,
+        resetAt,
+    };
+}
+
+/**
+ * 현재 사용자의 쿼터 잔여 조회 — checkUserQuota 가 검사하는 것과 동일한 버킷을 읽는다.
+ *
+ * 비인증(guest/anon) 이거나 KVStore 장애면 null (fail-open: 호출부는 표시를 생략).
+ */
+export async function getUserQuotaStatus(userId: string | undefined, now: number): Promise<UserQuotaStatus | null> {
+    if (!isPersistableUserId(userId)) return null;
+    const cfg = getConfig();
+
+    try {
+        const store = getKeyValueStore();
+        const [hUsed, wUsed] = await Promise.all([
+            store.get<number>(hourKey(userId, now)),
+            store.get<number>(weekKey(userId, now)),
+        ]);
+        return {
+            hourly: toWindow(
+                typeof hUsed === 'number' ? hUsed : 0,
+                cfg.llmHourlyTokenLimit,
+                (Math.floor(now / HOUR_MS) + 1) * HOUR_MS,
+            ),
+            weekly: toWindow(
+                typeof wUsed === 'number' ? wUsed : 0,
+                cfg.llmWeeklyTokenLimit,
+                (Math.floor(now / WEEK_MS) + 1) * WEEK_MS,
+            ),
+        };
+    } catch (e) {
+        logger.warn('per-user quota 조회 실패 (fail-open):', e);
+        return null;
+    }
+}
+
 /**
  * 사용량 기록 전 쿼터 검사. 이미 누적된 사용량이 한도 이상이면 throw.
  * (현재 요청 토큰은 선반영하지 않음 — 기존 soft-limit 동작과 일치.)

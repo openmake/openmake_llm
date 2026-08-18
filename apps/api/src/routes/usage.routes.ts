@@ -10,6 +10,7 @@
  * @description
  * - GET /api/usage       - API 사용량 통계 요약 (인증)
  * - GET /api/usage/daily - 일간 사용량 조회 (인증, 쿼리: ?days=7)
+ * - GET /api/usage/quota - 본인 토큰 쿼터 잔여 (인증)
  *
  * @requires requireAuth - JWT 인증 미들웨어
  * @requires ApiUsageTracker - API 사용량 추적기
@@ -17,6 +18,7 @@
 
 import { Router, Request, Response } from 'express';
 import { getApiUsageTracker } from '../llm';
+import { getUserQuotaStatus } from '../llm/user-quota';
 import { success } from '../utils/api-response';
 import { requireAuth } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
@@ -110,6 +112,19 @@ router.get('/daily', asyncHandler(async (req: Request, res: Response) => {
         messages: Number(row.messages),
     }));
     res.json(success({ daily }));
+}));
+
+/**
+ * 본인 토큰 쿼터 잔여 조회 — LLMClient 가 실제로 검사하는 per-user 버킷(llm/user-quota)을 그대로 읽는다.
+ * GET /api/usage/quota
+ *
+ * (전역 tracker 기반 GET /api/monitoring/quota 는 admin 전용 관측치로 별개.)
+ * 비인증/KVStore 장애 시 quota=null — 프론트는 표시를 생략한다(fail-open).
+ */
+router.get('/quota', asyncHandler(async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const quota = await getUserQuotaStatus(userId ?? undefined, Date.now());
+    res.json(success({ quota }));
 }));
 
 /**
