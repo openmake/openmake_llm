@@ -253,8 +253,12 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
 
         await client.connect();
         this.userPool.add(userId, serverId, client);
-        await this.repo.recordInstanceTransition(serverId, userId, 'running').catch(() => { /* noop */ });
-        logger.info(`spawn 완료 u=${userId} s=${serverId}`);
+        // pid 를 함께 남긴다 — 이게 없어서 운영 instance 행이 전부 pid NULL 이었고,
+        // 헬스체크(verifyRunningInstancesByPid)가 항상 missingPid 만 반환해
+        // 죽은 프로세스를 판별하지 못했다. 원격 transport 는 pid 가 없어 종전대로 null.
+        const pid = client.getPid?.() ?? undefined;
+        await this.repo.recordInstanceTransition(serverId, userId, 'running', pid).catch(() => { /* noop */ });
+        logger.info(`spawn 완료 u=${userId} s=${serverId} pid=${pid ?? 'n/a'}`);
         return client;
     }
 }

@@ -284,6 +284,27 @@ export class ExternalMCPClient extends EventEmitter {
     }
 
     /**
+     * stdio transport 가 spawn 한 자식 프로세스의 pid.
+     *
+     * lifecycle-supervisor 가 'running' 전이를 기록할 때 함께 남겨,
+     * 이후 헬스체크(process.kill(pid,0))가 실제 생존을 검증할 수 있게 한다.
+     * 이 접근자가 없어 pid 가 한 번도 기록되지 않았고(운영 3,404행 전부 NULL),
+     * 헬스체크가 항상 missingPid 만 반환했다.
+     *
+     * 원격 transport(sse/streamable-http)는 로컬 프로세스가 없으므로 null.
+     * Docker 샌드박스 경로에서는 `docker run` 프로세스의 pid 로, 컨테이너가 사는 동안
+     * 함께 살아 있어 생존 신호로 유효하다.
+     *
+     * @returns 자식 프로세스 pid, 없으면 null
+     */
+    getPid(): number | null {
+        const t = this.transport;
+        if (!t || !('pid' in t)) return null;
+        const pid = (t as { pid: number | null }).pid;
+        return typeof pid === 'number' ? pid : null;
+    }
+
+    /**
      * 서버 설정 반환
      *
      * @returns MCPServerConfig 복사본
