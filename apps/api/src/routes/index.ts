@@ -22,6 +22,7 @@ export { mcpAdminMonitoringRouter } from './mcp-admin-monitoring.routes';
 export { adminModelRolesRouter } from './admin-model-roles.routes';
 export { adminSystemSettingsRouter } from './admin-system-settings.routes';
 export { firstRunSetupRouter } from './first-run-setup.routes';
+export { default as kakaoMapEmbedRouter } from './kakao-map-embed.routes';
 
 // 🆕 리팩토링된 라우트
 export { default as chatRouter, setClusterManager as setChatCluster } from './chat.routes';

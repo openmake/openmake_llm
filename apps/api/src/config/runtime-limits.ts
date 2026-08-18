@@ -544,6 +544,14 @@ export const RESEARCH_TAVILY = {
     SEARCH_DEPTH: (process.env.RESEARCH_TAVILY_DEPTH === 'basic' ? 'basic' : 'advanced') as 'basic' | 'advanced',
 } as const;
 
+/** 카카오 지도 임베드 HTML (네이티브 앱 WKWebView 용) */
+export const KAKAO_MAP_EMBED = {
+    /** 정적 HTML 이라 캐시 허용 — 장소 데이터는 앱이 주입하므로 응답에 없다 */
+    CACHE_SECONDS: Number(process.env.KAKAO_MAP_EMBED_CACHE_SECONDS) || 3600,
+    /** 단일 지점일 때의 기본 확대 레벨 (카카오 기준: 작을수록 확대) */
+    DEFAULT_LEVEL: Number(process.env.KAKAO_MAP_EMBED_DEFAULT_LEVEL) || 4,
+} as const;
+
 export const SEARXNG_CATEGORY_SCOPE = {
     /** 기술/개발 질의 → `it` 카테고리 (github·stackoverflow·mdn·pypi·docker hub).
      *  ⚠️ 단독 `코드` 같은 일반어 토큰 금지 — '할인 코드' 류 비기술 질의가 매칭돼 카테고리를 오염시킨다. */

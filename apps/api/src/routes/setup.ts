@@ -40,6 +40,7 @@ import {
     adminModelRolesRouter,
     adminSystemSettingsRouter,
     firstRunSetupRouter,
+    kakaoMapEmbedRouter,
     usageRouter,
     nodesRouter,
     setNodesCluster,
@@ -226,6 +227,9 @@ export function setupApiRoutes(
     app.use('/api/auth', createAuthController(getConfig().port));
     // 첫 실행 셋업 마법사 (admin 0명일 때만 동작하는 일회성 공개 엔드포인트, auth 계열 리미터)
     app.use('/api/setup', authLimiter, firstRunSetupRouter);
+
+    // 카카오 지도 임베드 HTML — 네이티브 앱 WKWebView 전용, /api 스코프 밖(인증·CSRF 무관).
+    app.use('/embed', kakaoMapEmbedRouter);
     app.use('/api/admin', createAdminController());
     // GDPR Phase B Fix 6 (B7) — 동의 조회/철회 API
     app.use('/api/users/me/consent', createConsentController());
