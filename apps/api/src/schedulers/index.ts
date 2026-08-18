@@ -93,6 +93,28 @@ export async function startAllSchedulers(): Promise<void> {
         logger.warn('Agent Task 스케줄러 등록 실패(무시):', err);
     }
 
+    // 8-D. Agent Task 업로드 보존 스윕 — 종료 후 보존기간 지난 task 의 디스크 원본 회수 +
+    //      tmp/·chunked/ 잔재 청소(부팅 + 6h 주기). 샌드박스 플래그와 무관 — 업로드 원본은
+    //      비-샌드박스 task 도 무기한 쌓인다(removeTaskFiles 호출처가 롤백·삭제 2곳뿐).
+    try {
+        const { sweepExpiredTaskUploads } = await import('../services/agent-task/upload-retention');
+        const { cleanupStaleChunkUploads } = await import('../services/agent-task/chunk-store');
+        const { getPool } = await import('../data/models/unified-database');
+        const sweep = async () => {
+            const r = await sweepExpiredTaskUploads(getPool());
+            await cleanupStaleChunkUploads();
+            if (r.sweptTasks || r.orphanDirs || r.tmpFiles) {
+                logger.info(`Agent Task 업로드 정리: 원본 회수 ${r.sweptTasks} / 고아 ${r.orphanDirs} / tmp ${r.tmpFiles}`);
+            }
+        };
+        await sweep().catch(() => { /* noop */ });
+        const SIX_HOURS = 6 * 60 * 60 * 1000;
+        setInterval(() => { void sweep().catch(() => { /* noop */ }); }, SIX_HOURS).unref();
+        logger.debug('Agent Task 업로드 보존 스윕 등록 완료');
+    } catch (err) {
+        logger.warn('Agent Task 업로드 보존 스윕 등록 실패(무시):', err);
+    }
+
     // 9. 아티팩트 실행 히스토리 TTL 스윕 — persistTtlMs 초과 실행 결과 삭제(부팅 + 6h 주기).
     try {
         const { ARTIFACT_EXEC } = await import('../config/artifact-exec');
