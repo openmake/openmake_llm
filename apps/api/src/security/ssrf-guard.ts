@@ -212,15 +212,19 @@ export function isBlockedIP(address: string): boolean {
  * 외부 프로바이더 base_url / MCP 서버 URL 로 등록할 수 있도록, 차단 대상 IP 라도 명시적으로
  * 허용목록에 있으면 통과시킨다.
  *
- * 형식: 콤마 구분. 각 항목은 ① hostname(정확 일치) ② IPv4 ③ IPv4 CIDR.
- *   예) SSRF_ALLOWED_HOSTS=rag.internal,192.168.0.45,10.1.0.0/16
+ * 형식: 콤마 구분. 각 항목은 ① hostname(정확 일치) ② IPv4 ③ IPv4 CIDR ④ ①·②에 `:port` 부착.
+ *   예) SSRF_ALLOWED_HOSTS=rag.internal,192.168.0.45,10.1.0.0/16,127.0.0.1:8889
+ *
+ * `:port` 를 붙이면 그 포트로 향하는 요청만 허용한다 — loopback 의 특정 로컬 서비스
+ * (예: 사용자가 띄운 streamable-http MCP)만 열고 나머지 내부 포트(DB·Redis·게이트웨이)는
+ * 계속 막기 위한 최소 권한 형태. 포트를 생략하면 종전대로 모든 포트를 허용한다.
  *
  * ⚠️ 미설정(빈 값) 시 항상 false — 기존 차단 동작과 100% 동일(fail-closed). 즉 이 기능은
  *    opt-in 이며, 설정하지 않는 한 기본 보안 경계는 변하지 않는다.
  */
 type AllowlistEntry =
-    | { kind: 'hostname'; value: string }
-    | { kind: 'ipv4'; value: string }
+    | { kind: 'hostname'; value: string; port?: string }
+    | { kind: 'ipv4'; value: string; port?: string }
     | { kind: 'cidr'; value: string };
 
 let allowlistCache: { raw: string; entries: AllowlistEntry[] } | null = null;
@@ -244,10 +248,17 @@ function parseAllowlist(): AllowlistEntry[] {
             } catch {
                 logger.warn('SSRF allowlist: invalid CIDR ignored', { token });
             }
-        } else if (isIP(token) === 4) {
-            entries.push({ kind: 'ipv4', value: token });
         } else {
-            entries.push({ kind: 'hostname', value: token.toLowerCase() });
+            // host:port 형태 지원 — IPv6 리터럴은 대상이 아니므로 콜론 1개만 인정
+            const parts = token.split(':');
+            const hasPort = parts.length === 2 && /^\d{1,5}$/.test(parts[1]);
+            const host = hasPort ? parts[0] : token;
+            const port = hasPort ? parts[1] : undefined;
+            if (isIP(host) === 4) {
+                entries.push({ kind: 'ipv4', value: host, port });
+            } else {
+                entries.push({ kind: 'hostname', value: host.toLowerCase(), port });
+            }
         }
     }
 
@@ -259,17 +270,29 @@ function parseAllowlist(): AllowlistEntry[] {
  * URL 의 hostname 또는 resolved 주소가 SSRF_ALLOWED_HOSTS 허용목록에 있으면 true.
  * 미설정 시 항상 false (fail-closed).
  */
-export function isAllowlistedHost(hostname: string, address: string): boolean {
+/** URL 의 실제 포트 — 생략 시 스킴 기본값(http 80 / https 443). */
+export function effectivePort(url: URL): string {
+    if (url.port) return url.port;
+    return url.protocol === 'https:' ? '443' : '80';
+}
+
+export function isAllowlistedHost(hostname: string, address: string, port?: string): boolean {
     const entries = parseAllowlist();
     if (entries.length === 0) {
         return false;
     }
 
     const host = hostname.toLowerCase();
+    // 엔트리가 포트를 명시했으면 요청 포트까지 일치해야 한다 (미명시는 전 포트 허용).
+    const portMatches = (entry: AllowlistEntry): boolean =>
+        entry.kind === 'cidr' || !entry.port || entry.port === (port ?? '');
     const addressIsIPv4 = isIP(address) === 4;
     const hostnameIsIPv4 = isIP(hostname) === 4;
 
     for (const entry of entries) {
+        if (!portMatches(entry)) {
+            continue;
+        }
         if (entry.kind === 'hostname') {
             if (host === entry.value) {
                 return true;
@@ -306,7 +329,7 @@ export async function validateOutboundUrl(rawUrl: string, resolver: DnsResolver 
 
     const { address } = await resolver(url.hostname);
     if (isBlockedIP(address)) {
-        if (isAllowlistedHost(url.hostname, address)) {
+        if (isAllowlistedHost(url.hostname, address, effectivePort(url))) {
             logger.info('SSRF allowlist bypass: host explicitly allowed', { rawUrl, hostname: url.hostname, address });
         } else {
             const message = `SSRF blocked: resolved to blocked IP range: ${address}`;
@@ -360,7 +383,7 @@ export async function safeFetch(
 
         const { address } = await resolver(url.hostname);
         if (isBlockedIP(address)) {
-            if (isAllowlistedHost(url.hostname, address)) {
+            if (isAllowlistedHost(url.hostname, address, effectivePort(url))) {
                 logger.info('SSRF allowlist bypass: host explicitly allowed', { rawUrl: currentUrl, hostname: url.hostname, address });
             } else {
                 const message = `SSRF blocked: resolved to blocked IP range: ${address}`;
