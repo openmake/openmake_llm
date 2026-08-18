@@ -1377,6 +1377,12 @@ export const AGENT_TASK_LIMITS = {
     /** 미완성(미클레임) 청크 업로드 보관 시한(ms) — init 시 지난 것을 기회적으로 청소.
      *  AGENT_TASK_CHUNK_TTL_MS(기본 24h). */
     CHUNK_UPLOAD_TTL_MS: parseInt(process.env.AGENT_TASK_CHUNK_TTL_MS || '', 10) || 24 * 60 * 60 * 1000,
+    /** 종료(completed/failed/cancelled) 후 업로드 원본 보존 기간(ms) — 지나면 보존 스윕이
+     *  디스크 원본만 회수한다. DB 메타(input_files 추출텍스트·input_images base64)는 유지되므로
+     *  이후 재시도는 추출텍스트로 degrade 될 뿐 실패하지 않는다(task-inputs 의 복사 실패 내성).
+     *  AGENT_TASK_UPLOAD_RETENTION_DAYS(기본 30, 0 = 원본 회수 비활성 — tmp/청크 청소는 계속). */
+    UPLOAD_RETENTION_MS: ((d) => (Number.isFinite(d) && d >= 0 ? d : 30) * 24 * 60 * 60 * 1000)(
+        parseInt(process.env.AGENT_TASK_UPLOAD_RETENTION_DAYS || '', 10)),
     /** 사용자 지정 max_turns 의 절대 상한(Zod 입력 검증 상한도 이 값을 참조).
      *  20 은 조사→데이터 생성→렌더→검증이 이어지는 작업엔 부족하다 — 2026-08-09 실측: 예약
      *  리포트 최근 5회가 **전부 20/20 을 소진**했고, 성공한 회차조차 마진이 0이라 조금만 흔들리면
