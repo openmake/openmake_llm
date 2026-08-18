@@ -84,6 +84,12 @@ async function cleanupStale(): Promise<void> {
     }
 }
 
+/** TTL 지난 미클레임 업로드 청소 — 보존 스윕 스케줄러(schedulers/index.ts)에서 주기 호출.
+ *  init 시 기회적 청소만으로는 업로드가 끊긴 뒤 새 업로드가 없으면 영영 안 치워진다. */
+export async function cleanupStaleChunkUploads(): Promise<void> {
+    await cleanupStale();
+}
+
 /** 업로드 세션 시작 — 선언(파일명·크기·청크 수)을 기록하고 uploadId 발급. */
 export async function initChunkedUpload(
     userId: string,
