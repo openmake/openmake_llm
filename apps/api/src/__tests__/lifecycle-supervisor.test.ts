@@ -19,6 +19,9 @@ function mkRepo(): MockRepo {
     };
 }
 
+/** stdio 자식 프로세스 pid — 'running' 전이에 함께 기록되는지 검증하기 위한 고정값 */
+const MOCK_PID = 4242;
+
 function mkClientFactory() {
     const created: Array<{ serverId: string; client: unknown }> = [];
     const factory = jest.fn().mockImplementation((config: { id: string }) => {
@@ -28,6 +31,7 @@ function mkClientFactory() {
             listTools: jest.fn().mockResolvedValue({ tools: [] }),
             callTool: jest.fn(),
             on: jest.fn(),
+            getPid: jest.fn().mockReturnValue(MOCK_PID),
         };
         created.push({ serverId: config.id, client });
         return client;
@@ -76,7 +80,8 @@ describe('MCPLifecycleSupervisor', () => {
         expect(userPool.has('u-1', 's-chat')).toBe(false);
         expect(userPool.has('u-1', 's-off')).toBe(false);
         expect(repo.recordInstanceTransition).toHaveBeenCalledWith('s-session', 'u-1', 'starting');
-        expect(repo.recordInstanceTransition).toHaveBeenCalledWith('s-session', 'u-1', 'running');
+        // pid 를 함께 기록해야 헬스체크가 생존을 검증할 수 있다 (미전달 시 전량 NULL → missingPid 만 반환)
+        expect(repo.recordInstanceTransition).toHaveBeenCalledWith('s-session', 'u-1', 'running', MOCK_PID);
     });
 
     test('onChatStart: per_chat + per_session(auto_spawn) ensure, auto_spawn=false 제외', async () => {
