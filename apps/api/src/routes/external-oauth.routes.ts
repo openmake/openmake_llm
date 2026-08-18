@@ -174,7 +174,7 @@ router.post('/:providerId/oauth/poll',
             },
         );
 
-        // 403/404 = 아직 미승인 (opencode 동일 시맨틱) — pending 으로 응답
+        // 403/404 = 아직 미승인 — pending 으로 응답
         if (pollResponse.status === 403 || pollResponse.status === 404) {
             res.json(success({ status: 'pending' }));
             return;
