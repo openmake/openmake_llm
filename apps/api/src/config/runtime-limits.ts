@@ -1133,9 +1133,16 @@ export const EXTERNAL_LLM_TOOL_BLACKLIST: readonly string[] = [
  * 설치한 사용자의 경우 전체 도구 스키마가 과대해져 vLLM 첫 토큰 컴파일이 지연/hang
  * 되는 것을 막기 위해(과거 ~150 도구 786KB → 첫토큰 101s 사례) 노출 수를 제한한다.
  * 초과분은 drop 하고 로그로 알린다. picker 로 끈 도구는 cap 계산 전에 제외된다.
+ *
+ * 2026-08-19: 12 → 20. 실측상 **개수 cap 이 바이트 예산보다 먼저 걸려** 정원을 낭비하고
+ * 있었다 — 운영 로그가 매 요청 `46개 중 12개(8KB)` 로, SCHEMA_BUDGET(16KB)의 절반만
+ * 쓰고도 개수에서 잘렸다. 도구당 평균 ~0.67KB 이므로 20개여도 ~13KB 로 예산 안이며,
+ * 바이트 상한이 실질 가드로 남는다(hang 근거였던 786KB 와는 두 자릿수 차이).
+ * 도구가 많은 서버(notebooklm 39·open-design 18)를 쓰는 사용자는 이 상한 때문에
+ * round-robin 앞쪽 2~3개만 노출돼 나머지에 접근할 방법이 서버명 언급뿐이었다.
  */
 export const CHAT_USER_MCP_TOOL_CAP = parseInt(
-    process.env.CHAT_USER_MCP_TOOL_CAP || '12',
+    process.env.CHAT_USER_MCP_TOOL_CAP || '20',
     10,
 );
 
