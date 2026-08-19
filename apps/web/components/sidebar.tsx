@@ -185,7 +185,7 @@ export function Sidebar() {
     <aside className="flex h-full w-[264px] flex-col border-r border-border bg-surface-2/60">
       <Link href="/" className="flex items-center gap-2 px-4 pt-4 transition hover:opacity-80">
         <Image
-          src="/logo.png"
+          src="/logo.svg"
           alt="OpenMake"
           width={28}
           height={28}
