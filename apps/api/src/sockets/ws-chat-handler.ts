@@ -394,15 +394,18 @@ export async function handleChatMessage(
         // 운영 측정용 단일 라인 로그: TTFB + 경로 분기 플래그 + 토큰 처리량.
         // grep 패턴: "[ChatMetrics]" 로 추출, 컬럼 파싱으로 분기별 p50/p95 분석 가능.
         const rm = result.routingMeta;
+        // model 은 **실제로 답한 모델**(result.model = servedModel)을 쓴다 — 요청 모델을 쓰면
+        // 외부 provider 폴백(429·401 등) 시 로그가 chatgpt 로 남아 실제 응답(로컬)과 어긋난다.
+        const servedModel = result.model || selectedModel;
         // 평문(하위호환 grep) + 구조화 meta(집계/대시보드용 — 성공/에러 통일 스키마 event=chat_llm_call).
         log.info(
             `[ChatMetrics] ttfb=${ttfb}ms fp=${rm?.fastPath ? 'Y' : 'N'} ` +
             `agent_bypass=${rm?.agentBypass ? 'Y' : 'N'} cache_hit=${rm?.summaryCacheHit ? 'Y' : 'N'} ` +
-            `tokens=${tokenCount} tps=${tokensPerSec} total=${result.responseTime}ms model=${selectedModel}`,
+            `tokens=${tokenCount} tps=${tokensPerSec} total=${result.responseTime}ms model=${servedModel}`,
             {
                 event: 'chat_llm_call',
                 status: 'success',
-                model: selectedModel,
+                model: servedModel,
                 ttft_ms: ttfb,
                 ttlt_ms: generationDuration,
                 total_ms: result.responseTime,

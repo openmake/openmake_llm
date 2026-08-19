@@ -107,7 +107,17 @@ export async function runMessagePipeline(svc: ChatService,
     });
     // 여기가 "어느 모델이 답하는가"가 확정되는 유일한 지점 — 호출자에게 알려 응답·대화기록의
     // model 이 요청 모델이 아니라 실제 응답 모델을 싣게 한다. (폴백 시 external-fallback 이 갱신)
-    req.onServedModel?.(servedModelLabel(externalResolved));
+    //
+    // 아래 관측 로그(ChatTiming)도 같은 값을 써야 한다 — externalResolved 를 그대로 쓰면
+    // 폴백(429·401 등) 이 일어나도 로그가 요청 모델로 남아 실제 응답 모델과 어긋난다.
+    // 콜백을 래핑해 갱신을 여기서도 받는다(상위 콜백은 그대로 호출).
+    let servedModel = servedModelLabel(externalResolved);
+    const upstreamOnServedModel = req.onServedModel;
+    req.onServedModel = (fullId: string): void => {
+        servedModel = fullId;
+        upstreamOnServedModel?.(fullId);
+    };
+    req.onServedModel(servedModel);
 
     // ── 보안 사전 검사 ──
     const securityPreCheck = preRequestCheck(message || '');
@@ -453,7 +463,7 @@ export async function runMessagePipeline(svc: ChatService,
         const ttfcMs = tm.firstChunkAt > 0 ? tm.firstChunkAt - tm.firstLlmCallAt : -1;
         logger.info(
             `[ChatTiming] prep=${prepMs}ms ttfc=${ttfcMs}ms tool=${tm.toolMs}ms turns=${tm.turns} `
-            + `total=${Date.now() - startTime}ms model=${externalResolved.fullId}`,
+            + `total=${Date.now() - startTime}ms model=${servedModel}`,
             {
                 event: 'chat_timing',
                 prep_ms: prepMs,
@@ -461,7 +471,7 @@ export async function runMessagePipeline(svc: ChatService,
                 tool_ms: tm.toolMs,
                 turns: tm.turns,
                 total_ms: Date.now() - startTime,
-                model: externalResolved.fullId,
+                model: servedModel,
             },
         );
     }
