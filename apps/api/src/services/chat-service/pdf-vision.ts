@@ -36,17 +36,40 @@ function checkPdftoppm(): Promise<boolean> {
     return pdftoppmAvailable;
 }
 
-/** pdfinfo 로 총 페이지 수 조회 (실패 시 undefined — 안내문에서 총수만 생략) */
-async function getPageCount(pdfPath: string): Promise<number | undefined> {
+/** pdfinfo 결과 — 총 페이지 수와 첫 페이지 판형(pt). 실패 시 각 항목 undefined. */
+interface PdfInfo { pages?: number; longEdgePt?: number }
+
+/** pdfinfo 로 총 페이지 수 + 판형 조회 (실패 시 빈 값 — 안내문 총수 생략·기본 dpi 렌더) */
+async function getPdfInfo(pdfPath: string): Promise<PdfInfo> {
     try {
         const { stdout } = await execFileAsync('pdfinfo', [pdfPath], {
             timeout: PDF_VISION_LIMITS.RENDER_TIMEOUT_MS,
         });
-        const m = /^Pages:\s+(\d+)/m.exec(String(stdout));
-        return m ? parseInt(m[1], 10) : undefined;
+        const out = String(stdout);
+        const pm = /^Pages:\s+(\d+)/m.exec(out);
+        // "Page size:  960.009 x 540 pts" — 페이지마다 다를 수 있으나 pdfinfo 는 첫 페이지 기준.
+        const sm = /^Page size:\s+([\d.]+)\s+x\s+([\d.]+)\s+pts/m.exec(out);
+        return {
+            ...(pm ? { pages: parseInt(pm[1], 10) } : {}),
+            ...(sm ? { longEdgePt: Math.max(parseFloat(sm[1]), parseFloat(sm[2])) } : {}),
+        };
     } catch {
-        return undefined;
+        return {};
     }
+}
+
+/**
+ * 렌더 인자 선택 — 기본은 dpi 렌더지만, 판형이 커서 예상 픽셀이 상한을 넘으면
+ * -scale-to 로 긴 변을 고정한다(작은 페이지를 확대하지 않도록 조건부).
+ * 판형을 모르면 기존 동작(dpi)을 유지한다.
+ */
+function renderScaleArgs(longEdgePt: number | undefined): string[] {
+    const cap = PDF_VISION_LIMITS.MAX_EDGE_PX;
+    if (longEdgePt && cap > 0) {
+        const expectedPx = (longEdgePt / 72) * PDF_VISION_LIMITS.DPI;
+        if (expectedPx > cap) return ['-scale-to', String(cap)];
+    }
+    return ['-r', String(PDF_VISION_LIMITS.DPI)];
 }
 
 /** 렌더 산출 jpg 파일명의 페이지 번호 (p-1.jpg / p-01.jpg 숫자 정렬용) */
@@ -101,10 +124,11 @@ export async function buildPdfVisionAttachment(
             await fs.mkdir(dir, { recursive: true });
             const pdfPath = path.join(dir, 'in.pdf');
             await fs.writeFile(pdfPath, buf);
-            const total = await getPageCount(pdfPath);
+            const { pages: total, longEdgePt } = await getPdfInfo(pdfPath);
             const want = total !== undefined ? Math.min(budget, total) : budget;
+            const scaleArgs = renderScaleArgs(longEdgePt);
             await execFileAsync('pdftoppm', [
-                '-jpeg', '-r', String(PDF_VISION_LIMITS.DPI),
+                '-jpeg', ...scaleArgs,
                 '-f', '1', '-l', String(want),
                 pdfPath, path.join(dir, 'p'),
             ], { timeout: PDF_VISION_LIMITS.RENDER_TIMEOUT_MS });
@@ -120,7 +144,10 @@ export async function buildPdfVisionAttachment(
             budget -= pages.length;
             const range = pages.length === 1 ? '1페이지' : `1–${pages.length}페이지`;
             noteLines.push(`- ${f.name}: ${total !== undefined ? `총 ${total}페이지 중 ` : ''}${range} 이미지 첨부`);
-            logger.info(`[PdfVision] ${f.name}: ${pages.length}페이지 렌더 주입 (dpi ${PDF_VISION_LIMITS.DPI})`);
+            const scaleLabel = scaleArgs[0] === '-scale-to'
+                ? `긴 변 ${scaleArgs[1]}px 로 축소(판형 초과)`
+                : `dpi ${PDF_VISION_LIMITS.DPI}`;
+            logger.info(`[PdfVision] ${f.name}: ${pages.length}페이지 렌더 주입 (${scaleLabel})`);
         } catch (e) {
             logger.warn(`[PdfVision] ${f.name} 렌더 실패 — 텍스트 추출만 사용: ${e instanceof Error ? e.message : e}`);
         } finally {

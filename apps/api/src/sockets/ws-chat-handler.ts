@@ -14,6 +14,7 @@ import { KeyExhaustionError } from '../errors/key-exhaustion.error';
 import { ProviderError } from '../providers/provider-errors';
 import { checkChatRateLimit } from '../middlewares/chat-rate-limiter';
 import { createLogger } from '../utils/logger';
+import { logChatSuccessMetrics } from './chat-metrics-log';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
 import { WS_ERROR_MESSAGES, WS_PROVIDER_ERROR_MESSAGES, getLocalizedTemplate } from './ws-chat-locales';
 import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
@@ -391,28 +392,17 @@ export async function handleChatMessage(
             : '0.00';
         const ttfb = firstTokenTime > 0 ? firstTokenTime - generationStartTime : -1;
 
-        // 운영 측정용 단일 라인 로그: TTFB + 경로 분기 플래그 + 토큰 처리량.
-        // grep 패턴: "[ChatMetrics]" 로 추출, 컬럼 파싱으로 분기별 p50/p95 분석 가능.
-        const rm = result.routingMeta;
-        // 평문(하위호환 grep) + 구조화 meta(집계/대시보드용 — 성공/에러 통일 스키마 event=chat_llm_call).
-        log.info(
-            `[ChatMetrics] ttfb=${ttfb}ms fp=${rm?.fastPath ? 'Y' : 'N'} ` +
-            `agent_bypass=${rm?.agentBypass ? 'Y' : 'N'} cache_hit=${rm?.summaryCacheHit ? 'Y' : 'N'} ` +
-            `tokens=${tokenCount} tps=${tokensPerSec} total=${result.responseTime}ms model=${selectedModel}`,
-            {
-                event: 'chat_llm_call',
-                status: 'success',
-                model: selectedModel,
-                ttft_ms: ttfb,
-                ttlt_ms: generationDuration,
-                total_ms: result.responseTime,
-                tokens: tokenCount,
-                tps: Number(tokensPerSec),
-                fast_path: !!rm?.fastPath,
-                agent_bypass: !!rm?.agentBypass,
-                summary_cache_hit: !!rm?.summaryCacheHit,
-            },
-        );
+        // model 은 **실제로 답한 모델**(result.model = servedModel)을 쓴다 — 요청 모델을 쓰면
+        // 외부 provider 폴백(429·401 등) 시 로그가 chatgpt 로 남아 실제 응답(로컬)과 어긋난다.
+        logChatSuccessMetrics(log, {
+            model: result.model || selectedModel,
+            ttfbMs: ttfb,
+            generationMs: generationDuration,
+            totalMs: result.responseTime,
+            tokens: tokenCount,
+            tokensPerSec,
+            routingMeta: result.routingMeta,
+        });
         // Artifact parser flush — 닫는 태그 없이 끝난 partial 도 emit (defensive).
         artifactStreamParser.flush();
 

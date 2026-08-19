@@ -346,11 +346,12 @@ export function useChatSocket() {
         case "system_event":
           // 백엔드 메타 알림 — 현재는 모델 폴백 고지만 처리한다.
           if (data.payload?.type === "model_fallback") {
-            const md = (data.payload.metadata ?? {}) as { from?: string; to?: string; reason?: string };
+            const md = (data.payload.metadata ?? {}) as { from?: string; to?: string; reason?: string; code?: string };
             setModelFallback({
               from: String(md.from ?? ""),
               to: String(md.to ?? ""),
               ...(md.reason ? { reason: String(md.reason) } : {}),
+              ...(md.code ? { code: String(md.code) } : {}),
             });
           }
           break;
