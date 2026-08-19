@@ -56,6 +56,15 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // manifest 는 항상 재검증시킨다(기본 max-age=14400 이면 아이콘 목록 교체가 4시간 늦게 반영).
+      // ⚠️ favicon.ico·icon.svg·apple-icon.png 에는 이 헤더가 먹지 않는다 — metadata **이미지**
+      // 라우트는 Next 가 응답에 Cache-Control 을 직접 실어 config 헤더가 덮어쓰지 못한다(실측).
+      // 다만 HTML 의 <link> 에는 파일 해시 쿼리가 붙으므로, 페이지를 새로 받으면 새 URL 로
+      // 즉시 갱신된다. 4시간이 걸리는 건 규약 경로(/favicon.ico)로 직접 받는 경우뿐이다.
+      {
+        source: "/manifest.webmanifest",
+        headers: [{ key: "Cache-Control", value: "public, max-age=0, must-revalidate" }],
+      },
     ];
   },
 };
