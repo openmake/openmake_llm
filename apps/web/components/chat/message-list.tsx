@@ -244,7 +244,7 @@ function ThinkingIndicator({
       : t("thinking.analyzing");
   return (
     <div className="flex gap-3">
-      <Image src="/logo.png" alt="OpenMake" width={28} height={28} className="mt-0.5 h-7 w-7 shrink-0 rounded-md object-contain" />
+      <Image src="/logo.svg" alt="OpenMake" width={28} height={28} className="mt-0.5 h-7 w-7 shrink-0 rounded-md object-contain" />
       <div className="min-w-0 flex-1">
         <p className="mb-1 text-xs font-medium text-muted">OpenMake</p>
         <div className="flex items-center gap-2 text-sm text-muted">
@@ -604,7 +604,7 @@ export function MessageList() {
     return (
       <div className="flex h-full flex-col items-center justify-center px-6 text-center">
         <Image
-          src="/logo.png"
+          src="/logo.svg"
           alt="OpenMake"
           width={56}
           height={56}
@@ -654,7 +654,7 @@ export function MessageList() {
           <SystemMessage key={i} content={m.content} />
         ) : (
           <div key={i} className="flex gap-3">
-            <Image src="/logo.png" alt="OpenMake" width={28} height={28} className="mt-0.5 h-7 w-7 shrink-0 rounded-md object-contain" />
+            <Image src="/logo.svg" alt="OpenMake" width={28} height={28} className="mt-0.5 h-7 w-7 shrink-0 rounded-md object-contain" />
             <div className="min-w-0 flex-1">
               <p className="mb-1 text-xs font-medium text-muted">OpenMake</p>
               {m.modelFallback && (
