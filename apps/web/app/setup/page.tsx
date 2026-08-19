@@ -100,7 +100,7 @@ export default function SetupPage() {
     <div className="grid min-h-dvh place-items-center bg-app px-4 py-8">
       <div className="w-full max-w-sm">
         <div className="mb-7 flex flex-col items-center text-center">
-          <Image src="/logo.png" alt="OpenMake" width={48} height={48}
+          <Image src="/logo.svg" alt="OpenMake" width={48} height={48}
             className="h-12 w-12 rounded-xl object-contain" priority />
           <h1 className="mt-4 text-2xl font-bold text-fg">{t("title")}</h1>
           <p className="mt-1 text-sm text-muted">{t("subtitle")}</p>

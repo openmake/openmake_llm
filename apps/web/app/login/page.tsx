@@ -69,7 +69,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-7 flex flex-col items-center text-center">
           <Image
-            src="/logo.png"
+            src="/logo.svg"
             alt="OpenMake"
             width={48}
             height={48}
