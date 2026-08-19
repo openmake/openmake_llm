@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Boxes, Share2, ExternalLink, Lock, Globe, Link2, Clock } from "lucide-react";
+import { Boxes, Share2, ExternalLink, Lock, Globe, Link2 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { PageHeader, Card, Badge } from "@/components/ui/primitives";
@@ -110,20 +110,25 @@ export default function ArtifactsGalleryPage() {
                     <span className="text-lg leading-none">{it.icon || "📦"}</span>
                     <div className="min-w-0 flex-1">
                       <h3 className="truncate text-sm font-medium text-fg transition hover:text-accent">{it.title}</h3>
+                      {/* 제목 영역은 정체성(종류·버전)만 — 생성 시각은 아래 메타 줄에서 독립 항목으로 다룬다. */}
                       <div className="mt-1 flex flex-wrap items-center gap-1.5">
                         <Badge tone="neutral"><span className="font-mono">{it.kind}{it.lang ? `·${it.lang}` : ""}</span></Badge>
                         <span className="font-mono text-[11px] text-faint">v{it.version}</span>
-                        {(() => {
-                          const created = formatCreatedAt(it.createdAt, locale);
-                          return created ? (
-                            <span className="flex items-center gap-1 font-mono text-[11px] text-faint" title={created.full}>
-                              <Clock className="h-3 w-3" />{created.short}
-                            </span>
-                          ) : null;
-                        })()}
                       </div>
                     </div>
                   </button>
+
+                  {/* 메타 — 생성 시각을 라벨과 함께 독립 항목으로. 작업 카드의 측정값 블록과 같은 형식. */}
+                  {(() => {
+                    const created = formatCreatedAt(it.createdAt, locale);
+                    return created ? (
+                      <div className="flex items-baseline justify-between gap-2 border-t border-border pt-3 text-xs"
+                        title={created.full}>
+                        <span className="text-faint">{t("createdLabel")}</span>
+                        <span className="font-mono text-fg-2">{created.short}</span>
+                      </div>
+                    ) : null;
+                  })()}
 
                   <div className="flex items-center justify-between">
                     {it.published && vis && VisIcon ? (
