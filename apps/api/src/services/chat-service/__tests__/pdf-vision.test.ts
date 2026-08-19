@@ -16,6 +16,18 @@ jest.mock('child_process', () => {
     return { ...actual, execFile };
 });
 
+// 운영 .env 값(예: CAP 8 상향)에 흔들리지 않도록 한도를 고정 — .env 의존 테스트 함정 방지
+jest.mock('../../../config/runtime-limits', () => {
+    const actual = jest.requireActual('../../../config/runtime-limits');
+    return {
+        ...actual,
+        PDF_VISION_LIMITS: {
+            ...actual.PDF_VISION_LIMITS,
+            ENABLED: true, TOTAL_IMAGE_CAP: 4, MAX_PAGES: 4, DPI: 120, RENDER_TIMEOUT_MS: 5000,
+        },
+    };
+});
+
 import { buildPdfVisionAttachment } from '../pdf-vision';
 import { PDF_VISION_LIMITS } from '../../../config/runtime-limits';
 
@@ -69,7 +81,7 @@ describe('buildPdfVisionAttachment', () => {
     it('3페이지 PDF → 3장 렌더 + 안내문에 총 페이지 수 기재', async () => {
         mockExecHandler = okHandler([3]);
         const r = await buildPdfVisionAttachment([{ name: 'report.pdf', data: PDF_DATA }], 0);
-        expect(r.images).toHaveLength(Math.min(3, PDF_VISION_LIMITS.MAX_PAGES));
+        expect(r.images).toHaveLength(3);
         expect(r.images[0].startsWith('data:image/jpeg;base64,')).toBe(true);
         expect(r.note).toContain('report.pdf');
         expect(r.note).toContain('총 3페이지');
@@ -81,12 +93,9 @@ describe('buildPdfVisionAttachment', () => {
             [{ name: 'a.pdf', data: PDF_DATA }, { name: 'b.pdf', data: PDF_DATA }],
             0,
         );
-        expect(r.images.length).toBeLessThanOrEqual(PDF_VISION_LIMITS.MAX_PAGES);
+        expect(r.images).toHaveLength(4);
         expect(r.note).toContain('a.pdf');
-        if (PDF_VISION_LIMITS.MAX_PAGES >= 4) {
-            expect(r.images).toHaveLength(4);
-            expect(r.note).toContain('b.pdf: 총 5페이지 중 1페이지 이미지 첨부');
-        }
+        expect(r.note).toContain('b.pdf: 총 5페이지 중 1페이지 이미지 첨부');
     });
 
     it('렌더 실패는 graceful skip — 빈 결과, throw 없음', async () => {
