@@ -491,7 +491,8 @@
       },
       "openDetail": "查看详情",
       "versionPicker": "版本",
-      "close": "关闭"
+      "close": "关闭",
+      "createdLabel": "创建"
     },
     "resize": "调整面板宽度（双击重置）"
   },
@@ -802,7 +803,11 @@
       "interrupted": "因服务器重启而中断",
       "resumableHint": "可继续执行"
     },
-    "planNode": "步骤{n}"
+    "planNode": "步骤{n}",
+    "startedLabel": "开始",
+    "elapsedLabel": "耗时",
+    "modelLabel": "模型",
+    "tokensLabel": "令牌"
   },
   "customAgents": {
     "pageTitle": "自定义智能体",
