@@ -1422,13 +1422,24 @@ export const AGENT_TASK_LIMITS = {
      * 262K 컨텍스트의 4% 수준이라 안전하다.
      */
     GOAL_MAX_CHARS: parseInt(process.env.AGENT_TASK_GOAL_MAX_CHARS || '', 10) || 20000,
-    /** 기본 최대 턴 수 */
-    DEFAULT_MAX_TURNS: 10,
+    /** 기본 최대 턴 수(요청이 maxTurns 를 명시하지 않았을 때).
+     *  종전 10 은 근거 없이 낮았다 — 2026-08-19 실측: 기본값으로 실행된 141건 중 25건이 10/10 을
+     *  소진해 실패했고, 그중엔 조사·검증을 다 끝내고 산출물 저장 직전에 턴이 끊긴 건도 있었다
+     *  (6ad7b822: 검색 8회·fact_check 3회 성공 후 data.json 을 쓰지 못하고 goal_incomplete).
+     *  반면 천장(32)을 지정한 12건은 상한 도달이 0건(최대 28턴)이라 32 는 사실상 여유가 있다.
+     *  턴 상한은 "여기까지만 돌린다"는 안전판이지 예산이 아니다 — 작업이 일찍 끝나면 남는 턴은
+     *  소모되지 않으므로, 상향의 비용은 실패·루프 작업이 더 오래 도는 경우로 한정된다. 그 경우도
+     *  MAX_TOTAL_TOKENS·TOKEN_SOFT_RATIO 가 별도로 먼저 걸린다.
+     *  AGENT_TASK_DEFAULT_MAX_TURNS 로 오버라이드(상한은 MAX_TURNS_CEILING). */
+    DEFAULT_MAX_TURNS: parseInt(process.env.AGENT_TASK_DEFAULT_MAX_TURNS || '', 10) || 32,
     /**
      * 대형 첨부(생성 시점 추출 상한 초과 — 샌드박스에서 에이전트가 직접 파싱/OCR) 시 기본 턴 수.
-     * 기본 10턴은 수백 페이지 문서의 읽기+정리에 부족해 goal_incomplete 로 실패한다
+     * 종전 기본 10턴은 수백 페이지 문서의 읽기+정리에 부족해 goal_incomplete 로 실패했다
      * (2026-08-08 실측: 66MB 스캔 PDF 가 턴 10/10 소진, 57MB 도 10/10 턱걸이 완주).
      * 명시 maxTurns 가 오면 그 값이 우선.
+     * ⚠️ DEFAULT_MAX_TURNS 상향(10→32, 2026-08-19)으로 이 값이 기본보다 작아졌다. 이 상수는
+     * "상향"이 목적이므로 resolveDefaultMaxTurns 가 Math.max 로 역전을 막는다 — 실효를 가지려면
+     * 기본값보다 크게 잡을 것.
      */
     LARGE_INPUT_MAX_TURNS: parseInt(process.env.AGENT_TASK_LARGE_INPUT_MAX_TURNS || '', 10) || 20,
     /** 관리자 전체 조회(/admin/conversations 작업 탭, ?viewAll=true) 기본 목록 상한.
