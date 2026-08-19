@@ -190,7 +190,6 @@ export function Composer() {
     webSearchEnabled,
     agentTaskMode,
     agentApprovalMode,
-    agentRepoUrl,
     agentLocalExecutor,
     imageMode,
     artifactMode,
@@ -201,7 +200,6 @@ export function Composer() {
     toggle,
     setSelectedModel,
     setAgentApprovalMode,
-    setAgentRepoUrl,
     setAgentLocalExecutor,
     cycleStyle,
     setInputDraft,
@@ -231,14 +229,6 @@ export function Composer() {
     enabled: slashCandidate,
     staleTime: 30_000,
   });
-  // Phase 2 Git: 에이전트 모드 시 사용자의 GitHub repo 목록(push 권한) 조회 → repo 입력 자동완성.
-  const { data: repoData } = useQuery({
-    queryKey: ["github-repos"],
-    queryFn: () => ApiClient.get<{ data: { repos: Array<{ fullName: string; url: string }> } }>("/api/agent-tasks/github/repos"),
-    enabled: agentTaskMode,
-    staleTime: 300_000,
-  });
-  const repoSuggestions = repoData?.data?.repos ?? [];
   // Cowork D2: 로컬 브리지(데스크톱 앱) 연결 상태 — 토글 활성 판단. 15s 갱신.
   const { data: bridgeData } = useQuery({
     queryKey: ["local-bridge-status"],
@@ -337,7 +327,6 @@ export function Composer() {
         files.length ? files : undefined,
         images.length ? images.map((i) => i.dataUrl) : undefined,
         agentApprovalMode,
-        agentRepoUrl.trim() || undefined,
         agentLocalExecutor || undefined,
       );
     } else if (structuredMode) {
@@ -362,7 +351,6 @@ export function Composer() {
         files,
         images.length ? images.map((i) => i.dataUrl) : undefined,
         delegationApproval,
-        undefined,
       );
     } else if (
       !discussionMode && !deepResearchMode && !imageMode &&
@@ -373,7 +361,7 @@ export function Composer() {
       // 감지해 reportdata 계약 주입 → 완료 시 고정 템플릿 아티팩트가 칩으로 인라인 도착.
       // 승인정책은 Option B 와 동일(high-risk — web_search 등 조사 도구는 자동).
       const reportApproval = agentApprovalMode === "none" ? "none" : "high-risk";
-      void startAgentTask(text.trim(), undefined, undefined, reportApproval, undefined);
+      void startAgentTask(text.trim(), undefined, undefined, reportApproval);
     } else {
       // NotebookLM 컨텍스트 — grounding 프리픽스는 백엔드(prompts/notebook-context)가 주입.
       // 가로채기 모드(토론/딥리서치/이미지)는 도구를 우회하므로 미전송 — 칩은 흐림 표시로 안내.
@@ -610,45 +598,20 @@ export function Composer() {
           </p>
         )}
 
-        {/* Phase 2 Git — repo URL 지정 시 태스크가 해당 repo 를 clone 해 작업 후 PR 생성(선택).
-            로컬 실행 중엔 숨긴다 — 연결 폴더가 작업 대상이라 clone 대상이 없고, 백엔드도
-            executor='local' + repoUrl 조합을 400 으로 거절한다(agent-task.routes.ts).
-            브리지가 끊기면 로컬 실행은 실질 무효(토글도 '연결 필요' 표시)이므로 다시 노출한다 —
-            그래야 repo 지정이라는 대안이 막히지 않는다. */}
-        {agentTaskMode && !(agentLocalExecutor && bridgeConnected) && (
-          <div className="flex items-center gap-2 px-3 pt-2 text-xs">
-            <span className="shrink-0 text-muted">{t("repo.label")}</span>
-            <input
-              type="text"
-              value={agentRepoUrl}
-              onChange={(e) => setAgentRepoUrl(e.target.value)}
-              placeholder="https://github.com/org/repo"
-              list="agent-repo-suggestions"
-              className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-2 py-1 font-mono text-xs text-fg-1"
-            />
-            {repoSuggestions.length > 0 && (
-              <datalist id="agent-repo-suggestions">
-                {repoSuggestions.map((r) => (
-                  <option key={r.url} value={r.url}>{r.fullName}</option>
-                ))}
-              </datalist>
-            )}
-          </div>
-        )}
-        {/* Cowork D2 — 로컬 실행: 데스크톱 앱이 연결한 폴더에서 작업 실행. repo 지정과는 상호배타. */}
+        {/* Cowork D2 — 로컬 실행: 데스크톱 앱이 연결한 폴더에서 작업 실행. */}
         {agentTaskMode && (
           <div className="flex items-center gap-2 px-3 pt-2 text-xs">
             <span className="shrink-0 text-muted">{t("localExec.label")}</span>
             <button
               type="button"
               onClick={() => setAgentLocalExecutor(!agentLocalExecutor)}
-              disabled={!bridgeConnected || !!agentRepoUrl.trim()}
+              disabled={!bridgeConnected}
               className={cn(
                 "rounded-md border px-2 py-1 text-xs",
                 agentLocalExecutor && bridgeConnected
                   ? "border-accent bg-accent-soft text-accent"
                   : "border-border bg-surface-2 text-fg-1",
-                (!bridgeConnected || !!agentRepoUrl.trim()) && "opacity-50",
+                !bridgeConnected && "opacity-50",
               )}
             >
               {!bridgeConnected

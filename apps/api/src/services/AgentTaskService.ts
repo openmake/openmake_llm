@@ -44,7 +44,6 @@ import { buildJudgeToolEvidence } from './agent-task/goal-judge';
 import { persistArtifactSteps } from './agent-task/task-steps';
 import { initWorkspaceBaseline, maybePersistCodeDiff, captureDiffOnCleanup } from './agent-task/code-diff';
 import { getSteeringRegistry, applyPendingSteering } from './agent-task/steering';
-import { setupTaskRepo, maybePushAndOpenPR } from './agent-task/git-ops';
 import { resolveExecutorPlan } from './agent-task/executor-select';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
 import { executeTurnToolCalls } from './agent-task/turn-executor';
@@ -226,14 +225,13 @@ export class AgentTaskService {
                         sandboxContainerId: taskRuntime.containerName,
                         workspacePath: taskRuntime.localWorkdir ?? undefined,
                     });
-                    // 새 대화(resume 아님)면 system 에 작업환경 안내 주입. 이어서 Phase 2 Git: repo 지정 시 호스트 clone(토큰 컨테이너 미주입)+안내.
+                    // 새 대화(resume 아님)면 system 에 작업환경 안내 주입.
                     if (!input.resume && conversation[0]?.role === 'system') {
                         conversation[0].content += getTaskSandboxGuidance();
                         // 로컬 실행기 worktree 격리가 걸렸으면 작업 브랜치를 알린다(사용자 검토 지점).
                         const isolated = remoteExecutor?.isolatedBranch;
                         if (isolated) conversation[0].content += getWorktreeIsolationNote(isolated);
                     }
-                    await setupTaskRepo(taskRuntime, input, userId, conversation);
                     logger.info(`[AgentTask] 샌드박스 활성 (${taskId}, ${taskRuntime.containerName})`);
                 } catch (e) {
                     logger.warn(`[AgentTask] 샌드박스 생성 실패 — 미사용 진행: ${e instanceof Error ? e.message : e}`);
@@ -563,7 +561,6 @@ export class AgentTaskService {
                 // 완료 시 workspace 보존(다운로드용), 실패/취소 시 삭제 직전 코드 diff 캡처(실패한 코드 작업도 변경분 검토).
                 const keepWorkspace = curStatus === 'completed';
                 if (!keepWorkspace) await captureDiffOnCleanup(taskRuntime, taskId, stepNumber).catch(() => { /* fail-open */ });
-                else if (input.gitRepoUrl) await maybePushAndOpenPR(taskRuntime, input, userId, taskId, goal); // 완료+repo: 새 브랜치 push+PR
                 await taskRuntime.cleanup(!keepWorkspace).catch((e) =>
                     logger.warn(`[AgentTask] 샌드박스 정리 실패: ${taskId} — ${e}`));
             }

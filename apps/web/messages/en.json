@@ -291,9 +291,6 @@
       "autoHint": "Approve only high-risk tools (shell/python/browser/delete)",
       "skipHint": "Run all tools automatically"
     },
-    "repo": {
-      "label": "Repo (optional):"
-    },
     "localExec": {
       "label": "Local run:",
       "off": "Run in server sandbox",
@@ -356,7 +353,6 @@
       "turn": "Turn {turn}",
       "goal": "Goal",
       "outputs": "Outputs",
-      "viewPr": "View PR",
       "downloadFailed": "Download failed: {error}"
     },
     "research": {
@@ -800,7 +796,6 @@
       "delete": "Delete",
       "started": "Task started from template."
     },
-    "viewPr": "View PR",
     "downloadFailed": "Download failed: {error}",
     "localBadge": "Local folder run",
     "errorReason": {
@@ -1788,18 +1783,6 @@
     "dashboard": "Dashboard",
     "history": "Chat history",
     "research": "Deep research"
-  },
-  "githubConnect": {
-    "title": "GitHub",
-    "description": "Connect a Personal Access Token so agent tasks can clone repositories and open pull requests. The token is encrypted and never exposed to task sandboxes.",
-    "connected": "Connected",
-    "patLabel": "Personal Access Token",
-    "save": "Connect",
-    "disconnect": "Disconnect",
-    "disconnectConfirm": "Disconnect GitHub? Agent tasks will no longer be able to access your repositories.",
-    "hint": "Needs repo scope. Create at github.com → Settings → Developer settings → Personal access tokens.",
-    "saveFailed": "Failed to save token",
-    "disconnectFailed": "Failed to disconnect"
   },
   "notFound": {
     "title": "Page not found",

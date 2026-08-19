@@ -61,11 +61,6 @@ export interface AgentTaskRunInput {
     /** 이 실행의 총 타임아웃(ms) override — 미지정 시 전역 TOTAL_TIMEOUT_MS. 예약(무인) task 는
      *  무거운 생성 워크플로우를 위해 더 긴 SCHEDULE_TOTAL_TIMEOUT_MS 를 넘긴다. */
     totalTimeoutMs?: number;
-    /** Phase 2 Git: 작업 대상 GitHub repo URL(https://github.com/org/repo). 있으면 실행 시
-     *  호스트가 workspace 에 clone(토큰은 사용자 github 연결). 미지정이면 일반 샌드박스 작업. */
-    gitRepoUrl?: string;
-    /** Phase 2 Git: clone 할 브랜치(base). 미지정 시 repo 기본 브랜치. */
-    gitBranch?: string;
     /** Cowork D1a: 실행 백엔드 — 'local' 이면 로컬 브리지(RemoteExecutor)로 도구를 위임.
      *  LOCAL_EXECUTOR_ENABLED + 디바이스 연결 필요, 승인 정책은 'all' 강제. 미지정=sandbox. */
     executor?: 'sandbox' | 'local';
