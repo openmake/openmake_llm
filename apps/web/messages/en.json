@@ -404,7 +404,14 @@
       "copied": "Copied",
       "download": "Download .patch"
     },
-    "modelFallbackNotice": "The selected model ({from}) did not respond, so the default model ({to}) answered instead."
+    "modelFallbackNotice": "The selected model ({from}) did not respond, so the default model ({to}) answered instead.",
+    "modelFallbackReasons": {
+      "QUOTA_EXCEEDED": "usage limit reached",
+      "SUBSCRIPTION_REQUIRED": "subscription required",
+      "INVALID_API_KEY": "authentication error",
+      "MISSING_API_KEY": "authentication error",
+      "UPSTREAM_ERROR": "upstream error"
+    }
   },
   "artifacts": {
     "exec": {
@@ -487,7 +494,8 @@
       },
       "openDetail": "View details",
       "versionPicker": "Version",
-      "close": "Close"
+      "close": "Close",
+      "createdLabel": "Created"
     },
     "resize": "Resize panel (double-click to reset)"
   },
@@ -797,7 +805,11 @@
       "interrupted": "Interrupted by server restart",
       "resumableHint": "Can be resumed"
     },
-    "planNode": "Step {n}"
+    "planNode": "Step {n}",
+    "startedLabel": "Started",
+    "elapsedLabel": "Elapsed",
+    "modelLabel": "Model",
+    "tokensLabel": "Tokens"
   },
   "customAgents": {
     "pageTitle": "Custom Agents",

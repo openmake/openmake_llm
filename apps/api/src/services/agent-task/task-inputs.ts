@@ -28,7 +28,10 @@ export function resolveDefaultMaxTurns(
         const isDoc = DOC_EXTRACT_LIMITS.PDF_EXTS.includes(ext) || DOC_EXTRACT_LIMITS.OFFICE_EXTS.includes(ext);
         return isDoc && typeof f.content !== 'string';
     });
-    return needsSandboxParsing ? AGENT_TASK_LIMITS.LARGE_INPUT_MAX_TURNS : AGENT_TASK_LIMITS.DEFAULT_MAX_TURNS;
+    // LARGE_INPUT 은 기본값 "상향"이 목적이므로 기본보다 낮아지면 안 된다 — 둘 다 env 로 조정
+    // 가능해 역전이 가능하다(기본 32 > LARGE_INPUT 20 이면 대형 첨부가 오히려 손해).
+    if (!needsSandboxParsing) return AGENT_TASK_LIMITS.DEFAULT_MAX_TURNS;
+    return Math.max(AGENT_TASK_LIMITS.LARGE_INPUT_MAX_TURNS, AGENT_TASK_LIMITS.DEFAULT_MAX_TURNS);
 }
 
 const logger = createLogger('AgentTaskService');

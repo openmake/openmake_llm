@@ -90,7 +90,7 @@ backend/api/.ollama-cluster.json
 !apps/web/public/**/*.png
 !apps/web/public/**/*.jpg
 !apps/web/public/**/*.jpeg
-!apps/web/app/icon.png
+!apps/web/app/apple-icon.png
 !screenshot-main.png
 !skill-library-current.png
 # README screenshots/demo assets (personal info masked before commit)

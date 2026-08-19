@@ -543,6 +543,19 @@ function FeedbackButtons({ messageId }: { messageId: string }) {
   );
 }
 
+
+/** 폴백 사유 코드 중 번역 문구가 있는 것만 표시한다 — 그 외는 생략(원문은 배지 title 에 남는다). */
+const FALLBACK_REASON_KEYS = new Set([
+  "QUOTA_EXCEEDED",
+  "SUBSCRIPTION_REQUIRED",
+  "INVALID_API_KEY",
+  "MISSING_API_KEY",
+  "UPSTREAM_ERROR",
+]);
+function fallbackReasonKey(code?: string): string | null {
+  return code && FALLBACK_REASON_KEYS.has(code) ? code : null;
+}
+
 export function MessageList() {
   const t = useTranslations("chat");
   const chatHistory = useAppStore((s) => s.chatHistory);
@@ -649,8 +662,10 @@ export function MessageList() {
             <div className="min-w-0 flex-1">
               <p className="mb-1 text-xs font-medium text-muted">OpenMake</p>
               {m.modelFallback && (
+                /* 폴백 고지 — 어느 모델이 실제로 답했는지 알리는 유일한 표시라 본문과 같은 대비로 둔다
+                   (text-muted 로는 흘려보게 된다). 사유는 코드→번역 매핑, 원문은 title 로 유지. */
                 <div
-                  className="mb-2 flex items-start gap-1.5 rounded-md border border-warn/30 bg-warn/5 px-2.5 py-1.5 text-xs text-muted"
+                  className="mb-2 flex items-start gap-1.5 rounded-md border border-warn/50 bg-warn/10 px-2.5 py-1.5 text-xs text-fg-2"
                   title={m.modelFallback.reason}
                 >
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" aria-hidden />
@@ -659,6 +674,11 @@ export function MessageList() {
                       from: m.modelFallback.from,
                       to: m.modelFallback.to,
                     })}
+                    {fallbackReasonKey(m.modelFallback.code) && (
+                      <span className="text-muted">
+                        {" "}({t(`modelFallbackReasons.${fallbackReasonKey(m.modelFallback.code)}`)})
+                      </span>
+                    )}
                   </span>
                 </div>
               )}

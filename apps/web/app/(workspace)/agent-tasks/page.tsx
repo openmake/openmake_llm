@@ -2,13 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   Sparkles,
   Check,
   LoaderCircle,
-  Clock,
-  Cpu,
   X,
   Trash2,
   RotateCcw,
@@ -54,6 +52,8 @@ interface AgentTask {
   rawStatus: ApiTaskStatus;
   model: string;
   elapsed: string;
+  /** 시작(생성) 시각 ISO — 목록에서 경과시간과 함께 표시. 목업 데이터는 생략 가능. */
+  startedAt?: string;
   currentTurn: number;
   maxTurns: number;
   progress: number;
@@ -138,6 +138,22 @@ function formatElapsed(t: TFn, start?: string, end?: string): string {
     : t("elapsedSec", { s: r });
 }
 
+/**
+ * 목록용 시작 시각 — 연도는 생략해 카드 메타 줄을 짧게 유지하고, 전체 시각은 title 로 노출한다.
+ * 로그성 목록이라 12시간제(오전/오후)보다 24시간제가 읽기 쉽다.
+ */
+function formatStartedAt(iso: string | undefined, locale: string): { short: string; full: string } | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return {
+    short: d.toLocaleString(locale, {
+      month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false,
+    }),
+    full: d.toLocaleString(locale),
+  };
+}
+
 function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
   const status = mapStatus(t.status);
   const progress =
@@ -153,6 +169,7 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
     rawStatus: t.status,
     model: t.model || "Auto",
     elapsed: formatElapsed(tr, t.created_at, t.completed_at),
+    startedAt: t.created_at,
     currentTurn: t.current_turn ?? 0,
     maxTurns: t.max_turns ?? 0,
     progress,
@@ -872,6 +889,7 @@ function TemplatesPanel() {
 
 export default function AgentTasksPage() {
   const t = useTranslations("agentTasks");
+  const locale = useLocale();
   const router = useRouter();
   const [tasks, setTasks] = useState<AgentTask[]>(() => buildTaskFallback(t));
   const [loading, setLoading] = useState(true);
@@ -1045,6 +1063,7 @@ export default function AgentTasksPage() {
 
               return (
                 <Card key={task.id} className="flex flex-col p-5">
+                  {/* 1) 정체성 — 상태·소유자·실행기 배지 + 상세 진입. 턴은 진행률 줄로 내렸다. */}
                   <div className="mb-3 flex items-start justify-between gap-2">
                     <span className="flex flex-wrap items-center gap-1.5">
                       <Badge tone={meta.tone}>
@@ -1059,10 +1078,16 @@ export default function AgentTasksPage() {
                       {viewAll && task.ownerId && task.ownerId !== String(myUserId ?? "") && (
                         <Badge tone="neutral">{t("ownerBadge", { id: task.ownerId })}</Badge>
                       )}
+                      {task.executor === "local" && (
+                        <Badge tone="neutral">{t("localBadge")}</Badge>
+                      )}
                     </span>
-                    <span className="font-mono text-xs text-faint">
-                      {t("turnShort", { current: task.currentTurn, max: task.maxTurns })}
-                    </span>
+                    <button
+                      onClick={() => setDetailTaskId(task.id)}
+                      title={t("detailTitle")}
+                      className="-mr-1 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-faint transition hover:bg-surface-2 hover:text-fg">
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
                   </div>
 
                   {/* 실패 사유 — 알려진 코드는 번역, 재개 가능 사유는 resume 안내 병기 */}
@@ -1086,12 +1111,6 @@ export default function AgentTasksPage() {
                   >
                     {task.goal}
                   </h3>
-                  {task.executor === "local" && (
-                    <span className="mb-2 inline-flex w-fit items-center rounded-full border border-accent bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent">
-                      {t("localBadge")}
-                    </span>
-                  )}
-
                   {total > 0 ? (
                     <ul className="mb-4 flex-1 space-y-1.5">
                       {task.checklist.map((item, i) => (
@@ -1112,40 +1131,55 @@ export default function AgentTasksPage() {
                     <div className="flex-1" />
                   )}
 
-                  {/* 진행률 */}
+                  {/* 2) 진행 — 진행률과 턴은 같은 축이라 한 줄에 모은다(종전엔 턴만 카드 상단에 떨어져 있었다). */}
                   <div className="mb-3">
-                    <div className="mb-1 flex items-center justify-between text-xs">
+                    <div className="mb-1 flex items-baseline justify-between gap-2 text-xs">
                       <span className="text-faint">{t("progressLabel")}</span>
-                      <span className="font-mono text-fg-2">{pct}%</span>
+                      <span className="flex items-baseline gap-2 font-mono">
+                        <span className="text-fg-2">{pct}%</span>
+                        <span className="text-faint">
+                          {t("turnShort", { current: task.currentTurn, max: task.maxTurns })}
+                        </span>
+                      </span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-pill bg-surface-3">
                       <div className="h-full rounded-pill bg-accent transition-all" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
 
-                  {/* 메타 + 액션 버튼 */}
-                  <div className="flex items-center justify-between border-t border-border pt-3">
-                    <div className="flex items-center gap-3 text-xs text-faint">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" />{task.elapsed}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Cpu className="h-3.5 w-3.5" />{task.model}
-                      </span>
-                      {typeof task.totalTokens === "number" && task.totalTokens > 0 && (
-                        <span className="font-mono tabular-nums" title={t("tokensUsedHint")}>
-                          {t("tokensUsed", { count: task.totalTokens.toLocaleString() })}
-                        </span>
-                      )}
+                  {/* 3) 측정값 — 시작·소요를 각각 독립 항목으로 세우고 모델·토큰과 함께 2×2 로 정렬한다.
+                      라벨이 값의 뜻을 말하므로 종전의 Clock/Cpu 아이콘은 뺐다(중복). */}
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-1 border-t border-border pt-3 text-xs">
+                    {(() => {
+                      const started = formatStartedAt(task.startedAt, locale);
+                      return (
+                        <div className="flex items-baseline justify-between gap-2" title={started?.full}>
+                          <dt className="text-faint">{t("startedLabel")}</dt>
+                          <dd className="truncate font-mono text-fg-2">{started?.short ?? "—"}</dd>
+                        </div>
+                      );
+                    })()}
+                    <div className="flex items-baseline justify-between gap-2">
+                      <dt className="text-faint">{t("modelLabel")}</dt>
+                      <dd className="truncate text-fg-2">{task.model}</dd>
                     </div>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <dt className="text-faint">{t("elapsedLabel")}</dt>
+                      <dd className="truncate font-mono text-fg-2">{task.elapsed}</dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-2" title={t("tokensUsedHint")}>
+                      <dt className="text-faint">{t("tokensLabel")}</dt>
+                      <dd className="truncate font-mono tabular-nums text-fg-2">
+                        {typeof task.totalTokens === "number" && task.totalTokens > 0
+                          ? task.totalTokens.toLocaleString()
+                          : "—"}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  {/* 4) 액션 — 종전엔 메타와 한 줄을 다퉈 좁은 카드에서 넘쳤다. 별도 줄로 내리고 우측 정렬. */}
+                  <div className="mt-3 flex items-center justify-end gap-1">
                     <div className="flex items-center gap-1">
-                      {/* 상세 보기 */}
-                      <button
-                        onClick={() => setDetailTaskId(task.id)}
-                        title={t("detailTitle")}
-                        className="flex h-7 w-7 items-center justify-center rounded-md text-faint transition hover:bg-surface-2 hover:text-fg">
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      </button>
                       {/* Resume (failed + resumable) */}
                       {task.rawStatus === "failed" && task.resumable && (
                         <button

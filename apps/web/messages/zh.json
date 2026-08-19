@@ -404,7 +404,14 @@
       "copied": "已复制",
       "download": "下载 .patch"
     },
-    "modelFallbackNotice": "所选模型（{from}）未响应，已由默认模型（{to}）作答。"
+    "modelFallbackNotice": "所选模型（{from}）未响应，已由默认模型（{to}）作答。",
+    "modelFallbackReasons": {
+      "QUOTA_EXCEEDED": "已达使用上限",
+      "SUBSCRIPTION_REQUIRED": "需要订阅",
+      "INVALID_API_KEY": "认证错误",
+      "MISSING_API_KEY": "认证错误",
+      "UPSTREAM_ERROR": "上游错误"
+    }
   },
   "artifacts": {
     "exec": {
@@ -487,7 +494,8 @@
       },
       "openDetail": "查看详情",
       "versionPicker": "版本",
-      "close": "关闭"
+      "close": "关闭",
+      "createdLabel": "创建"
     },
     "resize": "调整面板宽度（双击重置）"
   },
@@ -797,7 +805,11 @@
       "interrupted": "因服务器重启而中断",
       "resumableHint": "可继续执行"
     },
-    "planNode": "步骤{n}"
+    "planNode": "步骤{n}",
+    "startedLabel": "开始",
+    "elapsedLabel": "耗时",
+    "modelLabel": "模型",
+    "tokensLabel": "令牌"
   },
   "customAgents": {
     "pageTitle": "自定义智能体",

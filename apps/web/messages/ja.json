@@ -404,7 +404,14 @@
       "copied": "コピー済み",
       "download": ".patch をダウンロード"
     },
-    "modelFallbackNotice": "選択したモデル({from})が応答しなかったため、既定のモデル({to})が回答しました。"
+    "modelFallbackNotice": "選択したモデル({from})が応答しなかったため、既定のモデル({to})が回答しました。",
+    "modelFallbackReasons": {
+      "QUOTA_EXCEEDED": "利用上限に到達",
+      "SUBSCRIPTION_REQUIRED": "サブスクリプションが必要",
+      "INVALID_API_KEY": "認証エラー",
+      "MISSING_API_KEY": "認証エラー",
+      "UPSTREAM_ERROR": "アップストリームエラー"
+    }
   },
   "artifacts": {
     "exec": {
@@ -487,7 +494,8 @@
       },
       "openDetail": "詳細を見る",
       "versionPicker": "バージョン",
-      "close": "閉じる"
+      "close": "閉じる",
+      "createdLabel": "作成"
     },
     "resize": "パネル幅を調整 (ダブルクリックでリセット)"
   },
@@ -797,7 +805,11 @@
       "interrupted": "サーバー再起動により中断",
       "resumableHint": "再開できます"
     },
-    "planNode": "ステップ{n}"
+    "planNode": "ステップ{n}",
+    "startedLabel": "開始",
+    "elapsedLabel": "所要",
+    "modelLabel": "モデル",
+    "tokensLabel": "トークン"
   },
   "customAgents": {
     "pageTitle": "カスタムエージェント",

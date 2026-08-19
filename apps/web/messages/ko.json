@@ -404,7 +404,14 @@
       "copied": "복사됨",
       "download": ".patch 다운로드"
     },
-    "modelFallbackNotice": "선택한 모델({from})이 응답하지 않아 기본 모델({to})로 답변했습니다."
+    "modelFallbackNotice": "선택한 모델({from})이 응답하지 않아 기본 모델({to})로 답변했습니다.",
+    "modelFallbackReasons": {
+      "QUOTA_EXCEEDED": "사용량 한도 초과",
+      "SUBSCRIPTION_REQUIRED": "구독 필요",
+      "INVALID_API_KEY": "인증 오류",
+      "MISSING_API_KEY": "인증 오류",
+      "UPSTREAM_ERROR": "업스트림 오류"
+    }
   },
   "artifacts": {
     "exec": {
@@ -487,7 +494,8 @@
       },
       "openDetail": "상세 보기",
       "versionPicker": "버전 선택",
-      "close": "닫기"
+      "close": "닫기",
+      "createdLabel": "생성"
     },
     "resize": "패널 너비 조절 (더블클릭: 기본값)"
   },
@@ -797,7 +805,11 @@
       "interrupted": "서버 재시작으로 중단",
       "resumableHint": "이어하기로 재개할 수 있습니다"
     },
-    "planNode": "{n}단계"
+    "planNode": "{n}단계",
+    "startedLabel": "시작",
+    "elapsedLabel": "소요",
+    "modelLabel": "모델",
+    "tokensLabel": "토큰"
   },
   "customAgents": {
     "pageTitle": "커스텀 에이전트",
