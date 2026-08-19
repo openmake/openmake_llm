@@ -429,6 +429,28 @@ export const DOC_EXTRACT_LIMITS = {
 } as const;
 
 /**
+ * PDF 첨부 vision 페이지 주입 한도 (2026-08-19)
+ * 채팅 PDF 첨부를 하이브리드로 처리 — 기존 doc-extractor 텍스트 추출에 더해 앞쪽
+ * 페이지를 pdftoppm 으로 JPEG 렌더해 vision(images) 채널에 병행 주입한다
+ * (표·차트 등 텍스트 추출로 소실되는 레이아웃 보강). pdftoppm 미설치 시 graceful skip.
+ *
+ * services/chat-service/pdf-vision.ts 에서 참조
+ */
+export const PDF_VISION_LIMITS = {
+    /** 기능 on/off (기본 on — 'false' 명시 시에만 비활성) */
+    ENABLED: process.env.PDF_VISION_ENABLED !== 'false',
+    /** 요청당 프롬프트 이미지 총 상한 — vLLM `--limit-mm-per-prompt '{"image": N}'` 와 페어.
+     *  사용자 첨부 이미지가 이 값을 채우면 페이지 주입은 잔여분만 사용 */
+    TOTAL_IMAGE_CAP: parseInt(process.env.PDF_VISION_TOTAL_IMAGE_CAP || '4', 10),
+    /** 요청당 렌더 페이지 최대 수 (PDF 여러 개면 순서대로 예산 소진) */
+    MAX_PAGES: parseInt(process.env.PDF_VISION_MAX_PAGES || '4', 10),
+    /** 렌더 해상도 dpi — 문서 판독 라이브 실측(2026-08-19) 120 이면 충분, 상향은 비전 토큰 비례 증가 */
+    DPI: parseInt(process.env.PDF_VISION_DPI || '120', 10),
+    /** 렌더(pdftoppm)·페이지 수 조회(pdfinfo) 타임아웃 ms */
+    RENDER_TIMEOUT_MS: parseInt(process.env.PDF_VISION_RENDER_TIMEOUT_MS || '20000', 10),
+} as const;
+
+/**
  * 채팅 메시지 내 URL 자동 분석 한도 (2026-06-13)
  * 사용자 메시지에서 URL 감지 시 LLM 호출 전 scrapePage 로 본문을 가져와
  * fileContext 채널로 주입한다 (결정적 사전 분석 — 환각 방지).

@@ -2,7 +2,9 @@
 # ============================================================
 # qwen3.6-35b-a3b — 기본 채팅 (262K context) @ :8002
 # ============================================================
-# DGX 실측 serve 명령 기준 (2026-08-02 동기화 — prefix caching 추가).
+# DGX 실측 serve 명령 기준 (2026-08-19 동기화 — --limit-mm-per-prompt image 4→8:
+# 채팅 PDF 하이브리드(pdf-vision 페이지 주입, PDF_VISION_TOTAL_IMAGE_CAP=8 페어) 지원.
+# 2026-08-02 prefix caching 추가).
 #
 # --enable-prefix-caching (2026-08-02 추가):
 #   앱은 이 기능을 전제로 프롬프트를 배치한다 — external-system-prompt.ts 가 정적 헌법을
@@ -47,7 +49,7 @@ exec vllm serve "$MODEL_DIR" \
   --reasoning-parser qwen3 \
   --enable-auto-tool-choice \
   --tool-call-parser qwen3_coder \
-  --limit-mm-per-prompt '{"image": 4}' \
+  --limit-mm-per-prompt '{"image": 8}' \
   --speculative-config '{"method": "mtp", "num_speculative_tokens": 1}' \
   --kv-cache-dtype fp8 \
   --enable-prefix-caching \
