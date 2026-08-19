@@ -22,6 +22,7 @@ import { WS_LIMITS } from '../config/timeouts';
 import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
 import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
 import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext } from '../services/chat-service/attach-context';
+import type { PdfVisionResult } from '../services/chat-service/pdf-vision';
 import { hasScriptMixing } from '../services/chat-service/script-purity';
 import { citationMarkersWereCleaned } from '../services/chat-service/external-deterministic-append';
 import { saveAssistantMessage } from '../chat/request-persistence';
@@ -140,7 +141,15 @@ export async function handleChatMessage(
         // 레이트 리밋 통과 후 조립 — 거부될 요청에 최대 300k 자 문자열 조립 비용을 쓰지 않는다.
         // 바이너리 문서(PDF/docx/xlsx/pptx 등)는 base64(data)를 텍스트로 추출해 content 를 채운다.
         // (무거운 파서는 첨부가 있을 때만 lazy 로딩)
+        let pdfVision: PdfVisionResult = { images: [], note: '' };
         if (hasFiles) {
+            // PDF 하이브리드 (2026-08-19): 텍스트 추출에 더해 앞쪽 페이지를 vision 채널로 병행 주입.
+            // 추출(data 소거) 전에 렌더해야 하며, 특수 모드는 제외 — 딥리서치(첨부 자체 거부),
+            // 이미지 생성(vision 미소비), 토론(참여 모델 수만큼 비전 비용 배수).
+            if (msg.deepResearchMode !== true && msg.imageMode !== true && msg.discussionMode !== true) {
+                const { buildPdfVisionAttachment } = await import('../services/chat-service/pdf-vision');
+                pdfVision = await buildPdfVisionAttachment(msg.files, images?.length ?? 0);
+            }
             const { extractAttachedDocuments } = await import('../services/chat-service/doc-extractor');
             await extractAttachedDocuments(msg.files);
         }
@@ -279,10 +288,12 @@ export async function handleChatMessage(
             model: selectedModel,
             nodeId,
             history,
-            images,
+            // PDF 하이브리드: 렌더된 페이지 이미지를 사용자 첨부 뒤에 병합 (예산은 pdf-vision 이 관리)
+            images: pdfVision.images.length > 0 ? [...(images ?? []), ...pdfVision.images] : images,
             sessionId: validSessionId,
             webSearchContext,
-            fileContext: effectiveAttachContext || undefined,
+            // pdfVision.note 는 이번 턴 한정 — 세션 캐시(appendCachedAttachContext)엔 attachContext 만 저장
+            fileContext: (effectiveAttachContext + pdfVision.note) || undefined,
             discussionMode: msg.discussionMode === true,
             deepResearchMode: msg.deepResearchMode === true,
             imageMode: msg.imageMode === true,
