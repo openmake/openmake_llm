@@ -104,6 +104,8 @@ export async function streamFromExternalProvider(
                 from: resolved.fullId,
                 to: localFullId,
                 reason: err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200),
+                // 사유 코드 — 프론트가 사용자 언어 문구로 매핑한다(reason 원문은 provider 영문이 섞임).
+                ...((err as { code?: string })?.code ? { code: String((err as { code?: string }).code) } : {}),
             },
         });
         // 실제로 답하는 모델이 바뀌었다 — 배지 고지와 같은 이유로 응답의 model 도 갱신한다.

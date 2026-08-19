@@ -35,7 +35,7 @@ export interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" 
    * 모델 폴백 고지 — 선택한 모델이 실패해 다른 모델이 답한 경우.
    * 표시가 없으면 사용자가 "선택한 모델이 답했다"고 오인한다(실측).
    */
-  modelFallback?: { from: string; to: string; reason?: string };
+  modelFallback?: { from: string; to: string; reason?: string; code?: string };
 }
 
 /** 에이전트 작업 인라인 카드 상태. */
