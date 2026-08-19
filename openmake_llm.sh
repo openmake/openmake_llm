@@ -433,13 +433,52 @@ cmd_restart() {
 }
 
 # ── build / migrate / deploy ───────────────────────────────────────────────────
+
+# 새 빌드 산출물을 실행 중인 프로세스에 반영한다.
+# 프론트(next start)는 .next 를 기동 시점에 읽으므로, 재빌드 후 재시작하지 않으면
+# 옛 모듈 그래프가 이미 사라진 청크를 요구해 전 페이지가 500 이 된다
+# (2026-08-20 장애: ChunkLoadError — 빌드만 하고 재시작을 빠뜨린 경우).
+# PM2 미등록 앱은 건너뛴다 (최초 설치 중 빌드 등).
+restart_built_apps() {
+    local restarted=0 app
+    for app in "$APP_NAME" "$FRONT_APP_NAME"; do
+        if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$app\""; then
+            if pm2 restart "$app" --update-env >/dev/null 2>&1; then
+                log_ok "$app 재시작"
+                restarted=1
+            else
+                log_warn "$app restart 실패 — 'pm2 restart $app' 수동 확인 필요"
+            fi
+        fi
+    done
+    if [[ "$restarted" -eq 0 ]]; then
+        log_info "PM2 등록 앱 없음 — 재시작 생략"
+    fi
+    return 0
+}
+
+# 사용법: cmd_build [--no-restart]
+#   기본은 빌드 성공 후 PM2 앱을 재시작한다.
+#   deploy 는 마이그레이션 뒤에 자체 재시작을 수행하므로 --no-restart 로 호출한다
+#   (여기서 재시작하면 새 코드가 옛 스키마로 먼저 뜨고, 이중 재시작이 된다).
 cmd_build() {
+    # set -e 하에서 `[[ ]] && x` 는 조건 거짓 시 리스트 상태가 1 이 되어 스크립트를 죽인다 — if 로 쓴다.
+    local do_restart=1
+    if [[ "${1:-}" == "--no-restart" ]]; then
+        do_restart=0
+    fi
+
     log_step "npm run build (backend tsc + apps/web Next.js 빌드)"
     if ! ( cd "$SCRIPT_DIR" && npm run build ); then
         log_err "빌드 실패 — 후속 작업 중단"
         return 2
     fi
     log_ok "빌드 완료"
+
+    if [[ "$do_restart" -eq 1 ]]; then
+        log_step "PM2 앱 재시작 (새 빌드 반영)"
+        restart_built_apps
+    fi
 }
 
 cmd_migrate() {
@@ -507,8 +546,8 @@ cmd_deploy() {
 
     log_step "Deploy: build → migrate → restart"
 
-    # 1) 빌드
-    cmd_build
+    # 1) 빌드 (재시작은 마이그레이션 뒤 3) 단계에서 일괄 수행)
+    cmd_build --no-restart
 
     # 2) 마이그레이션 (확인 프롬프트, --no-migrate면 skip)
     if [[ "$DEPLOY_NO_MIGRATE" -eq 1 ]]; then
@@ -574,6 +613,7 @@ OpenMake LLM 통합 서비스 매니저
 
 코드 변경 반영:
   build     npm run build (backend tsc + frontend Next.js build 산출물 생성)
+            빌드 후 PM2 앱(백엔드+프론트) 자동 재시작 — --no-restart 로 생략
   migrate   DB 마이그레이션 (status → migrate)
   deploy    build + migrate + restart 통합 (코드 변경 운영 반영)
             백엔드(openmake-llm)와 프론트(openmake-next) 모두 재시작
@@ -610,7 +650,7 @@ main() {
         start)    cmd_start ;;
         stop)     cmd_stop ;;
         restart)  cmd_restart ;;
-        build)    cmd_build ;;
+        build)    cmd_build "$@" ;;
         migrate)  cmd_migrate ;;
         deploy)   cmd_deploy "$@" ;;
         status)   show_status ;;

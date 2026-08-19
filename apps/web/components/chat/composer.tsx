@@ -610,8 +610,12 @@ export function Composer() {
           </p>
         )}
 
-        {/* Phase 2 Git — repo URL 지정 시 태스크가 해당 repo 를 clone 해 작업 후 PR 생성(선택). */}
-        {agentTaskMode && (
+        {/* Phase 2 Git — repo URL 지정 시 태스크가 해당 repo 를 clone 해 작업 후 PR 생성(선택).
+            로컬 실행 중엔 숨긴다 — 연결 폴더가 작업 대상이라 clone 대상이 없고, 백엔드도
+            executor='local' + repoUrl 조합을 400 으로 거절한다(agent-task.routes.ts).
+            브리지가 끊기면 로컬 실행은 실질 무효(토글도 '연결 필요' 표시)이므로 다시 노출한다 —
+            그래야 repo 지정이라는 대안이 막히지 않는다. */}
+        {agentTaskMode && !(agentLocalExecutor && bridgeConnected) && (
           <div className="flex items-center gap-2 px-3 pt-2 text-xs">
             <span className="shrink-0 text-muted">{t("repo.label")}</span>
             <input

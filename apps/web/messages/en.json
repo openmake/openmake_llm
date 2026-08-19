@@ -491,7 +491,8 @@
       },
       "openDetail": "View details",
       "versionPicker": "Version",
-      "close": "Close"
+      "close": "Close",
+      "createdLabel": "Created"
     },
     "resize": "Resize panel (double-click to reset)"
   },
@@ -802,7 +803,11 @@
       "interrupted": "Interrupted by server restart",
       "resumableHint": "Can be resumed"
     },
-    "planNode": "Step {n}"
+    "planNode": "Step {n}",
+    "startedLabel": "Started",
+    "elapsedLabel": "Elapsed",
+    "modelLabel": "Model",
+    "tokensLabel": "Tokens"
   },
   "customAgents": {
     "pageTitle": "Custom Agents",
