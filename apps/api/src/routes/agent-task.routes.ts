@@ -38,7 +38,6 @@ import {
 import { extractAttachedDocuments } from '../services/chat-service/doc-extractor';
 import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
 import { getSteeringRegistry } from '../services/agent-task/steering';
-import { listUserRepos } from '../services/agent-task/git-ops';
 import { dispatchAgentTask, getAgentTaskQueue } from '../services/agent-task/task-queue';
 import { safeRealWorkspacePath, listWorkspaceFilesAt } from '../services/task-sandbox/sandbox';
 import { basename } from 'path';
@@ -120,20 +119,16 @@ router.post('/', (req: Request, res: Response, next) => {
     } else {
         input = req.body as CreateAgentTaskInput;
     }
-    const { goal, maxTurns, files, images, repoUrl, branch, executor } = input;
+    const { goal, maxTurns, files, images, executor } = input;
 
     const taskId = uuidv4();
     const db = getUnifiedDatabase();
     const userId = String(req.user!.id);
 
-    // Cowork D1a: local 실행은 기능 게이트 + 디바이스 연결 + git repo 미지정(호스트 clone 불가)일 때만.
+    // Cowork D1a: local 실행은 기능 게이트 + 디바이스 연결이 있을 때만.
     if (executor === 'local') {
         if (!LOCAL_BRIDGE.ENABLED) {
             res.status(400).json(badRequest('로컬 실행 기능이 비활성화되어 있습니다 (LOCAL_EXECUTOR_ENABLED)'));
-            return;
-        }
-        if (repoUrl) {
-            res.status(400).json(badRequest('로컬 실행 작업은 git repo 지정을 지원하지 않습니다 — 로컬 폴더가 작업 대상입니다'));
             return;
         }
         if (!getLocalBridgeRegistry().getDevice(userId)) {
@@ -227,8 +222,6 @@ router.post('/', (req: Request, res: Response, next) => {
         maxTurns: resolveDefaultMaxTurns(maxTurns, inputFiles),
         inputFiles,
         inputImages: Array.isArray(images) && images.length > 0 ? images : undefined,
-        gitRepoUrl: repoUrl,
-        gitBranch: branch,
         executor,
     });
 
@@ -259,16 +252,6 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
         ? await db.getAllAgentTasks(AGENT_TASK_LIMITS.LIST_ALL_DEFAULT)
         : await db.getUserAgentTasks(userId);
     res.json(success({ tasks: tasks.map(t => toPublicTask(t as unknown as Record<string, unknown>)), total: tasks.length }));
-}));
-
-/**
- * GET /api/agent-tasks/github/repos
- * 저장된 GitHub 토큰으로 사용자의 repo 목록(push 권한) 조회 — composer repo 자동완성용.
- * 토큰 미연결이면 빈 배열. ⚠️ GET /:taskId 보다 먼저 등록(github 가 taskId 로 매칭되지 않게).
- */
-router.get('/github/repos', asyncHandler(async (req: Request, res: Response) => {
-    const repos = await listUserRepos(String(req.user!.id));
-    res.json(success({ repos }));
 }));
 
 /**
@@ -354,8 +337,6 @@ router.post('/:taskId/execute', validate(executeAgentTaskSchema), asyncHandler(a
             approvalPolicy,
             files: Array.isArray(task.input_files) ? task.input_files as AgentTaskInputFile[] : undefined,
             images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
-            gitRepoUrl: task.git_repo_url ?? undefined,
-            gitBranch: task.git_branch ?? undefined,
             executor: (task.executor === 'local' ? 'local' : undefined),
         }),
     });
@@ -430,8 +411,6 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
             maxTurns: task.max_turns,
             files: Array.isArray(task.input_files) ? task.input_files as AgentTaskInputFile[] : undefined,
             images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
-            gitRepoUrl: task.git_repo_url ?? undefined,
-            gitBranch: task.git_branch ?? undefined,
             resume: {
                 conversation: cp.conversation as ChatMessage[],
                 fromTurn: (cp.completedTurn ?? 0) + 1,

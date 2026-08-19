@@ -347,7 +347,7 @@ export class UnifiedDatabase {
         model?: string;
         inputFiles?: unknown;
         inputImages?: unknown;
-        gitRepoUrl?: string; gitBranch?: string; executor?: 'sandbox' | 'local';
+        executor?: 'sandbox' | 'local';
     }): Promise<void> {
         return this.agentTaskRepository.createAgentTask(params);
     }

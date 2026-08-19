@@ -291,9 +291,6 @@
       "autoHint": "高リスクツールのみ承認 (シェル/python/ブラウザ/削除)",
       "skipHint": "すべてのツールを自動実行"
     },
-    "repo": {
-      "label": "リポジトリ(任意):"
-    },
     "localExec": {
       "label": "ローカル実行:",
       "off": "サーバーサンドボックスで実行",
@@ -356,7 +353,6 @@
       "turn": "ターン {turn}",
       "goal": "目標",
       "outputs": "成果物",
-      "viewPr": "PR を表示",
       "downloadFailed": "ダウンロードに失敗しました: {error}"
     },
     "research": {
@@ -800,7 +796,6 @@
       "delete": "削除",
       "started": "テンプレートからタスクを開始しました。"
     },
-    "viewPr": "PR を表示",
     "downloadFailed": "ダウンロードに失敗しました: {error}",
     "localBadge": "ローカルフォルダ実行",
     "errorReason": {
@@ -1788,18 +1783,6 @@
     "dashboard": "ダッシュボード",
     "history": "チャット履歴",
     "research": "ディープリサーチ"
-  },
-  "githubConnect": {
-    "title": "GitHub",
-    "description": "Personal Access Token を接続すると、エージェントタスクがリポジトリをクローンし PR を作成できます。トークンは暗号化され、タスクサンドボックスには公開されません。",
-    "connected": "接続済み",
-    "patLabel": "Personal Access Token",
-    "save": "接続",
-    "disconnect": "切断",
-    "disconnectConfirm": "GitHub を切断しますか？エージェントタスクはリポジトリにアクセスできなくなります。",
-    "hint": "repo スコープが必要です。github.com → Settings → Developer settings → Personal access tokens で作成。",
-    "saveFailed": "トークンの保存に失敗しました",
-    "disconnectFailed": "切断に失敗しました"
   },
   "notFound": {
     "title": "ページが見つかりません",
