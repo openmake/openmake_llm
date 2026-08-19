@@ -1374,6 +1374,22 @@
         "signature": "Error Signature",
         "count": "Count"
       }
+    },
+    "workflow": {
+      "title": "Task Workflow (last {days} days)",
+      "unjudgedRate": "Unjudged Completions",
+      "ofCompleted": "{unjudged} of {completed} completed",
+      "retryRate": "Turn Retries",
+      "hitlDegradeRate": "HITL Timeout Degrades",
+      "ofTasks": "{count} of {total} tasks",
+      "planCoverage": "Plan Attribution Coverage",
+      "ofSteps": "{attributed} of {total} steps",
+      "unrecorded": "unrecorded",
+      "th": {
+        "path": "Completion Path",
+        "verdict": "Verdict",
+        "tasks": "Tasks"
+      }
     }
   },
   "adminAlerts": {

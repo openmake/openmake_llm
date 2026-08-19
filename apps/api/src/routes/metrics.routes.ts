@@ -260,6 +260,67 @@ router.get('/agent-tasks/tool-errors', asyncHandler(async (req: Request, res: Re
 }));
 
 /**
+ * GET /api/metrics/agent-tasks/workflow?days=N
+ * 에이전트 작업 워크플로우 관측 (관리자). 기본 30일.
+ * ① 완료 판정 분포(completion_path × judge_verdict) ② 실패 사유 분포
+ * ③ 구제 장치(retry·hitl_degrade) 발생률 ④ plan 귀속 커버리지.
+ */
+router.get('/agent-tasks/workflow', asyncHandler(async (req: Request, res: Response) => {
+    const days = parseDays(req.query.days, 30);
+    const repo = new AgentTaskMetricsRepository(getPool());
+    const [verdictRows, failureRows, interventionRow, coverageRow] = await Promise.all([
+        repo.getCompletionVerdictDistribution(days),
+        repo.getFailureReasons(days, 10),
+        repo.getInterventionCounts(days),
+        repo.getPlanAttributionCoverage(days),
+    ]);
+
+    const completedTasks = verdictRows.reduce((sum, r) => sum + Number(r.tasks), 0);
+    // 무판정 = judge 가 achieved/not_achieved 를 내지 않은 완료 (미기록·skipped·unknown 포함).
+    const unjudgedTasks = verdictRows
+        .filter((r) => r.judge_verdict !== 'achieved' && r.judge_verdict !== 'not_achieved')
+        .reduce((sum, r) => sum + Number(r.tasks), 0);
+
+    const totalTasks = Number(interventionRow.total_tasks);
+    const retryTasks = Number(interventionRow.retry_tasks);
+    const hitlDegradeTasks = Number(interventionRow.hitl_degrade_tasks);
+
+    const totalSteps = Number(coverageRow.total_steps);
+    const attributedSteps = Number(coverageRow.attributed_steps);
+
+    res.json(success({
+        days,
+        completion: {
+            completedTasks,
+            unjudgedTasks,
+            unjudgedRate: completedTasks > 0 ? unjudgedTasks / completedTasks : 0,
+            byVerdict: verdictRows.map((r) => ({
+                completionPath: r.completion_path,
+                judgeVerdict: r.judge_verdict,
+                tasks: Number(r.tasks),
+            })),
+        },
+        failures: failureRows.map((r) => ({
+            reason: r.reason,
+            tasks: Number(r.tasks),
+        })),
+        intervention: {
+            totalTasks,
+            retryTasks,
+            retryRate: totalTasks > 0 ? retryTasks / totalTasks : 0,
+            hitlDegradeTasks,
+            hitlDegradeRate: totalTasks > 0 ? hitlDegradeTasks / totalTasks : 0,
+        },
+        planCoverage: {
+            plannedTasks: Number(coverageRow.planned_tasks),
+            totalSteps,
+            attributedSteps,
+            coverage: totalSteps > 0 ? attributedSteps / totalSteps : 0,
+        },
+    }));
+}));
+
+/**
  * GET /api/analytics
  * 종합 분석 대시보드
  */
