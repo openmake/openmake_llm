@@ -408,7 +408,14 @@
       "copied": "已复制",
       "download": "下载 .patch"
     },
-    "modelFallbackNotice": "所选模型（{from}）未响应，已由默认模型（{to}）作答。"
+    "modelFallbackNotice": "所选模型（{from}）未响应，已由默认模型（{to}）作答。",
+    "modelFallbackReasons": {
+      "QUOTA_EXCEEDED": "已达使用上限",
+      "SUBSCRIPTION_REQUIRED": "需要订阅",
+      "INVALID_API_KEY": "认证错误",
+      "MISSING_API_KEY": "认证错误",
+      "UPSTREAM_ERROR": "上游错误"
+    }
   },
   "artifacts": {
     "exec": {
