@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import {
   Sparkles,
   Check,
@@ -54,6 +54,8 @@ interface AgentTask {
   rawStatus: ApiTaskStatus;
   model: string;
   elapsed: string;
+  /** 시작(생성) 시각 ISO — 목록에서 경과시간과 함께 표시. 목업 데이터는 생략 가능. */
+  startedAt?: string;
   currentTurn: number;
   maxTurns: number;
   progress: number;
@@ -139,6 +141,22 @@ function formatElapsed(t: TFn, start?: string, end?: string): string {
     : t("elapsedSec", { s: r });
 }
 
+/**
+ * 목록용 시작 시각 — 연도는 생략해 카드 메타 줄을 짧게 유지하고, 전체 시각은 title 로 노출한다.
+ * 로그성 목록이라 12시간제(오전/오후)보다 24시간제가 읽기 쉽다.
+ */
+function formatStartedAt(iso: string | undefined, locale: string): { short: string; full: string } | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return {
+    short: d.toLocaleString(locale, {
+      month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false,
+    }),
+    full: d.toLocaleString(locale),
+  };
+}
+
 function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
   const status = mapStatus(t.status);
   const progress =
@@ -154,6 +172,7 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
     rawStatus: t.status,
     model: t.model || "Auto",
     elapsed: formatElapsed(tr, t.created_at, t.completed_at),
+    startedAt: t.created_at,
     currentTurn: t.current_turn ?? 0,
     maxTurns: t.max_turns ?? 0,
     progress,
@@ -882,6 +901,7 @@ function TemplatesPanel() {
 
 export default function AgentTasksPage() {
   const t = useTranslations("agentTasks");
+  const locale = useLocale();
   const router = useRouter();
   const [tasks, setTasks] = useState<AgentTask[]>(() => buildTaskFallback(t));
   const [loading, setLoading] = useState(true);
@@ -1136,9 +1156,15 @@ export default function AgentTasksPage() {
                   {/* 메타 + 액션 버튼 */}
                   <div className="flex items-center justify-between border-t border-border pt-3">
                     <div className="flex items-center gap-3 text-xs text-faint">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5" />{task.elapsed}
-                      </span>
+                      {(() => {
+                        const started = formatStartedAt(task.startedAt, locale);
+                        return (
+                          <span className="flex items-center gap-1" title={started?.full}>
+                            <Clock className="h-3.5 w-3.5" />
+                            {started ? `${started.short} · ${task.elapsed}` : task.elapsed}
+                          </span>
+                        );
+                      })()}
                       <span className="flex items-center gap-1">
                         <Cpu className="h-3.5 w-3.5" />{task.model}
                       </span>

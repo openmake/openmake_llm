@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Boxes, Share2, ExternalLink, Lock, Globe, Link2 } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { Boxes, Share2, ExternalLink, Lock, Globe, Link2, Clock } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { PageHeader, Card, Badge } from "@/components/ui/primitives";
 import { ApiClient, ApiError } from "@/lib/api-client";
@@ -29,8 +29,25 @@ const VIS_META: Record<string, { labelKey: string; icon: typeof Lock }> = {
   link: { labelKey: "vis.link", icon: Link2 },
 };
 
+/**
+ * 목록용 생성 시각 — 연도는 생략해 카드 메타 줄을 짧게 유지하고, 전체 시각은 title 로 노출한다.
+ * 로그성 목록이라 12시간제(오전/오후)보다 24시간제가 읽기 쉽다.
+ */
+function formatCreatedAt(iso: string | undefined, locale: string): { short: string; full: string } | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return {
+    short: d.toLocaleString(locale, {
+      month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false,
+    }),
+    full: d.toLocaleString(locale),
+  };
+}
+
 export default function ArtifactsGalleryPage() {
   const t = useTranslations("artifacts.page");
+  const locale = useLocale();
   const [items, setItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [share, setShare] = useState<{ sessionId: string; artifactId: string; icon: string | null } | null>(null);
@@ -93,9 +110,17 @@ export default function ArtifactsGalleryPage() {
                     <span className="text-lg leading-none">{it.icon || "📦"}</span>
                     <div className="min-w-0 flex-1">
                       <h3 className="truncate text-sm font-medium text-fg transition hover:text-accent">{it.title}</h3>
-                      <div className="mt-1 flex items-center gap-1.5">
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
                         <Badge tone="neutral"><span className="font-mono">{it.kind}{it.lang ? `·${it.lang}` : ""}</span></Badge>
                         <span className="font-mono text-[11px] text-faint">v{it.version}</span>
+                        {(() => {
+                          const created = formatCreatedAt(it.createdAt, locale);
+                          return created ? (
+                            <span className="flex items-center gap-1 font-mono text-[11px] text-faint" title={created.full}>
+                              <Clock className="h-3 w-3" />{created.short}
+                            </span>
+                          ) : null;
+                        })()}
                       </div>
                     </div>
                   </button>
