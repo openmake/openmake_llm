@@ -52,8 +52,6 @@ export interface AgentTaskState {
   files?: string[];
   /** 완료 시 코드 작업(openmake_code) git diff — 있으면 카드에 DiffView 로 렌더. */
   diff?: string;
-  /** Phase 2c Git: 완료 시 생성된 PR URL — 있으면 카드에 "PR 보기" 링크. */
-  prUrl?: string;
   /** 방금 실행된 스텝 요약(4-5 실시간 스트림) — "현재 단계" 라인 표시. */
   lastStep?: { stepType: string; toolName?: string; preview?: string };
 }
@@ -175,7 +173,6 @@ interface AppState {
   /** 에이전트 작업 승인 3모드 — all=Manual(전부 승인·기본)·high-risk=Auto(고위험만)·none=Skip(전부 자동). */
   agentApprovalMode: "all" | "high-risk" | "none";
   /** 에이전트 작업 Git repo URL(Phase 2) — 있으면 태스크가 해당 repo 를 clone 해 작업 후 PR 생성. */
-  agentRepoUrl: string;
   /** Cowork D2: 로컬 실행 토글 — ON 이면 작업이 데스크톱 앱이 연결한 폴더에서 실행(executor='local'). */
   agentLocalExecutor: boolean;
   imageMode: boolean;
@@ -243,7 +240,6 @@ interface AppState {
   ) => void;
   setSelectedModel: (m: string) => void;
   setAgentApprovalMode: (m: "all" | "high-risk" | "none") => void;
-  setAgentRepoUrl: (u: string) => void;
   setAgentLocalExecutor: (v: boolean) => void;
   cycleStyle: () => void;
   setStyle: (m: ChatStyle) => void;
@@ -308,7 +304,6 @@ export const useAppStore = create<AppState>()(
   webSearchEnabled: false,
   agentTaskMode: false,
   agentApprovalMode: "all",
-  agentRepoUrl: "",
   agentLocalExecutor: false,
   imageMode: false,
   artifactMode: false,
@@ -479,7 +474,6 @@ export const useAppStore = create<AppState>()(
     }),
   setSelectedModel: (m) => set({ selectedModel: m }),
   setAgentApprovalMode: (m) => set({ agentApprovalMode: m }),
-  setAgentRepoUrl: (u) => set({ agentRepoUrl: u }),
   setAgentLocalExecutor: (v) => set({ agentLocalExecutor: v }),
   cycleStyle: () =>
     set((s) => ({

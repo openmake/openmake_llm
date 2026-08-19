@@ -35,7 +35,7 @@ import { createExternalConnectionSchema, updateExternalTokensSchema, addExternal
 const logger = createLogger('ExternalRoutes');
 const router = Router();
 
-const VALID_SERVICE_TYPES: ExternalServiceType[] = ['google_drive', 'notion', 'github', 'slack', 'dropbox'];
+const VALID_SERVICE_TYPES: ExternalServiceType[] = ['google_drive', 'notion', 'slack', 'dropbox'];
 
 function isValidServiceType(value: string): value is ExternalServiceType {
     return VALID_SERVICE_TYPES.includes(value as ExternalServiceType);

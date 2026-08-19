@@ -24,14 +24,10 @@ export class AgentTaskRepository extends BaseRepository {
         inputFiles?: unknown;
         /** 입력 첨부 이미지(dataURL 배열) — vision 주입 + 샌드박스 기록용 */
         inputImages?: unknown;
-        /** Phase 2 Git: 작업 대상 repo URL(https://github.com/org/repo) */
-        gitRepoUrl?: string;
-        /** Phase 2 Git: clone 할 base 브랜치 */
-        gitBranch?: string;
         /** Cowork D1a: 실행 백엔드 — 'sandbox'(기본) | 'local'(로컬 브리지) */
         executor?: 'sandbox' | 'local';
     }): Promise<void> {
-        // input_files/input_images/git_* 는 값이 있을 때만 컬럼에 포함 — 056/057/077 마이그레이션
+        // input_files/input_images 는 값이 있을 때만 컬럼에 포함 — 056/057 마이그레이션
         // 미적용 배포에서도 해당 값 없는 기존 생성 경로가 깨지지 않게 한다(2단계 배포 안전).
         const cols = ['id', 'user_id', 'goal', 'max_turns', 'model'];
         const values: QueryParam[] = [params.id, params.userId, params.goal, params.maxTurns ?? 10, params.model];
@@ -42,14 +38,6 @@ export class AgentTaskRepository extends BaseRepository {
         if (params.inputImages !== undefined) {
             cols.push('input_images');
             values.push(JSON.stringify(params.inputImages));
-        }
-        if (params.gitRepoUrl !== undefined) {
-            cols.push('git_repo_url');
-            values.push(params.gitRepoUrl);
-        }
-        if (params.gitBranch !== undefined) {
-            cols.push('git_branch');
-            values.push(params.gitBranch);
         }
         if (params.executor !== undefined) {
             cols.push('executor');
@@ -77,8 +65,6 @@ export class AgentTaskRepository extends BaseRepository {
         workspacePath?: string;
         plan?: unknown;
         totalTokens?: number;
-        gitPrUrl?: string;
-        gitPushedBranch?: string;
         /** 완료 출구 구분(091) — 'final_answer' | 'terminate'. 완료 판정 관측용 */
         completionPath?: string;
         /** goal judge 결과(091) — 'achieved' | 'not_achieved' | 'unknown' | 'skipped' */
@@ -131,14 +117,6 @@ export class AgentTaskRepository extends BaseRepository {
         if (updates.totalTokens !== undefined) {
             sets.push(`total_tokens = $${paramIdx++}`);
             params.push(updates.totalTokens);
-        }
-        if (updates.gitPrUrl !== undefined) {
-            sets.push(`git_pr_url = $${paramIdx++}`);
-            params.push(updates.gitPrUrl);
-        }
-        if (updates.gitPushedBranch !== undefined) {
-            sets.push(`git_pushed_branch = $${paramIdx++}`);
-            params.push(updates.gitPushedBranch);
         }
         if (updates.completionPath !== undefined) {
             sets.push(`completion_path = $${paramIdx++}`);

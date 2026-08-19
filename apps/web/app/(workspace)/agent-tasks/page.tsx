@@ -89,7 +89,6 @@ interface ApiAgentTask {
   resumable?: boolean;
   plan?: PlanStep[] | null;
   total_tokens?: number | null;
-  git_pr_url?: string | null;
   /** Cowork D2: 실행 백엔드 — 'local' 이면 데스크톱 브리지 폴더에서 실행됨 */
   executor?: "sandbox" | "local";
   /** 실패 사유 (toPublicTask 가 노출하는 error 컬럼) */
@@ -404,15 +403,6 @@ function TaskDetailModal({
             </div>
           )}
 
-          {/* Phase 2c Git: 생성된 PR 링크 */}
-          {detail.task.git_pr_url && (
-            <a
-              href={detail.task.git_pr_url} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-md border border-accent bg-accent-soft px-3 py-1.5 text-xs font-medium text-accent hover:opacity-90"
-            >
-              {t("viewPr")}
-            </a>
-          )}
 
           {/* 산출물 파일 (완료 시 workspace 보존) */}
           {files.length > 0 && (

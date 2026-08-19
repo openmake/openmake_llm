@@ -65,8 +65,6 @@ export const createAgentTaskSchema = z.strictObject({
     ).max(FILE_ATTACH_LIMITS.MAX_IMAGES).optional(),
     // Phase 2 Git: 작업 대상 repo(https://github.com/org/repo)·브랜치. 있으면 실행 시 호스트가 clone.
     // 엄격한 형식 검증은 서버 parseGithubRepo 가 수행 — 여기선 prefix·길이·안전문자만.
-    repoUrl: z.string().startsWith('https://github.com/').max(300).optional(),
-    branch: z.string().max(200).regex(/^[A-Za-z0-9._/-]+$/).optional(),
     // 승인 정책은 **실행 단위** 옵션이라 생성이 아니라 execute 에 넘긴다. 여기 실리면
     // 조용히 버려져(비-strict 객체는 미선언 키를 strip) "정책을 none 으로 줬는데 첫 도구에서
     // 승인 대기" 로만 보인다 — 원인이 드러나지 않으므로 명시적으로 거절한다.
