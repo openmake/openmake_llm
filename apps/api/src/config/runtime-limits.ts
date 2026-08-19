@@ -446,6 +446,13 @@ export const PDF_VISION_LIMITS = {
     MAX_PAGES: parseInt(process.env.PDF_VISION_MAX_PAGES || '4', 10),
     /** 렌더 해상도 dpi — 문서 판독 라이브 실측(2026-08-19) 120 이면 충분, 상향은 비전 토큰 비례 증가 */
     DPI: parseInt(process.env.PDF_VISION_DPI || '120', 10),
+    /**
+     * 렌더 이미지 긴 변 픽셀 상한 — dpi 만으로는 판형이 큰 문서(대형 슬라이드·도면·포스터)에서
+     * 초대형 이미지가 나온다. 실측(2026-08-20): A0급 스캔 슬라이드가 120dpi 에서 4134×5847px
+     * (24MP)로 렌더돼 vision prefill 이 LiteLLM 소켓 읽기 타임아웃을 넘겨 요청 자체가 실패했다.
+     * 예상 픽셀이 이 값을 넘으면 dpi 대신 pdftoppm -scale-to 로 긴 변을 맞춘다.
+     */
+    MAX_EDGE_PX: parseInt(process.env.PDF_VISION_MAX_EDGE_PX || '1600', 10),
     /** 렌더(pdftoppm)·페이지 수 조회(pdfinfo) 타임아웃 ms */
     RENDER_TIMEOUT_MS: parseInt(process.env.PDF_VISION_RENDER_TIMEOUT_MS || '20000', 10),
 } as const;
