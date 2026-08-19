@@ -1,5 +1,39 @@
 # Changelog
 
+## [1.26.0](https://github.com/openmake/openmake_llm/compare/v1.25.0...v1.26.0) (2026-08-19)
+
+
+### ✨ 기능
+
+* **agent-task:** 업로드 원본 보존 스윕 — 종료 후 N일 지난 원본 회수 ([#532](https://github.com/openmake/openmake_llm/issues/532)) ([8d5594b](https://github.com/openmake/openmake_llm/commit/8d5594ba3222e9f776aaec9fa986b73280fb0eb1))
+* **auth:** iOS 축 2 — 모바일 인증 (refresh body 모드·OAuth exchange code) ([#514](https://github.com/openmake/openmake_llm/issues/514)) ([978c897](https://github.com/openmake/openmake_llm/commit/978c8975d44595917751f61e64b15d90af3d96e6))
+* **chat,ios:** 모바일 답변 형식 힌트 + 긴 답변 섹션 접기 ([#520](https://github.com/openmake/openmake_llm/issues/520)) ([4589195](https://github.com/openmake/openmake_llm/commit/45891956d3d11a1bed2a5d647c85d218f1143abb))
+* **chat:** PDF 첨부 vision 하이브리드 — 앞쪽 페이지 이미지 병행 주입 ([#533](https://github.com/openmake/openmake_llm/issues/533)) ([7b89f08](https://github.com/openmake/openmake_llm/commit/7b89f0813717c251bddd8a0a151d06aaaf22c066))
+* **contracts:** iOS 축 1 — OpenAPI 계약 SoT·산출물·계약 테스트·CI drift 게이트 ([#512](https://github.com/openmake/openmake_llm/issues/512)) ([0ef22d8](https://github.com/openmake/openmake_llm/commit/0ef22d82051937a23b6833e725ae73ecbefbe136))
+* **ios:** LUMEN 2차 백로그 — 에이전트·아티팩트·푸시·스킬 표시 ([#517](https://github.com/openmake/openmake_llm/issues/517)) ([46a8f90](https://github.com/openmake/openmake_llm/commit/46a8f90b87ac9a09a3ade689d8df1666f046b278))
+* **ios:** 실기기 서명 팀 + DEBUG 시뮬레이터 스모크 훅 ([#516](https://github.com/openmake/openmake_llm/issues/516)) ([0fc8f64](https://github.com/openmake/openmake_llm/commit/0fc8f64797e4917faeac78ad26db0bcf51827167))
+* **ios:** 축 3 — SwiftUI MVP 앱 (OpenMakeKit·채팅·OAuth·iOS CI) ([#515](https://github.com/openmake/openmake_llm/issues/515)) ([1c0e6ef](https://github.com/openmake/openmake_llm/commit/1c0e6efee0a6c75e6fe1ef83fa29ce456d0108d8))
+* **ios:** 카카오 지도 블록을 네이티브 지도 카드로 렌더 ([#526](https://github.com/openmake/openmake_llm/issues/526)) ([b9e2f35](https://github.com/openmake/openmake_llm/commit/b9e2f3521dc315311cefd5817dcf48c01c8160bb))
+* **ios:** 카카오 타일로 지도 렌더 (서버 임베드 + MapKit 폴백) ([#527](https://github.com/openmake/openmake_llm/issues/527)) ([524976c](https://github.com/openmake/openmake_llm/commit/524976cba68c5c21e5c09ed3d08e060567a12f12))
+* **ios:** 표를 폰 화면용 카드로 구조화 ([#519](https://github.com/openmake/openmake_llm/issues/519)) ([fbf041d](https://github.com/openmake/openmake_llm/commit/fbf041d77830d1b39a1cda60e2f272e35005d04a))
+* UI 없이 방치된 백엔드 기능 배선 + 자가개선 루프 입력 단절 수정 ([#523](https://github.com/openmake/openmake_llm/issues/523)) ([1a6813b](https://github.com/openmake/openmake_llm/commit/1a6813bbdd9ec65434fd467244f773e21441c6ac))
+* **web:** 브랜드 마크 SVG 재드로잉 — 파비콘·로고 교체 ([#535](https://github.com/openmake/openmake_llm/issues/535)) ([fb11fc6](https://github.com/openmake/openmake_llm/commit/fb11fc690a421a0c7de419f68dbe5543a9cbf16d))
+* **web:** 이력 카드 재배치 · 로컬 실행 시 저장소 UI 숨김 · build 자동 재시작 ([#537](https://github.com/openmake/openmake_llm/issues/537)) ([7084c6a](https://github.com/openmake/openmake_llm/commit/7084c6a69b946b0c0ff23baeb900a8f9dd255a6c))
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 기본 max_turns 10 → 32 (기본값 실행의 상한 소진 실패 차단) ([#536](https://github.com/openmake/openmake_llm/issues/536)) ([524c5c2](https://github.com/openmake/openmake_llm/commit/524c5c246d04b71122171631a61a9b6f67794b8e))
+* **agents:** 스킬 상시 주입 오염 — triggers 선언 스킬은 관련 턴에만 ([#522](https://github.com/openmake/openmake_llm/issues/522)) ([fa68ea1](https://github.com/openmake/openmake_llm/commit/fa68ea1b23377587d05c73b6bfdec025b0578517))
+* **chat:** user MCP 도구 노출 cap 12 → 20 (예산이 실질 가드) ([#529](https://github.com/openmake/openmake_llm/issues/529)) ([d10ab67](https://github.com/openmake/openmake_llm/commit/d10ab67671804525f49164041b8620ac778b7f09))
+* **ios,chat:** 아티팩트 placeholder 노출 + 파이프 없는 표 + 에이전트 작업 표시 ([#521](https://github.com/openmake/openmake_llm/issues/521)) ([ae5d9f4](https://github.com/openmake/openmake_llm/commit/ae5d9f4bc0460cf06b28026d6d32dea70141f227))
+* **ios:** 이미지 응답 끊김 + 마크다운 블록 서식 ([#518](https://github.com/openmake/openmake_llm/issues/518)) ([d2bb59a](https://github.com/openmake/openmake_llm/commit/d2bb59a40b7ae5e9526f1cbcc700374c960259b6))
+* **ios:** 카카오 지도 임베드를 /api/embed 로 이동 (외부 경로 404) ([#528](https://github.com/openmake/openmake_llm/issues/528)) ([c5a3ed1](https://github.com/openmake/openmake_llm/commit/c5a3ed1708ea1c46515e8bf64556714a8ff0c264))
+* **mcp:** instance pid 미기록 — 헬스체크가 죽은 프로세스를 판별하지 못하던 문제 ([#524](https://github.com/openmake/openmake_llm/issues/524)) ([aa4ba2f](https://github.com/openmake/openmake_llm/commit/aa4ba2fce2582a0acb6a2cce70722e378639669d))
+* **security:** SSRF allowlist 에 host:port 최소 권한 형태 추가 ([#525](https://github.com/openmake/openmake_llm/issues/525)) ([a63f5bd](https://github.com/openmake/openmake_llm/commit/a63f5bd45f15037f0fe6ba10cb21f9473ab8244a))
+* **web:** iOS·PWA 아이콘 추가 + 마크 여백 축소 ([#539](https://github.com/openmake/openmake_llm/issues/539)) ([d721a3d](https://github.com/openmake/openmake_llm/commit/d721a3dd7c611c450f14351af9d18c344635d0fd))
+* 모델 폴백 표기 정정 + PDF vision 해상도 상한 ([#538](https://github.com/openmake/openmake_llm/issues/538)) ([0b4c177](https://github.com/openmake/openmake_llm/commit/0b4c177f566e5fc0428ae5e5edd5b6447690d8c8))
+
 ## [1.25.0](https://github.com/openmake/openmake_llm/compare/v1.24.1...v1.25.0) (2026-08-16)
 
 
