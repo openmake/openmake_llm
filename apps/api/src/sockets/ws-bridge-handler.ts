@@ -26,7 +26,11 @@ export async function handleBridgeMessage(ws: WebSocket, msg: WSMessage): Promis
         const deviceId = typeof msg.deviceId === 'string' && msg.deviceId.trim() ? msg.deviceId.trim().slice(0, 64) : 'unknown';
         const label = typeof msg.label === 'string' && msg.label.trim() ? msg.label.trim().slice(0, 120) : deviceId;
         const folderName = typeof msg.folderName === 'string' ? msg.folderName.trim().slice(0, 200) : '';
-        registry.register({ userId, deviceId, label, folderName, ws, connectedAt: Date.now() });
+        const ok = registry.register({ userId, deviceId, label, folderName, ws, connectedAt: Date.now() });
+        if (!ok) {
+            ws.send(JSON.stringify({ type: 'error', message: `브리지 디바이스 상한(${LOCAL_BRIDGE.MAX_DEVICES}대)을 초과했습니다 — 다른 디바이스 연결을 해제하세요` }));
+            return;
+        }
         ws.send(JSON.stringify({ type: 'bridge_ready', deviceId }));
         return;
     }

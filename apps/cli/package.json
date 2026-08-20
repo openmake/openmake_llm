@@ -1,0 +1,20 @@
+{
+    "name": "@openmake/cli",
+    "version": "0.1.0",
+    "private": true,
+    "description": "OpenMake Code — 로컬 브리지 CLI (에이전트 작업 로컬 실행 클라이언트)",
+    "main": "dist/index.js",
+    "bin": {
+        "openmake-code": "dist/index.js"
+    },
+    "scripts": {
+        "build": "tsc -p tsconfig.json",
+        "start": "node dist/index.js"
+    },
+    "dependencies": {
+        "ws": "^8.18.3"
+    },
+    "devDependencies": {
+        "@types/ws": "^8.5.12"
+    }
+}

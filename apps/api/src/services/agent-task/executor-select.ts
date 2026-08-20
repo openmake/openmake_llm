@@ -22,7 +22,7 @@ export interface ExecutorPlan {
 }
 
 export function resolveExecutorPlan(
-    input: Pick<AgentTaskRunInput, 'executor' | 'approvalPolicy'>,
+    input: Pick<AgentTaskRunInput, 'executor' | 'approvalPolicy' | 'deviceId'>,
     taskId: string,
     userId: string,
 ): ExecutorPlan {
@@ -37,6 +37,6 @@ export function resolveExecutorPlan(
     return {
         sandboxCfg,
         runtimeEnabled: sandboxCfg.enabled || isLocal,
-        remoteExecutor: isLocal ? new RemoteExecutor(taskId, userId) : undefined,
+        remoteExecutor: isLocal ? new RemoteExecutor(taskId, userId, input.deviceId) : undefined,
     };
 }

@@ -64,6 +64,8 @@ export interface AgentTaskRunInput {
     /** Cowork D1a: 실행 백엔드 — 'local' 이면 로컬 브리지(RemoteExecutor)로 도구를 위임.
      *  LOCAL_EXECUTOR_ENABLED + 디바이스 연결 필요, 승인 정책은 'all' 강제. 미지정=sandbox. */
     executor?: 'sandbox' | 'local';
+    /** 로컬 실행 대상 브리지 디바이스(101, 다중 디바이스) — 미지정은 최근 접속 폴백. */
+    deviceId?: string;
     /** resume(이어하기): 기존 end-of-turn checkpoint 에서 복원 */
     resume?: {
         conversation: ChatMessage[];
