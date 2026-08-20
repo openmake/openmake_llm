@@ -105,6 +105,8 @@ class LocalBridgeRegistry {
         if (prev && prev.ws !== session.ws) {
             logger.info(`[Bridge] 동일 디바이스 재등록 대체: user=${session.userId} ${prev.label} → ${session.label}`);
             this.rejectPendingFor(session.userId, session.deviceId, '디바이스가 재연결되어 세션이 대체되었습니다');
+            // 구 소켓을 능동 종료 — 방치하면 unregister 가 새 ws 만 매칭해 구 ws 는 유휴로 남는다.
+            try { prev.ws.close(1000, 'device_reregistered'); } catch { /* already closing */ }
         }
         byDevice.set(session.deviceId, session);
         logger.info(`[Bridge] 디바이스 등록: user=${session.userId} device=${session.deviceId} label="${session.label}" folder="${session.folderName}" (${byDevice.size}대)`);
@@ -171,12 +173,28 @@ class LocalBridgeRegistry {
         });
     }
 
-    /** bridge_result 수신 — reqId 상관관계 해소. 소유 userId 불일치는 무시(교차 주입 차단). */
-    handleResult(userId: string, reqId: string, result: BridgeResult): void {
+    /** ws 소켓에 해당하는 디바이스 id (없으면 null) — bridge_result 발신자 검증용. */
+    getDeviceIdByWs(userId: string, ws: WebSocket): string | null {
+        const byDevice = this.devices.get(userId);
+        if (!byDevice) return null;
+        for (const [deviceId, s] of byDevice) if (s.ws === ws) return deviceId;
+        return null;
+    }
+
+    /**
+     * bridge_result 수신 — reqId 상관관계 해소. 소유 userId 불일치는 무시(교차 주입 차단).
+     * senderDeviceId 지정 시 요청을 라우팅한 디바이스와 일치하는지도 검증한다(같은 유저의
+     * 다른 디바이스가 결과를 위조 주입하는 것 차단 — rejectPendingFor 의 deviceId 격리와 대칭).
+     */
+    handleResult(userId: string, reqId: string, result: BridgeResult, senderDeviceId?: string): void {
         const p = this.pending.get(reqId);
         if (!p) return; // 이미 타임아웃/해소됨
         if (p.userId !== userId) {
             logger.warn(`[Bridge] reqId 소유 불일치 무시: req=${reqId} owner=${p.userId} sender=${userId}`);
+            return;
+        }
+        if (senderDeviceId && p.deviceId && senderDeviceId !== p.deviceId) {
+            logger.warn(`[Bridge] reqId 디바이스 불일치 무시: req=${reqId} routed=${p.deviceId} sender=${senderDeviceId}`);
             return;
         }
         clearTimeout(p.timer);

@@ -7,7 +7,7 @@ import { getLocalBridgeRegistry, type DeviceSession } from './registry';
 import type { WebSocket } from 'ws';
 
 function fakeWs(): WebSocket {
-    return { readyState: 1, OPEN: 1, send: jest.fn() } as unknown as WebSocket;
+    return { readyState: 1, OPEN: 1, send: jest.fn(), close: jest.fn() } as unknown as WebSocket;
 }
 
 function session(userId: string, deviceId: string, connectedAt: number, ws = fakeWs()): DeviceSession {
@@ -57,6 +57,30 @@ describe('LocalBridgeRegistry 다중 디바이스', () => {
         expect(reg.getDevices('u1')).toHaveLength(3);
         // 기존 디바이스 재등록은 상한과 무관하게 허용
         expect(add('u1', 'd3', 5).ok).toBe(true);
+    });
+
+    test('같은 deviceId 재등록 시 구 소켓을 close 한다 (M2)', () => {
+        const a = add('u1', 'cli', 100);
+        add('u1', 'cli', 200); // 같은 deviceId, 새 ws
+        expect((a.ws.close as jest.Mock)).toHaveBeenCalled();
+    });
+
+    test('getDeviceIdByWs 는 소켓의 deviceId 를 돌려준다 (L1 발신자 검증)', () => {
+        const a = add('u1', 'desktop', 100);
+        expect(reg.getDeviceIdByWs('u1', a.ws)).toBe('desktop');
+        expect(reg.getDeviceIdByWs('u1', fakeWs())).toBeNull();
+    });
+
+    test('handleResult 는 발신 디바이스 불일치를 무시한다 (L1)', async () => {
+        const a = add('u1', 'desktop', 100);
+        add('u1', 'cli', 200);
+        const p = reg.request('u1', { kind: 'read', path: 'x' }, 60000, 'desktop');
+        const sent = JSON.parse((a.ws.send as jest.Mock).mock.calls[0][0] as string);
+        // 다른 디바이스(cli)가 desktop 으로 라우팅된 reqId 결과를 위조 → 무시되어야 함
+        reg.handleResult('u1', sent.reqId, { ok: true, content: 'forged' }, 'cli');
+        // 올바른 디바이스(desktop)가 응답하면 정상 해소
+        reg.handleResult('u1', sent.reqId, { ok: true, content: 'real' }, 'desktop');
+        expect((await p).content).toBe('real');
     });
 
     test('한 디바이스 해제는 다른 디바이스에 영향을 주지 않는다', () => {

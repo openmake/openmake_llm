@@ -5,7 +5,7 @@
  * 서버 AgentTaskService 하네스가 턴을 오케스트레이션하고, 이 CLI 는 브리지 디바이스(도구 실행)
  * + 터미널 렌더만 담당한다(자체 에이전트 루프 없음). 명령:
  *   login                  API key·서버 URL 저장
- *   connect [dir...]       폴더 상주 연결(데몬 전경 실행)
+ *   connect [dir]          폴더 상주 연결(데몬 전경 실행, 단일 폴더)
  *   status                 연결 상태·디바이스 조회
  *   "목표" [--dir .]        cwd(또는 --dir)에서 로컬 에이전트 작업 1회 실행
  */
@@ -68,14 +68,12 @@ async function cmdStatus(): Promise<void> {
     }
 }
 
-function connectBridge(cfg: { serverUrl: string; apiKey: string }, folders: string[]): CliBridge {
-    for (const f of folders) {
-        if (!fs.existsSync(f) || !fs.statSync(f).isDirectory()) {
-            console.error(`폴더가 존재하지 않습니다: ${f}`); process.exit(1);
-        }
+function connectBridge(cfg: { serverUrl: string; apiKey: string }, folder: string): CliBridge {
+    if (!fs.existsSync(folder) || !fs.statSync(folder).isDirectory()) {
+        console.error(`폴더가 존재하지 않습니다: ${folder}`); process.exit(1);
     }
     const bridge = new CliBridge({
-        serverUrl: cfg.serverUrl, apiKey: cfg.apiKey, folders,
+        serverUrl: cfg.serverUrl, apiKey: cfg.apiKey, folder,
         confirm: terminalConfirm,
         onStatus: (s) => console.log(`\x1b[36m[bridge]\x1b[0m ${s}`),
     });
@@ -85,9 +83,15 @@ function connectBridge(cfg: { serverUrl: string; apiKey: string }, folders: stri
 
 async function cmdConnect(dirs: string[]): Promise<void> {
     const cfg = requireConfig();
-    const folders = (dirs.length ? dirs : [process.cwd()]).map((d) => path.resolve(d));
-    connectBridge(cfg, folders);
-    console.log(`연결 폴더: ${folders.join(', ')}\n종료: Ctrl+C`);
+    // 서버는 디바이스당 단일 폴더만 지원한다(다중 폴더는 후속). 여러 인자를 조용히
+    // 버리지 않고 명시적으로 거절 — 여러 폴더가 필요하면 디바이스를 여러 개 띄운다.
+    if (dirs.length > 1) {
+        console.error('폴더는 하나만 지정할 수 있습니다 — 여러 폴더는 별도 터미널에서 각각 connect 하세요.');
+        process.exit(1);
+    }
+    const folder = path.resolve(dirs[0] ?? process.cwd());
+    connectBridge(cfg, folder);
+    console.log(`연결 폴더: ${folder}\n종료: Ctrl+C`);
     process.on('SIGINT', () => { console.log('\n연결을 종료합니다.'); process.exit(0); });
     await new Promise(() => { /* 상주 */ });
 }
@@ -104,7 +108,7 @@ async function cmdRun(goal: string, dir: string, autoApprove: boolean): Promise<
     // 파일 쓰기류 서버 HITL 이 매번 y/N 을 요구해 헤드리스/CI 실행이 막힌다. 셸/파이썬은
     // 별도로 디바이스 confirmExec 이 게이트하므로(OMK_BRIDGE_AUTO_APPROVE), 이 플래그는 서버측만.
     const serverAutoApprove = autoApprove || !process.stdin.isTTY;
-    const bridge = connectBridge(cfg, [folder]);
+    const bridge = connectBridge(cfg, folder);
 
     // 브리지 등록 대기 (서버가 이 디바이스를 인지할 때까지 최대 ~10s).
     const myId = deviceId();
@@ -133,7 +137,16 @@ async function cmdRun(goal: string, dir: string, autoApprove: boolean): Promise<
     let lastStatus = '';
     let lastProgress = -1;
     const seenApprovals = new Set<string>();
+    // 안전 상한 — 서버 작업이 종료 상태로 수렴하지 않고(스톨·거부 반복 등) 무기한 폴링하는 것을
+    // 막는다. 도달 시 CLI 만 종료하며 서버 작업은 계속된다(웹/재실행으로 확인 가능).
+    const POLL_DEADLINE_MS = 60 * 60 * 1000;
+    const startedAt = Date.now();
     for (;;) {
+        if (Date.now() - startedAt > POLL_DEADLINE_MS) {
+            console.error('\n\x1b[33m폴링 상한(1시간) 도달 — CLI 를 종료합니다. 작업은 서버에서 계속되며 웹에서 확인할 수 있습니다.\x1b[0m');
+            bridge.disconnect();
+            process.exit(1);
+        }
         await new Promise((r) => setTimeout(r, 2000));
         // 이 작업의 승인 대기 처리 (confirmExec 은 브리지가 별도로 처리 — 여기선 서버 HITL 게이트).
         try {
@@ -174,7 +187,7 @@ async function main(): Promise<void> {
 
 사용법:
   openmake-code login              API key·서버 URL 저장
-  openmake-code connect [dir...]   폴더 상주 연결 (웹에서 작업을 시작할 수 있게 됨)
+  openmake-code connect [dir]      폴더 상주 연결 (웹에서 작업을 시작할 수 있게 됨)
   openmake-code status             연결 상태·디바이스 조회
   openmake-code "목표" [--dir .] [--yes]   로컬 에이전트 작업 1회 실행
                                    (--yes: 파일 쓰기류 서버 승인 자동화. 셸은 별도 확인)`);

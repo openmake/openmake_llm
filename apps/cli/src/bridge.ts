@@ -78,7 +78,8 @@ export type ConfirmFn = (command: string, taskId: string | undefined, folderRoot
 export interface BridgeOptions {
     serverUrl: string;
     apiKey: string;
-    folders: string[];
+    /** 연결 폴더(단일) — 서버는 디바이스당 폴더 하나만 지원한다. */
+    folder: string;
     confirm: ConfirmFn;
     onStatus?: (s: string) => void;
     autoApproveAll?: boolean; // 테스트/비대화형 훅
@@ -86,8 +87,7 @@ export interface BridgeOptions {
 
 export class CliBridge {
     private ws: WebSocket | null = null;
-    private folderRoot: string;
-    private readonly folders: string[];
+    private readonly folderRoot: string;
     private sandboxProfilePath: string | null = null;
     private execPathCache: string | null = null;
     private readonly autoApproveTasks = new Set<string>();
@@ -95,8 +95,7 @@ export class CliBridge {
     private closed = false;
 
     constructor(private readonly opts: BridgeOptions) {
-        this.folders = opts.folders.map((f) => fs.realpathSync(f));
-        this.folderRoot = this.folders[0];
+        this.folderRoot = fs.realpathSync(opts.folder);
     }
 
     private status(s: string): void { this.opts.onStatus?.(s); }
