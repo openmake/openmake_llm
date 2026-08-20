@@ -65,7 +65,7 @@ ENV PATH=/home/node/.local/bin:${PATH}
 # 불필요 — 인증은 NOTEBOOKLM_COOKIES env(-e 주입)만으로 초기화된다.
 # 카탈로그(db/migrations/075_mcp_notebooklm_catalog.sql)는 `notebooklm-mcp` 로 실행.
 # 런타임 uvx-fetch 없이 즉시 spawn 하도록 사전설치(버전 고정).
-RUN uv tool install notebooklm-mcp-cli==0.8.9
+RUN uv tool install notebooklm-mcp-cli==0.9.13
 
 # ── Kakao(Map/Search) MCP 서버 — 이미지에 baked ─────────────────────────────
 # 벤더링된 수정 소스(vendor/kakao-api-mcp-server: deps 정정 + bin/shebang, ATTRIBUTION.md
