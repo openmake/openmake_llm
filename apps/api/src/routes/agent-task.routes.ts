@@ -51,7 +51,7 @@ import {
 } from '../services/agent-task/upload-store';
 import { claimUploadsAsInputFiles, ChunkStoreError } from '../services/agent-task/chunk-store';
 import { resolveDefaultMaxTurns } from '../services/agent-task/task-inputs';
-import { loadOwnedTask, toPublicTask } from './agent-task.helpers';
+import { loadOwnedTask, toPublicTask, validateLocalExecutorInput } from './agent-task.helpers';
 
 const logger = createLogger('AgentTaskRoutes');
 const router = Router();
@@ -126,29 +126,12 @@ router.post('/', (req: Request, res: Response, next) => {
     const db = getUnifiedDatabase();
     const userId = String(req.user!.id);
 
-    // Cowork D1a: local 실행은 기능 게이트 + 디바이스 연결이 있을 때만.
+    // Cowork D1a: local 실행은 기능 게이트 + 디바이스 연결 + 폴더 선택(102) 검증 (helpers 분리).
     if (executor === 'local') {
-        if (!LOCAL_BRIDGE.ENABLED) {
-            res.status(400).json(badRequest('로컬 실행 기능이 비활성화되어 있습니다 (LOCAL_EXECUTOR_ENABLED)'));
+        const localErr = validateLocalExecutorInput(userId, deviceId, folderRel);
+        if (localErr) {
+            res.status(400).json(badRequest(localErr));
             return;
-        }
-        if (!getLocalBridgeRegistry().getDevice(userId, deviceId)) {
-            res.status(400).json(badRequest(deviceId
-                ? `지정한 디바이스(${deviceId.slice(0, 12)}…)가 연결되어 있지 않습니다 — 디바이스에서 폴더를 다시 연결하세요`
-                : '연결된 로컬 디바이스가 없습니다 — 데스크톱 앱 또는 CLI 로 작업 폴더를 먼저 연결하세요'));
-            return;
-        }
-        // 폴더 선택(102): deviceId 지정 시에만 유효 + 디바이스가 folders 열거로 스스로 보고한
-        // 값만 통과(세션 캐시 검증) — 웹발 임의 경로가 디바이스로 내려가지 않는 불변식.
-        if (folderRel) {
-            if (!deviceId) {
-                res.status(400).json(badRequest('folderRel 은 deviceId 와 함께 지정해야 합니다'));
-                return;
-            }
-            if (!getLocalBridgeRegistry().isEnumeratedFolder(userId, deviceId, folderRel)) {
-                res.status(400).json(badRequest('디바이스가 보고하지 않은 폴더입니다 — 폴더 목록을 다시 조회한 뒤 선택하세요'));
-                return;
-            }
         }
     }
 
