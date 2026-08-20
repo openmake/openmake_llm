@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.27.0](https://github.com/openmake/openmake_llm/compare/v1.26.0...v1.27.0) (2026-08-20)
+
+
+### ✨ 기능
+
+* **admin:** 에이전트 작업 워크플로우 관측 지표 4종 ([#540](https://github.com/openmake/openmake_llm/issues/540)) ([8e300b0](https://github.com/openmake/openmake_llm/commit/8e300b035b1dcafdc76e4540f6e92d565e720bdc))
+* **agent-task:** OpenMake Code — 로컬 기반 CLI 에이전트 작업 ([#546](https://github.com/openmake/openmake_llm/issues/546)) ([8a7f0f8](https://github.com/openmake/openmake_llm/commit/8a7f0f84bbada9fcb158022c92a3e8f70640483d))
+
+
+### 🐛 버그 수정
+
+* **chat:** OpenAI 호환 클라이언트 system 메시지를 드롭 대신 맨 앞 system 에 병합 ([#543](https://github.com/openmake/openmake_llm/issues/543)) ([03b50c9](https://github.com/openmake/openmake_llm/commit/03b50c97fdac5fb5e6b148e371fd1a355caca89f))
+
 ## [1.26.0](https://github.com/openmake/openmake_llm/compare/v1.25.0...v1.26.0) (2026-08-19)
 
 
