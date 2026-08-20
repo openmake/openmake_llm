@@ -120,7 +120,7 @@ router.post('/', (req: Request, res: Response, next) => {
     } else {
         input = req.body as CreateAgentTaskInput;
     }
-    const { goal, maxTurns, files, images, executor, deviceId } = input;
+    const { goal, maxTurns, files, images, executor, deviceId, folderRel } = input;
 
     const taskId = uuidv4();
     const db = getUnifiedDatabase();
@@ -137,6 +137,18 @@ router.post('/', (req: Request, res: Response, next) => {
                 ? `지정한 디바이스(${deviceId.slice(0, 12)}…)가 연결되어 있지 않습니다 — 디바이스에서 폴더를 다시 연결하세요`
                 : '연결된 로컬 디바이스가 없습니다 — 데스크톱 앱 또는 CLI 로 작업 폴더를 먼저 연결하세요'));
             return;
+        }
+        // 폴더 선택(102): deviceId 지정 시에만 유효 + 디바이스가 folders 열거로 스스로 보고한
+        // 값만 통과(세션 캐시 검증) — 웹발 임의 경로가 디바이스로 내려가지 않는 불변식.
+        if (folderRel) {
+            if (!deviceId) {
+                res.status(400).json(badRequest('folderRel 은 deviceId 와 함께 지정해야 합니다'));
+                return;
+            }
+            if (!getLocalBridgeRegistry().isEnumeratedFolder(userId, deviceId, folderRel)) {
+                res.status(400).json(badRequest('디바이스가 보고하지 않은 폴더입니다 — 폴더 목록을 다시 조회한 뒤 선택하세요'));
+                return;
+            }
         }
     }
 
@@ -227,6 +239,7 @@ router.post('/', (req: Request, res: Response, next) => {
         inputImages: Array.isArray(images) && images.length > 0 ? images : undefined,
         executor,
         deviceId: executor === 'local' ? deviceId : undefined,
+        folderRel: executor === 'local' ? folderRel : undefined,
     });
 
     const task = await db.getAgentTask(taskId);
@@ -343,6 +356,7 @@ router.post('/:taskId/execute', validate(executeAgentTaskSchema), asyncHandler(a
             images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
             executor: (task.executor === 'local' ? 'local' : undefined),
             deviceId: task.device_id ?? undefined,
+            folderRel: task.folder_rel ?? undefined,
         }),
     });
 
@@ -428,6 +442,7 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
             images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
             executor: (task.executor === 'local' ? 'local' : undefined),
             deviceId: task.device_id ?? undefined,
+            folderRel: task.folder_rel ?? undefined,
             resume: {
                 conversation: cp.conversation as ChatMessage[],
                 fromTurn: (cp.completedTurn ?? 0) + 1,

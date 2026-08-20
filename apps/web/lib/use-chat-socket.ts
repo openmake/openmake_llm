@@ -588,6 +588,8 @@ export function useChatSocket() {
       localExecutor?: boolean,
       /** 다중 디바이스(101): 로컬 실행 대상 디바이스 id — 미지정은 최근 접속 디바이스 */
       localDeviceId?: string | null,
+      /** 폴더 선택(102): 연결 루트 기준 상대경로 — deviceId 와 함께일 때만 유효. null/미지정=루트 */
+      localFolderRel?: string | null,
     ) => {
       const goal = message.trim();
       const s = useAppStore.getState();
@@ -614,7 +616,7 @@ export function useChatSocket() {
               goal,
               files: [...payloadFiles, ...uploadRefs],
               ...(images && images.length > 0 ? { images } : {}),
-              ...(localExecutor ? { executor: "local", ...(localDeviceId ? { deviceId: localDeviceId } : {}) } : {}),
+              ...(localExecutor ? { executor: "local", ...(localDeviceId ? { deviceId: localDeviceId } : {}), ...(localDeviceId && localFolderRel ? { folderRel: localFolderRel } : {}) } : {}),
             },
           );
         } else if (binaryParts.length > 0) {
@@ -626,7 +628,7 @@ export function useChatSocket() {
             goal,
             ...(payloadFiles.length > 0 ? { files: payloadFiles } : {}),
             ...(images && images.length > 0 ? { images } : {}),
-            ...(localExecutor ? { executor: "local", ...(localDeviceId ? { deviceId: localDeviceId } : {}) } : {}),
+            ...(localExecutor ? { executor: "local", ...(localDeviceId ? { deviceId: localDeviceId } : {}), ...(localDeviceId && localFolderRel ? { folderRel: localFolderRel } : {}) } : {}),
           }));
           for (const f of binaryParts) fd.append("files", f.rawFile!, f.name);
           const resp = await fetch("/api/agent-tasks", {
@@ -650,7 +652,7 @@ export function useChatSocket() {
                 ? { files: files.map(toWireFile) }
                 : {}),
               ...(images && images.length > 0 ? { images } : {}),
-              ...(localExecutor ? { executor: "local", ...(localDeviceId ? { deviceId: localDeviceId } : {}) } : {}),
+              ...(localExecutor ? { executor: "local", ...(localDeviceId ? { deviceId: localDeviceId } : {}), ...(localDeviceId && localFolderRel ? { folderRel: localFolderRel } : {}) } : {}),
             },
           );
         }
