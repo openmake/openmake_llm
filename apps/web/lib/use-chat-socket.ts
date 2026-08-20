@@ -586,6 +586,8 @@ export function useChatSocket() {
       approvalPolicy?: "all" | "high-risk" | "none",
       /** Cowork D2: true 면 데스크톱 브리지가 연결한 로컬 폴더에서 실행 (승인은 서버가 'all' 강제) */
       localExecutor?: boolean,
+      /** 다중 디바이스(101): 로컬 실행 대상 디바이스 id — 미지정은 최근 접속 디바이스 */
+      localDeviceId?: string | null,
     ) => {
       const goal = message.trim();
       const s = useAppStore.getState();
@@ -612,7 +614,7 @@ export function useChatSocket() {
               goal,
               files: [...payloadFiles, ...uploadRefs],
               ...(images && images.length > 0 ? { images } : {}),
-              ...(localExecutor ? { executor: "local" } : {}),
+              ...(localExecutor ? { executor: "local", ...(localDeviceId ? { deviceId: localDeviceId } : {}) } : {}),
             },
           );
         } else if (binaryParts.length > 0) {
@@ -624,7 +626,7 @@ export function useChatSocket() {
             goal,
             ...(payloadFiles.length > 0 ? { files: payloadFiles } : {}),
             ...(images && images.length > 0 ? { images } : {}),
-            ...(localExecutor ? { executor: "local" } : {}),
+            ...(localExecutor ? { executor: "local", ...(localDeviceId ? { deviceId: localDeviceId } : {}) } : {}),
           }));
           for (const f of binaryParts) fd.append("files", f.rawFile!, f.name);
           const resp = await fetch("/api/agent-tasks", {
@@ -648,7 +650,7 @@ export function useChatSocket() {
                 ? { files: files.map(toWireFile) }
                 : {}),
               ...(images && images.length > 0 ? { images } : {}),
-              ...(localExecutor ? { executor: "local" } : {}),
+              ...(localExecutor ? { executor: "local", ...(localDeviceId ? { deviceId: localDeviceId } : {}) } : {}),
             },
           );
         }

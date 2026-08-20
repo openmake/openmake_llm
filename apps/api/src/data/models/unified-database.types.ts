@@ -182,6 +182,8 @@ export interface AgentTask {
     input_images?: unknown;
     /** Cowork D1a: 실행 백엔드(081) — 'sandbox'(기본) | 'local'(로컬 브리지) */
     executor?: 'sandbox' | 'local';
+    /** 로컬 실행 대상 브리지 디바이스(101) — NULL 은 최근 접속 디바이스 폴백 */
+    device_id?: string;
     /** 누적 LLM 토큰(prompt+completion) — terminal 전이 시 기록(066), resume 은 통산 */
     total_tokens?: number;
     /** 완료 출구 구분(091) — 'final_answer' | 'terminate'. 미완료/기존 행은 NULL */

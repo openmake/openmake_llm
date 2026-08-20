@@ -348,6 +348,7 @@ export class UnifiedDatabase {
         inputFiles?: unknown;
         inputImages?: unknown;
         executor?: 'sandbox' | 'local';
+        deviceId?: string;
     }): Promise<void> {
         return this.agentTaskRepository.createAgentTask(params);
     }
