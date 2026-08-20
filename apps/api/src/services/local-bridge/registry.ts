@@ -23,7 +23,7 @@ import { createLogger } from '../../utils/logger';
 const logger = createLogger('LocalBridge');
 
 /** 서버→디바이스 도구 요청 종류 — 이 외의 kind 는 존재하지 않는다(임의 RPC 금지). */
-export type BridgeKind = 'exec' | 'read' | 'write' | 'list' | 'listAll' | 'delete' | 'task_end' | 'browser' | 'worktree';
+export type BridgeKind = 'exec' | 'read' | 'write' | 'list' | 'listAll' | 'delete' | 'task_end' | 'browser' | 'worktree' | 'folders';
 
 /** worktree 연산 — 서버는 op 만 지정하고 git 명령은 디바이스가 고정 인자로 조립한다(명령 주입 차단). */
 export type WorktreeOp = 'add' | 'diff' | 'remove';
@@ -43,6 +43,14 @@ export interface BridgeRequestPayload {
      * (디바이스의 **작업 단위 일괄 승인** 범위 식별)에 쓰인다.
      */
     taskId?: string;
+    /**
+     * 폴더 선택(2026-08-21) — 연결 루트 기준 상대경로. exec cwd·파일 경로·worktree base 를
+     * 이 하위 폴더로 재지정한다. 웹 입력은 **작업 생성 시점**에 isEnumeratedFolder 로 검증
+     * (디바이스가 folders 응답으로 스스로 보고한 값만 — 웹발 임의 경로 차단)하고, 여기서
+     * 재검증하지 않는다(디바이스 재접속 시 세션 캐시가 리셋돼 실행 중 작업이 깨짐).
+     * 디바이스가 기존 safe()(realpath, 루트 탈출 차단)로 항상 재검증한다. 미지정=루트.
+     */
+    folder?: string;
 }
 
 /** 디바이스가 돌려주는 결과 (bridge_result). */
@@ -63,6 +71,8 @@ export interface BridgeResult {
     branch?: string;
     /** worktree remove 결과 — 변경분이 남아 보존했으면 true. */
     kept?: boolean;
+    /** folders 결과 — 열거 상한 초과로 목록이 절단됐으면 true. */
+    truncated?: boolean;
 }
 
 export interface DeviceSession {
@@ -73,6 +83,12 @@ export interface DeviceSession {
     folderName: string;
     ws: WebSocket;
     connectedAt: number;
+    /**
+     * 폴더 선택 세션 캐시 — 이 디바이스가 folders 응답으로 스스로 열거·보고한 루트 기준
+     * 상대경로 집합('' = 루트). 작업 생성·bridge_exec 의 folder 값은 이 집합에 있어야만
+     * 디바이스로 내려간다(디바이스 발원 검증). WS 세션과 수명을 같이한다.
+     */
+    enumeratedFolders?: Set<string>;
 }
 
 interface Pending {
@@ -108,6 +124,8 @@ class LocalBridgeRegistry {
             // 구 소켓을 능동 종료 — 방치하면 unregister 가 새 ws 만 매칭해 구 ws 는 유휴로 남는다.
             try { prev.ws.close(1000, 'device_reregistered'); } catch { /* already closing */ }
         }
+        // 루트('')는 항상 유효 — 열거 캐시는 등록 시점에 리셋(재연결 시 다른 루트일 수 있음).
+        session.enumeratedFolders = new Set(['']);
         byDevice.set(session.deviceId, session);
         logger.info(`[Bridge] 디바이스 등록: user=${session.userId} device=${session.deviceId} label="${session.label}" folder="${session.folderName}" (${byDevice.size}대)`);
         return true;
@@ -148,6 +166,20 @@ class LocalBridgeRegistry {
         const byDevice = this.devices.get(userId);
         if (!byDevice) return [];
         return [...byDevice.values()].sort((a, b) => a.connectedAt - b.connectedAt);
+    }
+
+    /** folders 응답 수신 시 열거 캐시 병합 — 이후 folder 지정 요청·작업 생성의 검증 근거. */
+    noteEnumeratedFolders(userId: string, deviceId: string, rels: string[]): void {
+        const dev = this.devices.get(userId)?.get(deviceId);
+        if (!dev) return;
+        dev.enumeratedFolders ??= new Set(['']);
+        for (const rel of rels) dev.enumeratedFolders.add(rel);
+    }
+
+    /** folder 값이 이 디바이스가 스스로 보고한 폴더인지 검증 ('' 또는 미지정 = 루트, 항상 유효). */
+    isEnumeratedFolder(userId: string, deviceId: string, rel: string | undefined): boolean {
+        if (!rel) return true;
+        return this.devices.get(userId)?.get(deviceId)?.enumeratedFolders?.has(rel) ?? false;
     }
 
     /** 도구 1회 왕복. 타임아웃/연결단절 시 ok=false 결과로 해소(throw 하지 않음 — 도구 오류로 전달). */

@@ -177,6 +177,8 @@ interface AppState {
   agentLocalExecutor: boolean;
   /** 다중 디바이스(101): 로컬 실행 대상 브리지 디바이스 id — null 은 최근 접속 디바이스 폴백. */
   agentLocalDeviceId: string | null;
+  /** 폴더 선택(102): 로컬 실행 폴더 — 연결 루트 기준 상대경로. null 은 루트. */
+  agentLocalFolderRel: string | null;
   imageMode: boolean;
   artifactMode: boolean;
   /** 구조화 답변 모드 — ON 시 메시지를 REST /api/chat/structured 로 보내 카드 UI 로 렌더(비스트리밍). */
@@ -244,6 +246,7 @@ interface AppState {
   setAgentApprovalMode: (m: "all" | "high-risk" | "none") => void;
   setAgentLocalExecutor: (v: boolean) => void;
   setAgentLocalDeviceId: (v: string | null) => void;
+  setAgentLocalFolderRel: (v: string | null) => void;
   cycleStyle: () => void;
   setStyle: (m: ChatStyle) => void;
   setAuth: (auth: AppState["auth"]) => void;
@@ -309,6 +312,7 @@ export const useAppStore = create<AppState>()(
   agentApprovalMode: "all",
   agentLocalExecutor: false,
   agentLocalDeviceId: null,
+  agentLocalFolderRel: null,
   imageMode: false,
   artifactMode: false,
   structuredMode: false,
@@ -479,7 +483,9 @@ export const useAppStore = create<AppState>()(
   setSelectedModel: (m) => set({ selectedModel: m }),
   setAgentApprovalMode: (m) => set({ agentApprovalMode: m }),
   setAgentLocalExecutor: (v) => set({ agentLocalExecutor: v }),
-  setAgentLocalDeviceId: (v) => set({ agentLocalDeviceId: v }),
+  // 디바이스 변경 시 폴더 선택은 리셋 — 다른 디바이스의 경로가 남지 않게.
+  setAgentLocalDeviceId: (v) => set({ agentLocalDeviceId: v, agentLocalFolderRel: null }),
+  setAgentLocalFolderRel: (v) => set({ agentLocalFolderRel: v }),
   cycleStyle: () =>
     set((s) => ({
       style: STYLE_ORDER[(STYLE_ORDER.indexOf(s.style) + 1) % STYLE_ORDER.length],

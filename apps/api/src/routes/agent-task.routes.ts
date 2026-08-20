@@ -51,7 +51,7 @@ import {
 } from '../services/agent-task/upload-store';
 import { claimUploadsAsInputFiles, ChunkStoreError } from '../services/agent-task/chunk-store';
 import { resolveDefaultMaxTurns } from '../services/agent-task/task-inputs';
-import { loadOwnedTask, toPublicTask } from './agent-task.helpers';
+import { loadOwnedTask, toPublicTask, validateLocalExecutorInput } from './agent-task.helpers';
 
 const logger = createLogger('AgentTaskRoutes');
 const router = Router();
@@ -120,22 +120,17 @@ router.post('/', (req: Request, res: Response, next) => {
     } else {
         input = req.body as CreateAgentTaskInput;
     }
-    const { goal, maxTurns, files, images, executor, deviceId } = input;
+    const { goal, maxTurns, files, images, executor, deviceId, folderRel } = input;
 
     const taskId = uuidv4();
     const db = getUnifiedDatabase();
     const userId = String(req.user!.id);
 
-    // Cowork D1a: local 실행은 기능 게이트 + 디바이스 연결이 있을 때만.
+    // Cowork D1a: local 실행은 기능 게이트 + 디바이스 연결 + 폴더 선택(102) 검증 (helpers 분리).
     if (executor === 'local') {
-        if (!LOCAL_BRIDGE.ENABLED) {
-            res.status(400).json(badRequest('로컬 실행 기능이 비활성화되어 있습니다 (LOCAL_EXECUTOR_ENABLED)'));
-            return;
-        }
-        if (!getLocalBridgeRegistry().getDevice(userId, deviceId)) {
-            res.status(400).json(badRequest(deviceId
-                ? `지정한 디바이스(${deviceId.slice(0, 12)}…)가 연결되어 있지 않습니다 — 디바이스에서 폴더를 다시 연결하세요`
-                : '연결된 로컬 디바이스가 없습니다 — 데스크톱 앱 또는 CLI 로 작업 폴더를 먼저 연결하세요'));
+        const localErr = validateLocalExecutorInput(userId, deviceId, folderRel);
+        if (localErr) {
+            res.status(400).json(badRequest(localErr));
             return;
         }
     }
@@ -227,6 +222,7 @@ router.post('/', (req: Request, res: Response, next) => {
         inputImages: Array.isArray(images) && images.length > 0 ? images : undefined,
         executor,
         deviceId: executor === 'local' ? deviceId : undefined,
+        folderRel: executor === 'local' ? folderRel : undefined,
     });
 
     const task = await db.getAgentTask(taskId);
@@ -343,6 +339,7 @@ router.post('/:taskId/execute', validate(executeAgentTaskSchema), asyncHandler(a
             images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
             executor: (task.executor === 'local' ? 'local' : undefined),
             deviceId: task.device_id ?? undefined,
+            folderRel: task.folder_rel ?? undefined,
         }),
     });
 
@@ -428,6 +425,7 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
             images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
             executor: (task.executor === 'local' ? 'local' : undefined),
             deviceId: task.device_id ?? undefined,
+            folderRel: task.folder_rel ?? undefined,
             resume: {
                 conversation: cp.conversation as ChatMessage[],
                 fromTurn: (cp.completedTurn ?? 0) + 1,

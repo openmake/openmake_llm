@@ -66,6 +66,8 @@ export interface AgentTaskRunInput {
     executor?: 'sandbox' | 'local';
     /** 로컬 실행 대상 브리지 디바이스(101, 다중 디바이스) — 미지정은 최근 접속 폴백. */
     deviceId?: string;
+    /** 로컬 실행 대상 폴더(102, 폴더 선택) — 연결 루트 기준 상대경로. 미지정=루트. */
+    folderRel?: string;
     /** resume(이어하기): 기존 end-of-turn checkpoint 에서 복원 */
     resume?: {
         conversation: ChatMessage[];

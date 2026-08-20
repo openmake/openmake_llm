@@ -306,7 +306,13 @@
       "label": "Local run:",
       "off": "Run in server sandbox",
       "on": "Run in local folder: {folder}",
-      "disconnected": "Desktop app not connected"
+      "disconnected": "Desktop app not connected",
+      "folderPick": "Change folder",
+      "folderUp": "Up",
+      "folderSelectHere": "Run in this folder",
+      "folderUnsupported": "This device does not support folder browsing — update the CLI/app",
+      "folderEmpty": "No subfolders",
+      "folderTruncated": "…list truncated"
     }
   },
   "chat": {
