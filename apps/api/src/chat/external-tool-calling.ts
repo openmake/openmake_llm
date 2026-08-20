@@ -76,11 +76,18 @@ export async function processExternalToolCalling(params: {
     ];
 
     // history 에 섞인 system 메시지는 배열에 두지 않고 맨 앞 system 에 병합한다.
-    // 자체 system 이 index 0 을 차지하므로 history 의 system 을 그대로 두면 두 번째 system 이
-    // 중간 위치에 들어가 vLLM/qwen 템플릿이 "System message must be at the beginning"
-    // (400 BadRequest) 으로 거부한다. 드롭이 아니라 병합인 이유 — OpenAI 호환 API 에서
-    // system 은 클라이언트의 지시 계약이라 조용히 버리면 외부 에이전트가 지시 없이 동작한다.
-    // (tools 없는 일반 채팅 경로의 대응: services/chat-service/external-provider.ts)
+    //
+    // 병합인 이유(드롭 아님) — OpenAI 호환 API 에서 system 은 호출자의 지시 계약이다.
+    // convertMessages 가 클라이언트 system 을 history 에 그대로 싣는데, 이를 버리면 외부
+    // CLI/에이전트가 자기 지시 없이 동작한다 (2026-08-20 라이브 실측: 드롭하던 일반 채팅
+    // 경로에서 클라이언트 system 지시가 실제로 무시됨).
+    //
+    // 배열에 남기지 않는 이유 — 자체 system 이 index 0 을 차지하므로 history 의 system 은
+    // 두 번째 system 이 된다. 이 형태의 수용 여부는 채팅 템플릿/provider 구현에 달려 있고,
+    // 거부하는 구현은 400 "System message must be at the beginning" 을 낸다. 현행
+    // qwen3.6-35b-a3b 에선 재현되지 않았으나(같은 실측), 구현에 의존하지 않도록 정규화한다.
+    //
+    // tools 없는 일반 채팅 경로의 동일 대응: services/chat-service/external-provider.ts
     const clientSystemParts: string[] = [];
 
     if (history && history.length > 0) {
