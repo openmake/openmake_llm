@@ -75,8 +75,21 @@ export async function processExternalToolCalling(params: {
         { role: 'system', content: promptConfig.systemPrompt },
     ];
 
+    // history 에 섞인 system 메시지는 배열에 두지 않고 맨 앞 system 에 병합한다.
+    // 자체 system 이 index 0 을 차지하므로 history 의 system 을 그대로 두면 두 번째 system 이
+    // 중간 위치에 들어가 vLLM/qwen 템플릿이 "System message must be at the beginning"
+    // (400 BadRequest) 으로 거부한다. 드롭이 아니라 병합인 이유 — OpenAI 호환 API 에서
+    // system 은 클라이언트의 지시 계약이라 조용히 버리면 외부 에이전트가 지시 없이 동작한다.
+    // (tools 없는 일반 채팅 경로의 대응: services/chat-service/external-provider.ts)
+    const clientSystemParts: string[] = [];
+
     if (history && history.length > 0) {
         for (const h of history) {
+            if (h.role === 'system') {
+                if (h.content) clientSystemParts.push(h.content);
+                continue;
+            }
+
             const msg: ChatMessage = {
                 role: h.role as ChatMessage['role'],
                 content: h.content || '',
@@ -98,6 +111,10 @@ export async function processExternalToolCalling(params: {
 
             messages.push(msg);
         }
+    }
+
+    if (clientSystemParts.length > 0) {
+        messages[0].content = [promptConfig.systemPrompt, ...clientSystemParts].join('\n\n');
     }
 
     // 현재 사용자 메시지 추가
