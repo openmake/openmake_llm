@@ -1374,6 +1374,22 @@
         "signature": "오류 시그니처",
         "count": "건수"
       }
+    },
+    "workflow": {
+      "title": "작업 워크플로우 (최근 {days}일)",
+      "unjudgedRate": "완료 무판정 비율",
+      "ofCompleted": "완료 {completed}건 중 {unjudged}건",
+      "retryRate": "턴 재시도 발생",
+      "hitlDegradeRate": "HITL 무응답 강등",
+      "ofTasks": "작업 {total}건 중 {count}건",
+      "planCoverage": "플랜 귀속 커버리지",
+      "ofSteps": "스텝 {total}개 중 {attributed}개",
+      "unrecorded": "미기록",
+      "th": {
+        "path": "완료 출구",
+        "verdict": "판정",
+        "tasks": "작업 수"
+      }
     }
   },
   "adminAlerts": {

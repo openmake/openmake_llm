@@ -39,6 +39,33 @@ export interface ToolErrorByToolRow {
     count: string;
 }
 
+/** 완료 판정 분포 — 완료 출구(completion_path) × goal judge 결과(judge_verdict) */
+export interface CompletionVerdictRow {
+    completion_path: string | null;
+    judge_verdict: string | null;
+    tasks: string;
+}
+
+/** 실패 사유 분포 — error 첫 줄 정규화 기준 */
+export interface FailureReasonRow {
+    reason: string;
+    tasks: string;
+}
+
+/** 구제 장치(retry·hitl_degrade) 발생 작업 수 */
+export interface InterventionRow {
+    total_tasks: string;
+    retry_tasks: string;
+    hitl_degrade_tasks: string;
+}
+
+/** plan 귀속 커버리지 — plan 이 있는 작업의 스텝 중 plan_step_index 가 채워진 비율 */
+export interface PlanCoverageRow {
+    planned_tasks: string;
+    total_steps: string;
+    attributed_steps: string;
+}
+
 export class AgentTaskMetricsRepository extends BaseRepository {
     /**
      * 기간별 도구 오류 요약 — 총 도구 실행 수, 오류 수, 오류 발생 고유 작업 수.
@@ -110,5 +137,83 @@ export class AgentTaskMetricsRepository extends BaseRepository {
             [String(days), limit]
         );
         return result.rows;
+    }
+    /**
+     * 완료 판정 분포 — completed 작업이 어느 출구로 나갔고 goal judge 가 무엇을 판정했는지.
+     * 091 이전 행은 두 컬럼 모두 NULL 이라 '미기록' 으로 뭉쳐 구분한다
+     * (무판정 완료 비율을 관측하는 것이 이 지표의 목적이므로 NULL 을 버리면 안 된다).
+     */
+    async getCompletionVerdictDistribution(days: number): Promise<CompletionVerdictRow[]> {
+        const result = await this.query<CompletionVerdictRow>(
+            `SELECT completion_path,
+                    judge_verdict,
+                    COUNT(*) AS tasks
+             FROM agent_tasks
+             WHERE status = 'completed'
+               AND created_at >= NOW() - ($1 || ' days')::interval
+             GROUP BY completion_path, judge_verdict
+             ORDER BY tasks DESC`,
+            [String(days)]
+        );
+        return result.rows;
+    }
+
+    /**
+     * 실패 사유 분포 — failed 작업의 error 첫 줄 앞 80자 기준 GROUP BY.
+     * goal_incomplete(목표 미달성 판정) 가 얼마나 차지하는지 보는 것이 주 용도.
+     */
+    async getFailureReasons(days: number, limit: number): Promise<FailureReasonRow[]> {
+        const result = await this.query<FailureReasonRow>(
+            `SELECT left(regexp_replace(COALESCE(error, '(unknown)'), E'\\n.*', '', 'g'), 80) AS reason,
+                    COUNT(*) AS tasks
+             FROM agent_tasks
+             WHERE status = 'failed'
+               AND created_at >= NOW() - ($1 || ' days')::interval
+             GROUP BY 1
+             ORDER BY tasks DESC, reason
+             LIMIT $2`,
+            [String(days), limit]
+        );
+        return result.rows;
+    }
+
+    /**
+     * 구제 장치 발생률 — 기간 내 작업 중 turn retry / HITL 무응답 강등이 걸린 작업 수.
+     * 증분 1(#432) 로 넣은 두 장치가 실제로 발동하는지, HITL 방치가 얼마나 되는지의 신호.
+     */
+    async getInterventionCounts(days: number): Promise<InterventionRow> {
+        const result = await this.query<InterventionRow>(
+            `SELECT COUNT(*) AS total_tasks,
+                    COUNT(*) FILTER (WHERE s.retry > 0) AS retry_tasks,
+                    COUNT(*) FILTER (WHERE s.degrade > 0) AS hitl_degrade_tasks
+             FROM agent_tasks t
+             LEFT JOIN LATERAL (
+                 SELECT COUNT(*) FILTER (WHERE step_type = 'retry') AS retry,
+                        COUNT(*) FILTER (WHERE step_type = 'hitl_degrade') AS degrade
+                 FROM agent_task_steps
+                 WHERE task_id = t.id
+             ) s ON TRUE
+             WHERE t.created_at >= NOW() - ($1 || ' days')::interval`,
+            [String(days)]
+        );
+        return result.rows[0] ?? { total_tasks: '0', retry_tasks: '0', hitl_degrade_tasks: '0' };
+    }
+
+    /**
+     * plan 귀속 커버리지 — plan 이 있는 작업으로 한정한 뒤 스텝 중 plan_step_index 가 채워진 비율.
+     * plan 없는 작업까지 분모에 넣으면 커버리지가 구조적으로 낮게 나와 증분 3 의 효과를 못 본다.
+     */
+    async getPlanAttributionCoverage(days: number): Promise<PlanCoverageRow> {
+        const result = await this.query<PlanCoverageRow>(
+            `SELECT COUNT(DISTINCT t.id) AS planned_tasks,
+                    COUNT(s.id) AS total_steps,
+                    COUNT(s.plan_step_index) AS attributed_steps
+             FROM agent_tasks t
+             JOIN agent_task_steps s ON s.task_id = t.id
+             WHERE t.plan IS NOT NULL
+               AND t.created_at >= NOW() - ($1 || ' days')::interval`,
+            [String(days)]
+        );
+        return result.rows[0] ?? { planned_tasks: '0', total_steps: '0', attributed_steps: '0' };
     }
 }

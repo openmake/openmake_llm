@@ -1374,6 +1374,22 @@
         "signature": "错误签名",
         "count": "次数"
       }
+    },
+    "workflow": {
+      "title": "任务工作流（最近 {days} 天）",
+      "unjudgedRate": "完成未判定比例",
+      "ofCompleted": "共 {completed} 个完成中 {unjudged} 个",
+      "retryRate": "轮次重试发生",
+      "hitlDegradeRate": "HITL 无响应降级",
+      "ofTasks": "共 {total} 个任务中 {count} 个",
+      "planCoverage": "计划归属覆盖率",
+      "ofSteps": "共 {total} 个步骤中 {attributed} 个",
+      "unrecorded": "未记录",
+      "th": {
+        "path": "完成出口",
+        "verdict": "判定",
+        "tasks": "任务数"
+      }
     }
   },
   "adminAlerts": {

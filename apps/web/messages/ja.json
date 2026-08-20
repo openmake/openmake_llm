@@ -1374,6 +1374,22 @@
         "signature": "エラーシグネチャ",
         "count": "件数"
       }
+    },
+    "workflow": {
+      "title": "タスクワークフロー (直近{days}日)",
+      "unjudgedRate": "完了時の未判定率",
+      "ofCompleted": "完了{completed}件中{unjudged}件",
+      "retryRate": "ターン再試行の発生",
+      "hitlDegradeRate": "HITL無応答による降格",
+      "ofTasks": "タスク{total}件中{count}件",
+      "planCoverage": "プラン紐付けカバレッジ",
+      "ofSteps": "ステップ{total}個中{attributed}個",
+      "unrecorded": "未記録",
+      "th": {
+        "path": "完了経路",
+        "verdict": "判定",
+        "tasks": "タスク数"
+      }
     }
   },
   "adminAlerts": {

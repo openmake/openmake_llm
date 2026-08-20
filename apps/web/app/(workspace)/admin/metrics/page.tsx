@@ -97,6 +97,35 @@ interface ToolErrorData {
   byToolName: { toolName: string; count: number }[];
 }
 
+/* ── 작업 워크플로우 관측 타입 ─────────────────────────────── */
+interface WorkflowData {
+  days: number;
+  completion: {
+    completedTasks: number;
+    unjudgedTasks: number;
+    unjudgedRate: number;
+    byVerdict: {
+      completionPath: string | null;
+      judgeVerdict: string | null;
+      tasks: number;
+    }[];
+  };
+  failures: { reason: string; tasks: number }[];
+  intervention: {
+    totalTasks: number;
+    retryTasks: number;
+    retryRate: number;
+    hitlDegradeTasks: number;
+    hitlDegradeRate: number;
+  };
+  planCoverage: {
+    plannedTasks: number;
+    totalSteps: number;
+    attributedSteps: number;
+    coverage: number;
+  };
+}
+
 export default function AdminMetricsPage() {
   const t = useTranslations("adminMetrics");
   const locale = toBcp47(useLocale());
@@ -107,6 +136,7 @@ export default function AdminMetricsPage() {
   const [agentSummary, setAgentSummary] = useState<AgentSummary | null>(null);
   const [agentMetrics, setAgentMetrics] = useState<AgentMetric[] | null>(null);
   const [toolErrors, setToolErrors] = useState<ToolErrorData | null>(null);
+  const [workflow, setWorkflow] = useState<WorkflowData | null>(null);
   const maxV = Math.max(...TIMESERIES.map((t) => t.value));
 
   const load = useCallback(async () => {
@@ -188,6 +218,13 @@ export default function AdminMetricsPage() {
       ).catch(() => null);
       if (toolErrRes?.data) {
         setToolErrors(toolErrRes.data);
+      }
+      // 작업 워크플로우 관측 로드 (기본 30일)
+      const workflowRes = await ApiClient.get<{ data: WorkflowData }>(
+        "/api/metrics/agent-tasks/workflow",
+      ).catch(() => null);
+      if (workflowRes?.data) {
+        setWorkflow(workflowRes.data);
       }
     } catch {
       /* 401/실패 시 목업 유지 */
@@ -347,6 +384,98 @@ export default function AdminMetricsPage() {
                     })}
                   </tbody>
                 </Table>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 작업 워크플로우 관측 — 완료 판정·실패 사유·구제 장치·플랜 귀속 */}
+        {workflow && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>
+                {t("workflow.title", { days: workflow.days })}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <StatCard
+                  label={t("workflow.unjudgedRate")}
+                  value={`${(workflow.completion.unjudgedRate * 100).toFixed(1)}%`}
+                  delta={t("workflow.ofCompleted", {
+                    unjudged: workflow.completion.unjudgedTasks.toLocaleString(),
+                    completed: workflow.completion.completedTasks.toLocaleString(),
+                  })}
+                />
+                <StatCard
+                  label={t("workflow.retryRate")}
+                  value={`${(workflow.intervention.retryRate * 100).toFixed(1)}%`}
+                  delta={t("workflow.ofTasks", {
+                    count: workflow.intervention.retryTasks.toLocaleString(),
+                    total: workflow.intervention.totalTasks.toLocaleString(),
+                  })}
+                />
+                <StatCard
+                  label={t("workflow.hitlDegradeRate")}
+                  value={`${(workflow.intervention.hitlDegradeRate * 100).toFixed(1)}%`}
+                  delta={t("workflow.ofTasks", {
+                    count: workflow.intervention.hitlDegradeTasks.toLocaleString(),
+                    total: workflow.intervention.totalTasks.toLocaleString(),
+                  })}
+                />
+                <StatCard
+                  label={t("workflow.planCoverage")}
+                  value={`${(workflow.planCoverage.coverage * 100).toFixed(1)}%`}
+                  delta={t("workflow.ofSteps", {
+                    attributed: workflow.planCoverage.attributedSteps.toLocaleString(),
+                    total: workflow.planCoverage.totalSteps.toLocaleString(),
+                  })}
+                />
+              </div>
+              {workflow.completion.byVerdict.length > 0 && (
+                <Table>
+                  <thead>
+                    <tr>
+                      <Th>{t("workflow.th.path")}</Th>
+                      <Th>{t("workflow.th.verdict")}</Th>
+                      <Th className="text-right">{t("workflow.th.tasks")}</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {workflow.completion.byVerdict.map((v, i) => (
+                      <tr key={i}>
+                        <Td className="font-mono text-xs text-fg-2">
+                          {v.completionPath ?? t("workflow.unrecorded")}
+                        </Td>
+                        <Td>
+                          <Badge
+                            tone={
+                              v.judgeVerdict === "achieved"
+                                ? "success"
+                                : v.judgeVerdict === "not_achieved"
+                                  ? "danger"
+                                  : "warn"
+                            }
+                          >
+                            {v.judgeVerdict ?? t("workflow.unrecorded")}
+                          </Badge>
+                        </Td>
+                        <Td className="text-right font-mono text-fg-2">
+                          {v.tasks.toLocaleString()}
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              )}
+              {workflow.failures.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {workflow.failures.map((f, i) => (
+                    <Badge key={i} tone="danger">
+                      {f.reason} · {f.tasks.toLocaleString()}
+                    </Badge>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>
