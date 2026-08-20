@@ -230,6 +230,17 @@
       "deactivate": "停用",
       "rotate": "轮换",
       "delete": "删除"
+    },
+    "scope": {
+      "label": "范围",
+      "full": "完全访问",
+      "bridge": "桥接(CLI)",
+      "chat": "推理 API",
+      "hint": {
+        "full": "访问所有 API。",
+        "bridge": "仅用于 OpenMake Code CLI 本地执行 — 无法使用推理 API / 消耗令牌。",
+        "chat": "仅限 OpenAI 兼容推理 API。"
+      }
     }
   },
   "composer": {

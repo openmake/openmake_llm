@@ -21,7 +21,8 @@ import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
-import { requireAuthOrApiKey } from '../middlewares/api-key-auth';
+import { requireAuthOrApiKeyScope } from '../middlewares/api-key-auth';
+import { API_KEY_SCOPES } from '../config/api-key-scopes';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { validate, validateWithSecurity } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
@@ -56,7 +57,7 @@ const logger = createLogger('AgentTaskRoutes');
 const router = Router();
 
 // 모든 엔드포인트 인증 필요
-router.use(requireAuthOrApiKey);
+router.use(requireAuthOrApiKeyScope(API_KEY_SCOPES.BRIDGE));
 
 type UserRole = 'admin' | 'user' | 'guest';
 

@@ -13,6 +13,7 @@ import { hashApiKey, isValidApiKeyFormat, API_KEY_PREFIX } from '../auth/api-key
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { error as apiError, ErrorCodes } from '../utils/api-response';
 import { createLogger } from '../utils/logger';
+import { apiKeyHasScope, type ApiKeyScope } from '../config/api-key-scopes';
 
 const logger = createLogger('ApiKeyAuth');
 
@@ -136,6 +137,40 @@ export async function requireAuthOrApiKey(req: Request, res: Response, next: Nex
     }
     const { requireAuth } = await import('../auth/middleware');
     await requireAuth(req, res, next);
+}
+
+/** 인증 통과한 요청이 API Key 라면 요구 스코프를 가졌는지 검사(JWT/쿠키 인증은 스코프 무관 통과). */
+function enforceApiKeyScope(req: Request, res: Response, scope: ApiKeyScope): boolean {
+    if (req.authMethod !== 'api-key') return true; // JWT/쿠키 유저는 스코프 개념 없음
+    const scopes = req.apiKeyRecord?.scopes as string[] | undefined;
+    if (apiKeyHasScope(scopes, scope)) return true;
+    res.status(403).json(apiError(
+        ErrorCodes.FORBIDDEN,
+        `이 API key 는 '${scope}' 스코프가 없습니다. 해당 스코프의 키를 발급하세요.`,
+    ));
+    return false;
+}
+
+/**
+ * 스코프 검사만 수행 (재인증 없음) — 상위에서 requireApiKey 가 이미 인증을 마친 경로용.
+ * v1 처럼 전역 requireApiKey 뒤에 특정 하위 경로만 스코프로 좁힐 때 사용한다.
+ */
+export function requireScope(scope: ApiKeyScope) {
+    return (req: Request, res: Response, next: NextFunction): void => {
+        if (enforceApiKeyScope(req, res, scope)) next();
+    };
+}
+
+/**
+ * JWT 또는 (요구 스코프를 가진) API Key 병용 인증 (2026-08-21). 로컬 브리지·에이전트 작업
+ * REST 에 사용 — 웹(JWT)은 그대로, CLI(API Key)는 bridge 스코프를 요구한다.
+ */
+export function requireAuthOrApiKeyScope(scope: ApiKeyScope) {
+    return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+        await requireAuthOrApiKey(req, res, () => {
+            if (enforceApiKeyScope(req, res, scope)) next();
+        });
+    };
 }
 
 /**

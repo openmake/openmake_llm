@@ -230,6 +230,17 @@
       "deactivate": "비활성화",
       "rotate": "순환",
       "delete": "삭제"
+    },
+    "scope": {
+      "label": "스코프",
+      "full": "전체 권한",
+      "bridge": "브리지(CLI)",
+      "chat": "추론 API",
+      "hint": {
+        "full": "모든 API 에 접근합니다.",
+        "bridge": "OpenMake Code CLI 의 로컬 실행 전용 — 추론 API·토큰 소비는 불가.",
+        "chat": "OpenAI 호환 추론 API 전용."
+      }
     }
   },
   "composer": {
