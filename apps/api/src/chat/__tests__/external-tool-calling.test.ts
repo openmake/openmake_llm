@@ -1,9 +1,10 @@
 /**
  * 외부 Tool Calling 경로 — 클라이언트 system 메시지 병합 회귀 테스트.
  *
- * history 에 role='system' 이 섞여 오면 자체 system(index 0) 뒤에 두 번째 system 이
- * 중간 위치로 들어가 vLLM/qwen 템플릿이 400 "System message must be at the beginning"
- * 으로 거부했다. 병합(드롭 아님)으로 고친 동작을 고정한다.
+ * OpenAI 호환 API 의 `convertMessages` 는 클라이언트가 보낸 role='system' 을 그대로
+ * history 에 싣는다. 이를 배열에 두면 자체 system(index 0) 뒤 두 번째 system 이 되어
+ * 수용 여부가 채팅 템플릿 구현에 달리고, 버리면 호출자의 지시 계약이 사라진다.
+ * 맨 앞 system 에 병합(드롭 아님)하는 동작을 고정한다.
  */
 
 import { processExternalToolCalling } from '../external-tool-calling';
