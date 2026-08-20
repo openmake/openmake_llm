@@ -133,13 +133,10 @@ export async function runExternalStream(
         messages.push({ role: 'system', content: systemContent });
     }
 
-    // history 에 섞인 system 메시지는 배열에 두지 않고 맨 앞 system 에 병합한다.
-    // 자체 system 이 index 0 을 차지하므로 history 의 system 을 그대로 두면 두 번째 system 이
-    // 중간 위치에 들어가 vLLM/qwen 템플릿이 "System message must be at the beginning"
-    // (400 BadRequest) 으로 거부한다. 드롭이 아니라 병합인 이유 — OpenAI 호환 API 에서
-    // system 은 클라이언트의 지시 계약이라 조용히 버리면 외부 클라이언트가 지시 없이 동작한다
-    // (convertMessages 가 클라이언트 system 을 history 에 그대로 싣는다).
-    // tools 요청 경로의 동일 대응: chat/external-tool-calling.ts
+    // history 에 섞인 system 은 배열에 두지 않고 맨 앞 system 에 병합한다 — 드롭하면
+    // 호출자의 지시 계약이 사라지고(2026-08-20 실측), 배열에 남기면 두 번째 system 의
+    // 수용 여부가 채팅 템플릿/provider 구현에 의존한다.
+    // 근거 전문 + tools 요청 경로의 동일 대응: chat/external-tool-calling.ts
     const clientSystemParts: string[] = [];
 
     for (const h of req.history ?? []) {
