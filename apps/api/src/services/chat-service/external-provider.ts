@@ -133,12 +133,20 @@ export async function runExternalStream(
         messages.push({ role: 'system', content: systemContent });
     }
 
+    // history 에 섞인 system 메시지는 배열에 두지 않고 맨 앞 system 에 병합한다.
+    // 자체 system 이 index 0 을 차지하므로 history 의 system 을 그대로 두면 두 번째 system 이
+    // 중간 위치에 들어가 vLLM/qwen 템플릿이 "System message must be at the beginning"
+    // (400 BadRequest) 으로 거부한다. 드롭이 아니라 병합인 이유 — OpenAI 호환 API 에서
+    // system 은 클라이언트의 지시 계약이라 조용히 버리면 외부 클라이언트가 지시 없이 동작한다
+    // (convertMessages 가 클라이언트 system 을 history 에 그대로 싣는다).
+    // tools 요청 경로의 동일 대응: chat/external-tool-calling.ts
+    const clientSystemParts: string[] = [];
+
     for (const h of req.history ?? []) {
-        // history 에 섞인 system 메시지는 제외한다. external-provider 는 위(151)에서 자체
-        // system 을 맨 앞에 조립하므로, history 의 system 을 그대로 두면 두 번째 system 이
-        // 중간 위치에 들어가 vLLM/qwen 템플릿이 "System message must be at the beginning"
-        // (400 BadRequest) 으로 거부한다.
-        if (h.role === 'system') continue;
+        if (h.role === 'system') {
+            if (h.content) clientSystemParts.push(h.content);
+            continue;
+        }
         const role = h.role === 'user' || h.role === 'assistant'
             ? h.role
             : 'user';
@@ -147,6 +155,15 @@ export async function runExternalStream(
             content: h.content,
             ...(h.images ? { images: h.images } : {}),
         });
+    }
+
+    if (clientSystemParts.length > 0) {
+        // 자체 system 이 없는 경우(systemContent 빈 값)엔 클라이언트 system 이 맨 앞 system 이 된다.
+        if (messages[0]?.role === 'system') {
+            messages[0].content = [messages[0].content, ...clientSystemParts].join('\n\n');
+        } else {
+            messages.unshift({ role: 'system', content: clientSystemParts.join('\n\n') });
+        }
     }
 
     messages.push({
