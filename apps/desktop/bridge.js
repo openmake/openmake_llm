@@ -113,7 +113,7 @@ let mainWin = null;          // exec 확인 다이얼로그의 부모 창
 const autoApproveTasks = new Set();
 
 /** exec 실행 전 사용자 확인(비우회). 거부/취소면 false. 실행될 명령 원문을 그대로 보여준다. */
-async function confirmExec(command, taskId) {
+async function confirmExec(command, taskId, base) {
   // 테스트 훅(개발/E2E 전용): 다이얼로그 없이 자동 승인 (다른 OMK_BRIDGE_* 훅과 동일 계열).
   if (process.env.OMK_BRIDGE_AUTO_APPROVE === '1') return true;
   if (taskId && autoApproveTasks.has(taskId)) return true;
@@ -121,7 +121,8 @@ async function confirmExec(command, taskId) {
   const r = await dialog.showMessageBox(mainWin || undefined, {
     type: 'warning',
     message: '에이전트가 이 셸 명령을 당신의 컴퓨터에서 실행하려고 합니다',
-    detail: `${preview}\n\n연결 폴더: ${folderRoot}\n${SANDBOX_ENABLED && sandboxProfilePath
+    // 폴더 선택 시 유효 실행 폴더(base)를 보여준다 — 어느 폴더에서 도는지 투명하게.
+    detail: `${preview}\n\n실행 폴더: ${base || folderRoot}\n${SANDBOX_ENABLED && sandboxProfilePath
       ? 'OS 샌드박스 적용: 폴더 밖 쓰기와 비밀 파일(.ssh/.aws 등) 읽기는 차단됩니다. 그 외 읽기·네트워크는 허용됩니다.'
       : '⚠️ 샌드박스 미적용: 이 명령은 당신 계정 권한으로 폴더 밖 파일·네트워크에 접근할 수 있습니다.'}${
       taskId ? '\n\n"이 작업 동안 모두 실행"을 고르면 이 작업이 끝날 때까지 다시 묻지 않습니다(다른 작업에는 적용되지 않습니다).' : ''}`,
@@ -201,17 +202,35 @@ function writeSandboxProfile(app, root, gitDir) {
     }
 }
 
-/** 스코프 가드 — 연결 폴더 밖 경로/심링크 탈출을 차단 (서버 safeRealWorkspacePath 등가). */
-function safe(rel) {
-  const abs = path.resolve(folderRoot, rel || '.');
-  if (abs !== folderRoot && !abs.startsWith(folderRoot + path.sep)) throw new Error(`폴더 스코프 밖 경로 거부: ${rel}`);
+/** 스코프 가드 — base 밖 경로/심링크 탈출을 차단 (서버 safeRealWorkspacePath 등가, 폴더 선택으로 base 일반화). */
+function safeFrom(baseAbs, rel) {
+  const abs = path.resolve(baseAbs, rel || '.');
+  if (abs !== baseAbs && !abs.startsWith(baseAbs + path.sep)) throw new Error(`폴더 스코프 밖 경로 거부: ${rel}`);
   // 존재하는 최근접 조상의 realpath 도 스코프 안이어야 함 (컨테이너 없는 로컬은 심링크가 유일한 탈출로).
   let probe = abs;
   while (!fs.existsSync(probe)) probe = path.dirname(probe);
   const real = fs.realpathSync(probe);
-  if (real !== folderRoot && !real.startsWith(folderRoot + path.sep)) throw new Error(`심링크 스코프 탈출 거부: ${rel}`);
+  const baseReal = fs.realpathSync(baseAbs);
+  if (real !== baseReal && !real.startsWith(baseReal + path.sep)) throw new Error(`심링크 스코프 탈출 거부: ${rel}`);
   return abs;
 }
+
+/** 연결 루트 기준 스코프 가드 (기존 계약). */
+function safe(rel) { return safeFrom(folderRoot, rel); }
+
+/**
+ * 폴더 선택(folder 필드) base 해석 — 루트 기준 상대경로를 safe() 재검증 후 실행 base 로 쓴다.
+ * 서버는 디바이스가 folders 로 보고한 값만 에코하지만, 여기서 다시 스코프를 강제한다(2중 방어).
+ */
+function resolveBase(m) {
+  if (!m.folder) return folderRoot;
+  const base = safe(m.folder);
+  if (!fs.existsSync(base) || !fs.statSync(base).isDirectory()) throw new Error(`실행 폴더가 존재하지 않습니다: ${m.folder}`);
+  return base;
+}
+
+/** folders(하위 폴더 열거) 1회 상한 — 서버 BRIDGE_FOLDERS_MAX_ENTRIES 와 같은 축(디바이스측 강제). */
+const FOLDERS_MAX_ENTRIES = 200;
 
 // ── worktree 격리 (로컬 실행기) ──────────────────────────────────────────
 // 에이전트가 사용자의 현재 작업트리·브랜치를 직접 건드리지 않도록, 연결 폴더가 git 레포면
@@ -236,9 +255,9 @@ function git(args, cwd) {
   });
 }
 
-/** 연결 폴더가 git 작업트리인지. worktree 안에서 재연결한 경우도 정상 동작한다. */
-async function isGitRepo() {
-  const r = await git(['rev-parse', '--is-inside-work-tree'], folderRoot);
+/** 연결 폴더(또는 선택 base)가 git 작업트리인지. worktree 안에서 재연결한 경우도 정상 동작한다. */
+async function isGitRepo(cwd) {
+  const r = await git(['rev-parse', '--is-inside-work-tree'], cwd);
   return r.code === 0 && r.stdout.trim() === 'true';
 }
 
@@ -287,26 +306,28 @@ async function readBaseSha(wtAbs) {
   return 'HEAD';
 }
 
-async function handleWorktree(m, done) {
+async function handleWorktree(m, done, base) {
   if (!folderRoot) { done({ ok: false, error: '폴더가 연결되지 않았습니다' }); return; }
   const taskId = String(m.taskId || '');
   if (!TASK_ID_RE.test(taskId)) { done({ ok: false, error: '잘못된 taskId 형식' }); return; }
+  // 폴더 선택 시 worktree 도 base(선택 폴더) 하위에 만들고, worktreeRel 은 base 기준
+  // 상대경로로 돌려준다 — 서버는 folder+worktreeRel 을 그대로 합성해 라우팅한다.
   const rel = `${WORKTREE_DIR}/${taskId}`;
-  const abs = path.join(folderRoot, rel);
+  const abs = path.join(base, rel);
   const branch = `${WORKTREE_BRANCH_PREFIX}${taskId.slice(0, 8)}`;
 
   if (m.op === 'add') {
-    if (!(await isGitRepo())) { done({ ok: false, error: 'git 레포가 아닙니다' }); return; }
+    if (!(await isGitRepo(base))) { done({ ok: false, error: 'git 레포가 아닙니다' }); return; }
     // worktree 는 **레포 전체**를 체크아웃한다. 연결 폴더가 레포 루트가 아니라 하위 디렉토리면
     // (예: 레포 /repo 를 두고 /repo/apps/web 을 연결) worktree 루트는 /repo 에 대응하므로,
     // 에이전트의 상대경로가 그대로면 다른 위치를 가리킨다. show-prefix 만큼 더 내려가 맞춘다.
-    const prefixR = await git(['rev-parse', '--show-prefix'], folderRoot);
+    const prefixR = await git(['rev-parse', '--show-prefix'], base);
     const sub = prefixR.code === 0 ? prefixR.stdout.trim().replace(/\/+$/, '') : '';
     const workRel = sub ? `${rel}/${sub}` : rel;
-    const gitDirR = await git(['rev-parse', '--absolute-git-dir'], folderRoot);
+    const gitDirR = await git(['rev-parse', '--absolute-git-dir'], base);
     if (gitDirR.code === 0) excludeWorktreeDir(gitDirR.stdout.trim());
     if (fs.existsSync(abs)) { done({ ok: true, worktreeRel: workRel, branch }); return; } // 재개 시 재사용
-    const r = await git(['worktree', 'add', abs, '-b', branch], folderRoot);
+    const r = await git(['worktree', 'add', abs, '-b', branch], base);
     if (r.code !== 0) { done({ ok: false, error: `worktree 생성 실패: ${(r.stderr || r.stdout).trim().slice(0, 300)}` }); return; }
     await writeBaseSha(abs);
     done({ ok: true, worktreeRel: workRel, branch });
@@ -334,9 +355,9 @@ async function handleWorktree(m, done) {
     const head = await git(['rev-parse', 'HEAD'], abs);
     const moved = head.code === 0 && head.stdout.trim() !== (await readBaseSha(abs));
     if ((st.code === 0 && st.stdout.trim() !== '') || moved) { done({ ok: true, kept: true, branch }); return; }
-    const r = await git(['worktree', 'remove', '--force', abs], folderRoot);
+    const r = await git(['worktree', 'remove', '--force', abs], base);
     if (r.code !== 0) { done({ ok: true, kept: true, branch }); return; } // 제거 실패도 보존으로 취급
-    await git(['branch', '-D', branch], folderRoot); // 변경 없는 빈 브랜치 정리(실패 무시)
+    await git(['branch', '-D', branch], base); // 변경 없는 빈 브랜치 정리(실패 무시)
     done({ ok: true, kept: false, branch });
     return;
   }
@@ -355,13 +376,15 @@ function walk(dir, base, out) {
 }
 
 async function handleExec(m, done) {
+  // 폴더 선택(folder 필드) — 유효 base 를 먼저 확정. 미지정은 연결 루트(현행 동작).
+  const base = resolveBase(m);
   switch (m.kind) {
     case 'exec': {
       // ① 명백히 위험한 패턴은 확인 없이 즉시 거부 (guardrail).
       const denied = matchDenylist(m.command);
       if (denied) { done({ ok: false, error: `위험 명령으로 차단됨: ${denied}`, exitCode: 126 }); return; }
       // ② 나머지는 실행 전 사용자 확인 (비우회). 같은 작업 안에서는 사용자가 일괄 승인할 수 있다.
-      if (!(await confirmExec(String(m.command || ''), m.taskId))) {
+      if (!(await confirmExec(String(m.command || ''), m.taskId, base))) {
         done({ ok: false, error: '사용자가 명령 실행을 거부했습니다', exitCode: 126 }); return;
       }
       // ③ OS 샌드박스로 감싸 실행 — 폴더 밖 쓰기·비밀 읽기를 커널이 차단한다.
@@ -370,7 +393,7 @@ async function handleExec(m, done) {
         done({ ok: false, error: 'exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다(폴더 재연결 필요). 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 앱을 실행하세요.', exitCode: 126 });
         return;
       }
-      const opts = { cwd: folderRoot, timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_BUFFER, env: { ...process.env, PATH: resolveExecPath() } };
+      const opts = { cwd: base, timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_BUFFER, env: { ...process.env, PATH: resolveExecPath() } };
       const cb = (err, stdout, stderr) => {
         done({ ok: true, stdout: String(stdout), stderr: String(stderr), exitCode: err ? (err.code ?? 1) : 0 });
       };
@@ -381,9 +404,9 @@ async function handleExec(m, done) {
       }
       return;
     }
-    case 'read': done({ ok: true, content: fs.readFileSync(safe(m.path), 'utf8') }); return;
+    case 'read': done({ ok: true, content: fs.readFileSync(safeFrom(base, m.path), 'utf8') }); return;
     case 'write': {
-      const abs = safe(m.path);
+      const abs = safeFrom(base, m.path);
       fs.mkdirSync(path.dirname(abs), { recursive: true });
       fs.writeFileSync(abs, Buffer.from(m.contentB64 || '', 'base64'));
       done({ ok: true }); return;
@@ -391,17 +414,31 @@ async function handleExec(m, done) {
     case 'list': {
       // 디렉토리는 '/' 접미사 — 모델이 폴더를 파일로 오인해 read 하다 EISDIR 로
       // 실패하고 하위 파일에 못 닿는 문제 방지 (샌드박스 실행기와 동일 규약).
-      const entries = fs.readdirSync(safe(m.path), { withFileTypes: true })
+      const entries = fs.readdirSync(safeFrom(base, m.path), { withFileTypes: true })
         .map((e) => (e.isDirectory() ? `${e.name}/` : e.name));
       done({ ok: true, entries });
       return;
     }
-    case 'listAll': done({ ok: true, entries: walk(folderRoot, folderRoot, []) }); return;
+    case 'listAll': done({ ok: true, entries: walk(base, base, []) }); return;
     case 'delete': {
-      const abs = safe(m.path);
-      if (abs === folderRoot) throw new Error('연결 폴더 루트는 삭제할 수 없습니다');
+      const abs = safeFrom(base, m.path);
+      if (abs === base) throw new Error('연결 폴더 루트는 삭제할 수 없습니다');
       fs.rmSync(abs, { recursive: true, force: true });
       done({ ok: true }); return;
+    }
+    case 'folders': {
+      // 하위 폴더 온디맨드 열거(폴더 선택) — path 는 루트 기준, 숨김·심링크 제외,
+      // 결과는 루트 기준 상대경로(서버가 세션 캐시에 병합해 folder 검증 근거로 쓴다).
+      const dirAbs = safe(m.path);
+      const entries = [];
+      let truncated = false;
+      for (const e of fs.readdirSync(dirAbs, { withFileTypes: true })) {
+        if (!e.isDirectory() || e.name.startsWith('.')) continue;
+        if (entries.length >= FOLDERS_MAX_ENTRIES) { truncated = true; break; }
+        entries.push(path.relative(folderRoot, path.join(dirAbs, e.name)).split(path.sep).join('/'));
+      }
+      done({ ok: true, entries, truncated });
+      return;
     }
     case 'browser': {
       // 로컬 브라우저(D3) — Electron 내장 Chromium 에서 액션 실행.
@@ -417,7 +454,7 @@ async function handleExec(m, done) {
       return;
     }
     case 'worktree':
-      await handleWorktree(m, done); return;
+      await handleWorktree(m, done, base); return;
     case 'task_end':
       agentBrowser.closeAll();   // 작업 종료 시 브라우저 패널 정리
       // 일괄 승인은 그 작업에만 유효 — 종료 즉시 회수한다.

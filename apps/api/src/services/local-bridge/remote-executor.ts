@@ -54,10 +54,17 @@ export class RemoteExecutor implements TaskExecutor {
     /** worktree 작업 브랜치명 — 사용자 안내·결과 보고용. */
     private worktreeBranch: string | null = null;
 
-    constructor(taskId: string, userId: string, deviceId?: string) {
+    /**
+     * 폴더 선택(102) — 연결 루트 기준 상대경로. 지정 시 모든 브리지 요청에 folder 로 첨부되어
+     * 디바이스가 exec cwd·파일 경로·worktree base 를 이 하위 폴더로 재지정한다. undefined=루트.
+     */
+    private readonly folderRel?: string;
+
+    constructor(taskId: string, userId: string, deviceId?: string, folderRel?: string) {
         this.taskId = taskId;
         this.userId = userId;
         this.deviceId = deviceId;
+        this.folderRel = folderRel;
     }
 
     get label(): string { return `local:${this.deviceLabel}`; }
@@ -88,7 +95,8 @@ export class RemoteExecutor implements TaskExecutor {
     }
 
     private req(payload: BridgeRequestPayload): Promise<BridgeResult> {
-        return getLocalBridgeRegistry().request(this.userId, payload, undefined, this.deviceId);
+        const withFolder = this.folderRel ? { ...payload, folder: this.folderRel } : payload;
+        return getLocalBridgeRegistry().request(this.userId, withFolder, undefined, this.deviceId);
     }
 
     /** 파일 경로를 worktree 기준으로 변환. 격리가 없으면 원래 경로 그대로. */

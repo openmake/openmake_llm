@@ -29,6 +29,8 @@ const SECRET_SUBPATHS = ['.ssh', '.aws', '.gnupg', '.kube', '.docker', '.config/
 const WORKTREE_DIR = '.openmake/worktrees';
 const WORKTREE_BRANCH_PREFIX = 'omk-task/';
 const TASK_ID_RE = /^[a-zA-Z0-9-]{8,64}$/;
+/** folders(하위 폴더 열거) 1회 상한 — 서버 BRIDGE_FOLDERS_MAX_ENTRIES 와 같은 축(디바이스측 강제). */
+const FOLDERS_MAX_ENTRIES = 200;
 
 const EXEC_DENYLIST: { re: RegExp; why: string }[] = [
     { re: /(^|[;&|(]|\s)sudo\s/, why: '권한 상승(sudo)' },
@@ -57,6 +59,8 @@ interface BridgeMsg {
     taskId?: string;
     spec?: unknown;
     message?: string;
+    /** 폴더 선택 — 연결 루트 기준 상대경로. exec cwd·파일 경로·worktree base 재지정. */
+    folder?: string;
 }
 interface BridgeResult {
     ok: boolean;
@@ -70,6 +74,7 @@ interface BridgeResult {
     worktreeRel?: string;
     branch?: string;
     kept?: boolean;
+    truncated?: boolean;
 }
 
 /** confirmExec 어댑터 — 터미널에서 y(실행)/a(작업 동안 모두)/n(거부). 비대화형은 자동 거부(fail-safe). */
@@ -153,15 +158,32 @@ export class CliBridge {
         } catch { return null; }
     }
 
-    /** 경로 스코프 가드 — 연결 폴더 밖/심링크 탈출 차단 (데스크톱 safe 이식). */
-    private safe(rel: string | undefined): string {
-        const abs = path.resolve(this.folderRoot, rel || '.');
-        if (abs !== this.folderRoot && !abs.startsWith(this.folderRoot + path.sep)) throw new Error(`폴더 스코프 밖 경로 거부: ${rel}`);
+    /** 경로 스코프 가드 — base 밖/심링크 탈출 차단 (데스크톱 safe 이식, 폴더 선택으로 base 일반화). */
+    private safeFrom(baseAbs: string, rel: string | undefined): string {
+        const abs = path.resolve(baseAbs, rel || '.');
+        if (abs !== baseAbs && !abs.startsWith(baseAbs + path.sep)) throw new Error(`폴더 스코프 밖 경로 거부: ${rel}`);
         let probe = abs;
         while (!fs.existsSync(probe)) probe = path.dirname(probe);
         const real = fs.realpathSync(probe);
-        if (real !== this.folderRoot && !real.startsWith(this.folderRoot + path.sep)) throw new Error(`심링크 스코프 탈출 거부: ${rel}`);
+        const baseReal = fs.realpathSync(baseAbs);
+        if (real !== baseReal && !real.startsWith(baseReal + path.sep)) throw new Error(`심링크 스코프 탈출 거부: ${rel}`);
         return abs;
+    }
+
+    /** 연결 루트 기준 스코프 가드 (기존 계약). */
+    private safe(rel: string | undefined): string {
+        return this.safeFrom(this.folderRoot, rel);
+    }
+
+    /**
+     * 폴더 선택(folder 필드) base 해석 — 루트 기준 상대경로를 safe() 재검증 후 실행 base 로 쓴다.
+     * 서버는 디바이스가 folders 로 보고한 값만 에코하지만, 여기서 다시 스코프를 강제한다(2중 방어).
+     */
+    private resolveBase(m: BridgeMsg): string {
+        if (!m.folder) return this.folderRoot;
+        const base = this.safe(m.folder);
+        if (!fs.existsSync(base) || !fs.statSync(base).isDirectory()) throw new Error(`실행 폴더가 존재하지 않습니다: ${m.folder}`);
+        return base;
     }
 
     // ── worktree (데스크톱 이식) ──
@@ -172,8 +194,8 @@ export class CliBridge {
             });
         });
     }
-    private async isGitRepo(): Promise<boolean> {
-        const r = await this.git(['rev-parse', '--is-inside-work-tree'], this.folderRoot);
+    private async isGitRepo(cwd: string): Promise<boolean> {
+        const r = await this.git(['rev-parse', '--is-inside-work-tree'], cwd);
         return r.code === 0 && r.stdout.trim() === 'true';
     }
     private excludeWorktreeDir(gitDir: string): void {
@@ -209,21 +231,23 @@ export class CliBridge {
         } catch { /* noop */ }
         return 'HEAD';
     }
-    private async handleWorktree(m: BridgeMsg, done: (r: BridgeResult) => void): Promise<void> {
+    private async handleWorktree(m: BridgeMsg, done: (r: BridgeResult) => void, base: string): Promise<void> {
         const taskId = String(m.taskId || '');
         if (!TASK_ID_RE.test(taskId)) { done({ ok: false, error: '잘못된 taskId 형식' }); return; }
+        // 폴더 선택 시 worktree 도 base(선택 폴더) 하위에 만들고, worktreeRel 은 base 기준
+        // 상대경로로 돌려준다 — 서버는 folder+worktreeRel 을 그대로 합성해 라우팅한다.
         const rel = `${WORKTREE_DIR}/${taskId}`;
-        const abs = path.join(this.folderRoot, rel);
+        const abs = path.join(base, rel);
         const branch = `${WORKTREE_BRANCH_PREFIX}${taskId.slice(0, 8)}`;
         if (m.op === 'add') {
-            if (!(await this.isGitRepo())) { done({ ok: false, error: 'git 레포가 아닙니다' }); return; }
-            const prefixR = await this.git(['rev-parse', '--show-prefix'], this.folderRoot);
+            if (!(await this.isGitRepo(base))) { done({ ok: false, error: 'git 레포가 아닙니다' }); return; }
+            const prefixR = await this.git(['rev-parse', '--show-prefix'], base);
             const sub = prefixR.code === 0 ? prefixR.stdout.trim().replace(/\/+$/, '') : '';
             const workRel = sub ? `${rel}/${sub}` : rel;
-            const gitDirR = await this.git(['rev-parse', '--absolute-git-dir'], this.folderRoot);
+            const gitDirR = await this.git(['rev-parse', '--absolute-git-dir'], base);
             if (gitDirR.code === 0) this.excludeWorktreeDir(gitDirR.stdout.trim());
             if (fs.existsSync(abs)) { done({ ok: true, worktreeRel: workRel, branch }); return; }
-            const r = await this.git(['worktree', 'add', abs, '-b', branch], this.folderRoot);
+            const r = await this.git(['worktree', 'add', abs, '-b', branch], base);
             if (r.code !== 0) { done({ ok: false, error: `worktree 생성 실패: ${(r.stderr || r.stdout).trim().slice(0, 300)}` }); return; }
             await this.writeBaseSha(abs);
             done({ ok: true, worktreeRel: workRel, branch });
@@ -243,9 +267,9 @@ export class CliBridge {
             const head = await this.git(['rev-parse', 'HEAD'], abs);
             const moved = head.code === 0 && head.stdout.trim() !== (await this.readBaseSha(abs));
             if ((st.code === 0 && st.stdout.trim() !== '') || moved) { done({ ok: true, kept: true, branch }); return; }
-            const r = await this.git(['worktree', 'remove', '--force', abs], this.folderRoot);
+            const r = await this.git(['worktree', 'remove', '--force', abs], base);
             if (r.code !== 0) { done({ ok: true, kept: true, branch }); return; }
-            await this.git(['branch', '-D', branch], this.folderRoot);
+            await this.git(['branch', '-D', branch], base);
             done({ ok: true, kept: false, branch });
             return;
         }
@@ -262,27 +286,30 @@ export class CliBridge {
         return out;
     }
 
-    private async confirmExec(command: string, taskId: string | undefined): Promise<boolean> {
+    private async confirmExec(command: string, taskId: string | undefined, base: string): Promise<boolean> {
         if (this.opts.autoApproveAll || process.env.OMK_BRIDGE_AUTO_APPROVE === '1') return true;
         if (taskId && this.autoApproveTasks.has(taskId)) return true;
-        const ans = await this.opts.confirm(command, taskId, this.folderRoot);
+        // 확인 창엔 유효 실행 폴더(base)를 보여준다 — 어느 폴더에서 도는지 투명하게.
+        const ans = await this.opts.confirm(command, taskId, base);
         if (ans === 'all' && taskId) { this.autoApproveTasks.add(taskId); return true; }
         return ans === 'yes';
     }
 
     private async handleExec(m: BridgeMsg, done: (r: BridgeResult) => void): Promise<void> {
+        // 폴더 선택(folder 필드) — 유효 base 를 먼저 확정. 미지정은 연결 루트(현행 동작).
+        const base = this.resolveBase(m);
         switch (m.kind) {
             case 'exec': {
                 const denied = matchDenylist(String(m.command || ''));
                 if (denied) { done({ ok: false, error: `위험 명령으로 차단됨: ${denied}`, exitCode: 126 }); return; }
-                if (!(await this.confirmExec(String(m.command || ''), m.taskId))) {
+                if (!(await this.confirmExec(String(m.command || ''), m.taskId, base))) {
                     done({ ok: false, error: '사용자가 명령 실행을 거부했습니다', exitCode: 126 }); return;
                 }
                 if (SANDBOX_ENABLED && !this.sandboxProfilePath) {
                     done({ ok: false, error: 'exec 샌드박스 프로파일을 준비하지 못해 실행을 거부했습니다. 비격리 실행이 필요하면 OMK_BRIDGE_SANDBOX=0 으로 실행하세요.', exitCode: 126 });
                     return;
                 }
-                const opts = { cwd: this.folderRoot, timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_BUFFER, encoding: 'utf8' as const, env: { ...process.env, PATH: this.resolveExecPath() } };
+                const opts = { cwd: base, timeout: EXEC_TIMEOUT_MS, maxBuffer: MAX_BUFFER, encoding: 'utf8' as const, env: { ...process.env, PATH: this.resolveExecPath() } };
                 const cb = (err: import('child_process').ExecFileException | null, stdout: string, stderr: string) => {
                     done({ ok: true, stdout: String(stdout), stderr: String(stderr), exitCode: err ? (typeof err.code === 'number' ? err.code : 1) : 0 });
                 };
@@ -293,29 +320,42 @@ export class CliBridge {
                 }
                 return;
             }
-            case 'read': done({ ok: true, content: fs.readFileSync(this.safe(m.path), 'utf8') }); return;
+            case 'read': done({ ok: true, content: fs.readFileSync(this.safeFrom(base, m.path), 'utf8') }); return;
             case 'write': {
-                const abs = this.safe(m.path);
+                const abs = this.safeFrom(base, m.path);
                 fs.mkdirSync(path.dirname(abs), { recursive: true });
                 fs.writeFileSync(abs, Buffer.from(m.contentB64 || '', 'base64'));
                 done({ ok: true }); return;
             }
             case 'list': {
-                const entries = fs.readdirSync(this.safe(m.path), { withFileTypes: true })
+                const entries = fs.readdirSync(this.safeFrom(base, m.path), { withFileTypes: true })
                     .map((e) => (e.isDirectory() ? `${e.name}/` : e.name));
                 done({ ok: true, entries }); return;
             }
-            case 'listAll': done({ ok: true, entries: this.walk(this.folderRoot, this.folderRoot, []) }); return;
+            case 'listAll': done({ ok: true, entries: this.walk(base, base, []) }); return;
             case 'delete': {
-                const abs = this.safe(m.path);
-                if (abs === this.folderRoot) throw new Error('연결 폴더 루트는 삭제할 수 없습니다');
+                const abs = this.safeFrom(base, m.path);
+                if (abs === base) throw new Error('연결 폴더 루트는 삭제할 수 없습니다');
                 fs.rmSync(abs, { recursive: true, force: true });
                 done({ ok: true }); return;
+            }
+            case 'folders': {
+                // 하위 폴더 온디맨드 열거(폴더 선택) — path 는 루트 기준, 숨김·심링크 제외,
+                // 결과는 루트 기준 상대경로(서버가 세션 캐시에 병합해 folder 검증 근거로 쓴다).
+                const dirAbs = this.safe(m.path);
+                const entries: string[] = [];
+                let truncated = false;
+                for (const e of fs.readdirSync(dirAbs, { withFileTypes: true })) {
+                    if (!e.isDirectory() || e.name.startsWith('.')) continue;
+                    if (entries.length >= FOLDERS_MAX_ENTRIES) { truncated = true; break; }
+                    entries.push(path.relative(this.folderRoot, path.join(dirAbs, e.name)).split(path.sep).join('/'));
+                }
+                done({ ok: true, entries, truncated }); return;
             }
             case 'browser':
                 done({ ok: false, error: 'CLI 브리지는 로컬 브라우저를 지원하지 않습니다' }); return;
             case 'worktree':
-                await this.handleWorktree(m, done); return;
+                await this.handleWorktree(m, done, base); return;
             case 'task_end':
                 if (m.taskId) this.autoApproveTasks.delete(m.taskId);
                 done({ ok: true }); return;

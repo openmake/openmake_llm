@@ -306,7 +306,13 @@
       "label": "로컬 실행:",
       "off": "서버 샌드박스에서 실행",
       "on": "로컬 폴더에서 실행: {folder}",
-      "disconnected": "데스크톱 앱 미연결"
+      "disconnected": "데스크톱 앱 미연결",
+      "folderPick": "폴더 변경",
+      "folderUp": "상위",
+      "folderSelectHere": "이 폴더에서 실행",
+      "folderUnsupported": "이 디바이스는 폴더 탐색을 지원하지 않습니다 — CLI/앱을 업데이트하세요",
+      "folderEmpty": "하위 폴더가 없습니다",
+      "folderTruncated": "…목록이 잘렸습니다"
     }
   },
   "chat": {

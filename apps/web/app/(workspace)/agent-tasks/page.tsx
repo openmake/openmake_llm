@@ -63,6 +63,8 @@ interface AgentTask {
   totalTokens?: number;
   /** Cowork D2: 'local' 이면 데스크톱 브리지 폴더에서 실행 */
   executor?: "sandbox" | "local";
+  /** 폴더 선택(102): 연결 루트 기준 실행 폴더 — 미지정은 루트 */
+  folderRel?: string;
   /** 실패 사유 — 코드(goal_incomplete/max_turns_exhausted/interrupted) 또는 자유 텍스트. */
   error?: string;
   /** 소유자 id — admin 전체 보기(viewAll)에서 타 사용자 작업 뱃지 표시용. */
@@ -91,6 +93,8 @@ interface ApiAgentTask {
   total_tokens?: number | null;
   /** Cowork D2: 실행 백엔드 — 'local' 이면 데스크톱 브리지 폴더에서 실행됨 */
   executor?: "sandbox" | "local";
+  /** 폴더 선택(102) — 연결 루트 기준 실행 폴더 (folder_rel 컬럼) */
+  folder_rel?: string | null;
   /** 실패 사유 (toPublicTask 가 노출하는 error 컬럼) */
   error?: string;
   /** 소유자 (toPublicTask 가 user_id 그대로 노출 — admin viewAll 에서 소유자 뱃지용) */
@@ -177,6 +181,7 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
     resumable: t.resumable,
     totalTokens: typeof t.total_tokens === "number" ? t.total_tokens : undefined,
     executor: t.executor,
+    folderRel: t.folder_rel || undefined,
     error: t.error || undefined,
     ownerId: t.user_id != null ? String(t.user_id) : undefined,
   };
@@ -356,7 +361,7 @@ function TaskDetailModal({
             <p className="text-sm text-fg">{detail.task.goal}</p>
             {detail.task.executor === "local" && (
               <span className="mt-2 inline-flex items-center rounded-full border border-accent bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent">
-                {t("localBadge")}
+                {t("localBadge")}{detail.task.folder_rel ? ` · ${detail.task.folder_rel}` : ""}
               </span>
             )}
             <div className="mt-2 flex items-center gap-3 text-xs text-faint">
