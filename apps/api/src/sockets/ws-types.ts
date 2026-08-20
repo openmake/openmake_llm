@@ -93,6 +93,8 @@ export interface ExtendedWebSocket extends WebSocket {
     _authTokenJti?: string | null;
     _authTokenFingerprint?: string | null;
     _authMethod?: 'cookie' | 'bearer' | 'none';
+    /** API key 인증 시 그 키의 스코프(브리지 등록 게이트). JWT/쿠키 인증은 undefined. */
+    _apiKeyScopes?: string[] | null;
     _clientIp?: string;
     _connectedAtMs?: number;
     _lastActivityAtMs?: number;

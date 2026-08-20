@@ -230,6 +230,17 @@
       "deactivate": "無効化",
       "rotate": "ローテーション",
       "delete": "削除"
+    },
+    "scope": {
+      "label": "スコープ",
+      "full": "フルアクセス",
+      "bridge": "ブリッジ(CLI)",
+      "chat": "推論API",
+      "hint": {
+        "full": "すべてのAPIにアクセスします。",
+        "bridge": "OpenMake Code CLI のローカル実行専用 — 推論API・トークン消費は不可。",
+        "chat": "OpenAI互換の推論API専用。"
+      }
     }
   },
   "composer": {

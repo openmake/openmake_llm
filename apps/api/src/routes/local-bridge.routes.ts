@@ -4,14 +4,15 @@
  * @module routes/local-bridge
  */
 import { Router, Request, Response } from 'express';
-import { requireAuthOrApiKey } from '../middlewares/api-key-auth';
+import { requireAuthOrApiKeyScope } from '../middlewares/api-key-auth';
+import { API_KEY_SCOPES } from '../config/api-key-scopes';
 import { success } from '../utils/api-response';
 import { LOCAL_BRIDGE } from '../config/local-bridge';
 import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
 
 const router = Router();
 
-router.get('/status', requireAuthOrApiKey, (req: Request, res: Response) => {
+router.get('/status', requireAuthOrApiKeyScope(API_KEY_SCOPES.BRIDGE), (req: Request, res: Response) => {
     const userId = String(req.user!.id);
     const devices = LOCAL_BRIDGE.ENABLED ? getLocalBridgeRegistry().getDevices(userId) : [];
     // 구 필드(connected/label/folderName)는 최근 접속 디바이스 기준으로 병존 — 구 프론트 무중단.

@@ -34,6 +34,12 @@ import { validate } from '../middlewares/validation';
 import { asyncHandler } from '../utils/error-handler';
 import { success, notFound, badRequest, unauthorized, rateLimited } from '../utils/api-response';
 import { getApiKeyService, ApiKeyError } from '../services/ApiKeyService';
+import { ALLOWED_API_KEY_SCOPES } from '../config/api-key-scopes';
+
+/** 발급/수정 시 허용 스코프 화이트리스트 검증 — 미지 스코프(오타·권한 오해)를 거부. */
+const scopesSchema = z.array(z.string().refine((s) => ALLOWED_API_KEY_SCOPES.has(s), {
+    message: `허용되지 않은 스코프입니다 (${[...ALLOWED_API_KEY_SCOPES].join(', ')} 중 선택)`,
+})).optional();
 
 const router = Router();
 
@@ -50,7 +56,7 @@ const router = Router();
 const createApiKeySchema = z.object({
     name: z.string().min(1).max(100),
     description: z.string().max(500).optional(),
-    scopes: z.array(z.string()).optional(),
+    scopes: scopesSchema,
     allowed_models: z.array(z.string()).optional(),
     expires_at: z.string().datetime().optional(),
 });
@@ -67,7 +73,7 @@ const createApiKeySchema = z.object({
 const updateApiKeySchema = z.object({
     name: z.string().min(1).max(100).optional(),
     description: z.string().max(500).optional(),
-    scopes: z.array(z.string()).optional(),
+    scopes: scopesSchema,
     allowed_models: z.array(z.string()).optional(),
     is_active: z.boolean().optional(),
     expires_at: z.string().datetime().nullable().optional(),
