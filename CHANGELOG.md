@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.0](https://github.com/openmake/openmake_llm/compare/v1.27.0...v1.28.0) (2026-08-20)
+
+
+### ✨ 기능
+
+* **auth:** API key bridge/chat 스코프 하드닝 ([#547](https://github.com/openmake/openmake_llm/issues/547)) ([cc8a9bc](https://github.com/openmake/openmake_llm/commit/cc8a9bc56eaec9e8ae056f9e630ddb25b5a1c22d))
+
 ## [1.27.0](https://github.com/openmake/openmake_llm/compare/v1.26.0...v1.27.0) (2026-08-20)
 
 
