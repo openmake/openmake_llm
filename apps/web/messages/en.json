@@ -230,6 +230,17 @@
       "deactivate": "Deactivate",
       "rotate": "Rotate",
       "delete": "Delete"
+    },
+    "scope": {
+      "label": "Scope",
+      "full": "Full access",
+      "bridge": "Bridge (CLI)",
+      "chat": "Inference API",
+      "hint": {
+        "full": "Access to all APIs.",
+        "bridge": "For OpenMake Code CLI local execution only — no inference API / token usage.",
+        "chat": "OpenAI-compatible inference API only."
+      }
     }
   },
   "composer": {

@@ -9,6 +9,7 @@ import type { WebSocket } from 'ws';
 import type { WSMessage, ExtendedWebSocket } from './ws-types';
 import { getLocalBridgeRegistry, type BridgeResult } from '../services/local-bridge/registry';
 import { LOCAL_BRIDGE } from '../config/local-bridge';
+import { apiKeyHasScope, API_KEY_SCOPES } from '../config/api-key-scopes';
 
 export async function handleBridgeMessage(ws: WebSocket, msg: WSMessage): Promise<void> {
     const extWs = ws as ExtendedWebSocket;
@@ -19,6 +20,13 @@ export async function handleBridgeMessage(ws: WebSocket, msg: WSMessage): Promis
     }
     if (!LOCAL_BRIDGE.ENABLED) {
         ws.send(JSON.stringify({ type: 'error', message: '로컬 실행 기능이 비활성화되어 있습니다 (LOCAL_EXECUTOR_ENABLED)' }));
+        return;
+    }
+    // API key 연결이면 bridge 스코프 필수 — 스코프 없는(예: chat 전용) 키의 브리지 등록 차단.
+    // JWT/쿠키(데스크톱 앱) 연결은 _apiKeyScopes=undefined 라 apiKeyHasScope 가 통과시킨다.
+    if (extWs._apiKeyScopes !== undefined && !apiKeyHasScope(extWs._apiKeyScopes, API_KEY_SCOPES.BRIDGE)) {
+        ws.send(JSON.stringify({ type: 'error', message: `이 API key 는 '${API_KEY_SCOPES.BRIDGE}' 스코프가 없습니다 — bridge 스코프 키를 발급하세요` }));
+        try { ws.close(1008, 'bridge_scope_required'); } catch { /* already closing */ }
         return;
     }
     const registry = getLocalBridgeRegistry();
