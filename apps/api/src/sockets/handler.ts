@@ -124,8 +124,14 @@ export class WebSocketHandler {
             // CSWSH 방어: Origin 헤더 화이트리스트 검증
             // CORS는 WS upgrade에 적용되지 않으므로 서버가 직접 검증해야 한다.
             const origin = req.headers.origin;
+            // API key(omk_live_*) 인증 요청은 Origin 검증 면제 — CSWSH 는 브라우저가 쿠키를
+            // 자동 첨부하는 쿠키기반 공격이라, 헤더로 API key 를 제시하는 네이티브 클라이언트
+            // (CLI 브리지)엔 성립하지 않는다(ambient credential 부재). 쿠키 세션엔 그대로 적용.
+            const authHeader = req.headers.authorization || '';
+            const isApiKeyClient = authHeader.startsWith('Bearer omk_live_')
+                || (typeof req.headers['x-api-key'] === 'string' && (req.headers['x-api-key'] as string).startsWith('omk_live_'));
             // REST CORS 와 동일한 allowlist 정책(security/cors-policy) 사용 — '*' reflect 금지, 정확 비교.
-            if (!isOriginAllowed(origin)) {
+            if (!isApiKeyClient && !isOriginAllowed(origin)) {
                 const clientIpForLog = this.guard.getClientIp(req);
                 log.warn(`[WS] Origin 거부: origin=${origin ?? '<none>'}, ip=${clientIpForLog}`);
                 try {

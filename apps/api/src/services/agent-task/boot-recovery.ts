@@ -64,6 +64,19 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
                 continue;
             }
 
+            // 로컬 실행 작업은 자동 재개하지 않는다 — 부팅 시점엔 브리지 디바이스가 아직
+            // 연결되지 않아(CLI/데스크톱은 서버 기동 후 재접속) RemoteExecutor.create 가
+            // 미연결로 실패한다. 상태만 failed(interrupted)로 정리해 완료 오표시·영구 polling 을
+            // 막고, 사용자가 디바이스 재연결 후 /resume 으로 수동 재개하게 한다.
+            if (task.executor === 'local') {
+                if (task.status === 'running' || task.status === 'paused') {
+                    await db.updateAgentTask(task.id, { status: 'failed', error: 'interrupted_local_device' });
+                    failed++;
+                    logger.info(`[BootRecovery] 로컬 실행 작업 자동재개 보류 → failed(디바이스 재연결 후 수동 resume): ${task.id}`);
+                }
+                continue;
+            }
+
             // 원자적 소유권 획득 — 실패(rowCount=0)면 다른 프로세스가 이미 복구 중이므로 건너뜀.
             const claimed = await taskRepo.claimAgentTaskForRecovery(task.id);
             if (!claimed) continue;

@@ -191,6 +191,7 @@ export function Composer() {
     agentTaskMode,
     agentApprovalMode,
     agentLocalExecutor,
+    agentLocalDeviceId,
     imageMode,
     artifactMode,
     structuredMode,
@@ -201,6 +202,7 @@ export function Composer() {
     setSelectedModel,
     setAgentApprovalMode,
     setAgentLocalExecutor,
+    setAgentLocalDeviceId,
     cycleStyle,
     setInputDraft,
     auth,
@@ -232,13 +234,19 @@ export function Composer() {
   // Cowork D2: 로컬 브리지(데스크톱 앱) 연결 상태 — 토글 활성 판단. 15s 갱신.
   const { data: bridgeData } = useQuery({
     queryKey: ["local-bridge-status"],
-    queryFn: () => ApiClient.get<{ data: { enabled: boolean; connected: boolean; folderName: string | null } }>("/api/local-bridge/status"),
+    queryFn: () => ApiClient.get<{ data: { enabled: boolean; connected: boolean; folderName: string | null; devices?: { deviceId: string; label: string; folderName: string; connectedAt: number }[] } }>("/api/local-bridge/status"),
     enabled: agentTaskMode,
     refetchInterval: 15_000,
     staleTime: 10_000,
   });
   const bridgeConnected = !!bridgeData?.data?.connected;
-  const bridgeFolder = bridgeData?.data?.folderName ?? "";
+  const bridgeDevices = bridgeData?.data?.devices ?? [];
+  // 다중 디바이스(101): 선택 디바이스가 있으면 그것, 없으면 최근 접속(마지막) 디바이스로 고정.
+  // 선택기가 안 뜨는 단일 디바이스에서도 명시 deviceId 를 작업에 실어 create↔execute 간
+  // "최근 접속" 폴백이 다른 디바이스로 튀는 것을 막는다(서버 M3 회귀 차단).
+  const selectedBridgeDevice = bridgeDevices.find((d) => d.deviceId === agentLocalDeviceId)
+    ?? bridgeDevices[bridgeDevices.length - 1] ?? null;
+  const bridgeFolder = selectedBridgeDevice?.folderName ?? bridgeData?.data?.folderName ?? "";
   // 검색어 없으면("/") 카테고리 그룹핑(전체), 있으면 평면 검색 목록
   const slashGrouped = slashDebounced.trim() === "";
   const rawSlashSkills: SkillSummary[] = slashCandidate ? slashSkillsData ?? [] : [];
@@ -328,6 +336,7 @@ export function Composer() {
         images.length ? images.map((i) => i.dataUrl) : undefined,
         agentApprovalMode,
         agentLocalExecutor || undefined,
+        agentLocalExecutor ? (selectedBridgeDevice?.deviceId ?? null) : null,
       );
     } else if (structuredMode) {
       // 구조화 답변 토글 ON — REST /api/chat/structured (비스트리밍, 카드 렌더). 첨부는 미지원.
@@ -620,6 +629,20 @@ export function Composer() {
                   ? t("localExec.on", { folder: bridgeFolder })
                   : t("localExec.off")}
             </button>
+            {/* 다중 디바이스(101): 2대 이상 접속 시 대상 디바이스 선택 — 1대면 현행 토글 UX 유지 */}
+            {agentLocalExecutor && bridgeConnected && bridgeDevices.length > 1 && (
+              <select
+                value={selectedBridgeDevice?.deviceId ?? bridgeDevices[bridgeDevices.length - 1]?.deviceId ?? ""}
+                onChange={(e) => setAgentLocalDeviceId(e.target.value || null)}
+                className="max-w-[220px] truncate rounded-md border border-border bg-surface-2 px-1.5 py-1 text-xs text-fg-1"
+              >
+                {bridgeDevices.map((d) => (
+                  <option key={d.deviceId} value={d.deviceId}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         )}
         {/* 승인 3모드(Manual/Auto/Skip) — 에이전트 작업 위임 시 이 실행의 도구 승인 정책 선택. */}

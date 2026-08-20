@@ -34,8 +34,16 @@ export const SCRAPER_CONFIG = {
         || 'reddit.com,www.reddit.com,old.reddit.com,oauth.reddit.com')
         .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
 
-    /** curl_cffi 임퍼소네이션 브라우저 프로필 */
-    IMPERSONATE_TARGET: process.env.SCRAPER_IMPERSONATE_TARGET || 'chrome120',
+    /** curl_cffi 임퍼소네이션 브라우저 프로필 (curl_cffi 0.16 지원 목록 기준) */
+    IMPERSONATE_TARGET: process.env.SCRAPER_IMPERSONATE_TARGET || 'chrome136',
+
+    /**
+     * 봇 챌린지 안내 페이지 판별 제목 패턴 (소문자 부분일치) — fetch/Playwright 가 챌린지
+     * 페이지("Just a moment...")를 정상 본문으로 반환하던 갭 차단, 임퍼소네이션 폴백 트리거.
+     */
+    BOT_CHALLENGE_TITLE_PATTERNS: (process.env.SCRAPER_BOT_CHALLENGE_TITLES
+        || 'just a moment,attention required,access denied,verify you are human,verifying you are human,security check')
+        .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
 
     /** 차단 우회 응답 최대 바이트 (메모리 보호) */
     IMPERSONATE_MAX_BYTES: parseInt(process.env.SCRAPER_IMPERSONATE_MAX_BYTES || '5000000', 10),

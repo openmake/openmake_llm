@@ -83,6 +83,104 @@ async function hnHandler(url: string): Promise<ScrapeResult | null> {
 }
 
 // ============================================
+// ChatGPT 공유 대화 핸들러
+// ============================================
+
+/**
+ * react-router turbo-stream flat graph 를 복원한다 — 값 배열에서 정수는 다른 인덱스 참조,
+ * 객체 키 `_K`는 키 문자열 인덱스. 음수 인덱스(undefined/NaN 등 특수값)는 null 로 강등.
+ * ChatGPT 공유 페이지가 대화 데이터를 이 인코딩의 인라인 스크립트로 임베드한다 (SSR 본문 없음).
+ */
+export function hydrateTurboStream(values: unknown[], idx: unknown, depth = 0): unknown {
+    if (typeof idx !== 'number' || !Number.isInteger(idx)) return idx;
+    if (idx < 0 || idx >= values.length || depth > 64) return null;
+    const v = values[idx];
+    if (Array.isArray(v)) return v.map((x) => hydrateTurboStream(values, x, depth + 1));
+    if (v && typeof v === 'object') {
+        const out: Record<string, unknown> = {};
+        for (const [k, vi] of Object.entries(v)) {
+            if (!k.startsWith('_')) continue;
+            const key = values[Number(k.slice(1))];
+            if (typeof key === 'string') out[key] = hydrateTurboStream(values, vi, depth + 1);
+        }
+        return out;
+    }
+    return v;
+}
+
+interface ChatGptShareNode {
+    message?: {
+        author?: { role?: string };
+        content?: { content_type?: string; parts?: unknown[] };
+    };
+}
+
+/** 복원된 그래프에서 대화 데이터(title + linear_conversation/mapping 보유 객체)를 깊이 탐색. */
+function findConversationData(o: unknown, depth = 0): Record<string, unknown> | null {
+    if (!o || typeof o !== 'object' || depth > 12) return null;
+    const rec = o as Record<string, unknown>;
+    if (!Array.isArray(o) && typeof rec.title === 'string'
+        && (Array.isArray(rec.linear_conversation) || (rec.mapping && typeof rec.mapping === 'object'))) {
+        return rec;
+    }
+    for (const v of Array.isArray(o) ? o : Object.values(rec)) {
+        const found = findConversationData(v, depth + 1);
+        if (found) return found;
+    }
+    return null;
+}
+
+/**
+ * ChatGPT 공유 페이지 HTML 에서 대화를 markdown 으로 추출한다. 대화가 안 보이면 null —
+ * 호출부(핸들러)가 null 을 반환하면 scrapePage 는 일반 fallback 단계로 넘어간다.
+ */
+export function parseChatGptShareHtml(html: string): ScrapeResult | null {
+    // 인라인 스크립트의 streamController.enqueue("...") 중 가장 큰 청크가 초기 그래프.
+    const chunks = [...html.matchAll(/streamController\.enqueue\(("(?:[^"\\]|\\.)*")\)/g)]
+        .map((m) => m[1]).sort((a, b) => b.length - a.length);
+    if (chunks.length === 0) return null;
+    let values: unknown;
+    try {
+        values = JSON.parse(JSON.parse(chunks[0]) as string); // JS 문자열 리터럴 → JSON 배열
+    } catch {
+        return null;
+    }
+    if (!Array.isArray(values)) return null;
+    const data = findConversationData(hydrateTurboStream(values, 0));
+    if (!data) return null;
+
+    const title = String(data.title);
+    const nodes = (Array.isArray(data.linear_conversation)
+        ? data.linear_conversation
+        : Object.values(data.mapping as Record<string, unknown>)) as ChatGptShareNode[];
+    const turns: string[] = [];
+    for (const node of nodes) {
+        const msg = node?.message;
+        if (!msg) continue;
+        const role = msg.author?.role;
+        if (role !== 'user' && role !== 'assistant') continue; // system/tool 노이즈 제외
+        if (msg.content?.content_type !== 'text') continue; // thoughts/code 등 내부 채널 제외
+        const text = (msg.content.parts ?? [])
+            .filter((p): p is string => typeof p === 'string').join('\n').trim();
+        if (!text) continue;
+        turns.push(`**${role === 'user' ? '사용자' : 'ChatGPT'}:**\n\n${text}`);
+    }
+    if (turns.length === 0) return null;
+    return {
+        markdown: `# ${title}\n\n${turns.join('\n\n---\n\n')}`,
+        title,
+        links: [],
+    };
+}
+
+/** ChatGPT 공유 대화 → 임베드 turbo-stream 데이터 파싱 (SPA 라 Readability 로는 본문 0). */
+async function chatgptShareHandler(url: string): Promise<ScrapeResult | null> {
+    const res = await safeFetch(url, { headers: browserHeaders() });
+    if (!res.ok) return null;
+    return parseChatGptShareHtml(await res.text());
+}
+
+// ============================================
 // 차단 우회 핸들러 (impersonate)
 // ============================================
 
@@ -139,6 +237,10 @@ const STRUCTURED_HANDLERS: Array<{ match: (u: URL) => boolean; handler: (url: st
     { match: (u) => /(?:^|\.)youtube\.com$/.test(u.hostname) && u.pathname === '/watch', handler: youtubeHandler },
     { match: (u) => u.hostname === 'youtu.be', handler: youtubeHandler },
     { match: (u) => u.hostname === 'news.ycombinator.com' && u.pathname === '/item', handler: hnHandler },
+    {
+        match: (u) => ['chatgpt.com', 'chat.openai.com'].includes(u.hostname) && u.pathname.startsWith('/share/'),
+        handler: chatgptShareHandler,
+    },
 ];
 
 const BLOCKED_HANDLERS: Array<{ match: (u: URL) => boolean; handler: (url: string) => Promise<ScrapeResult | null> }> = [

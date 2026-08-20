@@ -4,21 +4,29 @@
  * @module routes/local-bridge
  */
 import { Router, Request, Response } from 'express';
-import { requireAuth } from '../auth';
+import { requireAuthOrApiKey } from '../middlewares/api-key-auth';
 import { success } from '../utils/api-response';
 import { LOCAL_BRIDGE } from '../config/local-bridge';
 import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
 
 const router = Router();
 
-router.get('/status', requireAuth, (req: Request, res: Response) => {
+router.get('/status', requireAuthOrApiKey, (req: Request, res: Response) => {
     const userId = String(req.user!.id);
-    const dev = LOCAL_BRIDGE.ENABLED ? getLocalBridgeRegistry().getDevice(userId) : null;
+    const devices = LOCAL_BRIDGE.ENABLED ? getLocalBridgeRegistry().getDevices(userId) : [];
+    // 구 필드(connected/label/folderName)는 최근 접속 디바이스 기준으로 병존 — 구 프론트 무중단.
+    const latest = LOCAL_BRIDGE.ENABLED ? getLocalBridgeRegistry().getDevice(userId) : null;
     res.json(success({
         enabled: LOCAL_BRIDGE.ENABLED,
-        connected: !!dev,
-        label: dev?.label ?? null,
-        folderName: dev?.folderName ?? null,
+        connected: !!latest,
+        label: latest?.label ?? null,
+        folderName: latest?.folderName ?? null,
+        devices: devices.map((d) => ({
+            deviceId: d.deviceId,
+            label: d.label,
+            folderName: d.folderName,
+            connectedAt: d.connectedAt,
+        })),
     }));
 });
 

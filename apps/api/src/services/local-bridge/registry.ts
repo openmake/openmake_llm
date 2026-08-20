@@ -79,44 +79,82 @@ interface Pending {
     resolve: (r: BridgeResult) => void;
     timer: NodeJS.Timeout;
     userId: string;
+    deviceId: string;
 }
 
 class LocalBridgeRegistry {
-    /** userId → 세션 (유저당 1대 — 새 등록이 기존을 대체). */
-    private readonly devices = new Map<string, DeviceSession>();
+    /**
+     * userId → (deviceId → 세션). 유저당 여러 디바이스 병존(데스크톱+CLI, 상한 MAX_DEVICES) —
+     * 같은 deviceId 재등록은 기존 세션을 대체한다(구 1대 정책의 의미 유지).
+     */
+    private readonly devices = new Map<string, Map<string, DeviceSession>>();
     private readonly pending = new Map<string, Pending>();
 
-    register(session: DeviceSession): void {
-        const prev = this.devices.get(session.userId);
-        if (prev && prev.ws !== session.ws) {
-            logger.info(`[Bridge] 기존 디바이스 대체: user=${session.userId} ${prev.label} → ${session.label}`);
-            this.rejectPendingFor(session.userId, '다른 디바이스가 연결되어 세션이 대체되었습니다');
+    /** 등록. 디바이스 상한 초과 시 false (호출부가 오류 응답). */
+    register(session: DeviceSession): boolean {
+        let byDevice = this.devices.get(session.userId);
+        if (!byDevice) {
+            byDevice = new Map();
+            this.devices.set(session.userId, byDevice);
         }
-        this.devices.set(session.userId, session);
-        logger.info(`[Bridge] 디바이스 등록: user=${session.userId} device=${session.deviceId} label="${session.label}" folder="${session.folderName}"`);
+        const prev = byDevice.get(session.deviceId);
+        if (!prev && byDevice.size >= LOCAL_BRIDGE.MAX_DEVICES) {
+            logger.warn(`[Bridge] 디바이스 상한 초과 거부: user=${session.userId} device=${session.deviceId} (max=${LOCAL_BRIDGE.MAX_DEVICES})`);
+            return false;
+        }
+        if (prev && prev.ws !== session.ws) {
+            logger.info(`[Bridge] 동일 디바이스 재등록 대체: user=${session.userId} ${prev.label} → ${session.label}`);
+            this.rejectPendingFor(session.userId, session.deviceId, '디바이스가 재연결되어 세션이 대체되었습니다');
+            // 구 소켓을 능동 종료 — 방치하면 unregister 가 새 ws 만 매칭해 구 ws 는 유휴로 남는다.
+            try { prev.ws.close(1000, 'device_reregistered'); } catch { /* already closing */ }
+        }
+        byDevice.set(session.deviceId, session);
+        logger.info(`[Bridge] 디바이스 등록: user=${session.userId} device=${session.deviceId} label="${session.label}" folder="${session.folderName}" (${byDevice.size}대)`);
+        return true;
     }
 
-    /** WS 종료 시 호출 — 이 소켓이 현재 등록 세션이면 해제 + pending 전부 reject. */
+    /** WS 종료 시 호출 — 이 소켓의 세션만 해제 + 그 디바이스의 pending 만 reject. */
     unregister(ws: WebSocket): void {
-        for (const [userId, s] of this.devices) {
-            if (s.ws === ws) {
-                this.devices.delete(userId);
-                this.rejectPendingFor(userId, '디바이스 연결이 끊어졌습니다');
-                logger.info(`[Bridge] 디바이스 해제: user=${userId} label="${s.label}"`);
-                return;
+        for (const [userId, byDevice] of this.devices) {
+            for (const [deviceId, s] of byDevice) {
+                if (s.ws === ws) {
+                    byDevice.delete(deviceId);
+                    if (byDevice.size === 0) this.devices.delete(userId);
+                    this.rejectPendingFor(userId, deviceId, '디바이스 연결이 끊어졌습니다');
+                    logger.info(`[Bridge] 디바이스 해제: user=${userId} device=${deviceId} label="${s.label}"`);
+                    return;
+                }
             }
         }
     }
 
-    getDevice(userId: string): DeviceSession | null {
-        return this.devices.get(userId) ?? null;
+    /**
+     * 디바이스 조회. deviceId 지정 시 정확 일치, 미지정(구 계약)은 가장 최근 접속 디바이스
+     * — 1대 운용이던 기존 동작과 동일하고, 다대 접속 시에도 결정적이다.
+     */
+    getDevice(userId: string, deviceId?: string): DeviceSession | null {
+        const byDevice = this.devices.get(userId);
+        if (!byDevice || byDevice.size === 0) return null;
+        if (deviceId) return byDevice.get(deviceId) ?? null;
+        let latest: DeviceSession | null = null;
+        for (const s of byDevice.values()) {
+            if (!latest || s.connectedAt > latest.connectedAt) latest = s;
+        }
+        return latest;
+    }
+
+    /** 유저의 접속 디바이스 전체 (접속 순 정렬 — status API 노출용). */
+    getDevices(userId: string): DeviceSession[] {
+        const byDevice = this.devices.get(userId);
+        if (!byDevice) return [];
+        return [...byDevice.values()].sort((a, b) => a.connectedAt - b.connectedAt);
     }
 
     /** 도구 1회 왕복. 타임아웃/연결단절 시 ok=false 결과로 해소(throw 하지 않음 — 도구 오류로 전달). */
-    request(userId: string, payload: BridgeRequestPayload, timeoutMs = LOCAL_BRIDGE.REQUEST_TIMEOUT_MS): Promise<BridgeResult> {
-        const dev = this.devices.get(userId);
+    request(userId: string, payload: BridgeRequestPayload, timeoutMs = LOCAL_BRIDGE.REQUEST_TIMEOUT_MS, deviceId?: string): Promise<BridgeResult> {
+        const dev = this.getDevice(userId, deviceId);
         if (!dev || dev.ws.readyState !== dev.ws.OPEN) {
-            return Promise.resolve({ ok: false, error: '연결된 로컬 디바이스가 없습니다 — 데스크톱 앱에서 폴더를 연결하세요.' });
+            return Promise.resolve({ ok: false, error: '연결된 로컬 디바이스가 없습니다 — 데스크톱 앱 또는 CLI 로 작업 폴더를 연결하세요.' });
         }
         const reqId = randomUUID();
         return new Promise<BridgeResult>((resolve) => {
@@ -124,7 +162,7 @@ class LocalBridgeRegistry {
                 this.pending.delete(reqId);
                 resolve({ ok: false, error: `로컬 실행 응답 시간 초과 (${Math.round(timeoutMs / 1000)}s)` });
             }, timeoutMs);
-            this.pending.set(reqId, { resolve, timer, userId });
+            this.pending.set(reqId, { resolve, timer, userId, deviceId: dev.deviceId });
             try {
                 dev.ws.send(JSON.stringify({ type: 'bridge_exec', reqId, ...payload }));
             } catch (e) {
@@ -135,12 +173,28 @@ class LocalBridgeRegistry {
         });
     }
 
-    /** bridge_result 수신 — reqId 상관관계 해소. 소유 userId 불일치는 무시(교차 주입 차단). */
-    handleResult(userId: string, reqId: string, result: BridgeResult): void {
+    /** ws 소켓에 해당하는 디바이스 id (없으면 null) — bridge_result 발신자 검증용. */
+    getDeviceIdByWs(userId: string, ws: WebSocket): string | null {
+        const byDevice = this.devices.get(userId);
+        if (!byDevice) return null;
+        for (const [deviceId, s] of byDevice) if (s.ws === ws) return deviceId;
+        return null;
+    }
+
+    /**
+     * bridge_result 수신 — reqId 상관관계 해소. 소유 userId 불일치는 무시(교차 주입 차단).
+     * senderDeviceId 지정 시 요청을 라우팅한 디바이스와 일치하는지도 검증한다(같은 유저의
+     * 다른 디바이스가 결과를 위조 주입하는 것 차단 — rejectPendingFor 의 deviceId 격리와 대칭).
+     */
+    handleResult(userId: string, reqId: string, result: BridgeResult, senderDeviceId?: string): void {
         const p = this.pending.get(reqId);
         if (!p) return; // 이미 타임아웃/해소됨
         if (p.userId !== userId) {
             logger.warn(`[Bridge] reqId 소유 불일치 무시: req=${reqId} owner=${p.userId} sender=${userId}`);
+            return;
+        }
+        if (senderDeviceId && p.deviceId && senderDeviceId !== p.deviceId) {
+            logger.warn(`[Bridge] reqId 디바이스 불일치 무시: req=${reqId} routed=${p.deviceId} sender=${senderDeviceId}`);
             return;
         }
         clearTimeout(p.timer);
@@ -148,9 +202,9 @@ class LocalBridgeRegistry {
         p.resolve(result);
     }
 
-    private rejectPendingFor(userId: string, reason: string): void {
+    private rejectPendingFor(userId: string, deviceId: string, reason: string): void {
         for (const [reqId, p] of this.pending) {
-            if (p.userId === userId) {
+            if (p.userId === userId && p.deviceId === deviceId) {
                 clearTimeout(p.timer);
                 this.pending.delete(reqId);
                 p.resolve({ ok: false, error: reason });

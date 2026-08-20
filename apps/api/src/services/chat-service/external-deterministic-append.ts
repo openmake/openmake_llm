@@ -66,6 +66,41 @@ export function citationMarkersWereCleaned(streamed: string, final: string): boo
     return false;
 }
 
+/** 카카오 지도 계열 호스트의 이미지 URL — 모델이 환각으로 지어내는 정적 지도 이미지 src 대상. */
+const MAP_IMG_URL_SRC = String.raw`https?:\/\/(?:[a-z0-9-]+\.)*(?:kakao\.com|kakaocdn\.net|daumcdn\.net)\/[^"'\s)>]*`;
+/** 위 URL 을 src 로 갖는 <img> 태그. */
+const MAP_IMG_TAG_SRC = String.raw`<img\b[^>]*\bsrc=["']${MAP_IMG_URL_SRC}["'][^>]*\/?>`;
+
+/**
+ * 모델이 환각으로 만든 카카오 지도 HTML(<a><img></a>·단독 <img>·마크다운 이미지)을 제거한다 —
+ * "kakaomap 블록/좌표 직접 작성 금지" 넛지 하에서 qwen 이 존재하지 않는 lmap.kakao.com
+ * 정적 이미지 링크로 우회 환각한 라이브 사례(2026-08-20)의 결정적 후처리. 실제 지도는
+ * 아래 kakaomapBlocks 결정적 첨부가 담당하므로 이 HTML 은 저장 히스토리에서 제거해도
+ * 정보 손실이 없다. 화면(이미 스트리밍된 본문)은 ws-chat-handler 의 done.cleanedContent
+ * 교체가 정리한다 (죽은 인용 마커와 동일 패턴).
+ */
+export function stripHallucinatedMapHtml(content: string): { content: string; removed: number } {
+    let removed = 0;
+    const count = () => {
+        removed++;
+        return '';
+    };
+    let out = content
+        .replace(new RegExp(String.raw`<a\b[^>]*>\s*${MAP_IMG_TAG_SRC}\s*<\/a>`, 'gi'), count)
+        .replace(new RegExp(MAP_IMG_TAG_SRC, 'gi'), count)
+        .replace(new RegExp(String.raw`!\[[^\]]*\]\(\s*${MAP_IMG_URL_SRC}\s*\)`, 'gi'), count);
+    if (removed > 0) {
+        // 제거로 비어버린 <center> 래퍼와 직후 <br> 잔재 정리.
+        out = out.replace(/<center>\s*<\/center>\s*(?:<br\s*\/?>\s*)*/gi, '');
+    }
+    return { content: out, removed };
+}
+
+/** 스트리밍 본문엔 지도 환각 HTML 이 있었는데 최종본에선 제거됐는지 — cleanedContent 교체 판정용. */
+export function mapHtmlWasCleaned(streamed: string, final: string): boolean {
+    return stripHallucinatedMapHtml(streamed).removed > 0 && stripHallucinatedMapHtml(final).removed === 0;
+}
+
 export interface DeterministicAppendInput {
     /** 모델이 만든 최종 본문 (이미 라이브 스트리밍된 텍스트). */
     finalContent: string;
@@ -149,6 +184,13 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
         onToken(appended, undefined);
         finalContent += appended;
         logger.info(`🖼️ 생성 이미지 ${missingImages.length}개 자동 첨부 (LLM 응답 누락 보정)`);
+    }
+
+    // 지도 환각 HTML 결정적 제거 — 저장 히스토리(반환값)가 대상. 화면은 done.cleanedContent 교체.
+    const mapStrip = stripHallucinatedMapHtml(finalContent);
+    if (mapStrip.removed > 0) {
+        finalContent = mapStrip.content;
+        logger.info(`🧹 지도 환각 HTML ${mapStrip.removed}개 제거 (카카오 이미지 링크 환각)`);
     }
 
     // 카카오 지도 블록도 동일하게 — LLM 이 옮기지 않았으면 결정적 첨부(라이브 stream + 저장 히스토리).

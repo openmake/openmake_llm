@@ -59,6 +59,8 @@ export const createAgentTaskSchema = z.strictObject({
     maxTurns: z.number().int().min(1).max(AGENT_TASK_LIMITS.MAX_TURNS_CEILING).optional(),
     // Cowork D1a: 실행 백엔드 — 'local' 은 LOCAL_EXECUTOR_ENABLED + 디바이스 연결 필요(라우트가 검증).
     executor: z.enum(['sandbox', 'local']).optional(),
+    // 다중 디바이스(101): 로컬 실행 대상 브리지 디바이스. 미지정은 최근 접속 디바이스 폴백.
+    deviceId: z.string().min(1).max(64).optional(),
     files: z.array(taskInputFileSchema).max(FILE_ATTACH_LIMITS.MAX_FILES).optional(),
     images: z.array(
         z.string().startsWith('data:image/').max(FILE_ATTACH_LIMITS.MAX_IMAGE_DATAURL_CHARS)
