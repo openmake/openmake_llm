@@ -523,6 +523,12 @@ export const WEB_SEARCH_INJECTION = {
     MAX_RESULTS: parseInjectLimit(process.env.WEB_SEARCH_INJECT_MAX_RESULTS, 10),
     /** 결과당 주입 snippet 최대 글자 수 (초과 절단). 0 = 무제한(절단 안 함). 300→500: 결정적 사실이 스니펫 뒤쪽에 있어도 포함되게. */
     MAX_SNIPPET_CHARS: parseInjectLimit(process.env.WEB_SEARCH_INJECT_MAX_SNIPPET, 500),
+    /**
+     * 검색 쿼리 최대 글자 수 — 장문 프롬프트 전체가 웹검색 쿼리로 흘러가 provider URI 한도에
+     * 걸리던 414(네이버 hub·Daum, 2026-08-21 라이브) 차단. 검색엔진 실효 질의는 앞부분 수십
+     * 자로 충분하며, 초과분은 단어 경계에서 절단한다. 0 = 무제한.
+     */
+    QUERY_MAX_CHARS: parseInjectLimit(process.env.WEB_SEARCH_QUERY_MAX_CHARS, 200),
 } as const;
 
 /**
