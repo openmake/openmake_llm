@@ -16,9 +16,7 @@ import { MemoryStore } from './memory-store';
 import { RedisStore } from './redis-store';
 import { getConfig } from '../config';
 
-export type { KeyValueStore, StorageValue } from './types';
-export { MemoryStore } from './memory-store';
-export { RedisStore } from './redis-store';
+export type { KeyValueStore } from './types';
 
 let cachedInstance: KeyValueStore | null = null;
 

@@ -15,11 +15,6 @@ export * from './types';
 //  도구 호출 루프는 chat-service/external-provider 가 담당.)
 
 export { getApiUsageTracker } from './usage-tracker';
-export type { QuotaStatus } from './usage-tracker';
-
-export { thinkToReasoningEffort, buildExtraBody } from './reasoning-adapter';
-
-export { webSearch, webFetch } from './web-search-adapter';
 
 // (구 호환 stub getApiKeyManager / getConnectionPool 은 제거됨 —
 //  LiteLLM 단일 master key 운영 + OpenAI SDK 자체 connection 관리.)
