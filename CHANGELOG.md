@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.31.0](https://github.com/openmake/openmake_llm/compare/v1.30.0...v1.31.0) (2026-08-21)
+
+
+### ✨ 기능
+
+* **ios:** 카메라 촬영·음성 입력 — 폰 기능 3단계 ([#557](https://github.com/openmake/openmake_llm/issues/557)) ([68d6200](https://github.com/openmake/openmake_llm/commit/68d6200e9380934b8dd22eaf7ce0ba8730f8d164))
+
 ## [1.30.0](https://github.com/openmake/openmake_llm/compare/v1.29.0...v1.30.0) (2026-08-21)
 
 
