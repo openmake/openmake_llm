@@ -738,7 +738,7 @@
     "stateLabel": "ステータス:",
     "turnLabel": "ターン:",
     "planLabel": "計画 ({completed}/{total})",
-    "outputsLabel": "成果物 ({count})",
+    "outputsLabel": "成果物 {count}件",
     "noSteps": "ステップ記録がありません。",
     "stepsLabel": "実行ステップ ({count})",
     "reject": "却下",
@@ -773,7 +773,10 @@
       "empty": "テンプレートはありません。",
       "run": "このテンプレートで実行",
       "delete": "削除",
-      "started": "テンプレートからタスクを開始しました。"
+      "started": "テンプレートからタスクを開始しました。",
+      "expand": "全体を表示",
+      "collapse": "折りたたむ",
+      "lineCount": "{lines}行 · {chars}文字"
     },
     "downloadFailed": "ダウンロードに失敗しました: {error}",
     "localBadge": "ローカルフォルダ実行",
@@ -782,7 +785,8 @@
       "goal_incomplete": "目標未達成",
       "max_turns_exhausted": "ターン・リソース上限に到達",
       "interrupted": "サーバー再起動により中断",
-      "resumableHint": "再開できます"
+      "resumableHint": "再開できます",
+      "aborted": "ユーザーによる取り消し"
     },
     "planNode": "ステップ{n}",
     "startedLabel": "開始",
@@ -819,7 +823,15 @@
       "originSpawn": "並列サブ #{n}",
       "originDelegate": "専門家委任",
       "stepCount": "{count}ステップ"
-    }
+    },
+    "artifactSize": "{chars}文字",
+    "artifactOpen": "新しいタブで開く",
+    "artifactDownload": "ダウンロード",
+    "resultLabel": "結果",
+    "noResultBody": "保存された最終回答はありません。下の実行タイムラインで経過を確認してください。",
+    "previewTitle": "成果物プレビュー",
+    "previewEmpty": "このタスクに保存された成果物はありません。",
+    "previewLoadError": "成果物を読み込めませんでした。"
   },
   "customAgents": {
     "pageTitle": "カスタムエージェント",

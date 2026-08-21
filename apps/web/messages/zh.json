@@ -738,7 +738,7 @@
     "stateLabel": "状态:",
     "turnLabel": "回合:",
     "planLabel": "计划 ({completed}/{total})",
-    "outputsLabel": "产出物 ({count})",
+    "outputsLabel": "{count} 个产出",
     "noSteps": "暂无步骤记录。",
     "stepsLabel": "执行步骤 ({count})",
     "reject": "拒绝",
@@ -773,7 +773,10 @@
       "empty": "暂无模板。",
       "run": "使用此模板运行",
       "delete": "删除",
-      "started": "已从模板启动任务。"
+      "started": "已从模板启动任务。",
+      "expand": "显示全部",
+      "collapse": "收起",
+      "lineCount": "{lines} 行 · {chars} 字"
     },
     "downloadFailed": "下载失败: {error}",
     "localBadge": "本地文件夹执行",
@@ -782,7 +785,8 @@
       "goal_incomplete": "目标未达成",
       "max_turns_exhausted": "已达轮次/资源上限",
       "interrupted": "因服务器重启而中断",
-      "resumableHint": "可继续执行"
+      "resumableHint": "可继续执行",
+      "aborted": "用户已取消"
     },
     "planNode": "步骤{n}",
     "startedLabel": "开始",
@@ -819,7 +823,15 @@
       "originSpawn": "并行子代理 #{n}",
       "originDelegate": "专家委托",
       "stepCount": "{count} 步"
-    }
+    },
+    "artifactSize": "{chars} 字",
+    "artifactOpen": "在新标签页打开",
+    "artifactDownload": "下载",
+    "resultLabel": "结果",
+    "noResultBody": "没有保存的最终答复。请查看下方执行时间线了解经过。",
+    "previewTitle": "产出预览",
+    "previewEmpty": "该任务没有已保存的产出。",
+    "previewLoadError": "无法加载产出。"
   },
   "customAgents": {
     "pageTitle": "自定义智能体",

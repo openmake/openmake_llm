@@ -738,7 +738,7 @@
     "stateLabel": "상태:",
     "turnLabel": "턴:",
     "planLabel": "계획 ({completed}/{total})",
-    "outputsLabel": "산출물 ({count})",
+    "outputsLabel": "산출물 {count}개",
     "noSteps": "스텝 기록이 없습니다.",
     "stepsLabel": "실행 스텝 ({count})",
     "reject": "거절",
@@ -773,7 +773,10 @@
       "empty": "등록된 템플릿이 없습니다.",
       "run": "이 템플릿으로 실행",
       "delete": "삭제",
-      "started": "템플릿으로 작업을 시작했습니다."
+      "started": "템플릿으로 작업을 시작했습니다.",
+      "expand": "전체 보기",
+      "collapse": "접기",
+      "lineCount": "{lines}줄 · {chars}자"
     },
     "downloadFailed": "다운로드 실패: {error}",
     "localBadge": "로컬 폴더 실행",
@@ -782,7 +785,8 @@
       "goal_incomplete": "목표 미달성",
       "max_turns_exhausted": "턴·자원 상한 소진",
       "interrupted": "서버 재시작으로 중단",
-      "resumableHint": "이어하기로 재개할 수 있습니다"
+      "resumableHint": "이어하기로 재개할 수 있습니다",
+      "aborted": "사용자 취소"
     },
     "planNode": "{n}단계",
     "startedLabel": "시작",
@@ -819,7 +823,15 @@
       "originSpawn": "병렬 서브 #{n}",
       "originDelegate": "전문가 위임",
       "stepCount": "{count}단계"
-    }
+    },
+    "artifactSize": "{chars}자",
+    "artifactOpen": "새 탭에서 열기",
+    "artifactDownload": "다운로드",
+    "resultLabel": "결과",
+    "noResultBody": "저장된 최종 답변이 없습니다. 아래 실행 타임라인에서 진행 내역을 확인하세요.",
+    "previewTitle": "산출물 미리보기",
+    "previewEmpty": "이 작업에는 저장된 산출물이 없습니다.",
+    "previewLoadError": "산출물을 불러오지 못했습니다."
   },
   "customAgents": {
     "pageTitle": "커스텀 에이전트",
