@@ -115,6 +115,8 @@ export interface ChatRequestParams {
     apiKeyId?: string;
     /** 사용자가 설정에서 선택한 선호 언어 (language-policy userPreference) */
     userLanguagePreference?: string;
+    /** 기기 GPS 현재 위치 (옵트인, 턴 단위) — system 컨텍스트 결정적 주입용 */
+    userLocation?: { lat: number; lng: number };
     /** 클러스터 매니저 */
     clusterManager: ClusterManager;
     /** 요청 중단 시그널 */

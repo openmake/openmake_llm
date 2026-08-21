@@ -314,6 +314,13 @@ export async function handleChatMessage(
             enabledTools: msg.enabledTools,
             notebook: notebookRef,
             userLanguagePreference: userLangPreference,
+            // 기기 GPS 위치 (옵트인) — 범위 밖/비정상 값은 무시 (fail-safe)
+            userLocation: (() => {
+                const loc = (msg as { userLocation?: { lat?: unknown; lng?: unknown } }).userLocation;
+                if (!loc || typeof loc.lat !== 'number' || typeof loc.lng !== 'number') return undefined;
+                if (loc.lat < -90 || loc.lat > 90 || loc.lng < -180 || loc.lng > 180) return undefined;
+                return { lat: loc.lat, lng: loc.lng };
+            })(),
             userContext,
             clusterManager: cluster,
             abortSignal: abortController.signal,

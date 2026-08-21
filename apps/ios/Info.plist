@@ -16,5 +16,7 @@
 	</array>
 	<key>OpenMakeRemotePushEnabled</key>
 	<false/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>"내 주변" 장소 검색 등 위치 관련 질문에 현재 위치를 활용합니다. 위치 첨부를 켠 메시지에만 1회 사용되며 저장되지 않습니다.</string>
 </dict>
 </plist>

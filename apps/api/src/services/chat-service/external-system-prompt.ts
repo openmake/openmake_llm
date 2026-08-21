@@ -133,6 +133,19 @@ export function buildExternalSystemPrompt(params: {
         `사용자가 모델/provider 정보를 묻는 경우 위 식별자를 그대로 알려주세요.`,
     );
 
+    // 기기 GPS 위치 (폰 기능 2단계, 옵트인) — 클라이언트가 위치 관련 턴에만 첨부한 좌표를
+    // 결정적 주입한다. 전 provider 공통 단일 경로(이 함수)라 로컬/외부 대칭이 보장된다.
+    // 턴 단위 값이며 대화 저장에는 남지 않는다(system 채널).
+    if (req.userLocation) {
+        const { lat, lng } = req.userLocation;
+        systemPromptParts.push(
+            `[사용자 현재 위치 — 기기 GPS] 위도 ${lat.toFixed(6)}, 경도 ${lng.toFixed(6)}. ` +
+            '"내 주변"·"근처"·"현재 위치" 류 질문은 이 좌표를 기준으로 답하세요. ' +
+            '카카오 장소 검색(search-places)을 쓸 때는 x(경도)·y(위도)·radius 인자에 이 좌표를 전달해 ' +
+            '실제 주변 결과를 얻으세요. 좌표 값 자체를 답변 본문에 나열하지는 마세요.',
+        );
+    }
+
     // 위치/지도 의도면 카카오 장소 검색 도구를 우선 쓰도록 라우팅 넛지 주입.
     // (qwen 이 web_search/generate_image 로 이탈하는 문제 보정 — generate_image 는 별도로 도구 목록에서 제외)
     if (wantsMap) {

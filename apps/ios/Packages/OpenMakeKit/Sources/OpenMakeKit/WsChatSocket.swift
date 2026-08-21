@@ -145,7 +145,8 @@ public extension WsChatRequest {
         style: Style? = nil,
         saveHistory: Bool? = nil,
         memoryLearning: Bool? = nil,
-        userAgentId: String? = nil
+        userAgentId: String? = nil,
+        userLocation: UserLocation? = nil
     ) -> WsChatRequest {
         WsChatRequest(
             anonSessionID: nil,
@@ -169,6 +170,7 @@ public extension WsChatRequest {
             thinkingMode: thinkingMode,
             type: .chat,
             userAgentID: userAgentId,
+            userLocation: userLocation,
             webSearch: webSearch)
     }
 }

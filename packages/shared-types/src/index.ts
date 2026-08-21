@@ -116,6 +116,12 @@ export interface WsChatRequest {
   /** 커스텀 에이전트(user_agents) id — 지정 시 백엔드가 산업 에이전트 자동라우팅을 우회하고 해당 페르소나 system_prompt 를 prepend */
   userAgentId?: string;
   /**
+   * 기기 GPS 현재 위치 (폰 기능 2단계, 옵트인) — 클라이언트가 위치 관련 턴에만 첨부.
+   * 서버는 system 컨텍스트에 결정적 주입해 카카오 search-places(x=lng, y=lat) 좌표 검색을
+   * 가능하게 한다. 저장하지 않는 턴 단위 값.
+   */
+  userLocation?: { lat: number; lng: number };
+  /**
    * 클라이언트 표면 — 좁은 화면(모바일 네이티브)에 맞는 답변 형식을 요청할 때 'ios'.
    * 미지정은 기존 동작(데스크톱 기준). 서버는 이 값으로 answer-format 에 화면 폭
    * 지시를 덧붙일 뿐, 내용/기능 분기는 하지 않는다.
