@@ -80,7 +80,9 @@ export class RemoteExecutor implements TaskExecutor {
         const dev = getLocalBridgeRegistry().getDevice(this.userId, this.deviceId);
         if (!dev) throw new Error('연결된 로컬 디바이스가 없습니다 — 데스크톱 앱 또는 CLI 로 작업 폴더를 먼저 연결하세요.');
         this.deviceLabel = `${dev.label}`;
-        logger.info(`[${this.taskId}] 로컬 실행기 준비 (device=${dev.deviceId}, folder="${dev.folderName}")`);
+        // folderRel(폴더 선택, 102)까지 남긴다 — 로그만으로 "어느 폴더에서 돌았는지" 추적 가능해야
+        // 한다(DB folder_rel 조회 없이 사고 분석·감사가 되도록).
+        logger.info(`[${this.taskId}] 로컬 실행기 준비 (device=${dev.deviceId}, folder="${dev.folderName}"${this.folderRel ? `/${this.folderRel}` : ''})`);
 
         if (!LOCAL_BRIDGE.WORKTREE_ENABLED) return;
         const r = await this.req({ kind: 'worktree', op: 'add', taskId: this.taskId });
