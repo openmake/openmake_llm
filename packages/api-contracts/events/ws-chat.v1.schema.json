@@ -220,13 +220,19 @@
         },
         "userLocation": {
           "type": "object",
-          "description": "기기 GPS 현재 위치 (폰 기능 2단계, 옵트인) — 클라이언트가 위치 관련 턴에만 첨부. 서버는 system 컨텍스트에 결정적 주입(턴 단위, 저장 안 함).",
           "properties": {
-            "lat": { "type": "number", "minimum": -90, "maximum": 90 },
-            "lng": { "type": "number", "minimum": -180, "maximum": 180 }
+            "lat": {
+              "type": "number"
+            },
+            "lng": {
+              "type": "number"
+            }
           },
-          "required": ["lat", "lng"],
-          "additionalProperties": false
+          "required": [
+            "lat",
+            "lng"
+          ],
+          "description": "기기 GPS 현재 위치 (폰 기능 2단계, 옵트인) — 클라이언트가 위치 관련 턴에만 첨부. 서버는 system 컨텍스트에 결정적 주입해 카카오 search-places(x=lng, y=lat) 좌표 검색을 가능하게 한다. 저장하지 않는 턴 단위 값."
         },
         "client": {
           "type": "string",
