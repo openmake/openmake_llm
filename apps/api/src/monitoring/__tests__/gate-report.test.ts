@@ -19,12 +19,6 @@ function makeInput(overrides?: Partial<GateReportInput>): GateReportInput {
             goalIncompleteTasks: 3,
         },
         orchestration: { totalTurns: 800, exposedTurns: 60, calledTurns: 20, successTurns: 18 },
-        tailShadow: {
-            totalDecisions: 206,
-            tailDecisions: 4,
-            labeledDecisions: 120,
-            lastDecisionAt: '2026-07-30T01:00:00.000Z',
-        },
         ...overrides,
     };
 }
@@ -51,10 +45,15 @@ describe('gate-report 순수 헬퍼', () => {
 });
 
 describe('buildGateVerdicts', () => {
-    it('표본 충분 시 3개 게이트 모두 판정 가능', () => {
+    it('표본 충분 시 2개 게이트 모두 판정 가능', () => {
         const verdicts = buildGateVerdicts(makeInput(), 30);
-        expect(verdicts).toHaveLength(3);
+        expect(verdicts).toHaveLength(2);
         expect(verdicts.every((v) => v.tone === 'ok')).toBe(true);
+    });
+
+    it('반려된 tail 게이트는 판정 대상에서 제외된다 (2026-08-22)', () => {
+        const verdicts = buildGateVerdicts(makeInput(), 30);
+        expect(verdicts.some((v) => /tail/i.test(v.gate))).toBe(false);
     });
 
     it('표본 부족 시 warn 톤 — 계속 관측', () => {
@@ -67,19 +66,6 @@ describe('buildGateVerdicts', () => {
         expect(orch.status).toContain('표본 부족');
     });
 
-    it('tail 셰도우 적재 0건이면 danger — 플래그 확인 안내 포함', () => {
-        const verdicts = buildGateVerdicts(
-            makeInput({
-                tailShadow: { totalDecisions: 0, tailDecisions: 0, labeledDecisions: 0, lastDecisionAt: null },
-            }),
-            30
-        );
-        const tail = verdicts[2];
-        expect(tail.tone).toBe('danger');
-        expect(tail.status).toContain('적재 중단');
-        expect(tail.note).toContain('TAIL_ROUTING_SHADOW_ENABLED');
-        expect(tail.note).toContain('없음');
-    });
 });
 
 describe('renderGateReportHtml', () => {
@@ -90,7 +76,7 @@ describe('renderGateReportHtml', () => {
         expect(html).not.toContain('{{'); // placeholder 잔존 없음
         expect(html).toContain('Execution Graph');
         expect(html).toContain('오케스트레이션 자동 배정 상세');
-        expect(html).toContain('Tail 셰도우 상세');
+        expect(html).not.toContain('Tail 셰도우 상세'); // 반려된 게이트는 렌더되지 않는다
     });
 
     it('동적 값 escape — 날짜 파라미터에 태그가 섞여도 그대로 출력되지 않는다', async () => {
