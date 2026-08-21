@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.31.1](https://github.com/openmake/openmake_llm/compare/v1.31.0...v1.31.1) (2026-08-21)
+
+
+### ♻️ 리팩터링
+
+* **chat:** external-provider 600줄 가드 분할 (594→353) ([#545](https://github.com/openmake/openmake_llm/issues/545)) ([db212b4](https://github.com/openmake/openmake_llm/commit/db212b4beef67562bbe44f6639ec0935330d365e))
+
 ## [1.31.0](https://github.com/openmake/openmake_llm/compare/v1.30.0...v1.31.0) (2026-08-21)
 
 
