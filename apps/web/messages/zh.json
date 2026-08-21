@@ -1407,6 +1407,24 @@
         "verdict": "判定",
         "tasks": "任务数"
       }
+    },
+    "routing": {
+      "title": "路由门控观测（最近 {days} 天）",
+      "callRate": "编排调用率",
+      "ofExposed": "共 {exposed} 个曝光轮次中 {called} 个",
+      "successRate": "工具调用成功率",
+      "ofCalled": "共 {called} 次调用中 {success} 次",
+      "tailRate": "tail 判定比例",
+      "ofDecisions": "共 {total} 条影子记录中 {tail} 条",
+      "lastShadow": "影子最近记录",
+      "labeled": "已标注 {labeled} 条",
+      "shadowOff": "无记录 — 影子已关闭",
+      "th": {
+        "mode": "用户切换",
+        "turns": "轮次数",
+        "discussionHits": "讨论意图命中",
+        "delegateHits": "委派意图命中"
+      }
     }
   },
   "adminAlerts": {

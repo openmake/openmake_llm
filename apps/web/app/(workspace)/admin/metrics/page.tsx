@@ -126,6 +126,41 @@ interface WorkflowData {
   };
 }
 
+/* ── 라우팅 게이트 관측 타입 ───────────────────────────────── */
+interface RoutingGatesData {
+  days: number;
+  orchestration: {
+    totalTurns: number;
+    intentTurns: number;
+    exposedTurns: number;
+    calledTurns: number;
+    successTurns: number;
+    callRate: number;
+    successRate: number;
+    byTool: { tool: string; turns: number; successTurns: number }[];
+    toggles: {
+      userMode: string;
+      turns: number;
+      discussionIntentTurns: number;
+      taskDelegateIntentTurns: number;
+    }[];
+  };
+  tailShadow: {
+    totalDecisions: number;
+    tailDecisions: number;
+    tailRate: number;
+    labeledDecisions: number;
+    groundingFired: number;
+    groundingFixed: number;
+    lastDecisionAt: string | null;
+    byVerifiability: {
+      verifiability: string | null;
+      decisions: number;
+      tailDecisions: number;
+    }[];
+  };
+}
+
 export default function AdminMetricsPage() {
   const t = useTranslations("adminMetrics");
   const locale = toBcp47(useLocale());
@@ -137,6 +172,7 @@ export default function AdminMetricsPage() {
   const [agentMetrics, setAgentMetrics] = useState<AgentMetric[] | null>(null);
   const [toolErrors, setToolErrors] = useState<ToolErrorData | null>(null);
   const [workflow, setWorkflow] = useState<WorkflowData | null>(null);
+  const [routingGates, setRoutingGates] = useState<RoutingGatesData | null>(null);
   const maxV = Math.max(...TIMESERIES.map((t) => t.value));
 
   const load = useCallback(async () => {
@@ -225,6 +261,13 @@ export default function AdminMetricsPage() {
       ).catch(() => null);
       if (workflowRes?.data) {
         setWorkflow(workflowRes.data);
+      }
+      // 라우팅 게이트 관측 로드 (기본 30일)
+      const routingRes = await ApiClient.get<{ data: RoutingGatesData }>(
+        "/api/metrics/routing/gates",
+      ).catch(() => null);
+      if (routingRes?.data) {
+        setRoutingGates(routingRes.data);
       }
     } catch {
       /* 401/실패 시 목업 유지 */
@@ -473,6 +516,104 @@ export default function AdminMetricsPage() {
                   {workflow.failures.map((f, i) => (
                     <Badge key={i} tone="danger">
                       {f.reason} · {f.tasks.toLocaleString()}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 라우팅 게이트 관측 — 오케스트레이션 자동 배정·tail 셰도우 */}
+        {routingGates && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>
+                {t("routing.title", { days: routingGates.days })}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <StatCard
+                  label={t("routing.callRate")}
+                  value={`${(routingGates.orchestration.callRate * 100).toFixed(1)}%`}
+                  delta={t("routing.ofExposed", {
+                    called: routingGates.orchestration.calledTurns.toLocaleString(),
+                    exposed: routingGates.orchestration.exposedTurns.toLocaleString(),
+                  })}
+                />
+                <StatCard
+                  label={t("routing.successRate")}
+                  value={`${(routingGates.orchestration.successRate * 100).toFixed(1)}%`}
+                  delta={t("routing.ofCalled", {
+                    success: routingGates.orchestration.successTurns.toLocaleString(),
+                    called: routingGates.orchestration.calledTurns.toLocaleString(),
+                  })}
+                />
+                <StatCard
+                  label={t("routing.tailRate")}
+                  value={`${(routingGates.tailShadow.tailRate * 100).toFixed(1)}%`}
+                  delta={t("routing.ofDecisions", {
+                    tail: routingGates.tailShadow.tailDecisions.toLocaleString(),
+                    total: routingGates.tailShadow.totalDecisions.toLocaleString(),
+                  })}
+                />
+                <StatCard
+                  label={t("routing.lastShadow")}
+                  value={
+                    routingGates.tailShadow.lastDecisionAt
+                      ? new Date(routingGates.tailShadow.lastDecisionAt).toLocaleDateString(locale)
+                      : "—"
+                  }
+                  delta={
+                    routingGates.tailShadow.lastDecisionAt
+                      ? t("routing.labeled", {
+                          labeled: routingGates.tailShadow.labeledDecisions.toLocaleString(),
+                        })
+                      : t("routing.shadowOff")
+                  }
+                />
+              </div>
+              {routingGates.orchestration.toggles.length > 0 && (
+                <Table>
+                  <thead>
+                    <tr>
+                      <Th>{t("routing.th.mode")}</Th>
+                      <Th className="text-right">{t("routing.th.turns")}</Th>
+                      <Th className="text-right">{t("routing.th.discussionHits")}</Th>
+                      <Th className="text-right">{t("routing.th.delegateHits")}</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {routingGates.orchestration.toggles.map((row) => (
+                      <tr key={row.userMode}>
+                        <Td className="font-mono text-xs text-fg">{row.userMode}</Td>
+                        <Td className="text-right font-mono text-fg-2">
+                          {row.turns.toLocaleString()}
+                        </Td>
+                        <Td className="text-right font-mono text-fg-2">
+                          {row.discussionIntentTurns.toLocaleString()}
+                        </Td>
+                        <Td className="text-right font-mono text-fg-2">
+                          {row.taskDelegateIntentTurns.toLocaleString()}
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              )}
+              {(routingGates.orchestration.byTool.length > 0 ||
+                routingGates.tailShadow.byVerifiability.length > 0) && (
+                <div className="flex flex-wrap gap-2">
+                  {routingGates.orchestration.byTool.map((tool) => (
+                    <Badge key={tool.tool} tone="success">
+                      {tool.tool} · {tool.successTurns.toLocaleString()}/{tool.turns.toLocaleString()}
+                    </Badge>
+                  ))}
+                  {routingGates.tailShadow.byVerifiability.map((v, i) => (
+                    <Badge key={i} tone="warn">
+                      {v.verifiability ?? t("workflow.unrecorded")} ·{" "}
+                      {v.tailDecisions.toLocaleString()}/{v.decisions.toLocaleString()}
                     </Badge>
                   ))}
                 </div>

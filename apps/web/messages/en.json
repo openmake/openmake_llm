@@ -1407,6 +1407,24 @@
         "verdict": "Verdict",
         "tasks": "Tasks"
       }
+    },
+    "routing": {
+      "title": "Routing Gates (last {days} days)",
+      "callRate": "Orchestration Call Rate",
+      "ofExposed": "{called} of {exposed} exposed turns",
+      "successRate": "Tool Call Success",
+      "ofCalled": "{success} of {called} calls",
+      "tailRate": "Tail Decision Rate",
+      "ofDecisions": "{tail} of {total} shadow decisions",
+      "lastShadow": "Last Shadow Record",
+      "labeled": "{labeled} labeled",
+      "shadowOff": "no records — shadow OFF",
+      "th": {
+        "mode": "User Toggle",
+        "turns": "Turns",
+        "discussionHits": "Discussion Intent Hits",
+        "delegateHits": "Delegate Intent Hits"
+      }
     }
   },
   "adminAlerts": {

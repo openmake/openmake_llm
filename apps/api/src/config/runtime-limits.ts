@@ -1843,3 +1843,26 @@ export const AGENT_SELF_IMPROVE = {
     FIRST_RUN_DELAY_MS: parseInt(process.env.AGENT_SELF_IMPROVE_FIRST_RUN_DELAY_MS || '300000', 10),
     INTERVAL_MS: parseInt(process.env.AGENT_SELF_IMPROVE_INTERVAL_MS || String(6 * 60 * 60 * 1000), 10),
 } as const;
+
+/**
+ * 주간 게이트 판정 리포트 — measure-first 게이트(워크플로우·오케스트레이션·tail 셰도우)의
+ * 판정 근거를 무-LLM 결정적 렌더로 주 1회 스냅샷한다 (monitoring/gate-report.ts).
+ * 예약 리포트의 공개 정적 게시(schedule-publish)를 재사용하지 않는 이유: 그 경로는 인증
+ * 없이 서빙되는데 이 리포트는 운영 지표라 admin push + admin 전용 라우트로만 노출한다.
+ */
+export const GATE_REPORT = {
+    /** 기본 ON — 읽기 전용 집계 + admin 전용 노출. GATE_REPORT_ENABLED=false 로 해제. */
+    ENABLED: process.env.GATE_REPORT_ENABLED !== 'false',
+    /** 생성 요일 (ISO 1=월 ~ 7=일). GATE_REPORT_WEEKDAY(기본 1=월). */
+    WEEKDAY: parseInt(process.env.GATE_REPORT_WEEKDAY || '1', 10),
+    /** due 체크 주기(ms) — 해당 요일에 당일 스냅샷 부재 시 생성(멱등). GATE_REPORT_CHECK_INTERVAL_MS(기본 1h). */
+    CHECK_INTERVAL_MS: parseInt(process.env.GATE_REPORT_CHECK_INTERVAL_MS || '', 10) || 60 * 60 * 1000,
+    /** 집계 기간(일). GATE_REPORT_WINDOW_DAYS(기본 7). */
+    WINDOW_DAYS: parseInt(process.env.GATE_REPORT_WINDOW_DAYS || '7', 10),
+    /** 판정 힌트 최소 표본 — 미만이면 '표본 부족 — 계속 관측'. GATE_REPORT_MIN_SAMPLE(기본 30). */
+    MIN_SAMPLE: parseInt(process.env.GATE_REPORT_MIN_SAMPLE || '30', 10),
+    /** 스냅샷 저장 디렉토리 — 레포 루트 /data/ 는 gitignore 런타임 영역. GATE_REPORT_DIR. */
+    DIR: process.env.GATE_REPORT_DIR || `${process.cwd()}/data/gate-reports`,
+    /** 날짜·요일 판정 기준 TZ. GATE_REPORT_TZ(기본 Asia/Seoul). */
+    TZ: process.env.GATE_REPORT_TZ || 'Asia/Seoul',
+} as const;

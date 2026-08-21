@@ -1407,6 +1407,24 @@
         "verdict": "判定",
         "tasks": "タスク数"
       }
+    },
+    "routing": {
+      "title": "ルーティングゲート観測 (直近{days}日)",
+      "callRate": "オーケストレーション呼び出し率",
+      "ofExposed": "露出{exposed}ターン中{called}ターン",
+      "successRate": "ツール呼び出し成功率",
+      "ofCalled": "呼び出し{called}ターン中{success}ターン",
+      "tailRate": "tail判定比率",
+      "ofDecisions": "シャドウ{total}件中{tail}件",
+      "lastShadow": "シャドウ最終記録",
+      "labeled": "ラベル{labeled}件",
+      "shadowOff": "記録なし — シャドウOFF",
+      "th": {
+        "mode": "ユーザートグル",
+        "turns": "ターン数",
+        "discussionHits": "討論意図の的中",
+        "delegateHits": "委任意図の的中"
+      }
     }
   },
   "adminAlerts": {
