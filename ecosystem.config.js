@@ -22,9 +22,15 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-/** 포트/로그 위치는 .env 나 셸 환경으로 덮어쓸 수 있다 (No-Hardcoding). */
-const API_PORT = process.env.PORT || '52416';
-const WEB_PORT = process.env.OMK_WEB_PORT || '3000';
+/**
+ * 포트/로그 위치는 .env 나 셸 환경으로 덮어쓸 수 있다 (No-Hardcoding).
+ *
+ * 포트는 scripts/resolve-ports.cjs 가 단일 출처 — PM2 는 이 파일을 평가하는 시점의 셸 환경만
+ * 보므로, 예전처럼 `process.env` 만 읽으면 `PORT=… OMK_WEB_PORT=… pm2 start` 로 주입하지 않는 한
+ * 기본값(3000)으로 떨어져 다른 서비스와 EADDRINUSE 로 충돌했다. 이제 .env 를 직접 읽어
+ * 어떤 셸에서 `pm2 start ecosystem.config.js` 를 해도 같은 포트로 뜬다.
+ */
+const { apiPort: API_PORT, webPort: WEB_PORT } = require('./scripts/resolve-ports.cjs');
 /**
  * 로그 디렉터리. 기본은 기존 동작 유지(/tmp)지만, 여러 사용자가 쓰는 리눅스 호스트에서는
  * /tmp/openmake-*.log 소유자 충돌로 PM2 가 EACCES 로 죽는다 → OMK_LOG_DIR 로 분리 가능.

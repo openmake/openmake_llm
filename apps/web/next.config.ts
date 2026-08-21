@@ -1,5 +1,17 @@
 import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
+import { createRequire } from "node:module";
+
+/**
+ * 포트 단일 출처 — 루트 scripts/resolve-ports.cjs (우선순위: 셸 환경 > 루트 .env > 기본값).
+ * NEXT_PUBLIC_* 는 빌드 시점에 번들로 인라인되고 런타임 .env 로는 보정할 수 없다. 예전에는
+ * 빌드 명령에 `NEXT_PUBLIC_WEB_PORT=… NEXT_PUBLIC_WS_PORT=…` 를 직접 붙여야만 했고, 한 번만
+ * 빠뜨려도 기본 포트가 굳어 채팅 WS 가 엉뚱한 포트로 붙었다("서버와 연결이 끊겼습니다").
+ * 아래 env 로 주입해 맨 `npm run build` 로도 항상 옳은 값이 들어가게 한다.
+ */
+const { apiPort, webPort } = createRequire(import.meta.url)(
+  "../../scripts/resolve-ports.cjs",
+) as { apiPort: string; webPort: string };
 
 /**
  * 백엔드(Express + WS, 기본 :52416)와의 연동.
@@ -14,6 +26,12 @@ import createNextIntlPlugin from "next-intl/plugin";
 const API_PROXY_TARGET = process.env.API_PROXY_TARGET || "http://localhost:52416";
 
 const nextConfig: NextConfig = {
+  // 클라이언트 번들로 인라인될 공개 설정 — 위 주석 참고. 셸에서 직접 지정한 값이 있으면
+  // resolve-ports 가 그쪽을 우선하므로 install.sh 의 기존 주입도 그대로 유효하다.
+  env: {
+    NEXT_PUBLIC_WEB_PORT: webPort,
+    NEXT_PUBLIC_WS_PORT: apiPort,
+  },
   // 워크스페이스 공통 패키지(.ts 소스)를 Next 가 트랜스파일하도록 지정.
   transpilePackages: [
     "@openmake/shared-types",
