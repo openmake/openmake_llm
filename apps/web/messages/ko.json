@@ -1407,6 +1407,24 @@
         "verdict": "판정",
         "tasks": "작업 수"
       }
+    },
+    "routing": {
+      "title": "라우팅 게이트 관측 (최근 {days}일)",
+      "callRate": "오케스트레이션 호출률",
+      "ofExposed": "노출 {exposed}턴 중 {called}턴",
+      "successRate": "도구 호출 성공률",
+      "ofCalled": "호출 {called}턴 중 {success}턴",
+      "tailRate": "tail 판정 비율",
+      "ofDecisions": "셰도우 {total}건 중 {tail}건",
+      "lastShadow": "셰도우 최근 적재",
+      "labeled": "라벨 {labeled}건",
+      "shadowOff": "적재 없음 — 셰도우 OFF",
+      "th": {
+        "mode": "사용자 토글",
+        "turns": "턴 수",
+        "discussionHits": "토론 의도 적중",
+        "delegateHits": "위임 의도 적중"
+      }
     }
   },
   "adminAlerts": {
