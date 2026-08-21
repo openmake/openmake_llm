@@ -23,6 +23,7 @@ import { createExternalProviderInstance, buildOAuthSessionPersist } from '../pro
 import { ProviderError } from '../providers/provider-errors';
 import { MODEL_AVAILABILITY_PROBE } from '../config/runtime-limits';
 import { createLogger } from '../utils/logger';
+import { MODEL_PROBE } from '../config/model-defaults';
 
 const logger = createLogger('ModelAvailabilityProbe');
 
@@ -89,7 +90,7 @@ export async function probeProviderModels(
         timer.unref?.();
         try {
             await provider.streamChat(
-                { messages: [{ role: 'user', content: 'hi' }], modelId, maxTokens: 1, abortSignal: ac.signal },
+                { messages: [{ role: 'user', content: 'hi' }], modelId, maxTokens: MODEL_PROBE.MAX_TOKENS, abortSignal: ac.signal },
                 {},
             );
             result.usable++;

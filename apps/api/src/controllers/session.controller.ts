@@ -12,6 +12,7 @@ import { createLogger } from '../utils/logger';
 import { success, unauthorized, badRequest, forbidden } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { historySummaryCache } from '../services/chat-service/history-summary-cache';
+import { isAdminRole } from '../data/user-manager';
 
 const log = createLogger('SessionController');
 
@@ -96,7 +97,7 @@ export class SessionController {
             evaluateSessionAccess(session, {
                 userId: req.user?.id ? String(req.user.id) : undefined,
                 anonSessionId: typeof req.query.anonSessionId === 'string' ? req.query.anonSessionId : undefined,
-                isAdmin: req.user?.role === 'admin',
+                isAdmin: isAdminRole(req.user?.role),
             });
 
          // 세션 목록 조회 (사용자 격리 적용). ?q= 지정 시 제목+메시지 본문 검색
@@ -111,7 +112,7 @@ export class SessionController {
 
              const userIdStr = user?.id ? String(user.id) : undefined;
              const scope = resolveSessionListScope({
-                 isAdmin: user?.role === 'admin',
+                 isAdmin: isAdminRole(user?.role),
                  viewAll: req.query.viewAll === 'true',
                  userId: userIdStr,
                  anonSessionId: typeof anonSessionId === 'string' ? anonSessionId : undefined,

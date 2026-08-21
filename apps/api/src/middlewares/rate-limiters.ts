@@ -15,6 +15,7 @@ import { STORAGE_POLICY, RATE_LIMIT_POLICY, AUTH_COOKIES } from '../config/secur
 import { ARTIFACT_EXEC } from '../config/artifact-exec';
 import { ARTIFACT_EXPORT } from '../config/artifact-export';
 import { verifyToken } from '../auth/auth-core';
+import { isAdminRole } from '../data/user-manager';
 
 // ================================================
 // 타입 정의
@@ -255,7 +256,7 @@ export function createAdvancedRateLimiter(options: AdvancedRateLimiterOptions) {
         const actorKey = userKey ? `user:${userKey}` : `ip:${ip}`;
 
         // Admin은 높은 배수의 제한 적용 (완전 우회 방지)
-        const effectiveIpLimit = identity?.role === 'admin' ? options.ipLimit * RATE_LIMIT_POLICY.ADMIN_MULTIPLIER : options.ipLimit;
+        const effectiveIpLimit = isAdminRole(identity?.role) ? options.ipLimit * RATE_LIMIT_POLICY.ADMIN_MULTIPLIER : options.ipLimit;
 
         const endpointSpecificLimit = getEndpointSpecificLimit(options.endpointRules, req);
         const perEndpointLimit = endpointSpecificLimit ?? effectiveIpLimit;

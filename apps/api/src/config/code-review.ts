@@ -15,6 +15,8 @@ export const CODE_REVIEW_CONFIG = {
     minConfidence: Number(process.env.CODE_REVIEW_MIN_CONFIDENCE ?? 7),
     temperature: Number(process.env.CODE_REVIEW_TEMPERATURE ?? 0.1),
     maxFindings: Number(process.env.CODE_REVIEW_MAX_FINDINGS ?? 30),
+    /** finding 텍스트 필드(description/suggestion) 절단 상한 (문자) */
+    findingFieldMaxChars: Number(process.env.CODE_REVIEW_FINDING_FIELD_MAX_CHARS ?? 2000),
 } as const;
 
 /** 리뷰 차원 (dimension 필드 정규화 기준) */

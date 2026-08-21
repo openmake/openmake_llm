@@ -12,6 +12,8 @@ export const MEMORY_EXTRACTION = {
     llmEnabled: process.env.USER_MEMORY_LLM_EXTRACT === 'true',
     /** 사용자별 메모리 최대 개수(수동 저장과 공유 — 초과 시 자동형성 스킵). 컨트롤러와 동일 env. */
     maxCount: Number(process.env.USER_MEMORY_MAX_COUNT || '50'),
+    /** LLM 추출 호출 temperature — 결정적 추출이 목적이라 0 고정 기본. */
+    temperature: Number(process.env.USER_MEMORY_LLM_TEMPERATURE || '0'),
     /** 저장 콘텐츠 최소/최대 길이. */
     minLen: 4,
     maxLen: 300,
