@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.30.0](https://github.com/openmake/openmake_llm/compare/v1.29.0...v1.30.0) (2026-08-21)
+
+
+### ✨ 기능
+
+* **ios:** 위치 컨텍스트(GPS) + 웹 로고 앱 아이콘 — 폰 기능 2단계 ([#555](https://github.com/openmake/openmake_llm/issues/555)) ([927ee6a](https://github.com/openmake/openmake_llm/commit/927ee6a5f027b7f5163afad874bc795f140bd211))
+
 ## [1.29.0](https://github.com/openmake/openmake_llm/compare/v1.28.0...v1.29.0) (2026-08-21)
 
 
