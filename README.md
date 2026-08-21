@@ -349,6 +349,8 @@ openmake_llm/
 │   │       ├── auth/ security/ middlewares/     # JWT/OAuth, SSRF guard, rate limiting
 │   │       └── data/                            # PostgreSQL (raw SQL), migrations, repositories
 │   ├── web/          # Next.js + React frontend (the operating UI)
+│   ├── cli/          # OpenMake Code — local bridge CLI (run agent tasks in your own folder)
+│   │                 # private workspace: build from source, see apps/cli/README.md
 │   ├── discord-bot/  # Optional Discord gateway bot (relays to /api/v1/chat/completions)
 │   └── legacy-web/   # Static asset host (e.g. /generated) — legacy SPA retired
 ├── db/               # init schema + migrations (+ rollbacks/) — read at runtime
