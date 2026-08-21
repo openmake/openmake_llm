@@ -1025,7 +1025,13 @@
     "oauthLogoutTitle": "删除已保存的 OAuth 令牌并断开连接",
     "oauthStartFailed": "无法启动 OAuth 登录：{error}",
     "oauthOk": "已登录 {server} — 正在连接",
-    "oauthFailed": "登录 {server} 失败（{reason}）"
+    "oauthFailed": "登录 {server} 失败（{reason}）",
+    "renameTitle": "重命名",
+    "renameLabel": "服务器名称",
+    "renameHint": "作为工具名前缀(如 mcp-postgres::query)。重新连接后生效。",
+    "renameDone": "已重命名为“{name}”。下次连接时生效。",
+    "renameError": "重命名失败",
+    "save": "保存"
   },
   "mcpCatalog": {
     "pageTitle": "MCP 目录",
@@ -1040,7 +1046,11 @@
     "install": "安装",
     "installError": "安装失败，请重试。",
     "credentialsTitle": "请输入凭据以安装",
-    "cancel": "取消"
+    "cancel": "取消",
+    "installAnother": "再次安装",
+    "installFormTitle": "安装设置",
+    "nameLabel": "服务器名称",
+    "nameHint": "作为工具名前缀(如 mcp-postgres::query)。仅限字母、数字、_ 和 -。"
   },
   "mcpMonitoring": {
     "title": "MCP 监控",

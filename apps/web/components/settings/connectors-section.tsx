@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Server, Boxes, Plus, Loader2, X, KeyRound, ClipboardCheck, AlertTriangle, Power, PowerOff, LogIn, LogOut, Zap, ZapOff } from "lucide-react";
+import { Server, Boxes, Plus, Loader2, X, KeyRound, Pencil, ClipboardCheck, AlertTriangle, Power, PowerOff, LogIn, LogOut, Zap, ZapOff } from "lucide-react";
 import {
   Button,
   Badge,
@@ -125,6 +125,81 @@ function mapServer(s: ApiMcpServer, t: Translator): McpServer {
 }
 
 /* ── 자격증명(env) 변경 모달 ────────────────────────────────── */
+/* ── 이름 변경 모달 ─────────────────────────────────────────
+ * 서버 이름은 도구 네임스페이스(name::tool)라, 같은 카탈로그 템플릿을 여러 접속처에
+ * 설치했을 때 서로 구분하는 유일한 수단이다. 설치 후에도 바꿀 수 있어야 한다.
+ * 변경 후에는 respawn 이 필요하다(네임스페이스가 spawn 시점에 굳는다).
+ */
+function RenameModal({
+  server,
+  onClose,
+  onSuccess,
+}: {
+  server: McpServer | null;
+  onClose: () => void;
+  onSuccess: (notice: string) => void;
+}) {
+  const t = useTranslations("mcpServers");
+  const [name, setName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => { setName(server?.name ?? ""); setError(null); }, [server]);
+  if (!server) return null;
+
+  const valid = /^[A-Za-z0-9_-]+$/.test(name);
+
+  async function submit(ev: React.SubmitEvent<HTMLFormElement>) {
+    ev.preventDefault();
+    if (!server) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await ApiClient.patch(`/api/mcp/servers/${server.id}`, { name });
+      onSuccess(t("renameDone", { name }));
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("renameError"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-fg">{t("renameTitle")}</h2>
+          <button type="button" onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-2 hover:text-fg">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <form onSubmit={(e) => void submit(e)} className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-fg-2">{t("renameLabel")}</label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              pattern="[A-Za-z0-9_-]+"
+              required
+              className="h-9 w-full rounded-md border border-border-strong bg-app px-3 font-mono text-sm text-fg outline-none transition focus:border-accent"
+            />
+            <p className="mt-1 text-[11px] text-muted">{t("renameHint")}</p>
+          </div>
+          {error && <p className="rounded-md bg-danger-soft px-3 py-2 text-xs text-danger">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={onClose}>{t("cancel")}</Button>
+            <Button type="submit" size="sm" disabled={submitting || !valid || name === server.name}>
+              {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {t("save")}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function EnvEditModal({
   server,
   onClose,
@@ -353,6 +428,7 @@ export function ConnectorsSection() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
   const [envEditTarget, setEnvEditTarget] = useState<McpServer | null>(null);
+  const [renameTarget, setRenameTarget] = useState<McpServer | null>(null);
   const [envNotice, setEnvNotice] = useState<string | null>(null);
   // OAuth 콜백 착지 — 결과를 알리고 목록을 다시 읽는다(토큰이 생겨 연결됐을 수 있다)
   useEffect(() => {
@@ -482,6 +558,20 @@ export function ConnectorsSection() {
       alert(t("toggleFailed", { error: e instanceof Error ? e.message : "" } as never));
     } finally {
       setActionLoading((prev) => ({ ...prev, [id]: false }));
+
+  /** 이름 변경 등 목록을 다시 읽어야 하는 동작을 위한 재조회 — 실패 시 빈 목록(목업 폴백 금지). */
+  async function loadServers() {
+    try {
+      const res = await ApiClient.get<ApiEnvelope<{ servers: ApiMcpServer[] }>>(
+        "/api/mcp/servers",
+      );
+      setServers((res?.data?.servers ?? []).map((s) => mapServer(s, t)));
+    } catch {
+      // 401·네트워크 실패 등 → 목록 유지(재조회 실패는 화면을 비우지 않는다)
+    } finally {
+      setLoading(false);
+    }
+  }
     }
   }
 
@@ -516,6 +606,11 @@ export function ConnectorsSection() {
           // 설치분은 draft 로 들어가며 승인해야 연결된다 — 단일 승인 창구로 보낸다
           router.push("/approvals");
         }}
+      />
+      <RenameModal
+        server={renameTarget}
+        onClose={() => setRenameTarget(null)}
+        onSuccess={(notice) => { setEnvNotice(notice); void loadServers(); }}
       />
       <EnvEditModal
         server={envEditTarget}
@@ -665,6 +760,14 @@ export function ConnectorsSection() {
                       <Td className="whitespace-nowrap">
                         {/* 폭이 모자라면 버튼 글자를 꺾는 대신 버튼 단위로 다음 줄에 감싼다 */}
                         <div className="flex flex-wrap items-center gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setRenameTarget(s)}
+                            title={t("renameTitle")}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"

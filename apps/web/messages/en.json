@@ -1025,7 +1025,13 @@
     "oauthLogoutTitle": "Remove the stored OAuth token and disconnect",
     "oauthStartFailed": "Could not start OAuth sign-in: {error}",
     "oauthOk": "Signed in to {server} — connecting",
-    "oauthFailed": "Sign-in to {server} failed ({reason})"
+    "oauthFailed": "Sign-in to {server} failed ({reason})",
+    "renameTitle": "Rename",
+    "renameLabel": "Server name",
+    "renameHint": "Prefixes tool names (e.g. mcp-postgres::query). Takes effect after the server reconnects.",
+    "renameDone": "Renamed to \"{name}\". It applies on the next connection.",
+    "renameError": "Rename failed",
+    "save": "Save"
   },
   "mcpCatalog": {
     "pageTitle": "MCP Catalog",
@@ -1040,7 +1046,11 @@
     "install": "Install",
     "installError": "Installation failed. Please try again.",
     "credentialsTitle": "Enter credentials to install",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "installAnother": "Install another",
+    "installFormTitle": "Install settings",
+    "nameLabel": "Server name",
+    "nameHint": "Prefixes tool names (e.g. mcp-postgres::query). Letters, digits, _ and - only."
   },
   "mcpMonitoring": {
     "title": "MCP Monitoring",
