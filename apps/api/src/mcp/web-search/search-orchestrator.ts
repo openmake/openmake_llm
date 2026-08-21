@@ -100,6 +100,16 @@ function computeTermRelevance(terms: string[], result: SearchResult): number {
 export async function performWebSearch(query: string, options: { maxResults?: number; globalSearch?: boolean; language?: string; signal?: AbortSignal; preferRecent?: boolean } = {}): Promise<SearchResult[]> {
     const { maxResults = 30, globalSearch = true, language = 'en', signal, preferRecent = false } = options;
 
+    // 쿼리 길이 캡 — 장문 프롬프트 전체가 쿼리로 흘러오면 provider URI 한도에 걸린다
+    // (네이버 hub·Daum 414, 2026-08-21 라이브). 단어 경계에서 절단해 실효 질의만 남긴다.
+    const queryCap = WEB_SEARCH_INJECTION.QUERY_MAX_CHARS;
+    if (queryCap > 0 && query.length > queryCap) {
+        const cut = query.slice(0, queryCap);
+        const lastSpace = cut.lastIndexOf(' ');
+        query = (lastSpace > queryCap / 2 ? cut.slice(0, lastSpace) : cut).trim();
+        logger.info(`쿼리 절단: ${query.length}자로 캡 (원문 초과분 제거)`);
+    }
+
     // 고볼륨 모드: maxResults > 15이면 모든 소스에서 병렬 수집 (Deep Research 용)
     const highVolumeMode = maxResults > 15;
 
