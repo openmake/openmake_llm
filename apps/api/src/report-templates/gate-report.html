@@ -1,0 +1,48 @@
+<!-- 주간 게이트 판정 리포트 템플릿 — monitoring/gate-report.ts 가 이중 중괄호 placeholder 치환으로 렌더.
+     무-LLM 결정적 렌더: 동적 값은 전부 코드에서 escape 후 주입된다.
+     placeholder: GENERATED_AT · WINDOW_DAYS · VERDICTS_HTML · SECTIONS_HTML -->
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>주간 게이트 판정 리포트 — {{GENERATED_AT}}</title>
+<style>
+  :root { --fg:#1c1917; --muted:#78716c; --line:#e7e5e4; --bg:#fafaf9; --card:#ffffff;
+          --ok:#166534; --ok-bg:#dcfce7; --warn:#9a3412; --warn-bg:#ffedd5; --danger:#991b1b; --danger-bg:#fee2e2; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg:#e7e5e4; --muted:#a8a29e; --line:#292524; --bg:#0c0a09; --card:#1c1917;
+            --ok:#86efac; --ok-bg:#14532d; --warn:#fdba74; --warn-bg:#7c2d12; --danger:#fca5a5; --danger-bg:#7f1d1d; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:32px 16px; background:var(--bg); color:var(--fg);
+         font:15px/1.6 -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .meta { color:var(--muted); font-size:13px; margin-bottom:24px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px 20px; margin-bottom:16px; }
+  .card h2 { font-size:15px; margin:0 0 10px; }
+  .badge { display:inline-block; font-size:12px; padding:2px 8px; border-radius:999px; margin-left:8px; vertical-align:middle; }
+  .badge.ok { color:var(--ok); background:var(--ok-bg); }
+  .badge.warn { color:var(--warn); background:var(--warn-bg); }
+  .badge.danger { color:var(--danger); background:var(--danger-bg); }
+  .note { color:var(--muted); font-size:13px; margin:4px 0 0; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); }
+  td.num { text-align:right; font-variant-numeric: tabular-nums; }
+  footer { color:var(--muted); font-size:12px; margin-top:24px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>주간 게이트 판정 리포트</h1>
+  <p class="meta">생성 {{GENERATED_AT}} · 집계 기간 최근 {{WINDOW_DAYS}}일 · 무-LLM 결정적 렌더</p>
+  {{VERDICTS_HTML}}
+  {{SECTIONS_HTML}}
+  <footer>
+    판정 근거 상세는 관리자 메트릭 페이지(/admin/metrics)에서 기간을 바꿔 볼 수 있습니다.
+    agent-resolver 게이트는 로그 기반 별도 집계(scripts/daily-routing-report.sh)가 담당합니다.
+  </footer>
+</main>
+</body>
+</html>

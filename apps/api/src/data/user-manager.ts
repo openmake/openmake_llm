@@ -246,6 +246,15 @@ class UserManagerImpl {
         return result.rows.length > 0;
     }
 
+    /** admin 역할 사용자 id 목록 — 운영 알림(주간 게이트 리포트 push 등) 수신자 조회용 */
+    async getAdminUserIds(): Promise<string[]> {
+        const result = await getPool().query<{ id: string }>(
+            `SELECT id FROM users WHERE role = $1 AND is_active = TRUE`,
+            [USER_ROLES.ADMIN]
+        );
+        return result.rows.map((r) => r.id);
+    }
+
     async createUser(input: CreateUserInput): Promise<PublicUser | null> {
         const pool = getPool();
         // 중복 체크 (email 기반, fast path)

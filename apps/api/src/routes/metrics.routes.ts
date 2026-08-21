@@ -31,6 +31,8 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { promises as fsp } from 'fs';
+import * as path from 'path';
 import { getApiUsageTracker } from '../llm';
 import { getCacheSystem } from '../cache';
 import { getAlertSystem } from '../monitoring/alerts';
@@ -40,10 +42,12 @@ import { getAgentMonitor } from '../agents';
 import * as os from 'os';
 import { success } from '../utils/api-response';
 import { requireAuth, requireAdmin } from '../auth';
-import { asyncHandler } from '../utils/error-handler';
+import { asyncHandler, AppError } from '../utils/error-handler';
+import { GATE_REPORT } from '../config/runtime-limits';
 import { getPool } from '../data/models/unified-database';
 import { ConversationRepository } from '../data/repositories/conversation-repository';
 import { AgentTaskMetricsRepository } from '../data/repositories/agent-task-metrics-repository';
+import { RoutingMetricsRepository } from '../data/repositories/routing-metrics-repository';
 
 /** days 쿼리 파라미터 정수 파싱 + clamp(1~365). interval 인젝션 방지를 위해 항상 정수 반환. */
 function parseDays(raw: unknown, fallback = 7): number {
@@ -318,6 +322,92 @@ router.get('/agent-tasks/workflow', asyncHandler(async (req: Request, res: Respo
             coverage: totalSteps > 0 ? attributedSteps / totalSteps : 0,
         },
     }));
+}));
+
+/**
+ * GET /api/metrics/routing/gates?days=N
+ * 라우팅 게이트 관측 (관리자). 기본 30일.
+ * measure-first 게이트 판정 근거 — ① 오케스트레이션 자동 배정(086): 노출/호출/성공,
+ * 사용자 토글 턴 의도 적중(재현율 프록시) ② tail 라우팅 셰도우(061): tail 비율,
+ * 캘리브레이션 라벨·grounding 수, 전기간 마지막 적재 시각(셰도우 OFF 신선도).
+ */
+router.get('/routing/gates', asyncHandler(async (req: Request, res: Response) => {
+    const days = parseDays(req.query.days, 30);
+    const repo = new RoutingMetricsRepository(getPool());
+    const [dispatchRow, byToolRows, toggleRows, tailRow, verifiabilityRows] = await Promise.all([
+        repo.getOrchestrationDispatchSummary(days),
+        repo.getOrchestrationByTool(days),
+        repo.getOrchestrationToggleRecall(days),
+        repo.getTailShadowSummary(days),
+        repo.getTailShadowByVerifiability(days),
+    ]);
+
+    const exposedTurns = Number(dispatchRow.exposed_turns);
+    const calledTurns = Number(dispatchRow.called_turns);
+    const successTurns = Number(dispatchRow.success_turns);
+
+    const totalDecisions = Number(tailRow.total_decisions);
+    const tailDecisions = Number(tailRow.tail_decisions);
+
+    res.json(success({
+        days,
+        orchestration: {
+            totalTurns: Number(dispatchRow.total_turns),
+            intentTurns: Number(dispatchRow.intent_turns),
+            exposedTurns,
+            calledTurns,
+            successTurns,
+            callRate: exposedTurns > 0 ? calledTurns / exposedTurns : 0,
+            successRate: calledTurns > 0 ? successTurns / calledTurns : 0,
+            byTool: byToolRows.map((r) => ({
+                tool: r.tool_called,
+                turns: Number(r.turns),
+                successTurns: Number(r.success_turns),
+            })),
+            toggles: toggleRows.map((r) => ({
+                userMode: r.user_mode,
+                turns: Number(r.turns),
+                discussionIntentTurns: Number(r.discussion_intent_turns),
+                taskDelegateIntentTurns: Number(r.task_delegate_intent_turns),
+            })),
+        },
+        tailShadow: {
+            totalDecisions,
+            tailDecisions,
+            tailRate: totalDecisions > 0 ? tailDecisions / totalDecisions : 0,
+            labeledDecisions: Number(tailRow.labeled_decisions),
+            groundingFired: Number(tailRow.grounding_fired_decisions),
+            groundingFixed: Number(tailRow.grounding_fixed_decisions),
+            lastDecisionAt: tailRow.last_decision_at,
+            byVerifiability: verifiabilityRows.map((r) => ({
+                verifiability: r.verifiability,
+                decisions: Number(r.decisions),
+                tailDecisions: Number(r.tail_decisions),
+            })),
+        },
+    }));
+}));
+
+/**
+ * GET /api/metrics/routing/report?date=YYYY-MM-DD|latest
+ * 주간 게이트 판정 리포트 HTML (관리자). 기본 latest.
+ * monitoring/gate-report.ts 가 주 1회 생성한 스냅샷을 서빙 — 운영 지표라 공개 정적
+ * 경로(schedule-publish) 대신 admin 인증 뒤에서만 노출한다.
+ */
+router.get('/routing/report', asyncHandler(async (req: Request, res: Response) => {
+    const raw = String(req.query.date ?? 'latest');
+    // 날짜 형식 강제 — 파일명으로 쓰이므로 경로 탈출을 원천 차단한다.
+    const name = raw === 'latest' || /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+    if (!name) {
+        throw new AppError('date 는 YYYY-MM-DD 또는 latest 여야 합니다.', 400, true, 'INVALID_DATE');
+    }
+    let html: string;
+    try {
+        html = await fsp.readFile(path.join(GATE_REPORT.DIR, `${name}.html`), 'utf8');
+    } catch {
+        throw new AppError('게이트 리포트가 아직 생성되지 않았습니다.', 404, true, 'REPORT_NOT_FOUND');
+    }
+    res.type('html').send(html);
 }));
 
 /**

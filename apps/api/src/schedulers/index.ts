@@ -132,6 +132,14 @@ export async function startAllSchedulers(): Promise<void> {
         logger.warn('아티팩트 실행 히스토리 스윕 등록 실패(무시):', err);
     }
 
+    // 10. 주간 게이트 판정 리포트 — measure-first 게이트 관측 스냅샷(무-LLM, 멱등).
+    try {
+        const { startGateReportScheduler } = await import('../monitoring/gate-report');
+        if (startGateReportScheduler()) logger.debug('GateReportScheduler 등록 완료');
+    } catch (err) {
+        logger.warn('GateReportScheduler 등록 실패(무시):', err);
+    }
+
     logger.info('모든 백그라운드 스케줄러 시작 완료');
 }
 
