@@ -12,10 +12,4 @@
  */
 export { DiscussionStrategy } from './discussion-strategy';
 export { DeepResearchStrategy } from './deep-research-strategy';
-export type {
-    ChatContext,
-    ChatResult,
-    ChatStrategy,
-    DiscussionStrategyContext,
-    DeepResearchStrategyContext,
-} from './types';
+// (타입 재수출은 배럴 경유 소비 0건으로 제거 — 소비자는 ./types 직접 import)

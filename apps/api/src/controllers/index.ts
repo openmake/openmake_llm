@@ -15,8 +15,8 @@
  * - SessionController: 대화 세션 CRUD
  */
 
-export { ClusterController, createClusterController } from './cluster.controller';
-export { HealthController, createHealthController } from './health.controller';
-export { AuthController, createAuthController } from './auth.controller';
-export { AdminController, createAdminController } from './admin.controller';
-export { SessionController, createSessionController } from './session.controller';
+export { createClusterController } from './cluster.controller';
+export { createHealthController } from './health.controller';
+export { createAuthController } from './auth.controller';
+export { createAdminController } from './admin.controller';
+export { createSessionController } from './session.controller';
