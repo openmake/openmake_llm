@@ -2,12 +2,17 @@
  * 주간 게이트 판정 리포트 — measure-first 게이트의 판정 근거 스냅샷 (무-LLM 결정적 렌더).
  *
  * plan: docs/proposals/2026-08-22-quality-flywheel-gate-observability-plan.md Stage 2.
- * 대상 게이트 3종은 Stage 1 집계(repository)를 그대로 재사용한다:
+ * 대상 게이트 2종은 Stage 1 집계(repository)를 그대로 재사용한다:
  *   ① Execution Graph 증분 — agent_tasks/agent_task_steps (retry·hitl_degrade·plan 귀속)
  *   ② 오케스트레이션 자동 배정 — orchestration_dispatch_decisions(086)
- *   ③ tail 라우팅 셰도우 — routing_shadow_decisions(061, 적재 중단 감지 포함)
  * agent-resolver 게이트는 winston 로그 기반 별도 스크립트(scripts/daily-routing-report.sh)가
  * 담당하므로 여기 포함하지 않는다.
+ *
+ * tail 라우팅 게이트(061 셰도우)는 **반려 확정(2026-08-22)** 되어 제외했다. 골드셋 30건
+ * 사람 판정 대조 결과 게이트가 오류를 예측하지 못했다 — tail 로 지목한 층의 오답률 50%
+ * (판정가능 6건 중 3건) 대비 통과시킨 non-tail 층이 60%(10건 중 6건)로 오히려 높았고,
+ * error_score 평균도 오답 0.365 / 정답 0.360 으로 판별력이 없었다. 축 A 재설계 없이는
+ * 되살릴 근거가 없으므로 판정 대상에서 뺀다(셰도우 테이블·env 게이트 자체는 존치).
  *
  * 노출 경로: admin push 알림 + admin 전용 라우트(GET /api/metrics/routing/report).
  * 예약 리포트의 공개 정적 게시(schedule-publish)를 재사용하지 않는 이유 — 그 경로는 인증
@@ -69,12 +74,6 @@ export interface GateReportInput {
         calledTurns: number;
         successTurns: number;
     };
-    tailShadow: {
-        totalDecisions: number;
-        tailDecisions: number;
-        labeledDecisions: number;
-        lastDecisionAt: string | null;
-    };
 }
 
 export interface GateVerdict {
@@ -99,7 +98,6 @@ export function buildGateVerdicts(input: GateReportInput, minSample: number): Ga
 
     const wf = input.workflow;
     const orch = input.orchestration;
-    const tail = input.tailShadow;
 
     const verdicts: GateVerdict[] = [
         {
@@ -115,23 +113,6 @@ export function buildGateVerdicts(input: GateReportInput, minSample: number): Ga
             note: `노출 ${orch.exposedTurns}턴 → 호출 ${orch.calledTurns}턴 → 성공 ${orch.successTurns}턴 (전체 ${orch.totalTurns}턴)`,
         },
     ];
-
-    if (tail.totalDecisions === 0) {
-        verdicts.push({
-            gate: 'Tail 라우팅 Stage 2 (061 셰도우)',
-            sample: 0,
-            tone: 'danger',
-            status: '적재 중단 — 게이트 판정 불가',
-            note: `기간 내 셰도우 결정 0건. 마지막 적재 ${tail.lastDecisionAt ?? '없음'} — TAIL_ROUTING_SHADOW_ENABLED 확인 필요`,
-        });
-    } else {
-        verdicts.push({
-            gate: 'Tail 라우팅 Stage 2 (061 셰도우)',
-            sample: tail.totalDecisions,
-            ...sampleStatus(tail.totalDecisions),
-            note: `tail ${tail.tailDecisions}/${tail.totalDecisions}건 · 캘리브레이션 라벨 ${tail.labeledDecisions}건`,
-        });
-    }
     return verdicts;
 }
 
@@ -154,7 +135,6 @@ function renderSectionsHtml(input: GateReportInput): string {
     const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
     const wf = input.workflow;
     const orch = input.orchestration;
-    const tail = input.tailShadow;
     const rate = (num: number, den: number) => (den > 0 ? pct(num / den) : '—');
 
     const table = (title: string, rows: string[]) =>
@@ -174,12 +154,6 @@ function renderSectionsHtml(input: GateReportInput): string {
             row('도구 노출 턴', String(orch.exposedTurns)),
             row('호출 턴 (노출 대비)', `${orch.calledTurns} (${rate(orch.calledTurns, orch.exposedTurns)})`),
             row('성공 턴 (호출 대비)', `${orch.successTurns} (${rate(orch.successTurns, orch.calledTurns)})`),
-        ]),
-        table('Tail 셰도우 상세', [
-            row('셰도우 결정', String(tail.totalDecisions)),
-            row('tail 판정', `${tail.tailDecisions} (${rate(tail.tailDecisions, tail.totalDecisions)})`),
-            row('캘리브레이션 라벨', String(tail.labeledDecisions)),
-            row('마지막 적재 (전기간)', tail.lastDecisionAt ?? '없음'),
         ]),
     ].join('\n');
 }
@@ -207,13 +181,12 @@ async function collectGateReportInput(days: number): Promise<GateReportInput> {
     const routingRepo = new RoutingMetricsRepository(pool);
     const taskRepo = new AgentTaskMetricsRepository(pool);
 
-    const [verdictRows, failureRows, interventionRow, coverageRow, dispatchRow, tailRow] = await Promise.all([
+    const [verdictRows, failureRows, interventionRow, coverageRow, dispatchRow] = await Promise.all([
         taskRepo.getCompletionVerdictDistribution(days),
         taskRepo.getFailureReasons(days, 20),
         taskRepo.getInterventionCounts(days),
         taskRepo.getPlanAttributionCoverage(days),
         routingRepo.getOrchestrationDispatchSummary(days),
-        routingRepo.getTailShadowSummary(days),
     ]);
 
     const completedTasks = verdictRows.reduce((sum, r) => sum + Number(r.tasks), 0);
@@ -240,15 +213,6 @@ async function collectGateReportInput(days: number): Promise<GateReportInput> {
             exposedTurns: Number(dispatchRow.exposed_turns),
             calledTurns: Number(dispatchRow.called_turns),
             successTurns: Number(dispatchRow.success_turns),
-        },
-        tailShadow: {
-            totalDecisions: Number(tailRow.total_decisions),
-            tailDecisions: Number(tailRow.tail_decisions),
-            labeledDecisions: Number(tailRow.labeled_decisions),
-            // pg 는 TIMESTAMPTZ 를 Date 로 돌려준다 — 렌더는 문자열 전제라 여기서 정규화.
-            lastDecisionAt: tailRow.last_decision_at == null
-                ? null
-                : new Date(tailRow.last_decision_at).toISOString(),
         },
     };
 }

@@ -9,9 +9,24 @@
  * 학습 라벨 생성용 오프라인 1회성 배치 — 재실행 안전(라벨 NULL 행만 처리).
  *
  * 실행: npx ts-node apps/api/src/scripts/label-tail-shadow.ts [--dry-run] [--limit N]
+ *       [--verifiable-only] [--user ID] [--no-local-fallback]
  *
  * 판정 3값: correct/incorrect → a_was_correct 기록, unsure → NULL 유지(스킵).
  * 실시간성 질문(날씨 등)·판단 불가는 unsure 로 유도해 라벨 오염을 막는다.
+ *
+ * `--verifiable-only`: verifiability='none' 행을 대상에서 제외한다. 게이트가
+ * `isTail = errorScore≥θ AND verifiability≠'none'` 이라 none 행은 애초에 tail 이 될 수
+ * 없어 캘리브레이션에 기여하지 못한다. 게다가 그 모집단은 대부분 잡담·피드백이라
+ * judge 가 unsure 규칙을 지키지 못하고 incorrect 를 남발해 라벨을 오염시켰다
+ * (2026-08-22 실측: 무필터 dry-run 20건 중 incorrect 12건 — 실제 오답률로 비현실적).
+ *
+ * `--user ID`: 해당 사용자 행만 처리. judge role 이 사용자별 매핑(BYOK)으로 외부
+ * 모델에 배정된 경우, 매핑이 없는 사용자의 행은 로컬로 fail-open 되어 같은 배치에
+ * 서로 다른 판정자의 라벨이 섞인다. 그걸 막는다.
+ *
+ * `--no-local-fallback`: judge 연속 실패 시 로컬 강등 대신 즉시 중단한다. 라벨링에서
+ * 로컬 강등은 곧 '답변을 쓴 모델이 자기 답변을 채점'하는 상태로의 복귀라, 조용히
+ * 이어가면 라벨 절반이 오염된 채 완료된 것처럼 보인다. 배치에선 멈추는 편이 낫다.
  *
  * @module scripts/label-tail-shadow
  */
@@ -67,7 +82,7 @@ const JUDGE_SYSTEM = [
 
 type Verdict = 'correct' | 'incorrect' | 'unsure';
 
-async function judgeOne(client: LLMClient, row: LabelRow): Promise<Verdict | null> {
+async function judgeOne(client: LLMClient, row: LabelRow, think: boolean): Promise<Verdict | null> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), JUDGE_TIMEOUT_MS);
     try {
@@ -77,7 +92,7 @@ async function judgeOne(client: LLMClient, row: LabelRow): Promise<Verdict | nul
         ].join('\n\n');
         const r = await client.chat(
             [{ role: 'system', content: JUDGE_SYSTEM }, { role: 'user', content: user }],
-            undefined, undefined, { think: false, signal: controller.signal },
+            undefined, undefined, { think, signal: controller.signal },
         );
         const m = (r.content ?? '').match(/"verdict"\s*:\s*"(correct|incorrect|unsure)"/);
         return m ? (m[1] as Verdict) : null;
@@ -88,8 +103,18 @@ async function judgeOne(client: LLMClient, row: LabelRow): Promise<Verdict | nul
 
 async function main(): Promise<void> {
     const dryRun = process.argv.includes('--dry-run');
+    const verifiableOnly = process.argv.includes('--verifiable-only');
+    const noLocalFallback = process.argv.includes('--no-local-fallback');
+    // 판정은 조건부 규칙('검색 인용 실시간 답변은 unsure' 등)을 지켜야 하는 작업이라
+    // 추론 깊이가 결과를 가를 수 있다. 기본 off 는 로컬 qwen 의 thinking 폭주 방지 관성.
+    // ⚠️ chatgpt(OAuth) role 경로에는 효과가 없다 — ProviderRoleClient.chat 이 think 를
+    //    provider 요청에 싣지 않고, Codex 백엔드의 GPT-5 계열은 서버측에서 기본 추론한다
+    //    (2026-08-22 실측: 동일 30행 off/on 27행 동일 판정). 로컬/openai-compatible 전용.
+    const think = process.argv.includes('--think');
     const limitArg = process.argv.indexOf('--limit');
     const limit = limitArg >= 0 ? Number(process.argv[limitArg + 1]) || 0 : 0;
+    const userArg = process.argv.indexOf('--user');
+    const onlyUserId = userArg >= 0 ? String(process.argv[userArg + 1] ?? '').trim() : '';
 
     const pool = getPool();
     const { rows } = await pool.query<LabelRow>(
@@ -119,12 +144,19 @@ async function main(): Promise<void> {
            AND r.a_was_correct IS NULL
            AND char_length(um.content) > 0
            AND char_length(am.content) > 0
+           ${verifiableOnly ? "AND r.verifiability <> 'none'" : ''}
+           ${onlyUserId ? 'AND r.user_id = $4' : ''}
          ORDER BY r.id
          ${limit > 0 ? 'LIMIT ' + limit : ''}`,
-        [MATCH_WINDOW_SEC, MATCH_LEN_TOLERANCE, ANSWER_WINDOW],
+        onlyUserId
+            ? [MATCH_WINDOW_SEC, MATCH_LEN_TOLERANCE, ANSWER_WINDOW, onlyUserId]
+            : [MATCH_WINDOW_SEC, MATCH_LEN_TOLERANCE, ANSWER_WINDOW],
     );
 
-    logger.info(`라벨링 대상 ${rows.length}건 (dry-run=${dryRun})`);
+    logger.info(
+        `라벨링 대상 ${rows.length}건 (dry-run=${dryRun}, verifiable-only=${verifiableOnly}` +
+        `, user=${onlyUserId || 'all'}, no-local-fallback=${noLocalFallback}, think=${think})`,
+    );
     if (rows.length === 0) {
         logger.info('처리할 행 없음 — 종료');
         return;
@@ -155,7 +187,7 @@ async function main(): Promise<void> {
                 client = cached;
             }
             try {
-                const verdict = await judgeOne(client, row);
+                const verdict = await judgeOne(client, row, think);
                 consecutiveFailures = 0;
                 if (verdict === null) {
                     stats.parse_fail++;
@@ -174,6 +206,12 @@ async function main(): Promise<void> {
                 consecutiveFailures++;
                 logger.warn(`#${row.id} judge 실패 (${consecutiveFailures}연속): ${e instanceof Error ? e.message : e}`);
                 if (!degradedToLocal && consecutiveFailures >= FALLBACK_AFTER_CONSECUTIVE_FAILURES) {
+                    if (noLocalFallback) {
+                        // 로컬 강등 = 피판정 모델로의 복귀. 라벨 오염을 남기느니 중단한다.
+                        logger.error(`연속 실패 ${consecutiveFailures}회 — --no-local-fallback 이므로 중단`);
+                        work.length = 0;
+                        return;
+                    }
                     degradedToLocal = true;
                     logger.warn(`연속 실패 ${consecutiveFailures}회 — 로컬 default 모델로 강등`);
                 }
