@@ -123,6 +123,11 @@ export const chatRequestSchema = z.object({
     userAgentId: z.string().max(64).optional(),
     /** 클라이언트 표면 — 'ios' 면 좁은 화면용 답변 형식 지시 추가 (REST 경로 대비) */
     client: z.enum(['ios']).optional(),
+    /** 기기 GPS 현재 위치 (옵트인, 턴 단위) — 위경도 범위 검증 */
+    userLocation: z.object({
+        lat: z.number().min(-90).max(90),
+        lng: z.number().min(-180).max(180),
+    }).optional(),
 });
 
 /** 채팅 요청 TypeScript 타입 (Zod 스키마로부터 추론) */

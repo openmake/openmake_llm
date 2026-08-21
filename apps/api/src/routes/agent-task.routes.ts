@@ -21,7 +21,8 @@ import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
-import { requireAuth } from '../auth';
+import { requireAuthOrApiKeyScope } from '../middlewares/api-key-auth';
+import { API_KEY_SCOPES } from '../config/api-key-scopes';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { validate, validateWithSecurity } from '../middlewares/validation';
 import { getUnifiedDatabase } from '../data/models/unified-database';
@@ -50,13 +51,13 @@ import {
 } from '../services/agent-task/upload-store';
 import { claimUploadsAsInputFiles, ChunkStoreError } from '../services/agent-task/chunk-store';
 import { resolveDefaultMaxTurns } from '../services/agent-task/task-inputs';
-import { loadOwnedTask, toPublicTask } from './agent-task.helpers';
+import { loadOwnedTask, toPublicTask, validateLocalExecutorInput } from './agent-task.helpers';
 
 const logger = createLogger('AgentTaskRoutes');
 const router = Router();
 
 // 모든 엔드포인트 인증 필요
-router.use(requireAuth);
+router.use(requireAuthOrApiKeyScope(API_KEY_SCOPES.BRIDGE));
 
 type UserRole = 'admin' | 'user' | 'guest';
 
@@ -119,20 +120,17 @@ router.post('/', (req: Request, res: Response, next) => {
     } else {
         input = req.body as CreateAgentTaskInput;
     }
-    const { goal, maxTurns, files, images, executor } = input;
+    const { goal, maxTurns, files, images, executor, deviceId, folderRel } = input;
 
     const taskId = uuidv4();
     const db = getUnifiedDatabase();
     const userId = String(req.user!.id);
 
-    // Cowork D1a: local 실행은 기능 게이트 + 디바이스 연결이 있을 때만.
+    // Cowork D1a: local 실행은 기능 게이트 + 디바이스 연결 + 폴더 선택(102) 검증 (helpers 분리).
     if (executor === 'local') {
-        if (!LOCAL_BRIDGE.ENABLED) {
-            res.status(400).json(badRequest('로컬 실행 기능이 비활성화되어 있습니다 (LOCAL_EXECUTOR_ENABLED)'));
-            return;
-        }
-        if (!getLocalBridgeRegistry().getDevice(userId)) {
-            res.status(400).json(badRequest('연결된 로컬 디바이스가 없습니다 — 데스크톱 앱에서 작업 폴더를 먼저 연결하세요'));
+        const localErr = validateLocalExecutorInput(userId, deviceId, folderRel);
+        if (localErr) {
+            res.status(400).json(badRequest(localErr));
             return;
         }
     }
@@ -223,6 +221,8 @@ router.post('/', (req: Request, res: Response, next) => {
         inputFiles,
         inputImages: Array.isArray(images) && images.length > 0 ? images : undefined,
         executor,
+        deviceId: executor === 'local' ? deviceId : undefined,
+        folderRel: executor === 'local' ? folderRel : undefined,
     });
 
     const task = await db.getAgentTask(taskId);
@@ -301,8 +301,8 @@ router.post('/:taskId/execute', validate(executeAgentTaskSchema), asyncHandler(a
         if (!LOCAL_BRIDGE.ENABLED) {
             return res.status(400).json(badRequest('로컬 실행 기능이 비활성화되어 있습니다 (LOCAL_EXECUTOR_ENABLED)'));
         }
-        if (!getLocalBridgeRegistry().getDevice(String(req.user!.id))) {
-            return res.status(400).json(badRequest('연결된 로컬 디바이스가 없습니다 — 데스크톱 앱에서 작업 폴더를 먼저 연결하세요'));
+        if (!getLocalBridgeRegistry().getDevice(String(req.user!.id), task.device_id ?? undefined)) {
+            return res.status(400).json(badRequest('작업 대상 로컬 디바이스가 연결되어 있지 않습니다 — 데스크톱 앱 또는 CLI 로 작업 폴더를 먼저 연결하세요'));
         }
     }
 
@@ -338,6 +338,8 @@ router.post('/:taskId/execute', validate(executeAgentTaskSchema), asyncHandler(a
             files: Array.isArray(task.input_files) ? task.input_files as AgentTaskInputFile[] : undefined,
             images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
             executor: (task.executor === 'local' ? 'local' : undefined),
+            deviceId: task.device_id ?? undefined,
+            folderRel: task.folder_rel ?? undefined,
         }),
     });
 
@@ -394,6 +396,16 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
     if (!cp || !Array.isArray(cp.conversation) || cp.conversation.length === 0) {
         return res.status(400).json(badRequest('이어할 체크포인트가 없는 작업입니다.'));
     }
+    // 로컬 실행 작업 재개 가드 — execute 와 대칭. 없으면 로컬 작업이 조용히 docker 샌드박스로
+    // 폴백해(RemoteExecutor 미생성) 사용자 폴더/worktree 가 없는 채로 오작동한다.
+    if (task.executor === 'local') {
+        if (!LOCAL_BRIDGE.ENABLED) {
+            return res.status(400).json(badRequest('로컬 실행 기능이 비활성화되어 있습니다 (LOCAL_EXECUTOR_ENABLED)'));
+        }
+        if (!getLocalBridgeRegistry().getDevice(String(req.user!.id), task.device_id ?? undefined)) {
+            return res.status(400).json(badRequest('작업 대상 로컬 디바이스가 연결되어 있지 않습니다 — 데스크톱 앱 또는 CLI 로 작업 폴더를 먼저 연결하세요'));
+        }
+    }
 
     const role: UserRole = (req.user!.role as UserRole) || 'user';
     const db = getUnifiedDatabase();
@@ -411,6 +423,9 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
             maxTurns: task.max_turns,
             files: Array.isArray(task.input_files) ? task.input_files as AgentTaskInputFile[] : undefined,
             images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
+            executor: (task.executor === 'local' ? 'local' : undefined),
+            deviceId: task.device_id ?? undefined,
+            folderRel: task.folder_rel ?? undefined,
             resume: {
                 conversation: cp.conversation as ChatMessage[],
                 fromTurn: (cp.completedTurn ?? 0) + 1,

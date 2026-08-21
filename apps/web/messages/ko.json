@@ -230,6 +230,17 @@
       "deactivate": "비활성화",
       "rotate": "순환",
       "delete": "삭제"
+    },
+    "scope": {
+      "label": "스코프",
+      "full": "전체 권한",
+      "bridge": "브리지(CLI)",
+      "chat": "추론 API",
+      "hint": {
+        "full": "모든 API 에 접근합니다.",
+        "bridge": "OpenMake Code CLI 의 로컬 실행 전용 — 추론 API·토큰 소비는 불가.",
+        "chat": "OpenAI 호환 추론 API 전용."
+      }
     }
   },
   "composer": {
@@ -295,7 +306,13 @@
       "label": "로컬 실행:",
       "off": "서버 샌드박스에서 실행",
       "on": "로컬 폴더에서 실행: {folder}",
-      "disconnected": "데스크톱 앱 미연결"
+      "disconnected": "데스크톱 앱 미연결",
+      "folderPick": "폴더 변경",
+      "folderUp": "상위",
+      "folderSelectHere": "이 폴더에서 실행",
+      "folderUnsupported": "이 디바이스는 폴더 탐색을 지원하지 않습니다 — CLI/앱을 업데이트하세요",
+      "folderEmpty": "하위 폴더가 없습니다",
+      "folderTruncated": "…목록이 잘렸습니다"
     }
   },
   "chat": {

@@ -20,6 +20,12 @@ export const LOCAL_BRIDGE = {
     /** read/exec 결과 수신 캡(chars) — 모델 컨텍스트/스텝 저장 보호(샌드박스 outputCap 관행과 동일 축). */
     OUTPUT_CAP: parseInt(process.env.LOCAL_BRIDGE_OUTPUT_CAP || '65536', 10),
 
+    /** 유저당 동시 등록 브리지 디바이스 상한 (데스크톱+CLI 병존, 2026-08-21 다중화). */
+    MAX_DEVICES: parseInt(process.env.LOCAL_BRIDGE_MAX_DEVICES || '3', 10),
+
+    /** 폴더 선택(folders kind) 1회 열거 상한 — 초과분은 절단 + truncated 플래그(디바이스측 강제). */
+    FOLDERS_MAX_ENTRIES: parseInt(process.env.BRIDGE_FOLDERS_MAX_ENTRIES || '200', 10),
+
     /**
      * 로컬 브라우저(D3a) — 데스크톱 Electron 내장 Chromium 에서 browser 도구를 실행한다.
      * 서버 컨테이너 브라우저와 달리 **사용자 화면에 보이는** 패널로 뜨고, 전용 세션 파티션이라

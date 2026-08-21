@@ -44,7 +44,8 @@ import { getPool } from '../../data/models/unified-database';
 import { getProviderCatalogEntry } from '../../config/external-providers';
 import { buildFullModelId } from '../../providers/i-provider';
 import { success, unauthorized } from '../../utils/api-response';
-import { requireApiKey } from '../../middlewares/api-key-auth';
+import { requireApiKey, requireScope } from '../../middlewares/api-key-auth';
+import { API_KEY_SCOPES } from '../../config/api-key-scopes';
 import { apiKeyRateLimiter, apiKeyTPMLimiter } from '../../middlewares/api-key-limiter';
 import { asyncHandler } from '../../utils/error-handler';
 import { getApiKeyService } from '../../services/ApiKeyService';
@@ -54,6 +55,11 @@ const v1Router = Router();
 // §4 Rate Limit 미들웨어 — API Key 인증 요청에만 동작 (비인증 자동 스킵)
 // 전역 API 인증 미들웨어
 v1Router.use(requireApiKey);
+
+// 스코프 게이트 — v1 은 외부 개발자 추론 API 면이라 'chat' 스코프를 요구한다(와일드카드 '*'
+// 포함 키는 통과). CLI 브리지 전용('bridge') 키는 여기서 차단돼 토큰 소진을 못 한다.
+// CLI 는 /api/v1 을 쓰지 않고 /api/local-bridge·/api/agent-tasks 만 쓴다.
+v1Router.use(requireScope(API_KEY_SCOPES.CHAT));
 
 // API 키 기반 RPM 제한 (인증 이후에 적용되어 키 단위 카운트 보장)
 v1Router.use(apiKeyRateLimiter);

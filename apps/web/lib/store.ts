@@ -175,6 +175,10 @@ interface AppState {
   /** 에이전트 작업 Git repo URL(Phase 2) — 있으면 태스크가 해당 repo 를 clone 해 작업 후 PR 생성. */
   /** Cowork D2: 로컬 실행 토글 — ON 이면 작업이 데스크톱 앱이 연결한 폴더에서 실행(executor='local'). */
   agentLocalExecutor: boolean;
+  /** 다중 디바이스(101): 로컬 실행 대상 브리지 디바이스 id — null 은 최근 접속 디바이스 폴백. */
+  agentLocalDeviceId: string | null;
+  /** 폴더 선택(102): 로컬 실행 폴더 — 연결 루트 기준 상대경로. null 은 루트. */
+  agentLocalFolderRel: string | null;
   imageMode: boolean;
   artifactMode: boolean;
   /** 구조화 답변 모드 — ON 시 메시지를 REST /api/chat/structured 로 보내 카드 UI 로 렌더(비스트리밍). */
@@ -241,6 +245,8 @@ interface AppState {
   setSelectedModel: (m: string) => void;
   setAgentApprovalMode: (m: "all" | "high-risk" | "none") => void;
   setAgentLocalExecutor: (v: boolean) => void;
+  setAgentLocalDeviceId: (v: string | null) => void;
+  setAgentLocalFolderRel: (v: string | null) => void;
   cycleStyle: () => void;
   setStyle: (m: ChatStyle) => void;
   setAuth: (auth: AppState["auth"]) => void;
@@ -305,6 +311,8 @@ export const useAppStore = create<AppState>()(
   agentTaskMode: false,
   agentApprovalMode: "all",
   agentLocalExecutor: false,
+  agentLocalDeviceId: null,
+  agentLocalFolderRel: null,
   imageMode: false,
   artifactMode: false,
   structuredMode: false,
@@ -475,6 +483,9 @@ export const useAppStore = create<AppState>()(
   setSelectedModel: (m) => set({ selectedModel: m }),
   setAgentApprovalMode: (m) => set({ agentApprovalMode: m }),
   setAgentLocalExecutor: (v) => set({ agentLocalExecutor: v }),
+  // 디바이스 변경 시 폴더 선택은 리셋 — 다른 디바이스의 경로가 남지 않게.
+  setAgentLocalDeviceId: (v) => set({ agentLocalDeviceId: v, agentLocalFolderRel: null }),
+  setAgentLocalFolderRel: (v) => set({ agentLocalFolderRel: v }),
   cycleStyle: () =>
     set((s) => ({
       style: STYLE_ORDER[(STYLE_ORDER.indexOf(s.style) + 1) % STYLE_ORDER.length],

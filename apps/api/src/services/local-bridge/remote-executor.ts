@@ -43,6 +43,8 @@ export class RemoteExecutor implements TaskExecutor {
     /** 세션 영속은 데스크톱 파티션(persist:openmake-agent)이 담당 — 서버측 상태 파일 불필요. */
     readonly browserStatePath = null;
     private readonly userId: string;
+    /** 라우팅 대상 디바이스(101, 다중 디바이스) — undefined 는 최근 접속 디바이스 폴백. */
+    private readonly deviceId?: string;
     private deviceLabel = 'local-device';
     /**
      * worktree 격리 시 연결 폴더 기준 상대경로(예: `.openmake/worktrees/<taskId>`). null 이면
@@ -52,9 +54,17 @@ export class RemoteExecutor implements TaskExecutor {
     /** worktree 작업 브랜치명 — 사용자 안내·결과 보고용. */
     private worktreeBranch: string | null = null;
 
-    constructor(taskId: string, userId: string) {
+    /**
+     * 폴더 선택(102) — 연결 루트 기준 상대경로. 지정 시 모든 브리지 요청에 folder 로 첨부되어
+     * 디바이스가 exec cwd·파일 경로·worktree base 를 이 하위 폴더로 재지정한다. undefined=루트.
+     */
+    private readonly folderRel?: string;
+
+    constructor(taskId: string, userId: string, deviceId?: string, folderRel?: string) {
         this.taskId = taskId;
         this.userId = userId;
+        this.deviceId = deviceId;
+        this.folderRel = folderRel;
     }
 
     get label(): string { return `local:${this.deviceLabel}`; }
@@ -67,10 +77,12 @@ export class RemoteExecutor implements TaskExecutor {
      * 미연결이면 throw → 호출부 graceful degrade. worktree 실패는 throw 하지 않는다(fail-open).
      */
     async create(): Promise<void> {
-        const dev = getLocalBridgeRegistry().getDevice(this.userId);
-        if (!dev) throw new Error('연결된 로컬 디바이스가 없습니다 — 데스크톱 앱에서 작업 폴더를 먼저 연결하세요.');
+        const dev = getLocalBridgeRegistry().getDevice(this.userId, this.deviceId);
+        if (!dev) throw new Error('연결된 로컬 디바이스가 없습니다 — 데스크톱 앱 또는 CLI 로 작업 폴더를 먼저 연결하세요.');
         this.deviceLabel = `${dev.label}`;
-        logger.info(`[${this.taskId}] 로컬 실행기 준비 (device=${dev.deviceId}, folder="${dev.folderName}")`);
+        // folderRel(폴더 선택, 102)까지 남긴다 — 로그만으로 "어느 폴더에서 돌았는지" 추적 가능해야
+        // 한다(DB folder_rel 조회 없이 사고 분석·감사가 되도록).
+        logger.info(`[${this.taskId}] 로컬 실행기 준비 (device=${dev.deviceId}, folder="${dev.folderName}"${this.folderRel ? `/${this.folderRel}` : ''})`);
 
         if (!LOCAL_BRIDGE.WORKTREE_ENABLED) return;
         const r = await this.req({ kind: 'worktree', op: 'add', taskId: this.taskId });
@@ -85,7 +97,8 @@ export class RemoteExecutor implements TaskExecutor {
     }
 
     private req(payload: BridgeRequestPayload): Promise<BridgeResult> {
-        return getLocalBridgeRegistry().request(this.userId, payload);
+        const withFolder = this.folderRel ? { ...payload, folder: this.folderRel } : payload;
+        return getLocalBridgeRegistry().request(this.userId, withFolder, undefined, this.deviceId);
     }
 
     /** 파일 경로를 worktree 기준으로 변환. 격리가 없으면 원래 경로 그대로. */

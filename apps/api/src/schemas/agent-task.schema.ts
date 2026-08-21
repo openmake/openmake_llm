@@ -59,6 +59,15 @@ export const createAgentTaskSchema = z.strictObject({
     maxTurns: z.number().int().min(1).max(AGENT_TASK_LIMITS.MAX_TURNS_CEILING).optional(),
     // Cowork D1a: 실행 백엔드 — 'local' 은 LOCAL_EXECUTOR_ENABLED + 디바이스 연결 필요(라우트가 검증).
     executor: z.enum(['sandbox', 'local']).optional(),
+    // 다중 디바이스(101): 로컬 실행 대상 브리지 디바이스. 미지정은 최근 접속 디바이스 폴백.
+    deviceId: z.string().min(1).max(64).optional(),
+    // 폴더 선택(102): 연결 루트 기준 상대경로 — deviceId 지정 시에만 유효, 디바이스가 folders
+    // 열거로 보고한 값만 라우트가 통과시킨다(세션 캐시 검증). 형식만 여기서 차단.
+    folderRel: z.string().min(1).max(512)
+        .refine((v) => !v.startsWith('/') && !v.includes('\\') && !v.includes('\0')
+            && v.split('/').every((seg) => seg !== '' && seg !== '.' && seg !== '..'),
+            { error: 'folderRel 은 루트 기준 상대경로여야 합니다 (선행 /·빈 세그먼트·.. 금지)' })
+        .optional(),
     files: z.array(taskInputFileSchema).max(FILE_ATTACH_LIMITS.MAX_FILES).optional(),
     images: z.array(
         z.string().startsWith('data:image/').max(FILE_ATTACH_LIMITS.MAX_IMAGE_DATAURL_CHARS)

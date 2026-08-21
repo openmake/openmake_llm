@@ -63,6 +63,9 @@ export default function ApiAccessPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
+  // 스코프 프리셋 — 백엔드 config/api-key-scopes.ts 의 API_KEY_SCOPE_PRESETS 와 정합.
+  // full=전체(*), bridge=CLI 로컬 실행 전용, chat=추론 API 전용.
+  const [newScope, setNewScope] = useState<"full" | "bridge" | "chat">("full");
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   // 발급/순환 직후 평문 키 1회 노출 (재조회 불가)
@@ -91,11 +94,14 @@ export default function ApiAccessPage() {
     setCreating(true);
     setError(null);
     try {
+      const scopes = newScope === "full" ? ["*"] : [newScope];
       const res = await ApiClient.post<ApiSuccess<CreatedKey>>("/api/api-keys", {
         name: newName.trim(),
+        scopes,
       });
       setRevealed(res.data);
       setNewName("");
+      setNewScope("full");
       await load();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : t("createFailed"));
@@ -230,19 +236,30 @@ export default function ApiAccessPage() {
                 e.preventDefault();
                 void create();
               }}
-              className="flex items-center gap-2"
+              className="flex flex-wrap items-center gap-2"
             >
               <input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 maxLength={100}
                 placeholder={t("namePlaceholder")}
-                className="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-fg outline-none transition placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-[var(--accent-ring)]"
+                className="min-w-[180px] flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-fg outline-none transition placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-[var(--accent-ring)]"
               />
+              <select
+                value={newScope}
+                onChange={(e) => setNewScope(e.target.value as "full" | "bridge" | "chat")}
+                aria-label={t("scope.label")}
+                className="rounded-md border border-border bg-surface px-2 py-2 text-sm text-fg outline-none focus:border-accent focus:ring-2 focus:ring-[var(--accent-ring)]"
+              >
+                <option value="full">{t("scope.full")}</option>
+                <option value="bridge">{t("scope.bridge")}</option>
+                <option value="chat">{t("scope.chat")}</option>
+              </select>
               <Button type="submit" disabled={!newName.trim() || creating}>
                 {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                 {t("createButton")}
               </Button>
+              <p className="w-full text-xs text-muted">{t(`scope.hint.${newScope}`)}</p>
             </form>
           </CardContent>
         </Card>

@@ -48,16 +48,19 @@ const PY_SCRIPT = `
 import sys, json
 data = json.load(sys.stdin)
 try:
-    from curl_cffi import requests
+    from curl_cffi import requests, CurlOpt
 except Exception:
     print(json.dumps({"error": "curl_cffi_not_installed"})); sys.exit(0)
 try:
-    r = requests.get(
+    s = requests.Session()
+    # 검증한 IP 로만 연결 (DNS rebinding 차단) — requests API 의 resolve kwarg 는
+    # 어떤 curl_cffi 버전에도 없음(0.16 실측 TypeError) → 저수준 CurlOpt.RESOLVE 사용
+    s.curl.setopt(CurlOpt.RESOLVE, [data["resolve"].encode()])
+    r = s.get(
         data["url"],
         impersonate=data["target"],
         allow_redirects=False,
         timeout=data["timeout"],
-        resolve=[data["resolve"]],
         headers={"Accept-Language": "en-US,en;q=0.9"},
     )
     body = r.text

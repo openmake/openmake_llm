@@ -22,6 +22,13 @@ import { createLogger } from './logger';
 import { LLM_TIMEOUTS } from '../config/timeouts';
 import { SCRAPER_CONFIG, browserHeaders } from '../config/web-scraper';
 import { resolveStructuredSource, resolveBlockedSource, tryRssFallback } from './web-scraper-handlers';
+import { impersonateFetch } from './impersonate-fetch';
+
+/** Cloudflare 등 봇 챌린지 안내 페이지 여부 — 제목 패턴 부분일치 (config 관리). */
+export function isBotChallengeResult(result: Pick<ScrapeResult, 'title'>): boolean {
+    const t = (result.title || '').toLowerCase();
+    return SCRAPER_CONFIG.BOT_CHALLENGE_TITLE_PATTERNS.some((p) => t.includes(p));
+}
 
 const logger = createLogger('WebScraper');
 
@@ -172,7 +179,9 @@ export async function scrapePage(url: string, options: ScrapeOptions = {}): Prom
     if (SCRAPER_CONFIG.CACHE_ENABLED) {
         try {
             const hit = await getKeyValueStore().get<ScrapeResult>(cacheKey);
-            if (hit && typeof hit.markdown === 'string' && hit.markdown.trim().length > 0) {
+            // 챌린지 판별 도입 전 캐시된 봇 챌린지 페이지는 히트로 인정하지 않음 (재스크랩 유도)
+            if (hit && typeof hit.markdown === 'string' && hit.markdown.trim().length > 0
+                && !isBotChallengeResult(hit)) {
                 logger.info(`[${normalized}] 스크랩 캐시 히트`);
                 return hit;
             }
@@ -228,11 +237,11 @@ async function scrapePageLive(url: string, options: ScrapeOptions = {}): Promise
     // 1단계: safeFetch + Readability
     try {
         const result = await scrapeWithFetch(url, timeoutMs, onlyMainContent, options.signal);
-        if (result.markdown.trim().length > 0) {
+        if (result.markdown.trim().length > 0 && !isBotChallengeResult(result)) {
             recordSuccess();
             return result;
         }
-        logger.info(`[${url}] safeFetch 결과 비어있음 → Playwright fallback`);
+        logger.info(`[${url}] safeFetch 결과 ${isBotChallengeResult(result) ? '봇 챌린지 페이지' : '비어있음'} → Playwright fallback`);
     } catch (error) {
         logger.warn(`[${url}] safeFetch 실패: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -245,13 +254,29 @@ async function scrapePageLive(url: string, options: ScrapeOptions = {}): Promise
     }
     try {
         const result = await scrapeWithPlaywright(url, timeoutMs, onlyMainContent);
-        if (result.markdown.trim().length > 0) {
+        if (result.markdown.trim().length > 0 && !isBotChallengeResult(result)) {
             recordSuccess();
             return result;
         }
-        logger.info(`[${url}] Playwright 결과 비어있음 → RSS 폴백`);
+        logger.info(`[${url}] Playwright 결과 ${isBotChallengeResult(result) ? '봇 챌린지 페이지' : '비어있음'} → 임퍼소네이션/RSS 폴백`);
     } catch (error) {
         logger.warn(`[${url}] Playwright 실패: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    // 2b단계: TLS 임퍼소네이션 폴백 (curl_cffi) — Cloudflare 류 챌린지로 fetch/Playwright 가
+    // 막힌 사이트용. 플래그 OFF·비화이트리스트 도메인이면 impersonateFetch 가 null (graceful skip).
+    try {
+        const imp = await impersonateFetch(url);
+        if (imp && imp.status === 200) {
+            const result = parseHtmlToMarkdown(imp.body, url, onlyMainContent);
+            if (result.markdown.trim().length > 0 && !isBotChallengeResult(result)) {
+                logger.info(`[${url}] 임퍼소네이션 폴백 성공 (${result.markdown.length}자)`);
+                recordSuccess();
+                return result;
+            }
+        }
+    } catch (error) {
+        logger.warn(`[${url}] 임퍼소네이션 폴백 실패: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     // 3단계: RSS 폴백 (본문 추출 전부 실패/빈 결과)
@@ -266,7 +291,7 @@ async function scrapePageLive(url: string, options: ScrapeOptions = {}): Promise
     }
 
     recordFailure();
-    throw new Error(`스크래핑 실패 (${url}): 모든 단계(구조화·차단우회·fetch·playwright·rss) 실패`);
+    throw new Error(`스크래핑 실패 (${url}): 모든 단계(구조화·차단우회·fetch·playwright·임퍼소네이션·rss) 실패`);
 }
 
 // ============================================

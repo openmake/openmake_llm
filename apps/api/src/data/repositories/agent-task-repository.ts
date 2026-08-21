@@ -26,6 +26,10 @@ export class AgentTaskRepository extends BaseRepository {
         inputImages?: unknown;
         /** Cowork D1a: 실행 백엔드 — 'sandbox'(기본) | 'local'(로컬 브리지) */
         executor?: 'sandbox' | 'local';
+        /** 로컬 실행 대상 브리지 디바이스 (다중 디바이스, 093) — 미지정은 최근 접속 디바이스 폴백 */
+        deviceId?: string;
+        /** 로컬 실행 대상 폴더 (102) — 연결 루트 기준 상대경로. 미지정은 루트 */
+        folderRel?: string;
     }): Promise<void> {
         // input_files/input_images 는 값이 있을 때만 컬럼에 포함 — 056/057 마이그레이션
         // 미적용 배포에서도 해당 값 없는 기존 생성 경로가 깨지지 않게 한다(2단계 배포 안전).
@@ -42,6 +46,14 @@ export class AgentTaskRepository extends BaseRepository {
         if (params.executor !== undefined) {
             cols.push('executor');
             values.push(params.executor);
+        }
+        if (params.deviceId !== undefined) {
+            cols.push('device_id');
+            values.push(params.deviceId);
+        }
+        if (params.folderRel !== undefined) {
+            cols.push('folder_rel');
+            values.push(params.folderRel);
         }
         await this.query(
             `INSERT INTO agent_tasks (${cols.join(', ')}) VALUES (${values.map((_, i) => `$${i + 1}`).join(', ')})`,

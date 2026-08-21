@@ -1,6 +1,6 @@
 {
     "name": "openmake",
-    "version": "1.26.0",
+    "version": "1.31.0",
     "description": "OpenMake - AI Assistant Platform",
     "main": "apps/api/dist/server.js",
     "scripts": {
@@ -40,6 +40,7 @@
     "workspaces": [
         "apps/api",
         "apps/web",
+        "apps/cli",
         "apps/discord-bot",
         "packages/*"
     ],

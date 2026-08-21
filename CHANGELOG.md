@@ -1,5 +1,52 @@
 # Changelog
 
+## [1.31.0](https://github.com/openmake/openmake_llm/compare/v1.30.0...v1.31.0) (2026-08-21)
+
+
+### ✨ 기능
+
+* **ios:** 카메라 촬영·음성 입력 — 폰 기능 3단계 ([#557](https://github.com/openmake/openmake_llm/issues/557)) ([68d6200](https://github.com/openmake/openmake_llm/commit/68d6200e9380934b8dd22eaf7ce0ba8730f8d164))
+
+## [1.30.0](https://github.com/openmake/openmake_llm/compare/v1.29.0...v1.30.0) (2026-08-21)
+
+
+### ✨ 기능
+
+* **ios:** 위치 컨텍스트(GPS) + 웹 로고 앱 아이콘 — 폰 기능 2단계 ([#555](https://github.com/openmake/openmake_llm/issues/555)) ([927ee6a](https://github.com/openmake/openmake_llm/commit/927ee6a5f027b7f5163afad874bc795f140bd211))
+
+## [1.29.0](https://github.com/openmake/openmake_llm/compare/v1.28.0...v1.29.0) (2026-08-21)
+
+
+### ✨ 기능
+
+* **local-bridge:** 브리지 폴더 선택 프로토콜 — 웹에서 CLI 재시작 없이 실행 폴더 선택 ([#549](https://github.com/openmake/openmake_llm/issues/549)) ([d7c40df](https://github.com/openmake/openmake_llm/commit/d7c40dfa8cfd3121f2349265d7b48ad12cad776a))
+
+
+### 🐛 버그 수정
+
+* **local-bridge:** 로컬 실행기 준비 로그에 선택 폴더(folderRel) 기록 ([#551](https://github.com/openmake/openmake_llm/issues/551)) ([fd05e17](https://github.com/openmake/openmake_llm/commit/fd05e17f5e50ab32d175b32082c4b588528bd593))
+* **web-search:** 검색 쿼리 길이 캡 — 장문 프롬프트의 provider 414 차단 ([#554](https://github.com/openmake/openmake_llm/issues/554)) ([e40291d](https://github.com/openmake/openmake_llm/commit/e40291d7328b9e11e6615c00926c245fe5ac9f49))
+
+## [1.28.0](https://github.com/openmake/openmake_llm/compare/v1.27.0...v1.28.0) (2026-08-20)
+
+
+### ✨ 기능
+
+* **auth:** API key bridge/chat 스코프 하드닝 ([#547](https://github.com/openmake/openmake_llm/issues/547)) ([cc8a9bc](https://github.com/openmake/openmake_llm/commit/cc8a9bc56eaec9e8ae056f9e630ddb25b5a1c22d))
+
+## [1.27.0](https://github.com/openmake/openmake_llm/compare/v1.26.0...v1.27.0) (2026-08-20)
+
+
+### ✨ 기능
+
+* **admin:** 에이전트 작업 워크플로우 관측 지표 4종 ([#540](https://github.com/openmake/openmake_llm/issues/540)) ([8e300b0](https://github.com/openmake/openmake_llm/commit/8e300b035b1dcafdc76e4540f6e92d565e720bdc))
+* **agent-task:** OpenMake Code — 로컬 기반 CLI 에이전트 작업 ([#546](https://github.com/openmake/openmake_llm/issues/546)) ([8a7f0f8](https://github.com/openmake/openmake_llm/commit/8a7f0f84bbada9fcb158022c92a3e8f70640483d))
+
+
+### 🐛 버그 수정
+
+* **chat:** OpenAI 호환 클라이언트 system 메시지를 드롭 대신 맨 앞 system 에 병합 ([#543](https://github.com/openmake/openmake_llm/issues/543)) ([03b50c9](https://github.com/openmake/openmake_llm/commit/03b50c97fdac5fb5e6b148e371fd1a355caca89f))
+
 ## [1.26.0](https://github.com/openmake/openmake_llm/compare/v1.25.0...v1.26.0) (2026-08-19)
 
 

@@ -191,6 +191,8 @@ export function Composer() {
     agentTaskMode,
     agentApprovalMode,
     agentLocalExecutor,
+    agentLocalDeviceId,
+    agentLocalFolderRel,
     imageMode,
     artifactMode,
     structuredMode,
@@ -201,6 +203,8 @@ export function Composer() {
     setSelectedModel,
     setAgentApprovalMode,
     setAgentLocalExecutor,
+    setAgentLocalDeviceId,
+    setAgentLocalFolderRel,
     cycleStyle,
     setInputDraft,
     auth,
@@ -232,13 +236,32 @@ export function Composer() {
   // Cowork D2: 로컬 브리지(데스크톱 앱) 연결 상태 — 토글 활성 판단. 15s 갱신.
   const { data: bridgeData } = useQuery({
     queryKey: ["local-bridge-status"],
-    queryFn: () => ApiClient.get<{ data: { enabled: boolean; connected: boolean; folderName: string | null } }>("/api/local-bridge/status"),
+    queryFn: () => ApiClient.get<{ data: { enabled: boolean; connected: boolean; folderName: string | null; devices?: { deviceId: string; label: string; folderName: string; connectedAt: number }[] } }>("/api/local-bridge/status"),
     enabled: agentTaskMode,
     refetchInterval: 15_000,
     staleTime: 10_000,
   });
   const bridgeConnected = !!bridgeData?.data?.connected;
-  const bridgeFolder = bridgeData?.data?.folderName ?? "";
+  const bridgeDevices = bridgeData?.data?.devices ?? [];
+  // 폴더 선택(102): 연결 루트 하위 폴더 온디맨드 탐색 — 열 때마다 루트부터(서버 세션 캐시가
+  // 탐색 경로를 따라 쌓여야 folderRel 검증을 통과한다. 재접속 후 이전 선택 경로 직행 금지).
+  const [folderPickerOpen, setFolderPickerOpen] = useState(false);
+  const [folderBrowsePath, setFolderBrowsePath] = useState("");
+  // 다중 디바이스(101): 선택 디바이스가 있으면 그것, 없으면 최근 접속(마지막) 디바이스로 고정.
+  // 선택기가 안 뜨는 단일 디바이스에서도 명시 deviceId 를 작업에 실어 create↔execute 간
+  // "최근 접속" 폴백이 다른 디바이스로 튀는 것을 막는다(서버 M3 회귀 차단).
+  const selectedBridgeDevice = bridgeDevices.find((d) => d.deviceId === agentLocalDeviceId)
+    ?? bridgeDevices[bridgeDevices.length - 1] ?? null;
+  const bridgeFolder = selectedBridgeDevice?.folderName ?? bridgeData?.data?.folderName ?? "";
+  const { data: bridgeFoldersData, isLoading: bridgeFoldersLoading, isError: bridgeFoldersError } = useQuery({
+    queryKey: ["local-bridge-folders", selectedBridgeDevice?.deviceId, folderBrowsePath],
+    queryFn: () => ApiClient.get<{ data: { folders: { rel: string; name: string }[]; truncated: boolean } }>(
+      `/api/local-bridge/folders?deviceId=${encodeURIComponent(selectedBridgeDevice?.deviceId ?? "")}${folderBrowsePath ? `&path=${encodeURIComponent(folderBrowsePath)}` : ""}`,
+    ),
+    enabled: agentTaskMode && agentLocalExecutor && folderPickerOpen && !!selectedBridgeDevice,
+    staleTime: 10_000,
+    retry: false, // 구 디바이스(kind 미지원)는 재시도 무의미 — 즉시 미지원 안내
+  });
   // 검색어 없으면("/") 카테고리 그룹핑(전체), 있으면 평면 검색 목록
   const slashGrouped = slashDebounced.trim() === "";
   const rawSlashSkills: SkillSummary[] = slashCandidate ? slashSkillsData ?? [] : [];
@@ -328,6 +351,8 @@ export function Composer() {
         images.length ? images.map((i) => i.dataUrl) : undefined,
         agentApprovalMode,
         agentLocalExecutor || undefined,
+        agentLocalExecutor ? (selectedBridgeDevice?.deviceId ?? null) : null,
+        agentLocalExecutor ? agentLocalFolderRel : null,
       );
     } else if (structuredMode) {
       // 구조화 답변 토글 ON — REST /api/chat/structured (비스트리밍, 카드 렌더). 첨부는 미지원.
@@ -617,9 +642,78 @@ export function Composer() {
               {!bridgeConnected
                 ? t("localExec.disconnected")
                 : agentLocalExecutor
-                  ? t("localExec.on", { folder: bridgeFolder })
+                  ? t("localExec.on", { folder: agentLocalFolderRel ? `${bridgeFolder}/${agentLocalFolderRel}` : bridgeFolder })
                   : t("localExec.off")}
             </button>
+            {/* 폴더 선택(102): 연결 루트 하위 폴더 탐색·선택 — CLI 재시작 없이 실행 폴더 변경 */}
+            {agentLocalExecutor && bridgeConnected && (
+              <button
+                type="button"
+                onClick={() => { setFolderBrowsePath(""); setFolderPickerOpen((v) => !v); }}
+                className="rounded-md border border-border bg-surface-2 px-2 py-1 text-xs text-fg-1"
+              >
+                {t("localExec.folderPick")}
+              </button>
+            )}
+            {/* 다중 디바이스(101): 2대 이상 접속 시 대상 디바이스 선택 — 1대면 현행 토글 UX 유지 */}
+            {agentLocalExecutor && bridgeConnected && bridgeDevices.length > 1 && (
+              <select
+                value={selectedBridgeDevice?.deviceId ?? bridgeDevices[bridgeDevices.length - 1]?.deviceId ?? ""}
+                onChange={(e) => setAgentLocalDeviceId(e.target.value || null)}
+                className="max-w-[220px] truncate rounded-md border border-border bg-surface-2 px-1.5 py-1 text-xs text-fg-1"
+              >
+                {bridgeDevices.map((d) => (
+                  <option key={d.deviceId} value={d.deviceId}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
+        {/* 폴더 선택(102) 탐색 패널 — 디바이스가 folders 로 열거해 보고한 하위 폴더만 표시 */}
+        {agentTaskMode && agentLocalExecutor && bridgeConnected && folderPickerOpen && (
+          <div className="mx-3 mt-1 rounded-md border border-border bg-surface-2 p-2 text-xs">
+            <div className="flex items-center gap-2 pb-1">
+              <span className="min-w-0 flex-1 truncate text-muted">{bridgeFolder}/{folderBrowsePath}</span>
+              {folderBrowsePath && (
+                <button
+                  type="button"
+                  onClick={() => setFolderBrowsePath(folderBrowsePath.split("/").slice(0, -1).join("/"))}
+                  className="shrink-0 rounded border border-border px-1.5 py-0.5 text-fg-1"
+                >
+                  {t("localExec.folderUp")}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => { setAgentLocalFolderRel(folderBrowsePath || null); setFolderPickerOpen(false); }}
+                className="shrink-0 rounded border border-accent bg-accent-soft px-1.5 py-0.5 text-accent"
+              >
+                {t("localExec.folderSelectHere")}
+              </button>
+            </div>
+            {bridgeFoldersError ? (
+              <p className="text-muted">{t("localExec.folderUnsupported")}</p>
+            ) : bridgeFoldersLoading ? (
+              <p className="text-muted">…</p>
+            ) : (bridgeFoldersData?.data?.folders?.length ?? 0) === 0 ? (
+              <p className="text-muted">{t("localExec.folderEmpty")}</p>
+            ) : (
+              <div className="flex max-h-40 flex-wrap gap-1 overflow-y-auto">
+                {bridgeFoldersData?.data?.folders?.map((f) => (
+                  <button
+                    key={f.rel}
+                    type="button"
+                    onClick={() => setFolderBrowsePath(f.rel)}
+                    className="rounded border border-border px-1.5 py-0.5 text-fg-1 hover:bg-surface-3"
+                  >
+                    {f.name}/
+                  </button>
+                ))}
+                {bridgeFoldersData?.data?.truncated && <span className="text-muted">{t("localExec.folderTruncated")}</span>}
+              </div>
+            )}
           </div>
         )}
         {/* 승인 3모드(Manual/Auto/Skip) — 에이전트 작업 위임 시 이 실행의 도구 승인 정책 선택. */}

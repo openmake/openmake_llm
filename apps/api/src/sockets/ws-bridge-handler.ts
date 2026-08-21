@@ -9,6 +9,7 @@ import type { WebSocket } from 'ws';
 import type { WSMessage, ExtendedWebSocket } from './ws-types';
 import { getLocalBridgeRegistry, type BridgeResult } from '../services/local-bridge/registry';
 import { LOCAL_BRIDGE } from '../config/local-bridge';
+import { apiKeyHasScope, API_KEY_SCOPES } from '../config/api-key-scopes';
 
 export async function handleBridgeMessage(ws: WebSocket, msg: WSMessage): Promise<void> {
     const extWs = ws as ExtendedWebSocket;
@@ -21,17 +22,32 @@ export async function handleBridgeMessage(ws: WebSocket, msg: WSMessage): Promis
         ws.send(JSON.stringify({ type: 'error', message: '로컬 실행 기능이 비활성화되어 있습니다 (LOCAL_EXECUTOR_ENABLED)' }));
         return;
     }
+    // API key 연결이면 bridge 스코프 필수 — 스코프 없는(예: chat 전용) 키의 브리지 등록 차단.
+    // JWT/쿠키(데스크톱 앱) 연결은 _apiKeyScopes=undefined 라 apiKeyHasScope 가 통과시킨다.
+    if (extWs._apiKeyScopes !== undefined && !apiKeyHasScope(extWs._apiKeyScopes, API_KEY_SCOPES.BRIDGE)) {
+        ws.send(JSON.stringify({ type: 'error', message: `이 API key 는 '${API_KEY_SCOPES.BRIDGE}' 스코프가 없습니다 — bridge 스코프 키를 발급하세요` }));
+        try { ws.close(1008, 'bridge_scope_required'); } catch { /* already closing */ }
+        return;
+    }
     const registry = getLocalBridgeRegistry();
     if (msg.type === 'bridge_hello') {
         const deviceId = typeof msg.deviceId === 'string' && msg.deviceId.trim() ? msg.deviceId.trim().slice(0, 64) : 'unknown';
         const label = typeof msg.label === 'string' && msg.label.trim() ? msg.label.trim().slice(0, 120) : deviceId;
         const folderName = typeof msg.folderName === 'string' ? msg.folderName.trim().slice(0, 200) : '';
-        registry.register({ userId, deviceId, label, folderName, ws, connectedAt: Date.now() });
+        const ok = registry.register({ userId, deviceId, label, folderName, ws, connectedAt: Date.now() });
+        if (!ok) {
+            ws.send(JSON.stringify({ type: 'error', message: `브리지 디바이스 상한(${LOCAL_BRIDGE.MAX_DEVICES}대)을 초과했습니다 — 다른 디바이스 연결을 해제하세요` }));
+            // 미등록 소켓을 열어두면 좀비로 남아 MAX_CONNECTIONS_PER_USER 만 갉아먹는다 — 명시 종료.
+            try { ws.close(1008, 'bridge_device_limit'); } catch { /* already closing */ }
+            return;
+        }
         ws.send(JSON.stringify({ type: 'bridge_ready', deviceId }));
         return;
     }
-    // bridge_result — reqId 상관관계 해소 (소유 검증은 레지스트리가 수행)
+    // bridge_result — reqId 상관관계 해소 (소유 검증은 레지스트리가 수행). 발신 소켓의
+    // deviceId 를 함께 넘겨 요청을 라우팅한 디바이스와 일치하는지 검증(교차 디바이스 주입 차단).
     if (typeof msg.reqId === 'string' && msg.result && typeof msg.result === 'object') {
-        registry.handleResult(userId, msg.reqId, msg.result as unknown as BridgeResult);
+        const senderDeviceId = registry.getDeviceIdByWs(userId, ws) ?? undefined;
+        registry.handleResult(userId, msg.reqId, msg.result as unknown as BridgeResult, senderDeviceId);
     }
 }

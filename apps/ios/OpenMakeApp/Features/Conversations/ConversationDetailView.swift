@@ -262,14 +262,21 @@ private struct ChatTranscriptView: View {
         let files = pendingFiles
         pendingImages = []
         pendingFiles = []
+        let wantsLocation = model.modes.attachLocation
         Task {
+            // 위치 첨부 ON 이면 이 턴에 한해 GPS 1회 획득 (거부/실패 시 위치 없이 진행)
+            var location: UserLocation?
+            if wantsLocation, let coord = await LocationProvider.shared.currentLocation() {
+                location = UserLocation(lat: coord.lat, lng: coord.lng)
+            }
             await chat.send(
                 text,
                 model: model.selectedModelId,
                 userAgentId: model.selectedAgentId,
                 images: images,
                 files: files,
-                modes: model.modes)
+                modes: model.modes,
+                userLocation: location)
         }
     }
 
@@ -361,6 +368,12 @@ private struct MessageRow: View {
 /// LUMEN 컴포저 — accent-soft + 버튼, surface 입력 카드, 모드 칩(도트)
 private struct ChatComposer: View {
     @Environment(AppModel.self) private var model
+    /// 카메라 촬영 시트 (폰 기능 3단계) — 촬영 결과는 pendingImages(vision 채널)로
+    @State private var showCamera = false
+    /// 음성 입력 (폰 기능 3단계) — 녹음 중 실시간 전사를 draft 에 반영
+    @State private var speech = SpeechRecognizer()
+    /// 녹음 시작 시점의 기존 입력 — 실시간 전사가 이어붙도록 보존(덮어쓰기 방지)
+    @State private var draftBeforeRecording = ""
     @Binding var draft: String
     @Binding var photoItems: [PhotosPickerItem]
     @Binding var pendingImages: [String]
@@ -385,6 +398,11 @@ private struct ChatComposer: View {
                         PhotosPicker(selection: $photoItems, maxSelectionCount: 3, matching: .images) {
                             Label("사진", systemImage: "photo")
                         }
+                        if CameraPicker.isCameraAvailable {
+                            Button { showCamera = true } label: {
+                                Label("카메라", systemImage: "camera")
+                            }
+                        }
                         Button { showFileImporter = true } label: {
                             Label("파일", systemImage: "doc")
                         }
@@ -397,6 +415,7 @@ private struct ChatComposer: View {
                         Toggle("토론", systemImage: "person.2.wave.2", isOn: $model.modes.discussion)
                         Toggle("딥리서치", systemImage: "magnifyingglass.circle", isOn: $model.modes.deepResearch)
                         Toggle("에이전트 작업", systemImage: "wand.and.stars", isOn: $model.modes.agentTask)
+                        Toggle("위치 첨부", systemImage: "location", isOn: $model.modes.attachLocation)
                     }
                     Picker("응답 스타일", systemImage: "text.alignleft", selection: $model.modes.style) {
                         Text("간결").tag(Style.concise)
@@ -418,6 +437,22 @@ private struct ChatComposer: View {
                         .padding(.leading, 14)
                         .padding(.vertical, 9)
 
+                    Button {
+                        if speech.isRecording {
+                            speech.stop() // 실시간 반영이 이미 draft 를 채움 — 종료만
+                        } else {
+                            draftBeforeRecording = draft
+                            Task { await speech.start() }
+                        }
+                    } label: {
+                        Image(systemName: speech.isRecording ? "mic.fill" : "mic")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(speech.isRecording ? Color.red : Lumen.faint)
+                            .frame(width: 30, height: 30)
+                            .symbolEffect(.pulse, isActive: speech.isRecording)
+                    }
+                    .padding(.bottom, 3)
+
                     Button(action: onSubmit) {
                         Image(systemName: "arrow.up")
                             .font(.system(size: 14, weight: .semibold))
@@ -438,6 +473,17 @@ private struct ChatComposer: View {
         .padding(.top, 6)
         .padding(.bottom, 8)
         .background(Lumen.bg)
+        .sheet(isPresented: $showCamera) {
+            CameraPicker { data in
+                pendingImages.append(DataURL.encode(data, mimeType: "image/jpeg"))
+            }
+            .ignoresSafeArea()
+        }
+        .onChange(of: speech.transcript) { _, text in
+            // 실시간 전사 — 녹음 시작 시점 입력 뒤에 이어붙인다(기존 입력 덮어쓰기 방지)
+            guard speech.isRecording, !text.isEmpty else { return }
+            draft = draftBeforeRecording.isEmpty ? text : draftBeforeRecording + " " + text
+        }
     }
 
     @ViewBuilder

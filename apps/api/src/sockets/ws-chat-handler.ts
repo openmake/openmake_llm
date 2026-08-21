@@ -25,7 +25,7 @@ import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser'
 import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext } from '../services/chat-service/attach-context';
 import type { PdfVisionResult } from '../services/chat-service/pdf-vision';
 import { hasScriptMixing } from '../services/chat-service/script-purity';
-import { citationMarkersWereCleaned } from '../services/chat-service/external-deterministic-append';
+import { citationMarkersWereCleaned, mapHtmlWasCleaned } from '../services/chat-service/external-deterministic-append';
 import { saveAssistantMessage } from '../chat/request-persistence';
 import { buildWebSearchContext } from '../mcp/web-search/build-search-context';
 
@@ -314,6 +314,13 @@ export async function handleChatMessage(
             enabledTools: msg.enabledTools,
             notebook: notebookRef,
             userLanguagePreference: userLangPreference,
+            // 기기 GPS 위치 (옵트인) — 범위 밖/비정상 값은 무시 (fail-safe)
+            userLocation: (() => {
+                const loc = (msg as { userLocation?: { lat?: unknown; lng?: unknown } }).userLocation;
+                if (!loc || typeof loc.lat !== 'number' || typeof loc.lng !== 'number') return undefined;
+                if (loc.lat < -90 || loc.lat > 90 || loc.lng < -180 || loc.lng > 180) return undefined;
+                return { lat: loc.lat, lng: loc.lng };
+            })(),
             userContext,
             clusterManager: cluster,
             abortSignal: abortController.signal,
@@ -430,11 +437,14 @@ export async function handleChatMessage(
         // 그 차이가 있을 때만 정확히 겨냥해 reset 한다(그 외 턴은 기존대로 undefined).
         // 죽은 인용 마커 제거(external-deterministic-append)가 적용된 턴도 동일 패턴으로 교체 —
         // 스트리밍 화면에 남은 [출처 N](수집 목록 밖 번호) 마커를 완료 시점에 정리한다.
+        // 지도 환각 HTML 제거(stripHallucinatedMapHtml)가 적용된 턴도 동일 — 화면에 코드
+        // 텍스트로 노출된 가짜 카카오 이미지 링크를 완료 시점에 정리한다.
         const cleanedContent = (result.artifacts && result.artifacts.length > 0)
             ? result.response
             : (result.response
                 && ((hasScriptMixing(partialAssistantResponse) && !hasScriptMixing(result.response))
-                    || citationMarkersWereCleaned(partialAssistantResponse, result.response))
+                    || citationMarkersWereCleaned(partialAssistantResponse, result.response)
+                    || mapHtmlWasCleaned(partialAssistantResponse, result.response))
                 ? result.response
                 : undefined);
         ws.send(JSON.stringify({

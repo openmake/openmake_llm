@@ -51,7 +51,8 @@ final class ChatSessionModel {
         userAgentId: String? = nil,
         images: [String] = [],
         files: [WsAttachedFile] = [],
-        modes: AppModel.ChatModes = .init()
+        modes: AppModel.ChatModes = .init(),
+        userLocation: UserLocation? = nil
     ) async {
         errorMessage = nil
         noticeText = nil
@@ -111,7 +112,8 @@ final class ChatSessionModel {
                 discussionMode: modes.discussion ? true : nil,
                 deepResearchMode: modes.deepResearch ? true : nil,
                 style: modes.style == .styleDefault ? nil : modes.style,
-                userAgentId: userAgentId))
+                userAgentId: userAgentId,
+                userLocation: userLocation))
 
             for await event in events {
                 state.apply(event)

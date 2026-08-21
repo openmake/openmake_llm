@@ -5,6 +5,8 @@
  */
 import { IncomingMessage } from 'http';
 import { verifyToken } from '../auth';
+import { hashApiKey, isValidApiKeyFormat, API_KEY_PREFIX } from '../auth/api-key-utils';
+import { getUnifiedDatabase } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
 import { isOriginAllowed } from '../security/cors-policy';
 import { AUTH_COOKIES } from '../config/security';
@@ -17,6 +19,8 @@ export interface WebSocketAuthResult {
     tokenJti?: string | null;
     tokenFingerprint?: string | null;
     authMethod?: 'cookie' | 'bearer' | 'none';
+    /** API key 인증 시 그 키의 스코프(브리지 등록 게이트용). JWT/쿠키 인증은 undefined. */
+    apiKeyScopes?: string[] | null;
 }
 
 function tokenFingerprint(token: string): string {
@@ -24,6 +28,54 @@ function tokenFingerprint(token: string): string {
         return token;
     }
     return `${token.slice(0, 6)}...${token.slice(-6)}`;
+}
+
+const GUEST_RESULT: WebSocketAuthResult = {
+    userId: null,
+    userRole: 'guest',
+    tokenExpiresAtMs: null,
+    tokenIssuedAtMs: null,
+    tokenJti: null,
+    tokenFingerprint: null,
+    authMethod: 'none',
+};
+
+/**
+ * API key(omk_live_*) 로 WS 인증 — CLI 브리지 상주 연결용 (2026-08-21).
+ * JWT(15분)와 달리 만료 없이 유지되므로, 하트비트의 토큰 만료 종료 대상이 아니다
+ * (tokenExpiresAtMs = 키의 expires_at 또는 null). 검증 축은 REST requireApiKey 와 동일
+ * (해시 조회 + is_active + expires_at).
+ */
+async function resolveAuthFromApiKey(
+    plainKey: string,
+    logger: ReturnType<typeof createLogger>,
+): Promise<WebSocketAuthResult> {
+    if (!isValidApiKeyFormat(plainKey)) return { ...GUEST_RESULT };
+    try {
+        const db = getUnifiedDatabase();
+        const key = await db.getApiKeyByHash(hashApiKey(plainKey));
+        if (!key || !key.is_active) return { ...GUEST_RESULT };
+        if (key.expires_at && new Date(key.expires_at) < new Date()) {
+            logger.warn('[WS] 만료된 API key 연결 시도 차단');
+            return { ...GUEST_RESULT };
+        }
+        const user = await db.getUserById(key.user_id);
+        if (!user || !user.is_active) return { ...GUEST_RESULT };
+        logger.info(`[WS] API key 인증 연결: userId=${user.id}`);
+        return {
+            userId: String(user.id),
+            userRole: (user.role as 'admin' | 'user' | 'guest') || 'user',
+            tokenExpiresAtMs: key.expires_at ? new Date(key.expires_at).getTime() : null,
+            tokenIssuedAtMs: null,
+            tokenJti: null,
+            tokenFingerprint: tokenFingerprint(plainKey),
+            authMethod: 'bearer',
+            apiKeyScopes: (key.scopes as string[] | undefined) ?? ['*'],
+        };
+    } catch (e) {
+        logger.warn('[WS] API key 인증 실패:', e);
+        return { ...GUEST_RESULT };
+    }
 }
 
 async function resolveAuthFromToken(
@@ -96,6 +148,10 @@ export async function authenticateWebSocket(
         const headerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
         const token = cookieToken || headerToken;
+        // API key (CLI 브리지) — JWT 검증 전에 접두사로 분기 (JWT 형식이 아니므로).
+        if (token && token.startsWith(API_KEY_PREFIX)) {
+            return await resolveAuthFromApiKey(token, logger);
+        }
         if (token) {
             const authMethod: 'cookie' | 'bearer' = cookieToken ? 'cookie' : 'bearer';
             const authResult = await resolveAuthFromToken(token, logger, authMethod);
