@@ -24,10 +24,10 @@ interface CatalogTemplate {
   display_name: string;
   description?: string;
   transport_type: TransportType;
-  command?: string;
-  args?: string[];
-  env?: Record<string, string>;
-  url?: string;
+  command_template?: string | null;
+  args_schema?: Record<string, unknown>;
+  env_schema?: Record<string, unknown>;
+  url_template?: string | null;
   is_enabled: boolean;
 }
 
@@ -82,8 +82,8 @@ function TemplateFormModal({ initial, onClose, onSaved }: TemplateFormProps) {
   const [displayName, setDisplayName] = useState(initial?.display_name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [transportType, setTransportType] = useState<TransportType>(initial?.transport_type ?? "stdio");
-  const [command, setCommand] = useState(initial?.command ?? "");
-  const [url, setUrl] = useState(initial?.url ?? "");
+  const [command, setCommand] = useState(initial?.command_template ?? "");
+  const [url, setUrl] = useState(initial?.url_template ?? "");
   const [isEnabled, setIsEnabled] = useState(initial?.is_enabled ?? true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -97,8 +97,8 @@ function TemplateFormModal({ initial, onClose, onSaved }: TemplateFormProps) {
         display_name: displayName,
         description: description || undefined,
         transport_type: transportType,
-        command: command || undefined,
-        url: url || undefined,
+        command_template: command || undefined,
+        url_template: url || undefined,
         is_enabled: isEnabled,
       };
       if (isEdit && initial) {
@@ -130,6 +130,9 @@ function TemplateFormModal({ initial, onClose, onSaved }: TemplateFormProps) {
               value={id}
               onChange={(e) => setId(e.target.value)}
               placeholder="mcp-my-server"
+              /* 서버 스키마(createCatalogTemplateSchema)와 동일한 제약 — 어긋나면 400 */
+              pattern="mcp-[a-z0-9][a-z0-9-]*"
+              title='"mcp-" 로 시작하는 소문자/숫자/하이픈만 허용'
             />
           </div>
         )}
