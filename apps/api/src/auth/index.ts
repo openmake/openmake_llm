@@ -17,8 +17,6 @@ export {
     verifyToken,
     blacklistToken,
     extractToken,
-    hasPermission,
-    isAdmin,
     setTokenCookie,
     setRefreshTokenCookie,
     clearTokenCookie,
@@ -27,4 +25,4 @@ export {
 
 // 모듈 재-export
 export * from './types';
-export { optionalAuth, requireAuth, requireAdmin, requireRole } from './middleware';
+export { optionalAuth, requireAuth, requireAdmin } from './middleware';

@@ -29,16 +29,11 @@ import {
 
 // Re-export types and monitor
 export * from './types';
-export { getAgentMonitor, AgentMonitor } from './monitor';
+export { getAgentMonitor } from './monitor';
 
 // Re-export from agent-data (shared data module)
 export { AGENTS, getAgentById } from './agent-data';
 import { AGENTS, industryData } from './agent-data';
-
-// Re-export from topic-analyzer
-export { analyzeTopicIntent } from './topic-analyzer';
-export type { TopicCategory } from './topic-analyzer';
-export { TOPIC_CATEGORIES } from './topic-analyzer';
 
 // Re-export from keyword-router
 export { routeToAgent, detectPhase } from './keyword-router';
@@ -47,7 +42,7 @@ export { routeToAgent, detectPhase } from './keyword-router';
 export { getRelatedAgentsForDiscussion } from './discussion-recommender';
 
 // Re-export from system-prompt
-export { getAgentSystemMessage, getPhaseLabel, getDefaultSystemPrompt } from './system-prompt';
+export { getAgentSystemMessage } from './system-prompt';
 
 // ========================================
 // 유틸리티 함수

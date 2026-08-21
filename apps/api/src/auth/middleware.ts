@@ -16,7 +16,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { extractToken, verifyToken, hasPermission, isAdmin, clearTokenCookie } from './auth-core';
+import { extractToken, verifyToken, isAdmin, clearTokenCookie } from './auth-core';
 import { getUserManager, PublicUser, UserRole } from '../data/user-manager';
 import { unauthorized, forbidden } from '../utils/api-response';
 import { AUTH_COOKIES } from '../config/security';
@@ -180,21 +180,5 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
     next();
 }
 
-/**
- * 특정 역할 필수 미들웨어 팩토리
- */
-export function requireRole(role: UserRole) {
-    return (req: Request, res: Response, next: NextFunction): void => {
-        if (!req.user) {
-            res.status(401).json(unauthorized('인증이 필요합니다'));
-            return;
-        }
-
-        if (!hasPermission(req.user.role, role)) {
-            res.status(403).json(forbidden(`${role} 이상의 권한이 필요합니다`));
-            return;
-        }
-
-        next();
-    };
-}
+// (requireRole 미들웨어 팩토리는 사용처 0건으로 제거 — 2026-08-22.
+//  역할 게이트는 requireAdmin + scope middleware 가 담당.)

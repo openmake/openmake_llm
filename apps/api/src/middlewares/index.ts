@@ -16,7 +16,6 @@ const logger = createLogger('Middleware');
 // ================================================
 
 export {
-    createAdvancedRateLimiter,
     generalLimiter,
     authLimiter,
     chatLimiter,
@@ -114,16 +113,5 @@ export function corsMiddleware(req: Request, res: Response, next: NextFunction) 
 // Error Handler Utilities (Re-exports)
 // ================================================
 
-// Re-export error handler utilities
-export {
-    AppError,
-    ValidationError,
-    AuthenticationError,
-    AuthorizationError,
-    NotFoundError,
-    RateLimitError,
-    DatabaseError,
-    errorHandler,
-    asyncHandler,
-    notFoundHandler
-} from '../utils/error-handler';
+// (error-handler 유틸 재수출은 배럴 경유 소비 0건으로 제거 —
+//  소비자들은 utils/error-handler 를 직접 import)

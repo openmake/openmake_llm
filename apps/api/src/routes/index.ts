@@ -9,7 +9,7 @@
  * @module routes/index
  */
 
-export { default as metricsRouter, setClusterManager, setActiveConnectionsGetter } from './metrics.routes';
+export { default as metricsRouter, setClusterManager } from './metrics.routes';
 export { default as agentRouter } from './agents.routes';
 export { default as skillsRouter } from './skills.routes';
 export { default as modelRouter } from './model.routes';
@@ -25,9 +25,8 @@ export { firstRunSetupRouter } from './first-run-setup.routes';
 export { default as kakaoMapEmbedRouter } from './kakao-map-embed.routes';
 
 // 🆕 리팩토링된 라우트
-export { default as chatRouter, setClusterManager as setChatCluster } from './chat.routes';
+// (chatRouter/webSearchRouter 재수출 제거 — setup.ts/v1 이 각 routes 파일 직접 import)
 // documentsRouter: 2026-05-19 제거 (문서 업로드/Q&A/요약 폐기)
-export { default as webSearchRouter, setClusterManager as setWebSearchCluster } from './web-search.routes';
 
 // 🆕 추가 분리된 라우트
 export { default as usageRouter } from './usage.routes';
@@ -71,6 +70,6 @@ export { default as developerDocsRouter } from './developer-docs.routes';
 export { default as chatFeedbackRouter } from './chat-feedback.routes';
 
 // 🆕 Token Monitoring 라우트
-export { tokenMonitoringRouter } from './token-monitoring.routes';
+// (tokenMonitoringRouter 재수출 제거 — setup.ts/v1 이 token-monitoring.routes 직접 import)
 
 // Knowledge Base 라우트: 2026-05-19 제거 (메타데이터 CRUD만, 채팅 미연결 — dead code)

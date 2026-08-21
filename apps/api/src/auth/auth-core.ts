@@ -283,18 +283,7 @@ export function extractToken(authHeader?: string): string | null {
     return authHeader;
 }
 
-/**
- * 역할 권한 체크
- */
-export function hasPermission(userRole: UserRole, requiredRole: UserRole): boolean {
-    const roleHierarchy: Record<UserRole, number> = {
-        'admin': 3,
-        'user': 2,
-        'guest': 1
-    };
-
-    return roleHierarchy[userRole] >= roleHierarchy[requiredRole];
-}
+// (hasPermission 역할 계층 체크는 유일 소비자 requireRole 제거와 함께 삭제 — 2026-08-22)
 
 /**
  * 관리자 여부 확인
