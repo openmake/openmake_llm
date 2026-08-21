@@ -25,7 +25,6 @@ function isUnsafeEnv(env: string | undefined): boolean {
     return !SAFE_ENVS_FOR_MISSING_SECRETS.has(env ?? '');
 }
 const logLevelSchema = z.enum(['debug', 'info', 'warn', 'error']);
-const geminiThinkLevelSchema = z.enum(['low', 'medium', 'high']);
 
 const booleanFromString = (defaultValue: boolean) =>
     z.preprocess((value) => {
@@ -159,12 +158,6 @@ export const envSchema = z
 
         // Logging
         LOG_LEVEL: logLevelSchema.default('info'),
-
-        // Gemini
-        GEMINI_THINK_ENABLED: booleanFromString(true),
-        GEMINI_THINK_LEVEL: geminiThinkLevelSchema.default('high'),
-        GEMINI_NUM_CTX: positiveIntWithDefault(32768),
-        GEMINI_WEB_SEARCH_ENABLED: booleanFromString(true),
 
         // External
         GOOGLE_API_KEY: z.string().default(''),
