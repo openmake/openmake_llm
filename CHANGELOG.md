@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.29.0](https://github.com/openmake/openmake_llm/compare/v1.28.0...v1.29.0) (2026-08-21)
+
+
+### ✨ 기능
+
+* **local-bridge:** 브리지 폴더 선택 프로토콜 — 웹에서 CLI 재시작 없이 실행 폴더 선택 ([#549](https://github.com/openmake/openmake_llm/issues/549)) ([d7c40df](https://github.com/openmake/openmake_llm/commit/d7c40dfa8cfd3121f2349265d7b48ad12cad776a))
+
+
+### 🐛 버그 수정
+
+* **local-bridge:** 로컬 실행기 준비 로그에 선택 폴더(folderRel) 기록 ([#551](https://github.com/openmake/openmake_llm/issues/551)) ([fd05e17](https://github.com/openmake/openmake_llm/commit/fd05e17f5e50ab32d175b32082c4b588528bd593))
+* **web-search:** 검색 쿼리 길이 캡 — 장문 프롬프트의 provider 414 차단 ([#554](https://github.com/openmake/openmake_llm/issues/554)) ([e40291d](https://github.com/openmake/openmake_llm/commit/e40291d7328b9e11e6615c00926c245fe5ac9f49))
+
 ## [1.28.0](https://github.com/openmake/openmake_llm/compare/v1.27.0...v1.28.0) (2026-08-20)
 
 
