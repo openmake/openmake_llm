@@ -369,6 +369,9 @@ export class DashboardServer {
             });
             setLifecycleSupervisor(supervisor);
             console.log('✅ MCP Lifecycle Supervisor 초기화 완료');
+            // 재시작 후 user MCP 풀은 비어 있다 — enabled+auto_spawn 서버를 다시 띄운다.
+            // 기동을 막지 않도록 await 하지 않는다(자식 프로세스 spawn 이 수 초 걸린다).
+            void supervisor.restoreOnBoot();
         } catch (err) {
             console.error('⚠️  MCP Lifecycle Supervisor 초기화 실패 (graceful skip):', err);
         }

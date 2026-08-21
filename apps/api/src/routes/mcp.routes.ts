@@ -37,7 +37,7 @@ import { createLogger } from '../utils/logger';
 import { classifyConnectError, parseConnectError } from '../mcp/connect-error';
 import { validate } from '../middlewares/validation';
 import { mcpToolExecuteSchema, mcpServerCreateSchema, mcpServerEnvUpdateSchema,
-    mcpServerEnabledUpdateSchema, mcpServerAutoSpawnUpdateSchema } from '../schemas/mcp.schema';
+    mcpServerEnabledUpdateSchema, mcpServerAutoSpawnUpdateSchema, mcpServerRenameSchema } from '../schemas/mcp.schema';
 import { McpCatalogRepository } from '../data/repositories/mcp-catalog-repository';
 import { McpOAuthRepository } from '../data/repositories/mcp-oauth-repository';
 import { canRegisterServer, canViewServer, canDeleteServer, canStartStopServer, canUpdateServerEnv } from './mcp-visibility';
@@ -271,6 +271,79 @@ export const mcpRouter = Router();
       const registry = getUnifiedMCPClient().getServerRegistry();
       await registry.unregisterServer(id, db);
       res.json(success({ deleted: true }));
+  }));
+
+  // 서버 이름 변경 (PATCH) — 소유자 + admin.
+  //
+  // 이름은 도구 네임스페이스(name::tool)이자 tool-merger 의 의도 매칭 키다. 같은 카탈로그
+  // 템플릿을 여러 접속처(예: 앱 DB용 / 분석 DB용 postgres)에 설치할 때 서로 구분하는 유일한
+  // 수단이라, 설치 후에도 바꿀 수 있어야 한다.
+  mcpRouter.patch('/servers/:id', requireAuth, validate(mcpServerRenameSchema), asyncHandler(async (req: Request, res: Response) => {
+      const userId = String(req.user?.id ?? '');
+      const role = req.user?.role ?? 'user';
+      const actor = { id: userId, role };
+      const { id } = req.params;
+      const { name } = req.body as { name: string };
+
+      const db = getUnifiedDatabase();
+      const repo = new McpCatalogRepository(db.getPool());
+      const server = await repo.getServerById(id);
+      if (!server) {
+          res.status(404).json(notFound('서버'));
+          return;
+      }
+      // 이름 변경 권한은 env 변경과 동일 기준(소유자 + admin) — 공유 대상자는 바꿀 수 없다.
+      if (!canUpdateServerEnv(actor, server)) {
+          res.status(403).json(forbidden('해당 서버의 이름을 변경할 권한이 없습니다'));
+          return;
+      }
+      if (server.name === name) {
+          res.json(success({ server, respawnRequired: false }));
+          return;
+      }
+
+      let updated;
+      try {
+          updated = await repo.updateName(id, name);
+      } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          // uniq_mcp_servers_user_name / uniq_mcp_servers_global_name 위반.
+          if (/duplicate key|unique/i.test(msg)) {
+              res.status(409).json(badRequest(`이미 "${name}" 이름의 서버가 있습니다`));
+              return;
+          }
+          throw e;
+      }
+      if (!updated) {
+          res.status(404).json(notFound('서버'));
+          return;
+      }
+
+      // 떠 있는 클라이언트는 구 이름으로 도구를 노출한다(네임스페이스가 spawn 시점에 굳는다).
+      // env 변경과 같은 이유로 풀에서 내려 다음 ensureUserServers 가 새 이름으로 respawn 하게 한다.
+      let respawnRequired = false;
+      if (server.user_id) {
+          const supervisor = getLifecycleSupervisor();
+          if (supervisor) {
+              respawnRequired = true;
+              await supervisor.killUserServer(String(server.user_id), id).catch((e: unknown) =>
+                  logger.warn(`이름 변경 후 유저풀 정리 실패(변경은 유지): ${id}: ${e instanceof Error ? e.message : String(e)}`));
+          }
+      } else {
+          respawnRequired = true;
+          await getUnifiedMCPClient().getServerRegistry().disconnectServer(id).catch((e: unknown) =>
+              logger.warn(`이름 변경 후 전역 registry 정리 실패(변경은 유지): ${id}: ${e instanceof Error ? e.message : String(e)}`));
+      }
+
+      void getAuditService().logAudit({
+          action: 'mcp_server_rename',
+          userId,
+          resourceType: 'mcp_server',
+          resourceId: id,
+          details: { from: server.name, to: name },
+      }).catch(() => { /* audit 실패는 응답에 영향 없음 */ });
+
+      res.json(success({ server: updated, respawnRequired }));
   }));
 
   // env(자격증명) 교체 (PATCH) — 소유자 + admin.
