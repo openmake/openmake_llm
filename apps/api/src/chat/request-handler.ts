@@ -364,6 +364,7 @@ export class ChatRequestHandler {
             notebook: params.notebook,
             abortSignal,
             userLanguagePreference,
+            userLocation: params.userLocation,
             format: params.format,
             onServedModel: (fullId) => { servedModel = fullId; },
         };

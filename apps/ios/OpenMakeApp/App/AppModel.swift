@@ -33,11 +33,14 @@ final class AppModel {
         var discussion = false
         var deepResearch = false
         var agentTask = false
+        /// 위치 첨부 (폰 기능 2단계, 옵트인) — 켠 턴에만 GPS 1회 획득해 요청에 첨부
+        var attachLocation = false
         var style: Style = .styleDefault
 
         var activeLabels: [String] {
             var labels: [String] = []
             if webSearch { labels.append("웹 검색") }
+            if attachLocation { labels.append("위치") }
             if thinking { labels.append("추론") }
             if imageGen { labels.append("이미지") }
             if artifact { labels.append("아티팩트") }

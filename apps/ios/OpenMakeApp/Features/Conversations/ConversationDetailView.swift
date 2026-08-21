@@ -262,14 +262,21 @@ private struct ChatTranscriptView: View {
         let files = pendingFiles
         pendingImages = []
         pendingFiles = []
+        let wantsLocation = model.modes.attachLocation
         Task {
+            // 위치 첨부 ON 이면 이 턴에 한해 GPS 1회 획득 (거부/실패 시 위치 없이 진행)
+            var location: UserLocation?
+            if wantsLocation, let coord = await LocationProvider.shared.currentLocation() {
+                location = UserLocation(lat: coord.lat, lng: coord.lng)
+            }
             await chat.send(
                 text,
                 model: model.selectedModelId,
                 userAgentId: model.selectedAgentId,
                 images: images,
                 files: files,
-                modes: model.modes)
+                modes: model.modes,
+                userLocation: location)
         }
     }
 
@@ -397,6 +404,7 @@ private struct ChatComposer: View {
                         Toggle("토론", systemImage: "person.2.wave.2", isOn: $model.modes.discussion)
                         Toggle("딥리서치", systemImage: "magnifyingglass.circle", isOn: $model.modes.deepResearch)
                         Toggle("에이전트 작업", systemImage: "wand.and.stars", isOn: $model.modes.agentTask)
+                        Toggle("위치 첨부", systemImage: "location", isOn: $model.modes.attachLocation)
                     }
                     Picker("응답 스타일", systemImage: "text.alignleft", selection: $model.modes.style) {
                         Text("간결").tag(Style.concise)
