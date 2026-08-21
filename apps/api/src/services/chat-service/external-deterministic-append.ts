@@ -18,7 +18,7 @@ import { MCP_META_TOOL_NAMES } from '../../mcp/mcp-meta-tools';
 const MCP_CALL_TOOL_NAME = MCP_META_TOOL_NAMES[1]; // 'mcp_call'
 import { WEB_SEARCH_TEMPLATES, getLocalizedTemplate } from '../../sockets/ws-chat-locales';
 import type { ChatMessageRequest } from '../chat-service-types';
-import type { StreamFromExternalContext } from './external-provider';
+import type { StreamFromExternalContext } from './external-provider-types';
 
 const logger = createLogger('ChatExternalProvider');
 

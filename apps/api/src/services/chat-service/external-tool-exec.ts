@@ -16,7 +16,7 @@ import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { isPersistableUserId } from '../../utils/user-id-validation';
 import type { ResolvedProvider } from '../../providers/provider-router';
-import type { ExternalProviderDeps } from './external-provider';
+import type { ExternalProviderDeps } from './external-provider-types';
 
 const logger = createLogger('ChatExternalProvider');
 

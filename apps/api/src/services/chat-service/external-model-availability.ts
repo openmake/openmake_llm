@@ -10,7 +10,7 @@
  */
 import { createLogger } from '../../utils/logger';
 import type { ResolvedProvider } from '../../providers/provider-router';
-import type { ExternalProviderDeps } from './external-provider';
+import type { ExternalProviderDeps } from './external-provider-types';
 
 const logger = createLogger('ChatExternalProvider');
 
