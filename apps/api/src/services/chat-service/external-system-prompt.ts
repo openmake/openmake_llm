@@ -15,7 +15,7 @@ import { getStyleGuard, normalizeStyle } from '../../chat/style';
 import { ORCHESTRATION_PROMPT_GUIDE } from './orchestration-dispatch';
 import { SPAWN_PROMPT_GUIDE } from '../agent-spawn/spawn-agents';
 import { LANGUAGE_DISPLAY_NAMES, resolvePromptLocale, type SupportedLanguageCode } from '../../chat/language-policy';
-import type { StreamFromExternalContext } from './external-provider';
+import type { StreamFromExternalContext } from './external-provider-types';
 
 /**
  * 외부 provider 요청의 시스템 프롬프트 본문을 조립해 반환. 비면 '' (호출부가 system 미주입).
