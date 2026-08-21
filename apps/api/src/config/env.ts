@@ -85,12 +85,6 @@ export interface EnvConfig {
     // Log
     logLevel: 'debug' | 'info' | 'warn' | 'error';
 
-    // Gemini
-    geminiThinkEnabled: boolean;
-    geminiThinkLevel: 'low' | 'medium' | 'high';
-    geminiNumCtx: number;
-    geminiWebSearchEnabled: boolean;
-
     // External services
     googleApiKey: string;
     googleCseId: string;
@@ -220,12 +214,6 @@ const DEFAULT_CONFIG: EnvConfig = {
 
     // Log
     logLevel: 'info',
-
-    // Gemini
-    geminiThinkEnabled: true,
-    geminiThinkLevel: 'high' as const,
-    geminiNumCtx: 32768,
-    geminiWebSearchEnabled: true,
 
     // External services
     googleApiKey: '',
@@ -364,10 +352,6 @@ export function loadConfig(): EnvConfig {
         LLM_GATEWAY_PROVIDERS: env('LLM_GATEWAY_PROVIDERS'),
         LLM_DISABLE_THINKING_BY_DEFAULT: env('LLM_DISABLE_THINKING_BY_DEFAULT'),
         LOG_LEVEL: env('LOG_LEVEL'),
-        GEMINI_THINK_ENABLED: env('GEMINI_THINK_ENABLED'),
-        GEMINI_THINK_LEVEL: env('GEMINI_THINK_LEVEL'),
-        GEMINI_NUM_CTX: env('GEMINI_NUM_CTX'),
-        GEMINI_WEB_SEARCH_ENABLED: env('GEMINI_WEB_SEARCH_ENABLED'),
         GOOGLE_API_KEY: env('GOOGLE_API_KEY'),
         GOOGLE_CSE_ID: env('GOOGLE_CSE_ID'),
         NAVER_CLIENT_ID: env('NAVER_CLIENT_ID'),
@@ -486,12 +470,6 @@ export function loadConfig(): EnvConfig {
 
         // Log
         logLevel: parsed.LOG_LEVEL ?? DEFAULT_CONFIG.logLevel,
-
-        // Gemini
-        geminiThinkEnabled: parsed.GEMINI_THINK_ENABLED ?? DEFAULT_CONFIG.geminiThinkEnabled,
-        geminiThinkLevel: parsed.GEMINI_THINK_LEVEL ?? DEFAULT_CONFIG.geminiThinkLevel,
-        geminiNumCtx: parsed.GEMINI_NUM_CTX ?? DEFAULT_CONFIG.geminiNumCtx,
-        geminiWebSearchEnabled: parsed.GEMINI_WEB_SEARCH_ENABLED ?? DEFAULT_CONFIG.geminiWebSearchEnabled,
 
         // External services
         googleApiKey: parsed.GOOGLE_API_KEY ?? DEFAULT_CONFIG.googleApiKey,
