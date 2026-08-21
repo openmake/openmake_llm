@@ -18,6 +18,7 @@ import { dispatchAgentTask } from './task-queue';
 import { publishScheduleOutput } from './schedule-publish';
 import { computeNextRun } from './schedule-cron';
 import type { AgentTaskUserRole } from './types';
+import { isAdminRole } from '../../data/user-manager';
 
 const logger = createLogger('AgentTaskSchedule');
 
@@ -28,7 +29,7 @@ async function resolveRole(userId?: string): Promise<AgentTaskUserRole> {
     if (!userId) return 'user';
     try {
         const u = await getUnifiedDatabase().getUserById(String(userId));
-        return u?.role === 'admin' || u?.role === 'guest' ? u.role : 'user';
+        return isAdminRole(u?.role) || u?.role === 'guest' ? u.role : 'user';
     } catch {
         return 'user';
     }

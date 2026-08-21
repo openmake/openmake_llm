@@ -127,8 +127,8 @@ export function postProcessFindings(
             severity,
             line: Number.isInteger(lineNum) && lineNum > 0 ? lineNum : null,
             title: typeof f.title === 'string' ? f.title.slice(0, 200) : '(제목 없음)',
-            description: typeof f.description === 'string' ? f.description.slice(0, 2000) : '',
-            exploit_scenario: typeof f.exploit_scenario === 'string' ? f.exploit_scenario.slice(0, 2000) : '',
+            description: typeof f.description === 'string' ? f.description.slice(0, SECURITY_REVIEW_CONFIG.findingFieldMaxChars) : '',
+            exploit_scenario: typeof f.exploit_scenario === 'string' ? f.exploit_scenario.slice(0, SECURITY_REVIEW_CONFIG.findingFieldMaxChars) : '',
             confidence: conf,
         });
     }

@@ -37,6 +37,7 @@ import { createDeepResearchService } from '../services/DeepResearchService';
 import { resolveRoleClientForUser } from '../services/model-role-resolver';
 import { detectLanguage } from '../chat/language-policy';
 import { RESEARCH_DEPTH_LOOPS, RESEARCH_SESSION_LIST_ALL_DEFAULT } from '../config/runtime-limits';
+import { isAdminRole } from '../data/user-manager';
 import {
     createResearchSessionSchema,
     addResearchStepSchema,
@@ -91,7 +92,7 @@ router.get('/sessions', asyncHandler(async (req: Request, res: Response) => {
     const db = getUnifiedDatabase();
     const userId = String(req.user!.id);
     const scope = resolveSessionListScope({
-        isAdmin: req.user!.role === 'admin',
+        isAdmin: isAdminRole(req.user!.role),
         viewAll: req.query.viewAll === 'true',
         userId,
     });

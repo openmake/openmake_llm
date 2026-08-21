@@ -33,6 +33,7 @@ import {
     composeShareUrl,
 } from '../services/artifact-viewer-service';
 import { getAuditService } from '../services/AuditService';
+import { isAdminRole } from '../data/user-manager';
 
 const router = Router();
 
@@ -62,7 +63,7 @@ router.post('/sessions/:sid/artifacts/:aid/publish', requireAuth, asyncHandler(a
     }
 
     const userId = resolveUserId(req);
-    const isAdmin = req.user?.role === 'admin';
+    const isAdmin = isAdminRole(req.user?.role);
     const repo = new ArtifactRepository(getPool());
     const versions = await repo.listVersionsByArtifactId(sid, aid);
     if (versions.length === 0) {
@@ -124,7 +125,7 @@ router.post('/sessions/:sid/artifacts/:aid/publish', requireAuth, asyncHandler(a
 router.delete('/sessions/:sid/artifacts/:aid/publish', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { sid, aid } = req.params;
     const userId = resolveUserId(req);
-    const isAdmin = req.user?.role === 'admin';
+    const isAdmin = isAdminRole(req.user?.role);
     const pubRepo = new ArtifactPublicationRepository(getPool());
     const pub = await pubRepo.getByArtifact(sid, aid);
     if (!pub) {

@@ -14,6 +14,7 @@
 import type { MCPToolDefinition, MCPToolResult } from './types';
 import type { UserContext } from './user-sandbox';
 import { createLogger } from '../utils/logger';
+import { isAdminRole } from '../data/user-manager';
 
 const logger = createLogger('CreateSkillTool');
 
@@ -66,7 +67,7 @@ export const createSkillTool: MCPToolDefinition<CreateSkillArgs> = {
             };
         }
         const userId = String(context.userId);
-        const isAdmin = context.role === 'admin';
+        const isAdmin = isAdminRole(context.role);
 
         try {
             const { SkillCreatorService } = await import('../agents/skill-creator');

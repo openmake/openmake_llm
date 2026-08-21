@@ -109,8 +109,8 @@ export function postProcessReview(
             severity,
             line: Number.isInteger(lineNum) && lineNum > 0 ? lineNum : null,
             title: typeof f.title === 'string' ? f.title.slice(0, 200) : '(제목 없음)',
-            description: typeof f.description === 'string' ? f.description.slice(0, 2000) : '',
-            suggestion: typeof f.suggestion === 'string' ? f.suggestion.slice(0, 2000) : '',
+            description: typeof f.description === 'string' ? f.description.slice(0, CODE_REVIEW_CONFIG.findingFieldMaxChars) : '',
+            suggestion: typeof f.suggestion === 'string' ? f.suggestion.slice(0, CODE_REVIEW_CONFIG.findingFieldMaxChars) : '',
             confidence: conf,
         });
     }

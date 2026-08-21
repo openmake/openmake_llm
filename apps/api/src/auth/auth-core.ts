@@ -16,7 +16,7 @@ import * as jwt from 'jsonwebtoken';
 import type { Algorithm } from 'jsonwebtoken';
 import type { Response } from 'express';
 import { JWTPayload } from './types';
-import { PublicUser, UserRole } from '../data/user-manager';
+import { PublicUser, UserRole, isAdminRole } from '../data/user-manager';
 import * as crypto from 'crypto';
 import { getTokenBlacklist } from '../data/models/token-blacklist';
 import { getConfig } from '../config/env';
@@ -289,7 +289,7 @@ export function extractToken(authHeader?: string): string | null {
  * 관리자 여부 확인
  */
 export function isAdmin(role: UserRole): boolean {
-    return role === 'admin';
+    return isAdminRole(role);
 }
 
 /**

@@ -20,6 +20,7 @@ import {
     type ExportFormat,
 } from '../services/report/artifact-export-service';
 import { getAuditService } from '../services/AuditService';
+import { isAdminRole } from '../data/user-manager';
 
 const router = Router();
 
@@ -47,7 +48,7 @@ router.post('/sessions/:sid/artifacts/:aid/export', requireAuth, artifactExportL
         return;
     }
     const userId = req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString();
-    const isAdmin = req.user?.role === 'admin';
+    const isAdmin = isAdminRole(req.user?.role);
     if (!isAdmin && versions[0].user_id !== userId) {
         res.status(403).json({ error: 'FORBIDDEN', detail: 'not owner' });
         return;
@@ -120,7 +121,7 @@ router.post('/agent-tasks/:taskId/artifacts/:aid/export', requireAuth, artifactE
         return;
     }
     const userId = req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString();
-    const isAdmin = req.user?.role === 'admin';
+    const isAdmin = isAdminRole(req.user?.role);
     if (!isAdmin && String(task.user_id) !== String(userId)) {
         res.status(403).json({ error: 'FORBIDDEN', detail: 'not owner' });
         return;

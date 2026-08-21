@@ -18,6 +18,7 @@ import {
 } from '../providers/provider-router';
 import { createClient } from '../llm';
 import { createLogger } from '../utils/logger';
+import { MODEL_PROBE } from '../config/model-defaults';
 
 const logger = createLogger('ModelAssignmentValidation');
 
@@ -65,7 +66,7 @@ async function validateExternalAssignment(userId: string, fullId: string): Promi
                 {
                     messages: [{ role: 'user', content: 'ping' }],
                     modelId,
-                    maxTokens: 1,
+                    maxTokens: MODEL_PROBE.MAX_TOKENS,
                     abortSignal: abort.signal,
                 },
                 {},

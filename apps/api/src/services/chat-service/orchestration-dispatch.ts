@@ -28,6 +28,7 @@ import { AgentTaskService } from '../AgentTaskService';
 import { dispatchAgentTask } from '../agent-task/task-queue';
 import { ORCHESTRATION_DISPATCH, MODEL_CONTEXT_DEFAULTS, AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
+import { isAdminRole } from '../../data/user-manager';
 
 const logger = createLogger('OrchestrationDispatch');
 
@@ -191,7 +192,7 @@ async function runDelegateAgentTask(params: {
                 taskId,
                 goal,
                 userId,
-                userRole: (params.userCtx.role === 'admin' ? 'admin' : 'user'),
+                userRole: (isAdminRole(params.userCtx.role) ? 'admin' : 'user'),
                 maxTurns,
             }),
         });

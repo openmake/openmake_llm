@@ -66,6 +66,11 @@ export const MODEL_CAPABILITY_PRESETS: Readonly<Record<string, ModelCapabilities
 /**
  * 보수적 기본 capabilities — 프리셋 미매칭 모델의 게이팅/표시 기본값 (SoT).
  */
+/** 모델 가용성/자격 프로브 공통 상수 — 과금·부하 최소화를 위한 1토큰 최소 호출 */
+export const MODEL_PROBE = {
+    MAX_TOKENS: 1,
+} as const;
+
 export const FALLBACK_CAPABILITIES: ModelCapabilities = {
     toolCalling: false,
     thinking: false,

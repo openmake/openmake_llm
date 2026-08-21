@@ -39,6 +39,11 @@ const logger = createLogger('AnthropicProvider');
 const PROVIDER_ID = 'anthropic';
 const PROVIDER_DISPLAY_NAME = 'Anthropic Claude';
 
+/** 자격 검증(validateCredentials) 프로브에 쓰는 최저비용 모델 — KNOWN_MODELS 의 Haiku 항목과 동일 id */
+const CREDENTIAL_PROBE_MODEL = 'claude-haiku-4-5';
+/** 자격 검증 프로브 max_tokens — 과금 최소화를 위한 1토큰 호출 */
+const CREDENTIAL_PROBE_MAX_TOKENS = 1;
+
 /**
  * Phase 3 카탈로그 모델 — Anthropic 은 /v1/models endpoint 를 동적 조회 가능하나,
  * 단순화를 위해 카탈로그 형태로 관리. 실제 사용 가능 여부는 API 호출 시점에 결정.
@@ -277,8 +282,8 @@ export class AnthropicProvider implements IProvider {
         try {
             // 최소 비용 검증: 1 토큰 max_tokens 호출
             await this.client.messages.create({
-                model: 'claude-haiku-4-5',
-                max_tokens: 1,
+                model: CREDENTIAL_PROBE_MODEL,
+                max_tokens: CREDENTIAL_PROBE_MAX_TOKENS,
                 messages: [{ role: 'user', content: 'ok' }],
             });
             return { ok: true, latencyMs: Date.now() - start };

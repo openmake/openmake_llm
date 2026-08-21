@@ -53,12 +53,15 @@ export function classifyVerifiability(
     return 'none';
 }
 
-/** verifiability → Stage 2 실행 전략 매핑 (셰도우에서는 would_route_to 로만 기록) */
+/** verifiability → Stage 2 실행 전략 매핑 테이블 (셰도우에서는 would_route_to 로만 기록) */
+const VERIFIABILITY_STRATEGY_MAP: Record<Verifiability, string> = {
+    executable: 'generate-verify',
+    factual: 'conditional-verify',
+    decomposable: 'deep-research',
+    none: 'single',
+};
+
+/** verifiability → Stage 2 실행 전략 매핑 */
 export function verifiabilityToStrategy(v: Verifiability): string {
-    switch (v) {
-        case 'executable': return 'generate-verify';
-        case 'factual': return 'conditional-verify';
-        case 'decomposable': return 'deep-research';
-        default: return 'single';
-    }
+    return VERIFIABILITY_STRATEGY_MAP[v] ?? VERIFIABILITY_STRATEGY_MAP.none;
 }

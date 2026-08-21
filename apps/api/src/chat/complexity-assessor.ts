@@ -22,13 +22,13 @@ import { TOKEN_BUDGETS } from '../config/llm-parameters';
  */
 export function recommendTokenBudget(complexityScore: number, queryType: QueryType): number {
     // 최고 복잡도: 유한 상한(runaway/비용 방지). 과거 UNLIMITED(0)=무제한을 대체.
-    if (complexityScore >= 0.8) return TOKEN_BUDGETS.MAX;
+    if (complexityScore >= TOKEN_BUDGETS.SCORE_THRESHOLDS.MAX_MIN) return TOKEN_BUDGETS.MAX;
 
     // 복잡도 기반 기본 예산
     let budget: number;
-    if (complexityScore < 0.3) {
+    if (complexityScore < TOKEN_BUDGETS.SCORE_THRESHOLDS.LOW_MAX) {
         budget = TOKEN_BUDGETS.LOW;
-    } else if (complexityScore < 0.6) {
+    } else if (complexityScore < TOKEN_BUDGETS.SCORE_THRESHOLDS.MEDIUM_MAX) {
         budget = TOKEN_BUDGETS.MEDIUM;
     } else {
         budget = TOKEN_BUDGETS.HIGH;
