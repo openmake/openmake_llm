@@ -224,6 +224,8 @@ export interface ChatMessageRequest {
     onServedModel?: (fullId: string) => void;
     /** 사용자가 설정에서 선택한 선호 언어 (language-policy userPreference) */
     userLanguagePreference?: string;
+    /** 기기 GPS 현재 위치 (옵트인, 턴 단위 — 저장 안 함). system 컨텍스트에 결정적 주입. */
+    userLocation?: { lat: number; lng: number };
     /** 구조화된 출력 형식 ('json' 또는 JSON Schema 객체) */
     format?: import('../llm').FormatOption;
     /**

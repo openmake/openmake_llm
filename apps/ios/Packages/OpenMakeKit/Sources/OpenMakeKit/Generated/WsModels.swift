@@ -829,6 +829,8 @@ public struct WsChatRequest: Codable {
     public let type: RequestType
     /// 커스텀 에이전트(user_agents) id — 지정 시 백엔드가 산업 에이전트 자동라우팅을 우회하고 해당 페르소나 system_prompt 를 prepend
     public let userAgentID: String?
+    /// 기기 GPS 현재 위치 (폰 기능 2단계, 옵트인) — 클라이언트가 위치 관련 턴에만 첨부. 서버는 system 컨텍스트에 결정적 주입(턴 단위, 저장 안 함).
+    public let userLocation: UserLocation?
     public let webSearch: Bool?
 
     public enum CodingKeys: String, CodingKey {
@@ -852,10 +854,11 @@ public struct WsChatRequest: Codable {
         case thinkingMode = "thinkingMode"
         case type = "type"
         case userAgentID = "userAgentId"
+        case userLocation = "userLocation"
         case webSearch = "webSearch"
     }
 
-    public init(anonSessionID: String?, artifactMode: Bool?, client: Client?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, memoryLearning: Bool?, message: String, model: String?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, webSearch: Bool?) {
+    public init(anonSessionID: String?, artifactMode: Bool?, client: Client?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, memoryLearning: Bool?, message: String, model: String?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, userLocation: UserLocation?, webSearch: Bool?) {
         self.anonSessionID = anonSessionID
         self.artifactMode = artifactMode
         self.client = client
@@ -876,6 +879,7 @@ public struct WsChatRequest: Codable {
         self.thinkingMode = thinkingMode
         self.type = type
         self.userAgentID = userAgentID
+        self.userLocation = userLocation
         self.webSearch = webSearch
     }
 }
@@ -919,6 +923,7 @@ public extension WsChatRequest {
         thinkingMode: Bool?? = nil,
         type: RequestType? = nil,
         userAgentID: String?? = nil,
+        userLocation: UserLocation?? = nil,
         webSearch: Bool?? = nil
     ) -> WsChatRequest {
         return WsChatRequest(
@@ -942,6 +947,7 @@ public extension WsChatRequest {
             thinkingMode: thinkingMode ?? self.thinkingMode,
             type: type ?? self.type,
             userAgentID: userAgentID ?? self.userAgentID,
+            userLocation: userLocation ?? self.userLocation,
             webSearch: webSearch ?? self.webSearch
         )
     }
@@ -1163,6 +1169,60 @@ public enum Style: String, Codable {
 
 public enum RequestType: String, Codable {
     case chat = "chat"
+}
+
+/// 기기 GPS 현재 위치 (폰 기능 2단계, 옵트인) — 클라이언트가 위치 관련 턴에만 첨부. 서버는 system 컨텍스트에 결정적 주입(턴 단위, 저장 안 함).
+// MARK: - UserLocation
+public struct UserLocation: Codable {
+    public let lat: Double
+    public let lng: Double
+
+    public enum CodingKeys: String, CodingKey {
+        case lat = "lat"
+        case lng = "lng"
+    }
+
+    public init(lat: Double, lng: Double) {
+        self.lat = lat
+        self.lng = lng
+    }
+}
+
+// MARK: UserLocation convenience initializers and mutators
+
+public extension UserLocation {
+    init(data: Data) throws {
+        self = try newJSONDecoder().decode(UserLocation.self, from: data)
+    }
+
+    init(_ json: String, using encoding: String.Encoding = .utf8) throws {
+        guard let data = json.data(using: encoding) else {
+            throw NSError(domain: "JSONDecoding", code: 0, userInfo: nil)
+        }
+        try self.init(data: data)
+    }
+
+    init(fromURL url: URL) throws {
+        try self.init(data: try Data(contentsOf: url))
+    }
+
+    func with(
+        lat: Double? = nil,
+        lng: Double? = nil
+    ) -> UserLocation {
+        return UserLocation(
+            lat: lat ?? self.lat,
+            lng: lng ?? self.lng
+        )
+    }
+
+    func jsonData() throws -> Data {
+        return try newJSONEncoder().encode(self)
+    }
+
+    func jsonString(encoding: String.Encoding = .utf8) throws -> String? {
+        return String(data: try self.jsonData(), encoding: encoding)
+    }
 }
 
 // MARK: - Helper functions for creating encoders and decoders

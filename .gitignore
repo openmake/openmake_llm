@@ -86,6 +86,8 @@ backend/api/.ollama-cluster.json
 *.jpeg
 !frontend/web/public/**/*.png
 !frontend/web/public/**/*.jpg
+# iOS 앱 아이콘/에셋 카탈로그 — 커밋 필수 (없으면 CI/다른 머신 빌드에서 빈 아이콘)
+!apps/ios/OpenMakeApp/Assets.xcassets/**/*.png
 !frontend/web/public/**/*.jpeg
 !apps/web/public/**/*.png
 !apps/web/public/**/*.jpg
