@@ -43,6 +43,11 @@ export function isUserRole(value: string | null | undefined): value is UserRole 
     return value != null && (USER_ROLE_VALUES as readonly string[]).includes(value);
 }
 
+/** admin 역할 판정 SoT — 인라인 `role === 'admin'` 비교 금지 (CLAUDE.md No-Hardcoding) */
+export function isAdminRole(role: string | null | undefined): role is typeof USER_ROLES.ADMIN {
+    return role === USER_ROLES.ADMIN;
+}
+
 /**
  * 외부 노출용 사용자 정보 (password_hash 제외)
  * @interface PublicUser
@@ -165,7 +170,7 @@ class UserManagerImpl {
                 return;
             } else if (existingEmail.rows.length > 0) {
                 // 이메일 사용자만 있으면: admin 역할 부여
-                if (existingEmail.rows[0].role !== 'admin') {
+                if (!isAdminRole(existingEmail.rows[0].role)) {
                     const cfgAdminPassword = getConfig().adminPassword;
                     if (cfgAdminPassword) {
                         const passwordHash = await bcrypt.hash(cfgAdminPassword, BCRYPT_ROUNDS);

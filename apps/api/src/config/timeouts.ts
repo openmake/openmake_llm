@@ -93,6 +93,17 @@ export const CLEANUP_INTERVALS = {
     TOKEN_CLEANUP_DELAY_MS: 5 * 1000,
     /** 토큰 정리 반복 주기 (ms) — 1시간 */
     TOKEN_CLEANUP_INTERVAL_MS: 60 * 60 * 1000,
+    /** 유지보수 스윕 공통 주기 (ms) — 6시간 (task-sandbox workspace·업로드 보존·아티팩트 실행 TTL) */
+    MAINTENANCE_SWEEP_MS: 6 * 60 * 60 * 1000,
+} as const;
+
+/**
+ * 푸시 알림 (APNs) 관련 시간 값
+ * services/NativePushService.ts에서 참조
+ */
+export const PUSH_TIMEOUTS = {
+    /** APNs provider JWT 재사용 창 (ms) — Apple 유효기간 상한 60분에서 10분 버퍼를 둔 50분 */
+    APNS_TOKEN_REFRESH_WINDOW_MS: 50 * 60 * 1000,
 } as const;
 
 // ============================================

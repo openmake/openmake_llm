@@ -12,6 +12,7 @@
 import { Request, Response } from 'express';
 import { getSessionMeta } from '../data/conversation-sessions';
 import { notFound, unauthorized, forbidden } from '../utils/api-response';
+import { isAdminRole } from '../data/user-manager';
 
 /** 요청에서 userId 추출 (JWT userId 또는 id). 미인증이면 undefined. */
 export function resolveUserId(req: Request): string | undefined {
@@ -25,7 +26,7 @@ export function resolveAnonSessionId(req: Request): string | undefined {
 }
 
 export async function assertSessionAccess(req: Request, sessionId: string): Promise<void> {
-    if (req.user?.role === 'admin') return;
+    if (isAdminRole(req.user?.role)) return;
 
     const session = await getSessionMeta(sessionId);
     if (!session) {

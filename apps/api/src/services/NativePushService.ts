@@ -3,6 +3,7 @@ import * as jwt from 'jsonwebtoken';
 import type { Pool } from 'pg';
 import { getPool } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
+import { PUSH_TIMEOUTS } from '../config/timeouts';
 
 export interface NativePushToken {
     deviceToken: string;
@@ -45,7 +46,7 @@ function providerToken(config: APNsConfig): string {
     const fingerprint = `${config.teamId}:${config.keyId}`;
     if (cachedProviderToken
         && cachedProviderToken.fingerprint === fingerprint
-        && now - cachedProviderToken.createdAt < 50 * 60 * 1000) {
+        && now - cachedProviderToken.createdAt < PUSH_TIMEOUTS.APNS_TOKEN_REFRESH_WINDOW_MS) {
         return cachedProviderToken.value;
     }
     const options: jwt.SignOptions = {

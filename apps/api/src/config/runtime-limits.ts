@@ -1348,6 +1348,8 @@ export const SCRIPT_PURITY = {
     TIMEOUT_MS: parseInt(process.env.CHAT_SCRIPT_PURITY_TIMEOUT_MS || '20000', 10),
     /** 교정 출력 상한. 혼입 줄만 되돌려받으므로 본문 전체보다 훨씬 작다. */
     MAX_OUTPUT_TOKENS: parseInt(process.env.CHAT_SCRIPT_PURITY_MAX_TOKENS || '1200', 10),
+    /** 교정 호출 temperature — 결정적 재작성이 목적이라 0 고정 기본. */
+    TEMPERATURE: Number(process.env.CHAT_SCRIPT_PURITY_TEMPERATURE || '0'),
     /** 교정본이 원문 대비 이 비율보다 짧으면 내용 유실로 보고 그 줄은 원문 유지. */
     MIN_LENGTH_RATIO: 0.5,
     /**
@@ -1409,6 +1411,8 @@ export const AGENT_TASK_LIMITS = {
     CHUNK_MAX_BYTES: parseInt(process.env.AGENT_TASK_CHUNK_MAX_BYTES || '', 10) || 32 * 1024 * 1024,
     /** 업로드당 청크 수 상한 — REQUEST_BODY_MAX_BYTES(1000MB)/최소 실용 청크 기준 여유값. */
     CHUNK_MAX_COUNT: parseInt(process.env.AGENT_TASK_CHUNK_MAX_COUNT || '', 10) || 256,
+    /** ask_human(HITL) 답변 텍스트 최대 길이(문자). AGENT_TASK_HITL_ANSWER_MAX_CHARS(기본 4000). */
+    HITL_ANSWER_MAX_CHARS: parseInt(process.env.AGENT_TASK_HITL_ANSWER_MAX_CHARS || '', 10) || 4000,
     /** 미완성(미클레임) 청크 업로드 보관 시한(ms) — init 시 지난 것을 기회적으로 청소.
      *  AGENT_TASK_CHUNK_TTL_MS(기본 24h). */
     CHUNK_UPLOAD_TTL_MS: parseInt(process.env.AGENT_TASK_CHUNK_TTL_MS || '', 10) || 24 * 60 * 60 * 1000,

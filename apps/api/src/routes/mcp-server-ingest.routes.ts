@@ -32,6 +32,7 @@ import { RL_MCP_INGEST } from '../config/rate-limits';
 import { MCP_INGEST } from '../config/constants';
 import { createLogger } from '../utils/logger';
 import { requireAuth } from '../auth';
+import { isAdminRole } from '../data/user-manager';
 
 const logger = createLogger('McpServerIngestRoutes');
 
@@ -44,7 +45,7 @@ export interface McpServerIngestRouterDeps {
 type McpIngestRole = 'user' | 'admin';
 
 function resolveIngestRole(req: Request): McpIngestRole {
-    return req.user?.role === 'admin' ? 'admin' : 'user';
+    return isAdminRole(req.user?.role) ? 'admin' : 'user';
 }
 
 function mcpIngestKey(req: Request): string {
@@ -133,7 +134,7 @@ export function mcpServerIngestRouter(deps: McpServerIngestRouterDeps): Router {
             const result = await svc.import({
                 ...parsed.data,
                 userId,
-                isAdmin: role === 'admin',
+                isAdmin: isAdminRole(role),
             });
             res.json({ success: true, data: result });
         } catch (e) {
@@ -192,7 +193,7 @@ export function mcpServerIngestRouter(deps: McpServerIngestRouterDeps): Router {
                 res.status(404).json({ success: false, error: 'DRAFT_NOT_FOUND' });
                 return;
             }
-            if (draft.user_id !== userId && role !== 'admin') {
+            if (draft.user_id !== userId && !isAdminRole(role)) {
                 res.status(403).json({ success: false, error: 'FORBIDDEN' });
                 return;
             }
@@ -227,7 +228,7 @@ export function mcpServerIngestRouter(deps: McpServerIngestRouterDeps): Router {
             const approved = await repository.approve({
                 id: req.params.id,
                 userId,
-                isAdmin: role === 'admin',
+                isAdmin: isAdminRole(role),
                 envOverrides: parsed.data.envOverrides,
                 enableImmediately: parsed.data.enableImmediately !== false,
             });
@@ -258,12 +259,12 @@ export function mcpServerIngestRouter(deps: McpServerIngestRouterDeps): Router {
                 res.status(404).json({ success: false, error: 'DRAFT_NOT_FOUND' });
                 return;
             }
-            if (draft.user_id !== userId && role !== 'admin') {
+            if (draft.user_id !== userId && !isAdminRole(role)) {
                 res.status(403).json({ success: false, error: 'FORBIDDEN' });
                 return;
             }
 
-            const rejected = await repository.reject(req.params.id, userId, role === 'admin');
+            const rejected = await repository.reject(req.params.id, userId, isAdminRole(role));
             if (!rejected) {
                 res.status(409).json({ success: false, error: 'NOT_DRAFT', status: draft.status });
                 return;

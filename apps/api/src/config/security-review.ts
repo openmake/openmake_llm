@@ -21,6 +21,8 @@ export const SECURITY_REVIEW_CONFIG = {
     temperature: Number(process.env.SECURITY_REVIEW_TEMPERATURE ?? 0.1),
     /** 리포트 최대 finding 수 (상한) */
     maxFindings: Number(process.env.SECURITY_REVIEW_MAX_FINDINGS ?? 30),
+    /** finding 텍스트 필드(description/exploit_scenario) 절단 상한 (문자) */
+    findingFieldMaxChars: Number(process.env.SECURITY_REVIEW_FINDING_FIELD_MAX_CHARS ?? 2000),
 } as const;
 
 /** 표준 취약점 카테고리 (모델 출력 정규화 기준) */

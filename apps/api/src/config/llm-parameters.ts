@@ -141,6 +141,15 @@ export const TOKEN_BUDGETS = {
      * 16384 tokens ≈ 12,000 단어 — 정상 장문 답변에 충분하면서 폭주는 차단.
      */
     MAX: Number(process.env.OMK_TOKEN_BUDGET_MAX) || 16384,
+    /** 복잡도 점수 구간 경계 — recommendTokenBudget 의 LOW/MEDIUM/HIGH/MAX 판정 임계값 */
+    SCORE_THRESHOLDS: {
+        /** 이 값 미만 = LOW 예산 (env: OMK_TOKEN_BUDGET_SCORE_LOW) */
+        LOW_MAX: Number(process.env.OMK_TOKEN_BUDGET_SCORE_LOW) || 0.3,
+        /** 이 값 미만 = MEDIUM 예산 (env: OMK_TOKEN_BUDGET_SCORE_MEDIUM) */
+        MEDIUM_MAX: Number(process.env.OMK_TOKEN_BUDGET_SCORE_MEDIUM) || 0.6,
+        /** 이 값 이상 = MAX 상한 (env: OMK_TOKEN_BUDGET_SCORE_MAX) */
+        MAX_MIN: Number(process.env.OMK_TOKEN_BUDGET_SCORE_MAX) || 0.8,
+    },
     /**
      * Thinking 모드 활성화 시 num_predict 최소 보장 — env: OMK_THINKING_MIN_TOKENS.
      *

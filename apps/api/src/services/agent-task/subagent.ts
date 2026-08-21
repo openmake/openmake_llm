@@ -23,6 +23,7 @@ import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-gate';
 import { runTool } from './task-steps';
 import { createLogger } from '../../utils/logger';
+import { buildSubagentDelegationRules, SUBAGENT_FINAL_TURN_NOTICE } from '../../prompts/subagent-system';
 
 const logger = createLogger('AgentTaskSubagent');
 
@@ -62,16 +63,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
     const conversation: ChatMessage[] = [
         {
             role: 'system',
-            content: p.personaPrompt + '\n\n' + [
-                '당신은 상위 자율 에이전트로부터 하위 목표를 위임받은 서브에이전트입니다.',
-                `- 최대 ${maxTurns}턴 안에 끝내세요. 필요한 경우에만 도구를 쓰고, 즉시 답할 수 있으면 바로 답하세요.`,
-                '- 다른 에이전트에게 재위임할 수 없습니다.',
-                '- 최종 응답은 상위 에이전트가 그대로 활용할 간결·구체적인 결과여야 합니다.',
-                // 스크립트 순수성 — qwen 이 한국어 답변에 한자(诸費用·以内 등)를 섞는 결함이
-                // 서브 응답 경유로 유입되던 문제 차단(채팅 메인 경로 가드와 동일 정책, 라이브 관측).
-                '- 위임 요청과 같은 언어로, 그 언어의 고유 문자만 사용해 답하세요 — 한국어 답변에 한자·'
-                + '가나를 섞지 말고, 외래어·전문용어는 해당 언어로 음차하거나 번역하세요.',
-            ].join('\n'),
+            content: p.personaPrompt + '\n\n' + buildSubagentDelegationRules(maxTurns),
         },
         { role: 'user', content: p.subgoal },
     ];
@@ -81,13 +73,9 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
             if (p.signal?.aborted) return 'Error: 상위 작업이 중단되었습니다.';
             // 마지막 턴엔 도구를 제거해 최종 답변을 강제(도구 호출로 끝나 결과가 없는 상황 방지).
             const lastTurn = turn === maxTurns - 1;
-            // 마지막 턴 진입을 모델에게 명시 — 도구를 조용히 제거하면 qwen 이 raw <tool_call>
-            // XML 을 텍스트로 뱉어 스텁 결과가 되는 결함 차단(2026-07-12 spawn_agents 라이브 관측).
+            // 마지막 턴 진입을 모델에게 명시 — 안내문·배경은 prompts/subagent-system.ts 참고.
             if (lastTurn && turn > 0 && p.tools.length > 0) {
-                conversation.push({
-                    role: 'user',
-                    content: '이제 도구를 더 사용할 수 없습니다. 지금까지 수집한 내용만으로 최종 결과를 바로 작성하세요.',
-                });
+                conversation.push({ role: 'user', content: SUBAGENT_FINAL_TURN_NOTICE });
             }
             const result = await p.client.chat(conversation, undefined, undefined, {
                 tools: lastTurn || p.tools.length === 0 ? undefined : p.tools,

@@ -9,6 +9,7 @@ import { startSessionCleanupScheduler, stopSessionCleanupScheduler } from '../da
 import { startDbRetention } from '../data/db-retention';
 import { startPeriodicCleanup } from '../utils/token-cleanup';
 import { createLogger } from '../utils/logger';
+import { CLEANUP_INTERVALS } from '../config/timeouts';
 
 const logger = createLogger('Schedulers');
 
@@ -66,8 +67,7 @@ export async function startAllSchedulers(): Promise<void> {
             const { reapOrphanTaskSandboxes, reapStaleWorkspaces } = await import('../services/task-sandbox/sandbox');
             await reapOrphanTaskSandboxes();
             await reapStaleWorkspaces(Date.now());
-            const SIX_HOURS = 6 * 60 * 60 * 1000;
-            setInterval(() => { void reapStaleWorkspaces(Date.now()).catch(() => { /* noop */ }); }, SIX_HOURS).unref();
+            setInterval(() => { void reapStaleWorkspaces(Date.now()).catch(() => { /* noop */ }); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
             logger.debug('TaskSandbox 정리 스케줄 등록 완료');
         }
     } catch (err) {
@@ -108,8 +108,7 @@ export async function startAllSchedulers(): Promise<void> {
             }
         };
         await sweep().catch(() => { /* noop */ });
-        const SIX_HOURS = 6 * 60 * 60 * 1000;
-        setInterval(() => { void sweep().catch(() => { /* noop */ }); }, SIX_HOURS).unref();
+        setInterval(() => { void sweep().catch(() => { /* noop */ }); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
         logger.debug('Agent Task 업로드 보존 스윕 등록 완료');
     } catch (err) {
         logger.warn('Agent Task 업로드 보존 스윕 등록 실패(무시):', err);
@@ -126,8 +125,7 @@ export async function startAllSchedulers(): Promise<void> {
                 if (n) logger.info(`아티팩트 실행 히스토리 ${n}건 TTL 정리`);
             };
             await sweep().catch(() => { /* noop */ });
-            const SIX_HOURS = 6 * 60 * 60 * 1000;
-            setInterval(() => { void sweep().catch(() => { /* noop */ }); }, SIX_HOURS).unref();
+            setInterval(() => { void sweep().catch(() => { /* noop */ }); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
             logger.debug('아티팩트 실행 히스토리 TTL 스윕 등록 완료');
         }
     } catch (err) {

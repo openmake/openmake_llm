@@ -13,18 +13,11 @@ import type { ChatMessage } from '../../llm/types';
 import { createLogger } from '../../utils/logger';
 import { EXTENSION_INGEST } from '../../config/constants';
 import type { CatalogSnapshot } from './catalog-snapshot';
+import { CATALOG_TRANSLATOR_SYSTEM_PROMPT } from '../../prompts/catalog-translator-system';
 
 const logger = createLogger('CatalogTranslator');
 
-const SYSTEM_PROMPT = `당신은 개발 도구 문서 번역가입니다. 플러그인의 영어 설명을 자연스러운 한국어로 번역하세요.
-- 제품/브랜드명과 기술 용어(MCP, API, SDK, CLI 등)는 원문을 유지
-- 마케팅 수사는 덜어내고 "무엇을 해주는 도구인지" 기능 중심으로 간결하게
-- 입력은 JSON 배열이며, 각 원소를 같은 순서로 번역
-
-## 응답 형식
-JSON object only. 다른 텍스트 출력 금지.
-{ "translations": ["<첫 번째 번역>", "<두 번째 번역>", ...] }
-입력 배열과 반드시 같은 개수·같은 순서.`;
+const SYSTEM_PROMPT = CATALOG_TRANSLATOR_SYSTEM_PROMPT;
 
 /** 이전 스냅샷 번역 재사용 키 */
 function cacheKey(name: string, description: string): string {

@@ -32,6 +32,7 @@ import { CustomAgentRepository } from '../data/repositories/custom-agent-reposit
 import { AGENT_CREATOR } from '../config/constants';
 import { LLMClient } from '../llm/client';
 import { getUnifiedDatabase } from '../data/models/unified-database';
+import { isAdminRole } from '../data/user-manager';
 
 const router = Router();
 
@@ -304,7 +305,7 @@ router.post('/custom/import-from-git', requireAuth, validate(importAgentFromGitS
     }
     const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
     if (!userId) { res.status(401).json(unauthorized('인증 필요')); return; }
-    const isAdmin = req.user?.role === 'admin';
+    const isAdmin = isAdminRole(req.user?.role);
     if (!AGENT_CREATOR.userTierEnabled && !isAdmin) {
         res.status(503).json({ success: false, error: { code: 'FEATURE_ADMIN_ONLY' } });
         return;
@@ -359,7 +360,7 @@ router.post('/custom/import-from-git', requireAuth, validate(importAgentFromGitS
 router.get('/custom/drafts', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
     if (!userId) { res.status(401).json(unauthorized('인증 필요')); return; }
-    const isAdmin = req.user?.role === 'admin';
+    const isAdmin = isAdminRole(req.user?.role);
     const target = String(req.query.target ?? 'user') as 'user' | 'system' | 'all';
     if ((target === 'system' || target === 'all') && !isAdmin) {
         res.status(403).json({ error: 'ADMIN_REQUIRED', detail: `target=${target} 는 관리자 전용` });

@@ -13,6 +13,7 @@
  */
 import type { UserMcpServerRow } from '../data/repositories/mcp-catalog-repository';
 import type { McpVisibility } from '../schemas/mcp-catalog.schema';
+import { isAdminRole } from '../data/user-manager';
 
 export interface Actor {
     id: string;
@@ -28,7 +29,7 @@ export type CheckResult = { allowed: true } | { allowed: false; reason: string }
 
 export function canRegisterServer(actor: Actor, input: RegisterInput): CheckResult {
     if (input.visibility === 'global') {
-        if (actor.role !== 'admin') {
+        if (!isAdminRole(actor.role)) {
             return { allowed: false, reason: 'global 서버는 admin 만 등록할 수 있습니다' };
         }
         return { allowed: true };
@@ -41,17 +42,17 @@ export function canRegisterServer(actor: Actor, input: RegisterInput): CheckResu
 
 export function canViewServer(actor: Actor, server: UserMcpServerRow): boolean {
     if (server.visibility === 'global' || server.visibility === 'user_shared') return true;
-    if (actor.role === 'admin') return true;
+    if (isAdminRole(actor.role)) return true;
     return server.user_id === actor.id;
 }
 
 export function canDeleteServer(actor: Actor, server: UserMcpServerRow): boolean {
-    if (actor.role === 'admin') return true;
+    if (isAdminRole(actor.role)) return true;
     return server.user_id === actor.id;
 }
 
 export function canStartStopServer(actor: Actor, server: UserMcpServerRow): boolean {
-    if (actor.role === 'admin') return true;
+    if (isAdminRole(actor.role)) return true;
     return server.user_id === actor.id;
 }
 
@@ -60,6 +61,6 @@ export function canStartStopServer(actor: Actor, server: UserMcpServerRow): bool
  * user_shared 서버라도 공유 대상자는 값을 바꿀 수 없다(조회 권한과 분리).
  */
 export function canUpdateServerEnv(actor: Actor, server: UserMcpServerRow): boolean {
-    if (actor.role === 'admin') return true;
+    if (isAdminRole(actor.role)) return true;
     return server.user_id === actor.id;
 }

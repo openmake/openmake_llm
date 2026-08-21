@@ -20,6 +20,7 @@ import { success, notFound, unauthorized } from '../utils/api-response';
 import { draftsQuerySchema } from '../schemas/skills.schema';
 import { getSkillManager } from '../agents/skill-manager';
 import { createLogger } from '../utils/logger';
+import { isAdminRole } from '../data/user-manager';
 
 const logger = createLogger('SkillsDraftsRoutes');
 
@@ -38,7 +39,7 @@ router.get('/drafts', requireAuth, validateQuery(draftsQuerySchema), asyncHandle
         res.status(401).json(unauthorized('인증 필요'));
         return;
     }
-    const isAdmin = req.user?.role === 'admin';
+    const isAdmin = isAdminRole(req.user?.role);
     const target = String(req.query.target ?? 'user') as 'user' | 'system' | 'all';
 
     if ((target === 'system' || target === 'all') && !isAdmin) {

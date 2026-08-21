@@ -23,6 +23,7 @@
  * @module config/local-models
  */
 import { createLogger } from '../utils/logger';
+import { MODEL_PROBE } from './model-defaults';
 
 const logger = createLogger('LocalModels');
 
@@ -151,7 +152,7 @@ async function pingChatModel(
             body: JSON.stringify({
                 model: modelId,
                 messages: [{ role: 'user', content: 'hi' }],
-                max_tokens: 1,
+                max_tokens: MODEL_PROBE.MAX_TOKENS,
                 stream: false,
                 // thinking 모델은 reasoning 으로 토큰 소비 → enable_thinking=false 강제
                 chat_template_kwargs: { enable_thinking: false },

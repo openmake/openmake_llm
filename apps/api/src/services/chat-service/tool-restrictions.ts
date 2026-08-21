@@ -7,10 +7,11 @@
  * @module services/chat-service/tool-restrictions
  */
 import { type ToolDefinition } from '../../llm';
+import { isAdminRole } from '../../data/user-manager';
 
 /** 역할 레벨 (게스트<일반<관리자). */
 function roleLevel(role?: string): number {
-    return role === 'admin' ? 2 : role === 'user' ? 1 : 0;
+    return isAdminRole(role) ? 2 : role === 'user' ? 1 : 0;
 }
 
 /**

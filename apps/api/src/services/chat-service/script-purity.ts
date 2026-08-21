@@ -97,7 +97,7 @@ export async function repairScriptMixing(
                 { role: 'system', content: SCRIPT_PURITY.SYSTEM_PROMPT },
                 { role: 'user', content: numbered },
             ],
-            { num_predict: SCRIPT_PURITY.MAX_OUTPUT_TOKENS, temperature: 0 },
+            { num_predict: SCRIPT_PURITY.MAX_OUTPUT_TOKENS, temperature: SCRIPT_PURITY.TEMPERATURE },
             undefined,
             { think: false },
         );

@@ -24,6 +24,8 @@ const MAX_USER_MSG_CHARS = 500;
 /** 헤드라인 1문장 호출 전용 타임아웃 — 채팅 스트림과 병행되므로 짧게 */
 const SUMMARY_TIMEOUT_MS = parseInt(process.env.THINKING_SUMMARY_TIMEOUT_MS || '15000', 10);
 const SUMMARY_MAX_CHARS = 120;
+/** 요약 생성 출력 토큰 상한 — 한 줄 헤드라인이므로 소량 고정. THINKING_SUMMARY_MAX_TOKENS 로 조정. */
+const SUMMARY_MAX_OUTPUT_TOKENS = parseInt(process.env.THINKING_SUMMARY_MAX_TOKENS || '80', 10);
 
 function truncateThinking(thinking: string): string {
     if (thinking.length <= MAX_THINKING_CHARS) return thinking;
@@ -54,7 +56,7 @@ export async function summarizeThinking(
         );
         const r = await client.chat(
             [{ role: 'system', content: system }, { role: 'user', content: user }],
-            { num_predict: 80 },
+            { num_predict: SUMMARY_MAX_OUTPUT_TOKENS },
             undefined,
             { think: false },
         );

@@ -31,6 +31,7 @@ import { ARTIFACT_EXEC } from '../config/artifact-exec';
 import { ArtifactPublicationRepository } from '../data/repositories/artifact-publication-repository';
 import { exportPublicationViewer } from '../services/artifact-viewer-service';
 import { getAuditService } from '../services/AuditService';
+import { isAdminRole } from '../data/user-manager';
 
 const router = Router();
 
@@ -47,7 +48,7 @@ const router = Router();
 router.get('/sessions/:sid/meta', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const sessionId = req.params.sid;
     const userId = req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString();
-    const isAdmin = req.user?.role === 'admin';
+    const isAdmin = isAdminRole(req.user?.role);
 
     const row = await getSessionMeta(sessionId);
     if (!row) {
@@ -154,7 +155,7 @@ router.post('/sessions/:sid/artifacts/:aid', requireAuth, asyncHandler(async (re
         return;
     }
     const userId = req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString();
-    const isAdmin = req.user?.role === 'admin';
+    const isAdmin = isAdminRole(req.user?.role);
 
     const repo = new ArtifactRepository(getPool());
     // 기존 버전 fetch — 소유권 + 메타 (kind/title 기본값) 가져오기
@@ -220,7 +221,7 @@ router.delete('/sessions/:sid/artifacts/:aid', requireAuth, asyncHandler(async (
         return;
     }
     const userId = req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString();
-    const isAdmin = req.user?.role === 'admin';
+    const isAdmin = isAdminRole(req.user?.role);
     if (!isAdmin && rows[0].user_id !== userId) {
         res.status(403).json({ error: 'FORBIDDEN', detail: 'not owner' });
         return;
@@ -326,7 +327,7 @@ async function persistExecution(
 router.get('/sessions/:sid/artifacts/:aid/executions', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { sid, aid } = req.params;
     const userId = resolveUserId(req);
-    const isAdmin = req.user?.role === 'admin';
+    const isAdmin = isAdminRole(req.user?.role);
     const artRepo = new ArtifactRepository(getPool());
     const versions = await artRepo.listVersionsByArtifactId(sid, aid);
     if (versions.length === 0) {

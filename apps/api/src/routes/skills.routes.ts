@@ -54,7 +54,7 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 type SkillRole = 'user' | 'admin';
 
 function resolveSkillRole(req: Request): SkillRole {
-    return req.user?.role === 'admin' ? 'admin' : 'user';
+    return isAdminRole(req.user?.role) ? 'admin' : 'user';
 }
 
 function skillCreateKeyGen(prefix: string) {
@@ -99,6 +99,7 @@ router.use('/', skillsDraftsRouter);
 
 // 사용자 개인 스킬 할당 (GET /user-assigned, POST/DELETE /:skillId/user-assign)
 import skillsUserAssignRouter from './skills-user-assign.routes';
+import { isAdminRole } from '../data/user-manager';
 router.use('/', skillsUserAssignRouter);
 
 // .SKILL 업로드 multer (memoryStorage, 256KB 제한, P5-D7)
@@ -200,7 +201,7 @@ router.post('/upload', requireAuth, skillUpload.single('file'), asyncHandler(asy
         res.status(401).json(unauthorized('인증 필요'));
         return;
     }
-    const isAdmin = req.user?.role === 'admin';
+    const isAdmin = isAdminRole(req.user?.role);
 
     const content = file.buffer.toString('utf-8');
     let parsed;
@@ -273,7 +274,7 @@ router.post('/auto-create', requireAuth, skillCreateMonthlyLimiter, skillCreateB
         res.status(401).json(unauthorized('인증 필요'));
         return;
     }
-    const isAdmin = req.user?.role === 'admin';
+    const isAdmin = isAdminRole(req.user?.role);
     if (!SKILL_CREATOR.userTierEnabled && !isAdmin) {
         res.status(503).json({ success: false, error: { code: 'FEATURE_ADMIN_ONLY', message: '현재 admin 만 사용 가능합니다.' } });
         return;
@@ -371,7 +372,7 @@ router.post('/import-from-git', requireAuth, skillCreateMonthlyLimiter, skillCre
     }
     const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
     if (!userId) { res.status(401).json(unauthorized('인증 필요')); return; }
-    const isAdmin = req.user?.role === 'admin';
+    const isAdmin = isAdminRole(req.user?.role);
     const { gitUrl, gitRef, gitPath, accessToken, target, category } = req.body;
 
     const service = new GitIngestService({

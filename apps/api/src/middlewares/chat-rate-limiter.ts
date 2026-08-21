@@ -11,6 +11,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { getPool } from '../data/models/unified-database';
+import { isAdminRole } from '../data/user-manager';
 
 interface RateLimitEntry {
     count: number;
@@ -131,7 +132,7 @@ function getNextMidnightUTC(): number {
 }
 
 function getDailyLimit(role: string): number {
-    if (role === 'admin') return Infinity;
+    if (isAdminRole(role)) return Infinity;
     return DAILY_LIMITS[role] || DAILY_LIMITS['guest'];
 }
 

@@ -25,6 +25,7 @@ import { RL_GDPR_EXPORT } from '../config/rate-limits';
 import { createLogger } from '../utils/logger';
 import { internalError, badRequest } from '../utils/api-response';
 import type { QueryResultRow } from 'pg';
+import { isAdminRole } from '../data/user-manager';
 
 const log = createLogger('ExportController');
 
@@ -44,7 +45,7 @@ function getUserId(req: Request): string | null {
 function resolveExportRole(req: Request): ExportRole {
     if (!req.user) return 'user';
     const role = ('role' in req.user ? (req.user as { role?: string }).role : undefined);
-    return role === 'admin' ? 'admin' : 'user';
+    return isAdminRole(role) ? 'admin' : 'user';
 }
 
 function exportKeyGen(req: Request): string {

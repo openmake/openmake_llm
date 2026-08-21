@@ -15,6 +15,7 @@
 import type { MCPToolDefinition, MCPToolResult } from './types';
 import type { UserContext } from './user-sandbox';
 import { createLogger } from '../utils/logger';
+import { isAdminRole } from '../data/user-manager';
 
 const logger = createLogger('McpServerIngestTool');
 
@@ -60,7 +61,7 @@ export const importMcpServerFromGitTool: MCPToolDefinition<ImportMcpServerFromGi
             };
         }
         const userId = String(context.userId);
-        const isAdmin = context.role === 'admin';
+        const isAdmin = isAdminRole(context.role);
 
         try {
             const { McpServerIngestService } = await import('../agents/git-ingest/mcp-server-ingest-service');
