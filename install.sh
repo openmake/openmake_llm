@@ -319,7 +319,11 @@ try_node_version_manager() {
     if [[ -s "$nvm_sh" ]]; then
         log_info "nvm 으로 Node $NODE_PINNED_VERSION 설치 시도"
         # nvm.sh 는 set -u 환경에서 미정의 변수를 건드리므로 잠시 해제한다.
-        set +u; . "$nvm_sh"; nvm install "$NODE_PINNED_VERSION" >/dev/null 2>&1 || true
+        set +u
+        # nvm.sh 경로는 런타임 결정이라 정적 추적 불가가 정상 (지시자는 바로 다음 명령에만 적용).
+        # shellcheck source=/dev/null
+        . "$nvm_sh"
+        nvm install "$NODE_PINNED_VERSION" >/dev/null 2>&1 || true
         nvm use "$NODE_PINNED_VERSION" >/dev/null 2>&1 || true; set -u
         if [[ "$(node_major)" -ge $NODE_MAJOR_MIN ]]; then
             persist_path "$(dirname "$(command -v node)")"; return 0

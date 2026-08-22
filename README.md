@@ -234,6 +234,25 @@ On macOS the installer works with Docker Desktop, OrbStack, or **Colima**
 plugin isn't registered with the docker CLI, the installer adds `cliPluginsExtraDirs` to
 `~/.docker/config.json` for you.
 
+### Updating an installed instance
+
+```bash
+./openmake_llm.sh update            # git pull (ff-only) → build → migrate → restart
+./openmake_llm.sh update --yes      # skip the migration confirmation (non-interactive)
+```
+
+`update` refuses to touch a tree with uncommitted changes or diverged local commits — it
+never overwrites your edits. If nothing new was pulled it skips the redeploy (`--force` to
+redeploy anyway). Tarball installs (no git) should re-run `install.sh` instead, which
+repairs in place.
+
+To pin an install to a release instead of `main`, set `OMK_REF` on the one-liner:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh \
+  | OMK_REF=v1.31.1 bash -s -- --yes
+```
+
 ### Prerequisites (handled by the installer)
 
 - **git** — on a fresh macOS, the very first `git clone` triggers the Xcode Command

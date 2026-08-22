@@ -39,7 +39,8 @@
 # ==============================================================================
 set -euo pipefail
 
-readonly SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+readonly SCRIPT_DIR
 
 # install.sh 가 홈 디렉터리에 Node/PM2 를 설치한 경우 그 PATH 를 이어받는다.
 # (시스템에 Node 24 / pm2 가 없어도 이 스크립트가 그대로 동작하도록.)
@@ -137,7 +138,7 @@ port_listening() {
         ss -ltn "sport = :$port" 2>/dev/null | grep -q LISTEN && return 0
     fi
     if command -v netstat >/dev/null 2>&1; then
-        netstat -an 2>/dev/null | grep -qE "[.:]$port[[:space:]].*LISTEN" && return 0
+        netstat -an 2>/dev/null | grep -qE "[.:]${port}[[:space:]].*LISTEN" && return 0
     fi
     # 최종 판정 — 실제 연결을 시도한다 (localhost 바인딩만 감지 가능).
     (exec 3<>/dev/tcp/127.0.0.1/"$port") >/dev/null 2>&1 && return 0
@@ -540,6 +541,49 @@ confirm_or_exit() {
     esac
 }
 
+# ── update: 설치본 최신화 (git ff-only pull → deploy 위임) ──────────────────
+# 설치자(install.sh 사용자) 대상의 표준 업데이트 경로. 원칙:
+#   · ff-only — 로컬 커밋이 있으면 히스토리를 합치지 않고 중단(설치본 변형 보호)
+#   · 미커밋 변경 감지 시 중단 안내(덮어쓰기 없음) — 개발 트리 오염 방지
+#   · 변경 없으면 deploy 를 건너뛴다(무의미한 재시작 방지, --force 로 강제)
+cmd_update() {
+    local FORCE=0 PASS=()
+    for arg in "$@"; do
+        case "$arg" in
+            --force) FORCE=1 ;;
+            *) PASS+=("$arg") ;;   # --yes / --no-migrate 는 deploy 로 전달
+        esac
+    done
+    parse_deploy_opts "${PASS[@]}"
+
+    log_step "Update: git pull(ff-only) → deploy"
+    command -v git >/dev/null 2>&1 || { log_err "git 이 필요합니다"; exit 1; }
+    git -C "$SCRIPT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+        || { log_err "git 레포가 아닙니다 — tarball 설치본은 재설치(install.sh)로 갱신하세요"; exit 1; }
+
+    if [[ -n "$(git -C "$SCRIPT_DIR" status --porcelain 2>/dev/null)" ]]; then
+        log_err "미커밋 로컬 변경이 있어 업데이트를 중단합니다 (덮어쓰지 않음)."
+        echo "  변경을 정리(commit/stash)한 뒤 다시 실행하세요: git -C \"$SCRIPT_DIR\" status"
+        exit 1
+    fi
+
+    local before after
+    before="$(git -C "$SCRIPT_DIR" rev-parse --short HEAD)"
+    git -C "$SCRIPT_DIR" fetch --tags --prune || { log_err "git fetch 실패"; exit 1; }
+    if ! git -C "$SCRIPT_DIR" pull --ff-only; then
+        log_err "fast-forward 불가 — 로컬 커밋이 원격과 갈라졌습니다. 수동으로 정리 후 재시도하세요."
+        exit 1
+    fi
+    after="$(git -C "$SCRIPT_DIR" rev-parse --short HEAD)"
+
+    if [[ "$before" == "$after" && "$FORCE" -ne 1 ]]; then
+        log_ok "이미 최신입니다 ($after) — deploy 생략 (강제: --force)"
+        return 0
+    fi
+    log_ok "업데이트: $before → $after"
+    cmd_deploy "${PASS[@]}"
+}
+
 cmd_deploy() {
     parse_deploy_opts "$@"
     preflight
@@ -618,6 +662,8 @@ OpenMake LLM 통합 서비스 매니저
   deploy    build + migrate + restart 통합 (코드 변경 운영 반영)
             백엔드(openmake-llm)와 프론트(openmake-next) 모두 재시작
             옵션: --yes (확인 프롬프트 skip), --no-migrate (마이그 생략)
+  update    git pull(ff-only) → deploy — 설치본 표준 업데이트 경로
+            미커밋 변경·비ff 이력이면 중단(덮어쓰지 않음). 옵션: deploy 와 동일 + --force
 
 관측:
   status    모든 계층 상태 확인 (포트 + docker + PM2)
@@ -653,6 +699,7 @@ main() {
         build)    cmd_build "$@" ;;
         migrate)  cmd_migrate ;;
         deploy)   cmd_deploy "$@" ;;
+        update)   cmd_update "$@" ;;
         status)   show_status ;;
         health)   show_health ;;
         logs)     show_logs ;;
