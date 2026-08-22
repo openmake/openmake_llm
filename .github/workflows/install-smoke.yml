@@ -1,0 +1,72 @@
+# ==============================================================
+# 주간 클린 설치 스모크 — install.sh 완주 검증 (4축 배포 제품화, 2026-08-22)
+# ==============================================================
+# ci.yml 의 Gate 0.5(lint)는 문법·정적 결함만 잡는다. 이 워크플로우는 진짜 질문 —
+# "깨끗한 머신에서 원샷 설치가 지금도 완주하는가"—에 답한다. 러너 ~15분급이라
+# per-PR 은 과대해 주 1회 + 수동 dispatch 로 돈다.
+#
+# 검증 축: toolchain 확보 → .env 생성(시크릿) → compose(PG+Redis) → 마이그레이션
+# → 백엔드·프론트 빌드 → PM2 기동 → /health 200. LLM 은 placeholder(미설정) —
+# 설치 완주와 서비스 기동은 LLM 없이 성립해야 한다(설치 후 관리자가 설정하는 흐름).
+name: Install Smoke
+
+on:
+  schedule:
+    # 매주 월요일 새벽(UTC 20:47 일요일 = KST 월 05:47) — :00/:30 회피 관례.
+    - cron: '47 20 * * 0'
+  workflow_dispatch: {}
+
+concurrency:
+  group: install-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Clean install → health
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 러너에 이미 있는 Node 가 24가 아니어도 인스톨러가 스스로 확보해야 하지만,
+      # 러너의 npm 글로벌 권한·버전 관리자 상호작용 변수를 줄이기 위해 24를 미리 둔다
+      # (인스톨러의 ensure_node 는 "이미 24면 통과" 경로 — 자체 설치 경로는 lint 가 지킨다).
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.node-version'
+
+      - name: Run installer (non-interactive)
+        run: ./install.sh --yes
+
+      - name: Verify health + processes
+        run: |
+          set -euo pipefail
+          PORT=$(grep -E '^PORT=' .env | cut -d= -f2)
+          PORT=${PORT:-52416}
+          echo "health 확인: http://127.0.0.1:$PORT/health"
+          curl -fsS "http://127.0.0.1:$PORT/health" | head -c 300; echo
+          npx pm2 list
+          npx pm2 jlist | node -e '
+            const l=JSON.parse(require("fs").readFileSync(0,"utf8"));
+            const bad=l.filter(p=>p.pm2_env.status!=="online");
+            if(l.length===0){console.error("PM2 앱 0개");process.exit(1);}
+            if(bad.length){console.error("offline:",bad.map(p=>p.name));process.exit(1);}
+            console.log("PM2 online:",l.map(p=>p.name).join(", "));'
+
+      - name: Verify migrations applied
+        run: |
+          docker exec openmake-postgres \
+            psql -U "$(grep -E '^POSTGRES_USER=' .env | cut -d= -f2)" \
+                 -d "$(grep -E '^POSTGRES_DB=' .env | cut -d= -f2)" \
+                 -tAc "SELECT count(*) FROM migration_versions;" | tee /tmp/mig
+          [ "$(cat /tmp/mig)" -gt 0 ] || { echo "::error::마이그레이션 0건"; exit 1; }
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          echo "── pm2 logs ──"; npx pm2 logs --nostream --lines 60 || true
+          echo "── docker ps ──"; docker ps -a || true
+          echo "── compose logs ──"; docker compose --env-file .env -f infra/docker-compose.yml logs --tail 50 || true
+          echo "── .env 키 목록(값 제외) ──"; grep -oE '^[A-Z_]+' .env | head -40 || true
