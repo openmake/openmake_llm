@@ -8,6 +8,9 @@ export default [
       "**/.next/**",
       "apps/web/**",
       "apps/desktop/**",
+      // Companion 헬퍼 하네스 — bridge-harness.cjs(ignored apps/desktop) 와 동일한
+      // CommonJS spawn 하네스라 require 가 필수. 앱 소스가 아니라 lint 대상에서 제외.
+      "apps/desktop-native/helper/harness.cjs",
       "**/node_modules/**",
       "**/.claude/**",
       "**/*.min.js",

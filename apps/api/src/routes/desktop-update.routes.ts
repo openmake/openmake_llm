@@ -23,16 +23,25 @@ const router = Router();
 router.get('/latest', (_req: Request, res: Response) => {
     const manifestPath = path.join(DESKTOP_UPDATE.DIR, 'latest.json');
     try {
-        const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as { version?: string; file?: string; sha256?: string };
+        const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
+            version?: string; file?: string; sha256?: string;
+            native?: { version?: string; file?: string; sha256?: string };
+        };
         if (!m.version || !m.file || !DESKTOP_UPDATE.FILE_PATTERN.test(m.file)) {
             res.status(404).json(notFound('업데이트 매니페스트가 올바르지 않습니다'));
             return;
         }
+        // native 채널(SwiftUI 컴패니언) — 추가 전용: 블록이 없거나 형식이 어긋나면 기존 응답 그대로
+        const n = m.native;
+        const native = n && n.version && n.file && DESKTOP_UPDATE.FILE_PATTERN.test(n.file)
+            ? { version: n.version, file: n.file, sha256: n.sha256 ?? null, url: `/api/desktop/download/${n.file}` }
+            : null;
         res.json(success({
             version: m.version,
             file: m.file,
             sha256: m.sha256 ?? null,
             url: `/api/desktop/download/${m.file}`,
+            ...(native ? { native } : {}),
         }));
     } catch {
         res.status(404).json(notFound('배포된 데스크톱 업데이트가 없습니다'));

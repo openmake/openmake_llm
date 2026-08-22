@@ -1,0 +1,56 @@
+# ==============================================================
+# Desktop Native Companion CI (plan §2 레포 배치)
+# ==============================================================
+# path-filter: apps/desktop-native 또는 브리지 코어(packages/local-bridge-core) 변경 시에만 실행.
+# 코어가 바뀌었는데 헬퍼 번들/하네스가 깨지는 커밋을 여기서 잡는다 (iOS ci 패턴 준용).
+# ad-hoc 서명·dmg 게시는 로컬 수동(scripts/publish-desktop.sh) — CI 는 빌드 검증만.
+# ==============================================================
+
+name: Desktop Native
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/desktop-native/**'
+      - 'packages/local-bridge-core/**'
+      - '.github/workflows/desktop-native.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'apps/desktop-native/**'
+      - 'packages/local-bridge-core/**'
+      - '.github/workflows/desktop-native.yml'
+
+concurrency:
+  group: desktop-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  companion:
+    name: Companion (Helper harness → Swift build)
+    runs-on: macos-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # ─── Gate 1: 헬퍼 번들 + 하네스 ───
+      # local-bridge-core dist 빌드 → esbuild 번들 → stdio confirm 왕복 포함 회귀 하네스.
+      - name: "Gate 1: Helper bundle + harness"
+        run: |
+          npm ci --ignore-scripts
+          npm run build:packages
+          npx esbuild apps/desktop-native/helper/src/helper.mjs --bundle --platform=node \
+            --target=node20 --format=cjs --outfile=apps/desktop-native/helper/dist/helper.cjs
+          node apps/desktop-native/helper/harness.cjs
+
+      # ─── Gate 2: Swift 릴리스 빌드 (무서명) ───
+      - name: "Gate 2: Swift build"
+        run: swift build -c release --package-path apps/desktop-native/OpenMakeCompanion
