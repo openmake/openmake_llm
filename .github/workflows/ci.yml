@@ -1,7 +1,7 @@
 # ==============================================================
 # GitHub Actions CI Pipeline
 # ==============================================================
-# 7 게이트: Contract Drift → Jest → TypeScript Build → File Size Guard → ESLint → Routing Eval → Response Eval
+# 8 게이트: Contract Drift → Installer Lint → Jest → TypeScript Build → File Size Guard → ESLint → Routing Eval → Response Eval
 # 로컬 `npm test`/`npm run build`/`npm run lint` 와 같은 스크립트로 돈다(별도 미러 스크립트 없음).
 # Docker 사용 없음 (프로젝트 방침 영구 제외)
 # ==============================================================
@@ -74,6 +74,19 @@ jobs:
             exit 1
           fi
           echo "계약 산출물 최신 상태 확인"
+
+      # ─── Gate 0.5: Installer Lint ───
+      # install.sh(47KB)·openmake_llm.sh 는 레포 파일 구조를 참조하는 배포 진입점인데
+      # 어떤 게이트도 검사하지 않아, 리팩터링이 인스톨러를 조용히 깨뜨려도 신규 설치자가
+      # 실패할 때까지 발견되지 않았다 (4축 배포 제품화 대조, 2026-08-22). bash -n(문법) +
+      # shellcheck warning 이상 0건을 강제한다 — 도입 시점 클린 실측(지적 4건 전부 수정).
+      # 전체 설치 완주는 별도 주간 워크플로우(install-smoke.yml — 러너 15분급이라 per-PR 과대).
+      - name: "Gate 0.5: Installer Lint"
+        run: |
+          bash -n install.sh
+          bash -n openmake_llm.sh
+          shellcheck -S warning install.sh openmake_llm.sh
+          echo "인스톨러 lint 통과 (bash -n + shellcheck)"
 
       # ─── Gate 1: Jest ───
       # 로컬 `npm test` 와 **같은 러너**로 돈다. 이전에는 bun test 로 돌렸는데, 로컬은 jest 라
