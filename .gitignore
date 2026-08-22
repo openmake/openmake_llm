@@ -163,3 +163,4 @@ data/desktop-updates/
 
 # 도구 세션 상태(run-continuation) — 저장소와 무관
 .omo/
+apps/desktop/local-bridge-core/

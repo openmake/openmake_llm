@@ -1,13 +1,15 @@
 {
   "name": "openmake-desktop",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "private": true,
   "description": "OpenMake LLM 데스크톱 셸 (macOS) — 운영 백엔드(외부 공개 도메인 / 로컬)를 네이티브 창으로",
   "author": "OpenMake Team",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --mac dmg"
+    "dist": "electron-builder --mac dmg",
+    "prestart": "node ../../scripts/copy-desktop-bridge-core.mjs",
+    "predist": "node ../../scripts/copy-desktop-bridge-core.mjs"
   },
   "dependencies": {
     "ws": "^8.18.0"
@@ -28,7 +30,8 @@
       "main.js",
       "bridge.js",
       "updater.js",
-      "agent-browser.js"
+      "agent-browser.js",
+      "local-bridge-core/**"
     ],
     "afterPack": "afterPack.js",
     "mac": {
