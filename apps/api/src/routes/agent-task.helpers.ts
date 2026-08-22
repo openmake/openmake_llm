@@ -55,3 +55,23 @@ export function toPublicTask(t: Record<string, unknown>) {
         : undefined;
     return { ...rest, ...(fileMetas ? { input_files: fileMetas } : {}), resumable: !!checkpoint && t.status === 'failed' };
 }
+
+/**
+ * 로컬 실행 작업 생성 감사 — 사용자 머신에서 도구가 실행되는 보안 관련 행위라 어느
+ * 디바이스·폴더로 위임됐는지 이력을 남긴다 (축1 plan 6단계. CRITICAL_ACTIONS 미등록 =
+ * 알림 없음·기록만). fire-and-forget — 실패는 생성 결과에 영향 없음.
+ */
+export async function auditLocalTaskCreate(
+    userId: string, taskId: string, deviceId?: string, folderRel?: string,
+): Promise<void> {
+    try {
+        const { getAuditService } = await import('../services/AuditService');
+        await getAuditService().logAudit({
+            action: 'agent_task_local_create',
+            userId,
+            resourceType: 'agent_task',
+            resourceId: taskId,
+            details: { deviceId, folderRel: folderRel ?? null },
+        });
+    } catch { /* 감사 실패가 작업 생성을 되돌리지 않는다 */ }
+}
