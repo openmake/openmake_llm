@@ -3,7 +3,7 @@
  * Agent Resolver — 에이전트 라우팅 모듈
  * ============================================================
  *
- * 경량화 3단계(캐시 → 키워드 선분류 → 短문장 직행)를 거친 뒤에만
+ * 경량화 4단계(캐시 → 키워드 선분류 → URL 단독 직행 → 短문장 직행)를 거친 뒤에만
  * LLM 의미론적 라우팅을 호출하고, 실패 시 키워드 결과로 폴백합니다.
  * (2026-07-04: LLM 라우팅이 매 채팅 첫 청크에 ~2-3s + ~2.7k 토큰의
  * 고정 비용을 부과하던 것을 절감 — 단순/반복 질문은 LLM 호출 0회.)
@@ -20,16 +20,42 @@ import {
     AGENT_KEYWORD_PRECLASSIFY_CONFIDENCE,
     AGENT_SHORT_QUERY_MAX_CHARS,
     AGENT_SHORT_QUERY_KEYWORD_CEILING,
+    AGENT_URL_ONLY_SKIP,
+    AGENT_URL_DOMAIN_HINTS,
 } from '../../config/routing-config';
 
 const logger = createLogger('AgentResolver');
+
+/**
+ * "URL 하나만" 질의인지 판별하고 호스트명을 돌려준다.
+ * 본문 없이 링크만 붙여넣은 경우가 대상 — 링크에 설명이 한 줄이라도 붙으면
+ * 그 텍스트로 라우팅해야 하므로 대상이 아니다.
+ */
+function urlOnlyHost(message: string): string | null {
+    const trimmed = message.trim();
+    if (!/^https?:\/\/\S+$/i.test(trimmed)) return null;
+    try {
+        return new URL(trimmed).hostname.replace(/^www\./i, '').toLowerCase();
+    } catch {
+        return null;
+    }
+}
+
+/** 호스트 접미사 매칭 — 서브도메인이 붙어도 같은 힌트를 쓴다 */
+function domainHintFor(host: string): string | null {
+    for (const [domain, agentId] of Object.entries(AGENT_URL_DOMAIN_HINTS)) {
+        if (host === domain || host.endsWith(`.${domain}`)) return agentId;
+    }
+    return null;
+}
 
 /**
  * 에이전트 선택 — LLM 호출 전 경량 경로 3단계를 우선 시도.
  *
  * 1. **캐시**: 정규화된 동일 질문의 이전 라우팅 결과 재사용 (LRU, cache/index.ts)
  * 2. **키워드 선분류**: 키워드 라우터 신뢰도가 임계 이상이면 그대로 채택
- * 3. **短문장 직행**: 짧은 질문 + 키워드 신호 없음 → 'general' (단답형 잡담·산술 등)
+ * 3-A. **URL 단독 직행**: 본문 없는 링크 → 도메인 힌트 또는 'general' (길이 규칙보다 먼저)
+ * 3-B. **短문장 직행**: 짧은 질문 + 키워드 신호 없음 → 'general' (단답형 잡담·산술 등)
  * 4. **LLM 라우팅**: 위 모두 미해당 시에만 호출. 실패하면 1회 실행해 둔 키워드
  *    결과를 재사용해 폴백 (기존의 폴백 재호출 1회도 절감).
  */
@@ -60,6 +86,29 @@ async function selectAgent(message: string): Promise<AgentSelection> {
         const selection = { ...keywordSelection, reason: `[Keyword] ${keywordSelection.reason}` };
         if (AGENT_ROUTE_CACHE_ENABLED) cache.setRoutingResult(message, selection.primaryAgent, keywordConfidence);
         return selection;
+    }
+
+    // ③-A URL 단독 질의 → LLM 스킵. 본문이 없어 LLM 이 볼 수 있는 건 도메인뿐이라
+    // 일반 콘텐츠 사이트에서는 근거 없이 에이전트를 골랐다(실측 2026-08-19~21).
+    // 알려진 도메인은 힌트 맵으로 결정적 승격, 나머지는 general.
+    // 短문장 직행(③)보다 먼저 본다 — 짧은 URL 이 길이 규칙에 먼저 걸리면 도메인 힌트를 놓친다.
+    if (AGENT_URL_ONLY_SKIP) {
+        const host = urlOnlyHost(message);
+        if (host) {
+            const hinted = domainHintFor(host);
+            const agentId = hinted && isValidAgentId(hinted) ? hinted : 'general';
+            logger.info(`URL 단독 직행: ${agentId} (host ${host}${hinted ? ', 도메인 힌트' : ''}) — LLM 라우팅 스킵`);
+            return {
+                primaryAgent: agentId,
+                category: getAgentById(agentId)?.category || 'general',
+                phase: detectPhase(message),
+                reason: hinted
+                    ? `[URL-only] 도메인 힌트 매칭(${host}) — 결정적 라우팅`
+                    : '[URL-only] 본문 없는 링크 — 범용 에이전트 직행',
+                confidence: keywordConfidence,
+                matchedKeywords: [],
+            };
+        }
     }
 
     // ③ 短문장 + 키워드 신호 없음 → 'general' 직행 (예: "1+1은?", "고마워")
@@ -110,7 +159,7 @@ export interface AgentResolutionResult {
 }
 
 /**
- * 경량 3단계(캐시/키워드 선분류/短문장 직행) → LLM 라우팅 → 키워드 폴백 순으로
+ * 경량 4단계(캐시/키워드 선분류/URL 단독/短문장 직행) → LLM 라우팅 → 키워드 폴백 순으로
  * 에이전트를 선택하고 시스템 프롬프트를 구성합니다.
  *
  * @param message - 사용자 메시지

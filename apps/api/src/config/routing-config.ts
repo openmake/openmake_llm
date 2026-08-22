@@ -110,6 +110,45 @@ export const AGENT_SHORT_QUERY_MAX_CHARS =
 export const AGENT_SHORT_QUERY_KEYWORD_CEILING =
     Number(process.env.OMK_AGENT_SHORT_QUERY_KEYWORD_CEILING ?? '0.3');
 
+// ── URL 단독 질의 LLM 스킵 (2026-08-22) ──────────────────────
+// 위 실측에서 남은 LLM 발동 60건 중 13건이 "URL 하나만 붙여넣은" 질의였다. 본문이
+// 없으니 LLM 이 볼 수 있는 건 도메인 문자열뿐이고, 실제로 brunch·arca·chatgpt/share
+// 같은 일반 콘텐츠 사이트는 근거 없이 content-writer 로 뭉쳤다(건당 ~2s 낭비).
+//
+// ⚠️ 단, 같은 13건 중 6건은 법령 포털(law.go.kr·easylaw.go.kr)이었고 LLM 이 법률
+// 에이전트로 올바로 승격했다. 일괄 스킵하면 이 값까지 잃는다 — 키워드 라우터는
+// 호스트명에서 신호를 전혀 못 잡는 것을 실측으로 확인했다(law/easylaw 모두 general 0.3).
+// 그래서 스킵과 함께 **도메인 힌트 맵**을 둔다: 알려진 도메인은 LLM 없이 결정적으로
+// 해당 에이전트로 보내고(0ms), 모르는 도메인만 general 로 보낸다.
+// 힌트가 LLM 보다 나은 이유 — 같은 답을 2초 없이 내고, 도메인당 답이 고정된다.
+
+/** URL 단독 질의에서 LLM 라우팅을 건너뛸지 (env: OMK_AGENT_URL_ONLY_SKIP, 기본 true) */
+export const AGENT_URL_ONLY_SKIP =
+    (process.env.OMK_AGENT_URL_ONLY_SKIP ?? 'true') === 'true';
+
+/**
+ * URL 단독 질의의 도메인 → 에이전트 힌트. 키는 호스트 접미사(서브도메인 무관 매칭).
+ * 실측(2026-08-19~21) 에서 LLM 이 반복해서 같은 답을 낸 도메인만 넣는다 —
+ * 추측으로 채우면 잘못된 스킬을 결정적으로 주입하게 되므로 근거 있는 것만.
+ * env `OMK_AGENT_URL_DOMAIN_HINTS` 로 오버라이드 (형식: "domain=agentId,domain=agentId").
+ */
+export const AGENT_URL_DOMAIN_HINTS: Record<string, string> = (() => {
+    const base: Record<string, string> = {
+        // 국가법령정보센터·찾기쉬운 생활법령 — 법령 원문 링크. LLM 은 labor/corporate 로
+        // 갈렸는데 둘 다 특정 분야 포털이 아니라, 분야 중립인 compliance-officer 로 둔다.
+        'law.go.kr': 'compliance-officer',
+        'easylaw.go.kr': 'compliance-officer',
+    };
+    const raw = process.env.OMK_AGENT_URL_DOMAIN_HINTS;
+    if (!raw) return base;
+    const parsed: Record<string, string> = {};
+    for (const pair of raw.split(',')) {
+        const [domain, agentId] = pair.split('=').map((s) => s.trim());
+        if (domain && agentId) parsed[domain.toLowerCase()] = agentId;
+    }
+    return Object.keys(parsed).length > 0 ? parsed : base;
+})();
+
 // ── Complexity Assessor 설정 ─────────────────────────────────
 
 /** GV 건너뛰기 임계값 - 이 점수 미만이면 Generate-Verify 생략 (env: OMK_GV_SKIP_THRESHOLD) */

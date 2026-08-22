@@ -19,7 +19,7 @@ import { getCacheSystem } from '../../../cache';
 jest.mock('../../../agents/llm-router', () => ({
     routeWithLLM: jest.fn(),
     isValidAgentId: jest.fn((id: string) =>
-        ['general', 'software-engineer', 'data-analyst'].includes(id)),
+        ['general', 'software-engineer', 'data-analyst', 'compliance-officer'].includes(id)),
 }));
 
 jest.mock('../../../agents', () => ({
@@ -98,5 +98,37 @@ describe('agent-resolver 경량화 라우팅', () => {
         mockRouteToAgent.mockResolvedValue(keywordResult('software-engineer', 0.9));
         const r = await resolveAgent(msg, 'u1', 'ko');
         expect(r.agentSelection.primaryAgent).toBe('software-engineer');
+    });
+
+    describe('URL 단독 질의 스킵 (2026-08-22)', () => {
+        it('본문 없는 일반 URL: general 직행, LLM 미호출', async () => {
+            mockRouteToAgent.mockResolvedValue(keywordResult('general', 0.3));
+            const r = await resolveAgent('https://brunch.co.kr/@aideveloper/158', 'u1', 'ko');
+            expect(r.agentSelection.primaryAgent).toBe('general');
+            expect(r.agentSelection.reason).toMatch(/^\[URL-only\]/);
+            expect(mockRouteWithLLM).not.toHaveBeenCalled();
+        });
+
+        it('도메인 힌트 매칭: 결정적 승격, LLM 미호출', async () => {
+            mockRouteToAgent.mockResolvedValue(keywordResult('general', 0.3));
+            const r = await resolveAgent('https://www.law.go.kr/lsInfoP.do?lsiSeq=1', 'u1', 'ko');
+            expect(r.agentSelection.primaryAgent).toBe('compliance-officer');
+            expect(r.agentSelection.reason).toMatch(/도메인 힌트/);
+            expect(mockRouteWithLLM).not.toHaveBeenCalled();
+        });
+
+        it('서브도메인도 힌트 접미사 매칭', async () => {
+            mockRouteToAgent.mockResolvedValue(keywordResult('general', 0.3));
+            const r = await resolveAgent('https://open.law.go.kr/x', 'u1', 'ko');
+            expect(r.agentSelection.primaryAgent).toBe('compliance-officer');
+        });
+
+        it('URL + 설명이 붙으면 스킵 대상이 아니다 (LLM 경로 유지)', async () => {
+            mockRouteToAgent.mockResolvedValue(keywordResult('general', 0.3));
+            mockRouteWithLLM.mockResolvedValue({ agentId: 'data-analyst', confidence: 0.9, reasoning: 'r' });
+            const r = await resolveAgent('https://brunch.co.kr/@x/1 이 글 요약해줘', 'u1', 'ko');
+            expect(mockRouteWithLLM).toHaveBeenCalled();
+            expect(r.agentSelection.primaryAgent).toBe('data-analyst');
+        });
     });
 });
