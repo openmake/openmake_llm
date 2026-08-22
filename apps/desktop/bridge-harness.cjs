@@ -110,6 +110,11 @@ const fakeApp = {
     const esc = await exec({ kind: 'read', path: '../../etc/hosts' });
     assert.equal(esc.ok, false, '스코프 탈출 거부');
 
+    // ②-B listAll 재귀 나열 — 심링크 제외·상대경로 규약
+    const all = await exec({ kind: 'listAll' });
+    assert.ok(all.entries.includes('seed.txt'), 'listAll 루트 파일');
+    assert.ok(all.entries.includes('subdir/out.txt'), 'listAll 하위 파일');
+
     // ③ exec (denylist / 자동승인 실행)
     const denied = await exec({ kind: 'exec', command: 'sudo ls' });
     assert.equal(denied.exitCode, 126, 'denylist 126');
@@ -133,6 +138,12 @@ const fakeApp = {
     assert.ok(br.ok && JSON.parse(br.stdout).harness === true, 'browser 어댑터');
     await exec({ kind: 'task_end', taskId });
     assert.equal(stubs.browserClosed, 1, 'task_end → agent-browser.closeAll');
+
+    // ⑥-B 서버 error 프레임 — 상태에 반영되고 연결은 살아 있다
+    sock.send(JSON.stringify({ type: 'error', message: '검증용 서버 오류' }));
+    await new Promise((r) => setTimeout(r, 150));
+    assert.ok(statuses.some((s) => s.includes('서버 오류: 검증용 서버 오류')), 'error 프레임 상태 반영');
+    assert.equal((await exec({ kind: 'read', path: 'seed.txt' })).ok, true, 'error 프레임 후에도 연결 생존');
 
     // ⑦ 해제 — 상태·일괄승인 회수
     bridge.disconnectFolder();
