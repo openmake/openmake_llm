@@ -15,7 +15,7 @@
         "dev:frontend-next": "cd apps/web && npm run dev",
         "start": "node apps/api/dist/server.js",
         "start:api": "node apps/api/dist/server.js",
-        "test": "npm run build:packages && npm test --workspace=@openmake/local-bridge-core && npm test --workspace=apps/api",
+        "test": "npm run build:packages && npm test --workspace=@openmake/local-bridge-core && npm run test:bridge-harness && npm test --workspace=apps/api",
         "test:backend": "npm run build:packages && npm test --workspace=apps/api",
         "test:e2e": "npx playwright test",
         "test:e2e:ui": "npx playwright test --ui",
@@ -23,7 +23,8 @@
         "contracts:export": "TS_NODE_COMPILER_OPTIONS='{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' ts-node --transpile-only scripts/export-openapi.ts",
         "clean": "rm -rf */dist **/dist",
         "version": "node -e \"const v=require('./package.json').version;const fs=require('fs');['apps/api/package.json','apps/web/package.json'].forEach(f=>{const p=JSON.parse(fs.readFileSync(f,'utf8'));p.version=v;fs.writeFileSync(f,JSON.stringify(p,null,4)+'\\n')});console.log('✅ 모든 workspace 버전 동기화 완료:',v)\" && git add apps/api/package.json apps/web/package.json",
-        "build:discord-bot": "cd apps/discord-bot && npm run build"
+        "build:discord-bot": "cd apps/discord-bot && npm run build",
+        "test:bridge-harness": "node scripts/copy-desktop-bridge-core.mjs && node apps/desktop/bridge-harness.cjs"
     },
     "keywords": [
         "ai",
