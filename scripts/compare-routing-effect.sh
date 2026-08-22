@@ -21,7 +21,16 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IN_DIR="$REPO/logs/routing-reports"
-OUT="$IN_DIR/effect-$(date +%Y-%m-%d).txt"
+TODAY="$(date +%Y-%m-%d)"
+OUT="$IN_DIR/effect-$TODAY.txt"
+
+# 멱등 가드 — pm2 cron 을 날짜 한정(25 9 23 8 *) 대신 매일(25 9 * * *)로 걸 수 있게 한다.
+# 날짜 한정 일회성은 그 시각에 머신이 절전이면 보충 실행 기회가 없다(미실행과 정상완료를
+# 파일 유무로만 구분하게 됨 — orchestration-shadow-report 선례).
+if [[ -f "$OUT" ]]; then
+    echo "[routing-effect] 오늘 결과 이미 존재 — 종료: $OUT"
+    exit 0
+fi
 # 배포일 — 이 날짜 이전 파일이 기준선, 이후가 적용본
 DEPLOY_DATE="${ROUTING_EFFECT_DEPLOY_DATE:-2026-08-22}"
 
@@ -44,8 +53,16 @@ extract() {
     echo "배포일: $DEPLOY_DATE (그 이전 = 기준선, 이후 = 적용본)"
     echo
 
+    # 상류 의존: 09:17 daily-routing-report 가 만든 당일 집계. 실패·지연 시 전날까지
+    # 데이터로 "정상처럼" 판정되는 것을 막는다 — 경고를 본문 최상단에 남긴다.
+    if [[ ! -f "$IN_DIR/$TODAY.txt" ]]; then
+        echo "⚠️  경고: 당일 집계($TODAY.txt)가 없습니다 — daily-routing-report(09:17) 실패/지연."
+        echo "    아래 표는 전일까지의 데이터만 반영하며, 배포 효과 판정에 쓰지 마세요."
+        echo
+    fi
+
     shopt -s nullglob
-    files=("$IN_DIR"/2*.txt)
+    files=("$IN_DIR"/2[0-9]*.txt)   # effect-*.txt 자기 출력은 제외(파일명이 숫자로 시작하는 집계만)
     if [[ ${#files[@]} -eq 0 ]]; then
         echo "집계 파일 없음 — daily-routing-report.sh 실행 여부를 확인하세요."
         exit 0
