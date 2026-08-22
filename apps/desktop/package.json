@@ -7,7 +7,9 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --mac dmg"
+    "dist": "electron-builder --mac dmg",
+    "prestart": "node ../../scripts/copy-desktop-bridge-core.mjs",
+    "predist": "node ../../scripts/copy-desktop-bridge-core.mjs"
   },
   "dependencies": {
     "ws": "^8.18.0"
@@ -28,7 +30,8 @@
       "main.js",
       "bridge.js",
       "updater.js",
-      "agent-browser.js"
+      "agent-browser.js",
+      "local-bridge-core/**"
     ],
     "afterPack": "afterPack.js",
     "mac": {
