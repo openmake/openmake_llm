@@ -95,6 +95,23 @@ describe('handleWorktree', () => {
         expect(r.worktreeRel).toBe(`.openmake/worktrees/${TASK}/apps/web`);
     });
 
+    it('untracked 하위 폴더 base: 체크아웃에 없는 경로를 빈 디렉토리로 보장한다 (exec cwd ENOENT 회귀)', async () => {
+        // HEAD 에 없는(untracked) 하위 폴더를 연결/선택한 경우 — worktree 체크아웃에 해당
+        // 경로가 없어 exec cwd 가 실패하던 결함의 회귀 가드.
+        const sub = path.join(repo, 'newdir');
+        fs.mkdirSync(sub, { recursive: true }); // 커밋하지 않는다
+        const r = await run({ kind: 'worktree', op: 'add', taskId: TASK }, sub);
+        expect(r.ok).toBe(true);
+        expect(r.worktreeRel).toBe(`.openmake/worktrees/${TASK}/newdir`);
+        // 서버가 합성하는 실행 cwd(base + worktreeRel)가 실제로 존재해야 한다
+        expect(fs.existsSync(path.join(sub, r.worktreeRel!))).toBe(true);
+        // 재사용 경로에서도 보장된다
+        fs.rmSync(path.join(sub, r.worktreeRel!), { recursive: true, force: true });
+        const again = await run({ kind: 'worktree', op: 'add', taskId: TASK }, sub);
+        expect(again.ok).toBe(true);
+        expect(fs.existsSync(path.join(sub, again.worktreeRel!))).toBe(true);
+    });
+
     it('git 레포가 아니면 add 를 거부한다', async () => {
         const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'omk-plain-'));
         try {
