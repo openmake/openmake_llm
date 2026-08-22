@@ -226,6 +226,20 @@ router.post('/', (req: Request, res: Response, next) => {
         folderRel: executor === 'local' ? folderRel : undefined,
     });
 
+    // 로컬 실행 작업 생성 감사 — 사용자 머신에서 도구가 실행되는 보안 관련 행위라
+    // 어느 디바이스·폴더로 위임됐는지 이력을 남긴다 (축1 plan 6단계, CRITICAL_ACTIONS
+    // 미등록 = 알림 없음·기록만). 실패는 생성 결과에 영향 없음.
+    if (executor === 'local') {
+        const { getAuditService } = await import('../services/AuditService');
+        await getAuditService().logAudit({
+            action: 'agent_task_local_create',
+            userId,
+            resourceType: 'agent_task',
+            resourceId: taskId,
+            details: { deviceId, folderRel: folderRel ?? null },
+        }).catch((e) => logger.warn(`[AgentTask] 로컬 생성 감사 기록 실패(무시): ${e instanceof Error ? e.message : e}`));
+    }
+
     const task = await db.getAgentTask(taskId);
     // 목록/상세와 동일하게 메타만 노출 — 첨부 본문(content/data)·내부 경로(storedPath) 응답 제외
     res.status(201).json(success({
