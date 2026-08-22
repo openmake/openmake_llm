@@ -5,7 +5,7 @@
     "main": "apps/api/dist/server.js",
     "scripts": {
         "build": "npm run build:packages && npm run build:backend && npm run build:frontend-next",
-        "build:packages": "npm run build --workspace=@openmake/shared-types && npm run build --workspace=@openmake/config && npm run build --workspace=@openmake/api-client",
+        "build:packages": "npm run build --workspace=@openmake/shared-types && npm run build --workspace=@openmake/config && npm run build --workspace=@openmake/api-client && npm run build --workspace=@openmake/local-bridge-core",
         "build:database": "echo 'No separate database build needed'",
         "build:backend": "cd apps/api && npm run build",
         "build:frontend-next": "cd apps/web && npm run build",
@@ -15,7 +15,7 @@
         "dev:frontend-next": "cd apps/web && npm run dev",
         "start": "node apps/api/dist/server.js",
         "start:api": "node apps/api/dist/server.js",
-        "test": "npm run build:packages && npm test --workspace=apps/api",
+        "test": "npm run build:packages && npm test --workspace=@openmake/local-bridge-core && npm test --workspace=apps/api",
         "test:backend": "npm run build:packages && npm test --workspace=apps/api",
         "test:e2e": "npx playwright test",
         "test:e2e:ui": "npx playwright test --ui",

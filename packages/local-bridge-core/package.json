@@ -1,0 +1,24 @@
+{
+  "name": "@openmake/local-bridge-core",
+  "version": "1.31.1",
+  "private": true,
+  "description": "로컬 브리지 디바이스 코어 — 데스크톱(bridge.js)·CLI(apps/cli) 공용. 프로토콜 상태기계 + 경로 스코프 + exec 3단 방어 + worktree 격리",
+  "types": "dist/index.d.ts",
+  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "jest"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.10"
+  }
+}

@@ -16,9 +16,12 @@ function assertLocalRequiresPacked(appPath) {
   for (const entry of [...entries].filter((p) => /^\/[^/]+\.js$/.test(p))) {
     const src = asar.extractFile(asarPath, entry.slice(1)).toString('utf8');
     for (const m of src.matchAll(/require\(\s*['"]\.\/([\w.-]+?)(?:\.js)?['"]\s*\)/g)) {
-      const dep = `/${m[1]}.js`;
-      if (!entries.has(dep)) {
-        throw new Error(`asar 누락 모듈: ${entry} 가 require 하는 ${dep} 가 패키징에 없음 — package.json build.files 에 추가하세요`);
+      // 파일 모듈(./x → /x.js) 또는 디렉토리 모듈(./x → /x/index.js — local-bridge-core
+      // 복사본처럼 index.js 를 가진 디렉토리) 중 하나가 asar 에 있으면 통과.
+      const file = `/${m[1]}.js`;
+      const dirIndex = `/${m[1]}/index.js`;
+      if (!entries.has(file) && !entries.has(dirIndex)) {
+        throw new Error(`asar 누락 모듈: ${entry} 가 require 하는 ${file}(또는 ${dirIndex}) 가 패키징에 없음 — package.json build.files 에 추가하세요`);
       }
     }
   }
