@@ -51,6 +51,7 @@
         "@types/nodemailer": "^7.0.9",
         "@types/supertest": "^7.2.0",
         "concurrently": "^8.2.2",
+        "esbuild": "0.28.2",
         "eslint": "^9.0.0",
         "jest": "^30.4.2",
         "playwright": "^1.58.0",
