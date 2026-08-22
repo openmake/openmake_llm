@@ -32,6 +32,8 @@ NODE_BIN="$(command -v node)"
 NODE_BIN="$(node -e 'console.log(process.execPath)')"
 cp "$NODE_BIN" "$APP/Contents/Resources/node"
 chmod +x "$APP/Contents/Resources/node"
+# 앱 아이콘 — 기존 Electron 앱과 동일 자산 재사용
+cp "$ROOT/apps/desktop/assets/icon.icns" "$APP/Contents/Resources/icon.icns"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -46,6 +48,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
+  <key>CFBundleIconFile</key><string>icon</string>
   <key>NSHumanReadableCopyright</key><string>OpenMake</string>
 </dict></plist>
 PLIST
