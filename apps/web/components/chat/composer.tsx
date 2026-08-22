@@ -20,6 +20,8 @@ import {
   X,
   Lock,
   BookOpen,
+  Plus,
+  FolderOpen,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -109,6 +111,18 @@ export function Composer() {
   const [dragging, setDragging] = useState(false);
   // 모드 시트(모바일 최적화) — 7개 토글을 가로스크롤 칩 대신 '도구' 버튼 + 시트로 수납
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
+  // + 메뉴 — 파일 첨부/폴더 선택 진입점 통합. 폴더 선택은 에이전트 모드+로컬 실행이
+  // 전제라 클릭 시 함께 활성화한다(폴더는 로컬 실행 작업에서만 의미가 있음).
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const plusMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!plusMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (plusMenuRef.current && !plusMenuRef.current.contains(e.target as Node)) setPlusMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [plusMenuOpen]);
   // NotebookLM 노트북 컨텍스트 — 선택 시 백엔드가 메시지 앞에 grounding 프리픽스 주입,
   // 해제 전까지 같은 대화 내에서 유지. 상태는 store(notebookContext) — 대화 전환/새 대화
   // 리셋은 clearChat·대화 로드 지점(sidebar/history)이 담당해 다른 대화로 누수되지 않는다.
@@ -876,14 +890,44 @@ export function Composer() {
               e.target.value = ""; // 같은 파일 재선택 허용
             }}
           />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="grid h-8 w-8 place-items-center rounded-md text-muted transition hover:bg-surface-2 hover:text-fg disabled:opacity-40"
-            title={t("attachFile")}
-            aria-label={t("attachFileLabel")}
-          >
-            <Paperclip className="h-4 w-4" />
-          </button>
+          <div ref={plusMenuRef} className="relative">
+            <button
+              onClick={() => setPlusMenuOpen((v) => !v)}
+              className="grid h-8 w-8 place-items-center rounded-md text-muted transition hover:bg-surface-2 hover:text-fg disabled:opacity-40"
+              title={t("plusMenu.label")}
+              aria-label={t("plusMenu.label")}
+              aria-expanded={plusMenuOpen}
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+            {plusMenuOpen && (
+              <div className="absolute bottom-full left-0 z-20 mb-1 w-44 rounded-md border border-border bg-surface-2 p-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => { setPlusMenuOpen(false); fileInputRef.current?.click(); }}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs text-fg-1 hover:bg-surface-3"
+                  title={t("attachFile")}
+                >
+                  <Paperclip className="h-3.5 w-3.5" />
+                  {t("plusMenu.file")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPlusMenuOpen(false);
+                    if (!agentTaskMode) toggle("agentTaskMode");
+                    setAgentLocalExecutor(true);
+                    setFolderBrowsePath("");
+                    setFolderPickerOpen(true);
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs text-fg-1 hover:bg-surface-3"
+                >
+                  <FolderOpen className="h-3.5 w-3.5" />
+                  {t("plusMenu.folder")}
+                </button>
+              </div>
+            )}
+          </div>
 
           <button
             onClick={cycleStyle}
