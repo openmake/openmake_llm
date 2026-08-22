@@ -51,7 +51,7 @@ import {
 } from '../services/agent-task/upload-store';
 import { claimUploadsAsInputFiles, ChunkStoreError } from '../services/agent-task/chunk-store';
 import { resolveDefaultMaxTurns } from '../services/agent-task/task-inputs';
-import { loadOwnedTask, toPublicTask, validateLocalExecutorInput } from './agent-task.helpers';
+import { auditLocalTaskCreate, loadOwnedTask, toPublicTask, validateLocalExecutorInput } from './agent-task.helpers';
 import { isAdminRole } from '../data/user-manager';
 
 const logger = createLogger('AgentTaskRoutes');
@@ -225,6 +225,9 @@ router.post('/', (req: Request, res: Response, next) => {
         deviceId: executor === 'local' ? deviceId : undefined,
         folderRel: executor === 'local' ? folderRel : undefined,
     });
+
+    // 로컬 실행 작업 생성 감사 (helpers — 위임 이력, fire-and-forget)
+    if (executor === 'local') await auditLocalTaskCreate(userId, taskId, deviceId, folderRel);
 
     const task = await db.getAgentTask(taskId);
     // 목록/상세와 동일하게 메타만 노출 — 첨부 본문(content/data)·내부 경로(storedPath) 응답 제외
