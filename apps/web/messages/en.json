@@ -254,6 +254,11 @@
     "placeholder": "Type a message or invoke a skill with /...",
     "attachFile": "Attach files (drag & drop supported · any format)",
     "attachFileLabel": "Attach files",
+    "plusMenu": {
+      "label": "Add",
+      "file": "Attach files",
+      "folder": "Select folder"
+    },
     "responseStyle": "Response style",
     "stop": "Stop",
     "send": "Send",

@@ -254,6 +254,11 @@
     "placeholder": "メッセージを入力するか、/ でスキルを呼び出してください...",
     "attachFile": "ファイルを添付（ドラッグ＆ドロップ対応・すべての形式）",
     "attachFileLabel": "ファイルを添付",
+    "plusMenu": {
+      "label": "追加",
+      "file": "ファイルを添付",
+      "folder": "フォルダを選択"
+    },
     "responseStyle": "応答スタイル",
     "stop": "停止",
     "send": "送信",

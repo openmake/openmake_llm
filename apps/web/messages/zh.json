@@ -254,6 +254,11 @@
     "placeholder": "输入消息，或用 / 调用技能...",
     "attachFile": "添加文件（支持拖放 · 任意格式）",
     "attachFileLabel": "添加文件",
+    "plusMenu": {
+      "label": "添加",
+      "file": "附加文件",
+      "folder": "选择文件夹"
+    },
     "responseStyle": "回复风格",
     "stop": "停止",
     "send": "发送",
