@@ -94,12 +94,19 @@ export async function handleWorktree(m: BridgeMsg, done: (r: BridgeResult) => vo
         const prefixR = await gitRun(['rev-parse', '--show-prefix'], base);
         const sub = prefixR.code === 0 ? prefixR.stdout.trim().replace(/\/+$/, '') : '';
         const workRel = sub ? `${rel}/${sub}` : rel;
+        // 연결/선택 폴더가 **untracked**(HEAD 에 없는) 하위 디렉토리면 worktree 체크아웃에
+        // 해당 경로가 없어 exec cwd 가 ENOENT 로 실패한다 — 빈 디렉토리로 보장한다.
+        // (worktree 는 어차피 tracked 내용만 담으므로 격리 의미는 동일: 빈 폴더에서 시작.)
+        const ensureSub = (): void => {
+            if (sub) { try { fs.mkdirSync(path.join(abs, sub), { recursive: true }); } catch { /* exec 가 후속 실패로 노출 */ } }
+        };
         const gitDirR = await gitRun(['rev-parse', '--absolute-git-dir'], base);
         if (gitDirR.code === 0) excludeWorktreeDir(gitDirR.stdout.trim());
-        if (fs.existsSync(abs)) { done({ ok: true, worktreeRel: workRel, branch }); return; } // 재개 시 재사용
+        if (fs.existsSync(abs)) { ensureSub(); done({ ok: true, worktreeRel: workRel, branch }); return; } // 재개 시 재사용
         const r = await gitRun(['worktree', 'add', abs, '-b', branch], base);
         if (r.code !== 0) { done({ ok: false, error: `worktree 생성 실패: ${(r.stderr || r.stdout).trim().slice(0, 300)}` }); return; }
         await writeBaseSha(abs);
+        ensureSub();
         done({ ok: true, worktreeRel: workRel, branch });
         return;
     }
