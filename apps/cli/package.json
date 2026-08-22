@@ -12,7 +12,8 @@
         "start": "node dist/index.js"
     },
     "dependencies": {
-        "ws": "^8.18.3"
+        "ws": "^8.18.3",
+        "@openmake/local-bridge-core": "*"
     },
     "devDependencies": {
         "@types/ws": "^8.5.12"
