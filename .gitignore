@@ -132,7 +132,12 @@ user-guide.md
 .omc/
 
 # 운영 무관 개발 전용 문서/지침 (저장소 미추적, 로컬 보존)
-/docs/
+# 예외: docs/architecture 의 도면 **소스**는 추적한다. 2026-08-19 판 arch.png 이
+# 소스 없는 단발 PNG 라 나흘 만에 낡았던 전례가 있다 — 소스가 이 머신에만 있으면
+# 같은 일이 반복된다. 렌더 산출물(PNG)은 그대로 미추적: node docs/architecture/render.mjs.
+/docs/*
+!/docs/architecture/
+/docs/architecture/*.png
 /CLAUDE.md
 /AGENTS.md
 /apps/web/CLAUDE.md
