@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.32.1](https://github.com/openmake/openmake_llm/compare/v1.32.0...v1.32.1) (2026-08-23)
+
+
+### 🐛 버그 수정
+
+* **bridge:** 파일 kind FS 호출 async 전환 + 타임아웃 가드 ([c4e8906](https://github.com/openmake/openmake_llm/commit/c4e890624a874e4c51032a9c62c860ebed791122))
+* **bridge:** 파일 kind FS 호출 async 전환 + 타임아웃 가드 — 블록 시 전 루트 연결 사망 해소 ([b24e36d](https://github.com/openmake/openmake_llm/commit/b24e36d6b027bcf38991143abf430f1209717c5f))
+
 ## [1.32.0](https://github.com/openmake/openmake_llm/compare/v1.31.1...v1.32.0) (2026-08-23)
 
 
