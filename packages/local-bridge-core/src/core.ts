@@ -1,7 +1,7 @@
 /**
  * BridgeCore — 브리지 디바이스의 호스트 비의존 실행 코어.
  *
- * 서버 bridge_exec 요청(kind 화이트리스트 10종)을 처리한다. 데스크톱 bridge.js 와
+ * 서버 bridge_exec 요청(kind 화이트리스트 9종)을 처리한다. 데스크톱 bridge.js 와
  * CLI bridge.ts 에 자구 동일하게 이식돼 있던 로직의 단일화 (2026-08-22, 축2 plan 1단계).
  *
  * 보안 불변식 (양쪽 구현에서 그대로 이관 — 변경 금지):
@@ -194,18 +194,6 @@ export class BridgeCore {
                     return { entries, truncated };
                 });
                 done({ ok: true, ...r }); return;
-            }
-            case 'browser': {
-                // 로컬 브라우저(D3) — 데스크톱(Electron 내장 Chromium)만 어댑터로 구현한다.
-                if (!this.opts.browser) { done({ ok: false, error: '이 디바이스는 로컬 브라우저를 지원하지 않습니다' }); return; }
-                try {
-                    const out = await this.opts.browser(m.spec || {});
-                    // 컨테이너 runner 와 동일하게 stdout 에 JSON 을 싣는다(서버 파싱 재사용).
-                    done({ ok: true, stdout: JSON.stringify(out), exitCode: out.ok ? 0 : 1 });
-                } catch (e) {
-                    done({ ok: false, error: `로컬 브라우저 실행 실패: ${(e as Error).message}` });
-                }
-                return;
             }
             case 'worktree':
                 await handleWorktree(m, done, base); return;

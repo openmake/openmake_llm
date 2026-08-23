@@ -6,7 +6,6 @@
  * CLI 가 주입하는 호스트 차이만 남는다:
  *   - 인증: API key(omk_live_*) Authorization 헤더
  *   - confirmExec: 터미널 y/a/n 프롬프트 (index.ts 의 ConfirmFn)
- *   - browser: 미지원 → 코어가 거부 응답 (서버도 LOCAL_BRIDGE_BROWSER_ENABLED 로 게이트)
  *   - sandbox 프로파일 위치: tmpdir
  */
 import * as os from 'os';
@@ -36,7 +35,6 @@ export class CliBridge {
             confirm: opts.confirm,
             sandboxProfileDir: os.tmpdir(),
             ...(opts.autoApproveAll !== undefined ? { autoApproveAll: opts.autoApproveAll } : {}),
-            // browser 미지정 = 코어가 '미지원' 거부 응답 (CLI 는 로컬 브라우저 없음)
         });
         this.connection = new BridgeConnection({
             serverUrl: opts.serverUrl,
