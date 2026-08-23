@@ -200,6 +200,8 @@ export class LocalLLMProvider implements IProvider {
                 },
                 onTokenCombined,
                 {
+                    // 강도 문자열('low'|'medium'|'high'|'xhigh')은 그대로 넘겨 reasoning_effort 로
+                    // 매핑되게 한다. budget 객체는 로컬에서 미지원이라 단순 활성으로 축약.
                     think: typeof opts.thinking === 'object'
                         ? true
                         : opts.thinking,

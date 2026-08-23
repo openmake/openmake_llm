@@ -14,6 +14,7 @@
  * LLM 클라이언트 기본 설정 (vLLM/LiteLLM proxy 또는 OpenAI 호환 endpoint)
  * @interface LLMConfig
  */
+import type { ReasoningEffort } from '../config/reasoning-effort';
 export interface LLMConfig {
     /** LLM 서버 기본 URL (예: http://localhost:4000 — LiteLLM proxy) */
     baseUrl: string;
@@ -187,7 +188,7 @@ export interface ToolCall {
  *
  * @type ThinkOption
  */
-export type ThinkOption = boolean | 'low' | 'medium' | 'high';
+export type ThinkOption = boolean | ReasoningEffort;
 
 /**
  * 구조화된 출력 형식 옵션
