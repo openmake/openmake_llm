@@ -40,7 +40,6 @@ const KNOWN_FULLID_PREFIXES: readonly string[] = [
     'local-llm',
     'openrouter',
     'chatgpt',
-    'ollama-local',
     'ollama-cloud',
     'nvidia',
 ];

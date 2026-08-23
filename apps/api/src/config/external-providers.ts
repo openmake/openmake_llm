@@ -6,7 +6,7 @@
  * 기본 base URL, 검증 endpoint 등을 정의합니다.
  *
  * 활성: 로컬 LLM (vLLM via LiteLLM, 키 불필요) + BYO key provider 4종 —
- * openrouter / ollama-local / ollama-cloud / nvidia (모두 OpenAI 호환 endpoint).
+ * openrouter / ollama-cloud / nvidia (모두 OpenAI 호환 endpoint).
  * 2026-05-08 마이그레이션 018 로 openrouter 만 남겼다가, ollama 2종은 2026-07-04,
  * nvidia 는 2026-07-14 에 재도입됨 (018 은 기존 키 행 정리용 — 스키마는 유지).
  *
@@ -129,27 +129,6 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             { id: 'gpt-5.4',      displayName: 'GPT-5.4 (ChatGPT)',      isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true, thinking: true } },
             { id: 'gpt-5.4-mini', displayName: 'GPT-5.4 Mini (ChatGPT)', isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true, thinking: true } },
         ],
-    },
-    {
-        id: 'ollama-local',
-        displayName: 'Ollama (Local)',
-        sdkType: 'openai-compatible',
-        // Ollama 의 OpenAI 호환 endpoint 는 /v1. 실제 주소는 사용자가 base URL 로 입력
-        // (예: http://192.168.x.x:11434/v1). LAN IP 는 SSRF 가드에 걸리므로 운영자가
-        // .env SSRF_ALLOWED_HOSTS 에 해당 호스트를 등록해야 함 (fail-closed opt-in).
-        defaultBaseUrl: 'http://localhost:11434/v1',
-        validatePath: '/models',
-        enabled: true,
-        sortOrder: 30,
-        helpText:
-            '자체 서빙 중인 Ollama 서버의 OpenAI 호환 endpoint 를 입력하세요 ' +
-            '(예: http://<서버IP>:11434/v1). Ollama 는 API 키가 없으므로 임의 문자열 ' +
-            '8자 이상(예: ollama-no-key)을 입력하면 됩니다. LAN/사설 IP 는 서버 .env 의 ' +
-            'SSRF_ALLOWED_HOSTS 허용목록 등록이 필요합니다. 모델 목록은 해당 서버에 ' +
-            'pull 되어 있는 모델이 자동 표시됩니다.',
-        authMethods: ['api_key'] as const,
-        // 로컬 Ollama 는 설치 모델이 전부 — /v1/models 실패 시 보여줄 공통 모델이 없음
-        fallbackModels: [],
     },
     {
         id: 'ollama-cloud',
