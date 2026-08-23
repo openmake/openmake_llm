@@ -10,10 +10,15 @@
 //   - browser: 미지원 → 코어가 거부 응답 (capability 미보고 degrade)
 //   - deviceId·샌드박스 프로파일: ~/Library/Application Support/OpenMakeCompanion
 //
-// stdio 계약 (한 줄 = JSON 하나):
-//   helper→app: {ev:'status',text} {ev:'confirm',id,command,taskId,base,sandbox}
-//               {ev:'autoApprove',count} {ev:'taskEnd',taskId} {ev:'connected',folder}
-//   app→helper: {cmd:'connect',folder} {cmd:'disconnect'}
+// 다중 루트(0.2.0): 루트당 독립 BridgeCore+BridgeConnection, deviceId 는 기기 base id +
+// 루트 경로 해시 파생(재접속 안정) — 서버는 루트마다 별개 디바이스로 본다(프로토콜 무변경,
+// 유저당 LOCAL_BRIDGE_MAX_DEVICES 상한은 서버가 강제하고 초과는 status 로 표면화).
+//
+// stdio 계약 (한 줄 = JSON 하나, folder = 루트 realpath):
+//   helper→app: {ev:'status',folder?,text} {ev:'confirm',id,command,taskId,base,folder,sandbox}
+//               {ev:'autoApprove',count}(전 루트 합계) {ev:'taskEnd',taskId,folder}
+//               {ev:'connected',folder} {ev:'disconnected',folder}
+//   app→helper: {cmd:'connect',folder} {cmd:'disconnect',folder?}(folder 없으면 전체)
 //               {cmd:'confirm',id,result:'yes'|'all'|'no'} {cmd:'clearAutoApprove'} {cmd:'quit'}
 import * as fs from 'fs';
 import * as os from 'os';
@@ -33,7 +38,7 @@ fs.mkdirSync(SUPPORT_DIR, { recursive: true });
 
 function send(obj) { process.stdout.write(JSON.stringify(obj) + '\n'); }
 
-function deviceId() {
+function baseDeviceId() {
   const p = path.join(SUPPORT_DIR, 'device-id');
   try { return fs.readFileSync(p, 'utf8').trim(); } catch { /* 최초 생성 */ }
   const id = crypto.randomUUID();
@@ -41,53 +46,70 @@ function deviceId() {
   return id;
 }
 
+/** 루트별 파생 deviceId — 재접속 시 같은 값(서버 세션 대체 규칙과 정합). 36+3+12=51 ≤ 서버 64 상한. */
+function rootDeviceId(root) {
+  return `${baseDeviceId()}-r-${crypto.createHash('sha256').update(root).digest('hex').slice(0, 12)}`;
+}
+
 // confirm 왕복 — id 상관. 앱이 죽으면(stdin close) 전 대기를 'no' 로 해소하고 종료.
 let confirmSeq = 0;
 const pendingConfirms = new Map(); // id -> resolve
-function stdioConfirm(command, taskId, base) {
-  return new Promise((resolve) => {
-    const id = ++confirmSeq;
-    pendingConfirms.set(id, resolve);
-    send({ ev: 'confirm', id, command, taskId: taskId ?? null, base, sandbox: SANDBOX_ENABLED });
-  });
-}
 
-let core = null;
-let connection = null;
-let folderRoot = null;
+/** 연결 루트들 — realpath → {core, connection} */
+const roots = new Map();
+
+function totalAutoApprove() {
+  let n = 0;
+  for (const r of roots.values()) n += r.core.autoApprovedCount();
+  return n;
+}
 
 function connectFolder(folder) {
   if (!apiKey) { send({ ev: 'status', text: 'API key 필요 — 앱 설정에서 입력' }); return; }
   let real;
   try { real = fs.realpathSync(folder); } catch (e) { send({ ev: 'status', text: `폴더 열기 실패: ${e.message}` }); return; }
-  if (connection) connection.disconnect();
-  folderRoot = real;
-  core = new BridgeCore({
-    folder: folderRoot,
-    confirm: stdioConfirm,
+  const prev = roots.get(real);
+  if (prev) prev.connection.disconnect(); // 같은 루트 재연결 = 세션 갱신
+  const core = new BridgeCore({
+    folder: real,
+    confirm: (command, taskId, base) => new Promise((resolve) => {
+      const id = ++confirmSeq;
+      pendingConfirms.set(id, resolve);
+      send({ ev: 'confirm', id, command, taskId: taskId ?? null, base, folder: real, sandbox: SANDBOX_ENABLED });
+    }),
     sandboxProfileDir: SUPPORT_DIR,
-    onTaskEnd: (taskId) => send({ ev: 'taskEnd', taskId: taskId ?? null }),
-    onAutoApproveChange: () => send({ ev: 'autoApprove', count: core ? core.autoApprovedCount() : 0 }),
+    onTaskEnd: (taskId) => send({ ev: 'taskEnd', taskId: taskId ?? null, folder: real }),
+    onAutoApproveChange: () => send({ ev: 'autoApprove', count: totalAutoApprove() }),
   });
-  connection = new BridgeConnection({
+  const connection = new BridgeConnection({
     serverUrl,
     core,
-    deviceId: deviceId(),
-    label: `${os.hostname()} · ${path.basename(folderRoot)}`,
+    deviceId: rootDeviceId(real),
+    label: `${os.hostname()} · ${path.basename(real)}`,
     headers: () => ({ Authorization: `Bearer ${apiKey}` }),
-    onStatus: (s) => send({ ev: 'status', text: s }),
-    shouldReconnect: () => !!folderRoot,
+    onStatus: (s) => send({ ev: 'status', folder: real, text: s }),
+    shouldReconnect: () => roots.has(real),
   });
+  roots.set(real, { core, connection });
   void connection.connect();
-  send({ ev: 'connected', folder: folderRoot });
+  send({ ev: 'connected', folder: real });
 }
 
-function disconnectFolder() {
-  folderRoot = null;
-  if (connection) connection.disconnect(); // 일괄 승인 회수 포함
-  connection = null;
-  core = null;
-  send({ ev: 'status', text: '미연결' });
+function disconnectFolder(folder) {
+  if (folder === undefined) { // 전체 해제 (구 계약 호환)
+    for (const real of [...roots.keys()]) disconnectFolder(real);
+    return;
+  }
+  let real = folder;
+  try { real = fs.realpathSync(folder); } catch { /* 이미 삭제된 폴더도 등록 키로 시도 */ }
+  const r = roots.get(real) ?? roots.get(folder);
+  const key = roots.has(real) ? real : folder;
+  if (!r) return;
+  roots.delete(key);                 // shouldReconnect 가 false 가 된 뒤 끊는다
+  r.connection.disconnect();         // 일괄 승인 회수 포함
+  send({ ev: 'disconnected', folder: key });
+  send({ ev: 'autoApprove', count: totalAutoApprove() });
+  if (roots.size === 0) send({ ev: 'status', text: '미연결' });
 }
 
 const rl = readline.createInterface({ input: process.stdin });
@@ -96,7 +118,7 @@ rl.on('line', (line) => {
   try { m = JSON.parse(line); } catch { return; }
   switch (m.cmd) {
     case 'connect': if (typeof m.folder === 'string') connectFolder(m.folder); break;
-    case 'disconnect': disconnectFolder(); break;
+    case 'disconnect': disconnectFolder(typeof m.folder === 'string' ? m.folder : undefined); break;
     case 'confirm': {
       const resolve = pendingConfirms.get(m.id);
       if (resolve) {
@@ -105,7 +127,7 @@ rl.on('line', (line) => {
       }
       break;
     }
-    case 'clearAutoApprove': if (core) core.clearAutoApprove(); break;
+    case 'clearAutoApprove': for (const r of roots.values()) r.core.clearAutoApprove(); break;
     case 'quit': shutdown(); break;
     default: break;
   }
@@ -120,7 +142,7 @@ function shutdown() {
   shuttingDown = true;
   for (const resolve of pendingConfirms.values()) resolve('no');
   pendingConfirms.clear();
-  setTimeout(() => { disconnectFolder(); process.exit(0); }, 100);
+  setTimeout(() => { disconnectFolder(undefined); process.exit(0); }, 100);
 }
 rl.on('close', shutdown);
 process.on('SIGTERM', shutdown);
