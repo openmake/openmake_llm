@@ -112,6 +112,31 @@ export interface ChatGPTOAuthProviderOptions {
     transportFactory?: TransportFactory;
 }
 
+/**
+ * chat/completions 의 `response_format`(json_schema) → Responses API 의 `text.format`.
+ *
+ * Codex 백엔드는 chat/completions 계열 파라미터를 받지 않으므로, 구조화 요청이
+ * 그대로 전달되면 **조용히 무시**되어 스키마가 강제되지 않는다(실측 2026-08-24:
+ * intent 누락 → 컴포저가 평문 degrade → 원본 JSON 이 본문에 노출).
+ */
+function toResponsesTextFormat(
+    responseFormat?: Record<string, unknown>,
+): { text: { format: Record<string, unknown> } } | undefined {
+    if (!responseFormat || responseFormat.type !== 'json_schema') return undefined;
+    const js = responseFormat.json_schema as Record<string, unknown> | undefined;
+    if (!js?.schema) return undefined;
+    return {
+        text: {
+            format: {
+                type: 'json_schema',
+                name: typeof js.name === 'string' ? js.name : 'response',
+                schema: js.schema,
+                ...(js.strict !== undefined ? { strict: js.strict } : {}),
+            },
+        },
+    };
+}
+
 export class ChatGPTOAuthProvider implements IProvider {
     readonly id = CHATGPT_PROVIDER_ID;
     readonly sdkType: SdkType = 'openai-compatible';
@@ -257,6 +282,7 @@ export class ChatGPTOAuthProvider implements IProvider {
                     ? { tool_choice: toResponsesToolChoice(opts.tool_choice, codec) }
                     : {}),
                 // temperature / max_output_tokens 미전달 — Codex 백엔드 거부 회피
+                ...(toResponsesTextFormat(opts.responseFormat) ?? {}),
             };
 
             const stream = await this.client.responses.create(
