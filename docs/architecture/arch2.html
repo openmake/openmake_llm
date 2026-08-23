@@ -1,11 +1,15 @@
 <meta charset="utf-8">
 <title>OpenMake LLM — Deployment Architecture</title>
 <!--
-  OpenMake LLM 배치(머신 단위) 아키텍처 도면의 **소스**. arch.html 과 같은 규칙:
+  OpenMake LLM 배치(머신 단위) 아키텍처 도면의 **소스**.
   구조가 바뀌면 이 HTML 을 고치고 render.mjs 를 다시 돌린다.
 
-    node docs/architecture/render.mjs
-      → arch2.png (ko) / arch2.en.png (en)
+    node docs/architecture/render.mjs   → arch2.png (ko) / arch2.en.png (en)
+
+  그림체는 2026-08-23 참고 시안(기기 일러스트 + 아이콘)을 따르되, 텍스트는 소스에서
+  가져온다. 시안은 이미지 생성물이라 한국어가 여러 군데 깨져 있었다
+  (row SQL / 일·게이트웨이 / 표드 실행 / 얼레이 / 본전). 도면에서 라벨이 틀리면
+  그림이 예쁜 것은 의미가 없으므로, 아이콘은 인라인 SVG 로 그리고 글자는 실제 텍스트로 둔다.
 
   실측 근거: ecosystem.config.js(openmake-llm·openmake-next·openmake-discord),
   scripts/vllm/dgx-ecosystem.config.example.cjs(vllm-chat·vllm-embed·flux),
@@ -14,230 +18,309 @@
   LLM_GATEWAY_PROVIDERS=openrouter,ollama-cloud,nvidia)
 -->
 <style>
-  :root { --ink:#0f172a; --sub:#64748b; --line:#e2e8f0; --edge:#f59e0b; --pm2:#3b82f6;
-          --gw:#f97316; --data:#06b6d4; --box:#ec4899; --dgx:#22c55e; --cloud:#94a3b8; }
+  :root {
+    --ink:#0b1220; --sub:#64748b; --line:#e2e8f0;
+    --edge:#f59e0b; --pm2:#2563eb; --gw:#0d9488; --data:#0891b2; --box:#e11d48; --dgx:#22c55e;
+  }
   * { box-sizing:border-box; margin:0; padding:0; }
   body {
-    width:1920px; padding:40px 44px 32px;
-    background:linear-gradient(160deg,#fdfdff 0%,#f4f7fb 55%,#eef3f9 100%); color:var(--ink);
+    width:2000px; padding:44px 48px 36px; background:#fff; color:var(--ink);
     font:400 13px/1.5 -apple-system,"SF Pro Text","Pretendard","Helvetica Neue",sans-serif;
     -webkit-font-smoothing:antialiased;
   }
-  h1 { font-size:30px; font-weight:800; letter-spacing:-.02em; }
-  h1 b { color:#2563eb; }
-  h1 small { font-size:15px; font-weight:600; color:var(--sub); letter-spacing:0; }
-  .head { display:flex; justify-content:space-between; align-items:flex-start; gap:32px; margin-bottom:24px; }
-  .head p { margin-top:8px; font-size:13.5px; color:var(--sub); }
-  .stamp { padding:12px 16px; border:1px solid var(--line); border-radius:10px; background:#fff;
-           text-align:right; font-size:11.5px; line-height:1.65; color:var(--sub); white-space:nowrap; }
+  svg { display:block; flex:none; }
+  h1 { text-align:center; font-size:42px; font-weight:800; letter-spacing:-.03em; margin-bottom:6px; }
+  .sub-t { text-align:center; font-size:13.5px; color:var(--sub); margin-bottom:22px; }
+  .sub-t b { color:#334155; }
+
+  /* ── 공통 패널 ─────────────────────────────── */
+  .shell { border:1.5px solid #dbe3ee; border-radius:22px; background:#fbfdff; padding:16px 18px; }
+  .rail { display:flex; gap:16px; align-items:stretch; }
+  .rail > .badge {
+    flex:none; width:132px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:8px; border-radius:16px; text-align:center;
+  }
+  .badge .t { font-size:15px; font-weight:800; line-height:1.3; }
+  .badge .s { font-size:11px; color:var(--sub); }
+
+  .tiles { flex:1; display:grid; gap:0; grid-auto-flow:column; grid-auto-columns:1fr;
+           border:1px solid var(--line); border-radius:16px; background:#fff; overflow:hidden; }
+  .tile { display:flex; gap:11px; align-items:flex-start; padding:15px 16px; border-left:1px solid #eef2f7; }
+  .tile:first-child { border-left:0; }
+  .tile b { display:block; font-size:14px; font-weight:750; margin-bottom:3px; }
+  .tile p { font-size:11px; line-height:1.55; color:var(--sub); }
+
+  /* ── 진입 경로 ─────────────────────────────── */
+  .entries { display:flex; gap:22px; margin:16px 0 14px; }
+  .entry { display:flex; align-items:center; gap:12px; padding:13px 18px; border:2px solid var(--edge);
+           border-radius:16px; background:#fffbeb; }
+  .entry b { font-size:16px; font-weight:800; }
+  .entry p { font-size:11.5px; color:#92400e; margin-top:2px; }
+
+  /* ── 본체 3열 ─────────────────────────────── */
+  .main { display:grid; grid-template-columns:1090px 128px 1fr; gap:0 16px; align-items:start; }
+
+  /* Mac mini 기기 프레임 */
+  .mac { border:2px solid #cbd5e1; border-radius:26px; padding:14px;
+         background:linear-gradient(180deg,#f1f5f9 0%,#e2e8f0 100%); box-shadow:0 2px 0 #cbd5e1 inset; }
+  .mac > header { display:flex; align-items:center; gap:12px; padding:2px 8px 12px; }
+  .mac > header .t { font-size:22px; font-weight:800; }
+  .mac > header .s { font-size:11.5px; color:#475569; }
+  .mac > header .chip { margin-left:auto; padding:4px 10px; border-radius:999px; background:#fff;
+                        border:1px solid #cbd5e1; font-size:10.5px; color:#475569; font-family:ui-monospace,monospace; }
+  .zone { display:flex; gap:14px; align-items:stretch; padding:13px; border-radius:16px; margin-bottom:11px; }
+  .zone:last-child { margin-bottom:0; }
+  .zone > .zbadge { flex:none; width:96px; display:flex; flex-direction:column; align-items:center;
+                    justify-content:center; gap:7px; text-align:center; }
+  .zbadge .t { font-size:14px; font-weight:800; line-height:1.35; }
+  .zbody { flex:1; display:grid; gap:9px; }
+  .row3 { grid-template-columns:repeat(3,1fr); } .row2 { grid-template-columns:1fr 1fr; }
+  .item { display:flex; gap:10px; align-items:flex-start; padding:11px 13px; border:1px solid var(--line);
+          border-radius:12px; background:#fff; }
+  .item b { display:block; font-size:13px; font-weight:750; margin-bottom:2px; }
+  .item b em { font-style:normal; padding:1px 6px; margin-left:5px; border-radius:5px; background:#f1f5f9;
+               font-family:ui-monospace,"SF Mono",monospace; font-size:10.5px; color:#0f172a; font-weight:600; }
+  .item p { font-size:10.8px; line-height:1.55; color:var(--sub); }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; grid-column:1/-1; }
+  .chips i { font-style:normal; padding:5px 11px; border:1px solid #dbeafe; border-radius:999px;
+             background:#f8fbff; font-size:10.8px; color:#1e40af; font-weight:600; }
+  .hard { grid-column:1/-1; font-size:10.5px; color:var(--sub); padding-top:2px; }
+
+  /* Tailscale 통로 */
+  .link { display:flex; flex-direction:column; align-items:center; gap:8px; padding-top:230px; }
+  .link .arrow.up { transform:rotate(-90deg); }
+  .link .pill { display:flex; flex-direction:column; align-items:center; gap:9px; padding:20px 14px;
+                border:2px solid #86efac; border-radius:22px; background:#f0fdf4; }
+  .link .pill .t { font-size:14px; font-weight:800; text-align:center; line-height:1.4; }
+  .link .pill .s { font-size:10.5px; color:#15803d; text-align:center; line-height:1.4; }
+  .link .arrow { color:#22c55e; font-size:22px; }
+
+  /* DGX 섀시 */
+  .dgx { border:2px solid #0f172a; border-radius:22px; background:linear-gradient(180deg,#111827,#0b1220);
+         padding:16px; position:relative; overflow:hidden; }
+  .dgx::after { content:""; position:absolute; right:10px; top:56px; bottom:16px; width:52px; border-radius:10px;
+                background:repeating-linear-gradient(135deg,#1f2937 0 6px,#0b1220 6px 12px); opacity:.9; }
+  .dgx > header { display:flex; align-items:center; gap:10px; margin-bottom:13px; }
+  .dgx > header .t { font-size:19px; font-weight:800; color:#fff; }
+  .dgx > header .s { font-size:11.5px; color:#94a3b8; }
+  .dgx .item { background:#0f1a2e; border-color:#1f2a3d; margin-right:62px; }
+  .dgx .item b { color:#fff; } .dgx .item p { color:#94a3b8; }
+  .dgx .item b em { background:#1f2a3d; color:#bbf7d0; }
+  .dgx .note { margin:12px 62px 0 0; display:flex; gap:9px; align-items:flex-start; padding:10px 12px;
+               border:1px solid #1f2a3d; border-radius:12px; background:#0f1a2e; font-size:10.5px;
+               line-height:1.55; color:#94a3b8; }
+
+  /* 외부 provider 구름 */
+  .cloud { margin-top:14px; border:2px dashed #cbd5e1; border-radius:26px; background:#f8fafc; padding:14px 16px; }
+  .cloud > header { display:flex; align-items:center; gap:9px; margin-bottom:11px; }
+  .cloud > header .t { font-size:15px; font-weight:800; }
+  .cloud > header .s { font-size:11px; color:var(--sub); }
+  .cloud .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+  .cloud .out { margin-top:9px; text-align:right; font-size:10.5px; color:var(--sub); }
+
+  /* 하단 */
+  .legend { display:flex; align-items:center; justify-content:center; gap:26px; margin-top:20px; font-size:12px; color:#475569; }
+  .legend u { text-decoration:none; display:inline-flex; align-items:center; gap:7px; }
+  .legend u s { text-decoration:none; width:11px; height:11px; border-radius:50%; }
+  .flowbar { display:flex; align-items:center; justify-content:center; gap:14px; margin-top:14px; padding:14px 22px;
+             border:1.5px solid var(--line); border-radius:999px; background:#fbfdff; font-size:19px; font-weight:800; }
+  .flowbar span.a { color:#cbd5e1; font-size:17px; }
+  .flowbar .c1 { color:#f59e0b; } .flowbar .c2 { color:#1e3a8a; } .flowbar .c3 { color:#0d9488; } .flowbar .c4 { color:#16a34a; }
+  .stamp { position:absolute; top:44px; right:48px; text-align:right; font-size:11px; line-height:1.6; color:var(--sub); }
   .stamp b { color:var(--ink); }
-
-  .panel { border:1px solid var(--line); border-radius:14px; background:#fff; padding:16px 18px 18px; }
-  .panel > h2 { display:flex; align-items:center; gap:9px; font-size:15px; font-weight:700; margin-bottom:12px; }
-  .panel > h2 .ic { font-size:16px; }
-  .panel > h2 .tag { padding:2px 8px; border-radius:6px; background:#f1f5f9; color:var(--sub);
-                     font-size:11px; font-weight:600; font-family:ui-monospace,"SF Mono",monospace; }
-  .panel > h2 .meta { font-size:11.5px; font-weight:500; color:var(--sub); }
-
-  .grid { display:grid; gap:11px; }
-  .g5 { grid-template-columns:repeat(5,1fr); } .g3 { grid-template-columns:repeat(3,1fr); }
-  .g2 { grid-template-columns:repeat(2,1fr); }
-  .card { border:1px solid var(--line); border-left:3px solid var(--c,var(--pm2)); border-radius:9px;
-          background:#fff; padding:10px 12px; }
-  .card h3 { font-size:12.5px; font-weight:700; margin-bottom:3px; }
-  .card p { font-size:11px; line-height:1.55; color:var(--sub); }
-  code { padding:1px 5px; border-radius:4px; background:#f1f5f9; font-family:ui-monospace,"SF Mono",monospace;
-         font-size:10.5px; color:#0f172a; }
-
-  .entries { display:flex; justify-content:center; gap:120px; margin:14px 0; }
-  .entry { display:flex; flex-direction:column; align-items:center; gap:5px; padding:9px 18px;
-           border:1px solid var(--line); border-radius:12px; background:#fff; text-align:center; }
-  .entry b { font-size:12px; color:#2563eb; } .entry i { font-style:normal; font-size:10.5px; color:var(--sub); }
-  .arrows { display:flex; justify-content:center; gap:120px; color:#cbd5e1; font-size:13px; margin-bottom:12px; }
-
-  .machines { display:grid; grid-template-columns:1fr 60px 1fr; gap:0 14px; align-items:start; }
-  .sub { border:1px solid var(--line); border-radius:11px; padding:12px 13px; margin-top:11px; }
-  .sub > h4 { display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:700; margin-bottom:9px; }
-  .sub > h4 span { font-weight:500; font-size:11px; color:var(--sub); }
-  .live { margin-left:auto; width:9px; height:9px; border-radius:50%; background:#22c55e; box-shadow:0 0 0 3px #22c55e22; }
-
-  .rows { display:flex; flex-wrap:wrap; gap:7px; }
-  .rows i { font-style:normal; padding:5px 9px; border:1px solid var(--line); border-radius:7px;
-            background:#fff; font-size:10.5px; color:#334155; }
-  .rows i b { font-weight:700; }
-  .note { margin-top:9px; font-size:10.5px; line-height:1.55; color:var(--sub); }
-
-  .link { display:flex; flex-direction:column; align-items:center; justify-content:center;
-          gap:6px; padding-top:150px; }
-  .link .pipe { width:2px; flex:1; min-height:60px; background:linear-gradient(#cbd5e1,#94a3b8); }
-  .link b { writing-mode:vertical-rl; font-size:11px; color:#475569; letter-spacing:.03em; }
-  .link i { font-style:normal; font-size:10px; color:var(--sub); text-align:center; line-height:1.4; }
-
-  .dgx { background:#0f172a; border-color:#1e293b; color:#e2e8f0; }
-  .dgx > h2 { color:#fff; } .dgx > h2 .meta { color:#94a3b8; } .dgx > h2 .tag { background:#1e293b; color:#94a3b8; }
-  .dgx .card { background:#111c30; border-color:#1e293b; }
-  .dgx .card h3 { color:#fff; } .dgx .card p { color:#94a3b8; }
-  .dgx code { background:#1e293b; color:#e2e8f0; }
-  .dgx .note { color:#94a3b8; padding-top:9px; border-top:1px solid #1e293b; }
-
-  .legend { display:flex; flex-wrap:wrap; align-items:center; gap:16px; margin-top:20px; padding:13px 18px;
-            border:1px solid var(--line); border-radius:12px; background:#fff; font-size:11.5px; color:var(--sub); }
-  .legend b { color:var(--ink); }
-  .legend u { text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
-  .legend u s { text-decoration:none; width:9px; height:9px; border-radius:50%; }
 </style>
 <body></body>
 <script>
 const L = new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'ko';
 const p = (v) => (typeof v === 'string' ? v : v[L]);
 
+/* ── 아이콘: 브랜드 로고 대신 알아볼 수 있는 최소 도형 ── */
+const I = {
+  people: (c = '#1d4ed8') => `<svg width="42" height="42" viewBox="0 0 24 24" fill="${c}"><circle cx="9" cy="8" r="3.2"/><circle cx="16.5" cy="9" r="2.5"/><path d="M2.5 19c0-3.4 2.9-5.5 6.5-5.5s6.5 2.1 6.5 5.5z"/><path d="M16.5 13c3 0 5 1.7 5 4.4V19h-4.2c0-2-.6-3.6-1.6-4.8z"/></svg>`,
+  globe: () => `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.7 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.7-3.8-9S9.5 5.6 12 3z"/></svg>`,
+  menubar: () => `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#334155" stroke-width="1.7"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M2.5 8h19M8 20h8"/><circle cx="5.6" cy="6" r=".8" fill="#334155"/></svg>`,
+  terminal: () => `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="1.7"><rect x="2.5" y="4" width="19" height="16" rx="2.5"/><path d="M6.5 9.5l3 2.5-3 2.5M12.5 15h5"/></svg>`,
+  phone: () => `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="1.7"><rect x="6" y="2.5" width="12" height="19" rx="2.6"/><path d="M10.5 5h3"/><circle cx="12" cy="17.8" r="1"/></svg>`,
+  discord: () => `<svg width="30" height="30" viewBox="0 0 24 24" fill="#5865f2"><path d="M19 5.5A15 15 0 0 0 15.4 4l-.3.6a12 12 0 0 1 3 1.2 13 13 0 0 0-12.2 0 12 12 0 0 1 3-1.2L8.6 4A15 15 0 0 0 5 5.5C2.6 9.2 2 12.8 2.3 16.3A15 15 0 0 0 7 18.7l.9-1.4a10 10 0 0 1-1.6-.8l.4-.3a10.6 10.6 0 0 0 10.6 0l.4.3a10 10 0 0 1-1.6.8l.9 1.4a15 15 0 0 0 4.7-2.4c.4-4-.6-7.6-2.7-10.8zM9.3 14.2c-.9 0-1.7-.9-1.7-1.9s.8-1.9 1.7-1.9 1.7.9 1.7 1.9-.8 1.9-1.7 1.9zm5.4 0c-.9 0-1.7-.9-1.7-1.9s.8-1.9 1.7-1.9 1.7.9 1.7 1.9-.8 1.9-1.7 1.9z"/></svg>`,
+  cloudflare: () => `<svg width="34" height="34" viewBox="0 0 24 24" fill="#f6821f"><path d="M17.4 17H6.6a3.6 3.6 0 0 1-.5-7.2 5.2 5.2 0 0 1 9.9-1.4 3 3 0 0 1 1.4 8.6z"/></svg>`,
+  house: () => `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="1.8"><path d="M3.5 10.5 12 3.5l8.5 7"/><path d="M5.5 10v9.5h13V10"/><path d="M10 19.5V14h4v5.5"/></svg>`,
+  shield: (c = '#f59e0b') => `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.8"><path d="M12 2.8 20 6v6c0 4.6-3.3 8-8 9.3C7.3 20 4 16.6 4 12V6z"/><path d="m8.8 12.2 2.2 2.2 4.2-4.4"/></svg>`,
+  gear: () => `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.6v2.6M12 18.8v2.6M21.4 12h-2.6M5.2 12H2.6M18.6 5.4l-1.9 1.9M7.3 16.7l-1.9 1.9M18.6 18.6l-1.9-1.9M7.3 7.3 5.4 5.4"/></svg>`,
+  whale: () => `<svg width="34" height="34" viewBox="0 0 24 24" fill="#0891b2"><path d="M21.5 11.4c-.6-.4-1.7-.5-2.5-.3-.1-.9-.6-1.7-1.4-2.2l-.5-.3-.3.5c-.4.7-.5 1.7-.1 2.4H2.6c-.3 0-.5.2-.5.5 0 1.8.4 3.6 1.4 4.9 1.1 1.4 2.8 2.1 4.9 2.1 4.7 0 8.2-2.2 9.8-6.1.7 0 2.2 0 3-1.4l.2-.4zM5.4 9.4h2.2v2.2H5.4zm2.9 0h2.2v2.2H8.3zm2.9 0h2.2v2.2h-2.2zm-2.9-2.8h2.2v2.2H8.3zm2.9 0h2.2v2.2h-2.2zm0-2.9h2.2v2.2h-2.2z"/></svg>`,
+  db: (c = '#0891b2') => `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.7"><ellipse cx="12" cy="6" rx="7.5" ry="3"/><path d="M4.5 6v12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V6"/><path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/></svg>`,
+  layers: (c = '#e11d48') => `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.7"><path d="m12 3 8.5 4.5L12 12 3.5 7.5z"/><path d="m3.5 12 8.5 4.5L20.5 12M3.5 16.5 12 21l8.5-4.5"/></svg>`,
+  box: (c = '#e11d48') => `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.7"><path d="M3.5 7.6 12 3l8.5 4.6v8.8L12 21l-8.5-4.6z"/><path d="M3.5 7.6 12 12.2l8.5-4.6M12 12.2V21"/></svg>`,
+  netshield: () => `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#e11d48" stroke-width="1.7"><path d="M12 2.8 19.5 6v6c0 4.4-3.1 7.6-7.5 8.9C7.6 19.6 4.5 16.4 4.5 12V6z"/><path d="M4.8 12h14.4M12 3.2c1.9 2.5 2.9 5.6 2.9 8.8s-1 6.3-2.9 8.8c-1.9-2.5-2.9-5.6-2.9-8.8s1-6.3 2.9-8.8z"/></svg>`,
+  cube: (c = '#7c3aed') => `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.7"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M8.5 9.5 11 12l-2.5 2.5M13 15h3"/></svg>`,
+  bubble: () => `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="1.7"><path d="M20.5 12c0 4-3.8 7.2-8.5 7.2-1 0-2-.2-2.9-.4L4 20.5l1.4-3.6A6.9 6.9 0 0 1 3.5 12c0-4 3.8-7.2 8.5-7.2s8.5 3.2 8.5 7.2z"/></svg>`,
+  image: () => `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="1.7"><rect x="3.2" y="4.5" width="17.6" height="15" rx="2.5"/><circle cx="8.6" cy="9.6" r="1.6"/><path d="m4.5 17.5 5-5 4 4 2.5-2.5 3.5 3.5"/></svg>`,
+  lock: () => `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.7"><rect x="4.5" y="10.5" width="15" height="10" rx="2.4"/><path d="M8 10.5V7.6a4 4 0 0 1 8 0v2.9"/></svg>`,
+  cloud2: () => `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.7"><path d="M17.5 18.5H7a4.2 4.2 0 0 1-.6-8.4 5.9 5.9 0 0 1 11.3-1.6 3.6 3.6 0 0 1-.2 10z"/></svg>`,
+  nginx: () => `<svg width="26" height="26" viewBox="0 0 24 24" fill="#009639"><path d="M12 2 3 7v10l9 5 9-5V7zm4 13.2h-1.9l-4.3-6v6H8V8.8h1.9l4.3 6v-6H16z"/></svg>`,
+  caddy: () => `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="1.9"><path d="M16.8 7.6a6.5 6.5 0 1 0 0 8.8"/></svg>`,
+  next: () => `<svg width="26" height="26" viewBox="0 0 24 24" fill="#0f172a"><circle cx="12" cy="12" r="9.5"/><path d="M9.2 8.2h1.5l5.4 7.3v-7.3h1.2v8.2h-1.4L9.2 8.8v7.6H8V8.2z" fill="#fff"/></svg>`,
+  node: () => `<svg width="26" height="26" viewBox="0 0 24 24" fill="#5fa04e"><path d="m12 2.2 8.6 5v9.6l-8.6 5-8.6-5V7.2z"/><path d="M12 7.4c-2.4 0-3.9 1-3.9 2.7 0 1.8 1.4 2.3 3.6 2.6 2.7.3 2.9.7 2.9 1.2 0 .9-.7 1.3-2.4 1.3-2.1 0-2.6-.5-2.7-1.6h-1.5c.1 2 1.3 2.9 4.2 2.9 2.6 0 4-1 4-2.8 0-1.8-1.2-2.3-3.7-2.6-2.6-.3-2.8-.5-2.8-1.1 0-.5.2-1.2 2.2-1.2 1.8 0 2.4.4 2.6 1.5h1.5c-.2-1.9-1.4-2.9-4-2.9z" fill="#fff"/></svg>`,
+  gateway: () => `<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0d9488" stroke-width="1.7"><rect x="4" y="3.5" width="16" height="17" rx="3"/><path d="M8 8h8M8 12h8M8 16h4"/></svg>`,
+};
+
 const T = {
   ko: {
-    t1: '배치 아키텍처', t2: '(머신 단위 통합 구조)',
-    lede: 'Mac mini (프론트 · 백엔드 · 게이트웨이 · Docker 데이터/샌드박스 플레인) ⇄ Tailscale ⇄ DGX (vLLM inference 플레인) · 외부 provider 클라우드',
-    stamp: ['소스 기준', '운영: <b>PM2 + Docker Desktop</b>(Mac) · <b>PM2</b>(DGX)', '외부 공개: Cloudflare Tunnel — <b>chat.openmake.cc</b>'],
-    clients: '사용자 & 클라이언트', mac: 'Mac mini', macRole: '앱 · 게이트웨이 · 데이터 플레인',
-    macMeta: 'PM2 (launchd 부팅 복구) + Docker Desktop',
-    edge: '엣지 프로세스', edgeSub: '외부 유입 종단',
-    pm2: 'PM2 프로세스', pm2Sub: '프론트 · 백엔드 · LLM 게이트웨이',
-    docker: 'Docker Desktop (Linux VM)', dockerSub: '데이터 인프라 + 격리 실행 — 앱은 컨테이너화하지 않음(PM2 직배포)',
-    net: 'Tailscale 사설망', netSub: 'OpenAI 호환 API',
-    dgx: 'DGX', dgxRole: 'vLLM 전용 inference 플레인 · PM2',
+    title: 'OpenMake LLM — 배치 아키텍처',
+    lede: 'Mac mini (<b>앱 · 게이트웨이 · 데이터 플레인</b>) ⇄ Tailscale ⇄ DGX (<b>vLLM inference 플레인</b>) · 외부 provider 클라우드',
+    stamp: ['소스 기준', 'PM2 + Docker Desktop(Mac) · PM2(DGX)', 'chat.openmake.cc — Cloudflare Tunnel'],
+    clients: ['사용자 &', '클라이언트'],
+    macRole: '앱 · 게이트웨이 · 데이터 플레인', macChip: 'PM2 (launchd 부팅 복구) + Docker Desktop',
+    zEdge: ['엣지', '프록시'], zPm2: ['PM2', '프로세스'], zDocker: ['Docker Desktop', '(Linux VM)'],
+    tail: ['Tailscale', '사설망'], tailSub: 'OpenAI 호환 API',
+    dgx: 'DGX', dgxSub: 'vLLM 전용 inference 플레인 · PM2',
+    dgxNote: 'Tailscale IPv4 전용 바인딩 · 공인망·LAN 비노출 · API key 는 env 주입(CLI 인자 금지) · pm2-logrotate (100M · 7일)',
     ext: '외부 LLM Provider', extSub: 'LiteLLM 게이트웨이 경유(BYOK) · 일부 direct',
-    flow: '흐름: 클라이언트 → Cloudflare/LAN → Mac mini(엣지→백엔드→게이트웨이) → Tailscale → DGX vLLM · DB/샌드박스는 Mac 내 Docker VM',
-    legend: ['범례', '엣지', '앱 (PM2)', 'LLM 게이트웨이', '데이터 (Docker)', '격리 샌드박스 (Docker)', 'vLLM (DGX)'],
-    hard: '공통 하드닝: cap-drop ALL · no-new-privileges · read-only · network none 기본 · --memory = --memory-swap · 심링크 탈출 차단(realpath)',
-    dgxNote: '🔒 Tailscale IPv4 에만 바인딩 — 공인망·LAN 비노출 · API key 는 env 주입(CLI 인자 금지) · pm2-logrotate (100M/7일)',
-    extNote: '▲ Mac 의 LiteLLM(:13401) / apps/api 에서 아웃바운드 호출',
+    extOut: '▲ Mac 의 LiteLLM(:13401) / apps/api 에서 아웃바운드 호출',
+    hard: '공통 하드닝 — cap-drop ALL · no-new-privileges · read-only · network none 기본 · --memory = --memory-swap · 심링크 탈출 차단(realpath)',
+    legend: ['엣지', '앱 (PM2)', 'LLM 게이트웨이', '데이터 (Docker)', '격리 샌드박스 (Docker)', 'vLLM (DGX)'],
+    flow: ['클라이언트', 'Cloudflare/LAN', 'Mac mini', 'Tailscale', 'DGX vLLM'],
   },
   en: {
-    t1: 'Deployment architecture', t2: '(one view per machine)',
-    lede: 'Mac mini (frontend · backend · gateway · Docker data and sandbox plane) ⇄ Tailscale ⇄ DGX (vLLM inference plane) · external provider clouds',
-    stamp: ['source of truth', 'Runs on <b>PM2 + Docker Desktop</b> (Mac) · <b>PM2</b> (DGX)', 'Public entry: Cloudflare Tunnel — <b>chat.openmake.cc</b>'],
-    clients: 'People & clients', mac: 'Mac mini', macRole: 'app · gateway · data plane',
-    macMeta: 'PM2 (launchd boot recovery) + Docker Desktop',
-    edge: 'Edge processes', edgeSub: 'where outside traffic terminates',
-    pm2: 'PM2 processes', pm2Sub: 'frontend · backend · LLM gateway',
-    docker: 'Docker Desktop (Linux VM)', dockerSub: 'data infrastructure + isolated execution — the apps themselves are not containerised (PM2 deploys them directly)',
-    net: 'Tailscale private network', netSub: 'OpenAI-compatible API',
-    dgx: 'DGX', dgxRole: 'vLLM inference plane · PM2',
+    title: 'OpenMake LLM — Deployment Architecture',
+    lede: 'Mac mini (<b>app · gateway · data plane</b>) ⇄ Tailscale ⇄ DGX (<b>vLLM inference plane</b>) · external provider clouds',
+    stamp: ['source of truth', 'PM2 + Docker Desktop (Mac) · PM2 (DGX)', 'chat.openmake.cc — Cloudflare Tunnel'],
+    clients: ['People &', 'clients'],
+    macRole: 'app · gateway · data plane', macChip: 'PM2 (launchd boot recovery) + Docker Desktop',
+    zEdge: ['Edge', 'proxy'], zPm2: ['PM2', 'processes'], zDocker: ['Docker Desktop', '(Linux VM)'],
+    tail: ['Tailscale', 'private net'], tailSub: 'OpenAI-compatible API',
+    dgx: 'DGX', dgxSub: 'vLLM inference plane · PM2',
+    dgxNote: 'Bound to the Tailscale IPv4 only · never the public internet or the LAN · API keys arrive through env, never CLI args · pm2-logrotate (100M · 7 days)',
     ext: 'External LLM providers', extSub: 'through the LiteLLM gateway (BYOK) · some stay direct',
-    flow: 'Flow: client → Cloudflare/LAN → Mac mini (edge → backend → gateway) → Tailscale → DGX vLLM · the database and sandboxes live in the Docker VM on the Mac',
-    legend: ['Legend', 'edge', 'app (PM2)', 'LLM gateway', 'data (Docker)', 'isolated sandbox (Docker)', 'vLLM (DGX)'],
-    hard: 'Shared hardening: cap-drop ALL · no-new-privileges · read-only · network none by default · --memory = --memory-swap · symlink escape blocked (realpath)',
-    dgxNote: '🔒 Bound to the Tailscale IPv4 only — never the public internet or the LAN · API keys arrive through env, never CLI arguments · pm2-logrotate (100M / 7 days)',
-    extNote: '▲ Outbound calls come from LiteLLM (:13401) and apps/api on the Mac',
+    extOut: '▲ Outbound calls come from LiteLLM (:13401) and apps/api on the Mac',
+    hard: 'Shared hardening — cap-drop ALL · no-new-privileges · read-only · network none by default · --memory = --memory-swap · symlink escape blocked (realpath)',
+    legend: ['edge', 'app (PM2)', 'LLM gateway', 'data (Docker)', 'isolated sandbox (Docker)', 'vLLM (DGX)'],
+    flow: ['Clients', 'Cloudflare/LAN', 'Mac mini', 'Tailscale', 'DGX vLLM'],
   },
 }[L];
 
 const D = {
   clients: [
-    ['apps/web', { ko: 'Next.js SPA · 운영 UI · REST(ApiClient) + WS(use-chat-socket)', en: 'Next.js SPA · operator UI · REST (ApiClient) + WS (use-chat-socket)' }],
-    ['apps/desktop-native', { ko: 'SwiftUI 메뉴바 컴패니언 · Node 헬퍼로 브리지 코어 동봉 · native 업데이트 채널', en: 'SwiftUI menu-bar companion · bridge core bundled as a Node helper · native update channel' }],
-    ['apps/cli', { ko: 'openmake-code · 터미널 브리지 디바이스. 턴은 서버가 돌린다', en: 'openmake-code · terminal bridge device. The server drives the turns' }],
-    ['apps/ios', { ko: '네이티브 클라이언트 · 카카오 지도 카드 · 위치·카메라·음성', en: 'Native client · Kakao map cards · location, camera, voice' }],
-    ['apps/discord-bot', { ko: 'Discord 릴레이 · 자체 PM2 프로세스(openmake-discord)', en: 'Discord relay · its own PM2 process (openmake-discord)' }],
+    [I.globe(), 'apps/web', { ko: 'Next.js SPA · 운영 UI<br>REST(ApiClient) · WS(use-chat-socket)', en: 'Next.js SPA · operator UI<br>REST (ApiClient) · WS (use-chat-socket)' }],
+    [I.menubar(), 'apps/desktop-native', { ko: 'SwiftUI 메뉴바 컴패니언<br>브리지 코어 동봉 · native 업데이트', en: 'SwiftUI menu-bar companion<br>bundles the bridge core · native updates' }],
+    [I.terminal(), 'apps/cli', { ko: 'openmake-code · 터미널 브리지<br>턴은 서버가 돌린다', en: 'openmake-code · terminal bridge<br>the server drives the turns' }],
+    [I.phone(), 'apps/ios', { ko: '네이티브 클라이언트<br>카카오 지도 카드 · 위치·카메라·음성', en: 'Native client<br>Kakao map cards · location · camera · voice' }],
+    [I.discord(), 'apps/discord-bot', { ko: 'Discord 릴레이<br>자체 PM2 프로세스', en: 'Discord relay<br>its own PM2 process' }],
   ],
   edge: [
-    ['cloudflared', { ko: 'CF Tunnel 종단 → Caddy 업스트림', en: 'Terminates the CF Tunnel → upstream to Caddy' }],
-    ['Caddy <code>:33000</code>', { ko: '리버스 프록시 → 앱 <code>:52416</code>', en: 'Reverse proxy → app <code>:52416</code>' }],
-    ['nginx <code>:8088</code>', { ko: '아티팩트 공유 뷰어 · 별도 오리진 · strict CSP', en: 'Artifact share viewer · separate origin · strict CSP' }],
+    [I.cloudflare(), 'cloudflared', '', { ko: 'CF Tunnel 종단 →<br>Caddy 업스트림', en: 'Terminates the CF Tunnel →<br>upstream to Caddy' }],
+    [I.caddy(), 'Caddy', ':33000', { ko: '리버스 프록시 → 앱<br>:52416', en: 'Reverse proxy → app<br>:52416' }],
+    [I.nginx(), 'nginx', ':8088', { ko: '아티팩트 공유 뷰어<br>별도 오리진 · strict CSP', en: 'Artifact share viewer<br>separate origin · strict CSP' }],
   ],
   pm2: [
-    ['openmake-next — apps/web', { ko: '프로덕션 빌드 서빙 · <code>/api/*</code> rewrite → 백엔드', en: 'Serves the production build · <code>/api/*</code> rewrite → backend' }],
-    ['LiteLLM 게이트웨이', { ko: '<code>127.0.0.1:13401</code> · 전 LLM 호출 단일 게이트웨이 · master key 인증 · BYOK 는 x-api-key 헤더 전달', en: '<code>127.0.0.1:13401</code> · one gateway for every LLM call · master-key auth · BYOK passes through the x-api-key header' }],
+    [I.next(), 'openmake-next', '', { ko: 'apps/web — Next.js 프로덕션 서빙<br>/api/* rewrite → 백엔드', en: 'apps/web — serves the production build<br>/api/* rewrite → backend' }],
+    [I.node(), 'openmake-llm', ':52416', { ko: 'apps/api — Express 5 백엔드<br>채팅 단일 경로 + 워크플로우', en: 'apps/api — Express 5 backend<br>one chat path + workflows' }],
+    [I.gateway(), 'LiteLLM', '127.0.0.1:13401', { ko: 'LLM 호출 단일 게이트웨이<br>master key 인증 · BYOK x-api-key', en: 'One gateway for every LLM call<br>master-key auth · BYOK x-api-key' }],
   ],
-  api: {
-    title: 'openmake-llm — apps/api', port: ':52416',
-    sub: { ko: 'Express 5 백엔드 · 채팅 단일 경로 + 워크플로우 오케스트레이션', en: 'Express 5 backend · one chat path + workflow orchestration' },
-    rows: [
-      [{ ko: '진입 계층', en: 'Entry' }, 'middlewares(helmet·CORS·rate-limit) · auth(JWT·OAuth·API key bridge/chat 스코프·RBAC) · routes/controllers · WS handler · Zod', 'middlewares (helmet, CORS, rate limit) · auth (JWT, OAuth, API keys with bridge/chat scopes, RBAC) · routes/controllers · WS handler · Zod'],
-      [{ ko: '채팅 단일 경로', en: 'Chat path' }, '수신 → 조기 분기 ◈ → Provider Gate → 프롬프트 조립 → streamFromExternalProvider(도구 루프 ≤5턴) → LLMClient(262K) → 스트리밍', 'receive → early branch ◈ → provider gate → prompt assembly → streamFromExternalProvider (tool loop ≤5 turns) → LLMClient (262K) → streaming'],
-      [{ ko: '워크플로우', en: 'Workflows' }, 'Discussion(18 에이전트) · Deep Research · Agent Task(HITL·Goal Judge·sandbox|local) · MCP 도구 루프(내장 22종 + 외부)', 'Discussion (18 agents) · Deep Research · Agent Task (HITL, goal judge, sandbox|local) · MCP tool loop (22 built-ins + external)'],
-      [{ ko: 'LLM 호출 코어', en: 'LLM core' }, 'provider-router + LLMClient(per-request) · cluster health check · circuit breaker · LiteLLM :13401 로 송신 ↗', 'provider-router + LLMClient (per request) · cluster health checks · circuit breaker · sends to LiteLLM :13401 ↗'],
-      [{ ko: '횡단 관심사', en: 'Cross-cutting' }, 'Audit→Alert(web push·APNs·SMTP·webhook) · OTel · schedulers · system-settings(DB>env) · boot-recovery', 'Audit → Alert (web push, APNs, SMTP, webhook) · OTel · schedulers · system-settings (DB > env) · boot recovery'],
-    ],
+  chips: {
+    ko: ['Provider Gate', 'Discussion (18 에이전트)', 'Deep Research', 'Agent Task (HITL · sandbox|local)', 'MCP 도구 루프 (내장 22종)', 'Audit → Alert', 'OTel · schedulers'],
+    en: ['Provider gate', 'Discussion (18 agents)', 'Deep Research', 'Agent Task (HITL · sandbox|local)', 'MCP tool loop (22 built-ins)', 'Audit → Alert', 'OTel · schedulers'],
   },
   docker: [
-    ['PostgreSQL 16', 'var(--data)', { ko: 'openmake-postgres · raw SQL(pg) · 부팅 자동 마이그레이션', en: 'openmake-postgres · raw SQL (pg) · migrations applied on boot' }],
-    ['Redis', 'var(--data)', { ko: 'KVStore — rate limit · 토큰 쿼터 · OAuth state', en: 'KVStore — rate limits · token quota · OAuth state' }],
-    ['mcp-runtime', 'var(--box)', { ko: '외부 MCP stdio 서버 격리 · instance pid 기록', en: 'Isolates external MCP stdio servers · records the instance pid' }],
-    ['task-runtime', 'var(--box)', { ko: 'Agent Task 별 영속 워크스페이스 (uploads · 원본+추출텍스트)', en: 'Persistent per-task workspace (uploads, originals + extracted text)' }],
-    ['egress-proxy', 'var(--box)', { ko: '브라우저 컨테이너는 internal 네트워크뿐 — 이 프록시의 도메인 allowlist 로만 외부 도달', en: 'Browser containers sit on an internal network only — they reach the outside solely through this proxy’s domain allowlist' }],
-    ['artifact-exec', 'var(--box)', { ko: '아티팩트 코드 실행 · 동시 4 cap · PDF/DOCX 변환', en: 'Runs artifact code · 4 concurrent · PDF/DOCX conversion' }],
+    [I.db(), 'PostgreSQL 16', '', { ko: 'openmake-postgres · raw SQL(pg)<br>부팅 자동 마이그레이션', en: 'openmake-postgres · raw SQL (pg)<br>migrations on boot' }],
+    [I.layers('#dc2626'), 'Redis', '', { ko: 'KVStore — rate limit<br>토큰 쿼터 · OAuth state', en: 'KVStore — rate limits<br>token quota · OAuth state' }],
+    [I.box(), 'mcp-runtime', '', { ko: '외부 MCP stdio 서버 격리<br>instance pid 기록', en: 'Isolates external MCP stdio servers<br>records the instance pid' }],
+    [I.layers(), 'task-runtime', '', { ko: 'Agent Task 별 영속 워크스페이스<br>uploads(원본 + 추출 텍스트)', en: 'Persistent per-task workspace<br>uploads (originals + extracted text)' }],
+    [I.netshield(), 'egress-proxy', '', { ko: '브라우저 컨테이너는 internal 네트워크뿐<br>도메인 allowlist 로만 외부 도달', en: 'Browser containers stay on an internal net<br>they exit only via the domain allowlist' }],
+    [I.cube(), 'artifact-exec', '', { ko: '아티팩트 코드 실행 · 동시 4 cap<br>표준 라이브러리만 · PDF/DOCX 변환', en: 'Runs artifact code · 4 concurrent<br>stdlib only · PDF/DOCX conversion' }],
   ],
   dgx: [
-    ['vllm-chat <code>:8002</code>', { ko: 'qwen3.6-35b-a3b (MoE) · 262K context · 채팅/추론 본진', en: 'qwen3.6-35b-a3b (MoE) · 262K context · the main chat and reasoning model' }],
-    ['vllm-embed <code>:8003</code>', { ko: 'bge 임베딩', en: 'bge embeddings' }],
-    ['flux <code>:8005</code>', { ko: 'FLUX 이미지 생성 (generate_image)', en: 'FLUX image generation (generate_image)' }],
+    [I.bubble(), 'vllm-chat', ':8002', { ko: 'qwen3.6-35b-a3b (MoE) · 262K context<br>채팅 / 추론 본진', en: 'qwen3.6-35b-a3b (MoE) · 262K context<br>the main chat and reasoning model' }],
+    [I.db('#4ade80'), 'vllm-embed', ':8003', { ko: 'bge 임베딩', en: 'bge embeddings' }],
+    [I.image(), 'flux', ':8005', { ko: 'FLUX 이미지 생성 (generate_image)', en: 'FLUX image generation (generate_image)' }],
   ],
   ext: [
-    [{ ko: '게이트웨이 경유', en: 'Through the gateway' }, { ko: 'openrouter · ollama-cloud · NVIDIA NIM (wildcard deployment + x-api-key BYOK)', en: 'openrouter · ollama-cloud · NVIDIA NIM (wildcard deployment + x-api-key BYOK)' }],
-    [{ ko: 'Direct 예외', en: 'Direct exceptions' }, { ko: 'ollama-local (사용자별 endpoint) · ChatGPT OAuth (사용자 격리 불가 → 영구 direct)', en: 'ollama-local (per-user endpoint) · ChatGPT OAuth (cannot be isolated per user → always direct)' }],
+    [{ ko: '게이트웨이 경유', en: 'Through the gateway' }, { ko: 'openrouter · ollama-cloud<br>NVIDIA NIM (wildcard + BYOK)', en: 'openrouter · ollama-cloud<br>NVIDIA NIM (wildcard + BYOK)' }],
+    [{ ko: 'Direct 예외', en: 'Direct exceptions' }, { ko: 'ollama-local (사용자별 endpoint)<br>ChatGPT OAuth (격리 불가 → 영구 direct)', en: 'ollama-local (per-user endpoint)<br>ChatGPT OAuth (cannot isolate → always direct)' }],
   ],
 };
 
-const card = (h, d, c) => `<div class="card" style="--c:${c}"><h3>${p(h)}</h3><p>${p(d)}</p></div>`;
+const item = (icon, name, port, desc) =>
+  `<div class="item">${icon}<div><b>${name}${port ? `<em>${port}</em>` : ''}</b><p>${p(desc)}</p></div></div>`;
 
-let html = `
-<div class="head">
-  <div><h1><b>OpenMake LLM</b> — ${T.t1} <small>${T.t2}</small></h1><p>${T.lede}</p></div>
-  <div class="stamp"><b>${window.__STAMP__ || '2026-08-23'}</b> ${T.stamp[0]}<br>${T.stamp[1]}<br>${T.stamp[2]}</div>
-</div>
+document.body.innerHTML = `
+<div class="stamp"><b>${window.__STAMP__ || '2026-08-23'}</b> ${T.stamp[0]}<br>${T.stamp[1]}<br>${T.stamp[2]}</div>
+<h1>${T.title}</h1>
+<p class="sub-t">${T.lede}</p>
 
-<section class="panel"><h2><span class="ic">🧑‍💻</span>${T.clients}<span class="tag">apps/*</span></h2>
-  <div class="grid g5">${D.clients.map(([n, d]) => card(n, d, 'var(--pm2)')).join('')}</div></section>
+<section class="shell"><div class="rail">
+  <div class="badge">${I.people()}<div class="t">${T.clients[0]}<br>${T.clients[1]}</div></div>
+  <div class="tiles">${D.clients.map(([ic, n, d]) =>
+    `<div class="tile">${ic}<div><b>${n}</b><p>${p(d)}</p></div></div>`).join('')}</div>
+</div></section>
 
 <div class="entries">
-  <div class="entry"><b>Cloudflare — chat.openmake.cc</b><i>${L === 'ko' ? 'Tunnel · 요청당 100MB 상한(청크 업로드 우회)' : 'Tunnel · 100MB per request (chunked upload path)'}</i></div>
-  <div class="entry"><b>LAN / ${L === 'ko' ? '로컬' : 'local'}</b><i>:52416 ${L === 'ko' ? '직접 접속' : 'direct'}</i></div>
+  <div class="entry" style="flex:1.25">${I.cloudflare()}<div><b>Cloudflare — chat.openmake.cc</b>
+    <p>${L === 'ko' ? 'Tunnel · 요청당 100MB 상한 (초과분은 청크 업로드)' : 'Tunnel · 100MB per request (larger uploads go chunked)'}</p></div></div>
+  <div class="entry" style="flex:1">${I.house()}<div><b>LAN / ${L === 'ko' ? '로컬' : 'local'}</b>
+    <p>:52416 ${L === 'ko' ? '직접 접속' : 'direct'}</p></div></div>
 </div>
-<div class="arrows"><span>▼</span><span>▼</span></div>
 
-<div class="machines">
-  <section class="panel"><h2><span class="ic">🖥️</span>${T.mac}<span class="meta">${T.macRole}</span><span class="tag">${T.macMeta}</span><span class="live"></span></h2>
+<div class="main">
+  <section class="mac">
+    <header>
+      <svg width="54" height="30" viewBox="0 0 60 34"><rect x="1" y="6" width="58" height="20" rx="5" fill="#e5e9ee" stroke="#94a3b8"/><circle cx="30" cy="16" r="3.4" fill="#cbd5e1"/><circle cx="50" cy="22" r="1.2" fill="#94a3b8"/></svg>
+      <div><div class="t">Mac mini</div><div class="s">${T.macRole}</div></div>
+      <span class="chip">${T.macChip}</span>
+    </header>
 
-    <div class="sub" style="border-color:#fde68a;background:#fffbeb">
-      <h4>📡 ${T.edge}<span>${T.edgeSub}</span></h4>
-      <div class="grid g3">${D.edge.map(([n, d]) => card(n, d, 'var(--edge)')).join('')}</div>
+    <div class="zone" style="background:#fffbeb;border:1px solid #fde68a">
+      <div class="zbadge">${I.shield()}<div class="t" style="color:#b45309">${T.zEdge[0]}<br>${T.zEdge[1]}</div></div>
+      <div class="zbody row3">${D.edge.map(([i, n, pt, d]) => item(i, n, pt, d)).join('')}</div>
     </div>
 
-    <div class="sub" style="border-color:#bfdbfe;background:#f8fbff">
-      <h4>⚙️ ${T.pm2}<span>${T.pm2Sub}</span></h4>
-      <div class="grid g2">${D.pm2.map(([n, d], i) => card(n, d, i ? 'var(--gw)' : 'var(--pm2)')).join('')}</div>
-      <div class="sub" style="background:#fff">
-        <h4>🧩 ${D.api.title}<span><code>${D.api.port}</code> · ${p(D.api.sub)}</span></h4>
-        <div class="rows">${D.api.rows.map((r) => `<i><b>${p(r[0])}</b> — ${L === 'ko' ? r[1] : r[2]}</i>`).join('')}</div>
+    <div class="zone" style="background:#f8fbff;border:1px solid #bfdbfe">
+      <div class="zbadge">${I.gear()}<div class="t" style="color:#1d4ed8">${T.zPm2[0]}<br>${T.zPm2[1]}</div></div>
+      <div class="zbody row3">
+        ${D.pm2.map(([i, n, pt, d]) => item(i, n, pt, d)).join('')}
+        <div class="chips">${D.chips[L].map((c) => `<i>${c}</i>`).join('')}</div>
       </div>
     </div>
 
-    <div class="sub" style="border-color:#a5f3fc;background:#f0fdff">
-      <h4>🐳 ${T.docker}<span>${T.dockerSub}</span></h4>
-      <div class="grid g3">${D.docker.map(([n, c, d]) => card(n, d, c)).join('')}</div>
-      <p class="note">${T.hard}</p>
+    <div class="zone" style="background:#f0fdff;border:1px solid #a5f3fc">
+      <div class="zbadge">${I.whale()}<div class="t" style="color:#0e7490">${T.zDocker[0]}<br><span style="font-size:11px;font-weight:600">${T.zDocker[1]}</span></div></div>
+      <div class="zbody row3">
+        ${D.docker.map(([i, n, pt, d]) => item(i, n, pt, d)).join('')}
+        <p class="hard">${T.hard}</p>
+      </div>
     </div>
   </section>
 
-  <div class="link"><div class="pipe"></div><b>${T.net}</b><i>${T.netSub}</i><div class="pipe"></div></div>
+  <div class="link">
+    <div class="arrow">▶</div>
+    <div class="pill">${I.shield('#16a34a')}<div class="t">${T.tail[0]}<br>${T.tail[1]}</div><div class="s">${T.tailSub}</div></div>
+    <div class="arrow">▶</div>
+  </div>
 
   <div>
-    <section class="panel dgx"><h2><span class="ic">🧠</span>${T.dgx}<span class="meta">${T.dgxRole}</span><span class="live"></span></h2>
-      <div class="grid">${D.dgx.map(([n, d]) => card(n, d, 'var(--dgx)')).join('')}</div>
-      <p class="note">${T.dgxNote}</p>
+    <section class="dgx">
+      <header><svg width="30" height="30" viewBox="0 0 24 24" fill="#76b900"><path d="M3 9.5c3-3.4 7-4.6 10.6-3.6l-1 1.7c-2.8-.6-5.7.4-8 2.7 2 3.4 5.6 5.2 9.2 4.6V9.7h-2.3V8.2h4.2v8.6c-4.9 1.4-10.2-.6-12.7-4.6zm14.7-4.7v1.5c3 .5 5.2 2.9 5.4 5.9.2 3.2-2.1 5.9-5.4 6.4v1.5c4.2-.5 7.2-3.9 7-8-.2-3.9-3.1-6.9-7-7.3z"/></svg>
+        <div><div class="t">${T.dgx}</div><div class="s">${T.dgxSub}</div></div></header>
+      ${D.dgx.map(([i, n, pt, d]) => item(i, n, pt, d)).join('')}
+      <div class="note">${I.lock()}<span>${T.dgxNote}</span></div>
     </section>
-    <section class="panel" style="margin-top:14px"><h2><span class="ic">☁️</span>${T.ext}<span class="meta">${T.extSub}</span></h2>
-      <div class="grid g2">${D.ext.map(([n, d]) => card(n, d, 'var(--cloud)')).join('')}</div>
-      <p class="note" style="text-align:right">${T.extNote}</p>
+
+    <section class="cloud">
+      <header>${I.cloud2()}<div><div class="t">${T.ext}</div><div class="s">${T.extSub}</div></div></header>
+      <div class="grid2">${D.ext.map(([n, d]) =>
+        `<div class="item"><div><b>${p(n)}</b><p>${p(d)}</p></div></div>`).join('')}</div>
+      <p class="out">${T.extOut}</p>
     </section>
   </div>
 </div>
 
-<div class="legend"><b>${T.legend[0]}</b>
-  ${[['var(--edge)', T.legend[1]], ['var(--pm2)', T.legend[2]], ['var(--gw)', T.legend[3]],
-     ['var(--data)', T.legend[4]], ['var(--box)', T.legend[5]], ['var(--dgx)', T.legend[6]]]
-    .map(([c, n]) => `<u><s style="background:${c}"></s>${n}</u>`).join('')}
-  <span style="margin-left:auto">${T.flow}</span>
-</div>`;
+<div class="legend">${[['#f59e0b', 0], ['#2563eb', 1], ['#0d9488', 2], ['#0891b2', 3], ['#e11d48', 4], ['#22c55e', 5]]
+  .map(([c, i]) => `<u><s style="background:${c}"></s>${T.legend[i]}</u>`).join('')}</div>
 
-document.body.innerHTML = html;
+<div class="flowbar">${I.people('#334155')}
+  <span class="c2">${T.flow[0]}</span><span class="a">→</span>
+  <span class="c1">${T.flow[1]}</span><span class="a">→</span>
+  <span class="c2">${T.flow[2]}</span><span class="a">→</span>
+  <span class="c3">${T.flow[3]}</span><span class="a">→</span>
+  <span class="c4">${T.flow[4]}</span>
+</div>`;
 </script>

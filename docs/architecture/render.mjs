@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DIAGRAMS = [
     { src: 'arch.html', out: { ko: 'arch.png', en: 'arch.en.png' }, w: 1880 },
-    { src: 'arch2.html', out: { ko: 'arch2.png', en: 'arch2.en.png' }, w: 1920 },
+    { src: 'arch2.html', out: { ko: 'arch2.png', en: 'arch2.en.png' }, w: 2000 },
 ];
 const STAMP = process.env.ARCH_STAMP || new Date().toISOString().slice(0, 10);
 
