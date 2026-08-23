@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { matchDenylist } from '../denylist';
-import { safeFrom } from '../scope';
+import { safeFrom, safeFromAsync } from '../scope';
 import { writeSandboxProfile } from '../sandbox';
 
 describe('EXEC_DENYLIST', () => {
@@ -67,6 +67,14 @@ describe('safeFrom — 경로 스코프', () => {
     it('아직 존재하지 않는 경로도 최근접 조상 기준으로 검증한다', () => {
         expect(safeFrom(base, 'sub/new-dir/new.txt')).toBe(path.join(base, 'sub', 'new-dir', 'new.txt'));
         expect(() => safeFrom(base, 'link-out/new/new.txt')).toThrow(/심링크 스코프 탈출/);
+    });
+
+    it('safeFromAsync — sync 판과 동일한 검증 의미를 유지한다', async () => {
+        expect(await safeFromAsync(base, 'sub/a.txt')).toBe(path.join(base, 'sub', 'a.txt'));
+        await expect(safeFromAsync(base, '../' + path.basename(outside) + '/secret.txt')).rejects.toThrow(/스코프 밖/);
+        await expect(safeFromAsync(base, outside)).rejects.toThrow(/스코프 밖/);
+        await expect(safeFromAsync(base, 'link-out/secret.txt')).rejects.toThrow(/심링크 스코프 탈출/);
+        expect(await safeFromAsync(base, 'sub/new-dir/new.txt')).toBe(path.join(base, 'sub', 'new-dir', 'new.txt'));
     });
 });
 

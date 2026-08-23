@@ -16,15 +16,17 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import {
-    EXEC_TIMEOUT_MS, FOLDERS_MAX_ENTRIES, LIST_ALL_MAX, MAX_BUFFER,
+    EXEC_TIMEOUT_MS, FOLDERS_MAX_ENTRIES, FS_OP_TIMEOUT_MS, LIST_ALL_MAX, MAX_BUFFER,
     SANDBOX_BIN, SANDBOX_ENABLED,
 } from './constants';
 import { matchDenylist } from './denylist';
 import { resolveExecPath } from './exec-path';
 import { detectGitDir, writeSandboxProfile } from './sandbox';
-import { safeFrom } from './scope';
+import { safeFromAsync } from './scope';
 import { handleWorktree } from './worktree';
 import type { BridgeCoreOptions, BridgeMsg, BridgeResult } from './types';
+
+const fsp = fs.promises;
 
 export class BridgeCore {
     readonly folderRoot: string;
@@ -72,25 +74,44 @@ export class BridgeCore {
         return ans === 'yes';
     }
 
-    /** 연결 루트 기준 스코프 가드 (기존 계약). */
-    private safe(rel: string | undefined): string { return safeFrom(this.folderRoot, rel); }
+    /**
+     * 파일 kind FS 처리 타임아웃 가드 — OS 가 FS 호출을 무기한 블록하면(외장 볼륨 TCC
+     * 권한 미결 실사례: readdir 가 open 에서 영구 대기 → sync 시절엔 이벤트 루프가 굶어
+     * pong 이 끊기고 이 헬퍼의 **모든 루트 연결**이 하트비트로 강제 종료됐다) 요청을
+     * 오류로 해소한다. FS 호출은 전부 async(fsp)라 블록돼도 threadpool 에서 대기할 뿐
+     * 이벤트 루프·다른 루트는 살아 있다. 블록된 호출 자체는 취소 불가(스레드 점유 잔존).
+     */
+    private async timedFs<T>(label: string, fn: () => Promise<T>): Promise<T> {
+        let timer: NodeJS.Timeout | undefined;
+        try {
+            return await Promise.race([
+                fn(),
+                new Promise<never>((_, reject) => {
+                    timer = setTimeout(() => reject(new Error(
+                        `${label} 시간 초과 (${Math.round(FS_OP_TIMEOUT_MS / 1000)}s) — 폴더 접근이 차단됐을 수 있습니다(디스크 접근 권한 확인)`,
+                    )), FS_OP_TIMEOUT_MS);
+                }),
+            ]);
+        } finally { clearTimeout(timer); }
+    }
 
     /**
-     * 폴더 선택(folder 필드) base 해석 — 루트 기준 상대경로를 safe() 재검증 후 실행 base 로 쓴다.
+     * 폴더 선택(folder 필드) base 해석 — 루트 기준 상대경로를 스코프 재검증 후 실행 base 로 쓴다.
      * 서버는 디바이스가 folders 로 보고한 값만 에코하지만, 여기서 다시 스코프를 강제한다(2중 방어).
      */
-    private resolveBase(m: BridgeMsg): string {
+    private async resolveBase(m: BridgeMsg): Promise<string> {
         if (!m.folder) return this.folderRoot;
-        const base = this.safe(m.folder);
-        if (!fs.existsSync(base) || !fs.statSync(base).isDirectory()) throw new Error(`실행 폴더가 존재하지 않습니다: ${m.folder}`);
+        const base = await safeFromAsync(this.folderRoot, m.folder);
+        const st = await fsp.stat(base).catch(() => null);
+        if (!st || !st.isDirectory()) throw new Error(`실행 폴더가 존재하지 않습니다: ${m.folder}`);
         return base;
     }
 
-    private walk(dir: string, base: string, out: string[]): string[] {
-        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    private async walk(dir: string, base: string, out: string[]): Promise<string[]> {
+        for (const e of await fsp.readdir(dir, { withFileTypes: true })) {
             const p = path.join(dir, e.name);
             if (e.isSymbolicLink()) continue; // 심링크는 나열하지 않음
-            if (e.isDirectory()) this.walk(p, base, out); else out.push(path.relative(base, p));
+            if (e.isDirectory()) await this.walk(p, base, out); else out.push(path.relative(base, p));
             if (out.length >= LIST_ALL_MAX) return out;
         }
         return out;
@@ -98,7 +119,7 @@ export class BridgeCore {
 
     async handleExec(m: BridgeMsg, done: (r: BridgeResult) => void): Promise<void> {
         // 폴더 선택(folder 필드) — 유효 base 를 먼저 확정. 미지정은 연결 루트(현행 동작).
-        const base = this.resolveBase(m);
+        const base = await this.timedFs('실행 폴더 확인', () => this.resolveBase(m));
         switch (m.kind) {
             case 'exec': {
                 // ① 명백히 위험한 패턴은 확인 없이 즉시 거부 (guardrail).
@@ -129,39 +150,50 @@ export class BridgeCore {
                 }
                 return;
             }
-            case 'read': done({ ok: true, content: fs.readFileSync(safeFrom(base, m.path), 'utf8') }); return;
+            case 'read': {
+                const content = await this.timedFs('read', async () => fsp.readFile(await safeFromAsync(base, m.path), 'utf8'));
+                done({ ok: true, content }); return;
+            }
             case 'write': {
-                const abs = safeFrom(base, m.path);
-                fs.mkdirSync(path.dirname(abs), { recursive: true });
-                fs.writeFileSync(abs, Buffer.from(m.contentB64 || '', 'base64'));
+                await this.timedFs('write', async () => {
+                    const abs = await safeFromAsync(base, m.path);
+                    await fsp.mkdir(path.dirname(abs), { recursive: true });
+                    await fsp.writeFile(abs, Buffer.from(m.contentB64 || '', 'base64'));
+                });
                 done({ ok: true }); return;
             }
             case 'list': {
                 // 디렉토리는 '/' 접미사 — 모델이 폴더를 파일로 오인해 read 하다 EISDIR 로
                 // 실패하고 하위 파일에 못 닿는 문제 방지 (샌드박스 실행기와 동일 규약).
-                const entries = fs.readdirSync(safeFrom(base, m.path), { withFileTypes: true })
-                    .map((e) => (e.isDirectory() ? `${e.name}/` : e.name));
+                const entries = await this.timedFs('list', async () =>
+                    (await fsp.readdir(await safeFromAsync(base, m.path), { withFileTypes: true }))
+                        .map((e) => (e.isDirectory() ? `${e.name}/` : e.name)));
                 done({ ok: true, entries }); return;
             }
-            case 'listAll': done({ ok: true, entries: this.walk(base, base, []) }); return;
+            case 'listAll': done({ ok: true, entries: await this.timedFs('listAll', () => this.walk(base, base, [])) }); return;
             case 'delete': {
-                const abs = safeFrom(base, m.path);
-                if (abs === base) throw new Error('연결 폴더 루트는 삭제할 수 없습니다');
-                fs.rmSync(abs, { recursive: true, force: true });
+                await this.timedFs('delete', async () => {
+                    const abs = await safeFromAsync(base, m.path);
+                    if (abs === base) throw new Error('연결 폴더 루트는 삭제할 수 없습니다');
+                    await fsp.rm(abs, { recursive: true, force: true });
+                });
                 done({ ok: true }); return;
             }
             case 'folders': {
                 // 하위 폴더 온디맨드 열거(폴더 선택) — path 는 루트 기준, 숨김·심링크 제외,
                 // 결과는 루트 기준 상대경로(서버가 세션 캐시에 병합해 folder 검증 근거로 쓴다).
-                const dirAbs = this.safe(m.path);
-                const entries: string[] = [];
-                let truncated = false;
-                for (const e of fs.readdirSync(dirAbs, { withFileTypes: true })) {
-                    if (!e.isDirectory() || e.name.startsWith('.')) continue;
-                    if (entries.length >= FOLDERS_MAX_ENTRIES) { truncated = true; break; }
-                    entries.push(path.relative(this.folderRoot, path.join(dirAbs, e.name)).split(path.sep).join('/'));
-                }
-                done({ ok: true, entries, truncated }); return;
+                const r = await this.timedFs('folders', async () => {
+                    const dirAbs = await safeFromAsync(this.folderRoot, m.path);
+                    const entries: string[] = [];
+                    let truncated = false;
+                    for (const e of await fsp.readdir(dirAbs, { withFileTypes: true })) {
+                        if (!e.isDirectory() || e.name.startsWith('.')) continue;
+                        if (entries.length >= FOLDERS_MAX_ENTRIES) { truncated = true; break; }
+                        entries.push(path.relative(this.folderRoot, path.join(dirAbs, e.name)).split(path.sep).join('/'));
+                    }
+                    return { entries, truncated };
+                });
+                done({ ok: true, ...r }); return;
             }
             case 'browser': {
                 // 로컬 브라우저(D3) — 데스크톱(Electron 내장 Chromium)만 어댑터로 구현한다.
