@@ -163,7 +163,6 @@ data/desktop-updates/
 
 # 도구 세션 상태(run-continuation) — 저장소와 무관
 .omo/
-apps/desktop/local-bridge-core/
 
 # SwiftUI 네이티브 컴패니언 빌드 산출물 (apps/desktop-native)
 apps/desktop-native/dist/
