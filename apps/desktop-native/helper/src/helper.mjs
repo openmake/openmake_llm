@@ -7,7 +7,6 @@
 //     key 는 argv 가 아니라 env(OMK_COMPANION_API_KEY)로 받는다 — ps 인자 노출 방지.
 //   - confirmExec: stdio JSON-lines 로 부모(네이티브 앱)에 위임 — 비우회 사용자 확인의
 //     선택 주체는 항상 앱의 네이티브 다이얼로그(사용자)다. stdin 소실 시 'no'(fail-safe).
-//   - browser: 미지원 → 코어가 거부 응답 (capability 미보고 degrade)
 //   - deviceId·샌드박스 프로파일: ~/Library/Application Support/OpenMakeCompanion
 //
 // 다중 루트(0.2.0): 루트당 독립 BridgeCore+BridgeConnection, deviceId 는 기기 base id +
