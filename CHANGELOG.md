@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.33.1](https://github.com/openmake/openmake_llm/compare/v1.33.0...v1.33.1) (2026-08-23)
+
+
+### 🐛 버그 수정
+
+* **chatgpt:** 구조화 모드에서 ChatGPT 가 스키마를 무시하던 문제 ([b846b48](https://github.com/openmake/openmake_llm/commit/b846b4812e43eaa6b754ddfb5c9f12ee255d2c17))
+* **chatgpt:** 구조화 요청의 json_schema 를 Responses API 형식으로 전달 ([5269982](https://github.com/openmake/openmake_llm/commit/526998231c9bba57e30e7a11ce4273cb2b3f2ecf))
+* **chatgpt:** 추론 강도가 ChatGPT 경로에서만 무시되던 문제 ([078fe7c](https://github.com/openmake/openmake_llm/commit/078fe7c64f645584863049d3b3ac49d2974d0fbc))
+* **chatgpt:** 추론 강도를 Responses API reasoning.effort 로 전달 ([448f568](https://github.com/openmake/openmake_llm/commit/448f568d63cd321f8b1d15b87a028aae634653cc))
+
 ## [1.33.0](https://github.com/openmake/openmake_llm/compare/v1.32.1...v1.33.0) (2026-08-23)
 
 
