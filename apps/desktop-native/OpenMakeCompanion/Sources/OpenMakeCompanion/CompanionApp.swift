@@ -42,7 +42,7 @@ struct CompanionApp: App {
     @StateObject private var helper = HelperManager.shared
 
     var body: some Scene {
-        MenuBarExtra("OpenMake", systemImage: helper.connectedFolder != nil ? "folder.badge.gearshape" : "folder.badge.questionmark") {
+        MenuBarExtra("OpenMake", systemImage: !helper.connectedFolders.isEmpty ? "folder.badge.gearshape" : "folder.badge.questionmark") {
             MenuContent().environmentObject(helper)
         }
         Settings {
@@ -56,19 +56,22 @@ struct MenuContent: View {
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
-        Text("상태: \(helper.statusText)")
-        if let f = helper.connectedFolder {
-            Text("폴더: \(f)") // 전체 경로 — 로컬 표시 전용(서버엔 basename 만 감)
+        if helper.connectedFolders.isEmpty {
+            Text("상태: \(helper.statusText)")
+        }
+        // 다중 루트 — 루트별 서브메뉴 (전체 경로는 로컬 표시 전용, 서버엔 basename 만 감)
+        ForEach(helper.connectedFolders, id: \.self) { f in
+            Menu("폴더: \(URL(fileURLWithPath: f).lastPathComponent)") {
+                Text(f)
+                if let st = helper.rootStatus[f] { Text("상태: \(st)") }
+                Button("Finder 에서 열기") { NSWorkspace.shared.open(URL(fileURLWithPath: f)) }
+                Button("연결 해제") { helper.disconnect(folder: f) }
+            }
         }
         Divider()
-        Button("작업 폴더 연결…") { helper.chooseFolderAndConnect() }
-        if helper.connectedFolder != nil {
-            Button("연결 해제") { helper.disconnect() }
-            Button("Finder 에서 열기") {
-                if let f = helper.connectedFolder {
-                    NSWorkspace.shared.open(URL(fileURLWithPath: f))
-                }
-            }
+        Button(helper.connectedFolders.isEmpty ? "작업 폴더 연결…" : "작업 폴더 추가…") { helper.chooseFolderAndConnect() }
+        if helper.connectedFolders.count > 1 {
+            Button("전체 연결 해제") { helper.disconnectAll() }
         }
         if helper.autoApproveCount > 0 {
             Button("일괄 승인 해제 (\(helper.autoApproveCount)개 작업)") { helper.clearAutoApprove() }
