@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.32.0](https://github.com/openmake/openmake_llm/compare/v1.31.1...v1.32.0) (2026-08-23)
+
+
+### ✨ 기능
+
+* **agent-task:** local 작업 생성 감사 기록 — OpenMake Code 축1 마감 ([#569](https://github.com/openmake/openmake_llm/issues/569)) ([5587b7a](https://github.com/openmake/openmake_llm/commit/5587b7a9d74723917999a3cfb2586ba1d3e36581))
+* **bridge:** 브리지 디바이스 코어 단일화 — packages/local-bridge-core (축2 plan 1단계) ([#570](https://github.com/openmake/openmake_llm/issues/570)) ([fa8383a](https://github.com/openmake/openmake_llm/commit/fa8383a72b4d659b479253db32b3bb3dc98cfe50))
+* **desktop-native:** SwiftUI 네이티브 컴패니언 1차 — 헬퍼 브리지 + 승인 다이얼로그 + 알림 딥링크 + native 업데이트 채널 ([de6e5f7](https://github.com/openmake/openmake_llm/commit/de6e5f77c81b8985a4ebf6ddc08c184f945987d8))
+* **desktop-native:** SwiftUI 네이티브 컴패니언 1차 — 헬퍼 브리지·승인·알림·native 업데이트 채널 ([28c01a6](https://github.com/openmake/openmake_llm/commit/28c01a6547e1ce1f5bca499ef8d9026bd7827476))
+* **desktop-native:** 다중 루트 연결 — 루트당 독립 브리지 연결(파생 deviceId) ([da6f78f](https://github.com/openmake/openmake_llm/commit/da6f78f77db80964c11fc723a450cf5d801d1d62))
+* **desktop-native:** 다중 루트 연결 — 루트당 독립 브리지 연결(파생 deviceId) ([166028f](https://github.com/openmake/openmake_llm/commit/166028ffd9c548417b0ca201260235a14e503b78))
+* **install:** 배포 제품화 마감 — update 서브커맨드 + 인스톨러 CI 게이트 2단 ([#573](https://github.com/openmake/openmake_llm/issues/573)) ([e2a79e0](https://github.com/openmake/openmake_llm/commit/e2a79e05f70a525b1dd58c39a553e567280442e9))
+* **metrics:** 게이트 판정 관측 루프 — 라우팅 게이트 집계 + 주간 리포트 ([#564](https://github.com/openmake/openmake_llm/issues/564)) ([7a63b07](https://github.com/openmake/openmake_llm/commit/7a63b07dc7b40552acb3bcbeaacf95e932f59d89))
+* **routing:** URL 단독 질의 LLM 라우팅 스킵 + 도메인 힌트 ([#567](https://github.com/openmake/openmake_llm/issues/567)) ([2ad8124](https://github.com/openmake/openmake_llm/commit/2ad81240c95ee59df5e93689cf2ab296957db578))
+* **web:** 채팅 composer 첨부 버튼을 + 메뉴로 통합 — 파일 첨부/폴더 선택 ([5e62708](https://github.com/openmake/openmake_llm/commit/5e6270896e4f28ea3365392a42f73e9b24175f4b))
+* **web:** 채팅 composer 첨부 버튼을 + 메뉴로 통합 — 파일 첨부/폴더 선택 ([f6e13c9](https://github.com/openmake/openmake_llm/commit/f6e13c9d114a4ea0fbc7c83fb5d0ea1bbbd613c5))
+
+
+### 🐛 버그 수정
+
+* **bridge:** untracked 하위 폴더 연결 시 worktree cwd ENOENT 해소 ([f365c90](https://github.com/openmake/openmake_llm/commit/f365c905e18ce890da41c372f1b71685a85cda4a))
+* **bridge:** untracked 하위 폴더 연결 시 worktree cwd ENOENT 해소 ([7d5eb52](https://github.com/openmake/openmake_llm/commit/7d5eb52172872da8eaeb2daafb00de70b7a802e7))
+* **scripts:** routing-effect 비교 스크립트 하드닝 — 상류 부재 경고·멱등·자기출력 제외 ([#571](https://github.com/openmake/openmake_llm/issues/571)) ([0bafda9](https://github.com/openmake/openmake_llm/commit/0bafda93e8ff1b8fe08a14579abc2111021507fb))
+
+
+### ♻️ 리팩터링
+
+* **api:** externalize hardcoded values per No-Hardcoding policy ([#563](https://github.com/openmake/openmake_llm/issues/563)) ([d5ffe63](https://github.com/openmake/openmake_llm/commit/d5ffe631864daecb14842d28b501e441446fd526))
+* **api:** remove verified orphan files and dead code ([#561](https://github.com/openmake/openmake_llm/issues/561)) ([a8c774c](https://github.com/openmake/openmake_llm/commit/a8c774c6b3d614bc29582ac0f890141e9a8cd974))
+
 ## [1.31.1](https://github.com/openmake/openmake_llm/compare/v1.31.0...v1.31.1) (2026-08-21)
 
 
