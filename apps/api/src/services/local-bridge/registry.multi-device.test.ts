@@ -3,8 +3,18 @@
  * 유저당 여러 디바이스 등록, 같은 deviceId 재등록 대체, deviceId 지정/미지정 라우팅,
  * 상한 초과 거부, 해제 시 해당 디바이스 pending 만 reject 를 검증한다.
  */
-import { getLocalBridgeRegistry, type DeviceSession } from './registry';
 import type { WebSocket } from 'ws';
+
+// 상한 검증은 값 자체를 고정해야 한다 — 운영 .env 의 LOCAL_BRIDGE_MAX_DEVICES 가 주입되면
+// (로컬은 6) 기본 3 을 가정한 케이스가 환경에 따라 깨진다. requireActual + override 관행.
+const MAX_DEVICES = 3;
+jest.mock('../../config/local-bridge', () => ({
+    LOCAL_BRIDGE: { ...jest.requireActual('../../config/local-bridge').LOCAL_BRIDGE, MAX_DEVICES: 3 },
+}));
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { getLocalBridgeRegistry } = require('./registry') as typeof import('./registry');
+type DeviceSession = import('./registry').DeviceSession;
 
 function fakeWs(): WebSocket {
     return { readyState: 1, OPEN: 1, send: jest.fn(), close: jest.fn() } as unknown as WebSocket;
@@ -49,14 +59,12 @@ describe('LocalBridgeRegistry 다중 디바이스', () => {
         expect(reg.getDevice('u1', 'cli')?.connectedAt).toBe(200);
     });
 
-    test('상한(MAX_DEVICES=3) 초과 신규 등록은 거부된다', () => {
-        expect(add('u1', 'd1', 1).ok).toBe(true);
-        expect(add('u1', 'd2', 2).ok).toBe(true);
-        expect(add('u1', 'd3', 3).ok).toBe(true);
-        expect(add('u1', 'd4', 4).ok).toBe(false);
-        expect(reg.getDevices('u1')).toHaveLength(3);
+    test('상한(MAX_DEVICES) 초과 신규 등록은 거부된다', () => {
+        for (let i = 1; i <= MAX_DEVICES; i++) expect(add('u1', `d${i}`, i).ok).toBe(true);
+        expect(add('u1', `d${MAX_DEVICES + 1}`, MAX_DEVICES + 1).ok).toBe(false);
+        expect(reg.getDevices('u1')).toHaveLength(MAX_DEVICES);
         // 기존 디바이스 재등록은 상한과 무관하게 허용
-        expect(add('u1', 'd3', 5).ok).toBe(true);
+        expect(add('u1', `d${MAX_DEVICES}`, 99).ok).toBe(true);
     });
 
     test('같은 deviceId 재등록 시 구 소켓을 close 한다 (M2)', () => {

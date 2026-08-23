@@ -125,13 +125,10 @@ describe('BridgeCore', () => {
         await expect(run(core, { kind: 'read', path: 'x', folder: '../..' })).rejects.toThrow(/스코프 밖/);
     });
 
-    it('browser: 어댑터 없으면 미지원 거부, 있으면 stdout JSON 규약', async () => {
-        const noB = makeCore(base);
-        expect((await run(noB, { kind: 'browser', spec: {} })).error).toContain('지원하지 않습니다');
-        const withB = makeCore(base, { browser: async () => ({ ok: true, title: 'T' }) });
-        const r = await run(withB, { kind: 'browser', spec: {} });
-        expect(r.ok).toBe(true);
-        expect(JSON.parse(r.stdout!)).toEqual({ ok: true, title: 'T' });
+    it('폐기된 browser kind 는 화이트리스트에서 빠져 거부된다 (2026-08-23)', async () => {
+        const r = await run(makeCore(base), { kind: 'browser' } as BridgeMsg);
+        expect(r.ok).toBe(false);
+        expect(r.error).toContain('지원하지 않는 kind');
     });
 
     it('알 수 없는 kind 는 거부한다 (화이트리스트)', async () => {
