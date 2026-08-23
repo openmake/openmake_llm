@@ -21,6 +21,11 @@ export interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" 
   reasoning?: string;
   /** 추론 요약 헤드라인 — 생각 종료 시 별도 모델이 생성 (ws thinking_summary, 클로드 웹식) */
   reasoningSummary?: string;
+  /**
+   * 답변 검증 지적 — done 이후 judge 모델이 1회 점검한 결과(ws answer_verification).
+   * 지적이 없으면 이벤트가 오지 않으므로 이 필드도 비어 있다. 자동 수정은 하지 않는다.
+   */
+  verificationIssues?: string;
   /** 구조화 답변 데이터 (structuredMode=true 시 REST /api/chat/structured 응답). 있으면 카드 UI 로 렌더. */
   structured?: StructuredAnswerData;
   /** 에이전트 작업이 승인 대기(paused)일 때 표시할 대기 중 도구 호출 — 채팅 인라인 승인. */
@@ -171,6 +176,8 @@ interface AppState {
   thinkingEnabled: boolean;
   /** 추론 강도 — thinkingEnabled=true 일 때 전송. 모델별 지원값 정규화는 서버 담당. */
   thinkingLevel: ThinkingLevel;
+  /** 답변 검증 — 켜면 done 이후 judge 모델이 1회 점검(비용 발생). 기본 off. */
+  answerVerification: boolean;
   discussionMode: boolean;
   deepResearchMode: boolean;
   webSearchEnabled: boolean;
@@ -209,6 +216,7 @@ interface AppState {
   setModelFallback: (info: { from: string; to: string; reason?: string }) => void;
   appendThinking: (token: string) => void;
   setThinkingSummary: (summary: string) => void;
+  setVerificationIssues: (issues: string) => void;
   setStreaming: (v: boolean) => void;
   setCurrentSessionId: (id: string | null) => void;
   setInputDraft: (t: string) => void;
@@ -239,6 +247,7 @@ interface AppState {
   toggle: (
     key:
       | "thinkingEnabled"
+      | "answerVerification"
       | "discussionMode"
       | "deepResearchMode"
       | "webSearchEnabled"
@@ -315,6 +324,7 @@ export const useAppStore = create<AppState>()(
 
   thinkingEnabled: true, // 기본 ON — tool calling 중 추론(thinking) 과정을 화면에 노출
   thinkingLevel: "medium",
+  answerVerification: false,
   discussionMode: false,
   deepResearchMode: false,
   webSearchEnabled: false,
@@ -389,6 +399,18 @@ export const useAppStore = create<AppState>()(
       } else {
         // thinking 은 보통 답변 토큰보다 먼저 도착 — assistant placeholder 를 생성해 누적
         hist.push({ role: "assistant", content: "", reasoning: token, streaming: true });
+      }
+      return { chatHistory: hist };
+    }),
+  setVerificationIssues: (issues) =>
+    set((s) => {
+      // done 이후 도착 — 마지막 assistant 메시지에 부착.
+      const hist = [...s.chatHistory];
+      for (let i = hist.length - 1; i >= 0; i--) {
+        if (hist[i].role === "assistant") {
+          hist[i] = { ...hist[i], verificationIssues: issues };
+          break;
+        }
       }
       return { chatHistory: hist };
     }),
@@ -517,7 +539,7 @@ export const useAppStore = create<AppState>()(
         typeof window !== "undefined" ? window.localStorage : noopStorage,
       ),
       // 사용자 환경설정만 영속화 — 채팅/아티팩트 등 휘발성 세션 상태는 제외
-      partialize: (s) => ({ selectedModel: s.selectedModel, style: s.style, thinkingLevel: s.thinkingLevel, activeUserAgent: s.activeUserAgent }),
+      partialize: (s) => ({ selectedModel: s.selectedModel, style: s.style, thinkingLevel: s.thinkingLevel, answerVerification: s.answerVerification, activeUserAgent: s.activeUserAgent }),
     },
   ),
 );

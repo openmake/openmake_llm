@@ -274,7 +274,8 @@
       "agent": "Agent",
       "image": "Image",
       "artifact": "Artifact",
-      "structured": "Structured"
+      "structured": "Structured",
+      "verification": "Verify answer"
     },
     "slashMenu": {
       "heading": "Invoke skill",
@@ -439,6 +440,9 @@
       "INVALID_API_KEY": "authentication error",
       "MISSING_API_KEY": "authentication error",
       "UPSTREAM_ERROR": "upstream error"
+    },
+    "verification": {
+      "title": "Issues found by verification"
     }
   },
   "artifacts": {
