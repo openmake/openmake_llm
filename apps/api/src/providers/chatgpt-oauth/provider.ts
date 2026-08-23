@@ -38,6 +38,7 @@ import {
     isSessionExpired,
     refreshSession,
 } from './session';
+import type { ReasoningEffort } from '../../config/reasoning-effort';
 import {
     toResponsesInput,
     toResponsesTools,
@@ -110,6 +111,20 @@ export interface ChatGPTOAuthProviderOptions {
     persistSession?: (session: ChatGPTOAuthSessionPayload) => Promise<void>;
     /** 테스트 전용 — core transport 대체 주입 */
     transportFactory?: TransportFactory;
+}
+
+/**
+ * `thinking`(추론 강도) → Responses API 의 `reasoning.effort`.
+ *
+ * Codex 카탈로그는 전부 GPT-5 계열 reasoning 모델이라 강도 조절이 의미가 있는데,
+ * 이 값을 전달하지 않아 채팅 UI 의 추론 강도 토글이 ChatGPT 경로에서만 무시됐다.
+ * boolean(단순 on/off)은 강도를 특정하지 못하므로 모델 기본값에 맡긴다.
+ */
+function toResponsesReasoning(
+    thinking?: boolean | ReasoningEffort | { budget: number },
+): { reasoning: { effort: ReasoningEffort } } | undefined {
+    if (typeof thinking !== 'string') return undefined;
+    return { reasoning: { effort: thinking } };
 }
 
 /**
@@ -283,6 +298,7 @@ export class ChatGPTOAuthProvider implements IProvider {
                     : {}),
                 // temperature / max_output_tokens 미전달 — Codex 백엔드 거부 회피
                 ...(toResponsesTextFormat(opts.responseFormat) ?? {}),
+                ...(toResponsesReasoning(opts.thinking) ?? {}),
             };
 
             const stream = await this.client.responses.create(
