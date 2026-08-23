@@ -35,9 +35,11 @@ try {
 }
 
 const server = createServer((req, res) => {
+    // 도면 HTML 과 그것이 참조하는 같은 폴더의 정적 파일(icons.js 등)만 서빙.
     const name = req.url.split('?')[0].replace(/^\//, '');
-    if (!DIAGRAMS.some((d) => d.src === name)) { res.writeHead(404).end(); return; }
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    if (!/^[\w.-]+\.(html|js|css)$/.test(name)) { res.writeHead(404).end(); return; }
+    const type = name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : 'text/html';
+    res.writeHead(200, { 'content-type': `${type}; charset=utf-8` });
     createReadStream(resolve(HERE, name)).pipe(res);
 });
 await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
