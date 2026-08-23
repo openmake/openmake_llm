@@ -17,7 +17,12 @@
   }
   * { box-sizing:border-box; margin:0; padding:0; }
   body {
-    width:2000px; padding:44px 48px 36px; background:#fff; color:var(--ink);
+    width:2000px; padding:44px 48px 40px; color:var(--ink); position:relative;
+    background:
+      radial-gradient(1200px 520px at 50% -140px, #eef4ff 0%, rgba(238,244,255,0) 70%),
+      linear-gradient(#f8fafc 1px, transparent 1px) 0 0/34px 34px,
+      linear-gradient(90deg, #f8fafc 1px, transparent 1px) 0 0/34px 34px,
+      #fff;
     font:400 13px/1.5 -apple-system,"SF Pro Text","Pretendard","Helvetica Neue",sans-serif;
     -webkit-font-smoothing:antialiased;
   }
@@ -28,32 +33,43 @@
   .stamp { position:absolute; top:44px; right:48px; text-align:right; font-size:11px; line-height:1.6; color:var(--sub); }
   .stamp b { color:var(--ink); }
 
-  .shell { border:1.5px solid #dbe3ee; border-radius:22px; background:#fbfdff; padding:15px 17px; }
+  .shell { border:1px solid #dbe3ee; border-radius:22px; padding:16px 18px; position:relative;
+           background:linear-gradient(180deg,#ffffff,#fbfdff);
+           box-shadow:0 1px 0 #fff inset, 0 10px 26px -18px rgba(15,23,42,.42); }
   .rail { display:flex; gap:16px; align-items:stretch; }
   .rail > .badge { flex:none; width:126px; display:flex; flex-direction:column; align-items:center;
                    justify-content:center; gap:8px; text-align:center; }
   .badge .t { font-size:14.5px; font-weight:800; line-height:1.3; }
   .badge .s { font-size:10.5px; color:var(--sub); font-family:ui-monospace,monospace; }
   .tiles { flex:1; display:grid; gap:0; grid-auto-flow:column; grid-auto-columns:1fr;
-           border:1px solid var(--line); border-radius:16px; background:#fff; overflow:hidden; }
+           border:1px solid var(--line); border-radius:16px; background:#fff; overflow:hidden;
+           box-shadow:0 6px 18px -14px rgba(15,23,42,.5); }
   .tile { display:flex; gap:11px; align-items:flex-start; padding:14px 15px; border-left:1px solid #eef2f7; }
   .tile:first-child { border-left:0; }
   .tile b { display:block; font-size:13.5px; font-weight:750; margin-bottom:3px; }
   .tile p { font-size:10.8px; line-height:1.55; color:var(--sub); }
 
-  .gap { display:flex; justify-content:center; align-items:center; gap:10px; margin:11px 0; }
-  .gap span { padding:6px 18px; border:1px solid var(--line); border-radius:999px; background:#fff;
-              font-size:11.5px; font-weight:650; color:#475569; }
-  .gap i { font-style:normal; color:#cbd5e1; font-size:15px; }
+  .gap { position:relative; display:flex; justify-content:center; align-items:center; margin:6px 0; height:44px; }
+  .gap::before { content:""; position:absolute; left:50%; top:0; bottom:0; width:2px; margin-left:-1px;
+                 background:linear-gradient(#cbd5e1,#94a3b8); }
+  .gap span { position:relative; padding:6px 20px; border:1px solid #cbd5e1; border-radius:999px;
+              background:#fff; font-size:11.5px; font-weight:700; color:#334155;
+              box-shadow:0 3px 10px -6px rgba(15,23,42,.5); }
+  .gap i { display:none; }
+  .gap::after { content:"▼"; position:absolute; left:50%; bottom:-3px; margin-left:-7px;
+                color:#94a3b8; font-size:12px; }
 
   /* 앱 서버 프레임 */
-  .api { border:2px solid #a7f3d0; border-radius:26px; padding:14px; background:linear-gradient(180deg,#f0fdf9,#ecfdf5); }
+  .api { border:1.5px solid #a7f3d0; border-radius:26px; padding:16px;
+         background:linear-gradient(180deg,#f0fdf9,#e9fbf3);
+         box-shadow:0 1px 0 #fff inset, 0 22px 50px -34px rgba(5,150,105,.75); }
   .api > header { display:flex; align-items:center; gap:12px; padding:2px 8px 12px; }
   .api > header .t { font-size:22px; font-weight:800; }
   .api > header .s { font-size:11.5px; color:#047857; }
   .api > header .chip { margin-left:auto; padding:4px 11px; border-radius:999px; background:#fff;
                         border:1px solid #a7f3d0; font-size:10.5px; color:#047857; font-family:ui-monospace,monospace; }
-  .zone { display:flex; gap:14px; align-items:stretch; padding:13px; border-radius:16px; margin-bottom:11px; background:#fff; }
+  .zone { display:flex; gap:14px; align-items:stretch; padding:14px; border-radius:16px; margin-bottom:11px;
+          background:#fff; box-shadow:0 8px 22px -18px rgba(15,23,42,.5); }
   .zone:last-child { margin-bottom:0; }
   .zone > .zbadge { flex:none; width:100px; display:flex; flex-direction:column; align-items:center;
                     justify-content:center; gap:7px; text-align:center; }
@@ -69,35 +85,51 @@
   .item p { font-size:10.6px; line-height:1.55; color:var(--sub); }
 
   /* 채팅 파이프라인 */
-  .pipe { border:1.5px solid #bfdbfe; border-radius:16px; background:#f8fbff; padding:13px; margin-bottom:11px; }
+  .pipe { border:1px solid #bfdbfe; border-radius:16px; padding:15px; margin-bottom:11px;
+          background:linear-gradient(180deg,#ffffff,#f5f9ff);
+          box-shadow:0 10px 26px -22px rgba(37,99,235,.9); }
   .pipe > h4 { display:flex; align-items:center; gap:9px; font-size:14px; font-weight:800; margin-bottom:10px; }
   .pipe > h4 em { font-style:normal; padding:3px 10px; border-radius:999px; background:#2563eb; color:#fff; font-size:11px; }
   .pipe > h4 span { font-weight:500; font-size:11px; color:var(--sub); font-family:ui-monospace,monospace; }
-  .steps { display:flex; align-items:stretch; gap:5px; }
-  .step { flex:1; border:1px solid #dbeafe; border-radius:11px; background:#fff; padding:9px 10px; }
-  .step .n { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px;
-             border-radius:50%; background:#2563eb; color:#fff; font-size:10.5px; font-weight:700; margin-right:6px; }
+  .steps { position:relative; display:flex; align-items:stretch; gap:5px; }
+  .steps::before { content:""; position:absolute; left:26px; right:26px; top:22px; height:2px;
+                   background:linear-gradient(90deg,#bfdbfe,#2563eb,#bfdbfe); border-radius:2px; }
+  .step { position:relative; flex:1; border:1px solid #dbeafe; border-radius:11px; background:#fff;
+          padding:9px 10px; box-shadow:0 6px 16px -14px rgba(37,99,235,.9); }
+  .step .n { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px;
+             border-radius:50%; background:#2563eb; color:#fff; font-size:11px; font-weight:700;
+             margin-right:7px; box-shadow:0 0 0 3px #fff, 0 0 0 5px #dbeafe; }
   .step b { font-size:11.8px; font-weight:750; }
   .step p { margin-top:4px; font-size:10.2px; line-height:1.5; color:var(--sub); }
   .steps > i { font-style:normal; align-self:center; color:#93c5fd; font-size:14px; flex:none; }
 
   /* 워크플로우 레인 */
   .lanes { display:grid; grid-template-columns:repeat(4,1fr); gap:11px; margin-bottom:11px; }
-  .lane { border:1.5px solid var(--lc); border-radius:16px; background:#fff; overflow:hidden; }
+  .lane { border:1px solid var(--lc); border-radius:16px; background:#fff; overflow:hidden;
+          box-shadow:0 10px 24px -20px var(--lc); }
   .lane > h5 { display:flex; align-items:center; gap:8px; padding:10px 12px; background:var(--lb); }
   .lane > h5 .n { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px;
                   border-radius:50%; background:var(--lc); color:#fff; font-size:11px; font-weight:700; }
   .lane > h5 b { font-size:13.5px; font-weight:800; }
   .lane > h5 span { margin-left:auto; font-size:10px; color:var(--sub); font-family:ui-monospace,monospace; }
   .lane ol { list-style:none; padding:10px 12px; }
-  .lane li { padding:7px 0; border-top:1px dashed var(--line); }
-  .lane li:first-child { border-top:0; padding-top:2px; }
+  .lane li { position:relative; padding:9px 0 9px 16px; }
+  .lane li::before { content:""; position:absolute; left:4px; top:14px; bottom:-9px; width:2px; background:var(--lc); opacity:.28; }
+  .lane li:last-child::before { display:none; }
+  .lane li::after { content:""; position:absolute; left:0; top:11px; width:10px; height:10px; border-radius:50%;
+                    background:#fff; border:2.5px solid var(--lc); }
+  .lane li:first-child { padding-top:4px; }
+  .lane li:first-child::after { top:6px; }
   .lane li b { display:block; font-size:11.8px; font-weight:700; margin-bottom:2px; }
   .lane li p { font-size:10.3px; line-height:1.5; color:var(--sub); }
   .lane > p.foot { padding:9px 12px 11px; font-size:10.2px; line-height:1.5; color:var(--sub); border-top:1px solid var(--line); }
 
-  .core { display:flex; gap:12px; align-items:center; padding:13px 15px; border:1.5px solid #fdba74;
-          border-radius:16px; background:#fff7ed; margin-bottom:11px; }
+  .funnel { position:relative; height:34px; margin:-2px 0 6px; }
+  .funnel svg { position:absolute; inset:0; width:100%; height:34px; }
+  .core { position:relative; display:flex; gap:14px; align-items:center; padding:15px 17px;
+          border:1.5px solid #fdba74; border-radius:16px; margin-bottom:11px;
+          background:linear-gradient(180deg,#fff7ed,#ffedd5);
+          box-shadow:0 10px 26px -20px rgba(234,88,12,.9); }
   .core b { font-size:14px; font-weight:800; }
   .core code { padding:1px 6px; border-radius:5px; background:#ffedd5; font-family:ui-monospace,monospace; font-size:11px; }
   .core p { margin-top:3px; font-size:10.8px; line-height:1.55; color:#9a3412; }
@@ -278,6 +310,12 @@ document.body.innerHTML = `
       ${foot ? `<p class="foot">${p(foot)}</p>` : ''}
     </div>`).join('')}</div>
 
+  <div class="funnel"><svg viewBox="0 0 1000 34" preserveAspectRatio="none" fill="none">
+    <path d="M125 0C125 22 500 12 500 34" stroke="#fdba74" stroke-width="2"/>
+    <path d="M375 0C375 22 500 14 500 34" stroke="#fdba74" stroke-width="2"/>
+    <path d="M625 0C625 22 500 14 500 34" stroke="#fdba74" stroke-width="2"/>
+    <path d="M875 0C875 22 500 12 500 34" stroke="#fdba74" stroke-width="2"/>
+  </svg></div>
   <div class="core">${I.route('#ea580c', 32)}<div><b>${T.coreT} — <code>providers/provider-router</code> + <code>llm/LLMClient</code></b>
     <p>${L === 'ko'
       ? 'SdkType = local-llm · anthropic · openai-compatible · chatgpt-oauth · LLMClient 는 per-request 생성 · cluster/ 가 노드 health check · circuit breaker 로 라우팅 · per-user 토큰 쿼터(KVStore, fail-open)'
