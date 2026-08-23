@@ -56,6 +56,21 @@ describe('composeStructuredAnswer — degrade', () => {
         expect(retry[0].role).toBe('system');
     });
 
+    it('degrade 폴백이 스키마 모양 JSON 이면 raw JSON 대신 필드를 살린다', async () => {
+        // 실측 2026-08-24(ChatGPT 경로): 필수 필드(intent)가 빠진 JSON 이 그대로 conclusion 에
+        // 들어가 사용자에게 raw JSON 이 노출됐다.
+        const json = JSON.stringify({
+            title: '광합성', conclusion: '빛으로 양분을 만든다',
+            sections: [{ heading: '개요', body: '엽록체에서 일어난다' }],
+        });
+        const r = await composeStructuredAnswer({ message: 'q', chat: async () => json });
+        expect(r.degraded).toBe('schema_invalid');
+        expect(r.structured.conclusion).toBe('빛으로 양분을 만든다');
+        expect(r.structured.title).toBe('광합성');
+        expect(r.structured.sections).toHaveLength(1);
+        expect(r.markdown).not.toContain('"conclusion"');
+    });
+
     it('길이 상한으로 잘리면 스키마 재안내 대신 "짧게 쓰라"고 재시도한다', async () => {
         // 잘린 출력에 스키마를 다시 설명해봐야 소용없다 — 더 짧게 쓰게 해야 회복된다.
         const hints: string[] = [];
