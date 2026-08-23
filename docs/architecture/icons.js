@@ -44,3 +44,46 @@ window.I = {
   tools: (c = '#e11d48', s = 26) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.7"><path d="M14.5 6.2a3.8 3.8 0 0 0 5 5l-8.6 8.6a2.4 2.4 0 0 1-3.4-3.4z"/><path d="M6 4.5 8.5 7 7 8.5 4.5 6z"/></svg>`,
   clock: (c = '#64748b', s = 22) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 6.8V12l3.4 2"/></svg>`,
 };
+
+// ── 기기 일러스트 ────────────────────────────────────────────────
+// 이미지 생성 대신 손으로 그린 벡터. 확대해도 뭉개지지 않고 글자가 깨지지 않는다.
+window.ART = {
+  macMini: (w = 132) => `<svg width="${w}" viewBox="0 0 160 108" fill="none">
+    <defs>
+      <linearGradient id="mmTop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fdfefe"/><stop offset=".45" stop-color="#e8edf2"/><stop offset="1" stop-color="#cfd8e2"/></linearGradient>
+      <linearGradient id="mmSide" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c6d0db"/><stop offset="1" stop-color="#9fadbd"/></linearGradient>
+      <radialGradient id="mmGlow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#60a5fa" stop-opacity=".38"/><stop offset="1" stop-color="#60a5fa" stop-opacity="0"/></radialGradient>
+    </defs>
+    <ellipse cx="80" cy="94" rx="66" ry="11" fill="url(#mmGlow)"/>
+    <ellipse cx="80" cy="92" rx="52" ry="6" fill="#0f172a" opacity=".13"/>
+    <rect x="18" y="52" width="124" height="26" rx="11" fill="url(#mmSide)"/>
+    <rect x="18" y="26" width="124" height="42" rx="12" fill="url(#mmTop)" stroke="#b9c4d1"/>
+    <ellipse cx="80" cy="45" rx="13" ry="5.4" fill="#aab6c4" opacity=".5"/>
+    <ellipse cx="80" cy="44" rx="9" ry="3.6" fill="#8e9dae" opacity=".55"/>
+    <circle cx="128" cy="66" r="2.2" fill="#22c55e"/>
+    <path d="M24 66h16M46 66h10" stroke="#8fa0b3" stroke-width="1.6" stroke-linecap="round" opacity=".6"/>
+  </svg>`,
+  dgx: (w = 128) => `<svg width="${w}" viewBox="0 0 160 132" fill="none">
+    <defs>
+      <linearGradient id="dgBody" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f2937"/><stop offset="1" stop-color="#0b1220"/></linearGradient>
+      <radialGradient id="dgGlow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#4ade80" stop-opacity=".4"/><stop offset="1" stop-color="#4ade80" stop-opacity="0"/></radialGradient>
+      <radialGradient id="fanG" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#16a34a" stop-opacity=".55"/><stop offset=".75" stop-color="#052e16" stop-opacity=".9"/><stop offset="1" stop-color="#020617"/></radialGradient>
+    </defs>
+    <ellipse cx="80" cy="120" rx="62" ry="10" fill="url(#dgGlow)"/>
+    <rect x="20" y="12" width="120" height="104" rx="13" fill="url(#dgBody)" stroke="#334155"/>
+    <rect x="28" y="20" width="60" height="88" rx="8" fill="#0b1220" stroke="#1f2937"/>
+    <rect x="34" y="27" width="20" height="26" rx="3" fill="#132033" stroke="#1f2937"/>
+    <rect x="34" y="58" width="48" height="6" rx="3" fill="#132033"/>
+    <rect x="34" y="69" width="38" height="6" rx="3" fill="#132033"/>
+    <rect x="34" y="80" width="44" height="6" rx="3" fill="#132033"/>
+    <circle cx="62" cy="40" r="9" fill="none" stroke="#22c55e" stroke-width="1.6" opacity=".8"/>
+    <circle cx="62" cy="40" r="4" fill="#22c55e" opacity=".55"/>
+    <circle cx="114" cy="38" r="15" fill="url(#fanG)" stroke="#1f2937"/>
+    <circle cx="114" cy="76" r="15" fill="url(#fanG)" stroke="#1f2937"/>
+    <g stroke="#22c55e" stroke-width="1.1" opacity=".5">
+      <path d="M114 25v26M101 38h26M105 29l18 18M123 29l-18 18"/>
+      <path d="M114 63v26M101 76h26M105 67l18 18M123 67l-18 18"/>
+    </g>
+    <circle cx="132" cy="108" r="2.4" fill="#22c55e"/>
+  </svg>`,
+};
