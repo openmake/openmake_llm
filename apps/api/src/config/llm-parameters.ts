@@ -84,19 +84,6 @@ export const LLM_TEMPERATURES = {
 // ============================================
 
 /**
- * 용도별 top_p 값
- * temperature와 함께 LLM 샘플링 제어에 사용
- */
-export const LLM_TOP_P = {
-    /** Gemini 기본/비추론/한국어/코드 */
-    GEMINI_DEFAULT: 0.9,
-    /** Gemini 추론 */
-    GEMINI_REASONING: 0.95,
-    /** 안티 디제너레이션 (미사용 dead 상수 — 실제 배선은 LLM_ANTI_DEGENERATION_FREQUENCY_PENALTY) */
-    ANTI_DEGENERATION_PRESENCE_PENALTY: 1.5,
-} as const;
-
-/**
  * 로컬 모델 반복(degeneration) 방지 frequency_penalty 기본값.
  *
  * 근거(라이브 UI 재현): qwen 등 로컬 모델이 동일 토큰을 무한 반복("오오오오…")하며
@@ -208,37 +195,6 @@ export const CONFIDENCE_DIVISORS = {
 // ============================================
 // QueryType별 모델 파라미터 조정값
 // ============================================
-
-/**
- * model-selector.ts의 adjustOptionsForModel()에서 사용하는
- * QueryType별 LLM 파라미터 오버라이드 값
- */
-export const QUERY_TYPE_PARAMS = {
-    /** Qwen Coder 모델 temperature 상한 */
-    QWEN_CODER_TEMP_CAP: 0.3,
-    /** Vision 모델 temperature */
-    VISION_TEMP: 0.6,
-    /** 코드 관련 QueryType temperature 상한 */
-    CODE_TEMP_CAP: 0.3,
-    /** 창작 QueryType temperature 하한 */
-    CREATIVE_TEMP_FLOOR: 0.85,
-    /** 창작 QueryType top_p */
-    CREATIVE_TOP_P: 0.95,
-    /** 수학 QueryType temperature */
-    MATH_TEMP: 0.1,
-    /** 수학 QueryType top_p */
-    MATH_TOP_P: 0.8,
-    /** 추론 QueryType temperature */
-    REASONING_TEMP: 0.2,
-    /** 추론 QueryType top_p */
-    REASONING_TOP_P: 0.85,
-    /** 번역 QueryType temperature */
-    TRANSLATION_TEMP: 0.3,
-    /** 번역 QueryType repeat_penalty */
-    TRANSLATION_REPEAT_PENALTY: 1.2,
-    /** 기본 fallback temperature */
-    DEFAULT_TEMP_FALLBACK: 0.7,
-} as const;
 
 // ============================================
 // 모델 프리셋 (MODEL_PRESETS)

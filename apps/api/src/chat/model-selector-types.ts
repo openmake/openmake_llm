@@ -64,10 +64,14 @@ export interface QueryClassification {
  * selectOptimalModel() 의 반환 타입입니다.
  */
 export interface ModelSelection {
-    /** 선택된 모델 ID (예: 'gemini-3-flash-preview:cloud') */
+    /** 선택된 모델 ID */
     model: string;
-    /** 모델에 적용할 옵션 (temperature, top_p 등) */
-    options: ModelOptions;
+    /**
+     * (구 `options` 필드 — 질의 유형별 샘플링 튜닝은 2026-08-23 제거됐다.
+     *  유일 소비자인 ws-chat-handler 가 `model` 만 쓰고 옵션을 버려 계산이 통째로
+     *  죽어 있었고, 분류 결과로 동작을 바꾸는 것은 Phase B 에서 되돌린 방향이다.
+     *  샘플링은 vLLM 서버 기본값에 위임한다 — penalty 단일 소스 원칙과도 일치.)
+     */
     /** 선택 사유 설명 (한국어) */
     reason: string;
     /** 분류된 질문 유형 */

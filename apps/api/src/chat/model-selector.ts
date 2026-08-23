@@ -21,11 +21,7 @@
  */
 
 import { getConfig } from '../config/env';
-import { ModelOptions } from '../llm';
 import { createLogger } from '../utils/logger';
-import { MODEL_CONTEXT_DEFAULTS } from '../config/runtime-limits';
-import { QUERY_TYPE_PARAMS, LLM_TOP_P } from '../config/llm-parameters';
-import { recommendTokenBudget } from './complexity-assessor';
 import { getModelPresets } from '../config/model-presets';
 import { matchCapabilityPreset, resolveLocalCapabilities } from '../config/model-defaults';
 import { findLocalModel } from '../config/local-models';
@@ -56,9 +52,9 @@ export { ModelPreset, getModelPresets } from '../config/model-presets';
  * 질문 유형을 분류하고 단일 로컬 모델(llmDefaultModel)로 응답합니다.
  *
  * Phase B Phase 2-A (2026-05-26): LLM classifier 분기 제거 — fast-path + regex
- * 만 사용. LLM round-trip 0회 보장. classifier 결과는 옵션 튜닝
- * (QUERY_TYPE_PARAMS) 에만 영향하고 model 결정에는 미사용 (Pure Manual 모드)
- * 이라서 LLM 호출 비용 ROI 가 낮았던 4 layer 중 Layer 1 을 제거.
+ * 만 사용. LLM round-trip 0회 보장. 2026-08-23: 분류 결과로 샘플링을 튜닝하던
+ * options 계산도 제거 — 유일 소비자가 model 만 쓰고 옵션을 버려 죽어 있었고,
+ * 분류로 동작을 바꾸는 것은 Phase B 가 되돌린 방향이다. 분류는 관측 전용으로 남는다.
  *
  * @param query - 사용자 질문 텍스트
  * @param hasImages - 이미지 첨부 여부 (true면 vision 유형으로 강제 전환)
@@ -96,16 +92,9 @@ export async function selectOptimalModel(
     logger.info(`질문 유형: ${classifiedType} (신뢰도: ${(classifiedConfidence * 100).toFixed(0)}%)`);
 
     const localModel = config.llmDefaultModel;
-    const baseOptions: ModelOptions = {
-        temperature: QUERY_TYPE_PARAMS.DEFAULT_TEMP_FALLBACK,
-        top_p: LLM_TOP_P.GEMINI_DEFAULT,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-    };
-    const adjustedOptions = adjustOptionsForModel(localModel, baseOptions, classifiedType);
 
     return {
         model: localModel,
-        options: adjustedOptions,
         reason: `${classifiedType} → ${localModel}`,
         queryType: classifiedType,
         supportsToolCalling: true,
@@ -165,70 +154,4 @@ export function checkModelCapability(
 // 모델별 파라미터 조정
 // ============================================================
 
-/**
- * 특정 모델과 질문 유형에 맞게 모델 옵션을 미세 조정합니다.
- * 
- * 모델별 조정:
- * - Qwen Coder: temperature <= 0.3, repeat_penalty = 1.0
- * - Kimi: num_ctx >= 65536 (긴 문서 지원)
- * - Vision 모델: temperature = 0.6
- * 
- * 질문 유형별 조정:
- * - code: temperature <= 0.3 (정확성 우선)
- * - creative: temperature >= 0.85 (창의성 우선)
- * - math: temperature = 0.1 (결정적 응답)
- * - translation: temperature = 0.3, repeat_penalty = 1.2
- * 
- * @param _modelName - 대상 모델명 (현재 미사용 — 모델별 sampling 보강 분기 제거됨, 시그니처 보존)
- * @param baseOptions - 기본 모델 옵션
- * @param queryType - 질문 유형
- * @returns 조정된 모델 옵션 (원본 불변)
- */
-export function adjustOptionsForModel(
-    _modelName: string,
-    baseOptions: ModelOptions,
-    queryType: QueryType,
-    complexityScore?: number
-): ModelOptions {
-    const adjustedOptions = { ...baseOptions };
-
-    // 질문 유형별 추가 조정
-    switch (queryType) {
-        case 'code-agent':
-        case 'code-gen':
-        case 'code':
-            adjustedOptions.temperature = Math.min(adjustedOptions.temperature || QUERY_TYPE_PARAMS.DEFAULT_TEMP_FALLBACK, QUERY_TYPE_PARAMS.CODE_TEMP_CAP);
-            adjustedOptions.repeat_penalty = 1.0;
-            break;
-        case 'creative':
-            adjustedOptions.temperature = Math.max(adjustedOptions.temperature || QUERY_TYPE_PARAMS.DEFAULT_TEMP_FALLBACK, QUERY_TYPE_PARAMS.CREATIVE_TEMP_FLOOR);
-            adjustedOptions.top_p = QUERY_TYPE_PARAMS.CREATIVE_TOP_P;
-            break;
-        case 'math-hard':
-        case 'math-applied':
-        case 'math':
-            adjustedOptions.temperature = QUERY_TYPE_PARAMS.MATH_TEMP;
-            adjustedOptions.top_p = QUERY_TYPE_PARAMS.MATH_TOP_P;
-            break;
-        case 'reasoning':
-            adjustedOptions.temperature = QUERY_TYPE_PARAMS.REASONING_TEMP;
-            adjustedOptions.top_p = QUERY_TYPE_PARAMS.REASONING_TOP_P;
-            break;
-        case 'translation':
-            adjustedOptions.temperature = QUERY_TYPE_PARAMS.TRANSLATION_TEMP;
-            adjustedOptions.repeat_penalty = QUERY_TYPE_PARAMS.TRANSLATION_REPEAT_PENALTY;
-            break;
-    }
-
-    // ── 토큰 예산 관리 (num_predict) ──
-    // 기존에 num_predict가 설정되지 않은 경우에만 동적 설정
-    if (complexityScore !== undefined && !adjustedOptions.num_predict) {
-        const budget = recommendTokenBudget(complexityScore, queryType);
-        if (budget > 0) {
-            adjustedOptions.num_predict = budget;
-        }
-    }
-
-    return adjustedOptions;
-}
 
