@@ -1,0 +1,317 @@
+<meta charset="utf-8">
+<title>OpenMake LLM — Architecture</title>
+<!--
+  OpenMake LLM 통합 아키텍처 도면의 **소스**.
+
+  2026-08-19 판 arch.png 은 소스 없이 렌더된 단발 PNG 였고, 나흘 만에 클라이언트
+  계층이 어긋났다(Electron 제거 · legacy-web 제거 · cli 와 desktop-native 추가).
+  같은 일이 반복되지 않도록 도면을 HTML 로 두고 여기서 렌더한다.
+
+  렌더:
+    node docs/architecture/render.mjs          # ko·en 두 장을 arch.png / arch.en.png 로
+  언어:
+    file://…/arch.html?lang=ko  (기본) / ?lang=en
+-->
+<style>
+  :root {
+    --ink: #0f172a; --sub: #64748b; --line: #e2e8f0; --bg: #f8fafc;
+    --client: #3b82f6; --edge: #f59e0b; --api: #10b981; --sandbox: #ec4899;
+    --data: #06b6d4; --llm: #f97316; --pkg: #8b5cf6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1880px; padding: 40px 44px 32px;
+    background: linear-gradient(160deg, #fdfdff 0%, #f4f7fb 55%, #eef3f9 100%);
+    color: var(--ink);
+    font: 400 13px/1.5 -apple-system, "SF Pro Text", "Pretendard", "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; }
+  h1 b { color: #2563eb; }
+  h1 small { font-size: 15px; font-weight: 600; color: var(--sub); letter-spacing: 0; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 32px; margin-bottom: 26px; }
+  .head p { margin-top: 8px; font-size: 13.5px; color: var(--sub); }
+  .stamp {
+    padding: 12px 16px; border: 1px solid var(--line); border-radius: 10px;
+    background: #fff; text-align: right; font-size: 11.5px; line-height: 1.65; color: var(--sub); white-space: nowrap;
+  }
+  .stamp b { color: var(--ink); }
+
+  .layer { border: 1px solid var(--line); border-radius: 14px; background: #fff; padding: 18px 20px 20px; }
+  .layer + .flow, .layer + .layer { margin-top: 0; }
+  .layer > h2 { display: flex; align-items: center; gap: 9px; font-size: 16px; font-weight: 700; margin-bottom: 14px; }
+  .layer > h2 .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .layer > h2 .tag {
+    padding: 2px 8px; border-radius: 6px; background: #f1f5f9; color: var(--sub);
+    font-size: 11px; font-weight: 600; font-family: ui-monospace, "SF Mono", monospace;
+  }
+  .layer > h2 .meta { font-size: 11.5px; font-weight: 500; color: var(--sub); }
+
+  .grid { display: grid; gap: 12px; }
+  .g5 { grid-template-columns: repeat(5, 1fr); }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g2 { grid-template-columns: repeat(2, 1fr); }
+
+  .card {
+    border: 1px solid var(--line); border-left: 3px solid var(--c, var(--client));
+    border-radius: 9px; background: #fff; padding: 11px 13px;
+  }
+  .card h3 { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+  .card p { font-size: 11.5px; line-height: 1.55; color: var(--sub); }
+  code, .mono {
+    padding: 1px 5px; border-radius: 4px; background: #f1f5f9;
+    font-family: ui-monospace, "SF Mono", monospace; font-size: 11px; color: #0f172a;
+  }
+
+  .flow { display: flex; justify-content: center; margin: 12px 0; }
+  .flow span {
+    padding: 5px 16px; border: 1px solid var(--line); border-radius: 999px; background: #fff;
+    font-size: 11.5px; font-weight: 600; color: var(--sub);
+  }
+
+  .pipe { border: 1px solid #dbeafe; border-radius: 12px; background: #f8fbff; padding: 14px 16px; margin-top: 14px; }
+  .pipe > h4 { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; margin-bottom: 11px; }
+  .pipe > h4 em { padding: 2px 8px; border-radius: 6px; background: #2563eb; color: #fff; font-style: normal; font-size: 11px; }
+  .pipe > h4 span { font-weight: 500; color: var(--sub); font-size: 11.5px; }
+  .steps { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+  .step { border: 1px solid var(--line); border-top: 3px solid #93c5fd; border-radius: 8px; background: #fff; padding: 9px 10px; }
+  .step b { display: block; font-size: 11.5px; margin-bottom: 3px; }
+  .step i { font-style: normal; font-size: 10.5px; line-height: 1.5; color: var(--sub); }
+  .step .n {
+    display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px;
+    border-radius: 50%; background: #2563eb; color: #fff; font-size: 9.5px; font-weight: 700; margin-right: 5px;
+  }
+
+  .wf { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 14px; }
+  .wfbox { border: 1px solid var(--line); border-radius: 12px; padding: 13px 14px; }
+  .wfbox > h4 { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 700; margin-bottom: 4px; }
+  .wfbox > h4 .n { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border-radius: 50%; color: #fff; font-size: 10px; }
+  .wfbox > h4 .src { font-weight: 500; font-size: 10.5px; color: var(--sub); font-family: ui-monospace, monospace; }
+  .wfbox ul { list-style: none; margin-top: 8px; }
+  .wfbox li { border: 1px solid var(--line); border-radius: 7px; background: #fff; padding: 8px 10px; margin-bottom: 7px; }
+  .wfbox li b { display: block; font-size: 11.5px; margin-bottom: 2px; }
+  .wfbox li i { font-style: normal; font-size: 10.5px; line-height: 1.5; color: var(--sub); }
+  .wfbox > p { margin-top: 8px; font-size: 10.5px; line-height: 1.55; color: var(--sub); }
+
+  .band { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+  .band i {
+    font-style: normal; padding: 5px 10px; border: 1px solid var(--line); border-radius: 7px;
+    background: #fff; font-size: 10.5px; color: #334155;
+  }
+  .band > b { font-size: 11px; font-weight: 700; align-self: center; margin-right: 4px; }
+
+  .legend {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-top: 22px;
+    padding: 13px 18px; border: 1px solid var(--line); border-radius: 12px; background: #fff;
+    font-size: 11.5px; color: var(--sub);
+  }
+  .legend b { color: var(--ink); }
+  .legend u { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  .legend u s { text-decoration: none; width: 9px; height: 9px; border-radius: 50%; }
+  .cols { display: grid; grid-template-columns: 1fr 1.35fr; gap: 14px; }
+</style>
+<body></body>
+<script>
+const T = {
+  ko: {
+    title: ['OpenMake LLM — 통합 아키텍처', '(시스템 구성 + 워크플로우 단일 구조)'],
+    lede: '요청이 위에서 아래로 흐르는 실제 경로 그대로 — 클라이언트 → 엣지 → 앱 서버(채팅 단일 경로에서 4개 워크플로우 분기) → LLM 플레인 / 데이터',
+    stamp: ['소스 기준', 'backend <b>Express 5 + TS</b> · frontend <b>Next.js</b>', 'LLM = <b>vLLM(DGX)</b> + <b>LiteLLM 게이트웨이(Mac)</b>'],
+    clients: '클라이언트', packages: '공용 패키지', edge: '엣지 / 프록시', api: '앱 서버',
+    entry: '진입 계층 — 모든 요청 공통 통과',
+    pipeTitle: '채팅 파이프라인', pipeSub: '단일 경로 · ChatService → chat-service/external-provider → llm/LLMClient',
+    core: 'LLM 호출 코어', cross: '횡단 관심사 & 격리 실행', boot: '부팅 시퀀스',
+    dataTitle: '데이터 계층', llmTitle: 'LLM 플레인',
+    f1: 'HTTPS · WSS', f2: 'REST /api/* · WebSocket', f3: '채팅 요청 — 인증·검증 통과', f4: '모든 LLM 호출 수렴',
+    f5: 'raw SQL(pg) · KVStore', f6: 'OpenAI 호환 API — LLM 호출 코어에서',
+    legend: ['범례', '계층', '워크플로우 분기점', 'Docker 격리', 'Tailscale 사설망'],
+  },
+  en: {
+    title: ['OpenMake LLM — Unified Architecture', '(system layout + workflow in one view)'],
+    lede: 'The real path a request takes, top to bottom — clients → edge → app server (one chat path branching into four workflows) → LLM plane / data',
+    stamp: ['source of truth', 'backend <b>Express 5 + TS</b> · frontend <b>Next.js</b>', 'LLM = <b>vLLM (DGX)</b> + <b>LiteLLM gateway (Mac)</b>'],
+    clients: 'Clients', packages: 'Shared packages', edge: 'Edge / proxy', api: 'App server',
+    entry: 'Entry layer — every request passes through',
+    pipeTitle: 'Chat pipeline', pipeSub: 'single path · ChatService → chat-service/external-provider → llm/LLMClient',
+    core: 'LLM call core', cross: 'Cross-cutting & isolated execution', boot: 'Boot sequence',
+    dataTitle: 'Data layer', llmTitle: 'LLM plane',
+    f1: 'HTTPS · WSS', f2: 'REST /api/* · WebSocket', f3: 'chat request — authenticated and validated', f4: 'every LLM call converges here',
+    f5: 'raw SQL (pg) · KVStore', f6: 'OpenAI-compatible API — from the LLM call core',
+    legend: ['Legend', 'layer', 'workflow branch', 'Docker isolation', 'Tailscale private network'],
+  },
+};
+
+const D = {
+  clients: [
+    ['apps/web', { ko: 'Next.js + React SPA · 운영 UI 전담 · Zustand · ApiClient(REST) · use-chat-socket(WS)',
+                   en: 'Next.js + React SPA · owns the operator UI · Zustand · ApiClient (REST) · use-chat-socket (WS)' }],
+    ['apps/desktop-native', { ko: 'SwiftUI 메뉴바 컴패니언 · Node 헬퍼로 브리지 코어 동봉 · 승인 다이얼로그 · native 업데이트 채널',
+                              en: 'SwiftUI menu-bar companion · bundles the bridge core as a Node helper · approval dialog · native update channel' }],
+    ['apps/cli', { ko: 'openmake-code · 터미널 브리지 디바이스 + 렌더. 자체 에이전트 루프 없음 — 턴은 서버가 돌린다',
+                   en: 'openmake-code · terminal bridge device + renderer. No agent loop of its own — the server drives the turns' }],
+    ['apps/ios', { ko: '네이티브 클라이언트 · 카카오 지도 카드 렌더 · 위치·카메라·음성 입력',
+                   en: 'Native client · Kakao map cards · location, camera, and voice input' }],
+    ['apps/discord-bot', { ko: 'Discord 릴레이 봇 · /api/v1/chat/completions 경유 · 자체 PM2 프로세스',
+                           en: 'Discord relay bot · goes through /api/v1/chat/completions · its own PM2 process' }],
+  ],
+  packages: [
+    ['local-bridge-core', { ko: '브리지 프로토콜 · 경로 realpath 스코프 · exec 3단 방어 · sandbox-exec 프로파일 · worktree 격리. 컴패니언과 CLI 가 같은 구현을 쓴다',
+                            en: 'Bridge protocol · realpath path scoping · three-layer exec defense · sandbox-exec profile · worktree isolation. Companion and CLI run one implementation' }],
+    ['api-contracts', { ko: 'OpenAPI v1 단일 진실 공급원 · CI Gate 0 drift 차단',
+                        en: 'OpenAPI v1 source of truth · CI Gate 0 blocks drift' }],
+    ['api-client · shared-types · config', { ko: '생성 클라이언트 · 공유 타입 · 런타임 설정',
+                                             en: 'Generated client · shared types · runtime config' }],
+  ],
+  edge: [
+    [{ ko: '외부 공개 — chat.openmake.cc', en: 'Public — chat.openmake.cc' },
+     { ko: 'Cloudflare Tunnel → cloudflared → Caddy <code>:33000</code> → 앱 <code>:52416</code> · CF 100MB 상한 → 청크 업로드 우회',
+       en: 'Cloudflare Tunnel → cloudflared → Caddy <code>:33000</code> → app <code>:52416</code> · CF 100MB cap → chunked upload path' }],
+    [{ ko: 'LAN / 로컬', en: 'LAN / local' },
+     { ko: '앱 서버 <code>:52416</code> 직접 접속', en: 'App server <code>:52416</code> direct' }],
+    [{ ko: '아티팩트 공유 뷰어', en: 'Artifact share viewer' },
+     { ko: 'nginx <code>:8088</code> · 별도 오리진 · strict CSP · read-only 마운트',
+       en: 'nginx <code>:8088</code> · separate origin · strict CSP · read-only mount' }],
+  ],
+  entry: [
+    ['middlewares/', { ko: 'helmet · CORS · per-route rate limit · error-handler', en: 'helmet · CORS · per-route rate limit · error handler' }],
+    ['auth/ · security/', { ko: 'JWT(HttpOnly) · Google OAuth · API key(bridge·chat 스코프) · RBAC · SSRF guard', en: 'JWT (HttpOnly) · Google OAuth · API keys (bridge/chat scopes) · RBAC · SSRF guard' }],
+    ['routes/ + controllers/', { ko: 'REST API 모듈 · thin controller', en: 'REST API modules · thin controllers' }],
+    ['sockets/ws-chat-handler', { ko: '실시간 채팅 스트리밍(WS)', en: 'Live chat streaming (WS)' }],
+    ['schemas/ (Zod)', { ko: 'REST/WS payload 검증', en: 'REST/WS payload validation' }],
+  ],
+  steps: [
+    ['WS 메시지 수신', 'Receive WS message', 'ws-chat-handler · Zod 검증', 'ws-chat-handler · Zod validation'],
+    ['특수 모드 조기 분기', 'Early mode branch', 'Discussion / Deep Research / Image → 아래 레인', 'Discussion / Deep Research / Image → lanes below'],
+    ['Provider Gate', 'Provider gate', 'runProviderGate · 모델 ID 해석 (local-llm ↔ 외부)', 'runProviderGate · resolve model id (local-llm ↔ external)'],
+    ['시스템 프롬프트 조립', 'Assemble system prompt', 'memory → custom instructions → agent → skill → artifact guide → format → style', 'memory → custom instructions → agent → skill → artifact guide → format → style'],
+    ['streamFromExternalProvider', 'streamFromExternalProvider', '전 provider 공통 dispatch · MCP 도구 루프 ≤5턴(tool_choice:auto) · 자동 배정', 'One dispatch for every provider · MCP tool loop ≤5 turns (tool_choice:auto) · auto-dispatch'],
+    ['LLMClient.chat', 'LLMClient.chat', 'per-request · 262K context-fit 안전망 (truncate→max_tokens 축소→413)', 'per-request · 262K context-fit guard (truncate → shrink max_tokens → 413)'],
+    ['토큰 스트리밍 응답', 'Stream tokens back', 'WS delta → 프론트 렌더 · usage/audit · 웹검색 출처 결정적 첨부', 'WS delta → client render · usage/audit · deterministic search citations'],
+  ],
+  wf: [
+    ['#f59e0b', '②', 'Discussion', 'agents/discussion-engine',
+      [['주제 분석', 'Topic analysis', 'topic analyzer · keyword router'],
+       ['에이전트 선정', 'Pick agents', '18 산업 에이전트 · 100 스페셜리스트', '18 industry agents · 100 specialists'],
+       ['다중 라운드 토론', 'Multi-round debate', 'parallelBatch 병렬 발화 · 진행 스트리밍', 'parallelBatch concurrency · progress streaming'],
+       ['종합 결론', 'Synthesis', 'formatDiscussionResult → ⑦로 합류', 'formatDiscussionResult → rejoins ⑦']], ''],
+    ['#06b6d4', '③', 'Deep Research', 'services/deep-research/',
+      [['리서치 계획', 'Research plan', '질의 분해 · 하위 질문 생성', 'Decompose the query · generate sub-questions'],
+       ['병렬 검색·수집', 'Parallel search', '웹검색 4층 + 스크랩 · parallelBatch 동시성 제한', 'Four search tiers + scrape · parallelBatch concurrency cap'],
+       ['반복 심화', 'Iterative deepening', '갭 판단 → 추가 검색 루프', 'Gap check → another search loop'],
+       ['종합 보고서', 'Final report', '출처 인용 · 진행 배너 → ⑦로 합류', 'Cited sources · progress banner → rejoins ⑦']], ''],
+    ['#8b5cf6', '④', 'Agent Task', 'services/agent-task/* + task-sandbox',
+      [['작업 생성 + 입력 영속', 'Create task, persist input', 'files[]/images[] → doc-extractor → 청크 업로드 · 보존 스윕', 'files[]/images[] → doc-extractor → chunked upload · retention sweep'],
+       ['실행기 선택', 'Pick the executor', 'sandbox = Docker 워크스페이스 / local = 브리지 디바이스(감사 기록)', 'sandbox = Docker workspace / local = bridge device (audited)'],
+       ['턴 루프 + HITL', 'Turn loop + HITL', 'plan(autoAdvance) · 승인 3모드(수동/자동/건너뜀) · 재시도·강등 · 턴 종료 체크포인트', 'plan (autoAdvance) · approval modes · retry and demotion · end-of-turn checkpoint'],
+       ['Goal Judge → 종료', 'Goal judge → finish', '최종 답변 1회 판정 · completed(아티팩트/보고서) | failed(goal_incomplete)', 'One judging pass · completed (artifact/report) | failed (goal_incomplete)']],
+      { ko: '부팅 boot-recovery 좀비 복구 · 예약 실행(schedule-runner) · 절차 스킬 · subagent 병렬 spawn · 동시성 큐는 opt-in(단일 프로세스 in-memory)',
+        en: 'boot-recovery on start · scheduled runs · procedural skills · parallel subagent spawn · the concurrency queue is opt-in and in-process' }],
+    ['#ec4899', '⑤', 'MCP 도구 실행 루프', 'mcp/tool-router',
+      [['tool-router 분기', 'tool-router split', '내장 22종(web·scrape·task·image·skill·review) vs 외부 MCP', '22 built-ins (web, scrape, task, image, skill, review) vs external MCP'],
+       ['실행', 'Execute', '외부는 sandbox-docker 컨테이너 stdio · user/global pool · lifecycle-supervisor', 'External servers run stdio in sandbox-docker · user/global pool · lifecycle supervisor'],
+       ['결과 캡 + 재주입', 'Cap result, feed back', 'MAX_TOOL_RESULT_CHARS 절단 · 오류 분류 · ≤5턴 · doom-loop 감지 → ⑤로 복귀', 'MAX_TOOL_RESULT_CHARS truncation · error classing · ≤5 turns · doom-loop detection → back to ⑤']],
+      { ko: '채팅·Agent Task·Deep Research 가 같은 도구 계층을 공유 — 도구 결과가 곧 grounding',
+        en: 'Chat, Agent Task, and Deep Research share one tool layer — the tool result is the grounding' }],
+  ],
+  cross: [
+    ['AuditService → Alert', { ko: '감사 SoT · CRITICAL_ACTIONS 자동 알림 · web push / APNs / SMTP / webhook', en: 'Audit source of truth · CRITICAL_ACTIONS alerts · web push / APNs / SMTP / webhook' }],
+    [{ ko: '관측 · 운영', en: 'Observability & ops' }, { ko: 'monitoring(analytics·alerts) · OTel 트레이싱 · 주간 게이트 리포트 · schedulers · system-settings(DB>env)', en: 'monitoring (analytics, alerts) · OTel tracing · weekly gate report · schedulers · system-settings (DB > env)' }],
+    ['🐳 task-sandbox', { ko: 'Agent Task 영속 워크스페이스 · 브라우저는 egress allowlist 프록시 경유', en: 'Persistent Agent Task workspace · browser traffic goes through the egress allowlist proxy' }],
+    ['🐳 mcp-runtime', { ko: '외부 MCP stdio 격리 · instance pid 기록으로 죽은 프로세스 판별', en: 'Isolates external MCP stdio · records instance pid so health checks catch dead processes' }],
+    ['🐳 artifact-exec', { ko: '아티팩트 코드 실행 · 동시 4 cap · 표준 라이브러리만 · PDF/DOCX 변환도 여기', en: 'Runs artifact code · 4 concurrent · standard library only · PDF/DOCX conversion too' }],
+  ],
+  boot: {
+    ko: ['dotenv + 시크릿 자동 생성', '스키마 + 마이그레이션 (advisory lock)', 'system_settings overlay', 'MCP 외부 서버 init + 스킬 시더', 'cluster + 모델 프로브', 'listen :52416 → lifecycle supervisor · schedulers · task boot-recovery'],
+    en: ['dotenv + generated secrets', 'schema + migrations (advisory lock)', 'system_settings overlay', 'external MCP init + skill seeder', 'cluster + model probe', 'listen :52416 → lifecycle supervisor · schedulers · task boot-recovery'],
+  },
+  data: [
+    ['PostgreSQL 16', { ko: 'Docker 단독 운영 · ORM 없이 raw SQL · 파라미터화 쿼리 · 부팅 시 자동 마이그레이션', en: 'Runs in Docker · raw SQL, no ORM · parameterized queries · migrations applied on boot' }],
+    ['Redis (KVStore)', { ko: 'rate limit · per-user 토큰 쿼터 · OAuth state (메모리 폴백)', en: 'Rate limits · per-user token quota · OAuth state (memory fallback)' }],
+    [{ ko: '파일 스토리지', en: 'File storage' }, { ko: 'data/uploads(task 첨부 원본) · public/generated(생성 이미지) · artifact-viewer/data', en: 'data/uploads (task attachments) · public/generated (images) · artifact-viewer/data' }],
+  ],
+  llm: [
+    [{ ko: 'LiteLLM 통합 게이트웨이', en: 'LiteLLM unified gateway' }, { ko: 'Mac <code>127.0.0.1:13401</code> · PM2 · master key 인증 · BYOK 는 x-api-key 헤더', en: 'Mac <code>127.0.0.1:13401</code> · PM2 · master-key auth · BYOK via the x-api-key header' }],
+    [{ ko: 'DGX vLLM (Tailscale 사설망)', en: 'DGX vLLM (Tailscale private network)' }, { ko: '<code>:8002</code> qwen3.6-35b-a3b chat(262K) · <code>:8003</code> bge 임베딩 · <code>:8005</code> FLUX 이미지', en: '<code>:8002</code> qwen3.6-35b-a3b chat (262K) · <code>:8003</code> bge embeddings · <code>:8005</code> FLUX images' }],
+    [{ ko: '외부 provider — 게이트웨이 경유', en: 'External providers — through the gateway' }, { ko: 'openrouter · ollama-cloud · NVIDIA NIM (wildcard + BYOK)', en: 'openrouter · ollama-cloud · NVIDIA NIM (wildcard + BYOK)' }],
+    [{ ko: 'Direct 예외', en: 'Direct exceptions' }, { ko: 'ollama-local(사용자별 endpoint) · ChatGPT OAuth (격리 불가 → 영구 direct)', en: 'ollama-local (per-user endpoint) · ChatGPT OAuth (cannot be proxied → always direct)' }],
+  ],
+};
+
+const L = new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'ko';
+const t = T[L];
+const p = (v) => (typeof v === 'string' ? v : v[L]);
+const esc = (s) => s;
+
+function card(title, desc, color) {
+  return `<div class="card" style="--c:${color}"><h3>${p(title)}</h3><p>${p(desc)}</p></div>`;
+}
+function layer(color, name, tag, meta, inner) {
+  return `<section class="layer"><h2><span class="dot" style="background:${color}"></span>${name}
+    ${tag ? `<span class="tag">${tag}</span>` : ''}${meta ? `<span class="meta">${meta}</span>` : ''}</h2>${inner}</section>`;
+}
+const flow = (s) => `<div class="flow"><span>▼&nbsp;&nbsp;${s}&nbsp;&nbsp;▼</span></div>`;
+
+const stampDate = document.currentScript ? '' : '';
+let html = `
+<div class="head">
+  <div>
+    <h1><b>OpenMake LLM</b> ${t.title[0].replace('OpenMake LLM — ', '— ')} <small>${t.title[1]}</small></h1>
+    <p>${t.lede}</p>
+  </div>
+  <div class="stamp"><b>${window.__STAMP__ || '2026-08-23'}</b> ${t.stamp[0]}<br>${t.stamp[1]}<br>${t.stamp[2]}</div>
+</div>`;
+
+html += layer('var(--client)', t.clients, 'apps/*', '',
+  `<div class="grid g5">${D.clients.map(([n, d]) => card(n, d, 'var(--client)')).join('')}</div>`);
+
+html += `<div style="height:12px"></div>`;
+html += layer('var(--pkg)', t.packages, 'packages/*', '',
+  `<div class="grid g3">${D.packages.map(([n, d]) => card(n, d, 'var(--pkg)')).join('')}</div>`);
+
+html += flow(t.f1);
+html += layer('var(--edge)', t.edge, '', '',
+  `<div class="grid g3">${D.edge.map(([n, d]) => card(n, d, 'var(--edge)')).join('')}</div>`);
+
+html += flow(t.f2);
+
+let api = `<p style="font-size:11.5px;font-weight:600;color:var(--sub);margin-bottom:9px">${t.entry}</p>
+  <div class="grid g5">${D.entry.map(([n, d]) => card(n, d, 'var(--api)')).join('')}</div>`;
+
+api += flow(t.f3);
+api += `<div class="pipe"><h4><em>①</em>${t.pipeTitle}<span>${t.pipeSub}</span></h4>
+  <div class="steps">${D.steps.map((s, i) =>
+    `<div class="step"><b><span class="n">${i + 1}</span>${L === 'ko' ? s[0] : s[1]}</b><i>${L === 'ko' ? s[2] : s[3]}</i></div>`).join('')}</div></div>`;
+
+api += `<div class="wf">${D.wf.map(([c, n, name, src, items, note]) => `
+  <div class="wfbox" style="border-color:${c}33">
+    <h4><span class="n" style="background:${c}">${n}</span>${name}<span class="src">${src}</span></h4>
+    <ul>${items.map((it) => `<li><b>${L === 'ko' ? it[0] : it[1]}</b><i>${it.length > 3 ? (L === 'ko' ? it[2] : it[3]) : it[2]}</i></li>`).join('')}</ul>
+    ${note ? `<p>${p(note)}</p>` : ''}
+  </div>`).join('')}</div>`;
+
+api += flow(t.f4);
+api += `<div class="card" style="--c:var(--llm);background:#fffbf5">
+  <h3>${t.core} — <code>providers/provider-router</code> + <code>llm/LLMClient</code></h3>
+  <p>${L === 'ko'
+    ? 'SdkType = local-llm · anthropic · openai-compatible · chatgpt-oauth · LLMClient 는 per-request 생성 · cluster/ 가 노드 health check · circuit breaker 로 라우팅 · per-user 토큰 쿼터(KVStore, fail-open)'
+    : 'SdkType = local-llm · anthropic · openai-compatible · chatgpt-oauth · LLMClient is created per request · cluster/ health-checks nodes · circuit breaker routing · per-user token quota (KVStore, fail-open)'}</p></div>`;
+
+api += `<div class="band"><b>${t.cross}</b>${D.cross.map(([n, d]) => `<i><b>${p(n)}</b> — ${p(d)}</i>`).join('')}</div>`;
+api += `<div class="band"><b>⑥ ${t.boot}</b>${D.boot[L].map((s) => `<i>${s}</i>`).join('<span style="align-self:center;color:#cbd5e1">›</span>')}</div>`;
+
+html += layer('var(--api)', `${t.api} — apps/api`, 'Express 5 · TypeScript · PM2 · :52416', '', api);
+
+html += `<div class="cols" style="margin-top:12px">
+  ${layer('var(--data)', t.dataTitle, '', t.f5, `<div class="grid g3">${D.data.map(([n, d]) => card(n, d, 'var(--data)')).join('')}</div>`)}
+  ${layer('var(--llm)', t.llmTitle, '', t.f6, `<div class="grid g2">${D.llm.map(([n, d]) => card(n, d, 'var(--llm)')).join('')}</div>`)}
+</div>`;
+
+const legendItems = [['var(--client)', t.clients], ['var(--pkg)', t.packages], ['var(--edge)', t.edge],
+  ['var(--api)', t.api], ['var(--sandbox)', 'Docker'], ['var(--data)', t.dataTitle], ['var(--llm)', t.llmTitle]];
+html += `<div class="legend"><b>${t.legend[0]}</b>${legendItems.map(([c, n]) =>
+  `<u><s style="background:${c}"></s>${n}</u>`).join('')}
+  <span style="margin-left:auto">◈ = ${t.legend[2]} · 🐳 = ${t.legend[3]}</span></div>`;
+
+document.body.innerHTML = html;
+</script>
