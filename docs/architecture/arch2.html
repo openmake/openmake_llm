@@ -25,7 +25,12 @@
   }
   * { box-sizing:border-box; margin:0; padding:0; }
   body {
-    width:2000px; padding:44px 48px 36px; background:#fff; color:var(--ink);
+    width:2000px; padding:44px 48px 40px; color:var(--ink); position:relative;
+    background:
+      radial-gradient(1200px 520px at 50% -140px, #eef4ff 0%, rgba(238,244,255,0) 70%),
+      linear-gradient(#f8fafc 1px, transparent 1px) 0 0/34px 34px,
+      linear-gradient(90deg, #f8fafc 1px, transparent 1px) 0 0/34px 34px,
+      #fff;
     font:400 13px/1.5 -apple-system,"SF Pro Text","Pretendard","Helvetica Neue",sans-serif;
     -webkit-font-smoothing:antialiased;
   }
@@ -35,7 +40,9 @@
   .sub-t b { color:#334155; }
 
   /* ── 공통 패널 ─────────────────────────────── */
-  .shell { border:1.5px solid #dbe3ee; border-radius:22px; background:#fbfdff; padding:16px 18px; }
+  .shell { border:1px solid #dbe3ee; border-radius:22px; padding:16px 18px;
+           background:linear-gradient(180deg,#ffffff,#fbfdff);
+           box-shadow:0 1px 0 #fff inset, 0 10px 26px -18px rgba(15,23,42,.42); }
   .rail { display:flex; gap:16px; align-items:stretch; }
   .rail > .badge {
     flex:none; width:132px; display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -45,16 +52,30 @@
   .badge .s { font-size:11px; color:var(--sub); }
 
   .tiles { flex:1; display:grid; gap:0; grid-auto-flow:column; grid-auto-columns:1fr;
-           border:1px solid var(--line); border-radius:16px; background:#fff; overflow:hidden; }
+           border:1px solid var(--line); border-radius:16px; background:#fff; overflow:hidden;
+           box-shadow:0 6px 18px -14px rgba(15,23,42,.5); }
   .tile { display:flex; gap:11px; align-items:flex-start; padding:15px 16px; border-left:1px solid #eef2f7; }
   .tile:first-child { border-left:0; }
   .tile b { display:block; font-size:14px; font-weight:750; margin-bottom:3px; }
   .tile p { font-size:11px; line-height:1.55; color:var(--sub); }
 
   /* ── 진입 경로 ─────────────────────────────── */
-  .entries { display:flex; gap:22px; margin:16px 0 14px; }
-  .entry { display:flex; align-items:center; gap:12px; padding:13px 18px; border:2px solid var(--edge);
-           border-radius:16px; background:#fffbeb; }
+  .split { position:relative; height:34px; margin-top:8px; }
+  .split::before { content:""; position:absolute; left:50%; top:0; height:14px; width:2px; margin-left:-1px;
+                   background:#cbd5e1; }
+  .split::after { content:""; position:absolute; left:26%; right:26%; top:14px; height:2px; background:#cbd5e1; }
+  .split i { position:absolute; top:14px; bottom:0; width:2px; background:#cbd5e1; }
+  .split i:nth-of-type(1) { left:26%; } .split i:nth-of-type(2) { right:26%; }
+  .split i::after { content:"▼"; position:absolute; left:-6px; bottom:-4px; color:#f59e0b; font-size:12px; }
+  .entries { display:flex; gap:22px; margin:0 0 14px; }
+  .entry { position:relative; display:flex; align-items:center; gap:12px; padding:14px 18px;
+           border:1.5px solid var(--edge); border-radius:16px;
+           background:linear-gradient(180deg,#fffdf5,#fef3c7);
+           box-shadow:0 10px 24px -20px rgba(245,158,11,.9); }
+  .entry::after { content:"▼"; position:absolute; left:50%; bottom:-22px; margin-left:-7px;
+                  color:#f59e0b; font-size:12px; }
+  .entry::before { content:""; position:absolute; left:50%; bottom:-18px; width:2px; height:18px;
+                   margin-left:-1px; background:#fcd34d; }
   .entry b { font-size:16px; font-weight:800; }
   .entry p { font-size:11.5px; color:#92400e; margin-top:2px; }
 
@@ -62,22 +83,26 @@
   .main { display:grid; grid-template-columns:1090px 128px 1fr; gap:0 16px; align-items:start; }
 
   /* Mac mini 기기 프레임 */
-  .mac { border:2px solid #cbd5e1; border-radius:26px; padding:14px;
-         background:linear-gradient(180deg,#f1f5f9 0%,#e2e8f0 100%); box-shadow:0 2px 0 #cbd5e1 inset; }
+  .mac { border:1.5px solid #cbd5e1; border-radius:26px; padding:16px;
+         background:linear-gradient(180deg,#f6f8fb 0%,#e6ebf1 100%);
+         box-shadow:0 2px 0 #fff inset, 0 24px 54px -36px rgba(15,23,42,.75); }
   .mac > header { display:flex; align-items:center; gap:16px; padding:2px 8px 14px; }
   .mac > header .t { font-size:22px; font-weight:800; }
   .mac > header .s { font-size:11.5px; color:#475569; }
   .mac > header .chip { margin-left:auto; padding:4px 10px; border-radius:999px; background:#fff;
                         border:1px solid #cbd5e1; font-size:10.5px; color:#475569; font-family:ui-monospace,monospace; }
-  .zone { display:flex; gap:14px; align-items:stretch; padding:13px; border-radius:16px; margin-bottom:11px; }
+  .zone { position:relative; display:flex; gap:14px; align-items:stretch; padding:14px; border-radius:16px;
+          margin-bottom:16px; box-shadow:0 8px 22px -18px rgba(15,23,42,.45); }
   .zone:last-child { margin-bottom:0; }
+  .zone:not(:last-child)::after { content:""; position:absolute; left:61px; bottom:-16px; width:2px; height:16px;
+                                  background:#cbd5e1; }
   .zone > .zbadge { flex:none; width:96px; display:flex; flex-direction:column; align-items:center;
                     justify-content:center; gap:7px; text-align:center; }
   .zbadge .t { font-size:14px; font-weight:800; line-height:1.35; }
   .zbody { flex:1; display:grid; gap:9px; }
   .row3 { grid-template-columns:repeat(3,1fr); } .row2 { grid-template-columns:1fr 1fr; }
   .item { display:flex; gap:10px; align-items:flex-start; padding:11px 13px; border:1px solid var(--line);
-          border-radius:12px; background:#fff; }
+          border-radius:12px; background:#fff; box-shadow:0 5px 14px -12px rgba(15,23,42,.55); }
   .item b { display:block; font-size:13px; font-weight:750; margin-bottom:2px; }
   .item b em { font-style:normal; padding:1px 6px; margin-left:5px; border-radius:5px; background:#f1f5f9;
                font-family:ui-monospace,"SF Mono",monospace; font-size:10.5px; color:#0f172a; font-weight:600; }
@@ -88,17 +113,21 @@
   .hard { grid-column:1/-1; font-size:10.5px; color:var(--sub); padding-top:2px; }
 
   /* Tailscale 통로 */
-  .link { display:flex; flex-direction:column; align-items:center; gap:8px; padding-top:230px; }
-  .link .arrow.up { transform:rotate(-90deg); }
-  .link .pill { display:flex; flex-direction:column; align-items:center; gap:9px; padding:20px 14px;
-                border:2px solid #86efac; border-radius:22px; background:#f0fdf4; }
+  .link { position:relative; display:flex; flex-direction:column; align-items:center; gap:8px; padding-top:210px; }
+  .link::before { content:""; position:absolute; left:50%; top:236px; bottom:0; width:2px; margin-left:-1px;
+                  background:linear-gradient(#86efac,rgba(134,239,172,0)); }
+  .link .pill { position:relative; display:flex; flex-direction:column; align-items:center; gap:9px;
+                padding:20px 14px; border:1.5px solid #86efac; border-radius:22px;
+                background:linear-gradient(180deg,#f7fef9,#dcfce7);
+                box-shadow:0 12px 28px -22px rgba(22,163,74,.9); }
   .link .pill .t { font-size:14px; font-weight:800; text-align:center; line-height:1.4; }
   .link .pill .s { font-size:10.5px; color:#15803d; text-align:center; line-height:1.4; }
   .link .arrow { color:#22c55e; font-size:22px; }
 
   /* DGX 섀시 */
-  .dgx { border:2px solid #0f172a; border-radius:22px; background:linear-gradient(180deg,#111827,#0b1220);
-         padding:16px; position:relative; overflow:hidden; }
+  .dgx { border:1.5px solid #0f172a; border-radius:22px; background:linear-gradient(180deg,#131c2e,#0b1220);
+         padding:18px; position:relative; overflow:hidden;
+         box-shadow:0 26px 60px -40px rgba(2,6,23,.95); }
   .dgx > header { display:flex; align-items:center; gap:14px; margin-bottom:13px; }
   .dgx > header .t { font-size:19px; font-weight:800; color:#fff; }
   .dgx > header .s { font-size:11.5px; color:#94a3b8; }
@@ -110,7 +139,12 @@
                line-height:1.55; color:#94a3b8; }
 
   /* 외부 provider 구름 */
-  .cloud { margin-top:14px; border:2px dashed #cbd5e1; border-radius:26px; background:#f8fafc; padding:14px 16px; }
+  .cloud { position:relative; margin-top:30px; border:1.5px dashed #cbd5e1; border-radius:26px;
+           background:linear-gradient(180deg,#ffffff,#f6f8fb); padding:15px 17px;
+           box-shadow:0 10px 26px -22px rgba(15,23,42,.5); }
+  .cloud::before { content:""; position:absolute; left:50%; top:-16px; width:2px; height:16px; margin-left:-1px;
+                   background:#cbd5e1; }
+  .cloud::after { content:"▲"; position:absolute; left:50%; top:-22px; margin-left:-7px; color:#94a3b8; font-size:11px; }
   .cloud > header { display:flex; align-items:center; gap:9px; margin-bottom:11px; }
   .cloud > header .t { font-size:15px; font-weight:800; }
   .cloud > header .s { font-size:11px; color:var(--sub); }
@@ -224,6 +258,7 @@ document.body.innerHTML = `
     `<div class="tile">${ic}<div><b>${n}</b><p>${p(d)}</p></div></div>`).join('')}</div>
 </div></section>
 
+<div class="split"><i></i><i></i></div>
 <div class="entries">
   <div class="entry" style="flex:1.25">${I.cloudflare()}<div><b>Cloudflare — chat.openmake.cc</b>
     <p>${L === 'ko' ? 'Tunnel · 요청당 100MB 상한 (초과분은 청크 업로드)' : 'Tunnel · 100MB per request (larger uploads go chunked)'}</p></div></div>
