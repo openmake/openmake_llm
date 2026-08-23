@@ -186,9 +186,12 @@ export async function composeStructuredAnswer(opts: {
     let structured = await attempt(messages);
     if (!structured) {
         // 1회 재시도 — 교정 힌트 추가.
+        // 교정 힌트는 **user** 로 덧붙인다 — 일부 chat_template(qwen 등)은 system 이 맨 앞에만
+        // 오는 것을 강제해, 뒤에 붙이면 400 "System message must be at the beginning" 이 난다
+        // (실측 2026-08-24: 이 경로가 500 으로 새어나갔다).
         structured = await attempt([
             ...messages,
-            { role: 'system', content: getRepairHint(lang) },
+            { role: 'user', content: getRepairHint(lang) },
         ]);
     }
 

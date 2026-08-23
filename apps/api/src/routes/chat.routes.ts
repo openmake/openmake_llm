@@ -37,6 +37,12 @@ import { ExternalKeysRepository } from '../data/repositories/external-keys-repo'
 import { getPool } from '../data/models/unified-database';
 import { composeStructuredAnswer, type StructuredChatFn } from '../services/answer-composer';
 import { toResponseFormat } from '../llm/stream-parser';
+
+/**
+ * 구조화 답변 1회 출력 토큰 상한. strict json_schema 가 모든 필드를 채우게 해 출력이 길다 —
+ * 상한이 낮으면 finish_reason=length 로 잘려 JSON 파싱이 실패한다(실측 2026-08-24: 1200 부족).
+ */
+const STRUCTURED_MAX_OUTPUT_TOKENS = parseInt(process.env.STRUCTURED_MAX_OUTPUT_TOKENS || '4096', 10);
 import { buildWebSearchContext } from '../mcp/web-search/build-search-context';
 import { detectLanguage } from '../chat/language-policy';
 import { getCurrentDate } from '../utils/datetime';
@@ -296,10 +302,14 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
         });
         usedModel = client.model;
         chat = async (messages, format) => {
-            const result = await client.chat(messages, undefined, undefined, {
-                format,
-                signal: abortController.signal,
-            });
+            const result = await client.chat(
+                messages,
+                // strict json_schema 는 모든 필드를 채우게 하므로 출력이 길다 — 기본값으로는
+                // finish_reason=length 로 잘려 JSON 파싱이 실패한다(실측 2026-08-24).
+                { num_predict: STRUCTURED_MAX_OUTPUT_TOKENS },
+                undefined,
+                { format, signal: abortController.signal },
+            );
             return result.content ?? '';
         };
     } else {
@@ -321,6 +331,7 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
                 {
                     messages,
                     modelId: resolved.modelId,
+                    maxTokens: STRUCTURED_MAX_OUTPUT_TOKENS,
                     abortSignal: abortController.signal,
                     ...(responseFormat ? { responseFormat } : {}),
                 },
