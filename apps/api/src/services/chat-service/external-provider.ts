@@ -47,8 +47,17 @@ import type { ExternalProviderDeps, ChatTimings, StreamFromExternalContext } fro
  */
 function resolveThinking(
     req: { thinkingMode?: boolean; thinkingLevel?: 'low' | 'medium' | 'high' },
+    supportsThinking: boolean,
 ): boolean | 'low' | 'medium' | 'high' {
     if (req.thinkingMode !== true) return false;
+    // 모델이 thinking 을 지원하지 않으면 요청하지 않는다. vision·tools 와 달리 차단이 아니라
+    // 조용한 degrade — 다만 이유는 로그로 남긴다.
+    //
+    // 왜 필요한가: enable_thinking=true 를 보내면 stream-parser 가 스트림 **시작부터** reasoning
+    // 으로 간주하고 `</think>` 경계를 기다린다(chat_template 이 여는 태그를 prepend 하는 모델
+    // 규약). 그 태그를 쓰지 않는 모델이면 답변 전체가 thinking 채널로 흘러들어가 접힌 영역에
+    // 그려지다가 종료 시 recovery 로 승격된다 — 죽지는 않지만 스트리밍 UX 가 무너진다.
+    if (!supportsThinking) return false;
     return req.thinkingLevel ?? true;
 }
 
@@ -88,6 +97,14 @@ export async function runExternalStream(
 
     const hasImages = (req.images && req.images.length > 0)
         || (req.history ?? []).some((h) => h.images && h.images.length > 0);
+    // 사용자가 thinking 을 켰는데 모델이 미지원이면 요청당 1회 고지(조용한 축소 방지).
+    if (req.thinkingMode === true && !caps.thinking) {
+        logger.warn(
+            `[Thinking] '${resolved.fullId}' 는 thinking 미지원(capabilities.thinking=false, source=${capsSource}) — ` +
+            '이번 요청은 추론 없이 처리합니다. 지원 모델이면 LLM_MODEL_CAPABILITIES_JSON 으로 켜세요.',
+        );
+    }
+
     if (hasImages && !caps.vision) {
         // 휴리스틱 기반 '부정' 은 신뢰하지 않는다 — 오차단(진짜 비전 모델 400)이 실제
         // 장애였다. 이 경우 그대로 진행하고, 정말 미지원이면 upstream 오류 →
@@ -173,7 +190,7 @@ export async function runExternalStream(
                 {
                     messages: fittedMessages,
                     modelId: resolved.modelId,
-                    thinking: resolveThinking(req),
+                    thinking: resolveThinking(req, caps.thinking),
                     ...(turnTools.length > 0 ? { tools: turnTools } : {}),
                     // 첫 턴만 도구 강제(카카오 지도 또는 명시적 웹 검색) — 이후 턴은 auto(모델이 결과로 답변 작성).
                     ...(turn === 0 && forcedFirstTurnToolName && turnTools.length > 0
@@ -293,7 +310,7 @@ export async function runExternalStream(
                 {
                     messages: fittedFinal,
                     modelId: resolved.modelId,
-                    thinking: resolveThinking(req),
+                    thinking: resolveThinking(req, caps.thinking),
                     ...(req.abortSignal ? { abortSignal: req.abortSignal } : {}),
                 },
                 {
