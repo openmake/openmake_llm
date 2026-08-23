@@ -702,6 +702,19 @@ export function MessageList() {
                   <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent align-text-bottom" />
                 )}
               </div>
+              {/* 답변 검증 지적 — judge 모델이 1회 점검한 결과. 지적이 있을 때만 나타난다.
+                  자동 수정은 하지 않으므로 판단은 사용자 몫이라는 점을 문구로 드러낸다. */}
+              {m.verificationIssues && !m.streaming && (
+                <div className="mt-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2">
+                  <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-warning">
+                    <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+                    {t("verification.title")}
+                  </div>
+                  <div className="whitespace-pre-wrap text-xs leading-relaxed text-muted">
+                    {m.verificationIssues}
+                  </div>
+                </div>
+              )}
               {!m.streaming && !m.agentTask && !m.structured && m.content.trim().length > 0 && (
                 <div className="mt-1.5 flex items-center gap-1">
                   <MessageActions

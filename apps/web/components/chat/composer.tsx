@@ -21,8 +21,7 @@ import {
   Lock,
   BookOpen,
   Plus,
-  FolderOpen,
-} from "lucide-react";
+  FolderOpen, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { AttachedFileUI } from "@/lib/use-chat-socket";
@@ -213,6 +212,7 @@ export function Composer() {
     selectedModel,
     style,
     thinkingLevel,
+    answerVerification,
     inputDraft,
     toggle,
     setSelectedModel,
@@ -446,6 +446,7 @@ export function Composer() {
   const TOGGLES = [
     { key: "discussionMode" as const, on: discussionMode, icon: MessagesSquare, label: t("toggle.discussion") },
     { key: "thinkingEnabled" as const, on: thinkingEnabled, icon: Brain, label: t("toggle.thinking") },
+    { key: "answerVerification" as const, on: answerVerification, icon: ShieldCheck, label: t("toggle.verification") },
     { key: "deepResearchMode" as const, on: deepResearchMode, icon: Telescope, label: t("toggle.deepResearch") },
     { key: "webSearchEnabled" as const, on: webSearchEnabled, icon: Globe, label: t("toggle.web") },
     { key: "agentTaskMode" as const, on: agentTaskMode, icon: Sparkles, label: t("toggle.agent") },

@@ -274,7 +274,8 @@
       "agent": "智能体",
       "image": "图像",
       "artifact": "工件",
-      "structured": "结构化"
+      "structured": "结构化",
+      "verification": "验证回答"
     },
     "slashMenu": {
       "heading": "调用技能",
@@ -439,6 +440,9 @@
       "INVALID_API_KEY": "认证错误",
       "MISSING_API_KEY": "认证错误",
       "UPSTREAM_ERROR": "上游错误"
+    },
+    "verification": {
+      "title": "验证发现的问题"
     }
   },
   "artifacts": {

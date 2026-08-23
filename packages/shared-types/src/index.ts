@@ -148,6 +148,8 @@ export type WsServerEvent =
   | { type: "token"; token: string }
   | { type: "thinking"; token: string; messageId?: string }
   | { type: "thinking_summary"; summary: string; messageId?: string }
+  /** 답변 검증 지적 — done 이후 judge 모델 1회 점검 결과. 지적이 없으면 이 이벤트는 오지 않는다. */
+  | { type: "answer_verification"; issues: string; messageId?: string }
   | { type: "session_created"; sessionId: string }
   /** 연결 직후 서버 build id — 클라가 기억해 두고 다른 build 재수신 시 배포로 간주(reload). */
   | { type: "build_id"; buildId: string }
