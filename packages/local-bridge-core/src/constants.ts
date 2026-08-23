@@ -26,6 +26,13 @@ export const FOLDERS_MAX_ENTRIES = 200;
 /** listAll 재귀 나열 상한. */
 export const LIST_ALL_MAX = 1000;
 
+/**
+ * 파일 kind(read/write/list/listAll/delete/folders) 1회 처리 타임아웃 — OS 가 FS 호출을
+ * 무기한 블록하면(외장 볼륨 TCC 권한 미결 실사례, 2026-08-23) 요청을 오류로 해소해
+ * 연결(하트비트)을 지킨다. 블록된 호출 자체는 취소할 수 없어 threadpool 스레드는 남는다.
+ */
+export const FS_OP_TIMEOUT_MS = Number(process.env.OMK_BRIDGE_FS_TIMEOUT_MS || 15000);
+
 /** SBPL 문자열 리터럴 escape. */
 export function sbq(p: string): string {
     return `"${String(p).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
