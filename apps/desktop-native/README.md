@@ -16,6 +16,7 @@ build.sh                 # helper 번들(esbuild) → 하네스 → swift build 
 - 브리지 보안 코어(경로 스코프·exec 3단 방어·git 고정 조립·worktree)는 **`packages/local-bridge-core` 재사용** — Swift 재구현 금지(plan §6 게이트).
 - 앱↔헬퍼 stdio 계약은 `helper.mjs` 상단 주석 참고. confirm 응답은 항상 앱(사용자 다이얼로그)만 발원.
 - 인증: API key(`omk_live_*`, bridge 스코프) → Keychain 저장, 헬퍼엔 env(`OMK_COMPANION_API_KEY`)로 전달 (ps 노출 방지).
+- **다중 루트(0.2.0)**: 메뉴 "작업 폴더 추가…" 로 여러 루트를 각각 연결 — 루트당 독립 브리지 연결(파생 deviceId = base id + 경로 해시)이라 **서버·프로토콜 무변경**, 웹엔 루트마다 별개 디바이스로 표시(기존 디바이스 선택기 사용). 유저당 총 디바이스 수는 서버 `LOCAL_BRIDGE_MAX_DEVICES`(기본 3)가 강제 — 초과는 해당 루트 상태에 서버 오류로 표면화. 스코프·샌드박스·일괄승인 회수는 루트별 독립(코어 인스턴스 분리).
 - 업데이트: `GET /api/desktop/latest` 의 `native` 채널(추가 전용 필드) — sha256 검증 후 분리 스크립트가 교체·재실행 (Electron updater.js 이식).
 
 ## 빌드 / 게시

@@ -17,7 +17,10 @@ final class HelperManager: NSObject, ObservableObject {
     static let shared = HelperManager()
 
     @Published var statusText = "미연결"
-    @Published var connectedFolder: String? = nil
+    /** 연결된 루트들(realpath) — 루트당 독립 브리지 연결(파생 deviceId), 서버엔 별개 디바이스. */
+    @Published var connectedFolders: [String] = []
+    /** 루트별 최근 상태 텍스트 (연결됨/재연결 중/서버 오류 등). */
+    @Published var rootStatus: [String: String] = [:]
     @Published var autoApproveCount = 0
 
     private var process: Process?
@@ -37,10 +40,18 @@ final class HelperManager: NSObject, ObservableObject {
     var backend: (id: String, label: String, url: String, webUrl: String) {
         Self.backends.first { $0.id == backendId } ?? Self.backends[0]
     }
-    /** 마지막 연결 폴더 — 재기동 시 자동 재연결용(로컬 UserDefaults, 서버 미전송). */
-    var lastFolder: String? {
-        get { UserDefaults.standard.string(forKey: "lastFolder") }
-        set { UserDefaults.standard.set(newValue, forKey: "lastFolder") }
+    /** 마지막 연결 폴더들 — 재기동 시 자동 재연결용(로컬 UserDefaults, 서버 미전송).
+        구 단일 키(lastFolder)는 최초 1회 마이그레이션한다. */
+    var lastFolders: [String] {
+        get {
+            if let arr = UserDefaults.standard.stringArray(forKey: "lastFolders") { return arr }
+            if let one = UserDefaults.standard.string(forKey: "lastFolder") { return [one] }
+            return []
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "lastFolders")
+            UserDefaults.standard.removeObject(forKey: "lastFolder")
+        }
     }
 
     // ── 헬퍼 프로세스 lifecycle ──
@@ -86,8 +97,9 @@ final class HelperManager: NSObject, ObservableObject {
             Task { @MainActor in
                 self?.process = nil
                 self?.stdinPipe = nil
-                if self?.connectedFolder != nil { self?.statusText = "헬퍼 종료됨 — 다시 연결하세요" }
-                self?.connectedFolder = nil
+                if !(self?.connectedFolders.isEmpty ?? true) { self?.statusText = "헬퍼 종료됨 — 다시 연결하세요" }
+                self?.connectedFolders = []
+                self?.rootStatus = [:]
             }
         }
         do { try p.run() } catch {
@@ -104,7 +116,8 @@ final class HelperManager: NSObject, ObservableObject {
         let p = process
         process = nil
         stdinPipe = nil
-        connectedFolder = nil
+        connectedFolders = []
+        rootStatus = [:]
         // quit 처리(결과 flush 100ms) 뒤에도 살아 있으면 강제 종료 — 좀비 방지 2중선.
         DispatchQueue.global().asyncAfter(deadline: .now() + 1.0) { if let p, p.isRunning { p.terminate() } }
     }
@@ -121,7 +134,7 @@ final class HelperManager: NSObject, ObservableObject {
     /** 폴더 연결 — 권한 부여의 유일한 발원: 사용자가 패널에서 직접 고른 폴더만 헬퍼로 전달된다. */
     func chooseFolderAndConnect() {
         let panel = NSOpenPanel()
-        panel.title = "에이전트 작업에 연결할 폴더 선택"
+        panel.title = "에이전트 작업에 연결할 폴더 선택 (여러 폴더를 각각 추가할 수 있습니다)"
         panel.message = "이 폴더(와 하위 폴더)를 작업 기준으로 파일을 읽고 씁니다. 셸 명령은 실행 전 매번 확인을 받고, 승인해도 OS 샌드박스가 폴더 밖 쓰기와 비밀 파일(.ssh 등) 읽기를 차단합니다."
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
@@ -133,7 +146,9 @@ final class HelperManager: NSObject, ObservableObject {
 
     func connect(folder: String) {
         guard ensureHelper() else { return }
-        lastFolder = folder
+        var l = lastFolders
+        if !l.contains(folder) { l.append(folder) }
+        lastFolders = l
         send(["cmd": "connect", "folder": folder])
     }
 
@@ -141,12 +156,23 @@ final class HelperManager: NSObject, ObservableObject {
         // 테스트 훅(개발/E2E 전용): 폴더가 env 로 지정되면 패널 없이 자동 연결
         // (Electron 의 OMK_BRIDGE_FOLDER 와 동일 계열).
         if let f = ProcessInfo.processInfo.environment["OMK_COMPANION_FOLDER"] { connect(folder: f); return }
-        if let f = lastFolder, Keychain.load() != nil { connect(folder: f) }
+        guard Keychain.load() != nil else { return }
+        for f in lastFolders { connect(folder: f) }
     }
 
-    func disconnect() {
+    /** 루트 개별 해제 — 자동 재연결 목록에서도 제거한다. */
+    func disconnect(folder: String) {
+        send(["cmd": "disconnect", "folder": folder])
+        lastFolders = lastFolders.filter { $0 != folder && !folder.hasSuffix($0) && !$0.hasSuffix(folder) }
+        connectedFolders.removeAll { $0 == folder }
+        rootStatus[folder] = nil
+    }
+
+    func disconnectAll() {
         send(["cmd": "disconnect"])
-        connectedFolder = nil
+        lastFolders = []
+        connectedFolders = []
+        rootStatus = [:]
     }
 
     func clearAutoApprove() { send(["cmd": "clearAutoApprove"]) }
@@ -154,10 +180,10 @@ final class HelperManager: NSObject, ObservableObject {
     /** 백엔드 전환 — 헬퍼 재기동(서버 URL 은 spawn 인자) 후 재연결. */
     func switchBackend(_ id: String) {
         backendId = id
-        let wasConnected = connectedFolder ?? lastFolder
+        let folders = connectedFolders.isEmpty ? lastFolders : connectedFolders
         stopHelper()
-        if let f = wasConnected {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { self.connect(folder: f) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            for f in folders { self.connect(folder: f) }
         }
     }
 
@@ -181,10 +207,20 @@ final class HelperManager: NSObject, ObservableObject {
     private func handle(_ kind: String, _ ev: [String: Any]) {
         switch kind {
         case "status":
-            statusText = ev["text"] as? String ?? ""
-            if statusText == "미연결" { connectedFolder = nil }
+            let text = ev["text"] as? String ?? ""
+            if let f = ev["folder"] as? String {
+                rootStatus[f] = text // 루트별 상태 (연결됨/재연결 중/서버 오류)
+            } else {
+                statusText = text
+                if text == "미연결" { connectedFolders = []; rootStatus = [:] }
+            }
         case "connected":
-            connectedFolder = ev["folder"] as? String
+            if let f = ev["folder"] as? String, !connectedFolders.contains(f) { connectedFolders.append(f) }
+        case "disconnected":
+            if let f = ev["folder"] as? String {
+                connectedFolders.removeAll { $0 == f }
+                rootStatus[f] = nil
+            }
         case "autoApprove":
             autoApproveCount = ev["count"] as? Int ?? 0
         case "confirm":
@@ -201,7 +237,7 @@ final class HelperManager: NSObject, ObservableObject {
         let id = ev["id"] as? Int ?? 0
         let command = ev["command"] as? String ?? ""
         let taskId = ev["taskId"] as? String
-        let base = ev["base"] as? String ?? connectedFolder ?? ""
+        let base = ev["base"] as? String ?? ev["folder"] as? String ?? ""
         let sandboxed = ev["sandbox"] as? Bool ?? false
         let preview = command.count > 800 ? String(command.prefix(800)) + "…" : command
 
