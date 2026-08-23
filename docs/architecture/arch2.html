@@ -64,7 +64,7 @@
   /* Mac mini 기기 프레임 */
   .mac { border:2px solid #cbd5e1; border-radius:26px; padding:14px;
          background:linear-gradient(180deg,#f1f5f9 0%,#e2e8f0 100%); box-shadow:0 2px 0 #cbd5e1 inset; }
-  .mac > header { display:flex; align-items:center; gap:12px; padding:2px 8px 12px; }
+  .mac > header { display:flex; align-items:center; gap:16px; padding:2px 8px 14px; }
   .mac > header .t { font-size:22px; font-weight:800; }
   .mac > header .s { font-size:11.5px; color:#475569; }
   .mac > header .chip { margin-left:auto; padding:4px 10px; border-radius:999px; background:#fff;
@@ -99,15 +99,13 @@
   /* DGX 섀시 */
   .dgx { border:2px solid #0f172a; border-radius:22px; background:linear-gradient(180deg,#111827,#0b1220);
          padding:16px; position:relative; overflow:hidden; }
-  .dgx::after { content:""; position:absolute; right:10px; top:56px; bottom:16px; width:52px; border-radius:10px;
-                background:repeating-linear-gradient(135deg,#1f2937 0 6px,#0b1220 6px 12px); opacity:.9; }
-  .dgx > header { display:flex; align-items:center; gap:10px; margin-bottom:13px; }
+  .dgx > header { display:flex; align-items:center; gap:14px; margin-bottom:13px; }
   .dgx > header .t { font-size:19px; font-weight:800; color:#fff; }
   .dgx > header .s { font-size:11.5px; color:#94a3b8; }
-  .dgx .item { background:#0f1a2e; border-color:#1f2a3d; margin-right:62px; }
+  .dgx .item { background:#0f1a2e; border-color:#1f2a3d; }
   .dgx .item b { color:#fff; } .dgx .item p { color:#94a3b8; }
   .dgx .item b em { background:#1f2a3d; color:#bbf7d0; }
-  .dgx .note { margin:12px 62px 0 0; display:flex; gap:9px; align-items:flex-start; padding:10px 12px;
+  .dgx .note { margin:12px 0 0; display:flex; gap:9px; align-items:flex-start; padding:10px 12px;
                border:1px solid #1f2a3d; border-radius:12px; background:#0f1a2e; font-size:10.5px;
                line-height:1.55; color:#94a3b8; }
 
@@ -236,7 +234,7 @@ document.body.innerHTML = `
 <div class="main">
   <section class="mac">
     <header>
-      <svg width="54" height="30" viewBox="0 0 60 34"><rect x="1" y="6" width="58" height="20" rx="5" fill="#e5e9ee" stroke="#94a3b8"/><circle cx="30" cy="16" r="3.4" fill="#cbd5e1"/><circle cx="50" cy="22" r="1.2" fill="#94a3b8"/></svg>
+${ART.macMini(120)}
       <div><div class="t">Mac mini</div><div class="s">${T.macRole}</div></div>
       <span class="chip">${T.macChip}</span>
     </header>
@@ -271,7 +269,7 @@ document.body.innerHTML = `
 
   <div>
     <section class="dgx">
-      <header><svg width="30" height="30" viewBox="0 0 24 24" fill="#76b900"><path d="M3 9.5c3-3.4 7-4.6 10.6-3.6l-1 1.7c-2.8-.6-5.7.4-8 2.7 2 3.4 5.6 5.2 9.2 4.6V9.7h-2.3V8.2h4.2v8.6c-4.9 1.4-10.2-.6-12.7-4.6zm14.7-4.7v1.5c3 .5 5.2 2.9 5.4 5.9.2 3.2-2.1 5.9-5.4 6.4v1.5c4.2-.5 7.2-3.9 7-8-.2-3.9-3.1-6.9-7-7.3z"/></svg>
+      <header>${ART.dgx(116)}
         <div><div class="t">${T.dgx}</div><div class="s">${T.dgxSub}</div></div></header>
       ${D.dgx.map(([i, n, pt, d]) => item(i, n, pt, d)).join('')}
       <div class="note">${I.lock()}<span>${T.dgxNote}</span></div>
