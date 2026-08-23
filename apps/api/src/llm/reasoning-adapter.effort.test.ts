@@ -15,7 +15,16 @@ describe('buildExtraBody — reasoning_effort 정규화', () => {
         process.env.LLM_ENABLE_REASONING_EFFORT = 'false';
         const body = buildExtraBody('high', 'qwen3.8-27b-awq');
         expect(body?.reasoning_effort).toBeUndefined();
+        expect(body?.allowed_openai_params).toBeUndefined();
         expect(body?.chat_template_kwargs).toEqual({ enable_thinking: true });
+    });
+
+    it('reasoning_effort 를 보낼 땐 LiteLLM 통과 힌트를 동봉한다 (게이트웨이 400 회귀 차단)', () => {
+        // 라이브 실측: 힌트 없이 보내면 LiteLLM 이 UnsupportedParamsError 400 으로 막는다.
+        process.env.LLM_ENABLE_REASONING_EFFORT = 'true';
+        const body = buildExtraBody('medium', 'qwen3.6-35b-a3b');
+        expect(body?.reasoning_effort).toBe('medium');
+        expect(body?.allowed_openai_params).toEqual(['reasoning_effort']);
     });
 
     it('게이트 ON: qwen3.8 의 high 는 xhigh 로 바꿔 보낸다 (400 회피)', () => {

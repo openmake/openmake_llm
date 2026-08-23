@@ -54,7 +54,16 @@ export function buildExtraBody(
     if (reasoningEnabled) {
         const effort = thinkToReasoningEffort(t);
         // 대상 모델이 받지 않는 값은 인접 지원값으로 강등/승격 — 미정규화 전송은 400 이다.
-        if (effort) result.reasoning_effort = normalizeEffort(modelId, effort);
+        if (effort) {
+            result.reasoning_effort = normalizeEffort(modelId, effort);
+            // LiteLLM 게이트웨이는 provider('openai') 기준으로 파라미터를 검증해 reasoning_effort 를
+            // **업스트림에 닿기 전에** 400 으로 거절한다(라이브 실측 2026-08-23:
+            //   litellm.UnsupportedParamsError: openai does not support parameters: ['reasoning_effort']).
+            // 이 힌트를 함께 보내면 LiteLLM 이 허용 목록에 더해 그대로 전달한다(utils.py allowed_openai_params).
+            // LiteLLM 이 소비하는 필드라 업스트림엔 실리지 않으며, 게이트웨이 없이 vLLM 에 직결된
+            // 배포에서도 알 수 없는 필드로 무시된다(vLLM 0.27 직접 호출 200 확인).
+            result.allowed_openai_params = ['reasoning_effort'];
+        }
     }
 
     const disableThinkingByDefault = (process.env.LLM_DISABLE_THINKING_BY_DEFAULT ?? 'false').toLowerCase() === 'true';
