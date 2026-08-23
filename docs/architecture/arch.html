@@ -214,7 +214,7 @@ const D = {
     [{ ko: 'Provider Gate', en: 'Provider gate' }, { ko: 'runProviderGate · 모델 ID 해석 (local-llm ↔ 외부)', en: 'runProviderGate · resolve model id (local-llm ↔ external)' }],
     [{ ko: '시스템 프롬프트 조립', en: 'Assemble system prompt' }, { ko: 'memory → custom instructions → agent → skill → artifact guide → format → style', en: 'memory → custom instructions → agent → skill → artifact guide → format → style' }],
     [{ ko: 'streamFromExternalProvider', en: 'streamFromExternalProvider' }, { ko: '전 provider 공통 dispatch · MCP 도구 루프 ≤5턴(tool_choice:auto)', en: 'One dispatch for every provider · MCP tool loop ≤5 turns (tool_choice:auto)' }],
-    [{ ko: 'LLMClient.chat', en: 'LLMClient.chat' }, { ko: 'per-request · 262K context-fit 안전망(truncate → max_tokens 축소 → 413)', en: 'per request · 262K context-fit guard (truncate → shrink max_tokens → 413)' }],
+    [{ ko: 'LLMClient.chat', en: 'LLMClient.chat' }, { ko: 'per-request · context-fit 안전망(truncate → max_tokens 축소 → 413). 임계는 부팅 시 모델별 실측', en: 'per request · context-fit guard (truncate → shrink max_tokens → 413). The threshold is measured per model at boot' }],
     [{ ko: '토큰 스트리밍 응답', en: 'Stream tokens back' }, { ko: 'WS delta → 프론트 렌더 · usage/audit · 웹검색 출처 결정적 첨부', en: 'WS delta → client render · usage/audit · deterministic search citations' }],
   ],
   lanes: [
@@ -260,7 +260,7 @@ const D = {
     [I.gateway('#f97316'), { ko: 'LiteLLM 통합 게이트웨이', en: 'LiteLLM unified gateway' }, { ko: 'Mac <em>127.0.0.1:13401</em> · PM2 · master key 인증 · BYOK 는 x-api-key 헤더', en: 'Mac <em>127.0.0.1:13401</em> · PM2 · master-key auth · BYOK via x-api-key' }],
     [I.nvidia(26), { ko: 'DGX vLLM (Tailscale 사설망)', en: 'DGX vLLM (Tailscale private network)' }, { ko: '<em>:8002</em> qwen3.6-35b-a3b chat(262K) · <em>:8003</em> bge 임베딩 · <em>:8005</em> FLUX', en: '<em>:8002</em> qwen3.6-35b-a3b chat (262K) · <em>:8003</em> bge embeddings · <em>:8005</em> FLUX' }],
     [I.cloud2('#f97316', 26), { ko: '외부 provider — 게이트웨이 경유', en: 'External providers — via the gateway' }, { ko: 'openrouter · ollama-cloud · NVIDIA NIM (wildcard + BYOK)', en: 'openrouter · ollama-cloud · NVIDIA NIM (wildcard + BYOK)' }],
-    [I.lock('#f97316', 26), { ko: 'Direct 예외', en: 'Direct exceptions' }, { ko: 'ollama-local(사용자별 endpoint) · ChatGPT OAuth (격리 불가 → 영구 direct)', en: 'ollama-local (per-user endpoint) · ChatGPT OAuth (cannot isolate → always direct)' }],
+    [I.lock('#f97316', 26), { ko: 'Direct 예외', en: 'Direct exceptions' }, { ko: 'ChatGPT OAuth 하나뿐입니다. 사용자별 세션 격리가 안 돼 영구 direct. ollama-local 은 2026-08-23 폐기돼 예외 목록이 비었습니다', en: 'ChatGPT OAuth alone. Per-user session isolation is unsolved, so it stays direct. ollama-local was retired on 2026-08-23 and the exception list emptied' }],
   ],
 };
 
@@ -318,8 +318,8 @@ document.body.innerHTML = `
   </svg></div>
   <div class="core">${I.route('#ea580c', 32)}<div><b>${T.coreT} — <code>providers/provider-router</code> + <code>llm/LLMClient</code></b>
     <p>${L === 'ko'
-      ? 'SdkType = local-llm · anthropic · openai-compatible · chatgpt-oauth · LLMClient 는 per-request 생성 · cluster/ 가 노드 health check · circuit breaker 로 라우팅 · per-user 토큰 쿼터(KVStore, fail-open)'
-      : 'SdkType = local-llm · anthropic · openai-compatible · chatgpt-oauth · LLMClient is created per request · cluster/ health-checks nodes · circuit breaker routing · per-user token quota (KVStore, fail-open)'}</p></div></div>
+      ? 'SdkType = local-llm · openai-compatible (anthropic direct 어댑터는 2026-08-23 제거) · LLMClient 는 per-request 생성 · cluster/ 가 노드 health check · circuit breaker 로 라우팅 · per-user 토큰 쿼터(KVStore, fail-open)'
+      : 'SdkType = local-llm · openai-compatible (the anthropic direct adapter was removed on 2026-08-23) · LLMClient is created per request · cluster/ health-checks nodes · circuit breaker routing · per-user token quota (KVStore, fail-open)'}</p></div></div>
 
   <div class="band"><b>${T.crossT}</b>${D.cross.map(([n, d]) => `<i><b>${p(n)}</b> — ${p(d)}</i>`).join('')}</div>
   <div class="band">${I.clock()}<b>⑥ ${T.bootT}</b>${D.boot[L].map((s, i) =>
