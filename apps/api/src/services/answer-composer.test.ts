@@ -182,8 +182,14 @@ describe('answer-composer: composeStructuredAnswer', () => {
         expect(r.structured.intent).toBe('decision');
     });
 
-    it('계속 실패 → 422 throw', async () => {
+    // 2026-08-23 계약 변경: 스키마를 못 맞춰도 422 로 죽지 않고 평문을 최소 구조로 감싸
+    // degrade 한다(모델/백엔드 교체 시 구조화 엔드포인트가 통째로 죽는 것을 막기 위함).
+    // 내용조차 비었을 때만 422 — 그 케이스는 answer-composer.degrade.test.ts 가 고정한다.
+    it('계속 스키마 실패 → 422 대신 평문 degrade', async () => {
         const chat: StructuredChatFn = async () => 'not json at all';
-        await expect(composeStructuredAnswer({ message: 'x', chat })).rejects.toMatchObject({ statusCode: 422 });
+        const r = await composeStructuredAnswer({ message: 'x', chat });
+        expect(r.degraded).toBe('schema_invalid');
+        expect(r.structured.conclusion).toBe('not json at all');
+        expect(r.structured.confidence).toBe('low');
     });
 });

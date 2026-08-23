@@ -370,11 +370,16 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
             logger.warn(`[structured] 대화 기록 저장 실패 (continue): ${persistErr instanceof Error ? persistErr.message : persistErr}`);
         }
 
+        if (composed.degraded) {
+            logger.warn(`[structured] degrade 응답 (${composed.degraded}) — model=${usedModel}`);
+        }
         res.json(success({
             intent: composed.intent,
             structured: composed.structured,
             markdown: composed.markdown,
             model: usedModel,
+            // 정상 경로가 아니면 사유를 함께 노출 — 클라이언트가 신뢰도를 판단할 수 있게.
+            ...(composed.degraded ? { degraded: composed.degraded } : {}),
             ...(savedSessionId ? { sessionId: savedSessionId } : {}),
         }));
     } catch (err) {
