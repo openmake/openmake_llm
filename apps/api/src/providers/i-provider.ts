@@ -26,9 +26,9 @@ import type { ReasoningEffort } from '../config/reasoning-effort';
 /**
  * SDK 타입 식별자 — provider 의 native SDK 종류.
  * 로컬 vLLM/LiteLLM 진입점은 canonical 'local-llm'. (외부 키 DB CHECK 는
- * 'anthropic'|'openai-compatible' 만 허용하며 로컬 provider 는 외부 키 테이블에 저장되지 않는다.)
+ * 외부 키 테이블은 'openai-compatible' 만 담으며 로컬 provider 는 저장되지 않는다.)
  */
-export type SdkType = 'local-llm' | 'anthropic' | 'openai-compatible';
+export type SdkType = 'local-llm' | 'openai-compatible';
 
 /**
  * 모델별 지원 능력 플래그
@@ -153,7 +153,7 @@ export interface ChatStreamResult {
  * Provider 어댑터 인터페이스 — 모든 LLM 제공자 어댑터가 구현해야 할 표준 계약
  */
 export interface IProvider {
-    /** Provider 식별자 (예: 'local-llm', 'anthropic', 'openrouter') — fullId 의 prefix 와 일치 */
+    /** Provider 식별자 (예: 'local-llm', 'openrouter', 'nvidia') — fullId 의 prefix 와 일치 */
     readonly id: string;
     /** 사용 SDK 타입 */
     readonly sdkType: SdkType;
@@ -191,7 +191,7 @@ export interface IProvider {
  *
  * @example
  *   parseFullModelId('local-llm:qwen3.6-35b-a3b') → { providerId: 'local-llm', modelId: 'qwen3.6-35b-a3b' }
- *   parseFullModelId('anthropic:claude-sonnet-4-5') → { providerId: 'anthropic', modelId: 'claude-sonnet-4-5' }
+ *   parseFullModelId('openrouter:anthropic/claude-opus-4.5') → { providerId: 'openrouter', modelId: 'anthropic/claude-opus-4.5' }
  *
  * @throws Error if format is invalid
  */

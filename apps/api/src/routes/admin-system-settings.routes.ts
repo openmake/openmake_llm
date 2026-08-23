@@ -55,8 +55,9 @@ async function syncAdminProviderKey(adminId: string | null, settingKey: string, 
         } else {
             const entry = getProviderCatalogEntry(providerId);
             if (!entry) return;
-            // 카탈로그 sdkType 은 넓은 SdkType — BYOK 테이블은 외부 2종만 허용하므로 내로잉
-            if (entry.sdkType !== 'anthropic' && entry.sdkType !== 'openai-compatible') return;
+            // 카탈로그 sdkType 은 넓은 SdkType(local-llm 포함) — BYOK 테이블은 외부 provider 만 담는다.
+            // anthropic direct 폐기(2026-08-23) 이후 외부는 openai-compatible 하나뿐이다.
+            if (entry.sdkType !== 'openai-compatible') return;
             // 기존 행의 custom baseUrl 보존 — upsert 가 base_url = EXCLUDED.base_url 이라
             // 카탈로그 기본값을 넣으면 BYOK 화면에서 설정한 커스텀 endpoint 가 조용히 되돌아간다.
             const existing = await repo.getByUserAndProvider(adminId, providerId);
