@@ -27,7 +27,8 @@ import { MODEL_CONTEXT_DEFAULTS } from '../config/runtime-limits';
 import { QUERY_TYPE_PARAMS, LLM_TOP_P } from '../config/llm-parameters';
 import { recommendTokenBudget } from './complexity-assessor';
 import { getModelPresets } from '../config/model-presets';
-import { matchCapabilityPreset } from '../config/model-defaults';
+import { matchCapabilityPreset, resolveLocalCapabilities } from '../config/model-defaults';
+import { findLocalModel } from '../config/local-models';
 
 const logger = createLogger('ModelSelector');
 
@@ -133,12 +134,12 @@ export function checkModelCapability(
 ): boolean {
     const lowerModel = modelName.toLowerCase();
 
-    // 1차: 모델별 정확한 프리셋 (preset-authoritative — startsWith-longest 공유 매처).
-    // 카탈로그 모델의 실제 capability 가 generic profile 보다 우선한다. 이로써
-    // checkModelCapability 가 게이팅 경로(getCapabilities)와 동일한 SoT 를 따른다.
-    const presetCaps = matchCapabilityPreset(lowerModel);
-    if (presetCaps) {
-        return presetCaps[capability];
+    // 1차: 게이팅 경로(local-llm-provider.getCapabilities)와 **동일한 SoT** —
+    // env override → 프리셋 → 부팅 프로브 실측. 프리셋 미등록 모델도 여기서 실측이 반영된다.
+    const preset = matchCapabilityPreset(lowerModel);
+    const probed = findLocalModel(modelName)?.probedCapabilities;
+    if (preset || probed) {
+        return resolveLocalCapabilities(lowerModel, probed)[capability];
     }
 
     // 2차: profile fallback (generic 'local-llm' 프리셋) — preset 미등록이나

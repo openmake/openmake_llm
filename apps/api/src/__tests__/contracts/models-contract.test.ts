@@ -15,14 +15,18 @@ jest.mock('../../auth', () => ({
 jest.mock('../../config/model-roles', () => ({
     getModelForRole: () => 'test-model',
 }));
+const LOCAL_ENTRIES = [
+    { id: 'test-model', displayName: 'Test Model', description: '테스트 로컬 모델', contextLength: 262144 },
+    { id: 'down-model', displayName: 'Down', description: '비가용', available: false, unavailableReason: 'probe 실패' },
+];
 jest.mock('../../config/local-models', () => ({
-    getLocalChatModels: () => [
-        { id: 'test-model', displayName: 'Test Model', description: '테스트 로컬 모델', contextLength: 262144 },
-        { id: 'down-model', displayName: 'Down', description: '비가용', available: false, unavailableReason: 'probe 실패' },
-    ],
+    getLocalChatModels: () => LOCAL_ENTRIES,
+    // 능력 해석이 프로브 실측치를 참조하므로 라우트가 이 조회를 함께 쓴다.
+    findLocalModel: (id: string) => LOCAL_ENTRIES.find((m) => m.id === id),
 }));
 const caps = { thinking: true, vision: true, toolCalling: true, streaming: true };
 jest.mock('../../config/model-defaults', () => ({
+    resolveLocalCapabilities: () => caps,
     matchCapabilityPreset: () => caps,
     FALLBACK_CAPABILITIES: caps,
 }));
