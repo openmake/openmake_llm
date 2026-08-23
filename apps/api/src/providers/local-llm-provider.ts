@@ -32,7 +32,8 @@ import {
 import { ProviderError } from './provider-errors';
 import type { LLMClient } from '../llm';
 import type { ToolCall, UsageMetrics } from '../llm';
-import { matchCapabilityPreset, FALLBACK_CAPABILITIES } from '../config/model-defaults';
+import { findLocalModel } from '../config/local-models';
+import { resolveLocalCapabilities } from '../config/model-defaults';
 import { LLM_ANTI_DEGENERATION_FREQUENCY_PENALTY } from '../config/llm-parameters';
 import { LLM_TIMEOUTS } from '../config/timeouts';
 import { estimateMessageTokens } from '../llm/model-pool';
@@ -71,10 +72,13 @@ export class LocalLLMProvider implements IProvider {
 
     constructor(private client: LLMClient) {}
 
-    /** modelId 를 공유 매처(startsWith-longest)로 룩업; 미정의 시 보수적 FALLBACK. */
+    /**
+     * 능력 해석은 `resolveLocalCapabilities` 단일 SoT 를 따른다
+     * (env override → 프리셋 → 부팅 프로브 실측 → 보수적 기본값).
+     * 프리셋에 없는 모델로 교체해도 도구가 조용히 전부 꺼지지 않는다.
+     */
     getCapabilities(modelId: string): ProviderCapabilities {
-        const caps = matchCapabilityPreset(modelId);
-        return caps ? { ...caps } : { ...FALLBACK_CAPABILITIES };
+        return resolveLocalCapabilities(modelId, findLocalModel(modelId)?.probedCapabilities);
     }
 
     async listModels(): Promise<ProviderModel[]> {
