@@ -33,12 +33,6 @@ export const ANSWER_INTENTS = [
 
 export type AnswerIntent = (typeof ANSWER_INTENTS)[number];
 
-/**
- * strict json_schema 는 모든 키를 required 로 요구하므로 모델이 "값 없음"을 null 로 보낸다.
- * 그 null 을 미지정(undefined)과 동일하게 취급한다 — 기존 출력 타입(optional)은 그대로 유지.
- */
-const nullToUndefined = (v: unknown): unknown => (v === null ? undefined : v);
-
 const TableSchema = z.object({
     headers: z.array(z.string()),
     rows: z.array(z.array(z.string())),
@@ -47,8 +41,8 @@ const TableSchema = z.object({
 const SectionSchema = z.object({
     heading: z.string(),
     body: z.string(),
-    bullets: z.preprocess(nullToUndefined, z.array(z.string()).optional()),
-    table: z.preprocess(nullToUndefined, TableSchema.optional()),
+    bullets: z.array(z.string()).optional(),
+    table: TableSchema.optional(),
 });
 
 /**
@@ -58,65 +52,48 @@ export const StructuredAnswerSchema = z.object({
     intent: z.enum(ANSWER_INTENTS),
     title: z.string(),
     conclusion: z.string(),
-    // 선택 필드는 null 도 수용한다 — OpenAI strict json_schema 는 모든 키를 required 로 요구하므로
-    // 모델이 "값 없음"을 null 로 표현한다(아래 STRUCTURED_ANSWER_FORMAT 주석 참고).
-    summary: z.preprocess(nullToUndefined, z.string().optional().default('')),
+    summary: z.string().optional().default(''),
     sections: z.array(SectionSchema),
-    risks: z.preprocess(nullToUndefined, z.array(z.string()).optional()),
-    action_items: z.preprocess(nullToUndefined, z.array(z.string()).optional()),
+    risks: z.array(z.string()).optional(),
+    action_items: z.array(z.string()).optional(),
     confidence: z.enum(['high', 'medium', 'low']),
 });
 
 export type StructuredAnswer = z.infer<typeof StructuredAnswerSchema>;
 
 /**
- * LLMClient `advancedOptions.format` 으로 전달할 JSON Schema (json_schema, strict).
- *
- * ⚠️ **OpenAI strict 규격 준수 필수** (실측 2026-08-24): strict 모드는
- *   ① 모든 object 에 `additionalProperties: false`
- *   ② `required` 가 **모든** property 를 나열 (부분집합 불가)
- * 를 요구한다. 이를 어기면 OpenAI 계열(ChatGPT·OpenRouter)에서 스키마가 **강제되지 않고**
- * 모델이 필드를 빠뜨린다 — 실제로 `intent` 하나가 누락돼 검증 2회 실패 → degrade 했다.
- * (로컬 vLLM 의 guided decoding 은 더 관대해 이 위반이 드러나지 않았다.)
- *
- * 그래서 값이 선택적인 필드도 required 에 넣되 **null 을 허용**하고, Zod 쪽에서
- * null 을 미지정으로 정규화한다(위 nullToUndefined).
+ * LLMClient `advancedOptions.format` 으로 전달할 JSON Schema (vLLM json_schema, strict).
+ * stream-parser.toResponseFormat 가 { type:'json_schema', json_schema:{ schema:{ type:'object', properties, required } } } 로 변환.
  */
-const TABLE_SCHEMA = {
-    type: ['object', 'null'],
-    properties: {
-        headers: { type: 'array', items: { type: 'string' } },
-        rows: { type: 'array', items: { type: 'array', items: { type: 'string' } } },
-    },
-    required: ['headers', 'rows'],
-    additionalProperties: false,
-};
-
-const SECTION_SCHEMA = {
-    type: 'object',
-    properties: {
-        heading: { type: 'string' },
-        body: { type: 'string' },
-        bullets: { type: ['array', 'null'], items: { type: 'string' } },
-        table: TABLE_SCHEMA,
-    },
-    required: ['heading', 'body', 'bullets', 'table'],
-    additionalProperties: false,
-};
-
 export const STRUCTURED_ANSWER_FORMAT: FormatOption = {
     type: 'object',
     properties: {
         intent: { type: 'string', enum: [...ANSWER_INTENTS] },
         title: { type: 'string' },
         conclusion: { type: 'string' },
-        summary: { type: ['string', 'null'] },
-        sections: { type: 'array', items: SECTION_SCHEMA },
-        risks: { type: ['array', 'null'], items: { type: 'string' } },
-        action_items: { type: ['array', 'null'], items: { type: 'string' } },
+        summary: { type: 'string' },
+        sections: {
+            type: 'array',
+            items: {
+                type: 'object',
+                properties: {
+                    heading: { type: 'string' },
+                    body: { type: 'string' },
+                    bullets: { type: 'array', items: { type: 'string' } },
+                    table: {
+                        type: 'object',
+                        properties: {
+                            headers: { type: 'array', items: { type: 'string' } },
+                            rows: { type: 'array', items: { type: 'array', items: { type: 'string' } } },
+                        },
+                    },
+                },
+                required: ['heading', 'body'],
+            },
+        },
+        risks: { type: 'array', items: { type: 'string' } },
+        action_items: { type: 'array', items: { type: 'string' } },
         confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
     },
-    // strict 규격: 모든 property 를 나열해야 한다 (선택 필드는 위에서 null 허용).
-    required: ['intent', 'title', 'conclusion', 'summary', 'sections', 'risks', 'action_items', 'confidence'],
-    additionalProperties: false,
+    required: ['intent', 'title', 'conclusion', 'sections', 'confidence'],
 };

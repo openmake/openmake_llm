@@ -95,10 +95,6 @@ export function toResponseFormat(f: FormatOption | undefined): Record<string, un
                 type: 'object',
                 properties: f.properties,
                 ...(f.required && { required: f.required }),
-                // strict 모드 필수 — 누락하면 OpenAI 계열이 스키마를 강제하지 않는다(실측 2026-08-24).
-                ...(f.additionalProperties !== undefined
-                    ? { additionalProperties: f.additionalProperties }
-                    : {}),
             },
             strict: true,
         },
