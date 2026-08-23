@@ -50,6 +50,11 @@ export interface LocalModelEntry {
      * `config/model-defaults.resolveModelCapabilities` 참고. 프로브 미실행/실패 시 undefined.
      */
     probedCapabilities?: { toolCalling?: boolean };
+    /**
+     * `contextLength` 가 부팅 프로브로 **실측**된 값이면 true. 카탈로그 기본값(추정)과
+     * 구분해 로그·진단에서 신뢰도를 드러낸다.
+     */
+    contextLengthProbed?: boolean;
 }
 
 /**
@@ -157,9 +162,64 @@ export function resetLocalModelsCache(): void {
  * (일시 오류로 능력을 잘못 낮추지 않는다).
  */
 /**
+ * 컨텍스트 길이 실측 — 불가능한 max_tokens 를 요청해 백엔드가 돌려주는 상한을 읽는다.
+ *
+ * 근거(라이브 실측 2026-08-23, LiteLLM 경유):
+ *   400 "max_tokens=99999999 cannot be greater than max_model_len=max_total_tokens=262144"
+ * 즉 오류 메시지에 모델의 실제 컨텍스트가 들어온다. 게이트웨이 `/v1/models`·`/model/info`
+ * 는 커스텀 배포에 대해 이 값을 노출하지 않아(둘 다 null 확인) 이 방법을 쓴다.
+ *
+ * 목적: `LLM_POOL_DEFAULT_CTX` 기본값 262144 가 모델과 무관하게 고정돼 있어, 컨텍스트가
+ * 더 짧은 모델로 교체하면 안전망 임계에 영영 못 닿아 그대로 전송 → upstream 400 이 되고,
+ * 더 긴 모델이면 불필요하게 잘라내던 문제를 없앤다.
+ *
+ * 판정 불가(패턴 불일치·네트워크 오류 등)는 undefined — 호출부가 기존 값을 유지한다.
+ */
+async function probeContextLength(
+    baseUrl: string,
+    apiKey: string | undefined,
+    modelId: string,
+    timeoutMs: number,
+): Promise<number | undefined> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const res = await fetch(baseUrl.replace(/\/$/, '') + '/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+            },
+            body: JSON.stringify({
+                model: modelId,
+                messages: [{ role: 'user', content: 'hi' }],
+                max_tokens: CONTEXT_PROBE_MAX_TOKENS,
+                stream: false,
+                chat_template_kwargs: { enable_thinking: false },
+            }),
+            signal: controller.signal,
+        });
+        // 200 이면 상한을 알 수 없다(요청이 그대로 수용됨) — 판정 보류.
+        if (res.ok) return undefined;
+        const body = await res.text();
+        const m = body.match(/max_model_len=(?:max_total_tokens=)?(\d+)/)
+            ?? body.match(/maximum context length is (\d+)/i);
+        const n = m ? parseInt(m[1], 10) : NaN;
+        return Number.isFinite(n) && n > 0 ? n : undefined;
+    } catch {
+        return undefined;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+/**
  * 도구 지원 프로브용 더미 도구 — 모델이 호출할 이유가 없는 최소 스키마.
  * (실제 호출 여부가 아니라 **요청이 수용되는지**만 본다.)
  */
+/** 컨텍스트 프로브용 max_tokens — 어떤 모델도 수용하지 못할 값이어야 상한이 오류로 드러난다. */
+const CONTEXT_PROBE_MAX_TOKENS = 99_999_999;
+
 const TOOL_PROBE_DEFINITION = {
     type: 'function' as const,
     function: {
@@ -356,10 +416,17 @@ export async function probeLocalModelAvailability(
             return { model: m, result: await pingEmbeddingModel(llmBaseUrl, apiKey, m.id, timeoutMs) };
         }
         const result = await pingChatModel(llmBaseUrl, apiKey, m.id, timeoutMs);
-        // 살아 있는 chat 모델만 도구 지원을 실측 — 죽은 모델에 추가 요청을 낭비하지 않는다.
+        // 살아 있는 chat 모델만 능력·컨텍스트를 실측 — 죽은 모델에 추가 요청을 낭비하지 않는다.
         if (result.ok) {
-            const toolCalling = await probeToolCalling(llmBaseUrl, apiKey, m.id, timeoutMs);
+            const [toolCalling, ctx] = await Promise.all([
+                probeToolCalling(llmBaseUrl, apiKey, m.id, timeoutMs),
+                probeContextLength(llmBaseUrl, apiKey, m.id, timeoutMs),
+            ]);
             if (toolCalling !== undefined) m.probedCapabilities = { toolCalling };
+            if (ctx !== undefined) {
+                m.contextLength = ctx;
+                m.contextLengthProbed = true;
+            }
         }
         return { model: m, result };
     }));
@@ -378,8 +445,13 @@ export async function probeLocalModelAvailability(
         }
     }
     const toolProbe = pingTargets
-        .filter(m => m.probedCapabilities?.toolCalling !== undefined)
-        .map(m => `${m.id}:tools=${m.probedCapabilities?.toolCalling}`);
+        .filter(m => m.probedCapabilities?.toolCalling !== undefined || m.contextLengthProbed)
+        .map(m => {
+            const parts: string[] = [];
+            if (m.probedCapabilities?.toolCalling !== undefined) parts.push(`tools=${m.probedCapabilities.toolCalling}`);
+            if (m.contextLengthProbed) parts.push(`ctx=${m.contextLength}`);
+            return `${m.id}:${parts.join(',')}`;
+        });
     logger.info(
         `probe 완료: available=${available.length} [${available.join(',')}] ` +
         `missing=${missing.length} [${missing.join(' | ')}] ` +
