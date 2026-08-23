@@ -390,6 +390,7 @@ export class OpenAICompatProvider implements IProvider {
                 max_tokens: opts.maxTokens ?? DEFAULT_MAX_TOKENS,
                 ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
                 ...(tools ? { tools } : {}),
+                ...(opts.responseFormat ? { response_format: opts.responseFormat } : {}),
                 ...openRouterProvider,
                 ...geminiThinkingDisable,
             };
