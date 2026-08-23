@@ -58,19 +58,18 @@ export interface ExternalProviderInstanceDeps {
 }
 
 /**
- * 게이트웨이 라우팅 제외 provider — LLM_GATEWAY_PROVIDERS 에 있어도 direct 유지.
- * ollama-local: 사용자별 동적 endpoint 라 정적 게이트웨이 deployment 로 표현 불가
- * (게이트웨이 api_base 는 서버 통제 값만 허용 — SSRF 우회 방지).
- */
-const GATEWAY_EXCLUDED_PROVIDERS = new Set(['ollama-local']);
-
-/**
  * providerId 가 LiteLLM 게이트웨이 경유 대상이면 GatewayRouteOptions 반환.
- * OAuth 행(chatgpt)은 사용자별 세션 격리 미해결로 항상 direct (LiteLLM 의 공용 device 인증 구조로는 사용자별 격리 불가 — 2026-07-31 스파이크 No-Go).
+ *
+ * OAuth 행(chatgpt)은 사용자별 세션 격리 미해결로 항상 direct — LiteLLM 의 공용 device 인증
+ * 구조로는 사용자별 격리가 불가하다(2026-07-31 스파이크 No-Go).
+ *
+ * ⚠️ 불변식: 게이트웨이 `api_base` 는 **서버 통제 값**만 쓴다(SSRF 우회 방지). 사용자별 동적
+ * endpoint 를 받는 provider 는 게이트웨이로 표현할 수 없다 — 구 ollama-local 이 이 이유로
+ * 예외 목록에 있었고, 그 provider 폐기(2026-08-23)로 목록 자체가 비어 제거됐다. 같은 성격의
+ * provider 를 다시 도입한다면 여기서 direct 로 분기시켜야 한다.
  */
 function resolveGatewayRoute(providerId: string, authMethod: string): GatewayRouteOptions | undefined {
     if (authMethod === 'oauth') return undefined;
-    if (GATEWAY_EXCLUDED_PROVIDERS.has(providerId)) return undefined;
     const cfg = getConfig();
     if (!cfg.llmGatewayProviders.includes(providerId)) return undefined;
     return {
