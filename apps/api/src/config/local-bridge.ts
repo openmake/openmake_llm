@@ -27,16 +27,6 @@ export const LOCAL_BRIDGE = {
     FOLDERS_MAX_ENTRIES: parseInt(process.env.BRIDGE_FOLDERS_MAX_ENTRIES || '200', 10),
 
     /**
-     * 로컬 브라우저(D3a) — 데스크톱 Electron 내장 Chromium 에서 browser 도구를 실행한다.
-     * 서버 컨테이너 브라우저와 달리 **사용자 화면에 보이는** 패널로 뜨고, 전용 세션 파티션이라
-     * 개인 Chrome 쿠키·로그인에 접근하지 않는다. 기본 OFF — 켤 때 위 ENABLED 도 함께 필요.
-     */
-    BROWSER_ENABLED: process.env.LOCAL_BRIDGE_BROWSER_ENABLED === 'true',
-
-    /** 브라우저 액션 배열 1회 실행 상한(ms). 컨테이너 runner 기본값과 같은 축. */
-    BROWSER_TIMEOUT_MS: parseInt(process.env.LOCAL_BRIDGE_BROWSER_TIMEOUT_MS || '60000', 10),
-
-    /**
      * worktree 격리 — 연결 폴더가 git 레포면 별도 worktree(디렉토리+브랜치)를 만들어 그 안에서만
      * 작업한다. 사용자의 현재 작업트리·브랜치가 오염되지 않고, 작업 결과를 `git diff HEAD` 로
      * 정확히 캡처할 수 있다(샌드박스와 달리 인위적 baseline 커밋이 필요 없다 — 레포의 실제

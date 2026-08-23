@@ -35,12 +35,12 @@ export class RemoteExecutor implements TaskExecutor {
     readonly taskId: string;
     readonly localWorkdir = null;
     /**
-     * D3 — 로컬 브라우저 게이트. 서버 샌드박스의 TASK_SANDBOX_BROWSER_ENABLED 와 **별개**로
-     * LOCAL_BRIDGE_BROWSER_ENABLED 를 본다. false 면 tools.ts 의 browser 핸들러가 진입 단계에서
-     * 막으므로 runBrowser 까지 오지 않는다(D1 시절 하드코딩 false 로 인해 실제로 그랬다).
+     * 로컬 브라우저(D3) 폐기 — 항상 false (2026-08-23). 이 기능을 구현하던 것은 Electron
+     * 데스크톱 셸뿐이었고 그 앱이 제거되면서 구현 디바이스가 사라졌다(Companion·CLI 는
+     * 애초에 미지원). tools.ts 의 browser 핸들러가 진입 단계에서 막으므로 에이전트는
+     * 로컬 실행 작업에서 브라우저 도구를 쓸 수 없다 — 컨테이너 샌드박스 경로는 무관하게 유지된다.
      */
-    readonly isBrowserEnabled = LOCAL_BRIDGE.BROWSER_ENABLED;
-    /** 세션 영속은 데스크톱 파티션(persist:openmake-agent)이 담당 — 서버측 상태 파일 불필요. */
+    readonly isBrowserEnabled = false;
     readonly browserStatePath = null;
     private readonly userId: string;
     /** 라우팅 대상 디바이스(101, 다중 디바이스) — undefined 는 최근 접속 디바이스 폴백. */
@@ -133,33 +133,15 @@ export class RemoteExecutor implements TaskExecutor {
     }
 
     /**
-     * 로컬 브라우저 실행(D3a) — 데스크톱 Electron 내장 Chromium 에서 액션을 수행한다.
-     *
-     * 컨테이너 경로(`browser-runner.mjs`)와 **출력 계약을 동일**하게 맞춘다
-     * (`{ok, finalUrl, results[]}` JSON 을 stdout 으로) — 서버측 파싱·프롬프트를 재사용하기 위함.
-     * 액션 spec 은 에이전트가 워크스페이스(=사용자 폴더)에 써둔 JSON 이므로 브리지 read 로 가져온다.
+     * 폐기된 로컬 브라우저(D3) — TaskExecutor 계약을 만족시키기 위한 거절 스텁.
+     * isBrowserEnabled=false 라 tools.ts 가 먼저 막지만, 다른 경로로 호출돼도 브리지에
+     * browser 요청을 내보내지 않는다(프로토콜 kind 화이트리스트에서도 제거됨).
      */
-    async runBrowser(actionsRelPath: string): Promise<ExecResult> {
-        if (!LOCAL_BRIDGE.BROWSER_ENABLED) {
-            return {
-                stdout: '', exitCode: -1, truncated: false, timedOut: false, durationMs: 0,
-                stderr: '로컬 브라우저가 비활성화되어 있습니다 (LOCAL_BRIDGE_BROWSER_ENABLED=false).',
-            };
-        }
-        let spec: unknown;
-        try {
-            spec = JSON.parse(await this.readFile(actionsRelPath));
-        } catch (e) {
-            return {
-                stdout: '', exitCode: -1, truncated: false, timedOut: false, durationMs: 0,
-                stderr: `브라우저 액션 파일을 읽지 못했습니다 (${actionsRelPath}): ${e instanceof Error ? e.message : String(e)}`,
-            };
-        }
-        // timeout 은 서버 상한으로 고정 — 액션 파일이 제시한 값을 그대로 믿지 않는다.
-        return toExecResult(await this.req({
-            kind: 'browser',
-            spec: { ...(spec as Record<string, unknown>), timeoutMs: LOCAL_BRIDGE.BROWSER_TIMEOUT_MS },
-        }));
+    async runBrowser(_actionsRelPath: string): Promise<ExecResult> {
+        return {
+            stdout: '', exitCode: -1, truncated: false, timedOut: false, durationMs: 0,
+            stderr: '로컬 실행기는 브라우저를 지원하지 않습니다 (2026-08-23 폐기). 서버 샌드박스 작업으로 실행하세요.',
+        };
     }
 
     async writeFile(relPath: string, content: string | Buffer): Promise<void> {
