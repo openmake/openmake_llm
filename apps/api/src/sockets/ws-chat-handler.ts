@@ -7,7 +7,8 @@ import { WebSocket } from 'ws';
 import * as crypto from 'crypto';
 import { ClusterManager } from '../cluster/manager';
 import { selectOptimalModel } from '../chat/model-selector';
-import { verifyAnswer, isAnswerVerificationEnabled } from '../services/chat-service/answer-verifier';
+import { dispatchAnswerVerification } from '../services/chat-service/answer-verifier';
+import { resolveCleanedContent } from './ws-chat-completion';
 import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
 import { enqueueDebugCapture, DEBUG_QUEUE_TTL_MS } from '../data/conversation-debug-queue';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
@@ -25,8 +26,6 @@ import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
 import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
 import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext } from '../services/chat-service/attach-context';
 import type { PdfVisionResult } from '../services/chat-service/pdf-vision';
-import { hasScriptMixing } from '../services/chat-service/script-purity';
-import { citationMarkersWereCleaned, mapHtmlWasCleaned } from '../services/chat-service/external-deterministic-append';
 import { saveAssistantMessage } from '../chat/request-persistence';
 import { buildWebSearchContext } from '../mcp/web-search/build-search-context';
 
@@ -430,24 +429,11 @@ export async function handleChatMessage(
             }
         }
 
-        // Phase 1.F.2 (2026-05-26): cleanedContent 를 done 페이로드에 동봉.
-        // 클라이언트가 token 단위로 누적한 raw 본문을 backend 의 placeholder 적용 본문으로
-        // reset 하기 위함. artifact 가 없으면 undefined — 변경 없음.
-        // 스크립트 순수성 교정(script-purity)이 실제로 적용된 경우에도 본문을 교체한다 —
-        // 스트리밍으로 이미 나간 화면엔 한자 혼입이 남아 있고 최종본만 교정돼 있으므로,
-        // 그 차이가 있을 때만 정확히 겨냥해 reset 한다(그 외 턴은 기존대로 undefined).
-        // 죽은 인용 마커 제거(external-deterministic-append)가 적용된 턴도 동일 패턴으로 교체 —
-        // 스트리밍 화면에 남은 [출처 N](수집 목록 밖 번호) 마커를 완료 시점에 정리한다.
-        // 지도 환각 HTML 제거(stripHallucinatedMapHtml)가 적용된 턴도 동일 — 화면에 코드
-        // 텍스트로 노출된 가짜 카카오 이미지 링크를 완료 시점에 정리한다.
-        const cleanedContent = (result.artifacts && result.artifacts.length > 0)
-            ? result.response
-            : (result.response
-                && ((hasScriptMixing(partialAssistantResponse) && !hasScriptMixing(result.response))
-                    || citationMarkersWereCleaned(partialAssistantResponse, result.response)
-                    || mapHtmlWasCleaned(partialAssistantResponse, result.response))
-                ? result.response
-                : undefined);
+        const cleanedContent = resolveCleanedContent({
+            artifactCount: result.artifacts?.length ?? 0,
+            finalResponse: result.response,
+            streamedResponse: partialAssistantResponse,
+        });
         ws.send(JSON.stringify({
             type: 'done',
             messageId,
@@ -455,22 +441,18 @@ export async function handleChatMessage(
             ...(cleanedContent !== undefined ? { cleanedContent } : {}),
         }));
 
-        // 답변 검증 (선택) — done 이후 judge 모델이 1회 점검하고 **지적만** 보낸다.
-        // done 을 막지 않도록 완료 후 비동기로 돌리며, 실패는 조용히 무시한다(fail-open).
-        // 자동 수정은 하지 않는다 — 프로토타입 실측에서 수정 왕복이 답변을 악화시켰다.
-        if (msg.verifyAnswer === true && isAnswerVerificationEnabled()) {
-            const answerForVerify = cleanedContent ?? result.response ?? partialAssistantResponse;
-            void verifyAnswer(
-                typeof msg.message === 'string' ? msg.message : '',
-                answerForVerify ?? '',
-                extWs._authenticatedUserId ?? undefined,
-                userLangPreference,
-            ).then((issues) => {
-                if (issues && ws.readyState === ws.OPEN) {
-                    ws.send(JSON.stringify({ type: 'answer_verification', issues, messageId }));
-                }
-            }).catch(() => { /* fail-open */ });
-        }
+        // 답변 검증 (선택) — done 이후 judge 모델이 1회 점검하고 **지적만** 보낸다(자동 수정 없음).
+        dispatchAnswerVerification({
+            requested: msg.verifyAnswer === true,
+            userMessage: typeof msg.message === 'string' ? msg.message : '',
+            answer: cleanedContent ?? result.response ?? partialAssistantResponse ?? '',
+            ...(extWs._authenticatedUserId ? { userId: extWs._authenticatedUserId } : {}),
+            ...(userLangPreference ? { userLanguage: userLangPreference } : {}),
+        }, (issues) => {
+            if (ws.readyState === ws.OPEN) {
+                ws.send(JSON.stringify({ type: 'answer_verification', issues, messageId }));
+            }
+        });
 
     } catch (error: unknown) {
         // 중단 컨트롤러 정리

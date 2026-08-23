@@ -68,3 +68,17 @@ export async function verifyAnswer(
         return null;
     }
 }
+
+/**
+ * 검증 디스패치 — done 이후 비동기 실행 + 결과 전달까지 한 곳에.
+ * (소켓 핸들러가 커지지 않도록 분리. 실패는 전부 흡수 — 답변 경로에 영향 0.)
+ */
+export function dispatchAnswerVerification(
+    params: { requested: boolean; userMessage: string; answer: string; userId?: string; userLanguage?: string },
+    onIssues: (issues: string) => void,
+): void {
+    if (!params.requested || !ENABLED) return;
+    void verifyAnswer(params.userMessage, params.answer, params.userId, params.userLanguage)
+        .then((issues) => { if (issues) onIssues(issues); })
+        .catch(() => { /* fail-open */ });
+}
