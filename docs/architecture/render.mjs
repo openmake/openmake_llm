@@ -7,6 +7,7 @@
 //   node docs/architecture/render.mjs
 //     → arch.png / arch.en.png     통합 아키텍처 (arch.html)
 //     → arch2.png / arch2.en.png   배치 아키텍처 (arch2.html)
+//     → target.png / target.en.png 목표 구조 (target.html)
 //
 // playwright 는 e2e 용으로 이미 설치돼 있다(playwright.config.ts). file:// 은 일부
 // 환경에서 막히므로 임시 정적 서버를 띄워 그쪽을 찍는다.
@@ -19,6 +20,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const DIAGRAMS = [
     { src: 'arch.html', out: { ko: 'arch.png', en: 'arch.en.png' }, w: 1880 },
     { src: 'arch2.html', out: { ko: 'arch2.png', en: 'arch2.en.png' }, w: 2000 },
+    { src: 'target.html', out: { ko: 'target.png', en: 'target.en.png' }, w: 2000 },
 ];
 const STAMP = process.env.ARCH_STAMP || new Date().toISOString().slice(0, 10);
 
