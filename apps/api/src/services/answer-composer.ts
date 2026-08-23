@@ -27,7 +27,7 @@ import {
     type AnswerIntent,
 } from '../schemas/structured-answer.schema';
 import { classifyAnswerIntent } from '../chat/answer-planner';
-import { buildAnswerComposerSystemPrompt, getRepairHint } from '../prompts/answer-composer-system';
+import { buildAnswerComposerSystemPrompt, getRepairHint, getLengthRepairHint } from '../prompts/answer-composer-system';
 import type { ChatMessage, FormatOption } from '../llm/types';
 
 const logger = createLogger('AnswerComposer');
@@ -37,7 +37,10 @@ const logger = createLogger('AnswerComposer');
  * 구조화 답변용 1회 LLM 호출. `format` 이 undefined 면 **스키마 강제 없이** 호출한다
  * (guided decoding 미지원 백엔드로의 degrade 경로 — 외부 provider 경로는 원래 format 을 무시한다).
  */
-export type StructuredChatFn = (messages: ChatMessage[], format?: FormatOption) => Promise<string>;
+export type StructuredChatFn = (
+    messages: ChatMessage[],
+    format?: FormatOption,
+) => Promise<string | { text: string; truncated: boolean }>;
 
 /**
  * StructuredAnswer → 일정한 마크다운 (제안서 8절 formatAnswer 정확 구현).
@@ -162,21 +165,28 @@ export async function composeStructuredAnswer(opts: {
      * 한 번 더 호출한다 — 외부 provider 경로가 원래 그렇게 동작하므로 프롬프트만으로도
      * 유효 JSON 이 나올 수 있다. 이 경로를 타면 degraded 사유를 남긴다.
      */
+    const asText = (r: Awaited<ReturnType<StructuredChatFn>>) =>
+        typeof r === 'string' ? { text: r, truncated: false } : r;
+
+    /** 직전 시도가 **길이 상한**에 걸려 잘렸는지 — 재시도 힌트를 고르는 데 쓴다. */
+    let lastTruncated = false;
+
     const attempt = async (msgs: ChatMessage[]): Promise<StructuredAnswer | null> => {
-        let raw: string;
+        let raw: { text: string; truncated: boolean };
         try {
-            raw = await opts.chat(msgs, STRUCTURED_ANSWER_FORMAT);
+            raw = asText(await opts.chat(msgs, STRUCTURED_ANSWER_FORMAT));
         } catch (e) {
             if (!isFormatUnsupportedError(e)) throw e;
             logger.warn(`백엔드가 json_schema 를 거절 — 스키마 없이 재시도: ${errText(e).slice(0, 160)}`);
             degraded = 'format_unsupported';
-            raw = await opts.chat(msgs);
+            raw = asText(await opts.chat(msgs));
         }
+        lastTruncated = raw.truncated;
         let parsed: unknown;
         try {
-            parsed = parseStructured(raw);
+            parsed = parseStructured(raw.text);
         } catch {
-            logger.warn('구조화 출력 JSON 파싱 실패');
+            logger.warn(`구조화 출력 JSON 파싱 실패${raw.truncated ? ' (길이 상한으로 잘림)' : ''}`);
             return null;
         }
         const result = StructuredAnswerSchema.safeParse(parsed);
@@ -185,11 +195,14 @@ export async function composeStructuredAnswer(opts: {
 
     let structured = await attempt(messages);
     if (!structured) {
-        // 1회 재시도 — 교정 힌트 추가.
-        structured = await attempt([
-            ...messages,
-            { role: 'system', content: getRepairHint(lang) },
-        ]);
+        // 1회 재시도 — 실패 원인에 맞는 힌트를 고른다.
+        //  · 길이 상한으로 잘렸으면 스키마를 다시 설명해봐야 소용없다 → **짧게 쓰라**고 지시한다.
+        //  · 그 외(스키마 불일치)는 기존 교정 힌트.
+        // 힌트는 **user** 로 덧붙인다 — 일부 chat_template(qwen 등)은 system 이 맨 앞에만
+        // 오는 것을 강제해, 뒤에 붙이면 400 "System message must be at the beginning" 이 난다
+        // (실측 2026-08-24: 이 경로가 500 으로 새어나갔다).
+        const hint = lastTruncated ? getLengthRepairHint(lang) : getRepairHint(lang);
+        structured = await attempt([...messages, { role: 'user', content: hint }]);
     }
 
     if (!structured) {
@@ -197,7 +210,7 @@ export async function composeStructuredAnswer(opts: {
         // 최소 구조로 감싼다(confidence=low: 구조 검증을 통과하지 못했음을 정직하게 표기).
         // 여기서도 내용이 없을 때만 422 로 실패한다.
         logger.warn('구조화 2회 실패 — 평문 답변으로 degrade');
-        const plain = (await opts.chat(messages)).trim();
+        const plain = asText(await opts.chat(messages)).text.trim();
         if (!plain) {
             throw new AppError('구조화 답변 검증 실패 (스키마 불일치)', 422, true, 'STRUCTURED_OUTPUT_INVALID');
         }
