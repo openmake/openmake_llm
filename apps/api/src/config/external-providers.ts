@@ -79,7 +79,7 @@ export interface ExternalProviderCatalogEntry {
  * 추가 시 체크리스트:
  *   1. provider_id 를 services/chat-service/provider-gate.ts 의
  *      KNOWN_FULLID_PREFIXES 에도 등록
- *   2. sdk_type 은 'anthropic' | 'openai-compatible' 만 허용 (DB CHECK 제약)
+ *   2. sdk_type 은 'openai-compatible' 만 허용 (anthropic direct 는 2026-08-23 폐기)
  *   3. defaultBaseUrl 은 https:// 가 표준 — 로컬 vLLM 등 http:// 는 사용자 입력으로 수정
  */
 export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEntry> = [

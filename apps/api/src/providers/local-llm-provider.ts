@@ -14,7 +14,7 @@
  *
  * 주의:
  * - PROVIDER_ID / sdkType 은 canonical 'local-llm' (vLLM/LiteLLM 진입점). 로컬 provider 는
- *   외부 키 테이블에 저장되지 않아 DB CHECK('anthropic'|'openai-compatible')와 무관.
+ *   외부 키 테이블에 저장되지 않아 그 테이블의 sdk_type CHECK 와 무관.
  *
  * @module providers/local-llm-provider
  */

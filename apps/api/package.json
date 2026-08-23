@@ -21,7 +21,6 @@
         "eval:all": "npm run eval:routing && npm run eval:response && npm run eval:citation"
     },
     "dependencies": {
-        "@anthropic-ai/sdk": "^0.95.1",
         "@modelcontextprotocol/sdk": "^1.25.3",
         "@mozilla/readability": "^0.6.0",
         "@openai-oauth/core": "^2.0.0",
