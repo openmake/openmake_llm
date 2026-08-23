@@ -153,7 +153,18 @@ function toOpenAITools(tools: ToolDefinition[]): unknown[] {
     }));
 }
 
-function applyOptionsToRequest(options?: ChatRequest['options']): Record<string, unknown> {
+/**
+ * ModelOptions → OpenAI 호환 요청 파라미터.
+ *
+ * ⚠️ 이름 매핑 주의 (라이브 실측 2026-08-23, LiteLLM 게이트웨이 경유):
+ *   - `repeat_penalty`(내부 이름, Ollama 시절 유산)는 vLLM 이 **모르는 필드**라 그대로
+ *     보내면 조용히 무시된다. 반복 억제를 켜려면 `repetition_penalty` 로 보내야 한다.
+ *     실증: 같은 프롬프트에 repetition_penalty=2.0 은 출력이 바뀌고, repeat_penalty=2.0 은
+ *     기본값과 **완전히 동일**했다. 그동안 이 옵션은 매핑 자체가 없어 전송되지도 않았다.
+ *   - `top_k`·`repetition_penalty` 는 OpenAI 표준이 아닌 vLLM 확장이다. 운영 게이트웨이는
+ *     둘 다 수용(200 확인)하지만, 표준만 받는 백엔드로 바꾸면 400 이 날 수 있다.
+ */
+export function applyOptionsToRequest(options?: ChatRequest['options']): Record<string, unknown> {
     if (!options) return {};
     const params: Record<string, unknown> = {};
     if (options.temperature !== undefined) params.temperature = options.temperature;
@@ -165,6 +176,8 @@ function applyOptionsToRequest(options?: ChatRequest['options']): Record<string,
     // OpenAI/vLLM native penalty 파라미터 (presence_penalty / frequency_penalty).
     if (options.presence_penalty !== undefined) params.presence_penalty = options.presence_penalty;
     if (options.frequency_penalty !== undefined) params.frequency_penalty = options.frequency_penalty;
+    // 내부 repeat_penalty → vLLM repetition_penalty (위 주석 참고).
+    if (options.repeat_penalty !== undefined) params.repetition_penalty = options.repeat_penalty;
     return params;
 }
 
