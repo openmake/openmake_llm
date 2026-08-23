@@ -1,5 +1,48 @@
 # Changelog
 
+## [1.33.0](https://github.com/openmake/openmake_llm/compare/v1.32.1...v1.33.0) (2026-08-23)
+
+
+### ✨ 기능
+
+* **chat:** 구조화 답변 degrade — json_schema 미지원·스키마 불일치에 422 로 죽지 않게 ([c94d8fd](https://github.com/openmake/openmake_llm/commit/c94d8fdccdf4cd573bfae7d5eb9a2722306b29fd))
+* **chat:** 구조화 답변 degrade — json_schema 미지원·스키마 불일치에 422 로 죽지 않게 ([b6f6df8](https://github.com/openmake/openmake_llm/commit/b6f6df8561dfcd6289da9283546eac6e0416e3d1))
+* **chat:** 답변 검증 — judge 모델이 1회 점검하고 지적만 표시 (자동 수정 없음) ([f564073](https://github.com/openmake/openmake_llm/commit/f564073b8cf800c3ac86da4ea8d08b1edd536fb3))
+* **chat:** 답변 검증 — judge 모델이 1회 점검하고 지적만 표시 (자동 수정 없음) ([56c6a95](https://github.com/openmake/openmake_llm/commit/56c6a9594abfea46c8050e46656c3aa6ca783193))
+* **chat:** 외부 provider 구조화 요청에 json_schema 전달 — 프롬프트만으로는 필드 누락 ([43456c8](https://github.com/openmake/openmake_llm/commit/43456c8b17a581de8ddcf15276c7adc132e5066a))
+* **chat:** 외부 provider 구조화 요청에 json_schema 전달 — 프롬프트만으로는 필드 누락 ([c2f1c0e](https://github.com/openmake/openmake_llm/commit/c2f1c0ecc168f8aa0b2b2f040c91522ed8d3fd46))
+* **chat:** 추론 강도(reasoning effort) 사용자 선택 — 채팅 UI 3단 + 모델별 정규화 ([b4471cd](https://github.com/openmake/openmake_llm/commit/b4471cdc6849bbbc4ab95e3713b53f7c7f2c0386))
+* **chat:** 추론 강도(reasoning effort) 사용자 선택 — 채팅 UI 3단 + 모델별 정규화 ([c69117a](https://github.com/openmake/openmake_llm/commit/c69117abef963f33c9d9d29844adf788224602cd))
+* **docs:** 목표 구조 도면 신설 — arch.png 의 짝 ([2e79bb4](https://github.com/openmake/openmake_llm/commit/2e79bb47149749d11188493b87b2e8a39393cfa9))
+* **docs:** 배치 도면도 흐름이 보이도록 — 통합 도면과 같은 처리 ([59bade8](https://github.com/openmake/openmake_llm/commit/59bade844ae3d726740bfa3f5fe972abf68ed5dc))
+* **docs:** 배치 도면에 기기 일러스트 — Mac mini · DGX 섀시 ([8335926](https://github.com/openmake/openmake_llm/commit/833592612c8763a53e5e155ee2f2ae3702d68a85))
+* **docs:** 배치 도면을 일러스트 형식으로 다시 그림 ([bc8c258](https://github.com/openmake/openmake_llm/commit/bc8c258706ff395dce03e7059ebbb7e0fae4961c))
+* **docs:** 통합 도면 시각 개편 — 흐름이 보이도록 ([6ce7007](https://github.com/openmake/openmake_llm/commit/6ce7007c3d7f7d8dbf97cd7ea392c2860473d38c))
+* **docs:** 통합 도면도 같은 그림체로, 아이콘은 공용 icons.js 로 ([2ffa713](https://github.com/openmake/openmake_llm/commit/2ffa713acb29284d57eab4450ed7e612a6748ff1))
+* **models:** 모델 능력 해석 SoT + 도구 호출 부팅 프로브 — 교체 시 도구 무력화 차단 ([64f3263](https://github.com/openmake/openmake_llm/commit/64f32633c942c2d3472e55f96d4e1b81b44d27de))
+* **models:** 모델 능력 해석 SoT + 도구 호출 부팅 프로브 — 교체 시 도구 무력화 차단 ([1df540e](https://github.com/openmake/openmake_llm/commit/1df540efceadcf34bf2df453722d5988cd9603fd))
+* **models:** 컨텍스트 길이 부팅 실측 — 262K 고정 임계 제거 ([e2d9a15](https://github.com/openmake/openmake_llm/commit/e2d9a155837131d6af89bf03052740b623c199d3))
+* **models:** 컨텍스트 길이 부팅 실측 — 262K 고정 임계 제거 ([2d2049a](https://github.com/openmake/openmake_llm/commit/2d2049a9e25bef38c9d4c9c42c7b377b9306ccf9))
+
+
+### 🐛 버그 수정
+
+* **chat:** thinking 을 모델 capability 로 게이팅 — 미지원 모델 스트림 오분류 차단 ([cb98119](https://github.com/openmake/openmake_llm/commit/cb98119c05eb970cccdc52be5f6a7fc8c45aa78d))
+* **chat:** thinking 을 모델 capability 로 게이팅 — 미지원 모델 스트림 오분류 차단 ([867009e](https://github.com/openmake/openmake_llm/commit/867009ed981c6ce4b70d97e1649894ae2772b0fe))
+* **chat:** 구조화 답변 500 복구 — strict 스키마 재적용 + 길이 잘림 자동 회복 ([34f9a47](https://github.com/openmake/openmake_llm/commit/34f9a47816a13397992d18aeea5eff7ca05e6485))
+* **chat:** 구조화 답변 500 수정 — 출력 잘림 + 교정 재시도의 system 위치 ([7115bc7](https://github.com/openmake/openmake_llm/commit/7115bc7355340f4b049a08e4850ca6f0668efc6f))
+* **chat:** 구조화 출력이 길이 상한에 걸리면 스스로 줄여 재시도 ([f9f2f46](https://github.com/openmake/openmake_llm/commit/f9f2f46e0334d82b3a160908b7c1dd4d0034d4aa))
+* **ci:** 파일 크기 가드 + iOS 코드젠 drift 해소 ([4e77e0f](https://github.com/openmake/openmake_llm/commit/4e77e0fcecc04a19e88fcbfe4ededdd7553634a5))
+* **docs:** 도면의 provider 서술을 오늘 변경에 맞춤 ([cc44865](https://github.com/openmake/openmake_llm/commit/cc448650b5a0cb82baabea620cb54f9cca19ace4))
+* **docs:** 도면의 provider 서술을 오늘 변경에 맞춤 ([e94627d](https://github.com/openmake/openmake_llm/commit/e94627de3b9246297b0a37d1390e4469015429cf))
+* **llm:** reasoning_effort 를 LiteLLM 게이트웨이가 막던 문제 — 통과 힌트 동봉 ([b0b7092](https://github.com/openmake/openmake_llm/commit/b0b70925bd0d5aa95d89f8b1246a30ec3390ff2a))
+* **llm:** reasoning_effort 를 LiteLLM 게이트웨이가 막던 문제 — 통과 힌트 동봉 ([12fb2f4](https://github.com/openmake/openmake_llm/commit/12fb2f40dc0876313d23daa0ddd3041b95b4cc8b))
+* **llm:** repeat_penalty 가 전송되지 않던 매핑 버그 — vLLM 이름으로 정정 ([dbbb8fa](https://github.com/openmake/openmake_llm/commit/dbbb8faecdca3a6d75bb06025e213ea5f5e78740))
+* **llm:** repeat_penalty 가 전송되지 않던 매핑 버그 — vLLM 이름으로 정정 ([be80303](https://github.com/openmake/openmake_llm/commit/be803039806b617590dabff2d5da48e85bfba45c))
+* **schema:** 구조화 스키마를 OpenAI strict 규격으로 — 외부 모델이 필드를 빠뜨리던 원인 ([817b763](https://github.com/openmake/openmake_llm/commit/817b763a3eda3392ed9442ba9e103d27d1fff9c0))
+* **schema:** 구조화 스키마를 OpenAI strict 규격으로 — 외부 모델이 필드를 빠뜨리던 원인 ([c8252e2](https://github.com/openmake/openmake_llm/commit/c8252e2bb1df4bdf364202b67f0a6229edd76b8a))
+* **schema:** 구조화 스키마를 OpenAI strict 규격으로 — 외부 모델이 필드를 빠뜨리던 원인 ([63faae0](https://github.com/openmake/openmake_llm/commit/63faae0f1d3c41455f43da6368c70cccdf99475c))
+
 ## [1.32.1](https://github.com/openmake/openmake_llm/compare/v1.32.0...v1.32.1) (2026-08-23)
 
 
