@@ -56,6 +56,29 @@ describe('composeStructuredAnswer — degrade', () => {
         expect(retry[0].role).toBe('system');
     });
 
+    it('길이 상한으로 잘리면 스키마 재안내 대신 "짧게 쓰라"고 재시도한다', async () => {
+        // 잘린 출력에 스키마를 다시 설명해봐야 소용없다 — 더 짧게 쓰게 해야 회복된다.
+        const hints: string[] = [];
+        let n = 0;
+        const r = await composeStructuredAnswer({
+            message: 'q',
+            chat: async (msgs) => {
+                const last = msgs[msgs.length - 1];
+                if (n++ === 0) return { text: '{"intent":"expla', truncated: true };
+                hints.push(String(last.content));
+                return {
+                    text: JSON.stringify({
+                        intent: 'explanation', title: 't', conclusion: 'c',
+                        summary: 's', sections: [], confidence: 'high',
+                    }),
+                    truncated: false,
+                };
+            },
+        });
+        expect(r.degraded).toBeUndefined();
+        expect(hints[0]).toMatch(/짧게/);
+    });
+
     it('2회 스키마 실패 후 평문을 최소 구조로 감싸 반환한다 (schema_invalid)', async () => {
         let n = 0;
         const r = await composeStructuredAnswer({

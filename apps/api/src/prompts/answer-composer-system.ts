@@ -65,6 +65,21 @@ export function buildAnswerComposerSystemPrompt(intent: AnswerIntent, userLangua
 }
 
 /** Validator 실패 시 1회 재시도에 덧붙이는 교정 지시. */
+/**
+ * 출력이 토큰 상한에 걸려 잘렸을 때의 교정 힌트.
+ *
+ * 스키마를 못 지킨 게 아니라 **길이** 때문이므로, 스키마 재안내 대신 "짧게 쓰라"고 지시한다
+ * (실측 2026-08-24: strict 규격이 8개 필드를 모두 채우게 해 출력이 길어져 잘렸다).
+ */
+export function getLengthRepairHint(userLanguage: string): string {
+    const lang = userLanguage.toLowerCase().startsWith('ko') ? 'ko' : 'en';
+    return lang === 'ko'
+        ? '직전 출력이 길이 제한에 걸려 잘렸습니다. 같은 스키마를 지키되 **훨씬 짧게** 쓰세요 — '
+          + 'sections 는 최대 2개, 각 body 는 2문장 이내, bullets·risks·action_items 는 비우거나 null 로 두세요.'
+        : 'The previous output was cut off by the length limit. Keep the same schema but be MUCH shorter — '
+          + 'at most 2 sections, each body within 2 sentences, and leave bullets/risks/action_items empty or null.';
+}
+
 export function getRepairHint(userLanguage: string): string {
     const lang = userLanguage.toLowerCase().startsWith('ko') ? 'ko' : 'en';
     return lang === 'ko'
