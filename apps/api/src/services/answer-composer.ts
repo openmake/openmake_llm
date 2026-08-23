@@ -132,6 +132,48 @@ export interface ComposeResult {
 }
 
 /**
+ * degrade 폴백의 본문 구성.
+ *
+ * 평문 호출 결과가 **스키마 모양의 JSON** 인 경우가 있다 — 모델이 프롬프트만 보고 JSON 을
+ * 뱉었지만 필수 필드(intent 등)가 빠져 검증에 실패한 경우다. 이때 원문을 그대로 conclusion 에
+ * 넣으면 사용자에게 raw JSON 이 노출된다(실측 2026-08-24: ChatGPT 경로). 살릴 수 있는 필드는
+ * 살리고, JSON 이 아니면 기존대로 평문을 conclusion 으로 쓴다.
+ */
+function salvageStructured(
+    plain: string,
+    intent: StructuredAnswer['intent'],
+    message: string,
+): Omit<StructuredAnswer, 'confidence'> {
+    const fallbackTitle = message.slice(0, MAX_FALLBACK_TITLE_CHARS);
+    let obj: Record<string, unknown> | undefined;
+    try {
+        const parsed = parseStructured(plain);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            obj = parsed as Record<string, unknown>;
+        }
+    } catch {
+        // JSON 이 아니면 평문 그대로 — 정상 경로.
+    }
+    if (!obj || typeof obj.conclusion !== 'string' || !obj.conclusion.trim()) {
+        return { intent, title: fallbackTitle, conclusion: plain, summary: '', sections: [] };
+    }
+    const str = (v: unknown) => (typeof v === 'string' ? v : '');
+    const sections = Array.isArray(obj.sections)
+        ? obj.sections
+              .filter((x): x is Record<string, unknown> => !!x && typeof x === 'object')
+              .map((x) => ({ heading: str(x.heading), body: str(x.body) }))
+              .filter((x) => x.heading || x.body)
+        : [];
+    return {
+        intent,
+        title: str(obj.title) || fallbackTitle,
+        conclusion: obj.conclusion,
+        summary: str(obj.summary),
+        sections,
+    };
+}
+
+/**
  * 구조화 답변 합성. Answer Planner → Generator → Validator → Response Formatter.
  * Validator 실패 시 교정 힌트로 1회 재시도, 그래도 실패면 422.
  */
@@ -215,14 +257,7 @@ export async function composeStructuredAnswer(opts: {
             throw new AppError('구조화 답변 검증 실패 (스키마 불일치)', 422, true, 'STRUCTURED_OUTPUT_INVALID');
         }
         degraded = 'schema_invalid';
-        structured = {
-            intent,
-            title: opts.message.slice(0, MAX_FALLBACK_TITLE_CHARS),
-            conclusion: plain,
-            summary: '',
-            sections: [],
-            confidence: 'low',
-        };
+        structured = { ...salvageStructured(plain, intent, opts.message), confidence: 'low' };
     }
 
     const finalAnswer: StructuredAnswer = structured;
