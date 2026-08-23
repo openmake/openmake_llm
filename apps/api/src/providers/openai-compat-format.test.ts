@@ -22,6 +22,31 @@ describe('구조화 응답 포맷 변환', () => {
         );
     });
 
+    it('OpenAI strict 규격을 지킨다 — required=전체 property + additionalProperties:false', () => {
+        // 실측 2026-08-24: 이 규격을 어기면 OpenAI 계열(ChatGPT·OpenRouter)이 스키마를 강제하지
+        // 않아 모델이 intent 를 빠뜨렸다. 로컬 vLLM 은 관대해 드러나지 않던 위반이다.
+        const rf = toResponseFormat(STRUCTURED_ANSWER_FORMAT) as {
+            json_schema: { schema: { properties: Record<string, unknown>; required: string[]; additionalProperties: boolean } };
+        };
+        const { properties, required, additionalProperties } = rf.json_schema.schema;
+        expect(additionalProperties).toBe(false);
+        expect([...required].sort()).toEqual(Object.keys(properties).sort());
+    });
+
+    it('중첩 object(sections·table)도 같은 규격을 지킨다', () => {
+        const sec = (STRUCTURED_ANSWER_FORMAT as { properties: Record<string, { items?: Record<string, unknown> }> })
+            .properties.sections.items as { properties: Record<string, unknown>; required: string[]; additionalProperties: boolean };
+        expect(sec.additionalProperties).toBe(false);
+        expect([...sec.required].sort()).toEqual(Object.keys(sec.properties).sort());
+    });
+
+    it('선택 필드는 null 을 허용해 required 에 넣을 수 있게 한다', () => {
+        const props = (STRUCTURED_ANSWER_FORMAT as { properties: Record<string, { type: unknown }> }).properties;
+        for (const k of ['summary', 'risks', 'action_items']) {
+            expect(props[k].type).toEqual(expect.arrayContaining(['null']));
+        }
+    });
+
     it("'json' 단축형은 json_object 로", () => {
         expect(toResponseFormat('json')).toEqual({ type: 'json_object' });
     });

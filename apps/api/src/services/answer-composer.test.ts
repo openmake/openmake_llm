@@ -193,3 +193,20 @@ describe('answer-composer: composeStructuredAnswer', () => {
         expect(r.structured.confidence).toBe('low');
     });
 });
+
+describe('StructuredAnswerSchema — strict 스키마의 null 수용', () => {
+    it('선택 필드가 null 로 와도 통과하고 미지정과 동일하게 정규화된다', () => {
+        // strict json_schema 는 모든 키를 required 로 요구하므로 모델이 "값 없음"을 null 로 보낸다.
+        const parsed = StructuredAnswerSchema.parse({
+            intent: 'explanation', title: 'T', conclusion: 'C',
+            summary: null, risks: null, action_items: null,
+            sections: [{ heading: 'H', body: 'B', bullets: null, table: null }],
+            confidence: 'high',
+        });
+        expect(parsed.summary).toBe('');
+        expect(parsed.risks).toBeUndefined();
+        expect(parsed.action_items).toBeUndefined();
+        expect(parsed.sections[0].bullets).toBeUndefined();
+        expect(parsed.sections[0].table).toBeUndefined();
+    });
+});
