@@ -318,6 +318,12 @@
       "folderUnsupported": "该设备不支持文件夹浏览 — 请更新 CLI/应用",
       "folderEmpty": "没有子文件夹",
       "folderTruncated": "…列表已截断"
+    },
+    "thinkingLevel": {
+      "title": "推理强度",
+      "low": "推理: 低",
+      "medium": "推理: 中",
+      "high": "推理: 高"
     }
   },
   "chat": {
