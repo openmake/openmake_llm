@@ -98,3 +98,87 @@ export function matchCapabilityPreset(modelId: string): ModelCapabilities | null
     }
     return best;
 }
+
+/**
+ * ============================================================
+ * 로컬 모델 능력 해석 (SoT)
+ * ============================================================
+ *
+ * 배경: 능력을 **모델명 접두어 프리셋**으로만 판정하다 보니, 프리셋에 없는 모델로 교체하면
+ * `FALLBACK_CAPABILITIES`(toolCalling=false)로 떨어져 채팅의 MCP 도구가 통째로 사라졌다.
+ * 에러가 아니라 조용한 축소라 알아채기 어렵다(코드 주석에 과거 사고가 기록돼 있다).
+ *
+ * 해석 순서 (앞이 이길수록 신뢰도 높음):
+ *   ① env `LLM_MODEL_CAPABILITIES_JSON` — 운영자 명시 override (배포 없이 대응)
+ *   ② `MODEL_CAPABILITY_PRESETS` — 실측으로 확정한 모델별 프리셋
+ *   ③ 부팅 프로브 실측 (`probedCapabilities`, 현재 toolCalling 만) — 미등록 모델 안전망
+ *   ④ `FALLBACK_CAPABILITIES` — 전부 보수적 false
+ *
+ * vision·thinking 은 프로브 비용/신뢰도 문제로 실측하지 않는다(이미지 필요, reasoning 은
+ * 출력 형식 의존). 이 둘은 ①②만 반영되며 미상이면 보수적으로 꺼진 채 남는다 —
+ * 잘못 켜면 400 이지만, 꺼져 있으면 기능 축소에 그친다.
+ */
+export interface ProbedCapabilities {
+    toolCalling?: boolean;
+}
+
+let _capsOverride: Readonly<Record<string, Partial<ModelCapabilities>>> | null = null;
+
+/** 테스트 훅 — env 변경 후 캐시 리셋. */
+export function resetCapabilityOverrideCache(): void {
+    _capsOverride = null;
+}
+
+function getCapabilityOverrides(): Readonly<Record<string, Partial<ModelCapabilities>>> {
+    if (_capsOverride) return _capsOverride;
+    const raw = process.env.LLM_MODEL_CAPABILITIES_JSON;
+    const out: Record<string, Partial<ModelCapabilities>> = {};
+    if (raw) {
+        try {
+            const parsed = JSON.parse(raw) as Record<string, Record<string, unknown>>;
+            for (const [prefix, caps] of Object.entries(parsed)) {
+                const picked: Partial<ModelCapabilities> = {};
+                for (const k of ['toolCalling', 'thinking', 'vision', 'streaming'] as const) {
+                    if (typeof caps?.[k] === 'boolean') picked[k] = caps[k] as boolean;
+                }
+                if (Object.keys(picked).length > 0) out[prefix.toLowerCase()] = picked;
+            }
+        } catch { /* 형식 오류는 무시 — 프리셋/프로브로 진행 */ }
+    }
+    _capsOverride = out;
+    return _capsOverride;
+}
+
+/** override 접두어 매칭 — 프리셋과 동일한 startsWith-longest 규칙. */
+function matchOverride(modelId: string): Partial<ModelCapabilities> | null {
+    const lower = modelId.toLowerCase();
+    let best: Partial<ModelCapabilities> | null = null;
+    let bestLen = -1;
+    for (const [prefix, caps] of Object.entries(getCapabilityOverrides())) {
+        if (lower.startsWith(prefix) && prefix.length > bestLen) {
+            best = caps;
+            bestLen = prefix.length;
+        }
+    }
+    return best;
+}
+
+/**
+ * 로컬 모델의 최종 능력. 위 해석 순서를 한 곳에서 적용한다.
+ * @param probed 부팅 프로브 실측치 (`LocalModelEntry.probedCapabilities`)
+ */
+export function resolveLocalCapabilities(
+    modelId: string,
+    probed?: ProbedCapabilities,
+): ModelCapabilities {
+    const preset = matchCapabilityPreset(modelId);
+    const base: ModelCapabilities = preset
+        ? { ...preset }
+        : {
+            ...FALLBACK_CAPABILITIES,
+            // 프리셋 미등록 — 실측이 있으면 그것으로 도구 지원을 결정한다(조용한 무력화 차단).
+            ...(probed?.toolCalling !== undefined ? { toolCalling: probed.toolCalling } : {}),
+        };
+    const override = matchOverride(modelId);
+    return override ? { ...base, ...override } : base;
+}

@@ -18,8 +18,8 @@ import { success } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { createLogger } from '../utils/logger';
 import { getModelForRole } from '../config/model-roles';
-import { matchCapabilityPreset, FALLBACK_CAPABILITIES } from '../config/model-defaults';
-import { getLocalChatModels } from '../config/local-models';
+import { resolveLocalCapabilities } from '../config/model-defaults';
+import { getLocalChatModels, findLocalModel } from '../config/local-models';
 import { requireAuth, requireAdmin, optionalAuth } from '../auth';
 import { getModelHealthMonitor } from '../services/model-health-monitor';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
@@ -98,9 +98,12 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
         pricing?: { input: number; output: number };
     };
 
-    /** model id → 공유 매처(startsWith-longest)로 capability 조회; 미정의 시 보수적 FALLBACK. */
+    /**
+     * model id → capability. 실행 경로(local-llm-provider)와 **같은 SoT** 를 쓴다 —
+     * UI 표기와 실제 게이팅이 어긋나지 않게 하기 위함(env override·프리셋·부팅 프로브 실측).
+     */
     function capsFor(modelId: string) {
-        return matchCapabilityPreset(modelId) ?? FALLBACK_CAPABILITIES;
+        return resolveLocalCapabilities(modelId, findLocalModel(modelId)?.probedCapabilities);
     }
 
     // Local models catalog — config/local-models.ts (서버 proxy 가 model 명으로 라우팅)

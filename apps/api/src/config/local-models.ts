@@ -44,6 +44,12 @@ export interface LocalModelEntry {
     available?: boolean;
     /** 가용성 실패 사유 — UI tooltip 표시용 */
     unavailableReason?: string;
+    /**
+     * 부팅 프로브로 **실측한** 능력 (현재 toolCalling 만). 프리셋에 없는 모델로 교체해도
+     * 도구가 조용히 전부 꺼지지 않도록 하는 안전망 — 해석 우선순위는
+     * `config/model-defaults.resolveModelCapabilities` 참고. 프로브 미실행/실패 시 undefined.
+     */
+    probedCapabilities?: { toolCalling?: boolean };
 }
 
 /**
@@ -98,6 +104,12 @@ export function getLocalModels(): LocalModelEntry[] {
     return _cached;
 }
 
+/** id 로 카탈로그 엔트리 조회 (프로브 실측치 참조용). 미등록이면 undefined. */
+export function findLocalModel(modelId: string): LocalModelEntry | undefined {
+    return getLocalModels().find((m) => m.id === modelId);
+}
+
+
 /**
  * chat 역할 모델 반환.
  * @param opts.includeUnavailable true 면 available=false 모델도 포함 (UI dimmed 표시용)
@@ -134,6 +146,66 @@ export function resetLocalModelsCache(): void {
  * 200 응답 + completion content/reasoning 있으면 가용.
  * 500 / timeout / connection error 면 미가용.
  */
+/**
+ * 도구 호출 지원 실측 — 더미 도구 1개를 붙여 1-token 요청을 보낸다.
+ *
+ * 목적: 모델을 교체했을 때 `MODEL_CAPABILITY_PRESETS` 접두어에 안 걸리면 보수적 기본값
+ * (toolCalling=false)으로 떨어져 **채팅의 MCP 도구가 통째로 사라지던** 문제(과거 실사고)를
+ * 자동으로 막는다. 200 이면 지원, 도구 관련 4xx 면 미지원으로 본다.
+ *
+ * 판정 불가(네트워크 오류·타임아웃·5xx)는 `undefined` — 호출부가 프리셋/기본값을 유지한다
+ * (일시 오류로 능력을 잘못 낮추지 않는다).
+ */
+/**
+ * 도구 지원 프로브용 더미 도구 — 모델이 호출할 이유가 없는 최소 스키마.
+ * (실제 호출 여부가 아니라 **요청이 수용되는지**만 본다.)
+ */
+const TOOL_PROBE_DEFINITION = {
+    type: 'function' as const,
+    function: {
+        name: 'omk_capability_probe',
+        description: 'internal capability probe — do not call',
+        parameters: { type: 'object', properties: {}, additionalProperties: false },
+    },
+};
+
+async function probeToolCalling(
+    baseUrl: string,
+    apiKey: string | undefined,
+    modelId: string,
+    timeoutMs: number,
+): Promise<boolean | undefined> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const res = await fetch(baseUrl.replace(/\/$/, '') + '/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+            },
+            body: JSON.stringify({
+                model: modelId,
+                messages: [{ role: 'user', content: 'hi' }],
+                max_tokens: MODEL_PROBE.MAX_TOKENS,
+                stream: false,
+                chat_template_kwargs: { enable_thinking: false },
+                tools: [TOOL_PROBE_DEFINITION],
+                tool_choice: 'auto',
+            }),
+            signal: controller.signal,
+        });
+        if (res.ok) return true;
+        // 4xx = 요청 형태 거절 → 도구 미지원으로 판정. 5xx/기타는 판정 보류.
+        if (res.status >= 400 && res.status < 500) return false;
+        return undefined;
+    } catch {
+        return undefined;
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 async function pingChatModel(
     baseUrl: string,
     apiKey: string | undefined,
@@ -280,10 +352,16 @@ export async function probeLocalModelAvailability(
     }
 
     const pingResults = await Promise.all(pingTargets.map(async m => {
-        const r = m.role === 'embedding'
-            ? await pingEmbeddingModel(llmBaseUrl, apiKey, m.id, timeoutMs)
-            : await pingChatModel(llmBaseUrl, apiKey, m.id, timeoutMs);
-        return { model: m, result: r };
+        if (m.role === 'embedding') {
+            return { model: m, result: await pingEmbeddingModel(llmBaseUrl, apiKey, m.id, timeoutMs) };
+        }
+        const result = await pingChatModel(llmBaseUrl, apiKey, m.id, timeoutMs);
+        // 살아 있는 chat 모델만 도구 지원을 실측 — 죽은 모델에 추가 요청을 낭비하지 않는다.
+        if (result.ok) {
+            const toolCalling = await probeToolCalling(llmBaseUrl, apiKey, m.id, timeoutMs);
+            if (toolCalling !== undefined) m.probedCapabilities = { toolCalling };
+        }
+        return { model: m, result };
     }));
 
     const available: string[] = [];
@@ -299,10 +377,14 @@ export async function probeLocalModelAvailability(
             missing.push(`${model.id} (${result.reason})`);
         }
     }
+    const toolProbe = pingTargets
+        .filter(m => m.probedCapabilities?.toolCalling !== undefined)
+        .map(m => `${m.id}:tools=${m.probedCapabilities?.toolCalling}`);
     logger.info(
         `probe 완료: available=${available.length} [${available.join(',')}] ` +
         `missing=${missing.length} [${missing.join(' | ')}] ` +
-        `skipped=${skipped.length} [${skipped.join(',')}]`,
+        `skipped=${skipped.length} [${skipped.join(',')}]` +
+        (toolProbe.length ? ` | 능력 실측 [${toolProbe.join(',')}]` : ''),
     );
     return { probed: true, available, missing, skipped };
 }
