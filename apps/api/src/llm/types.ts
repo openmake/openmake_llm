@@ -202,6 +202,12 @@ export type FormatOption = 'json' | {
     type: 'object';
     properties: Record<string, unknown>;
     required?: string[];
+    /**
+     * OpenAI strict json_schema 규격 — strict 모드는 모든 object 에 이 값이 false 여야 하고
+     * required 가 모든 property 를 나열해야 한다. 누락 시 OpenAI 계열에서 스키마가 강제되지
+     * 않는다(실측 2026-08-24). vLLM guided decoding 은 더 관대해 이 위반이 드러나지 않았다.
+     */
+    additionalProperties?: boolean;
 };
 
 /**
