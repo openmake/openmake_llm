@@ -318,6 +318,12 @@
       "folderUnsupported": "This device does not support folder browsing — update the CLI/app",
       "folderEmpty": "No subfolders",
       "folderTruncated": "…list truncated"
+    },
+    "thinkingLevel": {
+      "title": "Reasoning effort",
+      "low": "Reasoning: Low",
+      "medium": "Reasoning: Medium",
+      "high": "Reasoning: High"
     }
   },
   "chat": {

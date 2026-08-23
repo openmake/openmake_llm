@@ -318,6 +318,12 @@
       "folderUnsupported": "이 디바이스는 폴더 탐색을 지원하지 않습니다 — CLI/앱을 업데이트하세요",
       "folderEmpty": "하위 폴더가 없습니다",
       "folderTruncated": "…목록이 잘렸습니다"
+    },
+    "thinkingLevel": {
+      "title": "추론 강도",
+      "low": "추론 낮음",
+      "medium": "추론 보통",
+      "high": "추론 높음"
     }
   },
   "chat": {

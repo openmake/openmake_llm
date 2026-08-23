@@ -11,9 +11,15 @@
  *
  * @module llm/reasoning-adapter
  */
+import { normalizeEffort, type ReasoningEffort } from '../config/reasoning-effort';
 import type { ThinkOption } from './types';
 
-export function thinkToReasoningEffort(t: ThinkOption | undefined): 'low' | 'medium' | 'high' | undefined {
+/**
+ * think 옵션 → reasoning_effort 값.
+ * `true`(단계 미지정)는 '높음' 의도로 보고 'high' 로 해석하되, 최종값은 호출부가
+ * modelId 로 정규화한다 — 모델마다 받는 값이 다르다(qwen3.8 은 high 를 400 거절).
+ */
+export function thinkToReasoningEffort(t: ThinkOption | undefined): ReasoningEffort | undefined {
     if (t === undefined || t === false) return undefined;
     if (t === true) return 'high';
     return t;
@@ -38,20 +44,24 @@ export function thinkToReasoningEffort(t: ThinkOption | undefined): 'low' | 'med
  * 측정: reasoning 모델 기준 TTFB 8.2s → 3.1s (reasoning OFF, 62% 단축).
  * vLLM 0.21+ 에서 chat_template 이 `enable_thinking` 변수를 인식해야 작동.
  */
-export function buildExtraBody(t: ThinkOption | undefined): Record<string, unknown> | undefined {
+export function buildExtraBody(
+    t: ThinkOption | undefined,
+    modelId?: string,
+): Record<string, unknown> | undefined {
     const result: Record<string, unknown> = {};
 
     const reasoningEnabled = (process.env.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true';
     if (reasoningEnabled) {
         const effort = thinkToReasoningEffort(t);
-        if (effort) result.reasoning_effort = effort;
+        // 대상 모델이 받지 않는 값은 인접 지원값으로 강등/승격 — 미정규화 전송은 400 이다.
+        if (effort) result.reasoning_effort = normalizeEffort(modelId, effort);
     }
 
     const disableThinkingByDefault = (process.env.LLM_DISABLE_THINKING_BY_DEFAULT ?? 'false').toLowerCase() === 'true';
     if (t === false) {
         // 명시적 비활성 — env 와 무관하게 강제 OFF.
         result.chat_template_kwargs = { enable_thinking: false };
-    } else if (t === true || t === 'low' || t === 'medium' || t === 'high') {
+    } else if (t === true || t === 'low' || t === 'medium' || t === 'high' || t === 'xhigh') {
         // 명시적 활성 — disableThinkingByDefault 가 true 여도 호출자 요청 우선.
         result.chat_template_kwargs = { enable_thinking: true };
     } else if (disableThinkingByDefault) {

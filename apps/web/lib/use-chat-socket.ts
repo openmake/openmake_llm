@@ -528,6 +528,8 @@ export function useChatSocket() {
         deepResearchMode: s.deepResearchMode,
         discussionMode: s.discussionMode,
         thinkingMode: s.thinkingEnabled,
+        // 추론 강도 — 토글이 켜진 경우에만 의미(서버가 thinkingMode=false 면 무시).
+        ...(s.thinkingEnabled ? { thinkingLevel: s.thinkingLevel } : {}),
         imageMode: s.imageMode,
         artifactMode: s.artifactMode,
         style: s.style,

@@ -125,6 +125,9 @@ export interface Artifact {
 
 export type ChatStyle = "concise" | "default" | "verbose";
 
+/** 추론 강도 — thinkingEnabled 가 켜졌을 때만 의미. 백엔드 ws `thinkingLevel` 계약과 1:1. */
+export type ThinkingLevel = "low" | "medium" | "high";
+
 /** store 인증 사용자 — shared-types User 의 표시용 부분집합 (name 은 username 매핑). */
 export interface AuthUser {
   id: string;
@@ -166,6 +169,8 @@ interface AppState {
 
   // 모드 토글 (기존 state.js)
   thinkingEnabled: boolean;
+  /** 추론 강도 — thinkingEnabled=true 일 때 전송. 모델별 지원값 정규화는 서버 담당. */
+  thinkingLevel: ThinkingLevel;
   discussionMode: boolean;
   deepResearchMode: boolean;
   webSearchEnabled: boolean;
@@ -249,10 +254,14 @@ interface AppState {
   setAgentLocalFolderRel: (v: string | null) => void;
   cycleStyle: () => void;
   setStyle: (m: ChatStyle) => void;
+  cycleThinkingLevel: () => void;
+  setThinkingLevel: (v: ThinkingLevel) => void;
   setAuth: (auth: AppState["auth"]) => void;
 }
 
 const STYLE_ORDER: ChatStyle[] = ["default", "concise", "verbose"];
+// 낮음 → 보통 → 높음 순환. 기본 medium (기존 서버 폴백 high 보다 보수적 — 추론 토큰 낭비 억제).
+const THINKING_LEVEL_ORDER: ThinkingLevel[] = ["low", "medium", "high"];
 
 /**
  * primary(전용) 모드 — 상호배타. 하나를 켜면 나머지는 자동으로 꺼진다.
@@ -305,6 +314,7 @@ export const useAppStore = create<AppState>()(
   artifactPanelOpen: false,
 
   thinkingEnabled: true, // 기본 ON — tool calling 중 추론(thinking) 과정을 화면에 노출
+  thinkingLevel: "medium",
   discussionMode: false,
   deepResearchMode: false,
   webSearchEnabled: false,
@@ -491,6 +501,14 @@ export const useAppStore = create<AppState>()(
       style: STYLE_ORDER[(STYLE_ORDER.indexOf(s.style) + 1) % STYLE_ORDER.length],
     })),
   setStyle: (m) => set({ style: m }),
+  cycleThinkingLevel: () =>
+    set((s) => ({
+      thinkingLevel:
+        THINKING_LEVEL_ORDER[
+          (THINKING_LEVEL_ORDER.indexOf(s.thinkingLevel) + 1) % THINKING_LEVEL_ORDER.length
+        ],
+    })),
+  setThinkingLevel: (v) => set({ thinkingLevel: v }),
   setAuth: (auth) => set({ auth }),
     }),
     {
@@ -499,7 +517,7 @@ export const useAppStore = create<AppState>()(
         typeof window !== "undefined" ? window.localStorage : noopStorage,
       ),
       // 사용자 환경설정만 영속화 — 채팅/아티팩트 등 휘발성 세션 상태는 제외
-      partialize: (s) => ({ selectedModel: s.selectedModel, style: s.style, activeUserAgent: s.activeUserAgent }),
+      partialize: (s) => ({ selectedModel: s.selectedModel, style: s.style, thinkingLevel: s.thinkingLevel, activeUserAgent: s.activeUserAgent }),
     },
   ),
 );

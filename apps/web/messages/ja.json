@@ -318,6 +318,12 @@
       "folderUnsupported": "このデバイスはフォルダ探索に対応していません — CLI/アプリを更新してください",
       "folderEmpty": "サブフォルダがありません",
       "folderTruncated": "…一覧が省略されました"
+    },
+    "thinkingLevel": {
+      "title": "推論の強度",
+      "low": "推論: 低",
+      "medium": "推論: 中",
+      "high": "推論: 高"
     }
   },
   "chat": {

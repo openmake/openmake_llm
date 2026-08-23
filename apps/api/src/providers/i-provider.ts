@@ -13,6 +13,7 @@
  */
 
 import type { ChatMessage, ToolDefinition, UsageMetrics } from '../llm';
+import type { ReasoningEffort } from '../config/reasoning-effort';
 
 /**
  * 어댑터가 사용하는 SDK 종류 — 디버깅/관측 목적의 메타 정보.
@@ -113,8 +114,12 @@ export interface ChatStreamOptions {
     temperature?: number;
     /** 최대 출력 토큰 */
     maxTokens?: number;
-    /** Thinking 활성화 — boolean 또는 토큰 budget 객체 */
-    thinking?: boolean | { budget: number };
+    /**
+     * Thinking 활성화 — boolean, 추론 강도('low'|'medium'|'high'|'xhigh'), 또는 토큰 budget 객체.
+     * 강도 문자열은 로컬(vLLM) 경로에서 reasoning_effort 로 전달되며, 모델이 받지 않는 값은
+     * config/reasoning-effort 가 인접 지원값으로 정규화한다.
+     */
+    thinking?: boolean | ReasoningEffort | { budget: number };
     /** 사용 가능한 도구 목록 */
     tools?: ToolDefinition[];
     /** 도구 선택 강제 — 특정 도구를 반드시 호출하게 하거나(function) 도구 사용을 강제/차단. vLLM tool_choice 시맨틱. */
