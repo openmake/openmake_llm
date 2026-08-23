@@ -41,6 +41,21 @@ describe('composeStructuredAnswer — degrade', () => {
         })).rejects.toThrow(/ECONNREFUSED/);
     });
 
+    it('교정 재시도는 system 이 아니라 user 로 덧붙인다 (chat_template 400 회귀)', async () => {
+        // 일부 chat_template(qwen 등)은 system 이 맨 앞에만 오는 것을 강제한다 —
+        // 뒤에 붙이면 400 "System message must be at the beginning" 이 나고 500 으로 샌다.
+        const seen: Array<Array<{ role: string }>> = [];
+        await composeStructuredAnswer({
+            message: 'q',
+            chat: async (msgs) => { seen.push(msgs as Array<{ role: string }>); return 'not json'; },
+        }).catch(() => { /* degrade 결과는 여기서 관심 없음 */ });
+        const retry = seen[1];
+        expect(retry[retry.length - 1].role).toBe('user');
+        // system 은 맨 앞 1개만 유지된다.
+        expect(retry.filter((m) => m.role === 'system')).toHaveLength(1);
+        expect(retry[0].role).toBe('system');
+    });
+
     it('2회 스키마 실패 후 평문을 최소 구조로 감싸 반환한다 (schema_invalid)', async () => {
         let n = 0;
         const r = await composeStructuredAnswer({
