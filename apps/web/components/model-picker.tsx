@@ -24,7 +24,6 @@ export type PickerModel = {
 /** provider id → 1단계 표시 라벨 (신규 provider 는 일반 처리 `🌐 {id}`) */
 const EXTERNAL_PROVIDER_LABELS: Record<string, string> = {
   openrouter: "🌐 OpenRouter",
-  "ollama-local": "🌐 Ollama (Local)",
   "ollama-cloud": "🌐 Ollama Cloud",
   nvidia: "🌐 NVIDIA NIM",
 };

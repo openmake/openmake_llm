@@ -4,7 +4,7 @@
  * 2026-07-31 LiteLLM Mac 이전 계약:
  * - 목록에 있는 API key provider → inference client 가 게이트웨이(baseURL=llmBaseUrl/v1)
  *   + x-litellm-api-key 헤더 + model prefix
- * - 목록에 없거나 ollama-local → 기존 direct 동작 무변경
+ * - 목록에 없는 provider → 기존 direct 동작 무변경
  * - 카탈로그/검증 client 는 게이트웨이 여부와 무관하게 provider endpoint direct
  */
 import { createExternalProviderInstance } from '../provider-router';
@@ -19,7 +19,7 @@ jest.mock('../../config', () => {
             ...actual.getConfig(),
             llmBaseUrl: 'http://127.0.0.1:13401',
             llmApiKey: 'sk-test-master',
-            llmGatewayProviders: ['openrouter', 'ollama-cloud', 'nvidia', 'ollama-local'],
+            llmGatewayProviders: ['openrouter', 'ollama-cloud', 'nvidia'],
         }),
     };
 });
@@ -95,13 +95,4 @@ describe('LLM_GATEWAY_PROVIDERS 게이트웨이 라우팅', () => {
         expect(p.modelPrefix).toBeUndefined();
     });
 
-    it('ollama-local 은 목록에 있어도 direct 유지 (사용자별 동적 endpoint)', () => {
-        const provider = createExternalProviderInstance(
-            makeKeyRow({ providerId: 'ollama-local', baseUrl: 'http://192.168.0.10:11434/v1' }),
-            'ollama-no-key',
-        );
-        const p = inner(provider as OpenAICompatProvider);
-        expect(p.client).toBe(p.catalogClient);
-        expect(p.modelPrefix).toBeUndefined();
-    });
 });
