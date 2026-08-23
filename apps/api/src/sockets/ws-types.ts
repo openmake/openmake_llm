@@ -28,7 +28,11 @@ export interface WSMessage {
     /** 아티팩트 모드 — ON 이면 모델이 <artifact> 산출물을 생성하도록 유도 (wantsArtifact 강제) */
     artifactMode?: boolean;
     thinkingMode?: boolean;
-    thinkingLevel?: string;
+    /**
+     * 추론 강도 — thinkingMode=true 일 때만 의미. 미지정이면 'high' 로 간주(기존 동작).
+     * 모델별 지원값 차이(qwen3.8 은 high 거절)는 서버가 config/reasoning-effort 로 정규화한다.
+     */
+    thinkingLevel?: 'low' | 'medium' | 'high';
     /**
      * 메시지 본문을 conversation_messages 에 저장할지 여부.
      * 기본 true (생략 시 저장). false 면 본문은 저장하지 않고

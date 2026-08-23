@@ -40,6 +40,18 @@ import type { ExternalProviderDeps, ChatTimings, StreamFromExternalContext } fro
 /**
  * 외부 LLM provider stream + multi-turn tool calling.
  */
+/**
+ * thinking 옵션 결정 — 토글이 켜져 있으면 사용자가 고른 추론 강도를 그대로 넘긴다.
+ * 강도 미지정(구 클라이언트)은 `true` 로 기존 동작을 유지하며, 모델이 받지 않는 값은
+ * config/reasoning-effort 가 정규화한다.
+ */
+function resolveThinking(
+    req: { thinkingMode?: boolean; thinkingLevel?: 'low' | 'medium' | 'high' },
+): boolean | 'low' | 'medium' | 'high' {
+    if (req.thinkingMode !== true) return false;
+    return req.thinkingLevel ?? true;
+}
+
 export async function runExternalStream(
     deps: ExternalProviderDeps,
     resolved: ResolvedProvider,
@@ -161,7 +173,7 @@ export async function runExternalStream(
                 {
                     messages: fittedMessages,
                     modelId: resolved.modelId,
-                    thinking: req.thinkingMode === true,
+                    thinking: resolveThinking(req),
                     ...(turnTools.length > 0 ? { tools: turnTools } : {}),
                     // 첫 턴만 도구 강제(카카오 지도 또는 명시적 웹 검색) — 이후 턴은 auto(모델이 결과로 답변 작성).
                     ...(turn === 0 && forcedFirstTurnToolName && turnTools.length > 0
@@ -281,7 +293,7 @@ export async function runExternalStream(
                 {
                     messages: fittedFinal,
                     modelId: resolved.modelId,
-                    thinking: req.thinkingMode === true,
+                    thinking: resolveThinking(req),
                     ...(req.abortSignal ? { abortSignal: req.abortSignal } : {}),
                 },
                 {

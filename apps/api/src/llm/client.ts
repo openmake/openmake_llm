@@ -177,7 +177,8 @@ export class LLMClient {
                 ...(advancedOptions.tool_choice !== undefined && { tool_choice: advancedOptions.tool_choice }),
             }),
         };
-        const extraBody = buildExtraBody(advancedOptions?.think);
+        // 실제 라우팅된 모델 기준으로 reasoning_effort 를 정규화한다(모델별 지원값 상이).
+        const extraBody = buildExtraBody(advancedOptions?.think, poolDecision.model);
 
         return withSpan(
             'llm-client',

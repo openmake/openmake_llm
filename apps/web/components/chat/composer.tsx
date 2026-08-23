@@ -212,6 +212,7 @@ export function Composer() {
     structuredMode,
     selectedModel,
     style,
+    thinkingLevel,
     inputDraft,
     toggle,
     setSelectedModel,
@@ -220,6 +221,7 @@ export function Composer() {
     setAgentLocalDeviceId,
     setAgentLocalFolderRel,
     cycleStyle,
+    cycleThinkingLevel,
     setInputDraft,
     auth,
   } = useAppStore();
@@ -936,6 +938,18 @@ export function Composer() {
           >
             {tSettings(`responseStyles.${style}`)}
           </button>
+
+          {/* 추론 강도 — Thinking 토글이 켜진 경우에만 노출. 낮음→보통→높음 순환(스타일 버튼과 동일 패턴).
+              모델마다 받는 값이 달라(qwen3.8 은 high 거절) 정규화는 서버가 담당한다. */}
+          {thinkingEnabled && (
+            <button
+              onClick={cycleThinkingLevel}
+              className="rounded-md px-2 py-1.5 text-xs font-medium text-muted hover:bg-surface-2 hover:text-fg"
+              title={t("thinkingLevel.title")}
+            >
+              {t(`thinkingLevel.${thinkingLevel}`)}
+            </button>
+          )}
 
           {/* 사용 중인 LLM 모델 — 표시 전용 (변경은 설정 → 모델&응답 → 기본 모델).
               '자동' 이면 서버 기본모델명을 병기해 실제 사용 모델을 노출한다.
