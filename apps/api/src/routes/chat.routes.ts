@@ -310,7 +310,7 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
                 undefined,
                 { format, signal: abortController.signal },
             );
-            return result.content ?? '';
+            return { text: result.content ?? '', truncated: result.metrics?.finish_reason === 'length' };
         };
     } else {
         // 외부 provider(OpenRouter/ChatGPT 등) — streamChat 을 집계(비스트리밍)하되
@@ -337,7 +337,7 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
                 },
                 {}, // 토큰 콜백 불필요 — 누적 결과(content)만 사용
             );
-            return result.content ?? '';
+            return { text: result.content ?? '', truncated: result.finishReason === 'length' };
         };
     }
 
