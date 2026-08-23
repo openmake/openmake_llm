@@ -64,6 +64,7 @@ public struct WsServerEvent: Codable {
     public let type: WsServerEventType
     public let messageID: String?
     public let summary: String?
+    public let issues: String?
     public let sessionID: String?
     public let buildID: String?
     public let message: String?
@@ -103,6 +104,7 @@ public struct WsServerEvent: Codable {
         case type = "type"
         case messageID = "messageId"
         case summary = "summary"
+        case issues = "issues"
         case sessionID = "sessionId"
         case buildID = "buildId"
         case message = "message"
@@ -132,11 +134,12 @@ public struct WsServerEvent: Codable {
         case taskID = "taskId"
     }
 
-    public init(token: String?, type: WsServerEventType, messageID: String?, summary: String?, sessionID: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, metrics: Metrics?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, status: String?, step: Step?, taskID: String?) {
+    public init(token: String?, type: WsServerEventType, messageID: String?, summary: String?, issues: String?, sessionID: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, metrics: Metrics?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, status: String?, step: Step?, taskID: String?) {
         self.token = token
         self.type = type
         self.messageID = messageID
         self.summary = summary
+        self.issues = issues
         self.sessionID = sessionID
         self.buildID = buildID
         self.message = message
@@ -190,6 +193,7 @@ public extension WsServerEvent {
         type: WsServerEventType? = nil,
         messageID: String?? = nil,
         summary: String?? = nil,
+        issues: String?? = nil,
         sessionID: String?? = nil,
         buildID: String?? = nil,
         message: String?? = nil,
@@ -223,6 +227,7 @@ public extension WsServerEvent {
             type: type ?? self.type,
             messageID: messageID ?? self.messageID,
             summary: summary ?? self.summary,
+            issues: issues ?? self.issues,
             sessionID: sessionID ?? self.sessionID,
             buildID: buildID ?? self.buildID,
             message: message ?? self.message,
@@ -772,6 +777,7 @@ public enum WsServerEventType: String, Codable {
     case aborted = "aborted"
     case agentSelected = "agent_selected"
     case agentTaskProgress = "agent_task_progress"
+    case answerVerification = "answer_verification"
     case artifactChunk = "artifact_chunk"
     case artifactEnd = "artifact_end"
     case artifactStart = "artifact_start"
