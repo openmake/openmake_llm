@@ -1,0 +1,297 @@
+<meta charset="utf-8">
+<title>OpenMake LLM — Deployment Architecture</title>
+<!--
+  OpenMake LLM 배치(머신 단위) 아키텍처 도면의 **소스**.
+  구조가 바뀌면 이 HTML 을 고치고 render.mjs 를 다시 돌린다.
+
+    node docs/architecture/render.mjs   → arch2.png (ko) / arch2.en.png (en)
+
+  그림체는 2026-08-23 참고 시안(기기 일러스트 + 아이콘)을 따르되, 텍스트는 소스에서
+  가져온다. 시안은 이미지 생성물이라 한국어가 여러 군데 깨져 있었다
+  (row SQL / 일·게이트웨이 / 표드 실행 / 얼레이 / 본전). 도면에서 라벨이 틀리면
+  그림이 예쁜 것은 의미가 없으므로, 아이콘은 인라인 SVG 로 그리고 글자는 실제 텍스트로 둔다.
+
+  실측 근거: ecosystem.config.js(openmake-llm·openmake-next·openmake-discord),
+  scripts/vllm/dgx-ecosystem.config.example.cjs(vllm-chat·vllm-embed·flux),
+  infra/docker-compose.yml(postgres·redis), infra/{mcp-runtime,task-runtime,
+  egress-proxy,artifact-viewer}, .env(LLM_BASE_URL=127.0.0.1:13401,
+  LLM_GATEWAY_PROVIDERS=openrouter,ollama-cloud,nvidia)
+-->
+<script src="icons.js"></script>
+<style>
+  :root {
+    --ink:#0b1220; --sub:#64748b; --line:#e2e8f0;
+    --edge:#f59e0b; --pm2:#2563eb; --gw:#0d9488; --data:#0891b2; --box:#e11d48; --dgx:#22c55e;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    width:2000px; padding:44px 48px 36px; background:#fff; color:var(--ink);
+    font:400 13px/1.5 -apple-system,"SF Pro Text","Pretendard","Helvetica Neue",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  svg { display:block; flex:none; }
+  h1 { text-align:center; font-size:42px; font-weight:800; letter-spacing:-.03em; margin-bottom:6px; }
+  .sub-t { text-align:center; font-size:13.5px; color:var(--sub); margin-bottom:22px; }
+  .sub-t b { color:#334155; }
+
+  /* ── 공통 패널 ─────────────────────────────── */
+  .shell { border:1.5px solid #dbe3ee; border-radius:22px; background:#fbfdff; padding:16px 18px; }
+  .rail { display:flex; gap:16px; align-items:stretch; }
+  .rail > .badge {
+    flex:none; width:132px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:8px; border-radius:16px; text-align:center;
+  }
+  .badge .t { font-size:15px; font-weight:800; line-height:1.3; }
+  .badge .s { font-size:11px; color:var(--sub); }
+
+  .tiles { flex:1; display:grid; gap:0; grid-auto-flow:column; grid-auto-columns:1fr;
+           border:1px solid var(--line); border-radius:16px; background:#fff; overflow:hidden; }
+  .tile { display:flex; gap:11px; align-items:flex-start; padding:15px 16px; border-left:1px solid #eef2f7; }
+  .tile:first-child { border-left:0; }
+  .tile b { display:block; font-size:14px; font-weight:750; margin-bottom:3px; }
+  .tile p { font-size:11px; line-height:1.55; color:var(--sub); }
+
+  /* ── 진입 경로 ─────────────────────────────── */
+  .entries { display:flex; gap:22px; margin:16px 0 14px; }
+  .entry { display:flex; align-items:center; gap:12px; padding:13px 18px; border:2px solid var(--edge);
+           border-radius:16px; background:#fffbeb; }
+  .entry b { font-size:16px; font-weight:800; }
+  .entry p { font-size:11.5px; color:#92400e; margin-top:2px; }
+
+  /* ── 본체 3열 ─────────────────────────────── */
+  .main { display:grid; grid-template-columns:1090px 128px 1fr; gap:0 16px; align-items:start; }
+
+  /* Mac mini 기기 프레임 */
+  .mac { border:2px solid #cbd5e1; border-radius:26px; padding:14px;
+         background:linear-gradient(180deg,#f1f5f9 0%,#e2e8f0 100%); box-shadow:0 2px 0 #cbd5e1 inset; }
+  .mac > header { display:flex; align-items:center; gap:16px; padding:2px 8px 14px; }
+  .mac > header .t { font-size:22px; font-weight:800; }
+  .mac > header .s { font-size:11.5px; color:#475569; }
+  .mac > header .chip { margin-left:auto; padding:4px 10px; border-radius:999px; background:#fff;
+                        border:1px solid #cbd5e1; font-size:10.5px; color:#475569; font-family:ui-monospace,monospace; }
+  .zone { display:flex; gap:14px; align-items:stretch; padding:13px; border-radius:16px; margin-bottom:11px; }
+  .zone:last-child { margin-bottom:0; }
+  .zone > .zbadge { flex:none; width:96px; display:flex; flex-direction:column; align-items:center;
+                    justify-content:center; gap:7px; text-align:center; }
+  .zbadge .t { font-size:14px; font-weight:800; line-height:1.35; }
+  .zbody { flex:1; display:grid; gap:9px; }
+  .row3 { grid-template-columns:repeat(3,1fr); } .row2 { grid-template-columns:1fr 1fr; }
+  .item { display:flex; gap:10px; align-items:flex-start; padding:11px 13px; border:1px solid var(--line);
+          border-radius:12px; background:#fff; }
+  .item b { display:block; font-size:13px; font-weight:750; margin-bottom:2px; }
+  .item b em { font-style:normal; padding:1px 6px; margin-left:5px; border-radius:5px; background:#f1f5f9;
+               font-family:ui-monospace,"SF Mono",monospace; font-size:10.5px; color:#0f172a; font-weight:600; }
+  .item p { font-size:10.8px; line-height:1.55; color:var(--sub); }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; grid-column:1/-1; }
+  .chips i { font-style:normal; padding:5px 11px; border:1px solid #dbeafe; border-radius:999px;
+             background:#f8fbff; font-size:10.8px; color:#1e40af; font-weight:600; }
+  .hard { grid-column:1/-1; font-size:10.5px; color:var(--sub); padding-top:2px; }
+
+  /* Tailscale 통로 */
+  .link { display:flex; flex-direction:column; align-items:center; gap:8px; padding-top:230px; }
+  .link .arrow.up { transform:rotate(-90deg); }
+  .link .pill { display:flex; flex-direction:column; align-items:center; gap:9px; padding:20px 14px;
+                border:2px solid #86efac; border-radius:22px; background:#f0fdf4; }
+  .link .pill .t { font-size:14px; font-weight:800; text-align:center; line-height:1.4; }
+  .link .pill .s { font-size:10.5px; color:#15803d; text-align:center; line-height:1.4; }
+  .link .arrow { color:#22c55e; font-size:22px; }
+
+  /* DGX 섀시 */
+  .dgx { border:2px solid #0f172a; border-radius:22px; background:linear-gradient(180deg,#111827,#0b1220);
+         padding:16px; position:relative; overflow:hidden; }
+  .dgx > header { display:flex; align-items:center; gap:14px; margin-bottom:13px; }
+  .dgx > header .t { font-size:19px; font-weight:800; color:#fff; }
+  .dgx > header .s { font-size:11.5px; color:#94a3b8; }
+  .dgx .item { background:#0f1a2e; border-color:#1f2a3d; }
+  .dgx .item b { color:#fff; } .dgx .item p { color:#94a3b8; }
+  .dgx .item b em { background:#1f2a3d; color:#bbf7d0; }
+  .dgx .note { margin:12px 0 0; display:flex; gap:9px; align-items:flex-start; padding:10px 12px;
+               border:1px solid #1f2a3d; border-radius:12px; background:#0f1a2e; font-size:10.5px;
+               line-height:1.55; color:#94a3b8; }
+
+  /* 외부 provider 구름 */
+  .cloud { margin-top:14px; border:2px dashed #cbd5e1; border-radius:26px; background:#f8fafc; padding:14px 16px; }
+  .cloud > header { display:flex; align-items:center; gap:9px; margin-bottom:11px; }
+  .cloud > header .t { font-size:15px; font-weight:800; }
+  .cloud > header .s { font-size:11px; color:var(--sub); }
+  .cloud .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+  .cloud .out { margin-top:9px; text-align:right; font-size:10.5px; color:var(--sub); }
+
+  /* 하단 */
+  .legend { display:flex; align-items:center; justify-content:center; gap:26px; margin-top:20px; font-size:12px; color:#475569; }
+  .legend u { text-decoration:none; display:inline-flex; align-items:center; gap:7px; }
+  .legend u s { text-decoration:none; width:11px; height:11px; border-radius:50%; }
+  .flowbar { display:flex; align-items:center; justify-content:center; gap:14px; margin-top:14px; padding:14px 22px;
+             border:1.5px solid var(--line); border-radius:999px; background:#fbfdff; font-size:19px; font-weight:800; }
+  .flowbar span.a { color:#cbd5e1; font-size:17px; }
+  .flowbar .c1 { color:#f59e0b; } .flowbar .c2 { color:#1e3a8a; } .flowbar .c3 { color:#0d9488; } .flowbar .c4 { color:#16a34a; }
+  .stamp { position:absolute; top:44px; right:48px; text-align:right; font-size:11px; line-height:1.6; color:var(--sub); }
+  .stamp b { color:var(--ink); }
+</style>
+<body></body>
+<script>
+const L = new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'ko';
+const p = (v) => (typeof v === 'string' ? v : v[L]);
+
+
+const T = {
+  ko: {
+    title: 'OpenMake LLM — 배치 아키텍처',
+    lede: 'Mac mini (<b>앱 · 게이트웨이 · 데이터 플레인</b>) ⇄ Tailscale ⇄ DGX (<b>vLLM inference 플레인</b>) · 외부 provider 클라우드',
+    stamp: ['소스 기준', 'PM2 + Docker Desktop(Mac) · PM2(DGX)', 'chat.openmake.cc — Cloudflare Tunnel'],
+    clients: ['사용자 &', '클라이언트'],
+    macRole: '앱 · 게이트웨이 · 데이터 플레인', macChip: 'PM2 (launchd 부팅 복구) + Docker Desktop',
+    zEdge: ['엣지', '프록시'], zPm2: ['PM2', '프로세스'], zDocker: ['Docker Desktop', '(Linux VM)'],
+    tail: ['Tailscale', '사설망'], tailSub: 'OpenAI 호환 API',
+    dgx: 'DGX', dgxSub: 'vLLM 전용 inference 플레인 · PM2',
+    dgxNote: 'Tailscale IPv4 전용 바인딩 · 공인망·LAN 비노출 · API key 는 env 주입(CLI 인자 금지) · pm2-logrotate (100M · 7일)',
+    ext: '외부 LLM Provider', extSub: 'LiteLLM 게이트웨이 경유(BYOK) · 일부 direct',
+    extOut: '▲ Mac 의 LiteLLM(:13401) / apps/api 에서 아웃바운드 호출',
+    hard: '공통 하드닝 — cap-drop ALL · no-new-privileges · read-only · network none 기본 · --memory = --memory-swap · 심링크 탈출 차단(realpath)',
+    legend: ['엣지', '앱 (PM2)', 'LLM 게이트웨이', '데이터 (Docker)', '격리 샌드박스 (Docker)', 'vLLM (DGX)'],
+    flow: ['클라이언트', 'Cloudflare/LAN', 'Mac mini', 'Tailscale', 'DGX vLLM'],
+  },
+  en: {
+    title: 'OpenMake LLM — Deployment Architecture',
+    lede: 'Mac mini (<b>app · gateway · data plane</b>) ⇄ Tailscale ⇄ DGX (<b>vLLM inference plane</b>) · external provider clouds',
+    stamp: ['source of truth', 'PM2 + Docker Desktop (Mac) · PM2 (DGX)', 'chat.openmake.cc — Cloudflare Tunnel'],
+    clients: ['People &', 'clients'],
+    macRole: 'app · gateway · data plane', macChip: 'PM2 (launchd boot recovery) + Docker Desktop',
+    zEdge: ['Edge', 'proxy'], zPm2: ['PM2', 'processes'], zDocker: ['Docker Desktop', '(Linux VM)'],
+    tail: ['Tailscale', 'private net'], tailSub: 'OpenAI-compatible API',
+    dgx: 'DGX', dgxSub: 'vLLM inference plane · PM2',
+    dgxNote: 'Bound to the Tailscale IPv4 only · never the public internet or the LAN · API keys arrive through env, never CLI args · pm2-logrotate (100M · 7 days)',
+    ext: 'External LLM providers', extSub: 'through the LiteLLM gateway (BYOK) · some stay direct',
+    extOut: '▲ Outbound calls come from LiteLLM (:13401) and apps/api on the Mac',
+    hard: 'Shared hardening — cap-drop ALL · no-new-privileges · read-only · network none by default · --memory = --memory-swap · symlink escape blocked (realpath)',
+    legend: ['edge', 'app (PM2)', 'LLM gateway', 'data (Docker)', 'isolated sandbox (Docker)', 'vLLM (DGX)'],
+    flow: ['Clients', 'Cloudflare/LAN', 'Mac mini', 'Tailscale', 'DGX vLLM'],
+  },
+}[L];
+
+const D = {
+  clients: [
+    [I.globe(), 'apps/web', { ko: 'Next.js SPA · 운영 UI<br>REST(ApiClient) · WS(use-chat-socket)', en: 'Next.js SPA · operator UI<br>REST (ApiClient) · WS (use-chat-socket)' }],
+    [I.menubar(), 'apps/desktop-native', { ko: 'SwiftUI 메뉴바 컴패니언<br>브리지 코어 동봉 · native 업데이트', en: 'SwiftUI menu-bar companion<br>bundles the bridge core · native updates' }],
+    [I.terminal(), 'apps/cli', { ko: 'openmake-code · 터미널 브리지<br>턴은 서버가 돌린다', en: 'openmake-code · terminal bridge<br>the server drives the turns' }],
+    [I.phone(), 'apps/ios', { ko: '네이티브 클라이언트<br>카카오 지도 카드 · 위치·카메라·음성', en: 'Native client<br>Kakao map cards · location · camera · voice' }],
+    [I.discord(), 'apps/discord-bot', { ko: 'Discord 릴레이<br>자체 PM2 프로세스', en: 'Discord relay<br>its own PM2 process' }],
+  ],
+  edge: [
+    [I.cloudflare(), 'cloudflared', '', { ko: 'CF Tunnel 종단 →<br>Caddy 업스트림', en: 'Terminates the CF Tunnel →<br>upstream to Caddy' }],
+    [I.caddy(), 'Caddy', ':33000', { ko: '리버스 프록시 → 앱<br>:52416', en: 'Reverse proxy → app<br>:52416' }],
+    [I.nginx(), 'nginx', ':8088', { ko: '아티팩트 공유 뷰어<br>별도 오리진 · strict CSP', en: 'Artifact share viewer<br>separate origin · strict CSP' }],
+  ],
+  pm2: [
+    [I.next(), 'openmake-next', '', { ko: 'apps/web — Next.js 프로덕션 서빙<br>/api/* rewrite → 백엔드', en: 'apps/web — serves the production build<br>/api/* rewrite → backend' }],
+    [I.node(), 'openmake-llm', ':52416', { ko: 'apps/api — Express 5 백엔드<br>채팅 단일 경로 + 워크플로우', en: 'apps/api — Express 5 backend<br>one chat path + workflows' }],
+    [I.gateway(), 'LiteLLM', '127.0.0.1:13401', { ko: 'LLM 호출 단일 게이트웨이<br>master key 인증 · BYOK x-api-key', en: 'One gateway for every LLM call<br>master-key auth · BYOK x-api-key' }],
+  ],
+  chips: {
+    ko: ['Provider Gate', 'Discussion (18 에이전트)', 'Deep Research', 'Agent Task (HITL · sandbox|local)', 'MCP 도구 루프 (내장 22종)', 'Audit → Alert', 'OTel · schedulers'],
+    en: ['Provider gate', 'Discussion (18 agents)', 'Deep Research', 'Agent Task (HITL · sandbox|local)', 'MCP tool loop (22 built-ins)', 'Audit → Alert', 'OTel · schedulers'],
+  },
+  docker: [
+    [I.db(), 'PostgreSQL 16', '', { ko: 'openmake-postgres · raw SQL(pg)<br>부팅 자동 마이그레이션', en: 'openmake-postgres · raw SQL (pg)<br>migrations on boot' }],
+    [I.layers('#dc2626'), 'Redis', '', { ko: 'KVStore — rate limit<br>토큰 쿼터 · OAuth state', en: 'KVStore — rate limits<br>token quota · OAuth state' }],
+    [I.box(), 'mcp-runtime', '', { ko: '외부 MCP stdio 서버 격리<br>instance pid 기록', en: 'Isolates external MCP stdio servers<br>records the instance pid' }],
+    [I.layers(), 'task-runtime', '', { ko: 'Agent Task 별 영속 워크스페이스<br>uploads(원본 + 추출 텍스트)', en: 'Persistent per-task workspace<br>uploads (originals + extracted text)' }],
+    [I.netshield(), 'egress-proxy', '', { ko: '브라우저 컨테이너는 internal 네트워크뿐<br>도메인 allowlist 로만 외부 도달', en: 'Browser containers stay on an internal net<br>they exit only via the domain allowlist' }],
+    [I.cube(), 'artifact-exec', '', { ko: '아티팩트 코드 실행 · 동시 4 cap<br>표준 라이브러리만 · PDF/DOCX 변환', en: 'Runs artifact code · 4 concurrent<br>stdlib only · PDF/DOCX conversion' }],
+  ],
+  dgx: [
+    [I.bubble(), 'vllm-chat', ':8002', { ko: 'qwen3.6-35b-a3b (MoE) · 262K context<br>채팅 / 추론 본진', en: 'qwen3.6-35b-a3b (MoE) · 262K context<br>the main chat and reasoning model' }],
+    [I.db('#4ade80'), 'vllm-embed', ':8003', { ko: 'bge 임베딩', en: 'bge embeddings' }],
+    [I.image(), 'flux', ':8005', { ko: 'FLUX 이미지 생성 (generate_image)', en: 'FLUX image generation (generate_image)' }],
+  ],
+  ext: [
+    [{ ko: '게이트웨이 경유', en: 'Through the gateway' }, { ko: 'openrouter · ollama-cloud<br>NVIDIA NIM (wildcard + BYOK)', en: 'openrouter · ollama-cloud<br>NVIDIA NIM (wildcard + BYOK)' }],
+    [{ ko: 'Direct 예외', en: 'Direct exceptions' }, { ko: 'ollama-local (사용자별 endpoint)<br>ChatGPT OAuth (격리 불가 → 영구 direct)', en: 'ollama-local (per-user endpoint)<br>ChatGPT OAuth (cannot isolate → always direct)' }],
+  ],
+};
+
+const item = (icon, name, port, desc) =>
+  `<div class="item">${icon}<div><b>${name}${port ? `<em>${port}</em>` : ''}</b><p>${p(desc)}</p></div></div>`;
+
+document.body.innerHTML = `
+<div class="stamp"><b>${window.__STAMP__ || '2026-08-23'}</b> ${T.stamp[0]}<br>${T.stamp[1]}<br>${T.stamp[2]}</div>
+<h1>${T.title}</h1>
+<p class="sub-t">${T.lede}</p>
+
+<section class="shell"><div class="rail">
+  <div class="badge">${I.people()}<div class="t">${T.clients[0]}<br>${T.clients[1]}</div></div>
+  <div class="tiles">${D.clients.map(([ic, n, d]) =>
+    `<div class="tile">${ic}<div><b>${n}</b><p>${p(d)}</p></div></div>`).join('')}</div>
+</div></section>
+
+<div class="entries">
+  <div class="entry" style="flex:1.25">${I.cloudflare()}<div><b>Cloudflare — chat.openmake.cc</b>
+    <p>${L === 'ko' ? 'Tunnel · 요청당 100MB 상한 (초과분은 청크 업로드)' : 'Tunnel · 100MB per request (larger uploads go chunked)'}</p></div></div>
+  <div class="entry" style="flex:1">${I.house()}<div><b>LAN / ${L === 'ko' ? '로컬' : 'local'}</b>
+    <p>:52416 ${L === 'ko' ? '직접 접속' : 'direct'}</p></div></div>
+</div>
+
+<div class="main">
+  <section class="mac">
+    <header>
+${ART.macMini(120)}
+      <div><div class="t">Mac mini</div><div class="s">${T.macRole}</div></div>
+      <span class="chip">${T.macChip}</span>
+    </header>
+
+    <div class="zone" style="background:#fffbeb;border:1px solid #fde68a">
+      <div class="zbadge">${I.shield()}<div class="t" style="color:#b45309">${T.zEdge[0]}<br>${T.zEdge[1]}</div></div>
+      <div class="zbody row3">${D.edge.map(([i, n, pt, d]) => item(i, n, pt, d)).join('')}</div>
+    </div>
+
+    <div class="zone" style="background:#f8fbff;border:1px solid #bfdbfe">
+      <div class="zbadge">${I.gear()}<div class="t" style="color:#1d4ed8">${T.zPm2[0]}<br>${T.zPm2[1]}</div></div>
+      <div class="zbody row3">
+        ${D.pm2.map(([i, n, pt, d]) => item(i, n, pt, d)).join('')}
+        <div class="chips">${D.chips[L].map((c) => `<i>${c}</i>`).join('')}</div>
+      </div>
+    </div>
+
+    <div class="zone" style="background:#f0fdff;border:1px solid #a5f3fc">
+      <div class="zbadge">${I.whale()}<div class="t" style="color:#0e7490">${T.zDocker[0]}<br><span style="font-size:11px;font-weight:600">${T.zDocker[1]}</span></div></div>
+      <div class="zbody row3">
+        ${D.docker.map(([i, n, pt, d]) => item(i, n, pt, d)).join('')}
+        <p class="hard">${T.hard}</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="link">
+    <div class="arrow">▶</div>
+    <div class="pill">${I.shield('#16a34a')}<div class="t">${T.tail[0]}<br>${T.tail[1]}</div><div class="s">${T.tailSub}</div></div>
+    <div class="arrow">▶</div>
+  </div>
+
+  <div>
+    <section class="dgx">
+      <header>${ART.dgx(116)}
+        <div><div class="t">${T.dgx}</div><div class="s">${T.dgxSub}</div></div></header>
+      ${D.dgx.map(([i, n, pt, d]) => item(i, n, pt, d)).join('')}
+      <div class="note">${I.lock()}<span>${T.dgxNote}</span></div>
+    </section>
+
+    <section class="cloud">
+      <header>${I.cloud2()}<div><div class="t">${T.ext}</div><div class="s">${T.extSub}</div></div></header>
+      <div class="grid2">${D.ext.map(([n, d]) =>
+        `<div class="item"><div><b>${p(n)}</b><p>${p(d)}</p></div></div>`).join('')}</div>
+      <p class="out">${T.extOut}</p>
+    </section>
+  </div>
+</div>
+
+<div class="legend">${[['#f59e0b', 0], ['#2563eb', 1], ['#0d9488', 2], ['#0891b2', 3], ['#e11d48', 4], ['#22c55e', 5]]
+  .map(([c, i]) => `<u><s style="background:${c}"></s>${T.legend[i]}</u>`).join('')}</div>
+
+<div class="flowbar">${I.people('#334155')}
+  <span class="c2">${T.flow[0]}</span><span class="a">→</span>
+  <span class="c1">${T.flow[1]}</span><span class="a">→</span>
+  <span class="c2">${T.flow[2]}</span><span class="a">→</span>
+  <span class="c3">${T.flow[3]}</span><span class="a">→</span>
+  <span class="c4">${T.flow[4]}</span>
+</div>`;
+</script>
