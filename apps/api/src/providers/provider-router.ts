@@ -18,7 +18,6 @@ import {
 } from './i-provider';
 import { ProviderError } from './provider-errors';
 import { LocalLLMProvider } from './local-llm-provider';
-import { AnthropicProvider } from './anthropic-provider';
 import { OpenAICompatProvider, GatewayRouteOptions } from './openai-compat-provider';
 import { getConfig } from '../config';
 import { ChatGPTOAuthProvider } from './chatgpt-oauth/provider';
@@ -95,11 +94,6 @@ const EXTERNAL_PROVIDER_FACTORIES: Record<
         deps?: ExternalProviderInstanceDeps;
     }) => IProvider
 > = {
-    anthropic: ({ keyRow, plaintextKey }) =>
-        new AnthropicProvider({
-            apiKey: plaintextKey,
-            baseUrl: keyRow.baseUrl,
-        }),
     'openai-compatible': ({ providerId, keyRow, plaintextKey, deps }) => {
         // OAuth 행(ChatGPT 디바이스 플로우) — 평문은 API 키가 아닌 세션 JSON
         if (keyRow.authMethod === 'oauth') {
@@ -273,36 +267,12 @@ export class ProviderRouter {
 
     /**
      * 사용 가능한 모든 모델 목록을 반환합니다.
-     * - 게스트: local (vLLM/LiteLLM) 모델만
-     * - 로그인 사용자: local + 등록된 외부 provider 카탈로그
+     *
+     * 외부 provider(openai-compatible)의 모델 카탈로그는 여기서 만들지 않는다 — `model.routes`
+     * 가 사용자 BYOK 로 provider `/v1/models` 를 호출해 TTL 캐시로 제공한다. 유일하게 여기서
+     * 정적 카탈로그를 반환하던 anthropic direct 어댑터는 제거됐다(2026-08-23, 사용처 0).
      */
-    async listAllModels(ctx: ProviderRouterContext): Promise<ProviderModel[]> {
-        const localModels = await this.deps.localProvider.listModels();
-        if (!ctx.userId || !this.deps.externalKeysRepo) {
-            return localModels;
-        }
-
-        const userKeys = await this.deps.externalKeysRepo.listByUser(ctx.userId);
-        const externalModels: ProviderModel[] = [];
-
-        for (const keyRow of userKeys) {
-            if (keyRow.sdkType === 'anthropic') {
-                // Anthropic 카탈로그는 정적 — 일시 인스턴스 생성 없이 빈 키로 listModels 호출
-                // (AnthropicProvider.listModels 는 외부 호출 없이 KNOWN_MODELS 반환)
-                try {
-                    const provider = new AnthropicProvider({ apiKey: 'placeholder', baseUrl: keyRow.baseUrl });
-                    const models = await provider.listModels();
-                    externalModels.push(...models.map((m) => ({
-                        ...m,
-                        fullId: buildFullModelId(keyRow.providerId, m.id),
-                    })));
-                } catch (err) {
-                    logger.warn(`Anthropic 모델 카탈로그 조회 실패: ${err}`);
-                }
-            }
-            // Phase 4: openai-compatible 모델 카탈로그
-        }
-
-        return [...localModels, ...externalModels];
+    async listAllModels(_ctx: ProviderRouterContext): Promise<ProviderModel[]> {
+        return this.deps.localProvider.listModels();
     }
 }

@@ -70,7 +70,9 @@ function getUserId(req: Request): string | null {
 }
 
 const upsertKeySchema = z.object({
-    sdk_type: z.enum(['anthropic', 'openai-compatible']),
+    // anthropic direct 어댑터 폐기(2026-08-23) — 모든 외부 provider 는 openai-compatible 로만 등록된다.
+    // (DB CHECK 는 구 값을 아직 허용 — 코드 참조 제거 후 다음 배포에서 좁히는 2단계 원칙)
+    sdk_type: z.enum(['openai-compatible']),
     display_name: z.string().min(1).max(128),
     base_url: z.string().regex(/^https?:\/\//, 'must be http(s) URL').optional().nullable(),
     api_key: z.string().min(8).max(512),
