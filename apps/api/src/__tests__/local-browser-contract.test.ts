@@ -1,14 +1,15 @@
 /**
  * 로컬 브라우저(D3) 계약 회귀 테스트.
  *
- * 데스크톱 실행기(apps/desktop/agent-browser.js)는 Electron 런타임이 필요해 여기서 직접
- * 구동할 수 없다. 대신 **서버가 의존하는 계약**을 고정한다 —
+ * 이 계약을 구현하던 Electron 데스크톱 실행기(agent-browser.js)는 앱과 함께 제거됐고
+ * (2026-08-23), 현재 브리지 디바이스(Companion·CLI)는 browser 를 미지원으로 거부한다.
+ * 서버측 계약은 컨테이너 runner 와 공유하므로 회귀 축으로 계속 고정한다 —
  *   ① allowlist 호스트 매칭 규칙이 컨테이너 runner 와 동일한가
  *   ② 결과 JSON 형태가 runner 와 같아 서버 파싱이 재사용되는가
  * 이 둘이 어긋나면 로컬/컨테이너 경로에서 에이전트가 다르게 행동한다.
  */
 
-/** agent-browser.js 의 hostAllowed 와 동일 규칙 (runner 의 allowlist 매칭과도 일치해야 함). */
+/** 로컬 실행기의 hostAllowed 와 동일 규칙 (runner 의 allowlist 매칭과도 일치해야 함). */
 function hostAllowed(hostname: string, allowlist: string[] | null): boolean {
     if (!Array.isArray(allowlist) || allowlist.length === 0) return true;
     const h = String(hostname || '').toLowerCase();
