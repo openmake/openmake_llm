@@ -10,7 +10,7 @@
  *
  * @module llm/model-pool
  */
-import { MODEL_POOL_CONFIG } from '../config/model-pool';
+import { MODEL_POOL_CONFIG, resolveEffectiveContext } from '../config/model-pool';
 import { ContextOverflowError } from '../errors/context-overflow.error';
 import type { ChatMessage, ModelOptions } from './types';
 
@@ -120,16 +120,17 @@ export function truncateMessagesPreservingSystem(
  *   2단계: max_tokens 축소 (최소 MIN_OUTPUT_TOKENS 보장)
  *   3단계: 극단 (system 단독으로도 초과) — ContextOverflowError throw
  *
- * (호출 시점에 input + requested 가 effectiveDefault 를 이미 초과한 상태.)
+ * (호출 시점에 input + requested 가 유효 컨텍스트를 이미 초과한 상태.)
  */
 export function reduceToFit(
     messages: ChatMessage[],
     options: Pick<ModelOptions, 'num_predict'>,
 ): ModelPoolDecision {
     const requested = options.num_predict ?? MODEL_POOL_CONFIG.routingMaxTokensDefault;
-    const effective = MODEL_POOL_CONFIG.effectiveDefault;
-    const minOutput = MODEL_POOL_CONFIG.minOutputTokens;
     const model = MODEL_POOL_CONFIG.defaultModel;
+    // 임계값은 대상 모델 기준 — env 명시 > 부팅 프로브 실측 > 카탈로그 > 기본값.
+    const effective = resolveEffectiveContext(model);
+    const minOutput = MODEL_POOL_CONFIG.minOutputTokens;
 
     // 1단계: input truncate
     const inputBudget = effective - requested - SAFETY_BUFFER;
@@ -162,7 +163,7 @@ export function reduceToFit(
 
     // 3단계: 극단
     throw new ContextOverflowError(
-        `메시지가 262K 토큰 한계 초과 (input=${newInputTokens}, limit=${effective}). 입력을 줄여주세요.`,
+        `메시지가 모델 컨텍스트 한계를 초과했습니다 (input=${newInputTokens}, limit=${effective}). 입력을 줄여주세요.`,
         newInputTokens,
         effective,
     );
@@ -197,7 +198,7 @@ export function selectModelByCapacity(
     const estimatedOutput = options.num_predict ?? MODEL_POOL_CONFIG.routingMaxTokensDefault;
     const required = inputTokens + estimatedOutput;
 
-    if (required <= MODEL_POOL_CONFIG.effectiveDefault) {
+    if (required <= resolveEffectiveContext(MODEL_POOL_CONFIG.defaultModel)) {
         return {
             model: MODEL_POOL_CONFIG.defaultModel,
             source: 'auto',
