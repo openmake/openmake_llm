@@ -274,7 +274,8 @@
       "agent": "에이전트",
       "image": "이미지",
       "artifact": "아티팩트",
-      "structured": "구조화 답변"
+      "structured": "구조화 답변",
+      "verification": "답변 검증"
     },
     "slashMenu": {
       "heading": "스킬 호출",
@@ -439,6 +440,9 @@
       "INVALID_API_KEY": "인증 오류",
       "MISSING_API_KEY": "인증 오류",
       "UPSTREAM_ERROR": "업스트림 오류"
+    },
+    "verification": {
+      "title": "검증에서 지적된 사항"
     }
   },
   "artifacts": {
