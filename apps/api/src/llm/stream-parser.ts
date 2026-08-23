@@ -84,7 +84,7 @@ type OpenAIChatResponse = {
  * FormatOption → vLLM/OpenAI response_format 변환.
  * vLLM 지원 타입: json_object | json_schema | structural_tag | text (docs.vllm.ai 2026-03 기준).
  */
-function toResponseFormat(f: FormatOption | undefined): Record<string, unknown> | undefined {
+export function toResponseFormat(f: FormatOption | undefined): Record<string, unknown> | undefined {
     if (!f) return undefined;
     if (f === 'json') return { type: 'json_object' };
     return {

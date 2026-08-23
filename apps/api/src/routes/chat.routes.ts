@@ -36,6 +36,7 @@ import { LocalLLMProvider } from '../providers/local-llm-provider';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { getPool } from '../data/models/unified-database';
 import { composeStructuredAnswer, type StructuredChatFn } from '../services/answer-composer';
+import { toResponseFormat } from '../llm/stream-parser';
 import { buildWebSearchContext } from '../mcp/web-search/build-search-context';
 import { detectLanguage } from '../chat/language-policy';
 import { getCurrentDate } from '../utils/datetime';
@@ -302,8 +303,10 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
             return result.content ?? '';
         };
     } else {
-        // 외부 provider(Anthropic/OpenRouter 등) — provider 추상화는 json_schema 미지원이라
-        // streamChat 을 집계(비스트리밍)하고 JSON 은 프롬프트 + Validator/재시도로 받는다.
+        // 외부 provider(OpenRouter/ChatGPT 등) — streamChat 을 집계(비스트리밍)하되
+        // json_schema 를 함께 넘겨 스키마를 모델에 강제한다. 프롬프트만으로는 required 필드가
+        // 누락된다(실측 2026-08-23: chatgpt:gpt-5.6-luna 가 intent·sections 를 빠뜨려 검증 2회
+        // 실패 → degrade). 포맷을 거절하는 provider 는 answer-composer 가 포맷 없이 재시도한다.
         const localProvider = new LocalLLMProvider(createClient());
         const providerRouter = new ProviderRouter({
             localProvider,
@@ -312,9 +315,15 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
         // 외부 키는 실제(영속) user id 로만 조회 — 게스트(anon)는 ctxUserId=undefined → GUEST_NOT_ALLOWED.
         const resolved = await providerRouter.resolve(fullId as string, { userId: ctxUserId });
         usedModel = resolved.fullId;
-        chat = async (messages) => {
+        chat = async (messages, format) => {
+            const responseFormat = toResponseFormat(format);
             const result = await resolved.provider.streamChat(
-                { messages, modelId: resolved.modelId, abortSignal: abortController.signal },
+                {
+                    messages,
+                    modelId: resolved.modelId,
+                    abortSignal: abortController.signal,
+                    ...(responseFormat ? { responseFormat } : {}),
+                },
                 {}, // 토큰 콜백 불필요 — 누적 결과(content)만 사용
             );
             return result.content ?? '';
