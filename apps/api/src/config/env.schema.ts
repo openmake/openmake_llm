@@ -141,7 +141,7 @@ export const envSchema = z
         /**
          * LiteLLM 통합 게이트웨이로 inference 를 라우팅할 외부 provider id 콤마 목록
          * (예: 'openrouter,ollama-cloud,nvidia'). 빈값(기본) = 전부 direct.
-         * ollama-local·OAuth provider 는 목록과 무관하게 direct 유지.
+         * OAuth provider(chatgpt)는 목록과 무관하게 direct 유지.
          */
         LLM_GATEWAY_PROVIDERS: z.string().optional(),
         /**
