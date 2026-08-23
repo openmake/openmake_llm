@@ -28,7 +28,12 @@ const KEY_PREFIX_LENGTH = 12;
 /** DB key_prefix 컬럼 상한 (VARCHAR(16), 마이그레이션 016) — 초과 시 INSERT 실패 */
 const KEY_PREFIX_COLUMN_MAX = 16;
 
-export type ExternalSdkType = 'anthropic' | 'openai-compatible';
+/**
+ * 외부 provider SDK 종류. anthropic direct 어댑터 폐기(2026-08-23)로 1종만 남았다.
+ * DB CHECK 는 아직 구 값('anthropic')을 허용한다 — 코드 참조 제거 후 다음 배포에서 좁힌다
+ * (2단계 배포 원칙). 폐기 시점 기준 해당 sdk_type 행은 0건.
+ */
+export type ExternalSdkType = 'openai-compatible';
 
 /**
  * 키 인증 방식 (마이그레이션 082).
