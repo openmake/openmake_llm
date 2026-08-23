@@ -1,0 +1,216 @@
+<meta charset="utf-8">
+<title>OpenMake LLM — Target Architecture</title>
+<!--
+  OpenMake 가 **가고자 하는** 구조. arch.html(현재 통합 구조)의 짝이다.
+  로드맵의 다섯 운영 계층을 축으로 삼고, 각 요소에 구현 상태를 표시한다.
+
+    node docs/architecture/render.mjs   → target.png (ko) / target.en.png (en)
+
+  상태 표기는 3단계이며 근거는 소스 대조 결과다:
+    have — 구현됨. partial — 있으나 미완. plan — 아직 없음.
+  판정 근거(2026-08-23 기준):
+    · Model Gateway/Durable Runtime = have (provider-router, 7상태 머신, boot-recovery)
+      단 큐는 opt-in(AGENT_TASK_QUEUE_ENABLED), 체크포인트는 턴 단위
+    · Tool/Sandbox/Approval = partial (정책 엔진 없음, 승인 대기는 인메모리)
+    · Execution Graph = plan (agent_tasks.plan 은 평면 JSONB 리스트)
+    · Memory = Procedural have / Episodic partial(파생) / Semantic plan(pgvector 없음)
+    · Observability = partial (OTel·게이트 리포트 있음, 1급 감사 보고서 없음)
+    · Control Plane = plan (스키마에 tenant·project·workspace 컬럼 자체가 없음)
+-->
+<script src="icons.js"></script>
+<style>
+  :root { --ink:#0b1220; --sub:#64748b; --line:#e2e8f0;
+          --ctrl:#7c3aed; --agent:#2563eb; --exec:#059669; --mem:#0891b2; --obs:#f59e0b; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    width:2000px; padding:44px 48px 40px; color:var(--ink); position:relative;
+    background:
+      radial-gradient(1200px 520px at 50% -140px, #f3eeff 0%, rgba(243,238,255,0) 70%),
+      linear-gradient(#f8fafc 1px, transparent 1px) 0 0/34px 34px,
+      linear-gradient(90deg, #f8fafc 1px, transparent 1px) 0 0/34px 34px,
+      #fff;
+    font:400 13px/1.5 -apple-system,"SF Pro Text","Pretendard","Helvetica Neue",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  svg { display:block; flex:none; }
+  h1 { text-align:center; font-size:42px; font-weight:800; letter-spacing:-.03em; margin-bottom:6px; }
+  .sub-t { text-align:center; font-size:13.5px; color:var(--sub); margin-bottom:8px; }
+  .sub-t b { color:#334155; }
+  .keybar { display:flex; justify-content:center; gap:22px; margin-bottom:20px; font-size:12px; color:#475569; }
+  .keybar u { text-decoration:none; display:inline-flex; align-items:center; gap:7px; }
+  .keybar u s { text-decoration:none; width:26px; height:12px; border-radius:4px; }
+  .stamp { position:absolute; top:44px; right:48px; text-align:right; font-size:11px; line-height:1.6; color:var(--sub); }
+  .stamp b { color:var(--ink); }
+
+  /* 조직 경계 — 전체를 감싸는 통제 테두리 */
+  .boundary { border:2px dashed var(--ctrl); border-radius:28px; padding:16px 18px 18px; position:relative;
+              background:linear-gradient(180deg,#fbf8ff,#ffffff); }
+  .boundary > .tag { position:absolute; top:-13px; left:34px; padding:3px 14px; border-radius:999px;
+                     background:var(--ctrl); color:#fff; font-size:12px; font-weight:750; }
+
+  .layer { display:flex; gap:16px; align-items:stretch; padding:15px; border-radius:18px; margin-bottom:13px;
+           background:#fff; border:1px solid var(--line); box-shadow:0 10px 26px -20px rgba(15,23,42,.55); }
+  .layer:last-child { margin-bottom:0; }
+  .layer > .lb { flex:none; width:150px; display:flex; flex-direction:column; align-items:center;
+                 justify-content:center; gap:8px; text-align:center; }
+  .lb .t { font-size:16px; font-weight:800; line-height:1.3; }
+  .lb .s { font-size:10.5px; color:var(--sub); line-height:1.4; }
+  .cells { flex:1; display:grid; gap:9px; }
+  .c5 { grid-template-columns:repeat(5,1fr); } .c4 { grid-template-columns:repeat(4,1fr); }
+  .c3 { grid-template-columns:repeat(3,1fr); }
+
+  .cell { position:relative; padding:11px 13px; border-radius:12px; background:#fff; }
+  .cell b { display:block; font-size:12.5px; font-weight:750; margin-bottom:3px; padding-right:44px; }
+  .cell p { font-size:10.6px; line-height:1.55; color:var(--sub); }
+  .cell .st { position:absolute; top:10px; right:10px; padding:2px 7px; border-radius:999px;
+              font-size:9.5px; font-weight:750; letter-spacing:.02em; }
+  .have    { border:1px solid var(--c); box-shadow:inset 3px 0 0 var(--c); }
+  .have .st{ background:var(--c); color:#fff; }
+  .partial { border:1px solid var(--c); box-shadow:inset 3px 0 0 var(--c);
+             background:repeating-linear-gradient(135deg,#fff 0 9px,#f8fafc 9px 18px); }
+  .partial .st { background:#fff; color:var(--c); border:1px solid var(--c); }
+  .plan    { border:1.5px dashed var(--c); background:#fcfdff; }
+  .plan .st{ background:#f1f5f9; color:var(--c); border:1px dashed var(--c); }
+  .plan b, .plan p { opacity:.92; }
+
+  /* 하단 진행 순서 */
+  .order { margin-top:16px; padding:15px 17px; border:1px solid var(--line); border-radius:18px;
+           background:linear-gradient(180deg,#ffffff,#fbfdff); box-shadow:0 10px 26px -20px rgba(15,23,42,.5); }
+  .order > h4 { display:flex; align-items:center; gap:9px; font-size:14px; font-weight:800; margin-bottom:11px; }
+  .track { position:relative; display:flex; gap:6px; }
+  .track::before { content:""; position:absolute; left:30px; right:30px; top:20px; height:2px;
+                   background:linear-gradient(90deg,#059669,#2563eb,#7c3aed); border-radius:2px; }
+  .stop { position:relative; flex:1; padding:9px 11px; border:1px solid var(--line); border-radius:12px;
+          background:#fff; box-shadow:0 6px 16px -14px rgba(15,23,42,.6); }
+  .stop .n { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px;
+             border-radius:50%; color:#fff; font-size:11px; font-weight:700; margin-right:7px;
+             box-shadow:0 0 0 3px #fff, 0 0 0 5px #e2e8f0; }
+  .stop b { font-size:12px; font-weight:750; }
+  .stop p { margin-top:4px; font-size:10.3px; line-height:1.5; color:var(--sub); }
+</style>
+<body></body>
+<script>
+const L = new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'ko';
+const p = (v) => (typeof v === 'string' ? v : v[L]);
+
+const T = {
+  ko: {
+    title: 'OpenMake — 목표 구조',
+    lede: '오픈웨이트 <b>Agent Runtime</b> 위에 기업용 <b>Control Plane</b>. 로드맵이 말하는 다섯 운영 계층과, 각 요소가 지금 어디에 있는지.',
+    stamp: ['판정 기준', '실선=구현됨 · 빗금=부분 · 점선=계획', 'arch.png(현재 구조)의 짝'],
+    key: ['구현됨', '부분', '계획'],
+    boundary: '조직 경계 — Organization · Tenant · Project',
+    L: {
+      ctrl: ['Control Plane', '권한 · 정책 · 예산 · 감사'],
+      agent: ['Agent Runtime', '실행을 상태로 다루는 계층'],
+      exec: ['Execution Plane', '모델 · 도구 · 샌드박스'],
+      mem: ['State & Memory', '작업 상태와 기억'],
+      obs: ['Observability', '무슨 일이 있었는지 증명'],
+    },
+    orderT: '여기까지 가는 순서',
+  },
+  en: {
+    title: 'OpenMake — Target Architecture',
+    lede: 'An open-weight <b>agent runtime</b> under an enterprise <b>control plane</b>. The five operating layers the roadmap names, and where each piece actually stands.',
+    stamp: ['assessment basis', 'solid = built · hatched = partial · dashed = planned', 'the companion to arch.png (current structure)'],
+    key: ['built', 'partial', 'planned'],
+    boundary: 'Organization boundary — organization · tenant · project',
+    L: {
+      ctrl: ['Control plane', 'permission · policy · budget · audit'],
+      agent: ['Agent runtime', 'execution treated as state'],
+      exec: ['Execution plane', 'models · tools · sandboxes'],
+      mem: ['State & memory', 'task state and recall'],
+      obs: ['Observability', 'proving what happened'],
+    },
+    orderT: 'The order this gets built in',
+  },
+}[L];
+
+const S = { have: T.key[0], partial: T.key[1], plan: T.key[2] };
+
+const D = {
+  ctrl: [
+    ['plan', { ko: 'Organization · Tenant · Project', en: 'Organization · tenant · project' }, { ko: '스키마에 해당 컬럼 자체가 없다. 지금은 모든 설치가 단일 조직', en: 'No such column exists in the schema. Every installation today is a single organization' }],
+    ['partial', 'RBAC', { ko: 'admin · user · guest 3종. tenant/project 범위의 역할은 아직', en: 'admin · user · guest. Roles scoped to a tenant or project are not there yet' }],
+    ['plan', { ko: 'Policy Engine', en: 'Policy engine' }, { ko: '권한 등급을 서버가 강제. 지금은 승인 게이트가 그 일부를 대신한다', en: 'Server-enforced permission levels. The approval gate covers part of this today' }],
+    ['plan', { ko: 'Budget · Data Egress', en: 'Budget · data egress' }, { ko: '예산 정책과 반출 통제. 토큰 쿼터는 있으나 fail-open', en: 'Budget policy and egress control. A token quota exists but fails open' }],
+    ['partial', { ko: 'Secrets · API Key', en: 'Secrets · API keys' }, { ko: 'AES-256-GCM 보관 · bridge/chat 스코프까지. 회전·위임은 이후', en: 'AES-256-GCM at rest · bridge/chat scopes. Rotation and delegation come later' }],
+  ],
+  agent: [
+    ['have', 'Durable Task Runtime', { ko: '7상태 머신 · 턴 종료 체크포인트 · 부팅 자동 복구 · 스케줄', en: 'Seven-state machine · end-of-turn checkpoints · boot recovery · schedules' }],
+    ['partial', { ko: '큐 · 멱등 재실행', en: 'Queue · idempotent replay' }, { ko: '동시성 큐는 opt-in·단일 프로세스. 턴 중간 크래시는 도구 호출을 재실행한다', en: 'The queue is opt-in and in-process. A crash mid-turn re-runs that turn’s tool calls' }],
+    ['plan', 'Execution Graph', { ko: '노드마다 의존성 · 권한 · 비용 한도 · 재시도 · 완료 기준. 지금 계획은 평면 리스트', en: 'Per-node dependencies · permissions · cost cap · retry · completion criteria. Today the plan is a flat list' }],
+    ['partial', { ko: 'Approval Workflow', en: 'Approval workflow' }, { ko: '승인 3모드는 동작. 대기 자체는 메모리에 있어 재시작을 넘기지 못한다', en: 'Three approval modes work. The wait itself lives in memory and does not survive a restart' }],
+  ],
+  exec: [
+    ['have', 'Model Gateway', { ko: '로컬 우선 라우팅 · 역할별 배정 · 외부 어댑터 · fallback · 토큰 계산', en: 'Local-first routing · per-role assignment · external adapters · fallback · token accounting' }],
+    ['partial', 'Tool Runtime', { ko: '내장 22종 + 외부 MCP. 스키마·권한 메타데이터를 갖춘 레지스트리는 아직', en: '22 built-ins + external MCP. A registry with schemas and permission metadata is not there yet' }],
+    ['have', 'Workspace Sandbox', { ko: '작업별 워크스페이스 · Docker 격리 · egress allowlist · 자원 상한', en: 'Per-task workspace · Docker isolation · egress allowlist · resource caps' }],
+    ['have', { ko: '로컬 실행 노드', en: 'Local execution node' }, { ko: '공용 브리지 코어 위의 컴패니언·CLI. 경로 스코프와 우회 불가 확인', en: 'Companion and CLI on one shared bridge core. Path scoping and non-bypassable confirmation' }],
+  ],
+  mem: [
+    ['have', { ko: 'Task State · Artifact', en: 'Task state · artifacts' }, { ko: '작업 row · 단계 로그 · 체크포인트 · 아티팩트 버전', en: 'Task rows · step logs · checkpoints · versioned artifacts' }],
+    ['have', 'Procedural Memory', { ko: '성공한 절차를 스킬로 저장해 유사 목표에서 LLM 없이 재생', en: 'A successful procedure is saved as a skill and replayed without asking the model again' }],
+    ['partial', 'Episodic Memory', { ko: '과거 유사 작업을 row 에서 파생해 주입. 저장소는 따로 없다', en: 'Past similar tasks are derived from rows and injected. There is no store of its own' }],
+    ['plan', 'Semantic Memory', { ko: '벡터 저장소가 없다. 사용자 메모리는 trigram 매칭으로 검색', en: 'No vector store. User memory is searched by trigram match' }],
+    ['plan', { ko: '범위 · 출처 · 만료', en: 'Scope · source · expiry' }, { ko: '기억마다 출처 · 확신도 · 민감도 · 만료를 달아 통제', en: 'Each memory carries source, confidence, sensitivity, and expiry' }],
+  ],
+  obs: [
+    ['have', { ko: '실행 타임라인 · 감사 로그', en: 'Execution timeline · audit log' }, { ko: '단계별 이벤트 · CRITICAL_ACTIONS 알림 · 사용량', en: 'Step-level events · CRITICAL_ACTIONS alerts · usage' }],
+    ['have', { ko: '트레이싱 · 평가 게이트', en: 'Tracing · evaluation gates' }, { ko: 'OTel · 골든셋 CI 게이트 · 주간 게이트 리포트', en: 'OTel · golden-dataset CI gates · weekly gate report' }],
+    ['partial', { ko: '비용 관측', en: 'Cost observability' }, { ko: '작업별 토큰과 일·월 추정 비용. 작업 단위 비용 한도는 없다', en: 'Per-task tokens and estimated daily cost. There is no per-task cost cap' }],
+    ['plan', { ko: '1급 감사 보고서', en: 'First-class audit report' }, { ko: '조직이 감사자에게 그대로 건넬 수 있는 형태', en: 'Something an organization can hand to a reviewer as-is' }],
+  ],
+};
+
+const ORDER = {
+  ko: [
+    ['#059669', 'Durable Task Runtime', '구현 완료 — 남은 것은 턴 이하 내구성'],
+    ['#059669', '도구 · 승인 · 샌드박스', '대부분 완료 — 남은 것은 선언형 정책 엔진'],
+    ['#2563eb', 'Execution Graph', '다음 단계 — 선형 턴 루프를 대체하는 계획 단위'],
+    ['#2563eb', 'Agent · Skill manifest', '진행 중 — 역할 표준화와 패키지 단위'],
+    ['#7c3aed', '범위 있는 Memory', 'Semantic 저장소와 출처·만료'],
+    ['#7c3aed', '조직 Control Plane', 'tenant · project · 예산 · 반출 통제'],
+  ],
+  en: [
+    ['#059669', 'Durable task runtime', 'Built — what remains is sub-turn durability'],
+    ['#059669', 'Tools · approval · sandbox', 'Mostly built — what remains is a declarative policy engine'],
+    ['#2563eb', 'Execution graph', 'Next — the planning unit that replaces the linear turn loop'],
+    ['#2563eb', 'Agent · skill manifests', 'In progress — standard roles and a package unit'],
+    ['#7c3aed', 'Scoped memory', 'A semantic store, plus source and expiry'],
+    ['#7c3aed', 'Organization control plane', 'tenant · project · budget · egress control'],
+  ],
+}[L];
+
+const cell = (st, name, desc, c) =>
+  `<div class="cell ${st}" style="--c:${c}"><span class="st">${S[st]}</span><b>${p(name)}</b><p>${p(desc)}</p></div>`;
+
+const layer = (icon, key, color, cls, rows) => `
+  <div class="layer">
+    <div class="lb">${icon}<div class="t" style="color:${color}">${T.L[key][0]}</div><div class="s">${T.L[key][1]}</div></div>
+    <div class="cells ${cls}">${rows.map(([st, n, d]) => cell(st, n, d, color)).join('')}</div>
+  </div>`;
+
+document.body.innerHTML = `
+<div class="stamp"><b>${window.__STAMP__ || '2026-08-23'}</b> ${T.stamp[0]}<br>${T.stamp[1]}<br>${T.stamp[2]}</div>
+<h1>${T.title}</h1><p class="sub-t">${T.lede}</p>
+<div class="keybar">
+  <u><s style="background:#2563eb"></s>${T.key[0]}</u>
+  <u><s style="background:repeating-linear-gradient(135deg,#fff 0 5px,#cbd5e1 5px 10px);border:1px solid #2563eb"></s>${T.key[1]}</u>
+  <u><s style="border:1.5px dashed #7c3aed;background:#fcfdff"></s>${T.key[2]}</u>
+</div>
+
+<section class="boundary">
+  <span class="tag">${T.boundary}</span>
+  ${layer(I.shield('#7c3aed', 40), 'ctrl', 'var(--ctrl)', 'c5', D.ctrl)}
+  ${layer(I.robot('#2563eb', 40), 'agent', 'var(--agent)', 'c4', D.agent)}
+  ${layer(I.server('#059669', 40), 'exec', 'var(--exec)', 'c4', D.exec)}
+  ${layer(I.db('#0891b2', 40), 'mem', 'var(--mem)', 'c5', D.mem)}
+  ${layer(I.check('#f59e0b', 40), 'obs', 'var(--obs)', 'c4', D.obs)}
+</section>
+
+<div class="order"><h4>${I.route('#7c3aed', 26)}${T.orderT}</h4>
+  <div class="track">${ORDER.map(([c, t2, d], i) =>
+    `<div class="stop"><b><span class="n" style="background:${c}">${i + 1}</span>${t2}</b><p>${d}</p></div>`).join('')}</div>
+</div>`;
+</script>
