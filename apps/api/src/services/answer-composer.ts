@@ -33,7 +33,11 @@ import type { ChatMessage, FormatOption } from '../llm/types';
 const logger = createLogger('AnswerComposer');
 
 /** 주입되는 LLM 호출 함수 — (messages, json_schema) → raw content. 비스트리밍. */
-export type StructuredChatFn = (messages: ChatMessage[], format: FormatOption) => Promise<string>;
+/**
+ * 구조화 답변용 1회 LLM 호출. `format` 이 undefined 면 **스키마 강제 없이** 호출한다
+ * (guided decoding 미지원 백엔드로의 degrade 경로 — 외부 provider 경로는 원래 format 을 무시한다).
+ */
+export type StructuredChatFn = (messages: ChatMessage[], format?: FormatOption) => Promise<string>;
 
 /**
  * StructuredAnswer → 일정한 마크다운 (제안서 8절 formatAnswer 정확 구현).
@@ -89,6 +93,24 @@ function renderTable(headers: string[], rows: string[][]): string {
 }
 
 /** json_schema 출력에서 객체를 안전 파싱 (혹시 모를 마크다운 펜스 제거). */
+/** degrade 시 title 로 쓸 원 질문 길이 상한 — 제목이 본문처럼 길어지지 않게. */
+const MAX_FALLBACK_TITLE_CHARS = 80;
+
+function errText(e: unknown): string {
+    return e instanceof Error ? e.message : String(e);
+}
+
+/**
+ * 백엔드가 response_format(json_schema/guided decoding)을 거절한 오류인가.
+ * 백엔드마다 문구가 달라 보수적으로 키워드 매칭한다 — 오탐이 나도 스키마 없이 한 번 더
+ * 호출할 뿐이라 손해가 작고, 미탐이면 기존처럼 예외가 그대로 전파된다.
+ */
+function isFormatUnsupportedError(e: unknown): boolean {
+    const msg = errText(e).toLowerCase();
+    if (!/\b(400|422|unsupported|not support|invalid[_ ]request)\b/.test(msg)) return false;
+    return /response_format|json_schema|guided|structured output|schema/.test(msg);
+}
+
 function parseStructured(raw: string): unknown {
     const trimmed = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
     return JSON.parse(trimmed);
@@ -98,6 +120,12 @@ export interface ComposeResult {
     intent: AnswerIntent;
     structured: StructuredAnswer;
     markdown: string;
+    /**
+     * 정상 경로가 아니면 그 사유. 관측·로그용이며 응답은 정상 반환된다.
+     *  - `format_unsupported`: 백엔드가 json_schema(guided decoding)를 거절 → 스키마 없이 재시도
+     *  - `schema_invalid`: 2회 시도 후에도 스키마 불일치 → 평문 답변을 최소 구조로 감싸 반환
+     */
+    degraded?: 'format_unsupported' | 'schema_invalid';
 }
 
 /**
@@ -127,8 +155,23 @@ export async function composeStructuredAnswer(opts: {
         { role: 'user', content: userContent },
     ];
 
+    let degraded: ComposeResult['degraded'];
+
+    /**
+     * 1회 시도. 백엔드가 json_schema 를 거절하면(guided decoding 미지원) **스키마 없이**
+     * 한 번 더 호출한다 — 외부 provider 경로가 원래 그렇게 동작하므로 프롬프트만으로도
+     * 유효 JSON 이 나올 수 있다. 이 경로를 타면 degraded 사유를 남긴다.
+     */
     const attempt = async (msgs: ChatMessage[]): Promise<StructuredAnswer | null> => {
-        const raw = await opts.chat(msgs, STRUCTURED_ANSWER_FORMAT);
+        let raw: string;
+        try {
+            raw = await opts.chat(msgs, STRUCTURED_ANSWER_FORMAT);
+        } catch (e) {
+            if (!isFormatUnsupportedError(e)) throw e;
+            logger.warn(`백엔드가 json_schema 를 거절 — 스키마 없이 재시도: ${errText(e).slice(0, 160)}`);
+            degraded = 'format_unsupported';
+            raw = await opts.chat(msgs);
+        }
         let parsed: unknown;
         try {
             parsed = parseStructured(raw);
@@ -148,9 +191,33 @@ export async function composeStructuredAnswer(opts: {
             { role: 'system', content: getRepairHint(lang) },
         ]);
     }
+
     if (!structured) {
-        throw new AppError('구조화 답변 검증 실패 (스키마 불일치)', 422, true, 'STRUCTURED_OUTPUT_INVALID');
+        // 최후 degrade — 스키마를 못 맞추는 모델이라도 **답은 준다**. 평문 1회 호출 결과를
+        // 최소 구조로 감싼다(confidence=low: 구조 검증을 통과하지 못했음을 정직하게 표기).
+        // 여기서도 내용이 없을 때만 422 로 실패한다.
+        logger.warn('구조화 2회 실패 — 평문 답변으로 degrade');
+        const plain = (await opts.chat(messages)).trim();
+        if (!plain) {
+            throw new AppError('구조화 답변 검증 실패 (스키마 불일치)', 422, true, 'STRUCTURED_OUTPUT_INVALID');
+        }
+        degraded = 'schema_invalid';
+        structured = {
+            intent,
+            title: opts.message.slice(0, MAX_FALLBACK_TITLE_CHARS),
+            conclusion: plain,
+            summary: '',
+            sections: [],
+            confidence: 'low',
+        };
     }
 
-    return { intent, structured, markdown: formatAnswer(structured, lang) };
+    const finalAnswer: StructuredAnswer = structured;
+
+    return {
+        intent,
+        structured: finalAnswer,
+        markdown: formatAnswer(finalAnswer, lang),
+        ...(degraded ? { degraded } : {}),
+    };
 }
