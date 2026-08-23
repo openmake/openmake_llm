@@ -129,6 +129,7 @@ export function useChatSocket() {
     setModelFallback,
     appendThinking,
     setThinkingSummary,
+    setVerificationIssues,
     setStreaming,
     setCurrentSessionId,
     setActiveAgent,
@@ -233,6 +234,10 @@ export function useChatSocket() {
           break;
         case "thinking_summary":
           if (typeof data.summary === "string" && data.summary) setThinkingSummary(data.summary);
+          break;
+        // 답변 검증 지적 — done 이후 도착. 지적이 없으면 이벤트 자체가 오지 않는다.
+        case "answer_verification":
+          if (typeof data.issues === "string" && data.issues) setVerificationIssues(data.issues);
           break;
         case "session_created":
           if (data.sessionId) setCurrentSessionId(data.sessionId);
@@ -530,6 +535,8 @@ export function useChatSocket() {
         thinkingMode: s.thinkingEnabled,
         // 추론 강도 — 토글이 켜진 경우에만 의미(서버가 thinkingMode=false 면 무시).
         ...(s.thinkingEnabled ? { thinkingLevel: s.thinkingLevel } : {}),
+        // 답변 검증 — 켠 경우에만 요청(서버도 ANSWER_VERIFICATION_ENABLED 로 게이트).
+        ...(s.answerVerification ? { verifyAnswer: true } : {}),
         imageMode: s.imageMode,
         artifactMode: s.artifactMode,
         style: s.style,

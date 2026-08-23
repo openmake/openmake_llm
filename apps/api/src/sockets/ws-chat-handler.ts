@@ -7,6 +7,7 @@ import { WebSocket } from 'ws';
 import * as crypto from 'crypto';
 import { ClusterManager } from '../cluster/manager';
 import { selectOptimalModel } from '../chat/model-selector';
+import { verifyAnswer, isAnswerVerificationEnabled } from '../services/chat-service/answer-verifier';
 import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
 import { enqueueDebugCapture, DEBUG_QUEUE_TTL_MS } from '../data/conversation-debug-queue';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
@@ -453,6 +454,23 @@ export async function handleChatMessage(
             metrics: { tokensPerSec, tokenCount },
             ...(cleanedContent !== undefined ? { cleanedContent } : {}),
         }));
+
+        // 답변 검증 (선택) — done 이후 judge 모델이 1회 점검하고 **지적만** 보낸다.
+        // done 을 막지 않도록 완료 후 비동기로 돌리며, 실패는 조용히 무시한다(fail-open).
+        // 자동 수정은 하지 않는다 — 프로토타입 실측에서 수정 왕복이 답변을 악화시켰다.
+        if (msg.verifyAnswer === true && isAnswerVerificationEnabled()) {
+            const answerForVerify = cleanedContent ?? result.response ?? partialAssistantResponse;
+            void verifyAnswer(
+                typeof msg.message === 'string' ? msg.message : '',
+                answerForVerify ?? '',
+                extWs._authenticatedUserId ?? undefined,
+                userLangPreference,
+            ).then((issues) => {
+                if (issues && ws.readyState === ws.OPEN) {
+                    ws.send(JSON.stringify({ type: 'answer_verification', issues, messageId }));
+                }
+            }).catch(() => { /* fail-open */ });
+        }
 
     } catch (error: unknown) {
         // 중단 컨트롤러 정리
