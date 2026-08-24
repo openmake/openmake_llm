@@ -103,4 +103,22 @@ describe('ConventionChecker', () => {
         expect(r.findings).toHaveLength(1);
         expect(r.findings[0].rule).toBe('x');
     });
+    // ⚠️ 펜스를 먼저 벗기면 JSON **안의** 코드블록을 잡아 깨진다 — 전체 파싱이 먼저다
+    // (2026-08-24 skill-creator 실측: `Unexpected token 'p', "python..."`)
+    it('findings 안에 코드펜스가 있어도 정상 파싱 (전체 파싱 우선)', async () => {
+        const payload = JSON.stringify({
+            findings: [{
+                severity: 'warn', rule: 'x',
+                message: '예시: ```python\nimport os\n``` 를 쓰지 마세요',
+            }],
+        });
+        (mockLLM.chat as jest.Mock).mockResolvedValueOnce({
+            content: payload, metrics: { completion_tokens: 10 },
+        });
+        const c = new ConventionChecker(mockLLM as LLMClient);
+        const r = await c.check('m', 'p');
+        expect(r.findings).toHaveLength(1);
+        expect(r.findings[0].rule).toBe('x');
+    });
+
 });
