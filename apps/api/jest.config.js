@@ -45,7 +45,7 @@ module.exports = {
         '^turndown-plugin-gfm$': '<rootDir>/__mocks__/empty.js'
     },
     setupFiles: ['<rootDir>/jest.setup.ts'],
-    setupFilesAfterEnv: [],
+    setupFilesAfterEnv: ['<rootDir>/jest.setup-after-env.ts'],
     testTimeout: 10000,
     verbose: true,
     // Worker 메모리 제한 + 강제 종료 — worker leak 경고 해소
