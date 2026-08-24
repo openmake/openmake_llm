@@ -1071,7 +1071,13 @@
       "timeout": "连接超时",
       "protocol": "MCP 协议响应错误",
       "unknown": "连接失败 — 悬停查看详情"
-    }
+    },
+    "disabledLabel": "未启用",
+    "disable": "停用",
+    "enable": "启用",
+    "disableTitle": "标记为不使用（保留配置，可随时恢复）",
+    "enableTitle": "重新启用该服务器",
+    "toggleFailed": "更新失败：{error}"
   },
   "mcpCatalog": {
     "pageTitle": "MCP 目录",

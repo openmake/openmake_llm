@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Server, Boxes, Plus, Loader2, X, KeyRound, ClipboardCheck, AlertTriangle } from "lucide-react";
+import { Server, Boxes, Plus, Loader2, X, KeyRound, ClipboardCheck, AlertTriangle, Power, PowerOff } from "lucide-react";
 import {
   Button,
   Badge,
@@ -36,6 +36,8 @@ interface McpServer {
   transport: Transport;
   toolCount: number;
   status: ConnStatus;
+  /** 사용 여부 — false 면 목록에 남되 "사용 안 함"으로 표시된다(삭제와 달리 되돌릴 수 있다) */
+  enabled: boolean;
   /** 연결 실패 원인 코드 — 없으면 실패한 적이 없거나 현재 연결됨 */
   errorCode: string | null;
   /** 원인 원문 (코드만으로 부족한 진단용 — tooltip) */
@@ -58,6 +60,8 @@ interface ApiMcpServer {
   lastPing?: string | null;
   /** 연결 실패 원인 — 그전엔 백엔드가 내려줘도 프론트가 버려서 화면에 원인이 없었다 */
   connectionError?: string | null;
+  /** 사용 여부 — false 면 사용자가 "쓰지 않음"으로 치워둔 서버 */
+  enabled?: boolean;
   /** 원인 코드(`auth_required` 등) — i18n 문구로 바꿔 보여준다 */
   connectionErrorCode?: string | null;
   /** 백엔드가 마스킹해서 내려주는 env — 암호화된 값은 "***" 로 치환돼 있다(원문 미노출). */
@@ -96,6 +100,7 @@ function mapServer(s: ApiMcpServer, t: Translator): McpServer {
     transport: TRANSPORT_MAP[s.transport_type] ?? "stdio",
     toolCount: s.toolCount ?? 0,
     status: mapStatus(s.connectionStatus),
+    enabled: s.enabled !== false,
     errorCode: s.connectionStatus === "connected" ? null : (s.connectionErrorCode ?? null),
     errorDetail: s.connectionStatus === "connected" ? null : (s.connectionError ?? null),
     // 백엔드는 지연(latency) 수치를 제공하지 않음 — 표시 생략
@@ -319,6 +324,7 @@ function buildMockServers(t: Translator): McpServer[] {
     transport: "stdio",
     toolCount: 8,
     status: "connected",
+    enabled: true,
     errorCode: null,
     errorDetail: null,
     latencyMs: 12,
@@ -332,6 +338,7 @@ function buildMockServers(t: Translator): McpServer[] {
     transport: "HTTP",
     toolCount: 21,
     status: "connected",
+    enabled: true,
     errorCode: null,
     errorDetail: null,
     latencyMs: 184,
@@ -345,6 +352,7 @@ function buildMockServers(t: Translator): McpServer[] {
     transport: "stdio",
     toolCount: 5,
     status: "degraded",
+    enabled: true,
     errorCode: null,
     errorDetail: null,
     latencyMs: 842,
@@ -358,6 +366,7 @@ function buildMockServers(t: Translator): McpServer[] {
     transport: "SSE",
     toolCount: 11,
     status: "connected",
+    enabled: true,
     errorCode: null,
     errorDetail: null,
     latencyMs: 76,
@@ -371,6 +380,7 @@ function buildMockServers(t: Translator): McpServer[] {
     transport: "HTTP",
     toolCount: 3,
     status: "disconnected",
+    enabled: true,
     errorCode: null,
     errorDetail: null,
     latencyMs: null,
@@ -443,6 +453,31 @@ export function ConnectorsSection() {
       );
     } catch {
       /* 실패 시 현상 유지 */
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [id]: false }));
+    }
+  }
+
+  /**
+   * 사용 여부 토글 — 끄면 목록에 남되 "사용 안 함"으로 표시되고 살아있는 연결도 정리된다.
+   * 삭제와 달리 되돌릴 수 있어, 연결이 구조적으로 불가능한 서버를 치우는 데 쓴다.
+   */
+  async function handleToggleEnabled(id: string, next: boolean) {
+    setActionLoading((prev) => ({ ...prev, [id]: true }));
+    try {
+      await ApiClient.patch<ApiEnvelope<{ enabled: boolean }>>(
+        `/api/mcp/servers/${id}/enabled`,
+        { enabled: next },
+      );
+      setServers((prev) =>
+        prev.map((s) =>
+          s.id === id
+            ? { ...s, enabled: next, status: next ? s.status : "disconnected", toolCount: next ? s.toolCount : 0 }
+            : s,
+        ),
+      );
+    } catch (e) {
+      alert(t("toggleFailed", { error: e instanceof Error ? e.message : "" } as never));
     } finally {
       setActionLoading((prev) => ({ ...prev, [id]: false }));
     }
@@ -590,9 +625,13 @@ export function ConnectorsSection() {
                         {s.toolCount}
                       </Td>
                       <Td>
-                        <Badge tone={meta.tone}>{t(meta.labelKey)}</Badge>
+                        {/* 사용 안 함이 연결 상태보다 우선 — 안 쓰기로 한 서버에 "연결 안 됨"만
+                            보이면 고장난 것처럼 읽힌다 */}
+                        <Badge tone={s.enabled ? meta.tone : "neutral"}>
+                          {s.enabled ? t(meta.labelKey) : t("disabledLabel")}
+                        </Badge>
                         {/* 실패 원인 — 없으면 아무것도 그리지 않는다(정상 서버에 잡음 금지) */}
-                        {s.errorCode && (
+                        {s.enabled && s.errorCode && (
                           <div
                             className="mt-1 flex items-start gap-1 text-xs text-warn"
                             title={s.errorDetail ?? undefined}
@@ -618,6 +657,16 @@ export function ConnectorsSection() {
                       <Td className="text-faint">{s.lastChecked}</Td>
                       <Td>
                         <div className="flex items-center gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={isActing}
+                            onClick={() => void handleToggleEnabled(s.id, !s.enabled)}
+                            title={s.enabled ? t("disableTitle") : t("enableTitle")}
+                          >
+                            {s.enabled ? <PowerOff className="h-3 w-3" /> : <Power className="h-3 w-3" />}
+                            {s.enabled ? t("disable") : t("enable")}
+                          </Button>
                           {s.envKeys.length > 0 && (
                             <Button
                               variant="outline"

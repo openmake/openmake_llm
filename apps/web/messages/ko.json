@@ -1071,7 +1071,13 @@
       "timeout": "연결 시간 초과",
       "protocol": "MCP 프로토콜 응답 오류",
       "unknown": "연결 실패 — 자세한 내용은 항목에 마우스를 올려 확인"
-    }
+    },
+    "disabledLabel": "사용 안 함",
+    "disable": "사용 안 함",
+    "enable": "사용",
+    "disableTitle": "이 서버를 쓰지 않음으로 표시 (설정은 보존, 언제든 되돌릴 수 있음)",
+    "enableTitle": "이 서버를 다시 사용",
+    "toggleFailed": "변경 실패: {error}"
   },
   "mcpCatalog": {
     "pageTitle": "MCP 카탈로그",

@@ -1071,7 +1071,13 @@
       "timeout": "Connection timed out",
       "protocol": "MCP protocol response error",
       "unknown": "Connection failed — hover for details"
-    }
+    },
+    "disabledLabel": "Disabled",
+    "disable": "Disable",
+    "enable": "Enable",
+    "disableTitle": "Mark this server unused (settings kept, reversible anytime)",
+    "enableTitle": "Use this server again",
+    "toggleFailed": "Update failed: {error}"
   },
   "mcpCatalog": {
     "pageTitle": "MCP Catalog",
