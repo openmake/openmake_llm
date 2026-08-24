@@ -25,7 +25,8 @@
       "systemSettingsAdmin": "系统设置",
       "developer": "开发者",
       "schedulesAdmin": "任务计划",
-      "agentSuggestionsAdmin": "提示词建议"
+      "agentSuggestionsAdmin": "提示词建议",
+      "approvals": "待审批"
     },
     "pendingApprovals": "{count} 个待批准 — 代理任务正在等待您的批准"
   },
@@ -752,7 +753,8 @@
         "partial": "{total} 项中仅处理了 {ok} 项，其余已处理或无权限。",
         "failed": "批量操作失败：{error}"
       }
-    }
+    },
+    "approvalsButton": "待审批"
   },
   "agentTasks": {
     "loading": "加载中...",
@@ -1060,7 +1062,8 @@
     "envSaved": "凭据已更新。",
     "envSavedRespawn": "凭据已更新。现有连接已关闭，重新连接后将使用新值。",
     "envUpdateError": "更新凭据失败",
-    "tabInstances": "实例状态"
+    "tabInstances": "实例状态",
+    "pendingApprovals": "待审批"
   },
   "mcpCatalog": {
     "pageTitle": "MCP 目录",
@@ -2001,5 +2004,39 @@
     "colStarted": "启动",
     "colStopped": "结束",
     "colError": "错误"
+  },
+  "approvals": {
+    "title": "待审批",
+    "description": "在此批准已安装扩展的技能和 MCP 服务器后，即可在聊天中使用。",
+    "approve": "批准",
+    "reject": "拒绝",
+    "skills": {
+      "title": "技能",
+      "hint": "批准后可用 `/技能名` 调用，相关提问时也会自动应用。"
+    },
+    "mcp": {
+      "title": "MCP 服务器",
+      "hint": "批准后服务器将连接，模型会在聊天中自动调用其工具。",
+      "badge": "待审批",
+      "risk": "检测到危险命令 — 请审查后再批准",
+      "empty": "没有待审批的 MCP 服务器。",
+      "actionFailed": "操作失败：{error}"
+    },
+    "agents": {
+      "title": "自定义智能体",
+      "hint": "智能体无需批准 — 安装后即可使用。",
+      "link": "打开智能体列表"
+    },
+    "tasks": {
+      "title": "代理任务审批",
+      "hint": "高风险工具执行和代理提问需经批准后任务才会继续。也可以直接在聊天中回复。",
+      "empty": "没有待审批的代理任务。",
+      "question": "提问",
+      "tool": "工具执行",
+      "openTask": "打开任务",
+      "answerPlaceholder": "请输入回复",
+      "sendAnswer": "发送回复",
+      "actionFailed": "操作失败：{error}"
+    }
   }
 }

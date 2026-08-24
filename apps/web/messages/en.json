@@ -25,7 +25,8 @@
       "systemSettingsAdmin": "System Settings",
       "developer": "Developer",
       "schedulesAdmin": "Task Schedules",
-      "agentSuggestionsAdmin": "Prompt suggestions"
+      "agentSuggestionsAdmin": "Prompt suggestions",
+      "approvals": "Approvals"
     },
     "pendingApprovals": "{count} pending approval(s) — agent tasks are waiting for your approval"
   },
@@ -752,7 +753,8 @@
         "partial": "Processed {ok} of {total}. The rest were already handled or not permitted.",
         "failed": "Bulk action failed: {error}"
       }
-    }
+    },
+    "approvalsButton": "Approvals"
   },
   "agentTasks": {
     "loading": "Loading...",
@@ -1060,7 +1062,8 @@
     "envSaved": "Credentials updated.",
     "envSavedRespawn": "Credentials updated. The existing connection was closed; the new values apply once it reconnects.",
     "envUpdateError": "Failed to update credentials",
-    "tabInstances": "Instances"
+    "tabInstances": "Instances",
+    "pendingApprovals": "Approvals"
   },
   "mcpCatalog": {
     "pageTitle": "MCP Catalog",
@@ -2001,5 +2004,39 @@
     "colStarted": "Started",
     "colStopped": "Stopped",
     "colError": "Error"
+  },
+  "approvals": {
+    "title": "Pending approvals",
+    "description": "Approve skills and MCP servers from installed extensions here to start using them in chat.",
+    "approve": "Approve",
+    "reject": "Reject",
+    "skills": {
+      "title": "Skills",
+      "hint": "Once approved, call them with `/skill-name` or let them apply automatically on related questions."
+    },
+    "mcp": {
+      "title": "MCP servers",
+      "hint": "Once approved the server connects, and the model calls its tools automatically in chat.",
+      "badge": "Pending",
+      "risk": "Risky command detected — review before approving",
+      "empty": "No MCP servers awaiting approval.",
+      "actionFailed": "Action failed: {error}"
+    },
+    "agents": {
+      "title": "Custom agents",
+      "hint": "Agents need no approval — they are usable as soon as they are installed.",
+      "link": "Open agent list"
+    },
+    "tasks": {
+      "title": "Agent task approvals",
+      "hint": "High-risk tool runs and agent questions need approval before the task continues. You can also answer inline in chat.",
+      "empty": "No agent tasks awaiting approval.",
+      "question": "Question",
+      "tool": "Tool run",
+      "openTask": "Open task",
+      "answerPlaceholder": "Type your answer",
+      "sendAnswer": "Send answer",
+      "actionFailed": "Action failed: {error}"
+    }
   }
 }

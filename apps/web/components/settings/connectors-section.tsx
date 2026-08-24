@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Server, Boxes, Plus, Loader2, X, KeyRound } from "lucide-react";
+import { Server, Boxes, Plus, Loader2, X, KeyRound, ClipboardCheck } from "lucide-react";
 import {
   Button,
   Badge,
@@ -95,17 +95,6 @@ function mapServer(s: ApiMcpServer, t: Translator): McpServer {
     secretKeys: Object.entries(s.env ?? {})
       .filter(([, v]) => v === "***")
       .map(([k]) => k),
-  };
-}
-
-/* ── Draft 타입 ─────────────────────────────────────────────── */
-interface DraftServer {
-  id: string;
-  name?: string;
-  git_url?: string;
-  status: string;
-  manifest_meta?: {
-    conventionFindings?: { severity: string }[];
   };
 }
 
@@ -387,7 +376,8 @@ const TRANSPORT_TONE: Record<Transport, "accent" | "neutral"> = {
   HTTP: "accent",
 };
 
-type TabId = "servers" | "drafts" | "instances";
+/** Draft(승인 대기) 탭은 `/approvals` 로 이관됨 — 아래 주석 참고 (2026-08-25). */
+type TabId = "servers" | "instances";
 
 export function ConnectorsSection() {
   const t = useTranslations("mcpServers");
@@ -397,49 +387,8 @@ export function ConnectorsSection() {
   const [servers, setServers] = useState<McpServer[]>(() => buildMockServers(t));
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
-  const [drafts, setDrafts] = useState<DraftServer[]>([]);
-  const [draftsLoading, setDraftsLoading] = useState(false);
-  const [draftActionLoading, setDraftActionLoading] = useState<Record<string, boolean>>({});
   const [envEditTarget, setEnvEditTarget] = useState<McpServer | null>(null);
   const [envNotice, setEnvNotice] = useState<string | null>(null);
-
-  async function loadDrafts() {
-    setDraftsLoading(true);
-    try {
-      const res = await ApiClient.get<{ success: boolean; data: DraftServer[] }>(
-        "/api/mcp/servers/drafts",
-      );
-      setDrafts(res?.data ?? []);
-    } catch {
-      /* 실패 시 빈 목록 유지 */
-    } finally {
-      setDraftsLoading(false);
-    }
-  }
-
-  async function handleApproveDraft(id: string) {
-    setDraftActionLoading((prev) => ({ ...prev, [id]: true }));
-    try {
-      await ApiClient.post(`/api/mcp/servers/${id}/approve`, {});
-      await loadDrafts();
-    } catch {
-      /* 실패 시 현상 유지 */
-    } finally {
-      setDraftActionLoading((prev) => ({ ...prev, [id]: false }));
-    }
-  }
-
-  async function handleRejectDraft(id: string) {
-    setDraftActionLoading((prev) => ({ ...prev, [id]: true }));
-    try {
-      await ApiClient.post(`/api/mcp/servers/${id}/reject`, {});
-      await loadDrafts();
-    } catch {
-      /* 실패 시 현상 유지 */
-    } finally {
-      setDraftActionLoading((prev) => ({ ...prev, [id]: false }));
-    }
-  }
 
   // env 교체 성공 — 백엔드가 기존 컨테이너를 정리했으므로(stale env 방지) 재연결 안내.
   function handleEnvUpdated(respawnRequired: boolean) {
@@ -501,20 +450,14 @@ export function ConnectorsSection() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (tab === "drafts") {
-      void loadDrafts();
-    }
-  }, [tab]);
-
   return (
     <Card>
       <GitImportModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         onSuccess={() => {
-          setTab("drafts");
-          void loadDrafts();
+          // 설치분은 draft 로 들어가며 승인해야 연결된다 — 단일 승인 창구로 보낸다
+          router.push("/approvals");
         }}
       />
       <EnvEditModal
@@ -528,6 +471,11 @@ export function ConnectorsSection() {
           <p className="mt-0.5 text-xs text-muted">{t("description")}</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* 구 Draft 탭 자리 — 승인은 /approvals 한 곳으로 모았다 (2026-08-25) */}
+          <Button variant="outline" size="sm" onClick={() => router.push("/approvals")}>
+            <ClipboardCheck className="h-4 w-4" />
+            {t("pendingApprovals")}
+          </Button>
           <Button variant="outline" size="sm" onClick={() => router.push("/mcp-catalog")}>
             <Boxes className="h-4 w-4" />
             {t("catalog")}
@@ -554,7 +502,7 @@ export function ConnectorsSection() {
         )}
         {/* 탭 */}
         <div className="mb-4 inline-flex rounded-pill border border-border bg-surface-2 p-1">
-          {(["servers", "drafts", "instances"] as TabId[]).map((tabId) => (
+          {(["servers", "instances"] as TabId[]).map((tabId) => (
             <button
               key={tabId}
               type="button"
@@ -566,7 +514,7 @@ export function ConnectorsSection() {
                   : "text-muted hover:text-fg",
               )}
             >
-              {tabId === "servers" ? t("tabServers") : tabId === "drafts" ? "Draft" : t("tabInstances")}
+              {tabId === "servers" ? t("tabServers") : t("tabInstances")}
             </button>
           ))}
         </div>
@@ -699,95 +647,6 @@ export function ConnectorsSection() {
             </tbody>
           </Table>
         </div>
-        )}
-
-        {/* Draft 탭 */}
-        {tab === "drafts" && (
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <Table>
-              <thead>
-                <tr>
-                  <Th>ID</Th>
-                  <Th>Git URL</Th>
-                  <Th>{t("colName")}</Th>
-                  <Th>{t("colStatus")}</Th>
-                  <Th>{t("draftColRisk")}</Th>
-                  <Th>{t("colAction")}</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {draftsLoading ? (
-                  <tr>
-                    <Td colSpan={6}>
-                      <div className="py-12 text-center text-muted">{t("loading")}</div>
-                    </Td>
-                  </tr>
-                ) : drafts.length === 0 ? (
-                  <tr>
-                    <Td colSpan={6}>
-                      <div className="py-12 text-center text-muted">
-                        {t("emptyDrafts")}
-                      </div>
-                    </Td>
-                  </tr>
-                ) : (
-                  drafts.map((d) => {
-                    const hasError = d.manifest_meta?.conventionFindings?.some(
-                      (f) => f.severity === "error",
-                    );
-                    const isActing = draftActionLoading[d.id] ?? false;
-                    return (
-                      <tr key={d.id} className="transition hover:bg-surface-2">
-                        <Td className="font-mono text-xs text-fg-2">
-                          {d.id.slice(0, 8)}
-                        </Td>
-                        <Td className="max-w-xs truncate text-xs text-fg-2">
-                          {d.git_url ?? "—"}
-                        </Td>
-                        <Td className="text-sm text-fg">{d.name ?? "—"}</Td>
-                        <Td>
-                          <Badge tone={d.status === "approved" ? "success" : d.status === "rejected" ? "danger" : "neutral"}>
-                            {d.status}
-                          </Badge>
-                        </Td>
-                        <Td>
-                          {hasError ? (
-                            <span className="text-sm text-danger">{t("riskWarning")}</span>
-                          ) : (
-                            <span className="text-faint">—</span>
-                          )}
-                        </Td>
-                        <Td>
-                          {d.status === "pending" && (
-                            <div className="flex items-center gap-1">
-                              <Button
-                                size="sm"
-                                disabled={isActing}
-                                onClick={() => void handleApproveDraft(d.id)}
-                              >
-                                {isActing && (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                )}
-                                {t("approve")}
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={isActing}
-                                onClick={() => void handleRejectDraft(d.id)}
-                              >
-                                {t("reject")}
-                              </Button>
-                            </div>
-                          )}
-                        </Td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </Table>
-          </div>
         )}
 
         {/* 인스턴스 상태 탭 — 프로세스 lifecycle(시작·중지·pid 헬스체크) */}

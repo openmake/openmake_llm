@@ -25,7 +25,8 @@
       "systemSettingsAdmin": "システム設定",
       "developer": "開発者",
       "schedulesAdmin": "タスクスケジュール",
-      "agentSuggestionsAdmin": "プロンプト提案"
+      "agentSuggestionsAdmin": "プロンプト提案",
+      "approvals": "承認待ち"
     },
     "pendingApprovals": "承認待ち {count}件 — エージェント作業がユーザーの承認を待っています"
   },
@@ -752,7 +753,8 @@
         "partial": "{total}件中{ok}件のみ処理されました。残りは処理済みか権限がありません。",
         "failed": "一括処理に失敗しました: {error}"
       }
-    }
+    },
+    "approvalsButton": "承認待ち"
   },
   "agentTasks": {
     "loading": "読み込み中...",
@@ -1060,7 +1062,8 @@
     "envSaved": "認証情報を変更しました。",
     "envSavedRespawn": "認証情報を変更しました。既存の接続は終了し、再接続時に新しい値が適用されます。",
     "envUpdateError": "認証情報の変更に失敗しました",
-    "tabInstances": "インスタンス状態"
+    "tabInstances": "インスタンス状態",
+    "pendingApprovals": "承認待ち"
   },
   "mcpCatalog": {
     "pageTitle": "MCPカタログ",
@@ -2001,5 +2004,39 @@
     "colStarted": "開始",
     "colStopped": "終了",
     "colError": "エラー"
+  },
+  "approvals": {
+    "title": "承認待ち",
+    "description": "インストールした拡張のスキル・MCPサーバーをここで承認すると、チャットですぐ使えます。",
+    "approve": "承認",
+    "reject": "却下",
+    "skills": {
+      "title": "スキル",
+      "hint": "承認すると `/スキル名` で呼び出せ、関連する質問では自動的に適用されます。"
+    },
+    "mcp": {
+      "title": "MCPサーバー",
+      "hint": "承認するとサーバーが接続され、チャットでモデルがそのツールを自動的に呼び出します。",
+      "badge": "承認待ち",
+      "risk": "危険なコマンドを検出 — 確認のうえ承認",
+      "empty": "承認待ちのMCPサーバーはありません。",
+      "actionFailed": "処理に失敗しました: {error}"
+    },
+    "agents": {
+      "title": "カスタムエージェント",
+      "hint": "エージェントは承認不要です — インストール後すぐ使用できます。",
+      "link": "エージェント一覧を開く"
+    },
+    "tasks": {
+      "title": "エージェント作業の承認",
+      "hint": "高リスクなツール実行とエージェントからの質問は、承認しないと作業が進みません。チャット内でも回答できます。",
+      "empty": "承認待ちの作業はありません。",
+      "question": "質問",
+      "tool": "ツール実行",
+      "openTask": "作業を開く",
+      "answerPlaceholder": "回答を入力してください",
+      "sendAnswer": "回答を送信",
+      "actionFailed": "処理に失敗しました: {error}"
+    }
   }
 }

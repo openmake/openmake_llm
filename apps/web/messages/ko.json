@@ -25,7 +25,8 @@
       "systemSettingsAdmin": "시스템 설정",
       "developer": "개발자",
       "schedulesAdmin": "작업 스케줄",
-      "agentSuggestionsAdmin": "프롬프트 제안"
+      "agentSuggestionsAdmin": "프롬프트 제안",
+      "approvals": "승인 대기"
     },
     "pendingApprovals": "승인 대기 {count}건 — 에이전트 작업이 사용자 승인을 기다리고 있습니다"
   },
@@ -752,7 +753,8 @@
         "partial": "{total}개 중 {ok}개만 처리됐습니다. 나머지는 이미 처리됐거나 권한이 없습니다.",
         "failed": "일괄 처리 실패: {error}"
       }
-    }
+    },
+    "approvalsButton": "승인 대기"
   },
   "agentTasks": {
     "loading": "불러오는 중...",
@@ -1060,7 +1062,8 @@
     "envSaved": "자격증명을 변경했습니다.",
     "envSavedRespawn": "자격증명을 변경했습니다. 기존 연결이 종료되었으며, 다시 연결되면 새 값이 적용됩니다.",
     "envUpdateError": "자격증명 변경에 실패했습니다",
-    "tabInstances": "인스턴스 상태"
+    "tabInstances": "인스턴스 상태",
+    "pendingApprovals": "승인 대기"
   },
   "mcpCatalog": {
     "pageTitle": "MCP 카탈로그",
@@ -2001,5 +2004,39 @@
     "colStarted": "시작",
     "colStopped": "종료",
     "colError": "오류"
+  },
+  "approvals": {
+    "title": "승인 대기",
+    "description": "설치한 확장의 스킬·MCP 서버를 여기서 승인하면 채팅에서 바로 쓸 수 있습니다.",
+    "approve": "승인",
+    "reject": "거부",
+    "skills": {
+      "title": "스킬",
+      "hint": "승인하면 채팅에서 `/스킬이름` 으로 부르거나, 관련 질문 시 자동으로 적용됩니다."
+    },
+    "mcp": {
+      "title": "MCP 서버",
+      "hint": "승인하면 서버가 연결되고, 채팅에서 모델이 그 도구를 자동으로 호출합니다.",
+      "badge": "승인 대기",
+      "risk": "위험 명령 감지 — 검토 후 승인",
+      "empty": "승인 대기 중인 MCP 서버가 없습니다.",
+      "actionFailed": "처리 실패: {error}"
+    },
+    "agents": {
+      "title": "커스텀 에이전트",
+      "hint": "에이전트는 승인이 필요 없습니다 — 설치 즉시 사용할 수 있습니다.",
+      "link": "에이전트 목록 열기"
+    },
+    "tasks": {
+      "title": "에이전트 작업 승인",
+      "hint": "고위험 도구 실행과 에이전트의 질문은 승인해야 작업이 이어집니다. 채팅 안에서도 바로 답할 수 있습니다.",
+      "empty": "승인 대기 중인 작업이 없습니다.",
+      "question": "질문",
+      "tool": "도구 실행",
+      "openTask": "작업 열기",
+      "answerPlaceholder": "답변을 입력하세요",
+      "sendAnswer": "답변 보내기",
+      "actionFailed": "처리 실패: {error}"
+    }
   }
 }
