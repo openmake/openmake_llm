@@ -264,6 +264,8 @@ export interface MCPServerConfig {
     sandbox_network?: 'full' | 'none' | 'host';
     /** 채팅 자동 노출 도구 화이트리스트(순서=우선순위, 카탈로그 tool_allowlist 유래). 미정의=전체 노출. REST 직접 실행 미적용 */
     tool_allowlist?: string[];
+    /** 소유 사용자 — 있으면 원격 transport 에 사용자×서버 단위 OAuth provider 를 붙인다(전역 서버는 없음) */
+    user_id?: string;
 }
 
 /**

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Server, Boxes, Plus, Loader2, X, KeyRound, ClipboardCheck, AlertTriangle, Power, PowerOff } from "lucide-react";
+import { Server, Boxes, Plus, Loader2, X, KeyRound, ClipboardCheck, AlertTriangle, Power, PowerOff, LogIn, LogOut } from "lucide-react";
 import {
   Button,
   Badge,
@@ -38,6 +38,8 @@ interface McpServer {
   status: ConnStatus;
   /** 사용 여부 — false 면 목록에 남되 "사용 안 함"으로 표시된다(삭제와 달리 되돌릴 수 있다) */
   enabled: boolean;
+  /** OAuth 토큰 보유 — 로그아웃 버튼 노출 기준 */
+  oauthConnected: boolean;
   /** 연결 실패 원인 코드 — 없으면 실패한 적이 없거나 현재 연결됨 */
   errorCode: string | null;
   /** 원인 원문 (코드만으로 부족한 진단용 — tooltip) */
@@ -62,6 +64,8 @@ interface ApiMcpServer {
   connectionError?: string | null;
   /** 사용 여부 — false 면 사용자가 "쓰지 않음"으로 치워둔 서버 */
   enabled?: boolean;
+  /** 원격 서버에 OAuth 토큰이 저장돼 있는가 */
+  oauthConnected?: boolean;
   /** 원인 코드(`auth_required` 등) — i18n 문구로 바꿔 보여준다 */
   connectionErrorCode?: string | null;
   /** 백엔드가 마스킹해서 내려주는 env — 암호화된 값은 "***" 로 치환돼 있다(원문 미노출). */
@@ -101,6 +105,7 @@ function mapServer(s: ApiMcpServer, t: Translator): McpServer {
     toolCount: s.toolCount ?? 0,
     status: mapStatus(s.connectionStatus),
     enabled: s.enabled !== false,
+    oauthConnected: s.oauthConnected === true,
     errorCode: s.connectionStatus === "connected" ? null : (s.connectionErrorCode ?? null),
     errorDetail: s.connectionStatus === "connected" ? null : (s.connectionError ?? null),
     // 백엔드는 지연(latency) 수치를 제공하지 않음 — 표시 생략
@@ -325,6 +330,7 @@ function buildMockServers(t: Translator): McpServer[] {
     toolCount: 8,
     status: "connected",
     enabled: true,
+    oauthConnected: false,
     errorCode: null,
     errorDetail: null,
     latencyMs: 12,
@@ -339,6 +345,7 @@ function buildMockServers(t: Translator): McpServer[] {
     toolCount: 21,
     status: "connected",
     enabled: true,
+    oauthConnected: false,
     errorCode: null,
     errorDetail: null,
     latencyMs: 184,
@@ -353,6 +360,7 @@ function buildMockServers(t: Translator): McpServer[] {
     toolCount: 5,
     status: "degraded",
     enabled: true,
+    oauthConnected: false,
     errorCode: null,
     errorDetail: null,
     latencyMs: 842,
@@ -367,6 +375,7 @@ function buildMockServers(t: Translator): McpServer[] {
     toolCount: 11,
     status: "connected",
     enabled: true,
+    oauthConnected: false,
     errorCode: null,
     errorDetail: null,
     latencyMs: 76,
@@ -381,6 +390,7 @@ function buildMockServers(t: Translator): McpServer[] {
     toolCount: 3,
     status: "disconnected",
     enabled: true,
+    oauthConnected: false,
     errorCode: null,
     errorDetail: null,
     latencyMs: null,
@@ -419,6 +429,17 @@ export function ConnectorsSection() {
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
   const [envEditTarget, setEnvEditTarget] = useState<McpServer | null>(null);
   const [envNotice, setEnvNotice] = useState<string | null>(null);
+  // OAuth 콜백 착지 — 결과를 알리고 목록을 다시 읽는다(토큰이 생겨 연결됐을 수 있다)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get("mcpOauth");
+    if (!result) return;
+    const server = params.get("server") ?? "";
+    setEnvNotice(result === "ok" ? t("oauthOk", { server } as never) : t("oauthFailed", { server, reason: params.get("reason") ?? "" } as never));
+    params.delete("mcpOauth"); params.delete("server"); params.delete("reason");
+    window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // env 교체 성공 — 백엔드가 기존 컨테이너를 정리했으므로(stale env 방지) 재연결 안내.
   function handleEnvUpdated(respawnRequired: boolean) {
@@ -453,6 +474,40 @@ export function ConnectorsSection() {
       );
     } catch {
       /* 실패 시 현상 유지 */
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [id]: false }));
+    }
+  }
+
+  /**
+   * 원격 MCP OAuth 로그인 — 백엔드가 인가 URL 을 만들어 주면 브라우저를 그리로 보낸다.
+   * 콜백이 끝나면 커넥터 탭으로 돌아오며 ?mcpOauth=ok|error 로 결과를 알린다.
+   */
+  async function handleOAuthLogin(id: string) {
+    setActionLoading((prev) => ({ ...prev, [id]: true }));
+    try {
+      const r = await ApiClient.post<ApiEnvelope<{ authorized: boolean; authorizationUrl: string | null }>>(
+        `/api/mcp/servers/${id}/oauth/start`, {});
+      if (r.data?.authorizationUrl) {
+        window.location.assign(r.data.authorizationUrl);
+        return; // 페이지를 떠난다 — 로딩 상태는 그대로 두어 중복 클릭을 막는다
+      }
+      // 이미 유효한 토큰이 있어 갱신만 됐다 → 바로 연결
+      await handleConnect(id);
+    } catch (e) {
+      alert(t("oauthStartFailed", { error: e instanceof Error ? e.message : "" } as never));
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [id]: false }));
+    }
+  }
+
+  async function handleOAuthLogout(id: string) {
+    setActionLoading((prev) => ({ ...prev, [id]: true }));
+    try {
+      await ApiClient.del(`/api/mcp/servers/${id}/oauth`);
+      setServers((prev) => prev.map((s) => (s.id === id ? { ...s, oauthConnected: false, status: "disconnected", toolCount: 0 } : s)));
+    } catch (e) {
+      alert(t("oauthStartFailed", { error: e instanceof Error ? e.message : "" } as never));
     } finally {
       setActionLoading((prev) => ({ ...prev, [id]: false }));
     }
@@ -638,6 +693,16 @@ export function ConnectorsSection() {
                           >
                             <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
                             <span>{t(`connectError.${s.errorCode}`)}</span>
+                            {s.errorCode === "auth_required" && (
+                              <button
+                                type="button"
+                                disabled={isActing}
+                                onClick={() => void handleOAuthLogin(s.id)}
+                                className="ml-1 inline-flex items-center gap-1 font-medium text-accent hover:underline disabled:opacity-50"
+                              >
+                                <LogIn className="h-3 w-3" />{t("oauthLogin")}
+                              </button>
+                            )}
                           </div>
                         )}
                       </Td>
@@ -667,6 +732,18 @@ export function ConnectorsSection() {
                             {s.enabled ? <PowerOff className="h-3 w-3" /> : <Power className="h-3 w-3" />}
                             {s.enabled ? t("disable") : t("enable")}
                           </Button>
+                          {s.oauthConnected && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={isActing}
+                              onClick={() => void handleOAuthLogout(s.id)}
+                              title={t("oauthLogoutTitle")}
+                            >
+                              <LogOut className="h-3 w-3" />
+                              {t("oauthLogout")}
+                            </Button>
+                          )}
                           {s.envKeys.length > 0 && (
                             <Button
                               variant="outline"

@@ -39,6 +39,7 @@ import { validate } from '../middlewares/validation';
 import { mcpToolExecuteSchema, mcpServerCreateSchema, mcpServerEnvUpdateSchema,
     mcpServerEnabledUpdateSchema } from '../schemas/mcp.schema';
 import { McpCatalogRepository } from '../data/repositories/mcp-catalog-repository';
+import { McpOAuthRepository } from '../data/repositories/mcp-oauth-repository';
 import { canRegisterServer, canViewServer, canDeleteServer, canStartStopServer, canUpdateServerEnv } from './mcp-visibility';
 import { getAuditService } from '../services/AuditService';
 import { validateOutboundUrl } from '../security/ssrf-guard';
@@ -130,6 +131,10 @@ export const mcpRouter = Router();
       const persistedErrors = await repo
           .getLatestConnectErrors(userId, filtered.map(s => s.id))
           .catch(() => new Map<string, { message: string; at: string }>());
+      // OAuth 토큰 보유 여부 — 화면의 [로그인]/[로그아웃] 분기용. 조회 실패는 fail-open.
+      const oauthConnected = await new McpOAuthRepository(getUnifiedDatabase().getPool())
+          .listConnectedServerIds(userId, filtered.map(s => s.id))
+          .catch(() => new Set<string>());
 
       const serversWithStatus = filtered.map(server => {
           const regStatus = statuses.find(s => s.serverId === server.id);
@@ -153,6 +158,8 @@ export const mcpRouter = Router();
               /** 원인 코드 — 프론트가 i18n 문구로 바꿔 보여준다 (`auth_required` 등) */
               connectionErrorCode: failure?.code ?? null,
               connectionErrorAt: live ? null : (persistedErrors.get(server.id)?.at ?? null),
+              /** 원격 서버에 OAuth 토큰이 저장돼 있는가 (stdio 는 항상 false) */
+              oauthConnected: oauthConnected.has(server.id),
           };
       });
 

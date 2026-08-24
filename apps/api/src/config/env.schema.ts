@@ -90,6 +90,8 @@ export const envSchema = z
         KAKAO_CLIENT_ID: z.string().default(''),
         KAKAO_CLIENT_SECRET: z.string().default(''),
         OAUTH_REDIRECT_URI: z.string().default(`http://localhost:${SERVER_CONFIG.DEFAULT_PORT}/api/auth/callback/google`),
+        /** 원격 MCP OAuth 콜백 origin 강제 (선택) — config/mcp-oauth.ts */
+        MCP_OAUTH_REDIRECT_BASE: z.string().url().optional(),
 
         // CORS
         CORS_ORIGINS: z.string().default(`http://localhost:${SERVER_CONFIG.DEFAULT_PORT}`),

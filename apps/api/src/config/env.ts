@@ -46,6 +46,8 @@ export interface EnvConfig {
     kakaoClientId: string;
     kakaoClientSecret: string;
     oauthRedirectUri: string;
+    /** 원격 MCP OAuth 콜백의 origin 강제 (선택). 미설정 시 OAUTH_REDIRECT_URI 의 origin 에서 유도 */
+    mcpOAuthRedirectBase?: string;
 
     // CORS
     corsOrigins: string;
@@ -331,6 +333,7 @@ export function loadConfig(): EnvConfig {
         KAKAO_CLIENT_ID: env('KAKAO_CLIENT_ID'),
         KAKAO_CLIENT_SECRET: env('KAKAO_CLIENT_SECRET'),
         OAUTH_REDIRECT_URI: env('OAUTH_REDIRECT_URI'),
+        MCP_OAUTH_REDIRECT_BASE: env('MCP_OAUTH_REDIRECT_BASE'),
         DB_POOL_MAX: env('DB_POOL_MAX'),
         DB_POOL_MIN: env('DB_POOL_MIN'),
         CORS_ORIGINS: env('CORS_ORIGINS'),
@@ -443,6 +446,7 @@ export function loadConfig(): EnvConfig {
         kakaoClientId: parsed.KAKAO_CLIENT_ID ?? DEFAULT_CONFIG.kakaoClientId,
         kakaoClientSecret: parsed.KAKAO_CLIENT_SECRET ?? DEFAULT_CONFIG.kakaoClientSecret,
         oauthRedirectUri: parsed.OAUTH_REDIRECT_URI ?? DEFAULT_CONFIG.oauthRedirectUri,
+        mcpOAuthRedirectBase: parsed.MCP_OAUTH_REDIRECT_BASE || undefined,
 
         // CORS
         corsOrigins: parsed.CORS_ORIGINS ?? DEFAULT_CONFIG.corsOrigins,

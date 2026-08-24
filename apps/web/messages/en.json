@@ -1065,7 +1065,7 @@
     "tabInstances": "Instances",
     "pendingApprovals": "Approvals",
     "connectError": {
-      "auth_required": "Authentication required — this server needs OAuth login (not supported yet)",
+      "auth_required": "Authentication required — this server needs OAuth sign-in",
       "not_found": "Endpoint not found (404)",
       "unreachable": "Cannot reach the server",
       "timeout": "Connection timed out",
@@ -1077,7 +1077,13 @@
     "enable": "Enable",
     "disableTitle": "Mark this server unused (settings kept, reversible anytime)",
     "enableTitle": "Use this server again",
-    "toggleFailed": "Update failed: {error}"
+    "toggleFailed": "Update failed: {error}",
+    "oauthLogin": "Sign in",
+    "oauthLogout": "Sign out",
+    "oauthLogoutTitle": "Remove the stored OAuth token and disconnect",
+    "oauthStartFailed": "Could not start OAuth sign-in: {error}",
+    "oauthOk": "Signed in to {server} — connecting",
+    "oauthFailed": "Sign-in to {server} failed ({reason})"
   },
   "mcpCatalog": {
     "pageTitle": "MCP Catalog",

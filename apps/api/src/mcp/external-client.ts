@@ -101,6 +101,7 @@ type TransportInstance = StdioClientTransport | StreamableHTTPClientTransport | 
  * @class ExternalMCPClient
  */
 import { EventEmitter } from 'events';
+import { McpOAuthProvider } from './oauth-provider';
 
 export class ExternalMCPClient extends EventEmitter {
     /** SDK 클라이언트 인스턴스 */
@@ -323,6 +324,16 @@ export class ExternalMCPClient extends EventEmitter {
      * @returns 생성된 Transport 인스턴스
      * @throws {Error} 필수 설정 누락 또는 알 수 없는 transport_type
      */
+    /**
+     * 원격 transport 용 OAuth provider — 사용자 소유 서버에만 붙는다.
+     * 401 이면 SDK 가 저장된 토큰(갱신 포함)을 쓰고, 없으면 인가 URL 만 붙잡아 둔 채
+     * UnauthorizedError 를 던진다 → `auth_required` 로 분류돼 화면에 [로그인] 이 뜬다.
+     */
+    private createAuthProvider(): McpOAuthProvider | undefined {
+        if (!this.config.user_id) return undefined;
+        return new McpOAuthProvider({ serverId: this.config.id, userId: this.config.user_id });
+    }
+
     private createTransport(): TransportInstance {
         switch (this.config.transport_type) {
             case 'stdio': {
@@ -362,13 +373,13 @@ export class ExternalMCPClient extends EventEmitter {
                 }
                 // 🔒 SSRF: URL 은 등록 시 1회만 검증되므로, 런타임 network 는 매번 재검증 + resolved IP
                 //   고정하는 fetch 로 DNS Rebinding(TOCTOU)을 차단한다.
-                return new SSEClientTransport(new URL(this.config.url), { fetch: createPinnedFetch() });
+                return new SSEClientTransport(new URL(this.config.url), { fetch: createPinnedFetch(), authProvider: this.createAuthProvider() });
             }
             case 'streamable-http': {
                 if (!this.config.url) {
                     throw new Error(`streamable-http transport requires "url" for server "${this.config.name}"`);
                 }
-                return new StreamableHTTPClientTransport(new URL(this.config.url), { fetch: createPinnedFetch() });
+                return new StreamableHTTPClientTransport(new URL(this.config.url), { fetch: createPinnedFetch(), authProvider: this.createAuthProvider() });
             }
             default:
                 throw new Error(`Unknown transport type: ${this.config.transport_type}`);
