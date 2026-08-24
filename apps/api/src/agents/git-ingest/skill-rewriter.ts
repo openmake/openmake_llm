@@ -16,7 +16,13 @@ import type { LLMClient } from '../../llm/client';
 import type { ChatMessage } from '../../llm/types';
 import { createLogger } from '../../utils/logger';
 import { SKILL_REWRITE, CLAUDE_TOOL_ALIASES } from '../../config/skill-compat';
-import { buildSkillRewriteSystemPrompt, buildSkillRewriteUserPrompt } from '../../prompts/skill-rewrite';
+import {
+    buildSkillRewriteSystemPrompt,
+    buildSkillRewriteUserPrompt,
+    REWRITE_CHANGED_MARKER,
+    REWRITE_SUMMARY_MARKER,
+    REWRITE_CONTENT_MARKER,
+} from '../../prompts/skill-rewrite';
 
 const logger = createLogger('SkillRewriter');
 
@@ -40,23 +46,41 @@ export function buildToolMappingHint(body: string): string {
     return lines.join('\n');
 }
 
-/** LLM 응답 텍스트 → 제안 객체. 파싱 불가면 null. */
+/**
+ * LLM 응답 텍스트 → 제안 객체. 파싱 불가면 null.
+ *
+ * 마커 기반 — 본문이 코드블록·백틱·따옴표가 섞인 긴 마크다운이라 JSON 문자열로 받으면
+ * 이스케이프가 깨진다(실측: 정상 종료했는데도 JSON.parse 실패). 마커는 그 문제가 없다.
+ */
 export function parseRewriteResponse(raw: string): { changed: boolean; content: string; summary: string[] } | null {
-    const trimmed = (raw ?? '').trim();
-    if (!trimmed) return null;
-    const fence = trimmed.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
-    const candidate = fence ? fence[1] : trimmed;
-    try {
-        const parsed = JSON.parse(candidate) as { changed?: unknown; content?: unknown; summary?: unknown };
-        const changed = parsed.changed === true;
-        const content = typeof parsed.content === 'string' ? parsed.content : '';
-        const summary = Array.isArray(parsed.summary)
-            ? parsed.summary.filter((s): s is string => typeof s === 'string')
-            : [];
-        return { changed, content, summary };
-    } catch {
-        return null;
-    }
+    const text = (raw ?? '').trim();
+    if (!text) return null;
+
+    const changedIdx = text.indexOf(REWRITE_CHANGED_MARKER);
+    if (changedIdx === -1) return null;
+
+    // "===CHANGED=== yes|no"
+    const changedLineEnd = text.indexOf('\n', changedIdx);
+    const changedLine = (changedLineEnd === -1 ? text.slice(changedIdx) : text.slice(changedIdx, changedLineEnd));
+    const changed = /\b(yes|true)\b/i.test(changedLine.slice(REWRITE_CHANGED_MARKER.length));
+    if (!changed) return { changed: false, content: '', summary: [] };
+
+    const contentIdx = text.indexOf(REWRITE_CONTENT_MARKER);
+    if (contentIdx === -1) return null;   // changed=yes 인데 본문이 없으면 신뢰 불가
+
+    const summaryIdx = text.indexOf(REWRITE_SUMMARY_MARKER);
+    const summary = summaryIdx !== -1 && summaryIdx < contentIdx
+        ? text.slice(summaryIdx + REWRITE_SUMMARY_MARKER.length, contentIdx)
+            .split('\n')
+            .map(l => l.replace(/^\s*[-*]\s*/, '').trim())
+            .filter(Boolean)
+        : [];
+
+    // ⚠️ 바깥 펜스를 벗기지 않는다 — 본문이 코드블록으로 시작/끝나는 경우가 흔해
+    // (```bash … ```) 벗겨내면 본문 자체가 훼손된다. 프롬프트가 "펜스로 감싸지 말 것"을
+    // 지시하며, 설령 감싸더라도 앞뒤에 ``` 가 남는 편이 본문 파손보다 안전하다.
+    const content = text.slice(contentIdx + REWRITE_CONTENT_MARKER.length).replace(/^\r?\n/, '');
+    return { changed: true, content: content.trimEnd(), summary };
 }
 
 /**
@@ -92,7 +116,12 @@ export async function proposeSkillRewrite(
     try {
         const resp = await llm.chat(messages);
         const parsed = parseRewriteResponse(resp.content ?? '');
-        if (!parsed || !parsed.changed) return null;
+        if (!parsed) {
+            // 파싱 실패를 "변경 불필요"와 섞으면 진단이 불가능해진다 (실측 사례)
+            logger.warn(`재작성 응답 파싱 실패 (원문 유지): ${input.name} — 응답 ${(resp.content ?? '').length}자`);
+            return null;
+        }
+        if (!parsed.changed) return null;
         if (!isAcceptableRewrite(body, parsed.content)) {
             logger.warn(`재작성 제안 폐기 (내용 소실 의심): ${input.name} — ${body.length}자 → ${parsed.content.length}자`);
             return null;
