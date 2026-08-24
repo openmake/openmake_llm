@@ -10,6 +10,7 @@
  */
 
 import { Application, Request, Response } from 'express';
+import { agentTaskQueueRouter } from './agent-task-queue.routes';
 import { mcpOAuthRouter } from './mcp-oauth.routes';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -275,6 +276,7 @@ export function setupApiRoutes(
     app.use('/api/agents-monitoring', agentsMonitoringRouter);
     app.use('/api/audit', auditRouter);
     app.use('/api/research', researchRouter);
+    app.use('/api/agent-tasks', agentTaskQueueRouter);   // /queue/stats — /:id 라우트보다 먼저
     app.use('/api/agent-tasks', agentTaskRouter);
     // 청크 업로드 — Cloudflare 요청당 100MB 상한 우회 (대용량 첨부는 조각으로 수신)
     app.use('/api/agent-task-uploads', agentTaskUploadRouter);
