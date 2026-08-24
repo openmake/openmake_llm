@@ -35,6 +35,19 @@ describe('parseReviewFindings', () => {
         expect(parseReviewFindings('```json\n{"findings":[{"dimension":"bug"}]}\n```').findings).toHaveLength(1);
         expect(parseReviewFindings('garbage').findings).toEqual([]);
     });
+    // ⚠️ 파싱 실패를 "발견 0건"과 구분한다 — 실패가 "문제 없음"으로 읽히면 안 된다
+    // (2026-08-24: skill-rewriter 에서 같은 패턴이 기능을 통째로 죽이고 있었다)
+    it('파싱 실패는 parseFailed=true 로 구분한다', () => {
+        expect(parseReviewFindings('전혀 JSON 이 아님').parseFailed).toBe(true);
+        expect(parseReviewFindings('{"summary": 깨진 json').parseFailed).toBe(true);
+    });
+
+    it('정상 파싱은 parseFailed 를 세우지 않는다 (findings 가 비어도)', () => {
+        const r = parseReviewFindings('{"summary":"이상 없음","findings":[]}');
+        expect(r.parseFailed).toBeUndefined();
+        expect(r.findings).toEqual([]);
+    });
+
 });
 
 describe('postProcessReview', () => {
