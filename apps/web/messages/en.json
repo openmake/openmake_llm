@@ -1063,7 +1063,15 @@
     "envSavedRespawn": "Credentials updated. The existing connection was closed; the new values apply once it reconnects.",
     "envUpdateError": "Failed to update credentials",
     "tabInstances": "Instances",
-    "pendingApprovals": "Approvals"
+    "pendingApprovals": "Approvals",
+    "connectError": {
+      "auth_required": "Authentication required — this server needs OAuth login (not supported yet)",
+      "not_found": "Endpoint not found (404)",
+      "unreachable": "Cannot reach the server",
+      "timeout": "Connection timed out",
+      "protocol": "MCP protocol response error",
+      "unknown": "Connection failed — hover for details"
+    }
   },
   "mcpCatalog": {
     "pageTitle": "MCP Catalog",
