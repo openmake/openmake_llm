@@ -25,6 +25,7 @@ import { recordTailShadow } from './tail-shadow-recorder';
 import type { ChatMessageRequest, SystemEventCallback } from '../chat-service-types';
 import { getExecutionPlanBuilder } from '../../chat/execution-plan-builder';
 import { normalizeStyle } from '../../chat/style';
+import { languageDetectionInput } from '../../chat/slash-command';
 import { resolveAnswerFormatProfile, getAnswerFormatGuard } from '../../chat/answer-format';
 import { REPORT_PIPELINE, REPORT_INTENT_PATTERNS } from '../../config/runtime-limits';
 import { runProviderGate, servedModelLabel } from './provider-gate';
@@ -75,6 +76,7 @@ export async function runMessagePipeline(svc: ChatService,
         userRole,
         enabledTools,
         userLanguagePreference,
+        originalMessage,
     } = req;
 
     const reqCtx: RequestContext = {
@@ -132,7 +134,9 @@ export async function runMessagePipeline(svc: ChatService,
     }
 
     // ── Step 1: 언어 정책 결정 ──
-    const languagePolicy = svc.resolveLanguagePolicy(message || '', userLanguagePreference);
+    // 언어 감지는 확장문이 아니라 원문(슬러그 뒤 인자) 기준 — 스킬 본문 언어가 질문 언어를 덮지 않게
+    const languagePolicy = svc.resolveLanguagePolicy(
+        languageDetectionInput(originalMessage ?? message ?? '', message || ''), userLanguagePreference);
 
     // 응답 후처리 체인 적용 헬퍼 — 일반 경로와 특수모드(Discussion/DeepResearch) 조기
     // return 이 동일하게 통과한다(조기 return 분기 조립 누락 함정 방지 — 2026-08-03 대칭화).
