@@ -1063,7 +1063,15 @@
     "envSavedRespawn": "認証情報を変更しました。既存の接続は終了し、再接続時に新しい値が適用されます。",
     "envUpdateError": "認証情報の変更に失敗しました",
     "tabInstances": "インスタンス状態",
-    "pendingApprovals": "承認待ち"
+    "pendingApprovals": "承認待ち",
+    "connectError": {
+      "auth_required": "認証が必要 — このサーバーは OAuth ログインを要求します（現在未対応）",
+      "not_found": "エンドポイントが見つかりません (404)",
+      "unreachable": "サーバーに接続できません",
+      "timeout": "接続がタイムアウトしました",
+      "protocol": "MCP プロトコル応答エラー",
+      "unknown": "接続に失敗しました — 詳細はホバーで確認"
+    }
   },
   "mcpCatalog": {
     "pageTitle": "MCPカタログ",

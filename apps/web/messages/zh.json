@@ -1063,7 +1063,15 @@
     "envSavedRespawn": "凭据已更新。现有连接已关闭，重新连接后将使用新值。",
     "envUpdateError": "更新凭据失败",
     "tabInstances": "实例状态",
-    "pendingApprovals": "待审批"
+    "pendingApprovals": "待审批",
+    "connectError": {
+      "auth_required": "需要认证 — 该服务器要求 OAuth 登录（当前不支持）",
+      "not_found": "找不到端点 (404)",
+      "unreachable": "无法连接到服务器",
+      "timeout": "连接超时",
+      "protocol": "MCP 协议响应错误",
+      "unknown": "连接失败 — 悬停查看详情"
+    }
   },
   "mcpCatalog": {
     "pageTitle": "MCP 目录",
