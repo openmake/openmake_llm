@@ -109,6 +109,21 @@ export function stripSlashEnvelope(text: string): string {
     return out.replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * 언어 감지에 넣을 텍스트를 고른다 (순수).
+ *
+ * 확장문으로 감지하면 **스킬 본문 언어가 사용자 질문 언어를 덮는다** — 영어 스킬을
+ * 한국어로 호출하면 en(0.80) 으로 판정돼 답변이 영어로 나간다(실측). 그렇다고 원문을
+ * 그대로 쓰면 `/slug` 만 친 경우 ASCII 슬러그를 보고 영어로 판정한다(반대 위험).
+ * → 슬러그 뒤 인자가 있으면 **인자만**, 없으면 확장문(스킬 본문이 유일한 언어 신호).
+ * 슬래시가 아니면 원문 그대로.
+ */
+export function languageDetectionInput(rawMessage: string, expandedMessage: string): string {
+    const parsed = parseSlashCommand(rawMessage);
+    if (!parsed) return rawMessage;
+    return parsed.rest || expandedMessage;
+}
+
 export function buildAugmentedMessage(skill: SlashSkill, rest: string): string {
     const safeName = skill.name.replace(/[<>"&]/g, '');
     // 외부 스킬의 `$ARGUMENTS`/`$1` 을 실제 인자로 치환 — 치환됐으면 본문 뒤 중복 첨부는 생략

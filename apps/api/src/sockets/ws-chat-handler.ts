@@ -20,7 +20,7 @@ import { logChatSuccessMetrics } from './chat-metrics-log';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
 import { WS_ERROR_MESSAGES, WS_PROVIDER_ERROR_MESSAGES, getLocalizedTemplate } from './ws-chat-locales';
 import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
-import { applySlashCommand, mergeActivatedSkillNames } from '../chat/slash-command';
+import { applySlashCommand, mergeActivatedSkillNames, languageDetectionInput } from '../chat/slash-command';
 import { WS_LIMITS } from '../config/timeouts';
 import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
 import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
@@ -79,7 +79,7 @@ export async function handleChatMessage(
 
     // 사용자 언어 감지 — 설정에서 선택한 언어를 우선, 없으면 메시지 기반 자동 감지
     const userLangPreference = (typeof msg.language === 'string' && msg.language.trim()) ? msg.language.trim() as SupportedLanguageCode : undefined;
-    const detectedLang = detectLanguage(message);
+    const detectedLang = detectLanguage(languageDetectionInput(rawMessage, message));
     const userLang = userLangPreference || detectedLang.language;
 
     // NotebookLM 노트북 컨텍스트 — 여기서 message 에 주입하지 않는다(주입 시 대화 저장·
@@ -284,7 +284,7 @@ export async function handleChatMessage(
 
         // ChatRequestHandler.processChat으로 통합 처리
         const result = await ChatRequestHandler.processChat({
-            message,
+            message, originalMessage: rawMessage,
             model: selectedModel,
             nodeId,
             history,

@@ -113,6 +113,8 @@ export interface ChatRequestParams {
     userContext: ChatUserContext;
     /** API Key 인증 요청 시 키 ID */
     apiKeyId?: string;
+    /** 슬래시 확장 **전** 원문 — 언어 감지용(확장문은 스킬 본문 언어가 질문 언어를 덮는다). 미전달 시 message 사용 */
+    originalMessage?: string;
     /** 사용자가 설정에서 선택한 선호 언어 (language-policy userPreference) */
     userLanguagePreference?: string;
     /** 기기 GPS 현재 위치 (옵트인, 턴 단위) — system 컨텍스트 결정적 주입용 */
