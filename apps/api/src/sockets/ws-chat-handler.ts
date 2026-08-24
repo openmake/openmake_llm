@@ -71,7 +71,8 @@ export async function handleChatMessage(
     // 비슬래시/미매칭/비활성은 원문 그대로(무영향·무비용), 오류는 graceful(원문 유지).
     const slashUserId = extWs._authenticatedUserId !== undefined ? String(extWs._authenticatedUserId) : undefined;
     const explicitSkillNames: string[] = [];
-    const message = await applySlashCommand((msg.message ?? '').trim(), {
+    const rawMessage = (msg.message ?? '').trim(); // 사전 웹검색·URL 분석용 원문 — slash-expansion-not-search-query.test.ts
+    const message = await applySlashCommand(rawMessage, {
         userId: slashUserId,
         onSkillApplied: (skillName) => explicitSkillNames.push(skillName),
     });
@@ -166,13 +167,13 @@ export async function handleChatMessage(
         // 딥 리서치는 자체 검색·스크래핑 파이프라인이 URL 을 다루므로 사전 분석 생략.
         const urlContextPromise = msg.deepResearchMode === true
             ? Promise.resolve('')
-            : buildUrlContext(message);
+            : buildUrlContext(rawMessage);
 
         // 웹 검색: 사용자가 명시적으로 활성화했거나, 시사 관련 질문이 감지된 경우 수행.
         // 구조화(/structured) 경로와 동일 헬퍼를 공유해 "한 경로만 검색되는" 분기 누락·로직 드리프트를 방지한다.
         // (WS 는 기존 동작 보존을 위해 signal 미전달 — 중단 시 진행 중 검색은 메인 LLM 루프에서 정리.)
         const { webSearchContext } = await buildWebSearchContext({
-            message,
+            message: rawMessage,
             userLang,
             webSearchEnabled: msg.webSearch === true,
             explicitlyDisabled: msg.enabledTools?.web_search === false,

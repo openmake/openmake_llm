@@ -9,6 +9,7 @@
  *
  * @module mcp/web-search/query-cleaner
  */
+import { stripSlashEnvelope } from '../../chat/slash-command';
 
 /** 제거 대상 대화체 지시 문구 패턴 (한국어 중심). 보수적으로만 — 핵심 명사는 보존. */
 const INSTRUCTION_NOISE: readonly RegExp[] = [
@@ -27,7 +28,9 @@ const INSTRUCTION_NOISE: readonly RegExp[] = [
  * 과잉 제거로 빈 문자열이 되면 원문을 그대로 반환(안전망).
  */
 export function cleanSearchQuery(raw: string): string {
-    const original = (raw || '').trim();
+    // 슬래시 스킬 확장 봉투를 먼저 벗긴다 — 호출부가 원문을 넘기는 것이 1차 방어선이지만,
+    // 새더라도 스킬 프롬프트 수천 자가 검색어가 되지 않도록 여기서 한 번 더 막는다.
+    const original = stripSlashEnvelope((raw || '').trim());
     let q = original;
     for (const re of INSTRUCTION_NOISE) q = q.replace(re, ' ');
     q = q

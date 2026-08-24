@@ -89,6 +89,26 @@ export function substituteSkillArguments(content: string, rest: string): { conte
 }
 
 /** 스킬 + 나머지 텍스트 → 증강 메시지 (순수) */
+/**
+ * `buildAugmentedMessage` 가 씌우는 **봉투**를 벗겨내는 정규식.
+ *
+ * 확장문은 모델에게 주는 지시라, 사용자의 질문을 입력으로 받는 하류(예: 사전 웹검색 쿼리)에
+ * 새면 안 된다. 호출부가 원문을 넘기는 것이 1차 방어선이고, 이건 2차 방어선이다 —
+ * 실측으로 스킬 본문 6,065자가 통째로 검색어가 되어 상류가 400/403 을 돌려준 적이 있다
+ * (2026-08-25). 형식이 바뀌면 여기도 함께 고쳐야 하므로 조립부 바로 옆에 둔다.
+ */
+export const SLASH_ENVELOPE_PATTERNS: readonly RegExp[] = [
+    /^\[슬래시 명령:[^\]]*\]\s*/,
+    /<skill_context\b[^>]*>[\s\S]*?<\/skill_context>/g,
+];
+
+/** 확장 봉투를 제거해 사용자가 실제로 쓴 부분만 남긴다 (순수). 봉투가 없으면 원문 그대로. */
+export function stripSlashEnvelope(text: string): string {
+    let out = text || '';
+    for (const re of SLASH_ENVELOPE_PATTERNS) out = out.replace(re, ' ');
+    return out.replace(/\s+/g, ' ').trim();
+}
+
 export function buildAugmentedMessage(skill: SlashSkill, rest: string): string {
     const safeName = skill.name.replace(/[<>"&]/g, '');
     // 외부 스킬의 `$ARGUMENTS`/`$1` 을 실제 인자로 치환 — 치환됐으면 본문 뒤 중복 첨부는 생략
