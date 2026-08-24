@@ -213,7 +213,7 @@ export function isBlockedIP(address: string): boolean {
  * 허용목록에 있으면 통과시킨다.
  *
  * 형식: 콤마 구분. 각 항목은 ① hostname(정확 일치) ② IPv4 ③ IPv4 CIDR ④ ①·②에 `:port` 부착.
- *   예) SSRF_ALLOWED_HOSTS=rag.internal,192.168.0.45,10.1.0.0/16,127.0.0.1:8889
+ *   예) SSRF_ALLOWED_HOSTS=rag.internal,192.168.0.45,10.1.0.0/16,127.0.0.1:9100
  *
  * `:port` 를 붙이면 그 포트로 향하는 요청만 허용한다 — loopback 의 특정 로컬 서비스
  * (예: 사용자가 띄운 streamable-http MCP)만 열고 나머지 내부 포트(DB·Redis·게이트웨이)는
