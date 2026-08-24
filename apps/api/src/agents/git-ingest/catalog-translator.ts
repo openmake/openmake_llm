@@ -17,6 +17,17 @@ import { CATALOG_TRANSLATOR_SYSTEM_PROMPT } from '../../prompts/catalog-translat
 
 const logger = createLogger('CatalogTranslator');
 
+/** LLM 응답 → JSON. 전체 파싱 먼저, 실패 시에만 코드펜스를 벗긴다. */
+function parseJsonLoose(raw: string): unknown {
+    try {
+        return JSON.parse(raw);
+    } catch {
+        const fence = raw.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
+        if (!fence) throw new Error('응답에서 JSON 을 찾지 못함');
+        return JSON.parse(fence[1]);
+    }
+}
+
 const SYSTEM_PROMPT = CATALOG_TRANSLATOR_SYSTEM_PROMPT;
 
 /** 이전 스냅샷 번역 재사용 키 */
@@ -59,8 +70,9 @@ export async function translateCatalogDescriptions(
             ];
             const resp = await llm.chat(messages);
             const raw = (resp.content ?? '').trim();
-            const fence = raw.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
-            const parsed = JSON.parse(fence ? fence[1] : raw) as { translations?: unknown };
+            // ⚠️ 전체 파싱 먼저 — 펜스 우선이면 번역문 안의 코드블록을 잡아 깨진다
+            // (skill-creator 에서 실측된 결함, 2026-08-24)
+            const parsed = parseJsonLoose(raw) as { translations?: unknown };
             const arr = Array.isArray(parsed.translations) ? parsed.translations : null;
             if (!arr || arr.length !== batch.length) {
                 throw new Error(`번역 개수 불일치: ${arr?.length ?? 'null'} != ${batch.length}`);
