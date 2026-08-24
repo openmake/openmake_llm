@@ -237,11 +237,15 @@ export class AgentTaskRepository extends BaseRepository {
      * 실제 대상은 대부분 ②다: ①잔존 running/paused(마킹 실패 대비) ②restart 마킹 + 최근 window 내
      * (과거 재시작이 남긴 오래된 failed 는 자동 resume 하지 않음 — 수동 resume 대상).
      * 오래된 것부터 복구(updated_at ASC).
+     *
+     * 'queued' 도 포함한다 — 큐(3-B)는 인메모리라 재시작하면 대기열이 증발하는데, DB 행은
+     * 'queued' 로 남아 UI 가 영구 '대기 중' 을 그리고 아무도 실행하지 않았다(2026-08-25 발견).
+     * queued 는 시작한 적이 없으므로 checkpoint 없이 처음부터 다시 디스패치한다.
      */
     async getInterruptedAgentTasks(windowMs: number): Promise<AgentTask[]> {
         const result = await this.query<AgentTask>(
             `SELECT * FROM agent_tasks
-             WHERE status IN ('running', 'paused')
+             WHERE status IN ('running', 'paused', 'queued')
                 OR (status = 'failed' AND error = 'server restarted'
                     AND completed_at > NOW() - make_interval(secs => $1))
              ORDER BY updated_at ASC`,
@@ -260,11 +264,24 @@ export class AgentTaskRepository extends BaseRepository {
         const result = await this.query(
             `UPDATE agent_tasks
              SET status = 'pending', error = NULL, completed_at = NULL, updated_at = NOW()
-             WHERE id = $1 AND (status IN ('running', 'paused')
+             WHERE id = $1 AND (status IN ('running', 'paused', 'queued')
                 OR (status = 'failed' AND error = 'server restarted'))`,
             [taskId]
         );
         return (result.rowCount ?? 0) > 0;
+    }
+
+    /** 활성 상태별 건수 — 큐 관측(/queue/stats) 용. 인메모리 큐 스냅샷과 대조해 재시작 고아를 드러낸다. */
+    async countActiveAgentTasksByStatus(): Promise<Record<'queued' | 'running' | 'paused' | 'pending', number>> {
+        const r = await this.query<{ status: string; n: string }>(
+            `SELECT status, COUNT(*)::text AS n FROM agent_tasks
+              WHERE status IN ('queued', 'running', 'paused', 'pending') GROUP BY status`,
+        );
+        const out = { queued: 0, running: 0, paused: 0, pending: 0 };
+        for (const row of r.rows) {
+            if (row.status in out) out[row.status as keyof typeof out] = parseInt(row.n, 10);
+        }
+        return out;
     }
 
     async deleteAgentTaskWithSteps(taskId: string): Promise<void> {
