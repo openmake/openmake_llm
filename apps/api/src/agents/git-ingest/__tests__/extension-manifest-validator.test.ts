@@ -59,20 +59,58 @@ describe('extension-manifest-validator', () => {
             expect(r.ok).toBe(false);
         });
 
-        it('version 누락 거부', () => {
+        // upstream 다수가 version 을 생략한다 (공식 25개 중 16개) — 필수로 강제하면
+        // 그 플러그인들이 설치 불가라 기본값으로 관용 처리한다 (2026-08-24).
+        it('version 누락 시 기본값 0.0.0 으로 수용', () => {
             const r = validateExtensionManifest(JSON.stringify({ name: 'my-plugin' }));
-            expect(r.ok).toBe(false);
+            expect(r.ok).toBe(true);
+            if (!r.ok) return;
+            expect(r.manifest.version).toBe('0.0.0');
         });
 
-        it('레거시 SSE transport 거부', () => {
+        // 항목 단위 관용 파싱 (2026-08-24): 무효 항목은 그 항목만 건너뛰고 사유를
+        // mcpWarnings 로 전달한다 — 과거엔 record 전체가 실패해 유효 서버까지 버려졌다.
+        it('레거시 SSE transport 는 그 항목만 건너뛰고 매니페스트는 유효', () => {
             const r = validateExtensionManifest(JSON.stringify({
                 name: 'my-plugin',
                 version: '1.0.0',
                 mcpServers: { old: { url: 'https://x.example.com/sse', type: 'sse' } },
             }));
-            expect(r.ok).toBe(false);
-            if (r.ok) return;
-            expect(r.errors[0]).toContain('SSE');
+            expect(r.ok).toBe(true);
+            if (!r.ok) return;
+            expect(r.manifest.mcpServers).toHaveLength(0);
+            expect(r.manifest.mcpWarnings.join(' ')).toContain('SSE');
+        });
+
+        it('무효 항목 1개가 나머지 서버를 죽이지 않는다 (빈 url placeholder 실사례)', () => {
+            const r = validateExtensionManifest(JSON.stringify({
+                name: 'my-plugin',
+                version: '1.0.0',
+                mcpServers: {
+                    figma: { type: 'http', url: 'https://mcp.figma.com/mcp' },
+                    'google calendar': { type: 'http', url: '' },   // upstream placeholder
+                    legacy: { url: 'https://x.example.com/sse', type: 'sse' },
+                },
+            }));
+            expect(r.ok).toBe(true);
+            if (!r.ok) return;
+            expect(r.manifest.mcpServers.map(s => s.name)).toEqual(['figma']);
+            expect(r.manifest.mcpWarnings).toHaveLength(2);
+        });
+
+        it('지원하지 않는 필드(oauth/headers)는 설치하되 경고', () => {
+            const r = validateExtensionManifest(JSON.stringify({
+                name: 'my-plugin',
+                version: '1.0.0',
+                mcpServers: {
+                    slack: { type: 'http', url: 'https://mcp.slack.com/mcp', oauth: { clientId: 'x' }, headers: { A: 'b' } },
+                },
+            }));
+            expect(r.ok).toBe(true);
+            if (!r.ok) return;
+            expect(r.manifest.mcpServers).toHaveLength(1);
+            expect(r.manifest.mcpWarnings.join(' ')).toMatch(/OAuth/);
+            expect(r.manifest.mcpWarnings.join(' ')).toMatch(/헤더/);
         });
     });
 
@@ -81,6 +119,13 @@ describe('extension-manifest-validator', () => {
             const r = normalizeMcpServers({ broken: {} });
             expect(r.servers).toHaveLength(0);
             expect(r.errors[0]).toContain('command 또는 url 필수');
+        });
+
+        it('항목이 객체가 아니면 그 항목만 에러', () => {
+            const r = normalizeMcpServers({ ok: { command: 'npx' }, bad: 'nope' });
+            expect(r.servers.map(s => s.name)).toEqual(['ok']);
+            expect(r.errors).toHaveLength(1);
+            expect(r.errors[0]).toContain('bad');
         });
     });
 
@@ -149,6 +194,18 @@ describe('extension-manifest-validator', () => {
             const r = parseMcpJsonFile('nope');
             expect(r.servers).toHaveLength(0);
             expect(r.errors[0]).toContain('유효한 JSON');
+        });
+
+        it('.mcp.json 도 항목 단위 — 빈 url 하나가 나머지를 버리지 않는다', () => {
+            const r = parseMcpJsonFile(JSON.stringify({
+                mcpServers: {
+                    figma: { type: 'http', url: 'https://mcp.figma.com/mcp' },
+                    linear: { type: 'http', url: 'https://mcp.linear.app/mcp' },
+                    'google calendar': { type: 'http', url: '' },
+                },
+            }));
+            expect(r.servers.map(s => s.name)).toEqual(['figma', 'linear']);
+            expect(r.errors).toHaveLength(1);
         });
     });
 });

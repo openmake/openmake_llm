@@ -1,5 +1,5 @@
 import { ExtensionIngestService, buildSkillDiscoveryPattern } from '../extension-ingest-service';
-import { resolveExtensionRoot, scanForExtensionManifests } from '../repo-scanner';
+import { resolveExtensionRoot, scanForExtensionManifests, detectUnsupportedComponents } from '../repo-scanner';
 import type { Pool } from 'pg';
 import type { LLMClient } from '../../../llm/client';
 import { GitFetcher } from '../git-fetcher';
@@ -40,6 +40,40 @@ describe('repo-scanner (extension)', () => {
         const subPat = buildSkillDiscoveryPattern('src/capabilities/core/');
         expect(subPat.test('src/capabilities/core/skill/SKILL.md')).toBe(true);
         expect(subPat.test('src/capabilities/blender/skill/SKILL.md')).toBe(false);
+    });
+});
+
+describe('detectUnsupportedComponents', () => {
+    const e = (path: string) => ({ path, sha: 'b', size: 1, type: 'blob' as const });
+
+    // Phase 2(2026-08-24)부터 commands/·agents/ 는 등가물로 **설치**되므로 미지원 목록에서 빠졌다.
+    // 여기 남는 것은 대응 개념이 없는 hooks 등뿐이다.
+    it('여전히 미지원인 것만 라벨+개수로 보고 (commands/agents 는 제외)', () => {
+        const notes = detectUnsupportedComponents(
+            [e('commands/a.md'), e('commands/b.md'), e('agents/x.md'), e('hooks/hooks.json'), e('skills/s/SKILL.md')],
+            '',
+        );
+        expect(notes.join(' ')).toContain('훅(hooks) 1개');
+        expect(notes.join(' ')).not.toContain('commands');
+        expect(notes.join(' ')).not.toContain('서브에이전트');
+        expect(notes.join(' ')).not.toContain('SKILL');
+    });
+
+    it('서브디렉토리 root 스코프 밖은 무시', () => {
+        const notes = detectUnsupportedComponents(
+            [e('other/hooks/a.json'), e('design/hooks/b.json')],
+            'design/',
+        );
+        expect(notes).toEqual(['훅(hooks) 1개']);
+    });
+
+    it('매니페스트 선언 키도 감지 (Gemini contextFileName 등)', () => {
+        const notes = detectUnsupportedComponents([], '', { contextFileName: 'GEMINI.md', excludeTools: ['x'] });
+        expect(notes).toEqual(['컨텍스트 파일 지정', '도구 제외 목록']);
+    });
+
+    it('미지원 구성요소가 없으면 빈 배열', () => {
+        expect(detectUnsupportedComponents([e('skills/a/SKILL.md')], '', { name: 'x' })).toEqual([]);
     });
 });
 
@@ -159,10 +193,10 @@ describe('ExtensionIngestService', () => {
             .rejects.toThrow('NO_EXTENSION_FOUND');
     });
 
-    it('INVALID_EXTENSION_MANIFEST: version 누락', async () => {
+    it('INVALID_EXTENSION_MANIFEST: name 이 kebab-case 가 아님 (version 누락은 이제 허용)', async () => {
         mockFetcher.resolveRef.mockResolvedValueOnce('abc123');
         mockFetcher.listTree.mockResolvedValueOnce(treeOf('plugin.json'));
-        mockFetcher.fetchFile.mockResolvedValueOnce(JSON.stringify({ name: 'x' }));
+        mockFetcher.fetchFile.mockResolvedValueOnce(JSON.stringify({ name: 'Bad Name' }));
 
         const svc = makeService();
         await expect(svc.import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar' }))
@@ -247,13 +281,16 @@ describe('ExtensionIngestService', () => {
             source_url: 'foo/bar', source_ref: 'oldsha1', source_path: 'plugin.json',
             manifest: { components: {} },
         }] });
+        // ⚠️ archive 는 update 판정 직후(구성요소 생성 **전**)에 실행된다 — Custom Agent
+        // 이름 표류 방지(코드리뷰 지적, 2026-08-24)
+        q.mockResolvedValueOnce({ rows: [] });                    // archive skills
+        q.mockResolvedValueOnce({ rows: [] });                    // archive mcp
+        q.mockResolvedValueOnce({ rows: [] });                    // archive custom agents (103)
         (mockLLM.chat as jest.Mock).mockResolvedValueOnce({
             content: JSON.stringify({ findings: [] }), metrics: { completion_tokens: 30 },
         });
         q.mockResolvedValueOnce({ rows: [] });                    // resolveUniqueServerName
         q.mockResolvedValueOnce({ rows: [{ id: 'mcp-new1' }] });  // insertDraft
-        q.mockResolvedValueOnce({ rows: [] });                    // archive skills
-        q.mockResolvedValueOnce({ rows: [] });                    // archive mcp
         q.mockResolvedValueOnce({ rows: [{                        // updateAfterReinstall RETURNING
             id: 'user-ext-u1', name: 'tool-pack', version: '1.1.0', status: 'active',
         }] });

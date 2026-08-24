@@ -24,7 +24,7 @@ import type { ImportMcpServerFromGitInput } from '../../schemas/mcp-server-inges
 import { GitFetcher } from './git-fetcher';
 import { scanForMcpServerManifests, type ManifestCandidate } from './repo-scanner';
 import { parseMcpServerFile, validateMcpServerManifest } from './mcp-server-manifest-validator';
-import { ConventionChecker, type ConventionFinding } from './convention-checker';
+import { ConventionChecker, isBlockedByConvention, type ConventionFinding } from './convention-checker';
 import { McpServerDraftRepository } from '../../data/repositories/mcp-server-draft-repository';
 import { MCP_INGEST, SKILL_CREATOR } from '../../config/constants';
 
@@ -120,7 +120,7 @@ export class McpServerIngestService {
             validation.body,
             { command: manifest.command, args: manifest.args },
         );
-        const blockedByConvention = conv.findings.some(f => f.severity === 'error');
+        const blockedByConvention = isBlockedByConvention(conv.findings);
 
         const promptHash = 'sha256:' + crypto.createHash('sha256')
             .update(JSON.stringify({

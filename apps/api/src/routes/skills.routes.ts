@@ -26,7 +26,9 @@ import { createLogger } from '../utils/logger';
 import { success, notFound, unauthorized } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getSkillManager } from '../agents/skill-manager';
+import { createHash } from 'crypto';
 import { parseSkillFile, validateManifest } from '../agents/manifest-validator';
+import { adaptSkillContent } from '../agents/git-ingest/skill-compat';
 import { ManifestImporter } from '../agents/manifest-importer';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
@@ -222,13 +224,23 @@ router.post('/upload', requireAuth, skillUpload.single('file'), asyncHandler(asy
         return;
     }
 
+    // 설치 시 적응 — git ingest 와 동일 규칙 (외부 SKILL.md 를 업로드하는 경로도 대칭 적용).
+    // 적응할 것이 없으면 원문 그대로라 이 프로젝트에서 만든 스킬은 무영향.
+    const adapted = adaptSkillContent({
+        frontmatter: validation.raw_frontmatter,
+        promptMd: validation.prompt_md,
+    });
+    const uploadChecksum = adapted.adapted
+        ? createHash('sha256').update(adapted.content).digest('hex')
+        : validation.checksum;
+
     try {
         const importer = new ManifestImporter(getUnifiedDatabase().getPool());
         const result = await importer.import({
             manifest: validation.manifest,
-            prompt_md: validation.prompt_md,
+            prompt_md: adapted.content,
             raw_yaml: validation.raw_yaml,
-            checksum: validation.checksum,
+            checksum: uploadChecksum,
             createdBy: userId,
             isAdmin,
         });
@@ -240,6 +252,7 @@ router.post('/upload', requireAuth, skillUpload.single('file'), asyncHandler(asy
             duplicate_checksum: result.duplicate_checksum,
             bindings_count: validation.manifest.tool_bindings.length,
             bundles_count: validation.manifest.mcp_bundles.length,
+            compat_notes: adapted.notes,
         }));
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -434,6 +447,53 @@ function mapGitIngestErrorToStatus(code: string): number {
         default: return 500;
     }
 }
+/**
+ * POST /api/agents/skills/:skillId/rewrite-proposal
+ *
+ * 설치 시 적응 Phase 3 — 외부 생태계 스킬 본문을 이 환경 문맥으로 다듬는 **제안** 생성.
+ * 저장하지 않는다: 원문과 제안을 함께 돌려주고, 사용자가 승인 화면에서 diff 를 확인한 뒤
+ * 기존 `PUT /:skillId` 로 적용한다 (LLM 재작성의 자동 적용 금지 — C형 후단 판정).
+ * 실패·무변경은 200 + proposal:null (fail-open).
+ */
+router.post('/:skillId/rewrite-proposal', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const { skillId } = req.params;
+    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
+
+    const skill = await getSkillManager().getSkillById(skillId);
+    if (!skill) {
+        res.status(404).json(notFound('스킬'));
+        return;
+    }
+    if (skill.createdBy) {
+        assertResourceOwnerOrAdmin(String(skill.createdBy), String(userId), req.user?.role || 'user');
+    }
+
+    const { proposeSkillRewrite } = await import('../agents/git-ingest/skill-rewriter');
+    const { buildUnifiedDiff, diffStats } = await import('../utils/unified-diff');
+    const model = SKILL_CREATOR.authorModel;
+    const proposal = await proposeSkillRewrite(
+        new LLMClient(model ? { model } : {}),
+        { name: skill.name, content: skill.content, model: model || 'default' },
+    );
+
+    logger.info(`rewrite-proposal: ${skillId} → ${proposal ? '제안 있음' : '변경 없음'} (user=${userId})`);
+    res.json(success({
+        skillId,
+        name: skill.name,
+        original: skill.content,
+        proposal: proposal
+            ? {
+                content: proposal.content,
+                summary: proposal.summary,
+                model: proposal.model,
+                // 프론트 DiffView(chat/diff-view.tsx)가 그대로 렌더하는 통합 diff 포맷
+                diff: buildUnifiedDiff(skill.content, proposal.content, skill.name),
+                stats: diffStats(skill.content, proposal.content),
+            }
+            : null,
+    }));
+}));
+
 /**
  * PUT /api/agents/skills/:skillId
  * 스킬 수정 (소유권 검증 포함)
