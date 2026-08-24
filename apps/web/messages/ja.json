@@ -1071,7 +1071,13 @@
       "timeout": "接続がタイムアウトしました",
       "protocol": "MCP プロトコル応答エラー",
       "unknown": "接続に失敗しました — 詳細はホバーで確認"
-    }
+    },
+    "disabledLabel": "使用しない",
+    "disable": "使用しない",
+    "enable": "使用する",
+    "disableTitle": "このサーバーを使用しないものとして表示（設定は保存、いつでも戻せます）",
+    "enableTitle": "このサーバーを再び使用",
+    "toggleFailed": "変更に失敗しました: {error}"
   },
   "mcpCatalog": {
     "pageTitle": "MCPカタログ",

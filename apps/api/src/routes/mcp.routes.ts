@@ -36,7 +36,8 @@ import { getLifecycleSupervisor } from '../mcp/lifecycle-supervisor';
 import { createLogger } from '../utils/logger';
 import { classifyConnectError, parseConnectError } from '../mcp/connect-error';
 import { validate } from '../middlewares/validation';
-import { mcpToolExecuteSchema, mcpServerCreateSchema, mcpServerEnvUpdateSchema } from '../schemas/mcp.schema';
+import { mcpToolExecuteSchema, mcpServerCreateSchema, mcpServerEnvUpdateSchema,
+    mcpServerEnabledUpdateSchema } from '../schemas/mcp.schema';
 import { McpCatalogRepository } from '../data/repositories/mcp-catalog-repository';
 import { canRegisterServer, canViewServer, canDeleteServer, canStartStopServer, canUpdateServerEnv } from './mcp-visibility';
 import { getAuditService } from '../services/AuditService';
@@ -263,6 +264,47 @@ export const mcpRouter = Router();
   // env(자격증명) 교체 (PATCH) — 소유자 + admin.
   // 로테이션 전용 부분 갱신: 전달한 키만 바뀌고 나머지는 보존된다. secret 값은 저장 시
   // 암호화(v1:)되며 응답에는 마스킹된 env 만 실린다.
+  /**
+   * PATCH /api/mcp/servers/:id/enabled  { enabled }
+   * 서버 사용 여부 토글 — 삭제의 **되돌릴 수 있는** 대안.
+   *
+   * 연결이 구조적으로 불가능한 서버(예: OAuth 를 요구하는 원격 MCP)를 목록에서 치우되
+   * 설정·자격증명은 보존한다. 끄면 살아있는 client 도 함께 정리한다 — 안 그러면 "사용 안 함"
+   * 으로 표시되면서 도구는 계속 제공되는 모순이 생긴다.
+   */
+  mcpRouter.patch('/servers/:id/enabled', requireAuth, validate(mcpServerEnabledUpdateSchema), asyncHandler(async (req: Request, res: Response) => {
+      const userId = String(req.user?.id ?? '');
+      const role = req.user?.role ?? 'user';
+      const actor = { id: userId, role };
+      const { id } = req.params;
+      const { enabled } = req.body as { enabled: boolean };
+
+      const db = getUnifiedDatabase();
+      const repo = new McpCatalogRepository(db.getPool());
+      const server = await repo.getServerById(id);
+      if (!server) {
+          res.status(404).json(notFound('서버'));
+          return;
+      }
+      // 실행 제어와 같은 성격의 권한이라 연결/해제와 동일한 판정을 쓴다.
+      if (!canStartStopServer(actor, server)) {
+          res.status(403).json(forbidden('해당 서버를 변경할 권한이 없습니다'));
+          return;
+      }
+
+      await repo.setServerEnabled(id, enabled);
+
+      if (!enabled && server.user_id) {
+          const supervisor = getLifecycleSupervisor();
+          if (supervisor) {
+              await supervisor.killUserServer(String(server.user_id), id).catch((e: unknown) =>
+                  logger.warn(`사용 안 함 전환 시 정리 실패(전환은 유지): ${id}: ${e instanceof Error ? e.message : String(e)}`));
+          }
+      }
+
+      res.json(success({ id, enabled }));
+  }));
+
   mcpRouter.patch('/servers/:id/env', requireAuth, validate(mcpServerEnvUpdateSchema), asyncHandler(async (req: Request, res: Response) => {
       const userId = String(req.user?.id ?? '');
       const role = req.user?.role ?? 'user';

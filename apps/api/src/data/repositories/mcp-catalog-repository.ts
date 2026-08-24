@@ -397,6 +397,14 @@ export class McpCatalogRepository {
      * ⚠️ 최신 행이 `running` 이면(= 그 뒤 성공적으로 떴다면) 낡은 실패를 보여주지 않도록
      *    제외한다. 안 그러면 지금 잘 도는 서버에 예전 에러가 계속 붙는다.
      */
+    /** 서버 사용 여부 토글 — 설정을 보존한 채 목록에서 치우는 용도(삭제의 되돌릴 수 있는 대안). */
+    async setServerEnabled(serverId: string, enabled: boolean): Promise<void> {
+        await this.pool.query(
+            `UPDATE mcp_servers SET enabled = $2, updated_at = NOW() WHERE id = $1`,
+            [serverId, enabled],
+        );
+    }
+
     async getLatestConnectErrors(
         userId: string,
         serverIds: string[],

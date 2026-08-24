@@ -74,9 +74,21 @@ export const mcpServerEnvUpdateSchema = z.object({
         .refine((v) => Object.keys(v).length <= 30, { message: '한 번에 최대 30개까지 변경할 수 있습니다' }),
 });
 
+/**
+ * MCP 서버 사용 여부 토글 (PATCH /api/mcp/servers/:id/enabled)
+ *
+ * `enabled=false` 는 "이 서버를 쓰지 않는다"는 사용자 의사표시다 — 삭제와 달리 되돌릴 수
+ * 있어, 연결이 안 되는 서버(예: OAuth 미지원 원격 MCP)를 목록에서 치우되 설정은 보존한다.
+ */
+export const mcpServerEnabledUpdateSchema = z.object({
+    enabled: z.boolean(),
+});
+
 /** MCP 도구 실행 요청 TypeScript 타입 */
 export type McpToolExecuteInput = z.infer<typeof mcpToolExecuteSchema>;
 /** MCP 서버 등록 요청 TypeScript 타입 */
 export type McpServerCreateInput = z.infer<typeof mcpServerCreateSchema>;
 /** MCP 서버 env 교체 요청 TypeScript 타입 */
 export type McpServerEnvUpdateInput = z.infer<typeof mcpServerEnvUpdateSchema>;
+/** MCP 서버 사용 여부 토글 TypeScript 타입 */
+export type McpServerEnabledUpdateInput = z.infer<typeof mcpServerEnabledUpdateSchema>;
