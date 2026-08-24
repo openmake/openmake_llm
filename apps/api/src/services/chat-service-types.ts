@@ -222,6 +222,8 @@ export interface ChatMessageRequest {
      * 없었고, 그래서 응답·대화기록의 model 이 항상 로컬 기본 모델로 기록됐다.
      */
     onServedModel?: (fullId: string) => void;
+    /** 슬래시 확장 **전** 원문 — 언어 감지용(확장문은 스킬 본문 언어가 질문 언어를 덮는다). 미전달 시 message 사용 */
+    originalMessage?: string;
     /** 사용자가 설정에서 선택한 선호 언어 (language-policy userPreference) */
     userLanguagePreference?: string;
     /** 기기 GPS 현재 위치 (옵트인, 턴 단위 — 저장 안 함). system 컨텍스트에 결정적 주입. */

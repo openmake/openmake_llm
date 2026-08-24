@@ -206,6 +206,7 @@ export class ChatRequestHandler {
             onSkillsActivated,
             onSystemEvent,
             userLanguagePreference,
+            originalMessage,
         } = params;
 
         // 자가개선(F2) 귀속 — 어떤 에이전트가 이 응답을 담당했는지는 onAgentSelected 로만 흘러나가고
@@ -364,6 +365,8 @@ export class ChatRequestHandler {
             notebook: params.notebook,
             abortSignal,
             userLanguagePreference,
+            // 언어 감지용 원문 — WS 는 확장 전 원문을 넘기고, REST 는 여기서 확장하므로 입력이 곧 원문
+            originalMessage: originalMessage ?? rawMessage,
             userLocation: params.userLocation,
             format: params.format,
             onServedModel: (fullId) => { servedModel = fullId; },
