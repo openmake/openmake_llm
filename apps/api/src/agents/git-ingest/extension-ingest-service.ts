@@ -38,7 +38,7 @@ import {
     parseMarketplaceFile,
     type NormalizedMcpServer,
 } from './extension-manifest-validator';
-import { ConventionChecker, type ConventionFinding } from './convention-checker';
+import { ConventionChecker, isBlockedByConvention, type ConventionFinding } from './convention-checker';
 import { commandFileToSkillMarkdown, agentFileToCustomAgent } from './plugin-component-compat';
 import { UserAgentRepository } from '../../data/repositories/user-agent-repository';
 import { SkillAssetRepository } from '../../data/repositories/skill-asset-repository';
@@ -442,7 +442,7 @@ export class ExtensionIngestService {
                         '',
                         { command: entry.command, args: entry.args },
                     );
-                    const blockedByConvention = conv.findings.some(f => f.severity === 'error');
+                    const blockedByConvention = isBlockedByConvention(conv.findings);
                     const finalName = await this.resolveUniqueServerName(input.userId, `${manifest.name}-${entry.name}`);
                     const inserted = await draftRepo.insertDraft({
                         name: finalName,
