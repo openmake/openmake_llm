@@ -1065,7 +1065,7 @@
     "tabInstances": "インスタンス状態",
     "pendingApprovals": "承認待ち",
     "connectError": {
-      "auth_required": "認証が必要 — このサーバーは OAuth ログインを要求します（現在未対応）",
+      "auth_required": "認証が必要 — このサーバーは OAuth ログインを要求します",
       "not_found": "エンドポイントが見つかりません (404)",
       "unreachable": "サーバーに接続できません",
       "timeout": "接続がタイムアウトしました",
@@ -1077,7 +1077,13 @@
     "enable": "使用する",
     "disableTitle": "このサーバーを使用しないものとして表示（設定は保存、いつでも戻せます）",
     "enableTitle": "このサーバーを再び使用",
-    "toggleFailed": "変更に失敗しました: {error}"
+    "toggleFailed": "変更に失敗しました: {error}",
+    "oauthLogin": "ログイン",
+    "oauthLogout": "ログアウト",
+    "oauthLogoutTitle": "保存された OAuth トークンを削除して接続を切ります",
+    "oauthStartFailed": "OAuth ログインを開始できません: {error}",
+    "oauthOk": "{server} にログインしました — 接続します",
+    "oauthFailed": "{server} へのログインに失敗しました ({reason})"
   },
   "mcpCatalog": {
     "pageTitle": "MCPカタログ",

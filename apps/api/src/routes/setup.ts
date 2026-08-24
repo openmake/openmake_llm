@@ -11,6 +11,7 @@
 
 import { Application, Request, Response } from 'express';
 import { agentTaskQueueRouter } from './agent-task-queue.routes';
+import { mcpOAuthRouter } from './mcp-oauth.routes';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -175,6 +176,7 @@ export function setupApiRoutes(
     app.use('/api/agents', agentRouter);
     app.use('/api/monitoring', tokenMonitoringRouter);
     app.use('/api/mcp', mcpRouter);
+    app.use('/api/mcp', mcpOAuthRouter);   // 원격 MCP OAuth (start/callback/logout)
     app.use('/api/mcp', mcpCatalogRouter);
     app.use('/api/mcp', notebooklmRouter);
     const e2eMcpMock = process.env.MCP_INGEST_E2E_MOCK === 'true';

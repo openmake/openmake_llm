@@ -18,6 +18,13 @@ describe('classifyConnectError', () => {
         expect(classifyConnectError(new Error(msg)).code).toBe(expected);
     });
 
+    it('SDK UnauthorizedError 는 메시지가 비어도 auth_required (authProvider REDIRECT 경로)', () => {
+        const e = new Error(''); e.name = 'UnauthorizedError';
+        const r = classifyConnectError(e);
+        expect(r.code).toBe('auth_required');
+        expect(r.message.length).toBeGreaterThan(0); // 원문이 비면 안내문으로 채운다
+    });
+
     it('404 는 not_found', () => {
         expect(classifyConnectError(new Error('HTTP 404 Not Found')).code).toBe('not_found');
     });
