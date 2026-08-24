@@ -250,7 +250,11 @@ export class SkillCreatorService {
 
             try {
                 const client = this.opts.llmClientFactory(modelUsed);
-                const resp = await client.chat(messages);
+                // ⚠️ 구조화 출력 강제 — 생성 결과의 `content` 는 200자~20KB 마크다운이라,
+                // 강제 없이 자유 텍스트로 JSON 을 요청하면 모델이 코드블록·백틱·따옴표
+                // 이스케이프를 깨뜨려 정상 종료한 응답이 JSON.parse 에서 죽는다
+                // (2026-08-24 skill-rewriter 실측). 백엔드(vLLM)가 문법을 보장하게 한다.
+                const resp = await client.chat(messages, undefined, undefined, { format: 'json' });
                 const raw = resp.content ?? '';
                 const tokensUsed = resp.metrics?.completion_tokens ?? 0;
 
