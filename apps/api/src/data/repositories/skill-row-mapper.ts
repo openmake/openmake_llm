@@ -30,6 +30,8 @@ export function rowToSkill(row: Record<string, unknown>): AgentSkill {
     const sourcePath = row.source_path;
     const status = row.status;
     const manifestMeta = row.manifest_meta;
+    const extensionId = row.extension_id;
+    const extensionName = row.extension_name;
 
     return {
         id: toStringValue(row.id),
@@ -45,5 +47,7 @@ export function rowToSkill(row: Record<string, unknown>): AgentSkill {
         sourcePath: typeof sourcePath === 'string' ? sourcePath : undefined,
         status: status === 'draft' || status === 'active' || status === 'archived' ? status : undefined,
         manifestMeta: manifestMeta && typeof manifestMeta === 'object' ? manifestMeta as Record<string, unknown> : undefined,
+        extensionId: typeof extensionId === 'string' ? extensionId : undefined,
+        extensionName: typeof extensionName === 'string' ? extensionName : undefined,
     };
 }

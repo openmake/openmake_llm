@@ -740,6 +740,17 @@
         "discard": "Discard",
         "dismiss": "Dismiss",
         "applyFailed": "Failed to apply: {error}"
+      },
+      "bulk": {
+        "selectAll": "Select all ({count})",
+        "selected": "{count} selected",
+        "approve": "Approve selected",
+        "reject": "Reject selected",
+        "otherGroup": "Not from an extension",
+        "approveConfirm": "Approve {count} selected? They become usable in chat immediately.",
+        "rejectConfirm": "Reject {count} selected? They are archived, not deleted.",
+        "partial": "Processed {ok} of {total}. The rest were already handled or not permitted.",
+        "failed": "Bulk action failed: {error}"
       }
     }
   },

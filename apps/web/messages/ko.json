@@ -740,6 +740,17 @@
         "discard": "버리기",
         "dismiss": "닫기",
         "applyFailed": "적용 실패: {error}"
+      },
+      "bulk": {
+        "selectAll": "전체 선택 ({count})",
+        "selected": "{count}개 선택됨",
+        "approve": "선택 승인",
+        "reject": "선택 거부",
+        "otherGroup": "확장 외 스킬",
+        "approveConfirm": "선택한 {count}개를 승인할까요? 승인 즉시 채팅에서 사용됩니다.",
+        "rejectConfirm": "선택한 {count}개를 거부할까요? 보관 처리되며 삭제되지는 않습니다.",
+        "partial": "{total}개 중 {ok}개만 처리됐습니다. 나머지는 이미 처리됐거나 권한이 없습니다.",
+        "failed": "일괄 처리 실패: {error}"
       }
     }
   },
