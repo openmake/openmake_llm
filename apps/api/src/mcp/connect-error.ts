@@ -26,6 +26,11 @@ export interface ClassifiedConnectError {
  */
 export function classifyConnectError(error: unknown): ClassifiedConnectError {
     const raw = error instanceof Error ? error.message : String(error ?? '');
+    // SDK 의 UnauthorizedError 는 메시지가 빈 문자열일 수 있다(authProvider 가 REDIRECT 를 돌려준 경우)
+    // — 패턴표로는 못 잡으므로 이름으로 먼저 본다.
+    if (error instanceof Error && error.name === 'UnauthorizedError') {
+        return { code: 'auth_required', message: (raw.trim() || 'OAuth 로그인이 필요합니다').slice(0, MCP_CONNECT_ERROR_MAX_CHARS) };
+    }
     const message = raw.trim().slice(0, MCP_CONNECT_ERROR_MAX_CHARS);
     const rule = MCP_CONNECT_ERROR_RULES.find((r) => r.pattern.test(raw));
     return { code: rule?.code ?? 'unknown', message };
