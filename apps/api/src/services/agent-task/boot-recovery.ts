@@ -52,8 +52,10 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
         try {
             const cp = task.checkpoint as { conversation?: unknown[]; completedTurn?: number } | null | undefined;
             const hasCheckpoint = !!cp && Array.isArray(cp.conversation) && cp.conversation.length > 0;
-
-            if (!hasCheckpoint) {
+            // 'queued' 는 인메모리 대기열에 있다가 재시작으로 증발한 것 — 시작한 적이 없으니
+            // checkpoint 도 없다. 처음부터 다시 디스패치한다(로컬 실행은 아래 규칙대로 보류).
+            const wasQueued = task.status === 'queued';
+            if (!hasCheckpoint && !wasQueued) {
                 // 재개 지점이 없음. restart 마킹(failed)은 이미 정리된 상태이므로 건드리지 않고,
                 // 잔존 running/paused 만 실패(interrupted)로 정리(완료 오표시·영구 polling 방지).
                 if (task.status === 'running' || task.status === 'paused') {
@@ -69,7 +71,7 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
             // 미연결로 실패한다. 상태만 failed(interrupted)로 정리해 완료 오표시·영구 polling 을
             // 막고, 사용자가 디바이스 재연결 후 /resume 으로 수동 재개하게 한다.
             if (task.executor === 'local') {
-                if (task.status === 'running' || task.status === 'paused') {
+                if (task.status === 'running' || task.status === 'paused' || wasQueued) {
                     await db.updateAgentTask(task.id, { status: 'failed', error: 'interrupted_local_device' });
                     failed++;
                     logger.info(`[BootRecovery] 로컬 실행 작업 자동재개 보류 → failed(디바이스 재연결 후 수동 resume): ${task.id}`);
@@ -97,15 +99,19 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
                     maxTurns: task.max_turns,
                     files: Array.isArray(task.input_files) ? task.input_files as AgentTaskInputFile[] : undefined,
                     images: Array.isArray(task.input_images) ? task.input_images as string[] : undefined,
-                    resume: {
-                        conversation: cp!.conversation as ChatMessage[],
-                        fromTurn: (cp!.completedTurn ?? 0) + 1,
-                        fromStep: steps.length,
-                    },
+                    ...(hasCheckpoint ? {
+                        resume: {
+                            conversation: cp!.conversation as ChatMessage[],
+                            fromTurn: (cp!.completedTurn ?? 0) + 1,
+                            fromStep: steps.length,
+                        },
+                    } : {}),
                 }),
             });
             resumed++;
-            logger.info(`[BootRecovery] 자동 재개: ${task.id} (turn ${(cp!.completedTurn ?? 0) + 1})`);
+            logger.info(hasCheckpoint
+                ? `[BootRecovery] 자동 재개: ${task.id} (turn ${(cp!.completedTurn ?? 0) + 1})`
+                : `[BootRecovery] 대기열 증발분 재디스패치: ${task.id}`);
         } catch (e) {
             logger.warn(`[BootRecovery] task 복구 실패(건너뜀): ${task.id} — ${e instanceof Error ? e.message : e}`);
         }
