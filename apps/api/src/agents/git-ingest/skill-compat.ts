@@ -138,7 +138,10 @@ export function buildCompatNote(mappings: readonly ToolMapping[], markers: reado
         lines.push('- `` !`명령` `` 형태의 자동 셸 주입은 이 환경에 없습니다 — 필요하면 에이전트 작업에서 `bash` 로 직접 실행하세요.');
     }
     if (markers.includes('.claude/')) {
-        lines.push('- `.claude/` · `CLAUDE.md` 경로는 이 환경에 존재하지 않습니다 — 해당 지침은 무시하세요.');
+        // ⚠️ "무시하라"로 뭉뚱그리면 안 된다 — `.claude/` 는 읽을 설정 경로일 때도 있고
+        // 스킬이 만들어내는 산출물 경로일 때도 있다(예: hookify 가 규칙 파일을 생성).
+        // 후자까지 무시시키면 스킬이 아무 결과도 내지 못한다.
+        lines.push('- `.claude/` · `CLAUDE.md` 는 이 환경에 없습니다. **읽으라는 지침이면 건너뛰고**, 스킬이 **만들어내는 파일 경로**면 `.claude/` 를 뗀 작업 디렉토리 기준 경로에 생성하세요 (그 파일이 원래 자동 실행되는 훅·설정이었다면 이 환경에서는 실행되지 않고 참고용으로만 남습니다).');
     }
 
     if (lines.length === 0) return '';

@@ -24,20 +24,51 @@ describe('skill-rewriter', () => {
         });
     });
 
+    // 마커 기반 — 본문에 코드블록·백틱·따옴표가 섞여도 이스케이프가 필요 없다
+    // (JSON 형식일 때 정상 종료했는데도 parse 실패하던 실측 사례로 전환, 2026-08-24)
     describe('parseRewriteResponse', () => {
-        it('JSON 파싱', () => {
-            const r = parseRewriteResponse(JSON.stringify({ changed: true, content: 'new', summary: ['a'] }));
-            expect(r).toEqual({ changed: true, content: 'new', summary: ['a'] });
+        it('마커 파싱 (요약 + 본문)', () => {
+            const r = parseRewriteResponse([
+                '===CHANGED=== yes',
+                '===SUMMARY===',
+                '- 도구 이름 교체',
+                '- 경로 조정',
+                '===CONTENT===',
+                '# 제목',
+                '본문입니다.',
+            ].join('\n'));
+            expect(r).toEqual({
+                changed: true,
+                content: '# 제목\n본문입니다.',
+                summary: ['도구 이름 교체', '경로 조정'],
+            });
         });
 
-        it('code fence 감싼 응답', () => {
-            const r = parseRewriteResponse('```json\n{"changed":false,"content":"","summary":[]}\n```');
-            expect(r?.changed).toBe(false);
+        it('changed=no 면 본문 없이 종료', () => {
+            expect(parseRewriteResponse('===CHANGED=== no')).toEqual({ changed: false, content: '', summary: [] });
         });
 
-        it('파싱 불가는 null', () => {
-            expect(parseRewriteResponse('not json')).toBeNull();
+        it('본문의 코드블록·따옴표·백슬래시를 그대로 보존 (이스케이프 불필요)', () => {
+            const body = '```bash\nrm -rf "$dir" \\\n  --force\n```\n\n`Read` 도구를 쓰세요.';
+            const r = parseRewriteResponse(`===CHANGED=== yes\n===SUMMARY===\n- x\n===CONTENT===\n${body}`);
+            expect(r?.content).toBe(body.trimEnd());
+        });
+
+        // 바깥 펜스를 벗기면 본문이 코드블록으로 시작/끝날 때 훼손된다 — 벗기지 않는다
+        it('바깥 펜스는 벗기지 않는다 (본문 파손 방지)', () => {
+            const r = parseRewriteResponse('===CHANGED=== yes\n===CONTENT===\n```\n# 본문\n```');
+            expect(r?.content).toBe('```\n# 본문\n```');
+        });
+
+        it('요약이 없어도 본문만 있으면 유효', () => {
+            const r = parseRewriteResponse('===CHANGED=== yes\n===CONTENT===\n본문');
+            expect(r).toEqual({ changed: true, content: '본문', summary: [] });
+        });
+
+        it('마커 없음·빈 응답·changed=yes 인데 본문 없음 → null', () => {
+            expect(parseRewriteResponse('그냥 텍스트')).toBeNull();
             expect(parseRewriteResponse('')).toBeNull();
+            expect(parseRewriteResponse('===CHANGED=== yes\n===SUMMARY===\n- x')).toBeNull();
         });
     });
 
@@ -67,19 +98,19 @@ describe('skill-rewriter', () => {
 
         it('변경 제안을 반환', async () => {
             const proposed = body.replace(/`Bash`/g, '`bash`');
-            const llm = mockLlm(JSON.stringify({ changed: true, content: proposed, summary: ['도구 이름 교체'] }));
+            const llm = mockLlm(`===CHANGED=== yes\n===SUMMARY===\n- 도구 이름 교체\n===CONTENT===\n${proposed}`);
             const r = await proposeSkillRewrite(llm, { name: 's', content: body, model: 'm' });
-            expect(r?.content).toBe(proposed);
+            expect(r?.content).toBe(proposed.trimEnd());
             expect(r?.summary).toEqual(['도구 이름 교체']);
         });
 
-        it('changed=false 면 제안 없음', async () => {
-            const llm = mockLlm(JSON.stringify({ changed: false, content: '', summary: [] }));
+        it('changed=no 면 제안 없음', async () => {
+            const llm = mockLlm('===CHANGED=== no');
             expect(await proposeSkillRewrite(llm, { name: 's', content: body, model: 'm' })).toBeNull();
         });
 
         it('내용이 급감하면 제안을 버린다', async () => {
-            const llm = mockLlm(JSON.stringify({ changed: true, content: '짧은 요약', summary: [] }));
+            const llm = mockLlm('===CHANGED=== yes\n===CONTENT===\n짧은 요약');
             expect(await proposeSkillRewrite(llm, { name: 's', content: body, model: 'm' })).toBeNull();
         });
 
@@ -89,7 +120,7 @@ describe('skill-rewriter', () => {
         });
 
         it('검사 대상을 경계 태그로 감싸 전달', async () => {
-            const llm = mockLlm(JSON.stringify({ changed: false, content: '', summary: [] }));
+            const llm = mockLlm('===CHANGED=== no');
             await proposeSkillRewrite(llm, { name: 's', content: body, model: 'm' });
             const messages = (llm.chat as jest.Mock).mock.calls[0][0];
             expect(messages[1].content).toContain('<skill_body>');

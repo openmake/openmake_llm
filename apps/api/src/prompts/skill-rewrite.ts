@@ -17,6 +17,16 @@ export const SKILL_REWRITE_TARGET_OPEN = '<skill_body>';
 export const SKILL_REWRITE_TARGET_CLOSE = '</skill_body>';
 
 /**
+ * 응답 마커 — JSON 대신 쓰는 이유: 스킬 본문은 코드블록·백틱·따옴표·개행이 많은 긴
+ * 마크다운이라, 이를 JSON 문자열에 담게 하면 로컬 모델이 이스케이프를 자주 깨뜨린다
+ * (2026-08-24 실측: finish_reason=stop 으로 정상 종료했는데도 JSON.parse 실패 →
+ * 제안이 조용히 "변경 없음"으로 처리됨). 마커 방식은 이스케이프가 아예 필요 없다.
+ */
+export const REWRITE_CHANGED_MARKER = '===CHANGED===';
+export const REWRITE_SUMMARY_MARKER = '===SUMMARY===';
+export const REWRITE_CONTENT_MARKER = '===CONTENT===';
+
+/**
  * @param toolMapping 이 환경의 도구 대응표 (예: "Read → file_ops")
  */
 export function buildSkillRewriteSystemPrompt(toolMapping: string): string {
@@ -46,20 +56,44 @@ ${toolMapping || '   (대응표 없음 — 도구 이름은 건드리지 마세�
    판단이 애매하면 **바꾸지 않는 쪽**을 택하세요.
 2. **플랫폼 지칭**: "Claude Code", "Claude Desktop", "이 CLI" 등 다른 제품 이름이
    동작을 설명할 때 → "이 환경" 으로. 단순 인용·출처 표기는 그대로 두세요.
-3. **존재하지 않는 경로·기능**: \`.claude/\`, \`CLAUDE.md\`, \`~/.claude/settings.json\`,
-   훅(hooks), 슬래시 명령 등록 절차처럼 이 환경에 없는 것을 지시하는 문장 →
-   그 단계를 건너뛰라는 짧은 안내로 바꾸세요 (문단 전체를 지우지는 마세요).
+3. **이 환경에 없는 경로·기능** — 용도에 따라 다르게 다룹니다. 뭉뚱그려 "건너뛰라"고
+   바꾸면 스킬이 아무 산출물도 못 내므로 아래 셋을 구분하세요:
+
+   (a) **읽어야 할 설정 파일** (\`~/.claude/settings.json\`, \`CLAUDE.md\`, 플러그인 설정 등
+       — 이 환경에 존재하지 않는 것을 읽으라는 지시)
+       → 그 단계를 건너뛰라는 짧은 안내로 바꿉니다.
+
+   (b) **만들어야 할 산출물 경로** (\`.claude/foo.md\` 처럼 스킬이 **생성**하는 파일)
+       → **경로에서 \`.claude/\` 만 떼고** 작업 디렉토리 기준 상대 경로로 바꿉니다.
+         예: \`.claude/hookify.rule.local.md\` → \`hookify.rule.local.md\`,
+             \`mkdir -p .claude\` 단계는 삭제.
+       ⚠️ **파일을 만드는 단계 자체는 없애지 마세요** — 그게 이 스킬의 결과물입니다.
+       그 산출물이 원래 플랫폼에서 자동 실행되는 훅·설정 파일이었다면, 파일은 그대로
+       만들되 "이 환경은 이 파일을 자동으로 실행하지 않습니다 — 내용은 참고용으로
+       남습니다" 같은 한 줄을 그 단계에 덧붙입니다.
+
+   (c) **플랫폼 절차** (훅 등록, 슬래시 명령 등록, 확장 설치 절차 등 이 환경에 대응
+       개념이 없는 조작) → 건너뛰라는 짧은 안내로 바꿉니다 (문단 전체를 지우지는 마세요).
 4. **자리표시자**: \`$ARGUMENTS\`·\`$1\` 은 **그대로 두세요** (호출 시 자동 치환됩니다).
 5. 이미 본문 맨 앞에 \`[openmake 호환 안내]\` blockquote 가 있으면 **그대로 보존**하세요.
 
 ## 응답 형식
-JSON object only. 다른 텍스트 출력 금지.
-{
-  "changed": true | false,
-  "content": "<수정된 전체 본문 (changed=false 면 빈 문자열)>",
-  "summary": ["<무엇을 왜 바꿨는지 한 줄>", "..."]
-}
-content 는 **본문 전체**여야 합니다 — 일부만 돌려주면 나머지가 소실됩니다.`;
+아래 세 줄 마커 형식으로만 답하세요. JSON 을 쓰지 마세요.
+
+\`\`\`
+${REWRITE_CHANGED_MARKER} yes
+${REWRITE_SUMMARY_MARKER}
+- 무엇을 왜 바꿨는지 한 줄
+- (여러 줄 가능)
+${REWRITE_CONTENT_MARKER}
+<여기서부터 끝까지가 수정된 **본문 전체**. 원문 그대로의 마크다운을 쓰고
+이스케이프하지 마세요. 코드블록·백틱·따옴표도 원문 형태 그대로 둡니다.>
+\`\`\`
+
+바꿀 것이 없으면 \`${REWRITE_CHANGED_MARKER} no\` 한 줄만 출력하고 끝내세요.
+\`${REWRITE_CONTENT_MARKER}\` 뒤에는 **본문 전체**가 와야 합니다 — 일부만 쓰면 나머지가 소실됩니다.
+본문 전체를 \`\`\` 코드펜스로 감싸지 마세요 (본문 안의 코드블록은 그대로 두되, 바깥을 추가로
+감싸면 안 됩니다).`;
 }
 
 export function buildSkillRewriteUserPrompt(skillName: string, body: string): string {
