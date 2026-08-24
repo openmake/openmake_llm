@@ -124,13 +124,31 @@ export function mergeActivatedSkillNames(...groups: string[][]): string[] {
 async function defaultFindSkillBySlug(slug: string, userId?: string): Promise<SlashSkill | null> {
     const { getSkillManager } = await import('../agents/skill-manager');
     const manager = getSkillManager();
-    for (const search of [slug.replace(/-/g, ' '), slug]) {
-        const result = await manager.searchSkills({ search, status: 'active', limit: 10, userId });
+    for (const { search, limit } of buildSlugSearchAttempts(slug)) {
+        const result = await manager.searchSkills({ search, status: 'active', limit, userId });
         const matched = result.skills.find((s) => matchesSlug(s.name, slug));
         if (matched) return { name: matched.name, content: matched.content };
-        if (!slug.includes('-')) break; // 하이픈 없으면 두 검색어가 동일 — 재검색 불필요
     }
     return null;
+}
+
+/**
+ * slug → DB 검색어 후보들 (순서대로 시도, 첫 매치에서 종료).
+ *
+ * `searchSkills` 는 검색어를 **문자열 그대로** ILIKE 하므로, 이름에 슬러그화 과정에서
+ * 사라지는 문자(`&`·`:`·`(` 등)가 있으면 공백 복원도 원 slug 도 매칭되지 않는다
+ * — 예: "Nginx Log Error Analysis **&** Reporting" ↔ "nginx log error analysis reporting"
+ * (2026-08-24 실측: 슬래시 호출이 조용히 무시되고 일반 에이전트가 답했다).
+ * 마지막 폴백으로 **첫 토큰만** 넓게 검색한 뒤 `matchesSlug` 로 정확 필터한다
+ * (필터가 정확 일치라 후보를 넓혀도 오탐이 없다).
+ */
+export function buildSlugSearchAttempts(slug: string): Array<{ search: string; limit: number }> {
+    const spaced = slug.replace(/-/g, ' ');
+    const attempts: Array<{ search: string; limit: number }> = [{ search: spaced, limit: 10 }];
+    if (slug !== spaced) attempts.push({ search: slug, limit: 10 });
+    const firstToken = slug.split('-')[0];
+    if (firstToken && firstToken !== slug) attempts.push({ search: firstToken, limit: 50 });
+    return attempts;
 }
 
 /**

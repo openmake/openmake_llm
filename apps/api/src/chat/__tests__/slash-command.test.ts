@@ -1,5 +1,6 @@
 import {
     substituteSkillArguments,
+    buildSlugSearchAttempts,
     parseSlashCommand,
     slugify,
     matchesSlug,
@@ -92,6 +93,42 @@ describe('substituteSkillArguments (외부 스킬 인자 자리표시자)', () =
     it('자리표시자와 금액이 섞여 있으면 자리표시자만 치환', () => {
         const r = substituteSkillArguments('대상: $1 (예산 $1,500)', 'design.fig');
         expect(r.content).toBe('대상: design.fig (예산 $1,500)');
+    });
+});
+
+describe('buildSlugSearchAttempts (DB 검색어 후보)', () => {
+    it('공백 복원 → 원 slug → 첫 토큰(넓게) 순', () => {
+        expect(buildSlugSearchAttempts('nginx-log-error')).toEqual([
+            { search: 'nginx log error', limit: 10 },
+            { search: 'nginx-log-error', limit: 10 },
+            { search: 'nginx', limit: 50 },
+        ]);
+    });
+
+    it('하이픈 없는 slug 는 후보 1개', () => {
+        expect(buildSlugSearchAttempts('billing')).toEqual([{ search: 'billing', limit: 10 }]);
+    });
+});
+
+// 이름에 슬러그화로 사라지는 문자(&·: 등)가 있으면 공백 복원·원 slug 둘 다 ILIKE 실패 →
+// 첫 토큰 폴백이 후보를 넓히고 matchesSlug 가 정확 필터한다 (2026-08-24 실측 결함)
+describe('특수문자 이름 스킬의 슬래시 매칭', () => {
+    it('"A & B" 형태 이름도 첫 토큰 폴백으로 찾는다', async () => {
+        const skill = { name: 'Nginx Log Error Analysis & Reporting', content: '본문' };
+        const findSkillBySlug = jest.fn(async (slug: string) => {
+            for (const { search } of buildSlugSearchAttempts(slug)) {
+                // searchSkills 의 ILIKE 를 흉내 — 이름에 부분 문자열이 있어야 후보에 오름
+                if (skill.name.toLowerCase().includes(search)) {
+                    return matchesSlug(skill.name, slug) ? skill : null;
+                }
+            }
+            return null;
+        });
+        const out = await applySlashCommand('/nginx-log-error-analysis-reporting 4xx 비율', { findSkillBySlug });
+        // 주입 시 이름의 <>"& 는 제거된다(속성 이스케이프) — 매칭이 됐는지가 요점
+        expect(out).toContain('Nginx Log Error Analysis  Reporting');
+        expect(out).toContain('본문');
+        expect(findSkillBySlug).toHaveBeenCalledWith('nginx-log-error-analysis-reporting', undefined);
     });
 });
 
