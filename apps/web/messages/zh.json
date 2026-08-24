@@ -1862,6 +1862,7 @@
     "empty": "暂无已安装的扩展。",
     "skills": "技能",
     "mcpServers": "MCP 服务器",
+    "agents": "自定义智能体",
     "none": "无",
     "approvalHint": "draft 状态的组件需在技能库/MCP 服务器页面批准后才会启用。",
     "report": {

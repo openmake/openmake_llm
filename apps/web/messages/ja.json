@@ -1862,6 +1862,7 @@
     "empty": "インストール済みの拡張はありません。",
     "skills": "スキル",
     "mcpServers": "MCPサーバー",
+    "agents": "カスタムエージェント",
     "none": "なし",
     "approvalHint": "draft 状態のコンポーネントはスキルライブラリ・MCPサーバーページで承認すると有効化されます。",
     "report": {

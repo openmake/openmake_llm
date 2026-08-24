@@ -1862,6 +1862,7 @@
     "empty": "설치된 확장이 없습니다.",
     "skills": "스킬",
     "mcpServers": "MCP 서버",
+    "agents": "커스텀 에이전트",
     "none": "없음",
     "approvalHint": "draft 상태 구성요소는 스킬 라이브러리·MCP 서버 페이지에서 승인해야 활성화됩니다.",
     "report": {

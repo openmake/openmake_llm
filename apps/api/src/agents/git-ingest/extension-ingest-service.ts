@@ -39,6 +39,11 @@ import {
     type NormalizedMcpServer,
 } from './extension-manifest-validator';
 import { ConventionChecker, type ConventionFinding } from './convention-checker';
+import { commandFileToSkillMarkdown, agentFileToCustomAgent } from './plugin-component-compat';
+import { UserAgentRepository } from '../../data/repositories/user-agent-repository';
+import { SkillAssetRepository } from '../../data/repositories/skill-asset-repository';
+import { PLUGIN_COMPONENT_LIMITS, UNSUPPORTED_AGENT_FIELDS } from '../../config/skill-compat';
+import { v4 as uuidv4 } from 'uuid';
 import { GitIngestService } from './git-ingest-service';
 import { McpServerDraftRepository } from '../../data/repositories/mcp-server-draft-repository';
 import { UserExtensionRepository } from '../../data/repositories/user-extension-repository';
@@ -58,6 +63,23 @@ export interface SkillInstallResult {
     deduped?: boolean;
     /** 설치 시 적응(호환 변환) 요약 — skill-compat */
     compatNotes?: string[];
+    /** commands/<name>.md 를 스킬로 변환한 경우 */
+    fromCommand?: boolean;
+    /** 함께 저장된 번들 파일 (scripts/·references/·assets/) 상대 경로 */
+    assets?: string[];
+    error?: string;
+}
+
+export interface AgentInstallResult {
+    /** agents/<name>.md 경로 */
+    path: string;
+    /** 원문 name (충돌 회피 전) */
+    name: string;
+    agentId?: string;
+    /** 실제 저장된 이름 (충돌 시 prefix/suffix 적용) */
+    storedName?: string;
+    /** 이 환경이 적용하지 않는 원문 필드 안내 */
+    ignoredFields?: string[];
     error?: string;
 }
 
@@ -82,6 +104,8 @@ export interface ImportResult {
     gitPath: string;
     skills: SkillInstallResult[];
     mcpServers: McpServerInstallResult[];
+    /** agents/*.md → Custom Agent (Phase 2) */
+    agents: AgentInstallResult[];
     validationWarnings: string[];
     deduped: boolean;
     /** 동일 소스 재설치인데 source_ref 가 이미 최신 — 아무것도 변경 안 함 */
@@ -289,7 +313,7 @@ export class ExtensionIngestService {
         // (5-c) 이 환경이 설치하지 않는 구성요소 — 조용히 무시하지 않고 리포트한다
         const unsupported = detectUnsupportedComponents(tree.entries, root, manifest.raw);
         if (unsupported.length > 0) {
-            warnings.push(`UNSUPPORTED_COMPONENTS: ${unsupported.join(', ')} — 이 환경은 스킬(SKILL.md)과 MCP 서버만 설치합니다`);
+            warnings.push(`UNSUPPORTED_COMPONENTS: ${unsupported.join(', ')} — 이 환경에 대응 개념이 없어 설치되지 않았습니다`);
         }
         // plugin.json mcpServers 항목 단위 사유 (설치는 나머지 항목으로 계속)
         if (manifest.mcpWarnings.length > 0) {
@@ -336,6 +360,53 @@ export class ExtensionIngestService {
                 skillResults.push({ path, error: e instanceof Error ? e.message : String(e) });
             }
         }
+
+        // (6-a2) commands/<name>.md → 스킬 (Phase 2)
+        // openmake 는 슬래시 명령이 곧 스킬 매칭이라 등가물이다. name 프론트매터가 없어
+        // (파일명이 명령 이름) SKILL.md 규격으로 정규화한 뒤 같은 파이프라인에 태운다.
+        const commandPattern = new RegExp(`^${root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}commands/(?:[^/]+/)?[^/]+\\.md$`, 'i');
+        let commandPaths = tree.entries.filter(e => commandPattern.test(e.path)).map(e => e.path);
+        if (commandPaths.length > PLUGIN_COMPONENT_LIMITS.maxCommands) {
+            warnings.push(`COMMANDS_TRUNCATED: ${commandPaths.length}개 중 ${PLUGIN_COMPONENT_LIMITS.maxCommands}개만 설치`);
+            commandPaths = commandPaths.slice(0, PLUGIN_COMPONENT_LIMITS.maxCommands);
+        }
+        for (const path of commandPaths) {
+            try {
+                const raw = await fetcher.fetchFile(owner, repo, sha, path, SKILL_CREATOR.gitMaxFileSize ?? 262144);
+                const normalized = commandFileToSkillMarkdown(path, raw);
+                const r = await skillService.import({
+                    userId: input.userId,
+                    isAdmin: input.isAdmin,
+                    gitUrl: effectiveGitUrl,
+                    gitRef: sha,
+                    gitPath: path,
+                    accessToken: input.accessToken,
+                    target: 'user',
+                    contentOverride: normalized.content,
+                });
+                if ('selectionRequired' in r && r.selectionRequired) {
+                    skillResults.push({ path, error: 'unexpected multi-candidate', fromCommand: true });
+                } else {
+                    skillResults.push({
+                        path, skillId: r.skillId, name: r.name, deduped: r.deduped, fromCommand: true,
+                        ...(r.compatNotes.length > 0 ? { compatNotes: r.compatNotes } : {}),
+                    });
+                }
+            } catch (e) {
+                skillResults.push({ path, error: e instanceof Error ? e.message : String(e), fromCommand: true });
+            }
+        }
+        if (commandPaths.length > 0) {
+            const ok = skillResults.filter(r => r.fromCommand && r.skillId).length;
+            warnings.push(`COMMANDS_CONVERTED: 슬래시 명령 ${ok}개를 스킬로 변환 (\`/이름\` 으로 호출)`);
+        }
+
+        // (6-a3) 스킬 번들 파일 — SKILL.md 와 같은 디렉토리의 scripts/·references/·assets/
+        // 본문이 "run scripts/check.py" 라고 지시하는데 파일이 없던 상태를 해소한다.
+        await this.collectSkillAssets({
+            fetcher, owner, repo, sha, tree,
+            skillResults, warnings,
+        });
 
         // (6-b) MCP servers — plugin.json mcpServers 우선, 없으면 <root>mcp.json / <root>.mcp.json
         let mcpEntries: NormalizedMcpServer[] = manifest.mcpServers;
@@ -408,6 +479,58 @@ export class ExtensionIngestService {
             }
         }
 
+        // (6-c) agents/<name>.md → Custom Agent (Phase 2)
+        // 본문이 곧 시스템 프롬프트다. 스킬/MCP 와 달리 실행 권한이 없고 사용자가 명시
+        // 선택할 때만 적용되는 페르소나라 승인 게이트 없이 즉시 활성으로 만든다.
+        const agentPattern = new RegExp(`^${root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}agents/(?:[^/]+/)?[^/]+\\.md$`, 'i');
+        let agentPaths = tree.entries.filter(e => agentPattern.test(e.path)).map(e => e.path);
+        if (agentPaths.length > PLUGIN_COMPONENT_LIMITS.maxAgents) {
+            warnings.push(`AGENTS_TRUNCATED: ${agentPaths.length}개 중 ${PLUGIN_COMPONENT_LIMITS.maxAgents}개만 설치`);
+            agentPaths = agentPaths.slice(0, PLUGIN_COMPONENT_LIMITS.maxAgents);
+        }
+        const agentResults: AgentInstallResult[] = [];
+        if (agentPaths.length > 0) {
+            const agentRepo = new UserAgentRepository(this.opts.pool);
+            for (const path of agentPaths) {
+                try {
+                    const raw = await fetcher.fetchFile(owner, repo, sha, path, SKILL_CREATOR.gitMaxFileSize ?? 262144);
+                    const parsedAgent = agentFileToCustomAgent(path, raw);
+                    if (!parsedAgent.systemPrompt || parsedAgent.systemPrompt.length < 10) {
+                        agentResults.push({ path, name: parsedAgent.name, error: '시스템 프롬프트가 비어있음' });
+                        continue;
+                    }
+                    const storedName = await this.resolveUniqueAgentName(
+                        agentRepo, input.userId, `${manifest.name}-${parsedAgent.name}`,
+                    );
+                    const ignoredFields = Object.keys(parsedAgent.upstreamFields)
+                        .filter(k => k in UNSUPPORTED_AGENT_FIELDS)
+                        .map(k => UNSUPPORTED_AGENT_FIELDS[k]);
+                    const created = await agentRepo.create({
+                        id: uuidv4(),
+                        userId: input.userId,
+                        name: storedName,
+                        description: parsedAgent.description,
+                        systemPrompt: parsedAgent.systemPrompt,
+                        extensionId: null,   // linkComponents 가 이어서 연결
+                    });
+                    agentResults.push({
+                        path, name: parsedAgent.name, agentId: created.id, storedName,
+                        ...(ignoredFields.length > 0 ? { ignoredFields } : {}),
+                    });
+                } catch (e) {
+                    agentResults.push({ path, name: path, error: e instanceof Error ? e.message : String(e) });
+                }
+            }
+            const okAgents = agentResults.filter(r => r.agentId);
+            if (okAgents.length > 0) {
+                warnings.push(`AGENTS_CONVERTED: 서브에이전트 ${okAgents.length}개를 Custom Agent 로 변환 (즉시 사용 가능)`);
+            }
+            const ignored = [...new Set(agentResults.flatMap(r => r.ignoredFields ?? []))];
+            if (ignored.length > 0) {
+                warnings.push(`AGENT_FIELDS_IGNORED: ${ignored.join(', ')} — 이 환경은 시스템 프롬프트만 사용합니다`);
+            }
+        }
+
         // 스킬 적응 요약 — 확장 단위 리포트에 합류 (구성요소별 상세는 skills[].compatNotes)
         const adaptedSkills = skillResults.filter(r => r.compatNotes && r.compatNotes.length > 0);
         if (adaptedSkills.length > 0) {
@@ -417,8 +540,9 @@ export class ExtensionIngestService {
         // (7) 전 구성요소 실패/부재 검증
         const okSkills = skillResults.filter(r => r.skillId);
         const okServers = mcpResults.filter(r => r.serverId);
-        if (okSkills.length === 0 && okServers.length === 0) {
-            const detail = [...skillResults, ...mcpResults]
+        const okAgentResults = agentResults.filter(r => r.agentId);
+        if (okSkills.length === 0 && okServers.length === 0 && okAgentResults.length === 0) {
+            const detail = [...skillResults, ...mcpResults, ...agentResults]
                 .map(r => r.error)
                 .filter(Boolean)
                 .join('; ');
@@ -428,7 +552,7 @@ export class ExtensionIngestService {
         // (8) user_extensions INSERT(신규) 또는 UPDATE(재설치) + 링크
         const componentManifest = {
             plugin: manifest.raw,
-            components: { skills: skillResults, mcpServers: mcpResults },
+            components: { skills: skillResults, mcpServers: mcpResults, agents: agentResults },
             // 설치 리포트 — 미지원 구성요소·건너뛴 MCP 항목·스킬 적응 (상세 UI 노출)
             warnings,
         };
@@ -465,9 +589,10 @@ export class ExtensionIngestService {
             row.id,
             okSkills.map(r => r.skillId!),
             okServers.map(r => r.serverId!),
+            okAgentResults.map(r => r.agentId!),
         );
 
-        logger.info(`extension-ingest ${updateTarget ? 'updated' : 'created'}: ${row.id} "${manifest.name}@${manifest.version}"${previousVersion ? ` (from ${previousVersion})` : ''} (${owner}/${repo}@${sha.slice(0, 7)}, skills=${okSkills.length}, mcp=${okServers.length})`);
+        logger.info(`extension-ingest ${updateTarget ? 'updated' : 'created'}: ${row.id} "${manifest.name}@${manifest.version}"${previousVersion ? ` (from ${previousVersion})` : ''} (${owner}/${repo}@${sha.slice(0, 7)}, skills=${okSkills.length}, mcp=${okServers.length}, agents=${okAgentResults.length})`);
         return {
             extensionId: row.id,
             name: manifest.name,
@@ -480,6 +605,7 @@ export class ExtensionIngestService {
             gitPath: candidate.path,
             skills: skillResults,
             mcpServers: mcpResults,
+            agents: agentResults,
             validationWarnings: warnings,
             deduped: false,
             ...(updateTarget ? { updated: true, previousVersion } : {}),
@@ -554,6 +680,121 @@ export class ExtensionIngestService {
         return `${base.slice(0, 93)}-${suffix}`;
     }
 
+    /**
+     * 스킬 번들 파일 수집 — SKILL.md 와 같은 디렉토리의 `scripts/`·`references/`·`assets/`.
+     *
+     * 외부 스킬 본문은 "see references/rules.md" 처럼 딸린 파일을 참조하는데 ingest 는
+     * SKILL.md 한 장만 가져와 참조 대상이 없었다. 원본 바이트를 skill_assets 에 보존해
+     * 목록 안내와 에이전트 작업 샌드박스 주입에 쓴다. 실패는 fail-soft — 스킬 설치는 유지.
+     */
+    private async collectSkillAssets(ctx: {
+        fetcher: GitFetcher;
+        owner: string;
+        repo: string;
+        sha: string;
+        tree: { entries: Array<{ path: string; size: number }> };
+        skillResults: SkillInstallResult[];
+        warnings: string[];
+    }): Promise<void> {
+        const assetRepo = new SkillAssetRepository(this.opts.pool);
+        for (const result of ctx.skillResults) {
+            if (!result.skillId) continue;
+            // SKILL.md 의 디렉토리 (commands/ 변환분은 번들 개념이 없어 건너뜀)
+            if (result.fromCommand) continue;
+            const dir = result.path.slice(0, result.path.lastIndexOf('/') + 1);
+            if (!dir) continue;
+            const candidates = ctx.tree.entries.filter(e =>
+                e.path.startsWith(dir)
+                && e.path !== result.path
+                && /^(scripts|references|assets)\//.test(e.path.slice(dir.length))
+            );
+            if (candidates.length === 0) continue;
+
+            let picked = candidates;
+            if (picked.length > PLUGIN_COMPONENT_LIMITS.maxAssetsPerSkill) {
+                ctx.warnings.push(`ASSETS_TRUNCATED: ${result.name ?? result.path} 의 번들 파일 ${picked.length}개 중 ${PLUGIN_COMPONENT_LIMITS.maxAssetsPerSkill}개만 저장`);
+                picked = picked.slice(0, PLUGIN_COMPONENT_LIMITS.maxAssetsPerSkill);
+            }
+            const stored: string[] = [];
+            let total = 0;
+            for (const entry of picked) {
+                const relPath = entry.path.slice(dir.length);
+                if (entry.size > PLUGIN_COMPONENT_LIMITS.maxAssetBytes) {
+                    ctx.warnings.push(`ASSET_TOO_LARGE: ${relPath} (${entry.size}B) 는 상한 초과로 건너뜀`);
+                    continue;
+                }
+                if (total + entry.size > PLUGIN_COMPONENT_LIMITS.maxAssetTotalBytes) {
+                    ctx.warnings.push(`ASSETS_BUDGET_EXCEEDED: ${result.name ?? result.path} 의 번들 파일 합계 상한 초과 — 이후 파일 생략`);
+                    break;
+                }
+                try {
+                    const raw = await ctx.fetcher.fetchFile(
+                        ctx.owner, ctx.repo, ctx.sha, entry.path, PLUGIN_COMPONENT_LIMITS.maxAssetBytes,
+                    );
+                    const buf = Buffer.from(raw, 'utf8');
+                    total += buf.length;
+                    await assetRepo.upsert({ skillId: result.skillId, relPath, content: buf });
+                    stored.push(relPath);
+                } catch (e) {
+                    logger.warn(`번들 파일 저장 실패 (fail-soft): ${entry.path} — ${e instanceof Error ? e.message : String(e)}`);
+                }
+            }
+            if (stored.length > 0) {
+                result.assets = stored;
+                // 모델이 파일의 존재와 경로를 알아야 load_skill(asset_paths) 로 열 수 있다
+                await this.appendAssetIndex(result.skillId, stored);
+                ctx.warnings.push(`ASSETS_STORED: ${result.name ?? result.path} 번들 파일 ${stored.length}개 보존 (${stored.slice(0, 5).join(', ')}${stored.length > 5 ? ' …' : ''})`);
+            }
+        }
+    }
+
+    /**
+     * 저장된 번들 파일 목록을 스킬 본문 끝에 안내로 덧붙인다.
+     *
+     * 파일을 보존만 하면 모델은 그 존재를 모른다 — 본문의 "see references/rules.md" 는
+     * 여전히 허공을 가리킨다. 목록과 여는 방법(`load_skill(asset_paths)`)을 명시해야
+     * 참조가 실제로 이어진다. `skill_manifests.prompt_md`·checksum 도 함께 동기화한다
+     * (주입 SoT 가 그쪽이라 어긋나면 안내가 반영되지 않는다).
+     */
+    private async appendAssetIndex(skillId: string, relPaths: string[]): Promise<void> {
+        const list = relPaths.map(p => `- \`${p}\``).join('\n');
+        const block = [
+            '',
+            '---',
+            '',
+            '> **[이 스킬에 딸린 파일]** 아래 파일이 함께 설치되어 있습니다. 내용이 필요하면',
+            '> `load_skill` 을 이 스킬 이름과 `asset_paths: ["<경로>"]` 로 호출해 여세요.',
+            '>',
+            ...list.split('\n').map(l => `> ${l}`),
+        ].join('\n');
+        try {
+            const r = await this.opts.pool.query<{ content: string }>(
+                `UPDATE agent_skills SET content = content || $2, updated_at = NOW()
+                  WHERE id = $1 RETURNING content`,
+                [skillId, block],
+            );
+            const updated = r.rows[0]?.content;
+            if (!updated) return;
+            const checksum = crypto.createHash('sha256').update(updated).digest('hex');
+            await this.opts.pool.query(
+                `UPDATE skill_manifests SET prompt_md = $2, checksum = $3 WHERE id = $1`,
+                [skillId, updated, checksum],
+            );
+        } catch (e) {
+            logger.warn(`번들 파일 안내 추가 실패 (fail-soft): ${skillId} — ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /** Custom Agent 이름 충돌 회피 — UNIQUE(user_id, name) 위반 방지 (MCP 서버명 규칙 동형). */
+    private async resolveUniqueAgentName(
+        repo: UserAgentRepository, userId: string, name: string,
+    ): Promise<string> {
+        const base = name.slice(0, 100);
+        if (!(await repo.existsByName(userId, base))) return base;
+        const suffix = crypto.randomBytes(3).toString('hex');
+        return `${base.slice(0, 93)}-${suffix}`;
+    }
+
     /** dedupe hit 시 기존 설치 레코드를 ImportResult shape 로 변환. */
     private shapeFromRow(
         row: {
@@ -566,6 +807,7 @@ export class ExtensionIngestService {
         const components = (row.manifest?.components ?? {}) as {
             skills?: SkillInstallResult[];
             mcpServers?: McpServerInstallResult[];
+            agents?: AgentInstallResult[];
         };
         return {
             extensionId: row.id,
@@ -578,6 +820,7 @@ export class ExtensionIngestService {
             gitRef: row.source_ref,
             gitPath: row.source_path,
             skills: components.skills ?? [],
+            agents: components.agents ?? [],
             mcpServers: components.mcpServers ?? [],
             validationWarnings: [],
             deduped,

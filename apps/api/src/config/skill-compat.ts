@@ -92,10 +92,11 @@ export const ALLOWED_TOOLS_KEYS: readonly string[] = ['allowed-tools', 'allowed_
 /**
  * 확장 번들(plugin.json) 구성요소 중 이 환경이 설치하지 않는 것.
  * key = tree 디렉토리/파일명 또는 매니페스트 키, value = 안내 라벨.
+ *
+ * ⚠️ Phase 2(2026-08-24)에서 `commands`·`agents` 는 등가물로 **설치**되므로 이 목록에서
+ * 빠졌다 (commands → 스킬, agents → Custom Agent). 여기 남은 것만 여전히 미지원이다.
  */
 export const UNSUPPORTED_EXTENSION_COMPONENTS: Readonly<Record<string, string>> = {
-    commands: '슬래시 명령(commands/)',
-    agents: '서브에이전트(agents/)',
     hooks: '훅(hooks)',
     lspServers: 'LSP 서버',
     outputStyles: '출력 스타일',
@@ -104,6 +105,29 @@ export const UNSUPPORTED_EXTENSION_COMPONENTS: Readonly<Record<string, string>> 
     excludeTools: '도구 제외 목록',
     statusLine: '상태 표시줄',
 } as const;
+
+/** 확장 번들에서 등가물로 변환·설치하는 구성요소 상한 (스킬/MCP 상한과 별개) */
+export const PLUGIN_COMPONENT_LIMITS = {
+    /** commands/*.md → 스킬 최대 개수 */
+    maxCommands: parseInt(process.env.EXTENSION_INGEST_MAX_COMMANDS || '10', 10),
+    /** agents/*.md → Custom Agent 최대 개수 */
+    maxAgents: parseInt(process.env.EXTENSION_INGEST_MAX_AGENTS || '10', 10),
+    /** 스킬 1개당 번들 파일(scripts/·references/·assets/) 최대 개수 */
+    maxAssetsPerSkill: parseInt(process.env.EXTENSION_INGEST_MAX_SKILL_ASSETS || '20', 10),
+    /** 번들 파일 1개 최대 바이트 */
+    maxAssetBytes: parseInt(process.env.EXTENSION_INGEST_MAX_SKILL_ASSET_BYTES || String(256 * 1024), 10),
+    /** 스킬 1개당 번들 파일 합계 최대 바이트 */
+    maxAssetTotalBytes: parseInt(process.env.EXTENSION_INGEST_MAX_SKILL_ASSET_TOTAL_BYTES || String(1024 * 1024), 10),
+} as const;
+
+/** Custom Agent 로 옮길 때 이 환경이 적용하지 않는 agents/*.md 프론트매터 필드 */
+export const UNSUPPORTED_AGENT_FIELDS: Readonly<Record<string, string>> = {
+    model: '모델 지정(Model 축이 담당)',
+    tools: '도구 화이트리스트',
+    color: '표시 색상',
+    effort: '추론 강도',
+    initialPrompt: '초기 프롬프트',
+};
 
 /**
  * 원격 MCP 서버 항목에서 이 환경이 지원하지 않는 필드.

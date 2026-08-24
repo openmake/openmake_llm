@@ -35,6 +35,14 @@ const logger = createLogger('GitIngestService');
 export interface ImportInput extends ImportFromGitInput {
     userId: string;
     isAdmin: boolean;
+    /**
+     * gitPath 파일을 fetch 하는 대신 이 내용을 사용 (확장 번들의 `commands/*.md` →
+     * SKILL.md 규격 정규화본 주입용). dedupe·상한·compat·manifest 생성 등 나머지
+     * 파이프라인은 그대로 탄다.
+     */
+    contentOverride?: string;
+    /** 번들 파일(scripts/·references/) 수집 콜백 — 저장된 skillId 를 받아 처리 */
+    onSkillStored?: (skillId: string) => Promise<void>;
 }
 
 export interface ImportResult {
@@ -119,7 +127,8 @@ export class GitIngestService {
         // (5) single candidate → fetch + validate
         const candidate = candidates[0];
         const maxFileSize = SKILL_CREATOR.gitMaxFileSize ?? 256 * 1024;
-        const content = await fetcher.fetchFile(owner, repo, sha, candidate.path, maxFileSize);
+        const content = input.contentOverride
+            ?? await fetcher.fetchFile(owner, repo, sha, candidate.path, maxFileSize);
         const parsedFile = parseSkillFile(content);
         const validation = await validateManifest(parsedFile, { availableToolNames: new Set() });
         if (!validation.ok) {

@@ -1862,6 +1862,7 @@
     "empty": "No extensions installed.",
     "skills": "Skills",
     "mcpServers": "MCP servers",
+    "agents": "Custom agents",
     "none": "None",
     "approvalHint": "Draft components must be approved in the Skill Library / MCP Servers pages before activation.",
     "report": {

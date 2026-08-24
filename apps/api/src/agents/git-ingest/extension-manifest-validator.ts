@@ -30,7 +30,10 @@ const mcpServerEntrySchema = z.object({
 
 const pluginManifestSchema = z.object({
     name: z.string().min(1).max(80).regex(NAME_PATTERN, 'name 은 소문자/숫자/대시 (kebab-case)'),
-    version: z.string().min(1).max(40),
+    // upstream 다수가 version 을 생략한다 (Anthropic 공식 25개 중 16개 — 2026-08-24 실측).
+    // 필수로 강제하면 그 플러그인들은 설치 자체가 불가하므로 기본값으로 관용 처리한다.
+    // 업데이트 판정 기준은 version 이 아니라 source_ref(commit sha) 라 부작용이 없다.
+    version: z.string().min(1).max(40).default('0.0.0'),
     description: z.string().max(500).optional(),
     // ⚠️ 항목 검증은 normalizeMcpServers 가 담당 — 여기서 엄격히 보면 무효 항목 하나가
     // 매니페스트 전체를 거절해 유효한 서버까지 버려진다 (항목 단위 관용 파싱).

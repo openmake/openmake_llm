@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Package, Trash2, Loader2, ChevronDown, ChevronLeft, ChevronRight, Puzzle, Server, RefreshCw, Share2, Download, Store, Plus, AlertTriangle } from "lucide-react";
+import { Package, Trash2, Loader2, ChevronDown, ChevronLeft, ChevronRight, Puzzle, Server, RefreshCw, Share2, Download, Store, Plus, AlertTriangle, Bot } from "lucide-react";
 import { Button, Card, CardHeader, CardTitle, CardContent } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
@@ -61,6 +61,8 @@ interface CatalogSource {
 interface ExtensionComponents {
   skills: Array<{ id: string; name: string; status: string }>;
   mcpServers: Array<{ id: string; name: string; status: string; enabled: boolean }>;
+  /** agents/*.md → Custom Agent (Phase 2, 103) */
+  agents?: Array<{ id: string; name: string; status: string }>;
 }
 
 type UpdateCheckState =
@@ -451,6 +453,21 @@ export function ExtensionsSection() {
                               </ul>
                             )}
                           </div>
+                          {(comp.agents?.length ?? 0) > 0 && (
+                            <div>
+                              <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-fg-2">
+                                <Bot className="h-3.5 w-3.5" /> {t("agents")} ({comp.agents!.length})
+                              </p>
+                              <ul className="space-y-1">
+                                {comp.agents!.map((a) => (
+                                  <li key={a.id} className="flex items-center justify-between text-xs">
+                                    <span className="truncate text-fg">{a.name}</span>
+                                    <span className={statusClass(a.status)}>{statusLabel(a.status)}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
                           {(ext.manifest?.warnings?.length ?? 0) > 0 && (
                             <div>
                               <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-warn">

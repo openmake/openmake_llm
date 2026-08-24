@@ -10,7 +10,9 @@
 import { Pool, QueryResult, QueryResultRow } from 'pg';
 import { withRetry } from '../retry-wrapper';
 
-export type QueryParam = string | number | boolean | null | undefined;
+// Buffer(BYTEA 원본 바이트) 와 string[](`= ANY($1::text[])`) 는 pg 가 네이티브로
+// 바인딩한다 — 우회 직렬화(base64/JSON) 없이 그대로 넘기기 위해 유니온에 포함.
+export type QueryParam = string | number | boolean | null | undefined | Buffer | string[];
 
 export class BaseRepository {
     protected pool: Pool;

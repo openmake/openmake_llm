@@ -59,9 +59,13 @@ describe('extension-manifest-validator', () => {
             expect(r.ok).toBe(false);
         });
 
-        it('version 누락 거부', () => {
+        // upstream 다수가 version 을 생략한다 (공식 25개 중 16개) — 필수로 강제하면
+        // 그 플러그인들이 설치 불가라 기본값으로 관용 처리한다 (2026-08-24).
+        it('version 누락 시 기본값 0.0.0 으로 수용', () => {
             const r = validateExtensionManifest(JSON.stringify({ name: 'my-plugin' }));
-            expect(r.ok).toBe(false);
+            expect(r.ok).toBe(true);
+            if (!r.ok) return;
+            expect(r.manifest.version).toBe('0.0.0');
         });
 
         // 항목 단위 관용 파싱 (2026-08-24): 무효 항목은 그 항목만 건너뛰고 사유를

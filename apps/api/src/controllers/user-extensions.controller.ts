@@ -168,6 +168,7 @@ export function createUserExtensionsController(): Router {
                 upToDate: (result.upToDate ?? false) || result.deduped,
                 skills: result.skills,
                 mcpServers: result.mcpServers,
+                agents: result.agents,
                 validationWarnings: result.validationWarnings,
             }));
         } catch (err) {
@@ -289,6 +290,7 @@ export function createUserExtensionsController(): Router {
                 upToDate: (result.upToDate ?? false) || result.deduped,
                 skills: result.skills,
                 mcpServers: result.mcpServers,
+                agents: result.agents,
                 validationWarnings: result.validationWarnings,
             }));
         } catch (err) {
