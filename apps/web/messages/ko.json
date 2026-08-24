@@ -727,7 +727,20 @@
       "emptyTitle": "승인 대기 중인 Draft가 없습니다",
       "emptyDesc": "AI 자동생성 또는 Git 가져오기로 생성된 스킬이 여기 나타납니다.",
       "approve": "승인",
-      "reject": "거부"
+      "reject": "거부",
+      "rewrite": {
+        "button": "호환 재작성",
+        "analyzing": "이 환경에 맞게 다듬을 부분을 확인하는 중…",
+        "applying": "적용 중…",
+        "noChange": "이 환경 기준으로 바꿀 부분이 없습니다.",
+        "failed": "재작성 제안을 만들지 못했습니다 (원문은 그대로입니다).",
+        "proposalTitle": "재작성 제안",
+        "reviewHint": "적용하면 스킬 본문이 이 내용으로 교체됩니다. 확인 후 적용하세요.",
+        "apply": "적용",
+        "discard": "버리기",
+        "dismiss": "닫기",
+        "applyFailed": "적용 실패: {error}"
+      }
     }
   },
   "agentTasks": {

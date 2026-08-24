@@ -727,7 +727,20 @@
       "emptyTitle": "没有待审批的 Draft",
       "emptyDesc": "通过 AI 自动生成或 Git 导入创建的技能会显示在这里。",
       "approve": "审批",
-      "reject": "拒绝"
+      "reject": "拒绝",
+      "rewrite": {
+        "button": "适配措辞",
+        "analyzing": "正在检查需要针对本环境调整的内容…",
+        "applying": "正在应用…",
+        "noChange": "没有需要针对本环境修改的内容。",
+        "failed": "未能生成改写建议（原文保持不变）。",
+        "proposalTitle": "改写建议",
+        "reviewHint": "应用后将用此内容替换技能正文。请确认后再应用。",
+        "apply": "应用",
+        "discard": "放弃",
+        "dismiss": "关闭",
+        "applyFailed": "应用失败：{error}"
+      }
     }
   },
   "agentTasks": {

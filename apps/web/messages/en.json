@@ -727,7 +727,20 @@
       "emptyTitle": "No drafts awaiting approval",
       "emptyDesc": "Skills created via AI generation or Git import appear here.",
       "approve": "Approve",
-      "reject": "Reject"
+      "reject": "Reject",
+      "rewrite": {
+        "button": "Adapt wording",
+        "analyzing": "Checking what to adapt for this environment…",
+        "applying": "Applying…",
+        "noChange": "Nothing needs adapting for this environment.",
+        "failed": "Could not produce a rewrite proposal (the original is unchanged).",
+        "proposalTitle": "Rewrite proposal",
+        "reviewHint": "Applying replaces the skill body with this content. Review before applying.",
+        "apply": "Apply",
+        "discard": "Discard",
+        "dismiss": "Dismiss",
+        "applyFailed": "Failed to apply: {error}"
+      }
     }
   },
   "agentTasks": {

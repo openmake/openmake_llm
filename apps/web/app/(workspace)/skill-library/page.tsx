@@ -16,6 +16,7 @@ import {
   Loader2,
   Check,
   Download,
+  Wand2,
 } from "lucide-react";
 import {
   Button,
@@ -24,6 +25,7 @@ import {
   Card,
 } from "@/components/ui/primitives";
 import { AgentsTabs } from "@/components/hub-tabs";
+import { DiffView } from "@/components/chat/diff-view";
 import { cn } from "@/lib/utils";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient, csrfHeaders } from "@/lib/api-client";
@@ -645,10 +647,27 @@ function SkillCard({
 }
 
 /* ── Draft 탭 ─────────────────────────────────────────────── */
+interface RewriteProposal {
+  content: string;
+  summary: string[];
+  model: string;
+  diff: string;
+  stats: { additions: number; deletions: number };
+}
+
+type RewriteState =
+  | { state: "loading" }
+  | { state: "none" }
+  | { state: "ready"; proposal: RewriteProposal }
+  | { state: "applying" }
+  | { state: "failed" };
+
 function DraftTab({ onRefresh }: { onRefresh: () => void }) {
   const t = useTranslations("skillLibrary");
   const [drafts, setDrafts] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
+  // 설치 시 적응 Phase 3 — 재작성 제안은 diff 를 확인하고 명시 적용할 때만 반영된다
+  const [rewrites, setRewrites] = useState<Record<string, RewriteState>>({});
 
   const loadDrafts = useCallback(async () => {
     setLoading(true);
@@ -672,6 +691,44 @@ function DraftTab({ onRefresh }: { onRefresh: () => void }) {
     } catch (err) {
       alert(t("draft.approveFailed", { error: err instanceof Error ? err.message : t("genericError") }));
     }
+  }
+
+  async function requestRewrite(skillId: string) {
+    setRewrites((m) => ({ ...m, [skillId]: { state: "loading" } }));
+    try {
+      const res = await ApiClient.post<{ data?: { proposal: RewriteProposal | null } }>(
+        `/api/agents/skills/${skillId}/rewrite-proposal`,
+        {},
+      );
+      const proposal = res?.data?.proposal ?? null;
+      setRewrites((m) => ({ ...m, [skillId]: proposal ? { state: "ready", proposal } : { state: "none" } }));
+    } catch {
+      setRewrites((m) => ({ ...m, [skillId]: { state: "failed" } }));
+    }
+  }
+
+  async function applyRewrite(skillId: string, content: string) {
+    setRewrites((m) => ({ ...m, [skillId]: { state: "applying" } }));
+    try {
+      await ApiClient.put(`/api/agents/skills/${skillId}`, { content });
+      setRewrites((m) => {
+        const next = { ...m };
+        delete next[skillId];
+        return next;
+      });
+      await loadDrafts();
+    } catch (err) {
+      setRewrites((m) => ({ ...m, [skillId]: { state: "failed" } }));
+      alert(t("draft.rewrite.applyFailed", { error: err instanceof Error ? err.message : t("genericError") }));
+    }
+  }
+
+  function dismissRewrite(skillId: string) {
+    setRewrites((m) => {
+      const next = { ...m };
+      delete next[skillId];
+      return next;
+    });
   }
 
   async function handleReject(skillId: string) {
@@ -717,6 +774,19 @@ function DraftTab({ onRefresh }: { onRefresh: () => void }) {
               <p className="mt-1 text-xs text-muted line-clamp-2">{d.description}</p>
             </div>
             <div className="flex gap-2 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={rewrites[d.id]?.state === "loading" || rewrites[d.id]?.state === "applying"}
+                onClick={() => void requestRewrite(d.id)}
+              >
+                {rewrites[d.id]?.state === "loading" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Wand2 className="h-3.5 w-3.5" />
+                )}
+                {t("draft.rewrite.button")}
+              </Button>
               <Button size="sm" onClick={() => void handleApprove(d.id)}>
                 <Check className="h-3.5 w-3.5" />{t("draft.approve")}
               </Button>
@@ -725,8 +795,90 @@ function DraftTab({ onRefresh }: { onRefresh: () => void }) {
               </Button>
             </div>
           </div>
+          <RewritePanel
+            state={rewrites[d.id]}
+            onApply={(content) => void applyRewrite(d.id, content)}
+            onDismiss={() => dismissRewrite(d.id)}
+          />
         </Card>
       ))}
+    </div>
+  );
+}
+
+/**
+ * 재작성 제안 패널 — 적용 전 diff 를 반드시 보여준다 (LLM 재작성의 자동 적용 금지).
+ * 기존 채팅 diff 뷰어(components/chat/diff-view.tsx)를 그대로 재사용한다.
+ */
+function RewritePanel({
+  state,
+  onApply,
+  onDismiss,
+}: {
+  state?: RewriteState;
+  onApply: (content: string) => void;
+  onDismiss: () => void;
+}) {
+  const t = useTranslations("skillLibrary");
+  if (!state) return null;
+
+  if (state.state === "loading" || state.state === "applying") {
+    return (
+      <div className="mt-3 flex items-center gap-2 border-t border-border pt-3 text-xs text-muted">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        {state.state === "loading" ? t("draft.rewrite.analyzing") : t("draft.rewrite.applying")}
+      </div>
+    );
+  }
+  if (state.state === "none") {
+    return (
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3 text-xs text-muted">
+        <span>{t("draft.rewrite.noChange")}</span>
+        <button type="button" className="text-accent hover:underline" onClick={onDismiss}>
+          {t("draft.rewrite.dismiss")}
+        </button>
+      </div>
+    );
+  }
+  if (state.state === "failed") {
+    return (
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3 text-xs text-warn">
+        <span>{t("draft.rewrite.failed")}</span>
+        <button type="button" className="text-accent hover:underline" onClick={onDismiss}>
+          {t("draft.rewrite.dismiss")}
+        </button>
+      </div>
+    );
+  }
+
+  const { proposal } = state;
+  return (
+    <div className="mt-3 space-y-2 border-t border-border pt-3">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="font-medium text-fg-2">{t("draft.rewrite.proposalTitle")}</span>
+        <span className="text-success">+{proposal.stats.additions}</span>
+        <span className="text-danger">−{proposal.stats.deletions}</span>
+        <span className="font-mono text-faint">{proposal.model}</span>
+      </div>
+      {proposal.summary.length > 0 && (
+        <ul className="space-y-0.5 text-xs text-muted">
+          {proposal.summary.map((line, i) => (
+            <li key={i}>· {line}</li>
+          ))}
+        </ul>
+      )}
+      <div className="max-h-80 overflow-auto">
+        <DiffView text={proposal.diff} />
+      </div>
+      <p className="text-[11px] text-muted">{t("draft.rewrite.reviewHint")}</p>
+      <div className="flex gap-2">
+        <Button size="sm" onClick={() => onApply(proposal.content)}>
+          <Check className="h-3.5 w-3.5" />{t("draft.rewrite.apply")}
+        </Button>
+        <Button variant="outline" size="sm" onClick={onDismiss}>
+          <X className="h-3.5 w-3.5" />{t("draft.rewrite.discard")}
+        </Button>
+      </div>
     </div>
   );
 }

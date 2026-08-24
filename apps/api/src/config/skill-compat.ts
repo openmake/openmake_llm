@@ -106,6 +106,18 @@ export const UNSUPPORTED_EXTENSION_COMPONENTS: Readonly<Record<string, string>> 
     statusLine: '상태 표시줄',
 } as const;
 
+/**
+ * Phase 3 — 본문 재작성 **제안** (LLM 1회, C형 후단 판정). 자동 적용은 없다:
+ * 사용자가 승인 화면에서 diff 를 확인하고 명시적으로 적용해야 반영된다.
+ */
+export const SKILL_REWRITE = {
+    enabled: process.env.SKILL_REWRITE_ENABLED !== 'false',
+    /** 이보다 긴 본문은 재작성하지 않는다 (출력이 입력만큼 길어야 해 비용·소실 위험이 커짐) */
+    maxBodyChars: parseInt(process.env.SKILL_REWRITE_MAX_BODY_CHARS || '24000', 10),
+    /** 제안 길이 / 원문 길이 하한 — 미만이면 "요약해버린" 것으로 보고 제안을 버린다 */
+    minLengthRatio: Number(process.env.SKILL_REWRITE_MIN_LENGTH_RATIO || '0.7'),
+} as const;
+
 /** 확장 번들에서 등가물로 변환·설치하는 구성요소 상한 (스킬/MCP 상한과 별개) */
 export const PLUGIN_COMPONENT_LIMITS = {
     /** commands/*.md → 스킬 최대 개수 */
