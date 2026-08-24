@@ -1,4 +1,5 @@
 import {
+  ClipboardCheck,
   Bot,
   LayoutGrid,
   MessageSquare,
@@ -35,6 +36,9 @@ export const NAV_ITEMS: NavItem[] = [
   { labelKey: "items.chat", href: "/", icon: MessageSquare, minRole: "guest" },
   { labelKey: "items.agentTasks", href: "/agent-tasks", icon: Sparkles },
   { labelKey: "items.customAgents", href: "/custom-agents", icon: Bot },
+  // 확장 설치분(스킬·MCP)의 단일 승인 창구 — 그전엔 스킬/MCP 승인이 서로 다른 화면의
+  // 서브탭에만 있고 사이드바에 없어 사용자가 찾지 못했다 (2026-08-25).
+  { labelKey: "items.approvals", href: "/approvals", icon: ClipboardCheck },
   { labelKey: "items.artifacts", href: "/artifacts", icon: LayoutGrid },
   { labelKey: "items.admin", href: "/admin", icon: Shield, minRole: "admin" },
 ];

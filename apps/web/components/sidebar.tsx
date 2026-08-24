@@ -65,23 +65,36 @@ export function Sidebar() {
   const [query, setQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  // 승인 대기 배지 — 위임된 작업이 HITL 승인에서 멈춘 것을 어느 화면/재접속 후에도 발견할 수 있게
-  // (WS 인라인 프롬프트는 연결 끊김·세션 이동 시 유실 — 2026-08-08 대형 PDF "인식 못함" 오인 사례).
+  // 승인 대기 배지 — 승인이 필요한 **세 종류를 합산**해 `/approvals` 에 표시한다.
+  // ① 에이전트 작업 HITL: 위임된 작업이 승인에서 멈춘 것을 어느 화면/재접속 후에도 발견할 수
+  //    있게 (WS 인라인 프롬프트는 연결 끊김·세션 이동 시 유실 — 2026-08-08 대형 PDF "인식 못함"
+  //    오인 사례) ② 확장 설치분 스킬 draft ③ 확장 설치분 MCP draft.
+  // ②③ 은 승인 화면이 서브탭에 숨어 있어 사용자가 찾지 못했다 — 배지가 진입점이 된다(2026-08-25).
   const [pendingApprovals, setPendingApprovals] = useState(0);
   useEffect(() => {
     if (!user) { setPendingApprovals(0); return; }
     let alive = true;
+    const opts = { redirectOnUnauthorized: false } as const;
+    // 한 축이 실패해도 나머지 합계는 보이도록 개별 fallback 을 둔다
+    const count = async (fn: () => Promise<number>) => { try { return await fn(); } catch { return 0; } };
     const poll = async () => {
-      try {
-        const r = await ApiClient.get<{ data: { pending: unknown[] } }>(
-          "/api/agent-tasks/approvals/pending",
-          { redirectOnUnauthorized: false },
-        );
-        if (alive) setPendingApprovals(r.data?.pending?.length ?? 0);
-      } catch {
-        /* 미인증/일시 오류 — 배지 유지 안 함 */
-        if (alive) setPendingApprovals(0);
-      }
+      const [hitl, skills, mcp] = await Promise.all([
+        count(async () => {
+          const r = await ApiClient.get<{ data: { pending: unknown[] } }>(
+            "/api/agent-tasks/approvals/pending", opts);
+          return r.data?.pending?.length ?? 0;
+        }),
+        count(async () => {
+          const r = await ApiClient.get<{ data: { total?: number; drafts?: unknown[] } }>(
+            "/api/agents/skills/drafts?target=user&limit=1", opts);
+          return r.data?.total ?? r.data?.drafts?.length ?? 0;
+        }),
+        count(async () => {
+          const r = await ApiClient.get<{ data: unknown[] }>("/api/mcp/servers/drafts", opts);
+          return r.data?.length ?? 0;
+        }),
+      ]);
+      if (alive) setPendingApprovals(hitl + skills + mcp);
     };
     void poll();
     const timer = setInterval(poll, 30_000);
@@ -232,7 +245,7 @@ export function Sidebar() {
               >
                 <item.icon className="h-[18px] w-[18px]" />
                 {tNav(item.labelKey)}
-                {item.href === "/agent-tasks" && pendingApprovals > 0 && (
+                {item.href === "/approvals" && pendingApprovals > 0 && (
                   <span
                     className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[11px] font-semibold text-white"
                     title={tNav("pendingApprovals", { count: pendingApprovals })}
