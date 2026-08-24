@@ -69,6 +69,12 @@ export const autoCreateSkillSchema = z.object({
 
 export type AutoCreateSkillInput = z.infer<typeof autoCreateSkillSchema>;
 
+/** 일괄 draft 처리 — 한 요청에서 여러 스킬을 승인/거부 (부분 성공 허용) */
+export const bulkDraftActionSchema = z.object({
+    skillIds: z.array(z.string().min(1).max(128)).min(1).max(50),
+    action: z.enum(['approve', 'reject']),
+});
+
 export const draftsQuerySchema = z.object({
     target: z.enum(['user', 'system', 'all']).default('user'),
     limit: z.coerce.number().int().positive().max(100).default(50),

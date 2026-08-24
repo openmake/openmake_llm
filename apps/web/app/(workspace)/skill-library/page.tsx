@@ -52,6 +52,8 @@ interface Skill {
   status?: string;
   content?: string;
   createdBy?: string | null;
+  /** 확장 번들 설치분이면 그 확장 이름 (draft 화면의 묶음 단위) */
+  extensionName?: string;
 }
 
 interface ApiSkill {
@@ -62,6 +64,8 @@ interface ApiSkill {
   status?: string;
   content?: string;
   createdBy?: string | null;
+  extensionId?: string;
+  extensionName?: string;
 }
 
 type SkillsResponse = ApiSuccess<{
@@ -98,6 +102,7 @@ function mapSkill(s: ApiSkill): Skill {
     status: s.status,
     content: s.content,
     createdBy: s.createdBy,
+    extensionName: s.extensionName,
   };
 }
 
@@ -668,6 +673,9 @@ function DraftTab({ onRefresh }: { onRefresh: () => void }) {
   const [loading, setLoading] = useState(true);
   // 설치 시 적응 Phase 3 — 재작성 제안은 diff 를 확인하고 명시 적용할 때만 반영된다
   const [rewrites, setRewrites] = useState<Record<string, RewriteState>>({});
+  // 일괄 처리 — 확장 하나가 스킬 8개를 만들기도 해서 하나씩 누르는 부담이 컸다
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const loadDrafts = useCallback(async () => {
     setLoading(true);
@@ -682,6 +690,67 @@ function DraftTab({ onRefresh }: { onRefresh: () => void }) {
   }, []);
 
   useEffect(() => { void loadDrafts(); }, [loadDrafts]);
+
+  // 확장별 묶음 — 확장 유래가 아닌 draft 는 마지막 '기타' 그룹으로
+  const groups = (() => {
+    const byExt = new Map<string, Skill[]>();
+    for (const d of drafts) {
+      const key = d.extensionName ?? "";
+      const list = byExt.get(key);
+      if (list) list.push(d);
+      else byExt.set(key, [d]);
+    }
+    return [...byExt.entries()]
+      .sort((a, b) => (a[0] === "" ? 1 : b[0] === "" ? -1 : a[0].localeCompare(b[0])))
+      .map(([name, items]) => ({ name, items }));
+  })();
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleGroup(items: Skill[]) {
+    const ids = items.map((i) => i.id);
+    const allOn = ids.every((id) => selected.has(id));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (allOn) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
+  }
+
+  async function handleBulk(action: "approve" | "reject") {
+    const skillIds = [...selected];
+    if (skillIds.length === 0) return;
+    if (!window.confirm(t(action === "approve" ? "draft.bulk.approveConfirm" : "draft.bulk.rejectConfirm", { count: skillIds.length }))) return;
+    setBulkBusy(true);
+    try {
+      const res = await ApiClient.post<{ data?: { succeeded: number; requested: number } }>(
+        "/api/agents/skills/drafts/bulk",
+        { skillIds, action },
+      );
+      const d = res?.data;
+      // 부분 성공을 그대로 알린다 — 전부 됐다고 뭉뚱그리지 않는다
+      if (d && d.succeeded < d.requested) {
+        alert(t("draft.bulk.partial", { ok: d.succeeded, total: d.requested }));
+      }
+      setSelected(new Set());
+      await loadDrafts();
+      onRefresh();
+    } catch (err) {
+      alert(t("draft.bulk.failed", { error: err instanceof Error ? err.message : t("genericError") }));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
 
   async function handleApprove(skillId: string) {
     try {
@@ -760,47 +829,102 @@ function DraftTab({ onRefresh }: { onRefresh: () => void }) {
     );
   }
 
+  const allIds = drafts.map((d) => d.id);
+  const allSelected = allIds.length > 0 && allIds.every((id) => selected.has(id));
+
   return (
     <div className="space-y-3">
-      {drafts.map((d) => (
-        <Card key={d.id} className="p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
-              <div className="mb-1 flex items-center gap-2">
-                <Badge tone="warn">Draft</Badge>
-                <Badge tone="neutral">{categoryLabel(t, d.category)}</Badge>
-              </div>
-              <h3 className="text-sm font-semibold text-fg">{d.name}</h3>
-              <p className="mt-1 text-xs text-muted line-clamp-2">{d.description}</p>
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={rewrites[d.id]?.state === "loading" || rewrites[d.id]?.state === "applying"}
-                onClick={() => void requestRewrite(d.id)}
-              >
-                {rewrites[d.id]?.state === "loading" ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Wand2 className="h-3.5 w-3.5" />
-                )}
-                {t("draft.rewrite.button")}
-              </Button>
-              <Button size="sm" onClick={() => void handleApprove(d.id)}>
-                <Check className="h-3.5 w-3.5" />{t("draft.approve")}
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => void handleReject(d.id)}>
-                <X className="h-3.5 w-3.5" />{t("draft.reject")}
-              </Button>
-            </div>
-          </div>
-          <RewritePanel
-            state={rewrites[d.id]}
-            onApply={(content) => void applyRewrite(d.id, content)}
-            onDismiss={() => dismissRewrite(d.id)}
+      {/* 일괄 처리 바 — 선택이 있을 때만 액션을 노출해 오조작을 줄인다 */}
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2">
+        <label className="flex cursor-pointer items-center gap-2 text-xs text-fg-2">
+          <input
+            type="checkbox"
+            className="h-3.5 w-3.5 accent-[var(--accent)]"
+            checked={allSelected}
+            onChange={() => setSelected(allSelected ? new Set() : new Set(allIds))}
           />
-        </Card>
+          {t("draft.bulk.selectAll", { count: drafts.length })}
+        </label>
+        <span className="text-xs text-muted">{t("draft.bulk.selected", { count: selected.size })}</span>
+        <div className="ml-auto flex gap-2">
+          <Button size="sm" disabled={selected.size === 0 || bulkBusy} onClick={() => void handleBulk("approve")}>
+            {bulkBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+            {t("draft.bulk.approve")}
+          </Button>
+          <Button variant="outline" size="sm" disabled={selected.size === 0 || bulkBusy} onClick={() => void handleBulk("reject")}>
+            <X className="h-3.5 w-3.5" />{t("draft.bulk.reject")}
+          </Button>
+        </div>
+      </div>
+
+      {groups.map((g) => (
+        <div key={g.name || "__other__"} className="space-y-2">
+          {/* 확장별 묶음 — 한 확장이 스킬 여러 개를 만들어 함께 처리할 일이 많다 */}
+          <div className="flex items-center gap-2 px-1">
+            <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-fg-2">
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5 accent-[var(--accent)]"
+                checked={g.items.every((i) => selected.has(i.id))}
+                onChange={() => toggleGroup(g.items)}
+              />
+              {g.name ? (
+                <><Package className="h-3.5 w-3.5 text-accent" />{g.name}</>
+              ) : (
+                t("draft.bulk.otherGroup")
+              )}
+            </label>
+            <span className="text-xs text-muted">({g.items.length})</span>
+          </div>
+
+          {g.items.map((d) => (
+            <Card key={d.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-3.5 w-3.5 shrink-0 accent-[var(--accent)]"
+                  checked={selected.has(d.id)}
+                  onChange={() => toggleOne(d.id)}
+                  aria-label={d.name}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="mb-1 flex items-center gap-2">
+                    <Badge tone="warn">Draft</Badge>
+                    <Badge tone="neutral">{categoryLabel(t, d.category)}</Badge>
+                  </div>
+                  <h3 className="text-sm font-semibold text-fg">{d.name}</h3>
+                  <p className="mt-1 text-xs text-muted line-clamp-2">{d.description}</p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={rewrites[d.id]?.state === "loading" || rewrites[d.id]?.state === "applying"}
+                    onClick={() => void requestRewrite(d.id)}
+                  >
+                    {rewrites[d.id]?.state === "loading" ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Wand2 className="h-3.5 w-3.5" />
+                    )}
+                    {t("draft.rewrite.button")}
+                  </Button>
+                  <Button size="sm" onClick={() => void handleApprove(d.id)}>
+                    <Check className="h-3.5 w-3.5" />{t("draft.approve")}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => void handleReject(d.id)}>
+                    <X className="h-3.5 w-3.5" />{t("draft.reject")}
+                  </Button>
+                </div>
+              </div>
+              <RewritePanel
+                state={rewrites[d.id]}
+                onApply={(content) => void applyRewrite(d.id, content)}
+                onDismiss={() => dismissRewrite(d.id)}
+              />
+            </Card>
+          ))}
+        </div>
       ))}
     </div>
   );

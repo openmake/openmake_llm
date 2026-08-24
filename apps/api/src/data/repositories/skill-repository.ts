@@ -13,6 +13,7 @@ import { BaseRepository, QueryParam } from './base-repository';
 import { createHash } from 'crypto';
 import { assertResourceOwnerOrAdmin } from '../../auth/ownership';
 import { rowToSkill } from './skill-row-mapper';
+import { buildDraftQuery } from './skill-draft-query';
 import { SkillAssignmentRepository } from './skill-assignment-repository';
 
 export interface AgentSkill {
@@ -29,6 +30,10 @@ export interface AgentSkill {
     sourcePath?: string;
     status?: 'draft' | 'active' | 'archived';
     manifestMeta?: Record<string, unknown>;
+    /** 확장 번들 설치분이면 그 확장 id (093) — draft 화면의 확장별 묶음에 쓰인다 */
+    extensionId?: string;
+    /** 확장 이름 (listDrafts 가 JOIN 으로 채움. 확장 유래가 아니면 undefined) */
+    extensionName?: string;
 }
 
 export type SkillStatus = 'draft' | 'active' | 'archived';
@@ -446,47 +451,14 @@ export class SkillRepository extends BaseRepository {
      * 'all' → admin 이 전체 draft (소유자 무관).
      */
     async listDrafts(options: DraftListOptions): Promise<DraftListResult> {
-        const conditions: string[] = [`status = 'draft'`];
-        const params: QueryParam[] = [];
-        let paramIdx = 1;
-
-        const target = options.target ?? 'user';
-        if (target === 'user') {
-            if (!options.userId) {
-                throw new Error('listDrafts: target=user 는 userId 필수');
-            }
-            conditions.push(`created_by = $${paramIdx}`);
-            params.push(options.userId);
-            paramIdx += 1;
-        } else if (target === 'system') {
-            conditions.push(`created_by IS NULL`);
-        }
-        // target === 'all' → 추가 조건 없음
-
-        const whereClause = `WHERE ${conditions.join(' AND ')}`;
-        const limit = Math.min(options.limit ?? 50, 100);
-        const offset = Math.max(0, options.offset ?? 0);
-
-        const countResult = await this.query<CountRow>(
-            `SELECT COUNT(*) AS total FROM agent_skills ${whereClause}`,
-            params
-        );
-
-        const dataParams: QueryParam[] = [...params, limit, offset];
-        const dataResult = await this.query(
-            `SELECT id, name, description, content, category, is_public, created_by, created_at, updated_at, source_repo, source_path, status, manifest_meta
-             FROM agent_skills
-             ${whereClause}
-             ORDER BY created_at DESC, id ASC
-             LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
-            dataParams
-        );
-
+        const q = buildDraftQuery(options);
+        const countResult = await this.query<CountRow>(q.countSql, q.params);
+        const dataResult = await this.query(q.dataSql, q.dataParams);
         return {
             drafts: dataResult.rows.map((row) => rowToSkill(row)),
             total: parseInt(countResult.rows[0]?.total ?? '0', 10),
-            limit,
-            offset,
+            limit: q.limit,
+            offset: q.offset,
         };
     }
 

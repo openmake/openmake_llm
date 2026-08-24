@@ -740,6 +740,17 @@
         "discard": "破棄",
         "dismiss": "閉じる",
         "applyFailed": "適用に失敗しました: {error}"
+      },
+      "bulk": {
+        "selectAll": "すべて選択 ({count})",
+        "selected": "{count}件選択中",
+        "approve": "選択を承認",
+        "reject": "選択を却下",
+        "otherGroup": "拡張以外のスキル",
+        "approveConfirm": "選択した{count}件を承認しますか？承認後すぐにチャットで使用されます。",
+        "rejectConfirm": "選択した{count}件を却下しますか？アーカイブされ、削除はされません。",
+        "partial": "{total}件中{ok}件のみ処理されました。残りは処理済みか権限がありません。",
+        "failed": "一括処理に失敗しました: {error}"
       }
     }
   },
