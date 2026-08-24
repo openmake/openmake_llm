@@ -57,12 +57,22 @@ export function isReviewNoise(f: { title?: unknown; description?: unknown; sugge
 }
 
 /** LLM raw 출력에서 findings 관대 파싱 */
-export function parseReviewFindings(raw: string): { summary: string; findings: unknown[] } {
+/**
+ * LLM 응답 → 리뷰 결과. 파싱 실패는 `parseFailed` 로 **구분해서** 알린다.
+ *
+ * ⚠️ 실패를 조용히 `findings: []` 로 돌려주면 "리뷰했는데 지적 사항 없음"과 구별되지
+ * 않아, 실제로는 분석이 실패했는데 사용자는 "문제 없음"으로 읽는다(2026-08-24 실측 —
+ * skill-rewriter 에서 같은 패턴이 기능을 통째로 죽이고 있었다).
+ */
+export function parseReviewFindings(raw: string): { summary: string; findings: unknown[]; parseFailed?: boolean } {
     if (!raw || !raw.trim()) return { summary: '', findings: [] };
     let text = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
     const start = text.indexOf('{');
     const end = text.lastIndexOf('}');
-    if (start === -1 || end === -1 || end <= start) return { summary: '', findings: [] };
+    if (start === -1 || end === -1 || end <= start) {
+        logger.warn(`코드 리뷰 응답에서 JSON 을 찾지 못함 (${raw.length}자)`);
+        return { summary: '', findings: [], parseFailed: true };
+    }
     text = text.slice(start, end + 1);
     try {
         const obj = JSON.parse(text) as { summary?: unknown; findings?: unknown };
@@ -70,8 +80,9 @@ export function parseReviewFindings(raw: string): { summary: string; findings: u
             summary: typeof obj.summary === 'string' ? obj.summary : '',
             findings: Array.isArray(obj.findings) ? obj.findings : [],
         };
-    } catch {
-        return { summary: '', findings: [] };
+    } catch (e) {
+        logger.warn(`코드 리뷰 응답 JSON 파싱 실패 (${raw.length}자): ${e instanceof Error ? e.message : String(e)}`);
+        return { summary: '', findings: [], parseFailed: true };
     }
 }
 
@@ -168,5 +179,9 @@ export async function reviewCode(input: ReviewInput): Promise<CodeReviewResult> 
         minConfidence: CODE_REVIEW_CONFIG.minConfidence,
         maxFindings: CODE_REVIEW_CONFIG.maxFindings,
     });
-    return { summary: parsed.summary, findings, stats };
+    // 파싱 실패를 "지적 사항 없음"으로 보이게 두지 않는다 — summary 로 명시한다
+    const summary = parsed.parseFailed
+        ? '리뷰 결과를 해석하지 못했습니다 (모델 응답 형식 오류) — 지적 사항이 없다는 뜻이 아닙니다.'
+        : parsed.summary;
+    return { summary, findings, stats };
 }

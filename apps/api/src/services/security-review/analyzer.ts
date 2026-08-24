@@ -68,7 +68,13 @@ export function isFalsePositive(f: { category?: unknown; title?: unknown; descri
  * LLM raw 출력에서 finding 배열을 관대하게 파싱.
  * 코드펜스/머리말이 섞여도 첫 JSON 객체를 추출. 실패 시 {summary:'', findings:[]}.
  */
-export function parseSecurityFindings(raw: string): { summary: string; findings: unknown[] } {
+/**
+ * LLM 응답 → 보안 검토 결과. 파싱 실패는 `parseFailed` 로 **구분해서** 알린다.
+ *
+ * ⚠️ 실패를 조용히 `findings: []` 로 돌려주면 "취약점 없음"으로 읽힌다 — 보안 검토에서
+ * 가장 위험한 오해다. 실패는 반드시 드러나야 한다.
+ */
+export function parseSecurityFindings(raw: string): { summary: string; findings: unknown[]; parseFailed?: boolean } {
     if (!raw || !raw.trim()) return { summary: '', findings: [] };
     let text = raw.trim();
     // 코드펜스 제거
@@ -76,15 +82,19 @@ export function parseSecurityFindings(raw: string): { summary: string; findings:
     // 첫 { ... 마지막 } 추출 (관대)
     const start = text.indexOf('{');
     const end = text.lastIndexOf('}');
-    if (start === -1 || end === -1 || end <= start) return { summary: '', findings: [] };
+    if (start === -1 || end === -1 || end <= start) {
+        logger.warn(`보안 검토 응답에서 JSON 을 찾지 못함 (${raw.length}자)`);
+        return { summary: '', findings: [], parseFailed: true };
+    }
     const slice = text.slice(start, end + 1);
     try {
         const obj = JSON.parse(slice) as { summary?: unknown; findings?: unknown };
         const summary = typeof obj.summary === 'string' ? obj.summary : '';
         const findings = Array.isArray(obj.findings) ? obj.findings : [];
         return { summary, findings };
-    } catch {
-        return { summary: '', findings: [] };
+    } catch (e) {
+        logger.warn(`보안 검토 응답 JSON 파싱 실패 (${raw.length}자): ${e instanceof Error ? e.message : String(e)}`);
+        return { summary: '', findings: [], parseFailed: true };
     }
 }
 
@@ -198,5 +208,9 @@ export async function analyzeCode(input: AnalyzeInput): Promise<SecurityReviewRe
         maxFindings: SECURITY_REVIEW_CONFIG.maxFindings,
     });
 
-    return { summary: parsed.summary, findings, stats };
+    // ⚠️ 파싱 실패를 "취약점 없음"으로 보이게 두지 않는다 (보안 검토의 최악 오해)
+    const summary = parsed.parseFailed
+        ? '보안 검토 결과를 해석하지 못했습니다 (모델 응답 형식 오류) — 취약점이 없다는 뜻이 아닙니다. 다시 실행해 주세요.'
+        : parsed.summary;
+    return { summary, findings, stats };
 }
