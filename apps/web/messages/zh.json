@@ -1065,7 +1065,7 @@
     "tabInstances": "实例状态",
     "pendingApprovals": "待审批",
     "connectError": {
-      "auth_required": "需要认证 — 该服务器要求 OAuth 登录（当前不支持）",
+      "auth_required": "需要认证 — 该服务器要求 OAuth 登录",
       "not_found": "找不到端点 (404)",
       "unreachable": "无法连接到服务器",
       "timeout": "连接超时",
@@ -1077,7 +1077,13 @@
     "enable": "启用",
     "disableTitle": "标记为不使用（保留配置，可随时恢复）",
     "enableTitle": "重新启用该服务器",
-    "toggleFailed": "更新失败：{error}"
+    "toggleFailed": "更新失败：{error}",
+    "oauthLogin": "登录",
+    "oauthLogout": "退出登录",
+    "oauthLogoutTitle": "删除已保存的 OAuth 令牌并断开连接",
+    "oauthStartFailed": "无法启动 OAuth 登录：{error}",
+    "oauthOk": "已登录 {server} — 正在连接",
+    "oauthFailed": "登录 {server} 失败（{reason}）"
   },
   "mcpCatalog": {
     "pageTitle": "MCP 目录",

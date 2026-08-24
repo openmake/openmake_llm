@@ -361,6 +361,7 @@ export class DashboardServer {
                     catalog_template_id: config.catalog_template_id ?? undefined,
                     sandbox_network: config.sandbox_network ?? 'full',
                     tool_allowlist: config.tool_allowlist,
+                    user_id: config.user_id,
                 }),
             });
             setLifecycleSupervisor(supervisor);
@@ -551,6 +552,7 @@ if (require.main === module) {
                         catalog_template_id: config.catalog_template_id ?? undefined,
                         sandbox_network: config.sandbox_network ?? 'full',
                         tool_allowlist: config.tool_allowlist,
+                        user_id: config.user_id,
                     }),
                 });
                 setLifecycleSupervisor(supervisor);
