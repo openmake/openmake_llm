@@ -740,6 +740,17 @@
         "discard": "放弃",
         "dismiss": "关闭",
         "applyFailed": "应用失败：{error}"
+      },
+      "bulk": {
+        "selectAll": "全选 ({count})",
+        "selected": "已选 {count} 项",
+        "approve": "批准所选",
+        "reject": "拒绝所选",
+        "otherGroup": "非扩展技能",
+        "approveConfirm": "批准所选 {count} 项？批准后立即可在聊天中使用。",
+        "rejectConfirm": "拒绝所选 {count} 项？将归档，不会删除。",
+        "partial": "{total} 项中仅处理了 {ok} 项，其余已处理或无权限。",
+        "failed": "批量操作失败：{error}"
       }
     }
   },
