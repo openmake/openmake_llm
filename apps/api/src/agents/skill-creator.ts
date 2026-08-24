@@ -287,11 +287,23 @@ export class SkillCreatorService {
         return parts.join('\n');
     }
 
+    /**
+     * LLM 응답 → JSON. **전체 파싱을 먼저 시도**하고, 실패할 때만 코드펜스를 벗긴다.
+     *
+     * ⚠️ 순서가 중요하다. 펜스를 먼저 벗기면 JSON **안에 들어 있는** 코드블록
+     * (예: content 필드의 python 코드펜스)을 정규식이 먼저 잡아 엉뚱한 조각을 파싱한다
+     * — `format:'json'` 으로 문법을 강제해도 이 파서가 그 이점을 무효화한다
+     * (2026-08-24 실측: 스킬 생성이 `Unexpected token 'p', "python..."` 로 실패).
+     */
     private extractJson(raw: string): unknown {
         const trimmed = raw.trim();
-        const fence = trimmed.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
-        const candidate = fence ? fence[1] : trimmed;
-        return JSON.parse(candidate);
+        try {
+            return JSON.parse(trimmed);
+        } catch {
+            const fence = trimmed.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
+            if (!fence) throw new Error('응답에서 JSON 을 찾지 못함');
+            return JSON.parse(fence[1]);
+        }
     }
 
     private buildResult(

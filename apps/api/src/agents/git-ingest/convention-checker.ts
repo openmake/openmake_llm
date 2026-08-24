@@ -28,6 +28,21 @@ import {
 
 const logger = createLogger('ConventionChecker');
 
+/**
+ * LLM 응답 → JSON. **전체 파싱을 먼저** 시도하고, 실패할 때만 코드펜스를 벗긴다.
+ * 펜스를 먼저 벗기면 JSON 안에 들어 있는 코드블록을 정규식이 잡아 엉뚱한 조각을
+ * 파싱한다 (2026-08-24 skill-creator 실측).
+ */
+function parseJsonLoose(raw: string): unknown {
+    try {
+        return JSON.parse(raw);
+    } catch {
+        const fence = raw.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
+        if (!fence) throw new Error('응답에서 JSON 을 찾지 못함');
+        return JSON.parse(fence[1]);
+    }
+}
+
 export interface ConventionFinding {
     severity: 'info' | 'warn' | 'error';
     rule: string;
@@ -100,9 +115,8 @@ export class ConventionChecker {
             const resp = await this.llm.chat(messages);
             const tokensUsed = resp.metrics?.completion_tokens ?? 0;
             const raw = (resp.content ?? '').trim();
-            const fence = raw.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
-            const candidate = fence ? fence[1] : raw;
-            const parsed = JSON.parse(candidate) as { findings?: ConventionFinding[] };
+            // ⚠️ 전체 파싱 먼저 — 펜스를 먼저 벗기면 findings 안의 코드블록을 잡아 깨진다
+            const parsed = parseJsonLoose(raw) as { findings?: ConventionFinding[] };
             const findings = (Array.isArray(parsed.findings) ? parsed.findings : []).map(demoteLlmFinding);
             return { findings, tokensUsed };
         } catch (e) {
