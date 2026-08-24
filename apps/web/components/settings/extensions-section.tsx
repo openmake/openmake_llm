@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Package, Trash2, Loader2, ChevronDown, ChevronLeft, ChevronRight, Puzzle, Server, RefreshCw, Share2, Download, Store, Plus } from "lucide-react";
+import { Package, Trash2, Loader2, ChevronDown, ChevronLeft, ChevronRight, Puzzle, Server, RefreshCw, Share2, Download, Store, Plus, AlertTriangle } from "lucide-react";
 import { Button, Card, CardHeader, CardTitle, CardContent } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
@@ -17,6 +17,8 @@ interface UserExtension {
   source_ref: string;
   visibility?: "private" | "shared";
   created_at?: string;
+  /** 설치 리포트 — 미지원 구성요소·건너뛴 MCP 항목·스킬 호환 적응 (ingest 가 기록) */
+  manifest?: { warnings?: string[] };
 }
 
 interface GalleryExtension extends UserExtension {
@@ -449,6 +451,21 @@ export function ExtensionsSection() {
                               </ul>
                             )}
                           </div>
+                          {(ext.manifest?.warnings?.length ?? 0) > 0 && (
+                            <div>
+                              <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-warn">
+                                <AlertTriangle className="h-3.5 w-3.5" /> {t("report.title")}
+                              </p>
+                              <ul className="space-y-1">
+                                {ext.manifest!.warnings!.map((w, i) => (
+                                  <li key={i} className="break-words text-[11px] leading-relaxed text-fg-2">
+                                    · {w}
+                                  </li>
+                                ))}
+                              </ul>
+                              <p className="mt-1 text-[11px] text-muted">{t("report.hint")}</p>
+                            </div>
+                          )}
                           <p className="text-[11px] text-muted">{t("approvalHint")}</p>
                         </>
                       ) : (

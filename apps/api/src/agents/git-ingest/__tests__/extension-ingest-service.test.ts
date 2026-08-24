@@ -1,5 +1,5 @@
 import { ExtensionIngestService, buildSkillDiscoveryPattern } from '../extension-ingest-service';
-import { resolveExtensionRoot, scanForExtensionManifests } from '../repo-scanner';
+import { resolveExtensionRoot, scanForExtensionManifests, detectUnsupportedComponents } from '../repo-scanner';
 import type { Pool } from 'pg';
 import type { LLMClient } from '../../../llm/client';
 import { GitFetcher } from '../git-fetcher';
@@ -40,6 +40,38 @@ describe('repo-scanner (extension)', () => {
         const subPat = buildSkillDiscoveryPattern('src/capabilities/core/');
         expect(subPat.test('src/capabilities/core/skill/SKILL.md')).toBe(true);
         expect(subPat.test('src/capabilities/blender/skill/SKILL.md')).toBe(false);
+    });
+});
+
+describe('detectUnsupportedComponents', () => {
+    const e = (path: string) => ({ path, sha: 'b', size: 1, type: 'blob' as const });
+
+    it('commands/·agents/·hooks 를 라벨+개수로 보고', () => {
+        const notes = detectUnsupportedComponents(
+            [e('commands/a.md'), e('commands/b.md'), e('agents/x.md'), e('hooks/hooks.json'), e('skills/s/SKILL.md')],
+            '',
+        );
+        expect(notes.join(' ')).toContain('슬래시 명령(commands/) 2개');
+        expect(notes.join(' ')).toContain('서브에이전트(agents/) 1개');
+        expect(notes.join(' ')).toContain('훅(hooks) 1개');
+        expect(notes.join(' ')).not.toContain('SKILL');
+    });
+
+    it('서브디렉토리 root 스코프 밖은 무시', () => {
+        const notes = detectUnsupportedComponents(
+            [e('other/commands/a.md'), e('design/commands/b.md')],
+            'design/',
+        );
+        expect(notes).toEqual(['슬래시 명령(commands/) 1개']);
+    });
+
+    it('매니페스트 선언 키도 감지 (Gemini contextFileName 등)', () => {
+        const notes = detectUnsupportedComponents([], '', { contextFileName: 'GEMINI.md', excludeTools: ['x'] });
+        expect(notes).toEqual(['컨텍스트 파일 지정', '도구 제외 목록']);
+    });
+
+    it('미지원 구성요소가 없으면 빈 배열', () => {
+        expect(detectUnsupportedComponents([e('skills/a/SKILL.md')], '', { name: 'x' })).toEqual([]);
     });
 });
 

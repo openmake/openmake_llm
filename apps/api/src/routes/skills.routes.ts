@@ -26,7 +26,9 @@ import { createLogger } from '../utils/logger';
 import { success, notFound, unauthorized } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getSkillManager } from '../agents/skill-manager';
+import { createHash } from 'crypto';
 import { parseSkillFile, validateManifest } from '../agents/manifest-validator';
+import { adaptSkillContent } from '../agents/git-ingest/skill-compat';
 import { ManifestImporter } from '../agents/manifest-importer';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
@@ -222,13 +224,23 @@ router.post('/upload', requireAuth, skillUpload.single('file'), asyncHandler(asy
         return;
     }
 
+    // 설치 시 적응 — git ingest 와 동일 규칙 (외부 SKILL.md 를 업로드하는 경로도 대칭 적용).
+    // 적응할 것이 없으면 원문 그대로라 이 프로젝트에서 만든 스킬은 무영향.
+    const adapted = adaptSkillContent({
+        frontmatter: validation.raw_frontmatter,
+        promptMd: validation.prompt_md,
+    });
+    const uploadChecksum = adapted.adapted
+        ? createHash('sha256').update(adapted.content).digest('hex')
+        : validation.checksum;
+
     try {
         const importer = new ManifestImporter(getUnifiedDatabase().getPool());
         const result = await importer.import({
             manifest: validation.manifest,
-            prompt_md: validation.prompt_md,
+            prompt_md: adapted.content,
             raw_yaml: validation.raw_yaml,
-            checksum: validation.checksum,
+            checksum: uploadChecksum,
             createdBy: userId,
             isAdmin,
         });
@@ -240,6 +252,7 @@ router.post('/upload', requireAuth, skillUpload.single('file'), asyncHandler(asy
             duplicate_checksum: result.duplicate_checksum,
             bindings_count: validation.manifest.tool_bindings.length,
             bundles_count: validation.manifest.mcp_bundles.length,
+            compat_notes: adapted.notes,
         }));
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);

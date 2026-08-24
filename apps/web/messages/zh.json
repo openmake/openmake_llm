@@ -1864,6 +1864,10 @@
     "mcpServers": "MCP 服务器",
     "none": "无",
     "approvalHint": "draft 状态的组件需在技能库/MCP 服务器页面批准后才会启用。",
+    "report": {
+      "title": "安装报告",
+      "hint": "本环境不支持的组件未被安装，外部格式的技能已自动添加工具名称对应说明。"
+    },
     "detailFailed": "组件信息加载失败。",
     "removeConfirm": "确定移除此扩展吗?其包含的技能与 MCP 服务器将被归档。",
     "removeAria": "移除扩展",

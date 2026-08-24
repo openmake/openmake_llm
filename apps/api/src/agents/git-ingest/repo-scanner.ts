@@ -10,6 +10,7 @@
  * @module agents/git-ingest/repo-scanner
  */
 import type { TreeEntry } from './git-fetcher';
+import { UNSUPPORTED_EXTENSION_COMPONENTS } from '../../config/skill-compat';
 
 export interface ManifestCandidate {
     path: string;
@@ -122,6 +123,46 @@ export function scanForMarketplaceManifests(tree: TreeEntry[]): ManifestCandidat
  * plugin.json 경로 → 확장 루트 디렉토리 prefix ('' = repo root, 아니면 'dir/').
  * Claude Code 마켓플레이스 레이아웃(.claude-plugin/plugin.json)은 그 부모가 루트.
  */
+/**
+ * 확장 번들에서 **이 환경이 설치하지 않는 구성요소** 감지 (tree + 매니페스트 키).
+ *
+ * openmake_llm 은 스킬(SKILL.md)과 MCP 서버만 설치한다. Claude Code 플러그인의
+ * commands/·agents/·hooks 나 Gemini/Qwen 의 contextFileName·excludeTools 는 대응
+ * 개념이 없어 조용히 무시되던 것을, 설치 리포트로 드러내기 위한 스캔.
+ *
+ * @returns 사람이 읽는 라벨 목록 (예: ['슬래시 명령(commands/) 3개', '훅(hooks)'])
+ */
+export function detectUnsupportedComponents(
+    entries: TreeEntry[],
+    root: string,
+    manifestRaw: Record<string, unknown> = {},
+): string[] {
+    const counts = new Map<string, number>();
+    for (const e of entries) {
+        if (root && !e.path.startsWith(root)) continue;
+        const rel = root ? e.path.slice(root.length) : e.path;
+        const seg = rel.includes('/') ? rel.slice(0, rel.indexOf('/')) : rel;
+        // 디렉토리형 구성요소 (commands/foo.md, agents/bar.md, hooks/hooks.json)
+        if (rel.includes('/') && seg in UNSUPPORTED_EXTENSION_COMPONENTS) {
+            counts.set(seg, (counts.get(seg) ?? 0) + 1);
+            continue;
+        }
+        // 파일형 (root 직하 hooks.json)
+        if (rel === 'hooks.json') counts.set('hooks', (counts.get('hooks') ?? 0) + 1);
+    }
+    const notes: string[] = [];
+    for (const [key, n] of counts) {
+        notes.push(`${UNSUPPORTED_EXTENSION_COMPONENTS[key]} ${n}개`);
+    }
+    // 매니페스트 선언 키 (tree 에 파일이 없어도 선언만으로 감지)
+    for (const key of Object.keys(manifestRaw)) {
+        if (key in UNSUPPORTED_EXTENSION_COMPONENTS && !counts.has(key)) {
+            notes.push(UNSUPPORTED_EXTENSION_COMPONENTS[key]);
+        }
+    }
+    return notes;
+}
+
 export function resolveExtensionRoot(manifestPath: string): string {
     const dir = manifestPath.includes('/')
         ? manifestPath.slice(0, manifestPath.lastIndexOf('/'))

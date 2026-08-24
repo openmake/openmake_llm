@@ -1,4 +1,5 @@
 import {
+    substituteSkillArguments,
     parseSlashCommand,
     slugify,
     matchesSlug,
@@ -49,6 +50,31 @@ describe('buildAugmentedMessage', () => {
     it('본문 없으면 기본 지시', () => {
         const out = buildAugmentedMessage({ name: 'X', content: 'c' }, '');
         expect(out).toContain('스킬 지침에 따라 진행');
+    });
+});
+
+describe('substituteSkillArguments (외부 스킬 인자 자리표시자)', () => {
+    it('$ARGUMENTS → 전체 인자', () => {
+        const r = substituteSkillArguments('감사 대상: $ARGUMENTS', '로그인 화면 검토');
+        expect(r).toEqual({ content: '감사 대상: 로그인 화면 검토', consumed: true });
+    });
+
+    it('$1/$2 → 공백 분리 토큰, @$1 은 @ 제거', () => {
+        const r = substituteSkillArguments('리뷰: @$1 (기준 $2)', 'design.fig AA');
+        expect(r.content).toBe('리뷰: design.fig (기준 AA)');
+    });
+
+    it('인자가 없으면 빈 문자열로 치환 (자리표시자 노출 방지)', () => {
+        expect(substituteSkillArguments('대상: $ARGUMENTS', '').content).toBe('대상: ');
+    });
+
+    it('자리표시자가 없으면 원문 그대로 + consumed=false', () => {
+        const r = substituteSkillArguments('평범한 본문', 'x');
+        expect(r).toEqual({ content: '평범한 본문', consumed: false });
+    });
+
+    it('치환 텍스트의 $& 등 특수문자는 그대로 (replacer 함수)', () => {
+        expect(substituteSkillArguments('q=$ARGUMENTS', 'a$&b').content).toBe('q=a$&b');
     });
 });
 

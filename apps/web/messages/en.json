@@ -1864,6 +1864,10 @@
     "mcpServers": "MCP servers",
     "none": "None",
     "approvalHint": "Draft components must be approved in the Skill Library / MCP Servers pages before activation.",
+    "report": {
+      "title": "Install report",
+      "hint": "Components unsupported here were not installed, and skills written for other ecosystems got an automatic tool-name mapping note."
+    },
     "detailFailed": "Failed to load component details.",
     "removeConfirm": "Remove this extension? Its skills and MCP servers will be archived.",
     "removeAria": "Remove extension",

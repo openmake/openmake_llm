@@ -9,6 +9,7 @@
  *   5. (multi-candidate) selectionRequired=true 로 조기 반환
  *   6. (single) fetcher.fetchFile → raw markdown
  *   7. agents/manifest-validator.ts validateManifest → SkillValidator 통과 검증
+ *   7-b. skill-compat.adaptSkillContent → 외부 생태계 표현(도구명·$ARGUMENTS 등) 호환 안내 주입
  *   8. ConventionChecker.check → ConventionFinding[]
  *   9. dedupe (promptHash = sha256(userId+url+sha+path)) + draft 상한 (50/user)
  *  10. agent_skills INSERT (status='draft', manifest_meta.source='git-url')
@@ -26,6 +27,7 @@ import { isArchiveUrl, archivePseudoRepo } from './archive-fetcher';
 import { scanForSkillManifests, type ManifestCandidate } from './repo-scanner';
 import { ConventionChecker, type ConventionFinding } from './convention-checker';
 import { parseSkillFile, validateManifest } from '../manifest-validator';
+import { adaptSkillContent } from './skill-compat';
 import { SKILL_CREATOR } from '../../config/constants';
 
 const logger = createLogger('GitIngestService');
@@ -49,6 +51,8 @@ export interface ImportResult {
     contentPreview: string;
     validationWarnings: string[];
     conventionFindings: ConventionFinding[];
+    /** 설치 시 적응(호환 변환) 요약 — 없으면 빈 배열 */
+    compatNotes: string[];
     modelUsed: string;
     tokensUsed: number;
     deduped: boolean;
@@ -122,6 +126,19 @@ export class GitIngestService {
             throw new Error(`MANIFEST_INVALID: ${validation.errors.join('; ')}`);
         }
 
+        // (5-b) 설치 시 적응 — 외부 생태계(Claude Code 등) 표현을 이 환경 기준으로 안내.
+        // 본문 재작성이 아니라 앞단 호환 노트 주입 + 버려지던 frontmatter 보존이라
+        // 적응할 것이 없으면 원문 그대로다(기존 스킬 무영향).
+        const adapted = adaptSkillContent({
+            frontmatter: validation.raw_frontmatter,
+            promptMd: validation.prompt_md,
+        });
+        const skillContent = adapted.content;
+        // checksum 은 실제 저장 본문 기준 — 적응본과 skill_manifests.prompt_md 가 일치해야 한다
+        const skillChecksum = adapted.adapted
+            ? crypto.createHash('sha256').update(skillContent).digest('hex')
+            : validation.checksum;
+
         // (6) convention check
         const llm = this.opts.llmClientFactory(SKILL_CREATOR.authorModel);
         const checker = new ConventionChecker(llm);
@@ -168,6 +185,7 @@ export class GitIngestService {
             gitPath: candidate.path,
             conventionFindings: conv.findings,
             tokensUsed: conv.tokensUsed,
+            ...(adapted.compat ? { compat: adapted.compat } : {}),
         };
         await this.opts.pool.query(
             `INSERT INTO agent_skills
@@ -177,7 +195,7 @@ export class GitIngestService {
                 skillId,
                 validation.manifest.name,
                 validation.manifest.description ?? '',
-                validation.prompt_md,
+                skillContent,
                 input.category ?? validation.manifest.category ?? 'general',
                 effectiveTarget === 'system',
                 effectiveTarget === 'system' ? null : input.userId,
@@ -201,8 +219,8 @@ export class GitIngestService {
                     skillId,
                     validation.manifest.version,
                     validation.raw_yaml,
-                    validation.prompt_md,
-                    validation.checksum,
+                    skillContent,
+                    skillChecksum,
                     effectiveTarget === 'system' ? null : input.userId,
                     effectiveTarget === 'system',
                 ]
@@ -223,9 +241,10 @@ export class GitIngestService {
             gitUrl: input.gitUrl,
             gitRef: sha,
             gitPath: candidate.path,
-            contentPreview: validation.prompt_md.slice(0, 300),
+            contentPreview: skillContent.slice(0, 300),
             validationWarnings: warnings,
             conventionFindings: conv.findings,
+            compatNotes: adapted.notes,
             modelUsed: SKILL_CREATOR.authorModel || 'unset',
             tokensUsed: conv.tokensUsed,
             deduped: false,
@@ -264,6 +283,9 @@ export class GitIngestService {
             contentPreview: (row.content ?? '').slice(0, 300),
             validationWarnings: warnings,
             conventionFindings: conv.findings,
+            compatNotes: Array.isArray((row.manifest_meta?.compat as { notes?: unknown } | undefined)?.notes)
+                ? ((row.manifest_meta!.compat as { notes: string[] }).notes)
+                : [],
             modelUsed: String(row.manifest_meta?.model ?? ''),
             tokensUsed: 0,
             deduped,

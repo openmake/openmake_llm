@@ -31,7 +31,7 @@ import { fetchCatalogSnapshot as fetchCatalogSnapshotImpl, buildSkillDiscoveryPa
 import { translateCatalogDescriptions } from './catalog-translator';
 // 기존 import 경로 호환 재노출 (테스트 등이 이 모듈에서 import)
 export { buildSkillDiscoveryPattern } from './catalog-snapshot';
-import { scanForExtensionManifests, scanForMarketplaceManifests, resolveExtensionRoot, type ManifestCandidate } from './repo-scanner';
+import { scanForExtensionManifests, scanForMarketplaceManifests, resolveExtensionRoot, detectUnsupportedComponents, type ManifestCandidate } from './repo-scanner';
 import {
     validateExtensionManifest,
     parseMcpJsonFile,
@@ -56,6 +56,8 @@ export interface SkillInstallResult {
     skillId?: string;
     name?: string;
     deduped?: boolean;
+    /** 설치 시 적응(호환 변환) 요약 — skill-compat */
+    compatNotes?: string[];
     error?: string;
 }
 
@@ -284,6 +286,16 @@ export class ExtensionIngestService {
 
         const warnings: string[] = [];
 
+        // (5-c) 이 환경이 설치하지 않는 구성요소 — 조용히 무시하지 않고 리포트한다
+        const unsupported = detectUnsupportedComponents(tree.entries, root, manifest.raw);
+        if (unsupported.length > 0) {
+            warnings.push(`UNSUPPORTED_COMPONENTS: ${unsupported.join(', ')} — 이 환경은 스킬(SKILL.md)과 MCP 서버만 설치합니다`);
+        }
+        // plugin.json mcpServers 항목 단위 사유 (설치는 나머지 항목으로 계속)
+        if (manifest.mcpWarnings.length > 0) {
+            warnings.push(`MCP_ENTRIES_SKIPPED: ${manifest.mcpWarnings.join('; ')}`);
+        }
+
         // (6-a) skills — <root>skills/<dir>/SKILL.md (Agent Plugins v1: 직계 하위만)
         const skillPattern = buildSkillDiscoveryPattern(root);
         let skillPaths = tree.entries.filter(e => skillPattern.test(e.path)).map(e => e.path);
@@ -315,7 +327,10 @@ export class ExtensionIngestService {
                     // explicit gitPath 라 도달 불가하지만 방어
                     skillResults.push({ path, error: 'unexpected multi-candidate' });
                 } else {
-                    skillResults.push({ path, skillId: r.skillId, name: r.name, deduped: r.deduped });
+                    skillResults.push({
+                        path, skillId: r.skillId, name: r.name, deduped: r.deduped,
+                        ...(r.compatNotes.length > 0 ? { compatNotes: r.compatNotes } : {}),
+                    });
                 }
             } catch (e) {
                 skillResults.push({ path, error: e instanceof Error ? e.message : String(e) });
@@ -331,8 +346,12 @@ export class ExtensionIngestService {
             if (mcpJsonEntry) {
                 const mcpRaw = await fetcher.fetchFile(owner, repo, sha, mcpJsonEntry.path, EXTENSION_INGEST.manifestMaxBytes);
                 const parsedMcp = parseMcpJsonFile(mcpRaw);
+                // 항목 단위 — 일부 실패해도 나머지는 설치된다 (upstream 의 빈 url placeholder 등)
                 if (parsedMcp.errors.length > 0) {
-                    warnings.push(`MCP_JSON_INVALID: ${parsedMcp.errors.join('; ')}`);
+                    warnings.push(`MCP_ENTRIES_SKIPPED: ${parsedMcp.errors.join('; ')}`);
+                }
+                if (parsedMcp.warnings.length > 0) {
+                    warnings.push(`MCP_FIELDS_IGNORED: ${parsedMcp.warnings.join('; ')}`);
                 }
                 mcpEntries = parsedMcp.servers;
             }
@@ -389,6 +408,12 @@ export class ExtensionIngestService {
             }
         }
 
+        // 스킬 적응 요약 — 확장 단위 리포트에 합류 (구성요소별 상세는 skills[].compatNotes)
+        const adaptedSkills = skillResults.filter(r => r.compatNotes && r.compatNotes.length > 0);
+        if (adaptedSkills.length > 0) {
+            warnings.push(`SKILLS_ADAPTED: ${adaptedSkills.length}개 스킬에 호환 안내 주입 (${adaptedSkills.map(r => r.name ?? r.path).join(', ')})`);
+        }
+
         // (7) 전 구성요소 실패/부재 검증
         const okSkills = skillResults.filter(r => r.skillId);
         const okServers = mcpResults.filter(r => r.serverId);
@@ -404,6 +429,8 @@ export class ExtensionIngestService {
         const componentManifest = {
             plugin: manifest.raw,
             components: { skills: skillResults, mcpServers: mcpResults },
+            // 설치 리포트 — 미지원 구성요소·건너뛴 MCP 항목·스킬 적응 (상세 UI 노출)
+            warnings,
         };
         let row;
         let previousVersion: string | undefined;

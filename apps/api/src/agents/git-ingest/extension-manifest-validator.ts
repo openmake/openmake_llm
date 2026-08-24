@@ -8,9 +8,15 @@
  *
  * 지원 transport: stdio(command) / streamable-http(url). 레거시 HTTP+SSE 미지원 (v1 spec).
  *
+ * ⚠️ 항목 단위 관용 파싱: mcpServers record 는 **항목별로** 검증한다. 한 항목이
+ * 무효(빈 url, sse, 미지원 필드)여도 나머지는 설치되고 사유만 warnings 로 전달된다
+ * — record 전체를 한 번에 safeParse 하면 upstream 의 `"url": ""` placeholder 하나가
+ * 서버 9개를 통째로 버리는 일이 실제로 발생했다 (knowledge-work-plugins/design).
+ *
  * @module agents/git-ingest/extension-manifest-validator
  */
 import { z } from 'zod';
+import { UNSUPPORTED_MCP_FIELDS } from '../../config/skill-compat';
 
 const NAME_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -26,7 +32,9 @@ const pluginManifestSchema = z.object({
     name: z.string().min(1).max(80).regex(NAME_PATTERN, 'name 은 소문자/숫자/대시 (kebab-case)'),
     version: z.string().min(1).max(40),
     description: z.string().max(500).optional(),
-    mcpServers: z.record(z.string().min(1).max(80), mcpServerEntrySchema).optional(),
+    // ⚠️ 항목 검증은 normalizeMcpServers 가 담당 — 여기서 엄격히 보면 무효 항목 하나가
+    // 매니페스트 전체를 거절해 유효한 서버까지 버려진다 (항목 단위 관용 파싱).
+    mcpServers: z.record(z.string().min(1).max(80), z.unknown()).optional(),
 });
 
 export interface NormalizedMcpServer {
@@ -43,6 +51,8 @@ export interface ExtensionManifest {
     version: string;
     description?: string;
     mcpServers: NormalizedMcpServer[];
+    /** 설치되지 않은 mcpServers 항목의 사유 + 무시된 필드 안내 (설치는 계속 진행) */
+    mcpWarnings: string[];
     /** 원문 (user_extensions.manifest 저장용) */
     raw: Record<string, unknown>;
 }
@@ -52,17 +62,37 @@ export type ValidationResult =
     | { ok: false; errors: string[] };
 
 /**
- * mcpServers record → 정규화 배열. 지원 불가 항목은 errors 로 수집.
+ * mcpServers record → 정규화 배열 (항목 단위).
+ *
+ * 반환:
+ *   - servers  : 설치 가능한 항목
+ *   - errors   : 그 항목을 설치할 수 없는 사유 (다른 항목에는 영향 없음)
+ *   - warnings : 설치는 하되 이 환경이 무시하는 필드 (headers/oauth/cwd 등)
  */
 export function normalizeMcpServers(
-    record: Record<string, z.infer<typeof mcpServerEntrySchema>>,
-): { servers: NormalizedMcpServer[]; errors: string[] } {
+    record: Record<string, unknown>,
+): { servers: NormalizedMcpServer[]; errors: string[]; warnings: string[] } {
     const servers: NormalizedMcpServer[] = [];
     const errors: string[] = [];
-    for (const [name, entry] of Object.entries(record)) {
+    const warnings: string[] = [];
+    for (const [name, rawEntry] of Object.entries(record)) {
+        const parsedEntry = mcpServerEntrySchema.safeParse(rawEntry);
+        if (!parsedEntry.success) {
+            errors.push(`${name}: ${parsedEntry.error.issues.map(i => `${i.path.join('.') || 'entry'} ${i.message}`).join(', ')}`);
+            continue;
+        }
+        const entry = parsedEntry.data;
         if (entry.type === 'sse') {
             errors.push(`${name}: 레거시 HTTP+SSE transport 미지원`);
             continue;
+        }
+        // 이 환경이 주입 경로를 갖지 않는 필드 — 설치는 하되 동작 차이를 알린다
+        if (rawEntry && typeof rawEntry === 'object') {
+            for (const [field, label] of Object.entries(UNSUPPORTED_MCP_FIELDS)) {
+                if (field in (rawEntry as Record<string, unknown>)) {
+                    warnings.push(`${name}: ${label}(${field}) 은 이 환경에서 지원되지 않아 무시됩니다`);
+                }
+            }
         }
         if (entry.command) {
             servers.push({
@@ -83,7 +113,7 @@ export function normalizeMcpServers(
             errors.push(`${name}: command 또는 url 필수`);
         }
     }
-    return { servers, errors };
+    return { servers, errors, warnings };
 }
 
 /** plugin.json 원문 파싱 + 검증. */
@@ -101,12 +131,12 @@ export function validateExtensionManifest(jsonText: string): ValidationResult {
             errors: result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`),
         };
     }
-    const norm = result.data.mcpServers
-        ? normalizeMcpServers(result.data.mcpServers)
-        : { servers: [], errors: [] };
-    if (norm.errors.length > 0) {
-        return { ok: false, errors: norm.errors };
-    }
+    // mcpServers 는 항목 단위 — 일부가 무효여도 매니페스트 자체는 유효로 본다
+    // (name/version 등 매니페스트 문법 오류만 실패). 사유는 mcpWarnings 로 전달.
+    const rawServers = (parsed as { mcpServers?: unknown }).mcpServers;
+    const norm = rawServers && typeof rawServers === 'object'
+        ? normalizeMcpServers(rawServers as Record<string, unknown>)
+        : { servers: [], errors: [], warnings: [] };
     return {
         ok: true,
         manifest: {
@@ -114,6 +144,7 @@ export function validateExtensionManifest(jsonText: string): ValidationResult {
             version: result.data.version,
             description: result.data.description,
             mcpServers: norm.servers,
+            mcpWarnings: [...norm.errors, ...norm.warnings],
             raw: parsed as Record<string, unknown>,
         },
     };
@@ -207,20 +238,19 @@ export function parseMarketplaceFile(jsonText: string): MarketplaceParseResult {
  * 별도 mcp.json 파싱 ({ mcpServers: {...} } 또는 최상위가 곧 server record 인 축약형).
  * plugin.json 에 mcpServers 가 이미 있으면 호출하지 않는다 (plugin.json 우선).
  */
-export function parseMcpJsonFile(jsonText: string): { servers: NormalizedMcpServer[]; errors: string[] } {
+export function parseMcpJsonFile(jsonText: string): { servers: NormalizedMcpServer[]; errors: string[]; warnings: string[] } {
     let parsed: unknown;
     try {
         parsed = JSON.parse(jsonText);
     } catch {
-        return { servers: [], errors: ['mcp.json 이 유효한 JSON 이 아님'] };
+        return { servers: [], errors: ['mcp.json 이 유효한 JSON 이 아님'], warnings: [] };
     }
     const obj = parsed as Record<string, unknown>;
     const record = (obj && typeof obj === 'object' && obj.mcpServers && typeof obj.mcpServers === 'object')
         ? obj.mcpServers
         : obj;
-    const result = z.record(z.string().min(1).max(80), mcpServerEntrySchema).safeParse(record);
-    if (!result.success) {
-        return { servers: [], errors: result.error.issues.map(i => `${i.path.join('.')}: ${i.message}`) };
+    if (!record || typeof record !== 'object') {
+        return { servers: [], errors: ['mcp.json 이 서버 목록 객체가 아님'], warnings: [] };
     }
-    return normalizeMcpServers(result.data);
+    return normalizeMcpServers(record as Record<string, unknown>);
 }
