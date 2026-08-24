@@ -223,6 +223,10 @@ export class ExtensionIngestService {
                     return { ...this.shapeFromRow(sameName, false), upToDate: true };
                 }
                 updateTarget = sameName;
+                // ⚠️ 구 구성요소 회수는 **신규 생성 전에** 해야 한다. Custom Agent 는
+                // UNIQUE(user_id, name) 이라 구 행이 살아 있으면 신규가 랜덤 suffix 를 달고
+                // 생성돼 이름이 업데이트마다 표류한다(사용자가 고르던 에이전트를 잃는다).
+                await extRepo.archiveLinkedComponents(sameName.id);
             } else {
                 throw new Error(`EXTENSION_ALREADY_INSTALLED: "${manifest.name}" 이 다른 소스(${sameName.source_url})로 이미 설치됨 (${sameName.id}) — 먼저 제거 후 재설치하세요`);
             }
@@ -338,7 +342,7 @@ export class ExtensionIngestService {
         let previousVersion: string | undefined;
         if (updateTarget) {
             previousVersion = updateTarget.version;
-            await extRepo.archiveLinkedComponents(updateTarget.id);
+            // (구 구성요소 archive 는 위 update 판정 직후 이미 수행됨 — 이름 충돌 회피)
             row = await extRepo.updateAfterReinstall(updateTarget.id, {
                 version: manifest.version,
                 description: manifest.description ?? null,

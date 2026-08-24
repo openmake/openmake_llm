@@ -5,6 +5,7 @@ import {
     commandFileToSkillMarkdown,
     agentFileToCustomAgent,
 } from '../plugin-component-compat';
+import { extensionOf, isStorableAsset, assetContentType } from '../extension-components';
 
 describe('plugin-component-compat', () => {
     describe('splitFrontmatter', () => {
@@ -106,5 +107,33 @@ describe('plugin-component-compat', () => {
             expect(r.description).toBe('당신은 코드 리뷰어입니다.');
             expect(r.upstreamFields).toEqual({});
         });
+    });
+});
+
+// ── 번들 파일 저장 가능성 판별 (extension-components) ────────────────────────
+describe('extension-components 번들 파일 판별', () => {
+    it('확장자 추출', () => {
+        expect(extensionOf('scripts/check.sh')).toBe('sh');
+        expect(extensionOf('references/GUIDE.MD')).toBe('md');
+        expect(extensionOf('assets/logo')).toBe('');
+        expect(extensionOf('.hidden')).toBe('');
+    });
+
+    // fetcher 가 UTF-8 문자열만 주므로 바이너리는 저장 시 원본이 깨진다 (코드리뷰 지적)
+    it('텍스트만 저장 가능 — 바이너리는 제외', () => {
+        expect(isStorableAsset('scripts/run.py')).toBe(true);
+        expect(isStorableAsset('references/rules.md')).toBe(true);
+        expect(isStorableAsset('assets/diagram.svg')).toBe(true);
+        expect(isStorableAsset('assets/logo.png')).toBe(false);
+        expect(isStorableAsset('assets/manual.pdf')).toBe(false);
+        expect(isStorableAsset('assets/font.woff2')).toBe(false);
+        expect(isStorableAsset('assets/noext')).toBe(false);
+    });
+
+    it('content_type 매핑 (미지 확장자는 text/plain)', () => {
+        expect(assetContentType('references/a.md')).toBe('text/markdown');
+        expect(assetContentType('scripts/a.sh')).toBe('text/x-shellscript');
+        expect(assetContentType('data/a.json')).toBe('application/json');
+        expect(assetContentType('notes/a.rst')).toBe('text/plain');
     });
 });

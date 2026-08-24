@@ -281,14 +281,16 @@ describe('ExtensionIngestService', () => {
             source_url: 'foo/bar', source_ref: 'oldsha1', source_path: 'plugin.json',
             manifest: { components: {} },
         }] });
+        // ⚠️ archive 는 update 판정 직후(구성요소 생성 **전**)에 실행된다 — Custom Agent
+        // 이름 표류 방지(코드리뷰 지적, 2026-08-24)
+        q.mockResolvedValueOnce({ rows: [] });                    // archive skills
+        q.mockResolvedValueOnce({ rows: [] });                    // archive mcp
+        q.mockResolvedValueOnce({ rows: [] });                    // archive custom agents (103)
         (mockLLM.chat as jest.Mock).mockResolvedValueOnce({
             content: JSON.stringify({ findings: [] }), metrics: { completion_tokens: 30 },
         });
         q.mockResolvedValueOnce({ rows: [] });                    // resolveUniqueServerName
         q.mockResolvedValueOnce({ rows: [{ id: 'mcp-new1' }] });  // insertDraft
-        q.mockResolvedValueOnce({ rows: [] });                    // archive skills
-        q.mockResolvedValueOnce({ rows: [] });                    // archive mcp
-        q.mockResolvedValueOnce({ rows: [] });                    // archive custom agents (103)
         q.mockResolvedValueOnce({ rows: [{                        // updateAfterReinstall RETURNING
             id: 'user-ext-u1', name: 'tool-pack', version: '1.1.0', status: 'active',
         }] });

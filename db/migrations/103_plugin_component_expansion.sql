@@ -10,8 +10,11 @@
 -- 1) user_agents.extension_id — 확장 단위 제거/업데이트 시 함께 정리 (agent_skills·
 --    mcp_servers 의 extension_id 와 동형. ON DELETE SET NULL = 링크만 해제).
 -- 2) skill_assets — 스킬 번들 파일 (SKILL.md 와 같은 디렉토리의 scripts/·references/·
---    assets/). 텍스트/바이너리 모두 BYTEA 로 원본 보존하며, 에이전트 작업 샌드박스
---    uploads/ 주입과 목록 안내에 쓰인다. 크기·개수 상한은 서비스 레이어가 강제.
+--    assets/). 원본 바이트를 BYTEA 로 보존하며, 목록 안내와 load_skill(asset_paths)
+--    열람에 쓰인다. 크기·개수 상한은 서비스 레이어가 강제.
+--    ⚠️ 현재 ingest 는 **텍스트 파일만** 저장한다 — GitFetcher 가 UTF-8 문자열만 주므로
+--    바이너리(이미지·PDF·폰트)는 왕복에서 깨진다. 컬럼이 BYTEA 인 것은 향후 fetcher 에
+--    바이트 모드를 추가하면 스키마 변경 없이 바이너리를 담기 위함이다.
 --
 -- 멱등 (IF NOT EXISTS + DO/EXCEPTION 제약 가드).
 

@@ -109,9 +109,15 @@ export class UserExtensionRepository extends BaseRepository {
             `UPDATE mcp_servers SET status='archived', enabled=FALSE, extension_id=NULL, updated_at=NOW() WHERE extension_id=$1`,
             [extensionId]
         );
-        // Custom Agent 는 status 컬럼이 없다 — soft-delete 계약(is_active=FALSE)으로 회수한다
+        // Custom Agent 는 status 컬럼이 없다 — soft-delete 계약(is_active=FALSE)으로 회수한다.
+        // ⚠️ 이름도 함께 비켜준다: UNIQUE(user_id, name) 은 soft-delete 행에도 걸리므로,
+        // 이름을 남겨두면 재설치된 동명 에이전트가 매번 랜덤 suffix 를 달고 생성돼
+        // 사용자가 고르던 에이전트 이름이 업데이트마다 표류한다.
         await this.query(
-            `UPDATE user_agents SET is_active=FALSE, extension_id=NULL, updated_at=NOW() WHERE extension_id=$1`,
+            `UPDATE user_agents
+                SET is_active=FALSE, extension_id=NULL, updated_at=NOW(),
+                    name = name || '-archived-' || substr(md5(random()::text), 1, 6)
+              WHERE extension_id=$1`,
             [extensionId]
         );
     }

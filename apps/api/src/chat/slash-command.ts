@@ -67,16 +67,24 @@ export function matchesSlug(skillName: string, slug: string): boolean {
  * `$ARGUMENTS` = 전체 인자, `$1`..`$9` = 공백 분리 토큰, `@$1` = 파일 참조 표기의
  * `@` 제거(이 환경엔 저장소 파일 참조가 없다). 자리표시자가 없으면 원문 그대로다.
  *
- * @returns 치환된 본문과 `$ARGUMENTS`(전체 인자) 소비 여부
+ * ⚠️ `$1` 은 금액(`$1,500`)·소수(`$1.5`)·여러 자리 수(`$19`)와 형태가 겹친다. 뒤에
+ * 숫자·쉼표·마침표가 오면 자리표시자로 보지 않는다 — 본문 산문을 깨뜨리는 오탐을
+ * 막기 위함이다(도구명 치환에서 평문 동사를 배제한 것과 같은 이유).
+ *
+ * @returns 치환된 본문과 자리표시자 소비 여부
  */
+const ARG_PLACEHOLDER = /\$([1-9])(?![\d,.])/g;
+
 export function substituteSkillArguments(content: string, rest: string): { content: string; consumed: boolean } {
-    if (!/\$ARGUMENTS\b|\$[1-9]\b/.test(content)) return { content, consumed: false };
+    if (!/\$ARGUMENTS\b/.test(content) && !new RegExp(ARG_PLACEHOLDER.source).test(content)) {
+        return { content, consumed: false };
+    }
     const tokens = rest.trim().length > 0 ? rest.trim().split(/\s+/) : [];
     const replaced = content
         // '@$1' → '$1' 치환 후 남는 '@' 제거 (Claude Code 파일 참조 표기)
-        .replace(/@(\$(?:ARGUMENTS\b|[1-9]\b))/g, '$1')
+        .replace(/@(\$(?:ARGUMENTS\b|[1-9](?![\d,.])))/g, '$1')
         .replace(/\$ARGUMENTS\b/g, () => rest.trim())
-        .replace(/\$([1-9])\b/g, (_m, d: string) => tokens[Number(d) - 1] ?? '');
+        .replace(ARG_PLACEHOLDER, (_m, d: string) => tokens[Number(d) - 1] ?? '');
     return { content: replaced, consumed: true };
 }
 

@@ -3,8 +3,9 @@
  *
  * 배경: 외부 스킬 본문은 흔히 "see references/rules.md", "run scripts/check.py" 라고
  * 지시하는데 ingest 는 SKILL.md 한 파일만 가져와 **참조 대상이 존재하지 않았다**.
- * 이 테이블이 원본 바이트를 보존해 ① 본문의 파일 목록 안내 ② 에이전트 작업 샌드박스
- * uploads/ 주입에 쓰인다.
+ * 이 테이블이 원본 바이트를 보존해 ① 본문의 파일 목록 안내 ② `load_skill(asset_paths)`
+ * 열람에 쓰인다. ⚠️ ingest 는 현재 **텍스트 파일만** 넣는다 (GitFetcher 가 UTF-8 문자열만
+ * 주므로 바이너리는 왕복에서 깨진다 — extension-components.isStorableAsset 참고).
  *
  * 스킬 삭제 시 ON DELETE CASCADE 로 함께 사라진다 (103).
  *

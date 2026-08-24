@@ -76,6 +76,23 @@ describe('substituteSkillArguments (외부 스킬 인자 자리표시자)', () =
     it('치환 텍스트의 $& 등 특수문자는 그대로 (replacer 함수)', () => {
         expect(substituteSkillArguments('q=$ARGUMENTS', 'a$&b').content).toBe('q=a$&b');
     });
+
+    // 본문 산문의 금액·소수·여러자리 수는 자리표시자가 아니다 (코드리뷰 지적, 2026-08-24)
+    it('금액·소수·여러 자리 수는 치환하지 않는다', () => {
+        expect(substituteSkillArguments('the budget is $1,500', 'do X').content).toBe('the budget is $1,500');
+        expect(substituteSkillArguments('costs $1.50 each', 'do X').content).toBe('costs $1.50 each');
+        expect(substituteSkillArguments('about $19 total', 'do X').content).toBe('about $19 total');
+    });
+
+    it('금액만 있고 진짜 자리표시자가 없으면 consumed=false (원문 유지)', () => {
+        expect(substituteSkillArguments('the budget is $1,500', 'x'))
+            .toEqual({ content: 'the budget is $1,500', consumed: false });
+    });
+
+    it('자리표시자와 금액이 섞여 있으면 자리표시자만 치환', () => {
+        const r = substituteSkillArguments('대상: $1 (예산 $1,500)', 'design.fig');
+        expect(r.content).toBe('대상: design.fig (예산 $1,500)');
+    });
 });
 
 describe('applySlashCommand', () => {

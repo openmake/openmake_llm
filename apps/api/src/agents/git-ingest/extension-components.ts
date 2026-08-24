@@ -32,6 +32,40 @@ import type { SkillInstallResult, AgentInstallResult, McpServerInstallResult } f
 
 const logger = createLogger('ExtensionIngestService');
 
+/**
+ * 번들 파일로 저장할 수 있는 확장자 — **텍스트 전용**.
+ *
+ * ⚠️ GitFetcher.fetchFile 은 `Buffer.concat(...).toString('utf8')` 로 **문자열만** 준다.
+ * 바이너리(이미지·PDF·폰트)를 이 경로로 받으면 UTF-8 왕복에서 replacement char 로
+ * 깨져 원본이 소실된다. 저장은 텍스트로 한정하고 그 외는 사유를 리포트한다
+ * (바이너리까지 보존하려면 fetcher 에 바이트 모드를 먼저 추가해야 한다).
+ */
+const TEXT_ASSET_EXTENSIONS = new Set([
+    'md', 'markdown', 'txt', 'rst', 'adoc',
+    'sh', 'bash', 'zsh', 'fish', 'ps1',
+    'py', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'rb', 'pl', 'lua', 'r',
+    'json', 'jsonc', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'env',
+    'csv', 'tsv', 'sql', 'graphql', 'html', 'css', 'scss', 'xml', 'svg',
+]);
+
+/** 확장자 → content_type (저장 메타. 목록 표시·후속 처리용) */
+const ASSET_CONTENT_TYPES: Readonly<Record<string, string>> = {
+    md: 'text/markdown', markdown: 'text/markdown',
+    json: 'application/json', jsonc: 'application/json',
+    yaml: 'application/yaml', yml: 'application/yaml',
+    csv: 'text/csv', tsv: 'text/tab-separated-values',
+    html: 'text/html', css: 'text/css', svg: 'image/svg+xml',
+    sh: 'text/x-shellscript', bash: 'text/x-shellscript',
+    py: 'text/x-python', sql: 'application/sql',
+};
+
+/** 경로 확장자 (소문자, 없으면 ''). */
+export function extensionOf(path: string): string {
+    const base = path.slice(path.lastIndexOf('/') + 1);
+    const dot = base.lastIndexOf('.');
+    return dot > 0 ? base.slice(dot + 1).toLowerCase() : '';
+}
+
 /** tree 엔트리 최소 형태 (경로 + 크기). */
 interface TreeLike {
     entries: Array<{ path: string; size: number }>;
@@ -58,6 +92,19 @@ export interface ComponentContext {
     extensionName: string;
     /** 설치 리포트 — 각 갈래가 사유를 push 한다 */
     warnings: string[];
+}
+
+/**
+ * 번들 파일로 보존 가능한지 — 텍스트 확장자만 허용.
+ * (fetcher 가 UTF-8 문자열만 주므로 바이너리는 저장 시 원본이 깨진다)
+ */
+export function isStorableAsset(path: string): boolean {
+    return TEXT_ASSET_EXTENSIONS.has(extensionOf(path));
+}
+
+/** 저장 메타용 content_type (미지 확장자는 text/plain). */
+export function assetContentType(path: string): string {
+    return ASSET_CONTENT_TYPES[extensionOf(path)] ?? 'text/plain';
 }
 
 /** `root` 하위 특정 디렉토리의 markdown 파일 경로 (1단계 중첩까지). */
@@ -207,6 +254,11 @@ export async function collectSkillAssets(
         let total = 0;
         for (const entry of picked) {
             const relPath = entry.path.slice(dir.length);
+            if (!isStorableAsset(entry.path)) {
+                // fetcher 가 UTF-8 문자열만 주므로 바이너리는 저장 시 원본이 깨진다 — 건너뛴다
+                ctx.warnings.push(`ASSET_BINARY_SKIPPED: ${relPath} — 텍스트가 아닌 파일은 보존하지 않습니다`);
+                continue;
+            }
             if (entry.size > PLUGIN_COMPONENT_LIMITS.maxAssetBytes) {
                 ctx.warnings.push(`ASSET_TOO_LARGE: ${relPath} (${entry.size}B) 는 상한 초과로 건너뜀`);
                 continue;
@@ -219,9 +271,20 @@ export async function collectSkillAssets(
                 const raw = await ctx.fetcher.fetchFile(
                     ctx.owner, ctx.repo, ctx.sha, entry.path, PLUGIN_COMPONENT_LIMITS.maxAssetBytes,
                 );
+                // UTF-8 왕복이 무손실인지 최종 확인 — 확장자가 텍스트라도 실제 내용이
+                // 바이너리면 replacement char 가 섞인다(잘못된 확장자·바이너리 혼입 방어)
+                if (raw.includes('\uFFFD')) {
+                    ctx.warnings.push(`ASSET_BINARY_SKIPPED: ${relPath} — 텍스트로 읽을 수 없어 보존하지 않습니다`);
+                    continue;
+                }
                 const buf = Buffer.from(raw, 'utf8');
                 total += buf.length;
-                await assetRepo.upsert({ skillId: result.skillId, relPath, content: buf });
+                await assetRepo.upsert({
+                    skillId: result.skillId,
+                    relPath,
+                    contentType: assetContentType(entry.path),
+                    content: buf,
+                });
                 stored.push(relPath);
             } catch (e) {
                 logger.warn(`번들 파일 저장 실패 (fail-soft): ${entry.path} — ${e instanceof Error ? e.message : String(e)}`);
