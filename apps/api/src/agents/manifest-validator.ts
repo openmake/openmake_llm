@@ -28,7 +28,15 @@ export interface ValidateOptions {
 }
 
 export type ValidateResult =
-    | { ok: true; manifest: SkillManifestFrontmatter; prompt_md: string; raw_yaml: string; checksum: string }
+    | {
+        ok: true;
+        manifest: SkillManifestFrontmatter;
+        prompt_md: string;
+        raw_yaml: string;
+        checksum: string;
+        /** Zod strip 이전의 원문 frontmatter — 외부 생태계 필드(allowed-tools 등) 보존/적응용 */
+        raw_frontmatter: Record<string, unknown>;
+      }
     | { ok: false; errors: string[] };
 
 export function parseSkillFile(content: string): ParsedSkillFile {
@@ -93,5 +101,6 @@ export async function validateManifest(
         prompt_md: parsed.prompt_md,
         raw_yaml: parsed.raw_yaml,
         checksum,
+        raw_frontmatter: (parsed.frontmatter ?? {}) as Record<string, unknown>,
     };
 }

@@ -24,93 +24,46 @@ import type { Pool } from 'pg';
 import type { LLMClient } from '../../llm/client';
 import { createLogger } from '../../utils/logger';
 import { parseGitUrl } from '../../schemas/git-ingest.schema';
-import type { ImportExtensionFromGitInput } from '../../schemas/extension-ingest.schema';
 import { GitFetcher } from './git-fetcher';
 import { ArchiveFetcher, isArchiveUrl, archivePseudoRepo } from './archive-fetcher';
 import { fetchCatalogSnapshot as fetchCatalogSnapshotImpl, buildSkillDiscoveryPattern, type CatalogSnapshot } from './catalog-snapshot';
 import { translateCatalogDescriptions } from './catalog-translator';
 // 기존 import 경로 호환 재노출 (테스트 등이 이 모듈에서 import)
 export { buildSkillDiscoveryPattern } from './catalog-snapshot';
-import { scanForExtensionManifests, scanForMarketplaceManifests, resolveExtensionRoot, type ManifestCandidate } from './repo-scanner';
+import { scanForExtensionManifests, scanForMarketplaceManifests, resolveExtensionRoot, detectUnsupportedComponents, type ManifestCandidate } from './repo-scanner';
+import { validateExtensionManifest, parseMarketplaceFile } from './extension-manifest-validator';
 import {
-    validateExtensionManifest,
-    parseMcpJsonFile,
-    parseMarketplaceFile,
-    type NormalizedMcpServer,
-} from './extension-manifest-validator';
-import { ConventionChecker, type ConventionFinding } from './convention-checker';
+    collectCommandSkills,
+    collectPluginAgents,
+    collectSkillAssets,
+    collectMcpDrafts,
+    type ComponentContext,
+} from './extension-components';
 import { GitIngestService } from './git-ingest-service';
-import { McpServerDraftRepository } from '../../data/repositories/mcp-server-draft-repository';
 import { UserExtensionRepository } from '../../data/repositories/user-extension-repository';
 import { EXTENSION_INGEST, SKILL_CREATOR } from '../../config/constants';
 
 const logger = createLogger('ExtensionIngestService');
 
-export interface ImportInput extends ImportExtensionFromGitInput {
-    userId: string;
-    isAdmin: boolean;
-}
-
-export interface SkillInstallResult {
-    path: string;
-    skillId?: string;
-    name?: string;
-    deduped?: boolean;
-    error?: string;
-}
-
-export interface McpServerInstallResult {
-    name: string;
-    serverId?: string;
-    transportType?: 'stdio' | 'streamable-http';
-    blockedByConvention?: boolean;
-    conventionFindings?: ConventionFinding[];
-    error?: string;
-}
-
-export interface ImportResult {
-    extensionId: string;
-    name: string;
-    version: string;
-    description: string;
-    status: 'active';
-    source: 'git-url';
-    gitUrl: string;
-    gitRef: string;
-    gitPath: string;
-    skills: SkillInstallResult[];
-    mcpServers: McpServerInstallResult[];
-    validationWarnings: string[];
-    deduped: boolean;
-    /** 동일 소스 재설치인데 source_ref 가 이미 최신 — 아무것도 변경 안 함 */
-    upToDate?: boolean;
-    /** 동일 이름·동일 소스 재설치 → 기존 설치를 새 ref 로 교체 (구 구성요소 archive) */
-    updated?: boolean;
-    previousVersion?: string;
-    selectionRequired?: false;
-    candidates?: never;
-}
-
-export interface UpdateCheckResult {
-    updateAvailable: boolean;
-    currentRef: string;
-    latestRef: string;
-    /** 최신 ref 의 plugin.json version (조회 실패 시 null) */
-    latestVersion: string | null;
-}
-
-export interface CandidateListResult {
-    gitUrl: string;
-    gitRef: string;
-    candidates: ManifestCandidate[];
-    totalCandidates: number;
-    selectionRequired: true;
-    /** marketplace.json 인덱스 발견 시 — plugin 인자로 이름을 지정해 재호출 */
-    marketplace?: {
-        name: string;
-        plugins: Array<{ name: string; description?: string }>;
-    };
-}
+// 공개 타입은 extension-ingest-types.ts 로 분리 — 기존 import 경로 호환 위해 재노출
+import type {
+    ImportInput,
+    SkillInstallResult,
+    AgentInstallResult,
+    McpServerInstallResult,
+    ImportResult,
+    UpdateCheckResult,
+    CandidateListResult,
+} from './extension-ingest-types';
+export type {
+    ImportInput,
+    SkillInstallResult,
+    AgentInstallResult,
+    McpServerInstallResult,
+    ImportResult,
+    UpdateCheckResult,
+    CandidateListResult,
+} from './extension-ingest-types';
 
 export interface ExtensionIngestOptions {
     pool: Pool;
@@ -270,6 +223,10 @@ export class ExtensionIngestService {
                     return { ...this.shapeFromRow(sameName, false), upToDate: true };
                 }
                 updateTarget = sameName;
+                // ⚠️ 구 구성요소 회수는 **신규 생성 전에** 해야 한다. Custom Agent 는
+                // UNIQUE(user_id, name) 이라 구 행이 살아 있으면 신규가 랜덤 suffix 를 달고
+                // 생성돼 이름이 업데이트마다 표류한다(사용자가 고르던 에이전트를 잃는다).
+                await extRepo.archiveLinkedComponents(sameName.id);
             } else {
                 throw new Error(`EXTENSION_ALREADY_INSTALLED: "${manifest.name}" 이 다른 소스(${sameName.source_url})로 이미 설치됨 (${sameName.id}) — 먼저 제거 후 재설치하세요`);
             }
@@ -283,6 +240,16 @@ export class ExtensionIngestService {
         }
 
         const warnings: string[] = [];
+
+        // (5-c) 이 환경이 설치하지 않는 구성요소 — 조용히 무시하지 않고 리포트한다
+        const unsupported = detectUnsupportedComponents(tree.entries, root, manifest.raw);
+        if (unsupported.length > 0) {
+            warnings.push(`UNSUPPORTED_COMPONENTS: ${unsupported.join(', ')} — 이 환경에 대응 개념이 없어 설치되지 않았습니다`);
+        }
+        // plugin.json mcpServers 항목 단위 사유 (설치는 나머지 항목으로 계속)
+        if (manifest.mcpWarnings.length > 0) {
+            warnings.push(`MCP_ENTRIES_SKIPPED: ${manifest.mcpWarnings.join('; ')}`);
+        }
 
         // (6-a) skills — <root>skills/<dir>/SKILL.md (Agent Plugins v1: 직계 하위만)
         const skillPattern = buildSkillDiscoveryPattern(root);
@@ -315,85 +282,49 @@ export class ExtensionIngestService {
                     // explicit gitPath 라 도달 불가하지만 방어
                     skillResults.push({ path, error: 'unexpected multi-candidate' });
                 } else {
-                    skillResults.push({ path, skillId: r.skillId, name: r.name, deduped: r.deduped });
+                    skillResults.push({
+                        path, skillId: r.skillId, name: r.name, deduped: r.deduped,
+                        ...(r.compatNotes.length > 0 ? { compatNotes: r.compatNotes } : {}),
+                    });
                 }
             } catch (e) {
                 skillResults.push({ path, error: e instanceof Error ? e.message : String(e) });
             }
         }
 
+        // (6-a2~a3) commands/*.md → 스킬, 스킬 번들 파일 보존 (Phase 2)
+        const componentCtx: ComponentContext = {
+            pool: this.opts.pool,
+            fetcher, owner, repo, sha, tree, root,
+            userId: input.userId,
+            isAdmin: input.isAdmin,
+            accessToken: input.accessToken,
+            gitUrl: effectiveGitUrl,
+            manifestPath: candidate.path,
+            extensionName: manifest.name,
+            warnings,
+        };
+        await collectCommandSkills(componentCtx, skillService, skillResults);
+        await collectSkillAssets(componentCtx, skillResults);
+
         // (6-b) MCP servers — plugin.json mcpServers 우선, 없으면 <root>mcp.json / <root>.mcp.json
-        let mcpEntries: NormalizedMcpServer[] = manifest.mcpServers;
-        if (mcpEntries.length === 0) {
-            const mcpJsonEntry = tree.entries.find(
-                e => e.path === `${root}mcp.json` || e.path === `${root}.mcp.json`
-            );
-            if (mcpJsonEntry) {
-                const mcpRaw = await fetcher.fetchFile(owner, repo, sha, mcpJsonEntry.path, EXTENSION_INGEST.manifestMaxBytes);
-                const parsedMcp = parseMcpJsonFile(mcpRaw);
-                if (parsedMcp.errors.length > 0) {
-                    warnings.push(`MCP_JSON_INVALID: ${parsedMcp.errors.join('; ')}`);
-                }
-                mcpEntries = parsedMcp.servers;
-            }
-        }
-        if (mcpEntries.length > EXTENSION_INGEST.maxMcpServersPerExtension) {
-            warnings.push(`MCP_SERVERS_TRUNCATED: ${mcpEntries.length}개 중 ${EXTENSION_INGEST.maxMcpServersPerExtension}개만 설치`);
-            mcpEntries = mcpEntries.slice(0, EXTENSION_INGEST.maxMcpServersPerExtension);
-        }
-        const mcpResults: McpServerInstallResult[] = [];
-        if (mcpEntries.length > 0) {
-            const checker = new ConventionChecker(this.opts.llmClientFactory(SKILL_CREATOR.authorModel));
-            const draftRepo = new McpServerDraftRepository(this.opts.pool);
-            for (const entry of mcpEntries) {
-                try {
-                    const conv = await checker.checkMcpServer(
-                        JSON.stringify(entry, null, 2),
-                        '',
-                        { command: entry.command, args: entry.args },
-                    );
-                    const blockedByConvention = conv.findings.some(f => f.severity === 'error');
-                    const finalName = await this.resolveUniqueServerName(input.userId, `${manifest.name}-${entry.name}`);
-                    const inserted = await draftRepo.insertDraft({
-                        name: finalName,
-                        transportType: entry.transportType,
-                        command: entry.command ?? null,
-                        args: entry.args ?? null,
-                        env: entry.env ?? null,
-                        url: entry.url ?? null,
-                        createdBy: input.userId,
-                        manifestMeta: {
-                            version: '1.0',
-                            source: 'extension',
-                            createdAt: new Date().toISOString(),
-                            gitUrl: effectiveGitUrl,
-                            gitRef: sha,
-                            gitPath: candidate.path,
-                            extensionName: manifest.name,
-                            serverKey: entry.name,
-                            conventionFindings: conv.findings,
-                            blockedByConvention,
-                            tokensUsed: conv.tokensUsed,
-                        },
-                    });
-                    mcpResults.push({
-                        name: entry.name,
-                        serverId: inserted.id,
-                        transportType: entry.transportType,
-                        blockedByConvention,
-                        conventionFindings: conv.findings,
-                    });
-                } catch (e) {
-                    mcpResults.push({ name: entry.name, error: e instanceof Error ? e.message : String(e) });
-                }
-            }
+        const mcpResults = await collectMcpDrafts(componentCtx, manifest.mcpServers, this.opts.llmClientFactory);
+
+        // (6-c) agents/<name>.md → Custom Agent (Phase 2)
+        const agentResults = await collectPluginAgents(componentCtx);
+
+        // 스킬 적응 요약 — 확장 단위 리포트에 합류 (구성요소별 상세는 skills[].compatNotes)
+        const adaptedSkills = skillResults.filter(r => r.compatNotes && r.compatNotes.length > 0);
+        if (adaptedSkills.length > 0) {
+            warnings.push(`SKILLS_ADAPTED: ${adaptedSkills.length}개 스킬에 호환 안내 주입 (${adaptedSkills.map(r => r.name ?? r.path).join(', ')})`);
         }
 
         // (7) 전 구성요소 실패/부재 검증
         const okSkills = skillResults.filter(r => r.skillId);
         const okServers = mcpResults.filter(r => r.serverId);
-        if (okSkills.length === 0 && okServers.length === 0) {
-            const detail = [...skillResults, ...mcpResults]
+        const okAgentResults = agentResults.filter(r => r.agentId);
+        if (okSkills.length === 0 && okServers.length === 0 && okAgentResults.length === 0) {
+            const detail = [...skillResults, ...mcpResults, ...agentResults]
                 .map(r => r.error)
                 .filter(Boolean)
                 .join('; ');
@@ -403,13 +334,15 @@ export class ExtensionIngestService {
         // (8) user_extensions INSERT(신규) 또는 UPDATE(재설치) + 링크
         const componentManifest = {
             plugin: manifest.raw,
-            components: { skills: skillResults, mcpServers: mcpResults },
+            components: { skills: skillResults, mcpServers: mcpResults, agents: agentResults },
+            // 설치 리포트 — 미지원 구성요소·건너뛴 MCP 항목·스킬 적응 (상세 UI 노출)
+            warnings,
         };
         let row;
         let previousVersion: string | undefined;
         if (updateTarget) {
             previousVersion = updateTarget.version;
-            await extRepo.archiveLinkedComponents(updateTarget.id);
+            // (구 구성요소 archive 는 위 update 판정 직후 이미 수행됨 — 이름 충돌 회피)
             row = await extRepo.updateAfterReinstall(updateTarget.id, {
                 version: manifest.version,
                 description: manifest.description ?? null,
@@ -438,9 +371,10 @@ export class ExtensionIngestService {
             row.id,
             okSkills.map(r => r.skillId!),
             okServers.map(r => r.serverId!),
+            okAgentResults.map(r => r.agentId!),
         );
 
-        logger.info(`extension-ingest ${updateTarget ? 'updated' : 'created'}: ${row.id} "${manifest.name}@${manifest.version}"${previousVersion ? ` (from ${previousVersion})` : ''} (${owner}/${repo}@${sha.slice(0, 7)}, skills=${okSkills.length}, mcp=${okServers.length})`);
+        logger.info(`extension-ingest ${updateTarget ? 'updated' : 'created'}: ${row.id} "${manifest.name}@${manifest.version}"${previousVersion ? ` (from ${previousVersion})` : ''} (${owner}/${repo}@${sha.slice(0, 7)}, skills=${okSkills.length}, mcp=${okServers.length}, agents=${okAgentResults.length})`);
         return {
             extensionId: row.id,
             name: manifest.name,
@@ -453,6 +387,7 @@ export class ExtensionIngestService {
             gitPath: candidate.path,
             skills: skillResults,
             mcpServers: mcpResults,
+            agents: agentResults,
             validationWarnings: warnings,
             deduped: false,
             ...(updateTarget ? { updated: true, previousVersion } : {}),
@@ -515,18 +450,6 @@ export class ExtensionIngestService {
         await translateCatalogDescriptions(llm, snapshot.plugins, previous);
     }
 
-    /** mcp_servers (user_id, name) unique 충돌 회피 — McpServerIngestService 관용구 동형. */
-    private async resolveUniqueServerName(userId: string, name: string): Promise<string> {
-        const base = name.slice(0, 100);
-        const r = await this.opts.pool.query<{ id: string }>(
-            `SELECT id FROM mcp_servers WHERE user_id=$1 AND name=$2 LIMIT 1`,
-            [userId, base]
-        );
-        if (r.rows.length === 0) return base;
-        const suffix = crypto.randomBytes(3).toString('hex');
-        return `${base.slice(0, 93)}-${suffix}`;
-    }
-
     /** dedupe hit 시 기존 설치 레코드를 ImportResult shape 로 변환. */
     private shapeFromRow(
         row: {
@@ -539,6 +462,7 @@ export class ExtensionIngestService {
         const components = (row.manifest?.components ?? {}) as {
             skills?: SkillInstallResult[];
             mcpServers?: McpServerInstallResult[];
+            agents?: AgentInstallResult[];
         };
         return {
             extensionId: row.id,
@@ -551,6 +475,7 @@ export class ExtensionIngestService {
             gitRef: row.source_ref,
             gitPath: row.source_path,
             skills: components.skills ?? [],
+            agents: components.agents ?? [],
             mcpServers: components.mcpServers ?? [],
             validationWarnings: [],
             deduped,

@@ -128,6 +128,7 @@ export const importSkillFromGitTool: MCPToolDefinition<ImportSkillFromGitArgs> =
                 gitRef: result.gitRef.slice(0, 7),
                 gitPath: result.gitPath,
                 conventionFindings: result.conventionFindings,
+                compatNotes: result.compatNotes,
                 modelUsed: result.modelUsed,
                 tokensUsed: result.tokensUsed,
                 deduped: result.deduped,
@@ -141,6 +142,10 @@ export const importSkillFromGitTool: MCPToolDefinition<ImportSkillFromGitArgs> =
             const convSuffix = result.conventionFindings.length > 0
                 ? `\n\n⚠ ConventionChecker 가 ${result.conventionFindings.length}건 발견 — 승인 전 검토하세요.`
                 : '';
+            // 외부 생태계 스킬을 이 환경에 맞춰 적응한 내역 (skill-compat)
+            const compatSuffix = result.compatNotes.length > 0
+                ? `\n\n🔧 설치 시 자동 적응:\n${result.compatNotes.map(n => `  · ${n}`).join('\n')}`
+                : '';
 
             const llmText = `Imported skill draft ${result.skillId} from ${result.gitUrl}@${result.gitRef.slice(0, 7)}:${result.gitPath} (name="${result.name}", category=${result.category}, status=draft).`;
 
@@ -153,7 +158,7 @@ export const importSkillFromGitTool: MCPToolDefinition<ImportSkillFromGitArgs> =
                         resource: {
                             uri: `openmake://skill-draft/${result.skillId}`,
                             mimeType: 'application/json',
-                            text: JSON.stringify({ previewCard, assistantText: assistantText + warningSuffix + convSuffix }),
+                            text: JSON.stringify({ previewCard, assistantText: assistantText + warningSuffix + convSuffix + compatSuffix }),
                         },
                     },
                 ],

@@ -152,10 +152,15 @@ export const importExtensionFromGitTool: MCPToolDefinition<ImportExtensionFromGi
             const blockSuffix = blockedServers.length > 0
                 ? `\n\n⚠ MCP 서버 ${blockedServers.length}개가 위험 명령 패턴으로 차단 표시 — 승인 전 반드시 검토하세요.`
                 : '';
+            // 설치 시 적응 리포트 — 미지원 구성요소·건너뛴 MCP 항목·스킬 호환 안내
+            // (조용히 무시하면 "왜 일부만 설치됐지"를 사용자가 알 수 없다)
+            const reportSuffix = result.validationWarnings.length > 0
+                ? `\n\n📋 설치 리포트:\n${result.validationWarnings.map(w => `  · ${w}`).join('\n')}`
+                : '';
 
             const llmText = result.upToDate
                 ? `Extension ${result.extensionId} "${result.name}@${result.version}" is already up to date (ref ${result.gitRef.slice(0, 7)}). No changes made.`
-                : `${result.updated ? `Updated extension ${result.extensionId} "${result.name}" v${result.previousVersion} -> v${result.version}` : `Installed extension ${result.extensionId} "${result.name}@${result.version}"`} from ${result.gitUrl}@${result.gitRef.slice(0, 7)} — skills: ${okSkills.length} ok/${failedSkills.length} failed, mcpServers: ${okServers.length} ok/${failedServers.length} failed/${blockedServers.length} convention-blocked. All components are drafts requiring user approval.`;
+                : `${result.updated ? `Updated extension ${result.extensionId} "${result.name}" v${result.previousVersion} -> v${result.version}` : `Installed extension ${result.extensionId} "${result.name}@${result.version}"`} from ${result.gitUrl}@${result.gitRef.slice(0, 7)} — skills: ${okSkills.length} ok/${failedSkills.length} failed, mcpServers: ${okServers.length} ok/${failedServers.length} failed/${blockedServers.length} convention-blocked. All components are drafts requiring user approval.${result.validationWarnings.length > 0 ? ` Install report: ${result.validationWarnings.join(' | ')}` : ''}`;
 
             logger.info(`MCP import_extension_from_git: ${result.extensionId} (user=${userId}, gitUrl=${args.gitUrl}, deduped=${result.deduped})`);
             return {
@@ -166,7 +171,7 @@ export const importExtensionFromGitTool: MCPToolDefinition<ImportExtensionFromGi
                         resource: {
                             uri: `openmake://extension-install/${result.extensionId}`,
                             mimeType: 'application/json',
-                            text: JSON.stringify({ previewCard, assistantText: assistantText + failSuffix + blockSuffix }),
+                            text: JSON.stringify({ previewCard, assistantText: assistantText + failSuffix + blockSuffix + reportSuffix }),
                         },
                     },
                 ],

@@ -109,6 +109,17 @@ export class UserExtensionRepository extends BaseRepository {
             `UPDATE mcp_servers SET status='archived', enabled=FALSE, extension_id=NULL, updated_at=NOW() WHERE extension_id=$1`,
             [extensionId]
         );
+        // Custom Agent 는 status 컬럼이 없다 — soft-delete 계약(is_active=FALSE)으로 회수한다.
+        // ⚠️ 이름도 함께 비켜준다: UNIQUE(user_id, name) 은 soft-delete 행에도 걸리므로,
+        // 이름을 남겨두면 재설치된 동명 에이전트가 매번 랜덤 suffix 를 달고 생성돼
+        // 사용자가 고르던 에이전트 이름이 업데이트마다 표류한다.
+        await this.query(
+            `UPDATE user_agents
+                SET is_active=FALSE, extension_id=NULL, updated_at=NOW(),
+                    name = name || '-archived-' || substr(md5(random()::text), 1, 6)
+              WHERE extension_id=$1`,
+            [extensionId]
+        );
     }
 
     async getByIdForUser(id: string, userId: string, isAdmin: boolean): Promise<UserExtensionRow | null> {
@@ -170,7 +181,7 @@ export class UserExtensionRepository extends BaseRepository {
     }
 
     /** ingest 로 생성된 구성요소를 확장에 링크. (구성요소 상한이 작아 개별 UPDATE — QueryParam 배열 미지원) */
-    async linkComponents(extensionId: string, skillIds: string[], mcpServerIds: string[]): Promise<void> {
+    async linkComponents(extensionId: string, skillIds: string[], mcpServerIds: string[], agentIds: string[] = []): Promise<void> {
         for (const skillId of skillIds) {
             await this.query(
                 `UPDATE agent_skills SET extension_id=$1 WHERE id=$2`,
@@ -181,6 +192,13 @@ export class UserExtensionRepository extends BaseRepository {
             await this.query(
                 `UPDATE mcp_servers SET extension_id=$1, updated_at=NOW() WHERE id=$2`,
                 [extensionId, serverId]
+            );
+        }
+        // Custom Agent (103, Phase 2) — 확장 유래 에이전트는 즉시 활성이라 상태 전이는 없고 링크만
+        for (const agentId of agentIds) {
+            await this.query(
+                `UPDATE user_agents SET extension_id=$1, updated_at=NOW() WHERE id=$2`,
+                [extensionId, agentId]
             );
         }
     }
@@ -223,6 +241,7 @@ export class UserExtensionRepository extends BaseRepository {
     async listComponents(extensionId: string): Promise<{
         skills: Array<{ id: string; name: string; status: string }>;
         mcpServers: Array<{ id: string; name: string; status: string; enabled: boolean }>;
+        agents: Array<{ id: string; name: string; status: string }>;
     }> {
         const skills = await this.query<{ id: string; name: string; status: string }>(
             `SELECT id, name, status FROM agent_skills WHERE extension_id=$1 ORDER BY name`,
@@ -232,7 +251,12 @@ export class UserExtensionRepository extends BaseRepository {
             `SELECT id, name, status, enabled FROM mcp_servers WHERE extension_id=$1 ORDER BY name`,
             [extensionId]
         );
-        return { skills: skills.rows, mcpServers: servers.rows };
+        const agents = await this.query<{ id: string; name: string; status: string }>(
+            `SELECT id, name, CASE WHEN is_active THEN 'active' ELSE 'archived' END AS status
+               FROM user_agents WHERE extension_id=$1 ORDER BY name`,
+            [extensionId]
+        );
+        return { skills: skills.rows, mcpServers: servers.rows, agents: agents.rows };
     }
 
     /**
@@ -245,6 +269,10 @@ export class UserExtensionRepository extends BaseRepository {
 
         await this.query(
             `UPDATE agent_skills SET status='archived' WHERE extension_id=$1`,
+            [id]
+        );
+        await this.query(
+            `UPDATE user_agents SET is_active=FALSE, updated_at=NOW() WHERE extension_id=$1`,
             [id]
         );
         await this.query(

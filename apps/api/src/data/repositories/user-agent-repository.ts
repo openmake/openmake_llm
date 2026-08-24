@@ -24,6 +24,8 @@ export interface UserAgent {
     visibility: 'private' | 'shared';
     is_active: boolean;
     usage_count: number;
+    /** 확장 번들 설치분이면 그 확장 id (103) */
+    extension_id?: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -43,6 +45,8 @@ export interface UserAgentCreate {
     allowedSkills?: string[];
     icon?: string | null;
     model?: string | null;
+    /** 확장 번들에서 설치된 경우 그 확장 id (제거/업데이트 시 함께 정리) */
+    extensionId?: string | null;
 }
 
 export interface UserAgentUpdate {
@@ -60,8 +64,8 @@ export class UserAgentRepository extends BaseRepository {
         const result = await this.query<UserAgent>(
             `INSERT INTO user_agents (
                 id, user_id, name, description, system_prompt,
-                allowed_tools, allowed_skills, icon, model
-            ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9)
+                allowed_tools, allowed_skills, icon, model, extension_id
+            ) VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, $10)
              RETURNING *`,
             [
                 params.id,
@@ -73,9 +77,22 @@ export class UserAgentRepository extends BaseRepository {
                 JSON.stringify(params.allowedSkills ?? []),
                 params.icon ?? null,
                 params.model ?? null,
+                params.extensionId ?? null,
             ],
         );
         return result.rows[0] as UserAgent;
+    }
+
+    /**
+     * 이름 중복 확인 — UNIQUE(user_id, name) 위반을 사전 회피하기 위한 조회.
+     * soft-delete(is_active=FALSE) 된 행도 제약 대상이라 포함해서 본다.
+     */
+    async existsByName(userId: string, name: string): Promise<boolean> {
+        const r = await this.query<{ one: number }>(
+            'SELECT 1 AS one FROM user_agents WHERE user_id = $1 AND name = $2 LIMIT 1',
+            [userId, name],
+        );
+        return r.rows.length > 0;
     }
 
     async listByUser(userId: string, includeInactive = false): Promise<UserAgent[]> {

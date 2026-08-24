@@ -10,6 +10,7 @@
  */
 
 import { BaseRepository, QueryParam } from './base-repository';
+import { createHash } from 'crypto';
 import { assertResourceOwnerOrAdmin } from '../../auth/ownership';
 import { rowToSkill } from './skill-row-mapper';
 import { SkillAssignmentRepository } from './skill-assignment-repository';
@@ -187,6 +188,17 @@ export class SkillRepository extends BaseRepository {
              WHERE id = $7`,
             params
         );
+
+        // ⚠️ 시스템 프롬프트 주입의 SoT 는 skill_manifests.prompt_md (buildManifestPrompt JOIN)이다.
+        // agent_skills.content 만 바꾸면 실제 주입은 옛 내용 그대로라 "수정했는데 그대로"가 된다.
+        // manifest 행이 없는 스킬(레거시)은 0 row 영향으로 no-op.
+        if (input.content !== undefined && input.content !== existing.content) {
+            const checksum = createHash('sha256').update(input.content).digest('hex');
+            await this.query(
+                `UPDATE skill_manifests SET prompt_md = $2, checksum = $3 WHERE id = $1`,
+                [id, input.content, checksum]
+            );
+        }
 
         return this.getSkillById(id);
     }

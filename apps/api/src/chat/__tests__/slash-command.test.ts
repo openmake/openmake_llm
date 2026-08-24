@@ -1,4 +1,5 @@
 import {
+    substituteSkillArguments,
     parseSlashCommand,
     slugify,
     matchesSlug,
@@ -49,6 +50,48 @@ describe('buildAugmentedMessage', () => {
     it('본문 없으면 기본 지시', () => {
         const out = buildAugmentedMessage({ name: 'X', content: 'c' }, '');
         expect(out).toContain('스킬 지침에 따라 진행');
+    });
+});
+
+describe('substituteSkillArguments (외부 스킬 인자 자리표시자)', () => {
+    it('$ARGUMENTS → 전체 인자', () => {
+        const r = substituteSkillArguments('감사 대상: $ARGUMENTS', '로그인 화면 검토');
+        expect(r).toEqual({ content: '감사 대상: 로그인 화면 검토', consumed: true });
+    });
+
+    it('$1/$2 → 공백 분리 토큰, @$1 은 @ 제거', () => {
+        const r = substituteSkillArguments('리뷰: @$1 (기준 $2)', 'design.fig AA');
+        expect(r.content).toBe('리뷰: design.fig (기준 AA)');
+    });
+
+    it('인자가 없으면 빈 문자열로 치환 (자리표시자 노출 방지)', () => {
+        expect(substituteSkillArguments('대상: $ARGUMENTS', '').content).toBe('대상: ');
+    });
+
+    it('자리표시자가 없으면 원문 그대로 + consumed=false', () => {
+        const r = substituteSkillArguments('평범한 본문', 'x');
+        expect(r).toEqual({ content: '평범한 본문', consumed: false });
+    });
+
+    it('치환 텍스트의 $& 등 특수문자는 그대로 (replacer 함수)', () => {
+        expect(substituteSkillArguments('q=$ARGUMENTS', 'a$&b').content).toBe('q=a$&b');
+    });
+
+    // 본문 산문의 금액·소수·여러자리 수는 자리표시자가 아니다 (코드리뷰 지적, 2026-08-24)
+    it('금액·소수·여러 자리 수는 치환하지 않는다', () => {
+        expect(substituteSkillArguments('the budget is $1,500', 'do X').content).toBe('the budget is $1,500');
+        expect(substituteSkillArguments('costs $1.50 each', 'do X').content).toBe('costs $1.50 each');
+        expect(substituteSkillArguments('about $19 total', 'do X').content).toBe('about $19 total');
+    });
+
+    it('금액만 있고 진짜 자리표시자가 없으면 consumed=false (원문 유지)', () => {
+        expect(substituteSkillArguments('the budget is $1,500', 'x'))
+            .toEqual({ content: 'the budget is $1,500', consumed: false });
+    });
+
+    it('자리표시자와 금액이 섞여 있으면 자리표시자만 치환', () => {
+        const r = substituteSkillArguments('대상: $1 (예산 $1,500)', 'design.fig');
+        expect(r.content).toBe('대상: design.fig (예산 $1,500)');
     });
 });
 

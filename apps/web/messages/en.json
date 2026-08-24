@@ -727,7 +727,20 @@
       "emptyTitle": "No drafts awaiting approval",
       "emptyDesc": "Skills created via AI generation or Git import appear here.",
       "approve": "Approve",
-      "reject": "Reject"
+      "reject": "Reject",
+      "rewrite": {
+        "button": "Adapt wording",
+        "analyzing": "Checking what to adapt for this environment…",
+        "applying": "Applying…",
+        "noChange": "Nothing needs adapting for this environment.",
+        "failed": "Could not produce a rewrite proposal (the original is unchanged).",
+        "proposalTitle": "Rewrite proposal",
+        "reviewHint": "Applying replaces the skill body with this content. Review before applying.",
+        "apply": "Apply",
+        "discard": "Discard",
+        "dismiss": "Dismiss",
+        "applyFailed": "Failed to apply: {error}"
+      }
     }
   },
   "agentTasks": {
@@ -1862,8 +1875,13 @@
     "empty": "No extensions installed.",
     "skills": "Skills",
     "mcpServers": "MCP servers",
+    "agents": "Custom agents",
     "none": "None",
     "approvalHint": "Draft components must be approved in the Skill Library / MCP Servers pages before activation.",
+    "report": {
+      "title": "Install report",
+      "hint": "Components unsupported here were not installed, and skills written for other ecosystems got an automatic tool-name mapping note."
+    },
     "detailFailed": "Failed to load component details.",
     "removeConfirm": "Remove this extension? Its skills and MCP servers will be archived.",
     "removeAria": "Remove extension",

@@ -18,6 +18,7 @@
  * @module routes/mcp-server-ingest.routes
  */
 import { Router, type NextFunction, type Request, type Response } from 'express';
+import { isBlockedByConvention, type ConventionFinding } from '../agents/git-ingest/convention-checker';
 import type { Pool } from 'pg';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import type { LLMClient } from '../llm/client';
@@ -202,8 +203,8 @@ export function mcpServerIngestRouter(deps: McpServerIngestRouterDeps): Router {
                 return;
             }
 
-            const findings = (draft.manifest_meta as { conventionFindings?: Array<{ severity: string }> } | null)?.conventionFindings;
-            const blocked = Array.isArray(findings) && findings.some(f => f.severity === 'error');
+            const findings = (draft.manifest_meta as { conventionFindings?: ConventionFinding[] } | null)?.conventionFindings;
+            const blocked = isBlockedByConvention(findings);
             if (blocked) {
                 res.status(409).json({
                     success: false,
