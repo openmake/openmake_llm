@@ -387,6 +387,36 @@ export class McpCatalogRepository {
         };
     }
 
+    /**
+     * 서버별 **최근 실패 원인**을 한 번에 조회 (목록 API 용).
+     *
+     * 연결에 실패한 client 는 풀에 남지 않으므로 메모리 상태만으로는 원인을 알 수 없다.
+     * `mcp_server_instances` 는 이력 테이블이라 서버당 행이 여러 개 — `DISTINCT ON` 으로
+     * 서버별 최신 crashed 행 하나만 뽑는다.
+     *
+     * ⚠️ 최신 행이 `running` 이면(= 그 뒤 성공적으로 떴다면) 낡은 실패를 보여주지 않도록
+     *    제외한다. 안 그러면 지금 잘 도는 서버에 예전 에러가 계속 붙는다.
+     */
+    async getLatestConnectErrors(
+        userId: string,
+        serverIds: string[],
+    ): Promise<Map<string, { message: string; at: string }>> {
+        const out = new Map<string, { message: string; at: string }>();
+        if (serverIds.length === 0) return out;
+        const r = await this.pool.query<{ mcp_server_id: string; status: string; last_error: string | null; started_at: string }>(
+            `SELECT DISTINCT ON (mcp_server_id) mcp_server_id, status, last_error, started_at::text
+               FROM mcp_server_instances
+              WHERE user_id = $1 AND mcp_server_id = ANY($2::text[])
+              ORDER BY mcp_server_id, started_at DESC`,
+            [userId, serverIds],
+        );
+        for (const row of r.rows) {
+            if (row.status !== 'crashed' || !row.last_error) continue;
+            out.set(row.mcp_server_id, { message: row.last_error, at: row.started_at });
+        }
+        return out;
+    }
+
     async recordInstanceTransition(
         serverId: string,
         userId: string,

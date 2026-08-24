@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Server, Boxes, Plus, Loader2, X, KeyRound, ClipboardCheck } from "lucide-react";
+import { Server, Boxes, Plus, Loader2, X, KeyRound, ClipboardCheck, AlertTriangle } from "lucide-react";
 import {
   Button,
   Badge,
@@ -36,6 +36,10 @@ interface McpServer {
   transport: Transport;
   toolCount: number;
   status: ConnStatus;
+  /** 연결 실패 원인 코드 — 없으면 실패한 적이 없거나 현재 연결됨 */
+  errorCode: string | null;
+  /** 원인 원문 (코드만으로 부족한 진단용 — tooltip) */
+  errorDetail: string | null;
   latencyMs: number | null;
   lastChecked: string;
   /** 편집 가능한 env 키 목록 (값은 서버가 마스킹하므로 키만 다룬다) */
@@ -52,6 +56,10 @@ interface ApiMcpServer {
   connectionStatus?: string;
   toolCount?: number;
   lastPing?: string | null;
+  /** 연결 실패 원인 — 그전엔 백엔드가 내려줘도 프론트가 버려서 화면에 원인이 없었다 */
+  connectionError?: string | null;
+  /** 원인 코드(`auth_required` 등) — i18n 문구로 바꿔 보여준다 */
+  connectionErrorCode?: string | null;
   /** 백엔드가 마스킹해서 내려주는 env — 암호화된 값은 "***" 로 치환돼 있다(원문 미노출). */
   env?: Record<string, string> | null;
 }
@@ -88,6 +96,8 @@ function mapServer(s: ApiMcpServer, t: Translator): McpServer {
     transport: TRANSPORT_MAP[s.transport_type] ?? "stdio",
     toolCount: s.toolCount ?? 0,
     status: mapStatus(s.connectionStatus),
+    errorCode: s.connectionStatus === "connected" ? null : (s.connectionErrorCode ?? null),
+    errorDetail: s.connectionStatus === "connected" ? null : (s.connectionError ?? null),
     // 백엔드는 지연(latency) 수치를 제공하지 않음 — 표시 생략
     latencyMs: null,
     lastChecked: relativeTime(s.lastPing, t),
@@ -309,6 +319,8 @@ function buildMockServers(t: Translator): McpServer[] {
     transport: "stdio",
     toolCount: 8,
     status: "connected",
+    errorCode: null,
+    errorDetail: null,
     latencyMs: 12,
     lastChecked: t("justNow"),
     envKeys: [],
@@ -320,6 +332,8 @@ function buildMockServers(t: Translator): McpServer[] {
     transport: "HTTP",
     toolCount: 21,
     status: "connected",
+    errorCode: null,
+    errorDetail: null,
     latencyMs: 184,
     lastChecked: t("minutesAgo", { count: 1 }),
     envKeys: [],
@@ -331,6 +345,8 @@ function buildMockServers(t: Translator): McpServer[] {
     transport: "stdio",
     toolCount: 5,
     status: "degraded",
+    errorCode: null,
+    errorDetail: null,
     latencyMs: 842,
     lastChecked: t("minutesAgo", { count: 2 }),
     envKeys: [],
@@ -342,6 +358,8 @@ function buildMockServers(t: Translator): McpServer[] {
     transport: "SSE",
     toolCount: 11,
     status: "connected",
+    errorCode: null,
+    errorDetail: null,
     latencyMs: 76,
     lastChecked: t("minutesAgo", { count: 3 }),
     envKeys: [],
@@ -353,6 +371,8 @@ function buildMockServers(t: Translator): McpServer[] {
     transport: "HTTP",
     toolCount: 3,
     status: "disconnected",
+    errorCode: null,
+    errorDetail: null,
     latencyMs: null,
     lastChecked: t("minutesAgo", { count: 12 }),
     envKeys: [],
@@ -571,6 +591,16 @@ export function ConnectorsSection() {
                       </Td>
                       <Td>
                         <Badge tone={meta.tone}>{t(meta.labelKey)}</Badge>
+                        {/* 실패 원인 — 없으면 아무것도 그리지 않는다(정상 서버에 잡음 금지) */}
+                        {s.errorCode && (
+                          <div
+                            className="mt-1 flex items-start gap-1 text-xs text-warn"
+                            title={s.errorDetail ?? undefined}
+                          >
+                            <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                            <span>{t(`connectError.${s.errorCode}`)}</span>
+                          </div>
+                        )}
                       </Td>
                       <Td className="text-right font-mono">
                         {s.latencyMs == null ? (

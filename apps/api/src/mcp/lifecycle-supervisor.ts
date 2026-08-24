@@ -17,6 +17,7 @@ import type { UserMCPPool } from './user-pool';
 import type { ExternalMCPClient } from './external-client';
 import type { McpCatalogRepository, UserMcpServerRow } from '../data/repositories/mcp-catalog-repository';
 import { createLogger } from '../utils/logger';
+import { classifyConnectError, serializeConnectError } from './connect-error';
 
 const logger = createLogger('LifecycleSupervisor');
 
@@ -251,7 +252,19 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
         client.on?.('exit', onExit);
         client.on?.('error', (err: unknown) => onExit(undefined, null, String(err)));
 
-        await client.connect();
+        // 연결 실패를 **영속화**한 뒤 rethrow — 실패한 client 는 풀에 등록되지 않으므로
+        // 기록하지 않으면 목록 API 가 `connectionError: null` 을 돌려주고, 화면에는 원인
+        // 없는 "연결 안 됨"만 남는다(승인은 됐는데 도구가 영영 0개인 상태를 알아챌 수 없다).
+        try {
+            await client.connect();
+        } catch (e) {
+            const classified = classifyConnectError(e);
+            logger.warn(`connect 실패 u=${userId} s=${serverId} code=${classified.code}: ${classified.message}`);
+            await this.repo
+                .recordInstanceTransition(serverId, userId, 'crashed', undefined, serializeConnectError(classified))
+                .catch(() => { /* 기록 실패가 원인 전파를 막지 않게 한다 */ });
+            throw e;
+        }
         this.userPool.add(userId, serverId, client);
         // pid 를 함께 남긴다 — 이게 없어서 운영 instance 행이 전부 pid NULL 이었고,
         // 헬스체크(verifyRunningInstancesByPid)가 항상 missingPid 만 반환해

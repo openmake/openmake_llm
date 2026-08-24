@@ -34,6 +34,7 @@ import { getUnifiedDatabase } from '../data/models/unified-database';
 import type { MCPTransportType, MCPConnectionStatus } from '../mcp/types';
 import { getLifecycleSupervisor } from '../mcp/lifecycle-supervisor';
 import { createLogger } from '../utils/logger';
+import { classifyConnectError, parseConnectError } from '../mcp/connect-error';
 import { validate } from '../middlewares/validation';
 import { mcpToolExecuteSchema, mcpServerCreateSchema, mcpServerEnvUpdateSchema } from '../schemas/mcp.schema';
 import { McpCatalogRepository } from '../data/repositories/mcp-catalog-repository';
@@ -121,6 +122,14 @@ export const mcpRouter = Router();
       const registry = getUnifiedMCPClient().getServerRegistry();
       const statuses = registry.getAllStatuses();
       const supervisor = getLifecycleSupervisor();
+
+      // 연결에 실패한 client 는 풀에 남지 않아 메모리 상태가 비어 있다 — 그때 화면에
+      // 원인 없는 "연결 안 됨"만 뜨던 것을 막기 위해 영속된 마지막 실패를 함께 싣는다.
+      // 조회 실패는 무시(fail-open) — 부가 정보가 목록 자체를 죽이면 안 된다.
+      const persistedErrors = await repo
+          .getLatestConnectErrors(userId, filtered.map(s => s.id))
+          .catch(() => new Map<string, { message: string; at: string }>());
+
       const serversWithStatus = filtered.map(server => {
           const regStatus = statuses.find(s => s.serverId === server.id);
           let userStatus: MCPConnectionStatus | undefined;
@@ -129,12 +138,20 @@ export const mcpRouter = Router();
               if (client) userStatus = client.getStatus();
           }
           const effective = userStatus || regStatus;
+          // 살아있는 client 의 에러가 우선. 없을 때만 영속된 마지막 실패로 폴백한다
+          // (연결된 서버에는 낡은 실패를 붙이지 않는다 — repo 쪽에서 이미 제외).
+          const live = effective?.error ? classifyConnectError(new Error(effective.error)) : null;
+          const stored = live ? null : parseConnectError(persistedErrors.get(server.id)?.message);
+          const failure = live ?? stored;
           return {
               ...server,
               connectionStatus: effective?.status || 'disconnected',
               toolCount: effective?.toolCount || 0,
               lastPing: effective?.lastPing || null,
-              connectionError: effective?.error || null,
+              connectionError: failure?.message ?? null,
+              /** 원인 코드 — 프론트가 i18n 문구로 바꿔 보여준다 (`auth_required` 등) */
+              connectionErrorCode: failure?.code ?? null,
+              connectionErrorAt: live ? null : (persistedErrors.get(server.id)?.at ?? null),
           };
       });
 
