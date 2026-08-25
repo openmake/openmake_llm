@@ -11,7 +11,6 @@
       "skillLibrary": "スキルライブラリ",
       "artifacts": "アーティファクト",
       "mcpMonitoring": "MCPモニタリング",
-      "agentLearning": "エージェント学習",
       "settings": "設定",
       "usage": "使用量",
       "admin": "管理者",
@@ -25,7 +24,6 @@
       "systemSettingsAdmin": "システム設定",
       "developer": "開発者",
       "schedulesAdmin": "タスクスケジュール",
-      "agentSuggestionsAdmin": "プロンプト提案",
       "approvals": "承認待ち"
     },
     "pendingApprovals": "承認待ち {count}件 — エージェント作業がユーザーの承認を待っています"
@@ -1032,33 +1030,6 @@
     "colLastCrash": "最終クラッシュ",
     "crashTrend": "クラッシュ推移 (24h)"
   },
-  "agentLearning": {
-    "title": "エージェント学習",
-    "description": "ユーザーフィードバックに基づくエージェント改善状況を追跡します。",
-    "collectedFeedback": "収集フィードバック",
-    "collectedFeedbackDelta": "+126 今週",
-    "appliedImprovements": "反映済み改善",
-    "pendingLabel": "保留",
-    "agentDetailAnalysis": "エージェント詳細分析",
-    "learningItems": "学習項目",
-    "emptyLearningItems": "収集された学習項目がありません。",
-    "loadingAgent": "エージェントデータを読み込み中...",
-    "qualityScore": "品質スコア",
-    "totalFeedbackCount": "総フィードバック {count} 件",
-    "avgRatingValue": "平均評点 {rating}",
-    "noQualityData": "品質データなし",
-    "noData": "データなし",
-    "failurePatterns": "失敗パターン",
-    "noFailurePatterns": "記録された失敗パターンなし",
-    "patternCount": "({count}回)",
-    "improvements": "改善提案",
-    "noImprovements": "改善提案なし",
-    "status": {
-      "applied": "反映済み",
-      "reviewing": "検討中",
-      "pending": "保留"
-    }
-  },
   "auth": {
     "login": {
       "subtitle": "ログインして続行",
@@ -1826,33 +1797,6 @@
       "sourceAll": "すべてのソース ({count})",
       "searchAria": "キーワード検索",
       "searchPlaceholder": "名前・説明を検索"
-    }
-  },
-  "adminSuggestions": {
-    "title": "プロンプト提案のレビュー",
-    "description": "自己改善サイクルが生成したエージェントのプロンプト改善提案を承認/却下します。",
-    "note": "承認された提案のみが該当エージェントのシステムプロンプトに注入されます。却下した提案は再提案されません。",
-    "listTitle": "提案 ({count}件)",
-    "refresh": "更新",
-    "empty": "この状態の提案はありません。",
-    "loadError": "提案一覧を読み込めませんでした。",
-    "actionError": "状態の変更に失敗しました。",
-    "approve": "承認",
-    "reject": "却下",
-    "sourcePatterns": "根拠パターン: {patterns}",
-    "filter": {
-      "pending": "保留",
-      "approved": "承認済み",
-      "rejected": "却下済み",
-      "all": "すべて"
-    },
-    "cols": {
-      "agent": "エージェント",
-      "suggestion": "提案内容",
-      "quality": "品質スコア",
-      "status": "状態",
-      "createdAt": "作成",
-      "action": "処理"
     }
   },
   "mcpInstances": {
