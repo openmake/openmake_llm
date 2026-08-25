@@ -17,7 +17,7 @@
  */
 import { parseGitUrl } from '../../schemas/git-ingest.schema';
 import type { GitFetcher, TreeEntry } from './git-fetcher';
-import { isArchiveUrl, archivePseudoRepo } from './archive-fetcher';
+import { isNonGitSourceUrl, nonGitPseudoRepo } from './internal-bundle-fetcher';
 import { scanForExtensionManifests, scanForMarketplaceManifests, resolveExtensionRoot } from './repo-scanner';
 import { validateExtensionManifest, parseMarketplaceFile } from './extension-manifest-validator';
 import { EXTENSION_INGEST } from '../../config/constants';
@@ -41,8 +41,8 @@ export async function fetchCatalogSnapshot(
     url: string,
     accessToken?: string,
 ): Promise<CatalogSnapshot> {
-    const isArchive = isArchiveUrl(url);
-    const parsed = isArchive ? archivePseudoRepo(url) : parseGitUrl(url);
+    const isArchive = isNonGitSourceUrl(url);
+    const parsed = isArchive ? nonGitPseudoRepo(url) : parseGitUrl(url);
     if (!parsed) throw new Error(`INVALID_GIT_URL: ${url}`);
     const fetcher = isArchive ? deps.archiveFetcherFor(url) : deps.fetcherFactory({ accessToken });
     const sha = await fetcher.resolveRef(parsed.owner, parsed.repo, 'HEAD');

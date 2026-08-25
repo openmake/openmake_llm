@@ -64,7 +64,6 @@ export const SYSTEM_SETTINGS_REGISTRY: SystemSettingDef[] = [
     // ── OAuth (소셜 로그인) — 미설정 시 해당 provider 로그인 비활성 ──
     { key: 'GOOGLE_CLIENT_ID', group: 'oauth', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.googleCloud },
     { key: 'GOOGLE_CLIENT_SECRET', group: 'oauth', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.googleCloud },
-    { key: 'MARKETPLACE_PUBLISH_TOKEN', group: 'oauth', secret: true, requiresRestart: false, validate: nonEmpty },
     { key: 'OAUTH_REDIRECT_URI', group: 'oauth', secret: false, requiresRestart: false, validate: httpUrl },
     { key: 'GITHUB_CLIENT_ID', group: 'oauth', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.github },
     { key: 'GITHUB_CLIENT_SECRET', group: 'oauth', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.github },

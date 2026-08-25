@@ -751,7 +751,7 @@ export function ExtensionsSection() {
           )}
         </div>
       </CardContent>
-      <MarketplacePublishSection />
+      <MarketplacePublishSection onPublishedAction={() => { void load(); void loadGallery(); }} />
     </Card>
   );
 }

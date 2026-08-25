@@ -2061,7 +2061,7 @@
   },
   "marketplacePublish": {
     "title": "Publish to marketplace",
-    "description": "Bundle your own skills, agents and MCP settings into a plugin and open a PR on {repo}. Once reviewed and merged it becomes installable from the catalog.",
+    "description": "Bundle your own skills, agents and MCP settings into a plugin and publish it to this server's gallery. Other users on the same server can install it; nothing leaves the server.",
     "namePlaceholder": "Plugin name (lowercase, digits, dashes — e.g. my-devops-pack)",
     "descPlaceholder": "One-line description",
     "skills": "Skills",
@@ -2069,12 +2069,12 @@
     "mcp": "MCP servers",
     "none": "No candidates (items installed from extensions are excluded)",
     "envPlaceholders": "{n} env keys → placeholders",
-    "secretNote": "MCP credential values are never exported — only key names as ${KEY} placeholders.",
-    "tokenPlaceholder": "GitHub token (leave empty if configured on the server)",
-    "publish": "Create PR ({n})",
-    "adminOnly": "Only admins can publish",
-    "prCreated": "PR created — open",
-    "prDetail": "branch {branch} · {files} files",
+    "secretNote": "MCP credential values are never exported — only key names as ${KEY} placeholders. Installers supply their own values.",
+    "shareToGallery": "Share to gallery (off = keep in my extensions only)",
+    "publish": "Publish ({n})",
+    "publishedShared": "'{name}' published to the gallery",
+    "publishedPrivate": "'{name}' saved to my extensions (private)",
+    "publishedDetail": "{files} files · publishing again with the same name updates it",
     "missing": "Some items were skipped (not owned or not active)."
   }
 }

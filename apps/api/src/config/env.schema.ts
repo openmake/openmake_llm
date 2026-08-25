@@ -92,10 +92,6 @@ export const envSchema = z
         OAUTH_REDIRECT_URI: z.string().default(`http://localhost:${SERVER_CONFIG.DEFAULT_PORT}/api/auth/callback/google`),
         /** 원격 MCP OAuth 콜백 origin 강제 (선택) — config/mcp-oauth.ts */
         MCP_OAUTH_REDIRECT_BASE: z.string().url().optional(),
-        /** 마켓플레이스 게시 대상 레포 owner/repo (config/marketplace-publish.ts) */
-        MARKETPLACE_REPO: z.string().regex(/^[\w.-]+\/[\w.-]+$/).optional(),
-        /** 마켓플레이스 게시용 GitHub 토큰 — 요청 body.accessToken 이 없을 때의 폴백 */
-        MARKETPLACE_PUBLISH_TOKEN: z.string().max(200).optional(),
 
         // CORS
         CORS_ORIGINS: z.string().default(`http://localhost:${SERVER_CONFIG.DEFAULT_PORT}`),
