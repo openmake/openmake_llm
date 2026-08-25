@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
+import { useTheme } from "next-themes";
 import {
   Settings,
   Bot,
@@ -236,11 +237,12 @@ export default function SettingsPage() {
     router.refresh(); // 재렌더 → useSyncExternalStore 가 쿠키를 다시 읽음
   };
 
-  // 인터페이스
-  const [theme, setTheme] = useState("system");
+  // 인터페이스 — 테마는 next-themes 가 SoT(상단 토글과 같은 저장소). preferences.theme 은
+  // 저장만 되고 어디서도 읽지 않던 죽은 값이라 더 쓰지 않는다.
+  const { theme: themeValue, setTheme } = useTheme();
+  const theme = themeValue ?? "system";
 
-  // 알림
-  const [emailAlerts, setEmailAlerts] = useState(true);
+  // 알림 (이메일 알림 토글은 제거 — preferences.emailAlerts 는 저장만 되고 발송 로직이 읽지 않았다)
   const [pushAlerts, setPushAlerts] = useState(false);
   const [pushSupported, setPushSupported] = useState<boolean | null>(null);
   const [pushSwReady, setPushSwReady] = useState(false);
@@ -364,8 +366,6 @@ export default function SettingsPage() {
           if (typeof p.defaultModel === "string") setSelectedModel(p.defaultModel);
           if (p.responseStyle === "concise" || p.responseStyle === "default" || p.responseStyle === "verbose")
             setResponseStyle(p.responseStyle);
-          if (typeof p.theme === "string") setTheme(p.theme);
-          if (typeof p.emailAlerts === "boolean") setEmailAlerts(p.emailAlerts);
           const sh = typeof p.saveHistory === "boolean" ? p.saveHistory : true;
           const ml = typeof p.memoryLearning === "boolean" ? p.memoryLearning : true;
           setSaveHistory(sh);
@@ -407,12 +407,10 @@ export default function SettingsPage() {
       await ApiClient.put("/api/users/me/custom-instructions", {
         customInstructions: trimmed.length > 0 ? trimmed : null,
       });
-      // defaultModel/responseStyle/theme/알림/개인정보 영속화 (language 는 NEXT_LOCALE 쿠키로 완료).
+      // defaultModel/responseStyle/개인정보 영속화 (language 는 NEXT_LOCALE 쿠키, 테마는 next-themes).
       await ApiClient.put("/api/users/me/preferences", {
         defaultModel: selectedModel,
         responseStyle,
-        theme,
-        emailAlerts,
         saveHistory,
         memoryLearning,
       });
@@ -586,12 +584,6 @@ export default function SettingsPage() {
                       )}
                     />
                   </FieldRow>
-                  <FieldRow
-                    title={tSettings("saveHistory.title")}
-                    description={tSettings("saveHistory.descriptionGeneral")}
-                  >
-                    <Toggle checked={saveHistory} onChange={setSaveHistory} />
-                  </FieldRow>
                 </CardContent>
               </Card>
             )}
@@ -727,12 +719,6 @@ export default function SettingsPage() {
                   <CardTitle>{tSettings("tabs.notifications")}</CardTitle>
                 </CardHeader>
                 <CardContent className="py-0">
-                  <FieldRow
-                    title={tSettings("emailAlerts.title")}
-                    description={tSettings("emailAlerts.description")}
-                  >
-                    <Toggle checked={emailAlerts} onChange={setEmailAlerts} />
-                  </FieldRow>
                   <FieldRow
                     title={tSettings("pushAlerts.title")}
                     description={tSettings("pushAlerts.description")}

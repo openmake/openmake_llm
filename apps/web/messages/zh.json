@@ -102,7 +102,6 @@
     },
     "saveHistory": {
       "title": "保存对话内容",
-      "descriptionGeneral": "将对话内容保存到服务器数据库。关闭后仅记录匿名使用元数据。",
       "descriptionPrivacy": "关闭后对话内容不会保存到服务器。"
     },
     "defaultModel": {
@@ -131,10 +130,6 @@
     "theme": {
       "title": "主题",
       "description": "选择应用的配色主题。"
-    },
-    "emailAlerts": {
-      "title": "邮件提醒",
-      "description": "通过邮件接收代理任务完成和安全事件通知。"
     },
     "pushAlerts": {
       "title": "推送通知",
@@ -648,24 +643,6 @@
       "autoCreate": "AI 技能自动生成",
       "gitIngest": "从 Git URL 导入技能"
     },
-    "fallback": {
-      "pdfSummary": {
-        "name": "PDF 摘要",
-        "description": "将长 PDF 文档压缩为核心要点。"
-      },
-      "sqlQuery": {
-        "name": "SQL 查询编写",
-        "description": "将自然语言需求转换为参数化 SQL。"
-      },
-      "adCopy": {
-        "name": "广告文案",
-        "description": "生成针对目标细分群体的营销文案。"
-      },
-      "financialReport": {
-        "name": "财务报表解读",
-        "description": "解读损益表和资产负债表的关键指标。"
-      }
-    },
     "form": {
       "nameRequired": "请输入技能名称。",
       "contentRequired": "请输入技能内容（Instructions）。",
@@ -805,7 +782,6 @@
     "outputsLabel": "产出物 ({count})",
     "noSteps": "暂无步骤记录。",
     "stepsLabel": "执行步骤 ({count})",
-    "approvalsTitle": "等待批准的工具执行 ({count})",
     "reject": "拒绝",
     "approve": "批准",
     "question": "智能体提问",
@@ -874,8 +850,6 @@
     "pageDescription": "用你自己的系统提示词定义专用智能体。",
     "importFromGit": "从 Git URL 导入",
     "newAgent": "新建智能体",
-    "tabActive": "启用的智能体",
-    "tabDraft": "草稿审核",
     "loading": "加载中...",
     "emptyTitle": "还没有自定义智能体",
     "emptyDescription": "自行创建或从 Git URL 导入以添加专用智能体。",
@@ -920,24 +894,11 @@
     "networkError": "网络错误",
     "loadingDrafts": "正在加载草稿...",
     "noDraftsTitle": "没有待审核的草稿",
-    "noDraftsDescription": "通过 Git URL 导入创建的智能体将显示在这里。",
     "approve": "批准",
     "reject": "拒绝",
     "approveFailed": "批准失败：{error}",
     "rejectFailed": "拒绝失败：{error}",
     "rejectConfirm": "确定要拒绝（归档）此草稿智能体吗？",
-    "fallback": {
-      "techWriter": {
-        "name": "技术文档写作者",
-        "description": "以一致的语气撰写 API 参考和架构文档。",
-        "systemPrompt": "你是一名资深技术文档写作者……"
-      },
-      "reviewer": {
-        "name": "代码审查者",
-        "description": "找出变更代码中的缺陷和可简化之处。",
-        "systemPrompt": "你是一名严格的代码审查者……"
-      }
-    },
     "useInChat": "在对话中使用",
     "inUseDeselect": "使用中 · 取消",
     "deselect": "取消智能体",
@@ -1099,20 +1060,9 @@
     "noDescription": "暂无描述。",
     "kindSkill": "技能",
     "kindServer": "服务器",
-    "toolCount": "{count} 个工具",
     "installed": "已安装",
     "install": "安装",
     "installError": "安装失败，请重试。",
-    "mock": {
-      "filesystem": "用于安全读写本地文件的沙箱文件系统工具集。",
-      "github": "处理议题、PR、仓库和代码搜索的 GitHub 集成服务器。",
-      "postgres": "提供只读 SQL 查询和架构自省的数据库工具。",
-      "slack": "用于读取频道、发送消息、搜索用户等的 Slack 工作区集成。",
-      "pdfExtractName": "PDF 提取技能",
-      "pdfExtract": "从 PDF 文档中结构化提取文本、表格和元数据的技能。",
-      "webResearchName": "网络研究技能",
-      "webResearch": "执行多源搜索、引用验证和摘要的深度研究技能。"
-    },
     "credentialsTitle": "请输入凭据以安装",
     "cancel": "取消"
   },
@@ -1162,14 +1112,6 @@
     "patternCount": "({count}次)",
     "improvements": "改进建议",
     "noImprovements": "暂无改进建议",
-    "topics": {
-      "codeReviewCitation": "强化代码审查回复中的依据引用",
-      "koreanHonorific": "保持韩语敬语的一致性",
-      "researchSourceReliability": "标注深度研究的来源可信度",
-      "longSummaryOmission": "减少长文摘要中的要点遗漏",
-      "toolFailureGuidance": "改进工具调用失败时的用户提示",
-      "calcVerification": "为数值计算增加验算步骤"
-    },
     "status": {
       "applied": "已反映",
       "reviewing": "审核中",
@@ -2049,13 +1991,15 @@
     },
     "agents": {
       "title": "自定义智能体",
-      "hint": "智能体无需批准 — 安装后即可使用。",
+      "hint": "通过扩展安装的智能体无需批准即刻生效。只有从 Git URL 导入的智能体需要在此审批。",
       "link": "打开智能体列表"
     },
     "tasks": {
       "title": "代理任务审批",
       "hint": "高风险工具执行和代理提问需经批准后任务才会继续。也可以直接在聊天中回复。",
       "empty": "没有待审批的代理任务。",
+      "autoApprove": "自动批准此任务",
+      "autoApproveHint": "此任务后续的工具调用无需批准即可执行（智能体的提问除外）",
       "question": "提问",
       "tool": "工具执行",
       "openTask": "打开任务",

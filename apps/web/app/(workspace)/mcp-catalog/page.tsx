@@ -77,73 +77,14 @@ function mapTemplate(t: ApiCatalogTemplate): CatalogEntry {
   };
 }
 
-/* ── 목업 데이터 — TODO: API 연동 (GET /api/mcp/catalog) ──── */
-function buildMockCatalog(t: (key: string) => string): CatalogEntry[] {
-  const mock: Omit<CatalogEntry, "envFields">[] = [
-    {
-      id: "mcp-filesystem",
-      name: "Filesystem",
-      provider: "Anthropic",
-      description: t("mock.filesystem"),
-      toolCount: 8,
-      kind: "server",
-      installed: true,
-    },
-    {
-      id: "mcp-github",
-      name: "GitHub",
-      provider: "GitHub",
-      description: t("mock.github"),
-      toolCount: 21,
-      kind: "server",
-    },
-    {
-      id: "mcp-postgres",
-      name: "PostgreSQL",
-      provider: "Community",
-      description: t("mock.postgres"),
-      toolCount: 5,
-      kind: "server",
-    },
-    {
-      id: "mcp-slack",
-      name: "Slack",
-      provider: "Slack",
-      description: t("mock.slack"),
-      toolCount: 11,
-      kind: "server",
-    },
-    {
-      id: "skill-pdf-extract",
-      name: t("mock.pdfExtractName"),
-      provider: "OpenMake",
-      description: t("mock.pdfExtract"),
-      toolCount: 3,
-      kind: "skill",
-    },
-    {
-      id: "skill-web-research",
-      name: t("mock.webResearchName"),
-      provider: "OpenMake",
-      description: t("mock.webResearch"),
-      toolCount: 4,
-      kind: "skill",
-    },
-  ];
-  return mock.map((e) => ({ ...e, envFields: [] as EnvField[] }));
-}
 
 export default function McpCatalogPage() {
   const t = useTranslations("mcpCatalog");
   const tTabs = useTranslations("pageTabs");
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [entries, setEntries] = useState<CatalogEntry[]>(() =>
-    buildMockCatalog(t),
-  );
+  const [entries, setEntries] = useState<CatalogEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  // 실데이터는 toolCount 를 제공하지 않으므로 도구 수 배지를 숨긴다.
-  const [showToolCount, setShowToolCount] = useState(true);
   const [installing, setInstalling] = useState<Record<string, boolean>>({});
   const [installError, setInstallError] = useState<Record<string, string>>({});
   // 설치 전 자격증명(env) 입력이 필요한 항목의 인라인 폼 상태.
@@ -160,10 +101,8 @@ export default function McpCatalogPage() {
         if (cancelled) return;
         const list = res?.data?.templates ?? [];
         setEntries(list.map(mapTemplate));
-        setShowToolCount(false);
       } catch {
-        // 401·실패 → 목업 유지 (데모)
-        if (!cancelled) setShowToolCount(true);
+        // 401·실패 → 빈 목록 (그전엔 목업 카탈로그가 실렌더됐다)
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -283,15 +222,10 @@ export default function McpCatalogPage() {
 
                   <div className="flex flex-col gap-2 border-t border-border pt-3">
                     <div className="flex items-center justify-between">
-                      {showToolCount ? (
-                        <Badge tone="neutral">
-                          {t("toolCount", { count: e.toolCount })}
-                        </Badge>
-                      ) : (
-                        <Badge tone="neutral">
-                          <span className="font-mono">{e.provider}</span>
-                        </Badge>
-                      )}
+                      {/* 실데이터는 toolCount 를 제공하지 않는다 — 목업 전용이던 도구 수 배지는 제거 */}
+                      <Badge tone="neutral">
+                        <span className="font-mono">{e.provider}</span>
+                      </Badge>
                       {e.installed ? (
                         <Button variant="outline" size="sm" disabled>
                           {t("installed")}
