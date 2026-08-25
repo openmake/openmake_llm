@@ -84,6 +84,16 @@ export const mcpServerEnabledUpdateSchema = z.object({
     enabled: z.boolean(),
 });
 
+/**
+ * MCP 서버 자동 연결 토글 (PATCH /api/mcp/servers/:id/auto-spawn)
+ *
+ * `auto_spawn=true` 면 로그인/채팅 시작/재시작 복구 때 supervisor 가 알아서 띄운다.
+ * false 는 "필요할 때만 손으로 [연결]" — 사용 여부(`enabled`)와는 별개 축.
+ */
+export const mcpServerAutoSpawnUpdateSchema = z.object({
+    auto_spawn: z.boolean(),
+});
+
 /** MCP 도구 실행 요청 TypeScript 타입 */
 export type McpToolExecuteInput = z.infer<typeof mcpToolExecuteSchema>;
 /** MCP 서버 등록 요청 TypeScript 타입 */
@@ -92,3 +102,5 @@ export type McpServerCreateInput = z.infer<typeof mcpServerCreateSchema>;
 export type McpServerEnvUpdateInput = z.infer<typeof mcpServerEnvUpdateSchema>;
 /** MCP 서버 사용 여부 토글 TypeScript 타입 */
 export type McpServerEnabledUpdateInput = z.infer<typeof mcpServerEnabledUpdateSchema>;
+/** MCP 서버 자동 연결 토글 TypeScript 타입 */
+export type McpServerAutoSpawnUpdateInput = z.infer<typeof mcpServerAutoSpawnUpdateSchema>;
