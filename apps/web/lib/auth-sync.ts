@@ -50,6 +50,15 @@ function fetchMe(): Promise<ApiSuccess<MePayload>> {
  */
 export async function syncAuthFromServer(): Promise<boolean> {
   try {
+    return await syncAuthInner();
+  } finally {
+    // 성공·게스트·실패 어느 경로든 "판정 끝" — /admin 가드가 이 플래그를 기다린다
+    useAppStore.getState().setAuthResolved(true);
+  }
+}
+
+async function syncAuthInner(): Promise<boolean> {
+  try {
     let res = await fetchMe();
     let u = res?.data?.user;
     if (!u && hadSession()) {

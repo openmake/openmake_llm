@@ -207,6 +207,8 @@ interface AppState {
 
   // 인증
   auth: { currentUser: AuthUser | null; isGuestMode: boolean };
+  /** /api/auth/me 1회 동기화가 끝났는가 — 끝나기 전엔 게스트로 보이므로 role 가드가 판정을 미룬다 */
+  authResolved: boolean;
 
   // actions
   setChatHistory: (fn: (prev: ChatMessage[]) => ChatMessage[]) => void;
@@ -266,6 +268,7 @@ interface AppState {
   cycleThinkingLevel: () => void;
   setThinkingLevel: (v: ThinkingLevel) => void;
   setAuth: (auth: AppState["auth"]) => void;
+  setAuthResolved: (v: boolean) => void;
 }
 
 const STYLE_ORDER: ChatStyle[] = ["default", "concise", "verbose"];
@@ -345,6 +348,7 @@ export const useAppStore = create<AppState>()(
   style: "default",
 
   auth: { currentUser: null, isGuestMode: true },
+  authResolved: false,
 
   setPrivacyPrefs: (patch) => set(() => ({ ...patch })),
   finalizeLastAssistant: (messageId, cleanedContent) =>
@@ -532,6 +536,7 @@ export const useAppStore = create<AppState>()(
     })),
   setThinkingLevel: (v) => set({ thinkingLevel: v }),
   setAuth: (auth) => set({ auth }),
+  setAuthResolved: (v) => set({ authResolved: v }),
     }),
     {
       name: "openmake-prefs",

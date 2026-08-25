@@ -129,16 +129,6 @@ function mapAgentTask(a: ApiAgentTask, tChat: TFn, locale: string): Session {
   };
 }
 
-/* ── 목업 데이터 — 미인증/네트워크 실패 시 폴백 (라벨은 t() 로 렌더 시 해석) ─── */
-const MOCK_META: Array<{ id: string; model: string; group: DateGroup }> = [
-  { id: "c1", model: "Pro", group: "today" },
-  { id: "c2", model: "Default", group: "today" },
-  { id: "c3", model: "Fast", group: "yesterday" },
-  { id: "c4", model: "Think", group: "yesterday" },
-  { id: "c5", model: "Code", group: "week" },
-  { id: "c6", model: "Vision", group: "week" },
-];
-
 const GROUP_ORDER: DateGroup[] = ["today", "yesterday", "week", "older"];
 
 export default function HistoryPage() {
@@ -149,19 +139,8 @@ export default function HistoryPage() {
   const queryClient = useQueryClient();
   const { setChatHistory, setCurrentSessionId, setArtifacts, clearChat, auth } = useAppStore();
   const currentSessionId = useAppStore((s) => s.currentSessionId);
-  const mockSessions = useMemo<Session[]>(
-    () =>
-      MOCK_META.map((m) => ({
-        ...m,
-        kind: "chat" as const,
-        title: t(`mock.${m.id}.title`),
-        preview: t(`mock.${m.id}.preview`),
-        time: t(`mock.${m.id}.time`),
-        ts: 0,
-      })),
-    [t],
-  );
-  const [sessions, setSessions] = useState<Session[]>(mockSessions);
+  // 실데이터만 — 그전엔 폐기된 brand profile(Pro/Think/Vision) 이름을 단 목업 6건이 401 시 실렌더됐다
+  const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   // admin 전체 보기 — 대화·작업 목록 모두 ?viewAll=true 로 조회(비관리자는 서버가 무시).
@@ -241,7 +220,7 @@ export default function HistoryPage() {
           ...taskItems.map((a) => mapAgentTask(a, tChat, locale)),
         ]);
       }
-      // 둘 다 실패(401·네트워크): 목업 폴백 유지 (초기 state 그대로)
+      // 둘 다 실패(401·네트워크): 빈 상태 유지
       setLoading(false);
     })();
     return () => {
