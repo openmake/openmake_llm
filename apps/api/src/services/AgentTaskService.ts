@@ -162,8 +162,11 @@ export class AgentTaskService {
         AgentTaskService.running.set(taskId, this);
         try {
             // 레지스트리 등록 전(detached 스케줄링 창)에 접수된 취소는 DB 에만 기록됨 — 시작 전 존중.
+            // 단 resume 은 "취소됐던 작업을 이어가는 것" 자체라 영속 상태 cancelled 를 취소 요청으로
+            // 읽으면 안 된다 — 그전엔 취소 작업 재개가 202 직후 곧바로 다시 aborted 로 끝났다
+            // (2026-08-26 CLI resume E2E 실측). AbortController 는 인스턴스별로 새것이라 signal 만 본다.
             const preTask = await db.getAgentTask(taskId);
-            if (signal.aborted || preTask?.status === 'cancelled') throw new AgentTaskAbort('aborted');
+            if (signal.aborted || (!input.resume && preTask?.status === 'cancelled')) throw new AgentTaskAbort('aborted');
             // resume: 이전 실행분 토큰을 이어서 누적(4-4) — runaway 토큰 가드도 통산 기준으로 동작.
             if (input.resume) totalTokens = Number(preTask?.total_tokens ?? 0);
 

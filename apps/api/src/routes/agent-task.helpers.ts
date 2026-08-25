@@ -47,13 +47,41 @@ export async function loadOwnedTask(req: Request, res: Response, taskId: string)
 
 /** 응답용 변환: 큰 checkpoint/input_files/input_images 본문 제거 + resumable 플래그(중단된 작업에 체크포인트 존재).
  *  input_files 는 내용(content/data)을 뺀 메타(name/type/size)만 노출 — 목록/상세 응답 팽창 방지. */
+/**
+ * 목록 필터 — CLI `openmake-code tasks` 가 "이 디바이스의 로컬 작업"만 보게 하려고 둔 부가 필터.
+ * 본인(또는 admin viewAll) 범위 안에서만 거르므로 권한 변화가 없다. 값이 없으면 통과.
+ * PURE: 라우트 밖에서 단위테스트 대상.
+ */
+export function filterTaskList<T extends { executor?: string | null; device_id?: string | null; status?: string }>(
+    tasks: T[],
+    q: { executor?: unknown; deviceId?: unknown; status?: unknown },
+): T[] {
+    const executor = typeof q.executor === 'string' && q.executor ? q.executor : null;
+    const deviceId = typeof q.deviceId === 'string' && q.deviceId ? q.deviceId : null;
+    // status 는 콤마 목록 허용 (예: failed,cancelled)
+    const statuses = typeof q.status === 'string' && q.status
+        ? new Set(q.status.split(',').map(s => s.trim()).filter(Boolean))
+        : null;
+    return tasks.filter(t =>
+        (!executor || t.executor === executor) &&
+        (!deviceId || t.device_id === deviceId) &&
+        (!statuses || (t.status !== undefined && statuses.has(t.status))),
+    );
+}
+
 export function toPublicTask(t: Record<string, unknown>) {
     const { checkpoint, input_files, input_images, ...rest } = t;
     void input_images; // dataURL 배열 — 응답에서 제외(팽창 방지)
     const fileMetas = Array.isArray(input_files)
         ? (input_files as AgentTaskInputFile[]).map((f) => ({ name: f?.name, type: f?.type, size: f?.size }))
         : undefined;
-    return { ...rest, ...(fileMetas ? { input_files: fileMetas } : {}), resumable: !!checkpoint && t.status === 'failed' };
+    // resume 라우트가 허용하는 범위와 일치 — failed/cancelled + checkpoint. (웹 Resume 버튼은 여기에
+    // RESUMABLE_ERROR_CODES 를 추가로 거르므로 cancelled 포함이 웹 노출을 바꾸지 않는다.)
+    return {
+        ...rest,
+        ...(fileMetas ? { input_files: fileMetas } : {}),
+        resumable: !!checkpoint && (t.status === 'failed' || t.status === 'cancelled'),
+    };
 }
 
 /**
