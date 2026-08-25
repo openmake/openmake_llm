@@ -42,6 +42,9 @@ import { ExtensionsSection } from "@/components/settings/extensions-section";
 /* ── 탭 정의 ────────────────────────────────────────────── */
 type TabId = "general" | "model" | "interface" | "notifications" | "memory" | "extensions" | "connectors" | "privacy" | "security";
 
+/** 넓은 표를 품은 탭 — 본문 폭을 6xl 로 넓힌다(그 외 탭은 4xl 유지). */
+const TABLE_TABS = new Set<TabId>(["connectors", "model"]);
+
 const TABS: { id: TabId; labelKey: string; icon: LucideIcon }[] = [
   { id: "general", labelKey: "tabs.general", icon: Settings },
   { id: "model", labelKey: "tabs.model", icon: Bot },
@@ -532,8 +535,9 @@ export default function SettingsPage() {
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        {/* 커넥터 탭은 7열 표(+액션 버튼 3개)라 4xl(896px) 안에선 열이 글자 단위로 꺾인다 — 그 탭만 넓힌다 */}
-        <div className={cn("mx-auto flex flex-col gap-6 lg:flex-row", tab === "connectors" ? "max-w-6xl" : "max-w-4xl")}>
+        {/* 표가 있는 탭(커넥터=서버 6열, 모델=API 키 6열)은 4xl(896px) 안에서 좌측 탭 내비와 폭을
+            나누면 열이 글자 단위로 꺾인다 — 그 탭만 넓힌다 */}
+        <div className={cn("mx-auto flex flex-col gap-6 lg:flex-row", TABLE_TABS.has(tab) ? "max-w-6xl" : "max-w-4xl")}>
           {/* 좌측 세로 탭 */}
           <nav className="flex shrink-0 gap-1 overflow-x-auto lg:w-48 lg:flex-col">
             {TABS.map((t) => {
