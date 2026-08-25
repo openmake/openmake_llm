@@ -45,16 +45,6 @@ interface ApiUserAgent {
 
 type UserAgentsResponse = ApiSuccess<{ agents: ApiUserAgent[] }>;
 
-interface ApiCustomAgentDraft {
-  id: string;
-  name: string;
-  description: string | null;
-  system_prompt?: string;
-  status?: string;
-}
-
-type DraftAgentsResponse = ApiSuccess<{ drafts: ApiCustomAgentDraft[]; total: number }>;
-
 function mapAgent(a: ApiUserAgent): CustomAgent {
   return {
     id: a.id,
@@ -69,26 +59,6 @@ function mapAgent(a: ApiUserAgent): CustomAgent {
   };
 }
 
-/* ── 목업 폴백 ─────────────────────────────────────────────── */
-const AGENTS_FALLBACK_META: {
-  id: string; emoji: string; nameKey: string; descKey: string; promptKey: string; source: "git" | "custom";
-}[] = [
-  {
-    id: "a1", emoji: "📐",
-    nameKey: "fallback.techWriter.name",
-    descKey: "fallback.techWriter.description",
-    promptKey: "fallback.techWriter.systemPrompt", source: "custom",
-  },
-  {
-    id: "a2", emoji: "🧪",
-    nameKey: "fallback.reviewer.name",
-    descKey: "fallback.reviewer.description",
-    promptKey: "fallback.reviewer.systemPrompt", source: "git",
-  },
-];
-
-const TAB_ACTIVE = "active";
-const TAB_DRAFT = "draft";
 
 /* ── 오버레이 모달 ────────────────────────────────────────── */
 function Modal({
@@ -374,111 +344,11 @@ function AgentGitIngestForm({
 }
 
 /* ── Draft 탭 (에이전트용) ──────────────────────────────────── */
-function AgentDraftTab({ onRefresh }: { onRefresh: () => void }) {
-  const t = useTranslations("customAgents");
-  const [drafts, setDrafts] = useState<ApiCustomAgentDraft[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const loadDrafts = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await ApiClient.get<DraftAgentsResponse>("/api/agents/custom/drafts?target=user");
-      setDrafts(res?.data?.drafts ?? []);
-    } catch {
-      setDrafts([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { void loadDrafts(); }, [loadDrafts]);
-
-  async function handleApprove(agentId: string) {
-    try {
-      await ApiClient.post(`/api/agents/custom/${agentId}/approve`, {});
-      await loadDrafts();
-      onRefresh();
-    } catch (err) {
-      alert(t("approveFailed", { error: err instanceof Error ? err.message : t("genericError") }));
-    }
-  }
-
-  async function handleReject(agentId: string) {
-    if (!window.confirm(t("rejectConfirm"))) return;
-    try {
-      await ApiClient.post(`/api/agents/custom/${agentId}/reject`, {});
-      await loadDrafts();
-    } catch (err) {
-      alert(t("rejectFailed", { error: err instanceof Error ? err.message : t("genericError") }));
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="grid place-items-center py-16 text-center">
-        <Loader2 className="mb-3 h-6 w-6 animate-spin text-faint" />
-        <p className="text-sm text-muted">{t("loadingDrafts")}</p>
-      </div>
-    );
-  }
-
-  if (drafts.length === 0) {
-    return (
-      <div className="grid place-items-center py-16 text-center">
-        <Bot className="mb-3 h-8 w-8 text-faint" />
-        <p className="text-sm font-medium text-fg-2">{t("noDraftsTitle")}</p>
-        <p className="mt-1 text-sm text-muted">{t("noDraftsDescription")}</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      {drafts.map((d) => (
-        <Card key={d.id} className="p-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
-              <div className="mb-1 flex items-center gap-2">
-                <Badge tone="warn">Draft</Badge>
-              </div>
-              <h3 className="text-sm font-semibold text-fg">{d.name}</h3>
-              {d.description && (
-                <p className="mt-1 text-xs text-muted line-clamp-2">{d.description}</p>
-              )}
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <Button size="sm" onClick={() => void handleApprove(d.id)}>
-                <Check className="h-3.5 w-3.5" />{t("approve")}
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => void handleReject(d.id)}>
-                <X className="h-3.5 w-3.5" />{t("reject")}
-              </Button>
-            </div>
-          </div>
-        </Card>
-      ))}
-    </div>
-  );
-}
-
 /* ── 메인 페이지 ──────────────────────────────────────────── */
 export default function CustomAgentsPage() {
   const t = useTranslations("customAgents");
-  const [agents, setAgents] = useState<CustomAgent[]>(() =>
-    AGENTS_FALLBACK_META.map((m) => ({
-      id: m.id,
-      emoji: m.emoji,
-      name: t(m.nameKey),
-      description: t(m.descKey),
-      systemPrompt: t(m.promptKey),
-      model: null,
-      source: m.source,
-      visibility: "private" as const,
-      owned: true,
-    })),
-  );
+  const [agents, setAgents] = useState<CustomAgent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<string>(TAB_ACTIVE);
   const [showCreate, setShowCreate] = useState(false);
   const [showGitIngest, setShowGitIngest] = useState(false);
   const [editingAgent, setEditingAgent] = useState<CustomAgent | null>(null);
@@ -558,20 +428,8 @@ export default function CustomAgentsPage() {
       />
       <AgentsTabs />
 
-      {/* 탭 */}
-      <div className="flex gap-4 border-b border-border px-6 pt-3">
-        {[{ id: TAB_ACTIVE, labelKey: "tabActive" }, { id: TAB_DRAFT, labelKey: "tabDraft" }].map((tabItem) => (
-          <button key={tabItem.id} onClick={() => setTab(tabItem.id)}
-            className={`pb-2 text-sm font-medium transition border-b-2 ${tab === tabItem.id ? "border-accent text-accent" : "border-transparent text-muted hover:text-fg"}`}>
-            {t(tabItem.labelKey)}
-          </button>
-        ))}
-      </div>
-
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        {tab === TAB_DRAFT ? (
-          <AgentDraftTab onRefresh={loadAgents} />
-        ) : loading ? (
+        {loading ? (
           <div className="grid place-items-center py-24 text-center">
             <Bot className="mb-3 h-8 w-8 animate-pulse text-faint" />
             <p className="text-sm text-muted">{t("loading")}</p>

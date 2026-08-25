@@ -253,7 +253,8 @@ export function ProviderKeysSection() {
               ) : (
                 <Table>
                   <thead>
-                    <tr>
+                    {/* 헤더 글자가 세로로 꺾이던 것 — 줄바꿈 대신 가로 스크롤 */}
+                    <tr className="whitespace-nowrap">
                       <Th>{t("col.provider")}</Th>
                       <Th>{t("col.name")}</Th>
                       <Th>{t("col.key")}</Th>
@@ -285,13 +286,15 @@ export function ProviderKeysSection() {
                               </div>
                             )}
                           </Td>
-                          <Td>{k.display_name}</Td>
-                          <Td className="font-mono text-xs">
+                          <Td className="whitespace-nowrap">{k.display_name}</Td>
+                          <Td className="whitespace-nowrap font-mono text-xs">
                             {k.key_prefix}
                             {"•".repeat(12)}
                           </Td>
-                          <Td>{formatDate(k.created_at, locale)}</Td>
-                          <Td>
+                          {/* 날짜·상태·작업은 폭이 모자라도 글자를 꺾지 않는다 — "2026. 05. 08." 이 3줄로
+                              쪼개지던 것(1440px 실측). 모자라면 Table 의 가로 스크롤에 맡긴다 */}
+                          <Td className="whitespace-nowrap">{formatDate(k.created_at, locale)}</Td>
+                          <Td className="whitespace-nowrap">
                             {ok === false ? (
                               <Badge tone="danger">
                                 {t("status.validationFailed")}
@@ -304,8 +307,8 @@ export function ProviderKeysSection() {
                               </Badge>
                             )}
                           </Td>
-                          <Td className="text-right">
-                            <div className="flex items-center justify-end gap-1">
+                          <Td className="whitespace-nowrap text-right">
+                            <div className="flex flex-wrap items-center justify-end gap-1">
                               <Button
                                 variant="ghost"
                                 size="sm"

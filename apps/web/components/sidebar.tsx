@@ -78,7 +78,7 @@ export function Sidebar() {
     // 한 축이 실패해도 나머지 합계는 보이도록 개별 fallback 을 둔다
     const count = async (fn: () => Promise<number>) => { try { return await fn(); } catch { return 0; } };
     const poll = async () => {
-      const [hitl, skills, mcp] = await Promise.all([
+      const [hitl, skills, mcp, agents] = await Promise.all([
         count(async () => {
           const r = await ApiClient.get<{ data: { pending: unknown[] } }>(
             "/api/agent-tasks/approvals/pending", opts);
@@ -93,8 +93,14 @@ export function Sidebar() {
           const r = await ApiClient.get<{ data: unknown[] }>("/api/mcp/servers/drafts", opts);
           return r.data?.length ?? 0;
         }),
+        // Custom Agent draft(Git URL 가져오기) — /approvals 로 이관하며 합산에 포함 (2026-08-26)
+        count(async () => {
+          const r = await ApiClient.get<{ data: { total?: number; drafts?: unknown[] } }>(
+            "/api/agents/custom/drafts?target=user", opts);
+          return r.data?.total ?? r.data?.drafts?.length ?? 0;
+        }),
       ]);
-      if (alive) setPendingApprovals(hitl + skills + mcp);
+      if (alive) setPendingApprovals(hitl + skills + mcp + agents);
     };
     void poll();
     const timer = setInterval(poll, 30_000);

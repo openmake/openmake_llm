@@ -27,7 +27,6 @@ import {
   Card,
 } from "@/components/ui/primitives";
 import { AgentsTabs } from "@/components/hub-tabs";
-import { DiffView } from "@/components/chat/diff-view";
 import { cn } from "@/lib/utils";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient, csrfHeaders } from "@/lib/api-client";
@@ -67,22 +66,6 @@ type SkillsResponse = ApiSuccess<{
   limit: number;
   offset: number;
 }>;
-
-type DraftsResponse = ApiSuccess<{
-  drafts: ApiSkill[];
-  total: number;
-}>;
-
-/* ── 목업 폴백 ─────────────────────────────────────────────── */
-
-function buildFallback(t: Translate): Skill[] {
-  return [
-    { id: "s1", name: t("fallback.pdfSummary.name"), category: "productivity", description: t("fallback.pdfSummary.description"), isSystem: true },
-    { id: "s2", name: t("fallback.sqlQuery.name"), category: "technology", description: t("fallback.sqlQuery.description"), isSystem: true },
-    { id: "s3", name: t("fallback.adCopy.name"), category: "creative", description: t("fallback.adCopy.description"), isSystem: false },
-    { id: "s4", name: t("fallback.financialReport.name"), category: "finance", description: t("fallback.financialReport.description"), isSystem: false },
-  ];
-}
 
 function mapSkill(s: ApiSkill): Skill {
   return {
@@ -647,7 +630,7 @@ function SkillCard({
 export default function SkillLibraryPage() {
   const t = useTranslations("skillLibrary");
   const router = useRouter();
-  const [skills, setSkills] = useState<Skill[]>(() => buildFallback(t));
+  const [skills, setSkills] = useState<Skill[]>([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<string>(ALL);
   const [tab, setTab] = useState<string>(TAB_ACTIVE);

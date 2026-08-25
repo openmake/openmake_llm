@@ -15,10 +15,11 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { Puzzle, Server, Bot, ExternalLink, ShieldQuestion } from "lucide-react";
-import { PageHeader, Card } from "@/components/ui/primitives";
+import { PageHeader } from "@/components/ui/primitives";
 import { SkillDrafts } from "@/components/approvals/skill-drafts";
 import { McpDrafts } from "@/components/approvals/mcp-drafts";
 import { TaskApprovals } from "@/components/approvals/task-approvals";
+import { CustomAgentDrafts } from "@/components/approvals/custom-agent-drafts";
 
 export default function ApprovalsPage() {
   const t = useTranslations("approvals");
@@ -61,13 +62,14 @@ export default function ApprovalsPage() {
           <McpDrafts onRefreshAction={refresh} />
         </section>
 
-        {/* Custom Agent — 승인 절차가 없다는 사실 자체를 알린다 */}
-        <section className="space-y-2 border-t border-border pt-6">
+        {/* Custom Agent — Git URL 가져오기 draft 만 승인 대상. 확장 설치분은 즉시 활성이라
+            여기엔 안 뜬다(그 사실도 hint 로 알린다). 구 /custom-agents "Draft 검토" 탭을 이관 */}
+        <section className="space-y-3 border-t border-border pt-6">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
             <Bot className="h-4 w-4 text-accent" />
             {t("agents.title")}
           </h2>
-          <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-muted">{t("agents.hint")}</p>
             <Link
               href="/custom-agents"
@@ -76,7 +78,8 @@ export default function ApprovalsPage() {
               {t("agents.link")}
               <ExternalLink className="h-3.5 w-3.5" />
             </Link>
-          </Card>
+          </div>
+          <CustomAgentDrafts onRefreshAction={refresh} />
         </section>
       </div>
     </div>

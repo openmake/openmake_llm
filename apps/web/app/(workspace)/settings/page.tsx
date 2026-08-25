@@ -3,6 +3,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
+import { useTheme } from "next-themes";
 import {
   Settings,
   Bot,
@@ -41,6 +42,9 @@ import { ExtensionsSection } from "@/components/settings/extensions-section";
 
 /* ── 탭 정의 ────────────────────────────────────────────── */
 type TabId = "general" | "model" | "interface" | "notifications" | "memory" | "extensions" | "connectors" | "privacy" | "security";
+
+/** 넓은 표를 품은 탭 — 본문 폭을 6xl 로 넓힌다(그 외 탭은 4xl 유지). */
+const TABLE_TABS = new Set<TabId>(["connectors", "model"]);
 
 const TABS: { id: TabId; labelKey: string; icon: LucideIcon }[] = [
   { id: "general", labelKey: "tabs.general", icon: Settings },
@@ -233,11 +237,12 @@ export default function SettingsPage() {
     router.refresh(); // 재렌더 → useSyncExternalStore 가 쿠키를 다시 읽음
   };
 
-  // 인터페이스
-  const [theme, setTheme] = useState("system");
+  // 인터페이스 — 테마는 next-themes 가 SoT(상단 토글과 같은 저장소). preferences.theme 은
+  // 저장만 되고 어디서도 읽지 않던 죽은 값이라 더 쓰지 않는다.
+  const { theme: themeValue, setTheme } = useTheme();
+  const theme = themeValue ?? "system";
 
-  // 알림
-  const [emailAlerts, setEmailAlerts] = useState(true);
+  // 알림 (이메일 알림 토글은 제거 — preferences.emailAlerts 는 저장만 되고 발송 로직이 읽지 않았다)
   const [pushAlerts, setPushAlerts] = useState(false);
   const [pushSupported, setPushSupported] = useState<boolean | null>(null);
   const [pushSwReady, setPushSwReady] = useState(false);
@@ -361,8 +366,6 @@ export default function SettingsPage() {
           if (typeof p.defaultModel === "string") setSelectedModel(p.defaultModel);
           if (p.responseStyle === "concise" || p.responseStyle === "default" || p.responseStyle === "verbose")
             setResponseStyle(p.responseStyle);
-          if (typeof p.theme === "string") setTheme(p.theme);
-          if (typeof p.emailAlerts === "boolean") setEmailAlerts(p.emailAlerts);
           const sh = typeof p.saveHistory === "boolean" ? p.saveHistory : true;
           const ml = typeof p.memoryLearning === "boolean" ? p.memoryLearning : true;
           setSaveHistory(sh);
@@ -404,12 +407,10 @@ export default function SettingsPage() {
       await ApiClient.put("/api/users/me/custom-instructions", {
         customInstructions: trimmed.length > 0 ? trimmed : null,
       });
-      // defaultModel/responseStyle/theme/알림/개인정보 영속화 (language 는 NEXT_LOCALE 쿠키로 완료).
+      // defaultModel/responseStyle/개인정보 영속화 (language 는 NEXT_LOCALE 쿠키, 테마는 next-themes).
       await ApiClient.put("/api/users/me/preferences", {
         defaultModel: selectedModel,
         responseStyle,
-        theme,
-        emailAlerts,
         saveHistory,
         memoryLearning,
       });
@@ -532,8 +533,9 @@ export default function SettingsPage() {
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        {/* 커넥터 탭은 7열 표(+액션 버튼 3개)라 4xl(896px) 안에선 열이 글자 단위로 꺾인다 — 그 탭만 넓힌다 */}
-        <div className={cn("mx-auto flex flex-col gap-6 lg:flex-row", tab === "connectors" ? "max-w-6xl" : "max-w-4xl")}>
+        {/* 표가 있는 탭(커넥터=서버 6열, 모델=API 키 6열)은 4xl(896px) 안에서 좌측 탭 내비와 폭을
+            나누면 열이 글자 단위로 꺾인다 — 그 탭만 넓힌다 */}
+        <div className={cn("mx-auto flex flex-col gap-6 lg:flex-row", TABLE_TABS.has(tab) ? "max-w-6xl" : "max-w-4xl")}>
           {/* 좌측 세로 탭 */}
           <nav className="flex shrink-0 gap-1 overflow-x-auto lg:w-48 lg:flex-col">
             {TABS.map((t) => {
@@ -581,12 +583,6 @@ export default function SettingsPage() {
                         o.value === "" ? { ...o, label: tSettings("languageAuto") } : o,
                       )}
                     />
-                  </FieldRow>
-                  <FieldRow
-                    title={tSettings("saveHistory.title")}
-                    description={tSettings("saveHistory.descriptionGeneral")}
-                  >
-                    <Toggle checked={saveHistory} onChange={setSaveHistory} />
                   </FieldRow>
                 </CardContent>
               </Card>
@@ -723,12 +719,6 @@ export default function SettingsPage() {
                   <CardTitle>{tSettings("tabs.notifications")}</CardTitle>
                 </CardHeader>
                 <CardContent className="py-0">
-                  <FieldRow
-                    title={tSettings("emailAlerts.title")}
-                    description={tSettings("emailAlerts.description")}
-                  >
-                    <Toggle checked={emailAlerts} onChange={setEmailAlerts} />
-                  </FieldRow>
                   <FieldRow
                     title={tSettings("pushAlerts.title")}
                     description={tSettings("pushAlerts.description")}

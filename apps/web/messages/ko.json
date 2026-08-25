@@ -102,7 +102,6 @@
     },
     "saveHistory": {
       "title": "대화 본문 저장",
-      "descriptionGeneral": "대화 내용을 서버 DB에 저장합니다. 끄면 익명 사용량 메타만 기록됩니다.",
       "descriptionPrivacy": "끄면 대화 본문은 서버에 저장되지 않습니다."
     },
     "defaultModel": {
@@ -131,10 +130,6 @@
     "theme": {
       "title": "테마",
       "description": "앱의 색상 테마를 선택합니다."
-    },
-    "emailAlerts": {
-      "title": "이메일 알림",
-      "description": "에이전트 작업 완료 및 보안 이벤트를 이메일로 받습니다."
     },
     "pushAlerts": {
       "title": "푸시 알림",
@@ -648,24 +643,6 @@
       "autoCreate": "AI 스킬 자동 생성",
       "gitIngest": "Git URL에서 스킬 가져오기"
     },
-    "fallback": {
-      "pdfSummary": {
-        "name": "PDF 요약",
-        "description": "긴 PDF 문서를 핵심 요점으로 압축합니다."
-      },
-      "sqlQuery": {
-        "name": "SQL 쿼리 작성",
-        "description": "자연어 요구사항을 파라미터화된 SQL 로 변환합니다."
-      },
-      "adCopy": {
-        "name": "광고 카피라이팅",
-        "description": "타겟 세그먼트에 맞춘 마케팅 카피를 생성합니다."
-      },
-      "financialReport": {
-        "name": "재무 보고서 해석",
-        "description": "손익계산서와 대차대조표의 핵심 지표를 해석합니다."
-      }
-    },
     "form": {
       "nameRequired": "스킬 이름을 입력하세요.",
       "contentRequired": "스킬 내용(Instructions)을 입력하세요.",
@@ -805,7 +782,6 @@
     "outputsLabel": "산출물 ({count})",
     "noSteps": "스텝 기록이 없습니다.",
     "stepsLabel": "실행 스텝 ({count})",
-    "approvalsTitle": "승인 대기 중인 도구 실행 ({count})",
     "reject": "거절",
     "approve": "승인",
     "question": "에이전트가 질문합니다",
@@ -874,8 +850,6 @@
     "pageDescription": "나만의 시스템 프롬프트로 특화된 에이전트를 정의합니다.",
     "importFromGit": "Git URL 에서 가져오기",
     "newAgent": "새 에이전트",
-    "tabActive": "활성 에이전트",
-    "tabDraft": "Draft 검토",
     "loading": "불러오는 중...",
     "emptyTitle": "아직 커스텀 에이전트가 없습니다",
     "emptyDescription": "직접 만들거나 Git URL 에서 가져와 특화된 에이전트를 추가하세요.",
@@ -920,24 +894,11 @@
     "networkError": "네트워크 오류",
     "loadingDrafts": "Draft 불러오는 중...",
     "noDraftsTitle": "승인 대기 중인 Draft가 없습니다",
-    "noDraftsDescription": "Git URL 가져오기로 생성된 에이전트가 여기 나타납니다.",
     "approve": "승인",
     "reject": "거부",
     "approveFailed": "승인 실패: {error}",
     "rejectFailed": "거부 실패: {error}",
     "rejectConfirm": "이 draft 에이전트를 거부(보관)하시겠습니까?",
-    "fallback": {
-      "techWriter": {
-        "name": "기술 문서 작성가",
-        "description": "API 레퍼런스와 아키텍처 문서를 일관된 톤으로 작성합니다.",
-        "systemPrompt": "당신은 시니어 테크니컬 라이터입니다..."
-      },
-      "reviewer": {
-        "name": "코드 리뷰어",
-        "description": "변경된 코드의 버그와 단순화 기회를 집어냅니다.",
-        "systemPrompt": "당신은 까다로운 코드 리뷰어입니다..."
-      }
-    },
     "useInChat": "채팅에서 사용",
     "inUseDeselect": "사용 중 · 해제",
     "deselect": "에이전트 해제",
@@ -1099,20 +1060,9 @@
     "noDescription": "설명이 없습니다.",
     "kindSkill": "스킬",
     "kindServer": "서버",
-    "toolCount": "도구 {count}개",
     "installed": "설치됨",
     "install": "설치",
     "installError": "설치 실패. 다시 시도해 주세요.",
-    "mock": {
-      "filesystem": "로컬 파일을 안전하게 읽고 쓰는 샌드박스 파일시스템 도구 모음.",
-      "github": "이슈, PR, 리포지토리, 코드 검색을 다루는 GitHub 연동 서버.",
-      "postgres": "읽기 전용 SQL 쿼리와 스키마 인트로스펙션을 제공하는 DB 도구.",
-      "slack": "채널 읽기, 메시지 전송, 사용자 검색 등 Slack 워크스페이스 연동.",
-      "pdfExtractName": "PDF 추출 스킬",
-      "pdfExtract": "PDF 문서에서 텍스트·표·메타데이터를 구조화해 추출하는 스킬.",
-      "webResearchName": "웹 리서치 스킬",
-      "webResearch": "다중 소스 검색·인용 검증·요약을 수행하는 딥 리서치 스킬."
-    },
     "credentialsTitle": "설치하려면 자격 증명을 입력하세요",
     "cancel": "취소"
   },
@@ -1162,14 +1112,6 @@
     "patternCount": "({count}회)",
     "improvements": "개선 제안",
     "noImprovements": "개선 제안 없음",
-    "topics": {
-      "codeReviewCitation": "코드 리뷰 응답의 근거 인용 강화",
-      "koreanHonorific": "한국어 존댓말 일관성 유지",
-      "researchSourceReliability": "딥 리서치 출처 신뢰도 표기",
-      "longSummaryOmission": "장문 요약 시 핵심 누락 감소",
-      "toolFailureGuidance": "도구 호출 실패 시 사용자 안내 개선",
-      "calcVerification": "수치 계산 검산 단계 추가"
-    },
     "status": {
       "applied": "반영됨",
       "reviewing": "검토 중",
@@ -2049,13 +1991,15 @@
     },
     "agents": {
       "title": "커스텀 에이전트",
-      "hint": "에이전트는 승인이 필요 없습니다 — 설치 즉시 사용할 수 있습니다.",
+      "hint": "확장으로 설치한 에이전트는 승인 없이 즉시 활성입니다. Git URL 가져오기로 만든 에이전트만 여기서 승인합니다.",
       "link": "에이전트 목록 열기"
     },
     "tasks": {
       "title": "에이전트 작업 승인",
       "hint": "고위험 도구 실행과 에이전트의 질문은 승인해야 작업이 이어집니다. 채팅 안에서도 바로 답할 수 있습니다.",
       "empty": "승인 대기 중인 작업이 없습니다.",
+      "autoApprove": "이 작업 자동 승인",
+      "autoApproveHint": "이 작업의 이후 도구 호출을 승인 없이 진행합니다 (에이전트의 질문은 제외)",
       "question": "질문",
       "tool": "도구 실행",
       "openTask": "작업 열기",
