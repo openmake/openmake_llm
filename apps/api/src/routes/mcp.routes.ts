@@ -41,6 +41,7 @@ import { mcpToolExecuteSchema, mcpServerCreateSchema, mcpServerEnvUpdateSchema,
 import { McpCatalogRepository } from '../data/repositories/mcp-catalog-repository';
 import { McpOAuthRepository } from '../data/repositories/mcp-oauth-repository';
 import { canRegisterServer, canViewServer, canDeleteServer, canStartStopServer, canUpdateServerEnv } from './mcp-visibility';
+import { connectGlobalServer } from './mcp-global-connect';
 import { getAuditService } from '../services/AuditService';
 import { validateOutboundUrl } from '../security/ssrf-guard';
 
@@ -464,36 +465,12 @@ export const mcpRouter = Router();
           return;
       }
 
-      const db = getUnifiedDatabase();
-      const server = await db.getMcpServerById(id);
-
-      if (!server) {
+      // 전역 서버 — /start 와 공유하는 registry 연결(복호화 포함). mcp-global-connect.ts 참고.
+      const status = await connectGlobalServer(id);
+      if (status === null) {
           res.status(404).json(notFound('서버'));
           return;
       }
-
-      // getMcpServerById 는 DB 원본(암호문 v1:)을 그대로 돌려주므로 복호화가 필수다.
-      // 빠뜨리면 암호문이 그대로 자식 프로세스 env 로 들어가 서버는 뜨고 도구 목록도
-      // 정상 등록되지만(연결 자체는 자격증명을 안 쓴다) 실제 API 호출만 401 로 실패한다.
-      // lifecycle-supervisor.safeSpawn 은 decryptEnvForSpawn 을 쓰므로 자동 spawn 경로는
-      // 정상이고, 수동 [연결] 경로만 갈라져 있었다.
-      const decryptedEnv = await repo.decryptEnvForSpawn(id);
-
-      const registry = getUnifiedMCPClient().getServerRegistry();
-      await registry.connectServer(id, {
-          id: server.id,
-          name: server.name,
-          transport_type: server.transport_type as MCPTransportType,
-          command: server.command || undefined,
-          args: server.args || undefined,
-          env: Object.keys(decryptedEnv).length > 0 ? decryptedEnv : undefined,
-          url: server.url || undefined,
-          enabled: server.enabled,
-          created_at: server.created_at,
-          updated_at: server.updated_at,
-      });
-
-      const status = registry.getServerStatus(id);
       res.json(success({ status }));
   }));
 
