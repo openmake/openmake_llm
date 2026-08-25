@@ -551,38 +551,6 @@
       "noResults": "No results found.",
       "hint": "Start a new conversation and it will appear here."
     },
-    "mock": {
-      "c1": {
-        "title": "Next.js 16 App Router migration",
-        "preview": "What should I watch out for when moving from the pages router to the app router...",
-        "time": "2:14 PM"
-      },
-      "c2": {
-        "title": "PostgreSQL index tuning",
-        "preview": "Explain how composite index order affects the query plan",
-        "time": "11:02 AM"
-      },
-      "c3": {
-        "title": "Marketing campaign copy brainstorming",
-        "preview": "Create 5 variations of social media ad copy targeting people in their 20s",
-        "time": "6:47 PM"
-      },
-      "c4": {
-        "title": "Structuring a research report",
-        "preview": "Suggest a table of contents for an enterprise LLM adoption report",
-        "time": "3:20 PM"
-      },
-      "c5": {
-        "title": "TypeScript generic type guards",
-        "preview": "How can I safely narrow a discriminated union?",
-        "time": "Monday"
-      },
-      "c6": {
-        "title": "Image analysis prompt",
-        "preview": "Read the key trends from the attached chart",
-        "time": "Sunday"
-      }
-    },
     "viewAllToggle": "All users",
     "ownerBadge": "User {id}"
   },
@@ -801,20 +769,6 @@
     "deleteFailed": "Deletion failed: {message}",
     "elapsedSec": "{s}s",
     "elapsedMinSec": "{m}m {s}s",
-    "mock": {
-      "t1Goal": "Analyze pricing on 3 competitor websites and compile a comparison table",
-      "t1Step1": "Confirm target site list",
-      "t1Step2": "Scrape each site's pricing page",
-      "t1Step3": "Normalize price data",
-      "t1Step4": "Build comparison table",
-      "t1Step5": "Write summary report",
-      "t2Goal": "Analyze monthly sales CSV and generate a report",
-      "t2Step1": "Load and validate data",
-      "t2Step2": "Aggregate by month and product",
-      "t2Step3": "Generate trend charts",
-      "t2Step4": "Export PDF report",
-      "t3Goal": "Summarize 5 recent AI papers and extract key points"
-    },
     "autoApprove": "Approve rest",
     "autoApproveHint": "Run remaining tool calls of this task without approval (questions excluded)",
     "tokensUsed": "{count} tokens",
@@ -962,18 +916,6 @@
       "progress": "Progress",
       "depth": "Depth"
     },
-    "mock": {
-      "verifiedClaims": "Claims Verified",
-      "conflicts": "Conflicts Found",
-      "tokensUsed": "Tokens Used",
-      "elapsed": "Elapsed Time",
-      "elapsedValue": "3m 12s",
-      "source1": "2026 AI Agent Market Trends Report",
-      "source2": "Multi-Agent Orchestration Architecture Analysis",
-      "source3": "Enterprise LLM Adoption Case Study",
-      "source4": "Autonomous Agent Safety Guidelines",
-      "source5": "RAG vs Long-Context Comparison Benchmark"
-    },
     "viewAllToggle": "All users",
     "ownerBadge": "User {id}"
   },
@@ -1073,7 +1015,6 @@
     "activeServers": "Active servers",
     "activeServersDelta": "of 5 total",
     "totalCalls": "Total tool calls",
-    "avgLatency": "Avg latency",
     "errorRate": "Error rate",
     "serverDistribution": "Calls by server",
     "callCount": "{count} calls",
@@ -1212,7 +1153,12 @@
       "edit": "Edit",
       "delete": "Delete"
     },
-    "empty": "No users to display."
+    "empty": "No users to display.",
+    "guard": {
+      "denied": "Admin access required",
+      "deniedDescription": "Only administrator accounts can view this page.",
+      "home": "Back to chat"
+    }
   },
   "adminAnalytics": {
     "title": "Analytics",
@@ -1690,7 +1636,6 @@
   "usage": {
     "title": "Usage",
     "description": "Token and request usage for your account.",
-    "mockData": "Mock data",
     "updatedAt": "Updated {time}",
     "refresh": "Refresh",
     "loading": "Loading...",
@@ -1744,7 +1689,8 @@
     "quotaResetAt": "Resets at {time}",
     "quotaExceeded": "You have used up the hourly quota. You can send requests again after the reset time.",
     "globalQuotaTitle": "Global quota usage (server-wide)",
-    "globalQuotaNote": "Server-wide observation that resets on process restart — separate from your personal quota"
+    "globalQuotaNote": "Server-wide observation that resets on process restart — separate from your personal quota",
+    "loadFailed": "Could not load usage"
   },
   "developer": {
     "pageTitle": "Developer Docs",

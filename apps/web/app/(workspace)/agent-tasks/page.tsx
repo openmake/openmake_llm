@@ -52,7 +52,7 @@ interface AgentTask {
   rawStatus: ApiTaskStatus;
   model: string;
   elapsed: string;
-  /** 시작(생성) 시각 ISO — 목록에서 경과시간과 함께 표시. 목업 데이터는 생략 가능. */
+  /** 시작(생성) 시각 ISO — 목록에서 경과시간과 함께 표시. */
   startedAt?: string;
   currentTurn: number;
   maxTurns: number;
@@ -197,59 +197,6 @@ function errorReasonLabel(tr: TFn, error: string): string {
   return KNOWN_ERROR_CODES.has(error)
     ? tr(`errorReason.${error}`)
     : error.length > 48 ? `${error.slice(0, 48)}…` : error;
-}
-
-/* ── 목업 폴백 ─────────────────────────────────────────────── */
-function buildTaskFallback(t: TFn): AgentTask[] {
-  return [
-  {
-    id: "t1",
-    goal: t("mock.t1Goal"),
-    status: "running",
-    rawStatus: "running",
-    model: "Pro",
-    elapsed: t("elapsedMinSec", { m: 2, s: "41" }),
-    currentTurn: 3,
-    maxTurns: 8,
-    progress: 60,
-    checklist: [
-      { label: t("mock.t1Step1"), done: true },
-      { label: t("mock.t1Step2"), done: true },
-      { label: t("mock.t1Step3"), done: true },
-      { label: t("mock.t1Step4"), done: false },
-      { label: t("mock.t1Step5"), done: false },
-    ],
-  },
-  {
-    id: "t2",
-    goal: t("mock.t2Goal"),
-    status: "completed",
-    rawStatus: "completed",
-    model: "Default",
-    elapsed: t("elapsedMinSec", { m: 5, s: "08" }),
-    currentTurn: 6,
-    maxTurns: 6,
-    progress: 100,
-    checklist: [
-      { label: t("mock.t2Step1"), done: true },
-      { label: t("mock.t2Step2"), done: true },
-      { label: t("mock.t2Step3"), done: true },
-      { label: t("mock.t2Step4"), done: true },
-    ],
-  },
-  {
-    id: "t3",
-    goal: t("mock.t3Goal"),
-    status: "pending",
-    rawStatus: "pending",
-    model: "Fast",
-    elapsed: "—",
-    currentTurn: 0,
-    maxTurns: 5,
-    progress: 0,
-    checklist: [],
-  },
-  ];
 }
 
 const STATUS_META: Record<TaskStatus, { labelKey: string; tone: "accent" | "success" | "neutral" }> = {
@@ -761,7 +708,8 @@ export default function AgentTasksPage() {
   const t = useTranslations("agentTasks");
   const locale = useLocale();
   const router = useRouter();
-  const [tasks, setTasks] = useState<AgentTask[]>(() => buildTaskFallback(t));
+  // 실데이터만 — 그전엔 목업 작업 3건(Pro/Default/Fast)이 401 시 실렌더됐다
+  const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null); // taskId being acted on
@@ -779,7 +727,7 @@ export default function AgentTasksPage() {
       );
       setTasks((res?.data?.tasks ?? []).map((task) => mapTask(t, task)));
     } catch {
-      // 401·네트워크 실패: 목업 폴백 유지
+      // 401·네트워크 실패: 빈 상태 유지
     } finally {
       setLoading(false);
     }

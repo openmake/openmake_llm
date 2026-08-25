@@ -551,38 +551,6 @@
       "noResults": "没有搜索结果。",
       "hint": "开始新对话后将显示在此处。"
     },
-    "mock": {
-      "c1": {
-        "title": "Next.js 16 App Router 迁移",
-        "preview": "从现有的 pages 路由迁移到 app 路由时需要注意什么...",
-        "time": "下午2:14"
-      },
-      "c2": {
-        "title": "PostgreSQL 索引调优",
-        "preview": "解释复合索引的顺序对查询计划的影响",
-        "time": "上午11:02"
-      },
-      "c3": {
-        "title": "营销活动文案头脑风暴",
-        "preview": "为面向20多岁人群制作5个社交媒体广告文案变体",
-        "time": "下午6:47"
-      },
-      "c4": {
-        "title": "搭建研究报告结构",
-        "preview": "为企业 LLM 采用报告提议一个目录",
-        "time": "下午3:20"
-      },
-      "c5": {
-        "title": "TypeScript 泛型类型守卫",
-        "preview": "如何安全地收窄可辨识联合类型？",
-        "time": "周一"
-      },
-      "c6": {
-        "title": "图像分析提示词",
-        "preview": "从附加的图表中解读主要趋势",
-        "time": "周日"
-      }
-    },
     "viewAllToggle": "所有用户",
     "ownerBadge": "用户 {id}"
   },
@@ -801,20 +769,6 @@
     "deleteFailed": "删除失败：{message}",
     "elapsedSec": "{s}秒",
     "elapsedMinSec": "{m}分{s}秒",
-    "mock": {
-      "t1Goal": "分析3个竞品网站的价格策略并整理成对比表",
-      "t1Step1": "确认目标网站列表",
-      "t1Step2": "抓取各网站价格页面",
-      "t1Step3": "规范化价格数据",
-      "t1Step4": "生成对比表",
-      "t1Step5": "撰写摘要报告",
-      "t2Goal": "分析月度销售CSV并生成报告",
-      "t2Step1": "加载并校验数据",
-      "t2Step2": "按月份和产品汇总",
-      "t2Step3": "生成趋势图表",
-      "t2Step4": "导出PDF报告",
-      "t3Goal": "总结5篇最新AI论文并提炼要点"
-    },
     "autoApprove": "批准其余全部",
     "autoApproveHint": "此任务后续的工具调用将无需批准直接执行（提问除外）",
     "tokensUsed": "{count} 令牌",
@@ -962,18 +916,6 @@
       "progress": "进度",
       "depth": "深度"
     },
-    "mock": {
-      "verifiedClaims": "已验证主张",
-      "conflicts": "发现的冲突",
-      "tokensUsed": "已用令牌",
-      "elapsed": "耗时",
-      "elapsedValue": "3分12秒",
-      "source1": "2026 AI 智能体市场趋势报告",
-      "source2": "多智能体编排架构分析",
-      "source3": "企业级 LLM 采用案例研究",
-      "source4": "自主智能体安全指南",
-      "source5": "RAG 与长上下文对比基准"
-    },
     "viewAllToggle": "所有用户",
     "ownerBadge": "用户 {id}"
   },
@@ -1073,7 +1015,6 @@
     "activeServers": "活跃服务器",
     "activeServersDelta": "共 5 个",
     "totalCalls": "工具调用总数",
-    "avgLatency": "平均延迟",
     "errorRate": "错误率",
     "serverDistribution": "各服务器调用分布",
     "callCount": "{count}次",
@@ -1212,7 +1153,12 @@
       "edit": "编辑",
       "delete": "删除"
     },
-    "empty": "没有可显示的用户。"
+    "empty": "没有可显示的用户。",
+    "guard": {
+      "denied": "需要管理员权限",
+      "deniedDescription": "只有管理员账号可以查看此页面。",
+      "home": "返回聊天"
+    }
   },
   "adminAnalytics": {
     "title": "分析",
@@ -1690,7 +1636,6 @@
   "usage": {
     "title": "使用量",
     "description": "按账户统计的令牌与请求使用量。",
-    "mockData": "模拟数据",
     "updatedAt": "更新于 {time}",
     "refresh": "刷新",
     "loading": "加载中...",
@@ -1744,7 +1689,8 @@
     "quotaResetAt": "{time} 重置",
     "quotaExceeded": "每小时配额已用尽。请在重置时间之后重新发送请求。",
     "globalQuotaTitle": "全局配额消耗 (服务器整体)",
-    "globalQuotaNote": "进程重启即重置的全局观测值 — 与个人配额无关"
+    "globalQuotaNote": "进程重启即重置的全局观测值 — 与个人配额无关",
+    "loadFailed": "无法加载用量"
   },
   "developer": {
     "pageTitle": "开发者文档",

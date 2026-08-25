@@ -498,30 +498,14 @@ function SystemTokenMonitor() {
   );
 }
 
-/* ── 목업 (비로그인/오류 폴백) ──────────────────────────── */
-function mockDaily(): DailyRow[] {
-  const today = new Date();
-  return Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(d.getDate() - (13 - i));
-    const base = 40 + Math.round(Math.sin(i / 2) * 25 + i * 6);
-    return {
-      date: d.toISOString().slice(0, 10),
-      totalRequests: base,
-      totalTokens: base * 1180,
-      totalErrors: i % 5 === 0 ? 1 : 0,
-      avgResponseTime: 600 + (i % 4) * 90,
-    };
-  });
-}
-
 export default function UsagePage() {
   const t = useTranslations("usage");
   const locale = toBcp47(useLocale());
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [daily, setDaily] = useState<DailyRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [usingMock, setUsingMock] = useState(false);
+  // 로드 실패(401·네트워크) 표시 — 그전엔 사인파 목업 14일치가 실렌더됐다
+  const [loadError, setLoadError] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<string>("-");
 
   const load = useCallback(async () => {
@@ -535,29 +519,11 @@ export default function UsagePage() {
       ]);
       setSummary(usageRes?.data ?? null);
       setDaily(dailyRes?.data?.daily ?? []);
-      setUsingMock(false);
+      setLoadError(false);
     } catch {
-      // TODO: API 연동 — 비로그인/오류 시 목업
-      const md = mockDaily();
-      setDaily(md);
-      const month = md.reduce(
-        (acc, r) => ({
-          totalTokens: acc.totalTokens + (r.totalTokens ?? 0),
-          totalRequests: acc.totalRequests + (r.totalRequests ?? 0),
-          totalErrors: acc.totalErrors + (r.totalErrors ?? 0),
-          avgResponseTime: acc.avgResponseTime,
-        }),
-        { totalTokens: 0, totalRequests: 0, totalErrors: 0, avgResponseTime: 712 },
-      );
-      setSummary({
-        today: { ...month, modelUsage: {} },
-        weekly: { ...month, modelUsage: {} },
-        allTime: {
-          ...month,
-          modelUsage: { default: 5200, pro: 2100, fast: 1800, code: 1100 },
-        },
-      });
-      setUsingMock(true);
+      setSummary(null);
+      setDaily([]);
+      setLoadError(true);
     } finally {
       setUpdatedAt(new Date().toLocaleTimeString(locale));
       setLoading(false);
@@ -581,7 +547,7 @@ export default function UsagePage() {
         actions={
           <div className="flex items-center gap-3">
             <span className="text-xs text-muted">
-              {usingMock ? t("mockData") : t("updatedAt", { time: updatedAt })}
+              {loadError ? t("loadFailed") : t("updatedAt", { time: updatedAt })}
             </span>
             <Button variant="outline" size="sm" onClick={() => void load()}>
               <RefreshCw className="h-4 w-4" />
