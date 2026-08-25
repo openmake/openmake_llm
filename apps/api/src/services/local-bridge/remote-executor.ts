@@ -96,9 +96,35 @@ export class RemoteExecutor implements TaskExecutor {
         }
     }
 
-    private req(payload: BridgeRequestPayload): Promise<BridgeResult> {
+    private req(payload: BridgeRequestPayload, timeoutMs?: number): Promise<BridgeResult> {
         const withFolder = this.folderRel ? { ...payload, folder: this.folderRel } : payload;
-        return getLocalBridgeRegistry().request(this.userId, withFolder, undefined, this.deviceId);
+        return getLocalBridgeRegistry().request(this.userId, withFolder, timeoutMs, this.deviceId);
+    }
+
+    /**
+     * 편집 후 진단 — 디바이스에서 컴파일러(tsc/py_compile)를 돌려 방금 고친 파일의 오류를 받는다.
+     * 모델에 새 도구를 노출하지 않고 write 계열 도구 결과에 덧붙이는 용도(plan 1단계).
+     *
+     * 다음은 모두 **null**(호출측이 조용히 생략, fail-open):
+     *   게이트 OFF · 구 디바이스(kind 미지원) · 타임아웃/오류 · 지원 도구 없음(serverKind='none')
+     * 진단 0건은 null 이 아니라 "진단 없음" 텍스트로 돌려준다 — 모델이 검사 결과를 신뢰할 수 있게.
+     */
+    async diagnostics(relPaths: string[]): Promise<{ text: string; count: number } | null> {
+        if (!LOCAL_BRIDGE.LSP_ENABLED || relPaths.length === 0) return null;
+        const r = await this.req(
+            { kind: 'lsp_diagnostics', paths: relPaths.map((p) => this.scoped(p)) },
+            LOCAL_BRIDGE.LSP_TIMEOUT_MS,
+        ).catch(() => ({ ok: false }) as BridgeResult);
+        if (!r.ok || !Array.isArray(r.diagnostics)) return null;      // 미지원·실패 → 생략
+        if (r.serverKind === 'none') return null;                     // 검사 도구 없음 → 생략
+        if (r.diagnostics.length === 0) return { text: '[진단 없음]', count: 0 };
+        // worktree prefix 는 모델이 쓰는 상대경로가 아니므로 떼어낸다(도구 인자와 표기 일치).
+        const strip = (p: string): string =>
+            this.worktreeRel && p.startsWith(`${this.worktreeRel}/`) ? p.slice(this.worktreeRel.length + 1) : p;
+        const lines = r.diagnostics.map((d) =>
+            `${strip(d.path)}:${d.line}:${d.col} ${d.severity}${d.code ? ` ${d.code}` : ''}: ${d.message}`);
+        const head = `[진단 ${r.diagnostics.length}건${r.truncated ? '+' : ''} — ${r.serverKind}]`;
+        return { text: `${head}\n${lines.join('\n')}`, count: r.diagnostics.length };
     }
 
     /** 파일 경로를 worktree 기준으로 변환. 격리가 없으면 원래 경로 그대로. */

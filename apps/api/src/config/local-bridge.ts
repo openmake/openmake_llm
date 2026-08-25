@@ -34,4 +34,15 @@ export const LOCAL_BRIDGE = {
      * 기본 ON — LOCAL_EXECUTOR_ENABLED 자체가 기본 OFF 라 이 값만으로 동작이 바뀌지 않는다.
      */
     WORKTREE_ENABLED: process.env.LOCAL_BRIDGE_WORKTREE !== 'false',
+
+    /**
+     * 편집 후 진단(LSP diagnostics-first) — 파일 쓰기 도구가 성공한 직후 디바이스에서 컴파일러
+     * 진단을 받아 도구 결과에 덧붙인다. 모델에 새 도구를 노출하지 않으므로 도구폭주 축과 무관하고,
+     * 실패·타임아웃·미지원 디바이스는 조용히 생략(fail-open)한다.
+     * 기본 OFF — 셰도우 측정(tool-errors·workflow 지표) 후 켠다.
+     */
+    LSP_ENABLED: process.env.LOCAL_BRIDGE_LSP_ENABLED === 'true',
+
+    /** 진단 1회 대기 상한(ms) — 초과 시 생략. 디바이스측 DIAG_TIMEOUT_MS 보다 짧게 잡는다. */
+    LSP_TIMEOUT_MS: parseInt(process.env.LOCAL_BRIDGE_LSP_TIMEOUT_MS || '10000', 10),
 } as const;

@@ -15,6 +15,22 @@ export interface BridgeMsg {
     message?: string;
     /** 폴더 선택 — 연결 루트 기준 상대경로. exec cwd·파일 경로·worktree base 재지정. */
     folder?: string;
+    /** lsp_diagnostics — 진단할 파일들(base 기준 상대경로). */
+    paths?: string[];
+}
+
+/** 편집 후 진단 1건 — 컴파일러/언어 서버 출력의 공통 표현. */
+export interface BridgeDiagnostic {
+    /** base 기준 상대경로(POSIX 구분자). */
+    path: string;
+    line: number;
+    col: number;
+    severity: 'error' | 'warning';
+    /** 진단 코드(TS2322 등) — 있으면. */
+    code?: string;
+    message: string;
+    /** 어느 도구가 냈는지 — 'tsc' | 'py_compile' … */
+    source: string;
 }
 
 export interface BridgeResult {
@@ -30,6 +46,10 @@ export interface BridgeResult {
     branch?: string;
     kept?: boolean;
     truncated?: boolean;
+    /** lsp_diagnostics 결과. 빈 배열 = 진단 없음(도구가 돌았고 문제가 없었다). */
+    diagnostics?: BridgeDiagnostic[];
+    /** 어떤 검사기가 돌았는지 — 'none' 이면 지원 도구가 없어 검사하지 않았다(진단 없음과 구분). */
+    serverKind?: string;
 }
 
 /**

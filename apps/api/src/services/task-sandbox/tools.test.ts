@@ -74,6 +74,53 @@ describe('task-sandbox tools', () => {
         expect(okSub.isError).toBeFalsy();
     });
 
+    describe('편집 후 진단 부착(LSP diagnostics-first)', () => {
+        /** 진단을 지원하는 가짜 실행기 — 로컬 브리지 RemoteExecutor 자리. */
+        function sandboxWithDiag(result: { text: string; count: number } | null | (() => never)) {
+            const sb = fakeSandbox() as unknown as Record<string, unknown> & { diagCalls: string[][] };
+            sb.diagCalls = [];
+            sb.diagnostics = async (paths: string[]) => {
+                sb.diagCalls.push(paths);
+                if (typeof result === 'function') result();
+                return result;
+            };
+            return sb as unknown as TaskSandbox & { diagCalls: string[][] };
+        }
+
+        it('write 성공 결과에 진단을 덧붙이고, 편집한 경로만 넘긴다', async () => {
+            const sb = sandboxWithDiag({ text: '[진단 1건 — tsc]\na.ts:1:7 error TS2322: bad', count: 1 });
+            const r = await byName(createTaskTools(sb), 'file_ops').handler({ op: 'write', path: 'a.ts', content: 'x' });
+            expect(txt(r)).toBe('기록됨: a.ts\n[진단 1건 — tsc]\na.ts:1:7 error TS2322: bad');
+            expect((sb as unknown as { diagCalls: string[][] }).diagCalls).toEqual([['a.ts']]);
+        });
+
+        it('str_replace_editor create/str_replace/insert 에도 붙는다', async () => {
+            const sb = sandboxWithDiag({ text: '[진단 없음]', count: 0 });
+            const ed = byName(createTaskTools(sb), 'str_replace_editor');
+            expect(txt(await ed.handler({ command: 'create', path: 'a.ts', file_text: 'a' }))).toContain('[진단 없음]');
+            expect(txt(await ed.handler({ command: 'str_replace', path: 'a.ts', old_str: 'a', new_str: 'b' }))).toContain('[진단 없음]');
+            expect(txt(await ed.handler({ command: 'insert', path: 'a.ts', insert_line: 0, new_str: 'c' }))).toContain('[진단 없음]');
+        });
+
+        it('null(게이트 OFF·미지원·타임아웃)이면 원문 그대로', async () => {
+            const sb = sandboxWithDiag(null);
+            const r = await byName(createTaskTools(sb), 'file_ops').handler({ op: 'write', path: 'a.ts', content: 'x' });
+            expect(txt(r)).toBe('기록됨: a.ts');
+        });
+
+        it('진단 조회가 던져도 편집 결과를 가리지 않는다(fail-open)', async () => {
+            const sb = sandboxWithDiag(() => { throw new Error('boom'); });
+            const r = await byName(createTaskTools(sb), 'file_ops').handler({ op: 'write', path: 'a.ts', content: 'x' });
+            expect(txt(r)).toBe('기록됨: a.ts');
+            expect(r.isError).toBeFalsy();
+        });
+
+        it('진단 미지원 실행기(샌드박스)는 종전과 동일', async () => {
+            const r = await byName(createTaskTools(fakeSandbox()), 'file_ops').handler({ op: 'write', path: 'a.ts', content: 'x' });
+            expect(txt(r)).toBe('기록됨: a.ts');
+        });
+    });
+
     describe('str_replace_editor', () => {
         it('create → view 왕복', async () => {
             const sb = fakeSandbox();
