@@ -532,7 +532,8 @@ export default function SettingsPage() {
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        <div className="mx-auto flex max-w-4xl flex-col gap-6 lg:flex-row">
+        {/* 커넥터 탭은 7열 표(+액션 버튼 3개)라 4xl(896px) 안에선 열이 글자 단위로 꺾인다 — 그 탭만 넓힌다 */}
+        <div className={cn("mx-auto flex flex-col gap-6 lg:flex-row", tab === "connectors" ? "max-w-6xl" : "max-w-4xl")}>
           {/* 좌측 세로 탭 */}
           <nav className="flex shrink-0 gap-1 overflow-x-auto lg:w-48 lg:flex-col">
             {TABS.map((t) => {

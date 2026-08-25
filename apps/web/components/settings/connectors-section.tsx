@@ -48,7 +48,6 @@ interface McpServer {
   errorCode: string | null;
   /** 원인 원문 (코드만으로 부족한 진단용 — tooltip) */
   errorDetail: string | null;
-  latencyMs: number | null;
   lastChecked: string;
   /** 편집 가능한 env 키 목록 (값은 서버가 마스킹하므로 키만 다룬다) */
   envKeys: string[];
@@ -117,8 +116,6 @@ function mapServer(s: ApiMcpServer, t: Translator): McpServer {
     oauthConnected: s.oauthConnected === true,
     errorCode: s.connectionStatus === "connected" ? null : (s.connectionErrorCode ?? null),
     errorDetail: s.connectionStatus === "connected" ? null : (s.connectionError ?? null),
-    // 백엔드는 지연(latency) 수치를 제공하지 않음 — 표시 생략
-    latencyMs: null,
     lastChecked: relativeTime(s.lastPing, t),
     envKeys: Object.keys(s.env ?? {}),
     secretKeys: Object.entries(s.env ?? {})
@@ -344,7 +341,6 @@ function buildMockServers(t: Translator): McpServer[] {
     oauthConnected: false,
     errorCode: null,
     errorDetail: null,
-    latencyMs: 12,
     lastChecked: t("justNow"),
     envKeys: [],
     secretKeys: [],
@@ -361,7 +357,6 @@ function buildMockServers(t: Translator): McpServer[] {
     oauthConnected: false,
     errorCode: null,
     errorDetail: null,
-    latencyMs: 184,
     lastChecked: t("minutesAgo", { count: 1 }),
     envKeys: [],
     secretKeys: [],
@@ -378,7 +373,6 @@ function buildMockServers(t: Translator): McpServer[] {
     oauthConnected: false,
     errorCode: null,
     errorDetail: null,
-    latencyMs: 842,
     lastChecked: t("minutesAgo", { count: 2 }),
     envKeys: [],
     secretKeys: [],
@@ -395,7 +389,6 @@ function buildMockServers(t: Translator): McpServer[] {
     oauthConnected: false,
     errorCode: null,
     errorDetail: null,
-    latencyMs: 76,
     lastChecked: t("minutesAgo", { count: 3 }),
     envKeys: [],
     secretKeys: [],
@@ -412,7 +405,6 @@ function buildMockServers(t: Translator): McpServer[] {
     oauthConnected: false,
     errorCode: null,
     errorDetail: null,
-    latencyMs: null,
     lastChecked: t("minutesAgo", { count: 12 }),
     envKeys: [],
     secretKeys: [],
@@ -675,12 +667,13 @@ export function ConnectorsSection() {
         <div className="overflow-x-auto rounded-lg border border-border">
           <Table>
             <thead>
-              <tr>
+              {/* 열 폭이 모자라면 헤더 글자가 세로로 꺾이던 것 — 줄바꿈 대신 Table 의 가로 스크롤에 맡긴다 */}
+              <tr className="whitespace-nowrap">
                 <Th>{t("colName")}</Th>
                 <Th>{t("colType")}</Th>
                 <Th className="text-right">{t("colToolCount")}</Th>
                 <Th>{t("colStatus")}</Th>
-                <Th className="text-right">{t("colLatency")}</Th>
+                {/* 지연(latency) 열은 제거 — 백엔드가 수치를 제공하지 않아 항상 "—" 였고 폭만 차지했다 */}
                 <Th>{t("colLastChecked")}</Th>
                 <Th>{t("colAction")}</Th>
               </tr>
@@ -688,13 +681,13 @@ export function ConnectorsSection() {
             <tbody>
               {loading ? (
                 <tr>
-                  <Td colSpan={7}>
+                  <Td colSpan={6}>
                     <div className="py-12 text-center text-muted">{t("loading")}</div>
                   </Td>
                 </tr>
               ) : servers.length === 0 ? (
                 <tr>
-                  <Td colSpan={7}>
+                  <Td colSpan={6}>
                     <div className="py-12 text-center text-muted">
                       {t("emptyServers")}
                     </div>
@@ -712,15 +705,15 @@ export function ConnectorsSection() {
                           <span className="font-medium text-fg">{s.name}</span>
                         </div>
                       </Td>
-                      <Td>
+                      <Td className="whitespace-nowrap">
                         <Badge tone={TRANSPORT_TONE[s.transport]}>
                           <span className="font-mono">{s.transport}</span>
                         </Badge>
                       </Td>
-                      <Td className="text-right font-mono text-fg">
+                      <Td className="whitespace-nowrap text-right font-mono text-fg">
                         {s.toolCount}
                       </Td>
-                      <Td>
+                      <Td className="min-w-[13rem]">
                         {/* 사용 안 함이 연결 상태보다 우선 — 안 쓰기로 한 서버에 "연결 안 됨"만
                             보이면 고장난 것처럼 읽힌다. 자동 연결을 끈 채 실패한 적 없는 서버도
                             같은 이유로 "대기 중"(중립) — 시작을 안 한 것이지 끊긴 게 아니다 */}
@@ -746,7 +739,7 @@ export function ConnectorsSection() {
                                 type="button"
                                 disabled={isActing}
                                 onClick={() => void handleOAuthLogin(s.id)}
-                                className="ml-1 inline-flex items-center gap-1 font-medium text-accent hover:underline disabled:opacity-50"
+                                className="ml-1 inline-flex items-center gap-1 whitespace-nowrap font-medium text-accent hover:underline disabled:opacity-50"
                               >
                                 <LogIn className="h-3 w-3" />{t("oauthLogin")}
                               </button>
@@ -754,22 +747,10 @@ export function ConnectorsSection() {
                           </div>
                         )}
                       </Td>
-                      <Td className="text-right font-mono">
-                        {s.latencyMs == null ? (
-                          <span className="text-faint">—</span>
-                        ) : (
-                          <span
-                            className={
-                              s.latencyMs > 500 ? "text-warn" : "text-fg-2"
-                            }
-                          >
-                            {s.latencyMs}ms
-                          </span>
-                        )}
-                      </Td>
-                      <Td className="text-faint">{s.lastChecked}</Td>
-                      <Td>
-                        <div className="flex items-center gap-1">
+                      <Td className="whitespace-nowrap text-faint">{s.lastChecked}</Td>
+                      <Td className="whitespace-nowrap">
+                        {/* 폭이 모자라면 버튼 글자를 꺾는 대신 버튼 단위로 다음 줄에 감싼다 */}
+                        <div className="flex flex-wrap items-center gap-1">
                           <Button
                             variant="outline"
                             size="sm"
