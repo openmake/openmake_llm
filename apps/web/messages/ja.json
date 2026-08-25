@@ -1185,10 +1185,6 @@
       "guest": "ゲスト"
     },
     "quickLinks": {
-      "users": {
-        "title": "ユーザー管理",
-        "desc": "アカウント作成・権限・ステータス管理"
-      },
       "models": {
         "title": "モデル・MCP 設定",
         "desc": "モデルプリセットとツールカタログ"
@@ -1200,7 +1196,6 @@
     },
     "stats": {
       "totalUsers": "総ユーザー数",
-      "totalUsersDelta": "+12（過去7日間）",
       "activeSessions": "アクティブセッション",
       "todayRequests": "本日のリクエスト",
       "systemStatus": "システム状態",
@@ -1243,10 +1238,8 @@
       "90d": "90日"
     },
     "stats": {
-      "totalConversations": "総会話数",
       "activeUsers": "アクティブユーザー",
-      "consumedTokens": "消費トークン",
-      "avgResponse": "平均応答"
+      "consumedTokens": "消費トークン"
     },
     "col": {
       "model": "モデル",
@@ -1265,7 +1258,8 @@
       "4": "木",
       "5": "金",
       "6": "土"
-    }
+    },
+    "noData": "表示するデータがありません。"
   },
   "adminConversations": {
     "title": "全会話の閲覧",
@@ -1325,12 +1319,8 @@
     "filter": {
       "allActions": "すべてのアクション"
     },
-    "severity": {
-      "all": "すべての重大度"
-    },
     "status": {
       "critical": "重大",
-      "warn": "警告",
       "info": "情報"
     },
     "period": {
@@ -1343,8 +1333,7 @@
       "time": "時刻",
       "actor": "実行者",
       "action": "アクション",
-      "target": "対象",
-      "severity": "重大度"
+      "target": "対象"
     },
     "empty": "条件に一致するログはありません。"
   },
@@ -1355,13 +1344,9 @@
     "refresh": "更新",
     "stat": {
       "cpu": "CPU使用率",
-      "memory": "メモリ",
-      "requestRate": "リクエスト率",
-      "errorRate": "エラー率"
+      "memory": "メモリ"
     },
     "memoryDelta": "全{total} GB中",
-    "requestChartTitle": "リクエスト率（過去24時間 · req/min）",
-    "barTooltip": "{hour}時: {value}/min",
     "nodeStatusTitle": "ノード · サービス状態",
     "nodeRoleLlm": "LLMノード",
     "th": {
@@ -1434,14 +1419,13 @@
         "discussionHits": "討論意図の的中",
         "delegateHits": "委任意図の的中"
       }
-    }
+    },
+    "noNodes": "報告されたクラスタノードはありません。"
   },
   "adminAlerts": {
     "title": "アラート",
     "description": "アラートルールを管理し、最近発生したイベントを確認します。",
-    "addRule": "ルールを追加",
     "rulesTitle": "アラートルール",
-    "toggleAria": "ルールの有効切り替え",
     "enabled": "有効",
     "disabled": "無効",
     "recentTitle": "最近のアラート",
@@ -1452,29 +1436,9 @@
       "warning": "警告",
       "info": "情報"
     },
-    "rules": {
-      "cpu": {
-        "name": "CPU使用率のしきい値",
-        "condition": "CPU > 85% · 5分間継続"
-      },
-      "contextOverflow": {
-        "name": "LLMコンテキストオーバーフロー",
-        "condition": "ContextOverflowError発生"
-      },
-      "errorRate": {
-        "name": "エラー率の急増",
-        "condition": "5xx率 > 2%"
-      },
-      "tokenQuota": {
-        "name": "トークンクォータの枯渇",
-        "condition": "週間クォータ90%超過"
-      },
-      "roleChange": {
-        "name": "管理者権限の変更",
-        "condition": "user.role_change → admin"
-      }
-    },
-    "empty": "最近発生したアラートはありません。"
+    "empty": "最近発生したアラートはありません。",
+    "rulesMovedHint": "アラートルール（しきい値・チャネル）はコード設定とシステム設定（alerts グループ）で管理します。この画面は発生履歴のみ表示します。",
+    "rulesMovedLink": "システム設定を開く"
   },
   "adminMcpCatalog": {
     "close": "閉じる",
