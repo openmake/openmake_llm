@@ -53,7 +53,7 @@ export function DeveloperTabs() {
 /**
  * 관리자 허브 — 관측(대시보드~에이전트 학습) + 관리(감사 로그~모델 역할) 전체 탭.
  * 2차 통폐합으로 사이드바 관리자 항목이 /admin 하나로 줄면서 나머지가 탭으로 편입됐다.
- * /mcp-monitoring·/agent-learning 은 라우트 가드가 없어 비관리자도 URL 로 도달할 수 있다 —
+ * /admin/* 는 admin/layout.tsx 가드가 막지만, 탭 자체도 admin 역할에서만 렌더한다 —
  * 그 경우 /admin 계열 링크를 노출하지 않도록 admin 역할에서만 렌더.
  */
 export function AdminTabs() {
@@ -69,8 +69,6 @@ export function AdminTabs() {
         { href: "/admin/analytics", label: tNav("items.analytics") },
         { href: "/admin/metrics", label: tNav("items.metrics") },
         { href: "/admin/mcp-monitoring", label: tNav("items.mcpMonitoring") },
-        { href: "/admin/agent-learning", label: tNav("items.agentLearning") },
-        { href: "/admin/agent-suggestions", label: tNav("items.agentSuggestionsAdmin") },
         { href: "/admin/audit", label: tNav("items.auditLog") },
         { href: "/admin/alerts", label: tNav("items.alerts") },
         { href: "/admin/mcp-catalog", label: tNav("items.mcpCatalogAdmin") },

@@ -11,7 +11,6 @@
       "skillLibrary": "技能库",
       "artifacts": "工件",
       "mcpMonitoring": "MCP监控",
-      "agentLearning": "智能体学习",
       "settings": "设置",
       "usage": "使用量",
       "admin": "管理员",
@@ -25,7 +24,6 @@
       "systemSettingsAdmin": "系统设置",
       "developer": "开发者",
       "schedulesAdmin": "任务计划",
-      "agentSuggestionsAdmin": "提示词建议",
       "approvals": "待审批"
     },
     "pendingApprovals": "{count} 个待批准 — 代理任务正在等待您的批准"
@@ -1032,33 +1030,6 @@
     "colLastCrash": "最后崩溃",
     "crashTrend": "崩溃趋势 (24h)"
   },
-  "agentLearning": {
-    "title": "智能体学习",
-    "description": "跟踪基于用户反馈的智能体改进情况。",
-    "collectedFeedback": "已收集反馈",
-    "collectedFeedbackDelta": "+126 本周",
-    "appliedImprovements": "已应用改进",
-    "pendingLabel": "待处理",
-    "agentDetailAnalysis": "智能体详细分析",
-    "learningItems": "学习项",
-    "emptyLearningItems": "暂无收集的学习项。",
-    "loadingAgent": "正在加载智能体数据...",
-    "qualityScore": "质量评分",
-    "totalFeedbackCount": "共 {count} 条反馈",
-    "avgRatingValue": "平均评分 {rating}",
-    "noQualityData": "暂无质量数据",
-    "noData": "暂无数据",
-    "failurePatterns": "失败模式",
-    "noFailurePatterns": "暂无记录的失败模式",
-    "patternCount": "({count}次)",
-    "improvements": "改进建议",
-    "noImprovements": "暂无改进建议",
-    "status": {
-      "applied": "已反映",
-      "reviewing": "审核中",
-      "pending": "待处理"
-    }
-  },
   "auth": {
     "login": {
       "subtitle": "登录以继续",
@@ -1826,33 +1797,6 @@
       "sourceAll": "全部来源 ({count})",
       "searchAria": "关键词搜索",
       "searchPlaceholder": "搜索名称/描述"
-    }
-  },
-  "adminSuggestions": {
-    "title": "提示词建议审核",
-    "description": "审批自我改进循环生成的智能体提示词改进建议。",
-    "note": "只有已批准的建议才会注入到该智能体的系统提示词中。已拒绝的建议不会再次提出。",
-    "listTitle": "建议 ({count} 条)",
-    "refresh": "刷新",
-    "empty": "没有该状态的建议。",
-    "loadError": "无法加载建议列表。",
-    "actionError": "状态变更失败。",
-    "approve": "批准",
-    "reject": "拒绝",
-    "sourcePatterns": "依据模式: {patterns}",
-    "filter": {
-      "pending": "待处理",
-      "approved": "已批准",
-      "rejected": "已拒绝",
-      "all": "全部"
-    },
-    "cols": {
-      "agent": "智能体",
-      "suggestion": "建议内容",
-      "quality": "质量分",
-      "status": "状态",
-      "createdAt": "创建",
-      "action": "操作"
     }
   },
   "mcpInstances": {
