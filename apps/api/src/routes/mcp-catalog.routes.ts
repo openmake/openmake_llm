@@ -17,6 +17,8 @@ import { McpFromCatalogPayloadSchema } from '../schemas/mcp-catalog.schema';
 import type { McpFromCatalogPayload } from '../schemas/mcp-catalog.schema';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { getLifecycleSupervisor } from '../mcp/lifecycle-supervisor';
+import { getUnifiedMCPClient } from '../mcp';
+import { connectGlobalServer } from './mcp-global-connect';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('McpCatalogRoutes');
@@ -162,9 +164,23 @@ mcpCatalogRouter.post('/servers/:id/start', requireAuth, asyncHandler(async (req
         res.status(403).json(forbidden('start 권한 없음'));
         return;
     }
-    // ownerId: user_private/user_shared 는 server.user_id, global 은 actor.id
-    // — supervisor 내부에서 owner 불일치 시 throw
-    const ownerId = server.user_id ?? actor.id;
+    // 전역 서버는 유저풀이 아니라 전역 registry 로 — /connect 와 같은 경로(mcp-global-connect.ts).
+    // 그전엔 `spawnUserServer(actor.id, …)` 로 보내 supervisor 가 `서버 소유자 불일치` 로 throw
+    // → 500 + 전역 서버에 actor 명의 crashed 이력이 남았다(2026-08-25 noapi-google-search 실측).
+    if (server.visibility === 'global') {
+        try {
+            const status = await connectGlobalServer(server.id);
+            logger.info(`start 성공(global) s=${server.id} actor=${actor.id}`);
+            res.status(202).json(success({ status: status?.status ?? 'running' }));
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            logger.error(`start 실패(global) s=${server.id}: ${msg}`);
+            res.status(500).json({ ok: false, error: msg });
+        }
+        return;
+    }
+
+    const ownerId = String(server.user_id);
     const supervisor = getLifecycleSupervisor();
     if (!supervisor) {
         res.status(503).json({ ok: false, error: 'lifecycle-supervisor 미초기화' });
@@ -197,7 +213,14 @@ mcpCatalogRouter.post('/servers/:id/stop', requireAuth, asyncHandler(async (req:
         res.status(403).json(forbidden('stop 권한 없음'));
         return;
     }
-    const ownerId = server.user_id ?? actor.id;
+    // start 와 대칭 — 전역 서버는 registry 에 떠 있으므로 유저풀 kill 은 no-op 이고
+    // actor 명의 'stopped' 이력만 남기던 것을 registry 해제로 바꾼다.
+    if (server.visibility === 'global') {
+        await getUnifiedMCPClient().getServerRegistry().disconnectServer(server.id).catch(() => { /* 미등록이면 무시 */ });
+        res.status(202).json(success({ status: 'stopped' }));
+        return;
+    }
+    const ownerId = String(server.user_id);
     const supervisor = getLifecycleSupervisor();
     if (supervisor) {
         await supervisor.killUserServer(ownerId, server.id).catch(e => {
