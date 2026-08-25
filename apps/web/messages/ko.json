@@ -2058,5 +2058,23 @@
       "sendAnswer": "답변 보내기",
       "actionFailed": "처리 실패: {error}"
     }
+  },
+  "marketplacePublish": {
+    "title": "마켓플레이스에 게시",
+    "description": "내가 만든 스킬·에이전트·MCP 설정을 플러그인으로 묶어 {repo} 에 PR 로 올립니다. 리뷰 후 머지되면 카탈로그에서 설치할 수 있습니다.",
+    "namePlaceholder": "플러그인 이름 (소문자·숫자·대시, 예: my-devops-pack)",
+    "descPlaceholder": "한 줄 설명",
+    "skills": "스킬",
+    "agents": "커스텀 에이전트",
+    "mcp": "MCP 서버",
+    "none": "후보 없음 (확장에서 설치한 항목은 제외)",
+    "envPlaceholders": "env {n}개 → 자리표시자",
+    "secretNote": "MCP 자격증명 값은 내보내지 않습니다 — 키 이름만 ${KEY} 자리표시자로 실립니다.",
+    "tokenPlaceholder": "GitHub 토큰 (서버 설정이 있으면 비워도 됨)",
+    "publish": "PR 만들기 ({n}개)",
+    "adminOnly": "게시는 관리자만 가능합니다",
+    "prCreated": "PR 이 생성되었습니다 — 열기",
+    "prDetail": "브랜치 {branch} · 파일 {files}개",
+    "missing": "일부 항목은 소유·활성 조건을 넘지 못해 빠졌습니다."
   }
 }

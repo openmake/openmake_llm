@@ -48,6 +48,10 @@ export interface EnvConfig {
     oauthRedirectUri: string;
     /** 원격 MCP OAuth 콜백의 origin 강제 (선택). 미설정 시 OAUTH_REDIRECT_URI 의 origin 에서 유도 */
     mcpOAuthRedirectBase?: string;
+    /** 마켓플레이스 게시 레포 (owner/repo). 미설정 시 openmake/openmake-marketplace */
+    marketplaceRepo?: string;
+    /** 마켓플레이스 게시 GitHub 토큰 폴백 (body.accessToken 우선) */
+    marketplacePublishToken?: string;
 
     // CORS
     corsOrigins: string;
@@ -334,6 +338,8 @@ export function loadConfig(): EnvConfig {
         KAKAO_CLIENT_SECRET: env('KAKAO_CLIENT_SECRET'),
         OAUTH_REDIRECT_URI: env('OAUTH_REDIRECT_URI'),
         MCP_OAUTH_REDIRECT_BASE: env('MCP_OAUTH_REDIRECT_BASE'),
+        MARKETPLACE_REPO: env('MARKETPLACE_REPO'),
+        MARKETPLACE_PUBLISH_TOKEN: env('MARKETPLACE_PUBLISH_TOKEN'),
         DB_POOL_MAX: env('DB_POOL_MAX'),
         DB_POOL_MIN: env('DB_POOL_MIN'),
         CORS_ORIGINS: env('CORS_ORIGINS'),
@@ -447,6 +453,8 @@ export function loadConfig(): EnvConfig {
         kakaoClientSecret: parsed.KAKAO_CLIENT_SECRET ?? DEFAULT_CONFIG.kakaoClientSecret,
         oauthRedirectUri: parsed.OAUTH_REDIRECT_URI ?? DEFAULT_CONFIG.oauthRedirectUri,
         mcpOAuthRedirectBase: parsed.MCP_OAUTH_REDIRECT_BASE || undefined,
+        marketplaceRepo: parsed.MARKETPLACE_REPO || undefined,
+        marketplacePublishToken: parsed.MARKETPLACE_PUBLISH_TOKEN || undefined,
 
         // CORS
         corsOrigins: parsed.CORS_ORIGINS ?? DEFAULT_CONFIG.corsOrigins,

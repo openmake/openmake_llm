@@ -6,6 +6,7 @@ import { Package, Trash2, Loader2, ChevronDown, ChevronLeft, ChevronRight, Puzzl
 import { Button, Card, CardHeader, CardTitle, CardContent } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
+import { MarketplacePublishSection } from "@/components/settings/marketplace-publish-section";
 import { useAppStore } from "@/lib/store";
 
 interface UserExtension {
@@ -750,6 +751,7 @@ export function ExtensionsSection() {
           )}
         </div>
       </CardContent>
+      <MarketplacePublishSection />
     </Card>
   );
 }
