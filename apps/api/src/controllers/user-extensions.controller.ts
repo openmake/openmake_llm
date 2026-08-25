@@ -84,10 +84,13 @@ async function buildIngestService() {
     const { GitFetcher } = await import('../agents/git-ingest/git-fetcher');
     const { LLMClient } = await import('../llm/client');
     const { SKILL_CREATOR } = await import('../config/constants');
+    const { MarketplaceBundleRepository } = await import('../data/repositories/marketplace-bundle-repository');
     return new ExtensionIngestService({
         pool: getPool(),
         llmClientFactory: (model: string) => new LLMClient(model ? { model } : {}),
         fetcherFactory: (opts) => new GitFetcher({ accessToken: opts.accessToken, timeoutMs: SKILL_CREATOR.gitFetchTimeout }),
+        // 갤러리에 게시된 내부 번들(internal://bundle/<id>) 설치 — DB 에서 파일을 읽는다
+        internalBundleLoader: (id) => new MarketplaceBundleRepository(getPool()).load(id),
     });
 }
 

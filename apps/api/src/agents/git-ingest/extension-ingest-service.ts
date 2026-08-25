@@ -25,7 +25,8 @@ import type { LLMClient } from '../../llm/client';
 import { createLogger } from '../../utils/logger';
 import { parseGitUrl } from '../../schemas/git-ingest.schema';
 import { GitFetcher } from './git-fetcher';
-import { ArchiveFetcher, isArchiveUrl, archivePseudoRepo } from './archive-fetcher';
+import { ArchiveFetcher } from './archive-fetcher';
+import { InternalBundleFetcher, isInternalBundleUrl, isNonGitSourceUrl, nonGitPseudoRepo, type LoadedBundle } from './internal-bundle-fetcher';
 import { fetchCatalogSnapshot as fetchCatalogSnapshotImpl, buildSkillDiscoveryPattern, type CatalogSnapshot } from './catalog-snapshot';
 import { translateCatalogDescriptions } from './catalog-translator';
 // 기존 import 경로 호환 재노출 (테스트 등이 이 모듈에서 import)
@@ -71,13 +72,20 @@ export interface ExtensionIngestOptions {
     fetcherFactory: (opts: { accessToken?: string }) => GitFetcher;
     /** .zip 아카이브 소스용 fetcher (테스트 주입용 — 기본은 ArchiveFetcher) */
     archiveFetcherFactory?: (url: string) => GitFetcher;
+    /** 내부 번들(internal://bundle/<id>) 로더 — 갤러리 게시분 설치용. 미주입 시 내부 소스는 실패한다 */
+    internalBundleLoader?: (id: string) => Promise<LoadedBundle | null>;
 }
 
 export class ExtensionIngestService {
     constructor(private opts: ExtensionIngestOptions) {}
 
-    /** .zip 아카이브 fetcher 생성 — GitFetcher 동형 (duck-typed). */
+    /** git 이 아닌 소스(.zip 아카이브 · 내부 번들) fetcher 생성 — GitFetcher 동형 (duck-typed). */
     private makeArchiveFetcher(url: string): GitFetcher {
+        if (isInternalBundleUrl(url)) {
+            const loader = this.opts.internalBundleLoader;
+            if (!loader) throw new Error('INTERNAL_BUNDLE_UNSUPPORTED: internalBundleLoader 미주입');
+            return new InternalBundleFetcher(url, loader) as unknown as GitFetcher;
+        }
         if (this.opts.archiveFetcherFactory) return this.opts.archiveFetcherFactory(url);
         return new ArchiveFetcher(url, {
             maxArchiveBytes: EXTENSION_INGEST.archiveMaxBytes,
@@ -92,8 +100,8 @@ export class ExtensionIngestService {
         }
 
         // (1) URL parse — .zip 아카이브 URL 은 pseudo repo (ArchiveFetcher 가 owner/repo 무시)
-        const isArchive = isArchiveUrl(input.gitUrl);
-        const parsed = isArchive ? archivePseudoRepo(input.gitUrl) : parseGitUrl(input.gitUrl);
+        const isArchive = isNonGitSourceUrl(input.gitUrl);
+        const parsed = isArchive ? nonGitPseudoRepo(input.gitUrl) : parseGitUrl(input.gitUrl);
         if (!parsed) throw new Error(`INVALID_GIT_URL: ${input.gitUrl}`);
         let { owner, repo } = parsed;
         // marketplace 엔트리가 다른 저장소/고정 ref 를 가리킬 수 있어 effective 값으로 관리
@@ -406,8 +414,8 @@ export class ExtensionIngestService {
         accessToken?: string;
     }): Promise<UpdateCheckResult> {
         // 아카이브 소스: 재다운로드 sha256 을 latestRef 로 사용 (내용 변경 감지)
-        const isArchive = isArchiveUrl(input.sourceUrl);
-        const parsed = isArchive ? archivePseudoRepo(input.sourceUrl) : parseGitUrl(input.sourceUrl);
+        const isArchive = isNonGitSourceUrl(input.sourceUrl);
+        const parsed = isArchive ? nonGitPseudoRepo(input.sourceUrl) : parseGitUrl(input.sourceUrl);
         if (!parsed) throw new Error(`INVALID_GIT_URL: ${input.sourceUrl}`);
         const fetcher = isArchive
             ? this.makeArchiveFetcher(input.sourceUrl)

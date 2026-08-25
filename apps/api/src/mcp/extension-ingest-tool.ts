@@ -13,6 +13,8 @@
  * @module mcp/extension-ingest-tool
  */
 import type { MCPToolDefinition, MCPToolResult } from './types';
+import { getPool } from '../data/models/unified-database';
+import { MarketplaceBundleRepository } from '../data/repositories/marketplace-bundle-repository';
 import type { UserContext } from './user-sandbox';
 import { createLogger } from '../utils/logger';
 import { isAdminRole } from '../data/user-manager';
@@ -86,6 +88,7 @@ export const importExtensionFromGitTool: MCPToolDefinition<ImportExtensionFromGi
                 pool: getUnifiedDatabase().getPool(),
                 llmClientFactory: (model: string) => new LLMClient(model ? { model } : {}),
                 fetcherFactory: (opts) => new GitFetcher({ accessToken: opts.accessToken, timeoutMs: SKILL_CREATOR.gitFetchTimeout }),
+                internalBundleLoader: (id) => new MarketplaceBundleRepository(getPool()).load(id),
             });
 
             const result = await service.import({

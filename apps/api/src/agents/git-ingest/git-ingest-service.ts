@@ -23,7 +23,7 @@ import type { LLMClient } from '../../llm/client';
 import { createLogger } from '../../utils/logger';
 import { parseGitUrl, type ImportFromGitInput } from '../../schemas/git-ingest.schema';
 import { GitFetcher } from './git-fetcher';
-import { isArchiveUrl, archivePseudoRepo } from './archive-fetcher';
+import { isNonGitSourceUrl, nonGitPseudoRepo } from './internal-bundle-fetcher';
 import { scanForSkillManifests, type ManifestCandidate } from './repo-scanner';
 import { ConventionChecker, type ConventionFinding } from './convention-checker';
 import { parseSkillFile, validateManifest } from '../manifest-validator';
@@ -91,7 +91,7 @@ export class GitIngestService {
         // (1) URL parse — .zip 아카이브 URL 은 pseudo repo 로 수용 (확장 번들 체인 경로,
         //     fetcherFactory 가 ArchiveFetcher 를 주입하며 owner/repo 인자는 무시됨)
         const parsed = parseGitUrl(input.gitUrl)
-            ?? (isArchiveUrl(input.gitUrl) ? archivePseudoRepo(input.gitUrl) : null);
+            ?? (isNonGitSourceUrl(input.gitUrl) ? nonGitPseudoRepo(input.gitUrl) : null);
         if (!parsed) throw new Error(`INVALID_GIT_URL: ${input.gitUrl}`);
         const { owner, repo } = parsed;
 
