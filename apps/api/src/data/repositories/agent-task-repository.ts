@@ -71,7 +71,8 @@ export class AgentTaskRepository extends BaseRepository {
         progress?: number;
         currentTurn?: number;
         result?: string;
-        error?: string;
+        /** null = 이전 시도의 실패 사유 제거(재개/재실행으로 완료된 작업). undefined = 변경 없음. */
+        error?: string | null;
         checkpoint?: unknown;
         sandboxContainerId?: string;
         workspacePath?: string;
