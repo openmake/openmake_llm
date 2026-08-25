@@ -154,6 +154,10 @@ describeOrSkip('mcp-server-ingest.routes', () => {
         expect(r.body.data.status).toBe('active');
         expect(r.body.data.enabled).toBe(true);
         expect(r.body.data.env.DATABASE_URL).toBe('postgres://test');
+        // 승인 시 auto_spawn 이 켜지고 즉시 spawn 을 시도한다 — 테스트엔 supervisor 가 없어
+        // spawned=false(fail-open) 로 떨어지되 승인 응답은 200 이어야 한다.
+        expect(r.body.data.auto_spawn).toBe(true);
+        expect(r.body.spawned).toBe(false);
     });
 
     test('POST /:id/approve — required_env 채움 누락 시 422', async () => {

@@ -97,6 +97,16 @@ describeOrSkip('McpServerDraftRepository', () => {
         expect(approved!.env).toEqual({ LOG: 'info', DATABASE_URL: 'postgres://user@host/db' });
     });
 
+    test('approve — draft 는 auto_spawn=false 로 들어오고 승인 시 true 가 된다', async () => {
+        const draft = await repo.insertDraft({
+            name: `autospawn-${SUFFIX}`, transportType: 'stdio', command: '/bin/true', args: [],
+            env: {}, url: null, createdBy: TEST_USER_ID, manifestMeta: {},
+        });
+        expect(draft.auto_spawn).toBe(false);
+        const approved = await repo.approve({ id: draft.id, userId: TEST_USER_ID, isAdmin: false });
+        expect(approved?.auto_spawn).toBe(true);
+    });
+
     test('approve — 다른 user 의 row 는 null (admin=false)', async () => {
         const draft = await repo.insertDraft({
             name: `auth-${SUFFIX}`, transportType: 'stdio', command: '/bin/true', args: [],

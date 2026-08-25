@@ -113,6 +113,11 @@ export class McpServerDraftRepository extends BaseRepository {
     /**
      * draft → active 전이.
      * 본인 row 또는 admin 만 가능. envOverrides 가 있으면 기존 env 와 merge.
+     *
+     * `auto_spawn=TRUE` 도 함께 켠다 — draft 는 spawn 되면 안 되므로 FALSE 로 들어오지만,
+     * 승인 뒤에도 FALSE 로 남으면 lifecycle-supervisor 의 로그인/채팅 시작 후보에서
+     * 영구 제외되어 재시작 때마다 손으로 [연결]을 눌러야 했다(2026-08-26 발견 — 확장 유래
+     * 서버 5개가 실패도 아닌 채 "연결 끊김"). 사용 여부는 `enabled` 가 따로 가른다.
      */
     async approve(input: ApproveInput): Promise<McpServerRow | null> {
         const existing = await this.getById(input.id);
@@ -129,6 +134,7 @@ export class McpServerDraftRepository extends BaseRepository {
             `UPDATE mcp_servers
                 SET status='active',
                     enabled=$1,
+                    auto_spawn=TRUE,
                     env=$2::jsonb,
                     updated_at=NOW()
               WHERE id=$3

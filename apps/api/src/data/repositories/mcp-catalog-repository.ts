@@ -405,6 +405,11 @@ export class McpCatalogRepository {
         );
     }
 
+    /** 자동 연결 토글 — TRUE 면 로그인/채팅 시작/재시작 복구 때 supervisor 가 spawn 한다. */
+    async setServerAutoSpawn(serverId: string, autoSpawn: boolean): Promise<void> {
+        await this.pool.query(`UPDATE mcp_servers SET auto_spawn = $2, updated_at = NOW() WHERE id = $1`, [serverId, autoSpawn]);
+    }
+
     async getLatestConnectErrors(
         userId: string,
         serverIds: string[],

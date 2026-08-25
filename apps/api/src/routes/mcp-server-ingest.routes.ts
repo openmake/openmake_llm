@@ -29,6 +29,7 @@ import {
 } from '../schemas/mcp-server-ingest.schema';
 import { McpServerIngestService } from '../agents/git-ingest/mcp-server-ingest-service';
 import { McpServerDraftRepository } from '../data/repositories/mcp-server-draft-repository';
+import { getLifecycleSupervisor } from '../mcp/lifecycle-supervisor';
 import { RL_MCP_INGEST } from '../config/rate-limits';
 import { MCP_INGEST } from '../config/constants';
 import { createLogger } from '../utils/logger';
@@ -238,7 +239,26 @@ export function mcpServerIngestRouter(deps: McpServerIngestRouterDeps): Router {
                 return;
             }
             logger.info(`mcp-server approved: ${req.params.id} (user=${userId})`);
-            res.json({ success: true, data: approved });
+
+            // 승인 즉시 spawn — from-catalog 설치와 대칭. 그전엔 DB 만 갱신하고 끝나서 첫 연결이
+            // 다음 로그인/채팅 시작으로 미뤄졌다(그마저 auto_spawn=FALSE 로 막혀 영영 안 붙었음,
+            // 2026-08-26). best-effort: 실패해도 승인은 유지되고 원인은 instance 이력(connectionError)
+            // 으로 보이며 다음 ensureUserServers 가 멱등 재시도한다. 풀 소유자는 승인자가 아니라
+            // 서버 소유자(user_id) — admin 이 남의 draft 를 승인해도 그 사용자의 풀에 띄운다.
+            let spawned = false;
+            if (approved.enabled && approved.auto_spawn && approved.user_id) {
+                const supervisor = getLifecycleSupervisor();
+                if (supervisor) {
+                    try {
+                        await supervisor.spawnUserServer(approved.user_id, approved.id);
+                        spawned = true;
+                        logger.info(`approve 즉시 spawn 성공: ${approved.id}`);
+                    } catch (e) {
+                        logger.warn(`approve 즉시 spawn 실패(승인 유지): ${approved.id}: ${e instanceof Error ? e.message : String(e)}`);
+                    }
+                }
+            }
+            res.json({ success: true, data: approved, spawned });
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             res.status(500).json({ success: false, error: 'APPROVE_ERROR', message: msg });

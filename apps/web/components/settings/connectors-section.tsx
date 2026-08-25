@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Server, Boxes, Plus, Loader2, X, KeyRound, ClipboardCheck, AlertTriangle, Power, PowerOff, LogIn, LogOut } from "lucide-react";
+import { Server, Boxes, Plus, Loader2, X, KeyRound, ClipboardCheck, AlertTriangle, Power, PowerOff, LogIn, LogOut, Zap, ZapOff } from "lucide-react";
 import {
   Button,
   Badge,
@@ -38,6 +38,10 @@ interface McpServer {
   status: ConnStatus;
   /** 사용 여부 — false 면 목록에 남되 "사용 안 함"으로 표시된다(삭제와 달리 되돌릴 수 있다) */
   enabled: boolean;
+  /** 자동 연결 — true 면 로그인/채팅 시작/재시작 복구 때 서버가 알아서 띄운다. false 는 손으로 [연결] */
+  autoSpawn: boolean;
+  /** 전역(admin 등록) 서버 — 부팅 시 붙으므로 자동 연결 토글이 없다 */
+  isGlobal: boolean;
   /** OAuth 토큰 보유 — 로그아웃 버튼 노출 기준 */
   oauthConnected: boolean;
   /** 연결 실패 원인 코드 — 없으면 실패한 적이 없거나 현재 연결됨 */
@@ -64,6 +68,9 @@ interface ApiMcpServer {
   connectionError?: string | null;
   /** 사용 여부 — false 면 사용자가 "쓰지 않음"으로 치워둔 서버 */
   enabled?: boolean;
+  /** 자동 연결 여부 — false 면 supervisor 가 띄우지 않아 재시작 뒤 수동 [연결]이 필요하다 */
+  auto_spawn?: boolean;
+  visibility?: "global" | "user_private" | "user_shared";
   /** 원격 서버에 OAuth 토큰이 저장돼 있는가 */
   oauthConnected?: boolean;
   /** 원인 코드(`auth_required` 등) — i18n 문구로 바꿔 보여준다 */
@@ -105,6 +112,8 @@ function mapServer(s: ApiMcpServer, t: Translator): McpServer {
     toolCount: s.toolCount ?? 0,
     status: mapStatus(s.connectionStatus),
     enabled: s.enabled !== false,
+    autoSpawn: s.auto_spawn === true,
+    isGlobal: s.visibility === "global",
     oauthConnected: s.oauthConnected === true,
     errorCode: s.connectionStatus === "connected" ? null : (s.connectionErrorCode ?? null),
     errorDetail: s.connectionStatus === "connected" ? null : (s.connectionError ?? null),
@@ -330,6 +339,8 @@ function buildMockServers(t: Translator): McpServer[] {
     toolCount: 8,
     status: "connected",
     enabled: true,
+    autoSpawn: true,
+    isGlobal: false,
     oauthConnected: false,
     errorCode: null,
     errorDetail: null,
@@ -345,6 +356,8 @@ function buildMockServers(t: Translator): McpServer[] {
     toolCount: 21,
     status: "connected",
     enabled: true,
+    autoSpawn: true,
+    isGlobal: false,
     oauthConnected: false,
     errorCode: null,
     errorDetail: null,
@@ -360,6 +373,8 @@ function buildMockServers(t: Translator): McpServer[] {
     toolCount: 5,
     status: "degraded",
     enabled: true,
+    autoSpawn: true,
+    isGlobal: false,
     oauthConnected: false,
     errorCode: null,
     errorDetail: null,
@@ -375,6 +390,8 @@ function buildMockServers(t: Translator): McpServer[] {
     toolCount: 11,
     status: "connected",
     enabled: true,
+    autoSpawn: true,
+    isGlobal: false,
     oauthConnected: false,
     errorCode: null,
     errorDetail: null,
@@ -390,6 +407,8 @@ function buildMockServers(t: Translator): McpServer[] {
     toolCount: 3,
     status: "disconnected",
     enabled: true,
+    autoSpawn: true,
+    isGlobal: false,
     oauthConnected: false,
     errorCode: null,
     errorDetail: null,
@@ -530,6 +549,28 @@ export function ConnectorsSection() {
             ? { ...s, enabled: next, status: next ? s.status : "disconnected", toolCount: next ? s.toolCount : 0 }
             : s,
         ),
+      );
+    } catch (e) {
+      alert(t("toggleFailed", { error: e instanceof Error ? e.message : "" } as never));
+    } finally {
+      setActionLoading((prev) => ({ ...prev, [id]: false }));
+    }
+  }
+
+  /**
+   * 자동 연결 토글 — 켜면 서버가 즉시 spawn 을 시도하고 `spawned` 로 결과를 알려준다
+   * (handleConnect 와 같은 낙관적 갱신; 실패 원인은 다음 목록 조회의 connectionError 로 보인다).
+   */
+  async function handleToggleAutoSpawn(id: string, next: boolean) {
+    setActionLoading((prev) => ({ ...prev, [id]: true }));
+    try {
+      const res = await ApiClient.patch<ApiEnvelope<{ auto_spawn: boolean; spawned: boolean }>>(
+        `/api/mcp/servers/${id}/auto-spawn`,
+        { auto_spawn: next },
+      );
+      const spawned = res?.data?.spawned === true;
+      setServers((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, autoSpawn: next, status: spawned ? "connected" : s.status } : s)),
       );
     } catch (e) {
       alert(t("toggleFailed", { error: e instanceof Error ? e.message : "" } as never));
@@ -681,10 +722,17 @@ export function ConnectorsSection() {
                       </Td>
                       <Td>
                         {/* 사용 안 함이 연결 상태보다 우선 — 안 쓰기로 한 서버에 "연결 안 됨"만
-                            보이면 고장난 것처럼 읽힌다 */}
-                        <Badge tone={s.enabled ? meta.tone : "neutral"}>
-                          {s.enabled ? t(meta.labelKey) : t("disabledLabel")}
-                        </Badge>
+                            보이면 고장난 것처럼 읽힌다. 자동 연결을 끈 채 실패한 적 없는 서버도
+                            같은 이유로 "대기 중"(중립) — 시작을 안 한 것이지 끊긴 게 아니다 */}
+                        {(() => {
+                          const idle = s.enabled && !s.autoSpawn && !s.isGlobal
+                            && s.status === "disconnected" && !s.errorCode;
+                          return (
+                            <Badge tone={s.enabled && !idle ? meta.tone : "neutral"}>
+                              {!s.enabled ? t("disabledLabel") : idle ? t("idleLabel") : t(meta.labelKey)}
+                            </Badge>
+                          );
+                        })()}
                         {/* 실패 원인 — 없으면 아무것도 그리지 않는다(정상 서버에 잡음 금지) */}
                         {s.enabled && s.errorCode && (
                           <div
@@ -732,6 +780,19 @@ export function ConnectorsSection() {
                             {s.enabled ? <PowerOff className="h-3 w-3" /> : <Power className="h-3 w-3" />}
                             {s.enabled ? t("disable") : t("enable")}
                           </Button>
+                          {/* 전역 서버는 부팅 시 registry 가 띄우므로 이 축이 없다 */}
+                          {!s.isGlobal && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={isActing || !s.enabled}
+                              onClick={() => void handleToggleAutoSpawn(s.id, !s.autoSpawn)}
+                              title={s.autoSpawn ? t("autoSpawnOffTitle") : t("autoSpawnOnTitle")}
+                            >
+                              {s.autoSpawn ? <Zap className="h-3 w-3" /> : <ZapOff className="h-3 w-3" />}
+                              {s.autoSpawn ? t("autoSpawnOn") : t("autoSpawnOff")}
+                            </Button>
+                          )}
                           {s.oauthConnected && (
                             <Button
                               variant="outline"
