@@ -17,6 +17,7 @@ import {
     selectModelByCapacity,
 } from '../llm/model-pool';
 import { ContextOverflowError } from '../errors/context-overflow.error';
+import type { ChatMessage } from '../llm/types';
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -148,6 +149,54 @@ describe('truncateMessagesPreservingSystem', () => {
         ];
         const result = truncateMessagesPreservingSystem(messages, 100);  // 매우 작음
         expect(result).toHaveLength(2);
+    });
+});
+
+describe('truncateMessagesPreservingSystem — 앵커(첫 user=goal) 보호', () => {
+    const sys = { role: 'system' as const, content: '가'.repeat(50) };
+    const goal = { role: 'user' as const, content: '목표: 리포트를 만들어라' };
+    const mid = (n: number) => Array.from({ length: n }, (_, i) => [
+        { role: 'assistant' as const, content: `턴${i} ` + '나'.repeat(120) },
+        { role: 'user' as const, content: `결과${i} ` + '다'.repeat(120) },
+    ]).flat();
+
+    it('오래된 턴을 버려도 앵커(goal)는 system 바로 뒤에 남는다', () => {
+        const messages = [sys, goal, ...mid(6)];
+        const full = estimateMessageTokens(messages);
+        const result = truncateMessagesPreservingSystem(messages, Math.floor(full / 2));
+        expect(result.length).toBeLessThan(messages.length);
+        expect(result[0]).toBe(sys);
+        expect(result[1]).toBe(goal);
+        expect(result[result.length - 1]).toBe(messages[messages.length - 1]);
+    });
+
+    it('예산이 앵커+최근 1개도 못 담으면 종전대로 최근 것만 남긴다 (최소 보장 우선)', () => {
+        const messages = [sys, goal, ...mid(2)];
+        const last = messages[messages.length - 1];
+        const result = truncateMessagesPreservingSystem(messages, estimateMessageTokens([sys, last]) + 1);
+        expect(result[0]).toBe(sys);
+        expect(result[result.length - 1]).toBe(last);
+        expect(result).not.toContain(goal);
+    });
+
+    it('첫 메시지가 user 가 아니면(assistant 선두) 앵커 없음 — 종전 동작', () => {
+        const lead = { role: 'assistant' as const, content: '선두' };
+        const messages = [sys, lead, ...mid(3)];
+        const result = truncateMessagesPreservingSystem(messages, estimateMessageTokens(messages) - 60);
+        expect(result[0]).toBe(sys);
+        expect(result).not.toContain(lead);
+    });
+
+    it('앵커 보호 후에도 선두 고아 tool 메시지는 제거된다', () => {
+        const messages: ChatMessage[] = [sys, goal,
+            { role: 'assistant', content: '', tool_calls: [{ id: 't1', type: 'function', function: { name: 'x', arguments: {} } }] },
+            { role: 'tool' as const, content: '결과'.repeat(80), tool_call_id: 't1' },
+            { role: 'assistant' as const, content: '마무리' },
+        ];
+        const budget = estimateMessageTokens([sys, goal, messages[4]]) + 5;
+        const result = truncateMessagesPreservingSystem(messages, budget);
+        expect(result[0]).toBe(sys); expect(result[1]).toBe(goal);
+        expect(result.some((m) => m.role === 'tool')).toBe(false);
     });
 });
 
