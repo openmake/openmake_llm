@@ -2058,5 +2058,23 @@
       "sendAnswer": "回答を送信",
       "actionFailed": "処理に失敗しました: {error}"
     }
+  },
+  "marketplacePublish": {
+    "title": "マーケットプレイスに公開",
+    "description": "自作のスキル・エージェント・MCP 設定をプラグインにまとめ {repo} に PR を作成します。レビュー後にマージされるとカタログからインストールできます。",
+    "namePlaceholder": "プラグイン名（小文字・数字・ダッシュ、例: my-devops-pack）",
+    "descPlaceholder": "一行説明",
+    "skills": "スキル",
+    "agents": "カスタムエージェント",
+    "mcp": "MCP サーバー",
+    "none": "候補なし（拡張からインストールした項目は除外）",
+    "envPlaceholders": "env {n}件 → プレースホルダー",
+    "secretNote": "MCP の認証情報は出力しません — キー名のみ ${KEY} プレースホルダーとして含まれます。",
+    "tokenPlaceholder": "GitHub トークン（サーバー設定があれば空でも可）",
+    "publish": "PR を作成（{n}件）",
+    "adminOnly": "公開は管理者のみ",
+    "prCreated": "PR を作成しました — 開く",
+    "prDetail": "ブランチ {branch} · ファイル {files}件",
+    "missing": "一部の項目は所有・有効条件を満たさずスキップされました。"
   }
 }

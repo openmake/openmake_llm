@@ -2058,5 +2058,23 @@
       "sendAnswer": "Send answer",
       "actionFailed": "Action failed: {error}"
     }
+  },
+  "marketplacePublish": {
+    "title": "Publish to marketplace",
+    "description": "Bundle your own skills, agents and MCP settings into a plugin and open a PR on {repo}. Once reviewed and merged it becomes installable from the catalog.",
+    "namePlaceholder": "Plugin name (lowercase, digits, dashes — e.g. my-devops-pack)",
+    "descPlaceholder": "One-line description",
+    "skills": "Skills",
+    "agents": "Custom agents",
+    "mcp": "MCP servers",
+    "none": "No candidates (items installed from extensions are excluded)",
+    "envPlaceholders": "{n} env keys → placeholders",
+    "secretNote": "MCP credential values are never exported — only key names as ${KEY} placeholders.",
+    "tokenPlaceholder": "GitHub token (leave empty if configured on the server)",
+    "publish": "Create PR ({n})",
+    "adminOnly": "Only admins can publish",
+    "prCreated": "PR created — open",
+    "prDetail": "branch {branch} · {files} files",
+    "missing": "Some items were skipped (not owned or not active)."
   }
 }
