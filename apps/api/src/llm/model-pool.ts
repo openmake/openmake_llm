@@ -71,7 +71,7 @@ export function estimateMessageTokens(messages: ChatMessage[]): number {
 }
 
 /**
- * Token budget 안에서 messages 를 자르되 system + 최근 user/assistant 는 보존.
+ * Token budget 안에서 messages 를 자르되 system + 첫 user(앵커=목표) + 최근 user/assistant 는 보존.
  *
  * 알고리즘:
  *   1. system message (index 0 인 경우만) 항상 유지
@@ -91,13 +91,27 @@ export function truncateMessagesPreservingSystem(
     // 이미지 토큰까지 포함해야 overflow 판정(estimateMessageTokens)과 대칭 — vision 요청 과소절단 방지
     const systemTokens = systemMsg ? estimateMessageTokens([systemMsg]) : 0;
 
+    // 앵커: system 바로 다음의 첫 user 메시지는 대화의 목표다 — 에이전트 작업에선 `goal` 이
+    // 여기 있다(system 은 프롬프트 규약만 담는다). 오래된 순으로 버리면 가장 먼저 사라져
+    // 모델이 목표 없이 도구 결과만 보고 "마무리"하게 되고, 에러는 나지 않는다(조용한 실패).
+    // 예산이 허락하면 system 과 함께 고정하고, 예산이 없으면 종전대로 버린다(최소 보장 우선).
+    const anchor = rest.length > 1 && rest[0].role === 'user' ? rest[0] : null;
+    const anchorTokens = anchor ? estimateMessageTokens([anchor]) : 0;
     const kept: ChatMessage[] = [];
     let used = systemTokens;
     for (let i = rest.length - 1; i >= 0; i--) {
+        if (anchor && i === 0) break;  // 앵커는 아래에서 별도 판정
         const tokens = estimateMessageTokens([rest[i]]);
-        if (used + tokens > budgetTokens && kept.length > 0) break;
+        // 앵커 자리를 남겨 둔 채 최근 것부터 채운다(단 최근 1개는 항상 보장)
+        const reserve = anchor && kept.length > 0 ? anchorTokens : 0;
+        if (used + tokens + reserve > budgetTokens && kept.length > 0) break;
         kept.unshift(rest[i]);
         used += tokens;
+    }
+    if (anchor) {
+        if (kept.length === 0) { kept.push(rest[rest.length - 1]); used += estimateMessageTokens([rest[rest.length - 1]]); }
+        // 앵커 + 최근분이 예산 안이면 고정, 아니면 종전 동작(앵커 포기)
+        if (used + anchorTokens <= budgetTokens) kept.unshift(anchor);
     }
 
     if (rest.length > 0 && kept.length === 0) {
