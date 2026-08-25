@@ -6,7 +6,7 @@
  * 종료는 호출자(AgentTaskService)가 담당하며 agent-task-input-files.test.ts 가 통합 커버한다.
  * 여기서는 judge 가 false 를 돌려주는 경로(계약의 goal-judge 쪽 절반)와 fail-open 을 고정한다.
  */
-import { judgeGoalAchieved, buildJudgeExecutionContext, buildJudgeToolEvidence } from '../goal-judge';
+import { judgeGoalAchieved, buildJudgeExecutionContext, buildJudgeToolEvidence,  judgeGoal } from '../goal-judge';
 import { AGENT_TASK_LIMITS } from '../../../config/runtime-limits';
 import type { LLMClient } from '../../../llm';
 
@@ -103,7 +103,13 @@ describe('buildJudgeExecutionContext', () => {
         );
         expect(ctx).toContain('사용 도구: web_search, python_execute');
         expect(ctx).toContain('턴 수: 3');
-        expect(ctx).toContain('계획: 2/3 단계 완료');
+        // 부분 완료(2/3)는 싣지 않는다 — 모델이 마킹을 ~60% 생략해 "1/7" 이 미달성의 거짓 근거로 작동했다
+        expect(ctx).not.toContain('계획:');
+    });
+
+    it('계획이 전부 완료일 때만 계획 줄을 싣는다 (긍정 증거 전용)', () => {
+        const ctx = buildJudgeExecutionContext(new Set(['bash']), 2, [{ status: 'completed' }, { status: 'completed' }]);
+        expect(ctx).toContain('계획: 2/2 단계 완료');
     });
 
     it('도구 미사용이면 "(없음 — 도구 미사용)" 로 표기한다', () => {
@@ -168,5 +174,41 @@ describe('buildJudgeToolEvidence', () => {
 
     it('tool 메시지가 없으면 빈 문자열을 반환한다(EXECUTION 블록 미첨부)', () => {
         expect(buildJudgeToolEvidence([{ role: 'user', content: 'x' }])).toBe('');
+    });
+});
+
+describe('judgeGoal — 사유 동반 판정', () => {
+    const mk = (content: string | null) => ({ chat: jest.fn().mockResolvedValue({ content }) }) as never;
+    it('achieved 와 reason 을 함께 돌려준다', async () => {
+        const r = await judgeGoal(mk('{"achieved": false, "reason": "필요한 파일이 \\"없음\\""}'), 'g', 'a', new AbortController().signal);
+        expect(r.achieved).toBe(false);
+        expect(r.reason).toBe('필요한 파일이 "없음"');
+    });
+    it('파싱 불가면 achieved=null 이고 raw 에 응답 앞부분이 남는다', async () => {
+        const r = await judgeGoal(mk('판정하기 어렵습니다.'), 'g', 'a', new AbortController().signal);
+        expect(r.achieved).toBeNull();
+        expect(r.raw).toContain('판정하기');
+    });
+    it('호출 실패도 throw 없이 null + error raw', async () => {
+        const c = { chat: jest.fn().mockRejectedValue(new Error('boom')) } as never;
+        const r = await judgeGoal(c, 'g', 'a', new AbortController().signal);
+        expect(r.achieved).toBeNull();
+        expect(r.raw).toContain('boom');
+    });
+});
+
+describe('buildJudgeToolEvidence — terminate/plan 결과는 증거 창에서 제외', () => {
+    it('terminate·plan_update 가 마지막 N개를 차지해도 실제 수행 증거가 남는다 (81b954b7 / 4185ca15 오판 재현)', () => {
+        const conv = [
+            { role: 'tool', tool_name: 'python_execute', content: 'render ok — 치환 56개·미치환 0개·경고 없음' },
+            { role: 'tool', tool_name: 'file_ops', content: 'data.json report.html' },
+            ...Array.from({ length: AGENT_TASK_LIMITS.GOAL_JUDGE_EVIDENCE_MAX_ITEMS }, () => ({ role: 'tool', tool_name: 'plan_update', content: '## 계획 (1/7 완료)' })),
+            { role: 'tool', tool_name: 'terminate', content: '__TASK_TERMINATE__ success: 리포트 생성 완료' },
+        ];
+        const ev = buildJudgeToolEvidence(conv);
+        expect(ev).toContain('render ok');
+        expect(ev).toContain('data.json report.html');
+        expect(ev).not.toContain('계획 (1/7');
+        expect(ev).not.toContain('__TASK_TERMINATE__');
     });
 });
