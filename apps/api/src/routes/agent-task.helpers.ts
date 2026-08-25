@@ -75,7 +75,13 @@ export function toPublicTask(t: Record<string, unknown>) {
     const fileMetas = Array.isArray(input_files)
         ? (input_files as AgentTaskInputFile[]).map((f) => ({ name: f?.name, type: f?.type, size: f?.size }))
         : undefined;
-    return { ...rest, ...(fileMetas ? { input_files: fileMetas } : {}), resumable: !!checkpoint && t.status === 'failed' };
+    // resume 라우트가 허용하는 범위와 일치 — failed/cancelled + checkpoint. (웹 Resume 버튼은 여기에
+    // RESUMABLE_ERROR_CODES 를 추가로 거르므로 cancelled 포함이 웹 노출을 바꾸지 않는다.)
+    return {
+        ...rest,
+        ...(fileMetas ? { input_files: fileMetas } : {}),
+        resumable: !!checkpoint && (t.status === 'failed' || t.status === 'cancelled'),
+    };
 }
 
 /**
