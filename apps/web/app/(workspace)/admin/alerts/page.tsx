@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import { Bell, Plus, AlertTriangle, AlertCircle, Info, Check } from "lucide-react";
+import Link from "next/link";
+import { Bell, AlertTriangle, AlertCircle, Info, Check, ExternalLink } from "lucide-react";
 import {
   PageHeader,
   Card,
@@ -19,13 +20,6 @@ import { ApiClient } from "@/lib/api-client";
 
 type Severity = "critical" | "warning" | "info";
 
-interface AlertRule {
-  id: string;
-  nameKey: string;
-  conditionKey: string;
-  channel: string[];
-  enabled: boolean;
-}
 
 interface AlertEvent {
   id: string;
@@ -55,16 +49,6 @@ const SEV_ICON_CLR: Record<Severity, string> = {
   info: "text-accent",
 };
 
-// 알림 규칙(rule) CRUD 백엔드 엔드포인트 없음 — AlertSystem 은 코드 내 config 로 규칙을
-// 관리하고 발생 이력만 alert_history 에 영속화. 따라서 규칙 목록은 목업 유지(토글도 로컬 전용).
-const RULES: AlertRule[] = [
-  { id: "r1", nameKey: "rules.cpu.name", conditionKey: "rules.cpu.condition", channel: ["webhook", "email"], enabled: true },
-  { id: "r2", nameKey: "rules.contextOverflow.name", conditionKey: "rules.contextOverflow.condition", channel: ["webhook"], enabled: true },
-  { id: "r3", nameKey: "rules.errorRate.name", conditionKey: "rules.errorRate.condition", channel: ["webhook", "slack"], enabled: true },
-  { id: "r4", nameKey: "rules.tokenQuota.name", conditionKey: "rules.tokenQuota.condition", channel: ["email"], enabled: false },
-  { id: "r5", nameKey: "rules.roleChange.name", conditionKey: "rules.roleChange.condition", channel: ["webhook", "email"], enabled: true },
-];
-
 function fmt(s: string, locale: string) {
   return new Date(s).toLocaleString(locale, {
     month: "2-digit",
@@ -87,7 +71,6 @@ interface ApiAlert {
 export default function AdminAlertsPage() {
   const t = useTranslations("adminAlerts");
   const locale = toBcp47(useLocale());
-  const [rules, setRules] = useState<AlertRule[]>(RULES);
   // 실데이터만 표시 — alert_history 응답이 비면 빈 상태(t("empty"))로 둔다.
   const [events, setEvents] = useState<AlertEvent[]>([]);
   const [acknowledged, setAcknowledged] = useState<Set<string>>(new Set());
@@ -134,19 +117,11 @@ export default function AdminAlertsPage() {
     };
   }, []);
 
-  const toggle = (id: string) =>
-    setRules((rs) => rs.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)));
-
   return (
     <>
       <PageHeader
         title={t("title")}
         description={t("description")}
-        actions={
-          <Button size="sm">
-            <Plus className="h-3.5 w-3.5" /> {t("addRule")}
-          </Button>
-        }
       />
 
       <AdminTabs />
@@ -157,33 +132,17 @@ export default function AdminAlertsPage() {
               <Bell className="h-4 w-4 text-accent" />
               <CardTitle>{t("rulesTitle")}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {rules.map((r) => (
-                <div
-                  key={r.id}
-                  className="flex items-start justify-between gap-3 rounded-lg border border-border bg-surface-2 p-3"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-fg">{t(r.nameKey)}</p>
-                    <p className="mt-0.5 text-xs text-muted">{t(r.conditionKey)}</p>
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {r.channel.map((c) => (
-                        <span
-                          key={c}
-                          className="rounded-pill bg-surface-3 px-2 py-0.5 font-mono text-[10px] text-muted"
-                        >
-                          {c}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <button onClick={() => toggle(r.id)} aria-label={t("toggleAria")}>
-                    <Badge tone={r.enabled ? "success" : "neutral"}>
-                      {r.enabled ? t("enabled") : t("disabled")}
-                    </Badge>
-                  </button>
-                </div>
-              ))}
+            <CardContent>
+              {/* 규칙 CRUD 백엔드가 없다 — 그전엔 하드코딩 규칙 5개와 동작 없는 [규칙 추가]·로컬
+                  전용 토글이 실제 설정처럼 보였다. 임계값·채널은 시스템 설정(alerts 그룹)이 SoT. */}
+              <p className="text-sm text-muted">{t("rulesMovedHint")}</p>
+              <Link
+                href="/admin/system-settings"
+                className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline"
+              >
+                {t("rulesMovedLink")}
+                <ExternalLink className="h-3.5 w-3.5" />
+              </Link>
             </CardContent>
           </Card>
 
