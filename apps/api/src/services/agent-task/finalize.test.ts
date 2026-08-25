@@ -12,22 +12,28 @@ jest.mock('../../config/runtime-limits', () => {
     };
 });
 jest.mock('./goal-judge', () => ({
+    judgeGoal: jest.fn(),
     judgeGoalAchieved: jest.fn(),
     buildJudgeExecutionContext: jest.fn(() => 'ctx'),
 }));
 jest.mock('./deliverable-verify', () => ({ verifyCodeArtifacts: jest.fn(async () => ({ ok: true, report: '' })) }));
 jest.mock('./role-client', () => ({ judgeClientFor: jest.fn(async () => ({})) }));
-jest.mock('./task-steps', () => ({ persistArtifactSteps: jest.fn(async (_t: string, _a: unknown[], n: number) => n + 1) }));
+jest.mock('./task-steps', () => ({
+    persistArtifactSteps: jest.fn(async (_t: string, _a: unknown[], n: number) => n + 1),
+    persistJudgeStep: jest.fn(async (_t: string, n: number) => n + 1),
+}));
 jest.mock('./code-diff', () => ({ maybePersistCodeDiff: jest.fn(async (_r: unknown, _c: unknown, _t: string, n: number) => n) }));
 
 import { finalizeTask, type FinalizeInput } from './finalize';
-import { judgeGoalAchieved } from './goal-judge';
+import { judgeGoal } from './goal-judge';
+import { persistJudgeStep } from './task-steps';
 import { verifyCodeArtifacts } from './deliverable-verify';
 import { AGENT_TASK_INCOMPLETE_MARKER } from '../../prompts/agent-task-prompt';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 
-const judgeMock = judgeGoalAchieved as jest.MockedFunction<typeof judgeGoalAchieved>;
+const judgeMock = judgeGoal as jest.MockedFunction<typeof judgeGoal>;
+const judgeStepMock = persistJudgeStep as jest.MockedFunction<typeof persistJudgeStep>;
 const verifyMock = verifyCodeArtifacts as jest.MockedFunction<typeof verifyCodeArtifacts>;
 
 /** 코드 아티팩트 1개를 담은 최종 응답 — 실제 파서를 통과하는 형태. */
@@ -68,7 +74,7 @@ beforeEach(() => {
 
 describe('finalizeTask — 완료 관문 단일화(091)', () => {
     it('terminate 경로도 goal judge 를 거친다 (종전엔 우회)', async () => {
-        judgeMock.mockResolvedValue(true);
+        judgeMock.mockResolvedValue({ achieved: true, reason: '파일이 생성됨', raw: '' });
         const i = input({ path: 'terminate', terminateSummary: '완료했습니다.' });
 
         const out = await finalizeTask(i);
@@ -81,7 +87,7 @@ describe('finalizeTask — 완료 관문 단일화(091)', () => {
     });
 
     it('terminate 인데 목표 미달성이면 completed 가 아니라 failed(goal_incomplete)', async () => {
-        judgeMock.mockResolvedValue(false);
+        judgeMock.mockResolvedValue({ achieved: false, reason: '자료 없음', raw: '' });
         const i = input({ path: 'terminate', terminateSummary: '' });
 
         const out = await finalizeTask(i);
@@ -93,13 +99,23 @@ describe('finalizeTask — 완료 관문 단일화(091)', () => {
     });
 
     it('judge 판정 불가는 fail-open — 완료 유지하되 verdict=unknown 으로 남긴다', async () => {
-        judgeMock.mockResolvedValue(null);
+        judgeMock.mockResolvedValue({ achieved: null, reason: '', raw: '판정 불가' });
         const i = input();
 
         const out = await finalizeTask(i);
 
         expect(out.kind).toBe('completed');
         expect(lastUpdate(i)).toMatchObject({ status: 'completed', judgeVerdict: 'unknown' });
+    });
+
+    it('judge 판정·사유는 스텝으로 영속되고 WS 로도 나간다 (오판 사후 규명용)', async () => {
+        judgeMock.mockResolvedValue({ achieved: false, reason: '입력 파일이 없음', raw: '' });
+        const emit = jest.fn();
+        const i = input({ path: 'terminate', terminateSummary: '', emitStep: emit });
+        await finalizeTask(i);
+        expect(judgeStepMock).toHaveBeenCalledWith(expect.any(String), expect.any(Number), 'not_achieved', '입력 파일이 없음', '', 'ctx');
+        const emitted = emit.mock.calls.find((c: unknown[]) => c[0] === 'judge');
+        expect(emitted?.[2]).toContain('입력 파일이 없음');
     });
 
     it('아티팩트가 있으면 judge 를 생략하고 verdict=skipped (발동 조건 유지)', async () => {
@@ -148,7 +164,7 @@ describe('finalizeTask — 완료 관문 단일화(091)', () => {
     });
 
     it('terminate summary 가 결과 본문이 된다', async () => {
-        judgeMock.mockResolvedValue(true);
+        judgeMock.mockResolvedValue({ achieved: true, reason: '파일이 생성됨', raw: '' });
         const i = input({ path: 'terminate', terminateSummary: '3개 파일을 생성했습니다.', rawContent: '' });
 
         await finalizeTask(i);
