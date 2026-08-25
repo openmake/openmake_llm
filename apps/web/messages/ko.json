@@ -11,7 +11,6 @@
       "skillLibrary": "스킬 라이브러리",
       "artifacts": "아티팩트",
       "mcpMonitoring": "MCP 모니터링",
-      "agentLearning": "에이전트 학습",
       "settings": "설정",
       "usage": "사용량",
       "admin": "관리자",
@@ -25,7 +24,6 @@
       "systemSettingsAdmin": "시스템 설정",
       "developer": "개발자",
       "schedulesAdmin": "작업 스케줄",
-      "agentSuggestionsAdmin": "프롬프트 제안",
       "approvals": "승인 대기"
     },
     "pendingApprovals": "승인 대기 {count}건 — 에이전트 작업이 사용자 승인을 기다리고 있습니다"
@@ -1032,33 +1030,6 @@
     "colLastCrash": "마지막 크래시",
     "crashTrend": "크래시 추이 (24h)"
   },
-  "agentLearning": {
-    "title": "에이전트 학습",
-    "description": "사용자 피드백을 기반으로 한 에이전트 개선 현황을 추적합니다.",
-    "collectedFeedback": "수집 피드백",
-    "collectedFeedbackDelta": "+126 이번 주",
-    "appliedImprovements": "반영 개선",
-    "pendingLabel": "대기",
-    "agentDetailAnalysis": "에이전트 상세 분석",
-    "learningItems": "학습 항목",
-    "emptyLearningItems": "수집된 학습 항목이 없습니다.",
-    "loadingAgent": "에이전트 데이터 불러오는 중...",
-    "qualityScore": "품질 점수",
-    "totalFeedbackCount": "총 피드백 {count}건",
-    "avgRatingValue": "평균 평점 {rating}",
-    "noQualityData": "품질 데이터 없음",
-    "noData": "데이터 없음",
-    "failurePatterns": "실패 패턴",
-    "noFailurePatterns": "기록된 실패 패턴 없음",
-    "patternCount": "({count}회)",
-    "improvements": "개선 제안",
-    "noImprovements": "개선 제안 없음",
-    "status": {
-      "applied": "반영됨",
-      "reviewing": "검토 중",
-      "pending": "대기"
-    }
-  },
   "auth": {
     "login": {
       "subtitle": "로그인하고 계속하세요",
@@ -1826,33 +1797,6 @@
       "sourceAll": "전체 소스 ({count})",
       "searchAria": "키워드 검색",
       "searchPlaceholder": "이름·설명 검색"
-    }
-  },
-  "adminSuggestions": {
-    "title": "프롬프트 제안 검토",
-    "description": "자가개선 사이클이 만든 에이전트 프롬프트 개선 제안을 승인/거부합니다.",
-    "note": "승인된 제안만 해당 에이전트의 시스템 프롬프트에 주입됩니다. 거부한 제안은 다시 제안되지 않습니다.",
-    "listTitle": "제안 ({count}건)",
-    "refresh": "새로고침",
-    "empty": "해당 상태의 제안이 없습니다.",
-    "loadError": "제안 목록을 불러오지 못했습니다.",
-    "actionError": "상태 변경에 실패했습니다.",
-    "approve": "승인",
-    "reject": "거부",
-    "sourcePatterns": "근거 패턴: {patterns}",
-    "filter": {
-      "pending": "대기",
-      "approved": "승인됨",
-      "rejected": "거부됨",
-      "all": "전체"
-    },
-    "cols": {
-      "agent": "에이전트",
-      "suggestion": "제안 내용",
-      "quality": "품질 점수",
-      "status": "상태",
-      "createdAt": "생성",
-      "action": "처리"
     }
   },
   "mcpInstances": {

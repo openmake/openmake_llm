@@ -11,7 +11,6 @@
       "skillLibrary": "Skill Library",
       "artifacts": "Artifacts",
       "mcpMonitoring": "MCP Monitoring",
-      "agentLearning": "Agent Learning",
       "settings": "Settings",
       "usage": "Usage",
       "admin": "Admin",
@@ -25,7 +24,6 @@
       "systemSettingsAdmin": "System Settings",
       "developer": "Developer",
       "schedulesAdmin": "Task Schedules",
-      "agentSuggestionsAdmin": "Prompt suggestions",
       "approvals": "Approvals"
     },
     "pendingApprovals": "{count} pending approval(s) — agent tasks are waiting for your approval"
@@ -1032,33 +1030,6 @@
     "colLastCrash": "Last crash",
     "crashTrend": "Crash trend (24h)"
   },
-  "agentLearning": {
-    "title": "Agent Learning",
-    "description": "Track agent improvements driven by user feedback.",
-    "collectedFeedback": "Collected feedback",
-    "collectedFeedbackDelta": "+126 this week",
-    "appliedImprovements": "Applied improvements",
-    "pendingLabel": "Pending",
-    "agentDetailAnalysis": "Agent detail analysis",
-    "learningItems": "Learning items",
-    "emptyLearningItems": "No learning items collected.",
-    "loadingAgent": "Loading agent data...",
-    "qualityScore": "Quality score",
-    "totalFeedbackCount": "{count} feedbacks total",
-    "avgRatingValue": "Avg rating {rating}",
-    "noQualityData": "No quality data",
-    "noData": "No data",
-    "failurePatterns": "Failure patterns",
-    "noFailurePatterns": "No failure patterns recorded",
-    "patternCount": "({count}x)",
-    "improvements": "Improvement suggestions",
-    "noImprovements": "No improvement suggestions",
-    "status": {
-      "applied": "Applied",
-      "reviewing": "Reviewing",
-      "pending": "Pending"
-    }
-  },
   "auth": {
     "login": {
       "subtitle": "Sign in to continue",
@@ -1826,33 +1797,6 @@
       "sourceAll": "All sources ({count})",
       "searchAria": "Keyword search",
       "searchPlaceholder": "Search name/description"
-    }
-  },
-  "adminSuggestions": {
-    "title": "Prompt suggestion review",
-    "description": "Approve or reject agent prompt improvements produced by the self-improvement cycle.",
-    "note": "Only approved suggestions are injected into that agent's system prompt. Rejected ones are not proposed again.",
-    "listTitle": "Suggestions ({count})",
-    "refresh": "Refresh",
-    "empty": "No suggestions with this status.",
-    "loadError": "Failed to load suggestions.",
-    "actionError": "Failed to change status.",
-    "approve": "Approve",
-    "reject": "Reject",
-    "sourcePatterns": "Source patterns: {patterns}",
-    "filter": {
-      "pending": "Pending",
-      "approved": "Approved",
-      "rejected": "Rejected",
-      "all": "All"
-    },
-    "cols": {
-      "agent": "Agent",
-      "suggestion": "Suggestion",
-      "quality": "Quality",
-      "status": "Status",
-      "createdAt": "Created",
-      "action": "Action"
     }
   },
   "mcpInstances": {
