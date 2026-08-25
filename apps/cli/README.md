@@ -60,7 +60,18 @@ openmake-code login              # 서버 URL·API key 저장 (~/.openmake/confi
 openmake-code connect [dir]      # 폴더 상주 연결 — 웹에서 작업을 시작할 수 있게 된다
 openmake-code status             # 연결 상태·디바이스 조회
 openmake-code "목표" [--dir .] [--yes]   # 로컬 에이전트 작업 1회 실행
+openmake-code tasks [--all]      # 이 디바이스의 로컬 작업 목록 (종료 작업은 --all)
+openmake-code resume <taskId> [--dir .] [--yes]   # checkpoint 에서 이어하기
+openmake-code "목표" --resume    # 재개 가능한 최근 작업이 있으면 그것을 이어감
 ```
+### 이어하기 (resume)
+- 서버가 작업(`agent_tasks`)과 checkpoint 를 보존하므로, 실패한 작업은 **`resume <taskId>`** 로 같은
+  대화·같은 worktree(`omk-task/<id>` 브랜치)에서 이어간다. `tasks` 목록의 `[resume 가능]` 표시가 대상.
+- 재개도 **디바이스가 연결돼 있어야** 한다 — `resume` 이 `--dir`(기본 cwd)로 폴더를 먼저 연결한다.
+  서버는 하위 폴더(상대경로)만 기억하고 루트는 디바이스만 알기 때문에, 원래 작업을 시작한
+  **같은 루트 폴더에서** 실행해야 한다.
+- 진행 중(`running`/`paused`)인 작업에 `resume` 을 하면 재실행하지 않고 진행만 따라간다.
+- 재개가 거부되는 경우는 서버 메시지를 그대로 보여준다(이미 완료·checkpoint 없음·디바이스 미연결).
 
 - `connect` 는 **전경 데몬**이다. 종료는 `Ctrl+C`.
 - 디바이스당 폴더는 **하나**다. 여러 폴더가 필요하면 터미널을 여러 개 띄워 각각 `connect` 한다.

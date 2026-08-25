@@ -8,6 +8,9 @@
  *   connect [dir]          폴더 상주 연결(데몬 전경 실행, 단일 폴더)
  *   status                 연결 상태·디바이스 조회
  *   "목표" [--dir .]        cwd(또는 --dir)에서 로컬 에이전트 작업 1회 실행
+ *   tasks [--all]          이 디바이스의 로컬 작업 목록 (기본: 미종료·재개 가능만)
+ *   resume <taskId> [--dir .]  checkpoint 에서 이어하기 (서버 재개 API + 같은 worktree 재부착)
+ *   "목표" --resume        마지막 재개 가능 작업이 있으면 그것을 이어한다
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -100,17 +103,17 @@ function taskOf(r: { task?: ApiTask } | ApiTask): ApiTask {
     return (r as { task?: ApiTask }).task ?? (r as ApiTask);
 }
 
-async function cmdRun(goal: string, dir: string, autoApprove: boolean): Promise<void> {
-    const cfg = requireConfig();
-    const folder = path.resolve(dir);
-    const api = new ApiClient(cfg.serverUrl, cfg.apiKey);
+/** 서버 승인 자동화 여부 — --yes 또는 비대화형(비-TTY). 셸 확인은 별개(디바이스 confirmExec). */
+function shouldAutoApprove(autoApprove: boolean): boolean {
     // --yes 또는 비대화형(비-TTY)이면 서버 승인을 작업 단위로 자동화한다 — 그렇지 않으면
     // 파일 쓰기류 서버 HITL 이 매번 y/N 을 요구해 헤드리스/CI 실행이 막힌다. 셸/파이썬은
     // 별도로 디바이스 confirmExec 이 게이트하므로(OMK_BRIDGE_AUTO_APPROVE), 이 플래그는 서버측만.
-    const serverAutoApprove = autoApprove || !process.stdin.isTTY;
-    const bridge = connectBridge(cfg, folder);
+    return autoApprove || !process.stdin.isTTY;
+}
 
-    // 브리지 등록 대기 (서버가 이 디바이스를 인지할 때까지 최대 ~10s).
+/** 폴더를 브리지로 연결하고 서버가 이 디바이스를 인지할 때까지 대기(최대 ~10s). 실패 시 종료. */
+async function connectAndRegister(cfg: { serverUrl: string; apiKey: string }, api: ApiClient, folder: string): Promise<CliBridge> {
+    const bridge = connectBridge(cfg, folder);
     const myId = deviceId();
     let registered = false;
     for (let i = 0; i < 20; i++) {
@@ -122,9 +125,18 @@ async function cmdRun(goal: string, dir: string, autoApprove: boolean): Promise<
         } catch { /* 재시도 */ }
     }
     if (!registered) { console.error('브리지 연결에 실패했습니다.'); bridge.disconnect(); process.exit(1); }
+    return bridge;
+}
+
+async function cmdRun(goal: string, dir: string, autoApprove: boolean): Promise<void> {
+    const cfg = requireConfig();
+    const folder = path.resolve(dir);
+    const api = new ApiClient(cfg.serverUrl, cfg.apiKey);
+    const serverAutoApprove = shouldAutoApprove(autoApprove);
+    const bridge = await connectAndRegister(cfg, api, folder);
 
     console.log(`\x1b[32m✓ 연결됨\x1b[0m — 작업을 생성합니다.`);
-    const created = taskOf(await api.createTask(goal, myId));
+    const created = taskOf(await api.createTask(goal, deviceId()));
     const taskId = created.id;
     if (serverAutoApprove) {
         await api.setAutoApprove(taskId, true);
@@ -132,8 +144,14 @@ async function cmdRun(goal: string, dir: string, autoApprove: boolean): Promise<
     }
     await api.executeTask(taskId);
     console.log(`\x1b[36m작업 ${taskId} 실행 중…\x1b[0m (Ctrl+C 로 CLI 종료)`);
+    await followTask(api, bridge, taskId);
+}
 
-    // 진행 폴링 — 승인 대기(pending)는 터미널에서 즉시 처리, 상태는 변할 때만 출력.
+/**
+ * 진행 폴링 — run/resume 공용. 승인 대기(pending)는 터미널에서 즉시 처리, 상태는 변할 때만 출력.
+ * 종료 상태에 도달하면 브리지를 끊고 프로세스를 종료한다(completed=0, 그 외 1).
+ */
+async function followTask(api: ApiClient, bridge: CliBridge, taskId: string): Promise<never> {
     let lastStatus = '';
     let lastProgress = -1;
     const seenApprovals = new Set<string>();
@@ -176,12 +194,87 @@ async function cmdRun(goal: string, dir: string, autoApprove: boolean): Promise<
     }
 }
 
+function shortId(id: string): string { return id.length > 12 ? `${id.slice(0, 8)}…` : id; }
+function fmtWhen(iso?: string): string {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? '-' : `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+/** 목록 기본값: 종료(completed) 는 --all 일 때만. failed/cancelled 는 재개 후보라 항상 보여준다. */
+function isListedByDefault(t: ApiTask): boolean { return t.status !== 'completed'; }
+
+async function cmdTasks(all: boolean): Promise<void> {
+    const cfg = requireConfig();
+    const api = new ApiClient(cfg.serverUrl, cfg.apiKey);
+    const { tasks } = await api.listTasks({ deviceId: deviceId() });
+    const rows = all ? tasks : tasks.filter(isListedByDefault);
+    if (rows.length === 0) {
+        console.log(all ? '이 디바이스의 로컬 작업이 없습니다.' : '미종료·재개 가능한 로컬 작업이 없습니다. (`--all` 로 종료 작업 포함)');
+        return;
+    }
+    console.log(`이 디바이스(${deviceId().slice(0, 8)}…)의 로컬 작업 ${rows.length}건${all ? '' : ' — 종료 작업은 --all'}:`);
+    for (const t of rows) {
+        const flag = t.resumable ? ' \x1b[32m[resume 가능]\x1b[0m' : (t.status === 'running' || t.status === 'paused' || t.status === 'queued') ? ' \x1b[36m[진행 중]\x1b[0m' : '';
+        const folder = t.folder_rel ? ` · 폴더 ${t.folder_rel}` : '';
+        console.log(`  ${shortId(t.id).padEnd(10)} ${t.status.padEnd(9)} ${String(Math.round(t.progress ?? 0)).padStart(3)}%  ${fmtWhen(t.created_at)}  omk-task/${t.id.slice(0, 8)}${folder}${flag}`);
+        if (t.goal) console.log(`             ${t.goal.replace(/\s+/g, ' ').slice(0, 60)}`);
+    }
+}
+
+/** 재개 대상 선택 — 이 디바이스의 최근 `resumable`(failed+checkpoint) 작업. 진행 중이면 재개 대신 follow 대상. */
+async function pickResumeTarget(api: ApiClient): Promise<{ task: ApiTask; followOnly: boolean } | null> {
+    const { tasks } = await api.listTasks({ deviceId: deviceId() });
+    const live = tasks.find((t) => t.status === 'running' || t.status === 'paused' || t.status === 'queued');
+    if (live) return { task: live, followOnly: true };
+    const cand = tasks.find((t) => t.resumable);
+    return cand ? { task: cand, followOnly: false } : null;
+}
+
+async function cmdResume(taskId: string, dir: string, autoApprove: boolean): Promise<void> {
+    const cfg = requireConfig();
+    const folder = path.resolve(dir);
+    const api = new ApiClient(cfg.serverUrl, cfg.apiKey);
+    // 서버는 folder_rel(상대경로)만 안다 — 루트는 --dir/cwd 로 사용자가 준 것만 쓴다(디바이스 발원 원칙).
+    const task = taskOf(await api.getTask(taskId));
+    if (task.executor !== 'local') { console.error('로컬 실행 작업이 아닙니다 — 웹에서 이어하세요.'); process.exit(1); }
+    if (task.device_id && task.device_id !== deviceId()) {
+        console.error(`이 작업은 다른 디바이스(${task.device_id.slice(0, 8)}…)에서 만든 것입니다. 그 디바이스에서 resume 하세요.`);
+        process.exit(1);
+    }
+    const bridge = await connectAndRegister(cfg, api, folder);
+    if (task.status === 'running' || task.status === 'paused' || task.status === 'queued') {
+        console.log(`\x1b[36m작업 ${taskId} 는 진행 중 — 재개 대신 진행을 따라갑니다.\x1b[0m`);
+        await followTask(api, bridge, taskId);
+    }
+    if (shouldAutoApprove(autoApprove)) {
+        await api.setAutoApprove(taskId, true);
+        console.log('\x1b[2m서버 승인 자동화 활성(--yes/비대화형)\x1b[0m');
+    }
+    try {
+        const r = await api.resumeTask(taskId);
+        console.log(`\x1b[32m✓ ${r.message ?? '작업을 이어서 시작했습니다.'}\x1b[0m (${taskId}${task.folder_rel ? `, 폴더 ${task.folder_rel}` : ''})`);
+    } catch (e) {
+        // 서버 400 사유(디바이스 미연결·checkpoint 없음·이미 완료 등)를 그대로 보여준다
+        console.error(`\x1b[31m재개 실패: ${(e as Error).message}\x1b[0m`);
+        bridge.disconnect();
+        process.exit(1);
+    }
+    await followTask(api, bridge, taskId);
+}
+
 async function main(): Promise<void> {
     const argv = process.argv.slice(2);
     const cmd = argv[0];
     if (cmd === 'login') return cmdLogin();
     if (cmd === 'status') return cmdStatus();
     if (cmd === 'connect') return cmdConnect(argv.slice(1));
+    if (cmd === 'tasks') return cmdTasks(argv.includes('--all'));
+    if (cmd === 'resume') {
+        const taskId = argv[1];
+        if (!taskId || taskId.startsWith('--')) { console.error('사용법: openmake-code resume <taskId> [--dir .] [--yes]'); process.exit(1); }
+        const di = argv.indexOf('--dir');
+        return cmdResume(taskId, di >= 0 ? argv[di + 1] ?? '.' : '.', argv.includes('--yes') || argv.includes('-y'));
+    }
     if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
         console.log(`OpenMake Code — 로컬 코딩 에이전트 CLI
 
@@ -190,16 +283,31 @@ async function main(): Promise<void> {
   openmake-code connect [dir]      폴더 상주 연결 (웹에서 작업을 시작할 수 있게 됨)
   openmake-code status             연결 상태·디바이스 조회
   openmake-code "목표" [--dir .] [--yes]   로컬 에이전트 작업 1회 실행
-                                   (--yes: 파일 쓰기류 서버 승인 자동화. 셸은 별도 확인)`);
+                                   (--yes: 파일 쓰기류 서버 승인 자동화. 셸은 별도 확인)
+  openmake-code tasks [--all]      이 디바이스의 로컬 작업 목록 (종료 작업은 --all)
+  openmake-code resume <taskId> [--dir .] [--yes]   checkpoint 에서 이어하기 (같은 worktree 재부착)
+  openmake-code "목표" --resume    재개 가능한 최근 작업이 있으면 그것을 이어감 (없으면 새 작업)`);
         return;
     }
     // 나머지는 목표 실행 — "목표" [--dir path]
     const dirIdx = argv.indexOf('--dir');
     const dir = dirIdx >= 0 ? argv[dirIdx + 1] ?? '.' : '.';
     const autoApprove = argv.includes('--yes') || argv.includes('-y');
+    const wantResume = argv.includes('--resume');
     const goal = argv
-        .filter((a, i) => a !== '--dir' && i !== dirIdx + 1 && a !== '--yes' && a !== '-y')
+        .filter((a, i) => a !== '--dir' && i !== dirIdx + 1 && a !== '--yes' && a !== '-y' && a !== '--resume')
         .join(' ').trim();
+    if (wantResume) {
+        const cfg = requireConfig();
+        const api = new ApiClient(cfg.serverUrl, cfg.apiKey);
+        const target = await pickResumeTarget(api);
+        if (target) {
+            console.log(`\x1b[2m--resume: ${target.followOnly ? '진행 중인' : '재개 가능한'} 작업 ${shortId(target.task.id)} 을 ${target.followOnly ? '따라갑니다' : '이어합니다'}${goal ? ' (입력한 목표는 무시)' : ''}\x1b[0m`);
+            return cmdResume(target.task.id, dir, autoApprove);
+        }
+        if (!goal) { console.error('재개 가능한 작업이 없고 새 목표도 없습니다.'); process.exit(1); }
+        console.log('\x1b[2m--resume: 재개 가능한 작업이 없어 새 작업을 만듭니다.\x1b[0m');
+    }
     if (!goal) { console.error('목표를 입력하세요. `openmake-code help` 참고.'); process.exit(1); }
     return cmdRun(goal, dir, autoApprove);
 }

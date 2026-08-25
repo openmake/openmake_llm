@@ -10,6 +10,13 @@ export interface ApiTask {
     error?: string;
     executor?: string;
     device_id?: string;
+    goal?: string;
+    /** 연결 루트 기준 상대 폴더(웹에서 고른 하위 폴더). 루트 자체는 디바이스만 안다. */
+    folder_rel?: string | null;
+    created_at?: string;
+    updated_at?: string;
+    /** 서버 판정: failed + checkpoint 보유 → `resume` 가능 */
+    resumable?: boolean;
 }
 
 export interface PendingApproval {
@@ -51,6 +58,17 @@ export class ApiClient {
     }
     executeTask(taskId: string): Promise<unknown> {
         return this.req('POST', `/api/agent-tasks/${taskId}/execute`, {});
+    }
+    /** 이 디바이스의 로컬 작업 목록 — 서버 부가 필터(executor/deviceId/status)로 샌드박스 작업을 섞지 않는다. */
+    listTasks(opts: { deviceId?: string; status?: string } = {}): Promise<{ tasks: ApiTask[]; total: number }> {
+        const q = new URLSearchParams({ executor: 'local' });
+        if (opts.deviceId) q.set('deviceId', opts.deviceId);
+        if (opts.status) q.set('status', opts.status);
+        return this.req('GET', `/api/agent-tasks?${q.toString()}`);
+    }
+    /** checkpoint 재개 — 서버가 상태·checkpoint·디바이스 연결을 검증한다(실패 사유는 400 메시지). */
+    resumeTask(taskId: string): Promise<{ message?: string; queued?: boolean }> {
+        return this.req('POST', `/api/agent-tasks/${taskId}/resume`, {});
     }
     /** 작업 단위 서버 승인 자동화 (데스크톱 일괄 승인과 동등) — 헤드리스/CI 실행용. */
     setAutoApprove(taskId: string, enabled: boolean): Promise<unknown> {

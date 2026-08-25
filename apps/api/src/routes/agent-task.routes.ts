@@ -51,7 +51,7 @@ import {
 } from '../services/agent-task/upload-store';
 import { claimUploadsAsInputFiles, ChunkStoreError } from '../services/agent-task/chunk-store';
 import { resolveDefaultMaxTurns } from '../services/agent-task/task-inputs';
-import { auditLocalTaskCreate, loadOwnedTask, toPublicTask, validateLocalExecutorInput } from './agent-task.helpers';
+import { auditLocalTaskCreate, filterTaskList, loadOwnedTask, toPublicTask, validateLocalExecutorInput } from './agent-task.helpers';
 import { isAdminRole } from '../data/user-manager';
 
 const logger = createLogger('AgentTaskRoutes');
@@ -252,9 +252,11 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
         viewAll: req.query.viewAll === 'true',
         userId,
     });
-    const tasks = scope === 'all'
+    const fetched = scope === 'all'
         ? await db.getAllAgentTasks(AGENT_TASK_LIMITS.LIST_ALL_DEFAULT)
         : await db.getUserAgentTasks(userId);
+    // ?executor=local&deviceId=…&status=failed,cancelled — CLI 목록용 부가 필터(권한 범위 무변경)
+    const tasks = filterTaskList(fetched, req.query);
     res.json(success({ tasks: tasks.map(t => toPublicTask(t as unknown as Record<string, unknown>)), total: tasks.length }));
 }));
 
