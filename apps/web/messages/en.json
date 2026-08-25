@@ -1185,10 +1185,6 @@
       "guest": "Guest"
     },
     "quickLinks": {
-      "users": {
-        "title": "User Management",
-        "desc": "Account creation, roles, and status"
-      },
       "models": {
         "title": "Model · MCP Settings",
         "desc": "Model presets and tool catalog"
@@ -1200,7 +1196,6 @@
     },
     "stats": {
       "totalUsers": "Total Users",
-      "totalUsersDelta": "+12 (last 7 days)",
       "activeSessions": "Active Sessions",
       "todayRequests": "Today's Requests",
       "systemStatus": "System Status",
@@ -1243,10 +1238,8 @@
       "90d": "90 days"
     },
     "stats": {
-      "totalConversations": "Total Conversations",
       "activeUsers": "Active Users",
-      "consumedTokens": "Tokens Consumed",
-      "avgResponse": "Avg. Response"
+      "consumedTokens": "Tokens Consumed"
     },
     "col": {
       "model": "Model",
@@ -1265,7 +1258,8 @@
       "4": "Thu",
       "5": "Fri",
       "6": "Sat"
-    }
+    },
+    "noData": "No data to show."
   },
   "adminConversations": {
     "title": "All Conversations",
@@ -1325,12 +1319,8 @@
     "filter": {
       "allActions": "All actions"
     },
-    "severity": {
-      "all": "All severities"
-    },
     "status": {
       "critical": "Critical",
-      "warn": "Warning",
       "info": "Info"
     },
     "period": {
@@ -1343,8 +1333,7 @@
       "time": "Time",
       "actor": "Actor",
       "action": "Action",
-      "target": "Target",
-      "severity": "Severity"
+      "target": "Target"
     },
     "empty": "No logs match the filters."
   },
@@ -1355,13 +1344,9 @@
     "refresh": "Refresh",
     "stat": {
       "cpu": "CPU Usage",
-      "memory": "Memory",
-      "requestRate": "Request Rate",
-      "errorRate": "Error Rate"
+      "memory": "Memory"
     },
     "memoryDelta": "of {total} GB total",
-    "requestChartTitle": "Request Rate (last 24h · req/min)",
-    "barTooltip": "{hour}:00 · {value}/min",
     "nodeStatusTitle": "Node · Service Status",
     "nodeRoleLlm": "LLM Node",
     "th": {
@@ -1434,14 +1419,13 @@
         "discussionHits": "Discussion Intent Hits",
         "delegateHits": "Delegate Intent Hits"
       }
-    }
+    },
+    "noNodes": "No cluster nodes reported."
   },
   "adminAlerts": {
     "title": "Alerts",
     "description": "Manage alert rules and review recent events.",
-    "addRule": "Add Rule",
     "rulesTitle": "Alert Rules",
-    "toggleAria": "Toggle rule enabled",
     "enabled": "Enabled",
     "disabled": "Disabled",
     "recentTitle": "Recent Alerts",
@@ -1452,29 +1436,9 @@
       "warning": "Warning",
       "info": "Info"
     },
-    "rules": {
-      "cpu": {
-        "name": "CPU Usage Threshold",
-        "condition": "CPU > 85% · sustained 5 min"
-      },
-      "contextOverflow": {
-        "name": "LLM Context Overflow",
-        "condition": "ContextOverflowError raised"
-      },
-      "errorRate": {
-        "name": "Error Rate Spike",
-        "condition": "5xx rate > 2%"
-      },
-      "tokenQuota": {
-        "name": "Token Quota Exhausted",
-        "condition": "Weekly quota over 90%"
-      },
-      "roleChange": {
-        "name": "Admin Role Change",
-        "condition": "user.role_change → admin"
-      }
-    },
-    "empty": "No recent alerts."
+    "empty": "No recent alerts.",
+    "rulesMovedHint": "Alert rules (thresholds, channels) are managed in code config and System settings (alerts group). This page shows the alert history only.",
+    "rulesMovedLink": "Open system settings"
   },
   "adminMcpCatalog": {
     "close": "Close",

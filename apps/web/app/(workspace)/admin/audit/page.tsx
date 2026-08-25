@@ -18,7 +18,6 @@ import { cn } from "@/lib/utils";
 import { toBcp47 } from "@/i18n/config";
 import { ApiClient } from "@/lib/api-client";
 
-type Severity = "critical" | "warn" | "info";
 
 interface AuditLog {
   id: string;
@@ -26,29 +25,11 @@ interface AuditLog {
   actor: string;
   action: string;
   target: string;
-  severity: Severity;
   ip: string;
 }
 
-const SEV_TONE: Record<Severity, "danger" | "warn" | "neutral"> = {
-  critical: "danger",
-  warn: "warn",
-  info: "neutral",
-};
-const SEV_LABEL_KEY: Record<Severity, string> = {
-  critical: "status.critical",
-  warn: "status.warn",
-  info: "status.info",
-};
-
 const ALL_ACTIONS = "__all__";
 const ACTIONS = [ALL_ACTIONS, "user.delete", "user.role_change", "apikey.create", "auth.login", "auth.failed_attempt", "mcp.server_register", "llm.context_overflow", "alert.dispatched"];
-const SEVERITIES: { key: "all" | Severity; labelKey: string }[] = [
-  { key: "all", labelKey: "severity.all" },
-  { key: "critical", labelKey: "status.critical" },
-  { key: "warn", labelKey: "status.warn" },
-  { key: "info", labelKey: "status.info" },
-];
 const PERIODS: { key: string; labelKey: string }[] = [
   { key: "today", labelKey: "period.today" },
   { key: "days7", labelKey: "period.days7" },
@@ -85,7 +66,6 @@ export default function AdminAuditPage() {
   // 실데이터만 표시 — API 응답이 비면 빈 상태(t("empty"))로 둔다.
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [action, setAction] = useState(ALL_ACTIONS);
-  const [severity, setSeverity] = useState<"all" | Severity>("all");
   const [period, setPeriod] = useState("days7");
 
   useEffect(() => {
@@ -104,8 +84,6 @@ export default function AdminAuditPage() {
             actor: l.user_id ?? "-",
             action: l.action ?? "-",
             target: [l.resource_type, l.resource_id].filter(Boolean).join(":") || "-",
-            // severity: audit_logs 미보유 컬럼 → 'info' 고정 (필터는 클라이언트 전용 best-effort)
-            severity: "info" as Severity,
             ip: l.ip_address ?? "-",
           })),
         );
@@ -120,12 +98,9 @@ export default function AdminAuditPage() {
 
   const filtered = useMemo(
     () =>
-      logs.filter(
-        (l) =>
-          (action === ALL_ACTIONS || l.action === action) &&
-          (severity === "all" || l.severity === severity),
-      ),
-    [logs, action, severity],
+      // severity 필터·컬럼은 제거 — audit_logs 에 컬럼이 없어 전부 'info' 로 고정돼 있었다(무의미)
+      logs.filter((l) => action === ALL_ACTIONS || l.action === action),
+    [logs, action],
   );
 
   const selectCls =
@@ -163,17 +138,6 @@ export default function AdminAuditPage() {
               </option>
             ))}
           </select>
-          <select
-            className={selectCls}
-            value={severity}
-            onChange={(e) => setSeverity(e.target.value as "all" | Severity)}
-          >
-            {SEVERITIES.map((s) => (
-              <option key={s.key} value={s.key}>
-                {t(s.labelKey)}
-              </option>
-            ))}
-          </select>
           <div className="flex items-center gap-1 rounded-pill border border-border bg-surface-2 p-1">
             {PERIODS.map((p) => (
               <button
@@ -199,14 +163,13 @@ export default function AdminAuditPage() {
                   <Th>{t("th.actor")}</Th>
                   <Th>{t("th.action")}</Th>
                   <Th>{t("th.target")}</Th>
-                  <Th>{t("th.severity")}</Th>
                   <Th>IP</Th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <Td className="py-8 text-center text-muted" colSpan={6}>
+                    <Td className="py-8 text-center text-muted" colSpan={5}>
                       {t("empty")}
                     </Td>
                   </tr>
@@ -217,9 +180,6 @@ export default function AdminAuditPage() {
                       <Td className="text-fg">{l.actor}</Td>
                       <Td className="font-mono text-xs text-fg-2">{l.action}</Td>
                       <Td className="font-mono text-xs text-muted">{l.target}</Td>
-                      <Td>
-                        <Badge tone={SEV_TONE[l.severity]}>{t(SEV_LABEL_KEY[l.severity])}</Badge>
-                      </Td>
                       <Td className="font-mono text-xs text-muted">{l.ip}</Td>
                     </tr>
                   ))

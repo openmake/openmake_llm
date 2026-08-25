@@ -1185,10 +1185,6 @@
       "guest": "게스트"
     },
     "quickLinks": {
-      "users": {
-        "title": "사용자 관리",
-        "desc": "계정 생성·권한·상태 관리"
-      },
       "models": {
         "title": "모델 · MCP 설정",
         "desc": "모델 프리셋과 도구 카탈로그"
@@ -1200,7 +1196,6 @@
     },
     "stats": {
       "totalUsers": "총 사용자",
-      "totalUsersDelta": "+12 (지난 7일)",
       "activeSessions": "활성 세션",
       "todayRequests": "오늘 요청",
       "systemStatus": "시스템 상태",
@@ -1243,10 +1238,8 @@
       "90d": "90일"
     },
     "stats": {
-      "totalConversations": "총 대화",
       "activeUsers": "활성 사용자",
-      "consumedTokens": "소비 토큰",
-      "avgResponse": "평균 응답"
+      "consumedTokens": "소비 토큰"
     },
     "col": {
       "model": "모델",
@@ -1265,7 +1258,8 @@
       "4": "목",
       "5": "금",
       "6": "토"
-    }
+    },
+    "noData": "표시할 데이터가 없습니다."
   },
   "adminConversations": {
     "title": "전체 대화 조회",
@@ -1325,12 +1319,8 @@
     "filter": {
       "allActions": "전체 액션"
     },
-    "severity": {
-      "all": "전체 심각도"
-    },
     "status": {
       "critical": "심각",
-      "warn": "경고",
       "info": "정보"
     },
     "period": {
@@ -1343,8 +1333,7 @@
       "time": "시각",
       "actor": "액터",
       "action": "액션",
-      "target": "대상",
-      "severity": "심각도"
+      "target": "대상"
     },
     "empty": "조건에 맞는 로그가 없습니다."
   },
@@ -1355,13 +1344,9 @@
     "refresh": "새로고침",
     "stat": {
       "cpu": "CPU 사용률",
-      "memory": "메모리",
-      "requestRate": "요청률",
-      "errorRate": "에러율"
+      "memory": "메모리"
     },
     "memoryDelta": "총 {total} GB 중",
-    "requestChartTitle": "요청률 (최근 24시간 · req/min)",
-    "barTooltip": "{hour}시: {value}/min",
     "nodeStatusTitle": "노드 · 서비스 상태",
     "nodeRoleLlm": "LLM 노드",
     "th": {
@@ -1434,14 +1419,13 @@
         "discussionHits": "토론 의도 적중",
         "delegateHits": "위임 의도 적중"
       }
-    }
+    },
+    "noNodes": "보고된 클러스터 노드가 없습니다."
   },
   "adminAlerts": {
     "title": "알림",
     "description": "알림 규칙을 관리하고 최근 발생 이벤트를 확인합니다.",
-    "addRule": "규칙 추가",
     "rulesTitle": "알림 규칙",
-    "toggleAria": "규칙 활성 토글",
     "enabled": "활성",
     "disabled": "비활성",
     "recentTitle": "최근 발생 알림",
@@ -1452,29 +1436,9 @@
       "warning": "경고",
       "info": "정보"
     },
-    "rules": {
-      "cpu": {
-        "name": "CPU 사용률 임계",
-        "condition": "CPU > 85% · 5분 지속"
-      },
-      "contextOverflow": {
-        "name": "LLM 컨텍스트 오버플로",
-        "condition": "ContextOverflowError 발생"
-      },
-      "errorRate": {
-        "name": "에러율 급증",
-        "condition": "5xx 비율 > 2%"
-      },
-      "tokenQuota": {
-        "name": "토큰 쿼터 소진",
-        "condition": "주간 쿼터 90% 초과"
-      },
-      "roleChange": {
-        "name": "관리자 권한 변경",
-        "condition": "user.role_change → admin"
-      }
-    },
-    "empty": "최근 발생한 알림이 없습니다."
+    "empty": "최근 발생한 알림이 없습니다.",
+    "rulesMovedHint": "알림 규칙(임계값·채널)은 코드 설정과 시스템 설정(alerts 그룹)에서 관리합니다. 이 화면은 발생 이력만 보여줍니다.",
+    "rulesMovedLink": "시스템 설정 열기"
   },
   "adminMcpCatalog": {
     "close": "닫기",

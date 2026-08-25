@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { Shield, Users, Boxes, Gauge, ArrowRight, Pencil, Trash2, Plus, X, Loader2 } from "lucide-react";
+import { Shield, Boxes, Gauge, ArrowRight, Pencil, Trash2, Plus, X, Loader2 } from "lucide-react";
 import {
   PageHeader,
   StatCard,
@@ -54,7 +54,6 @@ function fmtDate(s?: string | null) {
 }
 
 const QUICK_LINKS = [
-  { href: "/admin", titleKey: "quickLinks.users.title", descKey: "quickLinks.users.desc", icon: Users },
   { href: "/mcp-catalog", titleKey: "quickLinks.models.title", descKey: "quickLinks.models.desc", icon: Boxes },
   { href: "/admin/metrics", titleKey: "quickLinks.system.title", descKey: "quickLinks.system.desc", icon: Gauge },
 ];
@@ -407,12 +406,7 @@ export default function AdminPage() {
         <Card className="mt-8">
           <CardHeader className="flex items-center justify-between">
             <CardTitle>{t("recentUsers")}</CardTitle>
-            <Link
-              href="/admin"
-              className="inline-flex h-8 items-center rounded-md border border-border-strong bg-surface px-3 text-xs font-medium text-fg hover:bg-surface-2"
-            >
-              {t("viewAll")}
-            </Link>
+            {/* "전체 보기"는 자기 페이지를 가리키던 링크라 제거(전용 사용자 목록 페이지가 없다) */}
           </CardHeader>
           <CardContent className="p-0">
             <Table>
