@@ -37,7 +37,7 @@ import { createLogger } from '../utils/logger';
 import { classifyConnectError, parseConnectError } from '../mcp/connect-error';
 import { validate } from '../middlewares/validation';
 import { mcpToolExecuteSchema, mcpServerCreateSchema, mcpServerEnvUpdateSchema,
-    mcpServerEnabledUpdateSchema } from '../schemas/mcp.schema';
+    mcpServerEnabledUpdateSchema, mcpServerAutoSpawnUpdateSchema } from '../schemas/mcp.schema';
 import { McpCatalogRepository } from '../data/repositories/mcp-catalog-repository';
 import { McpOAuthRepository } from '../data/repositories/mcp-oauth-repository';
 import { canRegisterServer, canViewServer, canDeleteServer, canStartStopServer, canUpdateServerEnv } from './mcp-visibility';
@@ -310,6 +310,55 @@ export const mcpRouter = Router();
       }
 
       res.json(success({ id, enabled }));
+  }));
+
+  /**
+   * PATCH /api/mcp/servers/:id/auto-spawn  { auto_spawn }
+   * 자동 연결 토글 — 사용자 소유 서버 전용(전역은 부팅 시 registry 가 띄우므로 이 축이 없다).
+   *
+   * 켜면 다음 로그인/채팅 시작을 기다리지 않고 바로 spawn 을 시도한다(from-catalog 설치와
+   * 같은 규칙). spawn 실패는 토글 결과를 뒤집지 않는다 — 실패 원인은 instance 이력에 남아
+   * 목록의 connectionError 로 보이고, 다음 ensureUserServers 가 멱등 재시도한다.
+   */
+  mcpRouter.patch('/servers/:id/auto-spawn', requireAuth, validate(mcpServerAutoSpawnUpdateSchema), asyncHandler(async (req: Request, res: Response) => {
+      const userId = String(req.user?.id ?? '');
+      const role = req.user?.role ?? 'user';
+      const actor = { id: userId, role };
+      const { id } = req.params;
+      const { auto_spawn: autoSpawn } = req.body as { auto_spawn: boolean };
+
+      const db = getUnifiedDatabase();
+      const repo = new McpCatalogRepository(db.getPool());
+      const server = await repo.getServerById(id);
+      if (!server) {
+          res.status(404).json(notFound('서버'));
+          return;
+      }
+      if (!server.user_id) {
+          res.status(400).json(badRequest('전역 서버는 부팅 시 자동 연결됩니다 — 자동 연결 토글 대상이 아닙니다'));
+          return;
+      }
+      if (!canStartStopServer(actor, server)) {
+          res.status(403).json(forbidden('해당 서버를 변경할 권한이 없습니다'));
+          return;
+      }
+
+      await repo.setServerAutoSpawn(id, autoSpawn);
+
+      let spawned = false;
+      if (autoSpawn && server.enabled) {
+          const supervisor = getLifecycleSupervisor();
+          if (supervisor) {
+              try {
+                  await supervisor.spawnUserServer(String(server.user_id), id);
+                  spawned = true;
+              } catch (e: unknown) {
+                  logger.warn(`자동 연결 켜기 직후 spawn 실패(토글은 유지): ${id}: ${e instanceof Error ? e.message : String(e)}`);
+              }
+          }
+      }
+
+      res.json(success({ id, auto_spawn: autoSpawn, spawned }));
   }));
 
   mcpRouter.patch('/servers/:id/env', requireAuth, validate(mcpServerEnvUpdateSchema), asyncHandler(async (req: Request, res: Response) => {
