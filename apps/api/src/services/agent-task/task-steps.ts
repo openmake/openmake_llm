@@ -76,3 +76,29 @@ export async function runTool(
         return `Error: ${msg}`;
     }
 }
+
+/**
+ * judge 판정을 스텝으로 영속 — 사후 규명용. 종전엔 라벨(judge_verdict)만 남아 오판 원인을
+ * 복원할 수 없었다. 실패해도 완료 흐름을 막지 않는다(fail-open, 관측 전용).
+ */
+export async function persistJudgeStep(
+    taskId: string,
+    stepNumber: number,
+    verdict: string,
+    reason: string,
+    raw: string,
+    executionContext: string,
+): Promise<number> {
+    const content = [
+        `판정: ${verdict}`,
+        reason ? `사유: ${reason}` : `사유: (파싱 실패) ${raw}`,
+        `입력 요약:\n${executionContext}`,
+    ].join('\n');
+    try {
+        await getUnifiedDatabase().addAgentTaskStep({ taskId, stepNumber, stepType: 'judge', content });
+        return stepNumber + 1;
+    } catch (e) {
+        logger.warn(`[AgentTask] judge 스텝 영속 실패(무시): ${taskId} — ${e instanceof Error ? e.message : e}`);
+        return stepNumber;
+    }
+}

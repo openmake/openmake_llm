@@ -24,9 +24,9 @@ import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { extractAndStripArtifacts } from '../../llm/artifact-parser';
 import { applyReportRender } from '../chat-service/report-block';
 import { AGENT_TASK_INCOMPLETE_MARKER, getAgentTaskVerifyFailedNudge } from '../../prompts/agent-task-prompt';
-import { judgeGoalAchieved, buildJudgeExecutionContext } from './goal-judge';
+import { judgeGoal, buildJudgeExecutionContext } from './goal-judge';
 import { verifyCodeArtifacts } from './deliverable-verify';
-import { persistArtifactSteps } from './task-steps';
+import { persistArtifactSteps, persistJudgeStep } from './task-steps';
 import { maybePersistCodeDiff } from './code-diff';
 import { judgeClientFor } from './role-client';
 import { createLogger } from '../../utils/logger';
@@ -125,9 +125,13 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     let verdict: JudgeVerdict = 'skipped';
     if (artifacts.length === 0 && AGENT_TASK_LIMITS.GOAL_JUDGE_ENABLED) {
         const execCtx = buildJudgeExecutionContext(usedTools, turn + 1, taskRuntime?.getPlanSnapshot() ?? [], toolEvidence);
-        const achieved = await judgeGoalAchieved(
+        const outcome = await judgeGoal(
             await judgeClientFor(userId), goal, body ?? '', signal, execCtx);
+        const achieved = outcome.achieved;
         verdict = achieved === null ? 'unknown' : achieved ? 'achieved' : 'not_achieved';
+        // 판정·사유·입력 요약을 스텝으로 남긴다 — 오판 사후 규명용(관측 전용, fail-open).
+        stepNumber = await persistJudgeStep(taskId, stepNumber, verdict, outcome.reason, outcome.raw, execCtx);
+        emitStep('judge', undefined, `판정: ${verdict}${outcome.reason ? ` — ${outcome.reason}` : ''}`);
         if (achieved === false) {
             await update({
                 status: 'failed',

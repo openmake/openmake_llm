@@ -606,6 +606,12 @@ export const ROUTER_CONFIDENCE_FALLBACK = 0.85;
  * 언어 감지 임계값
  * chat/language-policy.ts에서 참조
  */
+/**
+ * goal judge 증거 창에서 제외할 도구 — 결과가 ANSWER(terminate) 나 계획 스냅샷(plan_*) 과 중복이라
+ * 마지막 N개 창을 차지하면 실제 수행 증거가 밀려난다. (goal-judge.ts buildJudgeToolEvidence)
+ */
+export const JUDGE_EVIDENCE_EXCLUDED_TOOLS: ReadonlySet<string> = new Set(['terminate', 'plan_create', 'plan_update', 'plan_view']);
+
 export const LANGUAGE_THRESHOLDS = {
     /** 비라틴 알파벳 비율 임계값 */
     NON_LATIN_RATIO: 0.3,
@@ -1532,9 +1538,12 @@ export const AGENT_TASK_LIMITS = {
     GOAL_JUDGE_MAX_ANSWER_CHARS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_MAX_CHARS || '6000', 10),
     /** judge 실행 컨텍스트에 싣는 최근 도구 결과 수 — 성공 증거 부재로 완수 작업을 미달성
      *  판정하던 false negative(2026-08-09 예약리포트·2026-08-15 로컬실행, 실측 2회) 완화. */
-    GOAL_JUDGE_EVIDENCE_MAX_ITEMS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_EVIDENCE_MAX_ITEMS || '5', 10),
+    GOAL_JUDGE_EVIDENCE_MAX_ITEMS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_EVIDENCE_MAX_ITEMS || '8', 10),
     /** judge 도구 결과 항목당 글자 캡 (프롬프트 팽창 방지) */
-    GOAL_JUDGE_EVIDENCE_ITEM_CHARS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_EVIDENCE_ITEM_CHARS || '160', 10),
+    GOAL_JUDGE_EVIDENCE_ITEM_CHARS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_EVIDENCE_ITEM_CHARS || '320', 10),
+    /** judge 사유 스텝에 남길 reason 최대 글자 (파싱 실패 시 raw 응답 앞부분도 같이 남긴다) */
+    GOAL_JUDGE_REASON_MAX_CHARS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_REASON_MAX_CHARS || '600', 10),
+    GOAL_JUDGE_RAW_KEEP_CHARS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_RAW_KEEP_CHARS || '400', 10),
     /** 부팅 자동 복구 — 프로세스 재시작으로 중단된 task 를 부팅 시 자동 resume 한다.
      *  주의: schema-initializer 가 부팅 시 running/paused 를 failed('server restarted') 로 먼저
      *  마킹하므로, 복구 대상은 ①잔존 running/paused(마킹 실패 대비) + ②restart 마킹 + checkpoint
