@@ -117,25 +117,25 @@ function urlToSource(raw: string, idx: number): Source {
   return { id: String(idx), title: raw, domain, verified: true };
 }
 
-/* ── 목업 데이터 — 미인증/네트워크 실패/세션 없음 시 폴백 ─────── */
+/* ── 진행 단계 템플릿 — 세션이 없을 때의 초기 stepper(전부 pending). 실제 상태는 deriveStages 가 채운다 ── */
 const STAGES: Stage[] = [
   {
     key: "decompose",
     labelKey: "stages.decompose.label",
     descKey: "stages.decompose.desc",
-    status: "done",
+    status: "pending",
   },
   {
     key: "collect",
     labelKey: "stages.collect.label",
     descKey: "stages.collect.desc",
-    status: "done",
+    status: "pending",
   },
   {
     key: "verify",
     labelKey: "stages.verify.label",
     descKey: "stages.verify.desc",
-    status: "running",
+    status: "pending",
   },
   {
     key: "synthesize",
@@ -143,52 +143,6 @@ const STAGES: Stage[] = [
     descKey: "stages.synthesize.desc",
     status: "pending",
   },
-];
-
-const SOURCES: Source[] = [
-  {
-    id: "1",
-    title: "",
-    titleKey: "mock.source1",
-    domain: "research.example.com",
-    verified: true,
-  },
-  {
-    id: "2",
-    title: "",
-    titleKey: "mock.source2",
-    domain: "arxiv.org",
-    verified: true,
-  },
-  {
-    id: "3",
-    title: "",
-    titleKey: "mock.source3",
-    domain: "techblog.example.io",
-    verified: true,
-  },
-  {
-    id: "4",
-    title: "",
-    titleKey: "mock.source4",
-    domain: "safety.example.org",
-    verified: false,
-  },
-  {
-    id: "5",
-    title: "",
-    titleKey: "mock.source5",
-    domain: "benchmark.example.dev",
-    verified: true,
-  },
-];
-
-const METRICS: Metric[] = [
-  { labelKey: "metrics.sources", value: "5" },
-  { labelKey: "mock.verifiedClaims", value: "23" },
-  { labelKey: "mock.conflicts", value: "2", tone: "warn" },
-  { labelKey: "mock.tokensUsed", value: "48.2K" },
-  { labelKey: "mock.elapsed", value: "", valueKey: "mock.elapsedValue" },
 ];
 
 const STAGE_ICON: Record<StageStatus, typeof Circle> = {
@@ -226,10 +180,10 @@ export default function ResearchPage() {
   const t = useTranslations("research");
   const router = useRouter();
   const [sourcesOpen, setSourcesOpen] = useState(false);
-  // 최신 세션이 있으면 그것으로 진행/소스/메트릭 표시. 없거나 실패 시 목업 폴백.
+  // 최신 세션이 있으면 그것으로 진행/소스/메트릭 표시. 없거나 실패 시 빈 상태(그전엔 목업 소스 5개·가짜 메트릭이 실렌더됐다).
   const [stages, setStages] = useState<Stage[]>(STAGES);
-  const [sources, setSources] = useState<Source[]>(SOURCES);
-  const [metrics, setMetrics] = useState<Metric[]>(METRICS);
+  const [sources, setSources] = useState<Source[]>([]);
+  const [metrics, setMetrics] = useState<Metric[]>([]);
   const [status, setStatus] = useState<ApiResearchStatus | null>(null);
   const [sessionList, setSessionList] = useState<ApiResearchSession[]>([]);
   const [activeSession, setActiveSession] = useState<ApiResearchSession | null>(null);
@@ -310,7 +264,7 @@ export default function ResearchPage() {
         applySession(latest);
         if (!TERMINAL.includes(latest.status)) poll(latest.id); // 진행 중이면 이어서 폴링
       } catch {
-        // 401·네트워크 실패: 목업 폴백 유지
+        // 401·네트워크 실패: 빈 상태 유지
       }
     })();
     return () => {

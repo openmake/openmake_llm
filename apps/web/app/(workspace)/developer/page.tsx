@@ -80,7 +80,7 @@ export default function DeveloperPage() {
           setSteps(payload.steps);
         }
       } catch {
-        /* 기본 목업 유지 */
+        /* API 실패 시 정적 기본 문서 유지 — 데이터가 아니라 문서라 폴백이 정당하다 */
       }
     })();
     return () => {

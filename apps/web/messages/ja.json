@@ -551,38 +551,6 @@
       "noResults": "検索結果がありません。",
       "hint": "新しい会話を始めるとここに表示されます。"
     },
-    "mock": {
-      "c1": {
-        "title": "Next.js 16 App Router 移行",
-        "preview": "既存の pages ルーターから app ルーターへ移行する際の注意点は...",
-        "time": "午後2:14"
-      },
-      "c2": {
-        "title": "PostgreSQL インデックスチューニング",
-        "preview": "複合インデックスの順序がクエリプランに与える影響を説明して",
-        "time": "午前11:02"
-      },
-      "c3": {
-        "title": "マーケティングキャンペーンのコピー ブレインストーミング",
-        "preview": "20代向けのSNS広告コピーを5パターン作って",
-        "time": "午後6:47"
-      },
-      "c4": {
-        "title": "リサーチレポートの構成づくり",
-        "preview": "エンタープライズLLM導入レポートの目次を提案して",
-        "time": "午後3:20"
-      },
-      "c5": {
-        "title": "TypeScript ジェネリック型ガード",
-        "preview": "Discriminated union を安全に絞り込む方法は？",
-        "time": "月曜日"
-      },
-      "c6": {
-        "title": "画像分析プロンプト",
-        "preview": "添付したチャートから主要なトレンドを読み取って",
-        "time": "日曜日"
-      }
-    },
     "viewAllToggle": "全ユーザー",
     "ownerBadge": "ユーザー {id}"
   },
@@ -801,20 +769,6 @@
     "deleteFailed": "削除に失敗しました: {message}",
     "elapsedSec": "{s}秒",
     "elapsedMinSec": "{m}分{s}秒",
-    "mock": {
-      "t1Goal": "競合サイト3件の価格戦略を分析し比較表にまとめる",
-      "t1Step1": "対象サイト一覧の確認",
-      "t1Step2": "各サイトの価格ページを取得",
-      "t1Step3": "価格データの正規化",
-      "t1Step4": "比較表の作成",
-      "t1Step5": "要約レポートの作成",
-      "t2Goal": "月次売上CSVを分析しレポートを生成",
-      "t2Step1": "データの読み込みと検証",
-      "t2Step2": "月別・製品別の集計",
-      "t2Step3": "推移チャートの生成",
-      "t2Step4": "PDFレポートの出力",
-      "t3Goal": "最新AI論文5本を要約し要点を整理"
-    },
     "autoApprove": "残りをすべて承認",
     "autoApproveHint": "このタスクの以降のツール実行を承認なしで進めます（質問は除く）",
     "tokensUsed": "{count} トークン",
@@ -962,18 +916,6 @@
       "progress": "進捗率",
       "depth": "深さ"
     },
-    "mock": {
-      "verifiedClaims": "検証済みの主張",
-      "conflicts": "検出された矛盾",
-      "tokensUsed": "使用トークン",
-      "elapsed": "経過時間",
-      "elapsedValue": "3分12秒",
-      "source1": "2026年AIエージェント市場動向レポート",
-      "source2": "マルチエージェントオーケストレーションアーキテクチャ分析",
-      "source3": "エンタープライズLLM導入事例研究",
-      "source4": "自律エージェント安全性ガイドライン",
-      "source5": "RAG対ロングコンテキスト比較ベンチマーク"
-    },
     "viewAllToggle": "全ユーザー",
     "ownerBadge": "ユーザー {id}"
   },
@@ -1073,7 +1015,6 @@
     "activeServers": "アクティブサーバー",
     "activeServersDelta": "全 5 件中",
     "totalCalls": "総ツール呼び出し",
-    "avgLatency": "平均遅延",
     "errorRate": "エラー率",
     "serverDistribution": "サーバー別呼び出し分布",
     "callCount": "{count}回",
@@ -1212,7 +1153,12 @@
       "edit": "編集",
       "delete": "削除"
     },
-    "empty": "表示するユーザーがありません。"
+    "empty": "表示するユーザーがありません。",
+    "guard": {
+      "denied": "管理者権限が必要です",
+      "deniedDescription": "このページは管理者アカウントのみ閲覧できます。",
+      "home": "チャットに戻る"
+    }
   },
   "adminAnalytics": {
     "title": "アナリティクス",
@@ -1690,7 +1636,6 @@
   "usage": {
     "title": "使用量",
     "description": "アカウント単位のトークン・リクエスト使用量です。",
-    "mockData": "モックデータ",
     "updatedAt": "更新 {time}",
     "refresh": "更新",
     "loading": "読み込み中...",
@@ -1744,7 +1689,8 @@
     "quotaResetAt": "{time} にリセット",
     "quotaExceeded": "1時間あたりのクォータを使い切りました。リセット時刻以降に再度リクエストできます。",
     "globalQuotaTitle": "グローバルクォータ消費率 (サーバー全体)",
-    "globalQuotaNote": "プロセス再起動でリセットされる全体観測値 — 個人クォータとは別"
+    "globalQuotaNote": "プロセス再起動でリセットされる全体観測値 — 個人クォータとは別",
+    "loadFailed": "使用量を読み込めませんでした"
   },
   "developer": {
     "pageTitle": "開発者ドキュメント",

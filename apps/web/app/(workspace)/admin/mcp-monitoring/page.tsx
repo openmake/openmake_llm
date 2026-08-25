@@ -35,7 +35,6 @@ interface ApiMonitoringSummary {
 interface SummaryView {
   activeServers: string;
   totalCalls: string;
-  avgLatency: string;
   errorRate: string;
 }
 
@@ -69,19 +68,6 @@ interface ToolLog {
   durationMs: number;
   status: LogStatus;
 }
-
-/* ── 목업 데이터 ──────────────────────────────────────────
- * 요약 StatCard 4개 중 "활성 서버"·"총 spawn(=총 도구 호출 칸)"·"에러율" 은
- * GET /api/admin/mcp/monitoring/summary 로 실연동. "평균 지연" 은 백엔드에
- * 해당 메트릭이 없어 목업 유지. 서버별 호출 분포·도구 실행 로그는 백엔드에
- * per-call/per-tool 집계 엔드포인트가 없어 목업 유지. (아래 주석 참조)
- */
-const SUMMARY: SummaryView = {
-  activeServers: "4",
-  totalCalls: "12,840",
-  avgLatency: "186ms",
-  errorRate: "1.4%",
-};
 
 /** 감사 로그의 mcp_tool_call 항목으로 서버별 호출 분포 + 최근 실행 로그를 구성한다(실데이터).
  *  백엔드에 전용 집계 엔드포인트가 없어 목업을 쓰던 것을 실 감사 데이터로 대체. */
@@ -143,7 +129,7 @@ async function fetchToolActivity(
   }
 }
 
-/** 요약 통계 조회 — 실패(401/네트워크) 시 null 반환하여 호출측이 목업 유지. */
+/** 요약 통계 조회 — 실패(401/네트워크) 시 null 반환(호출측은 "—" 유지). */
 async function fetchSummaryView(locale: string): Promise<SummaryView | null> {
   try {
     const res = await ApiClient.get<
@@ -155,13 +141,11 @@ async function fetchSummaryView(locale: string): Promise<SummaryView | null> {
       activeServers: String(s.currentRunning),
       // 백엔드엔 "총 도구 호출" 메트릭이 없어 누적 spawn 수로 대체 표시
       totalCalls: s.totalSpawned.toLocaleString(locale),
-      // 평균 지연 메트릭 없음 — 목업 값 유지
-      avgLatency: SUMMARY.avgLatency,
       errorRate:
         s.crashRate24hPct != null ? `${s.crashRate24hPct.toFixed(1)}%` : "—",
     };
   } catch {
-    // 401(비admin)·실패 → null (목업 유지)
+    // 401(비admin)·실패 → null
     return null;
   }
 }
@@ -169,7 +153,8 @@ async function fetchSummaryView(locale: string): Promise<SummaryView | null> {
 export default function McpMonitoringPage() {
   const t = useTranslations("mcpMonitoring");
   const locale = toBcp47(useLocale());
-  const [summary, setSummary] = useState<SummaryView>(SUMMARY);
+  // 실데이터만 — 그전엔 고정 목업(4·12,840·186ms·1.4%)이 실렌더됐고 "평균 지연"은 백엔드 메트릭이 없어 항상 목업이라 타일 자체를 뺐다
+  const [summary, setSummary] = useState<SummaryView>({ activeServers: "—", totalCalls: "—", errorRate: "—" });
   const [topCrashed, setTopCrashed] = useState<TopCrashedItem[]>([]);
   const [crashTrend, setCrashTrend] = useState<CrashTrendItem[]>([]);
   const [serverUsage, setServerUsage] = useState<ServerUsage[]>([]);
@@ -242,7 +227,6 @@ export default function McpMonitoringPage() {
             delta={t("activeServersDelta")}
           />
           <StatCard label={t("totalCalls")} value={summary.totalCalls} />
-          <StatCard label={t("avgLatency")} value={summary.avgLatency} />
           <StatCard
             label={t("errorRate")}
             value={summary.errorRate}
