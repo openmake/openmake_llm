@@ -63,16 +63,6 @@ interface LearningItem {
   status: LearningStatus;
 }
 
-/* ── 목업 데이터 ──────────────────────────────────────────── */
-const ITEMS_FALLBACK: LearningItem[] = [
-  { id: 1, topicKey: "topics.codeReviewCitation", positive: 142, negative: 18, status: "applied" },
-  { id: 2, topicKey: "topics.koreanHonorific", positive: 98, negative: 7, status: "applied" },
-  { id: 3, topicKey: "topics.researchSourceReliability", positive: 64, negative: 21, status: "reviewing" },
-  { id: 4, topicKey: "topics.longSummaryOmission", positive: 51, negative: 33, status: "reviewing" },
-  { id: 5, topicKey: "topics.toolFailureGuidance", positive: 29, negative: 44, status: "pending" },
-  { id: 6, topicKey: "topics.calcVerification", positive: 18, negative: 12, status: "pending" },
-];
-
 const STATUS_META: Record<LearningStatus, { labelKey: string; tone: "success" | "warn" | "neutral" }> = {
   applied: { labelKey: "status.applied", tone: "success" },
   reviewing: { labelKey: "status.reviewing", tone: "warn" },
@@ -207,7 +197,7 @@ function AgentDetailPanel({ agentId }: { agentId: string }) {
 export default function AgentLearningPage() {
   const t = useTranslations("agentLearning");
   const locale = toBcp47(useLocale());
-  const [items] = useState<LearningItem[]>(ITEMS_FALLBACK);
+  const [items] = useState<LearningItem[]>([]);
   const [collected, setCollected] = useState("0");
   const [agents, setAgents] = useState<ApiSystemAgent[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");

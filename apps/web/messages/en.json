@@ -102,7 +102,6 @@
     },
     "saveHistory": {
       "title": "Save conversation content",
-      "descriptionGeneral": "Store conversation content in the server database. When off, only anonymous usage metadata is recorded.",
       "descriptionPrivacy": "When off, conversation content is not stored on the server."
     },
     "defaultModel": {
@@ -131,10 +130,6 @@
     "theme": {
       "title": "Theme",
       "description": "Choose the app color theme."
-    },
-    "emailAlerts": {
-      "title": "Email alerts",
-      "description": "Receive agent task completions and security events by email."
     },
     "pushAlerts": {
       "title": "Push notifications",
@@ -648,24 +643,6 @@
       "autoCreate": "AI Skill Generation",
       "gitIngest": "Import Skill from Git URL"
     },
-    "fallback": {
-      "pdfSummary": {
-        "name": "PDF Summary",
-        "description": "Condenses long PDF documents into key points."
-      },
-      "sqlQuery": {
-        "name": "SQL Query Writer",
-        "description": "Converts natural-language requirements into parameterized SQL."
-      },
-      "adCopy": {
-        "name": "Ad Copywriting",
-        "description": "Generates marketing copy tailored to a target segment."
-      },
-      "financialReport": {
-        "name": "Financial Report Analysis",
-        "description": "Interprets key metrics from income statements and balance sheets."
-      }
-    },
     "form": {
       "nameRequired": "Enter a skill name.",
       "contentRequired": "Enter the skill content (Instructions).",
@@ -805,7 +782,6 @@
     "outputsLabel": "Outputs ({count})",
     "noSteps": "No step records.",
     "stepsLabel": "Steps ({count})",
-    "approvalsTitle": "Tool executions awaiting approval ({count})",
     "reject": "Reject",
     "approve": "Approve",
     "question": "The agent is asking",
@@ -874,8 +850,6 @@
     "pageDescription": "Define specialized agents with your own system prompts.",
     "importFromGit": "Import from Git URL",
     "newAgent": "New Agent",
-    "tabActive": "Active Agents",
-    "tabDraft": "Draft Review",
     "loading": "Loading...",
     "emptyTitle": "No custom agents yet",
     "emptyDescription": "Create one yourself or import from a Git URL to add a specialized agent.",
@@ -920,24 +894,11 @@
     "networkError": "Network error",
     "loadingDrafts": "Loading drafts...",
     "noDraftsTitle": "No drafts awaiting approval",
-    "noDraftsDescription": "Agents created via Git URL import will appear here.",
     "approve": "Approve",
     "reject": "Reject",
     "approveFailed": "Approval failed: {error}",
     "rejectFailed": "Rejection failed: {error}",
     "rejectConfirm": "Reject (archive) this draft agent?",
-    "fallback": {
-      "techWriter": {
-        "name": "Technical Writer",
-        "description": "Writes API references and architecture docs in a consistent tone.",
-        "systemPrompt": "You are a senior technical writer..."
-      },
-      "reviewer": {
-        "name": "Code Reviewer",
-        "description": "Catches bugs and simplification opportunities in changed code.",
-        "systemPrompt": "You are a meticulous code reviewer..."
-      }
-    },
     "useInChat": "Use in chat",
     "inUseDeselect": "In use · Deselect",
     "deselect": "Deselect agent",
@@ -1099,20 +1060,9 @@
     "noDescription": "No description available.",
     "kindSkill": "Skill",
     "kindServer": "Server",
-    "toolCount": "{count} tools",
     "installed": "Installed",
     "install": "Install",
     "installError": "Installation failed. Please try again.",
-    "mock": {
-      "filesystem": "A sandboxed filesystem toolset for safely reading and writing local files.",
-      "github": "A GitHub integration server for issues, PRs, repositories, and code search.",
-      "postgres": "A database tool offering read-only SQL queries and schema introspection.",
-      "slack": "Slack workspace integration for reading channels, sending messages, and searching users.",
-      "pdfExtractName": "PDF Extraction Skill",
-      "pdfExtract": "A skill that extracts structured text, tables, and metadata from PDF documents.",
-      "webResearchName": "Web Research Skill",
-      "webResearch": "A deep research skill for multi-source search, citation verification, and summarization."
-    },
     "credentialsTitle": "Enter credentials to install",
     "cancel": "Cancel"
   },
@@ -1162,14 +1112,6 @@
     "patternCount": "({count}x)",
     "improvements": "Improvement suggestions",
     "noImprovements": "No improvement suggestions",
-    "topics": {
-      "codeReviewCitation": "Strengthen source citations in code review responses",
-      "koreanHonorific": "Maintain consistent Korean honorific tone",
-      "researchSourceReliability": "Indicate source reliability in deep research",
-      "longSummaryOmission": "Reduce key omissions in long-form summaries",
-      "toolFailureGuidance": "Improve user guidance on tool call failures",
-      "calcVerification": "Add verification steps for numeric calculations"
-    },
     "status": {
       "applied": "Applied",
       "reviewing": "Reviewing",
@@ -2049,13 +1991,15 @@
     },
     "agents": {
       "title": "Custom agents",
-      "hint": "Agents need no approval — they are usable as soon as they are installed.",
+      "hint": "Agents installed from extensions are active immediately. Only agents imported from a Git URL need approval here.",
       "link": "Open agent list"
     },
     "tasks": {
       "title": "Agent task approvals",
       "hint": "High-risk tool runs and agent questions need approval before the task continues. You can also answer inline in chat.",
       "empty": "No agent tasks awaiting approval.",
+      "autoApprove": "Auto-approve this task",
+      "autoApproveHint": "Run this task's remaining tool calls without approval (questions from the agent still wait)",
       "question": "Question",
       "tool": "Tool run",
       "openTask": "Open task",

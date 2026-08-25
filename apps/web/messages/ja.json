@@ -102,7 +102,6 @@
     },
     "saveHistory": {
       "title": "会話本文の保存",
-      "descriptionGeneral": "会話内容をサーバーのデータベースに保存します。オフにすると匿名の利用メタデータのみが記録されます。",
       "descriptionPrivacy": "オフにすると会話本文はサーバーに保存されません。"
     },
     "defaultModel": {
@@ -131,10 +130,6 @@
     "theme": {
       "title": "テーマ",
       "description": "アプリのカラーテーマを選択します。"
-    },
-    "emailAlerts": {
-      "title": "メール通知",
-      "description": "エージェント作業の完了やセキュリティイベントをメールで受け取ります。"
     },
     "pushAlerts": {
       "title": "プッシュ通知",
@@ -648,24 +643,6 @@
       "autoCreate": "AI スキル自動生成",
       "gitIngest": "Git URL からスキルをインポート"
     },
-    "fallback": {
-      "pdfSummary": {
-        "name": "PDF 要約",
-        "description": "長い PDF 文書を要点に凝縮します。"
-      },
-      "sqlQuery": {
-        "name": "SQL クエリ作成",
-        "description": "自然言語の要件をパラメータ化された SQL に変換します。"
-      },
-      "adCopy": {
-        "name": "広告コピーライティング",
-        "description": "ターゲットセグメントに合わせたマーケティングコピーを生成します。"
-      },
-      "financialReport": {
-        "name": "財務レポート解釈",
-        "description": "損益計算書と貸借対照表の主要指標を解釈します。"
-      }
-    },
     "form": {
       "nameRequired": "スキル名を入力してください。",
       "contentRequired": "スキル内容（Instructions）を入力してください。",
@@ -805,7 +782,6 @@
     "outputsLabel": "成果物 ({count})",
     "noSteps": "ステップ記録がありません。",
     "stepsLabel": "実行ステップ ({count})",
-    "approvalsTitle": "承認待ちのツール実行 ({count})",
     "reject": "却下",
     "approve": "承認",
     "question": "エージェントからの質問",
@@ -874,8 +850,6 @@
     "pageDescription": "独自のシステムプロンプトで特化したエージェントを定義します。",
     "importFromGit": "Git URL から取り込む",
     "newAgent": "新規エージェント",
-    "tabActive": "有効なエージェント",
-    "tabDraft": "ドラフト確認",
     "loading": "読み込み中...",
     "emptyTitle": "カスタムエージェントはまだありません",
     "emptyDescription": "自分で作成するか、Git URL から取り込んで特化したエージェントを追加してください。",
@@ -920,24 +894,11 @@
     "networkError": "ネットワークエラー",
     "loadingDrafts": "ドラフトを読み込み中...",
     "noDraftsTitle": "承認待ちのドラフトはありません",
-    "noDraftsDescription": "Git URL の取り込みで作成されたエージェントがここに表示されます。",
     "approve": "承認",
     "reject": "却下",
     "approveFailed": "承認に失敗しました: {error}",
     "rejectFailed": "却下に失敗しました: {error}",
     "rejectConfirm": "このドラフトエージェントを却下(保管)しますか？",
-    "fallback": {
-      "techWriter": {
-        "name": "テクニカルライター",
-        "description": "API リファレンスやアーキテクチャ文書を一貫したトーンで作成します。",
-        "systemPrompt": "あなたはシニアテクニカルライターです..."
-      },
-      "reviewer": {
-        "name": "コードレビュアー",
-        "description": "変更されたコードのバグや簡素化の余地を指摘します。",
-        "systemPrompt": "あなたは厳格なコードレビュアーです..."
-      }
-    },
     "useInChat": "チャットで使用",
     "inUseDeselect": "使用中 · 解除",
     "deselect": "エージェント解除",
@@ -1099,20 +1060,9 @@
     "noDescription": "説明はありません。",
     "kindSkill": "スキル",
     "kindServer": "サーバー",
-    "toolCount": "ツール{count}個",
     "installed": "インストール済み",
     "install": "インストール",
     "installError": "インストールに失敗しました。もう一度お試しください。",
-    "mock": {
-      "filesystem": "ローカルファイルを安全に読み書きするサンドボックス化されたファイルシステムツール群。",
-      "github": "イシュー、PR、リポジトリ、コード検索を扱うGitHub連携サーバー。",
-      "postgres": "読み取り専用のSQLクエリとスキーマイントロスペクションを提供するDBツール。",
-      "slack": "チャンネルの読み取り、メッセージ送信、ユーザー検索などのSlackワークスペース連携。",
-      "pdfExtractName": "PDF抽出スキル",
-      "pdfExtract": "PDF文書からテキスト・表・メタデータを構造化して抽出するスキル。",
-      "webResearchName": "Webリサーチスキル",
-      "webResearch": "複数ソース検索・引用検証・要約を行うディープリサーチスキル。"
-    },
     "credentialsTitle": "インストールするには認証情報を入力してください",
     "cancel": "キャンセル"
   },
@@ -1162,14 +1112,6 @@
     "patternCount": "({count}回)",
     "improvements": "改善提案",
     "noImprovements": "改善提案なし",
-    "topics": {
-      "codeReviewCitation": "コードレビュー回答の根拠引用の強化",
-      "koreanHonorific": "韓国語敬語の一貫性維持",
-      "researchSourceReliability": "ディープリサーチの出典信頼度表記",
-      "longSummaryOmission": "長文要約時の重要点欠落の低減",
-      "toolFailureGuidance": "ツール呼び出し失敗時のユーザー案内の改善",
-      "calcVerification": "数値計算の検算ステップの追加"
-    },
     "status": {
       "applied": "反映済み",
       "reviewing": "検討中",
@@ -2049,13 +1991,15 @@
     },
     "agents": {
       "title": "カスタムエージェント",
-      "hint": "エージェントは承認不要です — インストール後すぐ使用できます。",
+      "hint": "拡張からインストールしたエージェントは承認なしで即時有効です。Git URL から取り込んだエージェントのみここで承認します。",
       "link": "エージェント一覧を開く"
     },
     "tasks": {
       "title": "エージェント作業の承認",
       "hint": "高リスクなツール実行とエージェントからの質問は、承認しないと作業が進みません。チャット内でも回答できます。",
       "empty": "承認待ちの作業はありません。",
+      "autoApprove": "この作業を自動承認",
+      "autoApproveHint": "この作業の以降のツール呼び出しを承認なしで進めます（エージェントからの質問は除く）",
       "question": "質問",
       "tool": "ツール実行",
       "openTask": "作業を開く",

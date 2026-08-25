@@ -158,6 +158,23 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
                   {t("approve")}
                 </Button>
               )}
+              {/* 이 작업 자동 승인 — 이후 도구 호출은 승인 없이 진행(ask_human 제외).
+                  구 /agent-tasks 인라인 패널에만 있던 기능을 단일 창구로 옮겨 온 것 */}
+              {!isQuestion && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={acting}
+                  title={t("tasks.autoApproveHint")}
+                  onClick={() =>
+                    void run(a.approvalId, () =>
+                      ApiClient.post(`/api/agent-tasks/${a.taskId}/approvals/auto-approve`, {}),
+                    )
+                  }
+                >
+                  {t("tasks.autoApprove")}
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"

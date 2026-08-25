@@ -326,92 +326,6 @@ function GitImportModal({
   );
 }
 
-/* ── 목업 데이터 — TODO: API 연동 (GET /api/mcp/servers) ──── */
-function buildMockServers(t: Translator): McpServer[] {
-  return [
-  {
-    id: "filesystem",
-    name: "filesystem",
-    transport: "stdio",
-    toolCount: 8,
-    status: "connected",
-    enabled: true,
-    autoSpawn: true,
-    isGlobal: false,
-    oauthConnected: false,
-    errorCode: null,
-    errorDetail: null,
-    lastChecked: t("justNow"),
-    envKeys: [],
-    secretKeys: [],
-  },
-  {
-    id: "github",
-    name: "github",
-    transport: "HTTP",
-    toolCount: 21,
-    status: "connected",
-    enabled: true,
-    autoSpawn: true,
-    isGlobal: false,
-    oauthConnected: false,
-    errorCode: null,
-    errorDetail: null,
-    lastChecked: t("minutesAgo", { count: 1 }),
-    envKeys: [],
-    secretKeys: [],
-  },
-  {
-    id: "postgres-prod",
-    name: "postgres-prod",
-    transport: "stdio",
-    toolCount: 5,
-    status: "degraded",
-    enabled: true,
-    autoSpawn: true,
-    isGlobal: false,
-    oauthConnected: false,
-    errorCode: null,
-    errorDetail: null,
-    lastChecked: t("minutesAgo", { count: 2 }),
-    envKeys: [],
-    secretKeys: [],
-  },
-  {
-    id: "slack-events",
-    name: "slack-events",
-    transport: "SSE",
-    toolCount: 11,
-    status: "connected",
-    enabled: true,
-    autoSpawn: true,
-    isGlobal: false,
-    oauthConnected: false,
-    errorCode: null,
-    errorDetail: null,
-    lastChecked: t("minutesAgo", { count: 3 }),
-    envKeys: [],
-    secretKeys: [],
-  },
-  {
-    id: "weather-api",
-    name: "weather-api",
-    transport: "HTTP",
-    toolCount: 3,
-    status: "disconnected",
-    enabled: true,
-    autoSpawn: true,
-    isGlobal: false,
-    oauthConnected: false,
-    errorCode: null,
-    errorDetail: null,
-    lastChecked: t("minutesAgo", { count: 12 }),
-    envKeys: [],
-    secretKeys: [],
-  },
-  ];
-}
-
 const STATUS_META: Record<
   ConnStatus,
   { labelKey: string; tone: "success" | "warn" | "danger" }
@@ -435,7 +349,7 @@ export function ConnectorsSection() {
   const router = useRouter();
   const [tab, setTab] = useState<TabId>("servers");
   const [modalOpen, setModalOpen] = useState(false);
-  const [servers, setServers] = useState<McpServer[]>(() => buildMockServers(t));
+  const [servers, setServers] = useState<McpServer[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
   const [envEditTarget, setEnvEditTarget] = useState<McpServer | null>(null);
@@ -582,7 +496,7 @@ export function ConnectorsSection() {
         const list = res?.data?.servers ?? [];
         setServers(list.map((s) => mapServer(s, t)));
       } catch {
-        // 401·네트워크 실패 등 → 목업 유지 (데모)
+        // 401·네트워크 실패 등 → 빈 목록 (그전엔 하드코딩 목업 5종이 실렌더됐다)
       } finally {
         if (!cancelled) setLoading(false);
       }
