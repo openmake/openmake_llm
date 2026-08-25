@@ -153,6 +153,9 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
         status: 'completed',
         progress: 100,
         result: body,
+        // 이전 시도의 실패 사유를 지운다 — resume/재실행으로 완료된 작업에 'aborted'·'goal_incomplete'
+        // 가 남아 목록·CLI 가 성공을 실패처럼 보여줬다(2026-08-26 resume E2E 에서 실측).
+        error: null,
         checkpoint: null, // 완료 작업은 재개 대상 아님 — checkpoint 잔존 시 resume 허용·저장 팽창
         completionPath: path,
         judgeVerdict: verdict,
