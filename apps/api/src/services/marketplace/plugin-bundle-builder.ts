@@ -17,7 +17,7 @@
  * @module services/marketplace/plugin-bundle-builder
  */
 import yaml from 'js-yaml';
-import { slugify } from '../../chat/slash-command';
+import { createHash } from 'crypto';
 import { MARKETPLACE_AUTHOR, MARKETPLACE_PATHS, MARKETPLACE_PUBLISH_LIMITS } from '../../config/marketplace-publish';
 import type { ExportAgent, ExportMcpServer, ExportSkill, ExportSkillAsset } from '../../data/repositories/marketplace-export-repository';
 
@@ -58,6 +58,18 @@ function stripFrontmatter(md: string): string {
 
 function frontmatter(obj: Record<string, unknown>): string {
     return `---\n${yaml.dump(obj, { lineWidth: -1, noRefs: true }).trimEnd()}\n---\n`;
+}
+
+/**
+ * 디렉토리용 ASCII 슬러그 — 한글 등 비ASCII 는 버리고, 남는 게 없으면 이름 해시로 만든다.
+ * 앱 내부 슬러그(`chat/slash-command.slugify`)는 유니코드를 보존하지만, 레포 경로는 Claude Code
+ * 설치·다른 OS 파일시스템 호환을 위해 ASCII 로 고정한다. 원래 이름은 frontmatter `name` 에 그대로 남는다.
+ */
+export function asciiSlug(name: string, prefix: string): string {
+    const base = name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    if (base.length >= 3) return base.slice(0, 64);
+    const hash = createHash('sha1').update(name).digest('hex').slice(0, 8);
+    return base ? `${base}-${hash}` : `${prefix}-${hash}`;
 }
 
 /** 이름 충돌 시 -2, -3 … 을 붙여 유일하게 */
@@ -104,7 +116,7 @@ export function buildPluginBundle(input: BundleInput): BundleResult {
         assetsBySkill.get(a.skill_id)!.push(a);
     }
     for (const s of input.skills) {
-        const slug = uniqueSlug(slugify(s.name), skillSlugs);
+        const slug = uniqueSlug(asciiSlug(s.name, 'skill'), skillSlugs);
         const meta = (s.manifest_meta ?? {}) as { version?: unknown; tags?: unknown };
         const fm: Record<string, unknown> = {
             name: s.name,
@@ -125,7 +137,7 @@ export function buildPluginBundle(input: BundleInput): BundleResult {
     // agents — Claude Code agents/<name>.md 규격 (frontmatter + 본문 = system prompt)
     const agentSlugs = new Set<string>();
     for (const ag of input.agents) {
-        const slug = uniqueSlug(slugify(ag.name), agentSlugs);
+        const slug = uniqueSlug(asciiSlug(ag.name, 'agent'), agentSlugs);
         const fm: Record<string, unknown> = { name: ag.name, description: (ag.description ?? '').trim() || `${ag.name} 에이전트` };
         if (ag.model) fm.model = ag.model;
         push(`agents/${slug}.md`, frontmatter(fm) + '\n' + ag.system_prompt.trim() + '\n');

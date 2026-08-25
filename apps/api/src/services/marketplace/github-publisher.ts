@@ -23,6 +23,8 @@ export interface PublishInput {
     token: string;
     files: BundleFile[];
     marketplaceEntry: { name: string; description: string; category: string; source: string };
+    /** plugins/<name> — 재게시 시 이 아래의 낡은 파일을 삭제한다 */
+    pluginDir: string;
     branchName: string;
     commitMessage: string;
     prTitle: string;
@@ -30,7 +32,7 @@ export interface PublishInput {
     baseBranch?: string;
 }
 
-export interface PublishResult { branch: string; commitSha: string; prUrl: string; prNumber: number; files: string[] }
+export interface PublishResult { branch: string; commitSha: string; prUrl: string; prNumber: number; files: string[]; removed: string[] }
 
 export class GithubPublisher {
     private readonly fetch = createPinnedFetch();
@@ -70,9 +72,20 @@ export class GithubPublisher {
         plugins.push(input.marketplaceEntry);
         const indexText = JSON.stringify({ ...index, plugins }, null, 2) + '\n';
 
+        // 재게시 = 갱신: 같은 plugins/<name>/ 아래 있던 파일 중 이번 번들에 없는 것은 삭제한다.
+        // 안 그러면 슬러그가 바뀐 스킬 디렉토리가 둘 다 남아 설치 시 이중으로 들어간다.
+        const pluginDir = input.pluginDir;
+        const baseTree = await this.api<{ tree: Array<{ path: string; type: string }>; truncated: boolean }>(
+            'GET', `/repos/${owner}/${repo}/git/trees/${baseCommit.tree.sha}?recursive=1`);
+        if (baseTree.truncated) throw new Error('레포 트리가 너무 커서 낡은 파일 정리를 보장할 수 없습니다');
+        const newPaths = new Set(input.files.map((f) => f.path));
+        const stale = baseTree.tree
+            .filter((t) => t.type === 'blob' && t.path.startsWith(`${pluginDir}/`) && !newPaths.has(t.path))
+            .map((t) => t.path);
+
         // blobs → tree → commit → ref → PR
         const allFiles: BundleFile[] = [...input.files, { path: idxPath, content: indexText }];
-        const treeEntries = [];
+        const treeEntries: Array<{ path: string; mode: string; type: string; sha: string | null }> = stale.map((path) => ({ path, mode: '100644', type: 'blob', sha: null }));
         for (const f of allFiles) {
             const isBuf = Buffer.isBuffer(f.content);
             const blob = await this.api<{ sha: string }>('POST', `/repos/${owner}/${repo}/git/blobs`, {
@@ -87,7 +100,7 @@ export class GithubPublisher {
         const pr = await this.api<{ html_url: string; number: number }>('POST', `/repos/${owner}/${repo}/pulls`, {
             title: input.prTitle, head: input.branchName, base, body: input.prBody,
         });
-        logger.info(`게시 PR 생성: ${pr.html_url} (${allFiles.length} files)`);
-        return { branch: input.branchName, commitSha: commit.sha, prUrl: pr.html_url, prNumber: pr.number, files: allFiles.map((f) => f.path) };
+        logger.info(`게시 PR 생성: ${pr.html_url} (${allFiles.length} files, ${stale.length} removed)`);
+        return { branch: input.branchName, commitSha: commit.sha, prUrl: pr.html_url, prNumber: pr.number, files: allFiles.map((f) => f.path), removed: stale };
     }
 }

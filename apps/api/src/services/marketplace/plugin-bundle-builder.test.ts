@@ -2,7 +2,7 @@
  * 번들 빌더 라운드트립 — 내보낸 파일을 **우리 ingest 파서가 그대로 읽어야** 한다.
  * (내보내기만 되고 재설치가 안 되면 마켓플레이스에 올려도 쓸 수 없다.)
  */
-import { buildPluginBundle, validatePluginName } from './plugin-bundle-builder';
+import { buildPluginBundle, validatePluginName, asciiSlug } from './plugin-bundle-builder';
 import { parseSkillFile } from '../../agents/manifest-validator';
 import { validateExtensionManifest, parseMcpJsonFile, parseMarketplaceFile } from '../../agents/git-ingest/extension-manifest-validator';
 import { agentFileToCustomAgent } from '../../agents/git-ingest/plugin-component-compat';
@@ -43,7 +43,7 @@ describe('buildPluginBundle 라운드트립', () => {
         expect((parsed.frontmatter as { tags?: unknown[] }).tags).toEqual(['devops']);
         expect(parsed.prompt_md).toContain('**역할**');
         expect(parsed.prompt_md).not.toContain('name: old');
-        const csv = parseSkillFile(text(b.files, 'plugins/my-devops-pack/skills/csv-결측치-분석/SKILL.md'));
+        const csv = parseSkillFile(text(b.files, 'plugins/my-devops-pack/skills/csv/SKILL.md')); // ASCII 부분만 남는다
         expect(csv.frontmatter.category).toBe('general');           // null → 기본
         expect(csv.frontmatter.description).toBe('CSV 결측치 분석'); // 빈 설명 → 이름
     });
@@ -71,6 +71,16 @@ describe('buildPluginBundle 라운드트립', () => {
         expect(b.marketplaceEntry.source).toBe('./plugins/my-devops-pack');
         const idx = parseMarketplaceFile(JSON.stringify({ name: 'x', plugins: [b.marketplaceEntry] }));
         expect(idx.ok && idx.marketplace.plugins[0].path).toBe('plugins/my-devops-pack');
+    });
+
+    it('디렉토리 슬러그는 ASCII 만 — 비ASCII 는 버리고, 남는 게 없으면 이름 해시', () => {
+        expect(asciiSlug('Nginx Log Error Analysis & Reporting', 'skill')).toBe('nginx-log-error-analysis-reporting');
+        expect(asciiSlug('CSV 결측치 분석', 'skill')).toBe('csv');
+        const k = asciiSlug('결측치 분석', 'skill');
+        expect(k).toMatch(/^skill-[0-9a-f]{8}$/);
+        expect(asciiSlug('결측치 분석', 'skill')).toBe(k);
+        expect(b.files.every((f) => /^[\x20-\x7e]+$/.test(f.path))).toBe(true);
+        expect(parseSkillFile(text(b.files, 'plugins/my-devops-pack/skills/csv/SKILL.md')).frontmatter.name).toBe('CSV 결측치 분석');
     });
 
     it('이름 규칙·빈 번들·상한을 거부한다', () => {

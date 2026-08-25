@@ -67,11 +67,11 @@ marketplacePublishRouter.post('/publish', requireAuth, requireAdmin, validate(pu
     const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 13).replace('T', '-');
     const summary = `skills ${skills.length} · agents ${agents.length} · mcp ${mcpServers.length}`;
     const result = await new GithubPublisher(token).publish({
-        owner, repo: repoName, files: bundle.files, marketplaceEntry: bundle.marketplaceEntry, token,
+        owner, repo: repoName, files: bundle.files, marketplaceEntry: bundle.marketplaceEntry, pluginDir: bundle.pluginDir, token,
         branchName: `${MARKETPLACE_PATHS.branchPrefix}${body.pluginName}-${stamp}`,
         commitMessage: `feat(plugins): publish ${body.pluginName} from openmake_llm (${summary})`,
         prTitle: `publish: ${body.pluginName} (${summary})`,
-        prBody: `openmake_llm 에서 게시한 플러그인 번들입니다.\n\n- ${summary}\n- 경로: \`${bundle.pluginDir}\`\n- MCP env 는 자리표시자(\`\${KEY}\`)만 포함됩니다.\n\n리뷰 후 머지하면 카탈로그 재동기화 시 설치 가능해집니다.`,
+        prBody: `openmake_llm 에서 게시한 플러그인 번들입니다.\n\n- ${summary}\n- 경로: \`${bundle.pluginDir}\`\n- MCP env 는 자리표시자(\`\${KEY}\`)만 포함됩니다.\n- 같은 플러그인 디렉토리의 이전 파일은 이번 번들 기준으로 정리(삭제)됩니다.\n\n리뷰 후 머지하면 카탈로그 재동기화 시 설치 가능해집니다.`,
     });
 
     getAuditService().logAudit({ userId, action: 'marketplace.publish', resourceType: 'marketplace', resourceId: `${owner}/${repoName}`, details: { plugin: body.pluginName, prUrl: result.prUrl, missing } }).catch(() => { /* noop */ });
