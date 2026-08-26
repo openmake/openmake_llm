@@ -25,7 +25,7 @@ const steps = [
     { step_number: 4, step_type: 'steering', content: 'STEERING_SHOULD_NOT_APPEAR' },
     { step_number: 5, step_type: 'judge', content: '판정: achieved — riskpw@gmail.com 확인' },
     { step_number: 6, step_type: 'diff', content: 'diff --git a/src/a.ts b/src/a.ts\n+const n: number = 1;' },
-    { step_number: 7, step_type: 'artifact', content: '{"id":"rep","kind":"html"}' },
+    { step_number: 7, step_type: 'artifact', content: '{"id":"rep","kind":"html","title":"주간 리포트","content":"<h1>ARTIFACT_BODY_SHOULD_NOT_APPEAR</h1>","validation":{"checked":true}}' },
     { step_number: 8, step_type: 'retry', content: 'RETRY_SHOULD_NOT_APPEAR' },
 ];
 
@@ -43,6 +43,7 @@ describe('buildShareDocument — 선별(allowlist)', () => {
         ['홈 디렉토리', '/Users/openmake_mac'],
         ['자격증명 값', 'sk-abcdef1234567890abcd'],
         ['이메일', 'riskpw@gmail.com'],
+        ['아티팩트 본문', 'ARTIFACT_BODY_SHOULD_NOT_APPEAR'],
     ])('%s 은 문서 어디에도 없다', (_label, needle) => {
         expect(serialized).not.toContain(needle);
     });
@@ -63,6 +64,11 @@ describe('buildShareDocument — 선별(allowlist)', () => {
 
     test('숫자 요약은 전체 스텝 기준(선별 전)', () => {
         expect(doc.summary).toEqual({ turns: 7, toolCalls: 1, retries: 1, diffs: 1, artifacts: 1 });
+    });
+
+    test('artifact 스텝은 제목·종류만 남는다(본문·validation 제외)', () => {
+        const a = doc.steps.find((s) => s.type === 'artifact');
+        expect(a?.text).toBe('주간 리포트 (html)');
     });
 
     test('diff 는 steps 가 아니라 diffs 필드로 간다', () => {

@@ -77,6 +77,23 @@ function iso(v: string | Date | null | undefined): string | null {
  * 공유 문서를 만든다. 게시 시점에 1회 실행해 **스냅샷으로 저장**한다 — 라이브 조인하면
  * 이후 resume·재실행으로 생긴 새 민감 정보가 자동 노출된다(plan §4).
  */
+
+/**
+ * `artifact` 스텝 content 는 `{id,kind,title,content,validation}` JSON 이고 `content` 에
+ * **아티팩트 본문 전체**가 들어 있다. 그대로 300자 자르면 JSON 파편과 본문 앞부분이 섞여
+ * 나가므로, 제목·종류만 남긴다(공유 가치는 "무엇을 만들었나"에 있다).
+ */
+function summarizeArtifact(raw: string): string {
+    try {
+        const a = JSON.parse(raw) as { title?: string; kind?: string; id?: string };
+        const name = (a.title || a.id || '').toString().trim();
+        if (!name) return '';
+        return a.kind ? `${name} (${a.kind})` : name;
+    } catch {
+        return raw; // JSON 이 아니면 종전대로(캡·정화는 호출측이 한다)
+    }
+}
+
 export function buildShareDocument(
     task: ShareTaskInput,
     steps: ShareStepInput[],
@@ -105,7 +122,9 @@ export function buildShareDocument(
             n: s.step_number,
             type: s.step_type,
             ...(s.tool_name ? { tool: r(s.tool_name) } : {}),
-            text: capText(r((s.content ?? '').replace(/\s+/g, ' ').trim()), SHARE_LIMITS.STEP_LINE),
+            text: capText(r((s.step_type === 'artifact'
+                ? summarizeArtifact(s.content ?? '')
+                : (s.content ?? '')).replace(/\s+/g, ' ').trim()), SHARE_LIMITS.STEP_LINE),
         }))
         .filter((s) => s.text.length > 0);
 
