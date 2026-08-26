@@ -19,9 +19,9 @@ import type { ApiSuccess } from "@openmake/shared-types";
 import { useAppStore } from "@/lib/store";
 import type { ChatRole } from "@/lib/store";
 import { visibleNavItems } from "@/lib/nav";
-import { ApiClient } from "@/lib/api-client";
+import { ApiClient, ApiError } from "@/lib/api-client";
 import { appendAnonSessionId } from "@/lib/anon-session";
-import { clearHadSession } from "@/lib/auth-sync";
+import { syncAuthFromServer, clearHadSession } from "@/lib/auth-sync";
 import Image from "next/image";
 import { ThemeToggle } from "./theme-toggle";
 import { cn } from "@/lib/utils";
@@ -75,8 +75,16 @@ export function Sidebar() {
     if (!user) { setPendingApprovals(0); return; }
     let alive = true;
     const opts = { redirectOnUnauthorized: false } as const;
-    // 한 축이 실패해도 나머지 합계는 보이도록 개별 fallback 을 둔다
-    const count = async (fn: () => Promise<number>) => { try { return await fn(); } catch { return 0; } };
+    // 한 축이 실패해도 나머지 합계는 보이도록 개별 fallback 을 둔다.
+    // 401 은 삼키지 않는다 — 세션이 죽은 신호라 서버 판정으로 store 를 갱신해(게스트면 user=null)
+    // 이 effect 자체가 정리되게 한다. 삼키면 만료 탭이 30초마다 4요청을 영원히 보낸다.
+    let unauthorized = false;
+    const count = async (fn: () => Promise<number>) => {
+      try { return await fn(); } catch (e) {
+        if (e instanceof ApiError && e.status === 401) unauthorized = true;
+        return 0;
+      }
+    };
     const poll = async () => {
       const [hitl, skills, mcp, agents] = await Promise.all([
         count(async () => {
@@ -100,7 +108,9 @@ export function Sidebar() {
           return r.data?.total ?? r.data?.drafts?.length ?? 0;
         }),
       ]);
-      if (alive) setPendingApprovals(hitl + skills + mcp + agents);
+      if (!alive) return;
+      if (unauthorized) { unauthorized = false; void syncAuthFromServer(); return; }
+      setPendingApprovals(hitl + skills + mcp + agents);
     };
     void poll();
     const timer = setInterval(poll, 30_000);

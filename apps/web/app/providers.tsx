@@ -27,7 +27,9 @@ function AuthSync() {
     if (!isLoggedIn) return;
     const timer = setInterval(() => {
       void ApiClient.post("/api/auth/refresh", undefined, { redirectOnUnauthorized: false }).catch(() => {
-        /* refresh 실패(세션 만료 등) — 다음 REST 401 인터셉트/리다이렉트 흐름에 위임 */
+        // refresh 실패(세션 수명 종료) — 서버 판정으로 store 를 갱신한다(게스트면 currentUser 해제 →
+        // 배지 폴링 등 로그인 전제 타이머가 멈춘다). 종전엔 무시해 만료 탭이 영원히 폴링했다.
+        void syncAuthFromServer();
       });
     }, CLIENT_TIMING.TOKEN_REFRESH_INTERVAL_MS);
     return () => clearInterval(timer);
