@@ -1,6 +1,7 @@
 /**
  * 에이전트 작업 읽기 전용 공유 — mount: `/api` (경로에 `agent-tasks`/`shared-tasks` 를 모두 포함).
  *
+ *   GET    /api/agent-tasks/:taskId/share          — 현재 공유 상태(소유자, 없으면 null)
  *   POST   /api/agent-tasks/:taskId/share/preview  — 게시 없이 공유 문서 미리보기(소유자)
  *   POST   /api/agent-tasks/:taskId/share          — 스냅샷 확정 게시(소유자)
  *   DELETE /api/agent-tasks/:taskId/share          — 공유 해제(소유자)
@@ -17,7 +18,9 @@
  */
 import { Router, Request, Response } from 'express';
 import { randomUUID, randomBytes, timingSafeEqual } from 'crypto';
-import { requireAuth, optionalAuth } from '../auth';
+import { optionalAuth } from '../auth';
+import { requireAuthOrApiKeyScope } from '../middlewares/api-key-auth';
+import { API_KEY_SCOPES } from '../config/api-key-scopes';
 import { success, badRequest, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getUnifiedDatabase } from '../data/models/unified-database';
@@ -29,6 +32,13 @@ import { createLogger } from '../utils/logger';
 const logger = createLogger('AgentTaskShareRoutes');
 
 export const agentTaskShareRouter = Router();
+
+/**
+ * 소유자 전용 라우트의 인증 — JWT(웹) 또는 `bridge` 스코프 API key(CLI).
+ * 작업 본 라우트(`agent-task.routes.ts`)와 같은 축이라야 CLI 가 자기 작업을 공유할 수 있다.
+ * 공개 조회(`/shared-tasks/:shareId`)는 예외로 `optionalAuth` 다.
+ */
+const requireOwner = requireAuthOrApiKeyScope(API_KEY_SCOPES.BRIDGE);
 
 const VALID_VISIBILITY: ShareVisibility[] = ['private', 'authenticated', 'link'];
 
@@ -58,11 +68,37 @@ function readToggles(body: unknown): { includeSteps: boolean; includeDiff: boole
     };
 }
 
+/** 공유 링크 경로 — 응답 3곳(게시·조회·CLI)이 같은 형태를 쓰도록 한 곳에서 만든다. */
+function sharePath(shareId: string, token: string | null): string {
+    return `/shared/task/${shareId}${token ? `?token=${token}` : ''}`;
+}
+
+/**
+ * 현재 공유 상태 — 없으면 `share: null`. UI/CLI 가 "이미 공유 중인가"를 알아야
+ * 링크 복사·해제를 보여줄 수 있다(게시 응답만으로는 새로고침 후 상태를 잃는다).
+ */
+agentTaskShareRouter.get('/agent-tasks/:taskId/share', requireOwner, asyncHandler(async (req: Request, res: Response) => {
+    const task = await loadOwnedTask(req, res, req.params.taskId);
+    if (!task) return;
+    const row = await repo().getByTaskId(req.params.taskId);
+    res.json(success({
+        share: row ? {
+            shareId: row.share_id,
+            visibility: row.visibility,
+            shareToken: row.share_token,
+            includeSteps: row.include_steps,
+            includeDiff: row.include_diff,
+            sharedAt: row.updated_at,
+            path: sharePath(row.share_id, row.share_token),
+        } : null,
+    }));
+}));
+
 /**
  * 미리보기 — 게시하지 않는다. 사용자가 **실제 공개될 내용 그대로** 확인한 뒤에만 게시하도록
  * 하는 것이 이 기능의 안전 장치다(자동 redaction 은 완전하지 않다).
  */
-agentTaskShareRouter.post('/agent-tasks/:taskId/share/preview', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+agentTaskShareRouter.post('/agent-tasks/:taskId/share/preview', requireOwner, asyncHandler(async (req: Request, res: Response) => {
     const task = await loadOwnedTask(req, res, req.params.taskId);
     if (!task) return;
     const doc = await buildFor(req.params.taskId, task as unknown as ShareTaskInput, readToggles(req.body));
@@ -73,7 +109,7 @@ agentTaskShareRouter.post('/agent-tasks/:taskId/share/preview', requireAuth, asy
  * 게시 — 미리보기와 **같은 입력으로 다시 조립해** 스냅샷으로 저장한다.
  * 기본 visibility 는 `private`(링크 생성은 명시 선택) — 실수로 공개되는 쪽보다 안 보이는 쪽이 낫다.
  */
-agentTaskShareRouter.post('/agent-tasks/:taskId/share', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+agentTaskShareRouter.post('/agent-tasks/:taskId/share', requireOwner, asyncHandler(async (req: Request, res: Response) => {
     const task = await loadOwnedTask(req, res, req.params.taskId);
     if (!task) return;
 
@@ -111,12 +147,12 @@ agentTaskShareRouter.post('/agent-tasks/:taskId/share', requireAuth, asyncHandle
         shareId: row.share_id,
         visibility: row.visibility,
         shareToken: row.share_token,
-        path: `/shared/task/${row.share_id}${row.share_token ? `?token=${row.share_token}` : ''}`,
+        path: sharePath(row.share_id, row.share_token),
     }));
 }));
 
 /** 공유 해제 — 이후 조회는 404. */
-agentTaskShareRouter.delete('/agent-tasks/:taskId/share', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+agentTaskShareRouter.delete('/agent-tasks/:taskId/share', requireOwner, asyncHandler(async (req: Request, res: Response) => {
     const task = await loadOwnedTask(req, res, req.params.taskId);
     if (!task) return;
     const deleted = await repo().deleteByTaskId(req.params.taskId);

@@ -795,7 +795,28 @@
     "startedLabel": "시작",
     "elapsedLabel": "소요",
     "modelLabel": "모델",
-    "tokensLabel": "토큰"
+    "tokensLabel": "토큰",
+    "share": {
+      "title": "공유",
+      "sharing": "공유 중",
+      "notShared": "공유 안 함",
+      "close": "닫기",
+      "includeSteps": "진행 기록 포함",
+      "includeDiff": "변경분(diff) 포함",
+      "scopeAuthenticated": "로그인 사용자에게 공개",
+      "scopeLink": "링크를 아는 누구나",
+      "previewBtn": "공개될 내용 미리보기",
+      "previewFirst": "게시 전에 공개될 내용을 먼저 확인해야 합니다.",
+      "previewNotice": "아래 내용이 그대로 공개됩니다 — 경로·자격증명은 자동 정화되지만 완전하지 않습니다.",
+      "goalLabel": "목표:",
+      "resultLabel": "결과:",
+      "diffIncluded": "변경분 {n}건 포함",
+      "publishAuthenticated": "로그인 사용자에게 공개",
+      "publishLink": "공유 링크 만들기",
+      "republish": "최신 내용으로 다시 게시",
+      "unshare": "공유 해제",
+      "unshareHint": "해제하면 링크는 즉시 열리지 않습니다. 이미 본 내용은 되돌릴 수 없습니다."
+    }
   },
   "customAgents": {
     "pageTitle": "커스텀 에이전트",
@@ -1879,5 +1900,19 @@
     "publishedPrivate": "'{name}' 을(를) 내 확장에 보관했습니다 (비공개)",
     "publishedDetail": "파일 {files}개 · 같은 이름으로 다시 게시하면 갱신됩니다",
     "missing": "일부 항목은 소유·활성 조건을 넘지 못해 빠졌습니다."
+  },
+  "sharedTask": {
+    "readOnly": "읽기 전용 공유",
+    "loading": "불러오는 중…",
+    "notFound": "공유된 작업을 찾을 수 없습니다.",
+    "notFoundHint": "링크가 만료됐거나 공개 범위 밖일 수 있습니다.",
+    "goal": "목표",
+    "result": "결과",
+    "summaryLine": "턴 {turns} · 도구 호출 {tools}회",
+    "retries": "재시도 {n}회",
+    "diffCount": "diff {n}건",
+    "steps": "진행 기록 {count}건",
+    "changes": "변경분 {count}건",
+    "snapshotNote": "게시 시점 기록입니다 — 이후 작업이 이어져도 이 화면은 바뀌지 않습니다."
   }
 }

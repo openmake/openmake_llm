@@ -11,6 +11,7 @@
  *   tasks [--all]          이 디바이스의 로컬 작업 목록 (기본: 미종료·재개 가능만)
  *   show <taskId>          작업 결과·진행 기록·변경분 재출력 (조회 전용)
  *   resume <taskId> [--dir .]  checkpoint 에서 이어하기 (서버 재개 API + 같은 worktree 재부착)
+ *   share <taskId>         결과를 읽기 전용 링크로 공유 (미리보기 → 확인 → 게시)
  *   "목표" --resume        마지막 재개 가능 작업이 있으면 그것을 이어한다
  */
 import * as fs from 'fs';
@@ -18,7 +19,7 @@ import * as path from 'path';
 import * as readline from 'readline';
 import { loadConfig, saveConfig, deviceId } from './config';
 import { CliBridge, type ConfirmFn } from './bridge';
-import { ApiClient, type ApiTask, type ApiTaskStep } from './api';
+import { ApiClient, type ApiTask, type ApiTaskStep, type ShareDocument } from './api';
 
 function prompt(q: string): Promise<string> {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -293,6 +294,71 @@ async function cmdShow(taskId: string, opts: { steps: boolean; diff: boolean }):
     }
 }
 
+/** 공유 문서를 사람이 읽을 형태로 — "무엇이 공개되는지"를 게시 전에 그대로 보여준다. */
+function printSharePreview(doc: ShareDocument): void {
+    console.log('\x1b[1m─ 공개될 내용 ─────────────────────────\x1b[0m');
+    console.log(`상태: ${doc.status} · 턴 ${doc.summary.turns} · 도구 호출 ${doc.summary.toolCalls}회`
+        + `${doc.summary.retries ? ` · 재시도 ${doc.summary.retries}회` : ''}`
+        + `${doc.summary.diffs ? ` · diff ${doc.summary.diffs}건` : ''}`);
+    if (doc.goal) console.log(`\n\x1b[1m목표\x1b[0m\n${doc.goal}`);
+    if (doc.result) console.log(`\n\x1b[1m결과\x1b[0m\n${doc.result}`);
+    if (doc.steps.length) {
+        console.log(`\n\x1b[1m진행 기록\x1b[0m (${doc.steps.length}건)`);
+        for (const st of doc.steps.slice(0, 20)) console.log(`  \x1b[2m${st.n}\x1b[0m ${st.tool ?? st.type}: ${st.text}`);
+        if (doc.steps.length > 20) console.log(`  \x1b[2m… 외 ${doc.steps.length - 20}건\x1b[0m`);
+    }
+    if (doc.diffs.length) console.log(`\n\x1b[1m변경분\x1b[0m ${doc.diffs.length}건 (${doc.diffs.reduce((n, d) => n + d.length, 0)}자)`);
+    console.log('\x1b[1m──────────────────────────────────────\x1b[0m');
+    console.log('\x1b[2m경로·자격증명은 자동 정화되지만 완전하지 않습니다 — 위 내용을 직접 확인하세요.\x1b[0m');
+}
+
+/**
+ * 공유 — 게시는 되돌릴 수 있지만(해제) **이미 본 사람은 되돌릴 수 없다**. 그래서 항상
+ * 미리보기를 먼저 출력하고, TTY 면 y/N 확인, 비대화형이면 `--yes` 를 요구한다.
+ */
+async function cmdShare(taskId: string, opts: {
+    link: boolean; steps: boolean; diff: boolean; off: boolean; previewOnly: boolean; yes: boolean;
+}): Promise<void> {
+    const cfg = requireConfig();
+    const api = new ApiClient(cfg.serverUrl, cfg.apiKey);
+
+    if (opts.off) {
+        const r = await api.unshare(taskId);
+        console.log(r.unshared ? '\x1b[32m✓ 공유를 해제했습니다 — 링크는 더 이상 열리지 않습니다.\x1b[0m' : '공유 중이 아닙니다.');
+        return;
+    }
+
+    const { share } = await api.getShare(taskId).catch(() => ({ share: null }));
+    if (share && !opts.previewOnly) {
+        // 이미 공유 중 — 링크만 다시 보여준다(재게시는 내용 변경이므로 명시적으로).
+        console.log(`\x1b[32m이미 공유 중\x1b[0m (${share.visibility}${share.includeDiff ? ', diff 포함' : ''})`);
+        console.log(`  ${cfg.serverUrl}${share.path}`);
+        console.log('\x1b[2m최신 내용으로 다시 게시하려면 `--preview` 로 확인 후 다시 실행, 해제는 `--off`.\x1b[0m');
+        return;
+    }
+
+    const toggles = { includeSteps: opts.steps, includeDiff: opts.diff };
+    const { preview } = await api.previewShare(taskId, toggles);
+    printSharePreview(preview);
+    if (opts.previewOnly) { console.log('\x1b[2m(미리보기만 — 게시되지 않았습니다)\x1b[0m'); return; }
+
+    const visibility = opts.link ? 'link' : 'authenticated';
+    const scope = opts.link ? '링크를 아는 누구나(로그인 불필요)' : '이 서버에 로그인한 사용자';
+    if (!opts.yes) {
+        if (!process.stdin.isTTY) {
+            console.error(`\n비대화형에서는 --yes 가 필요합니다 (공개 범위: ${scope}).`);
+            process.exit(1);
+        }
+        const ans = (await prompt(`\n위 내용을 ${scope}에게 공개합니다. 게시할까요? (y/N): `)).toLowerCase();
+        if (ans !== 'y' && ans !== 'yes') { console.log('취소했습니다.'); return; }
+    }
+
+    const r = await api.publishShare(taskId, { visibility, ...toggles });
+    console.log(`\x1b[32m✓ 공유됨\x1b[0m (${scope})`);
+    console.log(`  ${cfg.serverUrl}${r.path}`);
+    console.log('\x1b[2m해제: openmake-code share ' + taskId + ' --off\x1b[0m');
+}
+
 async function cmdResume(taskId: string, dir: string, autoApprove: boolean): Promise<void> {
     const cfg = requireConfig();
     const folder = path.resolve(dir);
@@ -337,6 +403,21 @@ async function main(): Promise<void> {
         if (!taskId || taskId.startsWith('--')) { console.error('사용법: openmake-code show <taskId> [--steps] [--diff]'); process.exit(1); }
         return cmdShow(taskId, { steps: argv.includes('--steps'), diff: argv.includes('--diff') });
     }
+    if (cmd === 'share') {
+        const taskId = argv[1];
+        if (!taskId || taskId.startsWith('--')) {
+            console.error('사용법: openmake-code share <taskId> [--link] [--no-steps] [--no-diff] [--preview] [--off] [--yes]');
+            process.exit(1);
+        }
+        return cmdShare(taskId, {
+            link: argv.includes('--link'),
+            steps: !argv.includes('--no-steps'),
+            diff: !argv.includes('--no-diff'),
+            off: argv.includes('--off'),
+            previewOnly: argv.includes('--preview'),
+            yes: argv.includes('--yes') || argv.includes('-y'),
+        });
+    }
     if (cmd === 'resume') {
         const taskId = argv[1];
         if (!taskId || taskId.startsWith('--')) { console.error('사용법: openmake-code resume <taskId> [--dir .] [--yes]'); process.exit(1); }
@@ -355,6 +436,9 @@ async function main(): Promise<void> {
   openmake-code tasks [--all]      이 디바이스의 로컬 작업 목록 (종료 작업은 --all)
   openmake-code show <taskId> [--steps] [--diff]   작업 결과 다시 보기 (실행 없음·연결 불필요)
   openmake-code resume <taskId> [--dir .] [--yes]   checkpoint 에서 이어하기 (같은 worktree 재부착)
+  openmake-code share <taskId> [--link] [--preview] [--off]   결과를 읽기 전용 링크로 공유
+                                   (미리보기 출력 → 확인 후 게시. 기본 공개 범위는 로그인 사용자,
+                                    --link 는 링크를 아는 누구나. --no-steps/--no-diff 로 범위 축소)
   openmake-code "목표" --resume    재개 가능한 최근 작업이 있으면 그것을 이어감 (없으면 새 작업)`);
         return;
     }

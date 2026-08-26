@@ -795,7 +795,28 @@
     "startedLabel": "开始",
     "elapsedLabel": "耗时",
     "modelLabel": "模型",
-    "tokensLabel": "令牌"
+    "tokensLabel": "令牌",
+    "share": {
+      "title": "共享",
+      "sharing": "共享中",
+      "notShared": "未共享",
+      "close": "关闭",
+      "includeSteps": "包含执行记录",
+      "includeDiff": "包含变更差异",
+      "scopeAuthenticated": "对已登录用户公开",
+      "scopeLink": "任何知道链接的人",
+      "previewBtn": "预览将公开的内容",
+      "previewFirst": "发布前请先确认将公开的内容。",
+      "previewNotice": "以下内容将原样公开 — 路径与凭据会自动脱敏，但并不完全。",
+      "goalLabel": "目标:",
+      "resultLabel": "结果:",
+      "diffIncluded": "包含 {n} 处变更差异",
+      "publishAuthenticated": "对已登录用户公开",
+      "publishLink": "创建共享链接",
+      "republish": "以最新内容重新发布",
+      "unshare": "取消共享",
+      "unshareHint": "取消后链接立即失效。已被看到的内容无法收回。"
+    }
   },
   "customAgents": {
     "pageTitle": "自定义智能体",
@@ -1879,5 +1900,19 @@
     "publishedPrivate": "已将 '{name}' 保存到我的扩展（私有）",
     "publishedDetail": "{files} 个文件 · 同名再次发布即为更新",
     "missing": "部分项目因不满足所有权或激活条件被跳过。"
+  },
+  "sharedTask": {
+    "readOnly": "只读共享",
+    "loading": "加载中…",
+    "notFound": "找不到该共享任务。",
+    "notFoundHint": "链接可能已被取消，或不在公开范围内。",
+    "goal": "目标",
+    "result": "结果",
+    "summaryLine": "{turns} 轮 · {tools} 次工具调用",
+    "retries": "重试 {n} 次",
+    "diffCount": "{n} 处差异",
+    "steps": "执行记录 {count} 条",
+    "changes": "变更差异 {count} 处",
+    "snapshotNote": "这是发布时的快照 — 继续执行任务不会改变此页面。"
   }
 }
