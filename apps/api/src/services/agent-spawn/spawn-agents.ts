@@ -30,7 +30,7 @@ import { resolveRoleClientForUser } from '../model-role-resolver';
 import { parallelBatch } from '../../workflow/graph-engine';
 import { routeToAgent } from '../../agents/keyword-router';
 import { getAgentSystemMessage } from '../../agents/system-prompt';
-import { requiresApproval } from '../task-sandbox/approval-gate';
+import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-gate';
 import { runSubagent } from '../agent-task/subagent';
 import type { DelegateFactoryParams } from '../agent-task/delegate';
 import { CHAT_DELEGATE_TOOL_NAME } from '../chat-service/chat-delegate';
@@ -72,6 +72,19 @@ export function normalizeSpawnArgs(raw: unknown): unknown {
         return { tasks: [o] };
     }
     return raw;
+}
+
+/** PURE: 인자 형태 요약(키·타입만, 값 없음) — 스키마 거부 사유를 다음에 추적할 수 있게. */
+export function describeArgsShape(raw: unknown): string {
+    if (!raw || typeof raw !== 'object') return `${raw === null ? 'null' : typeof raw}`;
+    const o = raw as Record<string, unknown>;
+    const keys = Object.keys(o);
+    if (keys.length === 0) return '빈 객체 {} (인자 JSON 절단·파싱 실패 가능성 — 서버 로그 "파싱 실패" 확인)';
+    const t = o.tasks;
+    const tasksShape = t === undefined ? '없음'
+        : Array.isArray(t) ? `배열[${t.length}](첫 항목 ${t[0] === undefined ? '없음' : typeof t[0] === 'object' && t[0] !== null ? 'keys=' + Object.keys(t[0] as object).join('|') : typeof t[0]})`
+        : typeof t;
+    return `keys=${keys.join('|')}, tasks=${tasksShape}`;
 }
 
 export const SPAWN_AGENTS_TOOL_DESCRIPTION =
@@ -146,6 +159,12 @@ export function filterChatSubTools(parentTools: ToolDefinition[]): ToolDefinitio
 }
 
 export interface SpawnAgentsParams {
+    /**
+     * 서브 도구가 0개가 된 **이유**(있으면). 결과 머리에 그대로 실어 부모 모델·타임라인이
+     * "조사한 결과"로 오인하지 않게 한다 — 도구 없는 서브는 기억으로 답을 지어낸다
+     * (2026-08-26 라이브: 승인 정책 all 로 도구 전부 제외 → 기준금리를 "미확정"으로 날조).
+     */
+    noToolsReason?: string;
     /** 도구 호출 인자(raw) — 내부에서 Zod 검증. */
     args: Record<string, unknown>;
     client: LLMClient;
@@ -215,7 +234,9 @@ async function resolveTaskExecution(
 export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
     const parsed = spawnAgentsArgsSchema.safeParse(normalizeSpawnArgs(p.args));
     if (!parsed.success) {
-        return 'Error: tasks 배열([{prompt, role?}, ...], 최소 1개)이 필요합니다.';
+        // 받은 형태를 함께 남긴다 — 2026-08-02 실패는 인자 원문이 어디에도 남지 않아 원인 추적이
+        // 불가능했다(커밋 6a019d18 의 사후 분석으로만 "단일 객체" 로 추정). 값은 싣지 않는다.
+        return `Error: tasks 배열([{prompt, role?}, ...], 최소 1개)이 필요합니다. 받은 인자: ${describeArgsShape(p.args)}`;
     }
     const requested = parsed.data.tasks;
     const tasks = requested.slice(0, AGENT_SPAWN.MAX_TASKS_PER_CALL);
@@ -225,6 +246,12 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
     const started = Date.now();
     logger.info(`[AgentSpawn] fan-out 시작: tasks=${tasks.length} (요청 ${requested.length}), `
         + `parallel=${AGENT_SPAWN.MAX_PARALLEL}, subTools=${subTools.length}`);
+    // 도구 없는 fan-out 은 "병렬 조사"가 아니라 "병렬 기억 인출"이다 — 조용히 성공처럼 보이면 안 된다.
+    const noToolsNotice = subTools.length === 0
+        ? `⚠️ 서브에이전트가 도구 없이 답했습니다(${p.noToolsReason ?? '전달된 도구 없음'}) — `
+            + '아래 내용은 검색·조회 없이 모델 기억만으로 작성된 것이라 사실 확인이 필요합니다.\n\n'
+        : '';
+    if (subTools.length === 0) logger.warn(`[AgentSpawn] 서브 도구 0개 — ${p.noToolsReason ?? '전달된 도구 없음'}`);
 
     let results: Array<string | null>;
     try {
@@ -277,7 +304,7 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
     // 턴 예산을 소진해 최종 종합 턴이 사라짐. 도구 결과 말미의 결정적 지시로 차단.
     const synthesisNudge = '\n\n지시: 위 서브에이전트 결과만으로 지금 바로 최종 답변을 종합해 작성하세요. '
         + '같은 주제를 다시 검색하거나 추가 도구를 호출하지 마세요.';
-    return `[병렬 서브에이전트 결과 — ${tasks.length}개 태스크]\n\n${sections.join('\n\n')}${truncationNote}${synthesisNudge}`;
+    return `[병렬 서브에이전트 결과 — ${tasks.length}개 태스크]\n\n${noToolsNotice}${sections.join('\n\n')}${truncationNote}${synthesisNudge}`;
 }
 
 /**
@@ -318,12 +345,25 @@ export type SpawnFn = (args: Record<string, unknown>) => Promise<string>;
  */
 export function buildTaskSpawnFn(p: DelegateFactoryParams): SpawnFn {
     return async (args: Record<string, unknown>): Promise<string> => {
-        const subTools = p.sandboxCfg.extraTools
+        const whitelisted = p.sandboxCfg.extraTools
             .map((n) => p.mcpTools.find((t) => t.function.name === n))
-            .filter((t): t is ToolDefinition => !!t)
-            .filter((t) => !requiresApproval(p.sandboxCfg.approvalPolicy, t.function.name, {}));
+            .filter((t): t is ToolDefinition => !!t);
+        // 자동 승인 작업이면 HITL fan-in 이 없으므로 배제할 이유가 없다 — 호출 시점에 판정한다
+        // (자동 승인은 실행 중에도 켜진다). 운영 정책 all 에서 이 판정이 없으면 도구가 전부
+        // 걷혀 서브가 기억으로만 답한다(2026-08-26 라이브 실측).
+        const autoApproved = getApprovalRegistry().isAutoApprove(p.taskId);
+        const subTools = autoApproved
+            ? whitelisted
+            : whitelisted.filter((t) => !requiresApproval(p.sandboxCfg.approvalPolicy, t.function.name, {}));
+        const stripped = whitelisted.length - subTools.length;
+        const noToolsReason = subTools.length === 0
+            ? (whitelisted.length === 0
+                ? '작업 호스트 도구 화이트리스트(TASK_SANDBOX_EXTRA_TOOLS)가 비어 있음'
+                : `승인 정책 '${p.sandboxCfg.approvalPolicy}' 로 도구 ${stripped}개 제외 — 작업의 자동 승인을 켜면 서브에이전트도 검색할 수 있습니다`)
+            : undefined;
         return runSpawnAgents({
             args,
+            ...(noToolsReason ? { noToolsReason } : {}),
             client: p.client,
             tools: subTools,
             userCtx: p.userCtx,

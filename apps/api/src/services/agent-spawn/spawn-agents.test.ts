@@ -18,6 +18,12 @@ jest.mock('../../config/runtime-limits', () => ({
     },
 }));
 
+const autoApproveMock = jest.fn((_taskId: string) => false);
+jest.mock('../task-sandbox/approval-gate', () => ({
+    ...jest.requireActual('../task-sandbox/approval-gate'),
+    getApprovalRegistry: () => ({ isAutoApprove: (id: string) => autoApproveMock(id) }),
+}));
+
 const runSubagentMock = jest.fn();
 jest.mock('../agent-task/subagent', () => ({
     runSubagent: (p: unknown) => runSubagentMock(p),
@@ -49,6 +55,7 @@ import {
     runChatSpawnAgents,
     buildTaskSpawnFn,
     normalizeSpawnArgs,
+    describeArgsShape,
 } from './spawn-agents';
 import { SPAWN_AGENT_GENERIC_PROMPT } from '../../prompts/spawn-agent-system';
 
@@ -69,16 +76,26 @@ const baseParams = {
 
 beforeEach(() => {
     jest.clearAllMocks();
+    autoApproveMock.mockReturnValue(false);
     runSubagentMock.mockImplementation(async (p: { subgoal: string }) => `RESULT<${p.subgoal}>`);
     routeToAgentMock.mockResolvedValue({ agentId: 'finance' });
     getAgentSystemMessageMock.mockResolvedValue({ prompt: 'PERSONA_PROMPT' });
 });
 
 describe('spawnAgentsArgsSchema / runSpawnAgents 인자 검증', () => {
-    it('tasks 누락이면 Error 문자열을 반환한다', async () => {
+    it('tasks 누락이면 Error 문자열을 반환한다 — 받은 형태를 함께 알린다', async () => {
         const out = await runSpawnAgents({ ...baseParams, args: {} });
         expect(out).toMatch(/^Error: tasks/);
+        expect(out).toContain('빈 객체');           // {} 는 인자 JSON 절단 의심 신호
         expect(runSubagentMock).not.toHaveBeenCalled();
+        const out2 = await runSpawnAgents({ ...baseParams, args: { tasks: 'a, b' } });
+        expect(out2).toContain('tasks=string');
+        const out3 = await runSpawnAgents({ ...baseParams, args: { tasks: [{ task: 'x' }] } });
+        expect(out3).toContain('keys=task');       // prompt 대신 다른 키를 쓴 경우가 보인다
+    });
+
+    it('describeArgsShape 는 값을 싣지 않는다', () => {
+        expect(describeArgsShape({ tasks: [{ prompt: 'SECRET_PROMPT_TEXT' }] })).not.toContain('SECRET_PROMPT_TEXT');
     });
 
     it('빈 배열·빈 prompt 도 거부한다', async () => {
@@ -267,10 +284,30 @@ describe('buildTaskSpawnFn — 에이전트 작업 경로', () => {
         expect(passed).toEqual(['web_search', 'browser']);
     });
 
-    it("정책 'all' 이면 승인 필요 도구가 전부 배제된다 (HITL fan-in 회피)", async () => {
+    it("정책 'all' + 수동 승인이면 승인 필요 도구가 전부 배제되고, 결과에 그 사실이 실린다", async () => {
         const spawn = buildTaskSpawnFn(makeFactoryParams('all', ['web_search', 'browser']));
-        await spawn({ tasks: [{ prompt: 'x' }] });
+        const out = await spawn({ tasks: [{ prompt: 'x' }] });
         expect(runSubagentMock.mock.calls[0][0].tools).toEqual([]);
+        // 조용한 성공 금지 — 도구 없이 답한 결과는 그렇게 표시돼야 한다
+        expect(out).toContain('도구 없이 답했습니다');
+        expect(out).toContain("승인 정책 'all'");
+        expect(out).toContain('자동 승인');
+    });
+
+    it("정책 'all' 이라도 작업이 자동 승인 상태면 도구를 그대로 전달한다 (fan-in 없음)", async () => {
+        autoApproveMock.mockReturnValue(true);
+        const spawn = buildTaskSpawnFn(makeFactoryParams('all', ['web_search', 'browser']));
+        const out = await spawn({ tasks: [{ prompt: 'x' }] });
+        const passed = runSubagentMock.mock.calls[0][0].tools.map((t: ToolDefinition) => t.function.name);
+        expect(passed).toEqual(['web_search', 'browser']);
+        expect(autoApproveMock).toHaveBeenCalledWith('task-1');
+        expect(out).not.toContain('도구 없이 답했습니다');
+    });
+
+    it('화이트리스트가 비어 있으면 그 사유가 실린다', async () => {
+        const spawn = buildTaskSpawnFn(makeFactoryParams('none', []));
+        const out = await spawn({ tasks: [{ prompt: 'x' }] });
+        expect(out).toContain('TASK_SANDBOX_EXTRA_TOOLS');
     });
 
     it("정책 'high-risk' 면 고위험 도구(browser)만 배제된다", async () => {
