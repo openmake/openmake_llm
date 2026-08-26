@@ -1279,6 +1279,41 @@ export const OD_ARTIFACT_ECHO = {
  * 시간이 장수에 비례해 늘던 것을 1장 수준으로 줄인다. 다른 도구는 순차 유지(부수효과·
  * 메시지 순서 보존), 결과는 원래 호출 순서대로 tool 메시지에 배치된다.
  */
+/**
+ * 한 턴 안의 **읽기 전용** 도구 호출 병렬 실행 (2026-08-26).
+ *
+ * 실측(최근 30일 에이전트 작업, 도구 턴 585개): 한 턴에 2개 이상 호출 20%(118턴), 그중
+ * 61%(72턴)가 전부 읽기 전용(web_search ×N · extract_webpage ×N). 모델은 이미 "독립"이라
+ * 판단해 한 턴에 4개씩 던지는데 하나씩 실행해 검색 4개 턴이 12초(1개 ≈ 3초)였다.
+ *
+ * 부작용 도구(bash·file_ops write 등)는 순서가 의미를 갖고 승인 게이트도 타므로 **여기 목록에
+ * 있는 이름만** 병렬한다. 결과는 원래 호출 순서로 대화에 배치된다(generate_image 선례와 동일).
+ * 채팅·에이전트 작업·서브에이전트 3경로 공용(services/tool-parallel).
+ */
+export const READ_ONLY_TOOL_PARALLEL = {
+    /** 기본 ON — READ_ONLY_TOOL_PARALLEL_ENABLED=false 로 순차 복귀. */
+    ENABLED: process.env.READ_ONLY_TOOL_PARALLEL_ENABLED !== 'false',
+    /** 동시 실행 상한(기본 4) — 검색 백엔드(SearXNG 등) 과점유 방지. */
+    MAX_CONCURRENT: parseInt(process.env.READ_ONLY_TOOL_PARALLEL_MAX || '4', 10),
+    /** 병렬 허용 도구 이름(CSV) — 부작용 없는 조회 도구만. 목록 밖은 종전대로 순차. */
+    TOOL_NAMES: (process.env.READ_ONLY_TOOL_PARALLEL_TOOLS
+        || 'web_search,extract_webpage,web_scrape,web_map,web_crawl,fact_check,analyze_image')
+        .split(',').map((s) => s.trim()).filter(Boolean),
+    /**
+     * 외부 MCP 도구(`server::tool`) 판정 — 이름에 조회 키워드가 있고 쓰기 키워드가 없으면 읽기 전용.
+     * 라이브 실측(2026-08-26): qwen 이 한 턴에 4개를 내면서 `web_search` 대신
+     * `mcp-kakao::search-web` 를 골라 정확 이름 목록만으로는 병렬이 한 번도 걸리지 않았다.
+     * 예약 리포트의 `noapi-google-search::google_news`(59회) 도 같은 부류.
+     */
+    MCP_READ_KEYWORDS: (process.env.READ_ONLY_TOOL_PARALLEL_MCP_KEYWORDS
+        || 'search,news,fetch,scrape,crawl,extract,lookup')
+        .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
+    /** 이 키워드가 이름에 있으면 조회 키워드가 있어도 제외(예: search_and_replace). */
+    MCP_WRITE_KEYWORDS: (process.env.READ_ONLY_TOOL_PARALLEL_MCP_WRITE_KEYWORDS
+        || 'write,replace,delete,remove,create,update,set,post,send,upload,insert,save,edit,move,rename')
+        .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
+} as const;
+
 export const IMAGE_GEN_PARALLEL = {
     /** 기본 ON — IMAGE_GEN_PARALLEL_ENABLED=false 로 비활성화(순차 복귀). */
     ENABLED: process.env.IMAGE_GEN_PARALLEL_ENABLED !== 'false',

@@ -16,6 +16,7 @@ import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-
 import { currentPlanStepIndex } from '../task-sandbox/planning';
 import { runTool, isSearchTool } from './task-steps';
 import { prepareToolArgs } from './tool-args';
+import { prefetchReadOnlyCalls } from '../tool-parallel';
 import { AgentTaskAbort } from './types';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
@@ -92,6 +93,29 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             url: '/agent-tasks',
         }).catch(() => { /* noop */ });
     };
+    // 읽기 전용 extra 도구(web_search 등) 병렬 선실행. 승인이 필요한 호출은 **자동 승인 작업에서만**
+    // 포함한다 — 아니면 승인 창이 동시에 N개 뜬다(HITL fan-in). 결과·스텝 영속은 아래 루프가
+    // 원래 순서로 처리하므로 체크포인트 계약은 그대로다.
+    const prefetched = await prefetchReadOnlyCalls(
+        toolCalls.map((tc) => ({ id: tc.id, name: tc.function.name, tc })),
+        ({ name, tc }) => !taskRuntime?.isTaskTool(name)
+            && (!requiresApproval(sandboxCfg.approvalPolicy, name, (tc.function.arguments ?? {}) as Record<string, unknown>)
+                || getApprovalRegistry().isAutoApprove(taskId)),
+        async ({ name, tc }) => {
+            const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
+            if (extraToolNames.has(name) && requiresApproval(sandboxCfg.approvalPolicy, name, args)) {
+                // 자동 승인 작업만 여기 온다 — 감사·집계를 위해 같은 레지스트리를 거친다(즉시 approved).
+                const r = await getApprovalRegistry().request(
+                    { taskId, userId, toolName: name, args },
+                    { timeoutMs: sandboxCfg.approvalTimeoutMs, signal },
+                );
+                pausedMs += r.waitedMs;
+                if (r.decision !== 'approved') return `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}).`;
+            }
+            return runTool(mcp, name, args, userCtx);
+        },
+        { signal, path: 'agent-task' },
+    );
     for (const tc of toolCalls) {
         if (signal.aborted) throw new AgentTaskAbort('aborted');
         const name = tc.function.name;
@@ -100,7 +124,10 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         if (name === 'browser') browserCalls++;
         const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
         let toolResult: string;
-        if (taskRuntime?.isTaskTool(name)) {
+        const pre = tc.id !== undefined ? prefetched.get(tc.id) : undefined;
+        if (pre !== undefined) {
+            toolResult = pre;
+        } else if (taskRuntime?.isTaskTool(name)) {
             // task 도구 — 승인 게이트 통과 후 영속 샌드박스에서 실행.
             // onApprovalWaited: 승인 대기 시간을 pausedMs 로 누적(4-1 pause-aware 타임아웃).
             toolResult = await taskRuntime.executeTaskTool(name, args, {
