@@ -19,6 +19,7 @@ import { executeExternalTool } from './external-tool-exec';
 import { captureOdArtifactHtml, normalizeOdToolCall, type OdArtifactCapture } from './external-deterministic-append';
 import { extractDiscussionSources } from '../../agents/discussion-sources';
 import { parallelBatch } from '../../workflow/graph-engine';
+import { prefetchReadOnlyCalls } from '../tool-parallel';
 import type { ChatMessage, ToolDefinition } from '../../llm';
 import type { ChatMessageRequest } from '../chat-service-types';
 import type { ChatStreamResult } from '../../providers/i-provider';
@@ -116,6 +117,14 @@ export async function runToolCallBatch(params: {
             IMAGE_GEN_PARALLEL.WALL_CLOCK_CREDIT_MAX_MS,
         );
     }
+    // 읽기 전용 도구(web_search·extract_webpage …) 2건 이상이면 동시에 선실행 — 결과는 아래
+    // 순차 루프가 원래 호출 순서대로 배치한다(이미지 병렬과 같은 계약). 채팅은 승인 게이트가 없다.
+    const parallelReadOnlyResults = await prefetchReadOnlyCalls(
+        toolCalls,
+        () => true,
+        (tc) => executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>),
+        { path: 'chat', ...(req.abortSignal ? { signal: req.abortSignal } : {}) },
+    );
     for (const tc of toolCalls) {
         let toolResult: string;
         if (tc.name === CHAT_DELEGATE_TOOL_NAME) {
@@ -166,6 +175,7 @@ export async function runToolCallBatch(params: {
             const singleImageStartedAt = tc.name === 'generate_image' && !parallelImageResults.has(tc.id)
                 ? Date.now() : 0;
             toolResult = parallelImageResults.get(tc.id)
+                ?? parallelReadOnlyResults.get(tc.id)
                 ?? await executeExternalTool(deps, tc.name, tc.args as Record<string, unknown>);
             if (singleImageStartedAt > 0) {
                 state.imageGenCreditMs = Math.min(
