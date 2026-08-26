@@ -148,7 +148,11 @@ export const mcpRouter = Router();
           // 살아있는 client 의 에러가 우선. 없을 때만 영속된 마지막 실패로 폴백한다
           // (연결된 서버에는 낡은 실패를 붙이지 않는다 — repo 쪽에서 이미 제외).
           const live = effective?.error ? classifyConnectError(new Error(effective.error)) : null;
-          const stored = live ? null : parseConnectError(persistedErrors.get(server.id)?.message);
+          // 지금 연결돼 있으면 영속된 옛 오류(instances 이력)는 싣지 않는다 — 부팅 시 붙는 전역
+          // 서버는 새 instance 행을 만들지 않아, 며칠 전 crashed 행이 "연결됨" 옆에 계속 보였다
+          // (2026-08-27 점검: noapi-google-search 08-25 소유자 불일치 문구 잔존).
+          const isConnected = effective?.status === 'connected';
+          const stored = live || isConnected ? null : parseConnectError(persistedErrors.get(server.id)?.message);
           const failure = live ?? stored;
           return {
               ...server,
@@ -158,7 +162,7 @@ export const mcpRouter = Router();
               connectionError: failure?.message ?? null,
               /** 원인 코드 — 프론트가 i18n 문구로 바꿔 보여준다 (`auth_required` 등) */
               connectionErrorCode: failure?.code ?? null,
-              connectionErrorAt: live ? null : (persistedErrors.get(server.id)?.at ?? null),
+              connectionErrorAt: live || isConnected ? null : (persistedErrors.get(server.id)?.at ?? null),
               /** 원격 서버에 OAuth 토큰이 저장돼 있는가 (stdio 는 항상 false) */
               oauthConnected: oauthConnected.has(server.id),
           };

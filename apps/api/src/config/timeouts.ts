@@ -233,3 +233,16 @@ export const MCP_EXTERNAL_TOOL_LIMITS = {
     /** 외부 도구 출력 최대 크기 (bytes) — 1MB */
     MAX_OUTPUT_SIZE: Number(process.env.MCP_EXTERNAL_TOOL_MAX_OUTPUT_SIZE) || 1024 * 1024,
 } as const;
+
+/**
+ * HTTP 서버 keep-alive (2026-08-27 운영 실측).
+ *
+ * Node 의 기본 keepAliveTimeout 은 5초라, Caddy(리버스 프록시)가 풀에 둔 유휴 업스트림 커넥션을
+ * Node 가 먼저 닫아 버리면 다음 요청이 `ERR_CONNECTION_CLOSED` 로 실패한다 — 브라우저에서
+ * 30초 주기 배지 폴링의 두 번째 배치가 매번 실패하던 원인. 프록시의 유휴 상한(Caddy 기본 90초)
+ * 보다 길게 잡아 "닫는 쪽은 항상 프록시" 가 되게 한다. headersTimeout 은 이보다 커야 한다(Node 규칙).
+ */
+export const HTTP_SERVER_TIMEOUTS = {
+    KEEP_ALIVE_MS: parseInt(process.env.HTTP_KEEP_ALIVE_TIMEOUT_MS || '100000', 10),
+    HEADERS_MS: parseInt(process.env.HTTP_HEADERS_TIMEOUT_MS || '101000', 10),
+} as const;
