@@ -79,6 +79,16 @@ function refreshOnce(): Promise<boolean> {
   return refreshInFlight;
 }
 
+/**
+ * 로그인 없이 보라고 만든 경로 — 여기서는 401 이 나도 로그인 화면으로 보내지 않는다.
+ * (공유된 작업 뷰어 등. 튕겨보내면 링크를 받은 사람이 내용을 볼 수 없다.)
+ */
+const PUBLIC_PATH_PREFIXES = ["/shared/"];
+
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATH_PREFIXES.some((p) => pathname.startsWith(p));
+}
+
 async function request<T>(endpoint: string, options: ApiRequestOptions = {}, _isRetry = false): Promise<T> {
   const { redirectOnUnauthorized = true, ...fetchOptions } = options;
   const method = (fetchOptions.method || "GET").toUpperCase();
@@ -114,7 +124,8 @@ async function request<T>(endpoint: string, options: ApiRequestOptions = {}, _is
       if (refreshed) {
         return request<T>(endpoint, options, true);
       }
-      if (redirectOnUnauthorized && typeof window !== "undefined" && window.location.pathname !== "/login") {
+      if (redirectOnUnauthorized && typeof window !== "undefined"
+        && window.location.pathname !== "/login" && !isPublicPath(window.location.pathname)) {
         window.location.href = "/login";
       }
     }

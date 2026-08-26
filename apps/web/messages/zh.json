@@ -1920,6 +1920,8 @@
     "snapshotNote": "这是发布时的快照 — 继续执行任务不会改变此页面。",
     "artifacts": "产出物 {count} 项",
     "artifactMarkupOmitted": "HTML/SVG 产出物不包含正文 — 共享页面只显示文本。",
-    "artifactUnavailable": "无法读取正文。"
+    "artifactUnavailable": "无法读取正文。",
+    "openArtifact": "打开",
+    "artifactViewerOnly": "正文在隔离查看器中打开 — 请点击\"打开\"。"
   }
 }

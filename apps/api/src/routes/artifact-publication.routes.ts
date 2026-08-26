@@ -31,7 +31,9 @@ import {
     resolveAuthorLabel,
     exportPublicationViewer,
     composeShareUrl,
+    verifyAccessToken,
 } from '../services/artifact-viewer-service';
+import { parseShareViewerPubId } from '../services/agent-task/share-artifact-viewer';
 import { getAuditService } from '../services/AuditService';
 import { isAdminRole } from '../data/user-manager';
 
@@ -198,6 +200,12 @@ router.get('/viewer-authz', asyncHandler(async (req: Request, res: Response) => 
         token = km ? decodeURIComponent(km[1]) : '';
     }
     if (!pubId) { res.status(403).end(); return; }
+    // 작업 공유 산출물(`share-<shareId>-<n>`)은 게시 행이 없다 — 공유 인가를 통과한 뒤
+    // `/shared-tasks/:id/artifacts/:n/open` 이 발급한 서명 접근토큰만으로 판정한다.
+    if (parseShareViewerPubId(pubId)) {
+        res.status(verifyAccessToken(pubId, token) ? 200 : 403).end();
+        return;
+    }
     const pubRepo = new ArtifactPublicationRepository(getPool());
     const pub = await pubRepo.getByPublicationId(pubId);
     if (!pub) { res.status(403).end(); return; }

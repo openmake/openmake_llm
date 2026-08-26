@@ -1920,6 +1920,8 @@
     "snapshotNote": "게시 시점 기록입니다 — 이후 작업이 이어져도 이 화면은 바뀌지 않습니다.",
     "artifacts": "산출물 {count}건",
     "artifactMarkupOmitted": "HTML·SVG 산출물은 본문을 담지 않습니다 — 공유 문서는 텍스트만 보여줍니다.",
-    "artifactUnavailable": "본문을 읽을 수 없습니다."
+    "artifactUnavailable": "본문을 읽을 수 없습니다.",
+    "openArtifact": "열기",
+    "artifactViewerOnly": "본문은 격리된 뷰어에서 열립니다 — [열기] 를 누르세요."
   }
 }

@@ -1920,6 +1920,8 @@
     "snapshotNote": "A snapshot from when it was published — continuing the task does not change this page.",
     "artifacts": "Outputs ({count})",
     "artifactMarkupOmitted": "HTML/SVG outputs are not included — a shared page shows text only.",
-    "artifactUnavailable": "The body could not be read."
+    "artifactUnavailable": "The body could not be read.",
+    "openArtifact": "Open",
+    "artifactViewerOnly": "The body opens in an isolated viewer — press Open."
   }
 }

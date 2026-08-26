@@ -37,8 +37,14 @@ async function tryRefresh(): Promise<boolean> {
   }
 }
 
+/**
+ * ⚠️ `redirectOnUnauthorized: false` 필수 — 이건 "누구세요"를 묻는 **탐침**이지 사용자가
+ * 요청한 동작이 아니다. 기본값(리다이렉트)이면 만료 쿠키를 가진 방문자가 **공개 페이지**
+ * (`/shared/task/...`)를 열 때 로그인 화면으로 튕긴다(2026-08-26 실측 — 한 번 로그인한 적
+ * 있는 동료에게 공유 링크가 안 열렸다). 401 은 여기선 그냥 "게스트"다.
+ */
 function fetchMe(): Promise<ApiSuccess<MePayload>> {
-  return ApiClient.get<ApiSuccess<MePayload>>("/api/auth/me");
+  return ApiClient.get<ApiSuccess<MePayload>>("/api/auth/me", { redirectOnUnauthorized: false });
 }
 
 /**

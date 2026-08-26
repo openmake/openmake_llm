@@ -36,7 +36,7 @@ export interface ShareDocument {
     summary: { turns: number; toolCalls: number; retries: number; diffs: number; artifacts: number };
     steps: { n: number; type: string; tool?: string; text: string }[];
     diffs: string[];
-    artifacts: { id: string; title: string; kind: string; body: string | null; omitted?: string }[];
+    artifacts: { id: string; title: string; kind: string; body: string | null; omitted?: string; viewerId?: string }[];
     createdAt: string | null;
     completedAt: string | null;
 }
@@ -127,6 +127,14 @@ export class ApiClient {
     }
     publishShare(taskId: string, opts: { visibility: string; includeSteps: boolean; includeDiff: boolean; includeArtifacts: boolean }): Promise<ShareState> {
         return this.req('POST', `/api/agent-tasks/${taskId}/share`, opts);
+    }
+    /** 공유 문서 조회 — link 공유면 토큰이 필요하지만, 소유자 API key 로도 읽힌다. */
+    getSharedTask(shareId: string, token: string | null): Promise<{ document: ShareDocument }> {
+        return this.req('GET', `/api/shared-tasks/${shareId}${token ? `?token=${encodeURIComponent(token)}` : ''}`);
+    }
+    /** 산출물 열람 URL — 공유와 같은 인가를 통과한 뒤 발급되는 TTL 토큰이 붙는다. */
+    openSharedArtifact(shareId: string, index: number, token: string | null): Promise<{ url: string }> {
+        return this.req('GET', `/api/shared-tasks/${shareId}/artifacts/${index}/open${token ? `?token=${encodeURIComponent(token)}` : ''}`);
     }
     unshare(taskId: string): Promise<{ unshared: boolean }> {
         return this.req('DELETE', `/api/agent-tasks/${taskId}/share`);

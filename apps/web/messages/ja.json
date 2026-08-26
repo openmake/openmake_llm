@@ -1920,6 +1920,8 @@
     "snapshotNote": "公開時点の記録です — タスクを続行してもこの画面は変わりません。",
     "artifacts": "成果物 {count} 件",
     "artifactMarkupOmitted": "HTML・SVG の成果物は本文を含めません — 共有ページはテキストのみ表示します。",
-    "artifactUnavailable": "本文を読み取れません。"
+    "artifactUnavailable": "本文を読み取れません。",
+    "openArtifact": "開く",
+    "artifactViewerOnly": "本文は隔離されたビューアで開きます — [開く] を押してください。"
   }
 }
