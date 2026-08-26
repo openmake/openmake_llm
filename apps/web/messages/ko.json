@@ -1031,7 +1031,13 @@
     "renameHint": "도구 이름 앞에 붙습니다(예: mcp-postgres::query). 변경 후 재연결되어야 적용됩니다.",
     "renameDone": "이름을 \"{name}\" 로 바꿨습니다. 다음 연결부터 적용됩니다.",
     "renameError": "이름 변경에 실패했습니다",
-    "save": "저장"
+    "save": "저장",
+    "delete": "삭제",
+    "deleteTitle": "서버 삭제",
+    "deleteConfirm": "이 MCP 서버 등록을 삭제할까요?",
+    "deleteHint": "되돌릴 수 없습니다. 저장된 자격증명(env)도 함께 삭제되며, 실행 중인 인스턴스가 있으면 종료됩니다. 다시 쓰려면 카탈로그에서 새로 설치해야 합니다.",
+    "deleteDone": "\"{name}\" 서버를 삭제했습니다.",
+    "deleteError": "삭제에 실패했습니다"
   },
   "mcpCatalog": {
     "pageTitle": "MCP 카탈로그",

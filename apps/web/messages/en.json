@@ -1031,7 +1031,13 @@
     "renameHint": "Prefixes tool names (e.g. mcp-postgres::query). Takes effect after the server reconnects.",
     "renameDone": "Renamed to \"{name}\". It applies on the next connection.",
     "renameError": "Rename failed",
-    "save": "Save"
+    "save": "Save",
+    "delete": "Delete",
+    "deleteTitle": "Delete server",
+    "deleteConfirm": "Delete this MCP server registration?",
+    "deleteHint": "This cannot be undone. Stored credentials (env) are deleted too, and any running instance is stopped. To use it again you must reinstall it from the catalog.",
+    "deleteDone": "Deleted server \"{name}\".",
+    "deleteError": "Failed to delete"
   },
   "mcpCatalog": {
     "pageTitle": "MCP Catalog",

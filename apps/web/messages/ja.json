@@ -1031,7 +1031,13 @@
     "renameHint": "ツール名の接頭辞になります(例: mcp-postgres::query)。再接続後に反映されます。",
     "renameDone": "名前を「{name}」に変更しました。次回の接続から反映されます。",
     "renameError": "名前の変更に失敗しました",
-    "save": "保存"
+    "save": "保存",
+    "delete": "削除",
+    "deleteTitle": "サーバーを削除",
+    "deleteConfirm": "この MCP サーバーの登録を削除しますか？",
+    "deleteHint": "元に戻せません。保存された認証情報（env）も削除され、実行中のインスタンスは停止します。再度使うにはカタログから再インストールが必要です。",
+    "deleteDone": "サーバー「{name}」を削除しました。",
+    "deleteError": "削除に失敗しました"
   },
   "mcpCatalog": {
     "pageTitle": "MCPカタログ",

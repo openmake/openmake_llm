@@ -1031,7 +1031,13 @@
     "renameHint": "作为工具名前缀(如 mcp-postgres::query)。重新连接后生效。",
     "renameDone": "已重命名为“{name}”。下次连接时生效。",
     "renameError": "重命名失败",
-    "save": "保存"
+    "save": "保存",
+    "delete": "删除",
+    "deleteTitle": "删除服务器",
+    "deleteConfirm": "确定删除此 MCP 服务器注册吗？",
+    "deleteHint": "此操作不可撤销。已保存的凭据（env）会一并删除，正在运行的实例将被终止。如需再次使用，请从目录重新安装。",
+    "deleteDone": "已删除服务器“{name}”。",
+    "deleteError": "删除失败"
   },
   "mcpCatalog": {
     "pageTitle": "MCP 目录",
