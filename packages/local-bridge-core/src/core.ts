@@ -16,9 +16,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import {
-    EXEC_TIMEOUT_MS, FOLDERS_MAX_ENTRIES, FS_OP_TIMEOUT_MS, LIST_ALL_MAX, MAX_BUFFER,
+    DIAG_MAX_TOTAL, EXEC_TIMEOUT_MS, FOLDERS_MAX_ENTRIES, FS_OP_TIMEOUT_MS, LIST_ALL_MAX, MAX_BUFFER,
     SANDBOX_BIN, SANDBOX_ENABLED,
 } from './constants';
+import { collectDiagnostics } from './diagnostics';
 import { matchDenylist } from './denylist';
 import { resolveExecPath } from './exec-path';
 import { detectGitDir, writeSandboxProfile } from './sandbox';
@@ -193,6 +194,16 @@ export class BridgeCore {
                     }
                     return { entries, truncated };
                 });
+                done({ ok: true, ...r }); return;
+            }
+            case 'lsp_diagnostics': {
+                // 읽기 전용 검사라 confirmExec 대상이 아니다 — 실행 파일·인자는 코어가 고정 조립하고
+                // (모델/서버 입력이 명령줄에 들어가지 않음) 경로는 safe() 로 스코프를 확정한 뒤 넘긴다.
+                const rel = Array.isArray(m.paths) ? m.paths.slice(0, DIAG_MAX_TOTAL) : [];
+                const abs: string[] = [];
+                for (const p of rel) abs.push(await safeFromAsync(base, p));
+                if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot);
+                const r = await collectDiagnostics(base, abs, this.execPathCache);
                 done({ ok: true, ...r }); return;
             }
             case 'worktree':

@@ -23,6 +23,19 @@ export const TASK_ID_RE = /^[a-zA-Z0-9-]{8,64}$/;
 /** folders(하위 폴더 열거) 1회 상한 — 서버 BRIDGE_FOLDERS_MAX_ENTRIES 와 같은 축(디바이스측 강제). */
 export const FOLDERS_MAX_ENTRIES = 200;
 
+/**
+ * 편집 후 진단(lsp_diagnostics) — 1회 실행 타임아웃과 결과 캡.
+ * 콜드 스타트(대형 TS 레포의 첫 tsc)를 고려해 exec 보다 짧고 FS 보다 길게 잡는다.
+ * 서버측(LOCAL_BRIDGE.LSP_TIMEOUT_MS)이 더 짧으면 서버가 먼저 포기한다 — 그쪽이 fail-open 이라 무해.
+ */
+export const DIAG_TIMEOUT_MS = Number(process.env.OMK_BRIDGE_DIAG_TIMEOUT_MS || 15000);
+/** 파일당 진단 상한 — 한 파일의 연쇄 오류가 결과를 독점하지 않게. */
+export const DIAG_MAX_PER_FILE = 20;
+/** 전체 진단 상한 — tool_result 팽창 방지(MAX_TOOL_RESULT_CHARS 절단과 이중). */
+export const DIAG_MAX_TOTAL = 60;
+/** 진단 메시지 1건 길이 상한. */
+export const DIAG_MSG_MAX = 300;
+
 /** listAll 재귀 나열 상한. */
 export const LIST_ALL_MAX = 1000;
 
