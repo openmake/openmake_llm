@@ -820,6 +820,12 @@
       "includeArtifacts": "산출물 포함",
       "artifactLabel": "산출물:",
       "bodyOmitted": "본문 제외"
+    },
+    "subagents": {
+      "title": "서브에이전트 활동 {count}건",
+      "originSpawn": "병렬 서브 #{n}",
+      "originDelegate": "전문가 위임",
+      "stepCount": "{count}단계"
     }
   },
   "customAgents": {
@@ -1360,7 +1366,9 @@
         "turns": "턴 수",
         "discussionHits": "토론 의도 적중",
         "delegateHits": "위임 의도 적중"
-      }
+      },
+      "spawnAdoption": "병렬 위임 채택률",
+      "ofSpawnIntent": "의도 매칭 {intent}턴 중 {called}턴 호출"
     },
     "noNodes": "보고된 클러스터 노드가 없습니다."
   },

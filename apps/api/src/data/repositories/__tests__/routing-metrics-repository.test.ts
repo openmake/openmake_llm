@@ -45,6 +45,8 @@ describe('RoutingMetricsRepository', () => {
             exposed_turns: '0',
             called_turns: '0',
             success_turns: '0',
+            spawn_intent_turns: '0',
+            spawn_called_turns: '0',
         });
     });
 

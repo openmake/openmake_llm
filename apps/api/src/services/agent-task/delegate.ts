@@ -17,6 +17,7 @@ import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { routeToAgent } from '../../agents/keyword-router';
 import { getAgentSystemMessage } from '../../agents/system-prompt';
 import { runSubagent } from './subagent';
+import { SubagentTrace, newTraceId } from './subagent-trace';
 
 export interface DelegateFactoryParams {
     client: LLMClient;
@@ -44,6 +45,7 @@ export function buildDelegateFn(p: DelegateFactoryParams): DelegateFn {
                 .map((n) => p.mcpTools.find((t) => t.function.name === n))
                 .filter((t): t is ToolDefinition => !!t);
             return runSubagent({
+                trace: new SubagentTrace(p.taskId, newTraceId(), 'delegate', 0, role ?? selection.primaryAgent ?? null),
                 client: p.client, personaPrompt: prompt, subgoal,
                 tools: subTools, userCtx: p.userCtx, taskId: p.taskId,
                 sandboxCfg: p.sandboxCfg, signal: p.signal,

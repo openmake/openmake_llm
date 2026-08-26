@@ -120,6 +120,10 @@ interface RoutingGatesData {
     successTurns: number;
     callRate: number;
     successRate: number;
+    /** 병렬 위임 채택률(110) */
+    spawnIntentTurns?: number;
+    spawnCalledTurns?: number;
+    spawnAdoptionRate?: number;
     byTool: { tool: string; turns: number; successTurns: number }[];
     toggles: {
       userMode: string;
@@ -491,7 +495,7 @@ export default function AdminMetricsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
                 <StatCard
                   label={t("routing.callRate")}
                   value={`${(routingGates.orchestration.callRate * 100).toFixed(1)}%`}
@@ -506,6 +510,14 @@ export default function AdminMetricsPage() {
                   delta={t("routing.ofCalled", {
                     success: routingGates.orchestration.successTurns.toLocaleString(),
                     called: routingGates.orchestration.calledTurns.toLocaleString(),
+                  })}
+                />
+                <StatCard
+                  label={t("routing.spawnAdoption")}
+                  value={`${((routingGates.orchestration.spawnAdoptionRate ?? 0) * 100).toFixed(1)}%`}
+                  delta={t("routing.ofSpawnIntent", {
+                    called: (routingGates.orchestration.spawnCalledTurns ?? 0).toLocaleString(),
+                    intent: (routingGates.orchestration.spawnIntentTurns ?? 0).toLocaleString(),
                   })}
                 />
                 <StatCard
