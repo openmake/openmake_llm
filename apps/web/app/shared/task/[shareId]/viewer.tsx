@@ -10,10 +10,10 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { LoaderCircle, Lock } from "lucide-react";
+import { ExternalLink, LoaderCircle, Lock } from "lucide-react";
 import { Badge, Card, CardContent } from "@/components/ui/primitives";
 import { DiffView } from "@/components/chat/diff-view";
-import { getSharedTask, type ShareDocument } from "@/lib/share-task";
+import { getSharedTask, openSharedArtifact, type ShareDocument } from "@/lib/share-task";
 import { cn } from "@/lib/utils";
 
 const STATUS_TONE: Record<string, "success" | "danger" | "accent" | "neutral"> = {
@@ -28,6 +28,25 @@ export function SharedTaskViewer({ shareId, token }: { shareId: string; token: s
   const [doc, setDoc] = useState<ShareDocument | null>(null);
   const [sharedAt, setSharedAt] = useState<string | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "denied">("loading");
+  const [opening, setOpening] = useState<number | null>(null);
+
+  // 산출물 열기 — 토큰은 여기서 발급받는다(스냅샷에 없다). 새 탭은 클릭 직후에 열어야
+  // 팝업 차단에 걸리지 않으므로, 먼저 열고 URL 을 받은 뒤 이동시킨다.
+  const openArtifact = async (index: number) => {
+    setOpening(index);
+    const tab = window.open("", "_blank", "noopener");
+    try {
+      const res = await openSharedArtifact(shareId, index, token);
+      const url = res?.data?.url;
+      if (!url) throw new Error("no url");
+      if (tab) tab.location.href = url;
+      else window.location.href = url;
+    } catch {
+      tab?.close();
+    } finally {
+      setOpening(null);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -99,12 +118,25 @@ export function SharedTaskViewer({ shareId, token }: { shareId: string; token: s
             {doc.artifacts.length > 0 && (
               <section className="space-y-2">
                 <h2 className="text-xs font-medium text-fg-2">{t("artifacts", { count: doc.artifacts.length })}</h2>
-                {doc.artifacts.map((a) => (
-                  <Card key={a.id || a.title}>
+                {doc.artifacts.map((a, i) => (
+                  <Card key={a.id || `${a.title}-${i}`}>
                     <CardContent className="space-y-2 pt-4">
                       <p className="flex flex-wrap items-center gap-2 text-sm text-fg">
                         {a.title}
                         <Badge tone="neutral">{a.kind}</Badge>
+                        {a.viewerId && (
+                          <button
+                            type="button"
+                            onClick={() => void openArtifact(i)}
+                            disabled={opening === i}
+                            className="inline-flex items-center gap-1 text-xs text-accent hover:underline disabled:opacity-60"
+                          >
+                            {opening === i
+                              ? <LoaderCircle className="h-3 w-3 animate-spin" />
+                              : <ExternalLink className="h-3 w-3" />}
+                            {t("openArtifact")}
+                          </button>
+                        )}
                       </p>
                       {/* 본문은 항상 텍스트로만 — 마크업 렌더는 별도 오리진·CSP 격리가 필요하다 */}
                       {a.body ? (
@@ -112,7 +144,11 @@ export function SharedTaskViewer({ shareId, token }: { shareId: string; token: s
                           {a.body}
                         </pre>
                       ) : (
-                        <p className="text-xs text-faint">{t(a.omitted === "markup" ? "artifactMarkupOmitted" : "artifactUnavailable")}</p>
+                        <p className="text-xs text-faint">
+                          {a.viewerId
+                            ? t("artifactViewerOnly")
+                            : t(a.omitted === "markup" ? "artifactMarkupOmitted" : "artifactUnavailable")}
+                        </p>
                       )}
                     </CardContent>
                   </Card>

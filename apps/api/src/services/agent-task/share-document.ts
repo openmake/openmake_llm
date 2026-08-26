@@ -80,6 +80,11 @@ export interface ShareArtifact {
     /** 본문 — 텍스트 계열만. 담지 않은 경우 null 이고 omitted 에 사유가 있다 */
     body: string | null;
     omitted?: 'markup' | 'unparsable';
+    /**
+     * 격리 오리진 뷰어 id — 게시 시 export 에 성공한 산출물에만 붙는다(라우트가 채운다).
+     * 본문(특히 html)은 여기서만 실행되고 공유 문서에는 담기지 않는다.
+     */
+    viewerId?: string;
 }
 
 export interface BuildShareOptions {
@@ -98,6 +103,32 @@ function iso(v: string | Date | null | undefined): string | null {
  * 공유 문서를 만든다. 게시 시점에 1회 실행해 **스냅샷으로 저장**한다 — 라이브 조인하면
  * 이후 resume·재실행으로 생긴 새 민감 정보가 자동 노출된다(plan §4).
  */
+
+/**
+ * 산출물 스텝 선별 — **문서와 뷰어 export 가 같은 순서를 봐야** 한다(viewerId 는 배열
+ * 인덱스로 매긴다). 그래서 순서·상한을 이 함수 하나로만 정한다.
+ */
+function selectArtifactSteps(steps: ShareStepInput[]): ShareStepInput[] {
+    return steps
+        .filter((s) => s.step_type === 'artifact')
+        .slice(0, SHARE_LIMITS.MAX_ARTIFACTS);
+}
+
+/**
+ * 뷰어 export 용 원본 본문 — 문서의 `artifacts` 와 **인덱스 정렬**된다. 마크업 포함 전 종류를
+ * 담는다(격리 오리진에서만 렌더). 파싱 실패·본문 없음은 null.
+ */
+export function extractArtifactViewerContents(steps: ShareStepInput[]): (string | null)[] {
+    return selectArtifactSteps(steps).map((s) => {
+        try {
+            const a = JSON.parse(s.content ?? '') as { content?: string };
+            const body = typeof a.content === 'string' ? a.content : '';
+            return body.length > 0 ? body : null;
+        } catch {
+            return null;
+        }
+    });
+}
 
 /**
  * `artifact` 스텝 → 공유용 산출물. content 는 `{id,kind,title,content,validation,sourceData}`
@@ -160,11 +191,12 @@ export function buildShareDocument(
         }))
         .filter((s) => s.text.length > 0);
 
-    const artifacts = !includeArtifacts ? [] : shared
-        .filter((s) => s.step_type === 'artifact')
-        .slice(0, SHARE_LIMITS.MAX_ARTIFACTS)
-        .map((s) => toShareArtifact(s.content ?? '', r))
-        .filter((a): a is ShareArtifact => a !== null);
+    // ⚠️ null(제목 없는 산출물)을 걸러내면 뷰어 콘텐츠 배열과 인덱스가 어긋난다 —
+    //    자리를 유지하기 위해 제목을 채워 넣는다.
+    const artifacts = !includeArtifacts ? [] : selectArtifactSteps(shared)
+        .map((s, i) => toShareArtifact(s.content ?? '', r) ?? {
+            id: '', title: `(제목 없는 산출물 ${i + 1})`, kind: 'unknown', body: null, omitted: 'unparsable' as const,
+        });
 
     const diffs = !includeDiff ? [] : shared
         .filter((s) => s.step_type === 'diff')
