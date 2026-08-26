@@ -141,7 +141,8 @@ const apps = [{
         // npm 을 fork 하면 pm2 ProcessContainerFork 가 crash → next 바이너리를 직접 node 로 실행.
         // (workspaces hoist 때문에 경로는 require.resolve 로 찾는다 — resolveNextBin 주석 참고)
         script: resolveNextBin(WEB_DIR),
-        args: `start -p ${WEB_PORT}`,
+        // keep-alive 를 Caddy 유휴 상한(90s)보다 길게 — API 서버와 같은 근거(config/timeouts HTTP_SERVER_TIMEOUTS).
+        args: `start -p ${WEB_PORT} --keepAliveTimeout ${process.env.HTTP_KEEP_ALIVE_TIMEOUT_MS || '100000'}`,
         env: {
             NODE_ENV: 'production',
             PORT: WEB_PORT,
