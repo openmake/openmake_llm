@@ -25,7 +25,10 @@ import { success, badRequest, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AgentTaskShareRepository, type ShareVisibility } from '../data/repositories/agent-task-share-repository';
-import { buildShareDocument, type ShareStepInput, type ShareTaskInput } from '../services/agent-task/share-document';
+import { buildShareDocument, extractArtifactViewerContents, type ShareDocument, type ShareStepInput, type ShareTaskInput } from '../services/agent-task/share-document';
+import { exportShareArtifactViewers, removeShareArtifactViewers } from '../services/agent-task/share-artifact-viewer';
+import { ARTIFACT_VIEWER } from '../config/artifact-viewer';
+import { mintAccessToken } from '../services/artifact-viewer-service';
 import { loadOwnedTask } from './agent-task.helpers';
 import { createLogger } from '../utils/logger';
 
@@ -55,9 +58,15 @@ function repo(): AgentTaskShareRepository {
 }
 
 /** 작업 + 스텝을 읽어 공유 문서를 만든다(게시/미리보기 공용). */
-async function buildFor(taskId: string, task: ShareTaskInput, opts: ShareToggles) {
+async function buildFor(taskId: string, task: ShareTaskInput, opts: ShareToggles): Promise<ShareDocument> {
     const steps = await getUnifiedDatabase().getAgentTaskSteps(taskId);
     return buildShareDocument(task, steps as unknown as ShareStepInput[], opts);
+}
+
+/** 뷰어 export 용 산출물 원본 — 문서의 artifacts 와 인덱스 정렬된다. */
+async function artifactContentsFor(taskId: string): Promise<(string | null)[]> {
+    const steps = await getUnifiedDatabase().getAgentTaskSteps(taskId);
+    return extractArtifactViewerContents(steps as unknown as ShareStepInput[]);
 }
 
 interface ShareToggles { includeSteps: boolean; includeDiff: boolean; includeArtifacts: boolean }
@@ -70,6 +79,18 @@ function readToggles(body: unknown): ShareToggles {
         includeDiff: b.includeDiff !== false,
         includeArtifacts: b.includeArtifacts !== false,
     };
+}
+
+/**
+ * 조회 인가 — 소유자 / authenticated(로그인) / link(토큰 일치). 조회와 산출물 열람이
+ * **같은 규칙**을 쓰도록 한 곳에 둔다(둘이 어긋나면 산출물이 공유보다 넓게 열린다).
+ */
+function isShareViewerAllowed(req: Request, share: { owner_user_id: string; visibility: ShareVisibility; share_token: string | null }): boolean {
+    const viewerId = req.user?.id ? String(req.user.id) : null;
+    if (viewerId !== null && viewerId === share.owner_user_id) return true;
+    if (share.visibility === 'authenticated') return viewerId !== null;
+    if (share.visibility === 'link') return safeTokenEqual(String(req.query.token ?? ''), share.share_token);
+    return false;
 }
 
 /** 공유 링크 경로 — 응답 3곳(게시·조회·CLI)이 같은 형태를 쓰도록 한 곳에서 만든다. */
@@ -136,6 +157,16 @@ agentTaskShareRouter.post('/agent-tasks/:taskId/share', requireOwner, asyncHandl
         ? (existing?.visibility === 'link' && existing.share_token ? existing.share_token : randomBytes(24).toString('base64url'))
         : null;
 
+    // 재게시면 이전 export 를 먼저 지운다(산출물 수가 줄면 옛 페이지가 남는다).
+    if (existing) {
+        const prev = (existing.snapshot as ShareDocument | null)?.artifacts?.length ?? 0;
+        await removeShareArtifactViewers(shareId, prev);
+    }
+    // 격리 오리진에 산출물 뷰어를 export 하고 viewerId 를 스냅샷에 심는다(fail-open).
+    if (toggles.includeArtifacts && snapshot.artifacts.length > 0) {
+        await exportShareArtifactViewers(shareId, String(req.user!.id), snapshot.artifacts, await artifactContentsFor(req.params.taskId));
+    }
+
     const row = await repo().upsert({
         shareId,
         taskId: req.params.taskId,
@@ -161,6 +192,10 @@ agentTaskShareRouter.post('/agent-tasks/:taskId/share', requireOwner, asyncHandl
 agentTaskShareRouter.delete('/agent-tasks/:taskId/share', requireOwner, asyncHandler(async (req: Request, res: Response) => {
     const task = await loadOwnedTask(req, res, req.params.taskId);
     if (!task) return;
+    const existing = await repo().getByTaskId(req.params.taskId);
+    if (existing) {
+        await removeShareArtifactViewers(existing.share_id, (existing.snapshot as ShareDocument | null)?.artifacts?.length ?? 0);
+    }
     const deleted = await repo().deleteByTaskId(req.params.taskId);
     logger.info(`작업 공유 해제: ${req.params.taskId} (${deleted ? '삭제됨' : '없음'})`);
     res.json(success({ unshared: deleted }));
@@ -180,14 +215,7 @@ agentTaskShareRouter.get('/shared-tasks/:shareId', optionalAuth, asyncHandler(as
         return;
     }
 
-    const viewerId = req.user?.id ? String(req.user.id) : null;
-    const isOwner = viewerId !== null && viewerId === share.owner_user_id;
-    let allowed = isOwner;
-    if (!allowed) {
-        if (share.visibility === 'authenticated') allowed = viewerId !== null;
-        else if (share.visibility === 'link') allowed = safeTokenEqual(String(req.query.token ?? ''), share.share_token);
-    }
-    if (!allowed) {
+    if (!isShareViewerAllowed(req, share)) {
         res.status(404).json(notFound('공유된 작업'));
         return;
     }
@@ -198,6 +226,33 @@ agentTaskShareRouter.get('/shared-tasks/:shareId', optionalAuth, asyncHandler(as
         sharedAt: share.updated_at,
         document: share.snapshot,
     }));
+}));
+
+/**
+ * 산출물 열람 URL 발급 — 공유와 **같은 인가**를 통과한 뒤에만 격리 오리진 접근토큰을 준다.
+ *
+ * 토큰을 스냅샷에 박아두지 않는 이유: 스냅샷은 조회 응답으로 그대로 나가므로, 박아두면
+ * 공유 문서를 한 번 본 사람이 인가와 무관하게 영구 URL 을 갖게 된다. 여기서 발급하는
+ * 접근토큰은 TTL 이 있고, 공유를 해제하면 export 자체가 사라져 404 다.
+ */
+agentTaskShareRouter.get('/shared-tasks/:shareId/artifacts/:index/open', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
+    const share = await repo().getByShareId(req.params.shareId);
+    if (!share || !isShareViewerAllowed(req, share)) {
+        res.status(404).json(notFound('공유된 작업'));
+        return;
+    }
+    const doc = share.snapshot as ShareDocument | null;
+    const artifact = doc?.artifacts?.[Number(req.params.index)];
+    if (!artifact?.viewerId) {
+        res.status(404).json(notFound('산출물'));
+        return;
+    }
+    const token = mintAccessToken(artifact.viewerId);
+    if (!token) {
+        res.status(404).json(notFound('산출물 뷰어'));
+        return;
+    }
+    res.json(success({ url: `${ARTIFACT_VIEWER.origin}/a/${artifact.viewerId}/?k=${encodeURIComponent(token)}` }));
 }));
 
 export default agentTaskShareRouter;
