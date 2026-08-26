@@ -258,17 +258,12 @@
     "send": "送信",
     "disclaimer": "OpenMake は誤ることがあります。重要な情報は確認してください。",
     "suppressedTag": "(未適用)",
-    "modifierSuppressed": "{label} はインターセプトモード中は適用されません",
     "externalLocalModeNotice": "ディスカッション・ディープリサーチはローカルモデルで実行されます（選択した外部モデルは使用されません）。",
     "toggle": {
       "discussion": "ディスカッション",
       "thinking": "思考",
       "deepResearch": "ディープリサーチ",
-      "web": "ウェブ",
       "agent": "エージェント",
-      "image": "画像",
-      "artifact": "アーティファクト",
-      "structured": "構造化",
       "verification": "回答の検証"
     },
     "slashMenu": {
@@ -558,9 +553,7 @@
     "unknownError": "不明なエラー",
     "disconnected": "_(サーバーとの接続が切れました。再接続中です。しばらくして再送信してください。)_",
     "taskIdMissing": "タスク作成レスポンスに taskId がありません",
-    "agentTaskStartFailed": "エージェントタスクを開始できませんでした: {message}",
-    "structuredAborted": "_(構造化回答の生成を中止しました。)_",
-    "structuredFailed": "構造化回答を生成できませんでした: {message}"
+    "agentTaskStartFailed": "エージェントタスクを開始できませんでした: {message}"
   },
   "skillLibrary": {
     "cancel": "キャンセル",
