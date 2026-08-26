@@ -15,6 +15,7 @@
  */
 import type { MCPToolDefinition, MCPToolResult } from '../../mcp/types';
 import type { TaskExecutor, ExecResult } from './executor';
+import { withDiagnostics } from './diagnostics-attach';
 import { TaskPlan, type PlanStepStatus } from './planning';
 import {
     SPAWN_AGENTS_TOOL_NAME,
@@ -163,7 +164,7 @@ export function createTaskTools(
             try {
                 if (command === 'create') {
                     await sandbox.writeFile(path, str(args.file_text));
-                    return textResult(`생성됨: ${path}`);
+                    return withDiagnostics(sandbox, path, `생성됨: ${path}`);
                 }
                 if (command === 'view') {
                     const content = await sandbox.readFile(path);
@@ -177,7 +178,7 @@ export function createTaskTools(
                     if (count === 0) return textResult(`old_str 를 찾을 수 없습니다: ${path} — old_str 는 공백·들여쓰기까지 파일 내용과 정확히 일치해야 합니다. command:view 로 현재 내용을 확인한 뒤 그대로 복사해 쓰세요.`, true);
                     if (count > 1) return textResult(`old_str 가 ${count}회 중복 — 유일해야 합니다.`, true);
                     await sandbox.writeFile(path, content.replace(oldStr, str(args.new_str)));
-                    return textResult(`치환 완료: ${path}`);
+                    return withDiagnostics(sandbox, path, `치환 완료: ${path}`);
                 }
                 if (command === 'insert') {
                     const content = await sandbox.readFile(path);
@@ -185,7 +186,7 @@ export function createTaskTools(
                     const at = Math.max(0, Math.min(lines.length, Number(args.insert_line) || 0));
                     lines.splice(at, 0, str(args.new_str));
                     await sandbox.writeFile(path, lines.join('\n'));
-                    return textResult(`삽입 완료: ${path}:${at}`);
+                    return withDiagnostics(sandbox, path, `삽입 완료: ${path}:${at}`);
                 }
                 return textResult(`알 수 없는 command: ${command}`, true);
             } catch (e) {
@@ -216,7 +217,7 @@ export function createTaskTools(
             const path = str(args.path);
             try {
                 if (op === 'read') return textResult(await sandbox.readFile(path));
-                if (op === 'write') { await sandbox.writeFile(path, str(args.content)); return textResult(`기록됨: ${path}`); }
+                if (op === 'write') { await sandbox.writeFile(path, str(args.content)); return withDiagnostics(sandbox, path, `기록됨: ${path}`); }
                 if (op === 'list') return textResult((await sandbox.listDir(path || '.')).join('\n') || '(빈 디렉토리)');
                 if (op === 'tree') {
                     // 하위 폴더 포함 전체 목록 — list 로 한 단계씩 파고들다 폴더를 놓치는

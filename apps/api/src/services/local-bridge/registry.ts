@@ -23,7 +23,7 @@ import { createLogger } from '../../utils/logger';
 const logger = createLogger('LocalBridge');
 
 /** 서버→디바이스 도구 요청 종류 — 이 외의 kind 는 존재하지 않는다(임의 RPC 금지). */
-export type BridgeKind = 'exec' | 'read' | 'write' | 'list' | 'listAll' | 'delete' | 'task_end' | 'worktree' | 'folders';
+export type BridgeKind = 'exec' | 'read' | 'write' | 'list' | 'listAll' | 'delete' | 'task_end' | 'worktree' | 'folders' | 'lsp_diagnostics';
 
 /** worktree 연산 — 서버는 op 만 지정하고 git 명령은 디바이스가 고정 인자로 조립한다(명령 주입 차단). */
 export type WorktreeOp = 'add' | 'diff' | 'remove';
@@ -49,6 +49,19 @@ export interface BridgeRequestPayload {
      * 디바이스가 기존 safe()(realpath, 루트 탈출 차단)로 항상 재검증한다. 미지정=루트.
      */
     folder?: string;
+    /** lsp_diagnostics 전용 — 진단할 파일들(base 기준 상대경로). */
+    paths?: string[];
+}
+
+/** 편집 후 진단 1건 — 디바이스의 컴파일러 출력(코어 BridgeDiagnostic 과 1:1). */
+export interface BridgeDiagnostic {
+    path: string;
+    line: number;
+    col: number;
+    severity: 'error' | 'warning';
+    code?: string;
+    message: string;
+    source: string;
 }
 
 /** 디바이스가 돌려주는 결과 (bridge_result). */
@@ -71,6 +84,10 @@ export interface BridgeResult {
     kept?: boolean;
     /** folders 결과 — 열거 상한 초과로 목록이 절단됐으면 true. */
     truncated?: boolean;
+    /** lsp_diagnostics 결과 — 빈 배열은 "검사했고 문제 없음". */
+    diagnostics?: BridgeDiagnostic[];
+    /** 어떤 검사기가 돌았는지 — 'none' 이면 지원 도구가 없어 검사하지 않음(진단 0건과 구분). */
+    serverKind?: string;
 }
 
 export interface DeviceSession {

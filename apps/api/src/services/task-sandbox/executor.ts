@@ -87,6 +87,13 @@ export interface TaskExecutor {
     /** workspace 파일/디렉토리 삭제. 루트 삭제 금지. */
     deleteFile(relPath: string): Promise<void>;
 
+    /**
+     * 편집 후 진단 — 실행기가 지원하면 구현한다(로컬 브리지: 디바이스의 tsc/py_compile).
+     * 미구현이거나 실패·미지원이면 null 을 돌려 호출측이 조용히 생략한다(fail-open).
+     * 도구가 없어 검사하지 못한 경우와 "진단 0건"은 `serverKind` 로 구분한다.
+     */
+    diagnostics?(relPaths: string[]): Promise<{ text: string; count: number } | null>;
+
     /** 실행 환경 정리. removeWorkspace=false 면 산출물 회수를 위해 workspace 보존. 멱등. */
     cleanup(removeWorkspace?: boolean): Promise<void>;
 }
