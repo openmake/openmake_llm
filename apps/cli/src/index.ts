@@ -9,6 +9,7 @@
  *   status                 연결 상태·디바이스 조회
  *   "목표" [--dir .]        cwd(또는 --dir)에서 로컬 에이전트 작업 1회 실행
  *   tasks [--all]          이 디바이스의 로컬 작업 목록 (기본: 미종료·재개 가능만)
+ *   show <taskId>          작업 결과·진행 기록·변경분 재출력 (조회 전용)
  *   resume <taskId> [--dir .]  checkpoint 에서 이어하기 (서버 재개 API + 같은 worktree 재부착)
  *   "목표" --resume        마지막 재개 가능 작업이 있으면 그것을 이어한다
  */
@@ -17,7 +18,7 @@ import * as path from 'path';
 import * as readline from 'readline';
 import { loadConfig, saveConfig, deviceId } from './config';
 import { CliBridge, type ConfirmFn } from './bridge';
-import { ApiClient, type ApiTask } from './api';
+import { ApiClient, type ApiTask, type ApiTaskStep } from './api';
 
 function prompt(q: string): Promise<string> {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -230,6 +231,68 @@ async function pickResumeTarget(api: ApiClient): Promise<{ task: ApiTask; follow
     return cand ? { task: cand, followOnly: false } : null;
 }
 
+/** 스텝 요약 한 줄 — 도구 결과·진단·판정을 사람이 읽는 형태로 압축. */
+function stepLine(s: ApiTaskStep): string | null {
+    const c = (s.content ?? '').replace(/\s+/g, ' ').trim();
+    switch (s.step_type) {
+        case 'tool_result': return c ? `  ${s.tool_name ?? 'tool'}: ${c.slice(0, 100)}` : null;
+        case 'judge': return `  \x1b[35m판정\x1b[0m: ${c.slice(0, 140)}`;
+        case 'retry': return `  \x1b[33m재시도\x1b[0m: ${c.slice(0, 100)}`;
+        case 'hitl_degrade': return `  \x1b[33m승인 무응답 강등\x1b[0m`;
+        case 'steering': return `  \x1b[36m지시 추가\x1b[0m: ${c.slice(0, 100)}`;
+        case 'artifact': return `  \x1b[32m아티팩트\x1b[0m: ${c.slice(0, 100)}`;
+        default: return null; // assistant_tool_call/plan/assistant/diff 는 별도 집계·출력
+    }
+}
+
+/**
+ * 완료·실패한 작업의 결과를 다시 본다. 실행 없이 조회만 하므로 디바이스 연결이 필요 없다
+ * (resume 과 달리 폴더도 필요 없다 — 서버에 남은 기록만 읽는다).
+ */
+async function cmdShow(taskId: string, opts: { steps: boolean; diff: boolean }): Promise<void> {
+    const cfg = requireConfig();
+    const api = new ApiClient(cfg.serverUrl, cfg.apiKey);
+    const task = taskOf(await api.getTask(taskId));
+    const { steps } = await api.listSteps(taskId).catch(() => ({ steps: [] as ApiTaskStep[] }));
+
+    const tone = task.status === 'completed' ? '\x1b[32m' : task.status === 'running' ? '\x1b[36m' : '\x1b[31m';
+    console.log(`\x1b[1m${shortId(task.id)}\x1b[0m  ${tone}${task.status}\x1b[0m ${Math.round(task.progress ?? 0)}%  ${fmtWhen(task.created_at)}`);
+    if (task.goal) {
+        const g = task.goal.replace(/\s+/g, ' ');
+        console.log(`목표: ${g.length > 200 ? `${g.slice(0, 200)}… (${g.length}자)` : g}`);
+    }
+    if (task.folder_rel) console.log(`폴더: ${task.folder_rel}`);
+    if (task.executor === 'local') console.log(`브랜치: omk-task/${task.id.slice(0, 8)}`);
+
+    // 진행 요약 — 도구 호출 수·턴·재시도는 한 줄로.
+    const calls = steps.filter((s) => s.step_type === 'assistant_tool_call').length;
+    const retries = steps.filter((s) => s.step_type === 'retry').length;
+    const diffs = steps.filter((s) => s.step_type === 'diff');
+    console.log(`\x1b[2m스텝 ${steps.length}개 · 도구 호출 ${calls}회${retries ? ` · 재시도 ${retries}회` : ''}${diffs.length ? ` · diff ${diffs.length}건` : ''}\x1b[0m`);
+
+    if (task.result) console.log(`\n\x1b[1m결과\x1b[0m\n${task.result}`);
+    // completed 인데 error 가 남은 행은 2026-08-26 이전 데이터다(PR #638 이 완료 시 error 를
+    // 지우기 전). 성공을 실패처럼 보이지 않게 흐리게 "이전 시도"로 표기한다.
+    if (task.error) {
+        console.log(task.status === 'completed'
+            ? `\n\x1b[2m(이전 시도 사유: ${task.error})\x1b[0m`
+            : `\n\x1b[31m오류: ${task.error}\x1b[0m`);
+    }
+
+    if (opts.steps) {
+        console.log('\n\x1b[1m진행 기록\x1b[0m');
+        const lines = steps.map(stepLine).filter((l): l is string => l !== null);
+        console.log(lines.length ? lines.join('\n') : '  (표시할 기록 없음)');
+    }
+    if (opts.diff) {
+        console.log('\n\x1b[1m변경분\x1b[0m');
+        console.log(diffs.length ? diffs.map((d) => d.content ?? '').join('\n') : '  (변경분 없음 — worktree 격리가 없었거나 변경이 없었다)');
+    }
+    if (!opts.steps && !opts.diff && (steps.length > 0 || diffs.length > 0)) {
+        console.log(`\n\x1b[2m--steps 로 진행 기록, --diff 로 변경분을 볼 수 있습니다.\x1b[0m`);
+    }
+}
+
 async function cmdResume(taskId: string, dir: string, autoApprove: boolean): Promise<void> {
     const cfg = requireConfig();
     const folder = path.resolve(dir);
@@ -269,6 +332,11 @@ async function main(): Promise<void> {
     if (cmd === 'status') return cmdStatus();
     if (cmd === 'connect') return cmdConnect(argv.slice(1));
     if (cmd === 'tasks') return cmdTasks(argv.includes('--all'));
+    if (cmd === 'show') {
+        const taskId = argv[1];
+        if (!taskId || taskId.startsWith('--')) { console.error('사용법: openmake-code show <taskId> [--steps] [--diff]'); process.exit(1); }
+        return cmdShow(taskId, { steps: argv.includes('--steps'), diff: argv.includes('--diff') });
+    }
     if (cmd === 'resume') {
         const taskId = argv[1];
         if (!taskId || taskId.startsWith('--')) { console.error('사용법: openmake-code resume <taskId> [--dir .] [--yes]'); process.exit(1); }
@@ -285,6 +353,7 @@ async function main(): Promise<void> {
   openmake-code "목표" [--dir .] [--yes]   로컬 에이전트 작업 1회 실행
                                    (--yes: 파일 쓰기류 서버 승인 자동화. 셸은 별도 확인)
   openmake-code tasks [--all]      이 디바이스의 로컬 작업 목록 (종료 작업은 --all)
+  openmake-code show <taskId> [--steps] [--diff]   작업 결과 다시 보기 (실행 없음·연결 불필요)
   openmake-code resume <taskId> [--dir .] [--yes]   checkpoint 에서 이어하기 (같은 worktree 재부착)
   openmake-code "목표" --resume    재개 가능한 최근 작업이 있으면 그것을 이어감 (없으면 새 작업)`);
         return;
