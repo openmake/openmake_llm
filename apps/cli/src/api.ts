@@ -19,6 +19,14 @@ export interface ApiTask {
     resumable?: boolean;
 }
 
+export interface ApiTaskStep {
+    step_number: number;
+    step_type: string;
+    tool_name?: string | null;
+    content?: string | null;
+    created_at?: string;
+}
+
 export interface PendingApproval {
     approvalId: string;
     taskId: string;
@@ -65,6 +73,10 @@ export class ApiClient {
         if (opts.deviceId) q.set('deviceId', opts.deviceId);
         if (opts.status) q.set('status', opts.status);
         return this.req('GET', `/api/agent-tasks?${q.toString()}`);
+    }
+    /** 작업 스텝(진행 기록) — show 가 요약·diff·판정을 뽑는 원본. */
+    listSteps(taskId: string): Promise<{ steps: ApiTaskStep[]; total: number }> {
+        return this.req('GET', `/api/agent-tasks/${taskId}/steps`);
     }
     /** checkpoint 재개 — 서버가 상태·checkpoint·디바이스 연결을 검증한다(실패 사유는 400 메시지). */
     resumeTask(taskId: string): Promise<{ message?: string; queued?: boolean }> {

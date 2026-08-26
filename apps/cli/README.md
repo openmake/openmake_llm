@@ -61,9 +61,18 @@ openmake-code connect [dir]      # 폴더 상주 연결 — 웹에서 작업을 
 openmake-code status             # 연결 상태·디바이스 조회
 openmake-code "목표" [--dir .] [--yes]   # 로컬 에이전트 작업 1회 실행
 openmake-code tasks [--all]      # 이 디바이스의 로컬 작업 목록 (종료 작업은 --all)
+openmake-code show <taskId> [--steps] [--diff]     # 작업 결과 다시 보기 (조회 전용)
 openmake-code resume <taskId> [--dir .] [--yes]   # checkpoint 에서 이어하기
 openmake-code "목표" --resume    # 재개 가능한 최근 작업이 있으면 그것을 이어감
 ```
+### 결과 다시 보기 (show)
+`show` 는 **조회 전용**이라 실행하지 않고, 디바이스 연결도 폴더 지정도 필요 없다(서버에 남은 기록만 읽는다).
+- 기본: 상태·목표·폴더·작업 브랜치 + 진행 요약(스텝/도구 호출/재시도/diff 수) + 결과 본문
+- `--steps`: 도구 결과·판정·재시도·지시 추가·아티팩트를 시간순 한 줄 요약으로
+- `--diff`: worktree 변경분(작업 중 서버가 캡처한 `git diff`)
+- ⚠️ `completed` 인데 `(이전 시도 사유: …)` 가 흐리게 보이면 2026-08-26 이전에 만들어진 작업이다
+  (그전엔 재개로 완료해도 이전 실패 사유가 남았다 — 지금은 완료 시 지운다).
+
 ### 이어하기 (resume)
 - 서버가 작업(`agent_tasks`)과 checkpoint 를 보존하므로, 실패한 작업은 **`resume <taskId>`** 로 같은
   대화·같은 worktree(`omk-task/<id>` 브랜치)에서 이어간다. `tasks` 목록의 `[resume 가능]` 표시가 대상.
