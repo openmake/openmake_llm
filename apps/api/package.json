@@ -32,7 +32,7 @@
         "@opentelemetry/instrumentation-express": "^0.67.0",
         "@opentelemetry/instrumentation-http": "^0.219.0",
         "@opentelemetry/resources": "^2.8.0",
-        "@opentelemetry/sdk-node": "^0.219.0",
+        "@opentelemetry/sdk-node": "^0.221.0",
         "@opentelemetry/sdk-trace-node": "^2.8.0",
         "@opentelemetry/semantic-conventions": "^1.41.1",
         "@types/pg": "^8.16.0",

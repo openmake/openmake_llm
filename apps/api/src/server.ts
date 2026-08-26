@@ -38,7 +38,7 @@ import { getAnalyticsSystem } from './monitoring/analytics';
 import { setupSecurity, setupStaticFiles, setupParsersAndLimiting, setupErrorHandling } from './middlewares/setup';
 import { setupApiRoutes } from './routes/setup';
 import { getConfig } from './config';
-import { WS_LIMITS } from './config/timeouts';
+import { HTTP_SERVER_TIMEOUTS, WS_LIMITS } from './config/timeouts';
 import { validateModels } from './config/model-roles';
 import { probeLocalModelAvailability } from './config/local-models';
 import { startAllSchedulers, stopAllSchedulers } from './schedulers';
@@ -96,6 +96,9 @@ export class DashboardServer {
 
         this.app = express();
         this.server = createServer(this.app);
+        // 프록시(Caddy) 유휴 커넥션 풀보다 길게 — 상세는 config/timeouts HTTP_SERVER_TIMEOUTS.
+        this.server.keepAliveTimeout = HTTP_SERVER_TIMEOUTS.KEEP_ALIVE_MS;
+        this.server.headersTimeout = HTTP_SERVER_TIMEOUTS.HEADERS_MS;
         this.wss = new WebSocketServer({
             server: this.server,
             // 파일/이미지 업로드 용량 무제한 — 기본 0(=ws 무제한). 상한이 필요하면
