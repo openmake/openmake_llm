@@ -258,17 +258,12 @@
     "send": "Send",
     "disclaimer": "OpenMake can make mistakes. Verify important information.",
     "suppressedTag": "(not applied)",
-    "modifierSuppressed": "{label} is not applied while an intercept mode is on",
     "externalLocalModeNotice": "Discussion and Deep Research run on the local model (the selected external model is not used).",
     "toggle": {
       "discussion": "Discussion",
       "thinking": "Thinking",
       "deepResearch": "Deep Research",
-      "web": "Web",
       "agent": "Agent",
-      "image": "Image",
-      "artifact": "Artifact",
-      "structured": "Structured",
       "verification": "Verify answer"
     },
     "slashMenu": {
@@ -558,9 +553,7 @@
     "unknownError": "Unknown error",
     "disconnected": "_(Disconnected from the server. Reconnecting — please try sending again shortly.)_",
     "taskIdMissing": "No taskId in the task creation response",
-    "agentTaskStartFailed": "Failed to start the agent task: {message}",
-    "structuredAborted": "_(Structured answer generation was stopped.)_",
-    "structuredFailed": "Failed to generate a structured answer: {message}"
+    "agentTaskStartFailed": "Failed to start the agent task: {message}"
   },
   "skillLibrary": {
     "cancel": "Cancel",

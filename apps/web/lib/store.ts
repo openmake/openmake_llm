@@ -180,7 +180,6 @@ interface AppState {
   answerVerification: boolean;
   discussionMode: boolean;
   deepResearchMode: boolean;
-  webSearchEnabled: boolean;
   agentTaskMode: boolean;
   /** 에이전트 작업 승인 3모드 — all=Manual(전부 승인·기본)·high-risk=Auto(고위험만)·none=Skip(전부 자동). */
   agentApprovalMode: "all" | "high-risk" | "none";
@@ -191,10 +190,6 @@ interface AppState {
   agentLocalDeviceId: string | null;
   /** 폴더 선택(102): 로컬 실행 폴더 — 연결 루트 기준 상대경로. null 은 루트. */
   agentLocalFolderRel: string | null;
-  imageMode: boolean;
-  artifactMode: boolean;
-  /** 구조화 답변 모드 — ON 시 메시지를 REST /api/chat/structured 로 보내 카드 UI 로 렌더(비스트리밍). */
-  structuredMode: boolean;
   mcpToolsEnabled: Record<string, boolean>;
 
   // 개인정보 설정 (설정 페이지 · 서버 preferences 영속) — 채팅 WS 메시지로 전송돼 백엔드가 존중.
@@ -252,11 +247,7 @@ interface AppState {
       | "answerVerification"
       | "discussionMode"
       | "deepResearchMode"
-      | "webSearchEnabled"
-      | "agentTaskMode"
-      | "imageMode"
-      | "artifactMode"
-      | "structuredMode",
+      | "agentTaskMode",
   ) => void;
   setSelectedModel: (m: string) => void;
   setAgentApprovalMode: (m: "all" | "high-risk" | "none") => void;
@@ -283,9 +274,7 @@ const THINKING_LEVEL_ORDER: ThinkingLevel[] = ["low", "medium", "high"];
 export const PRIMARY_MODE_KEYS = [
   "discussionMode",
   "deepResearchMode",
-  "imageMode",
   "agentTaskMode",
-  "structuredMode",
 ] as const;
 
 /**
@@ -295,7 +284,6 @@ export const PRIMARY_MODE_KEYS = [
 export const INTERCEPT_MODE_KEYS = [
   "discussionMode",
   "deepResearchMode",
-  "imageMode",
 ] as const;
 
 /** SSR(서버 평가) 시 localStorage 부재로 인한 ReferenceError 방지 — 클라에서만 실제 저장소 사용. */
@@ -330,15 +318,11 @@ export const useAppStore = create<AppState>()(
   answerVerification: false,
   discussionMode: false,
   deepResearchMode: false,
-  webSearchEnabled: false,
   agentTaskMode: false,
   agentApprovalMode: "all",
   agentLocalExecutor: false,
   agentLocalDeviceId: null,
   agentLocalFolderRel: null,
-  imageMode: false,
-  artifactMode: false,
-  structuredMode: false,
   mcpToolsEnabled: {},
 
   saveHistory: true,
@@ -505,7 +489,7 @@ export const useAppStore = create<AppState>()(
     set((s) => {
       const next = !s[key];
       // primary 모드를 켤 때만 나머지 primary 모드를 자동 off (상호배타).
-      // 끄는 경우·비-primary(thinking·web·artifact) 토글은 단순 flip.
+      // 끄는 경우·비-primary(thinking·답변 검증) 토글은 단순 flip.
       if (next && (PRIMARY_MODE_KEYS as readonly string[]).includes(key)) {
         const cleared: Record<string, boolean> = {};
         for (const k of PRIMARY_MODE_KEYS) {

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import type { WsChatRequest, WsServerEvent, WsAttachedFile } from "@openmake/shared-types";
-import { useAppStore, type StructuredAnswerData, type PendingApproval, type AgentTaskState } from "./store";
+import { useAppStore, type PendingApproval, type AgentTaskState } from "./store";
 import { ApiClient, csrfHeaders } from "./api-client";
 
 import { gaEvent, GA_EVENTS } from "./analytics";
@@ -115,7 +115,6 @@ export function useChatSocket() {
   const connectRef = useRef<() => void>(() => {});
   // 에이전트 작업 taskId → 목표(goal) — agent_task_progress 렌더에 사용
   // 구조화 답변(REST) 진행 중 AbortController — abort() 가 취소할 수 있게 보관
-  const structuredAbortRef = useRef<AbortController | null>(null);
   // token_warning 갱신이 스트리밍 중 도착하면 스트림 종료 후 재연결하기 위한 예약 플래그.
   const reconnectAfterRefreshRef = useRef(false);
   // MCP 도구 결과 resource — 스트리밍 중 append 하면 응답이 조각나므로(appendToken 이 카드를
@@ -529,7 +528,6 @@ export function useChatSocket() {
         images: images ?? [],
         // rawFile(브라우저 File)은 WS 직렬화 불가 — 계약 필드만 전송
         files: (files ?? []).map(toWireFile),
-        webSearch: s.webSearchEnabled,
         deepResearchMode: s.deepResearchMode,
         discussionMode: s.discussionMode,
         thinkingMode: s.thinkingEnabled,
@@ -537,8 +535,6 @@ export function useChatSocket() {
         ...(s.thinkingEnabled ? { thinkingLevel: s.thinkingLevel } : {}),
         // 답변 검증 — 켠 경우에만 요청(서버도 ANSWER_VERIFICATION_ENABLED 로 게이트).
         ...(s.answerVerification ? { verifyAnswer: true } : {}),
-        imageMode: s.imageMode,
-        artifactMode: s.artifactMode,
         style: s.style,
         enabledTools: s.mcpToolsEnabled,
         // NotebookLM 컨텍스트 — grounding 프리픽스 주입은 백엔드(prompts/notebook-context) 담당
@@ -553,23 +549,20 @@ export function useChatSocket() {
 
       // GA4 핵심 인게이지먼트 — 방문자의 채팅 사용을 모드/모델 차원으로 계측(PII 없음).
       gaEvent(GA_EVENTS.chatMessageSent, {
-        chat_mode: s.imageMode
-          ? "image"
-          : s.deepResearchMode
-            ? "deep_research"
-            : s.discussionMode
-              ? "discussion"
-              : s.thinkingEnabled
-                ? "thinking"
-                : "default",
+        chat_mode: s.deepResearchMode
+          ? "deep_research"
+          : s.discussionMode
+            ? "discussion"
+            : s.thinkingEnabled
+              ? "thinking"
+              : "default",
         model_id: s.selectedModel,
-        web_search: s.webSearchEnabled ? "on" : "off",
         with_attachment: hasFiles || (images?.length ?? 0) > 0 ? "yes" : "no",
       });
 
       // 가로채기(bypass) 모드가 켜져 있으면 도구·아티팩트가 이번 응답에 적용되지 않으므로,
       // 스트리밍 직전에 표시 전용 안내를 삽입한다(notice: true → history payload 제외).
-      if (s.discussionMode || s.deepResearchMode || s.imageMode) {
+      if (s.discussionMode || s.deepResearchMode) {
         appendMessage({ role: "system", content: tRef.current("interceptNotice"), notice: true });
       }
       return true;
@@ -579,8 +572,6 @@ export function useChatSocket() {
 
   const abort = useCallback(() => {
     wsRef.current?.send(JSON.stringify({ type: "abort" }));
-    // 구조화 답변(REST) 진행 중이면 fetch 도 취소
-    structuredAbortRef.current?.abort();
   }, []);
 
   // 에이전트 토글 ON: 메시지를 목표(goal)로 자율 에이전트 작업을 생성·실행한다.
@@ -695,59 +686,5 @@ export function useChatSocket() {
     [appendMessage],
   );
 
-  // 구조화 답변 모드 — WebSocket 스트리밍 대신 REST /api/chat/structured 호출(비스트리밍).
-  // 백엔드가 Answer Planner → JSON Schema → Validator → formatAnswer 파이프라인으로
-  // { intent, structured, markdown } 을 반환. structured 는 카드 UI(StructuredAnswer)로 렌더.
-  const sendStructured = useCallback(
-    async (message: string) => {
-      const msg = message.trim();
-      const s = useAppStore.getState();
-      if (!msg || s.isGenerating) return;
-      appendMessage({ role: "user", content: msg });
-      setStreaming(true);
-      const controller = new AbortController();
-      structuredAbortRef.current = controller;
-      try {
-        const res = await ApiClient.post<{
-          data: { intent: string; structured: StructuredAnswerData; markdown: string };
-        }>(
-          "/api/chat/structured",
-          {
-            message: msg,
-            model: s.selectedModel,
-            anonSessionId: getAnonSessionId(),
-            // 웹 기능 토글을 구조화 모드에도 전달 — 백엔드가 시사 질의 시 웹검색 수행.
-            webSearch: s.webSearchEnabled,
-            enabledTools: s.mcpToolsEnabled,
-            // userLanguage 는 보내지 않는다 — 백엔드가 메시지 내용으로 언어를 감지(WS 채팅과 동일).
-            // navigator.language(브라우저 로케일)에 의존하면 en-* 브라우저의 한국어 사용자가
-            // 한국어 질문에도 영어 답변을 받는 회귀가 발생했다.
-          },
-          { signal: controller.signal },
-        );
-        const data = res?.data;
-        appendMessage({
-          role: "assistant",
-          content: data?.markdown ?? "",
-          structured: data?.structured,
-        });
-      } catch (e) {
-        const aborted = e instanceof DOMException && e.name === "AbortError";
-        appendMessage({
-          role: "assistant",
-          content: aborted
-            ? tRef.current("structuredAborted")
-            : tRef.current("structuredFailed", {
-                message: e instanceof Error ? e.message : String(e),
-              }),
-        });
-      } finally {
-        structuredAbortRef.current = null;
-        setStreaming(false);
-      }
-    },
-    [appendMessage, setStreaming],
-  );
-
-  return { connected, sendChat, abort, startAgentTask, sendStructured };
+  return { connected, sendChat, abort, startAgentTask };
 }

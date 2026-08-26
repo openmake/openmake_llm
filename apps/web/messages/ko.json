@@ -258,17 +258,12 @@
     "send": "전송",
     "disclaimer": "OpenMake 는 실수할 수 있습니다. 중요한 정보는 확인하세요.",
     "suppressedTag": "(미적용)",
-    "modifierSuppressed": "{label} 은(는) 가로채기 모드에서 적용되지 않습니다",
     "externalLocalModeNotice": "토론·딥 리서치 모드는 로컬 모델로 실행됩니다 (선택한 외부 모델은 사용되지 않음).",
     "toggle": {
       "discussion": "토론",
       "thinking": "Thinking",
       "deepResearch": "딥 리서치",
-      "web": "웹",
       "agent": "에이전트",
-      "image": "이미지",
-      "artifact": "아티팩트",
-      "structured": "구조화 답변",
       "verification": "답변 검증"
     },
     "slashMenu": {
@@ -558,9 +553,7 @@
     "unknownError": "알 수 없는 오류",
     "disconnected": "_(서버와 연결이 끊겼습니다. 재연결 중이니 잠시 후 다시 전송해 주세요.)_",
     "taskIdMissing": "작업 생성 응답에 taskId 가 없습니다",
-    "agentTaskStartFailed": "에이전트 작업을 시작하지 못했습니다: {message}",
-    "structuredAborted": "_(구조화 답변 생성을 중단했습니다.)_",
-    "structuredFailed": "구조화 답변을 생성하지 못했습니다: {message}"
+    "agentTaskStartFailed": "에이전트 작업을 시작하지 못했습니다: {message}"
   },
   "skillLibrary": {
     "cancel": "취소",
