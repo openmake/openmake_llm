@@ -22,6 +22,7 @@ import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-gate';
 import { runTool } from './task-steps';
+import { prefetchReadOnlyCalls } from '../tool-parallel';
 import { createLogger } from '../../utils/logger';
 import { buildSubagentDelegationRules, SUBAGENT_FINAL_TURN_NOTICE } from '../../prompts/subagent-system';
 
@@ -100,9 +101,34 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 return finalText || '(서브에이전트가 빈 응답을 반환했습니다)';
             }
 
+            // 읽기 전용 도구 병렬 선실행 — 승인 필요 호출은 자동 승인 작업에서만(부모 루프와 같은 규칙).
+            const prefetched = await prefetchReadOnlyCalls(
+                result.tool_calls.map((tc) => ({ id: tc.id, name: tc.function.name, tc })),
+                ({ name, tc }) => !requiresApproval(p.sandboxCfg.approvalPolicy, name,
+                    (tc.function.arguments ?? {}) as Record<string, unknown>, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })
+                    || getApprovalRegistry().isAutoApprove(p.taskId),
+                async ({ name, tc }) => {
+                    const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
+                    if (requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) {
+                        const r = await getApprovalRegistry().request(
+                            { taskId: p.taskId, userId: String(p.userCtx.userId), toolName: name, args },
+                            { timeoutMs: p.sandboxCfg.approvalTimeoutMs, signal: p.signal },
+                        );
+                        p.onPausedMs?.(r.waitedMs);
+                        if (r.decision !== 'approved') return `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}).`;
+                    }
+                    return runTool(mcp, name, args, p.userCtx);
+                },
+                { path: 'subagent', ...(p.signal ? { signal: p.signal } : {}) },
+            );
             for (const tc of result.tool_calls) {
                 const name = tc.function.name;
                 const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
+                const pre = tc.id !== undefined ? prefetched.get(tc.id) : undefined;
+                if (pre !== undefined) {
+                    conversation.push({ role: 'tool', content: pre, tool_name: name, tool_call_id: tc.id });
+                    continue;
+                }
                 // 부모와 동일한 승인 게이트 — 정책 우회 없음(자동승인 task 면 즉시 approved).
                 let approved = true;
                 if (requiresApproval(p.sandboxCfg.approvalPolicy, name, args, { deviceGatesShell: p.sandboxCfg.deviceGatesShell })) {
