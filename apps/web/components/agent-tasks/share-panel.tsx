@@ -23,6 +23,7 @@ export function SharePanel({ taskId }: { taskId: string }) {
   const [preview, setPreview] = useState<ShareDocument | null>(null);
   const [includeSteps, setIncludeSteps] = useState(true);
   const [includeDiff, setIncludeDiff] = useState(true);
+  const [includeArtifacts, setIncludeArtifacts] = useState(true);
   const [visibility, setVisibility] = useState<ShareVisibility>("authenticated");
   const [busy, setBusy] = useState<"load" | "preview" | "publish" | "unshare" | null>("load");
   const [republish, setRepublish] = useState(false);
@@ -40,6 +41,7 @@ export function SharePanel({ taskId }: { taskId: string }) {
           setVisibility(s.visibility);
           setIncludeSteps(s.includeSteps);
           setIncludeDiff(s.includeDiff);
+          setIncludeArtifacts(s.includeArtifacts);
         }
       })
       .catch(() => { /* 미공유로 취급 */ })
@@ -55,10 +57,10 @@ export function SharePanel({ taskId }: { taskId: string }) {
     setError(null);
     try {
       if (kind === "preview") {
-        const res = await previewShare(taskId, { includeSteps, includeDiff });
+        const res = await previewShare(taskId, { includeSteps, includeDiff, includeArtifacts });
         setPreview(res?.data?.preview ?? null);
       } else if (kind === "publish") {
-        const res = await publishShare(taskId, { visibility, includeSteps, includeDiff });
+        const res = await publishShare(taskId, { visibility, includeSteps, includeDiff, includeArtifacts });
         setShare(res?.data ?? null);
         setPreview(null);
         setRepublish(false);
@@ -149,6 +151,10 @@ export function SharePanel({ taskId }: { taskId: string }) {
               <input type="checkbox" checked={includeDiff} onChange={(e) => { setIncludeDiff(e.target.checked); invalidate(); }} />
               {t("includeDiff")}
             </label>
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={includeArtifacts} onChange={(e) => { setIncludeArtifacts(e.target.checked); invalidate(); }} />
+              {t("includeArtifacts")}
+            </label>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-xs text-fg-2">
@@ -176,6 +182,12 @@ export function SharePanel({ taskId }: { taskId: string }) {
                 {preview.steps.map((s) => (
                   <p key={s.n} className="truncate font-mono text-muted">
                     <span className="text-faint">{s.n}</span> {s.tool ?? s.type}: {s.text}
+                  </p>
+                ))}
+                {preview.artifacts.map((a) => (
+                  <p key={a.id || a.title} className="text-fg-2">
+                    <span className="text-faint">{t("artifactLabel")} </span>{a.title}
+                    <span className="text-faint"> ({a.kind}{a.body ? `, ${a.body.length}자` : `, ${t("bodyOmitted")}`})</span>
                   </p>
                 ))}
                 {preview.diffs.length > 0 && <p className="text-muted">{t("diffIncluded", { n: preview.diffs.length })}</p>}

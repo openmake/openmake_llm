@@ -816,7 +816,10 @@
       "republish": "Republish with latest",
       "unshare": "Stop sharing",
       "unshareHint": "The link stops working immediately. What people already saw cannot be taken back.",
-      "republishCancel": "Cancel — the existing share stays as it is"
+      "republishCancel": "Cancel — the existing share stays as it is",
+      "includeArtifacts": "Include outputs",
+      "artifactLabel": "Output:",
+      "bodyOmitted": "body excluded"
     }
   },
   "customAgents": {
@@ -1914,6 +1917,9 @@
     "diffCount": "{n} diffs",
     "steps": "Progress log ({count})",
     "changes": "Changes ({count})",
-    "snapshotNote": "A snapshot from when it was published — continuing the task does not change this page."
+    "snapshotNote": "A snapshot from when it was published — continuing the task does not change this page.",
+    "artifacts": "Outputs ({count})",
+    "artifactMarkupOmitted": "HTML/SVG outputs are not included — a shared page shows text only.",
+    "artifactUnavailable": "The body could not be read."
   }
 }

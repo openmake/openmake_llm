@@ -96,6 +96,30 @@ export function SharedTaskViewer({ shareId, token }: { shareId: string; token: s
               </Card>
             )}
 
+            {doc.artifacts.length > 0 && (
+              <section className="space-y-2">
+                <h2 className="text-xs font-medium text-fg-2">{t("artifacts", { count: doc.artifacts.length })}</h2>
+                {doc.artifacts.map((a) => (
+                  <Card key={a.id || a.title}>
+                    <CardContent className="space-y-2 pt-4">
+                      <p className="flex flex-wrap items-center gap-2 text-sm text-fg">
+                        {a.title}
+                        <Badge tone="neutral">{a.kind}</Badge>
+                      </p>
+                      {/* 본문은 항상 텍스트로만 — 마크업 렌더는 별도 오리진·CSP 격리가 필요하다 */}
+                      {a.body ? (
+                        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded bg-surface-2 px-2 py-1.5 text-xs leading-relaxed text-muted">
+                          {a.body}
+                        </pre>
+                      ) : (
+                        <p className="text-xs text-faint">{t(a.omitted === "markup" ? "artifactMarkupOmitted" : "artifactUnavailable")}</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </section>
+            )}
+
             {doc.steps.length > 0 && (
               <section className="space-y-2">
                 <h2 className="text-xs font-medium text-fg-2">{t("steps", { count: doc.steps.length })}</h2>

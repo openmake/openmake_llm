@@ -36,6 +36,7 @@ export interface ShareDocument {
     summary: { turns: number; toolCalls: number; retries: number; diffs: number; artifacts: number };
     steps: { n: number; type: string; tool?: string; text: string }[];
     diffs: string[];
+    artifacts: { id: string; title: string; kind: string; body: string | null; omitted?: string }[];
     createdAt: string | null;
     completedAt: string | null;
 }
@@ -46,6 +47,7 @@ export interface ShareState {
     shareToken: string | null;
     includeSteps: boolean;
     includeDiff: boolean;
+    includeArtifacts: boolean;
     sharedAt?: string;
     path: string;
 }
@@ -120,10 +122,10 @@ export class ApiClient {
         return this.req('GET', `/api/agent-tasks/${taskId}/share`);
     }
     /** 게시 없이 공유될 내용을 그대로 받아본다 — 게시 전 확인용. */
-    previewShare(taskId: string, opts: { includeSteps: boolean; includeDiff: boolean }): Promise<{ preview: ShareDocument }> {
+    previewShare(taskId: string, opts: { includeSteps: boolean; includeDiff: boolean; includeArtifacts: boolean }): Promise<{ preview: ShareDocument }> {
         return this.req('POST', `/api/agent-tasks/${taskId}/share/preview`, opts);
     }
-    publishShare(taskId: string, opts: { visibility: string; includeSteps: boolean; includeDiff: boolean }): Promise<ShareState> {
+    publishShare(taskId: string, opts: { visibility: string; includeSteps: boolean; includeDiff: boolean; includeArtifacts: boolean }): Promise<ShareState> {
         return this.req('POST', `/api/agent-tasks/${taskId}/share`, opts);
     }
     unshare(taskId: string): Promise<{ unshared: boolean }> {

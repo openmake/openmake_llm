@@ -25,7 +25,8 @@ const steps = [
     { step_number: 4, step_type: 'steering', content: 'STEERING_SHOULD_NOT_APPEAR' },
     { step_number: 5, step_type: 'judge', content: '판정: achieved — riskpw@gmail.com 확인' },
     { step_number: 6, step_type: 'diff', content: 'diff --git a/src/a.ts b/src/a.ts\n+const n: number = 1;' },
-    { step_number: 7, step_type: 'artifact', content: '{"id":"rep","kind":"html","title":"주간 리포트","content":"<h1>ARTIFACT_BODY_SHOULD_NOT_APPEAR</h1>","validation":{"checked":true}}' },
+    { step_number: 7, step_type: 'artifact', content: '{"id":"rep","kind":"html","title":"주간 리포트","content":"<h1>MARKUP_BODY_SHOULD_NOT_APPEAR</h1>","validation":{"checked":true},"sourceData":{"rows":["SOURCEDATA_SHOULD_NOT_APPEAR"]}}' },
+    { step_number: 9, step_type: 'artifact', content: '{"id":"rule","kind":"markdown","title":"pre-commit 규칙","content":"# 규칙\\n커밋 전 테스트를 돌린다."}' },
     { step_number: 8, step_type: 'retry', content: 'RETRY_SHOULD_NOT_APPEAR' },
 ];
 
@@ -43,7 +44,8 @@ describe('buildShareDocument — 선별(allowlist)', () => {
         ['홈 디렉토리', '/Users/openmake_mac'],
         ['자격증명 값', 'sk-abcdef1234567890abcd'],
         ['이메일', 'riskpw@gmail.com'],
-        ['아티팩트 본문', 'ARTIFACT_BODY_SHOULD_NOT_APPEAR'],
+        ['마크업 아티팩트 본문', 'MARKUP_BODY_SHOULD_NOT_APPEAR'],
+        ['리포트 sourceData', 'SOURCEDATA_SHOULD_NOT_APPEAR'],
     ])('%s 은 문서 어디에도 없다', (_label, needle) => {
         expect(serialized).not.toContain(needle);
     });
@@ -63,12 +65,20 @@ describe('buildShareDocument — 선별(allowlist)', () => {
     });
 
     test('숫자 요약은 전체 스텝 기준(선별 전)', () => {
-        expect(doc.summary).toEqual({ turns: 7, toolCalls: 1, retries: 1, diffs: 1, artifacts: 1 });
+        expect(doc.summary).toEqual({ turns: 7, toolCalls: 1, retries: 1, diffs: 1, artifacts: 2 });
     });
 
-    test('artifact 스텝은 제목·종류만 남는다(본문·validation 제외)', () => {
-        const a = doc.steps.find((s) => s.type === 'artifact');
-        expect(a?.text).toBe('주간 리포트 (html)');
+    test('artifact 는 steps 가 아니라 artifacts 필드로 간다', () => {
+        expect(doc.steps.some((s) => s.type === 'artifact')).toBe(false);
+        expect(doc.artifacts.map((a) => a.title)).toEqual(['주간 리포트', 'pre-commit 규칙']);
+    });
+
+    test('텍스트 아티팩트는 본문이 담기고, 마크업(html/svg)은 담기지 않는다', () => {
+        const md = doc.artifacts.find((a) => a.kind === 'markdown');
+        const html = doc.artifacts.find((a) => a.kind === 'html');
+        expect(md?.body).toContain('커밋 전 테스트');
+        expect(html?.body).toBeNull();
+        expect(html?.omitted).toBe('markup');
     });
 
     test('diff 는 steps 가 아니라 diffs 필드로 간다', () => {
@@ -81,6 +91,12 @@ describe('buildShareDocument — 토글', () => {
         const doc = buildShareDocument(task, steps, { includeDiff: false });
         expect(doc.diffs).toEqual([]);
         expect(doc.summary.diffs).toBe(1); // "있었다"는 사실은 알린다
+    });
+
+    test('includeArtifacts=false 면 산출물이 빠지고 요약 숫자는 남는다', () => {
+        const doc = buildShareDocument(task, steps, { includeArtifacts: false });
+        expect(doc.artifacts).toEqual([]);
+        expect(doc.summary.artifacts).toBe(2);
     });
 
     test('includeSteps=false 면 스텝이 빠진다', () => {

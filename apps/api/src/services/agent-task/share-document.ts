@@ -19,12 +19,21 @@ import { redactText, capText } from '../../utils/redact';
 /** 공유 문서에 담는 스텝 종류 — 이 목록에 없는 step_type 은 통째로 버린다. */
 const SHARED_STEP_TYPES = new Set(['tool_result', 'judge', 'artifact', 'diff']);
 
+/**
+ * 본문을 담지 않는 아티팩트 종류. 공유 뷰어는 **텍스트만** 렌더한다(그래서 별도 오리진·CSP
+ * 격리가 필요 없다 — plan §1). 마크업 본문을 실으면 언젠가 렌더하고 싶어지고, 그 순간
+ * 아티팩트 뷰어가 별도 오리진으로 격리하는 이유를 그대로 떠안는다.
+ */
+const MARKUP_ARTIFACT_KINDS = new Set(['html', 'svg']);
+
 /** 길이 상한 — 공유 문서가 통째로 커지는 것을 막는다. */
 export const SHARE_LIMITS = {
     GOAL: 2000,
     RESULT: 20000,
     STEP_LINE: 300,
     DIFF: 60000,
+    ARTIFACT_BODY: 20000,
+    MAX_ARTIFACTS: 20,
     MAX_STEPS: 200,
 } as const;
 
@@ -58,13 +67,25 @@ export interface ShareDocument {
     steps: { n: number; type: string; tool?: string; text: string }[];
     /** include_diff=false 면 빈 배열 */
     diffs: string[];
+    /** 산출물 — include_artifacts=false 면 빈 배열. body 가 null 이면 omitted 사유가 있다 */
+    artifacts: ShareArtifact[];
     createdAt: string | null;
     completedAt: string | null;
+}
+
+export interface ShareArtifact {
+    id: string;
+    title: string;
+    kind: string;
+    /** 본문 — 텍스트 계열만. 담지 않은 경우 null 이고 omitted 에 사유가 있다 */
+    body: string | null;
+    omitted?: 'markup' | 'unparsable';
 }
 
 export interface BuildShareOptions {
     includeSteps?: boolean;
     includeDiff?: boolean;
+    includeArtifacts?: boolean;
 }
 
 function iso(v: string | Date | null | undefined): string | null {
@@ -79,19 +100,31 @@ function iso(v: string | Date | null | undefined): string | null {
  */
 
 /**
- * `artifact` 스텝 content 는 `{id,kind,title,content,validation}` JSON 이고 `content` 에
- * **아티팩트 본문 전체**가 들어 있다. 그대로 300자 자르면 JSON 파편과 본문 앞부분이 섞여
- * 나가므로, 제목·종류만 남긴다(공유 가치는 "무엇을 만들었나"에 있다).
+ * `artifact` 스텝 → 공유용 산출물. content 는 `{id,kind,title,content,validation,sourceData}`
+ * JSON 이며 `sourceData`(리포트 원본)·`validation` 같은 내부 필드가 섞여 있으므로
+ * **필요한 4개만** 뽑는다.
  */
-function summarizeArtifact(raw: string): string {
+function toShareArtifact(raw: string, redact: (s: string) => string): ShareArtifact | null {
+    let a: { id?: string; kind?: string; title?: string; content?: string };
     try {
-        const a = JSON.parse(raw) as { title?: string; kind?: string; id?: string };
-        const name = (a.title || a.id || '').toString().trim();
-        if (!name) return '';
-        return a.kind ? `${name} (${a.kind})` : name;
+        a = JSON.parse(raw) as typeof a;
     } catch {
-        return raw; // JSON 이 아니면 종전대로(캡·정화는 호출측이 한다)
+        return { id: '', title: capText(redact(raw.replace(/\s+/g, ' ').trim()), SHARE_LIMITS.STEP_LINE), kind: 'unknown', body: null, omitted: 'unparsable' };
     }
+    const title = (a.title || a.id || '').toString().trim();
+    if (!title) return null;
+    const kind = (a.kind || 'text').toString();
+    const markup = MARKUP_ARTIFACT_KINDS.has(kind);
+    const body = !markup && a.content
+        ? capText(redact(String(a.content)), SHARE_LIMITS.ARTIFACT_BODY)
+        : null;
+    return {
+        id: (a.id || '').toString(),
+        title: capText(redact(title), SHARE_LIMITS.STEP_LINE),
+        kind,
+        body,
+        ...(body === null && markup ? { omitted: 'markup' as const } : {}),
+    };
 }
 
 export function buildShareDocument(
@@ -101,6 +134,7 @@ export function buildShareDocument(
 ): ShareDocument {
     const includeSteps = opts.includeSteps !== false;
     const includeDiff = opts.includeDiff !== false;
+    const includeArtifacts = opts.includeArtifacts !== false;
     const redactOpts = { rootPath: task.workspace_path ?? null };
     const r = (s: string): string => redactText(s, redactOpts);
 
@@ -116,17 +150,21 @@ export function buildShareDocument(
     const shared = steps.filter((s) => SHARED_STEP_TYPES.has(s.step_type));
 
     const sharedSteps = !includeSteps ? [] : shared
-        .filter((s) => s.step_type !== 'diff') // diff 는 별도 필드로
+        .filter((s) => s.step_type !== 'diff' && s.step_type !== 'artifact') // diff·artifact 는 별도 필드로
         .slice(0, SHARE_LIMITS.MAX_STEPS)
         .map((s) => ({
             n: s.step_number,
             type: s.step_type,
             ...(s.tool_name ? { tool: r(s.tool_name) } : {}),
-            text: capText(r((s.step_type === 'artifact'
-                ? summarizeArtifact(s.content ?? '')
-                : (s.content ?? '')).replace(/\s+/g, ' ').trim()), SHARE_LIMITS.STEP_LINE),
+            text: capText(r((s.content ?? '').replace(/\s+/g, ' ').trim()), SHARE_LIMITS.STEP_LINE),
         }))
         .filter((s) => s.text.length > 0);
+
+    const artifacts = !includeArtifacts ? [] : shared
+        .filter((s) => s.step_type === 'artifact')
+        .slice(0, SHARE_LIMITS.MAX_ARTIFACTS)
+        .map((s) => toShareArtifact(s.content ?? '', r))
+        .filter((a): a is ShareArtifact => a !== null);
 
     const diffs = !includeDiff ? [] : shared
         .filter((s) => s.step_type === 'diff')
@@ -141,6 +179,7 @@ export function buildShareDocument(
         summary,
         steps: sharedSteps,
         diffs,
+        artifacts,
         createdAt: iso(task.created_at),
         completedAt: iso(task.completed_at),
     };

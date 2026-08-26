@@ -55,16 +55,20 @@ function repo(): AgentTaskShareRepository {
 }
 
 /** 작업 + 스텝을 읽어 공유 문서를 만든다(게시/미리보기 공용). */
-async function buildFor(taskId: string, task: ShareTaskInput, opts: { includeSteps: boolean; includeDiff: boolean }) {
+async function buildFor(taskId: string, task: ShareTaskInput, opts: ShareToggles) {
     const steps = await getUnifiedDatabase().getAgentTaskSteps(taskId);
     return buildShareDocument(task, steps as unknown as ShareStepInput[], opts);
 }
 
-function readToggles(body: unknown): { includeSteps: boolean; includeDiff: boolean } {
-    const b = (body ?? {}) as { includeSteps?: unknown; includeDiff?: unknown };
+interface ShareToggles { includeSteps: boolean; includeDiff: boolean; includeArtifacts: boolean }
+
+/** 범위 토글 — 모두 기본 포함(공유 가치가 큰 쪽), 명시 false 일 때만 제외. */
+function readToggles(body: unknown): ShareToggles {
+    const b = (body ?? {}) as { includeSteps?: unknown; includeDiff?: unknown; includeArtifacts?: unknown };
     return {
         includeSteps: b.includeSteps !== false,
         includeDiff: b.includeDiff !== false,
+        includeArtifacts: b.includeArtifacts !== false,
     };
 }
 
@@ -88,6 +92,7 @@ agentTaskShareRouter.get('/agent-tasks/:taskId/share', requireOwner, asyncHandle
             shareToken: row.share_token,
             includeSteps: row.include_steps,
             includeDiff: row.include_diff,
+            includeArtifacts: row.include_artifacts,
             sharedAt: row.updated_at,
             path: sharePath(row.share_id, row.share_token),
         } : null,
@@ -140,9 +145,10 @@ agentTaskShareRouter.post('/agent-tasks/:taskId/share', requireOwner, asyncHandl
         snapshot,
         includeDiff: toggles.includeDiff,
         includeSteps: toggles.includeSteps,
+        includeArtifacts: toggles.includeArtifacts,
     });
 
-    logger.info(`작업 공유 게시: ${req.params.taskId} (${visibility}, steps=${toggles.includeSteps}, diff=${toggles.includeDiff})`);
+    logger.info(`작업 공유 게시: ${req.params.taskId} (${visibility}, steps=${toggles.includeSteps}, diff=${toggles.includeDiff}, artifacts=${toggles.includeArtifacts})`);
     res.json(success({
         shareId: row.share_id,
         visibility: row.visibility,

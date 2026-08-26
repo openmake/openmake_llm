@@ -307,6 +307,12 @@ function printSharePreview(doc: ShareDocument): void {
         for (const st of doc.steps.slice(0, 20)) console.log(`  \x1b[2m${st.n}\x1b[0m ${st.tool ?? st.type}: ${st.text}`);
         if (doc.steps.length > 20) console.log(`  \x1b[2m… 외 ${doc.steps.length - 20}건\x1b[0m`);
     }
+    if (doc.artifacts.length) {
+        console.log(`\n\x1b[1m산출물\x1b[0m (${doc.artifacts.length}건)`);
+        for (const a of doc.artifacts) {
+            console.log(`  ${a.title} \x1b[2m(${a.kind}${a.body ? `, 본문 ${a.body.length}자` : ', 본문 제외'})\x1b[0m`);
+        }
+    }
     if (doc.diffs.length) console.log(`\n\x1b[1m변경분\x1b[0m ${doc.diffs.length}건 (${doc.diffs.reduce((n, d) => n + d.length, 0)}자)`);
     console.log('\x1b[1m──────────────────────────────────────\x1b[0m');
     console.log('\x1b[2m경로·자격증명은 자동 정화되지만 완전하지 않습니다 — 위 내용을 직접 확인하세요.\x1b[0m');
@@ -317,7 +323,7 @@ function printSharePreview(doc: ShareDocument): void {
  * 미리보기를 먼저 출력하고, TTY 면 y/N 확인, 비대화형이면 `--yes` 를 요구한다.
  */
 async function cmdShare(taskId: string, opts: {
-    link: boolean; steps: boolean; diff: boolean; off: boolean; previewOnly: boolean; republish: boolean; yes: boolean;
+    link: boolean; steps: boolean; diff: boolean; artifacts: boolean; off: boolean; previewOnly: boolean; republish: boolean; yes: boolean;
 }): Promise<void> {
     const cfg = requireConfig();
     const api = new ApiClient(cfg.serverUrl, cfg.apiKey);
@@ -337,7 +343,7 @@ async function cmdShare(taskId: string, opts: {
         return;
     }
 
-    const toggles = { includeSteps: opts.steps, includeDiff: opts.diff };
+    const toggles = { includeSteps: opts.steps, includeDiff: opts.diff, includeArtifacts: opts.artifacts };
     const { preview } = await api.previewShare(taskId, toggles);
     printSharePreview(preview);
     if (opts.previewOnly) { console.log('\x1b[2m(미리보기만 — 게시되지 않았습니다)\x1b[0m'); return; }
@@ -407,13 +413,14 @@ async function main(): Promise<void> {
     if (cmd === 'share') {
         const taskId = argv[1];
         if (!taskId || taskId.startsWith('--')) {
-            console.error('사용법: openmake-code share <taskId> [--link] [--no-steps] [--no-diff] [--preview] [--republish] [--off] [--yes]');
+            console.error('사용법: openmake-code share <taskId> [--link] [--no-steps] [--no-diff] [--no-artifacts] [--preview] [--republish] [--off] [--yes]');
             process.exit(1);
         }
         return cmdShare(taskId, {
             link: argv.includes('--link'),
             steps: !argv.includes('--no-steps'),
             diff: !argv.includes('--no-diff'),
+            artifacts: !argv.includes('--no-artifacts'),
             off: argv.includes('--off'),
             previewOnly: argv.includes('--preview'),
             republish: argv.includes('--republish'),
@@ -440,7 +447,7 @@ async function main(): Promise<void> {
   openmake-code resume <taskId> [--dir .] [--yes]   checkpoint 에서 이어하기 (같은 worktree 재부착)
   openmake-code share <taskId> [--link] [--preview] [--off]   결과를 읽기 전용 링크로 공유
                                    (미리보기 출력 → 확인 후 게시. 기본 공개 범위는 로그인 사용자,
-                                    --link 는 링크를 아는 누구나. --no-steps/--no-diff 로 범위 축소)
+                                    --link 는 링크를 아는 누구나. --no-steps/--no-diff/--no-artifacts 로 범위 축소)
   openmake-code "목표" --resume    재개 가능한 최근 작업이 있으면 그것을 이어감 (없으면 새 작업)`);
         return;
     }

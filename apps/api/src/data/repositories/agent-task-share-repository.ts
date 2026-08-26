@@ -18,6 +18,7 @@ export interface AgentTaskShareRow {
     snapshot: unknown;
     include_diff: boolean;
     include_steps: boolean;
+    include_artifacts: boolean;
     created_at: Date;
     updated_at: Date;
 }
@@ -33,23 +34,25 @@ export class AgentTaskShareRepository extends BaseRepository {
         snapshot: unknown;
         includeDiff: boolean;
         includeSteps: boolean;
+        includeArtifacts: boolean;
     }): Promise<AgentTaskShareRow> {
         const r = await this.query<AgentTaskShareRow>(
             `INSERT INTO agent_task_shares
-                (share_id, task_id, owner_user_id, visibility, share_token, snapshot, include_diff, include_steps)
-             VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
+                (share_id, task_id, owner_user_id, visibility, share_token, snapshot, include_diff, include_steps, include_artifacts)
+             VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9)
              ON CONFLICT (task_id) DO UPDATE SET
                 visibility = EXCLUDED.visibility,
                 share_token = EXCLUDED.share_token,
                 snapshot = EXCLUDED.snapshot,
                 include_diff = EXCLUDED.include_diff,
                 include_steps = EXCLUDED.include_steps,
+                include_artifacts = EXCLUDED.include_artifacts,
                 updated_at = NOW()
              RETURNING *`,
             [
                 params.shareId, params.taskId, params.ownerUserId, params.visibility,
                 params.shareToken, JSON.stringify(params.snapshot),
-                params.includeDiff, params.includeSteps,
+                params.includeDiff, params.includeSteps, params.includeArtifacts,
             ],
         );
         return r.rows[0]!;

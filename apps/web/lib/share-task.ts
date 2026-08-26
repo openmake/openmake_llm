@@ -20,6 +20,7 @@ export interface ShareDocument {
   summary: { turns: number; toolCalls: number; retries: number; diffs: number; artifacts: number };
   steps: { n: number; type: string; tool?: string; text: string }[];
   diffs: string[];
+  artifacts: { id: string; title: string; kind: string; body: string | null; omitted?: "markup" | "unparsable" }[];
   createdAt: string | null;
   completedAt: string | null;
 }
@@ -30,6 +31,7 @@ export interface ShareState {
   shareToken: string | null;
   includeSteps: boolean;
   includeDiff: boolean;
+  includeArtifacts: boolean;
   sharedAt?: string;
   path: string;
 }
@@ -37,6 +39,7 @@ export interface ShareState {
 export interface ShareToggles {
   includeSteps: boolean;
   includeDiff: boolean;
+  includeArtifacts: boolean;
 }
 
 export const getShareState = (taskId: string) =>

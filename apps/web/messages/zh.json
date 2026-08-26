@@ -816,7 +816,10 @@
       "republish": "以最新内容重新发布",
       "unshare": "取消共享",
       "unshareHint": "取消后链接立即失效。已被看到的内容无法收回。",
-      "republishCancel": "取消 — 现有共享保持不变"
+      "republishCancel": "取消 — 现有共享保持不变",
+      "includeArtifacts": "包含产出物",
+      "artifactLabel": "产出物:",
+      "bodyOmitted": "不含正文"
     }
   },
   "customAgents": {
@@ -1914,6 +1917,9 @@
     "diffCount": "{n} 处差异",
     "steps": "执行记录 {count} 条",
     "changes": "变更差异 {count} 处",
-    "snapshotNote": "这是发布时的快照 — 继续执行任务不会改变此页面。"
+    "snapshotNote": "这是发布时的快照 — 继续执行任务不会改变此页面。",
+    "artifacts": "产出物 {count} 项",
+    "artifactMarkupOmitted": "HTML/SVG 产出物不包含正文 — 共享页面只显示文本。",
+    "artifactUnavailable": "无法读取正文。"
   }
 }

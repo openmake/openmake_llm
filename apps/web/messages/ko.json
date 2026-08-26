@@ -816,7 +816,10 @@
       "republish": "최신 내용으로 다시 게시",
       "unshare": "공유 해제",
       "unshareHint": "해제하면 링크는 즉시 열리지 않습니다. 이미 본 내용은 되돌릴 수 없습니다.",
-      "republishCancel": "취소 — 기존 공유는 그대로 유지됩니다"
+      "republishCancel": "취소 — 기존 공유는 그대로 유지됩니다",
+      "includeArtifacts": "산출물 포함",
+      "artifactLabel": "산출물:",
+      "bodyOmitted": "본문 제외"
     }
   },
   "customAgents": {
@@ -1914,6 +1917,9 @@
     "diffCount": "diff {n}건",
     "steps": "진행 기록 {count}건",
     "changes": "변경분 {count}건",
-    "snapshotNote": "게시 시점 기록입니다 — 이후 작업이 이어져도 이 화면은 바뀌지 않습니다."
+    "snapshotNote": "게시 시점 기록입니다 — 이후 작업이 이어져도 이 화면은 바뀌지 않습니다.",
+    "artifacts": "산출물 {count}건",
+    "artifactMarkupOmitted": "HTML·SVG 산출물은 본문을 담지 않습니다 — 공유 문서는 텍스트만 보여줍니다.",
+    "artifactUnavailable": "본문을 읽을 수 없습니다."
   }
 }

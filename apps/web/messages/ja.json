@@ -816,7 +816,10 @@
       "republish": "最新の内容で再公開",
       "unshare": "共有を解除",
       "unshareHint": "解除するとリンクは即座に無効になります。すでに見られた内容は取り消せません。",
-      "republishCancel": "キャンセル — 既存の共有はそのまま維持されます"
+      "republishCancel": "キャンセル — 既存の共有はそのまま維持されます",
+      "includeArtifacts": "成果物を含める",
+      "artifactLabel": "成果物:",
+      "bodyOmitted": "本文は除外"
     }
   },
   "customAgents": {
@@ -1914,6 +1917,9 @@
     "diffCount": "差分 {n} 件",
     "steps": "実行ログ {count} 件",
     "changes": "変更差分 {count} 件",
-    "snapshotNote": "公開時点の記録です — タスクを続行してもこの画面は変わりません。"
+    "snapshotNote": "公開時点の記録です — タスクを続行してもこの画面は変わりません。",
+    "artifacts": "成果物 {count} 件",
+    "artifactMarkupOmitted": "HTML・SVG の成果物は本文を含めません — 共有ページはテキストのみ表示します。",
+    "artifactUnavailable": "本文を読み取れません。"
   }
 }
