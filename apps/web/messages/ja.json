@@ -820,6 +820,12 @@
       "includeArtifacts": "成果物を含める",
       "artifactLabel": "成果物:",
       "bodyOmitted": "本文は除外"
+    },
+    "subagents": {
+      "title": "サブエージェント活動 {count}件",
+      "originSpawn": "並列サブ #{n}",
+      "originDelegate": "専門家委任",
+      "stepCount": "{count}ステップ"
     }
   },
   "customAgents": {
@@ -1360,7 +1366,9 @@
         "turns": "ターン数",
         "discussionHits": "討論意図の的中",
         "delegateHits": "委任意図の的中"
-      }
+      },
+      "spawnAdoption": "並列委任の採用率",
+      "ofSpawnIntent": "意図一致 {intent}ターン中 {called}ターンで呼び出し"
     },
     "noNodes": "報告されたクラスタノードはありません。"
   },

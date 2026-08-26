@@ -359,6 +359,11 @@ router.get('/routing/gates', asyncHandler(async (req: Request, res: Response) =>
             successTurns,
             callRate: exposedTurns > 0 ? calledTurns / exposedTurns : 0,
             successRate: calledTurns > 0 ? successTurns / calledTurns : 0,
+            // 병렬 위임 채택률(110) — 의도 매칭 턴 중 spawn_agents 를 실제 호출한 비율.
+            spawnIntentTurns: Number(dispatchRow.spawn_intent_turns),
+            spawnCalledTurns: Number(dispatchRow.spawn_called_turns),
+            spawnAdoptionRate: Number(dispatchRow.spawn_intent_turns) > 0
+                ? Number(dispatchRow.spawn_called_turns) / Number(dispatchRow.spawn_intent_turns) : 0,
             byTool: byToolRows.map((r) => ({
                 tool: r.tool_called,
                 turns: Number(r.turns),

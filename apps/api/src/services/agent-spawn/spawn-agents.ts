@@ -32,6 +32,7 @@ import { routeToAgent } from '../../agents/keyword-router';
 import { getAgentSystemMessage } from '../../agents/system-prompt';
 import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-gate';
 import { runSubagent } from '../agent-task/subagent';
+import { SubagentTrace, newTraceId } from '../agent-task/subagent-trace';
 import type { DelegateFactoryParams } from '../agent-task/delegate';
 import { CHAT_DELEGATE_TOOL_NAME } from '../chat-service/chat-delegate';
 import { SPAWN_AGENT_GENERIC_PROMPT } from '../../prompts/spawn-agent-system';
@@ -40,6 +41,9 @@ import { createLogger } from '../../utils/logger';
 const logger = createLogger('AgentSpawn');
 
 export const SPAWN_AGENTS_TOOL_NAME = 'spawn_agents';
+
+/** 채팅 경로의 의사 taskId — 승인 레지스트리 키로만 쓰이며 작업 행이 없으므로 활동 기록은 건너뛴다. */
+export const CHAT_PSEUDO_TASK_ID = '__chat__';
 
 /** 서브에이전트 도구 서브셋에서 제외할 위임 계열 도구 — depth=1 구조 유지(재귀 차단). */
 const SUBAGENT_EXCLUDED_TOOLS = new Set([SPAWN_AGENTS_TOOL_NAME, CHAT_DELEGATE_TOOL_NAME, 'delegate']);
@@ -87,11 +91,16 @@ export function describeArgsShape(raw: unknown): string {
     return `keys=${keys.join('|')}, tasks=${tasksShape}`;
 }
 
+/**
+ * 도구 설명 — **언제 쓰는지**를 먼저 말한다. 종전 문구는 "⚠️ 쓰지 마세요"로 시작해 채택을
+ * 억눌렀다(2026-08-26 자연어 6문항 기준선 실측 → 셰도우 `spawn_intent` 로 효과를 잰다).
+ * 주의 문구는 유지하되 뒤로.
+ */
 export const SPAWN_AGENTS_TOOL_DESCRIPTION =
-    '서로 독립적인 하위 작업 여러 개를 병렬 서브에이전트들에게 분담시켜 동시에 수행합니다. '
-    + '각 태스크는 다른 태스크 결과를 참조할 수 없으므로 자기완결적으로 서술하세요. '
-    + '⚠️ 단순 질문이나 순차 의존적인 작업에는 쓰지 말고 직접 수행하세요 — 독립 하위 작업 2개 이상을 '
-    + '병렬로 나눌 가치가 있을 때만 사용합니다(응답 시간이 늘어납니다). 결과를 받은 뒤 직접 종합하세요.';
+    '서로 독립적인 하위 작업이 2개 이상일 때 각각을 병렬 서브에이전트에게 맡겨 동시에 수행합니다 — '
+    + '예: 여러 주제·대상·출처를 각각 조사해 비교하기, 여러 문서를 각각 요약하기. '
+    + '각 태스크는 다른 태스크 결과를 볼 수 없으므로 자기완결적으로 서술하세요. '
+    + '하나의 순차 작업이나 단순 질문에는 쓰지 말고 직접 수행하세요. 결과를 받은 뒤 직접 종합해 답하세요.';
 
 /** 시스템 프롬프트 주입 가이드 — SPAWN_INTENT_PATTERNS 매칭 턴에만 주입한다(상시 주입 금지).
  *  description 의 보수적 경고가 과작동해 자발 채택이 0 이던 갭 보완: 병렬 의도가 명시된
@@ -253,6 +262,8 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
         : '';
     if (subTools.length === 0) logger.warn(`[AgentSpawn] 서브 도구 0개 — ${p.noToolsReason ?? '전달된 도구 없음'}`);
 
+    // 활동 기록(109) — 에이전트 작업 경로만(채팅은 작업 행이 없다). fan-out 1회 = trace 1개.
+    const traceId = p.taskId !== CHAT_PSEUDO_TASK_ID ? newTraceId() : null;
     let results: Array<string | null>;
     try {
         results = await parallelBatch(
@@ -263,7 +274,11 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
                     if (exec.modelNote) {
                         logger.info(`[AgentSpawn] 태스크 ${idx + 1} custom agent 모델: ${exec.modelNote}`);
                     }
+                    const trace = traceId
+                        ? new SubagentTrace(p.taskId, traceId, 'spawn_agents', idx, task.role ?? task.agentId ?? null)
+                        : undefined;
                     return await runSubagent({
+                        ...(trace ? { trace } : {}),
                         client: exec.client,
                         personaPrompt: exec.persona,
                         subgoal: task.prompt,
@@ -328,7 +343,7 @@ export async function runChatSpawnAgents(params: {
         client: resolved.client,
         tools: filterChatSubTools(params.chatTools),
         userCtx: params.userCtx,
-        taskId: '__chat__', // 정책 'none' 이라 승인 레지스트리 미사용 — 식별용 문자열일 뿐
+        taskId: CHAT_PSEUDO_TASK_ID, // 정책 'none' 이라 승인 레지스트리 미사용 — 식별용 문자열일 뿐
         sandboxCfg: { approvalPolicy: 'none', approvalTimeoutMs: 0 },
         ...(params.signal ? { signal: params.signal } : {}),
         onTokens: (n) => logger.debug(`[AgentSpawn] 채팅 서브 토큰 +${n}`),

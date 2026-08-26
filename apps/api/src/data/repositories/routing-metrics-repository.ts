@@ -23,6 +23,8 @@ export interface OrchestrationDispatchSummaryRow {
     exposed_turns: string;
     called_turns: string;
     success_turns: string;
+    spawn_intent_turns: string;
+    spawn_called_turns: string;
 }
 
 /** 실제 호출된 도구별 턴 수·성공 수 */
@@ -69,7 +71,9 @@ export class RoutingMetricsRepository extends BaseRepository {
                     COUNT(*) FILTER (WHERE discussion_intent OR task_delegate_intent) AS intent_turns,
                     COUNT(*) FILTER (WHERE cardinality(tools_exposed) > 0) AS exposed_turns,
                     COUNT(*) FILTER (WHERE tool_called IS NOT NULL) AS called_turns,
-                    COUNT(*) FILTER (WHERE tool_success = true) AS success_turns
+                    COUNT(*) FILTER (WHERE tool_success = true) AS success_turns,
+                    COUNT(*) FILTER (WHERE spawn_intent) AS spawn_intent_turns,
+                    COUNT(*) FILTER (WHERE spawn_intent AND tool_called = 'spawn_agents') AS spawn_called_turns
              FROM orchestration_dispatch_decisions
              WHERE created_at >= NOW() - ($1 || ' days')::interval`,
             [String(days)]
@@ -80,6 +84,8 @@ export class RoutingMetricsRepository extends BaseRepository {
             exposed_turns: '0',
             called_turns: '0',
             success_turns: '0',
+            spawn_intent_turns: '0',
+            spawn_called_turns: '0',
         };
     }
 
