@@ -29,6 +29,10 @@ const WEB_PORT = process.env.OMK_WEB_PORT || '3000';
  * 로그 디렉터리. 기본은 기존 동작 유지(/tmp)지만, 여러 사용자가 쓰는 리눅스 호스트에서는
  * /tmp/openmake-*.log 소유자 충돌로 PM2 가 EACCES 로 죽는다 → OMK_LOG_DIR 로 분리 가능.
  */
+// .env 의 OMK_LOG_DIR 를 존중한다 — `pm2 start` 를 호출한 셸이 .env 를 export 하지 않으므로
+// (openmake_llm.sh 도 안 함) 여기서 직접 읽지 않으면 설정이 있어도 /tmp 로 떨어진다.
+// /tmp 는 재부팅·주기 정리로 사라져 장애 후 원인 로그가 없을 수 있다(2026-08-27 점검).
+try { require('dotenv').config({ path: path.join(__dirname, '.env'), quiet: true }); } catch { /* dotenv 없으면 셸 env 만 */ }
 const LOG_DIR = process.env.OMK_LOG_DIR || '/tmp';
 const logFile = (name) => path.join(LOG_DIR, name);
 
