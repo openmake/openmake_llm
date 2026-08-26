@@ -151,6 +151,11 @@ export async function runToolCallBatch(params: {
                     userCtx: deps.currentUserContext ?? { userId: 'guest', role: 'guest' },
                     ...(req.abortSignal ? { signal: req.abortSignal } : {}),
                 });
+            // 셰도우 계측(110) — 이 턴에서 처음 호출된 오케스트레이션류 도구로 기록.
+            if (ctx.orchestrationTelemetry && !ctx.orchestrationTelemetry.called) {
+                ctx.orchestrationTelemetry.called = tc.name;
+                ctx.orchestrationTelemetry.success = !toolResult.startsWith('Error');
+            }
         } else if (isOrchestrationTool(tc.name)) {
             // 오케스트레이션 자동 배정 — 토론 인라인 실행 / 백그라운드 작업 위임.
             deps.mcpToolStartCallback?.({ toolName: tc.name });

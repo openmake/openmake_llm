@@ -13,6 +13,7 @@
  * @module services/chat-service/external-provider
  */
 import { createLogger } from '../../utils/logger';
+import { SPAWN_AGENTS_TOOL_NAME } from '../agent-spawn/spawn-agents';
 import { LOOP_DETECTION, AGENT_LOOP_LIMITS, MAP_INTENT_PATTERNS, SPAWN_INTENT_PATTERNS, EXTERNAL_LLM_INPUT_TOKEN_BUDGET } from '../../config/runtime-limits';
 import { estimateMessageTokens, truncateMessagesPreservingSystem } from '../../llm/model-pool';
 import { AGENT_SPAWN } from '../../config/runtime-limits';
@@ -134,11 +135,15 @@ export async function runExternalStream(
         ...(deps.skillRequiredToolNames ? { skillRequiredToolNames: deps.skillRequiredToolNames } : {}),
     });
     // Stage 2 셰도우 계측 — 의도 매칭 턴만 텔레메트리를 초기화(호출 시 아래 루프가 갱신).
-    if (orchestration.discussion || orchestration.taskDelegate) {
+    // 병렬 위임(spawn) 의도 턴도 적재 — 노출→채택률을 재야 설명문·가이드 조정의 효과를 안다(110).
+    if (orchestration.discussion || orchestration.taskDelegate || wantsSpawn) {
         ctx.orchestrationTelemetry = {
             discussionIntent: orchestration.discussion,
             taskDelegateIntent: orchestration.taskDelegate,
-            exposed: tools.filter((t) => isOrchestrationTool(t.function.name)).map((t) => t.function.name),
+            spawnIntent: wantsSpawn,
+            exposed: tools
+                .filter((t) => isOrchestrationTool(t.function.name) || t.function.name === SPAWN_AGENTS_TOOL_NAME)
+                .map((t) => t.function.name),
         };
     }
 

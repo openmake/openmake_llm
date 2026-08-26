@@ -19,6 +19,8 @@ const logger = createLogger('OrchestrationShadow');
 export interface OrchestrationTelemetry {
     discussionIntent: boolean;
     taskDelegateIntent: boolean;
+    /** 병렬 위임 의도(SPAWN_INTENT_PATTERNS) — 110. 미지정=false(토글 셰도우 등). */
+    spawnIntent?: boolean;
     /** 이 턴에 노출된 오케스트레이션 도구 이름들 (미노출 = 빈 배열) */
     exposed: string[];
     /** 모델이 실제 호출한 도구 (미호출 = undefined — 모델 재량 직접 답변) */
@@ -60,8 +62,8 @@ export function recordOrchestrationDispatch(params: {
             await pool.query(
                 `INSERT INTO orchestration_dispatch_decisions
                    (request_id, user_id, query_length, discussion_intent, task_delegate_intent,
-                    tools_exposed, tool_called, tool_success, user_mode, query_preview)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                    tools_exposed, tool_called, tool_success, user_mode, query_preview, spawn_intent)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
                 [
                     requestId ?? null,
                     userId && userId !== 'guest' ? userId : null,
@@ -73,6 +75,7 @@ export function recordOrchestrationDispatch(params: {
                     telemetry.success ?? null,
                     userMode,
                     preview,
+                    telemetry.spawnIntent ?? false,
                 ],
             );
         } catch (e) {

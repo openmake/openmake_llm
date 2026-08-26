@@ -820,6 +820,12 @@
       "includeArtifacts": "包含产出物",
       "artifactLabel": "产出物:",
       "bodyOmitted": "不含正文"
+    },
+    "subagents": {
+      "title": "子代理活动 {count} 条",
+      "originSpawn": "并行子代理 #{n}",
+      "originDelegate": "专家委托",
+      "stepCount": "{count} 步"
     }
   },
   "customAgents": {
@@ -1360,7 +1366,9 @@
         "turns": "轮次数",
         "discussionHits": "讨论意图命中",
         "delegateHits": "委派意图命中"
-      }
+      },
+      "spawnAdoption": "并行委托采用率",
+      "ofSpawnIntent": "{intent} 个意图轮次中 {called} 个调用"
     },
     "noNodes": "没有上报的集群节点。"
   },

@@ -52,6 +52,15 @@ export interface ShareState {
     path: string;
 }
 
+export interface SubagentTraceView {
+    traceId: string;
+    origin: string;
+    subIndex: number;
+    label: string | null;
+    startedAt: string;
+    steps: { seq: number; type: string; tool: string | null; content: string | null; at: string }[];
+}
+
 export interface PendingApproval {
     approvalId: string;
     taskId: string;
@@ -102,6 +111,10 @@ export class ApiClient {
     /** 작업 스텝(진행 기록) — show 가 요약·diff·판정을 뽑는 원본. */
     listSteps(taskId: string): Promise<{ steps: ApiTaskStep[]; total: number }> {
         return this.req('GET', `/api/agent-tasks/${taskId}/steps`);
+    }
+    /** 서브에이전트 활동(109) — delegate/spawn 서브가 실제로 한 일. 없으면 빈 목록. */
+    listSubagents(taskId: string): Promise<{ traces: SubagentTraceView[] }> {
+        return this.req('GET', `/api/agent-tasks/${taskId}/subagents`);
     }
     /** checkpoint 재개 — 서버가 상태·checkpoint·디바이스 연결을 검증한다(실패 사유는 400 메시지). */
     resumeTask(taskId: string): Promise<{ message?: string; queued?: boolean }> {

@@ -23,6 +23,7 @@ import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-gate';
 import { runTool } from './task-steps';
 import { prefetchReadOnlyCalls } from '../tool-parallel';
+import type { SubagentTrace } from './subagent-trace';
 import { createLogger } from '../../utils/logger';
 import { buildSubagentDelegationRules, SUBAGENT_FINAL_TURN_NOTICE } from '../../prompts/subagent-system';
 
@@ -51,6 +52,8 @@ export interface SubagentParams {
     onTokens?: (n: number) => void;
     /** 승인 대기 시간을 부모 pausedMs 에 합산(4-1 pause-aware 일관). */
     onPausedMs?: (ms: number) => void;
+    /** 활동 기록(109) — 에이전트 작업 경로만 넘긴다. 채팅 경로는 작업 행이 없어 무기록. */
+    trace?: SubagentTrace;
 }
 
 /**
@@ -88,6 +91,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
             p.onTokens?.(used);
             if (tokens > AGENT_TASK_LIMITS.SUBAGENT_MAX_TOKENS) {
                 logger.warn(`[Subagent] 토큰 상한 초과 — 조기 종료 (${tokens})`);
+                p.trace?.record('final', `[토큰 상한 ${tokens}] ${result.content || '(부분 결과 없음)'}`);
                 return result.content || '(서브에이전트 토큰 상한 도달 — 부분 결과 없음)';
             }
 
@@ -98,7 +102,11 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
             });
             if (!result.tool_calls || result.tool_calls.length === 0) {
                 const finalText = stripRawToolCallXml(result.content || '');
+                p.trace?.record('final', finalText || '(빈 응답)');
                 return finalText || '(서브에이전트가 빈 응답을 반환했습니다)';
+            }
+            for (const tc of result.tool_calls) {
+                p.trace?.record('tool_call', JSON.stringify(tc.function.arguments ?? {}), tc.function.name);
             }
 
             // 읽기 전용 도구 병렬 선실행 — 승인 필요 호출은 자동 승인 작업에서만(부모 루프와 같은 규칙).
@@ -126,6 +134,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
                 const pre = tc.id !== undefined ? prefetched.get(tc.id) : undefined;
                 if (pre !== undefined) {
+                    p.trace?.record('tool_result', pre, name);
                     conversation.push({ role: 'tool', content: pre, tool_name: name, tool_call_id: tc.id });
                     continue;
                 }
@@ -142,14 +151,18 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 const toolResult = approved
                     ? await runTool(mcp, name, args, p.userCtx)
                     : `Error: 사용자가 도구 실행을 승인하지 않았습니다 (${name}).`;
+                p.trace?.record('tool_result', toolResult, name);
                 conversation.push({ role: 'tool', content: toolResult, tool_name: name, tool_call_id: tc.id });
             }
         }
         // 턴 소진 — 마지막 assistant 내용 반환.
         const last = [...conversation].reverse().find((m) => m.role === 'assistant');
-        return stripRawToolCallXml((last?.content as string) || '') || '(서브에이전트가 턴 상한에 도달했습니다)';
+        const exhausted = stripRawToolCallXml((last?.content as string) || '') || '(서브에이전트가 턴 상한에 도달했습니다)';
+        p.trace?.record('final', `[턴 상한 도달] ${exhausted}`);
+        return exhausted;
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
+        p.trace?.record('error', msg);
         logger.warn(`[Subagent] 실행 실패: ${msg}`);
         return `Error: 서브에이전트 실행 실패 — ${msg}`;
     }

@@ -24,6 +24,11 @@ jest.mock('../task-sandbox/approval-gate', () => ({
     getApprovalRegistry: () => ({ isAutoApprove: (id: string) => autoApproveMock(id) }),
 }));
 
+jest.mock('../agent-task/subagent-trace', () => ({
+    newTraceId: () => 'trace-test',
+    SubagentTrace: class { record = jest.fn(); },
+}));
+
 const runSubagentMock = jest.fn();
 jest.mock('../agent-task/subagent', () => ({
     runSubagent: (p: unknown) => runSubagentMock(p),
@@ -302,6 +307,15 @@ describe('buildTaskSpawnFn — 에이전트 작업 경로', () => {
         expect(passed).toEqual(['web_search', 'browser']);
         expect(autoApproveMock).toHaveBeenCalledWith('task-1');
         expect(out).not.toContain('도구 없이 답했습니다');
+    });
+
+    it('작업 경로는 서브에 활동 기록기(trace)를 넘기고, 채팅 경로는 넘기지 않는다', async () => {
+        const spawn = buildTaskSpawnFn(makeFactoryParams('none', ['web_search']));
+        await spawn({ tasks: [{ prompt: 'x' }] });
+        expect(runSubagentMock.mock.calls[0][0].trace).toBeDefined();
+        runSubagentMock.mockClear();
+        await runChatSpawnAgents({ args: { tasks: [{ prompt: 'y' }] }, chatTools: [llmTool('web_search')], userCtx: { userId: 'u1', role: 'user' } as never });
+        expect(runSubagentMock.mock.calls[0][0].trace).toBeUndefined();
     });
 
     it('화이트리스트가 비어 있으면 그 사유가 실린다', async () => {

@@ -120,6 +120,16 @@ interface ApiTaskStep {
 
 type AgentTasksResponse = ApiSuccess<{ tasks: ApiAgentTask[]; total: number }>;
 type AgentTaskDetailResponse = ApiSuccess<{ task: ApiAgentTask; steps: ApiTaskStep[] }>;
+/** 서브에이전트 활동(109) — delegate/spawn 서브 1개 = trace 1개 */
+interface SubagentTraceView {
+  traceId: string;
+  origin: string;
+  subIndex: number;
+  label: string | null;
+  startedAt: string;
+  steps: { seq: number; type: string; tool: string | null; content: string | null; at: string }[];
+}
+type SubagentsResponse = ApiSuccess<{ traces: SubagentTraceView[] }>;
 
 /* ── 유틸 ────────────────────────────────────────────────── */
 function mapStatus(s: ApiTaskStatus): TaskStatus {
@@ -258,6 +268,7 @@ function TaskDetailModal({
   const t = useTranslations("agentTasks");
   const [detail, setDetail] = useState<{ task: ApiAgentTask; steps: ApiTaskStep[] } | null>(null);
   const [files, setFiles] = useState<string[]>([]);
+  const [subagents, setSubagents] = useState<SubagentTraceView[]>([]);
   const [loading, setLoading] = useState(true);
 
   // 라이브 폴링: 실행 중(running/paused)이면 주기적으로 갱신 — "컴퓨터" 패널 실시간성.
@@ -270,6 +281,11 @@ function TaskDetailModal({
         if (cancelled) return;
         setDetail(res?.data ?? null);
         const st = res?.data?.task?.status;
+        // 서브에이전트 활동(109) — 위임/fan-out 이 있던 작업만 값이 있다. 실패는 빈 목록.
+        try {
+          const sa = await ApiClient.get<SubagentsResponse>(`/api/agent-tasks/${taskId}/subagents`);
+          if (!cancelled) setSubagents(sa?.data?.traces ?? []);
+        } catch { /* ignore */ }
         // 완료 task 의 산출물 파일 목록(보존된 workspace).
         if (st === "completed") {
           try {
@@ -399,6 +415,34 @@ function TaskDetailModal({
                   </li>
                 ))}
               </ul>
+            </div>
+          )}
+
+          {/* 서브에이전트 활동(109) — delegate/spawn 서브가 실제로 무엇을 했는지. 부모 스텝에는 결과만 남는다. */}
+          {subagents.length > 0 && (
+            <div className="rounded-md border border-border bg-surface-1 p-3">
+              <p className="mb-2 text-xs font-medium text-fg-2">{t("subagents.title", { count: subagents.length })}</p>
+              <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+                {subagents.map((tr) => (
+                  <div key={`${tr.traceId}:${tr.subIndex}`} className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <Badge tone="accent">{tr.origin === "spawn_agents" ? t("subagents.originSpawn", { n: tr.subIndex + 1 }) : t("subagents.originDelegate")}</Badge>
+                      {tr.label && <span className="text-muted">{tr.label}</span>}
+                      <span className="text-faint">{t("subagents.stepCount", { count: tr.steps.length })}</span>
+                    </div>
+                    <ul className="space-y-0.5 pl-2">
+                      {tr.steps.map((st) => (
+                        <li key={st.seq} className="flex gap-2 text-[11px]">
+                          <span className={cn("shrink-0 font-mono", st.type === "error" ? "text-danger" : st.type === "final" ? "text-success" : "text-faint")}>
+                            {st.tool ?? st.type}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-muted" title={st.content ?? ""}>{st.content}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

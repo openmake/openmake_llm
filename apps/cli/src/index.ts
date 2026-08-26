@@ -284,6 +284,19 @@ async function cmdShow(taskId: string, opts: { steps: boolean; diff: boolean }):
         console.log('\n\x1b[1m진행 기록\x1b[0m');
         const lines = steps.map(stepLine).filter((l): l is string => l !== null);
         console.log(lines.length ? lines.join('\n') : '  (표시할 기록 없음)');
+        // 서브에이전트 활동(109) — 부모 기록엔 결과만 남으므로 따로 보여준다.
+        const { traces } = await api.listSubagents(taskId).catch(() => ({ traces: [] as import('./api').SubagentTraceView[] }));
+        if (traces.length) {
+            console.log(`\n\x1b[1m서브에이전트 활동\x1b[0m (${traces.length}건)`);
+            for (const tr of traces) {
+                const head = tr.origin === 'spawn_agents' ? `병렬 서브 #${tr.subIndex + 1}` : '전문가 위임';
+                console.log(`  \x1b[36m${head}\x1b[0m${tr.label ? ` · ${tr.label}` : ''} (${tr.steps.length}단계)`);
+                for (const st of tr.steps) {
+                    const tone = st.type === 'error' ? '\x1b[31m' : st.type === 'final' ? '\x1b[32m' : '\x1b[2m';
+                    console.log(`    ${tone}${st.tool ?? st.type}\x1b[0m: ${(st.content ?? '').replace(/\s+/g, ' ').slice(0, 120)}`);
+                }
+            }
+        }
     }
     if (opts.diff) {
         console.log('\n\x1b[1m변경분\x1b[0m');

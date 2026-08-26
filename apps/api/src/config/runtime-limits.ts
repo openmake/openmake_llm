@@ -1690,6 +1690,10 @@ export const AGENT_TASK_LIMITS = {
     SUBAGENT_MAX_TURNS: parseInt(process.env.AGENT_TASK_SUBAGENT_MAX_TURNS || '3', 10),
     /** 서브에이전트 1회 위임당 토큰 상한 — 부모 누적에 합산되어 부모 한도도 함께 적용(기본 100k). */
     SUBAGENT_MAX_TOKENS: parseInt(process.env.AGENT_TASK_SUBAGENT_MAX_TOKENS || '100000', 10),
+    /** 서브에이전트 활동 기록(109) — 기본 on. AGENT_TASK_SUBAGENT_TRACE_ENABLED=false 로 끔. */
+    SUBAGENT_TRACE_ENABLED: process.env.AGENT_TASK_SUBAGENT_TRACE_ENABLED !== 'false',
+    /** 서브 스텝 본문 상한(자) — 도구 결과 전문은 부모 tool_result 에 이미 있으므로 미리보기만. */
+    SUBAGENT_TRACE_CONTENT_CAP: parseInt(process.env.AGENT_TASK_SUBAGENT_TRACE_CAP || '2000', 10),
     /** 동적 도구 선별 방식(Phase 5-4): 'keyword'(기본 — 무-LLM 오버랩) | 'embedding'(bge-m3 코사인,
      *  어휘가 달라도 의미 매칭. 실패 시 키워드 폴백). AGENT_TASK_DYNAMIC_TOOLS_MODE. */
     DYNAMIC_TOOLS_MODE: (process.env.AGENT_TASK_DYNAMIC_TOOLS_MODE === 'embedding' ? 'embedding' : 'keyword') as 'keyword' | 'embedding',

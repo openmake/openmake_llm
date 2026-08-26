@@ -820,6 +820,12 @@
       "includeArtifacts": "Include outputs",
       "artifactLabel": "Output:",
       "bodyOmitted": "body excluded"
+    },
+    "subagents": {
+      "title": "Sub-agent activity ({count})",
+      "originSpawn": "Parallel sub #{n}",
+      "originDelegate": "Expert delegate",
+      "stepCount": "{count} steps"
     }
   },
   "customAgents": {
@@ -1360,7 +1366,9 @@
         "turns": "Turns",
         "discussionHits": "Discussion Intent Hits",
         "delegateHits": "Delegate Intent Hits"
-      }
+      },
+      "spawnAdoption": "Parallel delegation adoption",
+      "ofSpawnIntent": "{called} of {intent} intent turns called it"
     },
     "noNodes": "No cluster nodes reported."
   },
