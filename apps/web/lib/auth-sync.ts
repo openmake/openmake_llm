@@ -1,5 +1,5 @@
 import type { ApiSuccess, MePayload } from "@openmake/shared-types";
-import { ApiClient, csrfHeaders } from "./api-client";
+import { ApiClient, ApiError, csrfHeaders } from "./api-client";
 import { getAnonSessionId } from "./anon-session";
 import { flushOAuthLoginPending, gaSetVisitor } from "./analytics";
 import { useAppStore } from "./store";
@@ -79,6 +79,11 @@ async function syncAuthInner(): Promise<boolean> {
     }
     if (!u) {
       // 비로그인은 200 + user:null 로 온다(401 아님) — 게스트 라벨링은 이 분기가 본선.
+      // ⚠️ store 도 게스트로 되돌린다. 종전엔 라벨만 바꾸고 currentUser 를 남겨서, 세션이 만료된
+      // 탭이 "로그인 상태"로 보이는 채 사이드바 배지가 30초마다 4개 요청을 만료 토큰으로
+      // 영원히 두드렸다(2026-08-27 실측: 24h `jwt expired` 5,471건).
+      const cur = useAppStore.getState().auth;
+      if (cur.currentUser) useAppStore.getState().setAuth({ currentUser: null, isGuestMode: true });
       gaSetVisitor(null, "guest");
       return false;
     }
@@ -113,8 +118,14 @@ async function syncAuthInner(): Promise<boolean> {
         /* 미설정/실패 — 기본값(true) 유지 */
       });
     return true;
-  } catch {
-    /* 비로그인(401) — 게스트 유지 */
+  } catch (e) {
+    // `/api/auth/me` 가 만료 토큰에 **401** 을 돌려주는 경우(서버가 쿠키를 정리하기 전) — 게스트
+    // (200, user:null)와 같은 뜻이다. 종전엔 라벨만 바꾸고 store 를 두어 만료 탭이 한 사이클 더
+    // 폴링했다(2026-08-27 라이브: 401 → 30초 뒤 폴링 → 그때야 200 게스트로 정리).
+    if (e instanceof ApiError && e.status === 401) {
+      clearHadSession();
+      if (useAppStore.getState().auth.currentUser) useAppStore.getState().setAuth({ currentUser: null, isGuestMode: true });
+    }
     gaSetVisitor(null, "guest");
     return false;
   }
