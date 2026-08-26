@@ -350,7 +350,9 @@ async function cmdShare(taskId: string, opts: {
 
     if (opts.republish && share) console.log('\x1b[2m재게시 — 기존 링크는 그대로 유지되고 내용만 갱신됩니다.\x1b[0m');
     const visibility = opts.link ? 'link' : (opts.republish && share ? share.visibility : 'authenticated');
-    const scope = opts.link ? '링크를 아는 누구나(로그인 불필요)' : '이 서버에 로그인한 사용자';
+    // 안내 문구는 **결정된 visibility** 에서 뽑는다 — 플래그(opts.link)로 뽑으면 재게시 때
+    // 실제로는 공개 링크를 내면서 "로그인 사용자에게만" 이라고 말하게 된다(확인 질문 포함).
+    const scope = visibility === 'link' ? '링크를 아는 누구나(로그인 불필요)' : '이 서버에 로그인한 사용자';
     if (!opts.yes) {
         if (!process.stdin.isTTY) {
             console.error(`\n비대화형에서는 --yes 가 필요합니다 (공개 범위: ${scope}).`);
