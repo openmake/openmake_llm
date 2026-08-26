@@ -795,7 +795,32 @@
     "startedLabel": "Started",
     "elapsedLabel": "Elapsed",
     "modelLabel": "Model",
-    "tokensLabel": "Tokens"
+    "tokensLabel": "Tokens",
+    "share": {
+      "title": "Share",
+      "sharing": "Shared",
+      "notShared": "Not shared",
+      "close": "Close",
+      "includeSteps": "Include progress log",
+      "includeDiff": "Include diff",
+      "scopeAuthenticated": "Visible to signed-in users",
+      "scopeLink": "Anyone with the link",
+      "previewBtn": "Preview what will be public",
+      "previewFirst": "Review what will be public before publishing.",
+      "previewNotice": "This is published as-is — paths and credentials are redacted automatically, but not perfectly.",
+      "goalLabel": "Goal:",
+      "resultLabel": "Result:",
+      "diffIncluded": "Includes {n} diff(s)",
+      "publishAuthenticated": "Share with signed-in users",
+      "publishLink": "Create share link",
+      "republish": "Republish with latest",
+      "unshare": "Stop sharing",
+      "unshareHint": "The link stops working immediately. What people already saw cannot be taken back.",
+      "republishCancel": "Cancel — the existing share stays as it is",
+      "includeArtifacts": "Include outputs",
+      "artifactLabel": "Output:",
+      "bodyOmitted": "body excluded"
+    }
   },
   "customAgents": {
     "pageTitle": "Custom Agents",
@@ -1879,5 +1904,22 @@
     "publishedPrivate": "'{name}' saved to my extensions (private)",
     "publishedDetail": "{files} files · publishing again with the same name updates it",
     "missing": "Some items were skipped (not owned or not active)."
+  },
+  "sharedTask": {
+    "readOnly": "Read-only share",
+    "loading": "Loading…",
+    "notFound": "This shared task could not be found.",
+    "notFoundHint": "The link may have been revoked or is outside its share scope.",
+    "goal": "Goal",
+    "result": "Result",
+    "summaryLine": "{turns} turns · {tools} tool calls",
+    "retries": "{n} retries",
+    "diffCount": "{n} diffs",
+    "steps": "Progress log ({count})",
+    "changes": "Changes ({count})",
+    "snapshotNote": "A snapshot from when it was published — continuing the task does not change this page.",
+    "artifacts": "Outputs ({count})",
+    "artifactMarkupOmitted": "HTML/SVG outputs are not included — a shared page shows text only.",
+    "artifactUnavailable": "The body could not be read."
   }
 }

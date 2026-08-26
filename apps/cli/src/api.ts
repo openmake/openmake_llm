@@ -27,6 +27,31 @@ export interface ApiTaskStep {
     created_at?: string;
 }
 
+/** 공유 문서(서버 `buildShareDocument` 결과) — 원본이 아니라 선별·정화된 사본이다. */
+export interface ShareDocument {
+    taskId: string;
+    goal: string;
+    result: string;
+    status: string;
+    summary: { turns: number; toolCalls: number; retries: number; diffs: number; artifacts: number };
+    steps: { n: number; type: string; tool?: string; text: string }[];
+    diffs: string[];
+    artifacts: { id: string; title: string; kind: string; body: string | null; omitted?: string }[];
+    createdAt: string | null;
+    completedAt: string | null;
+}
+
+export interface ShareState {
+    shareId: string;
+    visibility: 'private' | 'authenticated' | 'link';
+    shareToken: string | null;
+    includeSteps: boolean;
+    includeDiff: boolean;
+    includeArtifacts: boolean;
+    sharedAt?: string;
+    path: string;
+}
+
 export interface PendingApproval {
     approvalId: string;
     taskId: string;
@@ -91,6 +116,20 @@ export class ApiClient {
     }
     answerApproval(approvalId: string, decision: 'approve' | 'reject'): Promise<unknown> {
         return this.req('POST', `/api/agent-tasks/approvals/${approvalId}/${decision}`);
+    }
+    /** 현재 공유 상태(없으면 null). */
+    getShare(taskId: string): Promise<{ share: ShareState | null }> {
+        return this.req('GET', `/api/agent-tasks/${taskId}/share`);
+    }
+    /** 게시 없이 공유될 내용을 그대로 받아본다 — 게시 전 확인용. */
+    previewShare(taskId: string, opts: { includeSteps: boolean; includeDiff: boolean; includeArtifacts: boolean }): Promise<{ preview: ShareDocument }> {
+        return this.req('POST', `/api/agent-tasks/${taskId}/share/preview`, opts);
+    }
+    publishShare(taskId: string, opts: { visibility: string; includeSteps: boolean; includeDiff: boolean; includeArtifacts: boolean }): Promise<ShareState> {
+        return this.req('POST', `/api/agent-tasks/${taskId}/share`, opts);
+    }
+    unshare(taskId: string): Promise<{ unshared: boolean }> {
+        return this.req('DELETE', `/api/agent-tasks/${taskId}/share`);
     }
     bridgeStatus(): Promise<{ enabled: boolean; connected: boolean; devices?: { deviceId: string; label: string; folderName: string }[] }> {
         return this.req('GET', '/api/local-bridge/status');

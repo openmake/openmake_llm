@@ -34,6 +34,7 @@ import { useAppStore } from "@/lib/store";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { SteeringInput } from "@/components/chat/steering-input";
+import { SharePanel } from "@/components/agent-tasks/share-panel";
 import { DiffView } from "@/components/chat/diff-view";
 
 /* ── 타입 ────────────────────────────────────────────────── */
@@ -336,6 +337,11 @@ function TaskDetailModal({
               </div>
             )}
           </div>
+
+          {/* 공유 — 종료된 작업만(스냅샷 고정이라 진행 중 게시는 반쪽 기록이 굳는다). */}
+          {(detail.task.status === "completed" || detail.task.status === "failed" || detail.task.status === "cancelled") && (
+            <SharePanel taskId={taskId} />
+          )}
 
           {/* 실행 중/일시정지 시 방향 지시(steering) — 취소·재시작 없이 교정. */}
           {(detail.task.status === "running" || detail.task.status === "paused") && (

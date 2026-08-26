@@ -795,7 +795,32 @@
     "startedLabel": "開始",
     "elapsedLabel": "所要",
     "modelLabel": "モデル",
-    "tokensLabel": "トークン"
+    "tokensLabel": "トークン",
+    "share": {
+      "title": "共有",
+      "sharing": "共有中",
+      "notShared": "未共有",
+      "close": "閉じる",
+      "includeSteps": "実行ログを含める",
+      "includeDiff": "変更差分を含める",
+      "scopeAuthenticated": "ログインユーザーに公開",
+      "scopeLink": "リンクを知っている全員",
+      "previewBtn": "公開される内容をプレビュー",
+      "previewFirst": "公開前に内容を確認してください。",
+      "previewNotice": "以下がそのまま公開されます — パスや認証情報は自動的に伏せられますが完全ではありません。",
+      "goalLabel": "目標:",
+      "resultLabel": "結果:",
+      "diffIncluded": "変更差分 {n} 件を含む",
+      "publishAuthenticated": "ログインユーザーに公開",
+      "publishLink": "共有リンクを作成",
+      "republish": "最新の内容で再公開",
+      "unshare": "共有を解除",
+      "unshareHint": "解除するとリンクは即座に無効になります。すでに見られた内容は取り消せません。",
+      "republishCancel": "キャンセル — 既存の共有はそのまま維持されます",
+      "includeArtifacts": "成果物を含める",
+      "artifactLabel": "成果物:",
+      "bodyOmitted": "本文は除外"
+    }
   },
   "customAgents": {
     "pageTitle": "カスタムエージェント",
@@ -1879,5 +1904,22 @@
     "publishedPrivate": "'{name}' を自分の拡張に保存しました（非公開）",
     "publishedDetail": "ファイル {files}件 · 同名で再公開すると更新されます",
     "missing": "一部の項目は所有・有効条件を満たさずスキップされました。"
+  },
+  "sharedTask": {
+    "readOnly": "読み取り専用の共有",
+    "loading": "読み込み中…",
+    "notFound": "共有されたタスクが見つかりません。",
+    "notFoundHint": "リンクが解除されたか、公開範囲外の可能性があります。",
+    "goal": "目標",
+    "result": "結果",
+    "summaryLine": "ターン {turns} · ツール呼び出し {tools} 回",
+    "retries": "再試行 {n} 回",
+    "diffCount": "差分 {n} 件",
+    "steps": "実行ログ {count} 件",
+    "changes": "変更差分 {count} 件",
+    "snapshotNote": "公開時点の記録です — タスクを続行してもこの画面は変わりません。",
+    "artifacts": "成果物 {count} 件",
+    "artifactMarkupOmitted": "HTML・SVG の成果物は本文を含めません — 共有ページはテキストのみ表示します。",
+    "artifactUnavailable": "本文を読み取れません。"
   }
 }
