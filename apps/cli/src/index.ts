@@ -317,7 +317,7 @@ function printSharePreview(doc: ShareDocument): void {
  * 미리보기를 먼저 출력하고, TTY 면 y/N 확인, 비대화형이면 `--yes` 를 요구한다.
  */
 async function cmdShare(taskId: string, opts: {
-    link: boolean; steps: boolean; diff: boolean; off: boolean; previewOnly: boolean; yes: boolean;
+    link: boolean; steps: boolean; diff: boolean; off: boolean; previewOnly: boolean; republish: boolean; yes: boolean;
 }): Promise<void> {
     const cfg = requireConfig();
     const api = new ApiClient(cfg.serverUrl, cfg.apiKey);
@@ -329,11 +329,11 @@ async function cmdShare(taskId: string, opts: {
     }
 
     const { share } = await api.getShare(taskId).catch(() => ({ share: null }));
-    if (share && !opts.previewOnly) {
+    if (share && !opts.previewOnly && !opts.republish) {
         // 이미 공유 중 — 링크만 다시 보여준다(재게시는 내용 변경이므로 명시적으로).
         console.log(`\x1b[32m이미 공유 중\x1b[0m (${share.visibility}${share.includeDiff ? ', diff 포함' : ''})`);
         console.log(`  ${cfg.serverUrl}${share.path}`);
-        console.log('\x1b[2m최신 내용으로 다시 게시하려면 `--preview` 로 확인 후 다시 실행, 해제는 `--off`.\x1b[0m');
+        console.log('\x1b[2m최신 내용으로 다시 게시: `--republish` (미리보기 후 확인) · 해제: `--off`\x1b[0m');
         return;
     }
 
@@ -342,7 +342,8 @@ async function cmdShare(taskId: string, opts: {
     printSharePreview(preview);
     if (opts.previewOnly) { console.log('\x1b[2m(미리보기만 — 게시되지 않았습니다)\x1b[0m'); return; }
 
-    const visibility = opts.link ? 'link' : 'authenticated';
+    if (opts.republish && share) console.log('\x1b[2m재게시 — 기존 링크는 그대로 유지되고 내용만 갱신됩니다.\x1b[0m');
+    const visibility = opts.link ? 'link' : (opts.republish && share ? share.visibility : 'authenticated');
     const scope = opts.link ? '링크를 아는 누구나(로그인 불필요)' : '이 서버에 로그인한 사용자';
     if (!opts.yes) {
         if (!process.stdin.isTTY) {
@@ -406,7 +407,7 @@ async function main(): Promise<void> {
     if (cmd === 'share') {
         const taskId = argv[1];
         if (!taskId || taskId.startsWith('--')) {
-            console.error('사용법: openmake-code share <taskId> [--link] [--no-steps] [--no-diff] [--preview] [--off] [--yes]');
+            console.error('사용법: openmake-code share <taskId> [--link] [--no-steps] [--no-diff] [--preview] [--republish] [--off] [--yes]');
             process.exit(1);
         }
         return cmdShare(taskId, {
@@ -415,6 +416,7 @@ async function main(): Promise<void> {
             diff: !argv.includes('--no-diff'),
             off: argv.includes('--off'),
             previewOnly: argv.includes('--preview'),
+            republish: argv.includes('--republish'),
             yes: argv.includes('--yes') || argv.includes('-y'),
         });
     }

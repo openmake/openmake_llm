@@ -815,7 +815,8 @@
       "publishLink": "创建共享链接",
       "republish": "以最新内容重新发布",
       "unshare": "取消共享",
-      "unshareHint": "取消后链接立即失效。已被看到的内容无法收回。"
+      "unshareHint": "取消后链接立即失效。已被看到的内容无法收回。",
+      "republishCancel": "取消 — 现有共享保持不变"
     }
   },
   "customAgents": {

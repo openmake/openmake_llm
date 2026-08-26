@@ -815,7 +815,8 @@
       "publishLink": "공유 링크 만들기",
       "republish": "최신 내용으로 다시 게시",
       "unshare": "공유 해제",
-      "unshareHint": "해제하면 링크는 즉시 열리지 않습니다. 이미 본 내용은 되돌릴 수 없습니다."
+      "unshareHint": "해제하면 링크는 즉시 열리지 않습니다. 이미 본 내용은 되돌릴 수 없습니다.",
+      "republishCancel": "취소 — 기존 공유는 그대로 유지됩니다"
     }
   },
   "customAgents": {

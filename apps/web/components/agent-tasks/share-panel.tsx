@@ -25,6 +25,7 @@ export function SharePanel({ taskId }: { taskId: string }) {
   const [includeDiff, setIncludeDiff] = useState(true);
   const [visibility, setVisibility] = useState<ShareVisibility>("authenticated");
   const [busy, setBusy] = useState<"load" | "preview" | "publish" | "unshare" | null>("load");
+  const [republish, setRepublish] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,10 +61,12 @@ export function SharePanel({ taskId }: { taskId: string }) {
         const res = await publishShare(taskId, { visibility, includeSteps, includeDiff });
         setShare(res?.data ?? null);
         setPreview(null);
+        setRepublish(false);
       } else {
         await unshareTask(taskId);
         setShare(null);
         setPreview(null);
+        setRepublish(false);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "error");
@@ -109,7 +112,7 @@ export function SharePanel({ taskId }: { taskId: string }) {
         </button>
       </div>
 
-      {share ? (
+      {share && !republish ? (
         <div className="space-y-2">
           <p className="text-xs text-muted">{t(share.visibility === "link" ? "scopeLink" : "scopeAuthenticated")}</p>
           <div className="flex items-center gap-2">
@@ -124,7 +127,7 @@ export function SharePanel({ taskId }: { taskId: string }) {
             </Button>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="ghost" onClick={() => { setShare(null); void run("preview"); }}>
+            <Button size="sm" variant="ghost" onClick={() => { setRepublish(true); void run("preview"); }}>
               {t("republish")}
             </Button>
             <Button size="sm" variant="danger" disabled={busy === "unshare"} onClick={() => void run("unshare")}>
@@ -184,6 +187,11 @@ export function SharePanel({ taskId }: { taskId: string }) {
             </div>
           )}
           {!preview && <p className="text-[11px] text-faint">{t("previewFirst")}</p>}
+          {republish && (
+            <button type="button" onClick={() => { setRepublish(false); setPreview(null); }} className="text-[11px] text-faint underline">
+              {t("republishCancel")}
+            </button>
+          )}
         </div>
       )}
 

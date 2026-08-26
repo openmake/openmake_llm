@@ -815,7 +815,8 @@
       "publishLink": "Create share link",
       "republish": "Republish with latest",
       "unshare": "Stop sharing",
-      "unshareHint": "The link stops working immediately. What people already saw cannot be taken back."
+      "unshareHint": "The link stops working immediately. What people already saw cannot be taken back.",
+      "republishCancel": "Cancel — the existing share stays as it is"
     }
   },
   "customAgents": {
