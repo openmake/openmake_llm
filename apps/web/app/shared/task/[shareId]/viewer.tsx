@@ -39,8 +39,9 @@ export function SharedTaskViewer({ shareId, token }: { shareId: string; token: s
       const res = await openSharedArtifact(shareId, index, token);
       const url = res?.data?.url;
       if (!url) throw new Error("no url");
-      if (tab) tab.location.href = url;
-      else window.location.href = url;
+      // React Compiler 린트: window.open 결과의 프로퍼티 대입을 "불변 값 수정"으로 잡는다 — 메서드 호출로.
+      if (tab) tab.location.assign(url);
+      else window.location.assign(url);
     } catch {
       tab?.close();
     } finally {

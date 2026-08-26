@@ -4,15 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowUp,
-  Globe,
   MessagesSquare,
   Sparkles,
   Square,
   Telescope,
   Brain,
-  Image as ImageIcon,
-  FileCode2,
-  LayoutList,
   SlidersHorizontal,
   Check,
   Paperclip,
@@ -100,7 +96,7 @@ function readFileBase64(file: File): Promise<string> {
 export function Composer() {
   const t = useTranslations("composer");
   const tSettings = useTranslations("settings");
-  const { sendChat, abort, startAgentTask, sendStructured } = useChatSocket();
+  const { sendChat, abort, startAgentTask } = useChatSocket();
   const router = useRouter();
   const [text, setText] = useState("");
   const [files, setFiles] = useState<AttachedFileUI[]>([]);
@@ -200,15 +196,11 @@ export function Composer() {
     thinkingEnabled,
     discussionMode,
     deepResearchMode,
-    webSearchEnabled,
     agentTaskMode,
     agentApprovalMode,
     agentLocalExecutor,
     agentLocalDeviceId,
     agentLocalFolderRel,
-    imageMode,
-    artifactMode,
-    structuredMode,
     selectedModel,
     style,
     thinkingLevel,
@@ -370,11 +362,8 @@ export function Composer() {
         agentLocalExecutor ? (selectedBridgeDevice?.deviceId ?? null) : null,
         agentLocalExecutor ? agentLocalFolderRel : null,
       );
-    } else if (structuredMode) {
-      // 구조화 답변 토글 ON — REST /api/chat/structured (비스트리밍, 카드 렌더). 첨부는 미지원.
-      void sendStructured(text.trim());
     } else if (
-      !discussionMode && !deepResearchMode && !imageMode &&
+      !discussionMode && !deepResearchMode &&
       files.length > 0 && detectFileTaskIntent(text) && !detectPresentationChatIntent(text)
     ) {
       // 발표자료 제작 요청은 위임하지 않고 채팅 유지 — presentation-designer 스킬
@@ -394,7 +383,7 @@ export function Composer() {
         delegationApproval,
       );
     } else if (
-      !discussionMode && !deepResearchMode && !imageMode &&
+      !discussionMode && !deepResearchMode &&
       files.length === 0 && images.length === 0 && detectReportTaskIntent(text)
     ) {
       // 조사형 보고서 자동 위임(P1 Phase 2) — "X를 조사해서 보고서로" 류 self-contained
@@ -405,8 +394,8 @@ export function Composer() {
       void startAgentTask(text.trim(), undefined, undefined, reportApproval);
     } else {
       // NotebookLM 컨텍스트 — grounding 프리픽스는 백엔드(prompts/notebook-context)가 주입.
-      // 가로채기 모드(토론/딥리서치/이미지)는 도구를 우회하므로 미전송 — 칩은 흐림 표시로 안내.
-      const nbApplies = !discussionMode && !deepResearchMode && !imageMode;
+      // 가로채기 모드(토론/딥리서치)는 도구를 우회하므로 미전송 — 칩은 흐림 표시로 안내.
+      const nbApplies = !discussionMode && !deepResearchMode;
       sendChat(
         text.trim(),
         images.length ? images.map((i) => i.dataUrl) : undefined,
@@ -448,11 +437,7 @@ export function Composer() {
     { key: "thinkingEnabled" as const, on: thinkingEnabled, icon: Brain, label: t("toggle.thinking") },
     { key: "answerVerification" as const, on: answerVerification, icon: ShieldCheck, label: t("toggle.verification") },
     { key: "deepResearchMode" as const, on: deepResearchMode, icon: Telescope, label: t("toggle.deepResearch") },
-    { key: "webSearchEnabled" as const, on: webSearchEnabled, icon: Globe, label: t("toggle.web") },
     { key: "agentTaskMode" as const, on: agentTaskMode, icon: Sparkles, label: t("toggle.agent") },
-    { key: "imageMode" as const, on: imageMode, icon: ImageIcon, label: t("toggle.image") },
-    { key: "artifactMode" as const, on: artifactMode, icon: FileCode2, label: t("toggle.artifact") },
-    { key: "structuredMode" as const, on: structuredMode, icon: LayoutList, label: t("toggle.structured") },
   ];
   const activeModeCount = TOGGLES.filter((m) => m.on).length;
 
@@ -463,9 +448,10 @@ export function Composer() {
     { v: "none" as const, label: t("approvalMode.skip"), hint: t("approvalMode.skipHint") },
   ];
 
-  // 가로채기(bypass) 모드: 켜지면 백엔드가 웹·아티팩트 modifier 를 무시(전용 파이프라인).
+  // 가로채기(bypass) 모드: 켜지면 백엔드가 전용 파이프라인을 타며 일반 도구·아티팩트를 무시.
+  // (2026-08-27: 웹·이미지·아티팩트·구조화 답변 토글은 제거 — 모델이 질의에 따라 자동으로
+  //  web_search·generate_image·<artifact>·구조 가드를 쓰므로 수동 토글이 이중이었다.)
   const INTERCEPT_KEYS = new Set<string>(INTERCEPT_MODE_KEYS);
-  const MODIFIER_KEYS = new Set<string>(["webSearchEnabled", "artifactMode"]);
   const interceptActive = TOGGLES.some((m) => m.on && INTERCEPT_KEYS.has(m.key));
 
   // 외부 provider 모델 판별 — 모델 목록의 provider 필드가 SoT('local-llm' 이 로컬).
@@ -526,26 +512,20 @@ export function Composer() {
               </p>
               {TOGGLES.map((m) => {
                 const isIntercept = INTERCEPT_KEYS.has(m.key);
-                // 가로채기 모드가 켜져 있으면 웹·아티팩트 modifier 는 무시되므로 흐리게 + "(미적용)".
-                const suppressed = interceptActive && MODIFIER_KEYS.has(m.key);
                 const onColor = isIntercept ? "text-warn" : "text-accent";
                 return (
                   <button
                     key={m.key}
                     type="button"
                     onClick={() => toggle(m.key)}
-                    title={suppressed ? t("modifierSuppressed", { label: m.label }) : undefined}
                     className={cn(
                       "flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-sm transition",
-                      m.on ? onColor : suppressed ? "text-faint" : "text-fg-2 hover:bg-surface-3",
+                      m.on ? onColor : "text-fg-2 hover:bg-surface-3",
                     )}
                   >
                     <m.icon className="h-[18px] w-[18px] shrink-0" />
                     <span className="flex-1 text-left">
                       {m.label}
-                      {suppressed && (
-                        <span className="ml-1.5 text-[11px] text-faint">{t("suppressedTag")}</span>
-                      )}
                     </span>
                     {m.on && <Check className={cn("h-4 w-4 shrink-0", onColor)} />}
                   </button>
@@ -606,7 +586,7 @@ export function Composer() {
             onChange={setNotebook}
             open={notebookPickerOpen}
             onOpenChange={setNotebookPickerOpen}
-            suppressed={interceptActive || agentTaskMode || structuredMode}
+            suppressed={interceptActive || agentTaskMode}
           />
 
           {TOGGLES.filter((m) => m.on).map((m) => {

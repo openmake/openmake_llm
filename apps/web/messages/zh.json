@@ -258,17 +258,12 @@
     "send": "发送",
     "disclaimer": "OpenMake 可能会出错，请核实重要信息。",
     "suppressedTag": "(未应用)",
-    "modifierSuppressed": "{label} 在拦截模式下不会应用",
     "externalLocalModeNotice": "讨论和深度研究将使用本地模型运行（不会使用所选的外部模型）。",
     "toggle": {
       "discussion": "讨论",
       "thinking": "思考",
       "deepResearch": "深度研究",
-      "web": "网络",
       "agent": "智能体",
-      "image": "图像",
-      "artifact": "工件",
-      "structured": "结构化",
       "verification": "验证回答"
     },
     "slashMenu": {
@@ -558,9 +553,7 @@
     "unknownError": "未知错误",
     "disconnected": "_(与服务器的连接已断开。正在重新连接，请稍后重新发送。)_",
     "taskIdMissing": "任务创建响应中缺少 taskId",
-    "agentTaskStartFailed": "无法启动智能体任务：{message}",
-    "structuredAborted": "_(已停止生成结构化回答。)_",
-    "structuredFailed": "无法生成结构化回答：{message}"
+    "agentTaskStartFailed": "无法启动智能体任务：{message}"
   },
   "skillLibrary": {
     "cancel": "取消",
