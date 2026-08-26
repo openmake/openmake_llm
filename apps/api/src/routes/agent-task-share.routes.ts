@@ -19,6 +19,7 @@
 import { Router, Request, Response } from 'express';
 import { randomUUID, randomBytes, timingSafeEqual } from 'crypto';
 import { optionalAuth } from '../auth';
+import { optionalApiKey } from '../middlewares/api-key-auth';
 import { requireAuthOrApiKeyScope } from '../middlewares/api-key-auth';
 import { API_KEY_SCOPES } from '../config/api-key-scopes';
 import { success, badRequest, notFound } from '../utils/api-response';
@@ -208,7 +209,7 @@ agentTaskShareRouter.delete('/agent-tasks/:taskId/share', requireOwner, asyncHan
  *   link          : `?token` 이 share_token 과 일치하면 비인증도 허용
  * 존재 여부 자체를 숨기기 위해 권한 실패는 **404** 로 응답한다(403 이면 "그 작업은 있다"가 샌다).
  */
-agentTaskShareRouter.get('/shared-tasks/:shareId', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
+agentTaskShareRouter.get('/shared-tasks/:shareId', optionalApiKey, optionalAuth, asyncHandler(async (req: Request, res: Response) => {
     const share = await repo().getByShareId(req.params.shareId);
     if (!share) {
         res.status(404).json(notFound('공유된 작업'));
@@ -235,7 +236,7 @@ agentTaskShareRouter.get('/shared-tasks/:shareId', optionalAuth, asyncHandler(as
  * 공유 문서를 한 번 본 사람이 인가와 무관하게 영구 URL 을 갖게 된다. 여기서 발급하는
  * 접근토큰은 TTL 이 있고, 공유를 해제하면 export 자체가 사라져 404 다.
  */
-agentTaskShareRouter.get('/shared-tasks/:shareId/artifacts/:index/open', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
+agentTaskShareRouter.get('/shared-tasks/:shareId/artifacts/:index/open', optionalApiKey, optionalAuth, asyncHandler(async (req: Request, res: Response) => {
     const share = await repo().getByShareId(req.params.shareId);
     if (!share || !isShareViewerAllowed(req, share)) {
         res.status(404).json(notFound('공유된 작업'));

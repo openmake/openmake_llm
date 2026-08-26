@@ -323,7 +323,8 @@ function printSharePreview(doc: ShareDocument): void {
  * 미리보기를 먼저 출력하고, TTY 면 y/N 확인, 비대화형이면 `--yes` 를 요구한다.
  */
 async function cmdShare(taskId: string, opts: {
-    link: boolean; steps: boolean; diff: boolean; artifacts: boolean; off: boolean; previewOnly: boolean; republish: boolean; yes: boolean;
+    link: boolean; steps: boolean; diff: boolean; artifacts: boolean; off: boolean;
+    previewOnly: boolean; republish: boolean; openArtifacts: boolean; yes: boolean;
 }): Promise<void> {
     const cfg = requireConfig();
     const api = new ApiClient(cfg.serverUrl, cfg.apiKey);
@@ -335,11 +336,32 @@ async function cmdShare(taskId: string, opts: {
     }
 
     const { share } = await api.getShare(taskId).catch(() => ({ share: null }));
+
+    if (opts.openArtifacts) {
+        if (!share) { console.error('공유 중이 아닙니다 — 먼저 `openmake-code share <taskId>` 로 게시하세요.'); process.exit(1); }
+        const { document } = await api.getSharedTask(share.shareId, share.shareToken);
+        if (!document.artifacts.length) { console.log('산출물이 없습니다.'); return; }
+        console.log(`\x1b[1m산출물 열람 URL\x1b[0m \x1b[2m(발급 토큰은 유효기간이 있습니다)\x1b[0m`);
+        for (const [i, a] of document.artifacts.entries()) {
+            if (!a.viewerId) {
+                // 뷰어가 없는 경우(뷰어 기능 off·본문 없음) — 본문이 문서에 있으면 그걸로 대신한다.
+                console.log(`  ${i}. ${a.title} \x1b[2m(${a.kind} — 뷰어 없음${a.body ? `, 본문 ${a.body.length}자는 공유 페이지에서` : ''})\x1b[0m`);
+                continue;
+            }
+            try {
+                const { url } = await api.openSharedArtifact(share.shareId, i, share.shareToken);
+                console.log(`  ${i}. ${a.title} \x1b[2m(${a.kind})\x1b[0m\n     ${url}`);
+            } catch (e) {
+                console.log(`  ${i}. ${a.title} \x1b[31m— URL 발급 실패: ${(e as Error).message}\x1b[0m`);
+            }
+        }
+        return;
+    }
     if (share && !opts.previewOnly && !opts.republish) {
         // 이미 공유 중 — 링크만 다시 보여준다(재게시는 내용 변경이므로 명시적으로).
         console.log(`\x1b[32m이미 공유 중\x1b[0m (${share.visibility}${share.includeDiff ? ', diff 포함' : ''})`);
         console.log(`  ${cfg.serverUrl}${share.path}`);
-        console.log('\x1b[2m최신 내용으로 다시 게시: `--republish` (미리보기 후 확인) · 해제: `--off`\x1b[0m');
+        console.log('\x1b[2m산출물 열람: `--open` · 최신 내용으로 다시 게시: `--republish` · 해제: `--off`\x1b[0m');
         return;
     }
 
@@ -365,6 +387,7 @@ async function cmdShare(taskId: string, opts: {
     const r = await api.publishShare(taskId, { visibility, ...toggles });
     console.log(`\x1b[32m✓ 공유됨\x1b[0m (${scope})`);
     console.log(`  ${cfg.serverUrl}${r.path}`);
+    if (preview.artifacts.length) console.log(`\x1b[2m산출물 ${preview.artifacts.length}건 열람 URL: openmake-code share ${taskId} --open\x1b[0m`);
     console.log('\x1b[2m해제: openmake-code share ' + taskId + ' --off\x1b[0m');
 }
 
@@ -415,7 +438,7 @@ async function main(): Promise<void> {
     if (cmd === 'share') {
         const taskId = argv[1];
         if (!taskId || taskId.startsWith('--')) {
-            console.error('사용법: openmake-code share <taskId> [--link] [--no-steps] [--no-diff] [--no-artifacts] [--preview] [--republish] [--off] [--yes]');
+            console.error('사용법: openmake-code share <taskId> [--link] [--no-steps] [--no-diff] [--no-artifacts] [--preview] [--republish] [--open] [--off] [--yes]');
             process.exit(1);
         }
         return cmdShare(taskId, {
@@ -425,6 +448,7 @@ async function main(): Promise<void> {
             artifacts: !argv.includes('--no-artifacts'),
             off: argv.includes('--off'),
             previewOnly: argv.includes('--preview'),
+            openArtifacts: argv.includes('--open'),
             republish: argv.includes('--republish'),
             yes: argv.includes('--yes') || argv.includes('-y'),
         });
@@ -449,7 +473,8 @@ async function main(): Promise<void> {
   openmake-code resume <taskId> [--dir .] [--yes]   checkpoint 에서 이어하기 (같은 worktree 재부착)
   openmake-code share <taskId> [--link] [--preview] [--off]   결과를 읽기 전용 링크로 공유
                                    (미리보기 출력 → 확인 후 게시. 기본 공개 범위는 로그인 사용자,
-                                    --link 는 링크를 아는 누구나. --no-steps/--no-diff/--no-artifacts 로 범위 축소)
+                                    --link 는 링크를 아는 누구나. --no-steps/--no-diff/--no-artifacts 로 범위 축소,
+                                    --open 은 공유된 산출물의 열람 URL 발급)
   openmake-code "목표" --resume    재개 가능한 최근 작업이 있으면 그것을 이어감 (없으면 새 작업)`);
         return;
     }
