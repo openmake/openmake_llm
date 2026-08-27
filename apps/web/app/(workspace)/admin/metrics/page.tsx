@@ -80,6 +80,31 @@ interface ToolErrorData {
   byToolName: { toolName: string; count: number }[];
 }
 
+/* ── 도구 헬스(실패율) 타입 ────────────────────────────────
+ * ToolErrorData 와 별개다: 소스가 audit_logs 라 채팅 경로까지 덮고, 성공 호출도 세므로
+ * 분모(calls)가 있어 "6번 호출해 5번 실패" 같은 저빈도·고실패 도구가 드러난다. */
+interface ToolHealthData {
+  days: number;
+  minCalls: number;
+  summary: {
+    calls: number;
+    errors: number;
+    errorRate: number;
+    distinctTools: number;
+    failingTools: number;
+  };
+  tools: {
+    tool: string;
+    server: string | null;
+    calls: number;
+    errors: number;
+    errorRate: number;
+    p50DurationMs: number | null;
+    lastErrorAt: string | null;
+    byCategory: Record<string, number>;
+  }[];
+}
+
 /* ── 작업 워크플로우 관측 타입 ─────────────────────────────── */
 interface WorkflowData {
   days: number;
@@ -159,6 +184,7 @@ export default function AdminMetricsPage() {
   const [agentSummary, setAgentSummary] = useState<AgentSummary | null>(null);
   const [agentMetrics, setAgentMetrics] = useState<AgentMetric[] | null>(null);
   const [toolErrors, setToolErrors] = useState<ToolErrorData | null>(null);
+  const [toolHealth, setToolHealth] = useState<ToolHealthData | null>(null);
   const [workflow, setWorkflow] = useState<WorkflowData | null>(null);
   const [routingGates, setRoutingGates] = useState<RoutingGatesData | null>(null);
 
@@ -241,6 +267,13 @@ export default function AdminMetricsPage() {
       ).catch(() => null);
       if (toolErrRes?.data) {
         setToolErrors(toolErrRes.data);
+      }
+      // 도구 헬스 로드 (기본 30일·최소 3회 호출)
+      const toolHealthRes = await ApiClient.get<{ data: ToolHealthData }>(
+        "/api/metrics/tools/health",
+      ).catch(() => null);
+      if (toolHealthRes?.data) {
+        setToolHealth(toolHealthRes.data);
       }
       // 작업 워크플로우 관측 로드 (기본 30일)
       const workflowRes = await ApiClient.get<{ data: WorkflowData }>(
@@ -658,6 +691,108 @@ export default function AdminMetricsPage() {
                     </Badge>
                   ))}
                 </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* 도구 헬스 — 실패율 기준(분모 포함). 위 '작업 도구 오류'는 건수 기준이라 저빈도·고실패 도구가 보이지 않는다. */}
+        {toolHealth && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>
+                {t("toolHealth.title", {
+                  days: toolHealth.days,
+                  minCalls: toolHealth.minCalls,
+                })}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <StatCard
+                  label={t("toolHealth.errorRate")}
+                  value={`${(toolHealth.summary.errorRate * 100).toFixed(1)}%`}
+                />
+                <StatCard
+                  label={t("toolHealth.calls")}
+                  value={toolHealth.summary.calls.toLocaleString()}
+                />
+                <StatCard
+                  label={t("toolHealth.errors")}
+                  value={toolHealth.summary.errors.toLocaleString()}
+                />
+                <StatCard
+                  label={t("toolHealth.failingTools")}
+                  value={`${toolHealth.summary.failingTools.toLocaleString()} / ${toolHealth.summary.distinctTools.toLocaleString()}`}
+                />
+              </div>
+              {toolHealth.tools.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <thead>
+                      <tr>
+                        <Th>{t("toolHealth.th.tool")}</Th>
+                        <Th className="whitespace-nowrap">{t("toolHealth.th.server")}</Th>
+                        <Th className="whitespace-nowrap text-right">{t("toolHealth.th.calls")}</Th>
+                        <Th className="whitespace-nowrap text-right">{t("toolHealth.th.errors")}</Th>
+                        <Th className="whitespace-nowrap text-right">{t("toolHealth.th.errorRate")}</Th>
+                        <Th className="whitespace-nowrap">{t("toolHealth.th.causes")}</Th>
+                        <Th className="whitespace-nowrap">{t("toolHealth.th.lastError")}</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {toolHealth.tools.map((row) => {
+                        const causes = Object.entries(row.byCategory).sort(
+                          (a, b) => b[1] - a[1],
+                        );
+                        return (
+                          <tr key={row.tool}>
+                            <Td className="font-mono text-xs" title={row.tool}>
+                              {row.tool}
+                            </Td>
+                            <Td className="whitespace-nowrap text-xs text-fg-2">
+                              {row.server ?? "—"}
+                            </Td>
+                            <Td className="text-right font-mono text-fg-2">
+                              {row.calls.toLocaleString()}
+                            </Td>
+                            <Td className="text-right font-mono text-fg-2">
+                              {row.errors.toLocaleString()}
+                            </Td>
+                            <Td className="text-right">
+                              <Badge
+                                tone={
+                                  row.errorRate >= 0.5
+                                    ? "danger"
+                                    : row.errorRate >= 0.2
+                                      ? "warn"
+                                      : "neutral"
+                                }
+                              >
+                                {(row.errorRate * 100).toFixed(1)}%
+                              </Badge>
+                            </Td>
+                            <Td className="whitespace-nowrap text-xs text-fg-2">
+                              {causes.length > 0
+                                ? causes
+                                    .slice(0, 3)
+                                    .map(([cat, n]) => `${cat} ${n}`)
+                                    .join(" · ")
+                                : "—"}
+                            </Td>
+                            <Td className="whitespace-nowrap text-xs text-fg-2">
+                              {row.lastErrorAt
+                                ? new Date(row.lastErrorAt).toLocaleDateString(locale)
+                                : "—"}
+                            </Td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </Table>
+                </div>
+              ) : (
+                <p className="text-sm text-fg-2">{t("toolHealth.empty")}</p>
               )}
             </CardContent>
           </Card>

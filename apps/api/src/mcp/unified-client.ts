@@ -24,6 +24,7 @@
 
 import { MCPServer, createMCPServer } from './server';
 import { MCPToolResult } from './types';
+import type { ToolErrorCategory } from './tool-error-classifier';
 import { UserSandbox, UserContext } from './user-sandbox';
 import { ToolRouter } from './tool-router';
 import { MCPServerRegistry } from './server-registry';
@@ -206,14 +207,23 @@ export class UnifiedMCPClient {
         // 전달되지 않는다. 에이전트 루프(runTool)와 동일한 canonical 경로.
         const startedAt = Date.now();
         const result = await this.toolRouter.executeTool(toolName, sandboxedArgs, context);
+        // 실패 분류(fail() 이 실어 보낸 내부 전용 필드)를 감사에 넘기고 응답에서는 지운다.
+        // ⚠️ 감사는 fire-and-forget 이라 result 를 나중에 읽는다 — 제거 전에 값을 꺼내 인자로 전달할 것.
+        const errorCategory = result?.errorCategory;
+        const retryable = result?.retryable;
+        if (result) {
+            delete result.errorCategory;
+            delete result.retryable;
+        }
         // tool call 감사 영속화 (fire-and-forget·비차단). 공개 운영 포렌식용.
-        void this.auditToolCall(toolName, context, result, Date.now() - startedAt);
+        void this.auditToolCall(toolName, context, result, Date.now() - startedAt, { errorCategory, retryable });
         return result;
     }
 
     /** MCP tool call 을 audit_logs 에 영속화. action='mcp_tool_call' 은 CRITICAL_ACTIONS 미포함 → 알림 없음. */
     private async auditToolCall(
         toolName: string, context: UserContext, result: MCPToolResult, durationMs: number,
+        classification: { errorCategory?: ToolErrorCategory; retryable?: boolean } = {},
     ): Promise<void> {
         try {
             const { getAuditService } = await import('../services/AuditService');
@@ -232,6 +242,9 @@ export class UnifiedMCPClient {
                     server: isExternal ? toolName.split('::')[0] : 'builtin',
                     role: context.role,
                     actorId: rawUid ?? 'guest',
+                    // 실패 분류 — 도구별 실패 원인 집계(도구 헬스)의 소스. 성공 호출엔 없다.
+                    ...(classification.errorCategory ? { errorCategory: classification.errorCategory } : {}),
+                    ...(classification.retryable !== undefined ? { retryable: classification.retryable } : {}),
                 },
             });
         } catch (e) { logger.debug(`audit 기록 실패(무시): ${e instanceof Error ? e.message : String(e)}`); }

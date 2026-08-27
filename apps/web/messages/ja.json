@@ -1327,6 +1327,23 @@
         "count": "件数"
       }
     },
+    "toolHealth": {
+      "title": "ツール健全性 — 失敗率 (直近 {days}日 · 最小 {minCalls}回呼び出し)",
+      "errorRate": "全体の失敗率",
+      "calls": "総呼び出し",
+      "errors": "総失敗",
+      "failingTools": "失敗のあるツール",
+      "th": {
+        "tool": "ツール",
+        "server": "サーバー",
+        "calls": "呼び出し",
+        "errors": "失敗",
+        "errorRate": "失敗率",
+        "causes": "主な原因",
+        "lastError": "最終失敗"
+      },
+      "empty": "十分なサンプルのあるツールがありません。"
+    },
     "workflow": {
       "title": "タスクワークフロー (直近{days}日)",
       "unjudgedRate": "完了時の未判定率",

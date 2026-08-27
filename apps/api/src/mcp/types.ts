@@ -15,6 +15,7 @@
  */
 
 import type { UserContext } from './user-sandbox';
+import type { ToolErrorCategory } from './tool-error-classifier';
 
 /**
  * MCP JSON-RPC 2.0 요청 메시지
@@ -144,6 +145,15 @@ export interface MCPToolResult {
     }>;
     /** 에러 발생 여부 (true이면 content에 에러 메시지 포함) */
     isError?: boolean;
+    /**
+     * 실패 분류 — `ToolRouter.executeTool` 의 fail() 이 `classifyToolError` 결과를 실어 보내는
+     * **내부 전용** 필드. 도구 호출 감사(`auditToolCall`)가 읽어 `audit_logs.details` 에 남긴 뒤
+     * 응답에서 제거하므로, 도구 소비자(LLM 루프)에게는 노출되지 않는다.
+     * 종전에는 이 분류가 OTel span 속성으로만 나가 사후 집계가 불가능했다(문자열 매칭에 의존).
+     */
+    errorCategory?: ToolErrorCategory;
+    /** 실패가 재시도로 해소될 수 있는지 — errorCategory 와 같은 경로·같은 수명. */
+    retryable?: boolean;
 }
 
 /**
