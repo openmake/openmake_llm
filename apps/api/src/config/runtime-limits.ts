@@ -1523,6 +1523,19 @@ export const AGENT_TASK_LIMITS = {
      *  스텝→노드 귀속(plan_step_index)·진행 표시가 비지 않게 한다. 모델의 명시 마킹이 우선.
      *  AGENT_TASK_PLAN_AUTO_ADVANCE=false 로 비활성(기본 on). */
     PLAN_AUTO_ADVANCE: process.env.AGENT_TASK_PLAN_AUTO_ADVANCE !== 'false',
+    /** goal 의 번호 절차(`[절차] 1) … 7)`)를 작업 시작 시 초기 계획으로 심는다.
+     *  근거: 모델은 goal 의 번호를 계획으로 인식해 plan_create 없이 plan_update(step:N) 부터
+     *  부른다 — 실측(2026-08-28) plan 프로토콜 오류 28건 중 20건이 이 형태. 실패 인자가
+     *  `{step,status}` 뿐이라 빈 계획을 만들어줘도 그 단계가 무엇인지 알 수 없어, goal 의
+     *  번호를 그대로 심어 번호 체계를 일치시킨다. 결정적 파싱(LLM 없음).
+     *  AGENT_TASK_PLAN_FROM_GOAL=false 로 비활성(기본 on — 절차가 없는 goal 엔 no-op). */
+    PLAN_FROM_GOAL: process.env.AGENT_TASK_PLAN_FROM_GOAL !== 'false',
+    /** 번호 항목이 이 수 미만이면 절차 목록이 아니라고 보고 심지 않는다(오탐 방지). */
+    PLAN_FROM_GOAL_MIN_ITEMS: parseInt(process.env.AGENT_TASK_PLAN_FROM_GOAL_MIN_ITEMS || '3', 10),
+    /** 초기 계획으로 심을 최대 단계 수. */
+    PLAN_FROM_GOAL_MAX_ITEMS: parseInt(process.env.AGENT_TASK_PLAN_FROM_GOAL_MAX_ITEMS || '20', 10),
+    /** 단계 텍스트 상한(초과분은 잘라냄) — goal 의 한 항목이 길어도 계획 표시가 무너지지 않게. */
+    PLAN_FROM_GOAL_MAX_TEXT_CHARS: parseInt(process.env.AGENT_TASK_PLAN_FROM_GOAL_MAX_TEXT_CHARS || '160', 10),
     /** HITL 무응답 강등 — 승인 무응답(timeout, 명시 거절 아님)이 이 횟수에 달하면 이후 턴에서
      *  승인 필요 도구(+ask_human)를 제거하고 확보한 정보로 마무리를 유도한다. 후향 실측: 방치
      *  task 가 승인 대기(30분)×N 반복으로 예산만 소진하고 산출물 0 으로 종결되던 패턴 차단.
