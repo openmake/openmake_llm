@@ -37,6 +37,7 @@ import { createLogger } from '../utils/logger';
 import { MCP_EXTERNAL_TOOL_LIMITS } from '../config/timeouts';
 import { withSpan } from '../observability/otel';
 import { classifyToolError, formatToolError } from './tool-error-classifier';
+import { isToolCircuitOpen, recordToolResult } from './tool-health';
 import type { UserMCPPool } from './user-pool';
 import { collectUserPoolTools } from './user-pool-tools';
 
@@ -140,6 +141,15 @@ export class ToolRouter {
             for (const entry of userEntries) tools.push(entry.tool);
         }
 
+        // 서킷 차단 도구는 노출하지 않는다. 이 함수가 채팅·에이전트 작업·딥리서치의
+        // 공통 소스이므로 필터가 여기 한 곳이면 전 경로에 적용된다(게이트 OFF 면 no-op).
+        const open = tools.filter((t) => isToolCircuitOpen(t.name));
+        if (open.length > 0) {
+            logger.info(`[circuit] 노출 제외 ${open.length}개: ${open.map((t) => t.name).join(', ')}`);
+            const blocked = new Set(open.map((t) => t.name));
+            return tools.filter((t) => !blocked.has(t.name));
+        }
+
         return tools;
     }
 
@@ -207,10 +217,13 @@ export class ToolRouter {
             const ok = (result: MCPToolResult): MCPToolResult => {
                 span.setAttribute('tool.duration_ms', Date.now() - startedAt);
                 span.setAttribute('tool.success', true);
+                recordToolResult(name, true);
                 return result;
             };
-            const fail = (rawMessage: string): MCPToolResult => {
+            /** `record:false` 는 서킷 자신이 낸 거절 — 세면 차단이 스스로를 연장한다. */
+            const fail = (rawMessage: string, opts: { record?: boolean } = {}): MCPToolResult => {
                 const c = classifyToolError(rawMessage);
+                if (opts.record !== false) recordToolResult(name, false, c.category);
                 span.setAttribute('tool.duration_ms', Date.now() - startedAt);
                 span.setAttribute('tool.success', false);
                 span.setAttribute('tool.error_category', c.category);
@@ -236,6 +249,15 @@ export class ToolRouter {
                 }
                 return ok(result);
             };
+            // 서킷 차단 도구는 실행하지 않고 즉시 거절한다. 노출에서 빠져도 모델이 이름을
+            // 기억해 호출할 수 있으므로 2차 방어가 필요하다(그리고 죽은 서버를 두드리지 않는다).
+            if (isToolCircuitOpen(name)) {
+                return fail(
+                    `도구 "${name}" 은 반복 실패로 일시 비활성화되었습니다. 잠시 후 자동으로 재시도되며, 지금은 다른 도구나 방법을 사용하세요.`,
+                    { record: false },
+                );
+            }
+
             // 외부 도구 출력 크기 제한(MAX_OUTPUT_SIZE, 1MB) — user-pool(1a)·전역(1b) 두 경로 공통.
             // 누락 시 대용량 도구 결과가 통째로 LLM 컨텍스트에 주입돼 토큰 예산 폭주/context-fit 조기 발동.
             const capOutput = (result: MCPToolResult): MCPToolResult => {
