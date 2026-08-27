@@ -216,7 +216,14 @@ export class ToolRouter {
                 span.setAttribute('tool.error_category', c.category);
                 span.setAttribute('tool.error_retryable', c.retryable);
                 logger.warn(`Tool error [${name}] category=${c.category} retryable=${c.retryable}: ${rawMessage}`);
-                return { content: [{ type: 'text', text: formatToolError(rawMessage, c) }], isError: true };
+                // 분류를 결과에 실어 감사 계층(unified-client.auditToolCall)이 영속하게 한다.
+                // 소비자에게 새 필드가 새지 않도록 그 계층이 기록 직후 제거한다.
+                return {
+                    content: [{ type: 'text', text: formatToolError(rawMessage, c) }],
+                    isError: true,
+                    errorCategory: c.category,
+                    retryable: c.retryable,
+                };
             };
             // 도구가 isError 결과를 반환하면 분류·교정해 정규화, 정상이면 그대로 통과.
             const finalize = (result: MCPToolResult): MCPToolResult => {
