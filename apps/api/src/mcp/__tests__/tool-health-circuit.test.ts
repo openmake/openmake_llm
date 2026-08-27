@@ -21,7 +21,10 @@ function failN(n: number, category = 'provider'): void {
 describe('도구 서킷 브레이커', () => {
     beforeEach(() => {
         __resetCircuitsForTest();
-        Object.assign(mutable, original, { ENABLED: true, FAILURE_THRESHOLD: 3, MIN_CALLS: 3, OPEN_MS: 1000 });
+        // ⚠️ OPEN_MS 는 넉넉히 — 짧게 두면 느린 러너에서 차단 직후 판정 사이에 cooldown 이
+        // 지나 half-open 으로 전이되고 isToolCircuitOpen 이 false 를 돌려준다(CI 실측 flaky).
+        // cooldown 경과를 실제로 검증하는 테스트만 아래에서 1000ms 로 낮춘다.
+        Object.assign(mutable, original, { ENABLED: true, FAILURE_THRESHOLD: 3, MIN_CALLS: 3, OPEN_MS: 60_000 });
     });
     afterEach(() => Object.assign(mutable, original));
 
@@ -71,6 +74,7 @@ describe('도구 서킷 브레이커', () => {
     });
 
     it('cooldown 경과 후 half-open 으로 통과시키고, 성공하면 closed 로 복구', async () => {
+        Object.assign(mutable, { OPEN_MS: 1000 });
         failN(3);
         expect(isToolCircuitOpen(TOOL)).toBe(true);
         await new Promise((r) => setTimeout(r, 1100)); // OPEN_MS=1000
@@ -81,6 +85,7 @@ describe('도구 서킷 브레이커', () => {
     });
 
     it('half-open 에서 실패하면 재차단 + cooldown 이 배수로 늘어난다', async () => {
+        Object.assign(mutable, { OPEN_MS: 1000 });
         failN(3);
         await new Promise((r) => setTimeout(r, 1100));
         isToolCircuitOpen(TOOL); // half-open 전이
