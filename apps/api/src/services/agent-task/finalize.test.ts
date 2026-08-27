@@ -6,6 +6,7 @@ jest.mock('../../config/runtime-limits', () => {
         AGENT_TASK_LIMITS: {
             ...actual.AGENT_TASK_LIMITS,
             GOAL_JUDGE_ENABLED: true,
+            GOAL_JUDGE_SHADOW_ENABLED: true,
             VERIFY_DELIVERABLE_ENABLED: true,
             VERIFY_DELIVERABLE_MAX_RETRIES: 1,
         },
@@ -113,19 +114,52 @@ describe('finalizeTask — 완료 관문 단일화(091)', () => {
         const emit = jest.fn();
         const i = input({ path: 'terminate', terminateSummary: '', emitStep: emit });
         await finalizeTask(i);
-        expect(judgeStepMock).toHaveBeenCalledWith(expect.any(String), expect.any(Number), 'not_achieved', '입력 파일이 없음', '', 'ctx');
+        expect(judgeStepMock).toHaveBeenCalledWith(expect.any(String), expect.any(Number), 'not_achieved', '입력 파일이 없음', '', 'ctx', { shadow: false });
         const emitted = emit.mock.calls.find((c: unknown[]) => c[0] === 'judge');
         expect(emitted?.[2]).toContain('입력 파일이 없음');
     });
 
-    it('아티팩트가 있으면 judge 를 생략하고 verdict=skipped (발동 조건 유지)', async () => {
+    it('아티팩트가 있으면 판정을 적용하지 않는다 — verdict=skipped, 완료 유지', async () => {
+        judgeMock.mockResolvedValue({ achieved: true, reason: '산출물 확인', raw: '' });
         const i = input({ rawContent: WITH_ARTIFACT });
 
         const out = await finalizeTask(i);
 
-        expect(judgeMock).not.toHaveBeenCalled();
+        expect(out.kind).toBe('completed');
+        // 적용 조건은 종전 그대로 — 컬럼에는 셰도우 판정이 새지 않는다.
+        expect(lastUpdate(i)).toMatchObject({ status: 'completed', judgeVerdict: 'skipped' });
+    });
+
+    it('아티팩트가 있어도 셰도우로 판정만 돌려 기록한다 (표본 확보)', async () => {
+        judgeMock.mockResolvedValue({ achieved: true, reason: '산출물 확인', raw: '' });
+        const i = input({ rawContent: WITH_ARTIFACT });
+
+        await finalizeTask(i);
+
+        expect(judgeMock).toHaveBeenCalledTimes(1);
+        // 마지막 인자로 shadow:true 가 넘어가 step_type='judge_shadow' 로 갈린다.
+        expect(judgeStepMock).toHaveBeenCalledWith(
+            'task-1', expect.any(Number), 'achieved', '산출물 확인', '', 'ctx', { shadow: true });
+    });
+
+    it('셰도우 판정이 미달성이어도 완료를 뒤집지 않는다 (fail-open 계약)', async () => {
+        judgeMock.mockResolvedValue({ achieved: false, reason: '목표와 무관한 산출물', raw: '' });
+        const i = input({ rawContent: WITH_ARTIFACT });
+
+        const out = await finalizeTask(i);
+
         expect(out.kind).toBe('completed');
         expect(lastUpdate(i)).toMatchObject({ status: 'completed', judgeVerdict: 'skipped' });
+    });
+
+    it('적용 판정에는 shadow 플래그가 붙지 않는다', async () => {
+        judgeMock.mockResolvedValue({ achieved: true, reason: '파일 생성', raw: '' });
+        const i = input({ rawContent: '작업을 마쳤습니다.' });
+
+        await finalizeTask(i);
+
+        expect(judgeStepMock).toHaveBeenCalledWith(
+            'task-1', expect.any(Number), 'achieved', '파일 생성', '', 'ctx', { shadow: false });
     });
 
     it('미달성 마커는 judge 없이 failed(goal_incomplete) — 마커는 결과 본문에서 제거', async () => {

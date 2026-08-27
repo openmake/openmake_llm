@@ -80,6 +80,10 @@ export async function runTool(
 /**
  * judge 판정을 스텝으로 영속 — 사후 규명용. 종전엔 라벨(judge_verdict)만 남아 오판 원인을
  * 복원할 수 없었다. 실패해도 완료 흐름을 막지 않는다(fail-open, 관측 전용).
+ *
+ * `opts.shadow` 는 **적용되지 않은** 판정(아티팩트가 있어 완료가 이미 확정된 경우)이다.
+ * step_type 을 'judge_shadow' 로 갈라 집계에서 섞이지 않게 하고, 본문 첫 줄에 반영되지
+ * 않았음을 명시한다 — 상세 화면에 그대로 보이므로 "미달성인데 완료" 로 읽히면 안 된다.
  */
 export async function persistJudgeStep(
     taskId: string,
@@ -88,14 +92,18 @@ export async function persistJudgeStep(
     reason: string,
     raw: string,
     executionContext: string,
+    opts: { shadow?: boolean } = {},
 ): Promise<number> {
     const content = [
+        ...(opts.shadow ? ['[셰도우 계측 — 완료 여부에 반영되지 않음]'] : []),
         `판정: ${verdict}`,
         reason ? `사유: ${reason}` : `사유: (파싱 실패) ${raw}`,
         `입력 요약:\n${executionContext}`,
     ].join('\n');
     try {
-        await getUnifiedDatabase().addAgentTaskStep({ taskId, stepNumber, stepType: 'judge', content });
+        await getUnifiedDatabase().addAgentTaskStep({
+            taskId, stepNumber, stepType: opts.shadow ? 'judge_shadow' : 'judge', content,
+        });
         return stepNumber + 1;
     } catch (e) {
         logger.warn(`[AgentTask] judge 스텝 영속 실패(무시): ${taskId} — ${e instanceof Error ? e.message : e}`);

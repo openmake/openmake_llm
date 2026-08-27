@@ -221,11 +221,16 @@ describe('AgentTaskService 입력 첨부 파일', () => {
         expect(updateAgentTask.mock.calls.some((c) => c[1]?.status === 'failed')).toBe(false);
     });
 
-    it('아티팩트가 있는 최종 답변은 judge 를 생략하고 completed', async () => {
-        chatContent = '<artifact id="report" kind="markdown" title="보고서">본문</artifact> 보고서를 작성했습니다.';
+    it('아티팩트가 있는 최종 답변은 판정을 적용하지 않고 completed — 셰도우는 기록만', async () => {
+        chatQueue = [
+            '<artifact id="report" kind="markdown" title="보고서">본문</artifact> 보고서를 작성했습니다.',
+            // 셰도우 판정이 미달성이어도 완료를 뒤집지 않는다(적용 조건은 아티팩트 0 그대로).
+            '{"achieved": false, "reason": "목표와 무관한 산출물"}',
+        ];
         await new AgentTaskService().execute(baseInput);
 
-        expect(mockChat).toHaveBeenCalledTimes(1); // judge 호출 없음
+        expect(mockChat).toHaveBeenCalledTimes(2); // 본 루프 1회 + 셰도우 judge 1회
         expect(updateAgentTask).toHaveBeenCalledWith('t1', expect.objectContaining({ status: 'completed' }));
+        expect(updateAgentTask.mock.calls.some((c) => c[1]?.status === 'failed')).toBe(false);
     });
 });

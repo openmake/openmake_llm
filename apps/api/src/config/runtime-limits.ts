@@ -1569,6 +1569,12 @@ export const AGENT_TASK_LIMITS = {
      *  여부를 검증(마커 미준수 보완). 미달성 판정 시 completed 대신 failed(goal_incomplete).
      *  판정 실패/파싱 불가는 fail-open(완료 유지). AGENT_TASK_GOAL_JUDGE=false 로 비활성. */
     GOAL_JUDGE_ENABLED: process.env.AGENT_TASK_GOAL_JUDGE !== 'false',
+    /** judge 셰도우 계측 — 아티팩트가 **있는** 완료에서도 판정을 돌리되 **적용하지 않고 기록만**
+     *  한다(step_type='judge_shadow'). 발동 조건 확대의 게이트인 오판율을 재려면 표본이 필요한데,
+     *  현행 조건(아티팩트 0)으로는 completed 의 18% 만 판정을 거쳐 표본이 쌓이지 않는다
+     *  (2026-08-27 실측 30일: completed 120건 중 achieved 22 · skipped 43 · 미판정 55).
+     *  완료 흐름은 불변이며 실패해도 fail-open. AGENT_TASK_GOAL_JUDGE_SHADOW=false 로 비활성. */
+    GOAL_JUDGE_SHADOW_ENABLED: process.env.AGENT_TASK_GOAL_JUDGE_SHADOW !== 'false',
     /** judge 에 넘기는 최종 답변 최대 글자 수 (프롬프트 팽창 방지) */
     GOAL_JUDGE_MAX_ANSWER_CHARS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_MAX_CHARS || '6000', 10),
     /** judge 실행 컨텍스트에 싣는 최근 도구 결과 수 — 성공 증거 부재로 완수 작업을 미달성
