@@ -1585,6 +1585,11 @@ export const AGENT_TASK_LIMITS = {
     /** judge 사유 스텝에 남길 reason 최대 글자 (파싱 실패 시 raw 응답 앞부분도 같이 남긴다) */
     GOAL_JUDGE_REASON_MAX_CHARS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_REASON_MAX_CHARS || '600', 10),
     GOAL_JUDGE_RAW_KEEP_CHARS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_RAW_KEEP_CHARS || '400', 10),
+    /** judge 에 싣는 제출 산출물(아티팩트) 최대 개수 — 셰도우 확대(2026-08-27)로 아티팩트가 있는
+     *  완료도 판정하게 되면서 필요해졌다. 종전엔 발동 조건이 아티팩트 0 이라 실을 것이 없었다. */
+    GOAL_JUDGE_ARTIFACT_MAX_ITEMS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_ARTIFACT_MAX_ITEMS || '5', 10),
+    /** 산출물 항목당 본문 글자 캡 (프롬프트 팽창 방지 — 목표 수행 여부 판단엔 앞부분으로 충분) */
+    GOAL_JUDGE_ARTIFACT_ITEM_CHARS: parseInt(process.env.AGENT_TASK_GOAL_JUDGE_ARTIFACT_ITEM_CHARS || '400', 10),
     /** 부팅 자동 복구 — 프로세스 재시작으로 중단된 task 를 부팅 시 자동 resume 한다.
      *  주의: schema-initializer 가 부팅 시 running/paused 를 failed('server restarted') 로 먼저
      *  마킹하므로, 복구 대상은 ①잔존 running/paused(마킹 실패 대비) + ②restart 마킹 + checkpoint

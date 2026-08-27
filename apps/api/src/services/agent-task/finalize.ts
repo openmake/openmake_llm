@@ -27,7 +27,7 @@ import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { extractAndStripArtifacts } from '../../llm/artifact-parser';
 import { applyReportRender } from '../chat-service/report-block';
 import { AGENT_TASK_INCOMPLETE_MARKER, getAgentTaskVerifyFailedNudge } from '../../prompts/agent-task-prompt';
-import { judgeGoal, buildJudgeExecutionContext } from './goal-judge';
+import { judgeGoal, buildJudgeExecutionContext, buildJudgeArtifactSummary } from './goal-judge';
 import { verifyCodeArtifacts } from './deliverable-verify';
 import { persistArtifactSteps, persistJudgeStep } from './task-steps';
 import { maybePersistCodeDiff } from './code-diff';
@@ -134,8 +134,10 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     if (AGENT_TASK_LIMITS.GOAL_JUDGE_ENABLED
         && (judgeApplies || AGENT_TASK_LIMITS.GOAL_JUDGE_SHADOW_ENABLED)) {
         const execCtx = buildJudgeExecutionContext(usedTools, turn + 1, taskRuntime?.getPlanSnapshot() ?? [], toolEvidence);
+        // 셰도우 경로에선 ANSWER 에서 떨어져 나간 산출물을 함께 싣는다(적용 경로는 아티팩트 0 이라 빈 값).
         const outcome = await judgeGoal(
-            await judgeClientFor(userId), goal, body ?? '', signal, execCtx);
+            await judgeClientFor(userId), goal, body ?? '', signal, execCtx,
+            artifacts.length > 0 ? buildJudgeArtifactSummary(artifacts) : undefined);
         const achieved = outcome.achieved;
         const judged: JudgeVerdict = achieved === null ? 'unknown' : achieved ? 'achieved' : 'not_achieved';
         // 판정·사유·입력 요약을 스텝으로 남긴다 — 오판 사후 규명용(관측 전용, fail-open).

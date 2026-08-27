@@ -155,7 +155,7 @@ export function getAgentTaskUploadedFilesNote(fileLines: string[]): string {
 }
 
 /**
- * 목표 달성 judge 프롬프트 — 아티팩트 없는 최종 답변이 목표를 실제로 수행했는지 판정.
+ * 목표 달성 judge 프롬프트 — 최종 답변이 목표를 실제로 수행했는지 판정.
  * 보수적 기준: 답변이 "수행하지 못했음"(입력 부재·불가·되묻기만)을 드러낼 때만 미달성.
  * 품질 평가가 아니다 — 부실해도 목표를 수행한 답변은 달성으로 본다(오탐 방지).
  */
@@ -164,6 +164,8 @@ export function getAgentTaskGoalJudgeMessages(
     answer: string,
     /** 5-3(b): 실행 컨텍스트(계획 상태·사용 도구·턴수) — 판정 정확도 보강. 없으면 기존 동작. */
     executionContext?: string,
+    /** 제출 산출물 렌더 — ANSWER 는 아티팩트가 제거된 본문이라 이것 없이는 산출물을 못 본다. */
+    artifactSummary?: string,
 ): { system: string; user: string } {
     return {
         system: [
@@ -177,11 +179,15 @@ export function getAgentTaskGoalJudgeMessages(
             '  달성입니다 — 답변이 짧은 완료 보고여도 도구 결과 자체가 수행 증거입니다.',
             '- 계획 완료 단계 수가 낮거나 없는 것은 상태 표시 누락일 수 있으니 그것만으로 미달성',
             '  판정하지 마세요.',
+            '- 산출물(ARTIFACTS)이 주어지면 그것이 에이전트가 제출한 결과물입니다. ANSWER 에는',
+            '  산출물 본문이 빠져 있고 그것을 가리키는 문장만 남아 있을 수 있으니, 산출물이',
+            '  목표에 부합하면 ANSWER 가 짧더라도 달성입니다.',
             '- 품질은 평가하지 마세요 — 내용이 부실하더라도 목표를 수행한 답변이면 달성(achieved=true)입니다.',
             '- 확신이 없으면 달성(true)으로 판정하세요.',
             '다른 설명 없이 JSON 한 줄만 출력: {"achieved": true|false, "reason": "한 문장 근거"}',
         ].join('\n'),
         user: `## GOAL\n${goal}\n\n## ANSWER\n${answer}`
+            + (artifactSummary ? `\n\n## ARTIFACTS\n${artifactSummary}` : '')
             + (executionContext ? `\n\n## EXECUTION\n${executionContext}` : '')
             + '\n\n판정 JSON 을 출력하세요.',
     };

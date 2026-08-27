@@ -6,7 +6,7 @@
  * 종료는 호출자(AgentTaskService)가 담당하며 agent-task-input-files.test.ts 가 통합 커버한다.
  * 여기서는 judge 가 false 를 돌려주는 경로(계약의 goal-judge 쪽 절반)와 fail-open 을 고정한다.
  */
-import { judgeGoalAchieved, buildJudgeExecutionContext, buildJudgeToolEvidence,  judgeGoal } from '../goal-judge';
+import { judgeGoalAchieved, buildJudgeExecutionContext, buildJudgeToolEvidence,  judgeGoal, buildJudgeArtifactSummary } from '../goal-judge';
 import { AGENT_TASK_LIMITS } from '../../../config/runtime-limits';
 import type { LLMClient } from '../../../llm';
 
@@ -210,5 +210,39 @@ describe('buildJudgeToolEvidence — terminate/plan 결과는 증거 창에서 �
         expect(ev).toContain('data.json report.html');
         expect(ev).not.toContain('계획 (1/7');
         expect(ev).not.toContain('__TASK_TERMINATE__');
+    });
+});
+
+describe('buildJudgeArtifactSummary — ANSWER 에서 떨어져 나간 산출물을 되돌려준다', () => {
+    const art = (over = {}) => ({ kind: 'code', title: '변환 함수', lang: 'python', content: 'def f():\n    return 1', ...over });
+
+    it('종류·제목·본문 앞부분을 싣는다', () => {
+        const out = buildJudgeArtifactSummary([art()]);
+        expect(out).toContain('[code/python]');
+        expect(out).toContain('변환 함수');
+        expect(out).toContain('def f()');
+    });
+
+    it('lang 이 없으면 kind 만 표기하고, 제목이 비면 표식으로 대체', () => {
+        const out = buildJudgeArtifactSummary([art({ kind: 'markdown', lang: null, title: '' })]);
+        expect(out).toContain('[markdown]');
+        expect(out).toContain('(제목 없음)');
+    });
+
+    it('본문은 항목당 캡으로 자른다', () => {
+        const out = buildJudgeArtifactSummary([art({ content: 'x'.repeat(5000) })]);
+        expect(out.length).toBeLessThan(AGENT_TASK_LIMITS.GOAL_JUDGE_ARTIFACT_ITEM_CHARS + 200);
+    });
+
+    it('개수 상한을 넘는 산출물은 앞에서부터만 싣는다', () => {
+        const many = Array.from({ length: AGENT_TASK_LIMITS.GOAL_JUDGE_ARTIFACT_MAX_ITEMS + 3 },
+            (_, i) => art({ title: `t${i}` }));
+        const out = buildJudgeArtifactSummary(many);
+        expect(out).toContain('t0');
+        expect(out).not.toContain(`t${AGENT_TASK_LIMITS.GOAL_JUDGE_ARTIFACT_MAX_ITEMS}`);
+    });
+
+    it('산출물이 없으면 빈 문자열 (프롬프트에 ARTIFACTS 섹션이 붙지 않는다)', () => {
+        expect(buildJudgeArtifactSummary([])).toBe('');
     });
 });
