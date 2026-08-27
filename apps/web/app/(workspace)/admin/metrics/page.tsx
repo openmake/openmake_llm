@@ -105,6 +105,29 @@ interface ToolHealthData {
   }[];
 }
 
+/* ── 서킷 상태 타입 ────────────────────────────────────────
+ * 인메모리라 프로세스 재시작 시 비는 것이 정상이다(재시작 리셋이 "고쳤는데 여전히 차단"보다 안전). */
+interface CircuitData {
+  config: {
+    enabled: boolean;
+    scope: string;
+    failureThreshold: number;
+    windowMs: number;
+    minCalls: number;
+    openMs: number;
+    excludedCategories: string[];
+  };
+  circuits: {
+    tool: string;
+    state: "closed" | "open" | "half_open";
+    failuresInWindow: number;
+    callsInWindow: number;
+    openMs: number;
+    opensInMs: number | null;
+    lastCategory?: string;
+  }[];
+}
+
 /* ── 작업 워크플로우 관측 타입 ─────────────────────────────── */
 interface WorkflowData {
   days: number;
@@ -185,6 +208,7 @@ export default function AdminMetricsPage() {
   const [agentMetrics, setAgentMetrics] = useState<AgentMetric[] | null>(null);
   const [toolErrors, setToolErrors] = useState<ToolErrorData | null>(null);
   const [toolHealth, setToolHealth] = useState<ToolHealthData | null>(null);
+  const [circuit, setCircuit] = useState<CircuitData | null>(null);
   const [workflow, setWorkflow] = useState<WorkflowData | null>(null);
   const [routingGates, setRoutingGates] = useState<RoutingGatesData | null>(null);
 
@@ -275,6 +299,13 @@ export default function AdminMetricsPage() {
       if (toolHealthRes?.data) {
         setToolHealth(toolHealthRes.data);
       }
+      // 서킷 상태 (게이트 OFF 면 circuits 는 빈 배열)
+      const circuitRes = await ApiClient.get<{ data: CircuitData }>(
+        "/api/metrics/tools/circuit",
+      ).catch(() => null);
+      if (circuitRes?.data) {
+        setCircuit(circuitRes.data);
+      }
       // 작업 워크플로우 관측 로드 (기본 30일)
       const workflowRes = await ApiClient.get<{ data: WorkflowData }>(
         "/api/metrics/agent-tasks/workflow",
@@ -302,6 +333,15 @@ export default function AdminMetricsPage() {
     setUpdated(new Date().toLocaleTimeString(locale));
     void load();
   };
+
+  // 서킷 수동 해제 — 오탐 차단을 즉시 되돌리는 수단. 해제 후 목록을 다시 읽는다.
+  const onResetCircuit = async (tool: string) => {
+    await ApiClient.post("/api/metrics/tools/circuit/reset", { tool }).catch(() => null);
+    void load();
+  };
+
+  // 도구 → 서킷 상태. 게이트 OFF 거나 추적 항목이 없으면 빈 Map.
+  const circuitByTool = new Map((circuit?.circuits ?? []).map((c) => [c.tool, c]));
 
   return (
     <>
@@ -700,11 +740,18 @@ export default function AdminMetricsPage() {
         {toolHealth && (
           <Card className="mt-6">
             <CardHeader>
-              <CardTitle>
+              <CardTitle className="flex flex-wrap items-center gap-2">
                 {t("toolHealth.title", {
                   days: toolHealth.days,
                   minCalls: toolHealth.minCalls,
                 })}
+                {circuit && (
+                  <Badge tone={circuit.config.enabled ? "success" : "neutral"}>
+                    {circuit.config.enabled
+                      ? t("toolHealth.circuit.enabled", { n: circuit.config.failureThreshold })
+                      : t("toolHealth.circuit.disabled")}
+                  </Badge>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -738,6 +785,7 @@ export default function AdminMetricsPage() {
                         <Th className="whitespace-nowrap text-right">{t("toolHealth.th.errorRate")}</Th>
                         <Th className="whitespace-nowrap">{t("toolHealth.th.causes")}</Th>
                         <Th className="whitespace-nowrap">{t("toolHealth.th.lastError")}</Th>
+                        <Th className="whitespace-nowrap">{t("toolHealth.th.circuit")}</Th>
                       </tr>
                     </thead>
                     <tbody>
@@ -784,6 +832,26 @@ export default function AdminMetricsPage() {
                               {row.lastErrorAt
                                 ? new Date(row.lastErrorAt).toLocaleDateString(locale)
                                 : "—"}
+                            </Td>
+                            <Td className="whitespace-nowrap">
+                              {(() => {
+                                const c = circuitByTool.get(row.tool);
+                                if (!c || c.state === "closed") return <span className="text-xs text-fg-3">—</span>;
+                                return (
+                                  <span className="flex items-center gap-2">
+                                    <Badge tone={c.state === "open" ? "danger" : "warn"}>
+                                      {t(`toolHealth.circuit.${c.state}`)}
+                                    </Badge>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => void onResetCircuit(row.tool)}
+                                    >
+                                      {t("toolHealth.circuit.reset")}
+                                    </Button>
+                                  </span>
+                                );
+                              })()}
                             </Td>
                           </tr>
                         );

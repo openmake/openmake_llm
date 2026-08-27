@@ -28,10 +28,19 @@ jest.mock('../../data/repositories/tool-health-repository', () => ({
 }));
 jest.mock('../../data/models/unified-database', () => ({ getPool: () => ({}) }));
 
+const logAudit = jest.fn().mockResolvedValue(undefined);
+jest.mock('../../services/AuditService', () => ({ getAuditService: () => ({ logAudit }) }));
+
 import { toolHealthRouter } from '../../routes/tool-health.routes';
+import { TOOL_CIRCUIT } from '../../config/tool-health';
+import { recordToolResult, __resetCircuitsForTest } from '../../mcp/tool-health';
+
+const mutableCircuit = TOOL_CIRCUIT as unknown as Record<string, unknown>;
+const originalCircuit = { ...TOOL_CIRCUIT };
 
 function makeApp() {
     const app = express();
+    app.use(express.json());
     app.use('/api/metrics/tools', toolHealthRouter);
     return app;
 }
@@ -92,5 +101,49 @@ describe('GET /api/metrics/tools/health', () => {
     it('호출 0 이어도 errorRate 는 NaN 이 아닌 0', async () => {
         const res = await request(makeApp()).get('/api/metrics/tools/health').expect(200);
         expect(res.body.data.summary.errorRate).toBe(0);
+    });
+});
+
+describe('서킷 조회·해제', () => {
+    beforeEach(() => {
+        currentRole = 'admin';
+        logAudit.mockClear();
+        __resetCircuitsForTest();
+        Object.assign(mutableCircuit, originalCircuit, { ENABLED: true, FAILURE_THRESHOLD: 2, MIN_CALLS: 2 });
+    });
+    afterEach(() => Object.assign(mutableCircuit, originalCircuit));
+
+    it('GET /circuit: 설정과 현재 상태를 함께 준다', async () => {
+        recordToolResult('srv::x', false, 'provider');
+        recordToolResult('srv::x', false, 'provider');
+
+        const res = await request(makeApp()).get('/api/metrics/tools/circuit').expect(200);
+        expect(res.body.data.config.enabled).toBe(true);
+        expect(res.body.data.config.excludedCategories).toContain('invalid_args');
+        expect(res.body.data.circuits[0]).toMatchObject({ tool: 'srv::x', state: 'open' });
+        expect(res.body.data.circuits[0].opensInMs).toBeGreaterThan(0);
+    });
+
+    it('POST /circuit/reset: 해제 + 감사 기록', async () => {
+        recordToolResult('srv::x', false, 'provider');
+        recordToolResult('srv::x', false, 'provider');
+
+        await request(makeApp()).post('/api/metrics/tools/circuit/reset').send({ tool: 'srv::x' }).expect(200);
+        const after = await request(makeApp()).get('/api/metrics/tools/circuit').expect(200);
+        expect(after.body.data.circuits).toHaveLength(0);
+        expect(logAudit).toHaveBeenCalledTimes(1);
+        expect(logAudit.mock.calls[0][0].action).toBe('tool_circuit_reset');
+    });
+
+    it('POST /circuit/reset: tool 누락 400, 추적 없는 도구 404', async () => {
+        await request(makeApp()).post('/api/metrics/tools/circuit/reset').send({}).expect(400);
+        await request(makeApp()).post('/api/metrics/tools/circuit/reset').send({ tool: 'srv::none' }).expect(404);
+        expect(logAudit).not.toHaveBeenCalled();
+    });
+
+    it('비관리자는 서킷 조회·해제 모두 403', async () => {
+        currentRole = 'user';
+        await request(makeApp()).get('/api/metrics/tools/circuit').expect(403);
+        await request(makeApp()).post('/api/metrics/tools/circuit/reset').send({ tool: 'srv::x' }).expect(403);
     });
 });

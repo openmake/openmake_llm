@@ -1340,9 +1340,17 @@
         "errors": "실패",
         "errorRate": "실패율",
         "causes": "주요 원인",
-        "lastError": "마지막 실패"
+        "lastError": "마지막 실패",
+        "circuit": "차단"
       },
-      "empty": "표본이 충분한 도구가 없습니다."
+      "empty": "표본이 충분한 도구가 없습니다.",
+      "circuit": {
+        "open": "차단됨",
+        "half_open": "복구 시도",
+        "reset": "해제",
+        "enabled": "서킷 켜짐 (연속 실패 {n}회)",
+        "disabled": "서킷 꺼짐"
+      }
     },
     "workflow": {
       "title": "작업 워크플로우 (최근 {days}일)",

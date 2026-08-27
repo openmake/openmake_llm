@@ -1340,9 +1340,17 @@
         "errors": "失败",
         "errorRate": "失败率",
         "causes": "主要原因",
-        "lastError": "最后失败"
+        "lastError": "最后失败",
+        "circuit": "熔断"
       },
-      "empty": "暂无样本足够的工具。"
+      "empty": "暂无样本足够的工具。",
+      "circuit": {
+        "open": "已阻断",
+        "half_open": "试探恢复",
+        "reset": "解除",
+        "enabled": "熔断已开启 (连续失败 {n} 次)",
+        "disabled": "熔断已关闭"
+      }
     },
     "workflow": {
       "title": "任务工作流（最近 {days} 天）",

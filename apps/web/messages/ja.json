@@ -1340,9 +1340,17 @@
         "errors": "失敗",
         "errorRate": "失敗率",
         "causes": "主な原因",
-        "lastError": "最終失敗"
+        "lastError": "最終失敗",
+        "circuit": "遮断"
       },
-      "empty": "十分なサンプルのあるツールがありません。"
+      "empty": "十分なサンプルのあるツールがありません。",
+      "circuit": {
+        "open": "遮断中",
+        "half_open": "復旧試行",
+        "reset": "解除",
+        "enabled": "サーキット有効 (連続失敗 {n}回)",
+        "disabled": "サーキット無効"
+      }
     },
     "workflow": {
       "title": "タスクワークフロー (直近{days}日)",

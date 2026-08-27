@@ -2,8 +2,10 @@
  * 도구 헬스 관측 라우트 (admin 전용).
  *
  * 엔드포인트:
- *   GET /api/metrics/tools/health?days=N&minCalls=N&limit=N
+ *   GET  /api/metrics/tools/health?days=N&minCalls=N&limit=N
  *     — 도구별 호출·실패·**실패율**·주 실패 카테고리·p50 소요·마지막 실패 시각.
+ *   GET  /api/metrics/tools/circuit        — 서킷 현재 상태(인메모리 스냅샷) + 설정.
+ *   POST /api/metrics/tools/circuit/reset  — 서킷 수동 해제(오탐 즉시 되돌리기).
  *
  * 기존 `GET /api/metrics/agent-tasks/tool-errors` 와의 차이(둘 다 유지):
  *   ① 소스가 `audit_logs` 라 채팅·에이전트 작업 **양쪽** 경로를 덮는다(그쪽은 작업 스텝만).
@@ -21,7 +23,13 @@ import { asyncHandler } from '../utils/error-handler';
 import { success } from '../utils/api-response';
 import { getPool } from '../data/models/unified-database';
 import { ToolHealthRepository } from '../data/repositories/tool-health-repository';
-import { TOOL_HEALTH_QUERY } from '../config/tool-health';
+import { TOOL_HEALTH_QUERY, TOOL_CIRCUIT } from '../config/tool-health';
+import { getCircuitSnapshot, resetToolCircuit } from '../mcp/tool-health';
+import { getAuditService } from '../services/AuditService';
+import { badRequest, notFound } from '../utils/api-response';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('ToolHealthRoutes');
 
 export const toolHealthRouter = Router();
 toolHealthRouter.use(requireAuth, requireAdmin);
@@ -82,6 +90,54 @@ toolHealthRouter.get('/health', asyncHandler(async (req: Request, res: Response)
             };
         }),
     }));
+}));
+
+/**
+ * 서킷 현재 상태. 인메모리라 프로세스 재시작 시 비어 있는 것이 정상이다
+ * (재시작 리셋이 "서버를 고쳤는데 여전히 차단"보다 안전하다는 설계).
+ */
+toolHealthRouter.get('/circuit', asyncHandler(async (_req: Request, res: Response) => {
+    res.json(success({
+        config: {
+            enabled: TOOL_CIRCUIT.ENABLED,
+            scope: TOOL_CIRCUIT.SCOPE,
+            failureThreshold: TOOL_CIRCUIT.FAILURE_THRESHOLD,
+            windowMs: TOOL_CIRCUIT.WINDOW_MS,
+            minCalls: TOOL_CIRCUIT.MIN_CALLS,
+            openMs: TOOL_CIRCUIT.OPEN_MS,
+            excludedCategories: TOOL_CIRCUIT.EXCLUDED_CATEGORIES,
+        },
+        circuits: getCircuitSnapshot(),
+    }));
+}));
+
+/**
+ * 서킷 수동 해제. 오탐 차단을 즉시 되돌릴 수단 없이는 이 기능을 켤 수 없다.
+ * 도구 이름에 `::` 가 들어가므로 path param 대신 body 로 받는다.
+ */
+toolHealthRouter.post('/circuit/reset', asyncHandler(async (req: Request, res: Response) => {
+    const tool = typeof req.body?.tool === 'string' ? req.body.tool.trim() : '';
+    if (!tool) {
+        res.status(400).json(badRequest('tool 이 필요합니다.'));
+        return;
+    }
+    const cleared = resetToolCircuit(tool);
+    if (!cleared) {
+        res.status(404).json(notFound(`추적 중인 서킷(${tool})`));
+        return;
+    }
+    try {
+        await getAuditService().logAudit({
+            action: 'tool_circuit_reset',
+            userId: (req as Request & { user?: { id?: string } }).user?.id,
+            resourceType: 'tool_circuit',
+            resourceId: tool,
+        });
+    } catch (e) {
+        // 감사 실패가 해제를 되돌리진 않는다 — 애플리케이션 로그로 복원 가능하게 남긴다.
+        logger.warn(`서킷 해제 감사 기록 실패(무시): ${tool} — ${e instanceof Error ? e.message : e}`);
+    }
+    res.json(success({ tool, reset: true }));
 }));
 
 export default toolHealthRouter;

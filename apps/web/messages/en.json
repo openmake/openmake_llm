@@ -1340,9 +1340,17 @@
         "errors": "Failures",
         "errorRate": "Failure rate",
         "causes": "Top causes",
-        "lastError": "Last failure"
+        "lastError": "Last failure",
+        "circuit": "Circuit"
       },
-      "empty": "No tool has enough samples yet."
+      "empty": "No tool has enough samples yet.",
+      "circuit": {
+        "open": "Blocked",
+        "half_open": "Probing",
+        "reset": "Reset",
+        "enabled": "Circuit on ({n} failures)",
+        "disabled": "Circuit off"
+      }
     },
     "workflow": {
       "title": "Task Workflow (last {days} days)",
