@@ -15,7 +15,10 @@
  *   3. goal judge(LLM 1회) → 미달성 확정 시 failed(goal_incomplete), 판정 실패는 fail-open
  *   4. 아티팩트·코드 diff 영속 → completed
  *
- * judge 발동 조건(아티팩트 0)은 종전 그대로다 — 확대는 judge_verdict 전향 데이터를 본 뒤.
+ * judge **적용** 조건(아티팩트 0)은 종전 그대로다. 다만 아티팩트가 있는 완료도 2026-08-27 부터
+ * 셰도우로 판정만 돌려 기록한다(`judge_shadow` 스텝) — 확대 여부를 가를 오판율을 재려면
+ * 표본이 필요하고, 적용 조건으로는 completed 의 18% 만 판정을 거치기 때문이다. 적용 확대는
+ * 그 표본으로 오판율을 재측정한 뒤 결정한다.
  *
  * @module services/agent-task/finalize
  */
@@ -121,28 +124,42 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
         }
     }
 
-    // 3. goal judge — 아티팩트 없는 완료만 LLM 1회 검증(마커 미준수 보완). 결과는 관측 컬럼에 남긴다.
+    // 3. goal judge — 판정을 **적용**하는 대상은 종전 그대로 아티팩트 없는 완료뿐이다.
+    //    아티팩트가 있는 완료도 셰도우로 판정만 돌려 기록한다(완료 흐름 불변, fail-open):
+    //    발동 조건 확대의 게이트가 judge 오판율인데, 현행 조건으로는 completed 의 18% 만
+    //    판정을 거쳐 잴 표본이 쌓이지 않는다(2026-08-27 실측 30일: 120건 중 achieved 22 ·
+    //    skipped 43 · 미판정 55, 그중 34건이 아티팩트 보유로 우회).
     let verdict: JudgeVerdict = 'skipped';
-    if (artifacts.length === 0 && AGENT_TASK_LIMITS.GOAL_JUDGE_ENABLED) {
+    const judgeApplies = artifacts.length === 0;
+    if (AGENT_TASK_LIMITS.GOAL_JUDGE_ENABLED
+        && (judgeApplies || AGENT_TASK_LIMITS.GOAL_JUDGE_SHADOW_ENABLED)) {
         const execCtx = buildJudgeExecutionContext(usedTools, turn + 1, taskRuntime?.getPlanSnapshot() ?? [], toolEvidence);
         const outcome = await judgeGoal(
             await judgeClientFor(userId), goal, body ?? '', signal, execCtx);
         const achieved = outcome.achieved;
-        verdict = achieved === null ? 'unknown' : achieved ? 'achieved' : 'not_achieved';
+        const judged: JudgeVerdict = achieved === null ? 'unknown' : achieved ? 'achieved' : 'not_achieved';
         // 판정·사유·입력 요약을 스텝으로 남긴다 — 오판 사후 규명용(관측 전용, fail-open).
-        stepNumber = await persistJudgeStep(taskId, stepNumber, verdict, outcome.reason, outcome.raw, execCtx);
-        emitStep('judge', undefined, `판정: ${verdict}${outcome.reason ? ` — ${outcome.reason}` : ''}`);
-        if (achieved === false) {
-            await update({
-                status: 'failed',
-                error: 'goal_incomplete',
-                result: body,
-                checkpoint: null,
-                completionPath: path,
-                judgeVerdict: verdict,
-            });
-            logger.info(`[AgentTask] judge 목표 미달성 종료: ${taskId} (turn ${turn + 1}, ${path})`);
-            return { kind: 'goal_incomplete', stepNumber };
+        stepNumber = await persistJudgeStep(
+            taskId, stepNumber, judged, outcome.reason, outcome.raw, execCtx, { shadow: !judgeApplies });
+        emitStep(judgeApplies ? 'judge' : 'judge_shadow', undefined,
+            `${judgeApplies ? '' : '[셰도우] '}판정: ${judged}${outcome.reason ? ` — ${outcome.reason}` : ''}`);
+        // 셰도우는 여기까지. `judge_verdict` 컬럼은 'skipped' 로 둔다 — 적용된 판정만 담는
+        // 컬럼이라, 셰도우 값을 넣으면 not_achieved 인데 completed 인 행이 생겨 기존 집계가
+        // 깨진다(셰도우 표본은 step_type='judge_shadow' 로 읽는다).
+        if (judgeApplies) {
+            verdict = judged;
+            if (achieved === false) {
+                await update({
+                    status: 'failed',
+                    error: 'goal_incomplete',
+                    result: body,
+                    checkpoint: null,
+                    completionPath: path,
+                    judgeVerdict: verdict,
+                });
+                logger.info(`[AgentTask] judge 목표 미달성 종료: ${taskId} (turn ${turn + 1}, ${path})`);
+                return { kind: 'goal_incomplete', stepNumber };
+            }
         }
     }
 
