@@ -1327,6 +1327,23 @@
         "count": "건수"
       }
     },
+    "toolHealth": {
+      "title": "도구 헬스 — 실패율 (최근 {days}일 · 최소 {minCalls}회 호출)",
+      "errorRate": "전체 실패율",
+      "calls": "총 호출",
+      "errors": "총 실패",
+      "failingTools": "실패 있는 도구",
+      "th": {
+        "tool": "도구",
+        "server": "서버",
+        "calls": "호출",
+        "errors": "실패",
+        "errorRate": "실패율",
+        "causes": "주요 원인",
+        "lastError": "마지막 실패"
+      },
+      "empty": "표본이 충분한 도구가 없습니다."
+    },
     "workflow": {
       "title": "작업 워크플로우 (최근 {days}일)",
       "unjudgedRate": "완료 무판정 비율",

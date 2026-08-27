@@ -1327,6 +1327,23 @@
         "count": "Count"
       }
     },
+    "toolHealth": {
+      "title": "Tool health — failure rate (last {days}d · min {minCalls} calls)",
+      "errorRate": "Overall failure rate",
+      "calls": "Total calls",
+      "errors": "Total failures",
+      "failingTools": "Tools with failures",
+      "th": {
+        "tool": "Tool",
+        "server": "Server",
+        "calls": "Calls",
+        "errors": "Failures",
+        "errorRate": "Failure rate",
+        "causes": "Top causes",
+        "lastError": "Last failure"
+      },
+      "empty": "No tool has enough samples yet."
+    },
     "workflow": {
       "title": "Task Workflow (last {days} days)",
       "unjudgedRate": "Unjudged Completions",

@@ -42,6 +42,7 @@ import {
     mcpServerIngestRouter,
     mcpCatalogAdminRouter,
     mcpAdminMonitoringRouter,
+    toolHealthRouter,
     adminModelRolesRouter,
     adminSystemSettingsRouter,
     firstRunSetupRouter,
@@ -173,6 +174,8 @@ export function setupApiRoutes(
     setMetricsCluster(cluster);
 
     // 마운트 순서 중요: 구체적인 경로를 먼저, 파라미터 경로를 나중에
+    // 도구 헬스는 metricsRouter 보다 먼저 — 같은 /api/metrics 접두를 공유한다.
+    app.use('/api/metrics/tools', toolHealthRouter);
     app.use('/api/metrics', metricsRouter);
     // 🆕 스킬 라우트 — agentRouter(/:id catch-all) 보다 먼저 마운트 필수
     app.use('/api/agents/skills', skillsRouter);

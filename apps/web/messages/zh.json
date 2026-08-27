@@ -1327,6 +1327,23 @@
         "count": "次数"
       }
     },
+    "toolHealth": {
+      "title": "工具健康度 — 失败率 (最近 {days} 天 · 至少 {minCalls} 次调用)",
+      "errorRate": "总失败率",
+      "calls": "总调用",
+      "errors": "总失败",
+      "failingTools": "存在失败的工具",
+      "th": {
+        "tool": "工具",
+        "server": "服务器",
+        "calls": "调用",
+        "errors": "失败",
+        "errorRate": "失败率",
+        "causes": "主要原因",
+        "lastError": "最后失败"
+      },
+      "empty": "暂无样本足够的工具。"
+    },
     "workflow": {
       "title": "任务工作流（最近 {days} 天）",
       "unjudgedRate": "完成未判定比例",
