@@ -32,6 +32,29 @@ export function buildJudgeToolEvidence(
     return items.join('\n');
 }
 
+/**
+ * judge 에 실을 **제출 산출물** 렌더 — 종류·제목·본문 앞부분.
+ *
+ * `finalize` 가 judge 에 넘기는 ANSWER 는 `extractAndStripArtifacts` 를 거친 본문이라
+ * 아티팩트가 **떨어져 나가 있다**. 발동 조건이 아티팩트 0 이던 동안엔 실을 것이 없어 문제가
+ * 드러나지 않았지만, 셰도우 확대(2026-08-27) 첫 표본이 바로 이 갭에 걸렸다 — 코드 아티팩트를
+ * 정상 제출한 작업에 judge 가 "실제 코드가 제출되지 않고 아티팩트 참조만 있습니다"로
+ * 미달성 판정했다(본문은 artifact 스텝에 멀쩡히 있었다). 산출물을 못 보고 내리는 판정은
+ * 표본으로 쓸 수 없으므로 여기서 함께 싣는다.
+ */
+export function buildJudgeArtifactSummary(
+    artifacts: ReadonlyArray<{ kind: string; title: string; lang: string | null; content: string }>,
+): string {
+    return artifacts
+        .slice(0, AGENT_TASK_LIMITS.GOAL_JUDGE_ARTIFACT_MAX_ITEMS)
+        .map((a, i) => {
+            const head = a.content.trim().slice(0, AGENT_TASK_LIMITS.GOAL_JUDGE_ARTIFACT_ITEM_CHARS);
+            const type = a.lang ? `${a.kind}/${a.lang}` : a.kind;
+            return `${i + 1}. [${type}] ${a.title || '(제목 없음)'}\n${head}`;
+        })
+        .join('\n\n');
+}
+
 /** 5-3(b): judge 에 제공할 실행 컨텍스트(수행 흔적) 렌더 — 사용 도구·턴수·계획 상태·도구 결과. */
 export function buildJudgeExecutionContext(
     usedTools: ReadonlySet<string>,
@@ -72,12 +95,15 @@ export async function judgeGoal(
     answer: string,
     signal: AbortSignal,
     executionContext?: string,
+    /** 제출 산출물 렌더(buildJudgeArtifactSummary) — ANSWER 에서 떨어져 나간 아티팩트를 되돌려준다. */
+    artifactSummary?: string,
 ): Promise<JudgeOutcome> {
     try {
         const { system, user } = getAgentTaskGoalJudgeMessages(
             goal,
             answer.slice(0, AGENT_TASK_LIMITS.GOAL_JUDGE_MAX_ANSWER_CHARS),
             executionContext,
+            artifactSummary,
         );
         const r = await client.chat(
             [{ role: 'system', content: system }, { role: 'user', content: user }],

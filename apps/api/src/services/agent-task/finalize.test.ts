@@ -12,7 +12,10 @@ jest.mock('../../config/runtime-limits', () => {
         },
     };
 });
+// 산출물 렌더(buildJudgeArtifactSummary)는 실제 구현을 쓴다 — judge 에 실제로 무엇이
+// 도달하는지가 검증 대상이라 mock 으로 대체하면 의미가 없다.
 jest.mock('./goal-judge', () => ({
+    ...jest.requireActual('./goal-judge'),
     judgeGoal: jest.fn(),
     judgeGoalAchieved: jest.fn(),
     buildJudgeExecutionContext: jest.fn(() => 'ctx'),
@@ -140,6 +143,28 @@ describe('finalizeTask — 완료 관문 단일화(091)', () => {
         // 마지막 인자로 shadow:true 가 넘어가 step_type='judge_shadow' 로 갈린다.
         expect(judgeStepMock).toHaveBeenCalledWith(
             'task-1', expect.any(Number), 'achieved', '산출물 확인', '', 'ctx', { shadow: true });
+    });
+
+    it('셰도우 판정에는 산출물 본문을 함께 싣는다 (ANSWER 에서 떨어져 나가므로)', async () => {
+        judgeMock.mockResolvedValue({ achieved: true, reason: '산출물 확인', raw: '' });
+        const i = input({ rawContent: WITH_ARTIFACT });
+
+        await finalizeTask(i);
+
+        // 6번째 인자 = 산출물 렌더. 실제 코드 본문이 judge 에 도달해야 한다
+        // (2026-08-27 첫 셰도우 표본 오판: "코드가 제출되지 않고 아티팩트 참조만 있습니다").
+        const summary = judgeMock.mock.calls[0][5];
+        expect(summary).toContain('print(1)');
+        expect(summary).toContain('[code/python]');
+    });
+
+    it('적용 경로(아티팩트 0)는 산출물 인자가 없다', async () => {
+        judgeMock.mockResolvedValue({ achieved: true, reason: '수행 확인', raw: '' });
+        const i = input({ rawContent: '작업을 마쳤습니다.' });
+
+        await finalizeTask(i);
+
+        expect(judgeMock.mock.calls[0][5]).toBeUndefined();
     });
 
     it('셰도우 판정이 미달성이어도 완료를 뒤집지 않는다 (fail-open 계약)', async () => {
