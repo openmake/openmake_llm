@@ -222,7 +222,7 @@ export class AgentTaskService {
                             onPausedMs: (ms) => { pausedMs += ms; },
                         })
                         : undefined;
-                    taskRuntime = new TaskRuntime(taskId, userId, sandboxCfg, delegateFn, spawnFn, remoteExecutor);
+                    taskRuntime = new TaskRuntime(taskId, userId, sandboxCfg, delegateFn, spawnFn, remoteExecutor, goal);
                     await taskRuntime.create();
                     await db.updateAgentTask(taskId, {
                         sandboxContainerId: taskRuntime.containerName,

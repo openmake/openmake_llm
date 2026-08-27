@@ -36,6 +36,47 @@ export function currentPlanStepIndex(steps: PlanStep[]): number | undefined {
     return i < 0 ? undefined : i;
 }
 
+/**
+ * PURE: goal 본문의 번호 절차를 초기 계획 단계로 파싱.
+ *
+ * 왜 필요한가 — goal 에 `[절차] 1) … 7)` 처럼 번호가 적혀 있으면 모델은 **그 번호를 계획으로
+ * 인식**해 `plan_create` 없이 `plan_update(step:2)` 부터 부른다. TaskPlan 은 비어 있으므로
+ * "아직 계획이 없습니다"/"단계 N 이 범위를 벗어났습니다" 오류가 난다. 실측(2026-08-28):
+ * plan 프로토콜 오류 28건 중 20건이 이 형태였고, 실패 인자는 대부분 `{step, status}` 뿐이라
+ * **빈 계획을 만들어줘도 그 단계가 무엇인지 알 수 없다**. goal 의 번호를 그대로 계획으로
+ * 심어야 모델의 번호와 TaskPlan 의 번호가 일치한다.
+ *
+ * 결정적 파싱(LLM 없음) — 판단 경계 A형(앞단 LLM 판단) 도입이 아니다.
+ *
+ * 규칙: 줄 머리의 `N)` `N.` `N-` 만 인정(인라인 번호 제외), **1 부터 시작해 1 씩 증가하는
+ * 연속열**만 취한다(중간에 끊기면 거기까지). 하위 들여쓰기 줄은 앞 단계의 연속이므로 버린다.
+ * 항목이 `minItems` 미만이면 절차가 아니라고 보고 빈 배열(no-op).
+ */
+export function parseGoalPlanSteps(
+    goal: string,
+    opts: { minItems: number; maxItems: number; maxTextChars: number },
+): string[] {
+    if (!goal) return [];
+    const steps: string[] = [];
+    let expected = 1;
+    for (const rawLine of goal.split('\n')) {
+        // 들여쓰기된 줄은 앞 항목의 연속 — 번호처럼 보여도 새 단계로 세지 않는다.
+        if (/^\s/.test(rawLine)) continue;
+        const m = /^(\d{1,2})\s*[).\-]\s+(\S.*)$/.exec(rawLine.trim());
+        if (!m) continue;
+        if (Number(m[1]) !== expected) {
+            // 1 로 다시 시작하면 새 목록의 시작으로 본다(앞의 짧은 열은 버린다).
+            if (Number(m[1]) === 1) { steps.length = 0; expected = 2; steps.push(m[2].trim()); }
+            continue;
+        }
+        steps.push(m[2].trim());
+        expected++;
+        if (steps.length >= opts.maxItems) break;
+    }
+    if (steps.length < opts.minItems) return [];
+    return steps.map((t) => (t.length > opts.maxTextChars ? t.slice(0, opts.maxTextChars) + '…' : t));
+}
+
 /** task 실행 계획. 단계 목록 + 상태. 순수 로직(유닛테스트 대상). */
 export class TaskPlan {
     private steps: PlanStep[] = [];

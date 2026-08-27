@@ -18,7 +18,7 @@ import { recordBrowserMetric } from './browser-metrics';
 import { AGENT_TASK_LIMITS, ORCHESTRATION_DISPATCH, MAX_TOOL_RESULT_CHARS } from '../../config/runtime-limits';
 import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
 import { saveProceduralSkill, resolveProceduralSpec } from '../agent-task/procedural-skill';
-import { TaskPlan, type PlanStep } from './planning';
+import { TaskPlan, parseGoalPlanSteps, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval, type ApprovalRejectReason } from './approval-gate';
 import { createLogger } from '../../utils/logger';
 
@@ -70,11 +70,14 @@ export class TaskRuntime {
         spawn?: SpawnFn,
         /** 실행 백엔드 주입(D1 원격 실행기용). 미지정 시 현행 Docker 샌드박스. */
         executor?: TaskExecutor,
+        /** 작업 목표 — 번호 절차가 있으면 초기 계획으로 심는다(아래 seedPlanFromGoal). */
+        goal?: string,
     ) {
         this.taskId = taskId;
         this.userId = userId;
         this.cfg = cfg;
         this.executor = executor ?? new TaskSandbox(taskId, cfg);
+        this.seedPlanFromGoal(goal);
         // #1 절차 스킬: 저장/조회 훅을 userId 로 바인딩(재생 실행은 tools.ts 가 sandbox 로 수행). 플래그 OFF 면 미노출.
         const procedural: ProceduralHooks | undefined = AGENT_TASK_LIMITS.PROCEDURAL_SKILLS_ENABLED
             ? {
@@ -147,6 +150,26 @@ export class TaskRuntime {
     /** 내부 검증용 원시 exec — 승인 게이트 우회(에이전트 도구 호출이 아닌 시스템 산출물 검증).
      *  컨테이너는 격리(network none·자원 캡)이고 문법/컴파일 검사는 코드를 실행하지 않아 안전. */
     async execRaw(command: string): Promise<ExecResult> { return this.executor.exec(command); }
+
+    /**
+     * goal 의 번호 절차를 초기 계획으로 심는다.
+     *
+     * 모델은 goal 에 적힌 `1) … 7)` 을 계획으로 인식해 plan_create 없이 plan_update(step:N)
+     * 부터 부른다 — 그때 TaskPlan 이 비어 있으면 "계획이 없습니다"/"범위를 벗어났습니다" 로
+     * 턴을 버린다(실측 28건 중 20건). 번호를 미리 심어 두 번호 체계를 일치시킨다.
+     * 절차가 없는 goal 엔 no-op 이고, 모델이 plan_create 를 부르면 기존 상태 보존 병합이 받는다.
+     */
+    private seedPlanFromGoal(goal?: string): void {
+        if (!AGENT_TASK_LIMITS.PLAN_FROM_GOAL || !goal) return;
+        const steps = parseGoalPlanSteps(goal, {
+            minItems: AGENT_TASK_LIMITS.PLAN_FROM_GOAL_MIN_ITEMS,
+            maxItems: AGENT_TASK_LIMITS.PLAN_FROM_GOAL_MAX_ITEMS,
+            maxTextChars: AGENT_TASK_LIMITS.PLAN_FROM_GOAL_MAX_TEXT_CHARS,
+        });
+        if (steps.length === 0) return;
+        this.plan.create(steps);
+        logger.info(`[${this.taskId}] goal 절차 ${steps.length}단계를 초기 계획으로 심음`);
+    }
 
     /** task-scoped 도구를 LLM 형식으로. AgentTaskService 가 effectiveTools 에 합류. */
     getLLMTools(): ToolDefinition[] { return this.defs.map(toLLMTool); }
