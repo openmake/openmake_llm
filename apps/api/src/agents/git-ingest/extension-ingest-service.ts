@@ -27,12 +27,19 @@ import { parseGitUrl } from '../../schemas/git-ingest.schema';
 import { GitFetcher } from './git-fetcher';
 import { ArchiveFetcher } from './archive-fetcher';
 import { InternalBundleFetcher, isInternalBundleUrl, isNonGitSourceUrl, nonGitPseudoRepo, type LoadedBundle } from './internal-bundle-fetcher';
-import { fetchCatalogSnapshot as fetchCatalogSnapshotImpl, buildSkillDiscoveryPattern, type CatalogSnapshot } from './catalog-snapshot';
+import { fetchCatalogSnapshot as fetchCatalogSnapshotImpl, type CatalogSnapshot } from './catalog-snapshot';
 import { translateCatalogDescriptions } from './catalog-translator';
 // 기존 import 경로 호환 재노출 (테스트 등이 이 모듈에서 import)
 export { buildSkillDiscoveryPattern } from './catalog-snapshot';
 import { scanForExtensionManifests, scanForMarketplaceManifests, resolveExtensionRoot, detectUnsupportedComponents, type ManifestCandidate } from './repo-scanner';
 import { validateExtensionManifest, parseMarketplaceFile } from './extension-manifest-validator';
+import {
+    findExtensionManifestPath,
+    discoverSkillPaths,
+    synthesizedManifestPath,
+    isSynthesizedManifestPath,
+    rootOfSynthesizedPath,
+} from './extension-discovery';
 import {
     collectCommandSkills,
     collectPluginAgents,
@@ -118,6 +125,9 @@ export class ExtensionIngestService {
         // (3) tree
         let tree = await fetcher.listTree(owner, repo, sha, EXTENSION_INGEST.maxTreeEntries);
         let candidate: ManifestCandidate | undefined;
+        // plugin.json 이 없는 마켓 엔트리 — 엔트리 메타로 매니페스트를 합성한다 (상류 규격상 plugin.json 은 선택.
+        // 공식 마켓 receipts·session-report·anthropics/skills 실사례). candidate.path 는 가상 경로.
+        let synthesized: { name: string; description?: string } | undefined;
 
         // (3-a) marketplace.json 인덱스 (gitPath 미지정 시) — Claude Code 마켓플레이스 저장소
         if (!input.gitPath) {
@@ -160,16 +170,27 @@ export class ExtensionIngestService {
                     }
                     if (entry.ref) effectiveTrackingRef = entry.ref;
                     const prefix = entry.path ? `${entry.path}/` : '';
-                    const pj = tree.entries.find(e => e.path === `${prefix}.claude-plugin/plugin.json`)
-                        ?? tree.entries.find(e => e.path === `${prefix}plugin.json`);
-                    if (!pj) {
-                        throw new Error(`MARKETPLACE_PLUGIN_MANIFEST_NOT_FOUND: "${input.plugin}" (path=${entry.path || '.'}, ref=${sha.slice(0, 7)})`);
+                    // plugin.json > gemini-extension.json (단일 소스 경로·카탈로그 판정과 같은 우선순위)
+                    const manifestPath = findExtensionManifestPath(tree.entries, prefix);
+                    const pj = manifestPath ? tree.entries.find(e => e.path === manifestPath) : undefined;
+                    if (pj) {
+                        candidate = { path: pj.path, sha: pj.sha, size: pj.size };
+                    } else {
+                        synthesized = { name: entry.name, description: entry.description };
+                        candidate = { path: synthesizedManifestPath(prefix), sha: '', size: 0 };
                     }
-                    candidate = { path: pj.path, sha: pj.sha, size: pj.size };
-                    logger.info(`marketplace plugin resolved: ${input.plugin} → ${owner}/${repo}@${sha.slice(0, 7)}:${pj.path}`);
+                    logger.info(`marketplace plugin resolved: ${input.plugin} → ${owner}/${repo}@${sha.slice(0, 7)}:${candidate.path}${synthesized ? ' (합성)' : ''}`);
                 }
                 // mk 파싱 실패 → 일반 plugin.json 스캔으로 폴백
             }
+        }
+
+        // (3-a2) 합성 설치본의 재설치 (갤러리 — source_path 가 가상 경로): 이름은 호출측 plugin > 루트 디렉토리명 > repo
+        if (!candidate && input.gitPath && isSynthesizedManifestPath(input.gitPath)) {
+            const root = rootOfSynthesizedPath(input.gitPath);
+            const dirName = root.replace(/\/$/, '').split('/').pop();
+            synthesized = { name: input.plugin ?? (dirName || repo) };   // 루트('') 설치본은 repo 이름
+            candidate = { path: input.gitPath, sha: '', size: 0 };
         }
 
         // (3-b) 일반 plugin.json 스캔 (marketplace 미해당)
@@ -196,14 +217,19 @@ export class ExtensionIngestService {
             candidate = candidates[0];
         }
 
-        // (4) plugin.json fetch + validate
-        const manifestRaw = await fetcher.fetchFile(owner, repo, sha, candidate.path, EXTENSION_INGEST.manifestMaxBytes);
+        const warnings: string[] = [];
+
+        // (4) plugin.json fetch + validate (합성이면 같은 스키마로 엔트리 메타를 검증 — name 정규화 포함)
+        const manifestRaw = synthesized
+            ? JSON.stringify({ name: synthesized.name, version: '0.0.0', description: synthesized.description })
+            : await fetcher.fetchFile(owner, repo, sha, candidate.path, EXTENSION_INGEST.manifestMaxBytes);
         const validation = validateExtensionManifest(manifestRaw);
         if (!validation.ok) {
             throw new Error(`INVALID_EXTENSION_MANIFEST: ${validation.errors.join('; ')}`);
         }
         const manifest = validation.manifest;
-        const root = resolveExtensionRoot(candidate.path);
+        const root = synthesized ? rootOfSynthesizedPath(candidate.path) : resolveExtensionRoot(candidate.path);
+        if (synthesized) warnings.push('MANIFEST_SYNTHESIZED: plugin.json 이 없어 마켓플레이스 엔트리 메타로 설치');
 
         // (5) dedupe + 상한 + 동명 충돌
         const sourceHash = 'sha256:' + crypto.createHash('sha256')
@@ -247,8 +273,6 @@ export class ExtensionIngestService {
             }
         }
 
-        const warnings: string[] = [];
-
         // (5-c) 이 환경이 설치하지 않는 구성요소 — 조용히 무시하지 않고 리포트한다
         const unsupported = detectUnsupportedComponents(tree.entries, root, manifest.raw);
         if (unsupported.length > 0) {
@@ -259,9 +283,8 @@ export class ExtensionIngestService {
             warnings.push(`MCP_ENTRIES_SKIPPED: ${manifest.mcpWarnings.join('; ')}`);
         }
 
-        // (6-a) skills — <root>skills/<dir>/SKILL.md (Agent Plugins v1: 직계 하위만)
-        const skillPattern = buildSkillDiscoveryPattern(root);
-        let skillPaths = tree.entries.filter(e => skillPattern.test(e.path)).map(e => e.path);
+        // (6-a) skills — 기본 레이아웃 + plugin.json `skills` 경로 필드 + 루트 컨테이너 폴백 (extension-discovery)
+        let skillPaths = discoverSkillPaths(tree.entries, root, manifest.skillPaths);
         if (skillPaths.length > EXTENSION_INGEST.maxSkillsPerExtension) {
             warnings.push(`SKILLS_TRUNCATED: ${skillPaths.length}개 중 ${EXTENSION_INGEST.maxSkillsPerExtension}개만 설치`);
             skillPaths = skillPaths.slice(0, EXTENSION_INGEST.maxSkillsPerExtension);
@@ -311,6 +334,8 @@ export class ExtensionIngestService {
             manifestPath: candidate.path,
             extensionName: manifest.name,
             warnings,
+            commandPaths: manifest.commandPaths,
+            mcpServersPath: manifest.mcpServersPath,
         };
         await collectCommandSkills(componentCtx, skillService, skillResults);
         await collectSkillAssets(componentCtx, skillResults);

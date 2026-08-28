@@ -17,6 +17,7 @@
  */
 import { z } from 'zod';
 import { UNSUPPORTED_MCP_FIELDS } from '../../config/skill-compat';
+import { EXTENSION_INGEST } from '../../config/constants';
 import type { UserConfigEntry } from '../../mcp/env-placeholder';
 
 const NAME_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
@@ -29,16 +30,25 @@ const mcpServerEntrySchema = z.object({
     type: z.string().max(50).optional(),
 });
 
+/** 경로 필드 — 문자열 1개 또는 배열 (Claude Code plugin.json `skills`/`commands` 규격). */
+const pathListSchema = z.union([z.string().min(1).max(500), z.array(z.string().min(1).max(500)).max(200)]);
+
 const pluginManifestSchema = z.object({
-    name: z.string().min(1).max(80).regex(NAME_PATTERN, 'name 은 소문자/숫자/대시 (kebab-case)'),
+    // 대소문자·공백은 정규화해 받는다 (`"Notion"` 실사례, 2026-08-29) — 정규화 후에도 비면 거절
+    name: z.string().min(1).max(80).transform(normalizePluginName)
+        .refine(n => NAME_PATTERN.test(n), 'name 은 소문자/숫자/대시 (kebab-case) 로 정규화할 수 없음'),
     // upstream 다수가 version 을 생략한다 (Anthropic 공식 25개 중 16개 — 2026-08-24 실측).
     // 필수로 강제하면 그 플러그인들은 설치 자체가 불가하므로 기본값으로 관용 처리한다.
     // 업데이트 판정 기준은 version 이 아니라 source_ref(commit sha) 라 부작용이 없다.
     version: z.string().min(1).max(40).default('0.0.0'),
-    description: z.string().max(500).optional(),
+    description: z.string().max(EXTENSION_INGEST.manifestDescriptionMaxChars).optional(),
+    // 객체(인라인 서버 목록) 또는 설정 파일 경로 문자열 (`"./.mcp.json"` — 공식 마켓 35건 실사례)
+    // 경로 해석은 extension-discovery.findMcpConfigPath (tree 가 있어야 해서 여기선 보존만)
+    skills: pathListSchema.optional(),
+    commands: pathListSchema.optional(),
     // ⚠️ 항목 검증은 normalizeMcpServers 가 담당 — 여기서 엄격히 보면 무효 항목 하나가
     // 매니페스트 전체를 거절해 유효한 서버까지 버려진다 (항목 단위 관용 파싱).
-    mcpServers: z.record(z.string().min(1).max(80), z.unknown()).optional(),
+    mcpServers: z.union([z.record(z.string().min(1).max(80), z.unknown()), z.string().min(1).max(500)]).optional(),
     // Claude Code 의 사용자 입력 스키마. env 의 `${user_config.X}` 자리표시자가 이 항목을
     // 가리키며, 승인 화면이 title/description 을 입력 라벨·발급 안내로 쓴다.
     // 관용 파싱 — 형태가 어긋난 항목은 힌트만 잃고 설치는 계속된다.
@@ -66,6 +76,12 @@ export interface ExtensionManifest {
     version: string;
     description?: string;
     mcpServers: NormalizedMcpServer[];
+    /** `mcpServers` 가 파일 경로 문자열일 때 (루트 기준 상대 경로, 해석은 extension-discovery) */
+    mcpServersPath?: string;
+    /** plugin.json `skills` 경로 필드 (루트 기준 상대 경로 목록, 없으면 빈 배열) */
+    skillPaths: string[];
+    /** plugin.json `commands` 경로 필드 */
+    commandPaths: string[];
     /** 설치되지 않은 mcpServers 항목의 사유 + 무시된 필드 안내 (설치는 계속 진행) */
     mcpWarnings: string[];
     /** plugin.json `userConfig` — env 자리표시자의 입력 라벨·발급 안내 출처 */
@@ -86,6 +102,16 @@ export type ValidationResult =
  *   - errors   : 그 항목을 설치할 수 없는 사유 (다른 항목에는 영향 없음)
  *   - warnings : 설치는 하되 이 환경이 무시하는 필드 (headers/oauth/cwd 등)
  */
+/** plugin.json name 정규화 — 소문자화, 허용 밖 문자는 `-`, 연속·양끝 `-` 제거. */
+export function normalizePluginName(raw: string): string {
+    return raw.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function toPathList(v: string | string[] | undefined): string[] {
+    if (v === undefined) return [];
+    return typeof v === 'string' ? [v] : v;
+}
+
 export function normalizeMcpServers(
     record: Record<string, unknown>,
 ): { servers: NormalizedMcpServer[]; errors: string[]; warnings: string[] } {
@@ -150,7 +176,7 @@ export function validateExtensionManifest(jsonText: string): ValidationResult {
     }
     // mcpServers 는 항목 단위 — 일부가 무효여도 매니페스트 자체는 유효로 본다
     // (name/version 등 매니페스트 문법 오류만 실패). 사유는 mcpWarnings 로 전달.
-    const rawServers = (parsed as { mcpServers?: unknown }).mcpServers;
+    const rawServers = result.data.mcpServers;
     const norm = rawServers && typeof rawServers === 'object'
         ? normalizeMcpServers(rawServers as Record<string, unknown>)
         : { servers: [], errors: [], warnings: [] };
@@ -161,6 +187,9 @@ export function validateExtensionManifest(jsonText: string): ValidationResult {
             version: result.data.version,
             description: result.data.description,
             mcpServers: norm.servers,
+            mcpServersPath: typeof rawServers === 'string' ? rawServers : undefined,
+            skillPaths: toPathList(result.data.skills),
+            commandPaths: toPathList(result.data.commands),
             mcpWarnings: [...norm.errors, ...norm.warnings],
             userConfig: result.data.userConfig as Record<string, UserConfigEntry> | undefined,
             raw: parsed as Record<string, unknown>,

@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { Package, Trash2, Loader2, ChevronDown, ChevronLeft, ChevronRight, Puzzle, Server, RefreshCw, Share2, Download, Store, Plus, AlertTriangle, Bot } from "lucide-react";
 import { Button, Card, CardHeader, CardTitle, CardContent } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
-import { ApiClient } from "@/lib/api-client";
+import { ApiClient, ApiError } from "@/lib/api-client";
 import { MarketplacePublishSection } from "@/components/settings/marketplace-publish-section";
 import { useAppStore } from "@/lib/store";
 
@@ -29,7 +29,12 @@ interface GalleryExtension extends UserExtension {
 type GalleryInstallState =
   | { state: "installing" }
   | { state: "installed"; updated: boolean; upToDate: boolean }
-  | { state: "failed" };
+  | { state: "failed"; message?: string };
+
+/** 설치 실패 사유 — 서버 메시지(`카탈로그 설치 실패: CODE: …`)를 그대로 보여준다. 없으면 undefined. */
+function installFailureMessage(e: unknown): string | undefined {
+  return e instanceof ApiError && e.message ? e.message : undefined;
+}
 
 interface CatalogPlugin {
   name: string;
@@ -225,8 +230,8 @@ export function ExtensionsSection() {
         [id]: { state: "installed", updated: !!res?.data?.updated, upToDate: !!res?.data?.upToDate },
       }));
       void load();
-    } catch {
-      setGalleryInstalls((prev) => ({ ...prev, [id]: { state: "failed" } }));
+    } catch (e) {
+      setGalleryInstalls((prev) => ({ ...prev, [id]: { state: "failed", message: installFailureMessage(e) } }));
     }
   }
 
@@ -243,8 +248,8 @@ export function ExtensionsSection() {
         [key]: { state: "installed", updated: !!res?.data?.updated, upToDate: !!res?.data?.upToDate },
       }));
       void load();
-    } catch {
-      setCatalogInstalls((prev) => ({ ...prev, [key]: { state: "failed" } }));
+    } catch (e) {
+      setCatalogInstalls((prev) => ({ ...prev, [key]: { state: "failed", message: installFailureMessage(e) } }));
     }
   }
 
@@ -531,7 +536,10 @@ export function ExtensionsSection() {
                       </span>
                     )}
                     {install?.state === "failed" && (
-                      <span className="shrink-0 whitespace-nowrap text-xs text-muted">{t("gallery.failed")}</span>
+                      <span className="min-w-0 text-xs text-danger" title={install.message}>
+                        {t("gallery.failed")}
+                        {install.message ? `: ${install.message}` : ""}
+                      </span>
                     )}
                     <Button
                       variant="outline"
@@ -702,7 +710,10 @@ export function ExtensionsSection() {
                           </span>
                         )}
                         {st?.state === "failed" && (
-                          <span className="shrink-0 whitespace-nowrap text-xs text-muted">{t("gallery.failed")}</span>
+                          <span className="min-w-0 text-xs text-danger" title={st.message}>
+                            {t("gallery.failed")}
+                            {st.message ? `: ${st.message}` : ""}
+                          </span>
                         )}
                         <Button
                           variant="outline"

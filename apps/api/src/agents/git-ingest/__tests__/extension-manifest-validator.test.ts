@@ -54,9 +54,39 @@ describe('extension-manifest-validator', () => {
             expect(r.errors[0]).toContain('유효한 JSON');
         });
 
-        it('name kebab-case 위반 거부', () => {
+        // 2026-08-29: 대소문자·공백은 정규화해 받는다 (`"Notion"` 공식 마켓 실사례) — 정규화 후 비면 거절
+        it('name 은 kebab-case 로 정규화, 정규화 불가면 거부', () => {
             const r = validateExtensionManifest(JSON.stringify({ name: 'My Plugin', version: '1.0.0' }));
-            expect(r.ok).toBe(false);
+            expect(r.ok).toBe(true);
+            if (r.ok) expect(r.manifest.name).toBe('my-plugin');
+            expect(validateExtensionManifest(JSON.stringify({ name: 'Notion' })).ok && (validateExtensionManifest(JSON.stringify({ name: 'Notion' })) as { ok: true; manifest: { name: string } }).manifest.name).toBe('notion');
+            expect(validateExtensionManifest(JSON.stringify({ name: '___' })).ok).toBe(false);
+        });
+
+        it('mcpServers 가 파일 경로 문자열이면 mcpServersPath 로 보존 (인라인 서버 0개)', () => {
+            const r = validateExtensionManifest(JSON.stringify({ name: 'planetscale', mcpServers: './.mcp.json' }));
+            expect(r.ok).toBe(true);
+            if (!r.ok) return;
+            expect(r.manifest.mcpServersPath).toBe('./.mcp.json');
+            expect(r.manifest.mcpServers).toHaveLength(0);
+            expect(r.manifest.mcpWarnings).toHaveLength(0);
+        });
+
+        it('skills/commands 경로 필드 — 문자열 1개와 배열 모두 목록으로 정규화', () => {
+            const r = validateExtensionManifest(JSON.stringify({
+                name: 'x', skills: './carbone', commands: ['./claude/commands/a.md', './claude/commands/b.md'],
+            }));
+            expect(r.ok).toBe(true);
+            if (!r.ok) return;
+            expect(r.manifest.skillPaths).toEqual(['./carbone']);
+            expect(r.manifest.commandPaths).toHaveLength(2);
+            const none = validateExtensionManifest(JSON.stringify({ name: 'y' }));
+            if (none.ok) { expect(none.manifest.skillPaths).toEqual([]); expect(none.manifest.commandPaths).toEqual([]); }
+        });
+
+        it('description 은 구 500자 상한을 넘어도 수용 (공식 마켓 20건 실사례)', () => {
+            const r = validateExtensionManifest(JSON.stringify({ name: 'long', description: 'x'.repeat(1500) }));
+            expect(r.ok).toBe(true);
         });
 
         // upstream 다수가 version 을 생략한다 (공식 25개 중 16개) — 필수로 강제하면

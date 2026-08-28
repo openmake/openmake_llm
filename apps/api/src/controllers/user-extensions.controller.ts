@@ -154,6 +154,8 @@ export function createUserExtensionsController(): Router {
                 gitUrl: shared.source_url,
                 gitRef: shared.tracking_ref ?? undefined,
                 gitPath: shared.source_path,
+                // 합성 매니페스트 설치본(plugin.json 없는 마켓 엔트리)의 이름 — 가상 source_path 재설치 시 사용
+                plugin: shared.name,
                 accessToken: body.accessToken,
             });
             if ('selectionRequired' in result && result.selectionRequired) {

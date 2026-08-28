@@ -13,6 +13,7 @@
  *
  * @module agents/git-ingest/extension-components
  */
+import { discoverMarkdownComponents, findMcpConfigPath } from './extension-discovery';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import type { Pool } from 'pg';
@@ -93,6 +94,10 @@ export interface ComponentContext {
     extensionName: string;
     /** 설치 리포트 — 각 갈래가 사유를 push 한다 */
     warnings: string[];
+    /** plugin.json `commands` 경로 필드 (없으면 commands/ 디렉토리만) */
+    commandPaths?: string[];
+    /** plugin.json `mcpServers` 가 파일 경로 문자열일 때 */
+    mcpServersPath?: string;
 }
 
 /**
@@ -109,12 +114,6 @@ export function assetContentType(path: string): string {
 }
 
 /** `root` 하위 특정 디렉토리의 markdown 파일 경로 (1단계 중첩까지). */
-function markdownPathsUnder(tree: TreeLike, root: string, dirName: string): string[] {
-    const escaped = root.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`^${escaped}${dirName}/(?:[^/]+/)?[^/]+\\.md$`, 'i');
-    return tree.entries.filter(e => pattern.test(e.path)).map(e => e.path);
-}
-
 /**
  * `commands/<name>.md` → 스킬.
  *
@@ -127,7 +126,7 @@ export async function collectCommandSkills(
     skillService: GitIngestService,
     skillResults: SkillInstallResult[],
 ): Promise<void> {
-    let commandPaths = markdownPathsUnder(ctx.tree, ctx.root, 'commands');
+    let commandPaths = discoverMarkdownComponents(ctx.tree.entries, ctx.root, 'commands', ctx.commandPaths);
     if (commandPaths.length === 0) return;
     if (commandPaths.length > PLUGIN_COMPONENT_LIMITS.maxCommands) {
         ctx.warnings.push(`COMMANDS_TRUNCATED: ${commandPaths.length}개 중 ${PLUGIN_COMPONENT_LIMITS.maxCommands}개만 설치`);
@@ -170,7 +169,7 @@ export async function collectCommandSkills(
  * 선택할 때만 적용되는 페르소나라 승인 게이트 없이 즉시 활성으로 만든다.
  */
 export async function collectPluginAgents(ctx: ComponentContext): Promise<AgentInstallResult[]> {
-    let agentPaths = markdownPathsUnder(ctx.tree, ctx.root, 'agents');
+    let agentPaths = discoverMarkdownComponents(ctx.tree.entries, ctx.root, 'agents');
     if (agentPaths.length === 0) return [];
     if (agentPaths.length > PLUGIN_COMPONENT_LIMITS.maxAgents) {
         ctx.warnings.push(`AGENTS_TRUNCATED: ${agentPaths.length}개 중 ${PLUGIN_COMPONENT_LIMITS.maxAgents}개만 설치`);
@@ -314,11 +313,13 @@ export async function collectMcpDrafts(
 ): Promise<McpServerInstallResult[]> {
     let mcpEntries: NormalizedMcpServer[] = manifestServers;
     if (mcpEntries.length === 0) {
-        const mcpJsonEntry = ctx.tree.entries.find(
-            e => e.path === `${ctx.root}mcp.json` || e.path === `${ctx.root}.mcp.json`
-        );
-        if (mcpJsonEntry) {
-            const mcpRaw = await ctx.fetcher.fetchFile(ctx.owner, ctx.repo, ctx.sha, mcpJsonEntry.path, EXTENSION_INGEST.manifestMaxBytes);
+        // plugin.json `mcpServers` 문자열 경로 우선, 없으면 루트 mcp.json/.mcp.json
+        const mcpJsonPath = findMcpConfigPath(ctx.tree.entries, ctx.root, ctx.mcpServersPath);
+        if (ctx.mcpServersPath && !mcpJsonPath) {
+            ctx.warnings.push(`MCP_CONFIG_NOT_FOUND: plugin.json 이 가리키는 ${ctx.mcpServersPath} 이(가) 저장소에 없음`);
+        }
+        if (mcpJsonPath) {
+            const mcpRaw = await ctx.fetcher.fetchFile(ctx.owner, ctx.repo, ctx.sha, mcpJsonPath, EXTENSION_INGEST.manifestMaxBytes);
             const parsedMcp = parseMcpJsonFile(mcpRaw);
             // 항목 단위 — 일부 실패해도 나머지는 설치된다 (upstream 의 빈 url placeholder 등)
             if (parsedMcp.errors.length > 0) {

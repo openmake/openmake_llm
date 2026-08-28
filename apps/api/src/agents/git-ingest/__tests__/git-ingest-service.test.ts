@@ -1,4 +1,4 @@
-import { GitIngestService } from '../git-ingest-service';
+import { GitIngestService, deriveSkillNameFromPath } from '../git-ingest-service';
 import type { Pool } from 'pg';
 import type { LLMClient } from '../../../llm/client';
 import { GitFetcher } from '../git-fetcher';
@@ -64,6 +64,29 @@ This is a test skill body for unit testing.`;
         expect(r.source).toBe('git-url');
         expect(r.gitRef).toBe('abc123');
         expect(r.conventionFindings).toEqual([]);
+    });
+
+    // 2026-08-29: Claude Code 는 SKILL.md name 을 디렉토리에서 유도한다 (vanta·logrocket 실사례)
+    it('frontmatter name 누락 → 디렉토리명으로 유도 + SKILL_NAME_DERIVED 경고', async () => {
+        mockFetcher.resolveRef.mockResolvedValueOnce('abc123');
+        mockFetcher.listTree.mockResolvedValueOnce({
+            sha: 'abc123',
+            entries: [{ path: 'skills/fix-test/SKILL.md', sha: 'def456', size: 500, type: 'blob' }],
+            truncated: false,
+            rateLimitRemaining: 4999,
+        });
+        mockFetcher.fetchFile.mockResolvedValueOnce('---\ndescription: Fix a failing test\nargument-hint: test ID\n---\n\nFix the failing test specified in $ARGUMENTS.');
+        (mockLLM.chat as jest.Mock).mockResolvedValueOnce({ content: JSON.stringify({ findings: [] }), metrics: { completion_tokens: 1 } });
+        (mockPool.query as jest.Mock)
+            .mockResolvedValueOnce({ rows: [] })
+            .mockResolvedValueOnce({ rows: [{ count: '0' }] })
+            .mockResolvedValueOnce({ rows: [] });
+
+        const r = await makeService().import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar', gitPath: 'skills/fix-test/SKILL.md', target: 'user' });
+        if ('selectionRequired' in r && r.selectionRequired) throw new Error('expected single');
+        expect(r.name).toBe('fix-test');
+        expect(r.validationWarnings.some(w => w.startsWith("SKILL_NAME_DERIVED"))).toBe(true);
+        expect(deriveSkillNameFromPath('SKILL.md', 'My Repo')).toBe('my-repo');
     });
 
     it('multi-candidate mode: gitPath 미지정 + 여러 후보 → selectionRequired', async () => {
