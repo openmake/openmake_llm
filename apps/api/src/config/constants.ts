@@ -252,6 +252,8 @@ export const MCP_INGEST = {
  *   - EXTENSION_INGEST_MANIFEST_MAX_BYTES=65536 (기본 64KB — plugin.json/mcp.json 크기 상한)
  *   - EXTENSION_INGEST_MAX_TREE_ENTRIES=50000  (기본 50000 — 확장 ingest 경로 tree 상한)
  *   - EXTENSION_INGEST_TRANSLATE_BATCH_SIZE=10 (기본 10 — 카탈로그 설명 번역 LLM 배치 크기)
+ *   - EXTENSION_INGEST_DESCRIPTION_MAX_CHARS=4000 (기본 4000 — plugin.json description 상한.
+ *     구 500 은 공식 마켓 20건을 거절하던 임의값, 2026-08-29)
  */
 export const EXTENSION_INGEST = {
     enabled: process.env.EXTENSION_INGEST_ENABLED !== 'false',
@@ -264,6 +266,8 @@ export const EXTENSION_INGEST = {
     marketplaceMaxBytes: parseInt(process.env.EXTENSION_INGEST_MARKETPLACE_MAX_BYTES || String(1024 * 1024), 10),
     // 카탈로그 설명 한국어 번역 배치 크기 (동기화 후단 LLM 배치 — catalog-translator.ts)
     translateBatchSize: parseInt(process.env.EXTENSION_INGEST_TRANSLATE_BATCH_SIZE || '10', 10),
+    // plugin.json description 상한 — DB 는 TEXT 라 실질 상한 아님, 비정상 입력 방어용
+    manifestDescriptionMaxChars: parseInt(process.env.EXTENSION_INGEST_DESCRIPTION_MAX_CHARS || '4000', 10),
     // 확장 ingest 경로 전용 tree 상한 — 스킬 ingest(SKILL_CREATOR.gitMaxTreeEntries)보다 크게 잡아
     // 거대 마켓플레이스 repo 의 카탈로그 판정·설치 허용 (jeremylongshore 22,982 blobs 실측)
     maxTreeEntries: parseInt(process.env.EXTENSION_INGEST_MAX_TREE_ENTRIES || '50000', 10),
@@ -271,6 +275,15 @@ export const EXTENSION_INGEST = {
     archiveMaxBytes: parseInt(process.env.EXTENSION_INGEST_ARCHIVE_MAX_BYTES || String(10 * 1024 * 1024), 10),
     archiveMaxEntries: parseInt(process.env.EXTENSION_INGEST_ARCHIVE_MAX_ENTRIES || '2000', 10),
     archiveMaxTotalBytes: parseInt(process.env.EXTENSION_INGEST_ARCHIVE_MAX_TOTAL_BYTES || String(50 * 1024 * 1024), 10),
+} as const;
+
+/**
+ * SKILL_MANIFEST_LIMITS — SKILL.md frontmatter 검증 상한 (schemas/skill-manifest.schema.ts).
+ *   - SKILL_MANIFEST_DESCRIPTION_MAX_CHARS=4096 (기본 4096 — 구 1024 는 공개 스킬 십수 건을
+ *     거절하던 임의값, 2026-08-29. agent_skills.description 은 TEXT)
+ */
+export const SKILL_MANIFEST_LIMITS = {
+    descriptionMaxChars: parseInt(process.env.SKILL_MANIFEST_DESCRIPTION_MAX_CHARS || '4096', 10),
 } as const;
 
 // ============================================

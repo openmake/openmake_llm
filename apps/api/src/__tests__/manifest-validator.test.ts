@@ -39,6 +39,16 @@ describe('parseSkillFile', () => {
 });
 
 describe('validateManifest', () => {
+    // 2026-08-29: semver prerelease/build 허용 (`0.45.0-dev.0` sentry-cli 실사례), description 1024 초과 수용
+    it('version prerelease 와 긴 description 을 수용한다', async () => {
+        const md = VALID_SKILL.replace('version: 1.0.0', 'version: 0.45.0-dev.0').replace('description: 코드 리뷰 전문 skill', `description: ${'설'.repeat(1500)}`);
+        const r = await validateManifest(parseSkillFile(md), { availableToolNames: new Set(['web_search', 'fs_read_file']) });
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.manifest.version).toBe('0.45.0-dev.0');
+        const bad = await validateManifest(parseSkillFile(VALID_SKILL.replace('version: 1.0.0', 'version: 1.0')), { availableToolNames: new Set(['web_search', 'fs_read_file']) });
+        expect(bad.ok).toBe(false);
+    });
+
     test('valid manifest 통과', async () => {
         const parsed = parseSkillFile(VALID_SKILL);
         const result = await validateManifest(parsed, {

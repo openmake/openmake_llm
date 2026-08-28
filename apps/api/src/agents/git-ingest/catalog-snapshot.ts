@@ -6,10 +6,11 @@
  * 설치는 하지 않는다 (extension_catalog_sources.plugins 스냅샷용).
  *
  * installable 판정 (동기화 시점 사전 계산 — UI 는 설치 가능만 노출):
- *   ① 플러그인 경로에 skills(/skill)/SKILL.md 존재
- *   ② .mcp.json / mcp.json 존재
- *   ③ 매니페스트(plugin.json 등)에 mcpServers 선언
- *   커스텀 명령(commands/)만 있는 플러그인은 설치 구성요소가 없어 false.
+ *   설치 경로와 **같은 함수**(extension-discovery.hasInstallableComponents) 로 판정한다 —
+ *   매니페스트(plugin.json/gemini-extension.json, 없으면 마켓 엔트리 합성) 검증 통과 +
+ *   스킬(기본 레이아웃·`skills` 필드·루트 컨테이너)/commands/agents/MCP(인라인·경로·mcp.json)
+ *   중 하나라도 있으면 true. hooks/LSP 전용 플러그인은 설치 구성요소가 없어 false.
+ *   (2026-08-29 이전엔 skills 디렉토리 존재만 봐서 판정 true·설치 실패가 815건 중 34건이었다.)
  *   교차 저장소 엔트리는 accessToken 있을 때만 대상 repo 를 프로브한다
  *   (무인증 GitHub API 60/hr 실측 — 토큰 없으면 판정 미상 유지).
  *
@@ -19,8 +20,11 @@ import { parseGitUrl } from '../../schemas/git-ingest.schema';
 import type { GitFetcher, TreeEntry } from './git-fetcher';
 import { isNonGitSourceUrl, nonGitPseudoRepo } from './internal-bundle-fetcher';
 import { scanForExtensionManifests, scanForMarketplaceManifests, resolveExtensionRoot } from './repo-scanner';
-import { validateExtensionManifest, parseMarketplaceFile } from './extension-manifest-validator';
+import { validateExtensionManifest, parseMarketplaceFile, type ExtensionManifest } from './extension-manifest-validator';
 import { EXTENSION_INGEST } from '../../config/constants';
+import { findExtensionManifestPath, hasInstallableComponents } from './extension-discovery';
+// 기존 import 경로 호환 재노출 (extension-ingest-service 등이 이 모듈에서 import)
+export { buildSkillDiscoveryPattern } from './extension-discovery';
 
 export interface CatalogSnapshot {
     name: string;
@@ -125,9 +129,7 @@ export async function fetchCatalogSnapshot(
             const v = validateExtensionManifest(raw);
             if (v.ok) {
                 const root = resolveExtensionRoot(c.path);
-                const skillPat = buildSkillDiscoveryPattern(root);
-                const installable = v.manifest.mcpServers.length > 0
-                    || treeEntries.some(e => skillPat.test(e.path) || e.path === `${root}.mcp.json` || e.path === `${root}mcp.json`);
+                const installable = hasInstallableComponents(treeEntries, root, v.manifest);
                 plugins.push({ name: v.manifest.name, description: v.manifest.description, version: v.manifest.version, installable });
             }
         } catch {
@@ -154,19 +156,24 @@ async function probeInstallableAt(
     prefix: string,
     treeEntries: TreeEntry[] | null,
 ): Promise<boolean> {
+    // 설치 경로(extension-ingest-service)와 같은 함수로 판정한다 — 판정 true·설치 실패 불일치 차단.
     if (treeEntries) {
-        const skillPat = buildSkillDiscoveryPattern(prefix);
-        if (treeEntries.some(e =>
-            skillPat.test(e.path) || e.path === `${prefix}.mcp.json` || e.path === `${prefix}mcp.json`)) {
-            return true;
+        const manifestPath = findExtensionManifestPath(treeEntries, prefix);
+        let manifest: ExtensionManifest | null = null;   // null = plugin.json 없음 → 마켓 엔트리로 합성 설치
+        if (manifestPath) {
+            const raw = await fetcher.fetchFile(owner, repo, sha, manifestPath, EXTENSION_INGEST.manifestMaxBytes);
+            const v = validateExtensionManifest(raw);
+            if (!v.ok) return false;   // 설치도 INVALID_EXTENSION_MANIFEST 로 실패한다
+            manifest = v.manifest;
         }
+        return hasInstallableComponents(treeEntries, prefix, manifest);
     }
-    // 매니페스트의 mcpServers 선언 검사 (raw 직접 조회)
+    // 거대 repo (tree 없음) — 매니페스트만으로 판정: 인라인 mcpServers 또는 설정 파일 경로 선언
     for (const mp of [`${prefix}.claude-plugin/plugin.json`, `${prefix}plugin.json`, `${prefix}gemini-extension.json`]) {
         try {
             const raw = await fetcher.fetchFile(owner, repo, sha, mp, EXTENSION_INGEST.manifestMaxBytes);
             const v = validateExtensionManifest(raw);
-            return v.ok && v.manifest.mcpServers.length > 0;  // 매니페스트를 찾았으면 다음 경로 시도 불필요
+            return v.ok && (v.manifest.mcpServers.length > 0 || !!v.manifest.mcpServersPath);  // 매니페스트를 찾았으면 다음 경로 시도 불필요
         } catch {
             /* 해당 경로 없음 — 다음 후보 */
         }
@@ -212,17 +219,4 @@ async function probeExternalEntry(
     } catch {
         return undefined;
     }
-}
-
-function escapeRegExp(s: string): string {
-    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * 확장 루트 기준 SKILL.md 탐지 패턴 (순수 함수 — 테스트용 export).
- * 매칭: skills/<dir>/SKILL.md (Agent Plugins v1) · skill/SKILL.md (Qwen-MM-Plugins 등
- * 단수 레이아웃) · skills/SKILL.md. 하위 디렉토리 중첩은 1단계까지만.
- */
-export function buildSkillDiscoveryPattern(root: string): RegExp {
-    return new RegExp(`^${escapeRegExp(root)}skills?/(?:[^/]+/)?SKILL\\.md$`, 'i');
 }

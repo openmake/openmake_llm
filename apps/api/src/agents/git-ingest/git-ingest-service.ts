@@ -84,6 +84,14 @@ export interface GitIngestOptions {
     maxTreeEntries?: number;
 }
 
+/** `skills/<dir>/SKILL.md` → `<dir>`, 루트 `SKILL.md` → fallback (repo 이름). 유도 불가면 undefined. */
+export function deriveSkillNameFromPath(path: string, fallback: string): string | undefined {
+    const segments = path.split('/');
+    const dir = segments.length >= 2 ? segments[segments.length - 2] : fallback;
+    const normalized = dir.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+    return normalized || undefined;
+}
+
 export class GitIngestService {
     constructor(private opts: GitIngestOptions) {}
 
@@ -130,6 +138,15 @@ export class GitIngestService {
         const content = input.contentOverride
             ?? await fetcher.fetchFile(owner, repo, sha, candidate.path, maxFileSize);
         const parsedFile = parseSkillFile(content);
+        // name 누락 시 디렉토리명 폴백 — Claude Code 는 SKILL.md 의 name 을 디렉토리에서 유도한다
+        // (vanta·logrocket·windsor-ai 실사례, 2026-08-29). 루트 SKILL.md 는 repo 이름.
+        if (!parsedFile.frontmatter.name) {
+            const derived = deriveSkillNameFromPath(candidate.path, repo);
+            if (derived) {
+                parsedFile.frontmatter.name = derived;
+                warnings.push(`SKILL_NAME_DERIVED: frontmatter name 누락 → "${derived}" (경로에서 유도)`);
+            }
+        }
         const validation = await validateManifest(parsedFile, { availableToolNames: new Set() });
         if (!validation.ok) {
             throw new Error(`MANIFEST_INVALID: ${validation.errors.join('; ')}`);
