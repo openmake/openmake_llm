@@ -316,7 +316,7 @@ export class ExtensionIngestService {
         await collectSkillAssets(componentCtx, skillResults);
 
         // (6-b) MCP servers — plugin.json mcpServers 우선, 없으면 <root>mcp.json / <root>.mcp.json
-        const mcpResults = await collectMcpDrafts(componentCtx, manifest.mcpServers, this.opts.llmClientFactory);
+        const mcpResults = await collectMcpDrafts(componentCtx, manifest.mcpServers, this.opts.llmClientFactory, manifest.userConfig);
 
         // (6-c) agents/<name>.md → Custom Agent (Phase 2)
         const agentResults = await collectPluginAgents(componentCtx);

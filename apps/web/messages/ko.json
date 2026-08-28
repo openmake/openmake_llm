@@ -1892,7 +1892,10 @@
       "badge": "승인 대기",
       "risk": "위험 명령 감지 — 검토 후 승인",
       "empty": "승인 대기 중인 MCP 서버가 없습니다.",
-      "actionFailed": "처리 실패: {error}"
+      "actionFailed": "처리 실패: {error}",
+      "envRequired": "필수 환경변수 — 실제 값을 입력해야 승인됩니다",
+      "envPlaceholder": "값 입력",
+      "envMissing": "값이 필요합니다: {keys}"
     },
     "agents": {
       "title": "커스텀 에이전트",
