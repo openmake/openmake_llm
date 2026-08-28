@@ -20,7 +20,9 @@
 #   brew install caddy
 #   caddy run --config /Volumes/MAC_APP/openmake_llm/scripts/caddy/Caddyfile
 #   # 또는 백그라운드: brew services 로 등록하거나 `caddy start`
-#   (운영: /opt/homebrew/etc/Caddyfile 이 이 파일로의 심링크 — 이 파일이 SoT)
+#   (운영: /opt/homebrew/etc/Caddyfile 은 심링크가 아니라 실파일 — launchd 가 외장 볼륨을
+#    읽지 못해 교체함. 이 파일이 SoT 이며 `openmake_llm.sh deploy` 가 validate → 복사 → reload
+#    로 동기화한다. 운영 파일을 직접 고치면 다음 deploy 에 덮어써진다)
 #
 # 주의:
 #   - Caddy reverse_proxy 는 X-Forwarded-Host/Proto/For 를 자동 전달 →
