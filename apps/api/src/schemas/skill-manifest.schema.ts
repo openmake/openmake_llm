@@ -6,6 +6,7 @@
  *
  */
 import { z } from 'zod';
+import { SKILL_MANIFEST_LIMITS } from '../config/constants';
 
 const ToolBindingSchema = z.object({
     tool_name: z.string().min(1).max(128).regex(/^[a-z0-9_:-]+$/i, {
@@ -29,11 +30,12 @@ const McpBundleSchema = z.object({
 
 export const SkillManifestFrontmatterSchema = z.object({
     name: z.string().min(1).max(128),
-    description: z.string().min(1).max(1024),
+    description: z.string().min(1).max(SKILL_MANIFEST_LIMITS.descriptionMaxChars),
     // 누락 시 'general' — Anthropic/Claude Code 마켓플레이스 SKILL.md 는 category 가 없다
     // (하류 git-ingest 는 이미 `?? 'general'` 폴백 — 스키마만 엄격해 생태계 스킬이 거절되던 것 해소)
     category: z.string().min(1).max(64).default('general'),
-    version: z.string().regex(/^\d+\.\d+\.\d+$/, { message: 'semver (예: 1.0.0)' }).default('1.0.0'),
+    // prerelease/build 메타 허용 (`0.45.0-dev.0` — sentry-cli 실사례, 2026-08-29)
+    version: z.string().regex(/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/, { message: 'semver (예: 1.0.0)' }).default('1.0.0'),
     is_public: z.boolean().default(false),
     tool_bindings: z.array(ToolBindingSchema).max(64).default([]),
     mcp_bundles: z.array(McpBundleSchema).max(8).default([]),

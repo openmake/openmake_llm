@@ -193,10 +193,10 @@ describe('ExtensionIngestService', () => {
             .rejects.toThrow('NO_EXTENSION_FOUND');
     });
 
-    it('INVALID_EXTENSION_MANIFEST: name 이 kebab-case 가 아님 (version 누락은 이제 허용)', async () => {
+    it('INVALID_EXTENSION_MANIFEST: name 이 kebab-case 로 정규화 불가 (version 누락·대소문자는 허용)', async () => {
         mockFetcher.resolveRef.mockResolvedValueOnce('abc123');
         mockFetcher.listTree.mockResolvedValueOnce(treeOf('plugin.json'));
-        mockFetcher.fetchFile.mockResolvedValueOnce(JSON.stringify({ name: 'Bad Name' }));
+        mockFetcher.fetchFile.mockResolvedValueOnce(JSON.stringify({ name: '!!!' }));
 
         const svc = makeService();
         await expect(svc.import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar' }))
@@ -367,6 +367,54 @@ describe('ExtensionIngestService', () => {
             expect(insertCall![1]).toContain('core-v1');
         });
 
+        // 2026-08-29: 마켓 경로도 gemini-extension.json 을 인식한다 (openmake 마켓 code-review 실패 원인)
+        it('plugin.json 없이 gemini-extension.json 만 있는 엔트리 → 그 매니페스트로 설치', async () => {
+            const MK = JSON.stringify({ name: 'm', plugins: [{ name: 'code-review', source: { source: 'url', url: 'https://github.com/foo/bar.git' } }] });
+            mockFetcher.resolveRef.mockResolvedValueOnce('abc123');
+            mockFetcher.listTree.mockResolvedValueOnce(treeOf('.claude-plugin/marketplace.json', 'gemini-extension.json'));
+            mockFetcher.fetchFile.mockResolvedValueOnce(MK);
+            mockFetcher.fetchFile.mockResolvedValueOnce(JSON.stringify({ name: 'code-review', version: '0.1.0', mcpServers: { srv: { command: 'npx', args: ['x'] } } }));
+            const q = mockPool.query as jest.Mock;
+            q.mockResolvedValueOnce({ rows: [] }); q.mockResolvedValueOnce({ rows: [] }); q.mockResolvedValueOnce({ rows: [{ count: '0' }] });
+            (mockLLM.chat as jest.Mock).mockResolvedValueOnce({ content: JSON.stringify({ findings: [] }), metrics: { completion_tokens: 1 } });
+            q.mockResolvedValueOnce({ rows: [] }); q.mockResolvedValueOnce({ rows: [{ id: 'mcp-g1' }] });
+            q.mockResolvedValueOnce({ rows: [{ id: 'user-ext-g1', name: 'code-review', version: '0.1.0', status: 'active' }] });
+            q.mockResolvedValueOnce({ rows: [] });
+
+            const r = await makeService().import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar', plugin: 'code-review' });
+            if ('selectionRequired' in r && r.selectionRequired) throw new Error('expected single');
+            expect(r.gitPath).toBe('gemini-extension.json');
+            expect(r.mcpServers[0].serverId).toBe('mcp-g1');
+        });
+
+        // 상류 규격상 plugin.json 은 선택 — 공식 마켓 receipts·session-report 가 엔트리 메타만 가진다
+        it('매니페스트가 전혀 없는 엔트리 → 마켓 엔트리 메타로 합성 설치 (가상 source_path + 경고)', async () => {
+            const MK = JSON.stringify({ name: 'm', plugins: [{ name: 'Receipts', description: 'entry desc', source: './plugins/receipts' }] });
+            mockFetcher.resolveRef.mockResolvedValueOnce('abc123');
+            mockFetcher.listTree.mockResolvedValueOnce(treeOf('.claude-plugin/marketplace.json', 'plugins/receipts/skills/receipts/SKILL.md'));
+            mockFetcher.fetchFile.mockResolvedValueOnce(MK);
+            const q = mockPool.query as jest.Mock;
+            q.mockResolvedValueOnce({ rows: [] }); q.mockResolvedValueOnce({ rows: [] }); q.mockResolvedValueOnce({ rows: [{ count: '0' }] });
+            // 스킬 ingest (GitIngestService) — 실패해도 확장은 NO_COMPONENTS 로 죽으므로 성공 경로를 흉내낸다
+            mockFetcher.resolveRef.mockResolvedValueOnce('abc123');
+            mockFetcher.listTree.mockResolvedValueOnce(treeOf('plugins/receipts/skills/receipts/SKILL.md'));
+            mockFetcher.fetchFile.mockResolvedValueOnce('---\nname: receipts\ndescription: d\n---\n\n본문은 충분히 길어야 한다 열 자 이상');
+            (mockLLM.chat as jest.Mock).mockResolvedValueOnce({ content: JSON.stringify({ findings: [] }), metrics: { completion_tokens: 1 } });
+            q.mockResolvedValueOnce({ rows: [] });                    // skill dedupe
+            q.mockResolvedValueOnce({ rows: [{ count: '0' }] });      // skill draft count
+            q.mockResolvedValueOnce({ rows: [] });                    // skill INSERT
+            q.mockResolvedValueOnce({ rows: [] });                    // skill_manifests INSERT (fail-soft; 번들 파일 없음 → assets 쿼리 없음)
+            q.mockResolvedValueOnce({ rows: [{ id: 'user-ext-r1', name: 'receipts', version: '0.0.0', status: 'active' }] });  // ext INSERT
+            q.mockResolvedValueOnce({ rows: [] });                    // link
+
+            const r = await makeService().import({ userId: 'user-1', isAdmin: false, gitUrl: 'foo/bar', plugin: 'Receipts' });
+            if ('selectionRequired' in r && r.selectionRequired) throw new Error('expected single');
+            expect(r.name).toBe('receipts');                          // 엔트리 이름 정규화
+            expect(r.gitPath).toBe('plugins/receipts/.claude-plugin/marketplace-entry.json');
+            expect(r.validationWarnings.some(w => w.startsWith('MANIFEST_SYNTHESIZED'))).toBe(true);
+            expect(r.skills.filter(s => s.skillId)).toHaveLength(1);
+        });
+
         it('plugin 이 목록에 없으면 PLUGIN_NOT_IN_MARKETPLACE', async () => {
             mockFetcher.resolveRef.mockResolvedValueOnce('abc123');
             mockFetcher.listTree.mockResolvedValueOnce(treeOf('.claude-plugin/marketplace.json'));
@@ -399,10 +447,25 @@ describe('ExtensionIngestService', () => {
                 throw new Error(`REPO_NOT_FOUND: /repos/${owner}/${repo}`);
             });
             mockFetcher.listTree.mockImplementation(async (owner, repo) => {
-                if (owner === 'foo' && repo === 'bar') return treeOf('.claude-plugin/marketplace.json', 'local/skills/a/SKILL.md');
+                if (owner === 'foo' && repo === 'bar') return treeOf('.claude-plugin/marketplace.json', 'local/skills/a/SKILL.md', 'hooks-only/.claude-plugin/plugin.json', 'hooks-only/hooks/hooks.json');
                 if (owner === 'ext' && repo === 'skillrepo') return treeOf('skills/y/SKILL.md');
                 throw new Error(`REPO_NOT_FOUND: /repos/${owner}/${repo}`);
             });
+        });
+
+        // 판정은 설치 조건과 같은 함수 — plugin.json 없이 스킬만 있으면 true, hooks 전용은 false
+        it('plugin.json 없는 스킬 엔트리 true · hooks 전용 플러그인 false (판정=설치 조건)', async () => {
+            mockFetcher.fetchFile.mockImplementation(async (_o, _r, _s, path) => {
+                if (path === '.claude-plugin/marketplace.json') return JSON.stringify({ name: 'x', plugins: [
+                    { name: 'local', source: './local' }, { name: 'hooks-only', source: './hooks-only' },
+                ] });
+                if (path === 'hooks-only/.claude-plugin/plugin.json') return JSON.stringify({ name: 'hooks-only', hooks: './hooks/hooks.json' });
+                throw new Error(`UPSTREAM_FETCH_FAIL: 404 ${path}`);
+            });
+            const r = await makeService().fetchCatalogSnapshot('foo/bar', 'gh-token');
+            const byName = Object.fromEntries(r.plugins.map(p => [p.name, p.installable]));
+            expect(byName['local']).toBe(true);
+            expect(byName['hooks-only']).toBe(false);
         });
 
         it('accessToken 있으면 교차 저장소 프로브 — 스킬 보유 true / 소실 repo false', async () => {
