@@ -657,20 +657,34 @@ sync_caddyfile() {
         return 0
     fi
 
+    local has_caddy=0
+    command -v caddy >/dev/null 2>&1 && has_caddy=1
+
+    # 운영 파일을 덮어쓰기 *전에* 검증한다. reload 는 잘못된 설정을 거부하므로 지금은 멀쩡해 보여도
+    # (구 설정 유지) 디스크에 깨진 파일이 남아 다음 caddy 기동이 실패한다 — :33000 통째로 중단.
+    if (( has_caddy )); then
+        local verr
+        if ! verr="$(caddy validate --config "$src" --adapter caddyfile 2>&1 | tail -n 1)"; then
+            log_err "Caddyfile 검증 실패 — 운영 파일을 덮어쓰지 않습니다 (기존 설정 유지): $CADDYFILE_SRC_REL"
+            log_err "  $verr"
+            return 0
+        fi
+    fi
+
     if ! cp "$src" "$CADDYFILE_DEST" 2>/dev/null; then
         log_warn "Caddyfile 복사 실패 (권한 확인 필요): $CADDYFILE_DEST"
         return 0
     fi
     log_ok "Caddyfile 갱신 → $CADDYFILE_DEST"
 
-    if ! command -v caddy >/dev/null 2>&1; then
-        log_info "caddy 미설치 — reload 생략 (파일은 갱신됨)"
+    if (( ! has_caddy )); then
+        log_info "caddy 미설치 — 검증·reload 생략 (파일은 갱신됨)"
         return 0
     fi
     if caddy reload --config "$CADDYFILE_DEST" >/dev/null 2>&1; then
         log_ok "Caddy reload 완료 (무중단)"
     else
-        log_warn "Caddy reload 실패 — 미기동 상태일 수 있습니다. 다음 기동 시 반영됩니다"
+        log_warn "Caddy reload 실패 — 설정은 검증을 통과했으므로 caddy 미기동(admin API 무응답)일 가능성이 큽니다. 다음 기동 시 반영됩니다"
     fi
 }
 
