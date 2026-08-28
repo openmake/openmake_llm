@@ -1892,7 +1892,10 @@
       "badge": "Pending",
       "risk": "Risky command detected — review before approving",
       "empty": "No MCP servers awaiting approval.",
-      "actionFailed": "Action failed: {error}"
+      "actionFailed": "Action failed: {error}",
+      "envRequired": "Required environment variables — approval needs real values",
+      "envPlaceholder": "Enter value",
+      "envMissing": "Values required: {keys}"
     },
     "agents": {
       "title": "Custom agents",

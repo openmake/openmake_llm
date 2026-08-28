@@ -30,6 +30,7 @@ import {
 import { McpServerIngestService } from '../agents/git-ingest/mcp-server-ingest-service';
 import { McpServerDraftRepository } from '../data/repositories/mcp-server-draft-repository';
 import { getLifecycleSupervisor } from '../mcp/lifecycle-supervisor';
+import { isEnvPlaceholder } from '../mcp/env-placeholder';
 import { RL_MCP_INGEST } from '../config/rate-limits';
 import { MCP_INGEST } from '../config/constants';
 import { createLogger } from '../utils/logger';
@@ -73,13 +74,8 @@ const mcpIngestLimiter = rateLimit({
     skipFailedRequests: true,
 });
 
-/**
- * Placeholder 검증 — env 값이 `${...}` 형태이거나 빈 문자열이면 placeholder.
- */
-function isPlaceholder(value: string | undefined | null): boolean {
-    if (!value) return true;
-    return /^\$\{.+\}$/.test(value);
-}
+/** Placeholder 검증 — `mcp/env-placeholder` 가 SoT (확장 ingest 경로와 같은 규칙). */
+const isPlaceholder = isEnvPlaceholder;
 
 function extractUserId(req: Request): string | undefined {
     const direct = (req as Request & { userId?: string }).userId;

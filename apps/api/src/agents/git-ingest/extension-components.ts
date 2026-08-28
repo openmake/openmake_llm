@@ -22,6 +22,7 @@ import type { GitFetcher } from './git-fetcher';
 import type { GitIngestService } from './git-ingest-service';
 import { commandFileToSkillMarkdown, agentFileToCustomAgent } from './plugin-component-compat';
 import { parseMcpJsonFile, type NormalizedMcpServer } from './extension-manifest-validator';
+import { collectPlaceholderEnvKeys, buildEnvInputHints, type UserConfigEntry } from '../../mcp/env-placeholder';
 import { ConventionChecker, isBlockedByConvention } from './convention-checker';
 import { McpServerDraftRepository } from '../../data/repositories/mcp-server-draft-repository';
 import { UserAgentRepository } from '../../data/repositories/user-agent-repository';
@@ -309,6 +310,7 @@ export async function collectMcpDrafts(
     ctx: ComponentContext,
     manifestServers: NormalizedMcpServer[],
     llmClientFactory: (model: string) => LLMClient,
+    userConfig?: Record<string, UserConfigEntry>,
 ): Promise<McpServerInstallResult[]> {
     let mcpEntries: NormalizedMcpServer[] = manifestServers;
     if (mcpEntries.length === 0) {
@@ -366,6 +368,12 @@ export async function collectMcpDrafts(
                     conventionFindings: conv.findings,
                     blockedByConvention,
                     tokensUsed: conv.tokensUsed,
+                    // 값이 자리표시자인 env 키 — 승인 라우트가 이 목록으로 실제 값 입력을
+                    // 강제한다(REQUIRED_ENV_MISSING). 이게 없으면 `${user_config.api_key}`
+                    // 같은 값이 그대로 승인돼 서버는 뜨지만 인증이 전부 실패한다.
+                    requiredEnv: collectPlaceholderEnvKeys(entry.env),
+                    // 입력 라벨·발급 안내 (plugin.json userConfig 유래, 없으면 키 이름만)
+                    envHints: buildEnvInputHints(entry.env, userConfig),
                 },
             });
             results.push({
