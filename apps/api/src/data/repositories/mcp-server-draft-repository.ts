@@ -15,6 +15,20 @@
  */
 import * as crypto from 'crypto';
 import { BaseRepository } from './base-repository';
+import { encryptToken } from '../../utils/token-crypto';
+import type { EnvInputHint } from '../../mcp/env-placeholder';
+
+/**
+ * manifest_meta.envHints 에서 시크릿으로 선언된 env 키를 추린다.
+ *
+ * 힌트가 없거나 형태가 어긋난 매니페스트는 빈 집합 — 그 경우 값은 평문 저장되고,
+ * 이는 이 저장소의 기존 동작이다(암호화는 선언된 키에만 적용하는 점증적 강화).
+ */
+function extractSensitiveEnvKeys(manifestMeta: Record<string, unknown> | null): Set<string> {
+    const hints = (manifestMeta as { envHints?: EnvInputHint[] } | null)?.envHints;
+    if (!Array.isArray(hints)) return new Set();
+    return new Set(hints.filter(h => h?.sensitive === true && typeof h.key === 'string').map(h => h.key));
+}
 
 export interface InsertDraftInput {
     name: string;
@@ -125,8 +139,19 @@ export class McpServerDraftRepository extends BaseRepository {
         if (existing.status !== 'draft') return null;
         if (existing.user_id !== input.userId && !input.isAdmin) return null;
 
-        const mergedEnv = input.envOverrides
-            ? { ...(existing.env || {}), ...input.envOverrides }
+        // 승인 화면에서 받은 값 중 **시크릿으로 선언된 키만** 암호화해 저장한다.
+        // 판정 근거는 매니페스트의 `userConfig.<key>.sensitive`(envHints 로 영속됨) —
+        // 카탈로그 경로(mcp-catalog-repository.updateEnv)가 env_schema 의 secret 을
+        // 쓰는 것과 같은 규칙이다. 읽기는 server-registry.decryptEnvValues 가 `v1:`
+        // 접두사를 보고 복호화하므로 평문 값과 섞여 있어도 안전하다.
+        const sensitiveKeys = extractSensitiveEnvKeys(existing.manifest_meta);
+        const encryptedOverrides = input.envOverrides
+            ? Object.fromEntries(Object.entries(input.envOverrides).map(
+                ([k, v]) => [k, sensitiveKeys.has(k) ? encryptToken(v) : v],
+            ))
+            : undefined;
+        const mergedEnv = encryptedOverrides
+            ? { ...(existing.env || {}), ...encryptedOverrides }
             : existing.env;
         const shouldEnable = input.enableImmediately !== false;
 

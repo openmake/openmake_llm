@@ -17,6 +17,7 @@
  */
 import { z } from 'zod';
 import { UNSUPPORTED_MCP_FIELDS } from '../../config/skill-compat';
+import type { UserConfigEntry } from '../../mcp/env-placeholder';
 
 const NAME_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -38,6 +39,17 @@ const pluginManifestSchema = z.object({
     // ⚠️ 항목 검증은 normalizeMcpServers 가 담당 — 여기서 엄격히 보면 무효 항목 하나가
     // 매니페스트 전체를 거절해 유효한 서버까지 버려진다 (항목 단위 관용 파싱).
     mcpServers: z.record(z.string().min(1).max(80), z.unknown()).optional(),
+    // Claude Code 의 사용자 입력 스키마. env 의 `${user_config.X}` 자리표시자가 이 항목을
+    // 가리키며, 승인 화면이 title/description 을 입력 라벨·발급 안내로 쓴다.
+    // 관용 파싱 — 형태가 어긋난 항목은 힌트만 잃고 설치는 계속된다.
+    userConfig: z.record(
+        z.string().min(1).max(80),
+        z.object({
+            title: z.string().max(200).optional(),
+            description: z.string().max(1000).optional(),
+            sensitive: z.boolean().optional(),
+        }).loose(),
+    ).optional(),
 });
 
 export interface NormalizedMcpServer {
@@ -56,6 +68,8 @@ export interface ExtensionManifest {
     mcpServers: NormalizedMcpServer[];
     /** 설치되지 않은 mcpServers 항목의 사유 + 무시된 필드 안내 (설치는 계속 진행) */
     mcpWarnings: string[];
+    /** plugin.json `userConfig` — env 자리표시자의 입력 라벨·발급 안내 출처 */
+    userConfig?: Record<string, UserConfigEntry>;
     /** 원문 (user_extensions.manifest 저장용) */
     raw: Record<string, unknown>;
 }
@@ -148,6 +162,7 @@ export function validateExtensionManifest(jsonText: string): ValidationResult {
             description: result.data.description,
             mcpServers: norm.servers,
             mcpWarnings: [...norm.errors, ...norm.warnings],
+            userConfig: result.data.userConfig as Record<string, UserConfigEntry> | undefined,
             raw: parsed as Record<string, unknown>,
         },
     };

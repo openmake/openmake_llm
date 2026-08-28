@@ -521,27 +521,32 @@ export const mcpRouter = Router();
   mcpRouter.get('/servers/:id/status', requireAuth, asyncHandler(async (req: Request, res: Response) => {
       const { id } = req.params;
       const registry = getUnifiedMCPClient().getServerRegistry();
-      const status = registry.getServerStatus(id);
+      const regStatus = registry.getServerStatus(id);
 
-      if (!status) {
-          // DB에서 서버 존재 확인
-          const db = getUnifiedDatabase();
-          const server = await db.getMcpServerById(id);
-          if (!server) {
-              res.status(404).json(notFound('서버'));
-              return;
-          }
-          // 존재하지만 연결 안 된 상태
-          res.json(success({
-              status: {
-                  serverId: id,
-                  serverName: server.name,
-                  status: 'disconnected',
-                  toolCount: 0,
-              }
-          }));
+      // ⚠️ 사용자 소유 서버는 전역 registry 가 아니라 userPool 에 뜬다 — registry 만 보면
+      // 실제로 연결돼 도구가 등록된 서버도 늘 disconnected/toolCount:0 으로 보고된다
+      // (목록 API 는 이미 supervisor 를 함께 본다. 이중 풀은 양쪽 대칭이 원칙).
+      const db = getUnifiedDatabase();
+      const server = await db.getMcpServerById(id);
+      if (!server) {
+          res.status(404).json(notFound('서버'));
           return;
       }
 
-      res.json(success({ status }));
+      let userStatus: MCPConnectionStatus | undefined;
+      const supervisor = getLifecycleSupervisor();
+      if (server.user_id && supervisor) {
+          const client = supervisor.getUserClient(String(server.user_id), id);
+          if (client) userStatus = client.getStatus();
+      }
+
+      const effective = userStatus || regStatus;
+      res.json(success({
+          status: effective ?? {
+              serverId: id,
+              serverName: server.name,
+              status: 'disconnected',
+              toolCount: 0,
+          },
+      }));
   }));

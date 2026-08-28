@@ -1892,7 +1892,10 @@
       "badge": "承認待ち",
       "risk": "危険なコマンドを検出 — 確認のうえ承認",
       "empty": "承認待ちのMCPサーバーはありません。",
-      "actionFailed": "処理に失敗しました: {error}"
+      "actionFailed": "処理に失敗しました: {error}",
+      "envRequired": "必須の環境変数 — 実際の値を入力すると承認できます",
+      "envPlaceholder": "値を入力",
+      "envMissing": "値が必要です: {keys}"
     },
     "agents": {
       "title": "カスタムエージェント",

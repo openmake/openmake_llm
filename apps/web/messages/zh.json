@@ -1892,7 +1892,10 @@
       "badge": "待审批",
       "risk": "检测到危险命令 — 请审查后再批准",
       "empty": "没有待审批的 MCP 服务器。",
-      "actionFailed": "操作失败：{error}"
+      "actionFailed": "操作失败：{error}",
+      "envRequired": "必填环境变量 — 输入实际值后方可批准",
+      "envPlaceholder": "输入值",
+      "envMissing": "需要填写: {keys}"
     },
     "agents": {
       "title": "自定义智能体",
