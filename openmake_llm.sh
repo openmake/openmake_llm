@@ -19,7 +19,7 @@
 #                                # 재시작 후 실시간 로그 스트리밍 지속 (Ctrl+C로 종료)
 #   ./openmake_llm.sh build      # npm run build (backend tsc + frontend Next.js build 산출물 생성)
 #   ./openmake_llm.sh migrate    # DB 마이그레이션 적용 (status로 사전 확인 권장)
-#   ./openmake_llm.sh deploy     # build + migrate + restart (코드 변경 운영 반영)
+#   ./openmake_llm.sh deploy     # build + migrate + restart + Caddy 설정 동기화 (코드 변경 운영 반영)
 #                                # 옵션: --yes (확인 skip), --no-migrate (마이그 생략)
 #   ./openmake_llm.sh status     # 모든 계층 상태 확인
 #   ./openmake_llm.sh logs       # OpenMake LLM 실시간 로그
@@ -49,6 +49,14 @@ readonly SCRIPT_DIR
 
 readonly APP_NAME="openmake-llm"
 readonly FRONT_APP_NAME="openmake-next"
+
+# Caddy 리버스 프록시 설정 — 이 레포가 SoT.
+#
+# ⚠️ 운영 경로(/opt/homebrew/etc/Caddyfile)는 원래 이 파일로의 심링크였으나, launchd
+# 서비스가 외장 볼륨(/Volumes/...)을 읽지 못해(TCC: "operation not permitted") 실파일로
+# 교체했다. 그래서 레포 변경이 더는 자동 반영되지 않는다 — 배포마다 여기서 복사한다.
+readonly CADDYFILE_SRC_REL="scripts/caddy/Caddyfile"
+CADDYFILE_DEST="${CADDYFILE_DEST:-/opt/homebrew/etc/Caddyfile}"
 
 # .env 에서 키 하나만 추출한다 (전체 source 안 함 — 값에 공백/특수문자가 있어도 안전).
 # `|| true` 필수: 키가 없으면 grep 이 1 로 끝나고 pipefail+set -e 가 스크립트를 즉시 종료시킨다.
@@ -624,9 +632,46 @@ cmd_deploy() {
         wait_for_app_with_logs "$APP_PORT" "OpenMake LLM"
     fi
 
+    # 4) 리버스 프록시 설정 반영 (레포가 SoT — 위 sync_caddyfile 주석 참고)
+    log_step "Caddy 설정 동기화"
+    sync_caddyfile
+
     echo ""
     log_ok "Deploy 완료 — 변경사항이 운영에 반영되었습니다"
     show_status
+}
+
+# 레포의 Caddyfile 을 운영 경로로 복사하고, 내용이 바뀐 경우에만 caddy 를 무중단 reload 한다.
+#
+# 전부 fail-open — caddy 를 안 쓰는 배포(외부 프록시·단일 호스트)에서도 deploy 가 멈추면 안 된다.
+# reload 는 admin API(localhost:2019)를 쓰므로 caddy 가 떠 있어야 한다. 안 떠 있으면 파일만
+# 갱신되고 다음 기동 때 반영되므로 경고만 남긴다.
+sync_caddyfile() {
+    local src="$SCRIPT_DIR/$CADDYFILE_SRC_REL"
+
+    [[ -f "$src" ]] || { log_info "Caddyfile 소스 없음 — 동기화 생략 ($CADDYFILE_SRC_REL)"; return 0; }
+    [[ -d "$(dirname "$CADDYFILE_DEST")" ]] || { log_info "Caddy 설정 경로 없음 — 동기화 생략 ($CADDYFILE_DEST)"; return 0; }
+
+    if cmp -s "$src" "$CADDYFILE_DEST"; then
+        log_info "Caddyfile 변경 없음 — reload 생략"
+        return 0
+    fi
+
+    if ! cp "$src" "$CADDYFILE_DEST" 2>/dev/null; then
+        log_warn "Caddyfile 복사 실패 (권한 확인 필요): $CADDYFILE_DEST"
+        return 0
+    fi
+    log_ok "Caddyfile 갱신 → $CADDYFILE_DEST"
+
+    if ! command -v caddy >/dev/null 2>&1; then
+        log_info "caddy 미설치 — reload 생략 (파일은 갱신됨)"
+        return 0
+    fi
+    if caddy reload --config "$CADDYFILE_DEST" >/dev/null 2>&1; then
+        log_ok "Caddy reload 완료 (무중단)"
+    else
+        log_warn "Caddy reload 실패 — 미기동 상태일 수 있습니다. 다음 기동 시 반영됩니다"
+    fi
 }
 
 cmd_install() {
@@ -659,7 +704,7 @@ OpenMake LLM 통합 서비스 매니저
   build     npm run build (backend tsc + frontend Next.js build 산출물 생성)
             빌드 후 PM2 앱(백엔드+프론트) 자동 재시작 — --no-restart 로 생략
   migrate   DB 마이그레이션 (status → migrate)
-  deploy    build + migrate + restart 통합 (코드 변경 운영 반영)
+  deploy    build + migrate + restart + Caddy 설정 동기화 (코드 변경 운영 반영)
             백엔드(openmake-llm)와 프론트(openmake-next) 모두 재시작
             옵션: --yes (확인 프롬프트 skip), --no-migrate (마이그 생략)
   update    git pull(ff-only) → deploy — 설치본 표준 업데이트 경로
