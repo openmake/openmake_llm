@@ -24,6 +24,7 @@ import { searchExa } from './external-search-apis';
 import { createLogger } from '../../utils/logger';
 import { SEARCH_ESCALATION, SEARCH_RELIABILITY, SEARXNG_CATEGORY_SCOPE, WEB_SEARCH_INJECTION } from '../../config/runtime-limits';
 import { formatSearchSources } from './format-sources';
+import { resolveSearchLanguage } from './search-language';
 import { getConfig } from '../../config/env';
 import { logSemanticRerankShadow, rerankBySemantics } from './semantic-reranker';
 
@@ -38,7 +39,7 @@ const logger = createLogger('WebSearch');
  * @param query - 검색 쿼리
  * @param options.maxResults - 최대 결과 수 (기본값: 30)
  * @param options.globalSearch - 전세계 검색 여부 (기본값: true)
- * @param options.language - 검색 언어 (기본값: 'en')
+ * @param options.language - 검색 언어 (미지정 시 질의에서 감지 — search-language.ts)
  * @returns 중복 제거된 SearchResult 배열
  */
 /**
@@ -98,7 +99,8 @@ function computeTermRelevance(terms: string[], result: SearchResult): number {
 }
 
 export async function performWebSearch(query: string, options: { maxResults?: number; globalSearch?: boolean; language?: string; signal?: AbortSignal; preferRecent?: boolean } = {}): Promise<SearchResult[]> {
-    const { maxResults = 30, globalSearch = true, language = 'en', signal, preferRecent = false } = options;
+    const { maxResults = 30, globalSearch = true, signal, preferRecent = false } = options;
+    const language = resolveSearchLanguage(query, options.language);
 
     // 쿼리 길이 캡 — 장문 프롬프트 전체가 쿼리로 흘러오면 provider URI 한도에 걸린다
     // (네이버 hub·Daum 414, 2026-08-21 라이브). 단어 경계에서 절단해 실효 질의만 남긴다.
@@ -113,7 +115,7 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
     // 고볼륨 모드: maxResults > 15이면 모든 소스에서 병렬 수집 (Deep Research 용)
     const highVolumeMode = maxResults > 15;
 
-    logger.info(`쿼리: ${query} (maxResults: ${maxResults}, highVolume: ${highVolumeMode})`);
+    logger.info(`쿼리: ${query} (maxResults: ${maxResults}, highVolume: ${highVolumeMode}, lang: ${language})`);
 
     // 모든 소스에서 병렬 검색 — 각 provider 는 자체 fetch timeout + 외부 abort signal 로
     // hang 을 방지하므로 Promise.all 이 무한정 멈추지 않는다.
