@@ -49,6 +49,7 @@ import type {
 import { slugify } from '../chat/slash-command';
 import { recordSkillUsage } from './skill-usage-log';
 import { shouldInjectManifestSkill } from './manifest-injection-filter';
+import { SKILL_VERSION_LATEST_ORDER_SQL } from '../data/repositories/skill-manifest-sync';
 
 const logger = createLogger('SkillManager');
 
@@ -452,7 +453,8 @@ export class SkillManager {
                 INNER JOIN agent_skills ags ON ags.id = sm.id AND ags.status = 'active'
                 WHERE (asa.agent_id = $1 OR asa.agent_id = $2${userClause})
                   AND sm.version = (
-                      SELECT MAX(version) FROM skill_manifests WHERE id = sm.id
+                      SELECT version FROM skill_manifests WHERE id = sm.id
+                      ORDER BY ${SKILL_VERSION_LATEST_ORDER_SQL} LIMIT 1
                   )
                 ORDER BY sm.id, (asa.agent_id = $2) ASC, asa.priority DESC NULLS LAST
             ) dedup

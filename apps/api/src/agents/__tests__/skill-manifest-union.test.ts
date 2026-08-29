@@ -7,6 +7,7 @@
  */
 import { SkillManager } from '../skill-manager';
 import type { AgentSkill } from '../../data/repositories/skill-repository';
+import { SKILL_VERSION_LATEST_ORDER_SQL } from '../../data/repositories/skill-manifest-sync';
 
 const MANIFEST_ROWS = [{
     id: 'user-3-presentation-designer',
@@ -94,5 +95,13 @@ describe('buildManifestPrompt — 개인 지정 스킬 union', () => {
         // LIMIT 은 바깥(dedupe 후) 쿼리에만
         expect(manifestSql.indexOf('LIMIT 15')).toBeGreaterThan(manifestSql.indexOf(') dedup'));
         expect(manifestSql.match(/LIMIT 15/g)).toHaveLength(1);
+    });
+
+    it("최신 version 선택은 사전순 MAX(version) 이 아니라 semver 정렬 키 — '1.30.0' 이 '1.4.0' 아래로 밀리지 않는다", async () => {
+        const mgr = managerWithUserSkills([]);
+        await mgr.buildManifestPrompt('ui-ux-designer', '3', 'design');
+        const manifestSql = capturedSql.find((q) => q.includes('FROM skill_manifests'))!;
+        expect(manifestSql).not.toContain('MAX(version)');
+        expect(manifestSql).toContain(`ORDER BY ${SKILL_VERSION_LATEST_ORDER_SQL} LIMIT 1`);
     });
 });

@@ -10,7 +10,7 @@
  */
 
 import { createLogger } from '../../utils/logger';
-import { upsertSkillManifest, type SkillManifestRow } from './skill-manifest-sync';
+import { upsertSkillManifest, SKILL_VERSION_LATEST_ORDER_SQL, type SkillManifestRow } from './skill-manifest-sync';
 import { BaseRepository, QueryParam } from './base-repository';
 import { assertResourceOwnerOrAdmin } from '../../auth/ownership';
 import { rowToSkill } from './skill-row-mapper';
@@ -214,7 +214,7 @@ export class SkillRepository extends BaseRepository {
         // 2026-08-29: UPDATE 가 아니라 upsert — manifest 가 없던 레거시 스킬도 갱신 시점에 생긴다.
         if (input.content !== undefined && input.content !== existing.content) {
             const versions = await this.query<{ version: string }>(
-                `SELECT version FROM skill_manifests WHERE id = $1 ORDER BY version DESC LIMIT 1`, [id]
+                `SELECT version FROM skill_manifests WHERE id = $1 ORDER BY ${SKILL_VERSION_LATEST_ORDER_SQL} LIMIT 1`, [id]
             );
             await this.syncManifest({
                 id, name: params[0] as string, description: params[1] as string | null, category: params[3] as string,
