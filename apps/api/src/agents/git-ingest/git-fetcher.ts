@@ -9,11 +9,16 @@
  */
 const GITHUB_API = 'https://api.github.com';
 
+/** git tree mode — 심링크 blob. 내용이 본문이 아니라 대상 경로라 raw fetch 로 설치할 수 없다. */
+export const GIT_SYMLINK_MODE = '120000';
+
 export interface TreeEntry {
     path: string;
     sha: string;
     size: number;
     type: 'blob' | 'tree';
+    /** git 심링크(mode 120000) — 탐지에서 제외한다 (postiz `skills/postiz/SKILL.md` 실사례, 2026-08-29) */
+    symlink?: boolean;
 }
 
 export interface TreeResult {
@@ -99,14 +104,14 @@ export class GitFetcher {
      */
     async listTree(owner: string, repo: string, sha: string, maxEntries: number = 10_000): Promise<TreeResult> {
         const res = await this.req(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodeURIComponent(sha)}?recursive=1`);
-        const data = await res.json() as { sha: string; tree: Array<{ path: string; sha: string; size?: number; type: string }>; truncated: boolean };
+        const data = await res.json() as { sha: string; tree: Array<{ path: string; sha: string; size?: number; type: string; mode?: string }>; truncated: boolean };
         // GitHub 가 거대 tree(>100k entries / >7MB)에 truncated=true 를 주므로, 불완전+거대 tree 는 거부.
         if (data.truncated) {
             throw new Error(`REPO_TOO_LARGE: tree truncated by GitHub (${owner}/${repo}@${sha})`);
         }
         const entries: TreeEntry[] = (data.tree || [])
             .filter(e => e.type === 'blob')
-            .map(e => ({ path: e.path, sha: e.sha, size: e.size ?? 0, type: 'blob' as const }));
+            .map(e => ({ path: e.path, sha: e.sha, size: e.size ?? 0, type: 'blob' as const, ...(e.mode === GIT_SYMLINK_MODE ? { symlink: true } : {}) }));
         if (entries.length > maxEntries) {
             throw new Error(`REPO_TOO_LARGE: ${entries.length} blobs > ${maxEntries} (${owner}/${repo})`);
         }

@@ -36,6 +36,7 @@ import { validateExtensionManifest, parseMarketplaceFile } from './extension-man
 import {
     findExtensionManifestPath,
     discoverSkillPaths,
+    symlinkedSkillPaths,
     synthesizedManifestPath,
     isSynthesizedManifestPath,
     rootOfSynthesizedPath,
@@ -285,6 +286,10 @@ export class ExtensionIngestService {
 
         // (6-a) skills — 기본 레이아웃 + plugin.json `skills` 경로 필드 + 루트 컨테이너 폴백 (extension-discovery)
         let skillPaths = discoverSkillPaths(tree.entries, root, manifest.skillPaths);
+        const symlinked = symlinkedSkillPaths(tree.entries, root);
+        if (symlinked.length > 0) {
+            warnings.push(`SKILL_SYMLINK_SKIPPED: git 심링크라 설치 불가 — ${symlinked.join(', ')}`);
+        }
         if (skillPaths.length > EXTENSION_INGEST.maxSkillsPerExtension) {
             warnings.push(`SKILLS_TRUNCATED: ${skillPaths.length}개 중 ${EXTENSION_INGEST.maxSkillsPerExtension}개만 설치`);
             skillPaths = skillPaths.slice(0, EXTENSION_INGEST.maxSkillsPerExtension);

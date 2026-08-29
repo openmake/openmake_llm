@@ -11,13 +11,26 @@
  *   - `skills`: 기본 `skills/<dir>/SKILL.md` + plugin.json `skills` 경로 필드(문자열/배열) +
  *     둘 다 없으면 루트 직하 `<dir>/SKILL.md` (마켓 path 가 스킬 컨테이너 자체인 amd/coursera).
  *   - `mcpServers`: 객체 또는 **파일 경로 문자열**(`"./.mcp.json"`), 없으면 루트 mcp.json/.mcp.json.
+ *   - git 심링크(TreeEntry.symlink) 는 어느 탐지에서도 제외 — raw 내용이 대상 경로 문자열이라
+ *     설치가 반드시 실패한다 (postiz). 판정도 같은 필터를 타므로 UI 에 노출되지 않는다.
  *
  * @module agents/git-ingest/extension-discovery
  */
 import type { ExtensionManifest } from './extension-manifest-validator';
 
 /** tree 엔트리 최소 형태 — git-fetcher 의 TreeEntry 와 extension-components 의 TreeLike 둘 다 만족 */
-export type PathEntry = { path: string };
+export type PathEntry = { path: string; symlink?: boolean };
+
+/** 심링크 제외 — 모든 탐지 함수의 공통 전처리 */
+function realFiles(entries: readonly PathEntry[]): readonly PathEntry[] {
+    return entries.some(e => e.symlink) ? entries.filter(e => !e.symlink) : entries;
+}
+
+/** 심링크인 SKILL.md 경로 — 설치 리포트 경고용 (탐지에선 이미 제외됨) */
+export function symlinkedSkillPaths(entries: readonly PathEntry[], root: string): string[] {
+    const pattern = new RegExp(`^${escapeRegExp(root)}.*SKILL\\.md$`, 'i');
+    return entries.filter(e => e.symlink && pattern.test(e.path)).map(e => e.path);
+}
 
 /**
  * 합성 매니페스트의 가상 경로 basename — 실제 파일이 없다. `user_extensions.source_path` 에
@@ -40,7 +53,8 @@ export function rootOfSynthesizedPath(path: string): string {
 }
 
 /** 확장 루트(prefix, '' 또는 'dir/') 의 매니페스트 경로 — 우선순위 고정. 없으면 undefined. */
-export function findExtensionManifestPath(entries: readonly PathEntry[], root: string): string | undefined {
+export function findExtensionManifestPath(allEntries: readonly PathEntry[], root: string): string | undefined {
+    const entries = realFiles(allEntries);
     for (const candidate of [`${root}.claude-plugin/plugin.json`, `${root}plugin.json`, `${root}gemini-extension.json`]) {
         if (entries.some(e => e.path === candidate)) return candidate;
     }
@@ -75,7 +89,8 @@ export function resolveUnderRoot(root: string, relative: string): string | null 
  * SKILL.md 경로 탐지 — 기본 레이아웃 + plugin.json `skills` 필드 + 루트 컨테이너 폴백.
  * 순서 보존·중복 제거. 상한(maxSkillsPerExtension) 적용은 호출측.
  */
-export function discoverSkillPaths(entries: readonly PathEntry[], root: string, skillPathsField: string[] = []): string[] {
+export function discoverSkillPaths(allEntries: readonly PathEntry[], root: string, skillPathsField: string[] = []): string[] {
+    const entries = realFiles(allEntries);
     const found: string[] = [];
     const defaultPattern = buildSkillDiscoveryPattern(root);
     for (const e of entries) if (defaultPattern.test(e.path)) found.push(e.path);
@@ -101,11 +116,12 @@ export function discoverSkillPaths(entries: readonly PathEntry[], root: string, 
  * `<root><dir>/**.md` (1단계 중첩까지) + 매니페스트 경로 필드. commands/·agents/ 공용.
  */
 export function discoverMarkdownComponents(
-    entries: readonly PathEntry[],
+    allEntries: readonly PathEntry[],
     root: string,
     dirName: string,
     fieldPaths: string[] = [],
 ): string[] {
+    const entries = realFiles(allEntries);
     const pattern = new RegExp(`^${escapeRegExp(root)}${dirName}/(?:[^/]+/)?[^/]+\\.md$`, 'i');
     const found = entries.filter(e => pattern.test(e.path)).map(e => e.path);
     for (const field of fieldPaths) {
@@ -125,7 +141,8 @@ export function discoverMarkdownComponents(
  * MCP 설정 파일 경로 — plugin.json `mcpServers` 가 문자열이면 그 경로, 아니면 루트 mcp.json/.mcp.json.
  * 파일이 tree 에 없으면 undefined (문자열 경로가 가리키는 파일이 상류에 없는 kobiton 실사례 포함).
  */
-export function findMcpConfigPath(entries: readonly PathEntry[], root: string, mcpServersPath?: string): string | undefined {
+export function findMcpConfigPath(allEntries: readonly PathEntry[], root: string, mcpServersPath?: string): string | undefined {
+    const entries = realFiles(allEntries);
     if (mcpServersPath) {
         const resolved = resolveUnderRoot(root, mcpServersPath);
         return resolved && entries.some(e => e.path === resolved) ? resolved : undefined;

@@ -8,6 +8,7 @@ import {
     synthesizedManifestPath,
     isSynthesizedManifestPath,
     rootOfSynthesizedPath,
+    symlinkedSkillPaths,
 } from '../extension-discovery';
 
 // 카탈로그 판정과 설치가 공유하는 탐지 규칙 — 2026-08-29 드라이런(815건)에서 드러난 레이아웃을 고정한다.
@@ -95,6 +96,18 @@ describe('extension-discovery', () => {
             expect(findMcpConfigPath([e('.mcp.json')], '', './missing.json')).toBeUndefined();   // kobiton 실사례
             expect(findMcpConfigPath([e('mcp.json'), e('.mcp.json')], '')).toBe('mcp.json');
             expect(findMcpConfigPath([e('README.md')], '')).toBeUndefined();
+        });
+    });
+
+    describe('git 심링크 제외 (postiz skills/postiz/SKILL.md 실사례)', () => {
+        const sym = (path: string) => ({ path, symlink: true });
+        it('심링크 SKILL.md/mcp.json 은 어느 탐지에도 안 잡히고, 판정도 false', () => {
+            expect(discoverSkillPaths([sym('skills/postiz/SKILL.md')], '')).toEqual([]);
+            expect(discoverSkillPaths([sym('skills/postiz/SKILL.md'), e('skills/real/SKILL.md')], '')).toEqual(['skills/real/SKILL.md']);
+            expect(findMcpConfigPath([sym('.mcp.json')], '')).toBeUndefined();
+            expect(findExtensionManifestPath([sym('plugin.json')], '')).toBeUndefined();
+            expect(hasInstallableComponents([sym('skills/postiz/SKILL.md'), e('.claude-plugin/plugin.json')], '', null)).toBe(false);
+            expect(symlinkedSkillPaths([sym('skills/postiz/SKILL.md'), e('skills/real/SKILL.md')], '')).toEqual(['skills/postiz/SKILL.md']);
         });
     });
 
