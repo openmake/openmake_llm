@@ -14,6 +14,18 @@ import { createHash } from 'crypto';
 
 export const DEFAULT_SKILL_MANIFEST_VERSION = '1.0.0';
 
+/**
+ * `skill_manifests.version`(TEXT) 의 **최신 버전 정렬 키** (`ORDER BY` 절에 그대로 붙인다).
+ *
+ * `MAX(version)` / `ORDER BY version DESC` 는 사전순이라 '10.0.0' < '2.0.0', '1.30.0' < '1.4.0' 으로
+ * 뒤집힌다 (운영엔 이미 1.26.0·1.30.0·1.36.0 과 4버전 스킬이 있다). 숫자 토큰 int[] 비교
+ * ('v' 접두·비숫자 무시, 빈 문자열은 `{}`) → 정식 릴리스가 prerelease('-' 뒤) 보다 우선 → 원문 순.
+ * 컬럼 참조는 bare `version` 이라 `FROM skill_manifests` 단독/상관 서브쿼리 안에서만 쓴다.
+ */
+export const SKILL_VERSION_LATEST_ORDER_SQL =
+    "ARRAY(SELECT m[1]::int FROM regexp_matches(split_part(version, '-', 1), '\\d+', 'g') AS m) DESC, " +
+    "(split_part(version, '-', 2) = '') DESC, version DESC";
+
 export interface SkillManifestRow {
     id: string;
     name: string;
