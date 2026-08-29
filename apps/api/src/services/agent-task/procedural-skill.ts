@@ -17,6 +17,7 @@ import { getPool } from '../../data/models/unified-database';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { goalSimilarity } from './task-learning';
 import { createLogger } from '../../utils/logger';
+import { recordSkillUsage } from '../../agents/skill-usage-log';
 
 const logger = createLogger('ProceduralSkill');
 
@@ -108,7 +109,10 @@ export async function loadProceduralSpec(userId: string, skillId: string): Promi
     const skill = await getRepo().getSkillById(skillId).catch(() => null);
     if (!skill || skill.category !== PROCEDURAL_CATEGORY) return null;
     if (skill.createdBy && skill.createdBy !== userId && !skill.isPublic) return null;
-    return parseSpec(skill.content);
+    const spec = parseSpec(skill.content);
+    // 재생 시도 기록 — skill_run 도구의 load 훅이 이 경로로 들어온다 (skill_audit_log)
+    if (spec) recordSkillUsage([{ skillId: skill.id, kind: 'skill_run', userId, args: { kind: spec.kind } }]);
+    return spec;
 }
 
 /**

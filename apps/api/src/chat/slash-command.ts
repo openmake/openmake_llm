@@ -15,6 +15,7 @@
  */
 
 import { createLogger } from '../utils/logger';
+import { recordSkillUsage } from '../agents/skill-usage-log';
 
 const logger = createLogger('SlashCommand');
 
@@ -33,6 +34,8 @@ export interface ParsedSlashCommand {
 export interface SlashSkill {
     name: string;
     content: string;
+    /** agent_skills.id — 사용 기록(skill_audit_log) 용. 테스트 주입 finder 는 생략 가능 */
+    id?: string;
 }
 
 // 유니코드 문자 허용 (2026-07-04): 한글 등 비ASCII 스킬명의 slug 가 빈 문자열이 되어
@@ -162,7 +165,7 @@ async function defaultFindSkillBySlug(slug: string, userId?: string): Promise<Sl
     for (const { search, limit } of buildSlugSearchAttempts(slug)) {
         const result = await manager.searchSkills({ search, status: 'active', limit, userId });
         const matched = result.skills.find((s) => matchesSlug(s.name, slug));
-        if (matched) return { name: matched.name, content: matched.content };
+        if (matched) return { id: matched.id, name: matched.name, content: matched.content };
     }
     return null;
 }
@@ -205,6 +208,7 @@ export async function applySlashCommand(message: string, deps: ApplySlashDeps = 
         if (!skill) return message; // 미매칭 — 원문 유지(일반 텍스트로 취급)
         logger.info(`슬래시 명령 적용: /${parsed.slug} → 스킬 "${skill.name}"`);
         deps.onSkillApplied?.(skill.name);
+        if (skill.id) recordSkillUsage([{ skillId: skill.id, kind: 'slash', userId: deps.userId, args: { slug: parsed.slug, rest: parsed.rest } }]);
         return buildAugmentedMessage(skill, parsed.rest);
     } catch (e) {
         logger.warn(`슬래시 명령 처리 실패 (원문 유지): ${e instanceof Error ? e.message : String(e)}`);

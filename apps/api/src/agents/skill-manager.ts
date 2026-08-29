@@ -47,6 +47,7 @@ import type {
     DraftListResult,
 } from '../data/repositories/skill-repository';
 import { slugify } from '../chat/slash-command';
+import { recordSkillUsage } from './skill-usage-log';
 
 const logger = createLogger('SkillManager');
 
@@ -328,8 +329,8 @@ export class SkillManager {
      */
     async buildSkillPromptForNames(
         names: string[], userId?: string, topK: number = SKILL_AUTO_SELECT_TOP_K,
-    ): Promise<{ prompt: string; matched: string[] }> {
-        if (!Array.isArray(names) || names.length === 0) return { prompt: '', matched: [] };
+    ): Promise<{ prompt: string; matched: string[]; matchedIds: string[] }> {
+        if (!Array.isArray(names) || names.length === 0) return { prompt: '', matched: [], matchedIds: [] };
         const repo = await this.ensureInitialized();
         // userId 전달로 본인 소유 비공개 스킬도 검색 대상에 포함 — 아래 visible 필터와 동일 규칙.
         const result = await repo.searchSkills({ status: 'active', limit: SKILL_CATALOG_MAX_ITEMS, userId });
@@ -351,7 +352,7 @@ export class SkillManager {
         // isPublic 기본 false 이므로 명시적 true 만 공개로 취급.
         const visible = picked.filter((s) =>
             s.isPublic === true || (userId !== undefined && s.createdBy === userId));
-        return { prompt: this.formatSkillsAsPrompt(visible), matched: visible.map((s) => s.name) };
+        return { prompt: this.formatSkillsAsPrompt(visible), matched: visible.map((s) => s.name), matchedIds: visible.map((s) => s.id) };
     }
 
     /**
@@ -435,7 +436,7 @@ export class SkillManager {
         // 스킬의 잔존 manifest 가 주입되지 않게 막는다. 할당된 manifest 는 전부
         // agent_skills 행을 가진다(ManifestImporter placeholder·git-ingest 동시 INSERT).
         const sql = `
-            SELECT sm.id, sm.prompt_md, sm.manifest_yaml
+            SELECT sm.id, sm.version, sm.prompt_md, sm.manifest_yaml
             FROM skill_manifests sm
             INNER JOIN agent_skill_assignments asa ON asa.skill_id = sm.id
             INNER JOIN agent_skills ags ON ags.id = sm.id AND ags.status = 'active'
@@ -446,9 +447,9 @@ export class SkillManager {
             ORDER BY asa.priority DESC NULLS LAST, sm.id ASC
             LIMIT 15
         `;
-        let rows: Array<{ id: string; prompt_md: string; manifest_yaml: string }>;
+        let rows: Array<{ id: string; version: string; prompt_md: string; manifest_yaml: string }>;
         try {
-            const result = await pool.query<{ id: string; prompt_md: string; manifest_yaml: string }>(sql, params);
+            const result = await pool.query<{ id: string; version: string; prompt_md: string; manifest_yaml: string }>(sql, params);
             rows = result.rows;
         } catch (e) {
             logger.debug('skill_manifests 조회 실패 (021 마이그레이션 미적용?) — null', e);
@@ -481,6 +482,9 @@ export class SkillManager {
             return m?.[1]?.trim().replace(/^['"]|['"]$/g, '') || r.id;
         });
 
+        // 사용 기록 — 주입된 스킬 id/version (개인 union 분은 아래서 추가)
+        const injected: Array<{ skillId: string; skillVersion?: string }> = filtered.map(r => ({ skillId: r.id, skillVersion: r.version }));
+
         // 개인 지정(user-assign) 스킬 중 manifest 미보유분 union — 확장 설치 스킬 등은
         // agent_skills 에만 존재하는데, manifest 스킬이 하나라도 있으면 legacy fallback 이
         // 실행되지 않아 지정해도 조용히 누락되던 갭 (2026-08-16). agent/global 스킬은
@@ -499,11 +503,13 @@ export class SkillManager {
                         : s.content;
                     blocks.push(`<skill_context name="${safeName}">\n${content}\n</skill_context>`);
                     skillNames.push(s.name);
+                    injected.push({ skillId: s.id });
                 }
             } catch (e) {
                 logger.debug('개인 지정 스킬 union 실패 (manifest 분만 주입)', e);
             }
         }
+        recordSkillUsage(injected.map(i => ({ ...i, kind: 'inject' as const, userId, args: { agentId } })));
         return { prompt: `\n\n## 적용된 스킬 (manifest)\n${blocks.join('\n\n')}`, skillNames };
     }
 

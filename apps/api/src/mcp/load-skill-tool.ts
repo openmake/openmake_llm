@@ -17,6 +17,7 @@
 import type { MCPToolDefinition, MCPToolResult } from './types';
 import type { UserContext } from './user-sandbox';
 import { createLogger } from '../utils/logger';
+import { recordSkillUsage } from '../agents/skill-usage-log';
 
 const logger = createLogger('LoadSkillTool');
 
@@ -105,9 +106,10 @@ export const loadSkillTool: MCPToolDefinition<LoadSkillArgs> = {
             return { content: [{ type: 'text', text: '불러올 스킬 이름이 없습니다.' }] };
         }
         const userId = context?.userId !== undefined ? String(context.userId) : undefined;
+        const startedAt = Date.now();
         try {
             const { getSkillManager } = await import('../agents/skill-manager');
-            const { prompt, matched } = await getSkillManager().buildSkillPromptForNames(names, userId);
+            const { prompt, matched, matchedIds } = await getSkillManager().buildSkillPromptForNames(names, userId);
             if (!prompt || matched.length === 0) {
                 return { content: [{ type: 'text', text: `요청한 스킬을 찾지 못했습니다: ${names.join(', ')}` }] };
             }
@@ -121,6 +123,9 @@ export const loadSkillTool: MCPToolDefinition<LoadSkillArgs> = {
                 assetText = await loadSkillAssets(matched, assetPaths, userId);
             }
             logger.info(`load_skill: ${matched.join(', ')}${assetPaths.length > 0 ? ` +assets(${assetPaths.length})` : ''} (user=${userId ?? 'guest'})`);
+            recordSkillUsage(matchedIds.map(skillId => ({
+                skillId, kind: 'load_skill' as const, userId, args: { names, assetPaths }, durationMs: Date.now() - startedAt,
+            })));
             return { content: [{ type: 'text', text: prompt + assetText }] };
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);

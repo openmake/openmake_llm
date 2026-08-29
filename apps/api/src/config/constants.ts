@@ -286,6 +286,17 @@ export const SKILL_MANIFEST_LIMITS = {
     descriptionMaxChars: parseInt(process.env.SKILL_MANIFEST_DESCRIPTION_MAX_CHARS || '4096', 10),
 } as const;
 
+/**
+ * SKILL_USAGE_LOG — 스킬 사용 이벤트 기록 (agents/skill-usage-log.ts → skill_audit_log).
+ *   - SKILL_USAGE_LOG_ENABLED=true (기본 true — 끄면 기록·요약 모두 no-op)
+ *   - SKILL_USAGE_SUMMARY_DEFAULT_DAYS=30 / SKILL_USAGE_SUMMARY_MAX_DAYS=365 (요약 API 기간)
+ */
+export const SKILL_USAGE_LOG = {
+    enabled: process.env.SKILL_USAGE_LOG_ENABLED !== 'false',
+    summaryDefaultDays: parseInt(process.env.SKILL_USAGE_SUMMARY_DEFAULT_DAYS || '30', 10),
+    summaryMaxDays: parseInt(process.env.SKILL_USAGE_SUMMARY_MAX_DAYS || '365', 10),
+} as const;
+
 // ============================================
 // 모델 선택
 // ============================================
