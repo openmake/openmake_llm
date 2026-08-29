@@ -48,6 +48,7 @@ import type {
 } from '../data/repositories/skill-repository';
 import { slugify } from '../chat/slash-command';
 import { recordSkillUsage } from './skill-usage-log';
+import { shouldInjectManifestSkill, dedupeById } from './manifest-injection-filter';
 
 const logger = createLogger('SkillManager');
 
@@ -436,7 +437,7 @@ export class SkillManager {
         // 스킬의 잔존 manifest 가 주입되지 않게 막는다. 할당된 manifest 는 전부
         // agent_skills 행을 가진다(ManifestImporter placeholder·git-ingest 동시 INSERT).
         const sql = `
-            SELECT sm.id, sm.version, sm.prompt_md, sm.manifest_yaml
+            SELECT sm.id, sm.version, sm.prompt_md, sm.manifest_yaml, asa.agent_id AS assigned_to
             FROM skill_manifests sm
             INNER JOIN agent_skill_assignments asa ON asa.skill_id = sm.id
             INNER JOIN agent_skills ags ON ags.id = sm.id AND ags.status = 'active'
@@ -447,27 +448,23 @@ export class SkillManager {
             ORDER BY asa.priority DESC NULLS LAST, sm.id ASC
             LIMIT 15
         `;
-        let rows: Array<{ id: string; version: string; prompt_md: string; manifest_yaml: string }>;
+        let rows: Array<{ id: string; version: string; prompt_md: string; manifest_yaml: string; assigned_to: string }>;
         try {
-            const result = await pool.query<{ id: string; version: string; prompt_md: string; manifest_yaml: string }>(sql, params);
-            rows = result.rows;
+            const result = await pool.query<{ id: string; version: string; prompt_md: string; manifest_yaml: string; assigned_to: string }>(sql, params);
+            rows = dedupeById(result.rows);
         } catch (e) {
             logger.debug('skill_manifests 조회 실패 (021 마이그레이션 미적용?) — null', e);
             return null;
         }
         if (rows.length === 0) return null;
 
-        // agentCategory 필터: manifest_yaml 의 category 가 agent.category 와 일치하거나
-        // user-* prefix (사용자 개인 manifest) 인 경우만 포함 — 무관한 skill 의 프롬프트 오염 방지.
-        const filtered = rows.filter(r => {
-            // triggers 선언 스킬은 관련 턴에만 주입 — 개인 스킬의 카테고리 우회(아래)와
-            // 결합돼 무관한 질의까지 오염시키던 경로를 막는다. 미선언 스킬은 종전 동작.
-            if (!matchesSkillTriggers(parseManifestTriggers(r.manifest_yaml), query)) return false;
-            if (!agentCategory) return true;
-            if (r.id.startsWith('user-')) return true;
-            const cat = /^---[\s\S]*?\bcategory:\s*([^\n]+)/.exec(r.manifest_yaml);
-            return !cat || cat[1]?.trim().replace(/^['"]|['"]$/g, '') === agentCategory;
-        });
+        // 주입 필터 — manifest-injection-filter.ts (순수): triggers 게이트 + `__global__` 배정만
+        // 카테고리 필터. 에이전트/개인 명시 배정은 카테고리와 무관하게 주입한다 (2026-08-29 정정 —
+        // 종전엔 명시 배정도 걸러 user 3 의 ecc 스킬이 배정돼 있어도 한 번도 주입되지 않았다).
+        const filtered = rows.filter(r => shouldInjectManifestSkill(
+            { id: r.id, manifestYaml: r.manifest_yaml, assignedTo: r.assigned_to },
+            { agentId, agentCategory, query },
+        ));
         if (filtered.length === 0) return null;
 
         const blocks = filtered.map(r => {
