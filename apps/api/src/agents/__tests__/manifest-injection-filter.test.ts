@@ -1,4 +1,4 @@
-import { shouldInjectManifestSkill, dedupeById, manifestCategory, GLOBAL_ASSIGNMENT_ID } from '../manifest-injection-filter';
+import { shouldInjectManifestSkill, manifestCategory, GLOBAL_ASSIGNMENT_ID } from '../manifest-injection-filter';
 
 const yaml = (cat: string, triggers?: string) => `---\nname: x\ndescription: d\ncategory: ${cat}\n${triggers ? `triggers: ${triggers}\n` : ''}---\n`;
 const ctx = { agentId: 'backend-developer', agentCategory: 'technology' };
@@ -24,9 +24,8 @@ describe('manifest-injection-filter', () => {
         expect(shouldInjectManifestSkill(c, { ...ctx, query: '환급 절차 알려줘' })).toBe(true);
         expect(shouldInjectManifestSkill(c, { ...ctx, query: '오늘 날씨' })).toBe(false);
     });
-    it('manifestCategory / dedupeById', () => {
+    it('manifestCategory', () => {
         expect(manifestCategory(yaml("'ecc'"))).toBe('ecc');
         expect(manifestCategory('---\nname: x\n---\n')).toBeUndefined();
-        expect(dedupeById([{ id: 'a' }, { id: 'b' }, { id: 'a' }])).toEqual([{ id: 'a' }, { id: 'b' }]);
     });
 });

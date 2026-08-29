@@ -83,4 +83,16 @@ describe('buildManifestPrompt — 개인 지정 스킬 union', () => {
         const manifestSql = capturedSql.find((q) => q.includes('FROM skill_manifests'));
         expect(manifestSql).toContain("ags.status = 'active'");
     });
+
+    it('중복 배정 dedupe 는 SQL 에서 비-global 우선으로, LIMIT 은 dedupe 뒤에 — 이중 배정 스킬의 명시 배정이 global 행에 가려지지 않는다', async () => {
+        const mgr = managerWithUserSkills([]);
+        await mgr.buildManifestPrompt('ui-ux-designer', '3', 'design');
+        const manifestSql = capturedSql.find((q) => q.includes('FROM skill_manifests'))!;
+        expect(manifestSql).toContain('DISTINCT ON (sm.id)');
+        // 스킬 내 정렬: id → global 여부(false 먼저) → priority
+        expect(manifestSql).toMatch(/ORDER BY sm\.id, \(asa\.agent_id = \$2\) ASC, asa\.priority DESC NULLS LAST/);
+        // LIMIT 은 바깥(dedupe 후) 쿼리에만
+        expect(manifestSql.indexOf('LIMIT 15')).toBeGreaterThan(manifestSql.indexOf(') dedup'));
+        expect(manifestSql.match(/LIMIT 15/g)).toHaveLength(1);
+    });
 });
