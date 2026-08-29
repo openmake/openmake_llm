@@ -9,6 +9,10 @@ import {
     mergeActivatedSkillNames,
     type ApplySlashDeps,
 } from '../slash-command';
+import { recordSkillUsage } from '../../agents/skill-usage-log';
+
+// 사용 기록은 fire-and-forget DB 쓰기 — 여기선 호출 여부만 검증
+jest.mock('../../agents/skill-usage-log', () => ({ recordSkillUsage: jest.fn() }));
 
 describe('parseSlashCommand', () => {
     it('정상 명령 파싱', () => {
@@ -133,6 +137,21 @@ describe('특수문자 이름 스킬의 슬래시 매칭', () => {
 });
 
 describe('applySlashCommand', () => {
+    beforeEach(() => { (recordSkillUsage as jest.Mock).mockClear(); });
+
+    it('매칭 스킬에 id 가 있으면 skill_audit_log 에 slash 사용 기록 (userId·slug·인자)', async () => {
+        const find = jest.fn().mockResolvedValue({ id: 'user-skill-1', name: 'Billing', content: 'rules' });
+        await applySlashCommand('/billing 환불', { findSkillBySlug: find, enabled: true, userId: 'u3' });
+        expect(recordSkillUsage).toHaveBeenCalledWith([
+            expect.objectContaining({ skillId: 'user-skill-1', kind: 'slash', userId: 'u3', args: { slug: 'billing', rest: '환불' } }),
+        ]);
+    });
+    it('id 없는 finder(테스트 주입) 는 기록하지 않는다', async () => {
+        const find = jest.fn().mockResolvedValue({ name: 'Billing', content: 'rules' });
+        await applySlashCommand('/billing', { findSkillBySlug: find, enabled: true });
+        expect(recordSkillUsage).not.toHaveBeenCalled();
+    });
+
     it('비슬래시 → 원문 (findSkill 미호출)', async () => {
         const find = jest.fn();
         const out = await applySlashCommand('일반 질문입니다', { findSkillBySlug: find, enabled: true });

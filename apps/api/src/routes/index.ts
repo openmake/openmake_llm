@@ -12,6 +12,7 @@
 export { default as metricsRouter, setClusterManager } from './metrics.routes';
 export { default as agentRouter } from './agents.routes';
 export { default as skillsRouter } from './skills.routes';
+export { default as skillsUsageRouter } from './skills-usage.routes';
 export { default as modelRouter } from './model.routes';
 export { mcpRouter } from './mcp.routes';
 export { mcpCatalogRouter } from './mcp-catalog.routes';
