@@ -48,7 +48,7 @@ import type {
 } from '../data/repositories/skill-repository';
 import { slugify } from '../chat/slash-command';
 import { recordSkillUsage } from './skill-usage-log';
-import { shouldInjectManifestSkill, dedupeById } from './manifest-injection-filter';
+import { shouldInjectManifestSkill } from './manifest-injection-filter';
 
 const logger = createLogger('SkillManager');
 
@@ -436,22 +436,33 @@ export class SkillManager {
         // 만들므로(2026-08-16 근본 개선) 승인 전 draft·확장 제거/업데이트로 archived 된
         // 스킬의 잔존 manifest 가 주입되지 않게 막는다. 할당된 manifest 는 전부
         // agent_skills 행을 가진다(ManifestImporter placeholder·git-ingest 동시 INSERT).
+        //
+        // 같은 스킬이 여러 배정(에이전트 + __global__ + user:)으로 중복 조회되면 DISTINCT ON 으로
+        // 스킬당 1행만 남기되 **비-global 배정 행을 우선**한다 — global 행이 남으면 카테고리
+        // 필터가 다시 걸려 명시 배정이 무시된다. LIMIT 은 dedupe 뒤에 걸어 중복 행이 15 슬롯을
+        // 소모하지 않게 한다 (2026-08-30 — 종전엔 JS dedupe 가 priority 순 첫 행을 남겼고 LIMIT 이 먼저였다).
         const sql = `
-            SELECT sm.id, sm.version, sm.prompt_md, sm.manifest_yaml, asa.agent_id AS assigned_to
-            FROM skill_manifests sm
-            INNER JOIN agent_skill_assignments asa ON asa.skill_id = sm.id
-            INNER JOIN agent_skills ags ON ags.id = sm.id AND ags.status = 'active'
-            WHERE (asa.agent_id = $1 OR asa.agent_id = $2${userClause})
-              AND sm.version = (
-                  SELECT MAX(version) FROM skill_manifests WHERE id = sm.id
-              )
-            ORDER BY asa.priority DESC NULLS LAST, sm.id ASC
+            SELECT id, version, prompt_md, manifest_yaml, assigned_to
+            FROM (
+                SELECT DISTINCT ON (sm.id)
+                    sm.id, sm.version, sm.prompt_md, sm.manifest_yaml,
+                    asa.agent_id AS assigned_to, asa.priority
+                FROM skill_manifests sm
+                INNER JOIN agent_skill_assignments asa ON asa.skill_id = sm.id
+                INNER JOIN agent_skills ags ON ags.id = sm.id AND ags.status = 'active'
+                WHERE (asa.agent_id = $1 OR asa.agent_id = $2${userClause})
+                  AND sm.version = (
+                      SELECT MAX(version) FROM skill_manifests WHERE id = sm.id
+                  )
+                ORDER BY sm.id, (asa.agent_id = $2) ASC, asa.priority DESC NULLS LAST
+            ) dedup
+            ORDER BY priority DESC NULLS LAST, id ASC
             LIMIT 15
         `;
         let rows: Array<{ id: string; version: string; prompt_md: string; manifest_yaml: string; assigned_to: string }>;
         try {
             const result = await pool.query<{ id: string; version: string; prompt_md: string; manifest_yaml: string; assigned_to: string }>(sql, params);
-            rows = dedupeById(result.rows);
+            rows = result.rows;
         } catch (e) {
             logger.debug('skill_manifests 조회 실패 (021 마이그레이션 미적용?) — null', e);
             return null;
