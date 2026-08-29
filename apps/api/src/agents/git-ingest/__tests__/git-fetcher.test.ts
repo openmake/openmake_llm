@@ -45,6 +45,8 @@ describe('GitFetcher', () => {
                     { path: 'README.md', sha: 'b1', type: 'blob', size: 100 },
                     { path: 'skills/legal.SKILL.md', sha: 'b2', type: 'blob', size: 500 },
                     { path: 'skills', sha: 't1', type: 'tree' },
+                    // git 심링크 (postiz skills/postiz/SKILL.md 실사례) — symlink 플래그로 보존
+                    { path: 'skills/link/SKILL.md', sha: 'b3', type: 'blob', size: 14, mode: '120000' },
                 ],
                 truncated: false,
             }),
@@ -52,8 +54,10 @@ describe('GitFetcher', () => {
         });
         const f = new GitFetcher();
         const tree = await f.listTree('foo', 'bar', 'abc123');
-        expect(tree.entries).toHaveLength(2);
+        expect(tree.entries).toHaveLength(3);
         expect(tree.entries[0].path).toBe('README.md');
+        expect(tree.entries[0].symlink).toBeUndefined();
+        expect(tree.entries[2]).toMatchObject({ path: 'skills/link/SKILL.md', symlink: true });
         expect(tree.rateLimitRemaining).toBe(4998);
     });
 
