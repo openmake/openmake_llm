@@ -39,9 +39,3 @@ export function shouldInjectManifestSkill(
     const cat = manifestCategory(c.manifestYaml);
     return !cat || cat === ctx.agentCategory;
 }
-
-/** 같은 스킬이 여러 배정(에이전트 + __global__)으로 중복 조회되면 첫 행만 남긴다 */
-export function dedupeById<T extends { id: string }>(rows: T[]): T[] {
-    const seen = new Set<string>();
-    return rows.filter(r => (seen.has(r.id) ? false : (seen.add(r.id), true)));
-}
