@@ -6,6 +6,7 @@
  * @module agents/skill-creator
  */
 
+import { upsertSkillManifest } from '../data/repositories/skill-manifest-sync';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import type { Pool } from 'pg';
@@ -144,6 +145,16 @@ export class SkillCreatorService {
             ]
         );
 
+        // manifest 동시 생성 — 승인 후 배정돼도 manifest 가 없으면 주입되지 않는다 (2026-08-29)
+        try {
+            await upsertSkillManifest((sql, params) => this.opts.pool.query(sql, params), {
+                id: skillId, name: manifest.name, description: manifest.description, category: manifest.category,
+                content: manifest.content, createdBy: effectiveTarget === 'system' ? null : input.userId,
+                isPublic: effectiveTarget === 'system',
+            });
+        } catch (e) {
+            logger.warn(`skill_manifests 생성 실패 (fail-soft): ${skillId}`, e);
+        }
         logger.info(`Draft created: ${skillId} (target=${effectiveTarget}, model=${modelUsed})`);
 
         return {

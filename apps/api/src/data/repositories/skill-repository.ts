@@ -9,12 +9,15 @@
  * @module data/repositories/skill-repository
  */
 
+import { createLogger } from '../../utils/logger';
+import { upsertSkillManifest, type SkillManifestRow } from './skill-manifest-sync';
 import { BaseRepository, QueryParam } from './base-repository';
-import { createHash } from 'crypto';
 import { assertResourceOwnerOrAdmin } from '../../auth/ownership';
 import { rowToSkill } from './skill-row-mapper';
 import { buildDraftQuery } from './skill-draft-query';
 import { SkillAssignmentRepository } from './skill-assignment-repository';
+
+const logger = createLogger('SkillRepository');
 
 export interface AgentSkill {
     id: string;
@@ -118,6 +121,15 @@ export interface ActorContext {
 }
 
 export class SkillRepository extends BaseRepository {
+    /** agent_skills ↔ skill_manifests 동기화 (fail-soft — 스킬 행은 이미 커밋됨) */
+    private async syncManifest(row: SkillManifestRow): Promise<void> {
+        try {
+            await upsertSkillManifest((sql, params) => this.query(sql, params as QueryParam[]), row);
+        } catch (e) {
+            logger.warn(`skill_manifests 동기화 실패 (fail-soft): ${row.id} — ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
     async createSkill(input: CreateSkillInput): Promise<AgentSkill> {
         const id = `skill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const now = new Date();
@@ -140,6 +152,9 @@ export class SkillRepository extends BaseRepository {
                 input.sourcePath ?? null,
             ]
         );
+
+        await this.syncManifest({ id, name: input.name, description: input.description, category: input.category ?? 'general',
+            content: input.content, createdBy: input.createdBy ?? null, isPublic: input.isPublic ?? false });
 
         const created = await this.getSkillById(id);
         return created ?? {
@@ -196,13 +211,16 @@ export class SkillRepository extends BaseRepository {
 
         // ⚠️ 시스템 프롬프트 주입의 SoT 는 skill_manifests.prompt_md (buildManifestPrompt JOIN)이다.
         // agent_skills.content 만 바꾸면 실제 주입은 옛 내용 그대로라 "수정했는데 그대로"가 된다.
-        // manifest 행이 없는 스킬(레거시)은 0 row 영향으로 no-op.
+        // 2026-08-29: UPDATE 가 아니라 upsert — manifest 가 없던 레거시 스킬도 갱신 시점에 생긴다.
         if (input.content !== undefined && input.content !== existing.content) {
-            const checksum = createHash('sha256').update(input.content).digest('hex');
-            await this.query(
-                `UPDATE skill_manifests SET prompt_md = $2, checksum = $3 WHERE id = $1`,
-                [id, input.content, checksum]
+            const versions = await this.query<{ version: string }>(
+                `SELECT version FROM skill_manifests WHERE id = $1 ORDER BY version DESC LIMIT 1`, [id]
             );
+            await this.syncManifest({
+                id, name: params[0] as string, description: params[1] as string | null, category: params[3] as string,
+                content: input.content, createdBy: existing.createdBy ?? null, isPublic: params[4] as boolean,
+                version: versions.rows[0]?.version,
+            });
         }
 
         return this.getSkillById(id);
@@ -371,6 +389,8 @@ export class SkillRepository extends BaseRepository {
                 input.sourcePath ?? null,
             ]
         );
+        await this.syncManifest({ id, name: input.name, description: input.description, category: input.category ?? 'general',
+            content: input.content, createdBy: input.createdBy ?? null, isPublic: input.isPublic ?? true });
         if (result.rows.length > 0) {
             return rowToSkill(result.rows[0]);
         }
