@@ -36,6 +36,7 @@ import {
     setClusterManager as setMetricsCluster,
     agentRouter,
     skillsRouter,
+    skillsUsageRouter,
     mcpRouter,
     mcpCatalogRouter,
     notebooklmRouter,
@@ -178,6 +179,8 @@ export function setupApiRoutes(
     app.use('/api/metrics/tools', toolHealthRouter);
     app.use('/api/metrics', metricsRouter);
     // 🆕 스킬 라우트 — agentRouter(/:id catch-all) 보다 먼저 마운트 필수
+    // 사용 요약(/usage/summary)은 skillsRouter 의 /:skillId 보다 먼저 (skills.routes 600줄 게이트로 분리)
+    app.use('/api/agents/skills', skillsUsageRouter);
     app.use('/api/agents/skills', skillsRouter);
     app.use('/api/agents', agentRouter);
     app.use('/api/monitoring', tokenMonitoringRouter);
