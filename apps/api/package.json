@@ -21,6 +21,7 @@
         "eval:all": "npm run eval:routing && npm run eval:response && npm run eval:citation"
     },
     "dependencies": {
+        "@modelcontextprotocol/client": "^2.0.0",
         "@modelcontextprotocol/sdk": "^1.30.0",
         "@mozilla/readability": "^0.6.0",
         "@openai-oauth/core": "^2.0.0",

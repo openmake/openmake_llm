@@ -3,7 +3,8 @@
  * ExternalMCPClient - 외부 MCP 서버 클라이언트
  * ============================================================
  *
- * @modelcontextprotocol/sdk 기반 외부 MCP 서버 연결 클라이언트입니다.
+ * @modelcontextprotocol/client(v2) 기반 외부 MCP 서버 연결 클라이언트입니다.
+ * 협상 모드는 기본(legacy 2025 핸드셰이크) — 등록 서버 23종이 모두 v1 SDK 라 그대로 통한다.
  * stdio, SSE, Streamable HTTP 세 가지 전송 방식을 지원합니다.
  *
  * @module mcp/external-client
@@ -21,10 +22,8 @@
  * 5. disconnect() → 클라이언트 및 전송 정리
  */
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+import { Client, StreamableHTTPClientTransport, SSEClientTransport } from '@modelcontextprotocol/client';
+import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import type { MCPServerConfig, MCPConnectionStatus, MCPTool, MCPToolResult } from './types';
 import { buildSandboxedCommand } from './sandbox-docker';
 import { isConnectionDeathError } from './tool-error-classifier';
@@ -36,7 +35,7 @@ const logger = createLogger('ExternalMCP');
 /**
  * SDK Tool 타입
  *
- * @modelcontextprotocol/sdk에서 반환하는 도구 형식입니다.
+ * MCP 클라이언트가 반환하는 도구 형식입니다.
  * sdkToolToMCPTool()에서 MCPTool로 변환합니다.
  *
  * @interface SDKTool
@@ -62,7 +61,7 @@ interface SDKTool {
 /**
  * SDK callTool 결과 타입
  *
- * @modelcontextprotocol/sdk의 callTool 반환값입니다.
+ * MCP 클라이언트의 callTool 반환값입니다.
  * sdkResultToMCPToolResult()에서 MCPToolResult로 변환합니다.
  *
  * @interface SDKCallToolResult
@@ -389,7 +388,7 @@ export class ExternalMCPClient extends EventEmitter {
     /**
      * SDK Tool → MCPTool 변환
      *
-     * @modelcontextprotocol/sdk의 도구 형식을 내부 MCPTool 형식으로 변환합니다.
+     * MCP 클라이언트의 도구 형식을 내부 MCPTool 형식으로 변환합니다.
      *
      * @param sdkTool - SDK 도구 객체
      * @returns MCPTool 형식의 도구 정의
