@@ -37,11 +37,12 @@ import { createLogger } from '../utils/logger';
 import { classifyConnectError, parseConnectError } from '../mcp/connect-error';
 import { validate } from '../middlewares/validation';
 import { mcpToolExecuteSchema, mcpServerCreateSchema, mcpServerEnvUpdateSchema,
-    mcpServerEnabledUpdateSchema, mcpServerAutoSpawnUpdateSchema } from '../schemas/mcp.schema';
+    mcpServerEnabledUpdateSchema, mcpServerAutoSpawnUpdateSchema, mcpServerRenameSchema } from '../schemas/mcp.schema';
 import { McpCatalogRepository } from '../data/repositories/mcp-catalog-repository';
 import { McpOAuthRepository } from '../data/repositories/mcp-oauth-repository';
 import { canRegisterServer, canViewServer, canDeleteServer, canStartStopServer, canUpdateServerEnv } from './mcp-visibility';
 import { connectGlobalServer } from './mcp-global-connect';
+import { renameMcpServer } from './mcp-server-rename';
 import { getAuditService } from '../services/AuditService';
 import { validateOutboundUrl } from '../security/ssrf-guard';
 
@@ -272,6 +273,9 @@ export const mcpRouter = Router();
       await registry.unregisterServer(id, db);
       res.json(success({ deleted: true }));
   }));
+
+  // 서버 이름 변경 (PATCH) — 소유자 + admin. 본문은 mcp-server-rename.ts (600줄 가드로 분리).
+  mcpRouter.patch('/servers/:id', requireAuth, validate(mcpServerRenameSchema), asyncHandler(renameMcpServer));
 
   // env(자격증명) 교체 (PATCH) — 소유자 + admin.
   // 로테이션 전용 부분 갱신: 전달한 키만 바뀌고 나머지는 보존된다. secret 값은 저장 시

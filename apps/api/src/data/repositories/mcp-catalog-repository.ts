@@ -173,6 +173,21 @@ export class McpCatalogRepository {
      *
      * @throws {Error} 허용되지 않은 키가 patch 에 포함된 경우 (라우터가 400 으로 변환)
      */
+    /**
+     * 서버 이름(=도구 네임스페이스) 변경. 소유자 검증은 라우터 책임.
+     * 같은 사용자 안에서 이름은 유일해야 한다(uniq_mcp_servers_user_name) — 충돌은 그대로
+     * throw 해 라우터가 409 로 변환한다.
+     */
+    async updateName(id: string, name: string): Promise<UserMcpServerRow | null> {
+        const r = await this.pool.query<UserMcpServerRow>(
+            `UPDATE mcp_servers SET name = $2, updated_at = NOW() WHERE id = $1
+             RETURNING id, user_id, name, transport_type, command, args, env, url,
+                       visibility, catalog_template_id, enabled, auto_spawn, created_at, updated_at`,
+            [id, name],
+        );
+        return r.rows[0] ? this.maskEnv(r.rows[0]) : null;
+    }
+
     async updateEnv(
         serverId: string,
         patch: Record<string, string>,
@@ -428,6 +443,33 @@ export class McpCatalogRepository {
             out.set(row.mcp_server_id, { message: row.last_error, at: row.started_at });
         }
         return out;
+    }
+
+    /**
+     * 프로세스 재시작 후 풀이 비어 있으므로, 이 사용자들의 서버를 다시 띄운다.
+     */
+    async listAutoSpawnUserIds(): Promise<string[]> {
+        const r = await this.pool.query<{ user_id: string }>(
+            `SELECT DISTINCT user_id FROM mcp_servers
+              WHERE user_id IS NOT NULL AND enabled = TRUE AND auto_spawn = TRUE`,
+        );
+        return r.rows.map(x => x.user_id);
+    }
+
+    /**
+     * 고아 instance 행 정리 — 프로세스가 죽으면 running/starting 행이 그대로 남는다
+     * (shutdownAll 은 풀만 닫고 전이를 기록하지 않으며, 강제 종료 시엔 그마저 못 남긴다).
+     * 부팅 시 1회 호출해 "직전 프로세스의 살아있던 인스턴스"를 stopped 로 마감한다.
+     * @returns 마감한 행 수
+     */
+    async closeOrphanInstances(): Promise<number> {
+        const r = await this.pool.query(
+            `UPDATE mcp_server_instances
+                SET status = 'stopped', stopped_at = NOW(),
+                    last_error = COALESCE(last_error, 'process restart')
+              WHERE status IN ('running', 'starting')`,
+        );
+        return r.rowCount ?? 0;
     }
 
     async recordInstanceTransition(

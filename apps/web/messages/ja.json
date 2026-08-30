@@ -738,7 +738,7 @@
     "stateLabel": "ステータス:",
     "turnLabel": "ターン:",
     "planLabel": "計画 ({completed}/{total})",
-    "outputsLabel": "成果物 ({count})",
+    "outputsLabel": "成果物 {count}件",
     "noSteps": "ステップ記録がありません。",
     "stepsLabel": "実行ステップ ({count})",
     "reject": "却下",
@@ -773,7 +773,10 @@
       "empty": "テンプレートはありません。",
       "run": "このテンプレートで実行",
       "delete": "削除",
-      "started": "テンプレートからタスクを開始しました。"
+      "started": "テンプレートからタスクを開始しました。",
+      "expand": "全体を表示",
+      "collapse": "折りたたむ",
+      "lineCount": "{lines}行 · {chars}文字"
     },
     "downloadFailed": "ダウンロードに失敗しました: {error}",
     "localBadge": "ローカルフォルダ実行",
@@ -782,7 +785,8 @@
       "goal_incomplete": "目標未達成",
       "max_turns_exhausted": "ターン・リソース上限に到達",
       "interrupted": "サーバー再起動により中断",
-      "resumableHint": "再開できます"
+      "resumableHint": "再開できます",
+      "aborted": "ユーザーによる取り消し"
     },
     "planNode": "ステップ{n}",
     "startedLabel": "開始",
@@ -819,7 +823,15 @@
       "originSpawn": "並列サブ #{n}",
       "originDelegate": "専門家委任",
       "stepCount": "{count}ステップ"
-    }
+    },
+    "artifactSize": "{chars}文字",
+    "artifactOpen": "新しいタブで開く",
+    "artifactDownload": "ダウンロード",
+    "resultLabel": "結果",
+    "noResultBody": "保存された最終回答はありません。下の実行タイムラインで経過を確認してください。",
+    "previewTitle": "成果物プレビュー",
+    "previewEmpty": "このタスクに保存された成果物はありません。",
+    "previewLoadError": "成果物を読み込めませんでした。"
   },
   "customAgents": {
     "pageTitle": "カスタムエージェント",
@@ -1013,7 +1025,19 @@
     "oauthLogoutTitle": "保存された OAuth トークンを削除して接続を切ります",
     "oauthStartFailed": "OAuth ログインを開始できません: {error}",
     "oauthOk": "{server} にログインしました — 接続します",
-    "oauthFailed": "{server} へのログインに失敗しました ({reason})"
+    "oauthFailed": "{server} へのログインに失敗しました ({reason})",
+    "renameTitle": "名前の変更",
+    "renameLabel": "サーバー名",
+    "renameHint": "ツール名の接頭辞になります(例: mcp-postgres::query)。再接続後に反映されます。",
+    "renameDone": "名前を「{name}」に変更しました。次回の接続から反映されます。",
+    "renameError": "名前の変更に失敗しました",
+    "save": "保存",
+    "delete": "削除",
+    "deleteTitle": "サーバーを削除",
+    "deleteConfirm": "この MCP サーバーの登録を削除しますか？",
+    "deleteHint": "元に戻せません。保存された認証情報（env）も削除され、実行中のインスタンスは停止します。再度使うにはカタログから再インストールが必要です。",
+    "deleteDone": "サーバー「{name}」を削除しました。",
+    "deleteError": "削除に失敗しました"
   },
   "mcpCatalog": {
     "pageTitle": "MCPカタログ",
@@ -1028,7 +1052,11 @@
     "install": "インストール",
     "installError": "インストールに失敗しました。もう一度お試しください。",
     "credentialsTitle": "インストールするには認証情報を入力してください",
-    "cancel": "キャンセル"
+    "cancel": "キャンセル",
+    "installAnother": "追加インストール",
+    "installFormTitle": "インストール設定",
+    "nameLabel": "サーバー名",
+    "nameHint": "ツール名の接頭辞になります(例: mcp-postgres::query)。英数字・_・- のみ。"
   },
   "mcpMonitoring": {
     "title": "MCP モニタリング",

@@ -166,7 +166,7 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     }
 
     // 4. 산출물 영속 후 완료.
-    stepNumber = await persistArtifactSteps(taskId, artifacts, stepNumber);
+    stepNumber = await persistArtifactSteps(taskId, artifacts, stepNumber, userId);
     stepNumber = await maybePersistCodeDiff(taskRuntime, sandboxCfg, taskId, stepNumber, emitStep);
     await update({
         status: 'completed',

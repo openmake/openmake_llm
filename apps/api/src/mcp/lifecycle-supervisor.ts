@@ -43,7 +43,7 @@ export type ClientFactory = (config: ServerSpawnConfig) => ExternalMCPClient;
 
 export interface SupervisorDeps {
     userPool: UserMCPPool;
-    repo: Pick<McpCatalogRepository, 'listUserServers' | 'getServerById' | 'decryptEnvForSpawn' | 'recordInstanceTransition' | 'getCatalogToolAllowlist'>;
+    repo: Pick<McpCatalogRepository, 'listUserServers' | 'getServerById' | 'decryptEnvForSpawn' | 'recordInstanceTransition' | 'getCatalogToolAllowlist' | 'listAutoSpawnUserIds' | 'closeOrphanInstances'>;
     clientFactory: ClientFactory;
 }
 
@@ -56,6 +56,7 @@ export interface LifecycleSupervisor {
     spawnUserServer(userId: string, serverId: string): Promise<ExternalMCPClient>;
     killUserServer(userId: string, serverId: string): Promise<void>;
     getUserClient(userId: string, serverId: string): ExternalMCPClient | undefined;
+    restoreOnBoot(): Promise<void>;
     shutdownAll(): Promise<void>;
 }
 
@@ -184,8 +185,48 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
         return this.userPool.get(userId, serverId);
     }
 
+    /**
+     * 부팅 시 자동 복원 — 프로세스 재시작 후 user MCP 풀은 비어 있다. 종전에는 복원 경로가
+     * 없어 채팅 시작(onChatStart)·로그인 전까지 서버가 뜨지 않았고, 설정 화면이 계속
+     * "연결 끊김"으로 보였다(enabled/auto_spawn 은 저장돼 있는데도).
+     *
+     * 먼저 직전 프로세스의 고아 instance 행을 stopped 로 마감한 뒤, enabled+auto_spawn
+     * 서버를 가진 사용자별로 ensureUserServers 를 돌린다(멱등).
+     *
+     * MCP_RESTORE_ON_BOOT=false 로 끌 수 있다 — 사용자가 많아 부팅 시 자식 프로세스가
+     * 과도해지는 환경을 위한 opt-out. 실패는 기동을 막지 않는다.
+     */
+    async restoreOnBoot(): Promise<void> {
+        if (process.env.MCP_RESTORE_ON_BOOT === 'false') {
+            logger.info('restoreOnBoot: MCP_RESTORE_ON_BOOT=false — 건너뜀');
+            return;
+        }
+        try {
+            const closed = await this.repo.closeOrphanInstances();
+            if (closed > 0) logger.info(`restoreOnBoot: 고아 instance ${closed}건 stopped 로 마감`);
+
+            const userIds = await this.repo.listAutoSpawnUserIds();
+            if (userIds.length === 0) {
+                logger.info('restoreOnBoot: 복원 대상 사용자 없음');
+                return;
+            }
+            logger.info(`restoreOnBoot: 사용자 ${userIds.length}명 복원 시작`);
+            // 사용자별 순차 — 동시에 몰면 부팅 직후 자식 프로세스가 한꺼번에 뜬다.
+            for (const userId of userIds) {
+                await this.ensureUserServers(userId, 'boot').catch(e =>
+                    logger.warn(`restoreOnBoot 실패 u=${userId}: ${e instanceof Error ? e.message : String(e)}`));
+            }
+            logger.info('restoreOnBoot: 복원 완료');
+        } catch (e) {
+            logger.warn(`restoreOnBoot 실패(기동은 계속): ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
     async shutdownAll(): Promise<void> {
         logger.info(`shutdownAll: 전체 풀 정리 (size=${this.userPool.size()})`);
+        // 풀만 닫으면 instance 행이 running 인 채로 남아 이력이 거짓이 된다 —
+        // 다음 부팅의 closeOrphanInstances 가 보완하지만, graceful 종료에선 여기서 마감한다.
+        await this.repo.closeOrphanInstances().catch(() => { /* 이력 실패는 종료를 막지 않는다 */ });
         await this.userPool.closeAll();
     }
 

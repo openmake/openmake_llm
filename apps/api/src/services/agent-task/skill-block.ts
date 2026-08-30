@@ -11,6 +11,7 @@ import { REPORT_PIPELINE, REPORT_INTENT_PATTERNS } from '../../config/runtime-li
 import { buildLearningBlock } from './task-learning';
 import { buildProceduralSkillBlock } from './procedural-skill';
 import { buildUserMemoryBlock } from '../chat-service/user-context-blocks';
+import { buildArtifactGuideBlock } from '../chat-service/artifact-guide-block';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentTaskService');
@@ -46,11 +47,18 @@ export async function buildAgentTaskSystemContent(userId: string, goal: string, 
     const memory = userId && userId !== 'guest' ? await buildUserMemoryBlock(userId) : '';
     // 보고서 파이프라인 (P1 Phase 2): goal 이 보고서 의도면 reportdata 계약 가이드를 주입한다.
     // 최종 답변의 reportdata 블록은 AgentTaskService 가 applyReportRender 로 렌더해 아티팩트화.
+    const goalLang = /[가-힣]/.test(goal) ? 'ko' : 'en';
     const reportGuide = REPORT_PIPELINE.ENABLED && REPORT_INTENT_PATTERNS.some((re) => re.test(goal))
-        ? getReportGuideForTask(/[가-힣]/.test(goal) ? 'ko' : 'en')
+        ? getReportGuideForTask(goalLang)
         : '';
     if (reportGuide) logger.info(`[AgentTask] 보고서 의도 goal — reportdata 계약 가이드 주입: ${taskId}`);
+    // 아티팩트 가이드 — 채팅 경로(message-pipeline)와 동일한 블록을 공유한다.
+    // 이전에는 agent-task-prompt 의 짧은 요약 규칙만 받아, html 디자인 규칙(디자인 토큰·
+    // 시멘틱 마크업·반응형)이 에이전트 작업 산출물에는 적용되지 않았다.
+    // 사용자의 artifacts_enabled=false 는 buildArtifactGuideBlock 이 ''를 반환해 그대로 존중된다.
+    const artifactGuide = await buildArtifactGuideBlock(userId, goalLang);
     return getAgentTaskSystemPrompt()
+        + artifactGuide
         + reportGuide
         + memory
         + (await buildSkillPromptBlock(userId))

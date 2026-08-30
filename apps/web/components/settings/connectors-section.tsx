@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Server, Boxes, Plus, Loader2, X, KeyRound, ClipboardCheck, AlertTriangle, Power, PowerOff, LogIn, LogOut, Zap, ZapOff } from "lucide-react";
+import { Server, Boxes, Plus, Loader2, X, KeyRound, Pencil, Trash2, ClipboardCheck, AlertTriangle, Power, PowerOff, LogIn, LogOut, Zap, ZapOff } from "lucide-react";
 import {
   Button,
   Badge,
@@ -19,6 +19,7 @@ import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import { McpInstancesPanel } from "@/components/settings/mcp-instances-panel";
+import { useAppStore } from "@/lib/store";
 
 /**
  * MCP 서버(커넥터) 관리 — 구 /mcp-servers 페이지 본문을 설정 '커넥터' 탭으로 흡수한 것
@@ -53,6 +54,9 @@ interface McpServer {
   envKeys: string[];
   /** 그중 암호화 저장된(민감) 키 — 입력 시 password 필드로 렌더 */
   secretKeys: string[];
+  /** 소유자 — 삭제/이름변경 권한 판정용(백엔드 canDeleteServer 와 같은 기준: 소유자 + admin).
+   *  global 서버는 null 이라 admin 만 지울 수 있다. */
+  ownerId: string | null;
 }
 
 /* ── 백엔드 응답 타입 (GET /api/mcp/servers) ──────────────── */
@@ -76,6 +80,8 @@ interface ApiMcpServer {
   connectionErrorCode?: string | null;
   /** 백엔드가 마스킹해서 내려주는 env — 암호화된 값은 "***" 로 치환돼 있다(원문 미노출). */
   env?: Record<string, string> | null;
+  /** 소유자 id — global 카탈로그 서버는 null. 삭제 권한 판정에 쓴다. */
+  user_id?: string | null;
 }
 
 const TRANSPORT_MAP: Record<ApiMcpServer["transport_type"], Transport> = {
@@ -121,10 +127,150 @@ function mapServer(s: ApiMcpServer, t: Translator): McpServer {
     secretKeys: Object.entries(s.env ?? {})
       .filter(([, v]) => v === "***")
       .map(([k]) => k),
+    ownerId: s.user_id ?? null,
   };
 }
 
 /* ── 자격증명(env) 변경 모달 ────────────────────────────────── */
+/* ── 이름 변경 모달 ─────────────────────────────────────────
+ * 서버 이름은 도구 네임스페이스(name::tool)라, 같은 카탈로그 템플릿을 여러 접속처에
+ * 설치했을 때 서로 구분하는 유일한 수단이다. 설치 후에도 바꿀 수 있어야 한다.
+ * 변경 후에는 respawn 이 필요하다(네임스페이스가 spawn 시점에 굳는다).
+ */
+function RenameModal({
+  server,
+  onClose,
+  onSuccess,
+}: {
+  server: McpServer | null;
+  onClose: () => void;
+  onSuccess: (notice: string) => void;
+}) {
+  const t = useTranslations("mcpServers");
+  const [name, setName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => { setName(server?.name ?? ""); setError(null); }, [server]);
+  if (!server) return null;
+
+  const valid = /^[A-Za-z0-9_-]+$/.test(name);
+
+  async function submit(ev: React.SubmitEvent<HTMLFormElement>) {
+    ev.preventDefault();
+    if (!server) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await ApiClient.patch(`/api/mcp/servers/${server.id}`, { name });
+      onSuccess(t("renameDone", { name }));
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("renameError"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-fg">{t("renameTitle")}</h2>
+          <button type="button" onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-2 hover:text-fg">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <form onSubmit={(e) => void submit(e)} className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-fg-2">{t("renameLabel")}</label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              pattern="[A-Za-z0-9_-]+"
+              required
+              className="h-9 w-full rounded-md border border-border-strong bg-app px-3 font-mono text-sm text-fg outline-none transition focus:border-accent"
+            />
+            <p className="mt-1 text-[11px] text-muted">{t("renameHint")}</p>
+          </div>
+          {error && <p className="rounded-md bg-danger-soft px-3 py-2 text-xs text-danger">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={onClose}>{t("cancel")}</Button>
+            <Button type="submit" size="sm" disabled={submitting || !valid || name === server.name}>
+              {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {t("save")}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ── 삭제 확인 모달 ─────────────────────────────────────────
+ * 연결해제(disconnect)와 다르다: disconnect 는 런타임 연결만 끊고 등록은 남기지만,
+ * 삭제는 등록 자체를 지운다(DELETE /api/mcp/servers/:id). 백엔드가 유저풀에 spawn 된
+ * 샌드박스 컨테이너까지 정리하므로, 여기서는 확인만 받고 목록을 다시 읽으면 된다.
+ * 되돌릴 수 없고 저장된 자격증명(env)도 함께 사라지므로 확인을 한 번 거친다.
+ */
+function DeleteServerModal({
+  server,
+  onClose,
+  onSuccess,
+}: {
+  server: McpServer | null;
+  onClose: () => void;
+  onSuccess: (notice: string) => void;
+}) {
+  const t = useTranslations("mcpServers");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => { setError(null); }, [server?.id]);
+  if (!server) return null;
+
+  async function handleDelete() {
+    if (!server) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await ApiClient.del(`/api/mcp/servers/${server.id}`);
+      onSuccess(t("deleteDone", { name: server.name }));
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("deleteError"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-base font-semibold text-fg">{t("deleteTitle")}</h2>
+          <button type="button" onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-2 hover:text-fg">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <p className="mb-1 text-sm text-fg-2">{t("deleteConfirm")}</p>
+        <p className="mb-3 font-mono text-sm font-medium text-fg">{server.name}</p>
+        <p className="mb-4 rounded-md bg-surface-2 px-3 py-2 text-xs text-fg-2">{t("deleteHint")}</p>
+        {error && <p className="mb-3 rounded-md bg-danger-soft px-3 py-2 text-xs text-danger">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={submitting}>
+            {t("cancel")}
+          </Button>
+          <Button variant="danger" size="sm" onClick={() => void handleDelete()} disabled={submitting}>
+            {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {t("delete")}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function EnvEditModal({
   server,
   onClose,
@@ -353,6 +499,8 @@ export function ConnectorsSection() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
   const [envEditTarget, setEnvEditTarget] = useState<McpServer | null>(null);
+  const [renameTarget, setRenameTarget] = useState<McpServer | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<McpServer | null>(null);
   const [envNotice, setEnvNotice] = useState<string | null>(null);
   // OAuth 콜백 착지 — 결과를 알리고 목록을 다시 읽는다(토큰이 생겨 연결됐을 수 있다)
   useEffect(() => {
@@ -365,6 +513,12 @@ export function ConnectorsSection() {
     window.history.replaceState(null, "", `${window.location.pathname}?${params.toString()}`);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 삭제 권한은 백엔드 canDeleteServer 와 같은 기준(소유자 + admin)으로 클라이언트에서도 판정한다.
+  // 게이팅이 없으면 모두에게 보이는 global 서버에 삭제 버튼이 떠서 누를 때마다 403 이 난다.
+  const currentUser = useAppStore((st) => st.auth.currentUser);
+  const canDelete = (s: McpServer) =>
+    currentUser != null && (currentUser.role === "admin" || s.ownerId === currentUser.id);
 
   // env 교체 성공 — 백엔드가 기존 컨테이너를 정리했으므로(stale env 방지) 재연결 안내.
   function handleEnvUpdated(respawnRequired: boolean) {
@@ -485,6 +639,21 @@ export function ConnectorsSection() {
     }
   }
 
+  /** 이름 변경·삭제 등 목록을 다시 읽어야 하는 동작을 위한 재조회.
+   *  실패해도 화면을 비우지 않는다 — 목업 폴백은 두지 않는다(PR #634 이후 금지 패턴). */
+  async function loadServers() {
+    try {
+      const res = await ApiClient.get<ApiEnvelope<{ servers: ApiMcpServer[] }>>(
+        "/api/mcp/servers",
+      );
+      setServers((res?.data?.servers ?? []).map((s) => mapServer(s, t)));
+    } catch {
+      // 401·네트워크 실패 등 → 기존 목록 유지
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -517,10 +686,20 @@ export function ConnectorsSection() {
           router.push("/approvals");
         }}
       />
+      <RenameModal
+        server={renameTarget}
+        onClose={() => setRenameTarget(null)}
+        onSuccess={(notice) => { setEnvNotice(notice); void loadServers(); }}
+      />
       <EnvEditModal
         server={envEditTarget}
         onClose={() => setEnvEditTarget(null)}
         onSuccess={handleEnvUpdated}
+      />
+      <DeleteServerModal
+        server={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onSuccess={(notice) => { setEnvNotice(notice); void loadServers(); }}
       />
       <CardHeader className="flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -668,6 +847,14 @@ export function ConnectorsSection() {
                           <Button
                             variant="outline"
                             size="sm"
+                            onClick={() => setRenameTarget(s)}
+                            title={t("renameTitle")}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
                             disabled={isActing}
                             onClick={() => void handleToggleEnabled(s.id, !s.enabled)}
                             title={s.enabled ? t("disableTitle") : t("enableTitle")}
@@ -748,6 +935,20 @@ export function ConnectorsSection() {
                             >
                               {isActing && <Loader2 className="h-3 w-3 animate-spin" />}
                               {t("connect")}
+                            </Button>
+                          )}
+                          {/* 삭제는 연결 상태와 무관하게 노출 — 연결이 끊긴 서버야말로
+                              지우고 싶은 대상이다. 되돌릴 수 없어 확인 모달을 거친다. */}
+                          {canDelete(s) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={isActing}
+                              onClick={() => setDeleteTarget(s)}
+                              title={t("deleteTitle")}
+                              className="text-danger hover:bg-danger-soft"
+                            >
+                              <Trash2 className="h-3 w-3" />
                             </Button>
                           )}
                         </div>

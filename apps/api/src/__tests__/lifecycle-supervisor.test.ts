@@ -7,6 +7,8 @@ interface MockRepo {
     decryptEnvForSpawn: jest.Mock;
     recordInstanceTransition: jest.Mock;
     getCatalogToolAllowlist: jest.Mock;
+    listAutoSpawnUserIds: jest.Mock;
+    closeOrphanInstances: jest.Mock;
 }
 
 function mkRepo(): MockRepo {
@@ -16,6 +18,8 @@ function mkRepo(): MockRepo {
         decryptEnvForSpawn: jest.fn().mockResolvedValue({}),
         recordInstanceTransition: jest.fn().mockResolvedValue(undefined),
         getCatalogToolAllowlist: jest.fn().mockResolvedValue(null),
+        listAutoSpawnUserIds: jest.fn().mockResolvedValue([]),
+        closeOrphanInstances: jest.fn().mockResolvedValue(0),
     };
 }
 
