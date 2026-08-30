@@ -175,6 +175,26 @@ async function extractPdfOcrLegacy(buf: Buffer): Promise<string> {
 }
 
 /** office 포맷(docx/xlsx/pptx/odt/...) → plain text (officeparser, 순수 Node). buffer 직접 처리. */
+/**
+ * 한국 공문서(HWP 3.x/5.x·HWPX·HWPML) → 마크다운.
+ *
+ * kordoc 은 순수 JS 파서라 한컴오피스·Windows COM·JVM 이 필요 없다(PDF 경로의 JVM 과 대비).
+ * `parse()` 가 이미 `markdown` 을 만들어 주므로 블록을 다시 조립하지 않는다.
+ * 파싱 자체가 실패하면 throw — 호출부가 잡아 메타만 남긴다(기존 형식들과 동일).
+ */
+async function extractHwp(buf: Buffer, name: string): Promise<string> {
+    const { parse } = await import('kordoc');
+    // 형식은 매직바이트로 자동 판별된다(ParseOptions 에 filename 이 없다) — 확장자는 로그용.
+    const r = await withTimeout(parse(buf), DOC_EXTRACT_LIMITS.HWP_TIMEOUT_MS, 'HWP');
+    const md = typeof (r as { markdown?: unknown })?.markdown === 'string' ? (r as { markdown: string }).markdown : '';
+    // 암호화 문서 등은 success=false 로 오며 markdown 이 비어 있다 — 경고만 남기고 빈 문자열.
+    if (!md && Array.isArray((r as { warnings?: unknown[] })?.warnings)) {
+        const w = (r as { warnings: unknown[] }).warnings.slice(0, 3).join('; ');
+        if (w) logger.warn(`[DocExtract] ${name}: kordoc 경고 — ${w}`);
+    }
+    return md;
+}
+
 async function extractOffice(buf: Buffer, ext: string): Promise<string> {
     const { parseOffice } = await import('officeparser');
     const controller = new AbortController();
@@ -210,7 +230,8 @@ export async function extractAttachedDocuments(files: AttachedFileInput[] | unde
         const ext = extOf(typeof f.name === 'string' ? f.name : '');
         const isPdf = DOC_EXTRACT_LIMITS.PDF_EXTS.includes(ext);
         const isOffice = DOC_EXTRACT_LIMITS.OFFICE_EXTS.includes(ext);
-        if (!isPdf && !isOffice) { delete f.data; continue; }
+        const isHwp = DOC_EXTRACT_LIMITS.HWP_EXTS.includes(ext);
+        if (!isPdf && !isOffice && !isHwp) { delete f.data; continue; }
 
         const buf = Buffer.from(f.data, 'base64');
         // PDF 는 MAX_BYTES_PER_FILE(JVM 보호) 초과라도 OCR_MAX_BYTES 까지는 OCR 직행 허용 —
@@ -228,7 +249,9 @@ export async function extractAttachedDocuments(files: AttachedFileInput[] | unde
         try {
             const text = isPdf
                 ? (withinFull ? await extractPdf(buf) : await extractPdfOcr(buf))
-                : await extractOffice(buf, ext);
+                : isHwp
+                    ? await extractHwp(buf, typeof f.name === 'string' ? f.name : `doc.${ext}`)
+                    : await extractOffice(buf, ext);
             const trimmed = (text || '').trim();
             if (trimmed.length > 0) {
                 f.content = trimmed.slice(0, FILE_ATTACH_LIMITS.MAX_CHARS_PER_FILE);

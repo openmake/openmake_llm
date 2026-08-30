@@ -87,5 +87,13 @@ RUN sed -i 's/Components: main/Components: main contrib/' /etc/apt/sources.list.
     && apt-get clean && rm -rf /var/lib/apt/lists/* \
     && fc-cache -f
 
+# 한국 공문서 툴킷(kordoc, npm) — HWP 3.x/5.x·HWPX·HWPML 파싱/생성/서식 채우기/신구대조.
+# network=none 샌드박스라 런타임 `npx -y kordoc` 다운로드가 불가하므로 빌드타임에 전역 설치한다
+# (python venv·opendataloader 와 같은 패턴). 순수 JS 파서라 한컴오피스·JVM 이 필요 없다.
+# 버전은 apps/api 의존성(doc-extractor 가 쓰는 kordoc)과 메이저를 맞춘다.
+RUN npm install -g --no-fund --no-audit kordoc@^4 \
+    && npm cache clean --force \
+    && kordoc --version
+
 USER node
 WORKDIR /workspace
