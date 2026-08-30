@@ -91,3 +91,27 @@ describe('TaskRuntime 도구/게이트 (샌드박스 미생성 — 게이트 로
         expect(out).toContain('거절');
     });
 });
+
+describe('도구 이름 교정 (P0-b)', () => {
+    const cfgNone = { ...getTaskSandboxConfig(), approvalPolicy: 'none' as const };
+
+    it('알 수 없는 도구 이름에 후보를 붙인다 — Claude Code 별칭', async () => {
+        const rt = new TaskRuntime('t-alias', 'u1', cfgNone);
+        const out = await rt.executeTaskTool('Read', {});
+        expect(out).toContain('알 수 없는 task 도구 Read');
+        expect(out).toContain('file_ops');
+    });
+
+    it('노출 도구 목록을 주입하면 MCP·내장 도구도 후보가 된다', async () => {
+        const rt = new TaskRuntime('t-known', 'u1', cfgNone);
+        rt.setKnownToolNames(['web_search', 'extract_webpage']);
+        const out = await rt.executeTaskTool('web-search', {});
+        expect(out).toContain('web_search');
+    });
+
+    it('후보가 없으면 종전 메시지 그대로 (fail-open)', async () => {
+        const rt = new TaskRuntime('t-none', 'u1', cfgNone);
+        const out = await rt.executeTaskTool('zzzzzzzzzzzz', {});
+        expect(out).toBe('Error: 알 수 없는 task 도구 zzzzzzzzzzzz');
+    });
+});
