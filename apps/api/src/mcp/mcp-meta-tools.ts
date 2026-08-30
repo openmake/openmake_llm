@@ -42,7 +42,26 @@ export const mcpListToolsTool: MCPToolDefinition = {
         const groups = router.getUserPoolToolGroups(userId);
         // "없습니다"만 반환하면 모델이 "검색/도구 불가 환경"으로 오일반화해 내장 도구까지
         // 안 쓰는 환각을 확증시킨다(2026-07-17 Discord 사례) — 내장 도구 가용을 함께 명시.
+        //
+        // 빈 그룹은 "미설치"와 "이번 실행에서 풀이 아직 안 채워짐"을 구분하지 못한다. 후자를
+        // 미설치로 단정하자 모델이 설치돼 있는 서버를 두고 작업을 포기했다. DB 기준 설치 여부를
+        // 확인해 두 경우를 다르게 안내한다. 조회 실패는 기존 문구로 폴백(graceful).
         if (groups.length === 0) {
+            let installed: string[] = [];
+            try {
+                const { McpCatalogRepository } = await import('../data/repositories/mcp-catalog-repository');
+                const { getUnifiedDatabase } = await import('../data/models/unified-database');
+                const rows = await new McpCatalogRepository(getUnifiedDatabase().getPool()).listUserServers(userId);
+                installed = rows.filter(r => r.enabled).map(r => r.name);
+            } catch { /* 조회 실패 — 아래 기본 문구 */ }
+
+            if (installed.length > 0) {
+                return text(
+                    `설치된 MCP 서버(${installed.join(', ')})가 이번 실행에서 아직 준비되지 않았습니다. `
+                    + '미설치가 아니므로 "서버가 없다"고 단정하지 마세요. 현재 도구 목록에 해당 서버 도구가 '
+                    + '보이면 그대로 호출하고, 보이지 않으면 잠시 후 다시 이 도구로 확인하거나 내장 도구로 진행하세요.',
+                );
+            }
             return text(
                 '설치된 외부 MCP 서버가 없습니다. 단, 기본 내장 도구(현재 도구 목록의 web_search 등)는 '
                 + 'MCP 설치와 무관하게 지금 바로 사용할 수 있습니다. 웹 검색이 필요하면 web_search 도구를 직접 호출하세요.',
