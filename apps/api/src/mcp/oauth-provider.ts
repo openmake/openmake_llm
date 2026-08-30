@@ -1,7 +1,7 @@
 /**
  * 원격 MCP 서버용 OAuthClientProvider 구현.
  *
- * SDK(`@modelcontextprotocol/sdk` client/auth) 가 401 을 만나면 이 provider 로
+ * SDK(`@modelcontextprotocol/client` 의 auth) 가 401 을 만나면 이 provider 로
  * Authorization Code + PKCE(+ RFC 7591 동적 등록) 흐름을 돌린다. 이 클래스는 **저장만** 담당한다:
  *   - client 정보·토큰 → DB(`McpOAuthRepository`, 암호화)
  *   - state · PKCE verifier → KV(`storage/`, 10분 TTL)
@@ -13,8 +13,9 @@
  *
  * @module mcp/oauth-provider
  */
-import type { OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js';
-import type { OAuthClientInformationMixed, OAuthClientMetadata, OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js';
+import type {
+    OAuthClientProvider, OAuthClientInformationMixed, OAuthClientMetadata, OAuthTokens,
+} from '@modelcontextprotocol/client';
 import { randomBytes } from 'crypto';
 import { getKeyValueStore } from '../storage';
 import { McpOAuthRepository } from '../data/repositories/mcp-oauth-repository';

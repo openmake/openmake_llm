@@ -11,7 +11,7 @@
  * @module data/repositories/mcp-oauth-repository
  */
 import type { Pool } from 'pg';
-import type { OAuthTokens, OAuthClientInformationFull } from '@modelcontextprotocol/sdk/shared/auth.js';
+import type { OAuthTokens, OAuthClientInformationFull } from '@modelcontextprotocol/client';
 import { encryptToken, decryptToken } from '../../utils/token-crypto';
 import { createLogger } from '../../utils/logger';
 
