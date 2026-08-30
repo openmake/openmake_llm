@@ -14,7 +14,9 @@
 #   [ChatTiming] prep=23ms ttfc=5676ms tool=2955ms turns=4 total=27135ms model=...
 set -euo pipefail
 
-LOG="${1:-/tmp/openmake-llm-out.log}"
+# 로그 위치는 pm2 의 OMK_LOG_DIR 을 따른다(#650 으로 /tmp 에서 영속 볼륨으로 이전).
+# 기본값을 /tmp 로 고정해 두면 이전 이후 매일 "로그 없음" 으로 집계가 조용히 실패한다.
+LOG="${1:-${OMK_LOG_DIR:-/tmp}/openmake-llm-out.log}"
 [ -f "$LOG" ] || { echo "로그 없음: $LOG"; exit 1; }
 
 echo "로그: $LOG"
