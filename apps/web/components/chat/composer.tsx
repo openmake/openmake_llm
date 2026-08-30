@@ -52,7 +52,11 @@ const MAX_INLINE_DOC_BYTES = 30 * 1024 * 1024;
 //  - 이미지(image/*) → base64 data URL → vision 채널(images)
 //  - 문서(EXTRACT_EXTS: PDF/Word/Excel/PowerPoint 등) → base64 원본(data) → 백엔드가 텍스트 추출
 //  - 그 외 → 텍스트로 읽어 content (바이너리는 깨질 수 있으나 백엔드가 메타로 처리)
-const EXTRACT_EXTS = ["pdf", "docx", "xlsx", "pptx", "odt", "odp", "ods", "rtf"];
+// 백엔드가 추출하는 형식 — 이 목록에 없으면 readAsText 로 읽혀 **깨진 바이너리가 content 로**
+// 전송되고, 서버는 "이미 content 있음" 으로 추출을 건너뛴다(조용한 실패). hwp/hwpx/hml 은
+// kordoc 경로가 생겼는데 여기 누락돼 363KB 문서가 140K 토큰 쓰레기로 들어갔다(2026-08-31 실측).
+// ⚠️ 백엔드 DOC_EXTRACT_LIMITS 의 PDF_EXTS·OFFICE_EXTS·HWP_EXTS 와 한 쌍으로 유지할 것.
+const EXTRACT_EXTS = ["pdf", "docx", "xlsx", "pptx", "odt", "odp", "ods", "rtf", "hwp", "hwpx", "hml"];
 
 const extOf = (name: string): string => {
   const i = name.lastIndexOf(".");
