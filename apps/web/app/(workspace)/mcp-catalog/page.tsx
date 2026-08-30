@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Search, Boxes, Download, Loader2, Server } from "lucide-react";
@@ -90,6 +90,18 @@ export default function McpCatalogPage() {
   // 설치 전 자격증명(env) 입력이 필요한 항목의 인라인 폼 상태.
   const [configuringId, setConfiguringId] = useState<string | null>(null);
   const [envDraft, setEnvDraft] = useState<Record<string, string>>({});
+  // 설치 이름 — 같은 템플릿을 여러 접속처에 설치할 수 있으므로 인스턴스마다 이름을 받는다.
+  const [nameDraft, setNameDraft] = useState("");
+  // 이미 설치된 인스턴스 이름 — 기본 이름 제안 시 충돌 회피에 쓴다.
+  const [installedNames, setInstalledNames] = useState<string[]>([]);
+
+  const loadInstalled = useCallback(async () => {
+    try {
+      const r = await ApiClient.get<ApiEnvelope<{ servers: { name: string }[] }>>("/api/mcp/servers");
+      setInstalledNames((r?.data?.servers ?? []).map((x) => x.name));
+    } catch { /* 401·미배포: 제안 이름만 단순해진다 */ }
+  }, []);
+  useEffect(() => { void loadInstalled(); }, [loadInstalled]);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,18 +124,31 @@ export default function McpCatalogPage() {
     };
   }, []);
 
-  // 설치 시작: 필수 env 필드가 있으면 인라인 폼을 열고, 없으면 즉시 설치.
-  function beginInstall(e: CatalogEntry) {
-    setInstallError((prev) => ({ ...prev, [e.id]: "" }));
-    if (e.envFields.length > 0) {
-      setConfiguringId(e.id);
-      setEnvDraft(Object.fromEntries(e.envFields.map((f) => [f.key, ""])));
-      return;
+  /**
+   * 이미 쓰고 있는 이름을 피해 기본 이름을 제안한다 — 같은 템플릿을 두 번째로 설치할 때
+   * `mcp-postgres-2` 처럼. 이름은 (user_id, name) 유니크라 충돌하면 서버가 409 를 낸다.
+   */
+  function suggestName(e: CatalogEntry): string {
+    const base = e.id.replace(/[^a-zA-Z0-9_-]/g, "-");
+    const used = new Set(installedNames);
+    if (!used.has(base)) return base;
+    for (let i = 2; i < 100; i += 1) {
+      if (!used.has(`${base}-${i}`)) return `${base}-${i}`;
     }
-    void doInstall(e, {});
+    return base;
   }
 
-  async function doInstall(e: CatalogEntry, env: Record<string, string>) {
+  // 설치 시작: 이름(필수) + 자격증명(있으면)을 받는 인라인 폼을 연다.
+  // 종전에는 env 가 없으면 곧장 설치하면서 이름을 템플릿 id 로 고정해, 같은 템플릿을
+  // 두 번 설치할 수 없었다(두 번째가 유니크 제약에 걸림).
+  function beginInstall(e: CatalogEntry) {
+    setInstallError((prev) => ({ ...prev, [e.id]: "" }));
+    setConfiguringId(e.id);
+    setNameDraft(suggestName(e));
+    setEnvDraft(Object.fromEntries(e.envFields.map((f) => [f.key, ""])));
+  }
+
+  async function doInstall(e: CatalogEntry, env: Record<string, string>, name: string) {
     setInstalling((prev) => ({ ...prev, [e.id]: true }));
     setInstallError((prev) => ({ ...prev, [e.id]: "" }));
     try {
@@ -132,7 +157,7 @@ export default function McpCatalogPage() {
       // env 의 secret 필드는 백엔드 createFromCatalog 가 AES-256-GCM 으로 암호화 저장.
       await ApiClient.post("/api/mcp/servers/from-catalog", {
         template_id: e.id,
-        name: e.id.replace(/[^a-zA-Z0-9_-]/g, "-"), // name 은 영숫자/_/- 만 허용
+        name, // 인스턴스 이름 = 도구 네임스페이스. 영숫자/_/- 만 허용.
         ...(Object.keys(env).length > 0 ? { env } : {}),
       });
       setEntries((prev) =>
@@ -140,6 +165,7 @@ export default function McpCatalogPage() {
           item.id === e.id ? { ...item, installed: true } : item,
         ),
       );
+      void loadInstalled(); // 다음 추가 설치의 기본 이름 제안이 새 이름을 피하도록
       setConfiguringId((cur) => (cur === e.id ? null : cur));
     } catch {
       setInstallError((prev) => ({
@@ -226,32 +252,42 @@ export default function McpCatalogPage() {
                       <Badge tone="neutral">
                         <span className="font-mono">{e.provider}</span>
                       </Badge>
-                      {e.installed ? (
-                        <Button variant="outline" size="sm" disabled>
-                          {t("installed")}
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          disabled={installing[e.id]}
-                          onClick={() => beginInstall(e)}
-                        >
-                          {installing[e.id] ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Download className="h-4 w-4" />
-                          )}
-                          {t("install")}
-                        </Button>
-                      )}
+                      {/* 설치 여부와 무관하게 추가 설치를 허용한다 — 같은 템플릿을 서로 다른
+                          접속처(예: 앱 DB용 / 분석 DB용 postgres)에 이름만 달리해 여러 개 둘 수 있다.
+                          종전에는 설치되면 버튼이 잠겨 두 번째 인스턴스를 만들 수 없었다. */}
+                      {e.installed && <Badge tone="success">{t("installed")}</Badge>}
+                      <Button
+                        size="sm"
+                        variant={e.installed ? "outline" : "default"}
+                        disabled={installing[e.id]}
+                        onClick={() => beginInstall(e)}
+                      >
+                        {installing[e.id] ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Download className="h-4 w-4" />
+                        )}
+                        {e.installed ? t("installAnother") : t("install")}
+                      </Button>
                     </div>
 
                     {/* 필수 자격증명 입력 폼 — env_schema.required 가 있는 서버(Notion·GitHub 등) */}
                     {configuringId === e.id && (
                       <div className="flex flex-col gap-2 rounded-md border border-border bg-surface-2 p-3">
                         <p className="text-xs font-medium text-fg">
-                          {t("credentialsTitle")}
+                          {e.envFields.length > 0 ? t("credentialsTitle") : t("installFormTitle")}
                         </p>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-xs text-fg-2">{t("nameLabel")}</span>
+                          <input
+                            value={nameDraft}
+                            onChange={(ev) => setNameDraft(ev.target.value)}
+                            pattern="[A-Za-z0-9_-]+"
+                            placeholder="mcp-postgres-analytics"
+                            className="h-8 w-full rounded-md border border-border bg-surface px-2 font-mono text-xs text-fg placeholder:text-muted focus:border-accent focus:outline-none"
+                          />
+                          <span className="text-[11px] text-muted">{t("nameHint")}</span>
+                        </label>
                         {e.envFields.map((f) => (
                           <label key={f.key} className="flex flex-col gap-1">
                             <span className="text-xs text-fg-2">{f.title}</span>
@@ -282,9 +318,10 @@ export default function McpCatalogPage() {
                             size="sm"
                             disabled={
                               installing[e.id] ||
+                              !/^[A-Za-z0-9_-]+$/.test(nameDraft) ||
                               e.envFields.some((f) => !envDraft[f.key]?.trim())
                             }
-                            onClick={() => doInstall(e, envDraft)}
+                            onClick={() => doInstall(e, envDraft, nameDraft)}
                           >
                             {installing[e.id] ? (
                               <Loader2 className="h-4 w-4 animate-spin" />

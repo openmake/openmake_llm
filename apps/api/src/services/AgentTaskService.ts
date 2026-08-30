@@ -547,7 +547,7 @@ export class AgentTaskService {
             const lastAssistant = [...conversation].reverse().find((m) => m.role === 'assistant');
             const lastRaw = (lastAssistant?.content as string) || '(최대 턴에 도달하여 종료되었습니다.)';
             const lastExtracted = extractAndStripArtifacts(applyReportRender(lastRaw));
-            stepNumber = await persistArtifactSteps(taskId, lastExtracted.artifacts, stepNumber);
+            stepNumber = await persistArtifactSteps(taskId, lastExtracted.artifacts, stepNumber, userId);
             stepNumber = await maybePersistCodeDiff(taskRuntime, sandboxCfg, taskId, stepNumber, emitStep);
             await update({
                 status: 'failed',

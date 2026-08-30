@@ -738,7 +738,7 @@
     "stateLabel": "Status:",
     "turnLabel": "Turn:",
     "planLabel": "Plan ({completed}/{total})",
-    "outputsLabel": "Outputs ({count})",
+    "outputsLabel": "{count} output(s)",
     "noSteps": "No step records.",
     "stepsLabel": "Steps ({count})",
     "reject": "Reject",
@@ -773,7 +773,10 @@
       "empty": "No templates yet.",
       "run": "Run from this template",
       "delete": "Delete",
-      "started": "Task started from template."
+      "started": "Task started from template.",
+      "expand": "Show all",
+      "collapse": "Collapse",
+      "lineCount": "{lines} lines · {chars} chars"
     },
     "downloadFailed": "Download failed: {error}",
     "localBadge": "Local folder run",
@@ -782,7 +785,8 @@
       "goal_incomplete": "Goal not met",
       "max_turns_exhausted": "Turn/resource limit reached",
       "interrupted": "Interrupted by server restart",
-      "resumableHint": "Can be resumed"
+      "resumableHint": "Can be resumed",
+      "aborted": "Cancelled by user"
     },
     "planNode": "Step {n}",
     "startedLabel": "Started",
@@ -819,7 +823,15 @@
       "originSpawn": "Parallel sub #{n}",
       "originDelegate": "Expert delegate",
       "stepCount": "{count} steps"
-    }
+    },
+    "artifactSize": "{chars} chars",
+    "artifactOpen": "Open in new tab",
+    "artifactDownload": "Download",
+    "resultLabel": "Result",
+    "noResultBody": "No final answer was saved. See the execution timeline below for what happened.",
+    "previewTitle": "Output preview",
+    "previewEmpty": "This task has no saved output.",
+    "previewLoadError": "Could not load the output."
   },
   "customAgents": {
     "pageTitle": "Custom Agents",
@@ -1013,7 +1025,19 @@
     "oauthLogoutTitle": "Remove the stored OAuth token and disconnect",
     "oauthStartFailed": "Could not start OAuth sign-in: {error}",
     "oauthOk": "Signed in to {server} — connecting",
-    "oauthFailed": "Sign-in to {server} failed ({reason})"
+    "oauthFailed": "Sign-in to {server} failed ({reason})",
+    "renameTitle": "Rename",
+    "renameLabel": "Server name",
+    "renameHint": "Prefixes tool names (e.g. mcp-postgres::query). Takes effect after the server reconnects.",
+    "renameDone": "Renamed to \"{name}\". It applies on the next connection.",
+    "renameError": "Rename failed",
+    "save": "Save",
+    "delete": "Delete",
+    "deleteTitle": "Delete server",
+    "deleteConfirm": "Delete this MCP server registration?",
+    "deleteHint": "This cannot be undone. Stored credentials (env) are deleted too, and any running instance is stopped. To use it again you must reinstall it from the catalog.",
+    "deleteDone": "Deleted server \"{name}\".",
+    "deleteError": "Failed to delete"
   },
   "mcpCatalog": {
     "pageTitle": "MCP Catalog",
@@ -1028,7 +1052,11 @@
     "install": "Install",
     "installError": "Installation failed. Please try again.",
     "credentialsTitle": "Enter credentials to install",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "installAnother": "Install another",
+    "installFormTitle": "Install settings",
+    "nameLabel": "Server name",
+    "nameHint": "Prefixes tool names (e.g. mcp-postgres::query). Letters, digits, _ and - only."
   },
   "mcpMonitoring": {
     "title": "MCP Monitoring",

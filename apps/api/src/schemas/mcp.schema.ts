@@ -94,6 +94,23 @@ export const mcpServerAutoSpawnUpdateSchema = z.object({
     auto_spawn: z.boolean(),
 });
 
+/**
+ * 서버 이름 변경 요청 스키마.
+ *
+ * 이름은 곧 **도구 네임스페이스**(displayName::tool)이자 tool-merger 의 의도 매칭 키다.
+ * 같은 카탈로그 템플릿을 여러 접속처에 설치할 때 서로 구분하는 유일한 수단이라, 설치 후에도
+ * 바꿀 수 있어야 한다. 문자 집합은 from-catalog 의 name 과 동일하게 제한한다 —
+ * 네임스페이스 구분자·셸 인자 오염을 막기 위함.
+ */
+export const mcpServerRenameSchema = z.object({
+    name: z.string().min(1).max(128).regex(/^[a-zA-Z0-9_-]+$/, {
+        message: 'name 은 영숫자/언더스코어/하이픈만 허용',
+    }),
+});
+
+/** MCP 서버 이름 변경 요청 TypeScript 타입 */
+export type McpServerRenameInput = z.infer<typeof mcpServerRenameSchema>;
+
 /** MCP 도구 실행 요청 TypeScript 타입 */
 export type McpToolExecuteInput = z.infer<typeof mcpToolExecuteSchema>;
 /** MCP 서버 등록 요청 TypeScript 타입 */

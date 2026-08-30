@@ -21,8 +21,12 @@ import {
   CircleDot,
   CircleCheck,
   CircleX,
+  Download,
+  ExternalLink,
+  Eye,
   type LucideIcon,
 } from "lucide-react";
+import { ArtifactFrame } from "@/components/chat/artifact-frame";
 import {
   Button,
   Badge,
@@ -98,6 +102,8 @@ interface ApiAgentTask {
   folder_rel?: string | null;
   /** 실패 사유 (toPublicTask 가 노출하는 error 컬럼) */
   error?: string;
+  /** 최종 답변 본문 — toPublicTask 가 ...rest 로 그대로 노출한다(취소 작업은 null). */
+  result?: string | null;
   /** 소유자 (toPublicTask 가 user_id 그대로 노출 — admin viewAll 에서 소유자 뱃지용) */
   user_id?: string | number;
 }
@@ -199,7 +205,9 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
 }
 
 /** 실패 사유 코드 — i18n 번역 대상. 그 외 값은 자유 텍스트로 원문 표시. */
-const KNOWN_ERROR_CODES = new Set(["goal_incomplete", "max_turns_exhausted", "interrupted"]);
+// "aborted" 는 사용자 취소 시 error 컬럼에 들어간다 — 번역 대상에 없어 원문이 그대로
+// 노출되고 있었다(결과 블록이 취소 사유를 표시하면서 드러남).
+const KNOWN_ERROR_CODES = new Set(["goal_incomplete", "max_turns_exhausted", "interrupted", "aborted"]);
 /** 재개 가능한 사유 — resume 버튼과 시각적으로 연결. */
 const RESUMABLE_ERROR_CODES = new Set(["max_turns_exhausted", "interrupted"]);
 
@@ -248,6 +256,304 @@ function Modal({
         </div>
         <div className="p-5">{children}</div>
       </div>
+    </div>
+  );
+}
+
+/* ── 아티팩트 스텝 뷰 ──────────────────────────────────────
+ * 에이전트 작업의 산출물은 step_type='artifact' 스텝에 ExtractedArtifact JSON 으로 실려 온다.
+ * 일반 스텝과 같이 4,000자로 잘라 원시 JSON 을 보여주면 산출물을 확인할 수 없어(실측 16KB
+ * HTML 이 1/4 지점에서 절단) 전용 뷰로 분리한다 — 제목·종류 헤더 + 본문 전체 + 다운로드/열기.
+ */
+interface StepArtifact {
+  id: string;
+  kind: string;
+  title: string;
+  lang?: string | null;
+  content: string;
+}
+
+/** 스텝 content(JSON 문자열)를 아티팩트로 파싱 — 형식이 다르면 null(일반 스텝으로 폴백). */
+function parseStepArtifact(raw: string): StepArtifact | null {
+  try {
+    const o = JSON.parse(raw) as Partial<StepArtifact>;
+    if (typeof o?.content !== "string" || typeof o?.kind !== "string") return null;
+    return {
+      id: typeof o.id === "string" ? o.id : "artifact",
+      kind: o.kind,
+      title: typeof o.title === "string" ? o.title : "artifact",
+      lang: o.lang ?? null,
+      content: o.content,
+    };
+  } catch {
+    return null;
+  }
+}
+
+const ARTIFACT_MIME: Record<string, string> = {
+  html: "text/html",
+  svg: "image/svg+xml",
+  markdown: "text/markdown",
+  csv: "text/csv",
+};
+
+function ArtifactStepView({ artifact }: { artifact: StepArtifact }) {
+  const t = useTranslations("agentTasks");
+  const [open, setOpen] = useState(false);
+  const mime = ARTIFACT_MIME[artifact.kind] ?? "text/plain";
+  const ext = artifact.kind === "markdown" ? "md" : artifact.kind === "code" ? (artifact.lang || "txt") : artifact.kind;
+
+  // Blob URL 은 클릭 시점에만 만들고 즉시 해제 — 모달 수명 동안 누수되지 않게 한다.
+  const withBlobUrl = (fn: (url: string) => void) => {
+    const url = URL.createObjectURL(new Blob([artifact.content], { type: `${mime};charset=utf-8` }));
+    fn(url);
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+  const download = () => withBlobUrl((url) => {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${artifact.id}.${ext}`;
+    a.click();
+  });
+  const openTab = () => withBlobUrl((url) => window.open(url, "_blank", "noopener"));
+
+  return (
+    <div className="mt-1 rounded-md border border-accent/40 bg-surface-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-2 py-1.5">
+        <Badge tone="accent">{artifact.kind}</Badge>
+        <span className="min-w-0 flex-1 truncate text-xs font-medium text-fg">{artifact.title}</span>
+        <span className="text-[11px] text-muted">
+          {t("artifactSize", { chars: artifact.content.length })}
+        </span>
+        {(artifact.kind === "html" || artifact.kind === "svg") && (
+          <Button size="sm" variant="outline" onClick={openTab} title={t("artifactOpen")}>
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Button>
+        )}
+        <Button size="sm" variant="outline" onClick={download} title={t("artifactDownload")}>
+          <Download className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+      {/* 본문은 잘리지 않는다 — 기본은 접어 두고 토글로 전체를 연다. */}
+      <pre
+        className={`overflow-auto whitespace-pre-wrap break-words px-2 py-1.5 font-mono text-[11px] leading-relaxed text-muted ${
+          open ? "max-h-[32rem]" : "max-h-32"
+        }`}
+      >
+        {artifact.content}
+      </pre>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full border-t border-border px-2 py-1 text-[11px] text-accent hover:bg-surface"
+      >
+        {open ? t("templates.collapse") : t("templates.expand")}
+      </button>
+    </div>
+  );
+}
+
+/* ── 프롬프트(goal) 블록 ───────────────────────────────────
+ * goal 은 역할·절차·제약이 담긴 여러 줄 프롬프트다(실측 96줄). 일반 <p> 로 렌더하면
+ * HTML 이 줄바꿈을 공백으로 접어 한 문단이 되어 구조를 읽을 수 없다 → 줄바꿈을 보존하되
+ * 기본은 접어 두고 토글로 전체를 연다.
+ */
+function GoalBlock({ goal }: { goal: string }) {
+  const t = useTranslations("agentTasks");
+  const [open, setOpen] = useState(false);
+  const multiline = goal.includes("\n") || goal.length > 200;
+  return (
+    <>
+      <pre
+        className={`whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-fg ${
+          open ? "max-h-[28rem] overflow-auto" : "line-clamp-4"
+        }`}
+      >
+        {goal}
+      </pre>
+      {multiline && (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="mt-1 text-[11px] text-accent hover:underline"
+        >
+          {open ? t("templates.collapse") : t("templates.expand")}
+        </button>
+      )}
+    </>
+  );
+}
+
+/* ── 산출물 미리보기 모달 ──────────────────────────────────
+ * 이력 카드에서 상세 모달·타임라인을 거치지 않고 산출물만 바로 확인한다.
+ * 아티팩트는 갤러리와 같은 저장소(artifacts, session_id='task:<id>')에서 읽으므로
+ * 채팅 산출물과 동일한 엔드포인트를 그대로 쓴다.
+ */
+interface ApiArtifactRow {
+  artifact_id: string;
+  version: number;
+  kind: string;
+  title: string;
+  language: string | null;
+  content: string;
+}
+type SessionArtifactsResponse = ApiSuccess<{ artifacts: ApiArtifactRow[]; total: number }>;
+
+/** html·svg 는 라이브 렌더, 그 외는 원문 텍스트. */
+const RENDERABLE_KINDS = new Set(["html", "svg"]);
+
+function PreviewModal({ taskId, onClose }: { taskId: string; onClose: () => void }) {
+  const t = useTranslations("agentTasks");
+  const [rows, setRows] = useState<ApiArtifactRow[] | null>(null);
+  const [sel, setSel] = useState(0);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const sid = encodeURIComponent(`task:${taskId}`);
+        const r = await ApiClient.get<SessionArtifactsResponse>(`/api/sessions/${sid}/artifacts`);
+        if (!cancelled) setRows(r?.data?.artifacts ?? []);
+      } catch {
+        if (!cancelled) { setRows([]); setFailed(true); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [taskId]);
+
+  const cur = rows?.[sel];
+  return (
+    <Modal open onClose={onClose} title={t("previewTitle")}>
+      {rows === null ? (
+        <div className="flex justify-center py-10"><LoaderCircle className="h-5 w-5 animate-spin text-muted" /></div>
+      ) : rows.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted">
+          {failed ? t("previewLoadError") : t("previewEmpty")}
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {/* 산출물이 여러 개면 탭으로 전환 */}
+          {rows.length > 1 && (
+            <div className="flex flex-wrap gap-1">
+              {rows.map((a, i) => (
+                <button
+                  key={`${a.artifact_id}-${i}`}
+                  type="button"
+                  onClick={() => setSel(i)}
+                  className={`rounded-md border px-2 py-1 text-xs ${
+                    i === sel ? "border-accent bg-accent-soft text-accent" : "border-border text-muted hover:bg-surface-2"
+                  }`}
+                >
+                  {a.title}
+                </button>
+              ))}
+            </div>
+          )}
+          {cur && (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone="accent">{cur.kind}</Badge>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{cur.title}</span>
+                <span className="text-[11px] text-muted">{t("artifactSize", { chars: cur.content.length })}</span>
+              </div>
+              {RENDERABLE_KINDS.has(cur.kind) ? (
+                // ArtifactFrame: sandbox="allow-scripts" (allow-same-origin 없음) 로 격리 렌더.
+                <div className="h-[70vh] overflow-hidden rounded-md border border-border">
+                  <ArtifactFrame srcDoc={cur.content} title={cur.title} />
+                </div>
+              ) : (
+                <pre className="max-h-[70vh] overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-surface-2 p-3 font-mono text-xs leading-relaxed text-fg-2">
+                  {cur.content}
+                </pre>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+/* ── 결과 블록 ─────────────────────────────────────────────
+ * 종료된 작업(완료/실패/취소)의 결말을 모달 상단에 모아 보여준다. 예전에는 결말이
+ * 스텝 타임라인 맨 아래에 원시 텍스트로 섞여 있어, 성공했는지·왜 끝났는지·산출물이
+ * 무엇인지 확인하려면 수십 개 스텝을 스크롤해야 했다.
+ *   - 완료      → success 뱃지 + 최종 답변 + 산출물(아티팩트) 카드
+ *   - 취소/실패 → warn/danger 뱃지 + 종료 사유 + 남은 본문(있으면)
+ */
+function ResultBlock({ task, steps }: { task: ApiAgentTask; steps: ApiTaskStep[] }) {
+  const t = useTranslations("agentTasks");
+  const [open, setOpen] = useState(false);
+
+  const terminal = task.status === "completed" || task.status === "failed" || task.status === "cancelled";
+  if (!terminal) return null;
+
+  const tone = task.status === "completed" ? "success" : task.status === "cancelled" ? "warn" : "danger";
+  const labelKey = task.status === "completed" ? "status.completed"
+    : task.status === "cancelled" ? "cancelledTag" : "failedTag";
+
+  // 타임라인의 아티팩트 스텝을 결과 영역으로 끌어올린다 — 산출물이 결말의 핵심이다.
+  const artifacts = steps
+    .filter((st) => (st.step_type ?? st.type) === "artifact")
+    .map((st) => parseStepArtifact(st.tool_output || st.content || ""))
+    .filter((a): a is StepArtifact => a !== null);
+
+  const body = (task.result ?? "").trim();
+
+  return (
+    <div className="rounded-md border border-border bg-surface-1 p-3">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <Badge tone={tone}>{t(labelKey)}</Badge>
+        <span className="text-xs font-medium text-fg-2">{t("resultLabel")}</span>
+        {/* 종료 사유는 실패뿐 아니라 취소(aborted)에도 있다. */}
+        {task.error && (
+          <span
+            className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium ${
+              task.status === "cancelled"
+                ? "border-warn/40 bg-warn-soft text-warn"
+                : "border-danger/40 bg-danger-soft text-danger"
+            }`}
+            title={task.error}
+          >
+            {errorReasonLabel(t, task.error)}
+          </span>
+        )}
+      </div>
+
+      {body ? (
+        <>
+          <pre
+            className={`whitespace-pre-wrap break-words text-xs leading-relaxed text-fg-2 ${
+              open ? "max-h-[28rem] overflow-auto" : "line-clamp-6"
+            }`}
+          >
+            {body}
+          </pre>
+          {(body.includes("\n") || body.length > 300) && (
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              className="mt-1 text-[11px] text-accent hover:underline"
+            >
+              {open ? t("templates.collapse") : t("templates.expand")}
+            </button>
+          )}
+        </>
+      ) : (
+        <p className="text-xs text-muted">{t("noResultBody")}</p>
+      )}
+
+      {artifacts.length > 0 && (
+        <div className="mt-3">
+          <p className="mb-1 text-xs font-medium text-fg-2">
+            {t("outputsLabel", { count: artifacts.length })}
+          </p>
+          <div className="space-y-2">
+            {artifacts.map((a, i) => <ArtifactStepView key={`${a.id}-${i}`} artifact={a} />)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -322,7 +628,7 @@ function TaskDetailModal({
         <>
           <div className="rounded-md border border-border bg-surface-2 p-4">
             <p className="mb-1 text-xs font-medium text-muted">{t("goalLabel")}</p>
-            <p className="text-sm text-fg">{detail.task.goal}</p>
+            <GoalBlock goal={detail.task.goal} />
             {detail.task.executor === "local" && (
               <span className="mt-2 inline-flex items-center rounded-full border border-accent bg-accent-soft px-2 py-0.5 text-[10px] font-medium text-accent">
                 {t("localBadge")}{detail.task.folder_rel ? ` · ${detail.task.folder_rel}` : ""}
@@ -353,6 +659,9 @@ function TaskDetailModal({
               </div>
             )}
           </div>
+
+          {/* 종료된 작업의 결말 — 계획·타임라인보다 위에 둔다. */}
+          <ResultBlock task={detail.task} steps={detail.steps} />
 
           {/* 공유 — 종료된 작업만(스냅샷 고정이라 진행 중 게시는 반쪽 기록이 굳는다). */}
           {(detail.task.status === "completed" || detail.task.status === "failed" || detail.task.status === "cancelled") && (
@@ -457,7 +766,9 @@ function TaskDetailModal({
                   const body = step.tool_output || step.content || "";
                   const stepType = step.step_type ?? step.type;
                   const isDiff = stepType === "diff";
-                  const isTool = stepType === "tool_result" || !!step.tool_name;
+                  // 아티팩트 스텝은 전용 뷰 — 파싱 실패 시 null 이라 일반 스텝으로 자연 폴백된다.
+                  const artifact = stepType === "artifact" ? parseStepArtifact(body) : null;
+                  const isTool = !artifact && (stepType === "tool_result" || !!step.tool_name);
                   return (
                     <div key={step.id} className="flex gap-3">
                       <div className="flex flex-col items-center">
@@ -474,7 +785,9 @@ function TaskDetailModal({
                           )}
                           {step.tool_name && <span className="font-mono">{step.tool_name}</span>}
                         </div>
-                        {body && (isDiff ? (
+                        {body && (artifact ? (
+                          <ArtifactStepView artifact={artifact} />
+                        ) : isDiff ? (
                           <DiffView text={body.slice(0, 20000)} />
                         ) : (
                           <pre className={cn(
@@ -626,7 +939,7 @@ function SchedulesPanel() {
           {schedules.map((s) => (
             <div key={s.id} className="flex items-center justify-between gap-3 rounded-md border border-line bg-bg-1 p-2">
               <div className="min-w-0">
-                <p className="truncate text-xs font-medium text-fg-1">{s.goal}</p>
+                <p className="line-clamp-2 whitespace-pre-line text-xs font-medium text-fg-1" title={s.goal}>{s.goal}</p>
                 <p className="text-xs text-muted">
                   <span className="font-mono">{timingLabel(s)}</span>
                   {" · "}
@@ -663,6 +976,11 @@ interface ApiTemplate {
 }
 type TemplatesResponse = ApiSuccess<{ templates: ApiTemplate[]; total: number }>;
 
+/** 접기 UI 를 붙일지 판단 — 3줄(line-clamp-3) 을 넘거나 한 줄이라도 길면 true. */
+function isMultiline(text: string): boolean {
+  return text.includes("\n") || text.length > 120;
+}
+
 function TemplatesPanel() {
   const t = useTranslations("agentTasks");
   const [templates, setTemplates] = useState<ApiTemplate[]>([]);
@@ -670,6 +988,7 @@ function TemplatesPanel() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [goal, setGoal] = useState("");
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -718,10 +1037,15 @@ function TemplatesPanel() {
             value={goal}
             onChange={(e) => setGoal(e.target.value)}
             placeholder={t("templates.goalPlaceholder")}
-            rows={2}
-            className="w-full resize-y rounded-md border border-line bg-bg-2 p-2 text-sm text-fg-1"
+            rows={10}
+            // 줄바꿈은 그대로 저장된다(서버 sanitize 의 allowNewLines 기본 true) —
+            // 여러 줄 목표를 편집할 수 있도록 충분한 높이를 준다.
+            className="w-full resize-y whitespace-pre-wrap rounded-md border border-line bg-bg-2 p-2 font-mono text-xs leading-relaxed text-fg-1"
           />
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-muted">
+              {t("templates.lineCount", { lines: goal ? goal.split("\n").length : 0, chars: goal.length })}
+            </span>
             <Button size="sm" disabled={busy === "new" || !name.trim() || !goal.trim()} onClick={create}>
               {t("templates.add")}
             </Button>
@@ -733,10 +1057,28 @@ function TemplatesPanel() {
       ) : (
         <div className="space-y-2">
           {templates.map((tp) => (
-            <div key={tp.id} className="flex items-center justify-between gap-3 rounded-md border border-line bg-bg-1 p-2">
-              <div className="min-w-0">
+            <div key={tp.id} className="flex items-start justify-between gap-3 rounded-md border border-line bg-bg-1 p-2">
+              <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-medium text-fg-1">{tp.name}</p>
-                <p className="truncate text-xs text-muted">{tp.goal_template}</p>
+                {/* goal_template 은 여러 줄이 그대로 저장된다(실측 96줄 사례). 예전에는
+                    truncate 로 한 줄로 뭉개져 내용을 확인할 수 없었다 → 줄바꿈을 보존하되
+                    기본은 3줄로 접고, 넘칠 때만 펼치기 토글을 노출한다. */}
+                <pre
+                  className={`mt-0.5 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-muted ${
+                    expanded === tp.id ? "" : "line-clamp-3"
+                  }`}
+                >
+                  {tp.goal_template}
+                </pre>
+                {isMultiline(tp.goal_template) && (
+                  <button
+                    type="button"
+                    onClick={() => setExpanded(expanded === tp.id ? null : tp.id)}
+                    className="mt-1 text-[11px] text-accent hover:underline"
+                  >
+                    {expanded === tp.id ? t("templates.collapse") : t("templates.expand")}
+                  </button>
+                )}
               </div>
               <div className="flex shrink-0 gap-1">
                 <Button size="sm" variant="outline" disabled={busy === tp.id} onClick={() => instantiate(tp)} title={t("templates.run")}>
@@ -762,6 +1104,7 @@ export default function AgentTasksPage() {
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+  const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null); // taskId being acted on
 
   // admin 전체 보기 — 백엔드 ?viewAll=true 재사용 (비관리자의 viewAll 은 서버가 무시).
@@ -933,7 +1276,14 @@ export default function AgentTasksPage() {
                   {/* 1) 정체성 — 상태·소유자·실행기 배지 + 상세 진입. 턴은 진행률 줄로 내렸다. */}
                   <div className="mb-3 flex items-start justify-between gap-2">
                     <span className="flex flex-wrap items-center gap-1.5">
-                      <Badge tone={meta.tone}>
+                      {/* mapStatus 는 completed/failed/cancelled 를 모두 "completed" 로 접으므로
+                          STATUS_META 만 쓰면 취소·실패도 초록(success)으로 보인다 — 성공이 아닌
+                          종료는 톤을 분리한다: 취소=warn(노랑), 실패=danger. */}
+                      <Badge tone={
+                        task.rawStatus === "cancelled" ? "warn"
+                          : task.rawStatus === "failed" ? "danger"
+                            : meta.tone
+                      }>
                         {task.status === "running" && (
                           <LoaderCircle className="h-3 w-3 animate-spin" />
                         )}
@@ -972,9 +1322,13 @@ export default function AgentTasksPage() {
                     </div>
                   )}
 
+                  {/* whitespace-pre-line: 줄바꿈을 살려 clamp 2줄이 프롬프트의 첫 두 줄이
+                      되게 한다(예전엔 전체가 한 줄로 접혀 의미 없는 앞부분만 보였다).
+                      전체 프롬프트는 hover title 과 상세 모달에서 확인. */}
                   <h3
-                    className="mb-4 line-clamp-2 cursor-pointer text-sm font-semibold leading-snug text-fg hover:underline"
+                    className="mb-4 line-clamp-2 cursor-pointer whitespace-pre-line text-sm font-semibold leading-snug text-fg hover:underline"
                     onClick={() => setDetailTaskId(task.id)}
+                    title={task.goal}
                   >
                     {task.goal}
                   </h3>
@@ -1047,6 +1401,16 @@ export default function AgentTasksPage() {
                   {/* 4) 액션 — 종전엔 메타와 한 줄을 다퉈 좁은 카드에서 넘쳤다. 별도 줄로 내리고 우측 정렬. */}
                   <div className="mt-3 flex items-center justify-end gap-1">
                     <div className="flex items-center gap-1">
+                      {/* 산출물 미리보기 — 상세 모달·타임라인을 거치지 않고 결과만 바로 본다.
+                          종료된 작업에만 노출(실행 중엔 산출물이 아직 없다). */}
+                      {(task.rawStatus === "completed" || task.rawStatus === "failed" || task.rawStatus === "cancelled") && (
+                        <button
+                          onClick={() => setPreviewTaskId(task.id)}
+                          title={t("previewTitle")}
+                          className="flex h-7 w-7 items-center justify-center rounded-md text-faint transition hover:bg-accent-soft hover:text-accent">
+                          <Eye className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                       {/* Resume (failed + resumable) */}
                       {task.rawStatus === "failed" && task.resumable && (
                         <button
@@ -1099,6 +1463,9 @@ export default function AgentTasksPage() {
         <Modal open={!!detailTaskId} onClose={() => setDetailTaskId(null)} title={t("modalTitle")}>
           <TaskDetailModal taskId={detailTaskId} />
         </Modal>
+      )}
+      {previewTaskId && (
+        <PreviewModal taskId={previewTaskId} onClose={() => setPreviewTaskId(null)} />
       )}
     </>
   );

@@ -6,6 +6,7 @@ import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import type { UserContext } from '../../mcp/user-sandbox';
 import type { ExtractedArtifact } from '../../llm/artifact-parser';
+import type { ArtifactKind } from '../../data/repositories/artifact-repository';
 import { takeReportSource } from '../chat-service/report-block';
 import { MAX_TOOL_RESULT_CHARS, AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
@@ -20,22 +21,40 @@ export function isSearchTool(name: string): boolean {
 }
 
 /**
- * 최종 답변에서 추출한 deliverable 아티팩트를 step_type='artifact' 행으로 영속화.
- * content 는 ExtractedArtifact JSON (id/kind/title/lang/content) — 프론트 상세 모달이 파싱해 렌더.
- * 저장 실패는 작업을 실패시키지 않는다 (result 본문은 이미 보존됨).
+ * Agent Task 아티팩트의 합성 session_id — 채팅 세션과 네임스페이스를 분리한다.
+ * artifacts 테이블은 session_id NOT NULL 이고 (session_id, artifact_id, version) 이 유니크라,
+ * task 별로 고유한 값을 주면 스키마 변경 없이 같은 저장소를 공유할 수 있다.
+ */
+export function taskArtifactSessionId(taskId: string): string {
+    return `task:${taskId}`;
+}
+
+/**
+ * 최종 답변에서 추출한 deliverable 아티팩트를 영속화한다 — 두 곳에 저장한다:
+ *
+ *   1. agent_task_steps(step_type='artifact') — 작업 타임라인 표시용(기존 동작).
+ *   2. artifacts 테이블 — 채팅 산출물과 같은 아티팩트 갤러리에 노출.
+ *
+ * 2가 없던 동안 에이전트 작업 산출물은 갤러리에 아예 나타나지 않아, 작업 상세 모달의
+ * 스텝 타임라인에서 원시 JSON 을 4,000자만 잘라 보는 것 외에는 확인할 방법이 없었다.
+ * listLatestByUser 가 user_id 기준이라 합성 session_id 로도 갤러리에 정상 노출된다.
+ *
+ * 저장 실패는 작업을 실패시키지 않는다 (result 본문은 이미 보존됨). 두 저장은 서로
+ * 독립적으로 try 한다 — 갤러리 저장이 실패해도 타임라인 스텝은 남는다.
  */
 export async function persistArtifactSteps(
     taskId: string,
     artifacts: ExtractedArtifact[],
-    stepNumber: number
+    stepNumber: number,
+    userId?: string,
 ): Promise<number> {
     const db = getUnifiedDatabase();
     for (const artifact of artifacts) {
+        // 보고서 아티팩트면 reportdata 원본을 함께 보존 — docx 등 구조 기반 export 용.
+        // take 는 1회 회수(렌더 대기열 pendingReportSources 정리를 겸함)라 루프 선두에서
+        // 한 번만 꺼내 스텝 JSON 과 갤러리 row 양쪽에 쓴다.
+        const sourceData = takeReportSource(artifact.id);
         try {
-            // 보고서 아티팩트면 reportdata 원본을 스텝 JSON 에 동봉 — task 아티팩트의
-            // docx export 용(채팅 경로의 artifacts.source_data 대응물). 회수(take)로
-            // 렌더 대기열(pendingReportSources)의 잔존도 함께 정리된다.
-            const sourceData = takeReportSource(artifact.id);
             await db.addAgentTaskStep({
                 taskId,
                 stepNumber: stepNumber++,
@@ -45,6 +64,33 @@ export async function persistArtifactSteps(
             });
         } catch (e) {
             logger.warn(`[AgentTask] 아티팩트 스텝 저장 실패: ${taskId} — ${e}`);
+        }
+
+        // 갤러리 노출용 — 스텝 저장과 독립. 20MB 초과(ArtifactSizeError) 등은 warn 만 남긴다.
+        try {
+            const { ArtifactRepository } = await import('../../data/repositories/artifact-repository');
+            const { getPool } = await import('../../data/models/unified-database');
+            // artifacts.session_id 는 conversation_sessions(id) 를 참조하는 FK 다 — 합성 세션 행을
+            // 먼저 만들어 두지 않으면 insert 가 통째로 실패한다. 메시지가 없는 세션이라
+            // 채팅 목록에는 뜨지 않는다(getSessionsByUserId 가 conversation_messages EXISTS 로 거른다).
+            await getPool().query(
+                `INSERT INTO conversation_sessions (id, user_id, title)
+                 VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING`,
+                [taskArtifactSessionId(taskId), userId ?? null, `[task] ${artifact.title}`.slice(0, 200)],
+            );
+            await new ArtifactRepository(getPool()).insertArtifact({
+                artifactId: artifact.id,
+                sessionId: taskArtifactSessionId(taskId),
+                userId: userId ?? null,
+                // 채팅 경로(request-handler)와 동일 — 파서의 kind 는 string 이라 캐스팅한다.
+                kind: artifact.kind as ArtifactKind,
+                title: artifact.title,
+                language: artifact.lang ?? null,
+                content: artifact.content,
+                ...(sourceData ? { sourceData } : {}),
+            });
+        } catch (e) {
+            logger.warn(`[AgentTask] 아티팩트 갤러리 저장 실패: ${taskId} — ${e}`);
         }
     }
     return stepNumber;

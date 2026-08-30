@@ -738,7 +738,7 @@
     "stateLabel": "상태:",
     "turnLabel": "턴:",
     "planLabel": "계획 ({completed}/{total})",
-    "outputsLabel": "산출물 ({count})",
+    "outputsLabel": "산출물 {count}개",
     "noSteps": "스텝 기록이 없습니다.",
     "stepsLabel": "실행 스텝 ({count})",
     "reject": "거절",
@@ -773,7 +773,10 @@
       "empty": "등록된 템플릿이 없습니다.",
       "run": "이 템플릿으로 실행",
       "delete": "삭제",
-      "started": "템플릿으로 작업을 시작했습니다."
+      "started": "템플릿으로 작업을 시작했습니다.",
+      "expand": "전체 보기",
+      "collapse": "접기",
+      "lineCount": "{lines}줄 · {chars}자"
     },
     "downloadFailed": "다운로드 실패: {error}",
     "localBadge": "로컬 폴더 실행",
@@ -782,7 +785,8 @@
       "goal_incomplete": "목표 미달성",
       "max_turns_exhausted": "턴·자원 상한 소진",
       "interrupted": "서버 재시작으로 중단",
-      "resumableHint": "이어하기로 재개할 수 있습니다"
+      "resumableHint": "이어하기로 재개할 수 있습니다",
+      "aborted": "사용자 취소"
     },
     "planNode": "{n}단계",
     "startedLabel": "시작",
@@ -819,7 +823,15 @@
       "originSpawn": "병렬 서브 #{n}",
       "originDelegate": "전문가 위임",
       "stepCount": "{count}단계"
-    }
+    },
+    "artifactSize": "{chars}자",
+    "artifactOpen": "새 탭에서 열기",
+    "artifactDownload": "다운로드",
+    "resultLabel": "결과",
+    "noResultBody": "저장된 최종 답변이 없습니다. 아래 실행 타임라인에서 진행 내역을 확인하세요.",
+    "previewTitle": "산출물 미리보기",
+    "previewEmpty": "이 작업에는 저장된 산출물이 없습니다.",
+    "previewLoadError": "산출물을 불러오지 못했습니다."
   },
   "customAgents": {
     "pageTitle": "커스텀 에이전트",
@@ -1013,7 +1025,19 @@
     "oauthLogoutTitle": "저장된 OAuth 토큰을 지우고 연결을 끊습니다",
     "oauthStartFailed": "OAuth 로그인 시작 실패: {error}",
     "oauthOk": "{server} 로그인 완료 — 연결을 시도합니다",
-    "oauthFailed": "{server} 로그인 실패 ({reason})"
+    "oauthFailed": "{server} 로그인 실패 ({reason})",
+    "renameTitle": "이름 변경",
+    "renameLabel": "서버 이름",
+    "renameHint": "도구 이름 앞에 붙습니다(예: mcp-postgres::query). 변경 후 재연결되어야 적용됩니다.",
+    "renameDone": "이름을 \"{name}\" 로 바꿨습니다. 다음 연결부터 적용됩니다.",
+    "renameError": "이름 변경에 실패했습니다",
+    "save": "저장",
+    "delete": "삭제",
+    "deleteTitle": "서버 삭제",
+    "deleteConfirm": "이 MCP 서버 등록을 삭제할까요?",
+    "deleteHint": "되돌릴 수 없습니다. 저장된 자격증명(env)도 함께 삭제되며, 실행 중인 인스턴스가 있으면 종료됩니다. 다시 쓰려면 카탈로그에서 새로 설치해야 합니다.",
+    "deleteDone": "\"{name}\" 서버를 삭제했습니다.",
+    "deleteError": "삭제에 실패했습니다"
   },
   "mcpCatalog": {
     "pageTitle": "MCP 카탈로그",
@@ -1028,7 +1052,11 @@
     "install": "설치",
     "installError": "설치 실패. 다시 시도해 주세요.",
     "credentialsTitle": "설치하려면 자격 증명을 입력하세요",
-    "cancel": "취소"
+    "cancel": "취소",
+    "installAnother": "추가 설치",
+    "installFormTitle": "설치 설정",
+    "nameLabel": "서버 이름",
+    "nameHint": "도구 이름 앞에 붙습니다(예: mcp-postgres::query). 영숫자·_·- 만 사용."
   },
   "mcpMonitoring": {
     "title": "MCP 모니터링",

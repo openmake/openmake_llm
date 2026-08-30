@@ -46,11 +46,17 @@ export function getAgentTaskSystemPrompt(): string {
         '  document, draft, or code) — never a summary of what you did, a description of the',
         '  deliverable, or a promise to produce it.',
         '- Wrap the deliverable in an <artifact> tag so the user can view and download it:',
-        '  <artifact id="kebab-case-id" kind="markdown" title="Deliverable title">',
+        '  <artifact id="kebab-case-id" kind="KIND" title="Deliverable title">',
         '  ...full content here...',
         '  </artifact>',
-        '- kind: "markdown" for reports/documents/guides (default), "code" with lang="..."',
-        '  for source code, "html" for a standalone web page.',
+        // ⚠️ 예시의 kind 를 구체값으로 두지 말 것 — 예전에 kind="markdown" 을 하드코딩하고
+        //    "markdown ... (default)" 라고 적어두자, 사용자가 "html 로 보고서" 를 요청해도
+        //    모델이 그 기본값을 따라 markdown 아티팩트를 냈다. 형식 우선순위를 명시한다.
+        '- kind: "markdown" for reports/documents/guides, "code" with lang="..." for source',
+        '  code, "html" for a standalone web page.',
+        '- FORMAT PRIORITY: if the GOAL asks for a specific output format (e.g. "as HTML",',
+        '  "html 로", "make it a web page"), you MUST use that kind — it overrides the',
+        '  defaults above. Fall back to "markdown" only when the goal says nothing about format.',
         '- For kind="html": produce a self-contained semantic HTML5 page (inline <style>/<script>,',
         '  :root CSS-variable design tokens, responsive Flexbox/Grid layout, hover/focus states,',
         '  accessibility) with a deliberate design concept that fits the content.',
