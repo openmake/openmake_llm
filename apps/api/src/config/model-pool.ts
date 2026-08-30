@@ -16,6 +16,13 @@ function parseIntEnv(key: string, defaultValue: number): number {
     return Number.isFinite(n) ? n : defaultValue;
 }
 
+function parseFloatEnv(key: string, defaultValue: number): number {
+    const v = process.env[key];
+    if (v === undefined) return defaultValue;
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : defaultValue;
+}
+
 function parseBoolEnv(key: string, defaultValue: boolean): boolean {
     const v = process.env[key];
     if (v === undefined) return defaultValue;
@@ -35,6 +42,23 @@ const minOutputTokens = parseIntEnv('LLM_POOL_MIN_OUTPUT_TOKENS', 4096);
 //  방지를 위해 보수적 고정값 사용. base64 텍스트 길이가 아닌 디코딩 후 토큰 기준.)
 const tokensPerImage = parseIntEnv('LLM_POOL_TOKENS_PER_IMAGE', 1500);
 
+// --- 정확 토큰 재계산 (exact tokenize) ---
+// 문자 기반 추정은 BPE 병합률을 모른다 — 2026-08-31 실측(qwen3.6, vLLM /tokenize):
+// 산문 101~123%(보수적)인 반면 JSON 로그 61%, 바이너리 as-text 40~50%,
+// base64 36%, hex 30% 로 **과소추정**한다(고엔트로피·구두점 밀집 텍스트에서 BPE 가
+// 병합하지 못해 문자당 실제 비용이 0.25 가 아니라 0.4~0.97 토큰). 문자 클래스 가중치로는
+// 덮이지 않는다(제어문자 필요 가중치가 구간별 1.22~3.99 로 흔들리고, base64/hex 는
+// 제어문자가 0개인데도 30%대). 그래서 **임계 근처에서만** 모델 자신의 토크나이저로
+// 정확히 재계산한다 — 평상시 산문 요청은 임계에 못 닿아 추가 호출이 없다.
+/** vLLM `/tokenize` endpoint (예: http://<vllm-host>:8002/tokenize). 미설정 시 기능 off. */
+const tokenizeUrl = process.env.LLM_TOKENIZE_URL ?? '';
+/** tokenize endpoint 인증 키 (미설정 시 LLM_API_KEY 재사용). */
+const tokenizeApiKey = process.env.LLM_TOKENIZE_API_KEY ?? process.env.LLM_API_KEY ?? '';
+/** 문자 추정이 유효 컨텍스트의 이 비율을 넘을 때만 정확 재계산 (0~1). */
+const tokenizeExactRatio = parseFloatEnv('LLM_POOL_TOKENIZE_EXACT_RATIO', 0.5);
+/** tokenize 호출 타임아웃 — 초과 시 fail-open(문자 추정 유지). */
+const tokenizeTimeoutMs = parseIntEnv('LLM_POOL_TOKENIZE_TIMEOUT_MS', 3000);
+
 export const MODEL_POOL_CONFIG = {
     enabled,
     defaultModel,
@@ -43,6 +67,10 @@ export const MODEL_POOL_CONFIG = {
     routingMaxTokensDefault,
     minOutputTokens,
     tokensPerImage,
+    tokenizeUrl,
+    tokenizeApiKey,
+    tokenizeExactRatio,
+    tokenizeTimeoutMs,
     // derived effective capacity (nominal * (1 - margin/100))
     /** @deprecated 모델 무관 고정값 — 안전망은 resolveEffectiveContext(modelId) 를 쓴다. 진단·표시용으로만 잔존. */
     effectiveDefault: Math.floor(defaultCtx * (1 - defaultMarginPct / 100)),

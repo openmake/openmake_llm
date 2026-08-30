@@ -12,10 +12,14 @@
  */
 import { MODEL_POOL_CONFIG, resolveEffectiveContext } from '../config/model-pool';
 import { ContextOverflowError } from '../errors/context-overflow.error';
+import { countExactTokens, isExactTokenizeEnabled } from './exact-tokenizer';
+import { createLogger } from '../utils/logger';
 import type { ChatMessage, ModelOptions } from './types';
 
 /** tokenizer overhead 안전 마진 — system prompt boilerplate 등 */
 const SAFETY_BUFFER = 256;
+
+const logger = createLogger('ModelPool');
 
 export interface ModelPoolDecision {
     /** 사용할 model ID (LLMClient.chat 에 body.model 로 전달) */
@@ -139,6 +143,11 @@ export function truncateMessagesPreservingSystem(
 export function reduceToFit(
     messages: ChatMessage[],
     options: Pick<ModelOptions, 'num_predict'>,
+    /**
+     * 문자 추정 보정 계수 (실제 토큰 / 문자 추정). 1 = 보정 없음.
+     * 절단 판정은 문자 추정으로 하되 예산을 이 계수로 나눠 실제 토큰 기준과 맞춘다.
+     */
+    scale = 1,
 ): ModelPoolDecision {
     const requested = options.num_predict ?? MODEL_POOL_CONFIG.routingMaxTokensDefault;
     const model = MODEL_POOL_CONFIG.defaultModel;
@@ -147,9 +156,10 @@ export function reduceToFit(
     const minOutput = MODEL_POOL_CONFIG.minOutputTokens;
 
     // 1단계: input truncate
-    const inputBudget = effective - requested - SAFETY_BUFFER;
+    // truncate 는 문자 추정으로 누적하므로 예산을 보정 계수로 나눠 실제 토큰 기준과 맞춘다.
+    const inputBudget = Math.floor((effective - requested - SAFETY_BUFFER) / scale);
     const trimmed = truncateMessagesPreservingSystem(messages, inputBudget);
-    const newInputTokens = estimateMessageTokens(trimmed);
+    const newInputTokens = Math.ceil(estimateMessageTokens(trimmed) * scale);
 
     if (newInputTokens + requested <= effective) {
         return {
@@ -221,4 +231,54 @@ export function selectModelByCapacity(
     }
 
     return reduceToFit(messages, options);
+}
+
+/**
+ * 정확 토큰 보정을 적용한 context-fit — `LLMClient.chat()` 이 쓰는 진입점.
+ *
+ * 문자 추정이 유효 컨텍스트의 `tokenizeExactRatio` 를 넘을 때만 모델 자신의 토크나이저로
+ * 실제 토큰을 재계산하고, 그 비(scale)로 추정을 보정한다. 평상시 산문 요청은 임계에
+ * 닿지 않아 추가 호출이 없다(TTFT 무영향).
+ *
+ * 왜 "치환"이 아니라 "보정 계수"인가: 절단(truncateMessagesPreservingSystem)은 메시지마다
+ * 문자 추정을 누적한다. 총합만 실제값으로 바꾸면 절단 루프와 판정이 서로 다른 척도를 쓰게 돼
+ * 여전히 과소절단한다. 계수를 쓰면 두 척도가 한 번에 정합된다.
+ *
+ * 전 구간 fail-open — tokenize 실패는 종전(문자 추정) 동작으로 되돌아간다.
+ */
+export async function selectModelByCapacityExact(
+    messages: ChatMessage[],
+    options: Pick<ModelOptions, 'num_predict'> & { model?: string },
+): Promise<ModelPoolDecision> {
+    if (options.model) {
+        return { model: options.model, source: 'manual' };
+    }
+    if (!MODEL_POOL_CONFIG.enabled) {
+        return { model: MODEL_POOL_CONFIG.defaultModel, source: 'pool_disabled' };
+    }
+
+    const model = MODEL_POOL_CONFIG.defaultModel;
+    const effective = resolveEffectiveContext(model);
+    const rough = estimateMessageTokens(messages);
+
+    let scale = 1;
+    if (isExactTokenizeEnabled() && rough > effective * MODEL_POOL_CONFIG.tokenizeExactRatio) {
+        const exact = await countExactTokens(messages, model);
+        if (exact !== null && rough > 0) {
+            scale = exact / rough;
+            logger.info(
+                `[ModelPool] exact tokenize: rough=~${rough} exact=${exact}` +
+                ` scale=${scale.toFixed(2)}`,
+            );
+        }
+    }
+
+    const inputTokens = Math.ceil(rough * scale);
+    const estimatedOutput = options.num_predict ?? MODEL_POOL_CONFIG.routingMaxTokensDefault;
+
+    if (inputTokens + estimatedOutput <= effective) {
+        return { model, source: 'auto', inputTokens };
+    }
+
+    return reduceToFit(messages, options, scale);
 }
