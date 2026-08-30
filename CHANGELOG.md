@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.1](https://github.com/openmake/openmake_llm/compare/v1.35.0...v1.35.1) (2026-08-30)
+
+
+### 🐛 버그 수정
+
+* **ops:** 라우팅·TTFT 일일 집계가 로그를 못 찾던 문제 — OMK_LOG_DIR 반영 ([#681](https://github.com/openmake/openmake_llm/issues/681)) ([06abbdf](https://github.com/openmake/openmake_llm/commit/06abbdf9e57772dcdb7d8f83a735eb707375f08f))
+
 ## [1.35.0](https://github.com/openmake/openmake_llm/compare/v1.34.0...v1.35.0) (2026-08-30)
 
 
