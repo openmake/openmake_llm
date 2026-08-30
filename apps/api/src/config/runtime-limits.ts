@@ -402,6 +402,16 @@ export const DOC_EXTRACT_LIMITS = {
     PDF_EXTS: ['pdf'] as readonly string[],
     /** officeparser 로 처리할 확장자 */
     OFFICE_EXTS: ['docx', 'xlsx', 'pptx', 'odt', 'odp', 'ods', 'rtf'] as readonly string[],
+    /**
+     * kordoc 으로 처리할 한국 공문서 확장자.
+     *
+     * `.hwp`·`.hwpx` 는 업로드 화이트리스트(`ALLOWED_DOCUMENT_EXTENSIONS`)에 오래 있었지만
+     * 추출기 어느 목록에도 없어 **받아만 두고 본문을 못 읽었다**(확장자 허용 ≠ 파싱 지원).
+     * kordoc(순수 JS, 한컴오피스·JVM 불요)이 HWP 3.x/5.x·HWPX·HWPML 을 마크다운으로 낸다.
+     */
+    HWP_EXTS: ['hwp', 'hwpx', 'hml'] as readonly string[],
+    /** kordoc 추출 타임아웃 (ms) — 순수 JS 파서라 JVM 경로보다 짧게 잡는다 */
+    HWP_TIMEOUT_MS: parseInt(process.env.DOC_EXTRACT_HWP_TIMEOUT_MS || '30000', 10),
     /** 스캔본 PDF OCR 폴백 on/off (기본 on — opendataloader 가 텍스트를 못 뽑으면 officeparser+tesseract 로 재시도) */
     OCR_ENABLED: process.env.DOC_EXTRACT_OCR_ENABLED !== 'false',
     /** opendataloader 추출 텍스트가 이 글자 수 미만이면 스캔본(이미지 PDF)으로 보고 OCR 폴백 */
