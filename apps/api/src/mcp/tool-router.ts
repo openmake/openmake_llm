@@ -37,6 +37,7 @@ import { createLogger } from '../utils/logger';
 import { MCP_EXTERNAL_TOOL_LIMITS } from '../config/timeouts';
 import { withSpan } from '../observability/otel';
 import { classifyToolError, formatToolError } from './tool-error-classifier';
+import { withToolNameSuggestions } from './tool-name-suggest';
 import { isToolCircuitOpen, recordToolResult } from './tool-health';
 import type { UserMCPPool } from './user-pool';
 import { collectUserPoolTools } from './user-pool-tools';
@@ -199,6 +200,24 @@ export class ToolRouter {
     }
 
     /**
+     * 오류 경로 전용 — 지금 이 사용자에게 실제로 열려 있는 도구 이름을 모은다.
+     * 이름 교정 후보 계산에만 쓰이며, 사용자 풀 조회가 실패해도 내장·전역만으로 진행한다.
+     */
+    private async knownToolNamesFor(userId?: string): Promise<string[]> {
+        const names: string[] = builtInTools.map((d: MCPToolDefinition) => d.tool.name);
+        for (const key of this.externalTools.keys()) names.push(key);
+        if (userId) {
+            try {
+                const { getUserMCPPool } = await import('./user-pool');
+                for (const e of collectUserPoolTools(getUserMCPPool(), userId)) names.push(e.tool.name);
+            } catch {
+                /* 사용자 풀을 못 읽어도 후보 없이 종전 메시지로 진행 (fail-open) */
+            }
+        }
+        return names;
+    }
+
+    /**
      * 도구 실행 — 내장이면 직접 handler, 외부면 ExternalMCPClient로 라우팅
      * 
      * ⚙️ Phase 3: UserContext 전달 추가 (2026-02-07)
@@ -304,7 +323,7 @@ export class ToolRouter {
                 // 1b. 전역 externalTools (visibility=global) fallback
                 const externalEntry = this.externalTools.get(name);
                 if (!externalEntry) {
-                    return fail(`외부 도구를 찾을 수 없습니다: ${name}`);
+                    return fail(withToolNameSuggestions(`외부 도구를 찾을 수 없습니다: ${name}`, name, await this.knownToolNamesFor(context?.userId ? String(context.userId) : undefined)));
                 }
 
                 const executor = this.externalExecutors.get(externalEntry.serverId);
@@ -350,7 +369,7 @@ export class ToolRouter {
                 }
             }
 
-            return fail(`도구를 찾을 수 없습니다: ${name}`);
+            return fail(withToolNameSuggestions(`도구를 찾을 수 없습니다: ${name}`, name, await this.knownToolNamesFor(context?.userId ? String(context.userId) : undefined)));
         });
     }
 

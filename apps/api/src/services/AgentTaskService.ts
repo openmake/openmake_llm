@@ -223,6 +223,14 @@ export class AgentTaskService {
                         })
                         : undefined;
                     taskRuntime = new TaskRuntime(taskId, userId, sandboxCfg, delegateFn, spawnFn, remoteExecutor, goal);
+                    // 이름 교정(P0-b) — 모델에 실제 노출된 도구 이름을 런타임에 알려, 잘못된 이름 호출과
+                    // "도구를 셸 명령으로 실행" 을 그 자리에서 교정 안내한다. 오류 메시지 품질을 위한
+                    // 부가 기능이므로 여기서 실패해도 샌드박스 경로 전체를 죽이지 않는다(fail-open).
+                    try {
+                        taskRuntime.setKnownToolNames(mcpTools.map((t) => t.function.name));
+                    } catch (e) {
+                        logger.warn(`[${taskId}] 도구 이름 교정 목록 주입 실패(무시): ${e instanceof Error ? e.message : String(e)}`);
+                    }
                     await taskRuntime.create();
                     await db.updateAgentTask(taskId, {
                         sandboxContainerId: taskRuntime.containerName,

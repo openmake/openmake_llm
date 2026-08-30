@@ -20,6 +20,7 @@ import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
 import { saveProceduralSkill, resolveProceduralSpec } from '../agent-task/procedural-skill';
 import { TaskPlan, parseGoalPlanSteps, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval, type ApprovalRejectReason } from './approval-gate';
+import { withToolNameSuggestions, detectShellToolMisuse, formatShellToolMisuseHint } from '../../mcp/tool-name-suggest';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('TaskRuntime');
@@ -61,6 +62,8 @@ export class TaskRuntime {
     private readonly plan = new TaskPlan({ autoAdvance: AGENT_TASK_LIMITS.PLAN_AUTO_ADVANCE });
     private readonly handlers = new Map<string, MCPToolDefinition['handler']>();
     private readonly defs: MCPToolDefinition[];
+    /** 이 작업에 실제로 노출된 도구 이름(task + MCP + 내장). 이름 교정·셸 오용 감지에만 쓴다. */
+    private knownToolNames: string[] = [];
 
     constructor(
         taskId: string,
@@ -177,6 +180,25 @@ export class TaskRuntime {
     isTaskTool(name: string): boolean { return this.handlers.has(name); }
 
     /**
+     * 모델에 실제로 노출된 전체 도구 이름을 알려준다(AgentTaskService 가 도구 목록 확정 후 1회).
+     * task 도구만으로는 `web_search` 처럼 MCP·내장 도구를 셸에서 부른 경우를 알아볼 수 없다.
+     */
+    setKnownToolNames(names: readonly string[]): void {
+        this.knownToolNames = Array.from(new Set([...this.handlers.keys(), ...names]));
+    }
+
+
+    /**
+     * 셸 출력에 "도구 이름을 명령으로 실행" 한 흔적이 있으면 결과 끝에 교정 안내를 덧붙인다.
+     * 실측(30일 5건): 모델이 `web_search "질의"` 를 bash 로 실행해 `not found` 만 보고 헤맸다.
+     */
+    private appendShellToolHint(toolName: string, output: string): string {
+        if (toolName !== 'bash') return output;
+        const known = this.knownToolNames.length > 0 ? this.knownToolNames : Array.from(this.handlers.keys());
+        const misused = detectShellToolMisuse(output, known);
+        return misused.length > 0 ? output + formatShellToolMisuseHint(misused) : output;
+    }
+    /**
      * 도구 실행 — 승인 정책 적용 후 핸들러 실행. 거절 시 도구 결과로 거절 메시지 반환
      * (루프는 정상 진행 — LLM 이 거절을 보고 대안을 모색).
      */
@@ -186,7 +208,10 @@ export class TaskRuntime {
         opts: ExecuteTaskToolOpts = {},
     ): Promise<string> {
         const handler = this.handlers.get(name);
-        if (!handler) return `Error: 알 수 없는 task 도구 ${name}`;
+        if (!handler) {
+            const known = this.knownToolNames.length > 0 ? this.knownToolNames : Array.from(this.handlers.keys());
+            return withToolNameSuggestions(`Error: 알 수 없는 task 도구 ${name}`, name, known);
+        }
 
         // ask_human 은 승인 정책·자동승인과 무관하게 항상 사용자 응답을 대기한다 — 도구의 목적
         // 자체가 HITL 이므로 승인 레지스트리(pause + push + REST approve/reject/answer)를 응답 채널로 사용.
@@ -233,7 +258,7 @@ export class TaskRuntime {
                 rawChars: typed.content.map((c) => c.text ?? '').join('\n').length,
                 capChars: MAX_TOOL_RESULT_CHARS,
             });
-            return resultToString(typed);
+            return this.appendShellToolHint(name, resultToString(typed));
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             logger.warn(`[${this.taskId}] task 도구 실행 실패 (${name}): ${msg}`);

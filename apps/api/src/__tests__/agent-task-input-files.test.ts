@@ -64,6 +64,7 @@ jest.mock('../services/task-sandbox/runtime', () => ({
         writeWorkspaceFile,
         getLLMTools: () => [],
         isTaskTool: () => false,
+        setKnownToolNames: jest.fn(),
         getPlanSnapshot: () => [],
         executeTaskTool: jest.fn(),
     })),
