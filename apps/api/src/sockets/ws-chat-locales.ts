@@ -52,6 +52,7 @@ export const WS_PROVIDER_ERROR_MESSAGES: Record<string, Record<ProviderErrorCode
         MODEL_NOT_FOUND: '선택한 모델을 외부 LLM 제공자에서 찾을 수 없습니다. 모델 목록을 새로고침하거나 다른 모델을 선택하세요.',
         NOT_SUPPORTED: '선택한 모델이 이 기능을 지원하지 않습니다. 다른 모델을 시도해주세요.',
         UPSTREAM_ERROR: '외부 LLM 제공자에서 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+        CONTEXT_TOO_LARGE: '입력이 모델의 최대 길이를 초과했습니다. 첨부 파일을 줄이거나 대화를 새로 시작한 뒤 다시 시도해주세요.',
         INVALID_MODEL_ID: '모델 식별자 형식이 올바르지 않습니다. 모델 목록에서 다시 선택해주세요.',
     },
     en: {
@@ -64,6 +65,7 @@ export const WS_PROVIDER_ERROR_MESSAGES: Record<string, Record<ProviderErrorCode
         MODEL_NOT_FOUND: 'The selected model was not found at the external LLM provider. Please refresh the model list or select a different model.',
         NOT_SUPPORTED: 'The selected model does not support this feature. Please try a different model.',
         UPSTREAM_ERROR: 'A temporary error occurred at the external LLM provider. Please try again later.',
+        CONTEXT_TOO_LARGE: 'The input exceeds the model context limit. Reduce attachments or start a new conversation, then try again.',
         INVALID_MODEL_ID: 'The model identifier format is invalid. Please reselect from the model list.',
     },
     ja: {
@@ -76,6 +78,7 @@ export const WS_PROVIDER_ERROR_MESSAGES: Record<string, Record<ProviderErrorCode
         MODEL_NOT_FOUND: '選択したモデルが外部LLMプロバイダーで見つかりません。モデル一覧を更新するか、別のモデルを選択してください。',
         NOT_SUPPORTED: '選択したモデルはこの機能をサポートしていません。別のモデルをお試しください。',
         UPSTREAM_ERROR: '外部LLMプロバイダーで一時的なエラーが発生しました。しばらくしてから再度お試しください。',
+        CONTEXT_TOO_LARGE: '入力がモデルの最大長を超えました。添付を減らすか、新しい会話を開始してから再度お試しください。',
         INVALID_MODEL_ID: 'モデル識別子の形式が正しくありません。モデル一覧から再選択してください。',
     },
     zh: {
@@ -88,6 +91,7 @@ export const WS_PROVIDER_ERROR_MESSAGES: Record<string, Record<ProviderErrorCode
         MODEL_NOT_FOUND: '外部LLM提供商找不到所选模型。请刷新模型列表或选择其他模型。',
         NOT_SUPPORTED: '所选模型不支持此功能。请尝试其他模型。',
         UPSTREAM_ERROR: '外部LLM提供商发生临时错误。请稍后重试。',
+        CONTEXT_TOO_LARGE: '输入超出模型的最大长度。请减少附件或开始新对话后重试。',
         INVALID_MODEL_ID: '模型标识符格式无效。请从模型列表中重新选择。',
     },
     es: {
@@ -100,6 +104,7 @@ export const WS_PROVIDER_ERROR_MESSAGES: Record<string, Record<ProviderErrorCode
         MODEL_NOT_FOUND: 'El modelo seleccionado no se encontró en el proveedor LLM externo. Por favor, actualice la lista de modelos o seleccione un modelo diferente.',
         NOT_SUPPORTED: 'El modelo seleccionado no admite esta función. Por favor, pruebe un modelo diferente.',
         UPSTREAM_ERROR: 'Se produjo un error temporal en el proveedor LLM externo. Por favor, inténtelo de nuevo más tarde.',
+        CONTEXT_TOO_LARGE: 'La entrada supera el límite de contexto del modelo. Reduzca los archivos adjuntos o inicie una nueva conversación e inténtelo de nuevo.',
         INVALID_MODEL_ID: 'El formato del identificador del modelo no es válido. Por favor, vuelva a seleccionar de la lista de modelos.',
     },
     de: {
@@ -112,6 +117,7 @@ export const WS_PROVIDER_ERROR_MESSAGES: Record<string, Record<ProviderErrorCode
         MODEL_NOT_FOUND: 'Das ausgewählte Modell wurde beim externen LLM-Anbieter nicht gefunden. Bitte aktualisieren Sie die Modellliste oder wählen Sie ein anderes Modell.',
         NOT_SUPPORTED: 'Das ausgewählte Modell unterstützt diese Funktion nicht. Bitte versuchen Sie ein anderes Modell.',
         UPSTREAM_ERROR: 'Beim externen LLM-Anbieter ist ein vorübergehender Fehler aufgetreten. Bitte versuchen Sie es später erneut.',
+        CONTEXT_TOO_LARGE: 'Die Eingabe überschreitet das Kontextlimit des Modells. Reduzieren Sie die Anhänge oder starten Sie eine neue Unterhaltung und versuchen Sie es erneut.',
         INVALID_MODEL_ID: 'Das Format der Modellkennung ist ungültig. Bitte wählen Sie aus der Modellliste neu aus.',
     },
     fr: {
@@ -124,6 +130,7 @@ export const WS_PROVIDER_ERROR_MESSAGES: Record<string, Record<ProviderErrorCode
         MODEL_NOT_FOUND: 'Le modèle sélectionné est introuvable chez le fournisseur LLM externe. Veuillez actualiser la liste des modèles ou sélectionner un autre modèle.',
         NOT_SUPPORTED: 'Le modèle sélectionné ne prend pas en charge cette fonctionnalité. Veuillez essayer un autre modèle.',
         UPSTREAM_ERROR: 'Une erreur temporaire s\'est produite chez le fournisseur LLM externe. Veuillez réessayer plus tard.',
+        CONTEXT_TOO_LARGE: 'L\'entrée dépasse la limite de contexte du modèle. Réduisez les pièces jointes ou démarrez une nouvelle conversation, puis réessayez.',
         INVALID_MODEL_ID: 'Le format de l\'identifiant du modèle est invalide. Veuillez resélectionner dans la liste des modèles.',
     },
 };
