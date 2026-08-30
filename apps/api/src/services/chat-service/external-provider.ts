@@ -333,9 +333,15 @@ export async function runExternalStream(
             );
         }
     } catch (err) {
+        // 컨텍스트 초과는 **재시도해도 같다** — UPSTREAM_ERROR("잠시 후 다시 시도") 로 안내하면
+        // 사용자가 같은 실패를 반복한다. upstream 이 code 를 주지 않으므로 메시지로 판정한다
+        // (LiteLLM: `ContextWindowExceededError` / OpenAI 호환: `maximum context length`).
+        const rawMsg = err instanceof Error ? err.message : String(err ?? '');
         errorCode = err && typeof err === 'object' && 'code' in err
             ? String((err as { code: unknown }).code)
-            : 'UPSTREAM_ERROR';
+            : /ContextWindowExceeded|maximum context length|context_length_exceeded|too many tokens/i.test(rawMsg)
+                ? 'CONTEXT_TOO_LARGE'
+                : 'UPSTREAM_ERROR';
         // 접근 불가 판정 자동 학습 — provider 카탈로그에는 있으나 이 계정으로는 못 쓰는
         // 모델(Ollama Cloud 구독 전용 403, NVIDIA 계정별 404 등)을 목록에서 걸러내기 위해
         // 실패를 영속화한다. fire-and-forget — 기록 실패가 채팅 오류를 덮지 않는다.
