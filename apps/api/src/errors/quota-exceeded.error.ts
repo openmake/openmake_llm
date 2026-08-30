@@ -20,7 +20,10 @@ export class QuotaExceededError extends Error {
     public readonly retryAfterSeconds: number;
 
     constructor(quotaType: 'hourly' | 'weekly' | 'both', used: number, limit: number) {
-        const message = `API quota exceeded (${quotaType}): ${used}/${limit} requests used`;
+        // 단위는 **토큰** — user-quota.ts 가 llmHourlyTokenLimit/llmWeeklyTokenLimit(토큰 수)로
+        // 검사한다. 예전 문구가 "requests used" 라 요청 수로 읽혀, 업스트림 프로바이더의
+        // 요청 쿼터 초과로 오진하기 쉬웠다.
+        const message = `API quota exceeded (${quotaType}): ${used}/${limit} tokens used`;
         super(message);
         this.name = 'QuotaExceededError';
         this.quotaType = quotaType;

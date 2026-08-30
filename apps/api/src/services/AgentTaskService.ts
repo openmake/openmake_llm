@@ -18,6 +18,7 @@ import { type LLMClient } from '../llm';
 import type { ChatMessage, ToolDefinition } from '../llm/types';
 import { initAgentRoleState, chatTurnWithRoleFallback, defaultAgentClient } from './agent-task/role-client';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
+import { ensureUserMcpForTask } from '../mcp/lifecycle-hooks';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, AGENT_SPAWN } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
@@ -189,6 +190,11 @@ export class AgentTaskService {
             // fresh 재실행(실패/취소 작업을 처음부터): 이전 시도의 스텝을 비워
             // stepNumber 0 재시작으로 인한 (task_id, step_number) 중복·표시 혼선을 방지.
             if (!input.resume) await db.deleteAgentTaskSteps(taskId);
+
+            // user MCP 풀 보장 — 도구를 모으기 **전에** await 해야 한다. 채팅 경로만 풀을 채우던
+            // 탓에, 프로세스 재시작 후 채팅 없이 바로 실행한 작업은 user MCP 도구가 0개인 채로
+            // 돌아 모델이 "MCP 서버 미설치"로 오판하고 포기했다. 멱등이라 재실행 비용은 없다.
+            await ensureUserMcpForTask(userId, taskId);
 
             // 역할 게이팅(채팅 경로와 동일) — 고위험 전역 도구(Python REPL 등)를 역할 미달 user 에게서 제거.
             const allTools = filterRestrictedTools((await mcp.getToolRouter().getLLMTools({
