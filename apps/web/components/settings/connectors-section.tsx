@@ -636,8 +636,11 @@ export function ConnectorsSection() {
       alert(t("toggleFailed", { error: e instanceof Error ? e.message : "" } as never));
     } finally {
       setActionLoading((prev) => ({ ...prev, [id]: false }));
+    }
+  }
 
-  /** 이름 변경 등 목록을 다시 읽어야 하는 동작을 위한 재조회 — 실패 시 빈 목록(목업 폴백 금지). */
+  /** 이름 변경·삭제 등 목록을 다시 읽어야 하는 동작을 위한 재조회.
+   *  실패해도 화면을 비우지 않는다 — 목업 폴백은 두지 않는다(PR #634 이후 금지 패턴). */
   async function loadServers() {
     try {
       const res = await ApiClient.get<ApiEnvelope<{ servers: ApiMcpServer[] }>>(
@@ -645,11 +648,9 @@ export function ConnectorsSection() {
       );
       setServers((res?.data?.servers ?? []).map((s) => mapServer(s, t)));
     } catch {
-      // 401·네트워크 실패 등 → 목록 유지(재조회 실패는 화면을 비우지 않는다)
+      // 401·네트워크 실패 등 → 기존 목록 유지
     } finally {
       setLoading(false);
-    }
-  }
     }
   }
 
