@@ -16,7 +16,7 @@
  * @module routes/mcp-oauth.routes
  */
 import { Router, type Request, type Response } from 'express';
-import { auth } from '@modelcontextprotocol/sdk/client/auth.js';
+import { auth } from '@modelcontextprotocol/client';
 import { requireAuth } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
 import { success, badRequest, notFound, forbidden, internalError } from '../utils/api-response';
