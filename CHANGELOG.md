@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.35.0](https://github.com/openmake/openmake_llm/compare/v1.34.0...v1.35.0) (2026-08-30)
+
+
+### ✨ 기능
+
+* 유실 브랜치의 나머지 8커밋 전량 재이식 (다중 인스턴스·작업 결과 UI·포트 SSOT 등) ([#679](https://github.com/openmake/openmake_llm/issues/679)) ([5de3e3d](https://github.com/openmake/openmake_llm/commit/5de3e3d9dc4ca62280d0d73e8e1e215391972e5b))
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 재시작 후 첫 작업이 user MCP 도구 0개로 돌던 결함 + 쿼터 단위 오표시 (유실 브랜치 회수) ([#677](https://github.com/openmake/openmake_llm/issues/677)) ([d4be464](https://github.com/openmake/openmake_llm/commit/d4be4640091ffa7d34a961bd48eb97e1c4ce529e))
+
 ## [1.34.0](https://github.com/openmake/openmake_llm/compare/v1.33.1...v1.34.0) (2026-08-30)
 
 
