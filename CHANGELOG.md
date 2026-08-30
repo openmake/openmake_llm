@@ -1,5 +1,72 @@
 # Changelog
 
+## [1.34.0](https://github.com/openmake/openmake_llm/compare/v1.33.1...v1.34.0) (2026-08-30)
+
+
+### ✨ 기능
+
+* **agent-task-share:** 공유 산출물을 격리 오리진 뷰어로 열람 ([#644](https://github.com/openmake/openmake_llm/issues/644)) ([32f6582](https://github.com/openmake/openmake_llm/commit/32f65823f546cfbde0f1ee95471d78d15cf74f67))
+* **agent-task:** goal judge 셰도우 확대 — 아티팩트 있는 완료도 판정만 기록 ([#653](https://github.com/openmake/openmake_llm/issues/653)) ([cc98d6a](https://github.com/openmake/openmake_llm/commit/cc98d6a4338ede93b462b39ef25e0f07e0580a74))
+* **agent-task:** 서브에이전트 활동 기록(109) + 병렬 위임 채택률 셰도우(110)·설명문 조정 ([#647](https://github.com/openmake/openmake_llm/issues/647)) ([ba65791](https://github.com/openmake/openmake_llm/commit/ba65791ce11fc6816d61f2d4bbd218765e5e5168))
+* **agent-task:** 읽기 전용 작업 공유 — 서버·웹·CLI ([#642](https://github.com/openmake/openmake_llm/issues/642)) ([4e717e8](https://github.com/openmake/openmake_llm/commit/4e717e8bc56ea1bcfbe12f8e142c1cba382ad29e))
+* **cli:** openmake-code show &lt;taskId&gt; — 작업 결과·진행 기록·변경분 재출력 ([#641](https://github.com/openmake/openmake_llm/issues/641)) ([314b089](https://github.com/openmake/openmake_llm/commit/314b0894bc6121441fa58ba15dfedd1820772e59))
+* **cli:** openmake-code tasks/resume/--resume — 로컬 작업 이어하기 (+취소 작업 resume 결함 수정) ([#637](https://github.com/openmake/openmake_llm/issues/637)) ([f530721](https://github.com/openmake/openmake_llm/commit/f530721b06f59af5eaaecda22fd6ad99fda6e524))
+* **extensions:** 외부 스킬·플러그인 설치 시 openmake 환경 적응 (Phase 1~3) ([#607](https://github.com/openmake/openmake_llm/issues/607)) ([16a17b0](https://github.com/openmake/openmake_llm/commit/16a17b02c670b84f71a3916fe4ab17210fdec80d))
+* **local-bridge:** 편집 후 진단(LSP diagnostics-first 1단계) — write 결과에 tsc/py_compile 진단 부착 ([#639](https://github.com/openmake/openmake_llm/issues/639)) ([1ccb513](https://github.com/openmake/openmake_llm/commit/1ccb51359ecec08c1d236536ab9080fef5c16b89))
+* **marketplace:** 게시를 내부(갤러리)로 전환 — GitHub 로 나가지 않고 이 배포 안에서만 설치 ([#627](https://github.com/openmake/openmake_llm/issues/627)) ([a995d28](https://github.com/openmake/openmake_llm/commit/a995d2879d27349fa98957e64f7bc753241cf8c7))
+* **marketplace:** 발행형 — 내가 만든 스킬·Custom Agent·MCP 설정을 플러그인 번들로 게시 (PR) ([#623](https://github.com/openmake/openmake_llm/issues/623)) ([2b8023f](https://github.com/openmake/openmake_llm/commit/2b8023f5657a76d8e629b2e5c1931e8ea4584b5c))
+* **mcp:** 반복 실패 도구 서킷 차단 — 노출 제외 + 실행 거절 (P0-a PR2, 기본 OFF) ([#656](https://github.com/openmake/openmake_llm/issues/656)) ([0d67772](https://github.com/openmake/openmake_llm/commit/0d6777214bf8b182a77658bcf5bfcbeff722bff0))
+* **mcp:** 서버 사용 여부 토글 — 삭제의 되돌릴 수 있는 대안 ([#617](https://github.com/openmake/openmake_llm/issues/617)) ([f6e6df2](https://github.com/openmake/openmake_llm/commit/f6e6df2e0d0514b73527eb0c38afe543f76b0926))
+* **mcp:** 원격 MCP 서버 OAuth 로그인 (Authorization Code + PKCE + 동적 등록) ([#621](https://github.com/openmake/openmake_llm/issues/621)) ([7190a5b](https://github.com/openmake/openmake_llm/commit/7190a5bbe2984c205fb0fbe439969f3e654dd8a6))
+* **mcp:** 클라이언트를 @modelcontextprotocol/client v2 로 이전 (Phase 1, legacy 협상 고정) ([#676](https://github.com/openmake/openmake_llm/issues/676)) ([423db6c](https://github.com/openmake/openmake_llm/commit/423db6c6e7af33921deffbe3b487412478a6f9d2))
+* **metrics:** 도구별 실패율·실패 원인 관측 — 분모 있는 도구 헬스 지표 (P0-a PR1) ([#655](https://github.com/openmake/openmake_llm/issues/655)) ([00ed011](https://github.com/openmake/openmake_llm/commit/00ed011e78c4a19c064e3b9703c07b91b3f4f23e))
+* **skills:** draft 확장별 묶음 + 일괄 승인·거부 ([#614](https://github.com/openmake/openmake_llm/issues/614)) ([fbb5133](https://github.com/openmake/openmake_llm/commit/fbb51332b83321dfaeecaf3db63f0f2faa39a4c9))
+* **skills:** 스킬 사용 이벤트를 skill_audit_log 에 기록 + 사용 요약 API ([#671](https://github.com/openmake/openmake_llm/issues/671)) ([d4667b6](https://github.com/openmake/openmake_llm/commit/d4667b6faef59c1a4dc25c75b7243de8ca948384))
+* **tools:** 한 턴 안의 읽기 전용 도구 호출을 병렬 실행 — 채팅·에이전트 작업·서브에이전트 ([#646](https://github.com/openmake/openmake_llm/issues/646)) ([75067d6](https://github.com/openmake/openmake_llm/commit/75067d6f206abd90c0ef44629c4b6ab6fd9d2fad))
+* **web:** 승인 창구를 `/approvals` 한 곳으로 통합 ([#615](https://github.com/openmake/openmake_llm/issues/615)) ([646e1ab](https://github.com/openmake/openmake_llm/commit/646e1ab94013f5ce2d906f3a46aecff3aa48ae79))
+
+
+### 🐛 버그 수정
+
+* **agent-spawn:** 승인 정책 all 에서 서브에이전트가 도구 없이 답을 지어내던 것 + 인자 오류 진단 ([#645](https://github.com/openmake/openmake_llm/issues/645)) ([34ee0d6](https://github.com/openmake/openmake_llm/commit/34ee0d6d31930d65b03b7469a51a8f47e5d79340))
+* **agent-task:** goal judge 사유 영속 + 증거 창에서 terminate/plan 제외 + 부분 계획 비율 제외 ([#626](https://github.com/openmake/openmake_llm/issues/626)) ([ec0be6b](https://github.com/openmake/openmake_llm/commit/ec0be6bd3c3279f24fbca1d1a35d7faff0e0aba4))
+* **agent-task:** goal 의 번호 절차를 초기 계획으로 심는다 — plan 프로토콜 오류 제거 (P0-c) ([#657](https://github.com/openmake/openmake_llm/issues/657)) ([e360468](https://github.com/openmake/openmake_llm/commit/e360468f941c1563ea0a914e6a68335804fdba02))
+* **agent-task:** judge 에 제출 산출물을 싣는다 — 셰도우 표본 오염 차단 ([#654](https://github.com/openmake/openmake_llm/issues/654)) ([a96dcac](https://github.com/openmake/openmake_llm/commit/a96dcac2a8e5a167586e621efebfec0fbb15372b))
+* **agent-task:** 재개/재실행으로 완료된 작업에 이전 실패 사유가 남던 문제 ([#638](https://github.com/openmake/openmake_llm/issues/638)) ([78b1bf7](https://github.com/openmake/openmake_llm/commit/78b1bf70fca47bcba5f6bc712072283b7f67e512))
+* **agent-task:** 재시작 시 'queued' 작업이 영구 고아가 되던 문제 + 큐 관측 엔드포인트 ([#622](https://github.com/openmake/openmake_llm/issues/622)) ([e44d49a](https://github.com/openmake/openmake_llm/commit/e44d49a88262c9ba9f22dbb3d76564b60684de8e))
+* **chat:** 슬래시 스킬 호출 시 답변 언어를 스킬 본문이 아니라 사용자 질문으로 판정 ([#620](https://github.com/openmake/openmake_llm/issues/620)) ([88440a4](https://github.com/openmake/openmake_llm/commit/88440a40b1e749b34130ffc959fc5ef9dbd0d905))
+* **chat:** 슬래시 스킬 확장문이 사전 웹검색·URL 분석으로 새던 문제 ([#619](https://github.com/openmake/openmake_llm/issues/619)) ([2045886](https://github.com/openmake/openmake_llm/commit/204588638108e1c032886d7cb85aaf19cb2502c7))
+* **chat:** 이름에 특수문자가 있는 스킬의 슬래시 호출이 조용히 무시되던 문제 ([#613](https://github.com/openmake/openmake_llm/issues/613)) ([0af5ad5](https://github.com/openmake/openmake_llm/commit/0af5ad53a377f24a16f7a5ff1d90beab58054713))
+* **deploy:** Caddyfile 을 운영 경로에 덮어쓰기 전에 caddy validate 로 검증한다 ([#662](https://github.com/openmake/openmake_llm/issues/662)) ([c24bb45](https://github.com/openmake/openmake_llm/commit/c24bb4582b0086236ea78cee72c6a8bcb102cfe9))
+* **extensions:** git 심링크 SKILL.md 를 카탈로그 판정·설치 탐지에서 제외 ([#670](https://github.com/openmake/openmake_llm/issues/670)) ([4151356](https://github.com/openmake/openmake_llm/commit/4151356f346ff2d91d9e68da68f50426e6e8f2e2))
+* **extensions:** 카탈로그 판정과 설치를 한 함수로 통일 — 상류 plugin.json 규격(문자열 mcpServers·skills 경로·매니페스트 선택) 수용 ([#668](https://github.com/openmake/openmake_llm/issues/668)) ([e3f82c1](https://github.com/openmake/openmake_llm/commit/e3f82c1a798daf57f96e9d6926ac69c07628486c))
+* **llm:** 긴 텍스트를 JSON 으로 받는 경로 하드닝 (전수 조사 후속) ([#611](https://github.com/openmake/openmake_llm/issues/611)) ([554ca31](https://github.com/openmake/openmake_llm/commit/554ca3144885d24a0ebd344dc6ac9527a9546cf3))
+* **llm:** 컨텍스트 잘림 시 첫 user 메시지(=에이전트 작업 goal) 를 앵커로 보호 ([#625](https://github.com/openmake/openmake_llm/issues/625)) ([bace734](https://github.com/openmake/openmake_llm/commit/bace734e36d7ff76ad8d9e66876f3863796e24c4))
+* **llm:** 코드펜스를 먼저 벗겨 JSON 안의 코드블록을 잡던 파서 결함 ([#612](https://github.com/openmake/openmake_llm/issues/612)) ([ecee0dc](https://github.com/openmake/openmake_llm/commit/ecee0dca941b77cada2039515a00c9caba9b1856))
+* **marketplace:** 번들 디렉토리 슬러그를 ASCII 로 고정 + 재게시 시 낡은 파일 정리 ([#624](https://github.com/openmake/openmake_llm/issues/624)) ([3c60105](https://github.com/openmake/openmake_llm/commit/3c6010532ef39e8cfe4a06d16acd80de534ad4b4))
+* **mcp:** draft 승인 MCP 서버 자동 연결 — auto_spawn 승인 시 켜기 + 즉시 spawn + 토글/대기 중 표시 ([#628](https://github.com/openmake/openmake_llm/issues/628)) ([7dbbae5](https://github.com/openmake/openmake_llm/commit/7dbbae5a86c41b119869d7ef96e43a1f79963588))
+* **mcp:** 연결 실패 원인을 화면에 드러낸다 (401 이 원인 없는 "연결 안 됨"으로 보이던 문제) ([#616](https://github.com/openmake/openmake_llm/issues/616)) ([fb55e99](https://github.com/openmake/openmake_llm/commit/fb55e997436665ed45df0a4df419a068cdb96ae1))
+* **mcp:** 전역 서버 /start·/stop 가 유저풀 대신 전역 registry 로 — 소유자 불일치 500 해소 ([#629](https://github.com/openmake/openmake_llm/issues/629)) ([504ce7e](https://github.com/openmake/openmake_llm/commit/504ce7ecb5e46aa45f65a1f3114bb73a26fb6b75))
+* **mcp:** 확장 유래 MCP env 자리표시자 입력 + 시크릿 암호화 + status 이중 풀 ([#659](https://github.com/openmake/openmake_llm/issues/659)) ([62fb068](https://github.com/openmake/openmake_llm/commit/62fb0683b9671d4f342ea680b2e3eb0e114b33be))
+* **rate-limit:** 리미터 간 카운터 공유·프록시 IP 단일 집계로 무관한 429 가 나던 것 ([#643](https://github.com/openmake/openmake_llm/issues/643)) ([9a8d837](https://github.com/openmake/openmake_llm/commit/9a8d837b53e7f94dfef716203355f3c2c1d98ccd))
+* **skills:** manifest 주입 dedupe 를 SQL 로 — 이중 배정 시 비-global 우선 + LIMIT 은 dedupe 뒤에 ([#673](https://github.com/openmake/openmake_llm/issues/673)) ([0d1da92](https://github.com/openmake/openmake_llm/commit/0d1da9269e1e22a3450b70b290beed0c6f5deea7))
+* **skills:** skill_manifests 최신 version 선택을 사전순 MAX(version) 에서 semver 정렬 키로 ([#674](https://github.com/openmake/openmake_llm/issues/674)) ([cc4decb](https://github.com/openmake/openmake_llm/commit/cc4decb6ef8870c7147af160a9fc22c374026a33))
+* **skills:** 배정된 스킬이 주입되지 않던 2겹 결함 — manifest 동반 생성·백필 + 명시 배정은 카테고리 무관 ([#672](https://github.com/openmake/openmake_llm/issues/672)) ([533c81c](https://github.com/openmake/openmake_llm/commit/533c81cd9a8f5fd6079ec9059095b4bc10760808))
+* **skills:** 재작성 제안이 조용히 실패하던 문제 + .claude/ 경로 규칙 정교화 ([#610](https://github.com/openmake/openmake_llm/issues/610)) ([a4d37cb](https://github.com/openmake/openmake_llm/commit/a4d37cb8b89c9706e7b882bad3a582504fdd213e))
+* **tools:** 없는 도구 이름 호출에 교정 후보를 붙인다 (P0-b, 축소 채택) ([#675](https://github.com/openmake/openmake_llm/issues/675)) ([721354b](https://github.com/openmake/openmake_llm/commit/721354baa97fb0821546950a1fb5944afec41f4b))
+* **web-search:** 언어 미지정 호출은 질의에서 감지 — 한국어 web_search 도구 호출에 네이버·다음 provider 복원 ([#665](https://github.com/openmake/openmake_llm/issues/665)) ([8a2b8a5](https://github.com/openmake/openmake_llm/commit/8a2b8a53faf16373d3a4bcc2ecda0b91178c5266))
+* **web:** 세션 만료 시 store 를 게스트로 되돌려 배지 폴링을 멈춘다 ([#649](https://github.com/openmake/openmake_llm/issues/649)) ([68798a9](https://github.com/openmake/openmake_llm/commit/68798a98a704ff6779881c985d5e6975881fa171))
+* **web:** 커넥터 표 열 깨짐 — 커넥터 탭 본문 폭 확장 + 줄바꿈 금지 + 죽은 지연 열 제거 ([#630](https://github.com/openmake/openmake_llm/issues/630)) ([b51a4f5](https://github.com/openmake/openmake_llm/commit/b51a4f57ed12428253e9fc979ddf38c988645419))
+
+
+### ♻️ 리팩터링
+
+* **web:** 401/실패 시 목업 폴백 6곳 제거 + /admin/* 페이지 role 가드 ([#634](https://github.com/openmake/openmake_llm/issues/634)) ([52f3984](https://github.com/openmake/openmake_llm/commit/52f3984bffb0971705d048728dddc0f26ae2e548))
+* **web:** 관리자 탭에서 '에이전트 학습'·'프롬프트 제안' 제거 (미사용) ([#635](https://github.com/openmake/openmake_llm/issues/635)) ([65d39e5](https://github.com/openmake/openmake_llm/commit/65d39e512cd9a288c3d77b9a559a3fa45140fac5))
+* **web:** 관리자 페이지 전수조사 — 항상 가짜였던 목업·자기참조·이원화 정리 + 관리자 전용 라우트 /admin 하위로 ([#633](https://github.com/openmake/openmake_llm/issues/633)) ([8b530bc](https://github.com/openmake/openmake_llm/commit/8b530bc56b5f65bc85bf7ebc01de3fdfe07a0526))
+* **web:** 채팅 모드 메뉴에서 자동 발동 토글 4개 제거 — 웹·이미지·아티팩트·구조화 답변 ([#648](https://github.com/openmake/openmake_llm/issues/648)) ([de445e5](https://github.com/openmake/openmake_llm/commit/de445e5e4190875c49f7165bf110e7594989a30a))
+* **web:** 페이지 전수조사 기반 UI/UX 중복 제거·통합 1차 — 승인 창구 완성·설정 중복/죽은 컨트롤·목업 제거 ([#632](https://github.com/openmake/openmake_llm/issues/632)) ([634bfff](https://github.com/openmake/openmake_llm/commit/634bfff383bcaa099b198eeb92094678102e51e2))
+
 ## [1.33.1](https://github.com/openmake/openmake_llm/compare/v1.33.0...v1.33.1) (2026-08-23)
 
 
