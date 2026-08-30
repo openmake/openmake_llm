@@ -33,6 +33,8 @@ export type ProviderErrorCode =
     | 'MODEL_NOT_FOUND'
     | 'NOT_SUPPORTED'
     | 'UPSTREAM_ERROR'
+    /** 프롬프트가 모델 컨텍스트 한도를 넘음 — 재시도해도 같으므로 UPSTREAM_ERROR 와 분리한다. */
+    | 'CONTEXT_TOO_LARGE'
     | 'INVALID_MODEL_ID';
 
 /**
