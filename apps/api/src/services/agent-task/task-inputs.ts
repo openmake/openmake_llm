@@ -25,7 +25,11 @@ export function resolveDefaultMaxTurns(
     const needsSandboxParsing = (files ?? []).some((f) => {
         if ((f.size ?? 0) > DOC_EXTRACT_LIMITS.MAX_BYTES_PER_FILE) return true;
         const ext = (f.name ?? '').toLowerCase().split('.').pop() ?? '';
-        const isDoc = DOC_EXTRACT_LIMITS.PDF_EXTS.includes(ext) || DOC_EXTRACT_LIMITS.OFFICE_EXTS.includes(ext);
+        // HWP_EXTS 포함 필수 — 한국 공문서도 샌드박스에서 kordoc 으로 직접 파싱해야 하므로
+        // 같은 턴 예산이 필요하다 (2026-08-31 점검에서 이 목록만 누락돼 있었다).
+        const isDoc = DOC_EXTRACT_LIMITS.PDF_EXTS.includes(ext)
+            || DOC_EXTRACT_LIMITS.OFFICE_EXTS.includes(ext)
+            || DOC_EXTRACT_LIMITS.HWP_EXTS.includes(ext);
         return isDoc && typeof f.content !== 'string';
     });
     // LARGE_INPUT 은 기본값 "상향"이 목적이므로 기본보다 낮아지면 안 된다 — 둘 다 env 로 조정
