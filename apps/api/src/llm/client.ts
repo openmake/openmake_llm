@@ -25,7 +25,7 @@ import { getApiUsageTracker } from './usage-tracker';
 import { checkUserQuota, recordUserUsage } from './user-quota';
 import { streamChat, nonStreamChat } from './stream-parser';
 import { buildExtraBody } from './reasoning-adapter';
-import { selectModelByCapacity } from './model-pool';
+import { selectModelByCapacityExact } from './model-pool';
 import { MODEL_POOL_CONFIG } from '../config/model-pool';
 import {
     webSearch as webSearchAdapter,
@@ -122,7 +122,7 @@ export class LLMClient {
         // 다른 model 로 인스턴스화 됐으면 manual 우회 (사용자 명시 모델 존중).
         const isDefaultModel = this.config.model === MODEL_POOL_CONFIG.defaultModel;
         const poolDecision = isDefaultModel
-            ? selectModelByCapacity(messages, { num_predict: options?.num_predict })
+            ? await selectModelByCapacityExact(messages, { num_predict: options?.num_predict })
             : { model: this.config.model, source: 'manual' as const };
 
         if (poolDecision.source !== 'manual') {
