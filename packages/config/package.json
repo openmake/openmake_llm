@@ -1,6 +1,6 @@
 {
   "name": "@openmake/config",
-  "version": "1.36.0",
+  "version": "1.37.0",
   "private": true,
   "description": "프론트/백엔드 공통 상수·계약 (CSRF, 포트, 응답 코드)",
   "types": "dist/index.d.ts",
