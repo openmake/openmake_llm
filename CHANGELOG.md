@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.0](https://github.com/openmake/openmake_llm/compare/v1.36.0...v1.37.0) (2026-09-01)
+
+
+### ✨ 기능
+
+* **mcp:** 샌드박스 고아 컨테이너 라벨 + 부팅 스윕 ([#693](https://github.com/openmake/openmake_llm/issues/693)) ([464e585](https://github.com/openmake/openmake_llm/commit/464e585bf384ef136ce691ae3517f1d4269dbf75))
+
 ## [1.36.0](https://github.com/openmake/openmake_llm/compare/v1.35.1...v1.36.0) (2026-09-01)
 
 
