@@ -6,6 +6,7 @@
 ### 🐛 버그 수정
 
 * **eval:** response-023 라벨 결함 — 거절문 자연 표현을 금지어로 오지정 ([#695](https://github.com/openmake/openmake_llm/issues/695)) ([2464985](https://github.com/openmake/openmake_llm/commit/24649850e3eb7dead8f903ed0f47f66c30e72f61))
+* **agents,eval:** 라우팅 백로그 27건 해소 + real eval 구 케이스 3건 — 골든셋 게이트 100% ([#697](https://github.com/openmake/openmake_llm/issues/697)) ([11c1bc0](https://github.com/openmake/openmake_llm/commit/11c1bc0d0a19a4677de745835866a11bd52196b0))
 
 ## [1.37.0](https://github.com/openmake/openmake_llm/compare/v1.36.0...v1.37.0) (2026-09-01)
 
