@@ -39,6 +39,8 @@ describe('buildDockerArgs (pure)', () => {
         expect(s).toContain('--user 1000:1000');
         // per-server 캐시 격리 (볼륨에 serverId suffix)
         expect(s).toContain('-v openmake-mcp-cache-s1:/home/node/.cache');
+        // uvx 도구 venv 를 캐시 볼륨으로 — 없으면 readonly rootfs 에서 uvx 서버 전멸 (2026-09-01 실측)
+        expect(s).toContain('-e UV_TOOL_DIR=/home/node/.cache/uv-tools');
         // loopback 미참조 서버엔 add-host 미부여 (over-grant 차단)
         expect(s).not.toContain('--add-host');
         // 이미지 뒤에 원본 command
