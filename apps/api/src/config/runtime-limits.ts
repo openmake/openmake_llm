@@ -1948,3 +1948,15 @@ export const GATE_REPORT = {
     /** 날짜·요일 판정 기준 TZ. GATE_REPORT_TZ(기본 Asia/Seoul). */
     TZ: process.env.GATE_REPORT_TZ || 'Asia/Seoul',
 } as const;
+
+/**
+ * MCP 샌드박스 부트스트랩 (mcp/sandbox-bootstrap.ts) — 부팅 자세 점검 + 셋업 기본 활성화.
+ */
+export const MCP_SANDBOX_BOOTSTRAP = {
+    /**
+     * `docker image inspect` 프로브 timeout(ms) — Docker VM 스토리지 정지 시 exec 는 되는데
+     * 조회가 hang 하는 실사례가 있어(2026-08 EINTR 다운) 셋업 요청을 물고 늘어지지 않게 제한.
+     * MCP_SANDBOX_DOCKER_PROBE_TIMEOUT_MS
+     */
+    DOCKER_PROBE_TIMEOUT_MS: parseInt(process.env.MCP_SANDBOX_DOCKER_PROBE_TIMEOUT_MS || '', 10) || 5000,
+} as const;

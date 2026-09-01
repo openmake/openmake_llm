@@ -243,6 +243,10 @@ export class DashboardServer {
             const { getUnifiedDatabase } = await import('./data/models/unified-database');
             await getUnifiedMCPClient().initializeExternalServers(getUnifiedDatabase());
             console.log('[Server] 외부 MCP 서버 초기화 완료');
+            // 샌드박스 자세 관측(1회) — OFF+docker 가용(격리 권장) / ON+docker 부재(fail-closed 조기 경보)
+            const { sandboxBootAdvisory } = await import('./mcp/sandbox-bootstrap');
+            const advisory = sandboxBootAdvisory();
+            if (advisory) console.warn(`[Server] ${advisory}`);
         } catch (err) {
             console.error('[Server] 외부 MCP 서버 초기화 실패 (서비스 계속):', err);
         }
