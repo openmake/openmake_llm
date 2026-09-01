@@ -8,7 +8,7 @@
 evaluation/
 ├── README.md                            # 본 문서
 ├── types.ts                             # GoldenCase, Summary 타입
-├── golden-dataset.json                  # 골든셋 (50건: routing 30 + response 20)
+├── golden-dataset.json                  # 골든셋 (150건: routing 120 + response 30)
 ├── dataset-loader.ts                    # Zod 검증 + 의미 검증
 ├── router-evaluator.ts                  # 키워드 라우팅 정확도 평가
 ├── response-evaluator.ts                # mustContain/mustNotContain 평가
@@ -44,8 +44,8 @@ npm run eval:routing:strict
 
 | 변수 | 기본값 | 설명 |
 |---|---|---|
-| `OMK_EVAL_PASS_THRESHOLD` | `0.5` | eval:routing 통과 임계값 |
-| `OMK_EVAL_RESPONSE_THRESHOLD` | `0.5` | eval:response 통과 임계값 |
+| `OMK_EVAL_PASS_THRESHOLD` | `0.7` | eval:routing 통과 임계값 (v0.8.0 baseline 77.5% − 여유폭) |
+| `OMK_EVAL_RESPONSE_THRESHOLD` | mock `0.9` / real `0.7` | eval:response 통과 임계값 (모드별 기본, env 로 공통 override) |
 | `OMK_EVAL_REAL_TIMEOUT_MS` | `60000` | --real 모드 케이스당 timeout (ms) |
 | `OMK_EVAL_REAL_MAX_TOKENS` | `2000` | --real 모드 케이스당 추정 토큰 한도 |
 | `OMK_EVAL_REAL_DEFAULT_LIMIT` | `5` | --real 모드 기본 케이스 수 (--limit 미지정 시) |
@@ -104,7 +104,7 @@ npm run eval:routing:strict
 
 ### eval:routing
 - **통과율**: `expectedAgentIds` 합집합에 키워드 top-1이 포함된 비율
-- 이 PoC의 베이스라인은 약 50%
+- v0.8.0 확장셋(120건) 베이스라인 **77.5%** (2026-09-01 실측 — 실패 27건은 라우터 개선 대상 목록)
 
 ### eval:response
 - mock 모드는 `MOCK_RESPONSE_RULES` 룰셋 검증 (평가기 자체 동작 확인)
@@ -135,7 +135,7 @@ OMK_EVAL_REAL_TIMEOUT_MS=30000 OMK_EVAL_REAL_MAX_TOKENS=1000 \
 - name: Routing regression check
   run: |
     cd apps/api
-    OMK_EVAL_PASS_THRESHOLD=0.5 npm run eval:routing
+    npm run eval:routing   # 기본 임계값 0.7 (코드 기본값)
 ```
 
 PR마다 `evaluation-{timestamp}-{commit}.json`을 아티팩트로 업로드하면
@@ -154,13 +154,29 @@ commit 사이의 통과율 변동을 추적 가능.
 | JUnit XML 출력 | ❌ | CI 정식 통합 단계 |
 | eval:response --real | ✅ | 4중 비용 가드 적용 (timeout, max-tokens, --limit, --real 플래그) |
 
-## 베이스라인 측정값 (v0.4.0)
+## 베이스라인 측정값
 
-- `eval:routing`: **50% 통과** (15/30)
-- `eval:response` (mock): **100% 통과** (20/20)
+| 데이터셋 | eval:routing | eval:response (mock) |
+|---|---|---|
+| v0.4.0 (50건) | 50% (15/30) | 100% (20/20) |
+| v0.7.0 (50건) | 93.3% (28/30) | 100% (20/20) |
+| **v0.8.0 (150건)** | **77.5% (93/120)** | **100% (30/30)** |
+
+v0.8.0 확장(2026-09-01)은 운영 60일 실질의 분포를 반영해 익명화 재작성한 케이스다
+(짧은 한국어 후속 발화 = general 가드 13건 전원 통과, 실패 27건은 전문 질의
+under-routing·교차 혼동 — 라우터 개선 대상 신호로 의도적으로 남긴다).
+
+## Nightly 실모델 평가
+
+CI 는 게이트웨이(vLLM/LiteLLM)에 닿지 못해 mock 기반이다. 실모델 회귀(언어 정책·
+거절 환각·형식 준수)는 운영 Mac 의 `scripts/nightly-eval.sh` 로 감시한다 —
+routing + response(mock) + response `--real --limit 30`(전체 — limit 은 앞에서부터 자르므로
+줄이면 뒤쪽 신규 케이스가 빠진다)을 돌리고 실패 시
+`OPERATOR_WEBHOOK_URL` 통지, 리포트는 `logs/eval-reports/`. 등록은 pm2 cron
+(스크립트 상단 주석), 운영자 수동.
 
 ## 후속 작업 우선순위
 
-1. **eval:response --real** — ChatService wrapping + 토큰 비용 가드 (60s timeout, 케이스당 토큰 한도)
+1. **라우터 실패 27건 개선** — v0.8.0 실패 목록(연말정산→healthcare, 컨테이너→logistics 등)이 곧 개선 백로그
 2. **Phase 2.5 Prompt DB Registry** — 프롬프트 핫스왑 인프라
-3. **운영 오분류 케이스 점진 추가** — 베이스라인 통과율 50%를 지속 향상
+3. **trajectory 평가** — judge_shadow 적재분 + 2026-09-08 judge 재측정 결과를 본 뒤 증분 결정

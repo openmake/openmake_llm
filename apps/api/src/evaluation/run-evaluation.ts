@@ -36,9 +36,10 @@ function getGitCommitHash(): string {
     }
 }
 
-// 기본 임계값 0.5 — PoC 단계에서 실제 라우팅 정확도가 100% 미만임을 반영.
-// 운영 베이스라인을 측정한 후 점진적으로 상향. CI에서는 환경변수로 조정 가능.
-const PASS_RATE_THRESHOLD = Number(process.env.OMK_EVAL_PASS_THRESHOLD ?? '0.5');
+// 기본 임계값 0.7 — v0.8.0 확장셋(120케이스) 실측 baseline 77.5%(2026-09-01) − 여유폭.
+// 라우터는 결정적이라 통과율은 키워드/에이전트 변경 시에만 움직인다 — 0.7 미만 = 실제 회귀.
+// (구 0.5 는 PoC 30케이스 시절 값 — baseline 93.3% 대비 사실상 무의미한 게이트였다.)
+const PASS_RATE_THRESHOLD = Number(process.env.OMK_EVAL_PASS_THRESHOLD ?? '0.7');
 
 async function main() {
     const customPath = process.argv[2];

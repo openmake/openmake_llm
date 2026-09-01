@@ -38,12 +38,16 @@ export async function evaluateResponseCase(
 ): Promise<CaseResult> {
     const start = Date.now();
     try {
-        const response = await generator(goldenCase.query, goldenCase.language);
+        const rawResponse = await generator(goldenCase.query, goldenCase.language);
+        // 타이포그래피 아포스트로피 정규화 — 실모델(qwen)이 can't 를 can’t(U+2019)로 내
+        // ASCII substring 매칭이 깨진다 (2026-09-01 --real 스모크 실측 0/2). 응답·패턴 양쪽 정규화.
+        const norm = (s: string): string => s.replace(/[‘’]/g, "'");
+        const response = norm(rawResponse);
 
-        const missing = (goldenCase.mustContain ?? []).filter((s) => !response.includes(s));
-        const forbidden = (goldenCase.mustNotContain ?? []).filter((s) => response.includes(s));
+        const missing = (goldenCase.mustContain ?? []).filter((s) => !response.includes(norm(s)));
+        const forbidden = (goldenCase.mustNotContain ?? []).filter((s) => response.includes(norm(s)));
         const anyList = goldenCase.mustContainAny ?? [];
-        const anyMissed = anyList.length > 0 && !anyList.some((s) => response.includes(s));
+        const anyMissed = anyList.length > 0 && !anyList.some((s) => response.includes(norm(s)));
 
         const reasons: string[] = [];
         if (missing.length > 0) reasons.push(`누락 substring=[${missing.join(',')}]`);
