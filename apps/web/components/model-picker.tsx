@@ -26,6 +26,7 @@ const EXTERNAL_PROVIDER_LABELS: Record<string, string> = {
   openrouter: "🌐 OpenRouter",
   "ollama-cloud": "🌐 Ollama Cloud",
   nvidia: "🌐 NVIDIA NIM",
+  hasa: "🌐 Open AI Service Hub",
 };
 
 export function ModelPicker({

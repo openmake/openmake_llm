@@ -171,6 +171,34 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             { id: 'mistralai/mistral-nemotron',              displayName: 'Mistral Nemotron',     isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
         ],
     },
+    {
+        id: 'hasa',
+        displayName: 'Open AI Service Hub (HASA)',
+        sdkType: 'openai-compatible',
+        defaultBaseUrl: 'https://open.hasa.re.kr/v1',
+        keyPrefixPattern: 'sk-',
+        validatePath: '/models',
+        enabled: true,
+        sortOrder: 60,
+        helpText:
+            'Open AI Service Hub (https://open.hasa.re.kr) 의 개발키(sk-dev-*) 또는 운영키(sk-ops-*)를 입력하세요. ' +
+            '공공 GPU 팜이 서빙하는 오픈소스·국산 모델(Qwen3 Coder, EXAONE, HyperCLOVA X, Kanana 등)을 ' +
+            'OpenAI 호환 API 로 사용합니다. 모델 ID 는 "qwen3-coder" 처럼 접두사 없는 형식입니다. ' +
+            '주의: 모델 목록 API 는 인증이 없어 키 유효성은 첫 채팅에서 확인됩니다. ' +
+            '개발키는 분당 요청·일일 토큰 한도가 낮아(초과 시 429) 체험·검증 용도입니다.',
+        authMethods: ['api_key'] as const,
+        // 2026-09-02 공개 카탈로그(/api/catalog) 기준 — 개발키 허용 + 채팅 모달리티만 수록.
+        fallbackModels: [
+            { id: 'qwen3-coder',          displayName: 'Qwen3 Coder 30B A3B',  isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: false, thinking: false } },
+            { id: 'exaone-4.0-32b',       displayName: 'EXAONE 4.0 32B',       isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: false, thinking: false } },
+            { id: 'llama-3.3-70b',        displayName: 'Llama 3.3 70B',        isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: false, thinking: false } },
+            { id: 'gpt-oss-20b',          displayName: 'GPT-OSS 20B',          isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: false, thinking: true  } },
+            { id: 'gpt-oss-120b',         displayName: 'GPT-OSS 120B',         isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: false, thinking: true  } },
+            { id: 'hyperclovax-seed-32b', displayName: 'HyperCLOVA X SEED 32B', isFree: true, capabilities: { streaming: true, toolCalling: false, vision: false, thinking: true  } },
+            { id: 'kanana-2-30b-a3b',     displayName: 'Kanana 2 30B A3B',     isFree: true, capabilities: { streaming: true, toolCalling: false, vision: false, thinking: false } },
+            { id: 'qwen2.5-vl-72b',       displayName: 'Qwen2.5 VL 72B',       isFree: true, capabilities: { streaming: true, toolCalling: false, vision: true,  thinking: false } },
+        ],
+    },
 ] as const;
 
 /**
