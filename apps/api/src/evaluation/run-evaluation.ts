@@ -36,10 +36,11 @@ function getGitCommitHash(): string {
     }
 }
 
-// 기본 임계값 0.7 — v0.8.0 확장셋(120케이스) 실측 baseline 77.5%(2026-09-01) − 여유폭.
-// 라우터는 결정적이라 통과율은 키워드/에이전트 변경 시에만 움직인다 — 0.7 미만 = 실제 회귀.
-// (구 0.5 는 PoC 30케이스 시절 값 — baseline 93.3% 대비 사실상 무의미한 게이트였다.)
-const PASS_RATE_THRESHOLD = Number(process.env.OMK_EVAL_PASS_THRESHOLD ?? '0.7');
+// 기본 임계값 0.9 — 라우터 백로그 해소(2026-09-02: 키워드 70개 보강 + 짜줘 패턴 협소화)로
+// v0.8.2 실측 baseline 100%(120/120) − 여유폭(향후 키워드/에이전트 변경 드리프트 허용).
+// 라우터는 결정적이라 통과율은 키워드/에이전트 변경 시에만 움직인다 — 0.9 미만 = 실제 회귀.
+// (이력: 0.5 = PoC 30케이스 / 0.7 = v0.8.0 baseline 77.5% 시절.)
+const PASS_RATE_THRESHOLD = Number(process.env.OMK_EVAL_PASS_THRESHOLD ?? '0.9');
 
 async function main() {
     const customPath = process.argv[2];

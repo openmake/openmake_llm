@@ -121,6 +121,10 @@ export async function routeToAgent(message: string): Promise<AgentSelection> {
                 let matched = false;
 
                 // 2글자 이하 키워드는 단어 완전 일치만 허용 (오매칭 방지)
+                // ⚠️ 한글 2자 키워드('협상','세금' 등)는 조사 결합('협상에서') 때문에 여기서
+                // 사실상 죽는다 — 2026-09-02 실측: 부분 일치로 열면 '설계'류 범용어가 무관
+                // 카테고리를 오염시키고 general 가드까지 깨져(net 0) 반려. 2자어가 신호인
+                // 케이스는 구(phrase) 키워드('연봉 협상' 등, 3자+ substring)로 커버할 것.
                 if (keywordLower.length <= 2) {
                     if (expandedQueryTerms.has(keywordLower)) {
                         score += 3 * idf * categoryWeight * tierMultiplier;

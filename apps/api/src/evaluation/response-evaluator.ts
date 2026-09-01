@@ -39,9 +39,11 @@ export async function evaluateResponseCase(
     const start = Date.now();
     try {
         const rawResponse = await generator(goldenCase.query, goldenCase.language);
-        // 타이포그래피 아포스트로피 정규화 — 실모델(qwen)이 can't 를 can’t(U+2019)로 내
-        // ASCII substring 매칭이 깨진다 (2026-09-01 --real 스모크 실측 0/2). 응답·패턴 양쪽 정규화.
-        const norm = (s: string): string => s.replace(/[‘’]/g, "'");
+        // 정규화 2종 — 응답·패턴 양쪽 동일 적용:
+        // ① 타이포그래피 아포스트로피: 실모델(qwen)이 can't 를 can’t(U+2019)로 냄 (2026-09-01 실측 0/2)
+        // ② 소문자: "```python"(소문자)·"Hello, World!"(대문자) 가 mustContain ["Python","hello"] 를
+        //    둘 다 놓치던 대소문자 결함 (2026-09-02 nightly real 실측 — response-017/020)
+        const norm = (s: string): string => s.replace(/[‘’]/g, "'").toLowerCase();
         const response = norm(rawResponse);
 
         const missing = (goldenCase.mustContain ?? []).filter((s) => !response.includes(norm(s)));
