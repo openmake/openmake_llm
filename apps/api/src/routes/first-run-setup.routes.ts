@@ -11,6 +11,7 @@
  * @see docs/superpowers/plans/2026-08-12-first-run-setup.md §B
  */
 import { Router, type Request, type Response } from 'express';
+import * as path from 'path';
 import { z } from 'zod';
 import { validate } from '../middlewares/validation';
 import { asyncHandler } from '../utils/error-handler';
@@ -19,6 +20,7 @@ import { getUserManager } from '../data/user-manager';
 import { getSystemSettingsService } from '../services/system-settings-service';
 import { SETTING_DEFS_BY_KEY } from '../config/system-settings-registry';
 import { getAuditService } from '../services/AuditService';
+import { ensureSandboxDefaultOnSetup } from '../mcp/sandbox-bootstrap';
 import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
 
@@ -84,6 +86,16 @@ firstRunSetupRouter.post('/', validate(setupSchema), asyncHandler(async (req: Re
 
     if (Object.keys(llmEntries).length > 0) {
         await getSystemSettingsService().update(llmEntries, String(admin.id));
+    }
+
+    // MCP 샌드박스 secure-by-default — MCP_SANDBOX_ENABLED 미설정 + docker·런타임 이미지
+    // 가용일 때만 .env 영속 + 즉시 반영. 전 경로 fail-open(셋업을 죽이지 않음) — 미적용이면
+    // 다음 부팅의 sandboxBootAdvisory 경고가 OFF 상태를 다시 드러낸다.
+    const sandboxDefault = ensureSandboxDefaultOnSetup(path.resolve(__dirname, '../../../../.env'));
+    if (sandboxDefault.applied) {
+        logger.info('MCP 샌드박스 기본 활성화 (docker + 런타임 이미지 감지 → MCP_SANDBOX_ENABLED=true 영속)');
+    } else if (sandboxDefault.reason !== 'explicit') {
+        logger.info(`MCP 샌드박스 자동 활성화 건너뜀: ${sandboxDefault.reason}`);
     }
 
     try {
