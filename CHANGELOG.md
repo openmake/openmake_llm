@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.1](https://github.com/openmake/openmake_llm/compare/v1.37.0...v1.37.1) (2026-09-01)
+
+
+### 🐛 버그 수정
+
+* **eval:** response-023 라벨 결함 — 거절문 자연 표현을 금지어로 오지정 ([#695](https://github.com/openmake/openmake_llm/issues/695)) ([2464985](https://github.com/openmake/openmake_llm/commit/24649850e3eb7dead8f903ed0f47f66c30e72f61))
+
 ## [1.37.0](https://github.com/openmake/openmake_llm/compare/v1.36.0...v1.37.0) (2026-09-01)
 
 
