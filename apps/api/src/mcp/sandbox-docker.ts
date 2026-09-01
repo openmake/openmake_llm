@@ -67,7 +67,16 @@ export interface SandboxConfig {
     user: string;
     /** read-only rootfs + tmpfs (opt-in — 일부 서버가 home 외 쓰기 시 깨질 수 있어 기본 off) */
     readonly: boolean;
+    /**
+     * 컨테이너 라벨(openmake.pid)에 새길 소유 프로세스 pid — 부팅 고아 스윕
+     * (sandbox-bootstrap reapOrphanSandboxContainers)의 생존 판정 기준.
+     */
+    ownerPid: number;
 }
+
+/** MCP 샌드박스 컨테이너 식별 라벨 — ⚠️ task-sandbox(영속)·artifact-exec 와 절대 겹치면 안 됨 */
+export const MCP_SANDBOX_ROLE_LABEL = 'openmake.role=mcp-sandbox';
+export const MCP_SANDBOX_PID_LABEL_KEY = 'openmake.pid';
 
 let dockerCache: { key: string; value: string | null } | null = null;
 /** PATH 또는 절대경로에서 docker 바이너리 탐색 (memoize). 아티팩트 실행 서비스도 재사용. */
@@ -108,6 +117,7 @@ export function defaultSandboxConfig(): SandboxConfig {
         cpus: process.env.MCP_SANDBOX_CPUS || '1.0',
         user: process.env.MCP_SANDBOX_USER || '1000:1000',
         readonly: process.env.MCP_SANDBOX_READONLY === 'true',
+        ownerPid: process.pid,
     };
 }
 
@@ -153,6 +163,11 @@ export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string
     // --memory-swap = --memory 로 swap 차단(미설정 시 swap 으로 메모리 상한 우회 가능).
     a.push('--pids-limit', String(cfg.pidsLimit), '--memory', cfg.memory, '--memory-swap', cfg.memory, '--cpus', cfg.cpus);
     a.push('--user', cfg.user);
+    // 고아 식별 라벨 — 소유 프로세스가 죽은 컨테이너를 부팅 스윕이 결정적으로 판정한다
+    // (실사례: SIGKILL 이 docker CLI 만 죽이고 stdin EOF 를 무시하는 서버가 컨테이너로 잔존).
+    a.push('--label', MCP_SANDBOX_ROLE_LABEL);
+    a.push('--label', `${MCP_SANDBOX_PID_LABEL_KEY}=${cfg.ownerPid}`);
+    a.push('--label', `openmake.serverId=${sanitizeId(input.serverId)}`);
     if (cfg.readonly) a.push('--read-only', '--tmpfs', '/tmp:rw,exec', '--tmpfs', '/run:rw');
     a.push('-v', `${cacheVol}:/home/node/.cache`);
     if (referencesLoopback) a.push('--add-host', 'host.docker.internal:host-gateway');

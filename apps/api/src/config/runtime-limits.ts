@@ -1959,4 +1959,13 @@ export const MCP_SANDBOX_BOOTSTRAP = {
      * MCP_SANDBOX_DOCKER_PROBE_TIMEOUT_MS
      */
     DOCKER_PROBE_TIMEOUT_MS: parseInt(process.env.MCP_SANDBOX_DOCKER_PROBE_TIMEOUT_MS || '', 10) || 5000,
+    /**
+     * 고아 컨테이너 스윕의 `docker stop` timeout(ms) — stop 은 grace 10s 후 KILL 이라
+     * 프로브보다 길게. MCP_SANDBOX_DOCKER_STOP_TIMEOUT_MS
+     */
+    DOCKER_STOP_TIMEOUT_MS: parseInt(process.env.MCP_SANDBOX_DOCKER_STOP_TIMEOUT_MS || '', 10) || 20000,
+    /** 부팅 고아 스윕 게이트 — MCP_SANDBOX_ORPHAN_REAP=false 로 해제 (기본 on) */
+    ORPHAN_REAP_ENABLED: process.env.MCP_SANDBOX_ORPHAN_REAP !== 'false',
+    /** 1회 스윕에서 처리할 최대 컨테이너 수 (폭주 안전판) */
+    ORPHAN_REAP_MAX: parseInt(process.env.MCP_SANDBOX_ORPHAN_REAP_MAX || '', 10) || 50,
 } as const;

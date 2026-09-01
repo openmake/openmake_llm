@@ -23,7 +23,10 @@
  */
 import * as fs from 'fs';
 import { execFileSync } from 'child_process';
-import { defaultSandboxConfig, resolveDocker, type SandboxConfig } from './sandbox-docker';
+import {
+    defaultSandboxConfig, resolveDocker, type SandboxConfig,
+    MCP_SANDBOX_ROLE_LABEL, MCP_SANDBOX_PID_LABEL_KEY,
+} from './sandbox-docker';
 import { MCP_SANDBOX_BOOTSTRAP } from '../config/runtime-limits';
 
 /** ENABLED=false 상태에서도 docker 를 탐색해야 하므로 resolver 를 분리 (테스트 주입 가능) */
@@ -118,4 +121,89 @@ export function ensureSandboxDefaultOnSetup(
     // defaultSandboxConfig 가 spawn 마다 process.env 를 읽으므로 재시작 없이 즉시 반영된다
     process.env.MCP_SANDBOX_ENABLED = 'true';
     return { applied: true, reason: 'applied' };
+}
+
+// ── 고아 컨테이너 부팅 스윕 ──────────────────────────────────────────────
+// 실사례(2026-09-01): close() 의 SIGKILL 이 docker CLI 만 죽이고, stdin EOF 를
+// 무시하는 서버(mcp-python-repl)가 컨테이너로 이틀간 잔존(앱 재시작 3회 생존).
+// 판정은 결정적 — 라벨의 소유 pid 가 죽었으면 그 컨테이너의 stdio 상대는 이미
+// 없으므로 어떤 경우에도 쓸모없다. ⚠️ 라벨 스코핑 필수: task-sandbox 는 재시작을
+// 넘어 살아있는 것이 정상(작업 재개용)이라 이미지 기준 무차별 스윕은 금지.
+
+export interface OrphanReapResult {
+    scanned: number;
+    reaped: number;
+    /** 판정 불가(라벨 pid 없음/파싱 실패)로 건너뛴 수 — 안전측: 모르면 건드리지 않는다 */
+    skipped: number;
+    errors: string[];
+}
+
+/** 테스트 주입용 — 미지정 시 실제 docker/kill(pid,0) 사용 */
+export interface OrphanReapDeps {
+    resolveDockerPath?: () => string | null;
+    /** docker 하위명령 실행 → stdout (실패 시 throw) */
+    dockerExec?: (dockerPath: string, args: string[], timeoutMs: number) => string;
+    pidAlive?: (pid: number) => boolean;
+}
+
+function defaultDockerExec(dockerPath: string, args: string[], timeoutMs: number): string {
+    return execFileSync(dockerPath, args, { encoding: 'utf-8', timeout: timeoutMs, stdio: ['ignore', 'pipe', 'ignore'] });
+}
+
+/** ESRCH 만 사망으로 판정 — EPERM 등 그 외는 생존 취급(fail-open, 오살 방지) */
+function defaultPidAlive(pid: number): boolean {
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch (err) {
+        return (err as NodeJS.ErrnoException).code !== 'ESRCH';
+    }
+}
+
+/**
+ * 소유 프로세스가 죽은 MCP 샌드박스 컨테이너를 정리한다. 부팅 시 1회 호출.
+ * 전 경로 fail-open — docker 부재/정지(hang 은 timeout)·개별 실패가 부팅을 막지 않는다.
+ */
+export function reapOrphanSandboxContainers(deps: OrphanReapDeps = {}): OrphanReapResult {
+    const result: OrphanReapResult = { scanned: 0, reaped: 0, skipped: 0, errors: [] };
+    if (!MCP_SANDBOX_BOOTSTRAP.ORPHAN_REAP_ENABLED) return result;
+
+    const dockerPath = (deps.resolveDockerPath ?? resolveConfiguredDocker)();
+    if (!dockerPath) return result;
+
+    const exec = deps.dockerExec ?? defaultDockerExec;
+    const alive = deps.pidAlive ?? defaultPidAlive;
+    const probeMs = MCP_SANDBOX_BOOTSTRAP.DOCKER_PROBE_TIMEOUT_MS;
+
+    let ids: string[];
+    try {
+        ids = exec(dockerPath, ['ps', '-q', '--filter', `label=${MCP_SANDBOX_ROLE_LABEL}`], probeMs)
+            .split('\n').map((s) => s.trim()).filter(Boolean)
+            .slice(0, MCP_SANDBOX_BOOTSTRAP.ORPHAN_REAP_MAX);
+    } catch (err) {
+        result.errors.push(`ps: ${err instanceof Error ? err.message : String(err)}`);
+        return result;
+    }
+
+    for (const id of ids) {
+        result.scanned += 1;
+        try {
+            const raw = exec(
+                dockerPath,
+                ['inspect', '-f', `{{index .Config.Labels "${MCP_SANDBOX_PID_LABEL_KEY}"}}`, id],
+                probeMs,
+            ).trim();
+            const pid = parseInt(raw, 10);
+            if (!Number.isFinite(pid) || pid <= 0) {
+                result.skipped += 1; // 판정 불가 — 건드리지 않는다
+                continue;
+            }
+            if (alive(pid)) continue; // 소유 프로세스 생존 — 정상 컨테이너
+            exec(dockerPath, ['stop', id], MCP_SANDBOX_BOOTSTRAP.DOCKER_STOP_TIMEOUT_MS); // --rm 이라 stop = 제거
+            result.reaped += 1;
+        } catch (err) {
+            result.errors.push(`${id}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+    return result;
 }

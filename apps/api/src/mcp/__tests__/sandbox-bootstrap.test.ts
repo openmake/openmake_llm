@@ -19,6 +19,7 @@ function cfg(overrides: Partial<SandboxConfig>): SandboxConfig {
         cpus: '1.0',
         user: '1000:1000',
         readonly: false,
+        ownerPid: 12345,
         ...overrides,
     };
 }
@@ -118,5 +119,70 @@ describe('ensureSandboxDefaultOnSetup', () => {
         });
         expect(result).toEqual({ applied: false, reason: 'persist-failed' });
         expect(process.env.MCP_SANDBOX_ENABLED).toBeUndefined();
+    });
+});
+
+describe('reapOrphanSandboxContainers', () => {
+    const { reapOrphanSandboxContainers } = require('../sandbox-bootstrap');
+    const docker = '/usr/local/bin/docker';
+
+    function fakeDocker(containers: Array<{ id: string; pid: string }>, stopped: string[]) {
+        return (_d: string, args: string[], _t: number): string => {
+            if (args[0] === 'ps') return containers.map((c) => c.id).join('\n') + '\n';
+            if (args[0] === 'inspect') {
+                const c = containers.find((x) => x.id === args[3]);
+                return (c?.pid ?? '') + '\n';
+            }
+            if (args[0] === 'stop') { stopped.push(args[1]); return args[1]; }
+            throw new Error(`unexpected: ${args.join(' ')}`);
+        };
+    }
+
+    it('죽은 pid 소속만 정리하고 생존 pid·판정불가는 남긴다', () => {
+        const stopped: string[] = [];
+        const result = reapOrphanSandboxContainers({
+            resolveDockerPath: () => docker,
+            dockerExec: fakeDocker(
+                [
+                    { id: 'dead1', pid: '99991' },
+                    { id: 'alive', pid: '11111' },
+                    { id: 'nolab', pid: '<no value>' }, // 라벨 없음 → 보류
+                ],
+                stopped,
+            ),
+            pidAlive: (pid: number) => pid === 11111,
+        });
+        expect(stopped).toEqual(['dead1']);
+        expect(result).toEqual({ scanned: 3, reaped: 1, skipped: 1, errors: [] });
+    });
+
+    it('docker 부재 → no-op (fail-open)', () => {
+        const result = reapOrphanSandboxContainers({ resolveDockerPath: () => null });
+        expect(result).toEqual({ scanned: 0, reaped: 0, skipped: 0, errors: [] });
+    });
+
+    it('ps 실패 → 오류만 기록하고 throw 하지 않는다', () => {
+        const result = reapOrphanSandboxContainers({
+            resolveDockerPath: () => docker,
+            dockerExec: () => { throw new Error('daemon hang'); },
+        });
+        expect(result.errors.length).toBe(1);
+        expect(result.reaped).toBe(0);
+    });
+
+    it('개별 stop 실패는 그 컨테이너만 오류로 남기고 계속 진행한다', () => {
+        const stopped: string[] = [];
+        const base = fakeDocker([{ id: 'dead1', pid: '99991' }, { id: 'dead2', pid: '99992' }], stopped);
+        const result = reapOrphanSandboxContainers({
+            resolveDockerPath: () => docker,
+            dockerExec: (d: string, args: string[], t: number) => {
+                if (args[0] === 'stop' && args[1] === 'dead1') throw new Error('stop failed');
+                return base(d, args, t);
+            },
+            pidAlive: () => false,
+        });
+        expect(stopped).toEqual(['dead2']);
+        expect(result.reaped).toBe(1);
+        expect(result.errors.length).toBe(1);
     });
 });
