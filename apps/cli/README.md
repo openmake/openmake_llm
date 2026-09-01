@@ -5,7 +5,8 @@
 서버 샌드박스(Docker) 대신 **사용자 머신에서 직접** 도구를 실행한다. 턴 오케스트레이션은
 서버(`AgentTaskService` 하네스)가 하고, 이 CLI 는 **도구 실행 + 터미널 렌더**만 담당한다
 (자체 에이전트 루프 없음). 데스크톱 컴패니언(`apps/desktop-native`)과 같은 브리지 프로토콜을 쓰며,
-`src/bridge.ts` 는 데스크톱 `bridge.js` 의 호스트 비의존 코어를 이식한 것이다.
+`src/bridge.ts` 는 공용 브리지 코어 `packages/local-bridge-core` 의 CLI 어댑터다 — 프로토콜·경로
+스코프·exec 방어·worktree 로직은 패키지에 단일화돼 있고, 어댑터는 인증·confirm UI 만 가진다.
 
 ---
 
