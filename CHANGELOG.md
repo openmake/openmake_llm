@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.36.0](https://github.com/openmake/openmake_llm/compare/v1.35.1...v1.36.0) (2026-09-01)
+
+
+### ✨ 기능
+
+* **docs:** 한국 공문서(HWP/HWPX/HML) 지원 — kordoc 추출 + 샌드박스 툴킷 ([#683](https://github.com/openmake/openmake_llm/issues/683)) ([7fd1dc3](https://github.com/openmake/openmake_llm/commit/7fd1dc330e41432fb12f425539f3903eb4d9ca6f))
+* **eval:** 골든셋 150건 확장 + 임계 ratchet + nightly 실모델 평가 ([#691](https://github.com/openmake/openmake_llm/issues/691)) ([c19de78](https://github.com/openmake/openmake_llm/commit/c19de78e977362eb786326b6b2c0c071f7e93422))
+* **mcp:** 샌드박스 secure-by-default 보강 — 부팅 자세 관측 + 셋업 자동 활성화 ([#689](https://github.com/openmake/openmake_llm/issues/689)) ([8e414a0](https://github.com/openmake/openmake_llm/commit/8e414a01ec5acdbdb91f461f48251df1728b9e1b))
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 턴 예산 판정에서 HWP 확장자 누락 (잠복) ([#687](https://github.com/openmake/openmake_llm/issues/687)) ([bb37532](https://github.com/openmake/openmake_llm/commit/bb37532bbada3918f18aec3e1f68913be5db10ea))
+* HWP 첨부가 깨진 채 전송되던 문제 + 컨텍스트 초과 오안내 (두 겹) ([#685](https://github.com/openmake/openmake_llm/issues/685)) ([608e9a0](https://github.com/openmake/openmake_llm/commit/608e9a099d9a7710ca0419bd8842c02146ab3b9d))
+* **llm:** 문자 기반 토큰 추정의 과소추정 — 임계 근처에서만 실제 토크나이저로 재계산 ([#686](https://github.com/openmake/openmake_llm/issues/686)) ([4701d6b](https://github.com/openmake/openmake_llm/commit/4701d6bfb22efb0bfd2a98dc35b32b9965b5b1c8))
+* **mcp:** uvx 도구 venv 를 캐시 볼륨으로 — readonly rootfs 에서 uvx 서버 전멸 해소 ([#692](https://github.com/openmake/openmake_llm/issues/692)) ([8ee5deb](https://github.com/openmake/openmake_llm/commit/8ee5deb3ed759e93e9e996e432e49212ae46322f))
+
 ## [1.35.1](https://github.com/openmake/openmake_llm/compare/v1.35.0...v1.35.1) (2026-08-30)
 
 
