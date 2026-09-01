@@ -6,9 +6,17 @@ import { buildExtraBody } from './reasoning-adapter';
 
 describe('buildExtraBody — reasoning_effort 정규화', () => {
     const saved = process.env.LLM_ENABLE_REASONING_EFFORT;
+    // 운영 .env 의 모델별 지원 강도 override 가 정규화 기대값을 바꾼다
+    // (실사례: qwen3.6 에 'high' 제외 → 'xhigh' 로 정규화되어 실패). 기본 맵으로 고정.
+    const savedEffortsJson = process.env.LLM_REASONING_EFFORTS_JSON;
+    beforeAll(() => {
+        delete process.env.LLM_REASONING_EFFORTS_JSON;
+    });
     afterAll(() => {
         if (saved !== undefined) process.env.LLM_ENABLE_REASONING_EFFORT = saved;
         else delete process.env.LLM_ENABLE_REASONING_EFFORT;
+        if (savedEffortsJson !== undefined) process.env.LLM_REASONING_EFFORTS_JSON = savedEffortsJson;
+        else delete process.env.LLM_REASONING_EFFORTS_JSON;
     });
 
     it('게이트가 꺼져 있으면 reasoning_effort 를 보내지 않는다 (기존 동작)', () => {
