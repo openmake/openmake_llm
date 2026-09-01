@@ -160,6 +160,11 @@ export function buildDockerArgs(input: SandboxInput, cfg: SandboxConfig): string
     a.push('-e', 'HOME=/home/node');
     a.push('-e', 'NPM_CONFIG_CACHE=/home/node/.cache/npm');
     a.push('-e', 'UV_CACHE_DIR=/home/node/.cache/uv');
+    // uvx 는 도구 venv 를 UV_CACHE_DIR 이 아니라 ~/.local/share/uv/tools 에 만든다 —
+    // readonly rootfs 에서 "Could not create temporary file (os error 30)" 로 전멸
+    // (2026-09-01 운영 실측: uvx 서버 2종만 실패, npx 계열은 전부 생존). 캐시 볼륨으로
+    // 재지정하면 readonly 호환 + 재spawn 시 도구 venv 재사용(설치 생략) 이득도 있다.
+    a.push('-e', 'UV_TOOL_DIR=/home/node/.cache/uv-tools');
     // 서버 config.env 만 컨테이너에 주입 (호스트 env 미상속).
     // 🔒 값은 인자에 넣지 않는다 — `-e KEY`(이름만) 형태면 docker 가 호출 프로세스의 env 에서
     //    값을 읽어 컨테이너로 전달하므로, `ps` 로 읽히는 커맨드라인에 비밀이 남지 않는다.
