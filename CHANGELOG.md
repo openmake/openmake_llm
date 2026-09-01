@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.2](https://github.com/openmake/openmake_llm/compare/v1.37.1...v1.37.2) (2026-09-01)
+
+
+### 🐛 버그 수정
+
+* **eval:** response-003·030 표지 확장 — 030 은 한국어 거절 오탐 해소, 003 은 진짜 신호 확인 ([#699](https://github.com/openmake/openmake_llm/issues/699)) ([4d9b6d3](https://github.com/openmake/openmake_llm/commit/4d9b6d3b3b3cdc1f10b97172966c256e98800d35))
+
 ## [1.37.1](https://github.com/openmake/openmake_llm/compare/v1.37.0...v1.37.1) (2026-09-01)
 
 
