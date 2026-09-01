@@ -7,7 +7,7 @@
 # 토폴로지:
 #   앱(LLM_BASE_URL=http://127.0.0.1:13401) → 이 게이트웨이
 #     ├─ 로컬: Tailscale → DGX vLLM (:8002 qwen / :8003 bge / :8005 flux)
-#     └─ 외부: openrouter/* · ollama-cloud/* · nvidia/* wildcard (사용자 BYOK 는 요청 헤더)
+#     └─ 외부: openrouter/* · ollama-cloud/* · nvidia/* · hasa/* wildcard (사용자 BYOK 는 요청 헤더)
 #
 # 헤더 계약 (LiteLLM 1.89.4 라이브 검증):
 #   Authorization: Bearer <LITELLM_MASTER_KEY>  → 게이트웨이 인증 (upstream 미전달)
@@ -64,6 +64,12 @@ model_list:
   - model_name: nvidia/*
     litellm_params:
       model: nvidia_nim/*
+      api_key: os.environ/DUMMY_UPSTREAM_KEY
+
+  - model_name: hasa/*
+    litellm_params:
+      model: openai/*
+      api_base: https://open.hasa.re.kr/v1
       api_key: os.environ/DUMMY_UPSTREAM_KEY
 
 general_settings:
