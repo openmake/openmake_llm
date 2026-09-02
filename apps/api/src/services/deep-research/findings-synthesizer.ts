@@ -8,6 +8,7 @@
  */
 
 import type { LLMClient } from '../../llm';
+import { getExternalClientHints } from '../../llm/external-throttle';
 import type { SearchResult } from '../../mcp/web-search';
 import type { ResearchConfig, SynthesisResult } from '../deep-research-types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
@@ -50,6 +51,16 @@ function measureTotalContent(sources: SearchResult[]): number {
 /**
  * 검색 결과를 청크로 나눠 LLM 합성
  */
+/**
+ * 청크 fan-out 동시성 — 스로틀된 외부 클라이언트면 provider 동시 상한 이하로 잡는다.
+ * 그보다 크게 잡으면 세마포어 대기 시간이 chatWithAbortTimeout 의 청크 타임아웃에 포함돼
+ * 대기 중인 청크가 시작도 못 하고 abort 된다 (2026-09-03 bai 실측: 6/6 abort → 합성 중단).
+ */
+function synthesisConcurrency(client: LLMClient): number {
+    const hint = getExternalClientHints(client)?.concurrency;
+    return hint ? Math.min(RESEARCH_DEFAULTS.SYNTHESIS_CONCURRENCY, hint) : RESEARCH_DEFAULTS.SYNTHESIS_CONCURRENCY;
+}
+
 export async function synthesizeFindings(params: {
     /** 활성 스킬 지식 블록 (research-context) */
     skillBlock?: string;
@@ -126,7 +137,7 @@ export async function synthesizeFindings(params: {
             }
         },
         {
-            concurrency: RESEARCH_DEFAULTS.SYNTHESIS_CONCURRENCY,
+            concurrency: synthesisConcurrency(client),
             signal: abortSignal,
             // 청크 요약 완료마다 진행 보고 — 합성 단계의 긴 progress 공백 제거
             onItemComplete: (completed, total) => onChunkProgress?.(completed, total, 'chunk'),
@@ -215,7 +226,7 @@ async function hierarchicalMerge(params: {
             throwIfAborted();
             return await singleMerge({ client, config, topic, summaries: group, abortSignal, throwIfAborted });
         },
-        { concurrency: RESEARCH_DEFAULTS.SYNTHESIS_CONCURRENCY, signal: abortSignal }
+        { concurrency: synthesisConcurrency(client), signal: abortSignal }
     );
 
     const validIntermediate = (intermediateSummaries.filter(s => s != null) as string[]);

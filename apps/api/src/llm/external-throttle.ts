@@ -101,6 +101,23 @@ function signalOf(method: 'chat' | 'generate', args: unknown[]): AbortSignal | u
     return adv?.signal;
 }
 
+/** 프록시가 노출하는 실행 힌트 — 호출부(딥리서치 fan-out)가 배치 동시성·타임아웃을 맞추는 데 쓴다 */
+export interface ExternalClientHints {
+    providerId: string;
+    /** provider 별 동시 요청 상한 — parallelBatch concurrency 를 이 값 이하로 잡아야 대기 시간이 타임아웃에 포함되지 않는다 */
+    concurrency: number;
+    /** 호출별 타임아웃 배수 */
+    timeoutMultiplier: number;
+}
+
+export const EXTERNAL_CLIENT_HINTS = Symbol.for('openmake.externalClientHints');
+
+/** 스로틀된 외부 클라이언트면 힌트, 로컬/비스로틀이면 null */
+export function getExternalClientHints(client: unknown): ExternalClientHints | null {
+    const h = (client as Record<symbol, unknown> | null)?.[EXTERNAL_CLIENT_HINTS];
+    return h && typeof h === 'object' ? (h as ExternalClientHints) : null;
+}
+
 /**
  * 외부 provider 용 LLMClient 를 세마포어+429 재시도 프록시로 감싼다.
  * `chat`·`generate` 만 가로채고 나머지 속성/메서드는 원본에 그대로 위임(this 는 원본 인스턴스).
@@ -129,8 +146,15 @@ export function throttleExternalClient<T extends LLMClient>(client: T, providerI
         }
     };
 
+    const hints: ExternalClientHints = {
+        providerId,
+        concurrency: sem.limit,
+        timeoutMultiplier: Math.max(1, EXTERNAL_PROVIDER_THROTTLE.TIMEOUT_MULTIPLIER || 1),
+    };
+
     return new Proxy(client, {
         get(target, prop) {
+            if (prop === EXTERNAL_CLIENT_HINTS) return hints;
             if (prop === 'chat' || prop === 'generate') return wrap(prop);
             const v = Reflect.get(target, prop, target);
             return typeof v === 'function' ? v.bind(target) : v;

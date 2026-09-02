@@ -95,3 +95,15 @@ describe('throttleExternalClient', () => {
         expect(calls).toBe(1);
     });
 });
+
+describe('ExternalClientHints', () => {
+    it('스로틀 프록시는 provider 동시성·타임아웃 배수 힌트를 노출하고, 로컬은 null', () => {
+        const { getExternalClientHints } = require('../external-throttle') as typeof import('../external-throttle');
+        __resetExternalThrottleForTest();
+        const raw = fakeClient(async () => 'x');
+        const h = getExternalClientHints(throttleExternalClient(raw, 'bai'));
+        expect(h).toEqual({ providerId: 'bai', concurrency: 1, timeoutMultiplier: EXTERNAL_PROVIDER_THROTTLE.TIMEOUT_MULTIPLIER });
+        expect(getExternalClientHints(raw)).toBeNull();
+        expect(getExternalClientHints(throttleExternalClient(raw, 'local-llm'))).toBeNull();
+    });
+});
