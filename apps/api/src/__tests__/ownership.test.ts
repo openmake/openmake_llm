@@ -42,8 +42,12 @@ describe('assertResourceOwnerOrAdmin', () => {
         expect(() => assertResourceOwnerOrAdmin('owner', 'requester', 'guest')).toThrow(AuthorizationError);
     });
 
-    test('empty string IDs match and pass for non-admin', () => {
-        expect(() => assertResourceOwnerOrAdmin('', '', 'user')).not.toThrow();
+    // 2026-09-02 보안 리뷰 L4: 빈값끼리의 동등 비교('undefined'==='undefined')로 통과하던 것을 차단
+    test.each([
+        ['', ''], ['undefined', 'undefined'], ['null', 'null'],
+        [undefined, undefined], [null, null], ['u1', undefined],
+    ])('empty/nullish ID pair (%j, %j) throws for non-admin even when equal', (owner, requester) => {
+        expect(() => assertResourceOwnerOrAdmin(owner as unknown as string, requester as unknown as string, 'user')).toThrow(AuthorizationError);
     });
 
     test('empty owner ID with non-empty request ID throws for non-admin', () => {
