@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.38.0](https://github.com/openmake/openmake_llm/compare/v1.37.2...v1.38.0) (2026-09-02)
+
+
+### ✨ 기능
+
+* **llm:** 로컬 기본 채팅 모델 qwen3.8-27b 반영 ([#704](https://github.com/openmake/openmake_llm/issues/704)) ([37571ca](https://github.com/openmake/openmake_llm/commit/37571ca440730d404026430bd43d809be7c8f47b))
+* **llm:** 로컬 모델 자동 발견 — 게이트웨이 /model/info 로 카탈로그 갱신 ([#705](https://github.com/openmake/openmake_llm/issues/705)) ([8b30fa1](https://github.com/openmake/openmake_llm/commit/8b30fa111d05057060515275fc787dd44e2ad118))
+* **providers:** Open AI Service Hub(hasa) 외부 provider 추가 ([#701](https://github.com/openmake/openmake_llm/issues/701)) ([0a1c18d](https://github.com/openmake/openmake_llm/commit/0a1c18d3ae0039932f0964556bb71255705da5fa))
+
 ## [1.37.2](https://github.com/openmake/openmake_llm/compare/v1.37.1...v1.37.2) (2026-09-01)
 
 
