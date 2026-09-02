@@ -461,6 +461,16 @@ export const DOC_EXTRACT_LIMITS = {
 } as const;
 
 /**
+ * 로컬 vLLM 요청당 프롬프트 이미지 총 상한 (2026-09-03)
+ * vLLM `--limit-mm-per-prompt '{"image": N}'` 와 페어 — 초과 요청은 업스트림 400
+ * ("At most N image(s) may be provided in one prompt"). LLMClient wire 변환 직전
+ * (llm/prompt-image-cap.ts) 이 history 포함 총량을 이 값에 맞춘다. 0 이면 비활성.
+ */
+export const LLM_PROMPT_IMAGE_LIMITS = {
+    MAX_PER_REQUEST: parseInt(process.env.LLM_PROMPT_IMAGE_CAP || '8', 10),
+} as const;
+
+/**
  * PDF 첨부 vision 페이지 주입 한도 (2026-08-19)
  * 채팅 PDF 첨부를 하이브리드로 처리 — 기존 doc-extractor 텍스트 추출에 더해 앞쪽
  * 페이지를 pdftoppm 으로 JPEG 렌더해 vision(images) 채널에 병행 주입한다
@@ -471,9 +481,9 @@ export const DOC_EXTRACT_LIMITS = {
 export const PDF_VISION_LIMITS = {
     /** 기능 on/off (기본 on — 'false' 명시 시에만 비활성) */
     ENABLED: process.env.PDF_VISION_ENABLED !== 'false',
-    /** 요청당 프롬프트 이미지 총 상한 — vLLM `--limit-mm-per-prompt '{"image": N}'` 와 페어.
+    /** 요청당 프롬프트 이미지 총 상한 — 기본은 LLM_PROMPT_IMAGE_LIMITS(vLLM 페어)를 따른다.
      *  사용자 첨부 이미지가 이 값을 채우면 페이지 주입은 잔여분만 사용 */
-    TOTAL_IMAGE_CAP: parseInt(process.env.PDF_VISION_TOTAL_IMAGE_CAP || '4', 10),
+    TOTAL_IMAGE_CAP: parseInt(process.env.PDF_VISION_TOTAL_IMAGE_CAP || String(LLM_PROMPT_IMAGE_LIMITS.MAX_PER_REQUEST), 10),
     /** 요청당 렌더 페이지 최대 수 (PDF 여러 개면 순서대로 예산 소진) */
     MAX_PAGES: parseInt(process.env.PDF_VISION_MAX_PAGES || '4', 10),
     /** 렌더 해상도 dpi — 문서 판독 라이브 실측(2026-08-19) 120 이면 충분, 상향은 비전 토큰 비례 증가 */

@@ -25,14 +25,6 @@ model_list:
       api_base: os.environ/QWEN_VLLM_API_BASE      # http://<VLLM_TAILSCALE_HOST>:8002/v1
       api_key: os.environ/VLLM_API_KEY
 
-  # 호환 alias — 2026-09-02 :8002 실체가 qwen3.8-27b 로 바뀜. vLLM 도 같은 이름을 함께 서빙
-  # (--served-model-name qwen3.8-27b qwen3.6-35b-a3b) 하므로 구 클라이언트·옛 대화 model id 유지용.
-  - model_name: qwen3.6-35b-a3b
-    litellm_params:
-      model: openai/qwen3.6-35b-a3b
-      api_base: os.environ/QWEN_VLLM_API_BASE      # http://<VLLM_TAILSCALE_HOST>:8002/v1
-      api_key: os.environ/VLLM_API_KEY
-
   - model_name: bge-m3
     litellm_params:
       model: openai/bge-m3
