@@ -30,6 +30,7 @@ import {
 } from '../schemas/push.schema';
 import { getPushService, PushSubscription } from '../services/PushService';
 import { getNativePushService } from '../services/NativePushService';
+import { assertPushEndpointAllowed } from '../services/push-endpoint-guard';
 
 const logger = createLogger('PushRoutes');
 
@@ -75,12 +76,14 @@ router.get('/vapid-key', asyncHandler(async (req: Request, res: Response) => {
  */
 router.post('/subscribe', requireAuth, validate(pushSubscribeSchema), asyncHandler(async (req: Request, res: Response) => {
     await warmCacheIfNeeded();
-    const { endpoint, keys, userId } = req.body as {
+    const { endpoint, keys } = req.body as {
         endpoint: string;
         keys: { p256dh: string; auth: string };
-        userId?: string;
     };
-    
+    // 소유자는 인증 주체뿐 — body 의 userId 는 스키마에서 제거됨 (다른 핸들러와 동일)
+    const userId = String(req.user!.id);
+    await assertPushEndpointAllowed(endpoint);
+
     const subscription: PushSubscription = {
         endpoint,
         keys: { p256dh: keys.p256dh, auth: keys.auth },
@@ -93,7 +96,7 @@ router.post('/subscribe', requireAuth, validate(pushSubscribeSchema), asyncHandl
     logger.info(`[Push] 구독 등록: ${endpoint.substring(0, 50)}... (총 ${pushSubscriptions.size}개)`);
 
     // Async DB insert (fire-and-forget)
-    void pushService.subscribe(userId || '', subscription).catch(err => logger.error('[Push] DB 구독 저장 실패:', err));
+    void pushService.subscribe(userId, subscription).catch(err => logger.error('[Push] DB 구독 저장 실패:', err));
     
     res.json(success({ message: 'Push 구독이 등록되었습니다.' }));
 }));

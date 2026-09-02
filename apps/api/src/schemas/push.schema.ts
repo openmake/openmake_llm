@@ -16,15 +16,17 @@ import { z } from 'zod';
  * @property {object} keys - VAPID 암호화 키 (필수)
  * @property {string} keys.p256dh - P-256 Diffie-Hellman 공개키 (필수)
  * @property {string} keys.auth - 인증 시크릿 (필수)
- * @property {string} [userId] - 사용자 ID (선택)
  */
 export const pushSubscribeSchema = z.object({
-    endpoint: z.string().min(1, 'endpoint는 필수입니다').max(2048),
+    // 구독 소유자는 항상 req.user — body 의 userId 는 받지 않는다 (2026-09-02 보안 리뷰 H3:
+    // 종전엔 body.userId 로 타인 userId 에 공격자 endpoint 를 등록해 알림 사본을 받을 수 있었다).
+    // endpoint 는 https URL 만 — 사설/loopback 대역 차단은 라우트의 assertPushEndpointAllowed(DNS 해석 필요).
+    endpoint: z.string().min(1, 'endpoint는 필수입니다').max(2048).url('endpoint는 URL이어야 합니다')
+        .refine((u) => u.startsWith('https://'), { message: 'endpoint는 https URL이어야 합니다' }),
     keys: z.object({
         p256dh: z.string().min(1, 'keys.p256dh는 필수입니다'),
         auth: z.string().min(1, 'keys.auth는 필수입니다')
     }),
-    userId: z.string().optional()
 });
 
 /**
