@@ -56,7 +56,8 @@ export function is429(err: unknown): boolean {
     const e = err as { status?: unknown; statusCode?: unknown; message?: unknown } | null;
     if (!e || typeof e !== 'object') return false;
     if (e.status === 429 || e.statusCode === 429) return true;
-    return typeof e.message === 'string' && /\b429\b/.test(e.message);
+    // 메시지 폴백은 OpenAI SDK 의 정형 문구("429 status code (no body)")만 — 본문 어딘가의 숫자 429 는 오탐
+    return typeof e.message === 'string' && /^429 status code\b/.test(e.message);
 }
 
 /** Retry-After(초 또는 HTTP-date) → ms. 없거나 파싱 불가면 undefined */
@@ -74,11 +75,14 @@ function retryAfterMs(err: unknown): number | undefined {
 }
 
 function backoffMs(attempt: number, err: unknown): number {
-    const { RETRY_429_BASE_MS, RETRY_429_MAX_MS } = EXTERNAL_PROVIDER_THROTTLE;
+    const { RETRY_429_BASE_MS, RETRY_429_MAX_MS, RETRY_AFTER_HEADER_MAX_MS } = EXTERNAL_PROVIDER_THROTTLE;
     const fromHeader = retryAfterMs(err);
+    // 서버가 Retry-After 를 주면 그 값을 존중한다(지수 상한보다 커도 — 잘라내면 창이 안 열린 채 재시도해 429 만 소모).
+    // 폭주 방지용 별도 상한(RETRY_AFTER_HEADER_MAX_MS)만 둔다.
+    if (fromHeader !== undefined) return Math.min(RETRY_AFTER_HEADER_MAX_MS, fromHeader);
     const exp = RETRY_429_BASE_MS * 2 ** attempt;
     const jitter = Math.floor(Math.random() * RETRY_429_BASE_MS * 0.25);
-    return Math.min(RETRY_429_MAX_MS, Math.max(fromHeader ?? 0, exp + jitter));
+    return Math.min(RETRY_429_MAX_MS, exp + jitter);
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -90,9 +94,10 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     });
 }
 
-/** LLMClient.chat 의 advancedOptions.signal 위치(4번째 인자) */
-function signalOf(args: unknown[]): AbortSignal | undefined {
-    const adv = args[3] as { signal?: AbortSignal } | undefined;
+/** advancedOptions.signal 위치 — chat(messages, options, onToken, advanced) 은 args[3],
+ *  generate(prompt, options, onToken, images, advanced) 는 args[4] */
+function signalOf(method: 'chat' | 'generate', args: unknown[]): AbortSignal | undefined {
+    const adv = args[method === 'chat' ? 3 : 4] as { signal?: AbortSignal } | undefined;
     return adv?.signal;
 }
 
@@ -106,7 +111,7 @@ export function throttleExternalClient<T extends LLMClient>(client: T, providerI
     const { RETRY_429_MAX } = EXTERNAL_PROVIDER_THROTTLE;
 
     const wrap = (method: 'chat' | 'generate') => async (...args: unknown[]) => {
-        const signal = signalOf(args);
+        const signal = signalOf(method, args);
         const release = await sem.acquire();
         try {
             for (let attempt = 0; ; attempt++) {
