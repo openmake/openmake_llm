@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.39.0](https://github.com/openmake/openmake_llm/compare/v1.38.0...v1.39.0) (2026-09-02)
+
+
+### ✨ 기능
+
+* **providers:** B.AI 외부 provider 추가 — 무료 모델 5종 BYOK ([#711](https://github.com/openmake/openmake_llm/issues/711)) ([297f55a](https://github.com/openmake/openmake_llm/commit/297f55aee75a585cf7d8b05b20126e4728cf6a24))
+
+
+### 🐛 버그 수정
+
+* **providers:** 휴리스틱 추정 capability 캐시가 config 실측값을 가리지 않게 ([#713](https://github.com/openmake/openmake_llm/issues/713)) ([d857077](https://github.com/openmake/openmake_llm/commit/d857077541589e78e35ee6b1284499ec5d9cfbfe))
+* **security:** push 구독 소유자를 req.user 로 고정 + endpoint SSRF 가드 ([#707](https://github.com/openmake/openmake_llm/issues/707)) ([6cc0eb2](https://github.com/openmake/openmake_llm/commit/6cc0eb24f4fcec31e55325ad6fcbfadad9afac39))
+* **security:** 보안 리뷰 P0 low 4건 — CSV 수식 인젝션·MCP status 가시성·소유권 빈값·셋업 락 ([#708](https://github.com/openmake/openmake_llm/issues/708)) ([373af2c](https://github.com/openmake/openmake_llm/commit/373af2c711a6d31d5254936e7662dadb3aef3059))
+* **security:** 보안 리뷰 P1 — 내부 번들 스코프·역할 게이트 실행 강제·argv 비밀 예외 명시 ([#710](https://github.com/openmake/openmake_llm/issues/710)) ([eaf022d](https://github.com/openmake/openmake_llm/commit/eaf022dfc7bafca8a2d53ef83f432014b088a24e))
+* **security:** 시스템 스킬 수정·삭제와 공유 에이전트 스킬 배정에 관리자 게이트 ([#706](https://github.com/openmake/openmake_llm/issues/706)) ([40d147b](https://github.com/openmake/openmake_llm/commit/40d147b170717c2383401184d32bab5d9a6fa7d6))
+
 ## [1.38.0](https://github.com/openmake/openmake_llm/compare/v1.37.2...v1.38.0) (2026-09-02)
 
 
