@@ -258,7 +258,7 @@
     "send": "送信",
     "disclaimer": "OpenMake は誤ることがあります。重要な情報は確認してください。",
     "suppressedTag": "(未適用)",
-    "externalLocalModeNotice": "ディスカッション・ディープリサーチはローカルモデルで実行されます（選択した外部モデルは使用されません）。",
+    "externalModeNotice": "ディスカッション・ディープリサーチは選択した外部モデルで実行されます。",
     "toggle": {
       "discussion": "ディスカッション",
       "thinking": "思考",

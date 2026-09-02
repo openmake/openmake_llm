@@ -466,8 +466,9 @@ export function Composer() {
     if (entry) return entry.provider !== "local-llm";
     return selectedModel.includes(":") && !selectedModel.startsWith("local-llm:");
   })();
-  // 토론·딥 리서치는 전용 파이프라인이라 외부 모델을 무시하고 로컬 모델로 강제 실행된다.
-  const externalLocalModeNotice = selectedModelIsExternal && (discussionMode || deepResearchMode);
+  // 토론·딥 리서치도 선택한 외부 모델로 실행된다(백엔드 mode-external-client). 지정 모델로
+  // 돈다는 사실만 안내한다 — 로컬 강제 아님.
+  const externalModeNotice = selectedModelIsExternal && (discussionMode || deepResearchMode);
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
@@ -617,10 +618,10 @@ export function Composer() {
           })}
         </div>
 
-        {/* 외부 모델 + 토론/딥리서치 조합 안내 — 이 모드는 로컬 모델로 강제 실행됨. */}
-        {externalLocalModeNotice && (
-          <p className="px-3 pt-2 text-[11px] text-warn">
-            {t("externalLocalModeNotice")}
+        {/* 외부 모델 + 토론/딥리서치 조합 안내 — 이 모드는 선택한 외부 모델로 실행됨. */}
+        {externalModeNotice && (
+          <p className="px-3 pt-2 text-[11px] text-muted">
+            {t("externalModeNotice")}
           </p>
         )}
 
