@@ -14,6 +14,7 @@
  *
  */
 import type { UserMCPPool } from './user-pool';
+import { wrapEnvPlaceholdersAsShellRefs } from './env-placeholder-shell';
 import type { ExternalMCPClient } from './external-client';
 import type { McpCatalogRepository, UserMcpServerRow } from '../data/repositories/mcp-catalog-repository';
 import { createLogger } from '../utils/logger';
@@ -69,11 +70,6 @@ type ServerWithLifecycle = UserMcpServerRow & { lifecycle?: McpLifecycle };
  * 전달해야 하는 MCP 서버(예: @modelcontextprotocol/server-postgres 는 URL 을 argv 로
  * 받음)를 지원한다 — 평문을 args(미암호화) 에 저장하지 않고 spawn 시점에만 주입.
  */
-const ENV_PLACEHOLDER_RE = /\{\{env\.(\w+)\}\}/g;
-function substituteEnvPlaceholders(value: string, env: Record<string, string>): string {
-    return value.replace(ENV_PLACEHOLDER_RE, (_m, key: string) => env[key] ?? '');
-}
-
 export class MCPLifecycleSupervisor implements LifecycleSupervisor {
     private readonly userPool: UserMCPPool;
     private readonly repo: SupervisorDeps['repo'];
@@ -262,16 +258,22 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
             }
         }
 
+        const shellWrapped = server.command
+            ? wrapEnvPlaceholdersAsShellRefs(server.command, Array.isArray(server.args) ? server.args : [])
+            : { command: server.command, args: server.args, wrapped: false, keys: [] as string[] };
+        if (shellWrapped.wrapped) {
+            const missing = shellWrapped.keys.filter((k) => !(k in env));
+            if (missing.length) logger.warn(`{{env.*}} 참조 키가 env 에 없음 (빈값으로 전개) s=${serverId}: ${missing.join(',')}`);
+        }
         const config: ServerSpawnConfig = {
             id: server.id,
             user_id: userId,
             name: server.name,
             transport_type: server.transport_type,
-            // {{env.KEY}} placeholder 를 복호화 env 로 치환 (위치 인자 secret 주입 지원).
-            command: server.command ? substituteEnvPlaceholders(server.command, env) : server.command,
-            args: Array.isArray(server.args)
-                ? server.args.map(a => typeof a === 'string' ? substituteEnvPlaceholders(a, env) : a)
-                : server.args,
+            // {{env.KEY}} 자리표시자(위치 인자 secret)는 값을 argv 에 박지 않고 sh 변수 참조로 감싼다
+            // (env-placeholder-shell — ps 노출 차단, 2026-09-03). 값은 env 로만 전달.
+            command: shellWrapped.command,
+            args: shellWrapped.args,
             env,
             url: server.url,
             lifecycle,
