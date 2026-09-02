@@ -530,9 +530,10 @@ export const mcpRouter = Router();
       // ⚠️ 사용자 소유 서버는 전역 registry 가 아니라 userPool 에 뜬다 — registry 만 보면
       // 실제로 연결돼 도구가 등록된 서버도 늘 disconnected/toolCount:0 으로 보고된다
       // (목록 API 는 이미 supervisor 를 함께 본다. 이중 풀은 양쪽 대칭이 원칙).
-      const db = getUnifiedDatabase();
-      const server = await db.getMcpServerById(id);
-      if (!server) {
+      // 목록 API 와 동일한 visibility 게이트 — 타인 user_private 서버는 존재 자체를 숨긴다(404)
+      const actor = { id: String(req.user?.id ?? ''), role: req.user?.role ?? 'user' };
+      const server = await new McpCatalogRepository(getUnifiedDatabase().getPool()).getServerById(id);
+      if (!server || !canViewServer(actor, server)) {
           res.status(404).json(notFound('서버'));
           return;
       }
