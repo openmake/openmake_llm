@@ -15,15 +15,25 @@
  *   - 본 파일이 기본 카탈로그 (개발자 튜닝)
  *   - 환경변수 override: `LLM_LOCAL_MODELS_JSON` (runtime tweaking)
  *
+ * 모델 발견 (2026-09-02, 동적):
+ *   부팅·주기 프로브가 게이트웨이 `/model/info` 를 읽어 로컬(provider prefix 없는) 모델을
+ *   **자동 발견**한다 — alias(`gpt-3.5-turbo` → 같은 upstream) 는 하나로 접고, `mode` 가
+ *   이미지/임베딩 등인 항목은 채팅 목록에서 뺀다. DGX 에서 모델을 교체하면 재배포 없이
+ *   다음 프로브에 반영된다. 아래 DEFAULT_LOCAL_MODELS 는 게이트웨이에 닿지 못했을 때의
+ *   폴백일 뿐이다 (배경: :8002 가 qwen3.8 로 바뀐 뒤 앱이 옛 이름을 계속 표시하던 사고).
+ *   끄기: `LLM_LOCAL_MODELS_DISCOVERY=false` (그러면 정적 카탈로그만 사용).
+ *   `LLM_LOCAL_MODELS_JSON` 이 있으면 명시 override 라 발견 결과보다 우선한다.
+ *
  * 새 모델 추가 가이드:
- *   1. 서버 PC 의 vLLM 에 모델 띄움
- *   2. 본 카탈로그에 entry 추가 + 클라이언트 PC PM2 reload
- *   3. (선택) MODEL_CAPABILITY_PRESETS (model-defaults.ts) 에 capability 추가
+ *   1. 서버 PC 의 vLLM 에 모델 띄움 (+ LiteLLM model_list 등록) → 다음 프로브에 자동 반영
+ *   2. (선택) MODEL_CAPABILITY_PRESETS (model-defaults.ts) 에 capability 추가
+ *   3. 기본 모델을 바꾸려면 `LLM_DEFAULT_MODEL` — 발견 목록에 없으면 부팅 로그가 경고한다
  *
  * @module config/local-models
  */
 import { createLogger } from '../utils/logger';
 import { MODEL_PROBE } from './model-defaults';
+import { fetchGatewayModelInfo, selectLocalEntriesFromModelInfo } from './local-models-discovery';
 
 const logger = createLogger('LocalModels');
 
@@ -109,6 +119,49 @@ export function getLocalModels(): LocalModelEntry[] {
 
     _cached = DEFAULT_LOCAL_MODELS;
     return _cached;
+}
+
+/**
+ * 게이트웨이 `/model/info` 로 로컬 모델을 발견해 카탈로그를 갱신한다 (fail-open).
+ *   - `LLM_LOCAL_MODELS_JSON`(명시 override) 또는 `LLM_LOCAL_MODELS_DISCOVERY=false` 면 no-op
+ *   - 호출 실패·빈 결과면 기존 카탈로그 유지 (정적 폴백 또는 직전 발견 결과)
+ *   - `LLM_DEFAULT_MODEL` 이 발견 목록에 없으면 경고 — 기본 모델이 실체와 어긋난 신호
+ * @returns 발견해 반영했으면 true
+ */
+export async function discoverLocalModels(
+    llmBaseUrl: string,
+    apiKey: string | undefined,
+    timeoutMs: number = 5000,
+): Promise<boolean> {
+    if (process.env.LLM_LOCAL_MODELS_JSON) return false;
+    if (process.env.LLM_LOCAL_MODELS_DISCOVERY === 'false') return false;
+    const r = await fetchGatewayModelInfo(llmBaseUrl, apiKey, timeoutMs);
+    if (!r.ok) {
+        logger.warn(`모델 발견 실패 — 카탈로그 유지: ${r.reason}`);
+        return false;
+    }
+    const current = getLocalModels();
+    const entries = selectLocalEntriesFromModelInfo(r.data, [...current, ...DEFAULT_LOCAL_MODELS]);
+    if (entries.length === 0) {
+        logger.warn('모델 발견: 로컬 모델 0개 — 카탈로그 유지');
+        return false;
+    }
+    const before = current.map((m) => m.id).join(',');
+    _cached = entries;
+    const after = entries.map((m) => `${m.id}(${m.role})`).join(',');
+    if (before !== entries.map((m) => m.id).join(',')) {
+        logger.info(`모델 발견: 카탈로그 갱신 [${before}] → [${after}]`);
+    } else {
+        logger.debug(`모델 발견: 변경 없음 [${after}]`);
+    }
+    const def = process.env.LLM_DEFAULT_MODEL?.trim();
+    if (def && !entries.some((m) => m.id === def && m.role === 'chat')) {
+        logger.warn(
+            `LLM_DEFAULT_MODEL=${def} 이 게이트웨이 로컬 chat 모델에 없음 — 발견된 모델: ` +
+            `[${entries.filter((m) => m.role === 'chat').map((m) => m.id).join(',')}]. .env 를 확인할 것`,
+        );
+    }
+    return true;
 }
 
 /** id 로 카탈로그 엔트리 조회 (프로브 실측치 참조용). 미등록이면 undefined. */
@@ -369,6 +422,9 @@ export async function probeLocalModelAvailability(
     apiKey: string | undefined,
     timeoutMs: number = 8000,
 ): Promise<{ probed: boolean; available: string[]; missing: string[]; skipped: string[] }> {
+    // Stage 0: 게이트웨이에서 로컬 모델 발견 — 정적 카탈로그는 폴백 (실패해도 진행)
+    await discoverLocalModels(llmBaseUrl, apiKey, Math.min(timeoutMs, 5000));
+
     // Stage 1: /v1/models 빠른 fail
     const modelsUrl = llmBaseUrl.replace(/\/$/, '') + '/v1/models';
     const stage1Controller = new AbortController();
