@@ -70,11 +70,28 @@ describe('throttleExternalClient', () => {
         expect(wrapped.helper()).toBe('m');
     });
 
-    it('is429 는 status/statusCode/메시지 어느 쪽이든 인식', () => {
+    it('is429 는 status/statusCode 또는 SDK 정형 문구만 인식 — 본문 속 숫자 429 는 오탐 아님', () => {
         expect(is429({ status: 429 })).toBe(true);
         expect(is429({ statusCode: 429 })).toBe(true);
         expect(is429(new Error('429 status code (no body)'))).toBe(true);
         expect(is429(new Error('500'))).toBe(false);
+        expect(is429(new Error('request id 429 failed: invalid model'))).toBe(false);
         expect(is429(null)).toBe(false);
+    });
+
+    it('Retry-After 헤더가 지수 상한보다 커도 존중한다 (별도 상한 내)', async () => {
+        Object.assign(mutable, { RETRY_429_BASE_MS: 1, RETRY_429_MAX_MS: 2, RETRY_AFTER_HEADER_MAX_MS: 40, RETRY_429_MAX: 1 });
+        let calls = 0; const t0 = Date.now();
+        const client = throttleExternalClient(fakeClient(async () => { calls++; if (calls === 1) throw Object.assign(new Error('429 status code (no body)'), { status: 429, headers: { 'retry-after': '0.03' } }); return 'ok'; }), 'bai');
+        await expect(client.chat([], undefined)).resolves.toBe('ok');
+        expect(Date.now() - t0).toBeGreaterThanOrEqual(25); // 30ms 헤더 > 2ms 지수 상한
+    });
+
+    it('generate 의 abort signal 은 5번째 인자에서 읽는다', async () => {
+        const ac = new AbortController();
+        let calls = 0;
+        const client = throttleExternalClient(fakeClient(async () => { calls++; ac.abort(); throw Object.assign(new Error('429 status code (no body)'), { status: 429 }); }), 'bai');
+        await expect(client.generate('p', undefined, undefined, undefined, { signal: ac.signal })).rejects.toThrow();
+        expect(calls).toBe(1);
     });
 });
