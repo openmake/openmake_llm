@@ -138,7 +138,39 @@ export class UserSandbox {
             return false;
         }
 
+        // 🔒 심링크 탈출 차단 (2026-09-02 보안 리뷰 B5 NV): 어휘적 검사는 사용자 루트 안의 심링크가
+        // 루트 밖을 가리키는 경우를 못 막는다. 존재하는 가장 깊은 조상의 realpath 가 루트 realpath 안에
+        // 있어야 한다(아직 없는 경로는 조상만 검사 — 생성 자체는 허용). realpath 실패는 거부(fail-closed).
+        if (!this.realPathStaysInside(resolvedPath, userRoot)) {
+            logger.warn(`⚠️ 경로 접근 거부(심링크 탈출): ${resolvedPath} (사용자: ${userId})`);
+            return false;
+        }
+
         return true;
+    }
+
+    /** resolvedPath 의 존재하는 가장 깊은 조상을 realpath 로 풀어 userRoot(realpath) 안에 있는지 */
+    private static realPathStaysInside(resolvedPath: string, userRoot: string): boolean {
+        let rootReal: string;
+        try {
+            rootReal = fs.existsSync(userRoot) ? fs.realpathSync(userRoot) : userRoot;
+        } catch {
+            return false;
+        }
+        let probe = resolvedPath;
+        for (;;) {
+            if (fs.existsSync(probe)) break;
+            const parent = path.dirname(probe);
+            if (parent === probe) return true; // 파일시스템 루트까지 아무것도 없음 — 루트 자체가 미생성
+            probe = parent;
+        }
+        let real: string;
+        try {
+            real = fs.realpathSync(probe);
+        } catch {
+            return false;
+        }
+        return real === rootReal || (real + path.sep).startsWith(rootReal + path.sep);
     }
 
     /**

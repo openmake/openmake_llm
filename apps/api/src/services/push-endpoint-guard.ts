@@ -7,6 +7,7 @@
  */
 import { validateOutboundUrl, type DnsResolver } from '../security/ssrf-guard';
 import { ValidationError } from '../utils/error-handler';
+import { isPushEndpointHostAllowed } from '../config/push-endpoint-hosts';
 
 export async function assertPushEndpointAllowed(endpoint: string, resolver?: DnsResolver): Promise<void> {
     let url: URL;
@@ -17,6 +18,10 @@ export async function assertPushEndpointAllowed(endpoint: string, resolver?: Dns
     }
     if (url.protocol !== 'https:') {
         throw new ValidationError('endpoint는 https URL이어야 합니다');
+    }
+    // 알려진 push 서비스 호스트만 — 발송 시점 DNS rebinding 표면 축소 (PUSH_ENDPOINT_HOST_ALLOWLIST)
+    if (!isPushEndpointHostAllowed(url.hostname)) {
+        throw new ValidationError('허용되지 않는 push 서비스 호스트입니다');
     }
     try {
         await (resolver ? validateOutboundUrl(endpoint, resolver) : validateOutboundUrl(endpoint));

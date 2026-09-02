@@ -10,6 +10,7 @@
  */
 import { z } from 'zod';
 import { secureOptionalTextSchema, secureTextSchema } from './security.schema';
+import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
 
 /**
  * OpenAI 호환 tool_call 스키마 (히스토리 메시지 내 assistant의 tool_calls)
@@ -108,7 +109,8 @@ export const chatRequestSchema = z.object({
     sessionId: secureOptionalTextSchema({ maxLength: 500, fieldName: 'sessionId', allowNewLines: false, detectMaliciousPatterns: false }),
     anonSessionId: secureOptionalTextSchema({ maxLength: 500, fieldName: 'anonSessionId', allowNewLines: false, detectMaliciousPatterns: false }),
     docId: secureOptionalTextSchema({ maxLength: 500, fieldName: 'docId', allowNewLines: false, detectMaliciousPatterns: false }),
-    images: z.array(z.string()).optional(),
+    // 개수·개별 dataURL 길이 상한 — WS 경로(ws-chat-handler FILE_ATTACH_LIMITS 캡)와 대칭 (2026-09-02 보안 리뷰 B4 NV)
+    images: z.array(z.string().max(FILE_ATTACH_LIMITS.MAX_IMAGE_DATAURL_CHARS)).max(FILE_ATTACH_LIMITS.MAX_IMAGES).optional(),
     discussionMode: z.boolean().optional(),
     thinkingMode: z.boolean().optional(),
     thinkingLevel: z.enum(['low', 'medium', 'high']).optional(),
