@@ -27,6 +27,8 @@ import { ArtifactStreamParser, type ArtifactStreamCallbacks } from './artifact-p
 import { extractCoTFromContent } from './cot-extractor';
 import { PseudoToolCallGate, stripPseudoToolCalls } from './pseudo-tool-call-parser';
 import { createLogger } from '../utils/logger';
+import { capPromptImages } from './prompt-image-cap';
+import { LLM_PROMPT_IMAGE_LIMITS } from '../config/runtime-limits';
 
 const log = createLogger('StreamParser');
 
@@ -106,7 +108,9 @@ export function toResponseFormat(f: FormatOption | undefined): Record<string, un
 }
 
 function toOpenAIMessages(messages: ChatMessage[]): unknown[] {
-    return messages.map((m, idx) => {
+    // 로컬 vLLM `--limit-mm-per-prompt` 페어 — history 포함 총량을 상한에 맞춘다(초과 시 400).
+    const { messages: capped } = capPromptImages(messages, LLM_PROMPT_IMAGE_LIMITS.MAX_PER_REQUEST);
+    return capped.map((m, idx) => {
         if (m.role === 'tool') {
             return {
                 role: 'tool',
