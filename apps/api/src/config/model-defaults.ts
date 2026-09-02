@@ -1,5 +1,5 @@
 /**
- * 모델 기본값 — 로컬 모델 capability 프리셋 (기본 채팅 qwen3.6-35b-a3b)
+ * 모델 기본값 — 로컬 모델 capability 프리셋 (기본 채팅 qwen3.8-27b, 2026-09-02 교체)
  *
  * @module config/model-defaults
  */
@@ -52,7 +52,19 @@ export const MODEL_CAPABILITY_PRESETS: Readonly<Record<string, ModelCapabilities
         streaming: true,
     },
     /**
-     * OpenAI 호환 alias — proxy 가 qwen3.6-35b-a3b 으로 라우팅.
+     * Qwen 3.8 27B (dense, FP8) — 2026-09-02 부터 DGX :8002 의 실체.
+     * vLLM `--reasoning-parser qwen3 --tool-call-parser qwen3_coder --limit-mm-per-prompt image=8`
+     * 로 구동 — thinking·toolCalling·vision 모두 라이브 실측(도구 호출 tool_calls, 1px PNG 200).
+     * reasoning_effort 는 high 거절(xhigh/medium/low) — config/reasoning-effort.ts 가 정규화.
+     */
+    'qwen3.8-27b': {
+        toolCalling: true,
+        thinking: true,
+        vision: true,
+        streaming: true,
+    },
+    /**
+     * OpenAI 호환 alias — proxy 가 qwen3.8-27b 으로 라우팅.
      * 외부 도구 / OpenAI SDK 호환 클라이언트가 표준 model ID 로 호출 가능.
      */
     'gpt-3.5-turbo': {

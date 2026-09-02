@@ -199,7 +199,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     // LLM Backend (vLLM via LiteLLM proxy)
     llmBaseUrl: 'http://localhost:4000',
     llmApiKey: 'sk-no-key',
-    llmDefaultModel: 'qwen3.6-35b-a3b',
+    llmDefaultModel: 'qwen3.8-27b',
     llmTimeout: 120000,
     llmWarmupTimeoutMs: 10000,
     llmHourlyTokenLimit: 300000,
