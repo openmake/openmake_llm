@@ -27,6 +27,7 @@ const EXTERNAL_PROVIDER_LABELS: Record<string, string> = {
   "ollama-cloud": "🌐 Ollama Cloud",
   nvidia: "🌐 NVIDIA NIM",
   hasa: "🌐 Open AI Service Hub",
+  bai: "🌐 B.AI",
 };
 
 export function ModelPicker({
