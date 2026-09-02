@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # ============================================================
-# qwen3.6-35b-a3b — 기본 채팅 (262K context) @ :8002
+# qwen3.8-27b — 기본 채팅 (262K context) @ :8002
 # ============================================================
+# ⚠️ 2026-09-02 동기화: DGX :8002 실체가 qwen3.8-27b-fp8(dense, MTP) 로 교체됐고(DGX 측 2026-08-31)
+#   `--served-model-name qwen3.8-27b qwen3.6-35b-a3b` 로 구 이름을 호환 alias 로 함께 서빙한다.
+#   실행 주체도 바뀜 — PM2 가 아니라 DGX `/home/smith/vllm`(git: openmake/openmake_vllm) 의
+#   docker compose (`vllm-chat` 컨테이너, `bin/vllm-launch.sh chat` + `env/chat.env`, 2026-08-20 컷오버).
+#   이 파일은 레포 참조본이며 실제 SoT 는 openmake_vllm 의 env/chat.env 다.
 # DGX 실측 serve 명령 기준 (2026-08-19 동기화 — --limit-mm-per-prompt image 4→8:
 # 채팅 PDF 하이브리드(pdf-vision 페이지 주입, PDF_VISION_TOTAL_IMAGE_CAP=8 페어) 지원.
 # 2026-08-02 prefix caching 추가).
@@ -15,8 +20,8 @@
 #   `Prefix cache hit rate` 지표는 0.0% 로 표시된다(SSM 레이어는 KV 캐시가 없음).
 #   앱 실측(표본 4건)은 3건 개선·1건 악화로 유의성 미확보 — [ChatTiming] 로그 축적 후 재판단.
 #   문제 시 이 플래그만 제거하면 종전 동작으로 복귀한다.
-# 실행 주체: DGX 의 PM2 (`pm2-<user>.service` 아래 vllm-chat) — systemd 개별 유닛 아님.
-# venv: /home/smith/vllm/rebuild/vllm_env.023 (qwen3.6 지원 rebuild)
+# 실행 주체: (구) DGX PM2 vllm-chat → (현) docker compose `vllm-chat` — 위 2026-09-02 주석 참고.
+# venv: /home/smith/vllm_data/rebuild/vllm_env.0271 (vLLM 0.27.1 — Qwen3.8 dense+MTP 레지스트리 포함)
 #
 # 보안:
 # - API key 는 CLI 인자 금지(ps 노출) — 0600 env 파일의 VLLM_API_KEY 를 vLLM 이 직접 인식
@@ -24,7 +29,7 @@
 #   tailscaled 기동 전 부팅 경쟁은 아래 대기 루프로 방어.
 set -euo pipefail
 
-MODEL_DIR="${QWEN_MODEL_DIR:-/home/smith/models/qwen3.6-35b-a3b-fp8}"
+MODEL_DIR="${QWEN_MODEL_DIR:-/home/smith/models/qwen3.8-27b-fp8}"
 
 # vLLM API key — env 파일(0600) 주입 (VLLM_API_KEY)
 set -a; [ -f /home/smith/vllm/vllm.env ] && . /home/smith/vllm/vllm.env; set +a
@@ -42,7 +47,7 @@ exec vllm serve "$MODEL_DIR" \
   --host "$VLLM_BIND_HOST" \
   --tensor-parallel-size 1 \
   --dtype auto \
-  --served-model-name qwen3.6-35b-a3b \
+  --served-model-name qwen3.8-27b qwen3.6-35b-a3b \
   --max-model-len 262144 \
   --gpu-memory-utilization 0.47 \
   --max-num-batched-tokens 8192 \
