@@ -88,7 +88,11 @@ export const importExtensionFromGitTool: MCPToolDefinition<ImportExtensionFromGi
                 pool: getUnifiedDatabase().getPool(),
                 llmClientFactory: (model: string) => new LLMClient(model ? { model } : {}),
                 fetcherFactory: (opts) => new GitFetcher({ accessToken: opts.accessToken, timeoutMs: SKILL_CREATOR.gitFetchTimeout }),
-                internalBundleLoader: (id) => new MarketplaceBundleRepository(getPool()).load(id),
+                // 내부 번들은 요청자 스코프(본인 소유 또는 shared 게시분)로만 — 무스코프 load 는 IDOR (B9-01)
+                internalBundleLoader: (id) => {
+                    const repo = new MarketplaceBundleRepository(getPool());
+                    return isAdmin ? repo.load(id) : repo.loadForUser(id, userId);
+                },
             });
 
             const result = await service.import({

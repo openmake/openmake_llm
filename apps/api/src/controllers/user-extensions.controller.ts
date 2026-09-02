@@ -27,6 +27,7 @@
  * @see data/repositories/extension-catalog-repository
  */
 import { Router, Request } from 'express';
+import { isAdminRole } from '../data/user-manager';
 import { z } from 'zod';
 import { requireAuth, requireAdmin } from '../auth/middleware';
 import { validate } from '../middlewares/validation';
@@ -79,7 +80,7 @@ function toPublic(row: UserExtensionRow) {
 }
 
 /** ExtensionIngestService 조립 (동적 import — update-check/gallery install 공용). */
-async function buildIngestService() {
+async function buildIngestService(scope?: { userId: string; isAdmin: boolean }) {
     const { ExtensionIngestService } = await import('../agents/git-ingest/extension-ingest-service');
     const { GitFetcher } = await import('../agents/git-ingest/git-fetcher');
     const { LLMClient } = await import('../llm/client');
@@ -89,8 +90,12 @@ async function buildIngestService() {
         pool: getPool(),
         llmClientFactory: (model: string) => new LLMClient(model ? { model } : {}),
         fetcherFactory: (opts) => new GitFetcher({ accessToken: opts.accessToken, timeoutMs: SKILL_CREATOR.gitFetchTimeout }),
-        // 갤러리에 게시된 내부 번들(internal://bundle/<id>) 설치 — DB 에서 파일을 읽는다
-        internalBundleLoader: (id) => new MarketplaceBundleRepository(getPool()).load(id),
+        // 갤러리에 게시된 내부 번들(internal://bundle/<id>) 설치 — DB 에서 파일을 읽는다.
+        // scope 가 있으면 요청자 스코프(본인 소유 또는 shared 게시분)로만 읽는다 (B9-01 심층방어)
+        internalBundleLoader: (id) => {
+            const repo = new MarketplaceBundleRepository(getPool());
+            return scope && !scope.isAdmin ? repo.loadForUser(id, scope.userId) : repo.load(id);
+        },
     });
 }
 
@@ -146,7 +151,7 @@ export function createUserExtensionsController(): Router {
             if (!shared) { res.status(404).json(notFound('공유 확장 없음')); return; }
 
             const body = req.body as z.infer<typeof galleryInstallSchema>;
-            const service = await buildIngestService();
+            const service = await buildIngestService({ userId, isAdmin: isAdminRole(req.user?.role) });
             // 설치자 본인 계정으로 동일 소스 ingest 재실행 — 구성요소는 본인 소유 draft 로 생성
             const result = await service.import({
                 userId,
@@ -344,7 +349,7 @@ export function createUserExtensionsController(): Router {
             const row = await repo.getByIdForUser(req.params.id, userId, false);
             if (!row || row.status !== 'active') { res.status(404).json(notFound('확장 없음')); return; }
 
-            const service = await buildIngestService();
+            const service = await buildIngestService({ userId, isAdmin: isAdminRole(req.user?.role) });
             const body = req.body as z.infer<typeof updateCheckSchema>;
             const result = await service.checkForUpdate({
                 sourceUrl: row.source_url,
