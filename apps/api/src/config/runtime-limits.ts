@@ -368,6 +368,12 @@ export const EXTERNAL_PROVIDER_THROTTLE = {
     RETRY_429_MAX_MS: parseInt(process.env.EXTERNAL_PROVIDER_RETRY_429_MAX_MS || '20000', 10),
     /** 서버 Retry-After 헤더를 존중할 때의 별도 상한(폭주 방지) — 지수 상한(RETRY_429_MAX_MS)보다 크게 */
     RETRY_AFTER_HEADER_MAX_MS: parseInt(process.env.EXTERNAL_PROVIDER_RETRY_AFTER_HEADER_MAX_MS || '90000', 10),
+    /**
+     * 스로틀된 외부 클라이언트의 호출별 타임아웃 배수 — 딥리서치 chatWithAbortTimeout 이 적용.
+     * 무료/개발 키 모델(glm-5.3-flash 등)은 추론이 길어 로컬 기준 120s 청크 타임아웃을 넘긴다
+     * (2026-09-03 실측: 청크 6/6 전부 abort → 합성 중단).
+     */
+    TIMEOUT_MULTIPLIER: parseFloat(process.env.EXTERNAL_PROVIDER_TIMEOUT_MULTIPLIER || '3'),
 } as const;
 
 export const DISCUSSION_CONCURRENCY = {

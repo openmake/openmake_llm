@@ -9,6 +9,7 @@
  */
 
 import type { LLMClient, ChatMessage, ModelOptions, UsageMetrics } from '../../llm';
+import { getExternalClientHints } from '../../llm/external-throttle';
 
 /**
  * 외부 연구 abort signal 과 호출별 timeout 을 결합해 `client.chat` 을 실행한다.
@@ -34,7 +35,10 @@ export async function chatWithAbortTimeout(
     if (externalSignal?.aborted) {
         throw new Error('RESEARCH_ABORTED');
     }
-    const timeoutSignal = AbortSignal.timeout(timeoutMs);
+    // 스로틀된 외부 모델(무료/개발 키, 긴 추론)은 로컬 기준 타임아웃을 배수로 늘린다 (external-throttle 힌트)
+    const hints = getExternalClientHints(client);
+    const effectiveTimeoutMs = hints ? Math.round(timeoutMs * hints.timeoutMultiplier) : timeoutMs;
+    const timeoutSignal = AbortSignal.timeout(effectiveTimeoutMs);
     const signal = externalSignal
         ? AbortSignal.any([externalSignal, timeoutSignal])
         : timeoutSignal;
