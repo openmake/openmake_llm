@@ -43,6 +43,7 @@ const KNOWN_FULLID_PREFIXES: readonly string[] = [
     'ollama-cloud',
     'nvidia',
     'hasa',
+    'bai',
 ];
 
 export interface ProviderGateInput {
