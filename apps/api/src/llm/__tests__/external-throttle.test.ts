@@ -107,3 +107,15 @@ describe('ExternalClientHints', () => {
         expect(getExternalClientHints(throttleExternalClient(raw, 'local-llm'))).toBeNull();
     });
 });
+
+describe('externalClientTiming', () => {
+    it('LLM_TIMEOUT × 배수, maxRetries 0', () => {
+        const { externalClientTiming } = require('../external-throttle') as typeof import('../external-throttle');
+        const mutable2 = EXTERNAL_PROVIDER_THROTTLE as unknown as Record<string, unknown>;
+        const orig = EXTERNAL_PROVIDER_THROTTLE.TIMEOUT_MULTIPLIER;
+        Object.assign(mutable2, { TIMEOUT_MULTIPLIER: 6 });
+        try {
+            expect(externalClientTiming(120000)).toEqual({ timeout: 720000, maxRetries: 0 });
+        } finally { Object.assign(mutable2, { TIMEOUT_MULTIPLIER: orig }); }
+    });
+});

@@ -374,6 +374,8 @@ export const EXTERNAL_PROVIDER_THROTTLE = {
      * (2026-09-03 실측: 청크 6/6 전부 abort → 합성 중단).
      */
     TIMEOUT_MULTIPLIER: parseFloat(process.env.EXTERNAL_PROVIDER_TIMEOUT_MULTIPLIER || '3'),
+    /** 배수를 곱할 기준 타임아웃 — 호출측이 넘긴 값이 유효하지 않을 때의 폴백 (LLM_TIMEOUT 과 동일 기본) */
+    BASE_TIMEOUT_FALLBACK_MS: parseInt(process.env.LLM_TIMEOUT || '120000', 10),
 } as const;
 
 export const DISCUSSION_CONCURRENCY = {

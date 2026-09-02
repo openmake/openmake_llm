@@ -24,6 +24,8 @@ export interface LLMConfig {
     model: string;
     /** HTTP 요청 타임아웃 (밀리초) */
     timeout: number;
+    /** OpenAI SDK 자체 재시도 횟수 (미지정=SDK 기본 2). 외부 스로틀 클라이언트는 0 — 429 는 external-throttle 이, 타임아웃은 재시도하지 않는다 */
+    maxRetries?: number;
     /** 요청 사용자 ID — per-user 토큰 쿼터 enforcement 용 (미설정 시 enforcement skip) */
     userId?: string;
     /**
