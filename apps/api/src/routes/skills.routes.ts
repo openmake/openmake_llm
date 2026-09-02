@@ -502,13 +502,13 @@ router.put('/:skillId', requireAuth, validate(updateSkillSchema), asyncHandler(a
     const { skillId } = req.params;
     const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
 
-    // 소유권 검증: 본인이 만든 스킬 또는 시스템 스킬 수정 가능
+    // 소유권 검증
     const skill = await getSkillManager().getSkillById(skillId);
     if (!skill) {
         res.status(404).json(notFound('스킬'));
         return;
     }
-    // 시스템 스킬(createdBy=null)은 누구나 수정 가능, 사용자 스킬은 소유자만 수정 가능
+    // 사용자 스킬은 소유자만 — 시스템 스킬(createdBy=null)은 repo 계층에서 관리자 한정 (assertSkillMutationAllowed)
     if (skill.createdBy) {
         assertResourceOwnerOrAdmin(
             String(skill.createdBy),
@@ -538,13 +538,13 @@ router.delete('/:skillId', requireAuth, asyncHandler(async (req: Request, res: R
     const { skillId } = req.params;
     const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
 
-    // 소유권 검증: 본인이 만든 스킬 또는 시스템 스킬 삭제 가능
+    // 소유권 검증
     const skill = await getSkillManager().getSkillById(skillId);
     if (!skill) {
         res.status(404).json(notFound('스킬'));
         return;
     }
-    // 시스템 스킬(createdBy=null)은 누구나 삭제 가능, 사용자 스킬은 소유자만 삭제 가능
+    // 사용자 스킬은 소유자만 — 시스템 스킬(createdBy=null)은 repo 계층에서 관리자 한정 (assertSkillMutationAllowed)
     if (skill.createdBy) {
         assertResourceOwnerOrAdmin(
             String(skill.createdBy),

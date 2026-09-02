@@ -13,6 +13,7 @@ import { createLogger } from '../../utils/logger';
 import { upsertSkillManifest, SKILL_VERSION_LATEST_ORDER_SQL, type SkillManifestRow } from './skill-manifest-sync';
 import { BaseRepository, QueryParam } from './base-repository';
 import { assertResourceOwnerOrAdmin } from '../../auth/ownership';
+import { assertSkillMutationAllowed } from './skill-authz';
 import { rowToSkill } from './skill-row-mapper';
 import { buildDraftQuery } from './skill-draft-query';
 import { SkillAssignmentRepository } from './skill-assignment-repository';
@@ -120,6 +121,7 @@ export interface ActorContext {
     userRole: string;
 }
 
+
 export class SkillRepository extends BaseRepository {
     /** agent_skills ↔ skill_manifests 동기화 (fail-soft — 스킬 행은 이미 커밋됨) */
     private async syncManifest(row: SkillManifestRow): Promise<void> {
@@ -185,9 +187,10 @@ export class SkillRepository extends BaseRepository {
             return null;
         }
 
-        // 소유권 검증: 사용자 스킬(createdBy 존재)이면 소유자 또는 관리자만 수정 가능
-        if (actor && existing.createdBy) {
-            assertResourceOwnerOrAdmin(existing.createdBy, actor.userId, actor.userRole);
+        // 소유권 검증: 사용자 스킬은 소유자/관리자, 시스템 스킬(createdBy NULL)은 관리자만.
+        // skill_manifests.prompt_md 가 전 사용자 프롬프트 주입 SoT 라 시스템 스킬 본문 변경은 admin 한정
+        if (actor) {
+            assertSkillMutationAllowed(existing.createdBy, actor);
         }
 
         const now = new Date();
@@ -233,11 +236,11 @@ export class SkillRepository extends BaseRepository {
      * @param actor - (선택) 요청자 컨텍스트 (userId + userRole)
      */
     async deleteSkill(id: string, actor?: ActorContext): Promise<boolean> {
-        // 소유권 검증
+        // 소유권 검증 (updateSkill 과 동일 규칙 — 시스템 스킬 삭제는 관리자만)
         if (actor) {
             const existing = await this.getSkillById(id);
-            if (existing && existing.createdBy) {
-                assertResourceOwnerOrAdmin(existing.createdBy, actor.userId, actor.userRole);
+            if (existing) {
+                assertSkillMutationAllowed(existing.createdBy, actor);
             }
         }
 

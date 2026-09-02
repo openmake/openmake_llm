@@ -17,7 +17,7 @@ import { getCustomAgentBuilder } from '../agents/custom-builder';
 import { success, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { getSkillManager } from '../agents/skill-manager';
-import { requireAuth } from '../auth';
+import { requireAuth, requireAdmin } from '../auth';
 import { unauthorized } from '../utils/api-response';
 import { validate } from '../middlewares/validation';
 import {
@@ -213,9 +213,11 @@ router.get('/:agentId/skills', requireAuth, asyncHandler(async (req: Request, re
 
 /**
  * POST /api/agents/:agentId/skills/:skillId
- * 에이전트에 스킬 연결
+ * 에이전트에 스킬 연결 — 공유(산업) 에이전트 배정은 관리자만 (2026-09-02 보안 리뷰 H2:
+ * 종전엔 아무 인증 사용자가 자기 스킬을 공유 에이전트에 배정해 전 사용자 프롬프트에 주입 가능했다).
+ * 개인 배정은 /api/agents/skills/:skillId/user-assign 을 쓴다.
  */
-router.post('/:agentId/skills/:skillId', requireAuth, validate(assignSkillSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post('/:agentId/skills/:skillId', requireAuth, requireAdmin, validate(assignSkillSchema), asyncHandler(async (req: Request, res: Response) => {
     const { agentId, skillId } = req.params;
     // status 가드: 활성 스킬만 할당 허용 (draft/archived 차단)
     const skill = await getSkillManager().getSkillById(skillId);
@@ -236,7 +238,7 @@ router.post('/:agentId/skills/:skillId', requireAuth, validate(assignSkillSchema
  * DELETE /api/agents/:agentId/skills/:skillId
  * 에이전트에서 스킬 해제
  */
-router.delete('/:agentId/skills/:skillId', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+router.delete('/:agentId/skills/:skillId', requireAuth, requireAdmin, asyncHandler(async (req: Request, res: Response) => {
     const { agentId, skillId } = req.params;
     await getSkillManager().removeSkillFromAgent(agentId, skillId);
     res.json(success({ removed: true }));
