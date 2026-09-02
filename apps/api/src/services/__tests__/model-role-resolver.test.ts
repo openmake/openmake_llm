@@ -131,6 +131,11 @@ describe('resolveRoleClient — 3단 폴백', () => {
             model: 'openai/gpt-5',
             userId: 'u1',
         });
+        // 외부 클라이언트는 SDK 타임아웃 배수·재시도 0 (external-throttle.externalClientTiming, 2026-09-03)
+        const ext = createdClients[createdClients.length - 1];
+        expect(ext.maxRetries).toBe(0);
+        expect(typeof ext.timeout).toBe('number');
+        expect(ext.timeout as number).toBeGreaterThanOrEqual(120000);
     });
 
     it('keyRow.baseUrl 없으면 카탈로그 defaultBaseUrl 사용', async () => {
