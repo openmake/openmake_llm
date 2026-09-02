@@ -354,6 +354,20 @@ export const DISCUSSION_FACTCHECK = {
  */
 export const DISCUSSION_MIN_PROPOSERS = parseInt(process.env.DISCUSSION_MIN_PROPOSERS || '2', 10);
 
+/**
+ * 외부 provider 실행 클라이언트 스로틀 (llm/external-throttle) — 토론·딥리서치·역할 클라이언트가
+ * 외부 BYOK 모델을 병렬 호출할 때 provider 별 동시 요청 수를 제한하고 429 를 지수 백오프로 재시도.
+ * provider 별 동시성은 카탈로그 maxConcurrentRequests 가 우선, 없으면 DEFAULT_CONCURRENCY.
+ */
+export const EXTERNAL_PROVIDER_THROTTLE = {
+    DEFAULT_CONCURRENCY: parseInt(process.env.EXTERNAL_PROVIDER_DEFAULT_CONCURRENCY || '3', 10),
+    /** 429 재시도 횟수 (OpenAI SDK 자체 재시도와 별개 — SDK 는 짧은 백오프라 무료 키 분당 한도를 못 넘김) */
+    RETRY_429_MAX: parseInt(process.env.EXTERNAL_PROVIDER_RETRY_429_MAX || '3', 10),
+    /** 첫 백오프 ms (2^n 지수 + 지터, Retry-After 헤더가 있으면 그 값 우선) */
+    RETRY_429_BASE_MS: parseInt(process.env.EXTERNAL_PROVIDER_RETRY_429_BASE_MS || '2000', 10),
+    RETRY_429_MAX_MS: parseInt(process.env.EXTERNAL_PROVIDER_RETRY_429_MAX_MS || '20000', 10),
+} as const;
+
 export const DISCUSSION_CONCURRENCY = {
     /** 라운드 내 동시 에이전트 LLM 호출 최대 수 */
     MAX_PARALLEL_AGENTS: parseInt(process.env.DISCUSSION_MAX_PARALLEL_AGENTS || '5', 10),
