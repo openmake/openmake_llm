@@ -36,6 +36,20 @@ class Semaphore {
 
 const semaphores = new Map<string, Semaphore>();
 
+/**
+ * 외부 스로틀 클라이언트의 SDK 타이밍 설정 — model-role-resolver 가 createClient 에 펼친다.
+ * - timeout: 로컬 기준 LLM_TIMEOUT × TIMEOUT_MULTIPLIER. 긴 추론 모델(glm-5.3-flash 청크 요약 ~5분)은
+ *   로컬 120s 에 걸린다(2026-09-03 실측: chat-with-timeout 배수를 올려도 SDK 타임아웃 120s×재시도 3회
+ *   = 360s 에서 "Request timed out").
+ * - maxRetries 0: 429 는 이 모듈이 백오프로 처리하고, 타임아웃을 SDK 가 맹목 재시도하면 세마포어 슬롯을
+ *   3배로 점유한다.
+ */
+export function externalClientTiming(baseTimeoutMs: number): { timeout: number; maxRetries: number } {
+    const mult = Math.max(1, EXTERNAL_PROVIDER_THROTTLE.TIMEOUT_MULTIPLIER || 1);
+    const base = Number.isFinite(baseTimeoutMs) && baseTimeoutMs > 0 ? baseTimeoutMs : EXTERNAL_PROVIDER_THROTTLE.BASE_TIMEOUT_FALLBACK_MS;
+    return { timeout: Math.round(base * mult), maxRetries: 0 };
+}
+
 export function providerConcurrency(providerId: string): number {
     const hint = getProviderCatalogEntry(providerId)?.maxConcurrentRequests;
     const n = hint ?? EXTERNAL_PROVIDER_THROTTLE.DEFAULT_CONCURRENCY;

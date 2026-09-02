@@ -66,6 +66,7 @@ export class LLMClient {
             baseURL: this.config.baseUrl,
             apiKey: this.config.apiKey && this.config.apiKey.length > 0 ? this.config.apiKey : 'sk-no-key',
             timeout: this.config.timeout,
+            ...(this.config.maxRetries !== undefined && { maxRetries: this.config.maxRetries }),
         });
         logger.debug(`LLMClient init: chat=${this.config.baseUrl} (model=${this.config.model})`);
     }
