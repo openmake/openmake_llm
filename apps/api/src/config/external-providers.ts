@@ -46,6 +46,13 @@ export interface ExternalProviderCatalogEntry {
      */
     authMethods: ReadonlyArray<'api_key' | 'oauth'>;
     /**
+     * 이 provider 에 동시에 보낼 수 있는 요청 수 힌트 — 토론(전문가 병렬)·딥리서치(fan-out)처럼
+     * 병렬 호출하는 모드가 무료/개발 키의 rate limit(429)에 전멸하지 않도록 실행 클라이언트가
+     * 세마포어로 직렬화한다(llm/external-throttle). 미지정 시 EXTERNAL_PROVIDER_THROTTLE.DEFAULT_CONCURRENCY.
+     * (2026-09-03 라이브 실측: B.AI 무료 키는 동시 2건부터 429, hasa 개발키는 5건 병렬에서 3건 429)
+     */
+    maxConcurrentRequests?: number;
+    /**
      * OAuth 흐름 메타데이터 — authMethods 에 'oauth' 포함 시에만 활용.
      * Phase 1: 모든 entry 에서 undefined.
      */
@@ -175,6 +182,7 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
         id: 'hasa',
         displayName: 'Open AI Service Hub (HASA)',
         sdkType: 'openai-compatible',
+        maxConcurrentRequests: 2,
         defaultBaseUrl: 'https://open.hasa.re.kr/v1',
         keyPrefixPattern: 'sk-',
         validatePath: '/models',
@@ -203,6 +211,7 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
         id: 'bai',
         displayName: 'B.AI',
         sdkType: 'openai-compatible',
+        maxConcurrentRequests: 1,
         defaultBaseUrl: 'https://api.b.ai/v1',
         keyPrefixPattern: 'sk-',
         validatePath: '/models',
