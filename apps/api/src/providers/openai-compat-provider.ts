@@ -252,6 +252,7 @@ export class OpenAICompatProvider implements IProvider {
                 contextWindow: FALLBACK_CONTEXT_WINDOW_TOKENS,
                 outputLimit: FALLBACK_OUTPUT_LIMIT_TOKENS,
                 capabilities: inferCapabilitiesFromModelId(this.id, m.id),
+                capabilitiesInferred: true,
             }));
         } catch (err) {
             logger.warn(`OpenAI 호환 모델 목록 조회 실패 (${this.baseUrl}): ${err}`);
@@ -317,6 +318,7 @@ export class OpenAICompatProvider implements IProvider {
                         vision: inputModalities.includes('image'),
                         thinking: hasReasoningParam || m.pricing?.internal_reasoning != null,
                     },
+                    capabilitiesInferred: false,
                     pricing: {
                         input: promptUsd * PER_TOKEN_TO_PER_MILLION,
                         output: completionUsd * PER_TOKEN_TO_PER_MILLION,

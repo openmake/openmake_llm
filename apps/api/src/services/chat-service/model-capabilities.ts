@@ -47,6 +47,8 @@ type CachedModelEntry = {
     id?: string;
     fullId?: string;
     capabilities?: Partial<ProviderCapabilities>;
+    /** listModels 가 휴리스틱으로 채운 값이면 true (undefined = 레거시 행, 추정으로 간주) */
+    capabilitiesInferred?: boolean;
 };
 
 function fromPartial(
@@ -77,7 +79,10 @@ export async function resolveModelCapabilities(
         return { caps: heuristic, source: 'local' };
     }
 
-    // ② 사용자별 라이브 카탈로그 캐시 (provider API 응답 기반 — 가장 정확)
+    // ② 사용자별 라이브 카탈로그 캐시 — provider 가 **보고한** capability 만 신뢰한다.
+    //    listModels 가 모델 ID 휴리스틱으로 채운 값(capabilitiesInferred, 레거시 행은 undefined)은
+    //    ③ config 실측값보다 못하므로 건너뛴다. (종전엔 추정값이 'catalog' 로 승격돼 B.AI
+    //    qwen3.8-flash 의 vision/thinking 실측 true 를 가렸다 — 2026-09-03)
     if (userId && repo) {
         try {
             const cached = (await repo.getCachedModels(
@@ -86,7 +91,7 @@ export async function resolveModelCapabilities(
             const hit = cached?.find(
                 (m) => m.id === resolved.modelId || m.fullId === resolved.fullId,
             );
-            if (hit?.capabilities) {
+            if (hit?.capabilities && hit.capabilitiesInferred === false) {
                 return { caps: fromPartial(hit.capabilities, heuristic), source: 'catalog' };
             }
         } catch (e) {
@@ -94,7 +99,7 @@ export async function resolveModelCapabilities(
         }
     }
 
-    // ③ 운영자 큐레이션 카탈로그 (config)
+    // ③ 운영자 큐레이션 카탈로그 (config — 실측 기반)
     const entry = getProviderCatalogEntry(resolved.providerId);
     const known = entry?.fallbackModels?.find((m) => m.id === resolved.modelId);
     if (known?.capabilities) {

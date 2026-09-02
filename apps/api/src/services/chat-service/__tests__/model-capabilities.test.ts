@@ -43,13 +43,41 @@ describe('resolveModelCapabilities', () => {
         expect(r.caps).toEqual(HEURISTIC);
     });
 
-    it('라이브 카탈로그 캐시가 있으면 최우선 채택한다 (source=catalog)', async () => {
+    it('provider 가 보고한 라이브 카탈로그 캐시는 최우선 채택한다 (source=catalog)', async () => {
         const repo = makeRepo([
-            { id: 'meta/llama-4-maverick', capabilities: { vision: true, toolCalling: true, streaming: true, thinking: false } },
+            { id: 'meta/llama-4-maverick', capabilitiesInferred: false, capabilities: { vision: true, toolCalling: true, streaming: true, thinking: false } },
         ]);
         const r = await resolveModelCapabilities(makeResolved('nvidia', 'meta/llama-4-maverick'), 'u1', repo);
         expect(r.source).toBe('catalog');
         expect(r.caps.vision).toBe(true); // 휴리스틱은 false 였음
+    });
+
+    it('휴리스틱 추정 캐시(capabilitiesInferred=true)는 config 실측값을 가리지 못한다 (2026-09-03 B.AI)', async () => {
+        // B.AI /models 는 capability 를 안 주므로 listModels 가 휴리스틱(vision/thinking=false)으로 채워 캐시한다.
+        const repo = makeRepo([
+            { id: 'qwen3.8-flash', capabilitiesInferred: true, capabilities: { vision: false, toolCalling: true, streaming: true, thinking: false } },
+        ]);
+        const r = await resolveModelCapabilities(makeResolved('bai', 'qwen3.8-flash'), 'u1', repo);
+        expect(r.source).toBe('config');
+        expect(r.caps.vision).toBe(true);
+        expect(r.caps.thinking).toBe(true);
+    });
+
+    it('레거시 캐시 행(capabilitiesInferred 없음)도 추정으로 간주해 config 를 우선한다', async () => {
+        const repo = makeRepo([
+            { id: 'qwen3.8-flash', capabilities: { vision: false, toolCalling: true, streaming: true, thinking: false } },
+        ]);
+        const r = await resolveModelCapabilities(makeResolved('bai', 'qwen3.8-flash'), 'u1', repo);
+        expect(r.source).toBe('config');
+        expect(r.caps.vision).toBe(true);
+    });
+
+    it('추정 캐시 + config 미등록 모델은 휴리스틱으로 수렴한다', async () => {
+        const repo = makeRepo([
+            { id: 'unknown-model-x', capabilitiesInferred: true, capabilities: { vision: false, toolCalling: true, streaming: true, thinking: false } },
+        ]);
+        const r = await resolveModelCapabilities(makeResolved('bai', 'unknown-model-x'), 'u1', repo);
+        expect(r.source).toBe('heuristic');
     });
 
     it('캐시 미스면 config 카탈로그(fallbackModels)를 쓴다 (source=config)', async () => {
