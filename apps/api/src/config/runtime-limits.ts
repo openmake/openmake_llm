@@ -366,6 +366,8 @@ export const EXTERNAL_PROVIDER_THROTTLE = {
     /** 첫 백오프 ms (2^n 지수 + 지터, Retry-After 헤더가 있으면 그 값 우선) */
     RETRY_429_BASE_MS: parseInt(process.env.EXTERNAL_PROVIDER_RETRY_429_BASE_MS || '2000', 10),
     RETRY_429_MAX_MS: parseInt(process.env.EXTERNAL_PROVIDER_RETRY_429_MAX_MS || '20000', 10),
+    /** 서버 Retry-After 헤더를 존중할 때의 별도 상한(폭주 방지) — 지수 상한(RETRY_429_MAX_MS)보다 크게 */
+    RETRY_AFTER_HEADER_MAX_MS: parseInt(process.env.EXTERNAL_PROVIDER_RETRY_AFTER_HEADER_MAX_MS || '90000', 10),
 } as const;
 
 export const DISCUSSION_CONCURRENCY = {
