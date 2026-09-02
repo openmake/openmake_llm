@@ -258,7 +258,7 @@
     "send": "Send",
     "disclaimer": "OpenMake can make mistakes. Verify important information.",
     "suppressedTag": "(not applied)",
-    "externalLocalModeNotice": "Discussion and Deep Research run on the local model (the selected external model is not used).",
+    "externalModeNotice": "Discussion and Deep Research will run on the selected external model.",
     "toggle": {
       "discussion": "Discussion",
       "thinking": "Thinking",

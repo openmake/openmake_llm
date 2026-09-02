@@ -258,7 +258,7 @@
     "send": "发送",
     "disclaimer": "OpenMake 可能会出错，请核实重要信息。",
     "suppressedTag": "(未应用)",
-    "externalLocalModeNotice": "讨论和深度研究将使用本地模型运行（不会使用所选的外部模型）。",
+    "externalModeNotice": "讨论和深度研究将使用所选的外部模型运行。",
     "toggle": {
       "discussion": "讨论",
       "thinking": "思考",
