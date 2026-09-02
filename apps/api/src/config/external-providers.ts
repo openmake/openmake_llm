@@ -199,6 +199,32 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             { id: 'qwen2.5-vl-72b',       displayName: 'Qwen2.5 VL 72B',       isFree: true, capabilities: { streaming: true, toolCalling: false, vision: true,  thinking: false } },
         ],
     },
+    {
+        id: 'bai',
+        displayName: 'B.AI',
+        sdkType: 'openai-compatible',
+        defaultBaseUrl: 'https://api.b.ai/v1',
+        keyPrefixPattern: 'sk-',
+        validatePath: '/models',
+        enabled: true,
+        sortOrder: 70,
+        helpText:
+            'B.AI (https://docs.b.ai/llmservice/api/) 의 API 키(sk-*)를 입력하세요. OpenAI 호환 API 로 ' +
+            'GPT·Claude·Gemini·DeepSeek·Qwen·GLM 등을 크레딧 과금으로 제공합니다. ' +
+            '아래 목록은 2026-09-02 실측 기준 크레딧 잔액 0 인 키로도 호출되는 무료 모델만 수록했습니다 — ' +
+            '그 외 모델은 예치(deposit)·크레딧이 필요해 403/400 이 납니다. 모델 ID 는 "qwen3.8-flash" 처럼 접두사 없는 형식입니다. ' +
+            '연속 호출 시 429 가 잦으니 병렬 사용은 피하세요.',
+        authMethods: ['api_key'] as const,
+        // 2026-09-02 실측(무료 키·잔액 0): 45개 중 5개만 200. tools 는 5개 전부, vision 은 qwen3.8-flash·
+        // glm-5.3-flash·deepseek-v4-flash-vision-exp 만(32px 이상 이미지), 5개 전부 reasoning_content 반환.
+        fallbackModels: [
+            { id: 'qwen3.8-flash',                displayName: 'Qwen3.8 Flash',                 isFree: true, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: true } },
+            { id: 'glm-5.3-flash',                displayName: 'GLM 5.3 Flash',                 isFree: true, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: true } },
+            { id: 'deepseek-v4-flash',            displayName: 'DeepSeek V4 Flash',             isFree: true, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true } },
+            { id: 'deepseek-v4-flash-vision-exp', displayName: 'DeepSeek V4 Flash Vision (exp)', isFree: true, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: true } },
+            { id: 'hy3',                          displayName: 'Hunyuan 3',                     isFree: true, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true } },
+        ],
+    },
 ] as const;
 
 /**
