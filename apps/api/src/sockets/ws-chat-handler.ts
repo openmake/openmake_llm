@@ -297,7 +297,7 @@ export async function handleChatMessage(
             imageMode: msg.imageMode === true,
             artifactMode: msg.artifactMode === true,
             thinkingMode: msg.thinkingMode === true,
-            thinkingLevel: (msg.thinkingLevel || 'high') as 'low' | 'medium' | 'high',
+            thinkingLevel: (msg.thinkingLevel || 'medium') as 'low' | 'medium' | 'high',
             style: msg.style,
             userAgentId: msg.userAgentId,
             // 이 턴에 발급한 스트리밍 messageId — assistant 행에 남겨 피드백 신호를

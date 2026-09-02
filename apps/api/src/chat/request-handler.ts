@@ -329,7 +329,7 @@ export class ChatRequestHandler {
         //   3. 그 외 → OFF
         const fastPath = detectFastPath(message);
         const mergedThinkingMode = !fastPath.matched && thinkingMode === true;
-        const mergedThinkingLevel = mergedThinkingMode ? (thinkingLevel || 'high') : undefined;
+        const mergedThinkingLevel = mergedThinkingMode ? (thinkingLevel || 'medium') : undefined;
         if (fastPath.matched && thinkingMode === true) {
             log.info(`[RequestHandler] Fast-path 감지(${fastPath.reason}) — 사용자 thinking 토글 무시하고 OFF`);
         }

@@ -49,6 +49,9 @@ export async function semanticCompact(toolName: string, content: string): Promis
                 temperature: LLM_TEMPERATURES.SEMANTIC_COMPACTION,
                 num_predict: TOOL_RESULT_COMPACTION.SEMANTIC_MAX_TOKENS,
             },
+            undefined,
+            // 요약 예산이 작아(SEMANTIC_MAX_TOKENS) thinking 이 켜지면 본문이 비어 나온다 — 명시 OFF
+            { think: false },
         );
 
         const summary = result.content?.trim();

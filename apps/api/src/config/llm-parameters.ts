@@ -79,6 +79,37 @@ export const LLM_TEMPERATURES = {
     THINKING_DEFAULT: Number(process.env.LLM_TEMP_THINKING_DEFAULT) || 0.5,
 } as const;
 
+/**
+ * 로컬 모델 샘플링 프리셋 — thinking ON/OFF 별 공식 권장값 (Qwen3.8 모델 카드 기준, 2026-09-03).
+ * llm/sampling-preset.ts 가 "호출자가 샘플링을 지정하지 않은 로컬 요청"에만 채운다.
+ *   THINKING : T 1.0 · top_p 0.95 · top_k 20 · presence 0.0 · repetition 1.0
+ *   INSTRUCT : T 0.7 · top_p 0.80 · top_k 20 · presence 1.5 · repetition 1.0
+ * repetition 1.0 은 서버 `--override-generation-config` 의 1.05 를 요청 단위로 되돌린다 —
+ * 비추론 모드의 반복 억제는 공식 권장대로 presence_penalty 가 맡는다.
+ * env: LLM_LOCAL_SAMPLING_PRESET_ENABLED(기본 true), LLM_SAMPLING_{THINKING,INSTRUCT}_{TEMP,TOP_P,TOP_K,PRESENCE,REPETITION}
+ */
+const samplingNum = (key: string, fallback: number): number => {
+    const v = Number(process.env[key]);
+    return Number.isFinite(v) && process.env[key] !== undefined && process.env[key] !== '' ? v : fallback;
+};
+export const LOCAL_SAMPLING_PRESETS = {
+    ENABLED: process.env.LLM_LOCAL_SAMPLING_PRESET_ENABLED !== 'false',
+    THINKING: {
+        temperature: samplingNum('LLM_SAMPLING_THINKING_TEMP', 1.0),
+        top_p: samplingNum('LLM_SAMPLING_THINKING_TOP_P', 0.95),
+        top_k: samplingNum('LLM_SAMPLING_THINKING_TOP_K', 20),
+        presence_penalty: samplingNum('LLM_SAMPLING_THINKING_PRESENCE', 0.0),
+        repeat_penalty: samplingNum('LLM_SAMPLING_THINKING_REPETITION', 1.0),
+    },
+    INSTRUCT: {
+        temperature: samplingNum('LLM_SAMPLING_INSTRUCT_TEMP', 0.7),
+        top_p: samplingNum('LLM_SAMPLING_INSTRUCT_TOP_P', 0.8),
+        top_k: samplingNum('LLM_SAMPLING_INSTRUCT_TOP_K', 20),
+        presence_penalty: samplingNum('LLM_SAMPLING_INSTRUCT_PRESENCE', 1.5),
+        repeat_penalty: samplingNum('LLM_SAMPLING_INSTRUCT_REPETITION', 1.0),
+    },
+} as const;
+
 // ============================================
 // Top-p / 기타 샘플링 파라미터
 // ============================================

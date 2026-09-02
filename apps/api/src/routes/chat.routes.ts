@@ -308,7 +308,8 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
                 // finish_reason=length 로 잘려 JSON 파싱이 실패한다(실측 2026-08-24).
                 { num_predict: STRUCTURED_MAX_OUTPUT_TOKENS },
                 undefined,
-                { format, signal: abortController.signal },
+                // 구조화 출력은 thinking 을 명시적으로 끈다 — 추론 토큰이 strict 스키마 출력 예산을 잠식하지 않게.
+                { format, signal: abortController.signal, think: false },
             );
             return { text: result.content ?? '', truncated: result.metrics?.finish_reason === 'length' };
         };
