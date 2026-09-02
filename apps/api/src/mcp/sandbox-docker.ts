@@ -47,7 +47,11 @@ export interface SandboxResult {
     sandboxed: boolean;
     /**
      * sandboxed=true 일 때 docker 프로세스에 넘길 env — 컨테이너는 `-e KEY`(이름만) 로
-     * 여기서 값을 상속받는다. 값이 인자에 없으므로 `ps` 에 비밀이 노출되지 않는다.
+     * 여기서 값을 상속받는다. env 값은 인자에 없으므로 `ps` 에 노출되지 않는다.
+     * ⚠️ 예외: 서버 config 가 `{{env.KEY}}` 를 command/args 에 치환해 쓰면(lifecycle-supervisor
+     * substituteEnvPlaceholders — 카탈로그 server-postgres 템플릿의 DATABASE_URL 위치 인자) 그 값은
+     * `docker run` argv 에 실려 같은 호스트의 다른 로컬 계정이 볼 수 있다(2026-09-02 보안 리뷰 B5-01).
+     * 위치 인자로만 비밀을 받는 서버에 한정된, 문서화된 트레이드오프.
      */
     env?: Record<string, string>;
 }

@@ -7,6 +7,7 @@
  * @module data/repositories/marketplace-bundle-repository
  */
 import type { Pool } from 'pg';
+import { INTERNAL_BUNDLE_PREFIX } from '../../agents/git-ingest/internal-bundle-fetcher';
 import { createHash, randomUUID } from 'crypto';
 import type { LoadedBundle } from '../../agents/git-ingest/internal-bundle-fetcher';
 
@@ -62,12 +63,34 @@ export class MarketplaceBundleRepository {
         const r = await this.pool.query<{ sha: string; files: BundleFileRecord[] }>(
             `SELECT sha, files FROM marketplace_bundles WHERE id = $1`, [id]);
         const row = r.rows[0];
-        if (!row) return null;
+        return row ? this.toLoadedBundle(row) : null;
+    }
+
+    private toLoadedBundle(row: { sha: string; files: BundleFileRecord[] }): LoadedBundle {
         const files = new Map<string, Uint8Array>();
         for (const f of row.files) {
             files.set(f.path, f.encoding === 'base64' ? new Uint8Array(Buffer.from(f.content, 'base64')) : new Uint8Array(Buffer.from(f.content, 'utf8')));
         }
         return { sha: row.sha, files };
+    }
+
+    /**
+     * 요청자 스코프 로더 — 본인 소유이거나 갤러리에 shared 로 게시된(user_extensions.source_url 이
+     * 이 번들을 가리키고 visibility='shared'·active) 번들만 돌려준다. 2026-09-02 보안 리뷰 B9-01:
+     * 채팅 도구 import_extension_from_git 가 internal://bundle/<id> 를 무스코프 load 로 설치해
+     * 타인의 private 번들 내용을 id 만 알면 가져올 수 있었다(갤러리 경로만 getInstallableById 게이트).
+     */
+    async loadForUser(id: string, userId: string): Promise<LoadedBundle | null> {
+        const r = await this.pool.query<{ sha: string; files: BundleFileRecord[] }>(
+            `SELECT b.sha, b.files FROM marketplace_bundles b
+              WHERE b.id = $1
+                AND (b.owner_id = $2
+                     OR EXISTS (SELECT 1 FROM user_extensions ue
+                                 WHERE ue.source_url = $3 || b.id
+                                   AND ue.visibility = 'shared' AND ue.status = 'active'))`,
+            [id, userId, INTERNAL_BUNDLE_PREFIX]);
+        const row = r.rows[0];
+        return row ? this.toLoadedBundle(row) : null;
     }
 
     async getByOwnerAndName(ownerId: string, name: string): Promise<MarketplaceBundleRow | null> {

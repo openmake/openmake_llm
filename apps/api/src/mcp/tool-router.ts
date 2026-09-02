@@ -29,6 +29,7 @@
  */
 
 import type { MCPTool, MCPToolResult, ExternalToolEntry } from './types';
+import { isToolRestrictedForRole } from './tool-role-gate';
 import { MCP_NAMESPACE_SEPARATOR } from './types';
 import type { MCPToolDefinition } from './types';
 import { builtInTools } from './tools';
@@ -275,6 +276,13 @@ export class ToolRouter {
                     `도구 "${name}" 은 반복 실패로 일시 비활성화되었습니다. 잠시 후 자동으로 재시도되며, 지금은 다른 도구나 방법을 사용하세요.`,
                     { record: false },
                 );
+            }
+
+            // 역할 게이트 2차 방어 — 노출 필터(filterRestrictedTools)에서 빠진 고위험 서버 도구를
+            // 프롬프트 인젝션·REST 직접 호출로 지목해도 실행하지 않는다(B7-01). context 없는
+            // 호출은 서버 내부 신뢰 경계라 종전대로 통과.
+            if (context && isToolRestrictedForRole(name, context.role)) {
+                return fail(`도구 "${name}" 은 현재 역할(${context.role})로 실행할 수 없습니다.`, { record: false });
             }
 
             // 외부 도구 출력 크기 제한(MAX_OUTPUT_SIZE, 1MB) — user-pool(1a)·전역(1b) 두 경로 공통.
