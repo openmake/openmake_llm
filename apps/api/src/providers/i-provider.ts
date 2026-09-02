@@ -60,6 +60,14 @@ export interface ProviderModel {
     outputLimit: number;
     /** 모델별 지원 능력 */
     capabilities: ProviderCapabilities;
+    /**
+     * capabilities 가 provider 응답이 아니라 모델 ID 휴리스틱(inferCapabilitiesFromModelId)으로
+     * 추정된 값이면 true. 라이브 카탈로그 캐시에 함께 저장되어, 실행 시 capability 해석이
+     * 추정값을 "provider 가 보고한 값"으로 오신뢰하지 않게 한다(2026-09-03 B.AI 실측 —
+     * 추정 vision/thinking=false 가 config 실측값을 가려 이미지 요청 거절·추론 비활성).
+     * undefined 는 레거시 캐시 행 — 추정으로 간주한다.
+     */
+    capabilitiesInferred?: boolean;
     /** 1M 토큰당 USD 단가 (선택, cloud provider 전용) */
     pricing?: { input: number; output: number };
     /**
