@@ -39,7 +39,7 @@ describe('MODEL_POOL_CONFIG', () => {
         jest.resetModules();
         const { MODEL_POOL_CONFIG } = require('../config/model-pool');
         expect(MODEL_POOL_CONFIG.enabled).toBe(true);
-        expect(MODEL_POOL_CONFIG.defaultModel).toBe('qwen3.6-35b-a3b');
+        expect(MODEL_POOL_CONFIG.defaultModel).toBe('qwen3.8-27b');
         expect(MODEL_POOL_CONFIG.defaultCtx).toBe(262144);
         expect(MODEL_POOL_CONFIG.routingMaxTokensDefault).toBe(16384);
         expect(MODEL_POOL_CONFIG.minOutputTokens).toBe(4096);
@@ -208,7 +208,7 @@ describe('reduceToFit', () => {
             { role: 'user' as const, content: '가'.repeat(150_000) },   // ~157K tokens (최근 보존)
         ];
         const decision = reduceToFit(messages, { num_predict: 8192 });
-        expect(decision.model).toBe('qwen3.6-35b-a3b');
+        expect(decision.model).toBe('qwen3.8-27b');
         expect(decision.source).toBe('auto_trimmed');
         expect(decision.droppedMessages).toBeGreaterThan(0);
         expect(decision.adjustedMaxTokens).toBe(8192);
@@ -218,7 +218,7 @@ describe('reduceToFit', () => {
         // 작은 input + 거대 num_predict → truncate 무효, 출력 토큰만 축소
         const messages = [{ role: 'user' as const, content: 'hi' }];
         const decision = reduceToFit(messages, { num_predict: 250_000 });
-        expect(decision.model).toBe('qwen3.6-35b-a3b');
+        expect(decision.model).toBe('qwen3.8-27b');
         expect(decision.source).toBe('auto_trimmed_reduced');
         expect(decision.adjustedMaxTokens).toBeLessThan(250_000);
         expect(decision.adjustedMaxTokens).toBeGreaterThanOrEqual(4096);
@@ -248,7 +248,7 @@ describe('selectModelByCapacity', () => {
             [{ role: 'user' as const, content: 'hello' }],
             { num_predict: 1000 },
         );
-        expect(decision.model).toBe('qwen3.6-35b-a3b');
+        expect(decision.model).toBe('qwen3.8-27b');
         expect(decision.source).toBe('auto');
     });
 
@@ -260,7 +260,7 @@ describe('selectModelByCapacity', () => {
             ],
             { num_predict: 8192 },
         );
-        expect(decision.model).toBe('qwen3.6-35b-a3b');
+        expect(decision.model).toBe('qwen3.8-27b');
         expect(decision.source).toMatch(/auto_trimmed/);
     });
 
@@ -269,7 +269,7 @@ describe('selectModelByCapacity', () => {
             [{ role: 'user' as const, content: 'hi' }],
             { num_predict: 250_000 },
         );
-        expect(decision.model).toBe('qwen3.6-35b-a3b');
+        expect(decision.model).toBe('qwen3.8-27b');
         expect(decision.source).toBe('auto_trimmed_reduced');
     });
 

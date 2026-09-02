@@ -58,7 +58,9 @@ export interface LocalModelEntry {
 }
 
 /**
- * 기본 카탈로그 — 로컬 채팅 모델은 실질적으로 **단일** (qwen3.6-35b-a3b, 262K).
+ * 기본 카탈로그 — 로컬 채팅 모델은 실질적으로 **단일** (qwen3.8-27b, 262K).
+ * 2026-09-02: DGX :8002 가 qwen3.8-27b-fp8 로 교체됨(`--served-model-name qwen3.8-27b qwen3.6-35b-a3b`
+ * — 구 이름은 같은 가중치를 가리키는 호환 alias 라 옛 대화의 model id 도 계속 라우팅된다).
  * UI 표시명은 실제 모델명을 그대로 사용한다 (2026-07-04: 구 'Local LLM' 브랜딩 표기는
  * 멀티 provider 모델 칩/2단계 picker 도입으로 "어느 모델인지" 를 가려서 폐기).
  *
@@ -73,9 +75,9 @@ export interface LocalModelEntry {
  */
 const DEFAULT_LOCAL_MODELS: LocalModelEntry[] = [
     {
-        id: 'qwen3.6-35b-a3b',
-        displayName: 'qwen3.6-35b-a3b',
-        description: '로컬 vLLM (Qwen 3.6, 35B-A3B)',
+        id: 'qwen3.8-27b',
+        displayName: 'qwen3.8-27b',
+        description: '로컬 vLLM (Qwen 3.8, 27B dense FP8)',
         role: 'chat',
         contextLength: 262144,
     },

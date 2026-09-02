@@ -30,7 +30,7 @@ function parseBoolEnv(key: string, defaultValue: boolean): boolean {
 }
 
 const enabled = parseBoolEnv('LLM_POOL_ENABLED', true);
-const defaultModel = process.env.LLM_POOL_DEFAULT_MODEL ?? 'qwen3.6-35b-a3b';
+const defaultModel = process.env.LLM_POOL_DEFAULT_MODEL ?? 'qwen3.8-27b';
 const defaultCtx = parseIntEnv('LLM_POOL_DEFAULT_CTX', 262144);
 /** env 로 **명시**됐는지 — 명시값은 프로브 실측보다 우선한다(운영자 의도 존중). */
 const ctxExplicit = process.env.LLM_POOL_DEFAULT_CTX !== undefined && process.env.LLM_POOL_DEFAULT_CTX !== '';

@@ -67,7 +67,7 @@ const ADMIN_USERNAME = env('OMK_ADMIN_USERNAME', 'admin');
 const ADMIN_EMAIL = env('OMK_ADMIN_EMAIL', 'admin@openmake.local');
 const LLM_BASE_URL = env('OMK_LLM_BASE_URL', 'http://localhost:4000');
 const LLM_API_KEY = env('OMK_LLM_API_KEY', 'sk-no-key');
-const LLM_MODEL = env('OMK_LLM_MODEL', 'qwen3.6-35b-a3b');
+const LLM_MODEL = env('OMK_LLM_MODEL', 'qwen3.8-27b');
 
 const PG_USER = 'openmake';
 const PG_DB = 'openmake_llm';
