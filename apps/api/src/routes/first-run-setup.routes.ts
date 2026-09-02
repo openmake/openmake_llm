@@ -17,6 +17,8 @@ import { validate } from '../middlewares/validation';
 import { asyncHandler } from '../utils/error-handler';
 import { success, badRequest, forbidden } from '../utils/api-response';
 import { getUserManager } from '../data/user-manager';
+import { withAdvisoryLock } from '../data/advisory-lock';
+import { FIRST_RUN_SETUP_ADVISORY_LOCK_KEY } from '../config/constants';
 import { getSystemSettingsService } from '../services/system-settings-service';
 import { SETTING_DEFS_BY_KEY } from '../config/system-settings-registry';
 import { getAuditService } from '../services/AuditService';
@@ -55,6 +57,12 @@ firstRunSetupRouter.get('/status', asyncHandler(async (_req: Request, res: Respo
 }));
 
 firstRunSetupRouter.post('/', validate(setupSchema), asyncHandler(async (req: Request, res: Response) => {
+    // admin 존재 확인 → 생성 사이를 advisory lock 으로 직렬화 — 동시 요청이 각각 "admin 없음"을 보고
+    // 복수 관리자를 만드는 경합 차단 (2026-09-02 보안 리뷰 L5). 세션 락이라 전용 client 로 잡는다.
+    await withAdvisoryLock(FIRST_RUN_SETUP_ADVISORY_LOCK_KEY, () => runSetup(req, res));
+}));
+
+async function runSetup(req: Request, res: Response): Promise<void> {
     if (await adminExists()) {
         res.status(403).json(forbidden('셋업이 이미 완료되었습니다 (관리자 계정 존재)'));
         return;
@@ -111,4 +119,4 @@ firstRunSetupRouter.post('/', validate(setupSchema), asyncHandler(async (req: Re
 
     logger.info(`첫 실행 셋업 완료 — 관리자 ${body.adminEmail} 생성`);
     res.json(success({ completed: true }));
-}));
+}

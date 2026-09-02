@@ -9,6 +9,7 @@
  * @module controllers/admin-alerts.controller
  */
 import { Request, Response } from 'express';
+import { csvCell } from '../utils/csv';
 import { success, badRequest, internalError } from '../utils/api-response';
 import { createLogger } from '../utils/logger';
 
@@ -252,12 +253,8 @@ export async function exportAlertHistoryCsv(req: Request, res: Response): Promis
             [...params, maxRows],
         );
 
-        // RFC 4180: 모든 필드를 "" 로 감싸고 내부 " 를 "" 로 escape
-        const esc = (v: unknown): string => {
-            if (v === null || v === undefined) return '""';
-            const s = typeof v === 'string' ? v : (v instanceof Date ? v.toISOString() : JSON.stringify(v));
-            return `"${s.replace(/"/g, '""')}"`;
-        };
+        // RFC 4180 + 수식 인젝션 무력화 (utils/csv)
+        const esc = csvCell;
 
         const header = ['id', 'created_at', 'type', 'severity', 'title', 'message', 'acknowledged', 'acknowledged_by', 'acknowledged_at', 'data'].join(',');
         const rows = (r.rows as Array<Record<string, unknown>>).map(row => [

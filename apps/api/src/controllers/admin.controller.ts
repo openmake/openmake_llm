@@ -6,6 +6,7 @@
  */
 
 import { Request, Response, Router } from 'express';
+import { csvCell } from '../utils/csv';
 import { getUserManager, UserRole, USER_ROLES, isUserRole } from '../data/user-manager';
 import { getPool } from '../data/models/unified-database';
 import { requireAuth, requireAdmin } from '../auth';
@@ -217,10 +218,7 @@ export class AdminController {
                 const csvLines = [
                     headers.join(','),
                     ...result.rows.map((row: Record<string, unknown>) =>
-                        headers.map(h => {
-                            const val = String(row[h] ?? '').replace(/"/g, '""');
-                            return `"${val}"`;
-                        }).join(',')
+                        headers.map(h => csvCell(row[h] instanceof Date ? row[h] : (row[h] === null || row[h] === undefined ? '' : String(row[h])))).join(',')
                     )
                 ];
                 res.setHeader('Content-Type', 'text/csv; charset=utf-8');

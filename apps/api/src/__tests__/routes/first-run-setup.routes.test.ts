@@ -16,6 +16,9 @@ jest.mock('../../data/user-manager', () => ({
 }));
 
 const settingsUpdate = jest.fn(async () => ({ requiresRestart: [] }));
+// advisory lock 은 DB 세션이 필요하므로 단위 테스트에선 통과시키고 호출 사실만 기록
+const withAdvisoryLock = jest.fn(async (_key: number, fn: () => Promise<unknown>) => fn());
+jest.mock('../../data/advisory-lock', () => ({ withAdvisoryLock: (k: number, f: () => Promise<unknown>) => withAdvisoryLock(k, f) }));
 jest.mock('../../services/system-settings-service', () => ({
     getSystemSettingsService: () => ({ update: settingsUpdate }),
 }));

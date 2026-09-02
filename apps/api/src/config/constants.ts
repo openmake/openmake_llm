@@ -302,3 +302,9 @@ export const SKILL_USAGE_LOG = {
 // ============================================
 
 // 모델 식별은 `getModelForRole('chat')` 또는 `getConfig().llmDefaultModel` 사용.
+
+/**
+ * 첫 실행 셋업(POST /api/setup) 의 admin 확인→생성 직렬화용 pg advisory lock 키.
+ * 마이그레이션 락(runner.ts MIGRATION_ADVISORY_LOCK_KEY 0x6f6d6c6d)과 겹치지 않는 값.
+ */
+export const FIRST_RUN_SETUP_ADVISORY_LOCK_KEY = 0x6f6d7365;
