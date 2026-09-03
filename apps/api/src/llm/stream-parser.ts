@@ -29,6 +29,7 @@ import { PseudoToolCallGate, stripPseudoToolCalls } from './pseudo-tool-call-par
 import { createLogger } from '../utils/logger';
 import { capPromptImages } from './prompt-image-cap';
 import { LLM_PROMPT_IMAGE_LIMITS } from '../config/runtime-limits';
+import { LOCAL_PRESERVE_THINKING_ENABLED } from '../config/llm-parameters';
 
 const log = createLogger('StreamParser');
 
@@ -107,7 +108,7 @@ export function toResponseFormat(f: FormatOption | undefined): Record<string, un
     };
 }
 
-function toOpenAIMessages(messages: ChatMessage[]): unknown[] {
+export function toOpenAIMessages(messages: ChatMessage[]): unknown[] {
     // 로컬 vLLM `--limit-mm-per-prompt` 페어 — history 포함 총량을 상한에 맞춘다(초과 시 400).
     const { messages: capped } = capPromptImages(messages, LLM_PROMPT_IMAGE_LIMITS.MAX_PER_REQUEST);
     return capped.map((m, idx) => {
@@ -131,10 +132,14 @@ function toOpenAIMessages(messages: ChatMessage[]): unknown[] {
             }
             return { role: m.role, content: blocks };
         }
+        // 도구 루프 reasoning 보존 — Qwen3.8 template(preserve_thinking) 이 다음 턴에 재주입한다.
+        const reasoning = LOCAL_PRESERVE_THINKING_ENABLED && m.role === 'assistant' && m.thinking
+            ? { reasoning_content: m.thinking } : {};
         if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) {
             return {
                 role: 'assistant',
                 content: m.content || '',
+                ...reasoning,
                 tool_calls: m.tool_calls.map((tc, i) => ({
                     // 진짜 id (vLLM 발급) 우선, 누락 시에만 합성 fallback.
                     id: tc.id ?? `call_${tc.function.name}_${i}`,
@@ -146,7 +151,7 @@ function toOpenAIMessages(messages: ChatMessage[]): unknown[] {
                 })),
             };
         }
-        return { role: m.role, content: m.content };
+        return { role: m.role, content: m.content, ...reasoning };
     });
 }
 
