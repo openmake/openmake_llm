@@ -271,6 +271,8 @@ export async function runExternalStream(
             messages.push({
                 role: 'assistant',
                 content: result.content || '',
+                // 직전 추론을 다음 턴에 보존 — 로컬 wire(toOpenAIMessages)만 reasoning_content 로 싣는다.
+                ...(result.thinking ? { thinking: result.thinking } : {}),
                 tool_calls: result.toolCalls.map((tc) => ({
                     type: 'function' as const,
                     id: tc.id,

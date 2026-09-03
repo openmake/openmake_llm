@@ -232,7 +232,8 @@ export class LocalLLMProvider implements IProvider {
 
             // tool_calls 정규화: ToolCall (function-shape) → IProvider {id, name, args}
             const toolCalls = (result.tool_calls ?? []).map((tc: ToolCall, idx: number) => ({
-                id: `local-llm-tool-${Date.now()}-${idx}`,
+                // vLLM 발급 id 를 보존한다 — 업스트림 로그와의 상관 추적 + 같은 ms 병렬 배치 충돌 방지.
+                id: tc.id ?? `local-llm-tool-${Date.now()}-${idx}`,
                 name: tc.function.name,
                 args: tc.function.arguments,
             }));
