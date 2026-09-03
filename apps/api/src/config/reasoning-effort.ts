@@ -62,13 +62,23 @@ export function resetReasoningEffortCache(): void {
     _cached = null;
 }
 
-/** 모델이 받는 강도 목록 (미등록 모델은 보수적 기본값). */
-export function supportedEfforts(modelId: string | undefined): readonly ReasoningEffort[] {
+/**
+ * 모델이 받는 강도 목록 (미등록 모델은 보수적 기본값).
+ *
+ * `providerId` 가 로컬이 아니면 **provider 한정 키**(`"<providerId>:<model prefix>"`, 예 `"bai:glm-5.3"`)만
+ * 찾고, 없으면 OpenAI 표준 3단으로 폴백한다 — 로컬용 bare prefix(`qwen3.8` → xhigh 포함)가
+ * 외부의 같은 이름 모델(B.AI `qwen3.8-flash`)에 새어 나가 검증되지 않은 값(xhigh)을 보내지 않게.
+ * (2026-09-03 라이브: B.AI glm/qwen 은 low·medium·high 를 모두 200 으로 받는다.)
+ */
+export function supportedEfforts(modelId: string | undefined, providerId?: string): readonly ReasoningEffort[] {
     if (!modelId) return FALLBACK_SUPPORTED;
-    const lower = modelId.toLowerCase();
+    const external = !!providerId && providerId !== 'local-llm';
+    const lower = (external ? `${providerId}:${modelId}` : modelId).toLowerCase();
     let best: readonly ReasoningEffort[] | null = null;
     let bestLen = -1;
     for (const [prefix, list] of Object.entries(getModelEfforts())) {
+        // 외부는 provider 한정 키만, 로컬은 bare 키만 매칭 — 서로 새어 나가지 않는다.
+        if (external !== prefix.includes(':')) continue;
         if (lower.startsWith(prefix) && prefix.length > bestLen) {
             best = list;
             bestLen = prefix.length;
@@ -85,8 +95,9 @@ export function supportedEfforts(modelId: string | undefined): readonly Reasonin
 export function normalizeEffort(
     modelId: string | undefined,
     requested: ReasoningEffort,
+    providerId?: string,
 ): ReasoningEffort {
-    const supported = supportedEfforts(modelId);
+    const supported = supportedEfforts(modelId, providerId);
     if (supported.includes(requested)) return requested;
     const want = REASONING_EFFORT_LADDER.indexOf(requested);
     let best = supported[0];

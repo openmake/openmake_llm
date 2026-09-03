@@ -56,4 +56,20 @@ describe('reasoning-effort 정규화', () => {
         resetReasoningEffortCache();
         expect(supportedEfforts('qwen3.8-27b')).not.toContain('high');
     });
+
+    it('providerId 가 외부면 provider 한정 키만 보고, 없으면 표준 3단 (bare 로컬 키가 새지 않음)', () => {
+        expect(supportedEfforts('qwen3.8-flash', 'bai')).toEqual(['low', 'medium', 'high']);
+        expect(normalizeEffort('qwen3.8-flash', 'xhigh', 'bai')).toBe('high');
+        // 로컬은 종전과 동일
+        expect(supportedEfforts('qwen3.8-27b', 'local-llm')).toContain('xhigh');
+    });
+
+    it('env 에 provider 한정 키를 주면 외부 모델도 개별 맵을 쓴다', () => {
+        process.env.LLM_REASONING_EFFORTS_JSON = JSON.stringify({ 'bai:glm-5.3': ['low', 'high'] });
+        resetReasoningEffortCache();
+        expect(supportedEfforts('glm-5.3-flash', 'bai')).toEqual(['low', 'high']);
+        expect(normalizeEffort('glm-5.3-flash', 'medium', 'bai')).toBe('high');
+        // 같은 키가 로컬 조회엔 안 잡힌다
+        expect(supportedEfforts('glm-5.3-flash')).toEqual(['low', 'medium', 'high']);
+    });
 });
