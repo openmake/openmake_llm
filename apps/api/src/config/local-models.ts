@@ -37,6 +37,9 @@ import { fetchGatewayModelInfo, selectLocalEntriesFromModelInfo } from './local-
 
 const logger = createLogger('LocalModels');
 
+/** 카탈로그(또는 LLM_LOCAL_MODELS_JSON)가 명시적으로 비활성한 모델의 사유 — 프로브가 ping 을 건너뛰는 유일한 조건 */
+export const EXPLICIT_DISABLED_REASON = 'explicit disabled';
+
 export type LocalModelRole = 'chat' | 'embedding';
 
 export interface LocalModelEntry {
@@ -410,7 +413,7 @@ async function pingEmbeddingModel(
  *
  * 동작:
  *   - probe 미가용 (네트워크 timeout, proxy 미가용): 카탈로그 그대로 유지 (보수적)
- *   - Stage 2 ping 실패한 모델: available=false (demote)
+ *   - Stage 2 ping 실패한 모델: available=false (demote) — 다음 주기에 다시 ping 해 회복(up) 가능
  *   - 카탈로그의 explicit available=false 모델: ping 시도조차 안 함 (운영자가 명시적 비활성)
  *
  * @param llmBaseUrl proxy base URL (예: http://<llm-host>:13401)
@@ -453,8 +456,11 @@ export async function probeLocalModelAvailability(
     const skipped: string[] = [];
     const pingTargets: LocalModelEntry[] = [];
     for (const m of list) {
-        if (m.available === false) {
-            if (!m.unavailableReason) m.unavailableReason = 'explicit disabled';
+        // 건너뛰는 것은 카탈로그가 **명시적으로** 비활성한 모델뿐이다. 직전 프로브·런타임 fallback 이
+        // demote 한 모델(사유가 있음)은 매 주기 다시 ping 해야 회복된다 — 그렇지 않으면 일시 abort 1회로
+        // 재시작 전까지 영구 '사용 불가' 가 된다(2026-09-03 qwen3.8-27b 6시간 실측).
+        if (m.available === false && (!m.unavailableReason || m.unavailableReason === EXPLICIT_DISABLED_REASON)) {
+            m.unavailableReason = EXPLICIT_DISABLED_REASON;
             skipped.push(m.id);
             continue;
         }

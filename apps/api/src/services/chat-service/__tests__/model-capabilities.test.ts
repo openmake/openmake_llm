@@ -5,7 +5,8 @@
  * 진짜 비전 모델(meta/llama-4-maverick…)을 vision:false 로 오판 → 이미지 요청이
  * 400 으로 조기 차단됐다. 카탈로그 우선 해석과 출처 표기를 고정한다.
  */
-import { resolveModelCapabilities } from '../model-capabilities';
+import { resolveModelCapabilities, toCachedModelEntry } from '../model-capabilities';
+import type { ProviderModel } from '../../../providers/i-provider';
 import type { ResolvedProvider } from '../../../providers/provider-router';
 import type { ProviderCapabilities } from '../../../providers/i-provider';
 
@@ -107,5 +108,41 @@ describe('resolveModelCapabilities', () => {
         const r = await resolveModelCapabilities(makeResolved('chatgpt', 'gpt-5.4'));
         expect(r.source).toBe('config'); // chatgpt 카탈로그에 gpt-5.4 등록됨
         expect(r.caps.vision).toBe(true);
+    });
+});
+
+describe('toCachedModelEntry — 캐시 쓰기 형태가 읽기 채택 조건을 보존한다', () => {
+    // 2026-09-04 운영 실측: model.routes 가 필드를 손으로 골라 복사하다 capabilitiesInferred 를 떨어뜨려
+    // 캐시 전 행이 undefined → ② 의 `=== false` 채택이 영구 거짓(#713 무력, B.AI vision 거절 재현).
+    function makeModel(over: Partial<ProviderModel>): ProviderModel {
+        return {
+            id: 'm', fullId: 'p:m', displayName: 'M', contextWindow: 1, outputLimit: 1,
+            capabilities: { vision: true, toolCalling: true, streaming: true, thinking: false },
+            ...over,
+        } as ProviderModel;
+    }
+
+    it('capabilitiesInferred=false 를 보존해 실보고 행이 catalog 로 채택된다', async () => {
+        const row = toCachedModelEntry(makeModel({ id: 'meta/llama-4-maverick', capabilitiesInferred: false }));
+        expect(row.capabilitiesInferred).toBe(false);
+        const r = await resolveModelCapabilities(makeResolved('nvidia', 'meta/llama-4-maverick'), 'u1', makeRepo([row]));
+        expect(r.source).toBe('catalog');
+        expect(r.caps.vision).toBe(true);
+    });
+
+    it('capabilitiesInferred=true 를 보존해 휴리스틱 행이 config 를 가리지 않는다', async () => {
+        const row = toCachedModelEntry(makeModel({
+            id: 'qwen3.8-flash', capabilitiesInferred: true,
+            capabilities: { vision: false, toolCalling: true, streaming: true, thinking: false },
+        }));
+        expect(row.capabilitiesInferred).toBe(true);
+        const r = await resolveModelCapabilities(makeResolved('bai', 'qwen3.8-flash'), 'u1', makeRepo([row]));
+        expect(r.source).toBe('config');
+        expect(r.caps.vision).toBe(true);
+    });
+
+    it('응답에 필요한 표시 필드(displayName·isFree·pricing)도 함께 남긴다', () => {
+        const row = toCachedModelEntry(makeModel({ isFree: true, pricing: { input: 1, output: 2 } }));
+        expect(row).toMatchObject({ id: 'm', fullId: 'p:m', displayName: 'M', isFree: true, pricing: { input: 1, output: 2 } });
     });
 });
