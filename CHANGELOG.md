@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.40.1](https://github.com/openmake/openmake_llm/compare/v1.40.0...v1.40.1) (2026-09-03)
+
+
+### 🐛 버그 수정
+
+* **llm:** 로컬 도구 루프에서 assistant reasoning 을 다음 턴에 보존 + vLLM tool_call id 보존 ([#726](https://github.com/openmake/openmake_llm/issues/726)) ([fd46f47](https://github.com/openmake/openmake_llm/commit/fd46f47ece30a04ed074a85c8ef5928d1b23176f))
+
 ## [1.40.0](https://github.com/openmake/openmake_llm/compare/v1.39.0...v1.40.0) (2026-09-03)
 
 
