@@ -31,6 +31,7 @@ import {
 import { buildFullModelId } from '../providers/i-provider';
 import { getProviderCatalogEntry } from '../config/external-providers';
 import { isRoleAssignableModel } from '../config/role-model-filter';
+import { toCachedModelEntry, type CachedModelRow } from '../services/chat-service/model-capabilities';
 
 const router = Router();
 const logger = createLogger('ModelRoutes');
@@ -44,7 +45,7 @@ const logger = createLogger('ModelRoutes');
  */
 function getProviderFallbackModels(
     providerId: string,
-): Array<{ id: string; fullId: string; displayName: string; capabilities: Record<string, boolean>; isFree?: boolean }> {
+): CachedModelRow[] {
     const entry = getProviderCatalogEntry(providerId);
     if (!entry?.fallbackModels?.length) return [];
     return entry.fallbackModels.map(m => ({
@@ -165,16 +166,8 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
                             process.env.EXTERNAL_MODELS_CACHE_TTL_MS ?? '3600000',
                             10,
                         );
-                        type CachedModel = {
-                            id: string;
-                            fullId: string;
-                            displayName: string;
-                            capabilities: Record<string, boolean>;
-                            isFree?: boolean;
-                            pricing?: { input: number; output: number };
-                        };
                         const cached = await repo.getCachedModels(userId, keyRow.providerId, cacheTtlMs);
-                        let list: CachedModel[] | null = cached as CachedModel[] | null;
+                        let list: CachedModelRow[] | null = cached as CachedModelRow[] | null;
 
                         if (!list || list.length === 0) {
                             const plaintextKey = await repo.decryptKey(userId, keyRow.providerId);
@@ -189,14 +182,8 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
                                     : undefined,
                             );
                             const fresh = await provider.listModels();
-                            list = fresh.map((m) => ({
-                                id: m.id,
-                                fullId: m.fullId,
-                                displayName: m.displayName,
-                                capabilities: m.capabilities as unknown as Record<string, boolean>,
-                                isFree: m.isFree,
-                                pricing: m.pricing,
-                            }));
+                            // 캐시 행 형태는 model-capabilities 의 단일점을 쓴다(capabilitiesInferred 유실 방지)
+                            list = fresh.map(toCachedModelEntry);
                             // 빈 배열은 캐싱 안 함 (stale 영구화 방지) + provider별 fallback 모델 보강
                             if (list.length === 0) {
                                 list = getProviderFallbackModels(keyRow.providerId);
