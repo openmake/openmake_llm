@@ -23,10 +23,10 @@ describe('matchCapabilityPreset (startsWith-longest)', () => {
         expect(caps!.vision).toBe(true);
     });
 
-    it('gpt-3.5-turbo alias → gpt 키 (toolCalling:true, vision:false)', () => {
+    it('gpt-3.5-turbo alias → 라우팅 대상(qwen3.8-27b)과 같은 capability (toolCalling·vision 모두 true)', () => {
         const caps = matchCapabilityPreset('gpt-3.5-turbo');
         expect(caps!.toolCalling).toBe(true);
-        expect(caps!.vision).toBe(false);
+        expect(caps!.vision).toBe(true);
     });
 
     it('미등록 모델(kimi-k2) → null', () => {

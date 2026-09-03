@@ -66,11 +66,13 @@ export const MODEL_CAPABILITY_PRESETS: Readonly<Record<string, ModelCapabilities
     /**
      * OpenAI 호환 alias — proxy 가 qwen3.8-27b 으로 라우팅.
      * 외부 도구 / OpenAI SDK 호환 클라이언트가 표준 model ID 로 호출 가능.
+     * capability 는 라우팅 대상(qwen3.8-27b)과 동일하게 둔다 — vision:false 로 두면 이 id 로 온
+     * 이미지 요청을 앱이 400 으로 거절하는데 실제 모델은 받는다(2026-09-03 정정).
      */
     'gpt-3.5-turbo': {
         toolCalling: true,
         thinking: true,
-        vision: false,
+        vision: true,
         streaming: true,
     },
 } as const;

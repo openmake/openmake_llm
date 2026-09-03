@@ -64,6 +64,12 @@ describe('reasoning-effort 정규화', () => {
         expect(supportedEfforts('qwen3.8-27b', 'local-llm')).toContain('xhigh');
     });
 
+    it('B.AI glm-5.3 기본 맵: medium 은 400 이라 high 로 승격, low 는 그대로', () => {
+        expect(supportedEfforts('glm-5.3-flash', 'bai')).toEqual(['low', 'high']);
+        expect(normalizeEffort('glm-5.3-flash', 'medium', 'bai')).toBe('high');
+        expect(normalizeEffort('glm-5.3-flash', 'low', 'bai')).toBe('low');
+    });
+
     it('env 에 provider 한정 키를 주면 외부 모델도 개별 맵을 쓴다', () => {
         process.env.LLM_REASONING_EFFORTS_JSON = JSON.stringify({ 'bai:glm-5.3': ['low', 'high'] });
         resetReasoningEffortCache();
