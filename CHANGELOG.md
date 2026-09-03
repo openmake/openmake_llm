@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.40.0](https://github.com/openmake/openmake_llm/compare/v1.39.0...v1.40.0) (2026-09-03)
+
+
+### ✨ 기능
+
+* **chat:** 토론·딥리서치 명시 외부 모델 오류 계약 + 프론트 안내 정정 ([#716](https://github.com/openmake/openmake_llm/issues/716)) ([d901a35](https://github.com/openmake/openmake_llm/commit/d901a35597c24efea2b5bb52c1e242e8e22c1a09))
+* **llm:** 외부 provider 실행 클라이언트 스로틀 — provider 별 동시성 + 429 지수 백오프 ([#717](https://github.com/openmake/openmake_llm/issues/717)) ([37266dc](https://github.com/openmake/openmake_llm/commit/37266dcc8b883b30f1e1f8e6d8b4ab28c5a7965b))
+* **providers:** OpenAI 호환 외부 provider 에 추론 강도(reasoning_effort) 전송 — UI 낮음·보통·높음이 외부 모델에도 적용 ([#725](https://github.com/openmake/openmake_llm/issues/725)) ([972bc08](https://github.com/openmake/openmake_llm/commit/972bc084f75df3fc43fd8632ca8d81e3bf8d6b5d))
+
+
+### 🐛 버그 수정
+
+* **deep-research:** 스로틀된 외부 모델의 fan-out 동시성·타임아웃을 provider 힌트에 맞춤 ([#720](https://github.com/openmake/openmake_llm/issues/720)) ([23adfd5](https://github.com/openmake/openmake_llm/commit/23adfd584cf5be3eaf337655b07e3d6dd9b903a8))
+* **llm:** external-throttle 리뷰 3건 — generate signal 인자·Retry-After 존중·429 오탐 ([#719](https://github.com/openmake/openmake_llm/issues/719)) ([6b74032](https://github.com/openmake/openmake_llm/commit/6b740323fb42b7c8c69370d285cefd30f6a7330e))
+* **llm:** 로컬 vLLM 요청당 프롬프트 이미지 총량을 --limit-mm-per-prompt 상한에 맞춤 ([#722](https://github.com/openmake/openmake_llm/issues/722)) ([20abc6d](https://github.com/openmake/openmake_llm/commit/20abc6d908c21bbb77c95c83685e3693ee8faf5b))
+* **llm:** 로컬 모델 샘플링 프리셋(thinking ON/OFF) + 메타 호출 think:false 명시 + thinking 기본 레벨 medium ([#724](https://github.com/openmake/openmake_llm/issues/724)) ([1902e6d](https://github.com/openmake/openmake_llm/commit/1902e6d58f4132822bd835fe298f35655f447b04))
+* **llm:** 외부 스로틀 클라이언트의 SDK 타임아웃을 배수 적용 + SDK 재시도 0 ([#723](https://github.com/openmake/openmake_llm/issues/723)) ([570b150](https://github.com/openmake/openmake_llm/commit/570b150a76af465ac473522e264dbf35414500ff))
+* **mcp:** {{env.KEY}} 위치 인자 비밀을 argv 에 박지 않고 sh 변수 참조로 전달 ([#714](https://github.com/openmake/openmake_llm/issues/714)) ([7bcc67f](https://github.com/openmake/openmake_llm/commit/7bcc67fcc2b2de007d0694f9b394c99982b858dd))
+* **security:** 보안 리뷰 후속 3건 — REST images 상한·push 호스트 허용목록·user-sandbox realpath ([#715](https://github.com/openmake/openmake_llm/issues/715)) ([7beff99](https://github.com/openmake/openmake_llm/commit/7beff99351135973400da48030532dcbf018cab0))
+
 ## [1.39.0](https://github.com/openmake/openmake_llm/compare/v1.38.0...v1.39.0) (2026-09-02)
 
 
