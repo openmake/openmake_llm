@@ -29,6 +29,7 @@ import {
 import { ProviderError } from './provider-errors';
 import type { ChatMessage, ToolDefinition, UsageMetrics } from '../llm';
 import { createLogger } from '../utils/logger';
+import { buildReasoningEffortParams } from './openai-compat-reasoning';
 import { createPinnedFetch } from '../security/ssrf-guard';
 import { needsExplicitPromptCache, toOpenAIMessages, toOpenAITools } from './openai-compat-mapping';
 import { PseudoToolCallGate } from '../llm/pseudo-tool-call-parser';
@@ -395,6 +396,8 @@ export class OpenAICompatProvider implements IProvider {
                 ...(opts.responseFormat ? { response_format: opts.responseFormat } : {}),
                 ...openRouterProvider,
                 ...geminiThinkingDisable,
+                // 추론 강도(UI 낮음·보통·높음) — Gemini 는 위 leak 차단으로 항상 OFF 라 제외.
+                ...(isGemini ? {} : buildReasoningEffortParams(opts.thinking, opts.modelId, this.id, !!this.modelPrefix)),
             };
 
             const stream = await this.client.chat.completions.create(
