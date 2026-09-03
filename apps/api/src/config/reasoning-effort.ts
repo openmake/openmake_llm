@@ -27,6 +27,10 @@ const DEFAULT_MODEL_EFFORTS: Readonly<Record<string, readonly ReasoningEffort[]>
     'qwen3.6': ['low', 'medium', 'high', 'xhigh'],
     // 실측 거절값(high)을 제외 — 사용자가 '높음'을 고르면 아래 정규화가 xhigh 로 올린다.
     'qwen3.8': ['low', 'medium', 'xhigh'],
+    // B.AI GLM 5.3 은 항상 사고 모델이라 low/high/max 만 받고 medium 을 400 으로 거절한다
+    // (2026-09-03 레벨 실측: 12건 중 medium 간헐 400 "该模型始终思考，不支持关闭思考；请使用 low、high 或 max").
+    // 사다리에 max 는 없으므로 low/high — UI '보통' 은 동률 상위 규칙으로 high 가 된다.
+    'bai:glm-5.3': ['low', 'high'],
 };
 
 let _cached: Readonly<Record<string, readonly ReasoningEffort[]>> | null = null;

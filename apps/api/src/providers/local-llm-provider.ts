@@ -30,6 +30,7 @@ import {
     buildFullModelId,
 } from './i-provider';
 import { ProviderError } from './provider-errors';
+import { toFormatOption } from './local-response-format';
 import type { LLMClient } from '../llm';
 import type { ToolCall, UsageMetrics } from '../llm';
 import { findLocalModel } from '../config/local-models';
@@ -191,6 +192,10 @@ export class LocalLLMProvider implements IProvider {
                 if (token) callbacks.onToken?.(token);
             };
 
+            const formatOption = toFormatOption(opts.responseFormat);
+            if (opts.responseFormat && !formatOption) {
+                logger.warn(`[LocalLLMProvider] responseFormat(type=${String(opts.responseFormat.type)}) 을 로컬 format 으로 변환할 수 없어 무시합니다`);
+            }
             const chatPromise = this.client.chat(
                 opts.messages,
                 {
@@ -211,6 +216,8 @@ export class LocalLLMProvider implements IProvider {
                         : opts.thinking,
                     tools: opts.tools,
                     ...(opts.tool_choice !== undefined ? { tool_choice: opts.tool_choice } : {}),
+                    // responseFormat(OpenAI 원형) → LLMClient format 으로 역변환해 로컬에도 스키마를 강제한다.
+                    ...(formatOption ? { format: formatOption } : {}),
                     // 첫 SSE 청크 = 업스트림 생존 — fast-fail 취소 (tool-call-only 응답 포함).
                     onActivity: clearFastFail,
                     // user signal (opts.abortSignal) + self fast-fail signal 결합 전달 — 어느 쪽이
