@@ -92,6 +92,15 @@ const samplingNum = (key: string, fallback: number): number => {
     const v = Number(process.env[key]);
     return Number.isFinite(v) && process.env[key] !== undefined && process.env[key] !== '' ? v : fallback;
 };
+/**
+ * 로컬 도구 루프에서 assistant 의 reasoning(thinking) 을 다음 턴 프롬프트에 되돌려 보낸다 (2026-09-03).
+ * Qwen3.8 chat template 은 `preserve_thinking` 이 기본 true 라 assistant 메시지의 `reasoning_content` 를
+ * 재주입한다 — 없으면 도구 호출 5턴 동안 매 라운드 직전 추론을 잃고 다시 생각한다(공식 권고 이탈).
+ * 로컬(LLMClient) wire 에만 적용 — 외부 provider 는 별도 변환(OpenAICompatProvider)이라 무영향
+ * (DeepSeek 등은 입력 reasoning_content 를 400 으로 거절한다).
+ */
+export const LOCAL_PRESERVE_THINKING_ENABLED = process.env.LLM_PRESERVE_THINKING !== 'false';
+
 export const LOCAL_SAMPLING_PRESETS = {
     ENABLED: process.env.LLM_LOCAL_SAMPLING_PRESET_ENABLED !== 'false',
     THINKING: {
