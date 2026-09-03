@@ -112,7 +112,7 @@ export class ConventionChecker {
             { role: 'user', content: userContent },
         ];
         try {
-            const resp = await this.llm.chat(messages);
+            const resp = await this.llm.chat(messages, undefined, undefined, { think: false });
             const tokensUsed = resp.metrics?.completion_tokens ?? 0;
             const raw = (resp.content ?? '').trim();
             // ⚠️ 전체 파싱 먼저 — 펜스를 먼저 벗기면 findings 안의 코드블록을 잡아 깨진다

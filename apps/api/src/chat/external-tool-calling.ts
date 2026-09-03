@@ -177,7 +177,9 @@ export async function processExternalToolCalling(params: {
     let fullContent = '';
     const llmResponse = await client.chat(
         messages,
-        promptConfig.options,
+        // 샘플링은 지정하지 않는다 — 구 promptConfig.options(Gemini/GPT-OSS 시절 프리셋: top_k·repeat_penalty)
+        // 가 로컬 Qwen 에 그대로 실리던 것을 제거. LLMClient 가 thinking 상태별 로컬 프리셋을 채운다.
+        undefined,
         (token: string) => {
             // tool_calls JSON 토큰은 스트리밍에서 필터링
             if (!token.includes('tool_calls')) {
