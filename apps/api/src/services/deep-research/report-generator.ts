@@ -185,6 +185,7 @@ export async function generateReport(params: {
                 accumulatedChars += token.length;
                 onReportProgress?.(accumulatedChars);
             },
+            { think: false },
         );
         throwIfAborted();
 

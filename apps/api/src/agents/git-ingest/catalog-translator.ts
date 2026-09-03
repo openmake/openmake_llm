@@ -68,7 +68,7 @@ export async function translateCatalogDescriptions(
                 { role: 'system', content: SYSTEM_PROMPT },
                 { role: 'user', content: JSON.stringify(batch.map(p => p.description)) },
             ];
-            const resp = await llm.chat(messages);
+            const resp = await llm.chat(messages, undefined, undefined, { think: false });
             const raw = (resp.content ?? '').trim();
             // ⚠️ 전체 파싱 먼저 — 펜스 우선이면 번역문 안의 코드블록을 잡아 깨진다
             // (skill-creator 에서 실측된 결함, 2026-08-24)

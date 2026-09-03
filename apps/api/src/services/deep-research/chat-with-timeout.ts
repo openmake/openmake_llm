@@ -42,5 +42,7 @@ export async function chatWithAbortTimeout(
     const signal = externalSignal
         ? AbortSignal.any([externalSignal, timeoutSignal])
         : timeoutSignal;
-    return client.chat(messages, options, undefined, { signal });
+    // 딥리서치 하위 호출은 모델 네이티브 thinking 을 쓰지 않는다 — 추론은 파이프라인(분해→검색→요약→병합→검증)이
+    // 담당한다. env 기본값에 기대지 않고 명시한다(추론 기본 ON 모델에서 청크 요약이 예산을 소진하던 실패 차단).
+    return client.chat(messages, options, undefined, { signal, think: false });
 }

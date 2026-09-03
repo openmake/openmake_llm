@@ -114,7 +114,7 @@ export async function proposeSkillRewrite(
         { role: 'user', content: buildSkillRewriteUserPrompt(input.name, body) },
     ];
     try {
-        const resp = await llm.chat(messages);
+        const resp = await llm.chat(messages, undefined, undefined, { think: false });
         const parsed = parseRewriteResponse(resp.content ?? '');
         if (!parsed) {
             // 파싱 실패를 "변경 불필요"와 섞으면 진단이 불가능해진다 (실측 사례)

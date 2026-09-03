@@ -26,6 +26,17 @@ export function thinkToReasoningEffort(t: ThinkOption | undefined): ReasoningEff
 }
 
 /**
+ * 이 요청에서 모델의 thinking 이 실제로 켜지는지 — buildExtraBody 의 enable_thinking 결정 규칙과 동일.
+ * `undefined` 는 env `LLM_DISABLE_THINKING_BY_DEFAULT` 가 true 면 OFF, 아니면 서버 기본(reasoning 모델은 ON).
+ * 샘플링 프리셋(llm/sampling-preset.ts) 선택에 쓴다.
+ */
+export function isThinkingEnabled(t: ThinkOption | undefined): boolean {
+    if (t === false) return false;
+    if (t !== undefined) return true;
+    return (process.env.LLM_DISABLE_THINKING_BY_DEFAULT ?? 'false').toLowerCase() !== 'true';
+}
+
+/**
  * think 옵션을 OpenAI SDK extra_body 로 변환.
  *
  * 두 가지 extra_body 키를 지원:

@@ -343,7 +343,8 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
                 }
                 // 토큰 콜백마다 abort 체크 → 클라이언트 단절 시 다음 토큰 직전에 stream 중단
                 checkAborted();
-            });
+            // 참가자 발언은 thinking 을 쓰지 않는다(위에서 thinking 토큰을 버리고 있었음) — env 기본값에 기대지 않고 명시
+            }, { think: false });
 
             return response;
         };

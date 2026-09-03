@@ -25,6 +25,7 @@ import { getApiUsageTracker } from './usage-tracker';
 import { checkUserQuota, recordUserUsage } from './user-quota';
 import { streamChat, nonStreamChat } from './stream-parser';
 import { buildExtraBody } from './reasoning-adapter';
+import { applyLocalSamplingPreset } from './sampling-preset';
 import { selectModelByCapacityExact } from './model-pool';
 import { MODEL_POOL_CONFIG } from '../config/model-pool';
 import {
@@ -157,9 +158,14 @@ export class LLMClient {
         })();
 
         const effectiveMessages = poolDecision.adjustedMessages ?? messages;
-        const effectiveOptions: ModelOptions | undefined = poolDecision.adjustedMaxTokens !== undefined
+        const fitOptions: ModelOptions | undefined = poolDecision.adjustedMaxTokens !== undefined
             ? { ...(options ?? {}), num_predict: poolDecision.adjustedMaxTokens }
             : options;
+        // 로컬 모델 샘플링 프리셋 — 호출자가 샘플링을 지정하지 않았을 때만 thinking ON/OFF 권장값을 채운다.
+        // 외부 provider 클라이언트(quotaExempt)는 각자 기본값을 쓰므로 건너뛴다.
+        const effectiveOptions = applyLocalSamplingPreset(
+            fitOptions, advancedOptions?.think, { external: this.config.quotaExempt === true },
+        );
 
         const request: ChatRequest = {
             model: poolDecision.model,
