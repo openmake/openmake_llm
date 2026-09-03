@@ -22,7 +22,7 @@
  *
  * @module services/chat-service/model-capabilities
  */
-import type { ProviderCapabilities } from '../../providers/i-provider';
+import type { ProviderCapabilities, ProviderModel } from '../../providers/i-provider';
 import type { ResolvedProvider } from '../../providers/provider-router';
 import type { ExternalKeysRepository } from '../../data/repositories/external-keys-repo';
 import { getProviderCatalogEntry } from '../../config/external-providers';
@@ -43,13 +43,37 @@ function cacheTtlMs(): number {
     return parseInt(process.env.EXTERNAL_MODELS_CACHE_TTL_MS ?? '3600000', 10);
 }
 
-type CachedModelEntry = {
-    id?: string;
-    fullId?: string;
-    capabilities?: Partial<ProviderCapabilities>;
+/** `external_provider_models_cache.models_json` 의 항목 — 쓰기 시 형태 */
+export type CachedModelRow = {
+    id: string;
+    fullId: string;
+    displayName: string;
+    capabilities: Partial<ProviderCapabilities>;
     /** listModels 가 휴리스틱으로 채운 값이면 true (undefined = 레거시 행, 추정으로 간주) */
     capabilitiesInferred?: boolean;
+    isFree?: boolean;
+    pricing?: { input: number; output: number };
 };
+
+/** 읽기 시 형태 — 레거시 행은 어떤 필드도 비어 있을 수 있다 */
+type CachedModelEntry = Partial<CachedModelRow>;
+
+/**
+ * listModels 결과 → `external_provider_models_cache` 행 항목. 쓰기(model.routes)와 읽기(②)가
+ * 같은 형태를 쓰게 하는 단일점 — 종전엔 라우트가 필드를 손으로 골라 복사하다 `capabilitiesInferred`
+ * 를 떨어뜨려 ② 의 `=== false` 채택 조건이 영구 거짓이었다(2026-09-04 운영 캐시 전 행 undefined).
+ */
+export function toCachedModelEntry(m: ProviderModel): CachedModelRow {
+    return {
+        id: m.id,
+        fullId: m.fullId,
+        displayName: m.displayName,
+        capabilities: m.capabilities,
+        capabilitiesInferred: m.capabilitiesInferred,
+        isFree: m.isFree,
+        pricing: m.pricing,
+    };
+}
 
 function fromPartial(
     partial: Partial<ProviderCapabilities>,
