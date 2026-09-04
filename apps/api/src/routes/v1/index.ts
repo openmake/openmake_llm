@@ -41,7 +41,10 @@ import openaiCompatRouter from '../openai-compat.routes';
 import { listAvailableModels } from '../../chat/profile-resolver';
 import { ExternalKeysRepository } from '../../data/repositories/external-keys-repo';
 import { getPool } from '../../data/models/unified-database';
-import { getProviderCatalogEntry } from '../../config/external-providers';
+import { getProviderFallbackModels, resolveExternalModels } from '../../services/external-models-catalog';
+import { createLogger } from '../../utils/logger';
+
+const v1Log = createLogger('V1Models');
 import { buildFullModelId } from '../../providers/i-provider';
 import { success, unauthorized } from '../../utils/api-response';
 import { requireApiKey, requireScope } from '../../middlewares/api-key-auth';
@@ -170,31 +173,30 @@ v1Router.get('/models', asyncHandler(async (req, res) => {
     // 외부 provider 모델 노출 (Phase 2, 2026-07-26): API 키 사용자가 등록한
     // BYO/OAuth provider 의 모델을 fullId 로 나열 — CLI/서드파티 클라이언트가
     // /v1/models 디스커버리만으로 'chatgpt:*' 등을 선택할 수 있게 한다.
-    // 라이브 호출 없이 캐시(external_provider_models_cache) → 카탈로그 fallback 순.
+    // 캐시(external_provider_models_cache, TTL) → 만료 시 provider 라이브 조회(+캐시 갱신) → fallback.
+    // 웹 /api/models 와 같은 규칙(services/external-models-catalog). provider 하나의 실패는 fallback 으로 격리.
     const apiUserId = req.apiKeyRecord?.user_id?.toString() || null;
     if (apiUserId) {
         try {
             const repo = new ExternalKeysRepository(getPool());
-            const cacheTtlMs = parseInt(process.env.EXTERNAL_MODELS_CACHE_TTL_MS ?? '3600000', 10);
             const keys = await repo.listByUser(apiUserId);
             // 실사용 불가 모델 제외 (083) — /api/models 와 동일 규칙
             const unusable = await repo.listUnusableModels(apiUserId).catch(() => new Set<string>());
             for (const keyRow of keys) {
-                const cached = await repo.getCachedModels(apiUserId, keyRow.providerId, cacheTtlMs) as
-                    | Array<{ id?: string; fullId?: string }>
-                    | null;
-                const entries = (cached && cached.length > 0)
-                    ? cached.map((m) => ({
-                        fullId: m.fullId ?? buildFullModelId(keyRow.providerId, m.id ?? ''),
-                    }))
-                    : (getProviderCatalogEntry(keyRow.providerId)?.fallbackModels ?? []).map((m) => ({
-                        fullId: buildFullModelId(keyRow.providerId, m.id),
-                    }));
-                for (const m of entries) {
-                    if (!m.fullId) continue;
-                    if (unusable.has(m.fullId)) continue;
+                let list: Array<{ id?: string; fullId?: string }> | null;
+                try {
+                    list = await resolveExternalModels(repo, apiUserId, keyRow);
+                } catch (err) {
+                    v1Log.warn(`${keyRow.providerId} 모델 조회 실패 — fallback 사용: ${err instanceof Error ? err.message : err}`);
+                    list = getProviderFallbackModels(keyRow.providerId);
+                }
+                if (!list) continue;
+                for (const m of list) {
+                    const fullId = m.fullId ?? buildFullModelId(keyRow.providerId, m.id ?? '');
+                    if (!fullId) continue;
+                    if (unusable.has(fullId)) continue;
                     data.push({
-                        id: m.fullId,
+                        id: fullId,
                         object: 'model',
                         created,
                         owned_by: keyRow.providerId,
