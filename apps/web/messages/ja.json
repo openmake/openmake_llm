@@ -427,6 +427,7 @@
     "modelFallbackNotice": "選択したモデル({from})が応答しなかったため、既定のモデル({to})が回答しました。",
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "利用上限に到達",
+      "INSUFFICIENT_CREDIT": "クレジット不足",
       "SUBSCRIPTION_REQUIRED": "サブスクリプションが必要",
       "INVALID_API_KEY": "認証エラー",
       "MISSING_API_KEY": "認証エラー",
