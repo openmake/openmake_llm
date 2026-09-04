@@ -428,6 +428,7 @@
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "usage limit reached",
       "INSUFFICIENT_CREDIT": "insufficient credit",
+      "MODEL_ACCESS_RESTRICTED": "restricted by provider policy",
       "SUBSCRIPTION_REQUIRED": "subscription required",
       "INVALID_API_KEY": "authentication error",
       "MISSING_API_KEY": "authentication error",

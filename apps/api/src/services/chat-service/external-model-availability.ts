@@ -17,6 +17,7 @@ const logger = createLogger('ChatExternalProvider');
 /** 목록에서 제외할 근거가 되는 실패 코드 — 일시 오류(타임아웃·5xx)는 제외한다. */
 const UNUSABLE_ERROR_CODES: ReadonlySet<string> = new Set([
     'SUBSCRIPTION_REQUIRED',
+    'MODEL_ACCESS_RESTRICTED',
     'MODEL_NOT_FOUND',
     'NOT_SUPPORTED',
 ]);

@@ -428,6 +428,7 @@
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "사용량 한도 초과",
       "INSUFFICIENT_CREDIT": "크레딧 부족",
+      "MODEL_ACCESS_RESTRICTED": "제공자 정책상 접근 제한",
       "SUBSCRIPTION_REQUIRED": "구독 필요",
       "INVALID_API_KEY": "인증 오류",
       "MISSING_API_KEY": "인증 오류",

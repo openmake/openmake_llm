@@ -417,6 +417,7 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
                 QUOTA_EXCEEDED: 429,
                 INSUFFICIENT_CREDIT: 402,
                 SUBSCRIPTION_REQUIRED: 403,
+                MODEL_ACCESS_RESTRICTED: 403,
                 MODEL_NOT_FOUND: 404,
                 INVALID_MODEL_ID: 400,
                 NOT_SUPPORTED: 400,

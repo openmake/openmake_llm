@@ -547,7 +547,9 @@ function FeedbackButtons({ messageId }: { messageId: string }) {
 /** 폴백 사유 코드 중 번역 문구가 있는 것만 표시한다 — 그 외는 생략(원문은 배지 title 에 남는다). */
 const FALLBACK_REASON_KEYS = new Set([
   "QUOTA_EXCEEDED",
+  "INSUFFICIENT_CREDIT",
   "SUBSCRIPTION_REQUIRED",
+  "MODEL_ACCESS_RESTRICTED",
   "INVALID_API_KEY",
   "MISSING_API_KEY",
   "UPSTREAM_ERROR",

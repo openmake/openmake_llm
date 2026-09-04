@@ -121,6 +121,12 @@ function inferCapabilitiesFromModelId(
  * 인증 오류·업스트림 오류로 분류하면 사용자에게 "인증 오류"/"업스트림 오류"로 오안내된다.
  */
 const INSUFFICIENT_CREDIT_PATTERN = /insufficient[_ ]user[_ ]quota|insufficient balance|deposit required/i;
+/**
+ * 403 중 키·플랜이 아니라 provider 정책이 호출 경로 자체를 막는 응답 (2026-09-04 OpenRouter 실측):
+ *   `thinkingmachines/inkling:free is only available on agentic harnesses. Try plugging it into a coding agent...`
+ * 충전·업그레이드로 풀리지 않으므로 SUBSCRIPTION_REQUIRED 와 구분한다.
+ */
+const MODEL_ACCESS_RESTRICTED_PATTERN = /only available (on|to|for|via)|not available (on|to|for|via) (this|your)/i;
 
 export function mapOpenAIError(err: unknown): ProviderError {
     const message = err instanceof Error ? err.message : String(err);
@@ -132,6 +138,9 @@ export function mapOpenAIError(err: unknown): ProviderError {
         if (status === 401 || status === 403) {
             // 403 중 구독/플랜 미달 응답은 키 문제가 아님 — 별도 코드로 분기
             // (예: Ollama Cloud "this model requires a subscription, upgrade for access")
+            if (status === 403 && MODEL_ACCESS_RESTRICTED_PATTERN.test(message)) {
+                return new ProviderError('MODEL_ACCESS_RESTRICTED', `provider 정책상 접근 제한 모델: ${message}`, err);
+            }
             if (status === 403 && /subscription|upgrade/i.test(message)) {
                 return new ProviderError('SUBSCRIPTION_REQUIRED', `구독 전용 모델: ${message}`, err);
             }
