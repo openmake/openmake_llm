@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { EXTERNAL_LINKS } from "@/lib/external-links";
 import { ArrowRight, LoaderCircle } from "lucide-react";
 import Image from "next/image";
 import { ApiClient, ApiError } from "@/lib/api-client";
@@ -183,6 +184,17 @@ export default function LoginPage() {
             </Link>
           </p>
         </form>
+
+        {/* 자매 서비스 링크 — 비로그인 사용자의 유일한 진입점 (로그인 후엔 사이드바 계정 메뉴) */}
+        <p className="mt-5 text-center text-xs text-faint">
+          <a href={EXTERNAL_LINKS.homepage} target="_blank" rel="noopener noreferrer" className="transition hover:text-fg">
+            {t("homepage")}
+          </a>
+          <span className="mx-2">·</span>
+          <a href={EXTERNAL_LINKS.bench} target="_blank" rel="noopener noreferrer" className="transition hover:text-fg">
+            {t("bench")}
+          </a>
+        </p>
       </div>
     </div>
   );
