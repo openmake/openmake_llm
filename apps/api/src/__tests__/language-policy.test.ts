@@ -6,6 +6,7 @@
 
 import {
     detectLanguage,
+    preprocessTextForLanguageDetection,
     detectLatinSubLanguage,
     determineLanguagePolicy,
     getLanguageTemplate,
@@ -515,5 +516,24 @@ describe('Language Policy System', () => {
         test('이탈리아어 발음 기호 감지 (à/è)', () => {
             expect(detectLatinSubLanguage('La città è molto bella')).toBe('it');
         });
+    });
+});
+describe('detectLanguage — 코드 식별자가 섞인 한국어 질문 (2026-09-05 실측 오판 정정)', () => {
+    test('MCP 도구명·파일명·kebab 식별자가 많아도 한국어로 판정한다', () => {
+        const q = 'context7::resolve-library-id 와 context7::query-docs 도구로 Next.js 최신 문서에서 App Router 의 route handler(route.ts) 작성법을 찾아 코드 예제 하나만 보여줘.';
+        expect(detectLanguage(q).language).toBe('ko');
+    });
+    test('패키지 스코프·경로·snake_case 도 식별자로 걷어낸다', () => {
+        const q = '@upstash/context7-mcp 를 app/api/hello 경로에 붙이고 max_tokens 값을 어떻게 잡아야 하는지 알려줘';
+        expect(detectLanguage(q).language).toBe('ko');
+    });
+    test('식별자를 걷어낸 뒤 남는 것이 영어 문장이면 여전히 영어', () => {
+        const q = 'Please explain how the route.ts handler in Next.js App Router works with context7::query-docs results.';
+        expect(detectLanguage(q).language).toBe('en');
+    });
+    test('preprocess: 식별자 제거 후 일반 영단어는 남는다', () => {
+        const out = preprocessTextForLanguageDetection('context7::query-docs 로 App Router 의 route.ts 를 읽어줘');
+        expect(out).not.toMatch(/context7|query-docs|route\.ts/);
+        expect(out).toMatch(/App Router/);
     });
 });
