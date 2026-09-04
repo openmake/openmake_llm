@@ -24,38 +24,13 @@ import { requireAuth, requireAdmin, optionalAuth } from '../auth';
 import { getModelHealthMonitor } from '../services/model-health-monitor';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { getPool } from '../data/models/unified-database';
-import {
-    createExternalProviderInstance,
-    buildOAuthSessionPersist,
-} from '../providers/provider-router';
 import { buildFullModelId } from '../providers/i-provider';
 import { getProviderCatalogEntry } from '../config/external-providers';
 import { isRoleAssignableModel } from '../config/role-model-filter';
-import { toCachedModelEntry, type CachedModelRow } from '../services/chat-service/model-capabilities';
+import { resolveExternalModels } from '../services/external-models-catalog';
 
 const router = Router();
 const logger = createLogger('ModelRoutes');
-
-/**
- * Provider 별 fallback 모델 목록 — `/v1/models` API 호출 실패 또는 빈 배열 반환 시
- * 사용자가 채팅을 시작할 수 있도록 제공하는 known 모델 카탈로그.
- *
- * 모델 카탈로그는 No-Hardcoding 정책에 따라 `config/external-providers.ts` 의
- * `EXTERNAL_PROVIDER_CATALOG[].fallbackModels` 에 외부화되어 있습니다.
- */
-function getProviderFallbackModels(
-    providerId: string,
-): CachedModelRow[] {
-    const entry = getProviderCatalogEntry(providerId);
-    if (!entry?.fallbackModels?.length) return [];
-    return entry.fallbackModels.map(m => ({
-        id: m.id,
-        fullId: buildFullModelId(providerId, m.id),
-        displayName: m.displayName,
-        capabilities: m.capabilities,
-        isFree: m.isFree ?? false,
-    }));
-}
 
 /**
  * GET /model
@@ -161,39 +136,8 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
                 // openai-compatible 분기: provider 의 /v1/models 호출 (TTL 캐시 + 실패 격리)
                 if (keyRow.sdkType === 'openai-compatible' && keyRow.baseUrl) {
                     try {
-                        // 캐시 우선 조회 (EXTERNAL_MODELS_CACHE_TTL_MS, 기본 1h)
-                        const cacheTtlMs = parseInt(
-                            process.env.EXTERNAL_MODELS_CACHE_TTL_MS ?? '3600000',
-                            10,
-                        );
-                        const cached = await repo.getCachedModels(userId, keyRow.providerId, cacheTtlMs);
-                        let list: CachedModelRow[] | null = cached as CachedModelRow[] | null;
-
-                        if (!list || list.length === 0) {
-                            const plaintextKey = await repo.decryptKey(userId, keyRow.providerId);
-                            if (!plaintextKey) continue;
-                            // 공용 팩토리 사용 — OAuth 행(chatgpt)은 Codex transport 기반
-                            // ChatGPTOAuthProvider 로 분기된다 (refresh 시 세션 영속화 포함).
-                            const provider = createExternalProviderInstance(
-                                keyRow,
-                                plaintextKey,
-                                keyRow.authMethod === 'oauth'
-                                    ? buildOAuthSessionPersist(repo, userId, keyRow.providerId)
-                                    : undefined,
-                            );
-                            const fresh = await provider.listModels();
-                            // 캐시 행 형태는 model-capabilities 의 단일점을 쓴다(capabilitiesInferred 유실 방지)
-                            list = fresh.map(toCachedModelEntry);
-                            // 빈 배열은 캐싱 안 함 (stale 영구화 방지) + provider별 fallback 모델 보강
-                            if (list.length === 0) {
-                                list = getProviderFallbackModels(keyRow.providerId);
-                                if (list.length > 0) {
-                                    logger.warn(`${keyRow.providerId} /v1/models 빈 배열 — fallback ${list.length}개 사용 (캐싱 skip)`);
-                                }
-                            } else {
-                                await repo.putCachedModels(userId, keyRow.providerId, list);
-                            }
-                        }
+                        // 캐시(TTL) → 라이브 조회 → fallback (services/external-models-catalog, v1 과 공용)
+                        const list = await resolveExternalModels(repo, userId, keyRow);
 
                         const catalogDisplay = getProviderCatalogEntry(keyRow.providerId)?.displayName ?? keyRow.providerId;
                         if (!list) continue;

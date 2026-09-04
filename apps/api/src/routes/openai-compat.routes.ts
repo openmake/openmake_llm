@@ -15,6 +15,7 @@ import { getProviderCatalogEntry } from '../config/external-providers';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { OpenAICompatSessionRepository } from '../data/repositories/oaicompat-session-repo';
 import { getPool } from '../data/models/unified-database';
+import { handleRawCompletion, isRawRequest } from './openai-compat-raw';
 import { OPENAI_COMPAT_SESSION } from '../config/openai-compat';
 import { createLogger } from '../utils/logger';
 
@@ -273,6 +274,15 @@ openaiCompatRouter.post('/chat/completions', asyncHandler(async (req: Request, r
 
     if (!clusterManager) {
         openaiError(res, 503, 'Cluster manager not initialized');
+        return;
+    }
+
+    // 원본 호출 모드 (X-OpenMake-Raw: 1) — 파이프라인 없이 모델만 부른다. 위의 모델·키 검증은 이미 통과한 상태.
+    if (isRawRequest(req, body)) {
+        await handleRawCompletion(req, res, body, {
+            userId: req.apiKeyRecord?.user_id?.toString() || null,
+            tools: convertTools(body),
+        });
         return;
     }
 
