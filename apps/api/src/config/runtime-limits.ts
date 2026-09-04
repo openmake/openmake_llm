@@ -1214,6 +1214,23 @@ export const EXTERNAL_CHAT_FALLBACK = {
         .split(',').map((s) => s.trim()).filter(Boolean),
 } as const;
 
+/**
+ * 도구 결과 언어 리마인더 + 답변 언어 가드 관측 (2026-09-05).
+ * 실측(90일 한국어 질문 140쌍): 영어 답변 15건(10.7%) 이 사실상 전부 **도구 결과 직후 턴**
+ * (파일 조작 결과·영문 문서 인용 뒤 모델이 결과 언어로 드리프트). 시스템 프롬프트의 언어 지시만으론
+ * 긴 영문 도구 결과 뒤에 유지되지 않아, 도구 결과 말미에 결정적 한 줄을 붙인다(LLM 왕복 0, B형).
+ */
+export const TOOL_RESULT_LANGUAGE_NOTE = {
+    /** 끄려면 TOOL_RESULT_LANGUAGE_NOTE=false */
+    ENABLED: process.env.TOOL_RESULT_LANGUAGE_NOTE !== 'false',
+    /** 이 길이 미만의 도구 결과엔 붙이지 않는다(짧은 ok/JSON 은 드리프트 원인이 아님) */
+    MIN_RESULT_CHARS: 300,
+    /** 도구 결과의 대상 언어 문자 비율이 이 값 이하면 "다른 언어" 로 본다 */
+    MAX_TARGET_SCRIPT_RATIO: 0.15,
+    /** 답변 언어 가드 로그: 이 길이 이상의 최종 답변만 판정(코드블록·URL·아티팩트 참조 제외 후) */
+    GUARD_MIN_ANSWER_CHARS: 80,
+} as const;
+
 export const EXTERNAL_LLM_TOOL_BLACKLIST: readonly string[] = [
     'vision_ocr',
     'analyze_image',
