@@ -427,6 +427,7 @@
     "modelFallbackNotice": "The selected model ({from}) did not respond, so the default model ({to}) answered instead.",
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "usage limit reached",
+      "INSUFFICIENT_CREDIT": "insufficient credit",
       "SUBSCRIPTION_REQUIRED": "subscription required",
       "INVALID_API_KEY": "authentication error",
       "MISSING_API_KEY": "authentication error",

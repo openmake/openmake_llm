@@ -427,6 +427,7 @@
     "modelFallbackNotice": "선택한 모델({from})이 응답하지 않아 기본 모델({to})로 답변했습니다.",
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "사용량 한도 초과",
+      "INSUFFICIENT_CREDIT": "크레딧 부족",
       "SUBSCRIPTION_REQUIRED": "구독 필요",
       "INVALID_API_KEY": "인증 오류",
       "MISSING_API_KEY": "인증 오류",
