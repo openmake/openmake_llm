@@ -58,7 +58,8 @@ export const updateResearchSessionSchema = z.object({
  * @property {number} [maxLoops] - 최대 반복 횟수 (1~10, 기본값: 5)
  */
 export const executeResearchSchema = z.object({
-    maxLoops: z.number().int().min(1).max(10).optional().default(5)
+    // default 를 두지 않는다 — 두면 세션 depth(RESEARCH_DEPTH_LOOPS) 가 영원히 무시된다(2026-09-05 정정: 종전 default(5))
+    maxLoops: z.number().int().min(1).max(10).optional()
 });
 
 /** 리서치 세션 생성 요청 TypeScript 타입 */

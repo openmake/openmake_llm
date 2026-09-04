@@ -36,6 +36,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { createDeepResearchService } from '../services/DeepResearchService';
 import { resolveRoleClientForUser } from '../services/model-role-resolver';
 import { detectLanguage } from '../chat/language-policy';
+import { registerActiveRun, unregisterActiveRun, abortActiveRun } from '../services/deep-research/active-runs';
 import { RESEARCH_DEPTH_LOOPS, RESEARCH_SESSION_LIST_ALL_DEFAULT } from '../config/runtime-limits';
 import { isAdminRole } from '../data/user-manager';
 import {
@@ -268,10 +269,13 @@ router.post('/sessions/:sessionId/execute', validate(executeResearchSchema), asy
         resolved.client,
     );
 
-    // 백그라운드 실행 (응답은 즉시 반환)
-    service.executeResearch(sessionId, session.topic).catch((error) => {
-        logger.error(`[ResearchRoutes] 리서치 실행 실패: ${error}`);
-    });
+    // 백그라운드 실행 (응답은 즉시 반환). abort 는 레지스트리로 배선 — cancel/DELETE 가 중단한다.
+    const controller = registerActiveRun(sessionId);
+    service.executeResearch(sessionId, session.topic, undefined, controller.signal)
+        .catch((error) => {
+            logger.error(`[ResearchRoutes] 리서치 실행 실패: ${error}`);
+        })
+        .finally(() => unregisterActiveRun(sessionId, controller));
 
     logger.info(`[ResearchRoutes] 리서치 실행 시작: ${sessionId}`);
 
@@ -285,8 +289,29 @@ router.post('/sessions/:sessionId/execute', validate(executeResearchSchema), asy
 }));
 
 /**
+ * POST /api/research/sessions/:sessionId/cancel
+ * 실행 중인 리서치 중단 (이 프로세스에서 실행 중일 때만 유효)
+ */
+router.post('/sessions/:sessionId/cancel', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const { sessionId } = req.params;
+    const db = getUnifiedDatabase();
+    const session = await db.getResearchSession(sessionId);
+    if (!session) {
+        return res.status(404).json(notFound('리서치 세션을 찾을 수 없습니다.'));
+    }
+    assertResourceOwnerOrAdmin(String(session.user_id), String(req.user!.id), req.user!.role || 'user');
+
+    const aborted = abortActiveRun(sessionId);
+    if (!aborted) {
+        return res.status(409).json(badRequest('이 프로세스에서 실행 중인 리서치가 아닙니다.'));
+    }
+    logger.info(`[ResearchRoutes] 리서치 중단 요청: ${sessionId}`);
+    res.json(success({ message: '리서치 중단을 요청했습니다.', sessionId }));
+}));
+
+/**
  * DELETE /api/research/sessions/:sessionId
- * 리서치 세션 삭제
+ * 리서치 세션 삭제 (실행 중이면 먼저 중단)
  */
 router.delete('/sessions/:sessionId', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { sessionId } = req.params;
@@ -304,6 +329,7 @@ router.delete('/sessions/:sessionId', requireAuth, asyncHandler(async (req: Requ
         req.user!.role || 'user'
     );
 
+    abortActiveRun(sessionId);
     await db.deleteResearchSession(sessionId);
 
     res.json(success({ message: '리서치 세션이 삭제되었습니다.' }));
