@@ -29,6 +29,11 @@ describe('mapOpenAIError — 잔액 부족 분류', () => {
         expect(mapOpenAIError(httpErr(400, 'The request is invalid: unsupported parameter')).code).toBe('UPSTREAM_ERROR');
     });
 
+    it('403 "only available on agentic harnesses" (OpenRouter inkling) → MODEL_ACCESS_RESTRICTED', () => {
+        const e = mapOpenAIError(httpErr(403, 'thinkingmachines/inkling:free is only available on agentic harnesses. Try plugging it into a coding agent or productivity tool.'));
+        expect(e.code).toBe('MODEL_ACCESS_RESTRICTED');
+    });
+
     it('403 구독 문구는 여전히 SUBSCRIPTION_REQUIRED, 일반 403 은 INVALID_API_KEY', () => {
         expect(mapOpenAIError(httpErr(403, 'this model requires a subscription, upgrade for access')).code).toBe('SUBSCRIPTION_REQUIRED');
         expect(mapOpenAIError(httpErr(403, 'forbidden')).code).toBe('INVALID_API_KEY');
