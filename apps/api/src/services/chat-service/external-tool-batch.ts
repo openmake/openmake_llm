@@ -24,6 +24,7 @@ import type { ChatMessage, ToolDefinition } from '../../llm';
 import type { ChatMessageRequest } from '../chat-service-types';
 import type { ChatStreamResult } from '../../providers/i-provider';
 import type { ExternalProviderDeps, StreamFromExternalContext } from './external-provider-types';
+import { withLanguageNote } from './tool-result-language';
 
 const logger = createLogger('ChatExternalProvider');
 
@@ -220,9 +221,12 @@ export async function runToolCallBatch(params: {
         const modelFacingResult = toolResult
             .replace(/\[지도 표시용[^\]]*\]\s*/g, '')
             .replace(/```kakaomap\s*\n[\s\S]*?```/g, '');
+        // 도구 결과가 대상 언어와 다른 문자 체계(영문 문서·파일 조작 결과 등)면 말미에 언어 리마인더 —
+        // 시스템 프롬프트 지시만으론 긴 영문 결과 뒤 답변이 영어로 드리프트(90일 실측 10.7%).
+        const langCode = ctx.resolvedLanguage || req.userLanguagePreference;
         messages.push({
             role: 'tool',
-            content: modelFacingResult,
+            content: withLanguageNote(modelFacingResult, langCode),
             tool_name: tc.name,
             tool_call_id: tc.id,
         });
