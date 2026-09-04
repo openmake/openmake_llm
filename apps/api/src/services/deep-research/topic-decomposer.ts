@@ -10,7 +10,7 @@ import type { LLMClient } from '../../llm';
 import type { ResearchConfig, SubTopic } from '../deep-research-types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
-import { CAPACITY } from '../../config/runtime-limits';
+import { CAPACITY, RESEARCH_DEFAULTS } from '../../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { LLM_TIMEOUTS } from '../../config/timeouts';
 import { clampImportance, buildFallbackSubTopics } from '../deep-research-utils';
@@ -81,7 +81,12 @@ export async function decomposeTopics(params: {
             .sort((a, b) => b.importance - a.importance)
             .slice(0, CAPACITY.RESEARCH_MAX_TOTAL_SOURCES);
 
-        const finalSubTopics = normalized.length >= 8 ? normalized : buildFallbackSubTopics(topic);
+        // 유효 서브토픽이 최소치 이상이면 모델 결과를 채택, 아니면(파싱은 됐지만 전부 무효) 템플릿 폴백
+        const useModelResult = normalized.length >= RESEARCH_DEFAULTS.MIN_SUBTOPICS;
+        if (!useModelResult) {
+            logger.warn(`[DeepResearch] 유효 서브토픽 ${normalized.length}개 (< ${RESEARCH_DEFAULTS.MIN_SUBTOPICS}) — 템플릿 폴백`);
+        }
+        const finalSubTopics = useModelResult ? normalized : buildFallbackSubTopics(topic);
 
         const db = getUnifiedDatabase();
         await db.addResearchStep({

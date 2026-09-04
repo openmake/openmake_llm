@@ -183,6 +183,12 @@ export const RESEARCH_DEFAULTS = {
     REPORT_EXPECTED_CHARS: 20000,
     /** 검색 쿼리 최대 단어 수 (초과 시 잘림) */
     SEARCH_QUERY_MAX_WORDS: 10,
+    /**
+     * LLM 분해 결과를 채택하기 위한 최소 유효 서브토픽 수. 미만이면 고정 8개 템플릿으로 폴백.
+     * 2026-09-05 (gpt-researcher 대조): 종전 8 — 7개가 와도 통째로 버리고 템플릿으로 갈아끼웠다.
+     * 이제 1개라도 유효하면 모델의 분해를 존중한다(템플릿은 파싱 실패·0개일 때만).
+     */
+    MIN_SUBTOPICS: 1,
     /** 계층적 병합 전환 임계값 (청크 요약 수가 이 값 초과 시 재귀 병합) */
     MAP_REDUCE_THRESHOLD: 8,
     /** 계층적 병합 최대 깊이 (비용/지연 제어) */
