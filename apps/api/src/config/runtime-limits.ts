@@ -143,10 +143,8 @@ export const CAPACITY = {
     RESEARCH_MAX_SEARCH_QUERIES: 3,
     /** Deep Research 쿼리당 소스 최대 수 */
     RESEARCH_MAX_SOURCES_PER_QUERY: 10,
-    /** Deep Research 전체 소스 최대 수 */
-    RESEARCH_MAX_TOTAL_SOURCES: 15,
-    /** Deep Research 결과 상위 N개 (유틸) */
-    RESEARCH_TOP_RESULTS: 20,
+    /** Deep Research 서브토픽 최대 수 (분해 결과 상위 N개 — 구 RESEARCH_MAX_TOTAL_SOURCES 는 이름과 달리 이 용도였다, 2026-09-05 정정) */
+    RESEARCH_MAX_SUBTOPICS: 15,
     /** 검색 결과 응답 미리보기 최대 항목 */
     SEARCH_RESULT_MAX_DISPLAY: 10,
     /** Admin 대화 내보내기 SQL LIMIT */
@@ -189,6 +187,12 @@ export const RESEARCH_DEFAULTS = {
      * 이제 1개라도 유효하면 모델의 분해를 존중한다(템플릿은 파싱 실패·0개일 때만).
      */
     MIN_SUBTOPICS: 1,
+    /**
+     * 추가 탐색 필요 여부(needsMore) LLM 판정을 건너뛰고 무조건 계속하는 소스 비율 —
+     * 누적 소스 < config.maxTotalSources × 이 값 이면 LLM 을 묻지 않는다.
+     * (2026-09-05 정정: 종전엔 config 가 아니라 이 모듈 상수 MAX_TOTAL_SOURCES 에 곱해 호출자 override 가 무시됐다)
+     */
+    NEED_MORE_SKIP_RATIO: 0.6,
     /** 계층적 병합 전환 임계값 (청크 요약 수가 이 값 초과 시 재귀 병합) */
     MAP_REDUCE_THRESHOLD: 8,
     /** 계층적 병합 최대 깊이 (비용/지연 제어) */

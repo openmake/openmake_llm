@@ -290,7 +290,7 @@ export async function checkNeedsMoreInfo(params: {
     const { client, config, topic, currentFindings, sourceCount, abortSignal, throwIfAborted } = params;
 
     throwIfAborted();
-    if (sourceCount < RESEARCH_DEFAULTS.MAX_TOTAL_SOURCES * 0.6) {
+    if (sourceCount < config.maxTotalSources * RESEARCH_DEFAULTS.NEED_MORE_SKIP_RATIO) {
         return true;
     }
 

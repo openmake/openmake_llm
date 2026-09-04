@@ -79,7 +79,7 @@ export async function decomposeTopics(params: {
             })
             .filter((item): item is SubTopic => item !== null)
             .sort((a, b) => b.importance - a.importance)
-            .slice(0, CAPACITY.RESEARCH_MAX_TOTAL_SOURCES);
+            .slice(0, CAPACITY.RESEARCH_MAX_SUBTOPICS);
 
         // 유효 서브토픽이 최소치 이상이면 모델 결과를 채택, 아니면(파싱은 됐지만 전부 무효) 템플릿 폴백
         const useModelResult = normalized.length >= RESEARCH_DEFAULTS.MIN_SUBTOPICS;
