@@ -25,8 +25,7 @@ import {
     ResearchConfig,
     ResearchProgress,
     ResearchResult,
-    globalConfig,
-    setGlobalConfig
+    DEFAULT_CONFIG,
 } from './deep-research-types';
 
 import { deduplicateSources, getLoopProgressRange, computeResearchMetrics } from './deep-research-utils';
@@ -56,7 +55,7 @@ export class DeepResearchService {
     private abortController: AbortController | null = null;
 
     constructor(config?: Partial<ResearchConfig>, client?: LLMClient) {
-        this.config = { ...globalConfig, ...config };
+        this.config = { ...DEFAULT_CONFIG, ...config };
         if (client) {
             // 'research' role 해석 클라이언트 주입 (외부 BYOK endpoint 포함) — research.routes 경로
             this.client = client;
@@ -472,23 +471,6 @@ export class DeepResearchService {
 // ============================================================
 // 모듈 API
 // ============================================================
-
-/**
- * 전역 설정 가져오기
- */
-export function getResearchConfig(): ResearchConfig {
-    return { ...globalConfig };
-}
-
-/**
- * 전역 설정 업데이트
- */
-export function configureResearch(config: Partial<ResearchConfig>): ResearchConfig {
-    const updated = { ...globalConfig, ...config };
-    setGlobalConfig(updated);
-    logger.info(`[DeepResearch] 설정 업데이트: ${JSON.stringify(updated)}`);
-    return { ...updated };
-}
 
 /**
  * 서비스 인스턴스 생성

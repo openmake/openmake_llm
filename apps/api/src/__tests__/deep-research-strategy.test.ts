@@ -134,7 +134,6 @@ describe('DeepResearchStrategy', () => {
             expect(MockDeepResearchService).toHaveBeenCalledWith(
                 expect.objectContaining({
                     maxLoops: RESEARCH_STRATEGY_PARAMS.MAX_LOOPS,
-                    searchApi: 'all',
                     language: 'ko',
                     chunkSize: RESEARCH_STRATEGY_PARAMS.CHUNK_SIZE,
                 }),
