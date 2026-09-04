@@ -44,6 +44,8 @@
     "viewAll": "모두 보기",
     "noResults": "검색 결과 없음",
     "accountMenu": "계정 메뉴",
+    "homepage": "OpenMake 홈페이지",
+    "bench": "벤치마크",
     "groups": {
       "today": "오늘",
       "yesterday": "어제",
@@ -1084,6 +1086,8 @@
   },
   "auth": {
     "login": {
+      "homepage": "OpenMake 홈페이지",
+      "bench": "벤치마크",
       "subtitle": "로그인하고 계속하세요",
       "emailLabel": "이메일",
       "passwordLabel": "비밀번호",

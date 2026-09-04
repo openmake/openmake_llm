@@ -12,6 +12,8 @@ import {
   BarChart3,
   Terminal,
   ChevronsUpDown,
+  Globe,
+  Gauge,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
@@ -19,6 +21,7 @@ import type { ApiSuccess } from "@openmake/shared-types";
 import { useAppStore } from "@/lib/store";
 import type { ChatRole } from "@/lib/store";
 import { visibleNavItems } from "@/lib/nav";
+import { EXTERNAL_LINKS } from "@/lib/external-links";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { appendAnonSessionId } from "@/lib/anon-session";
 import { syncAuthFromServer, clearHadSession } from "@/lib/auth-sync";
@@ -359,6 +362,28 @@ export function Sidebar() {
               <Terminal className="h-4 w-4" />
               {tNav("items.developer")}
             </Link>
+            <div className="my-1 border-t border-border" />
+            {/* 자매 서비스 — 홈페이지·bench (bench 는 SSO 경로로 로그인 상태 유지) */}
+            <a
+              href={EXTERNAL_LINKS.homepage}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setMenuOpen(false)}
+              className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-fg-2 transition hover:bg-surface-3 hover:text-fg"
+            >
+              <Globe className="h-4 w-4" />
+              {t("homepage")}
+            </a>
+            <a
+              href={EXTERNAL_LINKS.benchSso}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setMenuOpen(false)}
+              className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-fg-2 transition hover:bg-surface-3 hover:text-fg"
+            >
+              <Gauge className="h-4 w-4" />
+              {t("bench")}
+            </a>
             <div className="my-1 border-t border-border" />
             <button
               type="button"

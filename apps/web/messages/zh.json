@@ -44,6 +44,8 @@
     "viewAll": "查看全部",
     "noResults": "无搜索结果",
     "accountMenu": "账户菜单",
+    "homepage": "OpenMake 主页",
+    "bench": "基准测试",
     "groups": {
       "today": "今天",
       "yesterday": "昨天",
@@ -1084,6 +1086,8 @@
   },
   "auth": {
     "login": {
+      "homepage": "OpenMake 主页",
+      "bench": "基准测试",
       "subtitle": "登录以继续",
       "emailLabel": "邮箱",
       "passwordLabel": "密码",

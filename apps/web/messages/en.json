@@ -44,6 +44,8 @@
     "viewAll": "View all",
     "noResults": "No results",
     "accountMenu": "Account menu",
+    "homepage": "OpenMake homepage",
+    "bench": "Benchmark",
     "groups": {
       "today": "Today",
       "yesterday": "Yesterday",
@@ -1084,6 +1086,8 @@
   },
   "auth": {
     "login": {
+      "homepage": "OpenMake homepage",
+      "bench": "Benchmark",
       "subtitle": "Sign in to continue",
       "emailLabel": "Email",
       "passwordLabel": "Password",
