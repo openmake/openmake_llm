@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.42.0](https://github.com/openmake/openmake_llm/compare/v1.41.0...v1.42.0) (2026-09-04)
+
+
+### ✨ 기능
+
+* **chat:** 도구 결과 언어 리마인더 + 답변 언어 가드 관측 (한국어 질문→영어 답변 드리프트) ([#743](https://github.com/openmake/openmake_llm/issues/743)) ([af901bb](https://github.com/openmake/openmake_llm/commit/af901bb18be979bdf4f323d6aac4c7d5cdcc0135))
+
+
+### 🐛 버그 수정
+
+* **chat:** 언어 감지 전처리에서 코드 식별자 제거 — 한국어 질문이 영어로 오판되던 것 ([#745](https://github.com/openmake/openmake_llm/issues/745)) ([d67804e](https://github.com/openmake/openmake_llm/commit/d67804e271c3ec5210740eba0a2bc04276dc7cde))
+
 ## [1.41.0](https://github.com/openmake/openmake_llm/compare/v1.40.1...v1.41.0) (2026-09-04)
 
 
