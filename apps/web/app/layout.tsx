@@ -1,16 +1,31 @@
 import type { Metadata, Viewport } from "next";
-import { JetBrains_Mono } from "next/font/google";
+import { IBM_Plex_Mono, Noto_Sans_KR, Space_Grotesk } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
 import "./globals.css";
 import { GoogleAnalytics } from "@/components/google-analytics";
 import { Providers } from "./providers";
 
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-jbm",
+// Instrument 서체 3종 (기준: OpenMake Color & Type Pairings) — 라틴/제목 Space Grotesk,
+// 한글 본문 Noto Sans KR(다크에서 300 사용), 수치·경로 IBM Plex Mono.
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
   subsets: ["latin"],
   display: "swap",
 });
+const notoSansKr = Noto_Sans_KR({
+  variable: "--font-noto-kr",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
+});
+const ibmPlexMono = IBM_Plex_Mono({
+  variable: "--font-ibm-plex-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  display: "swap",
+});
+const FONT_VARIABLES = `${spaceGrotesk.variable} ${notoSansKr.variable} ${ibmPlexMono.variable}`;
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("metadata");
@@ -36,13 +51,7 @@ export default async function RootLayout({
   // NEXT_LOCALE 쿠키 → Accept-Language → ko (i18n/request.ts 에서 결정)
   const locale = await getLocale();
   return (
-    <html lang={locale} suppressHydrationWarning className={jetbrainsMono.variable}>
-      <head>
-        {/* Pretendard self-host (public/vendor/pretendard) — 벤더 배포 형태 그대로 서빙하는
-            정적 자산이라 CSS 모듈 import 대상이 아님 (no-css-tags 예외) */}
-        {/* eslint-disable-next-line @next/next/no-css-tags */}
-        <link rel="stylesheet" href="/vendor/pretendard/pretendard.css" />
-      </head>
+    <html lang={locale} suppressHydrationWarning className={FONT_VARIABLES}>
       <body className="min-h-dvh bg-app text-fg antialiased">
         <GoogleAnalytics />
         <NextIntlClientProvider>
