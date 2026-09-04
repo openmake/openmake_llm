@@ -292,6 +292,15 @@ export function preprocessTextForLanguageDetection(text: string): string {
         .replace(/https?:\/\/[^\s]+/g, '')
         // 이메일 제거
         .replace(/\S+@\S+\.\S+/g, '')
+        // 코드 식별자 제거 — MCP 도구명(server::tool)·파일명/패키지명(route.ts, Next.js, @scope/pkg)·
+        // kebab/snake 식별자(resolve-library-id, max_tokens)·경로(app/api/hello). 자연어가 아닌데 라틴
+        // 문자 수를 부풀려 한국어 질문을 영어로 오판했다(2026-09-05 실측: "context7::resolve-library-id 와
+        // … Next.js … route.ts … 보여줘" → en 0.80). 백틱 없이 쓰인 식별자를 잡는 것이 목적이라
+        // 일반 영단어(App Router)는 남긴다.
+        .replace(/[A-Za-z0-9_@.\/-]*::[A-Za-z0-9_.\/-]+/g, ' ')
+        .replace(/(?:^|\s)@?[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_.-]+)+(?=\s|$|[,.!?)\]])/g, ' ')
+        .replace(/\b[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)+\b/g, ' ')
+        .replace(/\b[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)+\b/g, ' ')
         // 숫자만 있는 부분 제거
         .replace(/^\d+$/gm, '')
         // 특수문자만 있는 라인 제거
