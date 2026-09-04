@@ -114,10 +114,21 @@ function inferCapabilitiesFromModelId(
     return caps;
 }
 
-function mapOpenAIError(err: unknown): ProviderError {
+/**
+ * 402 가 아닌 status 로 오는 잔액 부족 응답 (2026-09-04 B.AI 실측):
+ *   400 `{"code":"insufficient_user_quota","message":"credit insufficient balance: balance=0 required=18"}`
+ *   403 `"Access restricted. Deposit required to unlock premium models."`
+ * 인증 오류·업스트림 오류로 분류하면 사용자에게 "인증 오류"/"업스트림 오류"로 오안내된다.
+ */
+const INSUFFICIENT_CREDIT_PATTERN = /insufficient[_ ]user[_ ]quota|insufficient balance|deposit required/i;
+
+export function mapOpenAIError(err: unknown): ProviderError {
     const message = err instanceof Error ? err.message : String(err);
     if (err && typeof err === 'object' && 'status' in err) {
         const status = (err as { status?: number }).status;
+        if ((status === 400 || status === 402 || status === 403) && INSUFFICIENT_CREDIT_PATTERN.test(message)) {
+            return new ProviderError('INSUFFICIENT_CREDIT', `잔액 부족: ${message}`, err);
+        }
         if (status === 401 || status === 403) {
             // 403 중 구독/플랜 미달 응답은 키 문제가 아님 — 별도 코드로 분기
             // (예: Ollama Cloud "this model requires a subscription, upgrade for access")
