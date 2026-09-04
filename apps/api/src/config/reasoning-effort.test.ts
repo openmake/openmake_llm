@@ -51,6 +51,21 @@ describe('reasoning-effort 정규화', () => {
         expect(normalizeEffort('newmodel-9b', 'medium')).toBe('low');
     });
 
+    it('env override 는 기본값 위에 merge 된다 — 옛 env 가 새 기본 항목을 지우지 못한다 (2026-09-04 B.AI 400)', () => {
+        // pm2 가 물고 있던 stale env: qwen 항목만 있고 bai:glm-5.3 이 없다.
+        process.env.LLM_REASONING_EFFORTS_JSON = JSON.stringify({ 'qwen3.8': ['low', 'medium', 'xhigh'] });
+        resetReasoningEffortCache();
+        expect(supportedEfforts('glm-5.3-flash', 'bai')).toEqual(['low', 'high']);
+        expect(normalizeEffort('glm-5.3-flash', 'medium', 'bai')).toBe('high');
+    });
+
+    it('env 가 같은 키를 주면 그 항목은 env 가 이긴다', () => {
+        process.env.LLM_REASONING_EFFORTS_JSON = JSON.stringify({ 'bai:glm-5.3': ['low'] });
+        resetReasoningEffortCache();
+        expect(supportedEfforts('glm-5.3-flash', 'bai')).toEqual(['low']);
+        expect(supportedEfforts('qwen3.8-27b')).toEqual(['low', 'medium', 'xhigh']); // 기본값 유지
+    });
+
     it('잘못된 env 는 기본 카탈로그로 폴백한다 (부팅 실패 금지)', () => {
         process.env.LLM_REASONING_EFFORTS_JSON = '{"broken": ["ultra"]}';
         resetReasoningEffortCache();
