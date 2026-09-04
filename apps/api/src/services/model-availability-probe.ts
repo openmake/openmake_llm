@@ -40,6 +40,7 @@ export interface ProbeResult {
 /** ProviderError code → 모델 자체가 못 쓰이는 상황인지 판정 */
 const UNUSABLE_CODES: ReadonlySet<string> = new Set([
     'SUBSCRIPTION_REQUIRED',
+    'MODEL_ACCESS_RESTRICTED',
     'MODEL_NOT_FOUND',
     'NOT_SUPPORTED',
     'INVALID_MODEL_ID',

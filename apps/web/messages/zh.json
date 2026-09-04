@@ -428,6 +428,7 @@
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "已达使用上限",
       "INSUFFICIENT_CREDIT": "积分不足",
+      "MODEL_ACCESS_RESTRICTED": "受提供商政策限制",
       "SUBSCRIPTION_REQUIRED": "需要订阅",
       "INVALID_API_KEY": "认证错误",
       "MISSING_API_KEY": "认证错误",
