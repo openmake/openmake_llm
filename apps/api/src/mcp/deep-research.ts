@@ -329,7 +329,6 @@ export const getResearchStatusTool: MCPToolDefinition = {
  *
  * @param args.maxLoops - 최대 반복 횟수 (1-10)
  * @param args.llmModel - LLM 모델명
- * @param args.searchApi - 검색 API 선택
  * @param args.maxSearchResults - 최대 검색 결과 수 (5-200)
  * @param args.language - 출력 언어 (ko/en/ja/zh/es/de)
  * @returns 업데이트된 설정 (JSON)
@@ -349,11 +348,6 @@ export const configureResearchTool: MCPToolDefinition = {
                     type: 'string',
                     description: '사용할 LLM 모델 이름'
                 },
-                searchApi: {
-                    type: 'string',
-                    enum: ['google', 'all'],
-                    description: '웹 검색 API 선택'
-                },
                 maxSearchResults: {
                     type: 'number',
                     description: '검색 결과 최대 수 (5-200)'
@@ -371,9 +365,6 @@ export const configureResearchTool: MCPToolDefinition = {
             // 타입 캐스팅
             const maxLoops = args.maxLoops as number | undefined;
             const llmModel = args.llmModel as string | undefined;
-            const rawSearchApi = args.searchApi as string | undefined;
-            const searchApi: 'google' | 'all' | undefined =
-                (rawSearchApi === 'google' || rawSearchApi === 'all') ? rawSearchApi : undefined;
             const maxSearchResults = args.maxSearchResults as number | undefined;
             const language = args.language as string | undefined;
 
@@ -398,10 +389,6 @@ export const configureResearchTool: MCPToolDefinition = {
 
             if (llmModel !== undefined) {
                 updates.llmModel = llmModel;
-            }
-
-            if (searchApi !== undefined) {
-                updates.searchApi = searchApi;
             }
 
             if (maxSearchResults !== undefined) {

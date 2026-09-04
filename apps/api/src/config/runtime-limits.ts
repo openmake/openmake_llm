@@ -210,8 +210,6 @@ export const RESEARCH_DEFAULTS = {
 export const RESEARCH_STRATEGY_PARAMS = {
     /** 최대 반복 루프 수 */
     MAX_LOOPS: 5,
-    /** 검색 API 종류 */
-    SEARCH_API: 'all' as const,
     /** 최대 검색 결과 수 */
     MAX_SEARCH_RESULTS: 360,
     /** 최대 전체 소스 수 — 합성·보고서 입력 규모를 좌우(과다 시 보고서 생성 지연). env override 가능. */
