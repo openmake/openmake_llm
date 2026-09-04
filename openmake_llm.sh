@@ -85,6 +85,12 @@ export_dotenv_for_pm2() {
         if [[ "$val" =~ ^\"(.*)\"$ ]] || [[ "$val" =~ ^\'(.*)\'$ ]]; then
             val="${BASH_REMATCH[1]}"
         fi
+        # 이 스크립트가 readonly 로 선언한 이름(COMPOSE_FILE·APP_NAME 등)은 export 가 실패하고
+        # set -e 가 deploy 를 재시작 직전에 조용히 끝낸다(2026-09-04 실사고: 빌드·마이그레이션만 되고
+        # pm2 미재시작). 그런 키는 건너뛴다 — 스크립트 내부 상수라 pm2 에 넘길 대상도 아니다.
+        if readonly -p 2>/dev/null | grep -q " $key="; then
+            continue
+        fi
         export "$key=$val"
     done < "$file"
 }
