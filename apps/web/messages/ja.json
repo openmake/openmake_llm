@@ -44,6 +44,8 @@
     "viewAll": "すべて表示",
     "noResults": "検索結果なし",
     "accountMenu": "アカウントメニュー",
+    "homepage": "OpenMake ホームページ",
+    "bench": "ベンチマーク",
     "groups": {
       "today": "今日",
       "yesterday": "昨日",
@@ -1084,6 +1086,8 @@
   },
   "auth": {
     "login": {
+      "homepage": "OpenMake ホームページ",
+      "bench": "ベンチマーク",
       "subtitle": "ログインして続行",
       "emailLabel": "メールアドレス",
       "passwordLabel": "パスワード",
