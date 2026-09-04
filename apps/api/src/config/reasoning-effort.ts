@@ -21,7 +21,11 @@ const FALLBACK_SUPPORTED: readonly ReasoningEffort[] = ['low', 'medium', 'high']
 /**
  * 모델 id 접두어 → 지원 강도 목록. `matchCapabilityPreset` 과 동일한
  * startsWith-longest 규칙을 쓴다(중간 substring 오매칭 배제).
- * env `LLM_REASONING_EFFORTS_JSON` 으로 통째 override 가능 — 새 모델 도입 시 배포 없이 대응.
+ * env `LLM_REASONING_EFFORTS_JSON` 은 **항목 단위로 기본값 위에 merge** 된다 — 새 모델 도입 시
+ * 배포 없이 대응하되, 기본값에 새로 들어온 항목을 env 가 지우지는 못한다.
+ * (2026-09-04 운영: pm2 가 옛 .env 의 qwen 항목만 든 JSON 을 물고 있어 통째 대체 시
+ *  `bai:glm-5.3` 이 사라지고 FALLBACK 의 medium 이 나가 B.AI 400 — dotenv 는 기존 env 를
+ *  덮어쓰지 않으므로 stale env 는 재시작으로 안 풀린다.)
  */
 const DEFAULT_MODEL_EFFORTS: Readonly<Record<string, readonly ReasoningEffort[]>> = {
     'qwen3.6': ['low', 'medium', 'high', 'xhigh'],
@@ -52,7 +56,7 @@ function getModelEfforts(): Readonly<Record<string, readonly ReasoningEffort[]>>
                 }
             }
             if (Object.keys(out).length > 0) {
-                _cached = out;
+                _cached = { ...DEFAULT_MODEL_EFFORTS, ...out };
                 return _cached;
             }
         } catch { /* 형식 오류는 기본값으로 폴백 */ }

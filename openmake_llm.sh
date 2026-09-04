@@ -65,6 +65,30 @@ env_line() {
     grep -E "^$1=" "$SCRIPT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d ' ' || true
 }
 
+# .env 의 KEY=VALUE 를 현재 셸에 export 한다 — `pm2 restart --update-env` 가 .env 편집을 실제로
+# 반영하게 하는 유일한 경로. PM2 는 최초 `pm2 start` 시점의 env 스냅샷을 프로세스에 계속 주입하고
+# 앱의 dotenv 는 이미 있는 값을 덮어쓰지 않으므로, 여기서 export 하지 않으면 .env 를 고쳐도 재시작
+# 뒤에 옛 값이 남는다 (2026-09-04: LLM_REASONING_EFFORTS_JSON 이 하루 넘게 stale → B.AI 400).
+# `source .env` 대신 줄 단위 파싱 — 값의 공백/특수문자에 셸 해석이 걸리지 않는다. 주석·빈 줄은
+# 건너뛰고, 값 전체를 감싼 한 쌍의 따옴표만 벗긴다(dotenv 와 같은 규칙).
+export_dotenv_for_pm2() {
+    local file="$SCRIPT_DIR/.env" line key val
+    [[ -f "$file" ]] || return 0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line="${line#export }"
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+        [[ "$line" == *=* ]] || continue
+        key="${line%%=*}"
+        val="${line#*=}"
+        [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+        if [[ "$val" =~ ^\"(.*)\"$ ]] || [[ "$val" =~ ^\'(.*)\'$ ]]; then
+            val="${BASH_REMATCH[1]}"
+        fi
+        export "$key=$val"
+    done < "$file"
+}
+
 # 포트 우선순위: 셸 환경변수 > .env > 기본값.
 # .env 를 봐야 하는 이유 — 기본 포트가 이미 점유돼 install.sh --postgres-port 등으로
 # 다른 포트에 띄운 경우, .env 를 무시하면 status/기동대기가 엉뚱한 포트를 본다.
@@ -287,6 +311,7 @@ start_app() {
     # PM2 프로세스 존재 여부 확인
     if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$APP_NAME\""; then
         log_info "$APP_NAME 이미 등록됨 — restart 시도"
+        export_dotenv_for_pm2
         pm2 restart "$APP_NAME" --update-env >/dev/null 2>&1 || {
             log_err "$APP_NAME restart 실패"
             return 2
@@ -450,6 +475,7 @@ cmd_restart() {
 # PM2 미등록 앱은 건너뛴다 (최초 설치 중 빌드 등).
 restart_built_apps() {
     local restarted=0 app
+    export_dotenv_for_pm2
     for app in "$APP_NAME" "$FRONT_APP_NAME"; do
         if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$app\""; then
             if pm2 restart "$app" --update-env >/dev/null 2>&1; then
@@ -612,6 +638,7 @@ cmd_deploy() {
     # 3) 재시작 (앱만)
     log_step "PM2 앱 재시작 (의존성은 그대로 유지)"
     if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$APP_NAME\""; then
+        export_dotenv_for_pm2
         pm2 restart "$APP_NAME" --update-env >/dev/null 2>&1 || {
             log_err "$APP_NAME restart 실패"
             return 2
