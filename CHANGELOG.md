@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.41.0](https://github.com/openmake/openmake_llm/compare/v1.40.1...v1.41.0) (2026-09-04)
+
+
+### ✨ 기능
+
+* **api:** 웹 SSO 클라이언트(bench)·/v1/models 캐시 라이브 갱신·OpenAI 호환 raw 모드 ([#732](https://github.com/openmake/openmake_llm/issues/732)) ([904c17a](https://github.com/openmake/openmake_llm/commit/904c17a210cc4bdcd26a3788bda26e125b279b71))
+* **mcp:** Context7 MCP 서버를 카탈로그에 시드 (114) ([#741](https://github.com/openmake/openmake_llm/issues/741)) ([da2446a](https://github.com/openmake/openmake_llm/commit/da2446a88839270a2904bc86d24818b8a23e8611))
+* **mcp:** Tavily MCP 서버를 카탈로그에 시드 (112) ([#737](https://github.com/openmake/openmake_llm/issues/737)) ([547c923](https://github.com/openmake/openmake_llm/commit/547c9231455cbb1718d99105921ec28fe97ac268))
+* **research:** 분해 프롬프트에 현재 날짜·검색 연산자 금지 주입 + 유효 서브토픽 관용 채택 ([#739](https://github.com/openmake/openmake_llm/issues/739)) ([22729f6](https://github.com/openmake/openmake_llm/commit/22729f6453b105b9978035a88e575eeed44da419))
+* **web:** 사이드바 계정 메뉴·로그인 화면에 openmake.cc·bench 링크 추가 ([#734](https://github.com/openmake/openmake_llm/issues/734)) ([21309c7](https://github.com/openmake/openmake_llm/commit/21309c703c0c0010878b08de462e8126ab0da748))
+
+
+### 🐛 버그 수정
+
+* **deploy:** export_dotenv_for_pm2 가 스크립트 readonly 상수와 겹치는 .env 키를 건너뜀 ([#733](https://github.com/openmake/openmake_llm/issues/733)) ([c94b759](https://github.com/openmake/openmake_llm/commit/c94b759435afc014a24e7a6d2f93dde27d3354bb))
+* **llm:** 로컬 모델 프로브 demote 영구 고착 해소 + 외부 모델 캐시 capabilitiesInferred 유실 수정 ([#729](https://github.com/openmake/openmake_llm/issues/729)) ([19bbd7d](https://github.com/openmake/openmake_llm/commit/19bbd7dc27178b802c4ce68fd3183a2ec7e43354))
+* **providers:** B.AI deepseek 2종 무료 해제 + 잔액 부족 응답을 INSUFFICIENT_CREDIT 로 분류 ([#735](https://github.com/openmake/openmake_llm/issues/735)) ([6449bd8](https://github.com/openmake/openmake_llm/commit/6449bd8d08e19446616551711ec8152aaa5a2a76))
+* **providers:** provider 정책 403 을 MODEL_ACCESS_RESTRICTED 로 분류 + 폴백 배지 사유 키 누락 수정 ([#736](https://github.com/openmake/openmake_llm/issues/736)) ([9b0bf49](https://github.com/openmake/openmake_llm/commit/9b0bf496146800a68b923809b459136051439137))
+* **providers:** 추론 강도 env 맵을 기본값에 merge + deploy 가 .env 를 pm2 --update-env 에 반영 ([#731](https://github.com/openmake/openmake_llm/issues/731)) ([5f319cc](https://github.com/openmake/openmake_llm/commit/5f319cc854dd456fac7c4d2506f0fd2698d3fe56))
+* **research:** 딥리서치 정합성 결함 6건 — depth 표 단일화·needsMore config 기준·REST 취소 배선·CAPACITY 정정·configure_research 사용자 격리·schema default 제거 ([#740](https://github.com/openmake/openmake_llm/issues/740)) ([d7e2c99](https://github.com/openmake/openmake_llm/commit/d7e2c991548ceba52ad9bff6d5845a2b8f89dcdf))
+
 ## [1.40.1](https://github.com/openmake/openmake_llm/compare/v1.40.0...v1.40.1) (2026-09-03)
 
 
