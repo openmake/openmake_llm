@@ -11,13 +11,13 @@
 import { Request, Response, Router } from 'express';
 import { getAuthService } from '../services/AuthService';
 import type { OAuthTokenResponse, GoogleUserInfo, GitHubUser, GitHubEmail, KakaoUserInfo } from '../auth/types';
-import { setTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken } from '../auth';
+import { setTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken, optionalAuth } from '../auth';
 import { getUserManager } from '../data/user-manager';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, unauthorized, serviceUnavailable, internalError } from '../utils/api-response';
 import { getConfig } from '../config/env';
 import { APP_USER_AGENT } from '../config/constants';
-import { MOBILE_AUTH } from '../config/security';
+import { MOBILE_AUTH, SSO_CLIENTS } from '../config/security';
 import { GOOGLE_OAUTH, GITHUB_OAUTH, GITHUB_API, KAKAO_OAUTH } from '../config/external-services';
 import { authLimiter } from '../middlewares/rate-limiters';
 import { validate } from '../middlewares/validation';
@@ -28,6 +28,7 @@ import {
     buildRedirectUri,
     sendOAuthSuccessRedirect,
     issueMobileExchangeRedirect,
+    issueSsoExchangeRedirect,
     consumeMobileExchangeCode,
 } from './auth-oauth-helpers';
 
@@ -72,6 +73,44 @@ export class AuthOAuthController {
         this.router.get('/callback/kakao', this.kakaoCallback.bind(this));
         // 모바일(iOS) 전용: OAuth exchange code → 토큰 교환 (사전 인증 POST — CSRF 부트스트랩 대상)
         this.router.post('/mobile/exchange', authLimiter, validate(mobileExchangeSchema), this.mobileExchange.bind(this));
+        // 웹 SSO 클라이언트(bench 등): 로그인돼 있으면 exchange code 를 등록된 redirect URI 로, 아니면 /login 으로
+        this.router.get('/sso/authorize', optionalAuth, this.ssoAuthorize.bind(this));
+    }
+
+    /**
+     * `?client=` 를 SSO_CLIENTS 화이트리스트로 해석 — 허용 목록 외 값은 undefined
+     */
+    private resolveSsoClient(req: Request): string | undefined {
+        const client = req.query.client;
+        return typeof client === 'string' && Object.hasOwn(SSO_CLIENTS, client) ? client : undefined;
+    }
+
+    /**
+     * OAuth 시작 시 state 에 귀속할 client — 모바일('ios') 또는 웹 SSO('sso:bench'). 콜백에서 분기.
+     */
+    private resolveStateClient(req: Request): string | undefined {
+        const sso = this.resolveSsoClient(req);
+        return sso ? `sso:${sso}` : this.resolveMobileClient(req);
+    }
+
+    /**
+     * GET /api/auth/sso/authorize?client=bench — 웹 SSO 진입점
+     *
+     * 세션 쿠키가 있으면(게스트 제외) 일회성 exchange code 를 등록된 redirect URI 로 보낸다.
+     * 없으면 /login?client= 로 보내 로그인 뒤 다시 여기로 오게 한다 (로그인 페이지가 처리).
+     */
+    private async ssoAuthorize(req: Request, res: Response): Promise<void> {
+        const client = this.resolveSsoClient(req);
+        if (!client) {
+            res.status(400).json(badRequest('알 수 없는 SSO 클라이언트입니다'));
+            return;
+        }
+        const user = req.user as { id?: string | number; role?: string } | undefined;
+        if (!user?.id || user.role === 'guest') {
+            res.redirect(`/login?client=${encodeURIComponent(client)}`);
+            return;
+        }
+        await issueSsoExchangeRedirect(res, String(user.id), client, 'session');
     }
 
     /**
@@ -160,7 +199,7 @@ export class AuthOAuthController {
         }
 
         // 🔒 Phase 2 보안 패치: 암호학적으로 안전한 state 생성 (?client=ios 는 state 에 귀속 — 콜백 분기용)
-        const state = await generateSecureState('google', this.resolveMobileClient(req));
+        const state = await generateSecureState('google', this.resolveStateClient(req));
         const authUrl = new URL(GOOGLE_OAUTH.AUTH_URL);
         authUrl.searchParams.set('client_id', clientId);
         authUrl.searchParams.set('redirect_uri', redirectUri);
@@ -187,7 +226,7 @@ export class AuthOAuthController {
         }
 
         // 🔒 Phase 2 보안 패치: 암호학적으로 안전한 state 생성 (?client=ios 는 state 에 귀속 — 콜백 분기용)
-        const state = await generateSecureState('github', this.resolveMobileClient(req));
+        const state = await generateSecureState('github', this.resolveStateClient(req));
         const authUrl = new URL(GITHUB_OAUTH.AUTH_URL);
         authUrl.searchParams.set('client_id', clientId);
         authUrl.searchParams.set('redirect_uri', redirectUri);
@@ -266,6 +305,11 @@ export class AuthOAuthController {
 
             if (!result.success || !result.token || !result.user) throw new Error(result.error || '인증 실패');
 
+            if (stateResult.client?.startsWith('sso:')) {
+                // 웹 SSO 클라이언트(bench 등): exchange code 를 등록된 redirect URI 로 전달
+                await issueSsoExchangeRedirect(res, String(result.user.id), stateResult.client.slice(4), 'google');
+                return;
+            }
             if (stateResult.client) {
                 // 모바일: 쿠키 대신 일회성 exchange code 를 app scheme 으로 전달 (iOS 축 2)
                 await issueMobileExchangeRedirect(res, String(result.user.id), 'google');
@@ -369,6 +413,11 @@ export class AuthOAuthController {
 
             if (!result.success || !result.token || !result.user) throw new Error(result.error || '인증 실패');
 
+            if (stateResult.client?.startsWith('sso:')) {
+                // 웹 SSO 클라이언트(bench 등): exchange code 를 등록된 redirect URI 로 전달
+                await issueSsoExchangeRedirect(res, String(result.user.id), stateResult.client.slice(4), 'github');
+                return;
+            }
             if (stateResult.client) {
                 // 모바일: 쿠키 대신 일회성 exchange code 를 app scheme 으로 전달 (iOS 축 2)
                 await issueMobileExchangeRedirect(res, String(result.user.id), 'github');
@@ -396,7 +445,7 @@ export class AuthOAuthController {
         }
 
         // 🔒 암호학적으로 안전한 state 생성 (CSRF 방어, ?client=ios 는 state 에 귀속 — 콜백 분기용)
-        const state = await generateSecureState('kakao', this.resolveMobileClient(req));
+        const state = await generateSecureState('kakao', this.resolveStateClient(req));
         const authUrl = new URL(KAKAO_OAUTH.AUTH_URL);
         authUrl.searchParams.set('client_id', clientId);
         authUrl.searchParams.set('redirect_uri', redirectUri);
@@ -488,6 +537,11 @@ export class AuthOAuthController {
 
             if (!result.success || !result.token || !result.user) throw new Error(result.error || '인증 실패');
 
+            if (stateResult.client?.startsWith('sso:')) {
+                // 웹 SSO 클라이언트(bench 등): exchange code 를 등록된 redirect URI 로 전달
+                await issueSsoExchangeRedirect(res, String(result.user.id), stateResult.client.slice(4), 'kakao');
+                return;
+            }
             if (stateResult.client) {
                 // 모바일: 쿠키 대신 일회성 exchange code 를 app scheme 으로 전달 (iOS 축 2)
                 await issueMobileExchangeRedirect(res, String(result.user.id), 'kakao');

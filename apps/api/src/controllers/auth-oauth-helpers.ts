@@ -10,7 +10,7 @@ import { Request, Response } from 'express';
 import * as crypto from 'crypto';
 import { createLogger } from '../utils/logger';
 import { getConfig } from '../config/env';
-import { MOBILE_AUTH } from '../config/security';
+import { MOBILE_AUTH, SSO_CLIENTS } from '../config/security';
 
 const log = createLogger('AuthOAuthHelpers');
 
@@ -252,6 +252,28 @@ export function buildRedirectUri(req: Request, provider: 'google' | 'github' | '
  * (config/security.ts MOBILE_AUTH 참고 — iOS 축 2)
  */
 export async function issueMobileExchangeRedirect(res: Response, userId: string, provider: string): Promise<void> {
+    const code = await createExchangeCode(userId, provider);
+    const target = `${MOBILE_AUTH.APP_SCHEME}://${MOBILE_AUTH.CALLBACK_HOST_PATH}?code=${code}`;
+    log.info(`[OAuth] 모바일 exchange code 발급 (provider=${provider}, user=${userId})`);
+    res.redirect(target);
+}
+
+/**
+ * 웹 SSO 클라이언트(config/security.ts SSO_CLIENTS) 완료 — 일회성 exchange code 를 등록된
+ * redirect URI 로 전달한다. 코드 저장소·TTL·교환 엔드포인트는 모바일과 같다.
+ */
+export async function issueSsoExchangeRedirect(res: Response, userId: string, client: string, provider: string): Promise<void> {
+    const target = SSO_CLIENTS[client]?.redirectUri;
+    if (!target) {
+        res.status(400).type('text').send('unknown sso client');
+        return;
+    }
+    const code = await createExchangeCode(userId, `sso:${client}:${provider}`);
+    log.info(`[OAuth] SSO exchange code 발급 (client=${client}, provider=${provider}, user=${userId})`);
+    res.redirect(`${target}?code=${code}`);
+}
+
+async function createExchangeCode(userId: string, provider: string): Promise<string> {
     const { getKeyValueStore } = await import('../storage');
     const code = crypto.randomBytes(MOBILE_AUTH.EXCHANGE_CODE_BYTES).toString('hex');
     await getKeyValueStore().set(
@@ -259,9 +281,7 @@ export async function issueMobileExchangeRedirect(res: Response, userId: string,
         { userId, provider },
         MOBILE_AUTH.EXCHANGE_CODE_TTL_MS,
     );
-    const target = `${MOBILE_AUTH.APP_SCHEME}://${MOBILE_AUTH.CALLBACK_HOST_PATH}?code=${code}`;
-    log.info(`[OAuth] 모바일 exchange code 발급 (provider=${provider}, user=${userId})`);
-    res.redirect(target);
+    return code;
 }
 
 /**

@@ -185,3 +185,16 @@ export const MOBILE_AUTH = {
     /** 허용 클라이언트 식별자 화이트리스트 (`?client=`) */
     ALLOWED_CLIENTS: ['ios'],
 } as const;
+
+/**
+ * 웹 SSO 클라이언트 (다른 호스트명의 자매 서비스가 openmake 로그인을 그대로 쓰는 경우)
+ *
+ * 쿠키는 호스트 단위라 bench.openmake.cc 같은 별도 오리진은 chat.openmake.cc 의 세션 쿠키를
+ * 받지 못한다. 대신 `GET /api/auth/sso/authorize?client=<id>` 가 로그인된 사용자에게 일회성
+ * exchange code(MOBILE_AUTH 와 같은 저장소·TTL)를 발급해 등록된 redirect URI 로 보내고,
+ * 클라이언트 서버가 `POST /api/auth/mobile/exchange` 로 교환한다. redirect URI 는 여기 등록된
+ * 값만 쓰며 요청 파라미터로 받지 않는다 (open redirect 차단).
+ */
+export const SSO_CLIENTS: Readonly<Record<string, { redirectUri: string }>> = {
+    bench: { redirectUri: process.env.SSO_BENCH_REDIRECT_URI || 'https://bench.openmake.cc/api/auth/callback' },
+};

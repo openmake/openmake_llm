@@ -18,6 +18,18 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 웹 SSO 클라이언트(bench 등)에서 온 로그인: 성공 후 /api/auth/sso/authorize 로 돌아가 exchange code 를 받는다.
+  // 마운트 후에 읽어 hydration 불일치를 피한다. 식별자만 허용 (redirect 목적지는 서버 화이트리스트).
+  const [ssoClient, setSsoClient] = useState<string | null>(null);
+  useEffect(() => {
+    const c = new URLSearchParams(window.location.search).get("client");
+    setSsoClient(c && /^[a-z][a-z0-9_-]{0,31}$/.test(c) ? c : null);
+  }, []);
+  const ssoQuery = ssoClient ? `?client=${encodeURIComponent(ssoClient)}` : "";
+  const afterLogin = () => {
+    if (ssoClient) window.location.assign(`/api/auth/sso/authorize${ssoQuery}`);
+    else router.push("/");
+  };
 
   // 첫 실행(admin 0명)이면 셋업 마법사로 유도 — 실패 시 로그인 폼 그대로 (fail-open)
   useEffect(() => {
@@ -40,7 +52,7 @@ export default function LoginPage() {
       // router.push 는 remount 가 없어 AuthSync(마운트 1회)가 다시 돌지 않는다 —
       // 로그인 직후 store 동기화(+익명 세션 이관)를 직접 수행해야 사이드바가 즉시 반영.
       await syncAuthFromServer();
-      router.push("/");
+      afterLogin();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("loginFailed"));
     } finally {
@@ -133,21 +145,21 @@ export default function LoginPage() {
 
           <div className="grid grid-cols-3 gap-2">
             <a
-              href="/api/auth/login/google"
+              href={`/api/auth/login/google${ssoQuery}`}
               onClick={() => markOAuthLoginPending("google")}
               className="inline-flex h-9 items-center justify-center rounded-md border border-border-strong bg-surface text-sm font-medium text-fg transition hover:bg-surface-2"
             >
               Google
             </a>
             <a
-              href="/api/auth/login/github"
+              href={`/api/auth/login/github${ssoQuery}`}
               onClick={() => markOAuthLoginPending("github")}
               className="inline-flex h-9 items-center justify-center rounded-md border border-border-strong bg-surface text-sm font-medium text-fg transition hover:bg-surface-2"
             >
               GitHub
             </a>
             <a
-              href="/api/auth/login/kakao"
+              href={`/api/auth/login/kakao${ssoQuery}`}
               onClick={() => markOAuthLoginPending("kakao")}
               className="inline-flex h-9 items-center justify-center rounded-md border border-border-strong bg-[#FEE500] text-sm font-medium text-[#191600] transition hover:brightness-95"
             >
