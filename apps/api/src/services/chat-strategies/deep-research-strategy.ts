@@ -60,7 +60,6 @@ export class DeepResearchStrategy implements ChatStrategy<DeepResearchStrategyCo
         // 재생성해 외부 모델이 로컬 endpoint 로 404 나던 문제 해소.
         const researchService = new DeepResearchService({
             maxLoops: RESEARCH_STRATEGY_PARAMS.MAX_LOOPS,
-            searchApi: RESEARCH_STRATEGY_PARAMS.SEARCH_API,
             maxSearchResults: RESEARCH_STRATEGY_PARAMS.MAX_SEARCH_RESULTS,
             language: detectLanguage(message).language,
             maxTotalSources: RESEARCH_STRATEGY_PARAMS.MAX_TOTAL_SOURCES,

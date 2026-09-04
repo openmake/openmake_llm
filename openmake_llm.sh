@@ -630,6 +630,10 @@ cmd_deploy() {
 
     log_step "Deploy: build → migrate → restart"
 
+    # 0) 태그 동기화(fail-open) — build-info.json 의 gitTag 는 로컬 태그(`git describe`)라
+    #    release-please 태그를 fetch 하지 않으면 한 단계 낮게 찍힌다(v1.41.0 배포에서 실측).
+    git -C "$SCRIPT_DIR" fetch --tags --quiet 2>/dev/null || log_warn "git fetch --tags 실패 — build-info gitTag 가 stale 일 수 있음"
+
     # 1) 빌드 (재시작은 마이그레이션 뒤 3) 단계에서 일괄 수행)
     cmd_build --no-restart
 
