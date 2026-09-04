@@ -15,7 +15,6 @@ import { MCPToolDefinition, MCPToolResult } from './types';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import {
     createDeepResearchService,
-    configureResearch as configureResearchGlobal,
     getResearchMessage,
     ResearchConfig,
     ResearchProgress
@@ -25,6 +24,7 @@ import { createLogger } from '../utils/logger';
 import { isPersistableUserId } from '../utils/user-id-validation';
 import { detectLanguage } from '../chat/language-policy';
 import { CLEANUP_INTERVALS } from '../config/timeouts';
+import { RESEARCH_DEPTH_LOOPS, RESEARCH_DEFAULTS } from '../config/runtime-limits';
 
 const logger = createLogger('DeepResearchMCP');
 
@@ -45,6 +45,23 @@ const activeResearches = new Map<string, {
     progress: ResearchProgress;
     startTime: number;
 }>();
+
+/**
+ * configure_research 의 사용자별 설정 override (프로세스 메모리).
+ * 2026-09-05 정정: 종전엔 DeepResearchService 의 전역 config 를 바꿔 한 사용자의 호출이
+ * 이후 모든 사용자의 리서치에 적용됐다. 이제 userId 키로 격리하고 research 도구가 자기 것만 합친다.
+ */
+const userResearchOverrides = new Map<string, Partial<ResearchConfig>>();
+const OVERRIDE_KEY_ANONYMOUS = 'anonymous';
+
+function overrideKey(userId: unknown): string {
+    return typeof userId === 'string' && userId.trim() ? userId : OVERRIDE_KEY_ANONYMOUS;
+}
+
+/** 테스트·research 도구용 — 해당 사용자의 override 사본 */
+export function getUserResearchOverrides(userId: unknown): Partial<ResearchConfig> {
+    return { ...(userResearchOverrides.get(overrideKey(userId)) ?? {}) };
+}
 
 // ============================================================
 // research 도구
@@ -119,7 +136,7 @@ export const researchTool: MCPToolDefinition = {
                     sessionId,
                     status: 'running',
                     currentLoop: 0,
-                    totalLoops: depth === 'quick' ? 1 : depth === 'standard' ? 3 : 5,
+                    totalLoops: RESEARCH_DEPTH_LOOPS[depth],
                     currentStep: 'starting',
                     progress: 0,
                     message: getResearchMessage('init', language)
@@ -127,11 +144,12 @@ export const researchTool: MCPToolDefinition = {
                 startTime: Date.now()
             });
 
-            // depth에 따른 maxLoops 설정
-            const maxLoops = depth === 'quick' ? 1 : depth === 'standard' ? 3 : 5;
+            // depth → 루프 수는 REST 와 같은 단일 표(RESEARCH_DEPTH_LOOPS). 사용자 configure_research 의 maxLoops 가 있으면 우선.
+            const overrides = getUserResearchOverrides(userId);
+            const maxLoops = overrides.maxLoops ?? RESEARCH_DEPTH_LOOPS[depth];
 
             // 비동기로 리서치 실행 (블로킹하지 않음)
-            const service = createDeepResearchService({ maxLoops, language });
+            const service = createDeepResearchService({ ...overrides, maxLoops, language });
             
             // 백그라운드 실행
             service.executeResearch(sessionId, topic, (progress) => {
@@ -236,7 +254,7 @@ export const getResearchStatusTool: MCPToolDefinition = {
                 sessionId,
                 status: session.status,
                 currentLoop: 0,
-                totalLoops: session.depth === 'quick' ? 1 : session.depth === 'standard' ? 3 : 5,
+                totalLoops: RESEARCH_DEPTH_LOOPS[session.depth as keyof typeof RESEARCH_DEPTH_LOOPS] ?? RESEARCH_DEPTH_LOOPS.standard,
                 currentStep: session.status,
                 progress: session.progress || 0,
                 message: session.status === 'completed' ? '리서치 완료' : session.status === 'failed' ? '리서치 실패' : '상태 확인 중'
@@ -312,7 +330,7 @@ export const getResearchStatusTool: MCPToolDefinition = {
  * @param args.maxLoops - 최대 반복 횟수 (1-10)
  * @param args.llmModel - LLM 모델명
  * @param args.searchApi - 검색 API 선택
- * @param args.maxSearchResults - 최대 검색 결과 수 (5-50)
+ * @param args.maxSearchResults - 최대 검색 결과 수 (5-200)
  * @param args.language - 출력 언어 (ko/en/ja/zh/es/de)
  * @returns 업데이트된 설정 (JSON)
  */
@@ -338,7 +356,7 @@ export const configureResearchTool: MCPToolDefinition = {
                 },
                 maxSearchResults: {
                     type: 'number',
-                    description: '검색 결과 최대 수 (5-50)'
+                    description: '검색 결과 최대 수 (5-200)'
                 },
                 language: {
                     type: 'string',
@@ -387,13 +405,14 @@ export const configureResearchTool: MCPToolDefinition = {
             }
 
             if (maxSearchResults !== undefined) {
-                if (maxSearchResults < 5 || maxSearchResults > 50) {
+                // 상한은 기본값(RESEARCH_DEFAULTS.MAX_SEARCH_RESULTS)까지 — 종전 50 은 기본 200 보다 작아 실제 값을 표현할 수 없었다
+                if (maxSearchResults < 5 || maxSearchResults > RESEARCH_DEFAULTS.MAX_SEARCH_RESULTS) {
                     return {
                         content: [{
                             type: 'text',
                             text: JSON.stringify({
                                 success: false,
-                                error: 'maxSearchResults는 5-50 사이여야 합니다.'
+                                error: `maxSearchResults는 5-${RESEARCH_DEFAULTS.MAX_SEARCH_RESULTS} 사이여야 합니다.`
                             }, null, 2)
                         }],
                         isError: true
@@ -406,10 +425,12 @@ export const configureResearchTool: MCPToolDefinition = {
                 updates.language = language;
             }
 
-            // 설정 업데이트
-            const newConfig = configureResearchGlobal(updates);
+            // 사용자별 override 갱신 (전역 config 는 건드리지 않는다)
+            const key = overrideKey(args.userId);
+            const newConfig = { ...(userResearchOverrides.get(key) ?? {}), ...updates };
+            userResearchOverrides.set(key, newConfig);
 
-            logger.info(`[DeepResearch MCP] 설정 변경: ${JSON.stringify(updates)}`);
+            logger.info(`[DeepResearch MCP] 설정 변경(user=${key}): ${JSON.stringify(updates)}`);
 
             return {
                 content: [{
