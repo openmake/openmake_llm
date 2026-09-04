@@ -36,6 +36,7 @@ const logger = createLogger('ChatExternalProvider');
 // 공개 타입은 external-provider-types 로 분리(600줄 CI 가드) — 기존 import 경로 호환 재노출.
 export type { ExternalProviderDeps, ChatTimings, StreamFromExternalContext } from './external-provider-types';
 import type { ExternalProviderDeps, ChatTimings, StreamFromExternalContext } from './external-provider-types';
+import { detectAnswerLanguageMismatch } from './tool-result-language';
 
 
 /**
@@ -387,6 +388,15 @@ export async function runExternalStream(
         req,
         ctx,
     });
+
+    // 답변 언어 가드 — 관측만(재생성 없음). 도구 결과 리마인더의 효과를 이 로그로 재측정한다.
+    try {
+        const guardLang = ctx.resolvedLanguage || req.userLanguagePreference;
+        if (detectAnswerLanguageMismatch(finalContent, guardLang)) {
+            const toolTurns = messages.filter((m) => m.role === 'tool').length;
+            logger.warn(`[LanguageGuard] 답변 문자 체계 불일치: target=${guardLang} model=${resolved.fullId} toolResults=${toolTurns} len=${finalContent.length}`);
+        }
+    } catch { /* 관측 실패는 무시 */ }
 
     return finalContent;
 }
