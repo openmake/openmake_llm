@@ -38,6 +38,25 @@ describe('isDuplicateMemory', () => {
     it('무관은 비중복', () => {
         expect(isDuplicateMemory('자바를 선호', ['나는 파이썬을 선호해'])).toBe(false);
     });
+    // 2026-09-06 user 3 dry-run 실측 — 같은 선호가 어미만 다르게 두 번 통과했다.
+    it('어미 변형 근접 중복(토큰 유사도)', () => {
+        expect(isDuplicateMemory(
+            '사용자는 병렬로 업무를 처리하는 방식을 선호한다.',
+            ['사용자는 병렬로 업무를 처리하기를 선호한다.'],
+        )).toBe(true);
+    });
+    it('핵심어 하나가 다른 대립 쌍은 비중복', () => {
+        expect(isDuplicateMemory('사용자는 직렬로 업무를 처리하기를 선호한다.', ['사용자는 병렬로 업무를 처리하기를 선호한다.'])).toBe(false);
+        expect(isDuplicateMemory('사용자는 자바를 선호한다.', ['사용자는 파이썬을 선호한다.'])).toBe(false);
+        expect(isDuplicateMemory('사용자의 이름은 김영희다.', ['사용자의 이름은 김철수다.'])).toBe(false);
+        expect(isDuplicateMemory('사용자는 비트코인 투자 전략 연구를 진행 중이다.', ['사용자는 코스모스(ATOM) 투자 전략 연구를 진행 중이다.'])).toBe(false);
+    });
+    it('"사용자는" 접두만 공유하는 무관 사실은 비중복', () => {
+        expect(isDuplicateMemory(
+            '사용자는 vexp.dev라는 로컬 우선 컨텍스트 엔진을 개발했다.',
+            ['사용자는 코스모스(ATOM) 투자 전략 연구를 진행 중이다.'],
+        )).toBe(false);
+    });
 });
 
 /* ── autoFormMemories: tombstone dedup + source 라벨 (repo/DB mock) ── */
