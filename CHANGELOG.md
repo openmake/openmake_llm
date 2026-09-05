@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.45.2](https://github.com/openmake/openmake_llm/compare/v1.45.1...v1.45.2) (2026-09-05)
+
+
+### 🐛 버그 수정
+
+* **memory:** 근접 중복 판정에 반복 어미 제거·수식어 불용어 추가 (라이브 실측 보강) ([#767](https://github.com/openmake/openmake_llm/issues/767)) ([f115cd7](https://github.com/openmake/openmake_llm/commit/f115cd78d9cc8a5107b8e384e8792cd2e1c8a957))
+
 ## [1.45.1](https://github.com/openmake/openmake_llm/compare/v1.45.0...v1.45.1) (2026-09-05)
 
 
