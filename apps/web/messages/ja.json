@@ -556,6 +556,7 @@
     "error": "エラー: {message}",
     "unknownError": "不明なエラー",
     "disconnected": "_(サーバーとの接続が切れました。再接続中です。しばらくして再送信してください。)_",
+    "resumeNone": "_(再開できる応答がありません。完了していれば会話履歴に保存されています。)_",
     "taskIdMissing": "タスク作成レスポンスに taskId がありません",
     "agentTaskStartFailed": "エージェントタスクを開始できませんでした: {message}"
   },

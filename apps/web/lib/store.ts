@@ -209,6 +209,8 @@ interface AppState {
   setChatHistory: (fn: (prev: ChatMessage[]) => ChatMessage[]) => void;
   appendMessage: (m: ChatMessage) => void;
   appendToken: (token: string) => void;
+  /** 재연결 이어받기 — 마지막 assistant 본문을 서버 스냅샷으로 되돌리고 스트리밍 상태로 복귀 */
+  resumeAssistant: (content: string, reasoning?: string) => void;
   /** 진행 중(또는 마지막) assistant 메시지에 모델 폴백 고지를 부착 */
   setModelFallback: (info: { from: string; to: string; reason?: string }) => void;
   appendThinking: (token: string) => void;
@@ -377,6 +379,22 @@ export const useAppStore = create<AppState>()(
         hist.push({ role: "assistant", content: token, streaming: true });
       }
       return { chatHistory: hist };
+    }),
+  resumeAssistant: (content, reasoning) =>
+    set((s) => {
+      const hist = [...s.chatHistory];
+      const last = hist[hist.length - 1];
+      if (last && last.role === "assistant") {
+        hist[hist.length - 1] = {
+          ...last,
+          content,
+          ...(reasoning ? { reasoning } : {}),
+          streaming: true,
+        };
+      } else {
+        hist.push({ role: "assistant", content, ...(reasoning ? { reasoning } : {}), streaming: true });
+      }
+      return { chatHistory: hist, isGenerating: true };
     }),
   appendThinking: (token) =>
     set((s) => {

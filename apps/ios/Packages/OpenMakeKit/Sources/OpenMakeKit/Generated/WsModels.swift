@@ -76,6 +76,9 @@ public struct WsServerEvent: Codable {
     public let cleanedContent: String?
     /// 백엔드 실제 페이로드(ws-chat-handler): 스트리밍 완료 시 토큰 메트릭. tokensPerSec 는 toFixed(2) 문자열.
     public let metrics: Metrics?
+    public let content: String?
+    public let finished: Bool?
+    public let thinking: String?
     /// 에러 분류(quota_exceeded / api_keys_exhausted / provider code 등)
     public let errorType: String?
     public let keysInCooldown: Double?
@@ -114,6 +117,9 @@ public struct WsServerEvent: Codable {
         case payload = "payload"
         case cleanedContent = "cleanedContent"
         case metrics = "metrics"
+        case content = "content"
+        case finished = "finished"
+        case thinking = "thinking"
         case errorType = "errorType"
         case keysInCooldown = "keysInCooldown"
         case resetTime = "resetTime"
@@ -134,7 +140,7 @@ public struct WsServerEvent: Codable {
         case taskID = "taskId"
     }
 
-    public init(token: String?, type: WsServerEventType, messageID: String?, summary: String?, issues: String?, sessionID: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, metrics: Metrics?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, status: String?, step: Step?, taskID: String?) {
+    public init(token: String?, type: WsServerEventType, messageID: String?, summary: String?, issues: String?, sessionID: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, metrics: Metrics?, content: String?, finished: Bool?, thinking: String?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, status: String?, step: Step?, taskID: String?) {
         self.token = token
         self.type = type
         self.messageID = messageID
@@ -149,6 +155,9 @@ public struct WsServerEvent: Codable {
         self.payload = payload
         self.cleanedContent = cleanedContent
         self.metrics = metrics
+        self.content = content
+        self.finished = finished
+        self.thinking = thinking
         self.errorType = errorType
         self.keysInCooldown = keysInCooldown
         self.resetTime = resetTime
@@ -203,6 +212,9 @@ public extension WsServerEvent {
         payload: Payload?? = nil,
         cleanedContent: String?? = nil,
         metrics: Metrics?? = nil,
+        content: String?? = nil,
+        finished: Bool?? = nil,
+        thinking: String?? = nil,
         errorType: String?? = nil,
         keysInCooldown: Double?? = nil,
         resetTime: String?? = nil,
@@ -237,6 +249,9 @@ public extension WsServerEvent {
             payload: payload ?? self.payload,
             cleanedContent: cleanedContent ?? self.cleanedContent,
             metrics: metrics ?? self.metrics,
+            content: content ?? self.content,
+            finished: finished ?? self.finished,
+            thinking: thinking ?? self.thinking,
             errorType: errorType ?? self.errorType,
             keysInCooldown: keysInCooldown ?? self.keysInCooldown,
             resetTime: resetTime ?? self.resetTime,
@@ -789,8 +804,10 @@ public enum WsServerEventType: String, Codable {
     case mcpToolResult = "mcp_tool_result"
     case mcpToolStart = "mcp_tool_start"
     case researchProgress = "research_progress"
+    case resumeNone = "resume_none"
     case sessionCreated = "session_created"
     case skillsActivated = "skills_activated"
+    case streamResume = "stream_resume"
     case systemEvent = "system_event"
     case thinking = "thinking"
     case thinkingSummary = "thinking_summary"

@@ -117,6 +117,9 @@ export function useChatSocket() {
   // 구조화 답변(REST) 진행 중 AbortController — abort() 가 취소할 수 있게 보관
   // token_warning 갱신이 스트리밍 중 도착하면 스트림 종료 후 재연결하기 위한 예약 플래그.
   const reconnectAfterRefreshRef = useRef(false);
+  // 스트리밍 도중 소켓이 끊겼음(탭 백그라운드·절전 등) — 재연결 직후 서버에 resume 을 보내
+  // 서버가 계속 생성해 둔 답변을 이어받는다(서버 ws-stream-registry 와 페어).
+  const pendingResumeRef = useRef(false);
   // MCP 도구 결과 resource — 스트리밍 중 append 하면 응답이 조각나므로(appendToken 이 카드를
   // 마지막 메시지로 오인) 버퍼에 모았다가 스트림 종료 시 flush 한다.
   const pendingMcpResourcesRef = useRef<McpResourcePayload[]>([]);
@@ -125,6 +128,7 @@ export function useChatSocket() {
     appendMessage,
     setChatHistory,
     appendToken,
+    resumeAssistant,
     setModelFallback,
     appendThinking,
     setThinkingSummary,
@@ -159,6 +163,10 @@ export function useChatSocket() {
       }
       setConnected(true);
       reconnectRef.current = 0;
+      if (pendingResumeRef.current) {
+        pendingResumeRef.current = false;
+        ws.send(JSON.stringify({ type: "resume", anonSessionId: getAnonSessionId() }));
+      }
     };
 
     // 버퍼에 모인 MCP resource 를 system(notice) 메시지로 flush — 스트림 종료 후에만 호출.
@@ -240,6 +248,16 @@ export function useChatSocket() {
           break;
         case "session_created":
           if (data.sessionId) setCurrentSessionId(data.sessionId);
+          break;
+        case "stream_resume":
+          // 끊긴 사이 서버가 계속 생성한 답변 스냅샷 — 마지막 assistant 본문을 통째로 되돌리고
+          // 다시 스트리밍 상태로 둔다(후속 token/done 이 그대로 이어진다).
+          if (data.sessionId) setCurrentSessionId(data.sessionId);
+          resumeAssistant(data.content, data.thinking);
+          break;
+        case "resume_none":
+          // 이어받을 스트림 없음(보관 만료 등) — 답변은 히스토리에 저장돼 있으니 안내만 남긴다.
+          appendMessage({ role: "system", notice: true, content: tRef.current("resumeNone") });
           break;
         case "done":
           // sessionId 는 session_created 이벤트가 담당(done 페이로드엔 없음).
@@ -456,6 +474,8 @@ export function useChatSocket() {
 
     ws.onclose = () => {
       setConnected(false);
+      // 생성 중에 끊겼으면 재연결 후 이어받기 대상으로 표시(서버는 유예 동안 계속 생성한다).
+      if (useAppStore.getState().isGenerating) pendingResumeRef.current = true;
       setStreaming(false);
       if (unmountedRef.current) return;
       // 지수 백오프 재연결 (최대 10회) — 타이머 핸들을 저장해 언마운트 시 취소 가능하게.

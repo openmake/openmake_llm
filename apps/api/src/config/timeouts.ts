@@ -165,6 +165,13 @@ export const ALERT_THRESHOLDS = {
 export const WEBSOCKET_TIMEOUTS = {
     /** 하트비트 주기 (ms) — 30초 */
     HEARTBEAT_INTERVAL_MS: 30000,
+    /**
+     * 소켓이 끊긴 뒤 진행 중 생성을 유지하는 유예 (ms) — 기본 5분.
+     * 탭 백그라운드·앱 전환으로 끊긴 클라이언트가 이 안에 `resume` 하면 이어받고, 없으면 abort.
+     */
+    STREAM_DETACH_GRACE_MS: Number(process.env.WS_STREAM_DETACH_GRACE_MS) || 5 * 60 * 1000,
+    /** detach 상태에서 생성이 끝났을 때 결과 스냅샷을 보관하는 시간 (ms) — 늦은 재연결용, 기본 2분 */
+    STREAM_RESULT_RETENTION_MS: Number(process.env.WS_STREAM_RESULT_RETENTION_MS) || 2 * 60 * 1000,
 } as const;
 
 // ============================================
@@ -192,6 +199,8 @@ export const WS_LIMITS = {
      * 대용량 텍스트 첨부를 수용한다(최종 컨텍스트 적합화는 LLMClient context-fit 안전망이 담당).
      */
     MAX_MESSAGE_CHARS: parseInt(process.env.WS_MAX_MESSAGE_CHARS || String(64 * 1024 * 1024), 10),
+    /** detach 된 스트림이 재생용으로 쌓아 두는 비-토큰 이벤트 버퍼 상한 (bytes) — 기본 4MB */
+    DETACHED_STREAM_BUFFER_MAX_BYTES: Number(process.env.WS_DETACHED_STREAM_BUFFER_MAX_BYTES) || 4 * 1024 * 1024,
     /** 사용자당 최대 동시 WebSocket 연결 수 */
     MAX_CONNECTIONS_PER_USER: Number(process.env.WS_MAX_CONNECTIONS_PER_USER) || 5,
     /** 연결 속도 제한 윈도우 (ms) — 기본 60초 */

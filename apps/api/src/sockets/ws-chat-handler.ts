@@ -28,6 +28,7 @@ import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCached
 import type { PdfVisionResult } from '../services/chat-service/pdf-vision';
 import { saveAssistantMessage } from '../chat/request-persistence';
 import { buildWebSearchContext } from '../mcp/web-search/build-search-context';
+import { getInFlightStreamRegistry, resolveStreamKey } from './ws-stream-registry';
 
 /**
  * AI 채팅 메시지를 처리합니다.
@@ -90,9 +91,17 @@ export async function handleChatMessage(
         ? { id: nb.id.trim().slice(0, 64), title: nb.title }
         : undefined;
 
-    // 중단 컨트롤러 생성
+    // 중단 컨트롤러 생성 + 이어받기 레지스트리 등록 — 소켓이 끊겨도 생성은 계속되고(유예),
+    // 이후 모든 클라이언트 이벤트는 out() 을 거쳐 attached 소켓으로 가거나 detach 버퍼에 쌓인다.
     const abortController = new AbortController();
     extWs._abortController = abortController;
+    const streamRegistry = getInFlightStreamRegistry();
+    const streamKey = resolveStreamKey(extWs, anonSessionId);
+    const streamEntry = streamKey ? streamRegistry.open(streamKey, extWs, abortController) : null;
+    const out = (payload: Record<string, unknown>): void => {
+        if (streamEntry) streamRegistry.send(streamEntry, payload);
+        else if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(payload));
+    };
 
     // Phase 7 lifecycle hook — per_chat MCP 서버 spawn.
     // chatId 식별자: 우선 sessionId, 없으면 anonSessionId, 없으면 timestamp.
@@ -136,7 +145,7 @@ export async function handleChatMessage(
             extWs._clientIp,
         );
         if (rateLimitError) {
-            ws.send(JSON.stringify({ type: 'error', message: rateLimitError }));
+            out({ type: 'error', message: rateLimitError });
             return;
         }
         // 첨부 파일(이미지 외) → LLM 주입용 컨텍스트 (transient — DB 미저장, webSearchContext 와 동급 채널)
@@ -158,7 +167,7 @@ export async function handleChatMessage(
         // 딥 리서치 파이프라인은 fileContext 를 소비하지 않음 (research 전략은 message 만 사용).
         // 무음 폐기 대신 명시 거부 — 첨부가 반영된 것처럼 보이는 UX 기만 방지 (2026-06-13)
         if (msg.deepResearchMode === true && fileContext) {
-            ws.send(JSON.stringify({ type: 'error', message: '딥 리서치 모드에서는 파일 첨부를 지원하지 않습니다. 첨부를 제거하거나 일반 채팅으로 질문해 주세요.' }));
+            out({ type: 'error', message: '딥 리서치 모드에서는 파일 첨부를 지원하지 않습니다. 첨부를 제거하거나 일반 채팅으로 질문해 주세요.' });
             return;
         }
 
@@ -223,23 +232,17 @@ export async function handleChatMessage(
         const flushArtifactChunk = (id: string) => {
             const buf = chunkBuffers.get(id);
             if (!buf || !buf.delta) return;
-            if (ws.readyState === ws.OPEN) {
-                ws.send(JSON.stringify({ type: 'artifact_chunk', id, delta: buf.delta, messageId }));
-            }
+            out({ type: 'artifact_chunk', id, delta: buf.delta, messageId });
             buf.delta = '';
             if (buf.timer) { clearTimeout(buf.timer); buf.timer = null; }
         };
         const artifactStreamParser = new ArtifactStreamParser({
             onContent: (delta) => {
-                if (ws.readyState === ws.OPEN) {
-                    ws.send(JSON.stringify({ type: 'token', token: delta, messageId }));
-                }
+                out({ type: 'token', token: delta, messageId });
             },
             onArtifactStart: (info: ArtifactInfo) => {
                 streamedArtifactIds.add(info.id);
-                if (ws.readyState === ws.OPEN) {
-                    ws.send(JSON.stringify({ type: 'artifact_start', artifact: info, messageId }));
-                }
+                out({ type: 'artifact_start', artifact: info, messageId });
             },
             onArtifactChunk: (id, delta) => {
                 // throttle: 50ms 윈도우에 도착하는 delta 를 합쳐서 한 번에 dispatch
@@ -254,9 +257,7 @@ export async function handleChatMessage(
                 // end 전 미flush 잔여 강제 dispatch
                 flushArtifactChunk(id);
                 chunkBuffers.delete(id);
-                if (ws.readyState === ws.OPEN) {
-                    ws.send(JSON.stringify({ type: 'artifact_end', id, messageId }));
-                }
+                out({ type: 'artifact_end', id, messageId });
             },
         });
 
@@ -279,7 +280,7 @@ export async function handleChatMessage(
         };
 
         if (explicitSkillNames.length > 0) {
-            ws.send(JSON.stringify({ type: 'skills_activated', skillNames: explicitSkillNames }));
+            out({ type: 'skills_activated', skillNames: explicitSkillNames });
         }
 
         // ChatRequestHandler.processChat으로 통합 처리
@@ -328,63 +329,55 @@ export async function handleChatMessage(
             onToken: tokenCallback,
             onThinking: (thinking) => {
                 if (abortController.signal.aborted) throw new Error('ABORTED');
-                ws.send(JSON.stringify({ type: 'thinking', token: thinking, messageId }));
+                out({ type: 'thinking', token: thinking, messageId });
             },
             // 생각 요약 헤드라인 (중간·최종) — request-handler 의 요약 세션이 발행
             onThinkingSummary: (summary) => {
-                if (ws.readyState === ws.OPEN) {
-                    ws.send(JSON.stringify({ type: 'thinking_summary', summary, messageId }));
-                }
+                out({ type: 'thinking_summary', summary, messageId });
             },
             format: msg.format as import('../llm').FormatOption,
-            onAgentSelected: (agent) => ws.send(JSON.stringify({ type: 'agent_selected', agent })),
-            onDiscussionProgress: (progress) => ws.send(JSON.stringify({ type: 'discussion_progress', progress })),
-            onResearchProgress: (progress) => ws.send(JSON.stringify({ type: 'research_progress', progress })),
-            onSkillsActivated: (skillNames) => ws.send(JSON.stringify({
+            onAgentSelected: (agent) => out({ type: 'agent_selected', agent }),
+            onDiscussionProgress: (progress) => out({ type: 'discussion_progress', progress }),
+            onResearchProgress: (progress) => out({ type: 'research_progress', progress }),
+            onSkillsActivated: (skillNames) => out({
                 type: 'skills_activated',
                 skillNames: mergeActivatedSkillNames(explicitSkillNames, skillNames),
-            })),
+            }),
             // MCP tool 호출 결과의 resource content 를 frontend 로 emit
             // (예: create_skill → openmake://skill-draft/{id} → chat.js 가 인라인 카드 렌더)
             onMcpToolResult: (event) => {
-                if (ws.readyState === ws.OPEN) {
-                    ws.send(JSON.stringify({
-                        type: 'mcp_tool_result',
-                        toolName: event.toolName,
-                        resources: event.resources,
-                        messageId,
-                    }));
-                }
+                out({
+                    type: 'mcp_tool_result',
+                    toolName: event.toolName,
+                    resources: event.resources,
+                    messageId,
+                });
             },
             // MCP tool 호출 시작 알림 — frontend "🔍 {도구} 실행 중" 진행 표시
             // (도구 실행 중 "생각 중..." 이 멈춘 듯 보이는 혼선 해소)
             onMcpToolStart: (event) => {
-                if (ws.readyState === ws.OPEN) {
-                    ws.send(JSON.stringify({
-                        type: 'mcp_tool_start',
-                        toolName: event.toolName,
-                        messageId,
-                    }));
-                }
+                out({
+                    type: 'mcp_tool_start',
+                    toolName: event.toolName,
+                    messageId,
+                });
             },
             // 시스템 이벤트 (자동 토론 활성화 등 메타 알림) — UI 토스트 분리 표시
             onSystemEvent: (event) => {
-                if (ws.readyState === ws.OPEN) {
-                    ws.send(JSON.stringify({
-                        type: 'system_event',
-                        payload: {
-                            type: event.type,
-                            message: event.message,
-                            metadata: event.metadata,
-                        },
-                    }));
-                }
+                out({
+                    type: 'system_event',
+                    payload: {
+                        type: event.type,
+                        message: event.message,
+                        metadata: event.metadata,
+                    },
+                });
             },
         });
 
         // WS 고유: 새 세션 생성 알림
         if (!validSessionId) {
-            ws.send(JSON.stringify({ type: 'session_created', sessionId: result.sessionId }));
+            out({ type: 'session_created', sessionId: result.sessionId });
         }
 
         // 이번 턴의 새 첨부 컨텍스트를 세션 캐시에 누적 — 첫 턴은 result.sessionId 로
@@ -418,15 +411,15 @@ export async function handleChatMessage(
         // 후처리에서 추출됐을 수 있음 — request-handler 의 result.artifacts 를 WS 로 발행.
         // 명시적 <artifact> 는 위 스트리밍 parser 가 이미 보냈으므로 중복 replay 하지 않음.
         // 클라이언트는 동일한 artifact_start/chunk/end 시퀀스로 패널 자동 오픈.
-        if (result.artifacts && result.artifacts.length > 0 && ws.readyState === ws.OPEN) {
+        if (result.artifacts && result.artifacts.length > 0) {
             for (const a of result.artifacts.filter((artifact) => !streamedArtifactIds.has(artifact.id))) {
-                ws.send(JSON.stringify({
+                out({
                     type: 'artifact_start',
                     artifact: { id: a.id, kind: a.kind, title: a.title, lang: a.lang },
                     messageId,
-                }));
-                ws.send(JSON.stringify({ type: 'artifact_chunk', id: a.id, delta: a.content, messageId }));
-                ws.send(JSON.stringify({ type: 'artifact_end', id: a.id, messageId }));
+                });
+                out({ type: 'artifact_chunk', id: a.id, delta: a.content, messageId });
+                out({ type: 'artifact_end', id: a.id, messageId });
             }
         }
 
@@ -435,12 +428,12 @@ export async function handleChatMessage(
             finalResponse: result.response,
             streamedResponse: partialAssistantResponse,
         });
-        ws.send(JSON.stringify({
+        out({
             type: 'done',
             messageId,
             metrics: { tokensPerSec, tokenCount },
             ...(cleanedContent !== undefined ? { cleanedContent } : {}),
-        }));
+        });
 
         // 답변 검증 (선택) — done 이후 judge 모델이 1회 점검하고 **지적만** 보낸다(자동 수정 없음).
         dispatchAnswerVerification({
@@ -450,9 +443,7 @@ export async function handleChatMessage(
             ...(extWs._authenticatedUserId ? { userId: extWs._authenticatedUserId } : {}),
             ...(userLangPreference ? { userLanguage: userLangPreference } : {}),
         }, (issues) => {
-            if (ws.readyState === ws.OPEN) {
-                ws.send(JSON.stringify({ type: 'answer_verification', issues, messageId }));
-            }
+            out({ type: 'answer_verification', issues, messageId });
         });
 
     } catch (error: unknown) {
@@ -505,15 +496,7 @@ export async function handleChatMessage(
             keysInCooldown?: number;
         }
 
-        const safeSend = (data: ChatWSErrorPayload) => {
-            if (ws.readyState === ws.OPEN) {
-                try {
-                    ws.send(JSON.stringify(data));
-                } catch (e) {
-                    log.warn('[Chat] WebSocket send failed:', e);
-                }
-            }
-        };
+        const safeSend = (data: ChatWSErrorPayload) => out({ ...data });
 
         if (error instanceof ChatRequestError) {
             log.warn('[Chat] 요청 처리 에러:', error.message);
@@ -577,19 +560,20 @@ export async function handleChatMessage(
                     if (capture) {
                         // 사용자에게 보존 사실 + 만료 시각 알림 (선택적 신뢰 회복)
                         const expiresInMs = DEBUG_QUEUE_TTL_MS['auto-error'];
-                        ws.send(JSON.stringify({
+                        out({
                             type: 'debug_retained',
                             captureId: capture.id,
                             expiresAt: capture.expiresAt.toISOString(),
                             ttlHours: Math.round(expiresInMs / 3600000),
-                        }));
+                        });
                     }
                 }).catch(() => {/* 디버그 큐 실패는 사용자 흐름 안 막음 */});
             }
         }
     } finally {
-        // 중단 컨트롤러 정리
+        // 중단 컨트롤러 정리 + 레지스트리 정리(detach 로 끝났으면 결과 스냅샷 보존)
         extWs._abortController = null;
+        if (streamEntry) streamRegistry.close(streamEntry);
 
         // Phase 7 lifecycle hook — per_chat MCP 서버 graceful kill.
         // try/finally 안 보장 — 에러 발생해도 누락 없이 정리 (P7-D4).
