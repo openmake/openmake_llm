@@ -93,3 +93,25 @@ describe('autoFormMemories — tombstone + source', () => {
         expect(repoMock.create).not.toHaveBeenCalled();
     });
 });
+
+describe('extractLLMMemories — 답변 누출 차단 (2026-09-06 dry-run 실측)', () => {
+    const clientWith = (content: string) => ({ chat: jest.fn().mockResolvedValue({ content }) }) as any;
+    const { extractLLMMemories, isDuplicateMemory: _unused } = require('./memory-extraction') as typeof import('./memory-extraction');
+    void _unused;
+
+    it('"사용자는 …" 형식 줄만 통과, 질문 답변·계산 줄은 제거', async () => {
+        const r = await extractLLMMemories(clientWith([
+            '사용자는 HTML 형식의 간결한 요약 출력을 선호한다.',
+            '부피 = 7³ = 343 cm³',
+            '정육면체 한 변이 7cm이므로 부피는 343 cm³입니다.',
+            '- 사용자의 이름은 김철수다',
+        ].join('\n')), '정육면체 한 변이 7cm 면 부피는?');
+        expect(r).toEqual(['사용자는 HTML 형식의 간결한 요약 출력을 선호한다.', '사용자의 이름은 김철수다']);
+    });
+    it('NONE 은 빈 배열, 분석 대상은 경계 태그로 감싼다', async () => {
+        const c = clientWith('NONE');
+        expect(await extractLLMMemories(c, '오늘 날씨 어때?')).toEqual([]);
+        const userMsg = c.chat.mock.calls[0][0][1].content as string;
+        expect(userMsg).toMatch(/^<extraction_target>\n오늘 날씨 어때\?\n<\/extraction_target>$/);
+    });
+});
