@@ -27,7 +27,7 @@ import type { UserContext } from '../mcp/user-sandbox';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { CHAT_ALWAYS_ON_TOOL_NAMES } from '../mcp/agent-task-tools';
 import { MCP_META_TOOL_NAMES } from '../mcp/mcp-meta-tools';
-import { CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, MCP_PROGRESSIVE_DISCLOSURE_ENABLED, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS, PLAN_INTENT_PATTERNS, EXTENSION_IMPORT_INTENT_PATTERNS } from '../config/runtime-limits';
+import { CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, MCP_PROGRESSIVE_DISCLOSURE_ENABLED, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS, PLAN_INTENT_PATTERNS, EXTENSION_IMPORT_INTENT_PATTERNS, CHAT_USER_MCP_BREADTH_SLOTS, CHAT_TOOL_INTENT_GATE_ENABLED, AGENT_TASK_INTENT_PATTERNS } from '../config/runtime-limits';
 import { applySkillCatalog as applySkillCatalogShared } from './skill-catalog-tool';
 import { LLMClient } from '../llm';
 import { type ToolDefinition } from '../llm';
@@ -176,7 +176,7 @@ export class ChatService {
         // 프리픽스는 LLM 전용 enhancedMessage 에만 실리므로(reqCtx.message 는 원문)
         // depth 매칭 힌트를 여기서 보강한다.
         const mcpSelectMessage = reqCtx.notebook ? `${reqCtx.message ?? ''} notebooklm` : reqCtx.message;
-        const userMcpAutoOn = selectUserMcpAutoOn(allTools, toolGroups, enabledToggles, CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, mcpSelectMessage);
+        const userMcpAutoOn = selectUserMcpAutoOn(allTools, toolGroups, enabledToggles, CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, mcpSelectMessage, CHAT_USER_MCP_BREADTH_SLOTS);
 
         // 사용자가 명시적으로 활성화한 도구만 추출
         const userToggled = allTools.filter(t => enabledToggles[t.function.name] === true);
@@ -198,8 +198,15 @@ export class ChatService {
         });
 
         // 토글 없이 항상 제공: 에이전트 작업 조회 + (플래그 ON 시) MCP 진행적 공개 메타 도구.
+        // 프롬프트 다이어트(2026-09-05): agent_task_list/get 은 작업 상태를 묻는 턴에만 —
+        // 7일 실측 호출 0회인데 매 턴 ≈470 토큰. 게이트 OFF 면 종전(상시).
+        const agentTaskWanted = !CHAT_TOOL_INTENT_GATE_ENABLED
+            || AGENT_TASK_INTENT_PATTERNS.some((re) => re.test(reqCtx.message ?? ''));
+        const baseAlwaysOn = agentTaskWanted
+            ? CHAT_ALWAYS_ON_TOOL_NAMES
+            : CHAT_ALWAYS_ON_TOOL_NAMES.filter((n) => !n.startsWith('agent_task_'));
         const alwaysOnNames: string[] = MCP_PROGRESSIVE_DISCLOSURE_ENABLED
-            ? [...CHAT_ALWAYS_ON_TOOL_NAMES, ...MCP_META_TOOL_NAMES] : CHAT_ALWAYS_ON_TOOL_NAMES;
+            ? [...baseAlwaysOn, ...MCP_META_TOOL_NAMES] : baseAlwaysOn;
         const alwaysOn = allTools.filter(t =>
             alwaysOnNames.includes(t.function.name) && !merged.some(m => m.function.name === t.function.name));
         // merged ∪ alwaysOn ∪ userMcpAutoOn — 이름 기준 중복 제거.

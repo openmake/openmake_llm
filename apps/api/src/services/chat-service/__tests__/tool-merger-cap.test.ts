@@ -89,3 +89,32 @@ describe('selectUserMcpAutoOn', () => {
         expect(picked.map(t => t.function.name)).toEqual(['a_0', 'a_2']);
     });
 });
+
+describe('selectUserMcpAutoOn — breadthSlots (프롬프트 다이어트 2026-09-05)', () => {
+    const groups = [
+        makeGroup('notebooklm', ['nb_a', 'nb_b', 'nb_c'], ['notebook']),
+        makeGroup('open-design', ['od_a', 'od_b'], ['artifact']),
+        makeGroup('tavily', ['tv_a'], ['tavily_search']),
+    ];
+    const all = groups.flatMap((g) => g.tools.map((n) => makeTool(n))) as unknown as Parameters<typeof selectUserMcpAutoOn>[0];
+
+    it('breadthSlots=0 이고 서버 언급이 없으면 아무것도 노출하지 않는다', () => {
+        const picked = selectUserMcpAutoOn(all, groups, {}, 20, 16000, '오늘 날씨 알려줘', 0);
+        expect(picked).toHaveLength(0);
+    });
+
+    it('breadthSlots=0 이어도 언급된 서버(depth)는 전부 노출한다', () => {
+        const picked = selectUserMcpAutoOn(all, groups, {}, 20, 16000, 'notebooklm 에서 찾아줘', 0);
+        expect(picked.map((t) => t.function.name)).toEqual(['nb_a', 'nb_b', 'nb_c']);
+    });
+
+    it('breadthSlots=N 이면 비참조 서버에 N개까지만 round-robin 한다', () => {
+        const picked = selectUserMcpAutoOn(all, groups, {}, 20, 16000, '아무 말', 2);
+        expect(picked.map((t) => t.function.name)).toEqual(['nb_a', 'od_a']);
+    });
+
+    it('breadthSlots 미지정은 종전 동작(cap 까지 round-robin)', () => {
+        const picked = selectUserMcpAutoOn(all, groups, {}, 20, 16000, '아무 말');
+        expect(picked).toHaveLength(6);
+    });
+});

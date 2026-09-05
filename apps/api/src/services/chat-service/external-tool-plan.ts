@@ -18,6 +18,7 @@ import {
     EXTERNAL_LLM_TOOL_BLACKLIST, ARTIFACT_REQUEST_SUPPRESSED_TOOLS, ARTIFACT_INTENT_PATTERNS,
     ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS, REPORT_PIPELINE, REPORT_INTENT_PATTERNS,
     CHAT_SUBAGENT, AGENT_SPAWN, ORCHESTRATION_DISPATCH, DISCUSSION_INTENT_PATTERNS, TASK_DELEGATE_INTENT_PATTERNS,
+    SPAWN_INTENT_PATTERNS, CHAT_TOOL_INTENT_GATE_ENABLED,
     PLAN_INTENT_PATTERNS,
 } from '../../config/runtime-limits';
 import { buildChatDelegateTool } from './chat-delegate';
@@ -93,7 +94,10 @@ export function buildExternalToolPlan(params: {
         tools.push(buildChatDelegateTool());
     }
     // 병렬 서브에이전트 fan-out(spawn_agents): 독립 하위 작업 N개 병렬 위임 — agent-spawn 공용 모듈.
-    if (AGENT_SPAWN.ENABLED && toolCalling) {
+    // spawn_agents 는 병렬 위임 의도(SPAWN_INTENT_PATTERNS) 턴에만 — 가이드 주입과 같은 게이트.
+    // 게이트 OFF(CHAT_TOOL_INTENT_GATE_ENABLED=false) 면 종전대로 상시 노출.
+    if (AGENT_SPAWN.ENABLED && toolCalling
+        && (!CHAT_TOOL_INTENT_GATE_ENABLED || SPAWN_INTENT_PATTERNS.some((re) => re.test(req.message ?? '')))) {
         tools.push(buildSpawnAgentsTool());
     }
     // 오케스트레이션 자동 배정(Stage 1): 의도 프리필터 매칭 턴에만 노출.

@@ -50,6 +50,7 @@ import { slugify } from '../chat/slash-command';
 import { recordSkillUsage } from './skill-usage-log';
 import { shouldInjectManifestSkill } from './manifest-injection-filter';
 import { SKILL_VERSION_LATEST_ORDER_SQL } from '../data/repositories/skill-manifest-sync';
+import { SKILL_MANIFEST_INJECT_MAX_CHARS } from '../config/runtime-limits';
 
 const logger = createLogger('SkillManager');
 
@@ -480,20 +481,31 @@ export class SkillManager {
         ));
         if (filtered.length === 0) return null;
 
-        const blocks = filtered.map(r => {
+        // 주입 합계 상한 (프롬프트 다이어트 2026-09-05): priority 순으로 담다가 SKILL_MANIFEST_INJECT_MAX_CHARS
+        // 초과분은 건너뛴다(첫 스킬은 항상). 실측 backend-developer 4개 30.7K 자(≈9K 토큰)가 매 턴 실렸다.
+        const injectedRows: typeof filtered = [];
+        const skipped: string[] = [];
+        let injectedChars = 0;
+        for (const r of filtered) {
+            if (injectedRows.length > 0 && injectedChars + r.prompt_md.length > SKILL_MANIFEST_INJECT_MAX_CHARS) { skipped.push(r.id); continue; }
+            injectedRows.push(r);
+            injectedChars += r.prompt_md.length;
+        }
+        if (skipped.length > 0) logger.info(`manifest 주입 상한(${SKILL_MANIFEST_INJECT_MAX_CHARS}자) — agent=${agentId} 주입 ${injectedRows.length}개(${injectedChars}자), 건너뜀: ${skipped.join(', ')}`);
+        const blocks = injectedRows.map(r => {
             const safeId = r.id.replace(/[<>"&]/g, '');
             return `<skill_context name="${safeId}">\n${r.prompt_md}\n</skill_context>`;
         });
         // 표시용 이름 — manifest_yaml 의 name 을 쓰고, 없으면 id 로 대체.
         // 저장된 manifest_yaml 은 fence('---') 없는 순수 yaml 이라 '^---' 전제 정규식은
         // 항상 실패해 uuid id 가 그대로 표시되던 결함 수정 — 최상위 name: 키를 multiline 매칭.
-        const skillNames = filtered.map(r => {
+        const skillNames = injectedRows.map(r => {
             const m = /^name:\s*([^\n]+)/m.exec(r.manifest_yaml);
             return m?.[1]?.trim().replace(/^['"]|['"]$/g, '') || r.id;
         });
 
         // 사용 기록 — 주입된 스킬 id/version (개인 union 분은 아래서 추가)
-        const injected: Array<{ skillId: string; skillVersion?: string }> = filtered.map(r => ({ skillId: r.id, skillVersion: r.version }));
+        const injected: Array<{ skillId: string; skillVersion?: string }> = injectedRows.map(r => ({ skillId: r.id, skillVersion: r.version }));
 
         // 개인 지정(user-assign) 스킬 중 manifest 미보유분 union — 확장 설치 스킬 등은
         // agent_skills 에만 존재하는데, manifest 스킬이 하나라도 있으면 legacy fallback 이

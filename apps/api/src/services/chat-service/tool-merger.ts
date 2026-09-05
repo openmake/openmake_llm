@@ -50,6 +50,8 @@ export function selectUserMcpAutoOn(
     cap: number,
     schemaBudget: number,
     message = '',
+    /** 비참조 서버 round-robin 슬롯 상한 — 기본 cap(종전 동작). 0 이면 언급된 서버만 노출. */
+    breadthSlots: number = cap,
 ): ToolDefinition[] {
     const lookup = new Map(allTools.map(t => [t.function.name, t]));
     const groups = toolGroups
@@ -75,15 +77,18 @@ export function selectUserMcpAutoOn(
     const referenced = groups.filter(g => isServerReferenced(g, message));
     for (const g of referenced) for (const n of g.tools) add(n);
 
-    // 2. breadth: 남은 서버 round-robin (참조 서버는 이미 소진)
+    // 2. breadth: 남은 서버 round-robin (참조 서버는 이미 소진). breadthSlots 만큼만 —
+    //    0 이면 언급된 서버만 노출하고 나머지는 mcp_list_tools/mcp_call 로 on-demand.
     const rest = groups.filter(g => !referenced.includes(g));
     const maxLen = rest.reduce((m, g) => Math.max(m, g.tools.length), 0);
-    for (let round = 0; round < maxLen && picked.length < cap; round++) {
-        for (const g of rest) if (round < g.tools.length) add(g.tools[round]);
+    const breadthLimit = Math.min(cap, picked.length + Math.max(0, breadthSlots));
+    for (let round = 0; round < maxLen && picked.length < breadthLimit; round++) {
+        for (const g of rest) if (round < g.tools.length && picked.length < breadthLimit) add(g.tools[round]);
     }
 
     if (totalEligible > picked.length) {
-        const mode = referenced.length ? `의도 depth(${referenced.map(g => g.displayName).join(',')}) + round-robin` : 'round-robin';
+        const breadth = breadthSlots > 0 ? 'round-robin' : '비참조 서버 미노출(진행적 공개로 접근)';
+        const mode = referenced.length ? `의도 depth(${referenced.map(g => g.displayName).join(',')}) + ${breadth}` : breadth;
         const limit = budgetHit ? `스키마 budget(${Math.round(schemaBudget / 1000)}KB)` : `cap=${cap}`;
         logger.warn(
             `user MCP 자동 노출: ${totalEligible}개 중 ${picked.length}개(${Math.round(bytes / 1000)}KB) 노출 ` +
