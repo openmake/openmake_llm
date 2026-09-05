@@ -53,7 +53,7 @@ const CHROME_CSS = `
 :root{color-scheme:light dark}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
-body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#f8fafc;color:#0f172a}
+body{font-family:system-ui,-apple-system,'Apple SD Gothic Neo',sans-serif;background:#F7F8FA;color:#14161A}
 #__av_bar{position:sticky;top:0;z-index:2147483647;display:flex;align-items:center;gap:10px;
   padding:8px 14px;background:#0f172a;color:#f1f5f9;font-size:13px;border-bottom:1px solid #1e293b}
 #__av_bar .t{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

@@ -202,8 +202,8 @@ export default function AdminSystemSettingsPage() {
         <div className="space-y-6">
       {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
       {restartKeys.length > 0 && (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm" role="status">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" aria-hidden />
+        <div className="flex items-start gap-2 rounded-lg border border-warn/40 bg-warn-soft p-3 text-sm" role="status">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warn" aria-hidden />
           <span>{t("restartNotice", { keys: restartKeys.join(", ") })}</span>
         </div>
       )}

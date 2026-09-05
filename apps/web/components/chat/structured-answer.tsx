@@ -116,9 +116,9 @@ export function StructuredAnswer({ data }: { data: StructuredAnswerData }) {
       {data.risks?.length ? (
         <div className="rounded-lg border border-border bg-surface-2 px-3.5 py-2.5">
           <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-fg-2">
-            <AlertTriangle className="h-3.5 w-3.5 text-amber-500" /> {t("structured.risks")}
+            <AlertTriangle className="h-3.5 w-3.5 text-warn" /> {t("structured.risks")}
           </p>
-          <ul className="ml-4 list-disc space-y-0.5 text-sm text-fg-2 marker:text-amber-500">
+          <ul className="ml-4 list-disc space-y-0.5 text-sm text-fg-2 marker:text-warn">
             {data.risks.map((r, i) => (
               <li key={i}>{r}</li>
             ))}
