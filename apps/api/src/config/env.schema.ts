@@ -179,7 +179,7 @@ export const envSchema = z
         GITHUB_TOKEN: z.string().default(''),
         VAPID_PUBLIC_KEY: z.string().default(''),
         VAPID_PRIVATE_KEY: z.string().default(''),
-        VAPID_SUBJECT: z.string().default('mailto:admin@openmake.ai'),
+        VAPID_SUBJECT: z.string().default('mailto:support@openmake.cc'),
         APNS_KEY_ID: z.string().default(''),
         APNS_TEAM_ID: z.string().default(''),
         APNS_PRIVATE_KEY: z.string().default(''),

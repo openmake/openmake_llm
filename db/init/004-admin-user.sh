@@ -9,7 +9,7 @@
 # 필요 환경변수 (infra/docker-compose.yml 이 .env 에서 전달):
 #   ADMIN_INITIAL_PASSWORD   미설정 시 계정을 만들지 않고 건너뛴다
 #   ADMIN_INITIAL_USERNAME   기본 admin
-#   ADMIN_INITIAL_EMAIL      기본 admin@openmake.ai
+#   ADMIN_INITIAL_EMAIL      기본 support@openmake.cc
 set -euo pipefail
 
 if [ -z "${ADMIN_INITIAL_PASSWORD:-}" ]; then
@@ -20,7 +20,7 @@ fi
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
   -v username="${ADMIN_INITIAL_USERNAME:-admin}" \
-  -v email="${ADMIN_INITIAL_EMAIL:-admin@openmake.ai}" \
+  -v email="${ADMIN_INITIAL_EMAIL:-support@openmake.cc}" \
   -v password="$ADMIN_INITIAL_PASSWORD" <<'SQL'
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
