@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.43.0](https://github.com/openmake/openmake_llm/compare/v1.42.0...v1.43.0) (2026-09-05)
+
+
+### ✨ 기능
+
+* **design:** Instrument 디자인 시스템 적용 — 코발트 프라이머리·시안 보조, Space Grotesk/Noto Sans KR/IBM Plex Mono ([#746](https://github.com/openmake/openmake_llm/issues/746)) ([496bbbb](https://github.com/openmake/openmake_llm/commit/496bbbb38daa4469123e3bb0f8bad1184505de0a))
+
+
+### 🐛 버그 수정
+
+* **web:** 모바일 입력 16px(iOS 포커스 확대 방지) + 터치 포인터 아이콘 버튼 히트 영역 36px ([#748](https://github.com/openmake/openmake_llm/issues/748)) ([db7d748](https://github.com/openmake/openmake_llm/commit/db7d748090b26f70e1a1801fba685d9659559a38))
+
 ## [1.42.0](https://github.com/openmake/openmake_llm/compare/v1.41.0...v1.42.0) (2026-09-04)
 
 
