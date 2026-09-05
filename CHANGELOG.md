@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.43.1](https://github.com/openmake/openmake_llm/compare/v1.43.0...v1.43.1) (2026-09-05)
+
+
+### 🐛 버그 수정
+
+* **providers:** NVIDIA NIM fallbackModels 를 현재 서빙 중인 모델로 교체 — 구 4개 중 3개가 EOL(410)/목록 부재 ([#749](https://github.com/openmake/openmake_llm/issues/749)) ([af66f1c](https://github.com/openmake/openmake_llm/commit/af66f1c3fde2ef03c380b8aad8ce0a751f023b01))
+
 ## [1.43.0](https://github.com/openmake/openmake_llm/compare/v1.42.0...v1.43.0) (2026-09-05)
 
 
