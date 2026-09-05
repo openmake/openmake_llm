@@ -103,3 +103,37 @@ describe('buildExternalSystemPrompt — spawn 가이드 주입', () => {
         expect(build(false)).not.toContain('[병렬 위임]');
     });
 });
+
+describe('buildExternalToolPlan — spawn_agents 의도 게이팅 (프롬프트 다이어트 2026-09-05)', () => {
+    const base = {
+        allowedTools: [] as ToolDefinition[],
+        toolCalling: true,
+        wantsMap: false,
+        orchestration: { discussion: false, taskDelegate: false },
+    };
+    const names = (msg: string) => buildExternalToolPlan({ ...base, req: { message: msg } as ChatMessageRequest })
+        .tools.map((t) => t.function.name);
+
+    it('병렬 위임 의도 턴에만 spawn_agents 를 노출한다', () => {
+        // AGENT_SPAWN.ENABLED 가 꺼진 환경이면 양쪽 다 미노출 — 게이트 자체는 "의도 없으면 없다"로 고정
+        expect(names('안녕하세요')).not.toContain('spawn_agents');
+        const withIntent = names('세 가지 주제를 병렬로 조사해줘');
+        const { AGENT_SPAWN } = jest.requireActual('../../../config/runtime-limits');
+        if (AGENT_SPAWN.ENABLED) expect(withIntent).toContain('spawn_agents');
+    });
+});
+
+describe('AGENT_TASK_INTENT_PATTERNS', () => {
+    const { AGENT_TASK_INTENT_PATTERNS } = jest.requireActual('../../../config/runtime-limits');
+    it.each([
+        '아까 시킨 에이전트 작업 상태 어때?',
+        '작업 결과 보여줘',
+        'agent task 진행 확인',
+        'what is the status of the task?',
+    ])('작업 상태 질의 매칭: %s', (msg) => {
+        expect(matchesAny(AGENT_TASK_INTENT_PATTERNS, msg)).toBe(true);
+    });
+    it.each(['오늘 날씨 알려줘', 'TypeScript 제네릭 설명해줘', '작업복 추천해줘'])('일반 질의 미매칭: %s', (msg) => {
+        expect(matchesAny(AGENT_TASK_INTENT_PATTERNS, msg)).toBe(false);
+    });
+});
