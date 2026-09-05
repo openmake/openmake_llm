@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.44.0](https://github.com/openmake/openmake_llm/compare/v1.43.1...v1.44.0) (2026-09-05)
+
+
+### ✨ 기능
+
+* **ios:** Instrument 디자인 시스템 적용 — 토큰·서체를 웹(apps/web)과 통일 ([#753](https://github.com/openmake/openmake_llm/issues/753)) ([43ea03a](https://github.com/openmake/openmake_llm/commit/43ea03a12bd47ee79bb35ce2f150ab41c0e3d387))
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 로컬 실행에서 명시한 승인 정책이 'all' 로 덮어써지던 결함 수정 ([#751](https://github.com/openmake/openmake_llm/issues/751)) ([96b9e61](https://github.com/openmake/openmake_llm/commit/96b9e61a8d66c53343ff18f1d80be93abefbac69))
+* **ws:** 탭 전환·앱 백그라운드로 소켓이 끊겨도 응답을 잃지 않게 — 스트림 detach/resume ([#754](https://github.com/openmake/openmake_llm/issues/754)) ([31cff3d](https://github.com/openmake/openmake_llm/commit/31cff3d37b2ad126b533d0c8ca4e75f9b24be0f6))
+
 ## [1.43.1](https://github.com/openmake/openmake_llm/compare/v1.43.0...v1.43.1) (2026-09-05)
 
 
