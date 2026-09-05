@@ -17,9 +17,11 @@
 <p align="center">
   <a href="https://openmake.cc/en/">Homepage</a> ·
   <a href="https://chat.openmake.cc">Live demo</a> ·
-  <a href="https://openmake.cc/en/docs/">Self-hosting guide</a> ·
-  <a href="https://openmake.cc/ko/">한국어</a> ·
-  <a href="https://openmake.cc/ja/">日本語</a>
+  <a href="https://bench.openmake.cc">Bench</a> ·
+  <a href="https://openmake.cc/en/docs/">Self-hosting guide</a><br/>
+  <a href="README.ko.md">한국어</a> ·
+  <a href="README.ja.md">日本語</a> ·
+  <a href="README.zh-CN.md">简体中文</a>
 </p>
 
 ---
@@ -36,7 +38,7 @@ Every request flows through a lightweight **message pipeline** that applies the 
 
 | | |
 |---|---|
-| 🧠 **1 local model, routed per request** | `qwen3.6-35b-a3b` served via vLLM + LiteLLM, with a 262K context-fit safety net |
+| 🧠 **1 local model, routed per request** | `qwen3.8-27b` served via vLLM + LiteLLM, with a 262K context-fit safety net |
 | 🎛️ **Role-based model orchestration** | Assign a different model (local or BYOK external) per functional role; per-user + admin-global mappings, server-shared keys with token budgets |
 | 🤖 **Autonomous agents** | Manus-style multi-turn agent in a persistent Docker sandbox (shell · Python · browser · files), with human-in-the-loop approval |
 | 🔬 **Deep research** | Fan-out web search → source fetch → claim verification → cited synthesis |
@@ -45,6 +47,8 @@ Every request flows through a lightweight **message pipeline** that applies the 
 | 🧩 **22 built-in MCP tools** + external MCP servers | Each external server isolated in Docker (`--cap-drop ALL`, non-root, network policy) |
 | 👤 **Custom agents & skills** | Project-scoped personas (with optional per-agent model) + an auto-selectable skill library + 18 industry agents (100 specialists) |
 | 💬 **Discord gateway bot** | Optional workspace relaying Discord messages to the OpenAI-compatible API, with role/mention access control |
+| 🖥️ **Native clients** | **OpenMake Companion** (SwiftUI menu-bar app, macOS Apple Silicon) for local-folder agent work, **OpenMake Code** CLI (local bridge), and a SwiftUI iOS client in progress — chat itself stays in the web app |
+| 📊 **OpenMake Bench** | [bench.openmake.cc](https://bench.openmake.cc): blind pairwise model comparisons and a hardware fit score, signed in through the web SSO client; a model picked there applies to your model roles |
 | 🌐 **4-language UI** | 한국어 · English · 日本語 · 简体中文 (`next-intl`, cookie locale, browser auto-detect) |
 | 🔒 **Security-first** | JWT (HttpOnly), Google OAuth 2.0, RBAC, per-route rate limiting, SSRF guard, Audit ↔ Alert |
 
@@ -127,9 +131,10 @@ OpenMake separates **policy** (deciding *how* to answer) from **execution** (act
 
 **▸ Models & routing**
 - Local and external models share the provider-gated `message-pipeline` and tool loop; behavior is controlled by orthogonal axes (Model · Style · Mode · Custom Agent).
-- Self-hosted vLLM + LiteLLM (default `qwen3.6-35b-a3b`) with a context-fit safety net that protects output tokens and degrades gracefully on overflow.
+- Self-hosted vLLM + LiteLLM (default `qwen3.8-27b`) with a context-fit safety net that protects output tokens and degrades gracefully on overflow.
 - Bring-your-own external keys — **OpenRouter, NVIDIA NIM, Ollama** (local + cloud), all OpenAI-compatible (an Anthropic adapter is built into the provider abstraction) — AES-256-GCM encrypted at rest. **Guests use the default local model only** — external providers require sign-in.
 - **Role-based model orchestration** — assign a different model (local or BYOK external) to each functional role (`agent`, `judge`, `research`, `spawn`, `review`, `summary`) via Settings; admins set org-wide defaults and register server-shared external keys with per-key token budgets in an admin console. Resolution is fail-open (falls back to the local default on any failure). Model lists filter down to what is actually reachable and role-capable.
+- **External provider throttling** — per-provider concurrency limits with exponential back-off on 429 (honouring `Retry-After`), so a burst of Discussion or Deep Research fan-out does not get a BYOK key rate-limited. The UI's reasoning-effort setting (low / medium / high) is forwarded to OpenAI-compatible external providers as `reasoning_effort`; local models get sampling presets for thinking ON/OFF.
 - **Tail routing (opt-in, off by default)** — a lightweight gate scores each query's error likelihood; when it judges a query as *factual tail* (likely to be answered wrong, externally verifiable), `web_search` is deterministically forced on the first turn. Ships with a shadow mode (`TAIL_ROUTING_SHADOW_ENABLED`) that records gate decisions without changing behavior, so thresholds can be tuned on real traffic before `TAIL_ROUTING_STAGE2B_ENABLED` is switched on.
 
 **▸ Agents & research**
@@ -139,7 +144,7 @@ OpenMake separates **policy** (deciding *how* to answer) from **execution** (act
 - **Custom agents & skills** — project-scoped agents (claude.ai Projects equivalent) selectable directly from the composer, each optionally pinned to its own model, plus an auto-selectable skill library and 18 built-in industry agents (100 specialists).
 
 **▸ Tools & extensibility**
-- **MCP tool system** — 22 built-in tools (web search, fact-check, web scrape/map/crawl, image analysis, agent-task control, skill/agent/MCP git-ingest, …) plus external MCP servers, each isolated in Docker (`--cap-drop ALL`, non-root, `--memory`+`--memory-swap`, network policy, realpath-guarded mounts). Install servers from the MCP catalog in **Settings → Connectors**; a catalog-level **tool allowlist** keeps chat auto-exposure focused (a 39-tool server need not dump 39 schemas into every prompt) while REST execution and the explicit tool picker keep full access.
+- **MCP tool system** — 22 built-in tools (web search, fact-check, web scrape/map/crawl, image analysis, agent-task control, skill/agent/MCP git-ingest, …) plus external MCP servers, each isolated in Docker (`--cap-drop ALL`, non-root, `--memory`+`--memory-swap`, network policy, realpath-guarded mounts). Install servers from the MCP catalog in **Settings → Connectors** (seeded with Tavily, Sentry, Context7 and more; `{{env.KEY}}` secrets are passed as shell variable references, never baked into argv); a catalog-level **tool allowlist** keeps chat auto-exposure focused (a 39-tool server need not dump 39 schemas into every prompt) while REST execution and the explicit tool picker keep full access.
 - **NotebookLM grounding** — install the NotebookLM connector with your own Google session cookie (AES-256-GCM encrypted, injected only at spawn), then pin a notebook from the composer. The grounding prefix rides an LLM-only channel, so stored messages and sidebar titles stay clean, and the pin is scoped to one conversation.
 - **Artifacts** — live sandboxed iframe rendering, optional Docker code execution (Python / JS), a resizable side panel, and a separate-origin strict-CSP shared viewer for publishing. The OpenAI-compatible API returns artifacts as a `message.artifacts` extension, and `publish_artifacts: true` makes the server mint share links for API-key clients that cannot publish themselves.
 - **PDF / DOCX export** — any HTML artifact (chat or agent-task deliverable) exports to **PDF** via headless Chromium print (CJK fonts included); report artifacts keep their structured source data (`artifacts.source_data`), enabling high-fidelity **DOCX** generation with `python-docx`. Both conversions run one-shot in the Docker sandbox (`--network none`, `--cap-drop ALL`, memory/pids caps) behind owner-scoped rate-limited endpoints.
@@ -149,6 +154,8 @@ OpenMake separates **policy** (deciding *how* to answer) from **execution** (act
 
 **▸ Integrations**
 - **Discord gateway bot** (`apps/discord-bot`) — an optional standalone workspace that relays Discord messages to `/api/v1/chat/completions`, with per-user session isolation (`/reset`), role/mention access control, and API-key auth. Generated images and artifacts come back as real Discord file attachments (with share links), since Discord cannot render the API's relative paths or placeholders. Runs as its own PM2 process.
+- **OpenMake Bench** — [bench.openmake.cc](https://bench.openmake.cc) signs in through the API's web SSO client and reads the live-refreshed `/v1/models` list; the OpenAI-compatible API also offers a raw mode for benchmark clients.
+- **Native clients** — `apps/desktop-native` (OpenMake Companion, SwiftUI menu bar: folder linking, device status, exec approval, task-finished notifications, web deep links), `apps/cli` (OpenMake Code, the local bridge that runs agent tool calls on your own machine instead of the server sandbox), and `apps/ios` (SwiftUI client, in progress). All three share the Instrument design tokens with the web app.
 - **NotebookLM** — `GET /api/mcp/notebooklm/notebooks` backs the composer picker (per-user cache, upstream failures converged to `502 NOTEBOOKLM_UPSTREAM` so the UI can prompt a reconnect when the Google cookie expires).
 
 **▸ Security**
@@ -161,12 +168,13 @@ OpenMake separates **policy** (deciding *how* to answer) from **execution** (act
 | Layer | Technologies |
 |---|---|
 | **Backend** | Node.js (≥24), Express 5, TypeScript (strict, CommonJS), Zod, Winston |
-| **Frontend** | Next.js 16, React 19, Zustand 5, Tailwind CSS 4, `next-intl` |
+| **Frontend** | Next.js 16, React 19, Zustand 5, Tailwind CSS 4, `next-intl`; Instrument design system (cobalt primary · cyan secondary, IBM Plex Mono) |
 | **Database** | PostgreSQL via `pg` — raw, parameterized SQL (no ORM) |
-| **Realtime** | WebSocket (`ws`) streaming chat |
+| **Realtime** | WebSocket (`ws`) streaming chat with stream detach/resume — a backgrounded tab or app reconnects without losing the response |
 | **LLM backend** | vLLM + LiteLLM (OpenAI-compatible); `@anthropic-ai/sdk`, `openai` for external providers |
 | **Agents / Tools** | Model Context Protocol (`@modelcontextprotocol/sdk`), Docker-isolated sandboxes |
-| **Integrations** | Discord gateway bot (`discord.js`) — optional standalone workspace |
+| **Integrations** | Discord gateway bot (`discord.js`) — optional standalone workspace; OpenMake Bench via web SSO |
+| **Native clients** | SwiftUI (macOS Companion, iOS), Node CLI (`apps/cli`) sharing `packages/local-bridge-core` |
 | **Auth / Security** | `jsonwebtoken`, Google OAuth 2.0, Helmet, AES-256-GCM |
 | **Infra** | PM2 (API · web · Discord bot) + Docker (PostgreSQL/Redis, MCP / agent / artifact sandboxes) |
 | **Testing / CI** | Jest/ts-jest, Playwright, ESLint, GitHub Actions (CI Gate) |
@@ -370,10 +378,12 @@ openmake_llm/
 │   ├── web/          # Next.js + React frontend (the operating UI)
 │   ├── cli/          # OpenMake Code — local bridge CLI (run agent tasks in your own folder)
 │   │                 # private workspace: build from source, see apps/cli/README.md
+│   ├── desktop-native/ # OpenMake Companion — SwiftUI menu-bar app (macOS Apple Silicon)
+│   ├── ios/          # SwiftUI iOS client (in progress)
 │   ├── discord-bot/  # Optional Discord gateway bot (relays to /api/v1/chat/completions)
 │   └── legacy-web/   # Static asset host (e.g. /generated) — legacy SPA retired
 ├── db/               # init schema + migrations (+ rollbacks/) — read at runtime
-├── packages/         # shared-types, config, api-client (shared workspaces)
+├── packages/         # shared-types, api-contracts, config, api-client, local-bridge-core (shared workspaces)
 ├── infra/            # Dockerfiles & compose (mcp-runtime, task-runtime, artifact-viewer, egress-proxy)
 ├── scripts/          # setup/ (gen-env.mjs) + host setup for the LLM backend — vLLM/LiteLLM
 │                     # systemd units, serve scripts, litellm.config.yaml, Caddyfile, diagnostics
@@ -406,6 +416,15 @@ Contributions are welcome. Please:
 - [ ] UI changes include screenshots; security changes describe their impact
 
 CI runs a single **CI Gate** (Test → Build → Size → Lint) on every push and pull request.
+
+---
+
+## Contact
+
+| | |
+|---|---|
+| General questions & self-hosting help | support@openmake.cc |
+| Maintainers | riskpw@openmake.cc · rockyhan@openmake.cc |
 
 ---
 
