@@ -34,6 +34,7 @@ import { applyAgentModelOverride } from './agent-model-override';
 import { resolveModeExternalClient } from './mode-external-client';
 import { buildUserContextBlocks } from './user-context-blocks';
 import { autoFormMemories } from './memory-extraction';
+import { resolveMemoryLearning } from './memory-policy';
 import type { RequestContext } from './request-context';
 import { recordOrchestrationDispatch } from './orchestration-shadow-recorder';
 import { detectOrchestrationIntents } from './external-tool-plan';
@@ -348,13 +349,15 @@ export async function runMessagePipeline(svc: ChatService,
     await svc.loadSkillBindings(selectedAgent.id, reqCtx);
 
     // Memory + Custom Instructions 주입 (claude.ai Memory/CI 동등).
+    // memoryLearning 은 서버 저장 설정이 authority(memory-policy) — 클라이언트 플래그는 더 제한할 수만 있다.
+    const memoryLearning = await resolveMemoryLearning(userId, req.memoryLearning);
     const { memoryBlock: extMemoryBlock, customInstructionsBlock: extCustomInstructionsBlock } =
-        await buildUserContextBlocks(userId, req.memoryLearning !== false);
+        await buildUserContextBlocks(userId, memoryLearning);
 
     // 자동 기억형성(#3 b) — user 메시지에서 지속적 사실 추출→저장. fire-and-forget(응답 무영향, 플래그 OFF 면 no-op).
-    // memoryLearning 토글은 "주입"(293행)뿐 아니라 "형성/저장"도 게이팅한다 — OFF 인데 저장이 계속되면
+    // memoryLearning 토글은 "주입"뿐 아니라 "형성/저장"도 게이팅한다 — OFF 인데 저장이 계속되면
     // 사용자가 끈 것과 반대로 동작하는 프라이버시 이슈.
-    if (req.memoryLearning !== false) {
+    if (memoryLearning) {
         void autoFormMemories({ userId, message: req.message, client: svc.client });
     }
 

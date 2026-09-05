@@ -80,14 +80,18 @@ export async function autoFormMemories(params: { userId?: string; message: strin
         const { UserMemoryRepository } = await import('../../data/repositories/user-memory-repository');
         const { getPool } = await import('../../data/models/unified-database');
         const repo = new UserMemoryRepository(getPool());
-        const existing = await repo.listActiveByUser(userId, MEMORY_EXTRACTION.maxCount);
-        const contents = existing.map((m) => m.content);
-        let count = existing.length;
+        // 개수 cap 은 active 기준, 중복 판정은 삭제(비활성) 행 포함 — 삭제한 문장의 재생성 차단(tombstone).
+        const [count0, contents] = await Promise.all([
+            repo.countActiveByUser(userId),
+            repo.listKnownContentsByUser(userId),
+        ]);
+        let count = count0;
         let saved = 0;
         for (const c of candidates) {
             if (count >= MEMORY_EXTRACTION.maxCount) break;
             if (isDuplicateMemory(c, contents)) continue;
-            const source = heur.includes(c) ? 'candidate' : 'batch';
+            // 034 스키마 정의대로: 휴리스틱("기억해줘" 명시 의도)=explicit, LLM 감지=candidate. batch 는 백필 전용.
+            const source = heur.includes(c) ? 'explicit' : 'candidate';
             await repo.create(randomUUID(), userId, c, source);
             contents.push(c);
             count += 1;
