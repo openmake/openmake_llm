@@ -69,6 +69,8 @@ public struct ChatStreamState: Sendable {
     public private(set) var errorMessage: String?
     /// 인증 토큰 만료 임박 — 호출자는 REST refresh 후 재연결 (웹과 동일 규약)
     public private(set) var needsTokenRefresh = false
+    /// resume 요청에 이어받을 스트림이 없었음 — 답변이 끝났다면 서버 히스토리에 있다
+    public private(set) var resumeUnavailable = false
     /// 진행 상태 한 줄 (도구 실행·리서치/토론 진행 등) — token 수신 시 자동 해제
     public private(set) var statusText: String?
     public private(set) var activityKind: ChatActivityKind?
@@ -179,6 +181,19 @@ public struct ChatStreamState: Sendable {
             activityKind = nil
         case .tokenWarning:
             needsTokenRefresh = true
+        case .streamResume:
+            // 끊긴 사이 서버가 계속 만든 답변 스냅샷 — 본문을 통째로 되돌리고 스트리밍 상태로 복귀.
+            // 뒤따르는 token/done 이 그대로 이어진다(웹 use-chat-socket 과 같은 규약).
+            streamingText = event.content ?? streamingText
+            isThinking = false
+            isDone = false
+            setActivity(streamingText.isEmpty ? "답변을 이어받고 있어요" : Self.writingText, kind: .finalizing)
+        case .resumeNone:
+            resumeUnavailable = true
+            isDone = true
+            isThinking = false
+            statusText = nil
+            activityKind = nil
         default:
             break
         }
