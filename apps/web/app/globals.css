@@ -203,6 +203,30 @@ h4 {
   letter-spacing: var(--ls-heading);
 }
 
+/* =========================================================================
+   모바일·터치 대응 (unlayered 라 Tailwind 유틸리티보다 우선)
+   - 입력 16px 미만이면 iOS 가 포커스 시 화면을 확대한다 → 모바일 폭에서 16px 고정
+   - 터치 포인터에서는 24/28px 아이콘 버튼의 히트 영역을 36px 로 키운다
+   ========================================================================= */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+@media (pointer: coarse) {
+  button.h-6,
+  button.h-7,
+  a.h-6,
+  a.h-7,
+  [role="button"].h-6,
+  [role="button"].h-7 {
+    min-height: 2.25rem;
+    min-width: 2.25rem;
+  }
+}
+
 /* 모노 라벨 (uppercase 메타·섹션 킥커) — 기준안 label 규격 */
 .label-mono {
   font-family: var(--mono);
