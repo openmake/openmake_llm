@@ -10,6 +10,7 @@ import { SkillManager } from '../skill-manager';
 jest.mock('../../config/runtime-limits', () => ({
     ...jest.requireActual('../../config/runtime-limits'),
     SKILL_MANIFEST_INJECT_MAX_CHARS: 1000,
+    SKILL_MANIFEST_PER_SKILL_MAX_CHARS: 700,
 }));
 
 const row = (id: string, chars: number) => ({
@@ -40,10 +41,12 @@ describe('buildManifestPrompt — 주입 합계 상한', () => {
         expect(out!.prompt).not.toContain('ECC-C:');
     });
 
-    it('첫 스킬이 상한보다 커도 항상 주입한다', async () => {
-        rows = [row('huge', 5000), row('small', 10)];
+    it('큰 스킬은 개별 상한으로 절단돼 뒤의 system 스킬이 밀려나지 않는다', async () => {
+        rows = [row('huge', 5000), row('system-skill-backend', 100)];
         const out = await manager().buildManifestPrompt('backend-developer', undefined, 'technology');
-        expect(out!.skillNames).toEqual(['huge']);
+        expect(out!.skillNames).toEqual(['huge', 'system-skill-backend']);
+        expect(out!.prompt).toContain('... (truncated)');
+        expect(out!.prompt).toContain('SYSTEM-SKILL-BACKEND:');
     });
 
     it('합계가 상한 이내면 전부 주입한다', async () => {

@@ -1298,6 +1298,16 @@ export const SKILL_MANIFEST_INJECT_MAX_CHARS = parseInt(
     10,
 );
 
+/**
+ * 스킬 manifest 1개의 주입 문자 상한. 합계 상한보다 큰 스킬 하나가 슬롯을 독점해 뒤의
+ * system 스킬(페르소나 규칙, ~2.5K 자)까지 밀어내는 것을 막는다 — 배포 첫 실측에서
+ * backend-developer 의 ecc 스킬 12,154자 하나가 들어가고 system-skill 이 건너뛰어졌다.
+ */
+export const SKILL_MANIFEST_PER_SKILL_MAX_CHARS = parseInt(
+    process.env.SKILL_MANIFEST_PER_SKILL_MAX_CHARS || '8000',
+    10,
+);
+
 /** agent_task_list / agent_task_get 노출 의도 — 에이전트 작업의 상태·결과·목록을 묻는 턴. */
 export const AGENT_TASK_INTENT_PATTERNS: readonly RegExp[] = [
     /(에이전트|agent)\s*(작업|task)/i,
