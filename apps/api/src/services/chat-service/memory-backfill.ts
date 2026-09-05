@@ -57,18 +57,19 @@ export async function backfillUserMemories(
     const candidates = [...new Set((perSession.flat().filter(Boolean) as string[]))];
 
     const repo = new UserMemoryRepository(pool);
-    const existing = (await repo.listActiveByUser(userId, MEMORY_EXTRACTION.maxCount)).map((m) => m.content);
+    // 중복 판정은 삭제(비활성) 행 포함(tombstone) — 사용자가 지운 사실을 백필이 되살리지 않는다.
+    const known = await repo.listKnownContentsByUser(userId);
     const fresh: string[] = [];
     let skippedDup = 0;
     for (const c of candidates) {
-        if (isDuplicateMemory(c, [...existing, ...fresh])) { skippedDup += 1; continue; }
+        if (isDuplicateMemory(c, [...known, ...fresh])) { skippedDup += 1; continue; }
         fresh.push(c);
     }
 
     let saved = 0;
     if (!dryRun && fresh.length > 0) {
         const { randomUUID } = await import('node:crypto');
-        let count = existing.length;
+        let count = await repo.countActiveByUser(userId);
         for (const c of fresh) {
             if (count >= MEMORY_EXTRACTION.maxCount) break;
             await repo.create(randomUUID(), userId, c, 'batch');
