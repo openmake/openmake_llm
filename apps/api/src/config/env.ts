@@ -244,7 +244,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     // VAPID
     vapidPublicKey: '',
     vapidPrivateKey: '',
-    vapidSubject: 'mailto:admin@openmake.ai',
+    vapidSubject: 'mailto:support@openmake.cc',
     operatorWebhookUrl: '',
     operatorWebhookUrlCritical: '',
     operatorWebhookUrlWarning: '',

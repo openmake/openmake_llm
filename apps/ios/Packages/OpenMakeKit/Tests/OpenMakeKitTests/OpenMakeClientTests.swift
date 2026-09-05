@@ -60,7 +60,7 @@ final class OpenMakeClientTests: XCTestCase {
     private var store: InMemoryTokenStore!
     private var client: OpenMakeClient!
 
-    private static let userJSON = #"{"id":"u1","email":"riskpw@gmail.com","role":"user","created_at":"2026-08-16T00:00:00.000Z","is_active":true}"#
+    private static let userJSON = #"{"id":"u1","email":"riskpw@openmake.cc","role":"user","created_at":"2026-08-16T00:00:00.000Z","is_active":true}"#
     private static let meta = #"{"timestamp":"2026-08-16T00:00:00.000Z"}"#
 
     override func setUp() {
@@ -99,8 +99,8 @@ final class OpenMakeClientTests: XCTestCase {
         MockURLProtocol.script("/api/auth/login", .init(status: 200, json:
             #"{"success":true,"data":{"success":true,"token":"at-1","refreshToken":"rt-1","user":\#(Self.userJSON)},"meta":\#(Self.meta)}"#))
 
-        let user = try await client.login(email: "riskpw@gmail.com", password: "pw")
-        XCTAssertEqual(user.email, "riskpw@gmail.com")
+        let user = try await client.login(email: "riskpw@openmake.cc", password: "pw")
+        XCTAssertEqual(user.email, "riskpw@openmake.cc")
         XCTAssertEqual(store.load(), AuthTokens(access: "at-1", refresh: "rt-1"))
 
         // CSRF Double-Submit 규약: 사전 인증 POST 에 부트스트랩 토큰 헤더 동봉

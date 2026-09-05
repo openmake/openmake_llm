@@ -12,7 +12,7 @@ import { expectContract } from './contract-validator';
 
 const sampleUser: PublicUser = {
     id: 'u1',
-    email: 'riskpw@gmail.com',
+    email: 'riskpw@openmake.cc',
     role: 'user',
     created_at: '2026-08-16T00:00:00.000Z',
     is_active: true,
@@ -142,7 +142,7 @@ describe('모바일 인증 (iOS 축 2)', () => {
             mockAuthService.login.mockResolvedValue({ success: true, token: 'at', user: sampleUser });
             const r = await request(app)
                 .post('/api/auth/login')
-                .send({ email: 'riskpw@gmail.com', password: 'pw', returnRefreshToken: true });
+                .send({ email: 'riskpw@openmake.cc', password: 'pw', returnRefreshToken: true });
             expect(r.status).toBe(200);
             expect(r.body.data.refreshToken).toBe('new-refresh-token');
             expect(cookieSpies.setTokenCookie).not.toHaveBeenCalled();
@@ -154,7 +154,7 @@ describe('모바일 인증 (iOS 축 2)', () => {
             mockAuthService.login.mockResolvedValue({ success: true, token: 'at', user: sampleUser });
             const r = await request(app)
                 .post('/api/auth/login')
-                .send({ email: 'riskpw@gmail.com', password: 'pw' });
+                .send({ email: 'riskpw@openmake.cc', password: 'pw' });
             expect(r.status).toBe(200);
             expect(r.body.data.refreshToken).toBeUndefined();
             expect(cookieSpies.setTokenCookie).toHaveBeenCalled();

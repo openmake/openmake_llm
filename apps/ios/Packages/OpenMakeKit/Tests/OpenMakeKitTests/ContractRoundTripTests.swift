@@ -21,16 +21,16 @@ final class ContractRoundTripTests: XCTestCase {
 
     func testLoginEnvelopeDecodesDateTimeMeta() throws {
         // meta.timestamp 는 format: date-time → Date 매핑 — OpenMakeJSON 전략 없이는 실패 (PoC 발견 ②)
-        let json = #"{"success":true,"data":{"success":true,"token":"at","user":{"id":"u1","email":"riskpw@gmail.com","role":"user","created_at":"2026-08-16T00:00:00.000Z","is_active":true}},"meta":{"timestamp":"2026-08-16T00:00:00.000Z"}}"#.data(using: .utf8)!
+        let json = #"{"success":true,"data":{"success":true,"token":"at","user":{"id":"u1","email":"riskpw@openmake.cc","role":"user","created_at":"2026-08-16T00:00:00.000Z","is_active":true}},"meta":{"timestamp":"2026-08-16T00:00:00.000Z"}}"#.data(using: .utf8)!
         let login = try OpenMakeJSON.decoder().decode(
             Operations.post_sol_api_sol_auth_sol_login.Output.Ok.Body.jsonPayload.self,
             from: json)
-        XCTAssertEqual(login.data.user?.email, "riskpw@gmail.com")
+        XCTAssertEqual(login.data.user?.email, "riskpw@openmake.cc")
     }
 
     func testMobileExchangeEnvelopeDecodes() throws {
         // 축 2 신설 표면 — POST /api/auth/mobile/exchange 200
-        let json = #"{"success":true,"data":{"token":"at","refreshToken":"rt","user":{"id":"u1","email":"riskpw@gmail.com","role":"user","created_at":"2026-08-16T00:00:00.000Z","is_active":true}},"meta":{"timestamp":"2026-08-16T00:00:00.000Z"}}"#.data(using: .utf8)!
+        let json = #"{"success":true,"data":{"token":"at","refreshToken":"rt","user":{"id":"u1","email":"riskpw@openmake.cc","role":"user","created_at":"2026-08-16T00:00:00.000Z","is_active":true}},"meta":{"timestamp":"2026-08-16T00:00:00.000Z"}}"#.data(using: .utf8)!
         let payload = try OpenMakeJSON.decoder().decode(
             Operations.post_sol_api_sol_auth_sol_mobile_sol_exchange.Output.Ok.Body.jsonPayload.self,
             from: json)

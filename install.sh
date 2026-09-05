@@ -914,7 +914,7 @@ summary() {
     fi
     echo ""
     # 로그인 식별자는 email 이다 (auth.schema.ts loginSchema — username 필드는 없음).
-    echo "  로그인    ${admin_email:-admin@openmake.local}   ← 이메일로 로그인합니다"
+    echo "  로그인    ${admin_email:-support@openmake.cc}   ← 이메일로 로그인합니다"
     echo "  비밀번호  ${admin_pass:-<.env 의 ADMIN_PASSWORD 참조>}"
     printf "  %s첫 로그인 후 비밀번호를 바꾸세요. 비밀번호는 .env 에 평문으로 저장됩니다.%s\n" "$C_DIM" "$C_RESET"
     echo ""
