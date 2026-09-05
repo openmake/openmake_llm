@@ -167,15 +167,16 @@ private struct RichTextBlock: View {
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(inline(heading.text))
-                    .font(.system(
+                    .font(Instrument.display(
                         size: heading.level <= 1 ? 20 : (heading.level == 2 ? 17.5 : 16),
-                        weight: .bold))
-                    .foregroundStyle(Lumen.fg)
+                        weight: .semibold))
+                    .kerning((heading.level <= 1 ? 20 : (heading.level == 2 ? 17.5 : 16)) * Instrument.headingTracking)
+                    .foregroundStyle(Instrument.fg)
                     .multilineTextAlignment(.leading)
                 if hasBody {
                     Image(systemName: isCollapsed ? "chevron.right" : "chevron.down")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(Lumen.faint)
+                        .foregroundStyle(Instrument.faint)
                 }
                 Spacer(minLength: 0)
             }
@@ -191,8 +192,9 @@ private struct RichTextBlock: View {
         switch line {
         case .heading(let level, let text):
             Text(inline(text))
-                .font(.system(size: level <= 1 ? 20 : (level == 2 ? 17.5 : 16), weight: .bold))
-                .foregroundStyle(Lumen.fg)
+                .font(Instrument.display(size: level <= 1 ? 20 : (level == 2 ? 17.5 : 16), weight: .semibold))
+                .kerning((level <= 1 ? 20 : (level == 2 ? 17.5 : 16)) * Instrument.headingTracking)
+                .foregroundStyle(Instrument.fg)
                 .padding(.top, 4)
                 .frame(maxWidth: .infinity, alignment: .leading)
         default:
@@ -206,8 +208,9 @@ private struct RichTextBlock: View {
             switch line {
                 case .heading(let level, let text):
                     Text(inline(text))
-                        .font(.system(size: level <= 1 ? 20 : (level == 2 ? 17.5 : 16), weight: .bold))
-                        .foregroundStyle(Lumen.fg)
+                        .font(Instrument.display(size: level <= 1 ? 20 : (level == 2 ? 17.5 : 16), weight: .semibold))
+                .kerning((level <= 1 ? 20 : (level == 2 ? 17.5 : 16)) * Instrument.headingTracking)
+                        .foregroundStyle(Instrument.fg)
                         .padding(.top, 4)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 case .bullet(let text, let depth):
@@ -217,14 +220,14 @@ private struct RichTextBlock: View {
                 case .quote(let text):
                     HStack(alignment: .top, spacing: 8) {
                         RoundedRectangle(cornerRadius: 1.5)
-                            .fill(Lumen.accent.opacity(0.5))
+                            .fill(Instrument.accent.opacity(0.5))
                             .frame(width: 3)
-                        body(text).foregroundStyle(Lumen.fg2)
+                        body(text).foregroundStyle(Instrument.fg2)
                     }
                     .fixedSize(horizontal: false, vertical: true)
                 case .divider:
                     Rectangle()
-                        .fill(Lumen.border)
+                        .fill(Instrument.border)
                         .frame(height: 1)
                         .padding(.vertical, 4)
                 case .paragraph(let text):
@@ -239,7 +242,7 @@ private struct RichTextBlock: View {
         HStack(alignment: .top, spacing: 7) {
             Text(marker)
                 .font(.system(size: 15))
-                .foregroundStyle(Lumen.muted)
+                .foregroundStyle(Instrument.muted)
                 .frame(minWidth: marker == "•" ? 8 : 16, alignment: .leading)
             body(text)
         }
@@ -251,7 +254,7 @@ private struct RichTextBlock: View {
         Text(inline(text))
             .font(.system(size: 15))
             .lineSpacing(3)
-            .foregroundStyle(Lumen.fg)
+            .foregroundStyle(Instrument.fg)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -351,22 +354,22 @@ private struct GeneratedImageView: View {
             switch phase {
             case .empty:
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Lumen.surface2)
+                    .fill(Instrument.surface2)
                     .aspectRatio(4 / 3, contentMode: .fit)
-                    .overlay { ProgressView().tint(Lumen.accent) }
+                    .overlay { ProgressView().tint(Instrument.accent) }
             case .success(let image):
                 image
                     .resizable()
                     .scaledToFit()
                     .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Lumen.border))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Instrument.border))
             case .failure:
                 ContentUnavailableView(
                     "이미지를 불러오지 못했습니다",
                     systemImage: "photo.badge.exclamationmark",
                     description: Text(source))
                     .frame(minHeight: 160)
-                    .background(Lumen.surface2, in: RoundedRectangle(cornerRadius: 12))
+                    .background(Instrument.surface2, in: RoundedRectangle(cornerRadius: 12))
             @unknown default:
                 EmptyView()
             }
@@ -394,11 +397,11 @@ struct MarkdownTableView: View {
                     HStack(alignment: .top, spacing: 8) {
                         Text(inline(row.first ?? ""))
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Lumen.fg)
+                            .foregroundStyle(Instrument.fg)
                             .frame(minWidth: 72, alignment: .leading)
                         Text(inline(row.count > 1 ? row[1] : ""))
                             .font(.system(size: 14))
-                            .foregroundStyle(Lumen.fg2)
+                            .foregroundStyle(Instrument.fg2)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .padding(.vertical, 2)
@@ -408,19 +411,19 @@ struct MarkdownTableView: View {
                     VStack(alignment: .leading, spacing: 5) {
                         Text(inline(row.first ?? ""))
                             .font(.system(size: 14.5, weight: .bold))
-                            .foregroundStyle(Lumen.fg)
+                            .foregroundStyle(Instrument.fg)
                         ForEach(Array(table.fields(of: row, skippingFirst: true).enumerated()), id: \.offset) { _, field in
                             HStack(alignment: .top, spacing: 6) {
                                 Text(field.header)
                                     .font(.system(size: 11.5, weight: .semibold))
-                                    .foregroundStyle(Lumen.accent)
+                                    .foregroundStyle(Instrument.accent)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
-                                    .background(Lumen.accentSoft, in: RoundedRectangle(cornerRadius: 5))
+                                    .background(Instrument.accentSoft, in: RoundedRectangle(cornerRadius: 5))
                                 Text(inline(field.value))
                                     .font(.system(size: 13.5))
                                     .lineSpacing(2)
-                                    .foregroundStyle(Lumen.fg2)
+                                    .foregroundStyle(Instrument.fg2)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
@@ -428,8 +431,8 @@ struct MarkdownTableView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Lumen.surface, in: RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Lumen.border))
+                    .background(Instrument.surface, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Instrument.border))
                 }
             }
         }
@@ -456,31 +459,31 @@ struct CodeBlockView: View {
             HStack {
                 Text(language ?? "code")
                     .font(.caption2)
-                    .foregroundStyle(Lumen.muted)
+                    .foregroundStyle(Instrument.muted)
                 Spacer()
                 Button {
                     UIPasteboard.general.string = code
                 } label: {
                     Image(systemName: "doc.on.doc")
                         .font(.caption2)
-                        .foregroundStyle(Lumen.muted)
+                        .foregroundStyle(Instrument.muted)
                         .frame(width: 44, height: 44)
                 }
                 .accessibilityLabel("코드 복사")
             }
             .padding(.leading, 12)
-            .background(Lumen.surface2)
+            .background(Instrument.surface2)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(code)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(Lumen.fg2)
+                    .font(Instrument.mono(size: 12))
+                    .foregroundStyle(Instrument.fg2)
                     .textSelection(.enabled)
                     .padding(12)
             }
         }
-        .background(Lumen.surface)
+        .background(Instrument.surface)
         .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Lumen.border))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Instrument.border))
     }
 }

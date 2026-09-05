@@ -8,11 +8,11 @@ struct ActivityStatusLine: View {
     private var color: Color {
         switch kind {
         case .thinking:
-            Lumen.warn
+            Instrument.warn
         case .agent, .research, .tool, .artifact:
-            Lumen.accent
+            Instrument.accent
         case .preparing, .finalizing:
-            Lumen.success
+            Instrument.success
         }
     }
 
@@ -21,7 +21,7 @@ struct ActivityStatusLine: View {
             LumenDot(color: color, size: 6, pulsing: true)
             Text(text)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Lumen.muted)
+                .foregroundStyle(Instrument.muted)
                 .lineLimit(1)
         }
         .accessibilityElement(children: .combine)
@@ -45,9 +45,9 @@ struct ActivityProgressCard: View {
 
     private var color: Color {
         switch kind {
-        case .thinking: Lumen.warn
-        case .agent, .research, .tool, .artifact: Lumen.accent
-        case .preparing, .finalizing: Lumen.success
+        case .thinking: Instrument.warn
+        case .agent, .research, .tool, .artifact: Instrument.accent
+        case .preparing, .finalizing: Instrument.success
         }
     }
 
@@ -63,14 +63,14 @@ struct ActivityProgressCard: View {
 
                 Text(statusText)
                     .font(.system(size: 12.5, weight: .medium))
-                    .foregroundStyle(Lumen.fg2)
+                    .foregroundStyle(Instrument.fg2)
                     .lineLimit(2)
 
                 if let startedAt {
                     TimelineView(.periodic(from: startedAt, by: 1)) { context in
                         Text(elapsedText(now: context.date, from: startedAt))
-                            .font(.system(size: 11.5, design: .monospaced))
-                            .foregroundStyle(Lumen.faint)
+                            .font(Instrument.mono(size: 11.5))
+                            .foregroundStyle(Instrument.muted)
                             .monospacedDigit()
                     }
                 }
@@ -83,7 +83,7 @@ struct ActivityProgressCard: View {
                     } label: {
                         Image(systemName: expanded ? "chevron.up" : "chevron.down")
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(Lumen.faint)
+                            .foregroundStyle(Instrument.faint)
                     }
                     .accessibilityLabel(expanded ? "진행 단계 접기" : "진행 단계 펼치기")
                 }
@@ -91,9 +91,9 @@ struct ActivityProgressCard: View {
                 Button(action: onStop) {
                     Image(systemName: "stop.fill")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(Lumen.muted)
+                        .foregroundStyle(Instrument.muted)
                         .frame(width: 22, height: 22)
-                        .background(Lumen.surface2, in: Circle())
+                        .background(Instrument.surface2, in: Circle())
                 }
                 .accessibilityLabel("응답 중단")
             }
@@ -104,10 +104,10 @@ struct ActivityProgressCard: View {
                         HStack(spacing: 7) {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(Lumen.success)
+                                .foregroundStyle(Instrument.success)
                             Text(entry.text)
                                 .font(.system(size: 11.5))
-                                .foregroundStyle(Lumen.faint)
+                                .foregroundStyle(Instrument.muted)
                                 .lineLimit(1)
                         }
                     }
@@ -119,8 +119,8 @@ struct ActivityProgressCard: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Lumen.surface, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Lumen.border))
+        .background(Instrument.surface, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Instrument.border))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("진행 상태: \(statusText)")
     }
@@ -150,8 +150,8 @@ struct ModeChip: View {
         .font(.system(size: 11, weight: .semibold))
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(Lumen.accentSoft, in: Capsule())
-        .foregroundStyle(Lumen.accent)
+        .background(Instrument.accentSoft, in: Capsule())
+        .foregroundStyle(Instrument.accent)
         .accessibilityElement(children: .combine)
         .accessibilityValue("켜짐")
     }
@@ -164,10 +164,10 @@ struct SkillChip: View {
         Label(name, systemImage: "sparkles")
             .font(.system(size: 11, weight: .medium))
             .lineLimit(1)
-            .foregroundStyle(Lumen.muted)
+            .foregroundStyle(Instrument.muted)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(Lumen.surface2, in: Capsule())
+            .background(Instrument.surface2, in: Capsule())
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("사용 스킬 \(name)")
     }
@@ -186,7 +186,7 @@ struct ActiveSkillBar: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
         }
-        .background(Lumen.bg)
+        .background(Instrument.bg)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("사용 스킬")
     }
@@ -232,8 +232,8 @@ struct DesignSystemShowcase: View {
                 }
                 .padding(20)
             }
-            .background(Lumen.bg)
-            .navigationTitle("LUMEN")
+            .background(Instrument.bg)
+            .navigationTitle("Instrument")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

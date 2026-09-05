@@ -20,22 +20,22 @@ struct ConversationDetailView: View {
                 ProgressView()
             }
         }
-        .background(Lumen.bg)
+        .background(Instrument.bg)
         .toolbar {
             ToolbarItem(placement: .principal) {
                 VStack(spacing: 1) {
                     Text(session?.title ?? "새 대화")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Lumen.fg)
+                        .foregroundStyle(Instrument.fg)
                         .lineLimit(1)
                     Text(activeModelName)
                         .font(.system(size: 10.5))
-                        .foregroundStyle(Lumen.muted)
+                        .foregroundStyle(Instrument.muted)
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
                 ModelAgentMenu()
-                    .tint(Lumen.fg2)
+                    .tint(Instrument.fg2)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -152,7 +152,7 @@ private struct ChatTranscriptView: View {
             if let notice = chat.noticeText, chat.errorMessage == nil, attachError == nil {
                 Text(notice)
                     .font(.footnote)
-                    .foregroundStyle(Lumen.muted)
+                    .foregroundStyle(Instrument.muted)
                     .padding(.horizontal, 16)
                     .padding(.bottom, 4)
             }
@@ -324,7 +324,7 @@ private struct AssistantHead: View {
             LumenDot(pulsing: pulsing)
             Text("OpenMake")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Lumen.muted)
+                .foregroundStyle(Instrument.muted)
         }
     }
 }
@@ -341,16 +341,16 @@ private struct MessageRow: View {
                     if let images = message.images, !images.isEmpty {
                         Label("사진 \(images.count)장", systemImage: "photo.on.rectangle")
                             .font(.caption2)
-                            .foregroundStyle(Lumen.muted)
+                            .foregroundStyle(Instrument.muted)
                     }
                     Text(message.content)
                         .font(.system(size: 15))
                         .textSelection(.enabled)
-                        .foregroundStyle(Lumen.fg)
+                        .foregroundStyle(Instrument.fg)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 9)
                         .background(
-                            Lumen.surface2,
+                            Instrument.surface2,
                             in: UnevenRoundedRectangle(
                                 topLeadingRadius: 18, bottomLeadingRadius: 18,
                                 bottomTrailingRadius: 4, topTrailingRadius: 18))
@@ -425,9 +425,9 @@ private struct ChatComposer: View {
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(Lumen.accent)
+                        .foregroundStyle(Instrument.accent)
                         .frame(width: 36, height: 36)
-                        .background(Lumen.accentSoft, in: Circle())
+                        .background(Instrument.accentSoft, in: Circle())
                 }
 
                 HStack(alignment: .bottom, spacing: 6) {
@@ -447,7 +447,7 @@ private struct ChatComposer: View {
                     } label: {
                         Image(systemName: speech.isRecording ? "mic.fill" : "mic")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(speech.isRecording ? Color.red : Lumen.faint)
+                            .foregroundStyle(speech.isRecording ? Color.red : Instrument.faint)
                             .frame(width: 30, height: 30)
                             .symbolEffect(.pulse, isActive: speech.isRecording)
                     }
@@ -456,23 +456,23 @@ private struct ChatComposer: View {
                     Button(action: onSubmit) {
                         Image(systemName: "arrow.up")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(canSend ? Lumen.accentFg : Lumen.faint)
+                            .foregroundStyle(canSend ? Instrument.accentFg : Instrument.faint)
                             .frame(width: 30, height: 30)
-                            .background(canSend ? Lumen.accent : Lumen.surface3, in: Circle())
+                            .background(canSend ? Instrument.accent : Instrument.surface3, in: Circle())
                     }
                     .disabled(!canSend)
                     .padding(.trailing, 4)
                     .padding(.bottom, 3)
                 }
-                .background(Lumen.surface, in: RoundedRectangle(cornerRadius: 22))
-                .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Lumen.border))
+                .background(Instrument.surface, in: RoundedRectangle(cornerRadius: 22))
+                .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Instrument.border))
                 .shadow(color: .black.opacity(0.06), radius: 8, y: 2)
             }
         }
         .padding(.horizontal, 12)
         .padding(.top, 6)
         .padding(.bottom, 8)
-        .background(Lumen.bg)
+        .background(Instrument.bg)
         .sheet(isPresented: $showCamera) {
             CameraPicker { data in
                 pendingImages.append(DataURL.encode(data, mimeType: "image/jpeg"))
@@ -530,10 +530,10 @@ private struct ChatComposer: View {
                 Image(systemName: "xmark.circle.fill").font(.caption)
             }
         }
-        .foregroundStyle(Lumen.fg2)
+        .foregroundStyle(Instrument.fg2)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(Lumen.surface2, in: Capsule())
+        .background(Instrument.surface2, in: Capsule())
     }
 
     private func modeSymbol(_ label: String) -> String? {
