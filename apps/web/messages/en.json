@@ -1802,6 +1802,8 @@
     "clearAll": "Clear all",
     "clearConfirm": "Delete all memories? This cannot be undone.",
     "deleteAria": "Delete memory",
+    "sourceCandidate": "Auto-detected",
+    "sourceBatch": "Backfilled",
     "limitReached": "You can save up to {max} memories."
   },
   "pageTabs": {

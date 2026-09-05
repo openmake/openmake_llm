@@ -1802,6 +1802,8 @@
     "clearAll": "すべて削除",
     "clearConfirm": "すべてのメモリを削除しますか？元に戻せません。",
     "deleteAria": "メモリを削除",
+    "sourceCandidate": "自動検出",
+    "sourceBatch": "バックフィル",
     "limitReached": "最大{max}件まで保存できます。"
   },
   "pageTabs": {
