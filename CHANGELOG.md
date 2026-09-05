@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.44.1](https://github.com/openmake/openmake_llm/compare/v1.44.0...v1.44.1) (2026-09-05)
+
+
+### 🐛 버그 수정
+
+* 이메일 주소를 openmake.cc 도메인으로 통일 ([#761](https://github.com/openmake/openmake_llm/issues/761)) ([ed74251](https://github.com/openmake/openmake_llm/commit/ed74251e8d463eaf9d461bbde8023585c7ad29b3))
+
+
+### ⚡ 성능
+
+* **chat:** 프롬프트 다이어트 1차 — MCP 비참조 서버 미노출·저빈도 도구 의도 게이팅·스킬 주입 상한 ([#755](https://github.com/openmake/openmake_llm/issues/755)) ([63ec9c0](https://github.com/openmake/openmake_llm/commit/63ec9c0f514065f66038a101dc0261681e67c6db))
+* **skills:** manifest 스킬 1개 주입 상한(8000자) — 큰 스킬이 system 스킬을 밀어내던 배포 첫 실측 정정 ([#757](https://github.com/openmake/openmake_llm/issues/757)) ([32765aa](https://github.com/openmake/openmake_llm/commit/32765aa8715ae6ff6a56f556720f3bafddf5eae3))
+* **skills:** system 스킬을 먼저 주입해 합계 상한에 밀려나지 않게 — [#757](https://github.com/openmake/openmake_llm/issues/757) 배포 실측 정정 ([#758](https://github.com/openmake/openmake_llm/issues/758)) ([d3aad8d](https://github.com/openmake/openmake_llm/commit/d3aad8de543fb809bd646b15e2565d1d5f0cf45d))
+
 ## [1.44.0](https://github.com/openmake/openmake_llm/compare/v1.43.1...v1.44.0) (2026-09-05)
 
 
