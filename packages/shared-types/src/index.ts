@@ -177,6 +177,15 @@ export type WsServerEvent =
       cleanedContent?: string;
     }
   | { type: "aborted"; message?: string }
+  /**
+   * 끊겼던 스트림 이어받기 (2026-09-05). 클라이언트가 재연결 후 `{type:"resume", anonSessionId?}` 를
+   * 보내면 서버가 진행 중(또는 방금 끝난) 스트림의 본문 스냅샷을 주고 이어서 스트리밍한다.
+   * content 는 지금까지의 답변 전체 — 클라는 마지막 assistant 본문을 이 값으로 되돌린 뒤 후속
+   * token 을 이어 붙인다. finished=true 면 뒤따르는 done/error 로 곧 끝난다.
+   */
+  | { type: "stream_resume"; messageId?: string; sessionId?: string; content: string; thinking?: string; finished: boolean }
+  /** resume 요청에 이어받을 스트림이 없음 — 클라는 대기 상태를 풀면 된다. */
+  | { type: "resume_none" }
   | {
       type: "error";
       message: string;

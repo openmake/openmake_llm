@@ -45,6 +45,7 @@ import { WEBSOCKET_TIMEOUTS, WS_LIMITS } from '../config/timeouts';
 import { WS_SECURITY } from '../config/security';
 import { getBuildId } from '../config/build-id';
 import { handleChatMessage } from './ws-chat-handler';
+import { getInFlightStreamRegistry, resolveStreamKey } from './ws-stream-registry';
 import { handleRequestAgents } from './ws-agents-handler';
 import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
 import { handleBridgeMessage } from './ws-bridge-handler';
@@ -228,8 +229,9 @@ export class WebSocketHandler {
                 this.unregisterConnection(ws);
                 // Local Bridge: 이 소켓이 등록한 로컬 실행기 세션 해제(pending 요청 reject).
                 getLocalBridgeRegistry().unregister(ws);
-                // 🔒 Phase 2 보안 패치: 연결 종료 시 진행 중인 AI 생성 중단
-                // GPU/CPU 리소스 해제 및 불필요한 토큰 생성 방지
+                // 진행 중 생성은 즉시 끊지 않는다 — 탭 백그라운드·앱 전환으로 끊긴 소켓이 유예 안에
+                // resume 하면 이어받는다(ws-stream-registry). 이어받기 대상이 아닌 연결만 종전대로 abort.
+                if (getInFlightStreamRegistry().detach(extWs)) return;
                 if (extWs._abortController) {
                     extWs._abortController.abort();
                     extWs._abortController = null;
@@ -318,7 +320,7 @@ export class WebSocketHandler {
             return;
         }
 
-        const validTypes: WSMessage['type'][] = ['refresh', 'request_agents', 'chat', 'abort'];
+        const validTypes: WSMessage['type'][] = ['refresh', 'request_agents', 'chat', 'abort', 'resume'];
         if (!validTypes.includes(typedMsg.type)) {
             log.debug(`[WS] 알 수 없는 메시지 타입: ${typedMsg.type}`);
             return;
@@ -351,6 +353,11 @@ export class WebSocketHandler {
                 case 'abort':
                     // 현재 진행 중인 채팅 중단
                     this.handleAbort(ws);
+                    break;
+
+                case 'resume':
+                    // 재연결 후 끊겼던 스트림 이어받기 — 없으면 resume_none
+                    this.handleResume(ws, typedMsg);
                     break;
             }
         });
@@ -399,10 +406,22 @@ export class WebSocketHandler {
             log.info('[WS] 채팅 중단 요청 수신');
             extWs._abortController.abort();
             extWs._abortController = null;
+            getInFlightStreamRegistry().abortByWs(extWs);
             ws.send(JSON.stringify({ type: 'aborted', message: '응답 생성이 중단되었습니다.' }));
         } else {
             log.debug('[WS] 중단할 진행 중인 채팅 없음');
         }
+    }
+
+    /**
+     * 끊겼던 스트림 이어받기 — 인증 사용자는 userId, 게스트는 anonSessionId 로 찾는다.
+     * 스트림이 없으면(이미 끝나 보관도 만료·애초에 없음) resume_none 으로 답해 클라이언트가 대기를 푼다.
+     */
+    private handleResume(ws: WebSocket, msg: WSMessage): void {
+        const extWs = ws as ExtendedWebSocket;
+        const key = resolveStreamKey(extWs, msg.anonSessionId);
+        const attached = key ? getInFlightStreamRegistry().attach(key, extWs) : false;
+        if (!attached) ws.send(JSON.stringify({ type: 'resume_none' }));
     }
 
     /**
@@ -433,8 +452,8 @@ export class WebSocketHandler {
                 log.info(reason === 'token_expired'
                     ? `[WS] 인증 토큰 만료 → 연결 종료: userId=${extWs._authenticatedUserId || 'anonymous'}`
                     : `[WS] 하트비트 미응답 → 연결 종료: userId=${extWs._authenticatedUserId || 'anonymous'}`);
-                // 진행 중인 AI 생성도 중단
-                if (extWs._abortController) {
+                // 진행 중 생성은 detach(유예 후 abort) — 이어받기 대상이 아니면 즉시 중단
+                if (!getInFlightStreamRegistry().detach(extWs) && extWs._abortController) {
                     extWs._abortController.abort();
                     extWs._abortController = null;
                 }

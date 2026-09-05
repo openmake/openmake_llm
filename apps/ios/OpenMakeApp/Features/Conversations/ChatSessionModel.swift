@@ -87,7 +87,7 @@ final class ChatSessionModel {
                 return
             }
             // 연결이 없으면 (재)연결 — 스트림 종료 시 다음 send 에서 재연결 (plan: 재연결+이력 재조회 단순화)
-            let events: AsyncStream<WsServerEvent>
+            var events: AsyncStream<WsServerEvent>
             if await socket.isConnected, let current = currentEvents {
                 events = current
             } else {
@@ -115,19 +115,40 @@ final class ChatSessionModel {
                 userAgentId: userAgentId,
                 userLocation: userLocation))
 
-            for await event in events {
-                state.apply(event)
-                apply(state)
-                if let sid = state.sessionId { sessionId = sid }
-                if state.needsTokenRefresh {
-                    // 웹과 동일 규약: REST refresh — 다음 재연결이 새 토큰 사용
-                    Task { try? await client.refresh() }
+            // 앱 전환·백그라운드로 소켓이 끊기면 스트림이 done 없이 끝난다. 서버는 유예 동안 생성을
+            // 계속하므로 재연결 후 resume 으로 이어받는다(웹 use-chat-socket 과 같은 규약).
+            var resumeAttempts = 0
+            streamLoop: while true {
+                for await event in events {
+                    state.apply(event)
+                    apply(state)
+                    if let sid = state.sessionId { sessionId = sid }
+                    if state.needsTokenRefresh {
+                        // 웹과 동일 규약: REST refresh — 다음 재연결이 새 토큰 사용
+                        Task { try? await client.refresh() }
+                    }
+                    if state.isDone { break streamLoop }
                 }
-                if state.isDone { break }
+                guard resumeAttempts < Self.maxResumeAttempts else { break }
+                resumeAttempts += 1
+                statusText = "연결을 복구하고 있어요"
+                try? await Task.sleep(for: .seconds(resumeAttempts))
+                guard let bearer = await client.accessToken else { break }
+                do {
+                    events = try await socket.connect(bearer: bearer)
+                    currentEvents = events
+                    await socket.resume()
+                } catch {
+                    continue
+                }
             }
 
             if let error = state.errorMessage {
                 errorMessage = error
+            } else if state.resumeUnavailable {
+                noticeText = streamingText.isEmpty
+                    ? "연결이 끊긴 사이 응답이 끝났어요. 대화 기록에서 확인해 주세요."
+                    : "여기까지 받았고, 나머지는 대화 기록에 저장돼 있어요."
             } else if state.wasAborted {
                 noticeText = streamingText.isEmpty
                     ? "응답을 중단했어요"
@@ -164,6 +185,8 @@ final class ChatSessionModel {
         Task { [socket] in await socket.disconnect() }
     }
 
+    /// done 없이 스트림이 끝났을 때 재연결+resume 시도 횟수 상한
+    private static let maxResumeAttempts = 3
     private var currentEvents: AsyncStream<WsServerEvent>?
     private var agentPollTask: Task<Void, Never>?
 

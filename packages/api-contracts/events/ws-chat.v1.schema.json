@@ -479,6 +479,47 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "stream_resume"
+            },
+            "messageId": {
+              "type": "string"
+            },
+            "sessionId": {
+              "type": "string"
+            },
+            "content": {
+              "type": "string"
+            },
+            "thinking": {
+              "type": "string"
+            },
+            "finished": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "content",
+            "finished"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "resume_none"
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "error"
             },
             "message": {

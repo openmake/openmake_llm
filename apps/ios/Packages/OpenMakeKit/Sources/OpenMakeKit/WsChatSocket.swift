@@ -79,6 +79,13 @@ public actor WsChatSocket {
         try? await task.send(.string(#"{"type":"abort"}"#))
     }
 
+    /// 재연결 후 끊겼던 스트림 이어받기 요청 — 서버(ws-stream-registry)가 stream_resume(본문 스냅샷)
+    /// 뒤 후속 이벤트를 이어서 보내거나, 없으면 resume_none 으로 답한다.
+    public func resume() async {
+        guard let task else { return }
+        try? await task.send(.string(#"{"type":"resume"}"#))
+    }
+
     public func disconnect() {
         task?.cancel(with: .normalClosure, reason: nil)
         task = nil

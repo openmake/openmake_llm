@@ -61,6 +61,29 @@ final class ChatStreamStateTests: XCTestCase {
         XCTAssertEqual(state.errorMessage, "백엔드 오류")
     }
 
+    func testStreamResumeReplacesTextAndReopensStream() {
+        var state = ChatStreamState()
+        state.begin()
+        state.apply(event(#"{"type":"token","token":"안녕"}"#))
+        state.apply(event(#"{"type":"stream_resume","messageId":"m1","sessionId":"s1","content":"안녕하세요, 이어서","finished":false}"#))
+        XCTAssertEqual(state.streamingText, "안녕하세요, 이어서")
+        XCTAssertEqual(state.sessionId, nil) // sessionId 는 session_created 재생이 담당
+        XCTAssertFalse(state.isDone)
+        state.apply(event(#"{"type":"token","token":" 답합니다"}"#))
+        state.apply(event(#"{"type":"done","messageId":"m1"}"#))
+        XCTAssertEqual(state.streamingText, "안녕하세요, 이어서 답합니다")
+        XCTAssertTrue(state.isDone)
+    }
+
+    func testResumeNoneEndsStreamWithFlag() {
+        var state = ChatStreamState()
+        state.begin()
+        state.apply(event(#"{"type":"resume_none"}"#))
+        XCTAssertTrue(state.isDone)
+        XCTAssertTrue(state.resumeUnavailable)
+        XCTAssertNil(state.errorMessage)
+    }
+
     func testAbortedEndsStream() {
         var state = ChatStreamState()
         state.apply(event(#"{"type":"aborted"}"#))
