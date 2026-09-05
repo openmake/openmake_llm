@@ -51,7 +51,7 @@ struct SettingsSheet: View {
                     if !notifications.remotePushEnabled {
                         Text("현재 서명은 로컬 알림 모드입니다. Apple Push capability를 활성화하면 원격 푸시 등록을 켤 수 있습니다.")
                             .font(.footnote)
-                            .foregroundStyle(Lumen.muted)
+                            .foregroundStyle(Instrument.muted)
                     }
                 }
 

@@ -26,7 +26,7 @@ struct LoginView: View {
             Wordmark(size: 26)
             Text("나의 서버, 나의 AI")
                 .font(.footnote)
-                .foregroundStyle(Lumen.muted)
+                .foregroundStyle(Instrument.muted)
                 .padding(.bottom, 16)
 
             VStack(spacing: 12) {
@@ -54,24 +54,24 @@ struct LoginView: View {
             } label: {
                 Group {
                     if isLoading {
-                        ProgressView().tint(Lumen.accentFg)
+                        ProgressView().tint(Instrument.accentFg)
                     } else {
                         Text("로그인").fontWeight(.semibold)
                     }
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(Lumen.accent, in: RoundedRectangle(cornerRadius: 14))
-                .foregroundStyle(Lumen.accentFg)
+                .background(Instrument.accent, in: RoundedRectangle(cornerRadius: 14))
+                .foregroundStyle(Instrument.accentFg)
             }
             .disabled(isLoading || email.isEmpty || password.isEmpty)
             .opacity(email.isEmpty || password.isEmpty ? 0.5 : 1)
 
             if providers.contains("google") {
                 HStack(spacing: 10) {
-                    Rectangle().fill(Lumen.border).frame(height: 1)
-                    Text("또는").font(.caption2).foregroundStyle(Lumen.faint)
-                    Rectangle().fill(Lumen.border).frame(height: 1)
+                    Rectangle().fill(Instrument.border).frame(height: 1)
+                    Text("또는").font(.caption2).foregroundStyle(Instrument.muted)
+                    Rectangle().fill(Instrument.border).frame(height: 1)
                 }
                 .padding(.vertical, 2)
 
@@ -82,9 +82,9 @@ struct LoginView: View {
                         .fontWeight(.medium)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)
-                        .background(Lumen.surface, in: RoundedRectangle(cornerRadius: 14))
-                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Lumen.border))
-                        .foregroundStyle(Lumen.fg2)
+                        .background(Instrument.surface, in: RoundedRectangle(cornerRadius: 14))
+                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Instrument.border))
+                        .foregroundStyle(Instrument.fg2)
                 }
                 .disabled(isLoading)
             }
@@ -93,7 +93,7 @@ struct LoginView: View {
             Spacer()
         }
         .padding(.horizontal, 24)
-        .background(Lumen.bg)
+        .background(Instrument.bg)
         .task {
             providers = (try? await model.client.oauthProviders()) ?? []
         }
@@ -103,8 +103,8 @@ struct LoginView: View {
         content()
             .padding(.horizontal, 14)
             .padding(.vertical, 13)
-            .background(Lumen.surface, in: RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Lumen.border))
+            .background(Instrument.surface, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Instrument.border))
     }
 
     private func submit() async {

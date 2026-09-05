@@ -28,17 +28,17 @@ struct KakaoMapCard: View {
             }
 
             if !payload.places.isEmpty {
-                Divider().overlay(Lumen.border)
+                Divider().overlay(Instrument.border)
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(payload.places.enumerated()), id: \.element.id) { index, place in
-                        if index > 0 { Divider().overlay(Lumen.border).padding(.leading, 12) }
+                        if index > 0 { Divider().overlay(Instrument.border).padding(.leading, 12) }
                         placeRow(place)
                     }
                 }
             }
         }
-        .background(Lumen.surface, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Lumen.border))
+        .background(Instrument.surface, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Instrument.border))
     }
 
     private var mapKitView: some View {
@@ -46,11 +46,11 @@ struct KakaoMapCard: View {
             Map(position: $camera) {
                 ForEach(payload.places) { place in
                     Marker(place.name, coordinate: place.coordinate)
-                        .tint(Lumen.accent)
+                        .tint(Instrument.accent)
                 }
                 if payload.route.count > 1 {
                     MapPolyline(coordinates: payload.route.map(\.coordinate))
-                        .stroke(Lumen.accent, lineWidth: 4)
+                        .stroke(Instrument.accent, lineWidth: 4)
                 }
             }
             .frame(height: 220)
@@ -66,22 +66,22 @@ struct KakaoMapCard: View {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "mappin.circle.fill")
                     .font(.system(size: 15))
-                    .foregroundStyle(Lumen.accent)
+                    .foregroundStyle(Instrument.accent)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(place.name)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Lumen.fg)
+                        .foregroundStyle(Instrument.fg)
                     if let address = place.address {
                         Text(address)
                             .font(.caption)
-                            .foregroundStyle(Lumen.muted)
+                            .foregroundStyle(Instrument.muted)
                     }
                 }
                 Spacer(minLength: 0)
                 if place.url != nil {
                     Image(systemName: "chevron.right")
                         .font(.caption2)
-                        .foregroundStyle(Lumen.faint)
+                        .foregroundStyle(Instrument.faint)
                 }
             }
             .padding(12)

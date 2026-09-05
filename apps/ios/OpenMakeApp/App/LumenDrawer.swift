@@ -27,7 +27,7 @@ struct LumenDrawer: View {
                             if let email {
                                 Text(email)
                                     .font(.caption)
-                                    .foregroundStyle(Lumen.muted)
+                                    .foregroundStyle(Instrument.muted)
                                     .lineLimit(1)
                             }
                         }
@@ -35,7 +35,7 @@ struct LumenDrawer: View {
                         Button("메뉴 닫기", systemImage: "xmark", action: onDismiss)
                             .labelStyle(.iconOnly)
                             .frame(width: 44, height: 44)
-                            .foregroundStyle(Lumen.fg2)
+                            .foregroundStyle(Instrument.fg2)
                     }
                     .padding(.horizontal, 18)
                     .padding(.top, 20)
@@ -48,11 +48,11 @@ struct LumenDrawer: View {
                     }
                     .padding(.horizontal, 8)
 
-                    Divider().overlay(Lumen.border).padding(.vertical, 12)
+                    Divider().overlay(Instrument.border).padding(.vertical, 12)
 
                     Text("최근 대화")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(Lumen.muted)
+                        .foregroundStyle(Instrument.muted)
                         .padding(.horizontal, 18)
                         .padding(.bottom, 6)
 
@@ -68,13 +68,13 @@ struct LumenDrawer: View {
                         .padding(.horizontal, 8)
                     }
 
-                    Divider().overlay(Lumen.border)
+                    Divider().overlay(Instrument.border)
                     DrawerRow(title: "설정", systemImage: "gearshape", action: onSettings)
                         .padding(8)
                 }
                 .frame(width: min(proxy.size.width * 0.86, 360))
                 .frame(maxHeight: .infinity)
-                .background(Lumen.surface)
+                .background(Instrument.surface)
                 .shadow(color: .black.opacity(0.18), radius: 24, x: 8)
                 .gesture(
                     DragGesture(minimumDistance: 20)
@@ -106,10 +106,10 @@ private struct DrawerRow: View {
                     .lineLimit(1)
                 Spacer()
             }
-            .foregroundStyle(accent ? Lumen.accent : Lumen.fg2)
+            .foregroundStyle(accent ? Instrument.accent : Instrument.fg2)
             .padding(.horizontal, 10)
             .frame(minHeight: 44)
-            .background(accent ? Lumen.accentSoft : Color.clear, in: RoundedRectangle(cornerRadius: 10))
+            .background(accent ? Instrument.accentSoft : Color.clear, in: RoundedRectangle(cornerRadius: 10))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

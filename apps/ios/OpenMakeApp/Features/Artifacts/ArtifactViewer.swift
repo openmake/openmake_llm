@@ -57,32 +57,32 @@ struct ArtifactCard: View {
             HStack(spacing: 12) {
                 Image(systemName: symbol)
                     .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(Lumen.accent)
+                    .foregroundStyle(Instrument.accent)
                     .frame(width: 34, height: 34)
-                    .background(Lumen.accentSoft, in: RoundedRectangle(cornerRadius: 9))
+                    .background(Instrument.accentSoft, in: RoundedRectangle(cornerRadius: 9))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(document.title)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Lumen.fg)
+                        .foregroundStyle(Instrument.fg)
                         .lineLimit(1)
                     Text(document.language ?? document.kind.uppercased())
                         .font(.caption2)
-                        .foregroundStyle(Lumen.muted)
+                        .foregroundStyle(Instrument.muted)
                 }
                 Spacer(minLength: 8)
                 if document.isComplete {
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(Lumen.faint)
+                        .foregroundStyle(Instrument.faint)
                 } else {
                     ProgressView()
                         .controlSize(.small)
-                        .tint(Lumen.accent)
+                        .tint(Instrument.accent)
                 }
             }
             .padding(12)
-            .background(Lumen.surface, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Lumen.border))
+            .background(Instrument.surface, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Instrument.border))
         }
         .buttonStyle(.plain)
         .disabled(!document.isComplete)
@@ -126,7 +126,7 @@ struct ArtifactViewer: View {
                     }
                 }
             }
-            .background(Lumen.bg)
+            .background(Instrument.bg)
             .navigationTitle(document.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -157,8 +157,8 @@ private struct SafeArtifactWebView: UIViewRepresentable {
         }
         let traits = UITraitCollection(
             userInterfaceStyle: colorScheme == .dark ? .dark : .light)
-        let foreground = UIColor(Lumen.fg).resolvedColor(with: traits).cssColor
-        let background = UIColor(Lumen.bg).resolvedColor(with: traits).cssColor
+        let foreground = UIColor(Instrument.fg).resolvedColor(with: traits).cssColor
+        let background = UIColor(Instrument.bg).resolvedColor(with: traits).cssColor
         let html = """
         <!doctype html><html><head>
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -167,7 +167,7 @@ private struct SafeArtifactWebView: UIViewRepresentable {
         </head><body>\(source)</body></html>
         """
         webView.isOpaque = false
-        webView.backgroundColor = UIColor(Lumen.bg).resolvedColor(with: traits)
+        webView.backgroundColor = UIColor(Instrument.bg).resolvedColor(with: traits)
         webView.loadHTMLString(html, baseURL: nil)
     }
 }
