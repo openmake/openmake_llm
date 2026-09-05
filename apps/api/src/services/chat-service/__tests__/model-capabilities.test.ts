@@ -85,7 +85,7 @@ describe('resolveModelCapabilities', () => {
         const repo = makeRepo(null);
         // nvidia 카탈로그에 등록된 실제 비전 모델
         const r = await resolveModelCapabilities(
-            makeResolved('nvidia', 'meta/llama-4-maverick-17b-128e-instruct'), 'u1', repo,
+            makeResolved('nvidia', 'meta/llama-3.2-90b-vision-instruct'), 'u1', repo,
         );
         expect(r.source).toBe('config');
         expect(r.caps.vision).toBe(true); // 카탈로그가 vision:true — 휴리스틱 오판 교정

@@ -171,11 +171,18 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             'OpenAI 호환 API 로 사용합니다. 모델 ID 는 "meta/llama-3.3-70b-instruct" 형식입니다. ' +
             '주의: NVIDIA 의 모델 목록 API 는 인증이 없어 키 유효성은 첫 채팅에서 확인됩니다.',
         authMethods: ['api_key'] as const,
+        // 2026-09-05 공개 /v1/models(81개) 대조 — llama-3.3-70b·qwen3-next-80b 는 410 end-of-life,
+        // llama-4-maverick 은 목록 부재라 제거. 아래는 목록에 살아 있는 채팅용 모델만.
+        // (NVIDIA 는 모델별 무료 플래그가 없고 계정 크레딧·RPM 제한이라 isFree 는 전부 false)
         fallbackModels: [
-            { id: 'meta/llama-3.3-70b-instruct',             displayName: 'Llama 3.3 70B',        isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
-            { id: 'meta/llama-4-maverick-17b-128e-instruct', displayName: 'Llama 4 Maverick 17B', isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: false } },
-            { id: 'qwen/qwen3-next-80b-a3b-instruct',        displayName: 'Qwen3 Next 80B A3B',   isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
-            { id: 'mistralai/mistral-nemotron',              displayName: 'Mistral Nemotron',     isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
+            { id: 'nvidia/nemotron-3-super-120b-a12b',   displayName: 'Nemotron 3 Super 120B A12B', isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
+            { id: 'nvidia/nemotron-nano-3-30b-a3b',      displayName: 'Nemotron Nano 3 30B A3B',    isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
+            { id: 'deepseek-ai/deepseek-v4-flash-0731',  displayName: 'DeepSeek V4 Flash',          isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
+            { id: 'moonshotai/kimi-k3',                  displayName: 'Kimi K3',                    isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
+            { id: 'openai/gpt-oss-20b',                  displayName: 'GPT-OSS 20B',                isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true  } },
+            { id: 'google/gemma-4-31b-it',               displayName: 'Gemma 4 31B',                isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
+            { id: 'mistralai/mistral-nemotron',          displayName: 'Mistral Nemotron',           isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
+            { id: 'meta/llama-3.2-90b-vision-instruct',  displayName: 'Llama 3.2 90B Vision',       isFree: false, capabilities: { streaming: true, toolCalling: false, vision: true,  thinking: false } },
         ],
     },
     {
