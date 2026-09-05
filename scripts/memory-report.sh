@@ -54,6 +54,7 @@ LOG="${OMK_LOG_DIR:-/tmp}/openmake-llm-out.log"
 if [[ -r "$LOG" ]]; then
     echo "  자동 저장(MemoryExtract) $(grep -c '\[MemoryExtract\] 자동 저장' "$LOG" || true)회"
     echo "  토큰 cap 발동          $(grep -c 'user_memories 토큰 cap 적용' "$LOG" || true)회  (검색 도입 게이트: > 0)"
+    echo "  개수 cap 폐기          $(grep -c '도달 — 후보 .*건 폐기' "$LOG" || true)회  (퇴출 정책 게이트: > 0, 로그는 PR #764 부터)"
     echo "  설정 조회 폴백(MemoryPolicy) $(grep -c 'memoryLearning 설정 조회 실패' "$LOG" || true)회"
 else
     echo "  (로그 없음: $LOG)"
