@@ -50,7 +50,7 @@ import { slugify } from '../chat/slash-command';
 import { recordSkillUsage } from './skill-usage-log';
 import { shouldInjectManifestSkill } from './manifest-injection-filter';
 import { SKILL_VERSION_LATEST_ORDER_SQL } from '../data/repositories/skill-manifest-sync';
-import { SKILL_MANIFEST_INJECT_MAX_CHARS } from '../config/runtime-limits';
+import { SKILL_MANIFEST_INJECT_MAX_CHARS, SKILL_MANIFEST_PER_SKILL_MAX_CHARS } from '../config/runtime-limits';
 
 const logger = createLogger('SkillManager');
 
@@ -487,9 +487,11 @@ export class SkillManager {
         const skipped: string[] = [];
         let injectedChars = 0;
         for (const r of filtered) {
-            if (injectedRows.length > 0 && injectedChars + r.prompt_md.length > SKILL_MANIFEST_INJECT_MAX_CHARS) { skipped.push(r.id); continue; }
-            injectedRows.push(r);
-            injectedChars += r.prompt_md.length;
+            const body = r.prompt_md.length > SKILL_MANIFEST_PER_SKILL_MAX_CHARS
+                ? r.prompt_md.slice(0, SKILL_MANIFEST_PER_SKILL_MAX_CHARS) + '\n... (truncated)' : r.prompt_md;
+            if (injectedRows.length > 0 && injectedChars + body.length > SKILL_MANIFEST_INJECT_MAX_CHARS) { skipped.push(r.id); continue; }
+            injectedRows.push({ ...r, prompt_md: body });
+            injectedChars += body.length;
         }
         if (skipped.length > 0) logger.info(`manifest 주입 상한(${SKILL_MANIFEST_INJECT_MAX_CHARS}자) — agent=${agentId} 주입 ${injectedRows.length}개(${injectedChars}자), 건너뜀: ${skipped.join(', ')}`);
         const blocks = injectedRows.map(r => {
