@@ -11,7 +11,7 @@ import { expectContract } from './contract-validator';
 
 const sampleUser: PublicUser = {
     id: 'u1',
-    email: 'riskpw@gmail.com',
+    email: 'riskpw@openmake.cc',
     role: 'user',
     created_at: '2026-08-16T00:00:00.000Z',
     is_active: true,

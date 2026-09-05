@@ -28,7 +28,7 @@ const USER_ROW = {
     id: '92',
     username: 'Rocky',
     password_hash: 'hash-placeholder',
-    email: 'rockyhan@iexcello.com',
+    email: 'rockyhan@openmake.cc',
     role: 'user',
     is_active: true,
     created_at: '2026-07-01T00:00:00Z',
@@ -55,12 +55,12 @@ describe('UserManager 계정 조회·비밀번호 변경', () => {
 
     describe('getUserByEmail', () => {
         test('email 일치 + username 폴백으로 조회해야 한다 (username 변경 계정의 OAuth 로그인 차단 방지)', async () => {
-            await manager.getUserByEmail('rockyhan@iexcello.com');
+            await manager.getUserByEmail('rockyhan@openmake.cc');
             const lookup = queries.find(q => q.sql.trimStart().startsWith('SELECT * FROM users'));
             expect(lookup).toBeDefined();
             expect(lookup!.sql).toContain('email = $1');
             expect(lookup!.sql).toContain('username = $1');
-            expect(lookup!.params).toEqual(['rockyhan@iexcello.com']);
+            expect(lookup!.params).toEqual(['rockyhan@openmake.cc']);
         });
 
         test('username 폴백은 email 이 빈 행만 인정하고 결정적으로 1행을 선택해야 한다 (계정 탈취 차단)', async () => {
@@ -74,10 +74,10 @@ describe('UserManager 계정 조회·비밀번호 변경', () => {
         });
 
         test('username≠email 계정도 email 컬럼 값으로 반환해야 한다', async () => {
-            const user = await manager.getUserByEmail('rockyhan@iexcello.com');
+            const user = await manager.getUserByEmail('rockyhan@openmake.cc');
             expect(user).not.toBeNull();
             expect(user!.id).toBe('92');
-            expect(user!.email).toBe('rockyhan@iexcello.com');
+            expect(user!.email).toBe('rockyhan@openmake.cc');
         });
 
         test('email 컬럼이 NULL 인 레거시 행은 username 으로 폴백한다', async () => {

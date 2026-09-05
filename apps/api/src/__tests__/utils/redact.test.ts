@@ -68,7 +68,7 @@ describe('redactText — 자격증명', () => {
     });
 
     test('이메일을 가린다', () => {
-        expect(redactText('riskpw@gmail.com 계정')).toBe('<email> 계정');
+        expect(redactText('riskpw@openmake.cc 계정')).toBe('<email> 계정');
     });
 });
 

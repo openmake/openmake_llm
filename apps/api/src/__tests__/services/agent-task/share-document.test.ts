@@ -23,7 +23,7 @@ const steps = [
     { step_number: 2, step_type: 'tool_result', tool_name: 'file_ops', content: '기록됨: /private/tmp/openmake-task-workspaces/abc/workspace/src/a.ts' },
     { step_number: 3, step_type: 'plan', content: 'PLAN_SHOULD_NOT_APPEAR' },
     { step_number: 4, step_type: 'steering', content: 'STEERING_SHOULD_NOT_APPEAR' },
-    { step_number: 5, step_type: 'judge', content: '판정: achieved — riskpw@gmail.com 확인' },
+    { step_number: 5, step_type: 'judge', content: '판정: achieved — riskpw@openmake.cc 확인' },
     { step_number: 6, step_type: 'diff', content: 'diff --git a/src/a.ts b/src/a.ts\n+const n: number = 1;' },
     { step_number: 7, step_type: 'artifact', content: '{"id":"rep","kind":"html","title":"주간 리포트","content":"<h1>MARKUP_BODY_SHOULD_NOT_APPEAR</h1>","validation":{"checked":true},"sourceData":{"rows":["SOURCEDATA_SHOULD_NOT_APPEAR"]}}' },
     { step_number: 9, step_type: 'artifact', content: '{"id":"rule","kind":"markdown","title":"pre-commit 규칙","content":"# 규칙\\n커밋 전 테스트를 돌린다."}' },
@@ -43,7 +43,7 @@ describe('buildShareDocument — 선별(allowlist)', () => {
         ['workspace 절대경로', '/private/tmp/openmake-task-workspaces'],
         ['홈 디렉토리', '/Users/openmake_mac'],
         ['자격증명 값', 'sk-abcdef1234567890abcd'],
-        ['이메일', 'riskpw@gmail.com'],
+        ['이메일', 'riskpw@openmake.cc'],
         ['마크업 아티팩트 본문', 'MARKUP_BODY_SHOULD_NOT_APPEAR'],
         ['리포트 sourceData', 'SOURCEDATA_SHOULD_NOT_APPEAR'],
     ])('%s 은 문서 어디에도 없다', (_label, needle) => {
