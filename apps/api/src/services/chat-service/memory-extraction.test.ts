@@ -45,7 +45,16 @@ describe('isDuplicateMemory', () => {
             ['사용자는 병렬로 업무를 처리하기를 선호한다.'],
         )).toBe(true);
     });
+    // 2026-09-06 라이브(chat.openmake.cc) 실측 — 1회 어미 제거·수식어 미제외로 0.57 에 그쳐 두 행이 저장됐다.
+    it('수식어·어간 변형 근접 중복(반복 어미 제거 + 불용어)', () => {
+        expect(isDuplicateMemory(
+            '사용자는 코드 예시를 TypeScript로 받는 방식을 선호한다.',
+            ['사용자는 모든 코드 예시를 TypeScript로 받기를 선호한다.'],
+        )).toBe(true);
+    });
     it('핵심어 하나가 다른 대립 쌍은 비중복', () => {
+        expect(isDuplicateMemory('사용자는 코드 예시를 Python으로 받기를 선호한다.', ['사용자는 코드 예시를 TypeScript로 받기를 선호한다.'])).toBe(false);
+        expect(isDuplicateMemory('사용자는 파이썬을 싫어한다.', ['사용자는 파이썬을 선호한다.'])).toBe(false);
         expect(isDuplicateMemory('사용자는 직렬로 업무를 처리하기를 선호한다.', ['사용자는 병렬로 업무를 처리하기를 선호한다.'])).toBe(false);
         expect(isDuplicateMemory('사용자는 자바를 선호한다.', ['사용자는 파이썬을 선호한다.'])).toBe(false);
         expect(isDuplicateMemory('사용자의 이름은 김영희다.', ['사용자의 이름은 김철수다.'])).toBe(false);

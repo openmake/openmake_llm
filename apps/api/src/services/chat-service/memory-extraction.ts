@@ -55,13 +55,24 @@ function norm(s: string): string {
     return s.toLowerCase().replace(/[.,!?~]/g, '').replace(/\s+/g, ' ').trim();
 }
 
-/** PURE: 근접 중복 비교용 토큰 집합 — 주어 접두 제거 → 어절 분리 → 조사·어미 1회 제거 → 짧은 토큰 제외. */
+/** PURE: 어절에서 조사·어미를 반복 제거한 크루드 어간(빈 문자열이 되기 직전에서 멈춤). */
+function stemToken(t: string): string {
+    let cur = t;
+    for (let i = 0; i < MEMORY_EXTRACTION.dupTokenStripRounds; i += 1) {
+        const next = cur.replace(MEMORY_EXTRACTION.dupTokenSuffix, '');
+        if (next === cur || next.length === 0) break;
+        cur = next;
+    }
+    return cur;
+}
+
+/** PURE: 근접 중복 비교용 토큰 집합 — 주어 접두 제거 → 어절 분리 → 어간 추출 → 수식어·짧은 토큰 제외. */
 function dupTokens(s: string): Set<string> {
     const body = norm(s).replace(/[()]/g, ' ').replace(MEMORY_EXTRACTION.dupSubjectPrefix, '');
     return new Set(
         body.split(/\s+/)
-            .map((t) => t.replace(MEMORY_EXTRACTION.dupTokenSuffix, ''))
-            .filter((t) => t.length >= MEMORY_EXTRACTION.dupTokenMinLen),
+            .map(stemToken)
+            .filter((t) => t.length >= MEMORY_EXTRACTION.dupTokenMinLen && !MEMORY_EXTRACTION.dupStopwords.has(t)),
     );
 }
 
