@@ -40,6 +40,8 @@ export async function extractLLMMemories(client: LLMClient, text: string): Promi
             .split('\n')
             .map((l) => l.replace(/^[-*\d.)\s"']+/, '').trim())
             .filter((l) => l.length >= MEMORY_EXTRACTION.minLen && !/^none$/i.test(l))
+            // 결정적 형식 필터 — 질문에 대한 답변·계산 결과가 메모리로 새는 것을 차단(config 주석 참고).
+            .filter((l) => MEMORY_EXTRACTION.llmLinePattern.test(l))
             .slice(0, MEMORY_EXTRACTION.llmMaxPerMessage)
             .map((l) => l.slice(0, MEMORY_EXTRACTION.maxLen));
     } catch (e) {
