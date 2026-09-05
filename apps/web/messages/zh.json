@@ -1802,6 +1802,8 @@
     "clearAll": "全部删除",
     "clearConfirm": "删除所有记忆吗？此操作无法撤销。",
     "deleteAria": "删除记忆",
+    "sourceCandidate": "自动识别",
+    "sourceBatch": "回填",
     "limitReached": "最多可保存 {max} 条记忆。"
   },
   "pageTabs": {

@@ -1802,6 +1802,8 @@
     "clearAll": "전체 삭제",
     "clearConfirm": "모든 메모리를 삭제할까요? 되돌릴 수 없습니다.",
     "deleteAria": "메모리 삭제",
+    "sourceCandidate": "자동 감지",
+    "sourceBatch": "백필",
     "limitReached": "최대 {max}개까지 저장할 수 있습니다."
   },
   "pageTabs": {
