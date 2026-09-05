@@ -1270,6 +1270,43 @@ export const CHAT_USER_MCP_SCHEMA_BUDGET_BYTES = parseInt(
 );
 
 /**
+ * 메시지가 어느 서버도 언급하지 않았을 때 비참조 서버에 round-robin 으로 배정하는 자동 노출
+ * 슬롯 수 (프롬프트 다이어트, 2026-09-05). 종전엔 cap 까지 채워 매 턴 14개/16KB(≈4.3K 토큰)가
+ * 의도와 무관하게 실렸다 — 7일 실측에서 그렇게 노출된 도구의 호출은 서버명 언급 없이 거의 없었다.
+ * 기본 0 = 언급된 서버(depth)만 노출. 밀려난 서버는 mcp_list_tools/mcp_call(진행적 공개)로
+ * on-demand 접근한다. 종전 동작으로 되돌리려면 CHAT_USER_MCP_TOOL_CAP 과 같은 값으로.
+ */
+export const CHAT_USER_MCP_BREADTH_SLOTS = parseInt(
+    process.env.CHAT_USER_MCP_BREADTH_SLOTS || '0',
+    10,
+);
+
+/**
+ * 저빈도 내장 도구 의도 게이팅 (프롬프트 다이어트, 2026-09-05) — always-on 이던 agent_task_list/
+ * agent_task_get 과 상시 노출이던 spawn_agents 를 아래 의도 정규식이 맞는 턴에만 노출한다.
+ * 7일 실측 호출 0~2회인데 매 턴 ≈830 토큰을 차지했다. false 면 종전(상시 노출).
+ */
+export const CHAT_TOOL_INTENT_GATE_ENABLED = process.env.CHAT_TOOL_INTENT_GATE_ENABLED !== 'false';
+
+/**
+ * 에이전트 1턴에 주입하는 스킬 manifest(prompt_md) 합계 문자 상한 (프롬프트 다이어트, 2026-09-05).
+ * priority 순으로 담고 넘치면 나머지를 건너뛴다(첫 스킬은 항상 주입). 실측: backend-developer
+ * 30.7K 자·software-engineer 18.2K 자가 매 턴 실렸고 대부분 에이전트는 2.5K 자.
+ */
+export const SKILL_MANIFEST_INJECT_MAX_CHARS = parseInt(
+    process.env.SKILL_MANIFEST_INJECT_MAX_CHARS || '12000',
+    10,
+);
+
+/** agent_task_list / agent_task_get 노출 의도 — 에이전트 작업의 상태·결과·목록을 묻는 턴. */
+export const AGENT_TASK_INTENT_PATTERNS: readonly RegExp[] = [
+    /(에이전트|agent)\s*(작업|task)/i,
+    /(작업|task)[^\n]{0,12}(상태|진행|결과|목록|리스트|확인|어떻게|어디까지|끝났|완료)/i,
+    /(status|progress|result)\s+of\s+(the\s+)?(task|job)/i,
+    /agent_task_(list|get)/i,
+];
+
+/**
  * MCP 진행적 공개(progressive disclosure) — mcp_list_tools / mcp_call 메타 도구를 채팅에
  * always-on 노출할지. ON 이면 다(多)서버 사용자가 cap 밖으로 밀린 서버 도구도 on-demand 로
  * 발견·호출 가능(함수 스키마 슬롯 1~2개만 사용). **기본 ON** — 라이브 E2E 검증 완료로 운영
