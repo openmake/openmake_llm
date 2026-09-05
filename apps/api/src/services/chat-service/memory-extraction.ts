@@ -87,8 +87,9 @@ export async function autoFormMemories(params: { userId?: string; message: strin
         ]);
         let count = count0;
         let saved = 0;
+        let droppedAtCap = 0;
         for (const c of candidates) {
-            if (count >= MEMORY_EXTRACTION.maxCount) break;
+            if (count >= MEMORY_EXTRACTION.maxCount) { droppedAtCap += 1; continue; }
             if (isDuplicateMemory(c, contents)) continue;
             // 034 스키마 정의대로: 휴리스틱("기억해줘" 명시 의도)=explicit, LLM 감지=candidate. batch 는 백필 전용.
             const source = heur.includes(c) ? 'explicit' : 'candidate';
@@ -98,6 +99,8 @@ export async function autoFormMemories(params: { userId?: string; message: strin
             saved += 1;
         }
         if (saved > 0) logger.info(`[MemoryExtract] 자동 저장 ${saved}건 (user ${userId}, heur ${heur.length}/llm ${llm.length})`);
+        // cap 도달로 버린 후보는 조용히 사라지지 않게 남긴다 — memory-report.sh 가 집계(퇴출 정책 도입 게이트).
+        if (droppedAtCap > 0) logger.warn(`[MemoryExtract] cap ${MEMORY_EXTRACTION.maxCount} 도달 — 후보 ${droppedAtCap}건 폐기 (user ${userId})`);
     } catch (e) {
         logger.debug(`[MemoryExtract] 실패 — 무시: ${e instanceof Error ? e.message : e}`);
     }

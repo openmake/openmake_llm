@@ -10,6 +10,8 @@ import { ApiClient } from "@/lib/api-client";
 interface Memory {
   id: string;
   content: string;
+  /** explicit=직접 입력 · candidate=자동 감지(LLM) · batch=백필. 직접 입력이 아니면 배지로 구분한다. */
+  source?: "explicit" | "candidate" | "batch";
   created_at?: string;
 }
 
@@ -139,7 +141,14 @@ export function MemorySection() {
               <li key={m.id}>
                 <div className="flex items-start gap-3 rounded-lg border border-border p-3.5">
                   <Brain className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-                  <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm text-fg">{m.content}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="whitespace-pre-wrap break-words text-sm text-fg">{m.content}</p>
+                    {m.source && m.source !== "explicit" && (
+                      <span className="mt-1 inline-block rounded border border-border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
+                        {m.source === "candidate" ? t("sourceCandidate") : t("sourceBatch")}
+                      </span>
+                    )}
+                  </div>
                   <Button variant="ghost" size="icon" aria-label={t("deleteAria")} onClick={() => void remove(m.id)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>

@@ -77,6 +77,7 @@ export async function backfillUserMemories(
             saved += 1;
         }
         logger.info(`[Backfill] user ${userId}: ${saved} 저장 (세션 ${sessions.length}, 후보 ${candidates.length}, 중복 ${skippedDup})`);
+        if (fresh.length > saved) logger.warn(`[Backfill] cap ${MEMORY_EXTRACTION.maxCount} 도달 — 후보 ${fresh.length - saved}건 폐기 (user ${userId})`);
     }
 
     return { sessionsProcessed: sessions.length, candidateCount: candidates.length, fresh, saved, skippedDup, dryRun };
