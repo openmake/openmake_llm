@@ -424,6 +424,15 @@ CI는 모든 푸시와 풀 리퀘스트에서 단일 **CI Gate**(Test → Build 
 
 ---
 
+## 문의
+
+| | |
+|---|---|
+| 일반 문의·셀프호스팅 도움 | support@openmake.cc |
+| 메인테이너 | riskpw@openmake.cc · rockyhan@openmake.cc |
+
+---
+
 ## 라이선스
 
 **MIT License**로 배포된다 — 자세한 내용은 [LICENSE](LICENSE)를 참고한다.

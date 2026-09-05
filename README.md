@@ -419,6 +419,15 @@ CI runs a single **CI Gate** (Test → Build → Size → Lint) on every push an
 
 ---
 
+## Contact
+
+| | |
+|---|---|
+| General questions & self-hosting help | support@openmake.cc |
+| Maintainers | riskpw@openmake.cc · rockyhan@openmake.cc |
+
+---
+
 ## License
 
 Released under the **MIT License** — see [LICENSE](LICENSE) for details.

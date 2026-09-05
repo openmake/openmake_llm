@@ -391,6 +391,15 @@ CI 在每次推送和 pull request 上运行单一的 **CI Gate**（Test → Bui
 
 ---
 
+## 联系我们
+
+| | |
+|---|---|
+| 一般咨询与自托管支持 | support@openmake.cc |
+| 维护者 | riskpw@openmake.cc · rockyhan@openmake.cc |
+
+---
+
 ## 许可证
 
 基于 **MIT 许可证** 发布 —— 详见 [LICENSE](LICENSE)。

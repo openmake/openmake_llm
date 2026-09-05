@@ -437,6 +437,15 @@ CI はすべての push と pull request で単一の **CI Gate**(Test → Build
 
 ---
 
+## お問い合わせ
+
+| | |
+|---|---|
+| 一般のお問い合わせ・セルフホスティング支援 | support@openmake.cc |
+| メンテナー | riskpw@openmake.cc · rockyhan@openmake.cc |
+
+---
+
 ## ライセンス
 
 **MIT ライセンス** の下でリリースされています — 詳細は [LICENSE](LICENSE) を参照してください。
