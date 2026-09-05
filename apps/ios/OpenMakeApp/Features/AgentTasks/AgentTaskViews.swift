@@ -31,11 +31,11 @@ struct AgentTaskCard: View {
                 Spacer()
                 Text("\(task.currentTurn)/\(task.maxTurns) 단계")
                     .font(.caption2)
-                    .foregroundStyle(Lumen.muted)
+                    .foregroundStyle(Instrument.muted)
             }
             Text(task.goal)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Lumen.fg)
+                .foregroundStyle(Instrument.fg)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
             ProgressView(value: min(max(task.progress, 0), 100), total: 100)
@@ -43,14 +43,14 @@ struct AgentTaskCard: View {
             if let detailText {
                 Text(detailText)
                     .font(.caption)
-                    .foregroundStyle(task.status == .failed ? .red : Lumen.muted)
+                    .foregroundStyle(task.status == .failed ? .red : Instrument.muted)
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(14)
-        .background(Lumen.surface, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Lumen.border))
+        .background(Instrument.surface, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Instrument.border))
     }
 
     private var isActive: Bool {
@@ -71,10 +71,10 @@ struct AgentTaskCard: View {
 
     private var statusColor: Color {
         switch task.status {
-        case .completed: Lumen.success
+        case .completed: Instrument.success
         case .failed, .cancelled: .red
-        case .paused: Lumen.warn
-        default: Lumen.accent
+        case .paused: Instrument.warn
+        default: Instrument.accent
         }
     }
 
@@ -107,7 +107,7 @@ struct AgentTaskListView: View {
                 if !approvals.isEmpty {
                     Text("승인 대기")
                         .font(.headline)
-                        .foregroundStyle(Lumen.fg)
+                        .foregroundStyle(Instrument.fg)
                     ForEach(approvals) { approval in
                         AgentTaskApprovalCard(approval: approval) {
                             await load()
@@ -131,7 +131,7 @@ struct AgentTaskListView: View {
             }
             .padding(16)
         }
-        .background(Lumen.bg)
+        .background(Instrument.bg)
         .navigationTitle("에이전트 작업")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -214,7 +214,7 @@ private struct NewAgentTaskSheet: View {
                     }
                     Text("고위험 작업은 실행 전에 에이전트 작업 화면에서 승인할 수 있습니다")
                         .font(.footnote)
-                        .foregroundStyle(Lumen.muted)
+                        .foregroundStyle(Instrument.muted)
                 }
                 if let errorMessage {
                     Section {
@@ -297,21 +297,21 @@ struct AgentTaskDetailView: View {
                                 .font(.headline)
                             ForEach(detail.steps.suffix(20)) { step in
                                 HStack(alignment: .top, spacing: 8) {
-                                    LumenDot(color: Lumen.faint, size: 5)
+                                    LumenDot(color: Instrument.faint, size: 5)
                                         .padding(.top, 6)
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(AgentTaskStepPresenter.label(
                                             stepType: step.stepType,
                                             toolName: step.toolName))
                                             .font(.caption.weight(.semibold))
-                                            .foregroundStyle(Lumen.fg2)
+                                            .foregroundStyle(Instrument.fg2)
                                         if let content = AgentTaskStepPresenter.body(
                                             stepType: step.stepType,
                                             toolName: step.toolName,
                                             content: step.content) {
                                             Text(content)
                                                 .font(.caption)
-                                                .foregroundStyle(Lumen.muted)
+                                                .foregroundStyle(Instrument.muted)
                                                 .lineLimit(4)
                                         }
                                     }
@@ -350,7 +350,7 @@ struct AgentTaskDetailView: View {
             }
             .padding(16)
         }
-        .background(Lumen.bg)
+        .background(Instrument.bg)
         .navigationTitle("작업 상세")
         .navigationBarTitleDisplayMode(.inline)
         .overlay(alignment: .bottom) {
@@ -431,10 +431,10 @@ private struct AgentTaskApprovalCard: View {
                 approval.toolName == "ask_human" ? "에이전트 질문" : "도구 실행 승인",
                 systemImage: approval.toolName == "ask_human" ? "questionmark.bubble" : "checkmark.shield")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Lumen.warn)
+                .foregroundStyle(Instrument.warn)
             Text(approval.toolName)
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(Lumen.muted)
+                .font(Instrument.mono(size: 12))
+                .foregroundStyle(Instrument.muted)
             // 무엇을 승인하는지 — bash 는 실행할 명령, ask_human 은 질문 본문.
             if let summary = approval.argumentSummary {
                 Text(summary)
@@ -442,11 +442,11 @@ private struct AgentTaskApprovalCard: View {
                         size: approval.toolName == "ask_human" ? 15 : 13,
                         weight: approval.toolName == "ask_human" ? .semibold : .regular,
                         design: approval.toolName == "ask_human" ? .default : .monospaced))
-                    .foregroundStyle(Lumen.fg)
+                    .foregroundStyle(Instrument.fg)
                     .lineLimit(6)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(10)
-                    .background(Lumen.bg, in: RoundedRectangle(cornerRadius: 10))
+                    .background(Instrument.bg, in: RoundedRectangle(cornerRadius: 10))
                     .textSelection(.enabled)
             }
             if approval.toolName == "ask_human" {
@@ -481,8 +481,8 @@ private struct AgentTaskApprovalCard: View {
             }
         }
         .padding(14)
-        .background(Lumen.surface, in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Lumen.warn.opacity(0.5)))
+        .background(Instrument.surface, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Instrument.warn.opacity(0.5)))
     }
 
     private func decide(approve: Bool) async {

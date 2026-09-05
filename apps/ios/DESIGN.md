@@ -1,8 +1,10 @@
-# OpenMake iOS Design System — LUMEN
+# OpenMake iOS Design System — Instrument (계측)
+
+> 2026-09-05 Lumen → **Instrument** 전환. 토큰·서체는 웹 `apps/web/app/globals.css` 와 동일 값이며 기준안은 `OpenMake Color & Type Pairings.html` (PR #746).
 
 ## 1. Product identity
 
-OpenMake iOS is the native companion for conversations, autonomous agent work, deep research, generated images, and reusable artifacts. The product should feel calm while work is in progress and precise when results arrive. The visual signature is the LUMEN dot: one small point of light that communicates model presence and activity without turning the interface into a dashboard.
+OpenMake iOS is the native companion for conversations, autonomous agent work, deep research, generated images, and reusable artifacts. The product should feel calm while work is in progress and precise when results arrive. The visual signature is the model dot (`LumenDot`): one small point of light that communicates model presence and activity without turning the interface into a dashboard.
 
 ## 2. Design principles
 
@@ -14,40 +16,43 @@ OpenMake iOS is the native companion for conversations, autonomous agent work, d
 
 ## 3. Color tokens
 
-All runtime colors are defined in `OpenMakeApp/App/Theme.swift` and must support light and dark appearances.
+All runtime colors are defined in `OpenMakeApp/App/Theme.swift` (`enum Instrument`) and must support light and dark appearances. Values mirror the web `:root` / `[data-theme="dark"]` tokens.
 
 | Token | Light | Dark | Use |
 |---|---:|---:|---|
-| `Lumen.bg` | `#F7F8FA` | `#0E1014` | App background |
-| `Lumen.surface` | `#FFFFFF` | `#15181E` | Cards and inputs |
-| `Lumen.surface2` | `#F1F3F6` | `#1B1F27` | Secondary controls and user messages |
-| `Lumen.surface3` | `#E9ECF1` | `#222732` | Disabled and tertiary controls |
-| `Lumen.fg` | `#14161C` | `#ECEEF2` | Primary text |
-| `Lumen.fg2` | `#3A3F4A` | `#C3C9D2` | Secondary text |
-| `Lumen.muted` | `#626B7A` | `#97A0AE` | Metadata |
-| `Lumen.faint` | `#8A93A1` | `#6B7480` | Disabled content |
-| `Lumen.border` | `#E4E7EC` | `#262B34` | Hairline borders |
-| `Lumen.accent` | `#2F6BFF` | `#5B8CFF` | Primary actions and active state |
-| `Lumen.accentSoft` | `#EAF1FF` | `#182134` | Selected chips and quiet emphasis |
-| `Lumen.success` | `#149A6B` | `#3FBD8C` | Completed states |
-| `Lumen.warn` | `#B5730A` | `#E0A040` | Thinking, paused, and attention states |
-
-System red is reserved for destructive actions and errors.
+| `Instrument.bg` | `#F7F8FA` | `#0D0F13` | App background |
+| `Instrument.surface` | `#FFFFFF` | `#12151A` | Cards and inputs |
+| `Instrument.surface2` | `#EEF1F5` | `#191D24` | Secondary controls and user messages |
+| `Instrument.surface3` | `#E8EBF0` | `#20252E` | Disabled and tertiary controls |
+| `Instrument.fg` | `#14161A` | `#E7EAEF` | Primary text (dark never pure white) |
+| `Instrument.fg2` | `#3B424C` | `#B5BCC7` | Secondary text |
+| `Instrument.muted` | `#5C6470` | `#8B93A0` | Metadata, smallest readable text |
+| `Instrument.faint` | `#949BA6` | `#616977` | Decorative icons and disabled glyphs only — **never text** (2.7:1) |
+| `Instrument.border` | `#E1E4EA` | `#262B33` | Hairline borders |
+| `Instrument.borderStrong` | `#D5D9E0` | `#343A45` | Emphasised borders |
+| `Instrument.accent` | `#1F4FD8` | `#5B84FF` | Primary actions and active state |
+| `Instrument.accentSoft` | `#E9EEFB` | `#5B84FF @14%` | Selected chips and quiet emphasis |
+| `Instrument.second` | `#00A3B4` | `#2FD4E4` | Secondary brand accent (code, mono highlights) |
+| `Instrument.secondSoft` | `#E0F5F8` | `#2FD4E4 @14%` | Quiet secondary emphasis |
+| `Instrument.success` | `#149A6B` | `#3FBD8C` | Completed states |
+| `Instrument.warn` | `#B5730A` | `#E0A040` | Thinking, paused, and attention states |
+| `Instrument.danger` | `#D5392F` | `#F1685E` | Destructive actions and errors |
 
 ## 4. Typography and iconography
 
-- Use San Francisco through SwiftUI system fonts. Body copy is 15 pt at the default content-size category; metadata is 11–12 pt; screen titles use the native navigation title scale.
+- Three families, same as the web: **Space Grotesk** for headings, wordmark and Latin display (`Instrument.display(size:weight:)`, tracking `-0.03em` via `Instrument.headingTracking`), the **system font** for body copy (Noto Sans KR is not bundled — several MB per weight; the system Korean face keeps Dynamic Type), and **IBM Plex Mono** for numbers, paths and code (`Instrument.mono(size:)`).
+- Bundled fonts live in `OpenMakeApp/Resources/Fonts/` (OFL licences alongside) and are registered in `Info.plist` `UIAppFonts`.
+- Body copy is 15 pt at the default content-size category; metadata is 11–12 pt; screen titles use the native navigation title scale.
 - Respect Dynamic Type for user-facing copy. Fixed-size typography is permitted only for compact labels when the surrounding control remains readable at accessibility sizes.
-- Use monospaced system text for code and machine identifiers.
 - Use SF Symbols for every visible icon. Do not use emoji as product icons or attachment labels.
-- The `Wordmark` uses heavy system weight and the accent only on “Make”.
+- The `Wordmark` uses Space Grotesk bold and the accent only on “Make”.
 
 ## 5. Spacing, shape, and layout
 
 - Base spacing unit: 4 pt. Common gaps are 4, 8, 12, 16, and 24 pt.
 - Minimum interactive target: 44 × 44 pt, even when the visible glyph is smaller.
 - Message and content corners: 10–18 pt. Composer radius: 22 pt. Mode and attachment labels use capsules.
-- Primary screens are edge-to-edge on `Lumen.bg`; content cards use `Lumen.surface` with a one-pixel `Lumen.border` stroke.
+- Primary screens are edge-to-edge on `Instrument.bg`; content cards use `Instrument.surface` with a one-pixel `Instrument.border` stroke.
 - The drawer is at most 86% of compact-screen width and leaves a scrim that dismisses with tap or drag.
 
 ## 6. Reusable primitives

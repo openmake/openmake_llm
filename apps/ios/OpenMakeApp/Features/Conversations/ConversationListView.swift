@@ -41,20 +41,20 @@ struct ConversationListView: View {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(session.title)
                                             .font(.system(size: 15, weight: .semibold))
-                                            .foregroundStyle(Lumen.fg)
+                                            .foregroundStyle(Instrument.fg)
                                             .lineLimit(1)
                                         HStack(spacing: 6) {
                                             LumenDot(size: 6)
                                             Text("\(shortModel(session.model)) · 메시지 \(session.messageCount)")
                                                 .font(.caption)
-                                                .foregroundStyle(Lumen.muted)
+                                                .foregroundStyle(Instrument.muted)
                                                 .lineLimit(1)
                                         }
                                     }
                                     .padding(.vertical, 4)
                                 }
-                                .listRowBackground(Lumen.bg)
-                                .listRowSeparatorTint(Lumen.border)
+                                .listRowBackground(Instrument.bg)
+                                .listRowSeparatorTint(Instrument.border)
                             }
                             .onDelete { offsets in
                                 Task { await delete(at: offsets) }
@@ -70,16 +70,16 @@ struct ConversationListView: View {
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 21, weight: .medium))
-                        .foregroundStyle(Lumen.accentFg)
+                        .foregroundStyle(Instrument.accentFg)
                         .frame(width: 52, height: 52)
-                        .background(Lumen.accent, in: Circle())
-                        .shadow(color: Lumen.accent.opacity(0.35), radius: 10, y: 4)
+                        .background(Instrument.accent, in: Circle())
+                        .shadow(color: Instrument.accent.opacity(0.35), radius: 10, y: 4)
                 }
                 .padding(.trailing, 18)
                 .padding(.bottom, 10)
                 .accessibilityLabel("새 대화")
             }
-            .background(Lumen.bg)
+            .background(Instrument.bg)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Wordmark(size: 18)
@@ -88,7 +88,7 @@ struct ConversationListView: View {
                     Button("메뉴", systemImage: "line.3.horizontal") {
                         setDrawerPresented(true)
                     }
-                    .tint(Lumen.fg2)
+                    .tint(Instrument.fg2)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -137,7 +137,7 @@ struct ConversationListView: View {
                 handleNotificationURL(url)
             }
         }
-        .tint(Lumen.accent)
+        .tint(Instrument.accent)
         .overlay {
             if showDrawer {
                 LumenDrawer(
