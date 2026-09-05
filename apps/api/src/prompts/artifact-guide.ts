@@ -176,24 +176,24 @@ function App() {
 ## 🎨 html 디자인 최종 점검 — kind="html" 이면 코드 작성 직전에 반드시 적용
 아래 토큰 블록을 **글자 그대로 복사**해 \`<style>\` 첫 부분에 넣으세요:
 \`\`\`css
-@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Noto+Sans+KR:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 :root{
-  --bg:#F7F8FA; --surface:#FFFFFF; --surface-2:#F1F3F6; --surface-3:#E9ECF1;
-  --fg:#14161C; --fg-2:#3A3F4A; --muted:#626B7A; --border:#E4E7EC; --border-strong:#CFD4DC;
-  --accent:#2F6BFF; --accent-hover:#235BE6; --accent-fg:#FFFFFF; --accent-soft:#EAF1FF;
+  --bg:#F7F8FA; --surface:#FFFFFF; --surface-2:#EEF1F5; --surface-3:#E8EBF0;
+  --fg:#14161A; --fg-2:#3B424C; --muted:#5C6470; --border:#E1E4EA; --border-strong:#D5D9E0;
+  --accent:#1F4FD8; --accent-hover:#1A44BD; --accent-fg:#FFFFFF; --accent-soft:#E9EEFB; --second:#00A3B4;
   --success:#149A6B; --warn:#B5730A; --danger:#D5392F;
-  --r-sm:8px; --r-md:10px; --r-lg:14px; --r-pill:999px;
-  --sh-2:0 4px 12px rgba(20,30,55,.08), 0 1px 3px rgba(20,30,55,.06);
-  --sans:'Pretendard',-apple-system,system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace;
+  --r-sm:6px; --r-md:8px; --r-lg:12px; --r-pill:999px;
+  --sh-2:0 2px 8px rgba(20,22,26,.06), 0 1px 2px rgba(20,22,26,.04);
+  --display:'Space Grotesk','Noto Sans KR',sans-serif; --sans:'Noto Sans KR',-apple-system,system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
 }
-[data-theme="dark"]{ --bg:#0E1014; --surface:#15181E; --surface-2:#1B1F27; --fg:#ECEEF2; --fg-2:#C3C9D2; --muted:#97A0AE; --border:#262B34; --accent:#5B8CFF; --accent-fg:#0B1220; }
+[data-theme="dark"]{ --bg:#0D0F13; --surface:#12151A; --surface-2:#191D24; --surface-3:#20252E; --fg:#E7EAEF; --fg-2:#B5BCC7; --muted:#8B93A0; --border:#262B33; --border-strong:#343A45; --accent:#5B84FF; --accent-hover:#6F94FF; --accent-fg:#0D0F13; --accent-soft:rgba(91,132,255,.14); --second:#2FD4E4; }
 \`\`\`
 숫자엔 \`font-variant-numeric:tabular-nums\`.
 1. 위 토큰 블록이 \`<style>\` 에 **그대로** 들어갔고, 모든 색·여백·라운드를 \`var(--...)\` 로만 지정했는가
-2. \`body\` 배경은 \`var(--bg)\` **단색** — 🚫 파랑/보라 \`linear-gradient\` 배경 금지, 🚫 \`'Segoe UI'\` 서체 금지 (Pretendard \`@import\` + \`var(--sans)\` 사용)
+2. \`body\` 배경은 \`var(--bg)\` **단색** — 🚫 파랑/보라 \`linear-gradient\` 배경 금지, 🚫 \`'Segoe UI'\` 서체 금지 (Google Fonts \`@import\` + 본문 \`var(--sans)\` · 제목 \`var(--display)\` 자간 -0.03em · 수치/코드 \`var(--mono)\`)
 3. 카드/표/코드블록은 \`var(--surface)\` + \`var(--border)\` + \`var(--sh-2)\`, 본문 텍스트는 \`var(--fg)\`/보조는 \`var(--muted)\`
 4. \`[data-theme="dark"]\` 토큰 블록 포함 + 상단에 다크모드 토글 버튼(JS 3줄)
-5. 액센트(\`var(--accent)\`)는 링크·버튼·강조 소수 지점에만 — 차분한 그래파이트 톤 유지
+5. 액센트(\`var(--accent)\` 코발트)는 링크·버튼·강조 소수 지점에만, 보조 강조는 \`var(--second)\` 시안 — 차분한 계측 도구 톤 유지
 이 5개를 지키지 않은 html 은 미완성으로 간주됩니다. 사용자가 명시적으로 다른 스타일을 요청한 경우에만 예외.
 ⚠️ 대화 히스토리에 이전에 생성한 html(다른 서체·그라데이션 배경 등)이 있어도 **그 스타일을 따라 하지 마세요** — 재작성·새 문서는 항상 위 5항 규칙이 우선입니다.`;
 
@@ -292,24 +292,24 @@ an \`<artifact>\` tag instead.
 ## 🎨 html design final check — apply right before writing kind="html" code
 Copy this token block **verbatim** at the top of your \`<style>\`:
 \`\`\`css
-@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Noto+Sans+KR:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 :root{
-  --bg:#F7F8FA; --surface:#FFFFFF; --surface-2:#F1F3F6; --surface-3:#E9ECF1;
-  --fg:#14161C; --fg-2:#3A3F4A; --muted:#626B7A; --border:#E4E7EC; --border-strong:#CFD4DC;
-  --accent:#2F6BFF; --accent-hover:#235BE6; --accent-fg:#FFFFFF; --accent-soft:#EAF1FF;
+  --bg:#F7F8FA; --surface:#FFFFFF; --surface-2:#EEF1F5; --surface-3:#E8EBF0;
+  --fg:#14161A; --fg-2:#3B424C; --muted:#5C6470; --border:#E1E4EA; --border-strong:#D5D9E0;
+  --accent:#1F4FD8; --accent-hover:#1A44BD; --accent-fg:#FFFFFF; --accent-soft:#E9EEFB; --second:#00A3B4;
   --success:#149A6B; --warn:#B5730A; --danger:#D5392F;
-  --r-sm:8px; --r-md:10px; --r-lg:14px; --r-pill:999px;
-  --sh-2:0 4px 12px rgba(20,30,55,.08), 0 1px 3px rgba(20,30,55,.06);
-  --sans:'Pretendard',-apple-system,system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace;
+  --r-sm:6px; --r-md:8px; --r-lg:12px; --r-pill:999px;
+  --sh-2:0 2px 8px rgba(20,22,26,.06), 0 1px 2px rgba(20,22,26,.04);
+  --display:'Space Grotesk','Noto Sans KR',sans-serif; --sans:'Noto Sans KR',-apple-system,system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
 }
-[data-theme="dark"]{ --bg:#0E1014; --surface:#15181E; --surface-2:#1B1F27; --fg:#ECEEF2; --fg-2:#C3C9D2; --muted:#97A0AE; --border:#262B34; --accent:#5B8CFF; --accent-fg:#0B1220; }
+[data-theme="dark"]{ --bg:#0D0F13; --surface:#12151A; --surface-2:#191D24; --surface-3:#20252E; --fg:#E7EAEF; --fg-2:#B5BCC7; --muted:#8B93A0; --border:#262B33; --border-strong:#343A45; --accent:#5B84FF; --accent-hover:#6F94FF; --accent-fg:#0D0F13; --accent-soft:rgba(91,132,255,.14); --second:#2FD4E4; }
 \`\`\`
 Numbers use \`font-variant-numeric:tabular-nums\`.
 1. The token block above is in \`<style>\` **verbatim**, and all colors/spacing/radii reference \`var(--...)\` only
-2. \`body\` background is **solid** \`var(--bg)\` — 🚫 no blue/purple \`linear-gradient\` backgrounds, 🚫 no \`'Segoe UI'\` (use Pretendard \`@import\` + \`var(--sans)\`)
+2. \`body\` background is **solid** \`var(--bg)\` — 🚫 no blue/purple \`linear-gradient\` backgrounds, 🚫 no \`'Segoe UI'\` (use the Google Fonts \`@import\` + body \`var(--sans)\` · headings \`var(--display)\` with letter-spacing -0.03em · numbers/code \`var(--mono)\`)
 3. Cards/tables/code blocks use \`var(--surface)\` + \`var(--border)\` + \`var(--sh-2)\`; body text \`var(--fg)\`, secondary \`var(--muted)\`
 4. Include the \`[data-theme="dark"]\` token block + a small dark-mode toggle (3 lines of JS)
-5. Use \`var(--accent)\` sparingly (links/buttons/highlights only) — keep the calm graphite tone
+5. Use \`var(--accent)\` (cobalt) sparingly (links/buttons/highlights only), \`var(--second)\` (cyan) for secondary emphasis — keep the calm instrument tone
 HTML that violates these five is considered unfinished. Deviate only when the user explicitly requests a different style.
 ⚠️ Even if earlier HTML in this conversation used a different style (other fonts, gradient backgrounds), do NOT imitate it — for rewrites and new documents these five rules always take precedence.`;
 

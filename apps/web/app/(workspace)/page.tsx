@@ -18,7 +18,7 @@ export default async function ChatPage() {
           <div className="flex shrink-0 items-center gap-2">
             <ArtifactToggle />
             <span className="rounded-md bg-surface-2 px-2 py-1 font-mono text-xs text-muted">
-              Lumen
+              Instrument
             </span>
           </div>
         </header>

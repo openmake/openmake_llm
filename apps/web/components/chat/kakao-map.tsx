@@ -102,7 +102,7 @@ export function KakaoMap({ places, route }: { places: KakaoPlace[]; route?: Kaka
           const polyline = new kakao.maps.Polyline({
             path: linePath,
             strokeWeight: 5,
-            strokeColor: "#2b6be6",
+            strokeColor: "#1F4FD8",
             strokeOpacity: 0.85,
             strokeStyle: "solid",
           });

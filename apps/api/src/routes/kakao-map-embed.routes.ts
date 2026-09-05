@@ -88,7 +88,7 @@ function renderHtml(jsKey: string): string {
       });
       if (route.length > 1) {
         var path = route.map(function(r){ var ll = new kakao.maps.LatLng(r.lat, r.lng); bounds.extend(ll); return ll; });
-        new kakao.maps.Polyline({ map: map, path: path, strokeWeight: 4, strokeColor: '#2F6BFF', strokeOpacity: 0.9 });
+        new kakao.maps.Polyline({ map: map, path: path, strokeWeight: 4, strokeColor: '#1F4FD8', strokeOpacity: 0.9 });
       }
       if (places.length + route.length > 1) { map.setBounds(bounds); }
       if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.mapStatus) {

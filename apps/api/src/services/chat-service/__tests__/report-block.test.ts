@@ -34,7 +34,7 @@ describe('tryRenderReportBlock', () => {
         expect(r).not.toBeNull();
         expect(r!.title).toBe('테스트 보고서');
         expect(r!.artifactAppend).toMatch(/<artifact id="report-[a-z0-9]+" kind="html" title="테스트 보고서">/);
-        expect(r!.artifactAppend).toContain('generic-report-v1-open-design');
+        expect(r!.artifactAppend).toContain('generic-report-v2-instrument');
         expect(r!.content).not.toContain('```reportdata');
         expect(r!.content).toContain('조사 결과를 정리했습니다.');
         expect(r!.content).toContain('이상입니다.');
@@ -62,7 +62,7 @@ describe('tryRenderReportBlock', () => {
         const payload = { ...VALID_DATA, template: 'no-such-template' };
         const r = tryRenderReportBlock(fence(JSON.stringify(payload)));
         expect(r).not.toBeNull();
-        expect(r!.artifactAppend).toContain('generic-report-v1-open-design');
+        expect(r!.artifactAppend).toContain('generic-report-v2-instrument');
     });
 
     it('applyReportRender — 렌더 성공 시 fence 제거 + <artifact> 포함 본문, 실패 시 원문 유지', () => {

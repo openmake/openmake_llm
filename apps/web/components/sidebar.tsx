@@ -266,7 +266,7 @@ export function Sidebar() {
                 {tNav(item.labelKey)}
                 {item.href === "/approvals" && pendingApprovals > 0 && (
                   <span
-                    className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[11px] font-semibold text-white"
+                    className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-warn px-1.5 text-[11px] font-semibold text-white"
                     title={tNav("pendingApprovals", { count: pendingApprovals })}
                   >
                     {pendingApprovals}

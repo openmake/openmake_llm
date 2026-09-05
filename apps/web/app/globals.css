@@ -1,29 +1,34 @@
-/* Pretendard 는 layout.tsx 의 <link>(public/vendor) 로 로드 — Turbopack 은 CSS @import 의
-   public 절대경로를 빌드 시 해석하지 못하므로 link 태그를 사용. */
 @import "tailwindcss";
 
 /* =========================================================================
-   Lumen 디자인 토큰 — 라이트 퍼스트 + 코발트 액센트 + 풀 다크 카운터파트
-   출처: OD 시안 openmake-newdesign-2026 디자인 시스템 패널
+   Instrument 디자인 토큰 — 라이트 퍼스트 · 코발트 단일 프라이머리 · 시안 보조
+   출처: OpenMake Color & Type Pairings (Turn 1 · Instrument / 계측)
+   - 라틴/제목 Space Grotesk · 한글 본문 Noto Sans KR · 수치/경로 IBM Plex Mono
+   - 라이트/다크는 같은 색 역할을 유지하고 다크에서 프라이머리·시안 명도를 올린다
+   - 다크는 본문 굵기를 한 단계 낮추고(300) 순백 대신 #E7EAEF 를 잉크로 쓴다
    ========================================================================= */
 :root {
   --bg: #f7f8fa;
   --surface: #ffffff;
-  --surface-2: #f1f3f6;
-  --surface-3: #e9ecf1;
-  --fg: #14161c;
-  --fg-2: #3a3f4a;
-  --muted: #5b6472;
-  --faint: #6e7686;
-  --border: #e4e7ec;
-  --border-strong: #cfd4dc;
+  --surface-2: #eef1f5;
+  --surface-3: #e8ebf0;
+  --fg: #14161a;
+  --fg-2: #3b424c;
+  --muted: #5c6470;
+  --faint: #949ba6;
+  --border: #e1e4ea;
+  --border-strong: #d5d9e0;
 
-  --accent: #2f6bff;
-  --accent-hover: #235be6;
-  --accent-press: #1b4cc9;
+  --accent: #1f4fd8;
+  --accent-hover: #1a44bd;
+  --accent-press: #16399f;
   --accent-fg: #ffffff;
-  --accent-soft: #eaf1ff;
-  --accent-ring: rgba(47, 107, 255, 0.32);
+  --accent-soft: #e9eefb;
+  --accent-ring: rgba(31, 79, 216, 0.32);
+
+  --second: #00a3b4;
+  --second-fg: #ffffff;
+  --second-soft: #e0f5f8;
 
   --success: #149a6b;
   --success-soft: #e2f5ee;
@@ -32,50 +37,61 @@
   --danger: #d5392f;
   --danger-soft: #fbe6e4;
 
-  /* 7 모델 프로파일 컬러 */
-  --m-default: #2f6bff;
+  /* 7 모델 프로파일 컬러 — default 는 프라이머리, code 는 보조(시안) */
+  --m-default: #1f4fd8;
   --m-pro: #6e56e8;
   --m-fast: #149a6b;
   --m-think: #b5730a;
-  --m-code: #0e8fa8;
+  --m-code: #00a3b4;
   --m-vision: #c7387e;
-  --m-auto: #5b6472;
+  --m-auto: #5c6470;
 
-  --r-xs: 6px;
-  --r-sm: 8px;
-  --r-md: 10px;
-  --r-lg: 14px;
-  --r-xl: 20px;
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
   --r-pill: 999px;
 
-  --sh-1: 0 1px 2px rgba(20, 22, 28, 0.05), 0 1px 1px rgba(20, 22, 28, 0.04);
-  --sh-2: 0 4px 12px rgba(20, 30, 55, 0.08), 0 1px 3px rgba(20, 30, 55, 0.06);
-  --sh-3: 0 18px 48px rgba(18, 28, 52, 0.16), 0 4px 12px rgba(18, 28, 52, 0.08);
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --sh-2: 0 2px 8px rgba(20, 22, 26, 0.06), 0 1px 2px rgba(20, 22, 26, 0.04);
+  --sh-3: 0 16px 40px rgba(20, 22, 26, 0.12), 0 2px 6px rgba(20, 22, 26, 0.06);
 
-  --sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
-    system-ui, sans-serif;
-  --mono: var(--font-jbm), "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
-    monospace;
+  --display: var(--font-space-grotesk), var(--font-noto-kr), -apple-system,
+    BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif;
+  --sans: var(--font-noto-kr), -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --mono: var(--font-ibm-plex-mono), "IBM Plex Mono", ui-monospace, SFMono-Regular,
+    Menlo, monospace;
+
+  --fw-body: 400;
+  --fw-heading: 600;
+  --ls-heading: -0.03em;
+  --ls-label: 0.14em;
 }
 
 [data-theme="dark"] {
-  --bg: #0e1014;
-  --surface: #15181e;
-  --surface-2: #1b1f27;
-  --surface-3: #222732;
-  --fg: #eceef2;
-  --fg-2: #c3c9d2;
-  --muted: #97a0ae;
-  --faint: #6b7480;
-  --border: #262b34;
-  --border-strong: #353c48;
+  --bg: #0d0f13;
+  --surface: #12151a;
+  --surface-2: #191d24;
+  --surface-3: #20252e;
+  --fg: #e7eaef;
+  --fg-2: #b5bcc7;
+  --muted: #8b93a0;
+  --faint: #616977;
+  --border: #262b33;
+  --border-strong: #343a45;
 
-  --accent: #5b8cff;
-  --accent-hover: #6e9aff;
-  --accent-press: #4a7bf0;
-  --accent-fg: #0b1220;
-  --accent-soft: rgba(91, 140, 255, 0.14);
-  --accent-ring: rgba(91, 140, 255, 0.36);
+  --accent: #5b84ff;
+  --accent-hover: #6f94ff;
+  --accent-press: #4b74ee;
+  --accent-fg: #0d0f13;
+  --accent-soft: rgba(91, 132, 255, 0.14);
+  --accent-ring: rgba(91, 132, 255, 0.36);
+
+  --second: #2fd4e4;
+  --second-fg: #0d0f13;
+  --second-soft: rgba(47, 212, 228, 0.14);
 
   --success: #3fbd8c;
   --success-soft: rgba(63, 189, 140, 0.14);
@@ -84,17 +100,20 @@
   --danger: #f1685e;
   --danger-soft: rgba(241, 104, 94, 0.14);
 
-  --m-default: #5b8cff;
+  --m-default: #5b84ff;
   --m-pro: #9986ff;
   --m-fast: #3fbd8c;
   --m-think: #e0a040;
-  --m-code: #3dbfd8;
+  --m-code: #2fd4e4;
   --m-vision: #e876ad;
-  --m-auto: #8a93a1;
+  --m-auto: #8b93a0;
 
   --sh-1: 0 1px 2px rgba(0, 0, 0, 0.4);
   --sh-2: 0 6px 16px rgba(0, 0, 0, 0.45);
   --sh-3: 0 20px 50px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.4);
+
+  --fw-body: 300;
+  --fw-heading: 500;
 }
 
 /* =========================================================================
@@ -118,6 +137,10 @@
   --color-accent-press: var(--accent-press);
   --color-accent-fg: var(--accent-fg);
   --color-accent-soft: var(--accent-soft);
+
+  --color-second: var(--second);
+  --color-second-fg: var(--second-fg);
+  --color-second-soft: var(--second-soft);
 
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
@@ -147,6 +170,7 @@
 
   --font-sans: var(--sans);
   --font-mono: var(--mono);
+  --font-display: var(--display);
 }
 
 * {
@@ -164,15 +188,35 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--sans);
+  font-weight: var(--fw-body);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* 제목은 Space Grotesk(라틴) + Noto Sans KR(한글) 조합, 자간 -0.03em. 다크에서는 굵기 한 단계 하향. */
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--display);
+  font-weight: var(--fw-heading);
+  letter-spacing: var(--ls-heading);
+}
+
+/* 모노 라벨 (uppercase 메타·섹션 킥커) — 기준안 label 규격 */
+.label-mono {
+  font-family: var(--mono);
+  font-size: 0.6875rem;
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--faint);
 }
 
 ::selection {
   background: var(--accent-soft);
 }
 
-/* 코드 하이라이트 (rehype-highlight / highlight.js) — Lumen 토큰 기반, 라이트/다크 자동 */
+/* 코드 하이라이트 (rehype-highlight / highlight.js) — Instrument 토큰 기반, 라이트/다크 자동 */
 .hljs-comment,
 .hljs-quote {
   color: var(--faint);
