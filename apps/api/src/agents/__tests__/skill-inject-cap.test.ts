@@ -35,7 +35,7 @@ describe('buildManifestPrompt — 주입 합계 상한', () => {
         rows = [row('ecc-a', 600), row('ecc-b', 300), row('ecc-c', 300), row('sys', 50)];
         const out = await manager().buildManifestPrompt('backend-developer', undefined, 'technology');
         expect(out).not.toBeNull();
-        // a(600)+b(300)=900 ≤ 1000, c 는 1200 초과로 건너뜀, sys(50) 는 950 이라 담김
+        // a(600)+b(300)=900 ≤ 1000, c 는 1200 초과로 건너뜀, sys(50) 는 950 이라 담김 (system 이 아닌 'sys' 는 priority 순)
         expect(out!.skillNames).toEqual(['ecc-a', 'ecc-b', 'sys']);
         expect(out!.prompt).toContain('ECC-A:');
         expect(out!.prompt).not.toContain('ECC-C:');
@@ -44,9 +44,15 @@ describe('buildManifestPrompt — 주입 합계 상한', () => {
     it('큰 스킬은 개별 상한으로 절단돼 뒤의 system 스킬이 밀려나지 않는다', async () => {
         rows = [row('huge', 5000), row('system-skill-backend', 100)];
         const out = await manager().buildManifestPrompt('backend-developer', undefined, 'technology');
-        expect(out!.skillNames).toEqual(['huge', 'system-skill-backend']);
+        expect(out!.skillNames).toEqual(['system-skill-backend', 'huge']);
         expect(out!.prompt).toContain('... (truncated)');
         expect(out!.prompt).toContain('SYSTEM-SKILL-BACKEND:');
+    });
+
+    it('system 스킬은 priority 가 낮아도 먼저 담겨 상한에 밀려나지 않는다', async () => {
+        rows = [row('ecc-a', 600), row('ecc-b', 350), row('system-skill-backend', 100)];
+        const out = await manager().buildManifestPrompt('backend-developer', undefined, 'technology');
+        expect(out!.skillNames).toEqual(['system-skill-backend', 'ecc-a']);
     });
 
     it('합계가 상한 이내면 전부 주입한다', async () => {
