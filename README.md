@@ -19,7 +19,8 @@
   <a href="https://chat.openmake.cc">Live demo</a> ·
   <a href="https://openmake.cc/en/docs/">Self-hosting guide</a> ·
   <a href="https://openmake.cc/ko/">한국어</a> ·
-  <a href="https://openmake.cc/ja/">日本語</a>
+  <a href="https://openmake.cc/ja/">日本語</a> ·
+  <a href="README.zh-CN.md">简体中文</a>
 </p>
 
 ---
