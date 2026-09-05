@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.45.1](https://github.com/openmake/openmake_llm/compare/v1.45.0...v1.45.1) (2026-09-05)
+
+
+### 🐛 버그 수정
+
+* **memory:** 자동 추출 근접 중복 판정에 어미 변형 흡수 토큰 유사도 추가 ([#765](https://github.com/openmake/openmake_llm/issues/765)) ([41bd6b6](https://github.com/openmake/openmake_llm/commit/41bd6b6f3908e8acbeb23beaa7c5b1ae1c9d3bb0))
+
 ## [1.45.0](https://github.com/openmake/openmake_llm/compare/v1.44.0...v1.45.0) (2026-09-05)
 
 
