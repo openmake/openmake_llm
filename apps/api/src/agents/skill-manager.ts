@@ -486,7 +486,9 @@ export class SkillManager {
         const injectedRows: typeof filtered = [];
         const skipped: string[] = [];
         let injectedChars = 0;
-        for (const r of filtered) {
+        // system 스킬(페르소나 규칙, 작음)을 먼저 담아 상한에 밀려나지 않게 한다 — 나머지는 priority 순 유지.
+        const ordered = [...filtered].sort((a, b) => Number(b.id.startsWith('system-skill-')) - Number(a.id.startsWith('system-skill-')));
+        for (const r of ordered) {
             const body = r.prompt_md.length > SKILL_MANIFEST_PER_SKILL_MAX_CHARS
                 ? r.prompt_md.slice(0, SKILL_MANIFEST_PER_SKILL_MAX_CHARS) + '\n... (truncated)' : r.prompt_md;
             if (injectedRows.length > 0 && injectedChars + body.length > SKILL_MANIFEST_INJECT_MAX_CHARS) { skipped.push(r.id); continue; }
