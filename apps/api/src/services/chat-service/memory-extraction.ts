@@ -55,13 +55,33 @@ function norm(s: string): string {
     return s.toLowerCase().replace(/[.,!?~]/g, '').replace(/\s+/g, ' ').trim();
 }
 
-/** PURE: 기존 메모리와 근접 중복인지(정규화 exact 또는 부분포함). */
+/** PURE: 근접 중복 비교용 토큰 집합 — 주어 접두 제거 → 어절 분리 → 조사·어미 1회 제거 → 짧은 토큰 제외. */
+function dupTokens(s: string): Set<string> {
+    const body = norm(s).replace(/[()]/g, ' ').replace(MEMORY_EXTRACTION.dupSubjectPrefix, '');
+    return new Set(
+        body.split(/\s+/)
+            .map((t) => t.replace(MEMORY_EXTRACTION.dupTokenSuffix, ''))
+            .filter((t) => t.length >= MEMORY_EXTRACTION.dupTokenMinLen),
+    );
+}
+
+/** PURE: 토큰 집합 Jaccard 유사도(둘 다 비면 0). */
+function tokenJaccard(a: Set<string>, b: Set<string>): number {
+    if (a.size === 0 || b.size === 0) return 0;
+    let inter = 0;
+    for (const t of a) if (b.has(t)) inter += 1;
+    return inter / (a.size + b.size - inter);
+}
+
+/** PURE: 기존 메모리와 근접 중복인지(정규화 exact·부분포함, 또는 어미 변형을 넘는 토큰 유사도). */
 export function isDuplicateMemory(content: string, existing: string[]): boolean {
     const n = norm(content);
     if (!n) return true;
+    const tokens = dupTokens(content);
     return existing.some((e) => {
         const ne = norm(e);
-        return ne === n || ne.includes(n) || n.includes(ne);
+        if (ne === n || ne.includes(n) || n.includes(ne)) return true;
+        return tokenJaccard(tokens, dupTokens(e)) >= MEMORY_EXTRACTION.dupTokenSimilarity;
     });
 }
 
