@@ -36,7 +36,7 @@ Every request flows through a lightweight **message pipeline** that applies the 
 
 | | |
 |---|---|
-| 🧠 **1 local model, routed per request** | `qwen3.6-35b-a3b` served via vLLM + LiteLLM, with a 262K context-fit safety net |
+| 🧠 **1 local model, routed per request** | `qwen3.8-27b` served via vLLM + LiteLLM, with a 262K context-fit safety net |
 | 🎛️ **Role-based model orchestration** | Assign a different model (local or BYOK external) per functional role; per-user + admin-global mappings, server-shared keys with token budgets |
 | 🤖 **Autonomous agents** | Manus-style multi-turn agent in a persistent Docker sandbox (shell · Python · browser · files), with human-in-the-loop approval |
 | 🔬 **Deep research** | Fan-out web search → source fetch → claim verification → cited synthesis |
@@ -127,7 +127,7 @@ OpenMake separates **policy** (deciding *how* to answer) from **execution** (act
 
 **▸ Models & routing**
 - Local and external models share the provider-gated `message-pipeline` and tool loop; behavior is controlled by orthogonal axes (Model · Style · Mode · Custom Agent).
-- Self-hosted vLLM + LiteLLM (default `qwen3.6-35b-a3b`) with a context-fit safety net that protects output tokens and degrades gracefully on overflow.
+- Self-hosted vLLM + LiteLLM (default `qwen3.8-27b`) with a context-fit safety net that protects output tokens and degrades gracefully on overflow.
 - Bring-your-own external keys — **OpenRouter, NVIDIA NIM, Ollama** (local + cloud), all OpenAI-compatible (an Anthropic adapter is built into the provider abstraction) — AES-256-GCM encrypted at rest. **Guests use the default local model only** — external providers require sign-in.
 - **Role-based model orchestration** — assign a different model (local or BYOK external) to each functional role (`agent`, `judge`, `research`, `spawn`, `review`, `summary`) via Settings; admins set org-wide defaults and register server-shared external keys with per-key token budgets in an admin console. Resolution is fail-open (falls back to the local default on any failure). Model lists filter down to what is actually reachable and role-capable.
 - **Tail routing (opt-in, off by default)** — a lightweight gate scores each query's error likelihood; when it judges a query as *factual tail* (likely to be answered wrong, externally verifiable), `web_search` is deterministically forced on the first turn. Ships with a shadow mode (`TAIL_ROUTING_SHADOW_ENABLED`) that records gate decisions without changing behavior, so thresholds can be tuned on real traffic before `TAIL_ROUTING_STAGE2B_ENABLED` is switched on.
