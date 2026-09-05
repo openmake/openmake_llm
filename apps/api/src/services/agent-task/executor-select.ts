@@ -1,8 +1,11 @@
 /**
  * 실행 백엔드/승인 정책 결정 (Cowork D1a) — AgentTaskService 에서 분리(파일 크기 가드).
  *
- * - executor='local' + 게이트 ON → RemoteExecutor(로컬 브리지) + 승인 'all' 강제
- *   (docker 격리가 없으므로 전건 승인. input.approvalPolicy 보다 우선.)
+ * - executor='local' + 게이트 ON → RemoteExecutor(로컬 브리지). 승인 정책은 호출자가 명시한
+ *   input.approvalPolicy 를 그대로 쓰고, **미지정일 때만 'all'** 로 둔다(전역 기본값보다 보수적 —
+ *   docker 격리가 없으므로). 과거엔 명시값도 'all' 로 덮어써 웹 컴포저의 "건너뜀/자동" 이 로컬
+ *   실행에서 조용히 무시됐다(2026-09-05 라이브 관찰). CLI 는 이미 `--yes` 로 서버 승인을 전부
+ *   건너뛰므로 웹만 막는 것은 비대칭이었다. 코드 실행은 정책과 무관하게 디바이스 confirmExec 가 게이트.
  * - 그 외 → 현행 docker 샌드박스, input.approvalPolicy 는 이 실행에 한해 override.
  * - 게이트 OFF 면 sandbox 로 폴백(생성 시점에 이미 검증되나 방어).
  *
@@ -30,7 +33,7 @@ export function resolveExecutorPlan(
     // 로컬: 파일/기타 도구는 서버 승인 유지(디바이스는 파일에 다이얼로그 없음)하되, 코드 실행
     // (bash/python_execute)은 디바이스 confirmExec 가 게이트하므로 deviceGatesShell 로 서버 승인 skip.
     const sandboxCfg = isLocal
-        ? { ...getTaskSandboxConfig(), approvalPolicy: 'all' as const, deviceGatesShell: true }
+        ? { ...getTaskSandboxConfig(), approvalPolicy: input.approvalPolicy ?? ('all' as const), deviceGatesShell: true }
         : input.approvalPolicy
             ? { ...getTaskSandboxConfig(), approvalPolicy: input.approvalPolicy }
             : getTaskSandboxConfig();

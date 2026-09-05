@@ -584,7 +584,7 @@ export function useChatSocket() {
       files?: AttachedFileUI[],
       images?: string[],
       approvalPolicy?: "all" | "high-risk" | "none",
-      /** Cowork D2: true 면 데스크톱 브리지가 연결한 로컬 폴더에서 실행 (승인은 서버가 'all' 강제) */
+      /** Cowork D2: true 면 데스크톱 브리지가 연결한 로컬 폴더에서 실행 (승인 정책은 그대로 적용, 미지정 시 서버가 'all') */
       localExecutor?: boolean,
       /** 다중 디바이스(101): 로컬 실행 대상 디바이스 id — 미지정은 최근 접속 디바이스 */
       localDeviceId?: string | null,
