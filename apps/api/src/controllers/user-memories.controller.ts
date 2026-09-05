@@ -29,6 +29,23 @@ import { success, internalError, unauthorized, badRequest, notFound } from '../u
 const log = createLogger('UserMemoriesController');
 
 const MAX_COUNT = Number(process.env.USER_MEMORY_MAX_COUNT || '50');
+
+/**
+ * 메모리 변경 감사 기록 — AuditService 가 SoT(CRITICAL_ACTIONS 매칭 시 알림은 서비스가 담당).
+ * fire-and-forget·fail-open: 기록 실패가 요청을 막지 않는다. (2026-09-06 — 그전엔 winston 로그만 남았다.)
+ */
+function auditMemory(req: Request, action: 'memory.created' | 'memory.deleted' | 'memory.deleted_all', userId: string, details: Record<string, unknown>): void {
+    void (async () => {
+        try {
+            const { getAuditService } = await import('../services/AuditService');
+            await getAuditService().logAudit({
+                action, userId, resourceType: 'user_memory',
+                resourceId: typeof details.id === 'string' ? details.id : undefined,
+                details, ipAddress: req.ip, userAgent: req.headers['user-agent'],
+            });
+        } catch (e) { log.warn(`[audit] ${action} 기록 실패:`, e); }
+    })();
+}
 const MAX_CONTENT = Number(process.env.USER_MEMORY_MAX_CONTENT_CHARS || '2000');
 
 const createSchema = z.object({
@@ -73,6 +90,7 @@ export function createUserMemoriesController(): Router {
             }
             const memory = await repo.create(uuidv4(), userId, content.trim());
             log.info(`memory 생성: userId=${userId} id=${memory.id} len=${memory.content.length}`);
+            auditMemory(req, 'memory.created', userId, { id: memory.id, source: memory.source, length: memory.content.length });
             res.json(success({ memory }));
         } catch (err) {
             log.error('create 실패:', err);
@@ -87,6 +105,7 @@ export function createUserMemoriesController(): Router {
             const repo = new UserMemoryRepository(getPool());
             const deleted = await repo.softDeleteForUser(req.params.id, userId);
             if (!deleted) { res.status(404).json(notFound('memory 없음')); return; }
+            auditMemory(req, 'memory.deleted', userId, { id: req.params.id });
             res.json(success({ deleted: true }));
         } catch (err) {
             log.error('delete 실패:', err);
@@ -101,6 +120,7 @@ export function createUserMemoriesController(): Router {
             const repo = new UserMemoryRepository(getPool());
             const count = await repo.deleteAllForUser(userId);
             log.info(`memory 전체 삭제: userId=${userId} count=${count}`);
+            auditMemory(req, 'memory.deleted_all', userId, { count });
             res.json(success({ deleted: count }));
         } catch (err) {
             log.error('deleteAll 실패:', err);

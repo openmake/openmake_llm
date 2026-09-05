@@ -1,17 +1,17 @@
 -- Migration 034 — user_memories 테이블
 --
 -- 사용자별 cross-conversation memory (claude.ai Memory / ChatGPT Memory 동등).
--- explicit 명령 (/remember) 으로 저장된 사실을 다음 대화의 system prompt 에
--- prepend.
+-- 설정 탭(REST POST /api/users/me/memories) 으로 저장된 사실을 다음 대화의 system
+-- prompt 에 주입. (초기 설계의 채팅 `/remember` 슬래시 명령은 구현되지 않았다.)
 --
 -- 도입 배경 (2026-05-26): mainstream gap closure Phase 3-A. 2026-05-19 폐기된
 -- MemoryService 의 lightweight 재도입 — auto-extraction 없이 explicit 만.
 -- vLLM 부담 0 (추가 LLM 호출 없음).
 --
 -- 저장 방식:
---   - source='explicit' — 사용자가 직접 입력
---   - source='candidate' — 모델 응답의 <memory-candidate> tag (Phase K, 미래)
---   - source='batch' — 일괄 추출 (Phase 3-C, 미래)
+--   - source='explicit' — 사용자 명시(설정 탭 입력, "기억해줘" 휴리스틱 패턴 — 2026-07-22)
+--   - source='candidate' — 모델 감지(메시지당 LLM 추출 — 2026-07-22. 초기 구상의 <memory-candidate> tag 는 미구현)
+--   - source='batch' — 일괄 추출(CLI backfill-memories — 2026-07-22)
 --
 -- max-per-user 정책은 application layer (env USER_MEMORY_MAX_COUNT, default 50)
 --
