@@ -34,6 +34,29 @@ export interface ExecResult {
  * TaskSandbox 의 공개 표면과 1:1 — D0 은 동작 무변경 추출이며,
  * 원격 실행기 특화 요구(디바이스 핸드셰이크 등)는 D1 에서 이 계약 위에 얹는다.
  */
+/** 코드 탐색 요청 — grep(정규식 매치) · files(파일별 줄 수). 경로는 workspace 상대. */
+export interface CodeNavSpec {
+    op: 'grep' | 'files';
+    /** 대상 경로(상대, 기본 '.'). */
+    path?: string;
+    /** grep 전용 — 정규식 소스. */
+    pattern?: string;
+    /** grep 전용 — 파일 글롭('*.ts' 처럼 '/' 가 없으면 파일명에만 적용). */
+    glob?: string;
+    ignoreCase?: boolean;
+    maxResults?: number;
+}
+
+/** 코드 탐색 결과 — 실행기가 캡을 적용한 뒤의 값. */
+export interface CodeNavData {
+    /** grep — "상대경로:줄번호:내용". */
+    matches?: string[];
+    /** files — 파일별 줄 수. */
+    files?: { path: string; lines: number }[];
+    /** 실행기 캡에 걸려 잘렸는지. */
+    truncated?: boolean;
+}
+
 export interface TaskExecutor {
     readonly taskId: string;
 
@@ -93,6 +116,16 @@ export interface TaskExecutor {
      * 도구가 없어 검사하지 못한 경우와 "진단 0건"은 `serverKind` 로 구분한다.
      */
     diagnostics?(relPaths: string[]): Promise<{ text: string; count: number } | null>;
+
+    /**
+     * 코드 탐색(grep_code·repo_map)의 네이티브 백엔드 — 실행기가 지원하면 구현한다.
+     * 미구현이면 도구가 `exec` 로 셸(rg/grep/find)을 돌린다(docker 샌드박스의 기존 경로).
+     *
+     * 로컬 브리지가 이걸 구현하는 이유: exec 로 내보내면 읽기 전용 탐색인데도 디바이스의
+     * confirmExec(비우회 승인 창)이 매번 뜬다. 전용 kind 는 셸을 거치지 않아 승인 없이 돈다.
+     * 실패·구 디바이스(kind 미지원)는 **null** 을 돌려 호출측이 셸 경로로 폴백한다(fail-open).
+     */
+    codeNav?(spec: CodeNavSpec): Promise<CodeNavData | null>;
 
     /** 실행 환경 정리. removeWorkspace=false 면 산출물 회수를 위해 workspace 보존. 멱등. */
     cleanup(removeWorkspace?: boolean): Promise<void>;

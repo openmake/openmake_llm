@@ -40,6 +40,28 @@ export const DIAG_MSG_MAX = 300;
 export const LIST_ALL_MAX = 1000;
 
 /**
+ * 코드 탐색(code_nav) 상한 — 읽기 전용이라 confirmExec 를 거치지 않으므로, 폭주를 막는 것은
+ * 전적으로 이 캡이다. 서버(TASK_CODE_NAV)도 같은 축의 캡을 갖지만 디바이스가 자체 강제한다.
+ */
+export const CODE_NAV_TIMEOUT_MS = Number(process.env.OMK_BRIDGE_CODE_NAV_TIMEOUT_MS || 15000);
+/** 1회 요청에서 훑을 최대 파일 수(대형 레포 보호). 초과하면 truncated. */
+export const CODE_NAV_MAX_FILES = 4000;
+/** 내용을 읽을 파일 크기 상한 — 초과 파일은 건너뛴다(번들·미니파이·데이터 덤프). */
+export const CODE_NAV_MAX_FILE_BYTES = 512 * 1024;
+/** grep 매치 상한(요청이 더 크게 요구해도 이 값으로 자른다). */
+export const CODE_NAV_MAX_MATCHES = 400;
+/** 한 파일에서 가져올 최대 매치 수 — 한 파일이 결과를 독점하지 않게. */
+export const CODE_NAV_MAX_PER_FILE = 20;
+/** 매치 줄 1건 길이 상한. */
+export const CODE_NAV_LINE_MAX_CHARS = 300;
+/** 정규식 소스 길이 상한. */
+export const CODE_NAV_PATTERN_MAX_CHARS = 500;
+/** 탐색에서 제외하는 디렉토리 — 서버 TASK_CODE_NAV.EXCLUDED_DIRS 와 같은 목록(양쪽 강제). */
+export const CODE_NAV_EXCLUDED_DIRS: readonly string[] = [
+    'node_modules', '.git', 'dist', 'build', '.next', '__pycache__', '.venv', 'venv', 'coverage', '.openmake',
+];
+
+/**
  * 파일 kind(read/write/list/listAll/delete/folders) 1회 처리 타임아웃 — OS 가 FS 호출을
  * 무기한 블록하면(외장 볼륨 TCC 권한 미결 실사례, 2026-08-23) 요청을 오류로 해소해
  * 연결(하트비트)을 지킨다. 블록된 호출 자체는 취소할 수 없어 threadpool 스레드는 남는다.

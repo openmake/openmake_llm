@@ -156,6 +156,21 @@ const { WebSocketServer } = require('ws');
     const diff = await execVia(dev1, { kind: 'worktree', op: 'diff', taskId });
     assert.ok(diff.ok && diff.stdout.includes('diff-me'), 'worktree diff');
 
+    // ④-B code_nav — 읽기 전용 코드 탐색(grep_code·repo_map 백엔드). 셸을 거치지 않으므로
+    //      confirm 이벤트가 발생하면 안 된다(발생하면 실사용에서 탐색마다 승인 창이 뜬다).
+    fs.mkdirSync(path.join(folder, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(folder, 'src/nav.js'), 'function navTarget() {\n  return 1;\n}\n');
+    fs.mkdirSync(path.join(folder, 'node_modules/pkg'), { recursive: true });
+    fs.writeFileSync(path.join(folder, 'node_modules/pkg/i.js'), 'function navTarget() {}\n');
+    const navConfirms = events.filter((e) => e.ev === 'confirm').length;
+    const grepR = await execVia(dev1, { kind: 'code_nav', op: 'grep', pattern: 'function navTarget' });
+    assert.ok(grepR.ok && grepR.codeNav.matches.includes('src/nav.js:1:function navTarget() {'), 'code_nav grep 매치');
+    assert.ok(!grepR.codeNav.matches.some((m) => m.startsWith('node_modules/')), 'code_nav 제외 디렉토리');
+    const filesR = await execVia(dev1, { kind: 'code_nav', op: 'files', path: 'src' });
+    assert.deepEqual(filesR.codeNav.files, [{ path: 'src/nav.js', lines: 3 }], 'code_nav files 줄 수');
+    assert.equal(events.filter((e) => e.ev === 'confirm').length, navConfirms, 'code_nav 는 승인 창을 띄우지 않는다');
+    assert.equal((await execVia(dev1, { kind: 'code_nav', op: 'grep', pattern: 'x', path: '../..' })).ok, false, 'code_nav 스코프 탈출 거부');
+
     // ⑤ 다중 루트 — 두 번째 루트 연결: 파생 deviceId 상이, 루트별 스코프 격리, 개별 해제
     send({ cmd: 'connect', folder: folder2 });
     const hello2 = await waitFor((f) => f.type === 'bridge_hello' && f.folderName === path.basename(folder2));
