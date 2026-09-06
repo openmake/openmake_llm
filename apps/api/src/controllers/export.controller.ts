@@ -70,16 +70,24 @@ const exportLimiter = rateLimit({
 /**
  * 5개 카테고리 병렬 조회. 각 query 실패는 개별 catch 로 빈 배열 반환 (export 자체는
  * 계속 — 사용자가 부분 데이터라도 받을 수 있게).
+ *
+ * ⚠️ 실패는 조용히 삼키지 않는다 — `_meta.failedCategories` 에 라벨을 싣고 error 로그를 남긴다.
+ * 배경(2026-09-07): user_memories 쿼리가 034 마이그레이션(2026-05-26)에서 DROP 된 옛 컬럼
+ * (category/key/value/importance)을 조회해 넉 달간 매번 실패했는데, 이 catch 가 `[]` 로
+ * 바꿔 `counts.userMemories: 0` 으로 나가 "메모리 없음" 처럼 보였다(Agent Memory Atlas 지적).
+ * 사용자가 부분 export 인지 알 수 있어야 GDPR 20조 취지에 맞는다.
  */
 async function collectUserData(userId: string): Promise<Record<string, unknown>> {
     const pool = getPool();
+    const failed: string[] = [];
 
     const safeQuery = async <T extends QueryResultRow>(label: string, sql: string, params: unknown[]): Promise<T[]> => {
         try {
             const r = await pool.query<T>(sql, params);
             return r.rows;
         } catch (err) {
-            log.warn(`[Export] ${label} 조회 실패 (continue):`, err);
+            failed.push(label);
+            log.error(`[Export] ${label} 조회 실패 — 부분 export 로 계속:`, err);
             return [];
         }
     };
@@ -108,7 +116,8 @@ async function collectUserData(userId: string): Promise<Record<string, unknown>>
              FROM custom_agents WHERE created_by = $1 ORDER BY created_at DESC`,
             [userId]),
         safeQuery<Record<string, unknown>>('user_memories',
-            `SELECT id, user_id, category, key, value, importance, created_at, updated_at
+            // 034 스키마(content/source/is_active). 삭제(tombstone) 행도 본인 데이터라 is_active 로 구분해 포함.
+            `SELECT id, user_id, content, source, is_active, accessed_at, created_at, updated_at
              FROM user_memories WHERE user_id = $1 ORDER BY created_at DESC`,
             [userId]),
     ]);
@@ -130,6 +139,9 @@ async function collectUserData(userId: string): Promise<Record<string, unknown>>
                 customAgents: customAgents.length,
                 userMemories: memories.length,
             },
+            /** 조회에 실패해 빈 배열로 대체된 카테고리 — 비어 있지 않으면 부분 export. */
+            failedCategories: failed,
+            partial: failed.length > 0,
             note: 'GDPR Article 20 right to data portability. consent_logs, api_keys (암호화) 는 보안상 미포함.',
         },
     };

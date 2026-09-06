@@ -9,7 +9,7 @@
 import { getPool } from '../../data/models/unified-database';
 import { UserMemoryRepository } from '../../data/repositories/user-memory-repository';
 import { createClient } from '../../llm/client';
-import { extractLLMMemories, isDuplicateMemory } from './memory-extraction';
+import { extractLLMMemories, isDuplicateMemory, auditMemoryWrite } from './memory-extraction';
 import { MEMORY_EXTRACTION } from '../../config/memory-extraction';
 import { parallelBatch } from '../../workflow/graph-engine';
 import { createLogger } from '../../utils/logger';
@@ -70,13 +70,16 @@ export async function backfillUserMemories(
     if (!dryRun && fresh.length > 0) {
         const { randomUUID } = await import('node:crypto');
         let count = await repo.countActiveByUser(userId);
+        const savedIds: string[] = [];
         for (const c of fresh) {
             if (count >= MEMORY_EXTRACTION.maxCount) break;
-            await repo.create(randomUUID(), userId, c, 'batch');
+            const row = await repo.create(randomUUID(), userId, c, 'batch');
             count += 1;
             saved += 1;
+            savedIds.push(row.id);
         }
         logger.info(`[Backfill] user ${userId}: ${saved} 저장 (세션 ${sessions.length}, 후보 ${candidates.length}, 중복 ${skippedDup})`);
+        if (saved > 0) auditMemoryWrite('memory.backfilled', userId, { count: saved, ids: savedIds, sessions: sessions.length, candidates: candidates.length, skippedDup });
         if (fresh.length > saved) logger.warn(`[Backfill] cap ${MEMORY_EXTRACTION.maxCount} 도달 — 후보 ${fresh.length - saved}건 폐기 (user ${userId})`);
     }
 
