@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.46.0](https://github.com/openmake/openmake_llm/compare/v1.45.3...v1.46.0) (2026-09-06)
+
+
+### ✨ 기능
+
+* **agent-task:** 코딩 고도화 1차 — 도구 결과 접기·grep_code/repo_map·workspace 테스트 게이트 ([#772](https://github.com/openmake/openmake_llm/issues/772)) ([c5969f9](https://github.com/openmake/openmake_llm/commit/c5969f9f8080741e01ff222ff6a68ad3e806831f))
+
 ## [1.45.3](https://github.com/openmake/openmake_llm/compare/v1.45.2...v1.45.3) (2026-09-06)
 
 
