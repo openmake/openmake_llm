@@ -9,6 +9,7 @@
  * @module providers/openai-compat-mapping
  */
 import type { ChatMessage, ToolDefinition } from '../llm';
+import type { ToolNameCodec } from './tool-name-codec';
 
 /**
  * OpenAI 형식 메시지로 변환.
@@ -65,8 +66,9 @@ import { inferImageMime } from '../utils/image-mime';
 
 export function toOpenAIMessages(
     messages: ChatMessage[],
-    opts?: { cacheSystemPrompt?: boolean },
+    opts?: { cacheSystemPrompt?: boolean; codec?: ToolNameCodec },
 ): OpenAIMessage[] {
+    const codec = opts?.codec;
     return messages.map((msg, idx): OpenAIMessage => {
         if (msg.role === 'tool') {
             return {
@@ -108,7 +110,8 @@ export function toOpenAIMessages(
                     id: tc.id ?? `call_${tc.function.name}_${i}`,
                     type: 'function' as const,
                     function: {
-                        name: tc.function.name,
+                        // 히스토리의 tool_calls 도 요청 방향이라 tools 와 같은 이름으로 내보낸다.
+                        name: codec ? codec.register(tc.function.name) : tc.function.name,
                         arguments: JSON.stringify(tc.function.arguments),
                     },
                 })),
@@ -119,14 +122,15 @@ export function toOpenAIMessages(
     });
 }
 
-export function toOpenAITools(tools: ToolDefinition[]): Array<{
+export function toOpenAITools(tools: ToolDefinition[], codec?: ToolNameCodec): Array<{
     type: 'function';
     function: { name: string; description: string; parameters: unknown };
 }> {
     return tools.map((t) => ({
         type: 'function' as const,
         function: {
-            name: t.function.name,
+            // `server::tool` 등 OpenAI 함수 이름 규약 밖 문자는 provider 경계에서만 인코딩
+            name: codec ? codec.register(t.function.name) : t.function.name,
             description: t.function.description,
             parameters: t.function.parameters,
         },
