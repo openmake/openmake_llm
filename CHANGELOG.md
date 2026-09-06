@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.49.0](https://github.com/openmake/openmake_llm/compare/v1.48.1...v1.49.0) (2026-09-06)
+
+
+### ✨ 기능
+
+* **llm:** 로컬 도구 정의에 strict:true — vLLM 이 인자 스키마를 디코딩 단계에서 강제 ([#781](https://github.com/openmake/openmake_llm/issues/781)) ([80b62fb](https://github.com/openmake/openmake_llm/commit/80b62fbdbbda7cfd7c1600f4218baf05a6a150d5))
+
 ## [1.48.1](https://github.com/openmake/openmake_llm/compare/v1.48.0...v1.48.1) (2026-09-06)
 
 
