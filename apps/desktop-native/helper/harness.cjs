@@ -170,6 +170,12 @@ const { WebSocketServer } = require('ws');
     assert.deepEqual(filesR.codeNav.files, [{ path: 'src/nav.js', lines: 3 }], 'code_nav files 줄 수');
     assert.equal(events.filter((e) => e.ev === 'confirm').length, navConfirms, 'code_nav 는 승인 창을 띄우지 않는다');
     assert.equal((await execVia(dev1, { kind: 'code_nav', op: 'grep', pattern: 'x', path: '../..' })).ok, false, 'code_nav 스코프 탈출 거부');
+    // 자격증명 파일은 훑지 않는다 — 승인이 도구 단위라 사용자는 어떤 파일을 읽을지 못 본다.
+    fs.writeFileSync(path.join(folder, '.env'), 'API_KEY=harness-secret\n');
+    const secretR = await execVia(dev1, { kind: 'code_nav', op: 'grep', pattern: 'harness-secret' });
+    assert.deepEqual(secretR.codeNav.matches, [], 'code_nav 자격증명 미검색');
+    assert.equal(secretR.codeNav.skipped, 1, 'code_nav 건너뛴 수 보고');
+    assert.ok((await execVia(dev1, { kind: 'read', path: '.env' })).content.includes('harness-secret'), '경로 지목 read 는 그대로 동작');
 
     // ⑤ 다중 루트 — 두 번째 루트 연결: 파생 deviceId 상이, 루트별 스코프 격리, 개별 해제
     send({ cmd: 'connect', folder: folder2 });

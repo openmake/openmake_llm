@@ -154,6 +154,7 @@ export class RemoteExecutor implements TaskExecutor {
             ...(r.codeNav.matches ? { matches: r.codeNav.matches.map(strip) } : {}),
             ...(r.codeNav.files ? { files: r.codeNav.files.map((f) => ({ ...f, path: strip(f.path) })) } : {}),
             ...(r.codeNav.truncated ? { truncated: true } : {}),
+            ...(r.codeNav.skipped ? { skipped: r.codeNav.skipped } : {}),
         };
     }
 

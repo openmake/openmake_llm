@@ -15,6 +15,7 @@
  * @module services/task-sandbox/approval-gate
  */
 import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
+import { isSensitivePath } from './sensitive-paths';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('TaskApprovalGate');
@@ -29,6 +30,9 @@ const HIGH_RISK_TOOLS = new Set(['bash', 'browser', 'python_execute', 'skill_run
 const NO_APPROVAL_TOOLS = new Set(['terminate', 'ask_human', 'plan_create', 'plan_update', 'plan_view', 'delegate', 'spawn_agents']);
 /** 고위험으로 보는 file_ops 작업. */
 const HIGH_RISK_FILE_OPS = new Set(['delete']);
+/** 파일을 바꾸는 작업 — 대상이 자격증명 파일이면 high-risk 로 올린다(아래 판정). */
+const FILE_WRITE_OPS = new Set(['write', 'delete']);
+const EDITOR_WRITE_COMMANDS = new Set(['create', 'str_replace', 'insert']);
 /** 디바이스(로컬 브리지)가 실행 직전 자체 확인하는 코드 실행 도구 — 서버 승인 중복이라 skip 대상. */
 const DEVICE_GATED_SHELL = new Set(['bash', 'python_execute']);
 
@@ -51,6 +55,18 @@ export function requiresApproval(
     // high-risk
     if (HIGH_RISK_TOOLS.has(toolName)) return true;
     if (toolName === 'file_ops' && HIGH_RISK_FILE_OPS.has(String(args.op))) return true;
+    // 자격증명 파일 쓰기는 high-risk 로 상향 — 종전엔 file_ops write·str_replace_editor 가
+    // 고위험 목록 밖이라 `.env`·키 파일 덮어쓰기가 **서버 승인도 디바이스 확인도 없이**
+    // 통과했다(로컬 브리지의 write kind 는 confirmExec 대상이 아니다). 차단이 아니라 승인
+    // 상향이므로 사용자가 허용하면 정상 작업(환경변수 추가 등)은 그대로 진행된다.
+    if (isSensitiveWrite(toolName, args)) return true;
+    return false;
+}
+
+/** PURE: 이 호출이 자격증명 파일을 바꾸려 하는가. args 미지({})면 false(보수 판정 — 강등 계산과 동일 계약). */
+export function isSensitiveWrite(toolName: string, args: Record<string, unknown>): boolean {
+    if (toolName === 'file_ops') return FILE_WRITE_OPS.has(String(args.op)) && isSensitivePath(args.path);
+    if (toolName === 'str_replace_editor') return EDITOR_WRITE_COMMANDS.has(String(args.command)) && isSensitivePath(args.path);
     return false;
 }
 
