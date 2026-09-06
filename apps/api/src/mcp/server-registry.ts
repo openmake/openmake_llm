@@ -21,6 +21,7 @@
  */
 
 import { ExternalMCPClient } from './external-client';
+import { wrapEnvPlaceholdersAsShellRefs } from './env-placeholder-shell';
 import { ToolRouter } from './tool-router';
 import type { MCPServerConfig, MCPConnectionStatus } from './types';
 import type { UnifiedDatabase, MCPServerRow } from '../data/models/unified-database';
@@ -211,7 +212,20 @@ export class MCPServerRegistry {
             await this.disconnectServer(serverId);
         }
 
-        const client = new ExternalMCPClient(config);
+        // {{env.KEY}} 자리표시자는 값을 argv 에 박지 않고 sh 변수 참조로 감싼다(env-placeholder-shell).
+        // 유저풀(lifecycle-supervisor)만 감싸고 전역 경로(부팅 initializeFromDB·수동 connect)는 리터럴이
+        // 그대로 argv 로 내려가 spawn 이 실패하던 갭 — 2026-09-06. 자리표시자가 없으면 원본 그대로(멱등).
+        const shellWrapped = config.command
+            ? wrapEnvPlaceholdersAsShellRefs(config.command, Array.isArray(config.args) ? config.args : [])
+            : null;
+        const effective: MCPServerConfig = shellWrapped?.wrapped
+            ? { ...config, command: shellWrapped.command, args: shellWrapped.args }
+            : config;
+        if (shellWrapped?.wrapped) {
+            const missing = shellWrapped.keys.filter((k) => !(k in (config.env ?? {})));
+            if (missing.length) logger.warn(`{{env.*}} 참조 키가 env 에 없음 (빈값으로 전개) s=${serverId}: ${missing.join(',')}`);
+        }
+        const client = new ExternalMCPClient(effective);
         this.connections.set(serverId, client);
 
         await client.connect();

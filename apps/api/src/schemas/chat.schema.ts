@@ -39,6 +39,9 @@ const chatMessageSchema = z.object({
     content: secureTextSchema({ maxLength: 100000, fieldName: 'content', allowHtmlLikeContent: true, detectMaliciousPatterns: false }).or(z.null()).optional().default(''),
     tool_calls: z.array(toolCallInMessageSchema).optional(),
     tool_call_id: secureOptionalTextSchema({ maxLength: 200, fieldName: 'tool_call_id', allowNewLines: false, detectMaliciousPatterns: false }),
+    // 히스토리 vision 이미지 — zod 기본 strip 이라 키가 없으면 validate 가 조용히 지워 WS/openai-compat
+    // 경로와 달리 REST 만 멀티턴 vision 이 끊겼다(2026-09-06). 상한은 현재 턴 images 와 동일.
+    images: z.array(z.string().max(FILE_ATTACH_LIMITS.MAX_IMAGE_DATAURL_CHARS)).max(FILE_ATTACH_LIMITS.MAX_IMAGES).optional(),
 });
 
 /**
