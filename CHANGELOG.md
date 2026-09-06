@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.47.0](https://github.com/openmake/openmake_llm/compare/v1.46.0...v1.47.0) (2026-09-06)
+
+
+### ✨ 기능
+
+* **local-bridge:** 코드 탐색 전용 kind(code_nav) — grep_code·repo_map 이 승인 창 없이 돈다 ([#774](https://github.com/openmake/openmake_llm/issues/774)) ([b1dcbe8](https://github.com/openmake/openmake_llm/commit/b1dcbe86a976dfc8786b64c674e77dc5784dd72e))
+
+
+### 🐛 버그 수정
+
+* **local-bridge:** code_nav 제외 목록을 이름 기준으로 — worktree 의 .git 은 파일이라 새어 들어왔다 ([#776](https://github.com/openmake/openmake_llm/issues/776)) ([5c3270e](https://github.com/openmake/openmake_llm/commit/5c3270e292e6da77d55426181bb27a59bc1638e1))
+
 ## [1.46.0](https://github.com/openmake/openmake_llm/compare/v1.45.3...v1.46.0) (2026-09-06)
 
 
