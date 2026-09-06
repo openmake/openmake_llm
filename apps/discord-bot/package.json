@@ -1,6 +1,6 @@
 {
     "name": "openmake-discord-bot",
-    "version": "1.46.0",
+    "version": "1.47.0",
     "description": "OpenMake LLM Discord gateway bot — Discord 메시지를 /api/v1/chat/completions 로 중계",
     "main": "dist/index.js",
     "scripts": {
