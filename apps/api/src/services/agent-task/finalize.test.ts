@@ -21,6 +21,7 @@ jest.mock('./goal-judge', () => ({
     buildJudgeExecutionContext: jest.fn(() => 'ctx'),
 }));
 jest.mock('./deliverable-verify', () => ({ verifyCodeArtifacts: jest.fn(async () => ({ ok: true, report: '' })) }));
+jest.mock('./workspace-test-verify', () => ({ verifyWorkspaceTests: jest.fn(async (_r: unknown, _t: string, _u: unknown, n: number) => ({ ran: false, ok: true, report: '', stepNumber: n })) }));
 jest.mock('./role-client', () => ({ judgeClientFor: jest.fn(async () => ({})) }));
 jest.mock('./task-steps', () => ({
     persistArtifactSteps: jest.fn(async (_t: string, _a: unknown[], n: number) => n + 1),
@@ -32,6 +33,7 @@ import { finalizeTask, type FinalizeInput } from './finalize';
 import { judgeGoal } from './goal-judge';
 import { persistJudgeStep } from './task-steps';
 import { verifyCodeArtifacts } from './deliverable-verify';
+import { verifyWorkspaceTests } from './workspace-test-verify';
 import { AGENT_TASK_INCOMPLETE_MARKER } from '../../prompts/agent-task-prompt';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
@@ -39,6 +41,7 @@ import type { TaskSandboxConfig } from '../../config/task-sandbox';
 const judgeMock = judgeGoal as jest.MockedFunction<typeof judgeGoal>;
 const judgeStepMock = persistJudgeStep as jest.MockedFunction<typeof persistJudgeStep>;
 const verifyMock = verifyCodeArtifacts as jest.MockedFunction<typeof verifyCodeArtifacts>;
+const testsMock = verifyWorkspaceTests as jest.MockedFunction<typeof verifyWorkspaceTests>;
 
 /** 코드 아티팩트 1개를 담은 최종 응답 — 실제 파서를 통과하는 형태. */
 const WITH_ARTIFACT = '정리했습니다.\n<artifact kind="code" lang="python" title="t">print(1)</artifact>';
@@ -229,5 +232,41 @@ describe('finalizeTask — 완료 관문 단일화(091)', () => {
         await finalizeTask(i);
 
         expect(lastUpdate(i).result).toBe('3개 파일을 생성했습니다.');
+    });
+});
+
+describe('finalizeTask — workspace 테스트 게이트(2026-09-06)', () => {
+    it('테스트 실패면 completed 대신 verify_retry 로 수정 턴을 준다(러너 출력이 nudge 에 실림)', async () => {
+        testsMock.mockResolvedValueOnce({ ran: true, ok: false, runner: 'npm', report: 'FAIL src/x.test.ts\n[exit=1]', stepNumber: 6 });
+        const i = input({ path: 'terminate', terminateSummary: '완료' });
+
+        const out = await finalizeTask(i);
+
+        expect(out.kind).toBe('verify_retry');
+        expect(out.stepNumber).toBe(6);
+        expect((out as { nudge: string }).nudge).toContain('FAIL src/x.test.ts');
+        expect((out as { nudge: string }).nudge).toContain('npm');
+        expect(judgeMock).not.toHaveBeenCalled();
+        expect(lastUpdate(i)).toBeUndefined();
+    });
+
+    it('재시도 상한(WORKSPACE_TEST_MAX_RETRIES)에 닿으면 게이트를 건너뛰고 완료한다', async () => {
+        judgeMock.mockResolvedValue({ achieved: true, reason: 'ok', raw: '' });
+        const i = input({ path: 'terminate', terminateSummary: '완료', verifyRetries: 99 });
+
+        const out = await finalizeTask(i);
+
+        expect(testsMock).not.toHaveBeenCalled();
+        expect(out.kind).toBe('completed');
+    });
+
+    it('러너가 없으면(ran=false) 통과해 종전 흐름 그대로 완료한다', async () => {
+        judgeMock.mockResolvedValue({ achieved: true, reason: 'ok', raw: '' });
+        const i = input({ path: 'terminate', terminateSummary: '완료' });
+
+        const out = await finalizeTask(i);
+
+        expect(testsMock).toHaveBeenCalledTimes(1);
+        expect(out.kind).toBe('completed');
     });
 });

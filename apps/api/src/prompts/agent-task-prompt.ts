@@ -110,6 +110,12 @@ export function getTaskSandboxGuidance(): string {
         '- 당신에게는 격리된 가상 컴퓨터가 있습니다: 작업 디렉토리 /workspace + 셸(bash) + python + 브라우저.',
         '- /workspace 의 파일은 단계 간 유지됩니다. 산출물 파일은 여기에 저장하세요.',
         '- bash/python_execute/str_replace_editor/file_ops 로 파일을 만들고 실행하고 편집하세요.',
+        '- 코드 탐색은 grep_code(정규식 → 파일:줄)·repo_map(구조·줄 수·심볼 개요) 를 먼저 쓰세요 — 결과가',
+        '  캡으로 잘려 컨텍스트를 아낍니다. bash 의 cat/grep/find 로 큰 출력을 통째로 받지 마세요.',
+        '- 오래된 도구 결과는 앞부분만 남기고 접힙니다("[접힌 도구 결과]"). 원문이 다시 필요하면 같은 도구를',
+        '  다시 호출하세요(파일 내용은 file_ops read). 편집할 때는 방금 읽은 최신 내용을 기준으로 하세요.',
+        '- workspace 에 테스트 러너(package.json scripts.test·pytest·go test)가 있으면 완료 시 자동 실행됩니다 —',
+        '  실패하면 수정 요청이 오니, 파일을 고친 뒤엔 직접 테스트를 돌려 확인하세요.',
         '- 오피스/PDF 산출물은 python_execute 로 생성·편집하세요(모두 설치됨, 바로 import): Excel(.xlsx)=openpyxl',
         '  (`wb.save(...)`), Word(.docx)=python-docx(`from docx import Document`), PowerPoint(.pptx)=python-pptx',
         '  (`from pptx import Presentation`), PDF 생성=reportlab/fpdf2, PDF 조작(병합/분할/회전/워터마크)=pypdf,',
@@ -264,6 +270,22 @@ export function getAgentTaskApprovalTimeoutNudge(): string {
 }
 
 /** 산출물 문법/컴파일 검사 실패 시 주입(Phase 2-B) — 오류를 근거로 코드 산출물을 1회 자가수정 유도. */
+/**
+ * workspace 테스트 게이트 실패 시 주입 — 레포의 테스트 러너(npm test/pytest/go test) 출력 끝부분.
+ * 산출물 재작성이 아니라 **workspace 파일 수정** 을 요구한다(deliverable nudge 와 다른 점).
+ */
+export function getAgentTaskTestsFailedNudge(runner: string, report: string): string {
+    return [
+        `완료 전에 workspace 의 테스트(${runner})를 실행했더니 실패했습니다:`,
+        '',
+        report,
+        '',
+        '실패 원인을 grep_code·file_ops read 로 확인하고 str_replace_editor 로 workspace 파일을 고친 뒤,',
+        `bash 로 같은 테스트를 다시 실행해 통과를 확인하고 마무리하세요. 이 실패가 당신의 변경과 무관한`,
+        '기존 실패라면 그 근거(어느 테스트가 왜 원래 실패하는지)를 최종 답변에 명시하세요.',
+    ].join('\n');
+}
+
 export function getAgentTaskVerifyFailedNudge(report: string): string {
     return [
         '작성한 코드 산출물에 문법/컴파일 오류가 발견되었습니다:',

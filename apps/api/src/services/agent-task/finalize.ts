@@ -26,9 +26,10 @@ import type { getUnifiedDatabase } from '../../data/models/unified-database';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { extractAndStripArtifacts } from '../../llm/artifact-parser';
 import { applyReportRender } from '../chat-service/report-block';
-import { AGENT_TASK_INCOMPLETE_MARKER, getAgentTaskVerifyFailedNudge } from '../../prompts/agent-task-prompt';
+import { AGENT_TASK_INCOMPLETE_MARKER, getAgentTaskVerifyFailedNudge, getAgentTaskTestsFailedNudge } from '../../prompts/agent-task-prompt';
 import { judgeGoal, buildJudgeExecutionContext, buildJudgeArtifactSummary } from './goal-judge';
 import { verifyCodeArtifacts } from './deliverable-verify';
+import { verifyWorkspaceTests } from './workspace-test-verify';
 import { persistArtifactSteps, persistJudgeStep } from './task-steps';
 import { maybePersistCodeDiff } from './code-diff';
 import { judgeClientFor } from './role-client';
@@ -123,6 +124,19 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
             return { kind: 'verify_retry', stepNumber, nudge: getAgentTaskVerifyFailedNudge(verify.report) };
         }
     }
+    // workspace 테스트 게이트 — 레포에 이미 있는 러너만 1회 실행(없으면 no-op). 파일을 편집한 작업 한정.
+    // 재시도 카운터는 deliverable 검증과 공유(둘 다 verifyRetries++) — 합산 상한으로 무한루프 방지.
+    if (taskRuntime
+        && AGENT_TASK_LIMITS.WORKSPACE_TEST_GATE_ENABLED
+        && input.verifyRetries < AGENT_TASK_LIMITS.WORKSPACE_TEST_MAX_RETRIES) {
+        const tests = await verifyWorkspaceTests(taskRuntime, taskId, usedTools, stepNumber, signal);
+        stepNumber = tests.stepNumber;
+        emitStepIfRan(tests, emitStep);
+        if (tests.ran && !tests.ok) {
+            logger.info(`[AgentTask] 테스트 게이트 실패 → 수정 유도: ${taskId} (${tests.runner}, 재시도 ${input.verifyRetries + 1})`);
+            return { kind: 'verify_retry', stepNumber, nudge: getAgentTaskTestsFailedNudge(tests.runner ?? 'test', tests.report) };
+        }
+    }
 
     // 3. goal judge — 판정을 **적용**하는 대상은 종전 그대로 아티팩트 없는 완료뿐이다.
     //    아티팩트가 있는 완료도 셰도우로 판정만 돌려 기록한다(완료 흐름 불변, fail-open):
@@ -181,4 +195,11 @@ export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcom
     });
     logger.info(`[AgentTask] 완료: ${taskId} (${turn + 1} 턴, ${path}, judge=${verdict}, 아티팩트 ${artifacts.length}개)`);
     return { kind: 'completed', stepNumber };
+}
+
+function emitStepIfRan(
+    tests: { ran: boolean; ok: boolean; runner?: string },
+    emitStep: FinalizeInput['emitStep'],
+): void {
+    if (tests.ran) emitStep('test_verify', tests.runner, `테스트 게이트: ${tests.runner} ${tests.ok ? '통과' : '실패'}`);
 }

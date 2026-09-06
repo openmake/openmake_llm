@@ -41,7 +41,7 @@ export const CLAUDE_TOOL_ALIASES: Readonly<Record<string, string | null>> = {
     KillShell: 'bash',
     KillBash: 'bash',
     Glob: 'bash',
-    Grep: 'bash',
+    Grep: 'grep_code',
     LS: 'bash',
     // 웹
     WebFetch: 'web_scrape',
