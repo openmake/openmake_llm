@@ -62,6 +62,10 @@ test.describe('GDPR data export (Article 20)', () => {
         // _meta.counts 일치
         expect(json._meta.counts.conversationSessions).toBe(json.conversationSessions.length);
         expect(json._meta.counts.skillManifests).toBe(json.skillManifests.length);
+        expect(json._meta.counts.userMemories).toBe(json.userMemories.length);
+        // 조회 실패가 빈 배열로 위장되지 않는지 — 2026-09-07 전까지 user_memories 가 넉 달간 조용히 실패했다.
+        expect(json._meta.failedCategories).toEqual([]);
+        expect(json._meta.partial).toBe(false);
     });
 
     test('RL_GDPR_EXPORT free=2 → 3번째 429', async ({ request }) => {
