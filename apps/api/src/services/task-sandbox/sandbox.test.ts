@@ -69,6 +69,8 @@ describe('task-sandbox pure functions', () => {
             await symlink(outside, join(ws, 'leakdir'));
             // 내부 심링크: ws/alias → ws/inner (workspace 안에서 안으로 — 허용)
             await symlink(join(ws, 'inner'), join(ws, 'alias'));
+            // 대상이 없는(dangling) 심링크: realpath ENOENT 를 "미실존" 으로 넘기면 통과하던 갭
+            await symlink(join(outside, 'not-yet.txt'), join(ws, 'dangling'));
         });
         afterAll(async () => {
             await rm(base, { recursive: true, force: true });
@@ -80,6 +82,9 @@ describe('task-sandbox pure functions', () => {
         it('workspace 밖을 가리키는 디렉토리 심링크 경유 차단 (실존/미실존 꼬리 모두)', async () => {
             await expect(safeRealWorkspacePath(ws, 'leakdir/secret.txt')).rejects.toThrow('symlink');
             await expect(safeRealWorkspacePath(ws, 'leakdir/newfile.txt')).rejects.toThrow('symlink');
+        });
+        it('대상이 없는 심링크(dangling)는 차단 — 쓰기가 링크를 따라 밖에 파일을 만드는 경로', async () => {
+            await expect(safeRealWorkspacePath(ws, 'dangling')).rejects.toThrow('symlink');
         });
         it('내부 → 내부 심링크는 허용 (대상 실경로 반환)', async () => {
             const p = await safeRealWorkspacePath(ws, 'alias/x.txt');
