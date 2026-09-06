@@ -32,6 +32,7 @@ import { createLogger } from '../utils/logger';
 import { buildReasoningEffortParams } from './openai-compat-reasoning';
 import { createPinnedFetch } from '../security/ssrf-guard';
 import { needsExplicitPromptCache, toOpenAIMessages, toOpenAITools } from './openai-compat-mapping';
+import { ToolNameCodec } from './tool-name-codec';
 import { PseudoToolCallGate } from '../llm/pseudo-tool-call-parser';
 
 const logger = createLogger('OpenAICompatProvider');
@@ -128,6 +129,14 @@ const INSUFFICIENT_CREDIT_PATTERN = /insufficient[_ ]user[_ ]quota|insufficient 
  */
 const MODEL_ACCESS_RESTRICTED_PATTERN = /only available (on|to|for|via)|not available (on|to|for|via) (this|your)/i;
 
+/**
+ * 400 중 우리가 보낸 도구 정의(함수 이름 규약)를 provider 가 거절한 응답 (2026-09-04·06 NVIDIA NIM 실측):
+ *   `Nvidia_nimException - Validation: Function at index 1 has an invalid name:`
+ *   OpenAI 원본: `Invalid 'tools[0].function.name': string does not match pattern`
+ * 재시도해도 같고, 로컬 폴백을 타면 사용자가 고른 모델이 조용히 바뀌므로 UPSTREAM_ERROR 와 분리한다.
+ */
+const INVALID_TOOL_NAME_PATTERN = /(function|tool)[^\n]{0,80}(invalid name|does not match pattern)|invalid '?tools\[/i;
+
 export function mapOpenAIError(err: unknown): ProviderError {
     const message = err instanceof Error ? err.message : String(err);
     if (err && typeof err === 'object' && 'status' in err) {
@@ -155,6 +164,10 @@ export function mapOpenAIError(err: unknown): ProviderError {
         }
         if (status === 404) {
             return new ProviderError('MODEL_NOT_FOUND', `모델 미발견: ${message}`, err);
+        }
+        if (status === 400 && INVALID_TOOL_NAME_PATTERN.test(message)) {
+            // 코덱이 있어도 신규 provider 가 다른 제약을 걸 수 있다 — 폴백 대상(RETRYABLE_CODES) 밖 코드로 드러낸다.
+            return new ProviderError('NOT_SUPPORTED', `provider 가 도구 정의를 거절: ${message}`, err);
         }
     }
     return new ProviderError('UPSTREAM_ERROR', `OpenAI 호환 호출 실패: ${message}`, err);
@@ -374,8 +387,15 @@ export class OpenAICompatProvider implements IProvider {
         callbacks: ChatStreamCallbacks,
     ): Promise<ChatStreamResult> {
         const cacheSystemPrompt = needsExplicitPromptCache(this.id, opts.modelId);
-        const messages = toOpenAIMessages(opts.messages, { cacheSystemPrompt });
-        const tools = opts.tools && opts.tools.length > 0 ? toOpenAITools(opts.tools) : undefined;
+        // `server::tool` 네임스페이스는 OpenAI 함수 이름 규약 밖 — provider 경계에서만 인코딩하고
+        // 응답 tool call 을 원래 이름으로 복원한다(NVIDIA NIM 이 요청 전체를 400 거절하던 실측).
+        const codec = new ToolNameCodec();
+        const tools = opts.tools && opts.tools.length > 0 ? toOpenAITools(opts.tools, codec) : undefined;
+        const messages = toOpenAIMessages(opts.messages, { cacheSystemPrompt, codec });
+        const renamed = codec.renamed();
+        if (renamed.length > 0) {
+            logger.debug(`${this.id} 도구명 정규화 ${renamed.length}건: ${renamed.slice(0, 5).map((r) => `${r.from}→${r.to}`).join(', ')}`);
+        }
 
         let aborted = false;
         opts.abortSignal?.addEventListener('abort', () => { aborted = true; });
@@ -511,7 +531,7 @@ export class OpenAICompatProvider implements IProvider {
                 } catch (parseErr) {
                     logger.warn(`tool_call arguments 파싱 실패 — {} 로 강등: tool=${buf.name} raw=${buf.jsonBuffer.slice(0, 200)} (${parseErr})`);
                 }
-                const call = { id: buf.id, name: buf.name, args };
+                const call = { id: buf.id, name: codec.restore(buf.name), args };
                 toolCalls.push(call);
                 callbacks.onToolCall?.(call);
             }
@@ -520,7 +540,7 @@ export class OpenAICompatProvider implements IProvider {
                 logger.warn(`[PseudoToolCall] 텍스트로 새어나온 툴콜 ${pseudoFlush.toolCalls.length}건 복구 — `
                     + `tools=${pseudoFlush.toolCalls.map((c) => c.name).join(',')}`);
                 for (const c of pseudoFlush.toolCalls) {
-                    const call = { id: c.id, name: c.name, args: c.args as unknown };
+                    const call = { id: c.id, name: codec.restore(c.name), args: c.args as unknown };
                     toolCalls.push(call);
                     callbacks.onToolCall?.(call);
                 }
