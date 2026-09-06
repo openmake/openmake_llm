@@ -152,6 +152,12 @@ export interface ToolDefinition {
             /** 필수 파라미터 이름 목록 */
             required?: string[];
         };
+        /**
+         * OpenAI `strict` — vLLM(0.27+, `VLLM_ENFORCE_STRICT_TOOL_CALLING` 기본 on)은 strict 도구가
+         * 하나라도 있으면 `tool_choice:auto` 에서도 xgrammar 구조화 태그로 호출 문법·인자 스키마를
+         * 강제한다. 로컬 wire 에서만 채운다(`llm/tool-strict.ts`) — 외부 provider 변환은 이 필드를 읽지 않는다.
+         */
+        strict?: boolean;
     };
 }
 

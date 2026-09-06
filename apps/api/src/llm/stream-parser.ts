@@ -155,13 +155,14 @@ export function toOpenAIMessages(messages: ChatMessage[]): unknown[] {
     });
 }
 
-function toOpenAITools(tools: ToolDefinition[]): unknown[] {
+export function toOpenAITools(tools: ToolDefinition[]): unknown[] {
     return tools.map((t) => ({
         type: 'function',
         function: {
             name: t.function.name,
             description: t.function.description,
             parameters: t.function.parameters,
+            ...(t.function.strict !== undefined && { strict: t.function.strict }),
         },
     }));
 }
