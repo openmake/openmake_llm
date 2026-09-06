@@ -104,7 +104,8 @@ async function collectUserData(userId: string): Promise<Record<string, unknown>>
              FROM conversation_sessions s WHERE s.user_id = $1 ORDER BY s.created_at DESC LIMIT 500`,
             [userId]),
         safeQuery<Record<string, unknown>>('skill_manifests',
-            `SELECT id, version, manifest_yaml, prompt_md, checksum, is_public, created_by, created_at, updated_at
+            // skill_manifests 에는 updated_at 이 없다(#783 배포 후 failedCategories 로 드러난 옛 컬럼 참조).
+            `SELECT id, version, manifest_yaml, prompt_md, examples_md, checksum, is_public, created_by, created_at
              FROM skill_manifests WHERE created_by = $1 ORDER BY created_at DESC`,
             [userId]),
         safeQuery<Record<string, unknown>>('agent_skills',
@@ -112,7 +113,8 @@ async function collectUserData(userId: string): Promise<Record<string, unknown>>
              FROM agent_skills WHERE created_by = $1 ORDER BY created_at DESC`,
             [userId]),
         safeQuery<Record<string, unknown>>('custom_agents',
-            `SELECT id, name, description, system_prompt, model, temperature, max_tokens, created_by, status, created_at, updated_at
+            // custom_agents 에는 model 컬럼이 없다(같은 배포에서 드러남) — 실제 컬럼(keywords/category/emoji/enabled)으로.
+            `SELECT id, name, description, system_prompt, keywords, category, emoji, temperature, max_tokens, enabled, created_by, status, created_at, updated_at
              FROM custom_agents WHERE created_by = $1 ORDER BY created_at DESC`,
             [userId]),
         safeQuery<Record<string, unknown>>('user_memories',
