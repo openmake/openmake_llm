@@ -15,7 +15,7 @@
  * @module services/task-sandbox/sandbox
  */
 import { spawn } from 'child_process';
-import { mkdir, rm, writeFile as fsWriteFile, readFile as fsReadFile, readdir, stat, realpath, copyFile as fsCopyFile } from 'fs/promises';
+import { mkdir, rm, writeFile as fsWriteFile, readFile as fsReadFile, readdir, stat, lstat, realpath, copyFile as fsCopyFile } from 'fs/promises';
 import { resolve, sep, join, dirname, basename, relative } from 'path';
 import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
 import type { TaskExecutor, ExecResult } from './executor';
@@ -135,6 +135,11 @@ export async function safeRealWorkspacePath(hostWorkdir: string, userPath: strin
             real = await realpath(probe);
         } catch (e) {
             if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+            // realpath ENOENT 는 "경로 없음" 과 "대상이 없는 심링크" 를 구분하지 못한다. 후자를 미실존으로
+            // 넘기면 부모 실경로 + 이름으로 통과해 writeFile 이 링크를 따라 밖에 파일을 만든다(2026-09-06).
+            if (await lstat(probe).then(() => true, () => false)) {
+                throw new Error(`workspace 경로 탈출 차단(symlink): ${userPath}`);
+            }
             const parent = dirname(probe);
             if (parent === probe) throw e; // 파일시스템 루트까지 미실존 — 비정상
             rest = rest ? join(basename(probe), rest) : basename(probe);

@@ -157,9 +157,13 @@ export class UserSandbox {
         } catch {
             return false;
         }
+        // ⚠️ existsSync 는 심링크를 따라가므로 대상이 없는(dangling) 심링크를 "미존재" 로 봐 부모만
+        // 검사하고 통과시킨다 — 이후 writeFile 이 그 심링크를 따라 루트 밖에 파일을 만든다. lstat 로
+        // 링크 자체의 존재를 보고, dangling 이면 realpath 가 실패해 fail-closed 로 거부된다(2026-09-06).
+        const existsNoFollow = (p: string): boolean => { try { fs.lstatSync(p); return true; } catch { return false; } };
         let probe = resolvedPath;
         for (;;) {
-            if (fs.existsSync(probe)) break;
+            if (existsNoFollow(probe)) break;
             const parent = path.dirname(probe);
             if (parent === probe) return true; // 파일시스템 루트까지 아무것도 없음 — 루트 자체가 미생성
             probe = parent;

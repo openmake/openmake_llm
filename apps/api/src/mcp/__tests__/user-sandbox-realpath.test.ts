@@ -16,6 +16,8 @@ describe('UserSandbox.validatePath realpath', () => {
         fs.writeFileSync(path.join(userRoot, 'workspace', 'ok.txt'), 'x');
         fs.writeFileSync(path.join(outside, 'secret.txt'), 's');
         fs.symlinkSync(outside, path.join(userRoot, 'workspace', 'escape'));
+        // 대상이 없는(dangling) 심링크 — existsSync 는 false 라 부모만 검사하고 통과시키던 갭
+        fs.symlinkSync(path.join(outside, 'not-yet.txt'), path.join(userRoot, 'workspace', 'dangling'));
     });
     afterAll(() => { fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(outside, { recursive: true, force: true }); });
 
@@ -28,6 +30,9 @@ describe('UserSandbox.validatePath realpath', () => {
     it('어휘적으로는 루트 안이지만 심링크가 밖을 가리키면 거부', () => {
         expect(UserSandbox.validatePath('u1', path.join(userRoot, 'workspace', 'escape', 'secret.txt'))).toBe(false);
         expect(UserSandbox.validatePath('u1', path.join(userRoot, 'workspace', 'escape'))).toBe(false);
+    });
+    it('대상이 없는 심링크(dangling)도 거부 — 쓰기가 링크를 따라 밖에 파일을 만드는 경로', () => {
+        expect(UserSandbox.validatePath('u1', path.join(userRoot, 'workspace', 'dangling'))).toBe(false);
     });
     it('어휘적 탈출(..)은 종전대로 거부', () => {
         expect(UserSandbox.validatePath('u1', path.join(userRoot, '..', 'u2', 'x'))).toBe(false);
