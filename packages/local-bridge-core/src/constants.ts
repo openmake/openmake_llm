@@ -57,17 +57,13 @@ export const CODE_NAV_LINE_MAX_CHARS = 300;
 /** 정규식 소스 길이 상한. */
 export const CODE_NAV_PATTERN_MAX_CHARS = 500;
 /**
- * 탐색에서 제외하는 **파일** 글롭 — 자격증명이 검색 한 번에 대화·스텝 DB 로 쓸려 들어가는 것을 막는다.
- * 승인은 도구 단위(“grep_code 를 실행할까요”)라 어떤 파일을 읽을지는 사용자에게 보이지 않으므로,
- * 정책과 무관하게 여기서 거른다. 봉쇄가 아니라 위생 조치다 — 경로를 지목한 file_ops read 는 그대로
- * 되고(그쪽은 별도 승인 게이트), 건너뛴 개수는 결과에 실려 모델이 "파일이 없다"로 오판하지 않는다.
- * 서버 SENSITIVE_FILE_PATTERNS 와 같은 목록(양쪽 강제).
+ * 탐색에서 제외하는 자격증명 글롭 — 단일 출처는 @openmake/config 의 SENSITIVE_FILE_PATTERNS
+ * (서버 approval-gate·셸 폴백과 같은 목록). 승인은 도구 단위라 어떤 파일을 읽을지 사용자에게
+ * 보이지 않으므로 정책과 무관하게 거른다. 봉쇄가 아니라 위생 — 경로를 지목한 read 는 그대로
+ * 되고, 건너뛴 개수는 결과에 실려 모델이 "파일이 없다"로 오판하지 않는다.
+ * 파일뿐 아니라 **같은 이름의 디렉토리도** 건너뛴다(셸 find -prune·rg -g 와 결과를 맞추기 위해).
  */
-export const CODE_NAV_EXCLUDED_FILES: readonly string[] = [
-    '.env', '.env.*', '*.pem', '*.key', '*.p12', '*.pfx', '*.jks', '*.keystore',
-    'id_rsa', 'id_rsa.*', 'id_ed25519', 'id_ed25519.*', '.npmrc', '.netrc', '.pgpass', '.htpasswd',
-    'credentials', 'credentials.*', 'service-account*.json', '*.kdbx',
-];
+export { SENSITIVE_FILE_PATTERNS as CODE_NAV_EXCLUDED_FILES } from '@openmake/config';
 
 /** 탐색에서 제외하는 디렉토리 — 서버 TASK_CODE_NAV.EXCLUDED_DIRS 와 같은 목록(양쪽 강제). */
 export const CODE_NAV_EXCLUDED_DIRS: readonly string[] = [

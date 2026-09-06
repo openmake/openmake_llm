@@ -29,3 +29,16 @@ export const MUTATING_METHODS = ["POST", "PUT", "PATCH", "DELETE"] as const;
 
 /** 아티팩트 코드 실행 가능성 판정 (샌드박스 표준 라이브러리 기준). */
 export { checkRunnable, type RunnableVerdict } from "./artifact-runnable";
+
+/**
+ * 자격증명 파일 글롭 — 코드 탐색 제외(grep_code·repo_map)와 쓰기 승인 상향(approval-gate)의
+ * **단일 출처**. 서버(apps/api)와 디바이스 코어(local-bridge-core) 양쪽이 여기서 읽는다 — 목록을
+ * 두 곳에 복제하면 한쪽만 고쳐져 제외가 조용히 약해진다(2026-09-07 코드 리뷰 지적).
+ * 파일명(basename) 글롭이며 디렉토리 이름에도 적용된다: rg -g · grep --exclude/--exclude-dir ·
+ * find -name 에 그대로 쓰이고, 디바이스는 같은 글롭을 정규식으로 매칭한다.
+ */
+export const SENSITIVE_FILE_PATTERNS: readonly string[] = [
+  ".env", ".env.*", "*.pem", "*.key", "*.p12", "*.pfx", "*.jks", "*.keystore",
+  "id_rsa", "id_rsa.*", "id_ed25519", "id_ed25519.*", ".npmrc", ".netrc", ".pgpass", ".htpasswd",
+  "credentials", "credentials.*", "service-account*.json", "*.kdbx",
+];

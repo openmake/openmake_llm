@@ -53,8 +53,25 @@ function excludeGlobsRg(): string {
 function excludeDirsGrep(): string {
     return [
         ...TASK_CODE_NAV.EXCLUDED_DIRS.map((d) => `--exclude-dir=${shq(d)}`),
+        // 자격증명 글롭은 파일·디렉토리 양쪽에 — rg -g / find -name / 디바이스 순회와 같은 규칙.
         ...TASK_CODE_NAV.EXCLUDED_FILES.map((f) => `--exclude=${shq(f)}`),
+        ...TASK_CODE_NAV.EXCLUDED_FILES.map((f) => `--exclude-dir=${shq(f)}`),
     ].join(' ');
+}
+
+/** 셸 폴백은 결과를 세지 못하므로 sentinel 한 줄로 건너뛴 자격증명 항목 수를 붙인다(파싱 후 제거). */
+const SKIPPED_SENTINEL = '__OMK_SKIPPED__';
+function countSkippedShell(rel: string): string {
+    const dirs = TASK_CODE_NAV.EXCLUDED_DIRS.map((d) => `-name ${shq(d)}`).join(' -o ');
+    const secrets = TASK_CODE_NAV.EXCLUDED_FILES.map((f) => `-name ${shq(f)}`).join(' -o ');
+    // 제외 디렉토리 안은 세지 않고, 자격증명 이름은 파일·디렉토리 모두 1건으로 센다(디렉토리는 내려가지 않음).
+    return `printf '\\n${SKIPPED_SENTINEL} %s\\n' "$(find ${shq(rel)} \\( ${dirs} \\) -prune -o \\( ${secrets} \\) -prune -print 2>/dev/null | head -n 10000 | wc -l | tr -d ' ')"`;
+}
+/** stdout 에서 sentinel 을 떼어내고 건너뛴 수를 돌려준다. 없으면 0(캡으로 잘린 경우 등 — 안내 생략). */
+function splitSkipped(stdout: string): { body: string; skipped: number } {
+    const m = stdout.match(new RegExp(`\\n?${SKIPPED_SENTINEL} (\\d+)\\n?$`));
+    if (!m) return { body: stdout, skipped: 0 };
+    return { body: stdout.slice(0, m.index), skipped: parseInt(m[1], 10) || 0 };
 }
 function pruneFind(): string {
     // find <path> \( -name a -o -name b \) -prune -o -type f -print
@@ -66,7 +83,7 @@ function pruneFind(): string {
 
 /** 결과 말미 안내 — 정책으로 건너뛴 파일이 있으면 "없음" 오판을 막는다(조용한 실패 방지). */
 function skippedNote(skipped: number | undefined): string {
-    return skipped ? `\n(자격증명 파일 ${skipped}개는 정책상 검색에서 제외됨 — 필요하면 file_ops read 로 경로를 지목하세요)` : '';
+    return skipped ? `\n(자격증명 파일·폴더 ${skipped}개는 정책상 검색에서 제외됨 — 필요하면 file_ops read 로 경로를 지목하세요)` : '';
 }
 
 function clipLines(out: string, maxLines: number, maxChars: number): { lines: string[]; overflow: boolean } {
@@ -78,7 +95,9 @@ function clipLines(out: string, maxLines: number, maxChars: number): { lines: st
 /** rg 로 먼저 시도하고, 실행 파일이 없으면(127) grep 으로 재시도한다. */
 async function execWithGrepFallback(sandbox: TaskExecutor, rgCmd: string, grepCmd: string): Promise<{ r: ExecResult; via: 'rg' | 'grep' }> {
     const r = await sandbox.exec(rgCmd);
-    if (r.exitCode !== EXIT_NOT_FOUND) return { r, via: 'rg' };
+    // sentinel 명령이 뒤에 붙으면 종료코드가 그것의 0 이 되므로 127 만으로는 rg 부재를 못 본다 → stderr 도 본다.
+    const rgMissing = r.exitCode === EXIT_NOT_FOUND || /\brg\b.*(not found|command not found)/i.test(r.stderr);
+    if (!rgMissing) return { r, via: 'rg' };
     return { r: await sandbox.exec(grepCmd), via: 'grep' };
 }
 
@@ -96,7 +115,7 @@ interface GrepOutcome {
     via: 'native' | 'rg' | 'grep';
     /** 실행 실패(오류 문구). 있으면 lines 는 무의미. */
     error?: string;
-    /** 민감 파일 정책으로 건너뛴 수(네이티브 백엔드만 셈). */
+    /** 민감 파일 정책으로 건너뛴 수(네이티브는 순회에서, 셸은 sentinel find 로 셈). */
     skipped?: number;
 }
 
@@ -114,19 +133,22 @@ async function runGrep(sandbox: TaskExecutor, o: {
     }
     const head = `head -n ${o.max + 1}`;
     const ic = o.ignoreCase === true;
+    const tail = `; ${countSkippedShell(o.rel)}`;
     const rgCmd = `rg -n --no-heading --color never --no-messages -m ${TASK_CODE_NAV.GREP_PER_FILE_MAX}`
-        + `${ic ? ' -i' : ''} ${excludeGlobsRg()}${o.glob ? ` -g ${shq(o.glob)}` : ''} -e ${shq(o.pattern)} -- ${shq(o.rel)} | ${head}`;
+        + `${ic ? ' -i' : ''} ${excludeGlobsRg()}${o.glob ? ` -g ${shq(o.glob)}` : ''} -e ${shq(o.pattern)} -- ${shq(o.rel)} | ${head}${tail}`;
     const grepCmd = `grep -rnI -E${ic ? 'i' : ''} ${excludeDirsGrep()}${o.glob ? ` --include=${shq(o.glob.replace(/^.*\//, ''))}` : ''}`
-        + ` -e ${shq(o.pattern)} -- ${shq(o.rel)} | ${head}`;
+        + ` -e ${shq(o.pattern)} -- ${shq(o.rel)} | ${head}${tail}`;
     const { r, via } = await execWithGrepFallback(sandbox, rgCmd, grepCmd);
     if (r.timedOut) return { lines: [], overflow: false, via, error: '검색 시간 초과 — path/glob 으로 범위를 좁히세요.' };
+    const { body, skipped } = splitSkipped(r.stdout);
+    const skippedField = skipped ? { skipped } : {};
     // 파이프 종료 코드는 head 의 것이라 rg/grep 의 1(무일치)·2(오류)를 못 본다 → 출력으로 판정.
-    if (!r.stdout.trim()) {
+    if (!body.trim()) {
         const err = r.stderr.trim();
-        return { lines: [], overflow: false, via, ...(err ? { error: `검색 실패: ${err.slice(0, 500)}` } : {}) };
+        return { lines: [], overflow: false, via, ...skippedField, ...(err ? { error: `검색 실패: ${err.slice(0, 500)}` } : {}) };
     }
-    const { lines, overflow } = clipLines(r.stdout, o.max, TASK_CODE_NAV.GREP_LINE_MAX_CHARS);
-    return { lines, overflow, via };
+    const { lines, overflow } = clipLines(body, o.max, TASK_CODE_NAV.GREP_LINE_MAX_CHARS);
+    return { lines, overflow, via, ...skippedField };
 }
 
 export function createCodeNavTools(sandbox: TaskExecutor): MCPToolDefinition[] {
@@ -200,10 +222,12 @@ export function createCodeNavTools(sandbox: TaskExecutor): MCPToolDefinition[] {
             } else {
                 // 파일별 줄 수 — GNU 전용 옵션 없이(find -printf·xargs -d 는 macOS 로컬 브리지에 없다).
                 const listCmd = `find ${shq(rel)} ${pruneFind()} | head -n ${maxFiles + 1} | while IFS= read -r f; do `
-                    + `printf '%s\\t%s\\n' "$(wc -l < "$f" 2>/dev/null | tr -d ' ')" "$f"; done`;
+                    + `printf '%s\\t%s\\n' "$(wc -l < "$f" 2>/dev/null | tr -d ' ')" "$f"; done; ${countSkippedShell(rel)}`;
                 const list = await sandbox.exec(listCmd);
                 if (list.timedOut) return textResult('구조 수집 시간 초과 — path 로 범위를 좁히세요.', true);
-                rows = list.stdout.split('\n').filter((l) => l.includes('\t')).map((l) => {
+                const split = splitSkipped(list.stdout);
+                nativeSkipped = split.skipped;
+                rows = split.body.split('\n').filter((l) => l.includes('\t')).map((l) => {
                     const [n, ...rest] = l.split('\t');
                     return { lines: parseInt(n, 10) || 0, path: rest.join('\t').replace(/^\.\//, '') };
                 });

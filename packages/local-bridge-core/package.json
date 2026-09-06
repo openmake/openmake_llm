@@ -16,6 +16,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@openmake/config": "*",
     "ws": "^8.18.0"
   },
   "devDependencies": {

@@ -109,6 +109,16 @@ describe('code_nav kind', () => {
         expect(f.codeNav?.skipped).toBe(3);
     });
 
+    it('자격증명 이름의 디렉토리도 건너뛴다(항목 1건) — 셸 find -prune·rg -g 와 같은 결과', async () => {
+        mk('credentials/aws.json', '{"secret":"dir-secret"}\n');
+        mk('credentials/nested/gcp.json', '{"secret":"dir-secret"}\n');
+        const g = await run(core(), { op: 'grep', pattern: 'dir-secret' });
+        expect(g.codeNav?.matches).toEqual([]);
+        expect(g.codeNav?.skipped).toBe(1);
+        const f = await run(core(), { op: 'files' });
+        expect(f.codeNav?.files?.some((x) => x.path.startsWith('credentials/'))).toBe(false);
+    });
+
     it('민감 파일을 path 로 직접 지목해도 탐색은 거른다(file_ops read 로 가야 한다)', async () => {
         mk('.env', 'API_KEY=x\n');
         const g = await run(core(), { op: 'grep', pattern: 'API_KEY', path: '.env' });

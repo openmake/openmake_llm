@@ -210,7 +210,7 @@ describe('민감 파일 제외 (2026-09-06)', () => {
         const { sandbox } = nativeSandbox(() => ({ matches: ['a.ts:1:KEY'], skipped: 2 }));
         const grep = createCodeNavTools(sandbox).find((t) => t.tool.name === 'grep_code')!;
         const t = text(await grep.handler({ pattern: 'KEY' }));
-        expect(t).toContain('자격증명 파일 2개는 정책상 검색에서 제외');
+        expect(t).toContain('자격증명 파일·폴더 2개는 정책상 검색에서 제외');
         expect(t).toContain('file_ops read');
     });
 
@@ -225,7 +225,52 @@ describe('민감 파일 제외 (2026-09-06)', () => {
             ? { files: [{ path: 'src/a.ts', lines: 3 }], skipped: 1 }
             : { matches: [] });
         const map = createCodeNavTools(sandbox).find((t) => t.tool.name === 'repo_map')!;
-        expect(text(await map.handler({}))).toContain('자격증명 파일 1개');
+        expect(text(await map.handler({}))).toContain('자격증명 파일·폴더 1개');
+    });
+
+    it('셸 폴백도 sentinel 로 건너뛴 수를 세어 안내한다 — docker 기본 경로의 조용한 실패 방지(리뷰 지적)', async () => {
+        const { sandbox, cmds } = fakeSandbox(() => exec('src/a.ts:1:KEY\n\n__OMK_SKIPPED__ 3\n'));
+        const grep = createCodeNavTools(sandbox).find((t) => t.tool.name === 'grep_code')!;
+        const t = text(await grep.handler({ pattern: 'KEY' }));
+        expect(t).toContain('src/a.ts:1:KEY');
+        expect(t).not.toContain('__OMK_SKIPPED__');
+        expect(t).toContain('자격증명 파일·폴더 3개는 정책상 검색에서 제외');
+        expect(cmds[0]).toContain("printf '\\n__OMK_SKIPPED__ %s\\n'");
+        expect(cmds[0]).toContain("-name '.env'");
+    });
+
+    it('셸 폴백: 무일치 + 건너뛴 수만 있으면 안내가 붙고 오류가 아니다', async () => {
+        const { sandbox } = fakeSandbox(() => exec('\n__OMK_SKIPPED__ 1\n'));
+        const grep = createCodeNavTools(sandbox).find((t) => t.tool.name === 'grep_code')!;
+        const r = await grep.handler({ pattern: 'KEY' });
+        expect(r.isError).toBeFalsy();
+        expect(text(r)).toContain('일치 없음');
+        expect(text(r)).toContain('정책상 검색에서 제외');
+    });
+
+    it('repo_map 셸 폴백도 sentinel 을 떼어내고 건너뛴 수를 안내한다', async () => {
+        const { sandbox } = fakeSandbox((cmd) => cmd.startsWith('find') ? exec('3\t./src/a.ts\n\n__OMK_SKIPPED__ 2\n') : exec(''));
+        const map = createCodeNavTools(sandbox).find((t) => t.tool.name === 'repo_map')!;
+        const t = text(await map.handler({ symbols: false }));
+        expect(t).toContain('src/a.ts (3)');
+        expect(t).not.toContain('__OMK_SKIPPED__');
+        expect(t).toContain('자격증명 파일·폴더 2개');
+    });
+
+    it('grep 폴백은 자격증명 이름을 디렉토리에도 적용한다(--exclude-dir)', async () => {
+        const { sandbox, cmds } = fakeSandbox((cmd) => cmd.startsWith('rg') ? exec('', 127, 'rg: not found') : exec(''));
+        await createCodeNavTools(sandbox).find((t) => t.tool.name === 'grep_code')!.handler({ pattern: 'x' });
+        expect(cmds[1]).toContain("--exclude-dir='credentials'");
+    });
+
+    it('rg 부재는 sentinel 때문에 종료코드가 0 이어도 stderr 로 판정해 grep 으로 폴백한다', async () => {
+        const { sandbox, cmds } = fakeSandbox((cmd) => cmd.startsWith('rg')
+            ? exec('\n__OMK_SKIPPED__ 0\n', 0, 'sh: 1: rg: not found')
+            : exec('y.ts:2:x\n\n__OMK_SKIPPED__ 0\n'));
+        const t = text(await createCodeNavTools(sandbox).find((t) => t.tool.name === 'grep_code')!.handler({ pattern: 'x' }));
+        expect(t).toContain('y.ts:2:x');
+        expect(t).toContain('grep 사용');
+        expect(cmds.length).toBe(2);
     });
 
     it('건너뛴 것이 없으면 안내를 붙이지 않는다', async () => {

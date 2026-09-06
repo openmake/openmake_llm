@@ -2096,22 +2096,13 @@ export const MCP_SANDBOX_BOOTSTRAP = {
 } as const;
 
 /**
- * 민감 파일 글롭 — 자격증명·키 파일의 단일 목록 (2026-09-06).
- *
- * 두 곳이 이 목록을 쓴다:
+ * 민감 파일 글롭 — 단일 출처는 @openmake/config (디바이스 코어와 공유). 두 소비처:
  *  ① 코드 탐색(grep_code·repo_map) 제외 — 승인이 도구 단위라 사용자는 어떤 파일을 읽을지
- *     보지 못한다. 정책과 무관하게 훑기에서 제외해 자격증명이 대화·스텝 DB 로 쓸려 들어가는
- *     것을 막는다(봉쇄가 아니라 위생 — 경로를 지목한 file_ops read 는 별도 승인 게이트).
+ *     보지 못한다. 정책과 무관하게 훑기에서 제외한다(봉쇄가 아니라 위생 — file_ops read 는 별도 게이트).
  *  ② 쓰기 승인 상향(approval-gate) — high-risk 정책에서 이 경로에 쓰는 호출은 승인 대상.
- *
- * 디바이스 코어의 CODE_NAV_EXCLUDED_FILES 와 같은 목록으로 유지할 것(양쪽 강제).
- * 패턴은 파일명(basename) 글롭 — rg -g · grep --exclude · find -name 에 그대로 쓰인다.
  */
-export const SENSITIVE_FILE_PATTERNS: readonly string[] = [
-    '.env', '.env.*', '*.pem', '*.key', '*.p12', '*.pfx', '*.jks', '*.keystore',
-    'id_rsa', 'id_rsa.*', 'id_ed25519', 'id_ed25519.*', '.npmrc', '.netrc', '.pgpass', '.htpasswd',
-    'credentials', 'credentials.*', 'service-account*.json', '*.kdbx',
-];
+export { SENSITIVE_FILE_PATTERNS } from '@openmake/config';
+import { SENSITIVE_FILE_PATTERNS } from '@openmake/config';
 
 /**
  * Task 샌드박스 코드 탐색 도구(grep_code·repo_map, 2026-09-06) 상한.
