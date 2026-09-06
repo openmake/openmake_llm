@@ -16,61 +16,11 @@ import { inferImageMime } from '../../utils/image-mime';
 
 /* ── 도구 이름 정규화 ──────────────────────────────────────── */
 
-/**
- * Codex 백엔드가 허용하는 도구 이름 패턴 — Chat Completions 보다 엄격하다.
- * (라이브 E2E 에서 확인: 위반 시 400 "string does not match pattern".)
- */
-const CODEX_TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
-/** 보수적 길이 상한 — OpenAI function name 관례 */
-const CODEX_TOOL_NAME_MAX = 64;
-
-/**
- * 도구 이름 정규화 코덱.
- *
- * MCP 서버가 등록하는 도구 이름에는 Codex 가 거부하는 문자(공백·점·콜론 등)가
- * 섞일 수 있다. 요청 방향으로는 안전한 이름으로 치환하고, 응답의 tool call 은
- * 원래 이름으로 되돌려 도구 실행 계층(이름으로 dispatch)이 그대로 동작하게 한다.
- */
-export class ToolNameCodec {
-    private readonly toSanitized = new Map<string, string>();
-    private readonly toOriginal = new Map<string, string>();
-
-    /** 원래 이름 → Codex 안전 이름 (멱등, 충돌 시 suffix 부여) */
-    register(original: string): string {
-        const existing = this.toSanitized.get(original);
-        if (existing) return existing;
-
-        let candidate = original
-            .replace(/[^a-zA-Z0-9_-]/g, '_')
-            .slice(0, CODEX_TOOL_NAME_MAX);
-        if (!candidate || !CODEX_TOOL_NAME_PATTERN.test(candidate)) {
-            candidate = `tool_${this.toSanitized.size}`;
-        }
-        // 서로 다른 원본이 같은 안전 이름으로 접히면 dispatch 가 깨진다 — suffix 로 분리
-        let unique = candidate;
-        let n = 1;
-        while (this.toOriginal.has(unique) && this.toOriginal.get(unique) !== original) {
-            const suffix = `_${n++}`;
-            unique = `${candidate.slice(0, CODEX_TOOL_NAME_MAX - suffix.length)}${suffix}`;
-        }
-
-        this.toSanitized.set(original, unique);
-        this.toOriginal.set(unique, original);
-        return unique;
-    }
-
-    /** Codex 안전 이름 → 원래 이름 (미등록 이름은 그대로 통과) */
-    restore(sanitized: string): string {
-        return this.toOriginal.get(sanitized) ?? sanitized;
-    }
-
-    /** 정규화가 실제로 일어난 항목 (관측/로깅용) */
-    renamed(): Array<{ from: string; to: string }> {
-        return [...this.toSanitized.entries()]
-            .filter(([from, to]) => from !== to)
-            .map(([from, to]) => ({ from, to }));
-    }
-}
+// ToolNameCodec 은 provider 중립 모듈로 이전했다(openai-compat 경로와 공유, 2026-09-06).
+// Codex 가 "Chat Completions 보다 엄격하다" 던 종전 전제는 NVIDIA NIM 실측으로 반증됐다 —
+// OpenAI 함수 이름 규약을 그대로 검증하는 Chat Completions 호환 endpoint 가 있다.
+import { ToolNameCodec } from '../tool-name-codec';
+export { ToolNameCodec };
 
 /* ── 요청 변환 ─────────────────────────────────────────────── */
 
