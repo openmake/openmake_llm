@@ -26,6 +26,7 @@ import { checkUserQuota, recordUserUsage } from './user-quota';
 import { streamChat, nonStreamChat } from './stream-parser';
 import { buildExtraBody } from './reasoning-adapter';
 import { applyLocalSamplingPreset } from './sampling-preset';
+import { applyLocalToolStrict } from './tool-strict';
 import { selectModelByCapacityExact } from './model-pool';
 import { MODEL_POOL_CONFIG } from '../config/model-pool';
 import {
@@ -180,7 +181,8 @@ export class LLMClient {
             // `[]` 가 그대로 실려 요청 자체가 실패하므로 length 로 판정한다. tool_choice 도 함께
             // 생략 — 도구 없는 요청에 tool_choice 만 남으면 같은 계열의 거절을 부른다.
             ...(advancedOptions?.tools?.length && {
-                tools: advancedOptions.tools,
+                // 로컬 도구엔 strict 를 채워 vLLM 이 인자 스키마를 디코딩 단계에서 강제하게 한다(외부는 skip).
+                tools: applyLocalToolStrict(advancedOptions.tools, { external: this.config.quotaExempt === true }),
                 ...(advancedOptions.tool_choice !== undefined && { tool_choice: advancedOptions.tool_choice }),
             }),
         };

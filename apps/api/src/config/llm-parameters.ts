@@ -101,6 +101,20 @@ const samplingNum = (key: string, fallback: number): number => {
  */
 export const LOCAL_PRESERVE_THINKING_ENABLED = process.env.LLM_PRESERVE_THINKING !== 'false';
 
+/**
+ * 로컬 도구 정의에 `strict: true` 를 채운다 (2026-09-07).
+ * vLLM 0.27.1 은 strict 도구가 하나라도 있으면 `tool_choice:auto` 에서도 xgrammar 구조화 태그로
+ * 도구 호출 문법 + 인자 JSON 스키마(enum·타입·배열·required)를 디코딩 단계에서 강제한다
+ * (`tool_parsers/structural_tag_registry.py` `_any_tool_strict`, 파서 qwen3_coder → `qwen_3_coder` 태그,
+ * `VLLM_ENFORCE_STRICT_TOOL_CALLING` 기본 True). 라이브 실측(LiteLLM 경유): 위반 지시(enum 밖 값·문자열
+ * 정수·문자열 배열·미선언 키)가 strict 없으면 그대로 통과, strict 면 스키마대로 교정. 병리적 스키마
+ * 21종($ref·anyOf·format·pattern·긴 enum 등)·도구 60개 모두 200, TTFC 변화 없음. 자유 텍스트 답변도 그대로 가능.
+ * 로컬(LLMClient, quotaExempt 아닌) wire 에만 적용 — 외부 OpenAI 호환 provider 는 strict 에 "전 속성 required +
+ * additionalProperties:false" 를 요구해(OpenAI 규격) 선택 인자가 있는 도구가 400 이 되므로 보내지 않는다.
+ * env: LLM_LOCAL_TOOL_STRICT(기본 true). 'false' 로 끄면 종전처럼 strict 미전송.
+ */
+export const LOCAL_TOOL_STRICT_ENABLED = process.env.LLM_LOCAL_TOOL_STRICT !== 'false';
+
 export const LOCAL_SAMPLING_PRESETS = {
     ENABLED: process.env.LLM_LOCAL_SAMPLING_PRESET_ENABLED !== 'false',
     THINKING: {
