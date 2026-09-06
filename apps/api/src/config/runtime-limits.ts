@@ -1743,6 +1743,25 @@ export const AGENT_TASK_LIMITS = {
     VERIFY_DELIVERABLE_ENABLED: process.env.AGENT_TASK_VERIFY_DELIVERABLE !== 'false',
     /** 산출물 검증 실패 시 자가수정 재시도 최대 횟수 — 초과하면 검증을 건너뛰고 완료(무한루프 방지). */
     VERIFY_DELIVERABLE_MAX_RETRIES: parseInt(process.env.AGENT_TASK_VERIFY_DELIVERABLE_MAX_RETRIES || '1', 10),
+    /** workspace 테스트 게이트(2026-09-06) — 완료 관문에서 workspace 에 **이미 있는** 테스트 러너
+     *  (package.json scripts.test + node_modules · pytest 설정/tests 디렉토리)를 감지하면 1회 실행해
+     *  실패 출력을 주입하고 수정 턴을 준다. 러너가 없으면 아무 것도 하지 않는다(리포트형 작업 무영향).
+     *  실행 grounding 이 self-critique 보다 값싸고 정확하다는 같은 원칙(deliverable-verify).
+     *  AGENT_TASK_WORKSPACE_TEST_GATE=false 로 비활성. */
+    WORKSPACE_TEST_GATE_ENABLED: process.env.AGENT_TASK_WORKSPACE_TEST_GATE !== 'false',
+    /** 테스트 실패 시 수정 턴 최대 횟수 — verifyRetries 카운터를 deliverable 검증과 공유한다. */
+    WORKSPACE_TEST_MAX_RETRIES: parseInt(process.env.AGENT_TASK_WORKSPACE_TEST_MAX_RETRIES || '2', 10),
+    /** 테스트 실패 출력 중 모델에 주입할 최대 글자(끝부분 우선 — 실패 요약은 보통 마지막에 있다). */
+    WORKSPACE_TEST_REPORT_MAX_CHARS: parseInt(process.env.AGENT_TASK_WORKSPACE_TEST_REPORT_MAX_CHARS || '3000', 10),
+    /** 오래된 도구 결과 접기(2026-09-06) — 매 턴 전체 대화를 재전송하므로 비용이 턴 수에 O(n²)로
+     *  붙는다(30일 실측: 완료 작업 평균 43만 토큰, 스텝 본문 총량의 ~18배). 최근 KEEP_TURNS 개
+     *  assistant 턴보다 오래된 tool 메시지 중 MIN_CHARS 를 넘는 것을 앞부분 HEAD_CHARS 만 남긴
+     *  스텁으로 치환한다(원문은 스텝 DB 에 그대로 — 모델은 필요 시 같은 도구를 다시 호출).
+     *  AGENT_TASK_CONTEXT_FOLD=false 로 비활성. */
+    CONTEXT_FOLD_ENABLED: process.env.AGENT_TASK_CONTEXT_FOLD !== 'false',
+    CONTEXT_FOLD_KEEP_TURNS: parseInt(process.env.AGENT_TASK_CONTEXT_FOLD_KEEP_TURNS || '4', 10),
+    CONTEXT_FOLD_MIN_CHARS: parseInt(process.env.AGENT_TASK_CONTEXT_FOLD_MIN_CHARS || '1500', 10),
+    CONTEXT_FOLD_HEAD_CHARS: parseInt(process.env.AGENT_TASK_CONTEXT_FOLD_HEAD_CHARS || '240', 10),
     /** 마무리 턴 본문 채택 임계(글자) — 자원 상한으로 도구를 막은 턴에서 모델이 도구 호출과 본문을
      *  함께 뱉었을 때, 본문이 이 길이 이상이면 최종 답변으로 채택해 완료 관문으로 보낸다.
      *  (미만이면 종전대로 응답을 버리고 다음 턴/턴상한 종료 — "산출물 다 만들고 실패 기록" 방지와
@@ -2074,4 +2093,25 @@ export const MCP_SANDBOX_BOOTSTRAP = {
     ORPHAN_REAP_ENABLED: process.env.MCP_SANDBOX_ORPHAN_REAP !== 'false',
     /** 1회 스윕에서 처리할 최대 컨테이너 수 (폭주 안전판) */
     ORPHAN_REAP_MAX: parseInt(process.env.MCP_SANDBOX_ORPHAN_REAP_MAX || '', 10) || 50,
+} as const;
+
+/**
+ * Task 샌드박스 코드 탐색 도구(grep_code·repo_map, 2026-09-06) 상한.
+ * 30일 실측: bash 호출 444건 중 탐색·읽기(grep/find/ls/cat)가 150건(34%)이고 결과가 통째로 대화에
+ * 들어갔다. 전용 도구는 결과를 파일:줄 형태로 캡을 걸어 돌려준다(읽기 전용, 승인 대상 아님).
+ * ⚠️ 이름에 'search' 를 쓰지 않는다 — AGENT_TASK_LIMITS.SEARCH_TOOL_KEYWORDS 가 웹검색 상한으로 센다.
+ */
+export const TASK_CODE_NAV = {
+    /** grep_code 가 돌려주는 최대 매치 줄 수. TASK_CODE_NAV_GREP_MAX_RESULTS 로 오버라이드. */
+    GREP_MAX_RESULTS: parseInt(process.env.TASK_CODE_NAV_GREP_MAX_RESULTS || '80', 10),
+    /** 매치 줄 한 줄의 최대 글자(미니파이 파일 방어). */
+    GREP_LINE_MAX_CHARS: parseInt(process.env.TASK_CODE_NAV_GREP_LINE_MAX_CHARS || '200', 10),
+    /** 파일당 최대 매치 수(rg -m). */
+    GREP_PER_FILE_MAX: parseInt(process.env.TASK_CODE_NAV_GREP_PER_FILE_MAX || '20', 10),
+    /** repo_map 이 나열하는 최대 파일 수(줄 수 포함). */
+    MAP_MAX_FILES: parseInt(process.env.TASK_CODE_NAV_MAP_MAX_FILES || '300', 10),
+    /** repo_map 심볼 개요 최대 줄 수(function/class/def 선언). */
+    MAP_MAX_SYMBOLS: parseInt(process.env.TASK_CODE_NAV_MAP_MAX_SYMBOLS || '200', 10),
+    /** 탐색에서 제외하는 디렉토리(빌드 산출물·의존성·VCS). */
+    EXCLUDED_DIRS: ['node_modules', '.git', 'dist', 'build', '.next', '__pycache__', '.venv', 'venv', 'coverage', '.openmake'] as readonly string[],
 } as const;

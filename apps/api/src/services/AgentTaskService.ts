@@ -50,6 +50,7 @@ import { recoverTextToolCalls } from './agent-task/text-tool-calls';
 import { executeTurnToolCalls } from './agent-task/turn-executor';
 import { prepareToolArgs } from './agent-task/tool-args';
 import { assembleAgentTools } from './agent-task/tool-assembly';
+import { foldOldToolResults } from './agent-task/context-fold';
 import { buildAgentTaskSystemContent, resolveSkillToolBindings } from './agent-task/skill-block';
 
 // 기존 import 호환 재노출 — 타입/에러는 services/agent-task/types 로 분리 (파일 크기 가드).
@@ -324,6 +325,15 @@ export class AgentTaskService {
                 // user 메시지로 주입해 방향을 조정한다. 턴 경계 소비라 tool_call_id 매칭이 유지되고
                 // 다음 checkpoint 에 자연 포함된다(resume 안전). 스텝으로 기록해 상세/카드에 노출.
                 stepNumber = await applyPendingSteering(taskId, turn, conversation, stepNumber, emitStep);
+                // 오래된 도구 결과 접기 — 재전송 O(n²) 완화. 원문은 스텝 DB 에 남고 최근 턴은 유지(context-fold).
+                if (AGENT_TASK_LIMITS.CONTEXT_FOLD_ENABLED) {
+                    const fold = foldOldToolResults(conversation, {
+                        keepTurns: AGENT_TASK_LIMITS.CONTEXT_FOLD_KEEP_TURNS,
+                        minChars: AGENT_TASK_LIMITS.CONTEXT_FOLD_MIN_CHARS,
+                        headChars: AGENT_TASK_LIMITS.CONTEXT_FOLD_HEAD_CHARS,
+                    });
+                    if (fold.folded > 0) logger.info(`[AgentTask] 도구 결과 접기: ${taskId} (turn ${turn + 1}, ${fold.folded}건, -${fold.savedChars}자)`);
+                }
 
                 // per-call abort: 작업 잔여 예산을 호출에도 바인딩 — 응답이 hang 되면
                 // 턴 사이 assertWithinLimits 까지 도달하지 못하므로 호출 자체를 끊는다.

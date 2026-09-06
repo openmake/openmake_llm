@@ -57,7 +57,7 @@ RUN chmod -R a+rX /opt/report-template
 RUN uv venv /opt/pyenv \
     && VIRTUAL_ENV=/opt/pyenv uv pip install --no-cache openpyxl reportlab fpdf2 python-docx python-pptx pypdf \
        PyMuPDF pytesseract \
-       pandas pdfplumber olefile requests \
+       pandas pdfplumber olefile requests pytest \
     && chmod -R a+rX /opt/pyenv
 ENV PATH=/opt/pyenv/bin:${PATH}
 
