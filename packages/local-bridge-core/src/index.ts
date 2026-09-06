@@ -13,5 +13,6 @@ export { safeFrom } from './scope';
 export { detectGitDir, writeSandboxProfile } from './sandbox';
 export { resolveExecPath } from './exec-path';
 export { gitRun, handleWorktree } from './worktree';
+export { runCodeNav, walkFiles, globToRegExp } from './code-nav';
 export { BridgeCore } from './core';
 export { BridgeConnection, type BridgeConnectionOptions } from './connection';

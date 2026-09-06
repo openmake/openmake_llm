@@ -1,7 +1,7 @@
 /**
  * BridgeCore — 브리지 디바이스의 호스트 비의존 실행 코어.
  *
- * 서버 bridge_exec 요청(kind 화이트리스트 9종)을 처리한다. 데스크톱 bridge.js 와
+ * 서버 bridge_exec 요청(고정 kind 화이트리스트)을 처리한다. 데스크톱 bridge.js 와
  * CLI bridge.ts 에 자구 동일하게 이식돼 있던 로직의 단일화 (2026-08-22, 축2 plan 1단계).
  *
  * 보안 불변식 (양쪽 구현에서 그대로 이관 — 변경 금지):
@@ -20,6 +20,7 @@ import {
     SANDBOX_BIN, SANDBOX_ENABLED,
 } from './constants';
 import { collectDiagnostics } from './diagnostics';
+import { runCodeNav } from './code-nav';
 import { matchDenylist } from './denylist';
 import { resolveExecPath } from './exec-path';
 import { detectGitDir, writeSandboxProfile } from './sandbox';
@@ -205,6 +206,14 @@ export class BridgeCore {
                 if (!this.execPathCache) this.execPathCache = resolveExecPath(this.folderRoot);
                 const r = await collectDiagnostics(base, abs, this.execPathCache);
                 done({ ok: true, ...r }); return;
+            }
+            case 'code_nav': {
+                // 읽기 전용 코드 탐색(grep_code·repo_map) — lsp_diagnostics 와 같은 이유로
+                // confirmExec 대상이 아니다: 셸을 거치지 않고(외부 실행 파일 없음) 경로는
+                // safe() 로 스코프를 확정하며, 폭주는 code-nav.ts 의 캡이 막는다.
+                const startAbs = await safeFromAsync(base, m.path);
+                const codeNav = await this.timedFs('code_nav', () => runCodeNav(base, startAbs, m));
+                done({ ok: true, codeNav }); return;
             }
             case 'worktree':
                 await handleWorktree(m, done, base); return;
