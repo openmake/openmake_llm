@@ -55,6 +55,8 @@ export interface CodeNavData {
     files?: { path: string; lines: number }[];
     /** 실행기 캡에 걸려 잘렸는지. */
     truncated?: boolean;
+    /** 민감 파일 정책으로 건너뛴 파일 수 — 0/미지원이면 생략. */
+    skipped?: number;
 }
 
 export interface TaskExecutor {

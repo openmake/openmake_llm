@@ -69,6 +69,8 @@ export interface BridgeCodeNavData {
     files?: { path: string; lines: number }[];
     /** 캡·시간 예산에 걸려 잘렸는지. */
     truncated?: boolean;
+    /** 민감 파일 정책으로 건너뛴 파일 수. */
+    skipped?: number;
 }
 
 /** 편집 후 진단 1건 — 디바이스의 컴파일러 출력(코어 BridgeDiagnostic 과 1:1). */

@@ -2096,6 +2096,24 @@ export const MCP_SANDBOX_BOOTSTRAP = {
 } as const;
 
 /**
+ * 민감 파일 글롭 — 자격증명·키 파일의 단일 목록 (2026-09-06).
+ *
+ * 두 곳이 이 목록을 쓴다:
+ *  ① 코드 탐색(grep_code·repo_map) 제외 — 승인이 도구 단위라 사용자는 어떤 파일을 읽을지
+ *     보지 못한다. 정책과 무관하게 훑기에서 제외해 자격증명이 대화·스텝 DB 로 쓸려 들어가는
+ *     것을 막는다(봉쇄가 아니라 위생 — 경로를 지목한 file_ops read 는 별도 승인 게이트).
+ *  ② 쓰기 승인 상향(approval-gate) — high-risk 정책에서 이 경로에 쓰는 호출은 승인 대상.
+ *
+ * 디바이스 코어의 CODE_NAV_EXCLUDED_FILES 와 같은 목록으로 유지할 것(양쪽 강제).
+ * 패턴은 파일명(basename) 글롭 — rg -g · grep --exclude · find -name 에 그대로 쓰인다.
+ */
+export const SENSITIVE_FILE_PATTERNS: readonly string[] = [
+    '.env', '.env.*', '*.pem', '*.key', '*.p12', '*.pfx', '*.jks', '*.keystore',
+    'id_rsa', 'id_rsa.*', 'id_ed25519', 'id_ed25519.*', '.npmrc', '.netrc', '.pgpass', '.htpasswd',
+    'credentials', 'credentials.*', 'service-account*.json', '*.kdbx',
+];
+
+/**
  * Task 샌드박스 코드 탐색 도구(grep_code·repo_map, 2026-09-06) 상한.
  * 30일 실측: bash 호출 444건 중 탐색·읽기(grep/find/ls/cat)가 150건(34%)이고 결과가 통째로 대화에
  * 들어갔다. 전용 도구는 결과를 파일:줄 형태로 캡을 걸어 돌려준다(읽기 전용, 승인 대상 아님).
@@ -2114,4 +2132,6 @@ export const TASK_CODE_NAV = {
     MAP_MAX_SYMBOLS: parseInt(process.env.TASK_CODE_NAV_MAP_MAX_SYMBOLS || '200', 10),
     /** 탐색에서 제외하는 디렉토리(빌드 산출물·의존성·VCS). */
     EXCLUDED_DIRS: ['node_modules', '.git', 'dist', 'build', '.next', '__pycache__', '.venv', 'venv', 'coverage', '.openmake'] as readonly string[],
+    /** 탐색에서 제외하는 파일(자격증명) — 위 SENSITIVE_FILE_PATTERNS 단일 목록. */
+    EXCLUDED_FILES: SENSITIVE_FILE_PATTERNS,
 } as const;

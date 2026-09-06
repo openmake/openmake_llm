@@ -35,6 +35,8 @@ export interface BridgeCodeNav {
     files?: { path: string; lines: number }[];
     /** 캡·시간 예산에 걸려 결과가 잘렸는지. */
     truncated?: boolean;
+    /** 민감 파일 정책으로 건너뛴 파일 수 — 0 이면 생략. 모델이 "없음"으로 오판하지 않게 노출한다. */
+    skipped?: number;
 }
 
 /** 편집 후 진단 1건 — 컴파일러/언어 서버 출력의 공통 표현. */
