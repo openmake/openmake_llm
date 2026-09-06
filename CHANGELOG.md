@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.0](https://github.com/openmake/openmake_llm/compare/v1.47.0...v1.48.0) (2026-09-06)
+
+
+### ✨ 기능
+
+* **task-sandbox:** 자격증명 파일 — 탐색 제외 + 쓰기 승인 상향 ([#777](https://github.com/openmake/openmake_llm/issues/777)) ([88101fe](https://github.com/openmake/openmake_llm/commit/88101fe745d9a8c31f65d3f4cf6f8d1348f730e8))
+
 ## [1.47.0](https://github.com/openmake/openmake_llm/compare/v1.46.0...v1.47.0) (2026-09-06)
 
 
