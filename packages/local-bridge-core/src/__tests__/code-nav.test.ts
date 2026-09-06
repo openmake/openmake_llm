@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { BridgeCore } from '../core';
-import { globToRegExp, runCodeNav, walkFiles } from '../code-nav';
+import { globToRegExp, isSecretFile, runCodeNav, walkFiles } from '../code-nav';
 import type { BridgeResult } from '../types';
 
 let root: string;
@@ -96,6 +96,30 @@ describe('code_nav kind', () => {
         expect(g.codeNav?.matches).toEqual([]);
     });
 
+    it('자격증명 파일은 훑지 않고, 건너뛴 수를 알려준다', async () => {
+        mk('.env', 'API_KEY=super-secret-value\n');
+        mk('.env.local', 'DB_PASSWORD=hunter2\n');
+        mk('certs/server.pem', '-----BEGIN PRIVATE KEY-----\n');
+        mk('src/keep.ts', 'const API_KEY = process.env.API_KEY;\n');
+        const g = await run(core(), { op: 'grep', pattern: 'API_KEY|PASSWORD|PRIVATE KEY' });
+        expect(g.codeNav?.matches).toEqual(['src/keep.ts:1:const API_KEY = process.env.API_KEY;']);
+        expect(g.codeNav?.skipped).toBe(3);
+        const f = await run(core(), { op: 'files' });
+        expect(f.codeNav?.files?.some((x) => x.path.startsWith('.env') || x.path.endsWith('.pem'))).toBe(false);
+        expect(f.codeNav?.skipped).toBe(3);
+    });
+
+    it('민감 파일을 path 로 직접 지목해도 탐색은 거른다(file_ops read 로 가야 한다)', async () => {
+        mk('.env', 'API_KEY=x\n');
+        const g = await run(core(), { op: 'grep', pattern: 'API_KEY', path: '.env' });
+        expect(g.codeNav?.matches).toEqual([]);
+        expect(g.codeNav?.skipped).toBe(1);
+    });
+
+    it('건너뛴 것이 없으면 skipped 를 싣지 않는다', async () => {
+        expect((await run(core(), { op: 'files' })).codeNav?.skipped).toBeUndefined();
+    });
+
     it('바이너리 파일은 grep 대상에서 제외한다', async () => {
         fs.writeFileSync(path.join(root, 'blob.bin'), Buffer.from([0x68, 0x69, 0x00, 0x68, 0x69]));
         const r = await run(core(), { op: 'grep', pattern: 'hi' });
@@ -146,5 +170,19 @@ describe('walkFiles / globToRegExp', () => {
         expect(globToRegExp('src/**/*.py').basenameOnly).toBe(false);
         expect(globToRegExp('src/**/*.py').re.test('src/a/b/x.py')).toBe(true);
         expect(globToRegExp('src/*.py').re.test('src/a/x.py')).toBe(false);
+    });
+});
+
+describe('isSecretFile', () => {
+    it('자격증명 파일명을 잡는다', () => {
+        for (const n of ['.env', '.env.production', 'server.pem', 'app.key', 'id_rsa', 'id_ed25519.pub',
+            '.npmrc', '.netrc', '.pgpass', 'credentials', 'service-account-prod.json', 'vault.kdbx']) {
+            expect(isSecretFile(n)).toBe(true);
+        }
+    });
+    it('일반 소스는 잡지 않는다', () => {
+        for (const n of ['env.ts', 'keychain.md', 'README.md', 'stats.js', 'package.json', 'environment.rb']) {
+            expect(isSecretFile(n)).toBe(false);
+        }
     });
 });

@@ -185,3 +185,52 @@ describe('네이티브 백엔드(codeNav) 우선 — 로컬 브리지 승인 창
         expect(text(r)).toContain('일치 없음');
     });
 });
+
+describe('민감 파일 제외 (2026-09-06)', () => {
+    it('셸 폴백도 자격증명 파일을 인자로 제외한다 — 네이티브와 같은 목록', async () => {
+        const { sandbox, cmds } = fakeSandbox(() => exec('src/a.ts:1:KEY'));
+        const grep = createCodeNavTools(sandbox).find((t) => t.tool.name === 'grep_code')!;
+        await grep.handler({ pattern: 'KEY' });
+        expect(cmds[0]).toContain("-g '!.env'");
+        expect(cmds[0]).toContain("-g '!*.pem'");
+        expect(cmds[0]).toContain("-g '!id_rsa'");
+    });
+
+    it('grep 폴백(--exclude)·find prune 에도 같은 목록이 들어간다', async () => {
+        const { sandbox, cmds } = fakeSandbox((cmd) => cmd.startsWith('rg') ? exec('', 127, 'not found') : exec('x.ts:1:m'));
+        await createCodeNavTools(sandbox).find((t) => t.tool.name === 'grep_code')!.handler({ pattern: 'm' });
+        expect(cmds[1]).toContain("--exclude='.env'");
+        const { sandbox: sb2, cmds: cmds2 } = fakeSandbox(() => exec('1\t./x.ts'));
+        await createCodeNavTools(sb2).find((t) => t.tool.name === 'repo_map')!.handler({ symbols: false });
+        expect(cmds2[0]).toContain("-name '.env'");
+        expect(cmds2[0]).toContain("-name '*.pem'");
+    });
+
+    it('건너뛴 파일이 있으면 결과 말미에 알린다 — "없음" 오판 방지', async () => {
+        const { sandbox } = nativeSandbox(() => ({ matches: ['a.ts:1:KEY'], skipped: 2 }));
+        const grep = createCodeNavTools(sandbox).find((t) => t.tool.name === 'grep_code')!;
+        const t = text(await grep.handler({ pattern: 'KEY' }));
+        expect(t).toContain('자격증명 파일 2개는 정책상 검색에서 제외');
+        expect(t).toContain('file_ops read');
+    });
+
+    it('무일치여도 건너뛴 것이 있으면 알린다', async () => {
+        const { sandbox } = nativeSandbox(() => ({ matches: [], skipped: 1 }));
+        const grep = createCodeNavTools(sandbox).find((t) => t.tool.name === 'grep_code')!;
+        expect(text(await grep.handler({ pattern: 'KEY' }))).toContain('정책상 검색에서 제외');
+    });
+
+    it('repo_map 도 건너뛴 수를 알린다', async () => {
+        const { sandbox } = nativeSandbox((spec) => spec.op === 'files'
+            ? { files: [{ path: 'src/a.ts', lines: 3 }], skipped: 1 }
+            : { matches: [] });
+        const map = createCodeNavTools(sandbox).find((t) => t.tool.name === 'repo_map')!;
+        expect(text(await map.handler({}))).toContain('자격증명 파일 1개');
+    });
+
+    it('건너뛴 것이 없으면 안내를 붙이지 않는다', async () => {
+        const { sandbox } = nativeSandbox(() => ({ matches: ['a.ts:1:x'] }));
+        const grep = createCodeNavTools(sandbox).find((t) => t.tool.name === 'grep_code')!;
+        expect(text(await grep.handler({ pattern: 'x' }))).not.toContain('정책상');
+    });
+});

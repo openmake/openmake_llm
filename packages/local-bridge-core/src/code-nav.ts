@@ -12,6 +12,8 @@
  *  - 경로는 호출부(core.ts)가 safeFromAsync 로 스코프를 확정한 뒤 넘긴다. walk 는 심링크를
  *    따라가지 않는다(scope 밖 탈출 차단 — listAll 의 walk 와 같은 규칙).
  *  - 폭주 방지는 전적으로 캡이다(승인 게이트가 없으므로): 파일 수·파일 크기·매치 수·시간 예산.
+ *  - 자격증명 파일(CODE_NAV_EXCLUDED_FILES)은 훑지 않는다 — 승인이 도구 단위라 사용자는 어떤
+ *    파일을 읽을지 보지 못한다. 건너뛴 수는 결과에 실어 "없음" 오판을 막는다(조용한 실패 방지).
  *  - ⚠️ 정규식은 모델이 만든 값이라 파국적 백트래킹이 가능하다. 파일 크기 상한과 파일 사이
  *    데드라인 검사로 피해를 한 파일로 묶는다(한 파일 안의 백트래킹은 중단할 수 없다).
  *
@@ -20,7 +22,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-    CODE_NAV_EXCLUDED_DIRS, CODE_NAV_LINE_MAX_CHARS, CODE_NAV_MAX_FILE_BYTES, CODE_NAV_MAX_FILES,
+    CODE_NAV_EXCLUDED_DIRS, CODE_NAV_EXCLUDED_FILES, CODE_NAV_LINE_MAX_CHARS, CODE_NAV_MAX_FILE_BYTES, CODE_NAV_MAX_FILES,
     CODE_NAV_MAX_MATCHES, CODE_NAV_MAX_PER_FILE, CODE_NAV_PATTERN_MAX_CHARS, CODE_NAV_TIMEOUT_MS,
 } from './constants';
 import type { BridgeCodeNav, BridgeMsg } from './types';
@@ -41,6 +43,13 @@ export function globToRegExp(glob: string): { re: RegExp; basenameOnly: boolean 
     return { re: new RegExp(`^${out}$`), basenameOnly };
 }
 
+const SECRET_FILE_RES = CODE_NAV_EXCLUDED_FILES.map((g) => globToRegExp(g).re);
+
+/** 자격증명 파일인지 — 파일명(basename)만 본다. 서버 셸 폴백의 rg -g '!…' 와 같은 패턴. */
+export function isSecretFile(name: string): boolean {
+    return SECRET_FILE_RES.some((re) => re.test(name));
+}
+
 /** 바이너리 추정 — 앞부분에 NUL 이 있으면 텍스트가 아니다(grep -I 과 같은 판정). */
 function looksBinary(buf: Buffer): boolean {
     return buf.subarray(0, 8192).includes(0);
@@ -50,6 +59,8 @@ interface WalkResult {
     /** base 기준 상대경로(POSIX 구분자). */
     files: string[];
     truncated: boolean;
+    /** 민감 파일 정책으로 건너뛴 수. */
+    skipped: number;
 }
 
 /**
@@ -58,12 +69,17 @@ interface WalkResult {
  */
 export async function walkFiles(baseAbs: string, startAbs: string, deadline: number): Promise<WalkResult> {
     const st = await fsp.stat(startAbs).catch(() => null);
-    if (!st) return { files: [], truncated: false };
+    if (!st) return { files: [], truncated: false, skipped: 0 };
     const rel = (abs: string): string => path.relative(baseAbs, abs).split(path.sep).join('/');
-    if (st.isFile()) return { files: [rel(startAbs)], truncated: false };
+    if (st.isFile()) {
+        return isSecretFile(path.basename(startAbs))
+            ? { files: [], truncated: false, skipped: 1 }
+            : { files: [rel(startAbs)], truncated: false, skipped: 0 };
+    }
 
     const files: string[] = [];
     let truncated = false;
+    let skipped = 0;
     const stack: string[] = [startAbs];
     while (stack.length > 0) {
         if (files.length >= CODE_NAV_MAX_FILES || Date.now() > deadline) { truncated = true; break; }
@@ -78,13 +94,14 @@ export async function walkFiles(baseAbs: string, startAbs: string, deadline: num
             if (e.isDirectory()) {
                 stack.push(path.join(dir, e.name));
             } else if (e.isFile()) {
+                if (isSecretFile(e.name)) { skipped++; continue; }   // 자격증명은 훑지 않는다
                 if (files.length >= CODE_NAV_MAX_FILES) { truncated = true; break; }
                 files.push(rel(path.join(dir, e.name)));
             }
         }
     }
     files.sort();
-    return { files, truncated };
+    return { files, truncated, skipped };
 }
 
 /** grep — 파일을 훑어 "상대경로:줄번호:내용" 목록을 만든다. */
@@ -124,7 +141,7 @@ async function grep(baseAbs: string, startAbs: string, m: BridgeMsg, deadline: n
             perFile++;
         }
     }
-    return { matches, truncated };
+    return { matches, truncated, ...(walked.skipped > 0 ? { skipped: walked.skipped } : {}) };
 }
 
 /** files — 파일별 줄 수(구조 개요용). 내용은 돌려주지 않는다. */
@@ -143,7 +160,7 @@ async function files(baseAbs: string, startAbs: string, deadline: number): Promi
         const text = buf.toString('utf8');
         out.push({ path: rel, lines: text === '' ? 0 : text.split('\n').length - (text.endsWith('\n') ? 1 : 0) });
     }
-    return { files: out, truncated };
+    return { files: out, truncated, ...(walked.skipped > 0 ? { skipped: walked.skipped } : {}) };
 }
 
 /**

@@ -44,14 +44,29 @@ export function normalizeRelPath(p: string): string | null {
 }
 
 function excludeGlobsRg(): string {
-    return TASK_CODE_NAV.EXCLUDED_DIRS.map((d) => `-g ${shq(`!${d}/**`)}`).join(' ');
+    return [
+        ...TASK_CODE_NAV.EXCLUDED_DIRS.map((d) => `-g ${shq(`!${d}/**`)}`),
+        // 자격증명 파일 — 디바이스 네이티브 경로(local-bridge-core)와 같은 목록으로 강제한다.
+        ...TASK_CODE_NAV.EXCLUDED_FILES.map((f) => `-g ${shq(`!${f}`)}`),
+    ].join(' ');
 }
 function excludeDirsGrep(): string {
-    return TASK_CODE_NAV.EXCLUDED_DIRS.map((d) => `--exclude-dir=${shq(d)}`).join(' ');
+    return [
+        ...TASK_CODE_NAV.EXCLUDED_DIRS.map((d) => `--exclude-dir=${shq(d)}`),
+        ...TASK_CODE_NAV.EXCLUDED_FILES.map((f) => `--exclude=${shq(f)}`),
+    ].join(' ');
 }
 function pruneFind(): string {
     // find <path> \( -name a -o -name b \) -prune -o -type f -print
-    return `\\( ${TASK_CODE_NAV.EXCLUDED_DIRS.map((d) => `-name ${shq(d)}`).join(' -o ')} \\) -prune -o -type f -print`;
+    // 디렉토리·파일 모두 이름 기준 prune — 파일에 걸리면 -o 단락으로 -print 에 닿지 않는다.
+    const names = [...TASK_CODE_NAV.EXCLUDED_DIRS, ...TASK_CODE_NAV.EXCLUDED_FILES]
+        .map((d) => `-name ${shq(d)}`).join(' -o ');
+    return `\\( ${names} \\) -prune -o -type f -print`;
+}
+
+/** 결과 말미 안내 — 정책으로 건너뛴 파일이 있으면 "없음" 오판을 막는다(조용한 실패 방지). */
+function skippedNote(skipped: number | undefined): string {
+    return skipped ? `\n(자격증명 파일 ${skipped}개는 정책상 검색에서 제외됨 — 필요하면 file_ops read 로 경로를 지목하세요)` : '';
 }
 
 function clipLines(out: string, maxLines: number, maxChars: number): { lines: string[]; overflow: boolean } {
@@ -81,6 +96,8 @@ interface GrepOutcome {
     via: 'native' | 'rg' | 'grep';
     /** 실행 실패(오류 문구). 있으면 lines 는 무의미. */
     error?: string;
+    /** 민감 파일 정책으로 건너뛴 수(네이티브 백엔드만 셈). */
+    skipped?: number;
 }
 
 /** grep 한 번 — 네이티브 우선, 아니면 셸(rg→grep). 캡·줄 절단은 이 함수가 단일 적용한다. */
@@ -93,7 +110,7 @@ async function runGrep(sandbox: TaskExecutor, o: {
     });
     if (native?.matches) {
         const { lines, overflow } = clipLines(native.matches.join('\n'), o.max, TASK_CODE_NAV.GREP_LINE_MAX_CHARS);
-        return { lines, overflow: overflow || native.truncated === true, via: 'native' };
+        return { lines, overflow: overflow || native.truncated === true, via: 'native', ...(native.skipped ? { skipped: native.skipped } : {}) };
     }
     const head = `head -n ${o.max + 1}`;
     const ic = o.ignoreCase === true;
@@ -118,7 +135,9 @@ export function createCodeNavTools(sandbox: TaskExecutor): MCPToolDefinition[] {
             name: 'grep_code',
             description: 'workspace 코드를 정규식으로 검색해 "파일:줄번호:내용" 목록을 돌려줍니다(ripgrep, 읽기 전용, '
                 + `최대 ${TASK_CODE_NAV.GREP_MAX_RESULTS}줄). 심볼 정의·사용처·문자열을 찾을 때 bash grep 대신 쓰세요 — `
-                + '결과가 캡으로 잘려 컨텍스트를 아낍니다. node_modules/.git/dist 는 자동 제외.',
+                + '결과가 캡으로 잘려 컨텍스트를 아낍니다. node_modules/.git/dist 는 자동 제외되고, '
+                + '자격증명 파일(.env·*.pem·id_rsa 등)은 정책상 검색되지 않습니다 — 그 내용이 필요하면 '
+                + 'file_ops read 로 경로를 지목하세요(승인이 필요할 수 있습니다).',
             inputSchema: {
                 type: 'object',
                 properties: {
@@ -145,9 +164,9 @@ export function createCodeNavTools(sandbox: TaskExecutor): MCPToolDefinition[] {
             ));
             const out = await runGrep(sandbox, { pattern, rel, max, ...(glob ? { glob } : {}), ...(ic ? { ignoreCase: true } : {}) });
             if (out.error) return textResult(out.error, true);
-            if (out.lines.length === 0) return textResult(`(일치 없음: ${pattern})`);
+            if (out.lines.length === 0) return textResult(`(일치 없음: ${pattern})${skippedNote(out.skipped)}`);
             const note = out.overflow ? `\n… ${max}줄에서 잘림 — pattern/path/glob 으로 좁히세요.` : '';
-            return textResult(`${out.lines.join('\n')}${note}${out.via === 'grep' ? '\n(rg 미설치 — grep 사용)' : ''}`);
+            return textResult(`${out.lines.join('\n')}${note}${skippedNote(out.skipped)}${out.via === 'grep' ? '\n(rg 미설치 — grep 사용)' : ''}`);
         },
     };
 
@@ -173,9 +192,11 @@ export function createCodeNavTools(sandbox: TaskExecutor): MCPToolDefinition[] {
             const native = await tryNative(sandbox, { op: 'files', path: rel });
             let rows: { lines: number; path: string }[];
             let nativeTruncated = false;
+            let nativeSkipped = 0;
             if (native?.files) {
                 rows = native.files.map((f) => ({ lines: f.lines, path: f.path.replace(/^\.\//, '') }));
                 nativeTruncated = native.truncated === true;
+                nativeSkipped = native.skipped ?? 0;
             } else {
                 // 파일별 줄 수 — GNU 전용 옵션 없이(find -printf·xargs -d 는 macOS 로컬 브리지에 없다).
                 const listCmd = `find ${shq(rel)} ${pruneFind()} | head -n ${maxFiles + 1} | while IFS= read -r f; do `
@@ -187,7 +208,7 @@ export function createCodeNavTools(sandbox: TaskExecutor): MCPToolDefinition[] {
                     return { lines: parseInt(n, 10) || 0, path: rest.join('\t').replace(/^\.\//, '') };
                 });
             }
-            if (rows.length === 0) return textResult(`(파일 없음: ${rel})`);
+            if (rows.length === 0) return textResult(`(파일 없음: ${rel})${skippedNote(nativeSkipped)}`);
             const overflow = rows.length > maxFiles || nativeTruncated;
             const files = rows.slice(0, maxFiles).sort((a, b) => a.path.localeCompare(b.path));
 
@@ -212,7 +233,7 @@ export function createCodeNavTools(sandbox: TaskExecutor): MCPToolDefinition[] {
                     if (sym.overflow) out.push(`… ${TASK_CODE_NAV.MAP_MAX_SYMBOLS}줄에서 잘림 — grep_code 로 좁히세요.`);
                 }
             }
-            return textResult(out.join('\n'));
+            return textResult(`${out.join('\n')}${skippedNote(nativeSkipped)}`);
         },
     };
 
