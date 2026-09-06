@@ -16,6 +16,7 @@
 import type { MCPToolDefinition, MCPToolResult } from '../../mcp/types';
 import type { TaskExecutor, ExecResult } from './executor';
 import { withDiagnostics } from './diagnostics-attach';
+import { createCodeNavTools } from './tools-code-nav';
 import { TaskPlan, type PlanStepStatus } from './planning';
 import {
     SPAWN_AGENTS_TOOL_NAME,
@@ -579,5 +580,5 @@ export function createTaskTools(
             textResult(`${TASK_ASK_HUMAN_SENTINEL} ${str(args.question)}`),
     };
 
-    return [bash, pythonExecute, strReplaceEditor, fileOps, browser, planCreate, planUpdate, planView, delegateTool, ...(spawn ? [spawnAgentsTool] : []), ...(discuss ? [discussTool] : []), ...(procedural ? [skillSave, skillRun] : []), terminate, askHuman];
+    return [bash, pythonExecute, strReplaceEditor, fileOps, ...createCodeNavTools(sandbox), browser, planCreate, planUpdate, planView, delegateTool, ...(spawn ? [spawnAgentsTool] : []), ...(discuss ? [discussTool] : []), ...(procedural ? [skillSave, skillRun] : []), terminate, askHuman];
 }

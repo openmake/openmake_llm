@@ -1,5 +1,5 @@
 // env 파생 상수 고정 — 운영 .env 에서 AGENT_TASK_DISCUSSION 을 켜면 도구가 12종이 되어
-// 아래 base 11종 단언이 깨진다. 기본(OFF) 계약을 검증하는 테스트이므로 env 와 무관하게 고정한다.
+// 아래 base 13종 단언이 깨진다. 기본(OFF) 계약을 검증하는 테스트이므로 env 와 무관하게 고정한다.
 // (start_discussion 노출 자체는 task-tools-discussion.test.ts 가 콜백 주입으로 검증)
 jest.mock('../../config/runtime-limits', () => {
     const actual = jest.requireActual('../../config/runtime-limits');
@@ -35,11 +35,11 @@ describe('TaskRuntime 도구/게이트 (샌드박스 미생성 — 게이트 로
     const cfgAll = { ...getTaskSandboxConfig(), approvalPolicy: 'all' as const };
     const cfgNone = { ...getTaskSandboxConfig(), approvalPolicy: 'none' as const };
 
-    it('getLLMTools 11종 + isTaskTool', () => {
+    it('getLLMTools 13종 + isTaskTool', () => {
         const rt = new TaskRuntime('t1', 'u1', cfgNone);
         // 절차 스킬 도구(skill_save/skill_run)는 AGENT_TASK_PROCEDURAL_SKILLS 플래그 게이트라 제외하고 base 11 검증.
         const names = rt.getLLMTools().map((t) => t.function.name).filter((n) => n !== 'skill_save' && n !== 'skill_run');
-        expect(names).toEqual(['bash', 'python_execute', 'str_replace_editor', 'file_ops', 'browser', 'plan_create', 'plan_update', 'plan_view', 'delegate', 'terminate', 'ask_human']);
+        expect(names).toEqual(['bash', 'python_execute', 'str_replace_editor', 'file_ops', 'grep_code', 'repo_map', 'browser', 'plan_create', 'plan_update', 'plan_view', 'delegate', 'terminate', 'ask_human']);
         expect(rt.isTaskTool('bash')).toBe(true);
         expect(rt.isTaskTool('web_search')).toBe(false);
     });

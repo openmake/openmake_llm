@@ -29,9 +29,9 @@ function byName(tools: ReturnType<typeof createTaskTools>, name: string) {
 const txt = (r: MCPToolResult) => r.content[0].text ?? '';
 
 describe('task-sandbox tools', () => {
-    it('11개 도구 제공 (5 sandbox + 3 plan + delegate + terminate + ask_human)', () => {
+    it('13개 도구 제공 (5 sandbox + 2 code-nav + 3 plan + delegate + terminate + ask_human)', () => {
         const names = createTaskTools(fakeSandbox()).map((t) => t.tool.name);
-        expect(names).toEqual(['bash', 'python_execute', 'str_replace_editor', 'file_ops', 'browser', 'plan_create', 'plan_update', 'plan_view', 'delegate', 'terminate', 'ask_human']);
+        expect(names).toEqual(['bash', 'python_execute', 'str_replace_editor', 'file_ops', 'grep_code', 'repo_map', 'browser', 'plan_create', 'plan_update', 'plan_view', 'delegate', 'terminate', 'ask_human']);
     });
 
     describe('delegate', () => {
