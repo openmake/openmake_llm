@@ -88,6 +88,14 @@ describe('code_nav kind', () => {
         expect(JSON.stringify(f)).not.toContain('return a + b');
     });
 
+    it('제외 이름은 파일이어도 건너뛴다 — worktree 의 .git 은 디렉토리가 아니라 파일이다', async () => {
+        fs.writeFileSync(path.join(root, '.git'), 'gitdir: /elsewhere/.git/worktrees/x\n');
+        const r = await run(core(), { op: 'files' });
+        expect(r.codeNav?.files?.some((f) => f.path === '.git')).toBe(false);
+        const g = await run(core(), { op: 'grep', pattern: 'gitdir' });
+        expect(g.codeNav?.matches).toEqual([]);
+    });
+
     it('바이너리 파일은 grep 대상에서 제외한다', async () => {
         fs.writeFileSync(path.join(root, 'blob.bin'), Buffer.from([0x68, 0x69, 0x00, 0x68, 0x69]));
         const r = await run(core(), { op: 'grep', pattern: 'hi' });
