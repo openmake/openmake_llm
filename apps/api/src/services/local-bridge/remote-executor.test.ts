@@ -9,6 +9,36 @@
 import { RemoteExecutor } from './remote-executor';
 import { getLocalBridgeRegistry } from './registry';
 
+describe('RemoteExecutor codeNav (읽기 전용 코드 탐색)', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    it('code_nav kind 로 요청하고 결과를 그대로 돌려준다', async () => {
+        const spy = jest.spyOn(getLocalBridgeRegistry(), 'request')
+            .mockResolvedValue({ ok: true, codeNav: { matches: ['src/a.ts:1:foo'], truncated: true } });
+        const r = await new RemoteExecutor('task-1', 'user-1').codeNav({ op: 'grep', pattern: 'foo', path: 'src', glob: '*.ts' });
+        expect(r).toEqual({ matches: ['src/a.ts:1:foo'], truncated: true });
+        expect(spy).toHaveBeenCalledWith('user-1',
+            expect.objectContaining({ kind: 'code_nav', op: 'grep', pattern: 'foo', path: 'src', glob: '*.ts' }),
+            undefined, undefined);
+    });
+
+    it('exec(셸)을 쓰지 않는다 — 디바이스 승인 창을 띄우지 않는 것이 이 경로의 목적', async () => {
+        const spy = jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue({ ok: true, codeNav: { files: [] } });
+        await new RemoteExecutor('task-1', 'user-1').codeNav({ op: 'files' });
+        expect(spy.mock.calls.every(([, payload]) => (payload as { kind: string }).kind !== 'exec')).toBe(true);
+    });
+
+    it('구 디바이스(미지원 kind)·실패는 null → 호출측이 셸로 폴백', async () => {
+        jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue({ ok: false, error: '지원하지 않는 kind: code_nav' });
+        expect(await new RemoteExecutor('task-1', 'user-1').codeNav({ op: 'files' })).toBeNull();
+    });
+
+    it('codeNav 필드가 없는 응답도 null 로 본다', async () => {
+        jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue({ ok: true });
+        expect(await new RemoteExecutor('task-1', 'user-1').codeNav({ op: 'grep', pattern: 'x' })).toBeNull();
+    });
+});
+
 describe('RemoteExecutor 브라우저 폐기', () => {
     afterEach(() => jest.restoreAllMocks());
 

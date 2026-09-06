@@ -23,10 +23,13 @@ import { createLogger } from '../../utils/logger';
 const logger = createLogger('LocalBridge');
 
 /** 서버→디바이스 도구 요청 종류 — 이 외의 kind 는 존재하지 않는다(임의 RPC 금지). */
-export type BridgeKind = 'exec' | 'read' | 'write' | 'list' | 'listAll' | 'delete' | 'task_end' | 'worktree' | 'folders' | 'lsp_diagnostics';
+export type BridgeKind = 'exec' | 'read' | 'write' | 'list' | 'listAll' | 'delete' | 'task_end' | 'worktree' | 'folders' | 'lsp_diagnostics' | 'code_nav';
 
 /** worktree 연산 — 서버는 op 만 지정하고 git 명령은 디바이스가 고정 인자로 조립한다(명령 주입 차단). */
 export type WorktreeOp = 'add' | 'diff' | 'remove';
+
+/** code_nav 연산 — grep(정규식 매치 줄) · files(파일별 줄 수). 그 외는 디바이스가 거절한다. */
+export type CodeNavOp = 'grep' | 'files';
 
 export interface BridgeRequestPayload {
     kind: BridgeKind;
@@ -34,8 +37,8 @@ export interface BridgeRequestPayload {
     path?: string;
     /** write 전용 — base64 본문 (바이너리 안전). */
     contentB64?: string;
-    /** worktree 전용 — 수행할 연산. */
-    op?: WorktreeOp;
+    /** worktree·code_nav 전용 — 수행할 연산. */
+    op?: WorktreeOp | CodeNavOp;
     /**
      * task 식별자. worktree(디렉토리·브랜치명 파생, 디바이스가 형식 재검증)와 exec·task_end
      * (디바이스의 **작업 단위 일괄 승인** 범위 식별)에 쓰인다.
@@ -51,6 +54,21 @@ export interface BridgeRequestPayload {
     folder?: string;
     /** lsp_diagnostics 전용 — 진단할 파일들(base 기준 상대경로). */
     paths?: string[];
+    /** code_nav grep 전용 — 정규식 소스·글롭·대소문자·매치 상한(디바이스가 캡으로 다시 자른다). */
+    pattern?: string;
+    glob?: string;
+    ignoreCase?: boolean;
+    maxResults?: number;
+}
+
+/** code_nav 결과 — 디바이스 코어 BridgeCodeNav 와 1:1. */
+export interface BridgeCodeNavData {
+    /** grep — "상대경로:줄번호:내용". */
+    matches?: string[];
+    /** files — 파일별 줄 수. */
+    files?: { path: string; lines: number }[];
+    /** 캡·시간 예산에 걸려 잘렸는지. */
+    truncated?: boolean;
 }
 
 /** 편집 후 진단 1건 — 디바이스의 컴파일러 출력(코어 BridgeDiagnostic 과 1:1). */
@@ -88,6 +106,8 @@ export interface BridgeResult {
     diagnostics?: BridgeDiagnostic[];
     /** 어떤 검사기가 돌았는지 — 'none' 이면 지원 도구가 없어 검사하지 않음(진단 0건과 구분). */
     serverKind?: string;
+    /** code_nav 결과 — 없으면 구 디바이스(kind 미지원)로 보고 셸 경로로 폴백한다. */
+    codeNav?: BridgeCodeNavData;
 }
 
 export interface DeviceSession {

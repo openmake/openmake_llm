@@ -12,7 +12,7 @@
  *
  * @module services/local-bridge/remote-executor
  */
-import type { TaskExecutor, ExecResult } from '../task-sandbox/executor';
+import type { TaskExecutor, ExecResult, CodeNavSpec, CodeNavData } from '../task-sandbox/executor';
 import { getLocalBridgeRegistry, type BridgeResult, type BridgeRequestPayload } from './registry';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
 import { readFile as fsReadFile, stat } from 'fs/promises';
@@ -125,6 +125,36 @@ export class RemoteExecutor implements TaskExecutor {
             `${strip(d.path)}:${d.line}:${d.col} ${d.severity}${d.code ? ` ${d.code}` : ''}: ${d.message}`);
         const head = `[진단 ${r.diagnostics.length}건${r.truncated ? '+' : ''} — ${r.serverKind}]`;
         return { text: `${head}\n${lines.join('\n')}`, count: r.diagnostics.length };
+    }
+
+    /**
+     * 코드 탐색(grep_code·repo_map) — 디바이스가 셸 없이 파일을 훑어 결과만 돌려준다.
+     * exec 로 내보내면 읽기 전용인데도 confirmExec 승인 창이 매 호출 떠서 실사용이 불가능하다
+     * (lsp_diagnostics 와 같은 취지의 전용 kind). 구 디바이스는 "지원하지 않는 kind" 오류를
+     * 돌려주므로 **null** → 호출측(tools-code-nav)이 셸 경로로 폴백한다.
+     */
+    async codeNav(spec: CodeNavSpec): Promise<CodeNavData | null> {
+        const r = await this.req({
+            kind: 'code_nav',
+            op: spec.op,
+            path: this.scoped(spec.path ?? '.'),
+            ...(spec.pattern ? { pattern: spec.pattern } : {}),
+            ...(spec.glob ? { glob: spec.glob } : {}),
+            ...(spec.ignoreCase ? { ignoreCase: true } : {}),
+            ...(spec.maxResults ? { maxResults: spec.maxResults } : {}),
+        }).catch(() => ({ ok: false }) as BridgeResult);
+        if (!r.ok || !r.codeNav) {
+            logger.info(`[${this.taskId}] code_nav 미지원·실패 — 셸 경로로 폴백: ${r.error ?? 'codeNav 없음'}`);
+            return null;
+        }
+        // worktree prefix 는 모델이 쓰는 상대경로가 아니라 떼어낸다(diagnostics 와 같은 규칙).
+        const strip = (p: string): string =>
+            this.worktreeRel && p.startsWith(`${this.worktreeRel}/`) ? p.slice(this.worktreeRel.length + 1) : p;
+        return {
+            ...(r.codeNav.matches ? { matches: r.codeNav.matches.map(strip) } : {}),
+            ...(r.codeNav.files ? { files: r.codeNav.files.map((f) => ({ ...f, path: strip(f.path) })) } : {}),
+            ...(r.codeNav.truncated ? { truncated: true } : {}),
+        };
     }
 
     /** 파일 경로를 worktree 기준으로 변환. 격리가 없으면 원래 경로 그대로. */

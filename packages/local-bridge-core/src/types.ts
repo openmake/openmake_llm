@@ -17,6 +17,24 @@ export interface BridgeMsg {
     folder?: string;
     /** lsp_diagnostics — 진단할 파일들(base 기준 상대경로). */
     paths?: string[];
+    /** code_nav grep — 정규식 소스(디바이스가 길이 검증 후 컴파일). */
+    pattern?: string;
+    /** code_nav grep — 파일 글롭 필터('*.ts' 처럼 '/' 가 없으면 파일명에만 적용). */
+    glob?: string;
+    /** code_nav grep — 대소문자 무시. */
+    ignoreCase?: boolean;
+    /** code_nav grep — 매치 상한(디바이스 캡으로 다시 잘린다). */
+    maxResults?: number;
+}
+
+/** code_nav 결과 — 읽기 전용 코드 탐색(grep/files)의 공통 표현. */
+export interface BridgeCodeNav {
+    /** grep — "상대경로:줄번호:내용" 형태의 매치 줄. */
+    matches?: string[];
+    /** files — 파일별 줄 수(base 기준 상대경로). */
+    files?: { path: string; lines: number }[];
+    /** 캡·시간 예산에 걸려 결과가 잘렸는지. */
+    truncated?: boolean;
 }
 
 /** 편집 후 진단 1건 — 컴파일러/언어 서버 출력의 공통 표현. */
@@ -50,6 +68,8 @@ export interface BridgeResult {
     diagnostics?: BridgeDiagnostic[];
     /** 어떤 검사기가 돌았는지 — 'none' 이면 지원 도구가 없어 검사하지 않았다(진단 없음과 구분). */
     serverKind?: string;
+    /** code_nav 결과. */
+    codeNav?: BridgeCodeNav;
 }
 
 /**
