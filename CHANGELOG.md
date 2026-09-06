@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.1](https://github.com/openmake/openmake_llm/compare/v1.48.0...v1.48.1) (2026-09-06)
+
+
+### 🐛 버그 수정
+
+* **task-sandbox:** 자격증명 가드 리뷰 반영 — 목록 단일 출처·디렉토리 정합·셸 폴백 건너뛴 수 ([#779](https://github.com/openmake/openmake_llm/issues/779)) ([03b3482](https://github.com/openmake/openmake_llm/commit/03b34826c20d207dd13c109c8476deacfb5c745b))
+
 ## [1.48.0](https://github.com/openmake/openmake_llm/compare/v1.47.0...v1.48.0) (2026-09-06)
 
 
