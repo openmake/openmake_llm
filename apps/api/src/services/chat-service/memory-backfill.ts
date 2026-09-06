@@ -79,7 +79,8 @@ export async function backfillUserMemories(
             savedIds.push(row.id);
         }
         logger.info(`[Backfill] user ${userId}: ${saved} 저장 (세션 ${sessions.length}, 후보 ${candidates.length}, 중복 ${skippedDup})`);
-        if (saved > 0) auditMemoryWrite('memory.backfilled', userId, { count: saved, ids: savedIds, sessions: sessions.length, candidates: candidates.length, skippedDup });
+        // CLI 가 반환 직후 process.exit 하므로 await 필수(fire-and-forget 이면 audit 행이 유실된다).
+        if (saved > 0) await auditMemoryWrite('memory.backfilled', userId, { count: saved, ids: savedIds, sessions: sessions.length, candidates: candidates.length, skippedDup });
         if (fresh.length > saved) logger.warn(`[Backfill] cap ${MEMORY_EXTRACTION.maxCount} 도달 — 후보 ${fresh.length - saved}건 폐기 (user ${userId})`);
     }
 

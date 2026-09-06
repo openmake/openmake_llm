@@ -53,21 +53,21 @@ export async function extractLLMMemories(client: LLMClient, text: string): Promi
 /**
  * 자동 형성·백필의 audit 기록 — AuditService 가 SoT. 컨트롤러(설정 탭)만 감사하고 이 두 경로는
  * 빠져 있던 갭(Agent Memory Atlas 지적, 2026-09-07). 액션은 `memory.*` 접두를 유지해
- * scripts/memory-report.sh 의 `LIKE 'memory.%'` 집계에 그대로 잡힌다. fire-and-forget·fail-open.
+ * scripts/memory-report.sh 의 `LIKE 'memory.%'` 집계에 그대로 잡힌다. fail-open — 절대 reject 하지 않는다.
+ * 반환 Promise 를 서버 경로(autoFormMemories)는 버려도 되지만, **CLI 백필은 반드시 await** 해야 한다 —
+ * cli.ts 가 반환 직후 `process.exit(0)` 을 호출해 미완 INSERT 가 통째로 사라진다(/code-review 지적, 2026-09-07).
  */
-export function auditMemoryWrite(
+export async function auditMemoryWrite(
     action: 'memory.auto_created' | 'memory.backfilled',
     userId: string,
     details: Record<string, unknown>,
-): void {
-    void (async () => {
-        try {
-            const { getAuditService } = await import('../AuditService');
-            await getAuditService().logAudit({ action, userId, resourceType: 'user_memory', details });
-        } catch (e) {
-            logger.warn(`[audit] ${action} 기록 실패:`, e);
-        }
-    })();
+): Promise<void> {
+    try {
+        const { getAuditService } = await import('../AuditService');
+        await getAuditService().logAudit({ action, userId, resourceType: 'user_memory', details });
+    } catch (e) {
+        logger.warn(`[audit] ${action} 기록 실패:`, e);
+    }
 }
 
 /** PURE: 정규화 문자열. */
@@ -156,7 +156,7 @@ export async function autoFormMemories(params: { userId?: string; message: strin
         if (saved > 0) {
             logger.info(`[MemoryExtract] 자동 저장 ${saved}건 (user ${userId}, heur ${heur.length}/llm ${llm.length})`);
             // 컨트롤러 경로(memory.created)와 대칭 — 자동 생성 행도 감사에 남긴다(본문은 싣지 않음).
-            auditMemoryWrite('memory.auto_created', userId, { count: saved, rows: savedRows, heuristic: heur.length, llm: llm.length });
+            void auditMemoryWrite('memory.auto_created', userId, { count: saved, rows: savedRows, heuristic: heur.length, llm: llm.length });
         }
         // cap 도달로 버린 후보는 조용히 사라지지 않게 남긴다 — memory-report.sh 가 집계(퇴출 정책 도입 게이트).
         if (droppedAtCap > 0) logger.warn(`[MemoryExtract] cap ${MEMORY_EXTRACTION.maxCount} 도달 — 후보 ${droppedAtCap}건 폐기 (user ${userId})`);
