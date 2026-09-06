@@ -71,8 +71,11 @@ export async function walkFiles(baseAbs: string, startAbs: string, deadline: num
         const entries = await fsp.readdir(dir, { withFileTypes: true }).catch(() => []);
         for (const e of entries) {
             if (e.isSymbolicLink()) continue;                       // 심링크는 따라가지 않는다(스코프 탈출 차단)
+            // 제외 이름은 종류를 가리지 않는다 — git worktree 의 `.git` 은 디렉토리가 아니라
+            // gitdir 포인터 **파일**이라, 디렉토리만 걸러내면 목록에 섞여 들어온다(라이브 실측).
+            // 셸 폴백의 find -prune 은 이미 이름 기준이라 이렇게 해야 두 백엔드가 같은 결과를 낸다.
+            if (CODE_NAV_EXCLUDED_DIRS.includes(e.name)) continue;
             if (e.isDirectory()) {
-                if (CODE_NAV_EXCLUDED_DIRS.includes(e.name)) continue;
                 stack.push(path.join(dir, e.name));
             } else if (e.isFile()) {
                 if (files.length >= CODE_NAV_MAX_FILES) { truncated = true; break; }
