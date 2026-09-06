@@ -91,10 +91,12 @@ export async function walkFiles(baseAbs: string, startAbs: string, deadline: num
             // gitdir 포인터 **파일**이라, 디렉토리만 걸러내면 목록에 섞여 들어온다(라이브 실측).
             // 셸 폴백의 find -prune 은 이미 이름 기준이라 이렇게 해야 두 백엔드가 같은 결과를 낸다.
             if (CODE_NAV_EXCLUDED_DIRS.includes(e.name)) continue;
+            // 자격증명 이름은 파일·디렉토리 모두 건너뛴다(항목 1건으로 셈) — 셸 폴백의 find -prune·
+            // rg -g '!name' 도 디렉토리를 자르므로, 파일에만 걸면 두 백엔드 결과가 갈린다(리뷰 지적).
+            if (isSecretFile(e.name)) { skipped++; continue; }
             if (e.isDirectory()) {
                 stack.push(path.join(dir, e.name));
             } else if (e.isFile()) {
-                if (isSecretFile(e.name)) { skipped++; continue; }   // 자격증명은 훑지 않는다
                 if (files.length >= CODE_NAV_MAX_FILES) { truncated = true; break; }
                 files.push(rel(path.join(dir, e.name)));
             }
