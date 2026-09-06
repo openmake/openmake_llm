@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.45.3](https://github.com/openmake/openmake_llm/compare/v1.45.2...v1.45.3) (2026-09-06)
+
+
+### 🐛 버그 수정
+
+* **providers:** openai-compat 경로에 도구 이름 코덱 적용 — `server::tool` 을 provider 가 400 거절하던 결함 ([#769](https://github.com/openmake/openmake_llm/issues/769)) ([f325317](https://github.com/openmake/openmake_llm/commit/f325317cbe72e34e43fb8de1ef6df41740ec9afd))
+* 보안 리뷰 잔여 3건 — 전역 MCP env 래핑·REST history images·dangling 심링크 ([#771](https://github.com/openmake/openmake_llm/issues/771)) ([5bd30e0](https://github.com/openmake/openmake_llm/commit/5bd30e018530c6a7ecc2dc898b4f0d734419c24b))
+
 ## [1.45.2](https://github.com/openmake/openmake_llm/compare/v1.45.1...v1.45.2) (2026-09-05)
 
 
