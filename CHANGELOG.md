@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.50.3](https://github.com/openmake/openmake_llm/compare/v1.50.2...v1.50.3) (2026-09-07)
+
+
+### 🐛 버그 수정
+
+* **web:** 기본 모델 목록에 20B 컷 미적용(chatOnly) + 피커가 목록 밖 저장값을 "자동"으로 표시하던 문제 ([#791](https://github.com/openmake/openmake_llm/issues/791)) ([2dc855a](https://github.com/openmake/openmake_llm/commit/2dc855adee10063aedb013090dd40c13e3d58062))
+
 ## [1.50.2](https://github.com/openmake/openmake_llm/compare/v1.50.1...v1.50.2) (2026-09-07)
 
 
