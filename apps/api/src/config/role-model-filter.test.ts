@@ -1,4 +1,4 @@
-import { parseModelParamsB, isRoleAssignableModel, ROLE_MODEL_MIN_PARAMS_B } from './role-model-filter';
+import { parseModelParamsB, isRoleAssignableModel, ROLE_MODEL_MIN_PARAMS_B, isChatCapableModel } from './role-model-filter';
 
 describe('parseModelParamsB', () => {
     it('총 파라미터 우선 (35b-a3b → 35)', () => {
@@ -52,5 +52,17 @@ describe('isRoleAssignableModel', () => {
         expect(isRoleAssignableModel(m('local-llm:flux2-klein'))).toBe(false);
         expect(isRoleAssignableModel(m('nvidia:nvidia/nv-embed-v1'))).toBe(false);
         expect(isRoleAssignableModel(m('openrouter:some/whisper-large'))).toBe(false);
+    });
+});
+
+describe('isChatCapableModel (chatOnly — 컴포저/설정 기본 모델 목록)', () => {
+    it('임베딩/이미지/음성은 제외', () => {
+        expect(isChatCapableModel({ modelId: 'local-llm:bge-m3' })).toBe(false);
+        expect(isChatCapableModel({ modelId: 'x:flux-2' })).toBe(false);
+        expect(isChatCapableModel({ modelId: 'openrouter:openai/whisper-1' })).toBe(false);
+    });
+    it('20B 이하 소형 채팅 모델은 유지 — usableOnly 와 다른 점', () => {
+        expect(isChatCapableModel({ modelId: 'openrouter:meta-llama/llama-3.2-1b-instruct' })).toBe(true);
+        expect(isChatCapableModel({ modelId: 'bai:qwen3.8-flash' })).toBe(true);
     });
 });
