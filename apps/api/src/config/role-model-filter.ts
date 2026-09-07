@@ -43,6 +43,16 @@ export function parseModelParamsB(idOrName: string): number | null {
 }
 
 /**
+ * 채팅 가능한 모델인지 판정 — 축 ① 만(임베딩/이미지/음성/리랭커 제외). 컴포저·설정의 기본 모델
+ * 선택은 이 판정만 쓴다(`/api/models?chatOnly=1`, 2026-09-08). 종전엔 usableOnly(20B 컷 포함)를
+ * 같이 써서 소형 외부 모델(예: 8b)이 목록에서 빠지고, 컴포저의 "목록에 없으면 기본값" 보정에 걸렸다.
+ */
+export function isChatCapableModel(model: { modelId: string; name?: string }): boolean {
+    const hay = `${model.modelId} ${model.name ?? ''}`.toLowerCase();
+    return !ROLE_MODEL_EXCLUDE_PATTERNS.some((p) => hay.includes(p));
+}
+
+/**
  * 역할 배정에 노출할 모델인지 판정.
  * @param model modelId(fullId)·name·capabilities 를 가진 목록 항목
  */
@@ -51,10 +61,8 @@ export function isRoleAssignableModel(model: {
     name?: string;
     capabilities?: { streaming?: boolean; toolCalling?: boolean; vision?: boolean };
 }): boolean {
+    if (!isChatCapableModel(model)) return false;
     const hay = `${model.modelId} ${model.name ?? ''}`.toLowerCase();
-
-    // ① 채팅 불가 모델(임베딩/이미지/음성 등) 제외
-    if (ROLE_MODEL_EXCLUDE_PATTERNS.some((p) => hay.includes(p))) return false;
 
     // ② 20B 이하 제외 (파싱 불가 = 대형 프론티어 모델로 간주해 유지)
     const params = parseModelParamsB(hay);

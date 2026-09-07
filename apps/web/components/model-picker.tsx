@@ -48,26 +48,37 @@ export function ModelPicker({
       ? t("modelGroup.local")
       : (EXTERNAL_PROVIDER_LABELS[provider] ?? `🌐 ${provider}`);
 
+  // 저장값이 목록에 없는 경우(키 삭제·목록 로딩 전·provider 일시 실패) — 종전엔 "자동" 으로
+  // 표시돼 값이 바뀐 것처럼 보였고, provider 를 다시 고르면 onChange('default') 로 실제 초기화됐다.
+  // 값은 SoT 로 보존하고 `provider:model` 접두어에서 provider 를 유도해 "목록에 없음" 항목으로 보인다.
+  const orphan = useMemo(() => {
+    if (!value || value === "default" || models.some((m) => m.modelId === value)) return null;
+    const idx = value.indexOf(":");
+    const provider = idx > 0 ? value.slice(0, idx) : "local-llm";
+    return { modelId: value, provider, name: `${value} ${t("modelPicker.notInList")}` } as PickerModel;
+  }, [models, value, t]);
+  const allModels = useMemo(() => (orphan ? [...models, orphan] : models), [models, orphan]);
+
   // provider 목록 — local-llm 우선, 외부는 응답 등장 순서 유지
   const providers = useMemo(() => {
     const seen: string[] = [];
-    for (const m of models) if (!seen.includes(m.provider)) seen.push(m.provider);
+    for (const m of allModels) if (!seen.includes(m.provider)) seen.push(m.provider);
     return seen.sort((a, b) => (a === "local-llm" ? -1 : b === "local-llm" ? 1 : 0));
-  }, [models]);
+  }, [allModels]);
 
   const currentProvider = useMemo(() => {
     if (!value || value === "default") return PROVIDER_AUTO;
-    return models.find((m) => m.modelId === value)?.provider ?? PROVIDER_AUTO;
-  }, [models, value]);
+    return allModels.find((m) => m.modelId === value)?.provider ?? PROVIDER_AUTO;
+  }, [allModels, value]);
 
   // 현재 provider 의 모델 목록 (무료 우선 안정 정렬)
   const providerModels = useMemo(() => {
     if (currentProvider === PROVIDER_AUTO) return [];
-    return models
+    return allModels
       .filter((m) => m.provider === currentProvider)
       .slice()
       .sort((a, b) => (b.isFree ? 1 : 0) - (a.isFree ? 1 : 0));
-  }, [models, currentProvider]);
+  }, [allModels, currentProvider]);
 
   const searchable = providerModels.length > MODEL_SEARCH_THRESHOLD;
   const q = filter.trim().toLowerCase();
@@ -90,7 +101,7 @@ export function ModelPicker({
       return;
     }
     // 해당 provider 의 첫 모델(무료 우선)로 즉시 전환 — value 가 SoT 라 2단계도 동기화됨
-    const first = models
+    const first = allModels
       .filter((m) => m.provider === p)
       .slice()
       .sort((a, b) => (b.isFree ? 1 : 0) - (a.isFree ? 1 : 0))[0];

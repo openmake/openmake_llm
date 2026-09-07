@@ -195,8 +195,8 @@ export function Composer() {
   const currentUserId = useAppStore((s) => s.auth.currentUser?.id ?? null);
   const authResolved = useAppStore((s) => s.authResolved);
   const { data: modelsData } = useQuery({
-    queryKey: ["models", currentUserId ?? "guest"],
-    queryFn: () => fetchModels({ usableOnly: true }),
+    queryKey: ["models", "chat", currentUserId ?? "guest"],
+    queryFn: () => fetchModels({ chatOnly: true }),
     staleTime: 60_000,
   });
   const {
