@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.50.1](https://github.com/openmake/openmake_llm/compare/v1.50.0...v1.50.1) (2026-09-07)
+
+
+### 🐛 버그 수정
+
+* **eval:** 실패 케이스 응답 앞부분을 결과·[FAIL] 로그에 남긴다 — nightly 실패 원인 사후 분석 불가 해소 ([#787](https://github.com/openmake/openmake_llm/issues/787)) ([1ba75ab](https://github.com/openmake/openmake_llm/commit/1ba75abb718b3c6af016764e2614d7f24026c6c6))
+
 ## [1.50.0](https://github.com/openmake/openmake_llm/compare/v1.49.0...v1.50.0) (2026-09-07)
 
 
