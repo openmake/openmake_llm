@@ -26,6 +26,7 @@ import type { ExecutionPlan } from '../chat/profile-resolver';
 import type { UserContext } from '../mcp/user-sandbox';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { CHAT_ALWAYS_ON_TOOL_NAMES } from '../mcp/agent-task-tools';
+import { OPS_METRICS_TOOL_ENABLED, OPS_METRICS_INTENT_PATTERNS } from '../config/ops-metrics';
 import { MCP_META_TOOL_NAMES } from '../mcp/mcp-meta-tools';
 import { CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, MCP_PROGRESSIVE_DISCLOSURE_ENABLED, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS, PLAN_INTENT_PATTERNS, EXTENSION_IMPORT_INTENT_PATTERNS, CHAT_USER_MCP_BREADTH_SLOTS, CHAT_TOOL_INTENT_GATE_ENABLED, AGENT_TASK_INTENT_PATTERNS } from '../config/runtime-limits';
 import { applySkillCatalog as applySkillCatalogShared } from './skill-catalog-tool';
@@ -266,6 +267,15 @@ export class ChatService {
             if (ie && !finalCombined.some((x) => x.function.name === ie.function.name)) {
                 finalCombined = [...finalCombined, ie];
                 logger.info('[Extension] 확장 설치 의도 — import_extension_from_git 강제 포함');
+            }
+        }
+        // 운영 지표 도구는 관리자 + 운영 질의 의도 턴에만(상시 노출 금지 — 프롬프트 다이어트).
+        // allTools 는 이미 역할 필터를 지났으므로 비관리자에겐 애초에 없다(2차 방어는 실행 게이트).
+        if (OPS_METRICS_TOOL_ENABLED && OPS_METRICS_INTENT_PATTERNS.some((re) => re.test(reqCtx.message ?? ''))) {
+            const om = allTools.find((x) => x.function.name === 'ops_metrics');
+            if (om && !finalCombined.some((x) => x.function.name === om.function.name)) {
+                finalCombined = [...finalCombined, om];
+                logger.info('[OpsMetrics] 운영 질의 의도 — ops_metrics 포함');
             }
         }
         return this.applySkillCatalog(finalCombined, allTools, reqCtx);
