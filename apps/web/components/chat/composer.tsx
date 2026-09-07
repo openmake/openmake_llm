@@ -190,8 +190,12 @@ export function Composer() {
 
 
   // 로컬 vLLM + 등록된 외부 LLM(OpenRouter 등) 통합 모델 목록
+  // 외부 provider 모델은 인증 사용자에게만 실리므로 사용자 단위로 캐시한다 — 로그아웃/로그인
+  // 전환 시 게스트 목록(로컬 1개)이 60초간 재사용돼 아래 보정이 저장 선택을 지우던 결함.
+  const currentUserId = useAppStore((s) => s.auth.currentUser?.id ?? null);
+  const authResolved = useAppStore((s) => s.authResolved);
   const { data: modelsData } = useQuery({
-    queryKey: ["models"],
+    queryKey: ["models", currentUserId ?? "guest"],
     queryFn: () => fetchModels({ usableOnly: true }),
     staleTime: 60_000,
   });
@@ -324,14 +328,17 @@ export function Composer() {
   // 모델 목록 로드 시 현재 selectedModel 이 목록에 없으면 defaultModel 로 동기화.
   // 'default'(자동) 는 유효한 센티널 — 백엔드 ws-chat-handler 가 자동 선택으로 처리하므로
   // 구체 모델로 강제 치환하지 않는다 (치환 시 설정의 "자동" 선택이 조용히 풀리는 버그).
+  // ⚠️ 보정은 **인증 확정 + 로그인 사용자의 목록**일 때만. 게스트/미확정 상태의 목록은 외부 모델이
+  // 빠져 있어(서버가 인증 사용자에게만 실음) 저장된 외부 모델 선택을 로컬 기본값으로 덮어쓰고
+  // localStorage 까지 갱신했다 — 설정 저장 후 재로그인하면 모델이 초기화되던 결함(2026-09-08).
   useEffect(() => {
-    if (!modelsData) return;
+    if (!modelsData || !authResolved || !currentUserId) return;
     if (selectedModel !== "default" && !modelsData.models.some((m) => m.modelId === selectedModel)) {
       setSelectedModel(modelsData.defaultModel);
     }
     // selectedModel 변동마다 재실행 불필요 — 목록 로드 시점에만 보정
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelsData]);
+  }, [modelsData, authResolved, currentUserId]);
 
   // 재생성 요청(MessageList) 처리 — 소켓은 이 컴포넌트만 보유하므로 여기서 히스토리를
   // fromIndex 이전으로 되돌린 뒤 원 질문을 재전송한다(사용자 말풍선은 sendChat 이 다시 추가).
