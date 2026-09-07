@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.49.1](https://github.com/openmake/openmake_llm/compare/v1.49.0...v1.49.1) (2026-09-07)
+
+
+### 🐛 버그 수정
+
+* **export:** skill_manifests·custom_agents 조회의 옛 컬럼 참조 수정 — [#783](https://github.com/openmake/openmake_llm/issues/783) 의 failedCategories 가 배포 직후 드러낸 조용한 실패 2건 ([#785](https://github.com/openmake/openmake_llm/issues/785)) ([9ffeca8](https://github.com/openmake/openmake_llm/commit/9ffeca8c4c2bbad08864257ebb40b9998270ec52))
+* **memory:** GDPR export user_memories 조회 결함 + 부분 export 관측 + 자동 추출·백필 audit + 주입 격리 테스트 ([#783](https://github.com/openmake/openmake_llm/issues/783)) ([0e62e47](https://github.com/openmake/openmake_llm/commit/0e62e4758c82623c5684093d9fd4eb156f0c3add))
+
 ## [1.49.0](https://github.com/openmake/openmake_llm/compare/v1.48.1...v1.49.0) (2026-09-06)
 
 
