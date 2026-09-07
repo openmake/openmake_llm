@@ -209,8 +209,9 @@ export default function SettingsPage() {
   const setPrivacyPrefs = useAppStore((s) => s.setPrivacyPrefs);
   // 게스트(비로그인)는 기본 모델만 사용 가능 — 외부 provider(Ollama/OpenRouter)는 가입 이용자 전용.
   const isGuest = !useAppStore((s) => s.auth.currentUser);
+  const currentUserIdForModels = useAppStore((s) => s.auth.currentUser?.id ?? null);
   const { data: modelsData } = useQuery({
-    queryKey: ["models"],
+    queryKey: ["models", currentUserIdForModels ?? "guest"],
     queryFn: () => fetchModels({ usableOnly: true }),
     staleTime: 60_000,
   });

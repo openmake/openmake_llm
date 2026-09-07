@@ -113,6 +113,11 @@ async function syncAuthInner(): Promise<boolean> {
         if (typeof p.saveHistory === "boolean") patch.saveHistory = p.saveHistory;
         if (typeof p.memoryLearning === "boolean") patch.memoryLearning = p.memoryLearning;
         if (Object.keys(patch).length > 0) useAppStore.getState().setPrivacyPrefs(patch);
+        // 기본 모델도 서버가 SoT — 종전엔 설정 페이지를 열 때만 복원돼, 로그아웃 중 컴포저가
+        // 로컬 기본값으로 덮어쓴 selectedModel 이 재로그인 뒤에도 그대로였다(2026-09-08 신고).
+        if (typeof p.defaultModel === "string" && p.defaultModel.length > 0) {
+          useAppStore.getState().setSelectedModel(p.defaultModel);
+        }
       })
       .catch(() => {
         /* 미설정/실패 — 기본값(true) 유지 */
