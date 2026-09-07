@@ -23,6 +23,11 @@ const logger = createLogger('ResponseEvaluator');
  */
 export type ResponseGenerator = (query: string, language?: string) => Promise<string>;
 
+/** 실패 케이스 결과에 남기는 응답 앞부분 길이 (env OMK_EVAL_RESPONSE_PREVIEW_CHARS, 기본 600). */
+const RESPONSE_PREVIEW_CHARS = Number(process.env.OMK_EVAL_RESPONSE_PREVIEW_CHARS ?? '600');
+/** [FAIL] 로그 한 줄에 싣는 응답 길이 — 리포트에서 바로 읽기 위한 짧은 미리보기. */
+const FAIL_LOG_PREVIEW_CHARS = 160;
+
 /**
  * 단일 response-pattern 케이스 평가
  *
@@ -64,7 +69,13 @@ export async function evaluateResponseCase(
             category: goldenCase.category,
             passed,
             failureReason,
-            actual: { responseLength: response.length, missing, forbidden },
+            // 실패 케이스는 응답 앞부분을 남긴다 — 길이만 저장하면 nightly 실패(2026-09-04~07
+            // response-003/012 반복)의 원인을 사후에 알 수 없었다(라이브 재현은 통과 → 모델 편차인지
+            // 게이트 결함인지 구분 불가). 통과 케이스는 종전대로 길이만.
+            actual: {
+                responseLength: response.length, missing, forbidden,
+                ...(passed ? {} : { responsePreview: rawResponse.slice(0, RESPONSE_PREVIEW_CHARS) }),
+            },
             expected: {
                 mustContain: goldenCase.mustContain ?? [],
                 mustContainAny: anyList,
@@ -103,7 +114,9 @@ export async function runResponseEvaluation(
         const result = await evaluateResponseCase(c, generator);
         results.push(result);
         if (!result.passed) {
-            logger.warn(`[FAIL] ${c.id}: ${result.failureReason}`);
+            const preview = typeof result.actual?.responsePreview === 'string'
+                ? ` | 응답=${JSON.stringify(result.actual.responsePreview.slice(0, FAIL_LOG_PREVIEW_CHARS))}` : '';
+            logger.warn(`[FAIL] ${c.id}: ${result.failureReason}${preview}`);
         }
     }
 
