@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.50.2](https://github.com/openmake/openmake_llm/compare/v1.50.1...v1.50.2) (2026-09-07)
+
+
+### 🐛 버그 수정
+
+* **web:** 설정 저장 후 재로그인하면 기본 모델이 초기화되던 결함 — 게스트 목록 보정·미복원 2겹 ([#789](https://github.com/openmake/openmake_llm/issues/789)) ([575218d](https://github.com/openmake/openmake_llm/commit/575218d7a9897b494b1b826211dd18e67b5ce5ef))
+
 ## [1.50.1](https://github.com/openmake/openmake_llm/compare/v1.50.0...v1.50.1) (2026-09-07)
 
 
