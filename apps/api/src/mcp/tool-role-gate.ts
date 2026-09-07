@@ -10,6 +10,7 @@
  */
 import { isAdminRole } from '../data/user-manager';
 import { MCP_NAMESPACE_SEPARATOR } from './types';
+import { BUILTIN_TOOL_REQUIRED_ROLE } from '../config/ops-metrics';
 
 export const DEFAULT_RESTRICTED_SERVERS = 'Python REPL:admin,Playwright Browser:user';
 
@@ -32,9 +33,17 @@ export function parseRestrictedServers(): Map<string, number> {
     return m;
 }
 
-/** 네임스페이스 도구 이름("서버명::도구")이 역할 미달로 제한되면 true. */
+/**
+ * 도구 이름이 역할 미달로 제한되면 true.
+ * - "서버명::도구"(외부 MCP): `MCP_RESTRICTED_SERVERS` 서버 단위.
+ * - 네임스페이스 없는 내장 도구: `BUILTIN_TOOL_REQUIRED_ROLE`(config/ops-metrics) 선언 — 2026-09-07 추가.
+ *   종전엔 내장 도구에 선언적 게이트가 없어 핸들러 안 분기뿐이었다.
+ */
 export function isToolRestrictedForRole(toolName: string, role?: string): boolean {
-    if (!toolName.includes(MCP_NAMESPACE_SEPARATOR)) return false;
+    if (!toolName.includes(MCP_NAMESPACE_SEPARATOR)) {
+        const required = BUILTIN_TOOL_REQUIRED_ROLE[toolName];
+        return required !== undefined && roleLevel(role) < roleLevel(required);
+    }
     const restricted = parseRestrictedServers();
     if (restricted.size === 0) return false;
     const userLevel = roleLevel(role);
