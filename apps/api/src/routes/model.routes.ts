@@ -26,7 +26,7 @@ import { ExternalKeysRepository } from '../data/repositories/external-keys-repo'
 import { getPool } from '../data/models/unified-database';
 import { buildFullModelId } from '../providers/i-provider';
 import { getProviderCatalogEntry } from '../config/external-providers';
-import { isRoleAssignableModel } from '../config/role-model-filter';
+import { isRoleAssignableModel, isChatCapableModel } from '../config/role-model-filter';
 import { resolveExternalModels } from '../services/external-models-catalog';
 
 const router = Router();
@@ -175,13 +175,18 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
     // UI 는 이 값으로 "이미지 생성 가능" 표시만 한다 (채팅 셀렉터 옵션 아님). 미설정 시 null.
     const imageModel = process.env.IMAGE_GEN_MODEL?.trim() || null;
 
-    // 사용 가능 모델 필터 — 채팅 불가(임베딩/이미지) + 20B 이하 제외.
-    // 역할 배정 드롭다운·기본 모델 선택(설정/컴포저)에서 usableOnly=1 로 호출.
-    // (forRoleAssignment 는 하위호환 별칭)
+    // 목록 필터 2종 —
+    //   usableOnly=1 (역할 배정 드롭다운·커스텀 에이전트): 채팅 불가(임베딩/이미지) + 20B 이하 제외.
+    //   chatOnly=1   (컴포저·설정의 기본 모델 선택): 채팅 불가만 제외 — 20B 컷을 여기 적용하면
+    //                소형 외부 모델 선택이 목록에서 빠져 컴포저 보정이 기본값으로 되돌린다(2026-09-08).
+    // (forRoleAssignment 는 usableOnly 의 하위호환 별칭)
     const usableOnly = req.query.usableOnly === '1' || req.query.forRoleAssignment === '1';
+    const chatOnly = req.query.chatOnly === '1';
     const outModels = usableOnly
         ? models.filter((m) => isRoleAssignableModel({ modelId: m.modelId, name: m.name, capabilities: m.capabilities as { streaming?: boolean; toolCalling?: boolean; vision?: boolean } }))
-        : models;
+        : chatOnly
+            ? models.filter((m) => isChatCapableModel({ modelId: m.modelId, name: m.name }))
+            : models;
 
     res.json(success({
         defaultModel: buildFullModelId('local-llm', defaultChat),

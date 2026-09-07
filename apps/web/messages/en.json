@@ -159,7 +159,8 @@
       "modelAria": "Select model",
       "searchPlaceholder": "Search models…",
       "count": "Showing {shown}/{total}",
-      "noMatch": "No matches"
+      "noMatch": "No matches",
+      "notInList": "(not in list)"
     },
     "dataExport": {
       "title": "Export my data",

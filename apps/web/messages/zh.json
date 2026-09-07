@@ -159,7 +159,8 @@
       "modelAria": "选择模型",
       "searchPlaceholder": "搜索模型…",
       "count": "显示 {shown}/{total} 个",
-      "noMatch": "无匹配结果"
+      "noMatch": "无匹配结果",
+      "notInList": "（不在列表中）"
     },
     "dataExport": {
       "title": "导出我的数据",

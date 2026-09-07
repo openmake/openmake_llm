@@ -159,7 +159,8 @@
       "modelAria": "モデルを選択",
       "searchPlaceholder": "モデルを検索…",
       "count": "{shown}/{total}件を表示",
-      "noMatch": "該当なし"
+      "noMatch": "該当なし",
+      "notInList": "（一覧にありません）"
     },
     "dataExport": {
       "title": "データをエクスポート",
