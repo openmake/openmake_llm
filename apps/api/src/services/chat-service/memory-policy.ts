@@ -8,7 +8,9 @@
  *
  * 규칙: 서버 설정 false 면 무조건 OFF. 서버 설정이 없거나 true 면 클라이언트 플래그가
  * 명시 false 일 때만 OFF(클라이언트는 더 제한할 수만 있고 켤 수는 없다). 조회 실패는
- * fail-open(클라이언트 플래그 기준) — 설정 조회 장애가 채팅을 막지 않는다.
+ * **fail-closed(OFF)** — 프라이버시 토글은 값을 모를 때 켜지면 안 된다(2026-09-08 외부 리뷰
+ * 지적 반영: 종전엔 클라이언트 플래그로 폴백해 설정 조회 장애가 사용자가 끈 메모리를 다시
+ * 켰다). OFF 는 이 턴의 메모리 주입·자동 저장만 건너뛰고 채팅 자체는 막지 않는다.
  *
  * @module services/chat-service/memory-policy
  */
@@ -34,7 +36,7 @@ export async function resolveMemoryLearning(userId: string | undefined, clientFl
         const prefs = await new UserRepository(getPool()).getPreferences(userId);
         return effectiveMemoryLearning(prefs.memoryLearning, clientFlag);
     } catch (e) {
-        logger.warn('memoryLearning 설정 조회 실패 — 클라이언트 플래그로 폴백:', e);
-        return effectiveMemoryLearning(undefined, clientFlag);
+        logger.warn('memoryLearning 설정 조회 실패 — 이 턴은 메모리 OFF(fail-closed):', e);
+        return false;
     }
 }

@@ -37,9 +37,10 @@ describe('resolveMemoryLearning', () => {
         expect(await resolveMemoryLearning('u1')).toBe(true);
         expect(await resolveMemoryLearning('u1', false)).toBe(false);
     });
-    it('조회 실패는 fail-open (클라이언트 플래그 기준)', async () => {
+    it('조회 실패는 fail-closed — 클라이언트가 true 를 보내도 OFF (설정 장애가 끈 메모리를 다시 켜지 않는다)', async () => {
         getPreferences.mockRejectedValue(new Error('db down'));
-        expect(await resolveMemoryLearning('u1')).toBe(true);
+        expect(await resolveMemoryLearning('u1')).toBe(false);
+        expect(await resolveMemoryLearning('u1', true)).toBe(false);
         expect(await resolveMemoryLearning('u1', false)).toBe(false);
     });
 });
