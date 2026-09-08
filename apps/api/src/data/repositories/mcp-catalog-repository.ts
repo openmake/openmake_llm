@@ -119,7 +119,7 @@ export class McpCatalogRepository {
     ): Promise<UserMcpServerRow> {
         const id = `mcp_${userId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const args = this.renderArgs(template, payload.args);
-        const env = this.encryptEnv(template, payload.env);
+        const env = this.encryptEnv(template, this.applyEnvDefaults(template, payload.env));
         const url = this.renderUrl(template, payload.args);
         // command_template 의 첫 토큰만 command 컬럼에 저장 (예: "npx -y firecrawl-mcp" → "npx").
         // 나머지 토큰은 renderArgs 가 args 로 분리. child_process.spawn 은 command 가 단일 실행파일이어야 함.
@@ -542,6 +542,21 @@ export class McpCatalogRepository {
             url = url.replace(`{${k}}`, encodeURIComponent(String(v)));
         }
         return url || null;
+    }
+
+    /**
+     * env_schema properties 의 `default` 를 미입력 키에 채운다 (설치 시 1회, 값은 평문 그대로).
+     * 설치 폼은 `required` 키만 입력받으므로, 서버가 동작하는 데 필요하지만 사용자가 알 필요 없는
+     * 고정 env(예: readonly 샌드박스에서 SQLite 캐시 경로를 캐시 볼륨으로 돌리는 HOME)를 카탈로그가
+     * 선언할 수 있다. 사용자가 명시한 값이 우선한다.
+     */
+    private applyEnvDefaults(template: McpCatalogTemplate, env: Record<string, string>): Record<string, string> {
+        const props = (template.env_schema as { properties?: Record<string, { default?: unknown }> }).properties ?? {};
+        const merged: Record<string, string> = { ...env };
+        for (const [k, p] of Object.entries(props)) {
+            if (merged[k] === undefined && typeof p?.default === 'string') merged[k] = p.default;
+        }
+        return merged;
     }
 
     private encryptEnv(template: McpCatalogTemplate, env: Record<string, string>): Record<string, string> {

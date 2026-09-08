@@ -63,6 +63,37 @@ const mkRow = (overrides: Record<string, unknown>) => ({
 });
 
 describe('MCPLifecycleSupervisor', () => {
+
+    test('safeSpawn: 같은 서버 동시 spawn 은 1회만 기동하고 같은 client 를 돌려준다 (from-catalog 즉시 spawn + ensureUserServers 경합)', async () => {
+        const userPool = new UserMCPPool();
+        const repo = mkRepo();
+        repo.getServerById.mockImplementation(async (id: string) => mkRow({ id, lifecycle: 'per_session' }));
+        const { factory, created } = mkClientFactory();
+        // connect 를 늦춰 두 호출이 모두 "풀에 없음" 상태에서 진입하게 한다
+        factory.mockImplementation((config: { id: string }) => {
+            const client = {
+                connect: jest.fn(() => new Promise<void>(r => setTimeout(r, 20))),
+                disconnect: jest.fn().mockResolvedValue(undefined),
+                listTools: jest.fn().mockResolvedValue({ tools: [] }),
+                callTool: jest.fn(),
+                on: jest.fn(),
+                getPid: jest.fn().mockReturnValue(MOCK_PID),
+            };
+            created.push({ serverId: config.id, client });
+            return client;
+        });
+        const sv = new MCPLifecycleSupervisor({ userPool, repo, clientFactory: factory });
+
+        const [a, b] = await Promise.all([sv.spawnUserServer('u-1', 's-1'), sv.spawnUserServer('u-1', 's-1')]);
+
+        expect(factory).toHaveBeenCalledTimes(1);
+        expect(a).toBe(b);
+        expect(userPool.has('u-1', 's-1')).toBe(true);
+        // 완료 후엔 in-flight 가 비워져 stale evict → respawn 경로가 막히지 않는다
+        await sv.killUserServer('u-1', 's-1');
+        await sv.spawnUserServer('u-1', 's-1');
+        expect(factory).toHaveBeenCalledTimes(2);
+    });
     test('onUserLogin: auto_spawn=true + lifecycle=per_session 만 spawn', async () => {
         const userPool = new UserMCPPool();
         const repo = mkRepo();
