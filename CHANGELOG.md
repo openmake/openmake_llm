@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.52.1](https://github.com/openmake/openmake_llm/compare/v1.52.0...v1.52.1) (2026-09-08)
+
+
+### 🐛 버그 수정
+
+* **memory:** memoryLearning 설정 조회 실패 시 fail-closed — 장애가 사용자가 끈 메모리를 다시 켜지 않게 ([#802](https://github.com/openmake/openmake_llm/issues/802)) ([446b049](https://github.com/openmake/openmake_llm/commit/446b049484d47b0cede96b32e85c145528abd3cd))
+
 ## [1.52.0](https://github.com/openmake/openmake_llm/compare/v1.51.2...v1.52.0) (2026-09-08)
 
 
