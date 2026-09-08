@@ -89,6 +89,8 @@ export async function chatTurnWithRoleFallback(
         userId: string;
         /** 재시도 발생 시 관측 훅(스텝 기록용) — 동기 호출, 실패해도 재시도를 막지 않을 것 */
         onRetry?: (info: { attempt: number; maxAttempts: number; error: string }) => void;
+        /** 스트리밍 토큰 훅 — 호출이 중간에 끊겨도(시간 예산 abort) 부분 본문을 건지기 위한 관측 경로. */
+        onToken?: (token: string) => void;
     },
 ): Promise<Awaited<ReturnType<LLMClient['chat']>>> {
     // openai SDK 요청 타임아웃을 task 총 예산에 맞춰 늘린다(파생 클라이언트, baseUrl/model 유지).
@@ -96,7 +98,7 @@ export async function chatTurnWithRoleFallback(
     // 넘기면 "Request timed out" 으로 task 가 죽는다. 실제 한계는 p.signal(잔여 예산)이 governor.
     // SDK 요청 타임아웃 상한은 최대 예산(예약)에 맞춘다 — 실제 한계는 p.signal(잔여 예산)이 governor.
     const call = () => state.client.derive({ timeout: AGENT_TASK_LIMITS.SCHEDULE_TOTAL_TIMEOUT_MS })
-        .chat(p.conversation, undefined, undefined, {
+        .chat(p.conversation, undefined, p.onToken, {
             tools: p.tools, signal: p.signal, think: false,
         });
     const maxRetries = Math.max(0, AGENT_TASK_LIMITS.TURN_RETRY_MAX);
