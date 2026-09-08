@@ -1622,6 +1622,16 @@ export const AGENT_TASK_LIMITS = {
     /** 작업 전체 타임아웃 (ms) — AGENT_TASK_TIMEOUT_MS 환경변수로 오버라이드.
      *  기본 10분: HTML/디자인 등 장문 deliverable 생성은 단일 LLM 호출이 수 분 걸릴 수 있음. */
     TOTAL_TIMEOUT_MS: parseInt(process.env.AGENT_TASK_TIMEOUT_MS || '', 10) || 10 * 60 * 1000,
+    /** 턴당 시간 예산(ms) — 실효 총 타임아웃은 max(TOTAL_TIMEOUT_MS, turnCeiling × 이 값).
+     *  근거(2026-09-09 실측 10770ab5): 로컬 qwen3.8-27b 는 턴당 20~30초라 32턴 작업은 13분 이상인데
+     *  총 예산이 10분 고정이라, 턴 상한엔 못 미친 채 시간 예산이 먼저 소진돼 마무리 턴 중간에
+     *  잘렸다. 턴 상한과 시간 예산을 정합시킨다. AGENT_TASK_TURN_TIME_BUDGET_MS 로 오버라이드(기본 30초). */
+    TURN_TIME_BUDGET_MS: parseInt(process.env.AGENT_TASK_TURN_TIME_BUDGET_MS || '', 10) || 30_000,
+    /** 마무리 턴 최소 보장 시간(ms) — 잔여 예산이 이보다 적어도 마무리 턴의 LLM 호출만은 이 시간을
+     *  준다. 마무리 턴은 도구 없이 장문(보고서)을 생성하는 턴이라 10 tok/s 로 수천 토큰이면 수 분이
+     *  걸리는데, 잔여 예산 2분으로 끊기면 산출물이 0 이 된다(위 실측: 2회 실행 모두 같은 지점 실패).
+     *  AGENT_TASK_FINAL_TURN_MIN_MS 로 오버라이드(기본 5분). */
+    FINAL_TURN_MIN_MS: parseInt(process.env.AGENT_TASK_FINAL_TURN_MIN_MS || '', 10) || 5 * 60 * 1000,
     /** 누적 토큰 상한 (input + output) — runaway 토큰 폭주 방지. AGENT_MAX_TOTAL_TOKENS 로 오버라이드.
      *  멀티턴 도구 작업은 매 턴 prompt_tokens(전체 컨텍스트)를 누적 카운트하므로 200k 는
      *  3턴 만에 소진됐다(샌드박스 도구 작업이 terminate 전에 실패). 기본 1M 으로 상향. */

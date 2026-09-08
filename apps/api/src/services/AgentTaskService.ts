@@ -39,6 +39,7 @@ import { currentPlanStepIndex } from './task-sandbox/planning';
 import { applyTurnResourceGates, shouldAdoptFinalTurnAnswer, type TurnGateFlags } from './agent-task/turn-gate';
 import { buildFileContext } from './chat-service/attach-context';
 import { AgentTaskAbort, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
+import { callAgentTurnWithBudget, AgentTaskTurnTimeout } from './agent-task/turn-call';
 import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
 import { finalizeTask } from './agent-task/finalize';
 import { buildJudgeToolEvidence } from './agent-task/goal-judge';
@@ -98,8 +99,10 @@ export class AgentTaskService {
         const signal = this.abortController.signal;
         const startedAt = Date.now();
         // 총 타임아웃 예산 — 예약(무인) task 는 input.totalTimeoutMs 로 더 긴 예산을 받는다(기본 전역값).
-        const totalTimeoutMs = input.totalTimeoutMs ?? AGENT_TASK_LIMITS.TOTAL_TIMEOUT_MS;
         const turnCeiling = Math.min(maxTurns, AGENT_TASK_LIMITS.MAX_TURNS_CEILING);
+        // 턴 상한과 정합(근거는 runtime-limits TURN_TIME_BUDGET_MS) — 명시/예약 예산이 더 크면 그대로.
+        const totalTimeoutMs = Math.max(input.totalTimeoutMs ?? AGENT_TASK_LIMITS.TOTAL_TIMEOUT_MS,
+            turnCeiling * AGENT_TASK_LIMITS.TURN_TIME_BUDGET_MS);
 
         const userCtx: UserContext = { userId, role: userRole };
 
@@ -338,16 +341,12 @@ export class AgentTaskService {
                 // per-call abort: 작업 잔여 예산을 호출에도 바인딩 — 응답이 hang 되면
                 // 턴 사이 assertWithinLimits 까지 도달하지 못하므로 호출 자체를 끊는다.
                 // 승인 대기 누적(pausedMs)은 예산에서 제외(4-1 pause-aware).
-                const remainingMs = Math.max(
-                    1_000,
-                    totalTimeoutMs - (Date.now() - startedAt - pausedMs)
-                );
-                const callSignal = AbortSignal.any([signal, AbortSignal.timeout(remainingMs)]);
-
-                // reasoning OFF + 외부 role 모델 tools 4xx 로컬 폴백 — agent-task/role-client
-                const result = await chatTurnWithRoleFallback(roleState, {
-                    conversation, tools: effectiveTools, signal: callSignal,
+                // 시간 예산 바인딩·마무리 턴 최소 보장·부분 본문 보존 — agent-task/turn-call
+                const { result, callSignal } = await callAgentTurnWithBudget({
+                    roleState, conversation, tools: effectiveTools, signal,
                     taskId, userId: String(userId),
+                    totalTimeoutMs, elapsedActiveMs: Date.now() - startedAt - pausedMs,
+                    finalTurn: !!finalTurnReason,
                     // 일시적 오류 재시도를 스텝으로 남긴다 — 발동 빈도·사유를 DB 로 집계(fail-open).
                     onRetry: ({ attempt, maxAttempts, error }) => {
                         const note = `일시적 LLM 오류 — 재시도 ${attempt}/${maxAttempts}: ${error}`;
@@ -576,6 +575,10 @@ export class AgentTaskService {
             await update({
                 status: aborted ? 'cancelled' : 'failed',
                 error: aborted ? kind : msg,
+                // 시간 예산으로 끊긴 마무리 턴의 부분 본문은 결과로 남긴다(종전엔 result NULL).
+                ...(err instanceof AgentTaskTurnTimeout && err.partialContent
+                    ? { result: `[시간 예산 초과로 중단된 부분 답변]\n\n${err.partialContent}` }
+                    : {}),
             }).catch((e) => logger.warn(`[AgentTask] 상태 갱신 실패: ${e}`));
             logger.warn(`[AgentTask] ${aborted ? '취소' : '실패'}: ${taskId} — ${kind}: ${msg}`);
         } finally {
