@@ -1578,7 +1578,8 @@
         "label": "Thinking Summary",
         "description": "Model that generates thinking headline summaries"
       }
-    }
+    },
+    "notInList": "(not in list)"
   },
   "adminModelRoles": {
     "title": "Model Roles Admin",

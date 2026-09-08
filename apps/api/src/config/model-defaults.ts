@@ -82,7 +82,13 @@ export const MODEL_CAPABILITY_PRESETS: Readonly<Record<string, ModelCapabilities
  */
 /** 모델 가용성/자격 프로브 공통 상수 — 과금·부하 최소화를 위한 1토큰 최소 호출 */
 export const MODEL_PROBE = {
-    MAX_TOKENS: 1,
+    /**
+     * 프로브(가용성·역할 배정 검증·로컬 도구/thinking 프로브) 1회 출력 상한.
+     * ⚠️ 1 로 두면 B.AI 가 `max_tokens must be greater than 2` 400 을 돌려줘 가용성 프로브는
+     * 영구 '보류', 역할 배정은 항상 거절됐다(2026-09-08 라이브 — 같은 모델이 채팅에선 정상).
+     * 8 은 실측(B.AI·NVIDIA·hasa) 전부 200 이고 비용 차이는 무시할 수준.
+     */
+    MAX_TOKENS: 8,
 } as const;
 
 export const FALLBACK_CAPABILITIES: ModelCapabilities = {
