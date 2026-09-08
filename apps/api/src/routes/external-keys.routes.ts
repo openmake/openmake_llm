@@ -102,6 +102,9 @@ router.get('/',
                 enabled: entry.enabled,
                 sort_order: entry.sortOrder,
                 help_text: entry.helpText,
+                homepage: entry.homepage,
+                key_url: entry.keyUrl ?? null,
+                logo: entry.logo,
                 user_key: userKey
                     ? {
                           display_name: userKey.displayName,

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Open AI Service Hub">
+  <g fill="none" stroke="#0E9AA7" stroke-width="3" stroke-linecap="round">
+    <path d="M24 18V10M24 30v8M18 24h-8M30 24h8"/>
+  </g>
+  <circle cx="24" cy="24" r="6" fill="none" stroke="#0E9AA7" stroke-width="3"/>
+  <g fill="#0E9AA7">
+    <circle cx="24" cy="8" r="3.2"/><circle cx="24" cy="40" r="3.2"/>
+    <circle cx="8" cy="24" r="3.2"/><circle cx="40" cy="24" r="3.2"/>
+  </g>
+</svg>
