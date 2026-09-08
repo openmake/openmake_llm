@@ -1483,7 +1483,14 @@
     "validateOk": "Verification succeeded",
     "validateFailed": "Verification failed: {error}",
     "usageSummary": "Last {days}d · {calls} calls · {tokens} tokens",
-    "error": "Error"
+    "error": "Error",
+    "stripLabel": "Works with",
+    "connect": "Connect",
+    "connectOAuth": "Connect with sign-in",
+    "connected": "Connected",
+    "keyPage": "API key page",
+    "signInPage": "Sign-in page",
+    "homepage": "Homepage"
   },
   "apiKeys": {
     "title": "API Keys",

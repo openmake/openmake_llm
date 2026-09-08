@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="OpenRouter">
+  <g fill="none" stroke="#5B62F0" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 24h7c3 0 4.5-4 7.5-4h6"/>
+    <path d="M6 24h7c3 0 4.5 8 7.5 8h6"/>
+    <path d="M26.5 20h6"/>
+    <path d="M33 16.5 37.5 20 33 23.5"/>
+    <path d="M33 28.5 37.5 32 33 35.5"/>
+  </g>
+  <circle cx="6" cy="24" r="3.4" fill="#5B62F0"/>
+</svg>
