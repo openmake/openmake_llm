@@ -75,6 +75,8 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
     private readonly repo: SupervisorDeps['repo'];
     private readonly clientFactory: ClientFactory;
     private readonly chatOwners = new Map<string, string>();
+    /** 진행 중 spawn(user:server) — 동시 호출이 같은 Promise 를 공유해 컨테이너 이중 기동을 막는다 */
+    private readonly inFlightSpawns = new Map<string, Promise<ExternalMCPClient>>();
 
     constructor(deps: SupervisorDeps) {
         this.userPool = deps.userPool;
@@ -226,7 +228,23 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
         await this.userPool.closeAll();
     }
 
-    private async safeSpawn(userId: string, serverId: string): Promise<ExternalMCPClient> {
+    /**
+     * 동시 호출 dedupe — from-catalog 즉시 spawn 과 채팅의 ensureUserServers 가 같은 서버를
+     * 동시에 spawn 하면 둘 다 풀 검사(get)를 통과해 컨테이너 2개가 뜨고, userPool.add 가
+     * 먼저 등록된 client 를 disconnect 없이 덮어써 프로세스가 누수됐다(2026-09-08 운영 실측 —
+     * 같은 serverId 로 `spawn 완료` 2줄, pid 2개). 진행 중 Promise 를 키(user:server)로
+     * 공유해 두 번째 호출자가 같은 client 를 받게 한다.
+     */
+    private safeSpawn(userId: string, serverId: string): Promise<ExternalMCPClient> {
+        const key = `${userId}:${serverId}`;
+        const pending = this.inFlightSpawns.get(key);
+        if (pending) return pending;
+        const p = this.doSpawn(userId, serverId).finally(() => { this.inFlightSpawns.delete(key); });
+        this.inFlightSpawns.set(key, p);
+        return p;
+    }
+
+    private async doSpawn(userId: string, serverId: string): Promise<ExternalMCPClient> {
         // 멱등 가드 — 이미 풀에 "살아있는" 클라이언트가 있으면 재spawn 하지 않는다
         // (로그인 반복 시 자식 프로세스 중복 생성/누수 방지).
         // self-heal: transport 가 exit/error 로 죽었다고 표시된(status!=='connected')

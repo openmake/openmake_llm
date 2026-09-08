@@ -113,3 +113,49 @@ describe('McpCatalogRepository.decryptEnvForSpawn', () => {
         await expect(repoWith(null).decryptEnvForSpawn('s1')).resolves.toEqual({});
     });
 });
+
+describe('McpCatalogRepository.createFromCatalog — env_schema default', () => {
+    const template = {
+        id: 'mcp-korean-dart',
+        transport_type: 'stdio',
+        command_template: 'npx -y korean-dart-mcp@0.10.1',
+        args_schema: {},
+        env_schema: {
+            required: ['DART_API_KEY'],
+            properties: {
+                DART_API_KEY: { secret: true },
+                HOME: { default: '/home/node/.cache/korean-dart' },
+            },
+        },
+        is_enabled: true,
+    } as never;
+    const payload = (env: Record<string, string>) =>
+        ({ template_id: 'mcp-korean-dart', name: 'dart', visibility: 'user_private', args: {}, env, auto_spawn: true }) as never;
+    const makePool = () => {
+        const queryMock = jest.fn().mockImplementation((_sql: string, params: unknown[]) =>
+            Promise.resolve({ rows: [{ id: String(params[0]), env: JSON.parse(String(params[6])) }] }));
+        return { queryMock, pool: { query: queryMock } as unknown as Pool };
+    };
+
+    it('미입력 키에 default 를 채우고 secret 은 암호화한다', async () => {
+        const { queryMock, pool } = makePool();
+        await new McpCatalogRepository(pool).createFromCatalog(payload({ DART_API_KEY: 'k' }), template, '3');
+        const saved = JSON.parse(String(queryMock.mock.calls[0]![1]![6]));
+        expect(saved.HOME).toBe('/home/node/.cache/korean-dart');
+        expect(decryptToken(saved.DART_API_KEY)).toBe('k');
+    });
+
+    it('사용자가 명시한 값은 default 로 덮지 않는다', async () => {
+        const { queryMock, pool } = makePool();
+        await new McpCatalogRepository(pool).createFromCatalog(payload({ DART_API_KEY: 'k', HOME: '/home/node/.cache/x' }), template, '3');
+        const saved = JSON.parse(String(queryMock.mock.calls[0]![1]![6]));
+        expect(saved.HOME).toBe('/home/node/.cache/x');
+    });
+
+    it('default 가 없는 템플릿은 입력 env 만 저장한다 (기존 동작)', async () => {
+        const { queryMock, pool } = makePool();
+        const plain = { ...(template as object), env_schema: { required: [], properties: { X: { secret: false } } } } as never;
+        await new McpCatalogRepository(pool).createFromCatalog(payload({}), plain, '3');
+        expect(JSON.parse(String(queryMock.mock.calls[0]![1]![6]))).toEqual({});
+    });
+});
