@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.51.1](https://github.com/openmake/openmake_llm/compare/v1.51.0...v1.51.1) (2026-09-08)
+
+
+### 🐛 버그 수정
+
+* **model-roles:** 외부 provider 역할 배정 점검 — B.AI 프로브 max_tokens 하한 + 목록 밖 배정값 표시 ([#796](https://github.com/openmake/openmake_llm/issues/796)) ([5c6d428](https://github.com/openmake/openmake_llm/commit/5c6d428e0bd81df351cf8735b7b4c133d0a15270))
+
 ## [1.51.0](https://github.com/openmake/openmake_llm/compare/v1.50.3...v1.51.0) (2026-09-08)
 
 
