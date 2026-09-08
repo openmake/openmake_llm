@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.52.2](https://github.com/openmake/openmake_llm/compare/v1.52.1...v1.52.2) (2026-09-08)
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 마무리 턴 시간 예산 보장·timeout 분류·부분 본문 보존 + 접기 스텁 재읽기 유도 제거 ([#804](https://github.com/openmake/openmake_llm/issues/804)) ([eb630f2](https://github.com/openmake/openmake_llm/commit/eb630f28fed545796b39f423eadceb889acd9428))
+
 ## [1.52.1](https://github.com/openmake/openmake_llm/compare/v1.52.0...v1.52.1) (2026-09-08)
 
 
