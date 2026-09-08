@@ -40,6 +40,15 @@ export interface ExternalProviderCatalogEntry {
     sortOrder: number;
     /** 키 등록 안내 — UI 도움말 텍스트 */
     helpText: string;
+    /** 공급자 홈페이지 — 설정 화면 로고/이름 클릭 목적지 폴백 */
+    homepage: string;
+    /**
+     * API 키 발급(또는 로그인) 페이지 — 설정 화면 "키 발급" 링크. OAuth 전용 provider 는
+     * 앱 안의 디바이스 플로우가 인증 경로라 생략(homepage 로 폴백).
+     */
+    keyUrl?: string;
+    /** apps/web public 의 로고 경로(www 와 같은 자산, 48×48 viewBox 단색 마크) */
+    logo: string;
     /**
      * 지원 인증 방식. Phase 1: 모두 ['api_key'].
      * Phase 2 에서 ['api_key', 'oauth'] 로 확장 가능 (OpenAI ChatGPT Plus/Pro 등).
@@ -104,6 +113,9 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             '300+ 모델(GPT, Claude, Gemini, Llama 등)을 단일 endpoint 로 라우팅합니다. ' +
             '모델 ID 는 "openai/gpt-5", "anthropic/claude-opus-4.5", "google/gemini-2.5-pro" 등 ' +
             'OpenRouter 의 namespaced 형식을 그대로 사용합니다.',
+        homepage: 'https://openrouter.ai',
+        keyUrl: 'https://openrouter.ai/settings/keys',
+        logo: '/images/providers/openrouter.svg',
         authMethods: ['api_key'] as const,
         fallbackModels: [
             { id: 'openai/gpt-5',                      displayName: 'GPT-5',                       isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: false } },
@@ -130,6 +142,8 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             '표시되는 코드를 OpenAI 인증 페이지에 입력하세요. ' +
             '⚠️ 비공식 통합: 반드시 본인 계정만 사용해야 하며, OpenAI 정책 변경 시 ' +
             '중단될 수 있습니다.',
+        homepage: 'https://chatgpt.com',
+        logo: '/images/providers/chatgpt.svg',
         authMethods: ['oauth'] as const,
         // Codex 카탈로그 조회 실패 시 폴백 — 계정 플랜에 따라 실제 목록은 다를 수 있음.
         fallbackModels: [
@@ -149,6 +163,9 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             'Ollama Cloud (https://ollama.com/settings/keys) 의 API 키를 입력하세요. ' +
             '클라우드 호스팅 대형 모델을 OpenAI 호환 API 로 사용합니다. ' +
             '모델 ID 는 "deepseek-v3.1:671b-cloud" 처럼 :cloud 태그 형식입니다.',
+        homepage: 'https://ollama.com',
+        keyUrl: 'https://ollama.com/settings/keys',
+        logo: '/images/providers/ollama-cloud.svg',
         authMethods: ['api_key'] as const,
         fallbackModels: [
             { id: 'deepseek-v3.1:671b-cloud', displayName: 'DeepSeek V3.1 671B (Cloud)', isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true } },
@@ -170,6 +187,9 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             'NVIDIA GPU 클라우드가 서빙하는 오픈소스 모델(Llama, Qwen, Nemotron 등)을 ' +
             'OpenAI 호환 API 로 사용합니다. 모델 ID 는 "meta/llama-3.3-70b-instruct" 형식입니다. ' +
             '주의: NVIDIA 의 모델 목록 API 는 인증이 없어 키 유효성은 첫 채팅에서 확인됩니다.',
+        homepage: 'https://build.nvidia.com',
+        keyUrl: 'https://build.nvidia.com/settings/api-keys',
+        logo: '/images/providers/nvidia-nim.svg',
         authMethods: ['api_key'] as const,
         // 2026-09-05 공개 /v1/models(81개) 대조 — llama-3.3-70b·qwen3-next-80b 는 410 end-of-life,
         // llama-4-maverick 은 목록 부재라 제거. 아래는 목록에 살아 있는 채팅용 모델만.
@@ -201,6 +221,9 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             'OpenAI 호환 API 로 사용합니다. 모델 ID 는 "qwen3-coder" 처럼 접두사 없는 형식입니다. ' +
             '주의: 모델 목록 API 는 인증이 없어 키 유효성은 첫 채팅에서 확인됩니다. ' +
             '개발키는 분당 요청·일일 토큰 한도가 낮아(초과 시 429) 체험·검증 용도입니다.',
+        homepage: 'https://open.hasa.re.kr',
+        keyUrl: 'https://open.hasa.re.kr/account/dev-keys',
+        logo: '/images/providers/hasa.svg',
         authMethods: ['api_key'] as const,
         // 2026-09-02 공개 카탈로그(/api/catalog) 기준 — 개발키 허용 + 채팅 모달리티만 수록.
         fallbackModels: [
@@ -230,6 +253,9 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             '무료 표시(isFree) 모델은 2026-09-04 실측 기준 크레딧 잔액 0 인 키로도 호출되는 것만 남겼습니다 — ' +
             '그 외 모델은 예치(deposit)·크레딧이 필요해 403/400 이 납니다. 모델 ID 는 "qwen3.8-flash" 처럼 접두사 없는 형식입니다. ' +
             '연속 호출 시 429 가 잦으니 병렬 사용은 피하세요.',
+        homepage: 'https://b.ai',
+        keyUrl: 'https://b.ai',
+        logo: '/images/providers/bai.svg',
         authMethods: ['api_key'] as const,
         // 2026-09-02 실측(무료 키·잔액 0): 45개 중 5개만 200. tools 는 5개 전부, vision 은 qwen3.8-flash·
         // glm-5.3-flash·deepseek-v4-flash-vision-exp 만(32px 이상 이미지), 5개 전부 reasoning_content 반환.

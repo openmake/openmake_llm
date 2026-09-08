@@ -1483,7 +1483,14 @@
     "validateOk": "验证成功",
     "validateFailed": "验证失败：{error}",
     "usageSummary": "近{days}天 · {calls}次调用 · {tokens} 令牌",
-    "error": "错误"
+    "error": "错误",
+    "stripLabel": "可以接入",
+    "connect": "连接",
+    "connectOAuth": "登录连接",
+    "connected": "已连接",
+    "keyPage": "API 密钥页面",
+    "signInPage": "认证页面",
+    "homepage": "官网"
   },
   "apiKeys": {
     "title": "API 密钥",

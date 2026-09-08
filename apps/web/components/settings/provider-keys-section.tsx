@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import {
@@ -12,6 +13,7 @@ import {
   Save,
   AlertTriangle,
   ShieldCheck,
+  ExternalLink,
 } from "lucide-react";
 import {
   Button,
@@ -49,6 +51,10 @@ interface ProviderEntry {
   auth_methods?: Array<"api_key" | "oauth">;
   default_base_url: string | null;
   help_text?: string;
+  /** 공급자 홈페이지 · API 키 발급(또는 로그인) 페이지 · 로고 — 백엔드 카탈로그(external-providers.ts) 제공 */
+  homepage?: string;
+  key_url?: string | null;
+  logo?: string;
   user_key: UserKey | null;
 }
 
@@ -105,6 +111,8 @@ export function ProviderKeysSection() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  /** 연결 스트립에서 고른 공급자 — 폼을 그 공급자로 열어 준다(키 입력 또는 OAuth 로그인) */
+  const [formProviderId, setFormProviderId] = useState<string | null>(null);
   const [usage, setUsage] = useState<Record<string, ProviderUsage>>({});
   const [usageDays, setUsageDays] = useState(30);
   const [validating, setValidating] = useState<Record<string, boolean>>({});
@@ -204,9 +212,24 @@ export function ProviderKeysSection() {
 
   return (
     <div className="space-y-6">
+      {/* 연결 가능한 공급자 스트립 — www 의 "이런 AI를 연결합니다" 와 같은 로고·이름.
+          칩을 누르면 그 공급자로 키 입력(OAuth 는 로그인) 폼이 열리고, 옆 링크는 공급자의
+          키 발급/인증 페이지로 간다(key_url, 없으면 homepage). */}
+      {!loading && providers.length > 0 && (
+        <ProviderStrip
+          providers={providers}
+          onConnect={(id) => {
+            setFormProviderId(id);
+            setShowForm(true);
+          }}
+        />
+      )}
+
       {showForm && (
         <AddKeyForm
+          key={formProviderId ?? "default"}
           providers={providers}
+          initialProviderId={formProviderId}
           onClose={() => setShowForm(false)}
           onSaved={async () => {
             setShowForm(false);
@@ -272,7 +295,13 @@ export function ProviderKeysSection() {
                       return (
                         <tr key={p.provider_id}>
                           <Td className="text-fg">
-                            <div className="font-medium">{p.display_name}</div>
+                            <div className="flex items-center gap-2 font-medium">
+                              {p.logo && (
+                                <Image src={p.logo} alt="" width={20} height={20} className="h-5 w-5 shrink-0" />
+                              )}
+                              <span>{p.display_name}</span>
+                              <ProviderSiteLink provider={p} />
+                            </div>
                             <div className="text-xs text-faint">
                               {t(SDK_LABEL_KEY[p.sdk_type])}
                             </div>
@@ -358,16 +387,19 @@ export function ProviderKeysSection() {
 /* ── 인라인 키 추가 폼 ──────────────────────────────────── */
 function AddKeyForm({
   providers,
+  initialProviderId,
   onClose,
   onSaved,
 }: {
   providers: ProviderEntry[];
+  /** 연결 스트립에서 고른 공급자(없으면 첫 항목) */
+  initialProviderId?: string | null;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
 }) {
   const t = useTranslations("apiKeys");
   const [providerId, setProviderId] = useState(
-    providers[0]?.provider_id ?? "anthropic",
+    initialProviderId ?? providers[0]?.provider_id ?? "anthropic",
   );
   const [displayName, setDisplayName] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -456,6 +488,11 @@ function AddKeyForm({
                   </option>
                 ))}
               </select>
+              {selected && (
+                <span className="mt-1 block">
+                  <ProviderSiteLink provider={selected} withLabel />
+                </span>
+              )}
               {selected?.help_text && (
                 <span className="mt-1 block text-xs leading-relaxed text-muted">
                   {selected.help_text}
@@ -650,6 +687,91 @@ function OAuthConnect({
         {t("oauthLogin")}
       </Button>
       {oauthError && <p className="text-xs text-danger">{oauthError}</p>}
+    </div>
+  );
+}
+
+/* ── 공급자 사이트 링크 (키 발급 페이지 > 홈페이지) ─────────── */
+function ProviderSiteLink({
+  provider,
+  withLabel = false,
+}: {
+  provider: ProviderEntry;
+  withLabel?: boolean;
+}) {
+  const pt = useTranslations("providerKeys");
+  const href = provider.key_url || provider.homepage;
+  if (!href) return null;
+  const isOAuth =
+    !!provider.auth_methods?.includes("oauth") &&
+    !provider.auth_methods.includes("api_key");
+  const label = isOAuth ? pt("signInPage") : provider.key_url ? pt("keyPage") : pt("homepage");
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={label}
+      aria-label={`${provider.display_name} — ${label}`}
+      className="inline-flex items-center gap-1 text-xs font-normal text-accent hover:underline"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {withLabel && label}
+      <ExternalLink className="h-3.5 w-3.5" />
+    </a>
+  );
+}
+
+/* ── 연결 가능한 공급자 스트립 ────────────────────────────── */
+function ProviderStrip({
+  providers,
+  onConnect,
+}: {
+  providers: ProviderEntry[];
+  onConnect: (providerId: string) => void;
+}) {
+  const pt = useTranslations("providerKeys");
+  return (
+    <div>
+      <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.14em] text-muted">
+        {pt("stripLabel")}
+      </p>
+      <ul className="flex flex-wrap gap-2">
+        {providers.map((p) => {
+          const connected = !!p.user_key;
+          const isOAuth =
+            !!p.auth_methods?.includes("oauth") && !p.auth_methods.includes("api_key");
+          return (
+            <li key={p.provider_id}>
+              <div
+                className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${
+                  connected ? "border-accent/40 bg-accent/5" : "border-border bg-surface"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => onConnect(p.provider_id)}
+                  title={isOAuth ? pt("connectOAuth") : pt("connect")}
+                  className="flex items-center gap-2 text-left"
+                >
+                  {p.logo && (
+                    <Image src={p.logo} alt="" width={24} height={24} className="h-6 w-6 shrink-0" />
+                  )}
+                  <span className="text-sm font-medium text-fg">{p.display_name}</span>
+                  {connected ? (
+                    <Badge tone="success">{pt("connected")}</Badge>
+                  ) : (
+                    <span className="text-xs text-muted">
+                      {isOAuth ? pt("connectOAuth") : pt("connect")}
+                    </span>
+                  )}
+                </button>
+                <ProviderSiteLink provider={p} />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

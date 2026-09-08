@@ -1483,7 +1483,14 @@
     "validateOk": "검증 성공",
     "validateFailed": "검증 실패: {error}",
     "usageSummary": "최근 {days}일 · {calls}회 호출 · {tokens} 토큰",
-    "error": "오류"
+    "error": "오류",
+    "stripLabel": "이런 AI를 연결합니다",
+    "connect": "연결",
+    "connectOAuth": "로그인으로 연결",
+    "connected": "연결됨",
+    "keyPage": "API 키 발급 페이지",
+    "signInPage": "인증 페이지",
+    "homepage": "홈페이지"
   },
   "apiKeys": {
     "title": "API 키",

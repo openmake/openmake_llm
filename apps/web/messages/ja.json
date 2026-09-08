@@ -1483,7 +1483,14 @@
     "validateOk": "検証に成功しました",
     "validateFailed": "検証に失敗しました: {error}",
     "usageSummary": "直近{days}日 · {calls}回呼び出し · {tokens}トークン",
-    "error": "エラー"
+    "error": "エラー",
+    "stripLabel": "つながるAI",
+    "connect": "接続",
+    "connectOAuth": "ログインで接続",
+    "connected": "接続済み",
+    "keyPage": "APIキー発行ページ",
+    "signInPage": "認証ページ",
+    "homepage": "ホームページ"
   },
   "apiKeys": {
     "title": "APIキー",

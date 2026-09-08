@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Ollama Cloud">
+  <path d="M15.5 33a8 8 0 0 1-.7-15.97 10 10 0 0 1 19.02 2.2A7.4 7.4 0 0 1 33 33Z" fill="none" stroke="#5B6778" stroke-width="3" stroke-linejoin="round"/>
+  <g fill="none" stroke="#5B6778" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m19 41 3.5-3.5L19 34"/>
+    <path d="M27 41h5"/>
+  </g>
+</svg>
