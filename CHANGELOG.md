@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.51.0](https://github.com/openmake/openmake_llm/compare/v1.50.3...v1.51.0) (2026-09-08)
+
+
+### ✨ 기능
+
+* **mcp:** OpenDART(금융감독원 전자공시) MCP 카탈로그 시드(115) + env_schema default + 동시 spawn dedupe ([#793](https://github.com/openmake/openmake_llm/issues/793)) ([3d75a31](https://github.com/openmake/openmake_llm/commit/3d75a3148c2b613affd14978f66d9502939c0fbc))
+* **settings:** 모델&응답 API 키 — 공급자 로고 스트립 + 키 발급/인증 페이지 링크 (www "이런 AI를 연결합니다" 정합) ([#794](https://github.com/openmake/openmake_llm/issues/794)) ([7cce200](https://github.com/openmake/openmake_llm/commit/7cce200e2b8422102dd6a6a70a7794ea378b61e3))
+
 ## [1.50.3](https://github.com/openmake/openmake_llm/compare/v1.50.2...v1.50.3) (2026-09-07)
 
 
