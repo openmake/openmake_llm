@@ -200,7 +200,7 @@ export default function AdminSystemSettingsPage() {
           (admin/alerts 등과 동일 관용구 — 누락 시 뷰포트 아래 내용 접근 불가) */}
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         <div className="space-y-6">
-      {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+      {error && <p className="text-sm text-danger" role="alert">{error}</p>}
       {restartKeys.length > 0 && (
         <div className="flex items-start gap-2 rounded-lg border border-warn/40 bg-warn-soft p-3 text-sm" role="status">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warn" aria-hidden />
@@ -221,7 +221,7 @@ export default function AdminSystemSettingsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-sm text-muted-foreground">{t(`groups.${group}.description`)}</p>
+              <p className="text-sm text-muted">{t(`groups.${group}.description`)}</p>
               {items.map((s) => (
                 <SettingRow key={s.key} setting={s} busy={busyKey === s.key} onSave={save} onReset={reset} />
               ))}
@@ -230,7 +230,7 @@ export default function AdminSystemSettingsPage() {
         );
       })}
 
-      <p className="text-xs text-muted-foreground">{t("priorityNote")}</p>
+      <p className="text-xs text-muted">{t("priorityNote")}</p>
         </div>
       </div>
     </>

@@ -105,8 +105,8 @@ function ServerKeyForm({ providers, onSaved }: {
           {t("keyForm.save")}
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">{t("keyForm.dailyLimitHelp")}</p>
-      {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+      <p className="text-xs text-muted">{t("keyForm.dailyLimitHelp")}</p>
+      {error && <p className="text-sm text-danger" role="alert">{error}</p>}
     </div>
   );
 }
@@ -179,7 +179,7 @@ export default function AdminModelRolesPage() {
       <PageHeader title={t("title")} description={t("description")} />
 
       <AdminTabs />
-      {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+      {error && <p className="text-sm text-danger" role="alert">{error}</p>}
 
       <Card>
         <CardHeader>
@@ -189,7 +189,7 @@ export default function AdminModelRolesPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">{t("serverKeys.description")}</p>
+          <p className="text-sm text-muted">{t("serverKeys.description")}</p>
           {serverKeys && serverKeys.keys.length > 0 && (
             <Table>
               <thead>
@@ -233,7 +233,7 @@ export default function AdminModelRolesPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">{t("globalRoles.description")}</p>
+          <p className="text-sm text-muted">{t("globalRoles.description")}</p>
           {(roles?.roles ?? []).map((role) => (
             <div key={role} className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center">
               <div className="flex min-w-36 items-center gap-2">
@@ -254,7 +254,7 @@ export default function AdminModelRolesPage() {
               </Button>
             </div>
           ))}
-          <p className="text-xs text-muted-foreground">{t("globalRoles.cacheNote")}</p>
+          <p className="text-xs text-muted">{t("globalRoles.cacheNote")}</p>
         </CardContent>
       </Card>
     </div>
