@@ -1578,7 +1578,8 @@
         "label": "思考摘要",
         "description": "生成思考过程标题摘要的模型"
       }
-    }
+    },
+    "notInList": "（不在列表中）"
   },
   "adminModelRoles": {
     "title": "角色模型管理",
