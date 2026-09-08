@@ -1578,7 +1578,8 @@
         "label": "생각 요약",
         "description": "생각 과정 헤드라인을 생성하는 모델"
       }
-    }
+    },
+    "notInList": "(목록에 없음)"
   },
   "adminModelRoles": {
     "title": "역할 모델 관리",

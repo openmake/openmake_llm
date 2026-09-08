@@ -153,6 +153,16 @@ export function ModelRolesSection() {
                       onChange={(e) => void handleChange(role, e.target.value)}
                     >
                       <option value={DEFAULT_VALUE}>{t("defaultOption")}</option>
+                      {/* 저장된 배정이 usableOnly 목록(20B 이하·채팅 불가 제외) 밖이면 — 예: 요약 역할에
+                          gpt-oss-20b 를 배정한 뒤 — <select> 가 첫 옵션 "기본(자동)" 을 보여 배정이 없는
+                          것처럼 오인된다(2026-09-08 라이브: 배정됨 배지는 뜨는데 값은 기본). 값을 보존하는
+                          옵션을 덧붙여 실제 배정을 표시한다(model-picker 의 "(목록에 없음)" 과 같은 규칙). */}
+                      {current !== DEFAULT_VALUE &&
+                        !models.some((m) => m.modelId === current) && (
+                          <option value={current}>
+                            {current} {t("notInList")}
+                          </option>
+                        )}
                       {models.map((m) => (
                         <option key={m.modelId} value={m.modelId}>
                           {m.name}

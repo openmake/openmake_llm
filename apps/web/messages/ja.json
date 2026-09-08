@@ -1578,7 +1578,8 @@
         "label": "思考要約",
         "description": "思考プロセスのヘッドラインを生成するモデル"
       }
-    }
+    },
+    "notInList": "（一覧にない）"
   },
   "adminModelRoles": {
     "title": "ロールモデル管理",
