@@ -16,7 +16,7 @@
  */
 import { type LLMClient } from '../llm';
 import type { ChatMessage, ToolDefinition } from '../llm/types';
-import { initAgentRoleState, chatTurnWithRoleFallback, defaultAgentClient } from './agent-task/role-client';
+import { initAgentRoleState, defaultAgentClient } from './agent-task/role-client';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { ensureUserMcpForTask } from '../mcp/lifecycle-hooks';
 import { getUnifiedDatabase } from '../data/models/unified-database';
