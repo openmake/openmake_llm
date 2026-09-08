@@ -102,17 +102,17 @@ export function ModelRolesSection() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground">{t("description")}</p>
-        <p className="text-xs text-muted-foreground">{t("externalNote")}</p>
+        <p className="text-sm text-muted">{t("description")}</p>
+        <p className="text-xs text-muted">{t("externalNote")}</p>
 
         {error && (
-          <p className="text-sm text-destructive" role="alert">
+          <p className="text-sm text-danger" role="alert">
             {error}
           </p>
         )}
 
         {loading ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 text-sm text-muted">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             {t("loading")}
           </div>
@@ -137,16 +137,16 @@ export function ModelRolesSection() {
                         </Badge>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted">
                       {t(`roles.${role}.description`)}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     {saving && (
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden />
+                      <Loader2 className="h-4 w-4 animate-spin text-muted" aria-hidden />
                     )}
                     <select
-                      className="h-9 min-w-52 rounded-md border bg-background px-2 text-sm"
+                      className="h-9 min-w-52 rounded-md border border-border-strong bg-surface px-2 text-sm text-fg outline-none focus:border-accent"
                       value={current}
                       disabled={saving}
                       aria-label={t(`roles.${role}.label`)}
@@ -186,7 +186,7 @@ export function ModelRolesSection() {
               );
             })}
             {roles.length === 0 && !error && (
-              <p className="text-sm text-muted-foreground">{t("empty")}</p>
+              <p className="text-sm text-muted">{t("empty")}</p>
             )}
           </div>
         )}
