@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.51.2](https://github.com/openmake/openmake_llm/compare/v1.51.1...v1.51.2) (2026-09-08)
+
+
+### 🐛 버그 수정
+
+* **web:** 역할별 모델 배정 select 가 흰 배경·회색 글자로 열리던 문제 — 미정의 색 클래스 교체 ([#798](https://github.com/openmake/openmake_llm/issues/798)) ([9cb426e](https://github.com/openmake/openmake_llm/commit/9cb426e7383b32868bcc78048d3bbd08f5bda306))
+
 ## [1.51.1](https://github.com/openmake/openmake_llm/compare/v1.51.0...v1.51.1) (2026-09-08)
 
 
