@@ -86,7 +86,7 @@ export default function AdminSchedulesPage() {
       <PageHeader title={t("title")} description={t("description")} />
 
       <AdminTabs />
-      {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+      {error && <p className="text-sm text-danger" role="alert">{error}</p>}
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -103,7 +103,7 @@ export default function AdminSchedulesPage() {
         </CardHeader>
         <CardContent>
           {schedules.length === 0 && !loading ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">{t("empty")}</p>
+            <p className="py-8 text-center text-sm text-muted">{t("empty")}</p>
           ) : (
             <Table>
               <thead>
