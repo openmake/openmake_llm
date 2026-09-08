@@ -28,6 +28,9 @@ describe('foldOldToolResults', () => {
         expect(tools[0].content).toContain('bash');
         expect(tools[0].content).toContain('turn0');
         expect(tools[0].content.startsWith(FOLD_MARKER)).toBe(true);
+        // 재읽기 유도 금지 — "다시 호출하세요" 문구가 같은 파일 25턴 반복 읽기를 유도했다(2026-09-09 실측)
+        expect(tools[0].content).not.toContain('다시 호출');
+        expect(tools[0].content).toContain('다시 읽지 마세요');
     });
 
     it('아직 keepTurns 를 넘는 턴이 없으면 아무 것도 접지 않는다', () => {

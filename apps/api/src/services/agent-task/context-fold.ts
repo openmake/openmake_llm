@@ -43,8 +43,11 @@ export function isFoldedToolResult(content: string): boolean {
 function buildStub(toolName: string | undefined, original: string, headChars: number): string {
     const head = original.slice(0, headChars).replace(/\s+$/, '');
     const ellipsis = original.length > headChars ? '…' : '';
-    return `${FOLD_MARKER} ${toolName ?? 'tool'} 결과 ${original.length}자 — 앞부분만 남김. `
-        + '원문이 다시 필요하면 같은 도구를 다시 호출하세요.\n'
+    // ⚠️ "원문이 필요하면 다시 호출하세요" 류 문구 금지 — 2026-09-09 실측(10770ab5): 그 문구가
+    // 같은 파일을 25턴 동안 반복해 읽는 루프를 유도했다(접힌 구간을 매번 다시 읽고 또 접힘).
+    // 이미 처리한 내용임을 알리고, 필요한 요점은 메모로 남기게 한다.
+    return `${FOLD_MARKER} ${toolName ?? 'tool'} 결과 ${original.length}자 — 이미 읽고 처리한 내용이라 앞부분만 남김. `
+        + '같은 내용을 다시 읽지 마세요. 나중에 필요한 요점은 지금 메모 파일(예: notes.md)에 적어 두세요.\n'
         + head + ellipsis;
 }
 
