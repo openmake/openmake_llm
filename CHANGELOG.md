@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.52.0](https://github.com/openmake/openmake_llm/compare/v1.51.2...v1.52.0) (2026-09-08)
+
+
+### ✨ 기능
+
+* **mcp:** 공공데이터포털(data.go.kr) MCP 서버 4종을 카탈로그에 시드(116) ([#800](https://github.com/openmake/openmake_llm/issues/800)) ([f880798](https://github.com/openmake/openmake_llm/commit/f880798eeb10d5c97f23f63fdd3c5786215176ed))
+
 ## [1.51.2](https://github.com/openmake/openmake_llm/compare/v1.51.1...v1.51.2) (2026-09-08)
 
 
