@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { RotateCcw, Send, Square } from "lucide-react";
+import { Brain, RotateCcw, Send, Square } from "lucide-react";
 import { ModelPicker, type PickerModel } from "@/components/model-picker";
 import { Markdown } from "@/components/chat/markdown";
 import { fetchModels } from "@/lib/models-api";
@@ -214,6 +214,8 @@ export function CompareView() {
   }, [modelA, modelB]);
 
   const [text, setText] = useState("");
+  // Thinking 토글 — 두 레인에 같은 값으로 실린다(모델 차이만 비교되도록 다른 변수는 고정).
+  const [thinking, setThinking] = useState(false);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
 
   const anyStreaming = laneA.streaming || laneB.streaming;
@@ -224,8 +226,8 @@ export function CompareView() {
     const prompt = text.trim();
     if (!prompt || !bothConnected || anyStreaming) return;
     // 같은 틱에 두 레인으로 — 서버는 lane 접미사로 스트림을 분리해 서로를 끊지 않는다.
-    laneA.send(prompt, modelA);
-    laneB.send(prompt, modelB);
+    laneA.send(prompt, modelA, { thinking });
+    laneB.send(prompt, modelB, { thinking });
     setText("");
     const ta = taRef.current;
     if (ta) ta.style.height = "auto";
@@ -284,14 +286,30 @@ export function CompareView() {
             className="block w-full resize-none bg-transparent px-4 pt-2.5 text-sm text-fg outline-none placeholder:text-muted"
           />
           <div className="flex items-center justify-between gap-2 px-2.5 pb-2.5 pt-1">
-            <button
-              type="button"
-              onClick={reset}
-              className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted transition hover:bg-surface-2 hover:text-fg"
-            >
-              <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-              {t("reset")}
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={reset}
+                className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-muted transition hover:bg-surface-2 hover:text-fg"
+              >
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                {t("reset")}
+              </button>
+              {/* Thinking 토글 — 컴포저의 모드 칩과 같은 시각 언어(켜짐=accent 테두리). */}
+              <button
+                type="button"
+                onClick={() => setThinking((v) => !v)}
+                aria-pressed={thinking}
+                title={thinking ? t("thinkingOff") : t("thinkingOn")}
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition hover:opacity-80",
+                  thinking ? "border-accent bg-accent-soft text-accent" : "border-border text-muted",
+                )}
+              >
+                <Brain className="h-3.5 w-3.5" aria-hidden />
+                {t("thinkingToggle")}
+              </button>
+            </div>
             <div className="flex items-center gap-1.5">
               {/* 같은 모델을 고른 경우(목록이 하나뿐일 때 포함) — 비교가 성립하지 않음을 알린다. */}
               {modelA === modelB && (
