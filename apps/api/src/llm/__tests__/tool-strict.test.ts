@@ -14,7 +14,7 @@ function load(value?: string) {
     jest.resetModules();
     const mod = require('../tool-strict') as typeof import('../tool-strict');
     const sp = require('../stream-parser') as typeof import('../stream-parser');
-    return { apply: mod.applyLocalToolStrict, toOpenAITools: sp.toOpenAITools };
+    return { apply: mod.applyLocalToolStrict, strip: mod.stripUnresolvableRefs, toOpenAITools: sp.toOpenAITools };
 }
 
 const tool = (name: string, strict?: boolean): ToolDefinition => ({
@@ -76,5 +76,85 @@ describe('applyLocalToolStrict', () => {
         expect(out).not.toBe(input);
         expect(input[0].function.strict).toBeUndefined();
         expect(out?.[0].function.parameters).toBe(input[0].function.parameters);
+    });
+});
+
+/** 해결 불가 $ref — 남겨두면 문법 강제 시 upstream 이 요청 전체를 거부한다(2026-09-10 라이브 재현). */
+describe('stripUnresolvableRefs', () => {
+    it('definitions 가 없는 $ref 는 제거하고 나머지 키는 남긴다', () => {
+        const { strip } = load();
+        const out = strip({
+            type: 'object',
+            properties: { from: { description: 'start', $ref: '#/definitions/Timestamp' } },
+        }) as { properties: { from: Record<string, unknown> } };
+        expect(out.properties.from).toEqual({ description: 'start' });
+    });
+
+    it('가리키는 정의가 실재하면 건드리지 않는다(null)', () => {
+        const { strip } = load();
+        expect(strip({
+            type: 'object',
+            definitions: { Timestamp: { type: 'string' } },
+            properties: { from: { $ref: '#/definitions/Timestamp' } },
+        })).toBeNull();
+        expect(strip({ $defs: { T: { type: 'string' } }, properties: { a: { $ref: '#/$defs/T' } } })).toBeNull();
+    });
+
+    it('배열 안쪽·중첩도 따라간다', () => {
+        const { strip } = load();
+        const out = strip({
+            properties: { list: { type: 'array', items: { $ref: '#/$defs/Missing' } } },
+        }) as { properties: { list: { items: Record<string, unknown> } } };
+        expect(out.properties.list.items).toEqual({});
+    });
+
+    it('외부 문서 참조와 anchor 형태도 제거 대상', () => {
+        const { strip } = load();
+        expect(strip({ properties: { a: { $ref: 'https://example.com/s.json' } } })).not.toBeNull();
+        expect(strip({ properties: { a: { $ref: '#Timestamp' } } })).not.toBeNull();
+    });
+
+    it('$ref 가 없으면 null, 순환 객체에서도 멈춘다', () => {
+        const { strip } = load();
+        expect(strip({ type: 'object', properties: { a: { type: 'string' } } })).toBeNull();
+        const cyclic: Record<string, unknown> = { type: 'object' };
+        cyclic.self = cyclic;
+        expect(strip(cyclic)).toBeNull();
+    });
+
+    it('원본을 변경하지 않는다', () => {
+        const { strip } = load();
+        const input = { properties: { from: { $ref: '#/definitions/Missing' } } };
+        strip(input);
+        expect(input.properties.from.$ref).toBe('#/definitions/Missing');
+    });
+});
+
+describe('applyLocalToolStrict — 해결 불가 $ref 도구', () => {
+    const refTool = (name: string): ToolDefinition => ({
+        type: 'function',
+        function: {
+            name,
+            description: 'd',
+            parameters: {
+                type: 'object',
+                properties: { from: { $ref: '#/definitions/Timestamp' } },
+                required: ['from'],
+            } as unknown as ToolDefinition['function']['parameters'],
+        },
+    });
+
+    it('참조를 지운 스키마로 strict 를 유지한다 — 도구별 해제로는 요청이 살지 않는다', () => {
+        const { apply } = load();
+        const out = apply([refTool('bad'), tool('good')]);
+        expect(out?.[0].function.strict).toBe(true);
+        expect(JSON.stringify(out?.[0].function.parameters)).not.toContain('$ref');
+        expect(JSON.stringify(out?.[0].function.parameters)).toContain('required');
+        expect(out?.[1].function.strict).toBe(true);
+    });
+
+    it('도구는 그대로 노출된다(제거하지 않는다)', () => {
+        const { apply } = load();
+        expect(apply([refTool('bad')])).toHaveLength(1);
     });
 });
