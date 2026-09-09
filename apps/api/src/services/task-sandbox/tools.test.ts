@@ -200,6 +200,23 @@ describe('task-sandbox tools', () => {
             const r = await byName(createTaskTools(fakeSandbox()), 'plan_create').handler({ steps: [] });
             expect(r.isError).toBe(true);
         });
+        it('plan_create: 빈 배열과 누락을 다르게 알린다 — 같은 오류가 반복되지 않게', async () => {
+            // 라이브에서 모델이 {"steps": []} 를 62회 반복했다. "배열이 필요하다"고만 답하면
+            // 배열은 보냈다고 여겨 같은 호출을 되풀이한다.
+            const tools = createTaskTools(fakeSandbox());
+            const empty = txt(await byName(tools, 'plan_create').handler({ steps: [] }));
+            const missing = txt(await byName(tools, 'plan_create').handler({}));
+            expect(empty).toContain('빈 배열');
+            expect(missing).not.toContain('빈 배열');
+            expect(empty).not.toBe(missing);
+        });
+        it('browser: 빈 actions 도 같은 방식으로 구분한다', async () => {
+            const tools = createTaskTools(fakeSandbox());
+            const empty = txt(await byName(tools, 'browser').handler({ actions: [] }));
+            const missing = txt(await byName(tools, 'browser').handler({}));
+            expect(empty).toContain('빈 배열');
+            expect(empty).not.toBe(missing);
+        });
         it('plan_update: 계획 없을 때 안내 메시지', async () => {
             const r = await byName(createTaskTools(fakeSandbox()), 'plan_update').handler({ step: 1, status: 'completed' });
             expect(r.isError).toBe(true);
