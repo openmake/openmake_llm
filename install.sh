@@ -14,7 +14,7 @@
 #
 # 사용:
 #   # curl 원라이너 — 클론 없이 한 줄. 레포 밖 실행을 감지하면 소스를
-#   # $HOME/openmake_llm 으로 받아온 뒤 자동으로 재진입한다. 터미널에서
+#   # $HOME/.openmake/chat 으로 받아온 뒤 자동으로 재진입한다. 터미널에서
 #   # 실행하면 파이프여도 /dev/tty 로 질문한다 (CI 등 tty 없으면 자동 승인).
 #   curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh | bash
 #   curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh | bash -s -- --yes
@@ -23,9 +23,12 @@
 #   ./install.sh --yes               # 비대화형 (기본값으로 진행, 프롬프트 없음)
 #   ./install.sh --llm-base-url https://openrouter.ai/api/v1 \
 #                --llm-api-key sk-or-... --llm-model qwen/qwen3-235b-a22b --yes
+#   ./install.sh --instance NAME     # 두 번째 인스턴스 — 기본 설치본과 같은 호스트에 나란히 뜬다
+#                                    #   ($HOME/.openmake/chat-NAME · 포트 52417/3010 · DB/Redis/PM2 분리)
+#   ./install.sh --public-url https://chat.example.com   # 공개 주소 (https 면 secure cookie 로 전환)
 #
 # 부트스트랩 환경변수 (curl 원라이너일 때만 의미 있음):
-#   OMK_HOME       소스를 받을 위치 (기본 $HOME/openmake_llm)
+#   OMK_HOME       소스를 받을 위치 (기본 $HOME/.openmake/chat, --instance NAME 은 $HOME/.openmake/chat-NAME)
 #   OMK_REPO_URL   클론할 레포 (기본 https://github.com/openmake/openmake_llm.git)
 #   OMK_REF        브랜치/태그 (기본 main)
 #
@@ -38,6 +41,14 @@
 #   --port / --web-port  API(52416) / 웹(3000) 포트 변경
 #   --postgres-port      PostgreSQL 포트 변경 (기본 5432 가 이미 점유된 경우)
 #   --redis-port         Redis 포트 변경 (기본 6379)
+#   --instance NAME      이름 있는 인스턴스 — PM2 앱·docker 컨테이너·볼륨에 "-NAME" 접미사,
+#                        .env 의 OMK_INSTANCE 로 고정. 기본 인스턴스와 같은 호스트에 나란히 뜬다.
+#                        기본 포트 52417/3010/5433/6380 (점유 시 자동으로 빈 포트로 이동)
+#   --public-url URL     외부 공개 주소 — OMK_APP_URL/CORS_ORIGINS 반영, https 면 COOKIE_SECURE=true
+#
+# 인스턴스 이름 규칙 (기본 인스턴스는 접미사 없음 — 기존 설치본과 동일):
+#   PM2      openmake-llm[-NAME] / openmake-next[-NAME]
+#   docker   openmake[-NAME]-postgres / openmake[-NAME]-redis, 볼륨 openmake[-NAME]_pgdata
 #
 # 재실행 안전(idempotent): 이미 된 단계는 건너뛰거나 갱신만 한다.
 #
@@ -58,10 +69,17 @@ readonly TOOLCHAIN_ENV="$TOOLCHAIN_DIR/toolchain.env"
 readonly HEALTH_RETRIES=45
 readonly HEALTH_INTERVAL=2
 
-APP_PORT="${OMK_PORT:-52416}"
-WEB_PORT="${OMK_WEB_PORT:-3000}"
-PG_PORT="${OMK_POSTGRES_PORT:-5432}"
-RD_PORT="${OMK_REDIS_PORT:-6379}"
+# 포트 — 빈 값이면 인스턴스별 기본값(resolve_instance)이 채운다. 셸 환경변수·플래그가 우선.
+APP_PORT="${OMK_PORT:-}"
+WEB_PORT="${OMK_WEB_PORT:-}"
+PG_PORT="${OMK_POSTGRES_PORT:-}"
+RD_PORT="${OMK_REDIS_PORT:-}"
+
+# 인스턴스 — 같은 호스트에 설치본 여러 개를 나란히 띄우기 위한 이름표. 빈 값 = 기본 인스턴스.
+# PM2 앱·docker 컨테이너·볼륨 이름에 "-$INSTANCE" 접미사가 붙고 .env 의 OMK_INSTANCE 로 고정된다.
+INSTANCE="${OMK_INSTANCE:-}"
+PUBLIC_URL=""
+APP_NAME=""; FRONT_APP_NAME=""; PG_CONTAINER=""; RD_CONTAINER=""
 
 ASSUME_YES=0
 SKIP_DOCKER=0
@@ -133,7 +151,13 @@ bootstrap_source() {
 
     local repo_url="${OMK_REPO_URL:-$DEFAULT_REPO_URL}"
     local ref="${OMK_REF:-main}"
-    local target="${OMK_HOME:-$HOME/openmake_llm}"
+    # --instance 는 parse_args 전이라 여기서 미리 훑는다 — 기본 설치 위치가 인스턴스별로 다르다.
+    local inst="$INSTANCE" prev="" a
+    for a in "$@"; do
+        [[ "$prev" == "--instance" ]] && inst="$a"
+        prev="$a"
+    done
+    local target="${OMK_HOME:-$HOME/.openmake/chat${inst:+-$inst}}"
 
     log_step "부트스트랩 — 소스 다운로드"
     log_info "설치 위치: $target  (변경: OMK_HOME / 레포: OMK_REPO_URL / 브랜치·태그: OMK_REF)"
@@ -178,11 +202,88 @@ parse_args() {
             --web-port)      WEB_PORT="${2:-}"; shift ;;
             --postgres-port) PG_PORT="${2:-}"; shift ;;
             --redis-port)    RD_PORT="${2:-}"; shift ;;
+            --instance)      INSTANCE="${2:-}"; shift ;;
+            --public-url)    PUBLIC_URL="${2:-}"; shift ;;
             -h|--help)       usage; exit 0 ;;
             *) log_err "알 수 없는 옵션: $1"; echo ""; usage; exit 1 ;;
         esac
         shift
     done
+}
+
+# ── 인스턴스 확정 ────────────────────────────────────────────────────────────
+# 재실행이면 .env 의 OMK_INSTANCE 가 진실 — 플래그와 다르면 다른 인스턴스를 같은 디렉터리에
+# 덮어쓰려는 것이므로 막는다. 확정 뒤 PM2 앱·컨테이너 이름과 인스턴스별 기본 포트를 정한다.
+resolve_instance() {
+    local from_env
+    from_env="$(env_value OMK_INSTANCE)"
+    if [[ -n "$from_env" ]]; then
+        if [[ -n "$INSTANCE" && "$INSTANCE" != "$from_env" ]]; then
+            die "이 디렉터리는 '$from_env' 인스턴스입니다 (.env OMK_INSTANCE) — '--instance $INSTANCE' 로 덮어쓸 수 없습니다. 다른 디렉터리(OMK_HOME)에 설치하세요."
+        fi
+        INSTANCE="$from_env"
+    fi
+    if [[ -n "$INSTANCE" ]] && ! [[ "$INSTANCE" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]]; then
+        die "인스턴스 이름은 소문자·숫자·하이픈만 가능합니다 (예: test): '$INSTANCE'"
+    fi
+    local suffix="${INSTANCE:+-$INSTANCE}"
+    APP_NAME="openmake-llm$suffix"
+    FRONT_APP_NAME="openmake-next$suffix"
+    # infra/docker-compose.yml 의 openmake${OMK_INSTANCE:+-…}-postgres 규칙과 같다.
+    PG_CONTAINER="openmake$suffix-postgres"
+    RD_CONTAINER="openmake$suffix-redis"
+
+    # 인스턴스별 기본 포트 — 기본 인스턴스는 기존 값 그대로, 이름 있는 인스턴스는 한 칸 옆.
+    # (점유돼 있으면 ensure_ports 가 빈 포트로 옮긴다.)
+    if [[ -n "$INSTANCE" ]]; then
+        : "${APP_PORT:=52417}" "${WEB_PORT:=3010}" "${PG_PORT:=5433}" "${RD_PORT:=6380}"
+        log_ok "인스턴스: $INSTANCE (PM2 $APP_NAME / $FRONT_APP_NAME · docker $PG_CONTAINER / $RD_CONTAINER)"
+    else
+        : "${APP_PORT:=52416}" "${WEB_PORT:=3000}" "${PG_PORT:=5432}" "${RD_PORT:=6379}"
+    fi
+}
+
+# .env 에 인스턴스 키가 없으면 붙인다 — 이름 있는 인스턴스인데 예전 .env 를 재사용하는 경우.
+# (신규 생성은 gen-env.mjs 가 같은 키를 쓴다.) 없으면 PM2/compose 가 접미사 없는 이름으로 떠서
+# 같은 호스트의 기본 인스턴스와 충돌한다.
+ensure_env_instance_keys() {
+    [[ -n "$INSTANCE" ]] || return 0
+    local envf="$SCRIPT_DIR/.env"
+    if [[ -z "$(env_value OMK_INSTANCE)" ]]; then
+        printf '\n# 인스턴스 — PM2 앱·컨테이너·볼륨 이름 접미사 (install.sh --instance)\nOMK_INSTANCE=%s\n' "$INSTANCE" >> "$envf"
+    fi
+    if [[ -z "$(env_value COMPOSE_PROJECT_NAME)" ]]; then
+        printf 'COMPOSE_PROJECT_NAME=openmake-%s\n' "$INSTANCE" >> "$envf"
+    fi
+}
+
+# 공개 주소를 .env 에 반영한다 — OMK_APP_URL 교체, CORS_ORIGINS 에 추가, OMK_WEB_PORT 명시
+# (주소에 포트가 없으면 resolve-ports 가 웹 포트를 역산할 수 없다), https 면 secure cookie 로.
+set_env_public_url() {
+    local url="${1%/}" envf="$SCRIPT_DIR/.env" tmp
+    [[ "$url" =~ ^https?://[^/[:space:]]+$ ]] \
+        || die "--public-url 은 스킴+호스트[:포트] 형식이어야 합니다 (예: https://chat.example.com): $url"
+    tmp="$(mktemp)"
+    sed -E "s|^OMK_APP_URL=.*|OMK_APP_URL=${url}|" "$envf" > "$tmp" && mv "$tmp" "$envf"
+    if ! env_value CORS_ORIGINS | tr ',' '\n' | grep -qxF "$url"; then
+        tmp="$(mktemp)"
+        sed -E "s|^CORS_ORIGINS=(.*)|CORS_ORIGINS=\1,${url}|" "$envf" > "$tmp" && mv "$tmp" "$envf"
+    fi
+    if grep -qE '^OMK_WEB_PORT=' "$envf"; then
+        tmp="$(mktemp)"
+        sed -E "s|^OMK_WEB_PORT=.*|OMK_WEB_PORT=${WEB_PORT}|" "$envf" > "$tmp" && mv "$tmp" "$envf"
+    else
+        printf '\n# 웹(Next) 포트 — 공개 주소에 포트가 없으므로 명시 (scripts/resolve-ports.cjs)\nOMK_WEB_PORT=%s\n' "$WEB_PORT" >> "$envf"
+    fi
+    if [[ "$url" == https://* ]]; then
+        tmp="$(mktemp)"
+        sed -E 's|^COOKIE_SECURE=.*|COOKIE_SECURE=true|; s|^ALLOW_INSECURE_COOKIES=.*|ALLOW_INSECURE_COOKIES=false|' \
+            "$envf" > "$tmp" && mv "$tmp" "$envf"
+        log_ok "공개 주소 $url — HTTPS 이므로 COOKIE_SECURE=true / ALLOW_INSECURE_COOKIES=false"
+        log_warn "TLS 를 종단하는 프록시(Cloudflare/Caddy 등) 뒤에서만 로그인이 됩니다 — http://localhost:$WEB_PORT 직접 접속은 쿠키가 저장되지 않습니다."
+    else
+        log_ok "공개 주소 $url 반영"
+    fi
 }
 
 # ── 플랫폼 감지 ──────────────────────────────────────────────────────────────
@@ -642,17 +743,19 @@ ensure_ports() {
 
     # 앱(API)/웹 포트 — PM2 로 도는 호스트 프로세스라 소유 판정은 PM2 등록 여부로 한다.
     v="$(env_value PORT)"; [[ -n "$v" ]] && APP_PORT="$v"
-    v="$(env_value OMK_APP_URL | sed -nE 's|.*:([0-9]+)/?$|\1|p')"; [[ -n "$v" ]] && WEB_PORT="$v"
+    v="$(env_value OMK_WEB_PORT)"
+    [[ -n "$v" ]] || v="$(env_value OMK_APP_URL | sed -nE 's|.*:([0-9]+)/?$|\1|p')"
+    [[ -n "$v" ]] && WEB_PORT="$v"
 
     local alt
-    if port_in_use "$APP_PORT" && ! pm2_has_app openmake-llm; then
+    if port_in_use "$APP_PORT" && ! pm2_has_app "$APP_NAME"; then
         alt="$(find_free_port $((APP_PORT + 1)))" \
             || die "API 대체 포트 탐색 실패 — --port 로 직접 지정하세요."
         log_warn "호스트 포트 $APP_PORT 을 다른 프로세스가 사용 중 — API 를 $alt 로 대체합니다."
         update_env_app_port "$APP_PORT" "$alt"
         APP_PORT="$alt"
     fi
-    if port_in_use "$WEB_PORT" && ! pm2_has_app openmake-next; then
+    if port_in_use "$WEB_PORT" && ! pm2_has_app "$FRONT_APP_NAME"; then
         alt="$(find_free_port 13000)" \
             || die "웹 대체 포트 탐색 실패 (13000~) — --web-port 로 직접 지정하세요."
         log_warn "호스트 포트 $WEB_PORT 을 다른 프로세스가 사용 중 — 웹 UI 를 $alt 로 대체합니다."
@@ -660,14 +763,14 @@ ensure_ports() {
         WEB_PORT="$alt"
     fi
 
-    if port_in_use "$PG_PORT" && ! port_owned_by openmake-postgres "$PG_PORT"; then
+    if port_in_use "$PG_PORT" && ! port_owned_by "$PG_CONTAINER" "$PG_PORT"; then
         alt="$(find_free_port 15432)" \
             || die "PostgreSQL 대체 포트 탐색 실패 (15432~) — --postgres-port 로 직접 지정하세요."
         log_warn "호스트 포트 $PG_PORT 을 다른 프로세스가 사용 중 (기존 PostgreSQL?) — $alt 로 대체합니다."
         PG_PORT="$alt"
         update_env_port POSTGRES_PORT "$alt"
     fi
-    if port_in_use "$RD_PORT" && ! port_owned_by openmake-redis "$RD_PORT"; then
+    if port_in_use "$RD_PORT" && ! port_owned_by "$RD_CONTAINER" "$RD_PORT"; then
         alt="$(find_free_port 16379)" \
             || die "Redis 대체 포트 탐색 실패 (16379~) — --redis-port 로 직접 지정하세요."
         log_warn "호스트 포트 $RD_PORT 을 다른 프로세스가 사용 중 (기존 Redis?) — $alt 로 대체합니다."
@@ -732,12 +835,18 @@ setup_env() {
         [[ -n "$LLM_BASE_URL" ]] && export OMK_LLM_BASE_URL="$LLM_BASE_URL"
         [[ -n "$LLM_API_KEY"  ]] && export OMK_LLM_API_KEY="$LLM_API_KEY"
         [[ -n "$LLM_MODEL"    ]] && export OMK_LLM_MODEL="$LLM_MODEL"
+        [[ -n "$INSTANCE"     ]] && export OMK_INSTANCE="$INSTANCE"
         if [[ $FORCE_ENV -eq 1 ]]; then
             node "$SCRIPT_DIR/scripts/setup/gen-env.mjs" --force >/dev/null
         else
             node "$SCRIPT_DIR/scripts/setup/gen-env.mjs" >/dev/null
         fi
     ) || die ".env 생성 실패"
+    ensure_env_instance_keys
+    if [[ -n "$PUBLIC_URL" ]]; then
+        set_env_public_url "$PUBLIC_URL"
+        EXTERNAL_URL="$PUBLIC_URL"
+    fi
 
     log_ok ".env 준비 완료"
 }
@@ -774,18 +883,18 @@ compose_up() {
     log_info "PostgreSQL 준비 대기"
     local i
     for ((i = 1; i <= HEALTH_RETRIES; i++)); do
-        if docker exec openmake-postgres pg_isready -U "$(env_value POSTGRES_USER)" \
+        if docker exec "$PG_CONTAINER" pg_isready -U "$(env_value POSTGRES_USER)" \
              -d "$(env_value POSTGRES_DB)" >/dev/null 2>&1; then
             log_ok "PostgreSQL 준비 완료 (~$((i * HEALTH_INTERVAL))s)"
             break
         fi
-        [[ $i -eq $HEALTH_RETRIES ]] && die "PostgreSQL 기동 실패 — docker logs openmake-postgres 확인"
+        [[ $i -eq $HEALTH_RETRIES ]] && die "PostgreSQL 기동 실패 — docker logs $PG_CONTAINER 확인"
         sleep "$HEALTH_INTERVAL"
     done
 
-    docker exec openmake-redis redis-cli ping >/dev/null 2>&1 \
+    docker exec "$RD_CONTAINER" redis-cli ping >/dev/null 2>&1 \
         && log_ok "Redis 준비 완료" \
-        || log_warn "Redis ping 실패 — docker logs openmake-redis 확인"
+        || log_warn "Redis ping 실패 — docker logs $RD_CONTAINER 확인"
 }
 
 run_migrations() {
@@ -842,7 +951,7 @@ start_app() {
     done
 
     log_err "health check 실패 — 최근 로그 50줄:"
-    "$PM2_BIN" logs openmake-llm --lines 50 --nostream 2>/dev/null || true
+    "$PM2_BIN" logs "$APP_NAME" --lines 50 --nostream 2>/dev/null || true
     exit 3
 }
 
@@ -861,6 +970,8 @@ detect_lan_ip() {
 }
 
 prompt_external_access() {
+    # --public-url 로 이미 정했으면 묻지 않는다.
+    [[ -n "$PUBLIC_URL" ]] && return 0
     # 비대화형(--yes / tty 없음)은 로컬 전용으로 두고, 방법만 summary 에서 안내.
     [[ $ASSUME_YES -eq 1 || -z "$TTY_DEV" ]] && return 0
     echo ""
@@ -877,18 +988,17 @@ prompt_external_access() {
 
     local web_origin="http://${host}:${WEB_PORT}" api_origin="http://${host}:${APP_PORT}"
     local envf="$SCRIPT_DIR/.env" tmp
-    tmp="$(mktemp)"
-    sed -E "s|^OMK_APP_URL=.*|OMK_APP_URL=${web_origin}|" "$envf" > "$tmp" && mv "$tmp" "$envf"
-    if ! grep -qE "^CORS_ORIGINS=.*${web_origin}" "$envf"; then
+    set_env_public_url "$web_origin"
+    if ! env_value CORS_ORIGINS | tr ',' '\n' | grep -qxF "$api_origin"; then
         tmp="$(mktemp)"
-        sed -E "s|^CORS_ORIGINS=(.*)|CORS_ORIGINS=\1,${web_origin},${api_origin}|" "$envf" > "$tmp" && mv "$tmp" "$envf"
+        sed -E "s|^CORS_ORIGINS=(.*)|CORS_ORIGINS=\1,${api_origin}|" "$envf" > "$tmp" && mv "$tmp" "$envf"
     fi
     EXTERNAL_URL="$web_origin"
 
     if [[ $NO_START -eq 0 ]]; then
         log_info "설정 반영을 위해 API 재시작"
-        "${PM2_BIN:-pm2}" restart openmake-llm --update-env >/dev/null 2>&1 \
-            || log_warn "재시작 실패 — 수동으로: pm2 restart openmake-llm"
+        "${PM2_BIN:-pm2}" restart "$APP_NAME" --update-env >/dev/null 2>&1 \
+            || log_warn "재시작 실패 — 수동으로: pm2 restart $APP_NAME"
     fi
     log_ok "외부 접속 설정 완료 — $web_origin"
     log_warn "HTTP 평문 통신입니다. 인터넷에 공개한다면 HTTPS(Caddy 등)를 앞에 두고 .env 의 COOKIE_SECURE=true / ALLOW_INSECURE_COOKIES=false 로 바꾸세요."
@@ -905,6 +1015,10 @@ summary() {
     printf "%s  OpenMake LLM 설치 완료%s\n" "$C_OK" "$C_RESET"
     printf "%s══════════════════════════════════════════════════════%s\n\n" "$C_OK" "$C_RESET"
 
+    if [[ -n "$INSTANCE" ]]; then
+        echo "  인스턴스  $INSTANCE   ($SCRIPT_DIR)"
+        echo "  PM2       $APP_NAME / $FRONT_APP_NAME   docker: $PG_CONTAINER / $RD_CONTAINER"
+    fi
     echo "  웹 UI     http://localhost:$WEB_PORT"
     echo "  API       http://localhost:$APP_PORT   (health: /health)"
     if [[ -n "$EXTERNAL_URL" ]]; then
@@ -943,6 +1057,7 @@ main() {
     bootstrap_source "$@"
 
     parse_args "$@"
+    resolve_instance
 
     printf "\n%s╔══════════════════════════════════════════════════╗%s\n" "$C_INFO" "$C_RESET"
     printf "%s║   OpenMake LLM — 원샷 설치 (macOS/Linux/WSL2)     ║%s\n" "$C_INFO" "$C_RESET"
