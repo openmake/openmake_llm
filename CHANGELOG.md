@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.55.0](https://github.com/openmake/openmake_llm/compare/v1.54.0...v1.55.0) (2026-09-09)
+
+
+### ✨ 기능
+
+* **agent-task:** 병렬 에이전트 진행을 실시간 상태로 노출 ([#813](https://github.com/openmake/openmake_llm/issues/813)) ([4135559](https://github.com/openmake/openmake_llm/commit/41355598ab9421117b39c53d22ca3d0a825e5e29))
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 빈 배열 인자로 도구 호출이 무한 반복되던 문제 + 병렬 안내 실측 반영 ([#816](https://github.com/openmake/openmake_llm/issues/816)) ([354d57e](https://github.com/openmake/openmake_llm/commit/354d57e718b2b32f4ef57e892c8e76fd2a75778f))
+* **llm:** 해결 불가 $ref 로 죽던 도구 요청 + 작업 경로 병렬 분담 유도 ([#815](https://github.com/openmake/openmake_llm/issues/815)) ([b935896](https://github.com/openmake/openmake_llm/commit/b9358967c474e55718ce840b61434e9210e3f08b))
+
 ## [1.54.0](https://github.com/openmake/openmake_llm/compare/v1.53.0...v1.54.0) (2026-09-09)
 
 
