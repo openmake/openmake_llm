@@ -77,6 +77,27 @@ export function getAgentTaskSystemPrompt(): string {
 }
 
 /**
+ * 병렬 분담 안내 — `spawn_agents` 가 도구 목록에 실릴 때만 붙인다(`AGENT_SPAWN.ENABLED`).
+ *
+ * 도구는 작업 경로에서 이미 상시 노출되는데 시스템 프롬프트에 병렬 위임 언급이 전혀 없어,
+ * 모델이 존재를 알면서도 고르지 않았다(운영 실측: 30일 호출 0건, 반면 유도 문구가 있는 채팅
+ * 경로는 노출 20턴 중 6턴 호출·성공률 100%). 판단은 그대로 모델이 같은 턴에 하고
+ * (`tool_choice:auto`), 이 블록은 "쓸 수 있다"는 사실과 남용 경계만 알린다.
+ */
+export function getAgentTaskParallelGuide(): string {
+    return [
+        '',
+        'PARALLEL SUBTASKS (spawn_agents):',
+        '- If the goal breaks into 2+ INDEPENDENT subtasks — different topics, sources, regions,',
+        '  files, or targets whose results do not depend on each other — call spawn_agents ONCE',
+        '  with all of them so they run at the same time, then synthesize the results yourself.',
+        '- Write each task prompt self-contained: subagents cannot see your context or each other.',
+        '- If the steps depend on each other in sequence, do NOT use it — just do them yourself.',
+        '',
+    ].join('\n');
+}
+
+/**
  * 턴 0 계획-만 응답 가드용 재촉 메시지 — 도구 호출도 deliverable 도 없이 계획만 쓰고
  * 멈춘 경우 루프가 이 메시지를 넣고 한 턴 더 진행한다 (AgentTaskService).
  */

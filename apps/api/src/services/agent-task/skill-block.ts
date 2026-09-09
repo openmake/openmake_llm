@@ -5,9 +5,9 @@
 import { getSkillManager, type ActiveSkillBinding } from '../../agents/skill-manager';
 import type { ToolDefinition } from '../../llm/types';
 import { mergeToolsWithSkills } from '../chat-service/tool-merger';
-import { getAgentTaskSystemPrompt } from '../../prompts/agent-task-prompt';
+import { getAgentTaskSystemPrompt, getAgentTaskParallelGuide } from '../../prompts/agent-task-prompt';
 import { getReportGuideForTask } from '../../prompts/report-guide';
-import { REPORT_PIPELINE, REPORT_INTENT_PATTERNS } from '../../config/runtime-limits';
+import { REPORT_PIPELINE, REPORT_INTENT_PATTERNS, AGENT_SPAWN } from '../../config/runtime-limits';
 import { buildLearningBlock } from './task-learning';
 import { buildProceduralSkillBlock } from './procedural-skill';
 import { buildUserMemoryBlock } from '../chat-service/user-context-blocks';
@@ -59,7 +59,10 @@ export async function buildAgentTaskSystemContent(userId: string, goal: string, 
     // 시멘틱 마크업·반응형)이 에이전트 작업 산출물에는 적용되지 않았다.
     // 사용자의 artifacts_enabled=false 는 buildArtifactGuideBlock 이 ''를 반환해 그대로 존중된다.
     const artifactGuide = await buildArtifactGuideBlock(userId, goalLang);
+    // 병렬 분담 안내는 도구가 실제로 실릴 때만 — 없는 도구를 권하면 모델이 헛호출한다.
+    const parallelGuide = AGENT_SPAWN.ENABLED ? getAgentTaskParallelGuide() : '';
     return getAgentTaskSystemPrompt()
+        + parallelGuide
         + artifactGuide
         + reportGuide
         + memory
