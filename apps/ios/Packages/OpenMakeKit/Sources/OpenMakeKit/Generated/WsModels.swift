@@ -835,6 +835,9 @@ public struct WsChatRequest: Codable {
     /// 이미지 생성 모드 — ON 이면 메시지를 프롬프트로 이미지를 직접 생성
     public let imageMode: Bool?
     public let images: [String]?
+    /// 비교 모드(두 모델 동시 답변) 패널 식별자. 같은 사용자의 스트림 키에 접미사로 붙어 레인별로 독립 스트림을 가진다. 형식
+    /// `^[a-z0-9_-]{1,16}$`, 그 외는 무시(레인 없음). (2026-09-09)
+    public let lane: String?
     /// 개인정보: false 면 메모리 학습 비활성 (saveHistory 와 독립). 기본 true
     public let memoryLearning: Bool?
     public let message: String
@@ -868,6 +871,7 @@ public struct WsChatRequest: Codable {
         case history = "history"
         case imageMode = "imageMode"
         case images = "images"
+        case lane = "lane"
         case memoryLearning = "memoryLearning"
         case message = "message"
         case model = "model"
@@ -882,7 +886,7 @@ public struct WsChatRequest: Codable {
         case webSearch = "webSearch"
     }
 
-    public init(anonSessionID: String?, artifactMode: Bool?, client: Client?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, memoryLearning: Bool?, message: String, model: String?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, userLocation: UserLocation?, webSearch: Bool?) {
+    public init(anonSessionID: String?, artifactMode: Bool?, client: Client?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, lane: String?, memoryLearning: Bool?, message: String, model: String?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, userLocation: UserLocation?, webSearch: Bool?) {
         self.anonSessionID = anonSessionID
         self.artifactMode = artifactMode
         self.client = client
@@ -893,6 +897,7 @@ public struct WsChatRequest: Codable {
         self.history = history
         self.imageMode = imageMode
         self.images = images
+        self.lane = lane
         self.memoryLearning = memoryLearning
         self.message = message
         self.model = model
@@ -937,6 +942,7 @@ public extension WsChatRequest {
         history: [History]?? = nil,
         imageMode: Bool?? = nil,
         images: [String]?? = nil,
+        lane: String?? = nil,
         memoryLearning: Bool?? = nil,
         message: String? = nil,
         model: String?? = nil,
@@ -961,6 +967,7 @@ public extension WsChatRequest {
             history: history ?? self.history,
             imageMode: imageMode ?? self.imageMode,
             images: images ?? self.images,
+            lane: lane ?? self.lane,
             memoryLearning: memoryLearning ?? self.memoryLearning,
             message: message ?? self.message,
             model: model ?? self.model,
