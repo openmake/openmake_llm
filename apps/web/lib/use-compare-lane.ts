@@ -33,12 +33,18 @@ export interface CompareMessage {
   metrics?: { tokensPerSec: string; tokenCount: number };
 }
 
+/** 전송 옵션 — 모델 외 변수는 기본 고정이고, 여기 있는 것만 사용자가 켤 수 있다. */
+export interface CompareSendOptions {
+  /** Thinking(추론) — 켜면 store 의 thinkingLevel 을 함께 실어 메인 채팅과 같은 강도로 돈다. */
+  thinking?: boolean;
+}
+
 export interface CompareLane {
   messages: CompareMessage[];
   sessionId: string | null;
   connected: boolean;
   streaming: boolean;
-  send: (prompt: string, model: string) => void;
+  send: (prompt: string, model: string, opts?: CompareSendOptions) => void;
   abort: () => void;
   reset: () => void;
 }
@@ -268,7 +274,7 @@ export function useCompareLane(lane: CompareLaneId): CompareLane {
   }, [connect]);
 
   const send = useCallback(
-    (prompt: string, model: string) => {
+    (prompt: string, model: string, opts?: CompareSendOptions) => {
       const message = prompt.trim();
       if (!message || streamingRef.current) return;
 
@@ -311,7 +317,9 @@ export function useCompareLane(lane: CompareLaneId): CompareLane {
         files: [],
         deepResearchMode: false,
         discussionMode: false,
-        thinkingMode: false,
+        thinkingMode: opts?.thinking === true,
+        // 추론 강도 — 토글이 켜진 경우에만 의미(서버가 thinkingMode=false 면 무시). 메인 훅과 동일.
+        ...(opts?.thinking ? { thinkingLevel: s.thinkingLevel } : {}),
         style: s.style,
         enabledTools: s.mcpToolsEnabled,
         // 비교 모드는 서버에 남기지 않는다 — 레인마다 세션이 하나씩 생겨 사이드바에 "반쪽 대화"가

@@ -457,7 +457,10 @@
     "emptyPane": "No answer yet.",
     "tokensPerSec": "{value} tok/s",
     "sameModelHint": "Both panes use the same model. Pick a different one to compare.",
-    "thinking": "Reasoning"
+    "thinking": "Reasoning",
+    "thinkingToggle": "Thinking",
+    "thinkingOn": "Turn Thinking on",
+    "thinkingOff": "Turn Thinking off"
   },
   "artifacts": {
     "exec": {

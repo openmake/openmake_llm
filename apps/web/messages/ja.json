@@ -457,7 +457,10 @@
     "emptyPane": "まだ回答がありません。",
     "tokensPerSec": "{value} tok/s",
     "sameModelHint": "両パネルが同じモデルです。比較するには別のモデルを選んでください。",
-    "thinking": "推論の過程"
+    "thinking": "推論の過程",
+    "thinkingToggle": "思考",
+    "thinkingOn": "思考をオン",
+    "thinkingOff": "思考をオフ"
   },
   "artifacts": {
     "exec": {
