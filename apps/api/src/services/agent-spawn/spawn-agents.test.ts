@@ -24,9 +24,20 @@ jest.mock('../task-sandbox/approval-gate', () => ({
     getApprovalRegistry: () => ({ isAutoApprove: (id: string) => autoApproveMock(id) }),
 }));
 
+/** 서브 수명 마킹 관측 — `${subIndex}:${event}` 순서로 쌓는다. */
+const mockTraceEvents: string[] = [];
 jest.mock('../agent-task/subagent-trace', () => ({
+    ...jest.requireActual('../agent-task/subagent-trace'),
     newTraceId: () => 'trace-test',
-    SubagentTrace: class { record = jest.fn(); },
+    SubagentTrace: class {
+        constructor(
+            public taskId: string, public traceId: string, public origin: string,
+            public subIndex: number, public label: string | null,
+        ) {}
+        record = jest.fn((type: string) => { mockTraceEvents.push(`${this.subIndex}:${type}`); });
+        queued = jest.fn(() => { mockTraceEvents.push(`${this.subIndex}:queued(${this.label})`); });
+        started = jest.fn(() => { mockTraceEvents.push(`${this.subIndex}:started`); });
+    },
 }));
 
 const runSubagentMock = jest.fn();
@@ -81,6 +92,7 @@ const baseParams = {
 
 beforeEach(() => {
     jest.clearAllMocks();
+    mockTraceEvents.length = 0;
     autoApproveMock.mockReturnValue(false);
     runSubagentMock.mockImplementation(async (p: { subgoal: string }) => `RESULT<${p.subgoal}>`);
     routeToAgentMock.mockResolvedValue({ agentId: 'finance' });
@@ -329,5 +341,43 @@ describe('buildTaskSpawnFn — 에이전트 작업 경로', () => {
         await spawn({ tasks: [{ prompt: 'x' }] });
         const passed = runSubagentMock.mock.calls[0][0].tools.map((t: ToolDefinition) => t.function.name);
         expect(passed).toEqual(['web_search']);
+    });
+});
+
+describe('runSpawnAgents 수명 마킹(진행 화면 근거)', () => {
+    test('실행 전에 전원이 등록된다 — 동시성 상한(2) 때문에 아직 못 뜬 서브도 목록에 보여야 한다', async () => {
+        // 3개 태스크 · MAX_PARALLEL=2 → 세 번째는 슬롯을 기다린다. 등록이 실행보다 먼저여야
+        // 그 대기 구간이 화면에 "대기 중"으로 나타난다.
+        await runSpawnAgents({
+            ...baseParams,
+            args: { tasks: [{ prompt: 'a' }, { prompt: 'b' }, { prompt: 'c' }] },
+        });
+        const queuedAt = mockTraceEvents.findIndex((e) => e === '2:queued(c)');
+        const firstStart = mockTraceEvents.findIndex((e) => e.endsWith(':started'));
+        expect(queuedAt).toBeGreaterThanOrEqual(0);
+        expect(queuedAt).toBeLessThan(firstStart);
+        expect(mockTraceEvents.filter((e) => e.includes('queued'))).toHaveLength(3);
+    });
+
+    test('role 이 없으면 서브목표가 라벨이 된다 — "서브 1·2·3" 만 남지 않게', async () => {
+        await runSpawnAgents({ ...baseParams, args: { tasks: [{ prompt: 'GB10 아키텍처 조사' }] } });
+        expect(mockTraceEvents).toContain('0:queued(GB10 아키텍처 조사)');
+    });
+
+    test('role 이 있으면 그것을 라벨로 쓴다', async () => {
+        await runSpawnAgents({ ...baseParams, args: { tasks: [{ prompt: 'x', role: 'finance' }] } });
+        expect(mockTraceEvents).toContain('0:queued(finance)');
+    });
+
+    test('서브 실행이 던지면 error 로 마감된다 — 영원한 "실행 중" 방지', async () => {
+        runSubagentMock.mockRejectedValueOnce(new Error('boom'));
+        const out = await runSpawnAgents({ ...baseParams, args: { tasks: [{ prompt: 'a' }] } });
+        expect(out).toMatch(/boom/);
+        expect(mockTraceEvents).toEqual(['0:queued(a)', '0:started', '0:error']);
+    });
+
+    test('채팅 경로(작업 행 없음)는 기록하지 않는다', async () => {
+        await runSpawnAgents({ ...baseParams, taskId: '__chat__', args: { tasks: [{ prompt: 'a' }] } });
+        expect(mockTraceEvents).toEqual([]);
     });
 });

@@ -848,10 +848,19 @@
       "bodyOmitted": "본문 제외"
     },
     "subagents": {
-      "title": "서브에이전트 활동 {count}건",
+      "title": "병렬 에이전트 {count}개",
       "originSpawn": "병렬 서브 #{n}",
       "originDelegate": "전문가 위임",
-      "stepCount": "{count}단계"
+      "stepCount": "{count}단계",
+      "summary": "{done}/{total} 완료",
+      "runningCount": "{count}개 실행 중",
+      "status": {
+        "queued": "대기 중",
+        "running": "실행 중",
+        "completed": "완료",
+        "failed": "실패",
+        "interrupted": "중단됨"
+      }
     },
     "artifactSize": "{chars}자",
     "artifactOpen": "새 탭에서 열기",

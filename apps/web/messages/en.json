@@ -848,10 +848,19 @@
       "bodyOmitted": "body excluded"
     },
     "subagents": {
-      "title": "Sub-agent activity ({count})",
-      "originSpawn": "Parallel sub #{n}",
-      "originDelegate": "Expert delegate",
-      "stepCount": "{count} steps"
+      "title": "Parallel agents ({count})",
+      "originSpawn": "Sub #{n}",
+      "originDelegate": "Expert delegation",
+      "stepCount": "{count} steps",
+      "summary": "{done}/{total} done",
+      "runningCount": "{count} running",
+      "status": {
+        "queued": "Queued",
+        "running": "Running",
+        "completed": "Completed",
+        "failed": "Failed",
+        "interrupted": "Interrupted"
+      }
     },
     "artifactSize": "{chars} chars",
     "artifactOpen": "Open in new tab",

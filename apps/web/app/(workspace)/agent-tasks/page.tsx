@@ -27,6 +27,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { ArtifactFrame } from "@/components/chat/artifact-frame";
+import { SubagentPanel, type SubagentTraceView } from "@/components/agent-tasks/subagent-panel";
 import {
   Button,
   Badge,
@@ -126,15 +127,6 @@ interface ApiTaskStep {
 
 type AgentTasksResponse = ApiSuccess<{ tasks: ApiAgentTask[]; total: number }>;
 type AgentTaskDetailResponse = ApiSuccess<{ task: ApiAgentTask; steps: ApiTaskStep[] }>;
-/** 서브에이전트 활동(109) — delegate/spawn 서브 1개 = trace 1개 */
-interface SubagentTraceView {
-  traceId: string;
-  origin: string;
-  subIndex: number;
-  label: string | null;
-  startedAt: string;
-  steps: { seq: number; type: string; tool: string | null; content: string | null; at: string }[];
-}
 type SubagentsResponse = ApiSuccess<{ traces: SubagentTraceView[] }>;
 
 /* ── 유틸 ────────────────────────────────────────────────── */
@@ -727,33 +719,8 @@ function TaskDetailModal({
             </div>
           )}
 
-          {/* 서브에이전트 활동(109) — delegate/spawn 서브가 실제로 무엇을 했는지. 부모 스텝에는 결과만 남는다. */}
-          {subagents.length > 0 && (
-            <div className="rounded-md border border-border bg-surface-1 p-3">
-              <p className="mb-2 text-xs font-medium text-fg-2">{t("subagents.title", { count: subagents.length })}</p>
-              <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
-                {subagents.map((tr) => (
-                  <div key={`${tr.traceId}:${tr.subIndex}`} className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <Badge tone="accent">{tr.origin === "spawn_agents" ? t("subagents.originSpawn", { n: tr.subIndex + 1 }) : t("subagents.originDelegate")}</Badge>
-                      {tr.label && <span className="text-muted">{tr.label}</span>}
-                      <span className="text-faint">{t("subagents.stepCount", { count: tr.steps.length })}</span>
-                    </div>
-                    <ul className="space-y-0.5 pl-2">
-                      {tr.steps.map((st) => (
-                        <li key={st.seq} className="flex gap-2 text-[11px]">
-                          <span className={cn("shrink-0 font-mono", st.type === "error" ? "text-danger" : st.type === "final" ? "text-success" : "text-faint")}>
-                            {st.tool ?? st.type}
-                          </span>
-                          <span className="min-w-0 flex-1 truncate text-muted" title={st.content ?? ""}>{st.content}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* 병렬 에이전트(109 + 수명 마킹) — fan-out 갈래별 진행 상태. */}
+          <SubagentPanel traces={subagents} />
 
           {/* 실행 스텝 — 터미널 스타일(도구 출력 전문) */}
           {detail.steps.length === 0 ? (

@@ -848,10 +848,19 @@
       "bodyOmitted": "不含正文"
     },
     "subagents": {
-      "title": "子代理活动 {count} 条",
-      "originSpawn": "并行子代理 #{n}",
-      "originDelegate": "专家委托",
-      "stepCount": "{count} 步"
+      "title": "并行智能体 {count} 个",
+      "originSpawn": "并行子任务 #{n}",
+      "originDelegate": "专家委派",
+      "stepCount": "{count} 步",
+      "summary": "{done}/{total} 已完成",
+      "runningCount": "{count} 个运行中",
+      "status": {
+        "queued": "等待中",
+        "running": "运行中",
+        "completed": "已完成",
+        "failed": "失败",
+        "interrupted": "已中断"
+      }
     },
     "artifactSize": "{chars} 字",
     "artifactOpen": "在新标签页打开",

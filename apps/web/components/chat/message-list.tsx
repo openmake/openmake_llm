@@ -10,6 +10,7 @@ import { SteeringInput } from "@/components/chat/steering-input";
 import { DiffView } from "@/components/chat/diff-view";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "@/lib/store";
 import { ApiClient } from "@/lib/api-client";
+import { LiveSubagentPanel } from "@/components/agent-tasks/subagent-panel";
 import { Markdown } from "./markdown";
 import { StructuredAnswer } from "./structured-answer";
 import { McpResourceCard, decodeMcpResources } from "@/components/chat/mcp-resource-card";
@@ -330,6 +331,8 @@ function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; appr
             {task.lastStep.preview ? ` · ${task.lastStep.preview.slice(0, 80)}` : ""}
           </p>
         )}
+        {/* 병렬 에이전트(fan-out) — 작업 화면에 들어가지 않아도 갈래별 진행이 채팅에서 보인다. */}
+        {taskId && <LiveSubagentPanel taskId={taskId} active={showProgress} />}
         {task.result && (task.status === "completed" || task.status === "failed") && (
           <div className="border-t border-border pt-2.5 text-[13px] leading-relaxed text-fg-2">
             {/* AssistantContent 가 [[artifact:id]] placeholder 를 클릭 칩으로 변환(일반 채팅과 동일). */}
