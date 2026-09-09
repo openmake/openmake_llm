@@ -77,6 +77,11 @@ export class LLMClient {
         return this.config.model;
     }
 
+    /** 현재 SDK 요청 타임아웃(ms) — 파생 시 "더 짧게 만들지 않기" 판단에 쓴다. */
+    get requestTimeout(): number {
+        return this.config.timeout;
+    }
+
     /**
      * 현재 설정(baseUrl/apiKey/model/userId 포함)을 유지한 채 일부만 덮어쓴
      * 파생 클라이언트를 만든다. role 해석된 외부 endpoint 클라이언트에
