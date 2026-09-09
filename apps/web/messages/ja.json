@@ -848,10 +848,19 @@
       "bodyOmitted": "本文は除外"
     },
     "subagents": {
-      "title": "サブエージェント活動 {count}件",
+      "title": "並列エージェント {count}件",
       "originSpawn": "並列サブ #{n}",
-      "originDelegate": "専門家委任",
-      "stepCount": "{count}ステップ"
+      "originDelegate": "専門家への委任",
+      "stepCount": "{count}ステップ",
+      "summary": "{done}/{total} 完了",
+      "runningCount": "{count}件 実行中",
+      "status": {
+        "queued": "待機中",
+        "running": "実行中",
+        "completed": "完了",
+        "failed": "失敗",
+        "interrupted": "中断"
+      }
     },
     "artifactSize": "{chars}文字",
     "artifactOpen": "新しいタブで開く",
