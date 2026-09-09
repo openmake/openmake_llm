@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.54.0](https://github.com/openmake/openmake_llm/compare/v1.53.0...v1.54.0) (2026-09-09)
+
+
+### ✨ 기능
+
+* **compare:** 모델 비교 모드에 Thinking 토글 추가 ([#810](https://github.com/openmake/openmake_llm/issues/810)) ([8259d46](https://github.com/openmake/openmake_llm/commit/8259d46a395b37fdd98cc974cfd0f8c90fbd4373))
+
 ## [1.53.0](https://github.com/openmake/openmake_llm/compare/v1.52.2...v1.53.0) (2026-09-09)
 
 
