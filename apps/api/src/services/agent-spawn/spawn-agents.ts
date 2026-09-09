@@ -32,7 +32,7 @@ import { routeToAgent } from '../../agents/keyword-router';
 import { getAgentSystemMessage } from '../../agents/system-prompt';
 import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-gate';
 import { runSubagent } from '../agent-task/subagent';
-import { SubagentTrace, newTraceId } from '../agent-task/subagent-trace';
+import { SubagentTrace, newTraceId, subagentLabel } from '../agent-task/subagent-trace';
 import type { DelegateFactoryParams } from '../agent-task/delegate';
 import { CHAT_DELEGATE_TOOL_NAME } from '../chat-service/chat-delegate';
 import { SPAWN_AGENT_GENERIC_PROMPT } from '../../prompts/spawn-agent-system';
@@ -264,19 +264,28 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
 
     // 활동 기록(109) — 에이전트 작업 경로만(채팅은 작업 행이 없다). fan-out 1회 = trace 1개.
     const traceId = p.taskId !== CHAT_PSEUDO_TASK_ID ? newTraceId() : null;
+    // 전원을 실행 전에 등록한다 — 동시성 상한에 걸려 슬롯을 기다리는 서브도 진행 화면에 보여야
+    // fan-out 이 몇 갈래인지 알 수 있다(첫 도구 호출 때 만들면 대기 중 서브는 유령이 된다).
+    const traces = traceId
+        ? tasks.map((task, idx) => {
+            const tr = new SubagentTrace(p.taskId, traceId, 'spawn_agents', idx,
+                subagentLabel(task.role ?? task.agentId, task.prompt));
+            tr.queued(task.prompt);
+            return tr;
+        })
+        : null;
     let results: Array<string | null>;
     try {
         results = await parallelBatch(
             tasks,
             async (task, idx) => {
+                const trace = traces?.[idx];
+                trace?.started();
                 try {
                     const exec = await resolveTaskExecution(task, userId, p.client);
                     if (exec.modelNote) {
                         logger.info(`[AgentSpawn] 태스크 ${idx + 1} custom agent 모델: ${exec.modelNote}`);
                     }
-                    const trace = traceId
-                        ? new SubagentTrace(p.taskId, traceId, 'spawn_agents', idx, task.role ?? task.agentId ?? null)
-                        : undefined;
                     return await runSubagent({
                         ...(trace ? { trace } : {}),
                         client: exec.client,
@@ -293,6 +302,9 @@ export async function runSpawnAgents(p: SpawnAgentsParams): Promise<string> {
                 } catch (e) {
                     const msg = e instanceof Error ? e.message : String(e);
                     logger.warn(`[AgentSpawn] 태스크 ${idx + 1} 실패: ${msg}`);
+                    // runSubagent 안에서 죽으면 그쪽이 기록하지만, 모델 해석(resolveTaskExecution)
+                    // 단계 실패는 여기서만 보인다 — 안 남기면 그 서브가 영영 "실행 중"으로 남는다.
+                    trace?.record('error', msg);
                     return `Error: 서브에이전트 실패 — ${msg}`;
                 }
             },
