@@ -80,6 +80,8 @@ export interface WSMessage {
     userAgentId?: string;
     /** 클라이언트 표면 — 'ios' 면 좁은 화면용 답변 형식 지시를 덧붙인다 (2026-08-18) */
     client?: 'ios';
+    /** 비교 모드(두 모델 동시 답변) 패널 식별자. 같은 사용자의 스트림 키에 접미사로 붙어 레인별로 독립 스트림을 가진다. 형식 `^[a-z0-9_-]{1,16}$`, 그 외는 무시(레인 없음). (2026-09-09) */
+    lane?: string;
     /** NotebookLM 노트북 컨텍스트 — composer picker 선택. 백엔드가 프리픽스 주입(prompts/notebook-context) */
     notebook?: { id: string; title: string } | null;
     /** Phase 3.4 (2026-05-26): 메시지 편집 분기 — 새 session 의 부모 추적 */

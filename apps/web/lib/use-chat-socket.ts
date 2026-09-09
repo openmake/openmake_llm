@@ -74,7 +74,7 @@ async function uploadFileInChunks(file: File): Promise<string> {
  * URL: dev 는 NEXT_PUBLIC_WS_URL(ws://localhost:52416, same-site 쿠키 전송),
  *      운영은 same-origin(location.host) → Nginx 업그레이드 프록시.
  */
-function resolveWsUrl(): string {
+export function resolveWsUrl(): string {
   const env = process.env.NEXT_PUBLIC_WS_URL;
   if (env) return env;
   const proto = location.protocol === "https:" ? "wss:" : "ws:";

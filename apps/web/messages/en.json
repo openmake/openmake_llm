@@ -390,7 +390,9 @@
     "emptyState": {
       "title": "How can I help you?",
       "description": "Multi-model orchestration · MCP tools · deep research · autonomous agents. Type your question below, or press <slash>/</slash> to invoke a skill.",
-      "languageHint": "Ask in any language — you'll get the answer in that language."
+      "languageHint": "Ask in any language — you'll get the answer in that language.",
+      "compareCta": "Start in compare mode",
+      "compareHint": "Ask two models the same question and compare their answers side by side."
     },
     "structured": {
       "confidence": {
@@ -438,6 +440,24 @@
     "verification": {
       "title": "Issues found by verification"
     }
+  },
+  "compare": {
+    "title": "Model comparison",
+    "subtitle": "Send one question to two models and read their answers side by side",
+    "backToChat": "Back to chat",
+    "laneA": "Panel A",
+    "laneB": "Panel B",
+    "servedModel": "Answered by: {model}",
+    "placeholder": "Type a question to send to both models...",
+    "send": "Send",
+    "stop": "Stop",
+    "reset": "Reset",
+    "notConnected": "Connecting...",
+    "resumeLost": "The connection dropped and the answer could not be resumed. Please ask again.",
+    "emptyPane": "No answer yet.",
+    "tokensPerSec": "{value} tok/s",
+    "sameModelHint": "Both panes use the same model. Pick a different one to compare.",
+    "thinking": "Reasoning"
   },
   "artifacts": {
     "exec": {

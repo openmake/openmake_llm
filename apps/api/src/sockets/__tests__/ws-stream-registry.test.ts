@@ -2,7 +2,7 @@
  * ws-stream-registry — 소켓이 끊겨도 생성을 이어 가고 재연결 시 이어받는 규약 검증.
  * 회귀 대상: "탭 전환/앱 백그라운드 → 응답 없음" (2026-09-05).
  */
-import { InFlightStreamRegistry, resolveStreamKey } from '../ws-stream-registry';
+import { InFlightStreamRegistry, resolveStreamKey, normalizeStreamLane } from '../ws-stream-registry';
 import type { ExtendedWebSocket } from '../ws-types';
 
 function fakeWs(userId: string | null = 'u1'): ExtendedWebSocket & { sent: unknown[] } {
@@ -142,5 +142,66 @@ describe('InFlightStreamRegistry', () => {
         expect(resolveStreamKey(fakeWs(null), 'anon-1')).toBe('a:anon-1');
         expect(resolveStreamKey(fakeWs(null), '  ')).toBeNull();
         expect(resolveStreamKey(fakeWs(null))).toBeNull();
+    });
+
+    // ── 레인(비교 모드) 테스트 (2026-09-09) ──
+
+    it('같은 사용자의 서로 다른 레인은 독립 키를 가지며, 두 번째 레인이 첫 번째를 abort 하지 않는다', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 4096);
+        const ws1 = fakeWs('u1');
+        const ac1 = new AbortController();
+        reg.open('u:u1#a', ws1, ac1);
+
+        const ws2 = fakeWs('u1');
+        const ac2 = new AbortController();
+        reg.open('u:u1#b', ws2, ac2);
+
+        expect(ac1.signal.aborted).toBe(false);
+        expect(ac2.signal.aborted).toBe(false);
+        expect(reg.size).toBe(2);
+    });
+
+    it('resolveStreamKey — 유효한 lane 이면 #lane 접미사가 붙는다', () => {
+        expect(resolveStreamKey(fakeWs('u1'), undefined, 'a')).toBe('u:u1#a');
+        expect(resolveStreamKey(fakeWs('u1'), undefined, 'model-b')).toBe('u:u1#model-b');
+    });
+
+    it('resolveStreamKey — 유효하지 않은 lane 은 무시된다 (접미사 없음)', () => {
+        // 대문자+공백
+        expect(resolveStreamKey(fakeWs('u1'), undefined, 'A B')).toBe('u:u1');
+        // 40자 (16자 초과)
+        expect(resolveStreamKey(fakeWs('u1'), undefined, 'a'.repeat(40))).toBe('u:u1');
+        // 비문자열
+        expect(resolveStreamKey(fakeWs('u1'), undefined, 123)).toBe('u:u1');
+        expect(resolveStreamKey(fakeWs('u1'), undefined, null)).toBe('u:u1');
+        expect(resolveStreamKey(fakeWs('u1'), undefined, undefined)).toBe('u:u1');
+    });
+
+    it('게스트 anonSessionId + lane → a:<id>#<lane>', () => {
+        expect(resolveStreamKey(fakeWs(null), 'sess-1', 'a')).toBe('a:sess-1#a');
+    });
+
+    it('같은 레인 키로 재오픈하면 이전 스트림은 여전히 abort 된다 (기존 동작 보존)', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 4096);
+        const ws1 = fakeWs('u1');
+        const ac1 = new AbortController();
+        reg.open('u:u1#a', ws1, ac1);
+
+        const ws2 = fakeWs('u1');
+        reg.open('u:u1#a', ws2, new AbortController());
+
+        expect(ac1.signal.aborted).toBe(true);
+        expect(reg.size).toBe(1);
+    });
+
+    it('normalizeStreamLane — 유효/무효 분류', () => {
+        expect(normalizeStreamLane('left')).toBe('left');
+        expect(normalizeStreamLane('model-a_1')).toBe('model-a_1');
+        expect(normalizeStreamLane('A B')).toBeNull();
+        expect(normalizeStreamLane('a'.repeat(17))).toBeNull();
+        expect(normalizeStreamLane('')).toBeNull();
+        expect(normalizeStreamLane(42)).toBeNull();
+        expect(normalizeStreamLane(null)).toBeNull();
+        expect(normalizeStreamLane(undefined)).toBeNull();
     });
 });

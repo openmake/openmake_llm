@@ -53,4 +53,11 @@ const apiPort = pick('PORT') || '52416';
 /** 프론트(Next) 포트. */
 const webPort = resolveWebPort();
 
-module.exports = { apiPort, webPort };
+/**
+ * 인스턴스 접미사 — 같은 호스트에 online/staging 을 나란히 띄울 때 PM2 앱 이름 충돌을 막는다.
+ * OMK_INSTANCE=staging → openmake-llm-staging / openmake-next-staging. 미설정이면 기존 이름 그대로.
+ */
+const instance = (pick('OMK_INSTANCE') || '').trim();
+const instanceSuffix = instance ? `-${instance}` : '';
+
+module.exports = { apiPort, webPort, instance, instanceSuffix };

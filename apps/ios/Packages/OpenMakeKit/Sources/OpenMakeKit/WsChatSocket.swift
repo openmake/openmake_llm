@@ -167,6 +167,7 @@ public extension WsChatRequest {
             history: history.isEmpty ? nil : history,
             imageMode: imageMode,
             images: images,
+            lane: nil,
             memoryLearning: memoryLearning,
             message: message,
             model: model,

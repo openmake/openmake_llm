@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown, Wrench, Pencil, AlertTriangle, Languages, Copy, Check, RefreshCw } from "lucide-react";
+import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown, Wrench, Pencil, AlertTriangle, Languages, Copy, Check, RefreshCw, Columns2 } from "lucide-react";
 import { ThinkingTimeline } from "@/components/chat/thinking-timeline";
 import { SteeringInput } from "@/components/chat/steering-input";
 import { DiffView } from "@/components/chat/diff-view";
@@ -642,6 +643,18 @@ export function MessageList() {
               <span className="truncate">{t(q.labelKey)}</span>
             </button>
           ))}
+        </div>
+
+        {/* 비교 모드 진입 — "처음 시작할 때" 고르는 선택지라 빈 화면에만 둔다(대화 중엔 안 보임). */}
+        <div className="mt-5 flex flex-col items-center gap-1">
+          <Link
+            href="/compare"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-muted transition hover:bg-surface-2 hover:text-fg"
+          >
+            <Columns2 className="h-4 w-4 shrink-0 text-accent" aria-hidden />
+            {t("emptyState.compareCta")}
+          </Link>
+          <p className="max-w-xs text-xs text-faint">{t("emptyState.compareHint")}</p>
         </div>
       </div>
     );

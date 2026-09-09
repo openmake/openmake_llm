@@ -390,7 +390,9 @@
     "emptyState": {
       "title": "무엇을 도와드릴까요?",
       "description": "멀티모델 오케스트레이션 · MCP 도구 · 딥 리서치 · 자율 에이전트. 아래에 질문을 입력하거나 <slash>/</slash> 로 스킬을 호출하세요.",
-      "languageHint": "어떤 언어로 질문해도 같은 언어로 답변합니다."
+      "languageHint": "어떤 언어로 질문해도 같은 언어로 답변합니다.",
+      "compareCta": "모델 비교 모드로 시작",
+      "compareHint": "두 모델에게 같은 질문을 던지고 답변을 나란히 비교해 보세요."
     },
     "structured": {
       "confidence": {
@@ -438,6 +440,24 @@
     "verification": {
       "title": "검증에서 지적된 사항"
     }
+  },
+  "compare": {
+    "title": "모델 비교",
+    "subtitle": "같은 질문을 두 모델에게 동시에 보내고 답변을 나란히 봅니다",
+    "backToChat": "채팅으로 돌아가기",
+    "laneA": "패널 A",
+    "laneB": "패널 B",
+    "servedModel": "실제 응답 모델: {model}",
+    "placeholder": "두 모델에게 보낼 질문을 입력하세요...",
+    "send": "전송",
+    "stop": "중지",
+    "reset": "초기화",
+    "notConnected": "연결 중...",
+    "resumeLost": "연결이 끊겨 답변을 이어받지 못했습니다. 다시 질문해 주세요.",
+    "emptyPane": "아직 답변이 없습니다.",
+    "tokensPerSec": "{value} tok/s",
+    "sameModelHint": "두 패널이 같은 모델입니다 — 다른 모델을 골라야 비교가 됩니다.",
+    "thinking": "추론 과정"
   },
   "artifacts": {
     "exec": {

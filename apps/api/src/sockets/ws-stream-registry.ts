@@ -44,11 +44,23 @@ export interface StreamEntry {
     startedAt: number;
 }
 
-/** 재부착 대상 키 — 인증 사용자는 userId, 게스트는 anonSessionId. 둘 다 없으면 이어받기 불가. */
-export function resolveStreamKey(extWs: ExtendedWebSocket, anonSessionId?: string): string | null {
-    if (extWs._authenticatedUserId) return `u:${extWs._authenticatedUserId}`;
-    if (typeof anonSessionId === 'string' && anonSessionId.trim()) return `a:${anonSessionId.trim()}`;
-    return null;
+/** 레인 식별자 정규화 — 유효한 형식(`^[a-z0-9_-]{1,16}$`)이면 그대로, 그 외는 null(레인 없음). (2026-09-09) */
+export function normalizeStreamLane(lane: unknown): string | null {
+    if (typeof lane !== 'string') return null;
+    return /^[a-z0-9_-]{1,16}$/.test(lane) ? lane : null;
+}
+
+/**
+ * 재부착 대상 키 — 인증 사용자는 userId, 게스트는 anonSessionId. 둘 다 없으면 이어받기 불가.
+ * lane 이 유효하면 `#<lane>` 접미사를 붙여 같은 사용자의 레인별 독립 스트림을 허용한다. (2026-09-09)
+ */
+export function resolveStreamKey(extWs: ExtendedWebSocket, anonSessionId?: string, lane?: unknown): string | null {
+    let base: string | null = null;
+    if (extWs._authenticatedUserId) base = `u:${extWs._authenticatedUserId}`;
+    else if (typeof anonSessionId === 'string' && anonSessionId.trim()) base = `a:${anonSessionId.trim()}`;
+    if (!base) return null;
+    const normalized = normalizeStreamLane(lane);
+    return normalized ? `${base}#${normalized}` : base;
 }
 
 export class InFlightStreamRegistry {

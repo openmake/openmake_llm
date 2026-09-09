@@ -96,7 +96,7 @@ export async function handleChatMessage(
     const abortController = new AbortController();
     extWs._abortController = abortController;
     const streamRegistry = getInFlightStreamRegistry();
-    const streamKey = resolveStreamKey(extWs, anonSessionId);
+    const streamKey = resolveStreamKey(extWs, anonSessionId, msg.lane);
     const streamEntry = streamKey ? streamRegistry.open(streamKey, extWs, abortController) : null;
     const out = (payload: Record<string, unknown>): void => {
         if (streamEntry) streamRegistry.send(streamEntry, payload);

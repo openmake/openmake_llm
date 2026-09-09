@@ -390,7 +390,9 @@
     "emptyState": {
       "title": "何かお手伝いしましょうか？",
       "description": "マルチモデルオーケストレーション · MCP ツール · ディープリサーチ · 自律エージェント。下に質問を入力するか、<slash>/</slash> でスキルを呼び出してください。",
-      "languageHint": "どの言語で質問しても、同じ言語で回答します。"
+      "languageHint": "どの言語で質問しても、同じ言語で回答します。",
+      "compareCta": "比較モードで始める",
+      "compareHint": "2つのモデルに同じ質問をして、回答を並べて比べてみましょう。"
     },
     "structured": {
       "confidence": {
@@ -438,6 +440,24 @@
     "verification": {
       "title": "検証で指摘された点"
     }
+  },
+  "compare": {
+    "title": "モデル比較",
+    "subtitle": "同じ質問を2つのモデルに同時に送り、回答を並べて確認します",
+    "backToChat": "チャットに戻る",
+    "laneA": "パネル A",
+    "laneB": "パネル B",
+    "servedModel": "実際に回答したモデル: {model}",
+    "placeholder": "両方のモデルに送る質問を入力してください...",
+    "send": "送信",
+    "stop": "停止",
+    "reset": "リセット",
+    "notConnected": "接続中...",
+    "resumeLost": "接続が切れたため回答を引き継げませんでした。もう一度質問してください。",
+    "emptyPane": "まだ回答がありません。",
+    "tokensPerSec": "{value} tok/s",
+    "sameModelHint": "両パネルが同じモデルです。比較するには別のモデルを選んでください。",
+    "thinking": "推論の過程"
   },
   "artifacts": {
     "exec": {

@@ -127,6 +127,8 @@ export interface WsChatRequest {
    * 지시를 덧붙일 뿐, 내용/기능 분기는 하지 않는다.
    */
   client?: "ios";
+  /** 비교 모드(두 모델 동시 답변) 패널 식별자. 같은 사용자의 스트림 키에 접미사로 붙어 레인별로 독립 스트림을 가진다. 형식 `^[a-z0-9_-]{1,16}$`, 그 외는 무시(레인 없음). (2026-09-09) */
+  lane?: string;
 }
 
 /** 아티팩트 메타 — 백엔드 llm/artifact-parser.ts ArtifactInfo 와 동일 계약. */
