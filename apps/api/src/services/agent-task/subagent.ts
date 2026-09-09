@@ -64,6 +64,18 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
     const mcp = getUnifiedMCPClient();
     let tokens = 0;
 
+    // role-client.ts 의 부모 턴과 같은 이유 — 기본 LLM_TIMEOUT(120s)은 채팅용이라,
+    // 서브의 마지막 턴(도구 없이 장문 최종 답변)이 넘기면 "Request timed out" 으로 죽는다.
+    // 실제 한계는 p.signal(상위 잔여 예산)이 governor 다.
+    // maxRetries 0: 타임아웃을 SDK 가 맹목 재시도하면 같은 조건에서 또 실패하면서
+    // 모델 슬롯만 3배로 점유해 동시 실행 중인 다른 서브까지 함께 느려진다
+    // (external-throttle.ts 가 외부 provider 에 같은 이유로 0 을 쓴다).
+    // 외부 role 클라이언트가 이미 더 긴 timeout 을 들고 있으면 그쪽을 존중한다.
+    const client = p.client.derive({
+        timeout: Math.max(p.client.requestTimeout, AGENT_TASK_LIMITS.SCHEDULE_TOTAL_TIMEOUT_MS),
+        maxRetries: 0,
+    });
+
     const conversation: ChatMessage[] = [
         {
             role: 'system',
@@ -81,7 +93,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
             if (lastTurn && turn > 0 && p.tools.length > 0) {
                 conversation.push({ role: 'user', content: SUBAGENT_FINAL_TURN_NOTICE });
             }
-            const result = await p.client.chat(conversation, undefined, undefined, {
+            const result = await client.chat(conversation, undefined, undefined, {
                 tools: lastTurn || p.tools.length === 0 ? undefined : p.tools,
                 signal: p.signal,
                 think: false,
