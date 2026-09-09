@@ -252,6 +252,8 @@ export function createTaskTools(
                 properties: {
                     actions: {
                         type: 'array',
+                        items: { type: 'object' },
+                        minItems: 1,
                         description: '액션 객체 배열. 예: [{"type":"goto","url":"https://example.com"},{"type":"extractText"}]',
                     },
                     allowlist: {
@@ -272,7 +274,10 @@ export function createTaskTools(
                 : (args.actions && typeof args.actions === 'object' ? [args.actions] : null);
             if (!actions || actions.length === 0) {
                 return textResult(
-                    'actions 배열이 필요합니다 — 예: [{"type":"goto","url":"https://example.com"},{"type":"extractText"}].',
+                    Array.isArray(args.actions)
+                        ? 'actions 가 빈 배열입니다 — 실제 액션 객체를 최소 1개 넣으세요. '
+                            + '예: [{"type":"goto","url":"https://example.com"},{"type":"extractText"}].'
+                        : 'actions 배열이 필요합니다 — 예: [{"type":"goto","url":"https://example.com"},{"type":"extractText"}].',
                     true,
                 );
             }
@@ -302,7 +307,7 @@ export function createTaskTools(
                 '복잡한 작업은 먼저 이 도구로 계획하고, 진행하며 plan_update 로 상태를 갱신하세요.',
             inputSchema: {
                 type: 'object',
-                properties: { steps: { type: 'array', description: '단계 설명 문자열 배열' } },
+                properties: { steps: { type: 'array', items: { type: 'string' }, minItems: 1, description: '단계 설명 문자열 배열(최소 1개)' } },
                 required: ['steps'],
             },
         },
@@ -312,7 +317,13 @@ export function createTaskTools(
                 ? args.steps
                 : (typeof args.steps === 'string' && args.steps.trim() ? [args.steps] : null);
             if (!steps || steps.length === 0) {
-                return textResult('steps 배열이 필요합니다 — 예: {"steps":["자료 조사","초안 작성","검토"]}.', true);
+                // 빈 배열을 "배열이 필요하다"고 되돌려주면 모델은 배열을 보냈다고 여겨 같은 호출을
+                // 반복한다(라이브: 한 작업에서 62회). 무엇이 잘못됐는지 그대로 말한다.
+                // 스키마의 items+minItems 가 1차 방어이고 이 메시지는 그것을 뚫었을 때의 2차다.
+                return textResult(Array.isArray(args.steps)
+                    ? 'steps 가 빈 배열입니다 — 실제 단계 문자열을 최소 1개 넣으세요. '
+                        + '예: {"steps":["자료 조사","초안 작성","검토"]}. 계획 없이 진행하려면 이 도구를 부르지 말고 바로 작업하세요.'
+                    : 'steps 배열이 필요합니다 — 예: {"steps":["자료 조사","초안 작성","검토"]}.', true);
             }
             plan.create(steps.map(String));
             return textResult(plan.render());

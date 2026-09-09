@@ -122,6 +122,7 @@ export const SPAWN_AGENTS_PARAMETERS_SCHEMA: {
     properties: {
         tasks: {
             type: 'array',
+            minItems: 1,
             description: '병렬 수행할 독립 하위 작업 목록 (2개 이상 권장)',
             items: {
                 type: 'object',
