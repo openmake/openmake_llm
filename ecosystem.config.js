@@ -30,7 +30,7 @@ const path = require('path');
  * 기본값(3000)으로 떨어져 다른 서비스와 EADDRINUSE 로 충돌했다. 이제 .env 를 직접 읽어
  * 어떤 셸에서 `pm2 start ecosystem.config.js` 를 해도 같은 포트로 뜬다.
  */
-const { apiPort: API_PORT, webPort: WEB_PORT } = require('./scripts/resolve-ports.cjs');
+const { apiPort: API_PORT, webPort: WEB_PORT, instanceSuffix: INSTANCE_SUFFIX } = require('./scripts/resolve-ports.cjs');
 /**
  * 로그 디렉터리. 기본은 기존 동작 유지(/tmp)지만, 여러 사용자가 쓰는 리눅스 호스트에서는
  * /tmp/openmake-*.log 소유자 충돌로 PM2 가 EACCES 로 죽는다 → OMK_LOG_DIR 로 분리 가능.
@@ -91,7 +91,7 @@ const WEB_DIR = path.join(__dirname, 'apps/web');
 const DISCORD_ENTRY = path.join(__dirname, 'apps/discord-bot/dist/index.js');
 
 const apps = [{
-        name: 'openmake-llm',
+        name: `openmake-llm${INSTANCE_SUFFIX}`,
         script: 'apps/api/dist/cli.js',
         args: `cluster --port ${API_PORT}`,
         cwd: __dirname,
@@ -119,8 +119,8 @@ const apps = [{
         
         // 로그 설정
         log_date_format: 'YYYY-MM-DD HH:mm:ss',
-        error_file: logFile('openmake-llm-error.log'),
-        out_file: logFile('openmake-llm-out.log'),
+        error_file: logFile(`openmake-llm${INSTANCE_SUFFIX}-error.log`),
+        out_file: logFile(`openmake-llm${INSTANCE_SUFFIX}-out.log`),
         merge_logs: true,
         log_type: 'json',
         
@@ -142,7 +142,7 @@ const apps = [{
         // ── Next.js 프론트엔드 (Lumen) ──────────────────────────────
         // 운영: Nginx 가 / 를 이 앱(:3000)으로, /api·/ws 를 openmake-llm(:52416)으로 프록시.
         // 선행: `npm run build:frontend-next` 로 apps/web/.next 생성 필요.
-        name: 'openmake-next',
+        name: `openmake-next${INSTANCE_SUFFIX}`,
         cwd: WEB_DIR,
         // npm 을 fork 하면 pm2 ProcessContainerFork 가 crash → next 바이너리를 직접 node 로 실행.
         // (workspaces hoist 때문에 경로는 require.resolve 로 찾는다 — resolveNextBin 주석 참고)
@@ -162,8 +162,8 @@ const apps = [{
         min_uptime: '10s',
         restart_delay: 3000,
         max_memory_restart: '1G',
-        error_file: logFile('openmake-next-error.log'),
-        out_file: logFile('openmake-next-out.log'),
+        error_file: logFile(`openmake-next${INSTANCE_SUFFIX}-error.log`),
+        out_file: logFile(`openmake-next${INSTANCE_SUFFIX}-out.log`),
         merge_logs: true,
         log_date_format: 'YYYY-MM-DD HH:mm:ss',
     }];
@@ -179,7 +179,7 @@ if (fs.existsSync(DISCORD_ENTRY)) {
         // 선행: 루트 .env 에 DISCORD_BOT_TOKEN·DISCORD_BOT_API_KEY + 접근 제어 설정,
         //       `npm run build:discord-bot` 으로 dist 생성.
         // 설정 미비 시 exit 78 로 스스로 내려가며 stop_exit_codes 가 재시작 루프를 막는다.
-        name: 'openmake-discord',
+        name: `openmake-discord${INSTANCE_SUFFIX}`,
         script: 'apps/discord-bot/dist/index.js',
         cwd: __dirname,
         env: {
@@ -193,8 +193,8 @@ if (fs.existsSync(DISCORD_ENTRY)) {
         min_uptime: '10s',
         restart_delay: 3000,
         max_memory_restart: '300M',
-        error_file: logFile('openmake-discord-error.log'),
-        out_file: logFile('openmake-discord-out.log'),
+        error_file: logFile(`openmake-discord${INSTANCE_SUFFIX}-error.log`),
+        out_file: logFile(`openmake-discord${INSTANCE_SUFFIX}-out.log`),
         merge_logs: true,
         log_date_format: 'YYYY-MM-DD HH:mm:ss',
     });

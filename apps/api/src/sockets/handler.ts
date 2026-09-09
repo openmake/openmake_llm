@@ -419,7 +419,7 @@ export class WebSocketHandler {
      */
     private handleResume(ws: WebSocket, msg: WSMessage): void {
         const extWs = ws as ExtendedWebSocket;
-        const key = resolveStreamKey(extWs, msg.anonSessionId);
+        const key = resolveStreamKey(extWs, msg.anonSessionId, msg.lane);
         const attached = key ? getInFlightStreamRegistry().attach(key, extWs) : false;
         if (!attached) ws.send(JSON.stringify({ type: 'resume_none' }));
     }
