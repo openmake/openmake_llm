@@ -82,17 +82,24 @@ export function getAgentTaskSystemPrompt(): string {
  * 도구는 작업 경로에서 이미 상시 노출되는데 시스템 프롬프트에 병렬 위임 언급이 전혀 없어,
  * 모델이 존재를 알면서도 고르지 않았다(운영 실측: 30일 호출 0건, 반면 유도 문구가 있는 채팅
  * 경로는 노출 20턴 중 6턴 호출·성공률 100%). 판단은 그대로 모델이 같은 턴에 하고
- * (`tool_choice:auto`), 이 블록은 "쓸 수 있다"는 사실과 남용 경계만 알린다.
+ * (`tool_choice:auto`), 이 블록은 "쓸 수 있다"는 사실과 경계만 알린다.
+ *
+ * ⚠️ 병렬 tool_calls 를 먼저 권한다. 3사 비교 goal 로 6회 재생했을 때 모델은 spawn 을 한 번도
+ * 고르지 않고 `web_search` 3개를 한 턴에 냈는데, 독립 단발 조회에는 그쪽이 실제로 더 싸다
+ * (서브에이전트는 별도 컨텍스트·프롬프트·종합 비용이 붙는다). spawn 의 이득은 갈래마다
+ * 여러 턴이 필요할 때 생기므로 그 경계를 문구에 명시한다.
  */
 export function getAgentTaskParallelGuide(): string {
     return [
         '',
-        'PARALLEL SUBTASKS (spawn_agents):',
-        '- If the goal breaks into 2+ INDEPENDENT subtasks — different topics, sources, regions,',
-        '  files, or targets whose results do not depend on each other — call spawn_agents ONCE',
-        '  with all of them so they run at the same time, then synthesize the results yourself.',
-        '- Write each task prompt self-contained: subagents cannot see your context or each other.',
-        '- If the steps depend on each other in sequence, do NOT use it — just do them yourself.',
+        'PARALLEL WORK:',
+        '- Independent lookups: issue several tool calls in ONE turn (e.g. three web_search calls',
+        '  for three companies). This is the cheapest way to parallelize — prefer it.',
+        '- spawn_agents: use it when each branch needs MULTIPLE steps of its own (search, then read,',
+        '  then summarize) and the branches do not depend on each other. Call it ONCE with all',
+        '  branches, then synthesize the results yourself.',
+        '- Write each branch prompt self-contained: subagents cannot see your context or each other.',
+        '- If the steps depend on each other in sequence, do NOT split — just do them yourself.',
         '',
     ].join('\n');
 }
