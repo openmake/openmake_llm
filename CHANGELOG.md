@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.53.0](https://github.com/openmake/openmake_llm/compare/v1.52.2...v1.53.0) (2026-09-09)
+
+
+### ✨ 기능
+
+* **chat:** 모델 비교 모드 — 두 모델이 같은 질문에 동시에 답하는 분할 화면 (/compare) ([#807](https://github.com/openmake/openmake_llm/issues/807)) ([8faa049](https://github.com/openmake/openmake_llm/commit/8faa0499cf147a4a4b10afc698b5fe2ec3b31215))
+
 ## [1.52.2](https://github.com/openmake/openmake_llm/compare/v1.52.1...v1.52.2) (2026-09-08)
 
 
