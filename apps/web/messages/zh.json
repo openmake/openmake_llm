@@ -457,7 +457,10 @@
     "emptyPane": "暂无回答。",
     "tokensPerSec": "{value} tok/s",
     "sameModelHint": "两个面板使用同一模型，请选择不同模型以进行比较。",
-    "thinking": "推理过程"
+    "thinking": "推理过程",
+    "thinkingToggle": "思考",
+    "thinkingOn": "开启思考",
+    "thinkingOff": "关闭思考"
   },
   "artifacts": {
     "exec": {

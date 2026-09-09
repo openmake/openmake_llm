@@ -457,7 +457,10 @@
     "emptyPane": "아직 답변이 없습니다.",
     "tokensPerSec": "{value} tok/s",
     "sameModelHint": "두 패널이 같은 모델입니다 — 다른 모델을 골라야 비교가 됩니다.",
-    "thinking": "추론 과정"
+    "thinking": "추론 과정",
+    "thinkingToggle": "Thinking",
+    "thinkingOn": "Thinking 켜기",
+    "thinkingOff": "Thinking 끄기"
   },
   "artifacts": {
     "exec": {
