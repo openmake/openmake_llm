@@ -191,18 +191,48 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
         keyUrl: 'https://build.nvidia.com/settings/api-keys',
         logo: '/images/providers/nvidia-nim.svg',
         authMethods: ['api_key'] as const,
-        // 2026-09-05 공개 /v1/models(81개) 대조 — llama-3.3-70b·qwen3-next-80b 는 410 end-of-life,
-        // llama-4-maverick 은 목록 부재라 제거. 아래는 목록에 살아 있는 채팅용 모델만.
-        // (NVIDIA 는 모델별 무료 플래그가 없고 계정 크레딧·RPM 제한이라 isFree 는 전부 false)
+        // 2026-09-11 실측 — build.nvidia.com "Free Endpoint" 필터 38개 중, OpenAI 호환
+        // API(/v1/models)로 접근 가능한 22개 전부. 나머지 16개는 전용 API(비디오 생성 cosmos-transfer,
+        // TTS magpie/studiovoice, 자율주행 인지 streampetr/sparsedrive/bevformer, 이미지 편집 등)라
+        // /v1/chat/completions 로 호출할 수 없어 제외했다.
+        // isFree 는 그 "Free Endpoint" 배지 기준이다 (종전 주석의 "모델별 무료 플래그가 없다"는 틀렸다).
+        // capabilities 는 user 3 키로 모델마다 실호출(plain/tools/vision)한 실측값이다.
+        //  ⚠️ vision 프로브는 정상 크기 이미지로 할 것 — 8x8 PNG 로 재면 실제 비전 모델
+        //     (llama-3.2-11b-vision·gemma-4·muse-glimmer 등)이 400/500 을 내 vision:false 로 잘못 등록된다.
+        //     미지원의 근거는 "not a multimodal model"·"multimodal processing is not enabled" 뿐이고,
+        //     "Failed to load image" 는 이미지 문제(=멀티모달 입력을 수용했다는 뜻)다.
+        //  ⚠️ 프로브 간격은 20s 이상 — 연속 호출은 429 라 capability 가 미지원으로 오판된다.
+        //  ⚠️ 무료 티어는 큐 대기가 길어 일부 모델(deepseek-v4-*, llama-3.2-90b-vision, llama-guard-4)은
+        //     280s 타임아웃까지 응답이 없었다. 이들 capability 는 형제 모델 실측(11B vision·content-safety)과
+        //     공식 스펙 기준이며 실측 확인분이 아니다.
         fallbackModels: [
-            { id: 'nvidia/nemotron-3-super-120b-a12b',   displayName: 'Nemotron 3 Super 120B A12B', isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
-            { id: 'nvidia/nemotron-nano-3-30b-a3b',      displayName: 'Nemotron Nano 3 30B A3B',    isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
-            { id: 'deepseek-ai/deepseek-v4-flash-0731',  displayName: 'DeepSeek V4 Flash',          isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
-            { id: 'moonshotai/kimi-k3',                  displayName: 'Kimi K3',                    isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
-            { id: 'openai/gpt-oss-20b',                  displayName: 'GPT-OSS 20B',                isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true  } },
-            { id: 'google/gemma-4-31b-it',               displayName: 'Gemma 4 31B',                isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
-            { id: 'mistralai/mistral-nemotron',          displayName: 'Mistral Nemotron',           isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: false } },
-            { id: 'meta/llama-3.2-90b-vision-instruct',  displayName: 'Llama 3.2 90B Vision',       isFree: false, capabilities: { streaming: true, toolCalling: false, vision: true,  thinking: false } },
+            // --- 범용 LLM (tools·vision 실측) ---
+            { id: 'moonshotai/kimi-k3',                           displayName: 'Kimi K3',                     isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: true,  thinking: true  } },
+            { id: 'meta/muse-glimmer-30b',                        displayName: 'Muse Glimmer 30B',            isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: true,  thinking: true  } },
+            { id: 'openai/gpt-oss-20b',                           displayName: 'GPT-OSS 20B',                 isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: true,  thinking: true  } },
+            { id: 'google/gemma-4-31b-it',                        displayName: 'Gemma 4 31B',                 isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: true,  thinking: false } },
+            { id: 'google/diffusiongemma-26b-a4b-it',             displayName: 'DiffusionGemma 26B A4B',      isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: true,  thinking: false } },
+            { id: 'nvidia/ising-calibration-1.5-31b',             displayName: 'Ising Calibration 1.5 31B',   isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: true,  thinking: false } },
+            { id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', displayName: 'Nemotron 3 Nano Omni 30B',   isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: true,  thinking: true  } },
+            { id: 'nvidia/nemotron-3-super-120b-a12b',            displayName: 'Nemotron 3 Super 120B A12B',  isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: false, thinking: true  } },
+            { id: 'nvidia/nemotron-3.5-lightning-30b-a3b',        displayName: 'Nemotron 3.5 Lightning 30B',  isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: false, thinking: true  } },
+            { id: 'nvidia/nemotron-3-ultra-550b-a55b',            displayName: 'Nemotron 3 Ultra 550B A55B',  isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: false, thinking: false } },
+            { id: 'mistralai/mistral-nemotron',                   displayName: 'Mistral Nemotron',            isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: false, thinking: false } },
+            { id: 'poolside/laguna-xs-2.1',                       displayName: 'Laguna XS 2.1',               isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: false, thinking: false } },
+            // --- 비전 (11B 는 실측, 90B 는 큐 대기로 미확인 — 형제 모델 기준) ---
+            { id: 'meta/llama-3.2-11b-vision-instruct',           displayName: 'Llama 3.2 11B Vision',        isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: true,  thinking: false } },
+            { id: 'meta/llama-3.2-90b-vision-instruct',           displayName: 'Llama 3.2 90B Vision',        isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: true,  thinking: false } },
+            // --- DeepSeek (chat 만 실측, tools/vision 은 큐 대기로 미확인) ---
+            { id: 'deepseek-ai/deepseek-v4-pro-0813',             displayName: 'DeepSeek V4 Pro',             isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: false, thinking: false } },
+            { id: 'deepseek-ai/deepseek-v4-flash-0731',           displayName: 'DeepSeek V4 Flash',           isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: false, thinking: false } },
+            // --- 특화 — tools 미지원 실측("auto tool choice requires --enable-auto-tool-choice") ---
+            { id: 'nvidia/nemotron-3.5-content-safety',           displayName: 'Nemotron 3.5 Content Safety', isFree: true, capabilities: { streaming: true, toolCalling: false, vision: true,  thinking: false } },
+            { id: 'meta/llama-guard-4-12b',                       displayName: 'Llama Guard 4 12B',           isFree: true, capabilities: { streaming: true, toolCalling: false, vision: true,  thinking: false } },
+            { id: 'nvidia/llama-3.1-nemotron-safety-guard-8b-v3', displayName: 'Nemotron Safety Guard 8B v3', isFree: true, capabilities: { streaming: true, toolCalling: false, vision: false, thinking: false } },
+            { id: 'nvidia/riva-translate-4b-instruct-v2',         displayName: 'Riva Translate 4B v2',        isFree: true, capabilities: { streaming: true, toolCalling: false, vision: false, thinking: false } },
+            { id: 'nvidia/riva-translate-4b-instruct-v1.1',       displayName: 'Riva Translate 4B v1.1',      isFree: true, capabilities: { streaming: true, toolCalling: false, vision: false, thinking: false } },
+            // --- 임베딩 (/v1/embeddings 200 실측) — 채팅 목록에선 isChatCapableModel 이 거른다 ---
+            { id: 'nvidia/nemotron-3-embed-1b',                   displayName: 'Nemotron 3 Embed 1B',         isFree: true, capabilities: { streaming: false, toolCalling: false, vision: false, thinking: false } },
         ],
     },
     {
