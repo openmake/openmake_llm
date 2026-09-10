@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.55.1](https://github.com/openmake/openmake_llm/compare/v1.55.0...v1.55.1) (2026-09-09)
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 서브에이전트가 120초 타임아웃 3회 재시도로 죽던 문제 ([#817](https://github.com/openmake/openmake_llm/issues/817)) ([d82e1be](https://github.com/openmake/openmake_llm/commit/d82e1bef2d57386fc412f5add530e6be13563e66))
+
 ## [1.55.0](https://github.com/openmake/openmake_llm/compare/v1.54.0...v1.55.0) (2026-09-09)
 
 
