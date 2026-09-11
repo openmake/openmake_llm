@@ -22,9 +22,16 @@ export async function handleBridgeMessage(ws: WebSocket, msg: WSMessage): Promis
         ws.send(JSON.stringify({ type: 'error', message: '로컬 실행 기능이 비활성화되어 있습니다 (LOCAL_EXECUTOR_ENABLED)' }));
         return;
     }
+    // 브리지는 API key 연결만 받는다 — Companion·CLI 가 이 경로다(ws-auth 는 API key 연결에 항상
+    // 스코프 배열을 싣는다: 미지정 키는 ['*']). JWT/쿠키 연결(_apiKeyScopes=undefined)로 등록하던 것은
+    // 구 Electron 데스크톱 앱뿐이었고, macOS 는 네이티브 컴패니언만 지원하므로(2026-09-11) 거부한다.
+    if (extWs._apiKeyScopes === undefined) {
+        ws.send(JSON.stringify({ type: 'error', message: '로컬 실행은 OpenMake Companion 또는 CLI 로만 연결할 수 있습니다 — bridge 스코프 API key 로 접속하세요' }));
+        try { ws.close(1008, 'bridge_api_key_required'); } catch { /* already closing */ }
+        return;
+    }
     // API key 연결이면 bridge 스코프 필수 — 스코프 없는(예: chat 전용) 키의 브리지 등록 차단.
-    // JWT/쿠키(데스크톱 앱) 연결은 _apiKeyScopes=undefined 라 apiKeyHasScope 가 통과시킨다.
-    if (extWs._apiKeyScopes !== undefined && !apiKeyHasScope(extWs._apiKeyScopes, API_KEY_SCOPES.BRIDGE)) {
+    if (!apiKeyHasScope(extWs._apiKeyScopes, API_KEY_SCOPES.BRIDGE)) {
         ws.send(JSON.stringify({ type: 'error', message: `이 API key 는 '${API_KEY_SCOPES.BRIDGE}' 스코프가 없습니다 — bridge 스코프 키를 발급하세요` }));
         try { ws.close(1008, 'bridge_scope_required'); } catch { /* already closing */ }
         return;

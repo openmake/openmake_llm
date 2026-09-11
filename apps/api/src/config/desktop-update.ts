@@ -13,6 +13,6 @@ import * as path from 'path';
 export const DESKTOP_UPDATE = {
     /** dmg + latest.json 보관 디렉토리 */
     DIR: process.env.DESKTOP_UPDATE_DIR || path.join(process.cwd(), 'data', 'desktop-updates'),
-    /** 다운로드 허용 파일명 패턴 — 경로 조작 차단 */
-    FILE_PATTERN: /^OpenMake-[A-Za-z0-9.-]+\.dmg$/,
+    /** 다운로드 허용 파일명 패턴 — 경로 조작 차단. macOS 는 네이티브 컴패니언 dmg 만 (구 Electron dmg 거부, 2026-09-11) */
+    FILE_PATTERN: /^OpenMake-Companion-[A-Za-z0-9.-]+\.dmg$/,
 } as const;
