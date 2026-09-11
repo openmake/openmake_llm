@@ -30,20 +30,9 @@ import { createLogger } from '../utils/logger';
 import { capPromptImages } from './prompt-image-cap';
 import { LLM_PROMPT_IMAGE_LIMITS } from '../config/runtime-limits';
 import { LOCAL_PRESERVE_THINKING_ENABLED } from '../config/llm-parameters';
+import { FALLBACK_REASONING_ONLY_NOTICE, shouldPromoteReasoningOnly } from './reasoning-only-recovery';
 
 const log = createLogger('StreamParser');
-
-/**
- * Fallback 메시지: vLLM reasoning 모델(Qwen3 등) 이 reasoning 토큰만으로
- * max_tokens 를 소진하여 `content` 가 `null|""` 로 반환된 경우 사용자에게 노출.
- *
- * 발생 조건 (vLLM 0.21+ Qwen3 reasoning):
- *   finish_reason="length", message.content=null, message.reasoning_content="...".
- * 해결책: max_tokens(num_predict) 증가 또는 `LLM_DISABLE_THINKING_BY_DEFAULT=true`.
- */
-const FALLBACK_REASONING_ONLY_NOTICE =
-    '(응답 한도(max_tokens) 내에서 reasoning 단계만 완료되어 본문이 생성되지 않았습니다. ' +
-    '재시도 시 더 짧게 질문하거나, 관리자에게 num_predict 증가 또는 reasoning 비활성화를 요청하세요.)';
 
 type OpenAIChatChunk = {
     choices: Array<{
@@ -452,9 +441,13 @@ export async function streamChat(
     // 일부 vLLM 빌드는 enable_thinking=false 요청을 받고도 모델 출력 전체를 reasoning
     // 채널로 라우팅하여 content=null 을 반환. 이 경우 reasoning 을 본 답변으로 승격하여
     // 사용자에게 빈 화면이 보이지 않도록 한다. finish_reason="length" 면 절단 안내도 부착.
+    // 단 thinking 을 명시 요청했고 서버가 추론을 분리해 보낸 정상 종료 턴은 승격하지 않는다(reasoning-only-recovery).
     let finalContent = reasoningSplit.content;
     let finalThinking = thinking;
-    if (!finalContent && thinking && toolCalls.length === 0) {
+    if (!finalContent && thinking && toolCalls.length === 0 && shouldPromoteReasoningOnly({
+        enableThinking: kwargs.enable_thinking, serverReasoningField: usesReasoningField,
+        finishReason, model: request.model, thinkingChars: thinking.length, completionTokens,
+    })) {
         // 2026-05-26: recovery 분기의 CoT extract 비활성 — false-positive 위험.
         // Qwen3.6 thinking 모드에서 코드 응답이 reasoning_content 로 전체 도착 + content 빈 채로
         // 종료되면, recovery 가 thinking 전체를 사용자에게 노출해야 함 (그것이 실제 답변).
@@ -562,10 +555,14 @@ export async function nonStreamChat(
     }
 
     // Reasoning-channel recovery (non-stream 동일 — streamChat 의 동일 원칙 적용).
-    // content 비어있고 reasoning 만 채워진 경우 reasoning 을 본 답변으로 승격.
+    // content 비어있고 reasoning 만 채워진 경우 reasoning 을 본 답변으로 승격(예외 규칙도 streamChat 과 동일).
     let finalContent = reasoningSplit.content;
     let finalThinking = combinedThinking;
-    if (!finalContent && combinedThinking && toolCalls.length === 0) {
+    const nsEnableThinking = (extraBody?.chat_template_kwargs as { enable_thinking?: boolean } | undefined)?.enable_thinking;
+    if (!finalContent && combinedThinking && toolCalls.length === 0 && shouldPromoteReasoningOnly({
+        enableThinking: nsEnableThinking, serverReasoningField: Boolean(serverReasoning),
+        finishReason, model: request.model, thinkingChars: combinedThinking.length, completionTokens: r.usage?.completion_tokens,
+    })) {
         finalContent = combinedThinking;
         finalThinking = '';
         if (finishReason === 'length') {

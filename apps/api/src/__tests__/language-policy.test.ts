@@ -537,3 +537,21 @@ describe('detectLanguage — 코드 식별자가 섞인 한국어 질문 (2026-0
         expect(out).toMatch(/App Router/);
     });
 });
+describe('detectLanguage — 한글 자모만 있는 입력 (2026-09-11 "ㅎㅇ" 영어 판정 정정)', () => {
+    test('자모만 있는 인사·웃음·대답은 한국어로 판정한다', () => {
+        for (const q of ['ㅎㅇ', 'ㅋㅋㅋ', 'ㅇㅇ']) {
+            const result = detectLanguage(q);
+            expect(result.language).toBe('ko');
+            expect(result.method).toBe('regex');
+        }
+    });
+    test('NFKC 로 조합형 자모(U+1100)가 된 입력도 한국어 — 입력 정제(NFKC)를 거친 경로', () => {
+        expect(detectLanguage('ㅎㅇ'.normalize('NFKC')).language).toBe('ko');
+    });
+    test('preprocess: 자모만 있는 줄을 특수문자 줄로 지우지 않는다', () => {
+        expect(preprocessTextForLanguageDetection('ㅎㅇ')).toBe('ㅎㅇ');
+    });
+    test('자모가 없는 짧은 영어는 그대로 영어 폴백', () => {
+        expect(detectLanguage('hi').language).toBe('en');
+    });
+});
