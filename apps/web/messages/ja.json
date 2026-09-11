@@ -1627,6 +1627,8 @@
     "resetLabel": "デフォルトに戻す",
     "empty": "割り当て可能なモダリティがありません。",
     "notInList": "(一覧にありません)",
+    "paramsHint": "provider 規格の引数 — 空欄ならデフォルト",
+    "paramsApply": "引数を適用",
     "source": {
       "user": "自分の設定",
       "global": "グローバル",
@@ -1690,6 +1692,8 @@
     "codeDefault": "コード既定値: {model}",
     "notInList": "(一覧にありません)",
     "cacheNote": "変更は再起動なしで最大60秒以内に反映されます。",
+    "paramsHint": "provider 規格の引数 — 空欄ならデフォルト",
+    "paramsApply": "引数を適用",
     "source": {
       "user": "自分の設定",
       "global": "グローバル",

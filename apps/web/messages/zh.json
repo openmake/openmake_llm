@@ -1627,6 +1627,8 @@
     "resetLabel": "恢复默认",
     "empty": "没有可分配的模态。",
     "notInList": "(不在列表中)",
+    "paramsHint": "provider 规格参数 — 留空则为默认值",
+    "paramsApply": "应用参数",
     "source": {
       "user": "我的设置",
       "global": "全局",
@@ -1690,6 +1692,8 @@
     "codeDefault": "代码默认值:{model}",
     "notInList": "(不在列表中)",
     "cacheNote": "更改无需重启,最多 60 秒内生效。",
+    "paramsHint": "provider 规格参数 — 留空则为默认值",
+    "paramsApply": "应用参数",
     "source": {
       "user": "我的设置",
       "global": "全局",

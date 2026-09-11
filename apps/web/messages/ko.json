@@ -1627,6 +1627,8 @@
     "resetLabel": "기본값으로 되돌리기",
     "empty": "배정 가능한 모달리티가 없습니다.",
     "notInList": "(목록에 없음)",
+    "paramsHint": "provider 규격 인자 — 비우면 기본값",
+    "paramsApply": "인자 적용",
     "source": {
       "user": "내 설정",
       "global": "전역",
@@ -1690,6 +1692,8 @@
     "codeDefault": "코드 기본값: {model}",
     "notInList": "(목록에 없음)",
     "cacheNote": "변경은 재시작 없이 최대 60초 내 반영됩니다.",
+    "paramsHint": "provider 규격 인자 — 비우면 기본값",
+    "paramsApply": "인자 적용",
     "source": {
       "user": "내 설정",
       "global": "전역",

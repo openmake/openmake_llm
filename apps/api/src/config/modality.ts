@@ -96,6 +96,16 @@ export const IMAGE_GEN_DEFAULT_SIZE = '1024x1024';
 export const TTS_ALLOWED_FORMATS: ReadonlySet<string> = new Set(['mp3', 'wav', 'opus', 'aac', 'flac']);
 export const TTS_DEFAULT_FORMAT = 'mp3';
 export const TTS_DEFAULT_VOICE = 'alloy';
+/**
+ * provider 별 모달리티 기본 params — 배정 params(사용자 입력) 가 없을 때 적용. 실측 규격 차이를 흡수한다
+ * (hasa melotts-ko: voice 는 `KR` 만, 형식은 `wav` 만 — 2026-09-12). 우선순위: 도구 인자 > 배정 params > 이 표 > 전역 기본.
+ */
+export const PROVIDER_MODALITY_PARAM_DEFAULTS: Record<string, Partial<Record<Modality, Record<string, string>>>> = {
+    hasa: { tts: { voice: 'KR', format: 'wav' } },
+};
+export function providerParamDefaults(providerId: string, modality: Modality): Record<string, string> {
+    return PROVIDER_MODALITY_PARAM_DEFAULTS[providerId]?.[modality] ?? {};
+}
 /** STT 입력으로 허용하는 오디오 확장자 */
 export const STT_ALLOWED_EXTS: ReadonlySet<string> = new Set(['mp3', 'wav', 'm4a', 'ogg', 'opus', 'flac', 'webm', 'mp4']);
 /** 영상 생성 기본 인자 (OpenAI videos 규격 — provider 가 다르면 params 로 덮어쓴다) */

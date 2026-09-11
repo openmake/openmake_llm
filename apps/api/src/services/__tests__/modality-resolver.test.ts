@@ -173,6 +173,16 @@ describe('영상 jobs-v1 어댑터(hasa) — 게이트웨이가 프록시 못 �
     });
 });
 
+describe('provider 별 params 기본값', () => {
+    it('hasa tts 는 voice=KR·format=wav 가 기본이고 배정 params 가 우선한다', async () => {
+        const a = await resolveModalityTarget('tts', undefined, makeDeps({ global: [row('__global__', 'tts', 'hasa:melotts-ko')], serverKey: 's' }));
+        expect(a.params).toEqual({ voice: 'KR', format: 'wav' });
+        clearGlobalModalityCache();
+        const b = await resolveModalityTarget('tts', undefined, makeDeps({ global: [row('__global__', 'tts', 'hasa:melotts-ko', { voice: 'EN' })], serverKey: 's' }));
+        expect(b.params).toEqual({ voice: 'EN', format: 'wav' });
+    });
+});
+
 describe('seedModalityDefaultsFromEnv — 구 IMAGE_GEN_MODEL 1회 이관', () => {
     const saved = process.env.IMAGE_GEN_MODEL;
     afterEach(() => {

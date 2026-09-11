@@ -21,6 +21,8 @@ import { ApiClient } from "@/lib/api-client";
 import { fetchModels, type ModelEntry } from "@/lib/models-api";
 import {
   ModalityEffectiveLine,
+  ModalityParamsInputs,
+  compactParams,
   type ModalityEffective,
   type ModalityOverride,
 } from "@/components/settings/modality-models-section";
@@ -135,6 +137,7 @@ function GlobalModalityModelsCard() {
   const [payload, setPayload] = useState<ModalityPayload | null>(null);
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [paramDrafts, setParamDrafts] = useState<Record<string, Record<string, string>>>({});
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -146,6 +149,9 @@ function GlobalModalityModelsCard() {
         fetchModels(),
       ]);
       setPayload(r?.data ?? null);
+      const drafts: Record<string, Record<string, string>> = {};
+      for (const row of r?.data?.mappings ?? []) drafts[row.modality] = { ...(row.params ?? {}) };
+      setParamDrafts(drafts);
       setModels(m.models);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("loadError"));
@@ -161,7 +167,11 @@ function GlobalModalityModelsCard() {
     setError(null);
     try {
       if (fullId) {
-        await ApiClient.put(`/api/admin/modality-models/${modality}`, { model: fullId });
+        const params = compactParams(paramDrafts[modality]);
+        await ApiClient.put(`/api/admin/modality-models/${modality}`, {
+          model: fullId,
+          ...(params ? { params } : {}),
+        });
       } else if (payload?.mappings.some((m) => m.modality === modality)) {
         await ApiClient.del(`/api/admin/modality-models/${modality}`);
       }
@@ -173,7 +183,12 @@ function GlobalModalityModelsCard() {
     }
   }
 
+  function setParam(modality: string, key: string, value: string) {
+    setParamDrafts((d) => ({ ...d, [modality]: { ...(d[modality] ?? {}), [key]: value } }));
+  }
+
   const mapped = new Map((payload?.mappings ?? []).map((m) => [m.modality, m.fullId]));
+  const savedParams = new Map((payload?.mappings ?? []).map((m) => [m.modality, m.params]));
   const effectiveMap = new Map((payload?.effective ?? []).map((e) => [e.modality, e]));
   const providers = payload?.gatewayProviders ?? [];
 
@@ -207,6 +222,16 @@ function GlobalModalityModelsCard() {
                 <p className="text-xs text-muted">
                   {t("codeDefault", { model: payload?.defaults[modality] || "—" })}
                 </p>
+                <ModalityParamsInputs
+                  modality={modality}
+                  draft={paramDrafts[modality] ?? {}}
+                  saved={savedParams.get(modality)}
+                  disabled={!current}
+                  busy={isBusy}
+                  onChange={(key, value) => setParam(modality, key, value)}
+                  onApply={() => void handleChange(modality, current)}
+                  t={t}
+                />
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {isBusy && <Loader2 className="h-4 w-4 animate-spin text-muted" aria-hidden />}

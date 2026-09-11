@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Layers, Loader2, RotateCcw } from "lucide-react";
+import { Layers, Loader2, RotateCcw, Save } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -42,6 +42,96 @@ interface ModalityModelsPayload {
 
 /** 배정 미지정 select 값 — 전역/기본값으로 자동 해석됨 */
 const DEFAULT_VALUE = "";
+
+/**
+ * 모달리티별 params 화이트리스트 — 백엔드 `config/modality.ts` `MODALITY_LIMITS.PARAM_KEYS` 와
+ * 동일하게 유지할 것(서버는 이 키 밖의 값을 조용히 버린다).
+ */
+export const MODALITY_PARAM_KEYS: Record<string, readonly string[]> = {
+  image_gen: ["size", "quality", "style"],
+  image_edit: ["size"],
+  vision: ["detail"],
+  video_gen: ["size", "seconds"],
+  stt: ["language"],
+  tts: ["voice", "format"],
+  embedding: ["dimensions"],
+};
+
+/** 백엔드 `PARAM_VALUE_MAX_CHARS` 와 동일 */
+export const MODALITY_PARAM_VALUE_MAX = 64;
+
+/** 비어 있지 않은(trim) 값만 남긴 params — PUT body 용. 없으면 undefined. */
+export function compactParams(draft: Record<string, string> | undefined): Record<string, string> | undefined {
+  if (!draft) return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(draft)) {
+    const s = v.trim();
+    if (s) out[k] = s;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** 저장된 params 와 초안이 같은지 (빈 값은 없는 것으로 취급) */
+export function paramsEqual(saved: Record<string, string> | undefined, draft: Record<string, string> | undefined): boolean {
+  const a = compactParams(saved) ?? {};
+  const b = compactParams(draft) ?? {};
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const k of keys) if (a[k] !== b[k]) return false;
+  return true;
+}
+
+/**
+ * 모달리티 params 입력 행 (사용자·관리자 공용). 허용 키마다 작은 텍스트 입력 하나.
+ * 모델이 배정되지 않았으면 비활성, 저장값과 다를 때만 [적용] 버튼 노출.
+ */
+export function ModalityParamsInputs({
+  modality,
+  draft,
+  saved,
+  disabled,
+  busy,
+  onChange,
+  onApply,
+  t,
+}: {
+  modality: string;
+  draft: Record<string, string>;
+  saved: Record<string, string> | undefined;
+  disabled: boolean;
+  busy: boolean;
+  onChange: (key: string, value: string) => void;
+  onApply: () => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const keys = MODALITY_PARAM_KEYS[modality] ?? [];
+  if (keys.length === 0) return null;
+  const dirty = !disabled && !paramsEqual(saved, draft);
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {keys.map((key) => (
+        <input
+          key={key}
+          type="text"
+          className="h-8 w-28 rounded-md border border-border bg-surface-2 px-2 font-mono text-xs text-fg placeholder:text-muted focus:border-accent focus:outline-none disabled:opacity-50"
+          placeholder={key}
+          title={key}
+          aria-label={`${t(`modalities.${modality}`)} ${key}`}
+          maxLength={MODALITY_PARAM_VALUE_MAX}
+          value={draft[key] ?? ""}
+          disabled={disabled || busy}
+          onChange={(e) => onChange(key, e.target.value)}
+        />
+      ))}
+      {dirty && (
+        <Button size="sm" variant="ghost" className="whitespace-nowrap" disabled={busy} onClick={onApply}>
+          <Save className="h-4 w-4" aria-hidden />
+          {t("paramsApply")}
+        </Button>
+      )}
+      <span className="text-xs text-muted">{t("paramsHint")}</span>
+    </div>
+  );
+}
 
 const SOURCE_TONE: Record<ModalitySource, "accent" | "success" | "neutral"> = {
   user: "accent",
@@ -95,6 +185,7 @@ export function ModalityModelsSection() {
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
+  const [paramDrafts, setParamDrafts] = useState<Record<string, Record<string, string>>>({});
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -106,7 +197,12 @@ export function ModalityModelsSection() {
         // 역할 배정과 달리 채팅 불가 모델(임베딩·이미지 등)이 배정 대상이므로 필터 없이 전체 목록.
         fetchModels(),
       ]);
-      setOverrides(res?.data?.overrides ?? []);
+      const nextOverrides = res?.data?.overrides ?? [];
+      setOverrides(nextOverrides);
+      // 저장된 params 를 초안으로 되돌린다(적용 뒤 dirty 표시가 사라지도록).
+      const drafts: Record<string, Record<string, string>> = {};
+      for (const o of nextOverrides) drafts[o.modality] = { ...(o.params ?? {}) };
+      setParamDrafts(drafts);
       setEffective(res?.data?.effective ?? []);
       setModalities(res?.data?.assignableModalities ?? []);
       setModels(modelsRes.models);
@@ -134,8 +230,11 @@ export function ModalityModelsSection() {
           await ApiClient.del(`/api/users/me/modality-models/${modality}`);
         }
       } else {
-        // params 는 1차 UI 없음 — 보내지 않는다.
-        await ApiClient.put(`/api/users/me/modality-models/${modality}`, { model: fullId });
+        const params = compactParams(paramDrafts[modality]);
+        await ApiClient.put(`/api/users/me/modality-models/${modality}`, {
+          model: fullId,
+          ...(params ? { params } : {}),
+        });
       }
       await load();
     } catch (e) {
@@ -145,7 +244,12 @@ export function ModalityModelsSection() {
     }
   }
 
+  function setParam(modality: string, key: string, value: string) {
+    setParamDrafts((d) => ({ ...d, [modality]: { ...(d[modality] ?? {}), [key]: value } }));
+  }
+
   const mapped = new Map(overrides.map((o) => [o.modality, o.fullId]));
+  const savedParams = new Map(overrides.map((o) => [o.modality, o.params]));
   const effectiveMap = new Map(effective.map((e) => [e.modality, e]));
 
   return (
@@ -194,6 +298,16 @@ export function ModalityModelsSection() {
                       )}
                     </div>
                     <ModalityEffectiveLine eff={effectiveMap.get(modality)} t={t} />
+                    <ModalityParamsInputs
+                      modality={modality}
+                      draft={paramDrafts[modality] ?? {}}
+                      saved={savedParams.get(modality)}
+                      disabled={current === DEFAULT_VALUE}
+                      busy={isSaving}
+                      onChange={(key, value) => setParam(modality, key, value)}
+                      onApply={() => void handleChange(modality, current)}
+                      t={t}
+                    />
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     {isSaving && (

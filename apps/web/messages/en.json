@@ -1627,6 +1627,8 @@
     "resetLabel": "Reset to default",
     "empty": "No assignable modalities.",
     "notInList": "(not in list)",
+    "paramsHint": "Provider-specific params — empty = default",
+    "paramsApply": "Apply params",
     "source": {
       "user": "My setting",
       "global": "Global",
@@ -1690,6 +1692,8 @@
     "codeDefault": "Code default: {model}",
     "notInList": "(not in list)",
     "cacheNote": "Changes take effect within 60 seconds without a restart.",
+    "paramsHint": "Provider-specific params — empty = default",
+    "paramsApply": "Apply params",
     "source": {
       "user": "My setting",
       "global": "Global",

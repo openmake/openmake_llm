@@ -27,6 +27,7 @@ import {
     MODALITY_ENDPOINT,
     MODALITY_LIMITS,
     videoAdapterFor,
+    providerParamDefaults,
     type Modality,
 } from '../config/modality';
 import { EXTERNAL_PROVIDER_CATALOG } from '../config/external-providers';
@@ -152,6 +153,7 @@ async function externalTarget(
 ): Promise<ModalityTarget> {
     const cfg = getConfig();
     const { providerId, modelId } = splitFullId(fullId);
+    params = { ...providerParamDefaults(providerId, modality), ...params };
     const entry = EXTERNAL_PROVIDER_CATALOG.find((p) => p.id === providerId);
     if (!entry) throw new ModalityUnavailableError(`카탈로그에 없는 provider '${providerId}'`, 'MODALITY_PROVIDER_UNKNOWN');
     if (!cfg.llmGatewayProviders.includes(providerId)) {
