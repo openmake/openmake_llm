@@ -24,6 +24,12 @@
 #   ./openmake_llm.sh status     # 모든 계층 상태 확인
 #   ./openmake_llm.sh logs       # OpenMake LLM 실시간 로그
 #   ./openmake_llm.sh health     # /health 엔드포인트 응답 확인
+#   ./openmake_llm.sh db-dump [파일]     # DB 전체 덤프 (pg_dump -Fc) — 다른 호스트로 옮길 때
+#   ./openmake_llm.sh db-restore <파일>  # 덤프를 이 인스턴스 DB 에 복원 → 마이그레이션 → 앱 재시작
+#
+# 인스턴스: .env 의 OMK_INSTANCE(install.sh --instance NAME)가 있으면 PM2 앱 이름이
+#   openmake-llm-<이름>/openmake-next-<이름>, 컨테이너가 openmake-<이름>-postgres 가 된다.
+#   이 스크립트는 자기 디렉터리의 .env 만 보므로 설치본 각각의 디렉터리에서 실행하면 된다.
 #
 # 환경 가정 (Linux / macOS 공통):
 #   - PostgreSQL/Redis는 docker compose 로 관리 (2026-06-21 brew postgresql@16 제거 → docker 단독)
@@ -47,8 +53,20 @@ readonly SCRIPT_DIR
 # shellcheck source=/dev/null
 [[ -f "$SCRIPT_DIR/.openmake/toolchain.env" ]] && . "$SCRIPT_DIR/.openmake/toolchain.env"
 
-readonly APP_NAME="openmake-llm"
-readonly FRONT_APP_NAME="openmake-next"
+# .env 에서 키 하나만 추출한다 (전체 source 안 함 — 값에 공백/특수문자가 있어도 안전).
+# `|| true` 필수: 키가 없으면 grep 이 1 로 끝나고 pipefail+set -e 가 스크립트를 즉시 종료시킨다.
+env_line() {
+    [[ -f "$SCRIPT_DIR/.env" ]] || return 0
+    grep -E "^$1=" "$SCRIPT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d ' ' || true
+}
+
+# 인스턴스 접미사 — ecosystem.config.js(resolve-ports.cjs)·infra/docker-compose.yml 과 같은 규칙으로
+# PM2 앱·docker 컨테이너 이름을 만든다 (.env 의 OMK_INSTANCE 하나가 단일 출처).
+_instance="$(env_line OMK_INSTANCE)"
+readonly INSTANCE="$_instance"
+readonly APP_NAME="openmake-llm${INSTANCE:+-$INSTANCE}"
+readonly FRONT_APP_NAME="openmake-next${INSTANCE:+-$INSTANCE}"
+readonly PG_CONTAINER="openmake${INSTANCE:+-$INSTANCE}-postgres"
 
 # Caddy 리버스 프록시 설정 — 이 레포가 SoT.
 #
@@ -57,13 +75,6 @@ readonly FRONT_APP_NAME="openmake-next"
 # 교체했다. 그래서 레포 변경이 더는 자동 반영되지 않는다 — 배포마다 여기서 복사한다.
 readonly CADDYFILE_SRC_REL="scripts/caddy/Caddyfile"
 CADDYFILE_DEST="${CADDYFILE_DEST:-/opt/homebrew/etc/Caddyfile}"
-
-# .env 에서 키 하나만 추출한다 (전체 source 안 함 — 값에 공백/특수문자가 있어도 안전).
-# `|| true` 필수: 키가 없으면 grep 이 1 로 끝나고 pipefail+set -e 가 스크립트를 즉시 종료시킨다.
-env_line() {
-    [[ -f "$SCRIPT_DIR/.env" ]] || return 0
-    grep -E "^$1=" "$SCRIPT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d ' ' || true
-}
 
 # .env 의 KEY=VALUE 를 현재 셸에 export 한다 — `pm2 restart --update-env` 가 .env 편집을 실제로
 # 반영하게 하는 유일한 경로. PM2 는 최초 `pm2 start` 시점의 env 스냅샷을 프로세스에 계속 주입하고
@@ -686,6 +697,12 @@ cmd_deploy() {
 sync_caddyfile() {
     local src="$SCRIPT_DIR/$CADDYFILE_SRC_REL"
 
+    # 호스트의 Caddyfile 은 하나뿐이다 — 이름 있는 인스턴스가 기본 인스턴스의 설정을 덮어쓰지 않게 한다.
+    if [[ -n "$INSTANCE" ]]; then
+        log_info "인스턴스 '$INSTANCE' — 호스트 Caddyfile 동기화 생략 (기본 인스턴스만 반영)"
+        return 0
+    fi
+
     [[ -f "$src" ]] || { log_info "Caddyfile 소스 없음 — 동기화 생략 ($CADDYFILE_SRC_REL)"; return 0; }
     [[ -d "$(dirname "$CADDYFILE_DEST")" ]] || { log_info "Caddy 설정 경로 없음 — 동기화 생략 ($CADDYFILE_DEST)"; return 0; }
 
@@ -723,6 +740,88 @@ sync_caddyfile() {
     else
         log_warn "Caddy reload 실패 — 설정은 검증을 통과했으므로 caddy 미기동(admin API 무응답)일 가능성이 큽니다. 다음 기동 시 반영됩니다"
     fi
+}
+
+# ── db-dump / db-restore: 인스턴스 DB 이관 ────────────────────────────────────
+# 운영 중인 다른 호스트의 DB 를 이 설치본으로 옮기는 표준 경로:
+#   원본:  ./openmake_llm.sh db-dump chat.dump          (pg_dump -Fc, 컨테이너 안에서 실행)
+#   대상:  ./openmake_llm.sh db-restore chat.dump       (앱 정지 → pg_restore → migrate → 재시작)
+#
+# ⚠ 복원 전에 원본 .env 의 시크릿을 대상 .env 로 옮겨야 한다 — DB 안의 값이 그 키로 묶여 있다:
+#   TOKEN_ENCRYPTION_KEY (외부 provider 자격증명 복호화), API_KEY_PEPPER (발급된 API 키 검증),
+#   JWT_SECRET (기존 세션 유지, 선택). ADMIN_* 는 DB 의 관리자 계정이 그대로 오므로 원본 값으로.
+#   업로드/생성 파일(apps/api 의 uploads·generated 디렉터리)은 DB 밖이라 rsync 로 따로 옮긴다.
+db_container_ready() {
+    docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$PG_CONTAINER" \
+        || { log_err "PostgreSQL 컨테이너($PG_CONTAINER)가 떠 있지 않습니다 — './openmake_llm.sh start' 또는 docker 확인"; return 2; }
+}
+
+cmd_db_dump() {
+    preflight
+    db_container_ready || return 2
+    local user db out
+    user="$(env_line POSTGRES_USER)"; user="${user:-openmake}"
+    db="$(env_line POSTGRES_DB)";     db="${db:-openmake_llm}"
+    out="${1:-$SCRIPT_DIR/${db}${INSTANCE:+-$INSTANCE}-$(date +%Y%m%d-%H%M%S).dump}"
+    log_step "DB 덤프: $PG_CONTAINER/$db → $out (pg_dump -Fc)"
+    if ! docker exec "$PG_CONTAINER" pg_dump -U "$user" -Fc "$db" > "$out"; then
+        rm -f "$out"; log_err "pg_dump 실패"; return 2
+    fi
+    log_ok "덤프 완료: $out ($(du -h "$out" | cut -f1))"
+    echo "  복원: 대상 설치본에서  ./openmake_llm.sh db-restore $(basename "$out")"
+    echo "  (복원 전 원본 .env 의 TOKEN_ENCRYPTION_KEY / API_KEY_PEPPER / JWT_SECRET 을 대상 .env 로 옮길 것)"
+}
+
+cmd_db_restore() {
+    local file="${1:-}" yes=0
+    [[ "${2:-}" == "--yes" || "${1:-}" == "--yes" ]] && yes=1
+    [[ "$file" == "--yes" ]] && file="${2:-}"
+    [[ -n "$file" && -f "$file" ]] || { log_err "사용법: $0 db-restore <덤프파일> [--yes]"; return 1; }
+    preflight
+    db_container_ready || return 2
+    local user db
+    user="$(env_line POSTGRES_USER)"; user="${user:-openmake}"
+    db="$(env_line POSTGRES_DB)";     db="${db:-openmake_llm}"
+
+    log_step "DB 복원: $file → $PG_CONTAINER/$db"
+    log_warn "현재 '$db' 의 모든 데이터가 덤프 내용으로 대체됩니다 (인스턴스: ${INSTANCE:-기본})."
+    DEPLOY_YES=$yes
+    confirm_or_exit "계속하시겠습니까?"
+
+    # 앱이 붙어 있으면 DROP 이 막힌다 — 복원 동안 API 만 내린다 (프론트는 무관).
+    if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$APP_NAME\""; then
+        pm2 stop "$APP_NAME" >/dev/null 2>&1 && log_info "$APP_NAME 정지 (복원 동안)"
+    fi
+
+    # 남은 세션을 끊고 통째로 다시 만든다 — --clean 보다 잔재(마이그레이션 표·enum 등)가 안 남는다.
+    docker exec "$PG_CONTAINER" psql -U "$user" -d postgres -v ON_ERROR_STOP=1 -q \
+        -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='$db' AND pid<>pg_backend_pid();" \
+        -c "DROP DATABASE IF EXISTS \"$db\";" -c "CREATE DATABASE \"$db\" OWNER \"$user\";" >/dev/null \
+        || { log_err "DB 재생성 실패"; return 2; }
+
+    # -Fc(custom) 덤프는 pg_restore, 평문 .sql 은 psql. 확장(extension) 소유권 경고는 무시 가능.
+    local rc=0
+    if head -c 5 "$file" | grep -q '^PGDMP'; then
+        docker exec -i "$PG_CONTAINER" pg_restore -U "$user" -d "$db" --no-owner --no-acl --exit-on-error < "$file" || rc=$?
+    else
+        docker exec -i "$PG_CONTAINER" psql -U "$user" -d "$db" -v ON_ERROR_STOP=1 -q < "$file" || rc=$?
+    fi
+    if [[ $rc -ne 0 ]]; then
+        log_err "복원 실패 (exit $rc) — DB 는 비어 있을 수 있습니다. 덤프 파일과 PostgreSQL 버전을 확인하세요."
+        return 2
+    fi
+    log_ok "복원 완료"
+
+    # 원본이 구버전이면 스키마를 이 코드에 맞춘다.
+    cmd_migrate || return 2
+
+    if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$APP_NAME\""; then
+        export_dotenv_for_pm2
+        pm2 restart "$APP_NAME" --update-env >/dev/null 2>&1 && log_ok "$APP_NAME 재시작" \
+            || log_warn "$APP_NAME 재시작 실패 — 'pm2 restart $APP_NAME' 수동 확인"
+        wait_for_app_with_logs "$APP_PORT" "OpenMake LLM" || true
+    fi
+    log_ok "DB 이관 완료 — 원본 .env 의 TOKEN_ENCRYPTION_KEY / API_KEY_PEPPER 가 대상 .env 와 같은지 확인하세요."
 }
 
 cmd_install() {
@@ -766,6 +865,15 @@ OpenMake LLM 통합 서비스 매니저
   health    /health 엔드포인트 호출 확인
   logs      OpenMake LLM 실시간 로그 (PM2)
 
+DB 이관 (다른 호스트/인스턴스로 옮길 때):
+  db-dump [파일]        이 인스턴스 DB 전체 덤프 (pg_dump -Fc, 기본 파일명 자동)
+  db-restore <파일>     덤프를 이 인스턴스 DB 에 복원 (앱 정지 → DROP/CREATE → 복원 → migrate → 재시작)
+                        옵션: --yes. 복원 전 원본 .env 의 TOKEN_ENCRYPTION_KEY / API_KEY_PEPPER /
+                        JWT_SECRET 을 이쪽 .env 로 옮길 것 (DB 안의 암호화 값·API 키가 그 키에 묶임)
+
+인스턴스 (현재: ${INSTANCE:-기본}):
+  .env 의 OMK_INSTANCE 에 따라 PM2 앱 $APP_NAME / $FRONT_APP_NAME, 컨테이너 $PG_CONTAINER 를 다룬다.
+
 환경 가정:
   - Linux / macOS (DB/Redis 는 docker compose, 앱은 PM2 로 관리)
   - PM2 설치 (npm i -g pm2 — install.sh 가 자동 처리)
@@ -799,6 +907,8 @@ main() {
         status)   show_status ;;
         health)   show_health ;;
         logs)     show_logs ;;
+        db-dump)  cmd_db_dump "$@" ;;
+        db-restore) cmd_db_restore "$@" ;;
         ""|-h|--help|help) usage ;;
         *)
             log_err "알 수 없는 명령: $cmd"

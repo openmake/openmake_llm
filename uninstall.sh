@@ -27,6 +27,13 @@ log_warn() { printf "%s[WARN]%s  %s\n" "$C_WARN" "$C_RESET" "$*"; }
 log_step() { printf "\n%s━━ %s ━━%s\n" "$C_INFO" "$*" "$C_RESET"; }
 has() { command -v "$1" >/dev/null 2>&1; }
 
+# 인스턴스 이름 — install.sh --instance NAME 이 .env 에 남긴 OMK_INSTANCE. 없으면 기본 이름.
+env_line() { [[ -f "$SCRIPT_DIR/.env" ]] && grep -E "^$1=" "$SCRIPT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d ' ' || true; }
+_inst="$(env_line OMK_INSTANCE)"; _pfx="openmake${_inst:+-$_inst}"
+readonly APP_NAME="openmake-llm${_inst:+-$_inst}" FRONT_APP_NAME="openmake-next${_inst:+-$_inst}"
+readonly PG_CONTAINER="$_pfx-postgres" RD_CONTAINER="$_pfx-redis"
+readonly PG_VOLUME="${_pfx}_pgdata" RD_VOLUME="${_pfx}_redisdata"
+
 ASSUME_YES=0; KEEP_DATA=0; KEEP_SOURCE=0
 for arg in "$@"; do
     case "$arg" in
@@ -49,7 +56,7 @@ confirm() {
 # ── 1. PM2 앱 ────────────────────────────────────────────────────────────────
 log_step "1/3 PM2 앱 정지·삭제"
 if has pm2; then
-    for app in openmake-llm openmake-next; do
+    for app in "$APP_NAME" "$FRONT_APP_NAME"; do
         if pm2 describe "$app" >/dev/null 2>&1; then
             pm2 delete "$app" >/dev/null 2>&1 && log_ok "$app 삭제" || log_warn "$app 삭제 실패"
         else
@@ -64,7 +71,7 @@ fi
 # ── 2. Docker 컨테이너·볼륨 ──────────────────────────────────────────────────
 log_step "2/3 Docker 컨테이너·볼륨"
 if has docker && docker info >/dev/null 2>&1; then
-    for c in openmake-postgres openmake-redis; do
+    for c in "$PG_CONTAINER" "$RD_CONTAINER"; do
         if docker ps -a --format '{{.Names}}' | grep -qx "$c"; then
             docker rm -f "$c" >/dev/null && log_ok "$c 컨테이너 제거"
         else
@@ -72,9 +79,9 @@ if has docker && docker info >/dev/null 2>&1; then
         fi
     done
     if [[ $KEEP_DATA -eq 1 ]]; then
-        log_info "--keep-data — 볼륨(openmake_pgdata, openmake_redisdata)은 남깁니다."
+        log_info "--keep-data — 볼륨($PG_VOLUME, $RD_VOLUME)은 남깁니다."
     elif confirm "DB 데이터 볼륨을 삭제할까요? (모든 사용자·채팅 데이터가 사라집니다)"; then
-        for v in openmake_pgdata openmake_redisdata; do
+        for v in "$PG_VOLUME" "$RD_VOLUME"; do
             docker volume rm "$v" >/dev/null 2>&1 && log_ok "$v 볼륨 삭제" || log_info "$v — 없음"
         done
     else
@@ -82,8 +89,8 @@ if has docker && docker info >/dev/null 2>&1; then
     fi
 else
     log_warn "docker 미실행 — 컨테이너/볼륨은 Docker 기동 후 직접 제거하세요:"
-    echo "    docker rm -f openmake-postgres openmake-redis"
-    echo "    docker volume rm openmake_pgdata openmake_redisdata"
+    echo "    docker rm -f $PG_CONTAINER $RD_CONTAINER"
+    echo "    docker volume rm $PG_VOLUME $RD_VOLUME"
 fi
 
 # ── 3. 소스 디렉터리 ─────────────────────────────────────────────────────────
