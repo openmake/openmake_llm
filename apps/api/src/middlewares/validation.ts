@@ -6,12 +6,17 @@ import { ZodSchema, ZodError, ZodIssue } from 'zod';
 import * as fs from 'fs';
 import * as path from 'path';
 import { badRequest } from '../utils/api-response';
-import { detectMaliciousPatterns, sanitizeTextInput, hasExcessiveSpecialCharacters } from '../schemas/security.schema';
+import { detectMaliciousPatterns, sanitizeTextInput, stripControlChars, hasExcessiveSpecialCharacters } from '../schemas/security.schema';
 
 interface SecurityValidationOptions {
     allowedContentTypes?: string[];
     maxBodySizeBytes?: number;
     sanitizeInput?: boolean;
+    /**
+     * 서식을 보존할 최상위 필드 — 제어문자만 제거하고 공백 접기·NFKC·trim 을 하지 않는다.
+     * 기본 정제는 줄바꿈 외 연속 공백을 한 칸으로 접어, 스킬 본문 코드 블록 들여쓰기가 저장 때마다 사라졌다 (2026-09-11).
+     */
+    preserveFormattingFields?: string[];
     detectMaliciousInput?: boolean;
     specialCharacterRatioLimit?: number;
 }
@@ -27,6 +32,7 @@ const DEFAULT_SECURITY_OPTIONS: Required<SecurityValidationOptions> = {
     allowedContentTypes: ['application/json'],
     maxBodySizeBytes: 1 * 1024 * 1024,
     sanitizeInput: true,
+    preserveFormattingFields: [],
     detectMaliciousInput: false,
     specialCharacterRatioLimit: 0.7,
 };
@@ -90,6 +96,18 @@ function sanitizeValue(value: unknown, depth: number = 0): unknown {
     return value;
 }
 
+/** 서식 보존 필드(최상위 문자열)는 제어문자만 제거하고, 나머지는 기본 정제 */
+function sanitizePayload(source: unknown, preserveFields: readonly string[]): unknown {
+    if (preserveFields.length === 0 || !source || typeof source !== 'object' || Array.isArray(source)) {
+        return sanitizeValue(source);
+    }
+    const output: Record<string, unknown> = {};
+    Object.entries(source as Record<string, unknown>).forEach(([key, item]) => {
+        output[key] = preserveFields.includes(key) && typeof item === 'string' ? stripControlChars(item) : sanitizeValue(item, 1);
+    });
+    return output;
+}
+
 function findSecurityViolations(payload: unknown, specialCharacterRatioLimit: number): string[] {
     const violations: string[] = [];
     const strings = extractStringValues(payload);
@@ -128,7 +146,7 @@ function createValidationMiddleware<T>(schema: ZodSchema<T>, options: SecurityVa
             }
 
             const source = mode === 'body' ? req.body : req.query;
-            const payload = merged.sanitizeInput ? sanitizeValue(source) : source;
+            const payload = merged.sanitizeInput ? sanitizePayload(source, merged.preserveFormattingFields) : source;
 
             if (merged.detectMaliciousInput) {
                 const violations = findSecurityViolations(payload, merged.specialCharacterRatioLimit);
