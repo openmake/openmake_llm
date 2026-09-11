@@ -56,7 +56,8 @@ adminCapabilityModelsRouter.get('/capability-models', asyncHandler(async (_req: 
     res.json(success({
         mappings,
         effective,
-        modalities: CAPABILITIES,
+        capabilities: CAPABILITIES,
+        assignableCapabilities: ASSIGNABLE_CAPABILITIES,
         defaults: CAPABILITY_DEFAULTS,
         gatewayProviders: getConfig().llmGatewayProviders,
     }));
