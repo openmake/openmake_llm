@@ -13,6 +13,7 @@ jest.mock('../generated-media', () => ({
     },
     resolveGeneratedPath: () => null,
 }));
+jest.mock('../../security/ssrf-guard', () => ({ safeFetch: (url: string, init?: RequestInit) => (global.fetch as typeof fetch)(url, init) }));
 jest.mock('../../config/modality', () => {
     const actual = jest.requireActual('../../config/modality');
     return { ...actual, MODALITY_LIMITS: { ...actual.MODALITY_LIMITS, VIDEO_WAIT_MS: 50, VIDEO_POLL_INTERVAL_MS: 5 } };
@@ -25,7 +26,7 @@ import { MODALITY_TOOL_INTENT_GATES } from '../../config/modality';
 
 const gwTarget = (modality: string, extra: Partial<Record<string, unknown>> = {}) => ({
     modality, fullId: 'hasa/x', providerId: 'hasa', model: 'hasa/x', baseUrl: 'http://gw', endpoint: '/v1/audio/speech',
-    headers: { Authorization: 'Bearer m', 'x-api-key': 'k' }, params: {}, source: 'global', ...extra,
+    headers: { Authorization: 'Bearer m', 'x-api-key': 'k' }, params: {}, source: 'global', transport: 'gateway', ...extra,
 });
 const realFetch = global.fetch;
 afterEach(() => { global.fetch = realFetch; mockResolve.mockReset(); saved.length = 0; });
@@ -92,11 +93,11 @@ describe('transcribe_audio', () => {
 
 describe('generate_video / get_video', () => {
     const jobsTarget = () => gwTarget('video_gen', {
-        fullId: 'hasa:Wan2.2-T2V', model: 'Wan2.2-T2V', baseUrl: 'http://gw/passthrough/hasa',
-        endpoint: '/videos/generations', headers: { Authorization: 'Bearer m' },
+        fullId: 'hasa:Wan2.2-T2V', model: 'Wan2.2-T2V', baseUrl: 'https://open.hasa.re.kr/v1',
+        endpoint: '/videos/generations', headers: { Authorization: 'Bearer byok' }, transport: 'direct',
     });
 
-    it('jobs-v1(hasa): 제출 → 상태 폴링 → artifact_url(상대) 다운로드 → 링크', async () => {
+    it('jobs-v1(hasa): 직결(safeFetch) 제출 → 상태 폴링 → artifact_url(상대) 다운로드 → 링크', async () => {
         mockResolve.mockResolvedValue(jobsTarget());
         const calls: string[] = [];
         let polls = 0;
@@ -117,9 +118,9 @@ describe('generate_video / get_video', () => {
         const r = await generateVideoTool.handler({ prompt: 'a red circle' }, { userId: 'u1', role: 'user' });
         expect(r.isError).toBeFalsy();
         expect(r.content[0].text).toContain('/generated/video.webm');
-        expect(calls[0]).toBe('POST http://gw/passthrough/hasa/videos/generations');
-        expect(calls).toContain('GET http://gw/passthrough/hasa/jobs/vid_1');
-        expect(calls).toContain('GET http://gw/passthrough/hasa/files/v.webm');
+        expect(calls[0]).toBe('POST https://open.hasa.re.kr/v1/videos/generations');
+        expect(calls).toContain('GET https://open.hasa.re.kr/v1/jobs/vid_1');
+        expect(calls).toContain('GET https://open.hasa.re.kr/v1/files/v.webm');
         expect(saved[0]).toMatchObject({ prefix: 'video', ext: 'webm', size: 3 });
     });
 

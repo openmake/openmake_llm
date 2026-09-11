@@ -14,6 +14,8 @@
  *  - 외부: `LLM_GATEWAY_PROVIDERS` 편입 provider 만. model = `<provider>/<model>`,
  *    Authorization = master, `x-api-key` = 사용자/서버 키 (openai-compat-provider 의 헤더 계약과 동일)
  *  - direct 전용 provider(chatgpt OAuth 등)는 배정 자체를 거부한다.
+ *  - 예외: jobs-v1 영상(config/modality VIDEO_PROVIDER_ADAPTERS — hasa)은 게이트웨이가 프록시하지
+ *    못하는 커스텀 API 라 사용자 키로 provider 직결(`transport: 'direct'`, 도구가 SSRF 고정 fetch 사용).
  *
  * 실패는 조용히 폴백하지 않고 ModalityUnavailableError(code) 로 명시한다 — 도구가
  * 사용자에게 사유를 안내해야 "이미지가 안 나온다" 가 설정 문제임을 알 수 있다.
@@ -63,6 +65,8 @@ export interface ModalityTarget {
     headers: Record<string, string>;
     params: Record<string, string>;
     source: 'user' | 'global' | 'default';
+    /** 'gateway'(기본) | 'direct' — jobs-v1 영상처럼 게이트웨이가 프록시 못 하는 경우만 provider 직결 */
+    transport: 'gateway' | 'direct';
 }
 
 /** 배정 시점 검증 — 저장 전에 같은 규칙을 적용해 해석 시점 실패를 앞당긴다 */
@@ -70,7 +74,7 @@ export async function validateModalityAssignment(
     scope: string,
     fullId: string,
     deps: { userKeys?: ExternalKeysRepository; serverKeys?: ServerExternalKeysRepository } = {},
-    modality?: Modality,
+    _modality?: Modality,
 ): Promise<string | null> {
     if (!isExternalFullId(fullId)) {
         return toLocalModelTag(fullId) ? null : `해석 불가한 모델 id: '${fullId}'`;
@@ -82,12 +86,6 @@ export async function validateModalityAssignment(
     if (entry.sdkType !== 'openai-compatible') return `provider '${providerId}' 는 OpenAI 호환이 아니라 모달리티 배정을 지원하지 않습니다`;
     if (!getConfig().llmGatewayProviders.includes(providerId)) {
         return `provider '${providerId}' 는 LiteLLM 게이트웨이에 편입되지 않아 배정할 수 없습니다 (LLM_GATEWAY_PROVIDERS)`;
-    }
-    if (modality === 'video_gen' && videoAdapterFor(providerId).kind === 'jobs-v1') {
-        // pass-through 경유(서버 키 LiteLLM env 주입) — 사용자 BYOK 를 실을 수 없어 전역 배정만
-        return scope === GLOBAL_MODALITY_SCOPE
-            ? null
-            : `provider '${providerId}' 의 영상 생성은 게이트웨이 pass-through(서버 키) 전용이라 관리자 전역 배정만 가능합니다`;
     }
     if (scope === GLOBAL_MODALITY_SCOPE) {
         const repo = deps.serverKeys ?? new ServerExternalKeysRepository(getPool());
@@ -140,7 +138,7 @@ function localTarget(modality: Modality, fullId: string, params: Record<string, 
         modality, fullId, providerId: 'local-llm', model: tag,
         baseUrl: gatewayBase(), endpoint: MODALITY_ENDPOINT[modality],
         headers: { Authorization: `Bearer ${cfg.llmApiKey}` },
-        params, source,
+        params, source, transport: 'gateway',
     };
 }
 
@@ -160,22 +158,11 @@ async function externalTarget(
         throw new ModalityUnavailableError(`provider '${providerId}' 는 LiteLLM 게이트웨이 미편입 — 모달리티 호출 불가`, 'MODALITY_PROVIDER_NOT_GATEWAY');
     }
 
-    if (modality === 'video_gen') {
-        const adapter = videoAdapterFor(providerId);
-        if (adapter.kind === 'jobs-v1' && adapter.passThroughPrefix) {
-            // upstream 키는 LiteLLM pass-through 정적 헤더가 주입 — 앱은 master 로 게이트웨이만 인증
-            return {
-                modality, fullId, providerId, model: modelId,
-                baseUrl: `${gatewayBase()}${adapter.passThroughPrefix}`, endpoint: adapter.submitPath ?? MODALITY_ENDPOINT[modality],
-                headers: { Authorization: `Bearer ${cfg.llmApiKey}` },
-                params, source,
-            };
-        }
-    }
-
     let apiKey: string | null = null;
+    let userBaseUrl: string | null = null;
     if (source === 'user' && userId) {
         apiKey = await deps.userKeys.decryptKey(userId, providerId);
+        userBaseUrl = (await deps.userKeys.getByUserAndProvider(userId, providerId))?.baseUrl ?? null;
     } else {
         apiKey = await deps.serverKeys.decryptKey(providerId);
     }
@@ -185,11 +172,22 @@ async function externalTarget(
             'MODALITY_KEY_MISSING',
         );
     }
+    if (modality === 'video_gen' && videoAdapterFor(providerId).kind === 'jobs-v1') {
+        // 게이트웨이가 프록시 못 하는 커스텀 영상 API — 사용자 키로 provider 직결(도구는 SSRF 고정 fetch 사용)
+        const adapter = videoAdapterFor(providerId);
+        return {
+            modality, fullId, providerId, model: modelId,
+            baseUrl: (userBaseUrl || entry.defaultBaseUrl).replace(/\/+$/, ''),
+            endpoint: adapter.submitPath ?? MODALITY_ENDPOINT[modality],
+            headers: { Authorization: `Bearer ${apiKey}` },
+            params, source, transport: 'direct',
+        };
+    }
     return {
         modality, fullId, providerId, model: `${providerId}/${modelId}`,
         baseUrl: gatewayBase(), endpoint: MODALITY_ENDPOINT[modality],
         headers: { Authorization: `Bearer ${cfg.llmApiKey}`, 'x-api-key': apiKey },
-        params, source,
+        params, source, transport: 'gateway',
     };
 }
 

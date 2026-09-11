@@ -5,8 +5,8 @@
  *
  * 모델은 모달리티 배정(`video_gen`)으로 정하고, 호출은 LiteLLM 게이트웨이 하나로만 간다.
  *  - OpenAI 규격 provider: `POST /v1/videos` → `GET /v1/videos/{id}` → `GET /v1/videos/{id}/content`
- *  - jobs-v1 어댑터(hasa 등, config/modality VIDEO_PROVIDER_ADAPTERS): 게이트웨이 pass-through 경유
- *    `POST <prefix>/videos/generations` → `GET <prefix>/jobs/{id}` → artifact_url 다운로드
+ *  - jobs-v1 어댑터(hasa 등, config/modality VIDEO_PROVIDER_ADAPTERS): 게이트웨이가 프록시 못 하는
+ *    커스텀 API 라 사용자 키로 provider 직결(SSRF 고정 fetch) `POST /videos/generations` → `GET /jobs/{id}` → artifact_url
  *
  * 생성은 수 분이 걸리므로 `generate_video` 는 상한(VIDEO_WAIT_MS)까지만 기다리고, 미완이면
  * 작업 id 를 돌려준다 — `get_video` 로 이어서 확인한다. 노출은 의도 턴에만.
@@ -21,6 +21,7 @@ import {
 import { resolveModalityTarget, ModalityUnavailableError, type ModalityTarget } from '../services/modality-resolver';
 import { withProviderSlot } from '../llm/external-throttle';
 import { saveGeneratedFile } from './generated-media';
+import { safeFetch } from '../security/ssrf-guard';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('VideoTools');
@@ -32,6 +33,11 @@ function userIdOf(context?: { userId?: string | number }): string | undefined {
     return context?.userId !== undefined ? String(context.userId) : undefined;
 }
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** 게이트웨이(loopback)는 fetch, provider 직결(jobs-v1)은 SSRF 고정 fetch */
+function fetchFor(target: ModalityTarget): (url: string, init?: RequestInit) => Promise<Response> {
+    return target.transport === 'direct' ? (url, init) => safeFetch(url, init) : (url, init) => fetch(url, init);
+}
 
 interface JobView { id: string; status: string; progress?: number; artifactUrl?: string; raw: Record<string, unknown> }
 
@@ -68,14 +74,14 @@ function statusUrl(target: ModalityTarget, adapter: VideoProviderAdapter, id: st
 function contentUrl(target: ModalityTarget, adapter: VideoProviderAdapter, view: JobView): string | null {
     if (adapter.kind === 'jobs-v1') {
         if (!view.artifactUrl) return null;
-        // 절대 URL 이면 그대로, 접두 상대 경로(`/files/..`)면 pass-through 접두 뒤에 붙인다
+        // 절대 URL 이면 그대로, 상대 경로(`/files/..`)면 provider base 뒤에 붙인다
         return /^https?:\/\//i.test(view.artifactUrl) ? view.artifactUrl : `${target.baseUrl}${view.artifactUrl}`;
     }
     return `${target.baseUrl}/v1/videos/${encodeURIComponent(view.id)}/content`;
 }
 
 async function fetchJob(target: ModalityTarget, adapter: VideoProviderAdapter, id: string): Promise<JobView> {
-    const res = await fetch(statusUrl(target, adapter, id), {
+    const res = await fetchFor(target)(statusUrl(target, adapter, id), {
         headers: { ...target.headers },
         signal: AbortSignal.timeout(MODALITY_LIMITS.VIDEO_SUBMIT_TIMEOUT_MS),
     });
@@ -86,7 +92,7 @@ async function fetchJob(target: ModalityTarget, adapter: VideoProviderAdapter, i
 async function downloadAndSave(target: ModalityTarget, adapter: VideoProviderAdapter, view: JobView): Promise<string> {
     const url = contentUrl(target, adapter, view);
     if (!url) throw new Error('완료됐지만 산출물 URL 이 없습니다');
-    const res = await fetch(url, { headers: { ...target.headers }, signal: AbortSignal.timeout(MODALITY_LIMITS.VIDEO_DOWNLOAD_TIMEOUT_MS) });
+    const res = await fetchFor(target)(url, { headers: { ...target.headers }, signal: AbortSignal.timeout(MODALITY_LIMITS.VIDEO_DOWNLOAD_TIMEOUT_MS) });
     if (!res.ok) throw new Error(`영상 다운로드 실패 (HTTP ${res.status})`);
     const buf = Buffer.from(await res.arrayBuffer());
     if (buf.length === 0) throw new Error('영상 파일이 비어 있습니다');
@@ -156,7 +162,7 @@ export const generateVideoTool: MCPToolDefinition = {
         const seconds = String(args.seconds || target.params.seconds || VIDEO_GEN_DEFAULT_SECONDS);
         const size = String(args.size || target.params.size || VIDEO_GEN_DEFAULT_SIZE);
         try {
-            const res = await withProviderSlot(target.providerId, () => fetch(`${target.baseUrl}${target.endpoint}`, {
+            const res = await withProviderSlot(target.providerId, () => fetchFor(target)(`${target.baseUrl}${target.endpoint}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...target.headers },
                 body: JSON.stringify({ model: target.model, prompt, seconds, size }),

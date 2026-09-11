@@ -102,20 +102,18 @@ export const STT_ALLOWED_EXTS: ReadonlySet<string> = new Set(['mp3', 'wav', 'm4a
 export const VIDEO_GEN_DEFAULT_SECONDS = '4';
 export const VIDEO_GEN_DEFAULT_SIZE = '720x1280';
 /**
- * 영상 생성 provider 어댑터 — OpenAI `/v1/videos` 규격이 아닌 provider 는 LiteLLM **pass-through**
- * (`general_settings.pass_through_endpoints`, 정적 헤더로 upstream 키 주입 — scripts/vllm/litellm.config.yaml)
- * 경유로 부른다. LiteLLM 1.89.4 pass-through 는 클라이언트 헤더를 전달하지 못하므로(설정 모델에
- * forward_headers 없음, `extra: forbid`) 이 부류는 **서버 키(LiteLLM env) 전용 = 전역 배정만** 가능하다.
- * 호출은 여전히 게이트웨이 하나다.
+ * 영상 생성 provider 어댑터 — OpenAI `/v1/videos` 규격이 아닌 provider(hasa: `POST /videos/generations`
+ * → `GET /jobs/{id}` → `artifact_url`)는 LiteLLM 이 프록시하지 못한다(1.89.4 pass-through 는 클라이언트
+ * 헤더를 전달하지 못해 사용자 BYOK 를 실을 수 없고, hasa 는 `Authorization: Bearer` 만 받는다 — 2026-09-12 실측).
+ * 사용자별 키로 쓰기 위해 이 부류만 **앱이 직결**(SSRF 고정 fetch, 문서화된 예외 — chatgpt OAuth 와 같은 부류)한다.
+ * 이미지·오디오·비전·OpenAI 규격 영상은 그대로 게이트웨이 하나다.
  */
 export interface VideoProviderAdapter {
     kind: 'openai-videos' | 'jobs-v1';
-    /** jobs-v1: 게이트웨이 pass-through 접두 경로 (LiteLLM path) */
-    passThroughPrefix?: string;
-    /** jobs-v1: 제출·상태·산출물 경로 (접두 뒤) — `{id}` 치환 */
+    /** jobs-v1: 제출·상태 경로 (provider base 뒤) — `{id}` 치환 */
     submitPath?: string;
     statusPath?: string;
-    /** 상태 응답에서 산출물 URL 필드(접두 상대 경로면 pass-through 접두를 붙인다) */
+    /** 상태 응답에서 산출물 URL 필드(base 상대 경로면 base 를 붙인다) */
     artifactField?: string;
     doneStatuses?: readonly string[];
     failStatuses?: readonly string[];
@@ -123,7 +121,6 @@ export interface VideoProviderAdapter {
 export const VIDEO_PROVIDER_ADAPTERS: Record<string, VideoProviderAdapter> = {
     hasa: {
         kind: 'jobs-v1',
-        passThroughPrefix: '/passthrough/hasa',
         submitPath: '/videos/generations',
         statusPath: '/jobs/{id}',
         artifactField: 'artifact_url',

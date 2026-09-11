@@ -143,28 +143,32 @@ describe('validateModalityAssignment', () => {
     });
 });
 
-describe('영상 jobs-v1 어댑터(hasa) — pass-through·전역 전용', () => {
-    it('전역 배정은 통과, 사용자 scope 는 거절(BYOK 를 pass-through 에 실을 수 없음)', async () => {
-        expect(await validateModalityAssignment('__global__', 'hasa:Wan2.2-T2V', makeDeps(), 'video_gen')).toBeNull();
-        expect(await validateModalityAssignment('u1', 'hasa:Wan2.2-T2V', makeDeps({ userKey: 'k' }), 'video_gen')).toMatch(/전역 배정만/);
-        // 같은 provider 라도 다른 모달리티(tts)는 종전 규칙(사용자 BYOK 허용)
-        expect(await validateModalityAssignment('u1', 'hasa:melotts-ko', makeDeps({ userKey: 'k' }), 'tts')).toBeNull();
+describe('영상 jobs-v1 어댑터(hasa) — 게이트웨이가 프록시 못 하는 커스텀 API 는 사용자 키로 직결', () => {
+    it('사용자·전역 배정 모두 종전 키 규칙(BYOK / 서버 키)', async () => {
+        expect(await validateModalityAssignment('u1', 'hasa:Wan2.2-T2V', makeDeps({ userKey: 'k' }), 'video_gen')).toBeNull();
+        expect(await validateModalityAssignment('u1', 'hasa:Wan2.2-T2V', makeDeps({ userKey: null }), 'video_gen')).toMatch(/키를 먼저 등록/);
+        expect(await validateModalityAssignment('__global__', 'hasa:Wan2.2-T2V', makeDeps({ serverKey: 's' }), 'video_gen')).toBeNull();
     });
 
-    it('해석 결과는 pass-through 접두 + 제출 경로, 헤더는 master 만(upstream 키는 LiteLLM 정적 헤더)', async () => {
-        const deps = makeDeps({ global: [row('__global__', 'video_gen', 'hasa:Wan2.2-T2V')], serverKey: null });
+    it('사용자 행: provider base(등록 baseUrl 우선) + 제출 경로, Authorization=BYOK, transport=direct', async () => {
+        const deps = makeDeps({ user: [row('u1', 'video_gen', 'hasa:Wan2.2-T2V')], userKey: 'byok' });
+        (deps.userKeys.getByUserAndProvider as jest.Mock).mockResolvedValue({ isActive: true, authMethod: 'api_key', baseUrl: 'https://custom.hasa/v1/' });
         const t = await resolveModalityTarget('video_gen', 'u1', deps);
-        expect(t.baseUrl).toBe('http://127.0.0.1:13401/passthrough/hasa');
-        expect(t.endpoint).toBe('/videos/generations');
-        expect(t.model).toBe('Wan2.2-T2V');
-        expect(t.headers).toEqual({ Authorization: 'Bearer master-key' });
+        expect(t).toMatchObject({ transport: 'direct', baseUrl: 'https://custom.hasa/v1', endpoint: '/videos/generations', model: 'Wan2.2-T2V' });
+        expect(t.headers).toEqual({ Authorization: 'Bearer byok' });
     });
 
-    it('OpenAI 규격 provider 의 영상은 종전 경로(/v1/videos, x-api-key)', async () => {
+    it('전역 행: 카탈로그 기본 base + 서버 키', async () => {
+        const deps = makeDeps({ global: [row('__global__', 'video_gen', 'hasa:Wan2.2-T2V')], serverKey: 'srv' });
+        const t = await resolveModalityTarget('video_gen', undefined, deps);
+        expect(t).toMatchObject({ transport: 'direct', baseUrl: 'https://open.hasa.re.kr/v1' });
+        expect(t.headers).toEqual({ Authorization: 'Bearer srv' });
+    });
+
+    it('OpenAI 규격 provider 의 영상은 게이트웨이(/v1/videos, x-api-key)', async () => {
         const deps = makeDeps({ global: [row('__global__', 'video_gen', 'openrouter:sora')], serverKey: 'srv' });
         const t = await resolveModalityTarget('video_gen', undefined, deps);
-        expect(t.endpoint).toBe('/v1/videos');
-        expect(t.model).toBe('openrouter/sora');
+        expect(t).toMatchObject({ transport: 'gateway', endpoint: '/v1/videos', model: 'openrouter/sora' });
         expect(t.headers['x-api-key']).toBe('srv');
     });
 });
