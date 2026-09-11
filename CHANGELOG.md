@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.56.1](https://github.com/openmake/openmake_llm/compare/v1.56.0...v1.56.1) (2026-09-11)
+
+
+### 🐛 버그 수정
+
+* **chat:** 추론만 온 턴을 답변으로 승격하지 않음 + 한글 자모 입력을 한국어로 판정 ([#826](https://github.com/openmake/openmake_llm/issues/826)) ([fe199cd](https://github.com/openmake/openmake_llm/commit/fe199cdbc11dcdfcb96c598afb12beecb18c774b))
+
 ## [1.56.0](https://github.com/openmake/openmake_llm/compare/v1.55.1...v1.56.0) (2026-09-11)
 
 
