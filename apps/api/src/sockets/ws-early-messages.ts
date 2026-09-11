@@ -7,8 +7,11 @@
  * 왕복 지연이 거의 없는 로컬 직결(`ws://127.0.0.1:52416`)에서 디바이스 등록이 유실됐다
  * (2026-09-11 실측: 즉시 전송 → 8초 무응답 / `init` 수신 후 전송 → 8ms 에 `bridge_ready`).
  *
- * 인증 전 연결이 메모리를 점유하지 못하도록 프레임 수·총 바이트 상한을 두고 넘치면 버린다
- * (정상 클라이언트의 첫 프레임은 hello·resume 같은 작은 메시지다).
+ * 인증 전 연결이 메모리를 점유하지 못하도록 프레임 수·총 바이트 상한을 둔다. 상한을 넘으면
+ * **조용히 버리지 않고** 오류를 보낸 뒤 1009 로 닫는다 — 일부만 버리면 순서가 깨지고 클라이언트는
+ * 응답 없이 기다리게 되어, 이 모듈이 없애려는 "조용한 유실" 이 다른 형태로 남기 때문이다
+ * (정상 클라이언트의 첫 프레임은 hello·resume 같은 작은 메시지라 상한에 닿지 않는다).
+ * 소켓이 먼저 닫히면 버퍼는 스스로 정리된다(attach/discard 를 못 부르는 경로 대비).
  *
  * @module sockets/ws-early-messages
  */
@@ -39,37 +42,39 @@ function frameSize(data: RawData): number {
 export function bufferEarlyMessages(ws: WebSocket): EarlyMessageBuffer {
     const frames: RawData[] = [];
     let bytes = 0;
-    let dropped = 0;
 
+    const stop = (): void => {
+        ws.off('message', collect);
+        ws.off('close', stop);
+        frames.length = 0;
+        bytes = 0;
+    };
     const collect = (data: RawData): void => {
         const size = frameSize(data);
         if (frames.length >= WS_LIMITS.EARLY_BUFFER_MAX_FRAMES || bytes + size > WS_LIMITS.EARLY_BUFFER_MAX_BYTES) {
-            dropped += 1;
+            // 일부만 담고 나머지를 버리면 순서가 깨진 채 재생된다 — 통째로 거부하고 이유를 알린다.
+            log.warn(`인증 전 프레임이 상한을 넘어 연결 종료 (상한 ${WS_LIMITS.EARLY_BUFFER_MAX_FRAMES}건/${WS_LIMITS.EARLY_BUFFER_MAX_BYTES}B, 도착 ${frames.length + 1}건/${bytes + size}B)`);
+            stop();
+            try { ws.send(JSON.stringify({ type: 'error', message: '인증이 끝나기 전에 보낸 메시지가 너무 많거나 큽니다. 연결 후 init 을 받고 다시 보내세요.' })); } catch { /* 이미 닫혔으면 무시 */ }
+            try { ws.close(1009, 'early_buffer_overflow'); } catch { /* already closing */ }
             return;
         }
         frames.push(data);
         bytes += size;
     };
     ws.on('message', collect);
+    ws.once('close', stop); // 거부 경로가 discard 를 못 부르더라도 소켓과 함께 정리된다
 
     return {
         attach(handler: (data: RawData) => void): void {
-            ws.off('message', collect);
-            ws.on('message', handler);
-            if (dropped > 0) {
-                log.warn(`인증 전 프레임 ${dropped}건 상한 초과로 폐기 (상한 ${WS_LIMITS.EARLY_BUFFER_MAX_FRAMES}건/${WS_LIMITS.EARLY_BUFFER_MAX_BYTES}B)`);
-            }
             const pending = frames.splice(0, frames.length);
-            bytes = 0;
+            stop();
+            ws.on('message', handler);
             if (pending.length > 0) {
                 log.info(`인증 전 도착 프레임 ${pending.length}건 재생`);
                 for (const data of pending) handler(data);
             }
         },
-        discard(): void {
-            ws.off('message', collect);
-            frames.length = 0;
-            bytes = 0;
-        },
+        discard: stop,
     };
 }

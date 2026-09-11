@@ -46,26 +46,40 @@ describe('bufferEarlyMessages', () => {
         expect(emitter.listenerCount('message')).toBe(0);
     });
 
-    it('프레임 수 상한을 넘으면 초과분을 버린다', () => {
+    it('프레임 수 상한을 넘으면 통째로 거부한다 — 오류 전송 후 1009 로 닫고 재생하지 않는다', () => {
         const { ws, emitter } = fakeWs();
+        const sent: string[] = [];
+        const closed: Array<[number, string]> = [];
+        (emitter as unknown as { send: (s: string) => void }).send = (s) => { sent.push(s); };
+        (emitter as unknown as { close: (c: number, r: string) => void }).close = (c, r) => { closed.push([c, r]); };
         const early = bufferEarlyMessages(ws);
-        const total = WS_LIMITS.EARLY_BUFFER_MAX_FRAMES + 3;
-        for (let i = 0; i < total; i += 1) emitter.emit('message', frame(`f${i}`));
+        for (let i = 0; i <= WS_LIMITS.EARLY_BUFFER_MAX_FRAMES; i += 1) emitter.emit('message', frame(`f${i}`));
 
+        expect(closed).toEqual([[1009, 'early_buffer_overflow']]);
+        expect(JSON.parse(sent[0])).toMatchObject({ type: 'error' });
+        expect(emitter.listenerCount('message')).toBe(0); // 더 모으지 않는다
         const seen: string[] = [];
         early.attach((d) => { seen.push(text(d)); });
-        expect(seen).toHaveLength(WS_LIMITS.EARLY_BUFFER_MAX_FRAMES);
-        expect(seen[0]).toBe('f0'); // 앞에서부터 담고 넘치면 버린다
+        expect(seen).toEqual([]); // 일부만 재생해 순서가 깨지는 일이 없다
     });
 
-    it('총 바이트 상한을 넘는 프레임은 담지 않는다', () => {
+    it('총 바이트 상한을 넘는 프레임도 같은 방식으로 거부한다', () => {
         const { ws, emitter } = fakeWs();
-        const early = bufferEarlyMessages(ws);
+        const closed: number[] = [];
+        (emitter as unknown as { send: (s: string) => void }).send = () => { /* noop */ };
+        (emitter as unknown as { close: (c: number) => void }).close = (c) => { closed.push(c); };
+        bufferEarlyMessages(ws);
         emitter.emit('message', frame('small'));
         emitter.emit('message', frame('x'.repeat(WS_LIMITS.EARLY_BUFFER_MAX_BYTES + 1)));
+        expect(closed).toEqual([1009]);
+    });
 
-        const seen: string[] = [];
-        early.attach((d) => { seen.push(text(d)); });
-        expect(seen).toEqual(['small']);
+    it('attach·discard 전에 소켓이 닫히면 버퍼가 스스로 정리된다', () => {
+        const { ws, emitter } = fakeWs();
+        bufferEarlyMessages(ws);
+        emitter.emit('message', frame('orphan'));
+        emitter.emit('close');
+        expect(emitter.listenerCount('message')).toBe(0);
+        expect(emitter.listenerCount('close')).toBe(0);
     });
 });
