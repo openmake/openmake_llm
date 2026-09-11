@@ -13,12 +13,19 @@
 // 루트 경로 해시 파생(재접속 안정) — 서버는 루트마다 별개 디바이스로 본다(프로토콜 무변경,
 // 유저당 LOCAL_BRIDGE_MAX_DEVICES 상한은 서버가 강제하고 초과는 status 로 표면화).
 //
+// 승인 대기 알림(0.2.6): 서버 bridge_notice 를 코어가 검증해 onNotice 로 넘기면 approvalPending
+// 이벤트로 앱에 전달한다(앱이 네이티브 알림). 상태 이벤트엔 다국어 표시용 code·arg 를 싣는다
+// (text 는 한국어 원문 — 코드를 모르는 소비자용 폴백).
+//
 // stdio 계약 (한 줄 = JSON 하나, folder = 루트 realpath):
-//   helper→app: {ev:'status',folder?,text} {ev:'confirm',id,command,taskId,base,folder,sandbox}
+//   helper→app: {ev:'status',folder?,text,code?,arg?} {ev:'confirm',id,command,taskId,base,folder,sandbox}
 //               {ev:'autoApprove',count}(전 루트 합계) {ev:'taskEnd',taskId,folder}
+//               {ev:'approvalPending',taskId,toolName,folder}
 //               {ev:'connected',folder} {ev:'disconnected',folder}
 //   app→helper: {cmd:'connect',folder} {cmd:'disconnect',folder?}(folder 없으면 전체)
 //               {cmd:'confirm',id,result:'yes'|'all'|'no'} {cmd:'clearAutoApprove'} {cmd:'quit'}
+//   status code: connecting·connected(arg=폴더명)·server_error(arg=메시지)·reconnecting·closed·idle·
+//                auth_error(arg=메시지)·api_key_required·folder_open_failed(arg=메시지)
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -64,9 +71,12 @@ function totalAutoApprove() {
 }
 
 function connectFolder(folder) {
-  if (!apiKey) { send({ ev: 'status', text: 'API key 필요 — 앱 설정에서 입력' }); return; }
+  if (!apiKey) { send({ ev: 'status', text: 'API key 필요 — 앱 설정에서 입력', code: 'api_key_required' }); return; }
   let real;
-  try { real = fs.realpathSync(folder); } catch (e) { send({ ev: 'status', text: `폴더 열기 실패: ${e.message}` }); return; }
+  try { real = fs.realpathSync(folder); } catch (e) {
+    send({ ev: 'status', text: `폴더 열기 실패: ${e.message}`, code: 'folder_open_failed', arg: e.message });
+    return;
+  }
   const prev = roots.get(real);
   if (prev) prev.connection.disconnect(); // 같은 루트 재연결 = 세션 갱신
   const core = new BridgeCore({
@@ -86,7 +96,8 @@ function connectFolder(folder) {
     deviceId: rootDeviceId(real),
     label: `${os.hostname()} · ${path.basename(real)}`,
     headers: () => ({ Authorization: `Bearer ${apiKey}` }),
-    onStatus: (s) => send({ ev: 'status', folder: real, text: s }),
+    onStatus: (s, code, arg) => send({ ev: 'status', folder: real, text: s, ...(code ? { code } : {}), ...(arg !== undefined ? { arg } : {}) }),
+    onNotice: (n) => send({ ev: 'approvalPending', taskId: n.taskId, toolName: n.toolName, folder: real }),
     shouldReconnect: () => roots.has(real),
   });
   roots.set(real, { core, connection });
@@ -108,7 +119,7 @@ function disconnectFolder(folder) {
   r.connection.disconnect();         // 일괄 승인 회수 포함
   send({ ev: 'disconnected', folder: key });
   send({ ev: 'autoApprove', count: totalAutoApprove() });
-  if (roots.size === 0) send({ ev: 'status', text: '미연결' });
+  if (roots.size === 0) send({ ev: 'status', text: '미연결', code: 'idle' });
 }
 
 const rl = readline.createInterface({ input: process.stdin });
@@ -147,4 +158,4 @@ rl.on('close', shutdown);
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
-send({ ev: 'status', text: '미연결' });
+send({ ev: 'status', text: '미연결', code: 'idle' });

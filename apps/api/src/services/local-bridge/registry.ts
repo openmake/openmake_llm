@@ -10,7 +10,9 @@
  *
  * 보안:
  *   - 등록은 인증된 WS(_authenticatedUserId)에서만 (handler.ts 가 보장)
- *   - 서버→디바이스로 나가는 메시지는 bridge_exec 고정 형태만 — 임의 RPC 금지
+ *   - 서버→디바이스로 나가는 메시지는 두 가지 고정 형태뿐 — 임의 RPC 금지
+ *       bridge_exec   : 도구 요청(kind 화이트리스트, reqId 로 결과 왕복)
+ *       bridge_notice : 단방향 알림(notice 화이트리스트) — 디바이스는 표시만 하고 아무것도 실행하지 않는다
  *   - 비밀(토큰 등)은 프로토콜에 싣지 않는다
  *
  * @module services/local-bridge/registry
@@ -24,6 +26,19 @@ const logger = createLogger('LocalBridge');
 
 /** 서버→디바이스 도구 요청 종류 — 이 외의 kind 는 존재하지 않는다(임의 RPC 금지). */
 export type BridgeKind = 'exec' | 'read' | 'write' | 'list' | 'listAll' | 'delete' | 'task_end' | 'worktree' | 'folders' | 'lsp_diagnostics' | 'code_nav';
+
+/**
+ * 서버→디바이스 단방향 알림 종류 — 디바이스 코어 NOTICE_KINDS 와 1:1.
+ * approval_pending: 로컬 실행 작업이 도구 승인·ask_human 응답을 기다리며 멈췄다(컴패니언이 네이티브 알림).
+ */
+export type BridgeNoticeKind = 'approval_pending';
+
+export interface BridgeNoticePayload {
+    notice: BridgeNoticeKind;
+    taskId: string;
+    /** 표시 전용 — 디바이스가 제어문자·길이를 다시 정리한다. */
+    toolName: string;
+}
 
 /** worktree 연산 — 서버는 op 만 지정하고 git 명령은 디바이스가 고정 인자로 조립한다(명령 주입 차단). */
 export type WorktreeOp = 'add' | 'diff' | 'remove';
@@ -240,6 +255,23 @@ class LocalBridgeRegistry {
                 resolve({ ok: false, error: `브리지 전송 실패: ${e instanceof Error ? e.message : String(e)}` });
             }
         });
+    }
+
+    /**
+     * 단방향 알림 — 응답을 기다리지 않는다(fire-and-forget). 라우팅은 request() 와 같다(deviceId 지정 시
+     * 정확 일치, 미지정은 최근 접속 디바이스). 프레임엔 화이트리스트 필드만 싣는다. 보냈으면 true,
+     * 디바이스 없음·닫힌 소켓·전송 예외는 false(throw 하지 않음 — 알림 실패가 작업을 흔들지 않게).
+     */
+    notify(userId: string, payload: BridgeNoticePayload, deviceId?: string): boolean {
+        const dev = this.getDevice(userId, deviceId);
+        if (!dev || dev.ws.readyState !== dev.ws.OPEN) return false;
+        try {
+            dev.ws.send(JSON.stringify({ type: 'bridge_notice', notice: payload.notice, taskId: payload.taskId, toolName: payload.toolName }));
+            return true;
+        } catch (e) {
+            logger.warn(`[Bridge] 알림 전송 실패: user=${userId} device=${dev.deviceId} ${e instanceof Error ? e.message : String(e)}`);
+            return false;
+        }
     }
 
     /** ws 소켓에 해당하는 디바이스 id (없으면 null) — bridge_result 발신자 검증용. */

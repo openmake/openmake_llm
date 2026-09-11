@@ -19,6 +19,9 @@ test -f "$ROOT/packages/local-bridge-core/dist/index.js" || { echo "core dist �
 # 2) 헬퍼 하네스 (회귀 게이트 — 실패 시 빌드 중단)
 (cd "$ROOT" && node apps/desktop-native/helper/harness.cjs)
 
+# 2-B) 다국어 표 게이트 (네 언어 키 집합·소스 사용 키 — 실패 시 빌드 중단)
+bash check-l10n.sh
+
 # 3) Swift 릴리스 빌드
 (cd OpenMakeCompanion && swift build -c release)
 
@@ -34,6 +37,8 @@ cp "$NODE_BIN" "$APP/Contents/Resources/node"
 chmod +x "$APP/Contents/Resources/node"
 # 앱 아이콘 — 구 Electron 앱에서 이설한 자산 (2026-08-23, apps/desktop 제거)
 cp "$ROOT/apps/desktop-native/assets/icon.icns" "$APP/Contents/Resources/icon.icns"
+# 다국어 표 — ko(개발 언어)·en·ja·zh-Hans (웹 LOCALES 와 같은 네 언어)
+cp -R Localization/*.lproj "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -46,6 +51,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleExecutable</key><string>OpenMakeCompanion</string>
   <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleDevelopmentRegion</key><string>ko</string>
+  <key>CFBundleLocalizations</key><array><string>ko</string><string>en</string><string>ja</string><string>zh-Hans</string></array>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
   <key>CFBundleIconFile</key><string>icon</string>

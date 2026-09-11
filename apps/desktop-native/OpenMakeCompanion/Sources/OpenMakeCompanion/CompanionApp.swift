@@ -1,5 +1,6 @@
 // OpenMake Companion — 메뉴바 상주 로컬 에이전트 컴패니언.
 // 역할 한정(plan §1 비목표): 채팅 UI 없음 — 깊은 작업은 웹으로 딥링크 핸드오프.
+// 사용자 문구는 전부 L(키) — Localization/<lang>.lproj (L10n.swift 참고).
 import AppKit
 import SwiftUI
 import UserNotifications
@@ -57,36 +58,36 @@ struct MenuContent: View {
 
     var body: some View {
         if helper.connectedFolders.isEmpty {
-            Text("상태: \(helper.statusText)")
+            Text(L("menu.status", helper.statusText))
         }
         // 다중 루트 — 루트별 서브메뉴 (전체 경로는 로컬 표시 전용, 서버엔 basename 만 감)
         ForEach(helper.connectedFolders, id: \.self) { f in
-            Menu("폴더: \(URL(fileURLWithPath: f).lastPathComponent)") {
+            Menu(L("menu.folder", URL(fileURLWithPath: f).lastPathComponent)) {
                 Text(f)
-                if let st = helper.rootStatus[f] { Text("상태: \(st)") }
-                Button("Finder 에서 열기") { NSWorkspace.shared.open(URL(fileURLWithPath: f)) }
-                Button("연결 해제") { helper.disconnect(folder: f) }
+                if let st = helper.rootStatus[f] { Text(L("menu.status", st)) }
+                Button(L("menu.openInFinder")) { NSWorkspace.shared.open(URL(fileURLWithPath: f)) }
+                Button(L("menu.disconnect")) { helper.disconnect(folder: f) }
             }
         }
         Divider()
-        Button(helper.connectedFolders.isEmpty ? "작업 폴더 연결…" : "작업 폴더 추가…") { helper.chooseFolderAndConnect() }
+        Button(helper.connectedFolders.isEmpty ? L("menu.connectFolder") : L("menu.addFolder")) { helper.chooseFolderAndConnect() }
         if helper.connectedFolders.count > 1 {
-            Button("전체 연결 해제") { helper.disconnectAll() }
+            Button(L("menu.disconnectAll")) { helper.disconnectAll() }
         }
         if helper.autoApproveCount > 0 {
-            Button("일괄 승인 해제 (\(helper.autoApproveCount)개 작업)") { helper.clearAutoApprove() }
+            Button(L("menu.clearAutoApprove", helper.autoApproveCount)) { helper.clearAutoApprove() }
         }
         Divider()
-        Button("웹에서 열기") { helper.openWeb() }
-        Button("업데이트 확인…") {
+        Button(L("menu.openWeb")) { helper.openWeb() }
+        Button(L("menu.checkUpdates")) {
             Task { await Updater.shared.check(backendUrl: helper.backend.url, interactive: true) }
         }
-        Button("설정…") {
+        Button(L("menu.settings")) {
             openSettings()
             NSApp.activate(ignoringOtherApps: true)
         }
         Divider()
-        Button("종료") {
+        Button(L("menu.quit")) {
             helper.stopHelper()
             NSApp.terminate(nil)
         }
@@ -101,26 +102,28 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("인증") {
-                SecureField("API key (omk_live_…)", text: $apiKey)
-                Text("웹 설정 → API 키에서 bridge 스코프 키를 발급해 붙여넣으세요. Keychain 에 저장됩니다.")
+            Section(L("settings.auth")) {
+                SecureField(L("settings.apiKey.placeholder"), text: $apiKey)
+                Text(L("settings.apiKey.help"))
                     .font(.caption).foregroundStyle(.secondary)
+                // 키 발급 위치는 웹의 API 액세스 페이지(/api-access) — 설정 탭이 아니다.
+                Button(L("settings.apiKey.open")) { helper.openApiAccess(backendId: backendId) }
             }
-            Section("백엔드") {
-                Picker("서버", selection: $backendId) {
+            Section(L("settings.backend")) {
+                Picker(L("settings.server"), selection: $backendId) {
                     ForEach(HelperManager.backends, id: \.id) { b in
-                        Text(b.label).tag(b.id)
+                        Text(L(b.label)).tag(b.id)
                     }
                 }
             }
             HStack {
-                Button("저장") {
+                Button(L("settings.save")) {
                     Keychain.save(apiKey.trimmingCharacters(in: .whitespacesAndNewlines))
                     if backendId != helper.backendId { helper.switchBackend(backendId) }
                     saved = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saved = false }
                 }
-                if saved { Text("저장됨").foregroundStyle(.green) }
+                if saved { Text(L("settings.saved")).foregroundStyle(.green) }
             }
         }
         .padding(20)
