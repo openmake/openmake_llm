@@ -335,6 +335,15 @@ export async function runExternalStream(
                 },
             );
         }
+
+        // D. 추론만 온 턴의 최후 수단: 로컬 thinking 턴이 본문 없이 추론만 내면 스트림 파서는 승격하지
+        // 않고 빈 본문을 돌려준다(llm/reasoning-only-recovery). 위 B 의 재요청도 같거나 이미 도구를 끈
+        // 턴이라 재요청할 수 없으면, 빈 답변 대신 종전처럼 추론을 답변으로 노출한다.
+        if (!result.content?.trim() && !result.toolCalls?.length && result.thinking?.trim()) {
+            logger.warn(`⚠️ 외부 LLM 본문 없이 추론만 남음 — 최후 수단으로 추론을 답변으로 노출 (${resolved.fullId})`);
+            onToken(result.thinking, undefined);
+            result = { ...result, content: result.thinking };
+        }
     } catch (err) {
         // 컨텍스트 초과는 **재시도해도 같다** — UPSTREAM_ERROR("잠시 후 다시 시도") 로 안내하면
         // 사용자가 같은 실패를 반복한다. upstream 이 code 를 주지 않으므로 메시지로 판정한다
