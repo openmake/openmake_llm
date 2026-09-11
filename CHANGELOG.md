@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.58.0](https://github.com/openmake/openmake_llm/compare/v1.57.0...v1.58.0) (2026-09-11)
+
+
+### ✨ 기능
+
+* **modality:** 모달리티별 모델 배정 축(이미지·비전·영상·오디오) + IMAGE_GEN_MODEL 고정 호출 폐기 ([#832](https://github.com/openmake/openmake_llm/issues/832)) ([8d6174d](https://github.com/openmake/openmake_llm/commit/8d6174d8c641938c6484c85522928e2745e17cce))
+
 ## [1.57.0](https://github.com/openmake/openmake_llm/compare/v1.56.1...v1.57.0) (2026-09-11)
 
 
