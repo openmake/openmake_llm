@@ -7,8 +7,9 @@ describe('validatePlan — 구조·의미 검증', () => {
         const ok = validatePlan({ complexity: 'simple', tasks: [{ id: 't1', capability: 'text.reason', input: { instruction: 'x' } }] }, known);
         expect(ok.ok).toBe(true);
         if (ok.ok) { expect(ok.plan.synthesis).toBe(false); expect(ok.plan.levels).toHaveLength(1); }
-        const bad = validatePlan({ complexity: 'simple', tasks: [{ id: 't1', capability: 'image.generate' }] }, known);
-        expect(bad.ok).toBe(false);
+        // simple 이라 적어도 미디어 작업이면 multi 로 보정(거절·재시도 없음)
+        const coerced = validatePlan({ complexity: 'simple', tasks: [{ id: 't1', capability: 'image.generate' }] }, known);
+        expect(coerced.ok && coerced.plan.complexity).toBe('multi');
     });
 
     it('알 수 없는 capability·계획 금지 capability(text.synthesize/text.embed)·미지 첨부는 거절', () => {

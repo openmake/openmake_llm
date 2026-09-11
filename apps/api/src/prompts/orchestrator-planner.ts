@@ -45,6 +45,7 @@ ${caps}
 - input.instruction 은 그 작업이 할 일을 한두 문장으로, 생성·편집 프롬프트는 영어로 구체적으로 씁니다.
 - audio.speech(낭독)는 **instruction 을 읽지 않습니다**. 읽을 문장이 정해져 있으면 input.text 에 그대로 넣고, 앞 작업 결과(요약·번역 등)를 읽어야 하면 input.refs 에 그 작업 id 만 넣습니다. 문장을 고치거나 번역해야 하면 먼저 text.reason 작업으로 만들고 그 결과를 refs 로 넘기세요.
 - 첨부 목록에 "job" 종류(진행 중이던 영상 작업)가 있고 사용자가 그 결과를 묻는다면 video.generate 를 새로 만들지 말고 attachments 에 그 job id 를 넣어 같은 작업을 재조회하세요.
+- 크기·음성·형식·길이 같은 인자는 문장에 섞지 말고 input 의 키로 적습니다(예: "size":"512x512", "voice":"KR", "seconds":"4").
 - 모델명·파일명을 지어내지 마세요. 기능 목록에 없는 capability 는 쓰지 마세요.
 - JSON 외 다른 텍스트를 출력하지 마세요.
 
@@ -65,6 +66,7 @@ ${caps}
 - input.instruction: one or two sentences of what the task must do; generation/edit prompts in specific English.
 - audio.speech never reads the instruction aloud. Put the exact sentences in input.text, or reference an earlier task's output via input.refs. If the text must be rewritten/translated first, do that in a text.reason task and reference it.
 - If the attachments list contains a "job" entry (a video job still in progress) and the user asks about it, do NOT create a new video.generate; reference that job id in attachments to re-check the same job.
+- Put parameters such as size/voice/format/duration as input keys (e.g. "size":"512x512", "voice":"KR", "seconds":"4"), not inside sentences.
 - Never invent model names or file names. Never use a capability not listed.
 - Output nothing but JSON.
 

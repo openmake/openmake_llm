@@ -63,7 +63,8 @@ async function auditChange(userId: string, action: string, details: Record<strin
 export async function describeEffectiveCapabilities(userId: string | undefined): Promise<Array<{
     capability: Capability; fullId?: string; source?: string; error?: string; code?: string;
 }>> {
-    return Promise.all(CAPABILITIES.map(async (capability) => {
+    // 배정 대상(ASSIGNABLE)만 — text.synthesize(채팅 모델)·web.search(검색 오케스트레이터)는 모델 배정이 없다
+    return Promise.all(ASSIGNABLE_CAPABILITIES.map(async (capability) => {
         try {
             const t = await resolveCapabilityTarget(capability, userId);
             return { capability, fullId: t.fullId, source: t.source };

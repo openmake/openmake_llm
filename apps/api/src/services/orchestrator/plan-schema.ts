@@ -149,11 +149,11 @@ export function validatePlan(raw: unknown, knownAttachmentIds: ReadonlySet<strin
     }
     if (seen.size !== tasks.length) return { ok: false, reason: 'dependency cycle detected' };
 
-    if (p.complexity === 'simple' && (tasks.length !== 1 || !tasks[0].capability.startsWith('text.'))) {
-        return { ok: false, reason: 'simple plan must be exactly one text.* task' };
-    }
+    // simple 인데 텍스트 하나가 아니면 거절 대신 multi 로 보정한다 — 모델이 "이미지 하나 = simple" 로 적는 경우가 잦아
+    // 재시도(추가 왕복)를 만들지 않는다(라이브 2026-09-12). 텍스트 여러 개도 multi.
+    const complexity: 'simple' | 'multi' = p.complexity === 'simple' && tasks.length === 1 && tasks[0].capability.startsWith('text.') ? 'simple' : 'multi';
     return {
         ok: true,
-        plan: { complexity: p.complexity, language: p.language, synthesis: p.synthesis ?? p.complexity === 'multi', tasks, levels },
+        plan: { complexity, language: p.language, synthesis: p.synthesis ?? complexity === 'multi', tasks, levels },
     };
 }

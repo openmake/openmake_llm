@@ -42,13 +42,6 @@ const chatMessageSchema = z.object({
     // 히스토리 vision 이미지 — zod 기본 strip 이라 키가 없으면 validate 가 조용히 지워 WS/openai-compat
     // 경로와 달리 REST 만 멀티턴 vision 이 끊겼다(2026-09-06). 상한은 현재 턴 images 와 동일.
     images: z.array(z.string().max(FILE_ATTACH_LIMITS.MAX_IMAGE_DATAURL_CHARS)).max(FILE_ATTACH_LIMITS.MAX_IMAGES).optional(),
-    /** 오디오·영상·이미지 첨부 원본(base64) — 멀티모달 오케스트레이터 입력 (WS 의 files.data 와 대칭) */
-    mediaFiles: z.array(z.object({
-        id: z.string().max(200),
-        name: z.string().max(255),
-        type: z.string().max(100),
-        data: z.string().max(FILE_ATTACH_LIMITS.MAX_IMAGE_DATAURL_CHARS * 4),
-    })).max(FILE_ATTACH_LIMITS.MAX_FILES).optional(),
 });
 
 /**
@@ -121,6 +114,13 @@ export const chatRequestSchema = z.object({
     docId: secureOptionalTextSchema({ maxLength: 500, fieldName: 'docId', allowNewLines: false, detectMaliciousPatterns: false }),
     // 개수·개별 dataURL 길이 상한 — WS 경로(ws-chat-handler FILE_ATTACH_LIMITS 캡)와 대칭 (2026-09-02 보안 리뷰 B4 NV)
     images: z.array(z.string().max(FILE_ATTACH_LIMITS.MAX_IMAGE_DATAURL_CHARS)).max(FILE_ATTACH_LIMITS.MAX_IMAGES).optional(),
+    /** 오디오·영상·이미지 첨부 원본(base64) — 멀티모달 오케스트레이터 입력 (WS 의 files.data 와 대칭) */
+    mediaFiles: z.array(z.object({
+        id: z.string().max(200),
+        name: z.string().max(255),
+        type: z.string().max(100),
+        data: z.string().max(FILE_ATTACH_LIMITS.MAX_IMAGE_DATAURL_CHARS * 4),
+    })).max(FILE_ATTACH_LIMITS.MAX_FILES).optional(),
     discussionMode: z.boolean().optional(),
     thinkingMode: z.boolean().optional(),
     thinkingLevel: z.enum(['low', 'medium', 'high']).optional(),
