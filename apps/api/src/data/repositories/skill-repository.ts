@@ -10,7 +10,7 @@
  */
 
 import { createLogger } from '../../utils/logger';
-import { upsertSkillManifest, SKILL_VERSION_LATEST_ORDER_SQL, type SkillManifestRow } from './skill-manifest-sync';
+import { upsertSkillManifest, extractPreservedManifestYaml, SKILL_VERSION_LATEST_ORDER_SQL, type SkillManifestRow } from './skill-manifest-sync';
 import { BaseRepository, QueryParam } from './base-repository';
 import { assertResourceOwnerOrAdmin } from '../../auth/ownership';
 import { assertSkillMutationAllowed } from './skill-authz';
@@ -227,13 +227,15 @@ export class SkillRepository extends BaseRepository {
         // agent_skills.content 만 바꾸면 실제 주입은 옛 내용 그대로라 "수정했는데 그대로"가 된다.
         // 2026-08-29: UPDATE 가 아니라 upsert — manifest 가 없던 레거시 스킬도 갱신 시점에 생긴다.
         if (input.content !== undefined && input.content !== existing.content) {
-            const versions = await this.query<{ version: string }>(
-                `SELECT version FROM skill_manifests WHERE id = $1 ORDER BY ${SKILL_VERSION_LATEST_ORDER_SQL} LIMIT 1`, [id]
+            const latest = await this.query<{ version: string; manifest_yaml: string | null }>(
+                `SELECT version, manifest_yaml FROM skill_manifests WHERE id = $1 ORDER BY ${SKILL_VERSION_LATEST_ORDER_SQL} LIMIT 1`, [id]
             );
             await this.syncManifest({
                 id, name: params[0] as string, description: params[1] as string | null, category: params[3] as string,
                 content: input.content, createdBy: existing.createdBy ?? null, isPublic: params[4] as boolean,
-                version: versions.rows[0]?.version,
+                version: latest.rows[0]?.version,
+                // triggers·tool_bindings 등 3키 밖 블록은 유지 — 다시 쓰면 트리거 게이트가 조용히 풀린다
+                preservedYaml: extractPreservedManifestYaml(latest.rows[0]?.manifest_yaml),
             });
         }
 
