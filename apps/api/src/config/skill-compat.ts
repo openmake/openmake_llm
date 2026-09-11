@@ -24,7 +24,7 @@ export const SKILL_COMPAT = {
  * Claude Code 도구 이름 → openmake_llm 등가 도구.
  *
  * 값이 null 이면 이 환경에 대응 도구가 없음(안내에 "대응 없음"으로 표기).
- * 채팅 도구(web_*, generate_image...)와 에이전트 작업 샌드박스 도구(bash,
+ * 채팅 도구(web_*, extract_webpage...)와 에이전트 작업 샌드박스 도구(bash,
  * file_ops...)가 섞여 있다 — 스킬은 두 경로 모두에서 주입될 수 있다.
  */
 export const CLAUDE_TOOL_ALIASES: Readonly<Record<string, string | null>> = {
