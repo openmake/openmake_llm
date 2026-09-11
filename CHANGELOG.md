@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.56.0](https://github.com/openmake/openmake_llm/compare/v1.55.1...v1.56.0) (2026-09-11)
+
+
+### ✨ 기능
+
+* **skills:** 주입 합계 상한을 넘는 턴은 어떤 스킬을 불러올지 모델이 고른다 ([#825](https://github.com/openmake/openmake_llm/issues/825)) ([e61b567](https://github.com/openmake/openmake_llm/commit/e61b567ec16e7bf240a10e72c95bb0766e0a8ab4))
+
+
+### 🐛 버그 수정
+
+* **api:** 코드·비밀값이 들어오는 긴 텍스트 필드의 공백 정제 해제 ([#824](https://github.com/openmake/openmake_llm/issues/824)) ([10de6c0](https://github.com/openmake/openmake_llm/commit/10de6c070df971f3311423487a9469002b51ab05))
+* **config:** NVIDIA NIM 무료 엔드포인트 22개로 카탈로그 갱신 ([#820](https://github.com/openmake/openmake_llm/issues/820)) ([20229c0](https://github.com/openmake/openmake_llm/commit/20229c05e736eb43d893c0ca34b4ee4d64077c92))
+* **skills:** load_skill 카탈로그에서 에이전트 페르소나 스킬 제외 + 상한 초과 경고 ([#822](https://github.com/openmake/openmake_llm/issues/822)) ([283609a](https://github.com/openmake/openmake_llm/commit/283609a1d3e16b348ab8788c1f84f36402d139fb))
+* **skills:** 스킬 본문 저장 시 들여쓰기 소실 + 트리거 보존 + 주입 순서 정정 ([#823](https://github.com/openmake/openmake_llm/issues/823)) ([cfbb819](https://github.com/openmake/openmake_llm/commit/cfbb819cef4e0c8a4219471d9db71acfe24c3739))
+
 ## [1.55.1](https://github.com/openmake/openmake_llm/compare/v1.55.0...v1.55.1) (2026-09-09)
 
 
