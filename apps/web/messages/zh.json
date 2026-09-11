@@ -1613,6 +1613,35 @@
     },
     "notInList": "（不在列表中）"
   },
+  "modalityModels": {
+    "title": "按模态分配模型",
+    "description": "决定由哪个模型处理图像生成、视觉、视频、语音和嵌入。未分配的项目遵循全局设置或默认值。 这与上方的角色模型分配（哪个角色使用文本模型）是彼此独立的维度。",
+    "axisNote": "这与上方的“角色模型分配”(哪个文本 LLM 负责代理、判定等)是相互独立的维度。",
+    "gatewayNote": "所有调用都经由单一的 LiteLLM 网关,因此外部模型只能分配已接入网关的 provider。",
+    "loading": "正在加载模态分配…",
+    "loadError": "无法加载模态分配。",
+    "saveFailed": "保存模态分配失败。",
+    "defaultOption": "默认(自动)",
+    "assignedBadge": "已分配",
+    "unavailableBadge": "不可用",
+    "resetLabel": "恢复默认",
+    "empty": "没有可分配的模态。",
+    "notInList": "(不在列表中)",
+    "source": {
+      "user": "我的设置",
+      "global": "全局",
+      "default": "默认"
+    },
+    "modalities": {
+      "image_gen": "图像生成",
+      "image_edit": "图像编辑",
+      "vision": "视觉(图像理解)",
+      "video_gen": "视频生成",
+      "stt": "语音识别",
+      "tts": "语音合成",
+      "embedding": "嵌入"
+    }
+  },
   "adminModelRoles": {
     "title": "角色模型管理",
     "description": "管理全局角色→模型映射(所有用户的默认值)和服务器共享外部密钥。",
@@ -1644,6 +1673,36 @@
       "save": "保存",
       "placeholder": "留空 = 回退 ({fallback})",
       "cacheNote": "更改无需重启,最多60秒内生效。"
+    }
+  },
+  "adminModalityModels": {
+    "title": "全局模态分配",
+    "description": "设置图像生成、视觉、视频、语音和嵌入的全局默认模型。用户个人分配优先;清除后回退到代码默认值。 这与上方的角色模型分配（哪个角色使用文本模型）是彼此独立的维度。",
+    "axisNote": "这与上方的“全局角色映射”(哪个文本 LLM 负责代理、判定等)是相互独立的维度。",
+    "gatewayNote": "所有调用都经由单一的 LiteLLM 网关,因此外部模型只能分配已接入网关的 provider({providers})。",
+    "gatewayNone": "无",
+    "loadError": "无法加载模态分配。",
+    "saveFailed": "保存模态分配失败。",
+    "defaultOption": "默认(代码默认值)",
+    "assigned": "已分配",
+    "unavailableBadge": "不可用",
+    "resetLabel": "恢复默认",
+    "codeDefault": "代码默认值:{model}",
+    "notInList": "(不在列表中)",
+    "cacheNote": "更改无需重启,最多 60 秒内生效。",
+    "source": {
+      "user": "我的设置",
+      "global": "全局",
+      "default": "默认"
+    },
+    "modalities": {
+      "image_gen": "图像生成",
+      "image_edit": "图像编辑",
+      "vision": "视觉(图像理解)",
+      "video_gen": "视频生成",
+      "stt": "语音识别",
+      "tts": "语音合成",
+      "embedding": "嵌入"
     }
   },
   "adminSystemSettings": {

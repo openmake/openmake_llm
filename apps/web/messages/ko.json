@@ -1613,6 +1613,35 @@
     },
     "notInList": "(목록에 없음)"
   },
+  "modalityModels": {
+    "title": "모달리티별 모델 배정",
+    "description": "이미지 생성·비전·영상·음성·임베딩을 어느 모델이 처리할지 정합니다. 미배정 항목은 전역 설정 또는 기본값을 따릅니다. 위의 역할별 모델 배정(누가 텍스트 모델을 쓰는가)과는 별개 축입니다.",
+    "axisNote": "위 \"역할별 모델 배정\"(어떤 텍스트 LLM 이 에이전트·판정 등을 맡는가)과는 별개의 축입니다.",
+    "gatewayNote": "모든 호출은 LiteLLM 게이트웨이 하나로 가므로 외부 모델은 게이트웨이에 편입된 provider 만 배정할 수 있습니다.",
+    "loading": "모달리티 배정 불러오는 중…",
+    "loadError": "모달리티 배정을 불러오지 못했습니다.",
+    "saveFailed": "모달리티 배정 저장에 실패했습니다.",
+    "defaultOption": "기본(자동)",
+    "assignedBadge": "배정됨",
+    "unavailableBadge": "사용 불가",
+    "resetLabel": "기본값으로 되돌리기",
+    "empty": "배정 가능한 모달리티가 없습니다.",
+    "notInList": "(목록에 없음)",
+    "source": {
+      "user": "내 설정",
+      "global": "전역",
+      "default": "기본값"
+    },
+    "modalities": {
+      "image_gen": "이미지 생성",
+      "image_edit": "이미지 편집",
+      "vision": "비전(이미지 이해)",
+      "video_gen": "영상 생성",
+      "stt": "음성 인식",
+      "tts": "음성 합성",
+      "embedding": "임베딩"
+    }
+  },
   "adminModelRoles": {
     "title": "역할 모델 관리",
     "description": "전역 역할→모델 매핑(모든 사용자 기본값)과 서버 공용 외부 키를 관리합니다.",
@@ -1644,6 +1673,36 @@
       "save": "저장",
       "placeholder": "비움 = 폴백 ({fallback})",
       "cacheNote": "변경은 재시작 없이 최대 60초 내에 반영됩니다."
+    }
+  },
+  "adminModalityModels": {
+    "title": "전역 모달리티 배정",
+    "description": "이미지 생성·비전·영상·음성·임베딩의 전역 기본 모델을 정합니다. 사용자 개인 배정이 우선하며, 해제하면 코드 기본값으로 돌아갑니다. 위의 역할별 모델 배정(누가 텍스트 모델을 쓰는가)과는 별개 축입니다.",
+    "axisNote": "위 \"전역 역할 매핑\"(어떤 텍스트 LLM 이 에이전트·판정 등을 맡는가)과는 별개의 축입니다.",
+    "gatewayNote": "모든 호출은 LiteLLM 게이트웨이 하나로 가므로 외부 모델은 게이트웨이 편입 provider({providers})만 배정할 수 있습니다.",
+    "gatewayNone": "없음",
+    "loadError": "모달리티 배정을 불러오지 못했습니다.",
+    "saveFailed": "모달리티 배정 저장에 실패했습니다.",
+    "defaultOption": "기본(코드 기본값)",
+    "assigned": "배정됨",
+    "unavailableBadge": "사용 불가",
+    "resetLabel": "기본값으로 되돌리기",
+    "codeDefault": "코드 기본값: {model}",
+    "notInList": "(목록에 없음)",
+    "cacheNote": "변경은 재시작 없이 최대 60초 내 반영됩니다.",
+    "source": {
+      "user": "내 설정",
+      "global": "전역",
+      "default": "기본값"
+    },
+    "modalities": {
+      "image_gen": "이미지 생성",
+      "image_edit": "이미지 편집",
+      "vision": "비전(이미지 이해)",
+      "video_gen": "영상 생성",
+      "stt": "음성 인식",
+      "tts": "음성 합성",
+      "embedding": "임베딩"
     }
   },
   "adminSystemSettings": {

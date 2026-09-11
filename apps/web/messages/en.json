@@ -1613,6 +1613,35 @@
     },
     "notInList": "(not in list)"
   },
+  "modalityModels": {
+    "title": "Model per Modality",
+    "description": "Choose which model handles image generation, vision, video, speech, and embeddings. Unassigned items follow the global setting or the default. This is a separate axis from the role assignments above (which text model each role uses).",
+    "axisNote": "This is a separate axis from \"Model Roles\" above (which text LLM handles agent, judge, etc.).",
+    "gatewayNote": "All calls go through the single LiteLLM gateway, so external models can only be assigned from providers enrolled in the gateway.",
+    "loading": "Loading modality mappings…",
+    "loadError": "Failed to load modality mappings.",
+    "saveFailed": "Failed to save modality mapping.",
+    "defaultOption": "Default (auto)",
+    "assignedBadge": "Assigned",
+    "unavailableBadge": "Unavailable",
+    "resetLabel": "Reset to default",
+    "empty": "No assignable modalities.",
+    "notInList": "(not in list)",
+    "source": {
+      "user": "My setting",
+      "global": "Global",
+      "default": "Default"
+    },
+    "modalities": {
+      "image_gen": "Image generation",
+      "image_edit": "Image editing",
+      "vision": "Vision (image understanding)",
+      "video_gen": "Video generation",
+      "stt": "Speech-to-text",
+      "tts": "Text-to-speech",
+      "embedding": "Embedding"
+    }
+  },
   "adminModelRoles": {
     "title": "Model Roles Admin",
     "description": "Manage global role→model mappings (defaults for all users) and server-shared external keys.",
@@ -1644,6 +1673,36 @@
       "save": "Save",
       "placeholder": "Empty = fallback ({fallback})",
       "cacheNote": "Changes take effect within 60 seconds without a restart."
+    }
+  },
+  "adminModalityModels": {
+    "title": "Global Modality Mappings",
+    "description": "Set the global default model for image generation, vision, video, speech, and embeddings. Per-user mappings take precedence; clearing falls back to the code default. This is a separate axis from the role assignments above (which text model each role uses).",
+    "axisNote": "This is a separate axis from \"Global Role Mappings\" above (which text LLM handles agent, judge, etc.).",
+    "gatewayNote": "All calls go through the single LiteLLM gateway, so external models can only be assigned from gateway-enrolled providers ({providers}).",
+    "gatewayNone": "none",
+    "loadError": "Failed to load modality mappings.",
+    "saveFailed": "Failed to save modality mapping.",
+    "defaultOption": "Default (code default)",
+    "assigned": "Assigned",
+    "unavailableBadge": "Unavailable",
+    "resetLabel": "Reset to default",
+    "codeDefault": "Code default: {model}",
+    "notInList": "(not in list)",
+    "cacheNote": "Changes take effect within 60 seconds without a restart.",
+    "source": {
+      "user": "My setting",
+      "global": "Global",
+      "default": "Default"
+    },
+    "modalities": {
+      "image_gen": "Image generation",
+      "image_edit": "Image editing",
+      "vision": "Vision (image understanding)",
+      "video_gen": "Video generation",
+      "stt": "Speech-to-text",
+      "tts": "Text-to-speech",
+      "embedding": "Embedding"
     }
   },
   "adminSystemSettings": {

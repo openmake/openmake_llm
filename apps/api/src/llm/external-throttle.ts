@@ -63,6 +63,17 @@ function semaphoreFor(providerId: string): Semaphore {
     return s;
 }
 
+/**
+ * LLMClient 가 아닌 호출(모달리티 도구의 fetch 등)이 같은 provider 세마포어를 공유하기 위한 진입점.
+ * 로컬(local-llm)은 세마포어 없이 그대로 실행. 429 백오프는 하지 않는다 — 비스트림 단발 호출은
+ * 호출부가 결과 코드를 그대로 사용자에게 안내한다(조용한 재시도로 이미지 생성이 수 분 늦어지는 것 방지).
+ */
+export async function withProviderSlot<T>(providerId: string, fn: () => Promise<T>): Promise<T> {
+    if (providerId === 'local-llm') return fn();
+    const release = await semaphoreFor(providerId).acquire();
+    try { return await fn(); } finally { release(); }
+}
+
 /** 테스트용 — 세마포어 상태 초기화 */
 export function __resetExternalThrottleForTest(): void { semaphores.clear(); }
 

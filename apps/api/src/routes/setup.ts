@@ -27,6 +27,7 @@ import { createUserAgentsController } from '../controllers/user-agents.controlle
 import { createUserExtensionsController } from '../controllers/user-extensions.controller';
 import { createUserMemoriesController } from '../controllers/user-memories.controller';
 import { createUserModelRolesController } from '../controllers/user-model-roles.controller';
+import { createModalityModelsController } from '../controllers/modality-models.controller';
 import debugQueueRouter from './debug-queue.routes';
 import { default as chatRouter, setClusterManager as setChatCluster } from './chat.routes';
 import { setClusterManager as setOpenAICompatCluster } from './openai-compat.routes';
@@ -45,6 +46,7 @@ import {
     mcpAdminMonitoringRouter,
     toolHealthRouter,
     adminModelRolesRouter,
+    adminModalityModelsRouter,
     adminSystemSettingsRouter,
     firstRunSetupRouter,
     kakaoMapEmbedRouter,
@@ -208,6 +210,7 @@ export function setupApiRoutes(
     }));
     app.use('/api/admin/mcp', mcpCatalogAdminRouter);
     app.use('/api/admin', adminModelRolesRouter);
+    app.use('/api/admin', adminModalityModelsRouter);
     app.use('/api/admin', adminSystemSettingsRouter);
     app.use('/api/admin/mcp', mcpAdminMonitoringRouter);
     app.use('/api/admin/agent-task-schedules', adminAgentTaskSchedulesRouter);
@@ -261,6 +264,8 @@ export function setupApiRoutes(
     // ⚠️ 채팅 `/remember` 슬래시는 미구현 — 저장은 이 엔드포인트(POST)로만.
     app.use('/api/users/me/memories', createUserMemoriesController());
     app.use('/api/users/me/model-roles', createUserModelRolesController());
+    // 모달리티(이미지·비전·영상·오디오·임베딩)→모델 오버라이드 — 역할 배정과 별개 축 (2026-09-12)
+    app.use('/api/users/me/modality-models', createModalityModelsController());
 
     // 클러스터 의존성 주입
     setChatCluster(cluster);

@@ -467,6 +467,8 @@ class UserManagerImpl {
 
             // ── 2. 사용자 데이터 정리 ──
             await client.query('DELETE FROM user_memories WHERE user_id = $1', [userId]);
+            // 모달리티 모델 오버라이드 — scope 가 '__global__' 도 담아 FK 를 못 걸므로 여기서 정리
+            await client.query('DELETE FROM modality_models WHERE scope = $1', [userId]);
 
             await client.query('DELETE FROM external_connections WHERE user_id = $1', [userId]);
             await client.query('DELETE FROM user_api_keys WHERE user_id = $1', [userId]);
