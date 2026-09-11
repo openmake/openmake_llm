@@ -49,6 +49,7 @@ import type {
 import { slugify } from '../chat/slash-command';
 import { recordSkillUsage } from './skill-usage-log';
 import { shouldInjectManifestSkill } from './manifest-injection-filter';
+import { planManifestInjection, buildManifestOfferBlock } from './manifest-injection-plan';
 import { SKILL_VERSION_LATEST_ORDER_SQL } from '../data/repositories/skill-manifest-sync';
 import { SKILL_MANIFEST_INJECT_MAX_CHARS, SKILL_MANIFEST_PER_SKILL_MAX_CHARS } from '../config/runtime-limits';
 import { SKILL_CATALOG_MAX_ITEMS, SKILL_CATALOG_EXCLUDE_PERSONAS, formatSkillCatalog, warnIfCatalogTruncated } from './skill-catalog';
@@ -415,6 +416,7 @@ export class SkillManager {
      */
     async buildManifestPrompt(
         agentId: string, userId?: string, agentCategory?: string, query?: string,
+        options: { offerOnOverflow?: boolean } = {},
     ): Promise<{ prompt: string; skillNames: string[] } | null> {
         let pool: Pool;
         try {
@@ -480,22 +482,15 @@ export class SkillManager {
         ));
         if (filtered.length === 0) return null;
 
-        // 주입 합계 상한 (프롬프트 다이어트 2026-09-05): priority 순으로 담다가 SKILL_MANIFEST_INJECT_MAX_CHARS
-        // 초과분은 건너뛴다(첫 스킬은 항상). 실측 backend-developer 4개 30.7K 자(≈9K 토큰)가 매 턴 실렸다.
-        const injectedRows: typeof filtered = [];
-        const skipped: string[] = [];
-        let injectedChars = 0;
-        // 페르소나(작음)만 먼저 담아 상한에 밀리지 않게 — 전역 시스템 스킬(karpathy 등)까지 앞세우면 관련 스킬이 밀린다.
-        const isPersona = (r: { id: string; assigned_to: string }) => r.id === AGENT_PERSONA_SKILL_ID_PREFIX + r.assigned_to;
-        const ordered = [...filtered].sort((a, b) => Number(isPersona(b)) - Number(isPersona(a)));
-        for (const r of ordered) {
-            const body = r.prompt_md.length > SKILL_MANIFEST_PER_SKILL_MAX_CHARS
-                ? r.prompt_md.slice(0, SKILL_MANIFEST_PER_SKILL_MAX_CHARS) + '\n... (truncated)' : r.prompt_md;
-            if (injectedRows.length > 0 && injectedChars + body.length > SKILL_MANIFEST_INJECT_MAX_CHARS) { skipped.push(r.id); continue; }
-            injectedRows.push({ ...r, prompt_md: body });
-            injectedChars += body.length;
-        }
-        if (skipped.length > 0) logger.info(`manifest 주입 상한(${SKILL_MANIFEST_INJECT_MAX_CHARS}자) — agent=${agentId} 주입 ${injectedRows.length}개(${injectedChars}자), 건너뜀: ${skipped.join(', ')}`);
+        // 주입 합계 상한 (프롬프트 다이어트 2026-09-05) — manifest-injection-plan.ts (순수): 페르소나 우선, 넘치면
+        // 모델 선택(후보 목록 → load_skill) 또는 종전 결정적 규칙(순서대로 담고 나머지 건너뜀).
+        const plan = planManifestInjection(filtered, {
+            maxChars: SKILL_MANIFEST_INJECT_MAX_CHARS, perSkillMaxChars: SKILL_MANIFEST_PER_SKILL_MAX_CHARS,
+            offerOnOverflow: options.offerOnOverflow === true,
+            isPersona: (r) => r.id === AGENT_PERSONA_SKILL_ID_PREFIX + r.assigned_to,
+        });
+        const injectedRows = plan.injected;
+        if (plan.skipped.length > 0) logger.info(`manifest 주입 상한(${SKILL_MANIFEST_INJECT_MAX_CHARS}자) — agent=${agentId} 주입 ${injectedRows.length}개(${plan.injectedChars}자), 건너뜀: ${plan.skipped.map(r => r.id).join(', ')}`);
         const blocks = injectedRows.map(r => {
             const safeId = r.id.replace(/[<>"&]/g, '');
             return `<skill_context name="${safeId}">\n${r.prompt_md}\n</skill_context>`;
@@ -534,6 +529,10 @@ export class SkillManager {
             } catch (e) {
                 logger.debug('개인 지정 스킬 union 실패 (manifest 분만 주입)', e);
             }
+        }
+        if (plan.offered.length > 0) {
+            blocks.push(buildManifestOfferBlock(plan.offered));
+            logger.info(`manifest 합계 상한 초과 — 모델 선택: agent=${agentId} 후보 ${plan.offered.length}개 (${plan.offered.map(r => r.id).join(', ')})`);
         }
         recordSkillUsage(injected.map(i => ({ ...i, kind: 'inject' as const, userId, args: { agentId } })));
         return { prompt: `\n\n## 적용된 스킬 (manifest)\n${blocks.join('\n\n')}`, skillNames };
