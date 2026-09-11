@@ -33,8 +33,8 @@ describe('model-roles (Role-based Multi-Agent Orchestration)', () => {
     });
 
     describe('역할 목록', () => {
-        it('8개 역할 SoT — classifier 없음 (DB CHECK 073 정합)', () => {
-            expect(MODEL_ROLES).toEqual(['chat', 'agent', 'judge', 'research', 'spawn', 'review', 'router', 'summary']);
+        it('9개 역할 SoT — classifier 없음 (DB CHECK 119 정합)', () => {
+            expect(MODEL_ROLES).toEqual(['chat', 'agent', 'judge', 'research', 'spawn', 'review', 'router', 'summary', 'planner']);
         });
     });
 

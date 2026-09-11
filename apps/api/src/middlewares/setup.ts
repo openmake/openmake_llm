@@ -181,7 +181,7 @@ export function setupParsersAndLimiting(app: Application): void {
  */
 export function setupStaticFiles(app: Application, dirname: string): void {
     // 백엔드 소유 정적 자산을 백엔드 origin 에서 항상 서빙한다 (프론트 모드와 무관).
-    // apps/legacy-web/public 은 구 Vanilla JS SPA 잔존 디렉토리로, 현재는 generate_image 도구
+    // apps/legacy-web/public 은 구 Vanilla JS SPA 잔존 디렉토리로, 현재는 오케스트레이터 미디어(이미지·음성·영상)
     // 출력(public/generated → /generated/*)만 보유한다. FRONTEND_REDIRECT_URL 설정 여부와 관계없이
     // 항상 등록해 /generated/*.png 가 외부 프록시 라우팅에 의존하지 않고 백엔드에서 직접 도달하게 한다.
     // (브라우저는 Next origin 에 있으므로 apps/web/next.config.ts 의 /generated rewrite 가 이 마운트로 프록시한다.)

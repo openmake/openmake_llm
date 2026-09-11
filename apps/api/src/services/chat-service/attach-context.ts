@@ -211,3 +211,21 @@ export function appendCachedAttachContext(sessionId: string, context: string): v
 export function clearAttachContextCache(): void {
     attachContextCache.clear();
 }
+
+
+/** WsAttachedFile 중 오디오·영상·이미지 원본(base64 data)만 추려 오케스트레이터 입력 계약으로 — MIME 또는 확장자로 판별 */
+export function collectMediaFiles(files: unknown): Array<{ id: string; name: string; type: string; data: string }> {
+    if (!Array.isArray(files)) return [];
+    const out: Array<{ id: string; name: string; type: string; data: string }> = [];
+    for (const f of files as Array<{ id?: unknown; name?: unknown; type?: unknown; data?: unknown }>) {
+        if (typeof f?.data !== 'string' || !f.data) continue;
+        const name = typeof f.name === 'string' ? f.name : '';
+        const type = typeof f.type === 'string' ? f.type : '';
+        const ext = (name.split('.').pop() ?? '').toLowerCase();
+        const isMedia = /^(audio|video|image)\//.test(type)
+            || ['mp3', 'wav', 'm4a', 'ogg', 'opus', 'flac', 'webm', 'mp4', 'png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext);
+        if (!isMedia) continue;
+        out.push({ id: String(f.id ?? name), name, type, data: f.data.replace(/^data:[^;]+;base64,/, '') });
+    }
+    return out;
+}

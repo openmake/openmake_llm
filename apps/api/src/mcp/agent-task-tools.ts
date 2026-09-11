@@ -147,4 +147,4 @@ export const agentTaskTools: MCPToolDefinition[] = [agentTaskListTool, agentTask
 // ("보안 차단됨"·가짜 200 OK 등)을 방지. SSRF 가드(safeFetch)는 이 도구 경로에도 동일 적용된다.
 // 주의: always-on 도구는 곧 아티팩트 생성 turn 의 distractor 이므로 runtime-limits.ts 의
 // ARTIFACT_REQUEST_SUPPRESSED_TOOLS 와 항상 동일 집합을 유지할 것.
-export const CHAT_ALWAYS_ON_TOOL_NAMES: string[] = [agentTaskListTool.tool.name, agentTaskGetTool.tool.name, 'generate_image', 'extract_webpage'];
+export const CHAT_ALWAYS_ON_TOOL_NAMES: string[] = [agentTaskListTool.tool.name, agentTaskGetTool.tool.name, 'extract_webpage'];

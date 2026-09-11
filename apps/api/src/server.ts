@@ -237,12 +237,12 @@ export class DashboardServer {
             console.error('[Server] 시스템 설정 로드 실패 (env 폴백으로 계속):', err);
         }
 
-        // 모달리티 모델 배정 시더 — 구 IMAGE_GEN_MODEL env 를 전역 image_gen 행으로 1회 이관 (fail-open)
+        // capability 배정 시더 — 구 IMAGE_GEN_MODEL env 가 남아 있으면 전역 image.generate 행으로 1회 이관 (fail-open, 폐기 예정 경고)
         try {
-            const { seedModalityDefaultsFromEnv } = await import('./services/modality-resolver');
-            await seedModalityDefaultsFromEnv();
+            const { seedCapabilityDefaultsFromEnv } = await import('./services/orchestrator/capability-resolver');
+            await seedCapabilityDefaultsFromEnv();
         } catch (err) {
-            console.error('[Server] 모달리티 시딩 실패 (계속):', err);
+            console.error('[Server] capability 시딩 실패 (계속):', err);
         }
 
         // 외부 MCP 서버 초기화 (DB에서 설정 로드 → stdio 연결)

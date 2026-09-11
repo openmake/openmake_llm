@@ -73,4 +73,6 @@ export interface StreamFromExternalContext {
     orchestrationTelemetry?: import('./orchestration-shadow-recorder').OrchestrationTelemetry;
     /** TTFT 분해 계측 — external-provider 가 채워 되돌려준다(호출부가 구간 계산·로깅). */
     timings?: ChatTimings;
+    /** 멀티모달 오케스트레이터가 이번 턴에 만든 미디어 마크다운(성공분만) — 모델이 누락해도 결정적 첨부 */
+    orchestratorMedia?: string[];
 }

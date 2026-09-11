@@ -24,7 +24,7 @@ import { applySlashCommand, mergeActivatedSkillNames, languageDetectionInput } f
 import { WS_LIMITS } from '../config/timeouts';
 import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
 import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser';
-import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext } from '../services/chat-service/attach-context';
+import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext, collectMediaFiles } from '../services/chat-service/attach-context';
 import type { PdfVisionResult } from '../services/chat-service/pdf-vision';
 import { saveAssistantMessage } from '../chat/request-persistence';
 import { buildWebSearchContext } from '../mcp/web-search/build-search-context';
@@ -153,12 +153,15 @@ export async function handleChatMessage(
         // 바이너리 문서(PDF/docx/xlsx/pptx 등)는 base64(data)를 텍스트로 추출해 content 를 채운다.
         // (무거운 파서는 첨부가 있을 때만 lazy 로딩)
         // PDF 하이브리드(2026-08-19): 추출(data 소거) 전 앞쪽 페이지 vision 렌더 주입 — 특수 모드(딥리서치·이미지생성·토론) 제외
+        let mediaFiles: import('../services/chat-service-types').MediaFileInput[] = [];
         let pdfVision: PdfVisionResult = { images: [], note: '' };
         if (hasFiles && msg.deepResearchMode !== true && msg.imageMode !== true && msg.discussionMode !== true) {
             const { buildPdfVisionAttachment } = await import('../services/chat-service/pdf-vision');
             pdfVision = await buildPdfVisionAttachment(msg.files, images?.length ?? 0);
         }
         if (hasFiles) {
+            // 오디오·영상·이미지 원본은 doc-extractor 가 소거하기 전에 명시 계약(mediaFiles)으로 보존
+            mediaFiles = collectMediaFiles(msg.files);
             const { extractAttachedDocuments } = await import('../services/chat-service/doc-extractor');
             await extractAttachedDocuments(msg.files);
         }
@@ -293,6 +296,7 @@ export async function handleChatMessage(
             sessionId: validSessionId,
             webSearchContext,
             fileContext: (effectiveAttachContext + pdfVision.note) || undefined,
+            ...(mediaFiles.length > 0 ? { mediaFiles } : {}),
             discussionMode: msg.discussionMode === true,
             deepResearchMode: msg.deepResearchMode === true,
             imageMode: msg.imageMode === true,

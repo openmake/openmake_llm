@@ -11,6 +11,7 @@
 import { createLogger } from '../../utils/logger';
 import { REPORT_PIPELINE } from '../../config/runtime-limits';
 import { tryRenderReportBlock } from './report-block';
+import { stripMissingGeneratedLinks } from './generated-link-guard';
 import { basename } from 'path';
 import { MCP_NAMESPACE_SEPARATOR } from '../../mcp/types';
 import { MCP_META_TOOL_NAMES } from '../../mcp/mcp-meta-tools';
@@ -184,6 +185,15 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
         onToken(appended, undefined);
         finalContent += appended;
         logger.info(`🖼️ 생성 이미지 ${missingImages.length}개 자동 첨부 (LLM 응답 누락 보정)`);
+    }
+
+    // 생성 파일 링크 환각 제거 — 이번 턴 생성분도 아니고 디스크에도 없는 /generated/ 링크(모델이 파일명을
+    // 지어낸 경우). 저장 히스토리(반환값)가 대상. 화면은 아래 지도 환각과 같이 done.cleanedContent 교체.
+    const produced = new Set(generatedImageMarkdowns.map((md) => md.match(/\(([^)]+)\)/)?.[1]).filter((p): p is string => !!p));
+    const linkStrip = stripMissingGeneratedLinks(finalContent, produced, undefined, ctx.resolvedLanguage || req.userLanguagePreference || 'ko');
+    if (linkStrip.removed.length > 0) {
+        finalContent = linkStrip.content;
+        logger.warn(`🧹 존재하지 않는 /generated 링크 ${linkStrip.removed.length}개 제거 (모델 환각): ${linkStrip.removed.join(', ')}`);
     }
 
     // 지도 환각 HTML 결정적 제거 — 저장 히스토리(반환값)가 대상. 화면은 done.cleanedContent 교체.

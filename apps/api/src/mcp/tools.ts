@@ -19,9 +19,6 @@
 
 import { MCPToolDefinition, MCPToolResult } from './types';
 import { agentTaskTools } from './agent-task-tools';
-import { imageTools } from './image-tools';
-import { audioTools } from './audio-tools';
-import { videoTools } from './video-tools';
 
 // ============================================
 // Vision Tools (OCR / Image Analysis)
@@ -164,9 +161,6 @@ export const builtInTools: MCPToolDefinition[] = [
     ...webSearchTools,
     ...webScraperTools,
     ...agentTaskTools,
-    ...imageTools,
-    ...audioTools,
-    ...videoTools,
     createSkillTool as MCPToolDefinition,
     importSkillFromGitTool as MCPToolDefinition,
     importAgentFromGitTool as MCPToolDefinition,

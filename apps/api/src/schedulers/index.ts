@@ -60,6 +60,15 @@ export async function startAllSchedulers(): Promise<void> {
     // 7. 로컬 모델 가용성 polling — startup probe 이후 backend 장애 동적 감지
     startLocalModelProbeScheduler();
 
+    // 7-b. /generated 생성 미디어 보존 스윕 (부팅 1회 + 주기) — reports/ 제외
+    try {
+        const { reapStaleGeneratedMedia } = await import('../services/generated-media-retention');
+        reapStaleGeneratedMedia();
+        setInterval(() => { try { reapStaleGeneratedMedia(); } catch { /* noop */ } }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
+    } catch (err) {
+        logger.warn('생성 미디어 스윕 등록 실패 (계속):', err);
+    }
+
     // 8. Task 샌드박스 정리 (플래그 ON 시) — 고아 컨테이너(부팅 1회) + stale workspace(부팅 + 6h 주기).
     try {
         const { getTaskSandboxConfig } = await import('../config/task-sandbox');

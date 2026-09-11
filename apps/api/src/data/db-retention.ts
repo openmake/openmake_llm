@@ -14,6 +14,7 @@
  * - alert_history                   : ALERT_PII_RETENTION_DAYS(기본 90일) 초과 data.actor/ipAddress/userAgent 제거
  * - mcp_server_instances            : MCP_INSTANCE_RETENTION_DAYS(기본 30일) 초과 transition 이력 삭제 (각 server·user 의 최신 transition 은 보존)
  * - orchestration_dispatch_decisions: ORCH_PREVIEW_RETENTION_DAYS(기본 30일) 초과 query_preview NULL (집계 지표는 METRICS_RETENTION_DAYS 까지 보존)
+ * - orchestrator_runs               : ORCHESTRATOR_RUNS_RETENTION_DAYS(기본 90일) 초과 행 삭제 (멀티모달 오케스트레이터 셰도우)
  *
  * @module data/db-retention
  */
@@ -66,6 +67,19 @@ async function runRetention(): Promise<void> {
             );
             if ((usageResult.rowCount ?? 0) > 0) {
                 logger.info(`[DbRetention] 외부 사용량 ${usageResult.rowCount}건 정리 완료 (${retentionDays}일 초과)`);
+            }
+        }
+
+        // 4-b. orchestrator_runs(멀티모달 오케스트레이터 셰도우 — 계획 원문·user_id) 보존 (env: ORCHESTRATOR_RUNS_RETENTION_DAYS)
+        const orchRetentionDays = parseInt(process.env.ORCHESTRATOR_RUNS_RETENTION_DAYS ?? '90', 10);
+        if (Number.isFinite(orchRetentionDays) && orchRetentionDays > 0) {
+            const orchResult = await pool.query(
+                `DELETE FROM orchestrator_runs
+                 WHERE created_at < NOW() - ($1 || ' days')::interval`,
+                [orchRetentionDays.toString()]
+            );
+            if ((orchResult.rowCount ?? 0) > 0) {
+                logger.info(`[DbRetention] 오케스트레이터 셰도우 ${orchResult.rowCount}건 정리 완료 (${orchRetentionDays}일 초과)`);
             }
         }
 

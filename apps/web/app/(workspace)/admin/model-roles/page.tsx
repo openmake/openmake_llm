@@ -20,12 +20,13 @@ import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { fetchModels, type ModelEntry } from "@/lib/models-api";
 import {
-  ModalityEffectiveLine,
-  ModalityParamsInputs,
+  CapabilityEffectiveLine,
+  CapabilityParamsInputs,
+  CapabilityUnsupportedBadge,
   compactParams,
-  type ModalityEffective,
-  type ModalityOverride,
-} from "@/components/settings/modality-models-section";
+  type CapabilityEffective,
+  type CapabilityOverride,
+} from "@/components/settings/capability-models-section";
 
 /* ── 타입 (백엔드 /api/admin/model-roles, /api/admin/server-external-keys) ── */
 interface GlobalMapping {
@@ -50,11 +51,12 @@ interface ServerKeysPayload {
   keys: ServerKeyRow[];
   providers: { id: string; displayName: string; defaultBaseUrl: string }[];
 }
-/* 백엔드 /api/admin/modality-models */
-interface ModalityPayload {
-  mappings: ModalityOverride[];
-  effective: ModalityEffective[];
-  modalities: string[];
+/* 백엔드 /api/admin/capability-models */
+interface CapabilityPayload {
+  mappings: CapabilityOverride[];
+  effective: CapabilityEffective[];
+  capabilities: string[];
+  assignableCapabilities: string[];
   defaults: Record<string, string>;
   gatewayProviders: string[];
 }
@@ -128,13 +130,13 @@ function ServerKeyForm({ providers, onSaved }: {
 }
 
 /**
- * 전역 모달리티→모델 배정 — "역할&모델"(텍스트 LLM 이 어떤 역할을 맡는가)과 별개 축.
- * 이미지 생성·비전·영상·STT·TTS·임베딩을 처리할 모델을 전역 기본값으로 정한다.
+ * 전역 capability→모델 배정 — "역할&모델"(텍스트 LLM 이 어떤 역할을 맡는가)과 별개 축.
+ * Planner 가 계획한 기능(추론·코드·이미지·비전·음성·영상·임베딩)을 처리할 모델을 전역 기본값으로 정한다.
  * 외부 모델은 게이트웨이 편입 provider 만 허용(서버 400 사유를 그대로 표시).
  */
-function GlobalModalityModelsCard() {
-  const t = useTranslations("adminModalityModels");
-  const [payload, setPayload] = useState<ModalityPayload | null>(null);
+function GlobalCapabilityModelsCard() {
+  const t = useTranslations("adminCapabilityModels");
+  const [payload, setPayload] = useState<CapabilityPayload | null>(null);
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [paramDrafts, setParamDrafts] = useState<Record<string, Record<string, string>>>({});
@@ -144,13 +146,13 @@ function GlobalModalityModelsCard() {
     setError(null);
     try {
       const [r, m] = await Promise.all([
-        ApiClient.get<ApiSuccess<ModalityPayload>>("/api/admin/modality-models"),
+        ApiClient.get<ApiSuccess<CapabilityPayload>>("/api/admin/capability-models"),
         // 채팅 불가 모델(임베딩·이미지)도 배정 대상 — 필터 없는 전체 목록.
         fetchModels(),
       ]);
       setPayload(r?.data ?? null);
       const drafts: Record<string, Record<string, string>> = {};
-      for (const row of r?.data?.mappings ?? []) drafts[row.modality] = { ...(row.params ?? {}) };
+      for (const row of r?.data?.mappings ?? []) drafts[row.capability] = { ...(row.params ?? {}) };
       setParamDrafts(drafts);
       setModels(m.models);
     } catch (e) {
@@ -162,18 +164,18 @@ function GlobalModalityModelsCard() {
     queueMicrotask(() => void load());
   }, [load]);
 
-  async function handleChange(modality: string, fullId: string) {
-    setBusy(modality);
+  async function handleChange(capability: string, fullId: string) {
+    setBusy(capability);
     setError(null);
     try {
       if (fullId) {
-        const params = compactParams(paramDrafts[modality]);
-        await ApiClient.put(`/api/admin/modality-models/${modality}`, {
+        const params = compactParams(paramDrafts[capability]);
+        await ApiClient.put(`/api/admin/capability-models/${capability}`, {
           model: fullId,
           ...(params ? { params } : {}),
         });
-      } else if (payload?.mappings.some((m) => m.modality === modality)) {
-        await ApiClient.del(`/api/admin/modality-models/${modality}`);
+      } else if (payload?.mappings.some((m) => m.capability === capability)) {
+        await ApiClient.del(`/api/admin/capability-models/${capability}`);
       }
       await load();
     } catch (e) {
@@ -183,13 +185,13 @@ function GlobalModalityModelsCard() {
     }
   }
 
-  function setParam(modality: string, key: string, value: string) {
-    setParamDrafts((d) => ({ ...d, [modality]: { ...(d[modality] ?? {}), [key]: value } }));
+  function setParam(capability: string, key: string, value: string) {
+    setParamDrafts((d) => ({ ...d, [capability]: { ...(d[capability] ?? {}), [key]: value } }));
   }
 
-  const mapped = new Map((payload?.mappings ?? []).map((m) => [m.modality, m.fullId]));
-  const savedParams = new Map((payload?.mappings ?? []).map((m) => [m.modality, m.params]));
-  const effectiveMap = new Map((payload?.effective ?? []).map((e) => [e.modality, e]));
+  const mapped = new Map((payload?.mappings ?? []).map((m) => [m.capability, m.fullId]));
+  const savedParams = new Map((payload?.mappings ?? []).map((m) => [m.capability, m.params]));
+  const effectiveMap = new Map((payload?.effective ?? []).map((e) => [e.capability, e]));
   const providers = payload?.gatewayProviders ?? [];
 
   return (
@@ -207,29 +209,30 @@ function GlobalModalityModelsCard() {
           {t("gatewayNote", { providers: providers.length > 0 ? providers.join(", ") : t("gatewayNone") })}
         </p>
         {error && <p className="text-sm text-danger" role="alert">{error}</p>}
-        {(payload?.modalities ?? []).map((modality) => {
-          const current = mapped.get(modality) ?? "";
-          const isBusy = busy === modality;
+        {(payload?.assignableCapabilities ?? []).map((capability) => {
+          const current = mapped.get(capability) ?? "";
+          const isBusy = busy === capability;
           return (
-            <div key={modality} className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div key={capability} className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0 space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="whitespace-nowrap text-sm font-medium">{t(`modalities.${modality}`)}</span>
-                  <span className="font-mono text-xs text-muted">{modality}</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="whitespace-nowrap text-sm font-medium">{t(`capabilities.${capability.replace(/\./g, '_')}`)}</span>
+                  <span className="font-mono text-xs text-muted">{capability}</span>
                   {current && <Badge tone="accent" className="shrink-0 whitespace-nowrap">{t("assigned")}</Badge>}
+                  <CapabilityUnsupportedBadge capability={capability} t={t} />
                 </div>
-                <ModalityEffectiveLine eff={effectiveMap.get(modality)} t={t} />
+                <CapabilityEffectiveLine eff={effectiveMap.get(capability)} t={t} />
                 <p className="text-xs text-muted">
-                  {t("codeDefault", { model: payload?.defaults[modality] || "—" })}
+                  {t("codeDefault", { model: payload?.defaults[capability] || "—" })}
                 </p>
-                <ModalityParamsInputs
-                  modality={modality}
-                  draft={paramDrafts[modality] ?? {}}
-                  saved={savedParams.get(modality)}
+                <CapabilityParamsInputs
+                  capability={capability}
+                  draft={paramDrafts[capability] ?? {}}
+                  saved={savedParams.get(capability)}
                   disabled={!current}
                   busy={isBusy}
-                  onChange={(key, value) => setParam(modality, key, value)}
-                  onApply={() => void handleChange(modality, current)}
+                  onChange={(key, value) => setParam(capability, key, value)}
+                  onApply={() => void handleChange(capability, current)}
                   t={t}
                 />
               </div>
@@ -239,8 +242,8 @@ function GlobalModalityModelsCard() {
                   className={`${selectCls} min-w-52`}
                   value={current}
                   disabled={isBusy}
-                  aria-label={t(`modalities.${modality}`)}
-                  onChange={(e) => void handleChange(modality, e.target.value)}
+                  aria-label={t(`capabilities.${capability.replace(/\./g, '_')}`)}
+                  onChange={(e) => void handleChange(capability, e.target.value)}
                 >
                   <option value="">{t("defaultOption")}</option>
                   {current && !models.some((m) => m.modelId === current) && (
@@ -255,7 +258,7 @@ function GlobalModalityModelsCard() {
                 </select>
                 {current && !isBusy && (
                   <Button variant="ghost" size="sm" aria-label={t("resetLabel")} title={t("resetLabel")}
-                    onClick={() => void handleChange(modality, "")}>
+                    onClick={() => void handleChange(capability, "")}>
                     <RotateCcw className="h-4 w-4" aria-hidden />
                   </Button>
                 )}
@@ -416,7 +419,7 @@ export default function AdminModelRolesPage() {
         </CardContent>
       </Card>
 
-      <GlobalModalityModelsCard />
+      <GlobalCapabilityModelsCard />
     </div>
   );
 }

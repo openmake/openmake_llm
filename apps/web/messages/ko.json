@@ -384,6 +384,21 @@
       "inProgress": "토론 진행 중",
       "round": "라운드 {current}/{total}"
     },
+    "orchestrator": {
+      "title": "멀티모달 오케스트레이터",
+      "phase": {
+        "planning": "질문 분석 중",
+        "executing": "작업 실행 중",
+        "synthesizing": "답변 작성 중"
+      },
+      "status": {
+        "pending": "대기",
+        "running": "실행 중",
+        "ok": "완료",
+        "failed": "실패"
+      },
+      "tasksCount": "작업 {count}개"
+    },
     "tool": {
       "running": "{tool} 실행 중"
     },
@@ -1609,23 +1624,28 @@
       "summary": {
         "label": "생각 요약",
         "description": "생각 과정 헤드라인을 생성하는 모델"
+      },
+      "planner": {
+        "label": "Planner(질문 분석·작업 계획)",
+        "description": "매 턴 1회 짧은 JSON 계획을 만드는 모델 — 작고 빠른 모델 권장(로컬 27B 는 ~15초)"
       }
     },
     "notInList": "(목록에 없음)"
   },
-  "modalityModels": {
-    "title": "모달리티별 모델 배정",
-    "description": "이미지 생성·비전·영상·음성·임베딩을 어느 모델이 처리할지 정합니다. 미배정 항목은 전역 설정 또는 기본값을 따릅니다.",
-    "axisNote": "위 \"역할별 모델 배정\"(어떤 텍스트 LLM 이 에이전트·판정 등을 맡는가)과는 별개의 축입니다.",
-    "gatewayNote": "모든 호출은 LiteLLM 게이트웨이 하나로 가므로 외부 모델은 게이트웨이에 편입된 provider 만 배정할 수 있습니다.",
-    "loading": "모달리티 배정 불러오는 중…",
-    "loadError": "모달리티 배정을 불러오지 못했습니다.",
-    "saveFailed": "모달리티 배정 저장에 실패했습니다.",
+  "capabilityModels": {
+    "title": "기능별 모델 배정",
+    "description": "질문을 분석한 Planner 가 계획한 기능(capability)을 어느 모델이 처리할지 정합니다. 위의 역할 배정(어떤 텍스트 모델이 답하는가)과는 별개이며, 호출은 LiteLLM 게이트웨이 하나로 갑니다.",
+    "gatewayNote": "외부 모델은 게이트웨이에 편입된 provider 만 배정할 수 있습니다. 미배정 항목은 전역 설정 또는 기본값을 따릅니다.",
+    "loading": "기능 배정 불러오는 중…",
+    "loadError": "기능 배정을 불러오지 못했습니다.",
+    "saveFailed": "기능 배정 저장에 실패했습니다.",
     "defaultOption": "기본(자동)",
     "assignedBadge": "배정됨",
     "unavailableBadge": "사용 불가",
+    "unsupportedBadge": "현재 미지원",
+    "unsupportedHint": "provider 어댑터가 아직 없어 배정만 저장됩니다.",
     "resetLabel": "기본값으로 되돌리기",
-    "empty": "배정 가능한 모달리티가 없습니다.",
+    "empty": "배정 가능한 기능이 없습니다.",
     "notInList": "(목록에 없음)",
     "paramsHint": "provider 규격 인자 — 비우면 기본값",
     "paramsApply": "인자 적용",
@@ -1634,14 +1654,21 @@
       "global": "전역",
       "default": "기본값"
     },
-    "modalities": {
-      "image_gen": "이미지 생성",
+    "capabilities": {
+      "text_reason": "텍스트 추론·분석",
+      "text_code": "코드",
+      "text_embed": "임베딩",
+      "vision_describe": "이미지 이해",
+      "vision_ocr": "OCR",
+      "image_generate": "이미지 생성",
       "image_edit": "이미지 편집",
-      "vision": "비전(이미지 이해)",
-      "video_gen": "영상 생성",
-      "stt": "음성 인식",
-      "tts": "음성 합성",
-      "embedding": "임베딩"
+      "audio_transcribe": "음성 인식(STT)",
+      "audio_speech": "음성 합성(TTS)",
+      "audio_analyze": "오디오 분석",
+      "music_analyze": "음악 분석",
+      "music_generate": "음악 생성",
+      "video_generate": "영상 생성",
+      "video_analyze": "영상 이해"
     }
   },
   "adminModelRoles": {
@@ -1677,17 +1704,19 @@
       "cacheNote": "변경은 재시작 없이 최대 60초 내에 반영됩니다."
     }
   },
-  "adminModalityModels": {
-    "title": "전역 모달리티 배정",
-    "description": "이미지 생성·비전·영상·음성·임베딩의 전역 기본 모델을 정합니다. 사용자 개인 배정이 우선하며, 해제하면 코드 기본값으로 돌아갑니다.",
-    "axisNote": "위 \"전역 역할 매핑\"(어떤 텍스트 LLM 이 에이전트·판정 등을 맡는가)과는 별개의 축입니다.",
-    "gatewayNote": "모든 호출은 LiteLLM 게이트웨이 하나로 가므로 외부 모델은 게이트웨이 편입 provider({providers})만 배정할 수 있습니다.",
+  "adminCapabilityModels": {
+    "title": "전역 기능별 모델 배정",
+    "description": "Planner 가 계획한 기능(capability)별 전역 기본 모델을 정합니다. 사용자 개인 배정이 우선하며, 해제하면 코드 기본값으로 돌아갑니다.",
+    "axisNote": "위 \"전역 역할 매핑\"(어떤 텍스트 LLM 이 답하는가)과는 별개의 축이며, 호출은 LiteLLM 게이트웨이 하나로 갑니다.",
+    "gatewayNote": "외부 모델은 게이트웨이 편입 provider({providers})만 배정할 수 있습니다.",
     "gatewayNone": "없음",
-    "loadError": "모달리티 배정을 불러오지 못했습니다.",
-    "saveFailed": "모달리티 배정 저장에 실패했습니다.",
+    "loadError": "기능 배정을 불러오지 못했습니다.",
+    "saveFailed": "기능 배정 저장에 실패했습니다.",
     "defaultOption": "기본(코드 기본값)",
     "assigned": "배정됨",
     "unavailableBadge": "사용 불가",
+    "unsupportedBadge": "현재 미지원",
+    "unsupportedHint": "provider 어댑터가 아직 없어 배정만 저장됩니다.",
     "resetLabel": "기본값으로 되돌리기",
     "codeDefault": "코드 기본값: {model}",
     "notInList": "(목록에 없음)",
@@ -1699,14 +1728,21 @@
       "global": "전역",
       "default": "기본값"
     },
-    "modalities": {
-      "image_gen": "이미지 생성",
+    "capabilities": {
+      "text_reason": "텍스트 추론·분석",
+      "text_code": "코드",
+      "text_embed": "임베딩",
+      "vision_describe": "이미지 이해",
+      "vision_ocr": "OCR",
+      "image_generate": "이미지 생성",
       "image_edit": "이미지 편집",
-      "vision": "비전(이미지 이해)",
-      "video_gen": "영상 생성",
-      "stt": "음성 인식",
-      "tts": "음성 합성",
-      "embedding": "임베딩"
+      "audio_transcribe": "음성 인식(STT)",
+      "audio_speech": "음성 합성(TTS)",
+      "audio_analyze": "오디오 분석",
+      "music_analyze": "음악 분석",
+      "music_generate": "음악 생성",
+      "video_generate": "영상 생성",
+      "video_analyze": "영상 이해"
     }
   },
   "adminSystemSettings": {
