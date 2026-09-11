@@ -22,6 +22,7 @@ export { mcpCatalogAdminRouter } from './mcp-catalog-admin.routes';
 export { mcpAdminMonitoringRouter } from './mcp-admin-monitoring.routes';
 export { toolHealthRouter } from './tool-health.routes';
 export { adminModelRolesRouter } from './admin-model-roles.routes';
+export { adminModalityModelsRouter } from './admin-modality-models.routes';
 export { adminSystemSettingsRouter } from './admin-system-settings.routes';
 export { firstRunSetupRouter } from './first-run-setup.routes';
 export { default as kakaoMapEmbedRouter } from './kakao-map-embed.routes';
