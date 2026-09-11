@@ -17,6 +17,15 @@
 # 선행: .env 에 POSTGRES_PASSWORD 를 DATABASE_URL 의 비밀번호와 동일하게 설정.
 #   (DATABASE_URL=postgresql://openmake:<PW>@127.0.0.1:5432/openmake_llm ↔ POSTGRES_PASSWORD=<PW>)
 #
+# 인스턴스 병행 (install.sh --instance NAME):
+#   .env 의 OMK_INSTANCE=NAME 이 컨테이너·볼륨 이름에 "-NAME" 을 붙인다
+#   (openmake-NAME-postgres / openmake-NAME_pgdata). 미설정(기본 인스턴스)이면 기존 이름
+#   openmake-postgres / openmake_pgdata 그대로 — 기존 설치본은 아무것도 바뀌지 않는다.
+#   COMPOSE_PROJECT_NAME=openmake-NAME 도 .env 에 함께 둔다 — 두 설치본이 같은 프로젝트 이름
+#   (디렉터리명 infra)으로 잡히면 compose 가 상대 컨테이너를 자기 것으로 보고 재생성해 버린다.
+#   (컨테이너 이름에 COMPOSE_PROJECT_NAME 을 쓰지 않는 이유: compose 가 해석된 프로젝트 이름을
+#    보간 변수로도 노출해 기본 설치본이 infra-postgres 로 바뀐다.)
+#
 # 초기화: 빈 볼륨 첫 기동 시 db/init/*.sql(001→002→003) 자동 실행.
 #   단 db/migrations/ 는 자동 적용 안 됨 → 기동 후:
 #     npx ts-node apps/api/src/data/migrations/cli.ts migrate
@@ -24,7 +33,7 @@
 services:
   postgres:
     image: postgres:16
-    container_name: openmake-postgres
+    container_name: openmake${OMK_INSTANCE:+-${OMK_INSTANCE}}-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-openmake}
@@ -49,7 +58,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: openmake-redis
+    container_name: openmake${OMK_INSTANCE:+-${OMK_INSTANCE}}-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     ports:
@@ -64,6 +73,6 @@ services:
 
 volumes:
   openmake_pgdata:
-    name: openmake_pgdata
+    name: openmake${OMK_INSTANCE:+-${OMK_INSTANCE}}_pgdata
   openmake_redisdata:
-    name: openmake_redisdata
+    name: openmake${OMK_INSTANCE:+-${OMK_INSTANCE}}_redisdata

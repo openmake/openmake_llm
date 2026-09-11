@@ -196,7 +196,7 @@ OpenMake 把**策略**（决定*如何*回答）与**执行**（真正调用模�
 curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh | bash
 ```
 
-无需克隆 —— 当安装脚本检测到自己运行在仓库之外时，会把源码拉取到 `~/openmake_llm`（用 `OMK_HOME=...` 覆盖；`OMK_REF=...` 指定分支或标签）并在那里重新进入自身。通过管道运行时仍会经由 `/dev/tty` 交互式地向你提问；在非终端环境（CI）中，提示会自动批准。更喜欢经典方式？它的用法与以前完全一致：
+无需克隆 —— 当安装脚本检测到自己运行在仓库之外时，会把源码拉取到 `~/.openmake/chat`（同一主机上并行部署第二份请加 `--instance NAME` → `~/.openmake/chat-NAME`；用 `OMK_HOME=...` 覆盖；`OMK_REF=...` 指定分支或标签）并在那里重新进入自身。通过管道运行时仍会经由 `/dev/tty` 交互式地向你提问；在非终端环境（CI）中，提示会自动批准。更喜欢经典方式？它的用法与以前完全一致：
 
 ```bash
 git clone https://github.com/openmake/openmake_llm.git

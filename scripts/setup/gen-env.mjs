@@ -22,6 +22,7 @@
  *   OMK_PORT(52416) OMK_WEB_PORT(3000) OMK_POSTGRES_PORT(5432) OMK_REDIS_PORT(6379)
  *   OMK_LLM_BASE_URL OMK_LLM_API_KEY OMK_LLM_MODEL
  *   OMK_ADMIN_USERNAME(admin) OMK_ADMIN_EMAIL(support@openmake.cc)
+ *   OMK_INSTANCE(없음)  — install.sh --instance NAME. 있으면 OMK_INSTANCE·COMPOSE_PROJECT_NAME 기록
  *
  * 출력: 마지막 줄에 `GENERATED=1` 또는 `REPAIRED=<n>` 또는 `UNCHANGED=0` (install.sh 파싱용)
  * ==============================================================================
@@ -68,6 +69,11 @@ const ADMIN_EMAIL = env('OMK_ADMIN_EMAIL', 'support@openmake.cc');
 const LLM_BASE_URL = env('OMK_LLM_BASE_URL', 'http://localhost:4000');
 const LLM_API_KEY = env('OMK_LLM_API_KEY', 'sk-no-key');
 const LLM_MODEL = env('OMK_LLM_MODEL', 'qwen3.8-27b');
+const INSTANCE = env('OMK_INSTANCE', '');
+if (INSTANCE && !/^[a-z0-9][a-z0-9-]{0,31}$/.test(INSTANCE)) {
+    process.stderr.write(`OMK_INSTANCE 는 소문자·숫자·하이픈만 가능합니다: '${INSTANCE}'\n`);
+    process.exit(1);
+}
 
 const PG_USER = 'openmake';
 const PG_DB = 'openmake_llm';
@@ -91,6 +97,19 @@ function buildEntries() {
         ['server', 'COOKIE_SECURE', 'false', 'HTTPS 로 서비스하면 true 로 바꾸세요'],
         ['server', 'ALLOW_INSECURE_COOKIES', 'true',
             'HTTP 로컬 실행 허용(위 COOKIE_SECURE=false 의 명시적 opt-out). HTTPS 배포 시 false'],
+
+        // 'instance' 섹션은 신규 생성 때만 쓴다 — 보수 모드에서 기존 설치본에 OMK_WEB_PORT 기본값을
+        // 덧붙이면 OMK_APP_URL 로 옮겨 둔 웹 포트를 덮어쓴다 (resolve-ports 는 OMK_WEB_PORT 를 우선).
+        ['instance', 'OMK_WEB_PORT', WEB_PORT, '웹(Next) 포트 — scripts/resolve-ports.cjs 가 PM2 기동·Next 빌드에 주입'],
+        ...(INSTANCE ? [
+            ['instance', 'OMK_INSTANCE', INSTANCE,
+                '인스턴스 이름 — PM2 앱(openmake-llm-*)·컨테이너·볼륨 이름 접미사. 같은 호스트 병행 설치용'],
+        ] : []),
+        // 프로젝트 이름을 고정한다 — 미설정이면 compose 파일의 디렉터리명(infra)이 되어, 같은 호스트의
+        // 다른 compose 프로젝트(다른 설치본·다른 앱의 infra/)와 서비스 이름이 겹치면 상대 컨테이너를
+        // 자기 것으로 보고 재생성해 버린다.
+        ['instance', 'COMPOSE_PROJECT_NAME', `openmake${INSTANCE ? `-${INSTANCE}` : ''}`,
+            'docker compose 프로젝트 이름 — 다른 compose 프로젝트(infra/)와 컨테이너가 섞이지 않게 고정'],
 
         ['secret', 'JWT_SECRET', hex32(), '세션 서명 키 — 바꾸면 모든 로그인 세션이 무효화됨'],
         ['secret', 'API_KEY_PEPPER', hex32(), 'API Key 해시 pepper'],
@@ -120,6 +139,7 @@ function buildEntries() {
 
 const SECTION_TITLES = {
     server: '서버 / 네트워크',
+    instance: '인스턴스 (install.sh --instance NAME)',
     secret: '시크릿 (자동 생성됨 — 유출 금지, 재생성 시 세션·저장된 키가 무효화됨)',
     admin: '관리자 계정',
     infra: 'PostgreSQL / Redis (infra/docker-compose.yml 과 공유)',
@@ -189,7 +209,8 @@ function main() {
     // ── 보수 모드: 빠진 필수 키만 덧붙인다 ──────────────────────────────────
     const text = fs.readFileSync(ENV_PATH, 'utf8');
     const present = declaredKeys(text);
-    const missing = buildEntries().filter(([, key]) => !present.has(key));
+    // 'instance' 섹션은 부팅 필수가 아니라 보수 대상에서 제외한다 (위 buildEntries 주석 참고).
+    const missing = buildEntries().filter(([section, key]) => section !== 'instance' && !present.has(key));
 
     if (missing.length === 0) {
         say('.env 에 필수 키가 모두 있습니다 — 변경 없음');

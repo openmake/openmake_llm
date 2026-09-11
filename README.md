@@ -192,8 +192,12 @@ curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.
 ```
 
 No clone needed — when the installer detects it is running outside the repo, it fetches
-the source into `~/openmake_llm` (override with `OMK_HOME=...`; `OMK_REF=...` picks a
-branch or tag) and re-enters itself there. Piped runs still prompt you interactively via
+the source into `~/.openmake/chat` (override with `OMK_HOME=...`; `OMK_REF=...` picks a
+branch or tag) and re-enters itself there. To run a second copy next to it on the same
+host, add `--instance NAME` (`... | bash -s -- --instance NAME`): it installs into
+`~/.openmake/chat-NAME` with its own ports (52417/3010), database, Redis and PM2 names
+(`openmake-llm-NAME`). `--public-url https://chat.example.com` writes the public address
+into `.env` and switches to secure cookies when it is HTTPS. Piped runs still prompt you interactively via
 `/dev/tty`; in a non-terminal context (CI) prompts are auto-approved. Prefer the classic
 way? It works exactly as before:
 

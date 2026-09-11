@@ -195,7 +195,7 @@ curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.
 ```
 
 クローンは不要です。インストーラーはリポジトリ外で実行されていることを検出すると、
-ソースを `~/openmake_llm` に取得し(`OMK_HOME=...` で上書き、`OMK_REF=...` でブランチや
+ソースを `~/.openmake/chat` に取得し(同一ホストに 2 つ目を並べるなら `--instance NAME` → `~/.openmake/chat-NAME`)(`OMK_HOME=...` で上書き、`OMK_REF=...` でブランチや
 タグを選択)、そこで自身を再実行します。パイプ実行でも `/dev/tty` 経由で対話的に
 プロンプトが表示されます。非ターミナルのコンテキスト(CI)ではプロンプトは自動承認されます。
 従来の方法がお好みですか。これまでどおり動作します:

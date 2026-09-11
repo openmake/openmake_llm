@@ -195,8 +195,11 @@ curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.
 ```
 
 클론이 필요 없다 — 설치 스크립트가 리포지토리 밖에서 실행되고 있음을 감지하면 소스를
-`~/openmake_llm`으로 가져오고(재정의는 `OMK_HOME=...`; `OMK_REF=...`로 브랜치나 태그 선택)
-그곳에서 스스로를 다시 실행한다. 파이프로 실행해도 `/dev/tty`를 통해 대화형으로 프롬프트가
+`~/.openmake/chat`으로 가져오고(재정의는 `OMK_HOME=...`; `OMK_REF=...`로 브랜치나 태그 선택)
+그곳에서 스스로를 다시 실행한다. 같은 호스트에 설치본을 하나 더 두려면 `--instance NAME`을
+붙인다(`... | bash -s -- --instance NAME`) — `~/.openmake/chat-NAME`에 별도 포트(52417/3010)·DB·Redis·PM2
+이름(`openmake-llm-NAME`)으로 설치된다. `--public-url https://chat.example.com`은 공개 주소를
+`.env`에 반영하고 HTTPS면 secure cookie로 전환한다. 파이프로 실행해도 `/dev/tty`를 통해 대화형으로 프롬프트가
 뜨며, 터미널이 아닌 환경(CI)에서는 프롬프트가 자동 승인된다. 고전적인 방식이 더 좋다면
 예전 그대로 동작한다:
 
