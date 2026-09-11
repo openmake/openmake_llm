@@ -201,6 +201,10 @@ export const WS_LIMITS = {
     MAX_MESSAGE_CHARS: parseInt(process.env.WS_MAX_MESSAGE_CHARS || String(64 * 1024 * 1024), 10),
     /** detach 된 스트림이 재생용으로 쌓아 두는 비-토큰 이벤트 버퍼 상한 (bytes) — 기본 4MB */
     DETACHED_STREAM_BUFFER_MAX_BYTES: Number(process.env.WS_DETACHED_STREAM_BUFFER_MAX_BYTES) || 4 * 1024 * 1024,
+    /** 인증 완료 전(연결 콜백의 await 구간) 도착한 프레임을 모아 두는 개수 상한 — 정상 첫 프레임은 hello 처럼 작다 */
+    EARLY_BUFFER_MAX_FRAMES: Number(process.env.WS_EARLY_BUFFER_MAX_FRAMES) || 8,
+    /** 같은 버퍼의 총 바이트 상한 — 기본 1MB. 인증 전 연결이 메모리를 점유하지 못하게 막는다 */
+    EARLY_BUFFER_MAX_BYTES: Number(process.env.WS_EARLY_BUFFER_MAX_BYTES) || 1024 * 1024,
     /** 사용자당 최대 동시 WebSocket 연결 수 */
     MAX_CONNECTIONS_PER_USER: Number(process.env.WS_MAX_CONNECTIONS_PER_USER) || 5,
     /** 연결 속도 제한 윈도우 (ms) — 기본 60초 */

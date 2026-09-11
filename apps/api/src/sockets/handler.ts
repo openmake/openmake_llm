@@ -33,7 +33,7 @@
  * @requires ChatService - AI 메시지 처리 서비스
  * @requires ClusterManager - LLM 클러스터 관리
  */
-import { WebSocket, WebSocketServer } from 'ws';
+import { WebSocket, WebSocketServer, type RawData } from 'ws';
 import { IncomingMessage } from 'http';
 import crypto from 'node:crypto';
 import { ClusterManager } from '../cluster/manager';
@@ -46,6 +46,7 @@ import { WS_SECURITY } from '../config/security';
 import { getBuildId } from '../config/build-id';
 import { handleChatMessage } from './ws-chat-handler';
 import { getInFlightStreamRegistry, resolveStreamKey } from './ws-stream-registry';
+import { bufferEarlyMessages } from './ws-early-messages';
 import { handleRequestAgents } from './ws-agents-handler';
 import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
 import { handleBridgeMessage } from './ws-bridge-handler';
@@ -122,6 +123,10 @@ export class WebSocketHandler {
      */
     private setupConnection(): void {
         this.wss.on('connection', async (ws: WebSocket, req: IncomingMessage) => {
+            // 인증(await) 구간에 도착한 프레임을 모아 둔다 — 리스너가 없으면 ws 가 그대로 버리기 때문.
+            // 아래 모든 경로에서 early.attach(정상) 또는 early.discard(거부)로 반드시 끝낸다.
+            const early = bufferEarlyMessages(ws);
+
             // CSWSH 방어: Origin 헤더 화이트리스트 검증
             // CORS는 WS upgrade에 적용되지 않으므로 서버가 직접 검증해야 한다.
             const origin = req.headers.origin;
@@ -141,6 +146,7 @@ export class WebSocketHandler {
                     /* socket may already be closed */
                 }
                 ws.close(WS_SECURITY.ORIGIN_REJECTED_CLOSE_CODE, WS_SECURITY.ORIGIN_REJECTED_REASON);
+                early.discard();
                 return;
             }
 
@@ -156,18 +162,21 @@ export class WebSocketHandler {
             if (this.guard.isIpRateLimited(clientIp)) {
                 ws.send(JSON.stringify({ type: 'error', message: '연결 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' }));
                 ws.close(1008, 'connection_rate_limited');
+                early.discard();
                 return;
             }
 
             if (auth.userId && this.guard.isUserRateLimited(auth.userId)) {
                 ws.send(JSON.stringify({ type: 'error', message: '사용자 연결 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.' }));
                 ws.close(1008, 'user_connection_rate_limited');
+                early.discard();
                 return;
             }
 
             if (auth.userId && this.guard.getActiveConnectionsForUser(auth.userId) >= WS_LIMITS.MAX_CONNECTIONS_PER_USER) {
                 ws.send(JSON.stringify({ type: 'error', message: '동시 WebSocket 세션 한도를 초과했습니다. 기존 세션을 종료 후 다시 시도해주세요.' }));
                 ws.close(1008, 'connection_limit_exceeded');
+                early.discard();
                 return;
             }
 
@@ -203,6 +212,7 @@ export class WebSocketHandler {
                 ws.send(JSON.stringify({ type: 'error', message: '인증 토큰이 만료되었습니다. 다시 로그인해주세요.' }));
                 this.unregisterConnection(ws);
                 ws.close(1008, 'token_expired');
+                early.discard();
                 return;
             }
 
@@ -249,7 +259,7 @@ export class WebSocketHandler {
                 log.warn(`WebSocket error for user ${extWs._authenticatedUserId || 'anonymous'}:`, err);
             });
 
-            ws.on('message', async (data) => {
+            const onMessage = async (data: RawData): Promise<void> => {
                 const wsRequestId = crypto.randomUUID();
                 await runWithRequestContext({ requestId: wsRequestId }, async () => {
                     try {
@@ -295,7 +305,9 @@ export class WebSocketHandler {
                         log.error('[WS] 메시지 처리 오류:', (e instanceof Error ? e.message : String(e)) || e);
                     }
                 });
-            });
+            };
+            // 실제 핸들러 등록 + 인증 전 도착분 재생(도착 순서 유지).
+            early.attach(onMessage);
         });
     }
 
