@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.60.0](https://github.com/openmake/openmake_llm/compare/v1.59.0...v1.60.0) (2026-09-11)
+
+
+### ✨ 기능
+
+* **install:** 기본 설치 위치 ~/.openmake/chat + --instance NAME 병행 설치 + --public-url + db-dump/db-restore ([#812](https://github.com/openmake/openmake_llm/issues/812)) ([249fc73](https://github.com/openmake/openmake_llm/commit/249fc730b66aad5880cf6ca472a0f7c12aa0df4a))
+
 ## [1.59.0](https://github.com/openmake/openmake_llm/compare/v1.58.1...v1.59.0) (2026-09-11)
 
 
