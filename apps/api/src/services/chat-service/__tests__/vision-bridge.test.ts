@@ -6,7 +6,7 @@ jest.mock('../../modality-resolver', () => {
 });
 jest.mock('../../../data/models/unified-database', () => ({ getPool: () => ({}) }));
 
-import { describeImagesForTextModel } from '../vision-bridge';
+import { describeImagesForTextModel, applyVisionBridge } from '../vision-bridge';
 import { ModalityUnavailableError } from '../../modality-resolver';
 import { MODALITY_LIMITS } from '../../../config/modality';
 
@@ -66,4 +66,19 @@ it('HTTP 오류·빈 응답은 throw', async () => {
     const bad = jest.fn(async () => ({ ok: false, status: 502, text: async () => 'upstream', json: async () => ({}) })) as unknown as typeof fetch;
     await expect(describeImagesForTextModel({ images: ['AAAA'], userMessage: '', lang: 'ko', fetchImpl: bad })).rejects.toThrow(/HTTP 502/);
     await expect(describeImagesForTextModel({ images: ['AAAA'], userMessage: '', lang: 'ko', fetchImpl: okFetch('   ') })).rejects.toThrow(/비어/);
+});
+
+describe('applyVisionBridge — 기록은 req.message 와 ctx.enhancedMessage 둘 다에, 이미지는 제거', () => {
+    it('enhancedMessage 가 있으면 그 뒤에 붙는다(외부 경로 user 턴 본문은 enhancedMessage 우선)', () => {
+        const req = { message: '뭐가 보여?', images: ['AAAA'], history: [{ role: 'user', content: '이전', images: ['BBBB'] }] } as never;
+        const { req: r, ctx } = applyVisionBridge(req, { enhancedMessage: '[스킬 컨텍스트]\n뭐가 보여?' }, '[관찰]\n이미지 1: 빨간 원');
+        expect(ctx.enhancedMessage).toBe('[스킬 컨텍스트]\n뭐가 보여?\n\n[관찰]\n이미지 1: 빨간 원');
+        expect(r.message).toContain('이미지 1: 빨간 원');
+        expect(r.images).toBeUndefined();
+        expect(r.history?.[0].images).toBeUndefined();
+    });
+    it('enhancedMessage 가 없으면 req.message 기준으로 만든다', () => {
+        const { ctx } = applyVisionBridge({ message: 'q', images: ['A'] } as never, {} as { enhancedMessage?: string }, 'N');
+        expect(ctx.enhancedMessage).toBe('q\n\nN');
+    });
 });
