@@ -1194,7 +1194,7 @@ export const RESEARCH_CONTEXT = {
     MCP_RESULT_CHAR_CAP: parseInt(process.env.RESEARCH_MCP_RESULT_CHAR_CAP || '8000', 10),
     /** 리서치에 부적합해 제외하는 도구 (웹검색은 파이프라인이 이미 수행) */
     MCP_EXCLUDED_TOOLS: (process.env.RESEARCH_MCP_EXCLUDED_TOOLS
-        || 'web_search,web_scrape,web_crawl,web_map,extract_webpage,research_topic,generate_image')
+        || 'web_search,web_scrape,web_crawl,web_map,extract_webpage,research_topic')
         .split(',').map((s) => s.trim()).filter(Boolean),
 } as const;
 
@@ -1341,7 +1341,7 @@ export const EXTERNAL_LLM_INPUT_TOKEN_BUDGET = parseInt(
  * 명시적 아티팩트 생성 요청 턴에서 억제할 always-on 도구.
  *
  * 측정 근거 (2026-06-23 통제실험): "아티팩트로 html5 ... 작성해" 요청에서 qwen3.6 이
- * `<artifact>` 산출물을 쓰는 대신 always-on 도구(generate_image / agent_task_list /
+ * `<artifact>` 산출물을 쓰는 대신 always-on 도구(구 generate_image(2026-09-12 제거) / agent_task_list /
  * agent_task_get)를 간헐 호출(~33%)해 아티팩트 생성이 실패(빈 응답). 동일 프롬프트로
  * 도구를 제거하면 3/3 정상 생성됨. artifact-guide 시스템 프롬프트(주입돼 있음)로는 막지
  * 못함 → 도구 레벨 조정. 이 도구들은 아티팩트 "생성"에 불필요하므로 명시적 아티팩트
@@ -1351,7 +1351,6 @@ export const EXTERNAL_LLM_INPUT_TOKEN_BUDGET = parseInt(
  * 무조건 주입되는 도구들이 곧 distractor 이기 때문.
  */
 export const ARTIFACT_REQUEST_SUPPRESSED_TOOLS: readonly string[] = [
-    'generate_image',
     'agent_task_list',
     'agent_task_get',
     'extract_webpage',

@@ -89,6 +89,27 @@ export interface DiscussionProgressInfo {
   totalRounds?: number;
 }
 
+/** 오케스트레이터 작업 1건 (백엔드 orchestrator_plan/orchestrator_task 이벤트의 task 대응). */
+export interface OrchestratorTaskInfo {
+  id: string;
+  capability: string;
+  instruction?: string;
+  status: "pending" | "running" | "ok" | "failed";
+  summary?: string;
+  ms?: number;
+}
+
+/**
+ * 멀티모달 오케스트레이터 진행상황 (ws system_event payload.type=orchestrator_status|plan|task).
+ * phase 는 status 이벤트, tasks 는 plan 으로 채워지고 task 이벤트로 상태가 갱신된다.
+ */
+export interface OrchestratorProgressInfo {
+  phase: "planning" | "executing" | "synthesizing";
+  detail?: string;
+  complexity?: string;
+  tasks: OrchestratorTaskInfo[];
+}
+
 /**
  * 구조화 답변 (백엔드 schemas/structured-answer.schema.ts StructuredAnswer 대응).
  * structuredMode 에서 POST /api/chat/structured 가 반환. content 에는 동일 내용의 markdown 도 함께 저장된다.
@@ -159,6 +180,8 @@ interface AppState {
   researchProgress: ResearchProgressInfo | null;
   /** 토론 모드 진행상황 (ws discussion_progress) — 스트리밍 중 배너로 표시, done 시 clear. */
   discussionProgress: DiscussionProgressInfo | null;
+  /** 오케스트레이터 진행상황 (ws system_event orchestrator_*) — 스트리밍 중 배너로 표시, done/skipped 시 clear. */
+  orchestratorProgress: OrchestratorProgressInfo | null;
   /** 현재 실행 중인 MCP/내장 도구명 (ws mcp_tool_start→표시, mcp_tool_result/done→clear). */
   activeTool: string | null;
   /**
@@ -225,6 +248,9 @@ interface AppState {
   setNotebookContext: (nb: { id: string; title: string } | null) => void;
   setResearchProgress: (p: ResearchProgressInfo | null) => void;
   setDiscussionProgress: (p: DiscussionProgressInfo | null) => void;
+  setOrchestratorProgress: (p: OrchestratorProgressInfo | null) => void;
+  /** orchestrator_task 이벤트 — 같은 id 의 작업 상태를 갱신(plan 을 못 받았으면 추가). */
+  updateOrchestratorTask: (task: OrchestratorTaskInfo) => void;
   setActiveTool: (t: string | null) => void;
   requestResend: (r: { fromIndex: number; content: string; images?: string[] }) => void;
   clearResendRequest: () => void;
@@ -308,6 +334,7 @@ export const useAppStore = create<AppState>()(
   notebookContext: null,
   researchProgress: null,
   discussionProgress: null,
+  orchestratorProgress: null,
   activeTool: null,
   resendRequest: null,
 
@@ -449,6 +476,18 @@ export const useAppStore = create<AppState>()(
   setNotebookContext: (nb) => set({ notebookContext: nb }),
   setResearchProgress: (p) => set({ researchProgress: p }),
   setDiscussionProgress: (p) => set({ discussionProgress: p }),
+  setOrchestratorProgress: (p) => set({ orchestratorProgress: p }),
+  updateOrchestratorTask: (task) =>
+    set((s) => {
+      const cur = s.orchestratorProgress;
+      if (!cur) return {};
+      const idx = cur.tasks.findIndex((t) => t.id === task.id);
+      const tasks =
+        idx >= 0
+          ? cur.tasks.map((t, i) => (i === idx ? { ...t, ...task } : t))
+          : [...cur.tasks, task];
+      return { orchestratorProgress: { ...cur, tasks } };
+    }),
   setActiveTool: (t) => set({ activeTool: t }),
   requestResend: (r) => set({ resendRequest: r }),
   clearResendRequest: () => set({ resendRequest: null }),
@@ -461,6 +500,7 @@ export const useAppStore = create<AppState>()(
       notebookContext: null,
       researchProgress: null,
       discussionProgress: null,
+      orchestratorProgress: null,
       activeTool: null,
       resendRequest: null,
       artifacts: [],

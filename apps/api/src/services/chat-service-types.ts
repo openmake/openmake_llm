@@ -152,6 +152,16 @@ export interface SystemEvent {
  */
 export type SystemEventCallback = (event: SystemEvent) => void;
 
+/** 첨부 미디어 원본(base64) — WsAttachedFile 중 audio/video/image 만 추려 담는다 */
+export interface MediaFileInput {
+    id: string;
+    name: string;
+    /** MIME (audio/wav 등) */
+    type: string;
+    /** base64 (dataURL 접두 없음) */
+    data: string;
+}
+
 /**
  * ChatService 설정 인터페이스
  * @interface ChatServiceConfig
@@ -186,6 +196,8 @@ export interface ChatMessageRequest {
     webSearchContext?: string;
     /** 첨부 파일 컨텍스트 (텍스트 파일 내용/바이너리 메타 — transient, DB 미저장) */
     fileContext?: string;
+    /** 오디오·영상·이미지 첨부 원본(base64) — 멀티모달 오케스트레이터 executor 입력. doc-extractor 가 소거하기 전에 WS/REST 가 채운다 */
+    mediaFiles?: MediaFileInput[];
     /** 멀티 에이전트 토론 모드 활성화 여부 */
     discussionMode?: boolean;
     /** 심층 연구 모드 활성화 여부 */

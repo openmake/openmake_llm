@@ -147,7 +147,7 @@ export function buildExternalSystemPrompt(params: {
     }
 
     // 위치/지도 의도면 카카오 장소 검색 도구를 우선 쓰도록 라우팅 넛지 주입.
-    // (qwen 이 web_search/generate_image 로 이탈하는 문제 보정 — generate_image 는 별도로 도구 목록에서 제외)
+    // (qwen 이 web_search 로 이탈하는 문제 보정 — 구 generate_image 도구는 2026-09-12 오케스트레이터로 대체돼 목록에 없음)
     if (wantsMap) {
         systemPromptParts.push(
             '사용자가 국내(한국) 장소·위치·지도·길찾기를 묻고 있습니다. 이런 질문에는 반드시 ' +

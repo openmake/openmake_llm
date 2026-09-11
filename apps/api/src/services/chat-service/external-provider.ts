@@ -28,7 +28,6 @@ import type { ResolvedProvider } from '../../providers/provider-router';
 import { executeExternalTool, recordExternalUsageFireAndForget } from './external-tool-exec';
 
 import { resolveModelCapabilities } from './model-capabilities';
-import { describeImagesForTextModel, applyVisionBridge } from './vision-bridge';
 import { markModelUnusableFireAndForget } from './external-model-availability';
 import { appendDeterministicBlocks } from './external-deterministic-append';
 
@@ -105,44 +104,20 @@ export async function runExternalStream(
         );
     }
 
-    // 역할 모델이 비전을 못 보면 모달리티 `vision` 모델이 첨부를 텍스트 관찰 기록으로 옮긴다
-    // (역할 모델 교체 없음 — 컨텍스트·prefix cache 유지). vision 미배정이면 종전 400.
+    // 채팅 모델이 비전을 못 보면 이미지를 제거하고 진행한다 — 첨부 이해는 멀티모달 오케스트레이터(Planner 가
+    // vision.describe 작업을 계획 → 관찰 기록이 enhancedMessage 에 실림)가 맡는다. 종전 400/브리지 분기 폐기(2026-09-12).
     let effectiveReq: ChatMessageRequest = req;
-    let effectiveCtx = ctx;
     if (hasImages && !caps.vision) {
-        // 휴리스틱 기반 '부정' 은 신뢰하지 않는다 — 오차단(진짜 비전 모델 400)이 실제
-        // 장애였다. 이 경우 그대로 진행하고, 정말 미지원이면 upstream 오류 →
-        // 로컬 폴백(withLocalFallback)이 받아낸다.
         if (capsSource === 'heuristic') {
-            logger.warn(
-                `[Vision] '${resolved.fullId}' vision 판정이 휴리스틱(부정) — 차단하지 않고 진행`,
-            );
-        } else if (!req.images || req.images.length === 0) {
-            // 현재 턴엔 이미지가 없고 history 에만 남은 경우 — 기록 대상이 아니므로 제거만 한다.
-            logger.info(`[VisionBridge] '${resolved.fullId}' 는 비전 미지원 — history 이미지만 제거하고 진행`);
-            effectiveReq = { ...req, history: (req.history ?? []).map((h) => (h.images ? { ...h, images: undefined } : h)) };
+            logger.warn(`[Vision] '${resolved.fullId}' vision 판정이 휴리스틱(부정) — 차단하지 않고 진행`);
         } else {
-            const bridged = await describeImagesForTextModel({
-                images: req.images ?? [],
-                userMessage: req.message ?? '',
-                userId: req.userId,
-                lang: ctx.resolvedLanguage || req.userLanguagePreference || 'en',
-            });
-            if (!bridged) {
-                const err = new Error(
-                    `Model '${resolved.fullId}' does not support vision input (capabilities.vision=false, source=${capsSource}). ` +
-                    'Use a vision-capable model, assign a vision modality model, or remove images from the request.',
-                );
-                (err as Error & { statusCode?: number }).statusCode = 400;
-                throw err;
-            }
-            // 현재 턴 이미지는 기록으로 대체(req.message 와 ctx.enhancedMessage 둘 다), history 이미지는 제거.
-            ({ req: effectiveReq, ctx: effectiveCtx } = applyVisionBridge(req, ctx, bridged.note));
+            logger.info(`[Vision] '${resolved.fullId}' 는 비전 미지원 — 이미지 제거(오케스트레이터 vision 작업 결과로 대체)`);
+            effectiveReq = { ...req, images: undefined, history: (req.history ?? []).map((h) => (h.images ? { ...h, images: undefined } : h)) };
         }
     }
 
     // 메시지 배열 조립(시스템 프롬프트 + history + 현재 turn)은 external-messages 로 분리.
-    const messages = buildExternalMessages({ req: effectiveReq, resolved, ctx: effectiveCtx, wantsMap, orchestration, wantsSpawn });
+    const messages = buildExternalMessages({ req: effectiveReq, resolved, ctx, wantsMap, orchestration, wantsSpawn });
 
     // 도구 노출·억제·첫 턴 강제 결정은 external-tool-plan 으로 분리 (동작 동일).
     const { tools, forcedFirstTurnToolName } = buildExternalToolPlan({
@@ -194,6 +169,8 @@ export async function runExternalStream(
     // 도구 배치가 누적하는 값(이미지 생성 소요시간·호출 집계·결정적 첨부 블록)은
     // external-tool-batch 가 소유한다 — 각 필드의 의미는 그 모듈의 ToolBatchState 참고.
     const state = createToolBatchState();
+    // 오케스트레이터 산출물(성공분만) — generate_image 결정적 첨부와 같은 경로로 누락 보정
+    if (ctx.orchestratorMedia?.length) state.generatedImageMarkdowns.push(...ctx.orchestratorMedia);
 
 
     try {

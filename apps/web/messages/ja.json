@@ -384,6 +384,21 @@
       "inProgress": "ディスカッション進行中",
       "round": "ラウンド {current}/{total}"
     },
+    "orchestrator": {
+      "title": "マルチモーダル オーケストレーター",
+      "phase": {
+        "planning": "質問を分析中",
+        "executing": "タスク実行中",
+        "synthesizing": "回答を作成中"
+      },
+      "status": {
+        "pending": "待機",
+        "running": "実行中",
+        "ok": "完了",
+        "failed": "失敗"
+      },
+      "tasksCount": "タスク {count} 件"
+    },
     "tool": {
       "running": "{tool} を実行中"
     },
@@ -1609,23 +1624,28 @@
       "summary": {
         "label": "思考要約",
         "description": "思考プロセスのヘッドラインを生成するモデル"
+      },
+      "planner": {
+        "label": "Planner(質問分析・作業計画)",
+        "description": "毎ターン1回、短い JSON 計画を作るモデル — 小さく速いモデル推奨(ローカル 27B は約15秒)"
       }
     },
     "notInList": "（一覧にない）"
   },
-  "modalityModels": {
-    "title": "モダリティ別モデル割り当て",
-    "description": "画像生成・ビジョン・動画・音声・埋め込みをどのモデルが処理するかを決めます。未設定の項目はグローバル設定またはデフォルトに従います。",
-    "axisNote": "上の「役割別モデル割り当て」(どのテキストLLMがエージェント・判定などを担うか)とは別の軸です。",
-    "gatewayNote": "すべての呼び出しは単一の LiteLLM ゲートウェイを経由するため、外部モデルはゲートウェイに登録された provider のみ割り当てられます。",
-    "loading": "モダリティ設定を読み込み中…",
-    "loadError": "モダリティ設定を読み込めませんでした。",
-    "saveFailed": "モダリティ設定の保存に失敗しました。",
+  "capabilityModels": {
+    "title": "機能別モデル割り当て",
+    "description": "質問を分析した Planner が計画した機能(capability)をどのモデルが処理するかを決めます。上の役割割り当て(どのテキストモデルが回答するか)とは別で、呼び出しは単一の LiteLLM ゲートウェイを経由します。",
+    "gatewayNote": "外部モデルはゲートウェイに登録された provider のみ割り当てられます。未設定の項目はグローバル設定またはデフォルトに従います。",
+    "loading": "機能設定を読み込み中…",
+    "loadError": "機能設定を読み込めませんでした。",
+    "saveFailed": "機能設定の保存に失敗しました。",
     "defaultOption": "デフォルト(自動)",
     "assignedBadge": "割り当て済み",
     "unavailableBadge": "利用不可",
+    "unsupportedBadge": "現在未対応",
+    "unsupportedHint": "provider アダプターが未実装のため、割り当てのみ保存されます。",
     "resetLabel": "デフォルトに戻す",
-    "empty": "割り当て可能なモダリティがありません。",
+    "empty": "割り当て可能な機能がありません。",
     "notInList": "(一覧にありません)",
     "paramsHint": "provider 規格の引数 — 空欄ならデフォルト",
     "paramsApply": "引数を適用",
@@ -1634,14 +1654,21 @@
       "global": "グローバル",
       "default": "デフォルト"
     },
-    "modalities": {
-      "image_gen": "画像生成",
+    "capabilities": {
+      "text_reason": "テキスト推論・分析",
+      "text_code": "コード",
+      "text_embed": "埋め込み",
+      "vision_describe": "画像理解",
+      "vision_ocr": "OCR",
+      "image_generate": "画像生成",
       "image_edit": "画像編集",
-      "vision": "ビジョン(画像理解)",
-      "video_gen": "動画生成",
-      "stt": "音声認識",
-      "tts": "音声合成",
-      "embedding": "埋め込み"
+      "audio_transcribe": "音声認識(STT)",
+      "audio_speech": "音声合成(TTS)",
+      "audio_analyze": "オーディオ分析",
+      "music_analyze": "音楽分析",
+      "music_generate": "音楽生成",
+      "video_generate": "動画生成",
+      "video_analyze": "動画理解"
     }
   },
   "adminModelRoles": {
@@ -1677,17 +1704,19 @@
       "cacheNote": "変更は再起動なしで最大60秒以内に反映されます。"
     }
   },
-  "adminModalityModels": {
-    "title": "グローバルモダリティ割り当て",
-    "description": "画像生成・ビジョン・動画・音声・埋め込みのグローバル既定モデルを設定します。ユーザー個別の割り当てが優先され、解除するとコードの既定値に戻ります。",
-    "axisNote": "上の「グローバル役割マッピング」(どのテキストLLMがエージェント・判定などを担うか)とは別の軸です。",
-    "gatewayNote": "すべての呼び出しは単一の LiteLLM ゲートウェイを経由するため、外部モデルはゲートウェイ登録済み provider({providers})のみ割り当てられます。",
+  "adminCapabilityModels": {
+    "title": "グローバル機能別割り当て",
+    "description": "Planner が計画した機能(capability)ごとのグローバル既定モデルを設定します。ユーザー個別の割り当てが優先され、解除するとコードの既定値に戻ります。",
+    "axisNote": "上の「グローバル役割マッピング」(どのテキストLLMが回答するか)とは別の軸で、呼び出しは単一の LiteLLM ゲートウェイを経由します。",
+    "gatewayNote": "外部モデルはゲートウェイ登録済み provider({providers})のみ割り当てられます。",
     "gatewayNone": "なし",
-    "loadError": "モダリティ設定を読み込めませんでした。",
-    "saveFailed": "モダリティ設定の保存に失敗しました。",
+    "loadError": "機能設定を読み込めませんでした。",
+    "saveFailed": "機能設定の保存に失敗しました。",
     "defaultOption": "デフォルト(コード既定値)",
     "assigned": "割り当て済み",
     "unavailableBadge": "利用不可",
+    "unsupportedBadge": "現在未対応",
+    "unsupportedHint": "provider アダプターが未実装のため、割り当てのみ保存されます。",
     "resetLabel": "デフォルトに戻す",
     "codeDefault": "コード既定値: {model}",
     "notInList": "(一覧にありません)",
@@ -1699,14 +1728,21 @@
       "global": "グローバル",
       "default": "デフォルト"
     },
-    "modalities": {
-      "image_gen": "画像生成",
+    "capabilities": {
+      "text_reason": "テキスト推論・分析",
+      "text_code": "コード",
+      "text_embed": "埋め込み",
+      "vision_describe": "画像理解",
+      "vision_ocr": "OCR",
+      "image_generate": "画像生成",
       "image_edit": "画像編集",
-      "vision": "ビジョン(画像理解)",
-      "video_gen": "動画生成",
-      "stt": "音声認識",
-      "tts": "音声合成",
-      "embedding": "埋め込み"
+      "audio_transcribe": "音声認識(STT)",
+      "audio_speech": "音声合成(TTS)",
+      "audio_analyze": "オーディオ分析",
+      "music_analyze": "音楽分析",
+      "music_generate": "音楽生成",
+      "video_generate": "動画生成",
+      "video_analyze": "動画理解"
     }
   },
   "adminSystemSettings": {

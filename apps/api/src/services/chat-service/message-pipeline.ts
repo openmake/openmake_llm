@@ -28,6 +28,7 @@ import { normalizeStyle } from '../../chat/style';
 import { languageDetectionInput } from '../../chat/slash-command';
 import { resolveAnswerFormatProfile, getAnswerFormatGuard } from '../../chat/answer-format';
 import { REPORT_PIPELINE, REPORT_INTENT_PATTERNS } from '../../config/runtime-limits';
+import { ORCHESTRATOR } from '../../config/capabilities';
 import { runProviderGate, servedModelLabel } from './provider-gate';
 import { buildNotebookContextPrefix } from '../../prompts/notebook-context';
 import { applyAgentModelOverride } from './agent-model-override';
@@ -173,7 +174,7 @@ export async function runMessagePipeline(svc: ChatService,
     // 이미지 생성 모드: 토글 ON 이면 메시지를 프롬프트로 이미지를 직접 생성한다 (결정적 경로 —
     // LLM 의 도구 호출 결정에 의존하지 않아 일부 모델이 이미지를 안 그리는 문제를 회피).
     if (req.imageMode === true && (req.message ?? '').trim()) {
-        return generateImageInline((req.message ?? '').trim(), onToken);
+        return generateImageInline((req.message ?? '').trim(), onToken, { userId, lang: languagePolicy?.resolvedLanguage, signal: req.abortSignal });
     }
 
     // Discussion / Deep Research 모드의 모델 해석 — 상세는 mode-external-client
@@ -418,10 +419,29 @@ export async function runMessagePipeline(svc: ChatService,
         extArtifactGuide = '';
         logger.info('[Report] 보고서 의도 감지 — reportdata 계약 가이드 주입 (artifact 가이드 대체)');
     }
+    // 멀티모달 오케스트레이터(2026-09-12) — 모든 턴 Planner. simple 이면 종전 경로, executed 면 작업 결과 블록 +
+    // 성공 미디어 결정적 첨부, fallback 이면 "미디어 미실행" 노트, cancelled 면 여기서 끝.
+    let orchestratedMessage = finalEnhancedMessage;
+    let orchestratorMedia: string[] | undefined;
+    if (ORCHESTRATOR.ENABLED) {
+        const { runOrchestrator } = await import('../orchestrator/orchestrate');
+        const outcome = await runOrchestrator({
+            req, lang: extLang, userId, signal: req.abortSignal,
+            onProgress: (event) => _onSystemEvent?.({ type: event.type, message: '', metadata: event as unknown as Record<string, unknown> }),
+        });
+        if (outcome.mode === 'cancelled') throw new Error('ABORTED');
+        if (outcome.contextBlock) {
+            orchestratedMessage = `${finalEnhancedMessage || message || ''}\n\n${outcome.contextBlock}`;
+        }
+        if (outcome.mode === 'executed') orchestratorMedia = outcome.mediaMarkdowns;
+        logger.info(`[Orchestrator] mode=${outcome.mode} planner=${outcome.plannerMs}ms${outcome.execMs !== undefined ? ` exec=${outcome.execMs}ms` : ''} media=${outcome.mediaMarkdowns.length}`);
+    }
+
     // 명명된 ctx — external-provider 가 orchestrationTelemetry(Stage 2)를 여기에 되돌려준다.
     const extStreamCtx: import('./external-provider').StreamFromExternalContext = {
         agentSystemMessage: agentSysMsgForExternal,
-        enhancedMessage: finalEnhancedMessage,
+        enhancedMessage: orchestratedMessage,
+        ...(orchestratorMedia ? { orchestratorMedia } : {}),
         resolvedLanguage: languagePolicy?.resolvedLanguage,
         memoryBlock: extMemoryBlock,
         customInstructionsBlock: extCustomInstructionsBlock,

@@ -272,9 +272,8 @@ describe('safeFetch', () => {
         ]);
         globalThis.fetch = fetchFn;
 
-        await expect(safeFetch('https://93.184.216.34/start')).rejects.toThrow(
-            'SSRF blocked: resolved to blocked IP range: 127.0.0.1'
-        );
+        // https → http(loopback) 리다이렉트는 다운그레이드 차단이 먼저 발동한다(2026-09-12 자격증명 보호) — 어느 쪽이든 차단
+        await expect(safeFetch('https://93.184.216.34/start')).rejects.toThrow(/SSRF blocked: (redirect downgrades https to http|resolved to blocked IP range)/);
     });
 
     test('throws when redirects exceed max limit', async () => {
