@@ -303,8 +303,8 @@ export function preprocessTextForLanguageDetection(text: string): string {
         .replace(/\b[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)+\b/g, ' ')
         // 숫자만 있는 부분 제거
         .replace(/^\d+$/gm, '')
-        // 특수문자만 있는 라인 제거
-        .replace(/^[^\w\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]+$/gm, '')
+        // 특수문자만 있는 라인 제거 — 한글 자모(ㅎㅇ·ㅋㅋ)와 NFKC 로 바뀐 조합형 자모(U+1100)는 문자로 남긴다
+        .replace(/^[^\w\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\u1100-\u11ff\u3131-\u318e\uac00-\ud7af]+$/gm, '')
         // 여러 공백을 하나로
         .replace(/\s+/g, ' ')
         .trim();
@@ -314,7 +314,7 @@ export function preprocessTextForLanguageDetection(text: string): string {
  * 언어별 문자 패턴 정의
  */
 export const LANGUAGE_PATTERNS = {
-    ko: /[\uac00-\ud7af]/g,          // 한글
+    ko: /[\u1100-\u11ff\u3131-\u318e\uac00-\ud7af]/g, // 한글 (조합형 자모 · 호환 자모 · 음절)
     ja: /[\u3040-\u309f\u30a0-\u30ff]/g, // 히라가나, 가타카나
     zh: /[\u4e00-\u9fff]/g,         // 중국어 한자
     ar: /[\u0600-\u06ff]/g,         // 아랍어
