@@ -24,6 +24,7 @@ import {
     MODALITY_DEFAULTS,
     MODALITY_ENDPOINT,
     MODALITY_LIMITS,
+    videoAdapterFor,
     type Modality,
 } from '../config/modality';
 import { EXTERNAL_PROVIDER_CATALOG } from '../config/external-providers';
@@ -69,6 +70,7 @@ export async function validateModalityAssignment(
     scope: string,
     fullId: string,
     deps: { userKeys?: ExternalKeysRepository; serverKeys?: ServerExternalKeysRepository } = {},
+    modality?: Modality,
 ): Promise<string | null> {
     if (!isExternalFullId(fullId)) {
         return toLocalModelTag(fullId) ? null : `해석 불가한 모델 id: '${fullId}'`;
@@ -80,6 +82,12 @@ export async function validateModalityAssignment(
     if (entry.sdkType !== 'openai-compatible') return `provider '${providerId}' 는 OpenAI 호환이 아니라 모달리티 배정을 지원하지 않습니다`;
     if (!getConfig().llmGatewayProviders.includes(providerId)) {
         return `provider '${providerId}' 는 LiteLLM 게이트웨이에 편입되지 않아 배정할 수 없습니다 (LLM_GATEWAY_PROVIDERS)`;
+    }
+    if (modality === 'video_gen' && videoAdapterFor(providerId).kind === 'jobs-v1') {
+        // pass-through 경유(서버 키 LiteLLM env 주입) — 사용자 BYOK 를 실을 수 없어 전역 배정만
+        return scope === GLOBAL_MODALITY_SCOPE
+            ? null
+            : `provider '${providerId}' 의 영상 생성은 게이트웨이 pass-through(서버 키) 전용이라 관리자 전역 배정만 가능합니다`;
     }
     if (scope === GLOBAL_MODALITY_SCOPE) {
         const repo = deps.serverKeys ?? new ServerExternalKeysRepository(getPool());
@@ -150,6 +158,19 @@ async function externalTarget(
     if (!entry) throw new ModalityUnavailableError(`카탈로그에 없는 provider '${providerId}'`, 'MODALITY_PROVIDER_UNKNOWN');
     if (!cfg.llmGatewayProviders.includes(providerId)) {
         throw new ModalityUnavailableError(`provider '${providerId}' 는 LiteLLM 게이트웨이 미편입 — 모달리티 호출 불가`, 'MODALITY_PROVIDER_NOT_GATEWAY');
+    }
+
+    if (modality === 'video_gen') {
+        const adapter = videoAdapterFor(providerId);
+        if (adapter.kind === 'jobs-v1' && adapter.passThroughPrefix) {
+            // upstream 키는 LiteLLM pass-through 정적 헤더가 주입 — 앱은 master 로 게이트웨이만 인증
+            return {
+                modality, fullId, providerId, model: modelId,
+                baseUrl: `${gatewayBase()}${adapter.passThroughPrefix}`, endpoint: adapter.submitPath ?? MODALITY_ENDPOINT[modality],
+                headers: { Authorization: `Bearer ${cfg.llmApiKey}` },
+                params, source,
+            };
+        }
     }
 
     let apiKey: string | null = null;

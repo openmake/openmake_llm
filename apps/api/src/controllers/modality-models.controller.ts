@@ -103,7 +103,7 @@ export function createModalityModelsController(): Router {
         try {
             const body = req.body as z.infer<typeof putSchema>;
             const fullId = body.model.trim();
-            const reason = await validateModalityAssignment(userId, fullId);
+            const reason = await validateModalityAssignment(userId, fullId, {}, modality);
             if (reason) { res.status(400).json(badRequest(reason)); return; }
 
             const params = sanitizeModalityParams(modality, body.params);

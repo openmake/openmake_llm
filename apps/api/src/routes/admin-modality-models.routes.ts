@@ -70,7 +70,7 @@ adminModalityModelsRouter.put('/modality-models/:modality', validate(putSchema),
     }
     const body = req.body as z.infer<typeof putSchema>;
     const fullId = body.model.trim();
-    const reason = await validateModalityAssignment(GLOBAL_MODALITY_SCOPE, fullId);
+    const reason = await validateModalityAssignment(GLOBAL_MODALITY_SCOPE, fullId, {}, modality);
     if (reason) { res.status(400).json(badRequest(reason)); return; }
 
     const repo = new ModalityModelsRepository(getPool());

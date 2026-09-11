@@ -83,6 +83,18 @@ general_settings:
   # 사용자 BYOK 를 요청 헤더에서 upstream 인증으로 전달 (BYOK 를 config 에 저장 금지)
   # ⚠️ database_url 미주입 — 앱 DB 오상속 방지 (arch.md §7-3)
   forward_llm_provider_auth_headers: true
+  # 모달리티 pass-through (2026-09-12, apps/api config/modality.ts VIDEO_PROVIDER_ADAPTERS) —
+  # OpenAI `/v1/videos` 규격이 아닌 provider(hasa: POST /videos/generations → GET /jobs/{id} → artifact_url)
+  # 를 게이트웨이 하나로 부르기 위한 경로. LiteLLM 1.89.4 pass-through 는 클라이언트 헤더를 전달하지
+  # 못하므로(설정 모델에 forward_headers 없음) upstream 키는 여기 정적 헤더(litellm.env HASA_API_KEY)로
+  # 주입한다 → 앱에선 관리자 전역 배정만 허용(사용자 BYOK 불가). auth: true = master key 로 게이트웨이 인증.
+  pass_through_endpoints:
+    - path: "/passthrough/hasa"
+      target: "https://open.hasa.re.kr/v1"
+      include_subpath: true
+      auth: true
+      headers:
+        Authorization: "Bearer os.environ/HASA_API_KEY"
 
 litellm_settings:
   drop_params: false

@@ -13,21 +13,14 @@
  *
  * @module mcp/image-tools
  */
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import * as crypto from 'node:crypto';
 import { MCPToolDefinition, MCPToolResult } from './types';
+import { saveGeneratedFile } from './generated-media';
 import { IMAGE_GEN_ALLOWED_SIZES, IMAGE_GEN_DEFAULT_SIZE, MODALITY_LIMITS } from '../config/modality';
 import { resolveModalityTarget, ModalityUnavailableError } from '../services/modality-resolver';
 import { withProviderSlot } from '../llm/external-throttle';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ImageTools');
-
-/** 생성 이미지 저장 디렉토리 — 백엔드가 /generated/* 로 노출하는 정적 경로 (apps/legacy-web/public/generated) */
-function resolveGeneratedDir(): string {
-    return path.resolve(__dirname, '../../../../apps/legacy-web/public/generated');
-}
 
 function textResult(text: string, isError = false): MCPToolResult {
     return { content: [{ type: 'text', text }], isError };
@@ -89,15 +82,12 @@ export const generateImageTool: MCPToolDefinition = {
             }
             if (!b64) return textResult('이미지 생성 응답에 데이터가 없습니다.', true);
 
-            const dir = resolveGeneratedDir();
-            fs.mkdirSync(dir, { recursive: true });
-            const filename = `img-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.png`;
-            fs.writeFileSync(path.join(dir, filename), Buffer.from(b64, 'base64'));
+            const { filename, urlPath } = saveGeneratedFile('img', 'png', Buffer.from(b64, 'base64'));
 
             const alt = prompt.slice(0, 80).replace(/[[\]]/g, '');
             logger.info(`이미지 생성 완료: ${filename} (${target.fullId}/${target.source}, ${size}, prompt ${prompt.length}자)`);
             return textResult(
-                `이미지가 생성되었습니다. 아래 마크다운을 답변에 그대로 포함하세요:\n\n![${alt}](/generated/${filename})`
+                `이미지가 생성되었습니다. 아래 마크다운을 답변에 그대로 포함하세요:\n\n![${alt}](${urlPath})`
             );
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);

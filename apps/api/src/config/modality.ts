@@ -53,6 +53,23 @@ export const MODALITY_DEFAULTS: Partial<Record<Modality, string>> = {
 export const MODALITY_LIMITS = {
     /** 이미지 생성 1건 타임아웃 ms (디퓨전 1장 수십 초). 구 IMAGE_GEN_TIMEOUT_MS 승계. */
     IMAGE_GEN_TIMEOUT_MS: parseInt(process.env.MODALITY_IMAGE_GEN_TIMEOUT_MS || process.env.IMAGE_GEN_TIMEOUT_MS || '180000', 10),
+    /** vision 브리지(첨부 이미지 → 텍스트) 1회 호출 타임아웃 ms */
+    VISION_BRIDGE_TIMEOUT_MS: parseInt(process.env.MODALITY_VISION_TIMEOUT_MS || '90000', 10),
+    /** vision 브리지에 넘길 이미지 상한(초과분은 건너뛰고 안내) — vLLM --limit-mm-per-prompt 와 같은 8 */
+    VISION_BRIDGE_MAX_IMAGES: parseInt(process.env.MODALITY_VISION_MAX_IMAGES || '8', 10),
+    /** vision 브리지 응답 max_tokens */
+    VISION_BRIDGE_MAX_TOKENS: parseInt(process.env.MODALITY_VISION_MAX_TOKENS || '1500', 10),
+    /** TTS 1회 타임아웃 ms · 입력 글자 상한 */
+    TTS_TIMEOUT_MS: parseInt(process.env.MODALITY_TTS_TIMEOUT_MS || '120000', 10),
+    TTS_MAX_CHARS: parseInt(process.env.MODALITY_TTS_MAX_CHARS || '4000', 10),
+    /** STT 1회 타임아웃 ms · 오디오 바이트 상한(OpenAI 규격 25MB) */
+    STT_TIMEOUT_MS: parseInt(process.env.MODALITY_STT_TIMEOUT_MS || '180000', 10),
+    STT_MAX_BYTES: parseInt(process.env.MODALITY_STT_MAX_BYTES || String(25 * 1024 * 1024), 10),
+    /** 영상 생성 — 제출 타임아웃 · 한 도구 호출 안에서 완료를 기다리는 상한 · 폴링 간격 */
+    VIDEO_SUBMIT_TIMEOUT_MS: parseInt(process.env.MODALITY_VIDEO_SUBMIT_TIMEOUT_MS || '60000', 10),
+    VIDEO_WAIT_MS: parseInt(process.env.MODALITY_VIDEO_WAIT_MS || '300000', 10),
+    VIDEO_POLL_INTERVAL_MS: parseInt(process.env.MODALITY_VIDEO_POLL_INTERVAL_MS || '10000', 10),
+    VIDEO_DOWNLOAD_TIMEOUT_MS: parseInt(process.env.MODALITY_VIDEO_DOWNLOAD_TIMEOUT_MS || '120000', 10),
     /** params JSONB 허용 키 — 모달리티별 화이트리스트(모르는 키는 저장 시 버린다) */
     PARAM_KEYS: {
         image_gen: ['size', 'quality', 'style'],
@@ -74,6 +91,63 @@ export const MODALITY_LIMITS = {
 /** 이미지 생성 허용 size 화이트리스트 (OpenAI images API 형식) */
 export const IMAGE_GEN_ALLOWED_SIZES: ReadonlySet<string> = new Set(['1024x1024', '768x1024', '1024x768', '512x512']);
 export const IMAGE_GEN_DEFAULT_SIZE = '1024x1024';
+
+/** TTS 응답 형식 화이트리스트 (OpenAI audio/speech 규격) */
+export const TTS_ALLOWED_FORMATS: ReadonlySet<string> = new Set(['mp3', 'wav', 'opus', 'aac', 'flac']);
+export const TTS_DEFAULT_FORMAT = 'mp3';
+export const TTS_DEFAULT_VOICE = 'alloy';
+/** STT 입력으로 허용하는 오디오 확장자 */
+export const STT_ALLOWED_EXTS: ReadonlySet<string> = new Set(['mp3', 'wav', 'm4a', 'ogg', 'opus', 'flac', 'webm', 'mp4']);
+/** 영상 생성 기본 인자 (OpenAI videos 규격 — provider 가 다르면 params 로 덮어쓴다) */
+export const VIDEO_GEN_DEFAULT_SECONDS = '4';
+export const VIDEO_GEN_DEFAULT_SIZE = '720x1280';
+/**
+ * 영상 생성 provider 어댑터 — OpenAI `/v1/videos` 규격이 아닌 provider 는 LiteLLM **pass-through**
+ * (`general_settings.pass_through_endpoints`, 정적 헤더로 upstream 키 주입 — scripts/vllm/litellm.config.yaml)
+ * 경유로 부른다. LiteLLM 1.89.4 pass-through 는 클라이언트 헤더를 전달하지 못하므로(설정 모델에
+ * forward_headers 없음, `extra: forbid`) 이 부류는 **서버 키(LiteLLM env) 전용 = 전역 배정만** 가능하다.
+ * 호출은 여전히 게이트웨이 하나다.
+ */
+export interface VideoProviderAdapter {
+    kind: 'openai-videos' | 'jobs-v1';
+    /** jobs-v1: 게이트웨이 pass-through 접두 경로 (LiteLLM path) */
+    passThroughPrefix?: string;
+    /** jobs-v1: 제출·상태·산출물 경로 (접두 뒤) — `{id}` 치환 */
+    submitPath?: string;
+    statusPath?: string;
+    /** 상태 응답에서 산출물 URL 필드(접두 상대 경로면 pass-through 접두를 붙인다) */
+    artifactField?: string;
+    doneStatuses?: readonly string[];
+    failStatuses?: readonly string[];
+}
+export const VIDEO_PROVIDER_ADAPTERS: Record<string, VideoProviderAdapter> = {
+    hasa: {
+        kind: 'jobs-v1',
+        passThroughPrefix: '/passthrough/hasa',
+        submitPath: '/videos/generations',
+        statusPath: '/jobs/{id}',
+        artifactField: 'artifact_url',
+        doneStatuses: ['COMPLETED', 'DONE', 'SUCCEEDED'],
+        failStatuses: ['FAILED', 'ERROR', 'CANCELLED', 'CANCELED'],
+    },
+};
+export function videoAdapterFor(providerId: string): VideoProviderAdapter {
+    return VIDEO_PROVIDER_ADAPTERS[providerId] ?? { kind: 'openai-videos' };
+}
+
+export const VIDEO_TERMINAL_STATUSES: ReadonlySet<string> = new Set(['completed', 'succeeded', 'failed', 'cancelled', 'canceled', 'error']);
+export const VIDEO_DONE_STATUSES: ReadonlySet<string> = new Set(['completed', 'succeeded']);
+
+/**
+ * 모달리티 도구의 채팅 노출 게이트 — 상시 노출 금지(도구폭주·prefix cache 원칙), 의도 턴에만.
+ * ChatService 가 메시지에 패턴이 맞으면 해당 도구를 강제 포함한다(카카오·web_search 강제 포함과 같은 선례).
+ */
+export const MODALITY_TOOL_INTENT_GATES: ReadonlyArray<{ tool: string; patterns: readonly RegExp[] }> = [
+    { tool: 'text_to_speech', patterns: [/(음성|목소리|오디오|소리)(으로|로)\s*(읽|만들|바꿔|변환|들려)/, /읽어\s*줘/, /낭독/, /\btts\b/i, /text[- ]to[- ]speech/i, /read (it|this|that) (aloud|out loud)/i, /\bvoice\s*(over|version)/i] },
+    { tool: 'transcribe_audio', patterns: [/(받아|옮겨)\s*(써|적)/, /전사/, /(음성|오디오|녹음)[^\n]{0,10}(텍스트|글|자막)/, /\bstt\b/i, /transcri(be|ption)/i, /speech[- ]to[- ]text/i] },
+    { tool: 'generate_video', patterns: [/(영상|비디오|동영상)[^\n]{0,12}(만들|생성|제작|그려)/, /\bvideo\b[^\n]{0,20}(generat|creat|make|render)/i, /(generat|creat|make)[^\n]{0,20}\bvideo\b/i] },
+    { tool: 'get_video', patterns: [/(영상|비디오|동영상)[^\n]{0,12}(상태|확인|됐|완료|다 됐|어디)/, /video[^\n]{0,20}(status|ready|done|finished)/i, /get_video/i] },
+];
 
 export function isModality(value: string): value is Modality {
     return (MODALITIES as readonly string[]).includes(value);

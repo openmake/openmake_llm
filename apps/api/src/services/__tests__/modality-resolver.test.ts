@@ -143,6 +143,32 @@ describe('validateModalityAssignment', () => {
     });
 });
 
+describe('영상 jobs-v1 어댑터(hasa) — pass-through·전역 전용', () => {
+    it('전역 배정은 통과, 사용자 scope 는 거절(BYOK 를 pass-through 에 실을 수 없음)', async () => {
+        expect(await validateModalityAssignment('__global__', 'hasa:Wan2.2-T2V', makeDeps(), 'video_gen')).toBeNull();
+        expect(await validateModalityAssignment('u1', 'hasa:Wan2.2-T2V', makeDeps({ userKey: 'k' }), 'video_gen')).toMatch(/전역 배정만/);
+        // 같은 provider 라도 다른 모달리티(tts)는 종전 규칙(사용자 BYOK 허용)
+        expect(await validateModalityAssignment('u1', 'hasa:melotts-ko', makeDeps({ userKey: 'k' }), 'tts')).toBeNull();
+    });
+
+    it('해석 결과는 pass-through 접두 + 제출 경로, 헤더는 master 만(upstream 키는 LiteLLM 정적 헤더)', async () => {
+        const deps = makeDeps({ global: [row('__global__', 'video_gen', 'hasa:Wan2.2-T2V')], serverKey: null });
+        const t = await resolveModalityTarget('video_gen', 'u1', deps);
+        expect(t.baseUrl).toBe('http://127.0.0.1:13401/passthrough/hasa');
+        expect(t.endpoint).toBe('/videos/generations');
+        expect(t.model).toBe('Wan2.2-T2V');
+        expect(t.headers).toEqual({ Authorization: 'Bearer master-key' });
+    });
+
+    it('OpenAI 규격 provider 의 영상은 종전 경로(/v1/videos, x-api-key)', async () => {
+        const deps = makeDeps({ global: [row('__global__', 'video_gen', 'openrouter:sora')], serverKey: 'srv' });
+        const t = await resolveModalityTarget('video_gen', undefined, deps);
+        expect(t.endpoint).toBe('/v1/videos');
+        expect(t.model).toBe('openrouter/sora');
+        expect(t.headers['x-api-key']).toBe('srv');
+    });
+});
+
 describe('seedModalityDefaultsFromEnv — 구 IMAGE_GEN_MODEL 1회 이관', () => {
     const saved = process.env.IMAGE_GEN_MODEL;
     afterEach(() => {
