@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.57.0](https://github.com/openmake/openmake_llm/compare/v1.56.1...v1.57.0) (2026-09-11)
+
+
+### ✨ 기능
+
+* **desktop:** macOS 는 네이티브 컴패니언만 — 업데이트 기본값·게시·브리지에서 Electron 제거 ([#830](https://github.com/openmake/openmake_llm/issues/830)) ([7472031](https://github.com/openmake/openmake_llm/commit/7472031e4c11ff15bacb9be05586d292ebfffb48))
+* **local-bridge:** 승인 대기를 컴패니언 네이티브 알림으로 + 컴패니언 다국어·키 안내 정정 ([#828](https://github.com/openmake/openmake_llm/issues/828)) ([2486795](https://github.com/openmake/openmake_llm/commit/24867954c323da5cf896f41356b31472e67391f3))
+
+
+### 🐛 버그 수정
+
+* **ws:** 인증 완료 전 도착한 메시지를 버리지 않는다 ([#831](https://github.com/openmake/openmake_llm/issues/831)) ([9da6553](https://github.com/openmake/openmake_llm/commit/9da655372338a2d1710aa3f8993a2d77ac474045))
+
 ## [1.56.1](https://github.com/openmake/openmake_llm/compare/v1.56.0...v1.56.1) (2026-09-11)
 
 
