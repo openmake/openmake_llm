@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.58.1](https://github.com/openmake/openmake_llm/compare/v1.58.0...v1.58.1) (2026-09-11)
+
+
+### 🐛 버그 수정
+
+* **modality:** vision 브리지 기록을 ctx.enhancedMessage 에도 반영 ([#834](https://github.com/openmake/openmake_llm/issues/834)) ([323c376](https://github.com/openmake/openmake_llm/commit/323c376f3d67204c40eb0fabbca1fb82bbb1b91e))
+
 ## [1.58.0](https://github.com/openmake/openmake_llm/compare/v1.57.0...v1.58.0) (2026-09-11)
 
 
