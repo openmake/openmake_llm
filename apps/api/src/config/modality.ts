@@ -142,6 +142,21 @@ export function videoAdapterFor(providerId: string): VideoProviderAdapter {
     return VIDEO_PROVIDER_ADAPTERS[providerId] ?? { kind: 'openai-videos' };
 }
 
+/**
+ * 이미지 편집 provider 어댑터 — OpenAI 규격은 `/v1/images/edits` multipart(image+prompt). hasa `Qwen-Image-Edit` 는
+ * `/v1/images/generations` JSON 에 `reference`(dataURL) 를 싣는 규격이며 LiteLLM 이 그 필드를 통과시킨다
+ * (2026-09-12 실측: 직결·게이트웨이 모두 200) — 그래서 영상과 달리 게이트웨이 하나로 간다.
+ */
+export interface ImageEditProviderAdapter { kind: 'openai-edits' | 'generations-reference' }
+export const IMAGE_EDIT_PROVIDER_ADAPTERS: Record<string, ImageEditProviderAdapter> = {
+    hasa: { kind: 'generations-reference' },
+};
+export function imageEditAdapterFor(providerId: string): ImageEditProviderAdapter {
+    return IMAGE_EDIT_PROVIDER_ADAPTERS[providerId] ?? { kind: 'openai-edits' };
+}
+/** 편집 입력 이미지 바이트 상한 */
+export const IMAGE_EDIT_MAX_INPUT_BYTES = parseInt(process.env.MODALITY_IMAGE_EDIT_MAX_INPUT_BYTES || String(8 * 1024 * 1024), 10);
+
 export const VIDEO_TERMINAL_STATUSES: ReadonlySet<string> = new Set(['completed', 'succeeded', 'failed', 'cancelled', 'canceled', 'error']);
 export const VIDEO_DONE_STATUSES: ReadonlySet<string> = new Set(['completed', 'succeeded']);
 
@@ -151,6 +166,7 @@ export const VIDEO_DONE_STATUSES: ReadonlySet<string> = new Set(['completed', 's
  */
 export const MODALITY_TOOL_INTENT_GATES: ReadonlyArray<{ tool: string; patterns: readonly RegExp[] }> = [
     { tool: 'text_to_speech', patterns: [/(음성|목소리|오디오|소리)(으로|로)\s*(읽|만들|바꿔|변환|들려)/, /읽어\s*줘/, /낭독/, /\btts\b/i, /text[- ]to[- ]speech/i, /read (it|this|that) (aloud|out loud)/i, /\bvoice\s*(over|version)/i] },
+    { tool: 'edit_image', patterns: [/(이미지|그림|사진)[^\n]{0,24}(수정|바꿔|바꾸|변경|편집|고쳐|고치|교체|지워|제거|추가)/, /(수정|바꿔|바꾸|변경|편집|고쳐)[^\n]{0,24}(이미지|그림|사진)/, /edit (the |this |that )?(image|picture|photo)/i, /(change|modify|replace|remove|add)[^\n]{0,30}\b(image|picture|photo)\b/i] },
     { tool: 'transcribe_audio', patterns: [/(받아|옮겨)\s*(써|적)/, /전사/, /(음성|오디오|녹음)[^\n]{0,10}(텍스트|글|자막)/, /\bstt\b/i, /transcri(be|ption)/i, /speech[- ]to[- ]text/i] },
     { tool: 'generate_video', patterns: [/(영상|비디오|동영상)[^\n]{0,12}(만들|생성|제작|그려)/, /\bvideo\b[^\n]{0,20}(generat|creat|make|render)/i, /(generat|creat|make)[^\n]{0,20}\bvideo\b/i] },
     { tool: 'get_video', patterns: [/(영상|비디오|동영상)[^\n]{0,12}(상태|확인|됐|완료|다 됐|어디)/, /video[^\n]{0,20}(status|ready|done|finished)/i, /get_video/i] },
