@@ -74,8 +74,9 @@ function statusUrl(target: ModalityTarget, adapter: VideoProviderAdapter, id: st
 function contentUrl(target: ModalityTarget, adapter: VideoProviderAdapter, view: JobView): string | null {
     if (adapter.kind === 'jobs-v1') {
         if (!view.artifactUrl) return null;
-        // 절대 URL 이면 그대로, 상대 경로(`/files/..`)면 provider base 뒤에 붙인다
-        return /^https?:\/\//i.test(view.artifactUrl) ? view.artifactUrl : `${target.baseUrl}${view.artifactUrl}`;
+        // 표준 URL 해석 — 절대 URL 은 그대로, `/files/..` 같은 루트 상대 경로는 **origin** 기준
+        // (hasa 실측: `/v1/files/..` 404, `https://open.hasa.re.kr/files/..` 200 — base 뒤에 붙이면 404)
+        return new URL(view.artifactUrl, `${target.baseUrl}/`).toString();
     }
     return `${target.baseUrl}/v1/videos/${encodeURIComponent(view.id)}/content`;
 }
