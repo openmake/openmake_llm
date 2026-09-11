@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.59.0](https://github.com/openmake/openmake_llm/compare/v1.58.1...v1.59.0) (2026-09-11)
+
+
+### ✨ 기능
+
+* **orchestrator:** 멀티모달 오케스트레이터 — Planner → capability 병렬 실행 → 채팅 모델 종합 (모달리티 축 교체) ([#837](https://github.com/openmake/openmake_llm/issues/837)) ([fd2d7c6](https://github.com/openmake/openmake_llm/commit/fd2d7c65013fa81427f258d7e273029dcf3181dd))
+
 ## [1.58.1](https://github.com/openmake/openmake_llm/compare/v1.58.0...v1.58.1) (2026-09-11)
 
 
