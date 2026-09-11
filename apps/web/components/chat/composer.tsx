@@ -51,12 +51,17 @@ const MAX_INLINE_DOC_BYTES = 30 * 1024 * 1024;
 // 모든 파일 타입 허용(accept 미지정). 처리 분기:
 //  - 이미지(image/*) → base64 data URL → vision 채널(images)
 //  - 문서(EXTRACT_EXTS: PDF/Word/Excel/PowerPoint 등) → base64 원본(data) → 백엔드가 텍스트 추출
+//  - 오디오·영상(MEDIA_EXTS) → base64 원본(data) → 백엔드 오케스트레이터(STT/영상 이해)
 //  - 그 외 → 텍스트로 읽어 content (바이너리는 깨질 수 있으나 백엔드가 메타로 처리)
 // 백엔드가 추출하는 형식 — 이 목록에 없으면 readAsText 로 읽혀 **깨진 바이너리가 content 로**
 // 전송되고, 서버는 "이미 content 있음" 으로 추출을 건너뛴다(조용한 실패). hwp/hwpx/hml 은
 // kordoc 경로가 생겼는데 여기 누락돼 363KB 문서가 140K 토큰 쓰레기로 들어갔다(2026-08-31 실측).
 // ⚠️ 백엔드 DOC_EXTRACT_LIMITS 의 PDF_EXTS·OFFICE_EXTS·HWP_EXTS 와 한 쌍으로 유지할 것.
 const EXTRACT_EXTS = ["pdf", "docx", "xlsx", "pptx", "odt", "odp", "ods", "rtf", "hwp", "hwpx", "hml"];
+// 오디오·영상 — base64 원본(data)으로 보내 백엔드 오케스트레이터가 STT/영상 이해 capability 로
+// 처리한다(텍스트로 읽으면 깨진 바이너리가 content 로 가는 같은 조용한 실패). 서버 STT 상한 25MB.
+const MEDIA_EXTS = ["mp3", "wav", "m4a", "ogg", "opus", "flac", "webm", "mp4"];
+const BINARY_EXTS = [...EXTRACT_EXTS, ...MEDIA_EXTS];
 
 const extOf = (name: string): string => {
   const i = name.lastIndexOf(".");
@@ -145,8 +150,8 @@ export function Composer() {
         const dataUrl = await readFileDataURL(file);
         if (!dataUrl) continue;
         nextImages.push({ id: crypto.randomUUID(), name: file.name.slice(0, 200), dataUrl });
-      } else if (EXTRACT_EXTS.includes(extOf(file.name))) {
-        // 문서(PDF/Word/Excel/PPT 등) — File 원본을 유지해 에이전트 작업은 multipart 로
+      } else if (BINARY_EXTS.includes(extOf(file.name))) {
+        // 문서(PDF/Word/Excel/PPT 등)·오디오·영상 — File 원본을 유지해 에이전트 작업은 multipart 로
         // 스트리밍 전송. 추출 상한 이하만 base64 를 병행(채팅 WS 경로에서 백엔드 텍스트 추출용).
         if (nextFiles.length >= MAX_FILES) continue;
         const data = file.size <= MAX_INLINE_DOC_BYTES ? await readFileBase64(file) : undefined;

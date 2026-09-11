@@ -63,6 +63,8 @@ export interface ChatRequestParams {
     webSearchContext?: string;
     /** 첨부 파일 컨텍스트 (텍스트 파일 내용/바이너리 메타 — transient, DB 미저장) */
     fileContext?: string;
+    /** 오디오·영상·이미지 첨부 원본(base64) — 멀티모달 오케스트레이터 executor 입력 */
+    mediaFiles?: import('../services/chat-service-types').MediaFileInput[];
     /** 토론 모드 */
     discussionMode?: boolean;
     /** 딥 리서치 모드 */

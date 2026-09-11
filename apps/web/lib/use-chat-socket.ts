@@ -139,6 +139,8 @@ export function useChatSocket() {
     setActiveSkills,
     setResearchProgress,
     setDiscussionProgress,
+    setOrchestratorProgress,
+    updateOrchestratorTask,
     setActiveTool,
     finalizeLastAssistant,
     startArtifact,
@@ -178,6 +180,73 @@ export function useChatSocket() {
         // notice:true → 히스토리 payload 제외(백엔드로 안 샘). content 는 sentinel+JSON,
         // message-list 가 프리픽스를 감지해 McpResourceCard 로 렌더한다.
         appendMessage({ role: "system", notice: true, content: encodeMcpResources(p) });
+      }
+    };
+
+    // 멀티모달 오케스트레이터 진행(system_event orchestrator_status|plan|task) → store 배너 상태.
+    // status: phase 전이(done/skipped 면 배너 제거), plan: 작업 목록 초기화(pending),
+    // task: 같은 id 작업의 상태·요약·소요 갱신. 알 수 없는 형태는 무시(fail-open).
+    const applyOrchestratorEvent = (type: string, metadata: Record<string, unknown> | undefined) => {
+      const md = (metadata ?? {}) as {
+        phase?: string;
+        detail?: string;
+        complexity?: string;
+        tasks?: Array<{ id?: string; capability?: string; instruction?: string }>;
+        id?: string;
+        capability?: string;
+        status?: string;
+        summary?: string;
+        ms?: number;
+      };
+      const prev = useAppStore.getState().orchestratorProgress;
+      if (type === "orchestrator_status") {
+        const phase = md.phase;
+        if (phase === "planning" || phase === "executing" || phase === "synthesizing") {
+          setOrchestratorProgress({
+            phase,
+            ...(md.detail ? { detail: String(md.detail) } : {}),
+            ...(prev?.complexity ? { complexity: prev.complexity } : {}),
+            tasks: prev?.tasks ?? [],
+          });
+        } else {
+          // done | skipped | 기타 — 배너 숨김
+          setOrchestratorProgress(null);
+        }
+        return;
+      }
+      if (type === "orchestrator_plan") {
+        const complexity = md.complexity ? String(md.complexity) : undefined;
+        if (complexity === "simple") {
+          setOrchestratorProgress(null);
+          return;
+        }
+        const tasks = (Array.isArray(md.tasks) ? md.tasks : [])
+          .filter((t) => typeof t.id === "string" && typeof t.capability === "string")
+          .map((t) => ({
+            id: String(t.id),
+            capability: String(t.capability),
+            ...(t.instruction ? { instruction: String(t.instruction) } : {}),
+            status: "pending" as const,
+          }));
+        setOrchestratorProgress({
+          phase: prev?.phase ?? "executing",
+          ...(prev?.detail ? { detail: prev.detail } : {}),
+          ...(complexity ? { complexity } : {}),
+          tasks,
+        });
+        return;
+      }
+      if (type === "orchestrator_task") {
+        const status = md.status;
+        if (typeof md.id !== "string" || typeof md.capability !== "string") return;
+        if (status !== "pending" && status !== "running" && status !== "ok" && status !== "failed") return;
+        updateOrchestratorTask({
+          id: md.id,
+          capability: md.capability,
+          status,
+          ...(md.summary ? { summary: String(md.summary) } : {}),
+          ...(typeof md.ms === "number" ? { ms: md.ms } : {}),
+        });
       }
     };
 
@@ -266,6 +335,7 @@ export function useChatSocket() {
           setStreaming(false);
           setResearchProgress(null);
           setDiscussionProgress(null);
+          setOrchestratorProgress(null);
           setActiveTool(null);
           flushPendingMcpResources();
           runDeferredAfterStream();
@@ -274,6 +344,7 @@ export function useChatSocket() {
           setStreaming(false);
           setResearchProgress(null);
           setDiscussionProgress(null);
+          setOrchestratorProgress(null);
           setActiveTool(null);
           flushPendingMcpResources();
           runDeferredAfterStream();
@@ -296,6 +367,7 @@ export function useChatSocket() {
           });
           setResearchProgress(null);
           setDiscussionProgress(null);
+          setOrchestratorProgress(null);
           setActiveTool(null);
           runDeferredAfterStream();
           break;
@@ -366,8 +438,10 @@ export function useChatSocket() {
           });
           break;
         case "system_event":
-          // 백엔드 메타 알림 — 현재는 모델 폴백 고지만 처리한다.
-          if (data.payload?.type === "model_fallback") {
+          // 백엔드 메타 알림 — 모델 폴백 고지 + 멀티모달 오케스트레이터 진행(orchestrator_*).
+          if (data.payload?.type?.startsWith("orchestrator_")) {
+            applyOrchestratorEvent(data.payload.type, data.payload.metadata);
+          } else if (data.payload?.type === "model_fallback") {
             const md = (data.payload.metadata ?? {}) as { from?: string; to?: string; reason?: string; code?: string };
             setModelFallback({
               from: String(md.from ?? ""),

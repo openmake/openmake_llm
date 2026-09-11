@@ -366,6 +366,22 @@ function createPinnedAgent(pinnedAddress: string, ipFamily: 4 | 6): Agent {
     });
 }
 
+/** 리다이렉트로 origin 이 바뀔 때 제거하는 자격증명·세션 헤더 (소문자 비교) */
+const CREDENTIAL_HEADER_NAMES: ReadonlySet<string> = new Set([
+    'authorization', 'proxy-authorization', 'cookie', 'x-api-key', 'api-key', 'x-goog-api-key', 'x-auth-token',
+]);
+
+export function stripCredentialHeaders(headers: HeadersInit): Record<string, string> {
+    const out: Record<string, string> = {};
+    const entries: Array<[string, string]> = headers instanceof Headers
+        ? [...headers.entries()]
+        : Array.isArray(headers) ? headers.map(([k, v]) => [k, v] as [string, string]) : Object.entries(headers);
+    for (const [k, v] of entries) {
+        if (!CREDENTIAL_HEADER_NAMES.has(k.toLowerCase())) out[k] = v;
+    }
+    return out;
+}
+
 export async function safeFetch(
     rawUrl: string,
     init?: RequestInit,
@@ -406,7 +422,20 @@ export async function safeFetch(
 
         const location = response.headers.get('location');
         if (REDIRECT_STATUS_CODES.has(response.status) && location) {
-            currentUrl = new URL(location, currentUrl).toString();
+            const nextUrl = new URL(location, currentUrl);
+            // 리다이렉트 응답 본문은 쓰지 않는다 — 연결을 바로 놓는다
+            await response.body?.cancel().catch(() => undefined);
+            // https → http 다운그레이드 리다이렉트는 거부 (자격증명·본문 평문 노출)
+            if (url.protocol === 'https:' && nextUrl.protocol === 'http:') {
+                const message = 'SSRF blocked: redirect downgrades https to http';
+                logger.warn(message, { rawUrl: currentUrl, location });
+                throw new Error(message);
+            }
+            // cross-origin 리다이렉트엔 자격증명 헤더를 넘기지 않는다 (동일 origin 302 → 외부 origin 으로 키 전달 차단)
+            if (nextUrl.origin !== url.origin && init?.headers) {
+                init = { ...init, headers: stripCredentialHeaders(init.headers) };
+            }
+            currentUrl = nextUrl.toString();
             continue;
         }
 

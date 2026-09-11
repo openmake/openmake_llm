@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown, Wrench, Pencil, AlertTriangle, Languages, Copy, Check, RefreshCw, Columns2 } from "lucide-react";
+import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown, Wrench, Pencil, AlertTriangle, Languages, Copy, Check, RefreshCw, Columns2, Workflow, Circle } from "lucide-react";
 import { ThinkingTimeline } from "@/components/chat/thinking-timeline";
 import { SteeringInput } from "@/components/chat/steering-input";
 import { DiffView } from "@/components/chat/diff-view";
@@ -443,6 +443,67 @@ function DiscussionProgressBanner() {
   );
 }
 
+/**
+ * 멀티모달 오케스트레이터 진행 배너 — discussion 배너와 대칭.
+ * phase(질문 분석/작업 실행/답변 작성) + 계획된 작업별 capability 라벨·상태 아이콘 타임라인.
+ */
+function OrchestratorProgressBanner() {
+  const t = useTranslations("chat");
+  const tCap = useTranslations("capabilityModels");
+  const op = useAppStore((s) => s.orchestratorProgress);
+  if (!op) return null;
+  const capLabel = (capability: string) =>
+    tCap.has(`capabilities.${capability}`) ? tCap(`capabilities.${capability}`) : capability;
+  const statusIcon = (status: string) => {
+    switch (status) {
+      case "running":
+        return <LoaderCircle className="h-3.5 w-3.5 animate-spin text-accent" aria-hidden />;
+      case "ok":
+        return <CircleCheck className="h-3.5 w-3.5 text-success" aria-hidden />;
+      case "failed":
+        return <CircleX className="h-3.5 w-3.5 text-danger" aria-hidden />;
+      default:
+        return <Circle className="h-3.5 w-3.5 text-faint" aria-hidden />;
+    }
+  };
+  return (
+    <div className="flex gap-3">
+      <div className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-accent-soft text-accent">
+        <Workflow className="h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2/60 p-3">
+        <div className="mb-1 flex flex-wrap items-center gap-2 text-xs font-medium text-fg-2">
+          <LoaderCircle className="h-3.5 w-3.5 animate-spin text-accent" />
+          {t(`orchestrator.phase.${op.phase}`)}
+          {op.tasks.length > 0 && (
+            <span className="text-faint">· {t("orchestrator.tasksCount", { count: op.tasks.length })}</span>
+          )}
+        </div>
+        {op.detail && <p className="mb-1.5 text-xs text-muted">{op.detail}</p>}
+        {op.tasks.length > 0 && (
+          <ul className="space-y-1">
+            {op.tasks.map((task) => (
+              <li key={task.id} className="flex min-w-0 items-center gap-2 text-xs">
+                {statusIcon(task.status)}
+                <span className="shrink-0 font-medium text-fg-2">{capLabel(task.capability)}</span>
+                <span className="sr-only">{t(`orchestrator.status.${task.status}`)}</span>
+                {task.summary ? (
+                  <span className="truncate text-muted">{task.summary}</span>
+                ) : task.instruction ? (
+                  <span className="truncate text-faint">{task.instruction}</span>
+                ) : null}
+                {typeof task.ms === "number" && task.status !== "running" && task.status !== "pending" && (
+                  <span className="ml-auto shrink-0 font-mono text-[11px] text-faint">{(task.ms / 1000).toFixed(1)}s</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** 도구 실행 인디케이터 — always-on tool loop 중 "실행 중" 표시(스트리밍 멈춘 듯한 혼선 해소). */
 function ToolIndicator() {
   const t = useTranslations("chat");
@@ -573,6 +634,7 @@ export function MessageList() {
   const activeSkills = useAppStore((s) => s.activeSkills);
   const researchProgress = useAppStore((s) => s.researchProgress);
   const discussionProgress = useAppStore((s) => s.discussionProgress);
+  const orchestratorProgress = useAppStore((s) => s.orchestratorProgress);
   const activeTool = useAppStore((s) => s.activeTool);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -749,6 +811,7 @@ export function MessageList() {
       )}
       {researchProgress && <ResearchProgressBanner />}
       {discussionProgress && <DiscussionProgressBanner />}
+      {orchestratorProgress && <OrchestratorProgressBanner />}
       {activeTool && <ToolIndicator />}
       {showThinking && <ThinkingIndicator agent={activeAgent} skills={activeSkills} />}
       <div ref={bottomRef} className={cn("h-px")} />

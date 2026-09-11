@@ -16,22 +16,41 @@ import { createLogger } from '../utils/logger';
 const logger = createLogger('ExternalThrottle');
 
 class Semaphore {
-    private active = 0;
-    private readonly queue: Array<() => void> = [];
+    private inflight = 0;
+    private waiters: Array<{ resolve: () => void; reject: (e: Error) => void; onAbort?: () => void; signal?: AbortSignal }> = [];
     constructor(readonly limit: number) {}
-    async acquire(): Promise<() => void> {
-        if (this.active < this.limit) { this.active++; return () => this.release(); }
-        await new Promise<void>((resolve) => this.queue.push(resolve));
-        this.active++;
-        return () => this.release();
+    get waiting(): number { return this.waiters.length; }
+    /**
+     * 슬롯 획득. signal 이 있으면 대기열에서도 취소된다(항목 제거 + reject) — 포화 상태에서 사용자가 취소해도
+     * 선행 요청이 끝날 때까지 턴이 살아남지 않게. 깨어난 뒤에도 aborted 를 재검사한다.
+     */
+    async acquire(signal?: AbortSignal): Promise<() => void> {
+        for (;;) {
+            if (signal?.aborted) throw new Error('취소됨');
+            if (this.inflight < this.limit) break;
+            await new Promise<void>((resolve, reject) => {
+                const entry: { resolve: () => void; reject: (e: Error) => void; onAbort?: () => void; signal?: AbortSignal } = { resolve, reject, signal };
+                if (signal) {
+                    entry.onAbort = () => {
+                        const idx = this.waiters.indexOf(entry);
+                        if (idx >= 0) this.waiters.splice(idx, 1);
+                        reject(new Error('취소됨'));
+                    };
+                    signal.addEventListener('abort', entry.onAbort, { once: true });
+                }
+                this.waiters.push(entry);
+            });
+        }
+        this.inflight++;
+        return () => {
+            this.inflight--;
+            const next = this.waiters.shift();
+            if (next) {
+                if (next.signal && next.onAbort) next.signal.removeEventListener('abort', next.onAbort);
+                next.resolve();
+            }
+        };
     }
-    private release(): void {
-        this.active--;
-        const next = this.queue.shift();
-        if (next) next();
-    }
-    get inFlight(): number { return this.active; }
-    get waiting(): number { return this.queue.length; }
 }
 
 const semaphores = new Map<string, Semaphore>();
@@ -68,9 +87,9 @@ function semaphoreFor(providerId: string): Semaphore {
  * 로컬(local-llm)은 세마포어 없이 그대로 실행. 429 백오프는 하지 않는다 — 비스트림 단발 호출은
  * 호출부가 결과 코드를 그대로 사용자에게 안내한다(조용한 재시도로 이미지 생성이 수 분 늦어지는 것 방지).
  */
-export async function withProviderSlot<T>(providerId: string, fn: () => Promise<T>): Promise<T> {
+export async function withProviderSlot<T>(providerId: string, fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     if (providerId === 'local-llm') return fn();
-    const release = await semaphoreFor(providerId).acquire();
+    const release = await semaphoreFor(providerId).acquire(signal);
     try { return await fn(); } finally { release(); }
 }
 
@@ -154,7 +173,7 @@ export function throttleExternalClient<T extends LLMClient>(client: T, providerI
 
     const wrap = (method: 'chat' | 'generate') => async (...args: unknown[]) => {
         const signal = signalOf(method, args);
-        const release = await sem.acquire();
+        const release = await sem.acquire(signal);
         try {
             for (let attempt = 0; ; attempt++) {
                 try {

@@ -384,6 +384,21 @@
       "inProgress": "Discussion in progress",
       "round": "Round {current}/{total}"
     },
+    "orchestrator": {
+      "title": "Multimodal orchestrator",
+      "phase": {
+        "planning": "Analyzing question",
+        "executing": "Running tasks",
+        "synthesizing": "Writing answer"
+      },
+      "status": {
+        "pending": "Pending",
+        "running": "Running",
+        "ok": "Done",
+        "failed": "Failed"
+      },
+      "tasksCount": "{count} tasks"
+    },
     "tool": {
       "running": "Running {tool}"
     },
@@ -1609,23 +1624,28 @@
       "summary": {
         "label": "Thinking Summary",
         "description": "Model that generates thinking headline summaries"
+      },
+      "planner": {
+        "label": "Planner (question analysis & task planning)",
+        "description": "Produces one short JSON plan per turn — a small, fast model is recommended (local 27B takes ~15s)"
       }
     },
     "notInList": "(not in list)"
   },
-  "modalityModels": {
-    "title": "Model per Modality",
-    "description": "Choose which model handles image generation, vision, video, speech, and embeddings. Unassigned items follow the global setting or the default.",
-    "axisNote": "This is a separate axis from \"Model Roles\" above (which text LLM handles agent, judge, etc.).",
-    "gatewayNote": "All calls go through the single LiteLLM gateway, so external models can only be assigned from providers enrolled in the gateway.",
-    "loading": "Loading modality mappings…",
-    "loadError": "Failed to load modality mappings.",
-    "saveFailed": "Failed to save modality mapping.",
+  "capabilityModels": {
+    "title": "Model per Capability",
+    "description": "Choose which model handles each capability the Planner schedules after analyzing your question. This is separate from the role mappings above (which text model answers); all calls go through the single LiteLLM gateway.",
+    "gatewayNote": "External models can only be assigned from providers enrolled in the gateway. Unassigned items follow the global setting or the default.",
+    "loading": "Loading capability mappings…",
+    "loadError": "Failed to load capability mappings.",
+    "saveFailed": "Failed to save capability mapping.",
     "defaultOption": "Default (auto)",
     "assignedBadge": "Assigned",
     "unavailableBadge": "Unavailable",
+    "unsupportedBadge": "Not supported yet",
+    "unsupportedHint": "No provider adapter yet — the assignment is stored only.",
     "resetLabel": "Reset to default",
-    "empty": "No assignable modalities.",
+    "empty": "No assignable capabilities.",
     "notInList": "(not in list)",
     "paramsHint": "Provider-specific params — empty = default",
     "paramsApply": "Apply params",
@@ -1634,14 +1654,21 @@
       "global": "Global",
       "default": "Default"
     },
-    "modalities": {
-      "image_gen": "Image generation",
-      "image_edit": "Image editing",
-      "vision": "Vision (image understanding)",
-      "video_gen": "Video generation",
-      "stt": "Speech-to-text",
-      "tts": "Text-to-speech",
-      "embedding": "Embedding"
+    "capabilities": {
+      "text.reason": "Text reasoning & analysis",
+      "text.code": "Code",
+      "text.embed": "Embedding",
+      "vision.describe": "Image understanding",
+      "vision.ocr": "OCR",
+      "image.generate": "Image generation",
+      "image.edit": "Image editing",
+      "audio.transcribe": "Speech-to-text (STT)",
+      "audio.speech": "Text-to-speech (TTS)",
+      "audio.analyze": "Audio analysis",
+      "music.analyze": "Music analysis",
+      "music.generate": "Music generation",
+      "video.generate": "Video generation",
+      "video.analyze": "Video understanding"
     }
   },
   "adminModelRoles": {
@@ -1677,17 +1704,19 @@
       "cacheNote": "Changes take effect within 60 seconds without a restart."
     }
   },
-  "adminModalityModels": {
-    "title": "Global Modality Mappings",
-    "description": "Set the global default model for image generation, vision, video, speech, and embeddings. Per-user mappings take precedence; clearing falls back to the code default.",
-    "axisNote": "This is a separate axis from \"Global Role Mappings\" above (which text LLM handles agent, judge, etc.).",
-    "gatewayNote": "All calls go through the single LiteLLM gateway, so external models can only be assigned from gateway-enrolled providers ({providers}).",
+  "adminCapabilityModels": {
+    "title": "Global Capability Mappings",
+    "description": "Set the global default model per capability scheduled by the Planner. Per-user mappings take precedence; clearing falls back to the code default.",
+    "axisNote": "This is a separate axis from \"Global Role Mappings\" above (which text LLM answers); all calls go through the single LiteLLM gateway.",
+    "gatewayNote": "External models can only be assigned from gateway-enrolled providers ({providers}).",
     "gatewayNone": "none",
-    "loadError": "Failed to load modality mappings.",
-    "saveFailed": "Failed to save modality mapping.",
+    "loadError": "Failed to load capability mappings.",
+    "saveFailed": "Failed to save capability mapping.",
     "defaultOption": "Default (code default)",
     "assigned": "Assigned",
     "unavailableBadge": "Unavailable",
+    "unsupportedBadge": "Not supported yet",
+    "unsupportedHint": "No provider adapter yet — the assignment is stored only.",
     "resetLabel": "Reset to default",
     "codeDefault": "Code default: {model}",
     "notInList": "(not in list)",
@@ -1699,14 +1728,21 @@
       "global": "Global",
       "default": "Default"
     },
-    "modalities": {
-      "image_gen": "Image generation",
-      "image_edit": "Image editing",
-      "vision": "Vision (image understanding)",
-      "video_gen": "Video generation",
-      "stt": "Speech-to-text",
-      "tts": "Text-to-speech",
-      "embedding": "Embedding"
+    "capabilities": {
+      "text.reason": "Text reasoning & analysis",
+      "text.code": "Code",
+      "text.embed": "Embedding",
+      "vision.describe": "Image understanding",
+      "vision.ocr": "OCR",
+      "image.generate": "Image generation",
+      "image.edit": "Image editing",
+      "audio.transcribe": "Speech-to-text (STT)",
+      "audio.speech": "Text-to-speech (TTS)",
+      "audio.analyze": "Audio analysis",
+      "music.analyze": "Music analysis",
+      "music.generate": "Music generation",
+      "video.generate": "Video generation",
+      "video.analyze": "Video understanding"
     }
   },
   "adminSystemSettings": {

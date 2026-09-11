@@ -26,7 +26,6 @@ import type { ExecutionPlan } from '../chat/profile-resolver';
 import type { UserContext } from '../mcp/user-sandbox';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { CHAT_ALWAYS_ON_TOOL_NAMES } from '../mcp/agent-task-tools';
-import { MODALITY_TOOL_INTENT_GATES } from '../config/modality';
 import { OPS_METRICS_TOOL_ENABLED, OPS_METRICS_INTENT_PATTERNS } from '../config/ops-metrics';
 import { MCP_META_TOOL_NAMES } from '../mcp/mcp-meta-tools';
 import { CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, MCP_PROGRESSIVE_DISCLOSURE_ENABLED, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS, PLAN_INTENT_PATTERNS, EXTENSION_IMPORT_INTENT_PATTERNS, CHAT_USER_MCP_BREADTH_SLOTS, CHAT_TOOL_INTENT_GATE_ENABLED, AGENT_TASK_INTENT_PATTERNS } from '../config/runtime-limits';
@@ -232,15 +231,6 @@ export class ChatService {
         }
         if (ROUTE_INTENT_PATTERNS.some((re) => re.test(reqCtx.message ?? ''))) {
             forceIncludeKakao('find-route', '길찾기 의도');
-        }
-        // 모달리티 도구(TTS·STT·영상)는 상시 노출 금지 — 의도 턴에만 강제 포함 (config/modality).
-        for (const gate of MODALITY_TOOL_INTENT_GATES) {
-            if (!gate.patterns.some((re) => re.test(reqCtx.message ?? ''))) continue;
-            const t = allTools.find((x) => x.function.name === gate.tool);
-            if (t && !finalCombined.some((x) => x.function.name === gate.tool)) {
-                finalCombined = [...finalCombined, t];
-                logger.info(`[Modality] ${gate.tool} 의도 감지 — 도구 포함`);
-            }
         }
         // 명시적 웹 검색 요청이면 web_search 를 강제 포함한다 — web_search 는 always-on 이
         // 아니라 에이전트 스킬 바인딩 경유로만 노출되므로, 에이전트 매칭이 안 되는 질문
