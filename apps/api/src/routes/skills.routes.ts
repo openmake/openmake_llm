@@ -34,7 +34,7 @@ import { getUnifiedDatabase } from '../data/models/unified-database';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { requireAuth } from '../auth';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
-import { validate, validateQuery } from '../middlewares/validation';
+import { validate, validateQuery, validateWithSecurity } from '../middlewares/validation';
 import {
     createSkillSchema,
     updateSkillSchema,
@@ -166,7 +166,7 @@ router.get('/', requireAuth, validateQuery(searchSkillsQuerySchema), asyncHandle
  * POST /api/agents/skills
  * 스킬 생성
  */
-router.post('/', requireAuth, validate(createSkillSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post('/', requireAuth, validateWithSecurity(createSkillSchema, { preserveFormattingFields: ['content'] }), asyncHandler(async (req: Request, res: Response) => {
     const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
     const { name, description, content, category, isPublic } = req.body;
 
@@ -498,7 +498,7 @@ router.post('/:skillId/rewrite-proposal', requireAuth, asyncHandler(async (req: 
  * PUT /api/agents/skills/:skillId
  * 스킬 수정 (소유권 검증 포함)
  */
-router.put('/:skillId', requireAuth, validate(updateSkillSchema), asyncHandler(async (req: Request, res: Response) => {
+router.put('/:skillId', requireAuth, validateWithSecurity(updateSkillSchema, { preserveFormattingFields: ['content'] }), asyncHandler(async (req: Request, res: Response) => {
     const { skillId } = req.params;
     const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
 

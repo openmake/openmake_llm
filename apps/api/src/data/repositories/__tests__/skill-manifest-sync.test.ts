@@ -1,4 +1,5 @@
-import { buildManifestYaml, skillContentChecksum, upsertSkillManifest, DEFAULT_SKILL_MANIFEST_VERSION, SKILL_VERSION_LATEST_ORDER_SQL } from '../skill-manifest-sync';
+import { buildManifestYaml, extractPreservedManifestYaml, skillContentChecksum, upsertSkillManifest, DEFAULT_SKILL_MANIFEST_VERSION, SKILL_VERSION_LATEST_ORDER_SQL } from '../skill-manifest-sync';
+import { parseManifestTriggers } from '../../../agents/skill-triggers';
 
 // 2026-08-29: createSkill/upsertSystemSkill/skill-creator 가 manifest 를 안 만들어 배정돼도
 // 주입되지 않던 갭 — 모든 생성 경로가 이 헬퍼로 manifest 를 동반한다.
@@ -35,5 +36,30 @@ describe('skill-manifest-sync', () => {
         expect(query.mock.calls[0][1][1]).toBe('2.0.0');
         expect(query.mock.calls[0][1][5]).toBeNull();
         expect(query.mock.calls[0][1][6]).toBe(false);
+    });
+
+    // 2026-09-11: 본문 수정이 yaml 을 3키로 다시 써서 triggers 가 사라지던 잠복 결함
+    it('extractPreservedManifestYaml — 재생성 3키·fence 는 빼고 triggers·tool_bindings 등은 원문 그대로', () => {
+        const yaml = [
+            'name: presentation-designer', 'description: 발표자료 워크플로우', 'category: design', 'version: 1.0.3',
+            'triggers:', '  - "발표자료"', '  - "PPT"',
+            'tool_bindings:', '  - tool_name: "open-design::create_project"', '    mode: required',
+        ].join('\n');
+        expect(extractPreservedManifestYaml(yaml)).toBe([
+            'version: 1.0.3', 'triggers:', '  - "발표자료"', '  - "PPT"',
+            'tool_bindings:', '  - tool_name: "open-design::create_project"', '    mode: required',
+        ].join('\n'));
+    });
+
+    it('extractPreservedManifestYaml — 3키뿐인 fence yaml·빈 값은 빈 문자열, 접힌 description 연속 줄도 제외', () => {
+        expect(extractPreservedManifestYaml(buildManifestYaml({ name: 'n', description: 'd', category: 'ecc' }))).toBe('');
+        expect(extractPreservedManifestYaml(null)).toBe('');
+        expect(extractPreservedManifestYaml('description: >\n  긴 설명\n  둘째 줄\ntriggers: [a, b]')).toBe('triggers: [a, b]');
+    });
+
+    it('buildManifestYaml — preservedYaml 은 fence 안에 붙고, 닫는 fence 가 트리거로 잡히지 않는다', () => {
+        const y = buildManifestYaml({ name: 'n', description: 'd', category: 'design', preservedYaml: 'triggers:\n  - "PPT"\n  - 발표' });
+        expect(y).toBe('---\nname: n\ndescription: d\ncategory: design\ntriggers:\n  - "PPT"\n  - 발표\n---\n');
+        expect(parseManifestTriggers(y)).toEqual(['PPT', '발표']);
     });
 });

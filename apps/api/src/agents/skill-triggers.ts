@@ -29,13 +29,15 @@ export function formatTriggerHint(manifestMeta?: Record<string, unknown>): strin
 
 /**
  * manifest yaml 의 `triggers:` 블록을 문자열 배열로 파싱.
- * 저장된 manifest_yaml 은 fence 없는 순수 yaml 이라 최상위 키를 multiline 으로 매칭한다.
+ * 최상위 키를 multiline 으로 매칭한다 (fence `---` 유무 무관).
  *
  * 지원 형태:
  *   triggers: [발표자료, 슬라이드]
  *   triggers:
  *     - 발표자료
  *     - "슬라이드"
+ *
+ * 목록 항목은 `-` 뒤 공백이 필수(YAML 규격) — 없으면 바로 뒤 닫는 fence `---` 가 항목 `--` 로 잡힌다.
  */
 export function parseManifestTriggers(manifestYaml: string): string[] {
     const inline = /^triggers:\s*\[([^\]]*)\]\s*$/m.exec(manifestYaml);
@@ -44,10 +46,10 @@ export function parseManifestTriggers(manifestYaml: string): string[] {
             .map(t => t.trim().replace(/^['"]|['"]$/g, ''))
             .filter(Boolean);
     }
-    const block = /^triggers:\s*\n((?:\s*-\s*[^\n]+\n?)+)/m.exec(manifestYaml);
+    const block = /^triggers:\s*\n((?:[ \t]*-[ \t]+[^\n]+\n?)+)/m.exec(manifestYaml);
     if (!block) return [];
     return block[1].split('\n')
-        .map(line => /^\s*-\s*(.+)$/.exec(line)?.[1]?.trim().replace(/^['"]|['"]$/g, '') ?? '')
+        .map(line => /^[ \t]*-[ \t]+(.+)$/.exec(line)?.[1]?.trim().replace(/^['"]|['"]$/g, '') ?? '')
         .filter(Boolean);
 }
 

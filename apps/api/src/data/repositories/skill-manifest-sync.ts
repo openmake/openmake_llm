@@ -35,14 +35,38 @@ export interface SkillManifestRow {
     version?: string;
     createdBy?: string | null;
     isPublic?: boolean;
+    /** 재생성 3키 밖의 기존 yaml 블록(triggers·tool_bindings 등) — extractPreservedManifestYaml 결과 */
+    preservedYaml?: string;
 }
 
 type QueryFn = (sql: string, params: unknown[]) => Promise<unknown>;
 
-/** 022/111 과 같은 fence 형식 — 소비처(buildManifestPrompt)는 `^name:`·`^category:` 멀티라인 정규식만 읽는다 */
-export function buildManifestYaml(row: Pick<SkillManifestRow, 'name' | 'description' | 'category'>): string {
+/** 재생성 시 행 값으로 다시 쓰는 키 — 나머지 최상위 블록은 보존한다 */
+const REGENERATED_MANIFEST_KEYS = new Set(['name', 'description', 'category']);
+
+/**
+ * 기존 manifest_yaml 에서 재생성 대상 키와 fence 를 뺀 최상위 블록만 추출한다.
+ * 종전엔 본문 수정이 yaml 을 3키로 다시 써서 triggers 가 사라졌다 — 트리거로 게이트하던 스킬이
+ * 그 순간부터 모든 턴에 주입되는 잠복 결함 (2026-09-11 발견, presentation-designer 가 해당).
+ */
+export function extractPreservedManifestYaml(yaml: string | null | undefined): string {
+    if (!yaml) return '';
+    const kept: string[] = [];
+    let keep = false;
+    for (const line of yaml.split(/\r?\n/)) {
+        if (/^---\s*$/.test(line)) { keep = false; continue; }
+        const top = /^([A-Za-z_][\w-]*):/.exec(line);
+        if (top) keep = !REGENERATED_MANIFEST_KEYS.has(top[1]);
+        if (keep && line.trim() !== '') kept.push(line);
+    }
+    return kept.join('\n');
+}
+
+/** 022/111 과 같은 fence 형식 — 소비처(buildManifestPrompt)는 `^name:`·`^category:`·`^triggers:` 멀티라인 정규식으로 읽는다 */
+export function buildManifestYaml(row: Pick<SkillManifestRow, 'name' | 'description' | 'category' | 'preservedYaml'>): string {
     const line = (v: string | null | undefined) => (v ?? '').replace(/\r?\n/g, ' ');
-    return `---\nname: ${line(row.name)}\ndescription: ${line(row.description)}\ncategory: ${row.category || 'general'}\n---\n`;
+    const preserved = row.preservedYaml ? `${row.preservedYaml}\n` : '';
+    return `---\nname: ${line(row.name)}\ndescription: ${line(row.description)}\ncategory: ${row.category || 'general'}\n${preserved}---\n`;
 }
 
 export function skillContentChecksum(content: string): string {

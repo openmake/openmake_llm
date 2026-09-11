@@ -41,18 +41,25 @@ describe('buildManifestPrompt — 주입 합계 상한', () => {
         expect(out!.prompt).not.toContain('ECC-C:');
     });
 
-    it('큰 스킬은 개별 상한으로 절단돼 뒤의 system 스킬이 밀려나지 않는다', async () => {
-        rows = [row('huge', 5000), row('system-skill-backend', 100)];
+    it('큰 스킬은 개별 상한으로 절단돼 뒤의 페르소나가 밀려나지 않는다', async () => {
+        rows = [row('huge', 5000), row('system-skill-backend-developer', 100)];
         const out = await manager().buildManifestPrompt('backend-developer', undefined, 'technology');
-        expect(out!.skillNames).toEqual(['system-skill-backend', 'huge']);
+        expect(out!.skillNames).toEqual(['system-skill-backend-developer', 'huge']);
         expect(out!.prompt).toContain('... (truncated)');
-        expect(out!.prompt).toContain('SYSTEM-SKILL-BACKEND:');
+        expect(out!.prompt).toContain('SYSTEM-SKILL-BACKEND-DEVELOPER:');
     });
 
-    it('system 스킬은 priority 가 낮아도 먼저 담겨 상한에 밀려나지 않는다', async () => {
-        rows = [row('ecc-a', 600), row('ecc-b', 350), row('system-skill-backend', 100)];
+    it('페르소나는 priority 가 낮아도 먼저 담겨 상한에 밀려나지 않는다', async () => {
+        rows = [row('ecc-a', 600), row('ecc-b', 350), row('system-skill-backend-developer', 100)];
         const out = await manager().buildManifestPrompt('backend-developer', undefined, 'technology');
-        expect(out!.skillNames).toEqual(['system-skill-backend', 'ecc-a']);
+        expect(out!.skillNames).toEqual(['system-skill-backend-developer', 'ecc-a']);
+    });
+
+    it('전역 시스템 스킬(karpathy 등)은 페르소나처럼 앞세우지 않는다 — 관련 스킬이 밀려나지 않게 (2026-09-11)', async () => {
+        rows = [row('ecc-a', 650), row('system-skill-karpathy-guidelines', 300), row('system-skill-backend-developer', 100)];
+        const out = await manager().buildManifestPrompt('backend-developer', undefined, 'technology');
+        // 페르소나 → ecc-a 순으로 담고, karpathy 는 합계 상한을 넘어 건너뜀 (종전엔 karpathy 가 앞서 ecc-a 가 밀렸다)
+        expect(out!.skillNames).toEqual(['system-skill-backend-developer', 'ecc-a']);
     });
 
     it('합계가 상한 이내면 전부 주입한다', async () => {

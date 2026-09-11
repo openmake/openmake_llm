@@ -53,7 +53,7 @@ const ENCODING_ATTACK_PATTERNS: readonly RegExp[] = [
     /&#x?[0-9a-f]+;/i,
 ];
 
-function stripControlChars(value: string): string {
+export function stripControlChars(value: string): string {
     return value.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 }
 

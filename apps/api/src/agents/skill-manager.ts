@@ -20,7 +20,7 @@
  */
 
 import { createLogger } from '../utils/logger';
-import { SkillRepository } from '../data/repositories/skill-repository';
+import { SkillRepository, AGENT_PERSONA_SKILL_ID_PREFIX } from '../data/repositories/skill-repository';
 import type { Pool } from 'pg';
 
 // Re-export 인터페이스 (기존 사용처 호환)
@@ -485,8 +485,9 @@ export class SkillManager {
         const injectedRows: typeof filtered = [];
         const skipped: string[] = [];
         let injectedChars = 0;
-        // system 스킬(페르소나 규칙, 작음)을 먼저 담아 상한에 밀려나지 않게 한다 — 나머지는 priority 순 유지.
-        const ordered = [...filtered].sort((a, b) => Number(b.id.startsWith('system-skill-')) - Number(a.id.startsWith('system-skill-')));
+        // 페르소나(작음)만 먼저 담아 상한에 밀리지 않게 — 전역 시스템 스킬(karpathy 등)까지 앞세우면 관련 스킬이 밀린다.
+        const isPersona = (r: { id: string; assigned_to: string }) => r.id === AGENT_PERSONA_SKILL_ID_PREFIX + r.assigned_to;
+        const ordered = [...filtered].sort((a, b) => Number(isPersona(b)) - Number(isPersona(a)));
         for (const r of ordered) {
             const body = r.prompt_md.length > SKILL_MANIFEST_PER_SKILL_MAX_CHARS
                 ? r.prompt_md.slice(0, SKILL_MANIFEST_PER_SKILL_MAX_CHARS) + '\n... (truncated)' : r.prompt_md;
