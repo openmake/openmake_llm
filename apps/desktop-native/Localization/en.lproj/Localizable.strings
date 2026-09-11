@@ -1,0 +1,86 @@
+/* OpenMake Companion — English. Keys are identifiers; check-l10n.sh verifies all four tables share the same key set. */
+
+/* Menu */
+"menu.status" = "Status: %@";
+"menu.folder" = "Folder: %@";
+"menu.openInFinder" = "Open in Finder";
+"menu.disconnect" = "Disconnect";
+"menu.connectFolder" = "Connect Work Folder…";
+"menu.addFolder" = "Add Work Folder…";
+"menu.disconnectAll" = "Disconnect All";
+"menu.clearAutoApprove" = "Revoke Bulk Approval (%ld tasks)";
+"menu.openWeb" = "Open in Browser";
+"menu.checkUpdates" = "Check for Updates…";
+"menu.settings" = "Settings…";
+"menu.quit" = "Quit";
+
+/* Settings */
+"settings.auth" = "Authentication";
+"settings.apiKey.placeholder" = "API key (omk_live_…)";
+"settings.apiKey.help" = "Issue a key with the bridge scope on the API Access page of the web app and paste it here. It is stored in the Keychain.";
+"settings.apiKey.open" = "Open API Access Page";
+"settings.backend" = "Backend";
+"settings.server" = "Server";
+"settings.save" = "Save";
+"settings.saved" = "Saved";
+"backend.external" = "External (chat.openmake.cc)";
+"backend.local" = "Local (localhost:52416)";
+
+/* Connection status */
+"status.idle" = "Not connected";
+"status.connecting" = "Connecting…";
+"status.connected" = "Connected: %@";
+"status.serverError" = "Server error: %@";
+"status.reconnecting" = "Disconnected — waiting to reconnect";
+"status.closed" = "Closed";
+"status.apiKeyRequired" = "API key required — enter it in Settings";
+"status.folderOpenFailed" = "Could not open folder: %@";
+"status.helperMissing" = "Helper resources missing (reinstall required)";
+"status.helperExited" = "Helper stopped — connect again";
+"status.helperLaunchFailed" = "Could not start helper: %@";
+
+/* Folder picker */
+"panel.title" = "Choose a folder for agent tasks (you can add several folders one at a time)";
+"panel.message" = "Agent tasks read and write files within this folder and its subfolders. Shell commands ask for your confirmation every time, and even when approved, the OS sandbox blocks writes outside the folder and reads of secret files (such as .ssh).";
+
+/* Shell command approval */
+"confirm.title" = "The agent wants to run this shell command on your computer";
+"confirm.folder" = "Working folder: %@";
+"confirm.sandboxOn" = "OS sandbox on: writes outside the folder and reads of secret files (.ssh/.aws, etc.) are blocked. Other reads and network access are allowed.";
+"confirm.sandboxOff" = "⚠️ Sandbox off: this command can access files outside the folder and the network with your account’s permissions.";
+"confirm.allHint" = "Choosing “Run All for This Task” stops these prompts until this task ends (other tasks are not affected).";
+"confirm.run" = "Run";
+"confirm.runAll" = "Run All for This Task";
+"confirm.deny" = "Deny";
+
+/* Notifications */
+"notify.taskEnd.title" = "Agent task finished";
+"notify.taskEnd.body" = "Your local task has finished. Check the results on the web.";
+"notify.approval.title" = "Agent task — approval needed";
+"notify.approval.body" = "Waiting for approval to run a tool: %@. Click to approve on the web.";
+"notify.question.title" = "The agent asked a question";
+"notify.question.body" = "The task is paused waiting for your answer. Click to answer on the web.";
+
+/* Updates */
+"update.insecure" = "Updates are only allowed from an HTTPS (or localhost) backend";
+"update.badBackend" = "Invalid backend address";
+"update.none.title" = "No updates";
+"update.none.body" = "There is no release on the native channel yet, or the manifest is missing. (Current v%@)";
+"update.latest.title" = "Up to date";
+"update.latest.body" = "v%@ is the latest version.";
+"update.available.title" = "Version v%1$@ is available (current v%2$@)";
+"update.available.body" = "Download and install it now? The app will quit briefly during installation and then reopen.";
+"update.install" = "Update";
+"update.later" = "Later";
+"update.badDownload" = "Invalid download address";
+"update.checksum" = "Download integrity check failed (sha256 mismatch)";
+"update.noBundle" = "Could not find the app bundle path (updates are unavailable in development runs)";
+"update.failed.title" = "Update check failed";
+"update.script.failTitle" = "Update failed";
+"update.script.log" = "Log";
+"update.script.mount" = "Could not mount the disk image.";
+"update.script.noApp" = "Could not find the app inside the image.";
+"update.script.copy" = "Could not copy the new version (check the permissions of the install folder).";
+"update.script.replace" = "Could not replace the existing app.";
+"update.script.rollback" = "Installing the new version failed, so the previous version was restored.";
+"update.script.reopen" = "The update succeeded, but the app could not be reopened.";

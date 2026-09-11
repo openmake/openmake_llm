@@ -1,6 +1,6 @@
 # OpenMake Companion (SwiftUI 네이티브 데스크톱)
 
-메뉴바 상주 **로컬 에이전트 컴패니언** — 폴더 연결·디바이스 상태·exec 승인·작업 종료 알림·웹 딥링크만 담당한다.
+메뉴바 상주 **로컬 에이전트 컴패니언** — 폴더 연결·디바이스 상태·exec 승인·작업 알림(종료·승인 대기)·웹 딥링크만 담당한다.
 채팅 등 깊은 UI 는 웹(chat.openmake.cc)이 전담한다 (plan §1 비목표: 채팅 UI 재구현 금지).
 Plan: `docs/proposals/2026-08-22-desktop-native-companion-plan.md` (로컬 보관).
 
@@ -10,13 +10,17 @@ Plan: `docs/proposals/2026-08-22-desktop-native-companion-plan.md` (로컬 보�
 helper/src/helper.mjs    # Node 헬퍼 — @openmake/local-bridge-core 의 stdio JSON-lines 어댑터
 helper/harness.cjs       # 헬퍼 회귀 하네스 (build.sh 가 게이트로 실행)
 OpenMakeCompanion/       # SwiftPM 앱 (MenuBarExtra + 설정 + HelperManager + Updater)
-build.sh                 # helper 번들(esbuild) → 하네스 → swift build → .app 조립 → ad-hoc 서명 → dmg
+Localization/            # <lang>.lproj/Localizable.strings — ko(개발 언어)·en·ja·zh-Hans
+check-l10n.sh            # 다국어 표 게이트 (build.sh·CI 공용)
+build.sh                 # helper 번들(esbuild) → 하네스 → l10n 게이트 → swift build → .app 조립 → ad-hoc 서명 → dmg
 ```
 
 - 브리지 보안 코어(경로 스코프·exec 3단 방어·git 고정 조립·worktree)는 **`packages/local-bridge-core` 재사용** — Swift 재구현 금지(plan §6 게이트).
 - 앱↔헬퍼 stdio 계약은 `helper.mjs` 상단 주석 참고. confirm 응답은 항상 앱(사용자 다이얼로그)만 발원.
-- 인증: API key(`omk_live_*`, bridge 스코프) → Keychain 저장, 헬퍼엔 env(`OMK_COMPANION_API_KEY`)로 전달 (ps 노출 방지).
+- 인증: API key(`omk_live_*`, bridge 스코프) → Keychain 저장, 헬퍼엔 env(`OMK_COMPANION_API_KEY`)로 전달 (ps 노출 방지). 키 발급은 웹의 **API 액세스 페이지(`/api-access`)** — 설정 화면의 "API 액세스 페이지 열기" 버튼이 연다.
 - **다중 루트(0.2.0)**: 메뉴 "작업 폴더 추가…" 로 여러 루트를 각각 연결 — 루트당 독립 브리지 연결(파생 deviceId = base id + 경로 해시)이라 **서버·프로토콜 무변경**, 웹엔 루트마다 별개 디바이스로 표시(기존 디바이스 선택기 사용). 유저당 총 디바이스 수는 서버 `LOCAL_BRIDGE_MAX_DEVICES`(기본 3)가 강제 — 초과는 해당 루트 상태에 서버 오류로 표면화. 스코프·샌드박스·일괄승인 회수는 루트별 독립(코어 인스턴스 분리).
+- **승인 대기 알림(0.2.6)**: 로컬 실행 작업이 도구 승인·`ask_human` 응답을 기다리며 멈추면 서버가 그 디바이스로 `bridge_notice`(단방향, 필드 화이트리스트)를 보내고 앱이 네이티브 알림을 띄운다(클릭 → `/agent-tasks?task=<id>`). 종전 설계는 "승인 대기 알림은 웹 푸시 담당 — 중복 구현 금지" 였으나, 웹 푸시는 설정에서 켜야 하는 opt-in 이라 운영 구독 0건 = 실제 도달 0 이어서 바꿨다. 코어는 알림을 검증(종류·taskId 형식·도구명 제어문자·길이)해 넘길 뿐 아무것도 실행하지 않고, 구 디바이스는 모르는 type 을 무시한다(추가 전용).
+- **다국어(0.2.6)**: 웹과 같은 네 언어. 문자열은 `L("키")` → `Localization/<lang>.lproj`, 앱 번들 `Contents/Resources` 로 복사하고 `CFBundleDevelopmentRegion=ko`(웹 `DEFAULT_LOCALE`). 헬퍼·코어의 상태 문구는 한국어 원문 + 상태 코드(`code`·`arg`)로 오고 앱이 코드로 번역한다. 새 문구를 넣으면 네 표에 모두 추가 — `check-l10n.sh` 가 키 불일치·누락 키를 막는다.
 - 업데이트: `GET /api/desktop/latest` 의 `native` 채널(추가 전용 필드) — sha256 검증 후 분리 스크립트가 교체·재실행 (구 Electron updater.js 에서 이식).
 
 ## 빌드 / 게시

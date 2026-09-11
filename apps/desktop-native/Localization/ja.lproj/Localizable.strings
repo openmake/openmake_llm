@@ -1,0 +1,86 @@
+/* OpenMake Companion — 日本語。キーは識別子で、4 言語の表のキー集合は check-l10n.sh が照合する。 */
+
+/* メニュー */
+"menu.status" = "状態: %@";
+"menu.folder" = "フォルダ: %@";
+"menu.openInFinder" = "Finder で開く";
+"menu.disconnect" = "接続を解除";
+"menu.connectFolder" = "作業フォルダを接続…";
+"menu.addFolder" = "作業フォルダを追加…";
+"menu.disconnectAll" = "すべての接続を解除";
+"menu.clearAutoApprove" = "一括承認を解除（%ld 件のタスク）";
+"menu.openWeb" = "Web で開く";
+"menu.checkUpdates" = "アップデートを確認…";
+"menu.settings" = "設定…";
+"menu.quit" = "終了";
+
+/* 設定 */
+"settings.auth" = "認証";
+"settings.apiKey.placeholder" = "API キー (omk_live_…)";
+"settings.apiKey.help" = "Web の API アクセスページで bridge スコープのキーを発行して貼り付けてください。キーチェーンに保存されます。";
+"settings.apiKey.open" = "API アクセスページを開く";
+"settings.backend" = "バックエンド";
+"settings.server" = "サーバー";
+"settings.save" = "保存";
+"settings.saved" = "保存しました";
+"backend.external" = "外部 (chat.openmake.cc)";
+"backend.local" = "ローカル (localhost:52416)";
+
+/* 接続状態 */
+"status.idle" = "未接続";
+"status.connecting" = "接続中…";
+"status.connected" = "接続済み: %@";
+"status.serverError" = "サーバーエラー: %@";
+"status.reconnecting" = "切断 — 再接続を待機中";
+"status.closed" = "終了";
+"status.apiKeyRequired" = "API キーが必要です — 設定で入力してください";
+"status.folderOpenFailed" = "フォルダを開けませんでした: %@";
+"status.helperMissing" = "ヘルパーのリソースがありません（再インストールが必要です）";
+"status.helperExited" = "ヘルパーが終了しました — もう一度接続してください";
+"status.helperLaunchFailed" = "ヘルパーを起動できませんでした: %@";
+
+/* フォルダ選択 */
+"panel.title" = "エージェントのタスクに接続するフォルダを選択（複数のフォルダを 1 つずつ追加できます）";
+"panel.message" = "このフォルダ（とサブフォルダ）を基準にファイルを読み書きします。シェルコマンドは実行前に毎回確認し、承認しても OS サンドボックスがフォルダ外への書き込みと秘密ファイル（.ssh など）の読み取りをブロックします。";
+
+/* シェルコマンドの実行承認 */
+"confirm.title" = "エージェントがこのシェルコマンドをあなたのコンピュータで実行しようとしています";
+"confirm.folder" = "実行フォルダ: %@";
+"confirm.sandboxOn" = "OS サンドボックス適用: フォルダ外への書き込みと秘密ファイル（.ssh/.aws など）の読み取りはブロックされます。それ以外の読み取りとネットワークは許可されます。";
+"confirm.sandboxOff" = "⚠️ サンドボックス未適用: このコマンドはあなたのアカウント権限でフォルダ外のファイルやネットワークにアクセスできます。";
+"confirm.allHint" = "「このタスク中はすべて実行」を選ぶと、このタスクが終わるまで再確認しません（ほかのタスクには適用されません）。";
+"confirm.run" = "実行";
+"confirm.runAll" = "このタスク中はすべて実行";
+"confirm.deny" = "拒否";
+
+/* 通知 */
+"notify.taskEnd.title" = "エージェントのタスクが終了しました";
+"notify.taskEnd.body" = "ローカルのタスクが終わりました。結果を Web で確認してください。";
+"notify.approval.title" = "エージェントのタスク — 承認が必要です";
+"notify.approval.body" = "ツール実行の承認を待っています: %@。クリックして Web で承認してください。";
+"notify.question.title" = "エージェントから質問があります";
+"notify.question.body" = "タスクが回答を待って停止しています。クリックして Web で回答してください。";
+
+/* アップデート */
+"update.insecure" = "アップデートは HTTPS（または localhost）のバックエンドからのみ許可されます";
+"update.badBackend" = "無効なバックエンドアドレス";
+"update.none.title" = "アップデートはありません";
+"update.none.body" = "native チャネルの配布がまだないか、マニフェストがありません。（現在 v%@）";
+"update.latest.title" = "最新バージョン";
+"update.latest.body" = "現在の v%@ が最新です。";
+"update.available.title" = "新しいバージョン v%1$@ があります（現在 v%2$@）";
+"update.available.body" = "今すぐダウンロードしてインストールしますか？インストール中、アプリは一時的に終了してから再度開きます。";
+"update.install" = "アップデート";
+"update.later" = "後で";
+"update.badDownload" = "無効なダウンロードアドレス";
+"update.checksum" = "ダウンロードの整合性検証に失敗しました（sha256 不一致）";
+"update.noBundle" = "アプリバンドルのパスが見つかりません（開発実行ではアップデートできません）";
+"update.failed.title" = "アップデートの確認に失敗しました";
+"update.script.failTitle" = "アップデートに失敗しました";
+"update.script.log" = "ログ";
+"update.script.mount" = "ディスクイメージをマウントできませんでした。";
+"update.script.noApp" = "イメージ内にアプリが見つかりませんでした。";
+"update.script.copy" = "新しいバージョンをコピーできませんでした（インストール先フォルダの権限を確認してください）。";
+"update.script.replace" = "既存のアプリを置き換えられません。";
+"update.script.rollback" = "新しいバージョンのインストールに失敗したため、以前のバージョンに戻しました。";
+"update.script.reopen" = "アップデートは完了しましたが、アプリを再度開けませんでした。";

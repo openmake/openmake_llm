@@ -118,6 +118,20 @@ const { WebSocketServer } = require('ws');
     const all = await execVia(dev1, { kind: 'listAll' });
     assert.ok(all.entries.includes('seed.txt') && all.entries.includes('subdir/out.txt'), 'listAll');
 
+    // ②-B 서버 단방향 알림(bridge_notice) — 검증 통과분만 approvalPending 이벤트로, 응답 프레임 없음.
+    //      상태 이벤트엔 다국어 표시용 code·arg 가 실린다(앱이 코드로 번역).
+    assert.ok(events.some((e) => e.ev === 'status' && e.folder === realFolder && e.code === 'connected'
+        && e.arg === path.basename(realFolder)), 'status code=connected · arg=폴더명');
+    const framesBefore = received.length;
+    socks.get(dev1).send(JSON.stringify({ type: 'bridge_notice', notice: 'approval_pending', taskId: 'harness-task-notice-0001', toolName: 'file_ops' }));
+    const ap = await waitEv((e) => e.ev === 'approvalPending');
+    assert.deepEqual([ap.taskId, ap.toolName, ap.folder], ['harness-task-notice-0001', 'file_ops', realFolder], 'approvalPending 이벤트');
+    socks.get(dev1).send(JSON.stringify({ type: 'bridge_notice', notice: 'approval_pending', taskId: '../escape', toolName: 'x' }));
+    socks.get(dev1).send(JSON.stringify({ type: 'bridge_notice', notice: 'exec_now', taskId: 'harness-task-notice-0002', toolName: 'x' }));
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal(events.filter((e) => e.ev === 'approvalPending').length, 1, '부적합 알림은 버린다');
+    assert.equal(received.length, framesBefore, '알림은 단방향 — 헬퍼가 응답 프레임을 보내지 않는다');
+
     // ③ exec — denylist / stdio confirm 승인 / 거부
     assert.equal((await execVia(dev1, { kind: 'exec', command: 'sudo ls' })).exitCode, 126, 'denylist 126');
     const runP = execVia(dev1, { kind: 'exec', command: 'echo -n from-companion', taskId: 'harness-task-000000000001' });

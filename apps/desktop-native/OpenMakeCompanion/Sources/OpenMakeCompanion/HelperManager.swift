@@ -16,7 +16,7 @@ import UserNotifications
 final class HelperManager: NSObject, ObservableObject {
     static let shared = HelperManager()
 
-    @Published var statusText = "미연결"
+    @Published var statusText = L("status.idle")
     /** 연결된 루트들(realpath) — 루트당 독립 브리지 연결(파생 deviceId), 서버엔 별개 디바이스. */
     @Published var connectedFolders: [String] = []
     /** 루트별 최근 상태 텍스트 (연결됨/재연결 중/서버 오류 등). */
@@ -28,10 +28,10 @@ final class HelperManager: NSObject, ObservableObject {
     private var stdoutBuf = Data()
 
     // 백엔드 선택 — Electron 셸과 동일 2종. 로컬은 Next(3000)가 WS 를 프록시하지 못하므로
-    // 백엔드(52416) 직결 (기존 bridgeBackendUrl 관행).
+    // 백엔드(52416) 직결 (기존 bridgeBackendUrl 관행). label 은 다국어 키.
     static let backends: [(id: String, label: String, url: String, webUrl: String)] = [
-        ("external", "외부 (chat.openmake.cc)", "https://chat.openmake.cc", "https://chat.openmake.cc"),
-        ("local", "로컬 (localhost:52416)", "http://localhost:52416", "http://localhost:3000"),
+        ("external", "backend.external", "https://chat.openmake.cc", "https://chat.openmake.cc"),
+        ("local", "backend.local", "http://localhost:52416", "http://localhost:3000"),
     ]
     var backendId: String {
         get { UserDefaults.standard.string(forKey: "backend") ?? "external" }
@@ -54,6 +54,18 @@ final class HelperManager: NSObject, ObservableObject {
         }
     }
 
+    /** 헬퍼·코어 상태 코드 → 다국어 키. 코드가 없거나 모르는 값(auth_error 등)이면 원문을 그대로 쓴다. */
+    private static let statusKeys: [String: String] = [
+        "connecting": "status.connecting",
+        "connected": "status.connected",
+        "server_error": "status.serverError",
+        "reconnecting": "status.reconnecting",
+        "closed": "status.closed",
+        "idle": "status.idle",
+        "api_key_required": "status.apiKeyRequired",
+        "folder_open_failed": "status.folderOpenFailed",
+    ]
+
     // ── 헬퍼 프로세스 lifecycle ──
 
     private func resourceURL(_ name: String) -> URL? {
@@ -70,12 +82,12 @@ final class HelperManager: NSObject, ObservableObject {
         // OMK_BRIDGE_TOKEN 관행과 동일 계열. 정식 실행 경로는 Keychain 만 쓴다.
         let envKey = ProcessInfo.processInfo.environment["OMK_COMPANION_API_KEY"]
         guard let apiKey = envKey ?? Keychain.load(), !apiKey.isEmpty else {
-            statusText = "API key 필요 — 설정에서 입력"
+            statusText = L("status.apiKeyRequired")
             return false
         }
         guard let nodeURL = resourceURL("node"), FileManager.default.isExecutableFile(atPath: nodeURL.path),
               let helperURL = resourceURL("helper.cjs"), FileManager.default.fileExists(atPath: helperURL.path) else {
-            statusText = "헬퍼 리소스 없음 (재설치 필요)"
+            statusText = L("status.helperMissing")
             return false
         }
         let p = Process()
@@ -97,13 +109,13 @@ final class HelperManager: NSObject, ObservableObject {
             Task { @MainActor in
                 self?.process = nil
                 self?.stdinPipe = nil
-                if !(self?.connectedFolders.isEmpty ?? true) { self?.statusText = "헬퍼 종료됨 — 다시 연결하세요" }
+                if !(self?.connectedFolders.isEmpty ?? true) { self?.statusText = L("status.helperExited") }
                 self?.connectedFolders = []
                 self?.rootStatus = [:]
             }
         }
         do { try p.run() } catch {
-            statusText = "헬퍼 실행 실패: \(error.localizedDescription)"
+            statusText = L("status.helperLaunchFailed", error.localizedDescription)
             return false
         }
         process = p
@@ -134,8 +146,8 @@ final class HelperManager: NSObject, ObservableObject {
     /** 폴더 연결 — 권한 부여의 유일한 발원: 사용자가 패널에서 직접 고른 폴더만 헬퍼로 전달된다. */
     func chooseFolderAndConnect() {
         let panel = NSOpenPanel()
-        panel.title = "에이전트 작업에 연결할 폴더 선택 (여러 폴더를 각각 추가할 수 있습니다)"
-        panel.message = "이 폴더(와 하위 폴더)를 작업 기준으로 파일을 읽고 씁니다. 셸 명령은 실행 전 매번 확인을 받고, 승인해도 OS 샌드박스가 폴더 밖 쓰기와 비밀 파일(.ssh 등) 읽기를 차단합니다."
+        panel.title = L("panel.title")
+        panel.message = L("panel.message")
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
@@ -191,6 +203,12 @@ final class HelperManager: NSObject, ObservableObject {
         if let url = URL(string: backend.webUrl) { NSWorkspace.shared.open(url) }
     }
 
+    /** bridge 스코프 키 발급 페이지 — 설정 화면에서 아직 저장하지 않은 백엔드 선택도 따른다. */
+    func openApiAccess(backendId id: String) {
+        let web = Self.backends.first { $0.id == id }?.webUrl ?? backend.webUrl
+        if let url = URL(string: "\(web)/api-access") { NSWorkspace.shared.open(url) }
+    }
+
     // ── 헬퍼 이벤트 소비 ──
 
     private func consume(_ d: Data) {
@@ -207,12 +225,13 @@ final class HelperManager: NSObject, ObservableObject {
     private func handle(_ kind: String, _ ev: [String: Any]) {
         switch kind {
         case "status":
-            let text = ev["text"] as? String ?? ""
+            let code = ev["code"] as? String
+            let text = Self.statusText(code: code, arg: ev["arg"] as? String, fallback: ev["text"] as? String ?? "")
             if let f = ev["folder"] as? String {
                 rootStatus[f] = text // 루트별 상태 (연결됨/재연결 중/서버 오류)
             } else {
                 statusText = text
-                if text == "미연결" { connectedFolders = []; rootStatus = [:] }
+                if code == "idle" { connectedFolders = []; rootStatus = [:] }
             }
         case "connected":
             if let f = ev["folder"] as? String, !connectedFolders.contains(f) { connectedFolders.append(f) }
@@ -227,9 +246,18 @@ final class HelperManager: NSObject, ObservableObject {
             presentConfirm(ev)
         case "taskEnd":
             notifyTaskEnd(taskId: ev["taskId"] as? String)
+        case "approvalPending":
+            if let taskId = ev["taskId"] as? String {
+                notifyApprovalPending(taskId: taskId, toolName: ev["toolName"] as? String ?? "")
+            }
         default:
             break
         }
+    }
+
+    private static func statusText(code: String?, arg: String?, fallback: String) -> String {
+        guard let code, let key = statusKeys[code] else { return fallback }
+        return L(key, arg ?? "")
     }
 
     /** exec 승인 — 비우회 네이티브 다이얼로그. 실행될 명령 원문·실행 폴더를 그대로 보여준다. */
@@ -243,18 +271,16 @@ final class HelperManager: NSObject, ObservableObject {
 
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "에이전트가 이 셸 명령을 당신의 컴퓨터에서 실행하려고 합니다"
-        var detail = "\(preview)\n\n실행 폴더: \(base)\n"
-        detail += sandboxed
-            ? "OS 샌드박스 적용: 폴더 밖 쓰기와 비밀 파일(.ssh/.aws 등) 읽기는 차단됩니다. 그 외 읽기·네트워크는 허용됩니다."
-            : "⚠️ 샌드박스 미적용: 이 명령은 당신 계정 권한으로 폴더 밖 파일·네트워크에 접근할 수 있습니다."
+        alert.messageText = L("confirm.title")
+        var detail = "\(preview)\n\n\(L("confirm.folder", base))\n"
+        detail += sandboxed ? L("confirm.sandboxOn") : L("confirm.sandboxOff")
         if taskId != nil {
-            detail += "\n\n\"이 작업 동안 모두 실행\"을 고르면 이 작업이 끝날 때까지 다시 묻지 않습니다(다른 작업에는 적용되지 않습니다)."
+            detail += "\n\n" + L("confirm.allHint")
         }
         alert.informativeText = detail
-        alert.addButton(withTitle: "실행")
-        if taskId != nil { alert.addButton(withTitle: "이 작업 동안 모두 실행") }
-        alert.addButton(withTitle: "거부")
+        alert.addButton(withTitle: L("confirm.run"))
+        if taskId != nil { alert.addButton(withTitle: L("confirm.runAll")) }
+        alert.addButton(withTitle: L("confirm.deny"))
         NSApp.activate(ignoringOtherApps: true)
         let r = alert.runModal()
         let result: String
@@ -264,16 +290,37 @@ final class HelperManager: NSObject, ObservableObject {
         send(["cmd": "confirm", "id": id, "result": result])
     }
 
+    /** 웹 작업 상세 딥링크 계약: /agent-tasks?task=<id> (admin/conversations 와 동일 패턴). */
+    private func taskUrl(_ taskId: String?) -> String {
+        taskId.map { "\(backend.webUrl)/agent-tasks?task=\($0)" } ?? backend.webUrl
+    }
+
     /** 작업 종료 알림 — 클릭 시 웹 작업 상세로 핸드오프(상세 UI 는 웹 단일 구현 원칙).
-        ask_human/승인 대기 알림은 서버 web-push 가 담당(turn-executor onApprovalPending) — 중복 구현 안 함. */
+        남아 있던 그 작업의 승인 대기 알림은 거둔다(이미 끝난 작업의 승인을 누르러 가지 않게). */
     private func notifyTaskEnd(taskId: String?) {
         let content = UNMutableNotificationContent()
-        content.title = "에이전트 작업 종료"
-        content.body = "로컬 작업이 끝났습니다. 결과를 웹에서 확인하세요."
-        // 웹 작업 상세 딥링크 계약: /agent-tasks?task=<id> (admin/conversations 와 동일 패턴)
-        let url = taskId.map { "\(backend.webUrl)/agent-tasks?task=\($0)" } ?? backend.webUrl
-        content.userInfo = ["url": url]
+        content.title = L("notify.taskEnd.title")
+        content.body = L("notify.taskEnd.body")
+        content.userInfo = ["url": taskUrl(taskId)]
+        let center = UNUserNotificationCenter.current()
+        if let taskId { center.removeDeliveredNotifications(withIdentifiers: ["approval-\(taskId)"]) }
         let req = UNNotificationRequest(identifier: taskId ?? UUID().uuidString, content: content, trigger: nil)
+        center.add(req) { _ in /* 권한 거부 등은 무시(fail-open) */ }
+    }
+
+    /** 승인 대기·질문 알림 — 서버가 브리지 bridge_notice 로 알려 준다(2026-09-11 설계 변경).
+        종전엔 "웹 푸시가 담당 — 중복 구현 안 함" 이었으나, 웹 푸시는 설정에서 켜야 하는 opt-in 이라
+        운영 구독 0건 = 실제 도달 0 이었다. 로컬 작업을 돌리는 동안 이 앱은 항상 떠 있으므로 여기서
+        직접 띄운다. 웹 푸시도 켠 사용자는 두 번 받을 수 있으나 놓치는 것보다 낫다.
+        식별자를 작업 단위로 고정해 다중 루트·연속 승인에서도 쌓이지 않고 최신 1건으로 교체된다. */
+    private func notifyApprovalPending(taskId: String, toolName: String) {
+        let content = UNMutableNotificationContent()
+        let isQuestion = toolName == "ask_human"
+        content.title = isQuestion ? L("notify.question.title") : L("notify.approval.title")
+        content.body = isQuestion ? L("notify.question.body") : L("notify.approval.body", toolName)
+        content.sound = .default
+        content.userInfo = ["url": taskUrl(taskId)]
+        let req = UNNotificationRequest(identifier: "approval-\(taskId)", content: content, trigger: nil)
         UNUserNotificationCenter.current().add(req) { _ in /* 권한 거부 등은 무시(fail-open) */ }
     }
 }

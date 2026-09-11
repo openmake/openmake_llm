@@ -129,6 +129,13 @@ export interface TaskExecutor {
      */
     codeNav?(spec: CodeNavSpec): Promise<CodeNavData | null>;
 
+    /**
+     * 승인 대기 알림 — 실행기가 사용자 디바이스에 닿아 있으면 구현한다(로컬 브리지: 컴패니언이
+     * 네이티브 알림을 띄운다). 웹 푸시는 사용자가 설정에서 켜야 하는 opt-in 이라 운영 구독 0건이던
+     * 실측(2026-09-11)을 메우는 채널이다. 전송 실패는 조용히 넘긴다(fail-open, 작업 무영향).
+     */
+    notifyApprovalPending?(toolName: string): void;
+
     /** 실행 환경 정리. removeWorkspace=false 면 산출물 회수를 위해 workspace 보존. 멱등. */
     cleanup(removeWorkspace?: boolean): Promise<void>;
 }

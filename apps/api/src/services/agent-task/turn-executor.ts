@@ -84,14 +84,17 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
     // 도구 실행 + 체크포인트
     let terminated = false;
     let terminateSummary = '';
-    // 승인 대기 진입 콜백 — task 도구·extra 도구 공용(status='paused' + web-push).
+    // 승인 대기 진입 콜백 — task 도구·extra 도구 공용(status='paused' + 알림).
+    // 알림은 두 채널: 웹 푸시(설정에서 켠 사용자만 — 운영 구독 0건이던 opt-in) + 로컬 실행 작업이면
+    // 실행 디바이스(컴패니언 네이티브 알림, 2026-09-11). 링크는 작업 상세로 바로 연다.
     const onApprovalPending = (toolName: string) => {
         void update({ status: 'paused' }).catch(() => { /* noop */ });
         void getPushService().sendPush(userId, {
             title: 'OpenMake 에이전트 — 승인 필요',
             body: `도구 실행 승인을 기다립니다: ${toolName}`,
-            url: '/agent-tasks',
+            url: `/agent-tasks?task=${encodeURIComponent(taskId)}`,
         }).catch(() => { /* noop */ });
+        try { taskRuntime?.notifyApprovalPending(toolName); } catch { /* 알림 실패는 작업에 영향 없음 */ }
     };
     // 읽기 전용 extra 도구(web_search 등) 병렬 선실행. 승인이 필요한 호출은 **자동 승인 작업에서만**
     // 포함한다 — 아니면 승인 창이 동시에 N개 뜬다(HITL fan-in). 결과·스텝 영속은 아래 루프가

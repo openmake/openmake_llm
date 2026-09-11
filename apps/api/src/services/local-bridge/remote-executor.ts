@@ -158,6 +158,16 @@ export class RemoteExecutor implements TaskExecutor {
         };
     }
 
+    /**
+     * 승인 대기 알림 — 이 작업을 실행 중인 디바이스로 bridge_notice 를 보낸다(컴패니언이 네이티브
+     * 알림으로 띄움). 단방향이라 결과를 기다리지 않고, 미연결은 조용히 넘긴다. 구 디바이스는 모르는
+     * type 을 무시하므로 추가 전용으로 안전하다.
+     */
+    notifyApprovalPending(toolName: string): void {
+        const sent = getLocalBridgeRegistry().notify(this.userId, { notice: 'approval_pending', taskId: this.taskId, toolName }, this.deviceId);
+        logger.info(`[${this.taskId}] 승인 대기 알림 → 디바이스 ${sent ? '전송' : '미전송(연결 없음)'}: ${toolName}`);
+    }
+
     /** 파일 경로를 worktree 기준으로 변환. 격리가 없으면 원래 경로 그대로. */
     private scoped(relPath: string): string {
         if (!this.worktreeRel) return relPath;

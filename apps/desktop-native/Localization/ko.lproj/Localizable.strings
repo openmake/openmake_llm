@@ -1,0 +1,86 @@
+/* OpenMake Companion — 한국어 (개발 언어). 키는 식별자이며 네 언어 표의 키 집합은 check-l10n.sh 가 대조한다. */
+
+/* 메뉴 */
+"menu.status" = "상태: %@";
+"menu.folder" = "폴더: %@";
+"menu.openInFinder" = "Finder 에서 열기";
+"menu.disconnect" = "연결 해제";
+"menu.connectFolder" = "작업 폴더 연결…";
+"menu.addFolder" = "작업 폴더 추가…";
+"menu.disconnectAll" = "전체 연결 해제";
+"menu.clearAutoApprove" = "일괄 승인 해제 (%ld개 작업)";
+"menu.openWeb" = "웹에서 열기";
+"menu.checkUpdates" = "업데이트 확인…";
+"menu.settings" = "설정…";
+"menu.quit" = "종료";
+
+/* 설정 */
+"settings.auth" = "인증";
+"settings.apiKey.placeholder" = "API key (omk_live_…)";
+"settings.apiKey.help" = "웹의 API 액세스 페이지에서 bridge 스코프 키를 발급해 붙여넣으세요. Keychain 에 저장됩니다.";
+"settings.apiKey.open" = "API 액세스 페이지 열기";
+"settings.backend" = "백엔드";
+"settings.server" = "서버";
+"settings.save" = "저장";
+"settings.saved" = "저장됨";
+"backend.external" = "외부 (chat.openmake.cc)";
+"backend.local" = "로컬 (localhost:52416)";
+
+/* 연결 상태 */
+"status.idle" = "미연결";
+"status.connecting" = "연결 중…";
+"status.connected" = "연결됨: %@";
+"status.serverError" = "서버 오류: %@";
+"status.reconnecting" = "끊김 — 재연결 대기";
+"status.closed" = "종료";
+"status.apiKeyRequired" = "API key 필요 — 설정에서 입력";
+"status.folderOpenFailed" = "폴더 열기 실패: %@";
+"status.helperMissing" = "헬퍼 리소스 없음 (재설치 필요)";
+"status.helperExited" = "헬퍼 종료됨 — 다시 연결하세요";
+"status.helperLaunchFailed" = "헬퍼 실행 실패: %@";
+
+/* 폴더 선택 */
+"panel.title" = "에이전트 작업에 연결할 폴더 선택 (여러 폴더를 각각 추가할 수 있습니다)";
+"panel.message" = "이 폴더(와 하위 폴더)를 작업 기준으로 파일을 읽고 씁니다. 셸 명령은 실행 전 매번 확인을 받고, 승인해도 OS 샌드박스가 폴더 밖 쓰기와 비밀 파일(.ssh 등) 읽기를 차단합니다.";
+
+/* 셸 명령 실행 승인 */
+"confirm.title" = "에이전트가 이 셸 명령을 당신의 컴퓨터에서 실행하려고 합니다";
+"confirm.folder" = "실행 폴더: %@";
+"confirm.sandboxOn" = "OS 샌드박스 적용: 폴더 밖 쓰기와 비밀 파일(.ssh/.aws 등) 읽기는 차단됩니다. 그 외 읽기·네트워크는 허용됩니다.";
+"confirm.sandboxOff" = "⚠️ 샌드박스 미적용: 이 명령은 당신 계정 권한으로 폴더 밖 파일·네트워크에 접근할 수 있습니다.";
+"confirm.allHint" = "“이 작업 동안 모두 실행”을 고르면 이 작업이 끝날 때까지 다시 묻지 않습니다(다른 작업에는 적용되지 않습니다).";
+"confirm.run" = "실행";
+"confirm.runAll" = "이 작업 동안 모두 실행";
+"confirm.deny" = "거부";
+
+/* 알림 */
+"notify.taskEnd.title" = "에이전트 작업 종료";
+"notify.taskEnd.body" = "로컬 작업이 끝났습니다. 결과를 웹에서 확인하세요.";
+"notify.approval.title" = "에이전트 작업 — 승인 필요";
+"notify.approval.body" = "도구 실행 승인을 기다립니다: %@. 눌러서 웹에서 승인하세요.";
+"notify.question.title" = "에이전트가 질문했습니다";
+"notify.question.body" = "작업이 답을 기다리며 멈췄습니다. 눌러서 웹에서 답하세요.";
+
+/* 업데이트 */
+"update.insecure" = "업데이트는 HTTPS(또는 로컬호스트) 백엔드에서만 허용됩니다";
+"update.badBackend" = "잘못된 백엔드 주소";
+"update.none.title" = "업데이트 없음";
+"update.none.body" = "native 채널 배포가 아직 없거나 매니페스트가 없습니다. (현재 v%@)";
+"update.latest.title" = "최신 버전";
+"update.latest.body" = "현재 v%@ 가 최신입니다.";
+"update.available.title" = "새 버전 v%1$@ 이 있습니다 (현재 v%2$@)";
+"update.available.body" = "지금 받아서 설치할까요? 설치 중 앱이 잠시 종료됐다가 다시 열립니다.";
+"update.install" = "업데이트";
+"update.later" = "나중에";
+"update.badDownload" = "잘못된 다운로드 주소";
+"update.checksum" = "다운로드 무결성 검증 실패(sha256 불일치)";
+"update.noBundle" = "앱 번들 경로를 찾지 못했습니다(개발 실행에서는 업데이트 불가)";
+"update.failed.title" = "업데이트 확인 실패";
+"update.script.failTitle" = "업데이트 실패";
+"update.script.log" = "로그";
+"update.script.mount" = "디스크 이미지를 마운트하지 못했습니다.";
+"update.script.noApp" = "이미지 안에서 앱을 찾지 못했습니다.";
+"update.script.copy" = "새 버전 복사에 실패했습니다(설치 폴더 권한을 확인하세요).";
+"update.script.replace" = "기존 앱을 교체할 수 없습니다.";
+"update.script.rollback" = "새 버전 설치에 실패해 이전 버전으로 되돌렸습니다.";
+"update.script.reopen" = "업데이트는 됐지만 앱을 다시 열지 못했습니다.";

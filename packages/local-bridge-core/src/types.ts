@@ -25,6 +25,10 @@ export interface BridgeMsg {
     ignoreCase?: boolean;
     /** code_nav grep — 매치 상한(디바이스 캡으로 다시 잘린다). */
     maxResults?: number;
+    /** bridge_notice — 알림 종류(NOTICE_KINDS 화이트리스트). */
+    notice?: string;
+    /** bridge_notice approval_pending — 승인을 기다리는 도구 이름(표시 전용, 서버 발 텍스트). */
+    toolName?: string;
 }
 
 /** code_nav 결과 — 읽기 전용 코드 탐색(grep/files)의 공통 표현. */
@@ -73,6 +77,23 @@ export interface BridgeResult {
     /** code_nav 결과. */
     codeNav?: BridgeCodeNav;
 }
+
+/**
+ * 서버→디바이스 단방향 알림 — BridgeConnection 이 검증한 것만 호스트(onNotice)로 넘어간다.
+ * approval_pending: 로컬 실행 작업이 도구 승인·ask_human 응답을 기다리며 멈췄다.
+ * 디바이스는 표시만 한다(아무것도 실행하지 않는다 — 임의 RPC 금지).
+ */
+export interface BridgeNotice {
+    notice: 'approval_pending';
+    taskId: string;
+    toolName: string;
+}
+
+/**
+ * 연결 상태 코드 — onStatus 의 두 번째 인자. 상태 텍스트는 한국어 고정이라 호스트가 다국어로
+ * 보여 줄 때 이 코드를 쓴다(세 번째 인자 arg = 폴더명·서버 메시지 등 치환값).
+ */
+export type BridgeStatusCode = 'connecting' | 'connected' | 'server_error' | 'reconnecting' | 'closed' | 'idle' | 'auth_error';
 
 /**
  * confirmExec 어댑터 — 실행 전 사용자 확인(비우회 게이트)의 호스트 구현.
