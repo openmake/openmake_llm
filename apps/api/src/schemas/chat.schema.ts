@@ -23,7 +23,7 @@ const toolCallInMessageSchema = z.object({
     type: z.literal('function'),
     function: z.object({
         name: secureTextSchema({ minLength: 1, maxLength: 128, fieldName: 'tool_call.function.name', allowNewLines: false, detectMaliciousPatterns: false }),
-        arguments: secureTextSchema({ maxLength: 200000, fieldName: 'tool_call.function.arguments', allowHtmlLikeContent: true, detectMaliciousPatterns: false }),
+        arguments: secureTextSchema({ maxLength: 200000, fieldName: 'tool_call.function.arguments', allowHtmlLikeContent: true, detectMaliciousPatterns: false, preserveWhitespace: true }),
     }),
 });
 
@@ -36,7 +36,7 @@ const toolCallInMessageSchema = z.object({
  */
 const chatMessageSchema = z.object({
     role: z.enum(['user', 'assistant', 'system', 'tool']),
-    content: secureTextSchema({ maxLength: 100000, fieldName: 'content', allowHtmlLikeContent: true, detectMaliciousPatterns: false }).or(z.null()).optional().default(''),
+    content: secureTextSchema({ maxLength: 100000, fieldName: 'content', allowHtmlLikeContent: true, detectMaliciousPatterns: false, preserveWhitespace: true }).or(z.null()).optional().default(''),
     tool_calls: z.array(toolCallInMessageSchema).optional(),
     tool_call_id: secureOptionalTextSchema({ maxLength: 200, fieldName: 'tool_call_id', allowNewLines: false, detectMaliciousPatterns: false }),
     // 히스토리 vision 이미지 — zod 기본 strip 이라 키가 없으면 validate 가 조용히 지워 WS/openai-compat
@@ -64,7 +64,7 @@ const toolDefinitionSchema = z.object({
     type: z.literal('function'),
     function: z.object({
         name: secureTextSchema({ minLength: 1, maxLength: 64, fieldName: 'function.name', allowNewLines: false, detectMaliciousPatterns: false }),
-        description: secureOptionalTextSchema({ maxLength: 5000, fieldName: 'function.description', allowHtmlLikeContent: true, detectMaliciousPatterns: false }),
+        description: secureOptionalTextSchema({ maxLength: 5000, fieldName: 'function.description', allowHtmlLikeContent: true, detectMaliciousPatterns: false, preserveWhitespace: true }),
         parameters: functionParametersSchema.optional(),
         strict: z.boolean().optional(),
     }),
@@ -105,7 +105,7 @@ const toolChoiceSchema = z.union([
  * @property {string|object} [tool_choice] - 도구 호출 제어 ("auto"|"none"|"required"|{...})
  */
 export const chatRequestSchema = z.object({
-    message: secureTextSchema({ minLength: 1, maxLength: 100000, fieldName: 'message', allowHtmlLikeContent: true, detectMaliciousPatterns: false }),
+    message: secureTextSchema({ minLength: 1, maxLength: 100000, fieldName: 'message', allowHtmlLikeContent: true, detectMaliciousPatterns: false, preserveWhitespace: true }),
     history: z.array(chatMessageSchema).optional(),
     model: secureOptionalTextSchema({ maxLength: 200, fieldName: 'model', allowNewLines: false, detectMaliciousPatterns: false }),
     nodeId: secureOptionalTextSchema({ maxLength: 200, fieldName: 'nodeId', allowNewLines: false, detectMaliciousPatterns: false }),

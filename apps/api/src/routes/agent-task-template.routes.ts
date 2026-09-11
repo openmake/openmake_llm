@@ -20,7 +20,7 @@ import { success, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
-import { validate } from '../middlewares/validation';
+import { validateWithSecurity } from '../middlewares/validation';
 import { getPool, getUnifiedDatabase } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
 import { AgentTaskTemplateRepository, instantiateGoal } from '../data/repositories/agent-task-template-repository';
@@ -46,7 +46,7 @@ async function loadOwned(req: Request, res: Response, id: string) {
 }
 
 /** POST / — 템플릿 생성. */
-router.post('/', validate(createAgentTaskTemplateSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post('/', validateWithSecurity(createAgentTaskTemplateSchema, { preserveFormattingFields: ['goalTemplate'] }), asyncHandler(async (req: Request, res: Response) => {
     const { name, goalTemplate, params, maxTurns } = req.body as CreateAgentTaskTemplateInput;
     const id = uuidv4();
     await repo().create({
@@ -64,7 +64,7 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
 }));
 
 /** PATCH /:id — 수정. */
-router.patch('/:id', validate(updateAgentTaskTemplateSchema), asyncHandler(async (req: Request, res: Response) => {
+router.patch('/:id', validateWithSecurity(updateAgentTaskTemplateSchema, { preserveFormattingFields: ['goalTemplate'] }), asyncHandler(async (req: Request, res: Response) => {
     const t = await loadOwned(req, res, req.params.id);
     if (!t) return;
     const b = req.body as UpdateAgentTaskTemplateInput;
@@ -83,7 +83,7 @@ router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
 /**
  * POST /:id/instantiate — 파라미터 치환으로 task 생성. execute!==false 면 즉시 실행(큐 3-B 경유).
  */
-router.post('/:id/instantiate', validate(instantiateTemplateSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post('/:id/instantiate', validateWithSecurity(instantiateTemplateSchema, { preserveFormattingFields: ['values'] }), asyncHandler(async (req: Request, res: Response) => {
     const t = await loadOwned(req, res, req.params.id);
     if (!t) return;
     const { values, execute } = req.body as InstantiateTemplateInput;

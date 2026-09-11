@@ -8,7 +8,7 @@
  */
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../auth';
-import { validate } from '../middlewares/validation';
+import { validateWithSecurity } from '../middlewares/validation';
 import { asyncHandler } from '../utils/error-handler';
 import { success, forbidden, notFound } from '../utils/api-response';
 import { McpCatalogRepository } from '../data/repositories/mcp-catalog-repository';
@@ -36,7 +36,7 @@ mcpCatalogRouter.get('/catalog', requireAuth, asyncHandler(async (_req: Request,
 mcpCatalogRouter.post(
     '/servers/from-catalog',
     requireAuth,
-    validate(McpFromCatalogPayloadSchema),
+    validateWithSecurity(McpFromCatalogPayloadSchema, { preserveFormattingFields: ['args', 'env'] }), // 비밀값·인자 원문 유지
     asyncHandler(async (req: Request, res: Response) => {
         const userId = String(req.user?.id ?? '');
         const role = req.user?.role ?? 'user';

@@ -23,7 +23,7 @@ import { optionalAuth } from '../auth';
 import { isPersistableUserId } from '../utils/user-id-validation';
 import { optionalApiKey } from '../middlewares/api-key-auth';
 import { chatRateLimiter } from '../middlewares/chat-rate-limiter';
-import { validate } from '../middlewares/validation';
+import { validateWithSecurity } from '../middlewares/validation';
 import { chatRequestSchema } from '../schemas';
 import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
 import { ensureSession, saveUserMessage, saveAssistantMessage } from '../chat/request-persistence';
@@ -65,7 +65,7 @@ export function setClusterManager(cluster: ClusterManager): void {
  * 일반 채팅 API (non-streaming)
  * 🔒 Phase 2 보안 패치: optionalAuth 미들웨어 적용
  */
-router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatRequestSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validateWithSecurity(chatRequestSchema, { preserveFormattingFields: ['message', 'history'] }), asyncHandler(async (req: Request, res: Response) => {
     const { message, model, nodeId, history, sessionId, tools, tool_choice } = req.body;
 
     // 인증 확인 (ChatRequestHandler로 통합)
@@ -148,7 +148,7 @@ router.post('/', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatReq
  * ✅ ChatService 경유: DB 로깅, Discussion, Deep Research, Agent Loop, Memory 지원
  * NOTE: SSE 엔드포인트는 asyncHandler로 감싸지 않음 (수동 에러 처리 필요)
  */
-router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validate(chatRequestSchema), async (req: Request, res: Response) => {
+router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validateWithSecurity(chatRequestSchema, { preserveFormattingFields: ['message', 'history'] }), async (req: Request, res: Response) => {
     const { message, model, nodeId, sessionId, tools, tool_choice } = req.body;
 
     // 인증 확인 (ChatRequestHandler로 통합)

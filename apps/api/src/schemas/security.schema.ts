@@ -8,6 +8,11 @@ export interface SecureTextOptions {
     allowHtmlLikeContent?: boolean;
     specialCharacterRatioLimit?: number;
     detectMaliciousPatterns?: boolean;
+    /**
+     * 공백 접기·NFKC·trim 없이 제어문자만 제거 — 코드·들여쓰기가 의미를 갖는 긴 본문용 (2026-09-11).
+     * 기본 정제는 줄바꿈 외 연속 공백을 한 칸으로 접어 REST 채팅에 붙여 넣은 코드가 모델에 닿기 전에 망가졌다.
+     */
+    preserveWhitespace?: boolean;
 }
 
 export interface MaliciousDetectionResult {
@@ -114,11 +119,12 @@ export function secureTextSchema(options: SecureTextOptions = {}) {
     const allowHtmlLikeContent = options.allowHtmlLikeContent ?? false;
     const specialCharacterRatioLimit = options.specialCharacterRatioLimit ?? 0.65;
     const detectPatterns = options.detectMaliciousPatterns ?? true;
+    const preserveWhitespace = options.preserveWhitespace ?? false;
 
     return z.string()
         .min(minLength)
         .max(maxLength)
-        .transform((value) => sanitizeTextInput(value, allowNewLines))
+        .transform((value) => (preserveWhitespace ? stripControlChars(value) : sanitizeTextInput(value, allowNewLines)))
         .superRefine((value, ctx) => {
             if (detectPatterns) {
                 const detection = detectMaliciousPatterns(value);

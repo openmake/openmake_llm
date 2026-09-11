@@ -21,7 +21,7 @@ import { success, badRequest, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
-import { validate } from '../middlewares/validation';
+import { validateWithSecurity } from '../middlewares/validation';
 import { getPool } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
 import { AgentTaskScheduleRepository } from '../data/repositories/agent-task-schedule-repository';
@@ -46,7 +46,7 @@ async function loadOwned(req: Request, res: Response, id: string) {
 }
 
 /** POST / — 스케줄 생성. */
-router.post('/', validate(createAgentTaskScheduleSchema), asyncHandler(async (req: Request, res: Response) => {
+router.post('/', validateWithSecurity(createAgentTaskScheduleSchema, { preserveFormattingFields: ['goal'] }), asyncHandler(async (req: Request, res: Response) => {
     const { goal, cron, intervalSeconds, maxTurns } = req.body as CreateAgentTaskScheduleInput;
     const userId = String(req.user!.id);
 
@@ -78,7 +78,7 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
 }));
 
 /** PATCH /:id — 스케줄 수정. timing 변경 시 next_run_at 재계산. */
-router.patch('/:id', validate(updateAgentTaskScheduleSchema), asyncHandler(async (req: Request, res: Response) => {
+router.patch('/:id', validateWithSecurity(updateAgentTaskScheduleSchema, { preserveFormattingFields: ['goal'] }), asyncHandler(async (req: Request, res: Response) => {
     const s = await loadOwned(req, res, req.params.id);
     if (!s) return;
     const body = req.body as UpdateAgentTaskScheduleInput;

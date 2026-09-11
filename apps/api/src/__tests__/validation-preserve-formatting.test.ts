@@ -33,4 +33,11 @@ describe('validate 정제 — 서식 보존 필드', () => {
         expect(out.content).toBe(CODE);
         expect(out.name).toBe('a b'); // 지정하지 않은 필드는 종전대로 정제
     });
+
+    it('지정한 키 안쪽의 배열·객체 문자열까지 보존한다 (히스토리·첨부·도구 인자·환경변수)', () => {
+        const nested = z.object({ history: z.array(z.object({ content: z.string() })), env: z.record(z.string(), z.string()) });
+        const out = run(validateWithSecurity(nested, { preserveFormattingFields: ['history', 'env'] }),
+            { history: [{ content: CODE }], env: { PASS: ' a  b ' } }) as unknown as z.infer<typeof nested>;
+        expect(out).toEqual({ history: [{ content: CODE }], env: { PASS: ' a  b ' } });
+    });
 });

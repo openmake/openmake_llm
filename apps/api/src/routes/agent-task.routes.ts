@@ -85,6 +85,7 @@ const uploadMw = multer({
 // 무력화해 대용량 첨부가 "요청 본문이 너무 큽니다" 로 거부되던 정합 버그 방지.
 const jsonValidateMw = validateWithSecurity(createAgentTaskSchema, {
     maxBodySizeBytes: AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES,
+    preserveFormattingFields: ['goal', 'files'], // 첨부 텍스트(코드·CSV) 들여쓰기 보존 — 기본 정제는 연속 공백을 접는다
 });
 
 router.post('/', (req: Request, res: Response, next) => {
