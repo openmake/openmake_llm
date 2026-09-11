@@ -96,14 +96,25 @@ function sanitizeValue(value: unknown, depth: number = 0): unknown {
     return value;
 }
 
-/** 서식 보존 필드(최상위 문자열)는 제어문자만 제거하고, 나머지는 기본 정제 */
+/** 서식 보존 — 문자열은 제어문자만 제거하고, 배열·객체는 안쪽까지 같은 규칙 */
+function preserveValue(value: unknown, depth: number = 0): unknown {
+    if (depth > 8) return value;
+    if (typeof value === 'string') return stripControlChars(value);
+    if (Array.isArray(value)) return value.map((item) => preserveValue(item, depth + 1));
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, preserveValue(v, depth + 1)]));
+    }
+    return value;
+}
+
+/** 서식 보존 필드(최상위 키 — 안쪽 배열·객체 포함)는 preserveValue, 나머지는 기본 정제 */
 function sanitizePayload(source: unknown, preserveFields: readonly string[]): unknown {
     if (preserveFields.length === 0 || !source || typeof source !== 'object' || Array.isArray(source)) {
         return sanitizeValue(source);
     }
     const output: Record<string, unknown> = {};
     Object.entries(source as Record<string, unknown>).forEach(([key, item]) => {
-        output[key] = preserveFields.includes(key) && typeof item === 'string' ? stripControlChars(item) : sanitizeValue(item, 1);
+        output[key] = preserveFields.includes(key) ? preserveValue(item, 1) : sanitizeValue(item, 1);
     });
     return output;
 }
