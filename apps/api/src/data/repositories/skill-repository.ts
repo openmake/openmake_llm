@@ -82,6 +82,12 @@ export interface UpdateSkillInput {
     isPublic?: boolean;
 }
 
+/**
+ * 산업 에이전트 페르소나 스킬 id 접두사 — skill-seeder 가 `system-skill-{agentId}` 로 만들어 그 에이전트에
+ * 배정한다. `excludeAgentPersonas` 판정이 이 규칙과 한 쌍이다.
+ */
+export const AGENT_PERSONA_SKILL_ID_PREFIX = 'system-skill-';
+
 export interface SkillSearchOptions {
     userId?: string;
     search?: string;
@@ -92,6 +98,11 @@ export interface SkillSearchOptions {
     offset?: number;
     /** 'draft' | 'active' | 'all'. 기본값 'active' — 일반 라이브러리에는 draft 노출 금지. */
     status?: 'draft' | 'active' | 'all';
+    /**
+     * 자기 에이전트에 배정된 페르소나 스킬(id = 접두사 + 배정 agent_id) 제외. 그 에이전트 턴에는 이미
+     * 자동 주입되므로 load_skill 카탈로그에 실으면 중복이다 (2026-09-11 실측: 101줄 ≈ 2.2K 토큰/턴).
+     */
+    excludeAgentPersonas?: boolean;
 }
 
 export interface SkillSearchResult {
@@ -299,6 +310,12 @@ export class SkillRepository extends BaseRepository {
         if (statusFilter !== 'all') {
             conditions.push(`status = $${paramIdx}`);
             params.push(statusFilter);
+            paramIdx += 1;
+        }
+
+        if (options.excludeAgentPersonas) {
+            conditions.push(`NOT EXISTS (SELECT 1 FROM agent_skill_assignments asa WHERE asa.skill_id = agent_skills.id AND agent_skills.id = $${paramIdx}::text || asa.agent_id)`);
+            params.push(AGENT_PERSONA_SKILL_ID_PREFIX);
             paramIdx += 1;
         }
 

@@ -51,6 +51,7 @@ import { recordSkillUsage } from './skill-usage-log';
 import { shouldInjectManifestSkill } from './manifest-injection-filter';
 import { SKILL_VERSION_LATEST_ORDER_SQL } from '../data/repositories/skill-manifest-sync';
 import { SKILL_MANIFEST_INJECT_MAX_CHARS, SKILL_MANIFEST_PER_SKILL_MAX_CHARS } from '../config/runtime-limits';
+import { SKILL_CATALOG_MAX_ITEMS, SKILL_CATALOG_EXCLUDE_PERSONAS, formatSkillCatalog, warnIfCatalogTruncated } from './skill-catalog';
 
 const logger = createLogger('SkillManager');
 
@@ -64,9 +65,7 @@ const MAX_SKILL_CONTENT_LENGTH = 10_000;
 const SKILL_OVERLOAD_MAX_ACTIVE = Number(process.env.SKILL_OVERLOAD_MAX_ACTIVE) || 12;
 const SKILL_OVERLOAD_MAX_TOTAL_CHARS = Number(process.env.SKILL_OVERLOAD_MAX_TOTAL_CHARS) || 50_000;
 
-/** 스킬 자동 호출(LLM self-select) 카탈로그/선택 상한 — env override (No-Hardcoding). */
-const SKILL_CATALOG_MAX_ITEMS = Number(process.env.SKILL_CATALOG_MAX_ITEMS) || 200;
-const SKILL_CATALOG_DESC_MAX = Number(process.env.SKILL_CATALOG_DESC_MAX) || 120;
+/** 스킬 자동 호출(LLM self-select) 선택 상한 — env override (No-Hardcoding). 카탈로그 설정은 skill-catalog.ts. */
 const SKILL_AUTO_SELECT_TOP_K = Number(process.env.SKILL_AUTO_SELECT_TOP_K) || 3;
 
 /**
@@ -314,15 +313,12 @@ export class SkillManager {
         const repo = await this.ensureInitialized();
         // userId 전달 시 본인 소유 비공개 스킬 포함(public OR own) — 미전달이면 public 전용.
         // 확장 설치 스킬(전부 비공개)이 카탈로그에 안 실려 자동 호출이 불가능하던 갭 (2026-08-16).
-        const result = await repo.searchSkills({ status: 'active', sortBy: 'name', limit: SKILL_CATALOG_MAX_ITEMS, userId: opts.userId });
-        const lines: string[] = [];
-        for (const s of result.skills) {
-            if (opts.excludeIds?.has(s.id)) continue;
-            const safeName = s.name.replace(/[<>"&]/g, '');
-            const desc = (s.description ?? '').replace(/\s+/g, ' ').trim().slice(0, SKILL_CATALOG_DESC_MAX);
-            lines.push(desc ? `- ${safeName}: ${desc}` : `- ${safeName}`);
-        }
-        return { catalog: lines.join('\n'), count: lines.length };
+        const result = await repo.searchSkills({
+            status: 'active', sortBy: 'name', limit: SKILL_CATALOG_MAX_ITEMS, userId: opts.userId,
+            excludeAgentPersonas: SKILL_CATALOG_EXCLUDE_PERSONAS,
+        });
+        warnIfCatalogTruncated(result);
+        return formatSkillCatalog(result.skills, opts.excludeIds);
     }
 
     /**
@@ -336,7 +332,10 @@ export class SkillManager {
         if (!Array.isArray(names) || names.length === 0) return { prompt: '', matched: [], matchedIds: [] };
         const repo = await this.ensureInitialized();
         // userId 전달로 본인 소유 비공개 스킬도 검색 대상에 포함 — 아래 visible 필터와 동일 규칙.
-        const result = await repo.searchSkills({ status: 'active', limit: SKILL_CATALOG_MAX_ITEMS, userId });
+        // 페르소나 제외도 카탈로그와 같게 둔다 — 카탈로그에 보이는 스킬이 상한(200)에 밀려 못 불러오는 일이 없게.
+        const result = await repo.searchSkills({
+            status: 'active', limit: SKILL_CATALOG_MAX_ITEMS, userId, excludeAgentPersonas: SKILL_CATALOG_EXCLUDE_PERSONAS,
+        });
         const wanted = names.slice(0, Math.max(1, topK)).map((n) => String(n).toLowerCase().trim()).filter(Boolean);
         const seen = new Set<string>();
         const picked: AgentSkill[] = [];
