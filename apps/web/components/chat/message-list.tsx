@@ -453,7 +453,7 @@ function OrchestratorProgressBanner() {
   const op = useAppStore((s) => s.orchestratorProgress);
   if (!op) return null;
   const capLabel = (capability: string) =>
-    tCap.has(`capabilities.${capability}`) ? tCap(`capabilities.${capability}`) : capability;
+    tCap.has(`capabilities.${capability.replace(/\./g, '_')}`) ? tCap(`capabilities.${capability.replace(/\./g, '_')}`) : capability;
   const statusIcon = (status: string) => {
     switch (status) {
       case "running":

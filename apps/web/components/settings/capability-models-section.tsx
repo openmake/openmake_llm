@@ -130,7 +130,7 @@ export function CapabilityParamsInputs({
           className="h-8 w-28 rounded-md border border-border bg-surface-2 px-2 font-mono text-xs text-fg placeholder:text-muted focus:border-accent focus:outline-none disabled:opacity-50"
           placeholder={key}
           title={key}
-          aria-label={`${t(`capabilities.${capability}`)} ${key}`}
+          aria-label={`${t(`capabilities.${capability.replace(/\./g, '_')}`)} ${key}`}
           maxLength={CAPABILITY_PARAM_VALUE_MAX}
           value={draft[key] ?? ""}
           disabled={disabled || busy}
@@ -319,7 +319,7 @@ export function CapabilityModelsSection() {
                   <div className="min-w-0 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="whitespace-nowrap text-sm font-medium">
-                        {t(`capabilities.${capability}`)}
+                        {t(`capabilities.${capability.replace(/\./g, '_')}`)}
                       </span>
                       <span className="font-mono text-xs text-muted">{capability}</span>
                       {current !== DEFAULT_VALUE && (
@@ -349,7 +349,7 @@ export function CapabilityModelsSection() {
                       className="h-9 min-w-52 rounded-md border border-border-strong bg-surface px-2 text-sm text-fg outline-none focus:border-accent"
                       value={current}
                       disabled={isSaving}
-                      aria-label={t(`capabilities.${capability}`)}
+                      aria-label={t(`capabilities.${capability.replace(/\./g, '_')}`)}
                       onChange={(e) => void handleChange(capability, e.target.value)}
                     >
                       <option value={DEFAULT_VALUE}>{t("defaultOption")}</option>

@@ -1655,20 +1655,20 @@
       "default": "デフォルト"
     },
     "capabilities": {
-      "text.reason": "テキスト推論・分析",
-      "text.code": "コード",
-      "text.embed": "埋め込み",
-      "vision.describe": "画像理解",
-      "vision.ocr": "OCR",
-      "image.generate": "画像生成",
-      "image.edit": "画像編集",
-      "audio.transcribe": "音声認識(STT)",
-      "audio.speech": "音声合成(TTS)",
-      "audio.analyze": "オーディオ分析",
-      "music.analyze": "音楽分析",
-      "music.generate": "音楽生成",
-      "video.generate": "動画生成",
-      "video.analyze": "動画理解"
+      "text_reason": "テキスト推論・分析",
+      "text_code": "コード",
+      "text_embed": "埋め込み",
+      "vision_describe": "画像理解",
+      "vision_ocr": "OCR",
+      "image_generate": "画像生成",
+      "image_edit": "画像編集",
+      "audio_transcribe": "音声認識(STT)",
+      "audio_speech": "音声合成(TTS)",
+      "audio_analyze": "オーディオ分析",
+      "music_analyze": "音楽分析",
+      "music_generate": "音楽生成",
+      "video_generate": "動画生成",
+      "video_analyze": "動画理解"
     }
   },
   "adminModelRoles": {
@@ -1729,20 +1729,20 @@
       "default": "デフォルト"
     },
     "capabilities": {
-      "text.reason": "テキスト推論・分析",
-      "text.code": "コード",
-      "text.embed": "埋め込み",
-      "vision.describe": "画像理解",
-      "vision.ocr": "OCR",
-      "image.generate": "画像生成",
-      "image.edit": "画像編集",
-      "audio.transcribe": "音声認識(STT)",
-      "audio.speech": "音声合成(TTS)",
-      "audio.analyze": "オーディオ分析",
-      "music.analyze": "音楽分析",
-      "music.generate": "音楽生成",
-      "video.generate": "動画生成",
-      "video.analyze": "動画理解"
+      "text_reason": "テキスト推論・分析",
+      "text_code": "コード",
+      "text_embed": "埋め込み",
+      "vision_describe": "画像理解",
+      "vision_ocr": "OCR",
+      "image_generate": "画像生成",
+      "image_edit": "画像編集",
+      "audio_transcribe": "音声認識(STT)",
+      "audio_speech": "音声合成(TTS)",
+      "audio_analyze": "オーディオ分析",
+      "music_analyze": "音楽分析",
+      "music_generate": "音楽生成",
+      "video_generate": "動画生成",
+      "video_analyze": "動画理解"
     }
   },
   "adminSystemSettings": {

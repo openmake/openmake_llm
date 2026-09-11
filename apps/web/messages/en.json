@@ -1655,20 +1655,20 @@
       "default": "Default"
     },
     "capabilities": {
-      "text.reason": "Text reasoning & analysis",
-      "text.code": "Code",
-      "text.embed": "Embedding",
-      "vision.describe": "Image understanding",
-      "vision.ocr": "OCR",
-      "image.generate": "Image generation",
-      "image.edit": "Image editing",
-      "audio.transcribe": "Speech-to-text (STT)",
-      "audio.speech": "Text-to-speech (TTS)",
-      "audio.analyze": "Audio analysis",
-      "music.analyze": "Music analysis",
-      "music.generate": "Music generation",
-      "video.generate": "Video generation",
-      "video.analyze": "Video understanding"
+      "text_reason": "Text reasoning & analysis",
+      "text_code": "Code",
+      "text_embed": "Embedding",
+      "vision_describe": "Image understanding",
+      "vision_ocr": "OCR",
+      "image_generate": "Image generation",
+      "image_edit": "Image editing",
+      "audio_transcribe": "Speech-to-text (STT)",
+      "audio_speech": "Text-to-speech (TTS)",
+      "audio_analyze": "Audio analysis",
+      "music_analyze": "Music analysis",
+      "music_generate": "Music generation",
+      "video_generate": "Video generation",
+      "video_analyze": "Video understanding"
     }
   },
   "adminModelRoles": {
@@ -1729,20 +1729,20 @@
       "default": "Default"
     },
     "capabilities": {
-      "text.reason": "Text reasoning & analysis",
-      "text.code": "Code",
-      "text.embed": "Embedding",
-      "vision.describe": "Image understanding",
-      "vision.ocr": "OCR",
-      "image.generate": "Image generation",
-      "image.edit": "Image editing",
-      "audio.transcribe": "Speech-to-text (STT)",
-      "audio.speech": "Text-to-speech (TTS)",
-      "audio.analyze": "Audio analysis",
-      "music.analyze": "Music analysis",
-      "music.generate": "Music generation",
-      "video.generate": "Video generation",
-      "video.analyze": "Video understanding"
+      "text_reason": "Text reasoning & analysis",
+      "text_code": "Code",
+      "text_embed": "Embedding",
+      "vision_describe": "Image understanding",
+      "vision_ocr": "OCR",
+      "image_generate": "Image generation",
+      "image_edit": "Image editing",
+      "audio_transcribe": "Speech-to-text (STT)",
+      "audio_speech": "Text-to-speech (TTS)",
+      "audio_analyze": "Audio analysis",
+      "music_analyze": "Music analysis",
+      "music_generate": "Music generation",
+      "video_generate": "Video generation",
+      "video_analyze": "Video understanding"
     }
   },
   "adminSystemSettings": {

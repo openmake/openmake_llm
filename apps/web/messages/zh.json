@@ -1655,20 +1655,20 @@
       "default": "默认"
     },
     "capabilities": {
-      "text.reason": "文本推理与分析",
-      "text.code": "代码",
-      "text.embed": "嵌入",
-      "vision.describe": "图像理解",
-      "vision.ocr": "OCR",
-      "image.generate": "图像生成",
-      "image.edit": "图像编辑",
-      "audio.transcribe": "语音识别(STT)",
-      "audio.speech": "语音合成(TTS)",
-      "audio.analyze": "音频分析",
-      "music.analyze": "音乐分析",
-      "music.generate": "音乐生成",
-      "video.generate": "视频生成",
-      "video.analyze": "视频理解"
+      "text_reason": "文本推理与分析",
+      "text_code": "代码",
+      "text_embed": "嵌入",
+      "vision_describe": "图像理解",
+      "vision_ocr": "OCR",
+      "image_generate": "图像生成",
+      "image_edit": "图像编辑",
+      "audio_transcribe": "语音识别(STT)",
+      "audio_speech": "语音合成(TTS)",
+      "audio_analyze": "音频分析",
+      "music_analyze": "音乐分析",
+      "music_generate": "音乐生成",
+      "video_generate": "视频生成",
+      "video_analyze": "视频理解"
     }
   },
   "adminModelRoles": {
@@ -1729,20 +1729,20 @@
       "default": "默认"
     },
     "capabilities": {
-      "text.reason": "文本推理与分析",
-      "text.code": "代码",
-      "text.embed": "嵌入",
-      "vision.describe": "图像理解",
-      "vision.ocr": "OCR",
-      "image.generate": "图像生成",
-      "image.edit": "图像编辑",
-      "audio.transcribe": "语音识别(STT)",
-      "audio.speech": "语音合成(TTS)",
-      "audio.analyze": "音频分析",
-      "music.analyze": "音乐分析",
-      "music.generate": "音乐生成",
-      "video.generate": "视频生成",
-      "video.analyze": "视频理解"
+      "text_reason": "文本推理与分析",
+      "text_code": "代码",
+      "text_embed": "嵌入",
+      "vision_describe": "图像理解",
+      "vision_ocr": "OCR",
+      "image_generate": "图像生成",
+      "image_edit": "图像编辑",
+      "audio_transcribe": "语音识别(STT)",
+      "audio_speech": "语音合成(TTS)",
+      "audio_analyze": "音频分析",
+      "music_analyze": "音乐分析",
+      "music_generate": "音乐生成",
+      "video_generate": "视频生成",
+      "video_analyze": "视频理解"
     }
   },
   "adminSystemSettings": {

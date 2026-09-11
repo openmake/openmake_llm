@@ -216,7 +216,7 @@ function GlobalCapabilityModelsCard() {
             <div key={capability} className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="whitespace-nowrap text-sm font-medium">{t(`capabilities.${capability}`)}</span>
+                  <span className="whitespace-nowrap text-sm font-medium">{t(`capabilities.${capability.replace(/\./g, '_')}`)}</span>
                   <span className="font-mono text-xs text-muted">{capability}</span>
                   {current && <Badge tone="accent" className="shrink-0 whitespace-nowrap">{t("assigned")}</Badge>}
                   <CapabilityUnsupportedBadge capability={capability} t={t} />
@@ -242,7 +242,7 @@ function GlobalCapabilityModelsCard() {
                   className={`${selectCls} min-w-52`}
                   value={current}
                   disabled={isBusy}
-                  aria-label={t(`capabilities.${capability}`)}
+                  aria-label={t(`capabilities.${capability.replace(/\./g, '_')}`)}
                   onChange={(e) => void handleChange(capability, e.target.value)}
                 >
                   <option value="">{t("defaultOption")}</option>

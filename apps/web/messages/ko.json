@@ -1655,20 +1655,20 @@
       "default": "기본값"
     },
     "capabilities": {
-      "text.reason": "텍스트 추론·분석",
-      "text.code": "코드",
-      "text.embed": "임베딩",
-      "vision.describe": "이미지 이해",
-      "vision.ocr": "OCR",
-      "image.generate": "이미지 생성",
-      "image.edit": "이미지 편집",
-      "audio.transcribe": "음성 인식(STT)",
-      "audio.speech": "음성 합성(TTS)",
-      "audio.analyze": "오디오 분석",
-      "music.analyze": "음악 분석",
-      "music.generate": "음악 생성",
-      "video.generate": "영상 생성",
-      "video.analyze": "영상 이해"
+      "text_reason": "텍스트 추론·분석",
+      "text_code": "코드",
+      "text_embed": "임베딩",
+      "vision_describe": "이미지 이해",
+      "vision_ocr": "OCR",
+      "image_generate": "이미지 생성",
+      "image_edit": "이미지 편집",
+      "audio_transcribe": "음성 인식(STT)",
+      "audio_speech": "음성 합성(TTS)",
+      "audio_analyze": "오디오 분석",
+      "music_analyze": "음악 분석",
+      "music_generate": "음악 생성",
+      "video_generate": "영상 생성",
+      "video_analyze": "영상 이해"
     }
   },
   "adminModelRoles": {
@@ -1729,20 +1729,20 @@
       "default": "기본값"
     },
     "capabilities": {
-      "text.reason": "텍스트 추론·분석",
-      "text.code": "코드",
-      "text.embed": "임베딩",
-      "vision.describe": "이미지 이해",
-      "vision.ocr": "OCR",
-      "image.generate": "이미지 생성",
-      "image.edit": "이미지 편집",
-      "audio.transcribe": "음성 인식(STT)",
-      "audio.speech": "음성 합성(TTS)",
-      "audio.analyze": "오디오 분석",
-      "music.analyze": "음악 분석",
-      "music.generate": "음악 생성",
-      "video.generate": "영상 생성",
-      "video.analyze": "영상 이해"
+      "text_reason": "텍스트 추론·분석",
+      "text_code": "코드",
+      "text_embed": "임베딩",
+      "vision_describe": "이미지 이해",
+      "vision_ocr": "OCR",
+      "image_generate": "이미지 생성",
+      "image_edit": "이미지 편집",
+      "audio_transcribe": "음성 인식(STT)",
+      "audio_speech": "음성 합성(TTS)",
+      "audio_analyze": "오디오 분석",
+      "music_analyze": "음악 분석",
+      "music_generate": "음악 생성",
+      "video_generate": "영상 생성",
+      "video_analyze": "영상 이해"
     }
   },
   "adminSystemSettings": {
