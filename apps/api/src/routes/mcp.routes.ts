@@ -35,7 +35,7 @@ import type { MCPTransportType, MCPConnectionStatus } from '../mcp/types';
 import { getLifecycleSupervisor } from '../mcp/lifecycle-supervisor';
 import { createLogger } from '../utils/logger';
 import { classifyConnectError, parseConnectError } from '../mcp/connect-error';
-import { validate } from '../middlewares/validation';
+import { validate, validateWithSecurity } from '../middlewares/validation';
 import { mcpToolExecuteSchema, mcpServerCreateSchema, mcpServerEnvUpdateSchema,
     mcpServerEnabledUpdateSchema, mcpServerAutoSpawnUpdateSchema, mcpServerRenameSchema } from '../schemas/mcp.schema';
 import { McpCatalogRepository } from '../data/repositories/mcp-catalog-repository';
@@ -76,7 +76,7 @@ export const mcpRouter = Router();
  });
 
   // 도구 실행 (POST) - 사용자 컨텍스트 기반 권한 검증
-  mcpRouter.post('/tools/:name/execute', requireAuth, validate(mcpToolExecuteSchema), asyncHandler(async (req: Request, res: Response) => {
+  mcpRouter.post('/tools/:name/execute', requireAuth, validateWithSecurity(mcpToolExecuteSchema, { preserveFormattingFields: ['arguments'] }), asyncHandler(async (req: Request, res: Response) => {
       const { name } = req.params;
       const { arguments: args = {} } = req.body;
 
@@ -174,7 +174,7 @@ export const mcpRouter = Router();
 
   // 새 외부 서버 등록 (POST) — visibility 분기:
   //   global (admin) | user_private | user_shared (사용자는 카탈로그 템플릿만)
-  mcpRouter.post('/servers', requireAuth, validate(mcpServerCreateSchema), asyncHandler(async (req: Request, res: Response) => {
+  mcpRouter.post('/servers', requireAuth, validateWithSecurity(mcpServerCreateSchema, { preserveFormattingFields: ['env'] }), asyncHandler(async (req: Request, res: Response) => {
       const userId = String(req.user?.id ?? '');
       const role = req.user?.role ?? 'user';
       const actor = { id: userId, role };
@@ -370,7 +370,7 @@ export const mcpRouter = Router();
       res.json(success({ id, auto_spawn: autoSpawn, spawned }));
   }));
 
-  mcpRouter.patch('/servers/:id/env', requireAuth, validate(mcpServerEnvUpdateSchema), asyncHandler(async (req: Request, res: Response) => {
+  mcpRouter.patch('/servers/:id/env', requireAuth, validateWithSecurity(mcpServerEnvUpdateSchema, { preserveFormattingFields: ['env'] }), asyncHandler(async (req: Request, res: Response) => {
       const userId = String(req.user?.id ?? '');
       const role = req.user?.role ?? 'user';
       const actor = { id: userId, role };
