@@ -6,8 +6,10 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { WebSocketServer, type WebSocket as ServerWs } from 'ws';
-import { BridgeConnection } from '../connection';
+import { BridgeConnection, parseNotice } from '../connection';
 import { BridgeCore } from '../core';
+import { NOTICE_TOOL_NAME_MAX } from '../constants';
+import type { BridgeNotice } from '../types';
 
 interface Frame { type?: string; reqId?: string; result?: Record<string, unknown>; deviceId?: string; label?: string; folderName?: string }
 
@@ -141,5 +143,63 @@ describe('BridgeConnection (가짜 WS 서버)', () => {
         await new Promise((r) => setTimeout(r, 300));
         expect(server.connections).toBe(0);
         expect(statuses).toContain('로그인 필요 — 앱에서 로그인 후 다시 연결');
+    });
+
+    /** 알림·상태 코드 검증용 연결 — onNotice·onStatus(code, arg) 를 기록한다. */
+    function noticeConn(notices: BridgeNotice[], codes: Array<[string, string | undefined]> = []): BridgeConnection {
+        const core = new BridgeCore({ folder: base, confirm: async () => 'no', sandboxProfileDir: os.tmpdir() });
+        conn = new BridgeConnection({
+            serverUrl: `http://127.0.0.1:${server.port}`, core, deviceId: 'test-device-n', label: 'unit · notice',
+            headers: () => ({ Authorization: 'Bearer omk_test' }),
+            onStatus: (s, code, arg) => { statuses.push(s); if (code) codes.push([code, arg]); },
+            onNotice: (n) => notices.push(n),
+            reconnectMs: 100,
+        });
+        return conn;
+    }
+
+    it('bridge_notice(approval_pending)는 검증 후 onNotice 로 넘기고 서버로 아무 프레임도 보내지 않는다', async () => {
+        const notices: BridgeNotice[] = [];
+        await noticeConn(notices).connect();
+        await server.waitFor((f) => f.type === 'bridge_hello');
+        await new Promise((r) => setTimeout(r, 50));
+        const before = server.received.length;
+        server.send({ type: 'bridge_notice', notice: 'approval_pending', taskId: 'task-aaaaaaaa-0001', toolName: 'file_ops' });
+        await new Promise((r) => setTimeout(r, 150));
+        expect(notices).toEqual([{ notice: 'approval_pending', taskId: 'task-aaaaaaaa-0001', toolName: 'file_ops' }]);
+        expect(server.received.length).toBe(before); // 단방향 — 응답·실행 없음
+    });
+
+    it('종류·taskId·toolName 이 부적합한 알림은 버린다', async () => {
+        const notices: BridgeNotice[] = [];
+        await noticeConn(notices).connect();
+        await server.waitFor((f) => f.type === 'bridge_hello');
+        server.send({ type: 'bridge_notice', notice: 'run_command', taskId: 'task-aaaaaaaa-0001', toolName: 'x' });
+        server.send({ type: 'bridge_notice', notice: 'approval_pending', taskId: '../../etc', toolName: 'x' });
+        server.send({ type: 'bridge_notice', notice: 'approval_pending', taskId: 'task-aaaaaaaa-0001' });
+        server.send({ type: 'bridge_notice', notice: 'approval_pending', taskId: 'task-aaaaaaaa-0001', toolName: '   ' });
+        await new Promise((r) => setTimeout(r, 150));
+        expect(notices).toEqual([]);
+    });
+
+    it('도구 이름은 제어문자를 걷어내고 길이를 자른다 (서버 발 텍스트는 표시 전용)', () => {
+        const nul = String.fromCharCode(0);
+        const lf = String.fromCharCode(10);
+        const n = parseNotice({ type: 'bridge_notice', notice: 'approval_pending', taskId: 'task-aaaaaaaa-0001', toolName: `ask${nul}_human${lf}` });
+        expect(n?.toolName).toBe('ask_human');
+        const long = 'a'.repeat(NOTICE_TOOL_NAME_MAX + 50);
+        expect(parseNotice({ type: 'bridge_notice', notice: 'approval_pending', taskId: 'task-aaaaaaaa-0001', toolName: long })?.toolName)
+            .toHaveLength(NOTICE_TOOL_NAME_MAX);
+    });
+
+    it('상태 알림에 코드와 치환값을 함께 준다 — 호스트 다국어 표시용', async () => {
+        const codes: Array<[string, string | undefined]> = [];
+        await noticeConn([], codes).connect();
+        await server.waitFor((f) => f.type === 'bridge_hello');
+        await new Promise((r) => setTimeout(r, 50));
+        expect(codes).toEqual(expect.arrayContaining([['connecting', undefined], ['connected', path.basename(fs.realpathSync(base))]]));
+        conn!.disconnect();
+        await new Promise((r) => setTimeout(r, 100));
+        expect(codes[codes.length - 1]).toEqual(['closed', undefined]);
     });
 });

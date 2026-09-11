@@ -20,6 +20,14 @@ export const WORKTREE_BRANCH_PREFIX = 'omk-task/';
 /** taskId 재검증 — 경로·브랜치명에 들어가므로 UUID 문자만 허용(디렉토리 탈출·옵션 주입 차단). */
 export const TASK_ID_RE = /^[a-zA-Z0-9-]{8,64}$/;
 
+/**
+ * 서버→디바이스 단방향 알림(bridge_notice) — 종류 화이트리스트와 표시 텍스트 상한.
+ * 알림은 표시만 하고 아무것도 실행하지 않는다(임의 RPC 금지). 도구 이름은 서버 발 텍스트라
+ * 제어문자를 걷어내고 길이를 자른 뒤에만 호스트로 넘긴다.
+ */
+export const NOTICE_KINDS: readonly string[] = ['approval_pending'];
+export const NOTICE_TOOL_NAME_MAX = 100;
+
 /** folders(하위 폴더 열거) 1회 상한 — 서버 BRIDGE_FOLDERS_MAX_ENTRIES 와 같은 축(디바이스측 강제). */
 export const FOLDERS_MAX_ENTRIES = 200;
 

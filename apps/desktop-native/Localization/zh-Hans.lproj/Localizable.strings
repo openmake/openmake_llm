@@ -1,0 +1,86 @@
+/* OpenMake Companion — 简体中文。键为标识符，check-l10n.sh 会核对四种语言表的键集合。 */
+
+/* 菜单 */
+"menu.status" = "状态：%@";
+"menu.folder" = "文件夹：%@";
+"menu.openInFinder" = "在访达中打开";
+"menu.disconnect" = "断开连接";
+"menu.connectFolder" = "连接工作文件夹…";
+"menu.addFolder" = "添加工作文件夹…";
+"menu.disconnectAll" = "全部断开";
+"menu.clearAutoApprove" = "撤销批量批准（%ld 个任务）";
+"menu.openWeb" = "在浏览器中打开";
+"menu.checkUpdates" = "检查更新…";
+"menu.settings" = "设置…";
+"menu.quit" = "退出";
+
+/* 设置 */
+"settings.auth" = "认证";
+"settings.apiKey.placeholder" = "API 密钥 (omk_live_…)";
+"settings.apiKey.help" = "请在网页的 API 访问页面签发 bridge 范围的密钥并粘贴到这里。密钥将保存在钥匙串中。";
+"settings.apiKey.open" = "打开 API 访问页面";
+"settings.backend" = "后端";
+"settings.server" = "服务器";
+"settings.save" = "保存";
+"settings.saved" = "已保存";
+"backend.external" = "外部 (chat.openmake.cc)";
+"backend.local" = "本地 (localhost:52416)";
+
+/* 连接状态 */
+"status.idle" = "未连接";
+"status.connecting" = "正在连接…";
+"status.connected" = "已连接：%@";
+"status.serverError" = "服务器错误：%@";
+"status.reconnecting" = "已断开 — 等待重新连接";
+"status.closed" = "已关闭";
+"status.apiKeyRequired" = "需要 API 密钥 — 请在设置中输入";
+"status.folderOpenFailed" = "无法打开文件夹：%@";
+"status.helperMissing" = "缺少辅助程序资源（需要重新安装）";
+"status.helperExited" = "辅助程序已停止 — 请重新连接";
+"status.helperLaunchFailed" = "无法启动辅助程序：%@";
+
+/* 选择文件夹 */
+"panel.title" = "选择要连接到智能体任务的文件夹（可以逐个添加多个文件夹）";
+"panel.message" = "智能体任务会在此文件夹（及其子文件夹）内读写文件。每次执行 Shell 命令前都会请求你确认；即使批准，系统沙盒也会阻止在文件夹外写入以及读取机密文件（如 .ssh）。";
+
+/* Shell 命令执行批准 */
+"confirm.title" = "智能体想在你的电脑上运行此 Shell 命令";
+"confirm.folder" = "运行文件夹：%@";
+"confirm.sandboxOn" = "已启用系统沙盒：在文件夹外写入和读取机密文件（.ssh/.aws 等）将被阻止。其他读取和网络访问不受限制。";
+"confirm.sandboxOff" = "⚠️ 未启用沙盒：此命令可以用你的账户权限访问文件夹外的文件和网络。";
+"confirm.allHint" = "选择“本任务期间全部运行”后，在此任务结束前不会再次询问（不适用于其他任务）。";
+"confirm.run" = "运行";
+"confirm.runAll" = "本任务期间全部运行";
+"confirm.deny" = "拒绝";
+
+/* 通知 */
+"notify.taskEnd.title" = "智能体任务已结束";
+"notify.taskEnd.body" = "本地任务已完成。请在网页上查看结果。";
+"notify.approval.title" = "智能体任务 — 需要批准";
+"notify.approval.body" = "正在等待批准运行工具：%@。点击后在网页上批准。";
+"notify.question.title" = "智能体提出了问题";
+"notify.question.body" = "任务已暂停，正在等待你的回答。点击后在网页上回答。";
+
+/* 更新 */
+"update.insecure" = "仅允许从 HTTPS（或 localhost）后端更新";
+"update.badBackend" = "后端地址无效";
+"update.none.title" = "没有更新";
+"update.none.body" = "native 通道尚无发布，或缺少清单。（当前 v%@）";
+"update.latest.title" = "已是最新版本";
+"update.latest.body" = "当前 v%@ 已是最新版本。";
+"update.available.title" = "有新版本 v%1$@（当前 v%2$@）";
+"update.available.body" = "现在下载并安装吗？安装期间应用会短暂退出，然后重新打开。";
+"update.install" = "更新";
+"update.later" = "稍后";
+"update.badDownload" = "下载地址无效";
+"update.checksum" = "下载完整性校验失败（sha256 不匹配）";
+"update.noBundle" = "找不到应用包路径（开发运行时无法更新）";
+"update.failed.title" = "检查更新失败";
+"update.script.failTitle" = "更新失败";
+"update.script.log" = "日志";
+"update.script.mount" = "无法挂载磁盘映像。";
+"update.script.noApp" = "在映像中找不到应用。";
+"update.script.copy" = "无法复制新版本（请检查安装文件夹的权限）。";
+"update.script.replace" = "无法替换现有应用。";
+"update.script.rollback" = "新版本安装失败，已恢复为之前的版本。";
+"update.script.reopen" = "更新已完成，但无法重新打开应用。";

@@ -128,6 +128,9 @@ export class TaskRuntime {
         return this.executor.captureDiff ? this.executor.captureDiff() : null;
     }
 
+    /** 승인 대기 알림을 실행기 채널로(로컬 브리지 → 디바이스 네이티브 알림). 미지원 실행기(docker)는 no-op. */
+    notifyApprovalPending(toolName: string): void { this.executor.notifyApprovalPending?.(toolName); }
+
     /** 호스트 workspace 절대경로 — 호스트측 git 연산(code-diff·clone·PR)이 의존.
      *  원격 실행기(D1)는 호스트 workspace 가 없으므로 호출부가 사용 전 가드해야 한다. */
     get workspacePath(): string {
