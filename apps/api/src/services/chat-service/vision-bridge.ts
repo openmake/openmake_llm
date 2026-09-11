@@ -13,8 +13,27 @@ import { withProviderSlot } from '../../llm/external-throttle';
 import { getVisionBridgeSystemPrompt, getVisionBridgeNote } from '../../prompts/vision-bridge';
 import { inferImageMime } from '../../utils/image-mime';
 import { createLogger } from '../../utils/logger';
+import type { ChatMessageRequest } from '../chat-service-types';
 
 const logger = createLogger('VisionBridge');
+
+/**
+ * 브리지 결과를 요청·컨텍스트에 반영한다(순수). external-messages 는 user 턴 본문을
+ * `ctx.enhancedMessage || req.message` 로 고르므로 **둘 다** 에 기록을 덧붙여야 한다 — 라이브에서
+ * req.message 만 바꿔 기록이 통째로 누락됐다(2026-09-12). 현재 턴 이미지는 제거, history 이미지도 제거.
+ */
+export function applyVisionBridge<C extends { enhancedMessage?: string }>(
+    req: ChatMessageRequest,
+    ctx: C,
+    note: string,
+): { req: ChatMessageRequest; ctx: C } {
+    const stripHistory = (req.history ?? []).map((h) => (h.images ? { ...h, images: undefined } : h));
+    const base = ctx.enhancedMessage || req.message || '';
+    return {
+        req: { ...req, images: undefined, message: `${req.message ?? ''}\n\n${note}`, history: stripHistory },
+        ctx: { ...ctx, enhancedMessage: `${base}\n\n${note}` },
+    };
+}
 
 export interface VisionBridgeResult {
     /** 역할 모델의 user 메시지 끝에 덧붙일 블록(헤더 + 관찰 기록) */

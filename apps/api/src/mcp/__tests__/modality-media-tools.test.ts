@@ -120,7 +120,7 @@ describe('generate_video / get_video', () => {
         expect(r.content[0].text).toContain('/generated/video.webm');
         expect(calls[0]).toBe('POST https://open.hasa.re.kr/v1/videos/generations');
         expect(calls).toContain('GET https://open.hasa.re.kr/v1/jobs/vid_1');
-        expect(calls).toContain('GET https://open.hasa.re.kr/v1/files/v.webm');
+        expect(calls).toContain('GET https://open.hasa.re.kr/files/v.webm'); // 루트 상대 → origin 기준
         expect(saved[0]).toMatchObject({ prefix: 'video', ext: 'webm', size: 3 });
     });
 
