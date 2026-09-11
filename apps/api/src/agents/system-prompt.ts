@@ -18,6 +18,7 @@ import { AgentSelection, AgentPhase } from './types';
 import { AGENTS } from './agent-data';
 import { createLogger } from '../utils/logger';
 import { getSkillManager } from './skill-manager';
+import { isSkillOfferEnabled } from './skill-catalog';
 import { getLanguageTemplate, type SupportedLanguageCode } from '../chat/language-policy';
 const logger = createLogger('AgentSystem');
 
@@ -252,7 +253,8 @@ ${applyPromptPlaceholders(promptTemplate.workingOn, { phase: getPhaseLabel(selec
     let hasDbSkills = false;
     const skillNames: string[] = [];
     try {
-        const manifest = await getSkillManager().buildManifestPrompt(agent.id, userId, agent.category, query);
+        // 상한을 넘는 턴은 후보 목록만 싣고 모델이 load_skill 로 고른다 (load_skill 노출 시)
+        const manifest = await getSkillManager().buildManifestPrompt(agent.id, userId, agent.category, query, { offerOnOverflow: isSkillOfferEnabled() });
         if (manifest) {
             result += manifest.prompt;
             hasDbSkills = true;

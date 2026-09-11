@@ -62,6 +62,18 @@ describe('buildManifestPrompt — 주입 합계 상한', () => {
         expect(out!.skillNames).toEqual(['system-skill-backend-developer', 'ecc-a']);
     });
 
+    it('모델 선택 모드: 넘치면 페르소나만 싣고 나머지는 load_skill 후보 목록으로 넘긴다 (2026-09-11)', async () => {
+        rows = [row('ecc-a', 650), row('system-skill-karpathy-guidelines', 300), row('system-skill-backend-developer', 100)];
+        const out = await manager().buildManifestPrompt('backend-developer', undefined, 'technology', undefined, { offerOnOverflow: true });
+        expect(out!.skillNames).toEqual(['system-skill-backend-developer']);
+        expect(out!.prompt).toContain('SYSTEM-SKILL-BACKEND-DEVELOPER:');
+        expect(out!.prompt).not.toContain('ECC-A:');
+        expect(out!.prompt).toContain('<skill_offer>');
+        expect(out!.prompt).toContain('- ecc-a (');
+        expect(out!.prompt).toContain('- system-skill-karpathy-guidelines (');
+        expect(out!.prompt).toContain('load_skill');
+    });
+
     it('합계가 상한 이내면 전부 주입한다', async () => {
         rows = [row('a', 100), row('b', 100), row('c', 100)];
         const out = await manager().buildManifestPrompt('backend-developer', undefined, 'technology');

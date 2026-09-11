@@ -9,9 +9,17 @@ const logger = createLogger('SkillCatalog');
 
 /** 카탈로그/선택 조회 상한 — env override (No-Hardcoding). searchSkills 가 200 으로 클램프한다. */
 export const SKILL_CATALOG_MAX_ITEMS = Number(process.env.SKILL_CATALOG_MAX_ITEMS) || 200;
-const SKILL_CATALOG_DESC_MAX = Number(process.env.SKILL_CATALOG_DESC_MAX) || 120;
+export const SKILL_CATALOG_DESC_MAX = Number(process.env.SKILL_CATALOG_DESC_MAX) || 120;
 /** 페르소나 스킬("○○ 전문 스킬")을 카탈로그·load_skill 대상에서 제외 — 기본 on, 'false' 면 종전 동작(롤백용). */
 export const SKILL_CATALOG_EXCLUDE_PERSONAS = process.env.SKILL_CATALOG_EXCLUDE_PERSONAS !== 'false';
+
+/**
+ * manifest 합계 상한을 넘은 턴에 후보를 목록으로 넘겨 모델이 load_skill 로 고르게 할지.
+ * load_skill 이 노출될 때(SKILL_AUTO_SELECT_ENABLED)만 의미가 있다. 'false' 면 종전 결정적 규칙(id 순).
+ */
+export function isSkillOfferEnabled(): boolean {
+    return process.env.SKILL_AUTO_SELECT_ENABLED === 'true' && process.env.SKILL_OVERFLOW_OFFER_ENABLED !== 'false';
+}
 
 /** 상한 초과 경고는 대상 수가 같으면 한 번만 (매 턴 반복 방지) */
 const truncationWarned = new Set<number>();
