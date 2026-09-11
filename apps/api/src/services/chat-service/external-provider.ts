@@ -28,6 +28,7 @@ import type { ResolvedProvider } from '../../providers/provider-router';
 import { executeExternalTool, recordExternalUsageFireAndForget } from './external-tool-exec';
 
 import { resolveModelCapabilities } from './model-capabilities';
+import { describeImagesForTextModel } from './vision-bridge';
 import { markModelUnusableFireAndForget } from './external-model-availability';
 import { appendDeterministicBlocks } from './external-deterministic-append';
 
@@ -81,9 +82,6 @@ export async function runExternalStream(
     const wantsSpawn = AGENT_SPAWN.ENABLED
         && SPAWN_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
 
-    // 메시지 배열 조립(시스템 프롬프트 + history + 현재 turn)은 external-messages 로 분리.
-    const messages = buildExternalMessages({ req, resolved, ctx, wantsMap, orchestration, wantsSpawn });
-
 
     // 토큰 쿼터 정책(2026-07-26 결정): 이 경로는 LLMClient 를 우회하므로 로컬 쿼터
     // (LLM_HOURLY/WEEKLY_TOKEN_LIMIT)를 타지 않는다. **의도된 면제**다 — 그 한도는 로컬
@@ -107,6 +105,9 @@ export async function runExternalStream(
         );
     }
 
+    // 역할 모델이 비전을 못 보면 모달리티 `vision` 모델이 첨부를 텍스트 관찰 기록으로 옮긴다
+    // (역할 모델 교체 없음 — 컨텍스트·prefix cache 유지). vision 미배정이면 종전 400.
+    let effectiveReq: ChatMessageRequest = req;
     if (hasImages && !caps.vision) {
         // 휴리스틱 기반 '부정' 은 신뢰하지 않는다 — 오차단(진짜 비전 모델 400)이 실제
         // 장애였다. 이 경우 그대로 진행하고, 정말 미지원이면 upstream 오류 →
@@ -115,15 +116,37 @@ export async function runExternalStream(
             logger.warn(
                 `[Vision] '${resolved.fullId}' vision 판정이 휴리스틱(부정) — 차단하지 않고 진행`,
             );
+        } else if (!req.images || req.images.length === 0) {
+            // 현재 턴엔 이미지가 없고 history 에만 남은 경우 — 기록 대상이 아니므로 제거만 한다.
+            logger.info(`[VisionBridge] '${resolved.fullId}' 는 비전 미지원 — history 이미지만 제거하고 진행`);
+            effectiveReq = { ...req, history: (req.history ?? []).map((h) => (h.images ? { ...h, images: undefined } : h)) };
         } else {
-            const err = new Error(
-                `Model '${resolved.fullId}' does not support vision input (capabilities.vision=false, source=${capsSource}). ` +
-                'Use a vision-capable model or remove images from the request.',
-            );
-            (err as Error & { statusCode?: number }).statusCode = 400;
-            throw err;
+            const bridged = await describeImagesForTextModel({
+                images: req.images ?? [],
+                userMessage: req.message ?? '',
+                userId: req.userId,
+                lang: ctx.resolvedLanguage || req.userLanguagePreference || 'en',
+            });
+            if (!bridged) {
+                const err = new Error(
+                    `Model '${resolved.fullId}' does not support vision input (capabilities.vision=false, source=${capsSource}). ` +
+                    'Use a vision-capable model, assign a vision modality model, or remove images from the request.',
+                );
+                (err as Error & { statusCode?: number }).statusCode = 400;
+                throw err;
+            }
+            // 현재 턴 이미지는 기록으로 대체, history 의 이미지는 제거(이번 턴 초점 밖 — 기록 대상 아님).
+            effectiveReq = {
+                ...req,
+                images: undefined,
+                message: `${req.message ?? ''}\n\n${bridged.note}`,
+                history: (req.history ?? []).map((h) => (h.images ? { ...h, images: undefined } : h)),
+            };
         }
     }
+
+    // 메시지 배열 조립(시스템 프롬프트 + history + 현재 turn)은 external-messages 로 분리.
+    const messages = buildExternalMessages({ req: effectiveReq, resolved, ctx, wantsMap, orchestration, wantsSpawn });
 
     // 도구 노출·억제·첫 턴 강제 결정은 external-tool-plan 으로 분리 (동작 동일).
     const { tools, forcedFirstTurnToolName } = buildExternalToolPlan({

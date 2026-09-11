@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { UsersRound, KeyRound, Trash2, Save, Loader2 } from "lucide-react";
+import { UsersRound, KeyRound, Trash2, Save, Loader2, Layers, RotateCcw } from "lucide-react";
 import {
   PageHeader,
   Card,
@@ -18,6 +18,14 @@ import {
 import { AdminTabs } from "@/components/hub-tabs";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
+import { fetchModels, type ModelEntry } from "@/lib/models-api";
+import {
+  ModalityEffectiveLine,
+  ModalityParamsInputs,
+  compactParams,
+  type ModalityEffective,
+  type ModalityOverride,
+} from "@/components/settings/modality-models-section";
 
 /* ── 타입 (백엔드 /api/admin/model-roles, /api/admin/server-external-keys) ── */
 interface GlobalMapping {
@@ -41,6 +49,14 @@ interface ServerKeyRow {
 interface ServerKeysPayload {
   keys: ServerKeyRow[];
   providers: { id: string; displayName: string; defaultBaseUrl: string }[];
+}
+/* 백엔드 /api/admin/modality-models */
+interface ModalityPayload {
+  mappings: ModalityOverride[];
+  effective: ModalityEffective[];
+  modalities: string[];
+  defaults: Record<string, string>;
+  gatewayProviders: string[];
 }
 
 const inputCls =
@@ -108,6 +124,148 @@ function ServerKeyForm({ providers, onSaved }: {
       <p className="text-xs text-muted">{t("keyForm.dailyLimitHelp")}</p>
       {error && <p className="text-sm text-danger" role="alert">{error}</p>}
     </div>
+  );
+}
+
+/**
+ * 전역 모달리티→모델 배정 — "역할&모델"(텍스트 LLM 이 어떤 역할을 맡는가)과 별개 축.
+ * 이미지 생성·비전·영상·STT·TTS·임베딩을 처리할 모델을 전역 기본값으로 정한다.
+ * 외부 모델은 게이트웨이 편입 provider 만 허용(서버 400 사유를 그대로 표시).
+ */
+function GlobalModalityModelsCard() {
+  const t = useTranslations("adminModalityModels");
+  const [payload, setPayload] = useState<ModalityPayload | null>(null);
+  const [models, setModels] = useState<ModelEntry[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [paramDrafts, setParamDrafts] = useState<Record<string, Record<string, string>>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const [r, m] = await Promise.all([
+        ApiClient.get<ApiSuccess<ModalityPayload>>("/api/admin/modality-models"),
+        // 채팅 불가 모델(임베딩·이미지)도 배정 대상 — 필터 없는 전체 목록.
+        fetchModels(),
+      ]);
+      setPayload(r?.data ?? null);
+      const drafts: Record<string, Record<string, string>> = {};
+      for (const row of r?.data?.mappings ?? []) drafts[row.modality] = { ...(row.params ?? {}) };
+      setParamDrafts(drafts);
+      setModels(m.models);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("loadError"));
+    }
+  }, [t]);
+
+  useEffect(() => {
+    queueMicrotask(() => void load());
+  }, [load]);
+
+  async function handleChange(modality: string, fullId: string) {
+    setBusy(modality);
+    setError(null);
+    try {
+      if (fullId) {
+        const params = compactParams(paramDrafts[modality]);
+        await ApiClient.put(`/api/admin/modality-models/${modality}`, {
+          model: fullId,
+          ...(params ? { params } : {}),
+        });
+      } else if (payload?.mappings.some((m) => m.modality === modality)) {
+        await ApiClient.del(`/api/admin/modality-models/${modality}`);
+      }
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("saveFailed"));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function setParam(modality: string, key: string, value: string) {
+    setParamDrafts((d) => ({ ...d, [modality]: { ...(d[modality] ?? {}), [key]: value } }));
+  }
+
+  const mapped = new Map((payload?.mappings ?? []).map((m) => [m.modality, m.fullId]));
+  const savedParams = new Map((payload?.mappings ?? []).map((m) => [m.modality, m.params]));
+  const effectiveMap = new Map((payload?.effective ?? []).map((e) => [e.modality, e]));
+  const providers = payload?.gatewayProviders ?? [];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Layers className="h-4 w-4" aria-hidden />
+          {t("title")}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-sm text-muted">{t("description")}</p>
+        <p className="text-xs text-muted">{t("axisNote")}</p>
+        <p className="text-xs text-muted">
+          {t("gatewayNote", { providers: providers.length > 0 ? providers.join(", ") : t("gatewayNone") })}
+        </p>
+        {error && <p className="text-sm text-danger" role="alert">{error}</p>}
+        {(payload?.modalities ?? []).map((modality) => {
+          const current = mapped.get(modality) ?? "";
+          const isBusy = busy === modality;
+          return (
+            <div key={modality} className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="whitespace-nowrap text-sm font-medium">{t(`modalities.${modality}`)}</span>
+                  <span className="font-mono text-xs text-muted">{modality}</span>
+                  {current && <Badge tone="accent" className="shrink-0 whitespace-nowrap">{t("assigned")}</Badge>}
+                </div>
+                <ModalityEffectiveLine eff={effectiveMap.get(modality)} t={t} />
+                <p className="text-xs text-muted">
+                  {t("codeDefault", { model: payload?.defaults[modality] || "—" })}
+                </p>
+                <ModalityParamsInputs
+                  modality={modality}
+                  draft={paramDrafts[modality] ?? {}}
+                  saved={savedParams.get(modality)}
+                  disabled={!current}
+                  busy={isBusy}
+                  onChange={(key, value) => setParam(modality, key, value)}
+                  onApply={() => void handleChange(modality, current)}
+                  t={t}
+                />
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {isBusy && <Loader2 className="h-4 w-4 animate-spin text-muted" aria-hidden />}
+                <select
+                  className={`${selectCls} min-w-52`}
+                  value={current}
+                  disabled={isBusy}
+                  aria-label={t(`modalities.${modality}`)}
+                  onChange={(e) => void handleChange(modality, e.target.value)}
+                >
+                  <option value="">{t("defaultOption")}</option>
+                  {current && !models.some((m) => m.modelId === current) && (
+                    <option value={current}>{current} {t("notInList")}</option>
+                  )}
+                  {models.map((m) => (
+                    <option key={m.modelId} value={m.modelId}>
+                      {m.name}
+                      {m.provider !== "local-llm" ? ` (${m.provider})` : ""}
+                    </option>
+                  ))}
+                </select>
+                {current && !isBusy && (
+                  <Button variant="ghost" size="sm" aria-label={t("resetLabel")} title={t("resetLabel")}
+                    onClick={() => void handleChange(modality, "")}>
+                    <RotateCcw className="h-4 w-4" aria-hidden />
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        <p className="text-xs text-muted">{t("cacheNote")}</p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -257,6 +415,8 @@ export default function AdminModelRolesPage() {
           <p className="text-xs text-muted">{t("globalRoles.cacheNote")}</p>
         </CardContent>
       </Card>
+
+      <GlobalModalityModelsCard />
     </div>
   );
 }

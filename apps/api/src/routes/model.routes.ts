@@ -28,6 +28,7 @@ import { buildFullModelId } from '../providers/i-provider';
 import { getProviderCatalogEntry } from '../config/external-providers';
 import { isRoleAssignableModel, isChatCapableModel } from '../config/role-model-filter';
 import { resolveExternalModels } from '../services/external-models-catalog';
+import { resolveModalityTarget } from '../services/modality-resolver';
 
 const router = Router();
 const logger = createLogger('ModelRoutes');
@@ -171,9 +172,11 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
         }
     }
 
-    // 이미지 생성 모델 — 채팅 모델이 아니라 generate_image 도구가 IMAGE_GEN_MODEL 로 호출.
-    // UI 는 이 값으로 "이미지 생성 가능" 표시만 한다 (채팅 셀렉터 옵션 아님). 미설정 시 null.
-    const imageModel = process.env.IMAGE_GEN_MODEL?.trim() || null;
+    // 이미지 생성 모델 — 채팅 모델이 아니라 generate_image 도구가 모달리티 배정(image_gen)으로 호출.
+    // UI 는 이 값으로 "이미지 생성 가능" 표시만 한다 (채팅 셀렉터 옵션 아님). 미배정 시 null.
+    const imageModel = await resolveModalityTarget('image_gen', userId ?? undefined)
+        .then((t) => t.fullId)
+        .catch(() => null);
 
     // 목록 필터 2종 —
     //   usableOnly=1 (역할 배정 드롭다운·커스텀 에이전트): 채팅 불가(임베딩/이미지) + 20B 이하 제외.

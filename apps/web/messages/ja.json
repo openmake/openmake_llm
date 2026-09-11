@@ -1613,6 +1613,37 @@
     },
     "notInList": "（一覧にない）"
   },
+  "modalityModels": {
+    "title": "モダリティ別モデル割り当て",
+    "description": "画像生成・ビジョン・動画・音声・埋め込みをどのモデルが処理するかを決めます。未設定の項目はグローバル設定またはデフォルトに従います。 上のロール別モデル割り当て（どのロールがテキストモデルを使うか）とは別の軸です。",
+    "axisNote": "上の「役割別モデル割り当て」(どのテキストLLMがエージェント・判定などを担うか)とは別の軸です。",
+    "gatewayNote": "すべての呼び出しは単一の LiteLLM ゲートウェイを経由するため、外部モデルはゲートウェイに登録された provider のみ割り当てられます。",
+    "loading": "モダリティ設定を読み込み中…",
+    "loadError": "モダリティ設定を読み込めませんでした。",
+    "saveFailed": "モダリティ設定の保存に失敗しました。",
+    "defaultOption": "デフォルト(自動)",
+    "assignedBadge": "割り当て済み",
+    "unavailableBadge": "利用不可",
+    "resetLabel": "デフォルトに戻す",
+    "empty": "割り当て可能なモダリティがありません。",
+    "notInList": "(一覧にありません)",
+    "paramsHint": "provider 規格の引数 — 空欄ならデフォルト",
+    "paramsApply": "引数を適用",
+    "source": {
+      "user": "自分の設定",
+      "global": "グローバル",
+      "default": "デフォルト"
+    },
+    "modalities": {
+      "image_gen": "画像生成",
+      "image_edit": "画像編集",
+      "vision": "ビジョン(画像理解)",
+      "video_gen": "動画生成",
+      "stt": "音声認識",
+      "tts": "音声合成",
+      "embedding": "埋め込み"
+    }
+  },
   "adminModelRoles": {
     "title": "ロールモデル管理",
     "description": "グローバルなロール→モデル割り当て(全ユーザーの既定値)とサーバー共有外部キーを管理します。",
@@ -1644,6 +1675,38 @@
       "save": "保存",
       "placeholder": "空 = フォールバック ({fallback})",
       "cacheNote": "変更は再起動なしで最大60秒以内に反映されます。"
+    }
+  },
+  "adminModalityModels": {
+    "title": "グローバルモダリティ割り当て",
+    "description": "画像生成・ビジョン・動画・音声・埋め込みのグローバル既定モデルを設定します。ユーザー個別の割り当てが優先され、解除するとコードの既定値に戻ります。 上のロール別モデル割り当て（どのロールがテキストモデルを使うか）とは別の軸です。",
+    "axisNote": "上の「グローバル役割マッピング」(どのテキストLLMがエージェント・判定などを担うか)とは別の軸です。",
+    "gatewayNote": "すべての呼び出しは単一の LiteLLM ゲートウェイを経由するため、外部モデルはゲートウェイ登録済み provider({providers})のみ割り当てられます。",
+    "gatewayNone": "なし",
+    "loadError": "モダリティ設定を読み込めませんでした。",
+    "saveFailed": "モダリティ設定の保存に失敗しました。",
+    "defaultOption": "デフォルト(コード既定値)",
+    "assigned": "割り当て済み",
+    "unavailableBadge": "利用不可",
+    "resetLabel": "デフォルトに戻す",
+    "codeDefault": "コード既定値: {model}",
+    "notInList": "(一覧にありません)",
+    "cacheNote": "変更は再起動なしで最大60秒以内に反映されます。",
+    "paramsHint": "provider 規格の引数 — 空欄ならデフォルト",
+    "paramsApply": "引数を適用",
+    "source": {
+      "user": "自分の設定",
+      "global": "グローバル",
+      "default": "デフォルト"
+    },
+    "modalities": {
+      "image_gen": "画像生成",
+      "image_edit": "画像編集",
+      "vision": "ビジョン(画像理解)",
+      "video_gen": "動画生成",
+      "stt": "音声認識",
+      "tts": "音声合成",
+      "embedding": "埋め込み"
     }
   },
   "adminSystemSettings": {

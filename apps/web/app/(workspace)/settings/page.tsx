@@ -38,6 +38,7 @@ import { MemorySection } from "@/components/settings/memory-section";
 import { ConnectorsSection } from "@/components/settings/connectors-section";
 import { ProviderKeysSection } from "@/components/settings/provider-keys-section";
 import { ModelRolesSection } from "@/components/settings/model-roles-section";
+import { ModalityModelsSection } from "@/components/settings/modality-models-section";
 import { ExtensionsSection } from "@/components/settings/extensions-section";
 
 /* ── 탭 정의 ────────────────────────────────────────────── */
@@ -688,6 +689,7 @@ export default function SettingsPage() {
               </Card>
               <ProviderKeysSection />
               <ModelRolesSection />
+              <ModalityModelsSection />
               </>
             )}
 
