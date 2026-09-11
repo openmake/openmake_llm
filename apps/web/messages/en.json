@@ -1615,7 +1615,7 @@
   },
   "modalityModels": {
     "title": "Model per Modality",
-    "description": "Choose which model handles image generation, vision, video, speech, and embeddings. Unassigned items follow the global setting or the default. This is a separate axis from the role assignments above (which text model each role uses).",
+    "description": "Choose which model handles image generation, vision, video, speech, and embeddings. Unassigned items follow the global setting or the default.",
     "axisNote": "This is a separate axis from \"Model Roles\" above (which text LLM handles agent, judge, etc.).",
     "gatewayNote": "All calls go through the single LiteLLM gateway, so external models can only be assigned from providers enrolled in the gateway.",
     "loading": "Loading modality mappings…",
@@ -1679,7 +1679,7 @@
   },
   "adminModalityModels": {
     "title": "Global Modality Mappings",
-    "description": "Set the global default model for image generation, vision, video, speech, and embeddings. Per-user mappings take precedence; clearing falls back to the code default. This is a separate axis from the role assignments above (which text model each role uses).",
+    "description": "Set the global default model for image generation, vision, video, speech, and embeddings. Per-user mappings take precedence; clearing falls back to the code default.",
     "axisNote": "This is a separate axis from \"Global Role Mappings\" above (which text LLM handles agent, judge, etc.).",
     "gatewayNote": "All calls go through the single LiteLLM gateway, so external models can only be assigned from gateway-enrolled providers ({providers}).",
     "gatewayNone": "none",
