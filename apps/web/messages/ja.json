@@ -1669,7 +1669,31 @@
       "music_generate": "音楽生成",
       "video_generate": "動画生成",
       "video_analyze": "動画理解"
-    }
+    },
+    "groups": {
+      "text": "テキスト・ビジョン",
+      "code": "コード",
+      "image": "画像",
+      "audio": "音声",
+      "music": "音楽",
+      "video": "動画",
+      "embed": "埋め込み(インフラ)",
+      "other": "その他"
+    },
+    "groupDesc": {
+      "text": "推論・分析と画像理解・OCR — ビジョン対応のテキストモデル1つが担当",
+      "code": "コード作成・修正専用モデル(空ならテキストモデル)",
+      "image": "画像生成と編集",
+      "audio": "音声認識(STT)と合成(TTS)",
+      "music": "音楽生成 — まだ実行経路がなく、割り当てのみ保存",
+      "video": "動画生成(ジョブ提出後、完了時に結果取得)",
+      "embed": "検索・埋め込み用インフラモデル(管理者のみ)",
+      "other": "グループに属さない機能"
+    },
+    "mixedOption": "(個別設定)",
+    "advancedShow": "詳細設定",
+    "advancedHide": "詳細を閉じる",
+    "hiddenUnsupportedNote": "実行経路のない機能は表示しません: {list}"
   },
   "adminModelRoles": {
     "title": "ロールモデル管理",
@@ -1743,7 +1767,31 @@
       "music_generate": "音楽生成",
       "video_generate": "動画生成",
       "video_analyze": "動画理解"
-    }
+    },
+    "groups": {
+      "text": "テキスト・ビジョン",
+      "code": "コード",
+      "image": "画像",
+      "audio": "音声",
+      "music": "音楽",
+      "video": "動画",
+      "embed": "埋め込み(インフラ)",
+      "other": "その他"
+    },
+    "groupDesc": {
+      "text": "推論・分析と画像理解・OCR — ビジョン対応のテキストモデル1つが担当",
+      "code": "コード作成・修正専用モデル(空ならテキストモデル)",
+      "image": "画像生成と編集",
+      "audio": "音声認識(STT)と合成(TTS)",
+      "music": "音楽生成 — まだ実行経路がなく、割り当てのみ保存",
+      "video": "動画生成(ジョブ提出後、完了時に結果取得)",
+      "embed": "検索・埋め込み用インフラモデル(管理者のみ)",
+      "other": "グループに属さない機能"
+    },
+    "mixedOption": "(個別設定)",
+    "advancedShow": "詳細設定",
+    "advancedHide": "詳細を閉じる",
+    "hiddenUnsupportedNote": "実行経路のない機能は表示しません: {list}"
   },
   "adminSystemSettings": {
     "title": "システム設定",

@@ -275,24 +275,3 @@ export async function resolveCapabilityTarget(
     );
 }
 
-/**
- * 구 `IMAGE_GEN_MODEL` env → 전역 image_gen 행 1회 시딩 (부팅, 마이그레이션 직후).
- * 전역 행이 이미 있으면 no-op. env 는 다음 배포에서 제거 대상 — 값이 남아 있으면 경고만.
- * fail-open: 실패해도 부팅을 막지 않는다.
- */
-export async function seedCapabilityDefaultsFromEnv(repo?: CapabilityModelsRepository): Promise<void> {
-    const legacy = process.env.IMAGE_GEN_MODEL?.trim();
-    if (!legacy) return;
-    const fullId = legacy.includes(':') ? legacy : `local-llm:${legacy}`;
-    try {
-        const r = repo ?? new CapabilityModelsRepository(getPool());
-        const inserted = await r.insertIfAbsent(GLOBAL_CAPABILITY_SCOPE, 'image.generate', fullId);
-        if (inserted) {
-            clearGlobalCapabilityCache();
-            logger.info(`전역 image.generate 을 구 IMAGE_GEN_MODEL 로 시딩: ${fullId}`);
-        }
-        logger.warn('IMAGE_GEN_MODEL env 는 폐기 예정 — capability 설정(DB)이 SoT 입니다. .env 에서 제거하세요.');
-    } catch (err) {
-        logger.warn(`capability 시딩 실패 (계속): ${err instanceof Error ? err.message : String(err)}`);
-    }
-}
