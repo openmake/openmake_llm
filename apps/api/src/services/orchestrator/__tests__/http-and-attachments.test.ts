@@ -108,3 +108,17 @@ describe('첨부 계약', () => {
         expect(map.get('m3')).toMatchObject({ urlPath: '/generated/img-1.png' });
     });
 });
+
+describe('coerceJobFollowup — Planner 가 simple 로 답해도 영상 job 첨부 + 영상 발화면 재조회 1작업으로 보정', () => {
+    const { coerceJobFollowup } = jest.requireActual('../orchestrate') as typeof import('../orchestrate');
+    const simple = { complexity: 'simple' as const, synthesis: false, tasks: [], levels: [] } as unknown as import('../plan-schema').ValidatedPlan;
+    const jobAtt = new Map([['j1', { id: 'j1', kind: 'job' as const, name: 'video.generate 완료·저장됨', mime: '', job: { capability: 'video.generate' as const, providerId: 'hasa', jobId: 'vid_1', resultPath: '/generated/v.webm' } }]]);
+    it('영상 발화 + job 첨부 → multi/video.generate(job id 첨부)', () => {
+        const p = coerceJobFollowup(simple, jobAtt, '아까 영상 다 됐어? 보여줘');
+        expect(p.complexity).toBe('multi'); expect(p.tasks[0].capability).toBe('video.generate'); expect(p.tasks[0].attachments).toEqual(['j1']);
+    });
+    it('영상 언급이 없거나 job 첨부가 없으면 계획 그대로', () => {
+        expect(coerceJobFollowup(simple, jobAtt, '한국의 수도는?')).toBe(simple);
+        expect(coerceJobFollowup(simple, new Map(), '영상 보여줘')).toBe(simple);
+    });
+});

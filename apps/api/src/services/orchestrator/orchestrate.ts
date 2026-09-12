@@ -9,11 +9,12 @@
  *  - `cancelled`: 사용자 취소 → 호출부가 종전 경로도 시작하지 않는다
  * 셰도우(orchestrator_runs)는 fire-and-forget.
  */
-import { ORCHESTRATOR, CAPABILITY_LABELS_KO, type Capability } from '../../config/capabilities';
+import { ORCHESTRATOR, CAPABILITY_LABELS_KO, VIDEO_JOB_FOLLOWUP_PATTERN, type Capability } from '../../config/capabilities';
 import { getPool } from '../../data/models/unified-database';
 import { OrchestratorRunsRepository } from '../../data/repositories/orchestrator-runs-repo';
 import type { ChatMessageRequest } from '../chat-service-types';
 import { planRequest } from './planner';
+import { validatePlan, type ValidatedPlan } from './plan-schema';
 import { executePlan } from './executor';
 import { preflightPlan } from './preflight';
 import { OrchestratorJobsRepository } from '../../data/repositories/orchestrator-jobs-repo';
@@ -90,6 +91,20 @@ async function collectPendingJobs(userId: string | undefined, map: Map<string, O
     } catch (err) {
         logger.debug(`pending job 조회 실패(무시): ${err instanceof Error ? err.message : String(err)}`);
     }
+}
+
+/**
+ * Planner 가 `simple` 을 냈는데 영상 job 첨부가 있고 사용자가 영상을 묻는 발화면, 가장 최근 job 을 재조회하는 1작업 multi 로 보정한다.
+ * (저장본은 실행기가 즉시 반환하므로 provider 호출 없음.) 그 외엔 계획 그대로.
+ */
+export function coerceJobFollowup(plan: ValidatedPlan, attachments: Map<string, OrchestratorAttachment>, message: string): ValidatedPlan {
+    if (plan.complexity !== 'simple' || !VIDEO_JOB_FOLLOWUP_PATTERN.test(message)) return plan;
+    const job = [...attachments.values()].find((a) => a.kind === 'job' && a.job?.capability === 'video.generate');
+    if (!job) return plan;
+    const v = validatePlan({ complexity: 'multi', language: plan.language, synthesis: true, tasks: [{ id: 't1', capability: 'video.generate', input: { instruction: message.slice(0, 400), attachments: [job.id] } }] }, new Set(attachments.keys()));
+    if (!v.ok) return plan;
+    logger.info(`[Orchestrator] simple → 영상 job 재조회로 보정 (${job.job?.jobId})`);
+    return v.plan;
 }
 
 function toPlannerMeta(atts: Map<string, OrchestratorAttachment>): PlannerAttachmentMeta[] {
@@ -180,7 +195,7 @@ export async function runOrchestrator(input: RunOrchestratorInput): Promise<Orch
         record({ requestId: input.requestId, userId, plannerModel: planned.model, plannerMs: planned.ms, plannerOk: false, plannerError: planned.error, outcome: 'fallback' });
         return { mode: 'fallback', contextBlock: fallbackNote(lang, planned.error ?? 'unknown'), mediaMarkdowns: [], plannerMs: planned.ms };
     }
-    const plan = planned.plan;
+    const plan = coerceJobFollowup(planned.plan, attachments, req.message ?? '');
     onProgress?.({ type: 'orchestrator_plan', complexity: plan.complexity, tasks: plan.tasks.map((t) => ({ id: t.id, capability: t.capability, instruction: t.instruction.slice(0, 160) })) });
 
     if (plan.complexity === 'simple') {
