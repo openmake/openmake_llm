@@ -16,6 +16,7 @@ import { UNSUPPORTED_CAPABILITIES, type Capability } from '../../config/capabili
 import { checkUserQuota } from '../../llm/user-quota';
 import { QuotaExceededError } from '../../errors/quota-exceeded.error';
 import { resolveCapabilityTarget, CapabilityUnavailableError, type CapabilityTarget } from './capability-resolver';
+import { savedVideoPath } from './executors/video';
 import type { PlanTask, ValidatedPlan } from './plan-schema';
 import { resolveTaskAttachments, type AttachmentKind, type ExecContext } from './types';
 
@@ -60,6 +61,8 @@ export async function preflightPlan(plan: ValidatedPlan, ctx: ExecContext): Prom
         const inputErr = inputProblem(task, ctx);
         if (inputErr) { rejected.set(task.id, `[input] ${inputErr}`); continue; }
         if (task.capability === 'web.search') continue; // 모델 배정 없음
+        // 완료·저장된 영상 job 조회는 외부 키 없이 반환되므로 배정·키 검사를 요구하지 않는다(Codex 검토 4)
+        if (task.capability === 'video.generate' && task.attachments.some((id) => savedVideoPath(ctx.attachments.get(id)))) continue;
         try {
             const target = await resolveCapabilityTarget(task.capability, ctx.userId);
             targets.set(task.id, target);

@@ -174,7 +174,7 @@ export async function runMessagePipeline(svc: ChatService,
     // 이미지 생성 모드: 토글 ON 이면 메시지를 프롬프트로 이미지를 직접 생성한다 (결정적 경로 —
     // LLM 의 도구 호출 결정에 의존하지 않아 일부 모델이 이미지를 안 그리는 문제를 회피).
     if (req.imageMode === true && (req.message ?? '').trim()) {
-        return generateImageInline((req.message ?? '').trim(), onToken, { userId, lang: languagePolicy?.resolvedLanguage, signal: req.abortSignal });
+        return generateImageInline((req.message ?? '').trim(), onToken, { userId, lang: languagePolicy?.resolvedLanguage, signal: req.abortSignal, sessionId: req.sessionId });
     }
 
     // Discussion / Deep Research 모드의 모델 해석 — 상세는 mode-external-client

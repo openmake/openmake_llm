@@ -12,7 +12,7 @@ import { refsRawText, resolveTaskAttachments, type CapabilityExecutor } from '..
 export const audioTranscribeExecutor: CapabilityExecutor = async (task, ctx) => {
     const [source] = resolveTaskAttachments(task, ctx, new Set(['audio', 'video']));
     if (!source) throw new Error('audio.transcribe: 오디오/영상 첨부(attachments 또는 refs)가 없습니다');
-    const target = await resolveCapabilityTarget('audio.transcribe', ctx.userId);
+    const target = ctx.targets?.get(task.id) ?? await resolveCapabilityTarget('audio.transcribe', ctx.userId);
     const input = await loadAttachment(source, {
         timeoutMs: CAPABILITY_LIMITS.STT_TIMEOUT_MS, signal: ctx.signal, maxBytes: CAPABILITY_LIMITS.STT_MAX_BYTES, allowTypes: ['audio/', 'video/'],
     });
@@ -34,7 +34,7 @@ export const audioSpeechExecutor: CapabilityExecutor = async (task, ctx) => {
     const text = (task.text || refsRawText(task, ctx, CAPABILITY_LIMITS.TTS_MAX_CHARS) || (task.refs.length === 0 ? ctx.userMessage : '')).trim();
     if (!text) throw new Error('audio.speech: 합성할 텍스트가 없습니다 (input.text 또는 완료된 refs 필요)');
     if (text.length > CAPABILITY_LIMITS.TTS_MAX_CHARS) throw new Error(`텍스트가 너무 깁니다 (${text.length}자 > ${CAPABILITY_LIMITS.TTS_MAX_CHARS}자)`);
-    const target = await resolveCapabilityTarget('audio.speech', ctx.userId);
+    const target = ctx.targets?.get(task.id) ?? await resolveCapabilityTarget('audio.speech', ctx.userId);
     const requested = String(task.extra.format ?? target.params.format ?? '');
     const format = TTS_ALLOWED_FORMATS.has(requested) ? requested : TTS_DEFAULT_FORMAT;
     const voice = String(task.extra.voice || target.params.voice || TTS_DEFAULT_VOICE);
