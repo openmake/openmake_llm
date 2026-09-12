@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.62.1](https://github.com/openmake/openmake_llm/compare/v1.62.0...v1.62.1) (2026-09-12)
+
+
+### 🐛 버그 수정
+
+* **docs:** quickstart curl 의 ${base} 미치환 교정 (배포 후 실측) ([#860](https://github.com/openmake/openmake_llm/issues/860)) ([51915ce](https://github.com/openmake/openmake_llm/commit/51915ceea2b8ebea74b70db4116973401a686d21))
+* **research:** 딥리서치 완주 차단 3건 — 분해 JSON 절단·합성 타임아웃 전멸·보고서 abort 무효 ([#861](https://github.com/openmake/openmake_llm/issues/861)) ([b710fbc](https://github.com/openmake/openmake_llm/commit/b710fbc4f82288a602c2e15ec5439f2b23469f2f))
+* **web,api:** 라이브 점검 결함 4건 — 웹 푸시 SW 부재·슬래시 확장문 저장·개발자 문서 플레이스홀더·404 메시지 이중화 ([#858](https://github.com/openmake/openmake_llm/issues/858)) ([ca0a639](https://github.com/openmake/openmake_llm/commit/ca0a639af24ee304b51daf78c4e35140f2a8d51c))
+
 ## [1.62.0](https://github.com/openmake/openmake_llm/compare/v1.61.1...v1.62.0) (2026-09-12)
 
 
