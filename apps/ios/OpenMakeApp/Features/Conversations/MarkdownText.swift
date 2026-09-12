@@ -21,6 +21,10 @@ struct MarkdownText: View {
                     textBlocks(text)
                 case .image(let alt, let source):
                     GeneratedImageView(alt: alt, source: source)
+                case .video(let title, let source):
+                    GeneratedVideoCard(title: title, source: source)
+                case .audio(let title, let source):
+                    GeneratedAudioCard(title: title, source: source)
                 }
             }
         }

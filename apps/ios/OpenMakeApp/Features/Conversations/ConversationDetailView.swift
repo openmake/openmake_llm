@@ -229,6 +229,10 @@ private struct ChatTranscriptView: View {
                             MarkdownText(content: chat.streamingText + " ▍")
                         }
                     }
+                    // 멀티모달 작업 목록 — 이미지·영상·음성 capability 작업의 상태(웹 진행 배너 대응)
+                    if chat.isStreaming, let progress = chat.orchestrator {
+                        OrchestratorProgressCard(progress: progress)
+                    }
                     // 진행 카드 — 스트리밍 중에는 본문 아래에도 계속 보여 "살아있음" 을 알린다
                     if chat.isStreaming {
                         ActivityProgressCard(
