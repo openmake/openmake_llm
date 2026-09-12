@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.60.1](https://github.com/openmake/openmake_llm/compare/v1.60.0...v1.60.1) (2026-09-12)
+
+
+### 🐛 버그 수정
+
+* **orchestrator:** 영상 산출물 내려받기 상한 120s→600s + 내려받기 실패는 실패가 아니라 pending 으로 보존 ([#841](https://github.com/openmake/openmake_llm/issues/841)) ([2d37b6a](https://github.com/openmake/openmake_llm/commit/2d37b6ae713daa571967176c6d2ceddebc774b70))
+
 ## [1.60.0](https://github.com/openmake/openmake_llm/compare/v1.59.0...v1.60.0) (2026-09-11)
 
 
