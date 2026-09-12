@@ -115,7 +115,13 @@ const apps = [{
         restart_delay: 3000,            // 재시작 간 3초 대기
         
         // 메모리 관리
-        max_memory_restart: '1G',       // 1GB 초과 시 자동 재시작
+        //
+        // ⚠️ 이 한도를 넘으면 pm2 가 **프로세스를 통째로 재시작**한다 — 진행 중이던 모든
+        // 사용자의 채팅·에이전트 작업·딥리서치가 안내 없이 함께 사라진다(2026-09-13 라이브:
+        // 딥리서치 50소스 스크래핑이 1,077MB 를 찍어 재시작, 진행률 14% 에서 영구 정지).
+        // 호스트 16GB 에 평상시 RSS 는 230MB 수준이라 2GB 로 올려 단발 스파이크를 흡수한다.
+        // (누수 감시 목적은 유지 — 한도를 없애지는 않는다.)
+        max_memory_restart: process.env.OMK_MAX_MEMORY_RESTART || '2G',
         
         // 로그 설정
         log_date_format: 'YYYY-MM-DD HH:mm:ss',
