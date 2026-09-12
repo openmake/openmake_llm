@@ -73,7 +73,7 @@ router.get('/quickstart', (req: Request, res: Response) => {
                 step: 1,
                 title: 'API Key 발급',
                 description: 'POST /api/v1/api-keys 를 호출하여 API Key를 생성합니다.',
-                curl: "curl -X POST ${base}/api/v1/api-keys -H 'Content-Type: application/json' -H 'Authorization: Bearer YOUR_JWT_TOKEN' -d '{\"name\": \"my-app-key\"}'",
+                curl: `curl -X POST ${base}/api/v1/api-keys -H 'Content-Type: application/json' -H 'Authorization: Bearer YOUR_JWT_TOKEN' -d '{"name": "my-app-key"}'`,
             },
             {
                 step: 2,
@@ -85,7 +85,7 @@ router.get('/quickstart', (req: Request, res: Response) => {
                 step: 3,
                 title: 'Chat 요청',
                 description: 'POST /api/v1/chat 를 호출하여 대화를 시작합니다.',
-                curl: "curl -X POST ${base}/api/v1/chat -H 'X-API-Key: omk_live_YOUR_KEY' -H 'Content-Type: application/json' -d '{\"model\": \"openmake_llm\", \"message\": \"Hello!\"}'",
+                curl: `curl -X POST ${base}/api/v1/chat -H 'X-API-Key: omk_live_YOUR_KEY' -H 'Content-Type: application/json' -d '{"model": "openmake_llm", "message": "Hello!"}'`,
             },
         ],
         documentation_url: `${base}/developer`,
