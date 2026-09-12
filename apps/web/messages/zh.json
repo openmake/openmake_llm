@@ -1669,7 +1669,31 @@
       "music_generate": "音乐生成",
       "video_generate": "视频生成",
       "video_analyze": "视频理解"
-    }
+    },
+    "groups": {
+      "text": "文本·视觉",
+      "code": "代码",
+      "image": "图像",
+      "audio": "语音",
+      "music": "音乐",
+      "video": "视频",
+      "embed": "嵌入(基础设施)",
+      "other": "其他"
+    },
+    "groupDesc": {
+      "text": "推理/分析以及图像理解·OCR — 由一个支持视觉的文本模型负责",
+      "code": "专用于编写/修改代码的模型(留空则由文本模型处理)",
+      "image": "图像生成与编辑",
+      "audio": "语音识别(STT)与合成(TTS)",
+      "music": "音乐生成 — 尚无执行路径,仅保存分配",
+      "video": "视频生成(提交任务后完成时获取结果)",
+      "embed": "搜索/嵌入用基础设施模型(仅管理员)",
+      "other": "不属于任何分组的功能"
+    },
+    "mixedOption": "(单独设置)",
+    "advancedShow": "详细设置",
+    "advancedHide": "收起详细",
+    "hiddenUnsupportedNote": "尚无执行路径的功能不显示: {list}"
   },
   "adminModelRoles": {
     "title": "角色模型管理",
@@ -1743,7 +1767,31 @@
       "music_generate": "音乐生成",
       "video_generate": "视频生成",
       "video_analyze": "视频理解"
-    }
+    },
+    "groups": {
+      "text": "文本·视觉",
+      "code": "代码",
+      "image": "图像",
+      "audio": "语音",
+      "music": "音乐",
+      "video": "视频",
+      "embed": "嵌入(基础设施)",
+      "other": "其他"
+    },
+    "groupDesc": {
+      "text": "推理/分析以及图像理解·OCR — 由一个支持视觉的文本模型负责",
+      "code": "专用于编写/修改代码的模型(留空则由文本模型处理)",
+      "image": "图像生成与编辑",
+      "audio": "语音识别(STT)与合成(TTS)",
+      "music": "音乐生成 — 尚无执行路径,仅保存分配",
+      "video": "视频生成(提交任务后完成时获取结果)",
+      "embed": "搜索/嵌入用基础设施模型(仅管理员)",
+      "other": "不属于任何分组的功能"
+    },
+    "mixedOption": "(单独设置)",
+    "advancedShow": "详细设置",
+    "advancedHide": "收起详细",
+    "hiddenUnsupportedNote": "尚无执行路径的功能不显示: {list}"
   },
   "adminSystemSettings": {
     "title": "系统设置",

@@ -1669,7 +1669,31 @@
       "music_generate": "Music generation",
       "video_generate": "Video generation",
       "video_analyze": "Video understanding"
-    }
+    },
+    "groups": {
+      "text": "Text & vision",
+      "code": "Code",
+      "image": "Image",
+      "audio": "Speech",
+      "music": "Music",
+      "video": "Video",
+      "embed": "Embedding (infra)",
+      "other": "Other"
+    },
+    "groupDesc": {
+      "text": "Reasoning/analysis plus image understanding and OCR — one vision-capable text model",
+      "code": "Dedicated model for writing/editing code (falls back to the text model)",
+      "image": "Image generation and editing",
+      "audio": "Speech-to-text and text-to-speech",
+      "music": "Music generation — no execution path yet, the assignment is stored only",
+      "video": "Video generation (submitted as a job; result fetched when done)",
+      "embed": "Infrastructure model for search/embeddings (admin only)",
+      "other": "Capabilities outside any group"
+    },
+    "mixedOption": "(set individually)",
+    "advancedShow": "Details",
+    "advancedHide": "Hide details",
+    "hiddenUnsupportedNote": "Capabilities without an execution path are hidden: {list}"
   },
   "adminModelRoles": {
     "title": "Model Roles Admin",
@@ -1743,7 +1767,31 @@
       "music_generate": "Music generation",
       "video_generate": "Video generation",
       "video_analyze": "Video understanding"
-    }
+    },
+    "groups": {
+      "text": "Text & vision",
+      "code": "Code",
+      "image": "Image",
+      "audio": "Speech",
+      "music": "Music",
+      "video": "Video",
+      "embed": "Embedding (infra)",
+      "other": "Other"
+    },
+    "groupDesc": {
+      "text": "Reasoning/analysis plus image understanding and OCR — one vision-capable text model",
+      "code": "Dedicated model for writing/editing code (falls back to the text model)",
+      "image": "Image generation and editing",
+      "audio": "Speech-to-text and text-to-speech",
+      "music": "Music generation — no execution path yet, the assignment is stored only",
+      "video": "Video generation (submitted as a job; result fetched when done)",
+      "embed": "Infrastructure model for search/embeddings (admin only)",
+      "other": "Capabilities outside any group"
+    },
+    "mixedOption": "(set individually)",
+    "advancedShow": "Details",
+    "advancedHide": "Hide details",
+    "hiddenUnsupportedNote": "Capabilities without an execution path are hidden: {list}"
   },
   "adminSystemSettings": {
     "title": "System Settings",
