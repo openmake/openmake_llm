@@ -9,7 +9,7 @@
  *  - `cancelled`: 사용자 취소 → 호출부가 종전 경로도 시작하지 않는다
  * 셰도우(orchestrator_runs)는 fire-and-forget.
  */
-import { ORCHESTRATOR, CAPABILITY_LABELS_KO, VIDEO_JOB_FOLLOWUP_PATTERN, type Capability } from '../../config/capabilities';
+import { ORCHESTRATOR, CAPABILITY_LABELS_KO, VIDEO_JOB_FOLLOWUP_PATTERN, VIDEO_JOB_RESULT_INTENT_PATTERN, VIDEO_JOB_NOT_FOLLOWUP_PATTERN, type Capability } from '../../config/capabilities';
 import { getPool } from '../../data/models/unified-database';
 import { OrchestratorRunsRepository } from '../../data/repositories/orchestrator-runs-repo';
 import type { ChatMessageRequest } from '../chat-service-types';
@@ -19,6 +19,9 @@ import { executePlan } from './executor';
 import { preflightPlan } from './preflight';
 import { OrchestratorJobsRepository } from '../../data/repositories/orchestrator-jobs-repo';
 import { ExternalKeysRepository } from '../../data/repositories/external-keys-repo';
+import { ServerExternalKeysRepository } from '../../data/repositories/server-external-keys-repo';
+import { recordServerKeyUsage } from '../server-key-quota';
+import type { CapabilityTarget } from './capability-resolver';
 import { recordUserUsage } from '../../llm/user-quota';
 import { isExternalFullId } from '../../config/model-roles';
 import { kindFromMime, mimeFromName } from './media-io';
@@ -73,19 +76,20 @@ export function collectAttachments(req: ChatMessageRequest): Map<string, Orchest
 }
 
 /** 최근 미완료 비동기 작업(영상) → kind=job 첨부 — Planner 가 새 제출 대신 재조회를 계획할 수 있게 */
-async function collectPendingJobs(userId: string | undefined, map: Map<string, OrchestratorAttachment>): Promise<void> {
+async function collectPendingJobs(userId: string | undefined, sessionId: string | undefined, map: Map<string, OrchestratorAttachment>): Promise<void> {
     if (!userId) return;
     try {
-        const rows = await new OrchestratorJobsRepository(getPool()).listRecent(userId, ORCHESTRATOR.JOB_LOOKBACK_HOURS, ORCHESTRATOR.JOB_MAX_LISTED);
+        const rows = await new OrchestratorJobsRepository(getPool()).listRecent(userId, ORCHESTRATOR.JOB_LOOKBACK_HOURS, ORCHESTRATOR.JOB_MAX_LISTED, sessionId ?? null);
         rows.forEach((r, i) => {
             const id = `j${i + 1}`;
             const done = r.status === 'completed' && !!r.resultPath;
             const state = done ? '완료·저장됨' : '진행 중';
+            const sameConversation = (r.sessionId ?? null) === (sessionId ?? null);
             map.set(id, {
                 id, kind: 'job', mime: '',
-                name: `${r.capability} ${state} (${r.providerId} ${r.jobId}, ${r.createdAt.toISOString().slice(11, 16)}Z)`,
+                name: `${r.capability} ${state}${sameConversation ? '' : ' (다른 대화)'} (${r.providerId} ${r.jobId}, ${r.createdAt.toISOString().slice(11, 16)}Z)`,
                 ...(done && r.resultPath ? { urlPath: r.resultPath } : {}),
-                job: { capability: r.capability as Capability, providerId: r.providerId, jobId: r.jobId, resultPath: done ? r.resultPath : null },
+                job: { capability: r.capability as Capability, providerId: r.providerId, jobId: r.jobId, resultPath: done ? r.resultPath : null, sameConversation },
             });
         });
     } catch (err) {
@@ -98,8 +102,10 @@ async function collectPendingJobs(userId: string | undefined, map: Map<string, O
  * (저장본은 실행기가 즉시 반환하므로 provider 호출 없음.) 그 외엔 계획 그대로.
  */
 export function coerceJobFollowup(plan: ValidatedPlan, attachments: Map<string, OrchestratorAttachment>, message: string): ValidatedPlan {
+    // 보정은 "기존 결과 조회" 의도에만 — 새 생성("만들어줘")·설명("압축 원리")·다른 대화의 job 은 Planner 판단을 그대로 둔다(Codex 검토 2)
     if (plan.complexity !== 'simple' || !VIDEO_JOB_FOLLOWUP_PATTERN.test(message)) return plan;
-    const job = [...attachments.values()].find((a) => a.kind === 'job' && a.job?.capability === 'video.generate');
+    if (!VIDEO_JOB_RESULT_INTENT_PATTERN.test(message) || VIDEO_JOB_NOT_FOLLOWUP_PATTERN.test(message)) return plan;
+    const job = [...attachments.values()].find((a) => a.kind === 'job' && a.job?.capability === 'video.generate' && a.job.sameConversation !== false);
     if (!job) return plan;
     const v = validatePlan({ complexity: 'multi', language: plan.language, synthesis: true, tasks: [{ id: 't1', capability: 'video.generate', input: { instruction: message.slice(0, 400), attachments: [job.id] } }] }, new Set(attachments.keys()));
     if (!v.ok) return plan;
@@ -142,21 +148,26 @@ function fallbackNote(lang: string, reason: string): string {
  * 사용량 관측 — 외부 BYOK 는 기존 external_provider_usage(비용 대시보드), 로컬은 per-user 토큰 쿼터에 누적.
  * provider 가 usage 를 안 주면 기록하지 않는다(0 으로 간주 금지). 비토큰 단위(이미지 수 등)는 셰도우 task_results 에만.
  */
-function recordUsage(userId: string | undefined, results: TaskResult[]): void {
+export function recordUsage(userId: string | undefined, results: TaskResult[], targets?: Map<string, CapabilityTarget>): void {
     if (!userId) return;
     const now = Date.now();
     let localTokens = 0;
     for (const r of results) {
         const u = r.usage;
         if (!u || !r.model || (u.promptTokens === undefined && u.completionTokens === undefined)) continue;
+        const inTok = u.promptTokens ?? 0; const outTok = u.completionTokens ?? 0;
         if (isExternalFullId(r.model)) {
             const idx = r.model.indexOf(':');
-            void new ExternalKeysRepository(getPool()).recordUsage({
-                userId, providerId: r.model.slice(0, idx), modelId: r.model.slice(idx + 1),
-                inputTokens: u.promptTokens ?? 0, outputTokens: u.completionTokens ?? 0, durationMs: r.ms,
-            }).catch(() => undefined);
+            const providerId = r.model.slice(0, idx); const modelId = r.model.slice(idx + 1);
+            // 비용 주체는 preflight 가 해석한 대상(target.costOwner)으로 — 서버 공용 키 호출을 사용자 BYOK 로 기록하지 않는다(Codex 검토 1)
+            if (targets?.get(r.taskId)?.costOwner === 'server') {
+                void new ServerExternalKeysRepository(getPool()).recordUsage({ providerId, modelId, role: `capability:${r.capability}`, callerUserId: userId, inputTokens: inTok, outputTokens: outTok });
+                void recordServerKeyUsage(providerId, inTok + outTok, now).catch(() => undefined);
+            } else {
+                void new ExternalKeysRepository(getPool()).recordUsage({ userId, providerId, modelId, inputTokens: inTok, outputTokens: outTok, durationMs: r.ms }).catch(() => undefined);
+            }
         } else {
-            localTokens += (u.promptTokens ?? 0) + (u.completionTokens ?? 0);
+            localTokens += inTok + outTok;
         }
     }
     if (localTokens > 0) void recordUserUsage(userId, localTokens, now).catch(() => undefined);
@@ -174,7 +185,7 @@ export interface RunOrchestratorInput {
 export async function runOrchestrator(input: RunOrchestratorInput): Promise<OrchestratorOutcome> {
     const { req, lang, userId, onProgress } = input;
     const attachments = collectAttachments(req);
-    await collectPendingJobs(userId, attachments);
+    await collectPendingJobs(userId, req.sessionId, attachments);
     onProgress?.({ type: 'orchestrator_status', phase: 'planning' });
 
     const planned = await planRequest({
@@ -205,16 +216,17 @@ export async function runOrchestrator(input: RunOrchestratorInput): Promise<Orch
     }
 
     onProgress?.({ type: 'orchestrator_status', phase: 'executing' });
-    const ctx: ExecContext = { userId, lang, userMessage: req.message ?? '', attachments, results: new Map(), signal: input.signal, onProgress };
-    // 실행 승인 경계 — 배정·키·어댑터·입력 종류·로컬 쿼터를 실행 전에 확정(거절 작업은 호출·과금 없음)
+    const ctx: ExecContext = { userId, lang, userMessage: req.message ?? '', attachments, results: new Map(), signal: input.signal, onProgress, sessionId: req.sessionId };
+    // 실행 승인 경계 — 배정·키·어댑터·입력 종류·로컬 쿼터를 실행 전에 확정(거절 작업은 호출·과금 없음). 승인된 대상은 그대로 실행 대상
     const pre = await preflightPlan(plan, ctx);
+    ctx.targets = pre.targets;
     for (const [id, reason] of pre.rejected) {
         const t = plan.tasks.find((x) => x.id === id)!;
         ctx.results.set(id, { taskId: id, capability: t.capability, ok: false, status: 'failed', text: reason, media: [], ms: 0, error: reason });
     }
     const summary = await executePlan(plan, ctx);
     const media: TaskMedia[] = summary.results.filter((r) => r.ok).flatMap((r) => r.media);
-    recordUsage(userId, summary.results);
+    recordUsage(userId, summary.results, pre.targets);
     onProgress?.({ type: 'orchestrator_status', phase: summary.cancelled ? 'skipped' : 'synthesizing', detail: `${summary.ok}/${summary.results.length}` });
     record({
         requestId: input.requestId, userId, plannerModel: planned.model, plannerMs: planned.ms, plannerOk: true, complexity: 'multi', plan,
@@ -225,4 +237,23 @@ export async function runOrchestrator(input: RunOrchestratorInput): Promise<Orch
     if (summary.cancelled) return { mode: 'cancelled', mediaMarkdowns: [], plannerMs: planned.ms, execMs: summary.ms };
     logger.info(`[Orchestrator] 실행 완료 ok=${summary.ok} failed=${summary.failed} skipped=${summary.skipped} media=${media.length} (${summary.ms}ms)`);
     return { mode: 'executed', contextBlock: buildResultBlock(summary.results, lang), mediaMarkdowns: media.map((m) => m.markdown), plannerMs: planned.ms, execMs: summary.ms };
+}
+
+/**
+ * Planner 없이 capability 1개를 **공통 실행 경계**(preflight 승인 → executor 게이트·데드라인·취소 → 사용량 계상)로 실행한다.
+ * 이미지 모드 토글처럼 사용자가 명시한 단일 작업용 — Planner 만 생략하고 실행 정책은 자동 경로와 같다(Codex 검토 5).
+ */
+export async function runSingleCapabilityTask(input: { capability: Capability; instruction: string; userId?: string; lang: string; sessionId?: string; signal?: AbortSignal }): Promise<TaskResult> {
+    const v = validatePlan({ complexity: 'multi', synthesis: false, tasks: [{ id: 't1', capability: input.capability, input: { instruction: input.instruction } }] }, new Set());
+    if (!v.ok) throw new Error(`계획 검증 실패: ${v.reason}`);
+    const ctx: ExecContext = { userId: input.userId, lang: input.lang, userMessage: input.instruction, attachments: new Map(), results: new Map(), signal: input.signal, sessionId: input.sessionId };
+    const pre = await preflightPlan(v.plan, ctx);
+    const rejected = pre.rejected.get('t1');
+    if (rejected) throw new Error(rejected);
+    ctx.targets = pre.targets;
+    const summary = await executePlan(v.plan, ctx);
+    recordUsage(input.userId, summary.results, pre.targets);
+    const r = summary.results[0];
+    if (!r) throw new Error('실행 결과가 없습니다');
+    return r;
 }

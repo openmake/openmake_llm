@@ -39,7 +39,7 @@ export const imageGenerateExecutor: CapabilityExecutor = async (task, ctx) => {
     const refs = refsRawText(task, ctx, 600);
     const prompt = [task.text || task.instruction, refs ? `Context: ${refs}` : ''].filter(Boolean).join('\n').trim();
     if (!prompt) throw new Error('image.generate: instruction(프롬프트)이 비어 있습니다');
-    const target = await resolveCapabilityTarget('image.generate', ctx.userId);
+    const target = ctx.targets?.get(task.id) ?? await resolveCapabilityTarget('image.generate', ctx.userId);
     const size = pickSize(task.extra, target.params);
     // response_format 미전송 — LiteLLM 이 커스텀 image 모델에서 거부(UnsupportedParamsError), vLLM-Omni 는 b64_json 기본
     const json = await callJson<ImagesResponse>(target, { body: { model: target.model, prompt, n: 1, size }, timeoutMs: CAPABILITY_LIMITS.IMAGE_GEN_TIMEOUT_MS, signal: ctx.signal });
@@ -52,7 +52,7 @@ export const imageEditExecutor: CapabilityExecutor = async (task, ctx) => {
     if (!prompt) throw new Error('image.edit: instruction(수정 지시)이 비어 있습니다');
     const [source] = resolveTaskAttachments(task, ctx, new Set(['image']));
     if (!source) throw new Error('image.edit: 원본 이미지(attachments 또는 refs)가 없습니다');
-    const target = await resolveCapabilityTarget('image.edit', ctx.userId);
+    const target = ctx.targets?.get(task.id) ?? await resolveCapabilityTarget('image.edit', ctx.userId);
     const input = await loadAttachment(source, { timeoutMs: CAPABILITY_LIMITS.IMAGE_GEN_TIMEOUT_MS, signal: ctx.signal, maxBytes: CAPABILITY_LIMITS.IMAGE_EDIT_MAX_INPUT_BYTES, allowTypes: ['image/'] });
     const size = pickSize(task.extra, target.params);
     const adapter = imageEditAdapterFor(target.providerId);

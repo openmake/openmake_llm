@@ -204,6 +204,8 @@ export interface ChatMessageRequest {
     deepResearchMode?: boolean;
     /** 이미지 생성 모드 — ON 이면 메시지를 프롬프트로 이미지를 직접 생성 */
     imageMode?: boolean;
+    /** 이 턴의 대화 id(저장 세션) — 오케스트레이터 job 귀속용. REST/WS 모두 request-handler 가 채운다 */
+    sessionId?: string;
     /** 아티팩트 모드 — ON 이면 모델이 <artifact> 산출물을 생성하도록 유도 (wantsArtifact 강제) */
     artifactMode?: boolean;
     /** Sequential Thinking 모드 활성화 여부 */

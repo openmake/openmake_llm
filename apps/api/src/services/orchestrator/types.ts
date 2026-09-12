@@ -20,7 +20,7 @@ export interface OrchestratorAttachment {
     /** 텍스트 문서면 추출 텍스트 */
     text?: string;
     /** kind=job: 진행 중이던 비동기 작업(영상) — 재조회용 */
-    job?: { capability: Capability; providerId: string; jobId: string; /** 이미 받아둔 산출물(/generated/..) — 있으면 재조회·재다운로드 없이 그대로 반환 */ resultPath?: string | null };
+    job?: { capability: Capability; providerId: string; jobId: string; /** 이미 받아둔 산출물(/generated/..) — 있으면 재조회·재다운로드 없이 그대로 반환 */ resultPath?: string | null; /** 이 턴과 같은 대화에서 만든 job 인지 — 결정적 보정은 같은 대화만 */ sameConversation?: boolean };
 }
 
 export interface TaskMedia {
@@ -65,6 +65,10 @@ export interface ExecContext {
     /** 앞선 작업 결과(refs 해석) */
     results: Map<string, TaskResult>;
     signal?: AbortSignal;
+    /** 이 턴의 대화 id — job 을 대화에 귀속(같은 대화의 job 만 보정 대상) */
+    sessionId?: string;
+    /** preflight 가 승인한 작업별 실행 대상 — executor 는 재해석하지 않고 이것을 쓴다(승인 대상 = 실행 대상) */
+    targets?: Map<string, import('./capability-resolver').CapabilityTarget>;
     /** 진행 이벤트(WS) — 없으면 무시 */
     onProgress?: (event: OrchestratorProgressEvent) => void;
 }

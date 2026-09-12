@@ -36,6 +36,7 @@ import { getPool } from '../../data/models/unified-database';
 import { CapabilityModelsRepository, type CapabilityModelRow } from '../../data/repositories/capability-models-repo';
 import { ExternalKeysRepository } from '../../data/repositories/external-keys-repo';
 import { ServerExternalKeysRepository } from '../../data/repositories/server-external-keys-repo';
+import { checkServerKeyBudget } from '../server-key-quota';
 import { AppError } from '../../utils/error-handler';
 import { createLogger } from '../../utils/logger';
 
@@ -47,6 +48,7 @@ export type CapabilityUnavailableCode =
     | 'CAPABILITY_PROVIDER_NOT_GATEWAY'
     | 'CAPABILITY_KEY_MISSING'
     | 'CAPABILITY_KEY_INACTIVE'
+    | 'CAPABILITY_KEY_BUDGET'
     | 'CAPABILITY_LOOKUP_FAILED'
     | 'CAPABILITY_UNSUPPORTED';
 
@@ -69,6 +71,8 @@ export interface CapabilityTarget {
     headers: Record<string, string>;
     params: Record<string, string>;
     source: 'user' | 'global' | 'default';
+    /** 비용 주체 — user: 사용자 BYOK(external_provider_usage) · server: 운영자 공용 키(server_external_key_usage + 일/월 상한) · local: 로컬 vLLM(사용자 토큰 쿼터) */
+    costOwner: 'user' | 'server' | 'local';
     /** 'gateway'(기본) | 'direct' — jobs-v1 영상처럼 게이트웨이가 프록시 못 하는 경우만 provider 직결 */
     transport: 'gateway' | 'direct';
 }
@@ -142,7 +146,7 @@ function localTarget(capability: Capability, fullId: string, params: Record<stri
         capability, fullId, providerId: 'local-llm', model: tag,
         baseUrl: gatewayBase(), endpoint: CAPABILITY_ENDPOINT[capability],
         headers: { Authorization: `Bearer ${cfg.llmApiKey}` },
-        params, source, transport: 'gateway',
+        params, source, costOwner: 'local', transport: 'gateway',
     };
 }
 
@@ -174,8 +178,16 @@ async function externalTarget(
         apiKey = await deps.userKeys.decryptKey(userId, providerId);
         userBaseUrl = keyRow.baseUrl ?? null;
     } else {
+        // 서버 공용 키 — 역할 경로(model-role-resolver)와 같은 정책: 등록·활성·일/월 상한을 실행 전에 검사(Codex 검토 1, 2026-09-12)
+        const row = await deps.serverKeys.get(providerId);
+        if (!row) throw new CapabilityUnavailableError(`'${providerId}' 서버 공용 키가 등록되어 있지 않아 ${capability} 를 실행할 수 없습니다`, 'CAPABILITY_KEY_MISSING');
+        if (!row.isActive) throw new CapabilityUnavailableError(`'${providerId}' 서버 공용 키가 비활성 상태입니다 (${capability})`, 'CAPABILITY_KEY_INACTIVE');
+        const budget = await checkServerKeyBudget(providerId, row.dailyTokenLimit, row.monthlyTokenLimit, Date.now());
+        if (budget) throw new CapabilityUnavailableError(budget, 'CAPABILITY_KEY_BUDGET');
         apiKey = await deps.serverKeys.decryptKey(providerId);
+        userBaseUrl = row.baseUrl ?? null;
     }
+    const costOwner: CapabilityTarget['costOwner'] = source === 'user' ? 'user' : 'server';
     if (!apiKey) {
         throw new CapabilityUnavailableError(
             `'${providerId}' 키가 없어 ${capability} 모델 '${modelId}' 를 호출할 수 없습니다 (${source === 'user' ? 'BYOK 키' : '서버 공용 키'} 필요)`,
@@ -190,14 +202,14 @@ async function externalTarget(
             baseUrl: (userBaseUrl || entry.defaultBaseUrl).replace(/\/+$/, ''),
             endpoint: adapter.submitPath ?? CAPABILITY_ENDPOINT[capability],
             headers: { Authorization: `Bearer ${apiKey}` },
-            params, source, transport: 'direct',
+            params, source, costOwner, transport: 'direct',
         };
     }
     return {
         capability, fullId, providerId, model: `${providerId}/${modelId}`,
         baseUrl: gatewayBase(), endpoint: CAPABILITY_ENDPOINT[capability],
         headers: { Authorization: `Bearer ${cfg.llmApiKey}`, 'x-api-key': apiKey },
-        params, source, transport: 'gateway',
+        params, source, costOwner, transport: 'gateway',
     };
 }
 

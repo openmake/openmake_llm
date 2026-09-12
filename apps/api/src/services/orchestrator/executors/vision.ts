@@ -17,7 +17,7 @@ const OCR_EN = 'You are an OCR transcriber. Transcribe all text, tables, and cod
 export const visionExecutor: CapabilityExecutor = async (task, ctx) => {
     const atts = resolveTaskAttachments(task, ctx, new Set(['image'])).slice(0, CAPABILITY_LIMITS.VISION_MAX_IMAGES);
     if (atts.length === 0) throw new Error(`${task.capability}: 사용할 이미지 첨부가 없습니다 (attachments/refs 확인)`);
-    const target = await resolveCapabilityTarget(task.capability, ctx.userId);
+    const target = ctx.targets?.get(task.id) ?? await resolveCapabilityTarget(task.capability, ctx.userId);
 
     const content: Array<Record<string, unknown>> = [
         { type: 'text', text: task.instruction || (ctx.lang === 'ko' ? '첨부 이미지를 서술하세요.' : 'Describe the attached image.') },
