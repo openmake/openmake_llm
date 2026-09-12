@@ -2,203 +2,25 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Layers, Loader2, RotateCcw, Save } from "lucide-react";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  Button,
-  Badge,
-} from "@/components/ui/primitives";
+import { Layers, Loader2 } from "lucide-react";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { fetchModels, type ModelEntry } from "@/lib/models-api";
+import { compactParams, DEFAULT_VALUE, type CapabilityEffective, type CapabilityOverride } from "./capability-shared";
+import { CapabilityGroupsEditor } from "./capability-groups";
 
-/* ── 타입 (백엔드 /api/users/me/capability-models 응답) ─────────── */
-export interface CapabilityOverride {
-  scope: string;
-  capability: string;
-  fullId: string;
-  params: Record<string, string>;
-  updatedAt: string;
-}
-
-export type CapabilitySource = "user" | "global" | "default";
-
-export interface CapabilityEffective {
-  capability: string;
-  fullId?: string;
-  source?: CapabilitySource;
-  error?: string;
-  code?: string;
-}
+// 관리자 페이지 등 기존 import 경로 호환 — 공용 조각은 capability-shared.tsx 가 SoT
+export {
+  CapabilityEffectiveLine, CapabilityParamsInputs, CapabilityUnsupportedBadge, compactParams, paramsEqual,
+  CAPABILITY_PARAM_KEYS, CAPABILITY_PARAM_VALUE_MAX, UNSUPPORTED_CAPABILITIES,
+  type CapabilityEffective, type CapabilityOverride, type CapabilitySource,
+} from "./capability-shared";
 
 interface CapabilityModelsPayload {
   overrides: CapabilityOverride[];
   effective: CapabilityEffective[];
   assignableCapabilities: string[];
-}
-
-/** 배정 미지정 select 값 — 전역/기본값으로 자동 해석됨 */
-const DEFAULT_VALUE = "";
-
-/**
- * capability 별 params 화이트리스트 — 백엔드 capability 설정의 PARAM_KEYS 와
- * 동일하게 유지할 것(서버는 이 키 밖의 값을 조용히 버린다).
- */
-export const CAPABILITY_PARAM_KEYS: Record<string, readonly string[]> = {
-  "text.reason": ["temperature"],
-  "text.code": ["temperature"],
-  "text.embed": ["dimensions"],
-  "vision.describe": ["detail"],
-  "vision.ocr": ["detail"],
-  "image.generate": ["size", "quality", "style"],
-  "image.edit": ["size"],
-  "audio.transcribe": ["language"],
-  "audio.speech": ["voice", "format"],
-  "music.generate": ["duration"],
-  "video.generate": ["size", "seconds"],
-};
-
-/**
- * provider 어댑터가 아직 없는 capability — 배정은 가능하지만 실행 경로가 없어
- * "현재 미지원" 배지를 보여 준다(백엔드 어댑터가 생기면 여기서 제거).
- */
-export const UNSUPPORTED_CAPABILITIES: ReadonlySet<string> = new Set([
-  "audio.analyze",
-  "music.analyze",
-  "music.generate",
-  "video.analyze",
-]);
-
-/** 백엔드 `PARAM_VALUE_MAX_CHARS` 와 동일 */
-export const CAPABILITY_PARAM_VALUE_MAX = 64;
-
-/** 비어 있지 않은(trim) 값만 남긴 params — PUT body 용. 없으면 undefined. */
-export function compactParams(draft: Record<string, string> | undefined): Record<string, string> | undefined {
-  if (!draft) return undefined;
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(draft)) {
-    const s = v.trim();
-    if (s) out[k] = s;
-  }
-  return Object.keys(out).length > 0 ? out : undefined;
-}
-
-/** 저장된 params 와 초안이 같은지 (빈 값은 없는 것으로 취급) */
-export function paramsEqual(saved: Record<string, string> | undefined, draft: Record<string, string> | undefined): boolean {
-  const a = compactParams(saved) ?? {};
-  const b = compactParams(draft) ?? {};
-  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-  for (const k of keys) if (a[k] !== b[k]) return false;
-  return true;
-}
-
-/**
- * capability params 입력 행 (사용자·관리자 공용). 허용 키마다 작은 텍스트 입력 하나.
- * 모델이 배정되지 않았으면 비활성, 저장값과 다를 때만 [적용] 버튼 노출.
- */
-export function CapabilityParamsInputs({
-  capability,
-  draft,
-  saved,
-  disabled,
-  busy,
-  onChange,
-  onApply,
-  t,
-}: {
-  capability: string;
-  draft: Record<string, string>;
-  saved: Record<string, string> | undefined;
-  disabled: boolean;
-  busy: boolean;
-  onChange: (key: string, value: string) => void;
-  onApply: () => void;
-  t: ReturnType<typeof useTranslations>;
-}) {
-  const keys = CAPABILITY_PARAM_KEYS[capability] ?? [];
-  if (keys.length === 0) return null;
-  const dirty = !disabled && !paramsEqual(saved, draft);
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {keys.map((key) => (
-        <input
-          key={key}
-          type="text"
-          className="h-8 w-28 rounded-md border border-border bg-surface-2 px-2 font-mono text-xs text-fg placeholder:text-muted focus:border-accent focus:outline-none disabled:opacity-50"
-          placeholder={key}
-          title={key}
-          aria-label={`${t(`capabilities.${capability.replace(/\./g, '_')}`)} ${key}`}
-          maxLength={CAPABILITY_PARAM_VALUE_MAX}
-          value={draft[key] ?? ""}
-          disabled={disabled || busy}
-          onChange={(e) => onChange(key, e.target.value)}
-        />
-      ))}
-      {dirty && (
-        <Button size="sm" variant="ghost" className="whitespace-nowrap" disabled={busy} onClick={onApply}>
-          <Save className="h-4 w-4" aria-hidden />
-          {t("paramsApply")}
-        </Button>
-      )}
-      <span className="text-xs text-muted">{t("paramsHint")}</span>
-    </div>
-  );
-}
-
-const SOURCE_TONE: Record<CapabilitySource, "accent" | "success" | "neutral"> = {
-  user: "accent",
-  global: "success",
-  default: "neutral",
-};
-
-/** 사용자·관리자 섹션이 공유하는 실효 값 표시 (fullId + source 배지, 오류 시 경고 배지). */
-export function CapabilityEffectiveLine({
-  eff,
-  t,
-}: {
-  eff: CapabilityEffective | undefined;
-  t: ReturnType<typeof useTranslations>;
-}) {
-  if (!eff) return null;
-  if (eff.error) {
-    return (
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <Badge tone="warn" className="shrink-0 whitespace-nowrap">
-          {t("unavailableBadge")}
-        </Badge>
-        <span className="text-warn">{eff.error}</span>
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-      <span className="break-all font-mono">{eff.fullId ?? "—"}</span>
-      {eff.source && (
-        <Badge tone={SOURCE_TONE[eff.source]} className="shrink-0 whitespace-nowrap">
-          {t(`source.${eff.source}`)}
-        </Badge>
-      )}
-    </div>
-  );
-}
-
-/** 어댑터 미구현 capability 배지 (사용자·관리자 공용). */
-export function CapabilityUnsupportedBadge({
-  capability,
-  t,
-}: {
-  capability: string;
-  t: ReturnType<typeof useTranslations>;
-}) {
-  if (!UNSUPPORTED_CAPABILITIES.has(capability)) return null;
-  return (
-    <Badge tone="neutral" className="shrink-0 whitespace-nowrap" title={t("unsupportedHint")}>
-      {t("unsupportedBadge")}
-    </Badge>
-  );
 }
 
 /**
@@ -251,28 +73,26 @@ export function CapabilityModelsSection() {
     queueMicrotask(() => void load());
   }, [load]);
 
-  async function handleChange(capability: string, fullId: string) {
-    setSaving(capability);
+  /** 그룹(여러 capability) 또는 단일 capability 에 같은 모델을 배정/해제한다 — 실패한 항목이 있어도 나머지는 반영되고 사유를 표시 */
+  async function assign(caps: string[], fullId: string, busyKey: string) {
+    setSaving(busyKey);
     setError(null);
-    try {
-      if (fullId === DEFAULT_VALUE) {
-        // 오버라이드가 있을 때만 해제 (없으면 404 — 이미 기본 상태)
-        if (overrides.some((o) => o.capability === capability)) {
-          await ApiClient.del(`/api/users/me/capability-models/${capability}`);
+    const failures: string[] = [];
+    for (const capability of caps) {
+      try {
+        if (fullId === DEFAULT_VALUE) {
+          if (overrides.some((o) => o.capability === capability)) await ApiClient.del(`/api/users/me/capability-models/${capability}`);
+        } else {
+          const params = compactParams(paramDrafts[capability]);
+          await ApiClient.put(`/api/users/me/capability-models/${capability}`, { model: fullId, ...(params ? { params } : {}) });
         }
-      } else {
-        const params = compactParams(paramDrafts[capability]);
-        await ApiClient.put(`/api/users/me/capability-models/${capability}`, {
-          model: fullId,
-          ...(params ? { params } : {}),
-        });
+      } catch (e) {
+        failures.push(`${capability}: ${e instanceof Error ? e.message : t("saveFailed")}`);
       }
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t("saveFailed"));
-    } finally {
-      setSaving(null);
     }
+    await load();
+    if (failures.length > 0) setError(failures.join(" · "));
+    setSaving(null);
   }
 
   function setParam(capability: string, key: string, value: string) {
@@ -307,86 +127,23 @@ export function CapabilityModelsSection() {
             {t("loading")}
           </div>
         ) : (
-          <div className="space-y-3">
-            {capabilities.map((capability) => {
-              const current = mapped.get(capability) ?? DEFAULT_VALUE;
-              const isSaving = saving === capability;
-              return (
-                <div
-                  key={capability}
-                  className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="whitespace-nowrap text-sm font-medium">
-                        {t(`capabilities.${capability.replace(/\./g, '_')}`)}
-                      </span>
-                      <span className="font-mono text-xs text-muted">{capability}</span>
-                      {current !== DEFAULT_VALUE && (
-                        <Badge tone="accent" className="shrink-0 whitespace-nowrap">
-                          {t("assignedBadge")}
-                        </Badge>
-                      )}
-                      <CapabilityUnsupportedBadge capability={capability} t={t} />
-                    </div>
-                    <CapabilityEffectiveLine eff={effectiveMap.get(capability)} t={t} />
-                    <CapabilityParamsInputs
-                      capability={capability}
-                      draft={paramDrafts[capability] ?? {}}
-                      saved={savedParams.get(capability)}
-                      disabled={current === DEFAULT_VALUE}
-                      busy={isSaving}
-                      onChange={(key, value) => setParam(capability, key, value)}
-                      onApply={() => void handleChange(capability, current)}
-                      t={t}
-                    />
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {isSaving && (
-                      <Loader2 className="h-4 w-4 animate-spin text-muted" aria-hidden />
-                    )}
-                    <select
-                      className="h-9 min-w-52 rounded-md border border-border-strong bg-surface px-2 text-sm text-fg outline-none focus:border-accent"
-                      value={current}
-                      disabled={isSaving}
-                      aria-label={t(`capabilities.${capability.replace(/\./g, '_')}`)}
-                      onChange={(e) => void handleChange(capability, e.target.value)}
-                    >
-                      <option value={DEFAULT_VALUE}>{t("defaultOption")}</option>
-                      {/* 저장값이 목록 밖이면 값을 보존하는 옵션을 덧붙여 실제 배정을 표시
-                          (model-roles-section 의 "(목록에 없음)" 규칙과 동일). */}
-                      {current !== DEFAULT_VALUE &&
-                        !models.some((m) => m.modelId === current) && (
-                          <option value={current}>
-                            {current} {t("notInList")}
-                          </option>
-                        )}
-                      {models.map((m) => (
-                        <option key={m.modelId} value={m.modelId}>
-                          {m.name}
-                          {m.provider !== "local-llm" ? ` (${m.provider})` : ""}
-                        </option>
-                      ))}
-                    </select>
-                    {current !== DEFAULT_VALUE && !isSaving && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        aria-label={t("resetLabel")}
-                        title={t("resetLabel")}
-                        onClick={() => void handleChange(capability, DEFAULT_VALUE)}
-                      >
-                        <RotateCcw className="h-4 w-4" aria-hidden />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            {capabilities.length === 0 && !error && (
-              <p className="text-sm text-muted">{t("empty")}</p>
-            )}
-          </div>
+          <CapabilityGroupsEditor
+            t={t}
+            capabilities={capabilities}
+            mapped={mapped}
+            savedParams={savedParams}
+            effectiveMap={effectiveMap}
+            models={models}
+            busy={saving}
+            paramDrafts={paramDrafts}
+            onAssign={(caps, fullId, key) => void assign(caps, fullId, key)}
+            onParamChange={setParam}
+            onParamApply={(capability) => void assign([capability], mapped.get(capability) ?? DEFAULT_VALUE, capability)}
+            labels={{ assigned: t("assignedBadge") }}
+          />
+        )}
+        {!loading && capabilities.length === 0 && !error && (
+          <p className="text-sm text-muted">{t("empty")}</p>
         )}
       </CardContent>
     </Card>

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { UsersRound, KeyRound, Trash2, Save, Loader2, Layers, RotateCcw } from "lucide-react";
+import { UsersRound, KeyRound, Trash2, Save, Loader2, Layers } from "lucide-react";
 import {
   PageHeader,
   Card,
@@ -19,14 +19,8 @@ import { AdminTabs } from "@/components/hub-tabs";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { fetchModels, type ModelEntry } from "@/lib/models-api";
-import {
-  CapabilityEffectiveLine,
-  CapabilityParamsInputs,
-  CapabilityUnsupportedBadge,
-  compactParams,
-  type CapabilityEffective,
-  type CapabilityOverride,
-} from "@/components/settings/capability-models-section";
+import { compactParams, type CapabilityEffective, type CapabilityOverride } from "@/components/settings/capability-shared";
+import { CapabilityGroupsEditor } from "@/components/settings/capability-groups";
 
 /* ── 타입 (백엔드 /api/admin/model-roles, /api/admin/server-external-keys) ── */
 interface GlobalMapping {
@@ -164,25 +158,26 @@ function GlobalCapabilityModelsCard() {
     queueMicrotask(() => void load());
   }, [load]);
 
-  async function handleChange(capability: string, fullId: string) {
-    setBusy(capability);
+  /** 그룹(여러 capability) 또는 단일 capability 에 같은 모델을 전역 배정/해제 — 실패 항목은 사유를 모아 표시 */
+  async function assign(caps: string[], fullId: string, busyKey: string) {
+    setBusy(busyKey);
     setError(null);
-    try {
-      if (fullId) {
-        const params = compactParams(paramDrafts[capability]);
-        await ApiClient.put(`/api/admin/capability-models/${capability}`, {
-          model: fullId,
-          ...(params ? { params } : {}),
-        });
-      } else if (payload?.mappings.some((m) => m.capability === capability)) {
-        await ApiClient.del(`/api/admin/capability-models/${capability}`);
+    const failures: string[] = [];
+    for (const capability of caps) {
+      try {
+        if (fullId) {
+          const params = compactParams(paramDrafts[capability]);
+          await ApiClient.put(`/api/admin/capability-models/${capability}`, { model: fullId, ...(params ? { params } : {}) });
+        } else if (payload?.mappings.some((m) => m.capability === capability)) {
+          await ApiClient.del(`/api/admin/capability-models/${capability}`);
+        }
+      } catch (e) {
+        failures.push(`${capability}: ${e instanceof Error ? e.message : t("saveFailed")}`);
       }
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t("saveFailed"));
-    } finally {
-      setBusy(null);
     }
+    await load();
+    if (failures.length > 0) setError(failures.join(" · "));
+    setBusy(null);
   }
 
   function setParam(capability: string, key: string, value: string) {
@@ -209,63 +204,22 @@ function GlobalCapabilityModelsCard() {
           {t("gatewayNote", { providers: providers.length > 0 ? providers.join(", ") : t("gatewayNone") })}
         </p>
         {error && <p className="text-sm text-danger" role="alert">{error}</p>}
-        {(payload?.assignableCapabilities ?? []).map((capability) => {
-          const current = mapped.get(capability) ?? "";
-          const isBusy = busy === capability;
-          return (
-            <div key={capability} className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0 space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="whitespace-nowrap text-sm font-medium">{t(`capabilities.${capability.replace(/\./g, '_')}`)}</span>
-                  <span className="font-mono text-xs text-muted">{capability}</span>
-                  {current && <Badge tone="accent" className="shrink-0 whitespace-nowrap">{t("assigned")}</Badge>}
-                  <CapabilityUnsupportedBadge capability={capability} t={t} />
-                </div>
-                <CapabilityEffectiveLine eff={effectiveMap.get(capability)} t={t} />
-                <p className="text-xs text-muted">
-                  {t("codeDefault", { model: payload?.defaults[capability] || "—" })}
-                </p>
-                <CapabilityParamsInputs
-                  capability={capability}
-                  draft={paramDrafts[capability] ?? {}}
-                  saved={savedParams.get(capability)}
-                  disabled={!current}
-                  busy={isBusy}
-                  onChange={(key, value) => setParam(capability, key, value)}
-                  onApply={() => void handleChange(capability, current)}
-                  t={t}
-                />
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {isBusy && <Loader2 className="h-4 w-4 animate-spin text-muted" aria-hidden />}
-                <select
-                  className={`${selectCls} min-w-52`}
-                  value={current}
-                  disabled={isBusy}
-                  aria-label={t(`capabilities.${capability.replace(/\./g, '_')}`)}
-                  onChange={(e) => void handleChange(capability, e.target.value)}
-                >
-                  <option value="">{t("defaultOption")}</option>
-                  {current && !models.some((m) => m.modelId === current) && (
-                    <option value={current}>{current} {t("notInList")}</option>
-                  )}
-                  {models.map((m) => (
-                    <option key={m.modelId} value={m.modelId}>
-                      {m.name}
-                      {m.provider !== "local-llm" ? ` (${m.provider})` : ""}
-                    </option>
-                  ))}
-                </select>
-                {current && !isBusy && (
-                  <Button variant="ghost" size="sm" aria-label={t("resetLabel")} title={t("resetLabel")}
-                    onClick={() => void handleChange(capability, "")}>
-                    <RotateCcw className="h-4 w-4" aria-hidden />
-                  </Button>
-                )}
-              </div>
-            </div>
-          );
-        })}
+        <CapabilityGroupsEditor
+          t={t}
+          admin
+          capabilities={payload?.assignableCapabilities ?? []}
+          mapped={mapped}
+          savedParams={savedParams}
+          effectiveMap={effectiveMap}
+          models={models}
+          busy={busy}
+          paramDrafts={paramDrafts}
+          codeDefaults={payload?.defaults}
+          onAssign={(caps, fullId, key) => void assign(caps, fullId, key)}
+          onParamChange={setParam}
+          onParamApply={(capability) => void assign([capability], mapped.get(capability) ?? "", capability)}
+          labels={{ assigned: t("assigned") }}
+        />
         <p className="text-xs text-muted">{t("cacheNote")}</p>
       </CardContent>
     </Card>

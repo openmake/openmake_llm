@@ -1669,7 +1669,31 @@
       "music_generate": "음악 생성",
       "video_generate": "영상 생성",
       "video_analyze": "영상 이해"
-    }
+    },
+    "groups": {
+      "text": "텍스트·비전",
+      "code": "코드",
+      "image": "이미지",
+      "audio": "음성",
+      "music": "음악",
+      "video": "영상",
+      "embed": "임베딩(인프라)",
+      "other": "기타"
+    },
+    "groupDesc": {
+      "text": "추론·분석과 이미지 이해·OCR — 비전을 지원하는 텍스트 모델 하나가 맡습니다",
+      "code": "코드 작성·수정 전용 모델(비우면 텍스트 모델이 처리)",
+      "image": "이미지 생성과 편집",
+      "audio": "음성 인식(STT)과 합성(TTS)",
+      "music": "음악 생성 — 아직 실행 경로가 없어 배정만 저장됩니다",
+      "video": "영상 생성(작업 제출 후 완료 시 결과 수령)",
+      "embed": "검색·임베딩용 인프라 모델(관리자 전용)",
+      "other": "그룹에 속하지 않은 기능"
+    },
+    "mixedOption": "(개별 설정)",
+    "advancedShow": "세부 설정",
+    "advancedHide": "세부 설정 닫기",
+    "hiddenUnsupportedNote": "아직 실행 경로가 없는 기능은 표시하지 않습니다: {list}"
   },
   "adminModelRoles": {
     "title": "역할 모델 관리",
@@ -1743,7 +1767,31 @@
       "music_generate": "음악 생성",
       "video_generate": "영상 생성",
       "video_analyze": "영상 이해"
-    }
+    },
+    "groups": {
+      "text": "텍스트·비전",
+      "code": "코드",
+      "image": "이미지",
+      "audio": "음성",
+      "music": "음악",
+      "video": "영상",
+      "embed": "임베딩(인프라)",
+      "other": "기타"
+    },
+    "groupDesc": {
+      "text": "추론·분석과 이미지 이해·OCR — 비전을 지원하는 텍스트 모델 하나가 맡습니다",
+      "code": "코드 작성·수정 전용 모델(비우면 텍스트 모델이 처리)",
+      "image": "이미지 생성과 편집",
+      "audio": "음성 인식(STT)과 합성(TTS)",
+      "music": "음악 생성 — 아직 실행 경로가 없어 배정만 저장됩니다",
+      "video": "영상 생성(작업 제출 후 완료 시 결과 수령)",
+      "embed": "검색·임베딩용 인프라 모델(관리자 전용)",
+      "other": "그룹에 속하지 않은 기능"
+    },
+    "mixedOption": "(개별 설정)",
+    "advancedShow": "세부 설정",
+    "advancedHide": "세부 설정 닫기",
+    "hiddenUnsupportedNote": "아직 실행 경로가 없는 기능은 표시하지 않습니다: {list}"
   },
   "adminSystemSettings": {
     "title": "시스템 설정",
