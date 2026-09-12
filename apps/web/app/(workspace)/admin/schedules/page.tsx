@@ -82,10 +82,13 @@ export default function AdminSchedulesPage() {
   const schedules = payload?.schedules ?? [];
 
   return (
-    <div className="space-y-6">
+    // <main> 이 overflow-hidden 이라 스크롤 컨테이너는 페이지가 만든다(헤더·탭은 고정).
+    <>
       <PageHeader title={t("title")} description={t("description")} />
 
       <AdminTabs />
+
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-6">
       {error && <p className="text-sm text-danger" role="alert">{error}</p>}
 
       <Card>
@@ -153,6 +156,7 @@ export default function AdminSchedulesPage() {
           )}
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </>
   );
 }

@@ -290,10 +290,15 @@ export default function AdminModelRolesPage() {
   const mappedRoles = new Set((roles?.mappings ?? []).map((m) => m.role));
 
   return (
-    <div className="space-y-6">
+    // 워크스페이스 레이아웃의 <main> 은 h-dvh + overflow-hidden 이라(채팅이 자체 스크롤 영역을
+    // 갖는 전제) 페이지가 스크롤 컨테이너를 직접 만들어야 한다 — 없으면 본문이 뷰포트 밖에서
+    // 통째로 잘린다(2026-09-13 신고: 1280×900 에서 1,314px 접근 불가). 헤더·탭은 고정.
+    <>
       <PageHeader title={t("title")} description={t("description")} />
 
       <AdminTabs />
+
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-6">
       {error && <p className="text-sm text-danger" role="alert">{error}</p>}
 
       <Card>
@@ -374,6 +379,7 @@ export default function AdminModelRolesPage() {
       </Card>
 
       <GlobalCapabilityModelsCard />
-    </div>
+      </div>
+    </>
   );
 }
