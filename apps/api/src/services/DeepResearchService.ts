@@ -338,6 +338,7 @@ export class DeepResearchService {
                     const prog = 85 + frac * 14;
                     this.reportProgress(onProgress, sessionId, 'running', this.config.maxLoops, this.config.maxLoops, 'report', prog, getResearchMessage('reportWriting', this.config.language, { chars }));
                 },
+                abortSignal: this.abortController?.signal,
                 throwIfAborted: () => this.throwIfAborted()
             });
 

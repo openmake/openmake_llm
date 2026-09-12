@@ -38,6 +38,9 @@ export async function decomposeTopics(params: {
     throwIfAborted();
     const prompt = withSkillContext(getDecomposePrompt(config.language, topic), params.skillBlock ?? '');
 
+    // 실패 시 "왜" 를 남기기 위한 응답 요약 — 이 단계는 파싱 실패해도 폴백으로 조용히 진행된다
+    let responseSummary = '';
+
     try {
         const response = await chatWithAbortTimeout(
             client,
@@ -48,6 +51,10 @@ export async function decomposeTopics(params: {
             abortSignal,
         );
         throwIfAborted();
+
+        const outTokens = response.metrics?.completion_tokens;
+        const truncated = typeof outTokens === 'number' && outTokens >= RESEARCH_DEFAULTS.DECOMPOSE_MAX_TOKENS;
+        responseSummary = `chars=${response.content.length} out=${outTokens ?? '?'} cap=${RESEARCH_DEFAULTS.DECOMPOSE_MAX_TOKENS}${truncated ? ' 출력상한절단' : ''}`;
 
         const jsonMatch = response.content.match(/\[[\s\S]*\]/);
         if (!jsonMatch) {
@@ -102,7 +109,7 @@ export async function decomposeTopics(params: {
         return finalSubTopics;
     } catch (error) {
         throwIfAborted();  // 외부 중단이면 RESEARCH_ABORTED 전파, timeout/파싱 실패면 폴백
-        logger.error(`[DeepResearch] 주제 분해 실패: ${error instanceof Error ? error.message : String(error)}`);
+        logger.error(`[DeepResearch] 주제 분해 실패 — 템플릿 폴백: ${error instanceof Error ? error.message : String(error)}${responseSummary ? ` (${responseSummary})` : ''}`);
         return buildFallbackSubTopics(topic);
     }
 }

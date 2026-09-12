@@ -173,8 +173,15 @@ export const RESEARCH_DEFAULTS = {
     CHUNK_SIZE: 6,
     /** 검색 fan-out 동시실행 수 (env: RESEARCH_SEARCH_CONCURRENCY) */
     SEARCH_CONCURRENCY: parseInt(process.env.RESEARCH_SEARCH_CONCURRENCY || '5', 10),
-    /** 합성 병렬 동시실행 수 */
-    SYNTHESIS_CONCURRENCY: 5,
+    /**
+     * 합성 병렬 동시실행 수 (env: RESEARCH_SYNTHESIS_CONCURRENCY).
+     *
+     * 로컬 단일 GPU 에서는 동시성을 높여도 이득이 없다 — 같은 청크(30,490자·12,826 토큰, 상한 800)를
+     * 동시 5건으로 돌리면 건당 110초, 동시 3건이면 **76초**다(2026-09-13 실측). 6청크 기준 총 시간도
+     * 3 쪽이 짧고(2배치×76초), 개별 타임아웃 여유까지 커진다. 외부 provider 는 `synthesisConcurrency()`
+     * 가 external hint 와 min 을 취하므로 이 값이 상한이 된다.
+     */
+    SYNTHESIS_CONCURRENCY: parseInt(process.env.RESEARCH_SYNTHESIS_CONCURRENCY || '3', 10),
     /**
      * 청크 요약 1건의 출력 상한 (토큰). 중간 산출물이라 길 필요가 없다.
      *
@@ -185,11 +192,16 @@ export const RESEARCH_DEFAULTS = {
      */
     CHUNK_SUMMARY_MAX_TOKENS: parseInt(process.env.DEEP_RESEARCH_CHUNK_SUMMARY_MAX_TOKENS || '800', 10),
     /**
-     * 주제 분해 출력 상한 (토큰) — 서브토픽 목록이라 짧다. 상한이 없어 로컬 모델에서
-     * 60초 타임아웃을 넘겨 실패했다(2026-09-13 라이브: "주제 분해 실패: Request was aborted").
+     * 주제 분해 출력 상한 (토큰) — 유일하게 **JSON 을 파싱하는** 단계라 절단되면 그대로 실패한다.
+     *
+     * 상한이 없던 동안은 60초 타임아웃을 넘겨 실패했고(분해 타임아웃 120초로 상향), 이어서 500 으로
+     * 조인 동안은 `finish_reason=length` 로 배열이 잘려 greedy `/\[[\s\S]*\]/` 가 중첩
+     * `searchQueries` 의 닫는 `]` 까지만 잡아 "Expected ',' or '}'" 파싱 실패 → 템플릿 폴백으로
+     * 엉뚱한 검색어가 나갔다(2026-09-13 라이브). 같은 프롬프트 실측: 상한 없음 741 토큰·67.4초,
+     * 상한 1500 이면 826 토큰·67.1초로 `stop` — 소요는 상한과 무관하므로 실측 최대 위로 둔다.
      * env: DEEP_RESEARCH_DECOMPOSE_MAX_TOKENS
      */
-    DECOMPOSE_MAX_TOKENS: parseInt(process.env.DEEP_RESEARCH_DECOMPOSE_MAX_TOKENS || '500', 10),
+    DECOMPOSE_MAX_TOKENS: parseInt(process.env.DEEP_RESEARCH_DECOMPOSE_MAX_TOKENS || '1500', 10),
     /** 청크 병합(findings) 출력 상한 (토큰). env: DEEP_RESEARCH_MERGE_MAX_TOKENS */
     MERGE_MAX_TOKENS: parseInt(process.env.DEEP_RESEARCH_MERGE_MAX_TOKENS || '1500', 10),
     /** 추가 탐색 필요 판단 출력 상한 (토큰) — yes/no 한 마디면 충분. env: DEEP_RESEARCH_NEED_MORE_MAX_TOKENS */
