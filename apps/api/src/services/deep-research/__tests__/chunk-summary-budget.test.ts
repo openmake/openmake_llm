@@ -41,4 +41,23 @@ describe('청크 요약 예산', () => {
         expect(cap).toBeGreaterThan(0);
         expect((cap / CONSERVATIVE_TOK_PER_SEC) * 1000).toBeLessThan(timeoutMs);
     });
+
+    // 분해는 **유일하게 JSON 을 파싱하는** 단계라 절단이 곧 실패다. 상한 500 으로 조였더니
+    // finish_reason=length 로 배열이 잘렸고, greedy 정규식이 중첩 searchQueries 의 닫는 `]` 까지만
+    // 잡아 파싱 실패 → 템플릿 폴백으로 엉뚱한 검색어가 나갔다 (2026-09-13 라이브).
+    describe('분해 출력 상한은 절단을 만들지 않는다', () => {
+        /** 같은 프롬프트 라이브 실측: 상한 없음 741 토큰 · 상한 1500 826 토큰(둘 다 finish=stop) */
+        const MEASURED_NATURAL_OUTPUT_TOKENS = 826;
+
+        it('실측 자연 출력 길이보다 상한이 크다', () => {
+            expect(RESEARCH_DEFAULTS.DECOMPOSE_MAX_TOKENS).toBeGreaterThan(MEASURED_NATURAL_OUTPUT_TOKENS);
+        });
+
+        it('절단된 배열은 greedy 매칭으로 복구되지 않는다 (상한이 커야 하는 이유)', () => {
+            const truncated = '[\n  {\n    "title": "보급 현황",\n    "searchQueries": ["전기버스 보급", "전기버스 대수"],\n    "importance": 9\n  },\n  {\n    "title": "정책", "searchQ';
+            const match = truncated.match(/\[[\s\S]*\]/);
+            expect(match).not.toBeNull();
+            expect(() => JSON.parse(match![0])).toThrow();
+        });
+    });
 });
