@@ -28,29 +28,44 @@ export const LLM_TIMEOUTS = {
     CLASSIFIER_TIMEOUT_MS: 10000,
     /** fire-and-forget 메모리 추출 LLM 호출 타임아웃 (ms) */
     MEMORY_EXTRACTION_TIMEOUT_MS: 30000,
-    /** Deep Research 주제 분해 타임아웃 (ms). 출력 상한(DECOMPOSE_MAX_TOKENS)과 짝. env: DEEP_RESEARCH_DECOMPOSE_TIMEOUT_MS */
-    RESEARCH_DECOMPOSE_TIMEOUT_MS: Number(process.env.DEEP_RESEARCH_DECOMPOSE_TIMEOUT_MS) || 120000,
+    /**
+     * Deep Research 주제 분해 타임아웃 (ms). 출력 상한(DECOMPOSE_MAX_TOKENS)과 짝 — 상한이 바인딩되는
+     * 최악의 경우(1500 토큰 × 보수 7 tok/s ≈ 214초)를 덮는다. 라이브 실측은 826 토큰·67초라 평상시엔
+     * 닿지 않으며, 타임아웃은 실패 경로에서만 작동한다. env: DEEP_RESEARCH_DECOMPOSE_TIMEOUT_MS
+     */
+    RESEARCH_DECOMPOSE_TIMEOUT_MS: Number(process.env.DEEP_RESEARCH_DECOMPOSE_TIMEOUT_MS) || 240000,
     /** Deep Research 추가정보 필요 판단 LLM 호출 타임아웃 (ms). env override: DEEP_RESEARCH_NEED_MORE_TIMEOUT_MS */
     RESEARCH_NEED_MORE_TIMEOUT_MS: Number(process.env.DEEP_RESEARCH_NEED_MORE_TIMEOUT_MS) || 30000,
     /** 웹 검색 프로바이더 개별 fetch 타임아웃 (ms) — timeout 부재 시 Promise.all 무한 hang 방지. env override: WEB_SEARCH_FETCH_TIMEOUT_MS */
     WEB_SEARCH_FETCH_TIMEOUT_MS: Number(process.env.WEB_SEARCH_FETCH_TIMEOUT_MS) || 12000,
     /**
      * Deep Research 청크 합성 개별 타임아웃 (ms) — 전역 LLM_TIMEOUT과 독립.
-     * 로컬 모델이 느려진 뒤(2026-09-02 qwen3.8-27b ~10.7 tok/s) 120s 로는 마진이 없어
-     * 상한 없는 출력과 겹치면 전멸했다. 출력 상한(CHUNK_SUMMARY_MAX_TOKENS)과 함께 여유를 둔다.
+     *
+     * 소요의 지배 요인은 프리필이 아니라 **디코드**다 — 같은 상한(800 토큰)에서 프롬프트를 절반으로
+     * 줄여도 110초 → 89초에 그쳤다(2026-09-13 실측, 동시 5건). 즉 800 토큰 ÷ ~10.7 tok/s ≈ 75초가
+     * 바닥이고 프리필은 그 위에 얹힌다. 180초는 이 바닥 대비 여유가 1.6배뿐이라 실제 라이브에서
+     * 동시 5건이 **전멸**했다(추정 입력 1.4K~13K 토큰인데도 180.0초 정확히 abort — 문자 기반 입력
+     * 추정이 웹 스크래핑 텍스트를 과소평가한다). 품질(상한)을 깎는 대신 여유를 준다.
      * env: DEEP_RESEARCH_CHUNK_TIMEOUT_MS
      */
-    SYNTHESIS_PER_CHUNK_TIMEOUT_MS: Number(process.env.DEEP_RESEARCH_CHUNK_TIMEOUT_MS) || 180000,
-    /** Deep Research 청크 병합 타임아웃 (ms). env: DEEP_RESEARCH_MERGE_TIMEOUT_MS */
-    SYNTHESIS_MERGE_TIMEOUT_MS: Number(process.env.DEEP_RESEARCH_MERGE_TIMEOUT_MS) || 240000,
+    SYNTHESIS_PER_CHUNK_TIMEOUT_MS: Number(process.env.DEEP_RESEARCH_CHUNK_TIMEOUT_MS) || 300000,
+    /**
+     * Deep Research 청크 병합 타임아웃 (ms) — 청크 요약 6건을 합치므로 프리필이 청크보다 크고
+     * 출력 상한도 1500 토큰(≈140초)이다. 240초로는 마진이 없어 같은 라이브에서 함께 실패했다.
+     * env: DEEP_RESEARCH_MERGE_TIMEOUT_MS
+     */
+    SYNTHESIS_MERGE_TIMEOUT_MS: Number(process.env.DEEP_RESEARCH_MERGE_TIMEOUT_MS) || 400000,
     /**
      * Deep Research 최종 보고서 생성 타임아웃 (ms).
-     * 대형 프롬프트(다수 소스)·장문 출력으로 전역 LLM_TIMEOUT보다 길어야 한다.
-     * 보고서 생성 LLM 호출에 **전용 클라이언트의 SDK 타임아웃**으로 적용됨(report-generator).
-     * env override: DEEP_RESEARCH_REPORT_TIMEOUT_MS. 기본 900000(15분) — 소스 축소(50)와 함께
-     * 정식 LLM 보고서가 timeout 으로 잘려 fallback 되지 않도록 여유 확보(평소엔 거의 미사용).
+     *
+     * 보고서 프롬프트는 "Do not abbreviate"·분석 3000~5000 words 를 요구하는 **의도된 장문**이라
+     * 로컬 qwen3.8-27b 에서 29,000자(≈15K 토큰) · 1,615초가 실측된다(2026-09-13 라이브).
+     * 900000(15분)은 이 설계와 맞지 않았고, 그동안 드러나지 않은 이유는 호출부가 `signal` 을 넘기지
+     * 않아 **타임아웃이 실제로 작동하지 않았기** 때문이다(SDK timeout 은 스트리밍 시작 후 해제됨).
+     * signal 배선과 함께 실측 위로 올린다 — 이 값은 stall 상한이며 정상 경로에선 닿지 않는다.
+     * env override: DEEP_RESEARCH_REPORT_TIMEOUT_MS
      */
-    REPORT_GENERATION_TIMEOUT_MS: Number(process.env.DEEP_RESEARCH_REPORT_TIMEOUT_MS) || 900000,
+    REPORT_GENERATION_TIMEOUT_MS: Number(process.env.DEEP_RESEARCH_REPORT_TIMEOUT_MS) || 2400000,
     /**
      * Fast-fail(TTFT race) 대형 프롬프트 prefill 보정: 입력 1k 토큰 추정치당 가산 시간 (ms).
      * vLLM 은 prefill 완료 후에야 첫 SSE 청크를 보내므로, 고정 fast-fail 은 대형 첨부(수만 토큰)의

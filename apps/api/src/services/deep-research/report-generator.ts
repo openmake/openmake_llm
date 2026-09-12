@@ -126,9 +126,11 @@ export async function generateReport(params: {
     sessionId: string;
     /** 보고서 생성 진행 콜백 — 누적 생성 글자 수를 보고해 report 단계 progress 공백(체감 멈춤)을 제거 */
     onReportProgress?: (charsGenerated: number) => void;
+    /** 상위(연구 중단) abort signal — 다른 단계와 대칭으로 upstream 요청까지 취소한다 */
+    abortSignal?: AbortSignal;
     throwIfAborted: () => void;
 }): Promise<{ summary: string; keyFindings: string[]; reportFailed?: boolean }> {
-    const { client, config, topic, findings, sources, subTopics, sessionId, onReportProgress, throwIfAborted } = params;
+    const { client, config, topic, findings, sources, subTopics, sessionId, onReportProgress, abortSignal, throwIfAborted } = params;
 
     throwIfAborted();
     const db = getUnifiedDatabase();
@@ -177,6 +179,12 @@ export async function generateReport(params: {
         timeout: LLM_TIMEOUTS.REPORT_GENERATION_TIMEOUT_MS,
     });
 
+    // SDK 의 timeout 옵션만으로는 **스트리밍이 시작된 뒤를 막지 못한다** — 2026-09-13 라이브에서
+    // 15분 상한을 27분 동안 넘겨 생성이 계속됐다(중단 버튼도 호출이 끝난 뒤에야 반영됐다).
+    // 다른 단계(chatWithAbortTimeout)와 같이 signal 로 걸어 upstream 요청 자체를 취소한다.
+    const timeoutSignal = AbortSignal.timeout(LLM_TIMEOUTS.REPORT_GENERATION_TIMEOUT_MS);
+    const reportSignal = abortSignal ? AbortSignal.any([abortSignal, timeoutSignal]) : timeoutSignal;
+
     try {
         // 스트리밍 호출 — 토큰이 흐르는 동안 진행을 보고(85% 공백 해소)하고, 누적 출력으로
         // stall 여부를 가시화한다. onToken 모드에서도 client 는 최종 content 를 누적 반환한다.
@@ -188,7 +196,7 @@ export async function generateReport(params: {
                 accumulatedChars += token.length;
                 onReportProgress?.(accumulatedChars);
             },
-            { think: false },
+            { think: false, signal: reportSignal },
         );
         throwIfAborted();
 
