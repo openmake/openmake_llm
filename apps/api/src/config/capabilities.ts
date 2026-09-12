@@ -156,6 +156,8 @@ export const CAPABILITY_LIMITS = {
     VIDEO_POLL_INTERVAL_MS: parseInt(process.env.CAPABILITY_VIDEO_POLL_INTERVAL_MS || '10000', 10),
     /** 산출물 내려받기 상한 — hasa 파일 서버가 3.7MB 를 173s 에 준 실측(2026-09-12)이 있어 넉넉히 둔다(TASK_TIMEOUT 안). */
     VIDEO_DOWNLOAD_TIMEOUT_MS: parseInt(process.env.CAPABILITY_VIDEO_DOWNLOAD_TIMEOUT_MS || '600000', 10),
+    /** 완성 산출물 내려받기 시도 횟수 — hasa 가 전송 중 연결을 끊는 실측(`terminated`, 2026-09-12)에 대비 */
+    VIDEO_DOWNLOAD_ATTEMPTS: parseInt(process.env.CAPABILITY_VIDEO_DOWNLOAD_ATTEMPTS || '2', 10),
     /** params JSONB 허용 키 — capability 별 화이트리스트 */
     PARAM_KEYS: {
         'text.reason': ['temperature'], 'text.code': ['temperature'], 'text.synthesize': [], 'text.embed': ['dimensions'],

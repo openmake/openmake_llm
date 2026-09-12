@@ -33,11 +33,16 @@ export class OrchestratorJobsRepository extends BaseRepository {
         );
     }
 
-    /** 최근 pending job (Planner 첨부 목록용) */
-    async listPending(userId: string, withinHours: number, limit: number): Promise<OrchestratorJobRow[]> {
+    /**
+     * 최근 job (Planner 첨부 목록용) — pending 과 **이미 받아둔 completed(result_path 있음)** 둘 다.
+     * completed 를 함께 주는 이유: "아까 영상 보여줘" 를 provider 재조회·재다운로드 없이 저장된 파일로 답하기 위해
+     * (hasa 파일 서버가 3.7MB 를 3~10분에 주는 실측, 2026-09-12). failed 는 제외.
+     */
+    async listRecent(userId: string, withinHours: number, limit: number): Promise<OrchestratorJobRow[]> {
         const r = await this.query<{ user_id: string; capability: string; provider_id: string; job_id: string; status: 'pending' | 'completed' | 'failed'; result_path: string | null; created_at: Date }>(
             `SELECT * FROM orchestrator_jobs
-             WHERE user_id = $1 AND status = 'pending' AND created_at > NOW() - ($2 || ' hours')::interval
+             WHERE user_id = $1 AND created_at > NOW() - ($2 || ' hours')::interval
+               AND (status = 'pending' OR (status = 'completed' AND result_path IS NOT NULL))
              ORDER BY created_at DESC LIMIT $3`,
             [userId, String(withinHours), limit],
         );
