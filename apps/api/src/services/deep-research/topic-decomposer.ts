@@ -42,7 +42,8 @@ export async function decomposeTopics(params: {
         const response = await chatWithAbortTimeout(
             client,
             [{ role: 'user', content: prompt }],
-            { temperature: LLM_TEMPERATURES.RESEARCH_PLAN },
+            // 상한이 없으면 로컬 모델이 길게 써서 분해 타임아웃에 걸린다(2026-09-13 실측)
+            { temperature: LLM_TEMPERATURES.RESEARCH_PLAN, num_predict: RESEARCH_DEFAULTS.DECOMPOSE_MAX_TOKENS },
             LLM_TIMEOUTS.RESEARCH_DECOMPOSE_TIMEOUT_MS,
             abortSignal,
         );
