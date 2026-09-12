@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.60.2](https://github.com/openmake/openmake_llm/compare/v1.60.1...v1.60.2) (2026-09-12)
+
+
+### 🐛 버그 수정
+
+* **orchestrator:** 완료·저장된 영상 job 은 재조회·재다운로드 없이 즉시 반환 + 내려받기 재시도(2회) ([#843](https://github.com/openmake/openmake_llm/issues/843)) ([fa9a574](https://github.com/openmake/openmake_llm/commit/fa9a57466f942ed1de5be5d960bc6ce14adedc76))
+
 ## [1.60.1](https://github.com/openmake/openmake_llm/compare/v1.60.0...v1.60.1) (2026-09-12)
 
 
