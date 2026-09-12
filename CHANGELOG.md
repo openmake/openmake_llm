@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.62.2](https://github.com/openmake/openmake_llm/compare/v1.62.1...v1.62.2) (2026-09-12)
+
+
+### 🐛 버그 수정
+
+* **web:** 워크스페이스 페이지 3곳에 스크롤 컨테이너 누락 — 내용이 잘려 접근 불가 ([#862](https://github.com/openmake/openmake_llm/issues/862)) ([87220fc](https://github.com/openmake/openmake_llm/commit/87220fc441022e670d88bb2a9016daf4041d0d53))
+
 ## [1.62.1](https://github.com/openmake/openmake_llm/compare/v1.62.0...v1.62.1) (2026-09-12)
 
 
