@@ -28,8 +28,8 @@ export const LLM_TIMEOUTS = {
     CLASSIFIER_TIMEOUT_MS: 10000,
     /** fire-and-forget 메모리 추출 LLM 호출 타임아웃 (ms) */
     MEMORY_EXTRACTION_TIMEOUT_MS: 30000,
-    /** Deep Research 주제 분해 타임아웃 (ms) */
-    RESEARCH_DECOMPOSE_TIMEOUT_MS: 60000,
+    /** Deep Research 주제 분해 타임아웃 (ms). 출력 상한(DECOMPOSE_MAX_TOKENS)과 짝. env: DEEP_RESEARCH_DECOMPOSE_TIMEOUT_MS */
+    RESEARCH_DECOMPOSE_TIMEOUT_MS: Number(process.env.DEEP_RESEARCH_DECOMPOSE_TIMEOUT_MS) || 120000,
     /** Deep Research 추가정보 필요 판단 LLM 호출 타임아웃 (ms). env override: DEEP_RESEARCH_NEED_MORE_TIMEOUT_MS */
     RESEARCH_NEED_MORE_TIMEOUT_MS: Number(process.env.DEEP_RESEARCH_NEED_MORE_TIMEOUT_MS) || 30000,
     /** 웹 검색 프로바이더 개별 fetch 타임아웃 (ms) — timeout 부재 시 Promise.all 무한 hang 방지. env override: WEB_SEARCH_FETCH_TIMEOUT_MS */

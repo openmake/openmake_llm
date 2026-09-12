@@ -184,6 +184,16 @@ export const RESEARCH_DEFAULTS = {
      * env: DEEP_RESEARCH_CHUNK_SUMMARY_MAX_TOKENS
      */
     CHUNK_SUMMARY_MAX_TOKENS: parseInt(process.env.DEEP_RESEARCH_CHUNK_SUMMARY_MAX_TOKENS || '800', 10),
+    /**
+     * 주제 분해 출력 상한 (토큰) — 서브토픽 목록이라 짧다. 상한이 없어 로컬 모델에서
+     * 60초 타임아웃을 넘겨 실패했다(2026-09-13 라이브: "주제 분해 실패: Request was aborted").
+     * env: DEEP_RESEARCH_DECOMPOSE_MAX_TOKENS
+     */
+    DECOMPOSE_MAX_TOKENS: parseInt(process.env.DEEP_RESEARCH_DECOMPOSE_MAX_TOKENS || '500', 10),
+    /** 청크 병합(findings) 출력 상한 (토큰). env: DEEP_RESEARCH_MERGE_MAX_TOKENS */
+    MERGE_MAX_TOKENS: parseInt(process.env.DEEP_RESEARCH_MERGE_MAX_TOKENS || '1500', 10),
+    /** 추가 탐색 필요 판단 출력 상한 (토큰) — yes/no 한 마디면 충분. env: DEEP_RESEARCH_NEED_MORE_MAX_TOKENS */
+    NEED_MORE_MAX_TOKENS: parseInt(process.env.DEEP_RESEARCH_NEED_MORE_MAX_TOKENS || '120', 10),
     /** 전체 합성을 실행하기 위한 최소 콘텐츠 길이 (문자). 이 미만이면 경량 합성 */
     MIN_CONTENT_FOR_FULL_SYNTHESIS: 1000,
     /** 보고서 생성 진행률 추정용 예상 출력 글자 수 (라이브 관측 ~20K자 기준, progress 표시 전용) */

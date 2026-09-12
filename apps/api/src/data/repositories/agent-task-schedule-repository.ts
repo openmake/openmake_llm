@@ -35,13 +35,16 @@ export class AgentTaskScheduleRepository extends BaseRepository {
         intervalSeconds?: number | null;
         maxTurns: number;
         nextRunAtMs: number;
+        /** 미지정이면 활성 — 호출자가 false 를 주면 꺼진 채로 만든다 */
+        enabled?: boolean;
     }): Promise<void> {
         await this.query(
             `INSERT INTO agent_task_schedules
-                (id, user_id, goal, cron, interval_seconds, max_turns, next_run_at)
-             VALUES ($1, $2, $3, $4, $5, $6, to_timestamp($7))`,
+                (id, user_id, goal, cron, interval_seconds, max_turns, next_run_at, enabled)
+             VALUES ($1, $2, $3, $4, $5, $6, to_timestamp($7), $8)`,
             [params.id, params.userId, params.goal, params.cron ?? null,
-             params.intervalSeconds ?? null, params.maxTurns, params.nextRunAtMs / 1000],
+             params.intervalSeconds ?? null, params.maxTurns, params.nextRunAtMs / 1000,
+             params.enabled ?? true],
         );
     }
 

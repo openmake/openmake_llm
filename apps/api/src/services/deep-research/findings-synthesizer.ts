@@ -262,7 +262,7 @@ async function singleMerge(params: {
         const response = await chatWithAbortTimeout(
             client,
             [{ role: 'user', content: withSkillContext(mergedPrompt, params.skillBlock ?? '') }],
-            { temperature: LLM_TEMPERATURES.RESEARCH_REPORT },
+            { temperature: LLM_TEMPERATURES.RESEARCH_REPORT, num_predict: RESEARCH_DEFAULTS.MERGE_MAX_TOKENS },
             LLM_TIMEOUTS.SYNTHESIS_MERGE_TIMEOUT_MS,
             abortSignal,
         );
@@ -302,7 +302,7 @@ export async function checkNeedsMoreInfo(params: {
         const response = await chatWithAbortTimeout(
             client,
             [{ role: 'user', content: prompt }],
-            { temperature: LLM_TEMPERATURES.RESEARCH_FACT_CHECK },
+            { temperature: LLM_TEMPERATURES.RESEARCH_FACT_CHECK, num_predict: RESEARCH_DEFAULTS.NEED_MORE_MAX_TOKENS },
             LLM_TIMEOUTS.RESEARCH_NEED_MORE_TIMEOUT_MS,
             abortSignal,
         );

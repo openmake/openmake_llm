@@ -109,6 +109,8 @@ export const createAgentTaskScheduleSchema = z.object({
     cron: z.string().min(1).max(120).optional(),
     intervalSeconds: z.number().int().min(AGENT_TASK_LIMITS.SCHEDULE_MIN_INTERVAL_SEC).max(365 * 24 * 3600).optional(),
     maxTurns: z.number().int().min(1).max(AGENT_TASK_LIMITS.MAX_TURNS_CEILING).optional(),
+    /** 생성 직후 활성 여부 — 미지정이면 활성(종전 동작). false 를 보내면 꺼진 채로 만든다. */
+    enabled: z.boolean().optional(),
 }).refine((v) => (!!v.cron) !== (v.intervalSeconds !== undefined), {
     message: 'cron 또는 intervalSeconds 중 정확히 하나를 지정하세요.',
 });

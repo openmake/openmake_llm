@@ -47,7 +47,7 @@ async function loadOwned(req: Request, res: Response, id: string) {
 
 /** POST / — 스케줄 생성. */
 router.post('/', validateWithSecurity(createAgentTaskScheduleSchema, { preserveFormattingFields: ['goal'] }), asyncHandler(async (req: Request, res: Response) => {
-    const { goal, cron, intervalSeconds, maxTurns } = req.body as CreateAgentTaskScheduleInput;
+    const { goal, cron, intervalSeconds, maxTurns, enabled } = req.body as CreateAgentTaskScheduleInput;
     const userId = String(req.user!.id);
 
     // cron 표현식 유효성(스키마는 형식만, 여기서 파싱 가능 여부 확인).
@@ -66,6 +66,9 @@ router.post('/', validateWithSecurity(createAgentTaskScheduleSchema, { preserveF
     await repo().create({
         id, userId, goal, cron: cron ?? null, intervalSeconds: intervalSeconds ?? null,
         maxTurns: maxTurns ?? AGENT_TASK_LIMITS.DEFAULT_MAX_TURNS, nextRunAtMs,
+        // 종전엔 enabled 를 스키마가 걷어내 `false` 로 만들어도 활성으로 생성됐다(조용한 무시,
+        // 2026-09-13 라이브 점검). 미지정이면 종전대로 활성.
+        ...(enabled !== undefined ? { enabled } : {}),
     });
     logger.info(`[Schedule] 생성: ${id} (user ${userId})`);
     res.status(201).json(success({ schedule: await repo().get(id) }));
