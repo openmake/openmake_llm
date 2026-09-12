@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.60.3](https://github.com/openmake/openmake_llm/compare/v1.60.2...v1.60.3) (2026-09-12)
+
+
+### 🐛 버그 수정
+
+* **orchestrator:** 영상 job 첨부가 있는 영상 후속 발화는 Planner 가 simple 로 답해도 재조회 1작업으로 보정 ([#845](https://github.com/openmake/openmake_llm/issues/845)) ([6ffba4a](https://github.com/openmake/openmake_llm/commit/6ffba4ad1f71e40925c9aac826dc7205802eafb0))
+
 ## [1.60.2](https://github.com/openmake/openmake_llm/compare/v1.60.1...v1.60.2) (2026-09-12)
 
 
