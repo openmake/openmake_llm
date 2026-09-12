@@ -11,6 +11,7 @@
 
 import type { SearchResult } from '../mcp/web-search';
 import type { SubTopic } from './deep-research-types';
+import { cleanSearchQuery } from '../mcp/web-search/query-cleaner';
 
 /**
  * 중복 소스 제거
@@ -100,46 +101,57 @@ export function clampImportance(value: number | undefined): number {
     return Math.max(1, Math.min(5, Math.round(value)));
 }
 
+/**
+ * 주제 분해가 실패했을 때 쓰는 고정 템플릿 서브토픽.
+ *
+ * ⚠️ `topic` 은 **사용자 발화 원문**이라 그대로 검색어에 붙이면 지시문이 섞인다 — 2026-09-13
+ * 라이브에서 "국내 전기버스 보급 현황을 아주 짧게 조사해줘. 개요" 같은 쿼리가 나가 보고서
+ * 참고문헌에 무관한 문서(국어 연감·지진·게임 위키)가 실렸다. 검색어는 `cleanSearchQuery` 로
+ * 지시문을 벗긴 주제어를 쓰고, 제목은 사용자에게 보이는 값이라 원문을 유지한다.
+ */
 export function buildFallbackSubTopics(topic: string): SubTopic[] {
+    // 정제가 과하게 깎아 빈 값이 되면 cleanSearchQuery 가 원문을 돌려주므로 추가 폴백은 불필요
+    const q = cleanSearchQuery(topic);
+    const currentYear = new Date().getFullYear();
     return [
         {
             title: `${topic} 개요 및 정의`,
-            searchQueries: [`${topic} 개요`, `${topic} 정의`, `${topic} 배경`],
+            searchQueries: [`${q} 개요`, `${q} 정의`, `${q} 배경`],
             importance: 5
         },
         {
             title: `${topic} 최신 동향`,
-            searchQueries: [`${topic} 최신 동향`, `${topic} 2025 트렌드`, `${topic} recent updates`],
+            searchQueries: [`${q} 최신 동향`, `${q} ${currentYear} 트렌드`, `${q} recent updates`],
             importance: 5
         },
         {
             title: `${topic} 기술/구조 분석`,
-            searchQueries: [`${topic} 구조`, `${topic} architecture`, `${topic} technical analysis`],
+            searchQueries: [`${q} 구조`, `${q} architecture`, `${q} technical analysis`],
             importance: 4
         },
         {
             title: `${topic} 시장 및 산업 영향`,
-            searchQueries: [`${topic} 시장 규모`, `${topic} 산업 영향`, `${topic} market report`],
+            searchQueries: [`${q} 시장 규모`, `${q} 산업 영향`, `${q} market report`],
             importance: 4
         },
         {
             title: `${topic} 주요 사례`,
-            searchQueries: [`${topic} 사례`, `${topic} case study`, `${topic} 성공 사례`],
+            searchQueries: [`${q} 사례`, `${q} case study`, `${q} 성공 사례`],
             importance: 4
         },
         {
             title: `${topic} 리스크와 한계`,
-            searchQueries: [`${topic} 한계`, `${topic} 리스크`, `${topic} 문제점`],
+            searchQueries: [`${q} 한계`, `${q} 리스크`, `${q} 문제점`],
             importance: 3
         },
         {
             title: `${topic} 규제 및 정책`,
-            searchQueries: [`${topic} 규제`, `${topic} 정책`, `${topic} 법률`],
+            searchQueries: [`${q} 규제`, `${q} 정책`, `${q} 법률`],
             importance: 3
         },
         {
             title: `${topic} 향후 전망`,
-            searchQueries: [`${topic} 전망`, `${topic} future outlook`, `${topic} 예측`],
+            searchQueries: [`${q} 전망`, `${q} future outlook`, `${q} 예측`],
             importance: 3
         }
     ];
