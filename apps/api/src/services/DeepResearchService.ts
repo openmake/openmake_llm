@@ -341,15 +341,18 @@ export class DeepResearchService {
                 throwIfAborted: () => this.throwIfAborted()
             });
 
+            // 합성이 전멸해 보고서를 못 만든 경우는 '완료'가 아니다 — 히스토리에 '완료'로 남으면
+            // 사용자가 결과가 있는 줄 알고 다시 열어본다(2026-09-13 라이브 점검에서 실제 발생).
+            const finalStatus = report.reportFailed ? 'failed' : 'completed';
             await db.updateResearchSession(sessionId, {
-                status: 'completed',
+                status: finalStatus,
                 progress: 100,
                 summary: report.summary,
                 keyFindings: report.keyFindings,
                 sources: finalSources.map(source => source.url)
             });
 
-            this.reportProgress(onProgress, sessionId, 'completed', this.config.maxLoops, this.config.maxLoops, 'completed', 100, getResearchMessage('completed', this.config.language));
+            this.reportProgress(onProgress, sessionId, finalStatus, this.config.maxLoops, this.config.maxLoops, finalStatus, 100, getResearchMessage(report.reportFailed ? 'reportFailed' : 'completed', this.config.language));
 
             const duration = Date.now() - startTime;
             logger.info(`[DeepResearch] 완료: ${topic} (${duration}ms)`);

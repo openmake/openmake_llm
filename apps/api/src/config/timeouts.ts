@@ -34,10 +34,15 @@ export const LLM_TIMEOUTS = {
     RESEARCH_NEED_MORE_TIMEOUT_MS: Number(process.env.DEEP_RESEARCH_NEED_MORE_TIMEOUT_MS) || 30000,
     /** 웹 검색 프로바이더 개별 fetch 타임아웃 (ms) — timeout 부재 시 Promise.all 무한 hang 방지. env override: WEB_SEARCH_FETCH_TIMEOUT_MS */
     WEB_SEARCH_FETCH_TIMEOUT_MS: Number(process.env.WEB_SEARCH_FETCH_TIMEOUT_MS) || 12000,
-    /** Deep Research 청크 합성 개별 타임아웃 (ms) — 전역 LLM_TIMEOUT과 독립 */
-    SYNTHESIS_PER_CHUNK_TIMEOUT_MS: 120000,
-    /** Deep Research 청크 병합 타임아웃 (ms) */
-    SYNTHESIS_MERGE_TIMEOUT_MS: 180000,
+    /**
+     * Deep Research 청크 합성 개별 타임아웃 (ms) — 전역 LLM_TIMEOUT과 독립.
+     * 로컬 모델이 느려진 뒤(2026-09-02 qwen3.8-27b ~10.7 tok/s) 120s 로는 마진이 없어
+     * 상한 없는 출력과 겹치면 전멸했다. 출력 상한(CHUNK_SUMMARY_MAX_TOKENS)과 함께 여유를 둔다.
+     * env: DEEP_RESEARCH_CHUNK_TIMEOUT_MS
+     */
+    SYNTHESIS_PER_CHUNK_TIMEOUT_MS: Number(process.env.DEEP_RESEARCH_CHUNK_TIMEOUT_MS) || 180000,
+    /** Deep Research 청크 병합 타임아웃 (ms). env: DEEP_RESEARCH_MERGE_TIMEOUT_MS */
+    SYNTHESIS_MERGE_TIMEOUT_MS: Number(process.env.DEEP_RESEARCH_MERGE_TIMEOUT_MS) || 240000,
     /**
      * Deep Research 최종 보고서 생성 타임아웃 (ms).
      * 대형 프롬프트(다수 소스)·장문 출력으로 전역 LLM_TIMEOUT보다 길어야 한다.

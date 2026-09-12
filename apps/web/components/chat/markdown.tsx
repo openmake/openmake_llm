@@ -21,15 +21,51 @@ import { KakaoMap } from "./kakao-map";
  * fail-open 잔존분에만 나타난다.
  */
 
+/** 서버가 만든 미디어(`/generated/*`)의 확장자 → 인라인 플레이어 종류.
+ *  오케스트레이터는 음성·영상을 `[🔊 …](/generated/x.wav)` 같은 **링크**로 붙이므로
+ *  링크 그대로 두면 새 탭으로 나가야 들을 수 있다(2026-09-13 라이브 점검). 브라우저가
+ *  재생할 수 있는 형식은 대화 안에서 바로 재생한다. 외부 URL 은 대상이 아니다(서버 소유 경로만). */
+const AUDIO_EXT = /\.(mp3|wav|m4a|ogg|opus|flac|aac)(\?|$)/i;
+const VIDEO_EXT = /\.(webm|mp4|mov|m4v)(\?|$)/i;
+const isGeneratedMedia = (href: string | undefined): "audio" | "video" | null => {
+  if (!href || !href.startsWith("/generated/")) return null;
+  if (AUDIO_EXT.test(href)) return "audio";
+  if (VIDEO_EXT.test(href)) return "video";
+  return null;
+};
+
 const MD_COMPONENTS: Components = {
-  a: ({ ...props }) => (
-    <a
-      {...props}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="break-all text-accent underline underline-offset-2 hover:text-accent-hover"
-    />
-  ),
+  a: ({ ...props }) => {
+    const kind = isGeneratedMedia(typeof props.href === "string" ? props.href : undefined);
+    if (kind === "audio") {
+      return (
+        <span className="my-2 block">
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <audio controls preload="metadata" src={props.href} className="w-full max-w-md">
+            <a href={props.href}>{props.children}</a>
+          </audio>
+        </span>
+      );
+    }
+    if (kind === "video") {
+      return (
+        <span className="my-2 block">
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <video controls preload="metadata" src={props.href} className="max-h-[420px] w-full max-w-xl rounded-lg border border-border">
+            <a href={props.href}>{props.children}</a>
+          </video>
+        </span>
+      );
+    }
+    return (
+      <a
+        {...props}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="break-all text-accent underline underline-offset-2 hover:text-accent-hover"
+      />
+    );
+  },
   img: ({ ...props }) => (
     // eslint-disable-next-line @next/next/no-img-element
     <img

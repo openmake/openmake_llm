@@ -153,14 +153,17 @@ describe('formatDiscussionResult', () => {
         expect(result).toContain('보안 측면에서도 TypeScript가 안전합니다.');
     });
 
-    test('종합 답변이 details 태그로 감싸진다', () => {
+    // 2026-09-13: raw HTML(<details>) → 마크다운 헤딩. 프론트 마크다운 렌더러는 XSS 방어로
+    // rehype-raw 를 쓰지 않아 태그가 렌더되지 않고 닫는 </details> 가 본문에 노출됐다.
+    test('종합 답변이 마크다운 헤딩으로 구분된다 (raw HTML 금지)', () => {
         const result = formatDiscussionResult(baseResult);
-        expect(result).toContain('<details open>');
-        expect(result).toContain('<summary>💡 <strong>종합 답변</strong> (전문가 의견 종합)</summary>');
-        expect(result).toContain('</details>');
+        expect(result).toContain('## 💡 종합 답변 (전문가 의견 종합)');
+        expect(result).not.toContain('<details');
+        expect(result).not.toContain('</details>');
+        expect(result).not.toContain('<summary>');
     });
 
-    test('finalAnswer가 details 태그 안에 포함된다', () => {
+    test('finalAnswer가 종합 답변 섹션에 포함된다', () => {
         const result = formatDiscussionResult(baseResult);
         expect(result).toContain('## 최종 답변\n\nTypeScript 사용을 권장합니다.');
     });
