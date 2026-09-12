@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.61.0](https://github.com/openmake/openmake_llm/compare/v1.60.5...v1.61.0) (2026-09-12)
+
+
+### ✨ 기능
+
+* **web:** 기능별 모델 배정 6그룹 UI (텍스트·비전/코드/이미지/음성/음악/영상) ([#851](https://github.com/openmake/openmake_llm/issues/851)) ([8ab70f5](https://github.com/openmake/openmake_llm/commit/8ab70f5529dd79e69fe5b9e572122da007479634))
+
 ## [1.60.5](https://github.com/openmake/openmake_llm/compare/v1.60.4...v1.60.5) (2026-09-12)
 
 
