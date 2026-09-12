@@ -175,6 +175,15 @@ export const RESEARCH_DEFAULTS = {
     SEARCH_CONCURRENCY: parseInt(process.env.RESEARCH_SEARCH_CONCURRENCY || '5', 10),
     /** 합성 병렬 동시실행 수 */
     SYNTHESIS_CONCURRENCY: 5,
+    /**
+     * 청크 요약 1건의 출력 상한 (토큰). 중간 산출물이라 길 필요가 없다.
+     *
+     * 상한이 없던 동안 모델이 1,400+ 토큰을 써서 로컬 qwen3.8-27b(~10.7 tok/s)로 단일 123.5초
+     * ·동시 5건 최대 129.7초가 걸렸고, 청크 타임아웃(120초)에 **6/6 전멸** → "모든 청크 요약 실패"
+     * → 보고서 없이 종료했다(2026-09-13 라이브 실측: 상한 800 이면 72.9초로 통과).
+     * env: DEEP_RESEARCH_CHUNK_SUMMARY_MAX_TOKENS
+     */
+    CHUNK_SUMMARY_MAX_TOKENS: parseInt(process.env.DEEP_RESEARCH_CHUNK_SUMMARY_MAX_TOKENS || '800', 10),
     /** 전체 합성을 실행하기 위한 최소 콘텐츠 길이 (문자). 이 미만이면 경량 합성 */
     MIN_CONTENT_FOR_FULL_SYNTHESIS: 1000,
     /** 보고서 생성 진행률 추정용 예상 출력 글자 수 (라이브 관측 ~20K자 기준, progress 표시 전용) */

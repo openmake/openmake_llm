@@ -124,7 +124,9 @@ export async function synthesizeFindings(params: {
                 const response = await chatWithAbortTimeout(
                     client,
                     [{ role: 'user', content: chunkPrompt }],
-                    { temperature: LLM_TEMPERATURES.RESEARCH_SYNTHESIS },
+                    // maxTokens 를 주지 않으면 모델이 1,400+ 토큰을 써 로컬 모델에서 청크 타임아웃에
+                    // 전멸한다(2026-09-13 실측). 중간 요약이라 상한을 두는 것이 맞다.
+                    { temperature: LLM_TEMPERATURES.RESEARCH_SYNTHESIS, num_predict: RESEARCH_DEFAULTS.CHUNK_SUMMARY_MAX_TOKENS },
                     LLM_TIMEOUTS.SYNTHESIS_PER_CHUNK_TIMEOUT_MS,
                     abortSignal,
                 );
