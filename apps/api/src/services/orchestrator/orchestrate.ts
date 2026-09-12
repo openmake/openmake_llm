@@ -75,10 +75,17 @@ export function collectAttachments(req: ChatMessageRequest): Map<string, Orchest
 async function collectPendingJobs(userId: string | undefined, map: Map<string, OrchestratorAttachment>): Promise<void> {
     if (!userId) return;
     try {
-        const rows = await new OrchestratorJobsRepository(getPool()).listPending(userId, ORCHESTRATOR.JOB_LOOKBACK_HOURS, ORCHESTRATOR.JOB_MAX_LISTED);
+        const rows = await new OrchestratorJobsRepository(getPool()).listRecent(userId, ORCHESTRATOR.JOB_LOOKBACK_HOURS, ORCHESTRATOR.JOB_MAX_LISTED);
         rows.forEach((r, i) => {
             const id = `j${i + 1}`;
-            map.set(id, { id, kind: 'job', name: `${r.capability} 진행 중 (${r.providerId} ${r.jobId}, ${r.createdAt.toISOString().slice(11, 16)}Z)`, mime: '', job: { capability: r.capability as Capability, providerId: r.providerId, jobId: r.jobId } });
+            const done = r.status === 'completed' && !!r.resultPath;
+            const state = done ? '완료·저장됨' : '진행 중';
+            map.set(id, {
+                id, kind: 'job', mime: '',
+                name: `${r.capability} ${state} (${r.providerId} ${r.jobId}, ${r.createdAt.toISOString().slice(11, 16)}Z)`,
+                ...(done && r.resultPath ? { urlPath: r.resultPath } : {}),
+                job: { capability: r.capability as Capability, providerId: r.providerId, jobId: r.jobId, resultPath: done ? r.resultPath : null },
+            });
         });
     } catch (err) {
         logger.debug(`pending job 조회 실패(무시): ${err instanceof Error ? err.message : String(err)}`);
