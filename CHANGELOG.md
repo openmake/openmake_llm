@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.62.0](https://github.com/openmake/openmake_llm/compare/v1.61.1...v1.62.0) (2026-09-12)
+
+
+### ✨ 기능
+
+* **ios:** web 기능 격차 5건 반영 — 오케스트레이터 진행 카드·미디어 카드·서브에이전트 패널·모델 비교·기능별 모델 배정 ([#856](https://github.com/openmake/openmake_llm/issues/856)) ([6bd58d1](https://github.com/openmake/openmake_llm/commit/6bd58d14311b906250942f06c7f60e1e067afbdc))
+
+
+### 🐛 버그 수정
+
+* **db:** server-filesystem 미고정 시드를 2026.8.31 로 고정 — 신규 설치에서 122 가 no-op 이던 갭 (123) ([#855](https://github.com/openmake/openmake_llm/issues/855)) ([e6a044c](https://github.com/openmake/openmake_llm/commit/e6a044cd09514e67e4a513f8b128abc38740e679))
+
 ## [1.61.1](https://github.com/openmake/openmake_llm/compare/v1.61.0...v1.61.1) (2026-09-12)
 
 
