@@ -180,6 +180,11 @@ export const TTS_ALLOWED_FORMATS: ReadonlySet<string> = new Set(['mp3', 'wav', '
 export const TTS_DEFAULT_FORMAT = 'mp3';
 export const TTS_DEFAULT_VOICE = 'alloy';
 export const STT_ALLOWED_EXTS: ReadonlySet<string> = new Set(['mp3', 'wav', 'm4a', 'ogg', 'opus', 'flac', 'webm', 'mp4']);
+/**
+ * 영상 후속 발화 판정 — Planner 가 저장·진행 중인 영상 job 첨부를 두고도 `simple` 로 답하면(실측: bai qwen3.8-flash 가
+ * "완료·저장됨" 을 "할 일 없음" 으로 읽음, 2026-09-12) 결정적으로 job 재조회 1작업으로 보정한다. 사용자 발화에만 적용.
+ */
+export const VIDEO_JOB_FOLLOWUP_PATTERN = /영상|비디오|동영상|\bvideo\b|\bclip\b/i;
 export const VIDEO_GEN_DEFAULT_SECONDS = '4';
 export const VIDEO_GEN_DEFAULT_SIZE = '720x1280';
 export const VIDEO_TERMINAL_STATUSES: ReadonlySet<string> = new Set(['completed', 'succeeded', 'failed', 'cancelled', 'canceled', 'error']);
