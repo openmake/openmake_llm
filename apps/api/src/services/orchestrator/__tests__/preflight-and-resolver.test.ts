@@ -1,6 +1,7 @@
 /** capability-resolver(우선순위·게이트웨이 불변식·BYOK 상태·조회 장애) + preflight(미지원·입력·미배정·쿼터) */
 const mockConfig = { llmBaseUrl: 'http://127.0.0.1:13401/', llmApiKey: 'master', llmGatewayProviders: ['openrouter', 'hasa'] };
 jest.mock('../../../config', () => ({ getConfig: () => mockConfig }));
+jest.mock('../../../config/capabilities', () => ({ ...jest.requireActual('../../../config/capabilities'), CAPABILITY_DEFAULTS: { ...jest.requireActual('../../../config/capabilities').CAPABILITY_DEFAULTS, 'image.generate': 'local-llm:flux2-klein' } })); // 운영 .env 가 기본값을 꺼도 테스트는 고정값
 jest.mock('../../../data/models/unified-database', () => ({ getPool: () => ({}) }));
 const quota = { exceeded: false };
 jest.mock('../../../llm/user-quota', () => ({

@@ -1,6 +1,7 @@
 /** Codex 구조 검토(2026-09-12) 5건 회귀 — 서버 공용 키 정책·비용 주체 · 영상 보정 범위 · job 저장 보장 · 저장본 조회 분리 · 명시 모드 공통 경계 */
 const mockConfig = { llmBaseUrl: 'http://127.0.0.1:13401/', llmApiKey: 'master', llmGatewayProviders: ['openrouter', 'hasa'] };
 jest.mock('../../../config', () => ({ getConfig: () => mockConfig }));
+jest.mock('../../../config/capabilities', () => ({ ...jest.requireActual('../../../config/capabilities'), CAPABILITY_DEFAULTS: { ...jest.requireActual('../../../config/capabilities').CAPABILITY_DEFAULTS, 'image.generate': 'local-llm:flux2-klein' } })); // 운영 .env 가 기본값을 꺼도 테스트는 고정값
 jest.mock('../../../data/models/unified-database', () => ({ getPool: () => ({}) }));
 const budget = { reason: null as string | null, recorded: [] as Array<[string, number]> };
 jest.mock('../../server-key-quota', () => ({
@@ -65,5 +66,17 @@ describe('2. 영상 보정 범위 — 결과 조회 의도 + 같은 대화만', 
         expect(coerceJobFollowup(simple, att(false), '아까 영상 다 됐어?')).toBe(simple);
         const p = coerceJobFollowup(simple, att(true), '아까 영상 다 됐어? 보여줘');
         expect(p.complexity).toBe('multi'); expect(p.tasks[0].attachments).toEqual(['j1']);
+    });
+});
+
+describe('코드 기본값 끄기 스위치 — CAPABILITY_DEFAULT_IMAGE_GENERATE', () => {
+    const saved = process.env.CAPABILITY_DEFAULT_IMAGE_GENERATE;
+    afterEach(() => { if (saved === undefined) delete process.env.CAPABILITY_DEFAULT_IMAGE_GENERATE; else process.env.CAPABILITY_DEFAULT_IMAGE_GENERATE = saved; });
+    const load = () => { let d: Record<string, string | undefined> = {}; jest.isolateModules(() => { d = jest.requireActual('../../../config/capabilities').CAPABILITY_DEFAULTS; }); return d; };
+    it('미설정이면 코드값, 빈 값·none 이면 기본값 없음(→ 미배정 명시 실패), 값이 있으면 그 값', () => {
+        delete process.env.CAPABILITY_DEFAULT_IMAGE_GENERATE; expect(load()['image.generate']).toBe('local-llm:flux2-klein');
+        process.env.CAPABILITY_DEFAULT_IMAGE_GENERATE = ''; expect(load()['image.generate']).toBeUndefined();
+        process.env.CAPABILITY_DEFAULT_IMAGE_GENERATE = 'none'; expect(load()['image.generate']).toBeUndefined();
+        process.env.CAPABILITY_DEFAULT_IMAGE_GENERATE = 'local-llm:other'; expect(load()['image.generate']).toBe('local-llm:other');
     });
 });
