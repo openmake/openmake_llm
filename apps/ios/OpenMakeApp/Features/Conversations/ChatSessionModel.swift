@@ -28,6 +28,8 @@ final class ChatSessionModel {
     private(set) var activityLog: [ChatActivityEntry] = []
     /// 스트리밍 시작 시각 — 경과 시간 표시(멈춤/진행 구분)의 기준
     private(set) var streamStartedAt: Date?
+    /// 멀티모달 오케스트레이터 진행(이미지·영상·음성 작업) — 있으면 진행 카드 위에 작업 목록을 보인다
+    private(set) var orchestrator: OrchestratorProgress?
 
     init(client: OpenMakeClient, serverURL: URL, sessionId: String?) {
         self.client = client
@@ -197,6 +199,7 @@ final class ChatSessionModel {
         activityKind = state.activityKind ?? .preparing
         activeSkills = state.activeSkillNames
         activityLog = state.activityLog
+        orchestrator = state.orchestrator
         for artifact in state.artifacts {
             let document = ArtifactDocument(streamed: artifact)
             if let index = artifacts.firstIndex(where: { $0.id == document.id }) {
@@ -297,5 +300,6 @@ final class ChatSessionModel {
         streamingText = ""
         isThinking = false
         statusText = nil
+        orchestrator = nil
     }
 }

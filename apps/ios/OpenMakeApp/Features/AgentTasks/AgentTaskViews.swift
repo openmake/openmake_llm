@@ -268,6 +268,8 @@ struct AgentTaskDetailView: View {
     @Environment(AppModel.self) private var model
     @State private var detail: AgentTaskDetail?
     @State private var approvals: [AgentTaskApproval] = []
+    /// 병렬 서브에이전트 진행 — 없으면 패널 숨김
+    @State private var subagents: [SubagentTrace] = []
     @State private var steering = ""
     @State private var errorMessage: String?
 
@@ -282,6 +284,8 @@ struct AgentTaskDetailView: View {
                             await load()
                         }
                     }
+
+                    SubagentPanel(traces: subagents)
 
                     if let result = detail.task.result, !result.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
@@ -380,8 +384,11 @@ struct AgentTaskDetailView: View {
         do {
             async let detailRequest = model.client.agentTask(id: taskId)
             async let approvalRequest = model.client.pendingAgentTaskApprovals()
+            async let subagentRequest = model.client.agentTaskSubagents(id: taskId)
             detail = try await detailRequest
             approvals = (try? await approvalRequest) ?? []
+            // 서브에이전트 조회 실패는 상세를 막지 않는다(fail-open — 패널만 비움)
+            subagents = (try? await subagentRequest) ?? []
             errorMessage = nil
         } catch {
             errorMessage = "작업 상태를 불러오지 못했습니다"

@@ -153,7 +153,9 @@ public extension WsChatRequest {
         saveHistory: Bool? = nil,
         memoryLearning: Bool? = nil,
         userAgentId: String? = nil,
-        userLocation: UserLocation? = nil
+        userLocation: UserLocation? = nil,
+        /// 모델 비교 모드 — 레인 식별(웹 use-compare-lane 과 동일 필드). 일반 채팅은 nil.
+        lane: String? = nil
     ) -> WsChatRequest {
         WsChatRequest(
             anonSessionID: nil,
@@ -167,7 +169,7 @@ public extension WsChatRequest {
             history: history.isEmpty ? nil : history,
             imageMode: imageMode,
             images: images,
-            lane: nil,
+            lane: lane,
             memoryLearning: memoryLearning,
             message: message,
             model: model,

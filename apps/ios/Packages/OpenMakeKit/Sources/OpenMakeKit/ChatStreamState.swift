@@ -58,6 +58,31 @@ public struct ChatActivityEntry: Identifiable, Equatable, Sendable {
     }
 }
 
+/// 멀티모달 오케스트레이터 작업 1건 (system_event orchestrator_plan/orchestrator_task 대응 — 웹 store 와 같은 형태)
+public struct OrchestratorTask: Identifiable, Equatable, Sendable {
+    public enum Status: String, Sendable { case pending, running, ok, failed }
+    public let id: String
+    public let capability: String
+    public var instruction: String?
+    public var status: Status
+    public var summary: String?
+    public var ms: Double?
+
+    public var label: String { CapabilityCatalog.label(capability) }
+}
+
+/// 오케스트레이터 진행 — 계획(planning) → 실행(executing, 작업별 상태) → 종합(synthesizing).
+/// `simple` 계획이거나 done/skipped 가 오면 nil 로 돌아간다(배너 소멸).
+public struct OrchestratorProgress: Equatable, Sendable {
+    public enum Phase: String, Sendable { case planning, executing, synthesizing }
+    public var phase: Phase
+    public var detail: String?
+    public var complexity: String?
+    public var tasks: [OrchestratorTask]
+
+    public var doneCount: Int { tasks.filter { $0.status == .ok || $0.status == .failed }.count }
+}
+
 public struct ChatStreamState: Sendable {
     public private(set) var streamingText = ""
     public private(set) var isThinking = false
@@ -78,6 +103,9 @@ public struct ChatStreamState: Sendable {
     public private(set) var artifacts: [ChatArtifact] = []
     /// 이번 응답에서 지나온 단계 이력 (최신이 마지막). 진행 카드에서 펼쳐 보여준다.
     public private(set) var activityLog: [ChatActivityEntry] = []
+    /// 멀티모달 오케스트레이터 진행 (이미지·영상·음성 등 capability 작업). 종전엔 system_event 를
+    /// 통째로 버려 이미지 34s·영상 수 분 동안 진행 표시가 0 이었다(2026-09-12).
+    public private(set) var orchestrator: OrchestratorProgress?
     /// 본문 토큰을 한 자라도 받았는지 — "응답 작성 중" 표시 판단용
     public var hasStartedAnswer: Bool { !streamingText.isEmpty }
 
@@ -89,6 +117,7 @@ public struct ChatStreamState: Sendable {
     public mutating func begin(hint: String? = nil) {
         activeSkillNames = []
         activityLog = []
+        orchestrator = nil
         setActivity(hint ?? "요청을 분석하고 있어요", kind: .preparing)
     }
 
@@ -164,6 +193,7 @@ public struct ChatStreamState: Sendable {
             isThinking = false
             statusText = nil
             activityKind = nil
+            orchestrator = nil
             if let raw = event.metrics {
                 metrics = ChatStreamMetrics(tokenCount: raw.tokenCount, tokensPerSec: raw.tokensPerSEC)
             }
@@ -188,12 +218,83 @@ public struct ChatStreamState: Sendable {
             isThinking = false
             isDone = false
             setActivity(streamingText.isEmpty ? "답변을 이어받고 있어요" : Self.writingText, kind: .finalizing)
+        case .systemEvent:
+            applySystemEvent(event.payload)
         case .resumeNone:
             resumeUnavailable = true
             isDone = true
             isThinking = false
             statusText = nil
             activityKind = nil
+        default:
+            break
+        }
+    }
+
+    /// system_event — 오케스트레이터 진행(orchestrator_status|plan|task)만 소비하고 나머지는 무시.
+    /// 알 수 없는 형태는 조용히 건너뛴다(fail-open, 웹 use-chat-socket applyOrchestratorEvent 와 같은 규칙).
+    private mutating func applySystemEvent(_ payload: Payload?) {
+        guard let payload else { return }
+        let md = SystemEventMetadata(payload.metadata)
+        switch payload.type {
+        case "orchestrator_status":
+            guard let phase = md.string("phase") else { return }
+            switch phase {
+            case "planning":
+                orchestrator = OrchestratorProgress(phase: .planning, detail: md.string("detail"), complexity: orchestrator?.complexity, tasks: orchestrator?.tasks ?? [])
+                setActivity("요청을 분석하고 있어요", kind: .preparing)
+            case "executing":
+                orchestrator = OrchestratorProgress(phase: .executing, detail: md.string("detail"), complexity: orchestrator?.complexity, tasks: orchestrator?.tasks ?? [])
+                if let running = orchestrator?.tasks.first(where: { $0.status == .running }) {
+                    setActivity(CapabilityCatalog.progressText(running.capability), kind: .tool)
+                } else {
+                    setActivity("작업을 실행하고 있어요", kind: .tool)
+                }
+            case "synthesizing":
+                orchestrator = OrchestratorProgress(phase: .synthesizing, detail: md.string("detail"), complexity: orchestrator?.complexity, tasks: orchestrator?.tasks ?? [])
+                setActivity("결과를 모아 답변을 정리하고 있어요", kind: .finalizing)
+            default:
+                // done | skipped | 기타 — 배너 숨김(상태 문구는 다음 이벤트가 갱신)
+                orchestrator = nil
+            }
+        case "orchestrator_plan":
+            let complexity = md.string("complexity")
+            if complexity == "simple" {
+                orchestrator = nil
+                return
+            }
+            let tasks: [OrchestratorTask] = md.objects("tasks").compactMap { t in
+                guard let id = t.string("id"), let capability = t.string("capability") else { return nil }
+                return OrchestratorTask(id: id, capability: capability, instruction: t.string("instruction"), status: .pending, summary: nil, ms: nil)
+            }
+            orchestrator = OrchestratorProgress(phase: orchestrator?.phase ?? .executing, detail: orchestrator?.detail, complexity: complexity, tasks: tasks)
+            if tasks.count == 1, let only = tasks.first {
+                setActivity(CapabilityCatalog.progressText(only.capability), kind: .tool)
+            } else if !tasks.isEmpty {
+                setActivity("\(tasks.count)개 작업을 실행하고 있어요", kind: .tool)
+            }
+        case "orchestrator_task":
+            guard let id = md.string("id"), let capability = md.string("capability"),
+                  let raw = md.string("status"), let status = OrchestratorTask.Status(rawValue: raw) else { return }
+            var progress = orchestrator ?? OrchestratorProgress(phase: .executing, detail: nil, complexity: nil, tasks: [])
+            if let index = progress.tasks.firstIndex(where: { $0.id == id }) {
+                progress.tasks[index].status = status
+                progress.tasks[index].summary = md.string("summary") ?? progress.tasks[index].summary
+                progress.tasks[index].ms = md.double("ms") ?? progress.tasks[index].ms
+            } else {
+                progress.tasks.append(OrchestratorTask(id: id, capability: capability, instruction: nil, status: status, summary: md.string("summary"), ms: md.double("ms")))
+            }
+            orchestrator = progress
+            switch status {
+            case .running:
+                setActivity(CapabilityCatalog.progressText(capability), kind: .tool)
+            case .ok:
+                setActivity("\(CapabilityCatalog.label(capability)) 완료", kind: .finalizing)
+            case .failed:
+                setActivity("\(CapabilityCatalog.label(capability)) 실패", kind: .finalizing)
+            case .pending:
+                break
+            }
         default:
             break
         }
@@ -236,6 +337,43 @@ public struct ChatStreamState: Sendable {
             let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty, seen.insert(trimmed).inserted else { return nil }
             return trimmed
+        }
+    }
+}
+
+
+/// system_event.payload.metadata 의 관대한 접근자 — 생성 모델의 JSONAny(value: Any) 위에서
+/// 문자열/숫자/객체 배열만 꺼낸다. 형식이 다르면 nil(무시).
+struct SystemEventMetadata {
+    private let raw: [String: Any]
+
+    init(_ metadata: [String: JSONAny]?) {
+        raw = (metadata ?? [:]).mapValues { $0.value }
+    }
+
+    init(any: [String: Any]) {
+        raw = any
+    }
+
+    func string(_ key: String) -> String? {
+        raw[key] as? String
+    }
+
+    func double(_ key: String) -> Double? {
+        switch raw[key] {
+        case let value as Double: return value
+        case let value as Int64: return Double(value)
+        case let value as Int: return Double(value)
+        default: return nil
+        }
+    }
+
+    func objects(_ key: String) -> [SystemEventMetadata] {
+        guard let array = raw[key] as? [Any] else { return [] }
+        return array.compactMap { item in
+            if let dict = item as? [String: Any] { return SystemEventMetadata(any: dict) }
+            if let dict = item as? [String: JSONAny] { return SystemEventMetadata(dict) }
+            return nil
         }
     }
 }

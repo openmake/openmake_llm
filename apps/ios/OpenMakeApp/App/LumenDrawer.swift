@@ -7,6 +7,7 @@ struct LumenDrawer: View {
     let onDismiss: () -> Void
     let onNewChat: () -> Void
     let onAgentTasks: () -> Void
+    let onCompare: () -> Void
     let onDeepResearch: () -> Void
     let onConversation: (OpenMakeClient.SessionSummary) -> Void
     let onSettings: () -> Void
@@ -44,6 +45,7 @@ struct LumenDrawer: View {
                     VStack(spacing: 4) {
                         DrawerRow(title: "새 대화", systemImage: "square.and.pencil", accent: true, action: onNewChat)
                         DrawerRow(title: "에이전트 작업", systemImage: "wand.and.stars", action: onAgentTasks)
+                        DrawerRow(title: "모델 비교", systemImage: "rectangle.split.2x1", action: onCompare)
                         DrawerRow(title: "딥리서치", systemImage: "magnifyingglass.circle", action: onDeepResearch)
                     }
                     .padding(.horizontal, 8)
