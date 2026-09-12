@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.60.4](https://github.com/openmake/openmake_llm/compare/v1.60.3...v1.60.4) (2026-09-12)
+
+
+### 🐛 버그 수정
+
+* **orchestrator:** 실행 경계 보안 정리 — 서버 공용 키 정책·비용 주체, 영상 보정 범위·대화 귀속, job 저장 보장, 저장본 조회 분리, 이미지 모드 공통 경계 ([#847](https://github.com/openmake/openmake_llm/issues/847)) ([569fa76](https://github.com/openmake/openmake_llm/commit/569fa768ef68831e006e7d1fa72bdf6ea3a090ca))
+
 ## [1.60.3](https://github.com/openmake/openmake_llm/compare/v1.60.2...v1.60.3) (2026-09-12)
 
 
