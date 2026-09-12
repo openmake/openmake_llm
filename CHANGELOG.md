@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.61.1](https://github.com/openmake/openmake_llm/compare/v1.61.0...v1.61.1) (2026-09-12)
+
+
+### 🐛 버그 수정
+
+* **chat:** 모바일 응답 후 하단 자동 스크롤 복구 ([7bb2db1](https://github.com/openmake/openmake_llm/commit/7bb2db17a213113931e2679ec0c75f19a6303e1c))
+
 ## [1.61.0](https://github.com/openmake/openmake_llm/compare/v1.60.5...v1.61.0) (2026-09-12)
 
 
