@@ -20,7 +20,7 @@ export interface OrchestratorAttachment {
     /** 텍스트 문서면 추출 텍스트 */
     text?: string;
     /** kind=job: 진행 중이던 비동기 작업(영상) — 재조회용 */
-    job?: { capability: Capability; providerId: string; jobId: string };
+    job?: { capability: Capability; providerId: string; jobId: string; /** 이미 받아둔 산출물(/generated/..) — 있으면 재조회·재다운로드 없이 그대로 반환 */ resultPath?: string | null };
 }
 
 export interface TaskMedia {

@@ -11,7 +11,8 @@ import { OrchestratorJobsRepository } from '../../../data/repositories/orchestra
 import { resolveCapabilityTarget, type CapabilityTarget } from '../capability-resolver';
 import { callJson, downloadProviderUrl } from '../http-call';
 import { saveVideo } from '../media-io';
-import { refsRawText, type CapabilityExecutor, type ExecutorOutput } from '../types';
+import { refsRawText, type CapabilityExecutor, type ExecutorOutput, type TaskMedia } from '../types';
+import { resolveGeneratedPath } from '../../../mcp/generated-media';
 import { createLogger } from '../../../utils/logger';
 
 const logger = createLogger('VideoExecutor');
@@ -62,6 +63,25 @@ function jobsRepo(): OrchestratorJobsRepository | null {
     try { return new OrchestratorJobsRepository(getPool()); } catch { return null; }
 }
 
+/** 내려받기를 VIDEO_DOWNLOAD_ATTEMPTS 회까지 시도 — 턴 취소(signal)면 즉시 중단 */
+async function downloadWithRetry(url: string, target: CapabilityTarget, signal: AbortSignal | undefined): Promise<Awaited<ReturnType<typeof downloadProviderUrl>>> {
+    const attempts = Math.max(1, CAPABILITY_LIMITS.VIDEO_DOWNLOAD_ATTEMPTS);
+    let lastErr: unknown;
+    for (let i = 1; i <= attempts; i++) {
+        try {
+            return await downloadProviderUrl(url, {
+                timeoutMs: CAPABILITY_LIMITS.VIDEO_DOWNLOAD_TIMEOUT_MS, signal, allowTypes: ['video/', 'application/octet-stream'],
+                headers: sameOrigin(url, target.baseUrl) ? target.headers : undefined,
+            });
+        } catch (err) {
+            lastErr = err;
+            if (signal?.aborted || i === attempts) break;
+            logger.warn(`[Video] 내려받기 ${i}/${attempts} 실패 — 재시도: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+    throw lastErr;
+}
+
 export const videoGenerateExecutor: CapabilityExecutor = async (task, ctx) => {
     const target = await resolveCapabilityTarget('video.generate', ctx.userId);
     const adapter = videoAdapterFor(target.providerId);
@@ -76,6 +96,13 @@ export const videoGenerateExecutor: CapabilityExecutor = async (task, ctx) => {
             throw new Error(`이전 영상 작업(${jobAtt.job.providerId})과 현재 배정 provider(${target.providerId})가 달라 재조회할 수 없습니다`);
         }
         jobId = jobAtt.job.jobId;
+        // 이미 받아둔 산출물이 있으면 provider 재조회·재다운로드 없이 그대로 돌려준다(파일이 실제로 있을 때만)
+        const saved = jobAtt.job.resultPath && resolveGeneratedPath(jobAtt.job.resultPath) ? jobAtt.job.resultPath : null;
+        if (saved) {
+            logger.info(`[Video] 기존 job 저장본 반환 ${jobId} ${saved}`);
+            const media: TaskMedia = { kind: 'video', urlPath: saved, markdown: `[🎬 ${ctx.lang === 'ko' ? '영상 보기' : 'Watch'}](${saved})` };
+            return { ok: true, status: 'completed', text: ctx.lang === 'ko' ? `영상(이미 완성): ${saved}` : `Video (already generated): ${saved}`, media: [media], model: target.fullId, job: { providerId: target.providerId, jobId } } satisfies ExecutorOutput;
+        }
         view = await fetchJob(target, adapter, jobId, ctx.signal);
         logger.info(`[Video] 기존 job 재조회 ${jobId} status=${view.status}`);
     } else {
@@ -105,10 +132,7 @@ export const videoGenerateExecutor: CapabilityExecutor = async (task, ctx) => {
         if (!url) throw new Error('완료됐지만 산출물 URL 이 없습니다');
         let downloaded: Awaited<ReturnType<typeof downloadProviderUrl>>;
         try {
-            downloaded = await downloadProviderUrl(url, {
-                timeoutMs: CAPABILITY_LIMITS.VIDEO_DOWNLOAD_TIMEOUT_MS, signal: ctx.signal, allowTypes: ['video/', 'application/octet-stream'],
-                headers: sameOrigin(url, target.baseUrl) ? target.headers : undefined,
-            });
+            downloaded = await downloadWithRetry(url, target, ctx.signal);
         } catch (err) {
             // provider 는 완성했는데 내려받기만 실패(느린 파일 서버·타임아웃) — 실패로 닫지 않고 job 을 pending 으로 남겨
             // 다음 요청에서 같은 job 을 다시 내려받게 한다(2026-09-12 실측: hasa 3.7MB 173s > 종전 120s 상한).
