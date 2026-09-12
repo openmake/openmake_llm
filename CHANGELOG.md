@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.60.5](https://github.com/openmake/openmake_llm/compare/v1.60.4...v1.60.5) (2026-09-12)
+
+
+### ⚡ 성능
+
+* **orchestrator:** 영상 완료/실패 markDone 을 fire-and-forget 으로 — 응답이 DB 쓰기를 기다리지 않는다 ([#849](https://github.com/openmake/openmake_llm/issues/849)) ([daa7184](https://github.com/openmake/openmake_llm/commit/daa7184f07fbdf8597834c523238c137ad2d93a1))
+
 ## [1.60.4](https://github.com/openmake/openmake_llm/compare/v1.60.3...v1.60.4) (2026-09-12)
 
 
