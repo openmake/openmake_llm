@@ -163,11 +163,13 @@ export default function ApiAccessPage() {
   };
 
   return (
-    <div>
+    // 루트를 fragment 로 둬야 헤더·탭·본문이 <main>(flex flex-col) 의 직접 자식이 되어
+    // 본문의 flex-1 이 먹는다 — <div> 로 감싸면 스크롤 영역이 생기지 않아 내용이 잘린다.
+    <>
       <PageHeader title={t("title")} description={t("subtitle")} />
       <DeveloperTabs />
 
-      <div className="mx-auto max-w-4xl space-y-5 px-6 py-6">
+      <div className="mx-auto min-h-0 w-full max-w-4xl flex-1 space-y-5 overflow-y-auto px-6 py-6">
         {error && (
           <div className="flex items-center gap-2 rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
             <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -345,6 +347,6 @@ export default function ApiAccessPage() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </>
   );
 }
