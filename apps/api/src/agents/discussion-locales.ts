@@ -10,6 +10,7 @@
  * @see agents/discussion-engine - 이 상수들을 소비하는 메인 엔진
  */
 import type { PromptLocaleCode } from '../chat/language-policy';
+import { subjectParticle } from '../utils/korean-particle';
 
 export const DISCUSSION_SYSTEM_PROMPTS: Record<PromptLocaleCode, {
     deepThinking: string;
@@ -481,7 +482,7 @@ export const DISCUSSION_PROGRESS_MESSAGES: Record<PromptLocaleCode, {
 }> = {
     ko: {
         selectingExperts: '토론 참여 전문가를 선택하고 있습니다...',
-        agentOpining: (agentEmoji, agentName) => `${agentEmoji} ${agentName}이(가) 의견을 제시하고 있습니다...`,
+        agentOpining: (agentEmoji, agentName) => `${agentEmoji} ${agentName}${subjectParticle(agentName)} 의견을 제시하고 있습니다...`,
         crossReviewing: '전문가 의견을 교차 검토하고 있습니다...',
         factChecking: '웹 검색으로 사실을 검증하고 있습니다...',
         synthesizing: '전문가 의견을 종합하여 최종 답변을 생성하고 있습니다...',

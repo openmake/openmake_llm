@@ -1949,7 +1949,7 @@
     "auth": {
       "title": "인증 방식",
       "apiKeyTitle": "API Key 인증",
-      "apiKeyDesc": "설정 > API 키 페이지에서 발급한 키를 <code>Authorization</code> 헤더에 전달합니다.",
+      "apiKeyDesc": "API 액세스 페이지(/api-access)에서 발급한 키를 <code>Authorization</code> 헤더에 전달합니다.",
       "jwtTitle": "JWT 세션 인증",
       "jwtDesc": "브라우저 세션은 HttpOnly 쿠키에 저장된 JWT를 자동으로 사용합니다. API 직접 호출 시에는 API Key를 권장합니다."
     },
@@ -1969,7 +1969,7 @@
     "steps": {
       "apiKey": {
         "title": "API 키 발급",
-        "description": "설정 > API 키 페이지에서 새 API 키를 생성합니다."
+        "description": "API 액세스 페이지(/api-access)에서 새 API 키를 생성합니다."
       },
       "chatCompletion": {
         "title": "채팅 완성 요청",

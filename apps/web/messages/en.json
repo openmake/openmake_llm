@@ -1949,7 +1949,7 @@
     "auth": {
       "title": "Authentication",
       "apiKeyTitle": "API Key Authentication",
-      "apiKeyDesc": "Pass a key issued on the Settings > API Keys page in the <code>Authorization</code> header.",
+      "apiKeyDesc": "Pass a key issued on the API Access page (/api-access) in the <code>Authorization</code> header.",
       "jwtTitle": "JWT Session Authentication",
       "jwtDesc": "Browser sessions automatically use a JWT stored in an HttpOnly cookie. For direct API calls, an API key is recommended."
     },
@@ -1969,7 +1969,7 @@
     "steps": {
       "apiKey": {
         "title": "Issue an API Key",
-        "description": "Create a new API key on the Settings > API Keys page."
+        "description": "Create a new API key on the the API Access page (/api-access) page."
       },
       "chatCompletion": {
         "title": "Chat Completion Request",

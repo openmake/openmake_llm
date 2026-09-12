@@ -37,6 +37,26 @@ function AuthSync() {
   return null;
 }
 
+/**
+ * 웹 푸시 서비스 워커 등록 (public/sw.js).
+ *
+ * 등록된 워커가 없으면 설정 → 알림의 구독 토글이 `serviceWorker.ready` 에서 영원히 멈춰
+ * "서비스 워커가 등록되지 않아 푸시 알림을 사용할 수 없습니다" 만 보였다(2026-09-13).
+ * 실패는 무시한다 — 푸시는 부가 기능이고, 비보안 컨텍스트·브라우저 미지원에서 앱이
+ * 깨지면 안 된다.
+ */
+function ServiceWorkerRegistrar() {
+  useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+    // 로컬 http 개발 환경(localhost 제외)은 등록 자체가 불가 — 조용히 건너뛴다
+    if (!window.isSecureContext) return;
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      /* 등록 실패 — 푸시만 비활성, 앱 동작에는 영향 없음 */
+    });
+  }, []);
+  return null;
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
     () =>
@@ -54,6 +74,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         disableTransitionOnChange
       >
         <AuthSync />
+      <ServiceWorkerRegistrar />
         {children}
       </ThemeProvider>
     </QueryClientProvider>

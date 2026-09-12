@@ -1949,7 +1949,7 @@
     "auth": {
       "title": "认证方式",
       "apiKeyTitle": "API Key 认证",
-      "apiKeyDesc": "将在 设置 > API 密钥 页面签发的密钥传入 <code>Authorization</code> 请求头。",
+      "apiKeyDesc": "将在 API 访问页面(/api-access)签发的密钥传入 <code>Authorization</code> 请求头。",
       "jwtTitle": "JWT 会话认证",
       "jwtDesc": "浏览器会话会自动使用存储在 HttpOnly Cookie 中的 JWT。直接调用 API 时建议使用 API Key。"
     },
@@ -1969,7 +1969,7 @@
     "steps": {
       "apiKey": {
         "title": "签发 API 密钥",
-        "description": "在 设置 > API 密钥 页面创建新的 API 密钥。"
+        "description": "在 API 访问页面(/api-access) 页面创建新的 API 密钥。"
       },
       "chatCompletion": {
         "title": "聊天补全请求",

@@ -226,6 +226,9 @@ export class ChatRequestHandler {
         const message = await applySlashCommand((rawMessage ?? '').trim(), {
             ...(userContext.authenticatedUserId ? { userId: String(userContext.authenticatedUserId) } : {}),
         });
+        /** 사용자가 실제로 친 문장 — 제목·대화기록 저장용(확장문 아님).
+         *  WS 는 확장 전 원문을 originalMessage 로 넘기고, REST 는 여기서 확장하므로 rawMessage 가 원문이다. */
+        const userFacingMessage = (originalMessage ?? rawMessage ?? '').trim() || message;
 
         // 1. ExecutionPlan 해석
         const { plan, engineModel } = ChatRequestHandler.buildPlan(model || '');
@@ -273,7 +276,10 @@ export class ChatRequestHandler {
             currentSessionId = await ensureSession(
                 sessionId,
                 userContext.authenticatedUserId,
-                message,
+                // 세션 제목·저장은 **사용자 발화**로 — 슬래시 확장문은 모델용 지시다.
+                // 종전엔 확장문을 넘겨 히스토리 제목이 '[슬래시 명령: 스킬 "x" 적용]' 으로 남았다
+                // (운영 13건, 2026-09-13 라이브 점검). #619·#620 과 같은 뿌리.
+                userFacingMessage,
                 userContext.anonSessionId,
                 userContext.userRole,
                 validatedBranchMeta,
@@ -294,7 +300,9 @@ export class ChatRequestHandler {
         const auditUserId = userContext.authenticatedUserId || userContext.anonSessionId || 'anonymous';
         // saveHistory 미지정 → true (기본 보존)
         const persistContent = saveHistory !== false;
-        await saveUserMessage(currentSessionId, auditUserId, message, maskedModel, persistContent);
+        // 저장도 사용자 발화 기준 — 확장문(스킬 본문 수천 자)을 저장하면 히스토리에 그대로 보이고
+        // 다음 턴 history 로 재전송돼 토큰까지 낭비된다.
+        await saveUserMessage(currentSessionId, auditUserId, userFacingMessage, maskedModel, persistContent);
 
         const startTime = Date.now();
 

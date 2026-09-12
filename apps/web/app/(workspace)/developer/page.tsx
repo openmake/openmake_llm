@@ -25,43 +25,55 @@ interface QuickStartData {
   baseUrl?: string;
 }
 
-const STEP_CODES: Record<number, string> = {
-  1: `# Include your API key in the HTTP header
+/** 문서에 찍히는 예시 주소 — 실제 접속 중인 오리진을 쓴다(플레이스홀더를 그대로 복사하지 않게).
+ *  SSR 에서는 알 수 없으므로 마운트 후 채운다(hydration 불일치 방지). */
+const FALLBACK_ORIGIN = "https://your-instance.example.com";
+
+function stepCodes(origin: string): Record<number, string> {
+  return {
+    1: `# Include your API key in the HTTP header
 Authorization: Bearer <YOUR_API_KEY>`,
-  2: `curl -X POST https://your-instance/v1/chat/completions \\
+    2: `curl -X POST ${origin}/api/v1/chat/completions \\
   -H "Authorization: Bearer <YOUR_API_KEY>" \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "default",
     "messages": [{"role": "user", "content": "Hello!"}]
   }'`,
-  3: `curl -X POST https://your-instance/v1/chat/completions \\
+    3: `curl -X POST ${origin}/api/v1/chat/completions \\
   -H "Authorization: Bearer <YOUR_API_KEY>" \\
   -H "Content-Type: application/json" \\
   -d '{"model":"default","messages":[...],"stream":true}'`,
-};
+  };
+}
 
 export default function DeveloperPage() {
   const t = useTranslations("developer");
+
+  const [origin, setOrigin] = useState(FALLBACK_ORIGIN);
+  useEffect(() => {
+    if (typeof window !== "undefined") setOrigin(window.location.origin);
+  }, []);
+  const codes = stepCodes(origin);
 
   const defaultSteps: QuickStartStep[] = [
     {
       step: 1,
       title: t("steps.apiKey.title"),
       description: t("steps.apiKey.description"),
-      code: STEP_CODES[1],
+      code: codes[1],
     },
     {
       step: 2,
       title: t("steps.chatCompletion.title"),
       description: t("steps.chatCompletion.description"),
-      code: STEP_CODES[2],
+      code: codes[2],
     },
     {
       step: 3,
       title: t("steps.streaming.title"),
       description: t("steps.streaming.description"),
-      code: STEP_CODES[3],
+      code: codes[3],
     },
   ];
 
@@ -108,7 +120,7 @@ export default function DeveloperPage() {
               <div>
                 <p className="mb-1 text-xs font-medium text-fg-2">Base URL</p>
                 <pre className="rounded-md bg-surface-2 p-3 text-xs text-fg-2 overflow-x-auto font-mono">
-                  {`https://your-instance.example.com`}
+                  {origin}
                 </pre>
               </div>
               <div>
@@ -148,7 +160,7 @@ export default function DeveloperPage() {
                   })}
                 </p>
                 <pre className="rounded-md bg-surface-2 p-3 text-xs text-fg-2 overflow-x-auto font-mono">
-                  {`Authorization: Bearer om_live_xxxxxxxxxxxxxxxx`}
+                  {`Authorization: Bearer omk_live_xxxxxxxxxxxxxxxx`}
                 </pre>
               </div>
               <div>
@@ -177,7 +189,7 @@ export default function DeveloperPage() {
                 })}
               </p>
               <pre className="rounded-md bg-surface-2 p-3 text-xs text-fg-2 overflow-x-auto font-mono">
-                {`curl https://your-instance/api/models \\
+                {`curl ${origin}/api/models \\
   -H "Authorization: Bearer <YOUR_API_KEY>"`}
               </pre>
               {/* 구 7 brand alias(pro/fast/think/code/vision) 는 2026-06-28 폐기됨.

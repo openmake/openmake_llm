@@ -127,7 +127,7 @@ export async function generateReport(params: {
     /** 보고서 생성 진행 콜백 — 누적 생성 글자 수를 보고해 report 단계 progress 공백(체감 멈춤)을 제거 */
     onReportProgress?: (charsGenerated: number) => void;
     throwIfAborted: () => void;
-}): Promise<{ summary: string; keyFindings: string[] }> {
+}): Promise<{ summary: string; keyFindings: string[]; reportFailed?: boolean }> {
     const { client, config, topic, findings, sources, subTopics, sessionId, onReportProgress, throwIfAborted } = params;
 
     throwIfAborted();
@@ -151,7 +151,10 @@ export async function generateReport(params: {
             result: fallbackSummary,
             status: 'completed'
         });
-        return { summary: fallbackSummary, keyFindings: [] };
+        // 호출자(DeepResearchService)가 세션을 '완료'로 기록하지 않도록 실패를 알린다 —
+        // 종전엔 보고서가 없어도 status=completed·progress=100 이라 /research 히스토리에
+        // '완료' 로 남았다(2026-09-13 라이브 점검).
+        return { summary: fallbackSummary, keyFindings: [], reportFailed: true };
     }
 
     const sourceList = uniqueSources

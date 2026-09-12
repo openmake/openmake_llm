@@ -100,12 +100,14 @@ export function formatDiscussionResult(result: DiscussionResult, userLanguage?: 
         formatted += '---\n\n';
     }
 
-    formatted += '<details open>\n<summary>💡 <strong>종합 답변</strong> (전문가 의견 종합)</summary>\n\n';
+    // 마크다운 헤딩으로 구분 — 종전엔 raw HTML(`<details open><summary>…`)을 썼는데,
+    // 프론트 마크다운 렌더러는 XSS 방어로 rehype-raw 를 쓰지 않아 태그가 렌더되지 않고
+    // 닫는 `</details>` 가 본문에 그대로 노출됐다(2026-09-13 라이브 점검).
+    formatted += '## 💡 종합 답변 (전문가 의견 종합)\n\n';
     formatted += result.finalAnswer;
-    formatted += '\n\n</details>';
 
     // 출처 결정적 첨부 — 도구 경유 경로(orchestration-dispatch)와 대칭.
-    // details 블록 밖에 두어 접힘 상태와 무관하게 근거가 보이도록 한다.
+    // 종합 답변 섹션 뒤에 두어 근거가 항상 보이도록 한다.
     formatted += buildDiscussionSourcesBlock(result.finalAnswer, result.sources, userLanguage);
 
     return formatted;

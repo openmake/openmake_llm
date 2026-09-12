@@ -1949,7 +1949,7 @@
     "auth": {
       "title": "認証方式",
       "apiKeyTitle": "API キー認証",
-      "apiKeyDesc": "設定 > API キーページで発行したキーを <code>Authorization</code> ヘッダーに渡します。",
+      "apiKeyDesc": "API アクセスページ(/api-access)で発行したキーを <code>Authorization</code> ヘッダーに渡します。",
       "jwtTitle": "JWT セッション認証",
       "jwtDesc": "ブラウザーセッションは HttpOnly クッキーに保存された JWT を自動的に使用します。API を直接呼び出す場合は API キーを推奨します。"
     },
@@ -1969,7 +1969,7 @@
     "steps": {
       "apiKey": {
         "title": "API キーの発行",
-        "description": "設定 > API キーページで新しい API キーを作成します。"
+        "description": "API アクセスページ(/api-access)で新しい API キーを作成します。"
       },
       "chatCompletion": {
         "title": "チャット補完リクエスト",
