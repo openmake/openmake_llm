@@ -78,6 +78,11 @@ interface SDKCallToolResult {
         /** MIME 타입 */
         mimeType?: string;
     }>;
+    /**
+     * 구조화 출력 (MCP 2025-06-18 리비전) — `outputSchema` 를 선언한 도구가 돌려주는 JSON.
+     * 규약상 서버는 같은 내용을 `content` 텍스트로도 실어야 하지만, 그러지 않는 서버가 있다.
+     */
+    structuredContent?: unknown;
     /** 에러 발생 여부 */
     isError?: boolean;
 }
@@ -425,14 +430,35 @@ export class ExternalMCPClient extends EventEmitter {
             return entry;
         });
 
-        // 빈 결과 방지
+        // 빈 결과 방지 — content 가 비었는데 구조화 출력(MCP 2025-06-18)이 있으면 그것을 싣는다.
+        // (규약은 텍스트 폴백 동반을 요구하지만 지키지 않는 서버가 있고, 그때 모델에게
+        //  '(empty result)' 만 가면 도구가 실패한 것처럼 보인다 — 조용한 실패)
         if (content.length === 0) {
-            content.push({ type: 'text', text: '(empty result)' });
+            const structured = serializeStructuredContent(result.structuredContent);
+            content.push({ type: 'text', text: structured ?? '(empty result)' });
         }
 
         return {
             content,
             isError: result.isError || false,
         };
+    }
+}
+
+/**
+ * 구조화 출력(structuredContent)을 도구 결과 텍스트로 직렬화한다.
+ *
+ * content 가 비었을 때의 폴백 전용 — 값이 없거나 직렬화할 수 없으면 null 을 돌려
+ * 호출부가 종전 '(empty result)' 를 쓰게 한다. 상한은 도구 결과 절단이 뒤에서
+ * 처리하므로 여기서 따로 자르지 않는다.
+ */
+export function serializeStructuredContent(value: unknown): string | null {
+    if (value === undefined || value === null) return null;
+    if (typeof value === 'string') return value.length > 0 ? value : null;
+    try {
+        const json = JSON.stringify(value, null, 2);
+        return json && json !== '{}' && json !== '[]' ? json : null;
+    } catch {
+        return null;
     }
 }
