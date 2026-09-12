@@ -1,3 +1,4 @@
+import { objectParticle } from './korean-particle';
 /**
  * ============================================================
  * API Response - 표준 API 응답 형식
@@ -210,15 +211,6 @@ export function notFoundMessage(resource: string): string {
         return trimmed;
     }
     return `${trimmed}${objectParticle(trimmed)} 찾을 수 없습니다`;
-}
-
-/** PURE: 목적격 조사 — 한글 받침이면 '을', 없으면 '를'. 비한글 끝은 관용상 '를'. */
-function objectParticle(word: string): string {
-    const last = word.charCodeAt(word.length - 1);
-    if (last >= 0xac00 && last <= 0xd7a3) {
-        return (last - 0xac00) % 28 === 0 ? '를' : '을';
-    }
-    return '를';
 }
 
 /** 409 Conflict */
