@@ -27,6 +27,17 @@ struct SettingsSheet: View {
                     .pickerStyle(.segmented)
                 }
 
+                Section("기능") {
+                    NavigationLink {
+                        CapabilityModelsView()
+                    } label: {
+                        Label("기능별 모델 배정", systemImage: "square.grid.2x2")
+                    }
+                    Text("이미지·영상·음성 등 멀티모달 기능을 어느 모델이 처리할지 정합니다. 웹 설정과 같은 값입니다.")
+                        .font(.footnote)
+                        .foregroundStyle(Instrument.muted)
+                }
+
                 Section("서버") {
                     LabeledContent("주소", value: AppConfig.serverURL.host() ?? "-")
                     if let catalog = model.modelCatalog {

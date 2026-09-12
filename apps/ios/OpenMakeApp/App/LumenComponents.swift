@@ -254,6 +254,7 @@ struct DesignSystemShowcase: View {
                     onDismiss: { showDrawer = false },
                     onNewChat: { showDrawer = false },
                     onAgentTasks: { showDrawer = false },
+                    onCompare: { showDrawer = false },
                     onDeepResearch: { showDrawer = false },
                     onConversation: { _ in showDrawer = false },
                     onSettings: { showDrawer = false })

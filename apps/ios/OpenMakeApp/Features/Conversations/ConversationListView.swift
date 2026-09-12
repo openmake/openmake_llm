@@ -12,6 +12,7 @@ struct ConversationListView: View {
     @State private var showSettings = false
     @State private var showDrawer = false
     @State private var showAgentTasks = false
+    @State private var showCompare = false
     @State private var selectedSession: OpenMakeClient.SessionSummary?
     @State private var searchText = ""
     @State private var autoChatFired = false
@@ -102,6 +103,9 @@ struct ConversationListView: View {
             .navigationDestination(isPresented: $showAgentTasks) {
                 AgentTaskListView()
             }
+            .navigationDestination(isPresented: $showCompare) {
+                CompareView()
+            }
             .navigationDestination(isPresented: Binding(
                 get: { selectedSession != nil },
                 set: { if !$0 { selectedSession = nil } }
@@ -151,6 +155,10 @@ struct ConversationListView: View {
                     onAgentTasks: {
                         showDrawer = false
                         showAgentTasks = true
+                    },
+                    onCompare: {
+                        showDrawer = false
+                        showCompare = true
                     },
                     onDeepResearch: {
                         model.modes.deepResearch = true
