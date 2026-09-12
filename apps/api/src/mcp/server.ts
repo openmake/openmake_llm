@@ -29,6 +29,7 @@ import {
     MCPTool
 } from './types';
 import { builtInTools } from './tools';
+import { negotiateProtocolVersion } from '../config/mcp-protocol';
 
 /**
  * MCP 서버 클래스
@@ -128,7 +129,11 @@ export class MCPServer {
                         jsonrpc: '2.0',
                         id,
                         result: {
-                            protocolVersion: '2024-11-05',
+                            // 클라이언트가 요청한 리비전을 수용 가능하면 그대로, 아니면 우리 최신으로
+                            // (종전엔 '2024-11-05' 고정이라 최신 클라이언트도 2024 리비전으로 협상됐다)
+                            protocolVersion: negotiateProtocolVersion(
+                                (params as { protocolVersion?: unknown } | undefined)?.protocolVersion
+                            ),
                             serverInfo: this.serverInfo,
                             capabilities: this.serverInfo.capabilities
                         }
