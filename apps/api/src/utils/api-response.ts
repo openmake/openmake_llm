@@ -184,8 +184,41 @@ export function forbidden(message = '권한이 없습니다'): ApiErrorResponse 
 }
 
 /** 404 Not Found */
+/**
+ * 404 Not Found.
+ *
+ * 인자는 보통 대상 명사('스킬')지만, 호출부 113곳 중 상당수가 이미 완성된 문장
+ * ('리서치 세션을 찾을 수 없습니다.')이나 서술('agent 없음')을 넘긴다 — 종전엔 그 뒤에
+ * 무조건 '를 찾을 수 없습니다' 를 붙여 "…찾을 수 없습니다.를 찾을 수 없습니다" 가
+ * 사용자에게 그대로 나갔다(2026-09-13 라이브 점검). 이미 문장이면 그대로 쓰고,
+ * 명사일 때만 한국어 조사(받침 유무)에 맞춰 붙인다.
+ */
 export function notFound(resource = '리소스'): ApiErrorResponse {
-    return error(ErrorCodes.NOT_FOUND, `${resource}를 찾을 수 없습니다`);
+    return error(ErrorCodes.NOT_FOUND, notFoundMessage(resource));
+}
+
+/** PURE: notFound 메시지 조립 — 문장/서술은 그대로, 명사는 조사 교정 후 접미. */
+export function notFoundMessage(resource: string): string {
+    const trimmed = resource.trim();
+    if (!trimmed) return '리소스를 찾을 수 없습니다';
+    // 이미 완결된 안내면 그대로: '찾을 수 없' 을 이미 담았거나, 한국어 종결어미로 끝나거나,
+    // 문장부호로 끝나거나(괄호 보충 포함), 영문 안내 문장인 경우.
+    if (/찾을 수 없/.test(trimmed)
+        || /(습니다|입니다|없음|않음|아님|됨|함)$/.test(trimmed)  // 서술형 종결·명사형(제거됨 등)
+        || /[.!?]$/.test(trimmed)
+        || /\b(not found|already|invalid|missing|required)\b/i.test(trimmed)) {
+        return trimmed;
+    }
+    return `${trimmed}${objectParticle(trimmed)} 찾을 수 없습니다`;
+}
+
+/** PURE: 목적격 조사 — 한글 받침이면 '을', 없으면 '를'. 비한글 끝은 관용상 '를'. */
+function objectParticle(word: string): string {
+    const last = word.charCodeAt(word.length - 1);
+    if (last >= 0xac00 && last <= 0xd7a3) {
+        return (last - 0xac00) % 28 === 0 ? '를' : '을';
+    }
+    return '를';
 }
 
 /** 409 Conflict */
