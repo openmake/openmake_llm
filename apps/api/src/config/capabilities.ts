@@ -185,6 +185,10 @@ export const STT_ALLOWED_EXTS: ReadonlySet<string> = new Set(['mp3', 'wav', 'm4a
  * "완료·저장됨" 을 "할 일 없음" 으로 읽음, 2026-09-12) 결정적으로 job 재조회 1작업으로 보정한다. 사용자 발화에만 적용.
  */
 export const VIDEO_JOB_FOLLOWUP_PATTERN = /영상|비디오|동영상|\bvideo\b|\bclip\b/i;
+/** 기존 결과를 묻는 발화 — 이것까지 맞아야 보정한다("다 됐어·완성·보여줘·어떻게 됐·결과·진행") */
+export const VIDEO_JOB_RESULT_INTENT_PATTERN = /다\s*됐|됐어|됐나|완성|끝났|보여|어떻게\s*됐|진행|결과|받아|확인|(is it|are they)\s+(done|ready|finished)|show\s+(me\s+)?(it|the)|status/i;
+/** 새 생성·설명 요청은 보정 금지 — Planner 판단(simple/새 video.generate)을 그대로 둔다 */
+export const VIDEO_JOB_NOT_FOLLOWUP_PATTERN = /만들어|생성|제작|새로|다시\s*(만|그)|설명|원리|뭐야|이란|란\s|무엇|어떻게\s*(하|만)|(make|create|generate|explain|what is|how to)/i;
 export const VIDEO_GEN_DEFAULT_SECONDS = '4';
 export const VIDEO_GEN_DEFAULT_SIZE = '720x1280';
 export const VIDEO_TERMINAL_STATUSES: ReadonlySet<string> = new Set(['completed', 'succeeded', 'failed', 'cancelled', 'canceled', 'error']);

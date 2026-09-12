@@ -9,7 +9,7 @@ import { callJson, extractChatText, extractUsage } from '../http-call';
 import { refsText, type CapabilityExecutor } from '../types';
 
 export const textExecutor: CapabilityExecutor = async (task, ctx) => {
-    const target = await resolveCapabilityTarget(task.capability, ctx.userId);
+    const target = ctx.targets?.get(task.id) ?? await resolveCapabilityTarget(task.capability, ctx.userId);
     const refs = refsText(task, ctx, ORCHESTRATOR.RESULT_MAX_CHARS);
     const system = ctx.lang === 'ko'
         ? '당신은 오케스트레이터의 하위 작업자입니다. 주어진 지시만 수행하고 결과를 간결한 텍스트로 돌려주세요. 인사·서두 없이 본문만.'

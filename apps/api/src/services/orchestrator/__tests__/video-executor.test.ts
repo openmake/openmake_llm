@@ -43,3 +43,14 @@ test('내려받기가 전부 실패하면 failed 가 아니라 pending(사유 �
     const r = await videoGenerateExecutor(task(['j1']), ctx({ capability: 'video.generate', providerId: 'hasa', jobId: 'vid_1', resultPath: null }));
     expect(r.ok).toBe(false); expect(r.status).toBe('pending'); expect(r.text).toMatch(/terminated/); expect(download).toHaveBeenCalledTimes(2);
 });
+
+describe('3·4. job 저장 보장 · 저장본은 자격증명 없이 반환', () => {
+    it('제출 후 저장 실패면 "보존됨" 대신 id 보관 안내(재제출 없음)', async () => {
+        // repo 는 getPool 이 throw → null → persisted=false 경로
+        exists.mockReturnValue(null);
+        callJson.mockResolvedValue({ job_id: 'vid_new', status: 'GENERATING' });
+        const r = await videoGenerateExecutor(task([]), { ...ctx({}), attachments: new Map() } as never);
+        expect(r.status).toBe('pending'); expect(r.text).toMatch(/저장하지 못했습니다|could not be saved/); expect(r.text).toMatch(/vid_new/);
+        expect(callJson).toHaveBeenCalledTimes(1);
+    });
+});

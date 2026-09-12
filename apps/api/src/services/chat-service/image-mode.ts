@@ -9,9 +9,7 @@
  * @module services/chat-service/image-mode
  */
 import { createLogger } from '../../utils/logger';
-import { imageGenerateExecutor } from '../orchestrator/executors/image';
-import type { PlanTask } from '../orchestrator/plan-schema';
-import type { ExecContext } from '../orchestrator/types';
+import { runSingleCapabilityTask } from '../orchestrator/orchestrate';
 
 const logger = createLogger('ImageMode');
 
@@ -22,16 +20,15 @@ const logger = createLogger('ImageMode');
 export async function generateImageInline(
     prompt: string,
     onToken: (token: string, thinking?: string) => void,
-    opts: { userId?: string; lang?: string; signal?: AbortSignal } = {},
+    opts: { userId?: string; lang?: string; signal?: AbortSignal; sessionId?: string } = {},
 ): Promise<string> {
-    // 이미지 모드 토글은 Planner 를 거치지 않고 image.generate executor 를 직접 호출한다(사용자 명시 의도).
-    const task: PlanTask = { id: 'image-mode', capability: 'image.generate', instruction: prompt, text: '', attachments: [], refs: [], dependsOn: [], extra: {} };
-    const ctx: ExecContext = { userId: opts.userId, lang: opts.lang ?? 'ko', userMessage: prompt, attachments: new Map(), results: new Map(), signal: opts.signal };
+    // 이미지 모드 토글은 Planner 만 생략한다 — 실행 승인(preflight)·동시 실행 게이트·데드라인·취소·사용량 계상은 자동 경로와 같은 경계를 탄다(Codex 검토 5).
     try {
-        const out = await imageGenerateExecutor(task, ctx);
+        const out = await runSingleCapabilityTask({ capability: 'image.generate', instruction: prompt, userId: opts.userId, lang: opts.lang ?? 'ko', signal: opts.signal, sessionId: opts.sessionId });
+        if (!out.ok) throw new Error(out.error || out.text);
         const md = out.media[0]?.markdown ?? '';
         const response = md ? `요청하신 이미지를 생성했어요.\n\n${md}` : out.text;
-        logger.info('이미지 직접 생성 완료 (executor 직접 호출)');
+        logger.info('이미지 직접 생성 완료 (공통 실행 경계)');
         onToken(response);
         return response;
     } catch (err) {

@@ -346,6 +346,7 @@ export class ChatRequestHandler {
 
         const chatRequest: ChatMessageRequest = {
             message,
+            sessionId: currentSessionId,
             history: effectiveHistory,
             images,
             webSearchContext,
