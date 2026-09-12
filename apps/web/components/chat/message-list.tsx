@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -638,14 +638,44 @@ export function MessageList() {
   const activeTool = useAppStore((s) => s.activeTool);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  const scrollToBottom = useCallback(() => {
+    bottomRef.current?.scrollIntoView({ block: "end", behavior: "auto" });
+  }, []);
+
   // 응답이 진행 중인데 아직 스트리밍 중인 assistant 메시지가 없으면(첫 토큰 전) "분석 중" 표시
   const last = chatHistory[chatHistory.length - 1];
   const showThinking =
     isGenerating && !(last?.role === "assistant" && last?.streaming);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatHistory, showThinking]);
+    scrollToBottom();
+  }, [
+    activeAgent,
+    activeSkills,
+    activeTool,
+    chatHistory,
+    discussionProgress,
+    orchestratorProgress,
+    researchProgress,
+    scrollToBottom,
+    showThinking,
+  ]);
+
+  useEffect(() => {
+    if (!isGenerating || !window.visualViewport) return;
+
+    let frame = 0;
+    const handleResize = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(scrollToBottom);
+    };
+
+    window.visualViewport.addEventListener("resize", handleResize);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", handleResize);
+      cancelAnimationFrame(frame);
+    };
+  }, [isGenerating, scrollToBottom]);
 
   // 마지막 assistant 메시지만 재생성 대상 — 중간 메시지 재생성은 이후 문맥을 무효화하므로 미허용.
   // 직전 user 메시지에 파일 첨부가 있었으면(hasAttachments) 제외 — 첨부 원본은 히스토리에
