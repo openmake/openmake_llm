@@ -103,10 +103,26 @@ export const videoGenerateExecutor: CapabilityExecutor = async (task, ctx) => {
     if (isDone(view, adapter)) {
         const url = contentUrl(target, adapter, view);
         if (!url) throw new Error('완료됐지만 산출물 URL 이 없습니다');
-        const { bytes, contentType } = await downloadProviderUrl(url, {
-            timeoutMs: CAPABILITY_LIMITS.VIDEO_DOWNLOAD_TIMEOUT_MS, signal: ctx.signal, allowTypes: ['video/', 'application/octet-stream'],
-            headers: sameOrigin(url, target.baseUrl) ? target.headers : undefined,
-        });
+        let downloaded: Awaited<ReturnType<typeof downloadProviderUrl>>;
+        try {
+            downloaded = await downloadProviderUrl(url, {
+                timeoutMs: CAPABILITY_LIMITS.VIDEO_DOWNLOAD_TIMEOUT_MS, signal: ctx.signal, allowTypes: ['video/', 'application/octet-stream'],
+                headers: sameOrigin(url, target.baseUrl) ? target.headers : undefined,
+            });
+        } catch (err) {
+            // provider 는 완성했는데 내려받기만 실패(느린 파일 서버·타임아웃) — 실패로 닫지 않고 job 을 pending 으로 남겨
+            // 다음 요청에서 같은 job 을 다시 내려받게 한다(2026-09-12 실측: hasa 3.7MB 173s > 종전 120s 상한).
+            if (ctx.signal?.aborted) throw err; // 턴 자체 취소는 그대로 전파(다운로드 자체 타임아웃은 ctx.signal 이 살아 있다)
+            const reason = err instanceof Error ? err.message : String(err);
+            logger.warn(`[Video] 완성된 산출물 내려받기 실패 ${jobId}: ${reason}`);
+            return {
+                ok: false, status: 'pending', media: [], model: target.fullId, job,
+                text: ctx.lang === 'ko'
+                    ? `영상은 완성됐지만 파일 내려받기가 실패했습니다(${reason}). 작업 id ${jobId} 는 보존되어 있으니 잠시 후 다시 요청하면 같은 영상을 다시 내려받습니다(새로 만들지 않음).`
+                    : `The video is finished but downloading it failed (${reason}). Job ${jobId} is saved; ask again shortly and the same video will be fetched (no new generation).`,
+            } satisfies ExecutorOutput;
+        }
+        const { bytes, contentType } = downloaded;
         const ext = contentType.includes('webm') || url.toLowerCase().endsWith('.webm') ? 'webm' : 'mp4';
         const media = saveVideo(bytes, ext, ctx.lang === 'ko' ? '영상 보기' : 'Watch');
         if (repo && ctx.userId) void repo.markDone(ctx.userId, target.providerId, jobId, 'completed', media.urlPath).catch(() => undefined);
