@@ -59,37 +59,24 @@
 
 ## 데모
 
-> 아래 GIF 는 실제로 돌아가는 앱에서 녹화했습니다. 최근 대화 제목과 계정 이름은 가렸습니다.
+> 실제로 돌아가는 앱에서 녹화했고, 탭은 자동으로 넘어갑니다. 최근 대화 제목과 계정 이름은 가렸습니다.
 
-**채팅** — 질문하면 답변이 스트리밍으로 이어지고, 모델·응답 스타일·추론 강도를 입력창에서 바로 바꿀 수 있습니다:
-
-<p align="center">
-  <img src="assets/demo-chat.gif" alt="채팅 스트리밍 데모" width="860" />
-</p>
-
-**멀티모달 오케스트레이션** — "…한 이미지를 만들어줘" 는 이미지 생성 작업으로 계획되고, 그 capability 에 배정된 모델에서 실행되어 대화 안에 표시됩니다:
-
-<p align="center">
-  <img src="assets/demo-media.gif" alt="멀티모달 오케스트레이터를 통한 이미지 생성" width="860" />
-</p>
-
-**에이전트 작업** — 입력창을 Agent 모드로 바꾸고 승인 정책을 고른 뒤 목표를 맡기면, 샌드박스에서 진행 상황을 보여주며 실행하고 결과를 돌려줍니다:
-
-<p align="center">
-  <img src="assets/demo-agent.gif" alt="입력창에서 실행한 에이전트 작업" width="860" />
-</p>
-
-**설정** — 모델 역할, capability 별 모델 배정, MCP 카탈로그, 스킬 라이브러리:
-
-<p align="center">
-  <img src="assets/demo-settings.gif" alt="모델 역할, capability 모델, MCP 카탈로그, 스킬 라이브러리" width="860" />
-</p>
-
-**다국어 UI** — 인터페이스는 브라우저 언어나 설정에서 고른 언어를 따릅니다:
-
-<p align="center">
-  <img src="assets/demo-i18n.gif" alt="영어·한국어·일본어·중국어 인터페이스" width="860" />
-</p>
+<table>
+  <tr>
+    <td align="center">
+      <img src="assets/demo-tour.gif" alt="데모 투어: 채팅, 멀티모달, 에이전트 작업, 설정, 언어" width="860" />
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <b>Chat</b> — 질문하면 답변이 스트리밍으로 이어지고, 모델·응답 스타일·추론 강도를 입력창에서 바로 바꿉니다<br/>
+      <b>Multimodal</b> — “…한 이미지를 만들어줘” 가 이미지 생성 작업이 되어, 그 capability 에 배정된 모델에서 실행되고 대화 안에 표시됩니다<br/>
+      <b>Agent tasks</b> — 승인 정책을 고른 Agent 모드가 목표를 샌드박스에서 실행하며 진행 상황을 보여주고 결과를 돌려줍니다<br/>
+      <b>Settings</b> — 모델 역할, capability 별 모델 배정, MCP 카탈로그, 스킬 라이브러리<br/>
+      <b>Languages</b> — 인터페이스는 브라우저 언어나 설정에서 고른 언어를 따릅니다
+    </td>
+  </tr>
+</table>
 
 ---
 
