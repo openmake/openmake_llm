@@ -27,7 +27,7 @@ const TABLE_MAX_ROWS = 50;
 /** 차트 항목 상한 — 막대/라인 모두 이 개수까지만 렌더. */
 const CHART_MAX_ITEMS = 24;
 
-export interface RenderReportResult {
+interface RenderReportResult {
     html: string;
     /** 렌더는 성공했지만 데이터 품질 문제(누락 키·버려진 키 등) 관측용 경고 */
     warnings: string[];

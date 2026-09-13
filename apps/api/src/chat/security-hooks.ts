@@ -26,7 +26,7 @@ const logger = createLogger('SecurityHooks');
  * - pii: 개인식별정보 포함 (주민번호, 카드번호, 전화번호 등)
  * - system_prompt_leak: 시스템 프롬프트 누출 (LLM 응답에서 감지)
  */
-export type ViolationType = 'jailbreak' | 'pii' | 'system_prompt_leak';
+type ViolationType = 'jailbreak' | 'pii' | 'system_prompt_leak';
 
 /**
  * 보안 위반 심각도
@@ -34,12 +34,12 @@ export type ViolationType = 'jailbreak' | 'pii' | 'system_prompt_leak';
  * - warn: 경고 로깅 (처리는 계속)
  * - redact: 마스킹 처리 후 계속
  */
-export type ViolationSeverity = 'block' | 'warn' | 'redact';
+type ViolationSeverity = 'block' | 'warn' | 'redact';
 
 /**
  * 개별 보안 위반 항목
  */
-export interface SecurityViolation {
+interface SecurityViolation {
     /** 위반 유형 */
     type: ViolationType;
     /** 심각도 */
@@ -53,7 +53,7 @@ export interface SecurityViolation {
 /**
  * 보안 검사 결과
  */
-export interface SecurityCheckResult {
+interface SecurityCheckResult {
     /** 검사 통과 여부 (위반 없으면 true) */
     passed: boolean;
     /** 감지된 위반 목록 */

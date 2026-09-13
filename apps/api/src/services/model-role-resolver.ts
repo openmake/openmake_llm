@@ -64,7 +64,7 @@ export interface UserModelRoleLookup {
     getRoleModel(userId: string, role: ModelRole): Promise<string | null>;
 }
 
-export interface RoleClientResolution {
+interface RoleClientResolution {
     client: LLMClient;
     role: ModelRole;
     /** 해석된 모델 fullId (로컬은 'local-llm:<tag>' 로 정규화) */
@@ -77,7 +77,7 @@ export interface RoleClientResolution {
     degraded?: string;
 }
 
-export interface ResolveRoleClientOptions {
+interface ResolveRoleClientOptions {
     /** 사용자별 매핑·BYOK 키 소유자. 미지정 시 전역/기본 티어만 사용. */
     userId?: string;
     /** 사용자별 매핑 조회 — 미주입 시 사용자 티어 스킵 (PR2 에서 실 repo 연결) */

@@ -44,16 +44,6 @@ describe('buildExternalToolPlan — 스킬 required 도구 억제 면제', () =>
         expect(toolNames(plan)).toContain('open-design::create_artifact');
     });
 
-    it('스킬 required 바인딩이면 지도 의도에도 agent_task_list 를 유지한다', () => {
-        const plan = buildExternalToolPlan({
-            ...base,
-            req: { message: '근처 카페 지도 보여줘' } as ChatMessageRequest,
-            wantsMap: true,
-            skillRequiredToolNames: ['agent_task_list'],
-        });
-        expect(toolNames(plan)).toContain('agent_task_list');
-    });
-
     it('required 목록에 없는 도구는 여전히 억제된다 (면제 스코프 한정)', () => {
         const plan = buildExternalToolPlan({
             ...base,

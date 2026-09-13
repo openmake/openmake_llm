@@ -292,7 +292,7 @@ async function performEvaluateAndIncrement(
 // createAdvancedRateLimiter
 // ================================================
 
-export function createAdvancedRateLimiter(options: AdvancedRateLimiterOptions) {
+function createAdvancedRateLimiter(options: AdvancedRateLimiterOptions) {
     return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         // 비용 리미터 등에서 read-only 요청을 제외 — 카운트/차단 없이 통과.
         if (options.skip?.(req)) { next(); return; }

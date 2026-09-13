@@ -128,5 +128,4 @@ router.post('/:id/run', asyncHandler(async (req: Request, res: Response) => {
     res.status(202).json(success({ message: '스케줄 실행을 시작했습니다.', id: s.id }));
 }));
 
-export { router as agentTaskScheduleRouter };
 export default router;

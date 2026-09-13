@@ -51,7 +51,7 @@ export function extractDomain(url: string): string | null {
 }
 
 /** Deep Research 결정적 메트릭 (단계8, LLM 비용 0) */
-export interface ResearchMetrics {
+interface ResearchMetrics {
     /** 최종 고유 소스 수 */
     sourceCount: number;
     /** 고유 도메인 수 */

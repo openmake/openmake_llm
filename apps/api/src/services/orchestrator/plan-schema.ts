@@ -6,9 +6,9 @@
 import { z } from 'zod';
 import { isCapability, PLANNABLE_CAPABILITIES, ORCHESTRATOR, type Capability } from '../../config/capabilities';
 
-export const PLAN_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
+const PLAN_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
 
-export const planTaskSchema = z.object({
+const planTaskSchema = z.object({
     id: z.string().regex(PLAN_ID_RE),
     capability: z.string().min(1).max(40),
     input: z.object({
@@ -21,14 +21,12 @@ export const planTaskSchema = z.object({
     depends_on: z.array(z.string().regex(PLAN_ID_RE)).max(16).optional(),
 });
 
-export const planSchema = z.object({
+const planSchema = z.object({
     complexity: z.enum(['simple', 'multi']),
     language: z.string().max(16).optional(),
     tasks: z.array(planTaskSchema).min(1).max(ORCHESTRATOR.MAX_TASKS),
     synthesis: z.boolean().optional(),
 });
-
-export type RawPlan = z.infer<typeof planSchema>;
 
 export interface PlanTask {
     id: string;
@@ -95,7 +93,7 @@ export function extractPlanJson(text: string): unknown | null {
     return null;
 }
 
-export type PlanValidation = { ok: true; plan: ValidatedPlan } | { ok: false; reason: string };
+type PlanValidation = { ok: true; plan: ValidatedPlan } | { ok: false; reason: string };
 
 /** 구조 + 의미 검증. 실패 사유는 Planner 재시도 프롬프트에 그대로 싣는다 */
 export function validatePlan(raw: unknown, knownAttachmentIds: ReadonlySet<string>): PlanValidation {

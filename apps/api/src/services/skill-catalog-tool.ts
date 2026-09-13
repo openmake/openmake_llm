@@ -20,7 +20,7 @@ import { createLogger } from '../utils/logger';
 
 const logger = createLogger('SkillCatalogTool');
 
-export interface SkillCatalogOptions {
+interface SkillCatalogOptions {
     /**
      * 이미 시스템 프롬프트로 전문 주입된 스킬 id — 카탈로그에서 제외(중복 노출 방지).
      * 채팅은 활성 바인딩, 에이전트 작업은 매니페스트 주입분이 해당.

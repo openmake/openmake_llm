@@ -47,9 +47,3 @@ export const nativePushUnsubscribeSchema = z.strictObject({
     deviceToken: z.string().min(16).max(512).regex(/^[a-fA-F0-9]+$/),
 });
 
-/** Push 구독 등록 요청 TypeScript 타입 */
-export type PushSubscribeInput = z.infer<typeof pushSubscribeSchema>;
-/** Push 구독 해제 요청 TypeScript 타입 */
-export type PushUnsubscribeInput = z.infer<typeof pushUnsubscribeSchema>;
-export type NativePushSubscribeInput = z.infer<typeof nativePushSubscribeSchema>;
-export type NativePushUnsubscribeInput = z.infer<typeof nativePushUnsubscribeSchema>;

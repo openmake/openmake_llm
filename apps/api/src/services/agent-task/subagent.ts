@@ -35,7 +35,7 @@ function stripRawToolCallXml(text: string): string {
     return text.replace(/<tool_call>[\s\S]*?(<\/tool_call>|$)/g, '').trim();
 }
 
-export interface SubagentParams {
+interface SubagentParams {
     client: LLMClient;
     /** 전문가 페르소나 system prompt (keyword-router 가 고른 산업 agent). */
     personaPrompt: string;

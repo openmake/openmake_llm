@@ -21,9 +21,9 @@
  */
 import { BaseRepository, type QueryParam } from './base-repository';
 
-export type MemorySource = 'explicit' | 'candidate' | 'batch';
+type MemorySource = 'explicit' | 'candidate' | 'batch';
 
-export interface UserMemory {
+interface UserMemory {
     id: string;
     user_id: string;
     content: string;

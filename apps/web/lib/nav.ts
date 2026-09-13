@@ -12,7 +12,7 @@ import {
 export type NavRole = "guest" | "user" | "admin";
 export const NAV_ROLE_RANK: Record<NavRole, number> = { guest: 0, user: 1, admin: 2 };
 
-export interface NavItem {
+interface NavItem {
   /** messages/*.json 의 nav 네임스페이스 키 (예: 'items.chat') */
   labelKey: string;
   href: string;
@@ -32,7 +32,7 @@ export interface NavItem {
  * - 설정·사용량·개발자: 사이드바 하단 프로필 메뉴로 이동
  * - 관리자 계열(/admin/*): 단일 '관리자' 항목 + AdminTabs 허브 탭
  */
-export const NAV_ITEMS: NavItem[] = [
+const NAV_ITEMS: NavItem[] = [
   { labelKey: "items.chat", href: "/", icon: MessageSquare, minRole: "guest" },
   { labelKey: "items.agentTasks", href: "/agent-tasks", icon: Sparkles },
   { labelKey: "items.customAgents", href: "/custom-agents", icon: Bot },

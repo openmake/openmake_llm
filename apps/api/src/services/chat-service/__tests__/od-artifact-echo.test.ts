@@ -69,7 +69,7 @@ describe('appendDeterministicBlocks — odArtifact 첨부', () => {
         const out = appendDeterministicBlocks({
             finalContent,
             onToken: (t) => { streamed += t; },
-            generatedImageMarkdowns: [],
+            generatedMediaMarkdowns: [],
             kakaomapBlocks: [],
             discussionSourceBlocks: [],
             odArtifact,

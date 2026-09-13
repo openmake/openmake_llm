@@ -76,23 +76,6 @@ export interface MCPError {
 }
 
 /**
- * MCP JSON-RPC 2.0 알림 메시지
- *
- * 응답을 요구하지 않는 단방향 메시지입니다.
- * id 필드가 없어 요청과 구분됩니다.
- *
- * @interface MCPNotification
- */
-export interface MCPNotification {
-    /** JSON-RPC 프로토콜 버전 (항상 '2.0') */
-    jsonrpc: '2.0';
-    /** 알림 메서드명 */
-    method: string;
-    /** 알림 파라미터 (선택적) */
-    params?: Record<string, unknown>;
-}
-
-/**
  * MCP 도구 정의
  *
  * AI 모델이 호출할 수 있는 도구의 메타데이터를 정의합니다.
@@ -154,24 +137,6 @@ export interface MCPToolResult {
     errorCategory?: ToolErrorCategory;
     /** 실패가 재시도로 해소될 수 있는지 — errorCategory 와 같은 경로·같은 수명. */
     retryable?: boolean;
-}
-
-/**
- * MCP 리소스 정의
- *
- * 서버가 제공하는 정적 리소스(파일, URL 등)의 메타데이터입니다.
- *
- * @interface MCPResource
- */
-export interface MCPResource {
-    /** 리소스 식별 URI */
-    uri: string;
-    /** 리소스 표시 이름 */
-    name: string;
-    /** 리소스 설명 (선택적) */
-    description?: string;
-    /** 리소스 MIME 타입 (선택적) */
-    mimeType?: string;
 }
 
 /**

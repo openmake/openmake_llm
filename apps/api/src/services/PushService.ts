@@ -17,12 +17,12 @@ export interface PushSubscription {
     createdAt: Date;
 }
 
-export interface StoredPushSubscription {
+interface StoredPushSubscription {
     userKey: string;
     subscription: PushSubscription;
 }
 
-export class PushService {
+class PushService {
     async subscribe(userId: string, subscription: PushSubscription): Promise<void> {
         const pool = getPool();
         await pool.query(

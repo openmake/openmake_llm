@@ -402,7 +402,7 @@ export async function seedAgentSkills(): Promise<void> {
  *
  * @param repo - SkillRepository 인스턴스 (호출자가 이미 생성한 것 재사용)
  */
-export async function seedSystemSkillAuthorGuide(repo: SkillRepository): Promise<void> {
+async function seedSystemSkillAuthorGuide(repo: SkillRepository): Promise<void> {
     const content = `# 스킬 생성 도구 사용 안내
 
 사용자가 다음 의도를 보이면 \`create_skill\` 도구를 호출하라:

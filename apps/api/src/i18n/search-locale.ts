@@ -12,7 +12,7 @@
 /**
  * 검색 API에 필요한 지역화 파라미터
  */
-export interface SearchLocaleParams {
+interface SearchLocaleParams {
     /** 검색 언어 코드 (예: 'ko', 'en') */
     lang: string;
     /** 검색 국가 코드 (예: 'kr', 'us') */

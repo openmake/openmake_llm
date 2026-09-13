@@ -42,7 +42,7 @@ export interface SecurityFinding {
     confidence: number;
 }
 
-export interface SecurityReviewResult {
+interface SecurityReviewResult {
     summary: string;
     findings: SecurityFinding[];
     /** 후처리 통계 — 투명성/디버깅 */
@@ -158,7 +158,7 @@ export function postProcessFindings(
     };
 }
 
-export interface AnalyzeInput {
+interface AnalyzeInput {
     code: string;
     language?: string;
     filename?: string;

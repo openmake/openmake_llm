@@ -17,7 +17,7 @@ import { getConfig } from '../config/env';
  * - 와일드카드('*') 제거 — credentials 환경에서 '*' reflect 는 CORS 스펙상 금지
  * - http(s):// 형식만 허용 (그 외 무시)
  */
-export function getCorsAllowlist(): string[] {
+function getCorsAllowlist(): string[] {
     return getConfig().corsOrigins
         .split(',')
         .map((o) => o.trim())

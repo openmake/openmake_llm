@@ -18,7 +18,7 @@ import { createLogger } from '../utils/logger';
 const logger = createLogger('ExternalModelsCatalog');
 
 /** 캐시 TTL (EXTERNAL_MODELS_CACHE_TTL_MS, 기본 1h) */
-export function externalModelsCacheTtlMs(): number {
+function externalModelsCacheTtlMs(): number {
     return parseInt(process.env.EXTERNAL_MODELS_CACHE_TTL_MS ?? '3600000', 10);
 }
 

@@ -28,10 +28,8 @@ import { applyReportRender } from './chat-service/report-block';
 import { getPushService } from './PushService';
 import { createLogger } from '../utils/logger';
 import type { UserContext } from '../mcp/user-sandbox';
-import { getSkillManager } from '../agents/skill-manager';
 import { buildDelegateFn } from './agent-task/delegate';
 import { buildTaskSpawnFn } from './agent-spawn/spawn-agents';
-import { mergeToolsWithSkills, type ActiveSkillBinding } from './chat-service/tool-merger';
 import { filterRestrictedTools } from './chat-service/tool-restrictions';
 import { TaskRuntime } from './task-sandbox/runtime';
 import { getApprovalRegistry } from './task-sandbox/approval-gate';
@@ -55,7 +53,7 @@ import { foldOldToolResults } from './agent-task/context-fold';
 import { buildAgentTaskSystemContent, resolveSkillToolBindings } from './agent-task/skill-block';
 
 // 기존 import 호환 재노출 — 타입/에러는 services/agent-task/types 로 분리 (파일 크기 가드).
-export { AgentTaskAbort, type AgentTaskRunInput, type AgentTaskInputFile } from './agent-task/types';
+export { type AgentTaskInputFile } from './agent-task/types';
 
 const logger = createLogger('AgentTaskService');
 

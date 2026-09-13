@@ -11,7 +11,7 @@ function loadJson<T>(filename: string): T {
     return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as T;
 }
 
-export interface RichCategoryKnowledge {
+interface RichCategoryKnowledge {
     rolePrinciples: string[];
     methodologies: string[];
     toolsAndFrameworks: string[];

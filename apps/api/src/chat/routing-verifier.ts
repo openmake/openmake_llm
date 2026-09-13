@@ -37,7 +37,7 @@ export interface ResponseQualitySignals {
 }
 
 /** 사후 검증 결과 */
-export interface RoutingVerificationResult {
+interface RoutingVerificationResult {
     /** 라우팅이 적절했는지 여부 */
     appropriate: boolean;
     /** 감지된 이슈 목록 */
@@ -47,7 +47,7 @@ export interface RoutingVerificationResult {
 }
 
 /** 검증에서 감지된 개별 이슈 */
-export interface RoutingVerificationIssue {
+interface RoutingVerificationIssue {
     /** 이슈 코드 */
     code: 'high-latency' | 'token-overuse' | 'error-occurred' | 'fallback-triggered' | 'empty-response';
     /** 심각도 */

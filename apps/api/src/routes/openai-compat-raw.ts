@@ -27,7 +27,7 @@ import { createLogger } from '../utils/logger';
 
 const log = createLogger('OpenAICompatRaw');
 
-export const RAW_HEADER = 'x-openmake-raw';
+const RAW_HEADER = 'x-openmake-raw';
 
 /** raw 모드 요청인가 — 헤더 `X-OpenMake-Raw: 1|true` 또는 body.openmake.raw === true */
 export function isRawRequest(req: Pick<Request, 'get'>, body: unknown): boolean {
@@ -73,7 +73,7 @@ interface RawResult {
     finishReason: 'stop' | 'length' | 'tool_calls' | 'error';
 }
 
-export interface RawTarget {
+interface RawTarget {
     kind: 'external' | 'local';
     providerId?: string;
     modelId: string;

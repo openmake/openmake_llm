@@ -218,21 +218,6 @@ export type FormatOption = 'json' | {
     additionalProperties?: boolean;
 };
 
-/**
- * 채팅 고급 옵션 — Thinking, 구조화 출력, Tool Calling 통합
- * @interface ChatAdvancedOptions
- */
-export interface ChatAdvancedOptions {
-    /** Thinking(추론 과정) 활성화 옵션 */
-    think?: ThinkOption;
-    /** 구조화된 출력 형식 (JSON Schema) */
-    format?: FormatOption;
-    /** 사용 가능한 도구 목록 */
-    tools?: ToolDefinition[];
-    /** vLLM tool_choice 제어 — ChatRequest.tool_choice 와 동일 시맨틱 */
-    tool_choice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
-}
-
 // ============================================
 // Web Search Types (llm/web-search-adapter)
 // ============================================

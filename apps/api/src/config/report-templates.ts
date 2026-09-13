@@ -29,7 +29,7 @@ export interface ReportTemplateGroupSpec {
     emptyHtml?: string;
 }
 
-export interface ReportTemplateSpec {
+interface ReportTemplateSpec {
     /** 템플릿 파일명 (REPORT_TEMPLATES_DIR 기준 상대 경로) */
     file: string;
     /** REPEAT 그룹명 → 렌더 스펙 */

@@ -158,4 +158,3 @@ router.post('/', validate(createAuditSchema), asyncHandler(async (req: Request, 
 }));
 
 export default router;
-export { router as auditRouter };

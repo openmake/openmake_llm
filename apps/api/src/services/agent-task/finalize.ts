@@ -45,7 +45,7 @@ type AgentTaskUpdatePayload = Parameters<UnifiedDb['updateAgentTask']>[1];
 /** 완료 관문을 지난 출구 구분 — 091 관측 컬럼 `agent_tasks.completion_path`. */
 export type CompletionPath = 'final_answer' | 'terminate';
 /** goal judge 결과 — 091 관측 컬럼 `agent_tasks.judge_verdict`. */
-export type JudgeVerdict = 'achieved' | 'not_achieved' | 'unknown' | 'skipped';
+type JudgeVerdict = 'achieved' | 'not_achieved' | 'unknown' | 'skipped';
 
 export interface FinalizeInput {
     taskId: string;
@@ -73,7 +73,7 @@ export interface FinalizeInput {
     emitStep: (stepType: string, toolName?: string, content?: string | null) => void;
 }
 
-export type FinalizeOutcome =
+type FinalizeOutcome =
     /** 완료 처리까지 끝냈다 — 호출부는 즉시 종료한다. */
     | { kind: 'completed'; stepNumber: number }
     /** 목표 미달성으로 failed 기록까지 끝냈다 — 호출부는 즉시 종료한다. */

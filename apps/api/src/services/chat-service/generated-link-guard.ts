@@ -9,7 +9,7 @@ import { resolveGeneratedPath } from '../../mcp/generated-media';
 
 const GENERATED_LINK_RE = /!?\[([^\]]*)\]\((\/generated\/[A-Za-z0-9._-]+)\)/g;
 
-export interface StripResult { content: string; removed: string[] }
+interface StripResult { content: string; removed: string[] }
 
 export function stripMissingGeneratedLinks(
     content: string,

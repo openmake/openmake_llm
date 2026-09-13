@@ -23,7 +23,7 @@ const logger = createLogger('MetricsRecorder');
 /**
  * recordMetricsAndVerify 함수의 입력 파라미터
  */
-export interface MetricsRecordParams {
+interface MetricsRecordParams {
     /** 생성된 전체 응답 */
     fullResponse: string;
     /** 요청 시작 시각 (ms) */

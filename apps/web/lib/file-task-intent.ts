@@ -13,7 +13,7 @@
  * 파일 가공·생성·정밀분석 의도를 나타내는 토큰(부분일치, 소문자 비교).
  * 순수 읽기 동사(요약/설명/뭐야/읽어)는 의도적으로 제외 — 그건 채팅이 더 빠르다.
  */
-export const FILE_TASK_INTENT_TOKENS: readonly string[] = [
+const FILE_TASK_INTENT_TOKENS: readonly string[] = [
   // 편집·변환·가공 (한국어)
   "편집", "수정", "고쳐", "바꿔", "변경", "변환", "합쳐", "병합", "나눠", "분할",
   "계산", "합계", "평균", "집계", "피벗", "정렬", "필터", "추출", "채워", "정리",
@@ -41,7 +41,7 @@ export function detectFileTaskIntent(text: string): boolean {
  * 채팅에 남긴다. 채팅 경로에만 presentation-designer 스킬(open-design MCP 도구
  * required 바인딩)이 배선되어 있어, 위임하면 디자인 워크플로우를 잃는다.
  */
-export const PRESENTATION_CHAT_TOKENS: readonly string[] = [
+const PRESENTATION_CHAT_TOKENS: readonly string[] = [
   "발표자료", "발표 자료", "발표용", "프레젠테이션", "슬라이드", "피치덱", "피치 덱",
   "presentation", "slide", "pitch deck",
 ];

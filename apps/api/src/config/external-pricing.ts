@@ -19,7 +19,7 @@
 /**
  * 1M 토큰당 USD 단가 — 입력 / 출력 분리
  */
-export interface ModelPricing {
+interface ModelPricing {
     /** 1M input tokens 당 USD */
     input: number;
     /** 1M output tokens 당 USD */

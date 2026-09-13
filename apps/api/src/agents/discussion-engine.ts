@@ -81,7 +81,7 @@ const EVIDENCE_MARKER_PATTERN = /예시|사례|예를 들|example|e\.g\.|for ins
 const SELF_CONSISTENCY_JSON_PATTERN = /\{[\s\S]*"consensus"[\s\S]*"conflicts"[\s\S]*\}/;
 
 // Re-export all types so consumers importing from discussion-engine don't break
-export type { DiscussionProgress, AgentOpinion, DiscussionResult, ContextPriority, TokenLimits, DiscussionConfig } from './discussion-types';
+export type { DiscussionProgress, DiscussionResult } from './discussion-types';
 
 // ========================================
 // Discussion Engine

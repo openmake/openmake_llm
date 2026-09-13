@@ -21,7 +21,7 @@ import { createLogger } from '../utils/logger';
 
 const log = createLogger('WSEarly');
 
-export interface EarlyMessageBuffer {
+interface EarlyMessageBuffer {
     /** 실제 메시지 핸들러를 붙이고, 모아 둔 프레임을 도착 순서대로 넘긴다. */
     attach(handler: (data: RawData) => void): void;
     /** 연결이 거부돼 핸들러를 붙이지 않을 때 — 리스너만 떼고 버린다. */

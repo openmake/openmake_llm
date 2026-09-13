@@ -19,7 +19,7 @@ import { success } from '../utils/api-response';
  * - 노드 목록 및 상태 확인
  * - 클러스터 통계 제공
  */
-export class ClusterController {
+class ClusterController {
     /** Express 라우터 인스턴스 */
     private router: Router;
     /** LLM 클러스터 매니저 */

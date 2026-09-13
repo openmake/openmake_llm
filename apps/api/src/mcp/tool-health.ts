@@ -19,7 +19,7 @@ import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ToolCircuit');
 
-export type ToolCircuitState = 'closed' | 'open' | 'half_open';
+type ToolCircuitState = 'closed' | 'open' | 'half_open';
 
 interface CircuitEntry {
     /** 창 안 실패 시각(ms). 창을 벗어나면 잘라낸다. */

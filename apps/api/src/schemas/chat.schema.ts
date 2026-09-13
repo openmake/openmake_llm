@@ -142,5 +142,3 @@ export const chatRequestSchema = z.object({
     }).optional(),
 });
 
-/** 채팅 요청 TypeScript 타입 (Zod 스키마로부터 추론) */
-export type ChatRequestInput = z.infer<typeof chatRequestSchema>;

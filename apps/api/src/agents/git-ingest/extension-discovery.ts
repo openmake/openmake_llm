@@ -19,7 +19,7 @@
 import type { ExtensionManifest } from './extension-manifest-validator';
 
 /** tree 엔트리 최소 형태 — git-fetcher 의 TreeEntry 와 extension-components 의 TreeLike 둘 다 만족 */
-export type PathEntry = { path: string; symlink?: boolean };
+type PathEntry = { path: string; symlink?: boolean };
 
 /** 심링크 제외 — 모든 탐지 함수의 공통 전처리 */
 function realFiles(entries: readonly PathEntry[]): readonly PathEntry[] {
@@ -37,7 +37,7 @@ export function symlinkedSkillPaths(entries: readonly PathEntry[], root: string)
  * 이 경로가 남으면 "마켓 엔트리로 합성된 설치" 라는 뜻이며, 재설치(갤러리) 시
  * `isSynthesizedManifestPath` 로 분기한다.
  */
-export const SYNTHESIZED_MANIFEST_BASENAME = '.claude-plugin/marketplace-entry.json';
+const SYNTHESIZED_MANIFEST_BASENAME = '.claude-plugin/marketplace-entry.json';
 
 export function synthesizedManifestPath(root: string): string {
     return `${root}${SYNTHESIZED_MANIFEST_BASENAME}`;

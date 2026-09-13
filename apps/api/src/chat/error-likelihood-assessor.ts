@@ -14,7 +14,7 @@
 import type { QueryClassification } from './model-selector-types';
 import { ERROR_LIKELIHOOD_NEUTRAL, ERROR_LIKELIHOOD_WEIGHTS, TAIL_GATE_PATTERNS } from '../config/routing-config';
 
-export interface ErrorLikelihood {
+interface ErrorLikelihood {
     /** 오류 가능성 점수 (0.0~1.0) */
     score: number;
     /** 발동한 시그널 목록 (셰도우 튜닝 근거) */

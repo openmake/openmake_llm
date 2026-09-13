@@ -26,7 +26,7 @@ import type { ChatMessage, ToolCall } from '../../llm/types';
 type UnifiedDb = ReturnType<typeof getUnifiedDatabase>;
 type AgentTaskUpdatePayload = Parameters<UnifiedDb['updateAgentTask']>[1];
 
-export interface TurnToolExecInput {
+interface TurnToolExecInput {
     /** 이 턴에서 모델이 요청한 도구 호출 (recoverTextToolCalls 승격분 포함). */
     toolCalls: ToolCall[];
     taskRuntime: TaskRuntime | null;
@@ -54,7 +54,7 @@ export interface TurnToolExecInput {
     emitStep: (stepType: string, toolName?: string, content?: string | null) => void;
 }
 
-export interface TurnToolExecResult {
+interface TurnToolExecResult {
     /** terminate 도구 호출로 깔끔한 완료 시그널이 왔는지. */
     terminated: boolean;
     terminateSummary: string;

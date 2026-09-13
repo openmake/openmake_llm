@@ -94,7 +94,7 @@ export function sanitizePromptInput(input: string): string {
 /**
  * Validation result returned by validatePromptInput.
  */
-export interface ValidationResult {
+interface ValidationResult {
   /** Whether the input passed all validation checks */
   valid: boolean;
   /** Error message if validation failed, undefined if valid */

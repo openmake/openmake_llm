@@ -30,7 +30,6 @@ module.exports = {
         // types(=dist/index.d.ts)로 해석되므로 dist 가 없으면 TS2307 로 죽는다. 그래서
         // 루트 `npm test` 가 build:packages 를 선행한다. (tsconfig paths 로 타입을 src 에
         // 물리면 tsc 빌드가 rootDir 위반 TS6059 로 깨지므로 그 방법은 쓸 수 없다.)
-        '^@openmake/shared-types$': '<rootDir>/../../packages/shared-types/src/index.ts',
         '^@openmake/config$': '<rootDir>/../../packages/config/src/index.ts',
         '^@openmake/api-client$': '<rootDir>/../../packages/api-client/src/index.ts',
         // ESM-only 패키지를 jest CJS 런타임에서 로드 가능하게 하는 로컬 shim.

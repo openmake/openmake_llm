@@ -16,9 +16,6 @@ import { validateConfig } from './env-validate';
 import { SERVER_CONFIG } from './constants';
 import type { SupportedLanguageCode } from '../chat/language-policy';
 
-// 파일 크기 가드 분리 (2026-07-31): 검증 로직은 env-validate.ts — 기존 import 경로 호환 재노출
-export { validateConfig } from './env-validate';
-
 export interface EnvConfig {
     // Node
     nodeEnv: string;
@@ -140,10 +137,6 @@ export interface EnvConfig {
 
     // HTTPS 없는 production 환경에서 cookieSecure=false 를 명시적으로 허용 (opt-out)
     allowInsecureCookies: boolean;
-
-    // Generate-Verify skip threshold: 2026-05-26 cleanup — routing-config.ts 가
-    // process.env.OMK_GV_SKIP_THRESHOLD 직접 사용, config 객체 필드는 dead 였음.
-    // env.schema.ts 의 OMK_GV_SKIP_THRESHOLD 는 검증 일관성 위해 유지.
 
     // Language Policy
     enableDynamicResponseLanguage: boolean;

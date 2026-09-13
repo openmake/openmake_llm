@@ -26,7 +26,7 @@ const logger = createLogger('ConversationAudit');
 /**
  * 감사 로그 INSERT 입력 파라미터
  */
-export interface AuditLogEntry {
+interface AuditLogEntry {
     sessionId: string;
     userId: string;
     messageRole: 'user' | 'assistant';

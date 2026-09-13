@@ -20,7 +20,7 @@ export const ROLE_MODEL_MIN_PARAMS_B = Number(process.env.ROLE_MODEL_MIN_PARAMS_
  * 채팅/역할 수행이 불가능한 모델 id 패턴 (소문자 substring 매칭).
  * 임베딩·이미지·음성·리랭커 등 — 어떤 역할도 수행 불가.
  */
-export const ROLE_MODEL_EXCLUDE_PATTERNS: readonly string[] = (
+const ROLE_MODEL_EXCLUDE_PATTERNS: readonly string[] = (
     process.env.ROLE_MODEL_EXCLUDE_PATTERNS
         ? process.env.ROLE_MODEL_EXCLUDE_PATTERNS.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
         : ['bge', 'embed', 'embedding', 'rerank', 'flux', 'sdxl', 'stable-diffusion',

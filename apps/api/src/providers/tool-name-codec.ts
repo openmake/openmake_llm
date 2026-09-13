@@ -19,7 +19,7 @@
 /** OpenAI 함수 이름 규약 — Codex·NVIDIA NIM 등이 그대로 검증한다. */
 export const OPENAI_TOOL_NAME_PATTERN = /^[a-zA-Z0-9_-]+$/;
 /** OpenAI 함수 이름 길이 상한 */
-export const OPENAI_TOOL_NAME_MAX = 64;
+const OPENAI_TOOL_NAME_MAX = 64;
 
 /**
  * 도구 이름 정규화 코덱.

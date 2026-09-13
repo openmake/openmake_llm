@@ -25,9 +25,9 @@ import type { TaskRuntime } from '../task-sandbox/runtime';
 const logger = createLogger('AgentTaskService');
 
 /** 파일을 바꾸는 도구 — 이 중 하나라도 썼을 때만 게이트가 적용된다. */
-export const WRITE_TOOL_NAMES: readonly string[] = ['str_replace_editor', 'file_ops', 'bash', 'python_execute', 'skill_run'];
+const WRITE_TOOL_NAMES: readonly string[] = ['str_replace_editor', 'file_ops', 'bash', 'python_execute', 'skill_run'];
 
-export type TestRunner = 'npm' | 'pytest' | 'go';
+type TestRunner = 'npm' | 'pytest' | 'go';
 
 /** 러너별 실행 명령 — CI=1 로 watch 모드·대화형 프롬프트를 막는다. */
 export const RUNNER_COMMANDS: Record<TestRunner, string> = {
@@ -49,7 +49,7 @@ export const DETECT_PROBE = [
     'echo none',
 ].join('; ');
 
-export interface WorkspaceTestResult {
+interface WorkspaceTestResult {
     /** 러너를 감지해 실제로 실행했는지. */
     ran: boolean;
     /** 실행하지 않았거나 통과했으면 true. */
@@ -59,7 +59,7 @@ export interface WorkspaceTestResult {
     report: string;
 }
 
-export function hasWriteTool(usedTools: ReadonlySet<string>): boolean {
+function hasWriteTool(usedTools: ReadonlySet<string>): boolean {
     return WRITE_TOOL_NAMES.some((t) => usedTools.has(t));
 }
 

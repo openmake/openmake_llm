@@ -119,7 +119,7 @@ function parseStructured(raw: string): unknown {
     return JSON.parse(trimmed);
 }
 
-export interface ComposeResult {
+interface ComposeResult {
     intent: AnswerIntent;
     structured: StructuredAnswer;
     markdown: string;

@@ -10,7 +10,7 @@
 import { getConfig } from './env';
 
 /** 인가 완료 후 브라우저가 돌아올 콜백 경로 — `routes/mcp-oauth.routes.ts` 와 한 쌍 */
-export const MCP_OAUTH_CALLBACK_PATH = '/api/mcp/oauth/callback';
+const MCP_OAUTH_CALLBACK_PATH = '/api/mcp/oauth/callback';
 
 /** 인가 흐름 중간값(state · PKCE verifier) 수명 — 브라우저 왕복 시간이면 충분하다 */
 export const MCP_OAUTH_FLOW_TTL_MS = 10 * 60 * 1000;

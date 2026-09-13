@@ -59,7 +59,7 @@ const consoleFormat = winston.format.combine(
 );
 
 // 로거 생성
-export const logger = winston.createLogger({
+const logger = winston.createLogger({
     level: getConfig().logLevel,
     format: customFormat,
     transports: [

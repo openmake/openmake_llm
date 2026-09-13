@@ -16,7 +16,7 @@ import { deviceId } from './config';
 /** 터미널 confirm 어댑터 시그니처 — 코어 계약을 그대로 재노출 (index.ts 하위호환). */
 export type ConfirmFn = CoreConfirmFn;
 
-export interface BridgeOptions {
+interface BridgeOptions {
     serverUrl: string;
     apiKey: string;
     /** 연결 폴더(단일) — 서버는 디바이스당 폴더 하나만 지원한다. */

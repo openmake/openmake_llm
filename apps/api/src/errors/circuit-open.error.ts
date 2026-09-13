@@ -13,7 +13,7 @@
  */
 
 /** 서킷 브레이커 상태 */
-export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
 export class CircuitOpenError extends Error {
     /** 서킷 브레이커 이름 (예: "node:vllm-host:8001") */

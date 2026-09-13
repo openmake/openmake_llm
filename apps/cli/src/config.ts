@@ -7,11 +7,11 @@ import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
 
-export const CONFIG_DIR = path.join(os.homedir(), '.openmake');
+const CONFIG_DIR = path.join(os.homedir(), '.openmake');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');
 const DEVICE_ID_PATH = path.join(CONFIG_DIR, 'device-id');
 
-export interface CliConfig {
+interface CliConfig {
     serverUrl: string;
     apiKey: string;
 }

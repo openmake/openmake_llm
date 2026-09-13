@@ -322,4 +322,3 @@ router.get('/published/:pubId', optionalAuth, asyncHandler(async (req: Request, 
 }));
 
 export default router;
-export { router as artifactPublicationRouter };

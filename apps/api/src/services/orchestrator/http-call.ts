@@ -49,7 +49,7 @@ async function readCapped(res: Response, maxBytes: number): Promise<Buffer> {
     return Buffer.concat(chunks.map((c) => Buffer.from(c)));
 }
 
-export interface CallOptions {
+interface CallOptions {
     method?: 'GET' | 'POST';
     /** JSON 본문(문자열화) 또는 FormData */
     body?: Record<string, unknown> | FormData;

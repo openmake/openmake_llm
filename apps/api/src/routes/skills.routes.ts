@@ -571,4 +571,3 @@ router.delete('/:skillId', requireAuth, asyncHandler(async (req: Request, res: R
 router.get('/:skillId/export', requireAuth, asyncHandler(exportSkill));
 
 export default router;
-export { router as skillsRouter };

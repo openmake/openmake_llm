@@ -26,7 +26,6 @@
         "@openai-oauth/core": "^2.0.0",
         "@opendataloader/pdf": "^2.5.0",
         "@openmake/config": "*",
-        "@openmake/shared-types": "*",
         "@opentelemetry/api": "^1.9.1",
         "@opentelemetry/exporter-trace-otlp-http": "^0.219.0",
         "@opentelemetry/instrumentation-express": "^0.67.0",
@@ -36,7 +35,6 @@
         "@opentelemetry/sdk-trace-node": "^2.8.0",
         "@opentelemetry/semantic-conventions": "^1.41.1",
         "@types/pg": "^8.16.0",
-        "axios": "^1.13.2",
         "babel-jest": "^30.4.1",
         "bcryptjs": "^3.0.3",
         "chalk": "^4.1.2",
@@ -69,9 +67,7 @@
         "zod": "^4.3.6"
     },
     "devDependencies": {
-        "@types/bcryptjs": "^2.4.6",
         "@types/cookie-parser": "^1.4.7",
-        "@types/cors": "^2.8.17",
         "@types/express": "^5.0.6",
         "@types/jest": "^30.0.0",
         "@types/js-yaml": "^4.0.9",

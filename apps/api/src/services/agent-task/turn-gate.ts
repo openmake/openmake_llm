@@ -18,7 +18,7 @@ import type { TaskSandboxConfig } from '../../config/task-sandbox';
 
 const logger = createLogger('AgentTaskService');
 
-export type FinalTurnReason = 'turns' | 'tokens' | null;
+type FinalTurnReason = 'turns' | 'tokens' | null;
 
 /** 가드별 "1회 nudge 주입" 플래그 — 턴 루프가 소유하고 이 모듈이 제자리 갱신한다. */
 export interface TurnGateFlags {
@@ -28,7 +28,7 @@ export interface TurnGateFlags {
     approvalDegradeNotified: boolean;
 }
 
-export interface TurnGateInput {
+interface TurnGateInput {
     taskId: string;
     turn: number;
     startTurn: number;
@@ -48,7 +48,7 @@ export interface TurnGateInput {
     emitStep: (stepType: string, toolName?: string, content?: string | null) => void;
 }
 
-export interface TurnGateResult {
+interface TurnGateResult {
     effectiveTools: ToolDefinition[];
     /** 마무리 턴 전환 사유 — 호출부의 "마무리 턴 도구 차단" 가드가 이어서 사용. */
     finalTurnReason: FinalTurnReason;

@@ -255,5 +255,3 @@ agentTaskShareRouter.get('/shared-tasks/:shareId/artifacts/:index/open', optiona
     }
     res.json(success({ url: `${ARTIFACT_VIEWER.origin}/a/${artifact.viewerId}/?k=${encodeURIComponent(token)}` }));
 }));
-
-export default agentTaskShareRouter;

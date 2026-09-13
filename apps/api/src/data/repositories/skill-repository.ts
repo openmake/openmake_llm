@@ -56,13 +56,6 @@ export interface DraftListResult {
     offset: number;
 }
 
-export interface AgentSkillAssignment {
-    agentId: string;
-    skillId: string;
-    priority: number;
-    createdAt: Date;
-}
-
 export interface CreateSkillInput {
     name: string;
     description?: string;
@@ -127,7 +120,7 @@ interface CategoryCountRow {
 }
 
 /** 소유권 검증 요청자 컨텍스트 */
-export interface ActorContext {
+interface ActorContext {
     userId: string;
     userRole: string;
 }

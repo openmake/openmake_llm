@@ -1,7 +1,7 @@
 /**
  * 검색 결과 → LLM 컨텍스트/프롬프트 주입용 문자열 포맷터 (단일 지점).
  *
- * 기존에 ws-chat-handler · web-search.routes · createFactCheckPrompt · tools 4곳에
+ * 기존에 ws-chat-handler · web-search.routes · 팩트체크 프롬프트 · tools 4곳에
  * 동일한 `[N] title/URL/snippet` 포맷이 중복돼, 주입 캡(결과 수·snippet 길이)이 한 곳에만
  * 적용되는 불일치가 있었다. 이 헬퍼로 포맷과 캡 정책을 한 곳에서 관리한다.
  *
@@ -9,7 +9,7 @@
  */
 import type { SearchResult } from './types';
 
-export interface FormatSourcesOptions {
+interface FormatSourcesOptions {
     /** 주입할 상위 결과 수 (0/미지정 = 무제한) */
     maxResults?: number;
     /** 결과당 snippet 최대 글자 수 (0/미지정 = 무제한) */

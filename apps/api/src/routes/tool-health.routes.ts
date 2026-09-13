@@ -139,5 +139,3 @@ toolHealthRouter.post('/circuit/reset', asyncHandler(async (req: Request, res: R
     }
     res.json(success({ tool, reset: true }));
 }));
-
-export default toolHealthRouter;

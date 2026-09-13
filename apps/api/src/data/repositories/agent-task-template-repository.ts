@@ -7,13 +7,13 @@
  */
 import { BaseRepository } from './base-repository';
 
-export interface TemplateParamDef {
+interface TemplateParamDef {
     name: string;
     description?: string;
     default?: string;
 }
 
-export interface AgentTaskTemplate {
+interface AgentTaskTemplate {
     id: string;
     user_id?: string;
     name: string;

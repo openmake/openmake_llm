@@ -25,13 +25,13 @@ const SLASH_COMMANDS_ENABLED = process.env.SLASH_COMMANDS_ENABLED !== 'false';
 const SLASH_SKILL_CONTENT_MAX = Number(process.env.SLASH_SKILL_CONTENT_MAX ?? 8_000);
 
 /** 슬래시 명령 파싱 결과 */
-export interface ParsedSlashCommand {
+interface ParsedSlashCommand {
     slug: string;
     rest: string;
 }
 
 /** 매칭에 필요한 최소 스킬 형태 */
-export interface SlashSkill {
+interface SlashSkill {
     name: string;
     content: string;
     /** agent_skills.id — 사용 기록(skill_audit_log) 용. 테스트 주입 finder 는 생략 가능 */
@@ -45,7 +45,7 @@ const COMMAND_PATTERN = /^\/([\p{L}\p{N}][\p{L}\p{N}_-]{0,63})\s*([\s\S]*)$/iu;
 /**
  * 메시지에서 선행 슬래시 명령을 파싱 (순수). 명령이 아니면 null.
  */
-export function parseSlashCommand(message: string): ParsedSlashCommand | null {
+function parseSlashCommand(message: string): ParsedSlashCommand | null {
     if (!message) return null;
     const trimmed = message.trimStart();
     if (!trimmed.startsWith('/')) return null;
@@ -60,7 +60,7 @@ export function slugify(name: string): string {
 }
 
 /** 명령 slug 가 스킬과 정확히 매칭되는지 */
-export function matchesSlug(skillName: string, slug: string): boolean {
+function matchesSlug(skillName: string, slug: string): boolean {
     return slugify(skillName) === slug || skillName.toLowerCase() === slug;
 }
 
@@ -78,7 +78,7 @@ export function matchesSlug(skillName: string, slug: string): boolean {
  */
 const ARG_PLACEHOLDER = /\$([1-9])(?![\d,.])/g;
 
-export function substituteSkillArguments(content: string, rest: string): { content: string; consumed: boolean } {
+function substituteSkillArguments(content: string, rest: string): { content: string; consumed: boolean } {
     if (!/\$ARGUMENTS\b/.test(content) && !new RegExp(ARG_PLACEHOLDER.source).test(content)) {
         return { content, consumed: false };
     }
@@ -100,7 +100,7 @@ export function substituteSkillArguments(content: string, rest: string): { conte
  * 실측으로 스킬 본문 6,065자가 통째로 검색어가 되어 상류가 400/403 을 돌려준 적이 있다
  * (2026-08-25). 형식이 바뀌면 여기도 함께 고쳐야 하므로 조립부 바로 옆에 둔다.
  */
-export const SLASH_ENVELOPE_PATTERNS: readonly RegExp[] = [
+const SLASH_ENVELOPE_PATTERNS: readonly RegExp[] = [
     /^\[슬래시 명령:[^\]]*\]\s*/,
     /<skill_context\b[^>]*>[\s\S]*?<\/skill_context>/g,
 ];
@@ -140,7 +140,7 @@ export function buildAugmentedMessage(skill: SlashSkill, rest: string): string {
     return `[슬래시 명령: 스킬 "${safeName}" 적용]\n<skill_context name="${safeName}">\n${content}\n</skill_context>\n\n${body}`;
 }
 
-export interface ApplySlashDeps {
+interface ApplySlashDeps {
     userId?: string;
     /** slug 로 active 스킬을 찾는 함수 (없으면 기본 구현 — skill-manager) */
     findSkillBySlug?: (slug: string, userId?: string) => Promise<SlashSkill | null>;
@@ -180,7 +180,7 @@ async function defaultFindSkillBySlug(slug: string, userId?: string): Promise<Sl
  * 마지막 폴백으로 **첫 토큰만** 넓게 검색한 뒤 `matchesSlug` 로 정확 필터한다
  * (필터가 정확 일치라 후보를 넓혀도 오탐이 없다).
  */
-export function buildSlugSearchAttempts(slug: string): Array<{ search: string; limit: number }> {
+function buildSlugSearchAttempts(slug: string): Array<{ search: string; limit: number }> {
     const spaced = slug.replace(/-/g, ' ');
     const attempts: Array<{ search: string; limit: number }> = [{ search: spaced, limit: 10 }];
     if (slug !== spaced) attempts.push({ search: slug, limit: 10 });

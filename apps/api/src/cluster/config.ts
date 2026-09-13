@@ -69,39 +69,3 @@ export function loadClusterConfig(): ClusterConfig {
     return DEFAULT_CONFIG;
 }
 
-export function saveClusterConfig(config: ClusterConfig, filePath?: string): void {
-    const targetPath = filePath || path.resolve(process.cwd(), CONFIG_FILENAME);
-    fs.writeFileSync(targetPath, JSON.stringify(config, null, 2), 'utf-8');
-}
-
-export function createDefaultConfigFile(): string {
-    const configPath = path.resolve(process.cwd(), CONFIG_FILENAME);
-
-    // 기본 노드 설정 우선순위:
-    //   1. LLM_BASE_URL (vLLM/LiteLLM, 2026-05 마이그레이션 후 표준)
-    //   2. 빈 배열 (사용자가 직접 설정)
-    let defaultHost = 'localhost';
-    let defaultPort = 8001;
-    const defaultNodeName = 'llm-proxy';
-
-    const llmBaseUrl = process.env.LLM_BASE_URL;
-    if (llmBaseUrl) {
-        try {
-            const url = new URL(llmBaseUrl);
-            defaultHost = url.hostname;
-            defaultPort = parseInt(url.port) || (url.protocol === 'https:' ? 443 : 80);
-        } catch {
-            // 파싱 실패 — localhost 기본값 유지
-        }
-    }
-
-    const defaultWithExample: ClusterConfig = {
-        ...DEFAULT_CONFIG,
-        nodes: defaultHost !== 'localhost' ? [
-            { host: defaultHost, port: defaultPort, name: defaultNodeName }
-        ] : [] // env 미설정 시 빈 배열 (사용자가 직접 설정)
-    };
-
-    saveClusterConfig(defaultWithExample, configPath);
-    return configPath;
-}

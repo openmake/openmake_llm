@@ -57,16 +57,9 @@ import modelRouter from '../../routes/model.routes';
 
 describe('Models 응답 계약', () => {
     let app: express.Express;
-    const savedImageModel = process.env.IMAGE_GEN_MODEL;
-
     beforeAll(() => {
-        delete process.env.IMAGE_GEN_MODEL;
         app = express();
         app.use('/api', modelRouter);
-    });
-
-    afterAll(() => {
-        if (savedImageModel !== undefined) process.env.IMAGE_GEN_MODEL = savedImageModel;
     });
 
     test('GET /api/models 200 (비인증 — 로컬 카탈로그 + imageModel null)', async () => {

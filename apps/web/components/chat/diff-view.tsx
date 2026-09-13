@@ -10,7 +10,7 @@ import { useTranslations } from "next-intl";
 import { ChevronRight, ChevronDown, Copy, Check, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export interface DiffFile {
+interface DiffFile {
   path: string;
   additions: number;
   deletions: number;
@@ -19,7 +19,7 @@ export interface DiffFile {
 }
 
 /** 통합 git diff 를 파일 단위로 파싱. `diff --git a/x b/x` 경계로 분할하고 +/− 라인을 센다. */
-export function parseUnifiedDiff(text: string): DiffFile[] {
+function parseUnifiedDiff(text: string): DiffFile[] {
   const files: DiffFile[] = [];
   let cur: DiffFile | null = null;
   const isMeta = (l: string) =>

@@ -7,7 +7,6 @@ import express, { type Request, type Response, type NextFunction } from 'express
 import request from 'supertest';
 import cookieParser from 'cookie-parser';
 import type { PublicUser } from '../../data/user-manager';
-import { expectContract } from './contract-validator';
 
 const sampleUser: PublicUser = {
     id: 'u1',

@@ -26,10 +26,6 @@ const MAX_USER_MSG_CHARS = 800;
 const TIMEOUT_MS = parseInt(process.env.ANSWER_VERIFICATION_TIMEOUT_MS || '20000', 10);
 const MAX_OUTPUT_TOKENS = parseInt(process.env.ANSWER_VERIFICATION_MAX_TOKENS || '300', 10);
 
-export function isAnswerVerificationEnabled(): boolean {
-    return ENABLED;
-}
-
 /**
  * @returns 지적 텍스트(사용자에게 표시) 또는 null (오류 없음·비활성·실패).
  */

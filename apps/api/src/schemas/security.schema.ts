@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export interface SecureTextOptions {
+interface SecureTextOptions {
     minLength?: number;
     maxLength?: number;
     allowNewLines?: boolean;
@@ -15,7 +15,7 @@ export interface SecureTextOptions {
     preserveWhitespace?: boolean;
 }
 
-export interface MaliciousDetectionResult {
+interface MaliciousDetectionResult {
     detected: boolean;
     reasons: string[];
 }

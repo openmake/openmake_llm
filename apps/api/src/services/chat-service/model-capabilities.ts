@@ -31,9 +31,9 @@ import { createLogger } from '../../utils/logger';
 const logger = createLogger('ModelCapabilities');
 
 /** capability 출처 — 'heuristic' 만 신뢰도가 낮아 차단 근거로 쓰지 않는다. */
-export type CapabilitySource = 'local' | 'catalog' | 'config' | 'heuristic';
+type CapabilitySource = 'local' | 'catalog' | 'config' | 'heuristic';
 
-export interface ResolvedCapabilities {
+interface ResolvedCapabilities {
     caps: ProviderCapabilities;
     source: CapabilitySource;
 }

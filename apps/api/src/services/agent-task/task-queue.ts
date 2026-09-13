@@ -16,7 +16,7 @@ import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentTaskQueue');
 
-export interface QueueEntry {
+interface QueueEntry {
     taskId: string;
     userId: string;
     /** 실제 실행 — AgentTaskService.execute 를 감싼 thunk. 절대 throw 하지 않음(execute 가 내부 흡수). */

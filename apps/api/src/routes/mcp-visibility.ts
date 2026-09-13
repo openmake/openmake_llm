@@ -20,12 +20,12 @@ export interface Actor {
     role: 'user' | 'admin' | string;
 }
 
-export interface RegisterInput {
+interface RegisterInput {
     visibility: McpVisibility;
     catalog_template_id?: string;
 }
 
-export type CheckResult = { allowed: true } | { allowed: false; reason: string };
+type CheckResult = { allowed: true } | { allowed: false; reason: string };
 
 export function canRegisterServer(actor: Actor, input: RegisterInput): CheckResult {
     if (input.visibility === 'global') {

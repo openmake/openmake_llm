@@ -59,7 +59,7 @@ router.post('/web-search', requireAuth, validate(webSearchSchema), asyncHandler(
       logger.info(`[WebSearch] 쿼리: ${query?.substring(0, 50)}... (모델: ${model})`);
 
      // 1. 실제 웹 검색 수행
-     const { performWebSearch } = await import('../mcp');
+     const { performWebSearch } = await import('../mcp/web-search');
      const searchResults = await performWebSearch(query, { maxResults: 5 });
 
       logger.info(`[WebSearch] ${searchResults.length}개 결과 찾음`);

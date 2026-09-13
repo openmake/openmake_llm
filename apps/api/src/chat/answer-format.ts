@@ -30,7 +30,7 @@ import { detectPromptType } from './prompt-templates';
 import type { PromptType } from './prompt-templates';
 import type { Style } from './style';
 
-export type AnswerFormatProfile = 'structured' | 'prose';
+type AnswerFormatProfile = 'structured' | 'prose';
 
 /**
  * 구조적 답변이 적합한 PromptType 집합.

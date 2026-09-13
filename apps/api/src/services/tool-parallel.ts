@@ -32,7 +32,7 @@ export function isReadOnlyTool(name: string): boolean {
     return reads && !writes;
 }
 
-export interface ParallelCall {
+interface ParallelCall {
     /** 없으면 결과를 매핑할 수 없어 병렬 대상에서 제외한다(순차 실행). */
     id: string | undefined;
     name: string;

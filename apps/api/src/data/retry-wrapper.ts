@@ -51,7 +51,7 @@ function isRetryableError(err: unknown): boolean {
 /**
  * 재시도 래퍼 옵션
  */
-export interface RetryOptions {
+interface RetryOptions {
     /** 최대 재시도 횟수 (기본값: 3) */
     maxRetries?: number;
     /** 초기 대기 시간(ms) — 지수 백오프 적용 (기본값: 500) */

@@ -146,7 +146,7 @@ function signalOf(method: 'chat' | 'generate', args: unknown[]): AbortSignal | u
 }
 
 /** 프록시가 노출하는 실행 힌트 — 호출부(딥리서치 fan-out)가 배치 동시성·타임아웃을 맞추는 데 쓴다 */
-export interface ExternalClientHints {
+interface ExternalClientHints {
     providerId: string;
     /** provider 별 동시 요청 상한 — parallelBatch concurrency 를 이 값 이하로 잡아야 대기 시간이 타임아웃에 포함되지 않는다 */
     concurrency: number;

@@ -26,7 +26,7 @@ const NON_TASK_DIRS = new Set(['tmp', 'chunked']);
 /** 원본 회수 대상 상태 — 진행형(pending/running/paused)은 절대 건드리지 않는다. */
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled']);
 
-export interface UploadRetentionResult {
+interface UploadRetentionResult {
     /** 보존기간 경과로 원본을 회수한 task 수 */
     sweptTasks: number;
     /** DB 행이 없어 제거한 고아 디렉토리 수 */

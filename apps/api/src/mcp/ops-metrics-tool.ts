@@ -20,7 +20,7 @@ export const OPS_METRICS_QUERIES = [
     'summary', 'failed_runs', 'slowest_runs', 'runs_by_model',
     'tool_errors', 'token_usage', 'goal_incomplete',
 ] as const;
-export type OpsMetricsQuery = (typeof OPS_METRICS_QUERIES)[number];
+type OpsMetricsQuery = (typeof OPS_METRICS_QUERIES)[number];
 
 interface OpsMetricsArgs extends Record<string, unknown> {
     query?: string;
@@ -48,7 +48,7 @@ function resolveLimit(limit: unknown): number {
  * 질의 실행 — 저장소는 지연 import(부팅 시 DB 결합 회피, 기존 ingest 도구 패턴).
  * 도구 단위 건전성·판정 분포·실패 사유는 기존 저장소를 재사용한다.
  */
-export async function runOpsMetricsQuery(query: OpsMetricsQuery, hours: number, limit: number): Promise<unknown> {
+async function runOpsMetricsQuery(query: OpsMetricsQuery, hours: number, limit: number): Promise<unknown> {
     const { getPool } = await import('../data/models/unified-database');
     const { OpsMetricsRepository } = await import('../data/repositories/ops-metrics-repository');
     const pool = getPool();

@@ -25,7 +25,7 @@ import { createLogger } from '../../utils/logger';
 const logger = createLogger('ShareArtifactViewer');
 
 /** pubId 접두사 — viewer-authz 가 이 접두사로 "작업 공유 산출물" 분기를 판정한다. */
-export const SHARE_VIEWER_PREFIX = 'share-';
+const SHARE_VIEWER_PREFIX = 'share-';
 
 /**
  * 산출물 뷰어 pubId. nginx 의 `^/a/[A-Za-z0-9-]+/` 를 만족해야 하므로 하이픈만 쓴다

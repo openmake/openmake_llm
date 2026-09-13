@@ -14,14 +14,14 @@
  * 추후 admin UI에서 편집 가능하도록 DB(prompt_templates)로 이전할 수 있다.
  */
 
-export interface StaleDataWarningTemplate {
+interface StaleDataWarningTemplate {
     /** 안전망 섹션 헤더 — Markdown H2 뒤에 사용됨 */
     header: string;
     /** LLM에게 전달되는 본문 instruction — 학습 컷오프 명시·단정 자제·검색 권유 */
     instruction: string;
 }
 
-export const STALE_DATA_WARNING_TEMPLATES: Record<string, StaleDataWarningTemplate> = {
+const STALE_DATA_WARNING_TEMPLATES: Record<string, StaleDataWarningTemplate> = {
     ko: {
         header: '주의: 실시간 정보 미반영',
         instruction:

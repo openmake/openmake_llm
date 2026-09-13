@@ -36,7 +36,7 @@ export const USER_ROLES = {
 } as const satisfies Record<string, UserRole>;
 
 /** UserRole 값 목록 — validation/iteration SoT (인라인 문자열 배열 금지, CLAUDE.md No-Hardcoding) */
-export const USER_ROLE_VALUES = Object.values(USER_ROLES) as readonly UserRole[];
+const USER_ROLE_VALUES = Object.values(USER_ROLES) as readonly UserRole[];
 
 /** 문자열이 유효한 UserRole 인지 검사하는 타입 가드 */
 export function isUserRole(value: string | null | undefined): value is UserRole {
@@ -73,7 +73,7 @@ export interface PublicUser {
  * 사용자 생성 요청 인터페이스
  * @interface CreateUserInput
  */
-export interface CreateUserInput {
+interface CreateUserInput {
     /** 사용자명 (표시명, 없으면 email 사용) */
     username?: string;
     /** 이메일 주소 (username과 동일하게 저장) */

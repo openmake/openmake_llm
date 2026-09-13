@@ -14,7 +14,7 @@ import { LOCAL_SAMPLING_PRESETS } from '../config/llm-parameters';
 import { isThinkingEnabled } from './reasoning-adapter';
 import type { ModelOptions, ThinkOption } from './types';
 
-export interface SamplingPresetContext {
+interface SamplingPresetContext {
     /** 외부 provider 클라이언트(LLMConfig.quotaExempt) — 프리셋 미적용 */
     external?: boolean;
 }

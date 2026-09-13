@@ -52,15 +52,10 @@ export async function startAllSchedulers(): Promise<void> {
     // 5. 에이전트 자기개선 사이클 스케줄러
     await startAgentLearningScheduler();
 
-    // 6. Cloud 모델 헬스체크 스케줄러 — 단일 로컬 모델 전환 (2026-05-06) 후 비활성.
-    //    `model-health-monitor` 가 스텁(항상 healthy, 빈 스냅샷)이라 5분 주기 호출은 no-op.
-    //    Cloud 모델 재도입 시 이 줄의 주석을 해제하여 즉시 복구 가능.
-    // startModelHealthScheduler();
-
-    // 7. 로컬 모델 가용성 polling — startup probe 이후 backend 장애 동적 감지
+    // 6. 로컬 모델 가용성 polling — startup probe 이후 backend 장애 동적 감지
     startLocalModelProbeScheduler();
 
-    // 7-b. /generated 생성 미디어 보존 스윕 (부팅 1회 + 주기) — reports/ 제외
+    // 6-b. /generated 생성 미디어 보존 스윕 (부팅 1회 + 주기) — reports/ 제외
     try {
         const { reapStaleGeneratedMedia } = await import('../services/generated-media-retention');
         reapStaleGeneratedMedia();
@@ -69,7 +64,7 @@ export async function startAllSchedulers(): Promise<void> {
         logger.warn('생성 미디어 스윕 등록 실패 (계속):', err);
     }
 
-    // 8. Task 샌드박스 정리 (플래그 ON 시) — 고아 컨테이너(부팅 1회) + stale workspace(부팅 + 6h 주기).
+    // 7. Task 샌드박스 정리 (플래그 ON 시) — 고아 컨테이너(부팅 1회) + stale workspace(부팅 + 6h 주기).
     try {
         const { getTaskSandboxConfig } = await import('../config/task-sandbox');
         if (getTaskSandboxConfig().enabled) {
@@ -123,7 +118,7 @@ export async function startAllSchedulers(): Promise<void> {
         logger.warn('Agent Task 업로드 보존 스윕 등록 실패(무시):', err);
     }
 
-    // 9. 아티팩트 실행 히스토리 TTL 스윕 — persistTtlMs 초과 실행 결과 삭제(부팅 + 6h 주기).
+    // 8. 아티팩트 실행 히스토리 TTL 스윕 — persistTtlMs 초과 실행 결과 삭제(부팅 + 6h 주기).
     try {
         const { ARTIFACT_EXEC } = await import('../config/artifact-exec');
         if (ARTIFACT_EXEC.persistEnabled) {
@@ -141,7 +136,7 @@ export async function startAllSchedulers(): Promise<void> {
         logger.warn('아티팩트 실행 히스토리 스윕 등록 실패(무시):', err);
     }
 
-    // 10. 주간 게이트 판정 리포트 — measure-first 게이트 관측 스냅샷(무-LLM, 멱등).
+    // 9. 주간 게이트 판정 리포트 — measure-first 게이트 관측 스냅샷(무-LLM, 멱등).
     try {
         const { startGateReportScheduler } = await import('../monitoring/gate-report');
         if (startGateReportScheduler()) logger.debug('GateReportScheduler 등록 완료');
@@ -206,61 +201,6 @@ function startLocalModelProbeScheduler(): void {
     timer.unref();
     activeTimers.push(timer);
     logger.debug(`LocalModelProbeScheduler 시작 완료 (주기 ${intervalMs / 1000}s)`);
-}
-
-/**
- * Cloud 모델 헬스체크 스케줄러를 시작합니다.
- *
- * - 부팅 후 30초 뒤 1차 실행 (워밍업)
- * - 이후 5분마다 반복
- * - 스냅샷은 ModelHealthMonitor 싱글톤에 저장되어 routing-circuit-breaker와
- *   Admin UI에서 조회됨
- */
-// Cloud 재도입 시 외부에서 직접 호출 가능하도록 export 유지 (현재는 비활성)
-export function startModelHealthScheduler(): void {
-    const HEALTH_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5분
-    const WARMUP_DELAY_MS = 30 * 1000; // 30초
-
-    const runCheck = async () => {
-        try {
-            const { getModelHealthMonitor } = await import('../services/model-health-monitor');
-            const snapshot = await getModelHealthMonitor().runCheck({ full: false });
-            if (snapshot.unhealthyCount > 0) {
-                const unhealthyDetails = snapshot.summary
-                    .filter((s) => !s.healthy)
-                    .map((s) => {
-                        const err = s.errors[0];
-                        const detail = err
-                            ? ` (HTTP ${err.httpStatus}${err.error ? ': ' + err.error : ''})`
-                            : '';
-                        return `${s.model}${detail}`;
-                    })
-                    .join(', ');
-                logger.warn(
-                    `[ModelHealth] ${snapshot.unhealthyCount}/${snapshot.modelCount} 모델 장애 — ${unhealthyDetails}`,
-                );
-            } else {
-                logger.debug(
-                    `[ModelHealth] ${snapshot.healthyCount}/${snapshot.modelCount} 모델 정상 (${snapshot.totalDurationMs}ms)`,
-                );
-            }
-        } catch (err) {
-            logger.error('[ModelHealth] 헬스체크 실행 실패:', err);
-        }
-    };
-
-    // 워밍업: 부팅 직후에는 실행하지 않고 30초 뒤에 1차 실행
-    const warmupTimer = setTimeout(() => {
-        runCheck();
-        const interval = setInterval(runCheck, HEALTH_CHECK_INTERVAL_MS);
-        interval.unref();
-        activeTimers.push(interval);
-    }, WARMUP_DELAY_MS);
-    warmupTimer.unref();
-
-    logger.debug(
-        `ModelHealthScheduler 시작 완료 (워밍업 ${WARMUP_DELAY_MS / 1000}s, 주기 ${HEALTH_CHECK_INTERVAL_MS / 1000}s)`,
-    );
 }
 
 /**

@@ -15,52 +15,52 @@
 import { BaseRepository } from './base-repository';
 
 /** 도구 실행 오류 요약 (총량/오류율/작업 분포) */
-export interface ToolErrorSummaryRow {
+interface ToolErrorSummaryRow {
     total_tool_executions: string;
     error_count: string;
     affected_tasks: string;
 }
 
 /** 오류 발생 작업의 결말(status) 분포 */
-export interface ToolErrorTaskStatusRow {
+interface ToolErrorTaskStatusRow {
     status: string;
     tasks: string;
 }
 
 /** 오류 시그니처(정규화된 content 앞부분)별 건수 */
-export interface ToolErrorSignatureRow {
+interface ToolErrorSignatureRow {
     signature: string;
     count: string;
 }
 
 /** tool_name 별 오류 건수 */
-export interface ToolErrorByToolRow {
+interface ToolErrorByToolRow {
     tool_name: string;
     count: string;
 }
 
 /** 완료 판정 분포 — 완료 출구(completion_path) × goal judge 결과(judge_verdict) */
-export interface CompletionVerdictRow {
+interface CompletionVerdictRow {
     completion_path: string | null;
     judge_verdict: string | null;
     tasks: string;
 }
 
 /** 실패 사유 분포 — error 첫 줄 정규화 기준 */
-export interface FailureReasonRow {
+interface FailureReasonRow {
     reason: string;
     tasks: string;
 }
 
 /** 구제 장치(retry·hitl_degrade) 발생 작업 수 */
-export interface InterventionRow {
+interface InterventionRow {
     total_tasks: string;
     retry_tasks: string;
     hitl_degrade_tasks: string;
 }
 
 /** plan 귀속 커버리지 — plan 이 있는 작업의 스텝 중 plan_step_index 가 채워진 비율 */
-export interface PlanCoverageRow {
+interface PlanCoverageRow {
     planned_tasks: string;
     total_steps: string;
     attributed_steps: string;

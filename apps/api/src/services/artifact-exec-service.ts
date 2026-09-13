@@ -16,7 +16,7 @@ import { ARTIFACT_EXEC, ARTIFACT_EXEC_RUNTIMES } from '../config/artifact-exec';
 
 const log = createLogger('ArtifactExec');
 
-export interface ArtifactExecResult {
+interface ArtifactExecResult {
   runtime: string;
   stdout: string;
   stderr: string;
@@ -52,13 +52,13 @@ export function buildExecDockerArgs(runtime: string): string[] {
   ];
 }
 
-export interface ExecAvailability {
+interface ExecAvailability {
   enabled: boolean;
   dockerPath: string | null;
 }
 
 /** 실행 가능 여부 — 게이트 on + docker 바이너리 발견. */
-export function execAvailability(): ExecAvailability {
+function execAvailability(): ExecAvailability {
   if (!ARTIFACT_EXEC.enabled) return { enabled: false, dockerPath: null };
   return { enabled: true, dockerPath: resolveDocker(ARTIFACT_EXEC.dockerPath) };
 }
@@ -123,9 +123,6 @@ function runOnce(dockerPath: string, runtime: string, code: string): Promise<Art
 
 /** 동시 실행 중인 컨테이너 수 — 프로세스 내 세마포어(단일 워커 전제, Agent Task 와 동일 모델). */
 let inFlight = 0;
-
-/** 관측/테스트용 — 현재 동시 실행 수. */
-export function currentInFlight(): number { return inFlight; }
 
 /**
  * 코드 아티팩트를 컨테이너에서 실행. lang 미지원/게이트 off/docker 부재면 throw.

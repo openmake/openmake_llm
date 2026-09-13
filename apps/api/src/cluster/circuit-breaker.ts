@@ -39,12 +39,12 @@ import { CIRCUIT_BREAKER_DEFAULTS } from '../config/timeouts';
 const logger = createLogger('CircuitBreaker');
 
 /** 서킷 브레이커 상태 */
-export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
 /**
  * 서킷 브레이커 설정
  */
-export interface CircuitBreakerConfig {
+interface CircuitBreakerConfig {
     /** OPEN 전환까지의 실패 횟수 (기본값: 5) */
     failureThreshold: number;
     /** OPEN → HALF_OPEN 전환 대기 시간 (ms, 기본값: 30000) */
@@ -58,7 +58,7 @@ export interface CircuitBreakerConfig {
 /**
  * 서킷 브레이커 메트릭
  */
-export interface CircuitBreakerMetrics {
+interface CircuitBreakerMetrics {
     /** 현재 서킷 상태 */
     state: CircuitState;
     /** 현재 윈도우 내 실패 횟수 */

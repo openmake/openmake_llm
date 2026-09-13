@@ -105,7 +105,7 @@ function mapChatGPTError(err: unknown): ProviderError {
     return new ProviderError('UPSTREAM_ERROR', `ChatGPT(Codex) 호출 실패: ${message}`, err);
 }
 
-export interface ChatGPTOAuthProviderOptions {
+interface ChatGPTOAuthProviderOptions {
     session: ChatGPTOAuthSessionPayload;
     /** 세션 refresh 후 영속화 콜백 (미지정 시 in-memory 갱신만) */
     persistSession?: (session: ChatGPTOAuthSessionPayload) => Promise<void>;

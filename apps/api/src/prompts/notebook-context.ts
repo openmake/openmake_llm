@@ -7,7 +7,7 @@
  * - 언어: 사용자 언어가 한국어면 한국어, 그 외는 영어 지시문.
  */
 
-export interface NotebookContextRef {
+interface NotebookContextRef {
     id: string;
     title: string;
 }

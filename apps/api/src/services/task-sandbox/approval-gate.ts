@@ -70,13 +70,13 @@ export function isSensitiveWrite(toolName: string, args: Record<string, unknown>
     return false;
 }
 
-export type ApprovalDecision = 'approved' | 'rejected';
+type ApprovalDecision = 'approved' | 'rejected';
 /** 거절 사유 — 'timeout'(무응답 만료) 은 사용자 부재 신호로, 명시 거절('user')과 달리
  *  HITL 무응답 강등(연속 N회 시 승인 필요 도구 제거 → 산출물 유도)의 카운트 대상이다. */
 export type ApprovalRejectReason = 'timeout' | 'user' | 'abort';
 
 /** 승인 요청의 해소 결과 — 결정 + (ask_human 자유텍스트 응답 시) 사용자 답변 본문. */
-export interface ApprovalResult {
+interface ApprovalResult {
     decision: ApprovalDecision;
     /** rejected 인 경우에만 채워짐 — 무응답 만료/명시 거절/실행 중단 구분. */
     reason?: ApprovalRejectReason;

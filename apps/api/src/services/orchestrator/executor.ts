@@ -16,7 +16,7 @@ import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('OrchestratorExecutor');
 
-export interface ExecutionSummary {
+interface ExecutionSummary {
     results: TaskResult[];
     ok: number;
     /** 제출됐지만 미완료(영상 등) — 성공도 실패도 아님 */

@@ -15,9 +15,7 @@ import {
   GitBranch,
   Cpu,
   Loader2,
-  Check,
   Download,
-  Wand2,
   ClipboardCheck,
 } from "lucide-react";
 import {

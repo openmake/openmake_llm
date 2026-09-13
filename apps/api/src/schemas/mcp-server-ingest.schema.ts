@@ -29,4 +29,3 @@ export const approveMcpServerDraftSchema = z.object({
     enableImmediately: z.boolean().optional(),
 });
 
-export type ApproveMcpServerDraftInput = z.infer<typeof approveMcpServerDraftSchema>;

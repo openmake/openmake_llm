@@ -22,7 +22,7 @@ export const SECTION_HEADERS: Record<string, { summary: string; findings: string
     fr: { summary: 'Résumé exécutif', findings: 'Découvertes clés', analysis: 'Analyse détaillée', references: 'Références' },
 };
 
-export function getSectionHeaders(lang: string) {
+function getSectionHeaders(lang: string) {
     return SECTION_HEADERS[lang] || SECTION_HEADERS['en']!;
 }
 

@@ -23,4 +23,3 @@ export const CHAT_RESULT_PROCESSORS: readonly ResultProcessor[] = [
 ];
 
 export { runResultProcessors } from './result-pipeline';
-export type { ResultProcessor, ResultProcessorCtx } from './result-pipeline';

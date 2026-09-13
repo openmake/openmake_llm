@@ -32,7 +32,7 @@ import { SKILL_CREATOR } from '../../config/constants';
 
 const logger = createLogger('GitIngestService');
 
-export interface ImportInput extends ImportFromGitInput {
+interface ImportInput extends ImportFromGitInput {
     userId: string;
     isAdmin: boolean;
     /**
@@ -45,7 +45,7 @@ export interface ImportInput extends ImportFromGitInput {
     onSkillStored?: (skillId: string) => Promise<void>;
 }
 
-export interface ImportResult {
+interface ImportResult {
     skillId: string;
     name: string;
     description: string;
@@ -68,7 +68,7 @@ export interface ImportResult {
     candidates?: never;
 }
 
-export interface CandidateListResult {
+interface CandidateListResult {
     gitUrl: string;
     gitRef: string;
     candidates: ManifestCandidate[];
@@ -76,7 +76,7 @@ export interface CandidateListResult {
     selectionRequired: true;
 }
 
-export interface GitIngestOptions {
+interface GitIngestOptions {
     pool: Pool;
     llmClientFactory: (model: string) => LLMClient;
     fetcherFactory: (opts: { accessToken?: string }) => GitFetcher;

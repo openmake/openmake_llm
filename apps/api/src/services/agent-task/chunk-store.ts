@@ -32,7 +32,7 @@ const CHUNK_ROOT = path.join(path.resolve(AGENT_TASK_LIMITS.UPLOAD_ROOT), 'chunk
 /** uploadId 는 서버 발급 uuid 만 유효 — 경로 성분 주입 차단. */
 const UPLOAD_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-export interface ChunkedUploadMeta {
+interface ChunkedUploadMeta {
     userId: string;
     name: string;
     type?: string;

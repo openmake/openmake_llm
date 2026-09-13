@@ -17,7 +17,7 @@ import { API_DESCRIPTION, specTags, specPaths, specComponents } from './swagger/
 
 const logger = createLogger('Swagger');
 
-export const openApiSpec = {
+const openApiSpec = {
     openapi: '3.0.3',
     info: {
         title: 'OpenMake.Ai API',

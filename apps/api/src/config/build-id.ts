@@ -13,7 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export interface BuildInfo {
+interface BuildInfo {
     buildTime: string;
     gitHash: string;
     gitDate: string;

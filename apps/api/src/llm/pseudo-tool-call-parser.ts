@@ -36,7 +36,7 @@ const FUNCTION_BLOCK = /<function=([^>\s]+)\s*>([\s\S]*?)(?:<\/function>|$)/g;
 /** `<parameter=NAME> ... </parameter>` (닫는 태그 없이 끝난 경우도 수용). */
 const PARAMETER_BLOCK = /<parameter=([^>\s]+)\s*>([\s\S]*?)(?:<\/parameter>|$)/g;
 
-export interface ParsedPseudoToolCall {
+interface ParsedPseudoToolCall {
     id: string;
     name: string;
     args: Record<string, unknown>;

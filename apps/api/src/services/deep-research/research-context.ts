@@ -33,10 +33,10 @@ const logger = createLogger('DeepResearch:Context');
  * 딥리서치의 스킬 스코프 sentinel — 산업 agent 페르소나를 우회하므로
  * `__global__` + `user:{userId}` 스킬만 매칭된다 (agent-task 의 `__agent_task__` 관행).
  */
-export const RESEARCH_SKILL_AGENT_ID = '__deep_research__';
+const RESEARCH_SKILL_AGENT_ID = '__deep_research__';
 
 /** MCP 도구 결과를 소스로 표시할 때 쓰는 스킴 — 스크래핑 대상에서 제외된다. */
-export const MCP_SOURCE_SCHEME = 'mcp://';
+const MCP_SOURCE_SCHEME = 'mcp://';
 
 /**
  * 활성 스킬 지식 블록. 실패/부재 시 '' — 리서치 흐름을 막지 않는다.

@@ -99,7 +99,7 @@ export function normalizePlan(
     };
 }
 
-export interface PlanInput {
+interface PlanInput {
     task: string;
     context?: string;
     /** 'review' role 사용자 매핑 해석용 (미지정 시 전역/기본 티어) */

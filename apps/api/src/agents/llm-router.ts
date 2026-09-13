@@ -41,7 +41,7 @@ const logger = createLogger('LLMRouter');
  *
  * @interface LLMRoutingResult
  */
-export interface LLMRoutingResult {
+interface LLMRoutingResult {
     /** 선택된 에이전트의 고유 ID (예: 'software-engineer') */
     agentId: string;
     /** LLM이 판단한 선택 신뢰도 (0.0 ~ 1.0, 0.3 미만이면 폴백) */

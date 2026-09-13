@@ -41,7 +41,7 @@ import { getPool } from '../data/models/unified-database';
  * // ... 에이전트 처리 ...
  * monitor.endRequest(requestId, true); // 성공
  */
-export class AgentMonitor {
+class AgentMonitor {
     /** 에이전트 유형별 누적 메트릭 (key: agentType) — 인메모리 캐시 */
     private metrics: Map<string, AgentMetrics> = new Map();
     /** 현재 진행 중인 활성 요청 (key: requestId) — 인메모리 전용 */

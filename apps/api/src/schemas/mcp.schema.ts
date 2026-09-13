@@ -108,16 +108,3 @@ export const mcpServerRenameSchema = z.object({
     }),
 });
 
-/** MCP 서버 이름 변경 요청 TypeScript 타입 */
-export type McpServerRenameInput = z.infer<typeof mcpServerRenameSchema>;
-
-/** MCP 도구 실행 요청 TypeScript 타입 */
-export type McpToolExecuteInput = z.infer<typeof mcpToolExecuteSchema>;
-/** MCP 서버 등록 요청 TypeScript 타입 */
-export type McpServerCreateInput = z.infer<typeof mcpServerCreateSchema>;
-/** MCP 서버 env 교체 요청 TypeScript 타입 */
-export type McpServerEnvUpdateInput = z.infer<typeof mcpServerEnvUpdateSchema>;
-/** MCP 서버 사용 여부 토글 TypeScript 타입 */
-export type McpServerEnabledUpdateInput = z.infer<typeof mcpServerEnabledUpdateSchema>;
-/** MCP 서버 자동 연결 토글 TypeScript 타입 */
-export type McpServerAutoSpawnUpdateInput = z.infer<typeof mcpServerAutoSpawnUpdateSchema>;

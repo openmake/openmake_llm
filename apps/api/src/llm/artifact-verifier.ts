@@ -29,7 +29,7 @@ export interface ArtifactValidation {
 }
 
 /** 검증 입력 — ArtifactInfo 의 부분집합 */
-export interface ArtifactVerifyInput {
+interface ArtifactVerifyInput {
     kind?: string;
     lang?: string | null;
     content: string;

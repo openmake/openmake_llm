@@ -24,7 +24,7 @@ interface UsageWindow {
     tokens: number;
 }
 
-export interface QuotaStatus {
+interface QuotaStatus {
     hourly: { used: number; limit: number; remaining: number };
     weekly: { used: number; limit: number; remaining: number };
 }

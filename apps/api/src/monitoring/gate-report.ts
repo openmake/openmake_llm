@@ -76,7 +76,7 @@ export interface GateReportInput {
     };
 }
 
-export interface GateVerdict {
+interface GateVerdict {
     gate: string;
     sample: number;
     /** 표시용 뱃지 톤 — ok(판정 가능)/warn(표본 부족)/danger(적재 중단) */
@@ -239,7 +239,7 @@ async function notifyAdmins(dateStr: string): Promise<void> {
  * due 판정 + 생성 스윕 — 설정 요일에 당일 스냅샷이 없으면 생성한다.
  * @returns 이번 호출에서 새로 생성했으면 true
  */
-export async function runGateReportSweep(now: Date = new Date()): Promise<boolean> {
+async function runGateReportSweep(now: Date = new Date()): Promise<boolean> {
     if (!GATE_REPORT.ENABLED) return false;
     if (gateReportWeekday(now, GATE_REPORT.TZ) !== GATE_REPORT.WEEKDAY) return false;
 

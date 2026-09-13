@@ -17,7 +17,7 @@ import { useTranslations } from "next-intl";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
-export interface NotebookRef {
+interface NotebookRef {
   id: string;
   title: string;
 }

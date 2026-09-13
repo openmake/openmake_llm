@@ -58,7 +58,7 @@ export const RATE_LIMIT_POLICY = {
  * 프론트 스캔 결과 실 사용 중인 powerful API는 `navigator.clipboard.writeText`만 확인됨.
  * 나머지는 XSS / iframe embed 시 공격면이 되므로 전면 차단.
  */
-export const PERMISSIONS_POLICY = {
+const PERMISSIONS_POLICY = {
     DIRECTIVES: {
         // 센서·입력 장치
         // 'ambient-light-sensor' / 'battery' 제거: Chrome 등 모던 브라우저가

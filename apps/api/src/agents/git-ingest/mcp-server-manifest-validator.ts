@@ -18,7 +18,7 @@ import { z } from 'zod';
 
 const SECURITY_DATA_COLLECTION = z.enum(['none', 'telemetry', 'logs']);
 
-export const mcpServerManifestFrontmatterSchema = z.object({
+const mcpServerManifestFrontmatterSchema = z.object({
     type: z.literal('mcp-server'),
     name: z.string().min(1).max(100),
     description: z.string().min(1).max(500),
@@ -72,14 +72,14 @@ export const mcpServerManifestFrontmatterSchema = z.object({
     }
 });
 
-export type McpServerManifestFrontmatter = z.infer<typeof mcpServerManifestFrontmatterSchema>;
+type McpServerManifestFrontmatter = z.infer<typeof mcpServerManifestFrontmatterSchema>;
 
-export interface ParsedMcpServerFile {
+interface ParsedMcpServerFile {
     frontmatterYaml: string;
     body: string;
 }
 
-export interface ValidateResult {
+interface ValidateResult {
     ok: boolean;
     manifest: McpServerManifestFrontmatter;
     raw_yaml: string;

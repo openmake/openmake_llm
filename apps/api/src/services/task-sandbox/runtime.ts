@@ -44,7 +44,7 @@ function resultToString(r: { content: Array<{ text?: string }>; isError?: boolea
     return r.isError ? `Error: ${text}` : text;
 }
 
-export interface ExecuteTaskToolOpts {
+interface ExecuteTaskToolOpts {
     signal?: AbortSignal;
     /** 승인 대기 진입 시 호출 — 호출부가 status='paused' + web-push/WS 발행. */
     onApprovalPending?: (p: PendingApproval) => void;

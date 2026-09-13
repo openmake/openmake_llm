@@ -15,8 +15,8 @@ import { secureOptionalTextSchema, secureTextSchema } from './security.schema';
  * 리서치 세션 생성 스키마
  * @property {string} topic - 리서치 주제 (1~500자, 필수)
  * @property {string} [depth] - 리서치 깊이 (quick/standard/deep, 기본값: standard)
- *   ⚠️ enum·기본값은 DB CHECK(002-schema.sql), 루프 맵(RESEARCH_DEPTH_LOOPS),
- *   MCP 도구(mcp/deep-research.ts)와 동일해야 한다 — 어긋나면 basic/comprehensive
+ *   ⚠️ enum·기본값은 DB CHECK(002-schema.sql), 루프 맵(RESEARCH_DEPTH_LOOPS)과
+ *   동일해야 한다 — 어긋나면 basic/comprehensive
  *   같은 값이 Zod 를 통과하고 DB CHECK 에서 500 으로 터진다(정합성 버그 이력).
  */
 export const createResearchSessionSchema = z.object({
@@ -62,11 +62,3 @@ export const executeResearchSchema = z.object({
     maxLoops: z.number().int().min(1).max(10).optional()
 });
 
-/** 리서치 세션 생성 요청 TypeScript 타입 */
-export type CreateResearchSessionInput = z.infer<typeof createResearchSessionSchema>;
-/** 리서치 스텝 추가 요청 TypeScript 타입 */
-export type AddResearchStepInput = z.infer<typeof addResearchStepSchema>;
-/** 리서치 세션 상태 업데이트 요청 TypeScript 타입 */
-export type UpdateResearchSessionInput = z.infer<typeof updateResearchSessionSchema>;
-/** 리서치 실행 요청 TypeScript 타입 */
-export type ExecuteResearchInput = z.infer<typeof executeResearchSchema>;

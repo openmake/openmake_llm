@@ -22,7 +22,7 @@ export class AgentTaskTurnTimeout extends AgentTaskAbort {
     }
 }
 
-export interface TurnCallInput {
+interface TurnCallInput {
     roleState: AgentRoleState;
     conversation: ChatMessage[];
     tools: ToolDefinition[];
@@ -43,7 +43,7 @@ export interface TurnCallInput {
  * 마무리 턴은 도구 없이 장문을 생성하므로 잔여와 무관하게 FINAL_TURN_MIN_MS 를 보장하고, 그 턴만
  * 스트리밍해(도구 턴은 종전대로 비스트림) 예산 abort 시 부분 본문을 AgentTaskTurnTimeout 에 실어 던진다.
  */
-export interface TurnCallResult {
+interface TurnCallResult {
     result: Awaited<ReturnType<typeof chatTurnWithRoleFallback>>;
     /** 이 턴의 예산 바인딩 signal — 뒤따르는 finalize(judge·검증)도 같은 예산에 묶는다. */
     callSignal: AbortSignal;

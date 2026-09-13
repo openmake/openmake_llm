@@ -43,7 +43,7 @@ export function evaluateSessionAccess(
 }
 
 /** 세션 목록 조회 범위 (순수 함수 — 단위 테스트 가능) */
-export type SessionListScope = 'all' | 'user' | 'anon' | 'none';
+type SessionListScope = 'all' | 'user' | 'anon' | 'none';
 
 /**
  * 세션 목록 조회 범위 판정.
@@ -79,7 +79,7 @@ export function resolveSessionListScope(
  * - 세션 제목 업데이트
  * - 세션 삭제
  */
-export class SessionController {
+class SessionController {
     /** Express 라우터 인스턴스 */
     private router: Router;
 

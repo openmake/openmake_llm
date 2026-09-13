@@ -22,7 +22,7 @@ function norm(s: string): string {
     return s.toLowerCase().replace(/^mcp[-_]/, '');
 }
 
-export const mcpListToolsTool: MCPToolDefinition = {
+const mcpListToolsTool: MCPToolDefinition = {
     tool: {
         name: 'mcp_list_tools',
         description: '설치한 MCP 서버의 도구 목록을 조회합니다. 쓰고 싶은 서버 도구가 현재 노출 목록에 없을 때, server 이름으로 그 서버의 전체 도구(이름·설명·입력 스키마)를 받은 뒤 mcp_call 로 호출하세요. server 를 비우면 설치된 서버 이름 목록만 반환합니다.',
@@ -86,7 +86,7 @@ export const mcpListToolsTool: MCPToolDefinition = {
     },
 };
 
-export const mcpCallTool: MCPToolDefinition = {
+const mcpCallTool: MCPToolDefinition = {
     tool: {
         name: 'mcp_call',
         description: '설치한 MCP 서버의 도구를 이름으로 호출합니다. 현재 노출 목록에 없는 서버 도구를 쓸 때 사용하세요(먼저 mcp_list_tools 로 server·tool·인자 스키마 확인). server=서버 displayName, tool=도구 원본 이름, args=그 도구의 입력 객체.',

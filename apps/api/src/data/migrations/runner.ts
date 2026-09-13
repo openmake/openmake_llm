@@ -21,7 +21,7 @@ interface AppliedMigrationRow {
     checksum: string | null;
 }
 
-export interface MigrationStatus {
+interface MigrationStatus {
     version: string;
     filename: string;
     applied: boolean;

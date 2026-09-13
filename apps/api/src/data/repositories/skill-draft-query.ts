@@ -7,14 +7,14 @@
  */
 import type { QueryParam } from './base-repository';
 
-export interface DraftQueryOptions {
+interface DraftQueryOptions {
     target?: 'user' | 'system' | 'all';
     userId?: string;
     limit?: number;
     offset?: number;
 }
 
-export interface DraftQuery {
+interface DraftQuery {
     /** 총 개수 SQL (WHERE 만, JOIN 없음) */
     countSql: string;
     /** 목록 SQL (확장 LEFT JOIN 포함) */

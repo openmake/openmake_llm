@@ -23,7 +23,7 @@ export function internalBundleId(url: string): string {
     return url.trim().slice(INTERNAL_BUNDLE_PREFIX.length).replace(/[^A-Za-z0-9_-]/g, '');
 }
 
-export function internalBundlePseudoRepo(url: string): { owner: string; repo: string } {
+function internalBundlePseudoRepo(url: string): { owner: string; repo: string } {
     return { owner: 'internal', repo: internalBundleId(url) };
 }
 

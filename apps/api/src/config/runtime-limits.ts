@@ -9,10 +9,6 @@
  */
 
 // ============================================
-// 컨텍스트 윈도우 (문자 수)
-// ============================================
-
-// ============================================
 // 토큰 예산 (Discussion/Context Engineering)
 // ============================================
 
@@ -27,7 +23,6 @@ export const DISCUSSION_TOKEN_BUDGET = {
         maxDocumentTokens: 4000,
         maxHistoryTokens: 2000,
         maxWebSearchTokens: 2000,
-        maxMemoryTokens: 1500,
         maxImageDescriptionTokens: parseInt(process.env.DISCUSSION_MAX_IMAGE_DESC_TOKENS || '500', 10),
     },
     /** 요약/보조 Discussion 컨텍스트 토큰 예산 */
@@ -36,7 +31,6 @@ export const DISCUSSION_TOKEN_BUDGET = {
         maxDocumentTokens: 3000,
         maxHistoryTokens: 2000,
         maxWebSearchTokens: 1500,
-        maxMemoryTokens: 1000,
         maxImageDescriptionTokens: parseInt(process.env.DISCUSSION_MAX_IMAGE_DESC_TOKENS || '500', 10),
     },
 } as const;
@@ -830,31 +824,6 @@ export const PHASE_KEYWORDS = {
 };
 
 // ============================================
-// 인사말 감지 패턴
-// ============================================
-
-/**
- * 간단한 인사말 감지 설정
- * services/chat-service/context-builder.ts에서 참조
- */
-export const GREETING_DETECTION = {
-    /** 인사말로 판단할 최대 메시지 길이 */
-    MAX_LENGTH: 15,
-    /** 인사말 패턴 (정규식) */
-    PATTERN: /^(안녕|하이|헬로|hello|hi|hey|good\s*(morning|afternoon|evening)|잘\s*지내|반가|감사합니다|고마워|ㅎㅇ|ㅎㅎ)/i,
-};
-
-// ============================================
-// 이벤트 루프 양보 지연 (workflow)
-// ============================================
-
-/**
- * 워크플로우 그래프 엔진에서 이벤트 루프 양보 시 사용하는 지연 시간(ms)
- * workflow/graph-engine.ts에서 참조
- */
-export const EVENT_LOOP_YIELD_MS = 10;
-
-// ============================================
 // SQL 안전 가드 제한
 // ============================================
 
@@ -963,23 +932,6 @@ export const CONVERSATION_LIMITS = {
  * services/chat-strategies/generate-verify-strategy.ts에서 참조
  */
 // ============================================
-// 동적 토큰 예산 프롬프트
-// ============================================
-
-/**
- * 잔여 토큰 예산이 부족할 때 시스템 프롬프트에 간결 응답 지시를 주입
- * Anthropic 하네스 원칙: "토큰 예산 인식 프롬프트 제어"
- */
-export const BUDGET_HINTS = {
-    /** 간결 지시 주입 임계값 (잔여 비율, 0.0~1.0) */
-    LOW_BUDGET_THRESHOLD: 0.2,
-    /** 한국어 간결 지시 */
-    HINT_KO: '주의: 토큰 예산이 부족합니다. 핵심만 간결하게 답변하세요. 불필요한 설명을 생략하세요.',
-    /** 영어 간결 지시 */
-    HINT_EN: 'Notice: Token budget is low. Be extremely concise and focus only on core answers.',
-} as const;
-
-// ============================================
 // Thinking 모드 Sprint Contract
 // ============================================
 
@@ -1062,37 +1014,6 @@ export const SEARCH_RELIABILITY = {
 
 // (CONTEXT_GC / EVAL_PIPELINE / TRACE_ANALYZER 상수는 2026-07-18 strategy 계층
 //  폐기 2단계로 삭제 — 유일 소비자였던 chat-strategies 하네스 모듈과 함께 제거됨.)
-
-export const THINKING_LIMITS = {
-    /** 최대 사고 단계 수 (초과 시 결론 강제) */
-    MAX_STEPS: parseInt(process.env.THINKING_MAX_STEPS || '10', 10),
-    /** 전체 사고 토큰 예산 (문자 수 기준, TOKEN_TO_CHAR_RATIO 적용) */
-    MAX_THINK_CHARS: parseInt(process.env.THINKING_MAX_CHARS || '12000', 10),
-    /** 단계별 최소 콘텐츠 길이 (미달 시 조기 종료) */
-    MIN_STEP_CONTENT_CHARS: 50,
-    /** 예산 소진율 임계값 — 이 비율 초과 시 결론 강제 (0.0~1.0) */
-    FORCE_CONCLUSION_AT: 0.8,
-    /** 결론-과정 일관성 검증 활성화 (소형 모델 사용, opt-in) */
-    VERIFY_CONCLUSION: process.env.THINKING_VERIFY_CONCLUSION === 'true',
-    /** 검증용 소형 모델 */
-    VERIFIER_MODEL: process.env.THINKING_VERIFIER_MODEL || 'phi3:mini',
-    /** 검증 최대 토큰 */
-    VERIFIER_MAX_TOKENS: 200,
-    /** 예산 경고 임계값 — 잔여 비율이 이 값 미만이면 "핵심 집중" 안내 (0.0~1.0) */
-    WARNING_THRESHOLD: parseFloat(process.env.THINKING_WARNING_THRESHOLD || '0.5'),
-    /** 예산 위기 임계값 — 잔여 비율이 이 값 미만이면 "결론 강제" 안내 (0.0~1.0) */
-    CRITICAL_THRESHOLD: parseFloat(process.env.THINKING_CRITICAL_THRESHOLD || '0.2'),
-    /** 폴백 시 최소 보장 턴 수 (ThinkingStrategy 실패 → AgentLoop 폴백 시 최소 이만큼 보장) */
-    FALLBACK_MIN_TURNS: parseInt(process.env.THINKING_FALLBACK_MIN_TURNS || '2', 10),
-    /** 스트리밍 버퍼 overflow 임계 (문자) — 초과 시 끝부분만 보존 */
-    BUFFER_OVERFLOW_THRESHOLD: parseInt(process.env.THINKING_BUFFER_OVERFLOW_CHARS || '200', 10),
-    /** 버퍼 overflow 시 보존할 끝부분 길이 (문자) */
-    BUFFER_TRIM_SIZE: parseInt(process.env.THINKING_BUFFER_TRIM_CHARS || '50', 10),
-    /** 결론 섹션 추출 최대 길이 (문자) */
-    CONCLUSION_MAX_CHARS: parseInt(process.env.THINKING_CONCLUSION_MAX_CHARS || '500', 10),
-    /** 추론 과정 추출 최대 길이 (문자) */
-    REASONING_MAX_CHARS: parseInt(process.env.THINKING_REASONING_MAX_CHARS || '1500', 10),
-} as const;
 
 // ============================================
 // Loop Detection (Doom Loop 방지)
@@ -1391,8 +1312,8 @@ export const ARTIFACT_REQUEST_SUPPRESSED_TOOLS: readonly string[] = [
 export const ARTIFACT_INTENT_PATTERNS: readonly RegExp[] = [
     /아티팩트/i,
     /\bartifact\b/i,
-    // 실사용 문구 보강 (2026-07-17): "html로 작성해서 보여줘"류가 매칭 안 돼 generate_image
-    // (distractor)가 남아 모델이 이미지 생성으로 이탈 — 60초 낭비 + 아티팩트 미생성.
+    // 실사용 문구 보강 (2026-07-17): "html로 작성해서 보여줘"류가 매칭 안 돼 distractor 도구가
+    // 남아 모델이 도구 호출로 이탈 — 60초 낭비 + 아티팩트 미생성.
     // 동사 결합형만 매칭해 "html에서 추출해줘"(extract_webpage 필요) 같은 문장은 제외.
     /html\s*(파일|문서|보고서|페이지)?\s*(로|으로)?[^\n.?!]{0,10}(작성|만들|생성|정리|변환|보여)/i,
     /웹\s?페이지(로|를)?\s*(만들|작성|생성|정리)/,
@@ -1420,12 +1341,6 @@ export const OD_ARTIFACT_ECHO = {
 } as const;
 
 /**
- * 이미지 생성 병렬화 — 같은 턴에 generate_image 가 2회 이상 호출되면 순차 await 대신
- * 동시 실행한다. FLUX 디퓨전 1장이 수십 초라 다중 이미지(발표자료 삽화 등)에서 도구 배치
- * 시간이 장수에 비례해 늘던 것을 1장 수준으로 줄인다. 다른 도구는 순차 유지(부수효과·
- * 메시지 순서 보존), 결과는 원래 호출 순서대로 tool 메시지에 배치된다.
- */
-/**
  * 한 턴 안의 **읽기 전용** 도구 호출 병렬 실행 (2026-08-26).
  *
  * 실측(최근 30일 에이전트 작업, 도구 턴 585개): 한 턴에 2개 이상 호출 20%(118턴), 그중
@@ -1433,7 +1348,7 @@ export const OD_ARTIFACT_ECHO = {
  * 판단해 한 턴에 4개씩 던지는데 하나씩 실행해 검색 4개 턴이 12초(1개 ≈ 3초)였다.
  *
  * 부작용 도구(bash·file_ops write 등)는 순서가 의미를 갖고 승인 게이트도 타므로 **여기 목록에
- * 있는 이름만** 병렬한다. 결과는 원래 호출 순서로 대화에 배치된다(generate_image 선례와 동일).
+ * 있는 이름만** 병렬한다. 결과는 원래 호출 순서로 대화에 배치된다.
  * 채팅·에이전트 작업·서브에이전트 3경로 공용(services/tool-parallel).
  */
 export const READ_ONLY_TOOL_PARALLEL = {
@@ -1460,22 +1375,6 @@ export const READ_ONLY_TOOL_PARALLEL = {
         .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
 } as const;
 
-export const IMAGE_GEN_PARALLEL = {
-    /** 기본 ON — IMAGE_GEN_PARALLEL_ENABLED=false 로 비활성화(순차 복귀). */
-    ENABLED: process.env.IMAGE_GEN_PARALLEL_ENABLED !== 'false',
-    /** 동시 생성 상한 — vLLM-Omni FLUX 서버 큐 과점유 방지. */
-    MAX_CONCURRENT: parseInt(process.env.IMAGE_GEN_PARALLEL_MAX || '3', 10),
-    /**
-     * 루프 wall-clock 예산에서 공제할 이미지 생성 소요시간 상한 (ms).
-     *
-     * 이미지 3장 배치(실측 166s, FLUX 직렬 큐)가 AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS
-     * (180s)를 잠식해 후속 덱 저장 턴이 "도구 비활성 최종 턴"으로 강제 전환되던 결함
-     * (2026-08-14 라이브 실측) 보정 — 디퓨전 대기는 모델/도구 폭주가 아니므로 예산에서
-     * 공제하되, 상한을 둬 최악 요청 시간을 예산+상한으로 묶는다.
-     */
-    WALL_CLOCK_CREDIT_MAX_MS: parseInt(process.env.IMAGE_GEN_CREDIT_MAX_MS || '180000', 10),
-} as const;
-
 /**
  * 보고서 작성 의도 판정 패턴. 매칭 시 ① report-guide(reportdata JSON 계약) 시스템 프롬프트
  * 주입 ② 아티팩트 의도와 동일한 distractor 도구 억제. 실사용 문구 기반(운영 로그 2026-07):
@@ -1490,9 +1389,8 @@ export const REPORT_INTENT_PATTERNS: readonly RegExp[] = [
 ] as const;
 
 /**
- * 위치/지도 의도 판정 패턴. 매칭 시 generate_image(distractor)를 도구 목록에서 제외해
- * 모델이 "지도"를 보고 가짜 지도 이미지를 그리는 대신, 카카오 검색 도구 + 네이티브 지도
- * 블록(```kakaomap)을 쓰도록 유도한다.
+ * 위치/지도 의도 판정 패턴. 매칭 시 카카오 검색 도구를 강제 포함하고 첫 턴에 강제 호출하며,
+ * 시스템 프롬프트에 네이티브 지도 블록(```kakaomap) 사용을 넛지한다.
  */
 export const MAP_INTENT_PATTERNS: readonly RegExp[] = [
     /지도/,

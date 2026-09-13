@@ -22,9 +22,9 @@ import { classifyConnectError, serializeConnectError } from './connect-error';
 
 const logger = createLogger('LifecycleSupervisor');
 
-export type McpLifecycle = 'per_chat' | 'per_session' | 'long_lived';
+type McpLifecycle = 'per_chat' | 'per_session' | 'long_lived';
 
-export interface ServerSpawnConfig {
+interface ServerSpawnConfig {
     id: string;
     user_id: string;
     name: string;
@@ -40,15 +40,15 @@ export interface ServerSpawnConfig {
     tool_allowlist?: string[];
 }
 
-export type ClientFactory = (config: ServerSpawnConfig) => ExternalMCPClient;
+type ClientFactory = (config: ServerSpawnConfig) => ExternalMCPClient;
 
-export interface SupervisorDeps {
+interface SupervisorDeps {
     userPool: UserMCPPool;
     repo: Pick<McpCatalogRepository, 'listUserServers' | 'getServerById' | 'decryptEnvForSpawn' | 'recordInstanceTransition' | 'getCatalogToolAllowlist' | 'listAutoSpawnUserIds' | 'closeOrphanInstances'>;
     clientFactory: ClientFactory;
 }
 
-export interface LifecycleSupervisor {
+interface LifecycleSupervisor {
     onUserLogin(userId: string): Promise<void>;
     onUserLogout(userId: string): Promise<void>;
     onChatStart(userId: string, chatId: string): Promise<void>;

@@ -58,7 +58,7 @@ export function sandboxBootAdvisory(
     );
 }
 
-export interface SandboxDefaultResult {
+interface SandboxDefaultResult {
     /** true = .env 영속 + process.env 주입 완료 */
     applied: boolean;
     /** 미적용 사유: explicit(명시 설정 존중) | no-docker | no-image | persist-failed */
@@ -66,7 +66,7 @@ export interface SandboxDefaultResult {
 }
 
 /** 테스트 주입용 의존성 — 미지정 시 실제 docker 를 조회한다 */
-export interface SandboxDefaultDeps {
+interface SandboxDefaultDeps {
     resolveDockerPath?: () => string | null;
     imageExists?: (dockerPath: string, image: string) => boolean;
 }
@@ -130,7 +130,7 @@ export function ensureSandboxDefaultOnSetup(
 // 없으므로 어떤 경우에도 쓸모없다. ⚠️ 라벨 스코핑 필수: task-sandbox 는 재시작을
 // 넘어 살아있는 것이 정상(작업 재개용)이라 이미지 기준 무차별 스윕은 금지.
 
-export interface OrphanReapResult {
+interface OrphanReapResult {
     scanned: number;
     reaped: number;
     /** 판정 불가(라벨 pid 없음/파싱 실패)로 건너뛴 수 — 안전측: 모르면 건드리지 않는다 */
@@ -139,7 +139,7 @@ export interface OrphanReapResult {
 }
 
 /** 테스트 주입용 — 미지정 시 실제 docker/kill(pid,0) 사용 */
-export interface OrphanReapDeps {
+interface OrphanReapDeps {
     resolveDockerPath?: () => string | null;
     /** docker 하위명령 실행 → stdout (실패 시 throw) */
     dockerExec?: (dockerPath: string, args: string[], timeoutMs: number) => string;

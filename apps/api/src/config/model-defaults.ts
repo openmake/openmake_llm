@@ -7,7 +7,7 @@
 /**
  * 모델 능력 인터페이스
  */
-export interface ModelCapabilities {
+interface ModelCapabilities {
     toolCalling: boolean;
     thinking: boolean;
     vision: boolean;
@@ -18,7 +18,7 @@ export interface ModelCapabilities {
  * 모델 이름 프리픽스별 기능 프리셋
  * gemma4:e4b가 지원하는 능력만 정의한다.
  */
-export const MODEL_CAPABILITY_PRESETS: Readonly<Record<string, ModelCapabilities>> = {
+const MODEL_CAPABILITY_PRESETS: Readonly<Record<string, ModelCapabilities>> = {
     'gemma4': {
         toolCalling: true,
         thinking: true,
@@ -138,7 +138,7 @@ export function matchCapabilityPreset(modelId: string): ModelCapabilities | null
  * 출력 형식 의존). 이 둘은 ①②만 반영되며 미상이면 보수적으로 꺼진 채 남는다 —
  * 잘못 켜면 400 이지만, 꺼져 있으면 기능 축소에 그친다.
  */
-export interface ProbedCapabilities {
+interface ProbedCapabilities {
     toolCalling?: boolean;
 }
 

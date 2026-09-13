@@ -64,17 +64,8 @@ import type {
     UpdateCheckResult,
     CandidateListResult,
 } from './extension-ingest-types';
-export type {
-    ImportInput,
-    SkillInstallResult,
-    AgentInstallResult,
-    McpServerInstallResult,
-    ImportResult,
-    UpdateCheckResult,
-    CandidateListResult,
-} from './extension-ingest-types';
 
-export interface ExtensionIngestOptions {
+interface ExtensionIngestOptions {
     pool: Pool;
     llmClientFactory: (model: string) => LLMClient;
     fetcherFactory: (opts: { accessToken?: string }) => GitFetcher;

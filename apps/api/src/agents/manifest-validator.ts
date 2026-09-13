@@ -17,17 +17,17 @@ const logger = createLogger('ManifestValidator');
 
 const FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/;
 
-export interface ParsedSkillFile {
+interface ParsedSkillFile {
     frontmatter: SkillManifestFrontmatter;
     prompt_md: string;
     raw_yaml: string;
 }
 
-export interface ValidateOptions {
+interface ValidateOptions {
     availableToolNames: Set<string>;
 }
 
-export type ValidateResult =
+type ValidateResult =
     | {
         ok: true;
         manifest: SkillManifestFrontmatter;

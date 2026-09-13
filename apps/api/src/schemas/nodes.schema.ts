@@ -22,5 +22,3 @@ export const addClusterNodeSchema = z.object({
     name: z.string().max(100).optional()
 });
 
-/** 클러스터 노드 추가 요청 TypeScript 타입 */
-export type AddClusterNodeInput = z.infer<typeof addClusterNodeSchema>;

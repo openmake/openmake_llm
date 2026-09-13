@@ -32,38 +32,3 @@ export interface SearchResult {
     category?: string;
 }
 
-/**
- * 사실 검증 결과 인터페이스
- *
- * @interface FactCheckResult
- */
-export interface FactCheckResult {
-    /** 검증 대상 주장 */
-    claim: string;
-    /** 판정 결과 */
-    verdict: string;
-    /** 신뢰도 (0-1) */
-    confidence: number;
-    /** 근거 자료 */
-    sources: SearchResult[];
-    /** 판정 설명 */
-    explanation: string;
-}
-
-/**
- * 연구 결과 인터페이스
- *
- * @interface ResearchResult
- */
-export interface ResearchResult {
-    /** 연구 주제 */
-    topic: string;
-    /** 연구 요약 */
-    summary: string;
-    /** 핵심 발견 사항 */
-    keyFindings: string[];
-    /** 참고 자료 */
-    sources: SearchResult[];
-    /** 품질 메트릭 */
-    qualityMetrics: Record<string, unknown>;
-}

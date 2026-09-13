@@ -9,7 +9,7 @@
  */
 
 /** 앱 기준 타임존 (IANA). 배포 지역에 맞춰 APP_TIMEZONE 으로 오버라이드. */
-export const APP_TIMEZONE = process.env.APP_TIMEZONE || 'Asia/Seoul';
+const APP_TIMEZONE = process.env.APP_TIMEZONE || 'Asia/Seoul';
 
 /**
  * 지정 타임존(기본 APP_TIMEZONE) 기준 현재 날짜를 YYYY-MM-DD 로 반환.

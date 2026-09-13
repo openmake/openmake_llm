@@ -21,7 +21,7 @@ interface SecurityValidationOptions {
     specialCharacterRatioLimit?: number;
 }
 
-export interface FileUploadValidationOptions {
+interface FileUploadValidationOptions {
     allowedMimeTypes?: string[];
     allowedExtensions?: string[];
     blockedExtensions?: string[];

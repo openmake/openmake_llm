@@ -7,7 +7,7 @@
 import { assertResourceOwnerOrAdmin } from '../../auth/ownership';
 import { AuthorizationError } from '../../utils/error-handler';
 
-export interface SkillActor { userId: string; userRole: string }
+interface SkillActor { userId: string; userRole: string }
 
 export function assertSkillMutationAllowed(createdBy: string | null | undefined, actor: SkillActor): void {
     if (createdBy) {

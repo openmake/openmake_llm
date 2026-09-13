@@ -30,7 +30,7 @@ function extractSensitiveEnvKeys(manifestMeta: Record<string, unknown> | null): 
     return new Set(hints.filter(h => h?.sensitive === true && typeof h.key === 'string').map(h => h.key));
 }
 
-export interface InsertDraftInput {
+interface InsertDraftInput {
     name: string;
     transportType: 'stdio' | 'sse' | 'streamable-http';
     command?: string | null;
@@ -41,7 +41,7 @@ export interface InsertDraftInput {
     manifestMeta: Record<string, unknown>;
 }
 
-export interface ApproveInput {
+interface ApproveInput {
     id: string;
     userId: string;
     isAdmin: boolean;
@@ -49,7 +49,7 @@ export interface ApproveInput {
     enableImmediately?: boolean;
 }
 
-export interface McpServerRow {
+interface McpServerRow {
     id: string;
     name: string;
     transport_type: 'stdio' | 'sse' | 'streamable-http';

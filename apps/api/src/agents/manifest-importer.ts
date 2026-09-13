@@ -21,7 +21,7 @@ import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ManifestImporter');
 
-export interface ImportInput {
+interface ImportInput {
     manifest: SkillManifestFrontmatter;
     prompt_md: string;
     raw_yaml: string;
@@ -30,7 +30,7 @@ export interface ImportInput {
     isAdmin: boolean;
 }
 
-export interface ImportResult {
+interface ImportResult {
     skill_id: string;
     version: string;
     inserted: boolean;

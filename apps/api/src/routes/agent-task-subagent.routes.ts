@@ -24,9 +24,9 @@ export const agentTaskSubagentRouter = Router();
 const TERMINAL_TASK_STATUSES = new Set(['completed', 'failed', 'cancelled']);
 
 /** 서브에이전트 1개의 진행 상태. `interrupted` 는 부모가 끝났는데 마무리 기록이 없는 경우. */
-export type SubagentStatus = 'queued' | 'running' | 'completed' | 'failed' | 'interrupted';
+type SubagentStatus = 'queued' | 'running' | 'completed' | 'failed' | 'interrupted';
 
-export interface SubagentTraceView {
+interface SubagentTraceView {
     traceId: string;
     origin: string;
     subIndex: number;
@@ -84,5 +84,3 @@ agentTaskSubagentRouter.get('/:taskId/subagents', requireAuthOrApiKeyScope(API_K
     const rows = await new AgentTaskSubagentStepRepository(getUnifiedDatabase().getPool()).listByTask(req.params.taskId);
     res.json(success({ traces: groupSubagentSteps(rows, task.status) }));
 }));
-
-export default agentTaskSubagentRouter;

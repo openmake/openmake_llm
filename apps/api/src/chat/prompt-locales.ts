@@ -17,7 +17,7 @@ export function resolveBasePromptLang(lang: string): PromptLanguageCode {
     return 'en';
 }
 
-export interface EnhancedBasePromptText {
+interface EnhancedBasePromptText {
     currentDateLabel: string;
     knowledgeCutoffLabel: string;
     sessionIdLabel: string;
@@ -25,7 +25,7 @@ export interface EnhancedBasePromptText {
     instruction: string;
 }
 
-export const ENHANCED_BASE_PROMPT_TEXTS: Record<PromptLanguageCode, EnhancedBasePromptText> = {
+const ENHANCED_BASE_PROMPT_TEXTS: Record<PromptLanguageCode, EnhancedBasePromptText> = {
     ko: {
         currentDateLabel: '현재 날짜',
         knowledgeCutoffLabel: '지식 기준일',

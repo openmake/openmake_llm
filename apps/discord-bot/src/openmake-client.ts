@@ -15,7 +15,7 @@ interface ChatCompletionResponse {
     error?: { message?: string };
 }
 
-export interface ChatAnswer {
+interface ChatAnswer {
     content: string;
     artifacts: ResponseArtifact[];
 }

@@ -30,8 +30,6 @@ import {
     setSuggestionStatus as storeSetSuggestionStatus,
 } from './learning-suggestions-store';
 
-export type { PromptSuggestionRow };
-
 const logger = createLogger('AgentLearning');
 
 /**

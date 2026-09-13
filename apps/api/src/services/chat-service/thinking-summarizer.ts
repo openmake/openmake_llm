@@ -78,7 +78,7 @@ const PROGRESS_STEP_CHARS = parseInt(process.env.THINKING_SUMMARY_PROGRESS_STEP_
 /** 중간 요약 최소 간격 — 요약 호출 폭주 방지 */
 const PROGRESS_MIN_INTERVAL_MS = parseInt(process.env.THINKING_SUMMARY_PROGRESS_INTERVAL_MS || '7000', 10);
 
-export interface ThinkingSummarySession {
+interface ThinkingSummarySession {
     /** 생각 청크 누적 — 임계값 도달 시 진행형 중간 요약을 비동기 발행 */
     onThinking(chunk: string): void;
     /** 누적된 생각 원문 (영속화용) */

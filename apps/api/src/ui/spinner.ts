@@ -9,7 +9,7 @@
 
 import ora, { Ora } from 'ora';
 
-export class Spinner {
+class Spinner {
     private spinner: Ora;
 
     constructor(text: string = '처리 중...') {

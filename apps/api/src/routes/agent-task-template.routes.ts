@@ -108,5 +108,4 @@ router.post('/:id/instantiate', validateWithSecurity(instantiateTemplateSchema, 
     res.status(201).json(success({ taskId, goal, queued, executed: execute !== false }));
 }));
 
-export { router as agentTaskTemplateRouter };
 export default router;

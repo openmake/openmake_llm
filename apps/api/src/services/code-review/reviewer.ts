@@ -35,7 +35,7 @@ export interface ReviewFinding {
     confidence: number;
 }
 
-export interface CodeReviewResult {
+interface CodeReviewResult {
     summary: string;
     findings: ReviewFinding[];
     stats: { raw: number; droppedFalsePositive: number; droppedLowConfidence: number; kept: number };
@@ -135,7 +135,7 @@ export function postProcessReview(
     };
 }
 
-export interface ReviewInput {
+interface ReviewInput {
     code: string;
     language?: string;
     filename?: string;

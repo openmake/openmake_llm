@@ -131,7 +131,7 @@ export function getLocalModels(): LocalModelEntry[] {
  *   - `LLM_DEFAULT_MODEL` 이 발견 목록에 없으면 경고 — 기본 모델이 실체와 어긋난 신호
  * @returns 발견해 반영했으면 true
  */
-export async function discoverLocalModels(
+async function discoverLocalModels(
     llmBaseUrl: string,
     apiKey: string | undefined,
     timeoutMs: number = 5000,
@@ -183,25 +183,6 @@ export function getLocalChatModels(opts: { includeUnavailable?: boolean } = {}):
         if (opts.includeUnavailable) return true;
         return m.available !== false;
     });
-}
-
-/**
- * embedding 역할 모델 반환 — embed() 호출용.
- * @param opts.includeUnavailable true 면 available=false 모델도 포함
- */
-export function getLocalEmbeddingModels(opts: { includeUnavailable?: boolean } = {}): LocalModelEntry[] {
-    return getLocalModels().filter(m => {
-        if (m.role !== 'embedding') return false;
-        if (opts.includeUnavailable) return true;
-        return m.available !== false;
-    });
-}
-
-/**
- * 테스트 / 환경변수 핫 리로드용 — 캐시 초기화.
- */
-export function resetLocalModelsCache(): void {
-    _cached = null;
 }
 
 /**

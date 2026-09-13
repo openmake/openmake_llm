@@ -139,5 +139,4 @@ router.post('/native/unsubscribe', requireAuth, validate(nativePushUnsubscribeSc
     res.json(success({ message: 'iOS 푸시 토큰이 해제되었습니다.' }));
 }));
 
-export default router;
 export { router as pushRouter };

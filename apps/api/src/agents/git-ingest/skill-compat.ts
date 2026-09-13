@@ -24,14 +24,14 @@ import { SkillManifestFrontmatterSchema } from '../../schemas/skill-manifest.sch
 /** 이 프로젝트 스키마가 인식하는 frontmatter 키 (Zod shape 에서 파생 — 하드코딩 회피) */
 const KNOWN_SCHEMA_KEYS: ReadonlySet<string> = new Set(Object.keys(SkillManifestFrontmatterSchema.shape));
 
-export interface ToolMapping {
+interface ToolMapping {
     /** 원문 도구 이름 (Claude Code) */
     from: string;
     /** 이 환경의 등가 도구 (없으면 null) */
     to: string | null;
 }
 
-export interface SkillCompatResult {
+interface SkillCompatResult {
     /** 적응된 본문 (변경 없으면 원문 그대로) */
     content: string;
     /** 적응이 실제로 일어났는지 */
@@ -42,7 +42,7 @@ export interface SkillCompatResult {
     notes: string[];
 }
 
-export interface SkillCompatMeta {
+interface SkillCompatMeta {
     /** 스키마가 버리던 원문 frontmatter 필드 (추적·후속 마이그레이션용) */
     upstreamFrontmatter: Record<string, unknown>;
     /** 도구 이름 대응표 */

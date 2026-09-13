@@ -82,7 +82,7 @@ export function buildJudgeExecutionContext(
  * null=판정 불가(호출 실패/파싱 실패) → 호출자가 fail-open(완료 유지) 처리.
  */
 /** judge 판정 + 사유. `achieved: null` 은 판정 불가(fail-open). `raw` 는 파싱 실패 규명용 응답 앞부분 */
-export interface JudgeOutcome { achieved: boolean | null; reason: string; raw: string }
+interface JudgeOutcome { achieved: boolean | null; reason: string; raw: string }
 
 /**
  * judge 호출 — 판정과 **사유를 함께** 돌려준다.

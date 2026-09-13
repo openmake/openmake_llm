@@ -3,9 +3,9 @@
  * Vision Bridge Prompt — 첨부 이미지 → 텍스트 설명
  * ============================================================
  *
- * 역할 모델(텍스트 전용)이 비전을 지원하지 않을 때, 모달리티 `vision` 모델이
- * 첨부 이미지를 텍스트로 풀어 역할 모델에 넘기기 위한 system prompt.
- * 역할 모델을 바꿔치기하지 않는 설계의 핵심 — 설명은 "답변" 이 아니라 "관찰 기록" 이어야 한다.
+ * 오케스트레이터 `vision.describe` 실행기(services/orchestrator/executors/vision)가 배정 VLM 에 싣는
+ * system prompt. 채팅 모델을 바꿔치기하지 않는다 — 기록은 종합 단계의 근거로만 쓰이므로
+ * 설명은 "답변" 이 아니라 "관찰 기록" 이어야 한다.
  *
  * @module prompts/vision-bridge
  */
@@ -26,11 +26,4 @@ const EN = `You are an image observation recorder. Describe each attached image 
 
 export function getVisionBridgeSystemPrompt(lang: string): string {
     return lang === 'ko' ? KO : EN;
-}
-
-/** 역할 모델에 주입되는 설명 블록 헤더 — 사용자 발화가 아니라 보조 관찰 기록임을 명시 */
-export function getVisionBridgeNote(lang: string, fullId: string): string {
-    return lang === 'ko'
-        ? `[첨부 이미지 관찰 기록 — 현재 모델은 이미지를 직접 볼 수 없어 비전 모델(${fullId})이 텍스트로 옮겼습니다. 아래 기록을 근거로 답하세요.]`
-        : `[Attached image observations — the current model cannot see images, so a vision model (${fullId}) transcribed them. Answer based on the notes below.]`;
 }

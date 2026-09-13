@@ -22,12 +22,12 @@ import {
  * - embed: 사용자가 고를 일이 없는 인프라 값이라 관리자 전역 화면에만
  * - 분석 계열(audio/music/video.analyze)은 실행 경로가 없어 숨긴다. music.generate 는 사용자 요청으로 그룹을 두되 "현재 미지원" 배지
  */
-export interface CapabilityGroupDef {
+interface CapabilityGroupDef {
   id: string;
   members: readonly string[];
   adminOnly?: boolean;
 }
-export const CAPABILITY_GROUPS: readonly CapabilityGroupDef[] = [
+const CAPABILITY_GROUPS: readonly CapabilityGroupDef[] = [
   { id: "text", members: ["text.reason", "vision.describe", "vision.ocr"] },
   { id: "code", members: ["text.code"] },
   { id: "image", members: ["image.generate", "image.edit"] },
@@ -39,15 +39,15 @@ export const CAPABILITY_GROUPS: readonly CapabilityGroupDef[] = [
 /** 그룹 안에 두는 미지원 capability — 배정은 저장되지만 실행 경로가 없다(배지로 표시). 나머지 미지원은 숨긴다 */
 const GROUPED_UNSUPPORTED: ReadonlySet<string> = new Set(["music.generate"]);
 /** 그룹 select 의 "개별 설정" 표시값 — 하위 배정이 서로 다를 때 */
-export const MIXED_VALUE = "__mixed__";
+const MIXED_VALUE = "__mixed__";
 
-export interface ResolvedGroup {
+interface ResolvedGroup {
   id: string;
   members: string[];
 }
 
 /** 배정 가능 목록을 그룹으로 나눈다 — 어느 그룹에도 없는 capability 는 'other' 로 모아 잃어버리지 않는다 */
-export function resolveCapabilityGroups(assignable: readonly string[], admin: boolean): { groups: ResolvedGroup[]; hiddenUnsupported: string[] } {
+function resolveCapabilityGroups(assignable: readonly string[], admin: boolean): { groups: ResolvedGroup[]; hiddenUnsupported: string[] } {
   const visible = (c: string) => !UNSUPPORTED_CAPABILITIES.has(c) || GROUPED_UNSUPPORTED.has(c);
   const placed = new Set<string>();
   const groups: ResolvedGroup[] = [];
@@ -64,12 +64,12 @@ export function resolveCapabilityGroups(assignable: readonly string[], admin: bo
 }
 
 /** 그룹 select 표시값 — 전원 같은 배정이면 그 값, 전원 미배정이면 DEFAULT, 섞이면 MIXED */
-export function groupSelectValue(members: readonly string[], mapped: ReadonlyMap<string, string>): string {
+function groupSelectValue(members: readonly string[], mapped: ReadonlyMap<string, string>): string {
   const values = members.map((m) => mapped.get(m) ?? DEFAULT_VALUE);
   return values.every((v) => v === values[0]) ? values[0] : MIXED_VALUE;
 }
 
-export function capabilityLabel(t: ReturnType<typeof useTranslations>, capability: string): string {
+function capabilityLabel(t: ReturnType<typeof useTranslations>, capability: string): string {
   return t(`capabilities.${capability.replace(/\./g, "_")}`);
 }
 
@@ -107,7 +107,7 @@ function ModelSelect({ value, models, disabled, ariaLabel, t, mixed, onChange }:
   );
 }
 
-export interface CapabilityGroupsEditorProps {
+interface CapabilityGroupsEditorProps {
   t: ReturnType<typeof useTranslations>;
   admin?: boolean;
   capabilities: string[];

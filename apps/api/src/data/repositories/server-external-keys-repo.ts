@@ -14,7 +14,7 @@ import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('ServerExternalKeysRepo');
 
-export interface ServerExternalKeyRow {
+interface ServerExternalKeyRow {
     providerId: string;
     baseUrl: string | null;
     isActive: boolean;

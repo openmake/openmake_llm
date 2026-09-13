@@ -67,7 +67,7 @@ export interface ExternalApiKeyRow {
     updatedAt: Date;
 }
 
-export interface UpsertExternalApiKeyInput {
+interface UpsertExternalApiKeyInput {
     userId: string;
     providerId: string;
     sdkType: ExternalSdkType;

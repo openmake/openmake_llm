@@ -20,7 +20,7 @@ export function resolveUserId(req: Request): string | undefined {
     return 'userId' in req.user ? (req.user as { userId: string }).userId : req.user.id?.toString();
 }
 
-export function resolveAnonSessionId(req: Request): string | undefined {
+function resolveAnonSessionId(req: Request): string | undefined {
     const raw = req.query.anonSessionId ?? req.body?.anonSessionId ?? req.get('x-anon-session-id');
     return typeof raw === 'string' && raw.length > 0 ? raw : undefined;
 }

@@ -13,7 +13,7 @@
  * - GoogleUserInfo / GitHubUser / GitHubEmail: 소셜 로그인 사용자 정보
  */
 
-import { UserRole, PublicUser } from '../data/user-manager';
+import { UserRole } from '../data/user-manager';
 
 /**
  * JWT 토큰 페이로드 인터페이스
@@ -35,17 +35,6 @@ export interface JWTPayload {
     exp?: number;
     /** JWT ID - 블랙리스트 지원용 고유 식별자 */
     jti?: string;
-}
-
-/**
- * 인증된 Express 요청 확장 인터페이스
- * @interface AuthenticatedRequest
- */
-export interface AuthenticatedRequest {
-    /** 인증된 사용자 정보 */
-    user?: PublicUser;
-    /** 인증 토큰 문자열 */
-    token?: string;
 }
 
 // Auth request/response types -> services/AuthService.ts (RegisterRequest, LoginRequest, AuthResult)

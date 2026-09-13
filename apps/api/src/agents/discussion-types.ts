@@ -100,8 +100,6 @@ export interface DiscussionResult {
  * 토큰 제한 시 우선순위가 높은 컨텍스트가 더 많은 토큰을 할당받음
  */
 export interface ContextPriority {
-    /** 사용자 메모리 (개인화) - 기본 1순위 */
-    userMemory: number;
     /** 대화 히스토리 (맥락 유지) - 기본 2순위 */
     conversationHistory: number;
     /** 문서 컨텍스트 (참조 자료) - 기본 3순위 */
@@ -124,8 +122,6 @@ export interface TokenLimits {
     maxHistoryTokens: number;
     /** 웹 검색 최대 토큰 (기본: 1500) */
     maxWebSearchTokens: number;
-    /** 사용자 메모리 최대 토큰 (기본: 1000) */
-    maxMemoryTokens: number;
     /** 이미지 설명 최대 토큰 (기본: 500) */
     maxImageDescriptionTokens: number;
 }
@@ -146,8 +142,6 @@ export interface DiscussionConfig {
     documentContext?: string;
     /** 대화 히스토리 (이전 대화 맥락 유지) */
     conversationHistory?: Array<{ role: string; content: string }>;
-    /** 사용자 메모리 컨텍스트 (장기 기억, 선호도 등) */
-    userMemoryContext?: string;
     /** 웹 검색 결과 컨텍스트 */
     webSearchContext?: string;
     

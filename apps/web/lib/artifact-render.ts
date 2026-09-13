@@ -19,7 +19,7 @@ const CDN = {
 /** iframe 으로 라이브 렌더하는 kind 집합. 그 외는 앱 트리(code/표/markdown)에서 렌더. */
 const IFRAME_KINDS = new Set(["html", "svg", "mermaid", "chart", "react"]);
 
-export function isIframeKind(kind: string): boolean {
+function isIframeKind(kind: string): boolean {
   return IFRAME_KINDS.has(kind);
 }
 

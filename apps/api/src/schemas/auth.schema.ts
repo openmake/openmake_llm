@@ -64,9 +64,3 @@ export const changePasswordSchema = z.object({
     newPassword: z.string().min(8, '새 비밀번호는 8자 이상이어야 합니다')
 });
 
-/** 로그인 요청 TypeScript 타입 */
-export type LoginInput = z.infer<typeof loginSchema>;
-/** 회원가입 요청 TypeScript 타입 */
-export type RegisterInput = z.infer<typeof registerSchema>;
-/** 비밀번호 변경 요청 TypeScript 타입 */
-export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;

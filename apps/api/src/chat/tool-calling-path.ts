@@ -29,7 +29,7 @@ import type { ExecutionPlan } from './profile-resolver';
 type ToolCallingCallParams = Parameters<typeof processExternalToolCalling>[0];
 
 /** processChat 이 이미 확보한 컨텍스트 — 이 경로가 스스로 만들지 않는 값들. */
-export interface ToolCallingPathParams {
+interface ToolCallingPathParams {
     message: string;
     history?: ToolCallingCallParams['history'];
     images?: string[];

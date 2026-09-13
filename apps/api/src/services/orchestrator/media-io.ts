@@ -8,9 +8,9 @@ import { downloadProviderUrl } from './http-call';
 import { inferImageMime } from '../../utils/image-mime';
 import type { OrchestratorAttachment, TaskMedia } from './types';
 
-export interface LoadedMedia { bytes: Buffer; mime: string; name: string; dataUrl: string }
+interface LoadedMedia { bytes: Buffer; mime: string; name: string; dataUrl: string }
 
-export interface LoadOptions {
+interface LoadOptions {
     timeoutMs: number;
     signal?: AbortSignal;
     /** 바이트 상한 — 초과는 로드 전에(base64 길이·stat·content-length) 거부 */

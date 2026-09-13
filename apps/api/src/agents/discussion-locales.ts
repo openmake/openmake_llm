@@ -550,7 +550,6 @@ export const DISCUSSION_PROGRESS_MESSAGES: Record<PromptLocaleCode, {
  * discussion-context.ts에서 buildFullContext() 시 각 항목의 제목으로 사용
  */
 export const DISCUSSION_CONTEXT_LABELS: Record<PromptLocaleCode, {
-    userMemory: string;
     conversationHistory: string;
     document: string;
     webSearch: string;
@@ -559,7 +558,6 @@ export const DISCUSSION_CONTEXT_LABELS: Record<PromptLocaleCode, {
     middleOmitted: (charCount: number) => string;
 }> = {
     ko: {
-        userMemory: '💾 사용자 선호도/기억',
         conversationHistory: '💬 이전 대화 맥락',
         document: '📄 참조 문서',
         webSearch: '🔍 웹 검색 결과',
@@ -568,7 +566,6 @@ export const DISCUSSION_CONTEXT_LABELS: Record<PromptLocaleCode, {
         middleOmitted: (c) => `... [중간 ${c}자 생략] ...`,
     },
     en: {
-        userMemory: '💾 User Preferences/Memory',
         conversationHistory: '💬 Previous Conversation Context',
         document: '📄 Reference Document',
         webSearch: '🔍 Web Search Results',
@@ -577,7 +574,6 @@ export const DISCUSSION_CONTEXT_LABELS: Record<PromptLocaleCode, {
         middleOmitted: (c) => `... [${c} chars omitted] ...`,
     },
     ja: {
-        userMemory: '💾 ユーザー設定/記憶',
         conversationHistory: '💬 以前の会話コンテキスト',
         document: '📄 参照ドキュメント',
         webSearch: '🔍 Web検索結果',
@@ -586,7 +582,6 @@ export const DISCUSSION_CONTEXT_LABELS: Record<PromptLocaleCode, {
         middleOmitted: (c) => `... [${c}文字省略] ...`,
     },
     zh: {
-        userMemory: '💾 用户偏好/记忆',
         conversationHistory: '💬 之前的对话上下文',
         document: '📄 参考文档',
         webSearch: '🔍 网页搜索结果',
@@ -595,7 +590,6 @@ export const DISCUSSION_CONTEXT_LABELS: Record<PromptLocaleCode, {
         middleOmitted: (c) => `... [省略 ${c} 字] ...`,
     },
     es: {
-        userMemory: '💾 Preferencias/Memoria del usuario',
         conversationHistory: '💬 Contexto de conversación previa',
         document: '📄 Documento de referencia',
         webSearch: '🔍 Resultados de búsqueda web',
@@ -604,7 +598,6 @@ export const DISCUSSION_CONTEXT_LABELS: Record<PromptLocaleCode, {
         middleOmitted: (c) => `... [${c} caracteres omitidos] ...`,
     },
     de: {
-        userMemory: '💾 Benutzereinstellungen/Erinnerung',
         conversationHistory: '💬 Vorheriger Gesprächskontext',
         document: '📄 Referenzdokument',
         webSearch: '🔍 Websuchergebnisse',
@@ -613,7 +606,6 @@ export const DISCUSSION_CONTEXT_LABELS: Record<PromptLocaleCode, {
         middleOmitted: (c) => `... [${c} Zeichen ausgelassen] ...`,
     },
     fr: {
-        userMemory: '💾 Préférences/Mémoire utilisateur',
         conversationHistory: '💬 Contexte de conversation précédente',
         document: '📄 Document de référence',
         webSearch: '🔍 Résultats de recherche web',

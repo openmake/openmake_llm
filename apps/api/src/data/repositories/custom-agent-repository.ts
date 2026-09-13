@@ -37,7 +37,7 @@ export interface CustomAgentRow {
     updated_at: Date;
 }
 
-export interface InsertDraftInput {
+interface InsertDraftInput {
     name: string;
     description: string;
     systemPrompt: string;
@@ -50,7 +50,7 @@ export interface InsertDraftInput {
     manifestMeta: Record<string, unknown>;
 }
 
-export interface DraftListResult {
+interface DraftListResult {
     drafts: CustomAgentRow[];
     total: number;
     limit: number;

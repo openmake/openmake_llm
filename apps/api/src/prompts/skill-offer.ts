@@ -5,7 +5,7 @@
  */
 import { LOAD_SKILL_TOOL_NAME } from '../mcp/load-skill-tool';
 
-export interface SkillOfferItem {
+interface SkillOfferItem {
     name: string;
     description: string;
     chars: number;

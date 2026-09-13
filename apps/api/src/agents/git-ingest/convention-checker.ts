@@ -52,7 +52,7 @@ export interface ConventionFinding {
     source?: 'static' | 'llm';
 }
 
-export interface ConventionCheckResult {
+interface ConventionCheckResult {
     findings: ConventionFinding[];
     tokensUsed: number;
 }

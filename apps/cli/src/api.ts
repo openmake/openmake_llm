@@ -41,7 +41,7 @@ export interface ShareDocument {
     completedAt: string | null;
 }
 
-export interface ShareState {
+interface ShareState {
     shareId: string;
     visibility: 'private' | 'authenticated' | 'link';
     shareToken: string | null;
@@ -61,7 +61,7 @@ export interface SubagentTraceView {
     steps: { seq: number; type: string; tool: string | null; content: string | null; at: string }[];
 }
 
-export interface PendingApproval {
+interface PendingApproval {
     approvalId: string;
     taskId: string;
     toolName: string;

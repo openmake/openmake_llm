@@ -32,7 +32,7 @@ export interface CatalogSnapshot {
     plugins: Array<{ name: string; description?: string; version?: string; installable?: boolean; category?: string; description_ko?: string }>;
 }
 
-export interface CatalogSnapshotDeps {
+interface CatalogSnapshotDeps {
     fetcherFactory: (opts: { accessToken?: string }) => GitFetcher;
     /** .zip 아카이브 소스용 fetcher (ExtensionIngestService.makeArchiveFetcher 위임) */
     archiveFetcherFor: (url: string) => GitFetcher;

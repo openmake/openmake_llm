@@ -112,18 +112,18 @@ export interface ScrapeResult {
     links: string[];
 }
 
-export interface ScrapeOptions {
+interface ScrapeOptions {
     timeoutMs?: number;
     onlyMainContent?: boolean;
     signal?: AbortSignal;
 }
 
-export interface MapOptions {
+interface MapOptions {
     limit?: number;
     search?: string;
 }
 
-export interface CrawlOptions {
+interface CrawlOptions {
     maxDepth?: number;
     limit?: number;
     timeoutMs?: number;
@@ -566,22 +566,4 @@ export async function crawlSite(
     }
 
     return results;
-}
-
-// ============================================
-// 서킷 브레이커 상태 조회
-// ============================================
-
-export function getScraperCircuitStatus(): {
-    isOpen: boolean;
-    consecutiveFailures: number;
-    remainingResetMs: number;
-} {
-    return {
-        isOpen: circuitState.isOpen,
-        consecutiveFailures: circuitState.consecutiveFailures,
-        remainingResetMs: circuitState.isOpen
-            ? Math.max(0, CIRCUIT_BREAKER_RESET_MS - (Date.now() - circuitState.openedAt))
-            : 0,
-    };
 }

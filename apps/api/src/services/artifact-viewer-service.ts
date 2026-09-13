@@ -91,7 +91,7 @@ const VENDOR = {
  * 빌드 결과 — HTML 문자열 + 이 페이지가 react(unsafe-eval) 경로인지 여부.
  * react 는 nginx 의 완화 CSP location(/ra) 으로 서빙해야 하므로 분기 신호 반환.
  */
-export interface BuiltViewer {
+interface BuiltViewer {
     html: string;
     needsUnsafeEval: boolean;
 }
@@ -114,7 +114,7 @@ function resolveRenderKind(kind: string, lang: string | null): string {
  * - html  : 아티팩트 자체가 문서 → 인라인 스크립트 sha256 화이트리스트 + chrome 주입
  * - 그 외 : 우리 템플릿 + data island + vendored bootstrap('self') 렌더
  */
-export function buildViewerHtml(input: BuildInput): BuiltViewer {
+function buildViewerHtml(input: BuildInput): BuiltViewer {
     const renderKind = resolveRenderKind(input.kind, input.lang);
     if (renderKind === 'html') return buildHtmlKind(input);
     return buildTemplatedKind({ ...input, kind: renderKind });

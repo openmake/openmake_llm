@@ -16,7 +16,7 @@ import { LOCAL_BRIDGE } from '../../config/local-bridge';
 import { RemoteExecutor } from '../local-bridge/remote-executor';
 import type { AgentTaskRunInput } from './types';
 
-export interface ExecutorPlan {
+interface ExecutorPlan {
     sandboxCfg: TaskSandboxConfig;
     /** TaskRuntime 조립 여부 — docker 샌드박스 ON 이거나 로컬 실행기일 때. */
     runtimeEnabled: boolean;

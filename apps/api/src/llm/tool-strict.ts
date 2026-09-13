@@ -4,7 +4,7 @@ import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ToolStrict');
 
-export interface ToolStrictContext {
+interface ToolStrictContext {
     /** 외부 provider 클라이언트(quotaExempt) — OpenAI strict 규격이 달라 건너뛴다 */
     external?: boolean;
 }

@@ -23,19 +23,6 @@ import { createLogger } from '../utils/logger';
 import { SkillRepository, AGENT_PERSONA_SKILL_ID_PREFIX } from '../data/repositories/skill-repository';
 import type { Pool } from 'pg';
 
-// Re-export 인터페이스 (기존 사용처 호환)
-export type {
-    AgentSkill,
-    AgentSkillAssignment,
-    CreateSkillInput,
-    UpdateSkillInput,
-    SkillSearchOptions,
-    SkillSearchResult,
-    SkillStatus,
-    DraftListOptions,
-    DraftListResult,
-} from '../data/repositories/skill-repository';
-
 import type {
     AgentSkill,
     CreateSkillInput,

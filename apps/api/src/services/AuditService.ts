@@ -3,14 +3,14 @@ import { createLogger } from '../utils/logger';
 
 const logger = createLogger('AuditService');
 
-export type AuditLog = Record<string, unknown>;
+type AuditLog = Record<string, unknown>;
 
-export interface AuditStat {
+interface AuditStat {
     action: string;
     count: number;
 }
 
-export interface GetAuditLogsFilters {
+interface GetAuditLogsFilters {
     startDate?: string;
     endDate?: string;
     action?: string;
@@ -19,7 +19,7 @@ export interface GetAuditLogsFilters {
     offset?: number;
 }
 
-export interface CreateAuditLogInput {
+interface CreateAuditLogInput {
     action: string;
     userId?: string;
     resourceType?: string;

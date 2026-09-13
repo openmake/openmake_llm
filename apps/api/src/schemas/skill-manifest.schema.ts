@@ -44,5 +44,3 @@ export const SkillManifestFrontmatterSchema = z.object({
 });
 
 export type SkillManifestFrontmatter = z.infer<typeof SkillManifestFrontmatterSchema>;
-export type SkillToolBinding = z.infer<typeof ToolBindingSchema>;
-export type SkillMcpBundle = z.infer<typeof McpBundleSchema>;

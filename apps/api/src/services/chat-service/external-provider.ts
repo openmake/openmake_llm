@@ -25,7 +25,7 @@ import { isOrchestrationTool } from './orchestration-dispatch';
 import type { ChatMessageRequest } from '../chat-service-types';
 import type { ResolvedProvider } from '../../providers/provider-router';
 
-import { executeExternalTool, recordExternalUsageFireAndForget } from './external-tool-exec';
+import { recordExternalUsageFireAndForget } from './external-tool-exec';
 
 import { resolveModelCapabilities } from './model-capabilities';
 import { markModelUnusableFireAndForget } from './external-model-availability';
@@ -34,7 +34,7 @@ import { appendDeterministicBlocks } from './external-deterministic-append';
 const logger = createLogger('ChatExternalProvider');
 
 // 공개 타입은 external-provider-types 로 분리(600줄 CI 가드) — 기존 import 경로 호환 재노출.
-export type { ExternalProviderDeps, ChatTimings, StreamFromExternalContext } from './external-provider-types';
+export type { ExternalProviderDeps, StreamFromExternalContext } from './external-provider-types';
 import type { ExternalProviderDeps, ChatTimings, StreamFromExternalContext } from './external-provider-types';
 import { detectAnswerLanguageMismatch } from './tool-result-language';
 
@@ -166,17 +166,17 @@ export async function runExternalStream(
     const toolUseCounts = new Map<string, number>();
     /** 도구별 과다 사용 경고를 이미 넣었는지 (중복 주입 방지). */
     const warnedTools = new Set<string>();
-    // 도구 배치가 누적하는 값(이미지 생성 소요시간·호출 집계·결정적 첨부 블록)은
+    // 도구 배치가 누적하는 값(호출 집계·결정적 첨부 블록)은
     // external-tool-batch 가 소유한다 — 각 필드의 의미는 그 모듈의 ToolBatchState 참고.
     const state = createToolBatchState();
-    // 오케스트레이터 산출물(성공분만) — generate_image 결정적 첨부와 같은 경로로 누락 보정
-    if (ctx.orchestratorMedia?.length) state.generatedImageMarkdowns.push(...ctx.orchestratorMedia);
+    // 오케스트레이터 산출물(성공분만) — 모델이 최종 응답에서 빠뜨려도 결정적으로 첨부한다
+    if (ctx.orchestratorMedia?.length) state.generatedMediaMarkdowns.push(...ctx.orchestratorMedia);
 
 
     try {
         for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
-            // Wall-clock 예산 가드(이미지 생성 소요시간 공제) — 상세는 external-loop-guards.
-            if (!suppressTools && applyWallClockGuard({ startedAt, imageGenCreditMs: state.imageGenCreditMs, messages })) {
+            // Wall-clock 예산 가드 — 상세는 external-loop-guards.
+            if (!suppressTools && applyWallClockGuard({ startedAt, messages })) {
                 suppressTools = true;
             }
             const turnTools = suppressTools ? [] : tools;
@@ -381,12 +381,12 @@ export async function runExternalStream(
         ...(directCostUsdMicrosTotal !== undefined ? { directCostUsdMicros: directCostUsdMicrosTotal } : {}),
     });
 
-    // 도구 루프 중 수집한 블록(생성 이미지·카카오 지도·토론 출처·웹검색 출처·보고서)을 최종
+    // 도구 루프 중 수집한 블록(생성 미디어·카카오 지도·토론 출처·웹검색 출처·보고서)을 최종
     // 응답에 결정적으로 첨부 — 상세는 external-deterministic-append (LLM 의 도구/인용 지시 누락 보정).
     const finalContent = appendDeterministicBlocks({
         finalContent: result.content || '',
         onToken,
-        generatedImageMarkdowns: state.generatedImageMarkdowns,
+        generatedMediaMarkdowns: state.generatedMediaMarkdowns,
         kakaomapBlocks: state.kakaomapBlocks,
         discussionSourceBlocks: state.discussionSourceBlocks,
         odArtifact: state.odArtifact,
@@ -406,5 +406,3 @@ export async function runExternalStream(
     return finalContent;
 }
 
-// 도구 실행·사용량 기록은 external-tool-exec.ts 로 분리(600줄 CI 가드) — 기존 import 경로 호환 재노출.
-export { executeExternalTool, recordExternalUsageFireAndForget };

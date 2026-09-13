@@ -29,7 +29,7 @@ export type ToolErrorCategory =
     | 'execution'; // 그 외 일반 실행 오류
 
 /** 에러 분류 결과 */
-export interface ToolErrorClassification {
+interface ToolErrorClassification {
     /** 분류된 카테고리 */
     category: ToolErrorCategory;
     /** 일시적 장애로 재시도 시 해소될 수 있는가 (모델/상위 계층 판단 보조) */

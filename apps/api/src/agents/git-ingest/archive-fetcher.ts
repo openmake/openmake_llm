@@ -36,7 +36,7 @@ export function archivePseudoRepo(url: string): { owner: string; repo: string } 
     return { owner: 'archive', repo: hash };
 }
 
-export interface ArchiveFetcherLimits {
+interface ArchiveFetcherLimits {
     /** 압축 파일 자체 크기 상한 (bytes) */
     maxArchiveBytes: number;
     /** 엔트리 수 상한 */

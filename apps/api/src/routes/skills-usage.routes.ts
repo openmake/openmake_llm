@@ -35,5 +35,4 @@ router.get('/usage/summary', requireAuth, validateQuery(summaryQuerySchema), asy
     res.json(success({ days, enabled: SKILL_USAGE_LOG.enabled, skills: rows }));
 }));
 
-export { router as skillsUsageRouter };
 export default router;

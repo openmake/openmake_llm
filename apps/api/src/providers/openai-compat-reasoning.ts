@@ -19,7 +19,7 @@ import { normalizeEffort, type ReasoningEffort } from '../config/reasoning-effor
 
 /** 외부 provider 로 보낼 추론 강도 파라미터 (없으면 빈 객체 — 기존 요청과 동일) */
 /** IProvider ChatOptions.thinking 과 동일 형태 */
-export type ProviderThinkingOption = boolean | ReasoningEffort | { budget: number };
+type ProviderThinkingOption = boolean | ReasoningEffort | { budget: number };
 
 export function buildReasoningEffortParams(
     thinking: ProviderThinkingOption | undefined,

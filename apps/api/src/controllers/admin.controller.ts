@@ -28,7 +28,7 @@ const log = createLogger('AdminController');
  * - 사용자 삭제
  * - 모든 API는 인증 + 관리자 권한 필수
  */
-export class AdminController {
+class AdminController {
     /** Express 라우터 인스턴스 */
     private router: Router;
 

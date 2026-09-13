@@ -27,7 +27,7 @@ import { MODEL_PROBE } from '../config/model-defaults';
 
 const logger = createLogger('ModelAvailabilityProbe');
 
-export interface ProbeResult {
+interface ProbeResult {
     providerId: string;
     total: number;
     usable: number;

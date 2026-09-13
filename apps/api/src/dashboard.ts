@@ -33,4 +33,3 @@ export function createDashboardServer(options?: DashboardOptions): DashboardServ
     return new DashboardServer(options);
 }
 
-export { DashboardServer };

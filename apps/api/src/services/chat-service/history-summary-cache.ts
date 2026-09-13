@@ -16,7 +16,7 @@ import { CACHE_CONFIG } from '../../config/runtime-limits';
 
 const logger = createLogger('HistorySummaryCache');
 
-export interface CachedSummaryMessage {
+interface CachedSummaryMessage {
     role: string;
     content: string;
     images?: string[];

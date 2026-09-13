@@ -7,7 +7,6 @@ import { CircuitBreaker, CircuitBreakerRegistry } from '../cluster/circuit-break
 import { CircuitOpenError } from '../errors/circuit-open.error';
 
 // CircuitBreakerRegistry 싱글톤 격리
-const _registryInstance: CircuitBreakerRegistry | null = null;
 function freshRegistry(): CircuitBreakerRegistry {
     // 싱글톤을 우회하기 위해 private static을 리셋
     (CircuitBreakerRegistry as unknown as { instance: CircuitBreakerRegistry | undefined }).instance = undefined;
