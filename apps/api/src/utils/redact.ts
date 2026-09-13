@@ -55,7 +55,7 @@ const WORKTREE_RE = /(?:^|\/)?\.openmake\/worktrees\/[0-9a-f-]{8,}\//g;
  */
 const ABS_PATH_RE = /(?<![\w~:/])\/(?:[\w.@+-]+\/){2,}([\w.@+-]+)/g;
 
-export interface RedactOptions {
+interface RedactOptions {
     /** 이 경로 이하를 상대경로로 만든다(레포/워크스페이스 루트). 없으면 생략. */
     rootPath?: string | null;
 }

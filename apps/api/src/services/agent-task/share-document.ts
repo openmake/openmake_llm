@@ -87,7 +87,7 @@ export interface ShareArtifact {
     viewerId?: string;
 }
 
-export interface BuildShareOptions {
+interface BuildShareOptions {
     includeSteps?: boolean;
     includeDiff?: boolean;
     includeArtifacts?: boolean;

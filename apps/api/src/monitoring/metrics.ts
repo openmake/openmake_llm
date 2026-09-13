@@ -20,29 +20,11 @@ import { EventEmitter } from 'events';
 import { CAPACITY } from '../config/runtime-limits';
 
 /**
- * 개별 메트릭 데이터 포인트 인터페이스
- *
- * @interface Metric
- */
-export interface Metric {
-    /** 메트릭 이름 (예: 'response_time_ms', 'tokens_used') */
-    name: string;
-    /** 메트릭 값 */
-    value: number;
-    /** 측정 단위 (예: 'ms', 'count', 'bytes') */
-    unit: string;
-    /** 기록 시점의 타임스탬프 */
-    timestamp: Date;
-    /** 메트릭 분류 라벨 (예: { model: 'gpt-4' }) */
-    labels?: Record<string, string>;
-}
-
-/**
  * 히스토그램 통계 결과 인터페이스
  *
  * @interface MetricStats
  */
-export interface MetricStats {
+interface MetricStats {
     /** 샘플 수 */
     count: number;
     /** 값의 합계 */
@@ -66,7 +48,7 @@ export interface MetricStats {
  *
  * @interface ChatMetrics
  */
-export interface ChatMetrics {
+interface ChatMetrics {
     /** 총 요청 수 */
     totalRequests: number;
     /** 성공한 요청 수 */
@@ -86,7 +68,7 @@ export interface ChatMetrics {
  *
  * @interface SystemMetrics
  */
-export interface SystemMetrics {
+interface SystemMetrics {
     /** 서버 가동 시간 (초) */
     uptime: number;
     /** Node.js 메모리 사용량 (heap, rss, external 등) */

@@ -354,14 +354,3 @@ export function getUnifiedMCPClient(): UnifiedMCPClient {
     return unifiedClient;
 }
 
-/**
- * 새 UnifiedMCPClient 인스턴스 생성
- *
- * 싱글톤이 아닌 독립 인스턴스가 필요한 경우 사용합니다.
- * 주로 테스트에서 사용됩니다.
- *
- * @returns 새 UnifiedMCPClient 인스턴스
- */
-export function createUnifiedMCPClient(): UnifiedMCPClient {
-    return new UnifiedMCPClient();
-}

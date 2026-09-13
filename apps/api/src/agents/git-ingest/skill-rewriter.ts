@@ -26,7 +26,7 @@ import {
 
 const logger = createLogger('SkillRewriter');
 
-export interface SkillRewriteProposal {
+interface SkillRewriteProposal {
     /** 제안된 전체 본문 */
     content: string;
     /** 무엇을 왜 바꿨는지 (사용자에게 보여줄 요약) */

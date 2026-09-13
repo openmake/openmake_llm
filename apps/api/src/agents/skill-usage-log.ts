@@ -23,10 +23,10 @@ import { SKILL_USAGE_LOG } from '../config/constants';
 
 const logger = createLogger('SkillUsageLog');
 
-export type SkillUsageKind = 'slash' | 'load_skill' | 'inject' | 'skill_run';
-export type SkillUsageStatus = 'ok' | 'error' | 'denied';
+type SkillUsageKind = 'slash' | 'load_skill' | 'inject' | 'skill_run';
+type SkillUsageStatus = 'ok' | 'error' | 'denied';
 
-export interface SkillUsageEvent {
+interface SkillUsageEvent {
     skillId: string;
     kind: SkillUsageKind;
     userId?: string | null;
@@ -77,7 +77,7 @@ async function insertRows(rows: SkillUsageEvent[]): Promise<void> {
     );
 }
 
-export interface SkillUsageSummaryRow {
+interface SkillUsageSummaryRow {
     skillId: string;
     name: string | null;
     status: string | null;

@@ -50,20 +50,9 @@ export interface ClusterStats {
     uniqueModels: string[];
 }
 
-export interface InferenceRequest {
-    id: string;
-    model: string;
-    prompt: string;
-    options?: Record<string, unknown>;
-    timestamp: Date;
-}
 
-export interface NodeMessage {
-    type: 'heartbeat' | 'discover' | 'announce' | 'status';
-    nodeId: string;
-    payload: unknown;
-    timestamp: number;
-}
+
+
 
 // 이벤트 타입
 export type ClusterEvent =

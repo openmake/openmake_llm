@@ -31,7 +31,7 @@ import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('Orchestrator');
 
-export interface OrchestratorOutcome {
+interface OrchestratorOutcome {
     mode: 'simple' | 'executed' | 'fallback' | 'cancelled';
     /** executed: 종합 모델에 넘길 작업 결과 블록 / fallback: 미실행 노트 */
     contextBlock?: string;
@@ -173,7 +173,7 @@ export function recordUsage(userId: string | undefined, results: TaskResult[], t
     if (localTokens > 0) void recordUserUsage(userId, localTokens, now).catch(() => undefined);
 }
 
-export interface RunOrchestratorInput {
+interface RunOrchestratorInput {
     req: ChatMessageRequest;
     lang: string;
     userId?: string;

@@ -12,13 +12,13 @@
 import { buildSkillOfferBlock } from '../prompts/skill-offer';
 import { SKILL_CATALOG_DESC_MAX } from './skill-catalog';
 
-export interface PlanRow {
+interface PlanRow {
     id: string;
     assigned_to: string;
     prompt_md: string;
 }
 
-export interface ManifestInjectionPlan<T extends PlanRow> {
+interface ManifestInjectionPlan<T extends PlanRow> {
     /** 본문을 싣는 행 — prompt_md 는 개별 상한으로 잘린 값 */
     injected: T[];
     /** 결정적 규칙에서 합계 상한에 밀린 행 */
@@ -28,7 +28,7 @@ export interface ManifestInjectionPlan<T extends PlanRow> {
     injectedChars: number;
 }
 
-export interface PlanOptions<T extends PlanRow> {
+interface PlanOptions<T extends PlanRow> {
     maxChars: number;
     perSkillMaxChars: number;
     /** 모델이 load_skill 로 불러올 수 있을 때만 true — 아니면 종전 결정적 규칙 */

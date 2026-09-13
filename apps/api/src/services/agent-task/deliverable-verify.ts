@@ -31,7 +31,7 @@ const LANG_CHECKS: Record<string, LangCheck> = {
     mjs: jsCheck('mjs'), cjs: jsCheck('cjs'),
 };
 
-export interface VerifyResult {
+interface VerifyResult {
     /** 모든 검사 대상이 통과했거나 검사 대상이 없으면 true. */
     ok: boolean;
     /** 실패 시 LLM 에 전달할 오류 리포트(언어·제목·stderr). ok=true 면 빈 문자열. */

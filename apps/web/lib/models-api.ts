@@ -11,16 +11,16 @@ export interface ModelEntry {
   capabilities?: Record<string, unknown>;
 }
 
-export interface ModelsPayload {
+interface ModelsPayload {
   defaultModel: string;
   models: ModelEntry[];
-  /** 이미지 생성 모델 (IMAGE_GEN_MODEL). 채팅 모델 아님 — generate_image 도구 전용. 미설정 시 null. */
+  /** 기능별 배정 `image.generate` 의 해석 결과(fullId). 채팅 모델 아님. 미배정·해석 실패 시 null. */
   imageModel?: string | null;
 }
 
 /**
  * GET /api/models — 로컬 vLLM 모델 + 인증 사용자가 등록한 외부 LLM(OpenRouter 등 openai-compatible)
- * provider 의 모델을 합산한 통합 목록. (legacy models-api.js 대응)
+ * provider 의 모델을 합산한 통합 목록.
  */
 export async function fetchModels(opts?: { usableOnly?: boolean; chatOnly?: boolean }): Promise<ModelsPayload> {
   // usableOnly: 채팅 불가(임베딩/이미지)·20B 이하 제외 — 역할/에이전트 모델 배정 드롭다운.

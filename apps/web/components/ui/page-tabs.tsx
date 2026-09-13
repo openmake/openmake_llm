@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-export interface PageTab {
+interface PageTab {
   /** 이동할 라우트 (기존 표준 라우트 유지 — 탭은 라우트 간 링크) */
   href: string;
   label: string;

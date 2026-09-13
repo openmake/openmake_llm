@@ -49,7 +49,7 @@ function levenshtein(a: string, b: string): number {
     return prev[b.length];
 }
 
-export interface SuggestToolNamesOpts {
+interface SuggestToolNamesOpts {
     maxSuggestions?: number;
     maxDistance?: number;
 }

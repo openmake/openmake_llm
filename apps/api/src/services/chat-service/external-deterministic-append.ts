@@ -102,13 +102,13 @@ export function mapHtmlWasCleaned(streamed: string, final: string): boolean {
     return stripHallucinatedMapHtml(streamed).removed > 0 && stripHallucinatedMapHtml(final).removed === 0;
 }
 
-export interface DeterministicAppendInput {
+interface DeterministicAppendInput {
     /** 모델이 만든 최종 본문 (이미 라이브 스트리밍된 텍스트). */
     finalContent: string;
     /** 라이브 스트림 콜백 — 첨부분을 프론트에 밀어낸다. */
     onToken: (token: string, thinking?: string) => void;
-    /** generate_image 결과의 이미지 마크다운. */
-    generatedImageMarkdowns: string[];
+    /** 오케스트레이터 산출물(이미지·영상·음성)의 미디어 마크다운. */
+    generatedMediaMarkdowns: string[];
     /** search-places 도구가 동봉한 ```kakaomap 블록. */
     kakaomapBlocks: string[];
     /** start_discussion 출처 블록. */
@@ -170,26 +170,26 @@ export function captureOdArtifactHtml(
  * 수집된 블록을 최종 응답에 결정적으로 첨부하고 갱신된 본문을 반환한다.
  */
 export function appendDeterministicBlocks(input: DeterministicAppendInput): string {
-    const { onToken, generatedImageMarkdowns, kakaomapBlocks, discussionSourceBlocks, req, ctx } = input;
+    const { onToken, generatedMediaMarkdowns, kakaomapBlocks, discussionSourceBlocks, req, ctx } = input;
     let finalContent = input.finalContent;
 
-    // generate_image 가 성공했으나 LLM 이 최종 응답에 이미지 마크다운을 누락한 경우 결정적 첨부.
-    // (qwen 등 로컬 모델이 도구 지시를 따르지 않아 생성 이미지가 채팅에 표시 안 되던 문제 보정.
-    //  onToken = 라이브 스트림, 반환값 = 저장 히스토리 — 양쪽에 반영해 reload 후에도 유지.)
-    const missingImages = generatedImageMarkdowns.filter((md) => {
+    // 생성 미디어 마크다운을 LLM 이 최종 응답에서 누락한 경우 결정적 첨부 — 미디어 링크는 모델 본문이
+    // 아니라 이 첨부가 SoT 다. (onToken = 라이브 스트림, 반환값 = 저장 히스토리 — 양쪽에 반영해
+    // reload 후에도 유지.)
+    const missingMedia = generatedMediaMarkdowns.filter((md) => {
         const pathMatch = md.match(/\(([^)]+)\)/);
         return !pathMatch || !finalContent.includes(pathMatch[1]);
     });
-    if (missingImages.length > 0) {
-        const appended = (finalContent.trim() ? '\n\n' : '') + missingImages.join('\n\n');
+    if (missingMedia.length > 0) {
+        const appended = (finalContent.trim() ? '\n\n' : '') + missingMedia.join('\n\n');
         onToken(appended, undefined);
         finalContent += appended;
-        logger.info(`🖼️ 생성 이미지 ${missingImages.length}개 자동 첨부 (LLM 응답 누락 보정)`);
+        logger.info(`🖼️ 생성 미디어 ${missingMedia.length}개 자동 첨부 (LLM 응답 누락 보정)`);
     }
 
     // 생성 파일 링크 환각 제거 — 이번 턴 생성분도 아니고 디스크에도 없는 /generated/ 링크(모델이 파일명을
     // 지어낸 경우). 저장 히스토리(반환값)가 대상. 화면은 아래 지도 환각과 같이 done.cleanedContent 교체.
-    const produced = new Set(generatedImageMarkdowns.map((md) => md.match(/\(([^)]+)\)/)?.[1]).filter((p): p is string => !!p));
+    const produced = new Set(generatedMediaMarkdowns.map((md) => md.match(/\(([^)]+)\)/)?.[1]).filter((p): p is string => !!p));
     const linkStrip = stripMissingGeneratedLinks(finalContent, produced, undefined, ctx.resolvedLanguage || req.userLanguagePreference || 'ko');
     if (linkStrip.removed.length > 0) {
         finalContent = linkStrip.content;

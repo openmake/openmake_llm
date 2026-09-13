@@ -46,7 +46,7 @@ const KNOWN_FULLID_PREFIXES: readonly string[] = [
     'bai',
 ];
 
-export interface ProviderGateInput {
+interface ProviderGateInput {
     /** 사용자가 명시한 모델 ID (executionPlan.requestedModel) — undefined면 fallback 사용 */
     requestedModel?: string;
     /** 클러스터가 할당한 기본 LLMClient 모델 — requestedModel 미지정 시 사용 */

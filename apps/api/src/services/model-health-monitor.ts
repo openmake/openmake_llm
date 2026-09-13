@@ -12,7 +12,7 @@ import { createLogger } from '../utils/logger';
 const logger = createLogger('ModelHealthMonitor');
 
 /** 개별 ping 결과 */
-export interface ModelHealthResult {
+interface ModelHealthResult {
     model: string;
     keyIndex: number;
     ok: boolean;
@@ -22,7 +22,7 @@ export interface ModelHealthResult {
 }
 
 /** 모델별 요약 */
-export interface ModelHealthSummary {
+interface ModelHealthSummary {
     model: string;
     healthy: boolean;
     okCount: number;
@@ -32,7 +32,7 @@ export interface ModelHealthSummary {
 }
 
 /** 스냅샷 */
-export interface HealthSnapshot {
+interface HealthSnapshot {
     checkedAt: string;
     totalDurationMs: number;
     mode: 'single-key' | 'full-matrix';
@@ -45,12 +45,7 @@ export interface HealthSnapshot {
     raw: ModelHealthResult[];
 }
 
-/** 로컬 모델 환경에서는 항상 빈 목록 반환 */
-export function collectConfiguredCloudModels(): string[] {
-    return [];
-}
-
-export class ModelHealthMonitor {
+class ModelHealthMonitor {
     getSnapshot(): HealthSnapshot | null {
         return null;
     }
@@ -89,12 +84,3 @@ export function getModelHealthMonitor(): ModelHealthMonitor {
     return instance;
 }
 
-/**
- * 서킷 브레이커 스텁 — 로컬 모델은 항상 건전하므로 요청 모델을 그대로 반환합니다.
- */
-export function applyHealthCircuitBreaker(
-    requested: string,
-    _fallbackCandidates: string[] = [],
-): string {
-    return requested;
-}

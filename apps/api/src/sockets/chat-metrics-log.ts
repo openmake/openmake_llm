@@ -8,7 +8,7 @@
  */
 import type { createLogger } from '../utils/logger';
 
-export interface ChatSuccessMetrics {
+interface ChatSuccessMetrics {
     /**
      * 실제로 답한 모델 — 요청 모델이 아니다(외부 provider 폴백 시 갈린다).
      * 모델 미지정 요청(자동 선택)에서 undefined 가 될 수 있어 기존 표기를 그대로 둔다.

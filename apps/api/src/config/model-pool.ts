@@ -93,7 +93,7 @@ export function resolveEffectiveContext(modelId?: string): number {
 }
 
 /** 마진 적용 전 컨텍스트(진단·로그용). */
-export function resolveNominalContext(modelId?: string): number {
+function resolveNominalContext(modelId?: string): number {
     if (ctxExplicit) return defaultCtx;
     if (modelId) {
         // 순환 import 방지를 위해 지연 로드 (local-models 는 config 계층 내부 모듈).

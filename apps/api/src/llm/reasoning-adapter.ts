@@ -19,7 +19,7 @@ import type { ThinkOption } from './types';
  * `true`(단계 미지정)는 '높음' 의도로 보고 'high' 로 해석하되, 최종값은 호출부가
  * modelId 로 정규화한다 — 모델마다 받는 값이 다르다(qwen3.8 은 high 를 400 거절).
  */
-export function thinkToReasoningEffort(t: ThinkOption | undefined): ReasoningEffort | undefined {
+function thinkToReasoningEffort(t: ThinkOption | undefined): ReasoningEffort | undefined {
     if (t === undefined || t === false) return undefined;
     if (t === true) return 'high';
     return t;

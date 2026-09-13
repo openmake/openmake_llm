@@ -43,7 +43,7 @@ interface CacheStats {
 /**
  * 통합 캐시 시스템
  */
-export class CacheSystem {
+class CacheSystem {
     // 쿼리 응답 캐시 (자주 사용되는 질문에 대한 응답)
     private queryCache: LRUCache<string, CachedResponse>;
 

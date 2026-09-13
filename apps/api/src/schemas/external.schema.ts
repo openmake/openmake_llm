@@ -64,9 +64,3 @@ export const addExternalFileSchema = z.object({
     cachedContent: z.string().max(1_000_000).optional(),
 });
 
-/** 외부 연결 생성 요청 TypeScript 타입 */
-export type CreateExternalConnectionInput = z.infer<typeof createExternalConnectionSchema>;
-/** 토큰 갱신 요청 TypeScript 타입 */
-export type UpdateExternalTokensInput = z.infer<typeof updateExternalTokensSchema>;
-/** 외부 파일 캐시 저장 요청 TypeScript 타입 */
-export type AddExternalFileInput = z.infer<typeof addExternalFileSchema>;

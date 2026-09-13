@@ -22,7 +22,7 @@ import type { ChatMessage } from '../llm/types';
 
 const logger = createLogger('SkillCreator');
 
-export interface CreateInput {
+interface CreateInput {
     userId: string;
     isAdmin: boolean;
     purpose: string;
@@ -34,7 +34,7 @@ export interface CreateInput {
     model?: string;
 }
 
-export interface ManifestMeta {
+interface ManifestMeta {
     version: '1.0';
     source: 'auto-llm';
     model: string;
@@ -47,7 +47,7 @@ export interface ManifestMeta {
     tokensUsed: number;
 }
 
-export interface CreateResult {
+interface CreateResult {
     skillId: string;
     name: string;
     description: string;
@@ -63,7 +63,7 @@ export interface CreateResult {
     deduped: boolean;
 }
 
-export interface SkillCreatorOptions {
+interface SkillCreatorOptions {
     pool: Pool;
     /**
      * Factory creates a per-request LLMClient (per-request 생성 — 글로벌 singleton 금지).

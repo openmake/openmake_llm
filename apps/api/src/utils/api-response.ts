@@ -30,14 +30,13 @@ import { objectParticle } from './korean-particle';
  * ```
  */
 
-// 프론트(apps/web) ↔ 백엔드 공통 응답 계약 — 아래 ApiSuccessResponse 와 동일 구조이며,
-// @openmake/shared-types 로 양쪽이 같은 타입을 공유한다(API 계약 강제).
-export type { ApiResponse, ApiSuccess, ApiFailure, ApiMeta } from "@openmake/shared-types";
+// 프론트(apps/web) ↔ 백엔드 공통 응답 계약 — 프론트는 @openmake/shared-types 의 ApiSuccess 를 쓰고,
+// 백엔드는 아래 같은 구조를 로컬로 둔다(실응답 일치는 __tests__/contracts 계약 테스트가 검증).
 
 // ===== Type Definitions =====
 
 /** 표준 API 성공 응답 (@openmake/shared-types ApiSuccess 와 동일 구조) */
-export interface ApiSuccessResponse<T = unknown> {
+interface ApiSuccessResponse<T = unknown> {
     success: true;
     data: T;
     meta?: ResponseMeta;
@@ -61,7 +60,7 @@ export interface ResponseMeta {
 }
 
 /** 페이지네이션 정보 */
-export interface PaginationMeta {
+interface PaginationMeta {
     page: number;
     pageSize: number;
     total: number;
@@ -71,7 +70,7 @@ export interface PaginationMeta {
 }
 
 /** 페이지네이션 포함 응답 */
-export interface PaginatedResponse<T> extends ApiSuccessResponse<T[]> {
+interface PaginatedResponse<T> extends ApiSuccessResponse<T[]> {
     pagination: PaginationMeta;
 }
 

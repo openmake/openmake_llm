@@ -20,7 +20,7 @@ import { validate } from '../middlewares/validation';
 import { getPool } from '../data/models/unified-database';
 import { CapabilityModelsRepository } from '../data/repositories/capability-models-repo';
 import {
-    CAPABILITIES, CAPABILITY_LIMITS, ASSIGNABLE_CAPABILITIES,
+    CAPABILITY_LIMITS, ASSIGNABLE_CAPABILITIES,
     normalizeCapability, sanitizeCapabilityParams, type Capability,
 } from '../config/capabilities';
 import {

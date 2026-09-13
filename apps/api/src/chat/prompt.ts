@@ -34,10 +34,7 @@ import {
 import { resolvePromptLocale } from './language-policy';
 import { resolveBasePromptLang, buildBasePrompt, IDENTITY_GUARD_TEXTS, RESPONSE_DISCIPLINE_TEXTS, UNTRUSTED_CONTENT_GUARD_TEXTS } from './prompt-locales';
 import type { PromptLanguageCode } from './prompt-locales';
-export type { PromptLanguageCode } from './prompt-locales';
 
-// Re-export from prompt-templates (values + types separated)
-export type { PromptType } from './prompt-templates';
 import { detectPromptType } from './prompt-templates';
 import { getLocalizedSystemPrompt } from './prompt-templates';
 import type { PromptType } from './prompt-templates';
@@ -57,7 +54,7 @@ import type { PromptType } from './prompt-templates';
  * @returns 공통 기반 시스템 프롬프트 문자열 (metadata + system_rules + instruction 섹션)
  */
 
-export function getEnhancedBasePrompt(userLanguage: string = 'en'): string {
+function getEnhancedBasePrompt(userLanguage: string = 'en'): string {
     const lang = resolveBasePromptLang(userLanguage);
     const metadata = createDynamicMetadata('', 'en');
     return buildBasePrompt(lang, metadata);
@@ -129,7 +126,7 @@ function getUntrustedContentGuard(userLanguage: string): string {
  * @param includeBase - 공통 기반 프롬프트 포함 여부 (기본: true)
  * @returns 조합된 시스템 프롬프트 문자열
  */
-export function buildSystemPrompt(type: PromptType = 'assistant', includeBase: boolean = true, userLanguage: string = 'en'): string {
+function buildSystemPrompt(type: PromptType = 'assistant', includeBase: boolean = true, userLanguage: string = 'en'): string {
     // Use language-aware prompt builders for supported types
     const promptLocale = resolvePromptLocale(userLanguage);
     if (includeBase) {
@@ -164,7 +161,7 @@ ${getLocalizedSystemPrompt(type, userLanguage)}`;
  * @param type - 프롬프트 역할 유형 (기본: 'assistant')
  * @returns 전체 시스템 프롬프트
  */
-export function getSystemPrompt(type: PromptType = 'assistant', userLanguage: string = 'en'): string {
+function getSystemPrompt(type: PromptType = 'assistant', userLanguage: string = 'en'): string {
     return buildSystemPrompt(type, true, userLanguage);
 }
 
@@ -175,7 +172,7 @@ export function getSystemPrompt(type: PromptType = 'assistant', userLanguage: st
  * @param type - 프롬프트 역할 유형
  * @returns 역할에 최적화된 ModelOptions
  */
-export function getPresetForPromptType(type: PromptType): ModelOptions {
+function getPresetForPromptType(type: PromptType): ModelOptions {
     return PROMPT_TYPE_PRESETS[type] || PROMPT_TYPE_PRESETS['assistant'];
 }
 
@@ -186,7 +183,7 @@ export function getPresetForPromptType(type: PromptType): ModelOptions {
  * @param type - 프롬프트 역할 유형
  * @returns Thinking 모드 활성화 여부
  */
-export function shouldUseThinking(type: PromptType): boolean {
+function shouldUseThinking(type: PromptType): boolean {
     return ['reasoning', 'reviewer'].includes(type);
 }
 
@@ -234,7 +231,7 @@ function getRoleLabel(userLanguage: string = 'en'): string {
  * @param userLanguage - 사용자 언어 코드
  * @returns 역할에 대한 언어별 설명 문자열
  */
-export function getPromptTypeDescription(type: PromptType, userLanguage: string = 'en'): string {
+function getPromptTypeDescription(type: PromptType, userLanguage: string = 'en'): string {
     const descriptions: Record<PromptLanguageCode, Record<PromptType, string>> = {
         ko: {
             assistant: '기본 어시스턴트 - 일반 대화 및 질문 답변',

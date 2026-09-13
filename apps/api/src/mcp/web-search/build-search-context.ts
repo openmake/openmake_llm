@@ -29,7 +29,7 @@ import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('WebSearchContext');
 
-export interface BuildWebSearchContextResult {
+interface BuildWebSearchContextResult {
     /** system 채널에 주입할 웹검색 컨텍스트 문자열 (없으면 ''). */
     webSearchContext: string;
     /** 시사 질의로 감지되었는지 여부. */

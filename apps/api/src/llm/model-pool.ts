@@ -21,7 +21,7 @@ const SAFETY_BUFFER = 256;
 
 const logger = createLogger('ModelPool');
 
-export interface ModelPoolDecision {
+interface ModelPoolDecision {
     /** 사용할 model ID (LLMClient.chat 에 body.model 로 전달) */
     model: string;
     /** 결정 소스 */

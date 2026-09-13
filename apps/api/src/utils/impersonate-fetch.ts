@@ -71,7 +71,7 @@ except Exception as e:
     print(json.dumps({"error": str(e)[:300]}))
 `;
 
-export interface ImpersonateResult {
+interface ImpersonateResult {
     status: number;
     body: string;
 }

@@ -23,7 +23,7 @@ function carriesImages(m: ChatMessage): boolean {
     return (m.role === 'user' || m.role === 'system') && Array.isArray(m.images) && m.images.length > 0;
 }
 
-export interface PromptImageCapResult {
+interface PromptImageCapResult {
     messages: ChatMessage[];
     /** 요청 전체 이미지 수 (캡 적용 전) */
     total: number;

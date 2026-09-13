@@ -15,7 +15,7 @@
 import { BaseRepository } from './base-repository';
 
 /** 도구 단위 집계 행 — 분모(calls) 포함이 이 지표의 존재 이유. */
-export interface ToolHealthRow {
+interface ToolHealthRow {
     tool: string;
     server: string | null;
     calls: string;
@@ -25,14 +25,14 @@ export interface ToolHealthRow {
 }
 
 /** 도구 × 실패 카테고리 건수 — 원인별 분해(도구가 고장인지 모델이 틀린 것인지). */
-export interface ToolErrorCategoryRow {
+interface ToolErrorCategoryRow {
     tool: string;
     category: string | null;
     count: string;
 }
 
 /** 기간 전체 요약 — 도구 단위 목록의 상단 타일. */
-export interface ToolHealthSummaryRow {
+interface ToolHealthSummaryRow {
     calls: string;
     errors: string;
     distinct_tools: string;

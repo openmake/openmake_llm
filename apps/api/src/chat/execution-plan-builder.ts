@@ -22,7 +22,7 @@ const logger = createLogger('ExecutionPlanBuilder');
  * Custom Agent (user_agents) 해석 결과 — system prompt prepend +
  * tool/skill 화이트리스트 반영용. (구 execution-plan-types.ts 에서 이동.)
  */
-export interface ResolvedUserAgent {
+interface ResolvedUserAgent {
     id: string;
     name: string;
     systemPrompt: string;
@@ -33,7 +33,7 @@ export interface ResolvedUserAgent {
     model: string | null;
 }
 
-export class ExecutionPlanBuilder {
+class ExecutionPlanBuilder {
     /**
      * Custom Agent 단독 로딩 — userAgentId 명시 시 소유권 검증 후 반환.
      * 조회 실패 시 silent fallback (null) — chat 흐름 차단 금지.

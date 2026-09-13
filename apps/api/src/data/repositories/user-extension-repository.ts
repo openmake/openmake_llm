@@ -31,7 +31,7 @@ export interface UserExtensionRow {
     updated_at: Date;
 }
 
-export interface InsertExtensionInput {
+interface InsertExtensionInput {
     userId: string;
     name: string;
     version: string;

@@ -28,7 +28,7 @@ import { Agent } from './types';
  * Sanitize agent ID to prevent path traversal attacks.
  * Only allows alphanumeric characters, hyphens, and underscores.
  */
-export function sanitizeAgentId(name: string): string {
+function sanitizeAgentId(name: string): string {
     const sanitized = name
         .toLowerCase()
         .replace(/[^a-z0-9가-힣_-]/g, '-')  // Allow Korean chars, alphanumeric, hyphens, underscores
@@ -47,7 +47,7 @@ export function sanitizeAgentId(name: string): string {
  * Validate that a resolved file path stays within the expected base directory.
  * Prevents path traversal attacks (e.g., ../../etc/passwd).
  */
-export function validatePathWithinDir(filePath: string, baseDir: string): void {
+function validatePathWithinDir(filePath: string, baseDir: string): void {
     const resolved = path.resolve(filePath);
     const base = path.resolve(baseDir);
     if (!resolved.startsWith(base + path.sep) && resolved !== base) {
@@ -110,7 +110,7 @@ interface ABTestResult {
  * 
  * @class CustomAgentBuilder
  */
-export class CustomAgentBuilder {
+class CustomAgentBuilder {
     private customAgents: Map<string, CustomAgentConfig> = new Map();
     private abTests: Map<string, ABTestResult> = new Map();
     private promptsDir: string;

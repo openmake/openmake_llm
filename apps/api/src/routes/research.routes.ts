@@ -336,4 +336,3 @@ router.delete('/sessions/:sessionId', requireAuth, asyncHandler(async (req: Requ
 }));
 
 export default router;
-export { router as researchRouter };

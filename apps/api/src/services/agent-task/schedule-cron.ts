@@ -10,7 +10,7 @@
  * @module services/agent-task/schedule-cron
  */
 
-export interface ScheduleTiming {
+interface ScheduleTiming {
     /** 5-field cron 문자열 (분 시 일 월 요일). interval 과 배타. */
     cron?: string | null;
     /** 반복 간격(초). cron 과 배타. */

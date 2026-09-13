@@ -43,13 +43,13 @@ const logger = createLogger('AgentSpawn');
 export const SPAWN_AGENTS_TOOL_NAME = 'spawn_agents';
 
 /** 채팅 경로의 의사 taskId — 승인 레지스트리 키로만 쓰이며 작업 행이 없으므로 활동 기록은 건너뛴다. */
-export const CHAT_PSEUDO_TASK_ID = '__chat__';
+const CHAT_PSEUDO_TASK_ID = '__chat__';
 
 /** 서브에이전트 도구 서브셋에서 제외할 위임 계열 도구 — depth=1 구조 유지(재귀 차단). */
 const SUBAGENT_EXCLUDED_TOOLS = new Set([SPAWN_AGENTS_TOOL_NAME, CHAT_DELEGATE_TOOL_NAME, 'delegate']);
 
 /** spawn_agents 도구 인자 스키마 — tasks 배열(각 태스크는 자기완결 지시 + 선택 전문 분야). */
-export const spawnAgentsArgsSchema = z.object({
+const spawnAgentsArgsSchema = z.object({
     tasks: z.array(z.object({
         prompt: z.string().trim().min(1),
         role: z.string().trim().min(1).optional(),
@@ -58,7 +58,7 @@ export const spawnAgentsArgsSchema = z.object({
     })).min(1),
 });
 
-export type SpawnTask = z.infer<typeof spawnAgentsArgsSchema>['tasks'][number];
+type SpawnTask = z.infer<typeof spawnAgentsArgsSchema>['tasks'][number];
 
 /**
  * PURE: 모델이 자주 흘리는 인자 형태를 스키마에 맞게 감싼다(계약 유지 — 값을 버리거나
@@ -168,7 +168,7 @@ export function filterChatSubTools(parentTools: ToolDefinition[]): ToolDefinitio
     return kept.length > 0 ? kept : parentTools;
 }
 
-export interface SpawnAgentsParams {
+interface SpawnAgentsParams {
     /**
      * 서브 도구가 0개가 된 **이유**(있으면). 결과 머리에 그대로 실어 부모 모델·타임라인이
      * "조사한 결과"로 오인하지 않게 한다 — 도구 없는 서브는 기억으로 답을 지어낸다

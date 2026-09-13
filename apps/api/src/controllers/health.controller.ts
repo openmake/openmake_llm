@@ -24,7 +24,7 @@ const _cachedVersion = APP_VERSION;
  * - Kubernetes 헬스체크 엔드포인트 (/health)
  * - 서비스 레디니스 프로브 (/ready)
  */
-export class HealthController {
+class HealthController {
     /** Express 라우터 인스턴스 */
     private router: Router;
     /** LLM 클러스터 매니저 */

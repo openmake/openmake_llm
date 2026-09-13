@@ -9,13 +9,10 @@
  *
  * @module chat/request-handler
  * @description
- * - resolveUserContext(): Express req 또는 WebSocket 연결에서 사용자 컨텍스트 추출
+ * - resolveUserContextFromRequest() / resolveUserContextFromWebSocket(): Express req·WebSocket 연결에서 사용자 컨텍스트 추출
  * - buildPlan(): 요청 모델 → ExecutionPlan 변환
  * - createClient(): 요청별 격리된 LLMClient 생성
- * - ensureSession(): 세션 존재 확인 및 생성
- * - saveUserMessage(): 사용자 메시지 DB 저장
- * - saveAssistantMessage(): AI 응답 DB 저장
- * - processChat(): 전체 파이프라인 오케스트레이션
+ * - processChat(): 세션 확보·사용자/AI 메시지 저장을 포함한 전체 파이프라인 오케스트레이션
  *
  * @see routes/chat.routes.ts - HTTP 엔드포인트
  * @see sockets/handler.ts - WebSocket 엔드포인트
@@ -54,11 +51,6 @@ import type {
 // 정의는 request-handler-types.ts 로 이동 — 기존 `from './request-handler'` import 호환 위해 re-export
 export type {
     ChatUserContext,
-    ExecutionPlanResult,
-    ChatRequestParams,
-    OpenAIToolCall,
-    RoutingMeta,
-    ChatResult,
 } from './request-handler-types';
 const log = createLogger('ChatRequestHandler');
 

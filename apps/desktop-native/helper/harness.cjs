@@ -1,10 +1,10 @@
 /**
  * Companion 헬퍼 헤드리스 하네스 — helper.cjs 를 실프로세스로 spawn 해 회귀 검증.
  *
- * 데스크톱 하네스(apps/desktop/bridge-harness.cjs)와 동일 축이되 호스트 차이를 검증한다:
+ * CLI 브리지와 같은 코어를 쓰되 네이티브 앱 호스트 차이를 검증한다:
  *  - 인증: Authorization Bearer(API key) 헤더, Origin 없음 (CLI 계약과 동일)
  *  - confirmExec: 자동승인 훅이 아니라 **실제 stdio 왕복** — 승인(yes)/거부(no) 양쪽
- *  - browser: 어댑터 미주입 → 코어 미지원 거부
+ *  - browser: 폐기된 kind(2026-08-23) → 코어 미지원 거부
  *  - 다중 루트(0.2.0): 루트당 독립 연결·파생 deviceId·스코프 상호 격리·개별 해제
  *  - stdin 종료 = 즉시 정리 종료 (좀비 방지)
  *

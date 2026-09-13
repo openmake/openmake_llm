@@ -130,7 +130,7 @@ export async function requireApiKey(req: Request, res: Response, next: NextFunct
  * JWT 또는 API Key 병용 필수 인증 (2026-08-21, CLI 브리지·에이전트 작업용).
  * Authorization/X-API-Key 에 omk_live_ 키가 있으면 API Key 경로로, 아니면 기존 requireAuth(JWT).
  */
-export async function requireAuthOrApiKey(req: Request, res: Response, next: NextFunction): Promise<void> {
+async function requireAuthOrApiKey(req: Request, res: Response, next: NextFunction): Promise<void> {
     if (extractApiKey(req)) {
         await requireApiKey(req, res, next);
         return;

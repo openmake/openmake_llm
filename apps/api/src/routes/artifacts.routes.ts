@@ -365,4 +365,3 @@ router.get('/sessions/:sid/artifacts/:aid/executions', requireAuth, asyncHandler
 // ============================================================
 
 export default router;
-export { router as artifactsRouter };

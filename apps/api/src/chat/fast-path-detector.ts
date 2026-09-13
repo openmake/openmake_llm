@@ -55,7 +55,7 @@ const MAX_FAST_PATH_LENGTH = 50;
 /**
  * Fast-path 매칭 결과
  */
-export interface FastPathMatch {
+interface FastPathMatch {
     /** 매칭 여부 */
     matched: boolean;
     /** 매칭된 패턴의 reason 식별자 (matched=false면 undefined) */

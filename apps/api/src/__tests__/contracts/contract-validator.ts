@@ -44,7 +44,7 @@ function escapePointer(segment: string): string {
 
 const validatorCache = new Map<string, ValidateFunction>();
 
-export interface ContractResult {
+interface ContractResult {
     valid: boolean;
     errors: string;
 }

@@ -14,7 +14,7 @@ import type { McpCatalogTemplate } from '../../schemas/mcp-catalog.schema';
 
 type TransportType = 'stdio' | 'sse' | 'streamable-http';
 
-export interface InsertCatalogTemplateInput {
+interface InsertCatalogTemplateInput {
     id: string;
     display_name: string;
     description?: string | null;
@@ -26,7 +26,7 @@ export interface InsertCatalogTemplateInput {
     is_enabled?: boolean;
 }
 
-export type UpdateCatalogTemplatePatch = Partial<{
+type UpdateCatalogTemplatePatch = Partial<{
     display_name: string;
     description: string | null;
     transport_type: TransportType;

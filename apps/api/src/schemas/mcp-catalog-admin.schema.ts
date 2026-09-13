@@ -46,8 +46,6 @@ export const createCatalogTemplateSchema = z.object({
     }
 });
 
-export type CreateCatalogTemplateInput = z.infer<typeof createCatalogTemplateSchema>;
-
 export const updateCatalogTemplateSchema = z.object({
     display_name: z.string().min(1).max(200).optional(),
     description: z.string().max(1000).nullable().optional(),
@@ -59,4 +57,3 @@ export const updateCatalogTemplateSchema = z.object({
     is_enabled: z.boolean().optional(),
 });
 
-export type UpdateCatalogTemplateInput = z.infer<typeof updateCatalogTemplateSchema>;

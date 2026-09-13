@@ -9,8 +9,7 @@
  * @module utils/error-handler
  * @description
  * - AppError: 기본 애플리케이션 에러 (상태코드, 운영 에러 여부)
- * - ValidationError (400), AuthenticationError (401), AuthorizationError (403)
- * - NotFoundError (404), RateLimitError (429), DatabaseError (500)
+ * - ValidationError (400), AuthorizationError (403), NotFoundError (404)
  * - errorHandler: Express 글로벌 에러 미들웨어 (MulterError, QuotaExceeded 통합)
  * - asyncHandler: async 라우트 핸들러 에러 캐처 래퍼
  * - notFoundHandler: 404 라우트 핸들러
@@ -83,15 +82,6 @@ export class ValidationError extends AppError {
 }
 
 /**
- * Authentication error (401)
- */
-export class AuthenticationError extends AppError {
-    constructor(message: string = '인증이 필요합니다') {
-        super(message, 401, true, 'AUTHENTICATION_ERROR');
-    }
-}
-
-/**
  * Authorization error (403)
  */
 export class AuthorizationError extends AppError {
@@ -103,27 +93,9 @@ export class AuthorizationError extends AppError {
 /**
  * Not found error (404)
  */
-export class NotFoundError extends AppError {
+class NotFoundError extends AppError {
     constructor(message: string = '리소스를 찾을 수 없습니다') {
         super(message, 404, true, 'NOT_FOUND');
-    }
-}
-
-/**
- * Rate limit error (429)
- */
-export class RateLimitError extends AppError {
-    constructor(message: string = '요청 제한을 초과했습니다') {
-        super(message, 429, true, 'RATE_LIMIT_EXCEEDED');
-    }
-}
-
-/**
- * Database error (500)
- */
-export class DatabaseError extends AppError {
-    constructor(message: string = '데이터베이스 오류가 발생했습니다') {
-        super(message, 500, true, 'DATABASE_ERROR');
     }
 }
 

@@ -36,7 +36,7 @@ import { agentTaskTools } from './agent-task-tools';
  * @param args.language - OCR 대상 언어 코드 (ko, en, ja 등)
  * @returns 비전 모델 위임 안내 메시지
  */
-export const visionOcrTool: MCPToolDefinition = {
+const visionOcrTool: MCPToolDefinition = {
     tool: {
         name: 'vision_ocr',
         description: '이미지에서 텍스트를 추출합니다 (OCR). 문서·스크린샷·영수증·표지판 등에서 글자만 그대로 읽어야 할 때 사용하세요. 이미지의 내용을 설명·해석해야 하면 analyze_image를 사용하세요. image_path 또는 image_base64 중 하나가 필요합니다.',
@@ -82,7 +82,7 @@ export const visionOcrTool: MCPToolDefinition = {
  * @param args.question - 이미지에 대한 질문 (선택적)
  * @returns 비전 모델 위임 안내 메시지
  */
-export const analyzeImageTool: MCPToolDefinition = {
+const analyzeImageTool: MCPToolDefinition = {
     tool: {
         name: 'analyze_image',
         description: '이미지의 내용을 분석하고 설명합니다. 사진·다이어그램·차트·UI 등 무엇이 담겼는지 이해·해석하거나 이미지에 대한 질문에 답할 때 사용하세요. 글자만 그대로 추출하려면 analyze 대신 vision_ocr를 사용하세요. image_path 또는 image_base64 중 하나가 필요합니다.',

@@ -16,7 +16,7 @@ import { matchesSkillTriggers, parseManifestTriggers } from './skill-triggers';
 
 export const GLOBAL_ASSIGNMENT_ID = '__global__';
 
-export interface InjectionCandidate {
+interface InjectionCandidate {
     id: string;
     manifestYaml: string;
     /** agent_skill_assignments.agent_id — 이 행이 어느 배정으로 조회됐는지 */

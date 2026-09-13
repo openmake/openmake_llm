@@ -5,7 +5,7 @@
  */
 import { BaseRepository } from './base-repository';
 
-export interface OrchestratorJobRow {
+interface OrchestratorJobRow {
     userId: string;
     capability: string;
     providerId: string;

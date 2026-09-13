@@ -49,7 +49,7 @@ const logger = createLogger('RealResponseGenerator');
 const TOKEN_ESTIMATION_DIVISOR = 3;
 
 /** createRealResponseGenerator 옵션 */
-export interface RealResponseGeneratorOptions {
+interface RealResponseGeneratorOptions {
     /** LLM 클라이언트 (미지정 시 환경변수 기반 기본 클라이언트 생성) */
     llmClient?: LLMClient;
     /** 케이스당 최대 실행 시간 (ms). 기본 60_000 */

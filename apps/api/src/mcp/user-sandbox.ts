@@ -370,21 +370,3 @@ export interface UserContext {
     orgId?: string;
 }
 
-/**
- * 사용자 컨텍스트 팩토리 함수
- *
- * 서버 측에서만 호출하여 UserContext를 생성합니다.
- * 클라이언트에서의 직접 생성은 보안상 금지됩니다.
- *
- * @param userId - 사용자 고유 ID
- * @param role - 사용자 역할
- * @param orgId - 조직 ID (선택적)
- * @returns 새 UserContext 객체
- */
-export function createUserContext(
-    userId: string | number,
-    role: 'admin' | 'user' | 'guest',
-    orgId?: string
-): UserContext {
-    return { userId, role, orgId };
-}

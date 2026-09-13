@@ -57,13 +57,6 @@ import {
 
 // Re-export all types so consumers importing from ChatService don't break
 export type {
-    ChatHistoryMessage,
-    AgentSelectionInfo,
-    ToolCallInfo,
-    WebSearchResult,
-    WebSearchFunction,
-    ChatResponseMeta,
-    ChatServiceConfig,
     ChatMessageRequest,
 } from './chat-service-types';
 
@@ -434,20 +427,15 @@ export class ChatService {
     }
 
     /**
-     * 문서, 웹검색 컨텍스트를 통합하여 최종 사용자 메시지를 구성합니다.
+     * 첨부 파일·웹검색 컨텍스트를 통합하여 최종 사용자 메시지를 구성합니다.
      * 실제 로직은 chat-service/context-builder.ts에 위임합니다.
      */
     async buildContextForLLM(
         message: string,
         webSearchContext: string | undefined,
-        thinkingMode: boolean | undefined,
-        apiKeyId?: string,
         fileContext?: string,
-    ): Promise<{ finalEnhancedMessage: string; documentImages: string[] }> {
-        return buildContextForLLM({
-            message, webSearchContext, fileContext, thinkingMode, apiKeyId,
-            clientModel: this.client.model,
-        });
+    ): Promise<{ finalEnhancedMessage: string }> {
+        return buildContextForLLM({ message, webSearchContext, fileContext });
     }
 
 

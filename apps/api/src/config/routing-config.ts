@@ -151,51 +151,6 @@ export const AGENT_URL_DOMAIN_HINTS: Record<string, string> = (() => {
 
 // ── Complexity Assessor 설정 ─────────────────────────────────
 
-/** GV 건너뛰기 임계값 - 이 점수 미만이면 Generate-Verify 생략 (env: OMK_GV_SKIP_THRESHOLD) */
-export const GV_SKIP_THRESHOLD =
-    Number(process.env.OMK_GV_SKIP_THRESHOLD ?? process.env.OMK_A2A_SKIP_THRESHOLD ?? '0.3');
-
-/** 복잡도 시작 점수 */
-export const COMPLEXITY_NEUTRAL_SCORE = 0.5;
-
-/** 복잡도 시그널 가중치 */
-export const COMPLEXITY_WEIGHTS = {
-    /** 매우 짧은 쿼리 (< 30자) 감점 */
-    VERY_SHORT_PENALTY: -0.3,
-    /** 짧은 쿼리 (< 50자) 감점 */
-    SHORT_PENALTY: -0.1,
-    /** chat 타입 감점 */
-    CHAT_TYPE_PENALTY: -0.2,
-    /** 낮은 신뢰도 감점 */
-    LOW_CONFIDENCE_PENALTY: -0.1,
-    /** 긴 쿼리 (> 200자) 가점 */
-    LONG_QUERY_BONUS: 0.2,
-    /** 여러 패턴 매칭 가점 */
-    MULTIPLE_PATTERNS_BONUS: 0.2,
-    /** 코드 블록 포함 가점 */
-    CODE_BLOCK_BONUS: 0.3,
-    /** 이미지 포함 가점 */
-    HAS_IMAGES_BONUS: 0.2,
-    /** 문서 포함 가점 */
-    HAS_DOCUMENTS_BONUS: 0.2,
-    /** 긴 대화 이력 가점 */
-    LONG_HISTORY_BONUS: 0.1,
-    /** 복잡한 쿼리 타입 가점 */
-    COMPLEX_TYPE_BONUS: 0.1,
-    /** 쿼리 길이 임계값 - 매우 짧음 */
-    VERY_SHORT_THRESHOLD: 30,
-    /** 쿼리 길이 임계값 - 짧음 */
-    SHORT_THRESHOLD: 50,
-    /** 쿼리 길이 임계값 - 김 */
-    LONG_THRESHOLD: 200,
-    /** 패턴 매칭 최소 개수 */
-    MIN_PATTERN_COUNT: 3,
-    /** 대화 이력 최소 길이 */
-    MIN_HISTORY_LENGTH: 5,
-    /** 낮은 신뢰도 임계값 */
-    LOW_CONFIDENCE_THRESHOLD: 0.2,
-} as const;
-
 // ── Tail 라우팅 게이트 (Stage 1) ─────────────────────────────
 // 목표: "복잡한 질문"이 아니라 "모델이 틀릴 것 같고(errorScore) 외부로 검증 가능한(verifiability)"
 // 소수 질문만 골라낸다. 아래 값은 셰도우 실측(routing_shadow_decisions Q4)으로 교정할 출발점 —
@@ -204,10 +159,6 @@ export const COMPLEXITY_WEIGHTS = {
 /** tail 판정 임계값 — errorScore 가 이 값 이상이어야 tail 후보 (env: OMK_TAIL_THRESHOLD) */
 export const TAIL_THRESHOLD =
     Number(process.env.OMK_TAIL_THRESHOLD ?? '0.55');
-
-/** tail 라우팅 트래픽 상한 (0~1) — 셰도우 관측 후 실제 라우팅 활성화 시 비용 통제용 (env: OMK_TAIL_TRAFFIC_CAP) */
-export const TAIL_TRAFFIC_CAP =
-    Number(process.env.OMK_TAIL_TRAFFIC_CAP ?? '0.15');
 
 /** 오류가능성(errorScore) 시작 점수 — 대부분 trunk 쪽으로 낮게 시작 */
 export const ERROR_LIKELIHOOD_NEUTRAL = 0.30;

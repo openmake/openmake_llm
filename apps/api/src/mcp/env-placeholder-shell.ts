@@ -14,9 +14,9 @@
  *   - 자리표시자가 있는 토큰은 리터럴 조각을 작은따옴표로, `{{env.KEY}}` 를 "$KEY" 로 이어 붙인다
  *   - script 는 `exec <cmd> <args...>` — 컨테이너/호스트 모두 sh 가 있다(node·uv 런타임 이미지 포함)
  */
-export const ENV_PLACEHOLDER_RE = /\{\{env\.(\w+)\}\}/g;
+const ENV_PLACEHOLDER_RE = /\{\{env\.(\w+)\}\}/g;
 
-export interface ShellWrapped {
+interface ShellWrapped {
     command: string;
     args: string[];
     /** 자리표시자가 있어 sh 로 감쌌는지 */

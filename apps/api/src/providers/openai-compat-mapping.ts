@@ -19,7 +19,7 @@ import type { ToolNameCodec } from './tool-name-codec';
  * - tool_calls: assistant role 에 그대로 첨부
  * - tool: tool_call_id + content 형식
  */
-export type OpenAIContentBlock = {
+type OpenAIContentBlock = {
     type: string;
     text?: string;
     image_url?: { url: string };
@@ -31,7 +31,7 @@ export type OpenAIContentBlock = {
     cache_control?: { type: 'ephemeral' };
 };
 
-export type OpenAIMessage = {
+type OpenAIMessage = {
     role: 'system' | 'user' | 'assistant' | 'tool';
     content?: string | OpenAIContentBlock[];
     tool_calls?: Array<{

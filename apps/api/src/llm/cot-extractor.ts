@@ -74,7 +74,7 @@ const ANSWER_MARKERS = [
 /** 한국어 결론 시작 휴리스틱 — Korean 글자가 있는 첫 문장 */
 const KOREAN_LINE_RE = /^[^\n]*[가-힣][^\n]*$/m;
 
-export interface CotExtractResult {
+interface CotExtractResult {
     detected: boolean;
     answer: string;
     thinking: string;

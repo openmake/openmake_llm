@@ -15,11 +15,9 @@
 import { LLMClient, createClient } from '../llm';
 import type { SearchResult } from '../mcp/web-search';
 import { getModelForRole } from '../config/model-roles';
-import { RESEARCH_DEPTH_LOOPS, RESEARCH_DEFAULTS } from '../config/runtime-limits';
+import { RESEARCH_DEFAULTS } from '../config/runtime-limits';
 import { getUnifiedDatabase } from '../data/models/unified-database';
-import { isPersistableUserId } from '../utils/user-id-validation';
 import { createLogger } from '../utils/logger';
-import { v4 as uuidv4 } from 'uuid';
 
 import {
     ResearchConfig,
@@ -40,9 +38,7 @@ import { generateReport } from './deep-research/report-generator';
 import { buildResearchSkillBlock, gatherMcpEvidence } from './deep-research/research-context';
 
 // Re-export types so consumers don't break
-export type { ResearchConfig, ResearchProgress, ResearchResult };
-// Re-export prompt helper for external consumers
-export { getResearchMessage } from './deep-research-prompts';
+export type { ResearchProgress, ResearchResult };
 
 const logger = createLogger('DeepResearchService');
 
@@ -483,31 +479,3 @@ export function createDeepResearchService(config?: Partial<ResearchConfig>, clie
     return new DeepResearchService(config, client);
 }
 
-/**
- * 빠른 리서치 실행 (세션 자동 생성)
- */
-export async function quickResearch(
-    topic: string,
-    userId: string,
-    depth: 'quick' | 'standard' | 'deep' = 'standard',
-    onProgress?: (progress: ResearchProgress) => void
-): Promise<ResearchResult> {
-    const db = getUnifiedDatabase();
-    const sessionId = uuidv4();
-
-    // 세션 생성 (anonymous/guest userId는 FK 위반 방지를 위해 null 처리)
-    const safeUserId = isPersistableUserId(userId) ? userId : undefined;
-    await db.createResearchSession({
-        id: sessionId,
-        userId: safeUserId,
-        topic,
-        depth
-    });
-
-    // depth에 따른 maxLoops 설정
-    const maxLoops = RESEARCH_DEPTH_LOOPS[depth] ?? RESEARCH_DEPTH_LOOPS.standard;
-
-    // 리서치 실행
-    const service = createDeepResearchService({ maxLoops });
-    return service.executeResearch(sessionId, topic, onProgress);
-}

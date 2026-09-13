@@ -22,7 +22,7 @@ const log = createLogger('ArtifactExport');
 
 export type ExportFormat = 'pdf' | 'docx';
 
-export interface ArtifactExportResult {
+interface ArtifactExportResult {
     format: ExportFormat;
     mime: string;
     /** 변환 산출물 (base64) */

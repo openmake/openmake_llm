@@ -11,7 +11,7 @@
 import { BaseRepository } from './base-repository';
 import type { ModelRole } from '../../config/model-roles';
 
-export interface UserModelRoleRow {
+interface UserModelRoleRow {
     userId: string;
     role: ModelRole;
     fullModelId: string;

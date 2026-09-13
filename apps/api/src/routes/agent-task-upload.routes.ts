@@ -86,4 +86,3 @@ router.delete('/:uploadId', asyncHandler(async (req: Request, res: Response) => 
 }));
 
 export default router;
-export { router as agentTaskUploadRouter };

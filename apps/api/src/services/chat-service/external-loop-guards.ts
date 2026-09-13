@@ -15,19 +15,15 @@ const logger = createLogger('ChatExternalProvider');
 
 /**
  * Wall-clock 예산 가드 — 턴 수와 별개로 누적 시간 초과 시 도구 끄고 최종 응답 유도.
- * 이미지 생성(디퓨전 수십 초~수 분) 소요시간은 공제(imageGenCreditMs) — 예산의
- * 목적(모델/도구 폭주 차단)과 무관한 정상 대기가 후속 턴(덱 저장 등)을 잘라내던
- * 결함 보정 (2026-08-14 라이브 실측: 3장 배치 166s → 도구 비활성 전환).
  *
  * @returns true 면 예산 초과 — 호출부는 suppressTools 로 전환한다.
  */
 export function applyWallClockGuard(p: {
     startedAt: number;
-    imageGenCreditMs: number;
     messages: ChatMessage[];
 }): boolean {
     if (AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS <= 0
-        || Date.now() - p.startedAt - p.imageGenCreditMs <= AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS) {
+        || Date.now() - p.startedAt <= AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS) {
         return false;
     }
     logger.warn(`⏱️ 외부 LLM 루프 wall-clock 예산 초과 (${AGENT_LOOP_LIMITS.MAX_WALL_CLOCK_MS}ms) — 도구 비활성 최종 턴으로 전환`);

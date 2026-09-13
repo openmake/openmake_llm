@@ -59,7 +59,7 @@ function providerToken(config: APNsConfig): string {
     return value;
 }
 
-export async function deliverAPNsNotification(
+async function deliverAPNsNotification(
     token: NativePushToken,
     payload: NativePushPayload,
 ): Promise<APNsDeliveryResult> {

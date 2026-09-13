@@ -514,4 +514,3 @@ router.get('/health', asyncHandler(async (req: Request, res: Response) => {
 }));
 
 export default router;
-export { router as metricsRouter };

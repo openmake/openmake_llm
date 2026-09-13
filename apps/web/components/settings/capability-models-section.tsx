@@ -10,13 +10,6 @@ import { fetchModels, type ModelEntry } from "@/lib/models-api";
 import { compactParams, DEFAULT_VALUE, type CapabilityEffective, type CapabilityOverride } from "./capability-shared";
 import { CapabilityGroupsEditor } from "./capability-groups";
 
-// 관리자 페이지 등 기존 import 경로 호환 — 공용 조각은 capability-shared.tsx 가 SoT
-export {
-  CapabilityEffectiveLine, CapabilityParamsInputs, CapabilityUnsupportedBadge, compactParams, paramsEqual,
-  CAPABILITY_PARAM_KEYS, CAPABILITY_PARAM_VALUE_MAX, UNSUPPORTED_CAPABILITIES,
-  type CapabilityEffective, type CapabilityOverride, type CapabilitySource,
-} from "./capability-shared";
-
 interface CapabilityModelsPayload {
   overrides: CapabilityOverride[];
   effective: CapabilityEffective[];

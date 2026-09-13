@@ -16,7 +16,7 @@ const FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/;
 
 const SKILL_BINDING_PATTERN = /^(skill-id:|git-url:)/;
 
-export const AgentManifestFrontmatterSchema = z.object({
+const AgentManifestFrontmatterSchema = z.object({
     type: z.literal('agent'),
     name: z.string().min(1).max(100),
     description: z.string().min(1).max(500),
@@ -32,15 +32,15 @@ export const AgentManifestFrontmatterSchema = z.object({
     version: z.string().regex(/^\d+\.\d+\.\d+$/, 'semver (예: 1.0.0)'),
 });
 
-export type AgentManifestFrontmatter = z.infer<typeof AgentManifestFrontmatterSchema>;
+type AgentManifestFrontmatter = z.infer<typeof AgentManifestFrontmatterSchema>;
 
-export interface ParsedAgentFile {
+interface ParsedAgentFile {
     frontmatter: unknown;
     system_prompt: string;
     raw_yaml: string;
 }
 
-export type ValidateAgentResult =
+type ValidateAgentResult =
     | { ok: true; manifest: AgentManifestFrontmatter; system_prompt: string; raw_yaml: string }
     | { ok: false; errors: string[] };
 

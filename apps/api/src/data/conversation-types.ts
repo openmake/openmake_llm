@@ -144,18 +144,3 @@ export function rowToSession(row: SessionRow, messages: ConversationMessage[]): 
     };
 }
 
-/**
- * duplicate key (23505) 에러 판별
- */
-export function isDuplicateKeyError(err: unknown): boolean {
-    if (err instanceof Error && err.message.includes('duplicate key')) {
-        return true;
-    }
-
-    if (typeof err === 'object' && err !== null && 'code' in err) {
-        const code = (err as { code?: unknown }).code;
-        return code === '23505';
-    }
-
-    return false;
-}

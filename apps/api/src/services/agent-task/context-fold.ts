@@ -20,7 +20,7 @@ import type { ChatMessage } from '../../llm/types';
 
 export const FOLD_MARKER = '[접힌 도구 결과]';
 
-export interface FoldOptions {
+interface FoldOptions {
     /** 원문을 유지할 최근 assistant 턴 수. */
     keepTurns: number;
     /** 이 길이 이하의 결과는 접지 않는다. */
@@ -29,7 +29,7 @@ export interface FoldOptions {
     headChars: number;
 }
 
-export interface FoldStats {
+interface FoldStats {
     /** 이번 호출에서 새로 접은 메시지 수. */
     folded: number;
     /** 새로 접어서 줄어든 글자 수(원문 − 스텁). */

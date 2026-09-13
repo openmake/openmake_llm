@@ -6,7 +6,7 @@ import type { UserMCPPool } from './user-pool';
 import type { MCPTool } from './types';
 import { MCP_NAMESPACE_SEPARATOR } from './types';
 
-export interface UserPoolToolEntry {
+interface UserPoolToolEntry {
     tool: MCPTool;
     serverId: string;
     displayName: string;

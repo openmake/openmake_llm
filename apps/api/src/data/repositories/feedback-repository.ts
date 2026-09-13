@@ -16,10 +16,10 @@ import { Pool } from 'pg';
 // ============================================================
 
 /** 피드백 신호 타입 */
-export type FeedbackSignal = 'thumbs_up' | 'thumbs_down' | 'regenerate' | 'auto-gv-metric';
+type FeedbackSignal = 'thumbs_up' | 'thumbs_down' | 'regenerate' | 'auto-gv-metric';
 
 /** 피드백 기록 입력 데이터 */
-export interface FeedbackRecord {
+interface FeedbackRecord {
     /** 대상 메시지 ID */
     messageId: string;
     /** 대화 세션 ID */
@@ -50,7 +50,7 @@ export interface FeedbackRecord {
 }
 
 /** 세션별 피드백 레코드 (DB 조회 결과) */
-export interface FeedbackRow {
+interface FeedbackRow {
     id: number;
     message_id: string;
     session_id: string;
@@ -61,7 +61,7 @@ export interface FeedbackRow {
 }
 
 /** 피드백 집계 통계 */
-export interface FeedbackStats {
+interface FeedbackStats {
     /** 전체 피드백 수 */
     total: number;
     /** 좋아요 수 */

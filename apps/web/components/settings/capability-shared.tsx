@@ -34,7 +34,7 @@ export const DEFAULT_VALUE = "";
  * capability 별 params 화이트리스트 — 백엔드 capability 설정의 PARAM_KEYS 와
  * 동일하게 유지할 것(서버는 이 키 밖의 값을 조용히 버린다).
  */
-export const CAPABILITY_PARAM_KEYS: Record<string, readonly string[]> = {
+const CAPABILITY_PARAM_KEYS: Record<string, readonly string[]> = {
   "text.reason": ["temperature"],
   "text.code": ["temperature"],
   "text.embed": ["dimensions"],
@@ -60,7 +60,7 @@ export const UNSUPPORTED_CAPABILITIES: ReadonlySet<string> = new Set([
 ]);
 
 /** 백엔드 `PARAM_VALUE_MAX_CHARS` 와 동일 */
-export const CAPABILITY_PARAM_VALUE_MAX = 64;
+const CAPABILITY_PARAM_VALUE_MAX = 64;
 
 /** 비어 있지 않은(trim) 값만 남긴 params — PUT body 용. 없으면 undefined. */
 export function compactParams(draft: Record<string, string> | undefined): Record<string, string> | undefined {
@@ -74,7 +74,7 @@ export function compactParams(draft: Record<string, string> | undefined): Record
 }
 
 /** 저장된 params 와 초안이 같은지 (빈 값은 없는 것으로 취급) */
-export function paramsEqual(saved: Record<string, string> | undefined, draft: Record<string, string> | undefined): boolean {
+function paramsEqual(saved: Record<string, string> | undefined, draft: Record<string, string> | undefined): boolean {
   const a = compactParams(saved) ?? {};
   const b = compactParams(draft) ?? {};
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);

@@ -62,9 +62,3 @@ export async function ensureEgressProxy(cfg: TaskSandboxConfig): Promise<string>
     return `http://${cfg.egressProxyContainer}:${cfg.egressProxyPort}`;
 }
 
-/** 프록시/네트워크 정리(운영 도구·테스트용). */
-export async function teardownEgressProxy(cfg: TaskSandboxConfig): Promise<void> {
-    const d = cfg.dockerPath;
-    await run(d, ['rm', '-f', cfg.egressProxyContainer]);
-    await run(d, ['network', 'rm', cfg.egressNetwork]);
-}

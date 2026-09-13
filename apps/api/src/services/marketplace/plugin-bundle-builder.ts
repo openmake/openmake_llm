@@ -21,9 +21,9 @@ import { createHash } from 'crypto';
 import { MARKETPLACE_AUTHOR, MARKETPLACE_PATHS, MARKETPLACE_PUBLISH_LIMITS } from '../../config/marketplace-publish';
 import type { ExportAgent, ExportMcpServer, ExportSkill, ExportSkillAsset } from '../../data/repositories/marketplace-export-repository';
 
-export interface BundleFile { path: string; content: string | Buffer }
+interface BundleFile { path: string; content: string | Buffer }
 
-export interface BundleInput {
+interface BundleInput {
     pluginName: string;
     description?: string;
     version?: string;
@@ -34,7 +34,7 @@ export interface BundleInput {
     mcpServers: ExportMcpServer[];
 }
 
-export interface BundleResult {
+interface BundleResult {
     pluginDir: string;
     files: BundleFile[];
     /** marketplace.json plugins[] 엔트리 */

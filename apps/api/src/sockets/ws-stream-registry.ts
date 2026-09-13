@@ -25,7 +25,7 @@ const SNAPSHOT_EVENT_TYPES = new Set(['token', 'thinking']);
 /** 스트림 종료 이벤트 — 이 뒤로는 새 이벤트가 오지 않는다. */
 const TERMINAL_EVENT_TYPES = new Set(['done', 'error', 'aborted']);
 
-export interface StreamEntry {
+interface StreamEntry {
     key: string;
     abortController: AbortController;
     messageId?: string;

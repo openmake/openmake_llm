@@ -9,7 +9,7 @@ import { BaseRepository } from './base-repository';
 
 export type ShareVisibility = 'private' | 'authenticated' | 'link';
 
-export interface AgentTaskShareRow {
+interface AgentTaskShareRow {
     share_id: string;
     task_id: string;
     owner_user_id: string;

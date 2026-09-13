@@ -10,7 +10,7 @@
  */
 import type { Pool } from 'pg';
 
-export interface GlobalInstanceSummary {
+interface GlobalInstanceSummary {
     totalServers: number;
     totalUsers: number;
     currentRunning: number;
@@ -19,7 +19,7 @@ export interface GlobalInstanceSummary {
     crashRate24hPct: number | null;
 }
 
-export interface TopCrashedServer {
+interface TopCrashedServer {
     mcp_server_id: string;
     name: string;
     user_id: string | null;
@@ -28,7 +28,7 @@ export interface TopCrashedServer {
     last_crash_at: string | null;
 }
 
-export interface CrashTrendBucket {
+interface CrashTrendBucket {
     hour: string;
     spawned: number;
     crashed: number;

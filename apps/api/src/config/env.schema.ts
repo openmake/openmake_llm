@@ -203,11 +203,6 @@ export const envSchema = z
         // Swagger
         SWAGGER_BASE_URL: z.string().default(''),
 
-        // Generate-Verify skip threshold
-        // routing-config.ts가 process.env로 직접 소비하지만
-        // 스키마 일관성을 위해 명시적으로 등록
-        OMK_GV_SKIP_THRESHOLD: z.coerce.number().min(0).max(1).default(0.3),
-
         // Language Policy
         ENABLE_DYNAMIC_RESPONSE_LANGUAGE: booleanFromString(true),
         DEFAULT_RESPONSE_LANGUAGE: supportedLanguageSchema.default('ko'),

@@ -27,7 +27,7 @@ import {
     resolveMcpOAuthRedirectUrl,
 } from '../config/mcp-oauth';
 
-export interface McpOAuthProviderOptions {
+interface McpOAuthProviderOptions {
     serverId: string;
     userId: string;
     /** 테스트 주입용 — 미지정 시 운영 DB */
@@ -35,7 +35,7 @@ export interface McpOAuthProviderOptions {
 }
 
 /** state → 사용자·서버 귀속 (콜백에서 조회) */
-export interface McpOAuthStateRecord {
+interface McpOAuthStateRecord {
     userId: string;
     serverId: string;
 }

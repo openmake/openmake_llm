@@ -81,50 +81,6 @@ export interface ConversationMessage {
 }
 
 // ============================================
-// 장기 메모리 시스템 인터페이스
-// ============================================
-
-export type MemoryCategory = 'preference' | 'fact' | 'project' | 'relationship' | 'skill' | 'context';
-
-/**
- * 사용자 장기 메모리 엔티티
- * 대화에서 추출된 중요 정보를 저장하여 향후 대화에 재활용
- * @interface UserMemory
- */
-export interface UserMemory {
-    /** 메모리 고유 식별자 (UUID) */
-    id: string;
-    /** 소유 사용자 ID */
-    user_id: string;
-    /** 메모리 카테고리 (선호도, 사실, 프로젝트 등) */
-    category: MemoryCategory;
-    /** 메모리 키 (검색용 요약) */
-    key: string;
-    /** 메모리 값 (상세 내용) */
-    value: string;
-    /** 중요도 점수 (높을수록 우선 참조) */
-    importance: number;
-    /** 참조 횟수 */
-    access_count: number;
-    /** 마지막 참조 일시 */
-    last_accessed?: string;
-    /** 메모리 추출 원본 세션 ID */
-    source_session_id?: string;
-    /** 생성 일시 */
-    created_at: string;
-    /** 수정 일시 */
-    updated_at: string;
-    /** 만료 일시 (자동 삭제) */
-    expires_at?: string;
-}
-
-export interface MemoryTag {
-    id: number;
-    memory_id: string;
-    tag: string;
-}
-
-// ============================================
 // Deep Research 인터페이스
 // ============================================
 

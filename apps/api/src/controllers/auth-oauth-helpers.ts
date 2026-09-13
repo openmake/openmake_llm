@@ -93,7 +93,7 @@ export function stopOAuthCleanup(): void {
 /**
  * state 검증 결과 — client 는 OAuth 시작 시 귀속된 모바일 클라이언트 식별자 (null = 웹)
  */
-export interface OAuthStateResult {
+interface OAuthStateResult {
     valid: boolean;
     client: string | null;
 }

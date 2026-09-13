@@ -8,7 +8,7 @@
 import { BaseRepository } from './base-repository';
 import type { ModelRole } from '../../config/model-roles';
 
-export interface GlobalModelRoleRow {
+interface GlobalModelRoleRow {
     role: ModelRole;
     fullModelId: string;
     updatedAt: Date;

@@ -19,7 +19,7 @@ import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentTaskService');
 
-export interface AssembledTools {
+interface AssembledTools {
     tools: ToolDefinition[];
     /** 호스트에서 실행되는 비-샌드박스 도구 이름(extra + 동적) — 디스패치가 승인 게이트 적용. */
     extraToolNames: Set<string>;

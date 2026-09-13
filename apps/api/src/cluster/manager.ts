@@ -425,14 +425,3 @@ export function getClusterManager(): ClusterManager {
     return clusterInstance;
 }
 
-/**
- * 새로운 ClusterManager 인스턴스 생성
- *
- * 싱글톤이 아닌 독립적인 클러스터 매니저가 필요할 때 사용합니다.
- *
- * @param config - 클러스터 설정 (선택)
- * @returns 새로운 ClusterManager 인스턴스
- */
-export function createClusterManager(config?: Partial<ClusterConfig>): ClusterManager {
-    return new ClusterManager(config);
-}

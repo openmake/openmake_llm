@@ -433,4 +433,3 @@ router.post('/custom/:agentId/reject', requireAuth, asyncHandler(async (req: Req
 }));
 
 export default router;
-export { router as agentRouter };

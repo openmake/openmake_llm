@@ -6,7 +6,7 @@
  * external-provider 에서 분리(파일 크기 가드): 의도 프리필터 기반으로
  * "이 턴에 어떤 도구를 노출/억제하고 첫 턴에 무엇을 강제할지"를 한 곳에서 결정한다.
  *
- * - distractor 억제: 아티팩트/보고서 의도 → generate_image 등 제외 (2026-06-23 통제실험)
+ * - distractor 억제: 아티팩트/보고서 의도 → always-on 조회 도구 제외 (2026-06-23 통제실험)
  * - 지도 의도 → 카카오 도구 강제(tool_choice), 명시 검색 의도 → web_search 강제
  * - 서브에이전트: delegate_expert(CHAT_SUBAGENT) · spawn_agents(AGENT_SPAWN)
  * - 오케스트레이션 자동 배정(Stage 1): 토론/작업위임 의도 프리필터 매칭 시에만
@@ -45,7 +45,7 @@ export function detectOrchestrationIntents(message: string | undefined): Orchest
     };
 }
 
-export interface ExternalToolPlan {
+interface ExternalToolPlan {
     tools: ToolDefinition[];
     /** 첫 턴 tool_choice 강제 대상 (카카오 지도 > web_search 우선순위). */
     forcedFirstTurnToolName?: string;
@@ -69,7 +69,7 @@ export function buildExternalToolPlan(params: {
     const skillRequired = new Set(params.skillRequiredToolNames ?? []);
 
     // 명시적 아티팩트 생성 요청(사용자 아티팩트 토글 또는 메시지 패턴)이면 distractor
-    // always-on 도구(generate_image 등)를 제외해 모델이 도구 호출 대신 <artifact> 산출물을
+    // always-on 도구(agent_task_list 등)를 제외해 모델이 도구 호출 대신 <artifact> 산출물을
     // 쓰도록 유도 (2026-06-23 통제실험 근거).
     // 보고서 의도(P1 파이프라인)는 산출물이 reportdata→아티팩트이므로 아티팩트 의도와
     // 동일하게 distractor 를 억제한다 (web_search 는 억제 목록에 없어 조사 가능).
@@ -78,16 +78,13 @@ export function buildExternalToolPlan(params: {
     const wantsArtifact = req.artifactMode === true
         || wantsReport
         || ARTIFACT_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
-    // 위치/지도 의도(wantsMap)면 generate_image 를 제외 — 모델이 가짜 지도
-    // 이미지를 그리는 대신 카카오 검색 + 네이티브 지도 블록을 쓰도록 유도 (distractor 억제).
-    // 단, 활성 스킬이 required 로 바인딩한 도구는 억제 면제 — 스킬의 명시 의도(예:
-    // 발표자료 스킬의 generate_image 삽화 생성)가 일반화된 distractor 휴리스틱보다 우선.
+    // 단, 활성 스킬이 required 로 바인딩한 도구는 억제 면제 — 스킬의 명시 의도가
+    // 일반화된 distractor 휴리스틱보다 우선.
     const tools = toolCalling
         ? allowedTools.filter((t) =>
             skillRequired.has(t.function.name)
             || (!EXTERNAL_LLM_TOOL_BLACKLIST.includes(t.function.name)
-                && !(wantsArtifact && ARTIFACT_REQUEST_SUPPRESSED_TOOLS.includes(t.function.name))
-                && !(wantsMap && t.function.name === 'generate_image')))
+                && !(wantsArtifact && ARTIFACT_REQUEST_SUPPRESSED_TOOLS.includes(t.function.name))))
         : [];
     // 채팅 서브에이전트(chat-delegate): 전문가 위임 도구 노출 — 스키마 +1 은 문법 컴파일 무해.
     if (CHAT_SUBAGENT.ENABLED && toolCalling) {
@@ -111,9 +108,6 @@ export function buildExternalToolPlan(params: {
     }
     if (wantsArtifact && toolCalling) {
         logger.info(`[Artifact] 명시적 아티팩트 요청 감지 — distractor 도구 억제 (잔여 도구 ${tools.length}종)`);
-    }
-    if (wantsMap && toolCalling) {
-        logger.info(`[Map] 위치/지도 의도 감지 — generate_image 억제 (잔여 도구 ${tools.length}종)`);
     }
     // 지도/길찾기 의도 시 첫 턴에 카카오 도구를 강제 호출(tool_choice)한다. 길찾기면 find-route,
     // 그 외 지도면 search-places. 넛지만으론 qwen 이 web_search/자체아티팩트로 이탈 → 강제로

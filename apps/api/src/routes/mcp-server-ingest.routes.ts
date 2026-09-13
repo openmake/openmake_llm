@@ -39,7 +39,7 @@ import { isAdminRole } from '../data/user-manager';
 
 const logger = createLogger('McpServerIngestRoutes');
 
-export interface McpServerIngestRouterDeps {
+interface McpServerIngestRouterDeps {
     pool: Pool;
     fetcherFactory: (opts: { accessToken?: string }) => GitFetcher;
     llmClientFactory: (model: string) => LLMClient;

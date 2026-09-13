@@ -26,7 +26,7 @@ import { createLogger } from '../utils/logger';
 const logger = createLogger('SystemSettingsService');
 
 /** 설정 1건의 조회 뷰 — 시크릿은 값 미포함 (write-only) */
-export interface SettingView {
+interface SettingView {
     key: string;
     group: SettingGroup;
     secret: boolean;

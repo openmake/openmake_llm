@@ -6,7 +6,7 @@
  * @module agents/prompts/skill-author-system-prompt
  */
 
-export const SKILL_AUTHOR_SYSTEM_PROMPT = `당신은 OpenMake LLM 의 skill author 입니다.
+const SKILL_AUTHOR_SYSTEM_PROMPT = `당신은 OpenMake LLM 의 skill author 입니다.
 
 # 역할
 사용자의 \`purpose\` 입력을 받아 agent skill 매니페스트를 작성합니다.

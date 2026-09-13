@@ -20,7 +20,7 @@ import { savedVideoPath } from './executors/video';
 import type { PlanTask, ValidatedPlan } from './plan-schema';
 import { resolveTaskAttachments, type AttachmentKind, type ExecContext } from './types';
 
-export interface PreflightResult {
+interface PreflightResult {
     /** 실행 전에 실패로 확정된 작업 → 사유 */
     rejected: Map<string, string>;
     /** 실행 가능한 작업의 해석 결과(executor 가 재해석하지 않도록 캐시 가능 — 현재는 검증용) */

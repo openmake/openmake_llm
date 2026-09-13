@@ -23,7 +23,7 @@ import { createLogger } from '../utils/logger';
 const logger = createLogger('ConversationDebugQueue');
 
 /** 디버그 큐 저장 사유 */
-export type DebugQueueReason = 'auto-error' | 'user-report';
+type DebugQueueReason = 'auto-error' | 'user-report';
 
 /** TTL 정책 — 사유별 보존 기간 (밀리초) */
 export const DEBUG_QUEUE_TTL_MS: Record<DebugQueueReason, number> = {
@@ -34,7 +34,7 @@ export const DEBUG_QUEUE_TTL_MS: Record<DebugQueueReason, number> = {
 };
 
 /** 디버그 큐 INSERT 입력 */
-export interface DebugQueueEntry {
+interface DebugQueueEntry {
     sessionId: string;
     userId: string;
     reason: DebugQueueReason;

@@ -37,7 +37,7 @@ const log = createLogger('AuthController');
  *
  * OAuth 인증은 AuthOAuthController (auth-oauth.controller.ts)에서 처리합니다.
  */
-export class AuthController {
+class AuthController {
     /** Express 라우터 인스턴스 */
     private router: Router;
 

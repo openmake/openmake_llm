@@ -42,7 +42,7 @@ import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('CapabilityResolver');
 
-export type CapabilityUnavailableCode =
+type CapabilityUnavailableCode =
     | 'CAPABILITY_UNASSIGNED'
     | 'CAPABILITY_PROVIDER_UNKNOWN'
     | 'CAPABILITY_PROVIDER_NOT_GATEWAY'

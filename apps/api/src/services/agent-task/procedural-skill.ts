@@ -105,7 +105,7 @@ export async function saveProceduralSkill(
 }
 
 /** id 로 절차 스펙 로드 — 본인 소유(또는 public) 이고 category='procedural' 인 경우만. */
-export async function loadProceduralSpec(userId: string, skillId: string): Promise<ProceduralSpec | null> {
+async function loadProceduralSpec(userId: string, skillId: string): Promise<ProceduralSpec | null> {
     const skill = await getRepo().getSkillById(skillId).catch(() => null);
     if (!skill || skill.category !== PROCEDURAL_CATEGORY) return null;
     if (skill.createdBy && skill.createdBy !== userId && !skill.isPublic) return null;
@@ -146,7 +146,7 @@ export async function resolveProceduralSpec(userId: string, idOrName: string): P
 }
 
 /** goal 유사 절차 스킬 상위 N(임계 이상). */
-export async function findMatchingSkills(userId: string, goal: string): Promise<MatchedSkill[]> {
+async function findMatchingSkills(userId: string, goal: string): Promise<MatchedSkill[]> {
     const res = await getRepo()
         .searchSkills({ userId, category: PROCEDURAL_CATEGORY, status: 'active', limit: 50 })
         .catch(() => null);

@@ -14,7 +14,6 @@ import {
     IProvider,
     ProviderModel,
     parseFullModelId,
-    buildFullModelId,
 } from './i-provider';
 import { ProviderError } from './provider-errors';
 import { LocalLLMProvider } from './local-llm-provider';
@@ -43,7 +42,7 @@ export interface ResolvedProvider {
     fullId: string;
 }
 
-export interface ProviderRouterDeps {
+interface ProviderRouterDeps {
     /** 로컬 vLLM/LiteLLM 진입점 — canonical 'local-llm' 라우팅 대상. */
     localProvider: LocalLLMProvider;
     /** Phase 3+ 외부 키 저장소 — 미주입 시 외부 provider 분기는 NOT_SUPPORTED */
@@ -52,7 +51,7 @@ export interface ProviderRouterDeps {
 }
 
 /** 외부 provider 인스턴스화 옵션 — OAuth 세션 갱신 영속화 콜백 등 */
-export interface ExternalProviderInstanceDeps {
+interface ExternalProviderInstanceDeps {
     /** OAuth refresh 후 세션 재암호화 저장 (미지정 시 in-memory 갱신만) */
     onOAuthSessionUpdate?: (session: ChatGPTOAuthSessionPayload) => Promise<void>;
 }

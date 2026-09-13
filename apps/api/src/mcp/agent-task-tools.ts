@@ -22,7 +22,7 @@ function textResult(text: string, isError = false): MCPToolResult {
     return { content: [{ type: 'text', text }], isError };
 }
 
-export const agentTaskListTool: MCPToolDefinition = {
+const agentTaskListTool: MCPToolDefinition = {
     tool: {
         name: 'agent_task_list',
         description:
@@ -53,7 +53,7 @@ export const agentTaskListTool: MCPToolDefinition = {
     },
 };
 
-export const agentTaskGetTool: MCPToolDefinition = {
+const agentTaskGetTool: MCPToolDefinition = {
     tool: {
         name: 'agent_task_get',
         description:

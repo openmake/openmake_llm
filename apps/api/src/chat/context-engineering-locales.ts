@@ -363,7 +363,7 @@ export const FINAL_REMINDER_CONTENT: Record<PromptLocaleCode, {
     },
 };
 
-export interface PresetContentData {
+interface PresetContentData {
     assistant: {
         persona: string;
         expertise: string[];

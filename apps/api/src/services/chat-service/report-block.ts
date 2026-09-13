@@ -25,7 +25,7 @@ const logger = createLogger('ChatReportBlock');
 const REPORTDATA_FENCE_RE = /```reportdata\s*\n([\s\S]*?)```/;
 const DEFAULT_TEMPLATE_ID = 'generic-report';
 
-export interface ReportBlockResult {
+interface ReportBlockResult {
     /** reportdata 블록이 제거된 본문 (저장 히스토리용) */
     content: string;
     /** 라이브 스트림 + 히스토리에 덧붙일 <artifact> 블록 */

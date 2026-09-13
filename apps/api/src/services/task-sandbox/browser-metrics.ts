@@ -19,7 +19,7 @@ const A11Y_TYPES = new Set(['snapshot', 'smartClick', 'smartFill']);
 /** a11y 조작 액션(발동만이 아니라 성패를 따지는 대상 — snapshot 은 발견이라 제외). */
 const A11Y_ACT_TYPES = new Set(['smartClick', 'smartFill']);
 
-export interface BrowserMetricSignal {
+interface BrowserMetricSignal {
     totalActions: number;
     selectorActions: number;
     selectorFail: number;

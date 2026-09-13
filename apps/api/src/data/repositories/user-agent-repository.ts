@@ -9,7 +9,7 @@
  */
 import { BaseRepository, type QueryParam } from './base-repository';
 
-export interface UserAgent {
+interface UserAgent {
     id: string;
     user_id: string;
     name: string;
@@ -31,11 +31,11 @@ export interface UserAgent {
 }
 
 /** 목록 응답용 — 소유 여부 플래그 부착(다른 사용자의 공유 에이전트 구분). */
-export interface UserAgentWithOwnership extends UserAgent {
+interface UserAgentWithOwnership extends UserAgent {
     owned: boolean;
 }
 
-export interface UserAgentCreate {
+interface UserAgentCreate {
     id: string;
     userId: string;
     name: string;
@@ -49,7 +49,7 @@ export interface UserAgentCreate {
     extensionId?: string | null;
 }
 
-export interface UserAgentUpdate {
+interface UserAgentUpdate {
     name?: string;
     description?: string | null;
     systemPrompt?: string;

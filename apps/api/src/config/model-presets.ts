@@ -19,7 +19,7 @@ import type { QueryType } from '../chat/model-selector-types';
  * 모델 프리셋 정의 인터페이스
  * 각 모델의 기본 설정, 기능, 적합한 질문 유형을 정의합니다.
  */
-export interface ModelPreset {
+interface ModelPreset {
     /** 모델 표시 이름 (예: 'Gemini 3 Flash') */
     name: string;
     /** .env 변수명 (예: 'LLM_DEFAULT_MODEL') */
@@ -52,7 +52,7 @@ export interface ModelPreset {
  * 키 자체를 코드 여러 곳에서 참조해야 할 때 매직 문자열을 피한다.
  * (e.g. fallback resolver, 테스트 fixture)
  */
-export const MODEL_PRESET_KEYS = {
+const MODEL_PRESET_KEYS = {
     /** 기본 로컬 모델 프리셋 — `getModelPresets()` 의 fallback 키 */
     DEFAULT_LOCAL: 'local-llm',
 } as const;

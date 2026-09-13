@@ -90,7 +90,7 @@ export interface ExtensionManifest {
     raw: Record<string, unknown>;
 }
 
-export type ValidationResult =
+type ValidationResult =
     | { ok: true; manifest: ExtensionManifest }
     | { ok: false; errors: string[] };
 
@@ -103,7 +103,7 @@ export type ValidationResult =
  *   - warnings : 설치는 하되 이 환경이 무시하는 필드 (headers/oauth/cwd 등)
  */
 /** plugin.json name 정규화 — 소문자화, 허용 밖 문자는 `-`, 연속·양끝 `-` 제거. */
-export function normalizePluginName(raw: string): string {
+function normalizePluginName(raw: string): string {
     return raw.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '');
 }
 
@@ -221,7 +221,7 @@ const marketplaceSchema = z.object({
     })).max(500),
 });
 
-export interface MarketplacePluginEntry {
+interface MarketplacePluginEntry {
     name: string;
     description?: string;
     /** 다른 저장소를 가리키는 경우 (git-subdir url) */
@@ -234,12 +234,12 @@ export interface MarketplacePluginEntry {
     category?: string;
 }
 
-export interface MarketplaceIndex {
+interface MarketplaceIndex {
     name: string;
     plugins: MarketplacePluginEntry[];
 }
 
-export type MarketplaceParseResult =
+type MarketplaceParseResult =
     | { ok: true; marketplace: MarketplaceIndex }
     | { ok: false; errors: string[] };
 

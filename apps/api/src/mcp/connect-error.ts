@@ -11,7 +11,7 @@ import {
     type McpConnectErrorCode,
 } from '../config/mcp-connect-errors';
 
-export interface ClassifiedConnectError {
+interface ClassifiedConnectError {
     /** 원인 코드 — 프론트 i18n 키로 쓰인다 */
     code: McpConnectErrorCode;
     /** 원문 메시지(상한 적용) — 코드만으로 부족한 진단을 위해 함께 남긴다 */

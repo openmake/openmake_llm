@@ -37,7 +37,7 @@ export interface CitationFixtureDataset {
 }
 
 /** 단일 케이스 평가 결과 */
-export interface CitationCaseResult {
+interface CitationCaseResult {
     caseId: string;
     passed: boolean;
     failureReason?: string;
@@ -47,7 +47,7 @@ export interface CitationCaseResult {
 }
 
 /** 코퍼스 전체 요약 */
-export interface CitationEvalSummary {
+interface CitationEvalSummary {
     datasetVersion: string;
     totalCases: number;
     regressionFailures: number;

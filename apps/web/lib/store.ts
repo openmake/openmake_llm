@@ -10,7 +10,7 @@ import type {
  * 채팅 메시지 (기존 state.js chatHistory 항목 대응).
  * shared-types ChatMessage 를 기반으로 store 고유 필드(streaming)만 확장한다.
  */
-export interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" | "images"> {
+interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" | "images"> {
   /** 서버 messageId (WS done 이벤트) — 메시지 피드백(👍/👎) 전송용 (assistant 메시지). */
   id?: string;
   /** 스트리밍 진행 중 여부 (assistant 메시지) */
@@ -70,7 +70,7 @@ export interface PendingApproval {
 }
 
 /** 딥리서치 진행상황 (백엔드 research_progress 이벤트 — DeepResearch ResearchProgress 대응). */
-export interface ResearchProgressInfo {
+interface ResearchProgressInfo {
   currentStep: string;
   progress: number;
   message: string;
@@ -79,7 +79,7 @@ export interface ResearchProgressInfo {
 }
 
 /** 토론 모드 진행상황 (백엔드 discussion_progress 이벤트 — DiscussionProgress 대응). */
-export interface DiscussionProgressInfo {
+interface DiscussionProgressInfo {
   phase: "selecting" | "discussing" | "reviewing" | "synthesizing" | "complete";
   currentAgent?: string;
   agentEmoji?: string;
@@ -90,7 +90,7 @@ export interface DiscussionProgressInfo {
 }
 
 /** 오케스트레이터 작업 1건 (백엔드 orchestrator_plan/orchestrator_task 이벤트의 task 대응). */
-export interface OrchestratorTaskInfo {
+interface OrchestratorTaskInfo {
   id: string;
   capability: string;
   instruction?: string;
@@ -103,7 +103,7 @@ export interface OrchestratorTaskInfo {
  * 멀티모달 오케스트레이터 진행상황 (ws system_event payload.type=orchestrator_status|plan|task).
  * phase 는 status 이벤트, tasks 는 plan 으로 채워지고 task 이벤트로 상태가 갱신된다.
  */
-export interface OrchestratorProgressInfo {
+interface OrchestratorProgressInfo {
   phase: "planning" | "executing" | "synthesizing";
   detail?: string;
   complexity?: string;
@@ -149,13 +149,13 @@ export interface Artifact {
   taskId?: string;
 }
 
-export type ChatStyle = "concise" | "default" | "verbose";
+type ChatStyle = "concise" | "default" | "verbose";
 
 /** 추론 강도 — thinkingEnabled 가 켜졌을 때만 의미. 백엔드 ws `thinkingLevel` 계약과 1:1. */
-export type ThinkingLevel = "low" | "medium" | "high";
+type ThinkingLevel = "low" | "medium" | "high";
 
 /** store 인증 사용자 — shared-types User 의 표시용 부분집합 (name 은 username 매핑). */
-export interface AuthUser {
+interface AuthUser {
   id: string;
   email: string;
   name?: string;
@@ -299,7 +299,7 @@ const THINKING_LEVEL_ORDER: ThinkingLevel[] = ["low", "medium", "high"];
  * 백엔드 message-pipeline 은 primary 모드 "하나"만 실행하고 나머지는 조용히 무시하므로,
  * 동시 활성 시 UI 에는 켜진 것처럼 보이지만 실제로는 안 먹는 착시를 제거하기 위함.
  */
-export const PRIMARY_MODE_KEYS = [
+const PRIMARY_MODE_KEYS = [
   "discussionMode",
   "deepResearchMode",
   "agentTaskMode",

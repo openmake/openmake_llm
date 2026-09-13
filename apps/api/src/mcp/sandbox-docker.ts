@@ -29,9 +29,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /** 'full'=bridge, 'none'=--network none, 'host'=컨테이너 없이 호스트 직접 실행(opt-out) */
-export type SandboxNetwork = 'full' | 'none' | 'host';
+type SandboxNetwork = 'full' | 'none' | 'host';
 
-export interface SandboxInput {
+interface SandboxInput {
     command: string;
     args: string[];
     serverId: string;
@@ -40,7 +40,7 @@ export interface SandboxInput {
     env?: Record<string, string>;
 }
 
-export interface SandboxResult {
+interface SandboxResult {
     command: string;
     args: string[];
     /** 실제 docker 로 감쌌는지 (false = no-op 통과) */

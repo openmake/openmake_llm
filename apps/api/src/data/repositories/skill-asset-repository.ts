@@ -14,7 +14,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { BaseRepository } from './base-repository';
 
-export interface SkillAssetRow {
+interface SkillAssetRow {
     id: string;
     skill_id: string;
     rel_path: string;
@@ -24,14 +24,14 @@ export interface SkillAssetRow {
     created_at: Date;
 }
 
-export interface SkillAssetMeta {
+interface SkillAssetMeta {
     id: string;
     rel_path: string;
     content_type: string;
     size_bytes: number;
 }
 
-export interface InsertSkillAssetInput {
+interface InsertSkillAssetInput {
     skillId: string;
     relPath: string;
     contentType?: string;

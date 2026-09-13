@@ -37,7 +37,7 @@ async function recordConsents(
     );
 }
 
-export interface RegisterRequest {
+interface RegisterRequest {
     username?: string;
     email: string;
     password: string;
@@ -54,19 +54,19 @@ export interface RegisterRequest {
     guardianEmail?: string;   // 미달 연령 시 필수
 }
 
-export interface LoginRequest {
+interface LoginRequest {
     email: string;
     password: string;
 }
 
-export interface ChangePasswordRequest {
+interface ChangePasswordRequest {
     userId: string;
     currentEmail: string;
     currentPassword: string;
     newPassword: string;
 }
 
-export interface AuthResult {
+interface AuthResult {
     success: boolean;
     error?: string;
     user?: PublicUser;

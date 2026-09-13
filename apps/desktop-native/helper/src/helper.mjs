@@ -1,7 +1,7 @@
 // OpenMake Companion 헬퍼 — @openmake/local-bridge-core 의 네이티브 앱(SwiftUI) 어댑터.
 //
 // 프로토콜·경로 스코프·exec 3단 방어·worktree 격리는 전부 코어 패키지가 담당한다
-// (데스크톱 Electron·CLI 와 동일 코어 — 보안 코드 재구현 금지 원칙, plan §3).
+// (CLI 와 동일 코어 — 보안 코드 재구현 금지 원칙, plan §3).
 // 이 파일은 호스트 차이만 남는다:
 //   - 인증: API key(omk_live_*) Authorization 헤더 (CLI 와 동일 계약).
 //     key 는 argv 가 아니라 env(OMK_COMPANION_API_KEY)로 받는다 — ps 인자 노출 방지.

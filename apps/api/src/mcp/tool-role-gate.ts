@@ -12,15 +12,15 @@ import { isAdminRole } from '../data/user-manager';
 import { MCP_NAMESPACE_SEPARATOR } from './types';
 import { BUILTIN_TOOL_REQUIRED_ROLE } from '../config/ops-metrics';
 
-export const DEFAULT_RESTRICTED_SERVERS = 'Python REPL:admin,Playwright Browser:user';
+const DEFAULT_RESTRICTED_SERVERS = 'Python REPL:admin,Playwright Browser:user';
 
 /** 역할 레벨 (게스트<일반<관리자). */
-export function roleLevel(role?: string): number {
+function roleLevel(role?: string): number {
     return isAdminRole(role) ? 2 : role === 'user' ? 1 : 0;
 }
 
 /** 고위험 MCP 서버별 최소 역할 파싱. */
-export function parseRestrictedServers(): Map<string, number> {
+function parseRestrictedServers(): Map<string, number> {
     const raw = process.env.MCP_RESTRICTED_SERVERS ?? DEFAULT_RESTRICTED_SERVERS;
     const m = new Map<string, number>();
     for (const part of raw.split(',')) {

@@ -21,7 +21,7 @@ const FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/;
 /** 본문에서 description 을 유도할 때 쓰는 최대 길이 (스킬 스키마 상한 1024 이내) */
 const DERIVED_DESCRIPTION_MAX = 300;
 
-export interface ParsedComponentFile {
+interface ParsedComponentFile {
     frontmatter: Record<string, unknown>;
     body: string;
 }
@@ -85,7 +85,7 @@ export function commandFileToSkillMarkdown(path: string, raw: string): { content
     };
 }
 
-export interface NormalizedPluginAgent {
+interface NormalizedPluginAgent {
     name: string;
     description: string;
     systemPrompt: string;

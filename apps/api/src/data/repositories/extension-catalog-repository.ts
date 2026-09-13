@@ -9,7 +9,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { BaseRepository } from './base-repository';
 
-export interface CatalogPluginEntry {
+interface CatalogPluginEntry {
     name: string;
     description?: string;
     version?: string;
@@ -21,7 +21,7 @@ export interface CatalogPluginEntry {
     description_ko?: string;
 }
 
-export interface ExtensionCatalogRow {
+interface ExtensionCatalogRow {
     id: string;
     url: string;
     name: string;

@@ -36,14 +36,14 @@ function weekKey(userId: string, now: number): string {
 }
 
 /** 조회용 윈도우 상태 — resetAt 은 현재 calendar bucket 이 넘어가는 시각(ms epoch). */
-export interface UserQuotaWindow {
+interface UserQuotaWindow {
     used: number;
     limit: number;
     remaining: number;
     resetAt: number;
 }
 
-export interface UserQuotaStatus {
+interface UserQuotaStatus {
     hourly: UserQuotaWindow;
     weekly: UserQuotaWindow;
 }

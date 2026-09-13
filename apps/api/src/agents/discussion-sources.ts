@@ -18,8 +18,8 @@ import { WEB_SEARCH_TEMPLATES, getLocalizedTemplate } from '../sockets/ws-chat-l
  * 카카오 지도 블록과 같은 선례). 마커로 감싸 두면 external-provider 가 이를 뽑아
  * 모델에게는 감추고 최종 응답에 정확히 1회 붙일 수 있다.
  */
-export const DISCUSSION_SOURCES_MARKER_START = '[[discussion-sources]]';
-export const DISCUSSION_SOURCES_MARKER_END = '[[/discussion-sources]]';
+const DISCUSSION_SOURCES_MARKER_START = '[[discussion-sources]]';
+const DISCUSSION_SOURCES_MARKER_END = '[[/discussion-sources]]';
 
 /** 마커로 감싼다(빈 블록이면 그대로 빈 문자열). */
 export function wrapDiscussionSources(block: string): string {

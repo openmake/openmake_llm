@@ -10,7 +10,7 @@
 const GITHUB_API = 'https://api.github.com';
 
 /** git tree mode — 심링크 blob. 내용이 본문이 아니라 대상 경로라 raw fetch 로 설치할 수 없다. */
-export const GIT_SYMLINK_MODE = '120000';
+const GIT_SYMLINK_MODE = '120000';
 
 export interface TreeEntry {
     path: string;

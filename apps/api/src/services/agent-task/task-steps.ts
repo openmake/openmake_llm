@@ -25,7 +25,7 @@ export function isSearchTool(name: string): boolean {
  * artifacts 테이블은 session_id NOT NULL 이고 (session_id, artifact_id, version) 이 유니크라,
  * task 별로 고유한 값을 주면 스키마 변경 없이 같은 저장소를 공유할 수 있다.
  */
-export function taskArtifactSessionId(taskId: string): string {
+function taskArtifactSessionId(taskId: string): string {
     return `task:${taskId}`;
 }
 

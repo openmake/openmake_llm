@@ -11,7 +11,7 @@ const logger = createLogger('TokenBlacklist');
 /**
  * Pluggable Token Blacklist Interface
  */
-export interface ITokenBlacklist {
+interface ITokenBlacklist {
     add(jti: string, expiresAt: number): Promise<void>;
     has(jti: string): Promise<boolean>;
     cleanup(): Promise<number>;
@@ -22,7 +22,7 @@ export interface ITokenBlacklist {
  * PostgreSQL-backed Token Blacklist Implementation
  * 공유 Pool(getPool())을 사용하여 연결 낭비를 방지합니다.
  */
-export class PostgresTokenBlacklist implements ITokenBlacklist {
+class PostgresTokenBlacklist implements ITokenBlacklist {
     private cleanupInterval: NodeJS.Timeout | null = null;
     private initialized = false;
 

@@ -1,23 +1,21 @@
 /**
  * ============================================================
- * Model Selector - 질문 유형별 모델 프리셋 선택
+ * Model Selector - 질문 유형 분류와 기본 모델 선택
  * ============================================================
  *
- * 사용자 질문을 분석하여 9가지 QueryType으로 분류하고,
- * 최적의 LLM 모델 프리셋을 선택합니다.
+ * 사용자 질문을 9가지 QueryType으로 분류하고 단일 로컬 모델(llmDefaultModel)을 돌려줍니다.
+ * 분류는 관측 전용이며 모델·샘플링을 바꾸지 않습니다.
  *
  * @module chat/model-selector
  * @description
- * - 질문 유형 분류: 정규식 패턴 매칭 + 키워드 가중치 스코어링 알고리즘
- * - 모델 프리셋 선택: QueryType별 최적 모델 매칭 (우선순위 기반)
- * - 모델별 파라미터 조정: 모델 특성에 맞는 temperature, top_p, num_ctx 자동 튜닝
+ * - 질문 유형 분류: fast-path + 정규식/키워드 분류(query-classifier) — LLM 호출 없음
+ * - 모델 기능 확인: checkModelCapability() — 프리셋·부팅 프로브 실측 기반
  *
- * 알고리즘 흐름:
- * 1. classifyQuery() - 정규식/키워드로 QueryType 분류 + 신뢰도 계산
- * 2. selectOptimalModel() - QueryType에 맞는 ModelPreset 선택
- * 3. adjustOptionsForModel() - 선택된 모델에 맞게 옵션 미세 조정
+ * 흐름:
+ * 1. detectFastPath() / classifyQuery() - QueryType 분류 + 신뢰도 계산
+ * 2. selectOptimalModel() - 분류 결과와 llmDefaultModel 반환
  *
- * @see services/ChatService.ts - 최종 모델 선택 결과 소비
+ * @see sockets/ws-chat-handler.ts - selectOptimalModel() 소비
  */
 
 import { getConfig } from '../config/env';
@@ -28,20 +26,11 @@ import { findLocalModel } from '../config/local-models';
 
 const logger = createLogger('ModelSelector');
 
-// Re-export types from model-selector-types
-export type { QueryType, QueryClassification, ModelSelection } from './model-selector-types';
 import type { QueryType, ModelSelection } from './model-selector-types';
 
-// Re-export classifyQuery from query-classifier
-export { classifyQuery } from './query-classifier';
-// Import classifyQuery for internal use (via separate name to avoid conflict)
-import { classifyQuery as _classifyQuery } from './query-classifier';
+import { classifyQuery } from './query-classifier';
 // Fast-path: 짧은 인사·단답형 즉시 분기
 import { detectFastPath } from './fast-path-detector';
-
-// Re-export ModelPreset and getModelPresets from config for backward compatibility
-export { ModelPreset, getModelPresets } from '../config/model-presets';
-
 
 
 // ============================================================
@@ -79,7 +68,7 @@ export async function selectOptimalModel(
         logger.info(`Fast-path 매칭(${fastPath.reason}) — queryType=chat`);
     } else {
         // ── Regex 분류 (단일 경로) ──
-        const regexResult = _classifyQuery(query);
+        const regexResult = classifyQuery(query);
         classifiedType = regexResult.type;
         classifiedConfidence = regexResult.confidence;
         classifierSource = 'regex';
@@ -149,9 +138,3 @@ export function checkModelCapability(
     };
     return defaults[capability] ?? false;
 }
-
-// ============================================================
-// 모델별 파라미터 조정
-// ============================================================
-
-

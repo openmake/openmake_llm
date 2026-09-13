@@ -26,7 +26,7 @@ const logger = createLogger('NotebookLMRoutes');
 
 export const notebooklmRouter = Router();
 
-export interface NotebookSummary {
+interface NotebookSummary {
     id: string;
     title: string;
     source_count?: number;

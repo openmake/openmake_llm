@@ -19,8 +19,6 @@ export const createSkillSchema = z.object({
     isPublic: z.boolean().optional().default(false),
 });
 
-export type CreateSkillInput = z.infer<typeof createSkillSchema>;
-
 // PUT /api/agents/skills/:skillId — 스킬 수정
 export const updateSkillSchema = z.object({
     name: z.string().min(1).max(200).optional(),
@@ -29,8 +27,6 @@ export const updateSkillSchema = z.object({
     category: z.string().max(100).optional(),
     isPublic: z.boolean().optional(),
 });
-
-export type UpdateSkillInput = z.infer<typeof updateSkillSchema>;
 
 // GET /api/agents/skills query params — 스킬 검색
 // status 필터는 의도적으로 미지원: draft 조회는 GET /api/agents/skills/drafts 전용 엔드포인트
@@ -44,8 +40,6 @@ export const searchSkillsQuerySchema = z.object({
     limit: z.coerce.number().int().min(1).max(200).optional().default(20),
     offset: z.coerce.number().int().min(0).optional().default(0),
 });
-
-export type SearchSkillsQuery = z.infer<typeof searchSkillsQuerySchema>;
 
 // ============================================================
 // Skill Creator (Phase 1) — 자동 생성 + draft 워크플로
@@ -67,8 +61,6 @@ export const autoCreateSkillSchema = z.object({
     hints: z.string().max(1000).optional(),
 });
 
-export type AutoCreateSkillInput = z.infer<typeof autoCreateSkillSchema>;
-
 /** 일괄 draft 처리 — 한 요청에서 여러 스킬을 승인/거부 (부분 성공 허용) */
 export const bulkDraftActionSchema = z.object({
     skillIds: z.array(z.string().min(1).max(128)).min(1).max(50),
@@ -80,8 +72,6 @@ export const draftsQuerySchema = z.object({
     limit: z.coerce.number().int().positive().max(100).default(50),
     offset: z.coerce.number().int().nonnegative().default(0),
 });
-
-export type DraftsQuery = z.infer<typeof draftsQuerySchema>;
 
 // LLM 응답 검증 (SkillCreatorService 가 사용)
 export const llmSkillManifestSchema = z.object({

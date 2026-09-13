@@ -11,7 +11,7 @@ import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('ToolMerger');
 
-export interface UserPoolToolGroup {
+interface UserPoolToolGroup {
     displayName: string;
     tools: string[];      // 네임스페이스 적용 이름 (displayName::tool)
     shortNames: string[]; // 원본 도구 이름 (의도 매칭용)
@@ -105,7 +105,7 @@ export interface ActiveSkillBinding {
     binding_mode: 'required' | 'allowed' | 'denied';
 }
 
-export interface MergeInput {
+interface MergeInput {
     allTools: ToolDefinition[];
     userToggled: ToolDefinition[];
     profileRequired: string[];

@@ -16,7 +16,7 @@ import { createLogger } from '../utils/logger';
 const logger = createLogger('ApiKeyService');
 
 /** API Key 생성 파라미터 */
-export interface CreateApiKeyParams {
+interface CreateApiKeyParams {
     userId: string;
     name: string;
     description?: string;
@@ -26,7 +26,7 @@ export interface CreateApiKeyParams {
 }
 
 /** API Key 생성 결과 (평문 키 포함 — 최초 1회만 반환) */
-export interface CreateApiKeyResult {
+interface CreateApiKeyResult {
     /** 평문 API Key — 이 응답에서만 노출됨 */
     plainKey: string;
     /** 저장된 키 메타데이터 */
@@ -34,7 +34,7 @@ export interface CreateApiKeyResult {
 }
 
 /** API Key 수정 파라미터 */
-export interface UpdateApiKeyParams {
+interface UpdateApiKeyParams {
     name?: string;
     description?: string;
     scopes?: string[];

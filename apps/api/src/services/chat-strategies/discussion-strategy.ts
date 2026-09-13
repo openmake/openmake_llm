@@ -257,7 +257,6 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
         // 1단계 문서 컨텍스트: 첨부 파일 fileContext (2026-06-12) — 텍스트 파일 내용/바이너리 메타.
         // (docId 기반 문서 첨부는 2026-05-19 폐기 — fileContext 는 per-message transient 채널)
         const documentContext = context.req.fileContext || '';
-        const documentImages: string[] = [];
 
         // 2단계: 대화 히스토리 변환 (프롬프트 인젝션 방어를 위해 content 정제)
         const conversationHistory = history?.map((h) => ({
@@ -273,11 +272,8 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
             logger.info(`🔍 웹 검색 컨텍스트 적용: ${webSearchContext.length}자`);
         }
 
-        // 3단계 사용자 장기 메모리 조회: 2026-05-19 MemoryService 폐기와 함께 제거
-        const userMemoryContext = '';
-
-        // 4단계: 이미지 분석 (최대 3개, 비전 모델을 통해 텍스트 설명 추출)
-        const allImages = [...(images || []), ...documentImages];
+        // 3단계: 이미지 분석 (최대 3개, 비전 모델을 통해 텍스트 설명 추출)
+        const allImages = [...(images || [])];
         let imageDescriptions: string[] = [];
 
         if (allImages.length > 0) {
@@ -322,7 +318,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
             imageDescriptions = await Promise.all(imagePromises);
         }
 
-        // 5단계: DiscussionEngine 생성 및 토론 실행
+        // 4단계: DiscussionEngine 생성 및 토론 실행
         /** DiscussionEngine에 주입할 LLM 응답 생성 함수
          *  - 호출 직전 abort 체크: 다음 라운드/전문가로 진입 전 중단
          *  - 스트리밍 토큰 콜백 내부 abort 체크: 진행 중인 LLM 호출의 다음 토큰을 throw로 차단
@@ -359,12 +355,10 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
                 userLanguage: userLanguagePreference,
                 documentContext,
                 conversationHistory,
-                userMemoryContext,
                 webSearchContext,
                 imageContexts: allImages,
                 imageDescriptions,
                 contextPriority: {
-                    userMemory: 1,
                     conversationHistory: 2,
                     document: 3,
                     webSearch: 4,
@@ -375,7 +369,6 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
                     maxDocumentTokens: DISCUSSION_TOKEN_BUDGET.DEFAULT.maxDocumentTokens,
                     maxHistoryTokens: DISCUSSION_TOKEN_BUDGET.DEFAULT.maxHistoryTokens,
                     maxWebSearchTokens: DISCUSSION_TOKEN_BUDGET.DEFAULT.maxWebSearchTokens,
-                    maxMemoryTokens: DISCUSSION_TOKEN_BUDGET.DEFAULT.maxMemoryTokens,
                     maxImageDescriptionTokens: DISCUSSION_TOKEN_BUDGET.DEFAULT.maxImageDescriptionTokens,
                 },
             },
@@ -386,7 +379,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
         let webSearchFn: ((q: string, opts?: { maxResults?: number }) => Promise<DiscussionSearchResult[]>) | undefined;
         if (DISCUSSION_FACTCHECK.ENABLED) {
             try {
-                const { performWebSearch } = await import('../../mcp');
+                const { performWebSearch } = await import('../../mcp/web-search');
                 webSearchFn = performWebSearch;
                 logger.info('🔍 웹 검색 사실 검증 활성화');
             } catch {
@@ -394,7 +387,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
             }
         }
 
-        // 6단계: 토론 실행 및 결과 포맷팅/스트리밍
+        // 5단계: 토론 실행 및 결과 포맷팅/스트리밍
         checkAborted();
         let result: DiscussionResult;
         try {
@@ -433,7 +426,6 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
         logger.info('📊 컨텍스트 사용 현황:');
         logger.info(`   - 문서: ${documentContext ? '✓' : '✗'} (${documentContext.length}자)`);
         logger.info(`   - 히스토리: ${conversationHistory.length}개 메시지`);
-        logger.info(`   - 메모리: ${userMemoryContext ? '✓' : '✗'} (${userMemoryContext.length}자)`);
         logger.info(`   - 웹검색: ${webSearchContext ? '✓' : '✗'}`);
         logger.info(`   - 이미지: ${imageDescriptions.length}개 분석됨`);
 

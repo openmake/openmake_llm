@@ -31,7 +31,7 @@ export interface ArtifactPublicationRow {
     updated_at: string;
 }
 
-export interface UpsertPublicationInput {
+interface UpsertPublicationInput {
     sessionId: string;
     artifactId: string;
     ownerUserId: string;
@@ -48,7 +48,7 @@ function generateShareToken(): string {
 
 /** UUID 형식 검증 — 비-UUID pubId 가 UUID 컬럼 쿼리에 들어가 DB 에러(500) 나는 것 방지. */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export function isUuid(s: string): boolean {
+function isUuid(s: string): boolean {
     return UUID_RE.test(s);
 }
 

@@ -40,5 +40,3 @@ export const chatFeedbackSchema = z.object({
     }).optional()
 });
 
-/** 채팅 피드백 기록 요청 TypeScript 타입 */
-export type ChatFeedbackInput = z.infer<typeof chatFeedbackSchema>;

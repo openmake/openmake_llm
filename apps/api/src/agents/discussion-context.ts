@@ -18,13 +18,13 @@ import { DISCUSSION_CONTEXT_LABELS } from './discussion-locales';
 const logger = createLogger('Discussion');
 
 // 토큰 → 문자 변환 (근사값)
-export const tokensToChars = (tokens: number): number => tokens * 4;
+const tokensToChars = (tokens: number): number => tokens * 4;
 
 /**
  * 🆕 문자열을 토큰 제한에 맞게 자르기
  * @param middleOmittedFn - 생략 메시지 포맷 함수 (다국어 지원)
  */
-export const truncateToLimit = (
+const truncateToLimit = (
     text: string,
     maxTokens: number,
     middleOmittedFn?: (charCount: number) => string,
@@ -56,7 +56,6 @@ export function createContextBuilder(config: DiscussionConfig): {
         // 🆕 컨텍스트 엔지니어링 필드 추출
         documentContext,
         conversationHistory,
-        userMemoryContext,
         webSearchContext,
         // 🆕 이미지 컨텍스트
         imageContexts,
@@ -75,7 +74,6 @@ export function createContextBuilder(config: DiscussionConfig): {
     // 🆕 컨텍스트 우선순위 기본값
     // ========================================
     const defaultPriority: ContextPriority = {
-        userMemory: 1,        // 최우선: 개인화
         conversationHistory: 2,  // 맥락 유지
         document: 3,          // 참조 자료
         webSearch: 4,         // 사실 검증
@@ -95,7 +93,6 @@ export function createContextBuilder(config: DiscussionConfig): {
         maxDocumentTokens: DISCUSSION_TOKEN_BUDGET.COMPACT.maxDocumentTokens,
         maxHistoryTokens: DISCUSSION_TOKEN_BUDGET.COMPACT.maxHistoryTokens,
         maxWebSearchTokens: DISCUSSION_TOKEN_BUDGET.COMPACT.maxWebSearchTokens,
-        maxMemoryTokens: DISCUSSION_TOKEN_BUDGET.COMPACT.maxMemoryTokens,
         maxImageDescriptionTokens: DISCUSSION_TOKEN_BUDGET.COMPACT.maxImageDescriptionTokens
     };
     
@@ -120,17 +117,7 @@ export function createContextBuilder(config: DiscussionConfig): {
             maxTokens: number;
         }> = [];
         
-        // 1. 사용자 메모리 (최우선)
-        if (userMemoryContext) {
-            contextItems.push({
-                priority: priority.userMemory,
-                label: contextLabels.userMemory,
-                content: userMemoryContext,
-                maxTokens: limits.maxMemoryTokens
-            });
-        }
-
-        // 2. 대화 히스토리
+        // 1. 대화 히스토리
         if (conversationHistory && conversationHistory.length > 0) {
             const recentHistory = conversationHistory.slice(-5);
             const historyText = recentHistory
@@ -144,7 +131,7 @@ export function createContextBuilder(config: DiscussionConfig): {
             });
         }
 
-        // 3. 문서 컨텍스트
+        // 2. 문서 컨텍스트
         if (documentContext) {
             contextItems.push({
                 priority: priority.document,
@@ -154,7 +141,7 @@ export function createContextBuilder(config: DiscussionConfig): {
             });
         }
 
-        // 4. 웹 검색 결과
+        // 3. 웹 검색 결과
         if (webSearchContext) {
             contextItems.push({
                 priority: priority.webSearch,
@@ -164,7 +151,7 @@ export function createContextBuilder(config: DiscussionConfig): {
             });
         }
 
-        // 5. 이미지 설명 (비전 모델 분석 결과)
+        // 4. 이미지 설명 (비전 모델 분석 결과)
         if (imageDescriptions && imageDescriptions.length > 0) {
             const imageText = imageDescriptions
                 .map((desc, i) => `${contextLabels.imageItem(i + 1)}: ${desc}`)

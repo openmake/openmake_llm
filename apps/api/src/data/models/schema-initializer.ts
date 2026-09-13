@@ -26,7 +26,7 @@ const SCHEMA_FILE_RELATIVE_PATH = 'db/init/002-schema.sql';
  * 002-schema.sql 파일 탐색 (cwd / __dirname 상대 경로 모두 시도).
  * 발견 실패 시 LEGACY_SCHEMA (inline) fallback.
  */
-export function getSchemaSql(): { schema: string; source: string } {
+function getSchemaSql(): { schema: string; source: string } {
     const candidatePaths = [
         path.resolve(process.cwd(), SCHEMA_FILE_RELATIVE_PATH),
         path.resolve(__dirname, '../../../../../db/init/002-schema.sql'),

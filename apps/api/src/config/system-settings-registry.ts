@@ -17,7 +17,7 @@ import { z } from 'zod';
 
 export type SettingGroup = 'oauth' | 'search' | 'alerts' | 'push' | 'llm';
 
-export interface SystemSettingDef {
+interface SystemSettingDef {
     /** env 변수명과 동일한 설정 키 */
     key: string;
     group: SettingGroup;

@@ -17,7 +17,7 @@ import { combineSignals } from './http-call';
 
 const logger = createLogger('OrchestratorPlanner');
 
-export interface PlannerInput {
+interface PlannerInput {
     message: string;
     attachments: PlannerAttachmentMeta[];
     recentTurns: Array<{ role: string; content: string }>;
@@ -26,7 +26,7 @@ export interface PlannerInput {
     signal?: AbortSignal;
 }
 
-export interface PlannerOutcome {
+interface PlannerOutcome {
     plan: ValidatedPlan | null;
     /** 해석된 planner 모델 fullId (관측) */
     model: string;

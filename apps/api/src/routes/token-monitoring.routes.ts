@@ -131,5 +131,4 @@ router.get('/costs', asyncHandler(async (req: Request, res: Response) => {
     res.json(success({ today: { totalCost: parseFloat(totalCost.toFixed(6)), byModel: modelCosts, totalTokens: todayStats.totalTokens, totalRequests: todayStats.totalRequests }, weekly: { totalTokens: weeklyStats.totalTokens, totalRequests: weeklyStats.totalRequests, estimatedCost: parseFloat((weeklyStats.totalTokens * TOKEN_COST.WEEKLY_ESTIMATE_COST_PER_TOKEN).toFixed(6)) }, priceTable: modelPrices }));
 }));
 
-export default router;
 export { router as tokenMonitoringRouter };

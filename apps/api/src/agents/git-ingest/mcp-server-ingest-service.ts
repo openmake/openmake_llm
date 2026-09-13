@@ -68,7 +68,7 @@ export interface CandidateListResult {
     selectionRequired: true;
 }
 
-export interface McpServerIngestOptions {
+interface McpServerIngestOptions {
     pool: Pool;
     llmClientFactory: (model: string) => LLMClient;
     fetcherFactory: (opts: { accessToken?: string }) => GitFetcher;

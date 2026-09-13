@@ -6,7 +6,7 @@
  */
 import { BaseRepository } from './base-repository';
 
-export interface OrchestratorRunRecord {
+interface OrchestratorRunRecord {
     requestId?: string;
     userId?: string;
     plannerModel?: string;

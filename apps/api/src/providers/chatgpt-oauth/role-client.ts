@@ -46,7 +46,7 @@ const PROVIDER_ERROR_STATUS: Record<string, number> = {
     INVALID_MODEL_ID: 400,
 };
 
-export interface ProviderRoleClientOptions {
+interface ProviderRoleClientOptions {
     provider: IProvider;
     /** provider 내부 모델 id (fullId 의 model 부분) */
     modelId: string;
@@ -77,7 +77,6 @@ function getProviderRoleClientCtor(): new (opts: ProviderRoleClientOptions) => L
     class ProviderRoleClientImpl extends LLMClient {
         private readonly provider: IProvider;
         private readonly modelId: string;
-        private readonly quotaUserId?: string;
         private readonly onUsage?: ProviderRoleClientOptions['onUsage'];
 
         constructor(opts: ProviderRoleClientOptions) {
@@ -85,7 +84,6 @@ function getProviderRoleClientCtor(): new (opts: ProviderRoleClientOptions) => L
             super({ model: opts.modelId, ...(opts.userId ? { userId: opts.userId } : {}) });
             this.provider = opts.provider;
             this.modelId = opts.modelId;
-            if (opts.userId) this.quotaUserId = opts.userId;
             if (opts.onUsage) this.onUsage = opts.onUsage;
         }
 

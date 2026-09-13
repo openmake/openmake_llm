@@ -41,7 +41,7 @@ export interface ShareState {
   path: string;
 }
 
-export interface ShareToggles {
+interface ShareToggles {
   includeSteps: boolean;
   includeDiff: boolean;
   includeArtifacts: boolean;

@@ -34,7 +34,7 @@ const logger = createLogger('AgentIngestService');
 
 const MAX_DRAFT_AGENTS_PER_USER = parseInt(process.env.AGENT_CREATOR_MAX_DRAFTS_PER_USER || '20', 10);
 
-export interface SkillBindingResolution {
+interface SkillBindingResolution {
     ref: string;
     resolved: boolean;
     skillId?: string;
@@ -42,12 +42,12 @@ export interface SkillBindingResolution {
     error?: string;
 }
 
-export interface ImportInput extends ImportAgentFromGitInput {
+interface ImportInput extends ImportAgentFromGitInput {
     userId: string;
     isAdmin: boolean;
 }
 
-export interface ImportResult {
+interface ImportResult {
     agentId: string;
     name: string;
     description: string;
@@ -69,7 +69,7 @@ export interface ImportResult {
     candidates?: never;
 }
 
-export interface CandidateListResult {
+interface CandidateListResult {
     gitUrl: string;
     gitRef: string;
     candidates: ManifestCandidate[];
@@ -77,7 +77,7 @@ export interface CandidateListResult {
     selectionRequired: true;
 }
 
-export interface AgentIngestOptions {
+interface AgentIngestOptions {
     pool: Pool;
     llmClientFactory: (model: string) => LLMClient;
     fetcherFactory: (opts: { accessToken?: string }) => GitFetcher;

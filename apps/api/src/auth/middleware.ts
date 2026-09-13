@@ -37,7 +37,7 @@ function looksLikeJWT(token: string): boolean {
  * PublicUser보다 간소화된 버전 - JWT 페이로드에서 직접 추출
  * @interface AuthUser
  */
-export interface AuthUser {
+interface AuthUser {
     /** JWT 페이로드의 userId */
     userId: string;
     /** 사용자 ID (DB 조회 후 설정) */

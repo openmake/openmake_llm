@@ -10,7 +10,7 @@ import { useAppStore } from "@/lib/store";
 import { NAV_ROLE_RANK, type NavRole } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
-/** OD lumen 모바일 시안: 하단 탭바(44px+ 터치 타깃) + "메뉴" 탭으로 전체 드로어. 데스크탑(lg)은 고정 사이드바. */
+/** 모바일: 하단 탭바(44px+ 터치 타깃) + "메뉴" 탭으로 전체 드로어. 데스크탑(lg)은 고정 사이드바. */
 const TABS: { labelKey: string; href: string; icon: typeof MessageSquare; minRole: NavRole }[] = [
   { labelKey: "chat", href: "/", icon: MessageSquare, minRole: "guest" },
   { labelKey: "agent", href: "/agent-tasks", icon: Sparkles, minRole: "user" },

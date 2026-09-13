@@ -80,7 +80,7 @@ export interface LanguagePolicyDecision {
 /**
  * 언어별 응답 템플릿 설정
  */
-export interface LanguageResponseTemplate {
+interface LanguageResponseTemplate {
     /** 언어 규칙 지시문 */
     languageRule: string;
     /** 형식 지침 */
@@ -118,7 +118,7 @@ export interface LanguagePolicyConfig {
 /**
  * 언어별 응답 템플릿 매핑
  */
-export const LANGUAGE_TEMPLATES: Record<SupportedLanguageCode, LanguageResponseTemplate> = {
+const LANGUAGE_TEMPLATES: Record<SupportedLanguageCode, LanguageResponseTemplate> = {
     ko: {
         languageRule: '한국어로 응답 (언어 혼용 금지)',
         formatGuidance: '정중하고 전문적인 어투를 사용합니다. 존댓말을 사용합니다.',
@@ -264,7 +264,7 @@ export const LANGUAGE_TEMPLATES: Record<SupportedLanguageCode, LanguageResponseT
 /**
  * 기본 언어 정책 설정
  */
-export const DEFAULT_LANGUAGE_POLICY: LanguagePolicyConfig = {
+const DEFAULT_LANGUAGE_POLICY: LanguagePolicyConfig = {
     defaultLanguage: 'ko',
     enableDynamicResponse: false, // Feature flag로 제어
     minConfidenceThreshold: LANGUAGE_THRESHOLDS.MIN_CONFIDENCE,
@@ -621,7 +621,7 @@ export function generateLanguageInstructions(policy: LanguagePolicyDecision): st
 
 export type PromptLocaleCode = 'ko' | 'en' | 'ja' | 'zh' | 'es' | 'de' | 'fr';
 
-export const PRIMARY_PROMPT_LOCALES: PromptLocaleCode[] = ['ko', 'en', 'ja', 'zh', 'es', 'de', 'fr'];
+const PRIMARY_PROMPT_LOCALES: PromptLocaleCode[] = ['ko', 'en', 'ja', 'zh', 'es', 'de', 'fr'];
 
 export function resolvePromptLocale(lang: string): PromptLocaleCode {
     const normalized = (lang || 'en').toLowerCase().split('-')[0];

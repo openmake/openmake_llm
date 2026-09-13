@@ -34,7 +34,7 @@ type ResponsesInputItem =
     | { type: 'function_call'; call_id: string; name: string; arguments: string }
     | { type: 'function_call_output'; call_id: string; output: string };
 
-export interface ResponsesRequestParts {
+interface ResponsesRequestParts {
     /** system 메시지 병합 — Responses 의 instructions 파라미터로 전달 */
     instructions?: string;
     input: ResponsesInputItem[];

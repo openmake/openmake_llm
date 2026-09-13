@@ -11,9 +11,9 @@ import { INTERNAL_BUNDLE_PREFIX } from '../../agents/git-ingest/internal-bundle-
 import { createHash, randomUUID } from 'crypto';
 import type { LoadedBundle } from '../../agents/git-ingest/internal-bundle-fetcher';
 
-export interface BundleFileRecord { path: string; encoding: 'utf8' | 'base64'; content: string }
+interface BundleFileRecord { path: string; encoding: 'utf8' | 'base64'; content: string }
 
-export interface UpsertBundleInput {
+interface UpsertBundleInput {
     ownerId: string;
     name: string;
     version: string;
@@ -22,7 +22,7 @@ export interface UpsertBundleInput {
     files: Array<{ path: string; content: string | Buffer }>;
 }
 
-export interface MarketplaceBundleRow {
+interface MarketplaceBundleRow {
     id: string; owner_id: string; name: string; version: string; description: string | null;
     category: string | null; sha: string; total_bytes: number; created_at: Date; updated_at: Date;
 }

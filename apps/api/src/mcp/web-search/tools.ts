@@ -21,7 +21,7 @@ import { formatSearchSources } from './format-sources';
  * @param args.query - 검색 쿼리 (필수)
  * @returns 번호가 매겨진 검색 결과 목록
  */
-export const webSearchTool: MCPToolDefinition = {
+const webSearchTool: MCPToolDefinition = {
     tool: {
         name: 'web_search',
         description: '웹에서 최신 정보를 검색합니다. 학습 시점 이후의 최신 정보(뉴스·날씨·시세·최근 사건·버전 등)나 모델이 모르는 사실이 필요할 때 사용하세요. 여러 출처의 제목·URL·요약을 번호 목록으로 반환합니다. 특정 단일 페이지의 본문이 필요하면 extract_webpage를, 주장 진위 교차검증은 fact_check를 사용하세요.',
@@ -58,7 +58,7 @@ export const webSearchTool: MCPToolDefinition = {
  * @param args.claim - 검증할 주장 (필수)
  * @returns 검증 근거 검색 결과 목록
  */
-export const factCheckTool: MCPToolDefinition = {
+const factCheckTool: MCPToolDefinition = {
     tool: {
         name: 'fact_check',
         description: '특정 주장의 진위를 외부 출처로 교차검증합니다. 사용자나 모델이 단정한 사실이 맞는지 근거가 필요할 때 사용하세요. 주장과 관련된 출처 5건의 제목·URL을 반환합니다. 단순 정보 탐색은 web_search를 사용하세요.',
@@ -121,7 +121,7 @@ export const extractWebpageTool: MCPToolDefinition = {
  * @param args.topic - 연구 주제 (필수)
  * @returns 검색된 연구 자료 목록
  */
-export const researchTopicTool: MCPToolDefinition = {
+const researchTopicTool: MCPToolDefinition = {
     tool: {
         name: 'research_topic',
         description: '한 주제에 대해 다출처 자료를 폭넓게 수집합니다. 개요·배경 조사가 필요한 광범위한 주제일 때 사용하세요. 단발성 사실 조회는 web_search가 더 빠릅니다. 심층 다단계 리서치가 필요하면 deep research 모드를 사용하세요.',

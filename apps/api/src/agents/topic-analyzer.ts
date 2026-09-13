@@ -24,7 +24,7 @@ import { CONFIDENCE_DIVISORS } from '../config/llm-parameters';
  *
  * @interface TopicCategory
  */
-export interface TopicCategory {
+interface TopicCategory {
     /** 카테고리 표시 이름 (예: '프로그래밍/개발', '금융/투자') */
     name: string;
     /** 질문 매칭용 정규식 패턴 배열 (하나라도 매칭되면 해당 카테고리) */

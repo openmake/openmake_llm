@@ -50,15 +50,8 @@ export function showBanner(version: string): void {
     console.log(chalk.gray('  Powered by OpenMake\n'));
 }
 
-export function showCompactBanner(): void {
-    console.log(chalk.hex('#FF6B6B').bold('\n🤖 OpenMake.Ai'));
-    console.log(chalk.gray('─'.repeat(50)));
-}
 
-export function showModelInfo(model: string): void {
-    console.log(chalk.cyan('📦 모델: ') + chalk.white.bold(model));
-}
 
-export function showDivider(): void {
-    console.log(chalk.gray('─'.repeat(50)));
-}
+
+
+

@@ -15,7 +15,6 @@
  * - /api/v1/chat, /agents, /mcp, /usage, /metrics 등 서브 라우터 마운트
  *
  * @requires requireApiKey - API Key 인증 미들웨어
- * @requires rateLimitHeaders - OpenAI 호환 Rate Limit 헤더
  * @requires apiKeyTPMLimiter - TPM(Tokens Per Minute) 이중 제한
  */
 import { Router } from 'express';

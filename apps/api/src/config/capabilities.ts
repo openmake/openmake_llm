@@ -55,7 +55,7 @@ export const UNSUPPORTED_CAPABILITIES: ReadonlySet<Capability> = new Set<Capabil
 export const GLOBAL_CAPABILITY_SCOPE = '__global__';
 
 /** 구 모달리티 이름 → capability (마이그레이션 118 행 이관·호환 입력 정규화) */
-export const LEGACY_MODALITY_TO_CAPABILITY: Record<string, Capability> = {
+const LEGACY_MODALITY_TO_CAPABILITY: Record<string, Capability> = {
     image_gen: 'image.generate',
     image_edit: 'image.edit',
     vision: 'vision.describe',
@@ -208,7 +208,7 @@ export const VIDEO_DONE_STATUSES: ReadonlySet<string> = new Set(['completed', 's
  * provider 별 capability params 기본값 — 배정 params 가 없을 때. 실측 규격 차이 흡수
  * (hasa melotts-ko: voice `KR`·형식 `wav` 만 — 2026-09-12). 우선순위: 계획 인자 > 배정 params > 이 표 > 전역 기본.
  */
-export const PROVIDER_CAPABILITY_PARAM_DEFAULTS: Record<string, Partial<Record<Capability, Record<string, string>>>> = {
+const PROVIDER_CAPABILITY_PARAM_DEFAULTS: Record<string, Partial<Record<Capability, Record<string, string>>>> = {
     hasa: { 'audio.speech': { voice: 'KR', format: 'wav' } },
 };
 export function providerParamDefaults(providerId: string, capability: Capability): Record<string, string> {
@@ -228,7 +228,7 @@ export interface VideoProviderAdapter {
     doneStatuses?: readonly string[];
     failStatuses?: readonly string[];
 }
-export const VIDEO_PROVIDER_ADAPTERS: Record<string, VideoProviderAdapter> = {
+const VIDEO_PROVIDER_ADAPTERS: Record<string, VideoProviderAdapter> = {
     hasa: {
         kind: 'jobs-v1', submitPath: '/videos/generations', statusPath: '/jobs/{id}', artifactField: 'artifact_url',
         doneStatuses: ['COMPLETED', 'DONE', 'SUCCEEDED'], failStatuses: ['FAILED', 'ERROR', 'CANCELLED', 'CANCELED'],
@@ -239,8 +239,8 @@ export function videoAdapterFor(providerId: string): VideoProviderAdapter {
 }
 
 /** 이미지 편집 어댑터 — hasa Qwen-Image-Edit 는 `/v1/images/generations` JSON `reference`(dataURL), LiteLLM 통과 */
-export interface ImageEditProviderAdapter { kind: 'openai-edits' | 'generations-reference' }
-export const IMAGE_EDIT_PROVIDER_ADAPTERS: Record<string, ImageEditProviderAdapter> = {
+interface ImageEditProviderAdapter { kind: 'openai-edits' | 'generations-reference' }
+const IMAGE_EDIT_PROVIDER_ADAPTERS: Record<string, ImageEditProviderAdapter> = {
     hasa: { kind: 'generations-reference' },
 };
 export function imageEditAdapterFor(providerId: string): ImageEditProviderAdapter {

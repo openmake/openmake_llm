@@ -24,7 +24,7 @@ export function scriptKeyFor(langCode: string): ScriptKey {
 }
 
 /** 판정 대상 문자만 남긴다 — 코드블록·URL·아티팩트 참조·공백·숫자·구두점 제외 */
-export function stripForScriptRatio(text: string): string {
+function stripForScriptRatio(text: string): string {
     return (text || '')
         .replace(/```[\s\S]*?```/g, '')
         .replace(/https?:\/\/\S+/g, '')

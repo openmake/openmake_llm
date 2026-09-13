@@ -153,82 +153,6 @@ export const LOCAL_SAMPLING_PRESETS = {
  */
 export const LLM_ANTI_DEGENERATION_FREQUENCY_PENALTY = Number(process.env.LLM_FREQUENCY_PENALTY ?? 0);
 
-/**
- * 복잡도 기반 토큰 예산 (num_predict 동적 제어)
- *
- * assessComplexity()의 복잡도 점수와 QueryType을 기반으로
- * 권장 num_predict 값을 결정할 때 사용합니다.
- *
- * UNLIMITED(0)은 제한 없음을 의미합니다.
- */
-export const TOKEN_BUDGETS = {
-    /** 최소 토큰 보장 (응답 잘림 방지) */
-    MIN_TOKENS: Number(process.env.OMK_TOKEN_BUDGET_MIN) || 128,
-    /** 저복잡도 (score < 0.3) 기본 예산 */
-    LOW: Number(process.env.OMK_TOKEN_BUDGET_LOW) || 256,
-    /** 중복잡도 (0.3 <= score < 0.6) 기본 예산 */
-    MEDIUM: Number(process.env.OMK_TOKEN_BUDGET_MEDIUM) || 1024,
-    /** 고복잡도 (0.6 <= score < 0.8) 기본 예산 */
-    HIGH: Number(process.env.OMK_TOKEN_BUDGET_HIGH) || 2048,
-    /** 최고복잡도 (score >= 0.8) — 0은 제한 없음 (백엔드 기본값 사용). 2026-07-09 이후 MAX 로 대체 */
-    UNLIMITED: 0,
-    /**
-     * 최고복잡도 출력 상한 (유한 ceiling) — env: OMK_TOKEN_BUDGET_MAX.
-     *
-     * 배경: score>=0.8 최고복잡도는 UNLIMITED(0)=무제한이었다. 서버
-     * repetition_penalty 로 반복 루프는 잡히지만, 무제한 출력은 runaway(붕괴 시
-     * 262K 컨텍스트까지 생성)·비용·지연 리스크로 남는다. 긴 정답(대형 리포트·코드·
-     * thinking reasoning+답변)은 넉넉히 담되 무한 생성은 막는 유한 상한으로 대체.
-     * 16384 tokens ≈ 12,000 단어 — 정상 장문 답변에 충분하면서 폭주는 차단.
-     */
-    MAX: Number(process.env.OMK_TOKEN_BUDGET_MAX) || 16384,
-    /** 복잡도 점수 구간 경계 — recommendTokenBudget 의 LOW/MEDIUM/HIGH/MAX 판정 임계값 */
-    SCORE_THRESHOLDS: {
-        /** 이 값 미만 = LOW 예산 (env: OMK_TOKEN_BUDGET_SCORE_LOW) */
-        LOW_MAX: Number(process.env.OMK_TOKEN_BUDGET_SCORE_LOW) || 0.3,
-        /** 이 값 미만 = MEDIUM 예산 (env: OMK_TOKEN_BUDGET_SCORE_MEDIUM) */
-        MEDIUM_MAX: Number(process.env.OMK_TOKEN_BUDGET_SCORE_MEDIUM) || 0.6,
-        /** 이 값 이상 = MAX 상한 (env: OMK_TOKEN_BUDGET_SCORE_MAX) */
-        MAX_MIN: Number(process.env.OMK_TOKEN_BUDGET_SCORE_MAX) || 0.8,
-    },
-    /**
-     * Thinking 모드 활성화 시 num_predict 최소 보장 — env: OMK_THINKING_MIN_TOKENS.
-     *
-     * 배경: reasoning 모델 응답은 message.content 와 message.thinking 이
-     *      같은 num_predict 토큰 풀을 공유합니다. 작은 cap(예: 512)에서 thinking
-     *      모델이 사고에 토큰을 다 쓰면 실제 응답이 비어 나오는 잘림 현상이
-     *      발생합니다 (gemma4:e4b 등 8B local 모델에서 특히 빈번).
-     *
-     * 효과: thinking ON 시 chatOptions.num_predict 가 이 값 미만이면 자동으로
-     *      이 값으로 상향. fast-path / thinking OFF 시에는 기존 budget 그대로.
-     */
-    THINKING_MIN_TOKENS: Number(process.env.OMK_THINKING_MIN_TOKENS) || 4096,
-    /** QueryType별 오버라이드 — 복잡도 점수와 독립적으로 최소 보장 예산 */
-    BY_TYPE: {
-        'chat': Number(process.env.OMK_TOKEN_BUDGET_CHAT) || 512,
-        'korean': Number(process.env.OMK_TOKEN_BUDGET_KOREAN) || 512,
-        'translation': Number(process.env.OMK_TOKEN_BUDGET_TRANSLATION) || 1024,
-        'vision': Number(process.env.OMK_TOKEN_BUDGET_VISION) || 1024,
-        'math-applied': Number(process.env.OMK_TOKEN_BUDGET_MATH_APPLIED) || 1024,
-        'creative': Number(process.env.OMK_TOKEN_BUDGET_CREATIVE) || 2048,
-        'analysis': Number(process.env.OMK_TOKEN_BUDGET_ANALYSIS) || 2048,
-        'document': Number(process.env.OMK_TOKEN_BUDGET_DOCUMENT) || 2048,
-        'code-gen': Number(process.env.OMK_TOKEN_BUDGET_CODE_GEN) || 2048,
-        'code-agent': Number(process.env.OMK_TOKEN_BUDGET_CODE_AGENT) || 2048,
-        'reasoning': Number(process.env.OMK_TOKEN_BUDGET_REASONING) || 4096,
-        'math-hard': Number(process.env.OMK_TOKEN_BUDGET_MATH_HARD) || 4096,
-    } as Record<string, number>,
-} as const;
-
-/**
- * 저복잡도 쿼리 프롬프트 지시어
- * complexity score < GV_SKIP_THRESHOLD 일 때 시스템 프롬프트 끝에 주입하여
- * LLM이 간결한 응답을 생성하도록 유도합니다.
- */
-export const CONCISE_RESPONSE_DIRECTIVE =
-    process.env.OMK_CONCISE_DIRECTIVE ??
-    'Provide a concise, focused answer. Avoid unnecessary repetition or lengthy explanations.';
-
 // ============================================
 // 신뢰도 제수(Divisor)
 // ============================================
@@ -247,10 +171,6 @@ export const CONFIDENCE_DIVISORS = {
 } as const;
 
 // ============================================
-// QueryType별 모델 파라미터 조정값
-// ============================================
-
-// ============================================
 // 모델 프리셋 (MODEL_PRESETS)
 // ============================================
 
@@ -264,7 +184,7 @@ export const CONFIDENCE_DIVISORS = {
  *
  * @constant MODEL_PRESETS
  */
-export const MODEL_PRESETS = {
+const MODEL_PRESETS = {
     // Gemini 3 Flash Preview 프리셋
     GEMINI_DEFAULT: {
         temperature: 0.7,
@@ -374,28 +294,3 @@ export const PROMPT_TYPE_PRESETS: Record<string, typeof MODEL_PRESETS[keyof type
     agent: MODEL_PRESETS.GEMINI_REASONING,
     assistant: MODEL_PRESETS.GEMINI_REASONING,
 };
-
-// ============================================
-// GPT-OSS 프리셋 매핑 (Record 룩업)
-// ============================================
-
-/**
- * ReasoningLevel → GPT-OSS ModelOptions 매핑
- * llm/types.ts의 getGptOssPreset()에서 참조
- */
-export const GPT_OSS_LEVEL_PRESETS: Record<string, typeof MODEL_PRESETS[keyof typeof MODEL_PRESETS]> = {
-    low: MODEL_PRESETS.GPT_OSS_LOW_REASONING,
-    medium: MODEL_PRESETS.GPT_OSS_MEDIUM_REASONING,
-    high: MODEL_PRESETS.GPT_OSS_HIGH_REASONING,
-};
-
-/**
- * TaskType → GPT-OSS ModelOptions 매핑
- * llm/types.ts의 getGptOssTaskPreset()에서 참조
- */
-export const GPT_OSS_TASK_PRESETS: Record<string, typeof MODEL_PRESETS[keyof typeof MODEL_PRESETS]> = {
-    code: MODEL_PRESETS.GPT_OSS_CODE,
-    document: MODEL_PRESETS.GPT_OSS_DOCUMENT,
-    json: MODEL_PRESETS.GPT_OSS_JSON,
-};
-

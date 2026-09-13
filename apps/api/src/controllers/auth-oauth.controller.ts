@@ -47,7 +47,7 @@ const log = createLogger('AuthOAuthController');
  * - GitHub OAuth (로그인 + 콜백)
  * - Kakao OAuth (로그인 + 콜백)
  */
-export class AuthOAuthController {
+class AuthOAuthController {
     /** Express 라우터 인스턴스 */
     private router: Router;
     /** 서버 포트 (OAuth 리다이렉트 URI 생성용) */

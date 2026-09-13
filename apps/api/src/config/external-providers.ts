@@ -21,7 +21,7 @@ import type { SdkType } from '../providers/i-provider';
 /**
  * 사용자가 등록 가능한 외부 provider 정의 (UI 카탈로그 기반)
  */
-export interface ExternalProviderCatalogEntry {
+interface ExternalProviderCatalogEntry {
     /** 내부 식별자 — fullId prefix 와 동일 (`provider:model`의 provider 부분) */
     id: string;
     /** UI 노출명 */

@@ -13,8 +13,8 @@
  * @module prompts/skill-rewrite
  */
 
-export const SKILL_REWRITE_TARGET_OPEN = '<skill_body>';
-export const SKILL_REWRITE_TARGET_CLOSE = '</skill_body>';
+const SKILL_REWRITE_TARGET_OPEN = '<skill_body>';
+const SKILL_REWRITE_TARGET_CLOSE = '</skill_body>';
 
 /**
  * 응답 마커 — JSON 대신 쓰는 이유: 스킬 본문은 코드블록·백틱·따옴표·개행이 많은 긴

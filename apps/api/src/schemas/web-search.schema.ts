@@ -20,5 +20,3 @@ export const webSearchSchema = z.object({
     model: z.string().max(100).optional()
 });
 
-/** 웹 검색 요청 TypeScript 타입 */
-export type WebSearchInput = z.infer<typeof webSearchSchema>;

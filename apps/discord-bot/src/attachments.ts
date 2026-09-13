@@ -17,12 +17,12 @@ export interface ResponseArtifact {
     shareUrl?: string;
 }
 
-export interface DiscordFile {
+interface DiscordFile {
     attachment: Buffer;
     name: string;
 }
 
-export interface PreparedReply {
+interface PreparedReply {
     content: string;
     files: DiscordFile[];
 }

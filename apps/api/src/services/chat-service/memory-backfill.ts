@@ -16,7 +16,7 @@ import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('MemoryBackfill');
 
-export interface BackfillResult {
+interface BackfillResult {
     sessionsProcessed: number;
     candidateCount: number;
     fresh: string[];

@@ -63,7 +63,7 @@ export default function ApiAccessPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
-  // 스코프 프리셋 — 백엔드 config/api-key-scopes.ts 의 API_KEY_SCOPE_PRESETS 와 정합.
+  // 스코프 프리셋 — full 은 ["*"], 나머지는 같은 이름의 단일 스코프로 발급한다(서버 허용 목록: config/api-key-scopes.ts ALLOWED_API_KEY_SCOPES).
   // full=전체(*), bridge=CLI 로컬 실행 전용, chat=추론 API 전용.
   const [newScope, setNewScope] = useState<"full" | "bridge" | "chat">("full");
   const [creating, setCreating] = useState(false);

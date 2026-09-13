@@ -28,7 +28,7 @@ export const FALLBACK_REASONING_ONLY_NOTICE =
     '(응답 한도(max_tokens) 내에서 reasoning 단계만 완료되어 본문이 생성되지 않았습니다. ' +
     '재시도 시 더 짧게 질문하거나, 관리자에게 num_predict 증가 또는 reasoning 비활성화를 요청하세요.)';
 
-export interface ReasoningOnlyTurn {
+interface ReasoningOnlyTurn {
     /** 요청의 chat_template_kwargs.enable_thinking (미전송이면 undefined) */
     enableThinking: boolean | undefined;
     /** 서버 reasoning-parser 가 reasoning 을 별도 필드(delta.reasoning 등)로 보냈는지 */

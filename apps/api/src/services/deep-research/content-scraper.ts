@@ -19,7 +19,7 @@ const logger = createLogger('DeepResearch:ContentScraper');
 /**
  * 단일 URL 스크래핑
  */
-export async function scrapeSingleUrl(params: {
+async function scrapeSingleUrl(params: {
     url: string;
     config: ResearchConfig;
     abortSignal?: AbortSignal;

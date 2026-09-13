@@ -11,7 +11,7 @@ import { createLogger } from '../utils/logger';
 import { isOriginAllowed } from '../security/cors-policy';
 import { AUTH_COOKIES } from '../config/security';
 
-export interface WebSocketAuthResult {
+interface WebSocketAuthResult {
     userId: string | null;
     userRole: 'admin' | 'user' | 'guest';
     tokenExpiresAtMs?: number | null;

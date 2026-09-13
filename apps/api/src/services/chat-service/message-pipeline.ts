@@ -73,7 +73,6 @@ export async function runMessagePipeline(svc: ChatService,
         fileContext,
         discussionMode,
         deepResearchMode,
-        thinkingMode,
         userId,
         userRole,
         enabledTools,
@@ -331,8 +330,8 @@ export async function runMessagePipeline(svc: ChatService,
     }
 
     // ── Step 3: 컨텍스트 구성 (웹검색) — agent 와 병렬 진행 ──
-    const { finalEnhancedMessage: builtEnhancedMessage, documentImages } = await svc.buildContextForLLM(
-        message || '', webSearchContext, thinkingMode, req.apiKeyId, fileContext,
+    const { finalEnhancedMessage: builtEnhancedMessage } = await svc.buildContextForLLM(
+        message || '', webSearchContext, fileContext,
     );
     // NotebookLM 노트북 컨텍스트 — LLM 전용 enhancedMessage 채널에만 프리픽스 주입.
     // (원문 message 는 대화 저장·말풍선·사이드바 제목에 쓰이므로 오염 금지 —
@@ -455,7 +454,7 @@ export async function runMessagePipeline(svc: ChatService,
 
     // ── Step 5: 라우팅 로그 + 메트릭 기록 ──
     // regex 분류(LLM 호출 0회)로 queryType/모델을 채워 라우팅 분석 관측 확보 (2026-07-18).
-    const extHasImages = (images && images.length > 0) || documentImages.length > 0;
+    const extHasImages = (images?.length ?? 0) > 0;
     const extClassified = fastPath?.matched
         ? { type: 'chat' as const, confidence: 1.0 }
         : classifyQuery(message || '');

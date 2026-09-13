@@ -25,7 +25,7 @@ import * as sessions from './conversation-sessions';
 import * as messages from './conversation-messages';
 
 // 타입 re-export (기존 import 경로 호환)
-export type { ConversationSession, ConversationMessage, MessageOptions } from './conversation-types';
+export type { ConversationSession } from './conversation-types';
 
 const logger = createLogger('ConversationDB');
 

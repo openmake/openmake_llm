@@ -17,7 +17,7 @@
 import { BaseRepository } from './base-repository';
 
 /** 오케스트레이션 배정 요약 — 전체/의도/노출/호출/성공 턴 수 */
-export interface OrchestrationDispatchSummaryRow {
+interface OrchestrationDispatchSummaryRow {
     total_turns: string;
     intent_turns: string;
     exposed_turns: string;
@@ -28,14 +28,14 @@ export interface OrchestrationDispatchSummaryRow {
 }
 
 /** 실제 호출된 도구별 턴 수·성공 수 */
-export interface OrchestrationByToolRow {
+interface OrchestrationByToolRow {
     tool_called: string;
     turns: string;
     success_turns: string;
 }
 
 /** 사용자 수동 토글 턴에서 프리필터 의도가 잡힌 수 (재현율 프록시) */
-export interface OrchestrationToggleRow {
+interface OrchestrationToggleRow {
     user_mode: string;
     turns: string;
     discussion_intent_turns: string;
@@ -43,7 +43,7 @@ export interface OrchestrationToggleRow {
 }
 
 /** tail 셰도우 요약 — 기간 내 결정 수와 전기간 마지막 적재 시각(신선도) */
-export interface TailShadowSummaryRow {
+interface TailShadowSummaryRow {
     total_decisions: string;
     tail_decisions: string;
     labeled_decisions: string;
@@ -54,7 +54,7 @@ export interface TailShadowSummaryRow {
 }
 
 /** verifiability 축 분포 — tail 판정과의 교차 */
-export interface TailShadowVerifiabilityRow {
+interface TailShadowVerifiabilityRow {
     verifiability: string | null;
     decisions: string;
     tail_decisions: string;

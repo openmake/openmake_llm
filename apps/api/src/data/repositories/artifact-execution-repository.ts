@@ -10,7 +10,7 @@
  */
 import { BaseRepository } from './base-repository';
 
-export interface ArtifactExecutionRow {
+interface ArtifactExecutionRow {
     id: string;
     session_id: string;
     artifact_id: string;
@@ -26,7 +26,7 @@ export interface ArtifactExecutionRow {
     created_at: string;
 }
 
-export interface InsertExecutionInput {
+interface InsertExecutionInput {
     sessionId: string;
     artifactId: string;
     version: number;

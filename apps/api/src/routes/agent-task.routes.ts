@@ -593,5 +593,4 @@ router.post('/approvals/:approvalId/:decision', asyncHandler(async (req: Request
     res.json(success({ approvalId, decision }));
 }));
 
-export { router as agentTaskRouter };
 export default router;

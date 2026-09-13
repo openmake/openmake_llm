@@ -69,7 +69,7 @@ export interface OpenAICompatArtifact {
     shareUrl?: string;
 }
 
-export interface OpenAIChatCompletionResponse {
+interface OpenAIChatCompletionResponse {
     id: string;
     object: 'chat.completion';
     created: number;
@@ -83,7 +83,7 @@ export interface OpenAIChatCompletionResponse {
     system_fingerprint?: string;
 }
 
-export interface OpenAIChatCompletionChunk {
+interface OpenAIChatCompletionChunk {
     id: string;
     object: 'chat.completion.chunk';
     created: number;
@@ -95,7 +95,7 @@ export interface OpenAIChatCompletionChunk {
     }>;
 }
 
-export interface OpenAIModelListResponse {
+interface OpenAIModelListResponse {
     object: 'list';
     data: Array<{
         id: string;

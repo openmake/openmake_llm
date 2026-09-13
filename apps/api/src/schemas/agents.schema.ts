@@ -11,56 +11,6 @@
 import { z } from 'zod';
 
 /**
- * 커스텀 에이전트 생성 스키마
- * @property {string} name - 에이전트 이름 (1~100자, 필수)
- * @property {string} [description] - 에이전트 설명
- * @property {string} [systemPrompt] - 시스템 프롬프트
- * @property {string[]} [keywords] - 키워드 배열
- * @property {string} [category] - 카테고리
- * @property {string} [emoji] - 이모지 아이콘
- * @property {number} [temperature] - temperature 설정 (0~2)
- * @property {number} [maxTokens] - 최대 토큰 수
- */
-export const createAgentSchema = z.object({
-    name: z.string().min(1, '에이전트 이름을 입력하세요').max(100),
-    description: z.string().max(500).optional(),
-    systemPrompt: z.string().max(10000).optional(),
-    keywords: z.array(z.string()).optional(),
-    category: z.string().max(50).optional(),
-    emoji: z.string().max(10).optional(),
-    temperature: z.number().min(0).max(2).optional(),
-    maxTokens: z.number().min(1).max(32000).optional()
-});
-
-/**
- * 커스텀 에이전트 수정 스키마 (모든 필드 optional)
- */
-export const updateAgentSchema = z.object({
-    name: z.string().min(1, '에이전트 이름을 입력하세요').max(100).optional(),
-    description: z.string().max(500).optional(),
-    systemPrompt: z.string().max(10000).optional(),
-    keywords: z.array(z.string()).optional(),
-    category: z.string().max(50).optional(),
-    emoji: z.string().max(10).optional(),
-    temperature: z.number().min(0).max(2).optional(),
-    maxTokens: z.number().min(1).max(32000).optional()
-});
-
-/**
- * 에이전트 클론 수정 스키마
- */
-export const cloneAgentSchema = z.object({
-    modifications: updateAgentSchema.optional()
-});
-
-/** 커스텀 에이전트 생성 요청 TypeScript 타입 */
-export type CreateAgentInput = z.infer<typeof createAgentSchema>;
-/** 커스텀 에이전트 수정 요청 TypeScript 타입 */
-export type UpdateAgentInput = z.infer<typeof updateAgentSchema>;
-/** 에이전트 클론 수정 요청 TypeScript 타입 */
-export type CloneAgentInput = z.infer<typeof cloneAgentSchema>;
-
-/**
  * 에이전트 피드백 제출 스키마
  * @property {number} rating - 평점 (1~5, 필수)
  * @property {string} query - 원본 질문 (필수, 5000자 이하)
@@ -86,11 +36,6 @@ export const abTestStartSchema = z.object({
     agentB: z.string().min(1, 'agentB는 필수입니다'),
 });
 
-/** 에이전트 피드백 요청 TypeScript 타입 */
-export type AgentFeedbackInput = z.infer<typeof agentFeedbackSchema>;
-/** A/B 테스트 시작 요청 TypeScript 타입 */
-export type AbTestStartInput = z.infer<typeof abTestStartSchema>;
-
 /**
  * 에이전트/사용자 스킬 할당 스키마
  * @property {number} [priority] - 스킬 우선순위 (0~100, 기본값 0)
@@ -99,5 +44,3 @@ export const assignSkillSchema = z.object({
     priority: z.number().int().min(0).max(100).optional(),
 });
 
-/** 스킬 할당 요청 TypeScript 타입 */
-export type AssignSkillInput = z.infer<typeof assignSkillSchema>;

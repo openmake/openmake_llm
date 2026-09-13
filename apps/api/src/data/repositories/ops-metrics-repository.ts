@@ -9,7 +9,7 @@
  */
 import { BaseRepository } from './base-repository';
 
-export interface OpsRunRow {
+interface OpsRunRow {
     id: string;
     user_id: string;
     status: string;
@@ -22,7 +22,7 @@ export interface OpsRunRow {
     created_at: Date;
 }
 
-export interface OpsRunsSummaryRow {
+interface OpsRunsSummaryRow {
     status: string;
     runs: string;
     avg_duration_s: string | null;
@@ -30,7 +30,7 @@ export interface OpsRunsSummaryRow {
     goal_incomplete: string;
 }
 
-export interface OpsRunsByModelRow {
+interface OpsRunsByModelRow {
     model: string | null;
     runs: string;
     failed: string;
@@ -38,7 +38,7 @@ export interface OpsRunsByModelRow {
     avg_tokens: string | null;
 }
 
-export interface OpsToolServerRow {
+interface OpsToolServerRow {
     server: string | null;
     calls: string;
     errors: string;
@@ -46,7 +46,7 @@ export interface OpsToolServerRow {
     last_error_at: Date | null;
 }
 
-export interface OpsProviderUsageRow {
+interface OpsProviderUsageRow {
     provider_id: string;
     model_id: string;
     requests: string;
@@ -57,7 +57,7 @@ export interface OpsProviderUsageRow {
     errors: string;
 }
 
-export interface OpsTaskTokensByUserRow {
+interface OpsTaskTokensByUserRow {
     user_id: string;
     runs: string;
     total_tokens: string | null;

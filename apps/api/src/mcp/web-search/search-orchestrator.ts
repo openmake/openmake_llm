@@ -23,7 +23,6 @@ import {
 import { searchExa } from './external-search-apis';
 import { createLogger } from '../../utils/logger';
 import { SEARCH_ESCALATION, SEARCH_RELIABILITY, SEARXNG_CATEGORY_SCOPE, WEB_SEARCH_INJECTION } from '../../config/runtime-limits';
-import { formatSearchSources } from './format-sources';
 import { resolveSearchLanguage } from './search-language';
 import { getConfig } from '../../config/env';
 import { logSemanticRerankShadow, rerankBySemantics } from './semantic-reranker';
@@ -276,7 +275,7 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
  * @param sortedResults - 점수 내림차순 전체 결과 풀
  * @param maxResults - 최종 최대 개수
  */
-export function ensureReferenceResults(
+function ensureReferenceResults(
     ranked: SearchResult[],
     sortedResults: SearchResult[],
     maxResults: number,
@@ -412,26 +411,3 @@ function scoreSearchResult(result: SearchResult): number {
     return Math.min(1.0, Math.max(0.0, score));
 }
 
-/**
- * 사실 검증 프롬프트 생성
- *
- * 검색 결과를 포맷팅하여 LLM에게 사실 검증을 요청하는 프롬프트를 생성합니다.
- *
- * @param claim - 검증할 주장 또는 질문
- * @param searchResults - 근거 자료 검색 결과
- * @returns 포맷팅된 사실 검증 프롬프트 문자열
- */
-export function createFactCheckPrompt(claim: string, searchResults: SearchResult[]): string {
-    const sources = formatSearchSources(searchResults, {
-        maxResults: WEB_SEARCH_INJECTION.MAX_RESULTS,
-        maxSnippetChars: WEB_SEARCH_INJECTION.MAX_SNIPPET_CHARS,
-    });
-
-    return `## Web Search Results (${new Date().toLocaleDateString()})
-${sources || '검색 결과 없음'}
-
-## 질문
-${claim}
-
-위 검색 결과를 참고하여 정확하게 답변하세요.`;
-}

@@ -17,13 +17,6 @@ export const API_KEY_SCOPES = {
 
 export type ApiKeyScope = typeof API_KEY_SCOPES[keyof typeof API_KEY_SCOPES];
 
-/** UI 발급 폼에 노출할 스코프 프리셋 (No-Hardcoding — 프론트도 이 목록과 정합). */
-export const API_KEY_SCOPE_PRESETS: ReadonlyArray<{ value: string; scopes: string[] }> = [
-    { value: 'full', scopes: ['*'] },
-    { value: 'bridge', scopes: [API_KEY_SCOPES.BRIDGE] },
-    { value: 'chat', scopes: [API_KEY_SCOPES.CHAT] },
-];
-
 /** 발급 시 허용하는 스코프 문자열 화이트리스트 (미지 스코프 거부 — 오타·권한 오해 방지). */
 export const ALLOWED_API_KEY_SCOPES: ReadonlySet<string> = new Set([
     '*', API_KEY_SCOPES.BRIDGE, API_KEY_SCOPES.CHAT,

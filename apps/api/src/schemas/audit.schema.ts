@@ -24,5 +24,3 @@ export const createAuditSchema = z.object({
     details: z.record(z.string(), z.unknown()).optional(),
 });
 
-/** 감사 로그 생성 요청 TypeScript 타입 */
-export type CreateAuditInput = z.infer<typeof createAuditSchema>;

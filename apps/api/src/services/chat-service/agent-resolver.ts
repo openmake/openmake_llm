@@ -152,7 +152,7 @@ async function selectAgent(message: string): Promise<AgentSelection> {
 /**
  * resolveAgent 함수의 반환값
  */
-export interface AgentResolutionResult {
+interface AgentResolutionResult {
     agentSelection: AgentSelection;
     agentSystemMessage: string;
     selectedAgent: (typeof AGENTS)[string];

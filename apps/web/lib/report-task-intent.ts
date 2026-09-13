@@ -15,18 +15,18 @@
  */
 
 /** 보고서 산출물 명사 (부분일치, 소문자 비교). */
-export const REPORT_NOUN_TOKENS: readonly string[] = [
+const REPORT_NOUN_TOKENS: readonly string[] = [
   "보고서", "리포트", "report",
 ];
 
 /** 조사·리서치 의도 동사 (self-contained 조사 요청 신호). */
-export const RESEARCH_VERB_TOKENS: readonly string[] = [
+const RESEARCH_VERB_TOKENS: readonly string[] = [
   "조사", "리서치", "알아보", "검색해", "찾아보", "찾아서",
   "research", "investigate", "search",
 ];
 
 /** 대화 맥락 참조 — 작업이 채팅 히스토리를 볼 수 없으므로 위임 제외. */
-export const CONTEXT_REFERENCE_TOKENS: readonly string[] = [
+const CONTEXT_REFERENCE_TOKENS: readonly string[] = [
   "지금까지", "위 내용", "이 내용", "방금", "아까", "지금 내용", "위의 내용",
 ];
 

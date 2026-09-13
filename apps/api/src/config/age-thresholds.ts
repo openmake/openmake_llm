@@ -18,7 +18,7 @@
  * Locale → 디지털 동의 연령 임계값 (만 나이).
  * 명시되지 않은 locale 은 DEFAULT_AGE_THRESHOLD 사용.
  */
-export const AGE_THRESHOLDS: Readonly<Record<string, number>> = Object.freeze({
+const AGE_THRESHOLDS: Readonly<Record<string, number>> = Object.freeze({
     // 한국 (정통망법 §31, 개보법 §39-3)
     ko: 14,
     // EU 회원국 — GDPR Article 8 default 16 (member state 13세 lower 가능, 보수적으로 16)
@@ -32,7 +32,7 @@ export const AGE_THRESHOLDS: Readonly<Record<string, number>> = Object.freeze({
 /**
  * 명시되지 않은 locale 의 기본 임계값. US COPPA (13) 기준.
  */
-export const DEFAULT_AGE_THRESHOLD = 13;
+const DEFAULT_AGE_THRESHOLD = 13;
 
 /**
  * locale 의 임계값 반환. 명시 안 된 locale 은 DEFAULT_AGE_THRESHOLD.

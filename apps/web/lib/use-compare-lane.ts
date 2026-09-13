@@ -18,7 +18,7 @@ import { resolveWsUrl } from "./use-chat-socket";
  * 돌리면 한쪽 abort 가 다른 쪽까지 끊는다. 스트림 레지스트리 충돌은 서버가 lane 접미사로
  * 분리하므로(ws-stream-registry.resolveStreamKey), 요청에 lane 을 함께 실어 보낸다.
  */
-export type CompareLaneId = "a" | "b";
+type CompareLaneId = "a" | "b";
 
 export interface CompareMessage {
   role: "user" | "assistant";

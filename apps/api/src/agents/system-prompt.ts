@@ -334,7 +334,7 @@ ${applyPromptPlaceholders(promptTemplate.workingOn, { phase: getPhaseLabel(selec
  * @param phase - 작업 페이즈 (선택적, 기본값: 'planning')
  * @returns {string} - 한국어 레이블 (기획/분석, 구현/개발, 최적화/개선)
  */
-export function getPhaseLabel(phase?: AgentPhase, languageCode: string = 'ko'): string {
+function getPhaseLabel(phase?: AgentPhase, languageCode: string = 'ko'): string {
     const promptLanguage = resolvePromptLanguage(languageCode);
     const labels: Record<PromptLanguageCode, Record<AgentPhase, string>> = {
         ko: {
@@ -383,7 +383,7 @@ export function getPhaseLabel(phase?: AgentPhase, languageCode: string = 'ko'): 
  *
  * @returns {string} - 범용 AI 어시스턴트 시스템 프롬프트
  */
-export function getDefaultSystemPrompt(languageCode: string = 'en'): string {
+function getDefaultSystemPrompt(languageCode: string = 'en'): string {
     const promptLanguage = resolvePromptLanguage(languageCode);
     return DEFAULT_SYSTEM_PROMPTS[promptLanguage];
 }
