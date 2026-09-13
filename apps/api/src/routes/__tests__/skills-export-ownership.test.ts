@@ -4,22 +4,9 @@
  * 형제 라우트(PUT/DELETE/rewrite-proposal)와 같은 assertResourceOwnerOrAdmin 을 요구한다.
  */
 jest.mock('../../agents/skill-manager', () => ({ getSkillManager: jest.fn() }));
-jest.mock('../../auth', () => ({ requireAuth: (_r: unknown, _s: unknown, n: () => void) => n() }));
-jest.mock('../../mcp/unified-client', () => ({ getUnifiedMCPClient: jest.fn() }));
-jest.mock('../../data/models/unified-database', () => ({ getUnifiedDatabase: jest.fn() }));
 
-import skillsRouter from '../skills.routes';
+import { exportSkill } from '../skills-export';
 import { getSkillManager } from '../../agents/skill-manager';
-
-interface Layer { route?: { path: string; methods: Record<string, boolean>; stack: Array<{ handle: unknown }> } }
-type Handler = (req: unknown, res: unknown, next: (e?: unknown) => void) => unknown;
-
-function exportHandler(): Handler {
-    const layers = (skillsRouter as unknown as { stack: Layer[] }).stack;
-    const layer = layers.find((l) => l.route && l.route.path === '/:skillId/export' && l.route.methods.get);
-    if (!layer?.route) throw new Error('route not found');
-    return layer.route.stack[layer.route.stack.length - 1].handle as Handler;
-}
 
 function fakeRes() {
     const res: Record<string, unknown> & { statusCode?: number; body?: unknown; sent?: unknown } = {};
@@ -34,12 +21,9 @@ async function run(skill: Record<string, unknown> | null, user: { id: string; ro
     (getSkillManager as jest.Mock).mockReturnValue({ getSkillById: jest.fn().mockResolvedValue(skill) });
     const res = fakeRes();
     let err: unknown;
-    await new Promise<void>((resolve) => {
-        exportHandler()({ params: { skillId: 's1' }, user }, res, (e) => { err = e; resolve(); });
-        // asyncHandler 는 promise 를 기다리지 않고 반환하므로 send/next 중 먼저 오는 쪽을 기다린다
-        const origSend = res.send as (b: unknown) => unknown;
-        res.send = (b: unknown) => { origSend(b); resolve(); return res; };
-    });
+    try {
+        await exportSkill({ params: { skillId: 's1' }, user } as never, res as never);
+    } catch (e) { err = e; }
     return { res, err };
 }
 
