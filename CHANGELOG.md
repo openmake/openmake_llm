@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.62.3](https://github.com/openmake/openmake_llm/compare/v1.62.2...v1.62.3) (2026-09-13)
+
+
+### 🐛 버그 수정
+
+* **security:** 09-02 이후 변경분 보안 재점검 — 브리지 심링크 write 탈출·스킬 export IDOR 등 7건 + 의존성 3종 ([#864](https://github.com/openmake/openmake_llm/issues/864)) ([378d501](https://github.com/openmake/openmake_llm/commit/378d50106369668a27108eebb7d9158d9cd42cd7))
+
 ## [1.62.2](https://github.com/openmake/openmake_llm/compare/v1.62.1...v1.62.2) (2026-09-12)
 
 
