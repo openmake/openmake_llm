@@ -113,9 +113,10 @@ export async function downloadProviderUrl(url: string, opts: { timeoutMs: number
         throw new HttpCallError(`다운로드 실패 (HTTP ${res.status}): ${url}`, res.status);
     }
     const contentType = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
-    if (contentType && !opts.allowTypes.some((t) => contentType.startsWith(t))) {
+    // Content-Type 부재도 거부 — 헤더가 없으면 허용목록 검사가 통째로 건너뛰어지던 갭 (2026-09-13 보안 점검)
+    if (!contentType || !opts.allowTypes.some((t) => contentType.startsWith(t))) {
         await res.body?.cancel().catch(() => undefined);
-        throw new HttpCallError(`허용되지 않는 응답 형식 ${contentType} (${url})`, res.status, 'type');
+        throw new HttpCallError(`허용되지 않는 응답 형식 ${contentType || '(없음)'} (${url})`, res.status, 'type');
     }
     const bytes = await readCapped(res, opts.maxBytes ?? HTTP_CALL_LIMITS.BINARY_MAX_BYTES);
     return { bytes, contentType };

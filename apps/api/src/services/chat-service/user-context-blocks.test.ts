@@ -41,7 +41,7 @@ describe('buildUserMemoryBlock — 격리', () => {
 
     it('주입한 행만 touchAccessed 한다', async () => {
         await buildUserMemoryBlock('u1');
-        expect(repoMock.touchAccessed).toHaveBeenCalledWith(['a1']);
+        expect(repoMock.touchAccessed).toHaveBeenCalledWith('u1', ['a1']);
     });
 
     it('행이 없으면 빈 문자열이고 touchAccessed 도 없다', async () => {
@@ -54,7 +54,7 @@ describe('buildUserMemoryBlock — 격리', () => {
         const many = Array.from({ length: 40 }, (_, i) => ({ id: `m${i}`, content: `row${i} ` + 'x'.repeat(300) }));
         repoMock.listActiveByUser.mockResolvedValue(many);
         const block = await buildUserMemoryBlock('u1');
-        const touched = repoMock.touchAccessed.mock.calls[0][0] as string[];
+        const touched = repoMock.touchAccessed.mock.calls[0][1] as string[];
         expect(touched.length).toBeGreaterThan(0);
         expect(touched.length).toBeLessThan(many.length);
         expect(block).toContain('row0 ');

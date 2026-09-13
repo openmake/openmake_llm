@@ -6,11 +6,19 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+/** lstat 기반 존재 확인 — 심링크는 대상이 없어도 "존재"로 본다(realpath 가 이어서 판정). */
+function lstatExistsSync(p: string): boolean {
+    try { fs.lstatSync(p); return true; } catch { return false; }
+}
+
 export function safeFrom(baseAbs: string, rel: string | undefined): string {
     const abs = path.resolve(baseAbs, rel || '.');
     if (abs !== baseAbs && !abs.startsWith(baseAbs + path.sep)) throw new Error(`폴더 스코프 밖 경로 거부: ${rel}`);
+    // ⚠️ existsSync 는 stat(심링크 추적)이라 대상이 없는(dangling) 심링크를 "없음"으로 보고 조상으로
+    // 올라가 통과시켰다 — 이후 write 가 링크를 따라가 base 밖에 파일을 만든다. lstat 로 링크 자체의
+    // 존재를 보고, realpath 가 ENOENT 를 던지면(dangling) 그대로 거부한다(fail-closed). (2026-09-13)
     let probe = abs;
-    while (!fs.existsSync(probe)) probe = path.dirname(probe);
+    while (!lstatExistsSync(probe)) probe = path.dirname(probe);
     const real = fs.realpathSync(probe);
     const baseReal = fs.realpathSync(baseAbs);
     if (real !== baseReal && !real.startsWith(baseReal + path.sep)) throw new Error(`심링크 스코프 탈출 거부: ${rel}`);
@@ -26,7 +34,7 @@ export async function safeFromAsync(baseAbs: string, rel: string | undefined): P
     const abs = path.resolve(baseAbs, rel || '.');
     if (abs !== baseAbs && !abs.startsWith(baseAbs + path.sep)) throw new Error(`폴더 스코프 밖 경로 거부: ${rel}`);
     let probe = abs;
-    while (!(await fs.promises.access(probe).then(() => true, () => false))) probe = path.dirname(probe);
+    while (!(await fs.promises.lstat(probe).then(() => true, () => false))) probe = path.dirname(probe);
     const real = await fs.promises.realpath(probe);
     const baseReal = await fs.promises.realpath(baseAbs);
     if (real !== baseReal && !real.startsWith(baseReal + path.sep)) throw new Error(`심링크 스코프 탈출 거부: ${rel}`);

@@ -10,6 +10,11 @@ import { isSensitivePath } from './sensitive-paths';
 import { isSensitiveWrite, requiresApproval, stripApprovalGatedTools } from './approval-gate';
 
 describe('isSensitivePath', () => {
+    it('대소문자만 바꾼 이름도 잡는다 — macOS 같은 case-insensitive FS 에서 `.ENV` 가 `.env` 를 덮어쓴다 (2026-09-13)', () => {
+        for (const p of ['.ENV', 'ID_RSA', 'src/Credentials.json', 'Deploy.PEM', '.Npmrc']) {
+            expect(isSensitivePath(p)).toBe(true);
+        }
+    });
     it('자격증명 파일을 경로 위치와 무관하게 잡는다', () => {
         for (const p of ['.env', 'apps/api/.env', './.env.production', 'certs/server.pem', 'a/b/app.key',
             'id_rsa', 'deploy/id_ed25519', '.npmrc', '.pgpass', 'credentials', 'gcp/service-account-prod.json']) {

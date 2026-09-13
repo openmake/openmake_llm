@@ -21,6 +21,11 @@ self.addEventListener('activate', (event) => {
     event.waitUntil(self.clients.claim());
 });
 
+/** 푸시 payload 의 url 이 앱 내부 상대 경로(`/...`, `//` 아님)일 때만 통과. */
+function safeInternalPath(u) {
+    return typeof u === 'string' && u.startsWith('/') && !u.startsWith('//') && !u.startsWith('/\\') ? u : '/';
+}
+
 self.addEventListener('push', (event) => {
     let payload = {};
     try {
@@ -35,7 +40,9 @@ self.addEventListener('push', (event) => {
         icon: '/icons/icon-192.png',
         badge: '/icons/icon-192.png',
         // 클릭 시 이동할 앱 내부 경로 (예: /agent-tasks?task=<id>)
-        data: { url: typeof payload.url === 'string' ? payload.url : '/' },
+        // 앱 내부 상대 경로만 허용 — 절대 URL·`//host`·스킴은 '/' 로 강등 (오픈 리다이렉트 방어).
+        // 서버(PushService)는 `/agent-tasks?task=<id>` 만 보내므로 정상 payload 는 영향 없다.
+        data: { url: safeInternalPath(payload.url) },
         // 같은 작업의 연속 알림이 쌓이지 않게 태그로 합친다
         tag: payload.tag || 'openmake',
         renotify: false,

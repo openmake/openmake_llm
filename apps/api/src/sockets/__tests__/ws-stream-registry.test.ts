@@ -139,7 +139,11 @@ describe('InFlightStreamRegistry', () => {
 
     it('resolveStreamKey — 인증 사용자 > 게스트 anonSessionId > 없음', () => {
         expect(resolveStreamKey(fakeWs('7'), 'anon')).toBe('u:7');
-        expect(resolveStreamKey(fakeWs(null), 'anon-1')).toBe('a:anon-1');
+        expect(resolveStreamKey(fakeWs(null), '3f2b9c1e-7d4a-4e21-9b6f-0c8d1e2f3a4b')).toBe('a:3f2b9c1e-7d4a-4e21-9b6f-0c8d1e2f3a4b');
+        // 짧거나 임의 문자가 섞인 게스트 id 는 키가 되지 않는다(추측 가능한 id 로 타인 스트림 재부착 차단)
+        expect(resolveStreamKey(fakeWs(null), 'anon-1')).toBeNull();
+        expect(resolveStreamKey(fakeWs(null), 'a'.repeat(15))).toBeNull();
+        expect(resolveStreamKey(fakeWs(null), 'x'.repeat(16) + ' y')).toBeNull();
         expect(resolveStreamKey(fakeWs(null), '  ')).toBeNull();
         expect(resolveStreamKey(fakeWs(null))).toBeNull();
     });
@@ -178,7 +182,7 @@ describe('InFlightStreamRegistry', () => {
     });
 
     it('게스트 anonSessionId + lane → a:<id>#<lane>', () => {
-        expect(resolveStreamKey(fakeWs(null), 'sess-1', 'a')).toBe('a:sess-1#a');
+        expect(resolveStreamKey(fakeWs(null), 'sess-0123456789ab', 'a')).toBe('a:sess-0123456789ab#a');
     });
 
     it('같은 레인 키로 재오픈하면 이전 스트림은 여전히 abort 된다 (기존 동작 보존)', () => {
