@@ -59,37 +59,24 @@
 
 ## 演示
 
-> 以下 GIF 录制自正在运行的应用。最近的对话标题和账户名称已隐藏。
+> 录制自正在运行的应用，标签会自动切换。最近的对话标题和账户名称已隐藏。
 
-**对话** —— 提问后回答以流式呈现，模型、回答风格和推理强度都可以直接在输入框中切换：
-
-<p align="center">
-  <img src="assets/demo-chat.gif" alt="对话流式输出演示" width="860" />
-</p>
-
-**多模态编排** —— “生成一张……的图片” 会被规划为图像生成任务，在分配给该 capability 的模型上运行，并直接显示在对话中：
-
-<p align="center">
-  <img src="assets/demo-media.gif" alt="通过多模态编排器生成图像" width="860" />
-</p>
-
-**智能体任务** —— 把输入框切换到 Agent 模式，选择审批策略并交付目标；任务在沙箱中运行，实时显示进度并返回结果：
-
-<p align="center">
-  <img src="assets/demo-agent.gif" alt="从输入框运行的智能体任务" width="860" />
-</p>
-
-**设置** —— 模型角色、按 capability 分配模型、MCP 目录、技能库：
-
-<p align="center">
-  <img src="assets/demo-settings.gif" alt="模型角色、capability 模型、MCP 目录和技能库" width="860" />
-</p>
-
-**多语言界面** —— 界面跟随浏览器语言或设置中选择的语言：
-
-<p align="center">
-  <img src="assets/demo-i18n.gif" alt="英语、韩语、日语、中文界面" width="860" />
-</p>
+<table>
+  <tr>
+    <td align="center">
+      <img src="assets/demo-tour.gif" alt="演示导览：对话、多模态、智能体任务、设置、语言" width="860" />
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <b>Chat</b> — 提问后回答以流式呈现，模型、回答风格和推理强度都可在输入框中直接切换<br/>
+      <b>Multimodal</b> — “生成一张……的图片” 会成为图像生成任务，在分配给该 capability 的模型上运行并直接显示在对话中<br/>
+      <b>Agent tasks</b> — 选好审批策略的 Agent 模式在沙箱中执行目标，实时显示进度并返回结果<br/>
+      <b>Settings</b> — 模型角色、按 capability 分配模型、MCP 目录、技能库<br/>
+      <b>Languages</b> — 界面跟随浏览器语言或设置中选择的语言
+    </td>
+  </tr>
+</table>
 
 ---
 

@@ -56,37 +56,24 @@ Beyond chat you get autonomous agent tasks in Docker sandboxes (or on your own m
 
 ## Demos
 
-> These GIFs are recorded from the running app. Recent conversation titles and the account name are hidden.
+> Recorded from the running app; the tabs switch automatically. Recent conversation titles and the account name are hidden.
 
-**Chat** — ask a question and the answer streams in, with the model, response style, and reasoning effort right in the composer:
-
-<p align="center">
-  <img src="assets/demo-chat.gif" alt="Chat streaming demo" width="860" />
-</p>
-
-**Multimodal orchestration** — "generate an image of …" is planned into an image-generation task, run on the model assigned to that capability, and shown inline:
-
-<p align="center">
-  <img src="assets/demo-media.gif" alt="Image generation through the multimodal orchestrator" width="860" />
-</p>
-
-**Agent tasks** — switch the composer to Agent mode, choose an approval policy, and hand over a goal; the task runs in a sandbox with live progress and returns its result:
-
-<p align="center">
-  <img src="assets/demo-agent.gif" alt="Agent task run from the composer" width="860" />
-</p>
-
-**Settings** — model roles, per-capability model assignment, the MCP catalog, and the skill library:
-
-<p align="center">
-  <img src="assets/demo-settings.gif" alt="Model roles, capability models, MCP catalog, and skill library" width="860" />
-</p>
-
-**Multilingual UI** — the interface follows your browser language or the Settings choice:
-
-<p align="center">
-  <img src="assets/demo-i18n.gif" alt="Interface in English, Korean, Japanese, and Chinese" width="860" />
-</p>
+<table>
+  <tr>
+    <td align="center">
+      <img src="assets/demo-tour.gif" alt="Demo tour: chat, multimodal, agent tasks, settings, languages" width="860" />
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <b>Chat</b> — a question streams into a formatted answer, with model, response style, and reasoning effort in the composer<br/>
+      <b>Multimodal</b> — “generate an image of …” becomes an image-generation task on the model assigned to that capability and appears inline<br/>
+      <b>Agent tasks</b> — Agent mode with an approval policy runs a goal in a sandbox, shows live progress, and returns the result<br/>
+      <b>Settings</b> — model roles, per-capability model assignment, the MCP catalog, and the skill library<br/>
+      <b>Languages</b> — the interface follows your browser language or the Settings choice
+    </td>
+  </tr>
+</table>
 
 ---
 
