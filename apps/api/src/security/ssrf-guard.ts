@@ -6,6 +6,11 @@ import { SSRF_LIMITS } from '../config/security';
 
 const logger = createLogger('SSRFGuard');
 
+/** 로그용 URL — 쿼리스트링·fragment 제거(서명 토큰·API 키가 provider URL 쿼리에 실리는 경우 노출 방지). */
+function redactUrlForLog(u: string): string {
+    try { const p = new URL(u); return `${p.origin}${p.pathname}${p.search ? '?[redacted]' : ''}`; } catch { return u.split('?')[0]; }
+}
+
 const BLOCKED_IPV4_CIDRS = [
     '10.0.0.0/8',
     '172.16.0.0/12',
@@ -323,17 +328,17 @@ export async function validateOutboundUrl(rawUrl: string, resolver: DnsResolver 
 
     if (url.protocol !== 'http:' && url.protocol !== 'https:') {
         const message = `SSRF blocked: scheme not allowed: ${url.protocol}`;
-        logger.warn(message, { rawUrl });
+        logger.warn(message, { rawUrl: redactUrlForLog(rawUrl) });
         throw new Error(message);
     }
 
     const { address } = await resolver(url.hostname);
     if (isBlockedIP(address)) {
         if (isAllowlistedHost(url.hostname, address, effectivePort(url))) {
-            logger.info('SSRF allowlist bypass: host explicitly allowed', { rawUrl, hostname: url.hostname, address });
+            logger.info('SSRF allowlist bypass: host explicitly allowed', { rawUrl: redactUrlForLog(rawUrl), hostname: url.hostname, address });
         } else {
             const message = `SSRF blocked: resolved to blocked IP range: ${address}`;
-            logger.warn(message, { rawUrl, hostname: url.hostname, address });
+            logger.warn(message, { rawUrl: redactUrlForLog(rawUrl), hostname: url.hostname, address });
             throw new Error(message);
         }
     }
@@ -393,17 +398,17 @@ export async function safeFetch(
         const url = new URL(currentUrl);
         if (url.protocol !== 'http:' && url.protocol !== 'https:') {
             const message = `SSRF blocked: scheme not allowed: ${url.protocol}`;
-            logger.warn(message, { rawUrl: currentUrl });
+            logger.warn(message, { rawUrl: redactUrlForLog(currentUrl) });
             throw new Error(message);
         }
 
         const { address } = await resolver(url.hostname);
         if (isBlockedIP(address)) {
             if (isAllowlistedHost(url.hostname, address, effectivePort(url))) {
-                logger.info('SSRF allowlist bypass: host explicitly allowed', { rawUrl: currentUrl, hostname: url.hostname, address });
+                logger.info('SSRF allowlist bypass: host explicitly allowed', { rawUrl: redactUrlForLog(currentUrl), hostname: url.hostname, address });
             } else {
                 const message = `SSRF blocked: resolved to blocked IP range: ${address}`;
-                logger.warn(message, { rawUrl: currentUrl, hostname: url.hostname, address });
+                logger.warn(message, { rawUrl: redactUrlForLog(currentUrl), hostname: url.hostname, address });
                 throw new Error(message);
             }
         }
@@ -428,7 +433,7 @@ export async function safeFetch(
             // https → http 다운그레이드 리다이렉트는 거부 (자격증명·본문 평문 노출)
             if (url.protocol === 'https:' && nextUrl.protocol === 'http:') {
                 const message = 'SSRF blocked: redirect downgrades https to http';
-                logger.warn(message, { rawUrl: currentUrl, location });
+                logger.warn(message, { rawUrl: redactUrlForLog(currentUrl), location: redactUrlForLog(location) });
                 throw new Error(message);
             }
             // cross-origin 리다이렉트엔 자격증명 헤더를 넘기지 않는다 (동일 origin 302 → 외부 origin 으로 키 전달 차단)
@@ -442,7 +447,7 @@ export async function safeFetch(
         return response;
     }
 
-    logger.warn('SSRF blocked: too many redirects', { rawUrl, maxRedirects: SSRF_LIMITS.MAX_REDIRECTS });
+    logger.warn('SSRF blocked: too many redirects', { rawUrl: redactUrlForLog(rawUrl), maxRedirects: SSRF_LIMITS.MAX_REDIRECTS });
     throw new Error('SSRF blocked: too many redirects');
 }
 

@@ -28,8 +28,11 @@ const router = Router();
 function publicBaseUrl(req: Request): string {
     const envUrl = process.env.OMK_APP_URL?.trim().replace(/\/$/, '');
     if (envUrl) return envUrl;
-    const proto = (req.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim() || req.protocol || 'https';
-    const host = (req.headers['x-forwarded-host'] as string | undefined)?.split(',')[0]?.trim() || req.get('host') || 'localhost';
+    // req.protocol / req.hostname 은 `trust proxy` 설정(TRUSTED_PROXIES)에 따라서만 x-forwarded-* 를
+    // 반영한다 — 헤더를 직접 읽으면 신뢰하지 않는 클라이언트도 문서의 예시 주소를 바꿔 넣을 수 있다.
+    const proto = req.protocol === 'http' ? 'http' : 'https';
+    const rawHost = req.hostname || 'localhost';
+    const host = /^[a-z0-9.-]+$/i.test(rawHost) ? rawHost : 'localhost';
     return `${proto}://${host}`;
 }
 

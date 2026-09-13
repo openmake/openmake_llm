@@ -34,6 +34,7 @@ import { getUnifiedDatabase } from '../data/models/unified-database';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { requireAuth } from '../auth';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
+import { exportSkill } from './skills-export';
 import { validate, validateQuery, validateWithSecurity } from '../middlewares/validation';
 import {
     createSkillSchema,
@@ -566,34 +567,8 @@ router.delete('/:skillId', requireAuth, asyncHandler(async (req: Request, res: R
 // 스킬 내보내기
 // ================================================
 
-/**
- * GET /api/agents/skills/:skillId/export
- * 스킬을 SKILL.md 파일로 내보내기
- */
-router.get('/:skillId/export', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-    const { skillId } = req.params;
-    const skill = await getSkillManager().getSkillById(skillId);
-    if (!skill) {
-        res.status(404).json(notFound('스킬'));
-        return;
-    }
-
-    const markdown = [
-        `# ${skill.name}`,
-        '',
-        `> ${skill.description}`,
-        '',
-        `**Category**: ${skill.category}`,
-        '',
-        '## Instructions',
-        '',
-        skill.content
-    ].join('\n');
-
-    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${skill.name.replace(/[^a-z0-9_]/gi, '_').toLowerCase()}.SKILL.md"`);
-    res.send(markdown);
-}));
+/** GET /api/agents/skills/:skillId/export — 본문은 skills-export.ts (600줄 가드로 분리) */
+router.get('/:skillId/export', requireAuth, asyncHandler(exportSkill));
 
 export default router;
 export { router as skillsRouter };

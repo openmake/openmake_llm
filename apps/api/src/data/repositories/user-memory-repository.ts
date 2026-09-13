@@ -95,12 +95,12 @@ export class UserMemoryRepository extends BaseRepository {
         return result.rowCount ?? 0;
     }
 
-    async touchAccessed(ids: string[]): Promise<void> {
+    async touchAccessed(userId: string, ids: string[]): Promise<void> {
         if (ids.length === 0) return;
-        const params: QueryParam[] = ids;
-        const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
+        const params: QueryParam[] = [userId, ...ids];
+        const placeholders = ids.map((_, i) => `$${i + 2}`).join(',');
         await this.query(
-            `UPDATE user_memories SET accessed_at = NOW() WHERE id IN (${placeholders})`,
+            `UPDATE user_memories SET accessed_at = NOW() WHERE user_id = $1 AND id IN (${placeholders})`,
             params,
         );
     }

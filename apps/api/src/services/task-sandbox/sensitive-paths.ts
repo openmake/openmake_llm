@@ -21,7 +21,8 @@ function globToRegExp(glob: string): RegExp {
         else if (c === '?') out += '[^/]';
         else out += c.replace(/[.+^${}()|[\]\\]/g, '\\$&');
     }
-    return new RegExp(`^${out}$`);
+    // 대소문자 무시 — macOS(로컬 브리지) 같은 case-insensitive FS 에서 `.ENV` 가 `.env` 를 덮어쓴다 (2026-09-13)
+    return new RegExp(`^${out}$`, 'i');
 }
 
 const RES = SENSITIVE_FILE_PATTERNS.map(globToRegExp);
