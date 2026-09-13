@@ -36,7 +36,7 @@ export async function buildUserMemoryBlock(userId: string): Promise<string> {
             logger.info(`user_memories 토큰 cap 적용 (${kept.length}/${memories.length}, >${maxMem} tok)`);
         }
         const lines = kept.map((m, i) => `${i + 1}. ${m.content}`).join('\n');
-        void memRepo.touchAccessed(kept.map((m) => m.id)).catch((e) => logger.warn('memory touch 실패 (무시):', e));
+        void memRepo.touchAccessed(userId, kept.map((m) => m.id)).catch((e) => logger.warn('memory touch 실패 (무시):', e));
         return `## 🧠 User Memory (cross-conversation)\n${lines}\n\n---\n\n`;
     } catch (e) {
         logger.warn('user_memories 조회 실패 (계속 진행):', e);

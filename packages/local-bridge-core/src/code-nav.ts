@@ -43,7 +43,8 @@ export function globToRegExp(glob: string): { re: RegExp; basenameOnly: boolean 
     return { re: new RegExp(`^${out}$`), basenameOnly };
 }
 
-const SECRET_FILE_RES = CODE_NAV_EXCLUDED_FILES.map((g) => globToRegExp(g).re);
+// 자격증명 이름은 대소문자 무시 — case-insensitive FS(macOS)에서 `.ENV`·`ID_RSA` 우회 차단 (서버 isSensitivePath 와 대칭)
+const SECRET_FILE_RES = CODE_NAV_EXCLUDED_FILES.map((g) => new RegExp(globToRegExp(g).re.source, 'i'));
 
 /** 자격증명 파일인지 — 파일명(basename)만 본다. 서버 셸 폴백의 rg -g '!…' 와 같은 패턴. */
 export function isSecretFile(name: string): boolean {

@@ -572,10 +572,16 @@ router.delete('/:skillId', requireAuth, asyncHandler(async (req: Request, res: R
  */
 router.get('/:skillId/export', requireAuth, asyncHandler(async (req: Request, res: Response) => {
     const { skillId } = req.params;
+    const userId = (req.user && 'userId' in req.user ? (req.user as { userId: string }).userId : req.user?.id?.toString());
     const skill = await getSkillManager().getSkillById(skillId);
     if (!skill) {
         res.status(404).json(notFound('스킬'));
         return;
+    }
+    // 형제 라우트(rewrite-proposal·PUT·DELETE)와 같은 소유권 가드 — getSkillById 는 id 만으로 조회하므로
+    // 비공개 타인 스킬의 본문(프롬프트 SoT)이 id 만 알면 내려가던 갭. 공개(isPublic) 스킬은 통과.
+    if (skill.createdBy && skill.isPublic !== true) {
+        assertResourceOwnerOrAdmin(String(skill.createdBy), String(userId), req.user?.role || 'user');
     }
 
     const markdown = [

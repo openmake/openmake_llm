@@ -69,6 +69,16 @@ describe('safeFrom — 경로 스코프', () => {
         expect(() => safeFrom(base, 'link-out/new/new.txt')).toThrow(/심링크 스코프 탈출/);
     });
 
+    it('대상이 없는(dangling) 심링크는 거부한다 — write 가 링크를 따라가 base 밖에 파일을 만들던 갭 (2026-09-13)', async () => {
+        const target = path.join(outside, 'planted.plist');
+        fs.symlinkSync(target, path.join(base, 'dangling'));
+        expect(fs.existsSync(target)).toBe(false);
+        expect(() => safeFrom(base, 'dangling')).toThrow();
+        await expect(safeFromAsync(base, 'dangling')).rejects.toThrow();
+        // 존재하지 않는 하위 경로(정상 케이스)는 여전히 통과한다
+        expect(safeFrom(base, 'sub/brand-new.txt')).toBe(path.join(base, 'sub', 'brand-new.txt'));
+    });
+
     it('safeFromAsync — sync 판과 동일한 검증 의미를 유지한다', async () => {
         expect(await safeFromAsync(base, 'sub/a.txt')).toBe(path.join(base, 'sub', 'a.txt'));
         await expect(safeFromAsync(base, '../' + path.basename(outside) + '/secret.txt')).rejects.toThrow(/스코프 밖/);
