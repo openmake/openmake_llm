@@ -2,7 +2,7 @@
 
 <p align="center">
   <strong>An open-source, local-first, self-hosted AI workspace for open-weight and BYOK models.</strong><br/>
-  vLLM/LiteLLM inference · autonomous AI agents · MCP tools · deep research · Docker sandboxes.
+  vLLM/LiteLLM inference · multimodal orchestration · autonomous agents · MCP tools · deep research · Docker sandboxes.
 </p>
 
 <p align="center">
@@ -28,9 +28,11 @@
 
 ## Overview
 
-**OpenMake LLM** is a self-hosted AI assistant you run on your own hardware. It serves a local model through **vLLM** behind a **LiteLLM proxy** (OpenAI-compatible) and routes the *same* abstraction to external providers you register with your own keys (**OpenRouter, NVIDIA NIM, Ollama** local/cloud — all OpenAI-compatible; an Anthropic adapter is also built in) — so your data stays on your machine by default.
+**OpenMake LLM** is a self-hosted AI assistant you run on your own hardware. It serves a local model through **vLLM** behind a **LiteLLM gateway** (OpenAI-compatible) and routes the *same* gateway to external providers you register with your own keys — **OpenRouter, NVIDIA NIM, Ollama Cloud, Open AI Service Hub (hasa), B.AI** — plus a **ChatGPT subscription login**. Your data stays on your machine by default.
 
-Every request flows through a lightweight **message pipeline** that applies the provider gate, security and language policy, and prompt/tool assembly *without* an extra LLM routing round-trip. Local and external models then share the same execution path and always-on tool loop. The current **`ExecutionPlanBuilder`** is intentionally narrow: it loads an authorized custom agent when one is selected. Behavior is controlled by orthogonal axes only — **Model · Style · Mode toggles · Custom Agent** — instead of opaque presets. Power users can go further with **role-based model orchestration** — assigning a different model (local or external) to each functional role (agent, judge, research, parallel sub-agents, review, thinking-summary). Beyond chat, it adds autonomous agents, a deep-research pipeline, and an MCP tool system — all behind JWT auth and role-based access control.
+Every chat turn goes through a lightweight **message pipeline** (provider gate, security and language policy, prompt and tool assembly) and a single execution path shared by local and external models. When a request needs more than text — *draw this, read it aloud, transcribe this clip, make a short video* — a **Planner** writes a small plan, the matching **capabilities** run in parallel on the models you assigned, and your chat model writes the final answer around the results. Behavior is controlled by orthogonal axes only — **Model · Style · Mode toggles · Custom Agent** — instead of opaque presets.
+
+Beyond chat you get autonomous agent tasks in Docker sandboxes (or on your own machine through a local bridge), deep research, an MCP tool system with a one-click catalog, and an extension system that installs Claude Code–style plugins and skills — all behind JWT auth and role-based access control.
 
 > **Single-host design:** the application (API + web) runs under **PM2**, while stateful dependencies (PostgreSQL / Redis) and sandboxed agent / MCP / artifact processes run in **Docker** for isolation.
 
@@ -38,128 +40,135 @@ Every request flows through a lightweight **message pipeline** that applies the 
 
 | | |
 |---|---|
-| 🧠 **1 local model, routed per request** | `qwen3.8-27b` served via vLLM + LiteLLM, with a 262K context-fit safety net |
-| 🎛️ **Role-based model orchestration** | Assign a different model (local or BYOK external) per functional role; per-user + admin-global mappings, server-shared keys with token budgets |
-| 🤖 **Autonomous agents** | Manus-style multi-turn agent in a persistent Docker sandbox (shell · Python · browser · files), with human-in-the-loop approval |
-| 🔬 **Deep research** | Fan-out web search → source fetch → claim verification → cited synthesis |
-| 📊 **Report pipeline** | Report-intent queries render model-produced data through a fixed design template into an HTML artifact — exportable to **PDF/DOCX** |
-| 📓 **NotebookLM grounding** | Pin one of your Google NotebookLM notebooks as conversation context, straight from the composer |
-| 🧩 **22 built-in MCP tools** + external MCP servers | Each external server isolated in Docker (`--cap-drop ALL`, non-root, network policy) |
-| 👤 **Custom agents & skills** | Project-scoped personas (with optional per-agent model) + an auto-selectable skill library + 18 industry agents (100 specialists) |
-| 💬 **Discord gateway bot** | Optional workspace relaying Discord messages to the OpenAI-compatible API, with role/mention access control |
-| 🖥️ **Native clients** | **OpenMake Companion** (SwiftUI menu-bar app, macOS Apple Silicon) for local-folder agent work, **OpenMake Code** CLI (local bridge), and a SwiftUI iOS client in progress — chat itself stays in the web app |
-| 📊 **OpenMake Bench** | [bench.openmake.cc](https://bench.openmake.cc): blind pairwise model comparisons and a hardware fit score, signed in through the web SSO client; a model picked there applies to your model roles |
-| 🌐 **4-language UI** | 한국어 · English · 日本語 · 简体中文 (`next-intl`, cookie locale, browser auto-detect) |
-| 🔒 **Security-first** | JWT (HttpOnly), Google OAuth 2.0, RBAC, per-route rate limiting, SSRF guard, Audit ↔ Alert |
+| 🧠 **Local model + BYOK gateway** | `qwen3.8-27b` served by vLLM behind LiteLLM, with a 262K context-fit safety net; external providers ride the same gateway with your own keys |
+| 🎨 **Multimodal orchestrator** | A Planner splits a request into capability tasks — image generation/editing, speech-to-text, text-to-speech, video, vision/OCR — runs them in parallel, and the chat model synthesizes the answer |
+| 🎛️ **Model roles & capabilities** | Pick a model per role (agent, judge, research, sub-agents, review, summary, planner) and per capability; per-user settings plus admin-wide defaults |
+| 🤖 **Autonomous agents** | Multi-turn agent tasks in a persistent Docker sandbox (shell · Python · browser · files) or in a local folder via **OpenMake Companion** / **OpenMake Code** CLI, with human-in-the-loop approval |
+| 🔬 **Deep research & reports** | Fan-out web search → source fetch → cited synthesis; report requests render into HTML artifacts exportable to **PDF/DOCX** |
+| 🧩 **23 built-in tools + MCP** | Web search, scraping, vision, planning, code/security review, skill loading, and more; external MCP servers each isolated in Docker, with OAuth login for remote servers |
+| 📦 **Extensions & skills** | Install plugins, skills, agents, and MCP servers from Git or a marketplace — Claude Code conventions are adapted on install — and approve them in one **Approvals** inbox |
+| ⚖️ **Compare mode** | Ask two models the same question and read the answers side by side |
+| 🖥️ **Native clients** | OpenMake Companion (SwiftUI menu-bar app, macOS), OpenMake Code CLI, and a SwiftUI iOS client in progress — chat itself stays in the web app |
+| 🌐 **4-language UI** | 한국어 · English · 日本語 · 简体中文 (`next-intl`, browser auto-detect); answers follow the language you write in |
+| 🔒 **Security-first** | JWT (HttpOnly), Google OAuth 2.0, RBAC, per-route rate limiting, SSRF guard, AES-256-GCM key storage, Audit ↔ Alert |
 
 ---
 
-## Screenshots
+## Demos
 
-> Conversation titles, notebook names, and the account email are blurred — everything else is the running app.
+> These GIFs are recorded from the running app. Recent conversation titles and the account name are hidden.
 
-**Chat workspace** — a five-item workspace nav, model selector, response style, and slash-invoked skills:
+**Chat** — ask a question and the answer streams in, with the model, response style, and reasoning effort right in the composer:
 
 <p align="center">
-  <img src="assets/screenshot-chat.png" alt="Chat workspace" width="920" />
+  <img src="assets/demo-chat.gif" alt="Chat streaming demo" width="860" />
 </p>
 
-| Mode menu — Discussion / Thinking / Deep Research / Web / Agent / Image / Artifact / Structured | NotebookLM picker — pin a notebook as conversation context |
-|---|---|
-| ![Composer mode menu](assets/screenshot-composer-modes.png) | ![NotebookLM notebook picker](assets/screenshot-notebook-picker.png) |
-
-**Agent tasks** — autonomous multi-turn runs with live progress, token accounting, recurring schedules, and reusable task templates:
+**Multimodal orchestration** — "generate an image of …" is planned into an image-generation task, run on the model assigned to that capability, and shown inline:
 
 <p align="center">
-  <img src="assets/screenshot-agent-tasks.png" alt="Agent task management" width="920" />
+  <img src="assets/demo-media.gif" alt="Image generation through the multimodal orchestrator" width="860" />
 </p>
 
-| Connectors — external MCP servers, each Docker-isolated | Model Roles Admin — global role→model mappings |
-|---|---|
-| ![Settings → Connectors](assets/screenshot-settings.png) | ![Model roles admin](assets/screenshot-model-roles.png) |
-
-**Skill Library** — reusable manifests with tool bindings, importable from Git or generated by the model:
+**Agent tasks** — switch the composer to Agent mode, choose an approval policy, and hand over a goal; the task runs in a sandbox with live progress and returns its result:
 
 <p align="center">
-  <img src="assets/screenshot-skill-library.png" alt="Skill Library" width="920" />
+  <img src="assets/demo-agent.gif" alt="Agent task run from the composer" width="860" />
 </p>
 
-**Multilingual UI (한국어 · English · 日本語 · 简体中文)** — switch the interface language in Settings, or let it follow your browser (`Accept-Language`). AI response language independently follows the message language:
+**Settings** — model roles, per-capability model assignment, the MCP catalog, and the skill library:
 
 <p align="center">
-  <img src="assets/i18n-demo.gif" alt="Interface language switching demo (ko / en / ja / zh)" width="920" />
+  <img src="assets/demo-settings.gif" alt="Model roles, capability models, MCP catalog, and skill library" width="860" />
+</p>
+
+**Multilingual UI** — the interface follows your browser language or the Settings choice:
+
+<p align="center">
+  <img src="assets/demo-i18n.gif" alt="Interface in English, Korean, Japanese, and Chinese" width="860" />
 </p>
 
 ---
 
 ## Architecture
 
-OpenMake separates **policy** (deciding *how* to answer) from **execution** (actually calling the model) — a SQL planner/executor split. The two layers are kept deliberately independent.
+OpenMake keeps **deciding what to run** separate from **calling the model**. Special modes are intercepted first; everything else goes through one path.
 
 ```
-                          WebSocket / REST
-                                  │
-                    ┌─────────────▼─────────────┐
-  Query ───────────►│      message-pipeline     │  request processing
-                    │                           │  · provider gate
-                    └─────────────┬─────────────┘  · security & language policy
-                                  │                · prompt & tool assembly
-                                  │                · authorized custom-agent load
-                    ┌─────────────▼─────────────┐
-                    │ streamFromExternalProvider│  single path — local & external alike
-                    │   (always-on tool loop)   │  · 5 tool turns max
-                    └─────────────┬─────────────┘  · special modes intercept earlier
-                                  │
-                    ┌─────────────▼─────────────┐
-                    │       LLMClient.chat      │  execution — per call
-                    │  (context-fit safety net) │  · token estimate → truncate → cap
-                    └─────────────┬─────────────┘  · overflow → 413 + audit + alert
-                                  │
-           vLLM serve → LiteLLM proxy (OpenAI-compatible endpoint)
+                             WebSocket / REST
+                                     │
+                       ┌─────────────▼─────────────┐
+   Query ─────────────►│     message-pipeline      │  provider gate · security & language policy
+                       └─────────────┬─────────────┘  prompt & tool assembly · custom agent
+                                     │
+                       ┌─────────────▼─────────────┐
+                       │          Planner          │  one small JSON plan per turn
+                       └──────┬──────────────┬─────┘
+                        simple│              │multi
+                              │   ┌──────────▼──────────┐
+                              │   │  capability tasks   │  image · speech · video · vision
+                              │   │  (run in parallel)  │  on the models you assigned
+                              │   └──────────┬──────────┘
+                       ┌──────▼──────────────▼─────┐
+                       │ streamFromExternalProvider│  one path for local & external models
+                       │   (always-on tool loop)   │  chat model writes the final answer
+                       └─────────────┬─────────────┘
+                                     │
+                       ┌─────────────▼─────────────┐
+                       │       LLMClient.chat      │  context-fit safety net
+                       └─────────────┬─────────────┘  truncate → cap → 413 + audit
+                                     │
+                  LiteLLM gateway → vLLM (local) · BYOK external providers
 ```
 
-- **One execution path** — the former per-strategy layer (generate-verify, agent-loop, thinking, direct) was retired: `message-pipeline` sends local and external models through a single `streamFromExternalProvider` dispatch with an always-on MCP tool loop. `ExecutionPlanBuilder` now only loads an authorized custom agent. Discussion and Deep Research remain separate modes intercepted before dispatch.
-- **Context-fit safety net** — on entry, prompt tokens (images included) are estimated; if the effective **262K** window is exceeded, input is truncated → `max_tokens` reduced → in the extreme, a `ContextOverflowError` returns **HTTP 413** with an audit record and an automatic webhook alert.
-- **User customization (4 orthogonal axes)** — **Model** (selector) · **Style** (Concise / Default / Verbose) · **Mode** (Discussion / Thinking / Deep Research / Web / Agent Task) · **Custom Instructions & Agents**. System-prompt assembly order: `memory + custom-instructions + style`.
-- **Role-based model orchestration** — every LLM-calling subsystem resolves its model through a single role registry with a fail-open fallback chain: per-user mapping → admin-set global (DB) → global env → local default. External models per role run on the user's BYOK key, or on a server-shared operator key (with daily/monthly token budgets) for global roles. Custom agents can also pin their own model.
-- **Cross-conversation memory** — explicit long-term memories are injected into the system prompt; a privacy toggle lets a user exclude them per session.
-- **Thinking display (Claude-web style)** — when Thinking mode is on, the reasoning stream renders as a live timeline; a dedicated `summary`-role model generates a one-line headline (streaming interim → final), and both the reasoning and headline are persisted so re-opening a conversation restores the timeline.
+- **One execution path** — local and external models share `streamFromExternalProvider` and its MCP tool loop. Discussion and Deep Research are separate modes intercepted before dispatch.
+- **Planner → capabilities → synthesis** — a `simple` plan adds no extra model calls. A `multi` plan is checked up front (assignment, key status, gateway support, quotas), its tasks run by dependency level in parallel, and only successful media is attached to the answer. Unfinished video jobs are kept and picked up again on your next message instead of being resubmitted.
+- **Model resolution** — every model-calling subsystem resolves its model through a role or capability registry: per-user setting → admin-wide default → built-in default, falling back to the local model on failure.
+- **Context-fit safety net** — prompt tokens (images included) are estimated on entry; when the effective **262K** window would be exceeded, input is trimmed, `max_tokens` is reduced, and as a last resort the request returns **HTTP 413** with an audit record and an alert.
+- **User customization** — **Model** · **Style** (Concise / Default / Verbose) · **Mode** (Discussion / Thinking / Verify answer / Deep Research / Agent) · **Custom Instructions & Agents**, plus opt-in cross-conversation memory.
+- **Resilient streaming** — if a tab goes to the background or the app loses its socket, generation keeps running and the client re-attaches to the same answer when it reconnects.
 
 ---
 
 ## Features
 
 **▸ Models & routing**
-- Local and external models share the provider-gated `message-pipeline` and tool loop; behavior is controlled by orthogonal axes (Model · Style · Mode · Custom Agent).
-- Self-hosted vLLM + LiteLLM (default `qwen3.8-27b`) with a context-fit safety net that protects output tokens and degrades gracefully on overflow.
-- Bring-your-own external keys — **OpenRouter, NVIDIA NIM, Ollama** (local + cloud), all OpenAI-compatible (an Anthropic adapter is built into the provider abstraction) — AES-256-GCM encrypted at rest. **Guests use the default local model only** — external providers require sign-in.
-- **Role-based model orchestration** — assign a different model (local or BYOK external) to each functional role (`agent`, `judge`, `research`, `spawn`, `review`, `summary`) via Settings; admins set org-wide defaults and register server-shared external keys with per-key token budgets in an admin console. Resolution is fail-open (falls back to the local default on any failure). Model lists filter down to what is actually reachable and role-capable.
-- **External provider throttling** — per-provider concurrency limits with exponential back-off on 429 (honouring `Retry-After`), so a burst of Discussion or Deep Research fan-out does not get a BYOK key rate-limited. The UI's reasoning-effort setting (low / medium / high) is forwarded to OpenAI-compatible external providers as `reasoning_effort`; local models get sampling presets for thinking ON/OFF.
-- **Tail routing (opt-in, off by default)** — a lightweight gate scores each query's error likelihood; when it judges a query as *factual tail* (likely to be answered wrong, externally verifiable), `web_search` is deterministically forced on the first turn. Ships with a shadow mode (`TAIL_ROUTING_SHADOW_ENABLED`) that records gate decisions without changing behavior, so thresholds can be tuned on real traffic before `TAIL_ROUTING_STAGE2B_ENABLED` is switched on.
+- Self-hosted vLLM + LiteLLM (default `qwen3.8-27b`) with a context-fit safety net that protects output tokens and degrades gracefully.
+- **Bring your own keys** for OpenRouter, NVIDIA NIM, Ollama Cloud, Open AI Service Hub (hasa), and B.AI — all routed through the LiteLLM gateway, with keys AES-256-GCM encrypted at rest — plus a ChatGPT subscription login. Guests use the local model only.
+- **Model roles** — assign a different model to `agent`, `judge`, `research`, `spawn`, `review`, `summary`, and `planner`; admins set org-wide defaults and can register server-shared keys with daily/monthly token budgets.
+- **Model per capability** — choose the model for text, code, vision/OCR, image generation/editing, speech-to-text, text-to-speech, and video; grouped in Settings with per-capability overrides.
+- **Clear failure reasons** — rate limits, insufficient credit, restricted models, and unsupported tool definitions are reported as such instead of a generic upstream error, and per-provider concurrency limits back off on `429`.
+- **Compare mode** — run two models on the same prompt side by side.
+
+**▸ Multimodal**
+- **Planner-driven orchestration** — image generation and editing (with the previous image as reference), speech-to-text on audio or video attachments, text-to-speech, video generation, and vision description/OCR, all as capability tasks that can run in parallel.
+- If the chat model cannot see images, a vision model describes them first and the chat model answers from those notes.
+- Generated media is served from `/generated` with automatic retention cleanup; usage and plan timings are recorded for cost review.
 
 **▸ Agents & research**
-- **Autonomous agent tasks** — a Manus-style agent pursues a goal across multiple tool-calling turns inside a **persistent Docker sandbox** (shell, Python, browser, file, planning tools) with human-in-the-loop approval. It records file attachments, injects images through a vision channel, produces deliverables including **Excel (.xlsx)** and **PDF** (with Korean/CJK fonts), and honestly reports non-achievement (`[GOAL_INCOMPLETE]` marker + goal judge) instead of falsely marking "done". Tasks can be saved as **reusable templates** or put on a **recurring schedule**.
-- **Deep research** — fan-out web search → source fetch → claim verification → cited synthesis.
-- **Report pipeline** — on report-intent queries ("research X and write a report") the model produces **data (JSON) only**; the server renders it through a fixed design template into an HTML artifact (*renderer owns design* — consistent editorial layout, KPI tiles, tables, dependency-free SVG charts, cited sources; all model strings escaped). Self-contained research-style report requests auto-delegate to an agent task for more research turns, and the same contract applies to agent-task deliverables. Failures are fail-open: without a valid data block the reply streams as ordinary chat.
-- **Custom agents & skills** — project-scoped agents (claude.ai Projects equivalent) selectable directly from the composer, each optionally pinned to its own model, plus an auto-selectable skill library and 18 built-in industry agents (100 specialists).
+- **Autonomous agent tasks** — pursue a goal across many tool-calling turns in a **persistent Docker sandbox** (shell, Python, browser, files, planning, code navigation) with **Manual / Auto / Skip** approval policies. Attach files and images, get deliverables such as **Excel** and **PDF**, and see honest non-achievement (goal judge) instead of a false "done". Save tasks as **templates**, run them on a **schedule**, or **share** a run.
+- **Local execution** — **OpenMake Companion** (macOS menu-bar app) or the **OpenMake Code** CLI connects a folder on your machine; tool calls run there with path scoping, a confirmation gate for commands, and git-worktree isolation.
+- **Parallel sub-agents** — split independent sub-tasks across sub-agents and combine the results.
+- **Deep research** — decomposition, fan-out web search (SearXNG, Naver, Daum, and more), chunked summarization, and a cited report.
+- **Report pipeline** — report requests produce structured data that the server renders through a fixed template into an HTML artifact, exportable to **PDF** and **DOCX**.
+- **Custom agents** — project-style personas selectable from the composer, each optionally pinned to its own model, alongside 18 built-in industry agents (100 specialists).
 
 **▸ Tools & extensibility**
-- **MCP tool system** — 22 built-in tools (web search, fact-check, web scrape/map/crawl, image analysis, agent-task control, skill/agent/MCP git-ingest, …) plus external MCP servers, each isolated in Docker (`--cap-drop ALL`, non-root, `--memory`+`--memory-swap`, network policy, realpath-guarded mounts). Install servers from the MCP catalog in **Settings → Connectors** (seeded with Tavily, Sentry, Context7 and more; `{{env.KEY}}` secrets are passed as shell variable references, never baked into argv); a catalog-level **tool allowlist** keeps chat auto-exposure focused (a 39-tool server need not dump 39 schemas into every prompt) while REST execution and the explicit tool picker keep full access.
-- **NotebookLM grounding** — install the NotebookLM connector with your own Google session cookie (AES-256-GCM encrypted, injected only at spawn), then pin a notebook from the composer. The grounding prefix rides an LLM-only channel, so stored messages and sidebar titles stay clean, and the pin is scoped to one conversation.
-- **Artifacts** — live sandboxed iframe rendering, optional Docker code execution (Python / JS), a resizable side panel, and a separate-origin strict-CSP shared viewer for publishing. The OpenAI-compatible API returns artifacts as a `message.artifacts` extension, and `publish_artifacts: true` makes the server mint share links for API-key clients that cannot publish themselves.
-- **PDF / DOCX export** — any HTML artifact (chat or agent-task deliverable) exports to **PDF** via headless Chromium print (CJK fonts included); report artifacts keep their structured source data (`artifacts.source_data`), enabling high-fidelity **DOCX** generation with `python-docx`. Both conversions run one-shot in the Docker sandbox (`--network none`, `--cap-drop ALL`, memory/pids caps) behind owner-scoped rate-limited endpoints.
-- **Memory & instructions** — persistent cross-conversation memory (with a per-session usage toggle) and always-on custom instructions.
-- **Thinking display** — Claude-web-style reasoning timeline with a live one-line headline (generated by a dedicated summary model), persisted and restored on re-open.
-- **Multilingual UI** — Korean, English, Japanese, and Simplified Chinese via `next-intl` (cookie-based locale, browser auto-detect, locale-aware date/number formatting).
+- **23 built-in tools** — web search, fact-check, page extraction, scrape/map/crawl, image analysis and OCR, agent-task lookup, planning, code and security review, skill creation and loading, Git importers for skills/agents/MCP servers/extensions, MCP meta tools, and an admin-only ops metrics tool. Tools are exposed only on turns that need them to keep prompts small.
+- **External MCP servers** — stdio servers run in Docker when the sandbox is enabled (the generated config turns it on): `--cap-drop ALL`, non-root, memory and network limits, and an optional read-only root filesystem. Install from the **MCP catalog** (Tavily, Context7, Notion, NotebookLM, Kakao Map, OpenDART, Korean public-data APIs, and more); remote servers can sign in with **OAuth**.
+- **Extensions** — install a plugin, skill, custom agent, or MCP server from Git, a zip, or the marketplace. Claude Code conventions (tool names, `$ARGUMENTS`, `commands/`, `agents/`, bundled scripts) are adapted on install, and everything that needs review lands in the **Approvals** inbox.
+- **Skills** — reusable manifests with tool bindings, invoked with `/skill-name` or picked by the model when relevant.
+- **Artifacts** — sandboxed live preview, optional Docker code execution, and a separate-origin viewer for publishing.
+- **NotebookLM grounding** — pin one of your notebooks as conversation context from the composer.
+- **Memory, instructions, and notifications** — opt-in cross-conversation memory, always-on custom instructions, and web push notifications when agent tasks need approval or finish.
 
 **▸ Integrations**
-- **Discord gateway bot** (`apps/discord-bot`) — an optional standalone workspace that relays Discord messages to `/api/v1/chat/completions`, with per-user session isolation (`/reset`), role/mention access control, and API-key auth. Generated images and artifacts come back as real Discord file attachments (with share links), since Discord cannot render the API's relative paths or placeholders. Runs as its own PM2 process.
-- **OpenMake Bench** — [bench.openmake.cc](https://bench.openmake.cc) signs in through the API's web SSO client and reads the live-refreshed `/v1/models` list; the OpenAI-compatible API also offers a raw mode for benchmark clients.
-- **Native clients** — `apps/desktop-native` (OpenMake Companion, SwiftUI menu bar: folder linking, device status, exec approval, task-finished notifications, web deep links), `apps/cli` (OpenMake Code, the local bridge that runs agent tool calls on your own machine instead of the server sandbox), and `apps/ios` (SwiftUI client, in progress). All three share the Instrument design tokens with the web app.
-- **NotebookLM** — `GET /api/mcp/notebooklm/notebooks` backs the composer picker (per-user cache, upstream failures converged to `502 NOTEBOOKLM_UPSTREAM` so the UI can prompt a reconnect when the Google cookie expires).
+- **OpenAI-compatible API** (`/api/v1/chat/completions`) with API keys and scopes.
+- **Discord gateway bot** (`apps/discord-bot`) relaying messages to the API with per-user sessions and file attachments.
+- **OpenMake Bench** — [bench.openmake.cc](https://bench.openmake.cc) signs in through web SSO; a model picked there can be applied to your model roles.
 
 **▸ Security**
-- JWT in HttpOnly cookies, Google OAuth 2.0, RBAC, per-user & per-route rate limiting, SSRF guard, Helmet headers, and a unified Audit ↔ Alert pipeline.
+- JWT in HttpOnly cookies, Google OAuth 2.0, RBAC, per-user and per-route rate limiting, SSRF guard, Helmet headers, credential-file guards for agent tools, and a unified Audit ↔ Alert pipeline.
 
 ---
 
@@ -167,14 +176,14 @@ OpenMake separates **policy** (deciding *how* to answer) from **execution** (act
 
 | Layer | Technologies |
 |---|---|
-| **Backend** | Node.js (≥24), Express 5, TypeScript (strict, CommonJS), Zod, Winston |
-| **Frontend** | Next.js 16, React 19, Zustand 5, Tailwind CSS 4, `next-intl`; Instrument design system (cobalt primary · cyan secondary, IBM Plex Mono) |
+| **Backend** | Node.js (≥24), Express 5, TypeScript (strict, CommonJS), Zod 4, Winston |
+| **Frontend** | Next.js 16, React 19, Zustand 5, Tailwind CSS 4, `next-intl`; Instrument design system |
 | **Database** | PostgreSQL via `pg` — raw, parameterized SQL (no ORM) |
-| **Realtime** | WebSocket (`ws`) streaming chat with stream detach/resume — a backgrounded tab or app reconnects without losing the response |
-| **LLM backend** | vLLM + LiteLLM (OpenAI-compatible); `@anthropic-ai/sdk`, `openai` for external providers |
-| **Agents / Tools** | Model Context Protocol (`@modelcontextprotocol/sdk`), Docker-isolated sandboxes |
-| **Integrations** | Discord gateway bot (`discord.js`) — optional standalone workspace; OpenMake Bench via web SSO |
+| **Realtime** | WebSocket (`ws`) streaming with detach/resume |
+| **LLM backend** | vLLM + LiteLLM gateway (OpenAI-compatible); `openai` SDK for external providers |
+| **Agents / Tools** | Model Context Protocol (`@modelcontextprotocol/client` v2), Docker-isolated sandboxes |
 | **Native clients** | SwiftUI (macOS Companion, iOS), Node CLI (`apps/cli`) sharing `packages/local-bridge-core` |
+| **Integrations** | Discord gateway bot (`discord.js`); OpenMake Bench via web SSO |
 | **Auth / Security** | `jsonwebtoken`, Google OAuth 2.0, Helmet, AES-256-GCM |
 | **Infra** | PM2 (API · web · Discord bot) + Docker (PostgreSQL/Redis, MCP / agent / artifact sandboxes) |
 | **Testing / CI** | Jest/ts-jest, Playwright, ESLint, GitHub Actions (CI Gate) |
@@ -246,6 +255,9 @@ On macOS the installer works with Docker Desktop, OrbStack, or **Colima**
 plugin isn't registered with the docker CLI, the installer adds `cliPluginsExtraDirs` to
 `~/.docker/config.json` for you.
 
+If no admin account exists yet, the web app opens a one-time **setup page** where you create
+the administrator and, optionally, point it at your LLM gateway.
+
 ### Updating an installed instance
 
 ```bash
@@ -262,7 +274,7 @@ To pin an install to a release instead of `main`, set `OMK_REF` on the one-liner
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh \
-  | OMK_REF=v1.31.1 bash -s -- --yes
+  | OMK_REF=v1.62.3 bash -s -- --yes
 ```
 
 ### Prerequisites (handled by the installer)
@@ -274,7 +286,7 @@ curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.
   `~/.openmake/node` tarball if none of those exist
 - **Docker** — required for PostgreSQL/Redis and the MCP/agent sandboxes. On Linux the
   installer offers to run the official `get.docker.com` script; on macOS you need
-  Docker Desktop or OrbStack. Note: Docker Desktop's **first launch** may ask for GUI
+  Docker Desktop, OrbStack, or Colima. Note: Docker Desktop's **first launch** may ask for GUI
   approval (privileged helper) and can outlast the installer's ~60s daemon wait — if
   that happens, wait for Docker to finish starting and re-run `./install.sh` (safe to
   repeat)
@@ -289,26 +301,31 @@ If you'd rather wire it up yourself, `install.sh` is a readable transcript of th
 npm install
 node scripts/setup/gen-env.mjs        # minimal .env with generated secrets
 docker compose --env-file .env -f infra/docker-compose.yml up -d postgres redis
-npx ts-node apps/api/src/data/migrations/cli.ts migrate
-npm run build && pm2 start ecosystem.config.js
+npm run build && pm2 start ecosystem.config.js   # migrations apply automatically on boot
 ```
 
 > The `--env-file .env` is not optional: Compose resolves its default `.env` relative to the
 > compose file's directory (`infra/`), so without it `POSTGRES_PASSWORD` is empty and startup fails.
 
-`gen-env.mjs` writes only the keys required to boot. `.env.example` is the full reference —
-copy optional blocks (OAuth, web search, MCP sandbox, Discord bot) out of it as you need them:
+`gen-env.mjs` writes only the keys required to boot (the server also generates missing
+`JWT_SECRET` / `API_KEY_PEPPER` / `TOKEN_ENCRYPTION_KEY` on first start). `.env.example` is the
+full reference — copy optional blocks (OAuth, web search, MCP sandbox, Discord bot) out of it
+as you need them:
 
 | Variable | Purpose |
 |---|---|
 | `PORT` | API port (default `52416`) |
 | `DATABASE_URL` | PostgreSQL connection string (password must match `POSTGRES_PASSWORD`) |
 | `JWT_SECRET` | JWT signing secret (≥32 chars) |
-| `API_KEY_PEPPER` | API-key hashing pepper — required in production |
+| `API_KEY_PEPPER` | API-key hashing pepper |
 | `TOKEN_ENCRYPTION_KEY` | AES-256-GCM key for external provider credentials (exactly 64 hex) |
-| `ADMIN_PASSWORD` | Bootstrap admin account password — required in production |
-| `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_DEFAULT_MODEL` | LiteLLM proxy endpoint, master key, default model |
+| `ADMIN_PASSWORD` | Optional bootstrap admin password — leave it empty to create the admin on the setup page |
+| `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_DEFAULT_MODEL` | LiteLLM gateway endpoint, master key, default model |
+| `LLM_GATEWAY_PROVIDERS` | External providers routed through the gateway (comma-separated ids) |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth (optional) |
+
+Many operational settings can also be changed at runtime in **Admin → System settings**
+(database values take precedence over `.env`).
 
 ### Run
 
@@ -333,7 +350,7 @@ npm run dev:api             # backend only (ts-node)
 npm run dev:frontend-next   # frontend only (next dev)
 
 # Production
-npm run build               # backend + frontend
+npm run build               # shared packages + backend + frontend
 npm start                   # node apps/api/dist/server.js
 ```
 
@@ -343,13 +360,10 @@ run: `launchd` on macOS, `systemd` on Linux), then `pm2 save`.
 ### Test & lint
 
 ```bash
-npm test                    # Jest unit tests (apps/api)
+npm test                    # builds shared packages, then Jest unit tests (apps/api)
 npm run test:e2e            # Playwright (chromium + webkit)
 npm run lint                # ESLint
 ```
-
-> `apps/api` unit tests are git-ignored (local-only), so `npm test` reports "0 matches" on a
-> fresh clone — that's expected, not a broken install. CI skips the gate the same way.
 
 ### Database migrations
 
@@ -372,34 +386,32 @@ openmake_llm/
 │   ├── api/          # Express 5 + TypeScript API server (strict, CommonJS)
 │   │   └── src/
 │   │       ├── routes/ controllers/ services/   # REST + business logic
-│   │       ├── chat/                            # ExecutionPlanBuilder, classifiers, prompts
-│   │       ├── agents/                          # 18 industry agents, router, discussion engine
+│   │       ├── services/orchestrator/           # Planner, capability executors, preflight
+│   │       ├── chat/                            # pipeline helpers, classifiers, prompts
+│   │       ├── agents/                          # industry agents, discussion engine, skills, git ingest
 │   │       ├── llm/ providers/ cluster/         # LLM client, provider abstraction, node routing
 │   │       ├── mcp/                             # MCP tool router, external client, Docker sandbox
-│   │       ├── sockets/                         # WebSocket chat handler
+│   │       ├── sockets/                         # WebSocket chat and local-bridge handlers
 │   │       ├── auth/ security/ middlewares/     # JWT/OAuth, SSRF guard, rate limiting
 │   │       └── data/                            # PostgreSQL (raw SQL), migrations, repositories
 │   ├── web/          # Next.js + React frontend (the operating UI)
-│   ├── cli/          # OpenMake Code — local bridge CLI (run agent tasks in your own folder)
-│   │                 # private workspace: build from source, see apps/cli/README.md
-│   ├── desktop-native/ # OpenMake Companion — SwiftUI menu-bar app (macOS Apple Silicon)
+│   ├── cli/          # OpenMake Code — local bridge CLI (build from source, see apps/cli/README.md)
+│   ├── desktop-native/ # OpenMake Companion — SwiftUI menu-bar app (macOS)
 │   ├── ios/          # SwiftUI iOS client (in progress)
 │   ├── discord-bot/  # Optional Discord gateway bot (relays to /api/v1/chat/completions)
-│   └── legacy-web/   # Static asset host (e.g. /generated) — legacy SPA retired
+│   └── legacy-web/   # Static asset host for /generated media
 ├── db/               # init schema + migrations (+ rollbacks/) — read at runtime
-├── packages/         # shared-types, api-contracts, config, api-client, local-bridge-core (shared workspaces)
+├── packages/         # shared-types, api-contracts, config, api-client, local-bridge-core
 ├── infra/            # Dockerfiles & compose (mcp-runtime, task-runtime, artifact-viewer, egress-proxy)
-├── scripts/          # setup/ (gen-env.mjs) + host setup for the LLM backend — vLLM/LiteLLM
-│                     # systemd units, serve scripts, litellm.config.yaml, Caddyfile, diagnostics
+├── scripts/          # setup/ (gen-env.mjs), LLM backend host setup (vLLM/LiteLLM), Caddy, diagnostics
 ├── tests/            # Playwright E2E
+├── assets/           # README demo GIFs
 ├── install.sh        # one-shot installer (Linux/macOS): toolchain → .env → DB → build → PM2
-├── openmake_llm.sh   # service manager: start/stop/restart/deploy/status/logs/health
+├── openmake_llm.sh   # service manager: start/stop/restart/deploy/update/status/logs/health
 └── ecosystem.config.js  # PM2 process definitions (API, Next frontend, optional Discord bot)
 ```
 
-**What the running server actually needs:** the built `apps/api/dist` + `apps/web/.next`, `db/` (the boot path applies `db/init/`, and the migration CLI resolves `db/migrations/` from the working directory), and `infra/` for the Docker-isolated sandboxes. `scripts/` and `tests/` are *not* loaded by any runtime code — but `scripts/vllm/` and `scripts/caddy/` are the deployment artifacts you copy onto the GPU host when standing up or rebuilding the inference backend, so keep them with the repo.
-
-Build, migration, and CI entry points live elsewhere: build in each workspace's `package.json`, migrations in `apps/api/src/data/migrations/cli.ts`, CI in `.github/workflows/`.
+**What the running server actually needs:** the built `apps/api/dist` + `apps/web/.next`, `db/` (the boot path applies `db/init/` and pending `db/migrations/`), and `infra/` for the Docker-isolated sandboxes. `scripts/` and `tests/` are *not* loaded by any runtime code — but `scripts/vllm/` and `scripts/caddy/` are the deployment artifacts for the inference backend and reverse proxy, so keep them with the repo.
 
 ---
 
@@ -417,7 +429,7 @@ Contributions are welcome. Please:
 - [ ] `npm test` passes
 - [ ] DB schema changes include a migration file (no sequence conflicts)
 - [ ] New env vars documented in `.env.example`
-- [ ] UI changes include screenshots; security changes describe their impact
+- [ ] UI changes include screenshots or a short GIF; security changes describe their impact
 
 CI runs a single **CI Gate** (Test → Build → Size → Lint) on every push and pull request.
 
