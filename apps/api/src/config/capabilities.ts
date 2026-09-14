@@ -276,8 +276,12 @@ export function sanitizeCapabilityParams(capability: Capability, input: unknown)
 export const ORCHESTRATOR = {
     /** 기능 게이트 — false 면 Planner 를 돌리지 않고 종전 단일 경로 */
     ENABLED: process.env.ORCHESTRATOR_ENABLED !== 'false',
-    /** Planner 호출 타임아웃 ms (초과 시 fail-open → 종전 경로) */
-    PLANNER_TIMEOUT_MS: parseInt(process.env.ORCHESTRATOR_PLANNER_TIMEOUT_MS || '20000', 10),
+    /**
+     * Planner 호출 타임아웃 ms (초과 시 fail-open → 종전 경로). 이 시간만큼 답변 시작이 늦어진다.
+     * 15초 근거(2026-09-12~15 orchestrator_runs 234건 성공분): 최대 local qwen3.8-27b 9,966ms · chatgpt 9,955ms,
+     * bai p95 5,248ms(이상치 1건 22.9s 는 이제 fail-open). 느린 모델을 배정했다면 env 로 늘린다.
+     */
+    PLANNER_TIMEOUT_MS: parseInt(process.env.ORCHESTRATOR_PLANNER_TIMEOUT_MS || '15000', 10),
     PLANNER_MAX_TOKENS: parseInt(process.env.ORCHESTRATOR_PLANNER_MAX_TOKENS || '400', 10),
     /** 계획 검증 실패 시 Planner 재시도 횟수 */
     PLANNER_RETRIES: parseInt(process.env.ORCHESTRATOR_PLANNER_RETRIES || '1', 10),

@@ -237,7 +237,8 @@ ${sanitizedMessage}
             if (agentId) {
                 const agentIdStr = String(agentId);
                 logger.info(`선택: ${agentIdStr} (신뢰도: ${parsed.confidence})`);
-                logger.info(`이유: ${parsed.reasoning}`);
+                // 프롬프트가 사유를 더는 요구하지 않는다(출력 토큰 절감) — 모델이 자발적으로 줬을 때만 남긴다.
+                if (parsed.reasoning) logger.info(`이유: ${parsed.reasoning}`);
 
                 return {
                     agentId: agentIdStr,

@@ -106,6 +106,11 @@ export async function planRequest(input: PlannerInput, llm?: { call: PlannerLlmC
         } catch (err) {
             if (input.signal?.aborted) return { plan: null, model: resolved.model, ms: Date.now() - startedAt, error: 'cancelled', attempts };
             lastError = signal.aborted ? `timeout ${perAttempt}ms` : (err instanceof Error ? err.message : String(err));
+            // 시간 초과·전송 오류는 같은 모델에 다시 물어도 대개 같다(과부하·다운) — 재시도는 계획 검증 실패에만 쓴다.
+            // 실측(2026-09-12~15): 로컬 planner 실패 3건이 전부 timeout → 재시도 timeout 으로 30초 deadline 을 다 썼고,
+            // nvidia planner 는 20초 timeout 뒤 재시도가 503 과부하였다.
+            logger.warn(`[Planner] attempt ${attempts} 실패: ${lastError} — 재시도 없이 종전 경로`);
+            break;
         }
         logger.warn(`[Planner] attempt ${attempts} 실패: ${lastError}`);
     }
