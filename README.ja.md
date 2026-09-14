@@ -237,7 +237,7 @@ flowchart TB
 | レイヤー | 技術 |
 |---|---|
 | バックエンド | Node.js 24、Express 5、TypeScript(strict)、Zod、Winston |
-| フロントエンド | Next.js 16、React 19、Zustand、Tailwind CSS 4、`next-intl`(ko · en · ja · zh) |
+| フロントエンド | Next.js 16、React 19、Zustand、Tailwind CSS 4、`next-intl`(ko · en · ja · zh · de) |
 | データ | パラメーター化した生 SQL による PostgreSQL(ORM なし)、Redis |
 | LLM | vLLM、LiteLLM ゲートウェイ、`openai` SDK |
 | エージェント・ツール | Model Context Protocol クライアント v2、Docker で隔離したサンドボックス |

@@ -1,4 +1,4 @@
-/* OpenMake Companion — English. Keys are identifiers; check-l10n.sh verifies all four tables share the same key set. */
+/* OpenMake Companion — English. Keys are identifiers; check-l10n.sh verifies all tables share the same key set. */
 
 /* Menu */
 "menu.status" = "Status: %@";

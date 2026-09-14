@@ -1,4 +1,4 @@
-/* OpenMake Companion — 简体中文。键为标识符，check-l10n.sh 会核对四种语言表的键集合。 */
+/* OpenMake Companion — 简体中文。键为标识符，check-l10n.sh 会核对所有语言表的键集合。 */
 
 /* 菜单 */
 "menu.status" = "状态：%@";

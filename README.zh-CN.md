@@ -236,7 +236,7 @@ flowchart TB
 | 层 | 技术 |
 |---|---|
 | 后端 | Node.js 24、Express 5、TypeScript（strict）、Zod、Winston |
-| 前端 | Next.js 16、React 19、Zustand、Tailwind CSS 4、`next-intl`（ko · en · ja · zh） |
+| 前端 | Next.js 16、React 19、Zustand、Tailwind CSS 4、`next-intl`（ko · en · ja · zh · de） |
 | 数据 | 通过参数化原生 SQL 访问 PostgreSQL（不使用 ORM）、Redis |
 | LLM | vLLM、LiteLLM 网关、`openai` SDK |
 | 智能体与工具 | Model Context Protocol 客户端 v2、Docker 隔离沙箱 |

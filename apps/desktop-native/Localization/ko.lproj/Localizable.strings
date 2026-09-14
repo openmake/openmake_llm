@@ -1,4 +1,4 @@
-/* OpenMake Companion — 한국어 (개발 언어). 키는 식별자이며 네 언어 표의 키 집합은 check-l10n.sh 가 대조한다. */
+/* OpenMake Companion — 한국어 (개발 언어). 키는 식별자이며 모든 언어 표의 키 집합은 check-l10n.sh 가 대조한다. */
 
 /* 메뉴 */
 "menu.status" = "상태: %@";

@@ -52,7 +52,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleExecutable</key><string>OpenMakeCompanion</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleDevelopmentRegion</key><string>ko</string>
-  <key>CFBundleLocalizations</key><array><string>ko</string><string>en</string><string>ja</string><string>zh-Hans</string></array>
+  <key>CFBundleLocalizations</key><array><string>ko</string><string>en</string><string>ja</string><string>zh-Hans</string><string>de</string></array>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
   <key>CFBundleIconFile</key><string>icon</string>

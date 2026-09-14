@@ -1,6 +1,6 @@
 #!/bin/bash
 # 컴패니언 다국어 표 게이트 (build.sh·CI 공용) — 실패 시 빌드 중단.
-#   ① 네 언어 .strings 문법  ② 키 집합 일치  ③ Swift 소스가 쓰는 L("키") 가 전부 표에 있음
+#   ① 모든 언어 .strings 문법  ② 키 집합 일치  ③ Swift 소스가 쓰는 L("키") 가 전부 표에 있음
 # 빠진 키는 그 언어 사용자에게 식별자(menu.quit 등)가 그대로 보이므로 빌드 전에 막는다.
 set -euo pipefail
 cd "$(dirname "$0")"
