@@ -1278,6 +1278,18 @@ export const MCP_PROGRESSIVE_DISCLOSURE_ENABLED =
     process.env.MCP_PROGRESSIVE_DISCLOSURE_ENABLED !== 'false';
 
 /**
+ * 외부 MCP 도구 스키마에서 LLM 에게 숨기고 호출 인자에서도 걷어낼 인자 이름.
+ * 호스트 연동 프로토콜용 불투명 값이라 모델이 지어내면 서버가 요청을 거절한다 — open-design 의
+ * `pluginWorkflowId`("서버가 발급한 값만, 지어내지 말 것")에 qwen3.8-27b 가 임의 UUID 를 넣어
+ * `daemon 404 plugin workflow run not found` 로 모든 호출이 실패했다(2026-09-15). 앱은 플러그인 호스트가
+ * 아니므로 `externalPluginContext` 도 쓰지 않는다. env `MCP_HIDDEN_TOOL_ARGS`(쉼표 구분)로 교체.
+ */
+export const MCP_HIDDEN_TOOL_ARGS: ReadonlySet<string> = new Set(
+    (process.env.MCP_HIDDEN_TOOL_ARGS ?? 'pluginWorkflowId,externalPluginContext')
+        .split(',').map((s) => s.trim()).filter(Boolean),
+);
+
+/**
  * 외부 provider 도구 루프 messages 토큰 예산 — external-provider 경로는 LLMClient.chat 의
  * model-pool context-fit 안전망을 우회(provider.streamChat 직접 호출)하므로, 큰 누적
  * 컨텍스트가 그대로 provider 로 전달돼 모델이 텍스트 없이 도구만 호출하고 끝나는 빈 응답을

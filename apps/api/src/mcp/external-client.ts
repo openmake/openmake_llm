@@ -30,6 +30,7 @@ import { isConnectionDeathError } from './tool-error-classifier';
 import { createLogger } from '../utils/logger';
 import { createPinnedFetch } from '../security/ssrf-guard';
 import { MCP_EXTERNAL_TOOL_LIMITS } from '../config/timeouts';
+import { MCP_HIDDEN_TOOL_ARGS } from '../config/runtime-limits';
 
 const logger = createLogger('ExternalMCP');
 
@@ -258,6 +259,13 @@ export class ExternalMCPClient extends EventEmitter {
             };
         }
 
+        // 스키마에서 숨긴 인자가 들어와도(mcp_call 메타 도구 경유·이전 턴 기억) 서버로 보내지 않는다.
+        const hidden = Object.keys(args).filter((key) => MCP_HIDDEN_TOOL_ARGS.has(key));
+        if (hidden.length > 0) {
+            logger.info(`"${this.config.name}::${name}" 호출에서 숨김 인자 제거: ${hidden.join(', ')}`);
+            args = Object.fromEntries(Object.entries(args).filter(([key]) => !MCP_HIDDEN_TOOL_ARGS.has(key)));
+        }
+
         try {
             const result = await this.client.callTool({ name, arguments: args }) as SDKCallToolResult;
             return this.sdkResultToMCPToolResult(result);
@@ -430,13 +438,18 @@ export class ExternalMCPClient extends EventEmitter {
      * @returns MCPTool 형식의 도구 정의
      */
     private sdkToolToMCPTool(sdkTool: SDKTool): MCPTool {
+        // 호스트 프로토콜용 인자(MCP_HIDDEN_TOOL_ARGS)는 모델에게 보이지 않게 뺀다 — 보이면 지어낸다.
+        const properties = Object.fromEntries(
+            Object.entries((sdkTool.inputSchema?.properties as Record<string, unknown>) || {})
+                .filter(([key]) => !MCP_HIDDEN_TOOL_ARGS.has(key)),
+        );
         return {
             name: sdkTool.name,
             description: sdkTool.description || '',
             inputSchema: {
                 type: 'object',
-                properties: (sdkTool.inputSchema?.properties as Record<string, unknown>) || {},
-                required: sdkTool.inputSchema?.required || [],
+                properties,
+                required: (sdkTool.inputSchema?.required || []).filter((key) => !MCP_HIDDEN_TOOL_ARGS.has(key)),
             },
         };
     }
