@@ -19,6 +19,9 @@ import { resolveCapabilityTarget, CapabilityUnavailableError, type CapabilityTar
 import { savedVideoPath } from './executors/video';
 import type { PlanTask, ValidatedPlan } from './plan-schema';
 import { resolveTaskAttachments, type AttachmentKind, type ExecContext } from './types';
+import { createLogger } from '../../utils/logger';
+
+const logger = createLogger('OrchestratorPreflight');
 
 interface PreflightResult {
     /** 실행 전에 실패로 확정된 작업 → 사유 */
@@ -48,6 +51,14 @@ function inputProblem(task: PlanTask, ctx: ExecContext): string | null {
     if (direct.length > 0) return null;
     if (task.refs.length > 0) return null;
     if (task.capability === 'video.generate') return null;
+    // Planner 가 첨부 id 를 빠뜨린 계획 — 이 종류 첨부가 정확히 하나면 그것을 채운다(여러 개면 어느 것인지 몰라 거절 유지).
+    // 실측(2026-09-15): hasa exaone-4.0-32b planner 가 이미지 이해·OCR·전사 계획에서 attachments:[] 를 냈다.
+    const candidates = [...ctx.attachments.values()].filter((a) => need.has(a.kind));
+    if (candidates.length === 1) {
+        task.attachments = [candidates[0].id];
+        logger.info(`[Preflight] ${task.id}(${task.capability}) 에 빠진 첨부 ${candidates[0].id} 보정`);
+        return null;
+    }
     return `${task.capability}: 필요한 첨부(${[...need].join('/')})가 계획에 없습니다`;
 }
 

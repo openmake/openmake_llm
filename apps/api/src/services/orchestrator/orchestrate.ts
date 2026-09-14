@@ -98,15 +98,25 @@ async function collectPendingJobs(userId: string | undefined, sessionId: string 
 }
 
 /**
- * Planner 가 `simple` 을 냈는데 영상 job 첨부가 있고 사용자가 영상을 묻는 발화면, 가장 최근 job 을 재조회하는 1작업 multi 로 보정한다.
- * (저장본은 실행기가 즉시 반환하므로 provider 호출 없음.) 그 외엔 계획 그대로.
+ * 영상 job 첨부가 있고 사용자가 그 영상을 묻는 발화일 때 Planner 계획을 재조회로 보정한다. 그 외엔 계획 그대로.
+ * - `simple` 을 냈으면 가장 최근 job 을 재조회하는 1작업 multi 로 바꾼다(저장본은 실행기가 즉시 반환 — provider 호출 없음).
+ * - `multi` 로 video.generate 를 골랐는데 job 첨부 id 를 빠뜨렸으면 그 작업에 job 을 붙인다 — 그대로 두면 지시문으로 **새 영상을
+ *   제출**한다(2026-09-15 실측: hasa exaone-4.0-32b planner 가 "아까 만든 영상 다시 보여줘" 에 attachments:[] 를 냈다).
  */
 export function coerceJobFollowup(plan: ValidatedPlan, attachments: Map<string, OrchestratorAttachment>, message: string): ValidatedPlan {
     // 보정은 "기존 결과 조회" 의도에만 — 새 생성("만들어줘")·설명("압축 원리")·다른 대화의 job 은 Planner 판단을 그대로 둔다(Codex 검토 2)
-    if (plan.complexity !== 'simple' || !VIDEO_JOB_FOLLOWUP_PATTERN.test(message)) return plan;
+    if (!VIDEO_JOB_FOLLOWUP_PATTERN.test(message)) return plan;
     if (!VIDEO_JOB_RESULT_INTENT_PATTERN.test(message) || VIDEO_JOB_NOT_FOLLOWUP_PATTERN.test(message)) return plan;
     const job = [...attachments.values()].find((a) => a.kind === 'job' && a.job?.capability === 'video.generate' && a.job.sameConversation !== false);
     if (!job) return plan;
+    if (plan.complexity !== 'simple') {
+        const orphan = plan.tasks.filter((t) => t.capability === 'video.generate' && t.attachments.length === 0 && t.refs.length === 0);
+        if (orphan.length === 1) {
+            orphan[0].attachments = [job.id];
+            logger.info(`[Orchestrator] video.generate 에 빠진 영상 job 첨부 보정 (${job.job?.jobId})`);
+        }
+        return plan;
+    }
     const v = validatePlan({ complexity: 'multi', language: plan.language, synthesis: true, tasks: [{ id: 't1', capability: 'video.generate', input: { instruction: message.slice(0, 400), attachments: [job.id] } }] }, new Set(attachments.keys()));
     if (!v.ok) return plan;
     logger.info(`[Orchestrator] simple → 영상 job 재조회로 보정 (${job.job?.jobId})`);

@@ -121,4 +121,16 @@ describe('coerceJobFollowup — Planner 가 simple 로 답해도 영상 job 첨�
         expect(coerceJobFollowup(simple, jobAtt, '한국의 수도는?')).toBe(simple);
         expect(coerceJobFollowup(simple, new Map(), '영상 보여줘')).toBe(simple);
     });
+    it('multi 로 video.generate 를 골랐는데 job 첨부를 빠뜨렸으면 그 작업에 job 을 붙인다 (새 영상 제출 방지)', () => {
+        const { validatePlan } = jest.requireActual('../plan-schema') as typeof import('../plan-schema');
+        const orphan = () => {
+            const v = validatePlan({ complexity: 'multi', tasks: [{ id: 't1', capability: 'video.generate', input: { instruction: 'Show the previously created video' } }] }, new Set(['j1']));
+            if (!v.ok) throw new Error(v.reason);
+            return v.plan;
+        };
+        expect(coerceJobFollowup(orphan(), jobAtt, '아까 만든 영상 다시 보여줘').tasks[0].attachments).toEqual(['j1']);
+        // 새 생성 발화·job 없음은 Planner 판단 그대로
+        expect(coerceJobFollowup(orphan(), jobAtt, '파도치는 바다 영상 새로 만들어줘').tasks[0].attachments).toEqual([]);
+        expect(coerceJobFollowup(orphan(), new Map(), '아까 만든 영상 다시 보여줘').tasks[0].attachments).toEqual([]);
+    });
 });
