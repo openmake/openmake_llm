@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.65.2](https://github.com/openmake/openmake_llm/compare/v1.65.1...v1.65.2) (2026-09-14)
+
+
+### 🐛 버그 수정
+
+* **orchestrator:** Planner 시간 초과·전송 오류는 재시도 없이 fail-open·타임아웃 15초 + 라우터 사유 로그 정리 ([#879](https://github.com/openmake/openmake_llm/issues/879)) ([013d820](https://github.com/openmake/openmake_llm/commit/013d820107ebc648f227b2a7eb51a3da7793f5eb))
+
 ## [1.65.1](https://github.com/openmake/openmake_llm/compare/v1.65.0...v1.65.1) (2026-09-14)
 
 
