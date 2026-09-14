@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.65.5](https://github.com/openmake/openmake_llm/compare/v1.65.4...v1.65.5) (2026-09-14)
+
+
+### 🐛 버그 수정
+
+* **mcp:** 외부 MCP 도구의 호스트 프로토콜 인자 숨김 — open-design pluginWorkflowId 날조로 모든 호출 404 ([#885](https://github.com/openmake/openmake_llm/issues/885)) ([fc11664](https://github.com/openmake/openmake_llm/commit/fc116642e93797df080c00f0bf58a9b3029e83c8))
+
 ## [1.65.4](https://github.com/openmake/openmake_llm/compare/v1.65.3...v1.65.4) (2026-09-14)
 
 
