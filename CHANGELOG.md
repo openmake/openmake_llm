@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.65.1](https://github.com/openmake/openmake_llm/compare/v1.65.0...v1.65.1) (2026-09-14)
+
+
+### 🐛 버그 수정
+
+* **agents:** LLM 에이전트 라우터 출력 축소·타임아웃 시 요청 중단 — 27B 전환 후 전부 폴백되던 회귀 ([#877](https://github.com/openmake/openmake_llm/issues/877)) ([d176aab](https://github.com/openmake/openmake_llm/commit/d176aab61d4818a78692f81490a8deae2d831169))
+
 ## [1.65.0](https://github.com/openmake/openmake_llm/compare/v1.64.0...v1.65.0) (2026-09-14)
 
 
