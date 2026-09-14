@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.63.0](https://github.com/openmake/openmake_llm/compare/v1.62.3...v1.63.0) (2026-09-14)
+
+
+### ✨ 기능
+
+* **providers:** OrcaRouter 외부 provider 추가 — BYOK + LiteLLM 게이트웨이 wildcard ([#871](https://github.com/openmake/openmake_llm/issues/871)) ([4994fe5](https://github.com/openmake/openmake_llm/commit/4994fe52028a3595cc3c46648ca0349d9c709b9b))
+
 ## [1.62.3](https://github.com/openmake/openmake_llm/compare/v1.62.2...v1.62.3) (2026-09-13)
 
 
