@@ -94,6 +94,32 @@ describe('preflightPlan — 실행 승인 경계', () => {
         expect(r.hasLocal).toBe(true);
     });
 
+    it('Planner 가 첨부 id 를 빠뜨리면 그 종류 첨부가 하나일 때만 채우고, 여러 개면 입력 누락으로 거절', async () => {
+        const plan = () => {
+            const v = validatePlan({ complexity: 'multi', tasks: [
+                { id: 'v', capability: 'vision.ocr', input: { instruction: 'x' } },
+                { id: 'a', capability: 'audio.transcribe', input: { instruction: 'x' } },
+            ] }, new Set());
+            if (!v.ok) throw new Error(v.reason);
+            return v.plan;
+        };
+        jest.spyOn(require('../capability-resolver'), 'resolveCapabilityTarget').mockResolvedValue({ providerId: 'hasa', fullId: 'hasa:x', model: 'x', baseUrl: '', endpoint: '', headers: {}, params: {}, source: 'user', transport: 'gateway', capability: 'vision.ocr' });
+        const one = new Map([
+            ['a1', { id: 'a1', kind: 'image' as const, name: 'receipt.jpg', mime: 'image/jpeg' }],
+            ['a2', { id: 'a2', kind: 'audio' as const, name: 'meeting.m4a', mime: 'audio/mp4' }],
+        ]);
+        const p1 = plan();
+        const r1 = await preflightPlan(p1, ctx({ attachments: one }));
+        expect(r1.rejected.size).toBe(0);
+        expect(p1.tasks.map((t) => t.attachments)).toEqual([['a1'], ['a2']]);
+
+        const two = new Map([...one, ['a3', { id: 'a3', kind: 'image' as const, name: 'other.png', mime: 'image/png' }]]);
+        const p2 = plan();
+        const r2 = await preflightPlan(p2, ctx({ attachments: two }));
+        expect(r2.rejected.get('v')).toMatch(/input/);
+        expect(r2.rejected.has('a')).toBe(false);
+    });
+
     it('로컬 쿼터 초과면 로컬 대상 작업만 거절', async () => {
         quota.exceeded = true;
         const p = validatePlan({ complexity: 'multi', tasks: [{ id: 'i', capability: 'image.generate', input: { instruction: 'x' } }, { id: 's', capability: 'web.search', input: { instruction: 'x' } }] }, new Set());
