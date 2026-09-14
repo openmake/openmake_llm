@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.65.3](https://github.com/openmake/openmake_llm/compare/v1.65.2...v1.65.3) (2026-09-14)
+
+
+### 🐛 버그 수정
+
+* **orchestrator:** Planner 가 빠뜨린 첨부 id 결정적 보정 — 이미지·오디오 단일 첨부, 영상 job 조회 ([#880](https://github.com/openmake/openmake_llm/issues/880)) ([61a25bb](https://github.com/openmake/openmake_llm/commit/61a25bbd16c56606a00c75d20a639a880ec00a03))
+
 ## [1.65.2](https://github.com/openmake/openmake_llm/compare/v1.65.1...v1.65.2) (2026-09-14)
 
 
