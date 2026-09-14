@@ -265,6 +265,8 @@ export const MCP_EXTERNAL_TOOL_LIMITS = {
     EXECUTION_TIMEOUT_MS: Number(process.env.MCP_EXTERNAL_TOOL_TIMEOUT_MS) || 30_000,
     /** 외부 도구 출력 최대 크기 (bytes) — 1MB */
     MAX_OUTPUT_SIZE: Number(process.env.MCP_EXTERNAL_TOOL_MAX_OUTPUT_SIZE) || 1024 * 1024,
+    /** stdio MCP 자식 stderr 보관 끝부분 (자) — 예기치 않은 종료 사유로 로그·instance 이력에 남긴다 */
+    STDERR_TAIL_MAX_CHARS: Number(process.env.MCP_EXTERNAL_STDERR_TAIL_MAX_CHARS) || 2000,
 } as const;
 
 /**

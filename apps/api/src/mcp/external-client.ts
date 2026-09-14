@@ -29,6 +29,7 @@ import { buildSandboxedCommand } from './sandbox-docker';
 import { isConnectionDeathError } from './tool-error-classifier';
 import { createLogger } from '../utils/logger';
 import { createPinnedFetch } from '../security/ssrf-guard';
+import { MCP_EXTERNAL_TOOL_LIMITS } from '../config/timeouts';
 
 const logger = createLogger('ExternalMCP');
 
@@ -122,6 +123,8 @@ export class ExternalMCPClient extends EventEmitter {
     private lastError: string | undefined;
     /** 마지막 ping 시각 (ISO 8601) */
     private lastPing: string | undefined;
+    /** stdio 자식 stderr 끝부분 — 예기치 않은 종료 사유로 쓴다 */
+    private stderrTail = '';
 
     /**
      * ExternalMCPClient 인스턴스를 생성합니다.
@@ -151,11 +154,14 @@ export class ExternalMCPClient extends EventEmitter {
 
         try {
             this.transport = this.createTransport();
+            this.stderrTail = '';
+            this.captureStderr(this.transport);
 
             this.client = new Client(
                 { name: 'openmake-llm', version: '1.0.0' },
                 { capabilities: {} }
             );
+            this.client.onclose = () => this.handleUnexpectedClose();
 
             await this.client.connect(this.transport);
 
@@ -182,6 +188,8 @@ export class ExternalMCPClient extends EventEmitter {
      * 검색된 도구 목록을 초기화합니다.
      */
     async disconnect(): Promise<void> {
+        // close() 가 onclose 를 부르기 전에 상태를 내려 둔다 — 의도한 종료를 'exit' 로 오인하지 않게.
+        this.status = 'disconnected';
         if (this.client) {
             try {
                 await this.client.close();
@@ -194,6 +202,29 @@ export class ExternalMCPClient extends EventEmitter {
         this.status = 'disconnected';
         this.discoveredTools = [];
         logger.info(`Disconnected from "${this.config.name}"`);
+    }
+
+    /**
+     * transport 가 disconnect() 없이 닫힘 — stdio 자식 종료(open-design MCP 는 30분 유휴 시 스스로 종료)·원격 세션 종료.
+     * 상태를 내리고 'exit' 를 발행해 LifecycleSupervisor 가 풀에서 빼게 한다(다음 ensureUserServers 가 새로 띄운다).
+     * 이 발행이 없어 status 가 'connected' 로 남았고, 끊긴 뒤 첫 도구 호출이 "Not connected" 로 실패했다(2026-09-15).
+     */
+    private handleUnexpectedClose(): void {
+        if (this.status !== 'connected') return;
+        const tail = this.stderrTail.trim();
+        this.status = 'disconnected';
+        this.discoveredTools = [];
+        this.lastError = tail ? `transport closed: ${tail}` : 'transport closed';
+        logger.warn(`Connection to "${this.config.name}" closed unexpectedly${tail ? ` — stderr: ${tail}` : ''}`);
+        this.emit('exit', undefined, null, this.lastError);
+    }
+
+    /** stdio 자식 stderr 를 비워 가며 끝부분만 보관 — 읽지 않으면 종료 사유가 사라지고 파이프 버퍼가 찬다 */
+    private captureStderr(transport: TransportInstance): void {
+        if (!(transport instanceof StdioClientTransport)) return;
+        transport.stderr?.on('data', (chunk: Buffer | string) => {
+            this.stderrTail = (this.stderrTail + chunk.toString()).slice(-MCP_EXTERNAL_TOOL_LIMITS.STDERR_TAIL_MAX_CHARS);
+        });
     }
 
     /**
