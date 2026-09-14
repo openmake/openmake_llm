@@ -46,9 +46,9 @@ interface LLMRoutingResult {
     agentId: string;
     /** LLM이 판단한 선택 신뢰도 (0.0 ~ 1.0, 0.3 미만이면 폴백) */
     confidence: number;
-    /** LLM이 제공한 선택 이유 (한 문장) */
+    /** LLM이 제공한 선택 이유 — 프롬프트가 더는 요구하지 않아(출력 토큰 절감) 보통 빈 문자열 */
     reasoning: string;
-    /** 대안 에이전트 ID 목록 (최대 2개) */
+    /** 대안 에이전트 ID 목록 — reasoning 과 같은 이유로 보통 빈 배열 */
     alternativeAgents: string[];
 }
 
@@ -192,9 +192,12 @@ ${sanitizedMessage}
 위 질문에 가장 적합한 전문가를 선택하고 JSON 형식으로만 응답하세요.`;
 
     try {
-        // 타임아웃 설정
+        // 타임아웃 설정 — 만료 시 upstream 요청도 끊는다. 끊지 않으면 폴백한 뒤에도 라우팅 요청이
+        // GPU 에서 계속 디코드돼 본 답변과 경합한다(2026-09-15: 09-02 이후 211회 전부 타임아웃이었다).
+        const controller = new AbortController();
+        let timer: ReturnType<typeof setTimeout> | undefined;
         const timeoutPromise = new Promise<null>((resolve) => {
-            setTimeout(() => resolve(null), timeout);
+            timer = setTimeout(() => { controller.abort(); resolve(null); }, timeout);
         });
 
         const routingPromise = (async () => {
@@ -208,12 +211,17 @@ ${sanitizedMessage}
                 // 라우터는 JSON expert-select 만 출력 — reasoning 토큰이 ROUTER_NUM_PREDICT 를
                 // 모두 소진하면 빈 응답 → '[LLMRouter] 타임아웃 - 폴백 사용' 패턴 재발 방지.
                 think: false,
+                signal: controller.signal,
             });
 
             return response.content;
-        })();
+        })().catch((err: unknown) => {
+            // 타임아웃으로 끊은 요청의 reject 는 폴백과 같은 결과다 — 그 외 오류는 아래 catch 로 보낸다.
+            if (controller.signal.aborted) return null;
+            throw err;
+        });
 
-        const result = await Promise.race([routingPromise, timeoutPromise]);
+        const result = await Promise.race([routingPromise, timeoutPromise]).finally(() => clearTimeout(timer));
 
         if (!result) {
             logger.info('타임아웃 - 폴백 사용');

@@ -132,8 +132,11 @@ describe('runExternalStream — ask_user 호출은 질문으로 턴을 끝낸다
             usage: {},
             finishReason: 'tool_calls',
         }));
-        const out = await runExternalStream(deps, makeResolved(streamChat), req, () => {});
+        const ctx: Parameters<typeof runExternalStream>[4] = {};
+        const out = await runExternalStream(deps, makeResolved(streamChat), req, () => {}, ctx);
         expect(streamChat).toHaveBeenCalledTimes(1);
         expect(out).toBe('어느 도시인가요?');
+        // 본문 없이 질문만 나간 턴도 첫 청크 시각이 찍혀야 [ChatTiming] ttfc 가 -1 이 되지 않는다.
+        expect(ctx.timings?.firstChunkAt).toBeGreaterThan(0);
     });
 });

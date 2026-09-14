@@ -11,6 +11,9 @@
 
 /**
  * LLM 라우터 시스템 프롬프트 생성
+ *
+ * 응답은 agent_id·confidence 두 필드만 받는다. 사유 문장·대안 목록까지 요구하면 출력이 ~100토큰이 돼
+ * dense 27B(디코드 ~19 tok/s)에서 라우팅 타임아웃(5초)을 항상 넘긴다 — 2026-09-15 실측 6.4s → 2.0s.
  * @param agentList - 사용 가능한 전문가 목록 (포맷팅된 문자열)
  */
 export function buildLLMRouterSystemPrompt(agentList: string): string {
@@ -30,11 +33,6 @@ export function buildLLMRouterSystemPrompt(agentList: string): string {
 ## 사용 가능한 전문가 목록:
 ${agentList}
 
-## 응답 형식 (반드시 JSON만 출력):
-{
-  "agent_id": "선택한 에이전트 ID",
-  "confidence": 0.0-1.0 사이의 신뢰도,
-  "reasoning": "선택 이유 (한 문장)",
-  "alternatives": ["대안1 ID", "대안2 ID"]
-}`;
+## 응답 형식 (반드시 JSON만 출력, 다른 필드 금지):
+{"agent_id": "선택한 에이전트 ID", "confidence": 0.0-1.0}`;
 }

@@ -138,7 +138,7 @@ async function selectAgent(message: string): Promise<AgentSelection> {
             primaryAgent: llmResult.agentId,
             category: getAgentById(llmResult.agentId)?.category || 'general',
             phase: detectPhase(message),
-            reason: `[LLM] ${llmResult.reasoning}`,
+            reason: llmResult.reasoning ? `[LLM] ${llmResult.reasoning}` : '[LLM]',
             confidence: llmResult.confidence,
             matchedKeywords: [],
         };
