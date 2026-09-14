@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.65.4](https://github.com/openmake/openmake_llm/compare/v1.65.3...v1.65.4) (2026-09-14)
+
+
+### 🐛 버그 수정
+
+* **mcp:** stdio 사용자 MCP 가 스스로 종료하면 감지·재기동 — open-design 유휴 종료 후 첫 도구 호출 Not connected ([#883](https://github.com/openmake/openmake_llm/issues/883)) ([e98a379](https://github.com/openmake/openmake_llm/commit/e98a37969ab218e119396359250fb08698571950))
+
 ## [1.65.3](https://github.com/openmake/openmake_llm/compare/v1.65.2...v1.65.3) (2026-09-14)
 
 
