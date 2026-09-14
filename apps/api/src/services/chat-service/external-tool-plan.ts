@@ -19,9 +19,10 @@ import {
     ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS, REPORT_PIPELINE, REPORT_INTENT_PATTERNS,
     CHAT_SUBAGENT, AGENT_SPAWN, ORCHESTRATION_DISPATCH, DISCUSSION_INTENT_PATTERNS, TASK_DELEGATE_INTENT_PATTERNS,
     SPAWN_INTENT_PATTERNS, CHAT_TOOL_INTENT_GATE_ENABLED,
-    PLAN_INTENT_PATTERNS,
+    PLAN_INTENT_PATTERNS, CHAT_ASK_USER,
 } from '../../config/runtime-limits';
 import { buildChatDelegateTool } from './chat-delegate';
+import { buildAskUserTool } from './ask-user';
 import { buildSpawnAgentsTool } from '../agent-spawn/spawn-agents';
 import { buildStartDiscussionTool, buildDelegateAgentTaskTool } from './orchestration-dispatch';
 import type { ToolDefinition } from '../../llm';
@@ -105,6 +106,11 @@ export function buildExternalToolPlan(params: {
     if (orchestration.taskDelegate && toolCalling) {
         tools.push(buildDelegateAgentTaskTool());
         logger.info('[Orchestration] 작업 위임 의도 감지 — delegate_agent_task 노출');
+    }
+    // 사용자 확인 질문(ask_user): 큰 산출물을 만들기 전에 모호한 요청을 되묻는 출구 — 아티팩트·보고서
+    // 의도 턴에만 노출한다(상시 노출 금지). 호출 처리는 external-provider 루프(도구 미실행·턴 종료).
+    if (CHAT_ASK_USER.ENABLED && wantsArtifact && toolCalling) {
+        tools.push(buildAskUserTool());
     }
     if (wantsArtifact && toolCalling) {
         logger.info(`[Artifact] 명시적 아티팩트 요청 감지 — distractor 도구 억제 (잔여 도구 ${tools.length}종)`);

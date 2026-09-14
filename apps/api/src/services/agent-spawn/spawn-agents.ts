@@ -35,6 +35,7 @@ import { runSubagent } from '../agent-task/subagent';
 import { SubagentTrace, newTraceId, subagentLabel } from '../agent-task/subagent-trace';
 import type { DelegateFactoryParams } from '../agent-task/delegate';
 import { CHAT_DELEGATE_TOOL_NAME } from '../chat-service/chat-delegate';
+import { ASK_USER_TOOL_NAME } from '../chat-service/ask-user';
 import { SPAWN_AGENT_GENERIC_PROMPT } from '../../prompts/spawn-agent-system';
 import { createLogger } from '../../utils/logger';
 
@@ -45,8 +46,8 @@ export const SPAWN_AGENTS_TOOL_NAME = 'spawn_agents';
 /** 채팅 경로의 의사 taskId — 승인 레지스트리 키로만 쓰이며 작업 행이 없으므로 활동 기록은 건너뛴다. */
 const CHAT_PSEUDO_TASK_ID = '__chat__';
 
-/** 서브에이전트 도구 서브셋에서 제외할 위임 계열 도구 — depth=1 구조 유지(재귀 차단). */
-const SUBAGENT_EXCLUDED_TOOLS = new Set([SPAWN_AGENTS_TOOL_NAME, CHAT_DELEGATE_TOOL_NAME, 'delegate']);
+/** 서브에이전트 도구 서브셋에서 제외할 위임 계열 도구 — depth=1 구조 유지(재귀 차단). ask_user 는 서브 루프에 사용자가 없어 제외. */
+const SUBAGENT_EXCLUDED_TOOLS = new Set([SPAWN_AGENTS_TOOL_NAME, CHAT_DELEGATE_TOOL_NAME, 'delegate', ASK_USER_TOOL_NAME]);
 
 /** spawn_agents 도구 인자 스키마 — tasks 배열(각 태스크는 자기완결 지시 + 선택 전문 분야). */
 const spawnAgentsArgsSchema = z.object({
