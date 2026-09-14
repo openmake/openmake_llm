@@ -1,426 +1,366 @@
-<h1 align="center">OpenMake LLM</h1>
+<h1 align="center">OpenMake</h1>
 
 <p align="center">
-  <strong>オープンウェイトモデルと BYOK モデルのための、オープンソース・ローカルファースト・セルフホスト型 AI ワークスペース。</strong><br/>
-  vLLM/LiteLLM 推論 · マルチモーダルオーケストレーション · 自律型エージェント · MCP ツール · ディープリサーチ · Docker サンドボックス。
+  <strong>ローカルモデル、オープンウェイトモデル、OpenAI 互換モデルのためのオープンソース AI ワークスペース兼エージェントランタイム。</strong>
 </p>
 
 <p align="center">
+  OpenMake は、専門モデル・エージェント・MCP ツール・リサーチ・サンドボックス実行を<br/>
+  ひとつのセルフホスト型ワークスペースで連携させます。
+</p>
+
+<p align="center">
+  <a href="https://chat.openmake.cc"><b>ライブデモ</b></a> ·
+  <a href="https://openmake.cc/ja/docs/"><b>ドキュメント</b></a> ·
+  <a href="https://openmake.cc/ja/roadmap/"><b>ロードマップ</b></a> ·
+  <a href="https://openmake.cc/ja/blog/"><b>エンジニアリングログ</b></a>
+</p>
+
+<p align="center">
+  Local-first · Self-hosted · Multi-model · Agents · MCP · BYOK
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/openmake/openmake_llm?color=blue" alt="License: MIT" /></a>
+  <a href="https://github.com/openmake/openmake_llm/releases"><img src="https://img.shields.io/github/v/release/openmake/openmake_llm?color=green" alt="Latest release" /></a>
   <a href="https://github.com/openmake/openmake_llm/actions/workflows/ci.yml"><img src="https://github.com/openmake/openmake_llm/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" /></a>
-  <img src="https://img.shields.io/github/package-json/v/openmake/openmake_llm?label=version&color=green" alt="Version" />
-  <img src="https://img.shields.io/badge/node-%3E%3D24%20%3C25-brightgreen.svg" alt="Node >=24 <25" />
-  <img src="https://img.shields.io/badge/TypeScript-strict-3178c6.svg" alt="TypeScript strict" />
-  <img src="https://img.shields.io/badge/Next.js-16-black.svg" alt="Next.js 16" />
+  <a href="https://github.com/openmake/openmake_llm"><img src="https://img.shields.io/github/stars/openmake/openmake_llm?style=flat" alt="GitHub stars" /></a>
 </p>
 
 <p align="center">
-  <a href="https://openmake.cc/ja/">ホームページ</a> ·
-  <a href="https://chat.openmake.cc">ライブデモ</a> ·
-  <a href="https://bench.openmake.cc">Bench</a> ·
-  <a href="https://openmake.cc/ja/docs/">セルフホスティングガイド</a><br/>
-  <a href="README.md">English</a> ·
-  <a href="README.ko.md">한국어</a> ·
-  <strong>日本語</strong> ·
-  <a href="README.zh-CN.md">简体中文</a>
+  <a href="README.md">English</a> · <a href="README.ko.md">한국어</a> · <strong>日本語</strong> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.de.md">Deutsch</a>
 </p>
 
----
+<p align="center">
+  <img src="assets/demo-orchestration.gif" alt="OpenMake でのひとつのリクエスト: Planner が Web 検索・推論・画像生成に分割し、チャットモデルが出典と生成画像を付けて回答します" width="860" />
+</p>
+
+<p align="center">
+  <sub>ひとつのリクエスト、複数のモデル: Planner が Web 検索・推論・画像生成を実行し、チャットモデルが出典を確認して、引用と生成画像付きで回答します。実行中のアプリから録画(早送り)。</sub>
+</p>
 
 > 本書は英語版 [README.md](README.md) の日本語訳です。内容が異なる場合は英語版とコードを正とします。
 
-## 概要
-
-**OpenMake LLM** は、自分のハードウェアで動かすセルフホスト型 AI アシスタントです。ローカルモデルを **vLLM** で提供し、その前段に **LiteLLM ゲートウェイ**(OpenAI 互換)を置きます。自分のキーで登録した外部プロバイダー — **OpenRouter、NVIDIA NIM、Ollama Cloud、Open AI Service Hub(hasa)、B.AI** — も*同じ*ゲートウェイを通り、**ChatGPT サブスクリプションログイン**にも対応します。既定ではデータは手元のマシンから出ません。
-
-すべてのチャットターンは軽量な**メッセージパイプライン**(プロバイダーゲート、セキュリティ・言語ポリシー、プロンプトとツールの組み立て)を経て、ローカルと外部のモデルが共有する単一の実行経路に入ります。*これを描いて、読み上げて、この動画を文字起こしして、短い動画を作って* のようにテキスト以上が必要なときは、**Planner** が小さな計画を立て、該当する **capability** のタスクが割り当てたモデルで並列に実行され、選んだチャットモデルがその結果を使って最終回答を書きます。動作は不透明なプリセットではなく、互いに独立した軸 — **モデル · 応答スタイル · モード切り替え · カスタムエージェント** — だけで制御します。
-
-チャット以外にも、Docker サンドボックス(またはローカルブリッジ経由で自分のマシン)で動く自律エージェントタスク、ディープリサーチ、ワンクリックのカタログを備えた MCP ツールシステム、Claude Code 形式のプラグインやスキルをインストールする拡張システムを提供し、すべて JWT 認証とロールベースのアクセス制御の内側にあります。
-
-> **単一ホスト設計:** アプリケーション(API + Web)は **PM2** で動かし、状態を持つ依存(PostgreSQL / Redis)とサンドボックス化されたエージェント・MCP・アーティファクトのプロセスは分離のため **Docker** で動かします。
-
-**ひと目でわかる特徴**
-
-| | |
-|---|---|
-| 🧠 **ローカルモデル + BYOK ゲートウェイ** | vLLM + LiteLLM で提供する `qwen3.8-27b`、262K コンテキストの安全網。外部プロバイダーも自分のキーで同じゲートウェイを通ります |
-| 🎨 **マルチモーダルオーケストレーター** | Planner がリクエストを画像生成・編集、音声→テキスト、テキスト→音声、動画、ビジョン・OCR のタスクに分けて並列実行し、チャットモデルが回答をまとめます |
-| 🎛️ **モデルロールと capability** | ロール(エージェント・判定・リサーチ・サブエージェント・レビュー・要約・プランナー)ごと、capability ごとにモデルを指定。ユーザー設定 + 管理者の全体既定値 |
-| 🤖 **自律型エージェント** | 永続的な Docker サンドボックス(シェル · Python · ブラウザー · ファイル)または **OpenMake Companion** / **OpenMake Code** CLI でつないだローカルフォルダーで複数ターンを実行、人による承認付き |
-| 🔬 **ディープリサーチとレポート** | 並列 Web 検索 → ソース取得 → 引用付きの統合。レポート依頼は **PDF/DOCX** に出力できる HTML アーティファクトとして描画 |
-| 🧩 **組み込みツール 23 種 + MCP** | Web 検索・スクレイピング・ビジョン・計画・コード/セキュリティレビュー・スキル読み込みなど。外部 MCP サーバーはそれぞれ Docker で分離、リモートサーバーは OAuth ログインに対応 |
-| 📦 **拡張とスキル** | Git やマーケットプレイスからプラグイン・スキル・エージェント・MCP サーバーをインストール — インストール時に Claude Code の慣習を変換 — し、**承認**画面ひとつで確認 |
-| ⚖️ **比較モード** | 2 つのモデルに同じ質問をして回答を並べて比べられます |
-| 🖥️ **ネイティブクライアント** | OpenMake Companion(SwiftUI メニューバーアプリ、macOS)、OpenMake Code CLI、開発中の SwiftUI iOS クライアント — チャット自体は Web アプリに置きます |
-| 🌐 **4 言語 UI** | 한국어 · English · 日本語 · 简体中文 (`next-intl`、ブラウザー自動検出)。回答は書いた言語に合わせます |
-| 🔒 **セキュリティ重視** | JWT(HttpOnly)、Google OAuth 2.0、RBAC、ルート単位のレート制限、SSRF ガード、AES-256-GCM によるキー保存、Audit ↔ Alert |
-
 ---
 
-## デモ
-
-> 実際に動いているアプリから録画しており、タブは自動で切り替わります。最近の会話タイトルとアカウント名は隠しています。
-
-<table>
-  <tr>
-    <td align="center">
-      <img src="assets/demo-tour.gif" alt="デモツアー: チャット、マルチモーダル、エージェントタスク、設定、言語" width="860" />
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <b>Chat</b> — 質問すると回答がストリーミングで表示され、モデル・応答スタイル・推論の強さを入力欄で直接切り替えられます<br/>
-      <b>Multimodal</b> — 「〜の画像を生成して」が画像生成タスクになり、その capability に割り当てたモデルで実行されて会話内に表示されます<br/>
-      <b>Agent tasks</b> — 承認ポリシーを選んだ Agent モードが目標をサンドボックスで実行し、進捗を表示して結果を返します<br/>
-      <b>Settings</b> — モデルロール、capability ごとのモデル割り当て、MCP カタログ、スキルライブラリ<br/>
-      <b>Languages</b> — インターフェースはブラウザーの言語か設定で選んだ言語に従います
-    </td>
-  </tr>
-</table>
-
----
-
-## アーキテクチャ
-
-OpenMake は**何を実行するかを決めること**と**モデルを呼び出すこと**を分けています。特殊モードは先に振り分け、それ以外はすべて 1 本の経路を通ります。
-
-```
-                             WebSocket / REST
-                                     │
-                       ┌─────────────▼─────────────┐
-   Query ─────────────►│     message-pipeline      │  provider gate · security & language policy
-                       └─────────────┬─────────────┘  prompt & tool assembly · custom agent
-                                     │
-                       ┌─────────────▼─────────────┐
-                       │          Planner          │  one small JSON plan per turn
-                       └──────┬──────────────┬─────┘
-                        simple│              │multi
-                              │   ┌──────────▼──────────┐
-                              │   │  capability tasks   │  image · speech · video · vision
-                              │   │  (run in parallel)  │  on the models you assigned
-                              │   └──────────┬──────────┘
-                       ┌──────▼──────────────▼─────┐
-                       │ streamFromExternalProvider│  one path for local & external models
-                       │   (always-on tool loop)   │  chat model writes the final answer
-                       └─────────────┬─────────────┘
-                                     │
-                       ┌─────────────▼─────────────┐
-                       │       LLMClient.chat      │  context-fit safety net
-                       └─────────────┬─────────────┘  truncate → cap → 413 + audit
-                                     │
-                  LiteLLM gateway → vLLM (local) · BYOK external providers
-```
-
-- **単一の実行経路** — ローカルと外部のモデルが `streamFromExternalProvider` とその MCP ツールループを共有します。ディスカッションとディープリサーチはディスパッチ前に振り分ける別モードです。
-- **Planner → capability → 統合** — `simple` の計画では追加のモデル呼び出しはありません。`multi` の計画は実行前に割り当て・キー状態・ゲートウェイ対応・クォータを確認し、依存関係の段階ごとに並列実行して、成功したメディアだけを回答に添付します。終わっていない動画ジョブは保持され、次のメッセージで再送信せずに引き継ぎます。
-- **モデルの決定** — モデルを呼ぶすべてのサブシステムは、ロール・capability のレジストリでモデルを決めます: ユーザー設定 → 管理者の全体既定値 → 組み込み既定値の順で、失敗したらローカルモデルに戻ります。
-- **コンテキスト安全網** — 入口でプロンプトのトークン数(画像を含む)を見積もり、有効な **262K** ウィンドウを超える場合は入力を削り、`max_tokens` を下げ、最後の手段として監査記録とアラート付きで **HTTP 413** を返します。
-- **ユーザーカスタマイズ** — **モデル** · **応答スタイル**(簡潔 / 標準 / 詳細) · **モード**(ディスカッション / Thinking / 回答検証 / ディープリサーチ / エージェント) · **カスタム指示とエージェント**、さらにオプトインの会話横断メモリ。
-- **途切れても続くストリーミング** — タブがバックグラウンドに回ったりアプリのソケットが切れたりしても生成は続き、再接続すると同じ回答に戻ります。
-
----
-
-## 機能
-
-**▸ モデルとルーティング**
-- セルフホストの vLLM + LiteLLM(既定 `qwen3.8-27b`)と、出力トークンを守りながら段階的に縮めるコンテキスト安全網。
-- OpenRouter、NVIDIA NIM、Ollama Cloud、Open AI Service Hub(hasa)、B.AI で**自分のキーを使用(BYOK)** — すべて LiteLLM ゲートウェイ経由で、キーは AES-256-GCM で暗号化保存 — に加えて ChatGPT サブスクリプションログイン。ゲストはローカルモデルのみ使えます。
-- **モデルロール** — `agent`、`judge`、`research`、`spawn`、`review`、`summary`、`planner` ごとに別のモデルを割り当て。管理者は組織全体の既定値を設定し、日次・月次のトークン予算付きのサーバー共有キーを登録できます。
-- **capability ごとのモデル** — テキスト、コード、ビジョン・OCR、画像生成・編集、音声→テキスト、テキスト→音声、動画のモデルを設定でグループ単位に選び、項目ごとに個別指定もできます。
-- **明確な失敗理由** — レート制限、クレジット不足、アクセス制限のあるモデル、非対応のツール定義を、ひとまとめのアップストリームエラーではなくそのまま伝え、プロバイダーごとの同時実行上限は `429` で後退します。
-- **比較モード** — 同じプロンプトを 2 つのモデルで並べて実行。
-
-**▸ マルチモーダル**
-- **Planner 主導のオーケストレーション** — 画像生成・編集(直前の画像を参照)、音声・動画添付の音声→テキスト、テキスト→音声、動画生成、ビジョンによる説明・OCR を、並列実行できる capability タスクとして処理します。
-- チャットモデルが画像を見られない場合は、ビジョンモデルが先に画像を説明し、チャットモデルはその記録をもとに回答します。
-- 生成したメディアは `/generated` から配信され、保持期間を過ぎると自動で整理されます。使用量と計画の所要時間はコスト確認のために記録されます。
-
-**▸ エージェントとリサーチ**
-- **自律エージェントタスク** — **永続的な Docker サンドボックス**(シェル、Python、ブラウザー、ファイル、計画、コード探索)で目標を複数ターンにわたって追い、承認ポリシーは **Manual / Auto / Skip**。ファイルや画像を添付し、**Excel** や **PDF** などの成果物を受け取れます。達成できなかった場合は偽りの「完了」ではなく目標判定の結果をそのまま示します。タスクは**テンプレート**として保存したり、**スケジュール**実行したり、実行結果を**共有**したりできます。
-- **ローカル実行** — **OpenMake Companion**(macOS メニューバーアプリ)または **OpenMake Code** CLI で手元のフォルダーをつなぐと、ツール呼び出しがそのフォルダー内で、パス制限・コマンド確認ゲート・git worktree 分離とともに実行されます。
-- **並列サブエージェント** — 互いに独立したサブタスクを複数のサブエージェントに分けて任せ、結果をまとめます。
-- **ディープリサーチ** — テーマ分解、並列 Web 検索(SearXNG、Naver、Daum など)、チャンク要約、引用付きレポート。
-- **レポートパイプライン** — レポート依頼は構造化データを生成し、サーバーが固定テンプレートで HTML アーティファクトとして描画し、**PDF** と **DOCX** に出力できます。
-- **カスタムエージェント** — 入力欄から選べるプロジェクト型のペルソナ。エージェントごとにモデルを固定でき、18 の業界エージェント(専門家 100 人)が標準で入っています。
-
-**▸ ツールと拡張性**
-- **組み込みツール 23 種** — Web 検索、ファクトチェック、ページ抽出、スクレイプ・マップ・クロール、画像解析・OCR、エージェントタスク参照、計画、コード・セキュリティレビュー、スキルの作成と読み込み、スキル・エージェント・MCP サーバー・拡張の Git インポート、MCP メタツール、管理者専用の運用メトリクスツール。プロンプトを小さく保つため、必要なターンにだけ公開します。
-- **外部 MCP サーバー** — サンドボックスを有効にすると(生成される設定の既定値)、stdio サーバーは Docker で `--cap-drop ALL`、非 root、メモリ・ネットワーク制限、任意の読み取り専用ルートファイルシステムとともに動きます。**MCP カタログ**(Tavily、Context7、Notion、NotebookLM、Kakao Map、OpenDART、韓国の公共データ API など)からインストールでき、リモートサーバーは **OAuth** でログインします。
-- **拡張** — Git、zip、マーケットプレイスからプラグイン・スキル・カスタムエージェント・MCP サーバーをインストールします。Claude Code の慣習(ツール名、`$ARGUMENTS`、`commands/`、`agents/`、同梱スクリプト)はインストール時に変換され、確認が必要なものはすべて**承認**画面に集まります。
-- **スキル** — ツールバインディング付きの再利用可能なマニフェスト。`/skill-name` で呼び出すか、関連する質問でモデルが選びます。
-- **アーティファクト** — サンドボックス化されたライブプレビュー、任意の Docker コード実行、公開用の別オリジンビューアー。
-- **NotebookLM グラウンディング** — 入力欄から自分のノートブックをひとつ会話のコンテキストとして固定します。
-- **メモリ・指示・通知** — オプトインの会話横断メモリ、常に適用されるカスタム指示、エージェントタスクが承認待ちになったり終わったりしたときの Web プッシュ通知。
-
-**▸ 連携**
-- API キーとスコープを使う **OpenAI 互換 API**(`/api/v1/chat/completions`)。
-- ユーザーごとのセッションとファイル添付に対応し、API へメッセージを中継する **Discord ゲートウェイボット**(`apps/discord-bot`)。
-- **OpenMake Bench** — [bench.openmake.cc](https://bench.openmake.cc) は Web SSO でサインインし、そこで選んだモデルを自分のモデルロールに適用できます。
-
-**▸ セキュリティ**
-- HttpOnly Cookie の JWT、Google OAuth 2.0、RBAC、ユーザー単位・ルート単位のレート制限、SSRF ガード、Helmet ヘッダー、エージェントツールの認証情報ファイル保護、統合された Audit ↔ Alert パイプライン。
-
----
-
-## 技術スタック
-
-| レイヤー | 技術 |
-|---|---|
-| **バックエンド** | Node.js (≥24), Express 5, TypeScript (strict, CommonJS), Zod 4, Winston |
-| **フロントエンド** | Next.js 16, React 19, Zustand 5, Tailwind CSS 4, `next-intl`; Instrument デザインシステム |
-| **データベース** | `pg` による PostgreSQL — パラメーター化された生 SQL(ORM なし) |
-| **リアルタイム** | 切断後の再接続(detach/resume)に対応した WebSocket(`ws`)ストリーミング |
-| **LLM バックエンド** | vLLM + LiteLLM ゲートウェイ(OpenAI 互換); 外部プロバイダーは `openai` SDK |
-| **エージェント / ツール** | Model Context Protocol (`@modelcontextprotocol/client` v2), Docker で分離したサンドボックス |
-| **ネイティブクライアント** | SwiftUI (macOS Companion, iOS), `packages/local-bridge-core` を共有する Node CLI (`apps/cli`) |
-| **連携** | Discord ゲートウェイボット (`discord.js`); Web SSO でつながる OpenMake Bench |
-| **認証 / セキュリティ** | `jsonwebtoken`, Google OAuth 2.0, Helmet, AES-256-GCM |
-| **インフラ** | PM2 (API · Web · Discord ボット) + Docker (PostgreSQL/Redis, MCP / エージェント / アーティファクトのサンドボックス) |
-| **テスト / CI** | Jest/ts-jest, Playwright, ESLint, GitHub Actions (CI Gate) |
-
----
-
-## はじめに
-
-対応プラットフォーム: **Linux** と **macOS**(Intel と Apple Silicon)。
-
-### インストール(1 コマンド)
+## クイックスタート
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh | bash
 ```
 
-クローンは不要です。インストーラーはリポジトリの外で実行されたことを検出すると、ソースを
-`~/.openmake/chat` に取得し(`OMK_HOME=...` で場所を変更、`OMK_REF=...` でブランチやタグを選択)、そこで
-自分自身を再実行します。同じホストで 2 つ目のコピーを動かすには `--instance NAME`
-(`... | bash -s -- --instance NAME`)を付けます。`~/.openmake/chat-NAME` に専用のポート(52417/3010)、
-データベース、Redis、PM2 名(`openmake-llm-NAME`)でインストールされます。`--public-url https://chat.example.com`
-は公開アドレスを `.env` に書き込み、HTTPS なら secure Cookie に切り替えます。パイプ実行でも `/dev/tty` で
-対話的に質問し、端末のない環境(CI)では自動で承認します。従来の方法もそのまま使えます:
+インストーラーがツールチェーン(Node.js 24、Docker、PM2)を確認し、新しいシークレットで `.env` を作成、PostgreSQL と Redis を起動し、OpenMake をビルドして PM2 で起動したうえで、ヘルスチェックまで行います。
+
+表示された URL を開いて管理者としてサインインし、モデルを接続してください — ローカルの vLLM・Ollama サーバー、または OpenAI 互換エンドポイントが使えます。
+
+Linux と macOS で動作します(Windows は WSL2 内で)。対話なしでインストールするには `bash -s -- --yes` を付けます。手動セットアップ、オプション、アップデート、リバースプロキシについては **[セルフホスティングガイド](https://openmake.cc/ja/docs/)** を参照してください。
+
+---
+
+## なぜ OpenMake か
+
+多くのセルフホスト型 AI インターフェースは **モデルと対話する** ためのものです。OpenMake は **モデル・ツール・エージェントを連携させ、実際の仕事をさせる** ことを目的に設計されています — 自分で管理するインフラ上で、すべてのステップを確認できる形で。
+
+| プロジェクト | 主な役割 |
+|---|---|
+| Ollama / vLLM | モデルを動かす |
+| Open WebUI | セルフホスト型インターフェースでモデルを使う |
+| Dify | AI アプリとワークフローを構築する |
+| OpenHands | ソフトウェア開発のためのエージェント |
+| **OpenMake** | **汎用的な AI の仕事のために、モデル・エージェント・ツールを連携させる** |
+
+これらは異なるレイヤーのプロジェクトで、排他的ではありません。OpenMake は vLLM でローカルモデルを提供し、Ollama サーバーをモデルエンドポイントとして使うこともできます。
+
+---
+
+## 仕組み
+
+```mermaid
+flowchart TB
+    R["リクエスト"] --> O["OpenMake<br/>計画 · ルーティング · 承認"]
+    O --> M["モデル<br/>テキスト · ビジョン · 画像 · 音声 · 埋め込み"]
+    O --> A["エージェント<br/>タスク · サブエージェント · リサーチ"]
+    O --> T["ツール<br/>MCP · ブラウザ · ファイル · コードサンドボックス"]
+    M --> X["回答 · コード · レポート · アーティファクト"]
+    A --> X
+    T --> X
+```
+
+単純な質問はそのままチャットモデルへ送られます。画像、文字起こし、Web 検索、複数ステップの作業など、それ以上が必要なリクエストは、割り当てたモデルとツールで動くタスクに分割され、チャットモデルがその結果をもとに最終回答を書きます。
+
+**モデルを選ぶのはあなた。モデル同士の連携は OpenMake が担います。**
+
+---
+
+## できること
+
+- **テーマを調査し**、複数の検索ソースに基づく出典付きレポートを受け取り、PDF・DOCX に書き出す。
+- **ローカルモデルとチャットしながら**、添付した画像は別のビジョンモデルに読ませる。
+- **画像生成、読み上げ、文字起こしを依頼する** — リクエストごとに、その機能に割り当てたモデルが処理します。
+- **エージェントに目標を任せる** — 計画を立て、Web を調べ、ファイルを編集し、Docker サンドボックスでコードを実行し、リスクのある手順の前には承認を待ちます。
+- **MCP で外部サービスに接続する**(Notion、Context7、Tavily、NotebookLM など)、または Claude Code 形式のプラグインやスキルをインストールする。
+- **自分のマシンのフォルダーでエージェント作業を実行する** — OpenMake Companion アプリまたは OpenMake Code CLI から。
+
+| 領域 | 対象 |
+|---|---|
+| **モデル** | vLLM + LiteLLM ゲートウェイ、Ollama または任意の OpenAI 互換エンドポイント、BYOK プロバイダー、ChatGPT サブスクリプションログイン |
+| **オーケストレーション** | Planner、モデルロール、機能ごとのモデル、並列の機能タスク |
+| **エージェント** | 複数ターンのタスク、サブエージェント、承認、スケジュール実行、テンプレート、ローカル実行 |
+| **リサーチ・ツール** | ディープリサーチ、組み込みツール 23 種、MCP カタログ、スキル、拡張機能 |
+| **成果物** | ストリーミング回答、アーティファクト、HTML/PDF/DOCX レポート、ファイル、生成メディア |
+
+タスク別の使い方は **[ユーザーマニュアル](https://openmake.cc/ja/manual/)** にあります。
+
+<p align="center">
+  <img src="assets/demo-tour.gif" alt="OpenMake アプリの紹介: チャット、マルチモーダルタスク、エージェントタスク、設定、言語" width="760" />
+</p>
+
+---
+
+## モデルとルーティング
+
+**OpenMake は、ひとつのモデルにすべてを任せることを前提にしていません。**
+
+```
+OpenMake
+ ├── LiteLLM ゲートウェイ (OpenAI 互換)
+ │    ├── vLLM ─────────── ローカル / オープンウェイトモデル
+ │    └── BYOK プロバイダー ─ OpenRouter · NVIDIA NIM · Ollama Cloud · Open AI Service Hub · B.AI
+ ├── 直接接続 ──────────── ChatGPT サブスクリプションログイン
+ └── 機能ごとに割り当てる専門モデル
+      ├── テキスト · コード
+      ├── ビジョン · OCR
+      ├── 画像生成 · 編集
+      ├── 音声認識 · 音声合成 · 動画
+      └── 埋め込み
+```
+
+- **モデルロール** — `agent`、`judge`、`research`、`spawn`、`review`、`summary`、`planner` ごとにモデルを選びます。ユーザーは各自で設定し、管理者は既定値を決め、日次・月次のトークン予算付きでサーバー共用キーを共有できます。
+- **機能ごとのモデル** — ビジョン、画像生成、音声、動画、コードを処理するモデルを割り当てます。割り当てのない機能は、黙って別のモデルに切り替えず、利用できないと通知します。
+- **BYOK(自分のキーを使う)** — プロバイダーキーは AES-256-GCM で暗号化して保存し、リクエストごとにゲートウェイへ渡します。レート制限、クレジット不足、利用制限のあるモデルは、汎用的な上流エラーではなくその理由のまま通知します。
+- **コンテキスト保護** — プロンプト(画像を含む)をモデルのコンテキスト長と照合し、はみ出す入力は呼び出し前に削り、どうしても収まらないリクエストは監査記録とともに `413` を返します。
+- **ローカルモデルの自動検出** — ゲートウェイの背後にあるモデルを起動時に検出するため、推論サーバーでモデルを入れ替えてもコード変更は不要です。
+- **比較モード** — 同じプロンプトを 2 つのモデルに送り、回答を並べて比較します。
+
+---
+
+## エージェントランタイム
+
+エージェントタスクは、ツールを呼び出す複数のターンにわたって目標を進めます。エージェントは次のことができます:
+
+- ターンの終わりごとにチェックポイントを残し、タスクの状態を引き継ぐ
+- 承認ポリシー(手動・自動・スキップ)のもとでツールを使う
+- 添付ファイルを扱い、Excel や PDF などの成果物を作る
+- 隔離された Docker ワークスペースでシェルや Python のコードを実行する
+- 許可リストで外部通信を制限した別のブラウザコンテナから Web を閲覧する
+- 独立した作業を並列のサブエージェントに分ける
+- 目標を達成できなかった場合、偽の「完了」ではなく目標判定で *未達成* を報告する
+
+**現在利用可能**
+
+- ✓ 一時停止・再開・キャンセルができ、サーバー再起動後も復旧する永続タスク
+- ✓ エージェントの手順・スキル・拡張機能・MCP サーバーをまとめて扱う **承認** 画面
+- ✓ テンプレート、スケジュール実行、タスク結果の共有
+- ✓ OpenMake Companion(macOS)または OpenMake Code CLI によるローカル実行 — パス範囲の制限、コマンド確認ゲート、git worktree による隔離
+
+**オプトイン** — 既定では無効です。`.env` で有効にします:
+
+| 設定 | 有効になる機能 | 前提条件 |
+|---|---|---|
+| `TASK_SANDBOX_ENABLED=true` | タスクごとの永続 Docker ワークスペース | `infra/mcp-runtime` をビルドしてから `infra/task-runtime` をビルド |
+| `LOCAL_EXECUTOR_ENABLED=true` | ユーザーのマシンでのツール実行 | `bridge` スコープの API キーで接続した OpenMake Companion または CLI |
+| `AGENT_TASK_QUEUE_ENABLED=true` | 全体・ユーザー単位の同時実行上限 | — |
+
+```bash
+docker build -t openmake-mcp-runtime:latest infra/mcp-runtime
+docker build -t openmake-task-runtime:latest infra/task-runtime
+```
+
+**計画中**
+
+- ○ **実行グラフ** — 各ノードが依存関係・権限・リトライ・完了条件を持つ計画。現在保存される計画はステップの平坦なリストです。
+- ○ **宣言的ポリシーエンジン** — 現在の承認ゲートを超えて、サーバーが強制する権限レベル。
+- ○ **ターン内の耐久性** — ツール呼び出し単位の記録により、途中で中断したターンを安全に再実行する。
+- ○ **スコープ付きメモリ** — 出典と有効期限を持つ作業・エピソード・意味メモリ。
+
+---
+
+## リサーチ・ツール・アーティファクト
+
+**ディープリサーチ** — 質問をサブトピックに分けて並列に検索し、ソースを読み、分割して要約したうえで出典付きレポートを書きます。Wikipedia、Google News、DuckDuckGo はキーなしで動作し、SearXNG・Google カスタム検索・Naver・Kakao は設定すると検索範囲が広がります。
+
+**組み込みツール** — Web 検索・ファクトチェック、ページ抽出・クロール、画像分析・OCR、計画、コード・セキュリティレビュー、スキルの読み込み、Git からのインポートなど 23 種。多くのツールは必要なターンにだけ提示し、プロンプトを小さく保ちます。
+
+**MCP** — カタログ(Tavily、Context7、Notion、NotebookLM、カカオマップ、OpenDART など)からサーバーをインストールするか、独自に登録します。stdio サーバーはそれぞれ専用の Docker コンテナで、権限の削減・非 root ユーザー・任意の読み取り専用ファイルシステムのもとで実行でき、リモートサーバーは OAuth でサインインします。
+
+**スキル・拡張機能** — プラグイン、スキル、カスタムエージェント、MCP サーバーを Git・zip・マーケットプレイスからインストールします。Claude Code の慣習(ツール名、`$ARGUMENTS`、`commands/`、`agents/`、同梱スクリプト)はインストール時にこの環境へ合わせて変換され、確認が必要なものはすべて承認画面に届きます。
+
+**アーティファクト** — 回答をサンドボックス化されたライブプレビューとして描画し、レポート依頼は PDF・DOCX に書き出せる HTML アーティファクトになり、共有アーティファクトは別オリジンのビューアーで配信します。
+
+**連携** — スコープ付き API キーを使う OpenAI 互換 API(`/api/v1/chat/completions`)、Discord ゲートウェイボット、割り当て前にモデルを比較できる [OpenMake Bench](https://bench.openmake.cc)。
+
+---
+
+## アーキテクチャ
+
+```mermaid
+flowchart TB
+    subgraph clients["クライアント"]
+        WEB["Web アプリ · Next.js"]
+        NATIVE["Companion (macOS) · Code CLI"]
+        APIC["OpenAI 互換 API · Discord ボット"]
+    end
+    clients -->|"REST · WebSocket"| API["API サーバー · Express 5 + TypeScript"]
+    API --> PIPE["メッセージパイプライン<br/>認証 · ポリシー · プロンプトとツールの組み立て"]
+    PIPE --> PLAN["Planner"]
+    PLAN --> CAP["機能タスク"]
+    PIPE --> AGT["エージェントランタイム<br/>タスク · 承認 · チェックポイント"]
+    PIPE --> TOOLS["ツール · MCP"]
+    CAP --> LLM["LLMClient<br/>コンテキスト保護"]
+    AGT --> LLM
+    TOOLS --> LLM
+    LLM --> GW["LiteLLM ゲートウェイ"]
+    GW --> VLLM["vLLM · ローカルモデル"]
+    GW --> EXT["BYOK プロバイダー"]
+    API --- PG[("PostgreSQL")]
+    API --- RD[("Redis")]
+    AGT --- SB["Docker サンドボックス<br/>タスク · MCP · アーティファクト"]
+    TOOLS --- SB
+```
+
+- **ひとつの実行経路** — ローカルモデルと外部モデルが同じストリーミングディスパッチとツールループを共有します。ディスカッションとディープリサーチは、ディスパッチ前に分岐する別モードです。
+- **Planner → 機能タスク → 統合** — `simple` の計画はモデル呼び出しを増やしません。`multi` の計画は実行前にチェック(割り当て、キーの状態、クォータ)され、タスクは依存レベルごとに並列実行され、成功したメディアだけが回答に添付されます。
+- **モデルの決定** — モデルを呼び出すすべてのサブシステムは、ロールまたは機能を通じてモデルを決めます: ユーザー設定 → 管理者の既定値 → 組み込みの既定値。
+- **途切れても続くストリーミング** — ブラウザのタブがバックグラウンドに回ったりソケットが切れたりしても生成は続き、クライアントは同じ回答に再接続します。
+- **単一ホスト設計** — アプリケーションは PM2 で、PostgreSQL・Redis・すべてのサンドボックスは Docker で動かします。
+
+| レイヤー | 技術 |
+|---|---|
+| バックエンド | Node.js 24、Express 5、TypeScript(strict)、Zod、Winston |
+| フロントエンド | Next.js 16、React 19、Zustand、Tailwind CSS 4、`next-intl`(ko · en · ja · zh) |
+| データ | パラメーター化した生 SQL による PostgreSQL(ORM なし)、Redis |
+| LLM | vLLM、LiteLLM ゲートウェイ、`openai` SDK |
+| エージェント・ツール | Model Context Protocol クライアント v2、Docker で隔離したサンドボックス |
+| ネイティブクライアント | SwiftUI(macOS Companion、iOS は開発中)、Node CLI — `packages/local-bridge-core` を共有 |
+
+### 設計原則
+
+**モデルを呼び出すのは簡単です。AI を安定して運用するのは簡単ではありません。** 難しいのは、状態の維持、権限の強制、安全な実行、障害からの復旧、そして何が起きたかの証明です。OpenMake はこれらを中心に作られています:
+
+- **状態** — タスク・ステップ・チェックポイントを永続化し、再起動をまたいで作業を続けます。
+- **権限** — RBAC、スコープ付き API キー、承認ポリシー、エージェントツールでの認証情報ファイルの保護。
+- **隔離** — エージェントのコード、MCP サーバー、アーティファクトを、権限・メモリ・ネットワークを制限した Docker で実行します。
+- **復旧** — 明確な失敗理由、一時的なエラーのリトライ、再開可能なタスク。
+- **監査可能性** — アラートと連動した監査ログと、ステップ単位のタスク履歴。
+- **回答前の追加呼び出しを最小限に** — 別の分類器ではなく、モデルが同じターンの中でツールを選びます。残っている回答前の呼び出し(Planner と LLM によるエージェントルーティング)は計測しながら見直しを続けています。
+
+---
+
+## デプロイ
+
+参考構成は、アプリケーションホスト 1 台と推論ホストの組み合わせです:
+
+```
+Application host                                   Inference host (GPU)
+┌──────────────────────────────────────────┐       ┌──────────────────────┐
+│ PM2: API · web                           │       │ vLLM                 │
+│ Docker: PostgreSQL · Redis · sandboxes   │ ────► │ chat · embedding ·   │
+│ LiteLLM gateway (OpenAI-compatible)      │       │ image models         │
+└──────────────────────────────────────────┘       └──────────────────────┘
+```
+
+すべてを 1 台で動かすことも、モデルエンドポイントにホスティング型プロバイダーを使うこともできます。
+
+日々の運用は `openmake_llm.sh` で行います:
+
+```bash
+./openmake_llm.sh start     # PostgreSQL → Redis → アプリ、続けてログを表示
+./openmake_llm.sh status    # ポート、コンテナ、PM2 の状態
+./openmake_llm.sh update    # git pull(fast-forward のみ)→ ビルド → マイグレーション → 再起動
+./openmake_llm.sh deploy    # ビルド → マイグレーション → 再起動
+./openmake_llm.sh stop
+```
+
+インストーラーが動作する `.env` を作成します。主な項目:
+
+| 変数 | 用途 |
+|---|---|
+| `LLM_BASE_URL` · `LLM_API_KEY` · `LLM_DEFAULT_MODEL` | OpenAI 互換のモデルエンドポイント |
+| `LLM_GATEWAY_PROVIDERS` | ゲートウェイ経由の BYOK プロバイダー |
+| `DATABASE_URL` · `REDIS_URL` | データストア |
+| `JWT_SECRET` · `API_KEY_PEPPER` · `TOKEN_ENCRYPTION_KEY` | シークレット(未設定なら初回起動時に生成) |
+
+すべての項目は `.env.example` にあり、多くの運用設定は **管理 → システム設定** から実行中に変更できます。データベースのマイグレーションは起動時に自動適用されます。公開アドレスが必要な場合は、インストール時に `--public-url https://chat.example.com` を指定してください。Caddy の設定は `scripts/caddy/` にあります。
+
+---
+
+## 開発
 
 ```bash
 git clone https://github.com/openmake/openmake_llm.git
 cd openmake_llm
-./install.sh
-```
-
-**Windows** では **WSL2**(Ubuntu)内で同じワンライナーを実行してください。ネイティブの Windows シェルを検出すると、
-代わりに WSL2 のセットアップ手順を表示します。
-
-これで完了です。インストーラーはツールチェーン(Node 24、Docker、PM2 — 足りなければ可能な限り `sudo` なしで導入)を
-確認し、ランダムなシークレットで `.env` を生成し、依存関係をインストールし、PostgreSQL + Redis を起動し、
-マイグレーションを適用し、両方のアプリをビルドして PM2 で起動したあと `/health` を待ちます。最後に Web の URL と
-生成された管理者パスワードを表示します。
-
-質問はひとつだけです — どの OpenAI 互換 LLM エンドポイントを使うか(Ollama / OpenRouter / カスタム / あとで決める)。
-すべての質問を省略するには:
-
-```bash
-# フラグはワンライナーにもそのまま渡せます:
-curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh | bash -s -- --yes
-
-./install.sh --yes                                    # 仮の LLM 設定、.env は後で埋める
-./install.sh --yes \
-  --llm-base-url https://openrouter.ai/api/v1 \
-  --llm-api-key  sk-or-... \
-  --llm-model    qwen/qwen3-235b-a22b
-```
-
-`./install.sh` は何度実行しても安全です — 上書きせずに修復します。便利なフラグ:
-`--skip-docker`(Postgres/Redis を自分で運用)、`--skip-build`、`--no-start`、`--force-env`、そして下記のポート指定。
-`./install.sh --help` を参照してください。
-
-既定のポートで Postgres や Redis がすでに動いている場合は、5432/6379 を取り合わずにコンテナのポートを移してください。
-ポートは `.env` に記録され、`openmake_llm.sh` が読み戻します:
-
-```bash
-./install.sh --yes --postgres-port 55432 --redis-port 56379
-```
-
-macOS では Docker Desktop、OrbStack、**Colima**(`brew install colima docker docker-compose` — GUI なしの
-ヘッドレス)に対応します。Homebrew の compose プラグインが docker CLI に登録されていない場合は、インストーラーが
-`~/.docker/config.json` に `cliPluginsExtraDirs` を追加します。
-
-管理者アカウントがまだない場合、Web アプリは一度だけの**セットアップページ**を開き、管理者の作成と、必要なら
-LLM ゲートウェイの設定ができます。
-
-### インストール済みインスタンスの更新
-
-```bash
-./openmake_llm.sh update            # git pull (ff-only) → ビルド → マイグレーション → 再起動
-./openmake_llm.sh update --yes      # マイグレーションの確認を省略 (非対話)
-```
-
-`update` は、コミットしていない変更や分岐したローカルコミットがあるツリーには手を付けません — 編集内容を上書きしません。
-新しく取得したものがなければ再デプロイを省略します(強制するには `--force`)。git なしで tarball からインストールした
-場合は、代わりに `install.sh` を再実行してください(その場で修復します)。
-
-`main` ではなく特定のリリースに固定するには、ワンライナーで `OMK_REF` を指定します:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/install.sh \
-  | OMK_REF=v1.62.3 bash -s -- --yes
-```
-
-### 前提条件(インストーラーが処理)
-
-- **git** — まっさらな macOS では最初の `git clone` で Xcode Command Line Tools のインストールダイアログが出ます。
-  一度承認するか、ソースを zip でダウンロードしてください。`install.sh` 自体は git がなくても動きます(ビルドメタデータは `unknown`)
-- **Node.js** `>=24 <25` — `mise`/`fnm`/`nvm`、Homebrew、どれもなければローカルの `~/.openmake/node` tarball で用意
-- **Docker** — PostgreSQL/Redis と MCP・エージェントのサンドボックスに必要です。Linux では公式の `get.docker.com`
-  スクリプトの実行を提案し、macOS では Docker Desktop、OrbStack、Colima のいずれかが必要です。注意: Docker Desktop の
-  **初回起動**は GUI での承認(特権ヘルパー)を求めることがあり、インストーラーの約 60 秒の待機を超える場合があります —
-  そのときは Docker の起動完了を待ってから `./install.sh` を再実行してください(繰り返しても安全)
-- OpenAI 互換の LLM エンドポイント: ローカルの **vLLM + LiteLLM** スタック、**Ollama**、または外部プロバイダーのキー
-
-### 手動セットアップ
-
-自分で組み立てたい場合、`install.sh` にはこの手順が読みやすい形で書かれています:
-
-```bash
 npm install
-node scripts/setup/gen-env.mjs        # シークレットを生成した最小限の .env
-docker compose --env-file .env -f infra/docker-compose.yml up -d postgres redis
-npm run build && pm2 start ecosystem.config.js   # マイグレーションは起動時に自動適用
-```
 
-> `--env-file .env` は省略できません。Compose は既定の `.env` を compose ファイルのディレクトリ(`infra/`)を基準に
-> 探すため、指定しないと `POSTGRES_PASSWORD` が空になり起動に失敗します。
-
-`gen-env.mjs` は起動に必要なキーだけを書き込みます(サーバーも初回起動時に不足している `JWT_SECRET` /
-`API_KEY_PEPPER` / `TOKEN_ENCRYPTION_KEY` を生成します)。`.env.example` が完全なリファレンスです —
-必要に応じて任意のブロック(OAuth、Web 検索、MCP サンドボックス、Discord ボット)をコピーしてください:
-
-| 変数 | 用途 |
-|---|---|
-| `PORT` | API ポート(既定 `52416`) |
-| `DATABASE_URL` | PostgreSQL の接続文字列(パスワードは `POSTGRES_PASSWORD` と一致させる) |
-| `JWT_SECRET` | JWT 署名シークレット(32 文字以上) |
-| `API_KEY_PEPPER` | API キーのハッシュ用 pepper |
-| `TOKEN_ENCRYPTION_KEY` | 外部プロバイダー認証情報用の AES-256-GCM キー(ちょうど 64 桁の hex) |
-| `ADMIN_PASSWORD` | 任意: ブートストラップ管理者のパスワード — 空にするとセットアップページで管理者を作成します |
-| `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_DEFAULT_MODEL` | LiteLLM ゲートウェイのエンドポイント、マスターキー、既定モデル |
-| `LLM_GATEWAY_PROVIDERS` | ゲートウェイ経由にする外部プロバイダーの id(カンマ区切り) |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth(任意) |
-
-多くの運用設定は **管理 → システム設定** で実行中に変更できます(データベースの値が `.env` より優先)。
-
-### 実行
-
-日常の運用は、PostgreSQL → Redis → アプリの 3 層を順に扱う `openmake_llm.sh` で行います(Linux・macOS 共通):
-
-```bash
-./openmake_llm.sh start     # 全体を起動してログを表示
-./openmake_llm.sh status    # 各層のポート + docker + PM2 の状態
-./openmake_llm.sh logs      # リアルタイムの PM2 ログ
-./openmake_llm.sh health    # GET /health
-./openmake_llm.sh deploy    # ビルド + マイグレーション + 再起動 (コード変更を反映)
-./openmake_llm.sh stop      # 逆順に停止
-```
-
-または個別に動かします:
-
-```bash
-# 開発
-npm run dev                 # API + フロントエンドを同時に実行
-npm run dev:api             # バックエンドのみ (ts-node)
-npm run dev:frontend-next   # フロントエンドのみ (next dev)
-
-# 本番
-npm run build               # 共有パッケージ + バックエンド + フロントエンド
-npm start                   # node apps/api/dist/server.js
-```
-
-再起動後も動かし続けるには PM2 を init システムに登録します — `pm2 startup`(実行するコマンドを表示します:
-macOS は `launchd`、Linux は `systemd`)のあとに `pm2 save`。
-
-### テストと lint
-
-```bash
-npm test                    # 共有パッケージをビルドしてから Jest 単体テスト (apps/api)
+npm run dev                 # API + Web
+npm test                    # 共有パッケージをビルドしてから Jest 単体テスト
 npm run test:e2e            # Playwright (chromium + webkit)
 npm run lint                # ESLint
 ```
 
-### データベースマイグレーション
-
-`db/migrations/` のファイルは**起動時に自動で適用**されます — `db/init/` のベーススキーマのあと、保留中のマイグレーションが PostgreSQL の advisory lock(複数インスタンスの同時起動を直列化)のもとで実行され、失敗すると即座に止まります。無効にするには `DB_AUTO_MIGRATE=false` にして CLI で手動実行します:
-
-```bash
-npx ts-node apps/api/src/data/migrations/cli.ts status    # 保留中を表示
-npx ts-node apps/api/src/data/migrations/cli.ts migrate   # 適用
 ```
-
-ロールバックスクリプトは `db/migrations/rollbacks/` にあります(正方向のマイグレーション走査からは除外)。
+apps/
+├── api/             Express 5 API — チャットパイプライン、オーケストレーター、エージェント、MCP、データ
+├── web/             Next.js Web アプリ
+├── cli/             OpenMake Code — ローカルブリッジ CLI
+├── desktop-native/  OpenMake Companion — SwiftUI メニューバーアプリ (macOS)
+├── ios/             SwiftUI iOS クライアント (開発中)
+└── discord-bot/     Discord ゲートウェイボット
+packages/            共有型、API 契約、設定、API クライアント、ローカルブリッジコア
+db/                  ベーススキーマとマイグレーション
+infra/               サンドボックスとデータストア用の Docker イメージと compose ファイル
+```
 
 ---
 
-## プロジェクト構成
+## ロードマップ
 
-```
-openmake_llm/
-├── apps/
-│   ├── api/          # Express 5 + TypeScript の API サーバー (strict, CommonJS)
-│   │   └── src/
-│   │       ├── routes/ controllers/ services/   # REST + ビジネスロジック
-│   │       ├── services/orchestrator/           # Planner、capability 実行器、事前チェック
-│   │       ├── chat/                            # パイプライン補助、分類器、プロンプト
-│   │       ├── agents/                          # 業界エージェント、ディスカッションエンジン、スキル、git 取り込み
-│   │       ├── llm/ providers/ cluster/         # LLM クライアント、プロバイダー抽象化、ノードルーティング
-│   │       ├── mcp/                             # MCP ツールルーター、外部クライアント、Docker サンドボックス
-│   │       ├── sockets/                         # WebSocket のチャット・ローカルブリッジハンドラー
-│   │       ├── auth/ security/ middlewares/     # JWT/OAuth、SSRF ガード、レート制限
-│   │       └── data/                            # PostgreSQL (生 SQL)、マイグレーション、リポジトリ
-│   ├── web/          # Next.js + React のフロントエンド (運用 UI)
-│   ├── cli/          # OpenMake Code — ローカルブリッジ CLI (ソースからビルド、apps/cli/README.md 参照)
-│   ├── desktop-native/ # OpenMake Companion — SwiftUI メニューバーアプリ (macOS)
-│   ├── ios/          # SwiftUI iOS クライアント (開発中)
-│   ├── discord-bot/  # 任意: Discord ゲートウェイボット (/api/v1/chat/completions へ中継)
-│   └── legacy-web/   # /generated メディア用の静的アセットホスト
-├── db/               # 初期スキーマ + マイグレーション (+ rollbacks/) — 実行時に読み込み
-├── packages/         # shared-types, api-contracts, config, api-client, local-bridge-core
-├── infra/            # Dockerfile と compose (mcp-runtime, task-runtime, artifact-viewer, egress-proxy)
-├── scripts/          # setup/ (gen-env.mjs)、LLM バックエンドのホスト設定 (vLLM/LiteLLM)、Caddy、診断
-├── tests/            # Playwright E2E
-├── assets/           # README のデモ GIF
-├── install.sh        # ワンショットインストーラー (Linux/macOS): ツールチェーン → .env → DB → ビルド → PM2
-├── openmake_llm.sh   # サービス管理: start/stop/restart/deploy/update/status/logs/health
-└── ecosystem.config.js  # PM2 のプロセス定義 (API、Next フロントエンド、任意の Discord ボット)
-```
+| 現在 — 提供中 | 次 | その後 |
+|---|---|---|
+| ロール・機能ルーティングを備えたマルチモデルゲートウェイ | 実行グラフ | スコープ付きメモリ |
+| 永続タスクランタイム: チェックポイント、一時停止・再開、再起動後の復旧 | 宣言的ポリシーエンジンと承認待ち | 組織、プロジェクト、マルチテナンシー |
+| ツール、MCP ゲートウェイ、承認、Docker サンドボックス | エージェント・スキルのマニフェスト | SSO(OIDC、SAML)、予算、デプロイ承認 |
+| ディープリサーチ、アーティファクト、ローカル実行ブリッジ | ターン内の耐久性 | エアギャップ環境へのインストール、HA、Kubernetes |
 
-**稼働中のサーバーが実際に必要とするもの:** ビルド済みの `apps/api/dist` + `apps/web/.next`、`db/`(起動経路が `db/init/` と保留中の `db/migrations/` を適用)、Docker で分離したサンドボックス用の `infra/`。`scripts/` と `tests/` は実行時のコードからは読み込まれ*ません*が、`scripts/vllm/` と `scripts/caddy/` は推論バックエンドとリバースプロキシのデプロイ用成果物なので、リポジトリと一緒に置いてください。
+方向性は定まっていますが、スケジュールは約束ではありません — [リリース](https://github.com/openmake/openmake_llm/releases)に含まれていない機能は計画として扱ってください。詳細: **[openmake.cc/roadmap](https://openmake.cc/ja/roadmap/)**。
+
+---
+
+## エンジニアリングログ
+
+OpenMake はオープンに開発しています。実装メモ、失敗、トレードオフ、運用で得た教訓を随時公開しています:
+
+- [Six months serving vLLM on a DGX Spark](https://openmake.cc/ja/blog/six-months-vllm-dgx-spark/)(英語)
+- [分離を作ったのに、本番では何もしていなかった](https://openmake.cc/ja/blog/mcp-sandbox-docker/)
+- [四回とも、テストは緑だった](https://openmake.cc/ja/blog/green-tests-four-gaps/)
+- [計画と実行をつなぐ作業を、三回に分けてやった](https://openmake.cc/ja/blog/execution-graph-increments/)
+- [推論バックエンドを一日で載せ替え、その請求書を十三日かけて払った](https://openmake.cc/ja/blog/ollama-to-vllm-migration/)
+
+毎週の内容は [週次開発ログ](https://openmake.cc/ja/blog/) にもまとめています — 最新: [W37](https://openmake.cc/ja/blog/weekly-log-2026-w37/)。
 
 ---
 
 ## コントリビューション
 
-コントリビューションを歓迎します。次の点をお願いします:
+バグ報告、修正、ドキュメント、新しいスキルや MCP 連携など、どのような貢献も歓迎します。
 
-- [Conventional Commits](https://www.conventionalcommits.org/) を使う — `feat`、`fix`、`refactor`、`docs`、`test`、`chore`。
-- 機能・修正ブランチで作業し、`main` に向けて PR を作成する。
-- コード規約に従う: TypeScript strict モード、入力検証は Zod、ロギングは Winston、**パラメーター化された生 SQL のみ**(ORM なし)、設定の外部化(モデル名・マジックナンバー・インラインプロンプトのハードコード禁止)。
+- ブランチを作成し、`main` に対してプルリクエストを送ってください。コミットは [Conventional Commits](https://www.conventionalcommits.org/)(`feat`、`fix`、`refactor`、`docs`、`test`、`chore`)に従います。
+- 規約: TypeScript strict モード、Zod による検証、パラメーター化した生 SQL(ORM なし)、設定の外部化 — モデル名・マジックナンバー・インラインプロンプトをハードコードしません。
+- PR の前に: `npm run lint` と `npm test` が通ること、スキーマ変更にはマイグレーションを含めること、新しい環境変数は `.env.example` に記載すること、UI の変更にはスクリーンショットを添えること。
 
-**PR を作成する前に:**
+CI はすべてのプッシュとプルリクエストで **CI Gate**(テスト → ビルド → サイズ → lint)をひとつ実行します。
 
-- [ ] `npm run lint` が通る
-- [ ] `npm test` が通る
-- [ ] DB スキーマの変更にはマイグレーションファイルを含める(連番の衝突なし)
-- [ ] 新しい環境変数は `.env.example` に記載する
-- [ ] UI の変更にはスクリーンショットか短い GIF を添付し、セキュリティの変更は影響範囲を説明する
-
-CI はすべての push と pull request で単一の **CI Gate**(Test → Build → Size → Lint)を実行します。
-
----
-
-## お問い合わせ
-
-| | |
-|---|---|
-| 一般的な質問とセルフホスティングのサポート | support@openmake.cc |
-| メンテナー | riskpw@openmake.cc · rockyhan@openmake.cc |
-
----
+**コミュニティ・連絡先** — 質問やセルフホスティングの相談: support@openmake.cc · メンテナー: riskpw@openmake.cc、rockyhan@openmake.cc。OpenMake が役に立ったら、スターを付けていただくと他の開発者が見つけやすくなります。
 
 ## ライセンス
 
-**MIT ライセンス**で公開しています — 詳細は [LICENSE](LICENSE) を参照してください。
+[MIT License](LICENSE) のもとで公開しています。
