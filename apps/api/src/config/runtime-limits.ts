@@ -1818,6 +1818,19 @@ export const AGENT_TASK_LIMITS = {
     EXECUTE_MAX_ALLOWED_SKILLS: parseInt(process.env.AGENT_TASK_EXECUTE_MAX_ALLOWED_SKILLS || '50', 10),
 } as const;
 
+/**
+ * 채팅 사용자 확인 질문(ask_user) — 요청이 모호할 때 모델이 산출물을 만들기 전에 질문으로 턴을 끝낸다.
+ * 배경(2026-09-15): "미국 시간" 시계 아티팩트 요청에서 모델이 본문으로 시간대를 물어놓고 그대로
+ * 진행해 5분 40초 뒤 완성본이 왔다 — 생성 중엔 입력창이 잠겨 사용자가 답할 길이 없었다.
+ * 노출은 아티팩트·보고서 의도 턴에만(상시 노출 금지 — LLM 판단 경계 B 형).
+ */
+export const CHAT_ASK_USER = {
+    /** 기본 ON. CHAT_ASK_USER_ENABLED=false 로 끈다. */
+    ENABLED: process.env.CHAT_ASK_USER_ENABLED !== 'false',
+    /** 질문 본문 상한(자) — 모델이 산출물 전체를 질문에 싣는 이탈 방어. CHAT_ASK_USER_MAX_CHARS. */
+    MAX_CHARS: parseInt(process.env.CHAT_ASK_USER_MAX_CHARS || '1500', 10),
+} as const;
+
 /** 채팅 서브에이전트(delegate_expert) — 채팅 도구 루프에서 전문가 위임(depth=1 tool-loop). */
 export const CHAT_SUBAGENT = {
     /** 기본 OFF — 지연(위임 1회 = 서브 LLM 최대 3턴) UX 영향을 관찰 후 조정. CHAT_SUBAGENT_ENABLED=true. */

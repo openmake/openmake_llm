@@ -22,6 +22,7 @@ import { buildExternalMessages } from './external-messages';
 import { createToolBatchState, runToolCallBatch } from './external-tool-batch';
 import { applyWallClockGuard, applyToolOveruseGuard } from './external-loop-guards';
 import { isOrchestrationTool } from './orchestration-dispatch';
+import { findAskUserCall, formatAskUserQuestion } from './ask-user';
 import type { ChatMessageRequest } from '../chat-service-types';
 import type { ResolvedProvider } from '../../providers/provider-router';
 
@@ -236,6 +237,19 @@ export async function runExternalStream(
                     });
                     continue;
                 }
+                break;
+            }
+
+            // 사용자 확인 질문(ask_user): 도구를 실행하지 않고 질문을 답변 본문으로 흘려보낸 뒤 턴을 끝낸다 —
+            // 사용자 답은 다음 턴 history 로 이어진다. 같은 배치의 다른 도구 호출도 실행하지 않는다
+            // (질문에 대한 답이 그 호출의 전제일 수 있다).
+            const askUser = findAskUserCall(result.toolCalls);
+            if (askUser) {
+                const question = formatAskUserQuestion(askUser.args);
+                logger.info(`[AskUser] 사용자 확인 질문으로 턴 종료 (turn ${turn + 1}, 동반 도구 ${result.toolCalls.length - 1}개 미실행)`);
+                const separator = result.content?.trim() ? '\n\n' : '';
+                onToken(`${separator}${question}`, undefined);
+                result = { ...result, content: `${result.content || ''}${separator}${question}`, toolCalls: [], finishReason: 'stop' };
                 break;
             }
 

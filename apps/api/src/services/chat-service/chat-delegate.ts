@@ -21,6 +21,7 @@ import { getModelForRole } from '../../config/model-roles';
 import { routeToAgent } from '../../agents/keyword-router';
 import { getAgentSystemMessage } from '../../agents/system-prompt';
 import { runSubagent } from '../agent-task/subagent';
+import { ASK_USER_TOOL_NAME } from './ask-user';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('ChatDelegate');
@@ -50,9 +51,9 @@ export function buildChatDelegateTool(): ToolDefinition {
     };
 }
 
-/** PURE: 서브에이전트에 넘길 도구 서브셋 — 부모 채팅 활성 도구에서 자기 자신만 제외. */
+/** PURE: 서브에이전트에 넘길 도구 서브셋 — 부모 채팅 활성 도구에서 자기 자신과 사용자 질문(ask_user — 서브 루프엔 사용자가 없다)만 제외. */
 export function buildSubagentTools(chatTools: ToolDefinition[]): ToolDefinition[] {
-    return chatTools.filter((t) => t.function.name !== CHAT_DELEGATE_TOOL_NAME);
+    return chatTools.filter((t) => t.function.name !== CHAT_DELEGATE_TOOL_NAME && t.function.name !== ASK_USER_TOOL_NAME);
 }
 
 /**
