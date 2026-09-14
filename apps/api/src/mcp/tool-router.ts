@@ -37,13 +37,18 @@ import type { UserContext } from './user-sandbox';
 import { createLogger } from '../utils/logger';
 import { MCP_EXTERNAL_TOOL_LIMITS } from '../config/timeouts';
 import { withSpan } from '../observability/otel';
-import { classifyToolError, formatToolError } from './tool-error-classifier';
+import { classifyToolError, formatToolError, isConnectionDeathError } from './tool-error-classifier';
 import { withToolNameSuggestions } from './tool-name-suggest';
 import { isToolCircuitOpen, recordToolResult } from './tool-health';
 import type { UserMCPPool } from './user-pool';
 import { collectUserPoolTools } from './user-pool-tools';
 
 const logger = createLogger('ToolRouter');
+
+/** 도구 결과의 텍스트 본문 — 오류 분류용 */
+function resultText(result: MCPToolResult): string {
+    return (result.content ?? []).map((c) => ('text' in c && typeof c.text === 'string' ? c.text : '')).join('\n');
+}
 
 /**
  * 외부 도구 실행기 함수 타입
@@ -218,6 +223,16 @@ export class ToolRouter {
         return names;
     }
 
+    /** 사용자 MCP 풀 보장 — supervisor 가 없으면(부팅 전·테스트) no-op, 실패는 도구 실패로 이어지게 삼킨다 */
+    private async ensureUserPool(userId: string, reason: string): Promise<void> {
+        const { getLifecycleSupervisor } = await import('./lifecycle-supervisor');
+        try {
+            await getLifecycleSupervisor()?.ensureUserServers(userId, reason);
+        } catch (e) {
+            logger.warn(`사용자 MCP 풀 보장 실패 u=${userId} (${reason}): ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
     /**
      * 도구 실행 — 내장이면 직접 handler, 외부면 ExternalMCPClient로 라우팅
      * 
@@ -307,19 +322,42 @@ export class ToolRouter {
                     // split[0](displayName) 직접 조회는 항상 실패하므로(서버명 충돌 시 suffix 도
                     // 붙음), collectUserPoolTools 로 전체 네임스페이스 이름을 매칭해 entry 의
                     // 실제 serverId + originalToolName 으로 호출한다.
+                    const userId = String(context.userId);
                     const { getUserMCPPool } = await import('./user-pool');
                     const pool = getUserMCPPool();
-                    const entry = collectUserPoolTools(pool, String(context.userId))
-                        .find(e => e.tool.name === name);
-                    const userClient = entry ? pool.get(String(context.userId), entry.serverId) : undefined;
-                    if (entry && userClient) {
+                    const findTarget = () => {
+                        const entry = collectUserPoolTools(pool, userId).find(e => e.tool.name === name);
+                        const client = entry ? pool.get(userId, entry.serverId) : undefined;
+                        return entry && client ? { entry, client } : undefined;
+                    };
+                    const callTarget = (t: NonNullable<ReturnType<typeof findTarget>>) => Promise.race([
+                        t.client.callTool(t.entry.originalToolName, args),
+                        new Promise<never>((_, reject) =>
+                            setTimeout(() => reject(new Error(`외부 도구 타임아웃: ${name} (${MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS}ms 초과)`)), MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS)
+                        ),
+                    ]);
+                    // 끊긴 사용자 서버 복구 — stdio 자식은 유휴 종료(open-design MCP 30분) 등으로 조용히 죽는다.
+                    // 끊긴 client 는 빼고, 풀에 없는데 전역 도구도 아니면 풀을 보장한 뒤 다시 찾는다(2026-09-15).
+                    let target = findTarget();
+                    if (target && target.client.getStatus().status !== 'connected') {
+                        await pool.remove(userId, target.entry.serverId);
+                        target = undefined;
+                    }
+                    if (!target && !this.externalTools.has(name)) {
+                        await this.ensureUserPool(userId, 'tool-call');
+                        target = findTarget();
+                    }
+                    if (target) {
                         try {
-                            const result = await Promise.race([
-                                userClient.callTool(entry.originalToolName, args),
-                                new Promise<never>((_, reject) =>
-                                    setTimeout(() => reject(new Error(`외부 도구 타임아웃: ${name} (${MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS}ms 초과)`)), MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS)
-                                ),
-                            ]);
+                            let result = await callTarget(target);
+                            // 종료 감지보다 호출이 먼저 닿은 경우 — 빼고 새로 띄워 1회만 재시도한다.
+                            if (result?.isError && isConnectionDeathError(resultText(result))) {
+                                logger.warn(`사용자 MCP 연결 끊김 — 재기동 후 재시도: ${name}`);
+                                await pool.remove(userId, target.entry.serverId);
+                                await this.ensureUserPool(userId, 'tool-retry');
+                                const retry = findTarget();
+                                if (retry) result = await callTarget(retry);
+                            }
                             return finalize(capOutput(result));
                         } catch (e) {
                             const msg = e instanceof Error ? e.message : String(e);
