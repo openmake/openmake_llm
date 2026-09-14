@@ -38,6 +38,13 @@ it('호출 도중 취소되면 재시도 없이 cancelled', async () => {
     expect(call).toHaveBeenCalledTimes(1); expect(r.error).toBe('cancelled');
 });
 
+it('전송 오류(과부하 등)는 같은 모델에 재시도하지 않고 바로 fail-open', async () => {
+    const call = jest.fn(async () => { throw new Error('503 Service temporarily overloaded'); });
+    const r = await planRequest(input, { call, model: 'm' });
+    expect(call).toHaveBeenCalledTimes(1); expect(r.attempts).toBe(1);
+    expect(r.plan).toBeNull(); expect(r.error).toMatch(/503/);
+});
+
 it('모델이 계속 잘못 답하면 재시도 상한 뒤 plan=null (fail-open 사유 보존)', async () => {
     const call: PlannerLlmCall = async () => 'not json at all';
     const r = await planRequest(input, { call, model: 'm' });
