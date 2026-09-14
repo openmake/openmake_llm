@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.65.0](https://github.com/openmake/openmake_llm/compare/v1.64.0...v1.65.0) (2026-09-14)
+
+
+### ✨ 기능
+
+* **chat:** 사용자 확인 질문 도구 ask_user — 모호한 산출물 요청은 질문으로 턴 종료 ([#875](https://github.com/openmake/openmake_llm/issues/875)) ([fa5935e](https://github.com/openmake/openmake_llm/commit/fa5935e1c165a20247de0046045baf176923e8f9))
+
 ## [1.64.0](https://github.com/openmake/openmake_llm/compare/v1.63.0...v1.64.0) (2026-09-14)
 
 
