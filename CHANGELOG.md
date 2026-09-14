@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.64.0](https://github.com/openmake/openmake_llm/compare/v1.63.0...v1.64.0) (2026-09-14)
+
+
+### ✨ 기능
+
+* **i18n:** 독일어(de) UI 지원 — 웹 next-intl + 컴패니언 ([#873](https://github.com/openmake/openmake_llm/issues/873)) ([c70b436](https://github.com/openmake/openmake_llm/commit/c70b436483030962daeac4e6bf4b0605999c679b))
+
 ## [1.63.0](https://github.com/openmake/openmake_llm/compare/v1.62.3...v1.63.0) (2026-09-14)
 
 
