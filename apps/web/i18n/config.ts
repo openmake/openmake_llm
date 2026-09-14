@@ -4,7 +4,7 @@
  * 클라이언트(설정 페이지)가 쓴 뒤 router.refresh() 로 재렌더한다.
  * 쿠키 없음 = "자동 감지" (Accept-Language 협상 → DEFAULT_LOCALE 폴백).
  */
-export const LOCALES = ["ko", "en", "ja", "zh"] as const;
+export const LOCALES = ["ko", "en", "ja", "zh", "de"] as const;
 export type Locale = (typeof LOCALES)[number];
 
 export const DEFAULT_LOCALE: Locale = "ko";
@@ -21,6 +21,7 @@ const BCP47: Record<Locale, string> = {
   en: "en-US",
   ja: "ja-JP",
   zh: "zh-CN",
+  de: "de-DE",
 };
 
 export function toBcp47(locale: string): string {

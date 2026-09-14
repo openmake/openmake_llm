@@ -237,7 +237,7 @@ flowchart TB
 | Ebene | Technologien |
 |---|---|
 | Backend | Node.js 24, Express 5, TypeScript (strict), Zod, Winston |
-| Frontend | Next.js 16, React 19, Zustand, Tailwind CSS 4, `next-intl` (ko · en · ja · zh) |
+| Frontend | Next.js 16, React 19, Zustand, Tailwind CSS 4, `next-intl` (ko · en · ja · zh · de) |
 | Daten | PostgreSQL über rohes, parametrisiertes SQL (kein ORM), Redis |
 | LLM | vLLM, LiteLLM-Gateway, `openai` SDK |
 | Agenten & Tools | Model Context Protocol Client v2, Docker-isolierte Sandboxes |

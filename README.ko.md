@@ -237,7 +237,7 @@ flowchart TB
 | 계층 | 기술 |
 |---|---|
 | 백엔드 | Node.js 24, Express 5, TypeScript(strict), Zod, Winston |
-| 프론트엔드 | Next.js 16, React 19, Zustand, Tailwind CSS 4, `next-intl`(ko · en · ja · zh) |
+| 프론트엔드 | Next.js 16, React 19, Zustand, Tailwind CSS 4, `next-intl`(ko · en · ja · zh · de) |
 | 데이터 | 파라미터화 raw SQL 로 쓰는 PostgreSQL(ORM 없음), Redis |
 | LLM | vLLM, LiteLLM 게이트웨이, `openai` SDK |
 | 에이전트·도구 | Model Context Protocol 클라이언트 v2, Docker 격리 샌드박스 |

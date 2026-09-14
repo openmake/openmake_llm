@@ -1,4 +1,4 @@
-/* OpenMake Companion — 日本語。キーは識別子で、4 言語の表のキー集合は check-l10n.sh が照合する。 */
+/* OpenMake Companion — 日本語。キーは識別子で、全言語の表のキー集合は check-l10n.sh が照合する。 */
 
 /* メニュー */
 "menu.status" = "状態: %@";

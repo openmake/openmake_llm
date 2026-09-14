@@ -1,0 +1,86 @@
+/* OpenMake Companion — Deutsch. Keys are identifiers; check-l10n.sh verifies all tables share the same key set. */
+
+/* Menu */
+"menu.status" = "Status: %@";
+"menu.folder" = "Ordner: %@";
+"menu.openInFinder" = "Im Finder öffnen";
+"menu.disconnect" = "Trennen";
+"menu.connectFolder" = "Arbeitsordner verbinden …";
+"menu.addFolder" = "Arbeitsordner hinzufügen …";
+"menu.disconnectAll" = "Alle trennen";
+"menu.clearAutoApprove" = "Sammelfreigabe widerrufen (%ld Aufgaben)";
+"menu.openWeb" = "Im Browser öffnen";
+"menu.checkUpdates" = "Nach Updates suchen …";
+"menu.settings" = "Einstellungen …";
+"menu.quit" = "Beenden";
+
+/* Settings */
+"settings.auth" = "Authentifizierung";
+"settings.apiKey.placeholder" = "API-Schlüssel (omk_live_…)";
+"settings.apiKey.help" = "Erstellen Sie auf der Seite „API-Zugriff“ der Web-App einen Schlüssel mit dem Bereich bridge und fügen Sie ihn hier ein. Er wird im Schlüsselbund gespeichert.";
+"settings.apiKey.open" = "Seite „API-Zugriff“ öffnen";
+"settings.backend" = "Backend";
+"settings.server" = "Server";
+"settings.save" = "Speichern";
+"settings.saved" = "Gespeichert";
+"backend.external" = "Extern (chat.openmake.cc)";
+"backend.local" = "Lokal (localhost:52416)";
+
+/* Connection status */
+"status.idle" = "Nicht verbunden";
+"status.connecting" = "Verbindung wird hergestellt …";
+"status.connected" = "Verbunden: %@";
+"status.serverError" = "Serverfehler: %@";
+"status.reconnecting" = "Getrennt – warte auf erneute Verbindung";
+"status.closed" = "Geschlossen";
+"status.apiKeyRequired" = "API-Schlüssel erforderlich – bitte in den Einstellungen eingeben";
+"status.folderOpenFailed" = "Ordner konnte nicht geöffnet werden: %@";
+"status.helperMissing" = "Hilfsressourcen fehlen (Neuinstallation erforderlich)";
+"status.helperExited" = "Hilfsprozess beendet – bitte erneut verbinden";
+"status.helperLaunchFailed" = "Hilfsprozess konnte nicht gestartet werden: %@";
+
+/* Folder picker */
+"panel.title" = "Ordner für Agentenaufgaben auswählen (Sie können nacheinander mehrere Ordner hinzufügen)";
+"panel.message" = "Agentenaufgaben lesen und schreiben Dateien in diesem Ordner und seinen Unterordnern. Shell-Befehle erfordern jedes Mal Ihre Bestätigung, und selbst nach der Freigabe blockiert die OS-Sandbox Schreibzugriffe außerhalb des Ordners sowie das Lesen geheimer Dateien (z. B. .ssh).";
+
+/* Shell command approval */
+"confirm.title" = "Der Agent möchte diesen Shell-Befehl auf Ihrem Computer ausführen";
+"confirm.folder" = "Arbeitsordner: %@";
+"confirm.sandboxOn" = "OS-Sandbox aktiv: Schreibzugriffe außerhalb des Ordners und das Lesen geheimer Dateien (.ssh/.aws usw.) werden blockiert. Andere Lesezugriffe und Netzwerkzugriff sind erlaubt.";
+"confirm.sandboxOff" = "⚠️ Sandbox aus: Dieser Befehl kann mit den Rechten Ihres Kontos auf Dateien außerhalb des Ordners und auf das Netzwerk zugreifen.";
+"confirm.allHint" = "Mit „Alle für diese Aufgabe ausführen“ entfallen diese Abfragen bis zum Ende dieser Aufgabe (andere Aufgaben sind nicht betroffen).";
+"confirm.run" = "Ausführen";
+"confirm.runAll" = "Alle für diese Aufgabe ausführen";
+"confirm.deny" = "Ablehnen";
+
+/* Notifications */
+"notify.taskEnd.title" = "Agentenaufgabe abgeschlossen";
+"notify.taskEnd.body" = "Ihre lokale Aufgabe ist abgeschlossen. Prüfen Sie die Ergebnisse im Web.";
+"notify.approval.title" = "Agentenaufgabe – Freigabe erforderlich";
+"notify.approval.body" = "Warte auf Freigabe zum Ausführen eines Tools: %@. Klicken Sie, um im Web freizugeben.";
+"notify.question.title" = "Der Agent hat eine Frage gestellt";
+"notify.question.body" = "Die Aufgabe wartet auf Ihre Antwort. Klicken Sie, um im Web zu antworten.";
+
+/* Updates */
+"update.insecure" = "Updates sind nur von einem HTTPS-Backend (oder localhost) erlaubt";
+"update.badBackend" = "Ungültige Backend-Adresse";
+"update.none.title" = "Keine Updates";
+"update.none.body" = "Im nativen Kanal gibt es noch kein Release, oder das Manifest fehlt. (Aktuell v%@)";
+"update.latest.title" = "Auf dem neuesten Stand";
+"update.latest.body" = "v%@ ist die neueste Version.";
+"update.available.title" = "Version v%1$@ ist verfügbar (aktuell v%2$@)";
+"update.available.body" = "Jetzt herunterladen und installieren? Die App wird während der Installation kurz beendet und danach wieder geöffnet.";
+"update.install" = "Aktualisieren";
+"update.later" = "Später";
+"update.badDownload" = "Ungültige Download-Adresse";
+"update.checksum" = "Integritätsprüfung des Downloads fehlgeschlagen (sha256 stimmt nicht überein)";
+"update.noBundle" = "App-Bundle-Pfad nicht gefunden (Updates sind in Entwicklungsläufen nicht verfügbar)";
+"update.failed.title" = "Suche nach Updates fehlgeschlagen";
+"update.script.failTitle" = "Update fehlgeschlagen";
+"update.script.log" = "Protokoll";
+"update.script.mount" = "Das Disk-Image konnte nicht aktiviert werden.";
+"update.script.noApp" = "Die App wurde im Image nicht gefunden.";
+"update.script.copy" = "Die neue Version konnte nicht kopiert werden (prüfen Sie die Berechtigungen des Installationsordners).";
+"update.script.replace" = "Die vorhandene App konnte nicht ersetzt werden.";
+"update.script.rollback" = "Die Installation der neuen Version ist fehlgeschlagen; die vorherige Version wurde wiederhergestellt.";
+"update.script.reopen" = "Das Update war erfolgreich, aber die App konnte nicht erneut geöffnet werden.";

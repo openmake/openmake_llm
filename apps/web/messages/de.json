@@ -1,0 +1,2181 @@
+{
+  "metadata": {
+    "description": "KI-gestützter intelligenter Chat-Assistent"
+  },
+  "nav": {
+    "items": {
+      "apiAccess": "API-Zugriff",
+      "chat": "Chat",
+      "agentTasks": "Agentenaufgaben",
+      "customAgents": "Benutzerdefinierte Agents",
+      "skillLibrary": "Skill-Bibliothek",
+      "artifacts": "Artefakte",
+      "mcpMonitoring": "MCP-Überwachung",
+      "settings": "Einstellungen",
+      "usage": "Nutzung",
+      "admin": "Admin",
+      "analytics": "Analysen",
+      "conversationsAdmin": "Unterhaltungen",
+      "auditLog": "Audit-Protokoll",
+      "metrics": "Metriken",
+      "alerts": "Warnungen",
+      "mcpCatalogAdmin": "MCP-Katalog-Admin",
+      "modelRolesAdmin": "Modellrollen-Admin",
+      "systemSettingsAdmin": "Systemeinstellungen",
+      "developer": "Entwickler",
+      "schedulesAdmin": "Aufgaben-Zeitpläne",
+      "approvals": "Freigaben"
+    },
+    "pendingApprovals": "{count} ausstehende Freigabe(n) — Agentenaufgaben warten auf Ihre Freigabe"
+  },
+  "sidebar": {
+    "newChat": "Neuer Chat",
+    "searchPlaceholder": "Suchen …",
+    "recentChats": "Letzte Chats",
+    "untitledChat": "Chat ohne Titel",
+    "deleteChat": "Chat löschen",
+    "deleteConfirm": "„{title}“ löschen?\nGelöschte Chats können nicht wiederhergestellt werden.",
+    "deleteFailed": "Löschen des Chats fehlgeschlagen.",
+    "guest": "Gast",
+    "selfHosted": "Selbst gehostet",
+    "notLoggedIn": "Nicht angemeldet",
+    "logout": "Abmelden",
+    "themeToggle": "Design umschalten",
+    "viewAll": "Alle anzeigen",
+    "noResults": "Keine Ergebnisse",
+    "accountMenu": "Kontomenü",
+    "homepage": "OpenMake-Startseite",
+    "bench": "Benchmark",
+    "groups": {
+      "today": "Heute",
+      "yesterday": "Gestern",
+      "previous7Days": "Letzte 7 Tage",
+      "older": "Älter"
+    }
+  },
+  "mobileNav": {
+    "chat": "Chat",
+    "agent": "Agents",
+    "login": "Anmelden",
+    "menu": "Menü",
+    "openMenu": "Vollständiges Menü",
+    "closeMenu": "Menü schließen"
+  },
+  "settings": {
+    "languageAuto": "Automatisch erkennen",
+    "pageTitle": "Einstellungen",
+    "pageDescription": "App-Einstellungen und Verhalten des KI-Modells konfigurieren.",
+    "saveButton": "Einstellungen speichern",
+    "savedAt": "Gespeichert um {time}",
+    "freeSuffix": " · Kostenlos",
+    "notConfigured": "Nicht festgelegt",
+    "modelLoading": "Modelle werden geladen …",
+    "tabs": {
+      "general": "Allgemein",
+      "model": "Modell & Antwort",
+      "interface": "Oberfläche",
+      "notifications": "Benachrichtigungen",
+      "privacy": "Datenschutz",
+      "security": "Sicherheit",
+      "memory": "Erinnerungen",
+      "connectors": "Konnektoren",
+      "extensions": "Erweiterungen"
+    },
+    "responseStyles": {
+      "concise": "Knapp",
+      "default": "Standard",
+      "verbose": "Ausführlich"
+    },
+    "themes": {
+      "system": "System",
+      "light": "Hell",
+      "dark": "Dunkel"
+    },
+    "modelGroup": {
+      "default": "Standard",
+      "auto": "Auto (Server-Standard)",
+      "local": "🏠 Lokales vLLM"
+    },
+    "language": {
+      "title": "Sprache",
+      "description": "Anzeigesprache der Oberfläche. „Automatisch erkennen“ folgt Ihrer Browsersprache. (KI-Antworten folgen der Sprache der Nachricht.)"
+    },
+    "saveHistory": {
+      "title": "Unterhaltungsinhalte speichern",
+      "descriptionPrivacy": "Wenn deaktiviert, werden Unterhaltungsinhalte nicht auf dem Server gespeichert."
+    },
+    "defaultModel": {
+      "title": "Standardmodell",
+      "description": "Das Modell für neue Unterhaltungen. Wählen Sie zwischen 🏠 lokalem vLLM und 🌐 externen LLMs (OpenRouter, BYOK)."
+    },
+    "externalLlmHint": {
+      "prefix": "Um ein externes LLM (OpenRouter) hinzuzufügen,",
+      "link": "die API-Schlüssel-Seite",
+      "suffix": "ist der Ort, an dem Sie Ihren Schlüssel registrieren."
+    },
+    "imageGeneration": {
+      "title": "Bilderzeugung",
+      "description": "Wird automatisch verwendet, wenn Sie im Chat eine Zeichnung oder ein Bild anfordern. Keine separate Auswahl nötig."
+    },
+    "responseStyle": {
+      "title": "Antwortstil",
+      "description": "Legen Sie fest, wie ausführlich Antworten sein sollen."
+    },
+    "customInstructions": {
+      "title": "Benutzerdefinierte Anweisungen",
+      "description": "Zusätzliche Systemprompt-Anweisungen, die dauerhaft auf jede Unterhaltung angewendet werden.",
+      "placeholder": "z. B. Keine zusätzlichen Informationen ausgeben, die der Nutzer nicht ausdrücklich angefordert hat.",
+      "charCount": "{count} / {max} Zeichen"
+    },
+    "theme": {
+      "title": "Design",
+      "description": "Wählen Sie das Farbdesign der App."
+    },
+    "pushAlerts": {
+      "title": "Push-Benachrichtigungen",
+      "description": "Erhalten Sie Echtzeit-Benachrichtigungen über Browser-Push."
+    },
+    "pushNotSupported": "Dieser Browser unterstützt keine Push-Benachrichtigungen.",
+    "pushSwNotReady": "Der Service Worker ist nicht registriert, daher sind Push-Benachrichtigungen nicht verfügbar.",
+    "memoryLearning": {
+      "title": "Langzeit-Erinnerungen verwenden",
+      "description": "Verweist in der Unterhaltung auf Ihre gespeicherten Langzeit-Erinnerungen. Deaktivieren Sie dies, um gespeicherte Erinnerungen aus diesem Chat auszuschließen."
+    },
+    "passwordChange": {
+      "title": "Passwort ändern"
+    },
+    "password": {
+      "current": "Aktuelles Passwort",
+      "new": "Neues Passwort",
+      "newHint": "8 Zeichen oder mehr",
+      "confirm": "Neues Passwort bestätigen",
+      "mismatch": "Die neuen Passwörter stimmen nicht überein.",
+      "tooShort": "Das neue Passwort muss mindestens 8 Zeichen lang sein.",
+      "changed": "Passwort geändert.",
+      "changeFailed": "Passwort konnte nicht geändert werden."
+    },
+    "modelPicker": {
+      "providerAria": "Anbieter auswählen",
+      "modelAria": "Modell auswählen",
+      "searchPlaceholder": "Modelle suchen …",
+      "count": "{shown}/{total} werden angezeigt",
+      "noMatch": "Keine Treffer",
+      "notInList": "(nicht in der Liste)"
+    },
+    "dataExport": {
+      "title": "Meine Daten exportieren",
+      "description": "Laden Sie alle Ihre Kontodaten als JSON-Datei herunter (DSGVO).",
+      "button": "Exportieren",
+      "exporting": "Wird exportiert …"
+    },
+    "consent": {
+      "privacy_policy": "Einwilligung zur Datenschutzerklärung",
+      "terms_of_service": "Einwilligung zu den Nutzungsbedingungen",
+      "granted": "Erteilt",
+      "withdrawn": "Widerrufen",
+      "withdraw": "Widerrufen",
+      "withdrawing": "Wird widerrufen …",
+      "withdrawnBadge": "Widerrufen",
+      "withdrawConfirm": "Diese Einwilligung widerrufen? Der Widerruf wird protokolliert.",
+      "note": "Gemäß Art. 7 Abs. 3 DSGVO können Sie Ihre Einwilligung jederzeit widerrufen. Der Widerruf wird protokolliert und kann sich auf Ihre Nutzung des Dienstes auswirken.",
+      "regrant": "Erneut einwilligen",
+      "granting": "Wird erteilt …"
+    },
+    "guestModelNotice": "Gäste können nur das Standardmodell nutzen. Externe Modelle wie Ollama und OpenRouter sind nach der Anmeldung (Registrierung) verfügbar."
+  },
+  "apiAccess": {
+    "title": "API-Zugriff",
+    "subtitle": "Entwickler-API-Schlüssel zum Aufruf der OpenMake-API aus externen Apps erstellen und verwalten.",
+    "createTitle": "Neuen API-Schlüssel erstellen",
+    "namePlaceholder": "Schlüsselname (z. B. my-app)",
+    "createButton": "Erstellen",
+    "listTitle": "Ihre Schlüssel",
+    "loading": "Wird geladen …",
+    "empty": "Noch keine API-Schlüssel.",
+    "neverUsed": "Nie",
+    "loadFailed": "API-Schlüssel konnten nicht geladen werden.",
+    "createFailed": "API-Schlüssel konnte nicht erstellt werden.",
+    "updateFailed": "Schlüssel konnte nicht aktualisiert werden.",
+    "rotateFailed": "Schlüssel konnte nicht rotiert werden.",
+    "deleteFailed": "Schlüssel konnte nicht gelöscht werden.",
+    "rotateConfirm": "Schlüssel „{name}“ rotieren? Der alte Schlüssel funktioniert sofort nicht mehr.",
+    "deleteConfirm": "Schlüssel „{name}“ löschen? Dies kann nicht rückgängig gemacht werden.",
+    "reveal": {
+      "title": "Klartext-Schlüssel — nur einmal angezeigt",
+      "warning": "Sie können diesen Schlüssel nicht erneut anzeigen. Kopieren Sie ihn jetzt an einen sicheren Ort.",
+      "dismiss": "Schließen",
+      "copyKey": "Schlüssel kopieren",
+      "copied": "Kopiert",
+      "curlTitle": "Schnellstart (curl)",
+      "copyCurl": "curl kopieren"
+    },
+    "col": {
+      "name": "Name",
+      "key": "Schlüssel",
+      "status": "Status",
+      "created": "Erstellt",
+      "lastUsed": "Zuletzt verwendet",
+      "requests": "Anfragen",
+      "actions": "Aktionen"
+    },
+    "status": {
+      "active": "Aktiv",
+      "inactive": "Inaktiv"
+    },
+    "action": {
+      "activate": "Aktivieren",
+      "deactivate": "Deaktivieren",
+      "rotate": "Rotieren",
+      "delete": "Löschen"
+    },
+    "scope": {
+      "label": "Geltungsbereich",
+      "full": "Vollzugriff",
+      "bridge": "Bridge (CLI)",
+      "chat": "Inferenz-API",
+      "hint": {
+        "full": "Zugriff auf alle APIs.",
+        "bridge": "Nur für die lokale Ausführung von OpenMake Code CLI — keine Inferenz-API / Token-Nutzung.",
+        "chat": "Nur OpenAI-kompatible Inferenz-API."
+      }
+    }
+  },
+  "composer": {
+    "dropToAttach": "Dateien hier ablegen, um sie anzuhängen",
+    "modeHeading": "Modi",
+    "modeSelect": "Modus auswählen",
+    "toolsButton": "Tools",
+    "toggleOff": "{label} ausschalten",
+    "removeAttachment": "{name} entfernen",
+    "attachTruncated": "{name} (teilweise angehängt, Länge überschritten)",
+    "placeholder": "Nachricht eingeben oder mit /… einen Skill aufrufen",
+    "attachFile": "Dateien anhängen (Drag & Drop unterstützt · jedes Format)",
+    "attachFileLabel": "Dateien anhängen",
+    "plusMenu": {
+      "label": "Hinzufügen",
+      "file": "Dateien anhängen",
+      "folder": "Ordner auswählen"
+    },
+    "responseStyle": "Antwortstil",
+    "stop": "Stopp",
+    "send": "Senden",
+    "disclaimer": "OpenMake kann Fehler machen. Überprüfen Sie wichtige Informationen.",
+    "suppressedTag": "(nicht angewendet)",
+    "externalModeNotice": "Diskussion und Deep Research laufen auf dem ausgewählten externen Modell.",
+    "toggle": {
+      "discussion": "Diskussion",
+      "thinking": "Nachdenken",
+      "deepResearch": "Deep Research",
+      "agent": "Agent",
+      "verification": "Antwort prüfen"
+    },
+    "slashMenu": {
+      "heading": "Skill aufrufen",
+      "loading": "Skills werden geladen …",
+      "noResults": "Keine passenden Skills",
+      "viewAll": "Alle in der Skill-Bibliothek anzeigen",
+      "categoryEtc": "Sonstige"
+    },
+    "modelLabel": "Modell auswählen",
+    "modelAuto": "Auto",
+    "notebooks": {
+      "button": "Notebooks",
+      "heading": "NotebookLM-Notebooks",
+      "loading": "Notebooks werden geladen …",
+      "empty": "Keine Notebooks",
+      "error": "Notebooks konnten nicht geladen werden. Falls Ihre NotebookLM-Verbindung (Cookies) abgelaufen ist, stellen Sie sie im Katalog erneut her.",
+      "notInstalled": "NotebookLM ist nicht verbunden",
+      "installCta": "Im MCP-Katalog verbinden",
+      "refresh": "Aktualisieren",
+      "clear": "Notebook-Kontext löschen",
+      "sourceCount": "{count} Quellen",
+      "select": "Notebook auswählen"
+    },
+    "approvalMode": {
+      "label": "Freigabe:",
+      "manual": "Manuell",
+      "auto": "Auto",
+      "skip": "Überspringen",
+      "manualHint": "Jeden Tool-Aufruf freigeben",
+      "autoHint": "Nur risikoreiche Tools freigeben (Shell/Python/Browser/Löschen)",
+      "skipHint": "Alle Tools automatisch ausführen"
+    },
+    "localExec": {
+      "label": "Lokale Ausführung:",
+      "off": "In Server-Sandbox ausführen",
+      "on": "Im lokalen Ordner ausführen: {folder}",
+      "disconnected": "Desktop-App nicht verbunden",
+      "folderPick": "Ordner ändern",
+      "folderUp": "Nach oben",
+      "folderSelectHere": "In diesem Ordner ausführen",
+      "folderUnsupported": "Dieses Gerät unterstützt das Durchsuchen von Ordnern nicht — aktualisieren Sie die CLI/App",
+      "folderEmpty": "Keine Unterordner",
+      "folderTruncated": "… Liste gekürzt"
+    },
+    "thinkingLevel": {
+      "title": "Denkaufwand",
+      "low": "Reasoning: Niedrig",
+      "medium": "Reasoning: Mittel",
+      "high": "Reasoning: Hoch"
+    }
+  },
+  "chat": {
+    "approvals": {
+      "title": "Freigabe für Tool-Ausführung erforderlich",
+      "approve": "Freigeben",
+      "reject": "Ablehnen",
+      "processFailed": "Verarbeitung fehlgeschlagen: {error}",
+      "errorFallback": "Fehler",
+      "question": "Der Agent fragt",
+      "answerPlaceholder": "Antwort eingeben …",
+      "sendAnswer": "Antwort senden",
+      "skip": "Überspringen",
+      "autoApprove": "Rest freigeben",
+      "autoApproveHint": "Verbleibende Tool-Aufrufe dieser Aufgabe ohne Freigabe ausführen (Fragen ausgenommen)"
+    },
+    "artifactFallback": "Artefakt",
+    "artifactBuilding": "Artefakt wird erstellt …",
+    "reportBuilding": "Bericht wird erstellt …",
+    "reportData": "Berichtsdaten",
+    "reasoningLabel": "Reasoning",
+    "thinking": {
+      "agentAnalyzing": "{agent} analysiert",
+      "skillsApplying": "{skills} werden angewendet",
+      "analyzing": "Wird analysiert"
+    },
+    "quickStarts": {
+      "summarize": {
+        "label": "Zusammenfassen",
+        "prompt": "Fasse Folgendes zusammen:\n\n"
+      },
+      "research": {
+        "label": "Recherchieren",
+        "prompt": "Recherchiere das folgende Thema eingehend:\n\n"
+      },
+      "analyze": {
+        "label": "Schritt-für-Schritt-Analyse",
+        "prompt": "Analysiere das folgende Problem Schritt für Schritt:\n\n"
+      },
+      "brainstorm": {
+        "label": "Brainstorming",
+        "prompt": "Lass uns über Folgendes Brainstorming machen:\n\n"
+      }
+    },
+    "status": {
+      "pending": "Ausstehend",
+      "running": "Wird ausgeführt",
+      "paused": "Wartet auf Freigabe",
+      "completed": "Abgeschlossen",
+      "failed": "Fehlgeschlagen",
+      "cancelled": "Abgebrochen"
+    },
+    "agentTask": {
+      "title": "Agentenaufgabe",
+      "turn": "Runde {turn}",
+      "goal": "Ziel",
+      "outputs": "Ausgaben",
+      "downloadFailed": "Download fehlgeschlagen: {error}"
+    },
+    "research": {
+      "inProgress": "Deep Research läuft",
+      "loop": "Durchlauf {current}/{total}"
+    },
+    "discussion": {
+      "inProgress": "Diskussion läuft",
+      "round": "Runde {current}/{total}"
+    },
+    "orchestrator": {
+      "title": "Multimodaler Orchestrator",
+      "phase": {
+        "planning": "Frage wird analysiert",
+        "executing": "Aufgaben werden ausgeführt",
+        "synthesizing": "Antwort wird verfasst"
+      },
+      "status": {
+        "pending": "Ausstehend",
+        "running": "Wird ausgeführt",
+        "ok": "Fertig",
+        "failed": "Fehlgeschlagen"
+      },
+      "tasksCount": "{count} Aufgaben"
+    },
+    "tool": {
+      "running": "{tool} wird ausgeführt"
+    },
+    "emptyState": {
+      "title": "Wie kann ich Ihnen helfen?",
+      "description": "Multi-Modell-Orchestrierung · MCP-Tools · Deep Research · autonome Agents. Geben Sie unten Ihre Frage ein oder drücken Sie <slash>/</slash>, um einen Skill aufzurufen.",
+      "languageHint": "Fragen Sie in jeder Sprache — Sie erhalten die Antwort in dieser Sprache.",
+      "compareCta": "Im Vergleichsmodus starten",
+      "compareHint": "Stellen Sie zwei Modellen dieselbe Frage und vergleichen Sie ihre Antworten nebeneinander."
+    },
+    "structured": {
+      "confidence": {
+        "high": "Hohe Konfidenz",
+        "medium": "Mittlere Konfidenz",
+        "low": "Geringe Konfidenz"
+      },
+      "conclusion": "Fazit",
+      "risks": "Zu beachtende Punkte",
+      "actionItems": "Nächste Schritte"
+    },
+    "feedbackUp": "Hilfreich",
+    "feedbackDown": "Nicht hilfreich",
+    "feedbackThanks": "Danke für Ihr Feedback",
+    "copyMessage": "Nachricht kopieren",
+    "copiedMessage": "Kopiert",
+    "regenerate": "Neu generieren",
+    "thinkingTimeline": {
+      "thinking": "Nachdenken",
+      "fallbackLabel": "Denkprozess",
+      "done": "Fertig"
+    },
+    "steering": {
+      "label": "Diese Aufgabe steuern",
+      "placeholder": "Senden Sie eine neue Anweisung, um die Richtung anzupassen … (Cmd/Ctrl+Enter)",
+      "sent": "Gesendet",
+      "failed": "Anweisung konnte nicht gesendet werden: {error}"
+    },
+    "diff": {
+      "files": "{count} Dateien",
+      "copy": "Kopieren",
+      "copied": "Kopiert",
+      "download": ".patch herunterladen"
+    },
+    "modelFallbackNotice": "Das ausgewählte Modell ({from}) hat nicht geantwortet, daher hat stattdessen das Standardmodell ({to}) geantwortet.",
+    "modelFallbackReasons": {
+      "QUOTA_EXCEEDED": "Nutzungslimit erreicht",
+      "INSUFFICIENT_CREDIT": "unzureichendes Guthaben",
+      "MODEL_ACCESS_RESTRICTED": "durch Anbieterrichtlinie eingeschränkt",
+      "SUBSCRIPTION_REQUIRED": "Abonnement erforderlich",
+      "INVALID_API_KEY": "Authentifizierungsfehler",
+      "MISSING_API_KEY": "Authentifizierungsfehler",
+      "UPSTREAM_ERROR": "Upstream-Fehler"
+    },
+    "verification": {
+      "title": "Von der Prüfung gefundene Probleme"
+    }
+  },
+  "compare": {
+    "title": "Modellvergleich",
+    "subtitle": "Senden Sie eine Frage an zwei Modelle und lesen Sie ihre Antworten nebeneinander",
+    "backToChat": "Zurück zum Chat",
+    "laneA": "Bereich A",
+    "laneB": "Bereich B",
+    "servedModel": "Beantwortet von: {model}",
+    "placeholder": "Geben Sie eine Frage ein, die an beide Modelle gesendet wird …",
+    "send": "Senden",
+    "stop": "Stopp",
+    "reset": "Zurücksetzen",
+    "notConnected": "Verbindung wird hergestellt …",
+    "resumeLost": "Die Verbindung wurde unterbrochen und die Antwort konnte nicht fortgesetzt werden. Bitte fragen Sie erneut.",
+    "emptyPane": "Noch keine Antwort.",
+    "tokensPerSec": "{value} Token/s",
+    "sameModelHint": "Beide Bereiche verwenden dasselbe Modell. Wählen Sie ein anderes zum Vergleichen.",
+    "thinking": "Reasoning",
+    "thinkingToggle": "Nachdenken",
+    "thinkingOn": "Nachdenken einschalten",
+    "thinkingOff": "Nachdenken ausschalten"
+  },
+  "artifacts": {
+    "exec": {
+      "disabled": "Die Codeausführung ist deaktiviert.",
+      "rateLimited": "Zu viele Ausführungsanfragen. Bitte versuchen Sie es in Kürze erneut.",
+      "unsupportedLang": "Nicht unterstützte Sprache.",
+      "tooLarge": "Der Code ist zu groß.",
+      "failed": "Ausführung fehlgeschlagen."
+    },
+    "run": {
+      "running": "Wird ausgeführt …",
+      "run": "Ausführen",
+      "sandbox": "Sandbox (Netzwerk blockiert) · {lang}",
+      "restored": "letzte Ausführung",
+      "externalDeps": "Kann nicht in der Sandbox ausgeführt werden — erfordert {packages} (nur Standardbibliothek)."
+    },
+    "output": {
+      "title": "Ausgabe",
+      "timedOut": "Zeitüberschreitung",
+      "truncated": "Gekürzt",
+      "empty": "(Keine Ausgabe)"
+    },
+    "generating": "Wird generiert …",
+    "versionSelect": "Version auswählen",
+    "latest": "neueste",
+    "viewCode": "Code anzeigen",
+    "viewPreview": "Vorschau",
+    "download": "Herunterladen",
+    "exportPdf": "Als PDF speichern",
+    "exportDocx": "Als DOCX speichern",
+    "exportFailed": "Dokumentkonvertierung fehlgeschlagen",
+    "exportNoSource": "Der DOCX-Export ist nur für Berichts-Artefakte verfügbar",
+    "exportRateLimited": "Zu viele Konvertierungsanfragen. Versuchen Sie es in Kürze erneut",
+    "exportDisabled": "Der Dokumentexport ist deaktiviert",
+    "shareLabel": "Teilen",
+    "copy": "Kopieren",
+    "closePanel": "Panel schließen",
+    "artifactCount": "Artefakte {count}",
+    "framePreviewTitle": "Artefakt-Vorschau",
+    "share": {
+      "title": "Artefakt teilen",
+      "close": "Schließen",
+      "viewerDisabled": "Der Viewer ist deaktiviert (ARTIFACT_VIEWER_ENABLED). Bitte wenden Sie sich an Ihren Administrator.",
+      "publishFailed": "Teilen fehlgeschlagen",
+      "unpublishFailed": "Teilen konnte nicht beendet werden",
+      "visibility": {
+        "private": {
+          "label": "Privat",
+          "desc": "Nur Sie können es ansehen"
+        },
+        "authenticated": {
+          "label": "Alle angemeldeten Nutzer",
+          "desc": "Für alle angemeldeten Nutzer sichtbar"
+        },
+        "link": {
+          "label": "Per Link teilen",
+          "desc": "Jeder mit dem Link (einschließlich abgemeldeter Nutzer)"
+        }
+      },
+      "iconLabel": "Symbol (Emoji)",
+      "copyLink": "Link kopieren",
+      "unpublish": "Teilen beenden",
+      "updateSettings": "Freigabeeinstellungen aktualisieren",
+      "publish": "Teilen"
+    },
+    "page": {
+      "viewerOpenFailed": "Viewer kann nicht geöffnet werden",
+      "title": "Artefakte",
+      "description": "Durchsuchen Sie Ihre erstellten Ausgaben und teilen Sie sie über einen Viewer mit separatem Ursprung.",
+      "loading": "Wird geladen …",
+      "emptyTitle": "Noch keine Artefakte",
+      "emptyDesc": "Erstellen Sie im Chat Ausgaben wie Code, HTML oder Diagramme, und sie erscheinen hier.",
+      "notShared": "Nicht geteilt",
+      "openViewer": "Viewer öffnen",
+      "share": "Teilen",
+      "vis": {
+        "private": "Privat",
+        "authenticated": "Authentifiziert",
+        "link": "Link"
+      },
+      "openDetail": "Details anzeigen",
+      "versionPicker": "Version",
+      "close": "Schließen",
+      "createdLabel": "Erstellt"
+    },
+    "resize": "Panelgröße ändern (Doppelklick zum Zurücksetzen)"
+  },
+  "history": {
+    "title": "Unterhaltungsverlauf",
+    "description": "Durchsuchen Sie vergangene Unterhaltungen und machen Sie dort weiter, wo Sie aufgehört haben.",
+    "searchPlaceholder": "Unterhaltungstitel durchsuchen …",
+    "deleteAllButton": "Alle löschen",
+    "loading": "Wird geladen …",
+    "untitledConversation": "Unterhaltung ohne Titel",
+    "messageCount": "{count} Nachrichten",
+    "deleteConfirm": "Die Unterhaltung „{title}“ löschen?\nGelöschte Unterhaltungen können nicht wiederhergestellt werden.",
+    "deleteError": "Löschen der Unterhaltung fehlgeschlagen.",
+    "deleteAllConfirm": "Alle {count} Unterhaltungen löschen?\nGelöschte Unterhaltungen können nicht wiederhergestellt werden.",
+    "deleteAllError": "Löschen aller Unterhaltungen fehlgeschlagen.",
+    "deleteAria": "Unterhaltung löschen",
+    "group": {
+      "today": "Heute",
+      "yesterday": "Gestern",
+      "week": "Diese Woche",
+      "older": "Älter"
+    },
+    "emptyState": {
+      "title": "Kein Unterhaltungsverlauf",
+      "noResults": "Keine Ergebnisse gefunden.",
+      "hint": "Starten Sie eine neue Unterhaltung, und sie erscheint hier."
+    },
+    "viewAllToggle": "Alle Nutzer",
+    "ownerBadge": "Nutzer {id}"
+  },
+  "chatSocket": {
+    "interceptNotice": "Ein Abfangmodus (Diskussion / Deep Research / Bild) ist aktiv, daher werden Tools (Analyse/Suche) und Artefakte in dieser Antwort nicht angewendet.",
+    "error": "Fehler: {message}",
+    "unknownError": "Unbekannter Fehler",
+    "disconnected": "_(Verbindung zum Server getrennt. Verbindung wird wiederhergestellt — bitte versuchen Sie es in Kürze erneut.)_",
+    "resumeNone": "_(Keine Antwort zum Fortsetzen. Falls sie abgeschlossen wurde, ist sie im Unterhaltungsverlauf gespeichert.)_",
+    "taskIdMissing": "Keine taskId in der Antwort zur Aufgabenerstellung",
+    "agentTaskStartFailed": "Start der Agentenaufgabe fehlgeschlagen: {message}"
+  },
+  "skillLibrary": {
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "create": "Erstellen",
+    "edit": "Bearbeiten",
+    "serverError": "Serverfehler",
+    "networkError": "Netzwerkfehler",
+    "genericError": "Fehler",
+    "requestFailed": "Anfrage fehlgeschlagen: {error}",
+    "failedStatus": "Fehlgeschlagen ({status}): {error}",
+    "systemBadge": "System",
+    "userBadge": "Benutzer",
+    "filterAll": "Alle",
+    "loading": "Wird geladen…",
+    "emptyTitle": "Keine Skills",
+    "emptyDesc": "Wählen Sie eine andere Kategorie oder fügen Sie einen neuen Skill hinzu.",
+    "deleteConfirm": "Skill „{name}“ löschen?",
+    "deleteFailed": "Löschen fehlgeschlagen: {error}",
+    "assignFailed": "Zuweisung konnte nicht aktualisiert werden: {error}",
+    "pageTitle": "Skill-Bibliothek",
+    "pageDescription": "Wiederverwendbare Manifeste und Tool-Bindungen verwalten.",
+    "uploadButton": ".SKILL hochladen",
+    "gitButton": "Aus Git importieren",
+    "autoButton": "KI-Generierung",
+    "newButton": "Neuer Skill",
+    "categoryGeneral": "Allgemein",
+    "categories": {
+      "productivity": "Produktivität",
+      "technology": "Technologie/IT",
+      "creative": "Kreativ/Design",
+      "business": "Business",
+      "science": "Wissenschaft/Forschung",
+      "communication": "Kommunikation",
+      "finance": "Finanzen/Investieren",
+      "education": "Bildung/Lernen"
+    },
+    "tabs": {
+      "active": "Aktive Skills",
+      "draft": "Entwurfsprüfung"
+    },
+    "modal": {
+      "create": "Neuen Skill erstellen",
+      "edit": "Skill bearbeiten",
+      "upload": ".SKILL-Datei hochladen",
+      "autoCreate": "KI-Skill-Generierung",
+      "gitIngest": "Skill aus Git-URL importieren"
+    },
+    "form": {
+      "nameRequired": "Geben Sie einen Skill-Namen ein.",
+      "contentRequired": "Geben Sie den Skill-Inhalt (Anweisungen) ein.",
+      "saveFailed": "Speichern fehlgeschlagen: {error}",
+      "nameLabel": "Skill-Name *",
+      "namePlaceholder": "z. B. PDF-Zusammenfassung",
+      "categoryLabel": "Kategorie",
+      "publicLabel": "Öffentlicher Skill",
+      "descriptionLabel": "Beschreibung",
+      "descriptionPlaceholder": "Beschreiben Sie kurz, was dieser Skill tut",
+      "instructionsLabel": "Anweisungen (Skill-Inhalt) *",
+      "instructionsPlaceholder": "Beschreiben Sie ausführlich, was dieser Skill tun soll…"
+    },
+    "upload": {
+      "fileRequired": "Wählen Sie eine Datei aus.",
+      "successDetail": "Upload abgeschlossen: {id} v{version}",
+      "success": "Upload abgeschlossen",
+      "failed": "Upload fehlgeschlagen: {error}",
+      "hint": "Laden Sie eine .SKILL- oder .md-Datei mit YAML-Frontmatter hoch. (max. 256 KB)",
+      "fileLabel": "Datei auswählen",
+      "submit": "Hochladen"
+    },
+    "auto": {
+      "purposeRequired": "Geben Sie einen Zweck ein.",
+      "requesting": "Anfrage wird gesendet…",
+      "generating": "Wird mit LLM generiert…",
+      "processing": "Wird verarbeitet…",
+      "done": "Generierung abgeschlossen!",
+      "generateFailed": "Generierung fehlgeschlagen",
+      "hint": "Geben Sie einen Zweck in natürlicher Sprache ein, und das LLM generiert automatisch ein Skill-Manifest.",
+      "purposeLabel": "Skill-Zweck *",
+      "purposePlaceholder": "z. B. Ein Skill, der hochgeladene PDF-Dokumente in drei Kernpunkte zusammenfasst",
+      "targetLabel": "Zielgruppe (optional)",
+      "targetPlaceholder": "z. B. Forschende, Marketer",
+      "submit": "KI-Generierung"
+    },
+    "git": {
+      "urlRequired": "Geben Sie eine GitHub-URL ein.",
+      "fetching": "Repository wird abgerufen…",
+      "validating": "Manifest wird validiert…",
+      "done": "Fertig!",
+      "importFailed": "Import fehlgeschlagen",
+      "hint": "Importieren Sie ein SKILL.md-Manifest aus einem GitHub-Repository und speichern Sie es als Entwurf.",
+      "urlLabel": "GitHub-URL *",
+      "refLabel": "Branch/Tag (optional)",
+      "pathLabel": "Dateipfad (optional)",
+      "tokenLabel": "Access Token (privates Repository)",
+      "submit": "Importieren"
+    },
+    "card": {
+      "assignTitle": "Als persönlichen Skill hinzufügen",
+      "unassignTitle": "Persönlichen Skill entfernen",
+      "exportTitle": ".SKILL.md exportieren"
+    },
+    "draft": {
+      "approveFailed": "Freigabe fehlgeschlagen: {error}",
+      "rejectConfirm": "Diesen Entwurf ablehnen (archivieren)?",
+      "rejectFailed": "Ablehnung fehlgeschlagen: {error}",
+      "loading": "Entwürfe werden geladen…",
+      "emptyTitle": "Keine Entwürfe zur Freigabe",
+      "emptyDesc": "Per KI-Generierung oder Git-Import erstellte Skills erscheinen hier.",
+      "approve": "Freigeben",
+      "reject": "Ablehnen",
+      "rewrite": {
+        "button": "Formulierung anpassen",
+        "analyzing": "Prüfung, was für diese Umgebung anzupassen ist…",
+        "applying": "Wird angewendet…",
+        "noChange": "Für diese Umgebung muss nichts angepasst werden.",
+        "failed": "Es konnte kein Umschreibungsvorschlag erstellt werden (Original unverändert).",
+        "proposalTitle": "Umschreibungsvorschlag",
+        "reviewHint": "Beim Anwenden wird der Skill-Text durch diesen Inhalt ersetzt. Vor dem Anwenden prüfen.",
+        "apply": "Anwenden",
+        "discard": "Verwerfen",
+        "dismiss": "Schließen",
+        "applyFailed": "Anwenden fehlgeschlagen: {error}"
+      },
+      "bulk": {
+        "selectAll": "Alle auswählen ({count})",
+        "selected": "{count} ausgewählt",
+        "approve": "Auswahl freigeben",
+        "reject": "Auswahl ablehnen",
+        "otherGroup": "Nicht aus einer Erweiterung",
+        "approveConfirm": "{count} ausgewählte freigeben? Sie sind sofort im Chat nutzbar.",
+        "rejectConfirm": "{count} ausgewählte ablehnen? Sie werden archiviert, nicht gelöscht.",
+        "partial": "{ok} von {total} verarbeitet. Der Rest war bereits bearbeitet oder nicht zulässig.",
+        "failed": "Massenaktion fehlgeschlagen: {error}"
+      }
+    },
+    "approvalsButton": "Freigaben"
+  },
+  "agentTasks": {
+    "loading": "Wird geladen…",
+    "error": "Fehler",
+    "chatCta": "Zum Chat",
+    "pageTitle": "Verwaltung der Agentenaufgaben",
+    "schedules": {
+      "title": "Geplante Ausführungen (wiederkehrend)",
+      "create": "Neuer Zeitplan",
+      "goalPlaceholder": "Wiederholt auszuführendes Ziel eingeben…",
+      "cron": "Cron",
+      "interval": "Intervall",
+      "minutes": "Min.",
+      "add": "Hinzufügen",
+      "cronHint": "Cron-Format: Min. Std. Tag Monat Wochentag (z. B. 0 8 * * * = täglich um 8 Uhr)",
+      "empty": "Noch keine Zeitpläne.",
+      "everyMinutes": "alle {min} Min.",
+      "nextRun": "nächste Ausführung {time}",
+      "disabled": "deaktiviert",
+      "disable": "Pausieren",
+      "enable": "Aktivieren",
+      "runNow": "Jetzt ausführen",
+      "delete": "Löschen"
+    },
+    "pageDescription": "Aufgabenliste, Fortschritt und Freigaben verwalten. Erstellung und Ausführung erfolgen im Agent-Modus des Chats.",
+    "banner": "Erstellen und starten Sie Agentenaufgaben im <b>Agent</b>-Modus der Chateingabe. Diese Seite verwaltet Aufgabenliste, Fortschritt und Freigaben.",
+    "emptyTitle": "Keine Aufgaben",
+    "emptyDescription": "Starten Sie eine neue Aufgabe im Agent-Modus des Chats.",
+    "status": {
+      "running": "In Bearbeitung",
+      "completed": "Abgeschlossen",
+      "pending": "Ausstehend"
+    },
+    "failedTag": "Fehlgeschlagen",
+    "cancelledTag": "Abgebrochen",
+    "turnShort": "Runde {current}/{max}",
+    "progressLabel": "Fortschritt",
+    "detailTitle": "Details anzeigen",
+    "resumeTitle": "Fortsetzen",
+    "cancelTitle": "Abbrechen",
+    "deleteTitle": "Löschen",
+    "modalTitle": "Aufgabendetails",
+    "detailLoadError": "Aufgabeninformationen konnten nicht geladen werden.",
+    "goalLabel": "Ziel",
+    "stateLabel": "Status:",
+    "turnLabel": "Runde:",
+    "planLabel": "Plan ({completed}/{total})",
+    "outputsLabel": "{count} Ausgabe(n)",
+    "noSteps": "Keine Schrittaufzeichnungen.",
+    "stepsLabel": "Schritte ({count})",
+    "reject": "Ablehnen",
+    "approve": "Freigeben",
+    "question": "Der Agent fragt",
+    "answerPlaceholder": "Antwort eingeben…",
+    "sendAnswer": "Antwort senden",
+    "skip": "Überspringen",
+    "cancelConfirm": "Aufgabe „{goal}…“ abbrechen?",
+    "deleteConfirm": "Aufgabe „{goal}…“ löschen?",
+    "processFailed": "Verarbeitung fehlgeschlagen: {message}",
+    "cancelFailed": "Abbruch fehlgeschlagen: {message}",
+    "resumeFailed": "Fortsetzen fehlgeschlagen: {message}",
+    "retryTitle": "Von vorn wiederholen",
+    "retryConfirm": "„{goal}…“ von Anfang an neu ausführen?",
+    "retryFailed": "Wiederholung fehlgeschlagen: {message}",
+    "viewAllToggle": "Aufgaben aller Benutzer",
+    "ownerBadge": "Benutzer {id}",
+    "deleteFailed": "Löschen fehlgeschlagen: {message}",
+    "elapsedSec": "{s} s",
+    "elapsedMinSec": "{m} m {s} s",
+    "autoApprove": "Rest freigeben",
+    "autoApproveHint": "Verbleibende Tool-Aufrufe dieser Aufgabe ohne Freigabe ausführen (Fragen ausgenommen)",
+    "tokensUsed": "{count} Token",
+    "tokensUsedHint": "Insgesamt von dieser Aufgabe verbrauchte LLM-Token",
+    "templates": {
+      "title": "Aufgabenvorlagen",
+      "create": "Neue Vorlage",
+      "namePlaceholder": "Vorlagenname",
+      "goalPlaceholder": "Zielvorlage… ({{param}} unterstützt)",
+      "add": "Hinzufügen",
+      "empty": "Noch keine Vorlagen.",
+      "run": "Aus dieser Vorlage ausführen",
+      "delete": "Löschen",
+      "started": "Aufgabe aus Vorlage gestartet.",
+      "expand": "Alle anzeigen",
+      "collapse": "Einklappen",
+      "lineCount": "{lines} Zeilen · {chars} Zeichen"
+    },
+    "downloadFailed": "Download fehlgeschlagen: {error}",
+    "localBadge": "Lauf im lokalen Ordner",
+    "errorReason": {
+      "label": "Fehlergrund:",
+      "goal_incomplete": "Ziel nicht erreicht",
+      "max_turns_exhausted": "Runden-/Ressourcenlimit erreicht",
+      "interrupted": "Durch Serverneustart unterbrochen",
+      "resumableHint": "Kann fortgesetzt werden",
+      "aborted": "Vom Benutzer abgebrochen"
+    },
+    "planNode": "Schritt {n}",
+    "startedLabel": "Gestartet",
+    "elapsedLabel": "Vergangen",
+    "modelLabel": "Modell",
+    "tokensLabel": "Token",
+    "share": {
+      "title": "Teilen",
+      "sharing": "Geteilt",
+      "notShared": "Nicht geteilt",
+      "close": "Schließen",
+      "includeSteps": "Fortschrittsprotokoll einschließen",
+      "includeDiff": "Diff einschließen",
+      "scopeAuthenticated": "Für angemeldete Benutzer sichtbar",
+      "scopeLink": "Jeder mit dem Link",
+      "previewBtn": "Vorschau, was öffentlich wird",
+      "previewFirst": "Prüfen Sie vor dem Veröffentlichen, was öffentlich wird.",
+      "previewNotice": "Dies wird unverändert veröffentlicht — Pfade und Anmeldedaten werden automatisch, aber nicht perfekt geschwärzt.",
+      "goalLabel": "Ziel:",
+      "resultLabel": "Ergebnis:",
+      "diffIncluded": "Enthält {n} Diff(s)",
+      "publishAuthenticated": "Mit angemeldeten Benutzern teilen",
+      "publishLink": "Freigabelink erstellen",
+      "republish": "Mit neuestem Stand erneut veröffentlichen",
+      "unshare": "Teilen beenden",
+      "unshareHint": "Der Link funktioniert sofort nicht mehr. Bereits Gesehenes lässt sich nicht zurücknehmen.",
+      "republishCancel": "Abbrechen — die bestehende Freigabe bleibt unverändert",
+      "includeArtifacts": "Ausgaben einschließen",
+      "artifactLabel": "Ausgabe:",
+      "bodyOmitted": "Inhalt ausgeschlossen"
+    },
+    "subagents": {
+      "title": "Parallele Agenten ({count})",
+      "originSpawn": "Sub #{n}",
+      "originDelegate": "Expertendelegation",
+      "stepCount": "{count} Schritte",
+      "summary": "{done}/{total} fertig",
+      "runningCount": "{count} laufend",
+      "status": {
+        "queued": "In Warteschlange",
+        "running": "Läuft",
+        "completed": "Abgeschlossen",
+        "failed": "Fehlgeschlagen",
+        "interrupted": "Unterbrochen"
+      }
+    },
+    "artifactSize": "{chars} Zeichen",
+    "artifactOpen": "In neuem Tab öffnen",
+    "artifactDownload": "Herunterladen",
+    "resultLabel": "Ergebnis",
+    "noResultBody": "Es wurde keine endgültige Antwort gespeichert. Sehen Sie unten in der Ausführungs-Timeline, was passiert ist.",
+    "previewTitle": "Ausgabevorschau",
+    "previewEmpty": "Diese Aufgabe hat keine gespeicherte Ausgabe.",
+    "previewLoadError": "Die Ausgabe konnte nicht geladen werden."
+  },
+  "customAgents": {
+    "pageTitle": "Benutzerdefinierte Agenten",
+    "pageDescription": "Definieren Sie spezialisierte Agenten mit eigenen System-Prompts.",
+    "importFromGit": "Aus Git-URL importieren",
+    "newAgent": "Neuer Agent",
+    "loading": "Wird geladen…",
+    "emptyTitle": "Noch keine benutzerdefinierten Agenten",
+    "emptyDescription": "Erstellen Sie selbst einen oder importieren Sie aus einer Git-URL, um einen spezialisierten Agenten hinzuzufügen.",
+    "createNewAgent": "Neuen Agenten erstellen",
+    "systemPromptHeading": "System-Prompt",
+    "edit": "Bearbeiten",
+    "deleteAria": "Löschen",
+    "deleteConfirm": "Agent „{name}“ löschen?",
+    "deleteFailed": "Löschen fehlgeschlagen: {error}",
+    "noDescription": "Keine Beschreibung.",
+    "genericError": "Fehler",
+    "createModalTitle": "Neuen Agenten erstellen",
+    "editModalTitle": "Agent bearbeiten",
+    "gitImportModalTitle": "Agent aus Git-URL importieren",
+    "iconLabel": "Symbol",
+    "nameLabel": "Agentenname *",
+    "namePlaceholder": "z. B. Technischer Redakteur",
+    "descriptionLabel": "Beschreibung",
+    "descriptionPlaceholder": "Beschreiben Sie kurz, was dieser Agent tut",
+    "systemPromptLabel": "System-Prompt *",
+    "systemPromptPlaceholder": "Sie sind ein …-Experte. …",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "create": "Erstellen",
+    "nameRequired": "Bitte geben Sie einen Agentennamen ein.",
+    "systemPromptRequired": "Bitte geben Sie einen System-Prompt ein.",
+    "saveFailed": "Speichern fehlgeschlagen: {error}",
+    "serverError": "Serverfehler",
+    "gitIngestDescription": "Importiert das AGENT.md-Manifest aus einem GitHub-Repository und speichert es als Entwurf.",
+    "gitUrlLabel": "GitHub-URL *",
+    "branchTagLabel": "Branch/Tag (optional)",
+    "filePathLabel": "Dateipfad (optional)",
+    "accessTokenLabel": "Access Token (privates Repository)",
+    "importButton": "Importieren",
+    "gitUrlRequired": "Bitte geben Sie eine GitHub-URL ein.",
+    "fetchingRepo": "Repository wird abgerufen…",
+    "processingManifest": "Manifest wird verarbeitet…",
+    "done": "Fertig!",
+    "importFailed": "Import fehlgeschlagen",
+    "importFailedStatus": "Fehlgeschlagen ({status}): {error}",
+    "requestFailed": "Anfrage fehlgeschlagen: {error}",
+    "networkError": "Netzwerkfehler",
+    "loadingDrafts": "Entwürfe werden geladen…",
+    "noDraftsTitle": "Keine Entwürfe zur Freigabe",
+    "approve": "Freigeben",
+    "reject": "Ablehnen",
+    "approveFailed": "Freigabe fehlgeschlagen: {error}",
+    "rejectFailed": "Ablehnung fehlgeschlagen: {error}",
+    "rejectConfirm": "Diesen Agentenentwurf ablehnen (archivieren)?",
+    "useInChat": "Im Chat verwenden",
+    "inUseDeselect": "In Verwendung · Abwählen",
+    "deselect": "Agent abwählen",
+    "modelLabel": "Modell",
+    "modelInherit": "Übernehmen (Anfragemodell/Standard)",
+    "modelHelp": "Wenn festgelegt, verwenden Chats mit diesem Agenten dieses Modell (eine ausdrückliche Modellwahl im Chat hat weiterhin Vorrang). Externe Modelle erfordern einen registrierten API-Schlüssel.",
+    "sharedBadge": "Geteilt",
+    "sharedByOtherBadge": "Arbeitsbereich",
+    "share": "In Arbeitsbereich teilen",
+    "unshare": "Teilen aufheben",
+    "shareAria": "Agent in Arbeitsbereich teilen",
+    "unshareAria": "Teilen des Agenten aufheben",
+    "shareFailed": "Freigabe konnte nicht geändert werden: {error}"
+  },
+  "research": {
+    "pageTitle": "Deep-Research-Verlauf",
+    "pageDescription": "Durchsuchen Sie Ihre bisherigen Rechercheergebnisse. Läufe werden im Deep-Research-Modus des Chats gestartet.",
+    "runBanner": "Starten Sie Deep Research im <mode>Deep Research</mode>-Modus der Chateingabe. Diese Seite zeigt Ihre bisherigen Rechercheergebnisse.",
+    "goToChat": "Zum Chat",
+    "pastResearch": "Frühere Recherchen",
+    "sessionEmpty": "Noch keine Recherchen.",
+    "report": "Bericht",
+    "keyFindings": "Kernerkenntnisse",
+    "reportPendingRunning": "Recherche läuft — der Bericht erscheint nach Abschluss der Synthese.",
+    "reportPending": "Der Bericht erscheint nach Abschluss der Synthese.",
+    "collectedSources": "Gesammelte Quellen",
+    "sourceCount": "{count, plural, one {# Element} other {# Elemente}}",
+    "verified": "Verifiziert",
+    "unverified": "Nicht verifiziert",
+    "deleteTitle": "Löschen",
+    "deleteConfirm": "Recherche „{topic}…“ löschen?",
+    "deleteFailed": "Löschen fehlgeschlagen: {message}",
+    "status": {
+      "pending": "Ausstehend",
+      "running": "Läuft",
+      "completed": "Abgeschlossen",
+      "failed": "Fehlgeschlagen",
+      "cancelled": "Abgebrochen"
+    },
+    "stages": {
+      "decompose": {
+        "label": "Frage zerlegen",
+        "desc": "Die Kernfrage in verifizierbare Teilfragen zerlegen"
+      },
+      "collect": {
+        "label": "Quellen sammeln",
+        "desc": "Websuchen auffächern und Quellen nach Glaubwürdigkeit auswählen"
+      },
+      "verify": {
+        "label": "Gegenprüfung",
+        "desc": "Jede Aussage adversarisch verifizieren und Widersprüche erkennen"
+      },
+      "synthesize": {
+        "label": "Bericht synthetisieren",
+        "desc": "Den finalen Bericht mit Quellenangaben erstellen"
+      }
+    },
+    "metrics": {
+      "sources": "Analysierte Quellen",
+      "keyFindings": "Kernerkenntnisse",
+      "progress": "Fortschritt",
+      "depth": "Tiefe"
+    },
+    "viewAllToggle": "Alle Benutzer",
+    "ownerBadge": "Benutzer {id}"
+  },
+  "mcpServers": {
+    "justNow": "Gerade eben",
+    "minutesAgo": "vor {count} Min.",
+    "hoursAgo": "vor {count} Std.",
+    "daysAgo": "vor {count} Tagen",
+    "importError": "Registrierung fehlgeschlagen.",
+    "importTitle": "MCP-Server aus Git-URL registrieren",
+    "accessTokenLabel": "Access Token (optional)",
+    "cancel": "Abbrechen",
+    "register": "Registrieren",
+    "title": "MCP-Server",
+    "description": "Verbinden Sie lokale Tools, damit das LLM sie nutzen kann.",
+    "catalog": "Katalog",
+    "addServer": "Server hinzufügen",
+    "tabServers": "Serverliste",
+    "colName": "Name",
+    "colType": "Typ",
+    "colToolCount": "Tools",
+    "colStatus": "Status",
+    "colLatency": "Latenz",
+    "colLastChecked": "Zuletzt geprüft",
+    "colAction": "Aktionen",
+    "loading": "Wird geladen…",
+    "emptyServers": "Keine MCP-Server verbunden. Fügen Sie einen aus dem Katalog hinzu.",
+    "status": {
+      "connected": "Verbunden",
+      "degraded": "Beeinträchtigt",
+      "disconnected": "Getrennt"
+    },
+    "disconnect": "Trennen",
+    "reconnect": "Erneut verbinden",
+    "connect": "Verbinden",
+    "draftColRisk": "Risiko",
+    "riskWarning": "⚠️ Risiko",
+    "emptyDrafts": "Keine Entwürfe. Registrieren Sie einen Server aus einer Git-URL.",
+    "approve": "Freigeben",
+    "reject": "Ablehnen",
+    "envEdit": "Anmeldedaten",
+    "envEditTitle": "Anmeldedaten aktualisieren",
+    "envEditHint": "Geben Sie nur die Werte ein, die Sie ändern möchten. Leer gelassene Felder behalten ihren aktuellen Wert.",
+    "envSecretHint": "verschlüsselt gespeichert",
+    "envUnchangedPlaceholder": "unverändert",
+    "envSave": "Speichern",
+    "envSaved": "Anmeldedaten aktualisiert.",
+    "envSavedRespawn": "Anmeldedaten aktualisiert. Die bestehende Verbindung wurde geschlossen; die neuen Werte gelten nach dem erneuten Verbinden.",
+    "envUpdateError": "Anmeldedaten konnten nicht aktualisiert werden",
+    "tabInstances": "Instanzen",
+    "pendingApprovals": "Freigaben",
+    "connectError": {
+      "auth_required": "Authentifizierung erforderlich — dieser Server benötigt eine OAuth-Anmeldung",
+      "not_found": "Endpunkt nicht gefunden (404)",
+      "unreachable": "Server nicht erreichbar",
+      "timeout": "Zeitüberschreitung bei der Verbindung",
+      "protocol": "Fehler in der MCP-Protokollantwort",
+      "unknown": "Verbindung fehlgeschlagen — für Details den Mauszeiger darüber bewegen"
+    },
+    "disabledLabel": "Deaktiviert",
+    "disable": "Deaktivieren",
+    "enable": "Aktivieren",
+    "disableTitle": "Diesen Server als ungenutzt markieren (Einstellungen bleiben erhalten, jederzeit umkehrbar)",
+    "enableTitle": "Diesen Server wieder verwenden",
+    "idleLabel": "Inaktiv",
+    "autoSpawnOn": "Auto-Verbinden",
+    "autoSpawnOff": "Manuell",
+    "autoSpawnOnTitle": "Auto-Verbinden einschalten — verbindet bei Anmeldung, Chatstart und Neustart (versucht es jetzt sofort)",
+    "autoSpawnOffTitle": "Auto-Verbinden ausschalten — bei Bedarf nur mit [Verbinden] starten",
+    "toggleFailed": "Aktualisierung fehlgeschlagen: {error}",
+    "oauthLogin": "Anmelden",
+    "oauthLogout": "Abmelden",
+    "oauthLogoutTitle": "Gespeicherten OAuth-Token entfernen und Verbindung trennen",
+    "oauthStartFailed": "OAuth-Anmeldung konnte nicht gestartet werden: {error}",
+    "oauthOk": "Bei {server} angemeldet — wird verbunden",
+    "oauthFailed": "Anmeldung bei {server} fehlgeschlagen ({reason})",
+    "renameTitle": "Umbenennen",
+    "renameLabel": "Servername",
+    "renameHint": "Wird Tool-Namen vorangestellt (z. B. mcp-postgres::query). Wird nach dem erneuten Verbinden des Servers wirksam.",
+    "renameDone": "Umbenannt in „{name}“. Wird bei der nächsten Verbindung wirksam.",
+    "renameError": "Umbenennen fehlgeschlagen",
+    "save": "Speichern",
+    "delete": "Löschen",
+    "deleteTitle": "Server löschen",
+    "deleteConfirm": "Registrierung dieses MCP-Servers löschen?",
+    "deleteHint": "Dies kann nicht rückgängig gemacht werden. Gespeicherte Anmeldedaten (env) werden ebenfalls gelöscht, und jede laufende Instanz wird gestoppt. Um ihn wieder zu verwenden, müssen Sie ihn aus dem Katalog neu installieren.",
+    "deleteDone": "Server „{name}“ gelöscht.",
+    "deleteError": "Löschen fehlgeschlagen"
+  },
+  "mcpCatalog": {
+    "pageTitle": "MCP-Katalog",
+    "pageDescription": "Durchsuchen Sie installierbare MCP-Server und Skills und fügen Sie sie Ihrem Arbeitsbereich hinzu.",
+    "searchPlaceholder": "Nach Name, Anbieter oder Beschreibung suchen…",
+    "loading": "Wird geladen…",
+    "emptyState": "Keine Ergebnisse gefunden.",
+    "noDescription": "Keine Beschreibung verfügbar.",
+    "kindSkill": "Skill",
+    "kindServer": "Server",
+    "installed": "Installiert",
+    "install": "Installieren",
+    "installError": "Installation fehlgeschlagen. Bitte versuchen Sie es erneut.",
+    "credentialsTitle": "Anmeldedaten zur Installation eingeben",
+    "cancel": "Abbrechen",
+    "installAnother": "Weiteren installieren",
+    "installFormTitle": "Installationseinstellungen",
+    "nameLabel": "Servername",
+    "nameHint": "Wird Tool-Namen vorangestellt (z. B. mcp-postgres::query). Nur Buchstaben, Ziffern, _ und -."
+  },
+  "mcpMonitoring": {
+    "title": "MCP-Überwachung",
+    "description": "Überwachen Sie Aufruftrends und Tool-Ausführungsprotokolle über alle MCP-Server hinweg.",
+    "refresh": "Aktualisieren",
+    "activeServers": "Aktive Server",
+    "activeServersDelta": "von 5 insgesamt",
+    "totalCalls": "Tool-Aufrufe gesamt",
+    "errorRate": "Fehlerrate",
+    "serverDistribution": "Aufrufe nach Server",
+    "callCount": "{count} Aufrufe",
+    "recentToolLog": "Aktuelles Tool-Ausführungsprotokoll",
+    "colTime": "Zeit",
+    "colServer": "Server",
+    "colTool": "Tool",
+    "colDuration": "Dauer",
+    "colStatus": "Status",
+    "statusSuccess": "Erfolgreich",
+    "statusError": "Fehlgeschlagen",
+    "topCrashed": "Server mit den meisten Abstürzen",
+    "noData": "Keine Daten",
+    "colCrashCount": "Abstürze",
+    "colLastCrash": "Letzter Absturz",
+    "crashTrend": "Absturztrend (24 Std.)"
+  },
+  "auth": {
+    "login": {
+      "homepage": "OpenMake-Startseite",
+      "bench": "Benchmark",
+      "subtitle": "Zum Fortfahren anmelden",
+      "emailLabel": "E-Mail",
+      "passwordLabel": "Passwort",
+      "submit": "Anmelden",
+      "or": "oder",
+      "continueAsGuest": "Als Gast fortfahren",
+      "noAccount": "Noch kein Konto?",
+      "signUp": "Registrieren",
+      "loginFailed": "Anmeldung fehlgeschlagen."
+    },
+    "register": {
+      "subtitle": "Erstellen Sie ein Konto, um loszulegen",
+      "nameLabel": "Name",
+      "namePlaceholder": "Max Mustermann",
+      "emailLabel": "E-Mail",
+      "passwordLabel": "Passwort",
+      "birthDateLabel": "Geburtsdatum",
+      "agreeTerms": "Ich stimme den <b>Nutzungsbedingungen</b> zu",
+      "agreePrivacy": "Ich stimme der <b>Datenschutzerklärung</b> zu",
+      "submit": "Registrieren",
+      "haveAccount": "Sie haben bereits ein Konto?",
+      "signIn": "Anmelden",
+      "agreementRequired": "Sie müssen den Nutzungsbedingungen und der Datenschutzerklärung zustimmen.",
+      "registerFailed": "Registrierung fehlgeschlagen."
+    }
+  },
+  "admin": {
+    "title": "Admin-Dashboard",
+    "description": "Verwalten Sie Benutzer, Modelle und Systemstatus an einem Ort.",
+    "adminOnly": "Nur für Admins",
+    "addUser": "Benutzer hinzufügen",
+    "quickLinksHeading": "Schnellverwaltung",
+    "recentUsers": "Kürzlich registrierte Benutzer",
+    "viewAll": "Alle anzeigen",
+    "guardianPending": "Einwilligung für Minderjährige ausstehend",
+    "approve": "Freigeben",
+    "close": "Schließen",
+    "cancel": "Abbrechen",
+    "create": "Erstellen",
+    "save": "Speichern",
+    "delete": "Löschen",
+    "active": "Aktiv",
+    "inactive": "Inaktiv",
+    "statusNormal": "Normal",
+    "editUser": "Benutzer bearbeiten",
+    "deleteTitle": "Benutzer löschen",
+    "deleteConfirm": "Möchten Sie wirklich löschen?",
+    "nameLabel": "Name (optional)",
+    "namePlaceholder": "Max Mustermann",
+    "emailRequired": "E-Mail *",
+    "roleRequired": "Rolle *",
+    "passwordRequired": "Passwort *",
+    "roleField": "Rolle",
+    "statusField": "Status",
+    "newPasswordLabel": "Neues Passwort (optional)",
+    "newPasswordPlaceholder": "Leer lassen, um unverändert zu belassen",
+    "createError": "Erstellen fehlgeschlagen. Bitte versuchen Sie es erneut.",
+    "updateError": "Aktualisieren fehlgeschlagen. Bitte versuchen Sie es erneut.",
+    "deleteError": "Löschen fehlgeschlagen. Bitte versuchen Sie es erneut.",
+    "roles": {
+      "admin": "Admin",
+      "user": "Benutzer",
+      "guest": "Gast"
+    },
+    "quickLinks": {
+      "models": {
+        "title": "Modell- · MCP-Einstellungen",
+        "desc": "Modellvorlagen und Tool-Katalog"
+      },
+      "system": {
+        "title": "Systemstatus",
+        "desc": "Zustandsüberwachung von Knoten und Diensten"
+      }
+    },
+    "stats": {
+      "totalUsers": "Benutzer gesamt",
+      "activeSessions": "Aktive Sitzungen",
+      "todayRequests": "Anfragen heute",
+      "systemStatus": "Systemstatus",
+      "allNodesNormal": "Alle Knoten normal"
+    },
+    "col": {
+      "id": "ID",
+      "email": "E-Mail",
+      "role": "Rolle",
+      "status": "Status",
+      "joinedAt": "Beigetreten",
+      "lastLogin": "Letzte Anmeldung",
+      "actions": "Aktionen",
+      "edit": "Bearbeiten",
+      "delete": "Löschen"
+    },
+    "empty": "Keine Benutzer zum Anzeigen.",
+    "guard": {
+      "denied": "Admin-Zugriff erforderlich",
+      "deniedDescription": "Nur Administratorkonten können diese Seite anzeigen.",
+      "home": "Zurück zum Chat"
+    }
+  },
+  "adminAnalytics": {
+    "title": "Analysen",
+    "description": "Analysieren Sie Trends bei Unterhaltungen, Benutzern und Token-Verbrauch.",
+    "dailyConversations": "Tägliche Unterhaltungen",
+    "recentDaysCaption": "Letzte {days} Tage · täglich",
+    "modelUsageTitle": "Nutzung nach Modellprofil",
+    "costAnalysis": "Kostenanalyse",
+    "dailyCost": "Tägliche Kosten",
+    "weeklyCost": "Wöchentliche Kosten",
+    "projectedMonthlyCost": "Voraussichtliche Monatskosten",
+    "userBehavior": "Nutzerverhalten",
+    "avgSessionLength": "Durchschn. Sitzungsdauer",
+    "minutesSuffix": "{value} Min.",
+    "avgQueriesPerSession": "Durchschn. Anfragen pro Sitzung",
+    "peakHoursTop3": "Top 3 Spitzenzeiten",
+    "peakHourItem": "{hour}:00 · {requests} Anfragen",
+    "topQueriesTop5": "Top 5 Anfragen",
+    "agentPerformance": "Agent-Leistung",
+    "period": {
+      "7d": "7 Tage",
+      "30d": "30 Tage",
+      "90d": "90 Tage"
+    },
+    "stats": {
+      "activeUsers": "Aktive Benutzer",
+      "consumedTokens": "Verbrauchte Token"
+    },
+    "col": {
+      "model": "Modell",
+      "cost": "Kosten",
+      "share": "Anteil",
+      "agent": "Agent",
+      "requests": "Anfragen",
+      "successRate": "Erfolgsrate",
+      "avgResponse": "Durchschn. Antwort"
+    },
+    "weekday": {
+      "0": "So",
+      "1": "Mo",
+      "2": "Di",
+      "3": "Mi",
+      "4": "Do",
+      "5": "Fr",
+      "6": "Sa"
+    },
+    "noData": "Keine Daten zum Anzeigen."
+  },
+  "adminConversations": {
+    "title": "Alle Unterhaltungen",
+    "description": "Durchsuchen Sie den Unterhaltungsverlauf über alle Benutzer und Gäste hinweg",
+    "countBadge": "{count} Sitzungen",
+    "searchPlaceholder": "Titel oder Benutzer suchen",
+    "guest": "Gast",
+    "cliSource": "CLI",
+    "untitled": "Unbenannte Unterhaltung",
+    "empty": "Keine Unterhaltungen",
+    "th": {
+      "title": "Titel",
+      "owner": "Benutzer",
+      "messages": "Nachrichten",
+      "model": "Modell",
+      "updatedAt": "Letzte Aktivität"
+    },
+    "detail": {
+      "loading": "Nachrichten werden geladen…",
+      "empty": "Keine Nachrichten",
+      "close": "Schließen"
+    },
+    "tabs": {
+      "conversations": "Unterhaltungen",
+      "tasks": "Agentenaufgaben",
+      "research": "Deep Research"
+    },
+    "tasksEmpty": "Keine Agentenaufgaben",
+    "researchEmpty": "Keine Recherchesitzungen",
+    "taskTh": {
+      "goal": "Ziel",
+      "owner": "Benutzer",
+      "status": "Status",
+      "createdAt": "Erstellt"
+    },
+    "researchTh": {
+      "topic": "Thema",
+      "owner": "Benutzer",
+      "status": "Status",
+      "createdAt": "Erstellt"
+    },
+    "researchDetail": {
+      "empty": "Keine Rechercheschritte",
+      "step": "Schritt {n}"
+    },
+    "pagination": {
+      "info": "{total} gesamt · Seite {page}/{pages}",
+      "prev": "Zurück",
+      "next": "Weiter"
+    }
+  },
+  "adminAudit": {
+    "title": "Audit-Protokoll",
+    "description": "Ein Protokoll der Sicherheits- und Verwaltungsaktivitäten im gesamten System.",
+    "countBadge": "{count} Einträge",
+    "exportCsv": "CSV exportieren",
+    "filter": {
+      "allActions": "Alle Aktionen"
+    },
+    "status": {
+      "critical": "Kritisch",
+      "info": "Info"
+    },
+    "period": {
+      "today": "Heute",
+      "days7": "7 Tage",
+      "days30": "30 Tage",
+      "all": "Alle"
+    },
+    "th": {
+      "time": "Zeit",
+      "actor": "Akteur",
+      "action": "Aktion",
+      "target": "Ziel"
+    },
+    "empty": "Keine Protokolle entsprechen den Filtern."
+  },
+  "adminMetrics": {
+    "title": "Systemmetriken",
+    "lastUpdated": "Zuletzt aktualisiert {time}",
+    "subtitle": "Echtzeitüberwachung von Systemstatus und Ressourcen",
+    "refresh": "Aktualisieren",
+    "stat": {
+      "cpu": "CPU-Auslastung",
+      "memory": "Arbeitsspeicher"
+    },
+    "memoryDelta": "von {total} GB insgesamt",
+    "nodeStatusTitle": "Knoten- · Dienststatus",
+    "nodeRoleLlm": "LLM-Knoten",
+    "th": {
+      "node": "Knoten",
+      "role": "Rolle",
+      "status": "Status",
+      "latency": "Latenz",
+      "load": "Auslastung"
+    },
+    "status": {
+      "online": "Online",
+      "degraded": "Beeinträchtigt",
+      "offline": "Offline"
+    },
+    "agentMetricsTitle": "Agent-Metriken",
+    "agent": {
+      "totalAgents": "Agenten gesamt",
+      "totalRequests": "Anfragen gesamt",
+      "avgSuccessRate": "Durchschn. Erfolgsrate",
+      "avgResponseTime": "Durchschn. Antwortzeit"
+    },
+    "agentTh": {
+      "id": "Agent-ID",
+      "requests": "Anfragen",
+      "successRate": "Erfolgsrate",
+      "avgResponseTime": "Durchschn. Antwortzeit"
+    },
+    "toolError": {
+      "title": "Aufgaben-Tool-Fehler (letzte {days} Tage)",
+      "errorRate": "Tool-Fehlerrate",
+      "errorCount": "Fehler",
+      "ofTotal": "von {total} insgesamt",
+      "affectedTasks": "Betroffene Aufgaben",
+      "taskStatus": "Aufgabenergebnis",
+      "th": {
+        "signature": "Fehlersignatur",
+        "count": "Anzahl"
+      }
+    },
+    "toolHealth": {
+      "title": "Tool-Zustand — Fehlerrate (letzte {days} T. · mind. {minCalls} Aufrufe)",
+      "errorRate": "Gesamtfehlerrate",
+      "calls": "Aufrufe gesamt",
+      "errors": "Fehler gesamt",
+      "failingTools": "Tools mit Fehlern",
+      "th": {
+        "tool": "Tool",
+        "server": "Server",
+        "calls": "Aufrufe",
+        "errors": "Fehler",
+        "errorRate": "Fehlerrate",
+        "causes": "Häufigste Ursachen",
+        "lastError": "Letzter Fehler",
+        "circuit": "Circuit"
+      },
+      "empty": "Für kein Tool liegen bislang genügend Stichproben vor.",
+      "circuit": {
+        "open": "Blockiert",
+        "half_open": "Prüfung läuft",
+        "reset": "Zurücksetzen",
+        "enabled": "Circuit an ({n} Fehler)",
+        "disabled": "Circuit aus"
+      }
+    },
+    "workflow": {
+      "title": "Aufgaben-Workflow (letzte {days} Tage)",
+      "unjudgedRate": "Nicht bewertete Abschlüsse",
+      "ofCompleted": "{unjudged} von {completed} abgeschlossen",
+      "retryRate": "Runden-Wiederholungen",
+      "hitlDegradeRate": "HITL-Timeout-Herabstufungen",
+      "ofTasks": "{count} von {total} Aufgaben",
+      "planCoverage": "Plan-Zuordnungsabdeckung",
+      "ofSteps": "{attributed} von {total} Schritten",
+      "unrecorded": "nicht erfasst",
+      "th": {
+        "path": "Abschlusspfad",
+        "verdict": "Urteil",
+        "tasks": "Aufgaben"
+      }
+    },
+    "routing": {
+      "title": "Routing-Gates (letzte {days} Tage)",
+      "callRate": "Orchestrierungs-Aufrufrate",
+      "ofExposed": "{called} von {exposed} Runden mit Bereitstellung",
+      "successRate": "Erfolg bei Tool-Aufrufen",
+      "ofCalled": "{success} von {called} Aufrufen",
+      "tailRate": "Tail-Entscheidungsrate",
+      "ofDecisions": "{tail} von {total} Schattenentscheidungen",
+      "lastShadow": "Letzter Schatteneintrag",
+      "labeled": "{labeled} gekennzeichnet",
+      "shadowOff": "keine Einträge — Schatten AUS",
+      "th": {
+        "mode": "Benutzer-Umschalter",
+        "turns": "Runden",
+        "discussionHits": "Diskussionsabsicht-Treffer",
+        "delegateHits": "Delegationsabsicht-Treffer"
+      },
+      "spawnAdoption": "Nutzung paralleler Delegation",
+      "ofSpawnIntent": "{called} von {intent} Runden mit Absicht haben es aufgerufen"
+    },
+    "noNodes": "Keine Cluster-Knoten gemeldet."
+  },
+  "adminAlerts": {
+    "title": "Warnungen",
+    "description": "Verwalten Sie Warnregeln und überprüfen Sie aktuelle Ereignisse.",
+    "rulesTitle": "Warnregeln",
+    "enabled": "Aktiviert",
+    "disabled": "Deaktiviert",
+    "recentTitle": "Aktuelle Warnungen",
+    "acknowledged": "Bestätigt",
+    "acknowledge": "Bestätigen",
+    "status": {
+      "critical": "Kritisch",
+      "warning": "Warnung",
+      "info": "Info"
+    },
+    "empty": "Keine aktuellen Warnungen.",
+    "rulesMovedHint": "Warnregeln (Schwellenwerte, Kanäle) werden in der Code-Konfiguration und den Systemeinstellungen (Gruppe „Warnungen“) verwaltet. Diese Seite zeigt nur den Warnungsverlauf.",
+    "rulesMovedLink": "Systemeinstellungen öffnen"
+  },
+  "adminMcpCatalog": {
+    "close": "Schließen",
+    "editTitle": "Vorlage bearbeiten",
+    "createTitle": "Neue Vorlage",
+    "saveError": "Speichern fehlgeschlagen. Bitte versuchen Sie es erneut.",
+    "displayNameLabel": "Anzeigename",
+    "descriptionLabel": "Beschreibung",
+    "descriptionPlaceholder": "Eine kurze Beschreibung des Servers",
+    "typeLabel": "Typ",
+    "commandLabel": "Befehl",
+    "enabledLabel": "Aktiviert",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "create": "Erstellen",
+    "deleteTitle": "Vorlage löschen",
+    "deleteConfirm": "Möchten Sie dies wirklich löschen?",
+    "deleteError": "Löschen fehlgeschlagen. Bitte versuchen Sie es erneut.",
+    "delete": "Löschen",
+    "pageTitle": "MCP-Katalogverwaltung",
+    "pageDescription": "Verwalten Sie die MCP-Servervorlagen, die Benutzern angeboten werden.",
+    "addTemplate": "Vorlage hinzufügen",
+    "colName": "Name",
+    "colDescription": "Beschreibung",
+    "colType": "Typ",
+    "colEnabled": "Aktiviert",
+    "colActions": "Aktionen",
+    "loading": "Wird geladen…",
+    "emptyState": "Keine Vorlagen registriert.",
+    "enabled": "Aktiviert",
+    "disabled": "Deaktiviert",
+    "editAction": "Bearbeiten",
+    "deleteAction": "Löschen"
+  },
+  "providerKeys": {
+    "validate": "Überprüfen",
+    "validating": "Wird überprüft",
+    "validateOk": "Überprüfung erfolgreich",
+    "validateFailed": "Überprüfung fehlgeschlagen: {error}",
+    "usageSummary": "Letzte {days} T. · {calls} Aufrufe · {tokens} Token",
+    "error": "Fehler",
+    "stripLabel": "Funktioniert mit",
+    "connect": "Verbinden",
+    "connectOAuth": "Über Anmeldung verbinden",
+    "connected": "Verbunden",
+    "keyPage": "API-Schlüssel-Seite",
+    "signInPage": "Anmeldeseite",
+    "homepage": "Startseite"
+  },
+  "apiKeys": {
+    "title": "API-Schlüssel",
+    "description": "Registrieren und verwalten Sie Schlüssel für externe LLM-Anbieter (Anthropic / OpenAI-kompatibel).",
+    "addKey": "Schlüssel hinzufügen",
+    "close": "Schließen",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "registeredKeys": "Registrierte Anbieterschlüssel",
+    "loading": "Schlüsselliste wird geladen...",
+    "emptyTitle": "Keine externen Schlüssel registriert",
+    "emptyDesc": "Fügen Sie einen Schlüssel hinzu, um die Modelle dieses Anbieters zu nutzen.",
+    "loadError": "Die Schlüsselliste konnte nicht geladen werden.",
+    "deleteConfirm": "Den Schlüssel {name} löschen?\nModellaufrufe mit diesem Schlüssel funktionieren dann nicht mehr.",
+    "deleteFailed": "Löschen fehlgeschlagen: {error}",
+    "saveFailed": "Speichern fehlgeschlagen: {error}",
+    "serverError": "Serverfehler",
+    "deleteAria": "Löschen",
+    "validationError": "Geben Sie einen Namen und einen API-Schlüssel mit mindestens 8 Zeichen ein.",
+    "namePlaceholder": "z. B. Produktion, Entwicklung",
+    "apiKeyLabel": "API-Schlüssel",
+    "baseUrlLabel": "Base URL (optional)",
+    "col": {
+      "provider": "Anbieter",
+      "name": "Name",
+      "key": "Schlüssel",
+      "createdAt": "Erstellt",
+      "status": "Status",
+      "actions": "Aktionen"
+    },
+    "status": {
+      "validationFailed": "Validierung fehlgeschlagen",
+      "active": "Aktiv",
+      "unverified": "Nicht überprüft"
+    },
+    "sdkType": {
+      "anthropic": "Anthropic",
+      "openaiCompatible": "OpenAI-kompatibel"
+    },
+    "validationWarning": "Schlüssel gespeichert, aber die Endpunkt-Validierung ist fehlgeschlagen: {error} — prüfen Sie URL/Schlüssel und speichern Sie erneut.",
+    "oauthLogin": "Mit ChatGPT anmelden",
+    "oauthStart": "Anmeldung starten",
+    "oauthHint": "Dieser Anbieter verwendet die OAuth-Anmeldung anstelle eines API-Schlüssels.",
+    "oauthCodeLabel": "Bestätigungscode",
+    "oauthInstruction": "Öffnen Sie den Link unten, geben Sie diesen Code ein und bestätigen Sie. Die Verbindung wird nach der Bestätigung automatisch hergestellt.",
+    "oauthOpenPage": "Bestätigungsseite öffnen",
+    "oauthWaiting": "Warten auf Bestätigung...",
+    "oauthConnected": "Verbunden",
+    "oauthFailed": "Anmeldung fehlgeschlagen: {error}",
+    "oauthAccount": "Konto"
+  },
+  "modelRoles": {
+    "title": "Modellrollen",
+    "description": "Weisen Sie Ihre registrierten Modelle (lokal oder externe API-Schlüssel) funktionalen Rollen zu. Nicht zugewiesene Rollen verwenden das Standardmodell des Servers.",
+    "externalNote": "Externe Modelle erfordern einen aktiven Anbieter-API-Schlüssel; fehlgeschlagene Aufrufe greifen automatisch auf das lokale Standardmodell zurück.",
+    "loading": "Rollenzuordnungen werden geladen…",
+    "loadError": "Rollenzuordnungen konnten nicht geladen werden.",
+    "saveFailed": "Rollenzuordnung konnte nicht gespeichert werden.",
+    "defaultOption": "Standard (automatisch)",
+    "assignedBadge": "Zugewiesen",
+    "resetLabel": "Auf Standard zurücksetzen",
+    "empty": "Keine zuweisbaren Rollen.",
+    "roles": {
+      "agent": {
+        "label": "Agentenaufgaben",
+        "description": "Ausführungsmodell für Agentenaufgaben im Hintergrund"
+      },
+      "judge": {
+        "label": "Zielbewerter",
+        "description": "Modell, das bewertet, ob eine Agentenaufgabe ihr Ziel erreicht hat"
+      },
+      "research": {
+        "label": "Deep Research",
+        "description": "Modell für die Recherche-Pipeline und die Berichterstellung"
+      },
+      "spawn": {
+        "label": "Parallele Subagenten",
+        "description": "Modell für parallele Fan-out-Subagenten"
+      },
+      "review": {
+        "label": "Code- & Sicherheitsprüfung",
+        "description": "Modell für Code-Prüfung, Sicherheitsanalyse und Planung"
+      },
+      "summary": {
+        "label": "Denkzusammenfassung",
+        "description": "Modell, das Überschriften-Zusammenfassungen zum Nachdenken generiert"
+      },
+      "planner": {
+        "label": "Planer (Fragenanalyse & Aufgabenplanung)",
+        "description": "Erstellt pro Runde einen kurzen JSON-Plan — ein kleines, schnelles Modell wird empfohlen (lokales 27B benötigt ~15 Sek.)"
+      }
+    },
+    "notInList": "(nicht in der Liste)"
+  },
+  "capabilityModels": {
+    "title": "Modell pro Fähigkeit",
+    "description": "Wählen Sie, welches Modell jede Fähigkeit übernimmt, die der Planner nach der Analyse Ihrer Frage einplant. Dies ist unabhängig von den Rollenzuordnungen oben (welches Textmodell antwortet); alle Aufrufe laufen über das eine LiteLLM-Gateway.",
+    "gatewayNote": "Externe Modelle können nur von Anbietern zugewiesen werden, die im Gateway registriert sind. Nicht zugewiesene Elemente folgen der globalen Einstellung oder dem Standard.",
+    "loading": "Fähigkeitszuordnungen werden geladen…",
+    "loadError": "Fähigkeitszuordnungen konnten nicht geladen werden.",
+    "saveFailed": "Fähigkeitszuordnung konnte nicht gespeichert werden.",
+    "defaultOption": "Standard (automatisch)",
+    "assignedBadge": "Zugewiesen",
+    "unavailableBadge": "Nicht verfügbar",
+    "unsupportedBadge": "Noch nicht unterstützt",
+    "unsupportedHint": "Noch kein Anbieter-Adapter — die Zuweisung wird nur gespeichert.",
+    "resetLabel": "Auf Standard zurücksetzen",
+    "empty": "Keine zuweisbaren Fähigkeiten.",
+    "notInList": "(nicht in der Liste)",
+    "paramsHint": "Anbieterspezifische Parameter — leer = Standard",
+    "paramsApply": "Parameter anwenden",
+    "source": {
+      "user": "Meine Einstellung",
+      "global": "Global",
+      "default": "Standard"
+    },
+    "capabilities": {
+      "text_reason": "Textanalyse & Schlussfolgern",
+      "text_code": "Code",
+      "text_embed": "Embedding",
+      "vision_describe": "Bildverständnis",
+      "vision_ocr": "OCR",
+      "image_generate": "Bildgenerierung",
+      "image_edit": "Bildbearbeitung",
+      "audio_transcribe": "Sprache-zu-Text (STT)",
+      "audio_speech": "Text-zu-Sprache (TTS)",
+      "audio_analyze": "Audioanalyse",
+      "music_analyze": "Musikanalyse",
+      "music_generate": "Musikgenerierung",
+      "video_generate": "Videogenerierung",
+      "video_analyze": "Videoverständnis"
+    },
+    "groups": {
+      "text": "Text & Vision",
+      "code": "Code",
+      "image": "Bild",
+      "audio": "Sprache",
+      "music": "Musik",
+      "video": "Video",
+      "embed": "Embedding (Infrastruktur)",
+      "other": "Sonstige"
+    },
+    "groupDesc": {
+      "text": "Schlussfolgern/Analyse sowie Bildverständnis und OCR — ein Textmodell mit Vision-Fähigkeit",
+      "code": "Dediziertes Modell zum Schreiben/Bearbeiten von Code (fällt auf das Textmodell zurück)",
+      "image": "Bildgenerierung und -bearbeitung",
+      "audio": "Sprache-zu-Text und Text-zu-Sprache",
+      "music": "Musikgenerierung — noch kein Ausführungspfad, die Zuweisung wird nur gespeichert",
+      "video": "Videogenerierung (als Aufgabe eingereicht; Ergebnis wird nach Fertigstellung abgerufen)",
+      "embed": "Infrastrukturmodell für Suche/Embeddings (nur Admin)",
+      "other": "Fähigkeiten außerhalb jeder Gruppe"
+    },
+    "mixedOption": "(einzeln festgelegt)",
+    "advancedShow": "Details",
+    "advancedHide": "Details ausblenden",
+    "hiddenUnsupportedNote": "Fähigkeiten ohne Ausführungspfad sind ausgeblendet: {list}"
+  },
+  "adminModelRoles": {
+    "title": "Modellrollen-Admin",
+    "description": "Globale Zuordnungen Rolle→Modell (Standardwerte für alle Nutzer) und servergeteilte externe Schlüssel verwalten.",
+    "loadError": "Laden fehlgeschlagen.",
+    "saveFailed": "Speichern fehlgeschlagen.",
+    "keyDeleteConfirm": "Server-Schlüssel für „{provider}“ löschen? Globale Zuordnungen für diesen Anbieter fallen auf das lokale Modell zurück.",
+    "serverKeys": {
+      "title": "Servergeteilte externe Schlüssel",
+      "description": "Betreibereigene Schlüssel — nur von globalen Rollenzuordnungen verwendet (Zuordnungen pro Nutzer und Chat nutzen persönliche BYOK-Schlüssel). Bei Überschreiten des täglichen Token-Limits fallen Aufrufe auf das lokale Modell zurück.",
+      "provider": "Anbieter",
+      "dailyLimit": "Tägliches Token-Limit",
+      "status": "Status",
+      "actions": "Aktionen",
+      "active": "Aktiv",
+      "inactive": "Inaktiv",
+      "delete": "Löschen"
+    },
+    "keyForm": {
+      "provider": "Anbieter",
+      "apiKeyPlaceholder": "API-Schlüssel (verschlüsselt gespeichert)",
+      "dailyLimit": "Tägliches Token-Limit",
+      "dailyLimitHelp": "Ein tägliches Token-Limit ist erforderlich — 0 sperrt den Schlüssel.",
+      "save": "Registrieren"
+    },
+    "globalRoles": {
+      "title": "Globale Rollenzuordnungen",
+      "description": "Legen Sie das Standardmodell pro Rolle fest. Zuordnungen pro Nutzer haben Vorrang; leer lassen, um auf env/Standard zurückzufallen. Externe Modelle (provider:model) erfordern einen servergeteilten Schlüssel.",
+      "assigned": "Zugewiesen",
+      "save": "Speichern",
+      "placeholder": "Leer = Rückfall ({fallback})",
+      "cacheNote": "Änderungen werden ohne Neustart innerhalb von 60 Sekunden wirksam."
+    }
+  },
+  "adminCapabilityModels": {
+    "title": "Globale Fähigkeitszuordnungen",
+    "description": "Legen Sie das globale Standardmodell pro Fähigkeit fest, die der Planner einplant. Zuordnungen pro Nutzer haben Vorrang; beim Leeren wird auf den Code-Standard zurückgegriffen.",
+    "axisNote": "Dies ist eine von den „Globalen Rollenzuordnungen“ oben getrennte Achse (welches Text-LLM antwortet); alle Aufrufe laufen über das eine LiteLLM-Gateway.",
+    "gatewayNote": "Externe Modelle können nur von im Gateway registrierten Anbietern zugewiesen werden ({providers}).",
+    "gatewayNone": "keine",
+    "loadError": "Fähigkeitszuordnungen konnten nicht geladen werden.",
+    "saveFailed": "Fähigkeitszuordnung konnte nicht gespeichert werden.",
+    "defaultOption": "Standard (Code-Standard)",
+    "assigned": "Zugewiesen",
+    "unavailableBadge": "Nicht verfügbar",
+    "unsupportedBadge": "Noch nicht unterstützt",
+    "unsupportedHint": "Noch kein Anbieter-Adapter — die Zuweisung wird nur gespeichert.",
+    "resetLabel": "Auf Standard zurücksetzen",
+    "codeDefault": "Code-Standard: {model}",
+    "notInList": "(nicht in der Liste)",
+    "cacheNote": "Änderungen werden ohne Neustart innerhalb von 60 Sekunden wirksam.",
+    "paramsHint": "Anbieterspezifische Parameter — leer = Standard",
+    "paramsApply": "Parameter anwenden",
+    "source": {
+      "user": "Meine Einstellung",
+      "global": "Global",
+      "default": "Standard"
+    },
+    "capabilities": {
+      "text_reason": "Textanalyse & Schlussfolgern",
+      "text_code": "Code",
+      "text_embed": "Embedding",
+      "vision_describe": "Bildverständnis",
+      "vision_ocr": "OCR",
+      "image_generate": "Bildgenerierung",
+      "image_edit": "Bildbearbeitung",
+      "audio_transcribe": "Sprache-zu-Text (STT)",
+      "audio_speech": "Text-zu-Sprache (TTS)",
+      "audio_analyze": "Audioanalyse",
+      "music_analyze": "Musikanalyse",
+      "music_generate": "Musikgenerierung",
+      "video_generate": "Videogenerierung",
+      "video_analyze": "Videoverständnis"
+    },
+    "groups": {
+      "text": "Text & Vision",
+      "code": "Code",
+      "image": "Bild",
+      "audio": "Sprache",
+      "music": "Musik",
+      "video": "Video",
+      "embed": "Embedding (Infrastruktur)",
+      "other": "Sonstige"
+    },
+    "groupDesc": {
+      "text": "Schlussfolgern/Analyse sowie Bildverständnis und OCR — ein Textmodell mit Vision-Fähigkeit",
+      "code": "Dediziertes Modell zum Schreiben/Bearbeiten von Code (fällt auf das Textmodell zurück)",
+      "image": "Bildgenerierung und -bearbeitung",
+      "audio": "Sprache-zu-Text und Text-zu-Sprache",
+      "music": "Musikgenerierung — noch kein Ausführungspfad, die Zuweisung wird nur gespeichert",
+      "video": "Videogenerierung (als Aufgabe eingereicht; Ergebnis wird nach Fertigstellung abgerufen)",
+      "embed": "Infrastrukturmodell für Suche/Embeddings (nur Admin)",
+      "other": "Fähigkeiten außerhalb jeder Gruppe"
+    },
+    "mixedOption": "(einzeln festgelegt)",
+    "advancedShow": "Details",
+    "advancedHide": "Details ausblenden",
+    "hiddenUnsupportedNote": "Fähigkeiten ohne Ausführungspfad sind ausgeblendet: {list}"
+  },
+  "adminSystemSettings": {
+    "title": "Systemeinstellungen",
+    "description": "Betriebseinstellungen verwalten (OAuth, Suche, Warnungen, Push, LLM-Gateway). Hier gespeicherte Werte (DB) haben Vorrang vor .env.",
+    "loadError": "Laden fehlgeschlagen.",
+    "saveFailed": "Speichern fehlgeschlagen.",
+    "save": "Speichern",
+    "reset": "Zurücksetzen",
+    "resetHelp": "DB-Wert löschen und auf .env/Standard zurückfallen.",
+    "resetConfirm": "„{key}“ löschen und auf env/Standard zurückfallen?",
+    "byokLinked": "Mit meinem Schlüssel verknüpft",
+    "issueLink": "Schlüssel holen",
+    "sourceDb": "In DB festgelegt",
+    "sourceEnv": "Aus env",
+    "sourceDefault": "Standard",
+    "secretSetPlaceholder": "●●●● festgelegt — neuen Wert eingeben, um zu ändern",
+    "secretUnsetPlaceholder": "Nicht festgelegt — Wert eingeben",
+    "valuePlaceholder": "Wert eingeben",
+    "restartRequired": "Neustart erforderlich",
+    "restartNotice": "Gespeichert. Diese Einstellungen werden nach einem Server-Neustart wirksam: {keys}",
+    "priorityNote": "Vorrang: DB (diese Seite) > .env > Standardwerte. Geheime Werte können nach dem Speichern nicht mehr angezeigt werden; jede Änderung wird im Audit-Protokoll erfasst.",
+    "groups": {
+      "llm": {
+        "title": "LLM-Gateway",
+        "description": "LiteLLM-Gateway-URL, -Schlüssel und Standardmodell. URL-/Schlüsseländerungen werden nach einem Server-Neustart wirksam."
+      },
+      "oauth": {
+        "title": "Social Login (OAuth)",
+        "description": "Google-/GitHub-/Kakao-Anmeldedaten. Anbieter ohne Anmeldedaten werden auf der Anmeldeseite ausgeblendet."
+      },
+      "search": {
+        "title": "Websuche",
+        "description": "Google Custom Search- und Naver-API-Schlüssel. Nicht festgelegte Schlüssel deaktivieren nur diese Suchquelle."
+      },
+      "alerts": {
+        "title": "Betreiberwarnungen",
+        "description": "Slack-/Discord-Incoming-Webhook-URLs. Schweregrad-spezifische URLs gewinnen; andernfalls wird die einzelne URL verwendet."
+      },
+      "push": {
+        "title": "Web Push (VAPID)",
+        "description": "VAPID-Schlüssel für Browser-Push-Benachrichtigungen. Legen Sie das öffentliche/private Schlüsselpaar zusammen fest."
+      }
+    }
+  },
+  "setup": {
+    "title": "Ersteinrichtung",
+    "subtitle": "Erster Start von OpenMake LLM — erstellen Sie ein Admin-Konto und verbinden Sie das LLM-Gateway.",
+    "adminSection": "Admin-Konto",
+    "emailLabel": "E-Mail",
+    "passwordLabel": "Passwort",
+    "passwordHint": "8+ Zeichen mit mindestens einem Großbuchstaben, einer Ziffer und einem Symbol",
+    "passwordConfirmLabel": "Passwort bestätigen",
+    "passwordMismatch": "Die Passwörter stimmen nicht überein.",
+    "llmSection": "LLM-Gateway (optional)",
+    "llmOptionalHint": "Sie können dies später unter Admin → Systemeinstellungen ändern.",
+    "llmBaseUrlLabel": "Gateway-URL",
+    "llmApiKeyLabel": "API-Schlüssel",
+    "submit": "Einrichtung abschließen",
+    "failed": "Einrichtung fehlgeschlagen.",
+    "doneTitle": "Einrichtung abgeschlossen!",
+    "doneDesc": "Das Admin-Konto wurde erstellt. Bitte melden Sie sich an.",
+    "goLogin": "Zur Anmeldung"
+  },
+  "adminSchedules": {
+    "title": "Aufgaben-Zeitplanverwaltung",
+    "description": "Wiederkehrende Zeitpläne für Agentenaufgaben aller Nutzer anzeigen.",
+    "listTitle": "Alle Zeitpläne ({count})",
+    "refresh": "Aktualisieren",
+    "empty": "Keine Zeitpläne registriert.",
+    "loadError": "Zeitpläne konnten nicht geladen werden.",
+    "intervalSec": "alle {sec}s",
+    "status": {
+      "enabled": "Aktiviert",
+      "disabled": "Deaktiviert"
+    },
+    "cols": {
+      "owner": "Eigentümer",
+      "goal": "Ziel",
+      "trigger": "Auslöser (cron/Intervall)",
+      "enabled": "Status",
+      "nextRun": "Nächste Ausführung",
+      "lastRun": "Letzte Ausführung",
+      "lastResult": "Letztes Ergebnis",
+      "failures": "Aufeinanderfolgende Fehler"
+    }
+  },
+  "usage": {
+    "title": "Nutzung",
+    "description": "Token- und Anfragenutzung für Ihr Konto.",
+    "updatedAt": "Aktualisiert {time}",
+    "refresh": "Aktualisieren",
+    "loading": "Wird geladen...",
+    "noData": "Keine Daten verfügbar.",
+    "dailyTitle": "Tägliche Token-Nutzung (letzte 14 Tage)",
+    "tokenTooltip": "{date} · {count} Token",
+    "systemMonitorTitle": "System-Token-Überwachung",
+    "dailyTokens7d": "Tägliche Token (letzte 7 Tage)",
+    "hourlyTokens": "Stündliche Token",
+    "modelUsageTitle": "Nutzung nach Modell",
+    "noModelData": "Keine Nutzungsdaten pro Modell verfügbar.",
+    "stat": {
+      "monthTokens": "Token diesen Monat",
+      "requests": "Anfragen",
+      "avgLatency": "Durchschn. Latenz",
+      "errors": "Fehler",
+      "todayCost": "Kosten heute",
+      "todayTokens": "Token heute",
+      "weekTokens": "Wöchentliche Token",
+      "weekEstCost": "Geschätzte Wochenkosten"
+    },
+    "delta": {
+      "warning": "Warnung",
+      "normal": "Normal"
+    },
+    "col": {
+      "model": "Modell",
+      "tokens": "Token",
+      "share": "Anteil",
+      "distribution": "Verteilung"
+    },
+    "costTitle": "Hypothetische Kosten",
+    "costSubtitle": "Wenn zu kommerziellen API-Tarifen abgerechnet würde (keine tatsächlichen Gebühren)",
+    "costToday": "Heute",
+    "costMonth": "Diesen Monat",
+    "costTotal": "Gesamt",
+    "costTabDay": "Täglich",
+    "costTabMonth": "Monatlich",
+    "costTabYear": "Jährlich",
+    "costColPeriod": "Zeitraum",
+    "costColTokens": "Token",
+    "costColUsd": "USD",
+    "costColKrw": "KRW",
+    "costRateNote": "Angenommene Tarife: Eingabe ${input}/1M · Ausgabe ${output}/1M (Ausgabeanteil {ratio}%) · Wechselkurs ₩{fx}/$ — anpassbar über Server-env",
+    "costNoData": "Keine Nutzung zum Aggregieren",
+    "costCoverage": "Abdeckung: Datensätze seit {since} (frühere Nutzung nicht enthalten — keine Token-Datensätze)",
+    "quotaTitle": "Mein Token-Kontingent",
+    "quotaSubtitle": "Dies blockiert tatsächlich Anfragen. Neue Antworten werden abgelehnt, sobald es aufgebraucht ist.",
+    "quotaHourly": "Stündlich",
+    "quotaWeekly": "Wöchentlich",
+    "quotaResetAt": "Wird um {time} zurückgesetzt",
+    "quotaExceeded": "Sie haben das stündliche Kontingent aufgebraucht. Nach der Zurücksetzungszeit können Sie wieder Anfragen senden.",
+    "globalQuotaTitle": "Globale Kontingentnutzung (serverweit)",
+    "globalQuotaNote": "Serverweite Beobachtung, die beim Prozess-Neustart zurückgesetzt wird — getrennt von Ihrem persönlichen Kontingent",
+    "loadFailed": "Nutzung konnte nicht geladen werden"
+  },
+  "developer": {
+    "pageTitle": "Entwicklerdokumentation",
+    "pageDescription": "Integrieren und automatisieren Sie mit der OpenMake LLM API.",
+    "apiInfo": {
+      "title": "API-Grundlagen",
+      "apiVersionLabel": "API-Version",
+      "versionBlock": "/v1  — OpenAI-kompatible Endpunkte\n/api — OpenMake-spezifische Endpunkte",
+      "description": "Die OpenMake LLM API ist mit der OpenAI Chat Completions API kompatibel. Sie können Ihr vorhandenes OpenAI SDK sofort verwenden, indem Sie nur die <code>baseURL</code> ändern."
+    },
+    "auth": {
+      "title": "Authentifizierung",
+      "apiKeyTitle": "API-Schlüssel-Authentifizierung",
+      "apiKeyDesc": "Übergeben Sie einen auf der Seite API-Zugriff (/api-access) ausgestellten Schlüssel im <code>Authorization</code>-Header.",
+      "jwtTitle": "JWT-Sitzungsauthentifizierung",
+      "jwtDesc": "Browser-Sitzungen verwenden automatisch ein JWT, das in einem HttpOnly-Cookie gespeichert ist. Für direkte API-Aufrufe wird ein API-Schlüssel empfohlen."
+    },
+    "models": {
+      "title": "Modellliste",
+      "description": "Rufen Sie die Liste der verfügbaren Modelle mit <code>GET /api/models</code> ab oder prüfen Sie die Modellauswahl auf der Chat-Seite.",
+      "brandIdLabel": "Marken-Modell-IDs"
+    },
+    "brandModels": {
+      "default": "Standardmodell",
+      "pro": "Hochleistungsmodell",
+      "fast": "Schnelle Antwort",
+      "think": "Nachdenken-Modus",
+      "code": "Code-spezialisiert",
+      "vision": "Bildunterstützung"
+    },
+    "steps": {
+      "apiKey": {
+        "title": "API-Schlüssel ausstellen",
+        "description": "Erstellen Sie einen neuen API-Schlüssel auf der Seite API-Zugriff (/api-access)."
+      },
+      "chatCompletion": {
+        "title": "Chat-Completion-Anfrage",
+        "description": "Senden Sie eine Anfrage an den OpenAI-kompatiblen Endpunkt /v1/chat/completions."
+      },
+      "streaming": {
+        "title": "Streaming-Antworten",
+        "description": "Fügen Sie stream: true hinzu, um Token in Echtzeit als SSE-Stream zu empfangen."
+      }
+    }
+  },
+  "memory": {
+    "title": "Erinnerungen",
+    "description": "Informationen verwalten, die über Unterhaltungen hinweg gemerkt werden sollen. Gespeicherte Erinnerungen werden in den System-Prompt neuer Chats eingefügt.",
+    "add": "Hinzufügen",
+    "addPlaceholder": "z. B. Ich bevorzuge Python und knappe Antworten",
+    "empty": "Noch keine Erinnerungen gespeichert. Fügen Sie oben eine hinzu.",
+    "clearAll": "Alle löschen",
+    "clearConfirm": "Alle Erinnerungen löschen? Dies kann nicht rückgängig gemacht werden.",
+    "deleteAria": "Erinnerung löschen",
+    "sourceCandidate": "Automatisch erkannt",
+    "sourceBatch": "Nachträglich erfasst",
+    "limitReached": "Sie können bis zu {max} Erinnerungen speichern."
+  },
+  "pageTabs": {
+    "myServers": "Meine Server",
+    "docs": "Dokumentation",
+    "dashboard": "Dashboard",
+    "history": "Chat-Verlauf",
+    "research": "Deep Research"
+  },
+  "notFound": {
+    "title": "Seite nicht gefunden",
+    "description": "Die gesuchte Seite existiert nicht oder wurde verschoben.",
+    "backHome": "Zurück zur Startseite"
+  },
+  "extensions": {
+    "title": "Erweiterungen",
+    "description": "Installierte Erweiterungsbündel (Skills + MCP-Server) anzeigen und entfernen.",
+    "installHint": "Zum Installieren im Chat anfragen: „Installiere diese Erweiterung: github.com/owner/repo“. Jede Komponente wird nach Prüfung und Freigabe aktiviert.",
+    "empty": "Keine Erweiterungen installiert.",
+    "skills": "Skills",
+    "mcpServers": "MCP-Server",
+    "agents": "Benutzerdefinierte Agents",
+    "none": "Keine",
+    "approvalHint": "Entwurfskomponenten müssen vor der Aktivierung auf den Seiten Skill-Bibliothek / MCP-Server freigegeben werden.",
+    "report": {
+      "title": "Installationsbericht",
+      "hint": "Hier nicht unterstützte Komponenten wurden nicht installiert, und für andere Ökosysteme geschriebene Skills erhielten einen automatischen Hinweis zur Tool-Namen-Zuordnung."
+    },
+    "detailFailed": "Komponentendetails konnten nicht geladen werden.",
+    "removeConfirm": "Diese Erweiterung entfernen? Ihre Skills und MCP-Server werden archiviert.",
+    "removeAria": "Erweiterung entfernen",
+    "status": {
+      "active": "Aktiv",
+      "draft": "Freigabe ausstehend",
+      "archived": "Archiviert",
+      "disabled": "Deaktiviert"
+    },
+    "update": {
+      "checkAria": "Nach Updates suchen",
+      "latest": "Aktuell",
+      "available": "v{version} verfügbar",
+      "availableNoVersion": "Update verfügbar",
+      "failed": "Prüfung fehlgeschlagen",
+      "hint": "Im Chat anfragen: „Aktualisiere diese Erweiterung“, um sie durch die neue Version zu ersetzen (alte Komponenten werden archiviert)."
+    },
+    "share": {
+      "toggleAria": "Arbeitsbereich-Freigabe umschalten",
+      "shared": "Geteilt"
+    },
+    "gallery": {
+      "title": "Arbeitsbereich-Galerie",
+      "description": "Von Teammitgliedern geteilte Erweiterungen in Ihr Konto installieren. Komponenten werden als Ihre eigenen Entwürfe erstellt und nach Freigabe aktiviert.",
+      "empty": "Keine geteilten Erweiterungen.",
+      "install": "Installieren",
+      "installed": "Installiert",
+      "updatedDone": "Aktualisiert",
+      "upToDate": "Aktuell",
+      "failed": "Installation fehlgeschlagen",
+      "owned": "(Ihre)"
+    },
+    "catalog": {
+      "title": "Kuratierter Katalog",
+      "description": "Von einem Admin registrierte Erweiterungsquellen. Bei der Installation werden Entwürfe in Ihrem Konto erstellt, die nach Freigabe aktiviert werden.",
+      "empty": "Keine Katalogquellen registriert.",
+      "urlPlaceholder": "github.com/owner/repo oder .zip-URL",
+      "register": "Registrieren",
+      "syncAria": "Katalog synchronisieren",
+      "removeAria": "Katalogquelle entfernen",
+      "removeConfirm": "Diese Katalogquelle entfernen? (Installierte Erweiterungen sind nicht betroffen)",
+      "installableCount": "({count}/{total} installierbar)",
+      "noneInstallable": "Keine installierbaren Plugins (Quelle nur mit Befehlen).",
+      "categoryAria": "Kategoriefilter",
+      "categoryAll": "Alle ({count})",
+      "uncategorized": "Ohne Kategorie",
+      "pageInfo": "{page} / {total}",
+      "prevPageAria": "Vorherige Seite",
+      "nextPageAria": "Nächste Seite",
+      "sourceAria": "Quellfilter",
+      "sourceAll": "Alle Quellen ({count})",
+      "searchAria": "Stichwortsuche",
+      "searchPlaceholder": "Name/Beschreibung durchsuchen"
+    }
+  },
+  "mcpInstances": {
+    "selectServer": "Server auswählen…",
+    "pickServer": "Wählen Sie einen Server aus.",
+    "empty": "Kein Instanzverlauf.",
+    "start": "Starten",
+    "stop": "Stoppen",
+    "healthCheck": "Health-Check",
+    "refresh": "Aktualisieren",
+    "healthCheckTitle": "Prüfen, ob die PIDs laufender Instanzen tatsächlich aktiv sind",
+    "autoRefresh": "Aktualisiert automatisch alle 15s",
+    "confirmStop": "Serverprozess stoppen?",
+    "startRequested": "Start angefordert.",
+    "stopRequested": "Stopp angefordert.",
+    "healthResult": "{verified} bestätigt · {dead} als tot markiert · {missing} ohne PID",
+    "loadError": "Instanzdaten konnten nicht geladen werden.",
+    "actionError": "Anfrage fehlgeschlagen.",
+    "metricRunning": "Läuft",
+    "metricSpawned": "Insgesamt gestartet",
+    "metricCrashed": "Abstürze (24h)",
+    "metricUptime": "Durchschn. Laufzeit",
+    "lastError": "Letzter Fehler ({at}): {message}",
+    "colStatus": "Status",
+    "colPid": "PID",
+    "colStarted": "Gestartet",
+    "colStopped": "Gestoppt",
+    "colError": "Fehler"
+  },
+  "approvals": {
+    "title": "Ausstehende Freigaben",
+    "description": "Geben Sie hier Skills und MCP-Server aus installierten Erweiterungen frei, um sie im Chat zu nutzen.",
+    "approve": "Freigeben",
+    "reject": "Ablehnen",
+    "skills": {
+      "title": "Skills",
+      "hint": "Nach der Freigabe rufen Sie sie mit `/skill-name` auf oder lassen sie bei verwandten Fragen automatisch anwenden."
+    },
+    "mcp": {
+      "title": "MCP-Server",
+      "hint": "Nach der Freigabe verbindet sich der Server, und das Modell ruft seine Tools im Chat automatisch auf.",
+      "badge": "Ausstehend",
+      "risk": "Riskanter Befehl erkannt — vor der Freigabe prüfen",
+      "empty": "Keine MCP-Server, die auf Freigabe warten.",
+      "actionFailed": "Aktion fehlgeschlagen: {error}",
+      "envRequired": "Erforderliche Umgebungsvariablen — für die Freigabe sind echte Werte nötig",
+      "envPlaceholder": "Wert eingeben",
+      "envMissing": "Werte erforderlich: {keys}"
+    },
+    "agents": {
+      "title": "Benutzerdefinierte Agents",
+      "hint": "Aus Erweiterungen installierte Agents sind sofort aktiv. Nur aus einer Git-URL importierte Agents benötigen hier eine Freigabe.",
+      "link": "Agentenliste öffnen"
+    },
+    "tasks": {
+      "title": "Freigaben für Agentenaufgaben",
+      "hint": "Hochriskante Tool-Ausführungen und Fragen des Agents benötigen eine Freigabe, bevor die Aufgabe fortgesetzt wird. Sie können auch direkt im Chat antworten.",
+      "empty": "Keine Agentenaufgaben, die auf Freigabe warten.",
+      "autoApprove": "Diese Aufgabe automatisch freigeben",
+      "autoApproveHint": "Die verbleibenden Tool-Aufrufe dieser Aufgabe ohne Freigabe ausführen (Fragen des Agents warten weiterhin)",
+      "question": "Frage",
+      "tool": "Tool-Ausführung",
+      "openTask": "Aufgabe öffnen",
+      "answerPlaceholder": "Antwort eingeben",
+      "sendAnswer": "Antwort senden",
+      "actionFailed": "Aktion fehlgeschlagen: {error}"
+    }
+  },
+  "marketplacePublish": {
+    "title": "Auf dem Marktplatz veröffentlichen",
+    "description": "Bündeln Sie Ihre eigenen Skills, Agents und MCP-Einstellungen zu einem Plugin und veröffentlichen Sie es in der Galerie dieses Servers. Andere Nutzer auf demselben Server können es installieren; nichts verlässt den Server.",
+    "namePlaceholder": "Plugin-Name (Kleinbuchstaben, Ziffern, Bindestriche — z. B. my-devops-pack)",
+    "descPlaceholder": "Einzeilige Beschreibung",
+    "skills": "Skills",
+    "agents": "Benutzerdefinierte Agents",
+    "mcp": "MCP-Server",
+    "none": "Keine Kandidaten (aus Erweiterungen installierte Elemente sind ausgeschlossen)",
+    "envPlaceholders": "{n} env-Schlüssel → Platzhalter",
+    "secretNote": "MCP-Anmeldedatenwerte werden nie exportiert — nur Schlüsselnamen als ${KEY}-Platzhalter. Installierende geben ihre eigenen Werte an.",
+    "shareToGallery": "In Galerie teilen (aus = nur in meinen Erweiterungen behalten)",
+    "publish": "Veröffentlichen ({n})",
+    "publishedShared": "„{name}“ in der Galerie veröffentlicht",
+    "publishedPrivate": "„{name}“ in meinen Erweiterungen gespeichert (privat)",
+    "publishedDetail": "{files} Dateien · erneutes Veröffentlichen mit demselben Namen aktualisiert es",
+    "missing": "Einige Elemente wurden übersprungen (nicht im Besitz oder nicht aktiv)."
+  },
+  "sharedTask": {
+    "readOnly": "Schreibgeschützte Freigabe",
+    "loading": "Wird geladen…",
+    "notFound": "Diese geteilte Aufgabe konnte nicht gefunden werden.",
+    "notFoundHint": "Der Link wurde möglicherweise widerrufen oder liegt außerhalb seines Freigabebereichs.",
+    "goal": "Ziel",
+    "result": "Ergebnis",
+    "summaryLine": "{turns} Runden · {tools} Tool-Aufrufe",
+    "retries": "{n} Wiederholungen",
+    "diffCount": "{n} Diffs",
+    "steps": "Fortschrittsprotokoll ({count})",
+    "changes": "Änderungen ({count})",
+    "snapshotNote": "Eine Momentaufnahme vom Zeitpunkt der Veröffentlichung — das Fortsetzen der Aufgabe ändert diese Seite nicht.",
+    "artifacts": "Ausgaben ({count})",
+    "artifactMarkupOmitted": "HTML-/SVG-Ausgaben sind nicht enthalten — eine geteilte Seite zeigt nur Text.",
+    "artifactUnavailable": "Der Inhalt konnte nicht gelesen werden.",
+    "openArtifact": "Öffnen",
+    "artifactViewerOnly": "Der Inhalt wird in einem isolierten Viewer geöffnet — drücken Sie auf Öffnen."
+  }
+}

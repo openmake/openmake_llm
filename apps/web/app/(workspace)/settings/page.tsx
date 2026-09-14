@@ -90,6 +90,7 @@ const LANGUAGES = [
   { value: "en", label: "English" },
   { value: "ja", label: "日本語" },
   { value: "zh", label: "中文(简体)" },
+  { value: "de", label: "Deutsch" },
 ];
 
 const CUSTOM_INSTRUCTIONS_MAX = 4000;

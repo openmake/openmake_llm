@@ -51,7 +51,7 @@ jobs:
             --target=node20 --format=cjs --outfile=apps/desktop-native/helper/dist/helper.cjs
           node apps/desktop-native/helper/harness.cjs
 
-      # ─── Gate 1-B: 다국어 표 (ko·en·ja·zh-Hans 키 집합 + 소스가 쓰는 L("키")) ───
+      # ─── Gate 1-B: 다국어 표 (ko·en·ja·zh-Hans·de 키 집합 + 소스가 쓰는 L("키")) ───
       - name: "Gate 1-B: Localization tables"
         run: bash apps/desktop-native/check-l10n.sh
 
