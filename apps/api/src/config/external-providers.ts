@@ -300,6 +300,39 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             { id: 'hy3',                          displayName: 'Hunyuan 3',                     isFree: true, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true } },
         ],
     },
+    {
+        id: 'orcarouter',
+        displayName: 'OrcaRouter',
+        sdkType: 'openai-compatible',
+        defaultBaseUrl: 'https://api.orcarouter.ai/v1',
+        keyPrefixPattern: 'sk-orca-',
+        validatePath: '/models',
+        enabled: true,
+        sortOrder: 80,
+        helpText:
+            'OrcaRouter (https://orcarouter.ai/console) 의 API 키(sk-orca-*)를 입력하세요. OpenAI 호환 API 로 ' +
+            'OpenAI·Anthropic·Gemini·DeepSeek·Grok·Qwen·Kimi·MiniMax·GLM 을 upstream 원가 그대로(마크업 0) 제공합니다. ' +
+            '모델 ID 는 "openai/gpt-4o-mini" 처럼 provider 접두사 형식이며, "-free" 로 끝나는 모델과 "orcarouter/free" 는 무료입니다. ' +
+            '무료 모델은 워크스페이스 단위 분당·일일 요청 한도와 요청당 프롬프트 토큰 상한이 있어(초과 시 429) ' +
+            '긴 대화·문서에는 유료 기본 모델을 쓰세요. 주의: 모델 목록 API 는 인증이 없어 키 유효성은 첫 채팅에서 확인됩니다.',
+        homepage: 'https://orcarouter.ai',
+        keyUrl: 'https://www.orcarouter.ai/console',
+        logo: '/images/providers/orcarouter.svg',
+        authMethods: ['api_key'] as const,
+        // 2026-09-14 공개 카탈로그(/v1/models · /api/pricing) 기준 — 무료 4종 + 대표 유료 4종.
+        // capability 는 /api/pricing 의 input_modalities·supported_parameters(tools/reasoning) 로 판정.
+        // 무료 목록은 OrcaRouter 정책에 따라 수시로 바뀐다("-free" 접미사 + $0 가 SoT).
+        fallbackModels: [
+            { id: 'orcarouter/free',                displayName: 'OrcaRouter Free (auto)',        isFree: true,  capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true  } },
+            { id: 'deepseek/deepseek-v4-flash-free', displayName: 'DeepSeek V4 Flash (Free)',      isFree: true,  capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true  } },
+            { id: 'z-ai/glm-5.3-flash-free',         displayName: 'GLM 5.3 Flash (Free)',          isFree: true,  capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: true  } },
+            { id: 'tencent/hy3-free',                displayName: 'Hunyuan 3 (Free)',              isFree: true,  capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true  } },
+            { id: 'openai/gpt-4o-mini',              displayName: 'GPT-4o mini',                   isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: false } },
+            { id: 'anthropic/claude-sonnet-4.6',     displayName: 'Claude Sonnet 4.6',             isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: true  } },
+            { id: 'google/gemini-2.5-flash',         displayName: 'Gemini 2.5 Flash',              isFree: false, capabilities: { streaming: true, toolCalling: true, vision: true,  thinking: true  } },
+            { id: 'deepseek/deepseek-chat',          displayName: 'DeepSeek V3',                   isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true  } },
+        ],
+    },
 ] as const;
 
 /**

@@ -28,6 +28,7 @@ const EXTERNAL_PROVIDER_LABELS: Record<string, string> = {
   nvidia: "🌐 NVIDIA NIM",
   hasa: "🌐 Open AI Service Hub",
   bai: "🌐 B.AI",
+  orcarouter: "🌐 OrcaRouter",
 };
 
 export function ModelPicker({
