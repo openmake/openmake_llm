@@ -248,6 +248,8 @@ export async function runExternalStream(
                 const question = formatAskUserQuestion(askUser.args);
                 logger.info(`[AskUser] 사용자 확인 질문으로 턴 종료 (turn ${turn + 1}, 동반 도구 ${result.toolCalls.length - 1}개 미실행)`);
                 const separator = result.content?.trim() ? '\n\n' : '';
+                // 본문 없이 도구 호출만 온 턴은 첫 청크가 여기서 나간다 — TTFT 계측(ttfc)이 -1 로 남지 않게.
+                if (!timings.firstChunkAt) timings.firstChunkAt = Date.now();
                 onToken(`${separator}${question}`, undefined);
                 result = { ...result, content: `${result.content || ''}${separator}${question}`, toolCalls: [], finishReason: 'stop' };
                 break;
