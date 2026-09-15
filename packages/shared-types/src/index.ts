@@ -206,13 +206,20 @@ export type WsServerEvent =
       agent: {
         type: string;
         name: string;
+        /** 영어 표시 이름 — 한국어 외 UI 는 이것을 쓴다(산업·범용 에이전트만, 커스텀 에이전트는 없음) */
+        nameEn?: string;
         emoji?: string;
         phase?: string;
         reason?: string;
         confidence?: number;
       };
     }
-  | { type: "skills_activated"; skillNames: string[] }
+  | {
+      type: "skills_activated";
+      skillNames: string[];
+      /** 시스템 시드 스킬의 영어 표시 이름(스킬 이름 → 영어) — 사용자·확장 스킬은 없다 */
+      skillNamesEn?: Record<string, string>;
+    }
   // MCP 도구 호출 진행 (백엔드 ws-chat-handler onMcpToolStart/onMcpToolResult)
   | { type: "mcp_tool_start"; toolName: string; messageId?: string }
   | { type: "mcp_tool_result"; toolName: string; resources?: McpToolResource[]; messageId?: string }

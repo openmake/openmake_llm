@@ -47,6 +47,18 @@ describe('summarizeThinking', () => {
         expect(sys).toContain('현재진행형');
     });
 
+    it('language=en → 대상 언어를 명시한 영어 프롬프트, 한글 없음 (2026-09-14 영어 질문에 한국어 헤드라인)', async () => {
+        await summarizeThinking('How do I get to the airport?', 'x'.repeat(100), 'u1', 'final', 'en');
+        const [sys, user] = chatMock.mock.calls[0][0] as Array<{ content: string }>;
+        expect(sys.content).toContain('Write the headline in English');
+        expect(/\p{Script=Hangul}/u.test(sys.content + user.content)).toBe(false);
+    });
+
+    it('language 미지정·ko → 한국어 프롬프트 유지', async () => {
+        await summarizeThinking('공항 가는 법', 'x'.repeat(100), 'u1', 'final', 'ko');
+        expect(chatMock.mock.calls[0][0][0].content).toContain('사용자 질문과 같은 언어');
+    });
+
     it('LLM 실패 → null (fail-open)', async () => {
         chatMock.mockRejectedValue(new Error('down'));
         expect(await summarizeThinking('q', 'x'.repeat(100), 'u1')).toBeNull();
@@ -80,6 +92,13 @@ describe('createThinkingSummarySession', () => {
         s.onThinking('x'.repeat(200)); // final 이후 중간 요약 없음
         await flush();
         expect(chatMock.mock.calls.length).toBe(callsAfterFinal);
+    });
+
+    it('세션에 준 언어가 요약 프롬프트까지 전달된다', async () => {
+        const s = createThinkingSummarySession('Question', 'u1', () => {}, 'ja');
+        s.onThinking('thinking '.repeat(3));
+        await s.startFinal();
+        expect(chatMock.mock.calls[0][0][0].content).toContain('日本語');
     });
 
     it('생각 없이 startFinal → null resolve, LLM 미호출', async () => {

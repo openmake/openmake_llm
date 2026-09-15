@@ -16,6 +16,8 @@ export type AgentPhase = 'planning' | 'build' | 'optimization';
 export interface Agent {
     id: string;
     name: string;
+    /** 영어 표시 이름 — 한국어 외 UI 의 에이전트·스킬 칩용(name 은 한국어) */
+    nameEn?: string;
     description: string;
     keywords: string[];
     emoji?: string;

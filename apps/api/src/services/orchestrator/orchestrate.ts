@@ -135,10 +135,12 @@ function recentTurns(req: ChatMessageRequest): Array<{ role: string; content: st
 function buildResultBlock(results: TaskResult[], lang: string): string {
     const ko = lang === 'ko';
     const lines = results.map((r) => {
-        const label = CAPABILITY_LABELS_KO[r.capability] ?? r.capability;
         const statusLabel = r.status === 'completed' ? (ko ? '완료' : 'done') : r.status === 'pending' ? (ko ? '진행 중(미완료)' : 'pending') : r.status === 'skipped' ? (ko ? '건너뜀' : 'skipped') : (ko ? '실패' : 'failed');
-        const head = `### ${r.taskId} · ${r.capability} (${label}) — ${statusLabel}`;
-        const body = r.text.length > ORCHESTRATOR.RESULT_MAX_CHARS ? `${r.text.slice(0, ORCHESTRATOR.RESULT_MAX_CHARS)}\n…(절단)` : r.text;
+        // 한국어 라벨은 한국어 턴에만 — 영어 턴의 종합 컨텍스트에 한국어가 섞이지 않게
+        const head = ko
+            ? `### ${r.taskId} · ${r.capability} (${CAPABILITY_LABELS_KO[r.capability] ?? r.capability}) — ${statusLabel}`
+            : `### ${r.taskId} · ${r.capability} — ${statusLabel}`;
+        const body = r.text.length > ORCHESTRATOR.RESULT_MAX_CHARS ? `${r.text.slice(0, ORCHESTRATOR.RESULT_MAX_CHARS)}\n…(${ko ? '절단' : 'truncated'})` : r.text;
         const media = r.media.length ? `\n${r.media.map((x) => x.markdown).join('\n')}` : '';
         return `${head}\n${body}${media}`;
     });

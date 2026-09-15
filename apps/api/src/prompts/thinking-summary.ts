@@ -4,15 +4,36 @@
  *
  * 생각(내부 추론) 원문을 받아 "무엇을 했는지" 한 문장 과거형 헤드라인을 만든다.
  * 예: "근거리 이동 수단 선택지를 비교 검토했습니다"
- * 사용자 질문과 같은 언어로 출력 (thinking 원문이 영어여도 헤드라인은 질문 언어).
+ * 응답 언어(파이프라인 판정값)로 출력한다. 한국어 프롬프트에 "질문과 같은 언어" 규칙만 두면
+ * 영어 질문에도 한국어 헤드라인이 나와(2026-09-14) 한국어 외 언어는 대상 언어를 명시한 영어 프롬프트를 쓴다.
  */
+import { LANGUAGE_DISPLAY_NAMES, type SupportedLanguageCode } from '../chat/language-policy';
 
 export function getThinkingSummaryMessages(
     userMessage: string,
     thinking: string,
     /** progress = 생각 진행 중 (현재진행형 헤드라인), final = 생각 종료 (과거형) */
     mode: 'progress' | 'final' = 'final',
+    /** 응답 언어 — 미지정·ko 는 한국어 프롬프트 */
+    language?: SupportedLanguageCode,
 ): { system: string; user: string } {
+    if (language && language !== 'ko') {
+        const target = LANGUAGE_DISPLAY_NAMES[language] ?? language;
+        const tense = mode === 'progress'
+            ? '- One sentence in the present progressive, under 80 characters (e.g. "Comparing short-distance travel options")'
+            : '- One sentence in the past tense, under 80 characters (e.g. "Compared short-distance travel options")';
+        return {
+            system: [
+                "You summarize an AI's internal reasoning into a one-line headline.",
+                'Rules:',
+                `- Write the headline in ${target}`,
+                tense,
+                '- Summarize the review/comparison/analysis the reasoning actually did — do not include its conclusion',
+                '- Output only the headline sentence, without quotes, prefixes, or explanations',
+            ].join('\n'),
+            user: `[User question]\n${userMessage}\n\n[AI internal reasoning]\n${thinking}\n\nOne-sentence headline in ${target}:`,
+        };
+    }
     const tense = mode === 'progress'
         ? '- 현재진행형 서술 한 문장, 40자 이내 (예: "근거리 이동 수단 선택지를 비교하는 중입니다")'
         : '- 정중한 과거형 서술 한 문장, 40자 이내 (예: "근거리 이동 수단 선택지를 비교 검토했습니다")';

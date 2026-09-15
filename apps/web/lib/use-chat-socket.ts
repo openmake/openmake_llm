@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { WsChatRequest, WsServerEvent, WsAttachedFile } from "@openmake/shared-types";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "./store";
 import { ApiClient, csrfHeaders } from "./api-client";
@@ -100,8 +100,12 @@ export function useChatSocket() {
   // 콜백들이 stale deps(useCallback([]) 등)로 메모이즈되어 t 가 클로저에 갇히므로
   // ref 로 최신 t 를 참조한다(렌더 중 ref 쓰기 금지 규칙이라 effect 에서 갱신).
   const tRef = useRef(t);
+  // 에이전트·스킬 칩 이름 선택용 UI 로케일 — t 와 같은 이유로 ref
+  const locale = useLocale();
+  const localeRef = useRef(locale);
   useEffect(() => {
     tRef.current = t;
+    localeRef.current = locale;
   });
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -451,12 +455,18 @@ export function useChatSocket() {
             });
           }
           break;
+        // 서버의 에이전트·시스템 스킬 이름은 한국어라, 한국어 외 UI 에선 영어 이름을 쓴다(없으면 원래 이름)
         case "agent_selected":
-          setActiveAgent({ name: data.agent.name, emoji: data.agent.emoji });
+          setActiveAgent({
+            name: (localeRef.current !== "ko" && data.agent.nameEn) || data.agent.name,
+            emoji: data.agent.emoji,
+          });
           break;
-        case "skills_activated":
-          setActiveSkills(data.skillNames);
+        case "skills_activated": {
+          const namesEn = localeRef.current !== "ko" ? data.skillNamesEn : undefined;
+          setActiveSkills(namesEn ? data.skillNames.map((n) => namesEn[n] ?? n) : data.skillNames);
           break;
+        }
         case "artifact_start":
           startArtifact(data.artifact);
           break;

@@ -138,7 +138,7 @@ export interface ChatRequestParams {
     /** 생각 요약 헤드라인 (중간·최종) — thinking-summarizer 발행, WS thinking_summary 로 전달 */
     onThinkingSummary?: (summary: string) => void;
     /** 에이전트 선택 콜백 */
-    onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void;
+    onAgentSelected?: (agent: { type: string; name: string; nameEn?: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void;
     /** 토론 진행 콜백 */
     onDiscussionProgress?: (progress: DiscussionProgress) => void;
     /** 딥 리서치 진행 콜백 */

@@ -173,7 +173,7 @@ export async function resolveAgent(
     message: string,
     userId: string | undefined,
     languageCode: string,
-    onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
+    onAgentSelected?: (agent: { type: string; name: string; nameEn?: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
     onSkillsActivated?: (skillNames: string[]) => void,
 ): Promise<AgentResolutionResult> {
     const agentSelection: AgentSelection = await selectAgent(message);
@@ -188,6 +188,7 @@ export async function resolveAgent(
         onAgentSelected({
             type: agentSelection.primaryAgent,
             name: selectedAgent.name,
+            nameEn: selectedAgent.nameEn,
             emoji: selectedAgent.emoji,
             phase: agentSelection.phase || 'planning',
             reason: agentSelection.reason || '',

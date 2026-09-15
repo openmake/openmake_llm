@@ -14,6 +14,7 @@
 import { getConfig } from '../../config';
 import { resolveRoleClientForUser } from '../model-role-resolver';
 import { getThinkingSummaryMessages } from '../../prompts/thinking-summary';
+import type { SupportedLanguageCode } from '../../chat/language-policy';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('ThinkingSummarizer');
@@ -42,6 +43,8 @@ export async function summarizeThinking(
     thinking: string,
     userId?: string,
     mode: 'progress' | 'final' = 'final',
+    /** 헤드라인 언어 — 파이프라인이 판정한 응답 언어 */
+    language?: SupportedLanguageCode,
 ): Promise<string | null> {
     if (!getConfig().thinkingSummaryEnabled) return null;
     if (!thinking || thinking.trim().length < 20) return null; // 한두 단어 생각은 요약 무의미
@@ -53,6 +56,7 @@ export async function summarizeThinking(
             userMessage.slice(0, MAX_USER_MSG_CHARS),
             truncateThinking(thinking),
             mode,
+            language,
         );
         const r = await client.chat(
             [{ role: 'system', content: system }, { role: 'user', content: user }],
@@ -99,6 +103,7 @@ export function createThinkingSummarySession(
     userMessage: string,
     userId: string | undefined,
     onSummary: (summary: string) => void,
+    language?: SupportedLanguageCode,
 ): ThinkingSummarySession {
     let buffer = '';
     let lastSummarizedLen = 0;
@@ -107,7 +112,7 @@ export function createThinkingSummarySession(
     let finalPromise: Promise<string | null> | null = null;
 
     const run = async (mode: 'progress' | 'final'): Promise<string | null> => {
-        const summary = await summarizeThinking(userMessage, buffer, userId, mode);
+        const summary = await summarizeThinking(userMessage, buffer, userId, mode, language);
         // 최종 요약이 이미 시작됐으면 늦게 도착한 중간 요약은 발행하지 않음 (역행 방지)
         if (summary && (mode === 'final' || !finalPromise)) onSummary(summary);
         return summary;

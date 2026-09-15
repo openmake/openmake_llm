@@ -338,7 +338,7 @@ export class ChatService {
     async processMessage(
         req: ChatMessageRequest,
         onToken: (token: string) => void,
-        onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
+        onAgentSelected?: (agent: { type: string; name: string; nameEn?: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
         onDiscussionProgress?: (progress: DiscussionProgress) => void,
         onResearchProgress?: (progress: ResearchProgress) => void,
         executionPlan?: ExecutionPlan,
@@ -387,7 +387,7 @@ export class ChatService {
     private async processMessageInternal(
         req: ChatMessageRequest,
         onToken: (token: string) => void,
-        onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
+        onAgentSelected?: (agent: { type: string; name: string; nameEn?: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
         onDiscussionProgress?: (progress: DiscussionProgress) => void,
         onResearchProgress?: (progress: ResearchProgress) => void,
         executionPlan?: ExecutionPlan,
@@ -420,7 +420,7 @@ export class ChatService {
         message: string,
         userId: string | undefined,
         languageCode: string,
-        onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
+        onAgentSelected?: (agent: { type: string; name: string; nameEn?: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
         onSkillsActivated?: (skillNames: string[]) => void,
     ): Promise<{ agentSelection: AgentSelection; agentSystemMessage: string; selectedAgent: typeof AGENTS[string] }> {
         return resolveAgentFn(message, userId, languageCode, onAgentSelected, onSkillsActivated);

@@ -39,6 +39,7 @@ for (const [categoryId, category] of Object.entries(industryData)) {
 AGENTS['general'] = {
     id: 'general',
     name: '범용 AI 어시스턴트',
+    nameEn: 'General AI Assistant',
     description: '다양한 질문에 도움을 드리는 범용 AI',
     keywords: [],
     emoji: '🤖',

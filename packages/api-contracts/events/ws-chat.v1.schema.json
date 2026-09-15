@@ -582,6 +582,10 @@
                 "name": {
                   "type": "string"
                 },
+                "nameEn": {
+                  "type": "string",
+                  "description": "영어 표시 이름 — 한국어 외 UI 는 이것을 쓴다(산업·범용 에이전트만, 커스텀 에이전트는 없음)"
+                },
                 "emoji": {
                   "type": "string"
                 },
@@ -618,6 +622,13 @@
               "items": {
                 "type": "string"
               }
+            },
+            "skillNamesEn": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "시스템 시드 스킬의 영어 표시 이름(스킬 이름 → 영어) — 사용자·확장 스킬은 없다"
             }
           },
           "required": [

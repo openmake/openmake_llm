@@ -90,7 +90,7 @@ export function refsText(task: PlanTask, ctx: ExecContext, maxChars: number): st
         parts.push(`[${r} ${res.capability}] ${res.text}`);
     }
     const joined = parts.join('\n\n');
-    return joined.length > maxChars ? `${joined.slice(0, maxChars)}\n…(절단)` : joined;
+    return joined.length > maxChars ? `${joined.slice(0, maxChars)}\n…(${ctx.lang === 'ko' ? '절단' : 'truncated'})` : joined;
 }
 
 /** refs 의 결과 **본문만**(메타 라벨 없이) 이어 붙인다 — 낭독·생성 입력용 */
