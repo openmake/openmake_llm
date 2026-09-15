@@ -22,29 +22,10 @@
 import { LLMClient } from '../../llm';
 import type { ChatMessage, ToolDefinition, UsageMetrics } from '../../llm/types';
 import type { IProvider } from '../i-provider';
-import { ProviderError } from '../provider-errors';
+import { ProviderError, PROVIDER_ERROR_HTTP_STATUS } from '../provider-errors';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('ProviderRoleClient');
-
-/**
- * ProviderError code → HTTP 상태 근사값.
- *
- * 역할 경로의 기존 폴백 규약(4xx 면 로컬 1회 강등 — agent-task/role-client.ts)이
- * `err.status` 숫자를 보고 판단하므로, provider 에러에도 같은 신호를 실어준다.
- * 이게 없으면 ChatGPT 인증 만료/한도 초과 시 폴백이 동작하지 않고 작업이 죽는다.
- */
-const PROVIDER_ERROR_STATUS: Record<string, number> = {
-    INVALID_API_KEY: 401,
-    GUEST_NOT_ALLOWED: 403,
-    SUBSCRIPTION_REQUIRED: 403,
-    MODEL_ACCESS_RESTRICTED: 403,
-    MODEL_NOT_FOUND: 404,
-    QUOTA_EXCEEDED: 429,
-    INSUFFICIENT_CREDIT: 402,
-    NOT_SUPPORTED: 400,
-    INVALID_MODEL_ID: 400,
-};
 
 interface ProviderRoleClientOptions {
     provider: IProvider;
@@ -148,11 +129,10 @@ function getProviderRoleClientCtor(): new (opts: ProviderRoleClientOptions) => L
                 };
             } catch (err) {
                 if (err instanceof ProviderError) {
-                    const status = PROVIDER_ERROR_STATUS[err.code];
-                    if (status !== undefined) {
-                        // 기존 4xx 폴백 규약과 맞물리도록 status 를 부착해 재throw
-                        Object.defineProperty(err, 'status', { value: status, enumerable: false });
-                    }
+                    // 역할 경로의 폴백 규약(4xx 면 로컬 1회 강등 — agent-task/role-client.ts)이 `err.status` 를
+                    // 보므로 provider 에러에도 같은 신호를 실어준다. 상태표는 REST 와 공유하는
+                    // PROVIDER_ERROR_HTTP_STATUS 하나만 쓴다(2026-09-16 전용 표 제거).
+                    Object.defineProperty(err, 'status', { value: PROVIDER_ERROR_HTTP_STATUS[err.code], enumerable: false });
                     logger.warn(`role 경로 provider 호출 실패 (${err.code}): ${err.message.slice(0, 120)}`);
                 }
                 throw err;
