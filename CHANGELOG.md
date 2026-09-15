@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.65.6](https://github.com/openmake/openmake_llm/compare/v1.65.5...v1.65.6) (2026-09-15)
+
+
+### 🐛 버그 수정
+
+* **chat:** 도구 결과 text 를 이스케이프 없이 이어 8000자 캡 절단 방지 — open-design list_projects 마지막 프로젝트 누락 ([#887](https://github.com/openmake/openmake_llm/issues/887)) ([f243bf1](https://github.com/openmake/openmake_llm/commit/f243bf1627cafd826081d91cc57d521ceb172089))
+
 ## [1.65.5](https://github.com/openmake/openmake_llm/compare/v1.65.4...v1.65.5) (2026-09-14)
 
 
