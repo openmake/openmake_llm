@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.68.2](https://github.com/openmake/openmake_llm/compare/v1.68.1...v1.68.2) (2026-09-15)
+
+
+### 🐛 버그 수정
+
+* **api:** SSE 채팅의 ProviderError 코드 전달 + chatgpt 역할 클라이언트 상태표를 공유 맵으로 통합 ([#905](https://github.com/openmake/openmake_llm/issues/905)) ([d3be717](https://github.com/openmake/openmake_llm/commit/d3be71745969945f5a79e630cb8d263dde54bf8e))
+
 ## [1.68.1](https://github.com/openmake/openmake_llm/compare/v1.68.0...v1.68.1) (2026-09-15)
 
 
