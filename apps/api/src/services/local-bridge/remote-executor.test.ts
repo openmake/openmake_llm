@@ -6,8 +6,38 @@
  * 게이트가 항상 꺼져 있고, runBrowser 가 **브리지 요청을 내보내지 않고** 거절한다.
  * (컨테이너 샌드박스의 browser 도구는 무관하게 유지된다 — TASK_SANDBOX_BROWSER_ENABLED.)
  */
+import type { WebSocket } from 'ws';
 import { RemoteExecutor } from './remote-executor';
 import { getLocalBridgeRegistry } from './registry';
+import { LOCAL_BRIDGE } from '../../config/local-bridge';
+
+describe('RemoteExecutor 경로 — 컨테이너 표기(/workspace) 정규화', () => {
+    afterEach(() => jest.restoreAllMocks());
+
+    it('worktree 격리가 없으면 /workspace/… 를 연결 폴더 기준 상대경로로 푼다', async () => {
+        const spy = jest.spyOn(getLocalBridgeRegistry(), 'request').mockResolvedValue({ ok: true, content: 'x' });
+        const ex = new RemoteExecutor('task-1', 'user-1');
+        await ex.readFile('/workspace/calc.py');
+        expect(spy).toHaveBeenLastCalledWith('user-1', expect.objectContaining({ kind: 'read', path: 'calc.py' }), undefined, undefined);
+        await ex.readFile('./src/a.ts');
+        expect(spy).toHaveBeenLastCalledWith('user-1', expect.objectContaining({ kind: 'read', path: 'src/a.ts' }), undefined, undefined);
+    });
+
+    it('worktree 격리 중이면 worktree 기준으로 옮긴다 — /workspace 접두가 경로에 섞이지 않는다', async () => {
+        jest.replaceProperty(LOCAL_BRIDGE, 'WORKTREE_ENABLED', true);
+        jest.spyOn(getLocalBridgeRegistry(), 'getDevice').mockReturnValue({
+            userId: 'user-1', deviceId: 'dev-1', label: 'mac · repo', folderName: 'repo', ws: {} as WebSocket, connectedAt: 0,
+        });
+        const spy = jest.spyOn(getLocalBridgeRegistry(), 'request').mockImplementation(async (_userId, payload) =>
+            (payload.kind === 'worktree' ? { ok: true, worktreeRel: '.openmake/worktrees/task-1', branch: 'omk-task/task-1' } : { ok: true, content: 'x' }));
+        const ex = new RemoteExecutor('task-1', 'user-1');
+        await ex.create();
+        await ex.readFile('/workspace/src/a.ts');
+        expect(spy).toHaveBeenLastCalledWith('user-1', expect.objectContaining({ kind: 'read', path: '.openmake/worktrees/task-1/src/a.ts' }), undefined, undefined);
+        await ex.listDir('/workspace');
+        expect(spy).toHaveBeenLastCalledWith('user-1', expect.objectContaining({ kind: 'list', path: '.openmake/worktrees/task-1' }), undefined, undefined);
+    });
+});
 
 describe('RemoteExecutor codeNav (읽기 전용 코드 탐색)', () => {
     afterEach(() => jest.restoreAllMocks());

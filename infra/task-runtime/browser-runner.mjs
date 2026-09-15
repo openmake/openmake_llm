@@ -17,6 +17,17 @@ const WORKSPACE = '/workspace';
 const MAX_ACTIONS = 40;
 const DEFAULT_TIMEOUT = 20000;
 
+/**
+ * 페이지가 있어야 의미 있는 액션. 호출마다 새 브라우저라 goto 없이 이것들을 실행하면 about:blank 에서
+ * 빈 텍스트·빈 스크린샷이 "성공"으로 돌아간다 — 모델이 goto 를 앞선 호출에 두고 추출만 따로 부르는 실수가
+ * 반복됐다(2026-06~08 실측 24건). 빈 페이지면 이유를 담은 실패로 돌려 그 자리에서 교정하게 한다.
+ */
+const PAGE_ACTIONS = new Set([
+    'click', 'fill', 'snapshot', 'smartClick', 'smartFill', 'press', 'waitFor', 'screenshot', 'extractText', 'extractHtml',
+]);
+const BLANK_PAGE_ERROR = '빈 페이지(about:blank)에서 실행됨 — browser 호출마다 새 페이지로 시작하므로(이전 호출의 페이지는 '
+    + '남지 않음) 같은 actions 배열 앞에 goto 를 넣으세요';
+
 // #2 Part B — a11y 폴백: CSS 셀렉터가 실패하는 페이지에서 상호작용 요소를
 // {role,name} 으로 재해석한다. role/name 은 fresh page 에서도 안정적으로 재해석되므로
 // 일회성 컨테이너(호출 간 page 소멸) 제약과 자연히 양립한다(ref 캐시 불필요).
@@ -37,6 +48,14 @@ function parseAriaSnapshot(yaml) {
 }
 
 function out(obj) { process.stdout.write(JSON.stringify(obj)); }
+
+/** screenshot 파일명 — 컨테이너 표기(/workspace/x.png)·./ 접두는 벗긴다. 벗기지 않으면 `/` 가 `_` 로 바뀌어
+ *  `_workspace_x.png` 로 저장돼 모델이 기대한 파일과 어긋난다(2026-07~09 실측 14건). */
+function screenshotName(path, i) {
+    let name = String(path || '');
+    if (name.startsWith(`${WORKSPACE}/`)) name = name.slice(WORKSPACE.length + 1);
+    return name.replace(/^(\.\/)+/, '').replace(/[^A-Za-z0-9._-]/g, '_') || `screenshot-${i}.png`;
+}
 
 const argPath = process.argv[2];
 if (!argPath) { out({ ok: false, error: 'actions JSON 경로 인자 필요' }); process.exit(1); }
@@ -93,6 +112,7 @@ try {
     for (let i = 0; i < actions.length; i++) {
         const a = actions[i];
         try {
+            if (PAGE_ACTIONS.has(a?.type) && page.url() === 'about:blank') throw new Error(BLANK_PAGE_ERROR);
             switch (a.type) {
                 case 'goto':
                     if (!hostAllowed(a.url)) throw new Error(`allowlist 차단: ${a.url}`);
@@ -129,7 +149,7 @@ try {
                     await page.waitForSelector(a.selector, { timeout });
                     results.push({ i, type: a.type, ok: true }); break;
                 case 'screenshot': {
-                    const p = (a.path || `screenshot-${i}.png`).replace(/[^A-Za-z0-9._-]/g, '_');
+                    const p = screenshotName(a.path, i);
                     await page.screenshot({ path: resolve(WORKSPACE, p), fullPage: !!a.fullPage });
                     results.push({ i, type: a.type, ok: true, path: p }); break;
                 }
