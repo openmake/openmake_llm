@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.67.0](https://github.com/openmake/openmake_llm/compare/v1.66.0...v1.67.0) (2026-09-15)
+
+
+### ✨ 기능
+
+* **agent-task:** 정책 계층 — 도구 위험 등급표로 승인 판정 + 승인함에 등급 표시 ([#899](https://github.com/openmake/openmake_llm/issues/899)) ([d284e5a](https://github.com/openmake/openmake_llm/commit/d284e5a1b74caa3bbbd2489b84a13bfbe0e4b7ac))
+
 ## [1.66.0](https://github.com/openmake/openmake_llm/compare/v1.65.10...v1.66.0) (2026-09-15)
 
 
