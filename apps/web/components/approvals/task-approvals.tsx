@@ -24,6 +24,10 @@ interface PendingItem {
   taskId: string;
   toolName: string;
   args?: Record<string, unknown>;
+  /** 위험 등급(백엔드 config/tool-policy) — 승인이 필요한 이유 표시. 구 서버는 미전송. */
+  riskClass?: "read" | "write" | "destructive" | "exec" | "network" | "external" | "control";
+  /** 자격증명 파일을 바꾸는 호출. */
+  sensitive?: boolean;
 }
 
 /** 인자 요약 — 어떤 작업을 승인하는지 한 줄로 보인다(장문은 잘라낸다). */
@@ -107,6 +111,12 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
                 )}
                 {a.toolName}
               </span>
+              {!isQuestion && a.riskClass && (
+                <Badge tone={a.riskClass === "exec" || a.riskClass === "destructive" || a.sensitive ? "warn" : "neutral"}>
+                  {t(`tasks.risk.${a.riskClass}`)}
+                  {a.sensitive ? ` · ${t("tasks.risk.sensitive")}` : ""}
+                </Badge>
+              )}
               <Link
                 href={`/agent-tasks?task=${encodeURIComponent(a.taskId)}`}
                 className="inline-flex items-center gap-1 text-xs text-accent hover:underline"

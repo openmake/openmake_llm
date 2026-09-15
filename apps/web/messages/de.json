@@ -2138,7 +2138,17 @@
       "openTask": "Aufgabe öffnen",
       "answerPlaceholder": "Antwort eingeben",
       "sendAnswer": "Antwort senden",
-      "actionFailed": "Aktion fehlgeschlagen: {error}"
+      "actionFailed": "Aktion fehlgeschlagen: {error}",
+      "risk": {
+        "read": "Lesen",
+        "write": "Datei schreiben",
+        "destructive": "Löschen",
+        "exec": "Codeausführung",
+        "network": "Netzwerkzugriff",
+        "external": "Externes Tool",
+        "control": "Steuerung",
+        "sensitive": "Anmeldedatei"
+      }
     }
   },
   "marketplacePublish": {

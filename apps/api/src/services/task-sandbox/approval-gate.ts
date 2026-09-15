@@ -18,51 +18,32 @@ import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
 import { isSensitivePath } from './sensitive-paths';
 import { createLogger } from '../../utils/logger';
 import { getPool } from '../../data/models/unified-database';
+import { classifyToolRisk, policyRequiresApproval, type ToolRiskClass } from '../../config/tool-policy';
 import { AgentTaskApprovalRepository, hashApprovalArgs, type ApprovalRow } from '../../data/repositories/agent-task-approval-repository';
 
 const logger = createLogger('TaskApprovalGate');
 
-/** 승인이 필요한 고위험 도구(high-risk 정책 시). browser=네트워크 egress.
- *  python_execute 는 임의 코드 실행이라 bash 와 동급 — 제외하면 정책 우회가 된다.
- *  skill_run 은 저장된 브라우저/스크립트 절차를 그대로 실행하므로 bash/browser 와 동급(제외 시 우회). */
-const HIGH_RISK_TOOLS = new Set(['bash', 'browser', 'python_execute', 'skill_run']);
-/** 부작용 없는 도구 — 승인 불요(제어 시그널 + 플래닝 + 전문가 자문·병렬 위임).
- *  ask_human 은 이 게이트와 무관하게 TaskRuntime 이 직접 승인 레지스트리로 대기시킨다.
- *  spawn_agents 는 서브 도구를 승인 불요 도구로만 선별(buildTaskSpawnFn)하므로 delegate 와 동급. */
-const NO_APPROVAL_TOOLS = new Set(['terminate', 'ask_human', 'plan_create', 'plan_update', 'plan_view', 'delegate', 'spawn_agents']);
-/** 고위험으로 보는 file_ops 작업. */
-const HIGH_RISK_FILE_OPS = new Set(['delete']);
 /** 파일을 바꾸는 작업 — 대상이 자격증명 파일이면 high-risk 로 올린다(아래 판정). */
 const FILE_WRITE_OPS = new Set(['write', 'delete']);
 const EDITOR_WRITE_COMMANDS = new Set(['create', 'str_replace', 'insert']);
 /** 디바이스(로컬 브리지)가 실행 직전 자체 확인하는 코드 실행 도구 — 서버 승인 중복이라 skip 대상. */
 const DEVICE_GATED_SHELL = new Set(['bash', 'python_execute']);
 
-/** PURE: 도구 호출이 승인을 요구하는지 정책에 따라 판정.
+/** PURE: 도구 호출이 승인을 요구하는지 정책에 따라 판정 — 규칙은 config/tool-policy 의 위험 등급표
+ *  (종전 이름 목록 HIGH_RISK_TOOLS/NO_APPROVAL_TOOLS 를 등급 × 정책으로 대체, 판정 결과는 동일).
  *  opts.deviceGatesShell=true(로컬 브리지 실행)면 exec 계열(bash/python_execute)은 디바이스가
  *  실행 직전 사용자 확인을 강제하므로 서버측 승인을 skip 한다(이중 프롬프트 제거). 파일/기타
- *  도구는 디바이스가 다이얼로그를 띄우지 않으므로 정책대로 서버 승인을 유지한다. */
+ *  도구는 디바이스가 다이얼로그를 띄우지 않으므로 정책대로 서버 승인을 유지한다.
+ *  자격증명 파일 쓰기(isSensitiveWrite)는 high-risk 에서도 승인 — 종전엔 `.env`·키 파일 덮어쓰기가
+ *  서버 승인도 디바이스 확인도 없이 통과했다(로컬 브리지의 write kind 는 confirmExec 대상이 아니다). */
 export function requiresApproval(
     policy: TaskSandboxApprovalPolicy,
     toolName: string,
     args: Record<string, unknown>,
     opts: { deviceGatesShell?: boolean } = {},
 ): boolean {
-    if (policy === 'none') return false;
-    // 제어 시그널·플래닝은 승인 불요(부작용 없음).
-    if (NO_APPROVAL_TOOLS.has(toolName)) return false;
-    // 로컬 브리지: 코드 실행은 디바이스가 게이트 → 서버 승인 중복 제거.
     if (opts.deviceGatesShell && DEVICE_GATED_SHELL.has(toolName)) return false;
-    if (policy === 'all') return true;
-    // high-risk
-    if (HIGH_RISK_TOOLS.has(toolName)) return true;
-    if (toolName === 'file_ops' && HIGH_RISK_FILE_OPS.has(String(args.op))) return true;
-    // 자격증명 파일 쓰기는 high-risk 로 상향 — 종전엔 file_ops write·str_replace_editor 가
-    // 고위험 목록 밖이라 `.env`·키 파일 덮어쓰기가 **서버 승인도 디바이스 확인도 없이**
-    // 통과했다(로컬 브리지의 write kind 는 confirmExec 대상이 아니다). 차단이 아니라 승인
-    // 상향이므로 사용자가 허용하면 정상 작업(환경변수 추가 등)은 그대로 진행된다.
-    if (isSensitiveWrite(toolName, args)) return true;
-    return false;
+    return policyRequiresApproval(policy, classifyToolRisk(toolName, args), isSensitiveWrite(toolName, args));
 }
 
 /** PURE: 이 호출이 자격증명 파일을 바꾸려 하는가. args 미지({})면 false(보수 판정 — 강등 계산과 동일 계약). */
@@ -111,6 +92,10 @@ export interface PendingApproval {
     toolName: string;
     args: Record<string, unknown>;
     createdAt: number;
+    /** 위험 등급(config/tool-policy) — 승인함이 "왜 승인이 필요한지"를 보여 주는 근거(125). */
+    riskClass: ToolRiskClass;
+    /** 자격증명 파일을 바꾸는 호출(high-risk 상향 사유). */
+    sensitive: boolean;
 }
 
 interface Waiter {
@@ -124,7 +109,13 @@ export type ApprovalStore = Pick<AgentTaskApprovalRepository,
     'insertPending' | 'markDecided' | 'listPending' | 'getPending' | 'takeoverForCall' | 'expirePendingForTask'>;
 
 function rowToPending(r: ApprovalRow): PendingApproval {
-    return { approvalId: r.approval_id, taskId: r.task_id, userId: r.user_id, toolName: r.tool_name, args: r.args ?? {}, createdAt: new Date(r.created_at).getTime() };
+    const args = r.args ?? {};
+    return {
+        approvalId: r.approval_id, taskId: r.task_id, userId: r.user_id, toolName: r.tool_name, args,
+        createdAt: new Date(r.created_at).getTime(),
+        riskClass: (r.risk_class as ToolRiskClass | null) ?? classifyToolRisk(r.tool_name, args),
+        sensitive: isSensitiveWrite(r.tool_name, args),
+    };
 }
 
 /**
@@ -214,8 +205,12 @@ export class ApprovalRegistry {
                 : { decision: 'rejected', reason: 'user', waitedMs: 0 };
         }
         const approvalId = prior?.approval_id ?? `apv_${input.taskId}_${Date.now().toString(36)}_${this.seq++}`;
-        const pending: PendingApproval = { approvalId, ...input, createdAt: prior ? new Date(prior.created_at).getTime() : Date.now() };
-        if (!prior && this.store) await this.persist((s) => s.insertPending({ approvalId, ...input, argsHash, timeoutMs: opts.timeoutMs }));
+        const riskClass = classifyToolRisk(input.toolName, input.args);
+        const pending: PendingApproval = {
+            approvalId, ...input, createdAt: prior ? new Date(prior.created_at).getTime() : Date.now(),
+            riskClass, sensitive: isSensitiveWrite(input.toolName, input.args),
+        };
+        if (!prior && this.store) await this.persist((s) => s.insertPending({ approvalId, ...input, argsHash, riskClass, timeoutMs: opts.timeoutMs }));
         return new Promise<ApprovalResult>((resolvePromise) => {
             const settle = (r: Omit<ApprovalResult, 'waitedMs'>) => {
                 const w = this.waiters.get(approvalId);

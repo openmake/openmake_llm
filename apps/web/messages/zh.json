@@ -2138,7 +2138,17 @@
       "openTask": "打开任务",
       "answerPlaceholder": "请输入回复",
       "sendAnswer": "发送回复",
-      "actionFailed": "操作失败：{error}"
+      "actionFailed": "操作失败：{error}",
+      "risk": {
+        "read": "读取",
+        "write": "写入文件",
+        "destructive": "删除",
+        "exec": "执行代码",
+        "network": "网络访问",
+        "external": "外部工具",
+        "control": "控制",
+        "sensitive": "凭据文件"
+      }
     }
   },
   "marketplacePublish": {
