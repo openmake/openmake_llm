@@ -1,6 +1,6 @@
 {
   "name": "@openmake/web",
-  "version": "1.65.8",
+  "version": "1.65.9",
   "private": true,
   "scripts": {
     "dev": "next dev",
