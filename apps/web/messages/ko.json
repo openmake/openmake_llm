@@ -1992,7 +1992,9 @@
     "deleteAria": "메모리 삭제",
     "sourceCandidate": "자동 감지",
     "sourceBatch": "백필",
-    "limitReached": "최대 {max}개까지 저장할 수 있습니다."
+    "limitReached": "최대 {max}개까지 저장할 수 있습니다.",
+    "sensitive": "민감 정보",
+    "expiresOn": "{date} 까지 유지"
   },
   "pageTabs": {
     "myServers": "내 서버",

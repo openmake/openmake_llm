@@ -23,6 +23,7 @@ import { requireAuth } from '../auth/middleware';
 import { validate } from '../middlewares/validation';
 import { getPool } from '../data/models/unified-database';
 import { UserMemoryRepository } from '../data/repositories/user-memory-repository';
+import { MEMORY_METADATA, expiresAtFromTtlDays } from '../config/memory-metadata';
 import { createLogger } from '../utils/logger';
 import { success, internalError, unauthorized, badRequest, notFound } from '../utils/api-response';
 
@@ -50,6 +51,10 @@ const MAX_CONTENT = Number(process.env.USER_MEMORY_MAX_CONTENT_CHARS || '2000');
 
 const createSchema = z.object({
     content: z.string().min(1).max(MAX_CONTENT),
+    /** 보존 기간(일, 126) — 미지정·0 은 무기한. 상한은 config/memory-metadata MAX_TTL_DAYS. */
+    ttlDays: z.number().int().min(0).max(MEMORY_METADATA.MAX_TTL_DAYS).optional(),
+    /** 주입 범위(126) — 현재 주입 경로는 user 만 읽는다. */
+    scope: z.enum(['user', 'session', 'task']).optional(),
 });
 
 function getUserId(req: Request): string | null {
@@ -81,16 +86,17 @@ export function createUserMemoriesController(): Router {
         const userId = getUserId(req);
         if (!userId) { res.status(401).json(unauthorized()); return; }
         try {
-            const { content } = req.body as z.infer<typeof createSchema>;
+            const { content, ttlDays, scope } = req.body as z.infer<typeof createSchema>;
             const repo = new UserMemoryRepository(getPool());
             const currentCount = await repo.countActiveByUser(userId);
             if (currentCount >= MAX_COUNT) {
                 res.status(400).json(badRequest(`Memory 한도 초과 (최대 ${MAX_COUNT}개). 기존 항목 삭제 후 다시 시도하세요.`));
                 return;
             }
-            const memory = await repo.create(uuidv4(), userId, content.trim());
+            // 명시 저장은 민감 패턴이어도 저장한다(사용자 의사) — sensitivity 표시만 남긴다(repo 가 판정).
+            const memory = await repo.create(uuidv4(), userId, content.trim(), 'explicit', { scope, expiresAt: expiresAtFromTtlDays(ttlDays) });
             log.info(`memory 생성: userId=${userId} id=${memory.id} len=${memory.content.length}`);
-            auditMemory(req, 'memory.created', userId, { id: memory.id, source: memory.source, length: memory.content.length });
+            auditMemory(req, 'memory.created', userId, { id: memory.id, source: memory.source, length: memory.content.length, scope: memory.scope, sensitivity: memory.sensitivity, expiresAt: memory.expires_at });
             res.json(success({ memory }));
         } catch (err) {
             log.error('create 실패:', err);

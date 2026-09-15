@@ -1992,7 +1992,9 @@
     "deleteAria": "メモリを削除",
     "sourceCandidate": "自動検出",
     "sourceBatch": "バックフィル",
-    "limitReached": "最大{max}件まで保存できます。"
+    "limitReached": "最大{max}件まで保存できます。",
+    "sensitive": "機密情報",
+    "expiresOn": "{date} まで保持"
   },
   "pageTabs": {
     "myServers": "マイサーバー",

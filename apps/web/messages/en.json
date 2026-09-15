@@ -1992,7 +1992,9 @@
     "deleteAria": "Delete memory",
     "sourceCandidate": "Auto-detected",
     "sourceBatch": "Backfilled",
-    "limitReached": "You can save up to {max} memories."
+    "limitReached": "You can save up to {max} memories.",
+    "sensitive": "Sensitive",
+    "expiresOn": "Kept until {date}"
   },
   "pageTabs": {
     "myServers": "My Servers",

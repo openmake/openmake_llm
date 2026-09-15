@@ -20,6 +20,7 @@
  * @see db/migrations/034_user_memories.sql
  */
 import { BaseRepository, type QueryParam } from './base-repository';
+import { MEMORY_CONFIDENCE_BY_SOURCE, isSensitiveMemory, type MemoryScope, type MemorySensitivity } from '../../config/memory-metadata';
 
 type MemorySource = 'explicit' | 'candidate' | 'batch';
 
@@ -32,21 +33,42 @@ interface UserMemory {
     accessed_at: string | null;
     created_at: string;
     updated_at: string;
+    /** 범위 메타데이터(126) — 구 행은 기본값(user · 출처별 신뢰도 · normal · 무기한). */
+    scope: MemoryScope;
+    confidence: number | null;
+    sensitivity: MemorySensitivity;
+    expires_at: string | null;
+}
+
+/** create 의 선택 메타 — 미지정은 규칙(config/memory-metadata)으로 채운다. */
+export interface MemoryCreateMeta {
+    scope?: MemoryScope;
+    confidence?: number;
+    sensitivity?: MemorySensitivity;
+    expiresAt?: Date | null;
 }
 
 export class UserMemoryRepository extends BaseRepository {
-    async create(id: string, userId: string, content: string, source: MemorySource = 'explicit'): Promise<UserMemory> {
+    async create(id: string, userId: string, content: string, source: MemorySource = 'explicit', meta: MemoryCreateMeta = {}): Promise<UserMemory> {
         const result = await this.query<UserMemory>(
-            `INSERT INTO user_memories (id, user_id, content, source) VALUES ($1, $2, $3, $4) RETURNING *`,
-            [id, userId, content, source],
+            `INSERT INTO user_memories (id, user_id, content, source, scope, confidence, sensitivity, expires_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+            [
+                id, userId, content, source,
+                meta.scope ?? 'user',
+                meta.confidence ?? MEMORY_CONFIDENCE_BY_SOURCE[source],
+                meta.sensitivity ?? (isSensitiveMemory(content) ? 'sensitive' : 'normal'),
+                meta.expiresAt ? meta.expiresAt.toISOString() : null,
+            ],
         );
         return result.rows[0] as UserMemory;
     }
 
+    /** 활성 + 미만료(126) — 주입·목록 공용. 만료 행은 tombstone 처럼 남되 보이지 않는다. */
     async listActiveByUser(userId: string, limit = 50): Promise<UserMemory[]> {
         const result = await this.query<UserMemory>(
             `SELECT * FROM user_memories
-             WHERE user_id = $1 AND is_active = TRUE
+             WHERE user_id = $1 AND is_active = TRUE AND (expires_at IS NULL OR expires_at > NOW())
              ORDER BY created_at DESC
              LIMIT $2`,
             [userId, limit],

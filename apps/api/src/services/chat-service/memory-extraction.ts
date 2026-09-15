@@ -7,6 +7,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { MEMORY_EXTRACTION, getMemoryExtractionMessages } from '../../config/memory-extraction';
+import { MEMORY_METADATA, isSensitiveMemory, expiresAtFromTtlDays } from '../../config/memory-metadata';
 import type { LLMClient } from '../../llm/client';
 import { createLogger } from '../../utils/logger';
 
@@ -142,12 +143,17 @@ export async function autoFormMemories(params: { userId?: string; message: strin
         let saved = 0;
         let droppedAtCap = 0;
         const savedRows: Array<{ id: string; source: string; length: number }> = [];
+        let droppedSensitive = 0;
         for (const c of candidates) {
             if (count >= MEMORY_EXTRACTION.maxCount) { droppedAtCap += 1; continue; }
             if (isDuplicateMemory(c, contents)) continue;
+            // 민감 패턴(자격증명·개인식별)은 자동 저장하지 않는다(126) — 사용자가 설정 탭에서 직접 적는 것만 허용.
+            if (isSensitiveMemory(c)) { droppedSensitive += 1; continue; }
             // 034 스키마 정의대로: 휴리스틱("기억해줘" 명시 의도)=explicit, LLM 감지=candidate. batch 는 백필 전용.
             const source = heur.includes(c) ? 'explicit' : 'candidate';
-            const row = await repo.create(randomUUID(), userId, c, source);
+            // 모델 감지 후보는 기본 TTL 로 만료(126) — 오래된 추정이 영구히 주입되지 않게. 명시 의도는 무기한.
+            const row = await repo.create(randomUUID(), userId, c, source,
+                source === 'candidate' ? { expiresAt: expiresAtFromTtlDays(MEMORY_METADATA.CANDIDATE_TTL_DAYS) } : {});
             contents.push(c);
             count += 1;
             saved += 1;
@@ -160,6 +166,7 @@ export async function autoFormMemories(params: { userId?: string; message: strin
         }
         // cap 도달로 버린 후보는 조용히 사라지지 않게 남긴다 — memory-report.sh 가 집계(퇴출 정책 도입 게이트).
         if (droppedAtCap > 0) logger.warn(`[MemoryExtract] cap ${MEMORY_EXTRACTION.maxCount} 도달 — 후보 ${droppedAtCap}건 폐기 (user ${userId})`);
+        if (droppedSensitive > 0) logger.info(`[MemoryExtract] 민감 패턴 후보 ${droppedSensitive}건 미저장 (user ${userId})`);
     } catch (e) {
         logger.debug(`[MemoryExtract] 실패 — 무시: ${e instanceof Error ? e.message : e}`);
     }
