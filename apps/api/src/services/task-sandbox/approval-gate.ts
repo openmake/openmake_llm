@@ -17,6 +17,8 @@
 import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
 import { isSensitivePath } from './sensitive-paths';
 import { createLogger } from '../../utils/logger';
+import { getPool } from '../../data/models/unified-database';
+import { AgentTaskApprovalRepository, hashApprovalArgs, type ApprovalRow } from '../../data/repositories/agent-task-approval-repository';
 
 const logger = createLogger('TaskApprovalGate');
 
@@ -117,9 +119,19 @@ interface Waiter {
     timer: NodeJS.Timeout;
 }
 
+/** 영속 저장소 계약(124) — 테스트는 생략(메모리만), 운영은 AgentTaskApprovalRepository. */
+export type ApprovalStore = Pick<AgentTaskApprovalRepository,
+    'insertPending' | 'markDecided' | 'listPending' | 'getPending' | 'takeoverForCall' | 'expirePendingForTask'>;
+
+function rowToPending(r: ApprovalRow): PendingApproval {
+    return { approvalId: r.approval_id, taskId: r.task_id, userId: r.user_id, toolName: r.tool_name, args: r.args ?? {}, createdAt: new Date(r.created_at).getTime() };
+}
+
 /**
- * in-memory 대기 승인 레지스트리 (싱글톤). task 백그라운드 프로세스가 request() 로 대기하고
- * REST(approve/reject)가 resolve 한다. 멀티프로세스 정합은 후속(현재 단일 워커 전제).
+ * 대기 승인 레지스트리 (싱글톤). task 백그라운드 프로세스가 request() 로 대기하고
+ * REST(approve/reject)가 resolve 한다. 메모리 waiter 가 실행 중 대기의 SoT 이고, 저장소(124)는
+ * 그 그림자다 — 프로세스가 내려가도 승인함에 pending 이 남고, 그때 내린 결정은 재개된 작업이
+ * 같은 호출을 다시 요청할 때 이어받는다. 저장소 오류는 전부 삼킨다(fail-open).
  */
 export class ApprovalRegistry {
     private waiters = new Map<string, Waiter>();
@@ -127,15 +139,29 @@ export class ApprovalRegistry {
     /** task 자동승인(4-2) — 사용자가 "나머지 모두 승인"을 누른 task 집합. 종료 시 해제. */
     private autoApproveTasks = new Set<string>();
 
-    /** 대기 중인 승인 요청 — owner user 의 task 일시정지 UI/REST 가 조회. */
-    list(userId: string): PendingApproval[] {
-        return [...this.waiters.values()]
-            .map((w) => w.pending)
-            .filter((p) => p.userId === userId);
+    constructor(private readonly store?: ApprovalStore) {}
+
+    private async persist<T>(fn: (s: ApprovalStore) => Promise<T>): Promise<T | undefined> {
+        if (!this.store) return undefined;
+        try { return await fn(this.store); } catch (e) {
+            logger.warn(`승인 영속 실패(무시): ${e instanceof Error ? e.message : e}`);
+            return undefined;
+        }
     }
 
-    get(approvalId: string): PendingApproval | undefined {
-        return this.waiters.get(approvalId)?.pending;
+    /** 대기 중인 승인 요청 — 메모리 waiter + 저장소의 살아 있는 pending(프로세스가 내려간 작업분). */
+    async list(userId: string): Promise<PendingApproval[]> {
+        const live = [...this.waiters.values()].map((w) => w.pending).filter((p) => p.userId === userId);
+        const rows = (await this.persist((s) => s.listPending(userId))) ?? [];
+        const seen = new Set(live.map((p) => p.approvalId));
+        return [...live, ...rows.filter((r) => !seen.has(r.approval_id)).map(rowToPending)];
+    }
+
+    async get(approvalId: string): Promise<PendingApproval | undefined> {
+        const live = this.waiters.get(approvalId)?.pending;
+        if (live) return live;
+        const row = await this.persist((s) => s.getPending(approvalId));
+        return row ? rowToPending(row) : undefined;
     }
 
     /**
@@ -146,6 +172,12 @@ export class ApprovalRegistry {
     setAutoApprove(taskId: string, enabled: boolean): void {
         if (!enabled) { this.autoApproveTasks.delete(taskId); return; }
         this.autoApproveTasks.add(taskId);
+        // 살아 있는 waiter 는 아래서 즉시 해소되고, 저장소의 pending 도 승인으로 닫는다(승인함 잔존 방지).
+        void this.persist(async (s) => {
+            for (const r of await s.listPending([...this.waiters.values()].find((w) => w.pending.taskId === taskId)?.pending.userId ?? '')) {
+                if (r.task_id === taskId && r.tool_name !== 'ask_human') await s.markDecided(r.approval_id, 'approved');
+            }
+        });
         for (const w of [...this.waiters.values()]) {
             if (w.pending.taskId === taskId && w.pending.toolName !== 'ask_human') {
                 w.resolve({ decision: 'approved', waitedMs: Date.now() - w.pending.createdAt });
@@ -163,15 +195,27 @@ export class ApprovalRegistry {
      * onPending 콜백으로 호출부가 알림(web-push/WS)·상태('paused')를 발행한다.
      * 자동승인 task(ask_human 제외)는 대기 없이 즉시 approved.
      */
-    request(
+    async request(
         input: { taskId: string; userId: string; toolName: string; args: Record<string, unknown> },
         opts: { timeoutMs: number; signal?: AbortSignal; onPending?: (p: PendingApproval) => void },
     ): Promise<ApprovalResult> {
         if (this.autoApproveTasks.has(input.taskId) && input.toolName !== 'ask_human') {
-            return Promise.resolve({ decision: 'approved', waitedMs: 0 });
+            return { decision: 'approved', waitedMs: 0 };
         }
-        const approvalId = `apv_${input.taskId}_${this.seq++}`;
-        const pending: PendingApproval = { approvalId, ...input, createdAt: Date.now() };
+        // 재시작 후 이어받기(124): 같은 호출에 이미 내려진 결정이 있으면 대기 없이 소비하고,
+        // 살아 있는 pending 이 있으면 그 id 를 그대로 써서 승인함의 항목이 바뀌지 않게 한다.
+        const argsHash = hashApprovalArgs(input.args);
+        // 저장소가 없으면(테스트·비영속) 대기 등록까지 동기적으로 끝낸다 — 호출 직후 list() 가 보이도록.
+        const prior = this.store ? await this.persist((s) => s.takeoverForCall(input.taskId, input.toolName, argsHash)) : undefined;
+        if (prior && prior.status !== 'pending') {
+            logger.info(`[${input.taskId}] 재시작 전 결정 이어받음(${prior.status}): ${input.toolName}`);
+            return prior.status === 'approved'
+                ? { decision: 'approved', waitedMs: 0, ...(prior.answer_text ? { text: prior.answer_text } : {}) }
+                : { decision: 'rejected', reason: 'user', waitedMs: 0 };
+        }
+        const approvalId = prior?.approval_id ?? `apv_${input.taskId}_${Date.now().toString(36)}_${this.seq++}`;
+        const pending: PendingApproval = { approvalId, ...input, createdAt: prior ? new Date(prior.created_at).getTime() : Date.now() };
+        if (!prior && this.store) await this.persist((s) => s.insertPending({ approvalId, ...input, argsHash, timeoutMs: opts.timeoutMs }));
         return new Promise<ApprovalResult>((resolvePromise) => {
             const settle = (r: Omit<ApprovalResult, 'waitedMs'>) => {
                 const w = this.waiters.get(approvalId);
@@ -179,6 +223,9 @@ export class ApprovalRegistry {
                 clearTimeout(w.timer);
                 this.waiters.delete(approvalId);
                 if (r.decision === 'rejected') logger.info(`[${input.taskId}] 승인 거절/만료(${r.reason}): ${input.toolName}`);
+                void this.persist((s) => s.markDecided(approvalId,
+                    r.decision === 'approved' ? 'approved' : r.reason === 'timeout' ? 'expired' : r.reason === 'abort' ? 'aborted' : 'rejected',
+                    r.text));
                 resolvePromise({ ...r, waitedMs: Date.now() - pending.createdAt });
             };
             const timer = setTimeout(() => settle({ decision: 'rejected', reason: 'timeout' }), opts.timeoutMs);
@@ -191,20 +238,23 @@ export class ApprovalRegistry {
         });
     }
 
-    /** REST 승인 — owner 검증은 호출부 책임. 성공 시 true. */
-    approve(approvalId: string): boolean {
+    /** 메모리 waiter 가 없으면(프로세스 재시작으로 작업이 내려간 상태) 저장소 pending 행에 결정만 남긴다 —
+     *  재개된 작업이 같은 호출을 다시 요청할 때 takeoverForCall 로 소비한다. */
+    private settleOrPersist(approvalId: string, r: Omit<ApprovalResult, 'waitedMs'>): Promise<boolean> {
         const w = this.waiters.get(approvalId);
-        if (!w) return false;
-        w.resolve({ decision: 'approved', waitedMs: Date.now() - w.pending.createdAt });
-        return true;
+        if (w) { w.resolve({ ...r, waitedMs: Date.now() - w.pending.createdAt }); return Promise.resolve(true); }
+        return this.persist((s) => s.markDecided(approvalId, r.decision === 'approved' ? 'approved' : 'rejected', r.text))
+            .then((ok) => ok === true);
+    }
+
+    /** REST 승인 — owner 검증은 호출부 책임. 성공 시 true. */
+    approve(approvalId: string): Promise<boolean> {
+        return this.settleOrPersist(approvalId, { decision: 'approved' });
     }
 
     /** REST 거절. */
-    reject(approvalId: string): boolean {
-        const w = this.waiters.get(approvalId);
-        if (!w) return false;
-        w.resolve({ decision: 'rejected', reason: 'user', waitedMs: Date.now() - w.pending.createdAt });
-        return true;
+    reject(approvalId: string): Promise<boolean> {
+        return this.settleOrPersist(approvalId, { decision: 'rejected', reason: 'user' });
     }
 
     /**
@@ -212,16 +262,31 @@ export class ApprovalRegistry {
      * 해소하되 답변 본문을 함께 전달해 에이전트가 실제 답을 받아 이어가게 한다.
      * (승인 게이트가 아닌 ask_human 대기에만 의미 있음 — 호출부가 owner 검증.)
      */
-    answer(approvalId: string, text: string): boolean {
-        const w = this.waiters.get(approvalId);
-        if (!w) return false;
-        w.resolve({ decision: 'approved', text, waitedMs: Date.now() - w.pending.createdAt });
-        return true;
+    answer(approvalId: string, text: string): Promise<boolean> {
+        return this.settleOrPersist(approvalId, { decision: 'approved', text });
+    }
+
+    /** 작업 종료 시 저장소에 남은 pending 정리(124) — 메모리 waiter 는 signal abort 가 이미 해소했다. */
+    closeTask(taskId: string): void {
+        this.autoApproveTasks.delete(taskId);
+        void this.persist((s) => s.expirePendingForTask(taskId));
     }
 }
 
 let registry: ApprovalRegistry | null = null;
 export function getApprovalRegistry(): ApprovalRegistry {
-    if (!registry) registry = new ApprovalRegistry();
+    if (!registry) {
+        // 저장소는 첫 사용 때 만든다 — DB 풀이 아직 없거나(부팅 순서·테스트 mock) 실패하면 persist 가 삼킨다.
+        let repo: AgentTaskApprovalRepository | null = null;
+        const lazy = (): AgentTaskApprovalRepository => (repo ??= new AgentTaskApprovalRepository(getPool()));
+        registry = new ApprovalRegistry({
+            insertPending: (r) => lazy().insertPending(r),
+            markDecided: (id, s, t) => lazy().markDecided(id, s, t),
+            listPending: (u) => lazy().listPending(u),
+            getPending: (id) => lazy().getPending(id),
+            takeoverForCall: (t, n, h) => lazy().takeoverForCall(t, n, h),
+            expirePendingForTask: (t, s) => lazy().expirePendingForTask(t, s),
+        });
+    }
     return registry;
 }

@@ -12,6 +12,7 @@
  */
 import { BaseRepository, QueryParam } from './base-repository';
 import type { AgentTask, AgentTaskStatus, AgentTaskStep } from '../models/unified-database.types';
+import { allowedSources, AgentTaskTransitionError } from '../../services/agent-task/task-state';
 
 export class AgentTaskRepository extends BaseRepository {
     async createAgentTask(params: {
@@ -82,6 +83,8 @@ export class AgentTaskRepository extends BaseRepository {
         completionPath?: string;
         /** goal judge 결과(091) — 'achieved' | 'not_achieved' | 'unknown' | 'skipped' */
         judgeVerdict?: string;
+        /** 상태 전이 사유(124 이벤트) — 미지정 시 error 문자열을 쓴다. */
+        transitionReason?: string;
     }): Promise<void> {
         const sets: string[] = ['updated_at = NOW()'];
         const params: QueryParam[] = [];
@@ -141,7 +144,58 @@ export class AgentTaskRepository extends BaseRepository {
         }
 
         params.push(taskId);
-        await this.query(`UPDATE agent_tasks SET ${sets.join(', ')} WHERE id = $${paramIdx}`, params);
+        if (!updates.status) {
+            await this.query(`UPDATE agent_tasks SET ${sets.join(', ')} WHERE id = $${paramIdx}`, params);
+            return;
+        }
+        // 상태 머신 강제(124): 허용 출발 상태에서만 전이하고 이전 상태를 RETURNING 으로 받아 이벤트를
+        // 남긴다. 표 밖 전이는 rowCount=0 → 현재 상태를 읽어 거부(throw). 규칙은 task-state.ts 한 곳.
+        params.push(allowedSources(updates.status));
+        const r = await this.query<{ prev: AgentTaskStatus }>(
+            `UPDATE agent_tasks t SET ${sets.join(', ')}
+             FROM (SELECT id, status AS prev FROM agent_tasks WHERE id = $${paramIdx} FOR UPDATE) o
+             WHERE t.id = o.id AND o.prev = ANY($${paramIdx + 1}::text[])
+             RETURNING o.prev`,
+            params,
+        );
+        if ((r.rowCount ?? 0) === 0) {
+            const cur = await this.query<{ status: string }>('SELECT status FROM agent_tasks WHERE id = $1', [taskId]);
+            if (!cur.rows[0]) return; // 삭제된 작업 — 종전에도 no-op 이었다
+            throw new AgentTaskTransitionError(taskId, cur.rows[0].status, updates.status);
+        }
+        const prev = r.rows[0]?.prev;
+        if (prev !== updates.status) await this.recordEvent(taskId, prev, updates.status, updates.transitionReason ?? updates.error ?? undefined);
+    }
+
+    /** 상태 전이 이벤트 1행(124) — 관측용이라 실패해도 전이를 되돌리지 않는다(fail-open). */
+    async recordEvent(taskId: string, from: string | null | undefined, to: string, reason?: string): Promise<void> {
+        await this.query(
+            'INSERT INTO agent_task_events (task_id, from_status, to_status, reason) VALUES ($1, $2, $3, $4)',
+            [taskId, from ?? null, to, reason ?? null],
+        ).catch(() => { /* 이벤트 기록 실패는 작업을 막지 않는다 */ });
+    }
+
+    async getAgentTaskEvents(taskId: string, limit = 200): Promise<Array<{ id: number; from_status: string | null; to_status: string; reason: string | null; created_at: string }>> {
+        const r = await this.query<{ id: number; from_status: string | null; to_status: string; reason: string | null; created_at: string }>(
+            'SELECT id, from_status, to_status, reason, created_at FROM agent_task_events WHERE task_id = $1 ORDER BY id ASC LIMIT $2',
+            [taskId, limit],
+        );
+        return r.rows;
+    }
+
+    /** "나머지 모두 승인" 플래그 영속(124) — 재시작 후 재개된 작업이 승인을 다시 묻지 않게. */
+    async setAutoApprove(taskId: string, enabled: boolean): Promise<void> {
+        await this.query('UPDATE agent_tasks SET auto_approve = $2, updated_at = NOW() WHERE id = $1', [taskId, enabled]);
+    }
+
+    /** 도구 호출 저널(124) — tool_call_id → tool_result 본문. 턴 중간 재개가 실행된 호출을 건너뛰는 근거. */
+    async getToolCallJournal(taskId: string, toolCallIds: string[]): Promise<Map<string, string>> {
+        const r = await this.query<{ tool_call_id: string; content: string | null }>(
+            `SELECT tool_call_id, content FROM agent_task_steps
+             WHERE task_id = $1 AND step_type = 'tool_result' AND tool_call_id = ANY($2::text[])`,
+            [taskId, toolCallIds],
+        );
+        return new Map(r.rows.map((row) => [row.tool_call_id, row.content ?? '']));
     }
 
     async addAgentTaskStep(params: {
@@ -156,14 +210,16 @@ export class AgentTaskRepository extends BaseRepository {
         planStepIndex?: number;
         /** 도구 호출 인자(091) — 호출부에서 마스킹·크기 캡을 적용한 값만 넘긴다. */
         toolArgs?: unknown;
+        /** tool_result 스텝의 원 tool_call id(124 저널). */
+        toolCallId?: string;
     }): Promise<void> {
         // NUL(0x00) 제거 — 바이너리 파일을 도구로 열람하면 도구 결과에 0x00 이 섞일 수 있고,
         // Postgres TEXT/JSON 은 이를 거부한다("invalid byte sequence for encoding UTF8: 0x00").
         // 저장 backstop 으로 content·messages_snapshot 모두 정화한다(resultToString 소스 차단과 병행).
         const stripNul = (s: string): string => s.replace(/\u0000/g, '');
         await this.query(
-            `INSERT INTO agent_task_steps (task_id, step_number, step_type, tool_name, content, messages_snapshot, status, plan_step_index, tool_args)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+            `INSERT INTO agent_task_steps (task_id, step_number, step_type, tool_name, content, messages_snapshot, status, plan_step_index, tool_args, tool_call_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
             [
                 params.taskId,
                 params.stepNumber,
@@ -173,7 +229,8 @@ export class AgentTaskRepository extends BaseRepository {
                 params.messagesSnapshot !== undefined ? stripNul(JSON.stringify(params.messagesSnapshot)) : null,
                 params.status || 'completed',
                 params.planStepIndex ?? null,
-                params.toolArgs !== undefined ? stripNul(JSON.stringify(params.toolArgs)) : null
+                params.toolArgs !== undefined ? stripNul(JSON.stringify(params.toolArgs)) : null,
+                params.toolCallId ?? null,
             ]
         );
     }
@@ -262,14 +319,18 @@ export class AgentTaskRepository extends BaseRepository {
      * 함께 정리(재개 task 가 목록에서 '실패·완료시각'으로 보이지 않게).
      */
     async claimAgentTaskForRecovery(taskId: string): Promise<boolean> {
-        const result = await this.query(
-            `UPDATE agent_tasks
+        const result = await this.query<{ prev: string }>(
+            `UPDATE agent_tasks t
              SET status = 'pending', error = NULL, completed_at = NULL, updated_at = NOW()
-             WHERE id = $1 AND (status IN ('running', 'paused', 'queued')
-                OR (status = 'failed' AND error = 'server restarted'))`,
+             FROM (SELECT id, status AS prev FROM agent_tasks WHERE id = $1 FOR UPDATE) o
+             WHERE t.id = o.id AND (o.prev IN ('running', 'paused', 'queued')
+                OR (o.prev = 'failed' AND t.error = 'server restarted'))
+             RETURNING o.prev`,
             [taskId]
         );
-        return (result.rowCount ?? 0) > 0;
+        if ((result.rowCount ?? 0) === 0) return false;
+        await this.recordEvent(taskId, result.rows[0]?.prev, 'pending', 'boot recovery claim');
+        return true;
     }
 
     /** 활성 상태별 건수 — 큐 관측(/queue/stats) 용. 인메모리 큐 스냅샷과 대조해 재시작 고아를 드러낸다. */

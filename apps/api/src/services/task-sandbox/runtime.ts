@@ -117,6 +117,9 @@ export class TaskRuntime {
     /** 현재 실행 계획 스냅샷 (진행 가시성·영속용). */
     getPlanSnapshot(): PlanStep[] { return this.plan.snapshot(); }
 
+    /** 재개 시 체크포인트의 계획 복원(124) — goal 시드 계획을 저장본으로 교체한다. */
+    restorePlan(steps: unknown): void { this.plan.restore(steps); }
+
     /** 관측/영속(sandboxContainerId)용 실행기 라벨 — docker: 컨테이너명, 원격(D1): 디바이스 라벨. */
     get containerName(): string { return this.executor.label; }
 

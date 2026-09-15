@@ -104,6 +104,7 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
                             conversation: cp!.conversation as ChatMessage[],
                             fromTurn: (cp!.completedTurn ?? 0) + 1,
                             fromStep: steps.length,
+                            plan: task.plan,
                         },
                     } : {}),
                 }),

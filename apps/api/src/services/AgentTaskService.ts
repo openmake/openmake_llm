@@ -39,10 +39,10 @@ import { buildFileContext } from './chat-service/attach-context';
 import { AgentTaskAbort, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
 import { callAgentTurnWithBudget, AgentTaskTurnTimeout } from './agent-task/turn-call';
 import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
-import { finalizeTask } from './agent-task/finalize';
+import { finalizeTask, finalizeMaxTurnsExhausted } from './agent-task/finalize';
 import { buildJudgeToolEvidence } from './agent-task/goal-judge';
-import { persistArtifactSteps } from './agent-task/task-steps';
-import { initWorkspaceBaseline, maybePersistCodeDiff, captureDiffOnCleanup } from './agent-task/code-diff';
+import { initWorkspaceBaseline, captureDiffOnCleanup } from './agent-task/code-diff';
+import { findDanglingToolCalls, loadToolCallJournal, writeTurnCheckpoint } from './agent-task/turn-reentry';
 import { getSteeringRegistry, applyPendingSteering } from './agent-task/steering';
 import { resolveExecutorPlan } from './agent-task/executor-select';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
@@ -171,7 +171,9 @@ export class AgentTaskService {
             const preTask = await db.getAgentTask(taskId);
             if (signal.aborted || (!input.resume && preTask?.status === 'cancelled')) throw new AgentTaskAbort('aborted');
             // resume: 이전 실행분 토큰을 이어서 누적(4-4) — runaway 토큰 가드도 통산 기준으로 동작.
+            // "나머지 모두 승인" 도 함께 복원(124) — 종전엔 메모리뿐이라 재시작 후 다시 물었다.
             if (input.resume) totalTokens = Number(preTask?.total_tokens ?? 0);
+            if (input.resume && preTask?.auto_approve) getApprovalRegistry().setAutoApprove(taskId, true);
 
             // resume 은 checkpoint(end-of-turn conversation)에서 복원, 새 시작은 system 에 활성 스킬
             // 지식(prompt_md)+크로스-task 학습(5-2, 플래그 OFF/실패 시 '') 주입. resume 은 old system 유지.
@@ -231,6 +233,7 @@ export class AgentTaskService {
                         })
                         : undefined;
                     taskRuntime = new TaskRuntime(taskId, userId, sandboxCfg, delegateFn, spawnFn, remoteExecutor, goal);
+                    if (input.resume?.plan) taskRuntime.restorePlan(input.resume.plan); // 체크포인트의 계획 복원(124)
                     // 이름 교정(P0-b) — 모델에 실제 노출된 도구 이름을 런타임에 알려, 잘못된 이름 호출과
                     // "도구를 셸 명령으로 실행" 을 그 자리에서 교정 안내한다. 오류 메시지 품질을 위한
                     // 부가 기능이므로 여기서 실패해도 샌드박스 경로 전체를 죽이지 않는다(fail-open).
@@ -294,8 +297,37 @@ export class AgentTaskService {
                 });
             };
 
+            // 턴 중간 재개(124): 결과 없는 tool_call 로 끝난 체크포인트는 LLM 재호출 없이 남은 호출만 실행(turn-reentry).
+            let reentry = input.resume ? findDanglingToolCalls(conversation) : null;
+
             for (let turn = startTurn; turn < turnCeiling; turn++) {
                 assertWithinLimits(signal, startedAt, pausedMs, totalTokens, totalTimeoutMs);
+                if (reentry) {
+                    const journal = await loadToolCallJournal(taskId, reentry.calls);
+                    logger.info(`[AgentTask] 턴 중간 재개: ${taskId} (turn ${turn + 1}, 남은 호출 ${reentry.calls.length}건, 저널 재사용 ${journal.size}건)`);
+                    await update({ currentTurn: turn + 1 });
+                    const re = await executeTurnToolCalls({
+                        toolCalls: reentry.calls, journal, taskRuntime, sandboxCfg, extraToolNames, mcp, userCtx,
+                        userId: String(userId), taskId, turn, conversation, usedTools, signal,
+                        stepNumber, searchCalls, browserCalls, pausedMs, approvalTimeouts, getCurStatus: () => curStatus, update, emitStep,
+                    });
+                    ({ stepNumber, searchCalls, browserCalls, pausedMs, approvalTimeouts } = re);
+                    const content = reentry.content;
+                    reentry = null;
+                    if (re.terminated) {
+                        const fin = await finalizeTask({
+                            taskId, goal, userId: String(userId), path: 'terminate', rawContent: content, terminateSummary: re.terminateSummary,
+                            taskRuntime, sandboxCfg, usedTools, toolEvidence: buildJudgeToolEvidence(conversation), turn, stepNumber, verifyRetries,
+                            signal, update, emitStep,
+                        });
+                        stepNumber = fin.stepNumber;
+                        if (fin.kind !== 'verify_retry') return;
+                        verifyRetries++;
+                        conversation.push({ role: 'user', content: fin.nudge });
+                    }
+                    await writeTurnCheckpoint(taskId, conversation, turn, taskRuntime);
+                    continue;
+                }
 
                 // 진행률: 에이전트가 plan 을 세웠으면 실제 단계 완료율(completed/total)을 진척으로 쓴다
                 // — "3/7 단계"처럼 실제 진행을 반영(1-C). plan 이 없으면(턴0·비플래닝 작업) 총 턴 수를
@@ -489,8 +521,10 @@ export class AgentTaskService {
                     return;
                 }
 
+                // 도구 실행 전 체크포인트(124): assistant(tool_calls)까지 저장해 첫 도구에서 죽어도 턴 중간 재개가
+                // LLM 재호출 없이 같은 호출을 이어가게 한다(승인 이어받기의 args_hash 도 그래야 맞는다).
+                if (AGENT_TASK_LIMITS.MIDTURN_CHECKPOINT_ENABLED) await writeTurnCheckpoint(taskId, conversation, turn - 1, taskRuntime).catch(() => { /* fail-open */ });
                 // 도구 실행 + 체크포인트 — 승인 게이트·terminate 감지·스텝 영속은 agent-task/turn-executor.
-                // conversation·usedTools 는 제자리 갱신, 카운터/terminate 상태는 반환값으로 넘겨받는다.
                 const turnExec = await executeTurnToolCalls({
                     toolCalls: result.tool_calls!,
                     taskRuntime, sandboxCfg, extraToolNames, mcp, userCtx,
@@ -525,44 +559,12 @@ export class AgentTaskService {
                     return;
                 }
 
-                // end-of-turn 체크포인트: tool 결과까지 포함된 완전한 conversation + 완료 턴 번호.
-                // 이 시점의 conversation 은 tool_call_id 가 매칭된 valid 상태라 그대로 resume 가능.
-                // (현재 모든 도구가 idempotent-read 라 턴 재실행 안전 — write 도구 추가 시 gate 필요)
-                const planSnapshot = taskRuntime?.getPlanSnapshot();
-                await db.updateAgentTask(taskId, {
-                    checkpoint: { conversation, completedTurn: turn },
-                    ...(planSnapshot && planSnapshot.length > 0 ? { plan: planSnapshot } : {}),
-                });
+                // end-of-turn 체크포인트: tool 결과까지 포함된 완전한 conversation + 완료 턴 + 계획(turn-reentry).
+                await writeTurnCheckpoint(taskId, conversation, turn, taskRuntime);
             }
 
-            // 턴 상한 도달 — **완주가 아니다**. terminate 경로(위)와 달리 모델이 작업을 끝냈다고
-            // 선언한 적이 없고, 마지막 턴이 문장 중간에서 끊기는 것이 보통이다.
-            // 종전에는 이 경로도 completed·progress 100·checkpoint null 로 기록해서
-            //   ① 사용자에게 빈/절단된 결과가 "완료"로 표시되고
-            //   ② resumable(= checkpoint 존재 && status==='failed', agent-task.routes)이 false 가 되어
-            //      턴이 모자라 끊긴 작업을 **이어할 수조차 없었다**
-            // (2026-08-02 실측: 9.5K 자 설계 문서 작업이 10턴·233K 토큰을 쓰고 "JSON이 유효한지
-            //  검증하겠습니다." 에서 끊겼는데 completed 로 기록됨).
-            // goal judge 의 "아무것도 못 했는데 완료" 차단과 같은 원칙으로 failed 로 기록하고,
-            // 체크포인트를 남겨 이어하기를 연다(마지막 end-of-turn checkpoint 는 위 루프에서 저장됨).
-            //
-            // ⚠️ 2026-08-03 이후 이 경로는 **드물다** — 마지막 턴은 도구를 뺀 마무리 턴으로 전환되므로
-            // 모델이 최종 답변을 내고 위 완료 경로에서 return 하는 것이 정상이다. 여기 도달한다는 건
-            // 마무리 턴에서도 도구 호출을 시도했거나(도구가 없으니 이례적) 응답이 비었다는 뜻이라
-            // failed 가 맞다. 마무리 턴 도입 전에는 산출물을 만든 작업까지 이 경로로 떨어져
-            // 사족에서 절단됐다(예약 리포트 20/20 3건 중 2건).
-            const lastAssistant = [...conversation].reverse().find((m) => m.role === 'assistant');
-            const lastRaw = (lastAssistant?.content as string) || '(최대 턴에 도달하여 종료되었습니다.)';
-            const lastExtracted = extractAndStripArtifacts(applyReportRender(lastRaw));
-            stepNumber = await persistArtifactSteps(taskId, lastExtracted.artifacts, stepNumber, userId);
-            stepNumber = await maybePersistCodeDiff(taskRuntime, sandboxCfg, taskId, stepNumber, emitStep);
-            await update({
-                status: 'failed',
-                error: 'max_turns_exhausted',
-                result: lastExtracted.cleanedContent || lastRaw,
-            });
-            logger.warn(`[AgentTask] 턴 상한 종료(미완주): ${taskId} (${turnCeiling} 턴) — `
-                + '재개하려면 max_turns 를 올려 resume 하세요.');
+            // 턴 상한 도달 — 완주가 아니라 failed + checkpoint 보존(이어하기 가능). 근거는 finalize.
+            await finalizeMaxTurnsExhausted({ taskId, userId, turnCeiling, conversation, taskRuntime, sandboxCfg, stepNumber, update, emitStep });
         } catch (err) {
             // signal.aborted 가 true 면 client.chat() 호출 도중 던져진 AbortError
             // ("Request was aborted") 도 사용자 취소로 분류 — 턴 사이 abort 뿐 아니라
@@ -581,8 +583,8 @@ export class AgentTaskService {
             logger.warn(`[AgentTask] ${aborted ? '취소' : '실패'}: ${taskId} — ${kind}: ${msg}`);
         } finally {
             AgentTaskService.running.delete(taskId);
-            // task 자동승인(4-2) 해제 — 종료된 task 의 플래그가 레지스트리에 잔존하지 않게.
-            getApprovalRegistry().clearAutoApprove(taskId);
+            // task 자동승인(4-2) 해제 + 저장소의 남은 승인 대기 정리(124).
+            getApprovalRegistry().closeTask(taskId);
             // 미소비 steering 정리 — 종료된 task 에 남은 지시가 다음 동명 실행에 새지 않게.
             getSteeringRegistry().clear(taskId);
             if (taskRuntime) {
