@@ -108,6 +108,8 @@ export const envSchema = z
         }),
         LLM_HOURLY_TOKEN_LIMIT: nonNegativeIntWithDefault(300000),
         LLM_WEEKLY_TOKEN_LIMIT: nonNegativeIntWithDefault(5000000),
+        /** 외부 모델 정책 JSON(Control Plane 기초) — 파싱은 config/external-model-policy, 형식 검증은 registry */
+        EXTERNAL_MODEL_POLICY: z.string().optional(),
         /**
          * vLLM `extra_body.reasoning_effort` 전송 활성화 (opt-in 기본).
          *

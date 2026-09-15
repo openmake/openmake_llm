@@ -7,6 +7,8 @@ jest.mock('../../data/repositories/organization-repository', () => ({
     OrganizationRepository: jest.fn().mockImplementation(() => ({ listBudgetedOrgsForUser })),
 }));
 jest.mock('../../data/models/unified-database', () => ({ getPool: () => ({}) }));
+// 운영 .env 는 STORAGE_BACKEND=redis — 테스트가 실제 redis 에 키를 남기지 않게 메모리 스토어로 고정.
+jest.mock('../../storage', () => { const { MemoryStore } = jest.requireActual('../../storage/memory-store'); const store = new MemoryStore(); return { getKeyValueStore: () => store }; });
 
 import { checkOrgBudget, recordUserUsage, clearOrgBudgetCache } from '../user-quota';
 import { QuotaExceededError } from '../../errors/quota-exceeded.error';

@@ -57,6 +57,8 @@ export interface EnvConfig {
     llmWarmupTimeoutMs: number;
     llmHourlyTokenLimit: number;
     llmWeeklyTokenLimit: number;
+    /** 외부 모델 정책 원문(JSON, Control Plane 기초) — config/external-model-policy 가 파싱 */
+    externalModelPolicy: string;
     /** vLLM `--reasoning-parser` 미설정 환경 등에서 extra_body.reasoning_effort 거절 방지 토글. */
     llmEnableReasoningEffort: boolean;
     /** 사용자별 역할→모델 매핑(user_model_roles) 사용 토글 (기본 false=전역 env/default 만). */
@@ -197,6 +199,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     llmWarmupTimeoutMs: 10000,
     llmHourlyTokenLimit: 300000,
     llmWeeklyTokenLimit: 5000000,
+    externalModelPolicy: '',
     llmEnableReasoningEffort: false,
     userModelRolesEnabled: false,
     thinkingSummaryEnabled: true,
@@ -291,14 +294,6 @@ export function applySettingsOverlay(overlay: Record<string, string>): void {
     resetConfig();
 }
 
-/**
- * 임의 설정 키의 현재값 — DB overlay(system_settings) > process.env. EnvConfig 에 필드를 두지 않은
- * 운영 설정(예: EXTERNAL_MODEL_POLICY)을 호출 시점에 읽는다. 관리자 UI 변경은 overlay 갱신으로 즉시 반영.
- */
-export function getSettingValue(key: string): string | undefined {
-    return settingsOverlay[key] ?? process.env[key] ?? undefined;
-}
-
 /** overlay 를 제외한 env 원값 (process.env > .env 파일) — 설정 출처(env/기본값) 판별용 */
 export function readRawEnvValue(key: string): string | undefined {
     const envPath = path.resolve(process.cwd(), '.env');
@@ -345,6 +340,7 @@ export function loadConfig(): EnvConfig {
         LLM_WARMUP_TIMEOUT_MS: env('LLM_WARMUP_TIMEOUT_MS'),
         LLM_HOURLY_TOKEN_LIMIT: env('LLM_HOURLY_TOKEN_LIMIT'),
         LLM_WEEKLY_TOKEN_LIMIT: env('LLM_WEEKLY_TOKEN_LIMIT'),
+        EXTERNAL_MODEL_POLICY: env('EXTERNAL_MODEL_POLICY'),
         LLM_ENABLE_REASONING_EFFORT: env('LLM_ENABLE_REASONING_EFFORT'),
         USER_MODEL_ROLES_ENABLED: env('USER_MODEL_ROLES_ENABLED'),
         THINKING_SUMMARY_ENABLED: env('THINKING_SUMMARY_ENABLED'),
@@ -460,6 +456,7 @@ export function loadConfig(): EnvConfig {
         llmWarmupTimeoutMs: parsed.LLM_WARMUP_TIMEOUT_MS ?? DEFAULT_CONFIG.llmWarmupTimeoutMs,
         llmHourlyTokenLimit: parsed.LLM_HOURLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmHourlyTokenLimit,
         llmWeeklyTokenLimit: parsed.LLM_WEEKLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmWeeklyTokenLimit,
+        externalModelPolicy: parsed.EXTERNAL_MODEL_POLICY ?? DEFAULT_CONFIG.externalModelPolicy,
         llmEnableReasoningEffort: (parsed.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true',
         userModelRolesEnabled: (parsed.USER_MODEL_ROLES_ENABLED ?? 'false').toLowerCase() === 'true',
         thinkingSummaryEnabled: (parsed.THINKING_SUMMARY_ENABLED ?? 'true').toLowerCase() === 'true',

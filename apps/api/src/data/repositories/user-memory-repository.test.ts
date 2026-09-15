@@ -29,7 +29,8 @@ describe('UserMemoryRepository — 사용자 격리', () => {
         const { pool, calls } = fakePool([{ id: 'm1', user_id: 'u1' }]);
         await new UserMemoryRepository(pool).create('m1', 'u1', 'hello');
         expect(calls[0].sql).toMatch(/INSERT INTO user_memories/);
-        expect(calls[0].params).toEqual(['m1', 'u1', 'hello', 'explicit']);
+        // 126: scope·confidence(출처별)·sensitivity(패턴 판정)·expires_at 이 뒤따른다
+        expect(calls[0].params).toEqual(['m1', 'u1', 'hello', 'explicit', 'user', 1, 'normal', null]);
     });
 });
 
