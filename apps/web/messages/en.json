@@ -2138,7 +2138,17 @@
       "openTask": "Open task",
       "answerPlaceholder": "Type your answer",
       "sendAnswer": "Send answer",
-      "actionFailed": "Action failed: {error}"
+      "actionFailed": "Action failed: {error}",
+      "risk": {
+        "read": "Read",
+        "write": "File write",
+        "destructive": "Delete",
+        "exec": "Code execution",
+        "network": "Network access",
+        "external": "External tool",
+        "control": "Control",
+        "sensitive": "Credential file"
+      }
     }
   },
   "marketplacePublish": {

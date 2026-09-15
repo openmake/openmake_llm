@@ -2138,7 +2138,17 @@
       "openTask": "作業を開く",
       "answerPlaceholder": "回答を入力してください",
       "sendAnswer": "回答を送信",
-      "actionFailed": "処理に失敗しました: {error}"
+      "actionFailed": "処理に失敗しました: {error}",
+      "risk": {
+        "read": "読み取り",
+        "write": "ファイル書き込み",
+        "destructive": "削除",
+        "exec": "コード実行",
+        "network": "ネットワークアクセス",
+        "external": "外部ツール",
+        "control": "制御",
+        "sensitive": "認証情報ファイル"
+      }
     }
   },
   "marketplacePublish": {

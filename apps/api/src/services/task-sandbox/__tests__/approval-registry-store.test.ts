@@ -8,7 +8,7 @@ import type { ApprovalRow } from '../../../data/repositories/agent-task-approval
 function fakeStore() {
     const rows = new Map<string, ApprovalRow>();
     const row = (p: Partial<ApprovalRow> & { approval_id: string }): ApprovalRow => ({
-        task_id: 't1', user_id: 'u1', tool_name: 'bash', args: { command: 'ls' }, args_hash: 'h', status: 'pending',
+        task_id: 't1', user_id: 'u1', tool_name: 'bash', args: { command: 'ls' }, args_hash: 'h', risk_class: null, status: 'pending',
         answer_text: null, created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 60_000).toISOString(),
         decided_at: null, consumed_at: null, ...p,
     });

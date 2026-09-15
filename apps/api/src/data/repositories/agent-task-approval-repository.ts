@@ -21,6 +21,8 @@ export interface ApprovalRow {
     tool_name: string;
     args: Record<string, unknown> | null;
     args_hash: string;
+    /** 위험 등급(config/tool-policy, 125) — 요청 시점 분류. 구 행은 NULL(조회 시 재분류). */
+    risk_class: string | null;
     status: ApprovalRowStatus;
     answer_text: string | null;
     created_at: string;
@@ -37,13 +39,13 @@ export function hashApprovalArgs(args: Record<string, unknown>): string {
 export class AgentTaskApprovalRepository extends BaseRepository {
     async insertPending(row: {
         approvalId: string; taskId: string; userId: string; toolName: string;
-        args: Record<string, unknown>; argsHash: string; timeoutMs: number;
+        args: Record<string, unknown>; argsHash: string; timeoutMs: number; riskClass?: string;
     }): Promise<void> {
         await this.query(
-            `INSERT INTO agent_task_approvals (approval_id, task_id, user_id, tool_name, args, args_hash, expires_at)
-             VALUES ($1, $2, $3, $4, $5, $6, NOW() + make_interval(secs => $7))
+            `INSERT INTO agent_task_approvals (approval_id, task_id, user_id, tool_name, args, args_hash, expires_at, risk_class)
+             VALUES ($1, $2, $3, $4, $5, $6, NOW() + make_interval(secs => $7), $8)
              ON CONFLICT (approval_id) DO NOTHING`,
-            [row.approvalId, row.taskId, row.userId, row.toolName, JSON.stringify(row.args ?? {}), row.argsHash, row.timeoutMs / 1000],
+            [row.approvalId, row.taskId, row.userId, row.toolName, JSON.stringify(row.args ?? {}), row.argsHash, row.timeoutMs / 1000, row.riskClass ?? null],
         );
     }
 
