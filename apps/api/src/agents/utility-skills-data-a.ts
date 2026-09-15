@@ -15,6 +15,8 @@ function loadJson<T>(filename: string): T {
 export interface UtilitySkillDef {
     id: string;
     name: string;
+    /** 영어 표시 이름 — 한국어 외 UI 의 스킬 칩용 */
+    nameEn?: string;
     description: string;
     category: string;
     content: string;

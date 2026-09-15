@@ -90,6 +90,8 @@ public struct WsServerEvent: Codable {
     public let data: JSONAny?
     public let agent: Agent?
     public let skillNames: [String]?
+    /// 시스템 시드 스킬의 영어 표시 이름(스킬 이름 → 영어) — 사용자·확장 스킬은 없다
+    public let skillNamesEn: [String: String]?
     public let toolName: String?
     public let resources: [MCPToolResource]?
     public let progress: ProgressUnion?
@@ -128,6 +130,7 @@ public struct WsServerEvent: Codable {
         case data = "data"
         case agent = "agent"
         case skillNames = "skillNames"
+        case skillNamesEn = "skillNamesEn"
         case toolName = "toolName"
         case resources = "resources"
         case progress = "progress"
@@ -140,7 +143,7 @@ public struct WsServerEvent: Codable {
         case taskID = "taskId"
     }
 
-    public init(token: String?, type: WsServerEventType, messageID: String?, summary: String?, issues: String?, sessionID: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, metrics: Metrics?, content: String?, finished: Bool?, thinking: String?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, status: String?, step: Step?, taskID: String?) {
+    public init(token: String?, type: WsServerEventType, messageID: String?, summary: String?, issues: String?, sessionID: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, metrics: Metrics?, content: String?, finished: Bool?, thinking: String?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, status: String?, step: Step?, taskID: String?) {
         self.token = token
         self.type = type
         self.messageID = messageID
@@ -166,6 +169,7 @@ public struct WsServerEvent: Codable {
         self.data = data
         self.agent = agent
         self.skillNames = skillNames
+        self.skillNamesEn = skillNamesEn
         self.toolName = toolName
         self.resources = resources
         self.progress = progress
@@ -223,6 +227,7 @@ public extension WsServerEvent {
         data: JSONAny?? = nil,
         agent: Agent?? = nil,
         skillNames: [String]?? = nil,
+        skillNamesEn: [String: String]?? = nil,
         toolName: String?? = nil,
         resources: [MCPToolResource]?? = nil,
         progress: ProgressUnion?? = nil,
@@ -260,6 +265,7 @@ public extension WsServerEvent {
             data: data ?? self.data,
             agent: agent ?? self.agent,
             skillNames: skillNames ?? self.skillNames,
+            skillNamesEn: skillNamesEn ?? self.skillNamesEn,
             toolName: toolName ?? self.toolName,
             resources: resources ?? self.resources,
             progress: progress ?? self.progress,
@@ -287,6 +293,8 @@ public struct Agent: Codable {
     public let confidence: Double?
     public let emoji: String?
     public let name: String
+    /// 영어 표시 이름 — 한국어 외 UI 는 이것을 쓴다(산업·범용 에이전트만, 커스텀 에이전트는 없음)
+    public let nameEn: String?
     public let phase: String?
     public let reason: String?
     public let type: String
@@ -295,15 +303,17 @@ public struct Agent: Codable {
         case confidence = "confidence"
         case emoji = "emoji"
         case name = "name"
+        case nameEn = "nameEn"
         case phase = "phase"
         case reason = "reason"
         case type = "type"
     }
 
-    public init(confidence: Double?, emoji: String?, name: String, phase: String?, reason: String?, type: String) {
+    public init(confidence: Double?, emoji: String?, name: String, nameEn: String?, phase: String?, reason: String?, type: String) {
         self.confidence = confidence
         self.emoji = emoji
         self.name = name
+        self.nameEn = nameEn
         self.phase = phase
         self.reason = reason
         self.type = type
@@ -332,6 +342,7 @@ public extension Agent {
         confidence: Double?? = nil,
         emoji: String?? = nil,
         name: String? = nil,
+        nameEn: String?? = nil,
         phase: String?? = nil,
         reason: String?? = nil,
         type: String? = nil
@@ -340,6 +351,7 @@ public extension Agent {
             confidence: confidence ?? self.confidence,
             emoji: emoji ?? self.emoji,
             name: name ?? self.name,
+            nameEn: nameEn ?? self.nameEn,
             phase: phase ?? self.phase,
             reason: reason ?? self.reason,
             type: type ?? self.type

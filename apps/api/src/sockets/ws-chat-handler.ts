@@ -19,6 +19,7 @@ import { createLogger } from '../utils/logger';
 import { logChatSuccessMetrics } from './chat-metrics-log';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
 import { WS_ERROR_MESSAGES, WS_PROVIDER_ERROR_MESSAGES, getLocalizedTemplate } from './ws-chat-locales';
+import { systemSkillNamesEn } from '../agents/system-skill-names';
 import { detectLanguage, type SupportedLanguageCode } from '../chat/language-policy';
 import { applySlashCommand, mergeActivatedSkillNames, languageDetectionInput } from '../chat/slash-command';
 import { WS_LIMITS } from '../config/timeouts';
@@ -283,7 +284,7 @@ export async function handleChatMessage(
         };
 
         if (explicitSkillNames.length > 0) {
-            out({ type: 'skills_activated', skillNames: explicitSkillNames });
+            out({ type: 'skills_activated', skillNames: explicitSkillNames, skillNamesEn: systemSkillNamesEn(explicitSkillNames) });
         }
 
         // ChatRequestHandler.processChat으로 통합 처리
@@ -343,10 +344,10 @@ export async function handleChatMessage(
             onAgentSelected: (agent) => out({ type: 'agent_selected', agent }),
             onDiscussionProgress: (progress) => out({ type: 'discussion_progress', progress }),
             onResearchProgress: (progress) => out({ type: 'research_progress', progress }),
-            onSkillsActivated: (skillNames) => out({
-                type: 'skills_activated',
-                skillNames: mergeActivatedSkillNames(explicitSkillNames, skillNames),
-            }),
+            onSkillsActivated: (skillNames) => {
+                const names = mergeActivatedSkillNames(explicitSkillNames, skillNames);
+                out({ type: 'skills_activated', skillNames: names, skillNamesEn: systemSkillNamesEn(names) });
+            },
             // MCP tool 호출 결과의 resource content 를 frontend 로 emit
             // (예: create_skill → openmake://skill-draft/{id} → chat.js 가 인라인 카드 렌더)
             onMcpToolResult: (event) => {

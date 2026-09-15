@@ -25,7 +25,8 @@ import { LLMClient, createClient as createDirectClient } from '../llm';
 import { ChatService } from '../services/ChatService';
 import type { ChatMessageRequest } from '../services/ChatService';
 import { buildExecutionPlan } from './profile-resolver';
-import { applySlashCommand } from './slash-command';
+import { applySlashCommand, languageDetectionInput } from './slash-command';
+import { resolveLanguagePolicy } from '../services/chat-service/language-resolver';
 import { detectFastPath } from './fast-path-detector';
 import { historySummaryCache } from '../services/chat-service/history-summary-cache';
 import { summarizeHistory } from './history-summarizer';
@@ -377,10 +378,16 @@ export class ChatRequestHandler {
 
         // 생각 요약 세션 (클로드 웹식 헤드라인): 중간(진행형)·최종(과거형) 요약을
         // onThinkingSummary 로 발행하고, 누적 원문은 저장 시 thinking 컬럼에 영속화.
+        // 헤드라인 언어는 파이프라인(message-pipeline Step 1)과 같은 판정으로 정한다.
+        const summaryLanguage = resolveLanguagePolicy(
+            languageDetectionInput(originalMessage ?? rawMessage ?? message ?? '', message || ''),
+            userLanguagePreference,
+        )?.resolvedLanguage;
         const summarySession = createThinkingSummarySession(
             message,
             userContext.authenticatedUserId ?? undefined,
             (summary) => params.onThinkingSummary?.(summary),
+            summaryLanguage,
         );
         let sawFirstToken = false;
         const onTokenWithSummary = (token: string) => {

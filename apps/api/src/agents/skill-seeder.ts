@@ -23,6 +23,7 @@ import { createLogger } from '../utils/logger';
 import type { Agent, AgentCategory } from './types';
 import type { SkillRepository } from '../data/repositories/skill-repository';
 import industryAgentsJson from './industry-agents.json';
+import { GENERAL_SYSTEM_SKILL_NAME, industrySkillName } from './system-skill-names';
 import {
     getCategoryGuidelines,
     CATEGORY_KNOWLEDGE,
@@ -310,7 +311,7 @@ export async function seedAgentSkills(): Promise<void> {
 
                     // 스킬 upsert
                     await repo.upsertSystemSkill(skillId, {
-                        name: `${agent.name} 전문 스킬`,
+                        name: industrySkillName(agent.name),
                         description: agent.description,
                         content: skillContent,
                         category: categoryId,
@@ -363,7 +364,7 @@ export async function seedAgentSkills(): Promise<void> {
 - 필요시 구체적 예시와 참고 자료 포함`;
 
             await repo.upsertSystemSkill(generalSkillId, {
-                name: '범용 AI 어시스턴트 스킬',
+                name: GENERAL_SYSTEM_SKILL_NAME,
                 description: '다양한 분야 질문에 대응하는 범용 AI 어시스턴트',
                 content: generalContent,
                 category: 'general',

@@ -7,6 +7,7 @@
       {
         "id": "software-engineer",
         "name": "소프트웨어 엔지니어",
+        "nameEn": "Software Engineer",
         "description": "소프트웨어 시스템 설계, 개발, 유지보수 전문가",
         "keywords": [
           "코딩",
@@ -24,6 +25,7 @@
       {
         "id": "data-scientist",
         "name": "데이터 사이언티스트",
+        "nameEn": "Data Scientist",
         "description": "데이터 분석, 모델링, 인사이트 도출 전문가",
         "keywords": [
           "데이터사이언스",
@@ -44,6 +46,7 @@
       {
         "id": "cybersecurity-expert",
         "name": "사이버보안 전문가",
+        "nameEn": "Cybersecurity Expert",
         "description": "보안 취약점 분석, 위협 대응, 보안 아키텍처 설계",
         "keywords": [
           "보안",
@@ -62,6 +65,7 @@
       {
         "id": "cloud-architect",
         "name": "클라우드 아키텍트",
+        "nameEn": "Cloud Architect",
         "description": "클라우드 인프라 설계, 마이그레이션, 최적화 전문가",
         "keywords": [
           "클라우드",
@@ -80,6 +84,7 @@
       {
         "id": "devops-engineer",
         "name": "DevOps 엔지니어",
+        "nameEn": "DevOps Engineer",
         "description": "CI/CD 파이프라인, 인프라 자동화, 운영 최적화",
         "keywords": [
           "DevOps",
@@ -98,6 +103,7 @@
       {
         "id": "ai-ml-engineer",
         "name": "AI/ML 엔지니어",
+        "nameEn": "AI/ML Engineer",
         "description": "AI/ML 모델 개발, 학습, 배포 전문가",
         "keywords": [
           "AI",
@@ -116,6 +122,7 @@
       {
         "id": "blockchain-developer",
         "name": "블록체인 개발자",
+        "nameEn": "Blockchain Developer",
         "description": "블록체인, 스마트 컨트랙트, Web3 개발 전문가",
         "keywords": [
           "블록체인",
@@ -128,6 +135,7 @@
       {
         "id": "mobile-developer",
         "name": "모바일 개발자",
+        "nameEn": "Mobile Developer",
         "description": "iOS/Android 모바일 앱 개발 전문가",
         "keywords": [
           "모바일",
@@ -140,6 +148,7 @@
       {
         "id": "frontend-developer",
         "name": "프론트엔드 개발자",
+        "nameEn": "Frontend Developer",
         "description": "웹 프론트엔드 개발, UI 구현 전문가",
         "keywords": [
           "프론트엔드",
@@ -156,6 +165,7 @@
       {
         "id": "backend-developer",
         "name": "백엔드 개발자",
+        "nameEn": "Backend Developer",
         "description": "서버, API, 데이터베이스 개발 전문가",
         "keywords": [
           "백엔드",
@@ -178,6 +188,7 @@
       {
         "id": "qa-engineer",
         "name": "QA 엔지니어",
+        "nameEn": "QA Engineer",
         "description": "품질 보증, 테스트 자동화, 버그 분석 전문가",
         "keywords": [
           "QA",
@@ -201,6 +212,7 @@
       {
         "id": "financial-analyst",
         "name": "금융 분석가",
+        "nameEn": "Financial Analyst",
         "description": "재무 분석, 기업 가치 평가, 투자 조사 전문가",
         "keywords": [
           "재무분석",
@@ -218,6 +230,7 @@
       {
         "id": "investment-banker",
         "name": "투자 은행가",
+        "nameEn": "Investment Banker",
         "description": "M&A, 자금 조달, 기업 금융 자문 전문가",
         "keywords": [
           "M&A",
@@ -229,6 +242,7 @@
       {
         "id": "risk-manager",
         "name": "리스크 매니저",
+        "nameEn": "Risk Manager",
         "description": "금융 리스크 식별, 측정, 관리 전문가",
         "keywords": [
           "리스크",
@@ -240,6 +254,7 @@
       {
         "id": "accountant",
         "name": "회계사",
+        "nameEn": "Accountant",
         "description": "회계 처리, 재무 보고, 감사 전문가",
         "keywords": [
           "회계",
@@ -252,6 +267,7 @@
       {
         "id": "tax-advisor",
         "name": "세무 전문가",
+        "nameEn": "Tax Advisor",
         "description": "세금 계획, 절세 전략, 세무 자문 전문가",
         "keywords": [
           "세금",
@@ -267,6 +283,7 @@
       {
         "id": "actuary",
         "name": "보험계리사",
+        "nameEn": "Actuary",
         "description": "보험/연금 리스크 계산, 상품 설계 전문가",
         "keywords": [
           "보험",
@@ -278,6 +295,7 @@
       {
         "id": "quantitative-analyst",
         "name": "퀀트 분석가",
+        "nameEn": "Quantitative Analyst",
         "description": "금융 수학 모델링, 알고리즘 트레이딩 전문가",
         "keywords": [
           "퀀트",
@@ -289,6 +307,7 @@
       {
         "id": "cryptocurrency-analyst",
         "name": "암호화폐 분석가",
+        "nameEn": "Cryptocurrency Analyst",
         "description": "암호화폐 시장 분석, 토큰 평가 전문가",
         "keywords": [
           "암호화폐",
@@ -300,6 +319,7 @@
       {
         "id": "portfolio-manager",
         "name": "포트폴리오 매니저",
+        "nameEn": "Portfolio Manager",
         "description": "자산 배분, 투자 포트폴리오 관리 전문가",
         "keywords": [
           "포트폴리오",
@@ -321,6 +341,7 @@
       {
         "id": "physician",
         "name": "의사",
+        "nameEn": "Physician",
         "description": "의료 자문, 질병 진단, 치료 방향 제시",
         "keywords": [
           "의료",
@@ -334,6 +355,7 @@
       {
         "id": "pharmacist",
         "name": "약사",
+        "nameEn": "Pharmacist",
         "description": "약물 전문가, 복약 지도, 약물 상호작용 분석",
         "keywords": [
           "약",
@@ -348,6 +370,7 @@
       {
         "id": "nurse",
         "name": "간호사",
+        "nameEn": "Nurse",
         "description": "환자 케어, 건강 교육, 임상 지원 전문가",
         "keywords": [
           "간호",
@@ -359,6 +382,7 @@
       {
         "id": "medical-researcher",
         "name": "의학 연구원",
+        "nameEn": "Medical Researcher",
         "description": "의학 연구, 임상시험, 신약 개발 전문가",
         "keywords": [
           "연구",
@@ -370,6 +394,7 @@
       {
         "id": "psychologist",
         "name": "심리학자",
+        "nameEn": "Psychologist",
         "description": "심리 분석, 상담, 정신건강 전문가",
         "keywords": [
           "심리",
@@ -381,6 +406,7 @@
       {
         "id": "nutritionist",
         "name": "영양사",
+        "nameEn": "Nutritionist",
         "description": "영양 및 식이 전문가, 건강한 식습관 지도",
         "keywords": [
           "영양",
@@ -395,6 +421,7 @@
       {
         "id": "biomedical-engineer",
         "name": "의공학자",
+        "nameEn": "Biomedical Engineer",
         "description": "의료기기 개발, 생체신호 처리 전문가",
         "keywords": [
           "의료기기",
@@ -412,6 +439,7 @@
       {
         "id": "corporate-lawyer",
         "name": "기업 변호사",
+        "nameEn": "Corporate Lawyer",
         "description": "기업법, 상법, 계약 전문 변호사",
         "keywords": [
           "기업법",
@@ -426,6 +454,7 @@
       {
         "id": "criminal-lawyer",
         "name": "형사 변호사",
+        "nameEn": "Criminal Lawyer",
         "description": "형사법, 수사 대응, 형사 소송 전문 변호사",
         "keywords": [
           "형사",
@@ -437,6 +466,7 @@
       {
         "id": "patent-attorney",
         "name": "특허 변호사",
+        "nameEn": "Patent Attorney",
         "description": "지식재산권, 특허, 상표 전문 변호사",
         "keywords": [
           "특허",
@@ -448,6 +478,7 @@
       {
         "id": "labor-lawyer",
         "name": "노동 변호사",
+        "nameEn": "Labor Lawyer",
         "description": "노동법, 고용 관계, 노사 분쟁 전문 변호사",
         "keywords": [
           "노동",
@@ -462,6 +493,7 @@
       {
         "id": "compliance-officer",
         "name": "컴플라이언스 담당자",
+        "nameEn": "Compliance Officer",
         "description": "규제 준수, 내부통제, 윤리 경영 전문가",
         "keywords": [
           "컴플라이언스",
@@ -480,6 +512,7 @@
       {
         "id": "business-strategist",
         "name": "비즈니스 전략가",
+        "nameEn": "Business Strategist",
         "description": "기업 전략 수립, 시장 분석, 성장 전략 전문가",
         "keywords": [
           "전략",
@@ -491,6 +524,7 @@
       {
         "id": "marketing-manager",
         "name": "마케팅 매니저",
+        "nameEn": "Marketing Manager",
         "description": "마케팅 전략 수립, 캠페인 관리 전문가",
         "keywords": [
           "마케팅",
@@ -508,6 +542,7 @@
       {
         "id": "product-manager",
         "name": "프로덕트 매니저",
+        "nameEn": "Product Manager",
         "description": "제품 기획, 로드맵 관리, 사용자 경험 최적화",
         "keywords": [
           "PM",
@@ -520,6 +555,7 @@
       {
         "id": "project-manager",
         "name": "프로젝트 매니저",
+        "nameEn": "Project Manager",
         "description": "프로젝트 계획, 실행, 모니터링 전문가",
         "keywords": [
           "프로젝트",
@@ -531,6 +567,7 @@
       {
         "id": "hr-manager",
         "name": "HR 매니저",
+        "nameEn": "HR Manager",
         "description": "인사 관리, 채용, 조직 문화 전문가",
         "keywords": [
           "인사",
@@ -545,6 +582,7 @@
       {
         "id": "operations-manager",
         "name": "운영 매니저",
+        "nameEn": "Operations Manager",
         "description": "사업 운영, 프로세스 최적화, 효율성 관리",
         "keywords": [
           "운영",
@@ -556,6 +594,7 @@
       {
         "id": "supply-chain-manager",
         "name": "공급망 매니저",
+        "nameEn": "Supply Chain Manager",
         "description": "공급망 계획, 조달, 물류 최적화 전문가",
         "keywords": [
           "공급망",
@@ -567,6 +606,7 @@
       {
         "id": "brand-strategist",
         "name": "브랜드 전략가",
+        "nameEn": "Brand Strategist",
         "description": "브랜드 아이덴티티, 포지셔닝, 브랜드 관리",
         "keywords": [
           "브랜드",
@@ -577,6 +617,7 @@
       {
         "id": "startup-advisor",
         "name": "스타트업 어드바이저",
+        "nameEn": "Startup Advisor",
         "description": "스타트업 창업, 투자, 성장 전략 전문 자문가",
         "keywords": [
           "스타트업",
@@ -600,6 +641,7 @@
       {
         "id": "ui-ux-designer",
         "name": "UI/UX 디자이너",
+        "nameEn": "UI/UX Designer",
         "description": "사용자 인터페이스 및 경험 설계 전문가",
         "keywords": [
           "UI",
@@ -617,6 +659,7 @@
       {
         "id": "graphic-designer",
         "name": "그래픽 디자이너",
+        "nameEn": "Graphic Designer",
         "description": "시각 디자인, 브랜딩, 그래픽 제작 전문가",
         "keywords": [
           "그래픽",
@@ -628,6 +671,7 @@
       {
         "id": "content-writer",
         "name": "콘텐츠 작가",
+        "nameEn": "Content Writer",
         "description": "콘텐츠 기획, 글쓰기, 스토리텔링 전문가",
         "keywords": [
           "콘텐츠",
@@ -639,6 +683,7 @@
       {
         "id": "video-producer",
         "name": "영상 프로듀서",
+        "nameEn": "Video Producer",
         "description": "영상 기획, 제작, 편집 전문가",
         "keywords": [
           "영상",
@@ -650,6 +695,7 @@
       {
         "id": "game-designer",
         "name": "게임 디자이너",
+        "nameEn": "Game Designer",
         "description": "게임 메커니즘, 레벨 설계, 게임 경험 전문가",
         "keywords": [
           "게임",
@@ -661,6 +707,7 @@
       {
         "id": "copywriter",
         "name": "카피라이터",
+        "nameEn": "Copywriter",
         "description": "광고 카피, 마케팅 메시지, 설득 글쓰기",
         "keywords": [
           "카피",
@@ -675,6 +722,7 @@
       {
         "id": "creative-director",
         "name": "크리에이티브 디렉터",
+        "nameEn": "Creative Director",
         "description": "크리에이티브 비전, 팀 리더십, 프로젝트 총괄",
         "keywords": [
           "디렉션",
@@ -692,6 +740,7 @@
       {
         "id": "mechanical-engineer",
         "name": "기계 엔지니어",
+        "nameEn": "Mechanical Engineer",
         "description": "기계 시스템 설계, 열/유체 역학, 제조 공정",
         "keywords": [
           "기계",
@@ -703,6 +752,7 @@
       {
         "id": "electrical-engineer",
         "name": "전기 엔지니어",
+        "nameEn": "Electrical Engineer",
         "description": "전기/전자 시스템 설계, 회로, 전력 시스템",
         "keywords": [
           "전기",
@@ -714,6 +764,7 @@
       {
         "id": "civil-engineer",
         "name": "토목 엔지니어",
+        "nameEn": "Civil Engineer",
         "description": "건설, 구조 설계, 인프라 전문가",
         "keywords": [
           "토목",
@@ -725,6 +776,7 @@
       {
         "id": "chemical-engineer",
         "name": "화학 엔지니어",
+        "nameEn": "Chemical Engineer",
         "description": "화학 공정 설계, 플랜트 운영, 반응 공학",
         "keywords": [
           "화학공학",
@@ -736,6 +788,7 @@
       {
         "id": "industrial-engineer",
         "name": "산업 엔지니어",
+        "nameEn": "Industrial Engineer",
         "description": "생산 시스템 최적화, 프로세스 개선, 효율성",
         "keywords": [
           "산업공학",
@@ -747,6 +800,7 @@
       {
         "id": "robotics-engineer",
         "name": "로보틱스 엔지니어",
+        "nameEn": "Robotics Engineer",
         "description": "로봇 시스템 설계, 제어, 자동화 전문가",
         "keywords": [
           "로봇",
@@ -759,6 +813,7 @@
       {
         "id": "automotive-engineer",
         "name": "자동차 엔지니어",
+        "nameEn": "Automotive Engineer",
         "description": "자동차 시스템 설계, 파워트레인, 섀시",
         "keywords": [
           "자동차",
@@ -780,6 +835,7 @@
       {
         "id": "research-scientist",
         "name": "연구 과학자",
+        "nameEn": "Research Scientist",
         "description": "과학 연구 수행, 실험 설계, 논문 작성",
         "keywords": [
           "과학연구",
@@ -792,6 +848,7 @@
       {
         "id": "physicist",
         "name": "물리학자",
+        "nameEn": "Physicist",
         "description": "물리 법칙 연구, 이론/실험 물리 전문가",
         "keywords": [
           "물리",
@@ -803,6 +860,7 @@
       {
         "id": "chemist",
         "name": "화학자",
+        "nameEn": "Chemist",
         "description": "화학 반응, 물질 분석, 합성 전문가",
         "keywords": [
           "화학",
@@ -815,6 +873,7 @@
       {
         "id": "biologist",
         "name": "생물학자",
+        "nameEn": "Biologist",
         "description": "생명 현상 연구, 분자생물학, 유전학",
         "keywords": [
           "생물",
@@ -826,6 +885,7 @@
       {
         "id": "environmental-scientist",
         "name": "환경 과학자",
+        "nameEn": "Environmental Scientist",
         "description": "환경 문제 연구, 오염 분석, 환경 보전",
         "keywords": [
           "환경",
@@ -840,6 +900,7 @@
       {
         "id": "materials-scientist",
         "name": "재료 과학자",
+        "nameEn": "Materials Scientist",
         "description": "재료 특성 연구, 신소재 개발, 재료 분석",
         "keywords": [
           "재료",
@@ -851,6 +912,7 @@
       {
         "id": "data-analyst",
         "name": "데이터 분석가",
+        "nameEn": "Data Analyst",
         "description": "데이터 수집, 분석, 시각화, 인사이트 도출",
         "keywords": [
           "데이터시각화",
@@ -880,6 +942,7 @@
       {
         "id": "educator",
         "name": "교육자",
+        "nameEn": "Educator",
         "description": "교육 설계, 학습 촉진, 교수법 전문가",
         "keywords": [
           "교육",
@@ -891,6 +954,7 @@
       {
         "id": "curriculum-designer",
         "name": "커리큘럼 디자이너",
+        "nameEn": "Curriculum Designer",
         "description": "교육과정 설계, 학습 경험 디자인 전문가",
         "keywords": [
           "커리큘럼",
@@ -903,6 +967,7 @@
       {
         "id": "educational-technologist",
         "name": "에듀테크 전문가",
+        "nameEn": "EdTech Specialist",
         "description": "교육 기술 적용, 이러닝, 학습 플랫폼",
         "keywords": [
           "에듀테크",
@@ -914,6 +979,7 @@
       {
         "id": "academic-advisor",
         "name": "학업 어드바이저",
+        "nameEn": "Academic Advisor",
         "description": "학업 상담, 진로 지도, 학생 성공 지원",
         "keywords": [
           "학업",
@@ -932,6 +998,7 @@
       {
         "id": "journalist",
         "name": "저널리스트",
+        "nameEn": "Journalist",
         "description": "취재, 보도, 탐사 저널리즘 전문가",
         "keywords": [
           "기자",
@@ -943,6 +1010,7 @@
       {
         "id": "public-relations-specialist",
         "name": "PR 전문가",
+        "nameEn": "PR Specialist",
         "description": "홍보 전략, 미디어 관계, 위기 커뮤니케이션",
         "keywords": [
           "PR",
@@ -954,6 +1022,7 @@
       {
         "id": "social-media-manager",
         "name": "소셜미디어 매니저",
+        "nameEn": "Social Media Manager",
         "description": "소셜미디어 전략, 콘텐츠 운영, 커뮤니티 관리",
         "keywords": [
           "SNS",
@@ -965,6 +1034,7 @@
       {
         "id": "communications-strategist",
         "name": "커뮤니케이션 전략가",
+        "nameEn": "Communications Strategist",
         "description": "통합 커뮤니케이션, 메시지 전략, 브랜드 스토리텔링",
         "keywords": [
           "커뮤니케이션",
@@ -982,6 +1052,7 @@
       {
         "id": "sociologist",
         "name": "사회학자",
+        "nameEn": "Sociologist",
         "description": "사회 구조, 계층, 세대 갈등, 사회 변동 분석 전문가",
         "keywords": [
           "사회학",
@@ -996,6 +1067,7 @@
       {
         "id": "social-policy-researcher",
         "name": "사회정책 연구원",
+        "nameEn": "Social Policy Researcher",
         "description": "복지 정책, 사회보장, 빈곤 해소, 고용 정책 연구 전문가",
         "keywords": [
           "사회정책",
@@ -1009,6 +1081,7 @@
       {
         "id": "demographer",
         "name": "인구통계학자",
+        "nameEn": "Demographer",
         "description": "인구 변동, 저출산, 고령화, 세대별 인구 구조 분석 전문가",
         "keywords": [
           "인구",
@@ -1023,6 +1096,7 @@
       {
         "id": "labor-economist",
         "name": "노동경제학자",
+        "nameEn": "Labor Economist",
         "description": "고용 시장, 임금 구조, 노동 정책, 일자리 분석 전문가",
         "keywords": [
           "고용",
@@ -1046,6 +1120,7 @@
       {
         "id": "policy-analyst",
         "name": "정책 분석가",
+        "nameEn": "Policy Analyst",
         "description": "공공 정책 분석, 정책 제안, 평가 전문가",
         "keywords": [
           "정책분석",
@@ -1061,6 +1136,7 @@
       {
         "id": "urban-planner",
         "name": "도시 계획가",
+        "nameEn": "Urban Planner",
         "description": "도시 개발, 토지 이용, 지역 계획 전문가",
         "keywords": [
           "도시계획",
@@ -1073,6 +1149,7 @@
       {
         "id": "public-administrator",
         "name": "행정가",
+        "nameEn": "Public Administrator",
         "description": "공공 조직 관리, 정책 실행, 행정 효율화",
         "keywords": [
           "행정",
@@ -1085,6 +1162,7 @@
       {
         "id": "diplomat",
         "name": "외교관",
+        "nameEn": "Diplomat",
         "description": "국제 관계, 외교 협상, 다자 외교 전문가",
         "keywords": [
           "외교",
@@ -1103,6 +1181,7 @@
       {
         "id": "real-estate-analyst",
         "name": "부동산 분석가",
+        "nameEn": "Real Estate Analyst",
         "description": "부동산 시장 분석, 투자 평가, 시장 조사",
         "keywords": [
           "부동산",
@@ -1115,6 +1194,7 @@
       {
         "id": "property-manager",
         "name": "자산 관리자",
+        "nameEn": "Property Manager",
         "description": "부동산 운영, 임대 관리, 시설 관리",
         "keywords": [
           "자산관리",
@@ -1126,6 +1206,7 @@
       {
         "id": "architecture-consultant",
         "name": "건축 컨설턴트",
+        "nameEn": "Architecture Consultant",
         "description": "건축 설계 자문, 공간 기획, 건축 프로젝트 관리",
         "keywords": [
           "건축",
@@ -1144,6 +1225,7 @@
       {
         "id": "energy-analyst",
         "name": "에너지 분석가",
+        "nameEn": "Energy Analyst",
         "description": "에너지 시장 분석, 수요 예측, 에너지 정책",
         "keywords": [
           "에너지",
@@ -1155,6 +1237,7 @@
       {
         "id": "sustainability-consultant",
         "name": "지속가능성 컨설턴트",
+        "nameEn": "Sustainability Consultant",
         "description": "지속가능 경영, ESG, 탄소 중립",
         "keywords": [
           "ESG",
@@ -1166,6 +1249,7 @@
       {
         "id": "renewable-energy-engineer",
         "name": "신재생에너지 엔지니어",
+        "nameEn": "Renewable Energy Engineer",
         "description": "태양광, 풍력, ESS 등 신재생에너지 시스템",
         "keywords": [
           "신재생",
@@ -1184,6 +1268,7 @@
       {
         "id": "logistics-manager",
         "name": "물류 매니저",
+        "nameEn": "Logistics Manager",
         "description": "물류 전략, 배송 최적화, 물류 운영 전문가",
         "keywords": [
           "물류",
@@ -1195,6 +1280,7 @@
       {
         "id": "transportation-analyst",
         "name": "운송 분석가",
+        "nameEn": "Transportation Analyst",
         "description": "운송 계획, 경로 최적화, 운송 비용 분석",
         "keywords": [
           "운송",
@@ -1207,6 +1293,7 @@
       {
         "id": "warehouse-manager",
         "name": "창고 매니저",
+        "nameEn": "Warehouse Manager",
         "description": "창고 운영, 재고 관리, 입출고 최적화",
         "keywords": [
           "창고",
@@ -1225,6 +1312,7 @@
       {
         "id": "hospitality-manager",
         "name": "호스피탈리티 매니저",
+        "nameEn": "Hospitality Manager",
         "description": "호텔/관광 운영, 고객 서비스, 수익 관리",
         "keywords": [
           "호텔경영",
@@ -1237,6 +1325,7 @@
       {
         "id": "event-planner",
         "name": "이벤트 플래너",
+        "nameEn": "Event Planner",
         "description": "행사 기획, 연회, 컨퍼런스 운영",
         "keywords": [
           "이벤트",
@@ -1248,6 +1337,7 @@
       {
         "id": "tourism-consultant",
         "name": "관광 컨설턴트",
+        "nameEn": "Tourism Consultant",
         "description": "관광 정책, 목적지 개발, 여행 트렌드",
         "keywords": [
           "관광",
@@ -1266,6 +1356,7 @@
       {
         "id": "agricultural-scientist",
         "name": "농업 과학자",
+        "nameEn": "Agricultural Scientist",
         "description": "작물 연구, 농업 기술, 생산성 향상",
         "keywords": [
           "농업",
@@ -1280,6 +1371,7 @@
       {
         "id": "food-scientist",
         "name": "식품 과학자",
+        "nameEn": "Food Scientist",
         "description": "식품 개발, 가공 기술, 식품 안전",
         "keywords": [
           "식품",
@@ -1293,6 +1385,7 @@
       {
         "id": "agribusiness-consultant",
         "name": "농업 컨설턴트",
+        "nameEn": "Agribusiness Consultant",
         "description": "농업 경영, 농촌 개발, 농식품 사업",
         "keywords": [
           "농업경영",
@@ -1311,6 +1404,7 @@
       {
         "id": "ethicist",
         "name": "윤리학자",
+        "nameEn": "Ethicist",
         "description": "윤리적 판단, 도덕적 딜레마 분석, 윤리 정책",
         "keywords": [
           "윤리",
@@ -1322,6 +1416,7 @@
       {
         "id": "futurist",
         "name": "미래학자",
+        "nameEn": "Futurist",
         "description": "미래 예측, 트렌드 분석, 시나리오 플래닝",
         "keywords": [
           "미래",
@@ -1333,6 +1428,7 @@
       {
         "id": "systems-thinker",
         "name": "시스템 사고가",
+        "nameEn": "Systems Thinker",
         "description": "복잡 시스템 분석, 상호작용 모델링, 전체론적 접근",
         "keywords": [
           "시스템사고",
@@ -1345,6 +1441,7 @@
       {
         "id": "behavioral-economist",
         "name": "행동 경제학자",
+        "nameEn": "Behavioral Economist",
         "description": "인간 의사결정, 행동 편향, 넛지 디자인",
         "keywords": [
           "행동경제학",
@@ -1356,6 +1453,7 @@
       {
         "id": "crisis-manager",
         "name": "위기 관리자",
+        "nameEn": "Crisis Manager",
         "description": "위기 대응, 비상 계획, 사업 연속성",
         "keywords": [
           "위기",
@@ -1367,6 +1465,7 @@
       {
         "id": "negotiation-expert",
         "name": "협상 전문가",
+        "nameEn": "Negotiation Expert",
         "description": "협상 전략, 분쟁 해결, 딜 메이킹",
         "keywords": [
           "협상",
@@ -1381,6 +1480,7 @@
       {
         "id": "fact-checker",
         "name": "팩트체커",
+        "nameEn": "Fact-Checker",
         "description": "사실 검증, 정보 확인, 미디어 리터러시",
         "keywords": [
           "팩트체크",

@@ -58,7 +58,7 @@ const logger = createLogger('MessagePipeline');
 export async function runMessagePipeline(svc: ChatService,
     req: ChatMessageRequest,
     onToken: (token: string) => void,
-    onAgentSelected?: (agent: { type: string; name: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
+    onAgentSelected?: (agent: { type: string; name: string; nameEn?: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
     onDiscussionProgress?: (progress: DiscussionProgress) => void,
     onResearchProgress?: (progress: ResearchProgress) => void,
     executionPlan?: ExecutionPlan,
