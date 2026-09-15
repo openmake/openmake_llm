@@ -31,7 +31,7 @@ import { createClient } from '../llm/client';
 import { AppError } from '../utils/error-handler';
 import { parseFullModelId } from '../providers/i-provider';
 import { ProviderRouter } from '../providers/provider-router';
-import { ProviderError } from '../providers/provider-errors';
+import { ProviderError, PROVIDER_ERROR_HTTP_STATUS } from '../providers/provider-errors';
 import { LocalLLMProvider } from '../providers/local-llm-provider';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
 import { getPool } from '../data/models/unified-database';
@@ -412,20 +412,7 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
         if (res.headersSent) return; // abort 등으로 이미 응답 시작 — 중복 전송 방지
         if (abortController.signal.aborted) return; // 클라이언트 중단 — 끊긴 연결에 에러 응답 불필요(spurious 500 방지)
         if (err instanceof ProviderError) {
-            const statusByCode: Record<string, number> = {
-                GUEST_NOT_ALLOWED: 403,
-                MISSING_API_KEY: 400,
-                INVALID_API_KEY: 401,
-                QUOTA_EXCEEDED: 429,
-                INSUFFICIENT_CREDIT: 402,
-                SUBSCRIPTION_REQUIRED: 403,
-                MODEL_ACCESS_RESTRICTED: 403,
-                MODEL_NOT_FOUND: 404,
-                INVALID_MODEL_ID: 400,
-                NOT_SUPPORTED: 400,
-                UPSTREAM_ERROR: 502,
-            };
-            res.status(statusByCode[err.code] ?? 502).json({ error: err.message, code: err.code });
+            res.status(PROVIDER_ERROR_HTTP_STATUS[err.code] ?? 502).json({ error: err.message, code: err.code });
             return;
         }
         // AppError(예: 422 스키마 검증 실패) 및 기타 — 직접 JSON 으로 매핑.
