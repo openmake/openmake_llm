@@ -108,7 +108,7 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
                 {a.toolName}
               </span>
               <Link
-                href={`/agent-tasks/${a.taskId}`}
+                href={`/agent-tasks?task=${encodeURIComponent(a.taskId)}`}
                 className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
               >
                 {t("tasks.openTask")}
