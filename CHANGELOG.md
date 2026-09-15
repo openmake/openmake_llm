@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.65.7](https://github.com/openmake/openmake_llm/compare/v1.65.6...v1.65.7) (2026-09-15)
+
+
+### 🐛 버그 수정
+
+* **i18n:** 영문 UI 에 한국어가 섞이던 3곳 — 사고 요약·오케스트레이터 text.reason 머리글·에이전트/스킬 칩 ([#889](https://github.com/openmake/openmake_llm/issues/889)) ([116d4da](https://github.com/openmake/openmake_llm/commit/116d4dae91606f714b737d0210fcd1e8019dd51d))
+
 ## [1.65.6](https://github.com/openmake/openmake_llm/compare/v1.65.5...v1.65.6) (2026-09-15)
 
 
