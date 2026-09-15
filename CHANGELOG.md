@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.65.9](https://github.com/openmake/openmake_llm/compare/v1.65.8...v1.65.9) (2026-09-15)
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 실행기별 작업환경 안내·도구 노출 + 브라우저 러너 빈 페이지 가드 ([#893](https://github.com/openmake/openmake_llm/issues/893)) ([c2b891c](https://github.com/openmake/openmake_llm/commit/c2b891cfdd6fd735bcecb9221d1b04c7b61e47a9))
+
 ## [1.65.8](https://github.com/openmake/openmake_llm/compare/v1.65.7...v1.65.8) (2026-09-15)
 
 
