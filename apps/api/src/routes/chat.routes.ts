@@ -228,12 +228,18 @@ router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validateWi
     } catch (error) {
         if (error instanceof ChatRequestError) {
             logger.warn(`[stream] ChatRequestError: ${error.message}`);
+        } else if (error instanceof ProviderError) {
+            logger.warn(`[stream] ProviderError (${error.code}): ${error.message}`);
         } else {
             logger.error('[stream] 스트리밍 처리 실패:', error);
         }
         if (!aborted) {
             if (error instanceof ChatRequestError) {
                 res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+            } else if (error instanceof ProviderError) {
+                // REST(글로벌 errorHandler)·WS 와 같은 code 를 SSE 이벤트에도 싣는다 — 정책 차단(403) 등이
+                // 일반 오류 문구로만 나가던 누락(2026-09-16). SSE 는 헤더가 이미 나갔으므로 status 는 페이로드로.
+                res.write(`data: ${JSON.stringify({ error: error.message, code: error.code, status: PROVIDER_ERROR_HTTP_STATUS[error.code] })}\n\n`);
             } else {
                 res.write(`data: ${JSON.stringify({ error: '스트리밍 중 오류가 발생했습니다' })}\n\n`);
             }
