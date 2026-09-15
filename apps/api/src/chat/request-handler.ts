@@ -378,10 +378,11 @@ export class ChatRequestHandler {
 
         // 생각 요약 세션 (클로드 웹식 헤드라인): 중간(진행형)·최종(과거형) 요약을
         // onThinkingSummary 로 발행하고, 누적 원문은 저장 시 thinking 컬럼에 영속화.
-        // 헤드라인 언어는 파이프라인(message-pipeline Step 1)과 같은 판정으로 정한다.
+        // 헤드라인 언어는 파이프라인(message-pipeline Step 1)과 같은 판정으로 정한다 — 결정 로그는 파이프라인이 남기므로 끈다.
         const summaryLanguage = resolveLanguagePolicy(
             languageDetectionInput(originalMessage ?? rawMessage ?? message ?? '', message || ''),
             userLanguagePreference,
+            { log: false },
         )?.resolvedLanguage;
         const summarySession = createThinkingSummarySession(
             message,
