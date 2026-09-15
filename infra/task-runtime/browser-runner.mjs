@@ -71,7 +71,9 @@ try {
 
 const actions = Array.isArray(spec.actions) ? spec.actions.slice(0, MAX_ACTIONS) : [];
 const timeout = Number(spec.timeoutMs) > 0 ? Number(spec.timeoutMs) : DEFAULT_TIMEOUT;
-const allowlist = Array.isArray(spec.allowlist) ? spec.allowlist.map(String) : null;
+// 빈 배열은 "제한 없음"으로 본다 — 선택 인자를 [] 로 채운 호출이 허용 0개로 해석돼 모든 접속이 막혔고,
+// 모델은 원인을 몰라 같은 호출을 반복했다(2026-09-15 라이브: 7회 반복 후 goal_incomplete).
+const allowlist = Array.isArray(spec.allowlist) && spec.allowlist.length > 0 ? spec.allowlist.map(String) : null;
 // 세션 지속(#2 Part A): spec.statePath 가 있으면 storageState(쿠키·localStorage)를 그 파일에서
 // 복원하고 실행 후 다시 저장 → 호출 간 로그인 유지. 파일은 workspace 내(task 격리·정리와 동일 수명).
 const statePath = typeof spec.statePath === 'string' && spec.statePath
@@ -115,7 +117,7 @@ try {
             if (PAGE_ACTIONS.has(a?.type) && page.url() === 'about:blank') throw new Error(BLANK_PAGE_ERROR);
             switch (a.type) {
                 case 'goto':
-                    if (!hostAllowed(a.url)) throw new Error(`allowlist 차단: ${a.url}`);
+                    if (!hostAllowed(a.url)) throw new Error(`allowlist 차단: ${a.url} — 허용 목록(${allowlist.join(', ')})에 없는 호스트입니다. 목록에 도메인을 추가하거나 allowlist 인자를 생략하세요`);
                     await page.goto(a.url, { waitUntil: a.waitUntil || 'domcontentloaded', timeout });
                     results.push({ i, type: a.type, ok: true, url: page.url() }); break;
                 case 'click':
