@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.68.1](https://github.com/openmake/openmake_llm/compare/v1.68.0...v1.68.1) (2026-09-15)
+
+
+### 🐛 버그 수정
+
+* **api:** REST 채팅의 ProviderError 를 글로벌 핸들러가 코드별 상태로 매핑 ([#903](https://github.com/openmake/openmake_llm/issues/903)) ([72487fd](https://github.com/openmake/openmake_llm/commit/72487fd63544355d68f29d52b291ace734960ddb))
+
 ## [1.68.0](https://github.com/openmake/openmake_llm/compare/v1.67.0...v1.68.0) (2026-09-15)
 
 
