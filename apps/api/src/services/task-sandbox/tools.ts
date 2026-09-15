@@ -33,6 +33,9 @@ export const TASK_TERMINATE_SENTINEL = '__TASK_TERMINATE__';
 /** file_ops tree 상한 — 실행기(walk/listWorkspaceFilesAt)의 1000개 캡과 일치시킨다. */
 const FILE_TREE_MAX = 1000;
 
+/** 실행기가 브라우저를 지원하지 않을 때의 거절 문구 — 로컬 실행기는 항상, 샌드박스는 게이트 OFF 일 때. */
+const BROWSER_UNAVAILABLE = '이 실행 환경에서는 브라우저를 쓸 수 없습니다 (로컬 실행 작업이거나 TASK_SANDBOX_BROWSER_ENABLED=false).';
+
 export const TASK_ASK_HUMAN_SENTINEL = '__TASK_ASK_HUMAN__';
 
 function textResult(text: string, isError = false): MCPToolResult {
@@ -94,7 +97,7 @@ export function createTaskTools(
     const bash: MCPToolDefinition = {
         tool: {
             name: 'bash',
-            description: '영속 작업 컨테이너(/workspace)에서 셸 명령을 실행합니다. 파일은 단계 간 유지됩니다. ' +
+            description: '작업 디렉토리에서 셸 명령을 실행합니다. 파일은 단계 간 유지됩니다. ' +
                 'git/curl/ripgrep/python3/node 사용 가능. 네트워크는 정책에 따라 제한될 수 있습니다.',
             inputSchema: {
                 type: 'object',
@@ -112,7 +115,7 @@ export function createTaskTools(
     const pythonExecute: MCPToolDefinition = {
         tool: {
             name: 'python_execute',
-            description: '/workspace 에 Python 코드를 파일로 저장하고 실행합니다. 결과(stdout/stderr)를 반환합니다.',
+            description: '작업 디렉토리에 Python 코드를 파일로 저장하고 실행합니다. 결과(stdout/stderr)를 반환합니다.',
             inputSchema: {
                 type: 'object',
                 properties: {
@@ -143,13 +146,13 @@ export function createTaskTools(
     const strReplaceEditor: MCPToolDefinition = {
         tool: {
             name: 'str_replace_editor',
-            description: '/workspace 파일을 보고/생성/편집합니다. command: view(보기) | create(생성) | ' +
+            description: '작업 디렉토리의 파일을 보고/생성/편집합니다. command: view(보기) | create(생성) | ' +
                 'str_replace(문자열 치환) | insert(라인 삽입).',
             inputSchema: {
                 type: 'object',
                 properties: {
                     command: { type: 'string', description: 'view | create | str_replace | insert' },
-                    path: { type: 'string', description: 'workspace 상대 경로' },
+                    path: { type: 'string', description: '작업 디렉토리 기준 상대 경로' },
                     file_text: { type: 'string', description: 'create 시 전체 내용' },
                     old_str: { type: 'string', description: 'str_replace 시 찾을 문자열(유일해야 함)' },
                     new_str: { type: 'string', description: 'str_replace/insert 시 새 문자열' },
@@ -200,14 +203,14 @@ export function createTaskTools(
         tool: {
             name: 'file_ops',
             description:
-                '/workspace 파일 작업: op=read | write | list | tree | delete. '
+                '작업 디렉토리 파일 작업: op=read | write | list | tree | delete. '
                 + 'list 는 해당 디렉토리만 보여주며 폴더는 이름 뒤에 "/" 가 붙는다. '
                 + '하위 폴더까지 한 번에 보려면 tree 를 쓴다.',
             inputSchema: {
                 type: 'object',
                 properties: {
                     op: { type: 'string', description: 'read | write | list | tree | delete' },
-                    path: { type: 'string', description: 'workspace 상대 경로 (list 는 기본 ".", tree 는 무시)' },
+                    path: { type: 'string', description: '작업 디렉토리 기준 상대 경로 (list 는 기본 ".", tree 는 무시)' },
                     content: { type: 'string', description: 'write 시 내용' },
                 },
                 required: ['op'],
@@ -241,7 +244,7 @@ export function createTaskTools(
     const browser: MCPToolDefinition = {
         tool: {
             name: 'browser',
-            description: '영속 컨테이너 내 chromium 으로 웹 브라우저를 자동화합니다(G2). actions 배열을 순서대로 실행: ' +
+            description: '일회성 컨테이너의 chromium 으로 웹 브라우저를 자동화합니다(G2). 호출마다 빈 페이지(about:blank)에서 새로 시작하므로(쿠키·로그인만 유지) goto 와 이어지는 액션을 한 actions 배열에 함께 넣으세요. actions 배열을 순서대로 실행: ' +
                 'goto{url} · click{selector} · fill{selector,text} · press{key} · wait{ms} · waitFor{selector} · ' +
                 'screenshot{path?} · extractText{selector?} · extractHtml{selector?}. 결과를 JSON 으로 반환합니다. ' +
                 'CSS 셀렉터(click/fill)가 실패하면 snapshot 으로 상호작용 요소를 {role,name,index} 목록으로 얻은 뒤 ' +
@@ -266,7 +269,7 @@ export function createTaskTools(
         },
         handler: async (args): Promise<MCPToolResult> => {
             if (!sandbox.isBrowserEnabled) {
-                return textResult('브라우저 기능이 비활성화되어 있습니다 (TASK_SANDBOX_BROWSER_ENABLED=false).', true);
+                return textResult(BROWSER_UNAVAILABLE, true);
             }
             // 단일 액션 객체를 넘기는 실수는 배열로 감싼다(계약 유지).
             const actions = Array.isArray(args.actions)
@@ -532,7 +535,7 @@ export function createTaskTools(
             };
             try {
                 if (spec.kind === 'browser') {
-                    if (!sandbox.isBrowserEnabled) return textResult('브라우저 기능이 비활성화되어 있습니다 (TASK_SANDBOX_BROWSER_ENABLED=false).', true);
+                    if (!sandbox.isBrowserEnabled) return textResult(BROWSER_UNAVAILABLE, true);
                     const renderedActions = deepSub(spec.actions ?? []);
                     const specOut = {
                         actions: renderedActions,
@@ -591,5 +594,5 @@ export function createTaskTools(
             textResult(`${TASK_ASK_HUMAN_SENTINEL} ${str(args.question)}`),
     };
 
-    return [bash, pythonExecute, strReplaceEditor, fileOps, ...createCodeNavTools(sandbox), browser, planCreate, planUpdate, planView, delegateTool, ...(spawn ? [spawnAgentsTool] : []), ...(discuss ? [discussTool] : []), ...(procedural ? [skillSave, skillRun] : []), terminate, askHuman];
+    return [bash, pythonExecute, strReplaceEditor, fileOps, ...createCodeNavTools(sandbox), ...(sandbox.isBrowserEnabled ? [browser] : []), planCreate, planUpdate, planView, delegateTool, ...(spawn ? [spawnAgentsTool] : []), ...(discuss ? [discussTool] : []), ...(procedural ? [skillSave, skillRun] : []), terminate, askHuman];
 }

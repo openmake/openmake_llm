@@ -3,14 +3,14 @@ import type { TaskSandbox, ExecResult } from './sandbox';
 import type { MCPToolResult } from '../../mcp/types';
 
 /** 인메모리 가짜 샌드박스 — docker 없이 도구 로직만 검증. */
-function fakeSandbox(): TaskSandbox & { files: Map<string, string>; lastCmd: string; lastBrowser: string } {
+function fakeSandbox({ browserEnabled = true }: { browserEnabled?: boolean } = {}): TaskSandbox & { files: Map<string, string>; lastCmd: string; lastBrowser: string } {
     const files = new Map<string, string>();
     const ok = (stdout: string): ExecResult => ({ stdout, stderr: '', exitCode: 0, truncated: false, timedOut: false, durationMs: 1 });
     const sb = {
         files,
         lastCmd: '',
         lastBrowser: '',
-        get isBrowserEnabled() { return true; },
+        get isBrowserEnabled() { return browserEnabled; },
         async exec(cmd: string) { (sb as { lastCmd: string }).lastCmd = cmd; return ok(`ran:${cmd}`); },
         async runBrowser(rel: string) { (sb as { lastBrowser: string }).lastBrowser = rel; return ok('browser-ran'); },
         async writeFile(p: string, c: string) { files.set(p, c); },
@@ -32,6 +32,23 @@ describe('task-sandbox tools', () => {
     it('13개 도구 제공 (5 sandbox + 2 code-nav + 3 plan + delegate + terminate + ask_human)', () => {
         const names = createTaskTools(fakeSandbox()).map((t) => t.tool.name);
         expect(names).toEqual(['bash', 'python_execute', 'str_replace_editor', 'file_ops', 'grep_code', 'repo_map', 'browser', 'plan_create', 'plan_update', 'plan_view', 'delegate', 'terminate', 'ask_human']);
+    });
+
+    it('실행기가 브라우저를 지원하지 않으면(로컬 실행기 등) browser 도구를 노출하지 않는다', () => {
+        const names = createTaskTools(fakeSandbox({ browserEnabled: false })).map((t) => t.tool.name);
+        expect(names).not.toContain('browser');
+        expect(names).toHaveLength(12);
+    });
+
+    it('도구 설명은 실행기 중립이다 — 컨테이너 경로(/workspace)를 전제하지 않는다', () => {
+        const schemas = JSON.stringify(createTaskTools(fakeSandbox()).map((t) => t.tool));
+        expect(schemas).not.toContain('/workspace');
+    });
+
+    it('browser 설명은 "호출마다 새 페이지 — goto 를 같은 actions 에" 규칙을 담는다', () => {
+        const description = byName(createTaskTools(fakeSandbox()), 'browser').tool.description;
+        expect(description).toContain('about:blank');
+        expect(description).toContain('한 actions 배열에 함께');
     });
 
     describe('delegate', () => {

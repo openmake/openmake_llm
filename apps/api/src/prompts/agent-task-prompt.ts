@@ -131,6 +131,25 @@ export function getWorktreeIsolationNote(branch: string): string {
     ].join('\n');
 }
 
+/** 실행기 공용 안내 — 코드 탐색·도구 결과 접기·테스트 게이트. 샌드박스·로컬 안내에 같은 문구로 들어간다. */
+const TASK_TOOL_USAGE_GUIDANCE = [
+    '- 코드 탐색은 grep_code(정규식 → 파일:줄)·repo_map(구조·줄 수·심볼 개요) 를 먼저 쓰세요 — 결과가',
+    '  캡으로 잘려 컨텍스트를 아낍니다. bash 의 cat/grep/find 로 큰 출력을 통째로 받지 마세요.',
+    '- 오래된 도구 결과는 앞부분만 남기고 접힙니다("[접힌 도구 결과]"). 원문이 다시 필요하면 같은 도구를',
+    '  다시 호출하세요(파일 내용은 file_ops read). 편집할 때는 방금 읽은 최신 내용을 기준으로 하세요.',
+    '- workspace 에 테스트 러너(package.json scripts.test·pytest·go test)가 있으면 완료 시 자동 실행됩니다 —',
+    '  실패하면 수정 요청이 오니, 파일을 고친 뒤엔 직접 테스트를 돌려 확인하세요.',
+];
+
+/** 실행기 공용 안내 — 승인·계획 추적. 샌드박스·로컬 안내의 끝에 같은 문구로 붙는다. */
+const TASK_APPROVAL_AND_PLAN_GUIDANCE = [
+    '- 일부 도구는 실행 전 사용자 승인이 필요할 수 있습니다(승인 대기 시 작업이 일시정지됩니다).',
+    '## 계획 추적 (G3)',
+    '- 복잡한 작업은 plan_create 로 단계 계획을 세우고, 진행하며 plan_update 로 각 단계 상태를',
+    '  (in_progress/completed/blocked) 갱신해 진행 상황을 가시화하세요.',
+    '- 막혔거나 더 진행할 수 없으면 terminate(또는 ask_human)로 깔끔히 마무리하세요.',
+];
+
 export function getTaskSandboxGuidance(): string {
     return [
         '',
@@ -138,12 +157,7 @@ export function getTaskSandboxGuidance(): string {
         '- 당신에게는 격리된 가상 컴퓨터가 있습니다: 작업 디렉토리 /workspace + 셸(bash) + python + 브라우저.',
         '- /workspace 의 파일은 단계 간 유지됩니다. 산출물 파일은 여기에 저장하세요.',
         '- bash/python_execute/str_replace_editor/file_ops 로 파일을 만들고 실행하고 편집하세요.',
-        '- 코드 탐색은 grep_code(정규식 → 파일:줄)·repo_map(구조·줄 수·심볼 개요) 를 먼저 쓰세요 — 결과가',
-        '  캡으로 잘려 컨텍스트를 아낍니다. bash 의 cat/grep/find 로 큰 출력을 통째로 받지 마세요.',
-        '- 오래된 도구 결과는 앞부분만 남기고 접힙니다("[접힌 도구 결과]"). 원문이 다시 필요하면 같은 도구를',
-        '  다시 호출하세요(파일 내용은 file_ops read). 편집할 때는 방금 읽은 최신 내용을 기준으로 하세요.',
-        '- workspace 에 테스트 러너(package.json scripts.test·pytest·go test)가 있으면 완료 시 자동 실행됩니다 —',
-        '  실패하면 수정 요청이 오니, 파일을 고친 뒤엔 직접 테스트를 돌려 확인하세요.',
+        ...TASK_TOOL_USAGE_GUIDANCE,
         '- 오피스/PDF 산출물은 python_execute 로 생성·편집하세요(모두 설치됨, 바로 import): Excel(.xlsx)=openpyxl',
         '  (`wb.save(...)`), Word(.docx)=python-docx(`from docx import Document`), PowerPoint(.pptx)=python-pptx',
         '  (`from pptx import Presentation`), PDF 생성=reportlab/fpdf2, PDF 조작(병합/분할/회전/워터마크)=pypdf,',
@@ -173,16 +187,35 @@ export function getTaskSandboxGuidance(): string {
         '  파일을 직접 편집하세요 — 변경분은 완료 시 자동으로 diff 로 기록되어 사용자에게 표시됩니다',
         '  (커밋은 직접 하지 않아도 됩니다).',
         '- browser 도구로 웹을 탐색·조작할 수 있습니다(네트워크 정책에 따라 제한).',
-        '- 일부 도구는 실행 전 사용자 승인이 필요할 수 있습니다(승인 대기 시 작업이 일시정지됩니다).',
-        '## 계획 추적 (G3)',
-        '- 복잡한 작업은 plan_create 로 단계 계획을 세우고, 진행하며 plan_update 로 각 단계 상태를',
-        '  (in_progress/completed/blocked) 갱신해 진행 상황을 가시화하세요.',
-        '- 막혔거나 더 진행할 수 없으면 terminate(또는 ask_human)로 깔끔히 마무리하세요.',
+        ...TASK_APPROVAL_AND_PLAN_GUIDANCE,
     ].join('\n');
 }
 
 /**
- * 입력 첨부 파일이 샌드박스 workspace 에 기록됐을 때 goal 메시지에 덧붙이는 안내.
+ * 로컬 실행기(executor='local') 작업환경 안내 — getTaskSandboxGuidance 의 로컬판.
+ *
+ * 작업 디렉토리는 사용자가 연결한 폴더이고 컨테이너 전용 요소(/workspace 경로·브라우저·번들 도구·
+ * 네트워크 차단)는 없다. 컨테이너 안내를 그대로 넣으면 모델이 `cd /workspace` 같은 없는 경로로
+ * 턴을 버린다(2026-09-15 CLI 라이브 실측). 공용 문단은 샌드박스 안내와 같은 문구를 쓴다.
+ */
+export function getLocalExecutorGuidance(): string {
+    return [
+        '',
+        '## 작업 환경 (사용자 로컬 폴더)',
+        '- 사용자가 연결한 로컬 폴더가 작업 디렉토리입니다. 셸(bash)·python·파일 도구가 모두 이 폴더에서 동작하며,',
+        '  /workspace 같은 컨테이너 경로는 없습니다. 파일 경로는 이 폴더 기준 상대경로로 쓰세요(예: src/app.ts).',
+        '- 파일 도구는 이 폴더 밖 경로를 거부합니다. 셸 명령은 사용자 머신에서 실행되며 실행 전 사용자 확인을',
+        '  받을 수 있고, 폴더 밖 쓰기(전역 설치 등)는 차단됩니다.',
+        '- 설치된 언어·도구는 사용자 환경마다 다릅니다 — 필요한 명령이 있는지 먼저 확인하세요(예: `command -v node`).',
+        '- 이 환경에는 browser 도구가 없습니다.',
+        '- bash/python_execute/str_replace_editor/file_ops 로 파일을 만들고 실행하고 편집하세요.',
+        ...TASK_TOOL_USAGE_GUIDANCE,
+        ...TASK_APPROVAL_AND_PLAN_GUIDANCE,
+    ].join('\n');
+}
+
+/**
+ * 입력 첨부 파일이 작업 디렉토리(샌드박스 workspace·로컬 연결 폴더)에 기록됐을 때 goal 메시지에 덧붙이는 안내.
  * fileLines 는 "- uploads/xxx (...)" 형식의 목록 행 — AgentTaskService 가 기록 결과로 조립.
  */
 export function getAgentTaskUploadedFilesNote(fileLines: string[]): string {
@@ -190,7 +223,7 @@ export function getAgentTaskUploadedFilesNote(fileLines: string[]): string {
         '',
         '',
         '## 📎 업로드 파일',
-        '사용자가 이 작업에 파일을 첨부했습니다. 작업 디렉토리(/workspace)에 저장되어 있습니다:',
+        '사용자가 이 작업에 파일을 첨부했습니다. 작업 디렉토리에 저장되어 있습니다:',
         ...fileLines,
         'PDF·오피스 문서는 이미 텍스트로 추출되어 있습니다. 먼저 이 파일들을 읽고(cat/python) 내용을 근거로 작업하세요.',
         '추출 텍스트는 구간을 나눠 여러 번 읽지 말고 한 번에 통째로 읽은 뒤, 필요한 요점을 즉시 메모 파일(예: notes.md)에 정리하세요.',

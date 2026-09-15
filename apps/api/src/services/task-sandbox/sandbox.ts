@@ -19,6 +19,7 @@ import { mkdir, rm, writeFile as fsWriteFile, readFile as fsReadFile, readdir, s
 import { resolve, sep, join, dirname, basename, relative } from 'path';
 import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
 import type { TaskExecutor, ExecResult } from './executor';
+import { SANDBOX_WORKSPACE_DIR, stripWorkspacePrefix } from './workspace-path';
 import { createLogger } from '../../utils/logger';
 
 // 기존 소비처(runtime/tools 등)가 './sandbox' 에서 ExecResult 를 import 하므로 재노출 유지.
@@ -27,7 +28,7 @@ export type { ExecResult } from './executor';
 const logger = createLogger('TaskSandbox');
 
 const CONTAINER_PREFIX = 'omk-task-';
-const WORKSPACE = '/workspace';
+const WORKSPACE = SANDBOX_WORKSPACE_DIR;
 
 /** docker 식별자 안전화. */
 export function sanitizeId(id: string): string {
@@ -99,11 +100,7 @@ export function buildBrowserRunArgs(
  */
 export function safeResolveWorkspacePath(hostWorkdir: string, userPath: string): string {
     const root = resolve(hostWorkdir);
-    const normalized = userPath === WORKSPACE
-        ? '.'
-        : userPath.startsWith(WORKSPACE + '/')
-            ? userPath.slice(WORKSPACE.length + 1) || '.'
-            : userPath;
+    const normalized = stripWorkspacePrefix(userPath);
     const abs = resolve(root, normalized);
     if (abs !== root && !abs.startsWith(root + sep)) {
         throw new Error(

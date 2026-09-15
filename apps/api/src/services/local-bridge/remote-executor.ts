@@ -13,6 +13,7 @@
  * @module services/local-bridge/remote-executor
  */
 import type { TaskExecutor, ExecResult, CodeNavSpec, CodeNavData } from '../task-sandbox/executor';
+import { stripWorkspacePrefix } from '../task-sandbox/workspace-path';
 import { getLocalBridgeRegistry, type BridgeResult, type BridgeRequestPayload } from './registry';
 import { LOCAL_BRIDGE } from '../../config/local-bridge';
 import { readFile as fsReadFile, stat } from 'fs/promises';
@@ -168,10 +169,14 @@ export class RemoteExecutor implements TaskExecutor {
         logger.info(`[${this.taskId}] 승인 대기 알림 → 디바이스 ${sent ? '전송' : '미전송(연결 없음)'}: ${toolName}`);
     }
 
-    /** 파일 경로를 worktree 기준으로 변환. 격리가 없으면 원래 경로 그대로. */
+    /**
+     * 파일 경로를 디바이스 요청 경로로 변환. 컨테이너 표기(`/workspace/...`)는 연결 폴더 기준 상대경로로
+     * 풀고(샌드박스 safeResolveWorkspacePath 와 같은 규칙 — 안 풀면 디바이스가 "폴더 스코프 밖"으로 거부한다),
+     * 격리 중이면 worktree 기준으로 옮긴다.
+     */
     private scoped(relPath: string): string {
-        if (!this.worktreeRel) return relPath;
-        const clean = (relPath ?? '.').replace(/^\.\/+/, '');
+        const clean = stripWorkspacePrefix(relPath ?? '.').replace(/^\.\/+/, '');
+        if (!this.worktreeRel) return clean || '.';
         return clean === '' || clean === '.' ? this.worktreeRel : `${this.worktreeRel}/${clean}`;
     }
 
