@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.68.0](https://github.com/openmake/openmake_llm/compare/v1.67.0...v1.68.0) (2026-09-15)
+
+
+### ✨ 기능
+
+* 로드맵 3~5단계 — Execution Graph 증분·메모리 범위 메타데이터·Control Plane 기초 ([#901](https://github.com/openmake/openmake_llm/issues/901)) ([4f0e11f](https://github.com/openmake/openmake_llm/commit/4f0e11f8bff1e3c5405dc7542de77384d5baf2ad))
+
 ## [1.67.0](https://github.com/openmake/openmake_llm/compare/v1.66.0...v1.67.0) (2026-09-15)
 
 
