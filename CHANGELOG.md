@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.65.8](https://github.com/openmake/openmake_llm/compare/v1.65.7...v1.65.8) (2026-09-15)
+
+
+### 🐛 버그 수정
+
+* **chat:** 사고 요약용 언어 판정의 중복 결정 로그 제거 ([#891](https://github.com/openmake/openmake_llm/issues/891)) ([e3c6e61](https://github.com/openmake/openmake_llm/commit/e3c6e616f1abdaeac0a74d90552b3881417704c1))
+
 ## [1.65.7](https://github.com/openmake/openmake_llm/compare/v1.65.6...v1.65.7) (2026-09-15)
 
 
