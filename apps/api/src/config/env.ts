@@ -291,6 +291,14 @@ export function applySettingsOverlay(overlay: Record<string, string>): void {
     resetConfig();
 }
 
+/**
+ * 임의 설정 키의 현재값 — DB overlay(system_settings) > process.env. EnvConfig 에 필드를 두지 않은
+ * 운영 설정(예: EXTERNAL_MODEL_POLICY)을 호출 시점에 읽는다. 관리자 UI 변경은 overlay 갱신으로 즉시 반영.
+ */
+export function getSettingValue(key: string): string | undefined {
+    return settingsOverlay[key] ?? process.env[key] ?? undefined;
+}
+
 /** overlay 를 제외한 env 원값 (process.env > .env 파일) — 설정 출처(env/기본값) 판별용 */
 export function readRawEnvValue(key: string): string | undefined {
     const envPath = path.resolve(process.cwd(), '.env');

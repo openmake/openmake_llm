@@ -24,6 +24,8 @@
  */
 import { buildFullModelId } from '../../providers/i-provider';
 import { ProviderError } from '../../providers/provider-errors';
+import { getSettingValue } from '../../config/env';
+import { isExternalModelAllowed, resolveExternalModelPolicy } from '../../config/external-model-policy';
 import type {
     ProviderRouter,
     ResolvedProvider,
@@ -89,7 +91,13 @@ export async function runProviderGate(
     input: ProviderGateInput,
 ): Promise<ResolvedProvider> {
     const fullId = normalizeToFullId(input.requestedModel, input.fallbackModel);
-    return router.resolve(fullId, input.ctx);
+    const resolved = await router.resolve(fullId, input.ctx);
+    // 외부 모델 정책(Control Plane 기초) — 관리자 허용·차단 목록을 서버가 강제. 로컬은 대상 아님.
+    if (resolved.providerId !== 'local-llm'
+        && !isExternalModelAllowed(resolved.fullId, resolveExternalModelPolicy(getSettingValue('EXTERNAL_MODEL_POLICY')))) {
+        throw new ProviderError('MODEL_ACCESS_RESTRICTED', `관리자 정책으로 사용할 수 없는 모델입니다: ${resolved.fullId}`);
+    }
+    return resolved;
 }
 
 /**

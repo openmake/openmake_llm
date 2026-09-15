@@ -40,6 +40,10 @@ const nonNegativeIntString = z
     .string()
     .trim()
     .regex(/^\d+$/, '0 이상의 정수여야 합니다');
+/** JSON 객체 문자열 — 외부 모델 정책({"allow":[…],"deny":[…]}) 같은 구조 설정. */
+const jsonObject = nonEmpty.refine((v) => {
+    try { const o = JSON.parse(v); return !!o && typeof o === 'object' && !Array.isArray(o); } catch { return false; }
+}, 'JSON 객체여야 합니다 (예: {"deny":["openrouter:*"]})');
 const mailtoOrHttps = nonEmpty.refine(
     (v) => /^(mailto:|https:\/\/)/.test(v),
     'mailto: 또는 https:// 형식이어야 합니다',
@@ -97,6 +101,10 @@ export const SYSTEM_SETTINGS_REGISTRY: SystemSettingDef[] = [
     { key: 'LLM_BASE_URL', group: 'llm', secret: false, requiresRestart: true, validate: httpUrl },
     { key: 'LLM_API_KEY', group: 'llm', secret: true, requiresRestart: true, validate: apiKeyLike },
     { key: 'LLM_DEFAULT_MODEL', group: 'llm', secret: false, requiresRestart: false, validate: nonEmpty },
+    // ── Control Plane 기초(2026-09-16): 토큰 예산·외부 모델 정책을 관리자 UI 에서 실시간 조정 ──
+    { key: 'LLM_HOURLY_TOKEN_LIMIT', group: 'llm', secret: false, requiresRestart: false, validate: nonNegativeIntString },
+    { key: 'LLM_WEEKLY_TOKEN_LIMIT', group: 'llm', secret: false, requiresRestart: false, validate: nonNegativeIntString },
+    { key: 'EXTERNAL_MODEL_POLICY', group: 'llm', secret: false, requiresRestart: false, validate: jsonObject },
 
     // ── 외부 LLM provider 키 — 저장/삭제 시 "관리자 본인"의 user_external_api_keys(BYOK)로
     //    연동된다 (admin-system-settings.routes 의 syncAdminProviderKey). 런타임 키 해석 경로는

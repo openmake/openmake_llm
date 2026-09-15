@@ -34,6 +34,50 @@ function hourKey(userId: string, now: number): string {
 function weekKey(userId: string, now: number): string {
     return `llmq:${userId}:w:${Math.floor(now / WEEK_MS)}`;
 }
+/** 달력 월 버킷(UTC) — 조직 월 예산(127) 합산 재료. 다음 달 말까지 보존(TTL 62일). */
+function monthBucket(now: number): string {
+    const d = new Date(now);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+function monthKey(userId: string, now: number): string {
+    return `llmq:${userId}:m:${monthBucket(now)}`;
+}
+const MONTH_TTL_MS = 62 * 24 * 60 * 60 * 1000;
+
+/** 조직 멤버십 조회 캐시 — LLM 호출마다 DB 를 치지 않게 60초 보존(fail-open: 실패 시 빈 목록). */
+const ORG_CACHE_TTL_MS = 60_000;
+const orgCache = new Map<string, { at: number; orgs: Array<{ orgId: string; budget: number; memberIds: string[] }> }>();
+async function budgetedOrgsFor(userId: string, now: number): Promise<Array<{ orgId: string; budget: number; memberIds: string[] }>> {
+    const hit = orgCache.get(userId);
+    if (hit && now - hit.at < ORG_CACHE_TTL_MS) return hit.orgs;
+    try {
+        const { OrganizationRepository } = await import('../data/repositories/organization-repository');
+        const { getPool } = await import('../data/models/unified-database');
+        const orgs = await new OrganizationRepository(getPool()).listBudgetedOrgsForUser(userId);
+        orgCache.set(userId, { at: now, orgs });
+        return orgs;
+    } catch (e) {
+        logger.warn('조직 예산 조회 실패 (fail-open):', e);
+        return [];
+    }
+}
+/** 테스트·관리자 변경 직후 캐시 무효화. */
+export function clearOrgBudgetCache(): void { orgCache.clear(); }
+
+/**
+ * 조직 월 예산 검사(127) — 사용자가 속한 예산 있는 조직마다 멤버 전체의 이번 달 사용량 합이 예산 이상이면 throw.
+ * 조직이 없으면 no-op. KV 장애는 fail-open.
+ */
+export async function checkOrgBudget(userId: string, now: number): Promise<void> {
+    const orgs = await budgetedOrgsFor(userId, now);
+    if (orgs.length === 0) return;
+    const store = getKeyValueStore();
+    for (const org of orgs) {
+        const used = (await Promise.all(org.memberIds.map((m) => store.get<number>(monthKey(m, now)))))
+            .reduce<number>((sum, v) => sum + (typeof v === 'number' ? v : 0), 0);
+        if (used >= org.budget) throw new QuotaExceededError('org_monthly', used, org.budget);
+    }
+}
 
 /** 조회용 윈도우 상태 — resetAt 은 현재 calendar bucket 이 넘어가는 시각(ms epoch). */
 interface UserQuotaWindow {
@@ -116,6 +160,7 @@ export async function checkUserQuota(userId: string | undefined, now: number): P
         if (weeklyLimit > 0 && weekly >= weeklyLimit) {
             throw new QuotaExceededError('weekly', weekly, weeklyLimit);
         }
+        await checkOrgBudget(userId, now);
     } catch (e) {
         if (e instanceof QuotaExceededError) throw e;
         logger.warn('per-user quota check 실패 (fail-open):', e);
@@ -133,9 +178,11 @@ export async function recordUserUsage(userId: string | undefined, tokens: number
         const store = getKeyValueStore();
         const hk = hourKey(userId, now);
         const wk = weekKey(userId, now);
+        const mk = monthKey(userId, now);
         await Promise.all([
             store.incrBy(hk, tokens).then(() => store.expire(hk, HOUR_TTL_MS)),
             store.incrBy(wk, tokens).then(() => store.expire(wk, WEEK_TTL_MS)),
+            store.incrBy(mk, tokens).then(() => store.expire(mk, MONTH_TTL_MS)),
         ]);
     } catch (e) {
         logger.warn('per-user quota record 실패 (무시):', e);
