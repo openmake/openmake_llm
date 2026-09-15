@@ -13,13 +13,16 @@
  */
 import { QUOTA_RETRY_AFTER } from '../config/timeouts';
 
+/** 'org_monthly' = 조직 월 예산(127) — 멤버 합산 사용량이 organizations.monthly_token_budget 을 넘음. */
+export type QuotaType = 'hourly' | 'weekly' | 'both' | 'org_monthly';
+
 export class QuotaExceededError extends Error {
-    public readonly quotaType: 'hourly' | 'weekly' | 'both';
+    public readonly quotaType: QuotaType;
     public readonly used: number;
     public readonly limit: number;
     public readonly retryAfterSeconds: number;
 
-    constructor(quotaType: 'hourly' | 'weekly' | 'both', used: number, limit: number) {
+    constructor(quotaType: QuotaType, used: number, limit: number) {
         // 단위는 **토큰** — user-quota.ts 가 llmHourlyTokenLimit/llmWeeklyTokenLimit(토큰 수)로
         // 검사한다. 예전 문구가 "requests used" 라 요청 수로 읽혀, 업스트림 프로바이더의
         // 요청 쿼터 초과로 오진하기 쉬웠다.

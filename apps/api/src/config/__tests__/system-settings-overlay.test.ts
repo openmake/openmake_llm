@@ -60,6 +60,8 @@ describe('system-settings-registry', () => {
         const sample: Record<string, string> = {};
         for (const def of wiringTargets) {
             if (def.key === 'NAVER_API_DAILY_LIMIT') sample[def.key] = '777';
+            else if (def.key === 'LLM_HOURLY_TOKEN_LIMIT') sample[def.key] = '778';
+            else if (def.key === 'LLM_WEEKLY_TOKEN_LIMIT') sample[def.key] = '779';
             else if (def.key.startsWith('OPERATOR_WEBHOOK') || def.key === 'OAUTH_REDIRECT_URI' || def.key === 'LLM_BASE_URL')
                 sample[def.key] = 'https://example.com/wired';
             else if (def.key === 'VAPID_SUBJECT') sample[def.key] = 'mailto:wired@example.com';

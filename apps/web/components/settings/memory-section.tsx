@@ -13,6 +13,9 @@ interface Memory {
   /** explicit=직접 입력 · candidate=자동 감지(LLM) · batch=백필. 직접 입력이 아니면 배지로 구분한다. */
   source?: "explicit" | "candidate" | "batch";
   created_at?: string;
+  /** 범위 메타데이터(백엔드 126) — 구 서버는 미전송. */
+  sensitivity?: "normal" | "sensitive";
+  expires_at?: string | null;
 }
 
 interface MemoriesPayload {
@@ -147,6 +150,14 @@ export function MemorySection() {
                       <span className="mt-1 inline-block rounded border border-border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
                         {m.source === "candidate" ? t("sourceCandidate") : t("sourceBatch")}
                       </span>
+                    )}
+                    {m.sensitivity === "sensitive" && (
+                      <span className="ml-1 mt-1 inline-block rounded border border-warn px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-warn">
+                        {t("sensitive")}
+                      </span>
+                    )}
+                    {m.expires_at && (
+                      <p className="mt-1 text-[11px] text-muted">{t("expiresOn", { date: new Date(m.expires_at).toLocaleDateString() })}</p>
                     )}
                   </div>
                   <Button variant="ghost" size="icon" aria-label={t("deleteAria")} onClick={() => void remove(m.id)}>

@@ -1992,7 +1992,9 @@
     "deleteAria": "删除记忆",
     "sourceCandidate": "自动识别",
     "sourceBatch": "回填",
-    "limitReached": "最多可保存 {max} 条记忆。"
+    "limitReached": "最多可保存 {max} 条记忆。",
+    "sensitive": "敏感信息",
+    "expiresOn": "保留至 {date}"
   },
   "pageTabs": {
     "myServers": "我的服务器",

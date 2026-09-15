@@ -16,6 +16,27 @@ export interface PlanStep {
     text: string;
     status: PlanStepStatus;
     note?: string;
+    /** 완료 기준(Execution Graph 증분 4, 2026-09-16) — goal judge 가 노드 단위로 대조하는 검증 가능한 조건. */
+    doneWhen?: string;
+    /** 선행 노드(1-based). 자동 승격은 선행이 모두 completed 인 노드만 고른다. */
+    after?: number[];
+}
+
+/** plan_create 입력 — 문자열(종전) 또는 완료 기준·선행 노드를 가진 객체. */
+export type PlanStepInput = string | { text: string; doneWhen?: string; after?: number[] };
+
+const STATUS_VALUES: ReadonlySet<string> = new Set(['not_started', 'in_progress', 'completed', 'blocked']);
+
+/** PURE: 입력 1건 → 정규화된 노드 필드(빈 텍스트는 null). after 는 1 이상 정수만, 자기 자신은 제외. */
+export function normalizePlanStepInput(input: unknown, index: number): { text: string; doneWhen?: string; after?: number[] } | null {
+    const o = typeof input === 'string' ? { text: input } : (input as { text?: unknown; doneWhen?: unknown; done_when?: unknown; after?: unknown } | null);
+    const text = String(o?.text ?? '').trim();
+    if (!text) return null;
+    const dw = typeof o?.doneWhen === 'string' ? o.doneWhen : typeof o?.done_when === 'string' ? o.done_when : '';
+    const after = Array.isArray(o?.after)
+        ? [...new Set(o.after.map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n !== index + 1))]
+        : [];
+    return { text, ...(dw.trim() ? { doneWhen: dw.trim() } : {}), ...(after.length > 0 ? { after } : {}) };
 }
 
 const STATUS_MARK: Record<PlanStepStatus, string> = {
@@ -86,27 +107,34 @@ export class TaskPlan {
      *  를 결정적으로 승격한다. 선형 실행 가정(모델의 정상 흐름) — 모델의 명시 마킹이 항상 우선. */
     constructor(private readonly opts: { autoAdvance?: boolean } = {}) {}
 
-    /** in_progress 부재 시 첫 not_started 승격 — create/완료·차단 전이 후에만 호출(명시 강등은 존중). */
+    /** PURE: 노드(1-based)의 선행 중 아직 completed 가 아닌 것들(범위 밖 번호는 무시). */
+    unmetDeps(stepNumber: number): number[] {
+        const step = this.steps[stepNumber - 1];
+        if (!step?.after) return [];
+        return step.after.filter((n) => n <= this.steps.length && this.steps[n - 1].status !== 'completed');
+    }
+
+    /** in_progress 부재 시 선행이 끝난 첫 not_started 승격 — create/완료·차단 전이 후에만 호출(명시 강등은 존중). */
     private maybeAdvance(): void {
         if (!this.opts.autoAdvance) return;
         if (this.steps.some((s) => s.status === 'in_progress')) return;
-        const next = this.steps.find((s) => s.status === 'not_started');
-        if (next) next.status = 'in_progress';
+        const idx = this.steps.findIndex((s, i) => s.status === 'not_started' && this.unmetDeps(i + 1).length === 0);
+        if (idx >= 0) this.steps[idx].status = 'in_progress';
     }
 
     /** 계획 생성/교체 — 상태 보존 병합(4-3). 모델이 plan_create 를 재호출해도(라이브에서 관찰된
      *  행동) 텍스트가 동일한 기존 단계의 status/note 는 보존하고, 신규 단계만 not_started 로
      *  시작한다. 진행률(plan 완료율)·가시성이 재호출로 리셋되던 문제 방지. */
-    create(stepTexts: string[]): void {
+    create(inputs: PlanStepInput[]): void {
         const prev = new Map(this.steps.map((s) => [s.text.trim(), s]));
-        this.steps = stepTexts
-            .map((t) => String(t).trim())
-            .filter(Boolean)
-            .map((text) => {
-                const old = prev.get(text);
+        this.steps = inputs
+            .map((input, i) => normalizePlanStepInput(input, i))
+            .filter((n): n is NonNullable<typeof n> => n !== null)
+            .map((n) => {
+                const old = prev.get(n.text);
                 return old
-                    ? { text, status: old.status, ...(old.note !== undefined ? { note: old.note } : {}) }
-                    : { text, status: 'not_started' as PlanStepStatus };
+                    ? { ...n, status: old.status, ...(old.note !== undefined ? { note: old.note } : {}) }
+                    : { ...n, status: 'not_started' as PlanStepStatus };
             });
         this.maybeAdvance();
     }
@@ -129,11 +157,11 @@ export class TaskPlan {
      */
     restore(steps: unknown): void {
         if (!Array.isArray(steps)) return;
-        const valid = new Set<PlanStepStatus>(['not_started', 'in_progress', 'completed', 'blocked']);
-        this.steps = steps.flatMap((s) => {
+        this.steps = steps.flatMap((s, i) => {
             const o = s as Partial<PlanStep> | null;
-            if (!o || typeof o.text !== 'string' || !o.text.trim() || !valid.has(o.status as PlanStepStatus)) return [];
-            return [{ text: o.text, status: o.status as PlanStepStatus, ...(typeof o.note === 'string' ? { note: o.note } : {}) }];
+            const n = o ? normalizePlanStepInput(o, i) : null;
+            if (!n || !STATUS_VALUES.has(String(o?.status))) return [];
+            return [{ ...n, status: o!.status as PlanStepStatus, ...(typeof o!.note === 'string' ? { note: o!.note } : {}) }];
         });
         this.maybeAdvance();
     }
@@ -155,7 +183,8 @@ export class TaskPlan {
         if (this.steps.length === 0) return '(계획 없음 — plan_create 로 단계를 세우세요)';
         const done = this.steps.filter((s) => s.status === 'completed').length;
         const lines = this.steps.map(
-            (s, i) => `${i + 1}. ${STATUS_MARK[s.status]} ${s.text}${s.note ? ` — ${s.note}` : ''}`,
+            (s, i) => `${i + 1}. ${STATUS_MARK[s.status]} ${s.text}${s.after?.length ? ` (after ${s.after.join(',')})` : ''}`
+                + `${s.note ? ` — ${s.note}` : ''}${s.doneWhen ? `\n   ↳ 완료 기준: ${s.doneWhen}` : ''}`,
         );
         return `## 계획 (${done}/${this.steps.length} 완료)\n${lines.join('\n')}`;
     }

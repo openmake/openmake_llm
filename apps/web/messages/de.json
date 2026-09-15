@@ -1992,7 +1992,9 @@
     "deleteAria": "Erinnerung löschen",
     "sourceCandidate": "Automatisch erkannt",
     "sourceBatch": "Nachträglich erfasst",
-    "limitReached": "Sie können bis zu {max} Erinnerungen speichern."
+    "limitReached": "Sie können bis zu {max} Erinnerungen speichern.",
+    "sensitive": "Sensibel",
+    "expiresOn": "Gespeichert bis {date}"
   },
   "pageTabs": {
     "myServers": "Meine Server",

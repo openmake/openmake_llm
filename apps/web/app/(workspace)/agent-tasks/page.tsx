@@ -82,6 +82,10 @@ interface PlanStep {
   text: string;
   status: PlanStepStatus;
   note?: string;
+  /** 완료 기준(Execution Graph 증분 4) — 모델이 적은 검증 조건. */
+  doneWhen?: string;
+  /** 선행 노드 번호(1-based). */
+  after?: number[];
 }
 
 interface ApiAgentTask {
@@ -688,6 +692,7 @@ function TaskDetailModal({
                       s.status === "completed" ? "text-muted line-through" : "text-fg-2",
                     )}>
                       {s.text}{s.note ? <span className="text-faint"> — {s.note}</span> : null}
+                      {s.doneWhen ? <span className="block text-[11px] text-muted">↳ {s.doneWhen}</span> : null}
                     </span>
                   </li>
                 ))}
