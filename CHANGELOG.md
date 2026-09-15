@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.66.0](https://github.com/openmake/openmake_llm/compare/v1.65.10...v1.66.0) (2026-09-15)
+
+
+### ✨ 기능
+
+* **agent-task:** 런타임 내구성 1단계 — 승인 대기 영속·상태 전이 강제·도구 호출 저널·계획 복원 ([#897](https://github.com/openmake/openmake_llm/issues/897)) ([516a215](https://github.com/openmake/openmake_llm/commit/516a215035e1599b6facde5be0d8b84a94c6f226))
+
 ## [1.65.10](https://github.com/openmake/openmake_llm/compare/v1.65.9...v1.65.10) (2026-09-15)
 
 
