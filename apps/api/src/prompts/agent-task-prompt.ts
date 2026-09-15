@@ -262,6 +262,8 @@ export function getAgentTaskGoalJudgeMessages(
             '  산출물 본문이 빠져 있고 그것을 가리키는 문장만 남아 있을 수 있으니, 산출물이',
             '  목표에 부합하면 ANSWER 가 짧더라도 달성입니다.',
             '- 품질은 평가하지 마세요 — 내용이 부실하더라도 목표를 수행한 답변이면 달성(achieved=true)입니다.',
+            '- EXECUTION 에 계획 노드 완료 기준(DONE_WHEN)이 있으면 각 기준이 도구 실행 결과·산출물로 충족됐는지',
+            '  대조하세요. 충족되지 않은 기준이 목표의 핵심이면 미달성이고, reason 에 그 노드 번호를 적으세요.',
             '- 확신이 없으면 달성(true)으로 판정하세요.',
             '다른 설명 없이 JSON 한 줄만 출력: {"achieved": true|false, "reason": "한 문장 근거"}',
         ].join('\n'),

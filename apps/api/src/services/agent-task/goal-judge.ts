@@ -59,10 +59,15 @@ export function buildJudgeArtifactSummary(
 export function buildJudgeExecutionContext(
     usedTools: ReadonlySet<string>,
     turnCount: number,
-    planSteps: ReadonlyArray<{ status: string }>,
+    planSteps: ReadonlyArray<{ status: string; text?: string; doneWhen?: string }>,
     toolEvidence?: string,
 ): string {
     const completed = planSteps.filter((s) => s.status === 'completed').length;
+    // 노드별 완료 기준(Execution Graph 증분 4) — 기준이 있는 노드만 싣는다. 상태 마킹은 누락이 잦아(60%)
+    // 근거로 쓰지 않지만, 기준 자체는 모델이 스스로 적은 검증 조건이라 EXECUTION 과 대조할 가치가 있다.
+    const criteria = planSteps
+        .map((s, i) => (s.doneWhen ? `${i + 1}. ${s.text ?? ''} — 완료 기준: ${s.doneWhen}` : null))
+        .filter((l): l is string => l !== null);
     return [
         `사용 도구: ${usedTools.size > 0 ? [...usedTools].join(', ') : '(없음 — 도구 미사용)'}`,
         `턴 수: ${turnCount}`,
@@ -73,6 +78,7 @@ export function buildJudgeExecutionContext(
         ...(planSteps.length > 0 && completed === planSteps.length
             ? [`계획: ${completed}/${planSteps.length} 단계 완료`]
             : []),
+        ...(criteria.length > 0 ? [`계획 노드 완료 기준(DONE_WHEN):\n${criteria.join('\n')}`] : []),
         ...(toolEvidence ? [`최근 도구 실행 결과:\n${toolEvidence}`] : []),
     ].join('\n');
 }

@@ -17,7 +17,8 @@ import type { MCPToolDefinition, MCPToolResult } from '../../mcp/types';
 import type { TaskExecutor, ExecResult } from './executor';
 import { withDiagnostics } from './diagnostics-attach';
 import { createCodeNavTools } from './tools-code-nav';
-import { TaskPlan, type PlanStepStatus } from './planning';
+import { TaskPlan } from './planning';
+import { createPlanTools } from './tools-plan';
 import {
     SPAWN_AGENTS_TOOL_NAME,
     SPAWN_AGENTS_TOOL_DESCRIPTION,
@@ -301,77 +302,8 @@ export function createTaskTools(
         },
     };
 
-    // ── G3 플래닝: 실행 계획 + step 상태 추적 ──
-    const VALID_STATUS = new Set(['not_started', 'in_progress', 'completed', 'blocked']);
-    const planCreate: MCPToolDefinition = {
-        tool: {
-            name: 'plan_create',
-            description: '작업을 시작할 때 단계별 실행 계획을 세웁니다. steps 문자열 배열을 받아 추적 가능한 계획을 만듭니다. ' +
-                '복잡한 작업은 먼저 이 도구로 계획하고, 진행하며 plan_update 로 상태를 갱신하세요.',
-            inputSchema: {
-                type: 'object',
-                properties: { steps: { type: 'array', items: { type: 'string' }, minItems: 1, description: '단계 설명 문자열 배열(최소 1개)' } },
-                required: ['steps'],
-            },
-        },
-        handler: async (args): Promise<MCPToolResult> => {
-            // 단일 문자열을 넘기는 흔한 실수는 배열로 감싼다(계약 유지 — 값을 버리지 않음).
-            const steps = Array.isArray(args.steps)
-                ? args.steps
-                : (typeof args.steps === 'string' && args.steps.trim() ? [args.steps] : null);
-            if (!steps || steps.length === 0) {
-                // 빈 배열을 "배열이 필요하다"고 되돌려주면 모델은 배열을 보냈다고 여겨 같은 호출을
-                // 반복한다(라이브: 한 작업에서 62회). 무엇이 잘못됐는지 그대로 말한다.
-                // 스키마의 items+minItems 가 1차 방어이고 이 메시지는 그것을 뚫었을 때의 2차다.
-                return textResult(Array.isArray(args.steps)
-                    ? 'steps 가 빈 배열입니다 — 실제 단계 문자열을 최소 1개 넣으세요. '
-                        + '예: {"steps":["자료 조사","초안 작성","검토"]}. 계획 없이 진행하려면 이 도구를 부르지 말고 바로 작업하세요.'
-                    : 'steps 배열이 필요합니다 — 예: {"steps":["자료 조사","초안 작성","검토"]}.', true);
-            }
-            plan.create(steps.map(String));
-            return textResult(plan.render());
-        },
-    };
-
-    const planUpdate: MCPToolDefinition = {
-        tool: {
-            name: 'plan_update',
-            description: '계획 단계의 상태를 갱신합니다. step(1-based) + status(not_started|in_progress|completed|blocked).',
-            inputSchema: {
-                type: 'object',
-                properties: {
-                    step: { type: 'number', description: '단계 번호(1부터)' },
-                    status: { type: 'string', description: 'not_started | in_progress | completed | blocked' },
-                    note: { type: 'string', description: '메모(선택)' },
-                },
-                required: ['step', 'status'],
-            },
-        },
-        handler: async (args): Promise<MCPToolResult> => {
-            const status = str(args.status);
-            if (!VALID_STATUS.has(status)) return textResult(`status 는 ${[...VALID_STATUS].join('|')} 여야 합니다.`, true);
-            const ok = plan.update(Number(args.step), status as PlanStepStatus, args.note !== undefined ? str(args.note) : undefined);
-            if (!ok) {
-                return textResult(
-                    plan.length === 0
-                        ? '아직 계획이 없습니다 — 먼저 plan_create 로 단계를 세우세요.'
-                        : `단계 ${args.step} 가 범위를 벗어났습니다 — 현재 계획은 ${plan.length}단계입니다`
-                          + `(유효 step: 1..${plan.length}). plan_view 로 계획을 확인하세요.`,
-                    true,
-                );
-            }
-            return textResult(plan.render());
-        },
-    };
-
-    const planView: MCPToolDefinition = {
-        tool: {
-            name: 'plan_view',
-            description: '현재 실행 계획과 각 단계 상태를 봅니다.',
-            inputSchema: { type: 'object', properties: {} },
-        },
-        handler: async (): Promise<MCPToolResult> => textResult(plan.render()),
-    };
+    // ── G3 플래닝 — tools-plan.ts(노드 속성 done_when/after, Execution Graph 증분 4) ──
+    const [planCreate, planUpdate, planView] = createPlanTools(plan);
 
     // ── G4 멀티에이전트: 전문가 위임(자문) ──
     const delegateTool: MCPToolDefinition = {
