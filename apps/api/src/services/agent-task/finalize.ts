@@ -36,6 +36,7 @@ import { judgeClientFor } from './role-client';
 import { createLogger } from '../../utils/logger';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
+import type { ChatMessage } from '../../llm/types';
 
 const logger = createLogger('AgentTaskService');
 
@@ -85,6 +86,28 @@ type FinalizeOutcome =
  * 완료 판정 관문. 상태 갱신(completed/failed)까지 이 함수가 수행하고, 호출부는 반환 kind 로
  * 종료/계속만 결정한다. judge·verify 는 모두 fail-open 이라 판정 인프라 장애가 완료를 막지 않는다.
  */
+/**
+ * 턴 상한 도달 — **완주가 아니다**. terminate 경로와 달리 모델이 작업을 끝냈다고 선언한 적이 없고
+ * 마지막 턴이 문장 중간에서 끊기는 것이 보통이다. 종전에는 completed·progress 100·checkpoint null 로
+ * 기록해 ① 빈/절단 결과가 "완료"로 표시되고 ② resumable 이 false 라 이어할 수조차 없었다
+ * (2026-08-02 실측). goal judge 와 같은 원칙으로 failed 로 기록하고 체크포인트를 남겨 이어하기를 연다
+ * (마지막 end-of-turn checkpoint 는 루프가 저장했다). 2026-08-03 마무리 턴 도입 뒤 이 경로는 드물다 —
+ * 마무리 턴에서도 도구를 부르거나 응답이 비었다는 뜻이라 failed 가 맞다.
+ */
+export async function finalizeMaxTurnsExhausted(p: {
+    taskId: string; userId: string; turnCeiling: number; conversation: ChatMessage[];
+    taskRuntime: TaskRuntime | null; sandboxCfg: TaskSandboxConfig; stepNumber: number;
+    update: FinalizeInput['update']; emitStep: FinalizeInput['emitStep'];
+}): Promise<void> {
+    const lastAssistant = [...p.conversation].reverse().find((m) => m.role === 'assistant');
+    const lastRaw = (lastAssistant?.content as string) || '(최대 턴에 도달하여 종료되었습니다.)';
+    const lastExtracted = extractAndStripArtifacts(applyReportRender(lastRaw));
+    const stepNumber = await persistArtifactSteps(p.taskId, lastExtracted.artifacts, p.stepNumber, p.userId);
+    await maybePersistCodeDiff(p.taskRuntime, p.sandboxCfg, p.taskId, stepNumber, p.emitStep);
+    await p.update({ status: 'failed', error: 'max_turns_exhausted', result: lastExtracted.cleanedContent || lastRaw });
+    logger.warn(`[AgentTask] 턴 상한 종료(미완주): ${p.taskId} (${p.turnCeiling} 턴) — 재개하려면 max_turns 를 올려 resume 하세요.`);
+}
+
 export async function finalizeTask(input: FinalizeInput): Promise<FinalizeOutcome> {
     const {
         taskId, goal, userId, path, rawContent, terminateSummary,

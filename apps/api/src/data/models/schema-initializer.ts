@@ -92,6 +92,11 @@ export async function initSchema(pool: Pool): Promise<void> {
     // 무한 polling·영구 paused 를 방지한다.
     // checkpoint 가 있으면 프론트에서 '이어하기(resume)' 가능 (status=failed + error='server restarted').
     try {
+        // 전이 이벤트(124)를 먼저 남긴다 — 이 마킹은 상태 머신을 거치지 않는 유일한 bulk 경로다.
+        await pool.query(
+            `INSERT INTO agent_task_events (task_id, from_status, to_status, reason)
+             SELECT id, status, 'failed', 'server restarted' FROM agent_tasks WHERE status IN ('running', 'paused')`,
+        ).catch(() => { /* 이벤트 테이블 미생성(마이그레이션 전) — 마킹은 그대로 진행 */ });
         await pool.query(
             `UPDATE agent_tasks SET status = 'failed', error = 'server restarted', completed_at = NOW() WHERE status IN ('running', 'paused')`,
         );

@@ -73,5 +73,7 @@ export interface AgentTaskRunInput {
         conversation: ChatMessage[];
         fromTurn: number;
         fromStep: number;
+        /** 체크포인트와 함께 저장된 계획(agent_tasks.plan) — 런타임에 복원(124). */
+        plan?: unknown;
     };
 }

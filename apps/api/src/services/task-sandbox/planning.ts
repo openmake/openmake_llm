@@ -122,6 +122,22 @@ export class TaskPlan {
         return true;
     }
 
+    /**
+     * 체크포인트에 저장된 계획 복원(124) — 재개 시 종전엔 새 TaskPlan 이라 계획이 비어
+     * plan_update 가 "계획이 없습니다" 로 실패하고 진행률·노드 귀속이 0 에서 다시 시작했다.
+     * 형태가 맞는 항목만 받아들이고(불량 행은 버림) 자동 승격은 복원 뒤에도 적용한다.
+     */
+    restore(steps: unknown): void {
+        if (!Array.isArray(steps)) return;
+        const valid = new Set<PlanStepStatus>(['not_started', 'in_progress', 'completed', 'blocked']);
+        this.steps = steps.flatMap((s) => {
+            const o = s as Partial<PlanStep> | null;
+            if (!o || typeof o.text !== 'string' || !o.text.trim() || !valid.has(o.status as PlanStepStatus)) return [];
+            return [{ text: o.text, status: o.status as PlanStepStatus, ...(typeof o.note === 'string' ? { note: o.note } : {}) }];
+        });
+        this.maybeAdvance();
+    }
+
     get length(): number { return this.steps.length; }
 
     /** 첫 미완료 단계(1-based) 또는 0(없음). */

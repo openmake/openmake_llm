@@ -52,6 +52,8 @@ interface TurnToolExecInput {
     getCurStatus: () => string;
     update: (u: AgentTaskUpdatePayload) => Promise<void>;
     emitStep: (stepType: string, toolName?: string, content?: string | null) => void;
+    /** 턴 중간 재개(124): tool_call_id → 이미 실행된 결과. 있는 호출은 재실행하지 않고 결과만 대화에 싣는다. */
+    journal?: Map<string, string>;
 }
 
 interface TurnToolExecResult {
@@ -99,8 +101,9 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
     // 읽기 전용 extra 도구(web_search 등) 병렬 선실행. 승인이 필요한 호출은 **자동 승인 작업에서만**
     // 포함한다 — 아니면 승인 창이 동시에 N개 뜬다(HITL fan-in). 결과·스텝 영속은 아래 루프가
     // 원래 순서로 처리하므로 체크포인트 계약은 그대로다.
+    const journal = input.journal ?? new Map<string, string>();
     const prefetched = await prefetchReadOnlyCalls(
-        toolCalls.map((tc) => ({ id: tc.id, name: tc.function.name, tc })),
+        toolCalls.filter((tc) => tc.id === undefined || !journal.has(tc.id)).map((tc) => ({ id: tc.id, name: tc.function.name, tc })),
         ({ name, tc }) => !taskRuntime?.isTaskTool(name)
             && (!requiresApproval(sandboxCfg.approvalPolicy, name, (tc.function.arguments ?? {}) as Record<string, unknown>)
                 || getApprovalRegistry().isAutoApprove(taskId)),
@@ -127,8 +130,13 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         if (name === 'browser') browserCalls++;
         const args = (tc.function.arguments ?? {}) as Record<string, unknown>;
         let toolResult: string;
+        const journaled = tc.id !== undefined ? journal.get(tc.id) : undefined;
         const pre = tc.id !== undefined ? prefetched.get(tc.id) : undefined;
-        if (pre !== undefined) {
+        if (journaled !== undefined) {
+            // 저널 재사용(124) — 결과는 이미 스텝에 있으므로 대화에만 싣고 스텝·체크포인트는 건너뛴다.
+            conversation.push({ role: 'tool', content: journaled, tool_name: name, tool_call_id: tc.id });
+            continue;
+        } else if (pre !== undefined) {
             toolResult = pre;
         } else if (taskRuntime?.isTaskTool(name)) {
             // task 도구 — 승인 게이트 통과 후 영속 샌드박스에서 실행.
@@ -185,6 +193,8 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
             planStepIndex: taskRuntime ? currentPlanStepIndex(taskRuntime.getPlanSnapshot()) : undefined,
             // 호출 인자 영속(091) — 마스킹·크기 캡은 prepareToolArgs 가 담당(사후 원인 분석).
             toolArgs: prepareToolArgs(args),
+            // 도구 호출 저널(124) — 재개 시 이 id 가 있는 호출은 재실행하지 않는다.
+            toolCallId: tc.id,
         });
         emitStep('tool_result', name, toolResult);
         // 턴 중간 체크포인트(6-4, opt-in): 도구 결과 단위로 저장 — 이 시점 conversation 은

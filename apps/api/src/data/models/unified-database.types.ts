@@ -132,6 +132,8 @@ export interface AgentTask {
     result?: string;
     error?: string;
     checkpoint?: unknown;
+    /** 실행 계획 스냅샷(050) — end-of-turn checkpoint 와 함께 저장, 재개 시 런타임에 복원(124) */
+    plan?: unknown;
     /** 입력 첨부 파일(추출 텍스트+원본 base64) — [{name,type,content,data,size,truncated,extracted}] */
     input_files?: unknown;
     /** 입력 첨부 이미지(dataURL 배열) — vision 주입 + 샌드박스 기록용 */
@@ -144,6 +146,8 @@ export interface AgentTask {
     folder_rel?: string;
     /** 누적 LLM 토큰(prompt+completion) — terminal 전이 시 기록(066), resume 은 통산 */
     total_tokens?: number;
+    /** "나머지 모두 승인" 플래그 영속(124) — 재개 시 승인 레지스트리에 복원 */
+    auto_approve?: boolean;
     /** 완료 출구 구분(091) — 'final_answer' | 'terminate'. 미완료/기존 행은 NULL */
     completion_path?: string;
     /** goal judge 결과(091) — 'achieved' | 'not_achieved' | 'unknown' | 'skipped' */
@@ -164,6 +168,8 @@ export interface AgentTaskStep {
     status: string;
     /** 도구 호출 인자(091) — 민감 키 마스킹·크기 캡 적용. 사후 원인 분석용 */
     tool_args?: unknown;
+    /** tool_result 스텝의 원 tool_call id(124 저널) */
+    tool_call_id?: string | null;
     created_at: string;
 }
 

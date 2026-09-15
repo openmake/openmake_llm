@@ -1815,9 +1815,9 @@ export const AGENT_TASK_LIMITS = {
     DYNAMIC_TOOLS_EMBED_TIMEOUT_MS: parseInt(process.env.AGENT_TASK_DYNAMIC_TOOLS_EMBED_TIMEOUT_MS || '3000', 10),
     /** 턴 중간 체크포인트(Phase 6-4) — 도구 결과 단위로도 checkpoint 저장. 재시작이 턴 중간에
      *  일어나도 이미 실행된 도구를 재실행하지 않고 재개한다(write 도구 재실행 방지 강화).
-     *  대화가 크면 도구 호출마다 DB 쓰기가 늘어나므로 기본 OFF(opt-in).
-     *  AGENT_TASK_MIDTURN_CHECKPOINT=true 로 활성. */
-    MIDTURN_CHECKPOINT_ENABLED: process.env.AGENT_TASK_MIDTURN_CHECKPOINT === 'true',
+     *  기본 ON(124) — 턴 중간 재개(turn-reentry)와 도구 호출 저널은 이 체크포인트가 있어야 남은
+     *  호출을 구분할 수 있다. 운영도 2026-08 부터 ON 이었다. AGENT_TASK_MIDTURN_CHECKPOINT=false 로 끈다. */
+    MIDTURN_CHECKPOINT_ENABLED: process.env.AGENT_TASK_MIDTURN_CHECKPOINT !== 'false',
     /** 실행 중 중간 지시(steering) — 실행 중 task 에 사용자가 방향 지시를 주입하면 다음 턴 경계에서
      *  conversation 에 user 메시지로 반영(취소·재시작 없이 교정). steering 은 사용자가 명시적으로
      *  보낼 때만 동작하므로 기본 ON. AGENT_TASK_STEERING=false 로 비활성. */

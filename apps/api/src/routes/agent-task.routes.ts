@@ -25,7 +25,8 @@ import { requireAuthOrApiKeyScope } from '../middlewares/api-key-auth';
 import { API_KEY_SCOPES } from '../config/api-key-scopes';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { validate, validateWithSecurity } from '../middlewares/validation';
-import { getUnifiedDatabase } from '../data/models/unified-database';
+import { getUnifiedDatabase, getPool } from '../data/models/unified-database';
+import { AgentTaskRepository } from '../data/repositories/agent-task-repository';
 import { resolveSessionListScope } from '../controllers/session.controller';
 import { LOCAL_BRIDGE } from '../config/local-bridge';
 import { getLocalBridgeRegistry } from '../services/local-bridge/registry';
@@ -437,6 +438,7 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
                 conversation: cp.conversation as ChatMessage[],
                 fromTurn: (cp.completedTurn ?? 0) + 1,
                 fromStep: steps.length,
+                plan: task.plan,
             },
         }),
     });
@@ -539,6 +541,7 @@ router.post('/:taskId/approvals/auto-approve', asyncHandler(async (req: Request,
     if (!task) return;
     const enabled = (req.body as { enabled?: unknown })?.enabled !== false;
     getApprovalRegistry().setAutoApprove(task.id, enabled);
+    await new AgentTaskRepository(getPool()).setAutoApprove(task.id, enabled).catch(() => { /* 영속 실패(124)는 메모리 플래그로 fail-open */ });
     logger.info(`[AgentTaskRoutes] 자동승인 ${enabled ? '활성' : '해제'}: ${task.id} (user ${req.user!.id})`);
     res.json(success({ taskId: task.id, autoApprove: enabled }));
 }));
@@ -548,7 +551,7 @@ router.post('/:taskId/approvals/auto-approve', asyncHandler(async (req: Request,
  * 현재 사용자의 승인 대기 도구 호출 목록 (HITL 게이트 — 전부-승인 정책).
  */
 router.get('/approvals/pending', asyncHandler(async (req: Request, res: Response) => {
-    const pending = getApprovalRegistry().list(String(req.user!.id));
+    const pending = await getApprovalRegistry().list(String(req.user!.id));
     res.json(success({ pending }));
 }));
 
@@ -565,11 +568,11 @@ router.post('/approvals/:approvalId/answer', asyncHandler(async (req: Request, r
     if (!text) return res.status(400).json(badRequest('text 가 필요합니다.'));
     if (text.length > AGENT_TASK_LIMITS.HITL_ANSWER_MAX_CHARS) return res.status(400).json(badRequest(`답변은 ${AGENT_TASK_LIMITS.HITL_ANSWER_MAX_CHARS}자를 넘을 수 없습니다.`));
     const registry = getApprovalRegistry();
-    const pending = registry.get(approvalId);
+    const pending = await registry.get(approvalId);
     if (!pending) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
     assertResourceOwnerOrAdmin(pending.userId, String(req.user!.id), req.user!.role || 'user');
 
-    const ok = registry.answer(approvalId, text);
+    const ok = await registry.answer(approvalId, text);
     if (!ok) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
     res.json(success({ approvalId, answered: true }));
 }));
@@ -584,11 +587,11 @@ router.post('/approvals/:approvalId/:decision', asyncHandler(async (req: Request
         return res.status(400).json(badRequest("decision 은 approve | reject 여야 합니다."));
     }
     const registry = getApprovalRegistry();
-    const pending = registry.get(approvalId);
+    const pending = await registry.get(approvalId);
     if (!pending) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
     assertResourceOwnerOrAdmin(pending.userId, String(req.user!.id), req.user!.role || 'user');
 
-    const ok = decision === 'approve' ? registry.approve(approvalId) : registry.reject(approvalId);
+    const ok = await (decision === 'approve' ? registry.approve(approvalId) : registry.reject(approvalId));
     if (!ok) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
     res.json(success({ approvalId, decision }));
 }));
