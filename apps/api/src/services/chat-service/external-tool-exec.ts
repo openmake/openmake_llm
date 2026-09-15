@@ -78,7 +78,17 @@ export async function executeExternalTool(
             const m = rawText.match(/```kakaomap[\s\S]*?```/);
             if (m) mapPrefix = `${m[0]}\n\n`;
         }
-        const serialized = JSON.stringify(result.content);
+        // text 항목은 그대로 잇고 비텍스트(image·resource 등)만 JSON 으로 싣는다 — 에이전트 작업 경로
+        // (task-sandbox resultToString)와 같은 방식. content 배열을 통째로 JSON.stringify 하면 줄바꿈·따옴표가
+        // 이스케이프돼 길이가 늘고(open-design list_projects 7,765자 → 8,676자) 8000자 캡에 마지막 항목이
+        // 잘렸다(2026-09-15). 모델도 이스케이프 없는 원문을 읽는다.
+        const serialized = Array.isArray(result.content)
+            ? result.content
+                .map((c) => ((c as { type?: unknown }).type === 'text' && typeof (c as { text?: unknown }).text === 'string'
+                    ? (c as { text: string }).text
+                    : JSON.stringify(c)))
+                .join('\n')
+            : JSON.stringify(result.content);
         // G3 셰도우 계측 — 8000자 절단 발생률/폭 실측 (chunk-요약 도입 판단 게이트)
         recordToolResultTruncation({
             path: 'chat', toolName, rawChars: serialized.length, capChars: MAX_TOOL_RESULT_CHARS,
