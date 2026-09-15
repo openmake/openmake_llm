@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.65.10](https://github.com/openmake/openmake_llm/compare/v1.65.9...v1.65.10) (2026-09-15)
+
+
+### 🐛 버그 수정
+
+* **agent-task:** 브라우저 러너가 빈 allowlist 를 전면 차단하던 결함 ([#895](https://github.com/openmake/openmake_llm/issues/895)) ([964e892](https://github.com/openmake/openmake_llm/commit/964e892bc2d09022881559e012d8599ba6fe81de))
+
 ## [1.65.9](https://github.com/openmake/openmake_llm/compare/v1.65.8...v1.65.9) (2026-09-15)
 
 
