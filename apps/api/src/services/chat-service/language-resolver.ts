@@ -24,11 +24,13 @@ const logger = createLogger('LanguageResolver');
  *
  * @param message - 사용자 메시지
  * @param userLanguagePreference - 사용자가 명시적으로 설정한 언어 선호
+ * @param options.log - 결정 로그 기록 여부(기본 true). 같은 요청에서 보조 용도로 다시 판정할 때 끈다
  * @returns 언어 정책 결정 결과 (감지 실패 시 undefined)
  */
 export function resolveLanguagePolicy(
     message: string,
     userLanguagePreference?: string,
+    options: { log?: boolean } = {},
 ): LanguagePolicyDecision | undefined {
     const config = getConfig();
     try {
@@ -40,7 +42,9 @@ export function resolveLanguagePolicy(
             fallbackLanguage: config.languageFallbackLanguage,
             supportedLanguages: ['ko', 'en', 'ja', 'zh', 'es', 'fr', 'de', 'pt', 'ru', 'ar', 'hi', 'it', 'nl', 'sv', 'da', 'no', 'fi', 'th', 'vi', 'tr']
         }, userLanguagePreference as SupportedLanguageCode | undefined);
-        logger.info(`언어 정책 결정: ${policy.resolvedLanguage} (${userLanguagePreference ? '사용자 설정' : '자동 감지'}, 신뢰도: ${policy.detection.confidence.toFixed(2)})`);
+        if (options.log !== false) {
+            logger.info(`언어 정책 결정: ${policy.resolvedLanguage} (${userLanguagePreference ? '사용자 설정' : '자동 감지'}, 신뢰도: ${policy.detection.confidence.toFixed(2)})`);
+        }
         return policy;
     } catch (error) {
         logger.warn('언어 감지 실패, 기본 언어 폴백:', error instanceof Error ? error.message : error);
