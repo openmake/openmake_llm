@@ -23,6 +23,7 @@ import { error as apiError, badRequest as apiBadRequest, ErrorCodes, ApiErrorRes
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
 import { KeyExhaustionError } from '../errors/key-exhaustion.error';
 import { ContextOverflowError } from '../errors/context-overflow.error';
+import { ProviderError, PROVIDER_ERROR_HTTP_STATUS } from '../providers/provider-errors';
 
 const logger = createLogger('ErrorHandler');
 
@@ -196,6 +197,13 @@ export function errorHandler(
     if (err.code === 'LIMIT_FILE_SIZE') {
         logger.warn(`File size limit exceeded: ${req.path}`);
         res.status(413).json(apiError(ErrorCodes.PAYLOAD_TOO_LARGE, '파일 크기가 너무 큽니다 (최대 100MB)'));
+        return;
+    }
+
+    // ── ProviderError → 코드별 상태(정책 차단 403·잔액 402 등), code 는 ProviderErrorCode 그대로 ──
+    if (err instanceof ProviderError) {
+        logger.warn(`Provider error ${err.code}: ${err.message}`, { path: req.path });
+        res.status(PROVIDER_ERROR_HTTP_STATUS[err.code] ?? 502).json(apiError(err.code, err.message));
         return;
     }
 

@@ -56,3 +56,23 @@ export class ProviderError extends Error {
         this.name = 'ProviderError';
     }
 }
+
+/**
+ * ProviderErrorCode → HTTP 상태. REST 경로(글로벌 errorHandler·/api/chat/structured)가 공유한다 —
+ * 글로벌 핸들러가 ProviderError 를 몰라 정책 차단(403)이 500 INTERNAL_ERROR 로 나가던 결함(2026-09-16).
+ * WS 경로는 상태 코드가 없어 ws-chat-locales 의 메시지 표만 쓴다.
+ */
+export const PROVIDER_ERROR_HTTP_STATUS: Record<ProviderErrorCode, number> = {
+    GUEST_NOT_ALLOWED: 403,
+    MISSING_API_KEY: 400,
+    INVALID_API_KEY: 401,
+    QUOTA_EXCEEDED: 429,
+    INSUFFICIENT_CREDIT: 402,
+    SUBSCRIPTION_REQUIRED: 403,
+    MODEL_ACCESS_RESTRICTED: 403,
+    MODEL_NOT_FOUND: 404,
+    NOT_SUPPORTED: 400,
+    UPSTREAM_ERROR: 502,
+    CONTEXT_TOO_LARGE: 413,
+    INVALID_MODEL_ID: 400,
+};
