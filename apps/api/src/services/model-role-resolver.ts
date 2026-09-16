@@ -55,6 +55,7 @@ import { GlobalModelRolesRepository } from '../data/repositories/global-model-ro
 import { getPool } from '../data/models/unified-database';
 import { checkServerKeyBudget, recordServerKeyUsage } from './server-key-quota';
 import { createLogger } from '../utils/logger';
+import { recordLlmCost } from './cost/cost-ledger-service';
 
 const logger = createLogger('ModelRoleResolver');
 
@@ -189,10 +190,13 @@ async function tryBuildExternalResolution(
                     provider, modelId, userId,
                     // BYOK 사용량 귀속 — API 키 provider(아래 createClient 분기)와 동일 규약.
                     // 이 어댑터는 LLMClient 본체를 우회하므로 훅을 명시 전달해야 기록된다.
-                    onUsage: (u) => void externalKeysRepo.recordUsage({
-                        userId, providerId, modelId: u.model,
-                        inputTokens: u.promptTokens, outputTokens: u.completionTokens,
-                    }).catch(() => { /* 관측 실패 무시 */ }),
+                    onUsage: (u) => {
+                        recordLlmCost({ userId, model: `${providerId}:${u.model}`, external: true, costOwner: 'byok', promptTokens: u.promptTokens, completionTokens: u.completionTokens, ctx: { feature: `role:${role}` } });
+                        void externalKeysRepo.recordUsage({
+                            userId, providerId, modelId: u.model,
+                            inputTokens: u.promptTokens, outputTokens: u.completionTokens,
+                        }).catch(() => { /* 관측 실패 무시 */ });
+                    },
                 }),
                 role,
                 fullId,
@@ -213,10 +217,13 @@ async function tryBuildExternalResolution(
             // 외부 BYOK 는 로컬 vLLM 용량을 쓰지 않으므로 토큰 쿼터 면제 (정책: LLMConfig.quotaExempt)
             quotaExempt: true,
             // BYOK 사용량 귀속 — 비용 대시보드(external_provider_usage) 반영 (fire-and-forget)
-            onUsage: (u) => void externalKeysRepo.recordUsage({
-                userId, providerId, modelId: u.model,
-                inputTokens: u.promptTokens, outputTokens: u.completionTokens,
-            }).catch(() => { /* 관측 실패 무시 */ }),
+            onUsage: (u) => {
+                recordLlmCost({ userId, model: `${providerId}:${u.model}`, external: true, costOwner: 'byok', promptTokens: u.promptTokens, completionTokens: u.completionTokens, ctx: { feature: `role:${role}` } });
+                void externalKeysRepo.recordUsage({
+                    userId, providerId, modelId: u.model,
+                    inputTokens: u.promptTokens, outputTokens: u.completionTokens,
+                }).catch(() => { /* 관측 실패 무시 */ });
+            },
         }), providerId),
         role,
         fullId,
@@ -268,6 +275,7 @@ async function tryBuildServerKeyResolution(
             quotaExempt: true,
             // 서버 키 사용량 귀속(운영자 비용 뷰) + 상한 카운터 누적
             onUsage: (u) => {
+                recordLlmCost({ userId, model: `${providerId}:${u.model}`, external: true, costOwner: 'server', promptTokens: u.promptTokens, completionTokens: u.completionTokens, ctx: { feature: `role:${role}` } });
                 void serverKeysRepo.recordUsage({
                     providerId, modelId: u.model, role, callerUserId: userId,
                     inputTokens: u.promptTokens, outputTokens: u.completionTokens,

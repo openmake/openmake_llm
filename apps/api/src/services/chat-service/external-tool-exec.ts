@@ -11,6 +11,7 @@
  * @module services/chat-service/external-tool-exec
  */
 import { createLogger } from '../../utils/logger';
+import { recordLlmCost } from '../cost/cost-ledger-service';
 import { MAX_TOOL_RESULT_CHARS } from '../../config/runtime-limits';
 import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
@@ -137,6 +138,13 @@ export function recordExternalUsageFireAndForget(
         );
     }
 
+    // 비용 원장(F25) — external_provider_usage 와 병행 기록(원장이 단일 진실, 기존 표는 대시보드 호환)
+    recordLlmCost({
+        userId, model: input.resolved.fullId, external: true, costOwner: 'byok',
+        promptTokens: input.inputTokens, completionTokens: input.outputTokens,
+        directCostUsdMicros: input.directCostUsdMicros !== undefined && input.directCostUsdMicros >= 0 ? input.directCostUsdMicros : undefined,
+        ctx: { feature: 'chat' },
+    });
     repo.recordUsage({
         userId,
         providerId: input.resolved.providerId,

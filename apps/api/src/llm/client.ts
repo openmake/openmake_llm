@@ -22,6 +22,7 @@ import { getConfig } from '../config';
 import { createLogger } from '../utils/logger';
 import { withSpan } from '../observability/otel';
 import { getApiUsageTracker } from './usage-tracker';
+import { recordLlmCost } from '../services/cost/cost-ledger-service';
 import { checkUserQuota, recordUserUsage } from './user-quota';
 import { streamChat, nonStreamChat } from './stream-parser';
 import { buildExtraBody } from './reasoning-adapter';
@@ -210,6 +211,12 @@ export class LLMClient {
                     if (!this.config.quotaExempt) {
                         getApiUsageTracker().record(totalTokens);  // 전역 aggregate (dashboard 관측용)
                         void recordUserUsage(this.config.userId, totalTokens, Date.now());  // per-user enforcement 누적
+                        // 비용 원장(F25) — 로컬 토큰. 단가는 cost_rates/env, 기본 0
+                        recordLlmCost({
+                            userId: this.config.userId, model: poolDecision.model, external: false,
+                            promptTokens: result.metrics?.prompt_tokens ?? 0, completionTokens: result.metrics?.completion_tokens ?? 0,
+                            costOwner: 'user', ctx: this.config.costContext,
+                        });
                     }
                     try {
                         this.config.onUsage?.({

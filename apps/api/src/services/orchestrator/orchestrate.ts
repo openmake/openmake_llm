@@ -21,6 +21,7 @@ import { OrchestratorJobsRepository } from '../../data/repositories/orchestrator
 import { ExternalKeysRepository } from '../../data/repositories/external-keys-repo';
 import { ServerExternalKeysRepository } from '../../data/repositories/server-external-keys-repo';
 import { recordServerKeyUsage } from '../server-key-quota';
+import { recordLlmCost } from '../cost/cost-ledger-service';
 import type { CapabilityTarget } from './capability-resolver';
 import { recordUserUsage } from '../../llm/user-quota';
 import { isExternalFullId } from '../../config/model-roles';
@@ -172,7 +173,9 @@ export function recordUsage(userId: string | undefined, results: TaskResult[], t
             const idx = r.model.indexOf(':');
             const providerId = r.model.slice(0, idx); const modelId = r.model.slice(idx + 1);
             // 비용 주체는 preflight 가 해석한 대상(target.costOwner)으로 — 서버 공용 키 호출을 사용자 BYOK 로 기록하지 않는다(Codex 검토 1)
-            if (targets?.get(r.taskId)?.costOwner === 'server') {
+            const owner = targets?.get(r.taskId)?.costOwner === 'server' ? 'server' : 'byok';
+            recordLlmCost({ userId, model: r.model, external: true, costOwner: owner, promptTokens: inTok, completionTokens: outTok, ctx: { feature: `orchestrator:${r.capability}` } });
+            if (owner === 'server') {
                 void new ServerExternalKeysRepository(getPool()).recordUsage({ providerId, modelId, role: `capability:${r.capability}`, callerUserId: userId, inputTokens: inTok, outputTokens: outTok });
                 void recordServerKeyUsage(providerId, inTok + outTok, now).catch(() => undefined);
             } else {
@@ -180,6 +183,7 @@ export function recordUsage(userId: string | undefined, results: TaskResult[], t
             }
         } else {
             localTokens += inTok + outTok;
+            recordLlmCost({ userId, model: r.model, external: false, costOwner: 'user', promptTokens: inTok, completionTokens: outTok, ctx: { feature: `orchestrator:${r.capability}` } });
         }
     }
     if (localTokens > 0) void recordUserUsage(userId, localTokens, now).catch(() => undefined);

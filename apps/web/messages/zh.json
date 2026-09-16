@@ -25,7 +25,8 @@
       "developer": "开发者",
       "schedulesAdmin": "任务计划",
       "approvals": "待审批",
-      "organizationsAdmin": "组织管理"
+      "organizationsAdmin": "组织管理",
+      "costRatesAdmin": "成本单价"
     },
     "pendingApprovals": "{count} 个待批准 — 代理任务正在等待您的批准"
   },
@@ -2264,5 +2265,23 @@
     "importProblems": "{count} 个问题 — 无法应用。",
     "importDryRun": "校验通过 — 设置 {systemSettings} · capability {capabilityModels} · 组织 {organizations} · 策略 {policies}。按“应用”生效。",
     "importApplied": "已应用 — 设置 {systemSettings} · capability {capabilityModels} · 组织 {organizations} · 策略 {policies}。"
+  },
+  "adminCostRates": {
+    "title": "成本单价表",
+    "description": "按 kind × rate_key × unit 的单价（USD micros）。未登记的组合回退到代码/env（外部：内置表，本地：LOCAL_LLM_COST_*），否则为 0。",
+    "loadError": "加载失败。",
+    "saveFailed": "保存失败。",
+    "addTitle": "新增 / 更新单价",
+    "rateKeyPlaceholder": "rate_key（模型 id · provider:model · *）",
+    "valuePlaceholder": "单价",
+    "notePlaceholder": "备注（可选）",
+    "unitHelp": "令牌 unit（token_in/out/think）按每 1M 令牌 USD 输入（1 USD/1M = 1 micro/token）。call·image·second·char·gb_day 为每单位 micros。",
+    "save": "保存",
+    "listTitle": "已登记单价",
+    "empty": "暂无单价（全部回退）。",
+    "value": "单价（micros/unit）",
+    "note": "备注",
+    "delete": "删除",
+    "deleteConfirm": "删除此单价？将回退到默认单价。"
   }
 }

@@ -25,7 +25,8 @@
       "developer": "Developer",
       "schedulesAdmin": "Task Schedules",
       "approvals": "Approvals",
-      "organizationsAdmin": "Organizations"
+      "organizationsAdmin": "Organizations",
+      "costRatesAdmin": "Cost Rates"
     },
     "pendingApprovals": "{count} pending approval(s) — agent tasks are waiting for your approval"
   },
@@ -2264,5 +2265,23 @@
     "importProblems": "{count} problem(s) — cannot apply.",
     "importDryRun": "Validated — settings {systemSettings} · capabilities {capabilityModels} · organizations {organizations} · policies {policies}. Press Apply to commit.",
     "importApplied": "Applied — settings {systemSettings} · capabilities {capabilityModels} · organizations {organizations} · policies {policies}."
+  },
+  "adminCostRates": {
+    "title": "Cost rates",
+    "description": "Unit prices (USD micros) per kind × rate_key × unit. Unregistered combinations fall back to code/env (external: built-in table, local: LOCAL_LLM_COST_*), else 0.",
+    "loadError": "Failed to load.",
+    "saveFailed": "Failed to save.",
+    "addTitle": "Add / update rate",
+    "rateKeyPlaceholder": "rate_key (model id · provider:model · *)",
+    "valuePlaceholder": "rate",
+    "notePlaceholder": "note (optional)",
+    "unitHelp": "For token units (token_in/out/think) enter USD per 1M tokens (1 USD/1M = 1 micro/token). call·image·second·char·gb_day are micros per unit.",
+    "save": "Save",
+    "listTitle": "Registered rates",
+    "empty": "No rates registered (all fallback).",
+    "value": "Rate (micros/unit)",
+    "note": "Note",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this rate? The fallback rate will apply."
   }
 }

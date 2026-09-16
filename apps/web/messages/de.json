@@ -25,7 +25,8 @@
       "developer": "Entwickler",
       "schedulesAdmin": "Aufgaben-Zeitpläne",
       "approvals": "Freigaben",
-      "organizationsAdmin": "Organisationen"
+      "organizationsAdmin": "Organisationen",
+      "costRatesAdmin": "Kostensätze"
     },
     "pendingApprovals": "{count} ausstehende Freigabe(n) — Agentenaufgaben warten auf Ihre Freigabe"
   },
@@ -2264,5 +2265,23 @@
     "importProblems": "{count} Problem(e) — kann nicht angewendet werden.",
     "importDryRun": "Geprüft — Einstellungen {systemSettings} · Capabilities {capabilityModels} · Organisationen {organizations} · Richtlinien {policies}. Mit „Anwenden“ übernehmen.",
     "importApplied": "Angewendet — Einstellungen {systemSettings} · Capabilities {capabilityModels} · Organisationen {organizations} · Richtlinien {policies}."
+  },
+  "adminCostRates": {
+    "title": "Kostensätze",
+    "description": "Stückpreise (USD micros) je kind × rate_key × unit. Nicht registrierte Kombinationen fallen auf Code/env zurück (extern: eingebaute Tabelle, lokal: LOCAL_LLM_COST_*), sonst 0.",
+    "loadError": "Laden fehlgeschlagen.",
+    "saveFailed": "Speichern fehlgeschlagen.",
+    "addTitle": "Satz hinzufügen / aktualisieren",
+    "rateKeyPlaceholder": "rate_key (Modell-ID · provider:model · *)",
+    "valuePlaceholder": "Satz",
+    "notePlaceholder": "Notiz (optional)",
+    "unitHelp": "Token-Einheiten (token_in/out/think) als USD je 1M Token eingeben (1 USD/1M = 1 micro/Token). call·image·second·char·gb_day sind micros je Einheit.",
+    "save": "Speichern",
+    "listTitle": "Registrierte Sätze",
+    "empty": "Keine Sätze registriert (alles Fallback).",
+    "value": "Satz (micros/Einheit)",
+    "note": "Notiz",
+    "delete": "Löschen",
+    "deleteConfirm": "Diesen Satz löschen? Der Fallback-Satz gilt dann."
   }
 }

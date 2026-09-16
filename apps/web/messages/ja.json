@@ -25,7 +25,8 @@
       "developer": "開発者",
       "schedulesAdmin": "タスクスケジュール",
       "approvals": "承認待ち",
-      "organizationsAdmin": "組織管理"
+      "organizationsAdmin": "組織管理",
+      "costRatesAdmin": "コスト単価"
     },
     "pendingApprovals": "承認待ち {count}件 — エージェント作業がユーザーの承認を待っています"
   },
@@ -2264,5 +2265,23 @@
     "importProblems": "問題 {count} 件 — 適用できません。",
     "importDryRun": "検証 OK — 設定 {systemSettings}・capability {capabilityModels}・組織 {organizations}・ポリシー {policies}。適用で反映されます。",
     "importApplied": "適用完了 — 設定 {systemSettings}・capability {capabilityModels}・組織 {organizations}・ポリシー {policies}。"
+  },
+  "adminCostRates": {
+    "title": "コスト単価表",
+    "description": "kind × rate_key × unit ごとの単価（USD micros）。未登録の組み合わせはコード/env のフォールバック（外部は定数表、ローカルは LOCAL_LLM_COST_*）、それもなければ 0。",
+    "loadError": "読み込みに失敗しました。",
+    "saveFailed": "保存に失敗しました。",
+    "addTitle": "単価の登録/更新",
+    "rateKeyPlaceholder": "rate_key（モデル id・provider:model・*）",
+    "valuePlaceholder": "単価",
+    "notePlaceholder": "メモ（任意）",
+    "unitHelp": "トークン unit（token_in/out/think）は 1M トークンあたり USD で入力（1 USD/1M = 1 micro/token）。call・image・second・char・gb_day は単位あたり micros。",
+    "save": "保存",
+    "listTitle": "登録済み単価",
+    "empty": "登録された単価はありません（すべてフォールバック）。",
+    "value": "単価（micros/unit）",
+    "note": "メモ",
+    "delete": "削除",
+    "deleteConfirm": "この単価を削除しますか？フォールバック単価に戻ります。"
   }
 }

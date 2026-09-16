@@ -25,7 +25,8 @@
       "developer": "개발자",
       "schedulesAdmin": "작업 스케줄",
       "approvals": "승인 대기",
-      "organizationsAdmin": "조직 관리"
+      "organizationsAdmin": "조직 관리",
+      "costRatesAdmin": "비용 단가"
     },
     "pendingApprovals": "승인 대기 {count}건 — 에이전트 작업이 사용자 승인을 기다리고 있습니다"
   },
@@ -2264,5 +2265,23 @@
     "importProblems": "문제 {count}건 — 적용할 수 없습니다.",
     "importDryRun": "검증 통과 — 설정 {systemSettings} · capability {capabilityModels} · 조직 {organizations} · 정책 {policies}. 적용을 누르면 반영됩니다.",
     "importApplied": "적용 완료 — 설정 {systemSettings} · capability {capabilityModels} · 조직 {organizations} · 정책 {policies}."
+  },
+  "adminCostRates": {
+    "title": "비용 단가표",
+    "description": "kind × rate_key × unit 당 단가(USD micros). 미등록 조합은 코드/env 폴백(외부는 상수표, 로컬은 LOCAL_LLM_COST_*), 그것도 없으면 0 입니다.",
+    "loadError": "불러오기에 실패했습니다.",
+    "saveFailed": "저장에 실패했습니다.",
+    "addTitle": "단가 등록/갱신",
+    "rateKeyPlaceholder": "rate_key (모델 id · provider:model · *)",
+    "valuePlaceholder": "단가",
+    "notePlaceholder": "메모(선택)",
+    "unitHelp": "토큰 unit(token_in/out/think)은 1M 토큰당 USD 로 입력하면 됩니다(1 USD/1M = 1 micro/token). call·image·second·char·gb_day 는 단위당 micros.",
+    "save": "저장",
+    "listTitle": "등록된 단가",
+    "empty": "등록된 단가가 없습니다(전부 폴백).",
+    "value": "단가(micros/unit)",
+    "note": "메모",
+    "delete": "삭제",
+    "deleteConfirm": "이 단가를 삭제할까요? 폴백 단가로 돌아갑니다."
   }
 }
