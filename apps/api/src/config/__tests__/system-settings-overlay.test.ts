@@ -62,6 +62,10 @@ describe('system-settings-registry', () => {
             if (def.key === 'NAVER_API_DAILY_LIMIT') sample[def.key] = '777';
             else if (def.key === 'LLM_HOURLY_TOKEN_LIMIT') sample[def.key] = '778';
             else if (def.key === 'LLM_WEEKLY_TOKEN_LIMIT') sample[def.key] = '779';
+            // enum·정수 키(F25 쿼터) — 문자열 샘플은 스키마에 걸린다
+            else if (def.key === 'QUOTA_FAIL_MODE') sample[def.key] = 'closed';
+            else if (def.key === 'QUOTA_EXCEEDED_ACTION') sample[def.key] = 'degrade';
+            else if (def.key === 'USER_MONTHLY_COST_BUDGET_MICROS') sample[def.key] = '780';
             else if (def.key.startsWith('OPERATOR_WEBHOOK') || def.key === 'OAUTH_REDIRECT_URI' || def.key === 'LLM_BASE_URL')
                 sample[def.key] = 'https://example.com/wired';
             else if (def.key === 'VAPID_SUBJECT') sample[def.key] = 'mailto:wired@example.com';
