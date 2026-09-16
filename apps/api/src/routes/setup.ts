@@ -53,6 +53,8 @@ import {
     adminOrganizationPoliciesRouter,
     adminConfigExportRouter,
     adminCostRatesRouter,
+    usageQuotaRouter,
+    adminQuotaOverageRouter,
     firstRunSetupRouter,
     kakaoMapEmbedRouter,
     usageRouter,
@@ -222,6 +224,8 @@ export function setupApiRoutes(
     app.use('/api/organizations', organizationPoliciesRouter);
     app.use('/api/admin', adminConfigExportRouter);
     app.use('/api/admin', adminCostRatesRouter);
+    app.use('/api/admin', adminQuotaOverageRouter);
+    app.use('/api/usage', usageQuotaRouter);
     app.use('/api/admin/mcp', mcpAdminMonitoringRouter);
     app.use('/api/admin/agent-task-schedules', adminAgentTaskSchedulesRouter);
     // F2 자가개선 — 프롬프트 제안 검토/승인 (관리자)

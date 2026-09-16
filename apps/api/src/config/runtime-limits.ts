@@ -2113,3 +2113,17 @@ export const QUOTA_RESERVE = {
     /** 정산 잡 활성(기본 true). QUOTA_RECONCILE_ENABLED=false 로 끔 */
     RECONCILE_ENABLED: process.env.QUOTA_RECONCILE_ENABLED !== 'false',
 } as const;
+
+/** 쿼터 추가 한도·이월·초과 요청 (F25 PR-3b). */
+export const QUOTA_GRANTS = {
+    /** 직전 버킷 미사용분 이월 비율 0~1 (기본 0 = 비활성). QUOTA_ROLLOVER_RATIO */
+    ROLLOVER_RATIO: parseFloat(process.env.QUOTA_ROLLOVER_RATIO || '0'),
+    /** 이월 상한 토큰(0 = 상한 없음). QUOTA_ROLLOVER_CAP_TOKENS */
+    ROLLOVER_CAP_TOKENS: parseInt(process.env.QUOTA_ROLLOVER_CAP_TOKENS || '0', 10),
+    /** 초과 시 승인 요청 자동 생성 (기본 false). QUOTA_OVERAGE_AUTO_REQUEST=true */
+    OVERAGE_AUTO_REQUEST: process.env.QUOTA_OVERAGE_AUTO_REQUEST === 'true',
+    /** 초과 요청 유효 기간(ms, 기본 7일). QUOTA_OVERAGE_REQUEST_TTL_MS */
+    OVERAGE_REQUEST_TTL_MS: parseInt(process.env.QUOTA_OVERAGE_REQUEST_TTL_MS || String(7 * 24 * 60 * 60 * 1000), 10),
+    /** 자동 요청 시 요청량 = 설정 한도 × 이 비율 (기본 0.5). QUOTA_OVERAGE_AUTO_REQUEST_RATIO */
+    OVERAGE_AUTO_REQUEST_RATIO: parseFloat(process.env.QUOTA_OVERAGE_AUTO_REQUEST_RATIO || '0.5'),
+} as const;

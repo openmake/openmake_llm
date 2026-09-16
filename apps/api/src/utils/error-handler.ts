@@ -144,6 +144,7 @@ export function errorHandler(
             used: err.used,
             limit: err.limit,
             retryAfter: err.retryAfterSeconds,
+            ...(err.approvalRequestId ? { approvalRequestId: err.approvalRequestId } : {}),
         }));
         return;
     }

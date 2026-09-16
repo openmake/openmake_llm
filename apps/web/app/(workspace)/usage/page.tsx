@@ -245,6 +245,16 @@ function MyQuotaSection() {
   const t = useTranslations("usage");
   const locale = toBcp47(useLocale());
   const [quota, setQuota] = useState<QuotaStatus | null>(null);
+  // 초과 승인 요청(135) — 주간 한도의 50% 를 기본 요청량으로. pending 이 있으면 서버가 그 id 를 돌려준다.
+  const [requested, setRequested] = useState<string | null>(null);
+  async function requestOverage() {
+    if (!quota) return;
+    const amount = Math.max(1, Math.ceil(quota.weekly.limit * 0.5));
+    try {
+      const r = await ApiClient.post<ApiSuccess<{ request: { id: string; status: string } }>>("/api/usage/overage-requests", { window: "weekly", requestedAmount: amount });
+      setRequested(r?.data?.request?.status ?? "pending");
+    } catch (e) { setRequested(e instanceof Error ? e.message : "error"); }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -295,6 +305,12 @@ function MyQuotaSection() {
             {t("quotaExceeded")}
           </p>
         )}
+        <div className="mt-3 flex items-center gap-2">
+          <button type="button" onClick={() => void requestOverage()} className="rounded-md border border-border px-2 py-1 text-xs text-fg hover:bg-surface-2">
+            {t("quotaRequestMore")}
+          </button>
+          {requested && <span className="text-[11px] text-muted">{requested === "pending" ? t("quotaRequestPending") : requested}</span>}
+        </div>
       </CardContent>
     </Card>
   );

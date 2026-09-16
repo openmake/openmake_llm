@@ -20,6 +20,8 @@ import { budgetedOrgsFor, clearOrgMembershipCache } from '../services/org/member
 import { createLogger } from '../utils/logger';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
 import { QuotaUnavailableError } from '../errors/quota-unavailable.error';
+import { grantsFor, maybeCreateRollover, ensureOverageRequest } from '../services/cost/quota-grants';
+import { QUOTA_GRANTS } from '../config/runtime-limits';
 import { isPersistableUserId } from '../utils/user-id-validation';
 
 const logger = createLogger('UserQuota');
@@ -45,6 +47,13 @@ function monthKey(userId: string, now: number): string {
     return `llmq:${userId}:m:${monthBucket(now)}`;
 }
 const MONTH_TTL_MS = 62 * 24 * 60 * 60 * 1000;
+
+/** 윈도우별 현재 버킷 id — grants·초과 요청 키와 동일 규약 (135). */
+export function currentBucket(window: 'hourly' | 'weekly' | 'monthly', now: number): string {
+    if (window === 'hourly') return String(Math.floor(now / HOUR_MS));
+    if (window === 'weekly') return String(Math.floor(now / WEEK_MS));
+    return monthBucket(now);
+}
 
 /** 정산 잡(services/cost/quota-reconcile-job)용 공개 헬퍼 */
 export function weekBucketKey(userId: string, now: number): string { return weekKey(userId, now); }
@@ -190,10 +199,11 @@ export async function reserveUserQuota(userId: string | undefined, estimate: num
     if (!isPersistableUserId(userId)) return null;
     const cfg = getConfig();
     const est = Number.isFinite(estimate) && estimate > 0 ? Math.ceil(estimate) : 0;
-    const plan: Array<{ key: string; ttlMs: number; limit: number; type: 'hourly' | 'weekly' | null }> = [
-        { key: hourKey(userId, now), ttlMs: HOUR_TTL_MS, limit: cfg.llmHourlyTokenLimit, type: 'hourly' },
-        { key: weekKey(userId, now), ttlMs: WEEK_TTL_MS, limit: cfg.llmWeeklyTokenLimit, type: 'weekly' },
-        { key: monthKey(userId, now), ttlMs: MONTH_TTL_MS, limit: 0, type: null },
+    const weekBucket = String(Math.floor(now / WEEK_MS));
+    const plan: Array<{ key: string; ttlMs: number; limit: number; type: 'hourly' | 'weekly' | null; bucket: string }> = [
+        { key: hourKey(userId, now), ttlMs: HOUR_TTL_MS, limit: cfg.llmHourlyTokenLimit, type: 'hourly', bucket: String(Math.floor(now / HOUR_MS)) },
+        { key: weekKey(userId, now), ttlMs: WEEK_TTL_MS, limit: cfg.llmWeeklyTokenLimit, type: 'weekly', bucket: weekBucket },
+        { key: monthKey(userId, now), ttlMs: MONTH_TTL_MS, limit: 0, type: null, bucket: monthBucket(now) },
     ];
     const applied: { key: string; ttlMs: number }[] = [];
     const store = getKeyValueStore();
@@ -202,10 +212,22 @@ export async function reserveUserQuota(userId: string | undefined, estimate: num
             const after = est > 0 ? await store.incrBy(step.key, est) : ((await store.get<number>(step.key)) ?? 0);
             if (est > 0) { applied.push({ key: step.key, ttlMs: step.ttlMs }); void store.expire(step.key, step.ttlMs).catch(() => undefined); }
             const usedNum = typeof after === 'number' ? after : 0;
+            if (!step.type || step.limit <= 0) continue;
+            // 이월(135): 주 버킷의 첫 예약(증가 후 값 == est)이면 직전 주 미사용분을 grants 로 — 멱등
+            if (step.type === 'weekly' && est > 0 && usedNum === est && QUOTA_GRANTS.ROLLOVER_RATIO > 0) {
+                const prevUsed = (await store.get<number>(weekKey(userId, now - WEEK_MS))) ?? 0;
+                await maybeCreateRollover(userId, 'weekly', step.bucket, step.limit, typeof prevUsed === 'number' ? prevUsed : 0);
+            }
+            const effectiveLimit = step.limit + (await grantsFor(userId, step.type, step.bucket, now));
             // 한도 판정은 "이 요청 포함" — est 가 0 이면 종전 checkUserQuota 와 같은 누적치 비교
-            if (step.type && step.limit > 0 && (est > 0 ? usedNum > step.limit : usedNum >= step.limit)) {
+            if (est > 0 ? usedNum > effectiveLimit : usedNum >= effectiveLimit) {
                 await refund(store, applied, est);
-                throw new QuotaExceededError(step.type, Math.max(0, usedNum - est), step.limit);
+                const err = new QuotaExceededError(step.type, Math.max(0, usedNum - est), effectiveLimit);
+                if (QUOTA_GRANTS.OVERAGE_AUTO_REQUEST) {
+                    err.approvalRequestId = await ensureOverageRequest(userId, step.type, step.bucket,
+                        Math.ceil(step.limit * QUOTA_GRANTS.OVERAGE_AUTO_REQUEST_RATIO), 'auto', true);
+                }
+                throw err;
             }
         }
         try {

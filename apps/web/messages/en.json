@@ -26,7 +26,8 @@
       "schedulesAdmin": "Task Schedules",
       "approvals": "Approvals",
       "organizationsAdmin": "Organizations",
-      "costRatesAdmin": "Cost Rates"
+      "costRatesAdmin": "Cost Rates",
+      "quotaRequestsAdmin": "Quota Approvals"
     },
     "pendingApprovals": "{count} pending approval(s) — agent tasks are waiting for your approval"
   },
@@ -1960,7 +1961,9 @@
     "quotaExceeded": "You have used up the hourly quota. You can send requests again after the reset time.",
     "globalQuotaTitle": "Global quota usage (server-wide)",
     "globalQuotaNote": "Server-wide observation that resets on process restart — separate from your personal quota",
-    "loadFailed": "Could not load usage"
+    "loadFailed": "Could not load usage",
+    "quotaRequestMore": "Request more quota",
+    "quotaRequestPending": "Awaiting admin approval"
   },
   "developer": {
     "pageTitle": "Developer Docs",
@@ -2283,5 +2286,33 @@
     "note": "Note",
     "delete": "Delete",
     "deleteConfirm": "Delete this rate? The fallback rate will apply."
+  },
+  "adminQuotaRequests": {
+    "title": "Quota overage approvals",
+    "description": "Approve or reject users' extra-quota requests and grant quota manually. Approved amounts add to the effective limit of that window bucket.",
+    "loadError": "Failed to load.",
+    "actionFailed": "Action failed.",
+    "listTitle": "Requests",
+    "status": "Status",
+    "statuses": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "expired": "Expired",
+      "all": "All"
+    },
+    "empty": "No requests.",
+    "user": "User",
+    "window": "Window",
+    "amount": "Tokens",
+    "reason": "Reason",
+    "auto": "auto-created",
+    "approve": "Approve",
+    "reject": "Reject",
+    "manualTitle": "Manual grant",
+    "manualHelp": "Added immediately to the current bucket (hourly/weekly/monthly). Find user ids in Admin → users.",
+    "userIdPlaceholder": "user id",
+    "grant": "Grant",
+    "grantDone": "Granted."
   }
 }

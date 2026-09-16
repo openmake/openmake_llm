@@ -26,7 +26,8 @@
       "schedulesAdmin": "Aufgaben-Zeitpläne",
       "approvals": "Freigaben",
       "organizationsAdmin": "Organisationen",
-      "costRatesAdmin": "Kostensätze"
+      "costRatesAdmin": "Kostensätze",
+      "quotaRequestsAdmin": "Kontingent-Freigaben"
     },
     "pendingApprovals": "{count} ausstehende Freigabe(n) — Agentenaufgaben warten auf Ihre Freigabe"
   },
@@ -1960,7 +1961,9 @@
     "quotaExceeded": "Sie haben das stündliche Kontingent aufgebraucht. Nach der Zurücksetzungszeit können Sie wieder Anfragen senden.",
     "globalQuotaTitle": "Globale Kontingentnutzung (serverweit)",
     "globalQuotaNote": "Serverweite Beobachtung, die beim Prozess-Neustart zurückgesetzt wird — getrennt von Ihrem persönlichen Kontingent",
-    "loadFailed": "Nutzung konnte nicht geladen werden"
+    "loadFailed": "Nutzung konnte nicht geladen werden",
+    "quotaRequestMore": "Mehr Kontingent anfragen",
+    "quotaRequestPending": "Wartet auf Admin-Freigabe"
   },
   "developer": {
     "pageTitle": "Entwicklerdokumentation",
@@ -2283,5 +2286,33 @@
     "note": "Notiz",
     "delete": "Löschen",
     "deleteConfirm": "Diesen Satz löschen? Der Fallback-Satz gilt dann."
+  },
+  "adminQuotaRequests": {
+    "title": "Kontingent-Überschreitungen",
+    "description": "Anfragen auf zusätzliches Kontingent freigeben oder ablehnen und Kontingent manuell gewähren. Freigaben erhöhen das wirksame Limit des Fenster-Buckets.",
+    "loadError": "Laden fehlgeschlagen.",
+    "actionFailed": "Aktion fehlgeschlagen.",
+    "listTitle": "Anfragen",
+    "status": "Status",
+    "statuses": {
+      "pending": "Offen",
+      "approved": "Freigegeben",
+      "rejected": "Abgelehnt",
+      "expired": "Abgelaufen",
+      "all": "Alle"
+    },
+    "empty": "Keine Anfragen.",
+    "user": "Benutzer",
+    "window": "Fenster",
+    "amount": "Token",
+    "reason": "Grund",
+    "auto": "automatisch",
+    "approve": "Freigeben",
+    "reject": "Ablehnen",
+    "manualTitle": "Manuell gewähren",
+    "manualHelp": "Wird sofort dem aktuellen Bucket hinzugefügt (stündlich/wöchentlich/monatlich). Benutzer-IDs unter Admin → Benutzer.",
+    "userIdPlaceholder": "Benutzer-ID",
+    "grant": "Gewähren",
+    "grantDone": "Gewährt."
   }
 }

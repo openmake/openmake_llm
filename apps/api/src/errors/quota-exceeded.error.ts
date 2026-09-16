@@ -21,6 +21,8 @@ export class QuotaExceededError extends Error {
     public readonly used: number;
     public readonly limit: number;
     public readonly retryAfterSeconds: number;
+    /** 초과 승인 요청(135)이 생성·존재하면 그 id — 프론트가 '승인 대기 중' 을 안내한다 */
+    public approvalRequestId?: string;
 
     constructor(quotaType: QuotaType, used: number, limit: number) {
         // 단위는 **토큰** — user-quota.ts 가 llmHourlyTokenLimit/llmWeeklyTokenLimit(토큰 수)로

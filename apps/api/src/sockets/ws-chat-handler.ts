@@ -513,7 +513,8 @@ export async function handleChatMessage(
                 type: 'error',
                 message: `⚠️ ${getLocalizedTemplate(WS_ERROR_MESSAGES, userLang).quotaExceeded} (${error.quotaType}). ${error.used}/${error.limit}.`,
                 errorType: 'quota_exceeded',
-                retryAfter: error.retryAfterSeconds
+                retryAfter: error.retryAfterSeconds,
+                ...(error.approvalRequestId ? { approvalRequestId: error.approvalRequestId } : {}),
             });
         } else if (error instanceof QuotaUnavailableError) {
             log.error('[Chat] 쿼터 저장소 장애 (fail-closed):', error.message);

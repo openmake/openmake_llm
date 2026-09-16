@@ -26,7 +26,8 @@
       "schedulesAdmin": "任务计划",
       "approvals": "待审批",
       "organizationsAdmin": "组织管理",
-      "costRatesAdmin": "成本单价"
+      "costRatesAdmin": "成本单价",
+      "quotaRequestsAdmin": "配额审批"
     },
     "pendingApprovals": "{count} 个待批准 — 代理任务正在等待您的批准"
   },
@@ -1960,7 +1961,9 @@
     "quotaExceeded": "每小时配额已用尽。请在重置时间之后重新发送请求。",
     "globalQuotaTitle": "全局配额消耗 (服务器整体)",
     "globalQuotaNote": "进程重启即重置的全局观测值 — 与个人配额无关",
-    "loadFailed": "无法加载用量"
+    "loadFailed": "无法加载用量",
+    "quotaRequestMore": "申请额外配额",
+    "quotaRequestPending": "等待管理员审批"
   },
   "developer": {
     "pageTitle": "开发者文档",
@@ -2283,5 +2286,33 @@
     "note": "备注",
     "delete": "删除",
     "deleteConfirm": "删除此单价？将回退到默认单价。"
+  },
+  "adminQuotaRequests": {
+    "title": "配额超额审批",
+    "description": "审批用户的额外配额申请并可手动授予配额。批准量会加到该窗口桶的有效上限。",
+    "loadError": "加载失败。",
+    "actionFailed": "操作失败。",
+    "listTitle": "申请",
+    "status": "状态",
+    "statuses": {
+      "pending": "待处理",
+      "approved": "已批准",
+      "rejected": "已拒绝",
+      "expired": "已过期",
+      "all": "全部"
+    },
+    "empty": "暂无申请。",
+    "user": "用户",
+    "window": "窗口",
+    "amount": "令牌",
+    "reason": "原因",
+    "auto": "自动创建",
+    "approve": "批准",
+    "reject": "拒绝",
+    "manualTitle": "手动授予",
+    "manualHelp": "立即加到当前桶（小时/周/月）。用户 id 可在管理员 → 用户列表查看。",
+    "userIdPlaceholder": "用户 id",
+    "grant": "授予",
+    "grantDone": "已授予。"
   }
 }
