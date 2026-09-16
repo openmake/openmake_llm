@@ -6,6 +6,9 @@
  * @module chat/request-idempotency
  */
 import { IDEMPOTENCY } from '../config/runtime-limits';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('ChatIdempotency');
 
 interface Entry { messageId: string; at: number }
 
@@ -45,4 +48,25 @@ export function normalizeClientRequestId(v: unknown): string | undefined {
     if (typeof v !== 'string') return undefined;
     const s = v.trim();
     return /^[A-Za-z0-9_-]{8,64}$/.test(s) ? s : undefined;
+}
+
+/**
+ * 채팅 요청 멱등 판정 — 형식이 맞는 id 를 이미 봤으면 이전 messageId 를 돌려주고(재전송), 처음이면 이번 messageId 를 기억한다.
+ * id 가 없거나 형식이 틀리면 멱등 없음(clientRequestId undefined).
+ */
+export function claimClientRequest(
+    owner: string,
+    rawId: unknown,
+    messageId: string,
+    registry: RequestIdempotencyRegistry = getRequestIdempotencyRegistry(),
+): { clientRequestId?: string; priorMessageId: string | null } {
+    const clientRequestId = normalizeClientRequestId(rawId);
+    if (!clientRequestId) return { priorMessageId: null };
+    const prior = registry.lookup(owner, clientRequestId);
+    if (prior) {
+        logger.info(`[Chat] 중복 요청 무시(멱등): ${clientRequestId} → ${prior}`);
+        return { clientRequestId, priorMessageId: prior };
+    }
+    registry.remember(owner, clientRequestId, messageId);
+    return { clientRequestId, priorMessageId: null };
 }

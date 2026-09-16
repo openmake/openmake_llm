@@ -5,6 +5,8 @@
  * @module services/agent-task/plan-edits
  */
 import type { PlanStepInput } from '../task-sandbox/planning';
+import type { TaskRuntime } from '../task-sandbox/runtime';
+import type { ChatMessage } from '../../llm/types';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentTaskPlanEdits');
@@ -26,3 +28,22 @@ export function getPlanEditRegistry(): PlanEditRegistry {
 
 /** 편집 반영 시 모델에게 주는 안내(steering 채널). */
 export const PLAN_EDIT_NOTICE = '사용자가 계획을 직접 수정했습니다. 아래 최신 계획을 따르고, 이미 완료된 단계의 상태는 유지하세요.';
+
+/**
+ * 턴 경계에서 대기 중인 계획 편집을 런타임 계획에 반영하고 모델에 최신 계획을 안내한다(steering 채널).
+ * 런타임이 없으면(샌드박스 OFF) 편집은 소비만 된다 — 종전 AgentTaskService 인라인 블록과 같은 동작.
+ */
+export function applyPendingPlanEdit(
+    taskId: string,
+    turn: number,
+    conversation: ChatMessage[],
+    emit: (stepType: string, toolName?: string, content?: string | null) => void,
+    taskRuntime?: Pick<TaskRuntime, 'replacePlan' | 'renderPlan'> | null,
+): void {
+    const editedPlan = getPlanEditRegistry().drain(taskId);
+    if (!editedPlan || !taskRuntime) return;
+    taskRuntime.replacePlan(editedPlan);
+    conversation.push({ role: 'user', content: `${PLAN_EDIT_NOTICE}\n\n${taskRuntime.renderPlan()}` });
+    emit('plan_edit', undefined, `계획 편집 반영 (${editedPlan.length}단계)`);
+    logger.info(`[AgentTask] 계획 편집 반영: ${taskId} (turn ${turn + 1})`);
+}

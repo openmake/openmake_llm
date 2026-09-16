@@ -44,7 +44,6 @@ import { buildJudgeToolEvidence } from './agent-task/goal-judge';
 import { initWorkspaceBaseline, captureDiffOnCleanup } from './agent-task/code-diff';
 import { findDanglingToolCalls, loadToolCallJournal, writeTurnCheckpoint } from './agent-task/turn-reentry';
 import { getSteeringRegistry, applyPendingSteering } from './agent-task/steering';
-import { getPlanEditRegistry, PLAN_EDIT_NOTICE } from './agent-task/plan-edits';
 import { resolveExecutorPlan } from './agent-task/executor-select';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
 import { executeTurnToolCalls } from './agent-task/turn-executor';
@@ -357,16 +356,8 @@ export class AgentTaskService {
 
                 // 실행 중 사용자 중간 지시(steering) — 이 턴 경계에 도착한 지시를 conversation 에
                 // user 메시지로 주입해 방향을 조정한다. 턴 경계 소비라 tool_call_id 매칭이 유지되고
-                // 다음 checkpoint 에 자연 포함된다(resume 안전). 스텝으로 기록해 상세/카드에 노출.
-                stepNumber = await applyPendingSteering(taskId, turn, conversation, stepNumber, emitStep);
-                // 사용자 계획 편집(139) — 턴 경계에서만 반영: 런타임 계획 교체 + 모델 안내(steering 채널)
-                const editedPlan = getPlanEditRegistry().drain(taskId);
-                if (editedPlan && taskRuntime) {
-                    taskRuntime.replacePlan(editedPlan);
-                    conversation.push({ role: 'user', content: `${PLAN_EDIT_NOTICE}\n\n${taskRuntime.renderPlan()}` });
-                    emitStep('plan_edit', undefined, `계획 편집 반영 (${editedPlan.length}단계)`);
-                    logger.info(`[AgentTask] 계획 편집 반영: ${taskId} (turn ${turn + 1})`);
-                }
+                // 다음 checkpoint 에 자연 포함된다(resume 안전). 스텝으로 기록해 상세/카드에 노출. 계획 편집(139)도 여기서.
+                stepNumber = await applyPendingSteering(taskId, turn, conversation, stepNumber, emitStep, taskRuntime);
                 // 오래된 도구 결과 접기 — 재전송 O(n²) 완화. 원문은 스텝 DB 에 남고 최근 턴은 유지(context-fold).
                 if (AGENT_TASK_LIMITS.CONTEXT_FOLD_ENABLED) {
                     const fold = foldOldToolResults(conversation, {

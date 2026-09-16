@@ -12,7 +12,7 @@ import { resolveCleanedContent } from './ws-chat-completion';
 import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
 import { enqueueDebugCapture, DEBUG_QUEUE_TTL_MS } from '../data/conversation-debug-queue';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
-import { getRequestIdempotencyRegistry, normalizeClientRequestId } from '../chat/request-idempotency';
+import { claimClientRequest } from '../chat/request-idempotency';
 import { QuotaUnavailableError } from '../errors/quota-unavailable.error';
 import { KeyExhaustionError } from '../errors/key-exhaustion.error';
 import { ProviderError } from '../providers/provider-errors';
@@ -216,22 +216,12 @@ export async function handleChatMessage(
         }
         const effectiveAttachContext = cachedAttachContext + attachContext;
 
-        // 멱등(140): 같은 clientRequestId 의 재전송이면 새 생성 없이 이전 messageId 로 done 만 다시 보낸다
-        const clientRequestId = normalizeClientRequestId(msg.clientRequestId);
-        const idemOwner = extWs._authenticatedUserId ? `u:${extWs._authenticatedUserId}` : `a:${anonSessionId ?? ''}`;
-        if (clientRequestId) {
-            const prior = getRequestIdempotencyRegistry().lookup(idemOwner, clientRequestId);
-            if (prior) {
-                log.info(`[Chat] 중복 요청 무시(멱등): ${clientRequestId} → ${prior}`);
-                out({ type: 'done', messageId: prior, deduplicated: true, metrics: { tokensPerSec: '0.00', tokenCount: 0 } });
-                return;
-            }
-        }
-        // messageId 생성 (WS 고유: 토큰 스트리밍에 사용)
+        // messageId 생성 (WS 고유: 토큰 스트리밍에 사용) — 같은 clientRequestId 재전송이면 이전 messageId 로 done 만 다시 보낸다(멱등 140)
         const messageId = crypto.randomUUID
             ? crypto.randomUUID()
             : `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        if (clientRequestId) getRequestIdempotencyRegistry().remember(idemOwner, clientRequestId, messageId);
+        const { clientRequestId, priorMessageId } = claimClientRequest(extWs._authenticatedUserId ? `u:${extWs._authenticatedUserId}` : `a:${anonSessionId ?? ''}`, msg.clientRequestId, messageId);
+        if (priorMessageId) { out({ type: 'done', messageId: priorMessageId, deduplicated: true, metrics: { tokensPerSec: '0.00', tokenCount: 0 } }); return; }
 
         // 토큰 생성 메트릭 추적 (tokenCount, partialAssistantResponse 는 catch 접근을 위해 try 외부 선언)
         tokenCount = 0;

@@ -14,6 +14,8 @@ import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { getAgentTaskSteeringInjection } from '../../prompts/agent-task-prompt';
 import { createLogger } from '../../utils/logger';
+import { applyPendingPlanEdit } from './plan-edits';
+import type { TaskRuntime } from '../task-sandbox/runtime';
 
 const logger = createLogger('AgentTaskSteering');
 
@@ -69,15 +71,19 @@ export async function applyPendingSteering(
     conversation: ChatMessage[],
     stepNumber: number,
     emit: (stepType: string, toolName?: string, content?: string | null) => void,
+    /** 사용자 계획 편집(139) 반영 대상 — steering 플래그와 무관하게 턴 경계에서 적용한다 */
+    taskRuntime?: Pick<TaskRuntime, 'replacePlan' | 'renderPlan'> | null,
 ): Promise<number> {
-    if (!AGENT_TASK_LIMITS.STEERING_ENABLED) return stepNumber;
-    for (const text of getSteeringRegistry().drain(taskId)) {
-        conversation.push({ role: 'user', content: getAgentTaskSteeringInjection(text) });
-        await getUnifiedDatabase().addAgentTaskStep({
-            taskId, stepNumber: stepNumber++, stepType: 'steering', content: text,
-        }).catch(() => { /* 기록 실패는 주입을 막지 않음 */ });
-        emit('steering', undefined, text);
-        logger.info(`[${taskId}] steering 반영 (turn ${turn + 1})`);
+    if (AGENT_TASK_LIMITS.STEERING_ENABLED) {
+        for (const text of getSteeringRegistry().drain(taskId)) {
+            conversation.push({ role: 'user', content: getAgentTaskSteeringInjection(text) });
+            await getUnifiedDatabase().addAgentTaskStep({
+                taskId, stepNumber: stepNumber++, stepType: 'steering', content: text,
+            }).catch(() => { /* 기록 실패는 주입을 막지 않음 */ });
+            emit('steering', undefined, text);
+            logger.info(`[${taskId}] steering 반영 (turn ${turn + 1})`);
+        }
     }
+    applyPendingPlanEdit(taskId, turn, conversation, emit, taskRuntime);
     return stepNumber;
 }

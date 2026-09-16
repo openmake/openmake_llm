@@ -1,4 +1,4 @@
-import { RequestIdempotencyRegistry, normalizeClientRequestId } from '../request-idempotency';
+import { RequestIdempotencyRegistry, normalizeClientRequestId, claimClientRequest } from '../request-idempotency';
 
 describe('RequestIdempotencyRegistry', () => {
     test('같은 owner·id 는 TTL 안에서 이전 messageId, TTL 지나면 null', () => {
@@ -19,5 +19,20 @@ describe('RequestIdempotencyRegistry', () => {
         expect(normalizeClientRequestId('short')).toBeUndefined();
         expect(normalizeClientRequestId('has space here')).toBeUndefined();
         expect(normalizeClientRequestId(123)).toBeUndefined();
+    });
+});
+
+describe('claimClientRequest', () => {
+    test('처음 보는 id 는 이번 messageId 를 기억하고, 재전송이면 이전 messageId 를 돌려준다', () => {
+        const r = new RequestIdempotencyRegistry(60_000, 10);
+        expect(claimClientRequest('u:1', 'req-aaaaaaaa', 'm1', r)).toEqual({ clientRequestId: 'req-aaaaaaaa', priorMessageId: null });
+        expect(claimClientRequest('u:1', 'req-aaaaaaaa', 'm2', r)).toEqual({ clientRequestId: 'req-aaaaaaaa', priorMessageId: 'm1' });
+        expect(claimClientRequest('u:2', 'req-aaaaaaaa', 'm3', r).priorMessageId).toBeNull();
+    });
+    test('id 가 없거나 형식이 틀리면 멱등 없음(기억하지 않음)', () => {
+        const r = new RequestIdempotencyRegistry(60_000, 10);
+        expect(claimClientRequest('u:1', undefined, 'm1', r)).toEqual({ priorMessageId: null });
+        expect(claimClientRequest('u:1', 'short', 'm1', r)).toEqual({ priorMessageId: null });
+        expect(r.lookup('u:1', 'short')).toBeNull();
     });
 });
