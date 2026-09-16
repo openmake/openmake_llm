@@ -54,6 +54,7 @@ import {
 import { claimUploadsAsInputFiles, ChunkStoreError } from '../services/agent-task/chunk-store';
 import { resolveDefaultMaxTurns } from '../services/agent-task/task-inputs';
 import { auditLocalTaskCreate, filterTaskList, loadOwnedTask, toPublicTask, validateLocalExecutorInput } from './agent-task.helpers';
+import { approvalsRouter } from './agent-task-approvals.routes';
 import { isAdminRole } from '../data/user-manager';
 
 const logger = createLogger('AgentTaskRoutes');
@@ -533,70 +534,7 @@ router.get('/:taskId/files/download', asyncHandler(async (req: Request, res: Res
     });
 }));
 
-/**
- * POST /api/agent-tasks/:taskId/approvals/auto-approve  { enabled?: boolean }
- * task 자동승인(4-2) — 이후 이 task 의 도구 승인 요청을 즉시 approved 처리("나머지 모두 승인").
- * ask_human 은 제외(질문은 항상 사람에게). 현재 대기 중인 승인들도 즉시 해소.
- * task 종료 시 자동 해제. owner/admin 만 가능.
- */
-router.post('/:taskId/approvals/auto-approve', asyncHandler(async (req: Request, res: Response) => {
-    const task = await loadOwnedTask(req, res, req.params.taskId);
-    if (!task) return;
-    const enabled = (req.body as { enabled?: unknown })?.enabled !== false;
-    getApprovalRegistry().setAutoApprove(task.id, enabled);
-    await new AgentTaskRepository(getPool()).setAutoApprove(task.id, enabled).catch(() => { /* 영속 실패(124)는 메모리 플래그로 fail-open */ });
-    logger.info(`[AgentTaskRoutes] 자동승인 ${enabled ? '활성' : '해제'}: ${task.id} (user ${req.user!.id})`);
-    res.json(success({ taskId: task.id, autoApprove: enabled }));
-}));
-
-/**
- * GET /api/agent-tasks/approvals/pending
- * 현재 사용자의 승인 대기 도구 호출 목록 (HITL 게이트 — 전부-승인 정책).
- */
-router.get('/approvals/pending', asyncHandler(async (req: Request, res: Response) => {
-    const pending = await getApprovalRegistry().list(String(req.user!.id));
-    res.json(success({ pending }));
-}));
-
-/**
- * POST /api/agent-tasks/approvals/:approvalId/answer  { text }
- * ask_human 질문에 자유텍스트로 응답 — 진행(approved)으로 해소하되 답변 본문을 에이전트에 전달.
- * (승인/거절 이진 응답의 한계를 보완하는 HITL 답변 채널.)
- * ⚠️ 아래 `/:decision` 라우트보다 반드시 먼저 등록 — 뒤에 두면 'answer' 가 :decision 으로
- *    매칭돼 400 이 난다(라이브 검증에서 발견된 라우트 순서 버그).
- */
-router.post('/approvals/:approvalId/answer', asyncHandler(async (req: Request, res: Response) => {
-    const { approvalId } = req.params;
-    const text = String((req.body as { text?: unknown })?.text ?? '').trim();
-    if (!text) return res.status(400).json(badRequest('text 가 필요합니다.'));
-    if (text.length > AGENT_TASK_LIMITS.HITL_ANSWER_MAX_CHARS) return res.status(400).json(badRequest(`답변은 ${AGENT_TASK_LIMITS.HITL_ANSWER_MAX_CHARS}자를 넘을 수 없습니다.`));
-    const registry = getApprovalRegistry();
-    const pending = await registry.get(approvalId);
-    if (!pending) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
-    assertResourceOwnerOrAdmin(pending.userId, String(req.user!.id), req.user!.role || 'user');
-
-    const ok = await registry.answer(approvalId, text);
-    if (!ok) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
-    res.json(success({ approvalId, answered: true }));
-}));
-
-/**
- * POST /api/agent-tasks/approvals/:approvalId/:decision  (decision = approve | reject)
- * 대기 중인 도구 호출을 승인/거절 — 해당 approval 의 owner 만 가능.
- */
-router.post('/approvals/:approvalId/:decision', asyncHandler(async (req: Request, res: Response) => {
-    const { approvalId, decision } = req.params;
-    if (decision !== 'approve' && decision !== 'reject') {
-        return res.status(400).json(badRequest("decision 은 approve | reject 여야 합니다."));
-    }
-    const registry = getApprovalRegistry();
-    const pending = await registry.get(approvalId);
-    if (!pending) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
-    assertResourceOwnerOrAdmin(pending.userId, String(req.user!.id), req.user!.role || 'user');
-
-    const ok = await (decision === 'approve' ? registry.approve(approvalId) : registry.reject(approvalId));
-    if (!ok) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
-    res.json(success({ approvalId, decision }));
-}));
+// 승인(HITL) 라우트는 agent-task-approvals.routes.ts (600줄 게이트로 분리, 2026-09-17) — 라우트 순서(answer → :decision)는 그 파일이 지킨다.
+router.use(approvalsRouter);
 
 export default router;
