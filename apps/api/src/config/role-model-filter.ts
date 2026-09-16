@@ -24,7 +24,11 @@ const ROLE_MODEL_EXCLUDE_PATTERNS: readonly string[] = (
     process.env.ROLE_MODEL_EXCLUDE_PATTERNS
         ? process.env.ROLE_MODEL_EXCLUDE_PATTERNS.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
         : ['bge', 'embed', 'embedding', 'rerank', 'flux', 'sdxl', 'stable-diffusion',
-           'dall-e', 'dalle', 'whisper', 'tts', 'clip', 'nemoretriever', 'nv-embed']
+           'dall-e', 'dalle', 'whisper', 'tts', 'clip', 'nemoretriever', 'nv-embed',
+           // 2026-09-16 라이브에서 역할 드롭다운에 노출된 비채팅 모델군 — 영상·이미지·OCR·
+           // 문서 파서·분류기·음성·양자 시뮬레이터 (hasa·nvidia·chatgpt 카탈로그 실측)
+           'image', 'video', 't2v', 'i2v', 'ltx-', 'ocr', 'nemotron-parse', 'detector',
+           'content-safety', 'moderation', 'pii-', 'transcribe', 'realtime', 'melotts', 'cuquantum']
 );
 
 /**
