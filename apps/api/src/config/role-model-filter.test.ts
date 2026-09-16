@@ -53,6 +53,24 @@ describe('isRoleAssignableModel', () => {
         expect(isRoleAssignableModel(m('nvidia:nvidia/nv-embed-v1'))).toBe(false);
         expect(isRoleAssignableModel(m('openrouter:some/whisper-large'))).toBe(false);
     });
+
+    it('영상·이미지·OCR·파서·분류기·양자 시뮬 모델 제외 (2026-09-16 라이브 노출분)', () => {
+        for (const id of [
+            'hasa:LTX-2', 'hasa:Qwen-Image', 'hasa:Qwen-Image-Edit', 'hasa:Wan2.2-T2V', 'hasa:wan2.2-i2v',
+            'chatgpt:gpt-image-2', 'hasa:paddleocr-vl', 'hasa:pii-ko', 'hasa:cuquantum-statevector',
+            'nvidia:nvidia/nemotron-parse-2.0', 'nvidia:nvidia/ai-synthetic-video-detector',
+            'nvidia:nvidia/nemotron-3.5-content-safety', 'hasa:gpt-4o-transcribe-diarize',
+            'hasa:gpt-realtime-2.1', 'hasa:melotts-ko',
+        ]) {
+            expect(isRoleAssignableModel(m(id))).toBe(false);
+        }
+    });
+
+    it('vision 채팅 모델·코더는 유지', () => {
+        expect(isRoleAssignableModel(m('nvidia:meta/llama-3.2-90b-vision-instruct'))).toBe(true);
+        expect(isRoleAssignableModel(m('hasa:qwen2.5-vl-72b'))).toBe(true);
+        expect(isRoleAssignableModel(m('hasa:qwen3-coder'))).toBe(true);
+    });
 });
 
 describe('isChatCapableModel (chatOnly — 컴포저/설정 기본 모델 목록)', () => {

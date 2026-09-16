@@ -25,6 +25,9 @@ const logger = createLogger('ModelAssignmentValidation');
 /** 배정 시점 실호출 probe 타임아웃 (ms) — env override */
 const ASSIGNMENT_PROBE_TIMEOUT_MS = Number(process.env.MODEL_ASSIGNMENT_PROBE_TIMEOUT_MS) || 20000;
 
+/** 로컬 모델 미존재 오류 메시지에 안내할 로컬 태그 최대 개수 */
+const LOCAL_TAG_HINT_MAX = 10;
+
 async function validateExternalAssignment(userId: string, fullId: string): Promise<string | null> {
     const idx = fullId.indexOf(':');
     const providerId = fullId.slice(0, idx);
@@ -87,7 +90,13 @@ async function validateLocalAssignment(tag: string): Promise<string | null> {
         const client = createClient();
         const { models } = await client.listModels();
         if (models.length > 0 && !models.some((m) => m.name === tag)) {
-            return `LLM 서버에 없는 로컬 모델: '${tag}' (사용 가능: ${models.map((m) => m.name).join(', ')})`;
+            // 게이트웨이 목록엔 외부 provider 의 `provider/model` 항목이 수백 개 섞여 있어 전부 실으면
+            // 400 본문이 수십 KB 가 된다 — 로컬 태그(슬래시 없음)만 상한까지 안내한다.
+            const localTags = models.map((m) => m.name).filter((n) => !n.includes('/'));
+            const listed = localTags.slice(0, LOCAL_TAG_HINT_MAX);
+            const rest = localTags.length - listed.length;
+            const hint = listed.join(', ') + (rest > 0 ? ` 외 ${rest}개` : '');
+            return `LLM 서버에 없는 로컬 모델: '${tag}' (사용 가능: ${hint})`;
         }
     } catch (err) {
         logger.warn(`로컬 모델 검증 스킵 (LLM 서버 무응답): ${err instanceof Error ? err.message : String(err)}`);
