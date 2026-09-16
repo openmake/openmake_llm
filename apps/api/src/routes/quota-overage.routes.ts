@@ -13,7 +13,7 @@ import { asyncHandler } from '../utils/error-handler';
 import { success, badRequest, notFound } from '../utils/api-response';
 import { validate } from '../middlewares/validation';
 import { getPool } from '../data/models/unified-database';
-import { QuotaGrantRepository, type QuotaWindow } from '../data/repositories/quota-grant-repository';
+import { QuotaGrantRepository } from '../data/repositories/quota-grant-repository';
 import { currentBucket } from '../llm/user-quota';
 import { clearQuotaGrantCache, ensureOverageRequest } from '../services/cost/quota-grants';
 import { getAuditService } from '../services/AuditService';
