@@ -468,7 +468,9 @@
     },
     "verification": {
       "title": "Issues found by verification"
-    }
+    },
+    "branchHere": "Branch from here",
+    "branchFailed": "Branch failed: {error}"
   },
   "compare": {
     "title": "Model comparison",

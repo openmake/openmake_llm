@@ -4,10 +4,12 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown, Wrench, Pencil, AlertTriangle, Languages, Copy, Check, RefreshCw, Columns2, Workflow, Circle } from "lucide-react";
+import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown, Wrench, Pencil, AlertTriangle, Languages, Copy, Check, RefreshCw, Columns2, Workflow, Circle, GitBranch } from "lucide-react";
 import { ThinkingTimeline } from "@/components/chat/thinking-timeline";
 import { SteeringInput } from "@/components/chat/steering-input";
 import { DiffView } from "@/components/chat/diff-view";
+import { loadSessionIntoStore } from "@/lib/session-loader";
+import { appendAnonSessionId } from "@/lib/anon-session";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "@/lib/store";
 import { ApiClient } from "@/lib/api-client";
 import { LiveSubagentPanel } from "@/components/agent-tasks/subagent-panel";
@@ -528,10 +530,13 @@ function MessageActions({
   content,
   canRegenerate,
   onRegenerate,
+  onBranch,
 }: {
   content: string;
   canRegenerate: boolean;
   onRegenerate: () => void;
+  /** "여기서 분기"(F08 PR-6) — 히스토리에서 불러온 메시지(dbId)에서만 제공 */
+  onBranch?: () => void;
 }) {
   const t = useTranslations("chat");
   const [copied, setCopied] = useState(false);
@@ -557,6 +562,17 @@ function MessageActions({
       >
         {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
+      {onBranch && (
+        <button
+          type="button"
+          aria-label={t("branchHere")}
+          title={t("branchHere")}
+          onClick={onBranch}
+          className="rounded-md p-1 text-muted transition hover:bg-surface-2 hover:text-fg"
+        >
+          <GitBranch className="h-3.5 w-3.5" />
+        </button>
+      )}
       {canRegenerate && (
         <button
           type="button"
@@ -701,6 +717,18 @@ export function MessageList() {
       break;
     }
   }
+  // 여기서 분기(F08 PR-6) — 이 메시지까지 복사한 새 세션을 만들고 그 세션으로 전환한다(원본은 그대로).
+  const branchHere = async (dbId: string) => {
+    const sid = useAppStore.getState().currentSessionId;
+    if (!sid) return;
+    try {
+      const r = await ApiClient.post<{ data?: { session?: { id: string } } }>(appendAnonSessionId(`/api/chat/sessions/${sid}/clone`), { uptoMessageId: Number(dbId) });
+      const newId = r?.data?.session?.id;
+      if (newId) await loadSessionIntoStore(newId);
+    } catch (err) {
+      alert(t("branchFailed", { error: err instanceof Error ? err.message : "" }));
+    }
+  };
   // 직전 사용자 질문 지점부터 히스토리를 되감고 재전송 요청(처리는 Composer).
   const regenerate = () => {
     if (regenSourceIndex < 0 || useAppStore.getState().isGenerating) return;
@@ -837,6 +865,7 @@ export function MessageList() {
                     content={m.content.replace(new RegExp(ARTIFACT_PLACEHOLDER), "").trim()}
                     canRegenerate={i === lastAssistantIndex && regenSourceIndex >= 0 && !isGenerating}
                     onRegenerate={regenerate}
+                    onBranch={m.dbId && !isGenerating ? () => void branchHere(m.dbId!) : undefined}
                   />
                   {m.id && <FeedbackButtons messageId={m.id} />}
                 </div>

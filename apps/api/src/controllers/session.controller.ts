@@ -9,7 +9,7 @@ import { Request, Response, Router } from 'express';
 import { getConversationDB, ConversationSession } from '../data/conversation-db';
 import { optionalAuth, requireAuth } from '../auth';
 import { createLogger } from '../utils/logger';
-import { success, unauthorized, badRequest, forbidden } from '../utils/api-response';
+import { success, unauthorized, badRequest, forbidden, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { historySummaryCache } from '../services/chat-service/history-summary-cache';
 import { isAdminRole } from '../data/user-manager';
@@ -290,6 +290,30 @@ class SessionController {
                   model, tokensUsed, responseTime
               });
               res.json(success({ message }));
+          }));
+
+         // 세션 복제(F08 PR-6) — 부모 메시지를 uptoMessageId 까지 복사한 새 세션. 소유권은 요청자(로그인이면 user, 아니면 익명).
+         this.router.post('/:sessionId/clone', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
+              const { sessionId } = req.params;
+              const session = await conversationDb.getSession(sessionId);
+              if (!hasSessionAccess(session, req)) { res.status(403).json(forbidden('권한이 없습니다')); return; }
+              const body = (req.body ?? {}) as { uptoMessageId?: unknown; title?: unknown; anonSessionId?: unknown };
+              const upto = body.uptoMessageId == null ? null : Number(body.uptoMessageId);
+              if (upto !== null && (!Number.isInteger(upto) || upto < 1)) { res.status(400).json(badRequest('uptoMessageId 는 양의 정수여야 합니다')); return; }
+              const userId = req.user?.id ? String(req.user.id) : undefined;
+              const anonId = userId ? undefined : (typeof body.anonSessionId === 'string' ? body.anonSessionId : session?.anonSessionId);
+              const cloned = await conversationDb.cloneSession(sessionId, { uptoMessageId: upto, title: typeof body.title === 'string' ? body.title : null, userId, anonSessionId: anonId });
+              if (!cloned) { res.status(404).json(notFound('세션을 찾을 수 없습니다')); return; }
+              log.info(`[Chat Sessions] 복제: ${sessionId} → ${cloned.id} (${cloned.copied}개, upto=${upto ?? 'all'})`);
+              res.status(201).json(success({ session: { id: cloned.id, title: cloned.title, parentSessionId: sessionId, parentMessageId: upto }, copied: cloned.copied }));
+          }));
+
+         // 세션 트리(F08 PR-6) — 조상 체인 + 직계 자식
+         this.router.get('/:sessionId/tree', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
+              const { sessionId } = req.params;
+              const session = await conversationDb.getSession(sessionId);
+              if (!hasSessionAccess(session, req)) { res.status(403).json(forbidden('권한이 없습니다')); return; }
+              res.json(success({ self: { id: sessionId, title: session?.title ?? '' }, ...(await conversationDb.getSessionTree(sessionId)) }));
           }));
 
          // 세션 제목 업데이트

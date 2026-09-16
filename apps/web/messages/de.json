@@ -468,7 +468,9 @@
     },
     "verification": {
       "title": "Von der Prüfung gefundene Probleme"
-    }
+    },
+    "branchHere": "Ab hier verzweigen",
+    "branchFailed": "Verzweigen fehlgeschlagen: {error}"
   },
   "compare": {
     "title": "Modellvergleich",

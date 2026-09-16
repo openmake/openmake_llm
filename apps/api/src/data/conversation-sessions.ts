@@ -13,7 +13,7 @@ import { getPool } from './models/unified-database';
 import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
 import { isPersistableUserId } from '../utils/user-id-validation';
-import { withRetry } from './retry-wrapper';
+import { withRetry, withTransaction } from './retry-wrapper';
 import {
     ConversationSession,
     SessionRow,
@@ -23,7 +23,7 @@ import {
     rowToSession
 } from './conversation-types';
 import { loadMessagesForSessions } from './conversation-messages';
-import { CONVERSATION_LIMITS } from '../config/runtime-limits';
+import { CONVERSATION_LIMITS, SESSION_BRANCH } from '../config/runtime-limits';
 
 const logger = createLogger('ConversationSessions');
 
@@ -419,4 +419,61 @@ export async function cleanupOldSessions(days: number): Promise<number> {
         logger.info(`[ConversationSessions] Cleaned ${count} old sessions (${days} days)`);
     }
     return count;
+}
+
+/** PURE: 복제 세션 metadata (140·F08 PR-6). WS branchFrom* 의 parentSessionId/parentMessageId/forkedAt 규격과 같고 kind 만 다르다. */
+export function buildCloneMetadata(parentSessionId: string, parentMessageId: string | null, now: Date = new Date()): Record<string, unknown> {
+    return { parentSessionId, ...(parentMessageId ? { parentMessageId } : {}), forkedAt: now.toISOString(), kind: 'clone' };
+}
+
+/**
+ * 세션 복제(F08 PR-6) — 부모 메시지(선택: uptoMessageId 까지)를 새 세션으로 복사한다. 단일 트랜잭션.
+ * client_message_id 는 복사하지 않는다(140 유니크는 세션 단위라 충돌은 없지만 멱등 키는 원 요청에만 의미가 있다).
+ */
+export async function cloneSession(
+    srcId: string,
+    opts: { uptoMessageId?: number | null; title?: string | null; userId?: string; anonSessionId?: string },
+): Promise<{ id: string; copied: number; title: string } | null> {
+    const pool = getPool();
+    const src = await pool.query<{ title: string }>('SELECT title FROM conversation_sessions WHERE id = $1', [srcId]);
+    if (!src.rows[0]) return null;
+    const id = uuidv4();
+    const title = (opts.title && opts.title.trim()) || `${src.rows[0].title} (분기)`;
+    const now = new Date();
+    const copied = await withRetry(() => withTransaction(pool, async (client) => {
+        await client.query(
+            `INSERT INTO conversation_sessions (id, user_id, anon_session_id, title, created_at, updated_at, metadata)
+             VALUES ($1, $2, $3, $4, $5, $5, $6)`,
+            [id, opts.userId || null, opts.anonSessionId || null, title, now.toISOString(), JSON.stringify(buildCloneMetadata(srcId, opts.uptoMessageId ? String(opts.uptoMessageId) : null, now))],
+        );
+        const r = await client.query(
+            `INSERT INTO conversation_messages (session_id, role, content, model, agent_id, thinking, tokens, response_time_ms, created_at, reasoning_summary)
+             SELECT $1, role, content, model, agent_id, thinking, tokens, response_time_ms, created_at, reasoning_summary
+             FROM (SELECT * FROM conversation_messages WHERE session_id = $2 AND ($3::int IS NULL OR id <= $3::int) ORDER BY created_at ASC, id ASC LIMIT $4) m`,
+            [id, srcId, opts.uptoMessageId ?? null, SESSION_BRANCH.CLONE_MAX_MESSAGES],
+        );
+        return r.rowCount ?? 0;
+    }), { operation: 'cloneSession' });
+    return { id, copied, title };
+}
+
+/** 세션 트리(F08 PR-6) — 조상 체인(가까운 순, 최대 TREE_MAX_DEPTH)과 직계 자식. metadata.parentSessionId 표현식 인덱스(140) 사용. */
+export async function getSessionTree(id: string): Promise<{ ancestors: Array<{ id: string; title: string; parentMessageId: string | null }>; children: Array<{ id: string; title: string; createdAt: string }> }> {
+    const pool = getPool();
+    const anc = await pool.query<{ id: string; title: string; parent_message_id: string | null }>(
+        `WITH RECURSIVE up AS (
+             SELECT s.id, s.title, s.metadata, 0 AS depth FROM conversation_sessions s WHERE s.id = $1
+             UNION ALL
+             SELECT p.id, p.title, p.metadata, up.depth + 1 FROM up JOIN conversation_sessions p ON p.id = up.metadata->>'parentSessionId'
+             WHERE up.depth < $2
+         )
+         SELECT id, title, metadata->>'parentMessageId' AS parent_message_id FROM up WHERE depth > 0 ORDER BY depth ASC`,
+        [id, SESSION_BRANCH.TREE_MAX_DEPTH],
+    );
+    const kids = await pool.query<{ id: string; title: string; created_at: string }>(
+        `SELECT id, title, created_at FROM conversation_sessions WHERE metadata->>'parentSessionId' = $1 ORDER BY created_at DESC LIMIT 100`, [id]);
+    return {
+        ancestors: anc.rows.map((r) => ({ id: r.id, title: r.title, parentMessageId: r.parent_message_id })),
+        children: kids.rows.map((r) => ({ id: r.id, title: r.title, createdAt: r.created_at })),
+    };
 }

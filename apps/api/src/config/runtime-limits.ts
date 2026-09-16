@@ -2138,3 +2138,9 @@ export const IDEMPOTENCY = {
     TTL_MS: parseInt(process.env.IDEMPOTENCY_TTL_MS || String(10 * 60 * 1000), 10),
     MAX_PER_OWNER: parseInt(process.env.IDEMPOTENCY_MAX_PER_OWNER || '200', 10),
 } as const;
+
+/** 세션 복제·트리(F08 PR-6) — 복제 메시지 상한·조상 탐색 깊이. SESSION_CLONE_MAX_MESSAGES / SESSION_TREE_MAX_DEPTH */
+export const SESSION_BRANCH = {
+    CLONE_MAX_MESSAGES: parseInt(process.env.SESSION_CLONE_MAX_MESSAGES || '500', 10),
+    TREE_MAX_DEPTH: parseInt(process.env.SESSION_TREE_MAX_DEPTH || '20', 10),
+} as const;

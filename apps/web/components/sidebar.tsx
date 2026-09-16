@@ -140,7 +140,7 @@ export function Sidebar() {
     useAppStore.getState().setNotebookContext(null);
     try {
       const res = await ApiClient.get<
-        ApiSuccess<{ messages?: Array<{ role: string; content: string; images?: string[]; thinking?: string; reasoningSummary?: string }> }>
+        ApiSuccess<{ messages?: Array<{ id?: string | number; role: string; content: string; images?: string[]; thinking?: string; reasoningSummary?: string }> }>
       >(appendAnonSessionId(`/api/chat/sessions/${sid}/messages`));
       const msgs = res?.data?.messages ?? [];
       setChatHistory(() =>
@@ -153,6 +153,7 @@ export function Sidebar() {
             // 영속화된 생각 과정 — 재열람 시 타임라인 표시 (접힘 상태)
             reasoning: m.thinking || undefined,
             reasoningSummary: m.reasoningSummary || undefined,
+            dbId: m.id !== undefined ? String(m.id) : undefined,
           })),
       );
     } catch {

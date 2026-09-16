@@ -72,6 +72,8 @@ class ConversationDB {
     getUserSessions = sessions.getUserSessions;
     updateSessionTitle = sessions.updateSessionTitle;
     updateSessionTitleIfVersion = sessions.updateSessionTitleIfVersion;
+    cloneSession = sessions.cloneSession;
+    getSessionTree = sessions.getSessionTree;
     deleteSession = sessions.deleteSession;
     deleteAllSessionsByUserId = sessions.deleteAllSessionsByUserId;
     claimAnonymousSessions = sessions.claimAnonymousSessions;

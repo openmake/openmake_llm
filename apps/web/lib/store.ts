@@ -13,6 +13,8 @@ import type {
 interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" | "images"> {
   /** 서버 messageId (WS done 이벤트) — 메시지 피드백(👍/👎) 전송용 (assistant 메시지). */
   id?: string;
+  /** 히스토리에서 불러온 DB 메시지 id — "여기서 분기"(clone uptoMessageId) 기준점. 스트리밍 중 메시지엔 없다. */
+  dbId?: string;
   /** 스트리밍 진행 중 여부 (assistant 메시지) */
   streaming?: boolean;
   /** 에이전트 작업 메시지 — agent_task_progress 로 라이브 업데이트되는 메시지 식별자 */

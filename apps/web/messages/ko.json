@@ -468,7 +468,9 @@
     },
     "verification": {
       "title": "검증에서 지적된 사항"
-    }
+    },
+    "branchHere": "여기서 분기",
+    "branchFailed": "분기 실패: {error}"
   },
   "compare": {
     "title": "모델 비교",

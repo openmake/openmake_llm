@@ -468,7 +468,9 @@
     },
     "verification": {
       "title": "验证发现的问题"
-    }
+    },
+    "branchHere": "从此处分支",
+    "branchFailed": "分支失败：{error}"
   },
   "compare": {
     "title": "模型对比",
