@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE, isLocale, toBcp47 } from "@/i18n/config";
 import { ModelPicker } from "@/components/model-picker";
 import { MemorySection } from "@/components/settings/memory-section";
+import { OrganizationSection } from "@/components/settings/organization-section";
 import { ConnectorsSection } from "@/components/settings/connectors-section";
 import { ProviderKeysSection } from "@/components/settings/provider-keys-section";
 import { ModelRolesSection } from "@/components/settings/model-roles-section";
@@ -590,6 +591,7 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
             )}
+            {tab === "general" && <OrganizationSection />}
 
             {tab === "model" && (
               <>

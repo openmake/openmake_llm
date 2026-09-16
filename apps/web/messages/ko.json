@@ -181,7 +181,17 @@
       "regrant": "재동의",
       "granting": "동의 중…"
     },
-    "guestModelNotice": "게스트는 기본 모델만 사용할 수 있습니다. Ollama·OpenRouter 등 외부 모델은 로그인(가입) 후 이용할 수 있습니다."
+    "guestModelNotice": "게스트는 기본 모델만 사용할 수 있습니다. Ollama·OpenRouter 등 외부 모델은 로그인(가입) 후 이용할 수 있습니다.",
+    "organization": {
+      "title": "조직",
+      "description": "조직을 선택하면 그 조직에 공유된 에이전트·템플릿을 사용할 수 있습니다.",
+      "personal": "개인(조직 없음)",
+      "saved": "활성 조직을 변경했습니다",
+      "failed": "활성 조직 변경 실패: {error}",
+      "roleOwner": "소유자",
+      "roleAdmin": "관리자",
+      "roleMember": "멤버"
+    }
   },
   "apiAccess": {
     "title": "API 액세스",
@@ -820,7 +830,11 @@
       "started": "템플릿으로 작업을 시작했습니다.",
       "expand": "전체 보기",
       "collapse": "접기",
-      "lineCount": "{lines}줄 · {chars}자"
+      "lineCount": "{lines}줄 · {chars}자",
+      "shareOrg": "조직에 공유",
+      "unshareOrg": "조직 공유 해제",
+      "orgBadge": "조직",
+      "sharedByOther": "공유됨"
     },
     "downloadFailed": "다운로드 실패: {error}",
     "localBadge": "로컬 폴더 실행",
@@ -952,7 +966,12 @@
     "unshare": "공유 해제",
     "shareAria": "에이전트를 워크스페이스에 공유",
     "unshareAria": "에이전트 공유 해제",
-    "shareFailed": "공유 변경 실패: {error}"
+    "shareFailed": "공유 변경 실패: {error}",
+    "visibilityPrivate": "비공개",
+    "visibilityShared": "워크스페이스 공유",
+    "visibilityOrganization": "조직 공유",
+    "orgBadge": "조직",
+    "visibilityAria": "에이전트 공개 범위"
   },
   "research": {
     "pageTitle": "딥 리서치 히스토리",

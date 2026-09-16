@@ -181,7 +181,17 @@
       "regrant": "Re-consent",
       "granting": "Granting…"
     },
-    "guestModelNotice": "Guests can use the default model only. External models such as Ollama and OpenRouter are available after signing in (registering)."
+    "guestModelNotice": "Guests can use the default model only. External models such as Ollama and OpenRouter are available after signing in (registering).",
+    "organization": {
+      "title": "Organization",
+      "description": "Select an organization to use agents and templates shared with it.",
+      "personal": "Personal (no organization)",
+      "saved": "Active organization updated",
+      "failed": "Failed to change organization: {error}",
+      "roleOwner": "Owner",
+      "roleAdmin": "Admin",
+      "roleMember": "Member"
+    }
   },
   "apiAccess": {
     "title": "API Access",
@@ -820,7 +830,11 @@
       "started": "Task started from template.",
       "expand": "Show all",
       "collapse": "Collapse",
-      "lineCount": "{lines} lines · {chars} chars"
+      "lineCount": "{lines} lines · {chars} chars",
+      "shareOrg": "Share with organization",
+      "unshareOrg": "Stop sharing with organization",
+      "orgBadge": "Org",
+      "sharedByOther": "Shared"
     },
     "downloadFailed": "Download failed: {error}",
     "localBadge": "Local folder run",
@@ -952,7 +966,12 @@
     "unshare": "Unshare",
     "shareAria": "Share agent to workspace",
     "unshareAria": "Unshare agent",
-    "shareFailed": "Failed to change sharing: {error}"
+    "shareFailed": "Failed to change sharing: {error}",
+    "visibilityPrivate": "Private",
+    "visibilityShared": "Workspace",
+    "visibilityOrganization": "Organization",
+    "orgBadge": "Org",
+    "visibilityAria": "Agent visibility"
   },
   "research": {
     "pageTitle": "Deep Research History",

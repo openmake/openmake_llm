@@ -181,7 +181,17 @@
       "regrant": "再同意",
       "granting": "同意中…"
     },
-    "guestModelNotice": "ゲストは既定のモデルのみ利用できます。Ollama・OpenRouter などの外部モデルはログイン(登録)後に利用できます。"
+    "guestModelNotice": "ゲストは既定のモデルのみ利用できます。Ollama・OpenRouter などの外部モデルはログイン(登録)後に利用できます。",
+    "organization": {
+      "title": "組織",
+      "description": "組織を選ぶと、その組織に共有されたエージェントやテンプレートを使えます。",
+      "personal": "個人（組織なし）",
+      "saved": "アクティブな組織を変更しました",
+      "failed": "組織の変更に失敗: {error}",
+      "roleOwner": "オーナー",
+      "roleAdmin": "管理者",
+      "roleMember": "メンバー"
+    }
   },
   "apiAccess": {
     "title": "API アクセス",
@@ -820,7 +830,11 @@
       "started": "テンプレートからタスクを開始しました。",
       "expand": "全体を表示",
       "collapse": "折りたたむ",
-      "lineCount": "{lines}行 · {chars}文字"
+      "lineCount": "{lines}行 · {chars}文字",
+      "shareOrg": "組織に共有",
+      "unshareOrg": "組織共有を解除",
+      "orgBadge": "組織",
+      "sharedByOther": "共有"
     },
     "downloadFailed": "ダウンロードに失敗しました: {error}",
     "localBadge": "ローカルフォルダ実行",
@@ -952,7 +966,12 @@
     "unshare": "共有を解除",
     "shareAria": "エージェントをワークスペースに共有",
     "unshareAria": "エージェントの共有を解除",
-    "shareFailed": "共有の変更に失敗しました: {error}"
+    "shareFailed": "共有の変更に失敗しました: {error}",
+    "visibilityPrivate": "非公開",
+    "visibilityShared": "ワークスペース共有",
+    "visibilityOrganization": "組織共有",
+    "orgBadge": "組織",
+    "visibilityAria": "エージェントの公開範囲"
   },
   "research": {
     "pageTitle": "ディープリサーチ履歴",

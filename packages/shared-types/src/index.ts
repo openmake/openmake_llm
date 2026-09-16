@@ -268,6 +268,26 @@ export type WsServerEvent =
 export interface SessionsPayload {
   sessions: ConversationSession[];
 }
+/** 조직 역할 (127) */
+export type OrgRole = "owner" | "admin" | "member";
+
+/** 사용자 관점 조직 멤버십 — GET /api/users/me/organizations (F22 Phase A) */
+export interface OrgMembership {
+  orgId: string;
+  name: string;
+  slug: string;
+  role: OrgRole;
+  monthlyTokenBudget: number | null;
+}
+
+/** 활성 조직 컨텍스트 — /api/auth/me 의 activeOrganization (null = 개인) */
+export interface ActiveOrganization {
+  orgId: string;
+  orgRole: OrgRole;
+}
+
 export interface MePayload {
   user: User;
+  /** F22 Phase A: 활성 조직(없으면 null). 구 서버는 필드 자체가 없다. */
+  activeOrganization?: ActiveOrganization | null;
 }

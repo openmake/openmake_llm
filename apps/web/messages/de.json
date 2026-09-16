@@ -181,7 +181,17 @@
       "regrant": "Erneut einwilligen",
       "granting": "Wird erteilt …"
     },
-    "guestModelNotice": "Gäste können nur das Standardmodell nutzen. Externe Modelle wie Ollama und OpenRouter sind nach der Anmeldung (Registrierung) verfügbar."
+    "guestModelNotice": "Gäste können nur das Standardmodell nutzen. Externe Modelle wie Ollama und OpenRouter sind nach der Anmeldung (Registrierung) verfügbar.",
+    "organization": {
+      "title": "Organisation",
+      "description": "Wähle eine Organisation, um die mit ihr geteilten Agenten und Vorlagen zu nutzen.",
+      "personal": "Persönlich (keine Organisation)",
+      "saved": "Aktive Organisation geändert",
+      "failed": "Organisation konnte nicht geändert werden: {error}",
+      "roleOwner": "Inhaber",
+      "roleAdmin": "Admin",
+      "roleMember": "Mitglied"
+    }
   },
   "apiAccess": {
     "title": "API-Zugriff",
@@ -820,7 +830,11 @@
       "started": "Aufgabe aus Vorlage gestartet.",
       "expand": "Alle anzeigen",
       "collapse": "Einklappen",
-      "lineCount": "{lines} Zeilen · {chars} Zeichen"
+      "lineCount": "{lines} Zeilen · {chars} Zeichen",
+      "shareOrg": "Mit Organisation teilen",
+      "unshareOrg": "Teilen mit Organisation beenden",
+      "orgBadge": "Org",
+      "sharedByOther": "Geteilt"
     },
     "downloadFailed": "Download fehlgeschlagen: {error}",
     "localBadge": "Lauf im lokalen Ordner",
@@ -952,7 +966,12 @@
     "unshare": "Teilen aufheben",
     "shareAria": "Agent in Arbeitsbereich teilen",
     "unshareAria": "Teilen des Agenten aufheben",
-    "shareFailed": "Freigabe konnte nicht geändert werden: {error}"
+    "shareFailed": "Freigabe konnte nicht geändert werden: {error}",
+    "visibilityPrivate": "Privat",
+    "visibilityShared": "Arbeitsbereich",
+    "visibilityOrganization": "Organisation",
+    "orgBadge": "Org",
+    "visibilityAria": "Sichtbarkeit des Agenten"
   },
   "research": {
     "pageTitle": "Deep-Research-Verlauf",

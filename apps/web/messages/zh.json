@@ -181,7 +181,17 @@
       "regrant": "重新同意",
       "granting": "同意中…"
     },
-    "guestModelNotice": "访客只能使用默认模型。Ollama、OpenRouter 等外部模型需登录（注册）后才能使用。"
+    "guestModelNotice": "访客只能使用默认模型。Ollama、OpenRouter 等外部模型需登录（注册）后才能使用。",
+    "organization": {
+      "title": "组织",
+      "description": "选择组织后，可使用共享给该组织的智能体和模板。",
+      "personal": "个人（无组织）",
+      "saved": "已切换活动组织",
+      "failed": "切换组织失败：{error}",
+      "roleOwner": "所有者",
+      "roleAdmin": "管理员",
+      "roleMember": "成员"
+    }
   },
   "apiAccess": {
     "title": "API 访问",
@@ -820,7 +830,11 @@
       "started": "已从模板启动任务。",
       "expand": "显示全部",
       "collapse": "收起",
-      "lineCount": "{lines} 行 · {chars} 字"
+      "lineCount": "{lines} 行 · {chars} 字",
+      "shareOrg": "共享给组织",
+      "unshareOrg": "取消组织共享",
+      "orgBadge": "组织",
+      "sharedByOther": "已共享"
     },
     "downloadFailed": "下载失败: {error}",
     "localBadge": "本地文件夹执行",
@@ -952,7 +966,12 @@
     "unshare": "取消共享",
     "shareAria": "将助手共享到工作区",
     "unshareAria": "取消共享助手",
-    "shareFailed": "更改共享失败：{error}"
+    "shareFailed": "更改共享失败：{error}",
+    "visibilityPrivate": "私有",
+    "visibilityShared": "工作区共享",
+    "visibilityOrganization": "组织共享",
+    "orgBadge": "组织",
+    "visibilityAria": "智能体可见范围"
   },
   "research": {
     "pageTitle": "深度研究历史",
