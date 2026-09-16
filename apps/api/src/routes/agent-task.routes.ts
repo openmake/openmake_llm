@@ -54,6 +54,7 @@ import { claimUploadsAsInputFiles, ChunkStoreError } from '../services/agent-tas
 import { resolveDefaultMaxTurns } from '../services/agent-task/task-inputs';
 import { auditLocalTaskCreate, filterTaskList, loadOwnedTask, toPublicTask, validateLocalExecutorInput } from './agent-task.helpers';
 import { approvalsRouter } from './agent-task-approvals.routes';
+import { forkRouter } from './agent-task-fork.routes';
 import { getPlanEditRegistry } from '../services/agent-task/plan-edits';
 import { TaskPlan, type PlanStepInput } from '../services/task-sandbox/planning';
 import { getPool } from '../data/models/unified-database';
@@ -566,5 +567,7 @@ router.put('/:taskId/plan', validate(updatePlanSchema), asyncHandler(async (req:
 
 // 승인(HITL) 라우트는 agent-task-approvals.routes.ts (600줄 게이트로 분리, 2026-09-17) — 라우트 순서(answer → :decision)는 그 파일이 지킨다.
 router.use(approvalsRouter);
+// 체크포인트 이력·분기(141)는 agent-task-fork.routes.ts
+router.use(forkRouter);
 
 export default router;

@@ -919,6 +919,14 @@
       "cancel": "Abbrechen",
       "conflict": "Der Plan wurde anderswo geändert. Neu laden und erneut bearbeiten.",
       "failed": "Speichern fehlgeschlagen."
+    },
+    "fork": {
+      "title": "Vom Checkpoint verzweigen",
+      "pick": "Runde wählen",
+      "turnOption": "Runde {turn} ({messages} Nachrichten)",
+      "go": "Verzweigen & starten",
+      "hint": "Führt alles nach der gewählten Runde als neue Aufgabe erneut aus (neuer Arbeitsordner).",
+      "failed": "Verzweigen fehlgeschlagen: {error}"
     }
   },
   "customAgents": {

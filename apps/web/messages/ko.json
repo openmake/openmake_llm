@@ -919,6 +919,14 @@
       "cancel": "취소",
       "conflict": "다른 곳에서 계획이 바뀌었습니다. 다시 불러온 뒤 편집하세요.",
       "failed": "저장에 실패했습니다."
+    },
+    "fork": {
+      "title": "체크포인트에서 분기",
+      "pick": "턴 선택",
+      "turnOption": "턴 {turn} ({messages}개 메시지)",
+      "go": "분기 실행",
+      "hint": "선택한 턴 이후를 새 작업으로 다시 진행합니다(작업 폴더는 새로 시작).",
+      "failed": "분기 실패: {error}"
     }
   },
   "customAgents": {

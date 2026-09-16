@@ -168,6 +168,37 @@ export class AgentTaskRepository extends BaseRepository {
         if (prev !== updates.status) await this.recordEvent(taskId, prev, updates.status, updates.transitionReason ?? updates.error ?? undefined);
     }
 
+    /** 턴 체크포인트 이력(141) 1행 + 초과분 정리 — fail-open 은 호출부. */
+    async insertCheckpointHistory(taskId: string, turn: number, conversation: unknown[], plan: unknown | null, keep: number): Promise<void> {
+        await this.query(
+            `INSERT INTO agent_task_checkpoints (task_id, turn, conversation, plan) VALUES ($1, $2, $3::jsonb, $4::jsonb)
+             ON CONFLICT (task_id, turn) DO UPDATE SET conversation = EXCLUDED.conversation, plan = EXCLUDED.plan, created_at = NOW()`,
+            [taskId, turn, JSON.stringify(conversation), plan == null ? null : JSON.stringify(plan)],
+        );
+        await this.query(
+            `DELETE FROM agent_task_checkpoints WHERE task_id = $1 AND id NOT IN (
+                 SELECT id FROM agent_task_checkpoints WHERE task_id = $1 ORDER BY turn DESC LIMIT $2)`,
+            [taskId, keep],
+        );
+    }
+
+    async listCheckpoints(taskId: string): Promise<Array<{ turn: number; messages: number; created_at: string }>> {
+        const r = await this.query<{ turn: number; messages: string; created_at: string }>(
+            `SELECT turn, jsonb_array_length(conversation)::text AS messages, created_at FROM agent_task_checkpoints WHERE task_id = $1 ORDER BY turn ASC`, [taskId]);
+        return r.rows.map((x) => ({ turn: x.turn, messages: Number(x.messages), created_at: x.created_at }));
+    }
+
+    async getCheckpoint(taskId: string, turn: number): Promise<{ conversation: unknown[]; plan: unknown | null } | null> {
+        const r = await this.query<{ conversation: unknown[]; plan: unknown | null }>(
+            'SELECT conversation, plan FROM agent_task_checkpoints WHERE task_id = $1 AND turn = $2', [taskId, turn]);
+        return r.rows[0] ?? null;
+    }
+
+    /** fork 표시(141) — 새 작업에 원 작업·턴을 기록. */
+    async markForked(taskId: string, fromTaskId: string, fromTurn: number): Promise<void> {
+        await this.query('UPDATE agent_tasks SET forked_from_task_id = $2, forked_from_turn = $3 WHERE id = $1', [taskId, fromTaskId, fromTurn]);
+    }
+
     /** 사용자 계획 편집(139) — expectedVersion 이 현재와 같을 때만 갱신. 반환 ok=false 면 현재 버전. */
     async updatePlanIfVersion(taskId: string, plan: unknown[], expectedVersion: number): Promise<{ ok: boolean; version: number }> {
         const r = await this.query<{ plan_version: number }>(

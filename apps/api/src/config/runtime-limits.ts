@@ -1487,6 +1487,8 @@ export const ROUTE_INTENT_PATTERNS: readonly RegExp[] = [
  * 백그라운드 detached 실행이라 사람이 지켜보지 않으므로 토큰/시간 폭주 방지가 필수.
  */
 export const AGENT_TASK_LIMITS = {
+    /** 작업당 유지하는 턴 체크포인트 이력 수(141). AGENT_TASK_CHECKPOINT_KEEP */
+    CHECKPOINT_KEEP: parseInt(process.env.AGENT_TASK_CHECKPOINT_KEEP || '20', 10),
     /** 실행 중 계획 편집 다음 턴 반영(139). AGENT_TASK_PLAN_EDIT_ENABLED */
     PLAN_EDIT_ENABLED: process.env.AGENT_TASK_PLAN_EDIT_ENABLED !== 'false',
     /** 작업 생성 요청 body 상한(bytes) — /api/agent-tasks 의 express.json 파서와 validate

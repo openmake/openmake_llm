@@ -919,6 +919,14 @@
       "cancel": "取消",
       "conflict": "计划已在别处更改，请重新加载后再编辑。",
       "failed": "保存失败。"
+    },
+    "fork": {
+      "title": "从检查点分支",
+      "pick": "选择回合",
+      "turnOption": "回合 {turn}（{messages} 条消息）",
+      "go": "分支并运行",
+      "hint": "以新任务重新执行所选回合之后的内容（工作目录重新开始）。",
+      "failed": "分支失败：{error}"
     }
   },
   "customAgents": {

@@ -919,6 +919,14 @@
       "cancel": "Cancel",
       "conflict": "The plan changed elsewhere. Reload and edit again.",
       "failed": "Failed to save."
+    },
+    "fork": {
+      "title": "Fork from checkpoint",
+      "pick": "Pick a turn",
+      "turnOption": "Turn {turn} ({messages} messages)",
+      "go": "Fork & run",
+      "hint": "Re-runs everything after the chosen turn as a new task (fresh workspace).",
+      "failed": "Fork failed: {error}"
     }
   },
   "customAgents": {

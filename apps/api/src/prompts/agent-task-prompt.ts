@@ -361,3 +361,6 @@ export function getAgentTaskVerifyFailedNudge(report: string): string {
         '오류 설명이 아니라 수정된 코드 자체를 작성해야 합니다.',
     ].join('\n');
 }
+
+/** 체크포인트 분기(141) — 워크스페이스는 복원되지 않는다는 안내(대화 끝 system). */
+export const FORK_WORKSPACE_NOTICE = '[분기 안내] 이 작업은 이전 작업의 체크포인트에서 갈라져 나왔습니다. 작업 디렉토리는 새로 시작하므로 이전 턴에서 만든 파일은 없을 수 있습니다 — 필요한 파일은 다시 만들거나 확인한 뒤 진행하세요.';
