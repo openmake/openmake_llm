@@ -218,7 +218,8 @@ async function resolveTaskExecution(
             const { UserAgentRepository } = await import('../../data/repositories/user-agent-repository');
             const { getPool } = await import('../../data/models/unified-database');
             // 소유 OR 워크스페이스 공유 에이전트를 서브에이전트 페르소나로 사용 허용 (loadUserAgent 와 대칭)
-            const agent = await new UserAgentRepository(getPool()).getByIdVisibleToUser(task.agentId, userId);
+            const { activeOrgFor } = await import('../org/membership-cache');
+            const agent = await new UserAgentRepository(getPool()).getByIdVisibleToUser(task.agentId, userId, (await activeOrgFor(userId))?.orgId ?? null);
             if (agent) {
                 let client = parentClient;
                 let modelNote: string | undefined;

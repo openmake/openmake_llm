@@ -27,7 +27,7 @@ interface CustomAgent {
   model: string | null;
   source: "git" | "custom";
   /** 'private'(소유자 전용) | 'shared'(워크스페이스 공유) */
-  visibility: "private" | "shared";
+  visibility: "private" | "shared" | "organization";
   /** 본인 소유 여부 — false 면 다른 사용자가 공유한 에이전트(편집/삭제 불가, 사용만). */
   owned: boolean;
 }
@@ -39,7 +39,7 @@ interface ApiUserAgent {
   system_prompt: string;
   icon: string | null;
   model: string | null;
-  visibility?: "private" | "shared";
+  visibility?: "private" | "shared" | "organization";
   owned?: boolean;
 }
 
@@ -354,6 +354,7 @@ export default function CustomAgentsPage() {
   const [editingAgent, setEditingAgent] = useState<CustomAgent | null>(null);
   const router = useRouter();
   const activeUserAgent = useAppStore((s) => s.activeUserAgent);
+  const activeOrgId = useAppStore((s) => s.auth.currentUser?.activeOrgId ?? null);
   const setActiveUserAgent = useAppStore((s) => s.setActiveUserAgent);
 
   function selectAgentForChat(agent: CustomAgent) {
@@ -401,6 +402,12 @@ export default function CustomAgentsPage() {
 
   async function handleToggleVisibility(agent: CustomAgent) {
     const next = agent.visibility === "shared" ? "private" : "shared";
+    await setVisibility(agent, next);
+  }
+
+  // 조직 공유(128): 활성 조직이 있을 때만 select 로 3단 선택. organization 은 서버가 활성 조직에 귀속시킨다.
+  async function setVisibility(agent: CustomAgent, next: CustomAgent["visibility"]) {
+    if (next === agent.visibility) return;
     try {
       await ApiClient.patch(`/api/users/me/agents/${agent.id}/visibility`, { visibility: next });
       await loadAgents();
@@ -460,6 +467,12 @@ export default function CustomAgentsPage() {
                         {agent.owned ? t("sharedBadge") : t("sharedByOtherBadge")}
                       </Badge>
                     )}
+                    {agent.visibility === "organization" && (
+                      <Badge tone="accent">
+                        <Users className="h-3 w-3" />
+                        {t("orgBadge")}
+                      </Badge>
+                    )}
                     {agent.source === "git" && (
                       <Badge tone="neutral">
                         <GitBranch className="h-3 w-3" />
@@ -501,15 +514,28 @@ export default function CustomAgentsPage() {
                         <Pencil className="h-3.5 w-3.5" />
                         {t("edit")}
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        aria-label={agent.visibility === "shared" ? t("unshareAria") : t("shareAria")}
-                        title={agent.visibility === "shared" ? t("unshare") : t("share")}
-                        onClick={() => void handleToggleVisibility(agent)}
-                      >
-                        <Share2 className={`h-3.5 w-3.5 ${agent.visibility === "shared" ? "text-accent" : ""}`} />
-                      </Button>
+                      {activeOrgId ? (
+                        <select
+                          aria-label={t("visibilityAria")}
+                          value={agent.visibility}
+                          onChange={(e) => void setVisibility(agent, e.target.value as CustomAgent["visibility"])}
+                          className="h-8 rounded-md border border-line bg-bg-1 px-2 text-xs text-fg"
+                        >
+                          <option value="private">{t("visibilityPrivate")}</option>
+                          <option value="shared">{t("visibilityShared")}</option>
+                          <option value="organization">{t("visibilityOrganization")}</option>
+                        </select>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          aria-label={agent.visibility === "shared" ? t("unshareAria") : t("shareAria")}
+                          title={agent.visibility === "shared" ? t("unshare") : t("share")}
+                          onClick={() => void handleToggleVisibility(agent)}
+                        >
+                          <Share2 className={`h-3.5 w-3.5 ${agent.visibility === "shared" ? "text-accent" : ""}`} />
+                        </Button>
+                      )}
                       <Button variant="ghost" size="icon" aria-label={t("deleteAria")} onClick={() => void handleDelete(agent)}>
                         <Trash2 className="h-4 w-4 text-danger" />
                       </Button>

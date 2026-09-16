@@ -17,15 +17,15 @@
  * - POST   /api/agent-tasks/:taskId/cancel  - 실행 중 작업 취소
  * - DELETE /api/agent-tasks/:taskId         - 작업 삭제
  */
+import { resolveEffectivePolicy, strictestApprovalPolicy } from '../services/org/effective-policy';
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuthOrApiKeyScope } from '../middlewares/api-key-auth';
 import { API_KEY_SCOPES } from '../config/api-key-scopes';
-import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { validate, validateWithSecurity } from '../middlewares/validation';
-import { getUnifiedDatabase, getPool } from '../data/models/unified-database';
+import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AgentTaskRepository } from '../data/repositories/agent-task-repository';
 import { resolveSessionListScope } from '../controllers/session.controller';
 import { LOCAL_BRIDGE } from '../config/local-bridge';
@@ -53,6 +53,7 @@ import {
 import { claimUploadsAsInputFiles, ChunkStoreError } from '../services/agent-task/chunk-store';
 import { resolveDefaultMaxTurns } from '../services/agent-task/task-inputs';
 import { auditLocalTaskCreate, filterTaskList, loadOwnedTask, toPublicTask, validateLocalExecutorInput } from './agent-task.helpers';
+import { approvalsRouter } from './agent-task-approvals.routes';
 import { isAdminRole } from '../data/user-manager';
 
 const logger = createLogger('AgentTaskRoutes');
@@ -326,7 +327,9 @@ router.post('/:taskId/execute', validate(executeAgentTaskSchema), asyncHandler(a
 
     // 스킬 범위(allowedSkills, 미지정이면 전체 활성 스킬)와 승인 3모드(Manual/Auto/Skip)는
     // executeAgentTaskSchema 가 검증한다 — 잘못된 값은 여기 오기 전에 400 이다.
-    const { allowedSkills, approvalPolicy } = req.body as ExecuteAgentTaskInput;
+    const { allowedSkills, approvalPolicy: requestedPolicy } = req.body as ExecuteAgentTaskInput;
+    // 조직 승인 하한(129) — 활성 조직이 TOOL_APPROVAL_POLICY_MIN 을 두면 요청값과 비교해 더 엄격한 쪽을 쓴다.
+    const approvalPolicy = strictestApprovalPolicy(requestedPolicy, (await resolveEffectivePolicy(String(req.user!.id))).approvalPolicyMin);
 
     // 백그라운드 detached 실행 (응답은 즉시 반환). AgentTaskService 가 자체
     // AbortController 를 소유하므로 ws.close 와 무관하게 끝까지 진행한다.
@@ -530,70 +533,7 @@ router.get('/:taskId/files/download', asyncHandler(async (req: Request, res: Res
     });
 }));
 
-/**
- * POST /api/agent-tasks/:taskId/approvals/auto-approve  { enabled?: boolean }
- * task 자동승인(4-2) — 이후 이 task 의 도구 승인 요청을 즉시 approved 처리("나머지 모두 승인").
- * ask_human 은 제외(질문은 항상 사람에게). 현재 대기 중인 승인들도 즉시 해소.
- * task 종료 시 자동 해제. owner/admin 만 가능.
- */
-router.post('/:taskId/approvals/auto-approve', asyncHandler(async (req: Request, res: Response) => {
-    const task = await loadOwnedTask(req, res, req.params.taskId);
-    if (!task) return;
-    const enabled = (req.body as { enabled?: unknown })?.enabled !== false;
-    getApprovalRegistry().setAutoApprove(task.id, enabled);
-    await new AgentTaskRepository(getPool()).setAutoApprove(task.id, enabled).catch(() => { /* 영속 실패(124)는 메모리 플래그로 fail-open */ });
-    logger.info(`[AgentTaskRoutes] 자동승인 ${enabled ? '활성' : '해제'}: ${task.id} (user ${req.user!.id})`);
-    res.json(success({ taskId: task.id, autoApprove: enabled }));
-}));
-
-/**
- * GET /api/agent-tasks/approvals/pending
- * 현재 사용자의 승인 대기 도구 호출 목록 (HITL 게이트 — 전부-승인 정책).
- */
-router.get('/approvals/pending', asyncHandler(async (req: Request, res: Response) => {
-    const pending = await getApprovalRegistry().list(String(req.user!.id));
-    res.json(success({ pending }));
-}));
-
-/**
- * POST /api/agent-tasks/approvals/:approvalId/answer  { text }
- * ask_human 질문에 자유텍스트로 응답 — 진행(approved)으로 해소하되 답변 본문을 에이전트에 전달.
- * (승인/거절 이진 응답의 한계를 보완하는 HITL 답변 채널.)
- * ⚠️ 아래 `/:decision` 라우트보다 반드시 먼저 등록 — 뒤에 두면 'answer' 가 :decision 으로
- *    매칭돼 400 이 난다(라이브 검증에서 발견된 라우트 순서 버그).
- */
-router.post('/approvals/:approvalId/answer', asyncHandler(async (req: Request, res: Response) => {
-    const { approvalId } = req.params;
-    const text = String((req.body as { text?: unknown })?.text ?? '').trim();
-    if (!text) return res.status(400).json(badRequest('text 가 필요합니다.'));
-    if (text.length > AGENT_TASK_LIMITS.HITL_ANSWER_MAX_CHARS) return res.status(400).json(badRequest(`답변은 ${AGENT_TASK_LIMITS.HITL_ANSWER_MAX_CHARS}자를 넘을 수 없습니다.`));
-    const registry = getApprovalRegistry();
-    const pending = await registry.get(approvalId);
-    if (!pending) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
-    assertResourceOwnerOrAdmin(pending.userId, String(req.user!.id), req.user!.role || 'user');
-
-    const ok = await registry.answer(approvalId, text);
-    if (!ok) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
-    res.json(success({ approvalId, answered: true }));
-}));
-
-/**
- * POST /api/agent-tasks/approvals/:approvalId/:decision  (decision = approve | reject)
- * 대기 중인 도구 호출을 승인/거절 — 해당 approval 의 owner 만 가능.
- */
-router.post('/approvals/:approvalId/:decision', asyncHandler(async (req: Request, res: Response) => {
-    const { approvalId, decision } = req.params;
-    if (decision !== 'approve' && decision !== 'reject') {
-        return res.status(400).json(badRequest("decision 은 approve | reject 여야 합니다."));
-    }
-    const registry = getApprovalRegistry();
-    const pending = await registry.get(approvalId);
-    if (!pending) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
-    assertResourceOwnerOrAdmin(pending.userId, String(req.user!.id), req.user!.role || 'user');
-
-    const ok = await (decision === 'approve' ? registry.approve(approvalId) : registry.reject(approvalId));
-    if (!ok) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
-    res.json(success({ approvalId, decision }));
-}));
+// 승인(HITL) 라우트는 agent-task-approvals.routes.ts (600줄 게이트로 분리, 2026-09-17) — 라우트 순서(answer → :decision)는 그 파일이 지킨다.
+router.use(approvalsRouter);
 
 export default router;

@@ -15,6 +15,7 @@
  * - mcp_server_instances            : MCP_INSTANCE_RETENTION_DAYS(기본 30일) 초과 transition 이력 삭제 (각 server·user 의 최신 transition 은 보존)
  * - orchestration_dispatch_decisions: ORCH_PREVIEW_RETENTION_DAYS(기본 30일) 초과 query_preview NULL (집계 지표는 METRICS_RETENTION_DAYS 까지 보존)
  * - orchestrator_runs               : ORCHESTRATOR_RUNS_RETENTION_DAYS(기본 90일) 초과 행 삭제 (멀티모달 오케스트레이터 셰도우)
+ * - system_settings_history / organization_policy_history : POLICY_HISTORY_RETENTION_DAYS(기본 365일) 초과 행 삭제 (130)
  *
  * @module data/db-retention
  */
@@ -67,6 +68,18 @@ async function runRetention(): Promise<void> {
             );
             if ((usageResult.rowCount ?? 0) > 0) {
                 logger.info(`[DbRetention] 외부 사용량 ${usageResult.rowCount}건 정리 완료 (${retentionDays}일 초과)`);
+            }
+        }
+
+        // 4-a. 설정·조직 정책 변경 이력(130) 보존 (env: POLICY_HISTORY_RETENTION_DAYS, 기본 365일)
+        const policyHistoryDays = parseInt(process.env.POLICY_HISTORY_RETENTION_DAYS ?? '365', 10);
+        if (Number.isFinite(policyHistoryDays) && policyHistoryDays > 0) {
+            for (const table of ['system_settings_history', 'organization_policy_history']) {
+                const r = await pool.query(
+                    `DELETE FROM ${table} WHERE changed_at < NOW() - ($1 || ' days')::interval`,
+                    [policyHistoryDays.toString()]
+                );
+                if ((r.rowCount ?? 0) > 0) logger.info(`[DbRetention] ${table} ${r.rowCount}건 정리 완료 (${policyHistoryDays}일 초과)`);
             }
         }
 

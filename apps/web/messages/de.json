@@ -24,7 +24,8 @@
       "systemSettingsAdmin": "Systemeinstellungen",
       "developer": "Entwickler",
       "schedulesAdmin": "Aufgaben-Zeitpläne",
-      "approvals": "Freigaben"
+      "approvals": "Freigaben",
+      "organizationsAdmin": "Organisationen"
     },
     "pendingApprovals": "{count} ausstehende Freigabe(n) — Agentenaufgaben warten auf Ihre Freigabe"
   },
@@ -181,7 +182,17 @@
       "regrant": "Erneut einwilligen",
       "granting": "Wird erteilt …"
     },
-    "guestModelNotice": "Gäste können nur das Standardmodell nutzen. Externe Modelle wie Ollama und OpenRouter sind nach der Anmeldung (Registrierung) verfügbar."
+    "guestModelNotice": "Gäste können nur das Standardmodell nutzen. Externe Modelle wie Ollama und OpenRouter sind nach der Anmeldung (Registrierung) verfügbar.",
+    "organization": {
+      "title": "Organisation",
+      "description": "Wähle eine Organisation, um die mit ihr geteilten Agenten und Vorlagen zu nutzen.",
+      "personal": "Persönlich (keine Organisation)",
+      "saved": "Aktive Organisation geändert",
+      "failed": "Organisation konnte nicht geändert werden: {error}",
+      "roleOwner": "Inhaber",
+      "roleAdmin": "Admin",
+      "roleMember": "Mitglied"
+    }
   },
   "apiAccess": {
     "title": "API-Zugriff",
@@ -820,7 +831,11 @@
       "started": "Aufgabe aus Vorlage gestartet.",
       "expand": "Alle anzeigen",
       "collapse": "Einklappen",
-      "lineCount": "{lines} Zeilen · {chars} Zeichen"
+      "lineCount": "{lines} Zeilen · {chars} Zeichen",
+      "shareOrg": "Mit Organisation teilen",
+      "unshareOrg": "Teilen mit Organisation beenden",
+      "orgBadge": "Org",
+      "sharedByOther": "Geteilt"
     },
     "downloadFailed": "Download fehlgeschlagen: {error}",
     "localBadge": "Lauf im lokalen Ordner",
@@ -952,7 +967,12 @@
     "unshare": "Teilen aufheben",
     "shareAria": "Agent in Arbeitsbereich teilen",
     "unshareAria": "Teilen des Agenten aufheben",
-    "shareFailed": "Freigabe konnte nicht geändert werden: {error}"
+    "shareFailed": "Freigabe konnte nicht geändert werden: {error}",
+    "visibilityPrivate": "Privat",
+    "visibilityShared": "Arbeitsbereich",
+    "visibilityOrganization": "Organisation",
+    "orgBadge": "Org",
+    "visibilityAria": "Sichtbarkeit des Agenten"
   },
   "research": {
     "pageTitle": "Deep-Research-Verlauf",
@@ -1834,7 +1854,11 @@
         "title": "Web Push (VAPID)",
         "description": "VAPID-Schlüssel für Browser-Push-Benachrichtigungen. Legen Sie das öffentliche/private Schlüsselpaar zusammen fest."
       }
-    }
+    },
+    "historyTitle": "Änderungsverlauf",
+    "historyShow": "Anzeigen",
+    "historyHide": "Ausblenden",
+    "historyEmpty": "Noch keine Änderungen."
   },
   "setup": {
     "title": "Ersteinrichtung",
@@ -2189,5 +2213,56 @@
     "artifactUnavailable": "Der Inhalt konnte nicht gelesen werden.",
     "openArtifact": "Öffnen",
     "artifactViewerOnly": "Der Inhalt wird in einem isolierten Viewer geöffnet — drücken Sie auf Öffnen."
+  },
+  "adminOrganizations": {
+    "title": "Organisationen",
+    "description": "Organisationen, Mitgliederrollen, Organisationsrichtlinien und Änderungsverlauf verwalten sowie die Betriebskonfiguration exportieren oder importieren.",
+    "loadError": "Laden fehlgeschlagen.",
+    "createFailed": "Organisation konnte nicht erstellt werden",
+    "listTitle": "Organisationen",
+    "namePlaceholder": "Name der Organisation",
+    "slugPlaceholder": "slug (Kleinbuchstaben, Ziffern, Bindestriche)",
+    "create": "Erstellen",
+    "empty": "Noch keine Organisationen.",
+    "delete": "Löschen",
+    "deleteConfirm": "Organisation „{name}“ löschen? Mitgliedschaften und Richtlinien werden ebenfalls entfernt.",
+    "budget": "Monatliches Token-Budget",
+    "budgetUnlimited": "Unbegrenzt",
+    "save": "Speichern",
+    "members": "Mitglieder",
+    "addMember": "Mitglied hinzufügen",
+    "selectUser": "Benutzer wählen",
+    "user": "Benutzer",
+    "role": "Rolle",
+    "noMembers": "Keine Mitglieder.",
+    "removeMember": "Mitglied entfernen",
+    "removeMemberConfirm": "Dieses Mitglied aus der Organisation entfernen?",
+    "roles": {
+      "owner": "Inhaber",
+      "admin": "Admin",
+      "member": "Mitglied"
+    },
+    "policies": "Organisationsrichtlinien",
+    "policySet": "Gesetzt",
+    "policyUnset": "Nicht gesetzt (global übernehmen)",
+    "policySave": "Speichern",
+    "policyReset": "Zurücksetzen",
+    "policySaveFailed": "Richtlinie konnte nicht gespeichert werden: {error}",
+    "policyHelp": {
+      "EXTERNAL_MODEL_POLICY": "Allow/Deny-Globs für externe Modelle als JSON. deny wird mit global vereinigt, allow geschnitten — eine Organisation kann eine globale Sperre nicht aufheben.",
+      "TOOL_APPROVAL_POLICY_MIN": "Untergrenze der Genehmigungsrichtlinie für Agentenaufgaben. Ist sie strenger als die Anfrage, gilt die Untergrenze.",
+      "MCP_ALLOWED_SERVERS": "Kommagetrennte MCP-Katalogvorlagen-IDs, deren Installation erlaubt ist. Leer = keine Einschränkung."
+    },
+    "history": "Änderungsverlauf",
+    "noHistory": "Noch keine Änderungen.",
+    "configTitle": "Betriebskonfiguration exportieren / importieren",
+    "configDescription": "Exportiert oder importiert Systemeinstellungen (ohne Geheimnisse), globale Capability-Zuordnungen, Organisationen und deren Richtlinien als JSON. Der Import prüft zuerst nur; Änderungen gelten erst nach „Anwenden“.",
+    "export": "Exportieren",
+    "importPick": "JSON wählen (prüfen)",
+    "importApply": "Anwenden",
+    "importConfirm": "Geprüfte Konfiguration anwenden? Systemeinstellungen und Organisationsrichtlinien werden überschrieben.",
+    "importProblems": "{count} Problem(e) — kann nicht angewendet werden.",
+    "importDryRun": "Geprüft — Einstellungen {systemSettings} · Capabilities {capabilityModels} · Organisationen {organizations} · Richtlinien {policies}. Mit „Anwenden“ übernehmen.",
+    "importApplied": "Angewendet — Einstellungen {systemSettings} · Capabilities {capabilityModels} · Organisationen {organizations} · Richtlinien {policies}."
   }
 }

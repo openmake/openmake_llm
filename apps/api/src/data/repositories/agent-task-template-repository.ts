@@ -16,6 +16,8 @@ interface TemplateParamDef {
 interface AgentTaskTemplate {
     id: string;
     user_id?: string;
+    /** NULL=개인, 값=그 조직 멤버 읽기·instantiate 가능 (128) */
+    org_id?: string | null;
     name: string;
     goal_template: string;
     params?: TemplateParamDef[] | null;
@@ -41,10 +43,19 @@ export class AgentTaskTemplateRepository extends BaseRepository {
         return r.rows[0];
     }
 
-    async listByUser(userId: string): Promise<AgentTaskTemplate[]> {
-        const r = await this.query<AgentTaskTemplate>(
-            'SELECT * FROM agent_task_templates WHERE user_id = $1 ORDER BY updated_at DESC', [userId]);
+    /** 본인 소유 + (활성 조직이 있으면) 그 조직에 공유된 템플릿. */
+    async listByUser(userId: string, orgId: string | null = null): Promise<AgentTaskTemplate[]> {
+        const r = orgId
+            ? await this.query<AgentTaskTemplate>(
+                'SELECT * FROM agent_task_templates WHERE user_id = $1 OR org_id = $2 ORDER BY (user_id = $1) DESC, updated_at DESC', [userId, orgId])
+            : await this.query<AgentTaskTemplate>(
+                'SELECT * FROM agent_task_templates WHERE user_id = $1 ORDER BY updated_at DESC', [userId]);
         return r.rows;
+    }
+
+    /** 조직 공유 설정/해제 — 소유권 검사는 호출부(security/authorize). */
+    async setOrgShare(id: string, orgId: string | null): Promise<void> {
+        await this.query('UPDATE agent_task_templates SET org_id = $2, updated_at = NOW() WHERE id = $1', [id, orgId]);
     }
 
     async update(id: string, u: {

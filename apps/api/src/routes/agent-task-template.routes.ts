@@ -16,11 +16,14 @@
  */
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
-import { success, notFound } from '../utils/api-response';
+import { success, notFound, badRequest } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth } from '../auth';
 import { assertResourceOwnerOrAdmin } from '../auth/ownership';
-import { validateWithSecurity } from '../middlewares/validation';
+import { assertCanAccess } from '../security/authorize';
+import { activeOrgFor, membershipsFor } from '../services/org/membership-cache';
+import { z } from 'zod';
+import { validateWithSecurity, validate } from '../middlewares/validation';
 import { getPool, getUnifiedDatabase } from '../data/models/unified-database';
 import { v4 as uuidv4 } from 'uuid';
 import { AgentTaskTemplateRepository, instantiateGoal } from '../data/repositories/agent-task-template-repository';
@@ -45,6 +48,19 @@ async function loadOwned(req: Request, res: Response, id: string) {
     return t;
 }
 
+/** 읽기·instantiate — 소유자·관리자 + 활성 조직에 공유된 템플릿의 조직 멤버 (128). */
+async function loadReadable(req: Request, res: Response, id: string) {
+    const t = await repo().get(id);
+    if (!t) { res.status(404).json(notFound('템플릿을 찾을 수 없습니다.')); return undefined; }
+    const userId = String(req.user!.id);
+    const org = await activeOrgFor(userId);
+    assertCanAccess('agent_task_template', 'read', { ownerId: t.user_id, orgId: t.org_id },
+        { userId, role: req.user!.role || 'user', orgId: org?.orgId, orgRole: org?.orgRole });
+    return t;
+}
+
+const shareSchema = z.object({ orgId: z.string().trim().min(1).max(200).nullable() });
+
 /** POST / — 템플릿 생성. */
 router.post('/', validateWithSecurity(createAgentTaskTemplateSchema, { preserveFormattingFields: ['goalTemplate'] }), asyncHandler(async (req: Request, res: Response) => {
     const { name, goalTemplate, params, maxTurns } = req.body as CreateAgentTaskTemplateInput;
@@ -57,10 +73,25 @@ router.post('/', validateWithSecurity(createAgentTaskTemplateSchema, { preserveF
     res.status(201).json(success({ template: await repo().get(id) }));
 }));
 
-/** GET / — 내 템플릿 목록. */
+/** GET / — 내 템플릿 + 활성 조직에 공유된 템플릿 목록. */
 router.get('/', asyncHandler(async (req: Request, res: Response) => {
-    const templates = await repo().listByUser(String(req.user!.id));
-    res.json(success({ templates, total: templates.length }));
+    const userId = String(req.user!.id);
+    const templates = await repo().listByUser(userId, (await activeOrgFor(userId))?.orgId ?? null);
+    res.json(success({ templates: templates.map((t) => ({ ...t, owned: t.user_id === userId })), total: templates.length }));
+}));
+
+/** PATCH /:id/share — 조직 공유 설정/해제 { orgId | null }. 소유자만, 본인이 멤버인 조직만 (128). */
+router.patch('/:id/share', validate(shareSchema), asyncHandler(async (req: Request, res: Response) => {
+    const t = await loadOwned(req, res, req.params.id);
+    if (!t) return;
+    const { orgId } = req.body as z.infer<typeof shareSchema>;
+    if (orgId !== null) {
+        const list = await membershipsFor(String(req.user!.id));
+        if (!list.some((m) => m.orgId === orgId)) { res.status(400).json(badRequest('속하지 않은 조직입니다.')); return; }
+    }
+    await repo().setOrgShare(t.id, orgId);
+    logger.info(`[Template] 조직 공유: ${t.id} → ${orgId ?? 'none'} (user ${req.user!.id})`);
+    res.json(success({ template: await repo().get(t.id) }));
 }));
 
 /** PATCH /:id — 수정. */
@@ -84,7 +115,7 @@ router.delete('/:id', asyncHandler(async (req: Request, res: Response) => {
  * POST /:id/instantiate — 파라미터 치환으로 task 생성. execute!==false 면 즉시 실행(큐 3-B 경유).
  */
 router.post('/:id/instantiate', validateWithSecurity(instantiateTemplateSchema, { preserveFormattingFields: ['values'] }), asyncHandler(async (req: Request, res: Response) => {
-    const t = await loadOwned(req, res, req.params.id);
+    const t = await loadReadable(req, res, req.params.id);
     if (!t) return;
     const { values, execute } = req.body as InstantiateTemplateInput;
     const goal = instantiateGoal(t.goal_template, t.params, values ?? {});

@@ -94,6 +94,8 @@ async function syncAuthInner(): Promise<boolean> {
         email: u.email,
         name: u.username,
         role: u.role ?? "user",
+        activeOrgId: res?.data?.activeOrganization?.orgId ?? null,
+        activeOrgRole: res?.data?.activeOrganization?.orgRole ?? null,
       },
       isGuestMode: false,
     });

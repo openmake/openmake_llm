@@ -160,6 +160,9 @@ interface AuthUser {
   email: string;
   name?: string;
   role: UserRole;
+  /** 활성 조직 (F22) — 없으면 null. 조직 공유 자원 노출·공유 토글 표시 조건. */
+  activeOrgId?: string | null;
+  activeOrgRole?: "owner" | "admin" | "member" | null;
 }
 
 interface AppState {

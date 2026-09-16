@@ -945,6 +945,10 @@ interface ApiTemplate {
   goal_template: string;
   params?: Array<{ name: string; description?: string; default?: string }> | null;
   max_turns: number;
+  /** 조직 공유 대상 (128) — NULL 이면 개인 */
+  org_id?: string | null;
+  /** 목록 응답 — 본인 소유 여부 (조직 공유분 구분) */
+  owned?: boolean;
 }
 type TemplatesResponse = ApiSuccess<{ templates: ApiTemplate[]; total: number }>;
 
@@ -986,6 +990,10 @@ function TemplatesPanel() {
     alert(t("templates.started"));
   });
   const remove = (tp: ApiTemplate) => run(tp.id, () => ApiClient.del(`/api/agent-task-templates/${tp.id}`));
+  // 조직 공유(128): 활성 조직이 있을 때만 토글 노출. 공유 해제는 orgId:null.
+  const activeOrgId = useAppStore((s) => s.auth.currentUser?.activeOrgId ?? null);
+  const toggleOrgShare = (tp: ApiTemplate) =>
+    run(tp.id, () => ApiClient.patch(`/api/agent-task-templates/${tp.id}/share`, { orgId: tp.org_id ? null : activeOrgId }));
 
   return (
     <Card className="mb-4 p-4">
@@ -1031,7 +1039,14 @@ function TemplatesPanel() {
           {templates.map((tp) => (
             <div key={tp.id} className="flex items-start justify-between gap-3 rounded-md border border-line bg-bg-1 p-2">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-medium text-fg-1">{tp.name}</p>
+                <p className="truncate text-xs font-medium text-fg-1">
+                  {tp.name}
+                  {tp.org_id && (
+                    <span className="ml-1.5 rounded bg-accent-soft px-1 text-[10px] text-accent">
+                      {tp.owned === false ? t("templates.sharedByOther") : t("templates.orgBadge")}
+                    </span>
+                  )}
+                </p>
                 {/* goal_template 은 여러 줄이 그대로 저장된다(실측 96줄 사례). 예전에는
                     truncate 로 한 줄로 뭉개져 내용을 확인할 수 없었다 → 줄바꿈을 보존하되
                     기본은 3줄로 접고, 넘칠 때만 펼치기 토글을 노출한다. */}
@@ -1056,9 +1071,16 @@ function TemplatesPanel() {
                 <Button size="sm" variant="outline" disabled={busy === tp.id} onClick={() => instantiate(tp)} title={t("templates.run")}>
                   <Play className="h-3.5 w-3.5" />
                 </Button>
-                <Button size="sm" variant="outline" disabled={busy === tp.id} onClick={() => remove(tp)} title={t("templates.delete")}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                {activeOrgId && tp.owned !== false && (
+                  <Button size="sm" variant="outline" disabled={busy === tp.id} onClick={() => toggleOrgShare(tp)} title={tp.org_id ? t("templates.unshareOrg") : t("templates.shareOrg")}>
+                    <Users className={`h-3.5 w-3.5 ${tp.org_id ? "text-accent" : ""}`} />
+                  </Button>
+                )}
+                {tp.owned !== false && (
+                  <Button size="sm" variant="outline" disabled={busy === tp.id} onClick={() => remove(tp)} title={t("templates.delete")}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </div>
             </div>
           ))}

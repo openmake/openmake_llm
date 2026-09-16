@@ -85,7 +85,9 @@ export class SystemSettingsService {
         for (const [key, value] of Object.entries(entries)) {
             const def = SETTING_DEFS_BY_KEY.get(key);
             if (!def) throw new Error(`허용되지 않은 설정 키: ${key}`);
+            const previous = this.snapshot[key] ?? null;
             await this.repo.upsert(key, value, def.secret, updatedBy);
+            await this.recordHistory(key, previous, value, def.secret, updatedBy);
             if (def.requiresRestart) requiresRestart.push(key);
         }
         await this.loadAndApply();
@@ -93,11 +95,27 @@ export class SystemSettingsService {
     }
 
     /** 설정 삭제 — env/기본값 폴백으로 복귀 */
-    async reset(key: string): Promise<boolean> {
-        if (!SETTING_DEFS_BY_KEY.has(key)) throw new Error(`허용되지 않은 설정 키: ${key}`);
+    async reset(key: string, updatedBy: string | null = null): Promise<boolean> {
+        const def = SETTING_DEFS_BY_KEY.get(key);
+        if (!def) throw new Error(`허용되지 않은 설정 키: ${key}`);
+        const previous = this.snapshot[key] ?? null;
         const deleted = await this.repo.deleteKey(key);
-        if (deleted) await this.loadAndApply();
+        if (deleted) {
+            await this.recordHistory(key, previous, null, def.secret, updatedBy);
+            await this.loadAndApply();
+        }
         return deleted;
+    }
+
+    /** 변경 이력(130) — 시크릿은 값 대신 마스크. 실패는 경고만(설정 변경 자체는 반영). */
+    private async recordHistory(key: string, oldValue: string | null, newValue: string | null, secret: boolean, changedBy: string | null): Promise<void> {
+        try {
+            const { PolicyHistoryRepository, SECRET_MASK } = await import('../data/repositories/policy-history-repository');
+            const mask = (v: string | null): string | null => (v === null ? null : secret ? SECRET_MASK : v);
+            await new PolicyHistoryRepository(getPool()).recordSetting(key, mask(oldValue), mask(newValue), changedBy);
+        } catch (err) {
+            logger.warn(`설정 변경 이력 기록 실패 (변경은 반영됨): ${key}`, err);
+        }
     }
 
     /** 전체 설정 조회 뷰 — 시크릿 값은 절대 포함하지 않는다 */

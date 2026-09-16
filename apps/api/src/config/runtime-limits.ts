@@ -2092,3 +2092,12 @@ export const TASK_CODE_NAV = {
     /** 탐색에서 제외하는 파일(자격증명) — 위 SENSITIVE_FILE_PATTERNS 단일 목록. */
     EXCLUDED_FILES: SENSITIVE_FILE_PATTERNS,
 } as const;
+
+/**
+ * 조직·테넌트 컨텍스트 (F22 Phase A, 2026-09-17).
+ * 멤버십·활성 조직·예산 조직 조회 캐시 TTL — 변경 REST 는 clearOrgMembershipCache 로 즉시 무효화한다.
+ */
+export const ORG_CONTEXT = {
+    /** 사용자별 멤버십·활성 조직 캐시 보존(ms). ORG_CONTEXT_CACHE_TTL_MS 로 오버라이드. */
+    CACHE_TTL_MS: parseInt(process.env.ORG_CONTEXT_CACHE_TTL_MS || '60000', 10),
+} as const;
