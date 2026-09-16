@@ -103,6 +103,11 @@ export async function initSchema(pool: Pool): Promise<void> {
     } catch {
         // 테이블 미존재(최초 부팅) 등 — 무시
     }
+    // 실패 분류(131) — 이 초기화는 마이그레이션보다 먼저 돈다. 컬럼이 아직 없으면(131 적용 전 부팅) 조용히 건너뛰고
+    // 마이그레이션 백필이 분류한다. 위 마킹과 한 문장에 넣으면 컬럼 부재로 마킹까지 실패한다.
+    await pool.query(
+        `UPDATE agent_tasks SET failure_class = 'interrupted' WHERE status = 'failed' AND error = 'server restarted' AND failure_class IS NULL`,
+    ).catch(() => { /* 131 적용 전 */ });
 
     // 좀비 리서치 정리: Deep Research 는 큐·워커 없이 in-process 파이프라인으로 돌기 때문에
     // (세션 생성 직후 같은 흐름에서 running 으로 전이) 이전 프로세스의 pending/running 세션은

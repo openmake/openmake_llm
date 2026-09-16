@@ -1740,6 +1740,13 @@ export const AGENT_TASK_LIMITS = {
     QUEUE_GLOBAL_MAX: parseInt(process.env.AGENT_TASK_QUEUE_GLOBAL_MAX || '4', 10),
     /** 유저별 동시 실행 상한. AGENT_TASK_QUEUE_USER_MAX 로 오버라이드(기본 2). */
     QUEUE_USER_MAX: parseInt(process.env.AGENT_TASK_QUEUE_USER_MAX || '2', 10),
+    /** 큐 우선순위(F16.6, 131) — 대기열은 높을수록 먼저, 같으면 등록순. 예약 실행은 SCHEDULED, 사용자 실행은 DEFAULT,
+     *  관리자만 DEFAULT 초과(상한은 system_settings AGENT_TASK_QUEUE_PRIORITY_MAX). */
+    QUEUE_PRIORITY_SCHEDULED: -1,
+    QUEUE_PRIORITY_DEFAULT: 0,
+    /** 실패 큐 뷰(GET /queue/dead) 기본 조회 기간(일)·최대 행 수. AGENT_TASK_DEAD_QUEUE_DAYS / AGENT_TASK_DEAD_QUEUE_LIMIT */
+    DEAD_QUEUE_DAYS: parseInt(process.env.AGENT_TASK_DEAD_QUEUE_DAYS || '7', 10),
+    DEAD_QUEUE_LIMIT: parseInt(process.env.AGENT_TASK_DEAD_QUEUE_LIMIT || '100', 10),
     /** 스케줄/반복 트리거(Phase 3-A) — cron/interval 로 task 를 반복 실행. 기본 OFF.
      *  AGENT_TASK_SCHEDULES_ENABLED=true 로 활성. 스케줄러 tick 이 due 스케줄을 큐에 제출. */
     SCHEDULES_ENABLED: process.env.AGENT_TASK_SCHEDULES_ENABLED === 'true',

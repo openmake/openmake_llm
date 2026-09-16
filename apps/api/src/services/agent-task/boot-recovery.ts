@@ -91,6 +91,7 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
             await dispatchAgentTask({
                 taskId: task.id,
                 userId: String(task.user_id),
+                priority: task.priority, // 증발한 대기열의 순위를 그대로(131)
                 run: () => service.execute({
                     taskId: task.id,
                     goal: task.goal,

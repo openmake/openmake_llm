@@ -929,7 +929,8 @@
       "go": "分支并运行",
       "hint": "以新任务重新执行所选回合之后的内容（工作目录重新开始）。",
       "failed": "分支失败：{error}"
-    }
+    },
+    "priorityBadge": "优先级 {priority}"
   },
   "customAgents": {
     "pageTitle": "自定义智能体",

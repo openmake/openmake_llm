@@ -40,7 +40,7 @@ import {
 import { extractAttachedDocuments } from '../services/chat-service/doc-extractor';
 import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
 import { getSteeringRegistry } from '../services/agent-task/steering';
-import { dispatchAgentTask, getAgentTaskQueue } from '../services/agent-task/task-queue';
+import { dispatchAgentTask, resolveQueuePriority, getAgentTaskQueue } from '../services/agent-task/task-queue';
 import { safeRealWorkspacePath, listWorkspaceFilesAt } from '../services/task-sandbox/sandbox';
 import { basename } from 'path';
 import multer from 'multer';
@@ -337,7 +337,7 @@ router.post('/:taskId/execute', validate(executeAgentTaskSchema), asyncHandler(a
 
     // 스킬 범위(allowedSkills, 미지정이면 전체 활성 스킬)와 승인 3모드(Manual/Auto/Skip)는
     // executeAgentTaskSchema 가 검증한다 — 잘못된 값은 여기 오기 전에 400 이다.
-    const { allowedSkills, approvalPolicy: requestedPolicy } = req.body as ExecuteAgentTaskInput;
+    const { allowedSkills, approvalPolicy: requestedPolicy, priority } = req.body as ExecuteAgentTaskInput;
     // 조직 승인 하한(129) — 활성 조직이 TOOL_APPROVAL_POLICY_MIN 을 두면 요청값과 비교해 더 엄격한 쪽을 쓴다.
     const approvalPolicy = strictestApprovalPolicy(requestedPolicy, (await resolveEffectivePolicy(String(req.user!.id))).approvalPolicyMin);
 
@@ -348,6 +348,7 @@ router.post('/:taskId/execute', validate(executeAgentTaskSchema), asyncHandler(a
     const outcome = await dispatchAgentTask({
         taskId: task.id,
         userId: String(req.user!.id),
+        priority: resolveQueuePriority(priority, role === 'admin'),
         run: () => service.execute({
             taskId: task.id,
             goal: task.goal,
@@ -436,6 +437,7 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
     const outcome = await dispatchAgentTask({
         taskId: task.id,
         userId: String(req.user!.id),
+        priority: task.priority, // 재개는 처음 실행의 우선순위를 잇는다(131)
         run: () => service.execute({
             taskId: task.id,
             goal: task.goal,

@@ -929,7 +929,8 @@
       "go": "Fork & run",
       "hint": "Re-runs everything after the chosen turn as a new task (fresh workspace).",
       "failed": "Fork failed: {error}"
-    }
+    },
+    "priorityBadge": "Priority {priority}"
   },
   "customAgents": {
     "pageTitle": "Custom Agents",

@@ -46,6 +46,13 @@ describe('executeAgentTaskSchema — 실행 옵션 계약', () => {
         expect(r.success).toBe(false);
     });
 
+    it('priority(131) 는 정수만 받는다 — 범위 조정은 라우트(역할)', () => {
+        expect(executeAgentTaskSchema.safeParse({ priority: 3 }).success).toBe(true);
+        expect(executeAgentTaskSchema.safeParse({ priority: -1 }).success).toBe(true);
+        expect(executeAgentTaskSchema.safeParse({ priority: 1.5 }).success).toBe(false);
+        expect(executeAgentTaskSchema.safeParse({ priority: '3' }).success).toBe(false);
+    });
+
     it('잘못된 승인 정책 값은 거절한다', () => {
         expect(executeAgentTaskSchema.safeParse({ approvalPolicy: 'auto' }).success).toBe(false);
     });

@@ -76,6 +76,8 @@ interface AgentTask {
   error?: string;
   /** 소유자 id — admin 전체 보기(viewAll)에서 타 사용자 작업 뱃지 표시용. */
   ownerId?: string;
+  /** 큐 우선순위(131) — 0 이 아니면 목록에 뱃지 */
+  priority?: number;
 }
 
 type PlanStepStatus = "not_started" | "in_progress" | "completed" | "blocked";
@@ -117,6 +119,8 @@ interface ApiAgentTask {
   result?: string | null;
   /** 소유자 (toPublicTask 가 user_id 그대로 노출 — admin viewAll 에서 소유자 뱃지용) */
   user_id?: string | number;
+  /** 큐 우선순위(131) — 예약 -1, 기본 0, 관리자 지정 >0 */
+  priority?: number;
 }
 
 type TaskFilesResponse = ApiSuccess<{ files: string[] }>;
@@ -203,6 +207,7 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
     folderRel: t.folder_rel || undefined,
     error: t.error || undefined,
     ownerId: t.user_id != null ? String(t.user_id) : undefined,
+    priority: typeof t.priority === "number" && t.priority !== 0 ? t.priority : undefined,
   };
 }
 
@@ -1347,6 +1352,9 @@ export default function AgentTasksPage() {
                       )}
                       {task.executor === "local" && (
                         <Badge tone="neutral">{t("localBadge")}</Badge>
+                      )}
+                      {task.priority !== undefined && (
+                        <Badge tone={task.priority > 0 ? "accent" : "neutral"}>{t("priorityBadge", { priority: task.priority })}</Badge>
                       )}
                     </span>
                     <button

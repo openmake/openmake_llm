@@ -96,6 +96,8 @@ export const executeAgentTaskSchema = z.strictObject({
     approvalPolicy: z.enum(['all', 'high-risk', 'none']).optional(),
     /** 이 실행에서 쓸 skill_id 목록 — 미지정이면 전체 활성 스킬. */
     allowedSkills: z.array(z.string().min(1).max(200)).max(AGENT_TASK_LIMITS.EXECUTE_MAX_ALLOWED_SKILLS).optional(),
+    /** 큐 우선순위(131) — 정수만 받고 범위는 라우트가 역할로 조정(관리자만 0 초과). 큐 OFF 면 기록만 된다. */
+    priority: z.number().int().optional(),
 });
 export type ExecuteAgentTaskInput = z.infer<typeof executeAgentTaskSchema>;
 

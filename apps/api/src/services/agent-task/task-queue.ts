@@ -5,7 +5,7 @@
  * 무제한이었다(샌드박스 maxConcurrent 는 컨테이너만 제한). 스케줄(3-A)이 생기면 폭주한다.
  *
  * 이 큐는 전역·유저별 동시 실행 상한을 강제한다. 상한 초과 시 'queued' 로 대기시키고,
- * 실행 슬롯이 비면 FIFO(유저 상한 준수)로 dequeue 한다. 단일 프로세스 전제(API instances:1) —
+ * 실행 슬롯이 비면 우선순위 높은 순·같으면 FIFO(유저 상한 준수)로 dequeue 한다(F16.6, 131). 단일 프로세스 전제(API instances:1) —
  * 멀티프로세스 확장 시 Redis 백엔드가 필요(현재 범위 밖).
  *
  * @module services/agent-task/task-queue
@@ -13,6 +13,7 @@
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
+import { getConfig } from '../../config/env';
 
 const logger = createLogger('AgentTaskQueue');
 
@@ -21,6 +22,8 @@ interface QueueEntry {
     userId: string;
     /** 실제 실행 — AgentTaskService.execute 를 감싼 thunk. 절대 throw 하지 않음(execute 가 내부 흡수). */
     run: () => Promise<void>;
+    /** 대기열 우선순위(131) — 높을수록 먼저. 미지정 0. 값 검증은 resolveQueuePriority(호출부). */
+    priority?: number;
 }
 
 export class AgentTaskQueue {
@@ -52,9 +55,11 @@ export class AgentTaskQueue {
         return true;
     }
 
-    /** 관측용 스냅샷. */
-    stats(): { globalActive: number; pending: number } {
-        return { globalActive: this.globalActive, pending: this.pending.length };
+    /** 관측용 스냅샷 — byPriority 는 대기 중 항목의 우선순위별 개수. */
+    stats(): { globalActive: number; pending: number; byPriority: Record<string, number> } {
+        const byPriority: Record<string, number> = {};
+        for (const e of this.pending) byPriority[String(e.priority ?? 0)] = (byPriority[String(e.priority ?? 0)] ?? 0) + 1;
+        return { globalActive: this.globalActive, pending: this.pending.length, byPriority };
     }
 
     private canRun(userId: string): boolean {
@@ -75,17 +80,17 @@ export class AgentTaskQueue {
             });
     }
 
-    /** 슬롯이 빈 만큼 대기열에서 유저 상한을 지키며 꺼내 실행. */
+    /** 슬롯이 빈 만큼 대기열에서 꺼내 실행 — 유저 상한을 넘지 않는 후보 중 우선순위가 가장 높은 것, 같으면 먼저 등록된 것. */
     private drain(): void {
-        for (let i = 0; i < this.pending.length && this.globalActive < this.globalMax;) {
-            const e = this.pending[i];
-            if ((this.userActive.get(e.userId) ?? 0) < this.userMax) {
-                this.pending.splice(i, 1);
-                this.start(e);
-                // splice 로 뒤 항목이 당겨졌으므로 i 유지(같은 인덱스 재검사).
-            } else {
-                i++; // 이 유저는 상한 도달 — 다음 후보로.
+        while (this.globalActive < this.globalMax) {
+            let best = -1;
+            for (let i = 0; i < this.pending.length; i++) {
+                const e = this.pending[i];
+                if ((this.userActive.get(e.userId) ?? 0) >= this.userMax) continue; // 이 유저는 상한 도달
+                if (best < 0 || (e.priority ?? 0) > (this.pending[best].priority ?? 0)) best = i;
             }
+            if (best < 0) return;
+            this.start(this.pending.splice(best, 1)[0]);
         }
     }
 }
@@ -94,6 +99,16 @@ let queue: AgentTaskQueue | null = null;
 export function getAgentTaskQueue(): AgentTaskQueue {
     if (!queue) queue = new AgentTaskQueue();
     return queue;
+}
+
+/**
+ * PURE(설정 읽기): 요청 우선순위 → 큐 우선순위. 관리자는 [SCHEDULED, AGENT_TASK_QUEUE_PRIORITY_MAX], 그 외는 [SCHEDULED, DEFAULT].
+ * 정수가 아니면 DEFAULT.
+ */
+export function resolveQueuePriority(requested: unknown, isAdmin: boolean, max: number = getConfig().agentTaskQueuePriorityMax): number {
+    if (typeof requested !== 'number' || !Number.isInteger(requested)) return AGENT_TASK_LIMITS.QUEUE_PRIORITY_DEFAULT;
+    const upper = isAdmin ? Math.max(AGENT_TASK_LIMITS.QUEUE_PRIORITY_DEFAULT, max) : AGENT_TASK_LIMITS.QUEUE_PRIORITY_DEFAULT;
+    return Math.min(upper, Math.max(AGENT_TASK_LIMITS.QUEUE_PRIORITY_SCHEDULED, requested));
 }
 
 /**
@@ -106,8 +121,10 @@ export async function dispatchAgentTask(entry: QueueEntry): Promise<'started' | 
         return 'started';
     }
     const outcome = getAgentTaskQueue().submit(entry);
-    if (outcome === 'queued') {
-        await getUnifiedDatabase().updateAgentTask(entry.taskId, { status: 'queued' }).catch(() => { /* noop */ });
+    // 우선순위도 남긴다 — 재시작으로 대기열이 증발해도 부팅 복구가 같은 순위로 다시 제출한다(131). 기본값은 컬럼 DEFAULT 와 같아 생략
+    const priority = entry.priority && entry.priority !== AGENT_TASK_LIMITS.QUEUE_PRIORITY_DEFAULT ? { priority: entry.priority } : {};
+    if (outcome === 'queued' || 'priority' in priority) {
+        await getUnifiedDatabase().updateAgentTask(entry.taskId, { ...(outcome === 'queued' ? { status: 'queued' as const } : {}), ...priority }).catch(() => { /* noop */ });
     }
     return outcome;
 }

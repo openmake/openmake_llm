@@ -13,6 +13,7 @@
 import { BaseRepository, QueryParam } from './base-repository';
 import type { AgentTask, AgentTaskStatus, AgentTaskStep } from '../models/unified-database.types';
 import { allowedSources, AgentTaskTransitionError } from '../../services/agent-task/task-state';
+import { classifyAgentTaskFailure } from '../../config/agent-task-failure-class';
 
 export class AgentTaskRepository extends BaseRepository {
     async createAgentTask(params: {
@@ -85,6 +86,8 @@ export class AgentTaskRepository extends BaseRepository {
         judgeVerdict?: string;
         /** 상태 전이 사유(124 이벤트) — 미지정 시 error 문자열을 쓴다. */
         transitionReason?: string;
+        /** 큐 우선순위(131) */
+        priority?: number;
     }): Promise<void> {
         const sets: string[] = ['updated_at = NOW()'];
         const params: QueryParam[] = [];
@@ -96,6 +99,9 @@ export class AgentTaskRepository extends BaseRepository {
             if (updates.status === 'completed' || updates.status === 'failed' || updates.status === 'cancelled') {
                 sets.push('completed_at = NOW()');
             }
+            // 실패 분류(131) — failed 전이에서만 채우고, 다른 전이(재실행·재개)는 지운다
+            sets.push(updates.status === 'failed' ? `failure_class = $${paramIdx++}` : 'failure_class = NULL');
+            if (updates.status === 'failed') params.push(classifyAgentTaskFailure(updates.error));
         }
         if (updates.progress !== undefined) {
             sets.push(`progress = $${paramIdx++}`);
@@ -142,6 +148,10 @@ export class AgentTaskRepository extends BaseRepository {
         if (updates.judgeVerdict !== undefined) {
             sets.push(`judge_verdict = $${paramIdx++}`);
             params.push(updates.judgeVerdict);
+        }
+        if (updates.priority !== undefined) {
+            sets.push(`priority = $${paramIdx++}`);
+            params.push(updates.priority);
         }
 
         params.push(taskId);
@@ -365,7 +375,7 @@ export class AgentTaskRepository extends BaseRepository {
     async claimAgentTaskForRecovery(taskId: string): Promise<boolean> {
         const result = await this.query<{ prev: string }>(
             `UPDATE agent_tasks t
-             SET status = 'pending', error = NULL, completed_at = NULL, updated_at = NOW()
+             SET status = 'pending', error = NULL, failure_class = NULL, completed_at = NULL, updated_at = NOW()
              FROM (SELECT id, status AS prev FROM agent_tasks WHERE id = $1 FOR UPDATE) o
              WHERE t.id = o.id AND (o.prev IN ('running', 'paused', 'queued')
                 OR (o.prev = 'failed' AND t.error = 'server restarted'))
@@ -375,6 +385,31 @@ export class AgentTaskRepository extends BaseRepository {
         if ((result.rowCount ?? 0) === 0) return false;
         await this.recordEvent(taskId, result.rows[0]?.prev, 'pending', 'boot recovery claim');
         return true;
+    }
+
+    /**
+     * 실패 큐 뷰(131) — 최근 failed 작업(분류 필터 선택)과 분류별 건수. 재처리는 기존 /resume.
+     * goal 은 목록 표시용으로 앞부분만 싣는다.
+     */
+    async listFailedAgentTasks(opts: { failureClass?: string; sinceDays: number; limit: number }): Promise<{
+        items: Array<{ id: string; user_id: string; goal: string; error: string | null; failure_class: string | null; priority: number; current_turn: number; updated_at: string }>;
+        byClass: Record<string, number>;
+    }> {
+        const params: QueryParam[] = [opts.sinceDays];
+        const classFilter = opts.failureClass ? `AND failure_class = $${params.push(opts.failureClass)}` : '';
+        params.push(opts.limit);
+        const items = await this.query<{ id: string; user_id: string; goal: string; error: string | null; failure_class: string | null; priority: number; current_turn: number; updated_at: string }>(
+            `SELECT id, user_id, left(goal, 200) AS goal, error, failure_class, priority, current_turn, updated_at FROM agent_tasks
+              WHERE status = 'failed' AND updated_at > NOW() - make_interval(days => $1) ${classFilter}
+              ORDER BY updated_at DESC LIMIT $${params.length}`,
+            params,
+        );
+        const counts = await this.query<{ c: string | null; n: string }>(
+            `SELECT failure_class AS c, COUNT(*)::text AS n FROM agent_tasks
+              WHERE status = 'failed' AND updated_at > NOW() - make_interval(days => $1) GROUP BY failure_class`,
+            [opts.sinceDays],
+        );
+        return { items: items.rows, byClass: Object.fromEntries(counts.rows.map((r) => [r.c ?? 'unclassified', parseInt(r.n, 10)])) };
     }
 
     /** 활성 상태별 건수 — 큐 관측(/queue/stats) 용. 인메모리 큐 스냅샷과 대조해 재시작 고아를 드러낸다. */

@@ -929,7 +929,8 @@
       "go": "Verzweigen & starten",
       "hint": "Führt alles nach der gewählten Runde als neue Aufgabe erneut aus (neuer Arbeitsordner).",
       "failed": "Verzweigen fehlgeschlagen: {error}"
-    }
+    },
+    "priorityBadge": "Priorität {priority}"
   },
   "customAgents": {
     "pageTitle": "Benutzerdefinierte Agenten",

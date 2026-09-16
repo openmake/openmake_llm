@@ -929,7 +929,8 @@
       "go": "分岐して実行",
       "hint": "選んだターン以降を新しい作業として再実行します（作業フォルダは新規）。",
       "failed": "分岐に失敗: {error}"
-    }
+    },
+    "priorityBadge": "優先度 {priority}"
   },
   "customAgents": {
     "pageTitle": "カスタムエージェント",
