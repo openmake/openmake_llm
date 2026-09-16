@@ -81,9 +81,10 @@ describe('ExternalMCPClient — 도구 목록 갱신', () => {
         const { c, sdk } = await connected();
         staleMs = 0;
         expect(await c.refreshToolsIfStale(Date.now() + 10_000_000)).toBe(false);
-        staleMs = 1;
+        // 1ms 기준이면 실패 직후 1ms 만 지나도 다시 stale 이 돼 간헐 실패했다 — 기준을 넉넉히 두고 미래 시각으로 판정
+        staleMs = 60_000;
         sdk.listTools.mockRejectedValueOnce(new Error('down'));
-        expect(await c.refreshToolsIfStale(Date.now() + 10)).toBe(false);
+        expect(await c.refreshToolsIfStale(Date.now() + 120_000)).toBe(false);
         expect(c.getTools().map((t) => t.name)).toEqual(['a']);
         expect(await c.refreshToolsIfStale()).toBe(false); // 방금 실패 시각 갱신 → stale 아님
         expect(sdk.listTools).toHaveBeenCalledTimes(2);
