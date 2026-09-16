@@ -20,6 +20,7 @@ import { AGENT_SPAWN } from '../../config/runtime-limits';
 import { buildExternalToolPlan, detectOrchestrationIntents } from './external-tool-plan';
 import { buildExternalMessages } from './external-messages';
 import { buildChatProvenance, classifyChatOutcome, recordChatRequestFireAndForget } from './chat-request-recorder';
+import { captureReplay } from '../../observability/replay-capture';
 import { createToolBatchState, runToolCallBatch } from './external-tool-batch';
 import { applyWallClockGuard, applyToolOveruseGuard } from './external-loop-guards';
 import { isOrchestrationTool } from './orchestration-dispatch';
@@ -193,6 +194,8 @@ export async function runExternalStream(
                 : messages;
             if (!timings.firstLlmCallAt) timings.firstLlmCallAt = Date.now();
             timings.turns++;
+            const replayTool = turn === 0 && forcedFirstTurnToolName && turnTools.length > 0 ? { type: 'function', function: { name: forcedFirstTurnToolName } } : undefined;
+            captureReplay(req.sessionId, { requestId: provenance.requestId, provider: resolved, messages: fittedMessages, tools: turnTools, tool_choice: replayTool, thinking: resolveThinking(req, caps.thinking) }); // 재현 번들(F24.7)
             result = await resolved.provider.streamChat(
                 {
                     messages: fittedMessages,
@@ -330,6 +333,7 @@ export async function runExternalStream(
             const fittedFinal = estimateMessageTokens(messages) > EXTERNAL_LLM_INPUT_TOKEN_BUDGET
                 ? truncateMessagesPreservingSystem(messages, EXTERNAL_LLM_INPUT_TOKEN_BUDGET)
                 : messages;
+            captureReplay(req.sessionId, { requestId: provenance.requestId, provider: resolved, messages: fittedFinal, thinking: resolveThinking(req, caps.thinking) });
             result = await resolved.provider.streamChat(
                 {
                     messages: fittedFinal,

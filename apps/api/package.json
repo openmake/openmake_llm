@@ -19,6 +19,7 @@
         "eval:response": "ts-node src/evaluation/run-response-evaluation.ts",
         "eval:citation": "ts-node src/evaluation/run-citation-evaluation.ts",
         "eval:budget": "ts-node src/evaluation/run-budget-evaluation.ts",
+        "replay:request": "ts-node src/scripts/replay-request.ts",
         "eval:all": "npm run eval:routing && npm run eval:response && npm run eval:citation"
     },
     "dependencies": {

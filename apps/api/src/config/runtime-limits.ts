@@ -2159,6 +2159,20 @@ export const SESSION_BRANCH = {
     TREE_MAX_DEPTH: parseInt(process.env.SESSION_TREE_MAX_DEPTH || '20', 10),
 } as const;
 
+/** 디버그 큐 재현 번들(F24.7, 144) — 세션별 마지막 LLM 요청 본문을 메모리에 잠깐 들고 있다가 오류·신고 시 보관. */
+export const REPLAY_CAPTURE = {
+    ENABLED: process.env.REPLAY_CAPTURE_ENABLED !== 'false',
+    /** 번들 최대 바이트 — 넘으면 도구 결과부터, 그다음 오래된 대화부터 자른다. REPLAY_BUNDLE_MAX_BYTES */
+    MAX_BYTES: parseInt(process.env.REPLAY_BUNDLE_MAX_BYTES || '', 10) || 256 * 1024,
+    /** 세션당 보관 턴 수(도구 루프 안의 마지막 LLM 호출들) */
+    TURNS_PER_SESSION: 2,
+    /** 메모리 보관 시간·세션 수 상한 — 신고는 보통 응답 직후라 짧게 */
+    TTL_MS: 30 * 60 * 1000,
+    MAX_SESSIONS: 300,
+    /** 관리자 REST 리플레이 분당 상한 — 실제 LLM 호출 비용 */
+    REPLAY_PER_MINUTE: 3,
+} as const;
+
 /** 채팅 요청 사실 테이블(F24.2, 142) — 요청당 1행 지문·결과. CHAT_REQUESTS_ENABLED=false 로 끔. */
 export const CHAT_REQUESTS = {
     ENABLED: process.env.CHAT_REQUESTS_ENABLED !== 'false',
