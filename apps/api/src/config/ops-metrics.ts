@@ -35,6 +35,7 @@ export const OPS_METRICS_INTENT_PATTERNS: readonly RegExp[] = [
     /(목표\s*미달|goal_incomplete|judge|판정)[^\n]{0,10}(비율|건수|rate|현황)/i,
     /(운영|ops)\s*(지표|현황|상태|metrics|status)/i,
     /(지난|최근|오늘|today|last)\s*[0-9]*\s*(시간|hour|일|day|주|week)[^\n]{0,16}(작업|task|도구|tool|오류|error|토큰|token)/i,
+    /(프롬프트|prompt)[^\n]{0,8}(버전|지문|version|fingerprint|변경)/i,
     /ops_metrics/i,
 ];
 

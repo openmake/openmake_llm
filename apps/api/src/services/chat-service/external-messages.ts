@@ -5,7 +5,7 @@
  *
  * @module services/chat-service/external-messages
  */
-import { buildExternalSystemPrompt } from './external-system-prompt';
+import { buildExternalSystemPromptParts } from './external-system-prompt';
 import type { ChatMessage } from '../../llm';
 import type { ChatMessageRequest } from '../chat-service-types';
 import type { ResolvedProvider } from '../../providers/provider-router';
@@ -20,12 +20,16 @@ export function buildExternalMessages(params: {
     wantsMap: boolean;
     orchestration: OrchestrationIntents;
     wantsSpawn: boolean;
+    /** 정적/가변 파트 관측(요청 지문 F24.2) — 조립 결과는 바꾸지 않는다 */
+    onPromptParts?: (parts: { staticParts: string[]; dynamicParts: string[] }) => void;
 }): ChatMessage[] {
     const { req, resolved, ctx, wantsMap, orchestration, wantsSpawn } = params;
     const messages: ChatMessage[] = [];
 
     // 시스템 프롬프트 조립(정적 헌법 → DYNAMIC → 가변)은 external-system-prompt 로 분리.
-    const systemContent = buildExternalSystemPrompt({ req, resolved, ctx, wantsMap, orchestration, wantsSpawn });
+    const parts = buildExternalSystemPromptParts({ req, resolved, ctx, wantsMap, orchestration, wantsSpawn });
+    params.onPromptParts?.(parts);
+    const systemContent = [...parts.staticParts, ...parts.dynamicParts].join('\n\n');
     if (systemContent) {
         messages.push({ role: 'system', content: systemContent });
     }

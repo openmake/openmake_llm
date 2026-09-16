@@ -2159,6 +2159,17 @@ export const SESSION_BRANCH = {
     TREE_MAX_DEPTH: parseInt(process.env.SESSION_TREE_MAX_DEPTH || '20', 10),
 } as const;
 
+/** 채팅 요청 사실 테이블(F24.2, 142) — 요청당 1행 지문·결과. CHAT_REQUESTS_ENABLED=false 로 끔. */
+export const CHAT_REQUESTS = {
+    ENABLED: process.env.CHAT_REQUESTS_ENABLED !== 'false',
+    /** 요청 행 보존(일). CHAT_REQUESTS_RETENTION_DAYS */
+    RETENTION_DAYS: parseInt(process.env.CHAT_REQUESTS_RETENTION_DAYS || '90', 10),
+    /** 지문 원문 보존 — 마지막 사용 후(일) */
+    FINGERPRINT_RETENTION_DAYS: 180,
+    /** 프로세스가 이미 upsert 한 지문 기억 수 — 매 요청 원문(~10KB) 재기록을 막는다 */
+    FINGERPRINT_SEEN_MAX: 500,
+} as const;
+
 /** 로그 자격증명 마스킹(F24.6) — utils/logger 가 출력 직전에 적용. LOG_REDACT_SECRETS=false 로 끔. */
 export const LOG_REDACT = {
     ENABLED: process.env.LOG_REDACT_SECRETS !== 'false',

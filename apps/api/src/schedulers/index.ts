@@ -80,6 +80,22 @@ export async function startAllSchedulers(): Promise<void> {
         logger.warn('TaskSandbox 정리 실패(무시):', err);
     }
 
+    // 7-a. 채팅 요청 사실 테이블 보존 정리(F24.2, 142) — 요청 행 90일·미사용 지문 180일
+    try {
+        const { CHAT_REQUESTS } = await import('../config/runtime-limits');
+        if (CHAT_REQUESTS.ENABLED) {
+            const { ChatRequestRepository } = await import('../data/repositories/chat-request-repository');
+            const { getPool } = await import('../data/models/unified-database');
+            const purge = () => new ChatRequestRepository(getPool()).purge(CHAT_REQUESTS.RETENTION_DAYS, CHAT_REQUESTS.FINGERPRINT_RETENTION_DAYS)
+                .then((r) => { if (r.requests || r.fingerprints) logger.info(`chat_requests 보존 정리: 요청 ${r.requests} · 지문 ${r.fingerprints}`); })
+                .catch(() => { /* 142 적용 전 등 — 다음 주기에 재시도 */ });
+            void purge();
+            setInterval(() => { void purge(); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
+        }
+    } catch (err) {
+        logger.warn('chat_requests 보존 정리 등록 실패(무시):', err);
+    }
+
     // 7-b. 질문 응답 대기 주차 스윕(F16.7) — 결정 도착분 재개·상한 초과분 실패·대기분 workspace 유지(주차가 없으면 조회 1회)
     try {
         const { sweepParkedTasks } = await import('../services/agent-task/hitl-park');

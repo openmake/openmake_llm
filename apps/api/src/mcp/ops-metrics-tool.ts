@@ -18,7 +18,7 @@ import { TOOL_HEALTH_QUERY } from '../config/tool-health';
 
 export const OPS_METRICS_QUERIES = [
     'summary', 'failed_runs', 'slowest_runs', 'runs_by_model',
-    'tool_errors', 'token_usage', 'goal_incomplete',
+    'tool_errors', 'token_usage', 'goal_incomplete', 'prompt_versions',
 ] as const;
 type OpsMetricsQuery = (typeof OPS_METRICS_QUERIES)[number];
 
@@ -91,6 +91,11 @@ async function runOpsMetricsQuery(query: OpsMetricsQuery, hours: number, limit: 
             ]);
             return { completion_verdicts: verdicts, failure_reasons: reasons, runs: summary };
         }
+        case 'prompt_versions': {
+            // 채팅 요청 정적 프롬프트 지문별 분포(F24.2, 142) — 배포 사이 프롬프트 변화와 TTFT·오류율을 나란히 본다
+            const { ChatRequestRepository } = await import('../data/repositories/chat-request-repository');
+            return { prompt_versions: await new ChatRequestRepository(pool).promptVersions(hours, limit) };
+        }
         default: {
             const never: never = query;
             throw new Error(`unknown query ${String(never)}`);
@@ -113,7 +118,8 @@ export const opsMetricsTool: MCPToolDefinition<OpsMetricsArgs> = {
                     type: 'string',
                     enum: [...OPS_METRICS_QUERIES],
                     description: 'summary=상태별 작업 요약+서버별 도구 호출 · failed_runs=실패 작업 목록 · slowest_runs=오래 걸린 작업 · '
-                        + 'runs_by_model=모델별 작업 · tool_errors=서버/도구/원인별 오류 · token_usage=토큰·비용 · goal_incomplete=목표 미달 판정 분포·실패 사유',
+                        + 'runs_by_model=모델별 작업 · tool_errors=서버/도구/원인별 오류 · token_usage=토큰·비용 · goal_incomplete=목표 미달 판정 분포·실패 사유'
+                        + ' · prompt_versions=채팅 시스템 프롬프트 지문별 요청 수·오류율·TTFT p50',
                 },
                 window: {
                     type: 'string',
