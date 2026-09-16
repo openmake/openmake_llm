@@ -34,7 +34,9 @@ jobs:
     # 실제 실행 시간 단축(Jest 병렬화·게이트 분리)은 별도 과제.
     # 25 → 35 (2026-09-02): 총 소요가 21~24분(Jest 단독 ~19분)으로 다시 상한에 붙어
     # 게이트 16단계 전부 success 인데 25분 00초에 cancelled 된 사례 재발(#711 1차).
-    timeout-minutes: 35
+    # 35 → 50 (2026-09-17): Jest 단독 ~33분(4,000건 대)으로 마지막 게이트(Response Pattern mock)가
+    # 35분 02초에 cancelled 됐다(#912 1차 — 그 앞 게이트 전부 success). Jest 병렬화는 여전히 별도 과제.
+    timeout-minutes: 50
 
     # GITHUB_TOKEN 권한 명시 (PR 코멘트 게시용)
     # - contents: read  → 체크아웃에 필요
