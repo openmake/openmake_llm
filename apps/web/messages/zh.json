@@ -581,7 +581,29 @@
     },
     "resize": "调整面板宽度（双击重置）",
     "exportXlsx": "另存为 XLSX",
-    "exportNoSourceXlsx": "XLSX 导出仅支持 CSV 或报告类工件"
+    "exportNoSourceXlsx": "XLSX 导出仅支持 CSV 或报告类工件",
+    "comments": {
+      "toggle": "评论",
+      "empty": "还没有评论。",
+      "placeholder": "输入评论 (Markdown)",
+      "submit": "发布",
+      "reply": "回复",
+      "replying": "正在回复",
+      "cancelReply": "取消",
+      "resolve": "标记已解决",
+      "unresolve": "重新打开",
+      "resolved": "已解决",
+      "delete": "删除",
+      "deleteConfirm": "要删除这条评论吗？",
+      "deletedPlaceholder": "该评论已删除。",
+      "apply": "请模型据此修改",
+      "applyHint": "把引用此评论的修改请求放入输入框",
+      "applyPrompt": "请根据下面这条评论修改工件“{title}”，生成新版本。",
+      "me": "我",
+      "user": "用户 {id}",
+      "loadFailed": "无法加载评论。",
+      "actionFailed": "操作失败。"
+    }
   },
   "history": {
     "title": "对话历史",

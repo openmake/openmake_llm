@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { X, Code2, Eye, Copy, Check, Play, Loader2, Download, Share2, PackageX } from "lucide-react";
+import { X, Code2, Eye, Copy, Check, Play, Loader2, Download, Share2, PackageX, MessageSquare } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAppStore } from "@/lib/store";
 import type { Artifact } from "@/lib/store";
@@ -12,6 +12,7 @@ import { checkRunnable } from "@openmake/config";
 import { appendAnonSessionId } from "@/lib/anon-session";
 import { ArtifactFrame } from "./artifact-frame";
 import { ArtifactShareModal } from "./artifact-share-modal";
+import { ArtifactComments } from "./artifact-comments";
 import { downloadArtifact } from "@/lib/artifact-download";
 import { Markdown } from "./markdown";
 import { cn } from "@/lib/utils";
@@ -264,6 +265,7 @@ export function ArtifactPanel() {
   const [view, setView] = useState<"preview" | "code">("preview");
   const [copied, setCopied] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
   // pdf/docx 서버 변환 상태 (P1 Phase 3) — busy 중 중복 클릭 차단, 실패 메시지는 헤더 밑 1줄.
   const [exportBusy, setExportBusy] = useState<ExportFormat | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -409,6 +411,8 @@ export function ArtifactPanel() {
   const latestVersion = versions.length ? versions[versions.length - 1].version : null;
   const shownVersion = override?.version ?? latestVersion;
   const canShare = !!currentSessionId && !active.streaming;
+  // 댓글(147) — 영속 채팅 세션의 아티팩트만(작업 산출물은 artifacts 테이블 밖). 열림 상태 훅은 early return 앞에 둔다
+  const canComment = !!currentSessionId && !active.taskId && !active.streaming;
 
   const copy = async () => {
     try {
@@ -511,6 +515,17 @@ export function ArtifactPanel() {
             {exportBusy === format ? "…" : format.toUpperCase()}
           </button>
         ))}
+        {canComment && (
+          <button
+            type="button"
+            onClick={() => setCommentsOpen((v) => !v)}
+            aria-label={t("comments.toggle")}
+            aria-pressed={commentsOpen}
+            className={cn("grid h-7 w-7 place-items-center rounded transition hover:bg-surface-3 hover:text-fg", commentsOpen ? "text-accent" : "text-muted")}
+          >
+            <MessageSquare className="h-4 w-4" />
+          </button>
+        )}
         {canShare && (
           <button
             type="button"
@@ -574,6 +589,11 @@ export function ArtifactPanel() {
       <div className="min-h-0 flex-1 overflow-hidden">
         <ArtifactBody artifact={shown} view={canToggle ? view : "preview"} sessionId={currentSessionId} version={shownVersion} />
       </div>
+      {commentsOpen && canComment && currentSessionId && (
+        <div className="h-[40%] min-h-[180px] border-t border-border">
+          <ArtifactComments sessionId={currentSessionId} artifactId={active.id} title={shown.title} />
+        </div>
+      )}
     </aside>
   );
 }

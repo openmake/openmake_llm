@@ -581,7 +581,29 @@
     },
     "resize": "パネル幅を調整 (ダブルクリックでリセット)",
     "exportXlsx": "XLSXで保存",
-    "exportNoSourceXlsx": "XLSX 変換は CSV またはレポートのアーティファクトのみ対応しています"
+    "exportNoSourceXlsx": "XLSX 変換は CSV またはレポートのアーティファクトのみ対応しています",
+    "comments": {
+      "toggle": "コメント",
+      "empty": "まだコメントはありません。",
+      "placeholder": "コメントを入力 (Markdown)",
+      "submit": "投稿",
+      "reply": "返信",
+      "replying": "返信を作成中",
+      "cancelReply": "キャンセル",
+      "resolve": "解決",
+      "unresolve": "再オープン",
+      "resolved": "解決済み",
+      "delete": "削除",
+      "deleteConfirm": "このコメントを削除しますか?",
+      "deletedPlaceholder": "削除されたコメントです。",
+      "apply": "モデルに反映を依頼",
+      "applyHint": "このコメントを引用した修正依頼を入力欄に入れます",
+      "applyPrompt": "アーティファクト「{title}」に付いた以下のコメントを反映して、新しいバージョンに修正してください。",
+      "me": "自分",
+      "user": "ユーザー {id}",
+      "loadFailed": "コメントを読み込めませんでした。",
+      "actionFailed": "処理できませんでした。"
+    }
   },
   "history": {
     "title": "会話履歴",

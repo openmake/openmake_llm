@@ -581,7 +581,29 @@
     },
     "resize": "패널 너비 조절 (더블클릭: 기본값)",
     "exportXlsx": "XLSX로 저장",
-    "exportNoSourceXlsx": "XLSX 변환은 CSV 또는 보고서 아티팩트만 지원합니다"
+    "exportNoSourceXlsx": "XLSX 변환은 CSV 또는 보고서 아티팩트만 지원합니다",
+    "comments": {
+      "toggle": "댓글",
+      "empty": "아직 댓글이 없습니다.",
+      "placeholder": "댓글을 입력하세요 (마크다운)",
+      "submit": "등록",
+      "reply": "답글",
+      "replying": "답글 작성 중",
+      "cancelReply": "취소",
+      "resolve": "해결",
+      "unresolve": "다시 열기",
+      "resolved": "해결됨",
+      "delete": "삭제",
+      "deleteConfirm": "이 댓글을 삭제할까요?",
+      "deletedPlaceholder": "삭제된 댓글입니다.",
+      "apply": "모델에게 반영 요청",
+      "applyHint": "이 댓글을 인용한 수정 요청을 입력창에 넣습니다",
+      "applyPrompt": "아티팩트 \"{title}\" 에 달린 아래 댓글을 반영해서 새 버전으로 수정해 주세요.",
+      "me": "나",
+      "user": "사용자 {id}",
+      "loadFailed": "댓글을 불러오지 못했습니다.",
+      "actionFailed": "처리하지 못했습니다."
+    }
   },
   "history": {
     "title": "대화 히스토리",

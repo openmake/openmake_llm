@@ -581,7 +581,29 @@
     },
     "resize": "Panelgröße ändern (Doppelklick zum Zurücksetzen)",
     "exportXlsx": "Als XLSX speichern",
-    "exportNoSourceXlsx": "XLSX-Export unterstützt nur CSV- oder Bericht-Artefakte"
+    "exportNoSourceXlsx": "XLSX-Export unterstützt nur CSV- oder Bericht-Artefakte",
+    "comments": {
+      "toggle": "Kommentare",
+      "empty": "Noch keine Kommentare.",
+      "placeholder": "Kommentar schreiben (Markdown)",
+      "submit": "Senden",
+      "reply": "Antworten",
+      "replying": "Antwort wird verfasst",
+      "cancelReply": "Abbrechen",
+      "resolve": "Erledigt",
+      "unresolve": "Wieder öffnen",
+      "resolved": "Erledigt",
+      "delete": "Löschen",
+      "deleteConfirm": "Diesen Kommentar löschen?",
+      "deletedPlaceholder": "Dieser Kommentar wurde gelöscht.",
+      "apply": "Vom Modell umsetzen lassen",
+      "applyHint": "Fügt eine Änderungsanfrage mit diesem Kommentar ins Eingabefeld ein",
+      "applyPrompt": "Bitte überarbeite das Artefakt „{title}“ in einer neuen Version gemäß dem folgenden Kommentar.",
+      "me": "Ich",
+      "user": "Nutzer {id}",
+      "loadFailed": "Kommentare konnten nicht geladen werden.",
+      "actionFailed": "Aktion fehlgeschlagen."
+    }
   },
   "history": {
     "title": "Unterhaltungsverlauf",

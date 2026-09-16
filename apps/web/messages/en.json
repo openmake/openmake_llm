@@ -581,7 +581,29 @@
     },
     "resize": "Resize panel (double-click to reset)",
     "exportXlsx": "Save as XLSX",
-    "exportNoSourceXlsx": "XLSX export supports CSV or report artifacts only"
+    "exportNoSourceXlsx": "XLSX export supports CSV or report artifacts only",
+    "comments": {
+      "toggle": "Comments",
+      "empty": "No comments yet.",
+      "placeholder": "Write a comment (Markdown)",
+      "submit": "Post",
+      "reply": "Reply",
+      "replying": "Replying",
+      "cancelReply": "Cancel",
+      "resolve": "Resolve",
+      "unresolve": "Reopen",
+      "resolved": "Resolved",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this comment?",
+      "deletedPlaceholder": "This comment was deleted.",
+      "apply": "Ask the model to apply",
+      "applyHint": "Puts a revision request quoting this comment into the composer",
+      "applyPrompt": "Please revise the artifact \"{title}\" into a new version that addresses the comment below.",
+      "me": "Me",
+      "user": "User {id}",
+      "loadFailed": "Couldn't load comments.",
+      "actionFailed": "Couldn't complete the action."
+    }
   },
   "history": {
     "title": "Conversation history",
