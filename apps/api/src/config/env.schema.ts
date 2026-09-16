@@ -107,6 +107,7 @@ export const envSchema = z
             message: 'LLM_WARMUP_TIMEOUT_MS must be between 1 and 60000 milliseconds',
         }),
         LLM_HOURLY_TOKEN_LIMIT: nonNegativeIntWithDefault(300000),
+        QUOTA_FAIL_MODE: z.enum(['open', 'closed']).optional(),
         LLM_WEEKLY_TOKEN_LIMIT: nonNegativeIntWithDefault(5000000),
         /** 외부 모델 정책 JSON(Control Plane 기초) — 파싱은 config/external-model-policy, 형식 검증은 registry */
         EXTERNAL_MODEL_POLICY: z.string().optional(),

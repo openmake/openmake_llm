@@ -21,6 +21,7 @@ import { Request, Response, NextFunction } from 'express';
 import { createLogger } from './logger';
 import { error as apiError, badRequest as apiBadRequest, ErrorCodes, ApiErrorResponse } from './api-response';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
+import { QuotaUnavailableError } from '../errors/quota-unavailable.error';
 import { KeyExhaustionError } from '../errors/key-exhaustion.error';
 import { ContextOverflowError } from '../errors/context-overflow.error';
 import { ProviderError, PROVIDER_ERROR_HTTP_STATUS } from '../providers/provider-errors';
@@ -144,6 +145,14 @@ export function errorHandler(
             limit: err.limit,
             retryAfter: err.retryAfterSeconds,
         }));
+        return;
+    }
+
+    // ── QuotaUnavailableError → 503 (QUOTA_FAIL_MODE=closed) ──
+    if (err instanceof QuotaUnavailableError) {
+        logger.error(`Quota store unavailable: ${err.message}`, { path: req.path });
+        res.set('Retry-After', String(err.retryAfterSeconds));
+        res.status(503).json(apiError(ErrorCodes.SERVICE_UNAVAILABLE, err.message, { retryAfter: err.retryAfterSeconds }));
         return;
     }
 

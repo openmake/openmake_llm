@@ -2101,3 +2101,15 @@ export const ORG_CONTEXT = {
     /** 사용자별 멤버십·활성 조직 캐시 보존(ms). ORG_CONTEXT_CACHE_TTL_MS 로 오버라이드. */
     CACHE_TTL_MS: parseInt(process.env.ORG_CONTEXT_CACHE_TTL_MS || '60000', 10),
 } as const;
+
+/**
+ * 쿼터 예약(F25 PR-2) — LLM 호출 전에 추정 토큰을 버킷에 선반영하고 응답 후 실측으로 정산한다.
+ */
+export const QUOTA_RESERVE = {
+    /** 출력 토큰 예약 기본값(num_predict 미지정 시). QUOTA_RESERVE_OUTPUT_TOKENS */
+    OUTPUT_TOKENS: parseInt(process.env.QUOTA_RESERVE_OUTPUT_TOKENS || '1024', 10),
+    /** 정산 잡 주기(ms, 기본 6시간). QUOTA_RECONCILE_INTERVAL_MS */
+    RECONCILE_INTERVAL_MS: parseInt(process.env.QUOTA_RECONCILE_INTERVAL_MS || String(6 * 60 * 60 * 1000), 10),
+    /** 정산 잡 활성(기본 true). QUOTA_RECONCILE_ENABLED=false 로 끔 */
+    RECONCILE_ENABLED: process.env.QUOTA_RECONCILE_ENABLED !== 'false',
+} as const;

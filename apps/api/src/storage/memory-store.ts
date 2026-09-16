@@ -42,10 +42,19 @@ export class MemoryStore implements KeyValueStore {
         return this.incrBy(key, 1);
     }
 
+    /**
+     * 원자적 증가 — Redis INCRBY 와 같은 계약. ⚠️ 읽기-쓰기 사이에 await 를 두지 않는다:
+     * 종전엔 `await this.get()` 으로 yield 해 동시 호출이 모두 같은 값을 읽었고, 쿼터 예약(F25 PR-2)의
+     * "동시 N요청 중 1건만 통과" 판정이 메모리 백엔드에서 깨졌다.
+     */
     async incrBy(key: string, amount: number): Promise<number> {
-        const current = await this.get<number>(key);
-        const next = (typeof current === 'number' ? current : 0) + amount;
         const existing = this.store.get(key);
+        let current = 0;
+        if (existing) {
+            const parsed = Number(existing.value);
+            current = Number.isFinite(parsed) ? parsed : 0;
+        }
+        const next = current + amount;
         this.store.set(key, { value: JSON.stringify(next), timer: existing?.timer });
         return next;
     }

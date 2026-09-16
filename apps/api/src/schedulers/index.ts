@@ -6,6 +6,7 @@
  */
 
 import { startSessionCleanupScheduler, stopSessionCleanupScheduler } from '../data/conversation-db';
+import { startQuotaReconcileJob } from '../services/cost/quota-reconcile-job';
 import { startDbRetention } from '../data/db-retention';
 import { startPeriodicCleanup } from '../utils/token-cleanup';
 import { createLogger } from '../utils/logger';
@@ -33,6 +34,7 @@ export async function startAllSchedulers(): Promise<void> {
     // 2. DB 데이터 보존 정리 스케줄러 (만료 문서, 토큰, OAuth state 정리)
     try {
         startDbRetention();
+        startQuotaReconcileJob();
         logger.debug('DbRetentionScheduler 시작 완료');
     } catch (err) {
         logger.error('DbRetentionScheduler 시작 실패:', err);

@@ -23,12 +23,13 @@ import { createLogger } from '../utils/logger';
 import { withSpan } from '../observability/otel';
 import { getApiUsageTracker } from './usage-tracker';
 import { recordLlmCost } from '../services/cost/cost-ledger-service';
-import { checkUserQuota, recordUserUsage } from './user-quota';
+import { reserveUserQuota, settleUserQuota, type QuotaReservation } from './user-quota';
 import { streamChat, nonStreamChat } from './stream-parser';
 import { buildExtraBody } from './reasoning-adapter';
 import { applyLocalSamplingPreset } from './sampling-preset';
 import { applyLocalToolStrict } from './tool-strict';
-import { selectModelByCapacityExact } from './model-pool';
+import { selectModelByCapacityExact, estimateTokens } from './model-pool';
+import { QUOTA_RESERVE } from '../config/runtime-limits';
 import { MODEL_POOL_CONFIG } from '../config/model-pool';
 import {
     webSearch as webSearchAdapter,
@@ -97,13 +98,16 @@ export class LLMClient {
         this.config.model = model;
     }
 
-    private async checkQuota(): Promise<void> {
-        // 외부 BYOK provider 는 로컬 vLLM 용량을 쓰지 않으므로 쿼터 면제 (LLMConfig.quotaExempt 참고).
-        if (this.config.quotaExempt) return;
-        // per-user enforcement (KVStore 기반, 멀티프로세스 정합). 전역 tracker 는
-        // record 경로에서 관측(dashboard)용으로만 누적 — "한 사용자 소진 시 전체 차단" 버그 제거.
-        // fail-open 은 checkUserQuota 내부 처리 (QuotaExceededError 만 throw).
-        await checkUserQuota(this.config.userId, Date.now());
+    /**
+     * 쿼터 예약(F25 PR-2) — 추정 토큰(입력 추정 + 출력 예약)을 선반영하고 응답 후 실측으로 정산한다.
+     * 외부 BYOK provider 는 로컬 vLLM 용량을 쓰지 않으므로 면제(LLMConfig.quotaExempt).
+     * per-user enforcement 는 KVStore 기반(멀티프로세스 정합). fail-open/closed 는 QUOTA_FAIL_MODE.
+     */
+    private async reserveQuota(messages: ChatMessage[], numPredict?: number): Promise<QuotaReservation | null> {
+        if (this.config.quotaExempt) return null;
+        const promptEstimate = messages.reduce((n, m) => n + estimateTokens(typeof m.content === 'string' ? m.content : ''), 0);
+        const outputReserve = numPredict && numPredict > 0 ? numPredict : QUOTA_RESERVE.OUTPUT_TOKENS;
+        return reserveUserQuota(this.config.userId, promptEstimate + outputReserve, Date.now());
     }
 
     async chat(
@@ -125,7 +129,9 @@ export class LLMClient {
             onActivity?: () => void;
         },
     ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
-        await this.checkQuota();
+        const reservation = await this.reserveQuota(messages, options?.num_predict);
+        let settledTokens = 0;
+        try {
 
         // Model Pool routing — this.config.model 이 pool default 와 같을 때만 자동 선택.
         // 다른 model 로 인스턴스화 됐으면 manual 우회 (사용자 명시 모델 존중).
@@ -210,7 +216,7 @@ export class LLMClient {
                     // 않도록 건너뛴다. BYOK 귀속(onUsage)은 면제와 무관하게 항상 수행.
                     if (!this.config.quotaExempt) {
                         getApiUsageTracker().record(totalTokens);  // 전역 aggregate (dashboard 관측용)
-                        void recordUserUsage(this.config.userId, totalTokens, Date.now());  // per-user enforcement 누적
+                        settledTokens = totalTokens;  // per-user 버킷은 finally 의 settle 이 예약분과 정산
                         // 비용 원장(F25) — 로컬 토큰. 단가는 cost_rates/env, 기본 0
                         recordLlmCost({
                             userId: this.config.userId, model: poolDecision.model, external: false,
@@ -241,6 +247,10 @@ export class LLMClient {
                 },
             },
         );
+        } finally {
+            // 예약 정산 — 성공은 실측 토큰, 오류·중단은 0(전액 환불). fail-open.
+            void settleUserQuota(reservation, settledTokens);
+        }
     }
 
     /**

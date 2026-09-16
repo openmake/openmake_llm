@@ -56,6 +56,8 @@ export interface EnvConfig {
     llmTimeout: number;
     llmWarmupTimeoutMs: number;
     llmHourlyTokenLimit: number;
+    /** 쿼터 저장소 장애 시 open(통과)|closed(503) — F25 PR-2 */
+    quotaFailMode: 'open' | 'closed';
     llmWeeklyTokenLimit: number;
     /** 외부 모델 정책 원문(JSON, Control Plane 기초) — config/external-model-policy 가 파싱 */
     externalModelPolicy: string;
@@ -198,6 +200,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     llmTimeout: 120000,
     llmWarmupTimeoutMs: 10000,
     llmHourlyTokenLimit: 300000,
+    quotaFailMode: 'open',
     llmWeeklyTokenLimit: 5000000,
     externalModelPolicy: '',
     llmEnableReasoningEffort: false,
@@ -339,6 +342,7 @@ export function loadConfig(): EnvConfig {
         LLM_TIMEOUT: env('LLM_TIMEOUT'),
         LLM_WARMUP_TIMEOUT_MS: env('LLM_WARMUP_TIMEOUT_MS'),
         LLM_HOURLY_TOKEN_LIMIT: env('LLM_HOURLY_TOKEN_LIMIT'),
+        QUOTA_FAIL_MODE: env('QUOTA_FAIL_MODE'),
         LLM_WEEKLY_TOKEN_LIMIT: env('LLM_WEEKLY_TOKEN_LIMIT'),
         EXTERNAL_MODEL_POLICY: env('EXTERNAL_MODEL_POLICY'),
         LLM_ENABLE_REASONING_EFFORT: env('LLM_ENABLE_REASONING_EFFORT'),
@@ -455,6 +459,7 @@ export function loadConfig(): EnvConfig {
         llmTimeout: parsed.LLM_TIMEOUT ?? DEFAULT_CONFIG.llmTimeout,
         llmWarmupTimeoutMs: parsed.LLM_WARMUP_TIMEOUT_MS ?? DEFAULT_CONFIG.llmWarmupTimeoutMs,
         llmHourlyTokenLimit: parsed.LLM_HOURLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmHourlyTokenLimit,
+        quotaFailMode: parsed.QUOTA_FAIL_MODE ?? DEFAULT_CONFIG.quotaFailMode,
         llmWeeklyTokenLimit: parsed.LLM_WEEKLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmWeeklyTokenLimit,
         externalModelPolicy: parsed.EXTERNAL_MODEL_POLICY ?? DEFAULT_CONFIG.externalModelPolicy,
         llmEnableReasoningEffort: (parsed.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true',

@@ -19,6 +19,7 @@ import { getConfig } from '../config';
 import { budgetedOrgsFor, clearOrgMembershipCache } from '../services/org/membership-cache';
 import { createLogger } from '../utils/logger';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
+import { QuotaUnavailableError } from '../errors/quota-unavailable.error';
 import { isPersistableUserId } from '../utils/user-id-validation';
 
 const logger = createLogger('UserQuota');
@@ -44,6 +45,22 @@ function monthKey(userId: string, now: number): string {
     return `llmq:${userId}:m:${monthBucket(now)}`;
 }
 const MONTH_TTL_MS = 62 * 24 * 60 * 60 * 1000;
+
+/** 정산 잡(services/cost/quota-reconcile-job)용 공개 헬퍼 */
+export function weekBucketKey(userId: string, now: number): string { return weekKey(userId, now); }
+export function monthBucketKey(userId: string, now: number): string { return monthKey(userId, now); }
+export { WEEK_TTL_MS, MONTH_TTL_MS };
+export function weekWindow(now: number): { from: Date; to: Date } {
+    const start = Math.floor(now / WEEK_MS) * WEEK_MS;
+    return { from: new Date(start), to: new Date(start + WEEK_MS) };
+}
+export function monthWindow(now: number): { from: Date; to: Date } {
+    const d = new Date(now);
+    const from = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+    const to = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
+    return { from, to };
+}
+
 
 /** 조직 예산 캐시는 services/org/membership-cache 로 통합(F22 Phase A) — 이름은 호출처 호환용으로 유지. */
 export function clearOrgBudgetCache(): void { clearOrgMembershipCache(); }
@@ -147,7 +164,90 @@ export async function checkUserQuota(userId: string | undefined, now: number): P
         await checkOrgBudget(userId, now);
     } catch (e) {
         if (e instanceof QuotaExceededError) throw e;
+        if (cfg.quotaFailMode === 'closed') {
+            logger.error('per-user quota check 저장소 장애 (fail-closed):', e);
+            throw new QuotaUnavailableError(e);
+        }
         logger.warn('per-user quota check 실패 (fail-open):', e);
+    }
+}
+
+/** 예약 핸들 — settleUserQuota 로 실측 정산. keys 는 hour/week/month 버킷. */
+export interface QuotaReservation {
+    userId: string;
+    estimate: number;
+    keys: { key: string; ttlMs: number }[];
+}
+
+/**
+ * 원자적 예약(F25 PR-2): 추정 토큰을 hour→week→month 버킷에 incrBy 로 **선반영**하고, 증가 후 값이 한도를
+ * 넘으면 지금까지 올린 만큼 환불하고 throw. 동시 N요청 중 한도를 넘는 요청은 자기 증가분의 결과값으로
+ * 즉시 판정되므로 초과 통과가 불가능하다(종전 check-then-record 의 경쟁 창 제거).
+ * 조직 월 예산은 종전처럼 멤버 합산 읽기로 검사한다(이 사용자의 예약분은 월 버킷에 이미 반영돼 있다).
+ * KV 장애: QUOTA_FAIL_MODE=open 이면 예약 없이 통과(estimate 0 핸들), closed 면 QuotaUnavailableError.
+ */
+export async function reserveUserQuota(userId: string | undefined, estimate: number, now: number): Promise<QuotaReservation | null> {
+    if (!isPersistableUserId(userId)) return null;
+    const cfg = getConfig();
+    const est = Number.isFinite(estimate) && estimate > 0 ? Math.ceil(estimate) : 0;
+    const plan: Array<{ key: string; ttlMs: number; limit: number; type: 'hourly' | 'weekly' | null }> = [
+        { key: hourKey(userId, now), ttlMs: HOUR_TTL_MS, limit: cfg.llmHourlyTokenLimit, type: 'hourly' },
+        { key: weekKey(userId, now), ttlMs: WEEK_TTL_MS, limit: cfg.llmWeeklyTokenLimit, type: 'weekly' },
+        { key: monthKey(userId, now), ttlMs: MONTH_TTL_MS, limit: 0, type: null },
+    ];
+    const applied: { key: string; ttlMs: number }[] = [];
+    const store = getKeyValueStore();
+    try {
+        for (const step of plan) {
+            const after = est > 0 ? await store.incrBy(step.key, est) : ((await store.get<number>(step.key)) ?? 0);
+            if (est > 0) { applied.push({ key: step.key, ttlMs: step.ttlMs }); void store.expire(step.key, step.ttlMs).catch(() => undefined); }
+            const usedNum = typeof after === 'number' ? after : 0;
+            // 한도 판정은 "이 요청 포함" — est 가 0 이면 종전 checkUserQuota 와 같은 누적치 비교
+            if (step.type && step.limit > 0 && (est > 0 ? usedNum > step.limit : usedNum >= step.limit)) {
+                await refund(store, applied, est);
+                throw new QuotaExceededError(step.type, Math.max(0, usedNum - est), step.limit);
+            }
+        }
+        try {
+            await checkOrgBudget(userId, now);
+        } catch (e) {
+            if (e instanceof QuotaExceededError) { await refund(store, applied, est); }
+            throw e;
+        }
+        return { userId, estimate: est, keys: applied };
+    } catch (e) {
+        if (e instanceof QuotaExceededError) throw e;
+        if (cfg.quotaFailMode === 'closed') {
+            logger.error('per-user quota 저장소 장애 (fail-closed):', e);
+            throw new QuotaUnavailableError(e);
+        }
+        logger.warn('per-user quota 예약 실패 (fail-open):', e);
+        return { userId, estimate: 0, keys: [] };
+    }
+}
+
+async function refund(store: ReturnType<typeof getKeyValueStore>, applied: { key: string }[], amount: number): Promise<void> {
+    if (amount <= 0) return;
+    await Promise.all(applied.map((a) => store.incrBy(a.key, -amount).catch(() => undefined)));
+}
+
+/**
+ * 정산 — 예약분과 실측의 차이(actual - estimate)를 버킷에 반영한다(음수 가능). 실패·중단은 actual=0 으로
+ * 호출해 전액 환불한다. fail-open.
+ */
+export async function settleUserQuota(reservation: QuotaReservation | null, actual: number): Promise<void> {
+    if (!reservation || reservation.keys.length === 0) {
+        // 예약 없이 통과한 경우(비인증·fail-open) — 실측이 있으면 종전 기록 경로
+        if (reservation && actual > 0) await recordUserUsage(reservation.userId, actual, Date.now());
+        return;
+    }
+    const delta = Math.max(0, Math.round(actual)) - reservation.estimate;
+    if (delta === 0) return;
+    try {
+        const store = getKeyValueStore();
+        await Promise.all(reservation.keys.map((k) => store.incrBy(k.key, delta).then(() => store.expire(k.key, k.ttlMs))));
+    } catch (e) {
+        logger.warn('per-user quota 정산 실패 (무시):', e);
     }
 }
 

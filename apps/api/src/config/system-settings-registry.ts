@@ -105,6 +105,7 @@ export const SYSTEM_SETTINGS_REGISTRY: SystemSettingDef[] = [
     { key: 'LLM_HOURLY_TOKEN_LIMIT', group: 'llm', secret: false, requiresRestart: false, validate: nonNegativeIntString },
     { key: 'LLM_WEEKLY_TOKEN_LIMIT', group: 'llm', secret: false, requiresRestart: false, validate: nonNegativeIntString },
     { key: 'EXTERNAL_MODEL_POLICY', group: 'llm', secret: false, requiresRestart: false, validate: jsonObject },
+    { key: 'QUOTA_FAIL_MODE', group: 'llm', secret: false, requiresRestart: false, validate: z.enum(['open', 'closed']) },
 
     // ── 외부 LLM provider 키 — 저장/삭제 시 "관리자 본인"의 user_external_api_keys(BYOK)로
     //    연동된다 (admin-system-settings.routes 의 syncAdminProviderKey). 런타임 키 해석 경로는
