@@ -557,7 +557,10 @@
       "copyLink": "링크 복사",
       "unpublish": "공유 중단",
       "updateSettings": "공유 설정 갱신",
-      "publish": "공유하기"
+      "publish": "공유하기",
+      "downloadBundle": "정적 HTML 내려받기",
+      "bundleMissing": "뷰어 파일이 없습니다 — 다시 게시한 뒤 시도하세요",
+      "bundleFailed": "HTML 을 내려받지 못했습니다"
     },
     "page": {
       "viewerOpenFailed": "뷰어를 열 수 없습니다",

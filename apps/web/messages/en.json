@@ -557,7 +557,10 @@
       "copyLink": "Copy link",
       "unpublish": "Stop sharing",
       "updateSettings": "Update share settings",
-      "publish": "Share"
+      "publish": "Share",
+      "downloadBundle": "Download static HTML",
+      "bundleMissing": "The viewer file is missing — publish again and retry",
+      "bundleFailed": "Couldn't download the HTML"
     },
     "page": {
       "viewerOpenFailed": "Unable to open the viewer",

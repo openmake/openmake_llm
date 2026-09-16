@@ -557,7 +557,10 @@
       "copyLink": "リンクをコピー",
       "unpublish": "共有を停止",
       "updateSettings": "共有設定を更新",
-      "publish": "共有する"
+      "publish": "共有する",
+      "downloadBundle": "静的 HTML をダウンロード",
+      "bundleMissing": "ビューアーファイルがありません — 再公開してから試してください",
+      "bundleFailed": "HTML をダウンロードできませんでした"
     },
     "page": {
       "viewerOpenFailed": "ビューアーを開けません",

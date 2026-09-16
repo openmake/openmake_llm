@@ -557,7 +557,10 @@
       "copyLink": "复制链接",
       "unpublish": "停止分享",
       "updateSettings": "更新分享设置",
-      "publish": "分享"
+      "publish": "分享",
+      "downloadBundle": "下载静态 HTML",
+      "bundleMissing": "查看器文件不存在 — 请重新发布后再试",
+      "bundleFailed": "无法下载 HTML"
     },
     "page": {
       "viewerOpenFailed": "无法打开查看器",

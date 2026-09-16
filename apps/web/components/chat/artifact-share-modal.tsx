@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Globe, Lock, Link2, Check, Copy, Loader2 } from "lucide-react";
+import { X, Globe, Lock, Link2, Check, Copy, Loader2, FileDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import type { ApiSuccess } from "@openmake/shared-types";
@@ -46,6 +46,7 @@ export function ArtifactShareModal({
   const [err, setErr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [published, setPublished] = useState(false);
+  const [publicationId, setPublicationId] = useState<string | null>(null);
 
   const base = `/api/sessions/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(artifactId)}`;
 
@@ -60,6 +61,7 @@ export function ArtifactShareModal({
       });
       const data = res.data;
       setPublished(true);
+      setPublicationId(data.publicationId);
       if (!data.viewerEnabled) {
         setErr(t("viewerDisabled"));
         return;
@@ -86,11 +88,24 @@ export function ArtifactShareModal({
     try {
       await ApiClient.del(`${base}/publish`);
       setPublished(false);
+      setPublicationId(null);
       setUrl(null);
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : t("unpublishFailed"));
     } finally {
       setBusy(false);
+    }
+  };
+
+  // 정적 HTML 내려받기(F20.5 옵션) — 게시 뷰어 파일 그대로, 외부 호스팅용
+  const downloadBundle = async () => {
+    if (!publicationId) return;
+    setErr(null);
+    try {
+      const { downloadPublicationBundle } = await import("@/lib/artifact-download");
+      await downloadPublicationBundle(publicationId, artifactId);
+    } catch (e) {
+      setErr(e instanceof ApiError && e.status === 404 ? t("bundleMissing") : t("bundleFailed"));
     }
   };
 
@@ -170,6 +185,11 @@ export function ArtifactShareModal({
             <button type="button" onClick={copy} className="grid h-7 w-7 shrink-0 place-items-center rounded text-muted hover:bg-surface-3 hover:text-fg" aria-label={t("copyLink")}>
               {copied ? <Check className="h-4 w-4 text-accent" /> : <Copy className="h-4 w-4" />}
             </button>
+            {publicationId && (
+              <button type="button" onClick={downloadBundle} className="grid h-7 w-7 shrink-0 place-items-center rounded text-muted hover:bg-surface-3 hover:text-fg" aria-label={t("downloadBundle")} title={t("downloadBundle")}>
+                <FileDown className="h-4 w-4" />
+              </button>
+            )}
           </div>
         )}
 

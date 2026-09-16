@@ -557,7 +557,10 @@
       "copyLink": "Link kopieren",
       "unpublish": "Teilen beenden",
       "updateSettings": "Freigabeeinstellungen aktualisieren",
-      "publish": "Teilen"
+      "publish": "Teilen",
+      "downloadBundle": "Statisches HTML herunterladen",
+      "bundleMissing": "Die Viewer-Datei fehlt — bitte erneut veröffentlichen und wiederholen",
+      "bundleFailed": "HTML konnte nicht heruntergeladen werden"
     },
     "page": {
       "viewerOpenFailed": "Viewer kann nicht geöffnet werden",
