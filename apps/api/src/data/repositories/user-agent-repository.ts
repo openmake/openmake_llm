@@ -9,6 +9,15 @@
  */
 import { BaseRepository, type QueryParam } from './base-repository';
 
+export type UserAgentVisibility = 'private' | 'shared' | 'organization';
+
+/** 가시성 SQL 조각 — 소유자 OR 인스턴스 공유 OR (활성 조직 공유). $u = userId, $o = orgId(없으면 조직 절 생략). */
+function visibleWhere(u: string, o: string | null): string {
+    return o
+        ? `(user_id = ${u} OR visibility = 'shared' OR (visibility = 'organization' AND org_id = ${o}))`
+        : `(user_id = ${u} OR visibility = 'shared')`;
+}
+
 interface UserAgent {
     id: string;
     user_id: string;
@@ -20,8 +29,10 @@ interface UserAgent {
     icon: string | null;
     /** 에이전트 전용 모델 fullId (NULL=상속 — 요청 model 자동일 때만 적용, Phase C) */
     model: string | null;
-    /** 'private'(기본, 소유자 전용) | 'shared'(워크스페이스 전원 사용). 편집/삭제는 shared 여도 소유자 한정. */
-    visibility: 'private' | 'shared';
+    /** 'private'(기본, 소유자 전용) | 'shared'(워크스페이스 전원 사용) | 'organization'(org_id 조직 멤버 사용, 128). 편집/삭제는 소유자 한정. */
+    visibility: UserAgentVisibility;
+    /** visibility='organization' 일 때 대상 조직 (128). */
+    org_id?: string | null;
     is_active: boolean;
     usage_count: number;
     /** 확장 번들 설치분이면 그 확장 id (103) */
@@ -119,34 +130,37 @@ export class UserAgentRepository extends BaseRepository {
      * loadUserAgent 의 유일 choke point 가 이걸 호출해 크로스유저 공유 사용을 연다.
      * 편집/삭제는 여전히 getByIdForUser·update·softDelete 의 user_id 한정을 통과해야 한다.
      */
-    async getByIdVisibleToUser(id: string, userId: string): Promise<UserAgent | undefined> {
+    async getByIdVisibleToUser(id: string, userId: string, orgId: string | null = null): Promise<UserAgent | undefined> {
         const result = await this.query<UserAgent>(
             `SELECT * FROM user_agents
              WHERE id = $1 AND is_active = TRUE
-               AND (user_id = $2 OR visibility = 'shared')`,
-            [id, userId],
+               AND ${visibleWhere('$2', orgId ? '$3' : null)}`,
+            orgId ? [id, userId, orgId] : [id, userId],
         );
         return result.rows[0] as UserAgent | undefined;
     }
 
     /** 목록 — 본인 소유(전부) + 다른 소유자의 공유 에이전트. owned 플래그로 구분. */
-    async listVisibleToUser(userId: string): Promise<UserAgentWithOwnership[]> {
+    async listVisibleToUser(userId: string, orgId: string | null = null): Promise<UserAgentWithOwnership[]> {
         const result = await this.query<UserAgentWithOwnership>(
             `SELECT *, (user_id = $1) AS owned FROM user_agents
-             WHERE is_active = TRUE AND (user_id = $1 OR visibility = 'shared')
+             WHERE is_active = TRUE AND ${visibleWhere('$1', orgId ? '$2' : null)}
              ORDER BY owned DESC, updated_at DESC`,
-            [userId],
+            orgId ? [userId, orgId] : [userId],
         );
         return result.rows as UserAgentWithOwnership[];
     }
 
-    /** 공유 상태 전환 — 소유자 전용(user_id 한정). publish/unpublish 양방향. */
-    async setVisibility(id: string, userId: string, visibility: 'private' | 'shared'): Promise<UserAgent | undefined> {
+    /**
+     * 공유 상태 전환 — 소유자 전용(user_id 한정). private/shared/organization.
+     * organization 이면 orgId 필수(호출부가 활성 조직 멤버십을 검증한 값), 그 외엔 org_id 를 비운다.
+     */
+    async setVisibility(id: string, userId: string, visibility: UserAgentVisibility, orgId: string | null = null): Promise<UserAgent | undefined> {
         const result = await this.query<UserAgent>(
-            `UPDATE user_agents SET visibility = $3, updated_at = NOW()
+            `UPDATE user_agents SET visibility = $3, org_id = $4, updated_at = NOW()
              WHERE id = $1 AND user_id = $2 AND is_active = TRUE
              RETURNING *`,
-            [id, userId, visibility],
+            [id, userId, visibility, visibility === 'organization' ? orgId : null],
         );
         return result.rows[0] as UserAgent | undefined;
     }

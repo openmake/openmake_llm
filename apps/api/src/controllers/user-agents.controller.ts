@@ -30,6 +30,7 @@ import { UserAgentRepository } from '../data/repositories/user-agent-repository'
 import { validateModelAssignment } from '../services/model-assignment-validation';
 import { createLogger } from '../utils/logger';
 import { success, internalError, unauthorized, notFound, badRequest } from '../utils/api-response';
+import { activeOrgFor } from '../services/org/membership-cache';
 
 const log = createLogger('UserAgentsController');
 
@@ -56,7 +57,7 @@ const updateSchema = z.object({
 });
 
 const visibilitySchema = z.object({
-    visibility: z.enum(['private', 'shared']),
+    visibility: z.enum(['private', 'shared', 'organization']),
 });
 
 function getUserId(req: Request): string | null {
@@ -77,7 +78,7 @@ export function createUserAgentsController(): Router {
         try {
             const repo = new UserAgentRepository(getPool());
             // 본인 소유 + 워크스페이스 공유(다른 소유자) 에이전트. 타인 user_id 는 노출하지 않는다.
-            const rows = await repo.listVisibleToUser(userId);
+            const rows = await repo.listVisibleToUser(userId, (await activeOrgFor(userId))?.orgId ?? null);
             const agents = rows.map(({ user_id: _user_id, ...rest }) => rest);
             res.json(success({ agents }));
         } catch (err) {
@@ -92,7 +93,7 @@ export function createUserAgentsController(): Router {
         try {
             const repo = new UserAgentRepository(getPool());
             // 소유 OR 공유 에이전트 조회 허용
-            const agent = await repo.getByIdVisibleToUser(req.params.id, userId);
+            const agent = await repo.getByIdVisibleToUser(req.params.id, userId, (await activeOrgFor(userId))?.orgId ?? null);
             if (!agent) { res.status(404).json(notFound('agent 없음')); return; }
             const { user_id, ...rest } = agent;
             res.json(success({ agent: { ...rest, owned: user_id === userId } }));
@@ -183,8 +184,14 @@ export function createUserAgentsController(): Router {
         if (!userId) { res.status(401).json(unauthorized()); return; }
         try {
             const { visibility } = req.body as z.infer<typeof visibilitySchema>;
+            // organization 공유는 요청자의 활성 조직(멤버십 검증 완료)에만 — 임의 org_id 를 받지 않는다.
+            const activeOrg = visibility === 'organization' ? await activeOrgFor(userId) : null;
+            if (visibility === 'organization' && !activeOrg) {
+                res.status(400).json(badRequest('활성 조직이 없습니다. 먼저 조직을 선택하세요.'));
+                return;
+            }
             const repo = new UserAgentRepository(getPool());
-            const agent = await repo.setVisibility(req.params.id, userId, visibility);
+            const agent = await repo.setVisibility(req.params.id, userId, visibility, activeOrg?.orgId ?? null);
             if (!agent) { res.status(404).json(notFound('agent 없음')); return; }
             log.info(`agent 공유 전환: userId=${userId} id=${agent.id} visibility=${visibility}`);
             const { user_id: _user_id, ...rest } = agent;
