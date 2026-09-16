@@ -61,6 +61,37 @@ export class CostLedgerRepository extends BaseRepository {
         return Number(r.rows[0]?.total ?? 0);
     }
 
+    /** 주체별 기간 합계 — user|org|system(전체). 라인 = kind×rate_key×unit. */
+    async summarizeBySubject(subjectType: 'user' | 'org' | 'system', subjectId: string, from: Date, to: Date): Promise<Array<CostSummaryRow & { unit: string }>> {
+        const where = subjectType === 'user' ? 'user_id = $3' : subjectType === 'org' ? 'org_id = $3' : '$3 = $3';
+        const r = await this.query<CostSummaryRow & { unit: string }>(
+            `SELECT kind, rate_key, unit, SUM(quantity)::text AS quantity, SUM(cost_usd_micros)::text AS cost_usd_micros
+             FROM cost_ledger WHERE occurred_at >= $1 AND occurred_at < $2 AND ${where}
+             GROUP BY kind, rate_key, unit ORDER BY cost_usd_micros DESC`,
+            [from.toISOString(), to.toISOString(), subjectId],
+        );
+        return r.rows;
+    }
+
+    /** 기간 내 에이전트별 비용(관리자 분석). agent_id NULL 은 제외. */
+    async costByAgent(from: Date, to: Date, limit = 20): Promise<Array<{ agent_id: string; cost_usd_micros: string }>> {
+        const r = await this.query<{ agent_id: string; cost_usd_micros: string }>(
+            `SELECT agent_id, SUM(cost_usd_micros)::text AS cost_usd_micros FROM cost_ledger
+             WHERE agent_id IS NOT NULL AND occurred_at >= $1 AND occurred_at < $2
+             GROUP BY agent_id ORDER BY SUM(cost_usd_micros) DESC LIMIT $3`,
+            [from.toISOString(), to.toISOString(), limit],
+        );
+        return r.rows;
+    }
+
+    /** 기간 내 사용자 목록(명세서 물질화 대상). */
+    async distinctUsers(from: Date, to: Date): Promise<string[]> {
+        const r = await this.query<{ user_id: string }>(
+            `SELECT DISTINCT user_id FROM cost_ledger WHERE user_id IS NOT NULL AND occurred_at >= $1 AND occurred_at < $2`,
+            [from.toISOString(), to.toISOString()]);
+        return r.rows.map((x) => x.user_id);
+    }
+
     /** 보존 정리 — occurred_at 기준 days 초과 삭제. */
     async deleteOlderThan(days: number): Promise<number> {
         const r = await this.query(`DELETE FROM cost_ledger WHERE occurred_at < NOW() - ($1 || ' days')::interval`, [String(days)]);

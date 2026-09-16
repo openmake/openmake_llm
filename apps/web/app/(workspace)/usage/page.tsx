@@ -84,6 +84,68 @@ interface CostEstimate {
   /** 토큰 기록 최초 일자 — 그 이전 사용분은 기록 부재로 미포함 */
   coverage?: { since: string | null };
 }
+
+/* ── 월 명세서 섹션 (F25 PR-5, GET /api/usage/statements) — 원장(cost_ledger) 기반 실제 회계. 가상 환산(CostEstimateSection)과 구분. */
+interface StatementLine { kind: string; rateKey: string; unit: string; quantity: number; usdMicros: number }
+interface Statement { periodStart: string; periodEnd: string; totalUsdMicros: number; lines: StatementLine[]; materialized: boolean }
+
+function StatementSection() {
+  const t = useTranslations("usage");
+  const locale = toBcp47(useLocale());
+  const now = new Date();
+  const months = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  });
+  const [month, setMonth] = useState(months[0]);
+  const [st, setSt] = useState<Statement | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void ApiClient.get<ApiSuccess<{ statement: Statement }>>(`/api/usage/statements?month=${month}`)
+      .then((r) => { if (alive) setSt(r?.data?.statement ?? null); })
+      .catch(() => { /* 비로그인/오류 — 섹션 미표시 */ });
+    return () => { alive = false; };
+  }, [month]);
+  if (!st) return null;
+  const usd = (m: number) => `$${(m / 1_000_000).toFixed(4)}`;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between gap-2">
+          <span>{t("statementTitle")}</span>
+          <div className="flex items-center gap-2">
+            <select value={month} onChange={(e) => setMonth(e.target.value)} aria-label={t("statementMonth")}
+              className="h-8 rounded-md border border-border bg-surface-2 px-2 text-xs text-fg">
+              {months.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <button type="button" className="rounded-md border border-border px-2 py-1 text-xs text-fg hover:bg-surface-2"
+              onClick={() => void ApiClient.download(`/api/usage/statements/${month}.csv`, `statement-${month}.csv`)}>
+              CSV
+            </button>
+          </div>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="mb-2 text-xs text-muted">{t("statementSubtitle")} · {st.materialized ? t("statementFinal") : t("statementLive")}</p>
+        {st.lines.length === 0 ? <p className="text-xs text-muted">{t("statementEmpty")}</p> : (
+          <Table>
+            <thead><tr><Th>kind</Th><Th>rate_key</Th><Th>unit</Th><Th>{t("statementQty")}</Th><Th>USD</Th></tr></thead>
+            <tbody>
+              {st.lines.map((l) => (
+                <tr key={`${l.kind}|${l.rateKey}|${l.unit}`}>
+                  <Td>{l.kind}</Td><Td className="font-mono text-xs">{l.rateKey}</Td><Td>{l.unit}</Td>
+                  <Td>{l.quantity.toLocaleString(locale)}</Td><Td>{usd(l.usdMicros)}</Td>
+                </tr>
+              ))}
+              <tr><Td className="font-medium">{t("statementTotal")}</Td><Td></Td><Td></Td><Td></Td><Td className="font-medium">{usd(st.totalUsdMicros)}</Td></tr>
+            </tbody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 type CostGranularity = "day" | "month" | "year";
 
 function CostEstimateSection() {
@@ -606,6 +668,7 @@ export default function UsagePage() {
 
               {/* 내 토큰 쿼터 잔여 (per-user, 실제 enforcement 소스) */}
               <MyQuotaSection />
+              <StatementSection />
 
               {/* 가상 비용 환산 (일/월/년) — 상용 API 였다면 얼마 */}
               <CostEstimateSection />

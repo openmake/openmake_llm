@@ -1963,7 +1963,15 @@
     "globalQuotaNote": "Serverweite Beobachtung, die beim Prozess-Neustart zurückgesetzt wird — getrennt von Ihrem persönlichen Kontingent",
     "loadFailed": "Nutzung konnte nicht geladen werden",
     "quotaRequestMore": "Mehr Kontingent anfragen",
-    "quotaRequestPending": "Wartet auf Admin-Freigabe"
+    "quotaRequestPending": "Wartet auf Admin-Freigabe",
+    "statementTitle": "Monatsabrechnung",
+    "statementMonth": "Monat",
+    "statementSubtitle": "Tatsächliche Abrechnung aus dem Kostenbuch — Positionen ohne Satz werden mit 0 erfasst",
+    "statementFinal": "endgültig",
+    "statementLive": "laufend",
+    "statementEmpty": "Keine Einträge in diesem Monat.",
+    "statementQty": "Menge",
+    "statementTotal": "Summe"
   },
   "developer": {
     "pageTitle": "Entwicklerdokumentation",

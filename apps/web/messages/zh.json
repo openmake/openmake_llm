@@ -1963,7 +1963,15 @@
     "globalQuotaNote": "进程重启即重置的全局观测值 — 与个人配额无关",
     "loadFailed": "无法加载用量",
     "quotaRequestMore": "申请额外配额",
-    "quotaRequestPending": "等待管理员审批"
+    "quotaRequestPending": "等待管理员审批",
+    "statementTitle": "月度账单",
+    "statementMonth": "月份",
+    "statementSubtitle": "基于成本账本(cost_ledger)的实际核算 — 未登记单价的项目记为 0",
+    "statementFinal": "已确定",
+    "statementLive": "统计中",
+    "statementEmpty": "本月暂无记录。",
+    "statementQty": "数量",
+    "statementTotal": "合计"
   },
   "developer": {
     "pageTitle": "开发者文档",

@@ -9,6 +9,7 @@ import { getPool } from '../../data/models/unified-database';
 import { getKeyValueStore } from '../../storage';
 import { QUOTA_RESERVE } from '../../config/runtime-limits';
 import { weekBucketKey, monthBucketKey, WEEK_TTL_MS, MONTH_TTL_MS, weekWindow, monthWindow } from '../../llm/user-quota';
+import { materializeMonth, currentMonth } from './statement-service';
 
 const logger = createLogger('QuotaReconcile');
 let timer: NodeJS.Timeout | null = null;
@@ -53,6 +54,13 @@ export function startQuotaReconcileJob(): void {
             if (n > 0) logger.info(`쿼터 버킷 정산 ${n}건`);
         } catch (e) {
             logger.warn('쿼터 정산 실패 (다음 주기 재시도):', e);
+        }
+        try {
+            // 지난달 명세서 물질화(137) — 멱등 upsert 라 매 주기 반복해도 안전
+            const d = new Date(); const prev = currentMonth(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1));
+            await materializeMonth(prev);
+        } catch (e) {
+            logger.warn('명세서 물질화 실패 (다음 주기 재시도):', e);
         }
     };
     timer = setInterval(run, QUOTA_RESERVE.RECONCILE_INTERVAL_MS);

@@ -1963,7 +1963,15 @@
     "globalQuotaNote": "Server-wide observation that resets on process restart — separate from your personal quota",
     "loadFailed": "Could not load usage",
     "quotaRequestMore": "Request more quota",
-    "quotaRequestPending": "Awaiting admin approval"
+    "quotaRequestPending": "Awaiting admin approval",
+    "statementTitle": "Monthly statement",
+    "statementMonth": "Month",
+    "statementSubtitle": "Actual accounting from the cost ledger — items without a rate are recorded at 0",
+    "statementFinal": "final",
+    "statementLive": "in progress",
+    "statementEmpty": "No records this month.",
+    "statementQty": "Qty",
+    "statementTotal": "Total"
   },
   "developer": {
     "pageTitle": "Developer Docs",

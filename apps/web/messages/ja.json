@@ -1963,7 +1963,15 @@
     "globalQuotaNote": "プロセス再起動でリセットされる全体観測値 — 個人クォータとは別",
     "loadFailed": "使用量を読み込めませんでした",
     "quotaRequestMore": "追加上限を申請",
-    "quotaRequestPending": "管理者の承認待ち"
+    "quotaRequestPending": "管理者の承認待ち",
+    "statementTitle": "月次明細",
+    "statementMonth": "月",
+    "statementSubtitle": "原帳(cost_ledger)に基づく実会計 — 単価未登録の項目は 0 で記録",
+    "statementFinal": "確定",
+    "statementLive": "集計中",
+    "statementEmpty": "この月の記録はありません。",
+    "statementQty": "数量",
+    "statementTotal": "合計"
   },
   "developer": {
     "pageTitle": "開発者ドキュメント",

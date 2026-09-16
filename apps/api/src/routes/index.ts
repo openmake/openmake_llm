@@ -29,6 +29,7 @@ export { organizationPoliciesRouter, adminOrganizationPoliciesRouter } from './o
 export { adminConfigExportRouter } from './admin-config-export.routes';
 export { adminCostRatesRouter } from './admin-cost-rates.routes';
 export { usageQuotaRouter, adminQuotaOverageRouter } from './quota-overage.routes';
+export { usageStatementsRouter, adminBillingRouter } from './billing-statements.routes';
 export { firstRunSetupRouter } from './first-run-setup.routes';
 export { default as kakaoMapEmbedRouter } from './kakao-map-embed.routes';
 

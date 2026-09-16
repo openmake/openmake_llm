@@ -1963,7 +1963,15 @@
     "globalQuotaNote": "프로세스 재시작 시 초기화되는 전역 관측치 — 개인 쿼터와 별개",
     "loadFailed": "사용량을 불러오지 못했습니다",
     "quotaRequestMore": "추가 한도 요청",
-    "quotaRequestPending": "관리자 승인 대기 중"
+    "quotaRequestPending": "관리자 승인 대기 중",
+    "statementTitle": "월 명세서",
+    "statementMonth": "월",
+    "statementSubtitle": "원장(cost_ledger) 기준 실제 회계 — 단가 미등록 항목은 0 으로 기록됩니다",
+    "statementFinal": "확정",
+    "statementLive": "집계 중",
+    "statementEmpty": "이 달의 기록이 없습니다.",
+    "statementQty": "수량",
+    "statementTotal": "합계"
   },
   "developer": {
     "pageTitle": "개발자 문서",
