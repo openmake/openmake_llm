@@ -25,6 +25,7 @@ export { adminModelRolesRouter } from './admin-model-roles.routes';
 export { adminCapabilityModelsRouter } from './admin-capability-models.routes';
 export { adminSystemSettingsRouter } from './admin-system-settings.routes';
 export { adminOrganizationsRouter } from './admin-organizations.routes';
+export { organizationPoliciesRouter, adminOrganizationPoliciesRouter } from './organization-policies.routes';
 export { firstRunSetupRouter } from './first-run-setup.routes';
 export { default as kakaoMapEmbedRouter } from './kakao-map-embed.routes';
 

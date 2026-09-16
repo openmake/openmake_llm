@@ -6,6 +6,7 @@
  *   - mcp-catalog.routes.ts: 카탈로그 select → from-catalog 등록 + lifecycle 조회
  *
  */
+import { resolveEffectivePolicy } from '../services/org/effective-policy';
 import { Router, Request, Response } from 'express';
 import { requireAuth } from '../auth';
 import { validateWithSecurity } from '../middlewares/validation';
@@ -47,6 +48,12 @@ mcpCatalogRouter.post(
         const template = await repo.getCatalogTemplate(payload.template_id);
         if (!template) {
             res.status(404).json(notFound('catalog template'));
+            return;
+        }
+        // 조직 허용 서버 목록(129) — 활성 조직이 MCP_ALLOWED_SERVERS 를 두면 목록 밖 템플릿 설치를 막는다.
+        const { mcpAllowedServers } = await resolveEffectivePolicy(userId);
+        if (mcpAllowedServers && !mcpAllowedServers.includes(payload.template_id)) {
+            res.status(403).json(forbidden('조직 정책으로 허용되지 않은 MCP 서버입니다.'));
             return;
         }
 

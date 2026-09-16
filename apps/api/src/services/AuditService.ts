@@ -159,6 +159,8 @@ const CRITICAL_ACTIONS: Record<string, 'info' | 'warning' | 'critical'> = {
     'user.deleted': 'critical',
     // 권한 변화 — admin 승격/박탈
     'user.role_changed': 'critical',
+    // 조직 정책 변경(129) — 외부 모델 차단·승인 하한·MCP 허용 목록
+    'org.policy_changed': 'warning',
     // 보안 변화
     'password.changed': 'warning',
     // GDPR Article 7(3) — 동의 철회

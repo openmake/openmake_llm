@@ -17,6 +17,7 @@
  * - POST   /api/agent-tasks/:taskId/cancel  - 실행 중 작업 취소
  * - DELETE /api/agent-tasks/:taskId         - 작업 삭제
  */
+import { resolveEffectivePolicy, strictestApprovalPolicy } from '../services/org/effective-policy';
 import { Router, Request, Response } from 'express';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, notFound } from '../utils/api-response';
@@ -326,7 +327,9 @@ router.post('/:taskId/execute', validate(executeAgentTaskSchema), asyncHandler(a
 
     // 스킬 범위(allowedSkills, 미지정이면 전체 활성 스킬)와 승인 3모드(Manual/Auto/Skip)는
     // executeAgentTaskSchema 가 검증한다 — 잘못된 값은 여기 오기 전에 400 이다.
-    const { allowedSkills, approvalPolicy } = req.body as ExecuteAgentTaskInput;
+    const { allowedSkills, approvalPolicy: requestedPolicy } = req.body as ExecuteAgentTaskInput;
+    // 조직 승인 하한(129) — 활성 조직이 TOOL_APPROVAL_POLICY_MIN 을 두면 요청값과 비교해 더 엄격한 쪽을 쓴다.
+    const approvalPolicy = strictestApprovalPolicy(requestedPolicy, (await resolveEffectivePolicy(String(req.user!.id))).approvalPolicyMin);
 
     // 백그라운드 detached 실행 (응답은 즉시 반환). AgentTaskService 가 자체
     // AbortController 를 소유하므로 ws.close 와 무관하게 끝까지 진행한다.
