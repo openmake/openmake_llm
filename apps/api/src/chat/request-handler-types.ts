@@ -131,6 +131,8 @@ export interface ChatRequestParams {
      * (자가개선 F2 귀속). 미전달이면 귀속 없이 기존과 동일하게 동작한다.
      */
     clientMessageId?: string;
+    /** 클라이언트 발급 멱등 키(140) — user 행 client_message_id */
+    clientRequestId?: string;
     /** 스트리밍 토큰 콜백 */
     onToken: (token: string) => void;
     /** Thinking 토큰 콜백 (추론 과정 실시간 전달) */

@@ -86,6 +86,8 @@ export interface WsAttachedFile {
 export interface WsChatRequest {
   type: "chat";
   message: string;
+  /** 클라이언트 발급 멱등 키(140) — 같은 id 재전송은 새 생성 없이 이전 messageId 로 done 만 다시 온다 */
+  clientRequestId?: string;
   model?: string;
   history?: Array<{ role: ChatRole; content: string }>;
   sessionId?: string | null;
@@ -177,6 +179,8 @@ export type WsServerEvent =
       metrics?: { tokensPerSec: string; tokenCount: number };
       /** 아티팩트가 있으면 raw 코드펜스가 placeholder 로 치환된 본문 — 클라가 누적 본문을 이걸로 reset. */
       cleanedContent?: string;
+      /** 같은 clientRequestId 의 재전송이라 새 생성 없이 끝냈음(140) */
+      deduplicated?: boolean;
     }
   | { type: "aborted"; message?: string }
   /**

@@ -301,7 +301,15 @@ class SessionController {
                   return;
               }
 
-              const { title } = req.body;
+              const { title, expectedVersion } = req.body as { title?: unknown; expectedVersion?: unknown };
+              if (typeof title !== 'string') { res.status(400).json(badRequest('title 은 문자열이어야 합니다')); return; }
+              // 낙관적 잠금(140) — expectedVersion 을 보낸 클라이언트만 409 를 받는다(구 클라이언트는 종전 동작)
+              if (typeof expectedVersion === 'number') {
+                  const r = await conversationDb.updateSessionTitleIfVersion(sessionId, title, expectedVersion);
+                  if (!r.ok) { res.status(409).json({ success: false, error: { code: 'VERSION_CONFLICT', message: '다른 곳에서 세션이 바뀌었습니다. 다시 불러오세요.' }, currentVersion: r.version }); return; }
+                  res.json(success({ updated: true, version: r.version }));
+                  return;
+              }
               const updated = await conversationDb.updateSessionTitle(sessionId, title);
               res.json(success({ updated }));
           }));

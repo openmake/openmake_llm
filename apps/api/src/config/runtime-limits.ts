@@ -2132,3 +2132,9 @@ export const QUOTA_GRANTS = {
 
 /** 승인함 "최근 결정" 조회 창(ms, 기본 30분) — 철회 가능한 미소비 승인을 찾는 범위. APPROVAL_RECENT_WINDOW_MS */
 export const APPROVAL_RECENT_WINDOW_MS = parseInt(process.env.APPROVAL_RECENT_WINDOW_MS || String(30 * 60 * 1000), 10);
+
+/** 채팅 요청 멱등(140) — clientRequestId 기억 TTL·사용자당 상한. IDEMPOTENCY_TTL_MS / IDEMPOTENCY_MAX_PER_OWNER */
+export const IDEMPOTENCY = {
+    TTL_MS: parseInt(process.env.IDEMPOTENCY_TTL_MS || String(10 * 60 * 1000), 10),
+    MAX_PER_OWNER: parseInt(process.env.IDEMPOTENCY_MAX_PER_OWNER || '200', 10),
+} as const;

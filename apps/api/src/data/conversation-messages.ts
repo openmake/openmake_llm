@@ -119,6 +119,7 @@ export async function addMessage(
         const insertResult = await client.query(`
             INSERT INTO conversation_messages (session_id, role, content, model, thinking, tokens, response_time_ms, created_at, agent_id, client_message_id)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            ON CONFLICT (session_id, client_message_id, role) WHERE client_message_id IS NOT NULL DO NOTHING
             RETURNING id
         `, [
             sessionId,
@@ -143,6 +144,15 @@ export async function addMessage(
         return insertResult;
     }), { operation: 'addMessage' });
 
+    // 멱등(140): 같은 (session, clientMessageId, role) 이 이미 있으면 INSERT 가 무시된다 → 기존 행을 돌려준다(deduplicated)
+    if (!result.rows[0] && options?.clientMessageId) {
+        const existing = await pool.query<{ id: number; content: string; created_at: string; model: string | null }>(
+            'SELECT id, content, created_at, model FROM conversation_messages WHERE session_id = $1 AND client_message_id = $2 AND role = $3',
+            [sessionId, options.clientMessageId, role],
+        );
+        const e = existing.rows[0];
+        if (e) return { id: String(e.id), sessionId, role, content: e.content, timestamp: e.created_at, model: e.model ?? undefined, thinking: undefined, deduplicated: true };
+    }
     return {
         id: String((result.rows[0] as { id: number }).id),
         sessionId,

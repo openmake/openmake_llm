@@ -139,17 +139,30 @@ export async function getSession(id: string): Promise<ConversationSession | unde
 export async function getSessionMeta(id: string): Promise<SessionMeta | undefined> {
     const pool = getPool();
     const result = await pool.query<Pick<SessionRow, 'user_id' | 'anon_session_id' | 'title' | 'metadata'>>(
-        'SELECT user_id, anon_session_id, title, metadata FROM conversation_sessions WHERE id = $1',
+        'SELECT user_id, anon_session_id, title, metadata, version FROM conversation_sessions WHERE id = $1',
         [id]
     );
-    const row = result.rows[0];
+    const row = result.rows[0] as (typeof result.rows[0] & { version?: number }) | undefined;
     if (!row) return undefined;
     return {
         userId: row.user_id,
         anonSessionId: row.anon_session_id,
         title: row.title,
         metadata: row.metadata,
+        version: typeof row.version === 'number' ? row.version : undefined,
     };
+}
+
+/** 제목 갱신(낙관적 잠금, 140) — expectedVersion 이 현재와 같을 때만. 반환 ok=false 면 현재 버전. */
+export async function updateSessionTitleIfVersion(sessionId: string, title: string, expectedVersion: number): Promise<{ ok: boolean; version: number }> {
+    const pool = getPool();
+    const r = await pool.query<{ version: number }>(
+        'UPDATE conversation_sessions SET title = $1, updated_at = NOW(), version = version + 1 WHERE id = $2 AND version = $3 RETURNING version',
+        [title, sessionId, expectedVersion],
+    );
+    if (r.rows[0]) return { ok: true, version: r.rows[0].version };
+    const cur = await pool.query<{ version: number }>('SELECT version FROM conversation_sessions WHERE id = $1', [sessionId]);
+    return { ok: false, version: cur.rows[0]?.version ?? 0 };
 }
 
 /**
@@ -301,7 +314,7 @@ export async function updateSessionTitle(sessionId: string, title: string): Prom
     const pool = getPool();
     const now = new Date().toISOString();
     const result = await pool.query(
-        'UPDATE conversation_sessions SET title = $1, updated_at = $2 WHERE id = $3',
+        'UPDATE conversation_sessions SET title = $1, updated_at = $2, version = version + 1 WHERE id = $3',
         [title, now, sessionId]
     );
 

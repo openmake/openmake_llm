@@ -124,6 +124,8 @@ export interface ChatMessageRequest {
      * claude.ai Projects / ChatGPT Custom GPTs 동등.
      */
     userAgentId?: string;
+    /** 클라이언트 발급 요청 id(140) — user 메시지 행의 client_message_id 로 저장돼 재전송 중복을 막는다 */
+    clientRequestId?: string;
     /** 클라이언트 표면 — 'ios' 면 좁은 화면용 답변 형식 지시 추가 (2026-08-18) */
     client?: 'ios';
 }

@@ -104,6 +104,7 @@ export async function saveUserMessage(
     message: string,
     model?: string,
     saveHistory: boolean = true,
+    clientRequestId?: string,
 ): Promise<void> {
     // 1. 감사 로그 — 항상 (실패해도 채팅 흐름 유지)
     await recordAuditLog({
@@ -118,7 +119,7 @@ export async function saveUserMessage(
     // 2. 본문 저장 — saveHistory=true 일 때만
     if (saveHistory) {
         const conversationDb = getConversationDB();
-        await conversationDb.addMessage(sessionId, 'user', message, { model, tokensUsed: estimateTokens(message) });
+        await conversationDb.addMessage(sessionId, 'user', message, { model, tokensUsed: estimateTokens(message), ...(clientRequestId ? { clientMessageId: clientRequestId } : {}) });
     }
 }
 

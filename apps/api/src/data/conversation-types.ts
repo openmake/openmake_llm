@@ -21,6 +21,8 @@ export interface ConversationSession {
     anonSessionId?: string;
     /** 대화 제목 */
     title: string;
+    /** 낙관적 잠금 버전(140) — getSession 만 채운다 */
+    version?: number;
     /** 세션 생성 일시 (ISO 8601) */
     created_at: string;
     /** 마지막 업데이트 일시 (ISO 8601) */
@@ -36,6 +38,8 @@ export interface ConversationSession {
  * @interface ConversationMessage
  */
 export interface ConversationMessage {
+    /** 멱등 충돌로 기존 행을 돌려준 경우(140) */
+    deduplicated?: boolean;
     /** 메시지 고유 식별자 */
     id: string;
     /** 소속 세션 ID */
@@ -92,6 +96,8 @@ export interface SessionRow {
  * 기존 의미를 그대로 유지하기 위함.
  */
 export interface SessionMeta {
+    /** 낙관적 잠금 버전(140) */
+    version?: number;
     userId: string | null;
     anonSessionId: string | null;
     title: string | null;

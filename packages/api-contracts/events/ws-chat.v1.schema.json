@@ -102,6 +102,10 @@
         "message": {
           "type": "string"
         },
+        "clientRequestId": {
+          "type": "string",
+          "description": "클라이언트 발급 멱등 키(140) — 같은 id 재전송은 새 생성 없이 이전 messageId 로 done 만 다시 온다"
+        },
         "model": {
           "type": "string"
         },
@@ -457,6 +461,10 @@
             "cleanedContent": {
               "type": "string",
               "description": "아티팩트가 있으면 raw 코드펜스가 placeholder 로 치환된 본문 — 클라가 누적 본문을 이걸로 reset."
+            },
+            "deduplicated": {
+              "type": "boolean",
+              "description": "같은 clientRequestId 의 재전송이라 새 생성 없이 끝냈음(140)"
             }
           },
           "required": [

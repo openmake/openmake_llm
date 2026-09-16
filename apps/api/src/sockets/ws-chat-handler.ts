@@ -12,6 +12,7 @@ import { resolveCleanedContent } from './ws-chat-completion';
 import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
 import { enqueueDebugCapture, DEBUG_QUEUE_TTL_MS } from '../data/conversation-debug-queue';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
+import { getRequestIdempotencyRegistry, normalizeClientRequestId } from '../chat/request-idempotency';
 import { QuotaUnavailableError } from '../errors/quota-unavailable.error';
 import { KeyExhaustionError } from '../errors/key-exhaustion.error';
 import { ProviderError } from '../providers/provider-errors';
@@ -215,10 +216,22 @@ export async function handleChatMessage(
         }
         const effectiveAttachContext = cachedAttachContext + attachContext;
 
+        // 멱등(140): 같은 clientRequestId 의 재전송이면 새 생성 없이 이전 messageId 로 done 만 다시 보낸다
+        const clientRequestId = normalizeClientRequestId(msg.clientRequestId);
+        const idemOwner = extWs._authenticatedUserId ? `u:${extWs._authenticatedUserId}` : `a:${anonSessionId ?? ''}`;
+        if (clientRequestId) {
+            const prior = getRequestIdempotencyRegistry().lookup(idemOwner, clientRequestId);
+            if (prior) {
+                log.info(`[Chat] 중복 요청 무시(멱등): ${clientRequestId} → ${prior}`);
+                out({ type: 'done', messageId: prior, deduplicated: true, metrics: { tokensPerSec: '0.00', tokenCount: 0 } });
+                return;
+            }
+        }
         // messageId 생성 (WS 고유: 토큰 스트리밍에 사용)
         const messageId = crypto.randomUUID
             ? crypto.randomUUID()
             : `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        if (clientRequestId) getRequestIdempotencyRegistry().remember(idemOwner, clientRequestId, messageId);
 
         // 토큰 생성 메트릭 추적 (tokenCount, partialAssistantResponse 는 catch 접근을 위해 try 외부 선언)
         tokenCount = 0;
@@ -311,6 +324,7 @@ export async function handleChatMessage(
             // 이 턴에 발급한 스트리밍 messageId — assistant 행에 남겨 피드백 신호를
             // 해당 응답(및 담당 에이전트)에 되짚을 수 있게 한다(자가개선 F2 귀속).
             clientMessageId: messageId,
+            clientRequestId,
             // 좁은 화면 클라이언트(iOS 앱) — 답변 형식에 폭 제약만 덧붙인다
             client: msg.client === 'ios' ? 'ios' : undefined,
             // Phase 3.4 (2026-05-26): 메시지 편집 분기 — 새 session 생성 시 부모 추적

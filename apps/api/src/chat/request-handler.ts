@@ -295,7 +295,7 @@ export class ChatRequestHandler {
         const persistContent = saveHistory !== false;
         // 저장도 사용자 발화 기준 — 확장문(스킬 본문 수천 자)을 저장하면 히스토리에 그대로 보이고
         // 다음 턴 history 로 재전송돼 토큰까지 낭비된다.
-        await saveUserMessage(currentSessionId, auditUserId, userFacingMessage, maskedModel, persistContent);
+        await saveUserMessage(currentSessionId, auditUserId, userFacingMessage, maskedModel, persistContent, params.clientRequestId);
 
         const startTime = Date.now();
 

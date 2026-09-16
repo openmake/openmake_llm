@@ -619,6 +619,8 @@ export function useChatSocket() {
       setStreaming(true); // assistant placeholder 는 첫 token 에서 생성, isGenerating=true
 
       const payload: WsChatRequest = {
+        // 멱등 키(140) — 전송마다 새로 발급. 재생성(regenerate)도 의도된 새 요청이라 새 id.
+        clientRequestId: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : undefined,
         type: "chat",
         message,
         model: s.selectedModel,
