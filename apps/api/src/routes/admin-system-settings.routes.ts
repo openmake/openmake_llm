@@ -171,13 +171,21 @@ adminSystemSettingsRouter.put('/system-settings', validate(putSettingsSchema), a
     res.json(success({ settings: getSystemSettingsService().describe(), requiresRestart }));
 }));
 
+/** GET /api/admin/system-settings/history?key=&limit= — 변경 이력(130). 시크릿 값은 마스크된 채 저장돼 있다. */
+adminSystemSettingsRouter.get('/system-settings/history', asyncHandler(async (req: Request, res: Response) => {
+    const key = typeof req.query.key === 'string' && req.query.key ? req.query.key : undefined;
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '100'), 10) || 100, 1), 500);
+    const { PolicyHistoryRepository } = await import('../data/repositories/policy-history-repository');
+    res.json(success({ history: await new PolicyHistoryRepository(getPool()).listSettings(key, limit) }));
+}));
+
 adminSystemSettingsRouter.delete('/system-settings/:key', asyncHandler(async (req: Request, res: Response) => {
     const key = req.params.key;
     if (!SETTING_DEFS_BY_KEY.has(key)) {
         res.status(400).json(badRequest(`허용되지 않은 설정 키: '${key}'`));
         return;
     }
-    const deleted = await getSystemSettingsService().reset(key);
+    const deleted = await getSystemSettingsService().reset(key, adminUserId(req));
     if (!deleted) {
         res.status(404).json(notFound(`DB 에 설정되지 않은 키: '${key}' (이미 env/기본값 동작)`));
         return;

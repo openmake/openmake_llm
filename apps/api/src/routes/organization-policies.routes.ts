@@ -23,6 +23,17 @@ import { isOrgPolicyKey, ORG_POLICY_SCHEMAS } from '../config/org-policy-registr
 import { membershipsFor } from '../services/org/membership-cache';
 import { clearOrgPolicyCache } from '../services/org/effective-policy';
 import { getAuditService } from '../services/AuditService';
+import { PolicyHistoryRepository } from '../data/repositories/policy-history-repository';
+import { createLogger } from '../utils/logger';
+
+const logger = createLogger('OrgPolicies');
+const historyRepo = () => new PolicyHistoryRepository(getPool());
+
+/** 이력(130) 기록 — 실패는 경고만. */
+async function recordHistory(orgId: string, key: string, oldValue: unknown, newValue: unknown, actor: string): Promise<void> {
+    try { await historyRepo().recordOrgPolicy(orgId, key, oldValue, newValue, actor); }
+    catch (err) { logger.warn(`조직 정책 이력 기록 실패 (변경은 반영됨): ${orgId}/${key}`, err); }
+}
 
 const orgRepo = () => new OrganizationRepository(getPool());
 const policyRepo = () => new OrganizationPolicyRepository(getPool());
@@ -46,6 +57,13 @@ function attach(router: Router, prefix: string, gate: 'admin' | 'org'): void {
         res.json(success({ policies: await policyRepo().list(req.params.id), keys: Object.keys(ORG_POLICY_SCHEMAS) }));
     }));
 
+    router.get(`${prefix}/:id/policies/history`, ...guard, asyncHandler(async (req: Request, res: Response) => {
+        if (!(await orgRepo().get(req.params.id))) return res.status(404).json(notFound('조직을 찾을 수 없습니다.'));
+        if (gate === 'org') await assertOrgAdmin(req, req.params.id);
+        const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '100'), 10) || 100, 1), 500);
+        res.json(success({ history: await historyRepo().listOrgPolicies(req.params.id, limit) }));
+    }));
+
     router.put(`${prefix}/:id/policies/:key`, ...guard, asyncHandler(async (req: Request, res: Response) => {
         const { id, key } = req.params;
         if (!isOrgPolicyKey(key)) return res.status(400).json(badRequest(`허용되지 않은 정책 키: ${key}`));
@@ -54,8 +72,10 @@ function attach(router: Router, prefix: string, gate: 'admin' | 'org'): void {
         const body = putSchema.safeParse(req.body);
         const parsed = body.success ? ORG_POLICY_SCHEMAS[key].safeParse(body.data.value) : null;
         if (!parsed || !parsed.success) return res.status(400).json(badRequest('정책 값이 형식에 맞지 않습니다.'));
+        const previous = (await policyRepo().list(id)).find((r) => r.key === key)?.value ?? null;
         const row = await policyRepo().upsert(id, key, parsed.data, String(req.user!.id));
         clearOrgPolicyCache(id);
+        await recordHistory(id, key, previous, parsed.data, String(req.user!.id));
         await getAuditService().logAudit({ action: 'org.policy_changed', userId: String(req.user!.id), resourceType: 'organization', resourceId: id, details: { key, value: parsed.data } });
         res.json(success({ policy: row }));
     }));
@@ -64,9 +84,11 @@ function attach(router: Router, prefix: string, gate: 'admin' | 'org'): void {
         const { id, key } = req.params;
         if (!isOrgPolicyKey(key)) return res.status(400).json(badRequest(`허용되지 않은 정책 키: ${key}`));
         if (gate === 'org') await assertOrgAdmin(req, id);
+        const previous = (await policyRepo().list(id)).find((r) => r.key === key)?.value ?? null;
         const removed = await policyRepo().remove(id, key);
         if (!removed) return res.status(404).json(notFound('정책이 없습니다.'));
         clearOrgPolicyCache(id);
+        await recordHistory(id, key, previous, null, String(req.user!.id));
         await getAuditService().logAudit({ action: 'org.policy_changed', userId: String(req.user!.id), resourceType: 'organization', resourceId: id, details: { key, value: null } });
         res.json(success({ removed: true }));
     }));

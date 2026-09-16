@@ -113,7 +113,7 @@ describe('admin-system-settings.routes', () => {
     test('DELETE — env 폴백 복귀 + audit', async () => {
         const r = await request(app).delete('/api/admin/system-settings/GOOGLE_CSE_ID');
         expect(r.status).toBe(200);
-        expect(mockService.reset).toHaveBeenCalledWith('GOOGLE_CSE_ID');
+        expect(mockService.reset).toHaveBeenCalledWith('GOOGLE_CSE_ID', 'test-admin');
         expect(logAudit).toHaveBeenCalledWith(
             expect.objectContaining({ action: 'system_settings.reset', details: { key: 'GOOGLE_CSE_ID' } }),
         );
