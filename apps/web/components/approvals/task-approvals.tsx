@@ -19,6 +19,16 @@ import { Check, X, Loader2, MessageCircleQuestion, Wrench, ExternalLink } from "
 import { Button, Badge, Card } from "@/components/ui/primitives";
 import { ApiClient } from "@/lib/api-client";
 
+interface RecentDecision {
+  approvalId: string;
+  taskId: string;
+  toolName: string;
+  status: "approved" | "revoked";
+  decidedAt: string | null;
+  consumedAt: string | null;
+  revocable: boolean;
+}
+
 interface PendingItem {
   approvalId: string;
   taskId: string;
@@ -48,6 +58,8 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  // 최근 결정(138) — 프로세스가 내려간 사이 내린 승인은 아직 실행되지 않았으므로 철회할 수 있다.
+  const [recent, setRecent] = useState<RecentDecision[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,6 +68,8 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
         "/api/agent-tasks/approvals/pending",
       );
       setItems(res?.data?.pending ?? []);
+      const rec = await ApiClient.get<{ data: { decisions: RecentDecision[] } }>("/api/agent-tasks/approvals/recent?minutes=30").catch(() => null);
+      setRecent(rec?.data?.decisions ?? []);
     } catch {
       setItems([]);
     } finally {
@@ -88,8 +102,41 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
     );
   }
 
+  const recentSection = recent.length > 0 && (
+    <div className="mt-4">
+      <p className="mb-2 text-xs font-medium text-muted">{t("tasks.recentTitle")}</p>
+      <div className="space-y-1">
+        {recent.map((d) => (
+          <div key={d.approvalId} className="flex items-center justify-between gap-2 rounded-md border border-line bg-bg-1 px-3 py-2 text-xs">
+            <span className="min-w-0 truncate">
+              <span className="font-mono">{d.toolName}</span> · {d.status === "revoked" ? t("tasks.revoked") : d.consumedAt ? t("tasks.consumed") : t("tasks.approvedPending")}
+              {d.decidedAt ? ` · ${new Date(d.decidedAt).toLocaleTimeString()}` : ""}
+            </span>
+            <div className="flex shrink-0 gap-1">
+              {d.revocable && (
+                <Button size="sm" variant="outline" disabled={busy === d.approvalId} title={t("tasks.revokeHint")}
+                  onClick={() => void run(d.approvalId, () => ApiClient.post(`/api/agent-tasks/approvals/${d.approvalId}/revoke`, {}))}>
+                  {t("tasks.revoke")}
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" disabled={busy === d.approvalId} title={t("tasks.autoApproveOffHint")}
+                onClick={() => void run(d.approvalId, () => ApiClient.post(`/api/agent-tasks/${d.taskId}/approvals/auto-approve`, { enabled: false }))}>
+                {t("tasks.autoApproveOff")}
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   if (items.length === 0) {
-    return <p className="py-6 text-center text-sm text-muted">{t("tasks.empty")}</p>;
+    return (
+      <>
+        <p className="py-6 text-center text-sm text-muted">{t("tasks.empty")}</p>
+        {recentSection}
+      </>
+    );
   }
 
   return (
@@ -202,6 +249,7 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
           </Card>
         );
       })}
+      {recentSection}
     </div>
   );
 }

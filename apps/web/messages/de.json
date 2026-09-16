@@ -2186,7 +2186,15 @@
         "external": "Externes Tool",
         "control": "Steuerung",
         "sensitive": "Anmeldedatei"
-      }
+      },
+      "recentTitle": "Letzte Entscheidungen (30 Min.)",
+      "revoked": "widerrufen",
+      "consumed": "ausgeführt",
+      "approvedPending": "freigegeben · noch nicht ausgeführt",
+      "revoke": "Widerrufen",
+      "revokeHint": "Eine noch nicht ausgeführte Freigabe zurückziehen (wartet beim Fortsetzen erneut)",
+      "autoApproveOff": "Auto-Freigabe aus",
+      "autoApproveOffHint": "Auto-Freigabe für diese Aufgabe deaktivieren"
     }
   },
   "marketplacePublish": {

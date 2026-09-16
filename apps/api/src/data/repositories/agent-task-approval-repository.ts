@@ -58,11 +58,13 @@ export class AgentTaskApprovalRepository extends BaseRepository {
     }
 
     /** 결정 기록 — pending 행에만 적용(이미 결정된 행은 그대로). 성공 시 true. decidedBy 는 138. */
-    async markDecided(approvalId: string, status: Exclude<ApprovalRowStatus, 'pending'>, answerText?: string, decidedBy?: string | null): Promise<boolean> {
+    async markDecided(approvalId: string, status: Exclude<ApprovalRowStatus, 'pending'>, answerText?: string, decidedBy?: string | null, consumed = false): Promise<boolean> {
+        // consumed=true: 살아 있는 waiter 가 결정 즉시 실행한 경우 — 재시작 이어받기·철회 대상에서 제외(138)
         const r = await this.query(
-            `UPDATE agent_task_approvals SET status = $2, answer_text = $3, decided_at = NOW(), decided_by = COALESCE($4, decided_by)
+            `UPDATE agent_task_approvals SET status = $2, answer_text = $3, decided_at = NOW(), decided_by = COALESCE($4, decided_by),
+                    consumed_at = CASE WHEN $5 THEN NOW() ELSE consumed_at END
              WHERE approval_id = $1 AND status = 'pending'`,
-            [approvalId, status, answerText ?? null, decidedBy ?? null],
+            [approvalId, status, answerText ?? null, decidedBy ?? null, consumed],
         );
         return (r.rowCount ?? 0) > 0;
     }

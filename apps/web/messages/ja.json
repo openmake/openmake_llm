@@ -2186,7 +2186,15 @@
         "external": "外部ツール",
         "control": "制御",
         "sensitive": "認証情報ファイル"
-      }
+      },
+      "recentTitle": "最近の決定（30分）",
+      "revoked": "取り消し済み",
+      "consumed": "実行済み",
+      "approvedPending": "承認済み・未実行",
+      "revoke": "取り消し",
+      "revokeHint": "まだ実行されていない承認を取り消します（再開時に再度承認待ち）",
+      "autoApproveOff": "自動承認を解除",
+      "autoApproveOffHint": "この作業の自動承認を無効にします"
     }
   },
   "marketplacePublish": {

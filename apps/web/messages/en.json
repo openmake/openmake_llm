@@ -2186,7 +2186,15 @@
         "external": "External tool",
         "control": "Control",
         "sensitive": "Credential file"
-      }
+      },
+      "recentTitle": "Recent decisions (30 min)",
+      "revoked": "revoked",
+      "consumed": "executed",
+      "approvedPending": "approved · not yet executed",
+      "revoke": "Revoke",
+      "revokeHint": "Withdraw an approval that has not been executed yet (it will wait again on resume)",
+      "autoApproveOff": "Turn off auto-approve",
+      "autoApproveOffHint": "Disable auto-approve for this task"
     }
   },
   "marketplacePublish": {

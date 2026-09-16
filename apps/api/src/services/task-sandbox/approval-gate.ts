@@ -222,9 +222,10 @@ export class ApprovalRegistry {
                 clearTimeout(w.timer);
                 this.waiters.delete(approvalId);
                 if (r.decision === 'rejected') logger.info(`[${input.taskId}] 승인 거절/만료(${r.reason}): ${input.toolName}`);
+                // 살아 있는 waiter 의 결정은 즉시 실행(소비)된다 — consumed 표시로 재시작 이어받기·철회(138) 대상에서 뺀다
                 void this.persist((s) => s.markDecided(approvalId,
                     r.decision === 'approved' ? 'approved' : r.reason === 'timeout' ? 'expired' : r.reason === 'abort' ? 'aborted' : 'rejected',
-                    r.text));
+                    r.text, undefined, true));
                 resolvePromise({ ...r, waitedMs: Date.now() - pending.createdAt });
             };
             const timer = setTimeout(() => settle({ decision: 'rejected', reason: 'timeout' }), opts.timeoutMs);
@@ -306,7 +307,7 @@ export function getApprovalRegistry(): ApprovalRegistry {
         const lazy = (): AgentTaskApprovalRepository => (repo ??= new AgentTaskApprovalRepository(getPool()));
         registry = new ApprovalRegistry({
             insertPending: (r) => lazy().insertPending(r),
-            markDecided: (id, s, t) => lazy().markDecided(id, s, t),
+            markDecided: (id, s, t, by, c) => lazy().markDecided(id, s, t, by, c),
             listPending: (u) => lazy().listPending(u),
             getPending: (id) => lazy().getPending(id),
             takeoverForCall: (t, n, h) => lazy().takeoverForCall(t, n, h),

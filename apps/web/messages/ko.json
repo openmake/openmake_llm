@@ -2186,7 +2186,15 @@
         "external": "외부 도구",
         "control": "제어",
         "sensitive": "자격증명 파일"
-      }
+      },
+      "recentTitle": "최근 결정(30분)",
+      "revoked": "철회됨",
+      "consumed": "실행됨",
+      "approvedPending": "승인됨 · 아직 실행 전",
+      "revoke": "철회",
+      "revokeHint": "아직 실행되지 않은 승인을 되돌립니다(재개 시 다시 승인 대기)",
+      "autoApproveOff": "자동 승인 해제",
+      "autoApproveOffHint": "이 작업의 자동 승인을 끕니다"
     }
   },
   "marketplacePublish": {

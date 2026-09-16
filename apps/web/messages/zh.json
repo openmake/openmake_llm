@@ -2186,7 +2186,15 @@
         "external": "外部工具",
         "control": "控制",
         "sensitive": "凭据文件"
-      }
+      },
+      "recentTitle": "最近决定（30 分钟）",
+      "revoked": "已撤销",
+      "consumed": "已执行",
+      "approvedPending": "已批准 · 尚未执行",
+      "revoke": "撤销",
+      "revokeHint": "撤回尚未执行的批准（恢复时将重新等待审批）",
+      "autoApproveOff": "关闭自动批准",
+      "autoApproveOffHint": "关闭此任务的自动批准"
     }
   },
   "marketplacePublish": {
