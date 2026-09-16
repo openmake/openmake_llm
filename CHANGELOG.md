@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.68.3](https://github.com/openmake/openmake_llm/compare/v1.68.2...v1.68.3) (2026-09-16)
+
+
+### 🐛 버그 수정
+
+* **api:** 역할 배정 드롭다운의 비채팅 모델 제외 + 로컬 태그 오류 메시지 상한 ([#907](https://github.com/openmake/openmake_llm/issues/907)) ([aa95326](https://github.com/openmake/openmake_llm/commit/aa953260a98ddfa9658392fca80337b05674fced))
+
 ## [1.68.2](https://github.com/openmake/openmake_llm/compare/v1.68.1...v1.68.2) (2026-09-15)
 
 
