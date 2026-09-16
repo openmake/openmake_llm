@@ -130,6 +130,47 @@ function SettingRow({ setting, busy, onSave, onReset }: {
  * 운영 설정(system_settings) 관리 — admin 전용.
  * 우선순위 DB > env > 기본값. 시크릿은 write-only(값 재조회 불가), 변경은 audit 기록.
  */
+interface HistoryRow { id: number; key: string; old_value: string | null; new_value: string | null; changed_by: string | null; changed_at: string }
+
+/** 변경 이력(130) — 최근 50건. 시크릿 값은 서버가 *** 로 저장했다. */
+function SettingsHistory() {
+  const t = useTranslations("adminSystemSettings");
+  const [rows, setRows] = useState<HistoryRow[] | null>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open || rows !== null) return;
+    ApiClient.get<ApiSuccess<{ history: HistoryRow[] }>>("/api/admin/system-settings/history?limit=50")
+      .then((r) => setRows(r?.data?.history ?? []))
+      .catch(() => setRows([]));
+  }, [open, rows]);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <span>{t("historyTitle")}</span>
+          <Button size="sm" variant="outline" onClick={() => setOpen((v) => !v)}>{open ? t("historyHide") : t("historyShow")}</Button>
+        </CardTitle>
+      </CardHeader>
+      {open && (
+        <CardContent>
+          {rows === null ? <Loader2 className="h-4 w-4 animate-spin text-muted" /> : rows.length === 0 ? (
+            <p className="text-xs text-muted">{t("historyEmpty")}</p>
+          ) : (
+            <ul className="space-y-1 text-[11px] text-muted">
+              {rows.map((h) => (
+                <li key={h.id} className="rounded bg-bg-1 px-2 py-1">
+                  <span className="text-fg">{h.key}</span> · {new Date(h.changed_at).toLocaleString()} · {h.changed_by ?? "—"}
+                  <div className="truncate font-mono">{h.old_value ?? "—"} → {h.new_value ?? "—"}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
 export default function AdminSystemSettingsPage() {
   const t = useTranslations("adminSystemSettings");
   const [settings, setSettings] = useState<SettingView[]>([]);
@@ -231,6 +272,7 @@ export default function AdminSystemSettingsPage() {
       })}
 
       <p className="text-xs text-muted">{t("priorityNote")}</p>
+      <SettingsHistory />
         </div>
       </div>
     </>

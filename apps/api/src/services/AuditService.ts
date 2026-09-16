@@ -161,6 +161,9 @@ const CRITICAL_ACTIONS: Record<string, 'info' | 'warning' | 'critical'> = {
     'user.role_changed': 'critical',
     // 조직 정책 변경(129) — 외부 모델 차단·승인 하한·MCP 허용 목록
     'org.policy_changed': 'warning',
+    // 운영 구성 내보내기/가져오기 (F22 Phase E)
+    'config.exported': 'warning',
+    'config.imported': 'critical',
     // 보안 변화
     'password.changed': 'warning',
     // GDPR Article 7(3) — 동의 철회

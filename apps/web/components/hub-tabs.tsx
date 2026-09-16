@@ -74,6 +74,7 @@ export function AdminTabs() {
         { href: "/admin/mcp-catalog", label: tNav("items.mcpCatalogAdmin") },
         { href: "/admin/model-roles", label: tNav("items.modelRolesAdmin") },
         { href: "/admin/system-settings", label: tNav("items.systemSettingsAdmin") },
+        { href: "/admin/organizations", label: tNav("items.organizationsAdmin") },
         { href: "/admin/schedules", label: tNav("items.schedulesAdmin") },
       ]}
     />

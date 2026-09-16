@@ -24,7 +24,8 @@
       "systemSettingsAdmin": "시스템 설정",
       "developer": "개발자",
       "schedulesAdmin": "작업 스케줄",
-      "approvals": "승인 대기"
+      "approvals": "승인 대기",
+      "organizationsAdmin": "조직 관리"
     },
     "pendingApprovals": "승인 대기 {count}건 — 에이전트 작업이 사용자 승인을 기다리고 있습니다"
   },
@@ -1853,7 +1854,11 @@
         "title": "웹 푸시 (VAPID)",
         "description": "브라우저 푸시 알림용 VAPID 키. 공개키/비밀키 쌍을 함께 설정하세요."
       }
-    }
+    },
+    "historyTitle": "변경 이력",
+    "historyShow": "보기",
+    "historyHide": "닫기",
+    "historyEmpty": "변경 이력이 없습니다."
   },
   "setup": {
     "title": "초기 설정",
@@ -2208,5 +2213,56 @@
     "artifactUnavailable": "본문을 읽을 수 없습니다.",
     "openArtifact": "열기",
     "artifactViewerOnly": "본문은 격리된 뷰어에서 열립니다 — [열기] 를 누르세요."
+  },
+  "adminOrganizations": {
+    "title": "조직 관리",
+    "description": "조직·멤버 역할·조직 정책·변경 이력을 관리하고 운영 구성을 내보내거나 가져옵니다.",
+    "loadError": "불러오기에 실패했습니다.",
+    "createFailed": "조직 생성 실패",
+    "listTitle": "조직",
+    "namePlaceholder": "조직 이름",
+    "slugPlaceholder": "slug (소문자·숫자·하이픈)",
+    "create": "생성",
+    "empty": "조직이 없습니다.",
+    "delete": "삭제",
+    "deleteConfirm": "'{name}' 조직을 삭제할까요? 멤버십·정책이 함께 삭제됩니다.",
+    "budget": "월 토큰 예산",
+    "budgetUnlimited": "무제한",
+    "save": "저장",
+    "members": "멤버",
+    "addMember": "멤버 추가",
+    "selectUser": "사용자 선택",
+    "user": "사용자",
+    "role": "역할",
+    "noMembers": "멤버가 없습니다.",
+    "removeMember": "멤버 제거",
+    "removeMemberConfirm": "이 멤버를 조직에서 제거할까요?",
+    "roles": {
+      "owner": "소유자",
+      "admin": "관리자",
+      "member": "멤버"
+    },
+    "policies": "조직 정책",
+    "policySet": "설정됨",
+    "policyUnset": "미설정(글로벌 따름)",
+    "policySave": "저장",
+    "policyReset": "해제",
+    "policySaveFailed": "정책 저장 실패: {error}",
+    "policyHelp": {
+      "EXTERNAL_MODEL_POLICY": "외부 모델 허용·차단 글롭 JSON. deny 는 글로벌과 합집합, allow 는 교집합 — 글로벌 차단을 풀 수 없습니다.",
+      "TOOL_APPROVAL_POLICY_MIN": "에이전트 작업 승인 정책 하한. 요청값보다 엄격하면 하한이 적용됩니다.",
+      "MCP_ALLOWED_SERVERS": "설치를 허용할 MCP 카탈로그 템플릿 id 목록(쉼표 구분). 비우면 제한 없음."
+    },
+    "history": "변경 이력",
+    "noHistory": "변경 이력이 없습니다.",
+    "configTitle": "운영 구성 내보내기 / 가져오기",
+    "configDescription": "시스템 설정(시크릿 제외)·전역 capability 배정·조직과 조직 정책을 JSON 으로 내보내거나 가져옵니다. 가져오기는 먼저 검증만 하고, 적용 버튼을 눌러야 반영됩니다.",
+    "export": "내보내기",
+    "importPick": "JSON 선택(검증)",
+    "importApply": "적용",
+    "importConfirm": "검증된 구성을 적용할까요? 시스템 설정과 조직 정책이 덮어써집니다.",
+    "importProblems": "문제 {count}건 — 적용할 수 없습니다.",
+    "importDryRun": "검증 통과 — 설정 {systemSettings} · capability {capabilityModels} · 조직 {organizations} · 정책 {policies}. 적용을 누르면 반영됩니다.",
+    "importApplied": "적용 완료 — 설정 {systemSettings} · capability {capabilityModels} · 조직 {organizations} · 정책 {policies}."
   }
 }

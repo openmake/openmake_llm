@@ -24,7 +24,8 @@
       "systemSettingsAdmin": "System Settings",
       "developer": "Developer",
       "schedulesAdmin": "Task Schedules",
-      "approvals": "Approvals"
+      "approvals": "Approvals",
+      "organizationsAdmin": "Organizations"
     },
     "pendingApprovals": "{count} pending approval(s) — agent tasks are waiting for your approval"
   },
@@ -1853,7 +1854,11 @@
         "title": "Web Push (VAPID)",
         "description": "VAPID keys for browser push notifications. Set the public/private key pair together."
       }
-    }
+    },
+    "historyTitle": "Change history",
+    "historyShow": "Show",
+    "historyHide": "Hide",
+    "historyEmpty": "No changes yet."
   },
   "setup": {
     "title": "Initial Setup",
@@ -2208,5 +2213,56 @@
     "artifactUnavailable": "The body could not be read.",
     "openArtifact": "Open",
     "artifactViewerOnly": "The body opens in an isolated viewer — press Open."
+  },
+  "adminOrganizations": {
+    "title": "Organizations",
+    "description": "Manage organizations, member roles, organization policies and change history, and export or import the operating configuration.",
+    "loadError": "Failed to load.",
+    "createFailed": "Failed to create organization",
+    "listTitle": "Organizations",
+    "namePlaceholder": "Organization name",
+    "slugPlaceholder": "slug (lowercase, digits, hyphens)",
+    "create": "Create",
+    "empty": "No organizations yet.",
+    "delete": "Delete",
+    "deleteConfirm": "Delete organization '{name}'? Memberships and policies are removed too.",
+    "budget": "Monthly token budget",
+    "budgetUnlimited": "Unlimited",
+    "save": "Save",
+    "members": "Members",
+    "addMember": "Add member",
+    "selectUser": "Select a user",
+    "user": "User",
+    "role": "Role",
+    "noMembers": "No members.",
+    "removeMember": "Remove member",
+    "removeMemberConfirm": "Remove this member from the organization?",
+    "roles": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "member": "Member"
+    },
+    "policies": "Organization policies",
+    "policySet": "Set",
+    "policyUnset": "Unset (inherit global)",
+    "policySave": "Save",
+    "policyReset": "Clear",
+    "policySaveFailed": "Failed to save policy: {error}",
+    "policyHelp": {
+      "EXTERNAL_MODEL_POLICY": "Allow/deny globs for external models as JSON. deny is unioned with global, allow is intersected — an org cannot lift a global block.",
+      "TOOL_APPROVAL_POLICY_MIN": "Minimum approval policy for agent tasks. If stricter than the request, the minimum wins.",
+      "MCP_ALLOWED_SERVERS": "Comma-separated MCP catalog template ids allowed for installation. Empty = no restriction."
+    },
+    "history": "Change history",
+    "noHistory": "No changes yet.",
+    "configTitle": "Export / import operating configuration",
+    "configDescription": "Exports or imports system settings (secrets excluded), global capability assignments, organizations and their policies as JSON. Import validates first; changes apply only after you press Apply.",
+    "export": "Export",
+    "importPick": "Choose JSON (validate)",
+    "importApply": "Apply",
+    "importConfirm": "Apply the validated configuration? System settings and organization policies will be overwritten.",
+    "importProblems": "{count} problem(s) — cannot apply.",
+    "importDryRun": "Validated — settings {systemSettings} · capabilities {capabilityModels} · organizations {organizations} · policies {policies}. Press Apply to commit.",
+    "importApplied": "Applied — settings {systemSettings} · capabilities {capabilityModels} · organizations {organizations} · policies {policies}."
   }
 }

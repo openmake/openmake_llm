@@ -24,7 +24,8 @@
       "systemSettingsAdmin": "系统设置",
       "developer": "开发者",
       "schedulesAdmin": "任务计划",
-      "approvals": "待审批"
+      "approvals": "待审批",
+      "organizationsAdmin": "组织管理"
     },
     "pendingApprovals": "{count} 个待批准 — 代理任务正在等待您的批准"
   },
@@ -1853,7 +1854,11 @@
         "title": "网页推送 (VAPID)",
         "description": "浏览器推送通知的 VAPID 密钥。请同时设置公钥/私钥对。"
       }
-    }
+    },
+    "historyTitle": "变更历史",
+    "historyShow": "显示",
+    "historyHide": "收起",
+    "historyEmpty": "暂无变更。"
   },
   "setup": {
     "title": "初始设置",
@@ -2208,5 +2213,56 @@
     "artifactUnavailable": "无法读取正文。",
     "openArtifact": "打开",
     "artifactViewerOnly": "正文在隔离查看器中打开 — 请点击\"打开\"。"
+  },
+  "adminOrganizations": {
+    "title": "组织管理",
+    "description": "管理组织、成员角色、组织策略与变更历史，并导出或导入运行配置。",
+    "loadError": "加载失败。",
+    "createFailed": "创建组织失败",
+    "listTitle": "组织",
+    "namePlaceholder": "组织名称",
+    "slugPlaceholder": "slug（小写、数字、连字符）",
+    "create": "创建",
+    "empty": "暂无组织。",
+    "delete": "删除",
+    "deleteConfirm": "删除组织“{name}”？成员关系和策略将一并删除。",
+    "budget": "每月令牌预算",
+    "budgetUnlimited": "不限",
+    "save": "保存",
+    "members": "成员",
+    "addMember": "添加成员",
+    "selectUser": "选择用户",
+    "user": "用户",
+    "role": "角色",
+    "noMembers": "暂无成员。",
+    "removeMember": "移除成员",
+    "removeMemberConfirm": "将此成员从组织中移除？",
+    "roles": {
+      "owner": "所有者",
+      "admin": "管理员",
+      "member": "成员"
+    },
+    "policies": "组织策略",
+    "policySet": "已设置",
+    "policyUnset": "未设置（沿用全局）",
+    "policySave": "保存",
+    "policyReset": "清除",
+    "policySaveFailed": "策略保存失败：{error}",
+    "policyHelp": {
+      "EXTERNAL_MODEL_POLICY": "外部模型允许/拒绝通配 JSON。deny 与全局取并集，allow 取交集 — 组织无法解除全局拒绝。",
+      "TOOL_APPROVAL_POLICY_MIN": "智能体任务审批策略下限。若比请求值更严格，则以下限为准。",
+      "MCP_ALLOWED_SERVERS": "允许安装的 MCP 目录模板 id（逗号分隔）。留空 = 不限制。"
+    },
+    "history": "变更历史",
+    "noHistory": "暂无变更。",
+    "configTitle": "导出 / 导入运行配置",
+    "configDescription": "以 JSON 导出或导入系统设置（不含密钥）、全局 capability 分配、组织及其策略。导入先仅做校验，按“应用”后才生效。",
+    "export": "导出",
+    "importPick": "选择 JSON（校验）",
+    "importApply": "应用",
+    "importConfirm": "应用已校验的配置？系统设置和组织策略将被覆盖。",
+    "importProblems": "{count} 个问题 — 无法应用。",
+    "importDryRun": "校验通过 — 设置 {systemSettings} · capability {capabilityModels} · 组织 {organizations} · 策略 {policies}。按“应用”生效。",
+    "importApplied": "已应用 — 设置 {systemSettings} · capability {capabilityModels} · 组织 {organizations} · 策略 {policies}。"
   }
 }

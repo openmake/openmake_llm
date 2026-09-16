@@ -24,7 +24,8 @@
       "systemSettingsAdmin": "システム設定",
       "developer": "開発者",
       "schedulesAdmin": "タスクスケジュール",
-      "approvals": "承認待ち"
+      "approvals": "承認待ち",
+      "organizationsAdmin": "組織管理"
     },
     "pendingApprovals": "承認待ち {count}件 — エージェント作業がユーザーの承認を待っています"
   },
@@ -1853,7 +1854,11 @@
         "title": "ウェブプッシュ (VAPID)",
         "description": "ブラウザプッシュ通知用の VAPID キー。公開鍵／秘密鍵のペアを一緒に設定してください。"
       }
-    }
+    },
+    "historyTitle": "変更履歴",
+    "historyShow": "表示",
+    "historyHide": "閉じる",
+    "historyEmpty": "変更履歴はありません。"
   },
   "setup": {
     "title": "初期設定",
@@ -2208,5 +2213,56 @@
     "artifactUnavailable": "本文を読み取れません。",
     "openArtifact": "開く",
     "artifactViewerOnly": "本文は隔離されたビューアで開きます — [開く] を押してください。"
+  },
+  "adminOrganizations": {
+    "title": "組織管理",
+    "description": "組織・メンバー役割・組織ポリシー・変更履歴を管理し、運用設定を書き出し/読み込みます。",
+    "loadError": "読み込みに失敗しました。",
+    "createFailed": "組織の作成に失敗",
+    "listTitle": "組織",
+    "namePlaceholder": "組織名",
+    "slugPlaceholder": "slug（小文字・数字・ハイフン）",
+    "create": "作成",
+    "empty": "組織がありません。",
+    "delete": "削除",
+    "deleteConfirm": "組織「{name}」を削除しますか？メンバーシップとポリシーも削除されます。",
+    "budget": "月間トークン予算",
+    "budgetUnlimited": "無制限",
+    "save": "保存",
+    "members": "メンバー",
+    "addMember": "メンバー追加",
+    "selectUser": "ユーザーを選択",
+    "user": "ユーザー",
+    "role": "役割",
+    "noMembers": "メンバーがいません。",
+    "removeMember": "メンバー削除",
+    "removeMemberConfirm": "このメンバーを組織から削除しますか？",
+    "roles": {
+      "owner": "オーナー",
+      "admin": "管理者",
+      "member": "メンバー"
+    },
+    "policies": "組織ポリシー",
+    "policySet": "設定済み",
+    "policyUnset": "未設定（グローバルに従う）",
+    "policySave": "保存",
+    "policyReset": "解除",
+    "policySaveFailed": "ポリシー保存失敗: {error}",
+    "policyHelp": {
+      "EXTERNAL_MODEL_POLICY": "外部モデルの許可/拒否グロブ JSON。deny はグローバルと和集合、allow は積集合 — グローバルの拒否は解除できません。",
+      "TOOL_APPROVAL_POLICY_MIN": "エージェント作業の承認ポリシー下限。要求より厳しければ下限が適用されます。",
+      "MCP_ALLOWED_SERVERS": "インストールを許可する MCP カタログテンプレート id（カンマ区切り）。空 = 制限なし。"
+    },
+    "history": "変更履歴",
+    "noHistory": "変更履歴はありません。",
+    "configTitle": "運用設定の書き出し / 読み込み",
+    "configDescription": "システム設定（シークレット除く）・グローバル capability 割当・組織と組織ポリシーを JSON で書き出し/読み込みます。読み込みは先に検証だけ行い、適用ボタンで反映されます。",
+    "export": "書き出し",
+    "importPick": "JSON を選択（検証）",
+    "importApply": "適用",
+    "importConfirm": "検証済みの設定を適用しますか？システム設定と組織ポリシーが上書きされます。",
+    "importProblems": "問題 {count} 件 — 適用できません。",
+    "importDryRun": "検証 OK — 設定 {systemSettings}・capability {capabilityModels}・組織 {organizations}・ポリシー {policies}。適用で反映されます。",
+    "importApplied": "適用完了 — 設定 {systemSettings}・capability {capabilityModels}・組織 {organizations}・ポリシー {policies}。"
   }
 }
