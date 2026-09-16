@@ -344,7 +344,8 @@
       "sendAnswer": "回答を送信",
       "skip": "スキップ",
       "autoApprove": "残りをすべて承認",
-      "autoApproveHint": "このタスクの以降のツール実行を承認なしで進めます（質問は除く）"
+      "autoApproveHint": "このタスクの以降のツール実行を承認なしで進めます（質問は除く）",
+      "preview": "変更プレビュー"
     },
     "artifactFallback": "アーティファクト",
     "artifactBuilding": "アーティファクトを生成中…",
@@ -2194,7 +2195,8 @@
       "revoke": "取り消し",
       "revokeHint": "まだ実行されていない承認を取り消します（再開時に再度承認待ち）",
       "autoApproveOff": "自動承認を解除",
-      "autoApproveOffHint": "この作業の自動承認を無効にします"
+      "autoApproveOffHint": "この作業の自動承認を無効にします",
+      "preview": "実行前の変更プレビュー"
     }
   },
   "marketplacePublish": {

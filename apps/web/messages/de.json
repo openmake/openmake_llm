@@ -344,7 +344,8 @@
       "sendAnswer": "Antwort senden",
       "skip": "Überspringen",
       "autoApprove": "Rest freigeben",
-      "autoApproveHint": "Verbleibende Tool-Aufrufe dieser Aufgabe ohne Freigabe ausführen (Fragen ausgenommen)"
+      "autoApproveHint": "Verbleibende Tool-Aufrufe dieser Aufgabe ohne Freigabe ausführen (Fragen ausgenommen)",
+      "preview": "Änderungsvorschau"
     },
     "artifactFallback": "Artefakt",
     "artifactBuilding": "Artefakt wird erstellt …",
@@ -2194,7 +2195,8 @@
       "revoke": "Widerrufen",
       "revokeHint": "Eine noch nicht ausgeführte Freigabe zurückziehen (wartet beim Fortsetzen erneut)",
       "autoApproveOff": "Auto-Freigabe aus",
-      "autoApproveOffHint": "Auto-Freigabe für diese Aufgabe deaktivieren"
+      "autoApproveOffHint": "Auto-Freigabe für diese Aufgabe deaktivieren",
+      "preview": "Änderungen vor Ausführung ansehen"
     }
   },
   "marketplacePublish": {

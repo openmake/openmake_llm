@@ -344,7 +344,8 @@
       "sendAnswer": "답변 전송",
       "skip": "건너뛰기",
       "autoApprove": "나머지 모두 승인",
-      "autoApproveHint": "이 작업의 이후 도구 실행을 승인 없이 진행합니다 (질문 제외)"
+      "autoApproveHint": "이 작업의 이후 도구 실행을 승인 없이 진행합니다 (질문 제외)",
+      "preview": "실행 전 변경 미리보기"
     },
     "artifactFallback": "아티팩트",
     "artifactBuilding": "아티팩트 생성 중…",
@@ -2194,7 +2195,8 @@
       "revoke": "철회",
       "revokeHint": "아직 실행되지 않은 승인을 되돌립니다(재개 시 다시 승인 대기)",
       "autoApproveOff": "자동 승인 해제",
-      "autoApproveOffHint": "이 작업의 자동 승인을 끕니다"
+      "autoApproveOffHint": "이 작업의 자동 승인을 끕니다",
+      "preview": "실행 전 변경 미리보기"
     }
   },
   "marketplacePublish": {

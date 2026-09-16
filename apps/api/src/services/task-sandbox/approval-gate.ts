@@ -96,6 +96,8 @@ export interface PendingApproval {
     riskClass: ToolRiskClass;
     /** 자격증명 파일을 바꾸는 호출(high-risk 상향 사유). */
     sensitive: boolean;
+    /** 실행 전 미리보기(unified diff, 138) — 파일 도구 외 undefined */
+    preview?: string;
 }
 
 interface Waiter {
@@ -116,6 +118,7 @@ function rowToPending(r: ApprovalRow): PendingApproval {
         createdAt: new Date(r.created_at).getTime(),
         riskClass: (r.risk_class as ToolRiskClass | null) ?? classifyToolRisk(r.tool_name, args),
         sensitive: isSensitiveWrite(r.tool_name, args),
+        ...(r.preview ? { preview: r.preview } : {}),
     };
 }
 
@@ -188,7 +191,7 @@ export class ApprovalRegistry {
      * 자동승인 task(ask_human 제외)는 대기 없이 즉시 approved.
      */
     async request(
-        input: { taskId: string; userId: string; toolName: string; args: Record<string, unknown> },
+        input: { taskId: string; userId: string; toolName: string; args: Record<string, unknown>; preview?: string },
         opts: { timeoutMs: number; signal?: AbortSignal; onPending?: (p: PendingApproval) => void },
     ): Promise<ApprovalResult> {
         if (this.autoApproveTasks.has(input.taskId) && input.toolName !== 'ask_human') {
@@ -207,12 +210,14 @@ export class ApprovalRegistry {
         }
         const approvalId = prior?.approval_id ?? `apv_${input.taskId}_${Date.now().toString(36)}_${this.seq++}`;
         const riskClass = classifyToolRisk(input.toolName, input.args);
+        const { preview, ...core } = input;
         const pending: PendingApproval = {
-            approvalId, ...input, createdAt: prior ? new Date(prior.created_at).getTime() : Date.now(),
+            approvalId, ...core, createdAt: prior ? new Date(prior.created_at).getTime() : Date.now(),
             riskClass, sensitive: isSensitiveWrite(input.toolName, input.args),
+            ...(preview ? { preview } : prior?.preview ? { preview: prior.preview } : {}),
         };
         if (!prior && this.store) {
-            await this.persist((s) => s.insertPending({ approvalId, ...input, argsHash, riskClass, timeoutMs: opts.timeoutMs }));
+            await this.persist((s) => s.insertPending({ approvalId, ...core, argsHash, riskClass, timeoutMs: opts.timeoutMs, preview }));
             void this.event(approvalId, 'requested', null, { toolName: input.toolName, riskClass });
         }
         return new Promise<ApprovalResult>((resolvePromise) => {

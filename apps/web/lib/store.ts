@@ -67,6 +67,8 @@ export interface PendingApproval {
   taskId: string;
   toolName: string;
   args: Record<string, unknown>;
+  /** 실행 전 미리보기(unified diff, 138) — 파일 쓰기 도구만 */
+  preview?: string;
 }
 
 /** 딥리서치 진행상황 (백엔드 research_progress 이벤트 — DeepResearch ResearchProgress 대응). */

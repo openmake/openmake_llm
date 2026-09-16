@@ -47,13 +47,13 @@ export function hashApprovalArgs(args: Record<string, unknown>): string {
 export class AgentTaskApprovalRepository extends BaseRepository {
     async insertPending(row: {
         approvalId: string; taskId: string; userId: string; toolName: string;
-        args: Record<string, unknown>; argsHash: string; timeoutMs: number; riskClass?: string;
+        args: Record<string, unknown>; argsHash: string; timeoutMs: number; riskClass?: string; preview?: string;
     }): Promise<void> {
         await this.query(
-            `INSERT INTO agent_task_approvals (approval_id, task_id, user_id, tool_name, args, args_hash, expires_at, risk_class)
-             VALUES ($1, $2, $3, $4, $5, $6, NOW() + make_interval(secs => $7), $8)
+            `INSERT INTO agent_task_approvals (approval_id, task_id, user_id, tool_name, args, args_hash, expires_at, risk_class, preview)
+             VALUES ($1, $2, $3, $4, $5, $6, NOW() + make_interval(secs => $7), $8, $9)
              ON CONFLICT (approval_id) DO NOTHING`,
-            [row.approvalId, row.taskId, row.userId, row.toolName, JSON.stringify(row.args ?? {}), row.argsHash, row.timeoutMs / 1000, row.riskClass ?? null],
+            [row.approvalId, row.taskId, row.userId, row.toolName, JSON.stringify(row.args ?? {}), row.argsHash, row.timeoutMs / 1000, row.riskClass ?? null, row.preview ?? null],
         );
     }
 

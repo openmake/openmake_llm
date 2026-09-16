@@ -110,6 +110,12 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
             <div className="min-w-0">
               <span className="font-mono text-xs text-fg-2">{a.toolName}</span>
               <span className="ml-2 break-all text-xs text-muted">{JSON.stringify(a.args).slice(0, 90)}</span>
+              {a.preview && (
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-[11px] text-accent">{t("approvals.preview")}</summary>
+                  <div className="mt-1"><DiffView text={a.preview} /></div>
+                </details>
+              )}
             </div>
             <div className="flex shrink-0 gap-1">
               <button

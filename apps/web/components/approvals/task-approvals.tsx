@@ -18,6 +18,7 @@ import Link from "next/link";
 import { Check, X, Loader2, MessageCircleQuestion, Wrench, ExternalLink } from "lucide-react";
 import { Button, Badge, Card } from "@/components/ui/primitives";
 import { ApiClient } from "@/lib/api-client";
+import { DiffView } from "@/components/chat/diff-view";
 
 interface RecentDecision {
   approvalId: string;
@@ -38,6 +39,8 @@ interface PendingItem {
   riskClass?: "read" | "write" | "destructive" | "exec" | "network" | "external" | "control";
   /** 자격증명 파일을 바꾸는 호출. */
   sensitive?: boolean;
+  /** 실행 전 미리보기(unified diff, 138) — 파일 쓰기 도구만 */
+  preview?: string;
 }
 
 /** 인자 요약 — 어떤 작업을 승인하는지 한 줄로 보인다(장문은 잘라낸다). */
@@ -174,6 +177,12 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
             </div>
 
             <p className="whitespace-pre-wrap break-words text-sm text-fg">{summarizeArgs(a.args)}</p>
+            {a.preview && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs text-accent">{t("tasks.preview")}</summary>
+                <div className="mt-1"><DiffView text={a.preview} /></div>
+              </details>
+            )}
 
             {isQuestion && (
               <input

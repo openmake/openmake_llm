@@ -344,7 +344,8 @@
       "sendAnswer": "Send answer",
       "skip": "Skip",
       "autoApprove": "Approve rest",
-      "autoApproveHint": "Run remaining tool calls of this task without approval (questions excluded)"
+      "autoApproveHint": "Run remaining tool calls of this task without approval (questions excluded)",
+      "preview": "Preview changes"
     },
     "artifactFallback": "Artifact",
     "artifactBuilding": "Building artifact…",
@@ -2194,7 +2195,8 @@
       "revoke": "Revoke",
       "revokeHint": "Withdraw an approval that has not been executed yet (it will wait again on resume)",
       "autoApproveOff": "Turn off auto-approve",
-      "autoApproveOffHint": "Disable auto-approve for this task"
+      "autoApproveOffHint": "Disable auto-approve for this task",
+      "preview": "Preview changes before running"
     }
   },
   "marketplacePublish": {

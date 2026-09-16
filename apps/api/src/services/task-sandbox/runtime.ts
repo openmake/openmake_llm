@@ -21,6 +21,8 @@ import { saveProceduralSkill, resolveProceduralSpec } from '../agent-task/proced
 import { TaskPlan, parseGoalPlanSteps, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval, type ApprovalRejectReason } from './approval-gate';
 import { withToolNameSuggestions, detectShellToolMisuse, formatShellToolMisuseHint } from '../../mcp/tool-name-suggest';
+import { buildApprovalPreview } from './approval-preview';
+import { APPROVAL_PREVIEW } from '../../config/task-sandbox';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('TaskRuntime');
@@ -241,8 +243,12 @@ export class TaskRuntime {
         }
 
         if (requiresApproval(this.cfg.approvalPolicy, name, args, { deviceGatesShell: this.cfg.deviceGatesShell })) {
+            // 실행 전 미리보기(138) — 파일 쓰기 도구는 현재 파일과 인자로 diff 를 만들어 승인 카드에 싣는다(fail-open)
+            const preview = APPROVAL_PREVIEW.ENABLED
+                ? await buildApprovalPreview(name, args, (p) => this.executor.readFile(p)).catch(() => null)
+                : null;
             const { decision, reason, waitedMs } = await getApprovalRegistry().request(
-                { taskId: this.taskId, userId: this.userId, toolName: name, args },
+                { taskId: this.taskId, userId: this.userId, toolName: name, args, preview: preview ?? undefined },
                 { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending },
             );
             opts.onApprovalWaited?.(waitedMs);
