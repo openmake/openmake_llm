@@ -12,6 +12,8 @@ import type { MCPToolDefinition, MCPToolResult } from './types';
 import { MCP_NAMESPACE_SEPARATOR } from './types';
 
 export const MCP_META_TOOL_NAMES = ['mcp_list_tools', 'mcp_call'] as const;
+/** resources/prompts 메타 도구(F13.2) — 상시 노출이 아니라 의도 턴(MCP_RESOURCE_INTENT_PATTERNS)에만. */
+export const MCP_RESOURCE_META_TOOL_NAMES = ['mcp_list_resources', 'mcp_read_resource', 'mcp_get_prompt'] as const;
 
 function text(t: string): MCPToolResult {
     return { content: [{ type: 'text', text: t }] };
@@ -120,4 +122,87 @@ const mcpCallTool: MCPToolDefinition = {
     },
 };
 
-export const mcpMetaTools: MCPToolDefinition[] = [mcpListToolsTool, mcpCallTool];
+/** displayName → 사용자 풀 클라이언트. 도구가 0개인 서버는 그룹에 없으므로 서버 이름으로도 찾는다. */
+async function resolveUserClient(userId: string, server: string) {
+    const { getUnifiedMCPClient } = await import('./unified-client');
+    const { collectUserPoolTools } = await import('./user-pool-tools');
+    const { getUserMCPPool } = await import('./user-pool');
+    const pool = getUserMCPPool();
+    const match = (n: string) => norm(n) === norm(server) || n.toLowerCase() === server.toLowerCase();
+    const g = getUnifiedMCPClient().getToolRouter().getUserPoolToolGroups(userId).find((x) => match(x.displayName));
+    if (g) {
+        const entry = collectUserPoolTools(pool, userId).find((e) => e.displayName === g.displayName);
+        const client = entry ? pool.get(userId, entry.serverId) : undefined;
+        if (client) return client;
+    }
+    for (const [, client] of pool.forUser(userId)) if (match(client.getStatus().serverName)) return client;
+    return undefined;
+}
+
+function requireUser(context: { userId?: unknown } | undefined): string | MCPToolResult {
+    const userId = context?.userId != null ? String(context.userId) : undefined;
+    if (!userId || userId === 'guest') return text('로그인 사용자만 MCP 서버 리소스·프롬프트를 조회할 수 있습니다.');
+    return userId;
+}
+
+const serverProp = { server: { type: 'string', description: 'MCP 서버 이름(displayName) — mcp_list_tools 로 확인' } };
+
+const mcpListResourcesTool: MCPToolDefinition = {
+    tool: {
+        name: 'mcp_list_resources',
+        description: '설치한 MCP 서버가 제공하는 리소스(파일·문서·데이터 URI) 목록을 조회합니다. 서버가 resources 기능을 광고하지 않으면 오류 텍스트를 돌려줍니다. 읽기는 mcp_read_resource.',
+        inputSchema: { type: 'object', properties: { ...serverProp }, required: ['server'] },
+    },
+    handler: async (args, context): Promise<MCPToolResult> => {
+        const u = requireUser(context); if (typeof u !== 'string') return u;
+        const server = typeof args.server === 'string' ? args.server.trim() : '';
+        const client = server ? await resolveUserClient(u, server) : undefined;
+        if (!client) return text(`서버 '${server}' 를 찾을 수 없습니다.`);
+        const { listResources } = await import('./external-resources');
+        return listResources(client);
+    },
+};
+
+const mcpReadResourceTool: MCPToolDefinition = {
+    tool: {
+        name: 'mcp_read_resource',
+        description: 'MCP 서버 리소스를 uri 로 읽습니다(mcp_list_resources 의 uri). 텍스트는 그대로, 바이너리는 크기만 알려줍니다.',
+        inputSchema: { type: 'object', properties: { ...serverProp, uri: { type: 'string', description: '리소스 URI' } }, required: ['server', 'uri'] },
+    },
+    handler: async (args, context): Promise<MCPToolResult> => {
+        const u = requireUser(context); if (typeof u !== 'string') return u;
+        const server = typeof args.server === 'string' ? args.server.trim() : '';
+        const uri = typeof args.uri === 'string' ? args.uri.trim() : '';
+        if (!uri) return text('uri 가 필요합니다.');
+        const client = server ? await resolveUserClient(u, server) : undefined;
+        if (!client) return text(`서버 '${server}' 를 찾을 수 없습니다.`);
+        const { readResource } = await import('./external-resources');
+        return readResource(client, uri);
+    },
+};
+
+const mcpGetPromptTool: MCPToolDefinition = {
+    tool: {
+        name: 'mcp_get_prompt',
+        description: 'MCP 서버가 제공하는 프롬프트 템플릿을 가져옵니다. name 을 비우면 프롬프트 목록을 돌려주고, name 과 arguments 를 주면 렌더된 메시지를 돌려줍니다.',
+        inputSchema: {
+            type: 'object',
+            properties: { ...serverProp, name: { type: 'string', description: '프롬프트 이름(비우면 목록)' }, arguments: { type: 'object', description: '프롬프트 인자(문자열 값)' } },
+            required: ['server'],
+        },
+    },
+    handler: async (args, context): Promise<MCPToolResult> => {
+        const u = requireUser(context); if (typeof u !== 'string') return u;
+        const server = typeof args.server === 'string' ? args.server.trim() : '';
+        const client = server ? await resolveUserClient(u, server) : undefined;
+        if (!client) return text(`서버 '${server}' 를 찾을 수 없습니다.`);
+        const { listPrompts, getPrompt } = await import('./external-resources');
+        const name = typeof args.name === 'string' ? args.name.trim() : '';
+        if (!name) return listPrompts(client);
+        const raw = args.arguments && typeof args.arguments === 'object' ? args.arguments as Record<string, unknown> : {};
+        const strArgs = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, typeof v === 'string' ? v : JSON.stringify(v)]));
+        return getPrompt(client, name, strArgs);
+    },
+};
+
+export const mcpMetaTools: MCPToolDefinition[] = [mcpListToolsTool, mcpCallTool, mcpListResourcesTool, mcpReadResourceTool, mcpGetPromptTool];

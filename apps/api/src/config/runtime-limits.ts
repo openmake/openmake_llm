@@ -2150,6 +2150,16 @@ export const SESSION_BRANCH = {
     TREE_MAX_DEPTH: parseInt(process.env.SESSION_TREE_MAX_DEPTH || '20', 10),
 } as const;
 
+/** 외부 MCP resources/prompts 메타 도구(F13.2) — 목록 상한. MCP_RESOURCE_LIST_MAX */
+export const MCP_RESOURCE_LIMITS = {
+    LIST_MAX: parseInt(process.env.MCP_RESOURCE_LIST_MAX || '100', 10),
+} as const;
+
+/** resources/prompts 메타 도구를 노출할 의도 턴 판정(F13.2) — 상시 노출 금지(프롬프트 다이어트). */
+export const MCP_RESOURCE_INTENT_PATTERNS: readonly RegExp[] = [
+    /리소스|resource|프롬프트\s*(템플릿|목록)|prompt\s*template|mcp.*(읽|read|목록|list)/i,
+];
+
 /** getAllTools 진입 시 stale 도구 재조회 동시성(F13.12). MCP_TOOL_REFRESH_CONCURRENCY */
 export const MCP_TOOL_REFRESH_CONCURRENCY = parseInt(process.env.MCP_TOOL_REFRESH_CONCURRENCY || '4', 10);
 

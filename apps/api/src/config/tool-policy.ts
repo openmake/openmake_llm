@@ -47,6 +47,10 @@ const TOOL_RISK: Readonly<Record<string, RiskRule>> = {
     str_replace_editor: (args) => EDITOR_RISK[String(args.command)] ?? 'write',
     grep_code: 'read',
     repo_map: 'read',
+    // 외부 MCP resources/prompts 메타 도구(F13.2) — 읽기 전용
+    mcp_list_resources: 'read',
+    mcp_read_resource: 'read',
+    mcp_get_prompt: 'read',
     skill_save: 'write',
     // 제어·플래닝·위임 — 부작용 없음
     terminate: 'control',

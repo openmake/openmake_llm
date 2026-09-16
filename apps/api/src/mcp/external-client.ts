@@ -131,6 +131,8 @@ export class ExternalMCPClient extends EventEmitter {
     private toolsRefreshedAt = 0;
     /** stale 재조회 진행 중이면 그 promise — 동시 getAllTools 가 listTools 를 겹쳐 부르지 않게 */
     private refreshing: Promise<boolean> | null = null;
+    /** initialize 응답의 서버 capabilities — resources/prompts 지원 판정(F13.2) */
+    private serverCapabilities: ReturnType<Client['getServerCapabilities']> = undefined;
 
     /**
      * ExternalMCPClient 인스턴스를 생성합니다.
@@ -185,6 +187,7 @@ export class ExternalMCPClient extends EventEmitter {
             this.client.onclose = () => this.handleUnexpectedClose();
 
             await this.client.connect(this.transport);
+            this.serverCapabilities = this.client.getServerCapabilities?.();
 
             // 도구 목록 검색
             const toolsResult = await this.client.listTools();
@@ -377,6 +380,16 @@ export class ExternalMCPClient extends EventEmitter {
      *
      * @returns MCPConnectionStatus 객체 (serverId, 상태, 도구 수, 에러 등)
      */
+    /** 서버가 광고한 capabilities(연결 후) — resources/prompts 메타 도구의 지원 판정용 */
+    getServerCapabilities(): ReturnType<Client['getServerCapabilities']> {
+        return this.serverCapabilities;
+    }
+
+    /** SDK 클라이언트 원본 — external-resources 래퍼 전용. 도구 호출은 callTool 을 쓸 것. */
+    getSdkClient(): Client | null {
+        return this.client;
+    }
+
     getStatus(): MCPConnectionStatus {
         return {
             serverId: this.config.id,
