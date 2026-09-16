@@ -14,6 +14,7 @@ import { createHash } from 'crypto';
 import { getKeyValueStore } from '../storage';
 import { STORAGE_POLICY, RATE_LIMIT_POLICY, AUTH_COOKIES } from '../config/security';
 import { ARTIFACT_EXEC } from '../config/artifact-exec';
+import { ARTIFACT_COMMENT_LIMITS } from '../config/runtime-limits';
 import { ARTIFACT_EXPORT } from '../config/artifact-export';
 import { verifyToken } from '../auth/auth-core';
 import { isAdminRole } from '../data/user-manager';
@@ -570,4 +571,15 @@ export const artifactExportLimiter = createAdvancedRateLimiter({
     ipLimit: ARTIFACT_EXPORT.rateIpLimit,
     userLimit: ARTIFACT_EXPORT.rateUserLimit,
     message: '문서 변환 요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
+});
+
+/**
+ * 아티팩트 댓글(F20.6) 작성·수정·삭제 레이트 리미터.
+ */
+export const artifactCommentLimiter = createAdvancedRateLimiter({
+    name: 'artifact-comment',
+    windowMs: ARTIFACT_COMMENT_LIMITS.RATE_WINDOW_MS,
+    ipLimit: ARTIFACT_COMMENT_LIMITS.RATE_IP,
+    userLimit: ARTIFACT_COMMENT_LIMITS.RATE_USER,
+    message: '댓글 요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
 });

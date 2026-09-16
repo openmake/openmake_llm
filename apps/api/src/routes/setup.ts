@@ -86,6 +86,7 @@ import {
     artifactsRouter,
     artifactPublicationRouter,
     artifactExportRouter,
+    artifactCommentsRouter,
 } from './index';
 import { setupSwaggerRoutes } from '../swagger';
 import { createClusterController, createHealthController, createAuthController, createAdminController, createSessionController } from '../controllers';
@@ -243,6 +244,7 @@ export function setupApiRoutes(
     app.use('/api', artifactPublicationRouter);
     // Artifacts pdf/docx export (P1 Phase 3 — 동일 /api prefix)
     app.use('/api', artifactExportRouter);
+    app.use('/api', artifactCommentsRouter);   // 아티팩트 댓글(147)
 
     // 부트스트랩 서비스 초기화
     bootstrapServices();

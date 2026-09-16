@@ -62,6 +62,7 @@ export { default as artifactsRouter } from './artifacts.routes';
 export { default as artifactPublicationRouter } from './artifact-publication.routes';
 // Artifacts pdf/docx export (P1 보고서 파이프라인 Phase 3 — 파일 크기 가드 분리)
 export { default as artifactExportRouter } from './artifact-export.routes';
+export { default as artifactCommentsRouter } from './artifact-comments.routes';
 
 // 🆕 Push 알림 라우트
 export { pushRouter } from './push.routes';

@@ -2159,6 +2159,17 @@ export const SESSION_BRANCH = {
     TREE_MAX_DEPTH: parseInt(process.env.SESSION_TREE_MAX_DEPTH || '20', 10),
 } as const;
 
+/** 아티팩트 댓글(F20.6, 147) — 본문 상한은 147 CHECK 와 짝. */
+export const ARTIFACT_COMMENT_LIMITS = {
+    BODY_MAX_CHARS: 4000,
+    /** 아티팩트당 목록 최대 행. ARTIFACT_COMMENT_LIST_MAX */
+    LIST_MAX: parseInt(process.env.ARTIFACT_COMMENT_LIST_MAX || '500', 10),
+    /** 작성·수정 레이트 리밋(분당). ARTIFACT_COMMENT_RATE_USER / ARTIFACT_COMMENT_RATE_IP */
+    RATE_WINDOW_MS: 60_000,
+    RATE_USER: parseInt(process.env.ARTIFACT_COMMENT_RATE_USER || '30', 10),
+    RATE_IP: parseInt(process.env.ARTIFACT_COMMENT_RATE_IP || '60', 10),
+} as const;
+
 /** 외부 MCP resources/prompts 메타 도구(F13.2) — 목록 상한. MCP_RESOURCE_LIST_MAX */
 export const MCP_RESOURCE_LIMITS = {
     LIST_MAX: parseInt(process.env.MCP_RESOURCE_LIST_MAX || '100', 10),
