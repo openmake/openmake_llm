@@ -12,6 +12,7 @@ import { getAuthService } from '../services/AuthService';
 import { getUserManager } from '../data/user-manager';
 import { requireAuth, optionalAuth, extractToken, blacklistToken, setTokenCookie, clearTokenCookie, setRefreshTokenCookie, generateRefreshToken, generateToken, verifyRefreshToken, removeSessionFromMap } from '../auth';
 import jwt from 'jsonwebtoken';
+import { activeOrgFor } from '../services/org/membership-cache';
 import { createLogger } from '../utils/logger';
 import { success, badRequest, unauthorized, conflict, internalError } from '../utils/api-response';
 import { getConfig } from '../config/env';
@@ -210,9 +211,11 @@ class AuthController {
      * GET /api/auth/me - 현재 사용자 정보
      * #24 연동: 표준 API 응답 형식
      */
-    private getCurrentUser(req: Request, res: Response): void {
+    private async getCurrentUser(req: Request, res: Response): Promise<void> {
         if (req.user) {
-            res.json(success({ user: req.user }));
+            // F22 Phase A: 활성 조직 컨텍스트 동봉 (없으면 null — 조직은 선택 구조)
+            const org = await activeOrgFor(String(req.user.id ?? (req.user as { userId?: string }).userId ?? ''));
+            res.json(success({ user: req.user, activeOrganization: org }));
             return;
         }
         // optionalAuth 라 user 없이도 통과. 여기서 토큰 유무로 분기:

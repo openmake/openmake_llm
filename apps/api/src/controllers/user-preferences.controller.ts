@@ -12,6 +12,8 @@
  * Endpoints:
  *   GET  /api/users/me/custom-instructions   — { customInstructions: string | null }
  *   PUT  /api/users/me/custom-instructions   — { customInstructions: string } body
+ *   GET  /api/users/me/organizations         — { organizations: OrgMembership[], activeOrgId } (F22 Phase A)
+ *   PUT  /api/users/me/active-organization   — { orgId: string | null } — 멤버인 조직만 활성화 가능
  *
  * 검증:
  *   - 인증 필수 (requireAuth)
@@ -27,11 +29,14 @@ import { validate } from '../middlewares/validation';
 import { getPool } from '../data/models/unified-database';
 import { UserRepository } from '../data/repositories/user-repository';
 import { createLogger } from '../utils/logger';
-import { success, internalError, unauthorized } from '../utils/api-response';
+import { success, internalError, unauthorized, badRequest } from '../utils/api-response';
+import { membershipsFor, activeOrgFor, clearOrgMembershipCache } from '../services/org/membership-cache';
 
 const log = createLogger('UserPreferencesController');
 
 const MAX_CHARS = Number(process.env.CUSTOM_INSTRUCTIONS_MAX_CHARS || '4000');
+
+const activeOrgSchema = z.object({ orgId: z.string().trim().min(1).max(200).nullable() });
 
 const updateSchema = z.object({
     customInstructions: z.string().max(MAX_CHARS, `최대 ${MAX_CHARS}자까지 허용됩니다.`).nullable(),
@@ -147,6 +152,51 @@ export function createUserPreferencesController(): Router {
         } catch (err) {
             log.error('preferences 갱신 실패:', err);
             res.status(500).json(internalError('설정 저장 실패'));
+        }
+    });
+
+    /**
+     * GET /api/users/me/organizations — 내 조직 멤버십 + 활성 조직 (조직 스위처 재료).
+     */
+    router.get('/organizations', requireAuth, async (req: Request, res: Response) => {
+        const userId = getUserId(req);
+        if (!userId) {
+            res.status(401).json(unauthorized('사용자 식별 실패'));
+            return;
+        }
+        const [organizations, active] = await Promise.all([membershipsFor(userId), activeOrgFor(userId)]);
+        res.json(success({ organizations, activeOrgId: active?.orgId ?? null, activeOrgRole: active?.orgRole ?? null }));
+    });
+
+    /**
+     * PUT /api/users/me/active-organization — body { orgId: string | null }.
+     * 멤버가 아닌 조직은 400. null 이면 개인 컨텍스트로 복귀.
+     */
+    router.put('/active-organization', requireAuth, validate(activeOrgSchema), async (req: Request, res: Response) => {
+        const userId = getUserId(req);
+        if (!userId) {
+            res.status(401).json(unauthorized('사용자 식별 실패'));
+            return;
+        }
+        const { orgId } = req.body as z.infer<typeof activeOrgSchema>;
+        try {
+            if (orgId !== null) {
+                clearOrgMembershipCache(userId);
+                const list = await membershipsFor(userId);
+                if (!list.some((m) => m.orgId === orgId)) {
+                    res.status(400).json(badRequest('속하지 않은 조직입니다.'));
+                    return;
+                }
+            }
+            const repo = new UserRepository(getPool());
+            await repo.updatePreferences(userId, { activeOrgId: orgId });
+            clearOrgMembershipCache(userId);
+            const active = await activeOrgFor(userId);
+            log.info(`활성 조직 변경: userId=${userId} orgId=${orgId ?? 'none'}`);
+            res.json(success({ activeOrgId: active?.orgId ?? null, activeOrgRole: active?.orgRole ?? null }));
+        } catch (err) {
+            log.error('활성 조직 변경 실패:', err);
+            res.status(500).json(internalError('활성 조직 저장 실패'));
         }
     });
 

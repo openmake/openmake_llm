@@ -17,6 +17,15 @@ export interface Organization {
     updated_at: string;
 }
 
+/** 사용자 관점 멤버십 — 조직 메타 + 본인 역할 (활성 조직 컨텍스트·조직 스위처 재료). */
+export interface OrgMembership {
+    orgId: string;
+    name: string;
+    slug: string;
+    role: OrgRole;
+    monthlyTokenBudget: number | null;
+}
+
 export interface OrgMember {
     org_id: string;
     user_id: string;
@@ -75,6 +84,25 @@ export class OrganizationRepository extends BaseRepository {
     async removeMember(orgId: string, userId: string): Promise<boolean> {
         const r = await this.query('DELETE FROM organization_members WHERE org_id = $1 AND user_id = $2', [orgId, userId]);
         return (r.rowCount ?? 0) > 0;
+    }
+
+    /** 사용자가 속한 모든 조직과 본인 역할 (가입 순). */
+    async listMembershipsForUser(userId: string): Promise<OrgMembership[]> {
+        const r = await this.query<{ org_id: string; name: string; slug: string; role: OrgRole; monthly_token_budget: string | null }>(
+            `SELECT o.id AS org_id, o.name, o.slug, m.role, o.monthly_token_budget
+             FROM organization_members m
+             JOIN organizations o ON o.id = m.org_id
+             WHERE m.user_id = $1
+             ORDER BY m.created_at ASC`,
+            [userId],
+        );
+        return r.rows.map((row) => ({
+            orgId: row.org_id,
+            name: row.name,
+            slug: row.slug,
+            role: row.role,
+            monthlyTokenBudget: row.monthly_token_budget === null ? null : Number(row.monthly_token_budget),
+        }));
     }
 
     /** 사용자가 속한 조직 중 월 예산이 있는 것들과 그 멤버 id — 쿼터 검사 재료(예산 없는 조직은 제외). */

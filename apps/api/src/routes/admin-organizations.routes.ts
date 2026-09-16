@@ -22,7 +22,7 @@ import { asyncHandler } from '../utils/error-handler';
 import { success, badRequest, notFound } from '../utils/api-response';
 import { getPool } from '../data/models/unified-database';
 import { OrganizationRepository } from '../data/repositories/organization-repository';
-import { clearOrgBudgetCache } from '../llm/user-quota';
+import { clearOrgMembershipCache } from '../services/org/membership-cache';
 
 const slugSchema = z.string().trim().min(2).max(64).regex(/^[a-z0-9][a-z0-9-]*$/, 'slug 는 소문자·숫자·하이픈');
 const budgetSchema = z.number().int().min(1).max(1_000_000_000_000).nullable();
@@ -52,13 +52,13 @@ adminOrganizationsRouter.post('/organizations', validate(createSchema), asyncHan
 adminOrganizationsRouter.patch('/organizations/:id', validate(patchSchema), asyncHandler(async (req: Request, res: Response) => {
     const org = await repo().update(req.params.id, req.body as z.infer<typeof patchSchema>);
     if (!org) return res.status(404).json(notFound('조직을 찾을 수 없습니다.'));
-    clearOrgBudgetCache();
+    clearOrgMembershipCache();
     res.json(success({ organization: org }));
 }));
 
 adminOrganizationsRouter.delete('/organizations/:id', asyncHandler(async (req: Request, res: Response) => {
     if (!(await repo().remove(req.params.id))) return res.status(404).json(notFound('조직을 찾을 수 없습니다.'));
-    clearOrgBudgetCache();
+    clearOrgMembershipCache();
     res.json(success({ deleted: true }));
 }));
 
@@ -71,7 +71,7 @@ adminOrganizationsRouter.put('/organizations/:id/members/:userId', validate(memb
     if (!(await repo().get(req.params.id))) return res.status(404).json(notFound('조직을 찾을 수 없습니다.'));
     try {
         const member = await repo().upsertMember(req.params.id, req.params.userId, (req.body as z.infer<typeof memberSchema>).role);
-        clearOrgBudgetCache();
+        clearOrgMembershipCache();
         res.json(success({ member }));
     } catch (e) {
         if ((e as { code?: string }).code === '23503') return res.status(400).json(badRequest('존재하지 않는 사용자입니다.'));
@@ -81,6 +81,6 @@ adminOrganizationsRouter.put('/organizations/:id/members/:userId', validate(memb
 
 adminOrganizationsRouter.delete('/organizations/:id/members/:userId', asyncHandler(async (req: Request, res: Response) => {
     if (!(await repo().removeMember(req.params.id, req.params.userId))) return res.status(404).json(notFound('멤버가 아닙니다.'));
-    clearOrgBudgetCache();
+    clearOrgMembershipCache();
     res.json(success({ removed: true }));
 }));

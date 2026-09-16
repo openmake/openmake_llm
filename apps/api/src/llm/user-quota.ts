@@ -16,6 +16,7 @@
  */
 import { getKeyValueStore } from '../storage';
 import { getConfig } from '../config';
+import { budgetedOrgsFor, clearOrgMembershipCache } from '../services/org/membership-cache';
 import { createLogger } from '../utils/logger';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
 import { isPersistableUserId } from '../utils/user-id-validation';
@@ -44,25 +45,8 @@ function monthKey(userId: string, now: number): string {
 }
 const MONTH_TTL_MS = 62 * 24 * 60 * 60 * 1000;
 
-/** 조직 멤버십 조회 캐시 — LLM 호출마다 DB 를 치지 않게 60초 보존(fail-open: 실패 시 빈 목록). */
-const ORG_CACHE_TTL_MS = 60_000;
-const orgCache = new Map<string, { at: number; orgs: Array<{ orgId: string; budget: number; memberIds: string[] }> }>();
-async function budgetedOrgsFor(userId: string, now: number): Promise<Array<{ orgId: string; budget: number; memberIds: string[] }>> {
-    const hit = orgCache.get(userId);
-    if (hit && now - hit.at < ORG_CACHE_TTL_MS) return hit.orgs;
-    try {
-        const { OrganizationRepository } = await import('../data/repositories/organization-repository');
-        const { getPool } = await import('../data/models/unified-database');
-        const orgs = await new OrganizationRepository(getPool()).listBudgetedOrgsForUser(userId);
-        orgCache.set(userId, { at: now, orgs });
-        return orgs;
-    } catch (e) {
-        logger.warn('조직 예산 조회 실패 (fail-open):', e);
-        return [];
-    }
-}
-/** 테스트·관리자 변경 직후 캐시 무효화. */
-export function clearOrgBudgetCache(): void { orgCache.clear(); }
+/** 조직 예산 캐시는 services/org/membership-cache 로 통합(F22 Phase A) — 이름은 호출처 호환용으로 유지. */
+export function clearOrgBudgetCache(): void { clearOrgMembershipCache(); }
 
 /**
  * 조직 월 예산 검사(127) — 사용자가 속한 예산 있는 조직마다 멤버 전체의 이번 달 사용량 합이 예산 이상이면 throw.
