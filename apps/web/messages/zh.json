@@ -930,7 +930,40 @@
       "hint": "以新任务重新执行所选回合之后的内容（工作目录重新开始）。",
       "failed": "分支失败：{error}"
     },
-    "priorityBadge": "优先级 {priority}"
+    "priorityBadge": "优先级 {priority}",
+    "triggers": {
+      "title": "Webhook 触发器",
+      "create": "新建触发器",
+      "hint": "外部系统发送带签名的 POST 时，会用所选模板启动任务。在模板目标中放入 {placeholder} 时请求正文会放在该位置，否则追加到末尾。",
+      "needTemplate": "请先创建任务模板",
+      "namePlaceholder": "触发器名称",
+      "template": "模板",
+      "templatePick": "选择模板",
+      "policy": "审批策略",
+      "policies": {
+        "all": "所有工具需审批",
+        "high-risk": "仅高风险需审批",
+        "none": "无需审批"
+      },
+      "add": "创建",
+      "secretOnce": "密钥只在此时显示 — 请保存到发送方的设置中。",
+      "copy": "复制",
+      "signingNote": "时间戳必须在 ±{window} 秒内。重试时发送相同的 {delivery} 可避免重复执行。",
+      "dismiss": "关闭",
+      "empty": "还没有触发器。",
+      "enabled": "已开启",
+      "disabled": "已关闭",
+      "templateMissing": "(模板不存在)",
+      "fired": "已执行 {count} 次",
+      "failures": "连续失败 {count} 次: {error}",
+      "enable": "开启",
+      "disable": "关闭",
+      "rotate": "重新生成密钥",
+      "rotateConfirm": "重新生成密钥后，用旧密钥签名的请求将被拒绝。是否继续？",
+      "delete": "删除",
+      "deleteConfirm": "要删除此触发器吗？",
+      "failed": "处理失败: {message}"
+    }
   },
   "customAgents": {
     "pageTitle": "自定义智能体",

@@ -42,6 +42,7 @@ import { SteeringInput } from "@/components/chat/steering-input";
 import { SharePanel } from "@/components/agent-tasks/share-panel";
 import { DiffView } from "@/components/chat/diff-view";
 import { PlanEditor } from "@/components/agent-tasks/plan-editor";
+import { TriggersPanel } from "@/components/agent-tasks/triggers-panel";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type TaskStatus = "running" | "completed" | "pending";
@@ -1303,6 +1304,7 @@ export default function AgentTasksPage() {
         </Card>
         <SchedulesPanel />
         <TemplatesPanel />
+        <TriggersPanel />
         {loading ? (
           <div className="grid place-items-center py-24 text-center">
             <Sparkles className="mb-3 h-8 w-8 animate-pulse text-faint" />

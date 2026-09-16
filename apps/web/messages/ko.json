@@ -930,7 +930,40 @@
       "hint": "선택한 턴 이후를 새 작업으로 다시 진행합니다(작업 폴더는 새로 시작).",
       "failed": "분기 실패: {error}"
     },
-    "priorityBadge": "우선순위 {priority}"
+    "priorityBadge": "우선순위 {priority}",
+    "triggers": {
+      "title": "웹훅 트리거",
+      "create": "새 트리거",
+      "hint": "외부 시스템이 서명한 POST 를 보내면 선택한 템플릿으로 작업을 시작합니다. 템플릿 목표에 {placeholder} 를 넣으면 그 자리에, 없으면 끝에 요청 본문이 들어갑니다.",
+      "needTemplate": "먼저 작업 템플릿을 만드세요",
+      "namePlaceholder": "트리거 이름",
+      "template": "템플릿",
+      "templatePick": "템플릿 선택",
+      "policy": "승인 정책",
+      "policies": {
+        "all": "모든 도구 승인",
+        "high-risk": "고위험만 승인",
+        "none": "승인 없음"
+      },
+      "add": "만들기",
+      "secretOnce": "시크릿은 지금만 보입니다 — 보내는 쪽 설정에 저장하세요.",
+      "copy": "복사",
+      "signingNote": "타임스탬프는 ±{window}초 안이어야 합니다. 재시도에는 같은 {delivery} 를 보내면 중복 실행되지 않습니다.",
+      "dismiss": "닫기",
+      "empty": "등록된 트리거가 없습니다.",
+      "enabled": "켜짐",
+      "disabled": "꺼짐",
+      "templateMissing": "(템플릿 없음)",
+      "fired": "실행 {count}회",
+      "failures": "연속 실패 {count}회: {error}",
+      "enable": "켜기",
+      "disable": "끄기",
+      "rotate": "시크릿 재발급",
+      "rotateConfirm": "시크릿을 새로 발급하면 기존 시크릿으로 서명한 요청은 거부됩니다. 계속할까요?",
+      "delete": "삭제",
+      "deleteConfirm": "이 트리거를 삭제할까요?",
+      "failed": "처리 실패: {message}"
+    }
   },
   "customAgents": {
     "pageTitle": "커스텀 에이전트",

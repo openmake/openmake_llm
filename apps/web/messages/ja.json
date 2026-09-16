@@ -930,7 +930,40 @@
       "hint": "選んだターン以降を新しい作業として再実行します（作業フォルダは新規）。",
       "failed": "分岐に失敗: {error}"
     },
-    "priorityBadge": "優先度 {priority}"
+    "priorityBadge": "優先度 {priority}",
+    "triggers": {
+      "title": "Webhook トリガー",
+      "create": "新しいトリガー",
+      "hint": "外部システムが署名付き POST を送ると、選択したテンプレートでタスクを開始します。テンプレートの目標に {placeholder} を入れるとその位置に、なければ末尾にリクエスト本文が入ります。",
+      "needTemplate": "先にタスクテンプレートを作成してください",
+      "namePlaceholder": "トリガー名",
+      "template": "テンプレート",
+      "templatePick": "テンプレートを選択",
+      "policy": "承認ポリシー",
+      "policies": {
+        "all": "すべてのツールを承認",
+        "high-risk": "高リスクのみ承認",
+        "none": "承認なし"
+      },
+      "add": "作成",
+      "secretOnce": "シークレットは今だけ表示されます — 送信側の設定に保存してください。",
+      "copy": "コピー",
+      "signingNote": "タイムスタンプは ±{window} 秒以内である必要があります。再送時に同じ {delivery} を送ると重複実行されません。",
+      "dismiss": "閉じる",
+      "empty": "トリガーはまだありません。",
+      "enabled": "オン",
+      "disabled": "オフ",
+      "templateMissing": "(テンプレートなし)",
+      "fired": "実行 {count} 回",
+      "failures": "連続失敗 {count} 回: {error}",
+      "enable": "オンにする",
+      "disable": "オフにする",
+      "rotate": "シークレット再発行",
+      "rotateConfirm": "シークレットを再発行すると、以前のシークレットで署名したリクエストは拒否されます。続けますか?",
+      "delete": "削除",
+      "deleteConfirm": "このトリガーを削除しますか?",
+      "failed": "処理に失敗しました: {message}"
+    }
   },
   "customAgents": {
     "pageTitle": "カスタムエージェント",

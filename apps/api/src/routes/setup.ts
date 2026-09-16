@@ -72,6 +72,8 @@ import {
     agentTaskScheduleRouter,
     adminAgentTaskSchedulesRouter,
     agentTaskTemplateRouter,
+    agentTaskTriggerRouter,
+    triggerReceiverRouter,
     agentSuggestionsRouter,
     externalRouter,
     pushRouter,
@@ -320,6 +322,8 @@ export function setupApiRoutes(
     app.use('/api/desktop', desktopUpdateRouter);
     app.use('/api/agent-task-schedules', agentTaskScheduleRouter);
     app.use('/api/agent-task-templates', agentTaskTemplateRouter);
+    app.use('/api/agent-task-triggers', agentTaskTriggerRouter);
+    app.use('/api/triggers', triggerReceiverRouter);   // 무인증 — HMAC 서명(132), 원문 파서는 middlewares/setup
     app.use('/api/external', externalRouter);
     app.use('/api/push', pushRouter);
     app.use('/api/docs', developerDocsRouter);

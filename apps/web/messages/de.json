@@ -930,7 +930,40 @@
       "hint": "Führt alles nach der gewählten Runde als neue Aufgabe erneut aus (neuer Arbeitsordner).",
       "failed": "Verzweigen fehlgeschlagen: {error}"
     },
-    "priorityBadge": "Priorität {priority}"
+    "priorityBadge": "Priorität {priority}",
+    "triggers": {
+      "title": "Webhook-Trigger",
+      "create": "Neuer Trigger",
+      "hint": "Sendet ein externes System einen signierten POST, startet eine Aufgabe aus der gewählten Vorlage. Steht {placeholder} im Vorlagenziel, wird der Request-Body dort eingefügt, sonst am Ende angehängt.",
+      "needTemplate": "Zuerst eine Aufgabenvorlage anlegen",
+      "namePlaceholder": "Name des Triggers",
+      "template": "Vorlage",
+      "templatePick": "Vorlage wählen",
+      "policy": "Freigaberichtlinie",
+      "policies": {
+        "all": "Jedes Tool freigeben",
+        "high-risk": "Nur Hochrisiko freigeben",
+        "none": "Keine Freigabe"
+      },
+      "add": "Anlegen",
+      "secretOnce": "Das Secret wird nur jetzt angezeigt — speichern Sie es beim Absender.",
+      "copy": "Kopieren",
+      "signingNote": "Der Zeitstempel muss innerhalb von ±{window} s liegen. Bei Wiederholungen denselben {delivery} senden, um doppelte Ausführung zu vermeiden.",
+      "dismiss": "Schließen",
+      "empty": "Noch keine Trigger.",
+      "enabled": "An",
+      "disabled": "Aus",
+      "templateMissing": "(Vorlage fehlt)",
+      "fired": "{count}-mal ausgeführt",
+      "failures": "{count} Fehlschläge in Folge: {error}",
+      "enable": "Einschalten",
+      "disable": "Ausschalten",
+      "rotate": "Secret neu erzeugen",
+      "rotateConfirm": "Nach dem Neuerzeugen werden mit dem alten Secret signierte Anfragen abgelehnt. Fortfahren?",
+      "delete": "Löschen",
+      "deleteConfirm": "Diesen Trigger löschen?",
+      "failed": "Fehlgeschlagen: {message}"
+    }
   },
   "customAgents": {
     "pageTitle": "Benutzerdefinierte Agenten",

@@ -142,6 +142,8 @@ export const CSRF_POLICY = {
     SKIP_PATHS: [
         '/api/auth/callback/',
         CSRF.TOKEN_ENDPOINT,
+        // 웹훅 트리거 수신(132) — 쿠키가 아니라 HMAC 서명·타임스탬프로 인증한다
+        '/api/triggers/',
     ] as const,
     /** 쿠키 옵션 — JS 읽기 가능해야 Double-Submit 패턴 성립 (httpOnly:false 필수) */
     COOKIE_OPTIONS: {

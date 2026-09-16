@@ -930,7 +930,40 @@
       "hint": "Re-runs everything after the chosen turn as a new task (fresh workspace).",
       "failed": "Fork failed: {error}"
     },
-    "priorityBadge": "Priority {priority}"
+    "priorityBadge": "Priority {priority}",
+    "triggers": {
+      "title": "Webhook triggers",
+      "create": "New trigger",
+      "hint": "When an external system sends a signed POST, a task starts from the chosen template. Put {placeholder} in the template goal to place the request body there; otherwise it is appended.",
+      "needTemplate": "Create a task template first",
+      "namePlaceholder": "Trigger name",
+      "template": "Template",
+      "templatePick": "Choose template",
+      "policy": "Approval policy",
+      "policies": {
+        "all": "Approve every tool",
+        "high-risk": "Approve high-risk only",
+        "none": "No approval"
+      },
+      "add": "Create",
+      "secretOnce": "The secret is shown only now — store it in the sender's settings.",
+      "copy": "Copy",
+      "signingNote": "The timestamp must be within ±{window}s. Resend the same {delivery} on retries to avoid duplicate runs.",
+      "dismiss": "Close",
+      "empty": "No triggers yet.",
+      "enabled": "On",
+      "disabled": "Off",
+      "templateMissing": "(template missing)",
+      "fired": "Ran {count} times",
+      "failures": "{count} consecutive failures: {error}",
+      "enable": "Turn on",
+      "disable": "Turn off",
+      "rotate": "Rotate secret",
+      "rotateConfirm": "Rotating the secret rejects requests signed with the old one. Continue?",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this trigger?",
+      "failed": "Failed: {message}"
+    }
   },
   "customAgents": {
     "pageTitle": "Custom Agents",

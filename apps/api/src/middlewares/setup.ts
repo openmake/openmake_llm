@@ -37,7 +37,7 @@ import { requestIdMiddleware } from './request-id';
 import { errorHandler, notFoundHandler } from '../utils/error-handler';
 import { getConfig } from '../config';
 import { buildPermissionsPolicyHeader, HSTS_POLICY } from '../config/security';
-import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
+import { AGENT_TASK_LIMITS, TRIGGER_LIMITS } from '../config/runtime-limits';
 
 /**
  * 정적 자산(생성 이미지 등) 응답 헤더 — content-type + 캐시 정책.
@@ -119,6 +119,8 @@ export function setupParsersAndLimiting(app: Application): void {
     //    early return 하면서 express.json·cookieParser 등록이 통째로 스킵됐다.
     //    → 모든 POST req.body=undefined(400), OAuth 후 req.cookies 미파싱(/me 401) 회귀.
     //    body parser 는 정적 서빙과 무관하므로 여기(parsers)로 이동해 항상 등록되게 한다.
+    // 웹훅 트리거 수신(132)은 서명 검증에 원문 바이트가 필요하다 — JSON 파서보다 먼저 raw 로 받는다(이후 json 파서는 이미 읽힌 본문을 건너뛴다)
+    app.use('/api/triggers', express.raw({ type: () => true, limit: TRIGGER_LIMITS.MAX_BODY_BYTES }));
     app.use('/api/chat', express.json({ limit: '10mb' }));
     // 에이전트 작업 생성은 입력 첨부(base64 문서 포함)를 받는다 — 파서 상한은
     // validate 미들웨어(maxBodySizeBytes)와 AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES 를 공유
