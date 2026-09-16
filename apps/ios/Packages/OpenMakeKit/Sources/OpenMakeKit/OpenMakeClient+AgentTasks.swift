@@ -215,6 +215,12 @@ public struct AgentTaskApproval: Decodable, Identifiable, Sendable, Equatable {
         riskClass = try? container.decodeIfPresent(String.self, forKey: .riskClass)
     }
 
+    /// 도구 승인이 아니라 사람의 답을 기다리는 질문 — 서버 config/tool-policy 의 HITL_ALWAYS_WAIT_TOOLS 와 짝.
+    /// mcp_elicit(2026-09-17)은 외부 MCP 서버가 도구 실행 중 요청한 입력이다(args: server·question).
+    public var isQuestion: Bool {
+        toolName == "ask_human" || toolName == "mcp_elicit"
+    }
+
     /// 사용자에게 보여줄 인자 요약 — 도구별 핵심 키를 우선하고, 없으면 첫 스칼라 인자.
     public var argumentSummary: String? {
         for key in ["question", "command", "code", "path", "url", "query", "topic", "op"] {

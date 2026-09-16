@@ -12,6 +12,7 @@ import { loadSessionIntoStore } from "@/lib/session-loader";
 import { appendAnonSessionId } from "@/lib/anon-session";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "@/lib/store";
 import { ApiClient } from "@/lib/api-client";
+import { isQuestionApproval, elicitationHint } from "@/lib/hitl-question";
 import { LiveSubagentPanel } from "@/components/agent-tasks/subagent-panel";
 import { Markdown } from "./markdown";
 import { StructuredAnswer } from "./structured-answer";
@@ -58,7 +59,7 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
   // task 자동승인(4-2) — 이후 이 작업의 도구 호출은 승인 없이 진행(ask_human 제외). 대기 중 승인도 즉시 해소.
   const autoApprove = (a: PendingApproval) =>
     run(a, () => ApiClient.post(`/api/agent-tasks/${a.taskId}/approvals/auto-approve`, {}));
-  const hasToolApproval = approvals.some((a) => a.toolName !== "ask_human");
+  const hasToolApproval = approvals.some((a) => !isQuestionApproval(a.toolName));
 
   return (
     <div className="mt-1 space-y-2 rounded-md border border-warning-soft bg-warning-soft/50 p-2.5">
@@ -69,21 +70,28 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
         {hasToolApproval && (
           <button
             disabled={busy !== null}
-            onClick={() => autoApprove(approvals.find((a) => a.toolName !== "ask_human")!)}
+            onClick={() => autoApprove(approvals.find((a) => !isQuestionApproval(a.toolName))!)}
             className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted hover:bg-surface-2 disabled:opacity-50"
             title={t("approvals.autoApproveHint")}
           >{t("approvals.autoApprove")}</button>
         )}
       </div>
       {approvals.map((a) => {
-        // ask_human 은 도구 승인이 아니라 사용자 질문 — 자유텍스트 답변 채널을 렌더.
-        if (a.toolName === "ask_human") {
+        // ask_human·mcp_elicit 은 도구 승인이 아니라 사용자 질문 — 자유텍스트 답변 채널을 렌더.
+        if (isQuestionApproval(a.toolName)) {
           const question = typeof a.args?.question === "string" ? a.args.question : "";
+          const elicit = elicitationHint(a.toolName, a.args);
           const text = answers[a.approvalId] ?? "";
           return (
             <div key={a.approvalId} className="space-y-1.5 rounded-md border border-border bg-surface-1 p-2">
               <p className="text-xs font-semibold text-fg-2">{t("approvals.question")}</p>
               {question && <p className="break-words text-xs text-fg-1">{question}</p>}
+              {elicit && (
+                <p className="break-words text-[11px] text-muted">
+                  {t("approvals.elicitHint", { server: elicit.server, fields: elicit.fields || "-" })}
+                  {elicit.jsonExample && <> · {t("approvals.elicitJsonHint", { example: elicit.jsonExample })}</>}
+                </p>
+              )}
               <textarea
                 value={text}
                 onChange={(e) => setAnswers((prev) => ({ ...prev, [a.approvalId]: e.target.value }))}

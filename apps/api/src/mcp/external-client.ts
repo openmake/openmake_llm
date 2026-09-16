@@ -30,7 +30,8 @@ import { isConnectionDeathError } from './tool-error-classifier';
 import { createLogger } from '../utils/logger';
 import { createPinnedFetch } from '../security/ssrf-guard';
 import { MCP_EXTERNAL_TOOL_LIMITS } from '../config/timeouts';
-import { MCP_HIDDEN_TOOL_ARGS } from '../config/runtime-limits';
+import { MCP_HIDDEN_TOOL_ARGS, MCP_ELICITATION_ENABLED } from '../config/runtime-limits';
+import { ElicitationCallTracker } from './elicitation-bridge';
 import { getConfig } from '../config/env';
 
 const logger = createLogger('ExternalMCP');
@@ -133,6 +134,8 @@ export class ExternalMCPClient extends EventEmitter {
     private refreshing: Promise<boolean> | null = null;
     /** initialize 응답의 서버 capabilities — resources/prompts 지원 판정(F13.2) */
     private serverCapabilities: ReturnType<Client['getServerCapabilities']> = undefined;
+    /** 사용자 입력 요청(F13.10) — 플래그 ON + 사용자 풀 서버만. 채팅·전역 서버는 elicitation 을 광고하지 않는다 */
+    private readonly elicitation: ElicitationCallTracker | null;
 
     /**
      * ExternalMCPClient 인스턴스를 생성합니다.
@@ -142,6 +145,7 @@ export class ExternalMCPClient extends EventEmitter {
     constructor(config: MCPServerConfig) {
         super();
         this.config = config;
+        this.elicitation = MCP_ELICITATION_ENABLED && config.user_id ? new ElicitationCallTracker(config.name) : null;
     }
 
     /**
@@ -168,7 +172,7 @@ export class ExternalMCPClient extends EventEmitter {
             this.client = new Client(
                 { name: 'openmake-llm', version: '1.0.0' },
                 {
-                    capabilities: {},
+                    capabilities: this.elicitation ? { elicitation: { form: {} } } : {},
                     // 서버가 tools listChanged 를 광고하면 SDK 가 알림을 구독해 갱신 목록을 넘긴다(F13.12).
                     // 미광고 서버는 조용히 건너뛰므로 stale 폴링(refreshToolsIfStale)이 안전망.
                     listChanged: {
@@ -185,6 +189,7 @@ export class ExternalMCPClient extends EventEmitter {
                 }
             );
             this.client.onclose = () => this.handleUnexpectedClose();
+            this.elicitation?.attach(this.client);
 
             await this.client.connect(this.transport);
             this.serverCapabilities = this.client.getServerCapabilities?.();
@@ -331,7 +336,9 @@ export class ExternalMCPClient extends EventEmitter {
         }
 
         try {
-            const result = await this.client.callTool({ name, arguments: args }) as SDKCallToolResult;
+            const client = this.client;
+            const call = (opts?: { signal: AbortSignal; timeout: number }) => (opts ? client.callTool({ name, arguments: args }, opts) : client.callTool({ name, arguments: args })) as Promise<SDKCallToolResult>;
+            const result = this.elicitation ? await this.elicitation.call(call) : await call();
             return this.sdkResultToMCPToolResult(result);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -383,6 +390,11 @@ export class ExternalMCPClient extends EventEmitter {
     /** 서버가 광고한 capabilities(연결 후) — resources/prompts 메타 도구의 지원 판정용 */
     getServerCapabilities(): ReturnType<Client['getServerCapabilities']> {
         return this.serverCapabilities;
+    }
+
+    /** 사용자 입력 요청 응답을 기다리는 중인지 — 라우터 호출 마감 연장(F13.10) */
+    isAwaitingInput(): boolean {
+        return this.elicitation?.isAwaitingInput() ?? false;
     }
 
     /** SDK 클라이언트 원본 — external-resources 래퍼 전용. 도구 호출은 callTool 을 쓸 것. */

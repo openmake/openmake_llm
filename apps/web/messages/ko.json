@@ -345,7 +345,9 @@
       "skip": "건너뛰기",
       "autoApprove": "나머지 모두 승인",
       "autoApproveHint": "이 작업의 이후 도구 실행을 승인 없이 진행합니다 (질문 제외)",
-      "preview": "실행 전 변경 미리보기"
+      "preview": "실행 전 변경 미리보기",
+      "elicitHint": "{server} 서버의 입력 요청 · 항목: {fields}",
+      "elicitJsonHint": "항목이 둘 이상이면 JSON 으로 답하세요: {example}"
     },
     "artifactFallback": "아티팩트",
     "artifactBuilding": "아티팩트 생성 중…",
@@ -2231,7 +2233,9 @@
       "reassign": "이관",
       "reassignPick": "이관 대상",
       "escalate": "에스컬레이션",
-      "escalateHint": "조직 소유자/관리자에게 넘깁니다"
+      "escalateHint": "조직 소유자/관리자에게 넘깁니다",
+      "elicitHint": "{server} 서버의 입력 요청 · 항목: {fields}",
+      "elicitJsonHint": "항목이 둘 이상이면 JSON 으로 답하세요: {example}"
     }
   },
   "marketplacePublish": {

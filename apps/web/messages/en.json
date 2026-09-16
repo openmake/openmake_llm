@@ -345,7 +345,9 @@
       "skip": "Skip",
       "autoApprove": "Approve rest",
       "autoApproveHint": "Run remaining tool calls of this task without approval (questions excluded)",
-      "preview": "Preview changes"
+      "preview": "Preview changes",
+      "elicitHint": "Input requested by {server} · fields: {fields}",
+      "elicitJsonHint": "For more than one field, answer in JSON: {example}"
     },
     "artifactFallback": "Artifact",
     "artifactBuilding": "Building artifact…",
@@ -2231,7 +2233,9 @@
       "reassign": "Reassign",
       "reassignPick": "Pick assignee",
       "escalate": "Escalate",
-      "escalateHint": "Hand off to an organization owner/admin"
+      "escalateHint": "Hand off to an organization owner/admin",
+      "elicitHint": "Input requested by {server} · fields: {fields}",
+      "elicitJsonHint": "For more than one field, answer in JSON: {example}"
     }
   },
   "marketplacePublish": {

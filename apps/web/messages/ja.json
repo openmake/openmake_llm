@@ -345,7 +345,9 @@
       "skip": "スキップ",
       "autoApprove": "残りをすべて承認",
       "autoApproveHint": "このタスクの以降のツール実行を承認なしで進めます（質問は除く）",
-      "preview": "変更プレビュー"
+      "preview": "変更プレビュー",
+      "elicitHint": "{server} サーバーからの入力リクエスト · 項目: {fields}",
+      "elicitJsonHint": "項目が複数ある場合は JSON で回答してください: {example}"
     },
     "artifactFallback": "アーティファクト",
     "artifactBuilding": "アーティファクトを生成中…",
@@ -2231,7 +2233,9 @@
       "reassign": "移管",
       "reassignPick": "移管先",
       "escalate": "エスカレーション",
-      "escalateHint": "組織のオーナー/管理者に引き継ぎます"
+      "escalateHint": "組織のオーナー/管理者に引き継ぎます",
+      "elicitHint": "{server} サーバーからの入力リクエスト · 項目: {fields}",
+      "elicitJsonHint": "項目が複数ある場合は JSON で回答してください: {example}"
     }
   },
   "marketplacePublish": {

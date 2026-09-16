@@ -2155,6 +2155,28 @@ export const MCP_RESOURCE_LIMITS = {
     LIST_MAX: parseInt(process.env.MCP_RESOURCE_LIST_MAX || '100', 10),
 } as const;
 
+/**
+ * 외부 MCP elicitation(서버→클라이언트 사용자 입력 요청) → 에이전트 작업 승인함(F13.10, 2026-09-17).
+ * 기본 OFF — 켜면 사용자 풀 서버에만 `elicitation.form` 을 광고한다(연결 시점에 정해지므로 재기동 후 반영).
+ * 채팅 경로·작업 문맥이 모호한 호출은 decline 으로 즉시 응답한다. MCP_ELICITATION_ENABLED
+ */
+export const MCP_ELICITATION_ENABLED = process.env.MCP_ELICITATION_ENABLED === 'true';
+
+export const MCP_ELICITATION_LIMITS = {
+    /** 사용자 입력 대기가 아닐 때의 도구 호출 마감(ms) — SDK 기본 요청 타임아웃과 같다. 입력 대기 중엔 연장. MCP_ELICITATION_CALL_TIMEOUT_MS */
+    CALL_TIMEOUT_MS: parseInt(process.env.MCP_ELICITATION_CALL_TIMEOUT_MS || '60000', 10),
+    /** SDK 요청 자체의 절대 상한(ms) — 연장이 끝없이 이어지지 않게. 승인 대기 상한(TASK_SANDBOX_APPROVAL_TIMEOUT_MS)보다 커야 한다. MCP_ELICITATION_CALL_MAX_MS */
+    CALL_MAX_MS: parseInt(process.env.MCP_ELICITATION_CALL_MAX_MS || String(2 * 60 * 60 * 1000), 10),
+    /** 승인함에 싣는 서버 메시지 최대 길이(문자). MCP_ELICITATION_MESSAGE_MAX_CHARS */
+    MESSAGE_MAX_CHARS: parseInt(process.env.MCP_ELICITATION_MESSAGE_MAX_CHARS || '2000', 10),
+} as const;
+
+/** elicitation boolean 필드의 자유텍스트 답변 해석표(F13.10) — 소문자 비교. */
+export const MCP_ELICITATION_BOOLEAN_WORDS: Readonly<Record<string, boolean>> = {
+    true: true, yes: true, y: true, '1': true, '예': true, '네': true,
+    false: false, no: false, n: false, '0': false, '아니오': false, '아니요': false,
+};
+
 /** resources/prompts 메타 도구를 노출할 의도 턴 판정(F13.2) — 상시 노출 금지(프롬프트 다이어트). */
 export const MCP_RESOURCE_INTENT_PATTERNS: readonly RegExp[] = [
     /리소스|resource|프롬프트\s*(템플릿|목록)|prompt\s*template|mcp.*(읽|read|목록|list)/i,

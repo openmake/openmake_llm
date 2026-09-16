@@ -12,6 +12,7 @@ describe('classifyToolRisk', () => {
         expect(classifyToolRisk('grep_code')).toBe('read');
         expect(classifyToolRisk('terminate')).toBe('control');
         expect(classifyToolRisk('ask_human')).toBe('control');
+        expect(classifyToolRisk('mcp_elicit')).toBe('control');
     });
     it('file_ops·str_replace_editor 는 인자로 갈린다', () => {
         expect(classifyToolRisk('file_ops', { op: 'read' })).toBe('read');

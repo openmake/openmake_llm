@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * 에이전트 작업 승인 대기(HITL) — 고위험 도구 호출 · `ask_human` 질문.
+ * 에이전트 작업 승인 대기(HITL) — 고위험 도구 호출 · `ask_human` 질문 · 외부 MCP 서버 입력 요청(`mcp_elicit`).
  *
  * 채팅 인라인(`chat/message-list.tsx` InlineApprovals)에도 같은 승인 UI 가 있다. 그쪽은
  * 대화 흐름 안에서 즉시 답하는 용도라 그대로 두고, 여기서는 **작업을 떠나 있어도**
@@ -20,6 +20,7 @@ import { Button, Badge, Card } from "@/components/ui/primitives";
 import { ApiClient } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
 import { DiffView } from "@/components/chat/diff-view";
+import { isQuestionApproval, elicitationHint } from "@/lib/hitl-question";
 
 interface RecentDecision {
   approvalId: string;
@@ -162,7 +163,8 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
   return (
     <div className="space-y-2">
       {items.map((a) => {
-        const isQuestion = a.toolName === "ask_human";
+        const isQuestion = isQuestionApproval(a.toolName);
+        const elicit = elicitationHint(a.toolName, a.args);
         const acting = busy === a.approvalId;
         return (
           <Card key={a.approvalId} className="p-4">
@@ -197,6 +199,12 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
             </div>
 
             <p className="whitespace-pre-wrap break-words text-sm text-fg">{summarizeArgs(a.args)}</p>
+            {elicit && (
+              <p className="mt-1 text-xs text-muted">
+                {t("tasks.elicitHint", { server: elicit.server, fields: elicit.fields || "-" })}
+                {elicit.jsonExample && <> · {t("tasks.elicitJsonHint", { example: elicit.jsonExample })}</>}
+              </p>
+            )}
             {a.preview && (
               <details className="mt-2">
                 <summary className="cursor-pointer text-xs text-accent">{t("tasks.preview")}</summary>
@@ -244,7 +252,7 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
                   {t("approve")}
                 </Button>
               )}
-              {/* 이 작업 자동 승인 — 이후 도구 호출은 승인 없이 진행(ask_human 제외).
+              {/* 이 작업 자동 승인 — 이후 도구 호출은 승인 없이 진행(질문형 승인 제외).
                   구 /agent-tasks 인라인 패널에만 있던 기능을 단일 창구로 옮겨 온 것 */}
               {!isQuestion && (
                 <Button

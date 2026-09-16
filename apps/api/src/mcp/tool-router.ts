@@ -36,6 +36,7 @@ import { builtInTools } from './tools';
 import type { UserContext } from './user-sandbox';
 import { createLogger } from '../utils/logger';
 import { MCP_EXTERNAL_TOOL_LIMITS } from '../config/timeouts';
+import { inputAwareTimer } from './elicitation-bridge';
 import { withSpan } from '../observability/otel';
 import { classifyToolError, formatToolError, isConnectionDeathError } from './tool-error-classifier';
 import { withToolNameSuggestions } from './tool-name-suggest';
@@ -361,11 +362,11 @@ export class ToolRouter {
                         const client = entry ? pool.get(userId, entry.serverId) : undefined;
                         return entry && client ? { entry, client } : undefined;
                     };
+                    // 서버가 사용자 입력을 기다리는 동안(elicitation, F13.10)은 마감을 다시 건다
                     const callTarget = (t: NonNullable<ReturnType<typeof findTarget>>) => Promise.race([
                         t.client.callTool(t.entry.originalToolName, args),
-                        new Promise<never>((_, reject) =>
-                            setTimeout(() => reject(new Error(`외부 도구 타임아웃: ${name} (${MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS}ms 초과)`)), MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS)
-                        ),
+                        new Promise<never>((_, reject) => inputAwareTimer(MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS, () => t.client.isAwaitingInput?.() ?? false,
+                            () => reject(new Error(`외부 도구 타임아웃: ${name} (${MCP_EXTERNAL_TOOL_LIMITS.EXECUTION_TIMEOUT_MS}ms 초과)`)))),
                     ]);
                     // 끊긴 사용자 서버 복구 — stdio 자식은 유휴 종료(open-design MCP 30분) 등으로 조용히 죽는다.
                     // 끊긴 client 는 빼고, 풀에 없는데 전역 도구도 아니면 풀을 보장한 뒤 다시 찾는다(2026-09-15).

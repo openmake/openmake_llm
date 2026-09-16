@@ -345,7 +345,9 @@
       "skip": "Überspringen",
       "autoApprove": "Rest freigeben",
       "autoApproveHint": "Verbleibende Tool-Aufrufe dieser Aufgabe ohne Freigabe ausführen (Fragen ausgenommen)",
-      "preview": "Änderungsvorschau"
+      "preview": "Änderungsvorschau",
+      "elicitHint": "Eingabeanfrage von {server} · Felder: {fields}",
+      "elicitJsonHint": "Bei mehreren Feldern bitte als JSON antworten: {example}"
     },
     "artifactFallback": "Artefakt",
     "artifactBuilding": "Artefakt wird erstellt …",
@@ -2231,7 +2233,9 @@
       "reassign": "Weitergeben",
       "reassignPick": "Empfänger wählen",
       "escalate": "Eskalieren",
-      "escalateHint": "An Inhaber/Admin der Organisation übergeben"
+      "escalateHint": "An Inhaber/Admin der Organisation übergeben",
+      "elicitHint": "Eingabeanfrage von {server} · Felder: {fields}",
+      "elicitJsonHint": "Bei mehreren Feldern bitte als JSON antworten: {example}"
     }
   },
   "marketplacePublish": {

@@ -18,7 +18,7 @@ import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
 import { isSensitivePath } from './sensitive-paths';
 import { createLogger } from '../../utils/logger';
 import { getPool } from '../../data/models/unified-database';
-import { classifyToolRisk, policyRequiresApproval, type ToolRiskClass } from '../../config/tool-policy';
+import { classifyToolRisk, policyRequiresApproval, HITL_ALWAYS_WAIT_TOOLS, type ToolRiskClass } from '../../config/tool-policy';
 import { AgentTaskApprovalRepository, hashApprovalArgs, type ApprovalRow } from '../../data/repositories/agent-task-approval-repository';
 
 const logger = createLogger('TaskApprovalGate');
@@ -81,7 +81,7 @@ export function stripApprovalGatedTools<T extends { function: { name: string } }
     policy: TaskSandboxApprovalPolicy,
     opts: { deviceGatesShell?: boolean } = {},
 ): T[] {
-    return tools.filter((t) => t.function.name !== 'ask_human'
+    return tools.filter((t) => !HITL_ALWAYS_WAIT_TOOLS.has(t.function.name)
         && !requiresApproval(policy, t.function.name, {}, opts));
 }
 
@@ -165,7 +165,7 @@ export class ApprovalRegistry {
 
     /**
      * task 자동승인 설정(4-2) — 이후 이 task 의 승인 요청은 즉시 approved 로 해소된다.
-     * ⚠️ ask_human 은 제외(질문의 목적 자체가 사람 응답). 현재 대기 중인 동일 task 의
+     * ⚠️ ask_human·mcp_elicit(HITL_ALWAYS_WAIT_TOOLS)은 제외(질문의 목적 자체가 사람 응답). 현재 대기 중인 동일 task 의
      * 승인들도 즉시 해소한다. task 종료 시 clearAutoApprove 로 해제(잔존 방지).
      */
     setAutoApprove(taskId: string, enabled: boolean): void {
@@ -174,15 +174,15 @@ export class ApprovalRegistry {
         // 살아 있는 waiter 는 아래서 즉시 해소되고, 저장소의 pending 도 승인으로 닫는다(승인함 잔존 방지).
         void this.persist(async (s) => {
             for (const r of await s.listPending([...this.waiters.values()].find((w) => w.pending.taskId === taskId)?.pending.userId ?? '')) {
-                if (r.task_id === taskId && r.tool_name !== 'ask_human') await s.markDecided(r.approval_id, 'approved');
+                if (r.task_id === taskId && !HITL_ALWAYS_WAIT_TOOLS.has(r.tool_name)) await s.markDecided(r.approval_id, 'approved');
             }
         });
         for (const w of [...this.waiters.values()]) {
-            if (w.pending.taskId === taskId && w.pending.toolName !== 'ask_human') {
+            if (w.pending.taskId === taskId && !HITL_ALWAYS_WAIT_TOOLS.has(w.pending.toolName)) {
                 w.resolve({ decision: 'approved', waitedMs: Date.now() - w.pending.createdAt });
             }
         }
-        logger.info(`[${taskId}] 자동승인 활성 — 이후 도구 호출은 승인 없이 진행 (ask_human 제외)`);
+        logger.info(`[${taskId}] 자동승인 활성 — 이후 도구 호출은 승인 없이 진행 (ask_human·mcp_elicit 제외)`);
     }
 
     isAutoApprove(taskId: string): boolean { return this.autoApproveTasks.has(taskId); }
@@ -192,13 +192,13 @@ export class ApprovalRegistry {
     /**
      * 승인을 요청하고 결정(approved/rejected)을 await. timeout/abort 시 'rejected'.
      * onPending 콜백으로 호출부가 알림(web-push/WS)·상태('paused')를 발행한다.
-     * 자동승인 task(ask_human 제외)는 대기 없이 즉시 approved.
+     * 자동승인 task(HITL_ALWAYS_WAIT_TOOLS 제외)는 대기 없이 즉시 approved.
      */
     async request(
         input: { taskId: string; userId: string; toolName: string; args: Record<string, unknown>; preview?: string },
         opts: { timeoutMs: number; signal?: AbortSignal; onPending?: (p: PendingApproval) => void },
     ): Promise<ApprovalResult> {
-        if (this.autoApproveTasks.has(input.taskId) && input.toolName !== 'ask_human') {
+        if (this.autoApproveTasks.has(input.taskId) && !HITL_ALWAYS_WAIT_TOOLS.has(input.toolName)) {
             return { decision: 'approved', waitedMs: 0 };
         }
         // 재시작 후 이어받기(124): 같은 호출에 이미 내려진 결정이 있으면 대기 없이 소비하고,
