@@ -2196,7 +2196,13 @@
       "revokeHint": "Withdraw an approval that has not been executed yet (it will wait again on resume)",
       "autoApproveOff": "Turn off auto-approve",
       "autoApproveOffHint": "Disable auto-approve for this task",
-      "preview": "Preview changes before running"
+      "preview": "Preview changes before running",
+      "assignedToMe": "Assigned to me",
+      "assignedAway": "Reassigned",
+      "reassign": "Reassign",
+      "reassignPick": "Pick assignee",
+      "escalate": "Escalate",
+      "escalateHint": "Hand off to an organization owner/admin"
     }
   },
   "marketplacePublish": {

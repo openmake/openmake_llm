@@ -98,6 +98,8 @@ export interface PendingApproval {
     sensitive: boolean;
     /** 실행 전 미리보기(unified diff, 138) — 파일 도구 외 undefined */
     preview?: string;
+    /** 현재 담당자(138) — 없으면 소유자(userId). 이관·에스컬레이션으로 바뀐다 */
+    assigneeUserId?: string;
 }
 
 interface Waiter {
@@ -109,7 +111,7 @@ interface Waiter {
 /** 영속 저장소 계약(124) — 테스트는 생략(메모리만), 운영은 AgentTaskApprovalRepository. */
 export type ApprovalStore = Pick<AgentTaskApprovalRepository,
     'insertPending' | 'markDecided' | 'listPending' | 'getPending' | 'takeoverForCall' | 'expirePendingForTask'>
-    & Partial<Pick<AgentTaskApprovalRepository, 'revokeUnconsumed' | 'listRecentDecisions' | 'recordEvent'>>;
+    & Partial<Pick<AgentTaskApprovalRepository, 'revokeUnconsumed' | 'listRecentDecisions' | 'recordEvent' | 'reassign'>>;
 
 function rowToPending(r: ApprovalRow): PendingApproval {
     const args = r.args ?? {};
@@ -119,6 +121,7 @@ function rowToPending(r: ApprovalRow): PendingApproval {
         riskClass: (r.risk_class as ToolRiskClass | null) ?? classifyToolRisk(r.tool_name, args),
         sensitive: isSensitiveWrite(r.tool_name, args),
         ...(r.preview ? { preview: r.preview } : {}),
+        ...(r.assignee_user_id ? { assigneeUserId: r.assignee_user_id } : {}),
     };
 }
 
@@ -146,7 +149,8 @@ export class ApprovalRegistry {
 
     /** 대기 중인 승인 요청 — 메모리 waiter + 저장소의 살아 있는 pending(프로세스가 내려간 작업분). */
     async list(userId: string): Promise<PendingApproval[]> {
-        const live = [...this.waiters.values()].map((w) => w.pending).filter((p) => p.userId === userId);
+        // 담당자(138)가 있으면 그 사람의 승인함에, 없으면 소유자의 승인함에 — 저장소 listPending 과 같은 규칙
+        const live = [...this.waiters.values()].map((w) => w.pending).filter((p) => (p.assigneeUserId ?? p.userId) === userId);
         const rows = (await this.persist((s) => s.listPending(userId))) ?? [];
         const seen = new Set(live.map((p) => p.approvalId));
         return [...live, ...rows.filter((r) => !seen.has(r.approval_id)).map(rowToPending)];
@@ -270,13 +274,26 @@ export class ApprovalRegistry {
         return r;
     }
 
+    /**
+     * 담당자 이관·에스컬레이션(138) — 살아 있는 waiter 의 pending 과 저장소 행을 함께 갱신. 권한(같은 조직·admin)은 호출부.
+     * 결정 채널(approve/reject/answer)은 그대로이므로 새 담당자가 결정하면 종전과 같이 해소된다.
+     */
+    async reassign(approvalId: string, toUserId: string, actorId: string, opts: { escalate?: boolean; reason?: string | null } = {}): Promise<boolean> {
+        const w = this.waiters.get(approvalId);
+        if (w) w.pending.assigneeUserId = toUserId;
+        const ok = this.store?.reassign ? (await this.persist((s) => s.reassign!(approvalId, toUserId, opts))) === true : false;
+        if (!w && !ok) return false;
+        void this.event(approvalId, opts.escalate ? 'escalated' : 'reassigned', actorId, { toUserId, reason: opts.reason ?? null });
+        return true;
+    }
+
     /** 최근 결정 목록(138) — 저장소가 없으면 빈 목록. */
     async recent(userId: string, sinceMs: number): Promise<Array<ApprovalRow & { revocable: boolean }>> {
         if (!this.store?.listRecentDecisions) return [];
         return (await this.persist((s) => s.listRecentDecisions!(userId, sinceMs))) ?? [];
     }
 
-    private event(approvalId: string, kind: 'approved' | 'rejected' | 'answered' | 'revoked' | 'requested', actorId?: string | null, detail?: Record<string, unknown>): Promise<void> {
+    private event(approvalId: string, kind: 'approved' | 'rejected' | 'answered' | 'revoked' | 'requested' | 'reassigned' | 'escalated', actorId?: string | null, detail?: Record<string, unknown>): Promise<void> {
         if (!this.store?.recordEvent) return Promise.resolve();
         return this.persist((s) => s.recordEvent!(approvalId, kind, actorId ?? null, detail)).then(() => undefined);
     }
@@ -320,6 +337,7 @@ export function getApprovalRegistry(): ApprovalRegistry {
             revokeUnconsumed: (id, a) => lazy().revokeUnconsumed(id, a),
             listRecentDecisions: (u, ms, l) => lazy().listRecentDecisions(u, ms, l),
             recordEvent: (id, k, a, d) => lazy().recordEvent(id, k, a, d),
+            reassign: (id, to, o) => lazy().reassign(id, to, o),
         });
     }
     return registry;

@@ -18,6 +18,7 @@ import Link from "next/link";
 import { Check, X, Loader2, MessageCircleQuestion, Wrench, ExternalLink } from "lucide-react";
 import { Button, Badge, Card } from "@/components/ui/primitives";
 import { ApiClient } from "@/lib/api-client";
+import { useAppStore } from "@/lib/store";
 import { DiffView } from "@/components/chat/diff-view";
 
 interface RecentDecision {
@@ -41,7 +42,12 @@ interface PendingItem {
   sensitive?: boolean;
   /** 실행 전 미리보기(unified diff, 138) — 파일 쓰기 도구만 */
   preview?: string;
+  /** 소유자·현재 담당자(138) — 담당자가 있으면 이관된 항목 */
+  userId?: string;
+  assigneeUserId?: string;
 }
+
+interface OrgMember { user_id: string; role: string }
 
 /** 인자 요약 — 어떤 작업을 승인하는지 한 줄로 보인다(장문은 잘라낸다). */
 function summarizeArgs(args?: Record<string, unknown>): string {
@@ -63,6 +69,17 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
   const [answers, setAnswers] = useState<Record<string, string>>({});
   // 최근 결정(138) — 프로세스가 내려간 사이 내린 승인은 아직 실행되지 않았으므로 철회할 수 있다.
   const [recent, setRecent] = useState<RecentDecision[]>([]);
+  // 이관 대상(138) — 활성 조직 멤버. 조직이 없으면 이관 UI 를 숨긴다.
+  const activeOrgId = useAppStore((s) => s.auth.currentUser?.activeOrgId ?? null);
+  const myId = useAppStore((s) => s.auth.currentUser?.id);
+  const [members, setMembers] = useState<OrgMember[]>([]);
+  const [reassignTo, setReassignTo] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!activeOrgId) { setMembers([]); return; }
+    ApiClient.get<{ data: { members: OrgMember[] } }>(`/api/organizations/${activeOrgId}/members`)
+      .then((r) => setMembers((r?.data?.members ?? []).filter((m) => m.user_id !== myId)))
+      .catch(() => setMembers([]));
+  }, [activeOrgId, myId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -167,6 +184,9 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
                   {a.sensitive ? ` · ${t("tasks.risk.sensitive")}` : ""}
                 </Badge>
               )}
+              {a.assigneeUserId && a.assigneeUserId !== a.userId && (
+                <Badge tone="neutral">{a.assigneeUserId === myId ? t("tasks.assignedToMe") : t("tasks.assignedAway")}</Badge>
+              )}
               <Link
                 href={`/agent-tasks?task=${encodeURIComponent(a.taskId)}`}
                 className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
@@ -254,6 +274,27 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
                 <X className="h-3.5 w-3.5" />
                 {t("reject")}
               </Button>
+              {activeOrgId && (
+                <>
+                  <select
+                    aria-label={t("tasks.reassign")}
+                    value={reassignTo[a.approvalId] ?? ""}
+                    onChange={(e) => setReassignTo((p) => ({ ...p, [a.approvalId]: e.target.value }))}
+                    className="h-8 rounded-md border border-border bg-surface px-2 text-xs text-fg"
+                  >
+                    <option value="">{t("tasks.reassignPick")}</option>
+                    {members.map((m) => <option key={m.user_id} value={m.user_id}>{m.user_id} · {m.role}</option>)}
+                  </select>
+                  <Button size="sm" variant="outline" disabled={acting || !reassignTo[a.approvalId]}
+                    onClick={() => void run(a.approvalId, () => ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/reassign`, { toUserId: reassignTo[a.approvalId] }))}>
+                    {t("tasks.reassign")}
+                  </Button>
+                  <Button size="sm" variant="ghost" disabled={acting} title={t("tasks.escalateHint")}
+                    onClick={() => void run(a.approvalId, () => ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/escalate`, {}))}>
+                    {t("tasks.escalate")}
+                  </Button>
+                </>
+              )}
             </div>
           </Card>
         );

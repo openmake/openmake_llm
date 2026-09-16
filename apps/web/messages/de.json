@@ -2196,7 +2196,13 @@
       "revokeHint": "Eine noch nicht ausgeführte Freigabe zurückziehen (wartet beim Fortsetzen erneut)",
       "autoApproveOff": "Auto-Freigabe aus",
       "autoApproveOffHint": "Auto-Freigabe für diese Aufgabe deaktivieren",
-      "preview": "Änderungen vor Ausführung ansehen"
+      "preview": "Änderungen vor Ausführung ansehen",
+      "assignedToMe": "Mir zugewiesen",
+      "assignedAway": "Weitergegeben",
+      "reassign": "Weitergeben",
+      "reassignPick": "Empfänger wählen",
+      "escalate": "Eskalieren",
+      "escalateHint": "An Inhaber/Admin der Organisation übergeben"
     }
   },
   "marketplacePublish": {

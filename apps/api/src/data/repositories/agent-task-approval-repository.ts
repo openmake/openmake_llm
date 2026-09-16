@@ -104,15 +104,27 @@ export class AgentTaskApprovalRepository extends BaseRepository {
         );
     }
 
-    /** 사용자의 살아 있는 pending 행(만료 전). 프로세스가 내려간 작업의 대기도 여기 남아 있다. */
+    /** 사용자가 봐야 하는 살아 있는 pending 행(만료 전) — 담당자(assignee) 가 있으면 그 사람, 없으면 소유자(138). */
     async listPending(userId: string): Promise<ApprovalRow[]> {
         const r = await this.query<ApprovalRow>(
             `SELECT * FROM agent_task_approvals
-             WHERE user_id = $1 AND status = 'pending' AND expires_at > NOW()
+             WHERE COALESCE(assignee_user_id, user_id) = $1 AND status = 'pending' AND expires_at > NOW()
              ORDER BY created_at ASC`,
             [userId],
         );
         return r.rows;
+    }
+
+    /** 담당자 변경(138) — pending 행만. escalate 면 escalated_at·사유를 함께 남긴다. */
+    async reassign(approvalId: string, toUserId: string, opts: { escalate?: boolean; reason?: string | null } = {}): Promise<boolean> {
+        const r = await this.query(
+            `UPDATE agent_task_approvals SET assignee_user_id = $2,
+                    escalated_at = CASE WHEN $3 THEN NOW() ELSE escalated_at END,
+                    escalation_reason = CASE WHEN $3 THEN $4 ELSE escalation_reason END
+             WHERE approval_id = $1 AND status = 'pending'`,
+            [approvalId, toUserId, !!opts.escalate, opts.reason ?? null],
+        );
+        return (r.rowCount ?? 0) > 0;
     }
 
     async getPending(approvalId: string): Promise<ApprovalRow | undefined> {

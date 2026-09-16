@@ -2196,7 +2196,13 @@
       "revokeHint": "아직 실행되지 않은 승인을 되돌립니다(재개 시 다시 승인 대기)",
       "autoApproveOff": "자동 승인 해제",
       "autoApproveOffHint": "이 작업의 자동 승인을 끕니다",
-      "preview": "실행 전 변경 미리보기"
+      "preview": "실행 전 변경 미리보기",
+      "assignedToMe": "나에게 이관됨",
+      "assignedAway": "이관됨",
+      "reassign": "이관",
+      "reassignPick": "이관 대상",
+      "escalate": "에스컬레이션",
+      "escalateHint": "조직 소유자/관리자에게 넘깁니다"
     }
   },
   "marketplacePublish": {

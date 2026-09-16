@@ -98,6 +98,13 @@ function attach(router: Router, prefix: string, gate: 'admin' | 'org'): void {
 export const organizationPoliciesRouter = Router();
 attach(organizationPoliciesRouter, '', 'org');
 
+/** GET /api/organizations/:id/members — 멤버 목록(같은 조직 멤버 누구나, 승인 이관 대상 선택용 · 138). */
+organizationPoliciesRouter.get('/:id/members', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const list = await membershipsFor(String(req.user!.id));
+    if (req.user!.role !== 'admin' && !list.some((m) => m.orgId === req.params.id)) throw new AuthorizationError('조직 멤버만 조회할 수 있습니다');
+    res.json(success({ members: await orgRepo().listMembers(req.params.id) }));
+}));
+
 /** /api/admin/organizations — 시스템 관리자 */
 export const adminOrganizationPoliciesRouter = Router();
 attach(adminOrganizationPoliciesRouter, '/organizations', 'admin');

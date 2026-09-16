@@ -2196,7 +2196,13 @@
       "revokeHint": "撤回尚未执行的批准（恢复时将重新等待审批）",
       "autoApproveOff": "关闭自动批准",
       "autoApproveOffHint": "关闭此任务的自动批准",
-      "preview": "执行前变更预览"
+      "preview": "执行前变更预览",
+      "assignedToMe": "已转交给我",
+      "assignedAway": "已转交",
+      "reassign": "转交",
+      "reassignPick": "选择转交对象",
+      "escalate": "上报",
+      "escalateHint": "交给组织所有者/管理员处理"
     }
   },
   "marketplacePublish": {
