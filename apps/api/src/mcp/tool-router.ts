@@ -44,6 +44,8 @@ import type { UserMCPPool } from './user-pool';
 import type { ExternalMCPClient } from './external-client';
 import { collectUserPoolTools } from './user-pool-tools';
 import { parallelBatch } from '../workflow/graph-engine';
+import { runPreHooks, runPostHooks, type ToolHookContext } from './tool-hooks';
+import './default-hooks';
 import { MCP_TOOL_REFRESH_CONCURRENCY } from '../config/runtime-limits';
 
 const logger = createLogger('ToolRouter');
@@ -255,7 +257,9 @@ export class ToolRouter {
      * ⚙️ Phase 3: UserContext 전달 추가 (2026-02-07)
      * 내장 도구 handler에 context를 전달하여, 도구가 사용자 정보를 참조할 수 있도록 합니다.
      */
-    async executeTool(name: string, args: Record<string, unknown>, context?: UserContext): Promise<MCPToolResult> {
+    async executeTool(name: string, argsIn: Record<string, unknown>, context?: UserContext): Promise<MCPToolResult> {
+        // pre 훅이 인자를 치환할 수 있어 let — 아래 모든 호출 경로가 이 args 를 쓴다.
+        let args = argsIn;
         // Harness Engineering: tool-call 관측성(span) + 에러 분류/교정 힌트를 단일 chokepoint 에 통합.
         // - 모든 에러 반환은 fail() 을 통과 → category/retryable span 속성 + actionable hint 부가.
         // - 성공/실패 모두 finalize() 로 정규화 (외부/내장 도구가 isError 를 반환하는 경우도 분류).
@@ -289,8 +293,14 @@ export class ToolRouter {
                     retryable: c.retryable,
                 };
             };
+            const hookCtx: ToolHookContext = {
+                name, external: isExternal, startedAt,
+                userId: context?.userId != null ? String(context.userId) : undefined, role: context?.role,
+            };
             // 도구가 isError 결과를 반환하면 분류·교정해 정규화, 정상이면 그대로 통과.
-            const finalize = (result: MCPToolResult): MCPToolResult => {
+            // post 훅(F13.5)은 정규화 전에 돈다 — 훅이 결과를 바꾸면 그 결과가 분류된다.
+            const finalize = async (raw: MCPToolResult): Promise<MCPToolResult> => {
+                const result = await runPostHooks(raw, hookCtx);
                 if (result?.isError) {
                     const text = (result.content ?? [])
                         .map((c) => ('text' in c && typeof c.text === 'string' ? c.text : ''))
@@ -315,6 +325,11 @@ export class ToolRouter {
             if (context && isToolRestrictedForRole(name, context.role)) {
                 return fail(`도구 "${name}" 은 현재 역할(${context.role})로 실행할 수 없습니다.`, { record: false });
             }
+
+            // pre 훅(F13.5) — 서킷·역할 게이트 뒤, 실제 호출 앞. deny 는 서킷 집계에 넣지 않는다(도구 잘못이 아니다).
+            const pre = await runPreHooks(args, hookCtx);
+            if (pre.deny) return fail(`도구 "${name}" 호출이 정책 훅에 의해 거절되었습니다: ${pre.deny}`, { record: false });
+            args = pre.args;
 
             // 외부 도구 출력 크기 제한(MAX_OUTPUT_SIZE, 1MB) — user-pool(1a)·전역(1b) 두 경로 공통.
             // 누락 시 대용량 도구 결과가 통째로 LLM 컨텍스트에 주입돼 토큰 예산 폭주/context-fit 조기 발동.

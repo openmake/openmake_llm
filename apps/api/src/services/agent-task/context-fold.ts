@@ -17,6 +17,7 @@
  * @module services/agent-task/context-fold
  */
 import type { ChatMessage } from '../../llm/types';
+import { runCompactionHooks } from './compaction-hooks';
 
 export const FOLD_MARKER = '[접힌 도구 결과]';
 
@@ -81,5 +82,6 @@ export function foldOldToolResults(conversation: ChatMessage[], opts: FoldOption
         stats.folded++;
         stats.savedChars += content.length - stub.length;
     }
+    if (stats.folded > 0) runCompactionHooks({ conversation, folded: stats.folded, savedChars: stats.savedChars });
     return stats;
 }

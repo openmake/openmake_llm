@@ -267,6 +267,8 @@ export const MCP_EXTERNAL_TOOL_LIMITS = {
     MAX_OUTPUT_SIZE: Number(process.env.MCP_EXTERNAL_TOOL_MAX_OUTPUT_SIZE) || 1024 * 1024,
     /** stdio MCP 자식 stderr 보관 끝부분 (자) — 예기치 않은 종료 사유로 로그·instance 이력에 남긴다 */
     STDERR_TAIL_MAX_CHARS: Number(process.env.MCP_EXTERNAL_STDERR_TAIL_MAX_CHARS) || 2000,
+    /** 기본 post 훅(audit-timing)이 경고를 남기는 도구 호출 소요 시간(ms) — MCP_SLOW_TOOL_WARN_MS */
+    SLOW_TOOL_WARN_MS: Number(process.env.MCP_SLOW_TOOL_WARN_MS) || 15_000,
 } as const;
 
 /**
