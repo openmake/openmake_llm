@@ -62,12 +62,12 @@ describe('exportByFormat', () => {
         expect(r.format).toBe('xlsx');
         expect(r.mime).toContain('spreadsheetml');
         expect(lastCommand()).toEqual(['python3', '-c', REPORT_XLSX_SCRIPT]);
-        expect(JSON.parse(spawned[0].stdin)).toEqual({ csv: 'a,b\n1,2' });
+        expect(JSON.parse(spawned[0].stdin)).toEqual({ csv: 'a,b\n1,2', maxRows: expect.any(Number) });
     });
 
     it('보고서 html 의 xlsx·docx 는 source_data 를 넘긴다', async () => {
         await exportByFormat('xlsx', { kind: 'html', content: '<p/>' }, { REPORT_TITLE: 't' });
-        expect(JSON.parse(spawned[0].stdin)).toEqual({ data: { REPORT_TITLE: 't' } });
+        expect(JSON.parse(spawned[0].stdin)).toEqual({ data: { REPORT_TITLE: 't' }, maxRows: expect.any(Number) });
         await exportByFormat('docx', { kind: 'html', content: '<p/>' }, { REPORT_TITLE: 't' });
         expect(lastCommand()).toEqual(['python3', '-c', REPORT_DOCX_SCRIPT]);
     });

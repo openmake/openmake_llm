@@ -35,6 +35,8 @@ export const ARTIFACT_EXPORT = {
     maxConcurrent: envNum(process.env.ARTIFACT_EXPORT_MAX_CONCURRENT, 2),
     /** 변환 입력(html/source_data JSON) 최대 크기. */
     inputMaxBytes: envNum(process.env.ARTIFACT_EXPORT_INPUT_MAX, 5 * 1024 * 1024),
+    /** xlsx 시트당 데이터 행 상한 — 넘으면 자르고 마지막 행에 절단 표시(대형 csv 의 컨테이너 시간 초과 방지). */
+    xlsxMaxRows: envNum(process.env.ARTIFACT_EXPORT_XLSX_MAX_ROWS, 100_000),
     /** 변환 출력(base64) 캡 — pdf 수 MB 수준이면 충분. */
     outputMaxBytes: envNum(process.env.ARTIFACT_EXPORT_OUTPUT_MAX, 40 * 1024 * 1024),
     user: process.env.ARTIFACT_EXPORT_USER || '1000:1000',

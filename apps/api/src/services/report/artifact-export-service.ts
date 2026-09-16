@@ -183,7 +183,7 @@ export async function exportArtifactDocx(sourceData: Record<string, unknown>): P
  * 수식 인젝션 이스케이프·숫자 캐스팅 규칙은 xlsx-script 주석 참고.
  */
 export async function exportArtifactXlsx(input: { csv: string } | { data: Record<string, unknown> }): Promise<ArtifactExportResult> {
-    const json = JSON.stringify(input);
+    const json = JSON.stringify({ ...input, maxRows: ARTIFACT_EXPORT.xlsxMaxRows });
     if (Buffer.byteLength(json, 'utf8') > ARTIFACT_EXPORT.inputMaxBytes) {
         throw new ArtifactExportError('데이터가 너무 커서 변환할 수 없습니다', 413, 'INPUT_TOO_LARGE');
     }
