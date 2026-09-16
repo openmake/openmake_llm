@@ -58,6 +58,10 @@ export interface EnvConfig {
     llmHourlyTokenLimit: number;
     /** 쿼터 저장소 장애 시 open(통과)|closed(503) — F25 PR-2 */
     quotaFailMode: 'open' | 'closed';
+    /** 로컬 쿼터 초과 시 reject(429)|degrade(QUOTA_DEGRADE_MODEL_MAP 으로 재해석) — F25 PR-3a */
+    quotaExceededAction: 'reject' | 'degrade';
+    /** 강등 맵 JSON (글롭 → 대체 fullId) */
+    quotaDegradeModelMap: string;
     llmWeeklyTokenLimit: number;
     /** 외부 모델 정책 원문(JSON, Control Plane 기초) — config/external-model-policy 가 파싱 */
     externalModelPolicy: string;
@@ -201,6 +205,8 @@ const DEFAULT_CONFIG: EnvConfig = {
     llmWarmupTimeoutMs: 10000,
     llmHourlyTokenLimit: 300000,
     quotaFailMode: 'open',
+    quotaExceededAction: 'reject',
+    quotaDegradeModelMap: '',
     llmWeeklyTokenLimit: 5000000,
     externalModelPolicy: '',
     llmEnableReasoningEffort: false,
@@ -343,6 +349,8 @@ export function loadConfig(): EnvConfig {
         LLM_WARMUP_TIMEOUT_MS: env('LLM_WARMUP_TIMEOUT_MS'),
         LLM_HOURLY_TOKEN_LIMIT: env('LLM_HOURLY_TOKEN_LIMIT'),
         QUOTA_FAIL_MODE: env('QUOTA_FAIL_MODE'),
+        QUOTA_EXCEEDED_ACTION: env('QUOTA_EXCEEDED_ACTION'),
+        QUOTA_DEGRADE_MODEL_MAP: env('QUOTA_DEGRADE_MODEL_MAP'),
         LLM_WEEKLY_TOKEN_LIMIT: env('LLM_WEEKLY_TOKEN_LIMIT'),
         EXTERNAL_MODEL_POLICY: env('EXTERNAL_MODEL_POLICY'),
         LLM_ENABLE_REASONING_EFFORT: env('LLM_ENABLE_REASONING_EFFORT'),
@@ -460,6 +468,8 @@ export function loadConfig(): EnvConfig {
         llmWarmupTimeoutMs: parsed.LLM_WARMUP_TIMEOUT_MS ?? DEFAULT_CONFIG.llmWarmupTimeoutMs,
         llmHourlyTokenLimit: parsed.LLM_HOURLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmHourlyTokenLimit,
         quotaFailMode: parsed.QUOTA_FAIL_MODE ?? DEFAULT_CONFIG.quotaFailMode,
+        quotaExceededAction: parsed.QUOTA_EXCEEDED_ACTION ?? DEFAULT_CONFIG.quotaExceededAction,
+        quotaDegradeModelMap: parsed.QUOTA_DEGRADE_MODEL_MAP ?? DEFAULT_CONFIG.quotaDegradeModelMap,
         llmWeeklyTokenLimit: parsed.LLM_WEEKLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmWeeklyTokenLimit,
         externalModelPolicy: parsed.EXTERNAL_MODEL_POLICY ?? DEFAULT_CONFIG.externalModelPolicy,
         llmEnableReasoningEffort: (parsed.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true',

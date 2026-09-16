@@ -108,6 +108,8 @@ export const envSchema = z
         }),
         LLM_HOURLY_TOKEN_LIMIT: nonNegativeIntWithDefault(300000),
         QUOTA_FAIL_MODE: z.enum(['open', 'closed']).optional(),
+        QUOTA_EXCEEDED_ACTION: z.enum(['reject', 'degrade']).optional(),
+        QUOTA_DEGRADE_MODEL_MAP: z.string().optional(),
         LLM_WEEKLY_TOKEN_LIMIT: nonNegativeIntWithDefault(5000000),
         /** 외부 모델 정책 JSON(Control Plane 기초) — 파싱은 config/external-model-policy, 형식 검증은 registry */
         EXTERNAL_MODEL_POLICY: z.string().optional(),
