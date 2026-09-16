@@ -902,7 +902,22 @@
     "noResultBody": "没有保存的最终答复。请查看下方执行时间线了解经过。",
     "previewTitle": "产出预览",
     "previewEmpty": "该任务没有已保存的产出。",
-    "previewLoadError": "无法加载产出。"
+    "previewLoadError": "无法加载产出。",
+    "planEdit": {
+      "open": "编辑",
+      "title": "编辑计划",
+      "nextTurn": "下一轮生效",
+      "stepPlaceholder": "步骤说明",
+      "doneWhenPlaceholder": "完成条件（可选）",
+      "moveUp": "上移",
+      "moveDown": "下移",
+      "remove": "删除",
+      "add": "添加步骤",
+      "save": "保存",
+      "cancel": "取消",
+      "conflict": "计划已在别处更改，请重新加载后再编辑。",
+      "failed": "保存失败。"
+    }
   },
   "customAgents": {
     "pageTitle": "自定义智能体",

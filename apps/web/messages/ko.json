@@ -902,7 +902,22 @@
     "noResultBody": "저장된 최종 답변이 없습니다. 아래 실행 타임라인에서 진행 내역을 확인하세요.",
     "previewTitle": "산출물 미리보기",
     "previewEmpty": "이 작업에는 저장된 산출물이 없습니다.",
-    "previewLoadError": "산출물을 불러오지 못했습니다."
+    "previewLoadError": "산출물을 불러오지 못했습니다.",
+    "planEdit": {
+      "open": "편집",
+      "title": "계획 편집",
+      "nextTurn": "다음 턴부터 적용",
+      "stepPlaceholder": "단계 설명",
+      "doneWhenPlaceholder": "완료 기준(선택)",
+      "moveUp": "위로",
+      "moveDown": "아래로",
+      "remove": "삭제",
+      "add": "단계 추가",
+      "save": "저장",
+      "cancel": "취소",
+      "conflict": "다른 곳에서 계획이 바뀌었습니다. 다시 불러온 뒤 편집하세요.",
+      "failed": "저장에 실패했습니다."
+    }
   },
   "customAgents": {
     "pageTitle": "커스텀 에이전트",

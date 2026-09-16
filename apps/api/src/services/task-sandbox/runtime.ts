@@ -22,6 +22,7 @@ import { TaskPlan, parseGoalPlanSteps, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval, type ApprovalRejectReason } from './approval-gate';
 import { withToolNameSuggestions, detectShellToolMisuse, formatShellToolMisuseHint } from '../../mcp/tool-name-suggest';
 import { buildApprovalPreview } from './approval-preview';
+import type { PlanStepInput } from './planning';
 import { APPROVAL_PREVIEW } from '../../config/task-sandbox';
 import { createLogger } from '../../utils/logger';
 
@@ -121,6 +122,9 @@ export class TaskRuntime {
 
     /** 재개 시 체크포인트의 계획 복원(124) — goal 시드 계획을 저장본으로 교체한다. */
     restorePlan(steps: unknown): void { this.plan.restore(steps); }
+    /** 사용자 편집(139) — 같은 텍스트의 단계는 상태를 보존(TaskPlan.create 규칙). */
+    replacePlan(steps: PlanStepInput[]): void { this.plan.create(steps); }
+    renderPlan(): string { return this.plan.render(); }
 
     /** 관측/영속(sandboxContainerId)용 실행기 라벨 — docker: 컨테이너명, 원격(D1): 디바이스 라벨. */
     get containerName(): string { return this.executor.label; }

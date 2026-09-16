@@ -902,7 +902,22 @@
     "noResultBody": "保存された最終回答はありません。下の実行タイムラインで経過を確認してください。",
     "previewTitle": "成果物プレビュー",
     "previewEmpty": "このタスクに保存された成果物はありません。",
-    "previewLoadError": "成果物を読み込めませんでした。"
+    "previewLoadError": "成果物を読み込めませんでした。",
+    "planEdit": {
+      "open": "編集",
+      "title": "計画を編集",
+      "nextTurn": "次のターンから適用",
+      "stepPlaceholder": "ステップの説明",
+      "doneWhenPlaceholder": "完了条件（任意）",
+      "moveUp": "上へ",
+      "moveDown": "下へ",
+      "remove": "削除",
+      "add": "ステップ追加",
+      "save": "保存",
+      "cancel": "キャンセル",
+      "conflict": "計画が別の場所で変更されました。再読み込みしてから編集してください。",
+      "failed": "保存に失敗しました。"
+    }
   },
   "customAgents": {
     "pageTitle": "カスタムエージェント",

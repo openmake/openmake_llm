@@ -902,7 +902,22 @@
     "noResultBody": "No final answer was saved. See the execution timeline below for what happened.",
     "previewTitle": "Output preview",
     "previewEmpty": "This task has no saved output.",
-    "previewLoadError": "Could not load the output."
+    "previewLoadError": "Could not load the output.",
+    "planEdit": {
+      "open": "Edit",
+      "title": "Edit plan",
+      "nextTurn": "applies from next turn",
+      "stepPlaceholder": "Step description",
+      "doneWhenPlaceholder": "Done when (optional)",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "remove": "Remove",
+      "add": "Add step",
+      "save": "Save",
+      "cancel": "Cancel",
+      "conflict": "The plan changed elsewhere. Reload and edit again.",
+      "failed": "Failed to save."
+    }
   },
   "customAgents": {
     "pageTitle": "Custom Agents",

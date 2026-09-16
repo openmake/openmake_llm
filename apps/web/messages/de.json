@@ -902,7 +902,22 @@
     "noResultBody": "Es wurde keine endgültige Antwort gespeichert. Sehen Sie unten in der Ausführungs-Timeline, was passiert ist.",
     "previewTitle": "Ausgabevorschau",
     "previewEmpty": "Diese Aufgabe hat keine gespeicherte Ausgabe.",
-    "previewLoadError": "Die Ausgabe konnte nicht geladen werden."
+    "previewLoadError": "Die Ausgabe konnte nicht geladen werden.",
+    "planEdit": {
+      "open": "Bearbeiten",
+      "title": "Plan bearbeiten",
+      "nextTurn": "ab nächster Runde",
+      "stepPlaceholder": "Schrittbeschreibung",
+      "doneWhenPlaceholder": "Fertig wenn (optional)",
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "remove": "Entfernen",
+      "add": "Schritt hinzufügen",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "conflict": "Der Plan wurde anderswo geändert. Neu laden und erneut bearbeiten.",
+      "failed": "Speichern fehlgeschlagen."
+    }
   },
   "customAgents": {
     "pageTitle": "Benutzerdefinierte Agenten",

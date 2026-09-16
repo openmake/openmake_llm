@@ -41,6 +41,7 @@ import { ApiClient } from "@/lib/api-client";
 import { SteeringInput } from "@/components/chat/steering-input";
 import { SharePanel } from "@/components/agent-tasks/share-panel";
 import { DiffView } from "@/components/chat/diff-view";
+import { PlanEditor } from "@/components/agent-tasks/plan-editor";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type TaskStatus = "running" | "completed" | "pending";
@@ -100,6 +101,8 @@ interface ApiAgentTask {
   completed_at?: string;
   resumable?: boolean;
   plan?: PlanStep[] | null;
+  /** 계획 낙관적 잠금 버전(139) */
+  plan_version?: number;
   total_tokens?: number | null;
   /** Cowork D2: 실행 백엔드 — 'local' 이면 데스크톱 브리지 폴더에서 실행됨 */
   executor?: "sandbox" | "local";
@@ -572,6 +575,9 @@ function TaskDetailModal({
   const [files, setFiles] = useState<string[]>([]);
   const [subagents, setSubagents] = useState<SubagentTraceView[]>([]);
   const [loading, setLoading] = useState(true);
+  // 계획 편집 저장 뒤 즉시 재조회(139) — 폴링 주기를 기다리지 않는다.
+  const [reloadTick, setReloadTick] = useState(0);
+  const reload = () => setReloadTick((n) => n + 1);
 
   // 라이브 폴링: 실행 중(running/paused)이면 주기적으로 갱신 — "컴퓨터" 패널 실시간성.
   useEffect(() => {
@@ -607,9 +613,11 @@ function TaskDetailModal({
     };
     load();
     return () => { cancelled = true; if (timer) clearTimeout(timer); };
-  }, [taskId]);
+  }, [taskId, reloadTick]);
 
   const plan = detail?.task.plan ?? [];
+  const [editingPlan, setEditingPlan] = useState(false);
+  const planEditable = !!detail && detail.task.status !== "completed";
 
   return (
     <div className="space-y-4">
@@ -669,11 +677,19 @@ function TaskDetailModal({
             <SteeringInput taskId={taskId} />
           )}
 
+          {/* 계획 편집(139) — 완료 전 작업만. 실행 중이면 다음 턴부터 적용. */}
+          {editingPlan && detail && (
+            <PlanEditor taskId={taskId} plan={plan} planVersion={detail.task.plan_version ?? 1} running={detail.task.status === "running"}
+              onSaved={() => { setEditingPlan(false); void reload(); }} onCancel={() => setEditingPlan(false)} />
+          )}
           {/* 계획 패널 (G3 plan + G5 실시간 상태) */}
-          {plan.length > 0 && (
+          {!editingPlan && (plan.length > 0 || planEditable) && (
             <div className="rounded-md border border-border bg-surface-1 p-3">
-              <p className="mb-2 text-xs font-medium text-fg-2">
-                {t("planLabel", { completed: plan.filter((s) => s.status === "completed").length, total: plan.length })}
+              <p className="mb-2 flex items-center justify-between text-xs font-medium text-fg-2">
+                <span>{t("planLabel", { completed: plan.filter((s) => s.status === "completed").length, total: plan.length })}</span>
+                {planEditable && (
+                  <button type="button" className="text-[11px] text-accent hover:underline" onClick={() => setEditingPlan(true)}>{t("planEdit.open")}</button>
+                )}
               </p>
               <ul className="space-y-1">
                 {plan.map((s, i) => (

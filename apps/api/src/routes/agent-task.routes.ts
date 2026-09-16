@@ -54,6 +54,15 @@ import { claimUploadsAsInputFiles, ChunkStoreError } from '../services/agent-tas
 import { resolveDefaultMaxTurns } from '../services/agent-task/task-inputs';
 import { auditLocalTaskCreate, filterTaskList, loadOwnedTask, toPublicTask, validateLocalExecutorInput } from './agent-task.helpers';
 import { approvalsRouter } from './agent-task-approvals.routes';
+import { getPlanEditRegistry } from '../services/agent-task/plan-edits';
+import { TaskPlan, type PlanStepInput } from '../services/task-sandbox/planning';
+import { getPool } from '../data/models/unified-database';
+import { z } from 'zod';
+
+const updatePlanSchema = z.object({
+    steps: z.array(z.union([z.string().trim().min(1).max(500), z.object({ text: z.string().trim().min(1).max(500), doneWhen: z.string().max(500).optional(), after: z.array(z.number().int().min(1)).max(20).optional() })])).min(1).max(50),
+    expectedVersion: z.number().int().min(1),
+});
 import { isAdminRole } from '../data/user-manager';
 
 const logger = createLogger('AgentTaskRoutes');
@@ -531,6 +540,28 @@ router.get('/:taskId/files/download', asyncHandler(async (req: Request, res: Res
     res.download(abs, basename(rel), (err) => {
         if (err && !res.headersSent) res.status(404).json(notFound('파일을 찾을 수 없습니다.'));
     });
+}));
+
+/**
+ * PUT /api/agent-tasks/:taskId/plan { steps, expectedVersion } (139) — 사용자 계획 편집.
+ * pending/paused/failed/cancelled/queued: DB 갱신(재개 시 TaskPlan.restore 가 복원). running: DB 갱신 + 다음 턴 경계 적용.
+ * completed 는 400, 버전 불일치는 409 {currentVersion}. 같은 텍스트 단계의 상태는 보존.
+ */
+router.put('/:taskId/plan', validate(updatePlanSchema), asyncHandler(async (req: Request, res: Response) => {
+    const task = await loadOwnedTask(req, res, req.params.taskId);
+    if (!task) return;
+    if (task.status === 'completed') return res.status(400).json(badRequest('완료된 작업의 계획은 편집할 수 없습니다.'));
+    const { steps, expectedVersion } = req.body as { steps: PlanStepInput[]; expectedVersion: number };
+    const tp = new TaskPlan();
+    tp.restore(task.plan);
+    tp.create(steps);
+    const merged = tp.snapshot();
+    if (merged.length === 0) return res.status(400).json(badRequest('단계가 비어 있습니다.'));
+    const r = await new AgentTaskRepository(getPool()).updatePlanIfVersion(task.id, merged, expectedVersion);
+    if (!r.ok) return res.status(409).json({ success: false, error: { code: 'VERSION_CONFLICT', message: '다른 곳에서 계획이 바뀌었습니다. 다시 불러오세요.' }, currentVersion: r.version });
+    if (task.status === 'running' && AGENT_TASK_LIMITS.PLAN_EDIT_ENABLED) getPlanEditRegistry().submit(task.id, steps);
+    logger.info(`[AgentTaskRoutes] 계획 편집: ${task.id} v${r.version} (${merged.length}단계, status=${task.status})`);
+    res.json(success({ plan: merged, planVersion: r.version, appliedAt: task.status === 'running' ? 'next_turn' : 'now' }));
 }));
 
 // 승인(HITL) 라우트는 agent-task-approvals.routes.ts (600줄 게이트로 분리, 2026-09-17) — 라우트 순서(answer → :decision)는 그 파일이 지킨다.

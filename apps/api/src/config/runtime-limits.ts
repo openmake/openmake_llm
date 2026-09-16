@@ -1487,6 +1487,8 @@ export const ROUTE_INTENT_PATTERNS: readonly RegExp[] = [
  * 백그라운드 detached 실행이라 사람이 지켜보지 않으므로 토큰/시간 폭주 방지가 필수.
  */
 export const AGENT_TASK_LIMITS = {
+    /** 실행 중 계획 편집 다음 턴 반영(139). AGENT_TASK_PLAN_EDIT_ENABLED */
+    PLAN_EDIT_ENABLED: process.env.AGENT_TASK_PLAN_EDIT_ENABLED !== 'false',
     /** 작업 생성 요청 body 상한(bytes) — /api/agent-tasks 의 express.json 파서와 validate
      *  미들웨어(maxBodySizeBytes)가 공유하는 단일 소스(정합 고정: 파서만 크고 검증이 1MB 로
      *  거부하던 불일치 방지). 첨부는 base64 로 4/3 팽창하므로 원본 파일 실효 상한은 약 3/4.

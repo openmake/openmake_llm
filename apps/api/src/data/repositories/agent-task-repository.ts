@@ -129,6 +129,7 @@ export class AgentTaskRepository extends BaseRepository {
         if (updates.plan !== undefined) {
             sets.push(`plan = $${paramIdx++}`);
             params.push(JSON.stringify(updates.plan));
+            sets.push('plan_version = plan_version + 1'); // 139 — 모든 plan 갱신에서 +1 (UI stale 감지)
         }
         if (updates.totalTokens !== undefined) {
             sets.push(`total_tokens = $${paramIdx++}`);
@@ -165,6 +166,18 @@ export class AgentTaskRepository extends BaseRepository {
         }
         const prev = r.rows[0]?.prev;
         if (prev !== updates.status) await this.recordEvent(taskId, prev, updates.status, updates.transitionReason ?? updates.error ?? undefined);
+    }
+
+    /** 사용자 계획 편집(139) — expectedVersion 이 현재와 같을 때만 갱신. 반환 ok=false 면 현재 버전. */
+    async updatePlanIfVersion(taskId: string, plan: unknown[], expectedVersion: number): Promise<{ ok: boolean; version: number }> {
+        const r = await this.query<{ plan_version: number }>(
+            `UPDATE agent_tasks SET plan = $2, plan_version = plan_version + 1, updated_at = NOW()
+             WHERE id = $1 AND plan_version = $3 RETURNING plan_version`,
+            [taskId, JSON.stringify(plan), expectedVersion],
+        );
+        if (r.rows[0]) return { ok: true, version: r.rows[0].plan_version };
+        const cur = await this.query<{ plan_version: number }>('SELECT plan_version FROM agent_tasks WHERE id = $1', [taskId]);
+        return { ok: false, version: cur.rows[0]?.plan_version ?? 0 };
     }
 
     /** 상태 전이 이벤트 1행(124) — 관측용이라 실패해도 전이를 되돌리지 않는다(fail-open). */
