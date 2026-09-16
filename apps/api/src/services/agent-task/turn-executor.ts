@@ -7,7 +7,7 @@
  *
  * @module services/agent-task/turn-executor
  */
-import { getUnifiedDatabase } from '../../data/models/unified-database';
+import { getUnifiedDatabase, getPool } from '../../data/models/unified-database';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { getPushService } from '../PushService';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
@@ -18,7 +18,9 @@ import { runTool, isSearchTool } from './task-steps';
 import { prepareToolArgs } from './tool-args';
 import { prefetchReadOnlyCalls } from '../tool-parallel';
 import { runWithElicitationContext, MCP_ELICIT_TOOL_NAME, type ElicitationContext } from '../../mcp/elicitation-bridge';
-import { AgentTaskAbort } from './types';
+import { AgentTaskAbort, AgentTaskParked } from './types';
+import { writeTurnCheckpoint } from './turn-reentry';
+import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import type { UserContext } from '../../mcp/user-sandbox';
@@ -99,6 +101,15 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         }).catch(() => { /* noop */ });
         try { taskRuntime?.notifyApprovalPending(toolName); } catch { /* 알림 실패는 작업에 영향 없음 */ }
     };
+    // 질문형 승인 만료 → 주차(F16.7): 질문 호출은 결과 없이 남겨 체크포인트하고 주차 표식 후 실행을 끝낸다.
+    // 답이 오면 hitl-park 가 재개하고, turn-reentry 가 같은 호출을 다시 실행해 결정을 이어받는다(이미 끝난 호출은 저널 재사용).
+    let parkRequested = false;
+    const park = async (): Promise<never> => {
+        await writeTurnCheckpoint(taskId, conversation, turn - 1, taskRuntime);
+        await update({ status: 'paused' });
+        await new AgentTaskRepository(getPool()).markParked(taskId);
+        throw new AgentTaskParked();
+    };
     // 외부 MCP 서버의 사용자 입력 요청(F13.10) — ask_human 과 같은 채널로 묻는다(자동승인·정책 무관, 대기는 pause-aware).
     const elicitCtx: ElicitationContext = {
         taskId,
@@ -108,6 +119,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
                 { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName) },
             );
             pausedMs += r.waitedMs;
+            if (r.reason === 'parked') { parkRequested = true; return r; } // 서버엔 cancel, 도구가 끝나면 주차
             if (r.decision === 'rejected') onApprovalRejected({ toolName: MCP_ELICIT_TOOL_NAME, reason: r.reason ?? 'user' });
             if (getCurStatus() === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
             return r;
@@ -141,6 +153,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
     );
     for (const tc of toolCalls) {
         if (signal.aborted) throw new AgentTaskAbort('aborted');
+        if (parkRequested) await park(); // 선실행(prefetch) 중 주차 — 이 턴 호출은 재개 때 다시 실행된다
         const name = tc.function.name;
         usedTools.add(name);
         if (isSearchTool(name)) searchCalls++;
@@ -163,7 +176,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
                 onApprovalPending: (p) => onApprovalPending(p.toolName),
                 onApprovalWaited: (ms) => { pausedMs += ms; },
                 onApprovalRejected,
-            });
+            }).catch((e: unknown) => (e instanceof AgentTaskParked ? park() : Promise.reject(e)));
             if (getCurStatus() === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
             if (toolResult.includes(TASK_TERMINATE_SENTINEL)) {
                 terminated = true;
@@ -194,6 +207,7 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         } else {
             toolResult = await execTool(name, args);
         }
+        if (parkRequested) await park(); // mcp_elicit 주차 — 결과(cancel 응답)는 기록하지 않는다
         conversation.push({
             role: 'tool',
             content: toolResult,

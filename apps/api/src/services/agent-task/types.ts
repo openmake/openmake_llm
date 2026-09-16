@@ -16,6 +16,18 @@ export class AgentTaskAbort extends Error {
     }
 }
 
+/** 질문형 승인(ask_human·mcp_elicit)이 만료돼 작업을 주차(paused)로 내려놓는다(F16.7).
+ *  던지는 쪽(turn-executor)이 체크포인트와 주차 표식을 남기고, AgentTaskService 는 실행만 끝낸다(슬롯 반납). */
+export class AgentTaskParked extends Error {
+    constructor() {
+        super(AGENT_TASK_PARKED_REASON);
+        this.name = 'AgentTaskParked';
+    }
+}
+
+/** 주차 표식 — agent_task_events.reason. 마지막 이벤트가 이 사유인 paused 작업이 주차 중이다. */
+export const AGENT_TASK_PARKED_REASON = 'hitl_parked';
+
 /** runaway 가드 — 한도 초과 시 종류별 AgentTaskAbort throw (AgentTaskService 에서 분리 — 파일 크기 가드).
  *  pausedMs(승인 대기 누적)는 활성 시간이 아니므로 타임아웃 예산에서 제외(4-1). */
 export function assertWithinLimits(

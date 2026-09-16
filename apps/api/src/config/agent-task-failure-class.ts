@@ -19,6 +19,7 @@ const EXACT: Readonly<Record<string, AgentTaskFailureClass>> = {
     max_turns_exhausted: 'max_turns',
     token_limit: 'token_limit',
     timeout: 'timeout',
+    hitl_park_expired: 'timeout', // 질문 응답 대기 주차 상한 초과(F16.7)
     interrupted: 'interrupted',
     interrupted_local_device: 'interrupted',
     'server restarted': 'interrupted',

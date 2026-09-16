@@ -1614,6 +1614,8 @@ export const AGENT_TASK_LIMITS = {
     /** 주차(F16.7)된 ask_human·mcp_elicit 승인의 최대 대기(ms) — 이후 종전처럼 만료. AGENT_TASK_HITL_PARK_MAX_MS(기본 7일).
      *  켜는 플래그는 system_settings `AGENT_TASK_HITL_PARK_ON_TIMEOUT`(getConfig().agentTaskHitlParkOnTimeout). */
     HITL_PARK_MAX_MS: parseInt(process.env.AGENT_TASK_HITL_PARK_MAX_MS || '', 10) || 7 * 24 * 60 * 60 * 1000,
+    /** 주차 스윕 주기(ms) — 결정이 왔는데 재개되지 못한 작업(로컬 디바이스 미연결 등) 재시도·상한 초과 정리·workspace 유지. AGENT_TASK_HITL_PARK_SWEEP_MS(기본 10분) */
+    HITL_PARK_SWEEP_MS: parseInt(process.env.AGENT_TASK_HITL_PARK_SWEEP_MS || '', 10) || 10 * 60 * 1000,
     /**
      * 마무리 턴 강제(2026-08-03) — 자원 상한에 **닿기 전에** 도구를 끊고 종합 답변을 받는다.
      *

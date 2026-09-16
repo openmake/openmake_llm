@@ -160,6 +160,15 @@ export class AgentTaskApprovalRepository extends BaseRepository {
         return pending.rows[0];
     }
 
+    /** 주차(F16.7) — 질문형 승인의 만료를 연장해 pending 으로 남긴다(작업은 paused 로 실행 슬롯 반납). */
+    async extendPending(approvalId: string, extendMs: number): Promise<boolean> {
+        const r = await this.query(
+            `UPDATE agent_task_approvals SET expires_at = NOW() + make_interval(secs => $2) WHERE approval_id = $1 AND status = 'pending'`,
+            [approvalId, extendMs / 1000],
+        );
+        return (r.rowCount ?? 0) > 0;
+    }
+
     /** 작업 종료 시 남은 pending 을 정리 — 승인함에 죽은 요청이 남지 않게. */
     async expirePendingForTask(taskId: string, status: 'expired' | 'aborted' = 'aborted'): Promise<void> {
         await this.query(

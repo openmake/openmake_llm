@@ -390,10 +390,11 @@ router.post('/:taskId/cancel', asyncHandler(async (req: Request, res: Response) 
     // 실행 전 대기열(queued)에 있으면 큐에서 제거 후 상태 정리(아직 execute 미시작이라 AbortController 없음).
     const dequeued = getAgentTaskQueue().cancelPending(task.id);
 
-    // 레지스트리에 없음: DB 상 running/queued/pending 이면 상태 정리, 아니면 취소 대상 아님
-    if (dequeued || task.status === 'running' || task.status === 'pending' || task.status === 'queued') {
+    // 레지스트리에 없음: DB 상 running/queued/pending·paused(질문 응답 대기 주차 F16.7 — 남은 질문 승인도 만료) 이면 상태 정리
+    if (dequeued || ['running', 'pending', 'queued', 'paused'].includes(task.status)) {
         const db = getUnifiedDatabase();
         await db.updateAgentTask(task.id, { status: 'cancelled' });
+        if (task.status === 'paused') getApprovalRegistry().closeTask(task.id);
         return res.json(success({ message: '작업이 취소되었습니다.', taskId: task.id }));
     }
     return res.status(400).json(badRequest('실행 중이거나 대기 중인 작업이 아닙니다.'));

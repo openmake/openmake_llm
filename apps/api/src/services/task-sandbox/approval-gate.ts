@@ -20,6 +20,8 @@ import { createLogger } from '../../utils/logger';
 import { getPool } from '../../data/models/unified-database';
 import { classifyToolRisk, policyRequiresApproval, HITL_ALWAYS_WAIT_TOOLS, type ToolRiskClass } from '../../config/tool-policy';
 import { AgentTaskApprovalRepository, hashApprovalArgs, type ApprovalRow } from '../../data/repositories/agent-task-approval-repository';
+import { getConfig } from '../../config/env';
+import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 
 const logger = createLogger('TaskApprovalGate');
 
@@ -55,8 +57,10 @@ export function isSensitiveWrite(toolName: string, args: Record<string, unknown>
 
 type ApprovalDecision = 'approved' | 'rejected';
 /** 거절 사유 — 'timeout'(무응답 만료) 은 사용자 부재 신호로, 명시 거절('user')과 달리
- *  HITL 무응답 강등(연속 N회 시 승인 필요 도구 제거 → 산출물 유도)의 카운트 대상이다. */
-export type ApprovalRejectReason = 'timeout' | 'user' | 'abort';
+ *  HITL 무응답 강등(연속 N회 시 승인 필요 도구 제거 → 산출물 유도)의 카운트 대상이다.
+ *  'parked'(F16.7): 질문형 승인이 만료됐지만 AGENT_TASK_HITL_PARK_ON_TIMEOUT 이라 저장소에 pending 으로 남긴 경우 —
+ *  호출부는 작업을 주차(AgentTaskParked)하고, 답이 오면 재개된 작업이 같은 호출에서 결정을 이어받는다. */
+export type ApprovalRejectReason = 'timeout' | 'user' | 'abort' | 'parked';
 
 /** 승인 요청의 해소 결과 — 결정 + (ask_human 자유텍스트 응답 시) 사용자 답변 본문. */
 interface ApprovalResult {
@@ -111,7 +115,7 @@ interface Waiter {
 /** 영속 저장소 계약(124) — 테스트는 생략(메모리만), 운영은 AgentTaskApprovalRepository. */
 export type ApprovalStore = Pick<AgentTaskApprovalRepository,
     'insertPending' | 'markDecided' | 'listPending' | 'getPending' | 'takeoverForCall' | 'expirePendingForTask'>
-    & Partial<Pick<AgentTaskApprovalRepository, 'revokeUnconsumed' | 'listRecentDecisions' | 'recordEvent' | 'reassign'>>;
+    & Partial<Pick<AgentTaskApprovalRepository, 'revokeUnconsumed' | 'listRecentDecisions' | 'recordEvent' | 'reassign' | 'extendPending'>>;
 
 function rowToPending(r: ApprovalRow): PendingApproval {
     const args = r.args ?? {};
@@ -187,6 +191,11 @@ export class ApprovalRegistry {
 
     isAutoApprove(taskId: string): boolean { return this.autoApproveTasks.has(taskId); }
 
+    /** 만료 시 주차할 수 있는가(F16.7) — 질문형 도구 + 플래그 ON + 대기 연장을 영속할 저장소(없으면 재개할 근거가 없다). */
+    private canPark(toolName: string): boolean {
+        return HITL_ALWAYS_WAIT_TOOLS.has(toolName) && getConfig().agentTaskHitlParkOnTimeout && !!this.store?.extendPending;
+    }
+
     clearAutoApprove(taskId: string): void { this.autoApproveTasks.delete(taskId); }
 
     /**
@@ -231,13 +240,15 @@ export class ApprovalRegistry {
                 clearTimeout(w.timer);
                 this.waiters.delete(approvalId);
                 if (r.decision === 'rejected') logger.info(`[${input.taskId}] 승인 거절/만료(${r.reason}): ${input.toolName}`);
+                // 주차(F16.7) — 결정이 아니라 대기 연장: 행은 pending 으로 남아 승인함에 계속 보이고, 답은 재개된 작업이 소비한다
+                if (r.reason === 'parked') void this.persist((s) => s.extendPending!(approvalId, AGENT_TASK_LIMITS.HITL_PARK_MAX_MS));
                 // 살아 있는 waiter 의 결정은 즉시 실행(소비)된다 — consumed 표시로 재시작 이어받기·철회(138) 대상에서 뺀다
-                void this.persist((s) => s.markDecided(approvalId,
+                else void this.persist((s) => s.markDecided(approvalId,
                     r.decision === 'approved' ? 'approved' : r.reason === 'timeout' ? 'expired' : r.reason === 'abort' ? 'aborted' : 'rejected',
                     r.text, undefined, true));
                 resolvePromise({ ...r, waitedMs: Date.now() - pending.createdAt });
             };
-            const timer = setTimeout(() => settle({ decision: 'rejected', reason: 'timeout' }), opts.timeoutMs);
+            const timer = setTimeout(() => settle({ decision: 'rejected', reason: this.canPark(input.toolName) ? 'parked' : 'timeout' }), opts.timeoutMs);
             this.waiters.set(approvalId, { pending, resolve: (r) => settle(r), timer });
             if (opts.signal) {
                 if (opts.signal.aborted) { settle({ decision: 'rejected', reason: 'abort' }); return; }
@@ -338,6 +349,7 @@ export function getApprovalRegistry(): ApprovalRegistry {
             listRecentDecisions: (u, ms, l) => lazy().listRecentDecisions(u, ms, l),
             recordEvent: (id, k, a, d) => lazy().recordEvent(id, k, a, d),
             reassign: (id, to, o) => lazy().reassign(id, to, o),
+            extendPending: (id, ms) => lazy().extendPending(id, ms),
         });
     }
     return registry;

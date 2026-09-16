@@ -25,6 +25,7 @@ import { buildApprovalPreview } from './approval-preview';
 import type { PlanStepInput } from './planning';
 import { APPROVAL_PREVIEW } from '../../config/task-sandbox';
 import { createLogger } from '../../utils/logger';
+import { AgentTaskParked } from '../agent-task/types';
 
 const logger = createLogger('TaskRuntime');
 
@@ -234,6 +235,7 @@ export class TaskRuntime {
                 { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending },
             );
             opts.onApprovalWaited?.(waitedMs);
+            if (reason === 'parked') throw new AgentTaskParked(); // 만료 → 주차(F16.7): 답이 오면 같은 호출로 재개
             if (decision !== 'approved') {
                 opts.onApprovalRejected?.({ toolName: name, reason: reason ?? 'user' });
                 return reason === 'timeout'

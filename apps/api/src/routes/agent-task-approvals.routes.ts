@@ -26,6 +26,7 @@ import { OrganizationRepository } from '../data/repositories/organization-reposi
 import { getPushService } from '../services/PushService';
 import { AuthorizationError } from '../utils/error-handler';
 import type { PendingApproval } from '../services/task-sandbox/approval-gate';
+import { resumeParkedTask } from '../services/agent-task/hitl-park';
 
 /** 결정·이관 권한(138): 소유자 OR 현재 담당자 OR 시스템 admin. */
 function assertApprovalActor(pending: PendingApproval, user: { id?: string | number; role?: string }): void {
@@ -151,6 +152,14 @@ router.post('/approvals/:approvalId/escalate', asyncHandler(async (req: Request,
     res.json(success({ approvalId, assigneeUserId: target, escalatedAt: new Date().toISOString() }));
 }));
 
+/** 결정이 주차 작업(F16.7)의 질문이면 재개 — 결정 자체는 이미 저장됐으므로 재개 실패는 응답을 막지 않는다(스윕이 재시도). */
+async function resumeIfParked(taskId: string): Promise<boolean> {
+    return resumeParkedTask(taskId).catch((e) => {
+        logger.warn(`[AgentTaskApprovalRoutes] 주차 작업 재개 실패(스윕이 재시도): ${taskId} — ${e instanceof Error ? e.message : e}`);
+        return false;
+    });
+}
+
 /**
  * POST /api/agent-tasks/approvals/:approvalId/answer  { text }
  * ask_human 질문에 자유텍스트로 응답 — 진행(approved)으로 해소하되 답변 본문을 에이전트에 전달.
@@ -170,7 +179,7 @@ router.post('/approvals/:approvalId/answer', asyncHandler(async (req: Request, r
 
     const ok = await registry.answer(approvalId, text, String(req.user!.id));
     if (!ok) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
-    res.json(success({ approvalId, answered: true }));
+    res.json(success({ approvalId, answered: true, resumed: await resumeIfParked(pending.taskId) }));
 }));
 
 /**
@@ -189,6 +198,6 @@ router.post('/approvals/:approvalId/:decision', asyncHandler(async (req: Request
 
     const ok = await (decision === 'approve' ? registry.approve(approvalId, String(req.user!.id)) : registry.reject(approvalId, String(req.user!.id)));
     if (!ok) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
-    res.json(success({ approvalId, decision }));
+    res.json(success({ approvalId, decision, resumed: await resumeIfParked(pending.taskId) }));
 }));
 

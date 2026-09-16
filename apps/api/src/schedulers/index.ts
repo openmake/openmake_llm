@@ -80,6 +80,16 @@ export async function startAllSchedulers(): Promise<void> {
         logger.warn('TaskSandbox 정리 실패(무시):', err);
     }
 
+    // 7-b. 질문 응답 대기 주차 스윕(F16.7) — 결정 도착분 재개·상한 초과분 실패·대기분 workspace 유지(주차가 없으면 조회 1회)
+    try {
+        const { sweepParkedTasks } = await import('../services/agent-task/hitl-park');
+        const { AGENT_TASK_LIMITS } = await import('../config/runtime-limits');
+        void sweepParkedTasks();
+        setInterval(() => { void sweepParkedTasks(); }, AGENT_TASK_LIMITS.HITL_PARK_SWEEP_MS).unref();
+    } catch (err) {
+        logger.warn('주차 스윕 등록 실패(무시):', err);
+    }
+
     // 8-B. Agent Task 부팅 자동 복구 — 재시작으로 running/paused 로 박제된 task 를 스윕.
     //      샌드박스 플래그와 무관하게 실행(비-샌드박스 task 도 좀비가 된다). 반드시 위
     //      reapOrphanTaskSandboxes() 이후 — 먼저 돌면 resume 이 만든 컨테이너를 reap 이 죽인다.

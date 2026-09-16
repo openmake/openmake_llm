@@ -15,6 +15,15 @@ import type { AgentTask, AgentTaskStatus, AgentTaskStep } from '../models/unifie
 import { allowedSources, AgentTaskTransitionError } from '../../services/agent-task/task-state';
 import { classifyAgentTaskFailure } from '../../config/agent-task-failure-class';
 
+/**
+ * 주차(F16.7) 판정 SQL — paused 이고 마지막 전이 이벤트 사유가 hitl_parked. 부팅 마킹·복구·재개 claim·스윕이 같은 조건을 쓴다.
+ * 주차는 이미 paused 인 작업에 걸리므로 paused→paused 이벤트로 표식한다(markParked).
+ */
+export function parkedTaskCondition(alias: string): string {
+    // COALESCE 필수 — 사유가 NULL 인(일반 승인 대기) paused 에서 비교가 NULL 이 되면 `NOT (…)` 도 NULL 이라 부팅 마킹·복구에서 빠진다
+    return `(${alias}.status = 'paused' AND COALESCE((SELECT e.reason FROM agent_task_events e WHERE e.task_id = ${alias}.id ORDER BY e.id DESC LIMIT 1), '') = 'hitl_parked')`;
+}
+
 export class AgentTaskRepository extends BaseRepository {
     async createAgentTask(params: {
         id: string;
@@ -229,6 +238,37 @@ export class AgentTaskRepository extends BaseRepository {
         ).catch(() => { /* 이벤트 기록 실패는 작업을 막지 않는다 */ });
     }
 
+    /** 주차 표식(F16.7) — recordEvent 와 달리 실패를 삼키지 않는다: 표식 없는 paused 는 아무도 재개하지 않는다. */
+    async markParked(taskId: string): Promise<void> {
+        await this.query(
+            `INSERT INTO agent_task_events (task_id, from_status, to_status, reason) VALUES ($1, 'paused', 'paused', 'hitl_parked')`,
+            [taskId],
+        );
+    }
+
+    /** 주차 작업 재개 claim — 주차 중일 때만 pending 으로(동시 답변·스윕 중복 재개 방지). */
+    async claimParkedTask(taskId: string): Promise<boolean> {
+        const r = await this.query(
+            `UPDATE agent_tasks t SET status = 'pending', updated_at = NOW() WHERE t.id = $1 AND ${parkedTaskCondition('t')} RETURNING t.id`,
+            [taskId],
+        );
+        if ((r.rowCount ?? 0) === 0) return false;
+        await this.recordEvent(taskId, 'paused', 'pending', 'hitl_park_resume');
+        return true;
+    }
+
+    /** 주차 중인 작업 목록 — 스윕이 결정 도착(재개)·만료(실패)·대기(워크스페이스 유지)로 나눈다. */
+    async listParkedTasks(limit = 200): Promise<Array<{ id: string; workspace_path: string | null; has_decision: boolean; has_live_pending: boolean }>> {
+        const r = await this.query<{ id: string; workspace_path: string | null; has_decision: boolean; has_live_pending: boolean }>(
+            `SELECT t.id, t.workspace_path,
+                    EXISTS (SELECT 1 FROM agent_task_approvals a WHERE a.task_id = t.id AND a.status IN ('approved', 'rejected') AND a.consumed_at IS NULL) AS has_decision,
+                    EXISTS (SELECT 1 FROM agent_task_approvals a WHERE a.task_id = t.id AND a.status = 'pending' AND a.expires_at > NOW()) AS has_live_pending
+               FROM agent_tasks t WHERE ${parkedTaskCondition('t')} ORDER BY t.updated_at ASC LIMIT $1`,
+            [limit],
+        );
+        return r.rows;
+    }
+
     async getAgentTaskEvents(taskId: string, limit = 200): Promise<Array<{ id: number; from_status: string | null; to_status: string; reason: string | null; created_at: string }>> {
         const r = await this.query<{ id: number; from_status: string | null; to_status: string; reason: string | null; created_at: string }>(
             'SELECT id, from_status, to_status, reason, created_at FROM agent_task_events WHERE task_id = $1 ORDER BY id ASC LIMIT $2',
@@ -357,7 +397,7 @@ export class AgentTaskRepository extends BaseRepository {
     async getInterruptedAgentTasks(windowMs: number): Promise<AgentTask[]> {
         const result = await this.query<AgentTask>(
             `SELECT * FROM agent_tasks
-             WHERE status IN ('running', 'paused', 'queued')
+             WHERE (status IN ('running', 'paused', 'queued') AND NOT ${parkedTaskCondition('agent_tasks')})
                 OR (status = 'failed' AND error = 'server restarted'
                     AND completed_at > NOW() - make_interval(secs => $1))
              ORDER BY updated_at ASC`,
@@ -377,7 +417,7 @@ export class AgentTaskRepository extends BaseRepository {
             `UPDATE agent_tasks t
              SET status = 'pending', error = NULL, failure_class = NULL, completed_at = NULL, updated_at = NOW()
              FROM (SELECT id, status AS prev FROM agent_tasks WHERE id = $1 FOR UPDATE) o
-             WHERE t.id = o.id AND (o.prev IN ('running', 'paused', 'queued')
+             WHERE t.id = o.id AND ((o.prev IN ('running', 'paused', 'queued') AND NOT ${parkedTaskCondition('t')})
                 OR (o.prev = 'failed' AND t.error = 'server restarted'))
              RETURNING o.prev`,
             [taskId]

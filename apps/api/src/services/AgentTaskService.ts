@@ -36,14 +36,15 @@ import { getApprovalRegistry } from './task-sandbox/approval-gate';
 import { currentPlanStepIndex } from './task-sandbox/planning';
 import { applyTurnResourceGates, shouldAdoptFinalTurnAnswer, type TurnGateFlags } from './agent-task/turn-gate';
 import { buildFileContext } from './chat-service/attach-context';
-import { AgentTaskAbort, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
+import { AgentTaskAbort, AgentTaskParked, assertWithinLimits, type AgentTaskRunInput } from './agent-task/types';
 import { callAgentTurnWithBudget, AgentTaskTurnTimeout } from './agent-task/turn-call';
 import { writeInputFilesToWorkspace } from './agent-task/task-inputs';
 import { finalizeTask, finalizeMaxTurnsExhausted } from './agent-task/finalize';
 import { buildJudgeToolEvidence } from './agent-task/goal-judge';
-import { initWorkspaceBaseline, captureDiffOnCleanup } from './agent-task/code-diff';
+import { initWorkspaceBaseline } from './agent-task/code-diff';
+import { cleanupTaskRun } from './agent-task/run-cleanup';
 import { findDanglingToolCalls, loadToolCallJournal, writeTurnCheckpoint } from './agent-task/turn-reentry';
-import { getSteeringRegistry, applyPendingSteering } from './agent-task/steering';
+import { applyPendingSteering } from './agent-task/steering';
 import { resolveExecutorPlan } from './agent-task/executor-select';
 import { recoverTextToolCalls } from './agent-task/text-tool-calls';
 import { executeTurnToolCalls } from './agent-task/turn-executor';
@@ -127,6 +128,7 @@ export class AgentTaskService {
         let curProgress = 0;
         let curTurn = 0;
         let taskRuntime: TaskRuntime | null = null;
+        let parked = false; // 질문 응답 대기 주차(F16.7) — finally 가 승인·workspace 를 남긴다
         const recentSignatures: string[] = [];
         let stuckNotified = false;
         let verifyRetries = 0;
@@ -566,6 +568,8 @@ export class AgentTaskService {
             // 턴 상한 도달 — 완주가 아니라 failed + checkpoint 보존(이어하기 가능). 근거는 finalize.
             await finalizeMaxTurnsExhausted({ taskId, userId, turnCeiling, conversation, taskRuntime, sandboxCfg, stepNumber, update, emitStep });
         } catch (err) {
+            // 질문 응답 대기 주차(F16.7) — 체크포인트·표식은 turn-executor 가 남겼다. 실행만 끝내 슬롯을 반납한다(재개는 hitl-park)
+            if (err instanceof AgentTaskParked && !signal.aborted) { parked = true; logger.info(`[AgentTask] 질문 응답 대기로 주차: ${taskId}`); return; }
             // signal.aborted 가 true 면 client.chat() 호출 도중 던져진 AbortError
             // ("Request was aborted") 도 사용자 취소로 분류 — 턴 사이 abort 뿐 아니라
             // LLM 호출 중간 취소도 cancelled 로 일관 처리.
@@ -583,17 +587,8 @@ export class AgentTaskService {
             logger.warn(`[AgentTask] ${aborted ? '취소' : '실패'}: ${taskId} — ${kind}: ${msg}`);
         } finally {
             AgentTaskService.running.delete(taskId);
-            // task 자동승인(4-2) 해제 + 저장소의 남은 승인 대기 정리(124).
-            getApprovalRegistry().closeTask(taskId);
-            // 미소비 steering 정리 — 종료된 task 에 남은 지시가 다음 동명 실행에 새지 않게.
-            getSteeringRegistry().clear(taskId);
-            if (taskRuntime) {
-                // 완료 시 workspace 보존(다운로드용), 실패/취소 시 삭제 직전 코드 diff 캡처(실패한 코드 작업도 변경분 검토).
-                const keepWorkspace = curStatus === 'completed';
-                if (!keepWorkspace) await captureDiffOnCleanup(taskRuntime, taskId, stepNumber).catch(() => { /* fail-open */ });
-                await taskRuntime.cleanup(!keepWorkspace).catch((e) =>
-                    logger.warn(`[AgentTask] 샌드박스 정리 실패: ${taskId} — ${e}`));
-            }
+            // 승인(주차면 질문 승인 유지)·steering·샌드박스(완료·주차는 workspace 보존) 정리 — agent-task/run-cleanup
+            await cleanupTaskRun({ taskId, taskRuntime, status: curStatus, parked, stepNumber });
         }
     }
 }
