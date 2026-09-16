@@ -148,6 +148,16 @@ jobs:
           OMK_EVAL_RESPONSE_THRESHOLD: '0.5'
         run: npm run eval:response
 
+      # ─── Gate 7: Prompt·Tool Schema Budget ───
+      # CI 는 LLM 에 닿지 못해 지연을 못 잰다 — 첫 토큰 지연의 주요인인 시스템 프롬프트 정적 prefix·전체 길이와
+      # 상시 노출 도구 스키마 크기를 기준선(evaluation/baselines/budget-baseline.json) 대비 증가율로 막는다(F26.8).
+      # 정당한 증가는 `npm run eval:budget -- --update-baseline` 결과를 같은 PR 에 포함한다.
+      - name: "Gate 7: Prompt & Tool Schema Budget"
+        working-directory: apps/api
+        env:
+          OMK_EVAL_BUDGET_DRIFT_PCT: '10'
+        run: npm run eval:budget
+
       # 평가 결과 아티팩트 업로드 (PR 회귀 추적용)
       - name: Upload evaluation artifacts
         if: always()
@@ -215,6 +225,7 @@ jobs:
             const responseFile = findLatest('response-evaluation-', null);
             const routing = loadEval(routingFile);
             const response = loadEval(responseFile);
+            const budget = loadEval(findLatest('budget-evaluation-', null));
 
             const routingBaseline = parseFloat(process.env.ROUTING_BASELINE || '0.5');
             const responseBaseline = parseFloat(process.env.RESPONSE_BASELINE || '0.5');
@@ -235,6 +246,9 @@ jobs:
               '|---|---|---|---|---|',
               row('Routing (Gate 5)', routing, routingBaseline),
               row('Response (Gate 6)', response, responseBaseline),
+              budget
+                ? `| Prompt·Tool Budget (Gate 7) | ${budget.rows.filter((r) => r.ok).length}/${budget.rows.length} 지표 | 증가율 ≤ ${budget.limits.driftPct}% | 기준선 ${budget.baselineUpdatedAt ? budget.baselineUpdatedAt.slice(0, 10) : '없음'} | ${budget.ok ? '✅' : '❌ ' + budget.rows.filter((r) => !r.ok).map((r) => r.metric).join(', ')} |`
+                : '| Prompt·Tool Budget (Gate 7) | n/a | n/a | n/a | 결과 파일 없음 |',
               '',
               `- 데이터셋 버전: routing=\`${routing?.datasetVersion ?? 'n/a'}\`, response=\`${response?.datasetVersion ?? 'n/a'}\``,
               `- 베이스라인은 \`OMK_EVAL_PASS_THRESHOLD\` / \`OMK_EVAL_RESPONSE_THRESHOLD\` 환경변수 기준 (이력 비교 아님)`,

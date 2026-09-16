@@ -1,0 +1,30 @@
+{
+  "contexts": {
+    "base-ko": {
+      "staticChars": 8923,
+      "fullChars": 9887
+    },
+    "concise-en": {
+      "staticChars": 10562,
+      "fullChars": 12222
+    },
+    "structured-ko": {
+      "staticChars": 9195,
+      "fullChars": 10159
+    },
+    "report-ko": {
+      "staticChars": 2689,
+      "fullChars": 3653
+    },
+    "agent-memory-ko": {
+      "staticChars": 8923,
+      "fullChars": 9979
+    },
+    "ios-compact-ko": {
+      "staticChars": 9193,
+      "fullChars": 10157
+    }
+  },
+  "alwaysOnToolSchemaBytes": 2090,
+  "updatedAt": "2026-09-16T23:32:49.211Z"
+}

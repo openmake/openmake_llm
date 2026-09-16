@@ -141,6 +141,20 @@ OMK_EVAL_REAL_TIMEOUT_MS=30000 OMK_EVAL_REAL_MAX_TOKENS=1000 \
 PR마다 `evaluation-{timestamp}-{commit}.json`을 아티팩트로 업로드하면
 commit 사이의 통과율 변동을 추적 가능.
 
+## 프롬프트·도구 스키마 예산 게이트 (CI Gate 7, 2026-09-17)
+
+CI 는 LLM 에 닿지 못해 지연을 직접 잴 수 없다. 대신 첫 토큰 지연의 주요인인 시스템 프롬프트 **정적 prefix**·전체 길이와
+**상시 노출 도구 스키마** 크기를 대표 컨텍스트 6종(`budget-contexts.ts`)으로 재고 기준선과 비교한다.
+
+```bash
+npm run eval:budget                       # 기준선 대비 +10% 초과면 exit 1
+npm run eval:budget -- --update-baseline  # 정당한 증가 — 갱신된 baselines/budget-baseline.json 을 같은 PR 에 포함
+```
+
+- `.env` 를 읽지 않는다(운영 플래그가 문구를 바꾸면 CI 와 어긋난다). 가변 블록(페르소나·메모리)은 고정 샘플이라 **코드가 붙이는 문구의 증가**만 본다.
+- env: `OMK_EVAL_BUDGET_DRIFT_PCT`(기본 10), 선택 절대 상한 `OMK_EVAL_PROMPT_BUDGET_CHARS`·`OMK_EVAL_TOOL_SCHEMA_BUDGET_BYTES`.
+- 정적 prefix 가 페르소나·메모리로 바뀌면 안 된다 — `budget-evaluation.test.ts` 가 고정(prefix cache 안정성).
+
 ## PoC 상태 (마지막 업데이트)
 
 | 항목 | 상태 | 비고 |

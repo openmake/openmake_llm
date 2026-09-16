@@ -18,6 +18,7 @@
         "eval:routing:strict": "OMK_EVAL_PASS_THRESHOLD=1.0 ts-node src/evaluation/run-evaluation.ts",
         "eval:response": "ts-node src/evaluation/run-response-evaluation.ts",
         "eval:citation": "ts-node src/evaluation/run-citation-evaluation.ts",
+        "eval:budget": "ts-node src/evaluation/run-budget-evaluation.ts",
         "eval:all": "npm run eval:routing && npm run eval:response && npm run eval:citation"
     },
     "dependencies": {
