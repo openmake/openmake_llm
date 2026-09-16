@@ -3,6 +3,8 @@
  *
  *   POST /api/agent-tasks/:taskId/approvals/auto-approve
  *   GET  /api/agent-tasks/approvals/pending
+ *   POST /api/agent-tasks/approvals/:approvalId/revoke     ← `/:decision` 보다 먼저 (138)
+ *   GET  /api/agent-tasks/approvals/recent                 (138)
  *   POST /api/agent-tasks/approvals/:approvalId/answer     ← `/:decision` 보다 먼저
  *   POST /api/agent-tasks/approvals/:approvalId/:decision  (approve | reject)
  *
@@ -16,7 +18,7 @@ import { assertResourceOwnerOrAdmin } from '../auth/ownership';
 import { getPool } from '../data/models/unified-database';
 import { AgentTaskRepository } from '../data/repositories/agent-task-repository';
 import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
-import { AGENT_TASK_LIMITS } from '../config/runtime-limits';
+import { AGENT_TASK_LIMITS, APPROVAL_RECENT_WINDOW_MS } from '../config/runtime-limits';
 import { loadOwnedTask } from './agent-task.helpers';
 
 const logger = createLogger('AgentTaskApprovalRoutes');
@@ -48,6 +50,29 @@ router.get('/approvals/pending', asyncHandler(async (req: Request, res: Response
     res.json(success({ pending }));
 }));
 
+
+/**
+ * POST /api/agent-tasks/approvals/:approvalId/revoke (138) — 미소비 승인(프로세스가 내려간 사이 내린 결정) 철회.
+ * 살아 있는 대기는 결정 즉시 실행되므로 409. ⚠️ `/:decision` 보다 먼저 등록.
+ */
+router.post('/approvals/:approvalId/revoke', asyncHandler(async (req: Request, res: Response) => {
+    const { approvalId } = req.params;
+    const recent = await getApprovalRegistry().recent(String(req.user!.id), APPROVAL_RECENT_WINDOW_MS);
+    const row = recent.find((r) => r.approval_id === approvalId);
+    if (row) assertResourceOwnerOrAdmin(row.user_id, String(req.user!.id), req.user!.role || 'user');
+    const result = await getApprovalRegistry().revoke(approvalId, String(req.user!.id));
+    if (result === 'not_found') return res.status(404).json(notFound('철회할 승인을 찾을 수 없습니다.'));
+    if (result === 'consumed') return res.status(409).json(badRequest('이미 실행에 사용된 승인은 철회할 수 없습니다.'));
+    res.json(success({ approvalId, status: 'revoked' }));
+}));
+
+/** GET /api/agent-tasks/approvals/recent?minutes=30 (138) — 최근 승인 결정(철회 가능 여부 포함). */
+router.get('/approvals/recent', asyncHandler(async (req: Request, res: Response) => {
+    const minutes = Math.min(Math.max(parseInt(String(req.query.minutes ?? '30'), 10) || 30, 1), 24 * 60);
+    const rows = await getApprovalRegistry().recent(String(req.user!.id), minutes * 60_000);
+    res.json(success({ decisions: rows.map((r) => ({ approvalId: r.approval_id, taskId: r.task_id, toolName: r.tool_name, status: r.status, decidedAt: r.decided_at, consumedAt: r.consumed_at, revocable: r.revocable })) }));
+}));
+
 /**
  * POST /api/agent-tasks/approvals/:approvalId/answer  { text }
  * ask_human 질문에 자유텍스트로 응답 — 진행(approved)으로 해소하되 답변 본문을 에이전트에 전달.
@@ -65,7 +90,7 @@ router.post('/approvals/:approvalId/answer', asyncHandler(async (req: Request, r
     if (!pending) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
     assertResourceOwnerOrAdmin(pending.userId, String(req.user!.id), req.user!.role || 'user');
 
-    const ok = await registry.answer(approvalId, text);
+    const ok = await registry.answer(approvalId, text, String(req.user!.id));
     if (!ok) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
     res.json(success({ approvalId, answered: true }));
 }));
@@ -84,7 +109,7 @@ router.post('/approvals/:approvalId/:decision', asyncHandler(async (req: Request
     if (!pending) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
     assertResourceOwnerOrAdmin(pending.userId, String(req.user!.id), req.user!.role || 'user');
 
-    const ok = await (decision === 'approve' ? registry.approve(approvalId) : registry.reject(approvalId));
+    const ok = await (decision === 'approve' ? registry.approve(approvalId, String(req.user!.id)) : registry.reject(approvalId, String(req.user!.id)));
     if (!ok) return res.status(404).json(notFound('대기 중인 승인 요청을 찾을 수 없습니다(만료 가능).'));
     res.json(success({ approvalId, decision }));
 }));

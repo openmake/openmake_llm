@@ -2127,3 +2127,6 @@ export const QUOTA_GRANTS = {
     /** 자동 요청 시 요청량 = 설정 한도 × 이 비율 (기본 0.5). QUOTA_OVERAGE_AUTO_REQUEST_RATIO */
     OVERAGE_AUTO_REQUEST_RATIO: parseFloat(process.env.QUOTA_OVERAGE_AUTO_REQUEST_RATIO || '0.5'),
 } as const;
+
+/** 승인함 "최근 결정" 조회 창(ms, 기본 30분) — 철회 가능한 미소비 승인을 찾는 범위. APPROVAL_RECENT_WINDOW_MS */
+export const APPROVAL_RECENT_WINDOW_MS = parseInt(process.env.APPROVAL_RECENT_WINDOW_MS || String(30 * 60 * 1000), 10);

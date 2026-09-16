@@ -12,7 +12,8 @@
 import { createHash } from 'crypto';
 import { BaseRepository } from './base-repository';
 
-export type ApprovalRowStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'aborted';
+export type ApprovalRowStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'aborted' | 'revoked';
+export type ApprovalEventKind = 'requested' | 'approved' | 'rejected' | 'answered' | 'revoked' | 'reassigned' | 'escalated' | 'expired' | 'aborted';
 
 export interface ApprovalRow {
     approval_id: string;
@@ -29,6 +30,13 @@ export interface ApprovalRow {
     expires_at: string;
     decided_at: string | null;
     consumed_at: string | null;
+    /** 138 */
+    preview?: string | null;
+    decided_by?: string | null;
+    revoked_at?: string | null;
+    assignee_user_id?: string | null;
+    escalated_at?: string | null;
+    escalation_reason?: string | null;
 }
 
 /** PURE: 같은 도구 호출을 재시작 후 다시 알아보기 위한 키 — 인자 JSON 의 sha256. */
@@ -49,14 +57,49 @@ export class AgentTaskApprovalRepository extends BaseRepository {
         );
     }
 
-    /** 결정 기록 — pending 행에만 적용(이미 결정된 행은 그대로). 성공 시 true. */
-    async markDecided(approvalId: string, status: Exclude<ApprovalRowStatus, 'pending'>, answerText?: string): Promise<boolean> {
+    /** 결정 기록 — pending 행에만 적용(이미 결정된 행은 그대로). 성공 시 true. decidedBy 는 138. */
+    async markDecided(approvalId: string, status: Exclude<ApprovalRowStatus, 'pending'>, answerText?: string, decidedBy?: string | null): Promise<boolean> {
         const r = await this.query(
-            `UPDATE agent_task_approvals SET status = $2, answer_text = $3, decided_at = NOW()
+            `UPDATE agent_task_approvals SET status = $2, answer_text = $3, decided_at = NOW(), decided_by = COALESCE($4, decided_by)
              WHERE approval_id = $1 AND status = 'pending'`,
-            [approvalId, status, answerText ?? null],
+            [approvalId, status, answerText ?? null, decidedBy ?? null],
         );
         return (r.rowCount ?? 0) > 0;
+    }
+
+    /**
+     * 철회(138) — approved 이면서 아직 소비되지 않은 결정만 되돌린다(프로세스가 내려간 사이 내린 승인).
+     * 살아 있는 waiter 는 결정 즉시 실행돼 되돌릴 수 없다 → 'consumed'.
+     */
+    async revokeUnconsumed(approvalId: string, actorId: string): Promise<'revoked' | 'consumed' | 'not_found'> {
+        const r = await this.query(
+            `UPDATE agent_task_approvals SET status = 'revoked', revoked_at = NOW(), decided_by = $2
+             WHERE approval_id = $1 AND status = 'approved' AND consumed_at IS NULL`,
+            [approvalId, actorId],
+        );
+        if ((r.rowCount ?? 0) > 0) return 'revoked';
+        const exists = await this.query<{ status: string; consumed_at: string | null }>('SELECT status, consumed_at FROM agent_task_approvals WHERE approval_id = $1', [approvalId]);
+        if (!exists.rows[0]) return 'not_found';
+        return 'consumed';
+    }
+
+    /** 최근 결정(승인함 "최근 결정" 섹션) — approved/revoked, 소유자 기준. revocable = approved 이고 미소비. */
+    async listRecentDecisions(userId: string, sinceMs: number, limit = 50): Promise<Array<ApprovalRow & { revocable: boolean }>> {
+        const r = await this.query<ApprovalRow & { revocable: boolean }>(
+            `SELECT *, (status = 'approved' AND consumed_at IS NULL) AS revocable FROM agent_task_approvals
+             WHERE user_id = $1 AND status IN ('approved', 'revoked') AND decided_at >= NOW() - make_interval(secs => $2)
+             ORDER BY decided_at DESC LIMIT $3`,
+            [userId, sinceMs / 1000, limit],
+        );
+        return r.rows;
+    }
+
+    /** 승인 이벤트(138) — 실패는 호출부가 삼킨다. */
+    async recordEvent(approvalId: string, kind: ApprovalEventKind, actorId: string | null, detail?: Record<string, unknown>): Promise<void> {
+        await this.query(
+            'INSERT INTO agent_task_approval_events (approval_id, actor_id, kind, detail) VALUES ($1, $2, $3, $4::jsonb)',
+            [approvalId, actorId, kind, JSON.stringify(detail ?? {})],
+        );
     }
 
     /** 사용자의 살아 있는 pending 행(만료 전). 프로세스가 내려간 작업의 대기도 여기 남아 있다. */

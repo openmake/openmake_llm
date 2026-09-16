@@ -106,7 +106,8 @@ interface Waiter {
 
 /** 영속 저장소 계약(124) — 테스트는 생략(메모리만), 운영은 AgentTaskApprovalRepository. */
 export type ApprovalStore = Pick<AgentTaskApprovalRepository,
-    'insertPending' | 'markDecided' | 'listPending' | 'getPending' | 'takeoverForCall' | 'expirePendingForTask'>;
+    'insertPending' | 'markDecided' | 'listPending' | 'getPending' | 'takeoverForCall' | 'expirePendingForTask'>
+    & Partial<Pick<AgentTaskApprovalRepository, 'revokeUnconsumed' | 'listRecentDecisions' | 'recordEvent'>>;
 
 function rowToPending(r: ApprovalRow): PendingApproval {
     const args = r.args ?? {};
@@ -210,7 +211,10 @@ export class ApprovalRegistry {
             approvalId, ...input, createdAt: prior ? new Date(prior.created_at).getTime() : Date.now(),
             riskClass, sensitive: isSensitiveWrite(input.toolName, input.args),
         };
-        if (!prior && this.store) await this.persist((s) => s.insertPending({ approvalId, ...input, argsHash, riskClass, timeoutMs: opts.timeoutMs }));
+        if (!prior && this.store) {
+            await this.persist((s) => s.insertPending({ approvalId, ...input, argsHash, riskClass, timeoutMs: opts.timeoutMs }));
+            void this.event(approvalId, 'requested', null, { toolName: input.toolName, riskClass });
+        }
         return new Promise<ApprovalResult>((resolvePromise) => {
             const settle = (r: Omit<ApprovalResult, 'waitedMs'>) => {
                 const w = this.waiters.get(approvalId);
@@ -243,12 +247,37 @@ export class ApprovalRegistry {
     }
 
     /** REST 승인 — owner 검증은 호출부 책임. 성공 시 true. */
-    approve(approvalId: string): Promise<boolean> {
+    approve(approvalId: string, actorId?: string): Promise<boolean> {
+        void this.event(approvalId, 'approved', actorId);
         return this.settleOrPersist(approvalId, { decision: 'approved' });
     }
 
+    /**
+     * 철회(138) — "아직 실행되지 않은 허가" 만 되돌린다: 살아 있는 waiter 는 결정 즉시 도구가 실행되므로
+     * 'consumed', 저장소의 미소비 approved 행(프로세스가 내려간 사이 내린 승인)만 'revoked'.
+     */
+    async revoke(approvalId: string, actorId: string): Promise<'revoked' | 'consumed' | 'not_found'> {
+        if (this.waiters.has(approvalId)) return 'consumed';
+        if (!this.store?.revokeUnconsumed) return 'not_found';
+        const r = (await this.persist((s) => s.revokeUnconsumed!(approvalId, actorId))) ?? 'not_found';
+        if (r === 'revoked') void this.event(approvalId, 'revoked', actorId);
+        return r;
+    }
+
+    /** 최근 결정 목록(138) — 저장소가 없으면 빈 목록. */
+    async recent(userId: string, sinceMs: number): Promise<Array<ApprovalRow & { revocable: boolean }>> {
+        if (!this.store?.listRecentDecisions) return [];
+        return (await this.persist((s) => s.listRecentDecisions!(userId, sinceMs))) ?? [];
+    }
+
+    private event(approvalId: string, kind: 'approved' | 'rejected' | 'answered' | 'revoked' | 'requested', actorId?: string | null, detail?: Record<string, unknown>): Promise<void> {
+        if (!this.store?.recordEvent) return Promise.resolve();
+        return this.persist((s) => s.recordEvent!(approvalId, kind, actorId ?? null, detail)).then(() => undefined);
+    }
+
     /** REST 거절. */
-    reject(approvalId: string): Promise<boolean> {
+    reject(approvalId: string, actorId?: string): Promise<boolean> {
+        void this.event(approvalId, 'rejected', actorId);
         return this.settleOrPersist(approvalId, { decision: 'rejected', reason: 'user' });
     }
 
@@ -257,7 +286,8 @@ export class ApprovalRegistry {
      * 해소하되 답변 본문을 함께 전달해 에이전트가 실제 답을 받아 이어가게 한다.
      * (승인 게이트가 아닌 ask_human 대기에만 의미 있음 — 호출부가 owner 검증.)
      */
-    answer(approvalId: string, text: string): Promise<boolean> {
+    answer(approvalId: string, text: string, actorId?: string): Promise<boolean> {
+        void this.event(approvalId, 'answered', actorId, { chars: text.length });
         return this.settleOrPersist(approvalId, { decision: 'approved', text });
     }
 
@@ -281,6 +311,9 @@ export function getApprovalRegistry(): ApprovalRegistry {
             getPending: (id) => lazy().getPending(id),
             takeoverForCall: (t, n, h) => lazy().takeoverForCall(t, n, h),
             expirePendingForTask: (t, s) => lazy().expirePendingForTask(t, s),
+            revokeUnconsumed: (id, a) => lazy().revokeUnconsumed(id, a),
+            listRecentDecisions: (u, ms, l) => lazy().listRecentDecisions(u, ms, l),
+            recordEvent: (id, k, a, d) => lazy().recordEvent(id, k, a, d),
         });
     }
     return registry;
