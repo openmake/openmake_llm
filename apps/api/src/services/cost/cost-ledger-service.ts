@@ -19,6 +19,8 @@ import { LOCAL_LLM_COST } from '../../config/cost-defaults';
 import { getModelPricing } from '../../config/external-pricing';
 import { getRequestId } from '../../utils/request-context';
 import { activeOrgFor } from '../org/membership-cache';
+import { getKeyValueStore } from '../../storage';
+import { costMonthKey, COST_MONTH_TTL_MS } from '../../llm/user-quota';
 
 const logger = createLogger('CostLedger');
 
@@ -116,6 +118,14 @@ export async function recordCostAsync(entry: CostEntry, now: number = Date.now()
         meta: entry.meta, idempotencyKey: entry.idempotencyKey ?? null,
     };
     await new CostLedgerRepository(getPool()).insert(row);
+    // 월 비용 버킷(136) — 사용자·조직 비용 예산 검사 재료. cost_owner 가 byok(사용자 본인 과금)여도 예산 관점에선 지출이다.
+    if (userId && cost > 0) {
+        try {
+            const store = getKeyValueStore();
+            const k = costMonthKey(userId, now);
+            await store.incrBy(k, cost); await store.expire(k, COST_MONTH_TTL_MS);
+        } catch (e) { logger.warn('월 비용 버킷 누적 실패 (무시):', e); }
+    }
 }
 
 /** LLM 토큰 비용 — 입력·출력(·사고) 토큰을 unit 별 행으로 적재. 로컬은 kind llm.local(rate_key=모델 id), 외부는 llm.external(rate_key=fullId). */

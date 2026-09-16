@@ -14,7 +14,7 @@
 import { QUOTA_RETRY_AFTER } from '../config/timeouts';
 
 /** 'org_monthly' = 조직 월 예산(127) — 멤버 합산 사용량이 organizations.monthly_token_budget 을 넘음. */
-export type QuotaType = 'hourly' | 'weekly' | 'both' | 'org_monthly';
+export type QuotaType = 'hourly' | 'weekly' | 'both' | 'org_monthly' | 'cost_monthly' | 'org_cost_monthly';
 
 export class QuotaExceededError extends Error {
     public readonly quotaType: QuotaType;

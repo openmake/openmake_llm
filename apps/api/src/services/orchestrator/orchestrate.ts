@@ -21,7 +21,15 @@ import { OrchestratorJobsRepository } from '../../data/repositories/orchestrator
 import { ExternalKeysRepository } from '../../data/repositories/external-keys-repo';
 import { ServerExternalKeysRepository } from '../../data/repositories/server-external-keys-repo';
 import { recordServerKeyUsage } from '../server-key-quota';
-import { recordLlmCost } from '../cost/cost-ledger-service';
+import { recordLlmCost, recordCost } from '../cost/cost-ledger-service';
+import type { CostKind, CostUnit } from '../../config/cost-kinds';
+
+/** TaskUsage.units.kind → 원장 kind/unit (audio_bytes 는 회계 단위가 없어 제외). */
+const UNIT_COST_KIND: Partial<Record<'images' | 'chars' | 'audio_bytes' | 'video_seconds', { kind: CostKind; unit: CostUnit }>> = {
+    images: { kind: 'media.image.generate', unit: 'image' },
+    chars: { kind: 'media.audio.speech', unit: 'char' },
+    video_seconds: { kind: 'media.video.generate', unit: 'second' },
+};
 import type { CapabilityTarget } from './capability-resolver';
 import { recordUserUsage } from '../../llm/user-quota';
 import { isExternalFullId } from '../../config/model-roles';
@@ -167,6 +175,12 @@ export function recordUsage(userId: string | undefined, results: TaskResult[], t
     let localTokens = 0;
     for (const r of results) {
         const u = r.usage;
+        // 비토큰 산출 단위(이미지 장수·합성 글자·영상 초) — 원장(F25 PR-4). 단가는 cost_rates(kind×모델), 없으면 0 으로 기록만.
+        if (u?.units && r.model) {
+            const owner = targets?.get(r.taskId)?.costOwner === 'server' ? 'server' : (isExternalFullId(r.model) ? 'byok' : 'user');
+            const unitKind = UNIT_COST_KIND[u.units.kind];
+            if (unitKind) recordCost({ userId, kind: unitKind.kind, unit: unitKind.unit, rateKey: r.model, quantity: u.units.count, costOwner: owner, ctx: { feature: `orchestrator:${r.capability}` } });
+        }
         if (!u || !r.model || (u.promptTokens === undefined && u.completionTokens === undefined)) continue;
         const inTok = u.promptTokens ?? 0; const outTok = u.completionTokens ?? 0;
         if (isExternalFullId(r.model)) {

@@ -2267,7 +2267,8 @@
     "importConfirm": "検証済みの設定を適用しますか？システム設定と組織ポリシーが上書きされます。",
     "importProblems": "問題 {count} 件 — 適用できません。",
     "importDryRun": "検証 OK — 設定 {systemSettings}・capability {capabilityModels}・組織 {organizations}・ポリシー {policies}。適用で反映されます。",
-    "importApplied": "適用完了 — 設定 {systemSettings}・capability {capabilityModels}・組織 {organizations}・ポリシー {policies}。"
+    "importApplied": "適用完了 — 設定 {systemSettings}・capability {capabilityModels}・組織 {organizations}・ポリシー {policies}。",
+    "costBudget": "月間コスト予算(USD)"
   },
   "adminCostRates": {
     "title": "コスト単価表",

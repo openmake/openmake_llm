@@ -16,7 +16,7 @@ import { ORG_CONTEXT } from '../../config/runtime-limits';
 
 const logger = createLogger('OrgMembershipCache');
 
-export interface BudgetedOrg { orgId: string; budget: number; memberIds: string[] }
+export interface BudgetedOrg { orgId: string; budget: number; costBudgetMicros: number; memberIds: string[] }
 export interface OrgContext { orgId: string; orgRole: OrgRole }
 
 interface Entry<T> { at: number; value: T }

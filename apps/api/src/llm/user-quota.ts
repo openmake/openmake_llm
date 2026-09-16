@@ -74,19 +74,38 @@ export function monthWindow(now: number): { from: Date; to: Date } {
 /** 조직 예산 캐시는 services/org/membership-cache 로 통합(F22 Phase A) — 이름은 호출처 호환용으로 유지. */
 export function clearOrgBudgetCache(): void { clearOrgMembershipCache(); }
 
+/** 월 비용 버킷(USD micros, 136) — 원장 적재 시 누적(cost-ledger-service.recordCostAsync). */
+export function costMonthKey(userId: string, now: number): string { return `costq:${userId}:m:${monthBucket(now)}`; }
+export const COST_MONTH_TTL_MS = MONTH_TTL_MS;
+
 /**
- * 조직 월 예산 검사(127) — 사용자가 속한 예산 있는 조직마다 멤버 전체의 이번 달 사용량 합이 예산 이상이면 throw.
+ * 조직 월 예산 검사(127·136) — 토큰 예산은 멤버 월 토큰 버킷 합, 비용 예산은 멤버 월 비용 버킷 합. 예산 이상이면 throw.
  * 조직이 없으면 no-op. KV 장애는 fail-open.
  */
 export async function checkOrgBudget(userId: string, now: number): Promise<void> {
     const orgs = await budgetedOrgsFor(userId, now);
     if (orgs.length === 0) return;
     const store = getKeyValueStore();
+    const sumOf = async (keys: string[]): Promise<number> =>
+        (await Promise.all(keys.map((k) => store.get<number>(k)))).reduce<number>((sum, v) => sum + (typeof v === 'number' ? v : 0), 0);
     for (const org of orgs) {
-        const used = (await Promise.all(org.memberIds.map((m) => store.get<number>(monthKey(m, now)))))
-            .reduce<number>((sum, v) => sum + (typeof v === 'number' ? v : 0), 0);
-        if (used >= org.budget) throw new QuotaExceededError('org_monthly', used, org.budget);
+        if (org.budget > 0) {
+            const used = await sumOf(org.memberIds.map((m) => monthKey(m, now)));
+            if (used >= org.budget) throw new QuotaExceededError('org_monthly', used, org.budget);
+        }
+        if (org.costBudgetMicros > 0) {
+            const used = await sumOf(org.memberIds.map((m) => costMonthKey(m, now)));
+            if (used >= org.costBudgetMicros) throw new QuotaExceededError('org_cost_monthly', used, org.costBudgetMicros);
+        }
     }
+}
+
+/** 사용자 월 비용 예산(USER_MONTHLY_COST_BUDGET_MICROS, 0=무제한) — 원장 누적이 예산 이상이면 throw. */
+export async function checkUserCostBudget(userId: string, now: number): Promise<void> {
+    const budget = getConfig().userMonthlyCostBudgetMicros;
+    if (!(budget > 0)) return;
+    const used = (await getKeyValueStore().get<number>(costMonthKey(userId, now))) ?? 0;
+    if (typeof used === 'number' && used >= budget) throw new QuotaExceededError('cost_monthly', used, budget);
 }
 
 /** 조회용 윈도우 상태 — resetAt 은 현재 calendar bucket 이 넘어가는 시각(ms epoch). */
@@ -170,6 +189,7 @@ export async function checkUserQuota(userId: string | undefined, now: number): P
         if (weeklyLimit > 0 && weekly >= weeklyLimit) {
             throw new QuotaExceededError('weekly', weekly, weeklyLimit);
         }
+        await checkUserCostBudget(userId, now);
         await checkOrgBudget(userId, now);
     } catch (e) {
         if (e instanceof QuotaExceededError) throw e;
@@ -231,6 +251,7 @@ export async function reserveUserQuota(userId: string | undefined, estimate: num
             }
         }
         try {
+            await checkUserCostBudget(userId, now);
             await checkOrgBudget(userId, now);
         } catch (e) {
             if (e instanceof QuotaExceededError) { await refund(store, applied, est); }

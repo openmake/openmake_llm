@@ -191,6 +191,7 @@ export async function handleChatMessage(
             userLang,
             webSearchEnabled: msg.webSearch === true,
             explicitlyDisabled: msg.enabledTools?.web_search === false,
+            userId: extWs._authenticatedUserId ?? undefined,
         });
 
         // URL 사전 분석 결과 합류 (위에서 웹검색과 병렬 시작) — 본문을 fileContext 채널에 합류.

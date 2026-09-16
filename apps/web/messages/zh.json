@@ -2267,7 +2267,8 @@
     "importConfirm": "应用已校验的配置？系统设置和组织策略将被覆盖。",
     "importProblems": "{count} 个问题 — 无法应用。",
     "importDryRun": "校验通过 — 设置 {systemSettings} · capability {capabilityModels} · 组织 {organizations} · 策略 {policies}。按“应用”生效。",
-    "importApplied": "已应用 — 设置 {systemSettings} · capability {capabilityModels} · 组织 {organizations} · 策略 {policies}。"
+    "importApplied": "已应用 — 设置 {systemSettings} · capability {capabilityModels} · 组织 {organizations} · 策略 {policies}。",
+    "costBudget": "每月成本预算(USD)"
   },
   "adminCostRates": {
     "title": "成本单价表",

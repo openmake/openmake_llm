@@ -22,6 +22,7 @@ import {
 } from './providers';
 import { searchExa } from './external-search-apis';
 import { createLogger } from '../../utils/logger';
+import { recordCost } from '../../services/cost/cost-ledger-service';
 import { SEARCH_ESCALATION, SEARCH_RELIABILITY, SEARXNG_CATEGORY_SCOPE, WEB_SEARCH_INJECTION } from '../../config/runtime-limits';
 import { resolveSearchLanguage } from './search-language';
 import { getConfig } from '../../config/env';
@@ -97,7 +98,7 @@ function computeTermRelevance(terms: string[], result: SearchResult): number {
     return Math.min(1, score / terms.length);
 }
 
-export async function performWebSearch(query: string, options: { maxResults?: number; globalSearch?: boolean; language?: string; signal?: AbortSignal; preferRecent?: boolean } = {}): Promise<SearchResult[]> {
+export async function performWebSearch(query: string, options: { maxResults?: number; globalSearch?: boolean; language?: string; signal?: AbortSignal; preferRecent?: boolean; /** 원장 귀속 사용자(F25 PR-4) — 있으면 tool.web_search 1건 기록 */ costUserId?: string } = {}): Promise<SearchResult[]> {
     const { maxResults = 30, globalSearch = true, signal, preferRecent = false } = options;
     const language = resolveSearchLanguage(query, options.language);
 
@@ -136,6 +137,7 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
     ];
 
     const allSearchResults = await Promise.all(searchPromises);
+    if (options.costUserId) recordCost({ userId: options.costUserId, kind: 'tool.web_search', unit: 'call', rateKey: language === 'ko' ? 'ko' : 'global', quantity: 1, costOwner: 'server', ctx: { feature: 'web_search' } });
     const googleResults = allSearchResults[0] || [];
     const wikiResults = allSearchResults[1] || [];
     const newsResults = allSearchResults[2] || [];

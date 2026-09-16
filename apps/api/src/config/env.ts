@@ -60,6 +60,8 @@ export interface EnvConfig {
     quotaFailMode: 'open' | 'closed';
     /** 로컬 쿼터 초과 시 reject(429)|degrade(QUOTA_DEGRADE_MODEL_MAP 으로 재해석) — F25 PR-3a */
     quotaExceededAction: 'reject' | 'degrade';
+    /** 사용자 월 비용 예산(USD micros, 0=무제한) — F25 PR-4 */
+    userMonthlyCostBudgetMicros: number;
     /** 강등 맵 JSON (글롭 → 대체 fullId) */
     quotaDegradeModelMap: string;
     llmWeeklyTokenLimit: number;
@@ -206,6 +208,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     llmHourlyTokenLimit: 300000,
     quotaFailMode: 'open',
     quotaExceededAction: 'reject',
+    userMonthlyCostBudgetMicros: 0,
     quotaDegradeModelMap: '',
     llmWeeklyTokenLimit: 5000000,
     externalModelPolicy: '',
@@ -350,6 +353,7 @@ export function loadConfig(): EnvConfig {
         LLM_HOURLY_TOKEN_LIMIT: env('LLM_HOURLY_TOKEN_LIMIT'),
         QUOTA_FAIL_MODE: env('QUOTA_FAIL_MODE'),
         QUOTA_EXCEEDED_ACTION: env('QUOTA_EXCEEDED_ACTION'),
+        USER_MONTHLY_COST_BUDGET_MICROS: env('USER_MONTHLY_COST_BUDGET_MICROS'),
         QUOTA_DEGRADE_MODEL_MAP: env('QUOTA_DEGRADE_MODEL_MAP'),
         LLM_WEEKLY_TOKEN_LIMIT: env('LLM_WEEKLY_TOKEN_LIMIT'),
         EXTERNAL_MODEL_POLICY: env('EXTERNAL_MODEL_POLICY'),
@@ -469,6 +473,7 @@ export function loadConfig(): EnvConfig {
         llmHourlyTokenLimit: parsed.LLM_HOURLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmHourlyTokenLimit,
         quotaFailMode: parsed.QUOTA_FAIL_MODE ?? DEFAULT_CONFIG.quotaFailMode,
         quotaExceededAction: parsed.QUOTA_EXCEEDED_ACTION ?? DEFAULT_CONFIG.quotaExceededAction,
+        userMonthlyCostBudgetMicros: parsed.USER_MONTHLY_COST_BUDGET_MICROS ?? DEFAULT_CONFIG.userMonthlyCostBudgetMicros,
         quotaDegradeModelMap: parsed.QUOTA_DEGRADE_MODEL_MAP ?? DEFAULT_CONFIG.quotaDegradeModelMap,
         llmWeeklyTokenLimit: parsed.LLM_WEEKLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmWeeklyTokenLimit,
         externalModelPolicy: parsed.EXTERNAL_MODEL_POLICY ?? DEFAULT_CONFIG.externalModelPolicy,

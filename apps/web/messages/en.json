@@ -2267,7 +2267,8 @@
     "importConfirm": "Apply the validated configuration? System settings and organization policies will be overwritten.",
     "importProblems": "{count} problem(s) — cannot apply.",
     "importDryRun": "Validated — settings {systemSettings} · capabilities {capabilityModels} · organizations {organizations} · policies {policies}. Press Apply to commit.",
-    "importApplied": "Applied — settings {systemSettings} · capabilities {capabilityModels} · organizations {organizations} · policies {policies}."
+    "importApplied": "Applied — settings {systemSettings} · capabilities {capabilityModels} · organizations {organizations} · policies {policies}.",
+    "costBudget": "Monthly cost budget (USD)"
   },
   "adminCostRates": {
     "title": "Cost rates",

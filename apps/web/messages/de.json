@@ -2267,7 +2267,8 @@
     "importConfirm": "Geprüfte Konfiguration anwenden? Systemeinstellungen und Organisationsrichtlinien werden überschrieben.",
     "importProblems": "{count} Problem(e) — kann nicht angewendet werden.",
     "importDryRun": "Geprüft — Einstellungen {systemSettings} · Capabilities {capabilityModels} · Organisationen {organizations} · Richtlinien {policies}. Mit „Anwenden“ übernehmen.",
-    "importApplied": "Angewendet — Einstellungen {systemSettings} · Capabilities {capabilityModels} · Organisationen {organizations} · Richtlinien {policies}."
+    "importApplied": "Angewendet — Einstellungen {systemSettings} · Capabilities {capabilityModels} · Organisationen {organizations} · Richtlinien {policies}.",
+    "costBudget": "Monatliches Kostenbudget (USD)"
   },
   "adminCostRates": {
     "title": "Kostensätze",

@@ -33,9 +33,9 @@ const webSearchTool: MCPToolDefinition = {
             required: ['query']
         }
     },
-    handler: async (args): Promise<MCPToolResult> => {
+    handler: async (args, context): Promise<MCPToolResult> => {
         const query = args.query as string;
-        const results = await performWebSearch(query);
+        const results = await performWebSearch(query, { costUserId: context?.userId !== undefined ? String(context.userId) : undefined });
 
         if (results.length === 0) {
             return { content: [{ type: 'text', text: `검색 결과 없음: "${query}"` }] };

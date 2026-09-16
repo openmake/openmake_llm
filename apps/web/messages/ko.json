@@ -2267,7 +2267,8 @@
     "importConfirm": "검증된 구성을 적용할까요? 시스템 설정과 조직 정책이 덮어써집니다.",
     "importProblems": "문제 {count}건 — 적용할 수 없습니다.",
     "importDryRun": "검증 통과 — 설정 {systemSettings} · capability {capabilityModels} · 조직 {organizations} · 정책 {policies}. 적용을 누르면 반영됩니다.",
-    "importApplied": "적용 완료 — 설정 {systemSettings} · capability {capabilityModels} · 조직 {organizations} · 정책 {policies}."
+    "importApplied": "적용 완료 — 설정 {systemSettings} · capability {capabilityModels} · 조직 {organizations} · 정책 {policies}.",
+    "costBudget": "월 비용 예산(USD)"
   },
   "adminCostRates": {
     "title": "비용 단가표",

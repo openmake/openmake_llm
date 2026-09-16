@@ -71,6 +71,13 @@ async function runRetention(): Promise<void> {
             }
         }
 
+        // 4-a0. 비용 원장(134) 보존 (env: COST_LEDGER_RETENTION_DAYS, 기본 400일 — 명세서가 압축본)
+        const ledgerDays = parseInt(process.env.COST_LEDGER_RETENTION_DAYS ?? '400', 10);
+        if (Number.isFinite(ledgerDays) && ledgerDays > 0) {
+            const r = await pool.query(`DELETE FROM cost_ledger WHERE occurred_at < NOW() - ($1 || ' days')::interval`, [ledgerDays.toString()]);
+            if ((r.rowCount ?? 0) > 0) logger.info(`[DbRetention] cost_ledger ${r.rowCount}건 정리 완료 (${ledgerDays}일 초과)`);
+        }
+
         // 4-a. 설정·조직 정책 변경 이력(130) 보존 (env: POLICY_HISTORY_RETENTION_DAYS, 기본 365일)
         const policyHistoryDays = parseInt(process.env.POLICY_HISTORY_RETENTION_DAYS ?? '365', 10);
         if (Number.isFinite(policyHistoryDays) && policyHistoryDays > 0) {

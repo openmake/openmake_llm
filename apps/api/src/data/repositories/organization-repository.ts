@@ -12,6 +12,8 @@ export interface Organization {
     name: string;
     slug: string;
     monthly_token_budget: string | number | null;
+    /** 월 비용 예산(USD micros, 136) */
+    monthly_cost_budget_micros?: string | number | null;
     created_by: string | null;
     created_at: string;
     updated_at: string;
@@ -52,11 +54,12 @@ export class OrganizationRepository extends BaseRepository {
         return r.rows[0];
     }
 
-    async update(id: string, patch: { name?: string; monthlyTokenBudget?: number | null }): Promise<Organization | undefined> {
+    async update(id: string, patch: { name?: string; monthlyTokenBudget?: number | null; monthlyCostBudgetMicros?: number | null }): Promise<Organization | undefined> {
         const sets: string[] = ['updated_at = NOW()'];
         const params: Array<string | number | null> = [];
         if (patch.name !== undefined) { params.push(patch.name); sets.push(`name = $${params.length}`); }
         if (patch.monthlyTokenBudget !== undefined) { params.push(patch.monthlyTokenBudget); sets.push(`monthly_token_budget = $${params.length}`); }
+        if (patch.monthlyCostBudgetMicros !== undefined) { params.push(patch.monthlyCostBudgetMicros); sets.push(`monthly_cost_budget_micros = $${params.length}`); }
         params.push(id);
         const r = await this.query<Organization>(`UPDATE organizations SET ${sets.join(', ')} WHERE id = $${params.length} RETURNING *`, params);
         return r.rows[0];
@@ -106,15 +109,21 @@ export class OrganizationRepository extends BaseRepository {
     }
 
     /** 사용자가 속한 조직 중 월 예산이 있는 것들과 그 멤버 id — 쿼터 검사 재료(예산 없는 조직은 제외). */
-    async listBudgetedOrgsForUser(userId: string): Promise<Array<{ orgId: string; budget: number; memberIds: string[] }>> {
-        const r = await this.query<{ org_id: string; monthly_token_budget: string; member_ids: string[] }>(
-            `SELECT o.id AS org_id, o.monthly_token_budget,
+    async listBudgetedOrgsForUser(userId: string): Promise<Array<{ orgId: string; budget: number; costBudgetMicros: number; memberIds: string[] }>> {
+        const r = await this.query<{ org_id: string; monthly_token_budget: string | null; monthly_cost_budget_micros: string | null; member_ids: string[] }>(
+            `SELECT o.id AS org_id, o.monthly_token_budget, o.monthly_cost_budget_micros,
                     ARRAY(SELECT m2.user_id FROM organization_members m2 WHERE m2.org_id = o.id) AS member_ids
              FROM organizations o
              JOIN organization_members m ON m.org_id = o.id AND m.user_id = $1
-             WHERE o.monthly_token_budget IS NOT NULL AND o.monthly_token_budget > 0`,
+             WHERE (o.monthly_token_budget IS NOT NULL AND o.monthly_token_budget > 0)
+                OR (o.monthly_cost_budget_micros IS NOT NULL AND o.monthly_cost_budget_micros > 0)`,
             [userId],
         );
-        return r.rows.map((row) => ({ orgId: row.org_id, budget: Number(row.monthly_token_budget), memberIds: row.member_ids }));
+        return r.rows.map((row) => ({
+            orgId: row.org_id,
+            budget: Number(row.monthly_token_budget ?? 0),
+            costBudgetMicros: Number(row.monthly_cost_budget_micros ?? 0),
+            memberIds: row.member_ids,
+        }));
     }
 }
