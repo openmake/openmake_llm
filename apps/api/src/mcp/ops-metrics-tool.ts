@@ -18,7 +18,7 @@ import { TOOL_HEALTH_QUERY } from '../config/tool-health';
 
 export const OPS_METRICS_QUERIES = [
     'summary', 'failed_runs', 'slowest_runs', 'runs_by_model',
-    'tool_errors', 'token_usage', 'goal_incomplete', 'prompt_versions',
+    'tool_errors', 'token_usage', 'goal_incomplete', 'prompt_versions', 'gpu', 'queue_depth',
 ] as const;
 type OpsMetricsQuery = (typeof OPS_METRICS_QUERIES)[number];
 
@@ -96,6 +96,21 @@ async function runOpsMetricsQuery(query: OpsMetricsQuery, hours: number, limit: 
             const { ChatRequestRepository } = await import('../data/repositories/chat-request-repository');
             return { prompt_versions: await new ChatRequestRepository(pool).promptVersions(hours, limit) };
         }
+        case 'gpu': {
+            // 노드 지표(F24.4, 143) — 최신 스냅샷(메모리)과 기간 추이 최대값
+            const { getNodeMetricsStates } = await import('../cluster/node-metrics-collector');
+            const { NodeMetricsRepository, resolveSeriesWindow } = await import('../data/repositories/node-metrics-repository');
+            const metrics = ['vllm_kv_cache_pct', 'vllm_requests_waiting', 'dcgm_gpu_util'];
+            const series = await new NodeMetricsRepository(pool).series(metrics, hours, resolveSeriesWindow(hours).bucketMinutes);
+            // 모델 컨텍스트 보호 — 최근 버킷 위주로 대략 지표당 limit 개
+            return { nodes: getNodeMetricsStates(), series: series.slice(-limit * metrics.length) };
+        }
+        case 'queue_depth': {
+            const { getLastQueueDepth, QUEUE_DEPTH_METRIC, QUEUE_DEPTH_QUEUES } = await import('../monitoring/queue-depth-sampler');
+            const { NodeMetricsRepository, resolveSeriesWindow } = await import('../data/repositories/node-metrics-repository');
+            const series = await new NodeMetricsRepository(pool).series([QUEUE_DEPTH_METRIC], hours, resolveSeriesWindow(hours).bucketMinutes);
+            return { current: getLastQueueDepth(), series: series.slice(-limit * QUEUE_DEPTH_QUEUES.length) };
+        }
         default: {
             const never: never = query;
             throw new Error(`unknown query ${String(never)}`);
@@ -119,7 +134,8 @@ export const opsMetricsTool: MCPToolDefinition<OpsMetricsArgs> = {
                     enum: [...OPS_METRICS_QUERIES],
                     description: 'summary=상태별 작업 요약+서버별 도구 호출 · failed_runs=실패 작업 목록 · slowest_runs=오래 걸린 작업 · '
                         + 'runs_by_model=모델별 작업 · tool_errors=서버/도구/원인별 오류 · token_usage=토큰·비용 · goal_incomplete=목표 미달 판정 분포·실패 사유'
-                        + ' · prompt_versions=채팅 시스템 프롬프트 지문별 요청 수·오류율·TTFT p50',
+                        + ' · prompt_versions=채팅 시스템 프롬프트 지문별 요청 수·오류율·TTFT p50'
+                        + ' · gpu=vLLM 노드 KV 캐시·대기/실행 요청(스냅샷+추이) · queue_depth=작업 큐·오케스트레이터 job·vLLM 대기 깊이',
                 },
                 window: {
                     type: 'string',

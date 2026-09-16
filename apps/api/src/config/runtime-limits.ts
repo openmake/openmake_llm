@@ -2159,6 +2159,25 @@ export const SESSION_BRANCH = {
     TREE_MAX_DEPTH: parseInt(process.env.SESSION_TREE_MAX_DEPTH || '20', 10),
 } as const;
 
+/**
+ * 노드 지표 스크레이프·큐 깊이(F24.4, 143). 대상은 VLLM_METRICS_URLS(쉼표 목록) — 비어 있으면 LLM_TOKENIZE_URL 의 origin + /metrics
+ * (같은 vLLM 이 /metrics 를 노출). DCGM exporter(:9400) URL 을 목록에 더하면 GPU util·메모리·온도도 읽는다. 끄기 NODE_METRICS_ENABLED=false.
+ */
+export const NODE_METRICS = {
+    ENABLED: process.env.NODE_METRICS_ENABLED !== 'false',
+    URLS: (process.env.VLLM_METRICS_URLS || '').split(',').map((u) => u.trim()).filter(Boolean),
+    POLL_MS: parseInt(process.env.NODE_METRICS_POLL_MS || '', 10) || 60_000,
+    TIMEOUT_MS: 3_000,
+    QUEUE_SAMPLE_MS: 30_000,
+    RETENTION_DAYS: parseInt(process.env.NODE_METRICS_RETENTION_DAYS || '', 10) || 14,
+    /** 이 시간 넘게 스크레이프가 실패하면 stale 로 표시 */
+    STALE_AFTER_MS: 3 * 60_000,
+    /** 관리자 추이 조회 기간(시간) 기본·상한과 기간별 집계 버킷(분) — [기간 상한, 버킷] 오름차순 */
+    SERIES_DEFAULT_HOURS: 6,
+    SERIES_MAX_HOURS: 14 * 24,
+    SERIES_BUCKETS: [[6, 5], [48, 30], [Infinity, 180]] as ReadonlyArray<readonly [number, number]>,
+} as const;
+
 /** 디버그 큐 재현 번들(F24.7, 144) — 세션별 마지막 LLM 요청 본문을 메모리에 잠깐 들고 있다가 오류·신고 시 보관. */
 export const REPLAY_CAPTURE = {
     ENABLED: process.env.REPLAY_CAPTURE_ENABLED !== 'false',

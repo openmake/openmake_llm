@@ -36,6 +36,7 @@ export const OPS_METRICS_INTENT_PATTERNS: readonly RegExp[] = [
     /(운영|ops)\s*(지표|현황|상태|metrics|status)/i,
     /(지난|최근|오늘|today|last)\s*[0-9]*\s*(시간|hour|일|day|주|week)[^\n]{0,16}(작업|task|도구|tool|오류|error|토큰|token)/i,
     /(프롬프트|prompt)[^\n]{0,8}(버전|지문|version|fingerprint|변경)/i,
+    /(gpu|kv\s*(캐시|cache)|큐\s*깊이|queue\s*depth|대기\s*요청|vllm)[^\n]{0,12}(사용률|상태|현황|지표|몇|얼마|usage|status)/i,
     /ops_metrics/i,
 ];
 

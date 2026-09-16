@@ -1582,7 +1582,34 @@
       "spawnAdoption": "并行委托采用率",
       "ofSpawnIntent": "{intent} 个意图轮次中 {called} 个调用"
     },
-    "noNodes": "没有上报的集群节点。"
+    "noNodes": "没有上报的集群节点。",
+    "nodeMetrics": {
+      "gpuTitle": "vLLM 节点 · KV 缓存",
+      "queueTitle": "队列深度",
+      "disabled": "节点指标采集已关闭(NODE_METRICS_ENABLED=false)。",
+      "noTargets": "没有抓取目标 — 请设置 VLLM_METRICS_URLS 或 LLM_TOKENIZE_URL。",
+      "waitingFirstScrape": "正在等待首次抓取。",
+      "stale": "已中断",
+      "fresh": "正常",
+      "peak": "最近 {hours} 小时最大 {value}",
+      "th": {
+        "node": "节点",
+        "state": "状态",
+        "kv": "KV 缓存",
+        "kvPeak": "KV 峰值({hours}h)",
+        "running": "运行",
+        "waiting": "等待",
+        "ttft": "平均 TTFT",
+        "gpuUtil": "GPU 利用率"
+      },
+      "queue": {
+        "agent_task_pending": "任务队列等待",
+        "agent_task_running": "任务运行中",
+        "agent_task_queued_db": "DB queued 任务",
+        "orchestrator_jobs_pending": "媒体 job 等待",
+        "vllm_waiting": "vLLM 等待请求"
+      }
+    }
   },
   "adminAlerts": {
     "title": "告警",

@@ -1582,7 +1582,34 @@
       "spawnAdoption": "Parallel delegation adoption",
       "ofSpawnIntent": "{called} of {intent} intent turns called it"
     },
-    "noNodes": "No cluster nodes reported."
+    "noNodes": "No cluster nodes reported.",
+    "nodeMetrics": {
+      "gpuTitle": "vLLM nodes · KV cache",
+      "queueTitle": "Queue depth",
+      "disabled": "Node metrics collection is off (NODE_METRICS_ENABLED=false).",
+      "noTargets": "No scrape targets — set VLLM_METRICS_URLS or LLM_TOKENIZE_URL.",
+      "waitingFirstScrape": "Waiting for the first scrape.",
+      "stale": "Stale",
+      "fresh": "OK",
+      "peak": "Peak {value} in last {hours}h",
+      "th": {
+        "node": "Node",
+        "state": "State",
+        "kv": "KV cache",
+        "kvPeak": "KV peak ({hours}h)",
+        "running": "Running",
+        "waiting": "Waiting",
+        "ttft": "Avg TTFT",
+        "gpuUtil": "GPU util"
+      },
+      "queue": {
+        "agent_task_pending": "Task queue waiting",
+        "agent_task_running": "Tasks running",
+        "agent_task_queued_db": "Queued tasks (DB)",
+        "orchestrator_jobs_pending": "Media jobs pending",
+        "vllm_waiting": "vLLM waiting requests"
+      }
+    }
   },
   "adminAlerts": {
     "title": "Alerts",

@@ -1582,7 +1582,34 @@
       "spawnAdoption": "병렬 위임 채택률",
       "ofSpawnIntent": "의도 매칭 {intent}턴 중 {called}턴 호출"
     },
-    "noNodes": "보고된 클러스터 노드가 없습니다."
+    "noNodes": "보고된 클러스터 노드가 없습니다.",
+    "nodeMetrics": {
+      "gpuTitle": "vLLM 노드 · KV 캐시",
+      "queueTitle": "큐 깊이",
+      "disabled": "노드 지표 수집이 꺼져 있습니다(NODE_METRICS_ENABLED=false).",
+      "noTargets": "스크레이프 대상이 없습니다 — VLLM_METRICS_URLS 또는 LLM_TOKENIZE_URL 을 설정하세요.",
+      "waitingFirstScrape": "첫 스크레이프를 기다리는 중입니다.",
+      "stale": "끊김",
+      "fresh": "정상",
+      "peak": "최근 {hours}시간 최대 {value}",
+      "th": {
+        "node": "노드",
+        "state": "상태",
+        "kv": "KV 캐시",
+        "kvPeak": "KV 최대({hours}h)",
+        "running": "실행",
+        "waiting": "대기",
+        "ttft": "평균 TTFT",
+        "gpuUtil": "GPU 사용률"
+      },
+      "queue": {
+        "agent_task_pending": "작업 큐 대기",
+        "agent_task_running": "작업 실행 중",
+        "agent_task_queued_db": "DB queued 작업",
+        "orchestrator_jobs_pending": "미디어 job 대기",
+        "vllm_waiting": "vLLM 대기 요청"
+      }
+    }
   },
   "adminAlerts": {
     "title": "알림",

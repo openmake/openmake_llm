@@ -1582,7 +1582,34 @@
       "spawnAdoption": "並列委任の採用率",
       "ofSpawnIntent": "意図一致 {intent}ターン中 {called}ターンで呼び出し"
     },
-    "noNodes": "報告されたクラスタノードはありません。"
+    "noNodes": "報告されたクラスタノードはありません。",
+    "nodeMetrics": {
+      "gpuTitle": "vLLM ノード · KV キャッシュ",
+      "queueTitle": "キューの深さ",
+      "disabled": "ノード指標の収集はオフです(NODE_METRICS_ENABLED=false)。",
+      "noTargets": "スクレイプ対象がありません — VLLM_METRICS_URLS または LLM_TOKENIZE_URL を設定してください。",
+      "waitingFirstScrape": "最初のスクレイプを待っています。",
+      "stale": "途絶",
+      "fresh": "正常",
+      "peak": "直近{hours}時間の最大 {value}",
+      "th": {
+        "node": "ノード",
+        "state": "状態",
+        "kv": "KV キャッシュ",
+        "kvPeak": "KV 最大({hours}h)",
+        "running": "実行",
+        "waiting": "待機",
+        "ttft": "平均 TTFT",
+        "gpuUtil": "GPU 使用率"
+      },
+      "queue": {
+        "agent_task_pending": "タスクキュー待機",
+        "agent_task_running": "タスク実行中",
+        "agent_task_queued_db": "DB queued タスク",
+        "orchestrator_jobs_pending": "メディア job 待機",
+        "vllm_waiting": "vLLM 待機リクエスト"
+      }
+    }
   },
   "adminAlerts": {
     "title": "アラート",

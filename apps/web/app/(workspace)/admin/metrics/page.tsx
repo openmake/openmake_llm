@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/primitives";
 import { ApiClient } from "@/lib/api-client";
 import { AdminTabs } from "@/components/hub-tabs";
+import { NodeQueueMetrics } from "@/components/admin/node-queue-metrics";
 
 type NodeStatus = "online" | "degraded" | "offline";
 
@@ -398,6 +399,7 @@ export default function AdminMetricsPage() {
             </Table>
           </CardContent>
         </Card>
+        <NodeQueueMetrics refreshKey={updated} />
         {/* 에이전트 메트릭 */}
         {(agentSummary || (agentMetrics && agentMetrics.length > 0)) && (
           <Card className="mt-6">

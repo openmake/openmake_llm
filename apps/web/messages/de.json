@@ -1582,7 +1582,34 @@
       "spawnAdoption": "Nutzung paralleler Delegation",
       "ofSpawnIntent": "{called} von {intent} Runden mit Absicht haben es aufgerufen"
     },
-    "noNodes": "Keine Cluster-Knoten gemeldet."
+    "noNodes": "Keine Cluster-Knoten gemeldet.",
+    "nodeMetrics": {
+      "gpuTitle": "vLLM-Knoten · KV-Cache",
+      "queueTitle": "Warteschlangentiefe",
+      "disabled": "Die Erfassung von Knotenmetriken ist aus (NODE_METRICS_ENABLED=false).",
+      "noTargets": "Keine Scrape-Ziele — VLLM_METRICS_URLS oder LLM_TOKENIZE_URL setzen.",
+      "waitingFirstScrape": "Warte auf den ersten Scrape.",
+      "stale": "Veraltet",
+      "fresh": "OK",
+      "peak": "Spitze {value} in {hours} h",
+      "th": {
+        "node": "Knoten",
+        "state": "Status",
+        "kv": "KV-Cache",
+        "kvPeak": "KV-Spitze ({hours} h)",
+        "running": "Laufend",
+        "waiting": "Wartend",
+        "ttft": "Ø TTFT",
+        "gpuUtil": "GPU-Auslastung"
+      },
+      "queue": {
+        "agent_task_pending": "Aufgaben-Warteschlange",
+        "agent_task_running": "Laufende Aufgaben",
+        "agent_task_queued_db": "Queued-Aufgaben (DB)",
+        "orchestrator_jobs_pending": "Wartende Medien-Jobs",
+        "vllm_waiting": "Wartende vLLM-Anfragen"
+      }
+    }
   },
   "adminAlerts": {
     "title": "Warnungen",
