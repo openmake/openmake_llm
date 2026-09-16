@@ -41,7 +41,10 @@ import { classifyToolError, formatToolError, isConnectionDeathError } from './to
 import { withToolNameSuggestions } from './tool-name-suggest';
 import { isToolCircuitOpen, recordToolResult } from './tool-health';
 import type { UserMCPPool } from './user-pool';
+import type { ExternalMCPClient } from './external-client';
 import { collectUserPoolTools } from './user-pool-tools';
+import { parallelBatch } from '../workflow/graph-engine';
+import { MCP_TOOL_REFRESH_CONCURRENCY } from '../config/runtime-limits';
 
 const logger = createLogger('ToolRouter');
 
@@ -144,6 +147,7 @@ export class ToolRouter {
 
         // Phase 7: 사용자 풀 도구 — userContext + userPool 둘 다 있을 때만
         if (userContext && this.userPool) {
+            await this.refreshStaleUserTools(userContext.userId);
             const userEntries = collectUserPoolTools(this.userPool, userContext.userId);
             for (const entry of userEntries) tools.push(entry.tool);
         }
@@ -158,6 +162,18 @@ export class ToolRouter {
         }
 
         return tools;
+    }
+
+    /**
+     * 사용자 풀 서버의 stale 도구 목록 재조회(F13.12) — listChanged 를 광고하지 않는 서버의 안전망.
+     * 동시성 4, 실패는 warn(노출 자체를 막지 않는다).
+     */
+    private async refreshStaleUserTools(userId: string): Promise<void> {
+        if (!this.userPool) return;
+        const clients = [...this.userPool.forUser(userId)].map(([, c]) => c);
+        if (clients.length === 0) return;
+        await parallelBatch(clients, async (c: ExternalMCPClient) => c.refreshToolsIfStale(), { concurrency: MCP_TOOL_REFRESH_CONCURRENCY })
+            .catch((e: unknown) => logger.warn(`stale 도구 재조회 실패 (무시): ${e instanceof Error ? e.message : e}`));
     }
 
     /**

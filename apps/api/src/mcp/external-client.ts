@@ -31,6 +31,7 @@ import { createLogger } from '../utils/logger';
 import { createPinnedFetch } from '../security/ssrf-guard';
 import { MCP_EXTERNAL_TOOL_LIMITS } from '../config/timeouts';
 import { MCP_HIDDEN_TOOL_ARGS } from '../config/runtime-limits';
+import { getConfig } from '../config/env';
 
 const logger = createLogger('ExternalMCP');
 
@@ -126,6 +127,10 @@ export class ExternalMCPClient extends EventEmitter {
     private lastPing: string | undefined;
     /** stdio 자식 stderr 끝부분 — 예기치 않은 종료 사유로 쓴다 */
     private stderrTail = '';
+    /** 도구 목록을 마지막으로 반영한 시각(ms) — stale 판정(F13.12) */
+    private toolsRefreshedAt = 0;
+    /** stale 재조회 진행 중이면 그 promise — 동시 getAllTools 가 listTools 를 겹쳐 부르지 않게 */
+    private refreshing: Promise<boolean> | null = null;
 
     /**
      * ExternalMCPClient 인스턴스를 생성합니다.
@@ -160,7 +165,22 @@ export class ExternalMCPClient extends EventEmitter {
 
             this.client = new Client(
                 { name: 'openmake-llm', version: '1.0.0' },
-                { capabilities: {} }
+                {
+                    capabilities: {},
+                    // 서버가 tools listChanged 를 광고하면 SDK 가 알림을 구독해 갱신 목록을 넘긴다(F13.12).
+                    // 미광고 서버는 조용히 건너뛰므로 stale 폴링(refreshToolsIfStale)이 안전망.
+                    listChanged: {
+                        tools: {
+                            onChanged: (error: Error | null, tools: SDKTool[] | null | undefined) => {
+                                if (error || !tools) {
+                                    logger.warn(`"${this.config.name}" tools listChanged 오류: ${error?.message ?? 'no tools'}`);
+                                    return;
+                                }
+                                this.applyTools(tools, 'list_changed');
+                            },
+                        },
+                    },
+                }
             );
             this.client.onclose = () => this.handleUnexpectedClose();
 
@@ -169,6 +189,7 @@ export class ExternalMCPClient extends EventEmitter {
             // 도구 목록 검색
             const toolsResult = await this.client.listTools();
             this.discoveredTools = (toolsResult.tools || []).map((t: SDKTool) => this.sdkToolToMCPTool(t));
+            this.toolsRefreshedAt = Date.now();
 
             this.status = 'connected';
             this.lastPing = new Date().toISOString();
@@ -238,6 +259,46 @@ export class ExternalMCPClient extends EventEmitter {
      */
     getTools(): MCPTool[] {
         return [...this.discoveredTools];
+    }
+
+    /** 도구 목록 교체 + 'tools_changed' 발행(F13.12). 스냅샷(getTools 복사본)을 쥔 호출자는 영향 없음. */
+    private applyTools(tools: SDKTool[], source: 'list_changed' | 'stale'): void {
+        const before = this.discoveredTools.map((t) => t.name).join(',');
+        this.discoveredTools = tools.map((t) => this.sdkToolToMCPTool(t));
+        this.toolsRefreshedAt = Date.now();
+        const after = this.discoveredTools.map((t) => t.name).join(',');
+        if (before !== after || source === 'list_changed') {
+            logger.info(`"${this.config.name}" 도구 목록 갱신(${source}): ${this.discoveredTools.length}개`);
+            this.emit('tools_changed', { serverId: this.config.id, count: this.discoveredTools.length, source });
+        }
+    }
+
+    /**
+     * 도구 목록이 stale(마지막 반영 후 `MCP_TOOL_LIST_STALE_MS` 경과)이면 tools/list 를 다시 부른다.
+     * 0 이면 끔. 연결이 아니면 false. 재조회 중 연결 사망은 기존 exit 경로가 처리하므로 여기선 warn 만.
+     * @returns 재조회를 실제로 수행했으면 true
+     */
+    async refreshToolsIfStale(now: number = Date.now()): Promise<boolean> {
+        const staleMs = getConfig().mcpToolListStaleMs;
+        if (staleMs <= 0 || this.status !== 'connected' || !this.client) return false;
+        if (now - this.toolsRefreshedAt < staleMs) return false;
+        if (this.refreshing) return this.refreshing;
+        const client = this.client;
+        this.refreshing = (async () => {
+            try {
+                const r = await client.listTools();
+                this.applyTools(r.tools || [], 'stale');
+                return true;
+            } catch (e) {
+                // 다음 stale 판정까지 재시도하지 않도록 시각만 갱신(죽은 서버를 매 호출마다 두드리지 않게)
+                this.toolsRefreshedAt = Date.now();
+                logger.warn(`"${this.config.name}" stale 도구 재조회 실패 (무시): ${e instanceof Error ? e.message : e}`);
+                return false;
+            } finally {
+                this.refreshing = null;
+            }
+        })();
+        return this.refreshing;
     }
 
     /**

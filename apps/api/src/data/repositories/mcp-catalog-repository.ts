@@ -493,6 +493,16 @@ export class McpCatalogRepository {
         );
     }
 
+    /** 도구 목록 반영 관측(133) — 해당 사용자·서버의 최신 running 행에 개수·시각 기록. */
+    async recordToolsRefreshed(serverId: string, userId: string, count: number): Promise<void> {
+        await this.pool.query(
+            `UPDATE mcp_server_instances SET tools_count = $3, tools_refreshed_at = NOW()
+             WHERE id = (SELECT id FROM mcp_server_instances WHERE mcp_server_id = $1 AND user_id = $2 AND status = 'running'
+                         ORDER BY started_at DESC LIMIT 1)`,
+            [serverId, userId, count],
+        );
+    }
+
     /**
      * spawn 시점에 child process env 로 전달할 평문 env 복호화.
      * 응답 마스킹 (maskEnv) 과 분리 — 본 메서드는 lifecycle-supervisor (Phase 7) 가 호출.

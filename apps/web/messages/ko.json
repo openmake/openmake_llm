@@ -1881,6 +1881,10 @@
       "push": {
         "title": "웹 푸시 (VAPID)",
         "description": "브라우저 푸시 알림용 VAPID 키. 공개키/비밀키 쌍을 함께 설정하세요."
+      },
+      "agent": {
+        "title": "에이전트·MCP 런타임",
+        "description": "외부 MCP 도구 목록 갱신 주기, 승인 만료 주차, 큐 우선순위 상한. 저장 즉시 반영됩니다."
       }
     },
     "historyTitle": "변경 이력",

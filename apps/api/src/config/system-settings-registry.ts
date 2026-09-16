@@ -15,7 +15,7 @@
  */
 import { z } from 'zod';
 
-export type SettingGroup = 'oauth' | 'search' | 'alerts' | 'push' | 'llm';
+export type SettingGroup = 'oauth' | 'search' | 'alerts' | 'push' | 'llm' | 'agent';
 
 interface SystemSettingDef {
     /** env 변수명과 동일한 설정 키 */
@@ -109,6 +109,11 @@ export const SYSTEM_SETTINGS_REGISTRY: SystemSettingDef[] = [
     { key: 'QUOTA_EXCEEDED_ACTION', group: 'llm', secret: false, requiresRestart: false, validate: z.enum(['reject', 'degrade']) },
     { key: 'QUOTA_DEGRADE_MODEL_MAP', group: 'llm', secret: false, requiresRestart: false, validate: jsonObject },
     { key: 'USER_MONTHLY_COST_BUDGET_MICROS', group: 'llm', secret: false, requiresRestart: false, validate: nonNegativeIntString },
+
+    // ── 에이전트·MCP 런타임(F13/F16, 2026-09-17) — 실시간 반영(getConfig 를 호출 시점에 읽는 소비자) ──
+    { key: 'MCP_TOOL_LIST_STALE_MS', group: 'agent', secret: false, requiresRestart: false, validate: nonNegativeIntString },
+    { key: 'AGENT_TASK_HITL_PARK_ON_TIMEOUT', group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
+    { key: 'AGENT_TASK_QUEUE_PRIORITY_MAX', group: 'agent', secret: false, requiresRestart: false, validate: nonNegativeIntString },
 
     // ── 외부 LLM provider 키 — 저장/삭제 시 "관리자 본인"의 user_external_api_keys(BYOK)로
     //    연동된다 (admin-system-settings.routes 의 syncAdminProviderKey). 런타임 키 해석 경로는

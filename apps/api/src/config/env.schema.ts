@@ -111,6 +111,10 @@ export const envSchema = z
         QUOTA_EXCEEDED_ACTION: z.enum(['reject', 'degrade']).optional(),
         USER_MONTHLY_COST_BUDGET_MICROS: nonNegativeIntWithDefault(0),
         QUOTA_DEGRADE_MODEL_MAP: z.string().optional(),
+        /** MCP·워크플로(F13/F16, 2026-09-17) — 관리자 UI 실시간 조정 대상 */
+        MCP_TOOL_LIST_STALE_MS: nonNegativeIntWithDefault(600_000),
+        AGENT_TASK_HITL_PARK_ON_TIMEOUT: z.enum(['true', 'false']).optional(),
+        AGENT_TASK_QUEUE_PRIORITY_MAX: nonNegativeIntWithDefault(10),
         LLM_WEEKLY_TOKEN_LIMIT: nonNegativeIntWithDefault(5000000),
         /** 외부 모델 정책 JSON(Control Plane 기초) — 파싱은 config/external-model-policy, 형식 검증은 registry */
         EXTERNAL_MODEL_POLICY: z.string().optional(),

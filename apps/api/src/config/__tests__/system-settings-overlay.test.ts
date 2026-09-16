@@ -66,6 +66,9 @@ describe('system-settings-registry', () => {
             else if (def.key === 'QUOTA_FAIL_MODE') sample[def.key] = 'closed';
             else if (def.key === 'QUOTA_EXCEEDED_ACTION') sample[def.key] = 'degrade';
             else if (def.key === 'USER_MONTHLY_COST_BUDGET_MICROS') sample[def.key] = '780';
+            else if (def.key === 'MCP_TOOL_LIST_STALE_MS') sample[def.key] = '781';
+            else if (def.key === 'AGENT_TASK_QUEUE_PRIORITY_MAX') sample[def.key] = '782';
+            else if (def.key === 'AGENT_TASK_HITL_PARK_ON_TIMEOUT') sample[def.key] = 'true';
             else if (def.key.startsWith('OPERATOR_WEBHOOK') || def.key === 'OAUTH_REDIRECT_URI' || def.key === 'LLM_BASE_URL')
                 sample[def.key] = 'https://example.com/wired';
             else if (def.key === 'VAPID_SUBJECT') sample[def.key] = 'mailto:wired@example.com';

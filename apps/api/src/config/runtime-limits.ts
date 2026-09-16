@@ -1611,6 +1611,9 @@ export const AGENT_TASK_LIMITS = {
      *  task 가 승인 대기(30분)×N 반복으로 예산만 소진하고 산출물 0 으로 종결되던 패턴 차단.
      *  0 이면 비활성. AGENT_TASK_HITL_TIMEOUT_DEGRADE_AFTER 로 오버라이드(기본 2). */
     HITL_TIMEOUT_DEGRADE_AFTER: parseInt(process.env.AGENT_TASK_HITL_TIMEOUT_DEGRADE_AFTER || '2', 10),
+    /** 주차(F16.7)된 ask_human·mcp_elicit 승인의 최대 대기(ms) — 이후 종전처럼 만료. AGENT_TASK_HITL_PARK_MAX_MS(기본 7일).
+     *  켜는 플래그는 system_settings `AGENT_TASK_HITL_PARK_ON_TIMEOUT`(getConfig().agentTaskHitlParkOnTimeout). */
+    HITL_PARK_MAX_MS: parseInt(process.env.AGENT_TASK_HITL_PARK_MAX_MS || '', 10) || 7 * 24 * 60 * 60 * 1000,
     /**
      * 마무리 턴 강제(2026-08-03) — 자원 상한에 **닿기 전에** 도구를 끊고 종합 답변을 받는다.
      *
@@ -2145,4 +2148,23 @@ export const IDEMPOTENCY = {
 export const SESSION_BRANCH = {
     CLONE_MAX_MESSAGES: parseInt(process.env.SESSION_CLONE_MAX_MESSAGES || '500', 10),
     TREE_MAX_DEPTH: parseInt(process.env.SESSION_TREE_MAX_DEPTH || '20', 10),
+} as const;
+
+/** getAllTools 진입 시 stale 도구 재조회 동시성(F13.12). MCP_TOOL_REFRESH_CONCURRENCY */
+export const MCP_TOOL_REFRESH_CONCURRENCY = parseInt(process.env.MCP_TOOL_REFRESH_CONCURRENCY || '4', 10);
+
+/**
+ * 인바운드 웹훅 트리거(F16.5, 132) — 서명 검증·남용 방지 상한.
+ */
+export const TRIGGER_LIMITS = {
+    /** 타임스탬프 허용 창(초) — 재전송 방어. AGENT_TASK_TRIGGER_SIGNATURE_WINDOW_SEC */
+    SIGNATURE_WINDOW_SEC: parseInt(process.env.AGENT_TASK_TRIGGER_SIGNATURE_WINDOW_SEC || '300', 10),
+    /** 트리거당 분당 수신 상한. AGENT_TASK_TRIGGER_PER_MINUTE */
+    PER_MINUTE: parseInt(process.env.AGENT_TASK_TRIGGER_PER_MINUTE || '30', 10),
+    /** 수신 본문 상한(bytes). AGENT_TASK_TRIGGER_MAX_BODY_BYTES */
+    MAX_BODY_BYTES: parseInt(process.env.AGENT_TASK_TRIGGER_MAX_BODY_BYTES || '', 10) || 64 * 1024,
+    /** 유저당 트리거 수 상한. AGENT_TASK_TRIGGER_MAX_PER_USER */
+    MAX_PER_USER: parseInt(process.env.AGENT_TASK_TRIGGER_MAX_PER_USER || '20', 10),
+    /** 연속 실패 이 횟수면 자동 비활성. AGENT_TASK_TRIGGER_DISABLE_AFTER_FAILURES */
+    DISABLE_AFTER_FAILURES: parseInt(process.env.AGENT_TASK_TRIGGER_DISABLE_AFTER_FAILURES || '5', 10),
 } as const;

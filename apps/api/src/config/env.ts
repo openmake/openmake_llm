@@ -62,6 +62,12 @@ export interface EnvConfig {
     quotaExceededAction: 'reject' | 'degrade';
     /** 사용자 월 비용 예산(USD micros, 0=무제한) — F25 PR-4 */
     userMonthlyCostBudgetMicros: number;
+    /** 외부 MCP 도구 목록 stale 판정(ms, 0=끔) — listChanged 미광고 서버의 안전망(F13.12) */
+    mcpToolListStaleMs: number;
+    /** ask_human·mcp_elicit 승인 만료를 거절 대신 주차(paused)로 — F16.7 */
+    agentTaskHitlParkOnTimeout: boolean;
+    /** 관리자가 줄 수 있는 큐 우선순위 상한 — F16.6 */
+    agentTaskQueuePriorityMax: number;
     /** 강등 맵 JSON (글롭 → 대체 fullId) */
     quotaDegradeModelMap: string;
     llmWeeklyTokenLimit: number;
@@ -210,6 +216,9 @@ const DEFAULT_CONFIG: EnvConfig = {
     quotaExceededAction: 'reject',
     userMonthlyCostBudgetMicros: 0,
     quotaDegradeModelMap: '',
+    mcpToolListStaleMs: 600_000,
+    agentTaskHitlParkOnTimeout: false,
+    agentTaskQueuePriorityMax: 10,
     llmWeeklyTokenLimit: 5000000,
     externalModelPolicy: '',
     llmEnableReasoningEffort: false,
@@ -355,6 +364,9 @@ export function loadConfig(): EnvConfig {
         QUOTA_EXCEEDED_ACTION: env('QUOTA_EXCEEDED_ACTION'),
         USER_MONTHLY_COST_BUDGET_MICROS: env('USER_MONTHLY_COST_BUDGET_MICROS'),
         QUOTA_DEGRADE_MODEL_MAP: env('QUOTA_DEGRADE_MODEL_MAP'),
+        MCP_TOOL_LIST_STALE_MS: env('MCP_TOOL_LIST_STALE_MS'),
+        AGENT_TASK_HITL_PARK_ON_TIMEOUT: env('AGENT_TASK_HITL_PARK_ON_TIMEOUT'),
+        AGENT_TASK_QUEUE_PRIORITY_MAX: env('AGENT_TASK_QUEUE_PRIORITY_MAX'),
         LLM_WEEKLY_TOKEN_LIMIT: env('LLM_WEEKLY_TOKEN_LIMIT'),
         EXTERNAL_MODEL_POLICY: env('EXTERNAL_MODEL_POLICY'),
         LLM_ENABLE_REASONING_EFFORT: env('LLM_ENABLE_REASONING_EFFORT'),
@@ -475,6 +487,9 @@ export function loadConfig(): EnvConfig {
         quotaExceededAction: parsed.QUOTA_EXCEEDED_ACTION ?? DEFAULT_CONFIG.quotaExceededAction,
         userMonthlyCostBudgetMicros: parsed.USER_MONTHLY_COST_BUDGET_MICROS ?? DEFAULT_CONFIG.userMonthlyCostBudgetMicros,
         quotaDegradeModelMap: parsed.QUOTA_DEGRADE_MODEL_MAP ?? DEFAULT_CONFIG.quotaDegradeModelMap,
+        mcpToolListStaleMs: parsed.MCP_TOOL_LIST_STALE_MS ?? DEFAULT_CONFIG.mcpToolListStaleMs,
+        agentTaskHitlParkOnTimeout: parsed.AGENT_TASK_HITL_PARK_ON_TIMEOUT === undefined ? DEFAULT_CONFIG.agentTaskHitlParkOnTimeout : parsed.AGENT_TASK_HITL_PARK_ON_TIMEOUT === 'true',
+        agentTaskQueuePriorityMax: parsed.AGENT_TASK_QUEUE_PRIORITY_MAX ?? DEFAULT_CONFIG.agentTaskQueuePriorityMax,
         llmWeeklyTokenLimit: parsed.LLM_WEEKLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmWeeklyTokenLimit,
         externalModelPolicy: parsed.EXTERNAL_MODEL_POLICY ?? DEFAULT_CONFIG.externalModelPolicy,
         llmEnableReasoningEffort: (parsed.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true',

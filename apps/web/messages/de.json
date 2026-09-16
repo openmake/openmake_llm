@@ -1881,6 +1881,10 @@
       "push": {
         "title": "Web Push (VAPID)",
         "description": "VAPID-Schlüssel für Browser-Push-Benachrichtigungen. Legen Sie das öffentliche/private Schlüsselpaar zusammen fest."
+      },
+      "agent": {
+        "title": "Agent- & MCP-Laufzeit",
+        "description": "Aktualisierungsintervall externer MCP-Werkzeuglisten, Parken abgelaufener Freigaben, Obergrenze der Warteschlangenpriorität. Sofort wirksam."
       }
     },
     "historyTitle": "Änderungsverlauf",

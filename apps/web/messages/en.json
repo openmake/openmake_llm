@@ -1881,6 +1881,10 @@
       "push": {
         "title": "Web Push (VAPID)",
         "description": "VAPID keys for browser push notifications. Set the public/private key pair together."
+      },
+      "agent": {
+        "title": "Agent & MCP runtime",
+        "description": "External MCP tool-list refresh interval, parking approvals on timeout, queue priority cap. Applied immediately."
       }
     },
     "historyTitle": "Change history",

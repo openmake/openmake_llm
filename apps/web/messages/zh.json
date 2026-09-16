@@ -1881,6 +1881,10 @@
       "push": {
         "title": "网页推送 (VAPID)",
         "description": "浏览器推送通知的 VAPID 密钥。请同时设置公钥/私钥对。"
+      },
+      "agent": {
+        "title": "代理与 MCP 运行时",
+        "description": "外部 MCP 工具列表刷新间隔、审批超时后暂存、队列优先级上限。保存后立即生效。"
       }
     },
     "historyTitle": "变更历史",
