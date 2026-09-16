@@ -72,8 +72,8 @@ function triggerBlobDownload(blob: Blob, filename: string) {
 }
 
 /**
- * 서버 변환 export (P1 Phase 3) — html 아티팩트를 pdf/docx 로 변환해 다운로드.
- * pdf 는 모든 html 아티팩트, docx 는 보고서 아티팩트(reportdata 원본 보유)만 (서버 409).
+ * 서버 변환 export (P1 Phase 3) — 아티팩트를 pdf/docx/xlsx 로 변환해 다운로드.
+ * pdf 는 모든 html 아티팩트, docx 는 보고서 아티팩트(reportdata 원본 보유)만, xlsx 는 csv 또는 보고서 아티팩트만 (서버 409).
  * 오류는 throw — 호출부(패널)가 상태 메시지로 표시.
  */
 export async function downloadExportedArtifact(opts: {
@@ -82,7 +82,7 @@ export async function downloadExportedArtifact(opts: {
   /** Agent Task 산출물(스텝 저장분)용 — 지정 시 task 전용 엔드포인트로 라우팅 */
   taskId?: string;
   artifactId: string;
-  format: "pdf" | "docx";
+  format: "pdf" | "docx" | "xlsx";
   title: string;
 }): Promise<void> {
   const { ApiClient } = await import("./api-client");

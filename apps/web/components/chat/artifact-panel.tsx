@@ -16,6 +16,11 @@ import { downloadArtifact } from "@/lib/artifact-download";
 import { Markdown } from "./markdown";
 import { cn } from "@/lib/utils";
 
+type ExportFormat = "pdf" | "docx" | "xlsx";
+/** 서버 변환 포맷(kind 별) — 서버 exportByFormat 규칙과 짝. docx·xlsx 는 보고서(source_data) 가 아니면 서버가 409. */
+const EXPORT_FORMATS_BY_KIND: Record<string, ExportFormat[]> = { html: ["pdf", "docx", "xlsx"], csv: ["xlsx"] };
+const EXPORT_LABEL_KEY: Record<ExportFormat, "exportPdf" | "exportDocx" | "exportXlsx"> = { pdf: "exportPdf", docx: "exportDocx", xlsx: "exportXlsx" };
+
 /** 영속 아티팩트 행(REST) → store Artifact 매핑. */
 interface PersistedArtifact {
   artifact_id: string;
@@ -260,7 +265,7 @@ export function ArtifactPanel() {
   const [copied, setCopied] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   // pdf/docx 서버 변환 상태 (P1 Phase 3) — busy 중 중복 클릭 차단, 실패 메시지는 헤더 밑 1줄.
-  const [exportBusy, setExportBusy] = useState<"pdf" | "docx" | null>(null);
+  const [exportBusy, setExportBusy] = useState<ExportFormat | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   // 버전 피커 — 활성 artifact 의 전체 버전 + 표시중 버전 override.
   const [versions, setVersions] = useState<{ version: number }[]>([]);
@@ -417,9 +422,10 @@ export function ArtifactPanel() {
 
   const canToggle = previewKindFor(shown.kind, shown.lang) !== null && !active.streaming;
 
-  // 서버 변환 export (pdf/docx) — html 아티팩트에서, 영속 세션(채팅) 또는 task 산출물일 때 노출.
-  const canExport = (!!currentSessionId || !!active.taskId) && !active.streaming && shown.kind === "html";
-  const runExport = async (format: "pdf" | "docx") => {
+  // 서버 변환 export — 영속 세션(채팅) 또는 task 산출물일 때 kind 별 포맷(html: pdf/docx/xlsx — docx·xlsx 는 보고서만, csv: xlsx).
+  const exportFormats = EXPORT_FORMATS_BY_KIND[shown.kind] ?? [];
+  const canExport = (!!currentSessionId || !!active.taskId) && !active.streaming && exportFormats.length > 0;
+  const runExport = async (format: ExportFormat) => {
     if ((!currentSessionId && !active.taskId) || exportBusy) return;
     setExportBusy(format);
     setExportError(null);
@@ -430,7 +436,7 @@ export function ArtifactPanel() {
         artifactId: active.id, format, title: shown.title,
       });
     } catch (e) {
-      if (e instanceof ApiError && e.status === 409) setExportError(t("exportNoSource"));
+      if (e instanceof ApiError && e.status === 409) setExportError(t(format === "xlsx" ? "exportNoSourceXlsx" : "exportNoSource"));
       else if (e instanceof ApiError && e.status === 429) setExportError(t("exportRateLimited"));
       else if (e instanceof ApiError && e.status === 503) setExportError(t("exportDisabled"));
       else setExportError(t("exportFailed"));
@@ -493,28 +499,18 @@ export function ArtifactPanel() {
         >
           <Download className="h-4 w-4" />
         </button>
-        {canExport && (
-          <>
-            <button
-              type="button"
-              onClick={() => runExport("pdf")}
-              disabled={exportBusy !== null}
-              aria-label={t("exportPdf")}
-              className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted transition hover:bg-surface-3 hover:text-fg disabled:opacity-50"
-            >
-              {exportBusy === "pdf" ? "…" : "PDF"}
-            </button>
-            <button
-              type="button"
-              onClick={() => runExport("docx")}
-              disabled={exportBusy !== null}
-              aria-label={t("exportDocx")}
-              className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted transition hover:bg-surface-3 hover:text-fg disabled:opacity-50"
-            >
-              {exportBusy === "docx" ? "…" : "DOCX"}
-            </button>
-          </>
-        )}
+        {canExport && exportFormats.map((format) => (
+          <button
+            key={format}
+            type="button"
+            onClick={() => runExport(format)}
+            disabled={exportBusy !== null}
+            aria-label={t(EXPORT_LABEL_KEY[format])}
+            className="rounded border border-border px-1.5 py-0.5 font-mono text-[10px] text-muted transition hover:bg-surface-3 hover:text-fg disabled:opacity-50"
+          >
+            {exportBusy === format ? "…" : format.toUpperCase()}
+          </button>
+        ))}
         {canShare && (
           <button
             type="button"

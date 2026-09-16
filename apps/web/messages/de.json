@@ -579,7 +579,9 @@
       "close": "Schließen",
       "createdLabel": "Erstellt"
     },
-    "resize": "Panelgröße ändern (Doppelklick zum Zurücksetzen)"
+    "resize": "Panelgröße ändern (Doppelklick zum Zurücksetzen)",
+    "exportXlsx": "Als XLSX speichern",
+    "exportNoSourceXlsx": "XLSX-Export unterstützt nur CSV- oder Bericht-Artefakte"
   },
   "history": {
     "title": "Unterhaltungsverlauf",

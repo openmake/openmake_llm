@@ -579,7 +579,9 @@
       "close": "关闭",
       "createdLabel": "创建"
     },
-    "resize": "调整面板宽度（双击重置）"
+    "resize": "调整面板宽度（双击重置）",
+    "exportXlsx": "另存为 XLSX",
+    "exportNoSourceXlsx": "XLSX 导出仅支持 CSV 或报告类工件"
   },
   "history": {
     "title": "对话历史",

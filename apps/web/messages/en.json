@@ -579,7 +579,9 @@
       "close": "Close",
       "createdLabel": "Created"
     },
-    "resize": "Resize panel (double-click to reset)"
+    "resize": "Resize panel (double-click to reset)",
+    "exportXlsx": "Save as XLSX",
+    "exportNoSourceXlsx": "XLSX export supports CSV or report artifacts only"
   },
   "history": {
     "title": "Conversation history",

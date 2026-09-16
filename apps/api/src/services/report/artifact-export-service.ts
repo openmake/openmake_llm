@@ -6,6 +6,7 @@
  *   변환 스크립트(node 프로그램)는 stdin 으로 전달 — html 은 base64 로 스크립트에 임베드,
  *   산출물은 stdout 에 base64 로 출력(바이너리 파이프 오염 방지).
  * - docx: /opt/pyenv 의 python-docx 로 reportdata source_data(JSON, stdin)에서 직접 생성.
+ * - xlsx(F20.1): /opt/pyenv 의 openpyxl 로 csv 아티팩트 본문 또는 reportdata source_data 에서 생성(xlsx-script).
  *
  * 격리: artifact-exec 와 동일한 3 샌드박스 공통 원칙 — cap-drop ALL·no-new-privileges·
  * non-root·read-only(+tmpfs)·network none·pids-limit·memory=memory-swap.
@@ -17,10 +18,18 @@ import { createLogger } from '../../utils/logger';
 import { resolveDocker } from '../../mcp/sandbox-docker';
 import { ARTIFACT_EXPORT } from '../../config/artifact-export';
 import { REPORT_DOCX_SCRIPT } from './docx-script';
+import { REPORT_XLSX_SCRIPT } from './xlsx-script';
 
 const log = createLogger('ArtifactExport');
 
-export type ExportFormat = 'pdf' | 'docx';
+export type ExportFormat = 'pdf' | 'docx' | 'xlsx';
+
+/** 라우트 입력 검증용 — 지원 포맷 집합 한 곳. */
+export const EXPORT_FORMATS: readonly ExportFormat[] = ['pdf', 'docx', 'xlsx'];
+
+export function isExportFormat(v: unknown): v is ExportFormat {
+    return typeof v === 'string' && (EXPORT_FORMATS as readonly string[]).includes(v);
+}
 
 interface ArtifactExportResult {
     format: ExportFormat;
@@ -167,4 +176,49 @@ export async function exportArtifactDocx(sourceData: Record<string, unknown>): P
         'docx',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     );
+}
+
+/**
+ * csv 아티팩트 본문 또는 보고서 source_data → xlsx (openpyxl, F20.1).
+ * 수식 인젝션 이스케이프·숫자 캐스팅 규칙은 xlsx-script 주석 참고.
+ */
+export async function exportArtifactXlsx(input: { csv: string } | { data: Record<string, unknown> }): Promise<ArtifactExportResult> {
+    const json = JSON.stringify(input);
+    if (Buffer.byteLength(json, 'utf8') > ARTIFACT_EXPORT.inputMaxBytes) {
+        throw new ArtifactExportError('데이터가 너무 커서 변환할 수 없습니다', 413, 'INPUT_TOO_LARGE');
+    }
+    return runExport(
+        ['python3', '-c', REPORT_XLSX_SCRIPT],
+        json,
+        'xlsx',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+}
+
+/** 변환 입력이 포맷에 맞지 않을 때(409) — 라우트가 그대로 응답한다. */
+export class ExportUnsupportedError extends ArtifactExportError {}
+
+/**
+ * PURE 분기 + 변환 — 채팅 아티팩트·작업 산출물 라우트가 같은 규칙을 쓴다.
+ * pdf: html/svg · docx: source_data 보유 · xlsx: csv 본문 또는 source_data 보유.
+ */
+export async function exportByFormat(
+    format: ExportFormat,
+    artifact: { kind?: string; content?: string },
+    sourceData: Record<string, unknown> | null | undefined,
+): Promise<ArtifactExportResult> {
+    if (format === 'pdf') {
+        if (artifact.kind !== 'html' && artifact.kind !== 'svg') {
+            throw new ExportUnsupportedError('pdf 변환은 html/svg 아티팩트만 지원합니다', 409, 'UNSUPPORTED_KIND');
+        }
+        return exportArtifactPdf(String(artifact.content ?? ''));
+    }
+    if (format === 'xlsx' && artifact.kind === 'csv') return exportArtifactXlsx({ csv: String(artifact.content ?? '') });
+    if (!sourceData) {
+        throw new ExportUnsupportedError(
+            format === 'xlsx' ? 'xlsx 변환은 csv 아티팩트 또는 보고서 아티팩트(reportdata 원본 보유)만 지원합니다'
+                : 'docx 변환은 보고서 아티팩트(reportdata 원본 보유)만 지원합니다',
+            409, 'NO_SOURCE_DATA');
+    }
+    return format === 'xlsx' ? exportArtifactXlsx({ data: sourceData }) : exportArtifactDocx(sourceData);
 }

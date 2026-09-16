@@ -579,7 +579,9 @@
       "close": "閉じる",
       "createdLabel": "作成"
     },
-    "resize": "パネル幅を調整 (ダブルクリックでリセット)"
+    "resize": "パネル幅を調整 (ダブルクリックでリセット)",
+    "exportXlsx": "XLSXで保存",
+    "exportNoSourceXlsx": "XLSX 変換は CSV またはレポートのアーティファクトのみ対応しています"
   },
   "history": {
     "title": "会話履歴",

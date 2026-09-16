@@ -579,7 +579,9 @@
       "close": "닫기",
       "createdLabel": "생성"
     },
-    "resize": "패널 너비 조절 (더블클릭: 기본값)"
+    "resize": "패널 너비 조절 (더블클릭: 기본값)",
+    "exportXlsx": "XLSX로 저장",
+    "exportNoSourceXlsx": "XLSX 변환은 CSV 또는 보고서 아티팩트만 지원합니다"
   },
   "history": {
     "title": "대화 히스토리",
