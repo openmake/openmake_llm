@@ -4,7 +4,7 @@
  * 코퍼스는 운영 `agent_task_steps` 에서 실제로 뽑은 문자열이다(2026-08-26). 규칙을 손볼 때
  * 이 케이스들이 계속 통과해야 한다 — 실제 데이터가 아닌 상상한 입력만으로는 누수를 못 잡는다.
  */
-import { redactText, capText } from '../../utils/redact';
+import { redactText, capText, redactSecrets } from '../../utils/redact';
 
 describe('redactText — 경로', () => {
     test('홈 디렉토리를 ~ 로 접는다', () => {
@@ -121,4 +121,38 @@ describe('capText', () => {
         expect(out).toContain('50자 중 10자');
     });
     test('빈 문자열 안전', () => expect(capText('', 10)).toBe(''));
+});
+
+describe('redactSecrets — 로그 한 줄(F24.6)', () => {
+    // 로그에 실제로 나오는 형태 — 값만 가리고 키·경로·URL·이메일·일반 식별자는 남아야 한다
+    test.each([
+        ['[ExternalMCP] headers {"x-api-key":"sk-or-v1-abcdef0123456789abcdef"}', '<redacted', 'abcdef0123456789abcdef'],
+        ['Authorization: Bearer omk_live_478eb1c2d3e4f5a6b7c8d9', 'Bearer <redacted', '478eb1c2d3e4'],
+        ['LITELLM_MASTER_KEY=sk-litellm-0123456789abcdefghij 로드', 'LITELLM_MASTER_KEY=<redacted>', '0123456789abcdefghij'],
+        ['DATABASE_URL postgres://openmake:s3cr3t-pass@127.0.0.1:5432/openmake_llm', 'postgres://openmake:<redacted>@127.0.0.1:5432/openmake_llm', 's3cr3t-pass'],
+        ['redis://default:hunter2hunter2@localhost:6379', 'redis://default:<redacted>@localhost:6379', 'hunter2hunter2'],
+        ['token ghp_ABCDEFGHIJKLMNOPQRST1234 발급', '<redacted:token>', 'ghp_ABCDEFGHIJKLMNOPQRST'],
+        ['jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIzIn0abc.c2lnbmF0dXJlc2lnbg', '<redacted:jwt>', 'eyJzdWIiOiIzIn0'],
+        ['x-api-key: hasa-abcdefghijklmnop', 'x-api-key: <redacted>', 'abcdefghijklmnop'],
+    ])('%s', (input, mustContain, mustNotContain) => {
+        const out = redactSecrets(input);
+        expect(out).toContain(mustContain);
+        expect(out).not.toContain(mustNotContain);
+    });
+
+    test('경로·URL·이메일·일반 식별자는 그대로 둔다(운영 디버깅 정보)', () => {
+        const lines = [
+            '[AgentTask] 워크스페이스 /private/tmp/openmake-task-workspaces/a00680d9/workspace 생성',
+            '[Chat] 모델 qwen3.8-27b → https://mcp.linear.app/mcp 연결 (user 3, session 6f1c2a9e-1b2c-4d3e-8f90-abcdef123456)',
+            '[Auth] 로그인 excellokrea2@example.com 성공',
+            'postgres://127.0.0.1:5432/openmake_llm 연결',
+            'task-queue 대기 3 · risk-assessment 완료',
+        ];
+        for (const l of lines) expect(redactSecrets(l)).toBe(l);
+    });
+
+    test('redactText 는 종전처럼 경로·이메일까지 접는다(공유용 계약 불변)', () => {
+        expect(redactText('Bearer abcdefghijklmnop /Users/me/x/y/z.txt a@b.co'))
+            .toBe('Bearer <redacted> ~/x/y/z.txt <email>');
+    });
 });

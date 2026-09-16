@@ -2159,6 +2159,13 @@ export const SESSION_BRANCH = {
     TREE_MAX_DEPTH: parseInt(process.env.SESSION_TREE_MAX_DEPTH || '20', 10),
 } as const;
 
+/** 로그 자격증명 마스킹(F24.6) — utils/logger 가 출력 직전에 적용. LOG_REDACT_SECRETS=false 로 끔. */
+export const LOG_REDACT = {
+    ENABLED: process.env.LOG_REDACT_SECRETS !== 'false',
+    /** 이보다 짧은 문자열은 검사하지 않는다(토큰은 12자 이상) */
+    MIN_LEN: 12,
+} as const;
+
 /** 아티팩트 댓글(F20.6, 147) — 본문 상한은 147 CHECK 와 짝. */
 export const ARTIFACT_COMMENT_LIMITS = {
     BODY_MAX_CHARS: 4000,

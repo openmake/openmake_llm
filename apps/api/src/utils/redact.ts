@@ -6,6 +6,8 @@
  * 줄이지만 **완전하지 않다** — 안전의 본선은 공유 흐름의 "미리보기 + 명시 확인 + 게시 시점
  * 스냅샷"이다(plan `2026-08-26-agent-task-share-plan.md` §4).
  *
+ * 로그용은 `redactSecrets` — 자격증명 값만 지우고 경로·이메일은 남긴다(운영 디버깅 정보, F24.6).
+ *
  * PURE — DB·env·시간에 의존하지 않는다(단위테스트/회귀 코퍼스 대상).
  *
  * @module utils/redact
@@ -23,6 +25,10 @@ const CREDENTIAL_PATTERNS: { re: RegExp; to: string }[] = [
     { re: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, to: '<redacted:jwt>' },
     // Authorization 헤더 값
     { re: /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{12,}/gi, to: '$1 <redacted>' },
+    // x-api-key 헤더 값(BYOK·게이트웨이) — 헤더 덤프 로그
+    { re: /\b(x-api-key)(["']?\s*[:=]\s*["']?)[A-Za-z0-9._~+/=-]{12,}/gi, to: '$1$2<redacted>' },
+    // 접속 URL 의 비밀번호 — postgres://user:pass@host (사용자명·호스트는 남긴다)
+    { re: /\b((?:postgres(?:ql)?|mysql|redis|rediss|mongodb(?:\+srv)?|amqps?):\/\/[^:\s/@]+):[^@\s]+@/g, to: '$1:<redacted>@' },
 ];
 
 /** `SOME_KEY=값` / `"api_key": "값"` 형태 — 키 이름은 유지하고 값만 가린다. */
@@ -77,10 +83,8 @@ export function redactText(input: string, opts: RedactOptions = {}): string {
     }
     out = out.replace(HOME_RE, '~');
 
-    // 2) 자격증명 — 대입 형태를 먼저 처리해 `KEY=<redacted>` 로 키 맥락을 남기고,
-    //    그 다음 남은 날 토큰(맨몸 값·헤더)을 종류별로 마스킹한다.
-    for (const { re, to } of ASSIGNMENT_PATTERNS) out = out.replace(re, to);
-    for (const { re, to } of CREDENTIAL_PATTERNS) out = out.replace(re, to);
+    // 2) 자격증명
+    out = redactSecrets(out);
 
     // 3) 남은 절대경로 접기 — 위에서 상대화되지 않은 시스템 경로(/private/tmp/... 등)
     out = out.replace(ABS_PATH_RE, '<path>/$1');
@@ -88,6 +92,18 @@ export function redactText(input: string, opts: RedactOptions = {}): string {
     // 4) 이메일
     out = out.replace(EMAIL_RE, '<email>');
 
+    return out;
+}
+
+/**
+ * 자격증명 값만 마스킹 — 로그 한 줄용(F24.6). 대입 형태를 먼저 처리해 `KEY=<redacted>` 로 키 맥락을 남기고,
+ * 그 다음 남은 날 토큰(맨몸 값·헤더·접속 URL 비밀번호)을 종류별로 가린다. 경로·이메일·URL 은 건드리지 않는다.
+ */
+export function redactSecrets(input: string): string {
+    if (!input) return input;
+    let out = input;
+    for (const { re, to } of ASSIGNMENT_PATTERNS) out = out.replace(re, to);
+    for (const { re, to } of CREDENTIAL_PATTERNS) out = out.replace(re, to);
     return out;
 }
 

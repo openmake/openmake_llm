@@ -18,6 +18,8 @@ import winston from 'winston';
 import path from 'path';
 import { getConfig } from '../config/env';
 import { getRequestId } from './request-context';
+import { redactSecrets } from './redact';
+import { LOG_REDACT } from '../config/runtime-limits';
 
 const logDir = path.join(__dirname, '../../logs');
 
@@ -35,8 +37,16 @@ function getTraceIdSafe(): string | undefined {
     return _getTraceId ? _getTraceId() : undefined;
 }
 
+/**
+ * 로그 출력 직전 자격증명 마스킹(F24.6) — 파일·콘솔(pm2 로그) 공통. 짧은 문자열은 건너뛴다(처리량).
+ * 끄기: LOG_REDACT_SECRETS=false.
+ */
+export function redactForLog(text: string): string {
+    return LOG_REDACT.ENABLED && text.length >= LOG_REDACT.MIN_LEN ? redactSecrets(text) : text;
+}
+
 // 커스텀 포맷 (request_id + trace_id 포함)
-const customFormat = winston.format.combine(
+export const customFormat = winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     winston.format.errors({ stack: true }),
     winston.format.printf(({ level, message, timestamp, ...meta }) => {
@@ -45,17 +55,20 @@ const customFormat = winston.format.combine(
         const reqStr = reqId ? ` req=${reqId}` : '';
         const traceStr = traceId ? ` trace_id=${traceId}` : '';
         const metaStr = Object.keys(meta).length ? JSON.stringify(meta) : '';
-        return `[${timestamp}] ${level.toUpperCase()}:${reqStr}${traceStr} ${message} ${metaStr}`;
+        return `[${timestamp}] ${level.toUpperCase()}:${reqStr}${traceStr} ${redactForLog(String(message))} ${redactForLog(metaStr)}`;
     })
 );
+
+/** 콘솔 한 줄 — pm2 가 stdout 을 파일로 남기므로 여기도 마스킹 */
+export function consoleLine({ level, message, timestamp }: { level: string; message: unknown; timestamp?: unknown }): string {
+    return `[${timestamp}] ${level}: ${redactForLog(String(message))}`;
+}
 
 // 콘솔 포맷 (컬러)
 const consoleFormat = winston.format.combine(
     winston.format.colorize(),
     winston.format.timestamp({ format: 'HH:mm:ss' }),
-    winston.format.printf(({ level, message, timestamp }) => {
-        return `[${timestamp}] ${level}: ${message}`;
-    })
+    winston.format.printf((info) => consoleLine(info))
 );
 
 // 로거 생성
