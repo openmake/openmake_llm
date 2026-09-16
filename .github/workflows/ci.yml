@@ -92,6 +92,12 @@ jobs:
           shellcheck -S warning install.sh openmake_llm.sh
           echo "인스톨러 lint 통과 (bash -n + shellcheck)"
 
+      # ─── Gate 0.7: Dependency Audit ───
+      # 운영 의존성(--omit=dev)의 high 이상 npm 권고가 새로 생기면 막는다(F28.8). 기존 부채는
+      # .audit-allowlist.json 에 사유·만료일과 함께 — 만료가 지나면 다시 실패한다. 수 초짜리라 Jest 앞에 둔다.
+      - name: "Gate 0.7: Dependency Audit"
+        run: npm run audit:gate
+
       # ─── Gate 1: Jest ───
       # 로컬 `npm test` 와 **같은 러너**로 돈다. 이전에는 bun test 로 돌렸는데, 로컬은 jest 라
       # 러너가 갈라져 있었다 — bun 은 jest.resetModules 등 일부 API 를 지원하지 않아 실측 시
