@@ -14,13 +14,15 @@
 import { QUOTA_RETRY_AFTER } from '../config/timeouts';
 
 /** 'org_monthly' = 조직 월 예산(127) — 멤버 합산 사용량이 organizations.monthly_token_budget 을 넘음. */
-export type QuotaType = 'hourly' | 'weekly' | 'both' | 'org_monthly';
+export type QuotaType = 'hourly' | 'weekly' | 'both' | 'org_monthly' | 'cost_monthly' | 'org_cost_monthly';
 
 export class QuotaExceededError extends Error {
     public readonly quotaType: QuotaType;
     public readonly used: number;
     public readonly limit: number;
     public readonly retryAfterSeconds: number;
+    /** 초과 승인 요청(135)이 생성·존재하면 그 id — 프론트가 '승인 대기 중' 을 안내한다 */
+    public approvalRequestId?: string;
 
     constructor(quotaType: QuotaType, used: number, limit: number) {
         // 단위는 **토큰** — user-quota.ts 가 llmHourlyTokenLimit/llmWeeklyTokenLimit(토큰 수)로

@@ -47,6 +47,8 @@ export interface LLMConfig {
      * 이미 면제 상태이며, 이 플래그가 role 경로를 같은 정책으로 맞춘다.
      */
     quotaExempt?: boolean;
+    /** 원장(cost_ledger) 귀속 컨텍스트 — feature·sessionId·agentId (F25 PR-1). 미지정이면 requestId 만 */
+    costContext?: { feature?: string; sessionId?: string | null; agentId?: string | null };
 }
 
 /**

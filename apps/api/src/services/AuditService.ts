@@ -164,6 +164,9 @@ const CRITICAL_ACTIONS: Record<string, 'info' | 'warning' | 'critical'> = {
     // 운영 구성 내보내기/가져오기 (F22 Phase E)
     'config.exported': 'warning',
     'config.imported': 'critical',
+    // 쿼터 초과 승인·수동 부여 (F25 PR-3b)
+    'quota.overage_decided': 'warning',
+    'quota.grant_manual': 'warning',
     // 보안 변화
     'password.changed': 'warning',
     // GDPR Article 7(3) — 동의 철회

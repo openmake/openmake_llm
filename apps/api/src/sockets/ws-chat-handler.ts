@@ -12,6 +12,7 @@ import { resolveCleanedContent } from './ws-chat-completion';
 import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
 import { enqueueDebugCapture, DEBUG_QUEUE_TTL_MS } from '../data/conversation-debug-queue';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
+import { QuotaUnavailableError } from '../errors/quota-unavailable.error';
 import { KeyExhaustionError } from '../errors/key-exhaustion.error';
 import { ProviderError } from '../providers/provider-errors';
 import { checkChatRateLimit } from '../middlewares/chat-rate-limiter';
@@ -190,6 +191,7 @@ export async function handleChatMessage(
             userLang,
             webSearchEnabled: msg.webSearch === true,
             explicitlyDisabled: msg.enabledTools?.web_search === false,
+            userId: extWs._authenticatedUserId ?? undefined,
         });
 
         // URL 사전 분석 결과 합류 (위에서 웹검색과 병렬 시작) — 본문을 fileContext 채널에 합류.
@@ -512,8 +514,12 @@ export async function handleChatMessage(
                 type: 'error',
                 message: `⚠️ ${getLocalizedTemplate(WS_ERROR_MESSAGES, userLang).quotaExceeded} (${error.quotaType}). ${error.used}/${error.limit}.`,
                 errorType: 'quota_exceeded',
-                retryAfter: error.retryAfterSeconds
+                retryAfter: error.retryAfterSeconds,
+                ...(error.approvalRequestId ? { approvalRequestId: error.approvalRequestId } : {}),
             });
+        } else if (error instanceof QuotaUnavailableError) {
+            log.error('[Chat] 쿼터 저장소 장애 (fail-closed):', error.message);
+            safeSend({ type: 'error', message: `⚠️ ${error.message}`, errorType: 'quota_unavailable', retryAfter: error.retryAfterSeconds });
         } else if (error instanceof KeyExhaustionError) {
             // 🆕 모든 API 키 소진 에러 처리
             log.warn('[Chat] 모든 API 키 소진:', error.message);

@@ -25,7 +25,9 @@
       "developer": "開発者",
       "schedulesAdmin": "タスクスケジュール",
       "approvals": "承認待ち",
-      "organizationsAdmin": "組織管理"
+      "organizationsAdmin": "組織管理",
+      "costRatesAdmin": "コスト単価",
+      "quotaRequestsAdmin": "クォータ承認"
     },
     "pendingApprovals": "承認待ち {count}件 — エージェント作業がユーザーの承認を待っています"
   },
@@ -1959,7 +1961,17 @@
     "quotaExceeded": "1時間あたりのクォータを使い切りました。リセット時刻以降に再度リクエストできます。",
     "globalQuotaTitle": "グローバルクォータ消費率 (サーバー全体)",
     "globalQuotaNote": "プロセス再起動でリセットされる全体観測値 — 個人クォータとは別",
-    "loadFailed": "使用量を読み込めませんでした"
+    "loadFailed": "使用量を読み込めませんでした",
+    "quotaRequestMore": "追加上限を申請",
+    "quotaRequestPending": "管理者の承認待ち",
+    "statementTitle": "月次明細",
+    "statementMonth": "月",
+    "statementSubtitle": "原帳(cost_ledger)に基づく実会計 — 単価未登録の項目は 0 で記録",
+    "statementFinal": "確定",
+    "statementLive": "集計中",
+    "statementEmpty": "この月の記録はありません。",
+    "statementQty": "数量",
+    "statementTotal": "合計"
   },
   "developer": {
     "pageTitle": "開発者ドキュメント",
@@ -2263,6 +2275,53 @@
     "importConfirm": "検証済みの設定を適用しますか？システム設定と組織ポリシーが上書きされます。",
     "importProblems": "問題 {count} 件 — 適用できません。",
     "importDryRun": "検証 OK — 設定 {systemSettings}・capability {capabilityModels}・組織 {organizations}・ポリシー {policies}。適用で反映されます。",
-    "importApplied": "適用完了 — 設定 {systemSettings}・capability {capabilityModels}・組織 {organizations}・ポリシー {policies}。"
+    "importApplied": "適用完了 — 設定 {systemSettings}・capability {capabilityModels}・組織 {organizations}・ポリシー {policies}。",
+    "costBudget": "月間コスト予算(USD)"
+  },
+  "adminCostRates": {
+    "title": "コスト単価表",
+    "description": "kind × rate_key × unit ごとの単価（USD micros）。未登録の組み合わせはコード/env のフォールバック（外部は定数表、ローカルは LOCAL_LLM_COST_*）、それもなければ 0。",
+    "loadError": "読み込みに失敗しました。",
+    "saveFailed": "保存に失敗しました。",
+    "addTitle": "単価の登録/更新",
+    "rateKeyPlaceholder": "rate_key（モデル id・provider:model・*）",
+    "valuePlaceholder": "単価",
+    "notePlaceholder": "メモ（任意）",
+    "unitHelp": "トークン unit（token_in/out/think）は 1M トークンあたり USD で入力（1 USD/1M = 1 micro/token）。call・image・second・char・gb_day は単位あたり micros。",
+    "save": "保存",
+    "listTitle": "登録済み単価",
+    "empty": "登録された単価はありません（すべてフォールバック）。",
+    "value": "単価（micros/unit）",
+    "note": "メモ",
+    "delete": "削除",
+    "deleteConfirm": "この単価を削除しますか？フォールバック単価に戻ります。"
+  },
+  "adminQuotaRequests": {
+    "title": "クォータ超過承認",
+    "description": "ユーザーの追加上限申請を承認/却下し、手動で上限を付与します。承認分はそのウィンドウの有効上限に加算されます。",
+    "loadError": "読み込みに失敗しました。",
+    "actionFailed": "処理に失敗しました。",
+    "listTitle": "申請",
+    "status": "状態",
+    "statuses": {
+      "pending": "待機",
+      "approved": "承認",
+      "rejected": "却下",
+      "expired": "期限切れ",
+      "all": "すべて"
+    },
+    "empty": "申請はありません。",
+    "user": "ユーザー",
+    "window": "ウィンドウ",
+    "amount": "トークン",
+    "reason": "理由",
+    "auto": "自動作成",
+    "approve": "承認",
+    "reject": "却下",
+    "manualTitle": "手動付与",
+    "manualHelp": "現在のバケットに即時加算されます（時間/週/月）。ユーザー id は管理者 → ユーザー一覧で確認。",
+    "userIdPlaceholder": "ユーザー id",
+    "grant": "付与",
+    "grantDone": "付与しました。"
   }
 }

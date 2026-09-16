@@ -358,6 +358,7 @@ router.post('/structured', optionalApiKey, optionalAuth, chatRateLimiter, asyncH
             webSearchEnabled: req.body.webSearch === true,
             explicitlyDisabled: req.body.enabledTools?.web_search === false,
             signal: abortController.signal,
+            userId: userContext.userId,
         });
 
         const startTime = Date.now();

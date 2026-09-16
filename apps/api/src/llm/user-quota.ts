@@ -19,6 +19,9 @@ import { getConfig } from '../config';
 import { budgetedOrgsFor, clearOrgMembershipCache } from '../services/org/membership-cache';
 import { createLogger } from '../utils/logger';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
+import { QuotaUnavailableError } from '../errors/quota-unavailable.error';
+import { grantsFor, maybeCreateRollover, ensureOverageRequest } from '../services/cost/quota-grants';
+import { QUOTA_GRANTS } from '../config/runtime-limits';
 import { isPersistableUserId } from '../utils/user-id-validation';
 
 const logger = createLogger('UserQuota');
@@ -45,22 +48,64 @@ function monthKey(userId: string, now: number): string {
 }
 const MONTH_TTL_MS = 62 * 24 * 60 * 60 * 1000;
 
+/** 윈도우별 현재 버킷 id — grants·초과 요청 키와 동일 규약 (135). */
+export function currentBucket(window: 'hourly' | 'weekly' | 'monthly', now: number): string {
+    if (window === 'hourly') return String(Math.floor(now / HOUR_MS));
+    if (window === 'weekly') return String(Math.floor(now / WEEK_MS));
+    return monthBucket(now);
+}
+
+/** 정산 잡(services/cost/quota-reconcile-job)용 공개 헬퍼 */
+export function weekBucketKey(userId: string, now: number): string { return weekKey(userId, now); }
+export function monthBucketKey(userId: string, now: number): string { return monthKey(userId, now); }
+export { WEEK_TTL_MS, MONTH_TTL_MS };
+export function weekWindow(now: number): { from: Date; to: Date } {
+    const start = Math.floor(now / WEEK_MS) * WEEK_MS;
+    return { from: new Date(start), to: new Date(start + WEEK_MS) };
+}
+export function monthWindow(now: number): { from: Date; to: Date } {
+    const d = new Date(now);
+    const from = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+    const to = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
+    return { from, to };
+}
+
+
 /** 조직 예산 캐시는 services/org/membership-cache 로 통합(F22 Phase A) — 이름은 호출처 호환용으로 유지. */
 export function clearOrgBudgetCache(): void { clearOrgMembershipCache(); }
 
+/** 월 비용 버킷(USD micros, 136) — 원장 적재 시 누적(cost-ledger-service.recordCostAsync). */
+export function costMonthKey(userId: string, now: number): string { return `costq:${userId}:m:${monthBucket(now)}`; }
+export const COST_MONTH_TTL_MS = MONTH_TTL_MS;
+
 /**
- * 조직 월 예산 검사(127) — 사용자가 속한 예산 있는 조직마다 멤버 전체의 이번 달 사용량 합이 예산 이상이면 throw.
+ * 조직 월 예산 검사(127·136) — 토큰 예산은 멤버 월 토큰 버킷 합, 비용 예산은 멤버 월 비용 버킷 합. 예산 이상이면 throw.
  * 조직이 없으면 no-op. KV 장애는 fail-open.
  */
 export async function checkOrgBudget(userId: string, now: number): Promise<void> {
     const orgs = await budgetedOrgsFor(userId, now);
     if (orgs.length === 0) return;
     const store = getKeyValueStore();
+    const sumOf = async (keys: string[]): Promise<number> =>
+        (await Promise.all(keys.map((k) => store.get<number>(k)))).reduce<number>((sum, v) => sum + (typeof v === 'number' ? v : 0), 0);
     for (const org of orgs) {
-        const used = (await Promise.all(org.memberIds.map((m) => store.get<number>(monthKey(m, now)))))
-            .reduce<number>((sum, v) => sum + (typeof v === 'number' ? v : 0), 0);
-        if (used >= org.budget) throw new QuotaExceededError('org_monthly', used, org.budget);
+        if (org.budget > 0) {
+            const used = await sumOf(org.memberIds.map((m) => monthKey(m, now)));
+            if (used >= org.budget) throw new QuotaExceededError('org_monthly', used, org.budget);
+        }
+        if (org.costBudgetMicros > 0) {
+            const used = await sumOf(org.memberIds.map((m) => costMonthKey(m, now)));
+            if (used >= org.costBudgetMicros) throw new QuotaExceededError('org_cost_monthly', used, org.costBudgetMicros);
+        }
     }
+}
+
+/** 사용자 월 비용 예산(USER_MONTHLY_COST_BUDGET_MICROS, 0=무제한) — 원장 누적이 예산 이상이면 throw. */
+export async function checkUserCostBudget(userId: string, now: number): Promise<void> {
+    const budget = getConfig().userMonthlyCostBudgetMicros;
+    if (!(budget > 0)) return;
+    const used = (await getKeyValueStore().get<number>(costMonthKey(userId, now))) ?? 0;
+    if (typeof used === 'number' && used >= budget) throw new QuotaExceededError('cost_monthly', used, budget);
 }
 
 /** 조회용 윈도우 상태 — resetAt 은 현재 calendar bucket 이 넘어가는 시각(ms epoch). */
@@ -144,10 +189,108 @@ export async function checkUserQuota(userId: string | undefined, now: number): P
         if (weeklyLimit > 0 && weekly >= weeklyLimit) {
             throw new QuotaExceededError('weekly', weekly, weeklyLimit);
         }
+        await checkUserCostBudget(userId, now);
         await checkOrgBudget(userId, now);
     } catch (e) {
         if (e instanceof QuotaExceededError) throw e;
+        if (cfg.quotaFailMode === 'closed') {
+            logger.error('per-user quota check 저장소 장애 (fail-closed):', e);
+            throw new QuotaUnavailableError(e);
+        }
         logger.warn('per-user quota check 실패 (fail-open):', e);
+    }
+}
+
+/** 예약 핸들 — settleUserQuota 로 실측 정산. keys 는 hour/week/month 버킷. */
+export interface QuotaReservation {
+    userId: string;
+    estimate: number;
+    keys: { key: string; ttlMs: number }[];
+}
+
+/**
+ * 원자적 예약(F25 PR-2): 추정 토큰을 hour→week→month 버킷에 incrBy 로 **선반영**하고, 증가 후 값이 한도를
+ * 넘으면 지금까지 올린 만큼 환불하고 throw. 동시 N요청 중 한도를 넘는 요청은 자기 증가분의 결과값으로
+ * 즉시 판정되므로 초과 통과가 불가능하다(종전 check-then-record 의 경쟁 창 제거).
+ * 조직 월 예산은 종전처럼 멤버 합산 읽기로 검사한다(이 사용자의 예약분은 월 버킷에 이미 반영돼 있다).
+ * KV 장애: QUOTA_FAIL_MODE=open 이면 예약 없이 통과(estimate 0 핸들), closed 면 QuotaUnavailableError.
+ */
+export async function reserveUserQuota(userId: string | undefined, estimate: number, now: number): Promise<QuotaReservation | null> {
+    if (!isPersistableUserId(userId)) return null;
+    const cfg = getConfig();
+    const est = Number.isFinite(estimate) && estimate > 0 ? Math.ceil(estimate) : 0;
+    const weekBucket = String(Math.floor(now / WEEK_MS));
+    const plan: Array<{ key: string; ttlMs: number; limit: number; type: 'hourly' | 'weekly' | null; bucket: string }> = [
+        { key: hourKey(userId, now), ttlMs: HOUR_TTL_MS, limit: cfg.llmHourlyTokenLimit, type: 'hourly', bucket: String(Math.floor(now / HOUR_MS)) },
+        { key: weekKey(userId, now), ttlMs: WEEK_TTL_MS, limit: cfg.llmWeeklyTokenLimit, type: 'weekly', bucket: weekBucket },
+        { key: monthKey(userId, now), ttlMs: MONTH_TTL_MS, limit: 0, type: null, bucket: monthBucket(now) },
+    ];
+    const applied: { key: string; ttlMs: number }[] = [];
+    const store = getKeyValueStore();
+    try {
+        for (const step of plan) {
+            const after = est > 0 ? await store.incrBy(step.key, est) : ((await store.get<number>(step.key)) ?? 0);
+            if (est > 0) { applied.push({ key: step.key, ttlMs: step.ttlMs }); void store.expire(step.key, step.ttlMs).catch(() => undefined); }
+            const usedNum = typeof after === 'number' ? after : 0;
+            if (!step.type || step.limit <= 0) continue;
+            // 이월(135): 주 버킷의 첫 예약(증가 후 값 == est)이면 직전 주 미사용분을 grants 로 — 멱등
+            if (step.type === 'weekly' && est > 0 && usedNum === est && QUOTA_GRANTS.ROLLOVER_RATIO > 0) {
+                const prevUsed = (await store.get<number>(weekKey(userId, now - WEEK_MS))) ?? 0;
+                await maybeCreateRollover(userId, 'weekly', step.bucket, step.limit, typeof prevUsed === 'number' ? prevUsed : 0);
+            }
+            const effectiveLimit = step.limit + (await grantsFor(userId, step.type, step.bucket, now));
+            // 한도 판정은 "이 요청 포함" — est 가 0 이면 종전 checkUserQuota 와 같은 누적치 비교
+            if (est > 0 ? usedNum > effectiveLimit : usedNum >= effectiveLimit) {
+                await refund(store, applied, est);
+                const err = new QuotaExceededError(step.type, Math.max(0, usedNum - est), effectiveLimit);
+                if (QUOTA_GRANTS.OVERAGE_AUTO_REQUEST) {
+                    err.approvalRequestId = await ensureOverageRequest(userId, step.type, step.bucket,
+                        Math.ceil(step.limit * QUOTA_GRANTS.OVERAGE_AUTO_REQUEST_RATIO), 'auto', true);
+                }
+                throw err;
+            }
+        }
+        try {
+            await checkUserCostBudget(userId, now);
+            await checkOrgBudget(userId, now);
+        } catch (e) {
+            if (e instanceof QuotaExceededError) { await refund(store, applied, est); }
+            throw e;
+        }
+        return { userId, estimate: est, keys: applied };
+    } catch (e) {
+        if (e instanceof QuotaExceededError) throw e;
+        if (cfg.quotaFailMode === 'closed') {
+            logger.error('per-user quota 저장소 장애 (fail-closed):', e);
+            throw new QuotaUnavailableError(e);
+        }
+        logger.warn('per-user quota 예약 실패 (fail-open):', e);
+        return { userId, estimate: 0, keys: [] };
+    }
+}
+
+async function refund(store: ReturnType<typeof getKeyValueStore>, applied: { key: string }[], amount: number): Promise<void> {
+    if (amount <= 0) return;
+    await Promise.all(applied.map((a) => store.incrBy(a.key, -amount).catch(() => undefined)));
+}
+
+/**
+ * 정산 — 예약분과 실측의 차이(actual - estimate)를 버킷에 반영한다(음수 가능). 실패·중단은 actual=0 으로
+ * 호출해 전액 환불한다. fail-open.
+ */
+export async function settleUserQuota(reservation: QuotaReservation | null, actual: number): Promise<void> {
+    if (!reservation || reservation.keys.length === 0) {
+        // 예약 없이 통과한 경우(비인증·fail-open) — 실측이 있으면 종전 기록 경로
+        if (reservation && actual > 0) await recordUserUsage(reservation.userId, actual, Date.now());
+        return;
+    }
+    const delta = Math.max(0, Math.round(actual)) - reservation.estimate;
+    if (delta === 0) return;
+    try {
+        const store = getKeyValueStore();
+        await Promise.all(reservation.keys.map((k) => store.incrBy(k.key, delta).then(() => store.expire(k.key, k.ttlMs))));
+    } catch (e) {
+        logger.warn('per-user quota 정산 실패 (무시):', e);
     }
 }
 

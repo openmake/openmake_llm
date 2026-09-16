@@ -13,7 +13,7 @@ import { AdminTabs } from "@/components/hub-tabs";
 import type { ApiSuccess, OrgRole } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 
-interface Org { id: string; name: string; slug: string; monthly_token_budget: string | number | null; created_at: string }
+interface Org { id: string; name: string; slug: string; monthly_token_budget: string | number | null; monthly_cost_budget_micros?: string | number | null; created_at: string }
 interface Member { org_id: string; user_id: string; role: OrgRole; created_at: string }
 interface PolicyRow { key: string; value: unknown; updated_by: string | null; updated_at: string }
 interface HistoryRow { id: number; key: string; old_value: unknown; new_value: unknown; changed_by: string | null; changed_at: string }
@@ -111,6 +111,7 @@ function OrgDetail({ org, users, onChanged }: { org: Org; users: AdminUser[]; on
   const [newUser, setNewUser] = useState("");
   const [newRole, setNewRole] = useState<OrgRole>("member");
   const [budget, setBudget] = useState(org.monthly_token_budget === null ? "" : String(org.monthly_token_budget));
+  const [costBudget, setCostBudget] = useState(org.monthly_cost_budget_micros == null ? "" : String(Number(org.monthly_cost_budget_micros) / 1_000_000));
 
   const load = useCallback(async () => {
     const [m, p, h] = await Promise.all([
@@ -126,7 +127,8 @@ function OrgDetail({ org, users, onChanged }: { org: Org; users: AdminUser[]; on
 
   async function saveBudget() {
     const n = budget.trim() === "" ? null : Number(budget);
-    await ApiClient.patch(`/api/admin/organizations/${org.id}`, { monthlyTokenBudget: n });
+    const c = costBudget.trim() === "" ? null : Math.round(Number(costBudget) * 1_000_000);
+    await ApiClient.patch(`/api/admin/organizations/${org.id}`, { monthlyTokenBudget: n, monthlyCostBudgetMicros: c });
     onChanged();
   }
   async function addMember() {
@@ -148,6 +150,8 @@ function OrgDetail({ org, users, onChanged }: { org: Org; users: AdminUser[]; on
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <label className="text-xs text-muted">{t("budget")}</label>
         <input className={`${inputCls} sm:w-48`} type="number" min={1} value={budget} onChange={(e) => setBudget(e.target.value)} placeholder={t("budgetUnlimited")} />
+        <label className="text-xs text-muted">{t("costBudget")}</label>
+        <input className={`${inputCls} sm:w-40`} type="number" min={0} step="0.01" value={costBudget} onChange={(e) => setCostBudget(e.target.value)} placeholder={t("budgetUnlimited")} />
         <Button size="sm" onClick={() => void saveBudget()}>{t("save")}</Button>
       </div>
 

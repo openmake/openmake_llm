@@ -47,6 +47,8 @@ export async function buildWebSearchContext(opts: {
     /** enabledTools.web_search === false 처럼 명시적으로 끈 경우. */
     explicitlyDisabled?: boolean;
     signal?: AbortSignal;
+    /** 원장 귀속 사용자(F25 PR-4) */
+    userId?: string;
 }): Promise<BuildWebSearchContextResult> {
     const { message, userLang, webSearchEnabled, explicitlyDisabled = false, signal } = opts;
 
@@ -67,6 +69,7 @@ export async function buildWebSearchContext(opts: {
                 language: userLang,
                 preferRecent: isCurrentEventsQuery,
                 signal,
+                costUserId: opts.userId,
             });
             if (searchResults.length > 0) {
                 const tpl = getLocalizedTemplate(WEB_SEARCH_TEMPLATES, userLang);

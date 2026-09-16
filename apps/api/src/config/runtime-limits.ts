@@ -2101,3 +2101,29 @@ export const ORG_CONTEXT = {
     /** 사용자별 멤버십·활성 조직 캐시 보존(ms). ORG_CONTEXT_CACHE_TTL_MS 로 오버라이드. */
     CACHE_TTL_MS: parseInt(process.env.ORG_CONTEXT_CACHE_TTL_MS || '60000', 10),
 } as const;
+
+/**
+ * 쿼터 예약(F25 PR-2) — LLM 호출 전에 추정 토큰을 버킷에 선반영하고 응답 후 실측으로 정산한다.
+ */
+export const QUOTA_RESERVE = {
+    /** 출력 토큰 예약 기본값(num_predict 미지정 시). QUOTA_RESERVE_OUTPUT_TOKENS */
+    OUTPUT_TOKENS: parseInt(process.env.QUOTA_RESERVE_OUTPUT_TOKENS || '1024', 10),
+    /** 정산 잡 주기(ms, 기본 6시간). QUOTA_RECONCILE_INTERVAL_MS */
+    RECONCILE_INTERVAL_MS: parseInt(process.env.QUOTA_RECONCILE_INTERVAL_MS || String(6 * 60 * 60 * 1000), 10),
+    /** 정산 잡 활성(기본 true). QUOTA_RECONCILE_ENABLED=false 로 끔 */
+    RECONCILE_ENABLED: process.env.QUOTA_RECONCILE_ENABLED !== 'false',
+} as const;
+
+/** 쿼터 추가 한도·이월·초과 요청 (F25 PR-3b). */
+export const QUOTA_GRANTS = {
+    /** 직전 버킷 미사용분 이월 비율 0~1 (기본 0 = 비활성). QUOTA_ROLLOVER_RATIO */
+    ROLLOVER_RATIO: parseFloat(process.env.QUOTA_ROLLOVER_RATIO || '0'),
+    /** 이월 상한 토큰(0 = 상한 없음). QUOTA_ROLLOVER_CAP_TOKENS */
+    ROLLOVER_CAP_TOKENS: parseInt(process.env.QUOTA_ROLLOVER_CAP_TOKENS || '0', 10),
+    /** 초과 시 승인 요청 자동 생성 (기본 false). QUOTA_OVERAGE_AUTO_REQUEST=true */
+    OVERAGE_AUTO_REQUEST: process.env.QUOTA_OVERAGE_AUTO_REQUEST === 'true',
+    /** 초과 요청 유효 기간(ms, 기본 7일). QUOTA_OVERAGE_REQUEST_TTL_MS */
+    OVERAGE_REQUEST_TTL_MS: parseInt(process.env.QUOTA_OVERAGE_REQUEST_TTL_MS || String(7 * 24 * 60 * 60 * 1000), 10),
+    /** 자동 요청 시 요청량 = 설정 한도 × 이 비율 (기본 0.5). QUOTA_OVERAGE_AUTO_REQUEST_RATIO */
+    OVERAGE_AUTO_REQUEST_RATIO: parseFloat(process.env.QUOTA_OVERAGE_AUTO_REQUEST_RATIO || '0.5'),
+} as const;

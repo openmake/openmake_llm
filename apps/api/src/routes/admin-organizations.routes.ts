@@ -27,7 +27,7 @@ import { clearOrgMembershipCache } from '../services/org/membership-cache';
 const slugSchema = z.string().trim().min(2).max(64).regex(/^[a-z0-9][a-z0-9-]*$/, 'slug 는 소문자·숫자·하이픈');
 const budgetSchema = z.number().int().min(1).max(1_000_000_000_000).nullable();
 const createSchema = z.object({ name: z.string().trim().min(1).max(200), slug: slugSchema, monthlyTokenBudget: budgetSchema.optional() });
-const patchSchema = z.object({ name: z.string().trim().min(1).max(200).optional(), monthlyTokenBudget: budgetSchema.optional() });
+const patchSchema = z.object({ name: z.string().trim().min(1).max(200).optional(), monthlyTokenBudget: budgetSchema.optional(), monthlyCostBudgetMicros: budgetSchema.optional() });
 const memberSchema = z.object({ role: z.enum(['owner', 'admin', 'member']).default('member') });
 
 export const adminOrganizationsRouter = Router();

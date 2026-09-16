@@ -10,6 +10,7 @@
  */
 import type { ChatService } from '../ChatService';
 import { createLogger } from '../../utils/logger';
+import { getConfig } from '../../config/env';
 import { AGENTS, getAgentById, type AgentSelection } from '../../agents';
 import type { DiscussionProgress } from '../../agents/discussion-engine';
 import { detectFastPath } from '../../chat/fast-path-detector';
@@ -30,6 +31,9 @@ import { resolveAnswerFormatProfile, getAnswerFormatGuard } from '../../chat/ans
 import { REPORT_PIPELINE, REPORT_INTENT_PATTERNS } from '../../config/runtime-limits';
 import { ORCHESTRATOR } from '../../config/capabilities';
 import { runProviderGate, servedModelLabel } from './provider-gate';
+import { checkUserQuota } from '../../llm/user-quota';
+import { QuotaExceededError } from '../../errors/quota-exceeded.error';
+import { resolveDegradeMap, resolveDegradeTarget } from '../../config/quota-degrade-policy';
 import { buildNotebookContextPrefix } from '../../prompts/notebook-context';
 import { applyAgentModelOverride } from './agent-model-override';
 import { resolveModeExternalClient } from './mode-external-client';
@@ -103,11 +107,35 @@ export async function runMessagePipeline(svc: ChatService,
         executionPlan?.requestedModel, req.userAgentId, req.userId,
     );
 
-    const externalResolved = await runProviderGate(svc.providerRouter, {
+    let externalResolved = await runProviderGate(svc.providerRouter, {
         requestedModel: gateRequestedModel,
         fallbackModel: svc.client.model,
         ctx: { userId: req.userId, userRole: req.userRole },
     });
+    // 로컬 쿼터 초과 시 강등(F25 PR-3a) — QUOTA_EXCEEDED_ACTION=degrade 면 맵의 대체 모델로 재해석하고 고지한다.
+    // 대체가 없거나 정책에 막히면 종전대로 QuotaExceededError(429).
+    if (externalResolved.providerId === 'local-llm' && getConfig().quotaExceededAction === 'degrade' && req.userId) {
+        try {
+            await checkUserQuota(req.userId, Date.now());
+        } catch (err) {
+            if (!(err instanceof QuotaExceededError)) throw err;
+            const target = resolveDegradeTarget(externalResolved.fullId, resolveDegradeMap(getConfig().quotaDegradeModelMap));
+            let degraded: typeof externalResolved | null = null;
+            if (target) {
+                try {
+                    degraded = await runProviderGate(svc.providerRouter, { requestedModel: target, fallbackModel: svc.client.model, ctx: { userId: req.userId, userRole: req.userRole } });
+                } catch (e) { logger.warn(`쿼터 강등 대상 해석 실패 → reject: ${target} (${e instanceof Error ? e.message : String(e)})`); }
+            }
+            if (!degraded || degraded.fullId === externalResolved.fullId) throw err;
+            logger.info(`쿼터 초과 강등: ${externalResolved.fullId} → ${degraded.fullId} (${err.quotaType})`);
+            _onSystemEvent?.({
+                type: 'model_fallback',
+                message: `사용량 한도 초과로 ${degraded.fullId} 모델로 답변합니다.`,
+                metadata: { from: externalResolved.fullId, to: degraded.fullId, reason: err.message, code: 'QUOTA_EXCEEDED' },
+            });
+            externalResolved = degraded;
+        }
+    }
     // 여기가 "어느 모델이 답하는가"가 확정되는 유일한 지점 — 호출자에게 알려 응답·대화기록의
     // model 이 요청 모델이 아니라 실제 응답 모델을 싣게 한다. (폴백 시 external-fallback 이 갱신)
     //

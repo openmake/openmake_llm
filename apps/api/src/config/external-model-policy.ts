@@ -27,7 +27,7 @@ export function parseExternalModelPolicy(raw: string | undefined): ExternalModel
     } catch { return EMPTY; }
 }
 
-function globToRegExp(glob: string): RegExp {
+export function globToRegExp(glob: string): RegExp {
     return new RegExp(`^${glob.split('*').map((s) => s.replace(/[.+^${}()|[\]\\?]/g, '\\$&')).join('.*')}$`, 'i');
 }
 

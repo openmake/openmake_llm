@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS cost_ledger;
+DROP TABLE IF EXISTS cost_rates;

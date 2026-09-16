@@ -25,7 +25,9 @@
       "developer": "개발자",
       "schedulesAdmin": "작업 스케줄",
       "approvals": "승인 대기",
-      "organizationsAdmin": "조직 관리"
+      "organizationsAdmin": "조직 관리",
+      "costRatesAdmin": "비용 단가",
+      "quotaRequestsAdmin": "쿼터 승인"
     },
     "pendingApprovals": "승인 대기 {count}건 — 에이전트 작업이 사용자 승인을 기다리고 있습니다"
   },
@@ -1959,7 +1961,17 @@
     "quotaExceeded": "시간당 쿼터를 모두 사용했습니다. 초기화 시각 이후 다시 요청할 수 있습니다.",
     "globalQuotaTitle": "전역 쿼터 소진율 (서버 전체)",
     "globalQuotaNote": "프로세스 재시작 시 초기화되는 전역 관측치 — 개인 쿼터와 별개",
-    "loadFailed": "사용량을 불러오지 못했습니다"
+    "loadFailed": "사용량을 불러오지 못했습니다",
+    "quotaRequestMore": "추가 한도 요청",
+    "quotaRequestPending": "관리자 승인 대기 중",
+    "statementTitle": "월 명세서",
+    "statementMonth": "월",
+    "statementSubtitle": "원장(cost_ledger) 기준 실제 회계 — 단가 미등록 항목은 0 으로 기록됩니다",
+    "statementFinal": "확정",
+    "statementLive": "집계 중",
+    "statementEmpty": "이 달의 기록이 없습니다.",
+    "statementQty": "수량",
+    "statementTotal": "합계"
   },
   "developer": {
     "pageTitle": "개발자 문서",
@@ -2263,6 +2275,53 @@
     "importConfirm": "검증된 구성을 적용할까요? 시스템 설정과 조직 정책이 덮어써집니다.",
     "importProblems": "문제 {count}건 — 적용할 수 없습니다.",
     "importDryRun": "검증 통과 — 설정 {systemSettings} · capability {capabilityModels} · 조직 {organizations} · 정책 {policies}. 적용을 누르면 반영됩니다.",
-    "importApplied": "적용 완료 — 설정 {systemSettings} · capability {capabilityModels} · 조직 {organizations} · 정책 {policies}."
+    "importApplied": "적용 완료 — 설정 {systemSettings} · capability {capabilityModels} · 조직 {organizations} · 정책 {policies}.",
+    "costBudget": "월 비용 예산(USD)"
+  },
+  "adminCostRates": {
+    "title": "비용 단가표",
+    "description": "kind × rate_key × unit 당 단가(USD micros). 미등록 조합은 코드/env 폴백(외부는 상수표, 로컬은 LOCAL_LLM_COST_*), 그것도 없으면 0 입니다.",
+    "loadError": "불러오기에 실패했습니다.",
+    "saveFailed": "저장에 실패했습니다.",
+    "addTitle": "단가 등록/갱신",
+    "rateKeyPlaceholder": "rate_key (모델 id · provider:model · *)",
+    "valuePlaceholder": "단가",
+    "notePlaceholder": "메모(선택)",
+    "unitHelp": "토큰 unit(token_in/out/think)은 1M 토큰당 USD 로 입력하면 됩니다(1 USD/1M = 1 micro/token). call·image·second·char·gb_day 는 단위당 micros.",
+    "save": "저장",
+    "listTitle": "등록된 단가",
+    "empty": "등록된 단가가 없습니다(전부 폴백).",
+    "value": "단가(micros/unit)",
+    "note": "메모",
+    "delete": "삭제",
+    "deleteConfirm": "이 단가를 삭제할까요? 폴백 단가로 돌아갑니다."
+  },
+  "adminQuotaRequests": {
+    "title": "쿼터 초과 승인함",
+    "description": "사용자의 추가 한도 요청을 승인·거절하고, 수동으로 한도를 부여합니다. 승인분은 해당 윈도우 버킷의 유효 한도에 더해집니다.",
+    "loadError": "불러오기에 실패했습니다.",
+    "actionFailed": "처리에 실패했습니다.",
+    "listTitle": "요청",
+    "status": "상태",
+    "statuses": {
+      "pending": "대기",
+      "approved": "승인",
+      "rejected": "거절",
+      "expired": "만료",
+      "all": "전체"
+    },
+    "empty": "요청이 없습니다.",
+    "user": "사용자",
+    "window": "윈도우",
+    "amount": "토큰",
+    "reason": "사유",
+    "auto": "자동 생성",
+    "approve": "승인",
+    "reject": "거절",
+    "manualTitle": "수동 한도 부여",
+    "manualHelp": "현재 버킷에 즉시 더해집니다(시간/주/월). 사용자 id 는 관리자 → 사용자 목록에서 확인.",
+    "userIdPlaceholder": "사용자 id",
+    "grant": "부여",
+    "grantDone": "부여했습니다."
   }
 }
