@@ -62,4 +62,26 @@ public extension OpenMakeClient {
     func deleteSession(id: String) async throws {
         _ = try await authorizedSend(method: "DELETE", path: "/api/chat/sessions/\(id)")
     }
+    /// 세션 복제·분기(F08, 2026-09-17) — uptoMessageId 까지만 복사하면 "여기서 분기". 새 세션 id 반환.
+    func cloneSession(id: String, uptoMessageId: Int? = nil, title: String? = nil) async throws -> String {
+        struct CloneRequest: Encodable {
+            let uptoMessageId: Int?
+            let title: String?
+        }
+        let (data, _) = try await authorizedSend(
+            method: "POST", path: "/api/chat/sessions/\(id)/clone",
+            body: CloneRequest(uptoMessageId: uptoMessageId, title: title))
+        let payload = try decodeContract(
+            Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.Created.Body.jsonPayload.self, from: data)
+        return payload.data.session.id
+    }
+
+    typealias SessionTree = Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Ok.Body.jsonPayload.dataPayload
+
+    /// 세션 트리 — 조상 체인(가까운 부모부터) + 직계 자식
+    func sessionTree(id: String) async throws -> SessionTree {
+        let (data, _) = try await authorizedSend(method: "GET", path: "/api/chat/sessions/\(id)/tree")
+        return try decodeContract(
+            Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Ok.Body.jsonPayload.self, from: data).data
+    }
 }

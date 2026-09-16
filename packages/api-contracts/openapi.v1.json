@@ -2158,6 +2158,276 @@
         }
       }
     },
+    "/api/chat/sessions/{sessionId}/clone": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "세션 복제(분기)",
+        "description": "세션을 새 세션으로 복제합니다. `uptoMessageId` 를 주면 그 메시지까지만 복사해 \"여기서 분기\" 가 됩니다(F08, 2026-09-17). 원본은 바뀌지 않으며 새 세션 metadata 에 parentSessionId/parentMessageId 가 기록됩니다.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "세션 ID"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "uptoMessageId": {
+                    "type": "integer",
+                    "description": "이 메시지 id 까지 복사(생략 시 전체)"
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "새 세션 제목(생략 시 원본 제목 기반)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "복제 성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "session",
+                        "copied"
+                      ],
+                      "properties": {
+                        "session": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "title",
+                            "parentSessionId"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "type": "string"
+                            },
+                            "parentSessionId": {
+                              "type": "string"
+                            },
+                            "parentMessageId": {
+                              "type": "integer",
+                              "nullable": true
+                            }
+                          }
+                        },
+                        "copied": {
+                          "type": "integer",
+                          "description": "복사된 메시지 수"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "uptoMessageId 형식 오류",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "접근 권한 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "세션 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/sessions/{sessionId}/tree": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "세션 트리(조상 체인 + 직계 자식)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "세션 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "self",
+                        "ancestors",
+                        "children"
+                      ],
+                      "properties": {
+                        "self": {
+                          "type": "object",
+                          "required": [
+                            "id",
+                            "title"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "ancestors": {
+                          "type": "array",
+                          "description": "가까운 부모부터",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "id",
+                              "title"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "parentMessageId": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            }
+                          }
+                        },
+                        "children": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "id",
+                              "title",
+                              "createdAt"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "접근 권한 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/models": {
       "get": {
         "tags": [

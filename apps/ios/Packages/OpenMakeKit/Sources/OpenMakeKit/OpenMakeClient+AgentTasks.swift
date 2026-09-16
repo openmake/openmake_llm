@@ -158,6 +158,17 @@ public struct AgentTaskExecution: Sendable, Equatable {
     public let queued: Bool
 }
 
+public struct AgentTaskCheckpoint: Decodable, Sendable, Equatable {
+    public let turn: Int
+    public let messages: Int
+    public let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case turn, messages
+        case createdAt = "created_at"
+    }
+}
+
 public struct AgentTaskApproval: Decodable, Identifiable, Sendable, Equatable {
     public let id: String
     public let taskId: String
@@ -166,12 +177,21 @@ public struct AgentTaskApproval: Decodable, Identifiable, Sendable, Equatable {
     /// 서버(approval-gate PendingApproval.args)는 예전부터 내려주고 있었는데 앱이 버려서,
     /// bash 가 무엇을 실행하는지·ask_human 이 무엇을 묻는지 모른 채 승인해야 했다.
     public let args: [String: String]
+    /// 이관·에스컬레이션(HITL2, 2026-09-17) — 담당자가 바뀐 승인은 assigneeUserId 가 요청자와 다르다. 서버가 안 주면 nil.
+    public let assigneeUserId: String?
+    public let escalatedAt: String?
+    /// 위험 등급·민감 표시(정책 계층 #899) — 카드에 사유를 보여줄 때.
+    public let riskClass: String?
 
-    public init(id: String, taskId: String, toolName: String, args: [String: String] = [:]) {
+    public init(id: String, taskId: String, toolName: String, args: [String: String] = [:],
+                assigneeUserId: String? = nil, escalatedAt: String? = nil, riskClass: String? = nil) {
         self.id = id
         self.taskId = taskId
         self.toolName = toolName
         self.args = args
+        self.assigneeUserId = assigneeUserId
+        self.escalatedAt = escalatedAt
+        self.riskClass = riskClass
     }
 
     enum CodingKeys: String, CodingKey {
@@ -179,6 +199,9 @@ public struct AgentTaskApproval: Decodable, Identifiable, Sendable, Equatable {
         case taskId
         case toolName
         case args
+        case assigneeUserId
+        case escalatedAt
+        case riskClass
     }
 
     public init(from decoder: Decoder) throws {
@@ -187,6 +210,9 @@ public struct AgentTaskApproval: Decodable, Identifiable, Sendable, Equatable {
         taskId = try container.decode(String.self, forKey: .taskId)
         toolName = try container.decode(String.self, forKey: .toolName)
         args = (try? container.decode(ScalarDictionary.self, forKey: .args).values) ?? [:]
+        assigneeUserId = try? container.decodeIfPresent(String.self, forKey: .assigneeUserId)
+        escalatedAt = try? container.decodeIfPresent(String.self, forKey: .escalatedAt)
+        riskClass = try? container.decodeIfPresent(String.self, forKey: .riskClass)
     }
 
     /// 사용자에게 보여줄 인자 요약 — 도구별 핵심 키를 우선하고, 없으면 첫 스칼라 인자.
@@ -339,6 +365,41 @@ public extension OpenMakeClient {
             method: "POST",
             path: "/api/agent-tasks/approvals/\(id)/\(decision)",
             body: Empty())
+    }
+
+    /// 미소비 결정 철회(138) — 살아 있는 대기는 즉시 실행돼 409(ALREADY_CONSUMED).
+    func revokeAgentTaskApproval(id: String) async throws {
+        struct Empty: Encodable {}
+        _ = try await authorizedSend(method: "POST", path: "/api/agent-tasks/approvals/\(id)/revoke", body: Empty())
+    }
+
+    /// 담당자 이관(같은 조직 멤버만)
+    func reassignAgentTaskApproval(id: String, toUserId: String) async throws {
+        struct Request: Encodable { let toUserId: String }
+        _ = try await authorizedSend(method: "POST", path: "/api/agent-tasks/approvals/\(id)/reassign", body: Request(toUserId: toUserId))
+    }
+
+    /// 조직 관리자에게 에스컬레이션
+    func escalateAgentTaskApproval(id: String, reason: String? = nil) async throws {
+        struct Request: Encodable { let reason: String? }
+        _ = try await authorizedSend(method: "POST", path: "/api/agent-tasks/approvals/\(id)/escalate", body: Request(reason: reason))
+    }
+
+    /// 턴 체크포인트 이력(141)
+    func agentTaskCheckpoints(id: String) async throws -> [AgentTaskCheckpoint] {
+        struct Payload: Decodable { let checkpoints: [AgentTaskCheckpoint] }
+        struct Envelope: Decodable { let data: Payload }
+        let (data, _) = try await authorizedSend(method: "GET", path: "/api/agent-tasks/\(id)/checkpoints")
+        return try decodeContract(Envelope.self, from: data).data.checkpoints
+    }
+
+    /// 체크포인트에서 분기 — pending 작업 id 반환. 이어서 resumeAgentTask 를 호출해야 실행된다.
+    func forkAgentTask(id: String, fromTurn: Int, goal: String? = nil) async throws -> String {
+        struct Request: Encodable { let fromTurn: Int; let goal: String? }
+        struct Payload: Decodable { let taskId: String }
+        struct Envelope: Decodable { let data: Payload }
+        let (data, _) = try await authorizedSend(method: "POST", path: "/api/agent-tasks/\(id)/fork", body: Request(fromTurn: fromTurn, goal: goal))
+        return try decodeContract(Envelope.self, from: data).data.taskId
     }
 
     func answerAgentTaskApproval(id: String, text: String) async throws {

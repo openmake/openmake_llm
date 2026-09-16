@@ -162,6 +162,8 @@ public extension WsChatRequest {
             artifactMode: artifactMode,
             // 좁은 화면 표면 — 서버가 답변 형식에 폭 제약(표 3열 이하·짧은 문단)을 덧붙인다
             client: .ios,
+            // 멱등 키(140) — 재전송돼도 서버가 같은 요청으로 판정한다.
+            clientRequestID: UUID().uuidString,
             deepResearchMode: deepResearchMode,
             discussionMode: discussionMode,
             enabledTools: nil,

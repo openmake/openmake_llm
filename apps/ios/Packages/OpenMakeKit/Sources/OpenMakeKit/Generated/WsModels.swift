@@ -74,6 +74,8 @@ public struct WsServerEvent: Codable {
     public let payload: Payload?
     /// 아티팩트가 있으면 raw 코드펜스가 placeholder 로 치환된 본문 — 클라가 누적 본문을 이걸로 reset.
     public let cleanedContent: String?
+    /// 같은 clientRequestId 의 재전송이라 새 생성 없이 끝냈음(140)
+    public let deduplicated: Bool?
     /// 백엔드 실제 페이로드(ws-chat-handler): 스트리밍 완료 시 토큰 메트릭. tokensPerSec 는 toFixed(2) 문자열.
     public let metrics: Metrics?
     public let content: String?
@@ -118,6 +120,7 @@ public struct WsServerEvent: Codable {
         case ttlHours = "ttlHours"
         case payload = "payload"
         case cleanedContent = "cleanedContent"
+        case deduplicated = "deduplicated"
         case metrics = "metrics"
         case content = "content"
         case finished = "finished"
@@ -143,7 +146,7 @@ public struct WsServerEvent: Codable {
         case taskID = "taskId"
     }
 
-    public init(token: String?, type: WsServerEventType, messageID: String?, summary: String?, issues: String?, sessionID: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, metrics: Metrics?, content: String?, finished: Bool?, thinking: String?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, status: String?, step: Step?, taskID: String?) {
+    public init(token: String?, type: WsServerEventType, messageID: String?, summary: String?, issues: String?, sessionID: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, content: String?, finished: Bool?, thinking: String?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, status: String?, step: Step?, taskID: String?) {
         self.token = token
         self.type = type
         self.messageID = messageID
@@ -157,6 +160,7 @@ public struct WsServerEvent: Codable {
         self.ttlHours = ttlHours
         self.payload = payload
         self.cleanedContent = cleanedContent
+        self.deduplicated = deduplicated
         self.metrics = metrics
         self.content = content
         self.finished = finished
@@ -215,6 +219,7 @@ public extension WsServerEvent {
         ttlHours: Double?? = nil,
         payload: Payload?? = nil,
         cleanedContent: String?? = nil,
+        deduplicated: Bool?? = nil,
         metrics: Metrics?? = nil,
         content: String?? = nil,
         finished: Bool?? = nil,
@@ -253,6 +258,7 @@ public extension WsServerEvent {
             ttlHours: ttlHours ?? self.ttlHours,
             payload: payload ?? self.payload,
             cleanedContent: cleanedContent ?? self.cleanedContent,
+            deduplicated: deduplicated ?? self.deduplicated,
             metrics: metrics ?? self.metrics,
             content: content ?? self.content,
             finished: finished ?? self.finished,
@@ -837,6 +843,8 @@ public struct WsChatRequest: Codable {
     /// 클라이언트 표면 — 좁은 화면(모바일 네이티브)에 맞는 답변 형식을 요청할 때 'ios'. 미지정은 기존 동작(데스크톱 기준). 서버는 이 값으로
     /// answer-format 에 화면 폭 지시를 덧붙일 뿐, 내용/기능 분기는 하지 않는다.
     public let client: Client?
+    /// 클라이언트 발급 멱등 키(140) — 같은 id 재전송은 새 생성 없이 이전 messageId 로 done 만 다시 온다
+    public let clientRequestID: String?
     public let deepResearchMode: Bool?
     /// 멀티 에이전트 토론 모드
     public let discussionMode: Bool?
@@ -876,6 +884,7 @@ public struct WsChatRequest: Codable {
         case anonSessionID = "anonSessionId"
         case artifactMode = "artifactMode"
         case client = "client"
+        case clientRequestID = "clientRequestId"
         case deepResearchMode = "deepResearchMode"
         case discussionMode = "discussionMode"
         case enabledTools = "enabledTools"
@@ -898,10 +907,11 @@ public struct WsChatRequest: Codable {
         case webSearch = "webSearch"
     }
 
-    public init(anonSessionID: String?, artifactMode: Bool?, client: Client?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, lane: String?, memoryLearning: Bool?, message: String, model: String?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, userLocation: UserLocation?, webSearch: Bool?) {
+    public init(anonSessionID: String?, artifactMode: Bool?, client: Client?, clientRequestID: String?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, lane: String?, memoryLearning: Bool?, message: String, model: String?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, userLocation: UserLocation?, webSearch: Bool?) {
         self.anonSessionID = anonSessionID
         self.artifactMode = artifactMode
         self.client = client
+        self.clientRequestID = clientRequestID
         self.deepResearchMode = deepResearchMode
         self.discussionMode = discussionMode
         self.enabledTools = enabledTools
@@ -947,6 +957,7 @@ public extension WsChatRequest {
         anonSessionID: String?? = nil,
         artifactMode: Bool?? = nil,
         client: Client?? = nil,
+        clientRequestID: String?? = nil,
         deepResearchMode: Bool?? = nil,
         discussionMode: Bool?? = nil,
         enabledTools: [String: Bool]?? = nil,
@@ -972,6 +983,7 @@ public extension WsChatRequest {
             anonSessionID: anonSessionID ?? self.anonSessionID,
             artifactMode: artifactMode ?? self.artifactMode,
             client: client ?? self.client,
+            clientRequestID: clientRequestID ?? self.clientRequestID,
             deepResearchMode: deepResearchMode ?? self.deepResearchMode,
             discussionMode: discussionMode ?? self.discussionMode,
             enabledTools: enabledTools ?? self.enabledTools,
