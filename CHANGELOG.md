@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.71.0](https://github.com/openmake/openmake_llm/compare/v1.70.1...v1.71.0) (2026-09-17)
+
+
+### ✨ 기능
+
+* 기능 갭 3종 — 커넥터 카탈로그 시드·배포 운영 자동화·평가 비용 게이트와 비토큰 회계 (마이그레이션 159~162) ([#928](https://github.com/openmake/openmake_llm/issues/928)) ([b337ae4](https://github.com/openmake/openmake_llm/commit/b337ae4cfac71e1468ae93f2182aad1d52eee1b5))
+
 ## [1.70.1](https://github.com/openmake/openmake_llm/compare/v1.70.0...v1.70.1) (2026-09-17)
 
 
