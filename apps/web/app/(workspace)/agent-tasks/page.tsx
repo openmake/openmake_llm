@@ -724,7 +724,8 @@ function TaskDetailModal({
               <select value={forkTurn} onChange={(e) => setForkTurn(e.target.value)} aria-label={t("fork.pick")}
                 className="h-8 rounded-md border border-border bg-surface px-2 text-xs text-fg">
                 <option value="">{t("fork.pick")}</option>
-                {checkpoints.map((c) => <option key={c.turn} value={String(c.turn)}>{t("fork.turnOption", { turn: c.turn, messages: c.messages })}</option>)}
+                {/* c.turn 은 0 기준 완료 턴(첫 턴 도중 체크포인트는 -1) — 표시는 완료한 턴 수로 */}
+                {checkpoints.map((c) => <option key={c.turn} value={String(c.turn)}>{t("fork.turnOption", { turn: c.turn + 1, messages: c.messages })}</option>)}
               </select>
               <Button size="sm" variant="outline" disabled={!forkTurn || forking} onClick={() => void forkFromCheckpoint()}>{t("fork.go")}</Button>
               <span className="text-[11px] text-muted">{t("fork.hint")}</span>

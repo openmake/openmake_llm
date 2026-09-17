@@ -15,6 +15,8 @@ import { getUnifiedDatabase, getPool } from '../data/models/unified-database';
 import { AgentTaskRepository } from '../data/repositories/agent-task-repository';
 import { loadOwnedTask } from './agent-task.helpers';
 import { FORK_WORKSPACE_NOTICE } from '../prompts/agent-task-prompt';
+import { findDanglingToolCalls } from '../services/agent-task/turn-reentry';
+import type { ChatMessage } from '../llm/types';
 
 const logger = createLogger('AgentTaskForkRoutes');
 export const forkRouter = Router();
@@ -30,12 +32,17 @@ forkRouter.post('/:taskId/fork', asyncHandler(async (req: Request, res: Response
     if (!src) return;
     const body = (req.body ?? {}) as { fromTurn?: unknown; goal?: unknown };
     const fromTurn = Number(body.fromTurn);
-    if (!Number.isInteger(fromTurn) || fromTurn < 1) return res.status(400).json(badRequest('fromTurn 은 1 이상의 정수여야 합니다.'));
+    // 체크포인트 턴은 0 기준 완료 턴 번호다(첫 턴 도중의 턴 중간 체크포인트는 -1) — turn-reentry.writeTurnCheckpoint 와 짝.
+    if (!Number.isInteger(fromTurn) || fromTurn < -1) return res.status(400).json(badRequest('fromTurn 은 -1 이상의 정수여야 합니다.'));
     const repo = new AgentTaskRepository(getPool());
     const cp = await repo.getCheckpoint(src.id, fromTurn);
     if (!cp) return res.status(404).json(notFound(`턴 ${fromTurn} 의 체크포인트가 없습니다(이력은 최근 것만 보존).`));
     const goal = typeof body.goal === 'string' && body.goal.trim() ? body.goal.trim() : src.goal;
-    const conversation = [...cp.conversation, { role: 'system', content: FORK_WORKSPACE_NOTICE }];
+    // 턴 중간 체크포인트는 결과 없는 tool_call 이 매달려 있다 — 그 assistant 부터 잘라 새 워크스페이스에서 그 턴을 다시 수행한다.
+    // 안내는 user 역할로 붙인다(대화 중간 system 메시지는 vLLM 이 400 으로 거절한다 — 계획 편집·steering 과 같은 방식).
+    const base = cp.conversation as ChatMessage[];
+    const cut = findDanglingToolCalls(base) ? base.map((m) => m.role).lastIndexOf('assistant') : base.length;
+    const conversation = [...base.slice(0, cut), { role: 'user', content: FORK_WORKSPACE_NOTICE }];
 
     const db = getUnifiedDatabase();
     const id = uuidv4();
