@@ -14,6 +14,7 @@
 #   2) eval:response (mock)    — 평가기/룰셋 자가 점검 (baseline 100%)
 #   3) eval:response --real    — LiteLLM 경유 실모델 (기본 limit 30 = response 전체:
 #      applyLimit 이 앞에서부터 자르므로 limit 을 줄이면 뒤쪽 신규 케이스가 빠진다)
+#      같은 30건이면 TTFT·전체 시간 p50/p95·출력 토큰을 baselines/latency-baseline.json 과 비교해 +20%(OMK_EVAL_LATENCY_REGRESSION_PCT) 초과 시 실패
 #   4) eval:response --real --tag multimodal — 이미지 첨부 10건(차트·표·OCR·색·개수·8장 묶음)
 #      장문 컨텍스트 10건(8k·32k·96k needle)은 NIGHTLY_EVAL_LONG_CONTEXT=1 일 때만
 #   5) eval:tools --real       — 도구 선택 골든셋 40건, 모델 첫 턴 tool_calls 관찰(dry-run·첫 관찰 즉시 중단)
@@ -91,9 +92,11 @@ echo "[nightly-eval] 리포트: $OUT (실패 ${#FAILED_STEPS[@]}건)"
 
 if [ "${#FAILED_STEPS[@]}" -gt 0 ]; then
     WEBHOOK="$(grep -E "^OPERATOR_WEBHOOK_URL=" "$REPO/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"')"
+    # 지연 회귀 항목(eval:response-real 의 [latency-regression] 줄)을 통지에 함께 싣는다 — JSON 문자열용으로 따옴표·역슬래시 제거
+    REGRESSIONS="$(grep -E "^\[latency-regression\]" "$OUT" 2>/dev/null | sed 's/^\[latency-regression\] //' | tr -d '"\\' | paste -sd ';' -)"
     if [ -n "${WEBHOOK:-}" ]; then
         curl -sS -m 10 -X POST -H 'Content-Type: application/json' \
-            -d "{\"text\":\"[nightly-eval] 평가 실패: ${FAILED_STEPS[*]} — $OUT\"}" \
+            -d "{\"text\":\"[nightly-eval] 평가 실패: ${FAILED_STEPS[*]}${REGRESSIONS:+ — 지연 회귀: $REGRESSIONS} — $OUT\"}" \
             "$WEBHOOK" >/dev/null 2>&1 || echo "[nightly-eval] webhook 통지 실패 (리포트는 저장됨)"
     fi
     exit 1

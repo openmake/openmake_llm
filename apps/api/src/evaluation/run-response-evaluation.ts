@@ -12,6 +12,7 @@
  *   ts-node src/evaluation/run-response-evaluation.ts --real           # 실제 LLM, 기본 5건
  *   ts-node src/evaluation/run-response-evaluation.ts --real --limit 3 # 첫 3건만
  *   ts-node src/evaluation/run-response-evaluation.ts --real --tag multimodal  # 태그 케이스만(F26.5)
+ *   ts-node src/evaluation/run-response-evaluation.ts --real --limit 30 --update-baseline  # 지연 기준선 갱신(F26.8)
  *
  * **--real 모드 운영 사고 방지 가드**:
  *   1) `--real` 명시적 플래그가 있어야만 활성 (기본은 mock)
@@ -30,6 +31,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
 import { loadGoldenDataset, REAL_ONLY_TAG } from './dataset-loader';
 import { buildEvalRunRecord, recordEvalRuns, type CaseTiming } from './eval-run-recorder';
+import { compareLatency, latencyMetrics, renderLatencyTable, type LatencyBaseline } from './latency-regression';
 import { runResponseEvaluation, type ResponseGenerator } from './response-evaluator';
 import type { EvaluationSummary, GoldenDataset } from './types';
 // 주의: real-response-generator는 ChatService/LLMClient 등 무거운 의존성을
@@ -157,7 +159,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
-        if (a === '--real' || a === '--mock') continue;
+        if (a === '--real' || a === '--mock' || a === '--update-baseline') continue;
         if (a === '--tag') {
             const next = argv[i + 1];
             if (!next || next.startsWith('--')) throw new Error('--tag 다음에 태그 이름이 와야 합니다');
@@ -265,6 +267,9 @@ async function main() {
         await recordEvalRuns([buildEvalRunRecord(summary, { runner: 'response', mode, gitHash: getGitCommitHash(), ...(tag ? { variant: tag } : {}), ...(caseTimings.length ? { timings: caseTimings } : {}) })]);
     }
 
+    // nightly 지연 회귀(F26.8) — real 전체 실행만. 기준선과 같은 케이스 집합·모델일 때만 비교한다
+    const latencyRegressed = useReal && !tag && summary.totalCases > 0 ? checkLatencyRegression(summary, caseTimings) : false;
+
     if (summary.totalCases === 0) {
         console.log('\n⚠ response-pattern 카테고리 케이스 없음 — exit 0 (통과로 간주)');
         process.exit(0);
@@ -277,8 +282,38 @@ async function main() {
         );
         process.exit(1);
     }
+    if (latencyRegressed) {
+        console.error('\n❌ 지연 회귀 — 통과율은 임계 이상이지만 기준선 대비 느려졌습니다(위 표).');
+        process.exit(1);
+    }
     console.log(`\n✅ Response 평가 성공: ${(summary.passRate * 100).toFixed(1)}%`);
     process.exit(0);
+}
+
+const LATENCY_BASELINE_PATH = path.resolve(__dirname, 'baselines', 'latency-baseline.json');
+
+/** 지연 기준선 비교(또는 --update-baseline 저장). 회귀면 true. 회귀 항목은 `[latency-regression]` 줄로 남겨 nightly 통지가 집는다. */
+function checkLatencyRegression(summary: EvaluationSummary, timings: CaseTiming[]): boolean {
+    const current = latencyMetrics(timings);
+    const cases = { datasetVersion: summary.datasetVersion, caseIds: summary.results.map((r) => r.caseId), model: process.env.LLM_DEFAULT_MODEL ?? null };
+    if (process.argv.includes('--update-baseline')) {
+        const baseline: LatencyBaseline = { ...cases, metrics: current, updatedAt: new Date().toISOString() };
+        fs.writeFileSync(LATENCY_BASELINE_PATH, JSON.stringify(baseline, null, 2) + '\n');
+        console.log(`\n[latency] 기준선 갱신: ${path.relative(process.cwd(), LATENCY_BASELINE_PATH)}`);
+        return false;
+    }
+    const baseline = fs.existsSync(LATENCY_BASELINE_PATH) ? JSON.parse(fs.readFileSync(LATENCY_BASELINE_PATH, 'utf8')) as LatencyBaseline : null;
+    const pct = Number(process.env.OMK_EVAL_LATENCY_REGRESSION_PCT ?? '20');
+    const cmp = compareLatency(current, cases, baseline, pct);
+    if (!cmp.comparable) {
+        console.log(`\n[latency] 비교 건너뜀 — ${cmp.reason}`);
+        return false;
+    }
+    console.log(`\n[latency] 기준선(${baseline!.updatedAt.slice(0, 10)}) 대비 — 허용 +${pct}%\n${renderLatencyTable(cmp.rows)}`);
+    for (const r of cmp.rows.filter((x) => x.regressed)) {
+        console.error(`[latency-regression] ${r.metric} ${r.baseline} → ${r.current} (+${r.deltaPct}%)`);
+    }
+    return !cmp.ok;
 }
 
 function printSummary(summary: EvaluationSummary, mode: 'mock' | 'real'): void {

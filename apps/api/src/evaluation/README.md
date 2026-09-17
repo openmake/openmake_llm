@@ -170,6 +170,19 @@ npm run eval:tools -- --real --limit 10    # real — ChatService evalToolObserv
 - 기준선: mock 39/40(97.5%) — 실패 1건 `tool-ws-009`("Look it up online")는 영어 표현이 `WEB_SEARCH_INTENT_PATTERNS` 에 안 걸리는 **실제 노출 누락**이다(라벨을 바꾸지 말고 패턴 보강 여부를 판단할 것).
 - 민감도 확인: `CHAT_TOOL_INTENT_GATE_ENABLED=false`(과다 노출 5건)·`OPS_METRICS_TOOL_ENABLED=false`(누락 5건) 모두 실패한다.
 
+## nightly 지연 회귀 기준선 (2026-09-17, F26.8)
+
+CI 는 LLM 에 닿지 못해 지연을 **예산(프롬프트·도구 스키마 크기, Gate 7)** 으로만 막고, 실측 회귀는 nightly 가 본다.
+
+```bash
+npm run eval:response -- --real --limit 30                    # 기준선과 비교 — +20% 초과 회귀면 exit 1
+npm run eval:response -- --real --limit 30 --update-baseline  # baselines/latency-baseline.json 갱신(PR 리뷰로 드러낸다)
+```
+
+- 지표: TTFT p50/p95 · 전체 시간 p50/p95 · 출력 토큰 p50(`latency-regression.ts`). 허용 증가율 `OMK_EVAL_LATENCY_REGRESSION_PCT`(기본 20), 짧은 지연의 잡음은 절대 변화 하한(`LATENCY_MIN_ABS_DELTA`)으로 거른다.
+- **같은 케이스 집합(데이터셋 버전·케이스 id 순서)·같은 `LLM_DEFAULT_MODEL`** 일 때만 비교한다 — 케이스·모델이 바뀌면 건너뛰고 기준선을 다시 잡는다. `--tag` 부분 실행은 비교하지 않는다.
+- 회귀 항목은 `[latency-regression]` 줄로 남고 nightly 실패 webhook 에 함께 실린다.
+
 ## 런타임 레드팀 (CI Gate 9 mock · nightly real, 2026-09-17, F26.6)
 
 `redteam/golden-redteam.json`(v1.0.0, 30건). 판정은 전부 결정적이다(LLM judge 없음). `services/security-review/` 는 코드 리뷰 도구라 쓰지 않는다.
