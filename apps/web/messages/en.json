@@ -248,10 +248,12 @@
       "full": "Full access",
       "bridge": "Bridge (CLI)",
       "chat": "Inference API",
+      "discord": "Discord bot",
       "hint": {
         "full": "Access to all APIs.",
         "bridge": "For OpenMake Code CLI local execution only — no inference API / token usage.",
-        "chat": "OpenAI-compatible inference API only."
+        "chat": "OpenAI-compatible inference API only.",
+        "discord": "For the Discord bot — issues both settings delivery (discord) and inference API (chat) scopes."
       }
     }
   },
@@ -2111,6 +2113,10 @@
       "slo": {
         "title": "SLO targets",
         "description": "Targets for chat availability, time to first token, agent task success and eval pass rate. Targets are percentages (e.g. 99.5); TTFT is the p95 threshold in ms. Applied from the next evaluation (every 5 minutes)."
+      },
+      "discord": {
+        "title": "Discord bot",
+        "description": "Token and access control for the Discord gateway bot. Restart the bot process to apply."
       }
     },
     "historyTitle": "Change history",

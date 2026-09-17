@@ -79,8 +79,8 @@ async function syncAdminProviderKey(adminId: string | null, settingKey: string, 
     }
 }
 
-/** 한 번에 저장 가능한 설정 수 상한 — registry 전체(현 24종)보다 넉넉한 방어값 */
-const MAX_ENTRIES_PER_REQUEST = 50;
+/** 한 번에 저장 가능한 설정 수 상한 — registry 전체(현 55종)보다 넉넉한 방어값 */
+const MAX_ENTRIES_PER_REQUEST = 100;
 
 const putSettingsSchema = z.object({
     entries: z.record(z.string().max(100), z.string().max(2000)),

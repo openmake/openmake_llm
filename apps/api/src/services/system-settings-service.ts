@@ -94,6 +94,19 @@ export class SystemSettingsService {
         return { requiresRestart };
     }
 
+    /**
+     * 외부 프로세스(Discord 봇)가 기동 시 받아갈 **유효값** — DB overlay 가 있으면 그 값, 없으면 env 원값.
+     * 시크릿 평문이 섞이므로 호출부가 스코프(API_KEY_SCOPES.DISCORD)를 먼저 검사해야 한다.
+     */
+    getEffectiveValues(keys: readonly string[]): Record<string, string> {
+        const out: Record<string, string> = {};
+        for (const key of keys) {
+            const value = this.snapshot[key] ?? readRawEnvValue(key);
+            if (value !== undefined && value !== '') out[key] = value;
+        }
+        return out;
+    }
+
     /** 설정 삭제 — env/기본값 폴백으로 복귀 */
     async reset(key: string, updatedBy: string | null = null): Promise<boolean> {
         const def = SETTING_DEFS_BY_KEY.get(key);

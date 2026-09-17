@@ -248,10 +248,12 @@
       "full": "フルアクセス",
       "bridge": "ブリッジ(CLI)",
       "chat": "推論API",
+      "discord": "Discord ボット",
       "hint": {
         "full": "すべてのAPIにアクセスします。",
         "bridge": "OpenMake Code CLI のローカル実行専用 — 推論API・トークン消費は不可。",
-        "chat": "OpenAI互換の推論API専用。"
+        "chat": "OpenAI互換の推論API専用。",
+        "discord": "Discord ボット専用 — 設定受信(discord)と推論API(chat)のスコープを併せて発行します。"
       }
     }
   },
@@ -2111,6 +2113,10 @@
       "slo": {
         "title": "SLO 目標",
         "description": "チャット可用性・初回トークン遅延・エージェントタスク成功率・評価合格率の目標。目標はパーセント(例: 99.5)、TTFT は p95 しきい値(ms)。次回の評価(5 分ごと)から反映されます。"
+      },
+      "discord": {
+        "title": "Discord ボット",
+        "description": "Discord ゲートウェイボットのトークンとアクセス制御。保存後にボットの再起動が必要です。"
       }
     },
     "historyTitle": "変更履歴",

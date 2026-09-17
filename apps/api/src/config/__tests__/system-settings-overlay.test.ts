@@ -4,6 +4,7 @@
 import { applySettingsOverlay, getConfig, resetConfig, loadConfig } from '../env';
 import { SYSTEM_SETTINGS_REGISTRY, SETTING_DEFS_BY_KEY } from '../system-settings-registry';
 import { ADMIN_SYNCED_PROVIDER_KEYS } from '../external-providers';
+import { DISCORD_RUNTIME_SETTING_KEYS } from '../discord-runtime';
 
 describe('applySettingsOverlay', () => {
     const ORIGINAL_CSE = process.env.GOOGLE_CSE_ID;
@@ -43,6 +44,14 @@ describe('applySettingsOverlay', () => {
 });
 
 describe('system-settings-registry', () => {
+    it('discord 그룹 키는 봇 중계 목록과 정확히 일치한다', () => {
+        // 한쪽만 늘리면 값이 저장돼도 봇에 닿지 않거나(레지스트리만), 저장이 거부된다(중계 목록만).
+        const groupKeys = SYSTEM_SETTINGS_REGISTRY.filter((d) => d.group === 'discord').map((d) => d.key).sort();
+        expect(groupKeys).toEqual([...DISCORD_RUNTIME_SETTING_KEYS].sort());
+        // 봇 API 키는 중계 요청 자체의 자격증명이라 어느 쪽에도 없어야 한다(부트스트랩 순환).
+        expect(groupKeys).not.toContain('DISCORD_BOT_API_KEY');
+    });
+
     it('키가 중복 없이 정의되어 있다', () => {
         const keys = SYSTEM_SETTINGS_REGISTRY.map((d) => d.key);
         expect(new Set(keys).size).toBe(keys.length);
@@ -52,10 +61,14 @@ describe('system-settings-registry', () => {
     it('모든 레지스트리 키가 loadConfig 의 safeParse 입력에 배선되어 있다', () => {
         // 배선 누락(과거 NAVER_API_HUB_* 실버그) 회귀 방지 — overlay 로 넣은 값이
         // 실제 config 에 도달하는지 키마다 확인한다. 값 검증이 있는 키는 형식을 맞춘다.
-        // 예외: ADMIN_SYNCED_PROVIDER_KEYS — config 소비자가 아니라 저장 시 관리자 본인
+        // 예외 ①: ADMIN_SYNCED_PROVIDER_KEYS — config 소비자가 아니라 저장 시 관리자 본인
         // BYOK(user_external_api_keys) 행으로 연동되는 키 (admin-system-settings.routes).
+        // 예외 ②: DISCORD_RUNTIME_SETTING_KEYS — 이 프로세스가 아니라 **별도 프로세스(Discord 봇)**가
+        // GET /api/integrations/discord/runtime-config 로 받아가는 중계 키라 EnvConfig 에 없다.
+        // (아래 별도 테스트가 "discord 그룹 = 중계 키 목록" 을 고정해 조용한 누락을 막는다.)
         const wiringTargets = SYSTEM_SETTINGS_REGISTRY.filter(
-            (def) => !(def.key in ADMIN_SYNCED_PROVIDER_KEYS),
+            (def) => !(def.key in ADMIN_SYNCED_PROVIDER_KEYS)
+                && !(DISCORD_RUNTIME_SETTING_KEYS as readonly string[]).includes(def.key),
         );
         const sample: Record<string, string> = {};
         for (const def of wiringTargets) {

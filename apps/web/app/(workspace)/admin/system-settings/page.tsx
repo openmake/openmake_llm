@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { KeyRound, Search, Bell, BellRing, Cpu, Bot, Gauge, Save, RotateCcw, Loader2, AlertTriangle, ExternalLink } from "lucide-react";
+import { AlertTriangle, Bell, BellRing, Bot, Cpu, ExternalLink, Gauge, KeyRound, Loader2, MessageSquare, RotateCcw, Save, Search } from "lucide-react";
 import {
   PageHeader,
   Card,
@@ -17,7 +17,7 @@ import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 
 /* ── 타입 (백엔드 /api/admin/system-settings) ── */
-type SettingGroup = "oauth" | "search" | "alerts" | "push" | "llm" | "agent" | "slo";
+type SettingGroup = "oauth" | "search" | "alerts" | "push" | "llm" | "agent" | "slo" | "discord";
 interface SettingView {
   key: string;
   group: SettingGroup;
@@ -37,7 +37,7 @@ interface SettingsPayload {
   settings: SettingView[];
 }
 
-const GROUP_ORDER: SettingGroup[] = ["llm", "agent", "slo", "oauth", "search", "alerts", "push"];
+const GROUP_ORDER: SettingGroup[] = ["llm", "agent", "slo", "oauth", "search", "alerts", "push", "discord"];
 const GROUP_ICONS: Record<SettingGroup, typeof KeyRound> = {
   oauth: KeyRound,
   search: Search,
@@ -46,6 +46,7 @@ const GROUP_ICONS: Record<SettingGroup, typeof KeyRound> = {
   llm: Cpu,
   agent: Bot,
   slo: Gauge,
+  discord: MessageSquare,
 };
 
 const inputCls =
