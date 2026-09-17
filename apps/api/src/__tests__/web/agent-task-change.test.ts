@@ -1,5 +1,6 @@
 /** 웹 승인·계획 변경 알림(apps/web/lib/agent-task-change.ts, HITL 2단계) — window 이벤트 발행·구독·해제. */
 // apps/api tsconfig rootDir 밖 파일이라 require 로 런타임만 불러온다(ts-jest 가 변환)
+export {}; // import 가 없어 전역 스크립트로 취급되면 다른 테스트의 `load` 와 이름이 충돌한다
 type Change = { taskId: string; approvalId?: string; reason: string };
 const load = () => require('../../../../web/lib/agent-task-change') as {
     announceAgentTaskChange: (c: Change) => void;
