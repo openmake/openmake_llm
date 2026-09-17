@@ -1967,6 +1967,28 @@
     "advancedHide": "詳細を閉じる",
     "hiddenUnsupportedNote": "実行経路のない機能は表示しません: {list}"
   },
+  "adminGatewayModels": {
+    "title": "ゲートウェイのモデル状態",
+    "description": "LiteLLM ゲートウェイ(/model/info)に登録されたルートとローカルモデルのプローブ結果です。",
+    "refresh": "更新",
+    "loadError": "ゲートウェイのモデル状態を読み込めませんでした",
+    "unreachable": "ゲートウェイに接続できませんでした: {reason}",
+    "empty": "ゲートウェイに登録されたモデルはありません",
+    "default": "既定",
+    "defaultNote": "既定のチャットモデル: {model}",
+    "col": {
+      "name": "ルート",
+      "upstream": "アップストリーム",
+      "mode": "モード",
+      "status": "状態"
+    },
+    "status": {
+      "available": "利用可",
+      "unavailable": "利用不可",
+      "uncataloged": "カタログ外",
+      "external": "外部"
+    }
+  },
   "adminSystemSettings": {
     "title": "システム設定",
     "description": "運用設定（OAuth・検索・通知・プッシュ・LLM ゲートウェイ）を管理します。ここで保存した値（DB）が .env より優先されます。",

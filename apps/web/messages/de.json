@@ -1967,6 +1967,28 @@
     "advancedHide": "Details ausblenden",
     "hiddenUnsupportedNote": "Fähigkeiten ohne Ausführungspfad sind ausgeblendet: {list}"
   },
+  "adminGatewayModels": {
+    "title": "Gateway-Modellstatus",
+    "description": "Auf dem LiteLLM-Gateway (/model/info) registrierte Routen und Prüfergebnisse der lokalen Modelle.",
+    "refresh": "Aktualisieren",
+    "loadError": "Gateway-Modellstatus konnte nicht geladen werden",
+    "unreachable": "Gateway nicht erreichbar: {reason}",
+    "empty": "Auf dem Gateway sind keine Modelle registriert",
+    "default": "Standard",
+    "defaultNote": "Standard-Chatmodell: {model}",
+    "col": {
+      "name": "Route",
+      "upstream": "Upstream",
+      "mode": "Modus",
+      "status": "Status"
+    },
+    "status": {
+      "available": "Verfügbar",
+      "unavailable": "Nicht verfügbar",
+      "uncataloged": "Nicht im Katalog",
+      "external": "Extern"
+    }
+  },
   "adminSystemSettings": {
     "title": "Systemeinstellungen",
     "description": "Betriebseinstellungen verwalten (OAuth, Suche, Warnungen, Push, LLM-Gateway). Hier gespeicherte Werte (DB) haben Vorrang vor .env.",

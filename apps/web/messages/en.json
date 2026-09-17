@@ -1967,6 +1967,28 @@
     "advancedHide": "Hide details",
     "hiddenUnsupportedNote": "Capabilities without an execution path are hidden: {list}"
   },
+  "adminGatewayModels": {
+    "title": "Gateway model status",
+    "description": "Routes registered on the LiteLLM gateway (/model/info) and local model probe results.",
+    "refresh": "Refresh",
+    "loadError": "Could not load gateway model status",
+    "unreachable": "Could not reach the gateway: {reason}",
+    "empty": "No models are registered on the gateway",
+    "default": "Default",
+    "defaultNote": "Default chat model: {model}",
+    "col": {
+      "name": "Route",
+      "upstream": "Upstream",
+      "mode": "Mode",
+      "status": "Status"
+    },
+    "status": {
+      "available": "Available",
+      "unavailable": "Unavailable",
+      "uncataloged": "Not in catalog",
+      "external": "External"
+    }
+  },
   "adminSystemSettings": {
     "title": "System Settings",
     "description": "Manage operational settings (OAuth, search, alerts, push, LLM gateway). Values saved here (DB) take precedence over .env.",

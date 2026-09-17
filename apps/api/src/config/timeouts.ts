@@ -74,6 +74,8 @@ export const LLM_TIMEOUTS = {
     FAST_FAIL_PREFILL_MS_PER_1K_TOKENS: Number(process.env.LLM_FAST_FAIL_PREFILL_MS_PER_1K_TOKENS) || 1000,
     /** Fast-fail 유효 타임아웃 상한 (ms) — 전역 LLM_TIMEOUT(기본 120000)과 정렬. env override: LLM_FAST_FAIL_MAX_MS */
     FAST_FAIL_MAX_MS: Number(process.env.LLM_FAST_FAIL_MAX_MS) || 120000,
+    /** 관리자 게이트웨이 모델 상태 카드의 `/model/info` 조회 타임아웃 (ms) — 느리면 카드가 실패 사유를 보인다 */
+    GATEWAY_MODEL_STATUS_TIMEOUT_MS: Number(process.env.LLM_GATEWAY_MODEL_STATUS_TIMEOUT_MS) || 5000,
 } as const;
 
 // ============================================

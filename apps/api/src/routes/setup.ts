@@ -54,6 +54,7 @@ import {
     adminOrganizationPoliciesRouter,
     adminConfigExportRouter,
     adminCostRatesRouter,
+    adminGatewayRouter,
     usageQuotaRouter,
     adminQuotaOverageRouter,
     usageStatementsRouter,
@@ -232,6 +233,7 @@ export function setupApiRoutes(
     app.use('/api/organizations', organizationPoliciesRouter);
     app.use('/api/admin', adminConfigExportRouter);
     app.use('/api/admin', adminCostRatesRouter);
+    app.use('/api/admin', adminGatewayRouter);
     app.use('/api/admin', adminQuotaOverageRouter);
     app.use('/api/usage', usageQuotaRouter);
     app.use('/api/usage', usageStatementsRouter);

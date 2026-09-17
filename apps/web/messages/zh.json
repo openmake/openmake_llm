@@ -1967,6 +1967,28 @@
     "advancedHide": "收起详细",
     "hiddenUnsupportedNote": "尚无执行路径的功能不显示: {list}"
   },
+  "adminGatewayModels": {
+    "title": "网关模型状态",
+    "description": "LiteLLM 网关(/model/info)中注册的路由及本地模型探测结果。",
+    "refresh": "刷新",
+    "loadError": "无法加载网关模型状态",
+    "unreachable": "无法连接网关：{reason}",
+    "empty": "网关中没有注册的模型",
+    "default": "默认",
+    "defaultNote": "默认聊天模型：{model}",
+    "col": {
+      "name": "路由",
+      "upstream": "上游",
+      "mode": "模式",
+      "status": "状态"
+    },
+    "status": {
+      "available": "可用",
+      "unavailable": "不可用",
+      "uncataloged": "不在目录中",
+      "external": "外部"
+    }
+  },
   "adminSystemSettings": {
     "title": "系统设置",
     "description": "管理运营设置（OAuth、搜索、通知、推送、LLM 网关）。此处保存的值（DB）优先于 .env。",

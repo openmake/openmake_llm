@@ -1967,6 +1967,28 @@
     "advancedHide": "세부 설정 닫기",
     "hiddenUnsupportedNote": "아직 실행 경로가 없는 기능은 표시하지 않습니다: {list}"
   },
+  "adminGatewayModels": {
+    "title": "게이트웨이 모델 상태",
+    "description": "LiteLLM 게이트웨이(/model/info)에 등록된 라우트와 로컬 모델 프로브 결과입니다.",
+    "refresh": "새로고침",
+    "loadError": "게이트웨이 모델 상태를 불러오지 못했습니다",
+    "unreachable": "게이트웨이에 연결하지 못했습니다: {reason}",
+    "empty": "게이트웨이에 등록된 모델이 없습니다",
+    "default": "기본",
+    "defaultNote": "기본 채팅 모델: {model}",
+    "col": {
+      "name": "라우트",
+      "upstream": "업스트림",
+      "mode": "모드",
+      "status": "상태"
+    },
+    "status": {
+      "available": "가용",
+      "unavailable": "불가",
+      "uncataloged": "카탈로그 밖",
+      "external": "외부"
+    }
+  },
   "adminSystemSettings": {
     "title": "시스템 설정",
     "description": "운영 설정(OAuth·검색·알림·푸시·LLM 게이트웨이)을 관리합니다. UI 저장값(DB)이 .env 보다 우선합니다.",
