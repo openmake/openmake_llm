@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.70.0](https://github.com/openmake/openmake_llm/compare/v1.69.0...v1.70.0) (2026-09-17)
+
+
+### ✨ 기능
+
+* 카탈로그 후속 — 원격 MCP OAuth 클라이언트·HITL 승인 알림·관리자 비용/디버그 큐 UI·iOS 폴더·분기 (마이그레이션 153~155) ([#922](https://github.com/openmake/openmake_llm/issues/922)) ([57a697d](https://github.com/openmake/openmake_llm/commit/57a697dbc6442343a4f4259990be901fbced49d6))
+
 ## [1.69.0](https://github.com/openmake/openmake_llm/compare/v1.68.3...v1.69.0) (2026-09-17)
 
 
