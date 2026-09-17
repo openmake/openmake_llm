@@ -1430,7 +1430,28 @@
       "5": "周五",
       "6": "周六"
     },
-    "noData": "没有可显示的数据。"
+    "noData": "没有可显示的数据。",
+    "billing": {
+      "title": "成本台账",
+      "subtitle": "基于 cost_ledger 的实际核算——与上方成本分析（估算）不同，未登记单价的项目记为 0。",
+      "scope": "范围",
+      "scopeSystem": "全部",
+      "scopeOrg": "组织",
+      "scopeUser": "用户",
+      "scopeIdPlaceholder": "组织或用户 ID",
+      "month": "月份",
+      "apply": "查看",
+      "qty": "数量",
+      "total": "合计",
+      "final": "已确定",
+      "live": "统计中",
+      "empty": "本月没有记录。",
+      "loadError": "无法加载账单",
+      "byAgentTitle": "按智能体的成本（最近 30 天）",
+      "byAgentEmpty": "没有归属到智能体的成本。",
+      "agent": "智能体",
+      "noAgent": "（未指定）"
+    }
   },
   "adminConversations": {
     "title": "全部对话查看",
@@ -1480,6 +1501,36 @@
       "info": "共{total}条 · 第{page}/{pages}页",
       "prev": "上一页",
       "next": "下一页"
+    },
+    "debugQueue": {
+      "title": "调试队列",
+      "description": "出错时自动保存（24 小时）或用户举报（7 天）的回复。重现包包含已脱敏的最后一次 LLM 请求。",
+      "refresh": "刷新",
+      "loadError": "无法加载调试队列",
+      "actionError": "无法完成请求",
+      "empty": "没有保留的条目。",
+      "col": {
+        "captured": "保存时间",
+        "reason": "原因",
+        "messages": "问题与回复",
+        "actions": "重现"
+      },
+      "reason": {
+        "autoError": "错误",
+        "userReport": "举报"
+      },
+      "downloadBundle": "下载重现包",
+      "replay": "重放",
+      "truncated": "已截断",
+      "noBundle": "无重现包",
+      "confirmTitle": "执行重放",
+      "confirmBody": "将把相同输入再次发送给模型。这是真实的 LLM 调用，会耗费时间和费用，每分钟限 3 次。",
+      "cancel": "取消",
+      "rateLimited": "重放每分钟限 3 次，请稍后再试。",
+      "resultTitle": "重放结果",
+      "resultMeta": "模型 {model} · {seconds} 秒 · 与已保存回复的相似度 {similarity}",
+      "toolCalls": "工具调用",
+      "close": "关闭"
     }
   },
   "adminAudit": {
@@ -1696,7 +1747,28 @@
     "enabled": "已启用",
     "disabled": "已禁用",
     "editAction": "编辑",
-    "deleteAction": "删除"
+    "deleteAction": "删除",
+    "oauthClientAction": "OAuth 客户端",
+    "oauthClient": {
+      "title": "{name} 的 OAuth 客户端",
+      "description": "不支持动态客户端注册的服务（GitHub、Google）需要先在其控制台创建 OAuth 客户端，用户才能登录。请将下方回调 URL 注册到该控制台。",
+      "redirectUri": "回调 URL（注册到服务控制台）",
+      "clientId": "客户端 ID",
+      "clientSecret": "客户端密钥",
+      "secretKeep": "已保存 — 留空则保留",
+      "secretRemove": "删除已保存的密钥",
+      "authMethod": "令牌端点认证方式",
+      "authMethodAuto": "自动（依据服务器元数据）",
+      "scope": "请求的 scope（空格分隔）",
+      "scopeHint": "留空时会请求服务公开的全部 scope——Google 会包含邮件完全访问权限，请填写所需的最小权限。",
+      "authorizationParams": "额外授权参数（每行一个 key=value）",
+      "save": "保存",
+      "saved": "已保存",
+      "remove": "删除",
+      "close": "关闭",
+      "loadError": "无法加载设置",
+      "saveError": "无法保存"
+    }
   },
   "providerKeys": {
     "validate": "验证",

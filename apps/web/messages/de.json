@@ -1430,7 +1430,28 @@
       "5": "Fr",
       "6": "Sa"
     },
-    "noData": "Keine Daten zum Anzeigen."
+    "noData": "Keine Daten zum Anzeigen.",
+    "billing": {
+      "title": "Kostenbuch",
+      "subtitle": "Tatsächliche Abrechnung aus cost_ledger — getrennt von der geschätzten Kostenanalyse oben; Posten ohne hinterlegten Tarif werden mit 0 erfasst.",
+      "scope": "Bereich",
+      "scopeSystem": "Gesamt",
+      "scopeOrg": "Organisation",
+      "scopeUser": "Benutzer",
+      "scopeIdPlaceholder": "Organisations- oder Benutzer-ID",
+      "month": "Monat",
+      "apply": "Anzeigen",
+      "qty": "Menge",
+      "total": "Summe",
+      "final": "Abgeschlossen",
+      "live": "Laufend",
+      "empty": "Keine Einträge für diesen Monat.",
+      "loadError": "Abrechnung konnte nicht geladen werden",
+      "byAgentTitle": "Kosten nach Agent (letzte 30 Tage)",
+      "byAgentEmpty": "Keine Kosten sind Agenten zugeordnet.",
+      "agent": "Agent",
+      "noAgent": "(nicht zugeordnet)"
+    }
   },
   "adminConversations": {
     "title": "Alle Unterhaltungen",
@@ -1480,6 +1501,36 @@
       "info": "{total} gesamt · Seite {page}/{pages}",
       "prev": "Zurück",
       "next": "Weiter"
+    },
+    "debugQueue": {
+      "title": "Debug-Warteschlange",
+      "description": "Antworten, die bei Fehlern automatisch (24 Stunden) oder durch Nutzermeldungen (7 Tage) gespeichert wurden. Replay-Pakete enthalten die maskierte letzte LLM-Anfrage.",
+      "refresh": "Aktualisieren",
+      "loadError": "Debug-Warteschlange konnte nicht geladen werden",
+      "actionError": "Anfrage konnte nicht ausgeführt werden",
+      "empty": "Keine gespeicherten Einträge.",
+      "col": {
+        "captured": "Gespeichert",
+        "reason": "Grund",
+        "messages": "Frage & Antwort",
+        "actions": "Replay"
+      },
+      "reason": {
+        "autoError": "Fehler",
+        "userReport": "Meldung"
+      },
+      "downloadBundle": "Replay-Paket herunterladen",
+      "replay": "Replay",
+      "truncated": "Gekürzt",
+      "noBundle": "Kein Paket",
+      "confirmTitle": "Replay ausführen",
+      "confirmBody": "Dieselbe Eingabe wird erneut an das Modell gesendet. Das ist ein echter LLM-Aufruf mit Zeit- und Kostenaufwand, begrenzt auf 3 pro Minute.",
+      "cancel": "Abbrechen",
+      "rateLimited": "Replays sind auf 3 pro Minute begrenzt. Bitte gleich erneut versuchen.",
+      "resultTitle": "Replay-Ergebnis",
+      "resultMeta": "Modell {model} · {seconds} s · Ähnlichkeit zur gespeicherten Antwort {similarity}",
+      "toolCalls": "Tool-Aufrufe",
+      "close": "Schließen"
     }
   },
   "adminAudit": {
@@ -1696,7 +1747,28 @@
     "enabled": "Aktiviert",
     "disabled": "Deaktiviert",
     "editAction": "Bearbeiten",
-    "deleteAction": "Löschen"
+    "deleteAction": "Löschen",
+    "oauthClientAction": "OAuth-Client",
+    "oauthClient": {
+      "title": "OAuth-Client für {name}",
+      "description": "Dienste ohne dynamische Client-Registrierung (GitHub, Google) benötigen einen in ihrer Konsole angelegten OAuth-Client, bevor sich Nutzer anmelden können. Tragen Sie die folgende Callback-URL dort ein.",
+      "redirectUri": "Callback-URL (in der Dienstkonsole eintragen)",
+      "clientId": "Client-ID",
+      "clientSecret": "Client-Secret",
+      "secretKeep": "Gespeichert — leer lassen zum Beibehalten",
+      "secretRemove": "Gespeichertes Secret entfernen",
+      "authMethod": "Authentifizierung am Token-Endpunkt",
+      "authMethodAuto": "Automatisch (laut Server-Metadaten)",
+      "scope": "Angeforderte Scopes (durch Leerzeichen getrennt)",
+      "scopeHint": "Leer bedeutet: alle vom Dienst angebotenen Scopes werden angefordert — bei Google inklusive vollem Mailzugriff. Geben Sie nur das Nötigste an.",
+      "authorizationParams": "Zusätzliche Autorisierungsparameter (ein key=value pro Zeile)",
+      "save": "Speichern",
+      "saved": "Gespeichert",
+      "remove": "Löschen",
+      "close": "Schließen",
+      "loadError": "Einstellungen konnten nicht geladen werden",
+      "saveError": "Speichern fehlgeschlagen"
+    }
   },
   "providerKeys": {
     "validate": "Überprüfen",

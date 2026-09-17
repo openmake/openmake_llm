@@ -62,7 +62,9 @@ mcpOAuthRouter.post('/servers/:id/oauth/start', requireAuth, asyncHandler(async 
     const provider = new McpOAuthProvider({ serverId: target.server.id, userId: target.ownerId });
     // 기존 토큰이 있으면 SDK 가 갱신을 시도해 AUTHORIZED 를 돌려줄 수 있다 — 그 경우 로그인 불필요.
     // 재로그인을 강제하려면 먼저 DELETE 로 지운다.
-    const result = await auth(provider, { serverUrl: target.server.url as string, fetchFn: createPinnedFetch() });
+    // 사전 등록 클라이언트(155)의 scope — 없으면 SDK 가 보호 리소스 메타의 scopes_supported 전체를 요청한다.
+    const scope = await provider.requestedScope();
+    const result = await auth(provider, { serverUrl: target.server.url as string, fetchFn: createPinnedFetch(), ...(scope ? { scope } : {}) });
     if (result === 'AUTHORIZED') {
         res.json(success({ authorized: true, authorizationUrl: null }));
         return;
@@ -94,7 +96,8 @@ mcpOAuthRouter.get('/oauth/callback', requireAuth, asyncHandler(async (req: Requ
 
     try {
         const provider = new McpOAuthProvider({ serverId: server.id, userId: record.userId });
-        const result = await auth(provider, { serverUrl: server.url, authorizationCode: code, fetchFn: createPinnedFetch() });
+        const scope = await provider.requestedScope();
+        const result = await auth(provider, { serverUrl: server.url, authorizationCode: code, fetchFn: createPinnedFetch(), ...(scope ? { scope } : {}) });
         if (result !== 'AUTHORIZED') throw new Error(`unexpected auth result: ${result}`);
         await provider.invalidateCredentials('verifier');
         logger.info(`OAuth 완료 s=${server.id} u=${record.userId}`);

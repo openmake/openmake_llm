@@ -80,3 +80,44 @@ describe('McpOAuthProvider', () => {
         expect(await p.clientInformation()).toBeUndefined();
     });
 });
+
+describe('McpOAuthProvider — 사전 등록 클라이언트(155, R-3)', () => {
+    const fixed = {
+        catalogId: 'mcp-google-gmail-remote', clientId: 'google-client', clientSecret: 'shh',
+        tokenEndpointAuthMethod: 'client_secret_post' as const, scope: 'https://www.googleapis.com/auth/gmail.readonly',
+        authorizationParams: { access_type: 'offline', prompt: 'consent', redirect_uri: 'https://evil.example/cb' },
+    };
+
+    it('카탈로그에 등록된 클라이언트를 사용자별 등록보다 먼저 쓰고, 사용자 행에 복사하지 않는다', async () => {
+        const repo = fakeRepo();
+        repo._store.client = { client_id: 'dcr-client' };
+        const p = new McpOAuthProvider({ serverId: 's1', userId: 'u1', repo, staticClients: { getForServer: async () => fixed } });
+        expect(await p.clientInformation()).toEqual({ client_id: 'google-client', client_secret: 'shh', token_endpoint_auth_method: 'client_secret_post' });
+        await p.saveClientInformation({ client_id: 'google-client', issuer: 'https://accounts.google.com' } as never);
+        expect(repo._store.client).toEqual({ client_id: 'dcr-client' });
+        expect(await p.requestedScope()).toBe('https://www.googleapis.com/auth/gmail.readonly');
+    });
+
+    it('인가 URL 에 provider 파라미터를 덧붙이되 PKCE·redirect 같은 예약 키는 덮어쓰지 않는다', async () => {
+        const p = new McpOAuthProvider({ serverId: 's1', userId: 'u1', repo: fakeRepo(), staticClients: { getForServer: async () => fixed } });
+        await p.clientInformation();
+        const url = new URL('https://accounts.google.com/o/oauth2/v2/auth?client_id=google-client&redirect_uri=https%3A%2F%2Fchat.example.com%2Fapi%2Fmcp%2Foauth%2Fcallback&code_challenge=abc');
+        p.redirectToAuthorization(url);
+        const q = p.capturedAuthorizationUrl!.searchParams;
+        expect(q.get('access_type')).toBe('offline');
+        expect(q.get('prompt')).toBe('consent');
+        expect(q.get('redirect_uri')).toBe('https://chat.example.com/api/mcp/oauth/callback');
+    });
+
+    it('등록이 없거나 조회가 실패하면 종전 동적 등록 경로(사용자 행)로 돌아간다', async () => {
+        const repo = fakeRepo();
+        repo._store.client = { client_id: 'dcr-client' };
+        const none = new McpOAuthProvider({ serverId: 's1', userId: 'u1', repo, staticClients: { getForServer: async () => undefined } });
+        expect(await none.clientInformation()).toEqual({ client_id: 'dcr-client' });
+        expect(await none.requestedScope()).toBeUndefined();
+        const broken = new McpOAuthProvider({ serverId: 's1', userId: 'u1', repo, staticClients: { getForServer: async () => { throw new Error('db down'); } } });
+        expect(await broken.clientInformation()).toEqual({ client_id: 'dcr-client' });
+        await broken.saveClientInformation({ client_id: 'dcr-2' } as never);
+        expect(repo._store.client).toEqual({ client_id: 'dcr-2' });
+    });
+});

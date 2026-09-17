@@ -107,7 +107,11 @@ public struct WsServerEvent: Codable {
     public let artifact: ArtifactMeta?
     public let delta: String?
     public let id: String?
+    /// 승인 이관·에스컬레이션·철회 대상 승인 id(HITL 2단계) — 계획 편집 알림엔 없다
+    public let approvalID: String?
     public let currentTurn: Double?
+    /// 승인·계획 변경 알림 사유 — 받은 클라이언트는 승인함(·계획)을 다시 읽는다
+    public let reason: Reason?
     public let status: String?
     /// 방금 기록된 스텝 요약(4-5 실시간 스트림) — "현재 단계" 라이브 표시용.
     public let step: Step?
@@ -151,13 +155,15 @@ public struct WsServerEvent: Codable {
         case artifact = "artifact"
         case delta = "delta"
         case id = "id"
+        case approvalID = "approvalId"
         case currentTurn = "currentTurn"
+        case reason = "reason"
         case status = "status"
         case step = "step"
         case taskID = "taskId"
     }
 
-    public init(token: String?, type: WsServerEventType, messageID: String?, summary: String?, issues: String?, sessionID: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, streamID: String?, thinking: String?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, status: String?, step: Step?, taskID: String?) {
+    public init(token: String?, type: WsServerEventType, messageID: String?, summary: String?, issues: String?, sessionID: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, streamID: String?, thinking: String?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, approvalID: String?, currentTurn: Double?, reason: Reason?, status: String?, step: Step?, taskID: String?) {
         self.token = token
         self.type = type
         self.messageID = messageID
@@ -195,7 +201,9 @@ public struct WsServerEvent: Codable {
         self.artifact = artifact
         self.delta = delta
         self.id = id
+        self.approvalID = approvalID
         self.currentTurn = currentTurn
+        self.reason = reason
         self.status = status
         self.step = step
         self.taskID = taskID
@@ -258,7 +266,9 @@ public extension WsServerEvent {
         artifact: ArtifactMeta?? = nil,
         delta: String?? = nil,
         id: String?? = nil,
+        approvalID: String?? = nil,
         currentTurn: Double?? = nil,
+        reason: Reason?? = nil,
         status: String?? = nil,
         step: Step?? = nil,
         taskID: String?? = nil
@@ -301,7 +311,9 @@ public extension WsServerEvent {
             artifact: artifact ?? self.artifact,
             delta: delta ?? self.delta,
             id: id ?? self.id,
+            approvalID: approvalID ?? self.approvalID,
             currentTurn: currentTurn ?? self.currentTurn,
+            reason: reason ?? self.reason,
             status: status ?? self.status,
             step: step ?? self.step,
             taskID: taskID ?? self.taskID
@@ -709,6 +721,14 @@ public enum Phase: String, Codable {
     case reviewing = "reviewing"
     case selecting = "selecting"
     case synthesizing = "synthesizing"
+}
+
+/// 승인·계획 변경 알림 사유 — 받은 클라이언트는 승인함(·계획)을 다시 읽는다
+public enum Reason: String, Codable {
+    case assigned = "assigned"
+    case escalated = "escalated"
+    case planEdited = "plan_edited"
+    case revoked = "revoked"
 }
 
 /// MCP 도구 결과의 resource content (백엔드 external-tool-exec 가 추출해 emit).

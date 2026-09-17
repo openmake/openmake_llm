@@ -1425,6 +1425,12 @@ export const WEB_SEARCH_INTENT_PATTERNS: readonly RegExp[] = [
     /검색(해\s*서|해\s*줘|해\s*봐|으로|해서|해줘|해봐)/,
     /(최신|오늘|지금|현재)[^\n]{0,12}(뉴스|날씨|시세|가격|환율)[^\n]{0,10}(알려|찾아|검색|조사)/,
     /web\s*search|search\s+(the\s+)?(web|internet|online)/i,
+    // 영어 명시 요청 — "Look it up online", "search for X on the web", "google it" (2026-09-17, 도구 선택
+    // 골든셋 tool-ws-009 가 잡은 누락). 첫 턴 tool_choice 강제로 이어지므로 동사+온라인 부사 조합만 받는다
+    // ("check if the server is online" 같은 상태 질문은 매칭하지 않는다).
+    /\blook\b[^\n.?!]{0,30}\bup\b[^\n.?!]{0,30}\b(online|on\s+the\s+(web|internet))\b/i,
+    /\b(search|google)\b[^\n.?!]{0,30}\b(online|on\s+the\s+(web|internet))\b/i,
+    /\bgoogle\s+(it|this|that)\b/i,
     // 시의성 질의는 "검색" 이라는 단어 없이 오는 경우가 더 많다 — 시점어 + 시황/지표만으로도
     // 매칭시킨다. ("코스피 지수랑 ... 어제 어떻게 됐어?" 가 위 3개 패턴에 모두 걸리지 않아
     // web_search 가 도구 목록에서 빠졌고, 모델이 텍스트 툴콜을 뱉어 본문에 노출된 2026-08-01 사례)
@@ -2208,6 +2214,9 @@ export const REPLAY_CAPTURE = {
     MAX_SESSIONS: 300,
     /** 관리자 REST 리플레이 분당 상한 — 실제 LLM 호출 비용 */
     REPLAY_PER_MINUTE: 3,
+    /** 관리자 디버그 큐 목록 — 한 번에 돌려주는 최대 행 수·본문 미리보기 글자 수 */
+    LIST_MAX: 100,
+    LIST_PREVIEW_CHARS: 160,
 } as const;
 
 /** 채팅 요청 사실 테이블(F24.2, 142) — 요청당 1행 지문·결과. CHAT_REQUESTS_ENABLED=false 로 끔. */

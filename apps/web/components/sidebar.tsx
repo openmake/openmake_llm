@@ -25,6 +25,7 @@ import { EXTERNAL_LINKS } from "@/lib/external-links";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { appendAnonSessionId } from "@/lib/anon-session";
 import { syncAuthFromServer, clearHadSession } from "@/lib/auth-sync";
+import { onAgentTaskChange } from "@/lib/agent-task-change";
 import Image from "next/image";
 import { ThemeToggle } from "./theme-toggle";
 import { cn } from "@/lib/utils";
@@ -117,7 +118,9 @@ export function Sidebar() {
     };
     void poll();
     const timer = setInterval(poll, 30_000);
-    return () => { alive = false; clearInterval(timer); };
+    // 승인이 이관·에스컬레이션·철회되면 폴링 주기를 기다리지 않고 합계를 다시 센다.
+    const off = onAgentTaskChange((c) => { if (c.reason !== "plan_edited") void poll(); });
+    return () => { alive = false; clearInterval(timer); off(); };
   }, [user]);
 
   // 라우트 이동·바깥 클릭 시 프로필 메뉴 닫기

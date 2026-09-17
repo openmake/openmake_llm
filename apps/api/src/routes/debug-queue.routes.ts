@@ -12,6 +12,7 @@
  * @see data/conversation-debug-queue.ts
  *
  * 재현(F24.7, 144, 관리자):
+ *   GET  /api/debug-queue?limit=&reason=auto-error|user-report   만료 전 항목 목록(본문 미리보기)
  *   GET  /api/debug-queue/:id/replay-bundle           번들·원문(다운로드용)
  *   POST /api/debug-queue/:id/replay {model?, temperature?}  같은 입력 재전송 + 저장 응답과 유사도(분당 3회, 실제 LLM 비용)
  */
@@ -20,7 +21,7 @@ import { Router, Request, Response } from 'express';
 import { success, badRequest } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { requireAuth, requireAdmin } from '../auth';
-import { enqueueDebugCapture, DEBUG_QUEUE_TTL_MS, getDebugCaptureForReplay } from '../data/conversation-debug-queue';
+import { enqueueDebugCapture, DEBUG_QUEUE_TTL_MS, getDebugCaptureForReplay, listDebugCaptures } from '../data/conversation-debug-queue';
 import rateLimit from 'express-rate-limit';
 import { REPLAY_CAPTURE } from '../config/runtime-limits';
 import { createLogger } from '../utils/logger';
@@ -97,6 +98,13 @@ async function loadReplayable(id: string, res: Response) {
     if (!row.replayBundle) { res.status(404).json(badRequest('이 항목에는 재현 번들이 없습니다(REPLAY_CAPTURE 비활성·세션 없음·보관 시간 초과)')); return null; }
     return row;
 }
+
+router.get('/', requireAuth, requireAdmin, asyncHandler(async (req: Request, res: Response) => {
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? ''), 10) || REPLAY_CAPTURE.LIST_MAX, 1), REPLAY_CAPTURE.LIST_MAX);
+    const reason = req.query.reason === 'auto-error' || req.query.reason === 'user-report' ? req.query.reason : undefined;
+    const items = await listDebugCaptures({ limit, previewChars: REPLAY_CAPTURE.LIST_PREVIEW_CHARS, reason });
+    res.json(success({ items }));
+}));
 
 router.get('/:id/replay-bundle', requireAuth, requireAdmin, asyncHandler(async (req: Request, res: Response) => {
     const row = await loadReplayable(req.params.id, res);

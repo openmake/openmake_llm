@@ -7,6 +7,7 @@
  *   GET    /admin/mcp/catalog/:id        — 단건
  *   PUT    /admin/mcp/catalog/:id        — 부분 수정
  *   DELETE /admin/mcp/catalog/:id        — 영구 삭제
+ *   GET/PUT/DELETE /admin/mcp/catalog/:id/oauth-client — 사전 등록 OAuth 클라이언트(155, 계획 R-3; secret write-only)
  *
  * @module routes/mcp-catalog-admin.routes
  */
@@ -17,7 +18,11 @@ import { success, notFound } from '../utils/api-response';
 import {
     createCatalogTemplateSchema,
     updateCatalogTemplateSchema,
+    catalogOAuthClientSchema,
 } from '../schemas/mcp-catalog-admin.schema';
+import { McpCatalogOAuthClientRepository } from '../data/repositories/mcp-catalog-oauth-client-repository';
+import { resolveMcpOAuthRedirectUrl } from '../config/mcp-oauth';
+import { getAuditService } from '../services/AuditService';
 import { McpCatalogAdminRepository } from '../data/repositories/mcp-catalog-admin-repository';
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { createLogger } from '../utils/logger';
@@ -95,5 +100,52 @@ mcpCatalogAdminRouter.delete('/catalog/:id', asyncHandler(async (req: Request, r
         return;
     }
     logger.info(`catalog template deleted: ${req.params.id} (by admin)`);
+    res.json(success({ id: req.params.id, deleted: true }));
+}));
+
+// ── 사전 등록 OAuth 클라이언트(155, 계획 R-3) — 동적 등록을 받지 않는 인가 서버(GitHub·Google)용 ──
+// 응답의 redirectUri 는 provider 콘솔(GitHub OAuth App·Google OAuth 클라이언트)에 등록할 콜백 URL 이다.
+
+async function catalogExists(id: string): Promise<boolean> {
+    return !!(await new McpCatalogAdminRepository(getUnifiedDatabase().getPool()).getCatalogTemplateForAdmin(id));
+}
+
+mcpCatalogAdminRouter.get('/catalog/:id/oauth-client', asyncHandler(async (req: Request, res: Response) => {
+    if (!(await catalogExists(req.params.id))) { res.status(404).json(notFound('catalog template')); return; }
+    const client = await new McpCatalogOAuthClientRepository(getUnifiedDatabase().getPool()).getView(req.params.id);
+    res.json(success({ client: client ?? null, redirectUri: resolveMcpOAuthRedirectUrl() }));
+}));
+
+mcpCatalogAdminRouter.put('/catalog/:id/oauth-client', asyncHandler(async (req: Request, res: Response) => {
+    const parsed = catalogOAuthClientSchema.safeParse(req.body);
+    if (!parsed.success) {
+        res.status(400).json({ success: false, error: 'VALIDATION_FAILED', details: parsed.error.issues });
+        return;
+    }
+    if (!(await catalogExists(req.params.id))) { res.status(404).json(notFound('catalog template')); return; }
+    const repo = new McpCatalogOAuthClientRepository(getUnifiedDatabase().getPool());
+    const b = parsed.data;
+    await repo.upsert({
+        catalogId: req.params.id, clientId: b.clientId, clientSecret: b.clientSecret,
+        tokenEndpointAuthMethod: b.tokenEndpointAuthMethod, scope: b.scope || null,
+        authorizationParams: b.authorizationParams, updatedBy: String(req.user!.id),
+    });
+    // secret 원문·client_id 는 감사 로그에 남기지 않는다 — 무엇이 바뀌었는지만
+    await getAuditService().logAudit({
+        action: 'mcp_catalog.oauth_client_changed', userId: String(req.user!.id), resourceType: 'mcp_catalog', resourceId: req.params.id,
+        details: { secret: b.clientSecret === undefined ? 'kept' : b.clientSecret === null ? 'removed' : 'set', hasScope: !!b.scope },
+    });
+    logger.info(`catalog oauth client saved: ${req.params.id} (by admin)`);
+    res.json(success({ client: await repo.getView(req.params.id), redirectUri: resolveMcpOAuthRedirectUrl() }));
+}));
+
+mcpCatalogAdminRouter.delete('/catalog/:id/oauth-client', asyncHandler(async (req: Request, res: Response) => {
+    const removed = await new McpCatalogOAuthClientRepository(getUnifiedDatabase().getPool()).delete(req.params.id);
+    if (!removed) { res.status(404).json(notFound('oauth client')); return; }
+    await getAuditService().logAudit({
+        action: 'mcp_catalog.oauth_client_changed', userId: String(req.user!.id), resourceType: 'mcp_catalog', resourceId: req.params.id,
+        details: { deleted: true },
+    });
+    logger.info(`catalog oauth client deleted: ${req.params.id} (by admin)`);
     res.json(success({ id: req.params.id, deleted: true }));
 }));

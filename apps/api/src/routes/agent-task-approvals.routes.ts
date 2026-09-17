@@ -27,6 +27,7 @@ import { getPushService } from '../services/PushService';
 import { AuthorizationError } from '../utils/error-handler';
 import type { PendingApproval } from '../services/task-sandbox/approval-gate';
 import { resumeParkedTask } from '../services/agent-task/hitl-park';
+import { notifyApprovalChange } from '../services/agent-task/approval-change-notify';
 
 /** 결정·이관 권한(138): 소유자 OR 현재 담당자 OR 시스템 admin. */
 function assertApprovalActor(pending: PendingApproval, user: { id?: string | number; role?: string }): void {
@@ -107,6 +108,7 @@ router.post('/approvals/:approvalId/revoke', asyncHandler(async (req: Request, r
     const result = await getApprovalRegistry().revoke(approvalId, String(req.user!.id));
     if (result === 'not_found') return res.status(404).json(notFound('철회할 승인을 찾을 수 없습니다.'));
     if (result === 'consumed') return res.status(409).json(badRequest('이미 실행에 사용된 승인은 철회할 수 없습니다.'));
+    if (row) void notifyApprovalChange({ userId: row.user_id, taskId: row.task_id, approvalId, reason: 'revoked' });
     res.json(success({ approvalId, status: 'revoked' }));
 }));
 
@@ -132,6 +134,7 @@ router.post('/approvals/:approvalId/reassign', asyncHandler(async (req: Request,
     }
     if (!(await registry.reassign(approvalId, toUserId, String(req.user!.id)))) return res.status(404).json(notFound('이관할 수 없습니다.'));
     notifyAssignee(toUserId, pending, false);
+    void notifyApprovalChange({ userId: toUserId, taskId: pending.taskId, approvalId, reason: 'assigned' });
     logger.info(`[AgentTaskApprovalRoutes] 이관: ${approvalId} → ${toUserId} (by ${req.user!.id})`);
     res.json(success({ approvalId, assigneeUserId: toUserId }));
 }));
@@ -148,6 +151,7 @@ router.post('/approvals/:approvalId/escalate', asyncHandler(async (req: Request,
     if (!target) return res.status(400).json(badRequest('에스컬레이션할 조직 관리자가 없습니다(조직 미가입 또는 관리자 부재).'));
     if (!(await registry.reassign(approvalId, target, String(req.user!.id), { escalate: true, reason }))) return res.status(404).json(notFound('에스컬레이션할 수 없습니다.'));
     notifyAssignee(target, pending, true);
+    void notifyApprovalChange({ userId: target, taskId: pending.taskId, approvalId, reason: 'escalated' });
     logger.info(`[AgentTaskApprovalRoutes] 에스컬레이션: ${approvalId} → ${target} (by ${req.user!.id})`);
     res.json(success({ approvalId, assigneeUserId: target, escalatedAt: new Date().toISOString() }));
 }));

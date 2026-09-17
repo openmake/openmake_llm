@@ -44,6 +44,7 @@ import { SharePanel } from "@/components/agent-tasks/share-panel";
 import { DiffView } from "@/components/chat/diff-view";
 import { PlanEditor } from "@/components/agent-tasks/plan-editor";
 import { TriggersPanel } from "@/components/agent-tasks/triggers-panel";
+import { onAgentTaskChange } from "@/lib/agent-task-change";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type TaskStatus = "running" | "completed" | "pending";
@@ -629,6 +630,9 @@ function TaskDetailModal({
 
   const plan = detail?.task.plan ?? [];
   const [editingPlan, setEditingPlan] = useState(false);
+  // 다른 창·기기의 계획 편집·승인 변경 → 재조회. 편집 중엔 건너뛴다 — 재조회가 planVersion 을 올려
+  // 이 편집기의 낙관적 잠금(expectedVersion)을 무력화하면 남의 편집을 조용히 덮어쓴다.
+  useEffect(() => onAgentTaskChange((c) => { if (c.taskId === taskId && !editingPlan) reload(); }), [taskId, editingPlan]);
   const planEditable = !!detail && detail.task.status !== "completed";
   // 체크포인트 분기(141) — 실행 중이 아닐 때 이력을 불러와 턴을 고른다. fork → resume → 새 작업 열기.
   const [checkpoints, setCheckpoints] = useState<Array<{ turn: number; messages: number }>>([]);

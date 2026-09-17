@@ -782,6 +782,10 @@ public enum Components {
         }
         /// - Remark: Generated from `#/components/schemas/ChatMessage`.
         public struct ChatMessage: Codable, Hashable, Sendable {
+            /// DB 메시지 id(정수 문자열) — 이력 조회에만 있으며 "여기서 분기"(clone uptoMessageId) 기준점
+            ///
+            /// - Remark: Generated from `#/components/schemas/ChatMessage/id`.
+            public var id: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ChatMessage/role`.
             @frozen public enum rolePayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case user = "user"
@@ -809,6 +813,7 @@ public enum Components {
             /// Creates a new `ChatMessage`.
             ///
             /// - Parameters:
+            ///   - id: DB 메시지 id(정수 문자열) — 이력 조회에만 있으며 "여기서 분기"(clone uptoMessageId) 기준점
             ///   - role:
             ///   - content:
             ///   - model:
@@ -817,6 +822,7 @@ public enum Components {
             ///   - created_at:
             ///   - sources: assistant 답변의 웹검색 출처(156) — 본문 [N] 과 같은 번호
             public init(
+                id: Swift.String? = nil,
                 role: Components.Schemas.ChatMessage.rolePayload,
                 content: Swift.String,
                 model: Swift.String? = nil,
@@ -825,6 +831,7 @@ public enum Components {
                 created_at: Swift.String? = nil,
                 sources: [Components.Schemas.SearchSourceRef]? = nil
             ) {
+                self.id = id
                 self.role = role
                 self.content = content
                 self.model = model
@@ -834,6 +841,7 @@ public enum Components {
                 self.sources = sources
             }
             public enum CodingKeys: String, CodingKey {
+                case id
                 case role
                 case content
                 case model

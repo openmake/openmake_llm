@@ -167,7 +167,7 @@ npm run eval:tools -- --real --limit 10    # real — ChatService evalToolObserv
 - mock 은 `.env` 를 읽지 않고 운영 플래그 프로필(`ORCHESTRATION_AUTO_DISPATCH=true`·`REPORT_PIPELINE_ENABLED=true`)을 고정한다. 운영 플래그가 바뀌면 러너의 `MOCK_PROFILE_ENV` 도 맞춘다.
 - mock 범위 밖: 토글·스킬 바인딩(DB)·사용자 MCP·이미지 첨부로만 열리는 도구(vision·load_skill 카탈로그).
 - real 은 도구를 실행하지 않고(dry-run) 첫 관찰 직후 중단해 비용이 첫 턴 1회분이다. 단 멀티모달 오케스트레이터 Planner 가 `multi` 로 판정한 턴은 도구 루프 **이전에** 웹검색 capability 를 실행한다(도구 호출이 아니라 dry-run 대상이 아니다). 2026-09-17 `--limit 3` 실측 3/3.
-- 기준선: mock 39/40(97.5%) — 실패 1건 `tool-ws-009`("Look it up online")는 영어 표현이 `WEB_SEARCH_INTENT_PATTERNS` 에 안 걸리는 **실제 노출 누락**이다(라벨을 바꾸지 말고 패턴 보강 여부를 판단할 것).
+- 기준선: mock 40/40(100%). 도입 시 39/40 이던 실패 1건 `tool-ws-009`("Look it up online")는 영어 명시 검색 표현이 `WEB_SEARCH_INTENT_PATTERNS` 에 없던 **실제 노출 누락**이라 라벨이 아니라 패턴을 보강했다(2026-09-17 — 동사+online 조합만, "server is online" 류 상태 질문은 음성 테스트로 고정).
 - 민감도 확인: `CHAT_TOOL_INTENT_GATE_ENABLED=false`(과다 노출 5건)·`OPS_METRICS_TOOL_ENABLED=false`(누락 5건) 모두 실패한다.
 
 ## nightly 지연 회귀 기준선 (2026-09-17, F26.8)

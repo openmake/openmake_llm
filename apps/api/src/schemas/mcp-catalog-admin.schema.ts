@@ -57,3 +57,20 @@ export const updateCatalogTemplateSchema = z.object({
     is_enabled: z.boolean().optional(),
 });
 
+
+/** 인가 URL 에 덧붙일 provider 파라미터 키 — 소문자·숫자·밑줄만(예약 키 필터는 provider 가 한 번 더 한다) */
+const AUTHORIZATION_PARAM_KEY = /^[a-z][a-z0-9_]{0,39}$/;
+
+/**
+ * 원격 MCP 사전 등록 OAuth 클라이언트(155, 계획 R-3). clientSecret: 생략=기존 유지, null=제거.
+ * secret 은 write-only — 조회 응답엔 hasSecret 만 나간다.
+ */
+export const catalogOAuthClientSchema = z.object({
+    clientId: z.string().trim().min(1).max(300),
+    clientSecret: z.string().min(1).max(500).nullable().optional(),
+    tokenEndpointAuthMethod: z.enum(['client_secret_post', 'client_secret_basic', 'none']).nullable().optional(),
+    scope: z.string().trim().max(2000).nullable().optional(),
+    authorizationParams: z.record(z.string().regex(AUTHORIZATION_PARAM_KEY), z.string().max(200))
+        .refine((o) => Object.keys(o).length <= 10, '인가 파라미터는 10개까지')
+        .optional(),
+});

@@ -164,6 +164,13 @@ final class ChatStreamStateTests: XCTestCase {
         XCTAssertEqual(state.activityKind, .agent)
     }
 
+    func testAgentTaskChangeNotificationDoesNotOverwriteActivity() {
+        var state = ChatStreamState()
+        state.apply(event(#"{"type":"agent_task_progress","taskId":"task-1","currentTurn":2,"status":"running","step":{"stepType":"tool_result","preview":"문서를 읽었어요"}}"#))
+        state.apply(event(#"{"type":"agent_task_progress","taskId":"task-1","currentTurn":2,"status":"paused","approvalId":"apv-1","reason":"assigned"}"#))
+        XCTAssertEqual(state.statusText, "문서를 읽었어요")
+    }
+
     func testArtifactLifecycleAccumulatesContent() {
         var state = ChatStreamState()
         state.apply(event(#"{"type":"artifact_start","artifact":{"id":"a1","kind":"code","lang":"swift","title":"Sample.swift"}}"#))

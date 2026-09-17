@@ -321,6 +321,10 @@ export type WsServerEvent =
       currentTurn: number;
       /** 방금 기록된 스텝 요약(4-5 실시간 스트림) — "현재 단계" 라이브 표시용. */
       step?: { stepType: string; toolName?: string; preview?: string };
+      /** 승인 이관·에스컬레이션·철회 대상 승인 id(HITL 2단계) — 계획 편집 알림엔 없다 */
+      approvalId?: string;
+      /** 승인·계획 변경 알림 사유 — 받은 클라이언트는 승인함(·계획)을 다시 읽는다 */
+      reason?: "assigned" | "escalated" | "revoked" | "plan_edited";
     }
   // 딥리서치 진행상황 (백엔드 ws-chat-handler onResearchProgress)
   | {

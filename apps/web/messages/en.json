@@ -1430,7 +1430,28 @@
       "5": "Fri",
       "6": "Sat"
     },
-    "noData": "No data to show."
+    "noData": "No data to show.",
+    "billing": {
+      "title": "Cost ledger",
+      "subtitle": "Actual accounting from cost_ledger — separate from the estimated cost analysis above; items without a registered rate are recorded as 0.",
+      "scope": "Scope",
+      "scopeSystem": "All",
+      "scopeOrg": "Organization",
+      "scopeUser": "User",
+      "scopeIdPlaceholder": "Organization or user ID",
+      "month": "Month",
+      "apply": "Show",
+      "qty": "Quantity",
+      "total": "Total",
+      "final": "Final",
+      "live": "In progress",
+      "empty": "No records for this month.",
+      "loadError": "Could not load the statement",
+      "byAgentTitle": "Cost by agent (last 30 days)",
+      "byAgentEmpty": "No costs are attributed to agents.",
+      "agent": "Agent",
+      "noAgent": "(unassigned)"
+    }
   },
   "adminConversations": {
     "title": "All Conversations",
@@ -1480,6 +1501,36 @@
       "info": "{total} total · page {page}/{pages}",
       "prev": "Previous",
       "next": "Next"
+    },
+    "debugQueue": {
+      "title": "Debug queue",
+      "description": "Responses saved automatically on errors (24 hours) or reported by users (7 days). Replay bundles contain the masked last LLM request.",
+      "refresh": "Refresh",
+      "loadError": "Could not load the debug queue",
+      "actionError": "Could not complete the request",
+      "empty": "No items are being kept.",
+      "col": {
+        "captured": "Captured",
+        "reason": "Reason",
+        "messages": "Question & answer",
+        "actions": "Replay"
+      },
+      "reason": {
+        "autoError": "Error",
+        "userReport": "Report"
+      },
+      "downloadBundle": "Download replay bundle",
+      "replay": "Replay",
+      "truncated": "Truncated",
+      "noBundle": "No bundle",
+      "confirmTitle": "Run replay",
+      "confirmBody": "The same input will be sent to the model again. This is a real LLM call that costs time and money, limited to 3 per minute.",
+      "cancel": "Cancel",
+      "rateLimited": "Replays are limited to 3 per minute. Try again shortly.",
+      "resultTitle": "Replay result",
+      "resultMeta": "Model {model} · {seconds}s · similarity to saved answer {similarity}",
+      "toolCalls": "Tool calls",
+      "close": "Close"
     }
   },
   "adminAudit": {
@@ -1696,7 +1747,28 @@
     "enabled": "Enabled",
     "disabled": "Disabled",
     "editAction": "Edit",
-    "deleteAction": "Delete"
+    "deleteAction": "Delete",
+    "oauthClientAction": "OAuth client",
+    "oauthClient": {
+      "title": "{name} OAuth client",
+      "description": "Services without dynamic client registration (GitHub, Google) need an OAuth client created in their console before users can sign in. Register the callback URL below in that console.",
+      "redirectUri": "Callback URL (register in the service console)",
+      "clientId": "Client ID",
+      "clientSecret": "Client secret",
+      "secretKeep": "Saved — leave blank to keep",
+      "secretRemove": "Remove saved secret",
+      "authMethod": "Token endpoint auth method",
+      "authMethodAuto": "Automatic (from server metadata)",
+      "scope": "Requested scopes (space-separated)",
+      "scopeHint": "If blank, every scope the service advertises is requested — for Google this includes full mail access, so enter the minimum you need.",
+      "authorizationParams": "Extra authorization parameters (one key=value per line)",
+      "save": "Save",
+      "saved": "Saved",
+      "remove": "Delete",
+      "close": "Close",
+      "loadError": "Could not load the settings",
+      "saveError": "Could not save"
+    }
   },
   "providerKeys": {
     "validate": "Verify",

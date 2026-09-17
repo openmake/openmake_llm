@@ -1430,7 +1430,28 @@
       "5": "金",
       "6": "土"
     },
-    "noData": "表示するデータがありません。"
+    "noData": "表示するデータがありません。",
+    "billing": {
+      "title": "コスト台帳",
+      "subtitle": "cost_ledger に基づく実際の会計 — 上のコスト分析（推定換算）とは別で、単価未登録の項目は 0 として記録されます。",
+      "scope": "範囲",
+      "scopeSystem": "全体",
+      "scopeOrg": "組織",
+      "scopeUser": "ユーザー",
+      "scopeIdPlaceholder": "組織・ユーザー ID",
+      "month": "月",
+      "apply": "表示",
+      "qty": "数量",
+      "total": "合計",
+      "final": "確定",
+      "live": "集計中",
+      "empty": "この月の記録はありません。",
+      "loadError": "明細を読み込めませんでした",
+      "byAgentTitle": "エージェント別コスト（直近 30 日）",
+      "byAgentEmpty": "エージェントに紐づくコストはありません。",
+      "agent": "エージェント",
+      "noAgent": "（未指定）"
+    }
   },
   "adminConversations": {
     "title": "全会話の閲覧",
@@ -1480,6 +1501,36 @@
       "info": "全{total}件 · {page}/{pages}ページ",
       "prev": "前へ",
       "next": "次へ"
+    },
+    "debugQueue": {
+      "title": "デバッグキュー",
+      "description": "エラー時に自動保存（24 時間）、またはユーザーが報告（7 日間）した応答です。再現バンドルにはマスク済みの最後の LLM リクエストが含まれます。",
+      "refresh": "更新",
+      "loadError": "デバッグキューを読み込めませんでした",
+      "actionError": "リクエストを処理できませんでした",
+      "empty": "保管中の項目はありません。",
+      "col": {
+        "captured": "保存日時",
+        "reason": "理由",
+        "messages": "質問・応答",
+        "actions": "再現"
+      },
+      "reason": {
+        "autoError": "エラー",
+        "userReport": "報告"
+      },
+      "downloadBundle": "再現バンドルをダウンロード",
+      "replay": "リプレイ",
+      "truncated": "切り詰め",
+      "noBundle": "バンドルなし",
+      "confirmTitle": "リプレイを実行",
+      "confirmBody": "同じ入力をモデルに再送信します。実際の LLM 呼び出しのため時間と費用がかかり、1 分あたり 3 回までです。",
+      "cancel": "キャンセル",
+      "rateLimited": "リプレイは 1 分あたり 3 回までです。しばらくしてから再試行してください。",
+      "resultTitle": "リプレイ結果",
+      "resultMeta": "モデル {model} · {seconds} 秒 · 保存済み応答との類似度 {similarity}",
+      "toolCalls": "ツール呼び出し",
+      "close": "閉じる"
     }
   },
   "adminAudit": {
@@ -1696,7 +1747,28 @@
     "enabled": "有効",
     "disabled": "無効",
     "editAction": "編集",
-    "deleteAction": "削除"
+    "deleteAction": "削除",
+    "oauthClientAction": "OAuth クライアント",
+    "oauthClient": {
+      "title": "{name} の OAuth クライアント",
+      "description": "動的クライアント登録に対応していないサービス（GitHub・Google）は、サービスのコンソールで作成した OAuth クライアントがないとユーザーがログインできません。下のコールバック URL をそのコンソールに登録してください。",
+      "redirectUri": "コールバック URL（サービスのコンソールに登録）",
+      "clientId": "クライアント ID",
+      "clientSecret": "クライアントシークレット",
+      "secretKeep": "保存済み — 空欄なら維持",
+      "secretRemove": "保存済みのシークレットを削除",
+      "authMethod": "トークンエンドポイントの認証方式",
+      "authMethodAuto": "自動（サーバーのメタデータに従う）",
+      "scope": "要求するスコープ（スペース区切り）",
+      "scopeHint": "空欄の場合はサービスが公開する全スコープを要求します。Google ではメールの全権限も含まれるため、必要最小限を入力してください。",
+      "authorizationParams": "追加の認可パラメータ（1 行に key=value）",
+      "save": "保存",
+      "saved": "保存しました",
+      "remove": "削除",
+      "close": "閉じる",
+      "loadError": "設定を読み込めませんでした",
+      "saveError": "保存できませんでした"
+    }
   },
   "providerKeys": {
     "validate": "検証",

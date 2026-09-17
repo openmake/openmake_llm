@@ -142,3 +142,29 @@ export async function getDebugCaptureForReplay(id: string): Promise<{ id: string
     const x = r.rows[0];
     return x ? { id: x.id, sessionId: x.session_id, reason: x.reason, userMessage: x.user_message, assistantMessage: x.assistant_message, errorCode: x.error_code, replayBundle: x.replay_bundle, requestId: x.request_id, replayTruncated: x.replay_truncated } : null;
 }
+
+export interface DebugCaptureSummary {
+    id: string; sessionId: string; userId: string; reason: string; errorCode: string | null; requestId: string | null;
+    capturedAt: string; expiresAt: string; hasReplayBundle: boolean; replayTruncated: boolean;
+    userPreview: string; assistantPreview: string;
+}
+
+/** 관리자 목록(F24.7 UI) — 만료 전 항목 최신순, 본문은 앞부분만. 리플레이 대상 id 를 찾는 입구다. */
+export async function listDebugCaptures(opts: { limit: number; previewChars: number; reason?: DebugQueueReason }): Promise<DebugCaptureSummary[]> {
+    const r = await getPool().query<{ id: string; session_id: string; user_id: string; reason: string; error_code: string | null; request_id: string | null; captured_at: string; expires_at: string; has_bundle: boolean; replay_truncated: boolean; user_preview: string; assistant_preview: string }>(
+        `SELECT id::text AS id, session_id::text AS session_id, user_id, reason, error_code, request_id,
+                captured_at::text AS captured_at, expires_at::text AS expires_at,
+                replay_bundle IS NOT NULL AS has_bundle, replay_truncated,
+                LEFT(user_message, $2) AS user_preview, LEFT(assistant_message, $2) AS assistant_preview
+           FROM conversation_debug_queue
+          WHERE expires_at > now() AND ($3::text IS NULL OR reason = $3)
+          ORDER BY captured_at DESC
+          LIMIT $1`,
+        [opts.limit, opts.previewChars, opts.reason ?? null],
+    );
+    return r.rows.map((x) => ({
+        id: x.id, sessionId: x.session_id, userId: x.user_id, reason: x.reason, errorCode: x.error_code, requestId: x.request_id,
+        capturedAt: x.captured_at, expiresAt: x.expires_at, hasReplayBundle: x.has_bundle, replayTruncated: x.replay_truncated,
+        userPreview: x.user_preview, assistantPreview: x.assistant_preview,
+    }));
+}

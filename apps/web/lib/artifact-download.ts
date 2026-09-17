@@ -60,7 +60,8 @@ export function downloadArtifact(opts: { title: string; kind: string; lang: stri
   triggerBlobDownload(blob, `${safeName(opts.title)}.${ext}`);
 }
 
-function triggerBlobDownload(blob: Blob, filename: string) {
+/** Blob 을 파일로 저장 — 다른 관리 화면(디버그 큐 재현 번들 등)도 이 경로를 쓴다 */
+export function triggerBlobDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

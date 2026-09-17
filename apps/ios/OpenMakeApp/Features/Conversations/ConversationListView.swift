@@ -16,6 +16,11 @@ struct ConversationListView: View {
     @State private var selectedSession: OpenMakeClient.SessionSummary?
     @State private var searchText = ""
     @State private var autoChatFired = false
+    @State private var folders: [OpenMakeClient.ConversationFolder] = []
+    /// 필터 메뉴의 태그 후보 — 전체 목록을 불러올 때만 갱신(필터 중엔 목록이 좁아지므로)
+    @State private var knownTags: [String] = []
+    @State private var filter: SessionListFilter = .all
+    @State private var organizingSession: OpenMakeClient.SessionSummary?
 
     private var filtered: [OpenMakeClient.SessionSummary] {
         let query = searchText.trimmingCharacters(in: .whitespaces)
@@ -31,6 +36,10 @@ struct ConversationListView: View {
                         ContentUnavailableView(
                             "불러오기 실패", systemImage: "wifi.exclamationmark",
                             description: Text(errorMessage))
+                    } else if sessions.isEmpty && !isLoading && filter != .all {
+                        ContentUnavailableView(
+                            "해당하는 대화가 없습니다", systemImage: "line.3.horizontal.decrease.circle",
+                            description: Text("필터를 바꾸거나 전체 대화로 돌아가세요"))
                     } else if sessions.isEmpty && !isLoading {
                         ContentUnavailableView(
                             "대화가 없습니다", systemImage: "bubble.left.and.bubble.right",
@@ -46,13 +55,18 @@ struct ConversationListView: View {
                                             .lineLimit(1)
                                         HStack(spacing: 6) {
                                             LumenDot(size: 6)
-                                            Text("\(shortModel(session.model)) · 메시지 \(session.messageCount)")
+                                            Text(rowMeta(session))
                                                 .font(.caption)
                                                 .foregroundStyle(Instrument.muted)
                                                 .lineLimit(1)
                                         }
                                     }
                                     .padding(.vertical, 4)
+                                }
+                                .contextMenu {
+                                    Button("폴더·태그 정리", systemImage: "folder.badge.gearshape") {
+                                        organizingSession = session
+                                    }
                                 }
                                 .listRowBackground(Instrument.bg)
                                 .listRowSeparatorTint(Instrument.border)
@@ -91,6 +105,9 @@ struct ConversationListView: View {
                     }
                     .tint(Instrument.fg2)
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    filterMenu
+                }
             }
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: "대화 검색")
@@ -116,6 +133,16 @@ struct ConversationListView: View {
             }
             .sheet(isPresented: $showSettings) {
                 SettingsSheet()
+            }
+            .sheet(isPresented: Binding(
+                get: { organizingSession != nil },
+                set: { if !$0 { organizingSession = nil } }
+            )) {
+                if let organizingSession {
+                    SessionOrganizeSheet(session: organizingSession, folders: folders) {
+                        await load()
+                    }
+                }
             }
             .refreshable { await load() }
             .task {
@@ -178,6 +205,47 @@ struct ConversationListView: View {
         }
     }
 
+    /// 폴더·태그 필터 (F19.5) — 선택하면 서버 목록 쿼리로 다시 불러온다
+    private var filterMenu: some View {
+        Menu {
+            Picker("필터", selection: Binding(
+                get: { filter },
+                set: { newValue in
+                    filter = newValue
+                    Task { await load() }
+                }
+            )) {
+                Label("전체 대화", systemImage: "tray.full").tag(SessionListFilter.all)
+                Label("미분류", systemImage: "tray").tag(SessionListFilter.unfiled)
+                ForEach(folders, id: \.id) { folder in
+                    Label("\(folder.name) (\(folder.sessionCount))", systemImage: "folder")
+                        .tag(SessionListFilter.folder(folder.id))
+                }
+                ForEach(knownTags, id: \.self) { tag in
+                    Label("#\(tag)", systemImage: "number").tag(SessionListFilter.tag(tag))
+                }
+            }
+        } label: {
+            Image(systemName: filter == .all
+                ? "line.3.horizontal.decrease.circle"
+                : "line.3.horizontal.decrease.circle.fill")
+        }
+        .tint(filter == .all ? Instrument.fg2 : Instrument.accent)
+        .accessibilityLabel("폴더·태그 필터")
+    }
+
+    /// "모델 · 메시지 N · 폴더 · #태그"
+    private func rowMeta(_ session: OpenMakeClient.SessionSummary) -> String {
+        var parts = [shortModel(session.model), "메시지 \(session.messageCount)"]
+        if let folderId = session.folderId, let folder = folders.first(where: { $0.id == folderId }) {
+            parts.append(folder.name)
+        }
+        if let tags = session.tags, !tags.isEmpty {
+            parts.append(tags.map { "#\($0)" }.joined(separator: " "))
+        }
+        return parts.joined(separator: " · ")
+    }
+
     private var accountEmail: String? {
         if case .loggedIn(let user) = model.authState { return user.email }
         return nil
@@ -212,6 +280,8 @@ struct ConversationListView: View {
             return
         }
         Task {
+            // 필터 중이면 알림 대상 대화가 목록에 없을 수 있다
+            filter = .all
             await load()
             selectedSession = sessions.first { $0.id == sessionId }
         }
@@ -227,7 +297,14 @@ struct ConversationListView: View {
         defer { isLoading = false }
         errorMessage = nil
         do {
-            sessions = try await model.client.sessions()
+            sessions = try await model.client.sessions(folderId: filter.folderQuery, tag: filter.tagQuery)
+            if filter == .all {
+                knownTags = Array(Set(sessions.flatMap { $0.tags ?? [] })).sorted()
+            }
+            // 폴더는 부가 정보 — 실패해도 목록은 보인다
+            if let loaded = try? await model.client.folders() {
+                folders = loaded
+            }
         } catch let error as OpenMakeAPIError {
             if error == .notAuthenticated {
                 await model.logout()

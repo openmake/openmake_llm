@@ -18,6 +18,10 @@ describe('WEB_SEARCH_INTENT_PATTERNS', () => {
         '지금 환율 얼마야',
         '최근 비트코인 시세 어때',
         'search the web for KOSPI close',
+        "What's the weather in Tokyo today? Look it up online.",
+        'Can you look up the latest Nvidia earnings on the internet?',
+        'search for Tokyo weather online',
+        'Just google it for me',
     ])('시의성·검색 질의를 매칭한다: %s', (msg) => {
         expect(matches(msg)).toBe(true);
     });
@@ -26,6 +30,10 @@ describe('WEB_SEARCH_INTENT_PATTERNS', () => {
         '피보나치 수열 코드 짜줘',
         '이 함수 리팩터링 해줘',
         '고맙습니다',
+        'Can you check if the server is online?',
+        'How do I look up a key in a Python dict?',
+        'Explain how online learning works',
+        'Write a Google Docs add-on',
     ])('일반 질의는 매칭하지 않는다: %s', (msg) => {
         expect(matches(msg)).toBe(false);
     });

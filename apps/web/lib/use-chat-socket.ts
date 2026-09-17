@@ -11,6 +11,7 @@ import { ApiClient, csrfHeaders } from "./api-client";
 import { gaEvent, GA_EVENTS } from "./analytics";
 import { getAnonSessionId } from "./anon-session";
 import { CLIENT_TIMING } from "./config";
+import { announceAgentTaskChange } from "./agent-task-change";
 import { encodeMcpResources, type McpResourcePayload } from "@/components/chat/mcp-resource-card";
 
 // 배포 감지·토큰 갱신 상태는 소켓 재연결/훅 재마운트 간에도 유지되어야 하므로 모듈 레벨에 둔다.
@@ -495,6 +496,8 @@ export function useChatSocket() {
         case "agent_task_progress": {
           // 에이전트 작업 진행을 구조화 상태(agentTask)로 갱신 → AgentTaskCard 가 벡터 아이콘으로 렌더.
           const { taskId, status, progress, currentTurn, step } = data;
+          // 승인 이관·에스컬레이션·철회·계획 편집 알림 — 승인함·배지·작업 상세가 다시 읽는다.
+          if (data.reason) announceAgentTaskChange({ taskId, approvalId: data.approvalId, reason: data.reason });
           const terminal =
             status === "completed" || status === "failed" || status === "cancelled";
           // 스텝 실시간 스트림(4-5) — 있으면 "현재 단계"로 반영(터미널에선 정리).

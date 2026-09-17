@@ -1430,7 +1430,28 @@
       "5": "금",
       "6": "토"
     },
-    "noData": "표시할 데이터가 없습니다."
+    "noData": "표시할 데이터가 없습니다.",
+    "billing": {
+      "title": "비용 원장",
+      "subtitle": "cost_ledger 기준 실제 회계 — 위 비용 분석(가상 환산)과 별개이며 단가 미등록 항목은 0 으로 기록됩니다.",
+      "scope": "범위",
+      "scopeSystem": "전체",
+      "scopeOrg": "조직",
+      "scopeUser": "사용자",
+      "scopeIdPlaceholder": "조직·사용자 ID",
+      "month": "월",
+      "apply": "조회",
+      "qty": "수량",
+      "total": "합계",
+      "final": "확정",
+      "live": "집계 중",
+      "empty": "이 달의 기록이 없습니다.",
+      "loadError": "명세서를 불러오지 못했습니다",
+      "byAgentTitle": "에이전트별 비용 (최근 30일)",
+      "byAgentEmpty": "에이전트에 귀속된 비용이 없습니다.",
+      "agent": "에이전트",
+      "noAgent": "(미지정)"
+    }
   },
   "adminConversations": {
     "title": "전체 대화 조회",
@@ -1480,6 +1501,36 @@
       "info": "총 {total}건 · {page}/{pages} 페이지",
       "prev": "이전",
       "next": "다음"
+    },
+    "debugQueue": {
+      "title": "디버그 큐",
+      "description": "오류로 자동 저장되거나(24시간) 사용자가 신고한(7일) 응답입니다. 재현 번들에는 마스킹된 마지막 LLM 요청이 들어 있습니다.",
+      "refresh": "새로고침",
+      "loadError": "디버그 큐를 불러오지 못했습니다",
+      "actionError": "요청을 처리하지 못했습니다",
+      "empty": "보관 중인 항목이 없습니다.",
+      "col": {
+        "captured": "저장 시각",
+        "reason": "사유",
+        "messages": "질문·응답",
+        "actions": "재현"
+      },
+      "reason": {
+        "autoError": "오류",
+        "userReport": "신고"
+      },
+      "downloadBundle": "재현 번들 내려받기",
+      "replay": "리플레이",
+      "truncated": "잘림",
+      "noBundle": "번들 없음",
+      "confirmTitle": "리플레이 실행",
+      "confirmBody": "같은 입력을 모델에 다시 보냅니다. 실제 LLM 호출이라 비용과 시간이 들고 분당 3회로 제한됩니다.",
+      "cancel": "취소",
+      "rateLimited": "리플레이는 분당 3회까지입니다. 잠시 후 다시 시도하세요.",
+      "resultTitle": "리플레이 결과",
+      "resultMeta": "모델 {model} · {seconds}초 · 저장 응답과 유사도 {similarity}",
+      "toolCalls": "도구 호출",
+      "close": "닫기"
     }
   },
   "adminAudit": {
@@ -1696,7 +1747,28 @@
     "enabled": "활성",
     "disabled": "비활성",
     "editAction": "편집",
-    "deleteAction": "삭제"
+    "deleteAction": "삭제",
+    "oauthClientAction": "OAuth 클라이언트",
+    "oauthClient": {
+      "title": "{name} OAuth 클라이언트",
+      "description": "동적 등록을 지원하지 않는 서비스(GitHub·Google)는 서비스 콘솔에서 만든 OAuth 클라이언트가 있어야 사용자가 로그인할 수 있습니다. 아래 콜백 URL 을 서비스 콘솔에 등록하세요.",
+      "redirectUri": "콜백 URL (서비스 콘솔에 등록)",
+      "clientId": "클라이언트 ID",
+      "clientSecret": "클라이언트 시크릿",
+      "secretKeep": "저장됨 — 비워 두면 유지",
+      "secretRemove": "저장된 시크릿 제거",
+      "authMethod": "토큰 엔드포인트 인증 방식",
+      "authMethodAuto": "자동(서버 메타데이터 기준)",
+      "scope": "요청 scope (공백 구분)",
+      "scopeHint": "비워 두면 서비스가 공개한 scope 전체를 요청합니다 — Google 은 메일 전체 권한까지 포함되니 최소 권한을 입력하세요.",
+      "authorizationParams": "추가 인가 파라미터 (줄마다 key=value)",
+      "save": "저장",
+      "saved": "저장했습니다",
+      "remove": "삭제",
+      "close": "닫기",
+      "loadError": "설정을 불러오지 못했습니다",
+      "saveError": "저장하지 못했습니다"
+    }
   },
   "providerKeys": {
     "validate": "검증",

@@ -83,6 +83,7 @@ export const coreSchemas = {
         type: 'object',
         required: ['role', 'content'],
         properties: {
+            id: { type: 'string', description: 'DB 메시지 id(정수 문자열) — 이력 조회에만 있으며 "여기서 분기"(clone uptoMessageId) 기준점' },
             role: { type: 'string', enum: ['user', 'assistant', 'system'] },
             content: { type: 'string' },
             model: { type: 'string' },

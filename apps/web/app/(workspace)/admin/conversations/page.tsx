@@ -16,6 +16,7 @@ import {
   useFocusTrap,
 } from "@/components/ui/primitives";
 import { AdminTabs } from "@/components/hub-tabs";
+import { DebugQueuePanel } from "@/components/admin/debug-queue-panel";
 import { ApiClient } from "@/lib/api-client";
 import { toBcp47 } from "@/i18n/config";
 
@@ -502,6 +503,8 @@ export default function AdminConversationsPage() {
             )}
           </CardContent>
         </Card>
+        {/* 디버그 큐 — 오류 자동 저장·사용자 신고의 재현 번들·리플레이 (F24.7) */}
+        <DebugQueuePanel />
       </div>
 
       {detail && (

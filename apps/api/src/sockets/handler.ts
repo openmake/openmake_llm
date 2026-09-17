@@ -576,6 +576,9 @@ export class WebSocketHandler {
                 currentTurn: ev.currentTurn,
                 // 방금 기록된 스텝 요약(4-5) — 채팅 인라인 카드의 "현재 단계" 실시간 표시.
                 ...(ev.step ? { step: ev.step } : {}),
+                // 승인 이관·에스컬레이션·철회·계획 편집 알림(HITL 2단계) — 받은 쪽은 승인함을 재조회한다.
+                ...(ev.approvalId ? { approvalId: ev.approvalId } : {}),
+                ...(ev.reason ? { reason: ev.reason } : {}),
             });
         });
     }
