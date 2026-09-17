@@ -11,11 +11,14 @@ struct ConversationDetailView: View {
     @Environment(AppModel.self) private var model
     @State private var chat: ChatSessionModel?
     @State private var draft = ""
+    /// 분기로 전환한 세션의 제목 — 없으면 진입 세션 제목
+    @State private var branchedTitle: String?
 
     var body: some View {
         Group {
             if let chat {
-                ChatTranscriptView(chat: chat, draft: $draft)
+                ChatTranscriptView(chat: chat, draft: $draft, onBranched: switchToBranch)
+                    .id(ObjectIdentifier(chat))
             } else {
                 ProgressView()
             }
@@ -24,7 +27,7 @@ struct ConversationDetailView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 VStack(spacing: 1) {
-                    Text(session?.title ?? "새 대화")
+                    Text(branchedTitle ?? session?.title ?? "새 대화")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Instrument.fg)
                         .lineLimit(1)
@@ -60,6 +63,18 @@ struct ConversationDetailView: View {
         .onDisappear {
             chat?.teardown()
         }
+    }
+
+    /// 분기한 새 세션으로 화면을 전환한다 — 웹과 같이 원본 세션은 그대로 남는다
+    private func switchToBranch(_ cloned: OpenMakeClient.ClonedSession) {
+        chat?.teardown()
+        let chatModel = ChatSessionModel(
+            client: model.client,
+            serverURL: AppConfig.serverURL,
+            sessionId: cloned.id)
+        chat = chatModel
+        branchedTitle = cloned.title
+        Task { await chatModel.loadHistory() }
     }
 
     private var activeModelName: String {
@@ -136,6 +151,7 @@ private struct ChatTranscriptView: View {
     @Environment(AppModel.self) private var model
     @Bindable var chat: ChatSessionModel
     @Binding var draft: String
+    let onBranched: (OpenMakeClient.ClonedSession) -> Void
 
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var pendingImages: [String] = []
@@ -208,7 +224,7 @@ private struct ChatTranscriptView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
                     ForEach(Array(chat.messages.enumerated()), id: \.offset) { _, message in
-                        MessageRow(message: message)
+                        MessageRow(message: message, onBranch: branchAction(for: message))
                     }
 
                     if let task = chat.activeAgentTask {
@@ -254,6 +270,19 @@ private struct ChatTranscriptView: View {
             }
             .onChange(of: chat.messages.count) {
                 proxy.scrollTo("bottom", anchor: .bottom)
+            }
+        }
+    }
+
+    /// 이력에서 불러온(DB id 가 있는) 답변에서만, 생성 중이 아닐 때 분기를 제공한다(웹 동작 줄과 같은 조건)
+    private func branchAction(for message: OpenMakeClient.ChatMessage) -> (() -> Void)? {
+        guard message.role == .assistant, !chat.isStreaming,
+              let raw = message.id, let messageId = Int(raw) else { return nil }
+        return {
+            Task {
+                if let cloned = await chat.branch(uptoMessageId: messageId) {
+                    onBranched(cloned)
+                }
             }
         }
     }
@@ -337,6 +366,7 @@ private struct AssistantHead: View {
 /// LUMEN 메시지 행 — user 는 테일 버블(우측), assistant 는 도트 헤더 + 전체폭 마크다운
 private struct MessageRow: View {
     let message: OpenMakeClient.ChatMessage
+    var onBranch: (() -> Void)?
 
     var body: some View {
         if message.role == .user {
@@ -366,6 +396,19 @@ private struct MessageRow: View {
                 AssistantHead(pulsing: false)
                 MarkdownText(content: message.content)
                 SourcesDisclosure(items: (message.sources ?? []).map(ChatSourceItem.init))
+                // 본문은 길게 누르면 텍스트 선택이라 메뉴를 겹치지 않고 답변 아래 작은 메뉴로 둔다
+                if let onBranch {
+                    Menu {
+                        Button("여기서 분기", systemImage: "arrow.triangle.branch", action: onBranch)
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Instrument.muted)
+                            .frame(width: 44, height: 28, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("답변 메뉴")
+                }
             }
         }
     }

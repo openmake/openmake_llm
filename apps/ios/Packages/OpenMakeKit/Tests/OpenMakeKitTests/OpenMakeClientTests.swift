@@ -188,6 +188,69 @@ final class OpenMakeClientTests: XCTestCase {
         XCTAssertEqual(messages.last?.role, .assistant)
     }
 
+    func testMessagesDecodeDbIdForBranching() async throws {
+        store.save(AuthTokens(access: "at", refresh: "rt"))
+        MockURLProtocol.script("/api/chat/sessions/s1/messages", .init(status: 200, json:
+            #"{"success":true,"data":{"messages":[{"id":"42","role":"user","content":"안녕"}]},"meta":\#(Self.meta)}"#))
+
+        let messages = try await client.messages(sessionId: "s1")
+        XCTAssertEqual(messages.first?.id, "42")
+    }
+
+    func testCloneSessionSendsUptoAndReturnsNewSession() async throws {
+        store.save(AuthTokens(access: "at", refresh: "rt"))
+        MockURLProtocol.script("/api/chat/sessions/s1/clone", .init(status: 201, json:
+            #"{"success":true,"data":{"session":{"id":"s2","title":"테스트 대화 (분기)","parentSessionId":"s1","parentMessageId":42},"copied":3},"meta":\#(Self.meta)}"#))
+
+        let cloned = try await client.cloneSession(id: "s1", uptoMessageId: 42)
+        XCTAssertEqual(cloned.id, "s2")
+        XCTAssertEqual(cloned.title, "테스트 대화 (분기)")
+        let body = try XCTUnwrap(bodyData(from: MockURLProtocol.requests(to: "/api/chat/sessions/s1/clone").first))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(json["uptoMessageId"] as? Int, 42)
+    }
+
+    func testSessionsListSendsFolderAndTagFilters() async throws {
+        store.save(AuthTokens(access: "at", refresh: "rt"))
+        MockURLProtocol.script("/api/chat/sessions", .init(status: 200, json:
+            #"{"success":true,"data":{"sessions":[{"id":"s1","title":"t","createdAt":"2026-09-17T00:00:00.000Z","updatedAt":"2026-09-17T00:00:00.000Z","messageCount":1,"model":"m","folderId":null,"tags":["업무"]}]},"meta":\#(Self.meta)}"#))
+
+        let sessions = try await client.sessions(folderId: OpenMakeClient.unfiledFolderFilter, tag: "업무")
+        XCTAssertEqual(sessions.first?.tags, ["업무"])
+        let items = URLComponents(url: try XCTUnwrap(MockURLProtocol.requests(to: "/api/chat/sessions").first?.url), resolvingAgainstBaseURL: true)?.queryItems
+        XCTAssertEqual(items, [URLQueryItem(name: "folderId", value: "none"), URLQueryItem(name: "tag", value: "업무")])
+    }
+
+    func testFoldersListAndCreateDecode() async throws {
+        store.save(AuthTokens(access: "at", refresh: "rt"))
+        let folder = #"{"id":"f1","name":"업무","position":0,"sessionCount":2,"createdAt":"2026-09-17T00:00:00.000Z","updatedAt":"2026-09-17T00:00:00.000Z"}"#
+        MockURLProtocol.script("/api/chat/folders",
+            .init(status: 200, json: #"{"success":true,"data":{"folders":[\#(folder)]},"meta":\#(Self.meta)}"#),
+            .init(status: 201, json: #"{"success":true,"data":{"folder":\#(folder)},"meta":\#(Self.meta)}"#))
+
+        let folders = try await client.folders()
+        XCTAssertEqual(folders.first?.sessionCount, 2)
+        let created = try await client.createFolder(name: "업무")
+        XCTAssertEqual(created.id, "f1")
+        XCTAssertEqual(MockURLProtocol.requests(to: "/api/chat/folders").last?.httpMethod, "POST")
+    }
+
+    func testOrganizeSessionSendsExplicitNullFolder() async throws {
+        store.save(AuthTokens(access: "at", refresh: "rt"))
+        MockURLProtocol.script("/api/chat/sessions/s1", .init(status: 200, json:
+            #"{"success":true,"data":{"session":{"id":"s1"}},"meta":\#(Self.meta)}"#))
+
+        try await client.organizeSession(id: "s1", folderId: nil, tags: ["a", "b"])
+        let request = MockURLProtocol.requests(to: "/api/chat/sessions/s1").first
+        XCTAssertEqual(request?.httpMethod, "PATCH")
+        // folderId 를 생략하면 서버는 "변경 없음" 으로 본다 — 미분류로 옮기려면 null 이 실제로 실려야 한다
+        let body = try XCTUnwrap(bodyData(from: request))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertTrue(json.keys.contains("folderId"))
+        XCTAssertTrue(json["folderId"] is NSNull)
+        XCTAssertEqual(json["tags"] as? [String], ["a", "b"])
+    }
+
     func testDeleteSessionUsesDeleteMethod() async throws {
         store.save(AuthTokens(access: "at", refresh: "rt"))
         MockURLProtocol.script("/api/chat/sessions/s1", .init(status: 200, json:

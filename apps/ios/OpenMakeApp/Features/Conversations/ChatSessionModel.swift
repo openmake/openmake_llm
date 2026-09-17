@@ -49,6 +49,18 @@ final class ChatSessionModel {
         }
     }
 
+    /// 여기서 분기(F08) — 이 메시지까지 복사한 새 세션을 만든다(원본은 그대로). 실패하면 오류 문구를 남기고 nil.
+    func branch(uptoMessageId: Int) async -> OpenMakeClient.ClonedSession? {
+        guard let sessionId, !isStreaming else { return nil }
+        errorMessage = nil
+        do {
+            return try await client.cloneSession(id: sessionId, uptoMessageId: uptoMessageId)
+        } catch {
+            errorMessage = "분기하지 못했습니다"
+            return nil
+        }
+    }
+
     func send(
         _ text: String,
         model: String? = nil,
