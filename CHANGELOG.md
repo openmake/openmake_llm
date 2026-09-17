@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.72.0](https://github.com/openmake/openmake_llm/compare/v1.71.0...v1.72.0) (2026-09-17)
+
+
+### ✨ 기능
+
+* **web:** 커넥터 설치·자격증명 화면에서 선택 항목도 입력 가능하게 ([#930](https://github.com/openmake/openmake_llm/issues/930)) ([fd4d721](https://github.com/openmake/openmake_llm/commit/fd4d721914da86a6b1fd0abd92ed4377f956c91c))
+
 ## [1.71.0](https://github.com/openmake/openmake_llm/compare/v1.70.1...v1.71.0) (2026-09-17)
 
 
