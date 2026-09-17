@@ -640,7 +640,31 @@
       "hint": "Start a new conversation and it will appear here."
     },
     "viewAllToggle": "All users",
-    "ownerBadge": "User {id}"
+    "ownerBadge": "User {id}",
+    "folders": {
+      "railLabel": "Conversation folders and tags",
+      "all": "All",
+      "unfiled": "Unfiled",
+      "heading": "Folders",
+      "create": "New folder",
+      "namePlaceholder": "Folder name",
+      "save": "Save",
+      "cancel": "Cancel",
+      "rename": "Rename folder",
+      "renameAria": "Rename {name}",
+      "deleteAria": "Delete {name}",
+      "deleteConfirm": "Delete the '{name}' folder? Its conversations stay as unfiled.",
+      "empty": "No folders yet",
+      "tags": "Tags",
+      "error": "Could not complete the request",
+      "organizeTitle": "Organize conversation",
+      "organizeAria": "Organize {title}",
+      "folderLabel": "Folder",
+      "tagsLabel": "Tags",
+      "tagsPlaceholder": "e.g. work, research",
+      "tagsHelp": "Separate with commas. Saved in lowercase, up to 8.",
+      "folderBadge": "Folder"
+    }
   },
   "chatSocket": {
     "interceptNotice": "An intercept mode (Discussion / Deep Research / Image) is on, so tools (analysis/search) and artifacts are not applied in this response.",

@@ -640,7 +640,31 @@
       "hint": "Starten Sie eine neue Unterhaltung, und sie erscheint hier."
     },
     "viewAllToggle": "Alle Nutzer",
-    "ownerBadge": "Nutzer {id}"
+    "ownerBadge": "Nutzer {id}",
+    "folders": {
+      "railLabel": "Unterhaltungsordner und Tags",
+      "all": "Alle",
+      "unfiled": "Ohne Ordner",
+      "heading": "Ordner",
+      "create": "Neuer Ordner",
+      "namePlaceholder": "Ordnername",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "rename": "Ordner umbenennen",
+      "renameAria": "{name} umbenennen",
+      "deleteAria": "{name} löschen",
+      "deleteConfirm": "Ordner „{name}“ löschen? Die Unterhaltungen darin bleiben ohne Ordner erhalten.",
+      "empty": "Noch keine Ordner",
+      "tags": "Tags",
+      "error": "Anfrage konnte nicht ausgeführt werden",
+      "organizeTitle": "Unterhaltung ordnen",
+      "organizeAria": "{title} ordnen",
+      "folderLabel": "Ordner",
+      "tagsLabel": "Tags",
+      "tagsPlaceholder": "z. B. arbeit, recherche",
+      "tagsHelp": "Mit Kommas trennen. Wird kleingeschrieben gespeichert, höchstens 8.",
+      "folderBadge": "Ordner"
+    }
   },
   "chatSocket": {
     "interceptNotice": "Ein Abfangmodus (Diskussion / Deep Research / Bild) ist aktiv, daher werden Tools (Analyse/Suche) und Artefakte in dieser Antwort nicht angewendet.",

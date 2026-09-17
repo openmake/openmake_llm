@@ -640,7 +640,31 @@
       "hint": "开始新对话后将显示在此处。"
     },
     "viewAllToggle": "所有用户",
-    "ownerBadge": "用户 {id}"
+    "ownerBadge": "用户 {id}",
+    "folders": {
+      "railLabel": "对话文件夹和标签",
+      "all": "全部",
+      "unfiled": "未分类",
+      "heading": "文件夹",
+      "create": "新建文件夹",
+      "namePlaceholder": "文件夹名称",
+      "save": "保存",
+      "cancel": "取消",
+      "rename": "重命名文件夹",
+      "renameAria": "重命名 {name}",
+      "deleteAria": "删除 {name}",
+      "deleteConfirm": "删除文件夹“{name}”？其中的对话将保留为未分类。",
+      "empty": "暂无文件夹",
+      "tags": "标签",
+      "error": "无法完成请求",
+      "organizeTitle": "整理对话",
+      "organizeAria": "整理 {title} 的文件夹和标签",
+      "folderLabel": "文件夹",
+      "tagsLabel": "标签",
+      "tagsPlaceholder": "例如：工作, 研究",
+      "tagsHelp": "用逗号分隔。以小写保存，最多 8 个。",
+      "folderBadge": "文件夹"
+    }
   },
   "chatSocket": {
     "interceptNotice": "拦截模式（讨论・深度研究・图像）已开启，本次回复不会应用工具（分析・搜索）与工件。",

@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { Clock, Search, MessageSquare, Trash2, Bot, Users } from "lucide-react";
-import type { ApiSuccess, SearchSourceRef } from "@openmake/shared-types";
+import { Clock, Search, MessageSquare, Trash2, Bot, Users, FolderInput, Folder, Tag } from "lucide-react";
+import type { ApiSuccess, ConversationFolder, SearchSourceRef } from "@openmake/shared-types";
 import { Badge, PageHeader, Card } from "@/components/ui/primitives";
 import { HistoryTabs } from "@/components/hub-tabs";
 import { ApiClient } from "@/lib/api-client";
@@ -13,6 +13,8 @@ import { toBcp47 } from "@/i18n/config";
 import { appendAnonSessionId } from "@/lib/anon-session";
 import { useAppStore } from "@/lib/store";
 import type { ChatRole } from "@/lib/store";
+import { FolderRail, type HistoryFilter } from "@/components/history/folder-rail";
+import { SessionOrganizeDialog } from "@/components/history/session-organize-dialog";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type DateGroup = "today" | "yesterday" | "week" | "older";
@@ -32,6 +34,9 @@ interface Session {
   status?: string;
   /** 소유자 id — admin 전체 보기(viewAll)에서 타 사용자 항목 구분용 */
   ownerId?: string;
+  /** 폴더·태그(157) — chat 전용 */
+  folderId?: string | null;
+  tags?: string[];
 }
 
 /* ── 백엔드 응답 타입 (GET /api/chat/conversations → res.data.sessions, camelCase) ──
@@ -47,6 +52,8 @@ interface ApiConversation {
   messageCount?: number;
   /** ?q= 본문 검색 시 매칭 메시지 발췌 (비검색 응답엔 없음) */
   snippet?: string;
+  folderId?: string | null;
+  tags?: string[];
 }
 
 type ConversationsResponse = ApiSuccess<{ sessions: ApiConversation[] }>;
@@ -107,7 +114,20 @@ function mapConversation(c: ApiConversation, t: TFn, locale: string): Session {
     model: c.model || "Auto",
     group: bucketByDate(ts),
     ownerId: c.userId != null ? String(c.userId) : undefined,
+    folderId: c.folderId ?? null,
+    tags: c.tags ?? [],
   };
+}
+
+/** PURE: 현재 목록의 태그를 많이 쓰인 순으로 */
+function collectTags(items: Session[]): string[] {
+  const counts = new Map<string, number>();
+  for (const s of items) for (const tag of s.tags ?? []) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([tag]) => tag);
+}
+
+function filterQuery(f: HistoryFilter): string {
+  return `${f.folderId ? `&folderId=${encodeURIComponent(f.folderId)}` : ""}${f.tag ? `&tag=${encodeURIComponent(f.tag)}` : ""}`;
 }
 
 /** chat.status.* 에 라벨이 있는 상태만 t() — 그 외(queued 등)는 원문 표시(누락 키 경고 방지) */
@@ -148,6 +168,54 @@ export default function HistoryPage() {
   const isAdmin = auth.currentUser?.role === "admin";
   const myUserId = auth.currentUser?.id;
   const [viewAll, setViewAll] = useState(false);
+  // 폴더·태그(157) — 로그인 사용자 본인 목록에서만(전체 보기·게스트 제외)
+  const canOrganize = !!auth.currentUser && !viewAll;
+  const [folders, setFolders] = useState<ConversationFolder[]>([]);
+  const [filter, setFilter] = useState<HistoryFilter>({});
+  const [allTags, setAllTags] = useState<string[]>([]);
+  const [organizing, setOrganizing] = useState<Session | null>(null);
+  const filterActive = !!(filter.folderId || filter.tag);
+
+  const loadFolders = async () => {
+    try {
+      const r = await ApiClient.get<ApiSuccess<{ folders: ConversationFolder[] }>>("/api/chat/folders");
+      setFolders(r?.data?.folders ?? []);
+    } catch {
+      setFolders([]);
+    }
+  };
+  useEffect(() => {
+    if (canOrganize) void loadFolders();
+    else { setFolders([]); setFilter({}); }
+  }, [canOrganize]);
+
+  const createFolder = async (name: string) => {
+    await ApiClient.post("/api/chat/folders", { name });
+    await loadFolders();
+  };
+  const renameFolder = async (id: string, name: string) => {
+    await ApiClient.patch(`/api/chat/folders/${encodeURIComponent(id)}`, { name });
+    await loadFolders();
+  };
+  const removeFolder = async (f: ConversationFolder) => {
+    if (!window.confirm(t("folders.deleteConfirm", { name: f.name }))) return;
+    await ApiClient.del(`/api/chat/folders/${encodeURIComponent(f.id)}`);
+    if (filter.folderId === f.id) setFilter({ ...filter, folderId: undefined });
+    setSessions((prev) => prev.map((s) => (s.folderId === f.id ? { ...s, folderId: null } : s)));
+    await loadFolders();
+  };
+  const saveOrganization = async (s: Session, patch: { folderId: string | null; tags: string[] }) => {
+    const r = await ApiClient.patch<ApiSuccess<{ folderId: string | null; tags: string[] }>>(appendAnonSessionId(`/api/chat/sessions/${s.id}`), patch);
+    const next = { folderId: r?.data?.folderId ?? patch.folderId, tags: r?.data?.tags ?? patch.tags };
+    // 필터에서 벗어나면 목록에서 뺀다(서버 필터와 같은 규칙)
+    setSessions((prev) => prev
+      .map((x) => (x.kind === "chat" && x.id === s.id ? { ...x, ...next } : x))
+      .filter((x) => x.kind !== "chat" || x.id !== s.id
+        || ((filter.folderId === undefined || (filter.folderId === "none" ? !next.folderId : next.folderId === filter.folderId))
+          && (!filter.tag || next.tags.includes(filter.tag)))));
+    setAllTags((prev) => [...new Set([...next.tags, ...prev])]);
+    await loadFolders();
+  };
 
   // 세션 단건 삭제 — 백엔드 DELETE /api/chat/sessions/:sid (소유자/익명 소유 검증).
   const deleteSession = async (s: Session) => {
@@ -206,19 +274,23 @@ export default function HistoryPage() {
       // 각각 개별 실패 허용: 작업 API 는 익명 401 이 정상이므로 빈 배열 폴백.
       const [convRes, taskRes] = await Promise.allSettled([
         ApiClient.get<ConversationsResponse>(
-          appendAnonSessionId(`/api/chat/conversations?limit=100${viewAll ? "&viewAll=true" : ""}`),
+          appendAnonSessionId(`/api/chat/conversations?limit=100${viewAll ? "&viewAll=true" : filterQuery(filter)}`),
         ),
-        ApiClient.get<AgentTasksResponse>(viewAll ? "/api/agent-tasks?viewAll=true" : "/api/agent-tasks"),
+        // 폴더·태그 필터 중엔 작업 항목을 섞지 않는다(작업에는 폴더·태그가 없다)
+        filterActive ? Promise.resolve({ data: { tasks: [] } } as unknown as AgentTasksResponse) : ApiClient.get<AgentTasksResponse>(viewAll ? "/api/agent-tasks?viewAll=true" : "/api/agent-tasks"),
       ]);
       if (cancelled) return;
       const convs = convRes.status === "fulfilled" ? (convRes.value?.data?.sessions ?? []) : null;
       const taskItems = taskRes.status === "fulfilled" ? (taskRes.value?.data?.tasks ?? []) : [];
       if (convs !== null || taskItems.length > 0) {
         // 실제 데이터가 오면 우선 표시 (빈 배열도 실제 상태로 존중)
-        setSessions([
+        const mapped = [
           ...(convs ?? []).map((c) => mapConversation(c, t, locale)),
           ...taskItems.map((a) => mapAgentTask(a, tChat, locale)),
-        ]);
+        ];
+        setSessions(mapped);
+        // 태그 칩은 필터 없는 전체 목록 기준으로 모은다(필터 중엔 이전 목록 유지)
+        if (!filterActive) setAllTags(collectTags(mapped));
       }
       // 둘 다 실패(401·네트워크): 빈 상태 유지
       setLoading(false);
@@ -226,8 +298,9 @@ export default function HistoryPage() {
     return () => {
       cancelled = true;
     };
-    // locale/t 변경 시 라벨 재매핑 위해 재조회, viewAll 토글 시 범위 재조회
-  }, [t, tChat, locale, viewAll]);
+    // locale/t 변경 시 라벨 재매핑 위해 재조회, viewAll 토글·폴더/태그 필터 변경 시 범위 재조회
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t, tChat, locale, viewAll, filter.folderId, filter.tag]);
 
   // 본문 검색 — 서버 ?q= (제목+메시지 ILIKE). 제목 클라 필터에 매칭 세션 id 를 합류시키고,
   // 메인 목록(limit=100) 밖의 매칭 세션은 별도(searchExtras)로 목록에 병합한다.
@@ -247,7 +320,7 @@ export default function HistoryPage() {
     const timer = setTimeout(async () => {
       try {
         const res = await ApiClient.get<ConversationsResponse>(
-          appendAnonSessionId(`/api/chat/conversations?limit=100&q=${encodeURIComponent(q)}`),
+          appendAnonSessionId(`/api/chat/conversations?limit=100&q=${encodeURIComponent(q)}${filterQuery(filter)}`),
         );
         if (cancelled) return;
         const list = res?.data?.sessions ?? [];
@@ -263,7 +336,8 @@ export default function HistoryPage() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query, t, locale, viewAll]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, t, locale, viewAll, filter.folderId, filter.tag]);
 
   const grouped = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -295,6 +369,20 @@ export default function HistoryPage() {
       />
       <HistoryTabs />
 
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+      {canOrganize && (
+        <aside className="max-h-48 flex-shrink-0 overflow-y-auto border-b border-border p-4 md:max-h-none md:w-56 md:border-b-0 md:border-r">
+          <FolderRail
+            folders={folders}
+            tags={allTags}
+            filter={filter}
+            onFilter={setFilter}
+            onCreate={createFolder}
+            onRename={renameFolder}
+            onDelete={removeFolder}
+          />
+        </aside>
+      )}
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
         {/* 검색 + 전체 삭제 */}
         <div className="mb-5 flex items-center gap-2">
@@ -388,12 +476,37 @@ export default function HistoryPage() {
                           <Badge tone="neutral">
                             <span className="font-mono">{s.model}</span>
                           </Badge>
+                          {s.kind === "chat" && s.folderId && (
+                            <Badge tone="neutral">
+                              <Folder className="mr-1 inline h-3 w-3" aria-hidden />
+                              {folders.find((f) => f.id === s.folderId)?.name ?? t("folders.folderBadge")}
+                            </Badge>
+                          )}
+                          {s.kind === "chat" && (s.tags ?? []).map((tag) => (
+                            <Badge key={tag} tone="neutral">
+                              <Tag className="mr-1 inline h-3 w-3" aria-hidden />
+                              {tag}
+                            </Badge>
+                          ))}
                           {/* 전체 보기에서 타 사용자 항목 구분 */}
                           {viewAll && s.ownerId && s.ownerId !== String(myUserId ?? "") && (
                             <Badge tone="accent">{t("ownerBadge", { id: s.ownerId })}</Badge>
                           )}
                         </div>
                       </div>
+                      {s.kind === "chat" && canOrganize && (
+                        <button
+                          type="button"
+                          aria-label={t("folders.organizeAria", { title: s.title })}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOrganizing(s);
+                          }}
+                          className="mt-0.5 grid h-8 w-8 flex-shrink-0 place-items-center rounded-md text-faint opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 hover:bg-surface-3 hover:text-fg"
+                        >
+                          <FolderInput className="h-4 w-4" />
+                        </button>
+                      )}
                       {s.kind === "chat" && (
                         <button
                           type="button"
@@ -415,6 +528,18 @@ export default function HistoryPage() {
           </div>
         )}
       </div>
+      </div>
+      <SessionOrganizeDialog
+        open={!!organizing}
+        title={organizing?.title ?? ""}
+        folders={folders}
+        initialFolderId={organizing?.folderId ?? null}
+        initialTags={organizing?.tags ?? EMPTY_TAGS}
+        onClose={() => setOrganizing(null)}
+        onSave={(patch) => (organizing ? saveOrganization(organizing, patch) : Promise.resolve())}
+      />
     </>
   );
 }
+
+const EMPTY_TAGS: string[] = [];

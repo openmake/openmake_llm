@@ -640,7 +640,31 @@
       "hint": "새 대화를 시작하면 여기에 표시됩니다."
     },
     "viewAllToggle": "모든 사용자",
-    "ownerBadge": "사용자 {id}"
+    "ownerBadge": "사용자 {id}",
+    "folders": {
+      "railLabel": "대화 폴더와 태그",
+      "all": "전체",
+      "unfiled": "미분류",
+      "heading": "폴더",
+      "create": "새 폴더",
+      "namePlaceholder": "폴더 이름",
+      "save": "저장",
+      "cancel": "취소",
+      "rename": "폴더 이름 바꾸기",
+      "renameAria": "{name} 이름 바꾸기",
+      "deleteAria": "{name} 삭제",
+      "deleteConfirm": "'{name}' 폴더를 삭제할까요? 안의 대화는 미분류로 남습니다.",
+      "empty": "폴더가 없습니다",
+      "tags": "태그",
+      "error": "요청을 처리하지 못했습니다",
+      "organizeTitle": "대화 정리",
+      "organizeAria": "{title} 폴더·태그 정리",
+      "folderLabel": "폴더",
+      "tagsLabel": "태그",
+      "tagsPlaceholder": "예: 업무, 리서치",
+      "tagsHelp": "쉼표로 구분합니다. 소문자로 저장되고 최대 8개입니다.",
+      "folderBadge": "폴더"
+    }
   },
   "chatSocket": {
     "interceptNotice": "가로채기 모드(토론·딥리서치·이미지)가 켜져 있어 도구(분석·검색)·아티팩트는 이번 응답에 적용되지 않습니다.",

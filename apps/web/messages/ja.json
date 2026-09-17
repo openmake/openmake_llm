@@ -640,7 +640,31 @@
       "hint": "新しい会話を始めるとここに表示されます。"
     },
     "viewAllToggle": "全ユーザー",
-    "ownerBadge": "ユーザー {id}"
+    "ownerBadge": "ユーザー {id}",
+    "folders": {
+      "railLabel": "会話フォルダーとタグ",
+      "all": "すべて",
+      "unfiled": "未分類",
+      "heading": "フォルダー",
+      "create": "新しいフォルダー",
+      "namePlaceholder": "フォルダー名",
+      "save": "保存",
+      "cancel": "キャンセル",
+      "rename": "フォルダー名を変更",
+      "renameAria": "{name} の名前を変更",
+      "deleteAria": "{name} を削除",
+      "deleteConfirm": "フォルダー「{name}」を削除しますか？中の会話は未分類として残ります。",
+      "empty": "フォルダーはありません",
+      "tags": "タグ",
+      "error": "リクエストを処理できませんでした",
+      "organizeTitle": "会話を整理",
+      "organizeAria": "{title} のフォルダー・タグを整理",
+      "folderLabel": "フォルダー",
+      "tagsLabel": "タグ",
+      "tagsPlaceholder": "例: 仕事, リサーチ",
+      "tagsHelp": "カンマで区切ります。小文字で保存され、最大 8 個です。",
+      "folderBadge": "フォルダー"
+    }
   },
   "chatSocket": {
     "interceptNotice": "インターセプトモード（ディスカッション・ディープリサーチ・画像）が有効なため、ツール（分析・検索）やアーティファクトはこの応答では適用されません。",
