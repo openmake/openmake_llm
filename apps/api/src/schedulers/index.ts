@@ -135,6 +135,17 @@ export async function startAllSchedulers(): Promise<void> {
         logger.warn('SLO 평가 등록 실패(무시):', err);
     }
 
+    // 7-e. LLM 요청 셰도우 계측 보존 정리(F06.2 G0, 158) — 90일
+    try {
+        const { LLM_REQUEST_METRICS } = await import('../config/runtime-limits');
+        const { getPool } = await import('../data/models/unified-database');
+        const purgeLlmMetrics = () => getPool().query('DELETE FROM llm_request_metrics WHERE created_at < NOW() - make_interval(days => $1)', [LLM_REQUEST_METRICS.RETENTION_DAYS])
+            .catch(() => undefined);
+        setInterval(() => { void purgeLlmMetrics(); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
+    } catch (err) {
+        logger.warn('LLM 요청 계측 보존 정리 등록 실패(무시):', err);
+    }
+
     // 7-b. 질문 응답 대기 주차 스윕(F16.7) — 결정 도착분 재개·상한 초과분 실패·대기분 workspace 유지(주차가 없으면 조회 1회)
     try {
         const { sweepParkedTasks } = await import('../services/agent-task/hitl-park');

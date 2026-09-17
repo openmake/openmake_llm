@@ -10,6 +10,7 @@
 import { withProviderSlot } from '../../llm/external-throttle';
 import { safeFetch } from '../../security/ssrf-guard';
 import type { CapabilityTarget } from './capability-resolver';
+import { classifyLlmError, recordLlmRequestMetric } from '../../llm/request-metrics';
 
 export const HTTP_CALL_LIMITS = {
     /** JSON 응답 본문 상한 (b64 이미지 포함 — 1024² PNG ≈ 3MB×1.37) */
@@ -74,22 +75,39 @@ function buildInit(target: CapabilityTarget, opts: CallOptions, signal: AbortSig
     };
 }
 
+/** capability 호출 셰도우 계측(F06.2 G0, 158) — 모델·provider 별 총 시간·오류. 결과·실패에 영향 없음 */
+async function measured<T>(target: CapabilityTarget, run: () => Promise<T>): Promise<T> {
+    const startedAt = Date.now();
+    const base = { model: target.model, providerId: target.providerId, requestClass: 'fanout' as const, costOwner: target.costOwner };
+    try {
+        const out = await run();
+        recordLlmRequestMetric({ ...base, totalMs: Date.now() - startedAt });
+        return out;
+    } catch (err) {
+        const errorCode = err instanceof HttpCallError
+            ? (err.kind === 'http' && err.status ? `http_${err.status}` : err.kind)
+            : classifyLlmError(err);
+        recordLlmRequestMetric({ ...base, totalMs: Date.now() - startedAt, errorCode });
+        throw err;
+    }
+}
+
 /** JSON 응답 호출 — 슬롯 안에서 본문까지 읽는다. 실패는 HttpCallError(status·앞 160자) */
 export async function callJson<T>(target: CapabilityTarget, opts: CallOptions): Promise<T> {
     const signal = combineSignals(opts.signal, AbortSignal.timeout(opts.timeoutMs));
-    return withProviderSlot(target.providerId, async () => {
+    return measured(target, () => withProviderSlot(target.providerId, async () => {
         if (signal.aborted) throw new HttpCallError('취소됨', undefined, 'aborted');
         const res = await fetchFor(target)(opts.url ?? `${target.baseUrl}${target.endpoint}`, buildInit(target, opts, signal));
         const buf = await readCapped(res, HTTP_CALL_LIMITS.JSON_MAX_BYTES);
         if (!res.ok) throw new HttpCallError(`HTTP ${res.status} ${buf.toString('utf8', 0, 160).replace(/\s+/g, ' ')}`, res.status);
         try { return JSON.parse(buf.toString('utf8')) as T; } catch { throw new HttpCallError('JSON 파싱 실패', res.status, 'type'); }
-    }, signal);
+    }, signal));
 }
 
 /** 바이너리 응답 호출(TTS 등) — content-type 과 함께 반환 */
 export async function callBinary(target: CapabilityTarget, opts: CallOptions): Promise<{ bytes: Buffer; contentType: string }> {
     const signal = combineSignals(opts.signal, AbortSignal.timeout(opts.timeoutMs));
-    return withProviderSlot(target.providerId, async () => {
+    return measured(target, () => withProviderSlot(target.providerId, async () => {
         if (signal.aborted) throw new HttpCallError('취소됨', undefined, 'aborted');
         const res = await fetchFor(target)(opts.url ?? `${target.baseUrl}${target.endpoint}`, buildInit(target, opts, signal));
         if (!res.ok) {
@@ -98,7 +116,7 @@ export async function callBinary(target: CapabilityTarget, opts: CallOptions): P
         }
         const bytes = await readCapped(res, HTTP_CALL_LIMITS.BINARY_MAX_BYTES);
         return { bytes, contentType: (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase() };
-    }, signal);
+    }, signal));
 }
 
 /**

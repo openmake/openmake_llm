@@ -23,6 +23,7 @@ import { createLogger } from '../utils/logger';
 import { withSpan } from '../observability/otel';
 import { getApiUsageTracker } from './usage-tracker';
 import { recordLlmCost } from '../services/cost/cost-ledger-service';
+import { classifyLlmError, recordLlmRequestMetric, type LlmRequestClass } from './request-metrics';
 import { reserveUserQuota, settleUserQuota, type QuotaReservation } from './user-quota';
 import { streamChat, nonStreamChat } from './stream-parser';
 import { buildExtraBody } from './reasoning-adapter';
@@ -127,10 +128,24 @@ export class LLMClient {
              * fast-fail 타이머 취소용. tool-call-only 응답에서도 발화한다.
              */
             onActivity?: () => void;
+            /** 요청 클래스(F06.2·F04.6) — 셰도우 계측·우선순위 부여 분류. 미지정은 unspecified */
+            requestClass?: LlmRequestClass;
         },
     ): Promise<ChatMessage & { metrics?: UsageMetrics }> {
         const reservation = await this.reserveQuota(messages, options?.num_predict);
         let settledTokens = 0;
+        // 셰도우 계측(158) — 첫 청크(본문·추론·도구 호출)까지와 전체 시간
+        const startedAt = Date.now();
+        let firstChunkAt: number | null = null;
+        const markFirstChunk = () => { if (firstChunkAt === null) firstChunkAt = Date.now(); };
+        let routedModel = this.config.model;
+        const metricBase = () => ({
+            model: routedModel,
+            providerId: this.config.quotaExempt ? 'external' : 'local-llm',
+            requestClass: advancedOptions?.requestClass ?? 'unspecified' as const,
+            userId: this.config.userId ?? null,
+            costOwner: (this.config.quotaExempt ? 'user' : 'local') as 'user' | 'local',
+        });
         try {
 
         // Model Pool routing — this.config.model 이 pool default 와 같을 때만 자동 선택.
@@ -170,6 +185,7 @@ export class LLMClient {
             }
         })();
 
+        routedModel = poolDecision.model;
         const effectiveMessages = poolDecision.adjustedMessages ?? messages;
         const fitOptions: ModelOptions | undefined = poolDecision.adjustedMaxTokens !== undefined
             ? { ...(options ?? {}), num_predict: poolDecision.adjustedMaxTokens }
@@ -206,9 +222,17 @@ export class LLMClient {
             'llm.chat',
             async (span) => {
                 const result = onToken
-                    ? await streamChat(this.openai, request, onToken, extraBody, advancedOptions?.signal,
-                        undefined, advancedOptions?.onActivity)
+                    ? await streamChat(this.openai, request, (token, thinking) => { markFirstChunk(); onToken(token, thinking); }, extraBody, advancedOptions?.signal,
+                        undefined, () => { markFirstChunk(); advancedOptions?.onActivity?.(); })
                     : await nonStreamChat(this.openai, request, extraBody, advancedOptions?.signal);
+                recordLlmRequestMetric({
+                    ...metricBase(),
+                    ttftMs: onToken && firstChunkAt !== null ? firstChunkAt - startedAt : null,
+                    totalMs: Date.now() - startedAt,
+                    promptTokens: result.metrics?.prompt_tokens ?? null,
+                    completionTokens: result.metrics?.completion_tokens ?? null,
+                    finishReason: result.metrics?.finish_reason ?? null,
+                });
                 const totalTokens =
                     (result.metrics?.prompt_tokens ?? 0) + (result.metrics?.completion_tokens ?? 0);
                 if (totalTokens > 0) {
@@ -247,6 +271,14 @@ export class LLMClient {
                 },
             },
         );
+        } catch (err) {
+            recordLlmRequestMetric({
+                ...metricBase(),
+                ttftMs: firstChunkAt !== null ? firstChunkAt - startedAt : null,
+                totalMs: Date.now() - startedAt,
+                errorCode: classifyLlmError(err),
+            });
+            throw err;
         } finally {
             // 예약 정산 — 성공은 실측 토큰, 오류·중단은 0(전액 환불). fail-open.
             void settleUserQuota(reservation, settledTokens);

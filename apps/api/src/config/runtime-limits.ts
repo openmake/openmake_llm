@@ -2179,6 +2179,13 @@ export const NODE_METRICS = {
     SERIES_BUCKETS: [[6, 5], [48, 30], [Infinity, 180]] as ReadonlyArray<readonly [number, number]>,
 } as const;
 
+/** LLM 요청 셰도우 계측(F06.2 G0, 158) — 호출 1건당 1행(fire-and-forget), 90일 보존. 끄기 LLM_REQUEST_METRICS_ENABLED=false */
+export const LLM_REQUEST_METRICS = {
+    ENABLED: process.env.LLM_REQUEST_METRICS_ENABLED !== 'false',
+    RETENTION_DAYS: parseInt(process.env.LLM_REQUEST_METRICS_RETENTION_DAYS || '', 10) || 90,
+    ERROR_CODE_MAX_CHARS: 64,
+} as const;
+
 /** 메시지 웹검색 출처(F19.4, 156) — 스트리밍 중 모아 assistant 행 저장 때 영속. 인메모리 대기는 TTL·개수 상한 */
 export const MESSAGE_SOURCES_LIMITS = {
     TTL_MS: 30 * 60_000,

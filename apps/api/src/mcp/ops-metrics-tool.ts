@@ -18,7 +18,7 @@ import { TOOL_HEALTH_QUERY } from '../config/tool-health';
 
 export const OPS_METRICS_QUERIES = [
     'summary', 'failed_runs', 'slowest_runs', 'runs_by_model',
-    'tool_errors', 'token_usage', 'goal_incomplete', 'prompt_versions', 'gpu', 'queue_depth', 'slo',
+    'tool_errors', 'token_usage', 'goal_incomplete', 'prompt_versions', 'gpu', 'queue_depth', 'slo', 'llm_models',
 ] as const;
 type OpsMetricsQuery = (typeof OPS_METRICS_QUERIES)[number];
 
@@ -120,6 +120,21 @@ async function runOpsMetricsQuery(query: OpsMetricsQuery, hours: number, limit: 
             ]);
             return { evaluations, daily_history: history.slice(0, limit * evaluations.length) };
         }
+        case 'llm_models': {
+            // LLM 요청 셰도우 계측(F06.2 G0, 158) — 모델·provider·요청 클래스별 호출 수·오류율·TTFT/총 시간 p50·p95
+            const r = await pool.query(
+                `SELECT model, provider_id, request_class, count(*)::int AS calls,
+                        round(avg((error_code IS NOT NULL)::int)::numeric, 4)::float8 AS error_rate,
+                        percentile_cont(0.5) WITHIN GROUP (ORDER BY ttft_ms) FILTER (WHERE ttft_ms IS NOT NULL)::float8 AS ttft_p50_ms,
+                        percentile_cont(0.95) WITHIN GROUP (ORDER BY ttft_ms) FILTER (WHERE ttft_ms IS NOT NULL)::float8 AS ttft_p95_ms,
+                        percentile_cont(0.5) WITHIN GROUP (ORDER BY total_ms)::float8 AS total_p50_ms,
+                        percentile_cont(0.95) WITHIN GROUP (ORDER BY total_ms)::float8 AS total_p95_ms
+                 FROM llm_request_metrics WHERE created_at >= NOW() - make_interval(hours => $1)
+                 GROUP BY model, provider_id, request_class ORDER BY calls DESC LIMIT $2`,
+                [hours, limit],
+            );
+            return { models: r.rows };
+        }
         default: {
             const never: never = query;
             throw new Error(`unknown query ${String(never)}`);
@@ -145,7 +160,8 @@ export const opsMetricsTool: MCPToolDefinition<OpsMetricsArgs> = {
                         + 'runs_by_model=모델별 작업 · tool_errors=서버/도구/원인별 오류 · token_usage=토큰·비용 · goal_incomplete=목표 미달 판정 분포·실패 사유'
                         + ' · prompt_versions=채팅 시스템 프롬프트 지문별 요청 수·오류율·TTFT p50'
                         + ' · gpu=vLLM 노드 KV 캐시·대기/실행 요청(스냅샷+추이) · queue_depth=작업 큐·오케스트레이터 job·vLLM 대기 깊이'
-                        + ' · slo=SLO(채팅 가용성·TTFT·작업 성공률·평가 통과율) 목표 대비 현재·에러 버짓 잔량·burn-rate',
+                        + ' · slo=SLO(채팅 가용성·TTFT·작업 성공률·평가 통과율) 목표 대비 현재·에러 버짓 잔량·burn-rate'
+                        + ' · llm_models=모델·provider·요청 클래스별 LLM 호출 수·오류율·TTFT/총 시간 p50·p95',
                 },
                 window: {
                     type: 'string',
