@@ -87,6 +87,7 @@ public struct WsServerEvent: Codable {
     /// 이 스트림의 식별자(F19.11) — 클라이언트 커서가 다르면 새 스트림으로 본다
     public let streamID: String?
     public let thinking: String?
+    public let sources: [SearchSourceRef]?
     /// 에러 분류(quota_exceeded / api_keys_exhausted / provider code 등)
     public let errorType: String?
     public let keysInCooldown: Double?
@@ -134,6 +135,7 @@ public struct WsServerEvent: Codable {
         case lastSeq = "lastSeq"
         case streamID = "streamId"
         case thinking = "thinking"
+        case sources = "sources"
         case errorType = "errorType"
         case keysInCooldown = "keysInCooldown"
         case resetTime = "resetTime"
@@ -155,7 +157,7 @@ public struct WsServerEvent: Codable {
         case taskID = "taskId"
     }
 
-    public init(token: String?, type: WsServerEventType, messageID: String?, summary: String?, issues: String?, sessionID: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, streamID: String?, thinking: String?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, status: String?, step: Step?, taskID: String?) {
+    public init(token: String?, type: WsServerEventType, messageID: String?, summary: String?, issues: String?, sessionID: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, streamID: String?, thinking: String?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, status: String?, step: Step?, taskID: String?) {
         self.token = token
         self.type = type
         self.messageID = messageID
@@ -177,6 +179,7 @@ public struct WsServerEvent: Codable {
         self.lastSeq = lastSeq
         self.streamID = streamID
         self.thinking = thinking
+        self.sources = sources
         self.errorType = errorType
         self.keysInCooldown = keysInCooldown
         self.resetTime = resetTime
@@ -239,6 +242,7 @@ public extension WsServerEvent {
         lastSeq: Double?? = nil,
         streamID: String?? = nil,
         thinking: String?? = nil,
+        sources: [SearchSourceRef]?? = nil,
         errorType: String?? = nil,
         keysInCooldown: Double?? = nil,
         resetTime: String?? = nil,
@@ -281,6 +285,7 @@ public extension WsServerEvent {
             lastSeq: lastSeq ?? self.lastSeq,
             streamID: streamID ?? self.streamID,
             thinking: thinking ?? self.thinking,
+            sources: sources ?? self.sources,
             errorType: errorType ?? self.errorType,
             keysInCooldown: keysInCooldown ?? self.keysInCooldown,
             resetTime: resetTime ?? self.resetTime,
@@ -765,6 +770,76 @@ public extension MCPToolResource {
     }
 }
 
+/// 웹검색 구조화 출처(F19.4) — 본문 [N] 인용과 같은 번호. 서버 formatSearchSources 와 같은 순서·캡
+// MARK: - SearchSourceRef
+public struct SearchSourceRef: Codable {
+    public let n: Double
+    public let snippet: String
+    /// 결과 도메인(표시용)
+    public let source: String?
+    public let title: String
+    public let url: String
+
+    public enum CodingKeys: String, CodingKey {
+        case n = "n"
+        case snippet = "snippet"
+        case source = "source"
+        case title = "title"
+        case url = "url"
+    }
+
+    public init(n: Double, snippet: String, source: String?, title: String, url: String) {
+        self.n = n
+        self.snippet = snippet
+        self.source = source
+        self.title = title
+        self.url = url
+    }
+}
+
+// MARK: SearchSourceRef convenience initializers and mutators
+
+public extension SearchSourceRef {
+    init(data: Data) throws {
+        self = try newJSONDecoder().decode(SearchSourceRef.self, from: data)
+    }
+
+    init(_ json: String, using encoding: String.Encoding = .utf8) throws {
+        guard let data = json.data(using: encoding) else {
+            throw NSError(domain: "JSONDecoding", code: 0, userInfo: nil)
+        }
+        try self.init(data: data)
+    }
+
+    init(fromURL url: URL) throws {
+        try self.init(data: try Data(contentsOf: url))
+    }
+
+    func with(
+        n: Double? = nil,
+        snippet: String? = nil,
+        source: String?? = nil,
+        title: String? = nil,
+        url: String? = nil
+    ) -> SearchSourceRef {
+        return SearchSourceRef(
+            n: n ?? self.n,
+            snippet: snippet ?? self.snippet,
+            source: source ?? self.source,
+            title: title ?? self.title,
+            url: url ?? self.url
+        )
+    }
+
+    func jsonData() throws -> Data {
+        return try newJSONEncoder().encode(self)
+    }
+
+    func jsonString(encoding: String.Encoding = .utf8) throws -> String? {
+        return String(data: try self.jsonData(), encoding: encoding)
+    }
+}
+
 /// 방금 기록된 스텝 요약(4-5 실시간 스트림) — "현재 단계" 라이브 표시용.
 // MARK: - Step
 public struct Step: Codable {
@@ -841,6 +916,7 @@ public enum WsServerEventType: String, Codable {
     case mcpToolStart = "mcp_tool_start"
     case researchProgress = "research_progress"
     case resumeNone = "resume_none"
+    case searchSources = "search_sources"
     case sessionCreated = "session_created"
     case skillsActivated = "skills_activated"
     case streamResume = "stream_resume"

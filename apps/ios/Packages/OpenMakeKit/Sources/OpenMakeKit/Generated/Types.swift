@@ -667,6 +667,10 @@ public enum Components {
             public var images: [Swift.String]?
             /// - Remark: Generated from `#/components/schemas/ChatMessage/created_at`.
             public var created_at: Swift.String?
+            /// assistant 답변의 웹검색 출처(156) — 본문 [N] 과 같은 번호
+            ///
+            /// - Remark: Generated from `#/components/schemas/ChatMessage/sources`.
+            public var sources: [Components.Schemas.SearchSourceRef]?
             /// Creates a new `ChatMessage`.
             ///
             /// - Parameters:
@@ -676,13 +680,15 @@ public enum Components {
             ///   - tokens:
             ///   - images: dataURL 이미지 목록
             ///   - created_at:
+            ///   - sources: assistant 답변의 웹검색 출처(156) — 본문 [N] 과 같은 번호
             public init(
                 role: Components.Schemas.ChatMessage.rolePayload,
                 content: Swift.String,
                 model: Swift.String? = nil,
                 tokens: Swift.Int? = nil,
                 images: [Swift.String]? = nil,
-                created_at: Swift.String? = nil
+                created_at: Swift.String? = nil,
+                sources: [Components.Schemas.SearchSourceRef]? = nil
             ) {
                 self.role = role
                 self.content = content
@@ -690,6 +696,7 @@ public enum Components {
                 self.tokens = tokens
                 self.images = images
                 self.created_at = created_at
+                self.sources = sources
             }
             public enum CodingKeys: String, CodingKey {
                 case role
@@ -698,6 +705,52 @@ public enum Components {
                 case tokens
                 case images
                 case created_at
+                case sources
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/SearchSourceRef`.
+        public struct SearchSourceRef: Codable, Hashable, Sendable {
+            /// 1부터 — 본문 [N] 번호
+            ///
+            /// - Remark: Generated from `#/components/schemas/SearchSourceRef/n`.
+            public var n: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/SearchSourceRef/title`.
+            public var title: Swift.String
+            /// - Remark: Generated from `#/components/schemas/SearchSourceRef/url`.
+            public var url: Swift.String
+            /// - Remark: Generated from `#/components/schemas/SearchSourceRef/snippet`.
+            public var snippet: Swift.String
+            /// 결과 도메인(표시용)
+            ///
+            /// - Remark: Generated from `#/components/schemas/SearchSourceRef/source`.
+            public var source: Swift.String?
+            /// Creates a new `SearchSourceRef`.
+            ///
+            /// - Parameters:
+            ///   - n: 1부터 — 본문 [N] 번호
+            ///   - title:
+            ///   - url:
+            ///   - snippet:
+            ///   - source: 결과 도메인(표시용)
+            public init(
+                n: Swift.Int,
+                title: Swift.String,
+                url: Swift.String,
+                snippet: Swift.String,
+                source: Swift.String? = nil
+            ) {
+                self.n = n
+                self.title = title
+                self.url = url
+                self.snippet = snippet
+                self.source = source
+            }
+            public enum CodingKeys: String, CodingKey {
+                case n
+                case title
+                case url
+                case snippet
+                case source
             }
         }
         /// - Remark: Generated from `#/components/schemas/ModelCapabilities`.

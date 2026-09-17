@@ -177,3 +177,27 @@ final class ChatStreamStateTests: XCTestCase {
         XCTAssertEqual(state.statusText, "답변을 정리하고 있어요")
     }
 }
+
+final class ChatSourcesTests: XCTestCase {
+    private func decode(_ json: String) -> WsServerEvent { WsEventDecoder.decode(Data(json.utf8))! }
+
+    func testSearchSourcesEventReplacesListAndBeginClears() {
+        var state = ChatStreamState()
+        state.begin()
+        state.apply(decode(#"{"type":"search_sources","messageId":"m","sources":[{"n":1,"title":"A","url":"https://a.example/x","snippet":"s"}]}"#))
+        XCTAssertEqual(state.sources.map(\.n), [1])
+        XCTAssertEqual(state.sources.first?.domain, "a.example")
+        state.apply(decode(#"{"type":"search_sources","sources":[{"n":1,"title":"B","url":"u","snippet":"","source":"b.example"},{"n":2,"title":"C","url":"u2","snippet":""}]}"#))
+        XCTAssertEqual(state.sources.map(\.title), ["B", "C"])
+        XCTAssertEqual(state.sources.first?.domain, "b.example")
+        state.apply(decode(#"{"type":"search_sources","sources":[]}"#))
+        XCTAssertEqual(state.sources.count, 2)
+        state.begin()
+        XCTAssertTrue(state.sources.isEmpty)
+    }
+
+    func testContractRefRoundTrip() {
+        let item = ChatSourceItem(n: 3, title: "T", url: "https://x.example", snippet: "s", source: nil)
+        XCTAssertEqual(ChatSourceItem(item.contractRef), item)
+    }
+}

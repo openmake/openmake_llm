@@ -2757,6 +2757,41 @@
           },
           "created_at": {
             "type": "string"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchSourceRef"
+            },
+            "description": "assistant 답변의 웹검색 출처(156) — 본문 [N] 과 같은 번호"
+          }
+        }
+      },
+      "SearchSourceRef": {
+        "type": "object",
+        "required": [
+          "n",
+          "title",
+          "url",
+          "snippet"
+        ],
+        "properties": {
+          "n": {
+            "type": "integer",
+            "description": "1부터 — 본문 [N] 번호"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "snippet": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "description": "결과 도메인(표시용)"
           }
         }
       },
