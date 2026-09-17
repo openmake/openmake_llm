@@ -253,6 +253,35 @@
         "message"
       ]
     },
+    "WsResumeRequest": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "resume"
+        },
+        "anonSessionId": {
+          "type": "string",
+          "description": "게스트 스트림 키"
+        },
+        "lane": {
+          "type": "string",
+          "description": "비교 모드 레인"
+        },
+        "streamId": {
+          "type": "string",
+          "description": "마지막으로 받은 이벤트의 streamId"
+        },
+        "afterSeq": {
+          "type": "number",
+          "description": "마지막으로 받은 이벤트의 seq — 같은 스트림이면 이 뒤 이벤트만 재생"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "description": "재연결 후 끊긴 스트림 이어받기 요청 — 커서가 없거나 다른 스트림이면 서버는 미전달 이벤트만 재생한다(종전 동작)."
+    },
     "WsServerEvent": {
       "anyOf": [
         {
@@ -507,6 +536,18 @@
             },
             "finished": {
               "type": "boolean"
+            },
+            "streamId": {
+              "type": "string",
+              "description": "이 스트림의 식별자(F19.11) — 클라이언트 커서가 다르면 새 스트림으로 본다"
+            },
+            "lastSeq": {
+              "type": "number",
+              "description": "스냅샷이 반영한 마지막 순번"
+            },
+            "gap": {
+              "type": "boolean",
+              "description": "재생해야 할 이벤트 일부가 링버퍼에서 밀려났음 — 아티팩트는 done.cleanedContent 로 재구성할 것"
             }
           },
           "required": [
@@ -886,6 +927,18 @@
           ]
         }
       ]
+    },
+    "WsStreamEnvelope": {
+      "type": "object",
+      "properties": {
+        "streamId": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "number"
+        }
+      },
+      "description": "스트림 이벤트 공통 봉투(F19.11, 2026-09-17) — 채팅 스트림 이벤트에 서버가 덧붙이는 이어받기 커서. `streamId` 는 스트림(한 번의 생성)마다 새로 발급되고 `seq` 는 그 안에서 1부터 단조 증가한다(토큰 포함). 클라이언트는 마지막으로 받은 값을 기억해 재연결 시 `resume{streamId, afterSeq}` 로 보내고, `seq <= afterSeq` 인 이벤트는 중복이므로 무시한다. 구 서버는 필드가 없다."
     }
   }
 }

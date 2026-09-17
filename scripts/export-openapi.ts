@@ -28,7 +28,7 @@ const SHARED_TYPES_ENTRY = path.join(ROOT, 'packages', 'shared-types', 'src', 'i
 const SHARED_TYPES_TSCONFIG = path.join(ROOT, 'packages', 'shared-types', 'tsconfig.json');
 
 /** WS 계약으로 추출할 shared-types 루트 타입 */
-const WS_CONTRACT_TYPES = ['WsChatRequest', 'WsServerEvent'] as const;
+const WS_CONTRACT_TYPES = ['WsChatRequest', 'WsResumeRequest', 'WsServerEvent', 'WsStreamEnvelope'] as const;
 
 function writeJson(relPath: string, value: unknown): void {
     const target = path.join(OUT_DIR, relPath);
