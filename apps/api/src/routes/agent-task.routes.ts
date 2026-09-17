@@ -65,6 +65,7 @@ const updatePlanSchema = z.object({
     expectedVersion: z.number().int().min(1),
 });
 import { isAdminRole } from '../data/user-manager';
+import { notifyApprovalChange } from '../services/agent-task/approval-change-notify';
 
 const logger = createLogger('AgentTaskRoutes');
 const router = Router();
@@ -565,6 +566,8 @@ router.put('/:taskId/plan', validate(updatePlanSchema), asyncHandler(async (req:
     if (!r.ok) return res.status(409).json({ success: false, error: { code: 'VERSION_CONFLICT', message: '다른 곳에서 계획이 바뀌었습니다. 다시 불러오세요.' }, currentVersion: r.version });
     if (task.status === 'running' && AGENT_TASK_LIMITS.PLAN_EDIT_ENABLED) getPlanEditRegistry().submit(task.id, steps);
     logger.info(`[AgentTaskRoutes] 계획 편집: ${task.id} v${r.version} (${merged.length}단계, status=${task.status})`);
+    // 같은 계정의 다른 창·기기(iOS)가 계획을 다시 읽게 — 편집한 창은 응답으로 이미 갱신된다.
+    void notifyApprovalChange({ userId: String(task.user_id ?? req.user!.id), taskId: task.id, reason: 'plan_edited' });
     res.json(success({ plan: merged, planVersion: r.version, appliedAt: task.status === 'running' ? 'next_turn' : 'now' }));
 }));
 

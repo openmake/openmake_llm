@@ -21,6 +21,7 @@ import { ApiClient } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
 import { DiffView } from "@/components/chat/diff-view";
 import { isQuestionApproval, elicitationHint } from "@/lib/hitl-question";
+import { onAgentTaskChange } from "@/lib/agent-task-change";
 
 interface RecentDecision {
   approvalId: string;
@@ -101,6 +102,9 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
   useEffect(() => {
     void load();
   }, [load]);
+
+  // 다른 사람이 이관·에스컬레이션했거나 철회된 승인 — 목록을 즉시 다시 읽는다.
+  useEffect(() => onAgentTaskChange((c) => { if (c.reason !== "plan_edited") void load(); }), [load]);
 
   async function run(id: string, fn: () => Promise<unknown>) {
     setBusy(id);

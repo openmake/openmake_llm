@@ -155,6 +155,9 @@ public struct ChatStreamState: Sendable {
                 setActivity("\(activeSkillNames.joined(separator: ", ")) 적용 중", kind: .agent)
             }
         case .agentTaskProgress:
+            // 승인 이관·철회·계획 편집 알림(reason)은 진행이 아니다 — 스트림 활동 문구를 덮지 않는다.
+            // (작업 화면은 주기 재조회로 승인 목록을 따라온다)
+            if event.reason != nil { break }
             if let preview = event.step?.preview, !preview.isEmpty {
                 setActivity(preview, kind: .agent)
             } else if let currentTurn = event.currentTurn {

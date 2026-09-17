@@ -17,6 +17,10 @@ import { EventEmitter } from 'events';
 
 export const AGENT_TASK_PROGRESS = 'agent_task_progress';
 
+/** 진행 이벤트에 붙는 승인·계획 변경 사유(HITL 2단계 D7) — 새 WS 이벤트 타입 대신 선택 필드로 싣는다 */
+export const AGENT_TASK_PROGRESS_REASONS = ['assigned', 'escalated', 'revoked', 'plan_edited'] as const;
+export type AgentTaskProgressReason = (typeof AGENT_TASK_PROGRESS_REASONS)[number];
+
 /** 에이전트 작업 진행 이벤트 — 상태 전체를 실어 프론트가 GET 없이 카드 갱신 가능 */
 export interface AgentTaskProgressEvent {
     /** 작업 소유자 userId — sendToUser 가 이 user 에게만 relay */
@@ -27,6 +31,9 @@ export interface AgentTaskProgressEvent {
     currentTurn: number;
     /** 방금 기록된 스텝 요약(4-5) — 채팅 인라인 카드가 "현재 단계"를 실시간 표시. 선택적. */
     step?: { stepType: string; toolName?: string; preview?: string };
+    /** 승인·계획 변경 알림일 때 대상 승인 id(계획 편집은 없음) — 클라이언트가 승인함을 재조회하는 신호 */
+    approvalId?: string;
+    reason?: AgentTaskProgressReason;
 }
 
 const bus = new EventEmitter();
