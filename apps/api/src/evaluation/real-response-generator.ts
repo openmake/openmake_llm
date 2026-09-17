@@ -60,6 +60,12 @@ interface RealResponseGeneratorOptions {
     abortOnBudgetExceed?: boolean;
     /** ChatService 인스턴스를 외부에서 주입 (테스트용). 미지정 시 매 호출마다 new */
     chatServiceFactory?: (client: LLMClient) => ChatService;
+    /** 매트릭스 셀 모델(F26.1) — 미지정 시 LLM_DEFAULT_MODEL. llmClient 주입 시 무시 */
+    model?: string;
+    /** 매트릭스 variant 요청 덮어쓰기(style·thinking 등, F26.1) */
+    requestOverrides?: Partial<ChatMessageRequest>;
+    /** 케이스별 계측 통지 — 첫 토큰(ms)·전체(ms)·provider 사용량(있으면) */
+    onCaseMetrics?: (m: { ttftMs: number | null; totalMs: number; inputTokens?: number; outputTokens?: number }) => void;
 }
 
 /** 응답 생성 중 가드 트리거를 식별하기 위한 Error 서브타입 */
@@ -95,7 +101,7 @@ export function createRealResponseGenerator(
 
     return async (query, language) => {
         // 케이스 간 상태 누수 방지: client/service를 새로 생성
-        const client = options.llmClient ?? new LLMClient({});
+        const client = options.llmClient ?? new LLMClient(options.model ? { model: options.model } : {});
         const chatService = factory(client);
 
         // 단일 AbortController로 timeout + token-budget 두 가드를 모두 처리
@@ -111,8 +117,10 @@ export function createRealResponseGenerator(
 
         let chars = 0;
         const startedAt = Date.now();
+        let firstTokenAt: number | null = null;
 
         const onToken = (token: string): void => {
+            if (firstTokenAt === null && token) firstTokenAt = Date.now();
             // 메모리 주의: 긴 응답을 buffer하지 않고 카운터만 유지
             // (token-budget 가드는 chars만으로 충분; 실제 응답은 processMessage 반환값에서 받음)
             chars += token.length;
@@ -135,6 +143,7 @@ export function createRealResponseGenerator(
             enabledTools: {},
             abortSignal: controller.signal,
             userLanguagePreference: language,
+            ...(options.requestOverrides ?? {}),
         };
 
         logger.info(
@@ -146,6 +155,15 @@ export function createRealResponseGenerator(
             const response = await chatService.processMessage(req, onToken);
 
             const durationMs = Date.now() - startedAt;
+            if (options.onCaseMetrics) {
+                const usage = chatService.getLastProviderUsage();
+                options.onCaseMetrics({
+                    ttftMs: firstTokenAt === null ? null : firstTokenAt - startedAt,
+                    totalMs: durationMs,
+                    ...(usage?.prompt_tokens !== undefined ? { inputTokens: usage.prompt_tokens } : {}),
+                    ...(usage?.completion_tokens !== undefined ? { outputTokens: usage.completion_tokens } : {}),
+                });
+            }
             const estimatedTokens = Math.ceil(chars / TOKEN_ESTIMATION_DIVISOR);
             logger.info(
                 `[real-eval] case ok: durationMs=${durationMs}, chars=${chars}, ` +

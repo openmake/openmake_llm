@@ -170,6 +170,17 @@ npm run eval:tools -- --real --limit 10    # real — ChatService evalToolObserv
 - 기준선: mock 39/40(97.5%) — 실패 1건 `tool-ws-009`("Look it up online")는 영어 표현이 `WEB_SEARCH_INTENT_PATTERNS` 에 안 걸리는 **실제 노출 누락**이다(라벨을 바꾸지 말고 패턴 보강 여부를 판단할 것).
 - 민감도 확인: `CHAT_TOOL_INTENT_GATE_ENABLED=false`(과다 노출 5건)·`OPS_METRICS_TOOL_ENABLED=false`(누락 5건) 모두 실패한다.
 
+## 비교 매트릭스·실행 이력 (2026-09-17, 146)
+
+```bash
+npm run eval:matrix -- --real --models qwen3.8-27b --variants base,concise --limit 5
+```
+
+- 셀 = 모델 × variant(`matrix-variants.ts` — base·concise·verbose·thinking, 채팅 요청 필드만 바꾼다). 셀마다 response 골든셋을 실모델로 돌려 통과율·TTFT p50/p95·전체 p50/p95·토큰을 모은다. 모델은 로컬(LiteLLM alias)만 — 평가 ProviderRouter 에 외부 키가 없다.
+- 출력: 콘솔 마크다운 표 + `logs/matrix-evaluation-*.json`.
+- **실행 이력** `eval_runs`(146): routing·response·tools·matrix 러너가 `OMK_EVAL_RECORD_DB=true` + `DATABASE_URL` 일 때만 1행(매트릭스는 셀당, `matrix_run_id` 로 묶음)을 남긴다. CI·로컬 임시 실행은 기본 기록하지 않는다. nightly(`scripts/nightly-eval.sh`)는 켜고, `NIGHTLY_EVAL_MATRIX=1` 이면 매트릭스도 돈다.
+- 조회: 관리자 `/admin/evaluations`(API `GET /api/metrics/evaluations`·`/:id`). SLO `eval_pass` 는 `runner='response' AND mode='real'` 최신 행을 읽는다.
+
 ## PoC 상태 (마지막 업데이트)
 
 | 항목 | 상태 | 비고 |

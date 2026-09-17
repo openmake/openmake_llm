@@ -28,6 +28,7 @@
       "organizationsAdmin": "組織管理",
       "costRatesAdmin": "コスト単価",
       "sloAdmin": "SLO",
+      "evaluationsAdmin": "評価履歴",
       "quotaRequestsAdmin": "クォータ承認"
     },
     "pendingApprovals": "承認待ち {count}件 — エージェント作業がユーザーの承認を待っています"
@@ -2514,6 +2515,35 @@
         "name": "評価合格率",
         "desc": "直近 {window} 日以内の最新応答評価の合格率"
       }
+    }
+  },
+  "adminEvaluations": {
+    "title": "評価履歴",
+    "description": "nightly 評価の実行記録 — 合格率・初回トークン遅延・失敗ケース",
+    "refresh": "更新",
+    "loadError": "読み込みに失敗しました。",
+    "runnerFilter": "ランナー",
+    "allRunners": "すべてのランナー",
+    "matrixTitle": "最新マトリクス ({time})",
+    "modelVariant": "モデル \\ variant",
+    "listTitle": "実行一覧",
+    "empty": "記録はまだありません — nightly 評価が OMK_EVAL_RECORD_DB=true で実行されると蓄積されます。",
+    "noFailures": "失敗ケースはありません。",
+    "th": {
+      "completedAt": "完了時刻",
+      "runner": "ランナー",
+      "mode": "モード",
+      "model": "モデル · variant",
+      "passRate": "合格率",
+      "ttft": "TTFT p50",
+      "totalP95": "全体 p95",
+      "version": "データセット · コミット"
+    },
+    "runner": {
+      "routing": "ルーティング",
+      "response": "応答",
+      "tools": "ツール選択",
+      "matrix": "マトリクス"
     }
   }
 }

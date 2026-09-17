@@ -24,6 +24,7 @@ import * as dotenv from 'dotenv';
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
 import { loadGoldenDataset } from './dataset-loader';
+import { buildEvalRunRecord, currentGitHash, recordEvalRuns } from './eval-run-recorder';
 import { runRoutingEvaluation } from './router-evaluator';
 import type { EvaluationSummary } from './types';
 
@@ -53,6 +54,8 @@ async function main() {
 
     printSummary(summary);
     saveSummaryToFile(summary);
+    // eval_runs 이력(146) — OMK_EVAL_RECORD_DB=true(nightly) 일 때만
+    await recordEvalRuns([buildEvalRunRecord(summary, { runner: 'routing', mode: 'mock', gitHash: currentGitHash() })]);
 
     const meetsThreshold = summary.passRate >= PASS_RATE_THRESHOLD;
     if (!meetsThreshold) {

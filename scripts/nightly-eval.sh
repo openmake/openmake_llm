@@ -15,6 +15,8 @@
 #   3) eval:response --real    — LiteLLM 경유 실모델 (기본 limit 30 = response 전체:
 #      applyLimit 이 앞에서부터 자르므로 limit 을 줄이면 뒤쪽 신규 케이스가 빠진다)
 #   4) eval:tools --real       — 도구 선택 골든셋 40건, 모델 첫 턴 tool_calls 관찰(dry-run·첫 관찰 즉시 중단)
+#   5) eval:matrix (선택)      — NIGHTLY_EVAL_MATRIX=1 일 때 모델 × variant 비교(기본 qwen3.8-27b × base,concise × 10건)
+# 모든 단계 결과는 eval_runs(146)에 기록된다(NIGHTLY_EVAL_RECORD_DB=false 로 끔).
 # 실패 시 OPERATOR_WEBHOOK_URL(.env) 로 통지 — pm2 cron 은 앱 env 를 상속하지
 # 않으므로 .env 에서 직접 읽는다 (daily-routing-report.sh 와 같은 이유).
 set -uo pipefail
@@ -36,6 +38,13 @@ if ! command -v npm >/dev/null 2>&1; then
 fi
 
 REAL_LIMIT="${NIGHTLY_EVAL_REAL_LIMIT:-30}"
+# 실행 이력을 eval_runs(146)에 남긴다 — 관리자 /admin/evaluations·SLO eval_pass 가 읽는다.
+# mock 러너는 .env 를 읽지 않으므로 DATABASE_URL 을 여기서 넘긴다(끄기: NIGHTLY_EVAL_RECORD_DB=false).
+export OMK_EVAL_RECORD_DB="${NIGHTLY_EVAL_RECORD_DB:-true}"
+if [ -z "${DATABASE_URL:-}" ]; then
+    DATABASE_URL="$(grep -E "^DATABASE_URL=" "$REPO/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"')"
+    export DATABASE_URL
+fi
 FAILED_STEPS=()
 
 run_step() {
@@ -60,6 +69,11 @@ run_step "eval:routing"        npm --workspace apps/api run eval:routing
 run_step "eval:response-mock"  npm --workspace apps/api run eval:response
 run_step "eval:response-real"  npm --workspace apps/api run eval:response -- --real --limit "$REAL_LIMIT"
 run_step "eval:tools-real"     npm --workspace apps/api run eval:tools -- --real --limit 40
+# 모델 × 프롬프트 매트릭스(선택) — 호출 수 = 모델 × variant × 케이스라 기본 꺼짐
+if [ "${NIGHTLY_EVAL_MATRIX:-0}" = "1" ]; then
+    run_step "eval:matrix" npm --workspace apps/api run eval:matrix -- --real \
+        --models "${NIGHTLY_EVAL_MATRIX_MODELS:-qwen3.8-27b}" --variants "${NIGHTLY_EVAL_MATRIX_VARIANTS:-base,concise}" --limit "${NIGHTLY_EVAL_MATRIX_LIMIT:-10}"
+fi
 
 echo >> "$OUT"
 echo "실패 단계: ${FAILED_STEPS[*]:-없음}" >> "$OUT"

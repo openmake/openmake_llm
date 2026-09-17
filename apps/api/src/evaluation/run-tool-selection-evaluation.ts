@@ -63,6 +63,8 @@ async function main(): Promise<void> {
     fs.mkdirSync(LOGS_DIR, { recursive: true });
     const out = path.join(LOGS_DIR, `tool-selection-evaluation-${useReal ? 'real' : 'mock'}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
     fs.writeFileSync(out, JSON.stringify({ mode: useReal ? 'real' : 'mock', threshold, ...summary }, null, 2));
+    const { buildEvalRunRecord, currentGitHash, recordEvalRuns } = await import('./eval-run-recorder');
+    await recordEvalRuns([buildEvalRunRecord(summary, { runner: 'tools', mode: useReal ? 'real' : 'mock', gitHash: currentGitHash() })]);
     const ok = summary.passRate >= threshold;
     console.log(`결과: ${ok ? '통과' : '실패'} (임계 ${(threshold * 100).toFixed(0)}%) → ${path.relative(process.cwd(), out)}`);
     if (!ok) process.exit(1);

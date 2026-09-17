@@ -28,6 +28,7 @@
       "organizationsAdmin": "组织管理",
       "costRatesAdmin": "成本单价",
       "sloAdmin": "SLO",
+      "evaluationsAdmin": "评估记录",
       "quotaRequestsAdmin": "配额审批"
     },
     "pendingApprovals": "{count} 个待批准 — 代理任务正在等待您的批准"
@@ -2514,6 +2515,35 @@
         "name": "评估通过率",
         "desc": "最近 {window} 天内最新一次回答评估的通过率"
       }
+    }
+  },
+  "adminEvaluations": {
+    "title": "评估记录",
+    "description": "nightly 评估运行记录 — 通过率、首个 token 延迟与失败用例",
+    "refresh": "刷新",
+    "loadError": "加载失败。",
+    "runnerFilter": "运行器",
+    "allRunners": "全部运行器",
+    "matrixTitle": "最新矩阵 ({time})",
+    "modelVariant": "模型 \\ variant",
+    "listTitle": "运行列表",
+    "empty": "暂无记录 — nightly 评估以 OMK_EVAL_RECORD_DB=true 运行后会累积。",
+    "noFailures": "没有失败用例。",
+    "th": {
+      "completedAt": "完成时间",
+      "runner": "运行器",
+      "mode": "模式",
+      "model": "模型 · variant",
+      "passRate": "通过率",
+      "ttft": "TTFT p50",
+      "totalP95": "总耗时 p95",
+      "version": "数据集 · 提交"
+    },
+    "runner": {
+      "routing": "路由",
+      "response": "回答",
+      "tools": "工具选择",
+      "matrix": "矩阵"
     }
   }
 }

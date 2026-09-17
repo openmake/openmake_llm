@@ -48,7 +48,7 @@ export const SLO_LIMITS = {
     REALERT_MS: 60 * 60_000,
     SNAPSHOT_RETENTION_DAYS: 400,
     HISTORY_MAX_DAYS: 90,
-    /** 평가 통과율 SLO 가 읽는 러너(146 eval_runs.runner) */
+    /** 평가 통과율 SLO 가 읽는 러너(146 eval_runs.runner, mode='real' 만) */
     EVAL_RUNNER: 'response',
 } as const;
 

@@ -28,6 +28,7 @@ import * as dotenv from 'dotenv';
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
 import { loadGoldenDataset } from './dataset-loader';
+import { buildEvalRunRecord, recordEvalRuns, type CaseTiming } from './eval-run-recorder';
 import { runResponseEvaluation, type ResponseGenerator } from './response-evaluator';
 import type { EvaluationSummary, GoldenDataset } from './types';
 // 주의: real-response-generator는 ChatService/LLMClient 등 무거운 의존성을
@@ -206,6 +207,7 @@ async function main() {
 
     let generator: ResponseGenerator;
     let mode: 'mock' | 'real';
+    const caseTimings: CaseTiming[] = [];
 
     if (useReal) {
         // Lazy load: ChatService/LLMClient 등 LLM 의존성은 --real 모드에서만 필요
@@ -217,6 +219,7 @@ async function main() {
             timeoutMs: REAL_TIMEOUT_MS,
             maxTokensPerCase: REAL_MAX_TOKENS,
             abortOnBudgetExceed: true,
+            onCaseMetrics: (m) => caseTimings.push(m),
         });
         mode = 'real';
     } else {
@@ -240,6 +243,10 @@ async function main() {
     const summary = await runResponseEvaluation(dataset, generator);
     printSummary(summary, mode);
     saveSummaryToFile(summary, mode);
+    // eval_runs 이력(146) — OMK_EVAL_RECORD_DB=true(nightly) 일 때만. real 은 케이스 계측(TTFT·토큰) 포함
+    if (summary.totalCases > 0) {
+        await recordEvalRuns([buildEvalRunRecord(summary, { runner: 'response', mode, gitHash: getGitCommitHash(), ...(caseTimings.length ? { timings: caseTimings } : {}) })]);
+    }
 
     if (summary.totalCases === 0) {
         console.log('\n⚠ response-pattern 카테고리 케이스 없음 — exit 0 (통과로 간주)');

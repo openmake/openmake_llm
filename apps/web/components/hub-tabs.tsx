@@ -69,6 +69,7 @@ export function AdminTabs() {
         { href: "/admin/analytics", label: tNav("items.analytics") },
         { href: "/admin/metrics", label: tNav("items.metrics") },
         { href: "/admin/slo", label: tNav("items.sloAdmin") },
+        { href: "/admin/evaluations", label: tNav("items.evaluationsAdmin") },
         { href: "/admin/mcp-monitoring", label: tNav("items.mcpMonitoring") },
         { href: "/admin/audit", label: tNav("items.auditLog") },
         { href: "/admin/alerts", label: tNav("items.alerts") },

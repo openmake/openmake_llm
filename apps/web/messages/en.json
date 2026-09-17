@@ -28,6 +28,7 @@
       "organizationsAdmin": "Organizations",
       "costRatesAdmin": "Cost Rates",
       "sloAdmin": "SLO",
+      "evaluationsAdmin": "Evaluations",
       "quotaRequestsAdmin": "Quota Approvals"
     },
     "pendingApprovals": "{count} pending approval(s) — agent tasks are waiting for your approval"
@@ -2514,6 +2515,35 @@
         "name": "Eval pass rate",
         "desc": "Pass rate of the latest response eval within the last {window} days"
       }
+    }
+  },
+  "adminEvaluations": {
+    "title": "Evaluations",
+    "description": "Nightly evaluation runs — pass rate, time to first token and failed cases",
+    "refresh": "Refresh",
+    "loadError": "Failed to load.",
+    "runnerFilter": "Runner",
+    "allRunners": "All runners",
+    "matrixTitle": "Latest matrix ({time})",
+    "modelVariant": "Model \\ variant",
+    "listTitle": "Runs",
+    "empty": "No runs yet — they appear once nightly evaluation runs with OMK_EVAL_RECORD_DB=true.",
+    "noFailures": "No failed cases.",
+    "th": {
+      "completedAt": "Completed",
+      "runner": "Runner",
+      "mode": "Mode",
+      "model": "Model · variant",
+      "passRate": "Pass rate",
+      "ttft": "TTFT p50",
+      "totalP95": "Total p95",
+      "version": "Dataset · commit"
+    },
+    "runner": {
+      "routing": "Routing",
+      "response": "Response",
+      "tools": "Tool selection",
+      "matrix": "Matrix"
     }
   }
 }

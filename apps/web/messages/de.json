@@ -28,6 +28,7 @@
       "organizationsAdmin": "Organisationen",
       "costRatesAdmin": "Kostensätze",
       "sloAdmin": "SLO",
+      "evaluationsAdmin": "Evaluierungen",
       "quotaRequestsAdmin": "Kontingent-Freigaben"
     },
     "pendingApprovals": "{count} ausstehende Freigabe(n) — Agentenaufgaben warten auf Ihre Freigabe"
@@ -2514,6 +2515,35 @@
         "name": "Eval-Bestehensquote",
         "desc": "Bestehensquote der letzten Antwort-Auswertung innerhalb von {window} Tagen"
       }
+    }
+  },
+  "adminEvaluations": {
+    "title": "Evaluierungen",
+    "description": "Nächtliche Evaluierungsläufe — Bestehensquote, Zeit bis zum ersten Token und fehlgeschlagene Fälle",
+    "refresh": "Aktualisieren",
+    "loadError": "Laden fehlgeschlagen.",
+    "runnerFilter": "Runner",
+    "allRunners": "Alle Runner",
+    "matrixTitle": "Letzte Matrix ({time})",
+    "modelVariant": "Modell \\ Variante",
+    "listTitle": "Läufe",
+    "empty": "Noch keine Läufe — sie erscheinen, sobald die nächtliche Evaluierung mit OMK_EVAL_RECORD_DB=true läuft.",
+    "noFailures": "Keine fehlgeschlagenen Fälle.",
+    "th": {
+      "completedAt": "Abgeschlossen",
+      "runner": "Runner",
+      "mode": "Modus",
+      "model": "Modell · Variante",
+      "passRate": "Bestehensquote",
+      "ttft": "TTFT p50",
+      "totalP95": "Gesamt p95",
+      "version": "Datensatz · Commit"
+    },
+    "runner": {
+      "routing": "Routing",
+      "response": "Antwort",
+      "tools": "Tool-Auswahl",
+      "matrix": "Matrix"
     }
   }
 }

@@ -72,13 +72,13 @@ export class SloRepository extends BaseRepository {
         return toMap(r.rows);
     }
 
-    /** 최근 평가 통과율 — eval_runs(146) 가 없으면 null. */
+    /** 최근 실모델(real) 평가 통과율 — eval_runs(146) 가 없으면 null. mock 은 결정적이라 SLO 대상이 아니다. */
     async latestEvalPass(runner: string, windowHours: number): Promise<{ passRate: number; totalCases: number; completedAt: string } | null> {
         const exists = await this.query<{ ok: boolean }>(`SELECT to_regclass('public.eval_runs') IS NOT NULL AS ok`);
         if (!exists.rows[0]?.ok) return null;
         const r = await this.query<{ pass_rate: number; total_cases: number; completed_at: string }>(
             `SELECT pass_rate, total_cases, completed_at FROM eval_runs
-             WHERE runner = $1 AND completed_at >= NOW() - make_interval(secs => $2 * 3600)
+             WHERE runner = $1 AND mode = 'real' AND completed_at >= NOW() - make_interval(secs => $2 * 3600)
              ORDER BY completed_at DESC LIMIT 1`,
             [runner, windowHours],
         );

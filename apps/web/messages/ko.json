@@ -28,6 +28,7 @@
       "organizationsAdmin": "조직 관리",
       "costRatesAdmin": "비용 단가",
       "sloAdmin": "SLO",
+      "evaluationsAdmin": "평가 이력",
       "quotaRequestsAdmin": "쿼터 승인"
     },
     "pendingApprovals": "승인 대기 {count}건 — 에이전트 작업이 사용자 승인을 기다리고 있습니다"
@@ -2514,6 +2515,35 @@
         "name": "평가 통과율",
         "desc": "최근 {window}일 안의 마지막 응답 평가 통과율"
       }
+    }
+  },
+  "adminEvaluations": {
+    "title": "평가 이력",
+    "description": "nightly 평가 실행 기록 — 통과율·첫 토큰 지연·실패 케이스",
+    "refresh": "새로고침",
+    "loadError": "불러오기에 실패했습니다.",
+    "runnerFilter": "러너",
+    "allRunners": "전체 러너",
+    "matrixTitle": "최근 매트릭스 ({time})",
+    "modelVariant": "모델 \\ variant",
+    "listTitle": "실행 목록",
+    "empty": "기록이 없습니다 — nightly 평가가 OMK_EVAL_RECORD_DB=true 로 실행되면 쌓입니다.",
+    "noFailures": "실패 케이스가 없습니다.",
+    "th": {
+      "completedAt": "완료 시각",
+      "runner": "러너",
+      "mode": "모드",
+      "model": "모델 · variant",
+      "passRate": "통과율",
+      "ttft": "TTFT p50",
+      "totalP95": "전체 p95",
+      "version": "데이터셋 · 커밋"
+    },
+    "runner": {
+      "routing": "라우팅",
+      "response": "응답",
+      "tools": "도구 선택",
+      "matrix": "매트릭스"
     }
   }
 }

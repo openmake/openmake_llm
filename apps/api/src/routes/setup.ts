@@ -45,6 +45,7 @@ import {
     mcpCatalogAdminRouter,
     mcpAdminMonitoringRouter,
     toolHealthRouter,
+    evaluationRunsRouter,
     adminModelRolesRouter,
     adminCapabilityModelsRouter,
     adminSystemSettingsRouter,
@@ -191,6 +192,7 @@ export function setupApiRoutes(
     // 마운트 순서 중요: 구체적인 경로를 먼저, 파라미터 경로를 나중에
     // 도구 헬스는 metricsRouter 보다 먼저 — 같은 /api/metrics 접두를 공유한다.
     app.use('/api/metrics/tools', toolHealthRouter);
+    app.use('/api/metrics/evaluations', evaluationRunsRouter);
     app.use('/api/metrics', metricsRouter);
     // 🆕 스킬 라우트 — agentRouter(/:id catch-all) 보다 먼저 마운트 필수
     // 사용 요약(/usage/summary)은 skillsRouter 의 /:skillId 보다 먼저 (skills.routes 600줄 게이트로 분리)

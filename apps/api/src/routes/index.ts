@@ -21,6 +21,7 @@ export { mcpServerIngestRouter } from './mcp-server-ingest.routes';
 export { mcpCatalogAdminRouter } from './mcp-catalog-admin.routes';
 export { mcpAdminMonitoringRouter } from './mcp-admin-monitoring.routes';
 export { toolHealthRouter } from './tool-health.routes';
+export { evaluationRunsRouter } from './evaluation-runs.routes';
 export { adminModelRolesRouter } from './admin-model-roles.routes';
 export { adminCapabilityModelsRouter } from './admin-capability-models.routes';
 export { adminSystemSettingsRouter } from './admin-system-settings.routes';
