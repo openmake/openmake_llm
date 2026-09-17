@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.69.0](https://github.com/openmake/openmake_llm/compare/v1.68.3...v1.69.0) (2026-09-17)
+
+
+### ✨ 기능
+
+* **cost:** 비용 원장·쿼터 예약·강등·승인 요청·명세서 (F25 PR-1~5, 마이그레이션 134~137) ([#911](https://github.com/openmake/openmake_llm/issues/911)) ([1b780e3](https://github.com/openmake/openmake_llm/commit/1b780e3e47871690009d54a3608471763f0e1c8a))
+* **org:** 조직·테넌트 축 완성 Phase A~E — 활성 조직 컨텍스트·권한 판정 단일화·조직 공유·조직 정책·변경 이력·관리 콘솔 ([#909](https://github.com/openmake/openmake_llm/issues/909)) ([3b976b0](https://github.com/openmake/openmake_llm/commit/3b976b04f669f6c6ffaeeb0da69ef19fd23307fc))
+* 카탈로그 보완 스택 — HITL·세션·MCP 워크플로·아티팩트 커넥터·관측/평가·UX 게이트웨이 (마이그레이션 131~133·138~149·156~158) ([#913](https://github.com/openmake/openmake_llm/issues/913)) ([81478ae](https://github.com/openmake/openmake_llm/commit/81478aec2220f634243cd3b9ab26ebb0e0474eb0))
+
 ## [1.68.3](https://github.com/openmake/openmake_llm/compare/v1.68.2...v1.68.3) (2026-09-16)
 
 
