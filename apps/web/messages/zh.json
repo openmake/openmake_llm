@@ -479,6 +479,11 @@
       "chipLabel": "来源 {n}：{title}",
       "popoverLabel": "来源 {n} 预览",
       "open": "打开原文"
+    },
+    "a11y": {
+      "generating": "正在生成回答",
+      "toolRunning": "正在运行 {tool}",
+      "done": "回答已完成"
     }
   },
   "compare": {

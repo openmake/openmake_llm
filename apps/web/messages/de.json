@@ -479,6 +479,11 @@
       "chipLabel": "Quelle {n}: {title}",
       "popoverLabel": "Vorschau Quelle {n}",
       "open": "Quelle öffnen"
+    },
+    "a11y": {
+      "generating": "Antwort wird erstellt",
+      "toolRunning": "{tool} wird ausgeführt",
+      "done": "Antwort fertig"
     }
   },
   "compare": {

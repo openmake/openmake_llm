@@ -521,6 +521,34 @@ function OrchestratorProgressBanner() {
   );
 }
 
+/**
+ * 스트림 상태 스크린리더 통지(F19.8) — 생성 시작·도구 실행·완료를 **이벤트 단위** 로만 알린다(토큰마다 갱신 금지).
+ * 시각적으로 숨긴 role=status(aria-live polite) 한 곳.
+ */
+function StreamStatusAnnouncer() {
+  const t = useTranslations("chat.a11y");
+  const isGenerating = useAppStore((s) => s.isGenerating);
+  const tool = useAppStore((s) => s.activeTool);
+  const [text, setText] = useState("");
+  const wasGenerating = useRef(false);
+
+  useEffect(() => {
+    if (isGenerating && !wasGenerating.current) setText(t("generating"));
+    else if (!isGenerating && wasGenerating.current) setText(t("done"));
+    wasGenerating.current = isGenerating;
+  }, [isGenerating, t]);
+
+  useEffect(() => {
+    if (tool) setText(t("toolRunning", { tool }));
+  }, [tool, t]);
+
+  return (
+    <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+      {text}
+    </div>
+  );
+}
+
 /** 도구 실행 인디케이터 — always-on tool loop 중 "실행 중" 표시(스트리밍 멈춘 듯한 혼선 해소). */
 function ToolIndicator() {
   const t = useTranslations("chat");
@@ -799,7 +827,8 @@ export function MessageList() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6">
+    <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6" aria-busy={isGenerating}>
+      <StreamStatusAnnouncer />
       {chatHistory.map((m, i) =>
         m.role === "user" ? (
           <div key={i} className="flex justify-end">

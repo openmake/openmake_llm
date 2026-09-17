@@ -479,6 +479,11 @@
       "chipLabel": "Source {n}: {title}",
       "popoverLabel": "Source {n} preview",
       "open": "Open source"
+    },
+    "a11y": {
+      "generating": "Generating a response",
+      "toolRunning": "Running {tool}",
+      "done": "Response complete"
     }
   },
   "compare": {

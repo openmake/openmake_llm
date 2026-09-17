@@ -479,6 +479,11 @@
       "chipLabel": "出典 {n}: {title}",
       "popoverLabel": "出典 {n} のプレビュー",
       "open": "原文を開く"
+    },
+    "a11y": {
+      "generating": "応答を生成しています",
+      "toolRunning": "{tool} を実行中",
+      "done": "応答が完了しました"
     }
   },
   "compare": {
