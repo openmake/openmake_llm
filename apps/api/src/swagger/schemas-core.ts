@@ -62,7 +62,21 @@ export const coreSchemas = {
             metadata: { type: 'object', nullable: true },
             messageCount: { type: 'integer' },
             model: { type: 'string', description: '첫 메시지의 모델명 (없으면 기본 표시명)' },
-            snippet: { type: 'string', description: '본문 검색(?q=) 매칭 발췌 — 검색 응답에만 존재' }
+            snippet: { type: 'string', description: '본문 검색(?q=) 매칭 발췌 — 검색 응답에만 존재' },
+            folderId: { type: 'string', nullable: true, description: '폴더(157) — null 이면 미분류' },
+            tags: { type: 'array', items: { type: 'string' }, description: '태그(157)' }
+        }
+    },
+    ConversationFolder: {
+        type: 'object',
+        required: ['id', 'name', 'position', 'sessionCount', 'createdAt', 'updatedAt'],
+        properties: {
+            id: { type: 'string' },
+            name: { type: 'string' },
+            position: { type: 'integer' },
+            sessionCount: { type: 'integer' },
+            createdAt: { type: 'string' },
+            updatedAt: { type: 'string' }
         }
     },
     ChatMessage: {

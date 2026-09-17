@@ -165,19 +165,33 @@ export async function updateSessionTitleIfVersion(sessionId: string, title: stri
     return { ok: false, version: cur.rows[0]?.version ?? 0 };
 }
 
+/** 폴더·태그 목록 필터(157) — folderId 'none' 은 미분류. 컬럼명은 고정, 값만 바인딩 */
+export interface SessionListFilter { folderId?: string; tag?: string }
+
+/** PURE: 필터 → 추가 WHERE 절과 파라미터(시작 번호부터) */
+export function sessionFilterClause(filter: SessionListFilter | undefined, startIndex: number): { sql: string; params: string[] } {
+    const parts: string[] = [];
+    const params: string[] = [];
+    if (filter?.folderId === 'none') parts.push('cs.folder_id IS NULL');
+    else if (filter?.folderId) { params.push(filter.folderId); parts.push(`cs.folder_id = $${startIndex + params.length - 1}`); }
+    if (filter?.tag) { params.push(filter.tag); parts.push(`$${startIndex + params.length - 1} = ANY(cs.tags)`); }
+    return { sql: parts.map((p) => ` AND ${p}`).join(''), params };
+}
+
 /**
  * 사용자 ID로 세션 목록 조회
  */
-export async function getSessionsByUserId(userId: string, limit: number = CONVERSATION_LIMITS.SESSION_LIST_DEFAULT): Promise<ConversationSession[]> {
+export async function getSessionsByUserId(userId: string, limit: number = CONVERSATION_LIMITS.SESSION_LIST_DEFAULT, filter?: SessionListFilter): Promise<ConversationSession[]> {
     const pool = getPool();
+    const f = sessionFilterClause(filter, 3);
     // 메시지 0개 세션 제외 — saveHistory:false 요청은 세션 행만 만들고 본문을 저장하지 않아
     // (멀티턴 continuation 위해 세션 자체는 유지) 최근 목록에 빈 껍데기로 뜨던 것을 차단.
     const result = await pool.query(
         `SELECT * FROM conversation_sessions cs
          WHERE cs.user_id = $1
-           AND EXISTS (SELECT 1 FROM conversation_messages m WHERE m.session_id = cs.id)
+           AND EXISTS (SELECT 1 FROM conversation_messages m WHERE m.session_id = cs.id)${f.sql}
          ORDER BY cs.updated_at DESC LIMIT $2`,
-        [userId, limit]
+        [userId, limit, ...f.params]
     );
 
     // list view: 세션당 최근 50개만 — 5K+ 메시지 사용자의 메모리 spike 방지.
@@ -214,6 +228,7 @@ export async function searchSessionsByOwner(
     owner: { userId?: string; anonSessionId?: string },
     query: string,
     limit: number = CONVERSATION_LIMITS.SESSION_LIST_DEFAULT,
+    filter?: SessionListFilter,
 ): Promise<{ sessions: ConversationSession[]; snippets: Record<string, string> }> {
     const ownerVal = owner.userId ?? owner.anonSessionId;
     if (!ownerVal || !query.trim()) return { sessions: [], snippets: {} };
@@ -221,6 +236,8 @@ export async function searchSessionsByOwner(
     const ownerClause = owner.userId ? 'cs.user_id = $1' : 'cs.anon_session_id = $1';
     // ILIKE 메타문자(\ % _) 이스케이프 — 검색어가 패턴으로 해석되는 것을 차단
     const pattern = '%' + query.trim().replace(/[\\%_]/g, (c) => '\\' + c) + '%';
+    // 폴더·태그 필터는 로그인 사용자만(익명 세션에는 폴더·태그가 없다)
+    const f = sessionFilterClause(owner.userId ? filter : undefined, 4);
 
     const pool = getPool();
     const result = await pool.query(
@@ -232,9 +249,9 @@ export async function searchSessionsByOwner(
          ) hit ON true
          WHERE ${ownerClause}
            AND (cs.title ILIKE $2 OR hit.snippet IS NOT NULL)
-           AND EXISTS (SELECT 1 FROM conversation_messages m WHERE m.session_id = cs.id)
+           AND EXISTS (SELECT 1 FROM conversation_messages m WHERE m.session_id = cs.id)${f.sql}
          ORDER BY cs.updated_at DESC LIMIT $3`,
-        [ownerVal, pattern, limit]
+        [ownerVal, pattern, limit, ...f.params]
     );
 
     const rows = result.rows as (SessionRow & { snippet: string | null })[];
@@ -319,6 +336,22 @@ export async function updateSessionTitle(sessionId: string, title: string): Prom
     );
 
     return (result.rowCount || 0) > 0;
+}
+
+/**
+ * 세션 폴더·태그 변경(157) — 주어진 필드만. 폴더 소유권 검증은 호출부(컨트롤러)가 한다.
+ */
+export async function updateSessionOrganization(sessionId: string, patch: { folderId?: string | null; tags?: string[] }): Promise<{ folderId: string | null; tags: string[] } | null> {
+    const sets: string[] = [];
+    const params: unknown[] = [sessionId];
+    if (patch.folderId !== undefined) { params.push(patch.folderId); sets.push(`folder_id = $${params.length}`); }
+    if (patch.tags !== undefined) { params.push(patch.tags); sets.push(`tags = $${params.length}::text[]`); }
+    if (!sets.length) return null;
+    const r = await getPool().query<{ folder_id: string | null; tags: string[] }>(
+        `UPDATE conversation_sessions SET ${sets.join(', ')} WHERE id = $1 RETURNING folder_id, tags`,
+        params,
+    );
+    return r.rows[0] ? { folderId: r.rows[0].folder_id, tags: r.rows[0].tags ?? [] } : null;
 }
 
 /**

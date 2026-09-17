@@ -55,6 +55,20 @@ export interface ConversationSession {
   messageCount?: number;
   created_at?: string;
   updated_at?: string;
+  /** 폴더(157) — null 이면 미분류 */
+  folderId?: string | null;
+  /** 태그(157) */
+  tags?: string[];
+}
+
+/** 대화 폴더(157) — 사용자 소유 */
+export interface ConversationFolder {
+  id: string;
+  name: string;
+  position: number;
+  sessionCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type ChatRole = "user" | "assistant" | "system";

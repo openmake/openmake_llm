@@ -917,6 +917,11 @@ export const CONVERSATION_LIMITS = {
     SESSION_LIST_ALL_DEFAULT: parseInt(process.env.CONVERSATION_SESSION_LIST_ALL_DEFAULT || '100', 10),
     /** 본문 검색 발췌(snippet)의 매칭 지점 전후 문자 수 */
     SEARCH_SNIPPET_RADIUS: parseInt(process.env.CONVERSATION_SEARCH_SNIPPET_RADIUS || '60', 10),
+    /** 대화 폴더·태그(F19.5, 157) — 사용자당 폴더 수·세션당 태그 수·길이 상한 */
+    MAX_FOLDERS_PER_USER: parseInt(process.env.CONVERSATION_MAX_FOLDERS_PER_USER || '50', 10),
+    MAX_TAGS_PER_SESSION: parseInt(process.env.CONVERSATION_MAX_TAGS_PER_SESSION || '8', 10),
+    TAG_MAX_CHARS: 32,
+    FOLDER_NAME_MAX_CHARS: 64,
 } as const;
 
 // ============================================

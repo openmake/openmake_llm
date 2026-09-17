@@ -1719,6 +1719,334 @@
         }
       }
     },
+    "/api/chat/folders": {
+      "get": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "대화 폴더 목록(157)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "folders"
+                      ],
+                      "properties": {
+                        "folders": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ConversationFolder"
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 필요",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "대화 폴더 생성(157)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 64
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "생성됨",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "folder"
+                      ],
+                      "properties": {
+                        "folder": {
+                          "$ref": "#/components/schemas/ConversationFolder"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "잘못된 입력",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "상한 초과 또는 같은 이름",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/folders/{id}": {
+      "patch": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "대화 폴더 이름·순서 변경(157)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "폴더 ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "position": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "folder"
+                      ],
+                      "properties": {
+                        "folder": {
+                          "$ref": "#/components/schemas/ConversationFolder"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "같은 이름",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "대화 폴더 삭제(157) — 안의 세션은 미분류로 남는다",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "폴더 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "삭제됨",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "deleted"
+                      ],
+                      "properties": {
+                        "deleted": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/chat/sessions": {
       "get": {
         "tags": [
@@ -1748,6 +2076,22 @@
               "type": "string"
             },
             "description": "제목+메시지 본문 검색어"
+          },
+          {
+            "name": "folderId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "폴더 필터(157) — `none` 이면 미분류"
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "태그 필터(157)"
           }
         ],
         "responses": {
@@ -1916,7 +2260,8 @@
         "tags": [
           "Chat"
         ],
-        "summary": "세션 제목 변경",
+        "summary": "세션 제목·폴더·태그 변경",
+        "description": "title·folderId·tags 중 보낸 필드만 바꾼다. 폴더·태그(157)는 로그인한 본인 세션만, folderId 는 본인 폴더만(null 이면 미분류로).",
         "security": [
           {
             "bearerAuth": []
@@ -1939,12 +2284,20 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "title"
-                ],
                 "properties": {
                   "title": {
                     "type": "string"
+                  },
+                  "folderId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "정규화(소문자·중복 제거·상한) 후 저장"
                   }
                 }
               }
@@ -2721,6 +3074,49 @@
           "snippet": {
             "type": "string",
             "description": "본문 검색(?q=) 매칭 발췌 — 검색 응답에만 존재"
+          },
+          "folderId": {
+            "type": "string",
+            "nullable": true,
+            "description": "폴더(157) — null 이면 미분류"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "태그(157)"
+          }
+        }
+      },
+      "ConversationFolder": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "position",
+          "sessionCount",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "position": {
+            "type": "integer"
+          },
+          "sessionCount": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
           }
         }
       },

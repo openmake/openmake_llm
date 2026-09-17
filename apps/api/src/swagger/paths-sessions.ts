@@ -18,7 +18,59 @@ const sessionIdParam = {
     description: '세션 ID'
 };
 
+const folderResponse = (description: string, key: 'folder' | 'folders') => ({
+    description,
+    content: {
+        'application/json': {
+            schema: envelope({
+                type: 'object',
+                required: [key],
+                properties: key === 'folders'
+                    ? { folders: { type: 'array', items: { $ref: '#/components/schemas/ConversationFolder' } } }
+                    : { folder: { $ref: '#/components/schemas/ConversationFolder' } }
+            })
+        }
+    }
+});
+
+const folderIdParam = { name: 'id', in: 'path', required: true, schema: { type: 'string' }, description: '폴더 ID' };
+
 export const sessionPaths = {
+    '/api/chat/folders': {
+        get: {
+            tags: ['Chat'],
+            summary: '대화 폴더 목록(157)',
+            security: [{ bearerAuth: [] }],
+            responses: { '200': folderResponse('성공', 'folders'), '401': failureResponse('인증 필요') }
+        },
+        post: {
+            tags: ['Chat'],
+            summary: '대화 폴더 생성(157)',
+            security: [{ bearerAuth: [] }],
+            requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['name'], properties: { name: { type: 'string', maxLength: 64 } } } } } },
+            responses: { '201': folderResponse('생성됨', 'folder'), '400': failureResponse('잘못된 입력'), '409': failureResponse('상한 초과 또는 같은 이름') }
+        }
+    },
+    '/api/chat/folders/{id}': {
+        patch: {
+            tags: ['Chat'],
+            summary: '대화 폴더 이름·순서 변경(157)',
+            security: [{ bearerAuth: [] }],
+            parameters: [folderIdParam],
+            requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { name: { type: 'string', maxLength: 64 }, position: { type: 'integer', minimum: 0 } } } } } },
+            responses: { '200': folderResponse('성공', 'folder'), '404': failureResponse('없음'), '409': failureResponse('같은 이름') }
+        },
+        delete: {
+            tags: ['Chat'],
+            summary: '대화 폴더 삭제(157) — 안의 세션은 미분류로 남는다',
+            security: [{ bearerAuth: [] }],
+            parameters: [folderIdParam],
+            responses: {
+                '200': { description: '삭제됨', content: { 'application/json': { schema: envelope({ type: 'object', required: ['deleted'], properties: { deleted: { type: 'boolean' } } }) } } },
+                '404': failureResponse('없음')
+            }
+        }
+    },
     '/api/chat/sessions': {
         get: {
             tags: ['Chat'],
@@ -27,7 +79,9 @@ export const sessionPaths = {
             security: [{ bearerAuth: [] }],
             parameters: [
                 { name: 'limit', in: 'query', schema: { type: 'integer', default: 50 }, description: '최대 조회 개수' },
-                { name: 'q', in: 'query', schema: { type: 'string' }, description: '제목+메시지 본문 검색어' }
+                { name: 'q', in: 'query', schema: { type: 'string' }, description: '제목+메시지 본문 검색어' },
+                { name: 'folderId', in: 'query', schema: { type: 'string' }, description: '폴더 필터(157) — `none` 이면 미분류' },
+                { name: 'tag', in: 'query', schema: { type: 'string' }, description: '태그 필터(157)' }
             ],
             responses: {
                 '200': {
@@ -100,7 +154,8 @@ export const sessionPaths = {
     '/api/chat/sessions/{sessionId}': {
         patch: {
             tags: ['Chat'],
-            summary: '세션 제목 변경',
+            summary: '세션 제목·폴더·태그 변경',
+            description: 'title·folderId·tags 중 보낸 필드만 바꾼다. 폴더·태그(157)는 로그인한 본인 세션만, folderId 는 본인 폴더만(null 이면 미분류로).',
             security: [{ bearerAuth: [] }],
             parameters: [sessionIdParam],
             requestBody: {
@@ -109,8 +164,11 @@ export const sessionPaths = {
                     'application/json': {
                         schema: {
                             type: 'object',
-                            required: ['title'],
-                            properties: { title: { type: 'string' } }
+                            properties: {
+                                title: { type: 'string' },
+                                folderId: { type: 'string', nullable: true },
+                                tags: { type: 'array', items: { type: 'string' }, description: '정규화(소문자·중복 제거·상한) 후 저장' }
+                            }
                         }
                     }
                 }

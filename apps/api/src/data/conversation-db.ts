@@ -71,6 +71,7 @@ class ConversationDB {
     getSessions = sessions.getSessions;
     getUserSessions = sessions.getUserSessions;
     updateSessionTitle = sessions.updateSessionTitle;
+    updateSessionOrganization = sessions.updateSessionOrganization;
     updateSessionTitleIfVersion = sessions.updateSessionTitleIfVersion;
     cloneSession = sessions.cloneSession;
     getSessionTree = sessions.getSessionTree;

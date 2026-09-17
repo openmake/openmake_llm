@@ -29,6 +29,10 @@ export interface ConversationSession {
     updated_at: string;
     /** 세션 메타데이터 (JSONB) */
     metadata?: Record<string, unknown> | null;
+    /** 폴더(157) — 없으면 미분류 */
+    folderId?: string | null;
+    /** 태그(157) */
+    tags?: string[];
     /** 세션에 속한 메시지 목록 */
     messages: ConversationMessage[];
 }
@@ -92,6 +96,9 @@ export interface SessionRow {
     created_at: string;
     updated_at: string;
     metadata: Record<string, unknown> | null;
+    /** 157 — 적용 전 DB 에는 없다 */
+    folder_id?: string | null;
+    tags?: string[] | null;
 }
 
 /**
@@ -153,6 +160,8 @@ export function rowToSession(row: SessionRow, messages: ConversationMessage[]): 
         created_at: row.created_at,
         updated_at: row.updated_at,
         metadata: row.metadata || undefined,
+        ...(row.folder_id !== undefined ? { folderId: row.folder_id } : {}),
+        ...(Array.isArray(row.tags) ? { tags: row.tags } : {}),
         messages
     };
 }

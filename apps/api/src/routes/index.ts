@@ -80,6 +80,7 @@ export { default as developerDocsRouter } from './developer-docs.routes';
 
 // 🆕 Chat Feedback 라우트
 export { default as chatFeedbackRouter } from './chat-feedback.routes';
+export { default as conversationFoldersRouter } from './conversation-folders.routes';
 
 // 🆕 Token Monitoring 라우트
 // (tokenMonitoringRouter 재수출 제거 — setup.ts/v1 이 token-monitoring.routes 직접 import)

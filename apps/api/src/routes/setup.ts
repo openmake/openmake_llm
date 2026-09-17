@@ -81,6 +81,7 @@ import {
     modelRouter,
     developerDocsRouter,
     chatFeedbackRouter,
+    conversationFoldersRouter,
     apiKeysRouter,
     externalKeysRouter,
     externalOAuthRouter,
@@ -309,6 +310,7 @@ export function setupApiRoutes(
     app.use('/api/chat/conversations', sessionController);
     // 🆕 /api/chat/feedback 는 /api/chat 보다 먼저 마운트해야 Express가 올바르게 매칭
     app.use('/api/chat/feedback', chatFeedbackRouter);
+    app.use('/api/chat/folders', conversationFoldersRouter);
     app.use('/api/chat', chatRouter);
     app.use('/api', webSearchRouter);
     app.use('/api/usage', usageRouter);
