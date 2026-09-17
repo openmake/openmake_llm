@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Clock, Search, MessageSquare, Trash2, Bot, Users } from "lucide-react";
-import type { ApiSuccess } from "@openmake/shared-types";
+import type { ApiSuccess, SearchSourceRef } from "@openmake/shared-types";
 import { Badge, PageHeader, Card } from "@/components/ui/primitives";
 import { HistoryTabs } from "@/components/hub-tabs";
 import { ApiClient } from "@/lib/api-client";
@@ -185,13 +185,13 @@ export default function HistoryPage() {
     useAppStore.getState().setNotebookContext(null);
     try {
       const res = await ApiClient.get<
-        ApiSuccess<{ messages?: Array<{ role: string; content: string; images?: string[] }> }>
+        ApiSuccess<{ messages?: Array<{ role: string; content: string; images?: string[]; sources?: SearchSourceRef[] }> }>
       >(appendAnonSessionId(`/api/chat/sessions/${sid}/messages`));
       const msgs = res?.data?.messages ?? [];
       setChatHistory(() =>
         msgs
           .filter((m) => m.role === "user" || m.role === "assistant" || m.role === "system")
-          .map((m) => ({ role: m.role as ChatRole, content: m.content, images: m.images })),
+          .map((m) => ({ role: m.role as ChatRole, content: m.content, images: m.images, ...(m.sources?.length ? { sources: m.sources } : {}) })),
       );
     } catch {
       /* 조회 실패 — 무시 */

@@ -474,7 +474,12 @@
       "title": "Issues found by verification"
     },
     "branchHere": "Branch from here",
-    "branchFailed": "Branch failed: {error}"
+    "branchFailed": "Branch failed: {error}",
+    "citation": {
+      "chipLabel": "Source {n}: {title}",
+      "popoverLabel": "Source {n} preview",
+      "open": "Open source"
+    }
   },
   "compare": {
     "title": "Model comparison",

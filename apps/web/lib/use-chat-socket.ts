@@ -141,6 +141,7 @@ export function useChatSocket() {
     appendThinking,
     setThinkingSummary,
     setVerificationIssues,
+    setMessageSources,
     setStreaming,
     setCurrentSessionId,
     setActiveAgent,
@@ -416,6 +417,10 @@ export function useChatSocket() {
         case "mcp_tool_start":
           // 도구 실행 시작 — "🔍 {도구} 실행 중" 인디케이터(스트리밍 멈춘 듯한 혼선 해소).
           setActiveTool(data.toolName);
+          break;
+        case "search_sources":
+          // 웹검색 출처(F19.4) — 본문 [N] 인용 칩. 같은 턴에 여러 번 오면 마지막 목록이 이긴다
+          if (Array.isArray(data.sources) && data.sources.length > 0) setMessageSources(data.sources);
           break;
         case "mcp_tool_result":
           // 도구 결과 도착 — 인디케이터 해제(다음 도구 시작 시 다시 표시).

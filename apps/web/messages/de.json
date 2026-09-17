@@ -474,7 +474,12 @@
       "title": "Von der Prüfung gefundene Probleme"
     },
     "branchHere": "Ab hier verzweigen",
-    "branchFailed": "Verzweigen fehlgeschlagen: {error}"
+    "branchFailed": "Verzweigen fehlgeschlagen: {error}",
+    "citation": {
+      "chipLabel": "Quelle {n}: {title}",
+      "popoverLabel": "Vorschau Quelle {n}",
+      "open": "Quelle öffnen"
+    }
   },
   "compare": {
     "title": "Modellvergleich",

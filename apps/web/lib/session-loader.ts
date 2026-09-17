@@ -2,12 +2,12 @@
  * 세션 메시지를 store 에 싣는 공용 로더 (F08 PR-6) — 분기(clone) 직후 새 세션으로 전환할 때 사용.
  * 사이드바·히스토리의 기존 로더와 같은 매핑(+ dbId: 분기 기준점 선택용 DB 메시지 id).
  */
-import type { ApiSuccess, ChatRole } from "@openmake/shared-types";
+import type { ApiSuccess, ChatRole, SearchSourceRef } from "@openmake/shared-types";
 import { ApiClient } from "./api-client";
 import { appendAnonSessionId } from "./anon-session";
 import { useAppStore } from "./store";
 
-interface WireMessage { id?: string | number; role: string; content: string; images?: string[]; thinking?: string; reasoningSummary?: string }
+interface WireMessage { id?: string | number; role: string; content: string; images?: string[]; thinking?: string; reasoningSummary?: string; sources?: SearchSourceRef[] }
 
 export async function loadSessionIntoStore(sid: string): Promise<void> {
   const st = useAppStore.getState();
@@ -26,6 +26,7 @@ export async function loadSessionIntoStore(sid: string): Promise<void> {
           images: m.images,
           reasoning: m.thinking || undefined,
           reasoningSummary: m.reasoningSummary || undefined,
+          ...(m.sources?.length ? { sources: m.sources } : {}),
           dbId: m.id !== undefined ? String(m.id) : undefined,
         })),
     );

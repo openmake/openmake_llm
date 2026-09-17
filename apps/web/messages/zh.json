@@ -474,7 +474,12 @@
       "title": "验证发现的问题"
     },
     "branchHere": "从此处分支",
-    "branchFailed": "分支失败：{error}"
+    "branchFailed": "分支失败：{error}",
+    "citation": {
+      "chipLabel": "来源 {n}：{title}",
+      "popoverLabel": "来源 {n} 预览",
+      "open": "打开原文"
+    }
   },
   "compare": {
     "title": "模型对比",

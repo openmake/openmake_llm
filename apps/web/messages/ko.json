@@ -474,7 +474,12 @@
       "title": "검증에서 지적된 사항"
     },
     "branchHere": "여기서 분기",
-    "branchFailed": "분기 실패: {error}"
+    "branchFailed": "분기 실패: {error}",
+    "citation": {
+      "chipLabel": "출처 {n}: {title}",
+      "popoverLabel": "출처 {n} 미리보기",
+      "open": "원문 열기"
+    }
   },
   "compare": {
     "title": "모델 비교",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import type { SearchSourceRef } from "@openmake/shared-types";
 import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -199,7 +200,7 @@ function SystemMessage({ content }: { content: string }) {
 }
 
 /** assistant 본문 — `[[artifact:id]]` placeholder 를 칩으로, 나머지는 Markdown 으로. */
-function AssistantContent({ content, streaming }: { content: string; streaming?: boolean }) {
+function AssistantContent({ content, streaming, sources }: { content: string; streaming?: boolean; sources?: SearchSourceRef[] }) {
   // 스트리밍 중 닫히지 않은(길어지는) 코드 펜스는 fence-fallback 으로 아티팩트가 될 가능성이 높다.
   // 원시 코드를 71초간 흘리는 대신 "생성 중" 인디케이터로 즉시 피드백 (완료 시 칩/패널로 교체).
   // 명시적 <artifact> 태그 경로는 ws 가 이미 라이브 패널을 열므로 여기 대상 아님.
@@ -215,14 +216,14 @@ function AssistantContent({ content, streaming }: { content: string; streaming?:
         const before = content.slice(0, lastOpen).trim();
         return (
           <>
-            {before && <Markdown content={before} />}
+            {before && <Markdown content={before} sources={sources} />}
             <ArtifactBuilding />
           </>
         );
       }
     }
   }
-  if (!content.includes("[[artifact:")) return <Markdown content={content} />;
+  if (!content.includes("[[artifact:")) return <Markdown content={content} sources={sources} />;
   const nodes: ReactNode[] = [];
   let last = 0;
   let m: RegExpExecArray | null;
@@ -231,14 +232,14 @@ function AssistantContent({ content, streaming }: { content: string; streaming?:
   while ((m = re.exec(content)) !== null) {
     if (m.index > last) {
       const text = content.slice(last, m.index).trim();
-      if (text) nodes.push(<Markdown key={`t${idx}`} content={text} />);
+      if (text) nodes.push(<Markdown key={`t${idx}`} content={text} sources={sources} />);
     }
     nodes.push(<ArtifactChip key={`a${idx}`} id={m[1]} />);
     last = m.index + m[0].length;
     idx += 1;
   }
   const tail = content.slice(last).trim();
-  if (tail) nodes.push(<Markdown key="tail" content={tail} />);
+  if (tail) nodes.push(<Markdown key="tail" content={tail} sources={sources} />);
   return <>{nodes}</>;
 }
 
@@ -848,7 +849,7 @@ export function MessageList() {
                 ) : m.structured ? (
                   <StructuredAnswer data={m.structured} />
                 ) : (
-                  <AssistantContent content={m.content} streaming={m.streaming} />
+                  <AssistantContent content={m.content} streaming={m.streaming} sources={m.sources} />
                 )}
                 {m.streaming && !m.agentTask && (
                   <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent align-text-bottom" />

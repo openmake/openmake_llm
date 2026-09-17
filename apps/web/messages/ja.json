@@ -474,7 +474,12 @@
       "title": "検証で指摘された点"
     },
     "branchHere": "ここから分岐",
-    "branchFailed": "分岐に失敗: {error}"
+    "branchFailed": "分岐に失敗: {error}",
+    "citation": {
+      "chipLabel": "出典 {n}: {title}",
+      "popoverLabel": "出典 {n} のプレビュー",
+      "open": "原文を開く"
+    }
   },
   "compare": {
     "title": "モデル比較",

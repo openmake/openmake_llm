@@ -3,6 +3,7 @@ import { persist, createJSONStorage, type StateStorage } from "zustand/middlewar
 import type {
   ChatMessage as SharedChatMessage,
   ChatRole,
+  SearchSourceRef,
   UserRole,
 } from "@openmake/shared-types";
 
@@ -43,6 +44,8 @@ interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" | "imag
    * 표시가 없으면 사용자가 "선택한 모델이 답했다"고 오인한다(실측).
    */
   modelFallback?: { from: string; to: string; reason?: string; code?: string };
+  /** 웹검색 출처(F19.4) — 본문 [N] 인용 칩. ws search_sources 또는 히스토리 로드. 히스토리 payload 에는 싣지 않는다 */
+  sources?: SearchSourceRef[];
 }
 
 /** 에이전트 작업 인라인 카드 상태. */
@@ -246,6 +249,7 @@ interface AppState {
   appendThinking: (token: string) => void;
   setThinkingSummary: (summary: string) => void;
   setVerificationIssues: (issues: string) => void;
+  setMessageSources: (sources: SearchSourceRef[]) => void;
   setStreaming: (v: boolean) => void;
   setCurrentSessionId: (id: string | null) => void;
   setInputDraft: (t: string) => void;
@@ -440,6 +444,15 @@ export const useAppStore = create<AppState>()(
         // thinking 은 보통 답변 토큰보다 먼저 도착 — assistant placeholder 를 생성해 누적
         hist.push({ role: "assistant", content: "", reasoning: token, streaming: true });
       }
+      return { chatHistory: hist };
+    }),
+  setMessageSources: (sources) =>
+    set((s) => {
+      // 사전 주입 검색은 첫 토큰보다 먼저 온다 — 스트리밍 assistant 가 없으면 placeholder 를 만들어 부착(appendThinking 과 같은 규칙)
+      const hist = [...s.chatHistory];
+      const last = hist[hist.length - 1];
+      if (last && last.role === "assistant" && last.streaming) hist[hist.length - 1] = { ...last, sources };
+      else hist.push({ role: "assistant", content: "", sources, streaming: true });
       return { chatHistory: hist };
     }),
   setVerificationIssues: (issues) =>
