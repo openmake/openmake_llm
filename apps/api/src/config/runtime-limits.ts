@@ -2174,6 +2174,16 @@ export const NODE_METRICS = {
     SERIES_BUCKETS: [[6, 5], [48, 30], [Infinity, 180]] as ReadonlyArray<readonly [number, number]>,
 } as const;
 
+/** 메시지 웹검색 출처(F19.4, 156) — 스트리밍 중 모아 assistant 행 저장 때 영속. 인메모리 대기는 TTL·개수 상한 */
+export const MESSAGE_SOURCES_LIMITS = {
+    TTL_MS: 30 * 60_000,
+    MAX_PENDING: 500,
+    MAX_SOURCES: 20,
+    MAX_TITLE_CHARS: 300,
+    MAX_URL_CHARS: 2_000,
+    MAX_SNIPPET_CHARS: 400,
+} as const;
+
 /** 디버그 큐 재현 번들(F24.7, 144) — 세션별 마지막 LLM 요청 본문을 메모리에 잠깐 들고 있다가 오류·신고 시 보관. */
 export const REPLAY_CAPTURE = {
     ENABLED: process.env.REPLAY_CAPTURE_ENABLED !== 'false',

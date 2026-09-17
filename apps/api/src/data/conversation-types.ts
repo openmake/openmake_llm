@@ -56,6 +56,8 @@ export interface ConversationMessage {
     thinking?: string;
     /** 생각 요약 헤드라인 — summary role 모델 생성 (재열람 타임라인용) */
     reasoningSummary?: string;
+    /** 웹검색 출처(F19.4, 156) — 본문 [N] 인용 미리보기 */
+    sources?: import('../mcp/web-search/types').SearchSourceRef[];
 }
 
 /**
@@ -77,6 +79,8 @@ export interface MessageOptions {
     agentId?: string;
     /** WS/REST 가 클라이언트에 발급한 message id — 피드백 신호를 이 행에 되짚기 위한 조인 키. */
     clientMessageId?: string;
+    /** 웹검색 출처(F19.4, 156) */
+    sources?: import('../mcp/web-search/types').SearchSourceRef[];
 }
 
 // Internal row types for PostgreSQL mapping
@@ -116,6 +120,8 @@ export interface MessageRow {
     tokens: number | null;
     response_time_ms: number | null;
     created_at: string;
+    /** 156 — 적용 전 DB 에는 없다 */
+    sources?: unknown;
 }
 
 /**
@@ -130,7 +136,8 @@ export function rowToMessage(row: MessageRow): ConversationMessage {
         timestamp: row.created_at,
         model: row.model || undefined,
         thinking: row.thinking || undefined,
-        reasoningSummary: row.reasoning_summary || undefined
+        reasoningSummary: row.reasoning_summary || undefined,
+        ...(Array.isArray(row.sources) && row.sources.length > 0 ? { sources: row.sources as import('../mcp/web-search/types').SearchSourceRef[] } : {}),
     };
 }
 

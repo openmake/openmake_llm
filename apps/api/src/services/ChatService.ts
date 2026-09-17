@@ -86,7 +86,7 @@ export class ChatService {
      * processMessage 진입 시 저장, executeExternalTool / agent-loop-strategy 가 공유.
      * tool 결과에 type='resource' content 가 있으면 invoke → ws-chat-handler 가 frontend 로 emit.
      */
-    private currentMcpToolResultCallback?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }> }) => void;
+    private currentMcpToolResultCallback?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }>; sources?: import('../mcp/web-search/types').SearchSourceRef[] }) => void;
 
     /**
      * 현재 채팅의 MCP tool 시작 콜백.
@@ -267,7 +267,7 @@ export class ChatService {
         onSkillsActivated?: (skillNames: string[]) => void,
         onThinking?: (thinking: string) => void,
         onSystemEvent?: SystemEventCallback,
-        onMcpToolResult?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }> }) => void,
+        onMcpToolResult?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }>; sources?: import('../mcp/web-search/types').SearchSourceRef[] }) => void,
         onMcpToolStart?: (event: { toolName: string }) => void,
     ): Promise<string> {
         // MCP tool resource content 콜백을 인스턴스 상태로 저장 — executeExternalTool 및 strategy 가 공유

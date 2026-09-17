@@ -59,6 +59,16 @@ export interface ConversationSession {
 
 export type ChatRole = "user" | "assistant" | "system";
 
+/** 웹검색 구조화 출처(F19.4) — 본문 [N] 인용과 같은 번호. 서버 formatSearchSources 와 같은 순서·캡 */
+export interface SearchSourceRef {
+  n: number;
+  title: string;
+  url: string;
+  snippet: string;
+  /** 결과 도메인(표시용) */
+  source?: string;
+}
+
 export interface ChatMessage {
   role: ChatRole;
   content: string;
@@ -66,6 +76,8 @@ export interface ChatMessage {
   tokens?: number;
   images?: string[];
   created_at?: string;
+  /** assistant 답변의 웹검색 출처(156) — 히스토리 payload(클라→서버)에는 싣지 않는다 */
+  sources?: SearchSourceRef[];
 }
 
 /* ── WebSocket 채팅 프로토콜 (sockets/ws-chat-handler 와 페어) ───────── */
@@ -229,6 +241,11 @@ export type WsServerEvent =
     }
   /** resume 요청에 이어받을 스트림이 없음 — 클라는 대기 상태를 풀면 된다. */
   | { type: "resume_none" }
+  /**
+   * 이 답변의 웹검색 출처(F19.4) — 사전 주입 검색은 생성 시작 전, web_search 도구는 호출 직후 온다.
+   * 같은 턴에 여러 번 오면 마지막 목록이 본문 [N] 의 번호 체계다(서버도 마지막 목록을 저장한다).
+   */
+  | { type: "search_sources"; messageId?: string; sources: SearchSourceRef[] }
   | {
       type: "error";
       message: string;

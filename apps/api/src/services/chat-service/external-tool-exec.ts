@@ -49,8 +49,10 @@ export async function executeExternalTool(
                 .filter((c): c is { type: 'resource'; resource: { uri: string; mimeType?: string; text?: string } } =>
                     c.type === 'resource' && !!c.resource && typeof c.resource.uri === 'string')
                 .map(c => ({ uri: c.resource.uri, mimeType: c.resource.mimeType, text: c.resource.text }));
-            if (resources.length > 0) {
-                try { deps.mcpToolResultCallback({ toolName, resources }); }
+            // 웹검색류 도구의 구조화 출처(F19.4)도 같은 통로로 — 모델에게는 text 만 간다
+            const sources = Array.isArray(result.sources) && result.sources.length > 0 ? result.sources : undefined;
+            if (resources.length > 0 || sources) {
+                try { deps.mcpToolResultCallback({ toolName, resources, ...(sources ? { sources } : {}) }); }
                 catch (e) { logger.warn(`onMcpToolResult 콜백 실패: ${e instanceof Error ? e.message : String(e)}`); }
             }
         }

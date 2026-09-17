@@ -108,6 +108,8 @@ export interface MCPTool {
  * @interface MCPToolResult
  */
 export interface MCPToolResult {
+    /** 웹검색류 도구의 구조화 출처(F19.4) — 채팅 경로가 search_sources 이벤트로 내보내고 메시지에 영속한다(모델에는 안 간다) */
+    sources?: import('./web-search/types').SearchSourceRef[];
     /** 결과 콘텐츠 배열 (하나 이상의 항목 포함) */
     content: Array<{
         /** 콘텐츠 타입: 텍스트, 이미지(base64), 또는 리소스 참조 */

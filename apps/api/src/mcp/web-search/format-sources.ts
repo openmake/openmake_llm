@@ -7,7 +7,7 @@
  *
  * @module mcp/web-search/format-sources
  */
-import type { SearchResult } from './types';
+import type { SearchResult, SearchSourceRef } from './types';
 
 interface FormatSourcesOptions {
     /** 주입할 상위 결과 수 (0/미지정 = 무제한) */
@@ -48,6 +48,24 @@ function displaySourceLabel(source: string | undefined, url: string): string | u
     }
 }
 
+/** code point 기준 snippet 컷 — formatSearchSources 와 같은 규칙 */
+function capSnippet(snippet: string, maxSnippetChars: number, suffix: string): string {
+    if (maxSnippetChars > 0 && [...snippet].length > maxSnippetChars) return [...snippet].slice(0, maxSnippetChars).join('') + suffix;
+    return snippet && suffix ? snippet + suffix : snippet;
+}
+
+/**
+ * 구조화 출처(F19.4) — formatSearchSources 에 준 것과 **같은 결과 배열·maxResults·snippet 캡** 을 넘겨야 [N] 번호가 맞는다.
+ */
+export function toSourceRefs(results: SourceLike[], opts: Pick<FormatSourcesOptions, 'maxResults' | 'maxSnippetChars' | 'snippetSuffix'> = {}): SearchSourceRef[] {
+    const { maxResults = 0, maxSnippetChars = 0, snippetSuffix = '' } = opts;
+    const limited = maxResults > 0 ? results.slice(0, maxResults) : results;
+    return limited.map((r, i) => {
+        const source = displaySourceLabel(r.source, r.url);
+        return { n: i + 1, title: r.title, url: r.url, snippet: capSnippet(r.snippet || '', maxSnippetChars, snippetSuffix), ...(source ? { source } : {}) };
+    });
+}
+
 /** 검색 결과 배열을 주입용 문자열로 포맷 (결과 수·snippet 길이 캡 적용). */
 export function formatSearchSources(results: SourceLike[], opts: FormatSourcesOptions = {}): string {
     const {
@@ -64,14 +82,9 @@ export function formatSearchSources(results: SourceLike[], opts: FormatSourcesOp
 
     const limited = maxResults > 0 ? results.slice(0, maxResults) : results;
     const lines = limited.map((r, i) => {
-        let snip = r.snippet || '';
         // code point 기준 컷 — UTF-16 code unit slice 는 이모지(surrogate pair) 중간을
         // 잘라 lone surrogate/replacement char 를 남긴다. [...str] 는 code point 이터레이터.
-        if (maxSnippetChars > 0 && [...snip].length > maxSnippetChars) {
-            snip = [...snip].slice(0, maxSnippetChars).join('') + snippetSuffix;
-        } else if (snip && snippetSuffix) {
-            snip = snip + snippetSuffix;
-        }
+        const snip = capSnippet(r.snippet || '', maxSnippetChars, snippetSuffix);
         const tag = labeled ? `[${sourceWord} ${i + 1}]` : `[${i + 1}]`;
         const sourceLabel = showSource ? displaySourceLabel(r.source, r.url) : undefined;
         const title = sourceLabel ? `${r.title} · ${sourceLabel}` : r.title;

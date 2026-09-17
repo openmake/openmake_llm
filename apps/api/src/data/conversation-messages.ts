@@ -117,8 +117,8 @@ export async function addMessage(
     // ("current transaction is aborted")로 오보고된다. 새 BEGIN 부터 다시 시도해야 한다.
     const result = await withRetry(() => withTransaction(pool, async (client) => {
         const insertResult = await client.query(`
-            INSERT INTO conversation_messages (session_id, role, content, model, thinking, tokens, response_time_ms, created_at, agent_id, client_message_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            INSERT INTO conversation_messages (session_id, role, content, model, thinking, tokens, response_time_ms, created_at, agent_id, client_message_id, sources)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
             ON CONFLICT (session_id, client_message_id, role) WHERE client_message_id IS NOT NULL DO NOTHING
             RETURNING id
         `, [
@@ -133,7 +133,8 @@ export async function addMessage(
             // agent_id/client_message_id 는 오랫동안 INSERT 에서 누락돼 전량 NULL 이었다(마이그 099 주석).
             // 자가개선 루프가 피드백을 에이전트에 귀속시키려면 이 두 값이 필요하다.
             options?.agentId || null,
-            options?.clientMessageId || null
+            options?.clientMessageId || null,
+            options?.sources?.length ? JSON.stringify(options.sources) : null,
         ]);
 
         await client.query(
@@ -160,7 +161,8 @@ export async function addMessage(
         content,
         timestamp: now,
         model: options?.model || undefined,
-        thinking: options?.thinking || undefined
+        thinking: options?.thinking || undefined,
+        ...(options?.sources?.length ? { sources: options.sources } : {}),
     };
 }
 

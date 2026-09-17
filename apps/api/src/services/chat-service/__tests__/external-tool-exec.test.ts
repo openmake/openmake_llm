@@ -73,3 +73,22 @@ describe('executeExternalTool — 결과 문자열 변환', () => {
         expect(out.startsWith(`${block}\n\n`)).toBe(true);
     });
 });
+
+describe('executeExternalTool — 웹검색 출처 전달(F19.4)', () => {
+    const sources = [{ n: 1, title: 'T', url: 'https://e.example', snippet: 's' }];
+
+    it('sources 가 있으면 resource 가 없어도 콜백에 싣고, 모델에는 text 만 간다', async () => {
+        const mcpToolResultCallback = jest.fn();
+        executeToolWithContext.mockResolvedValue({ content: [{ type: 'text', text: '[1] T' }], sources });
+        const out = await executeExternalTool({ ...(deps as object), mcpToolResultCallback } as never, 'web_search', { query: 'q' });
+        expect(out).toBe('[1] T');
+        expect(mcpToolResultCallback).toHaveBeenCalledWith({ toolName: 'web_search', resources: [], sources });
+    });
+
+    it('sources·resource 둘 다 없으면 콜백하지 않는다', async () => {
+        const mcpToolResultCallback = jest.fn();
+        executeToolWithContext.mockResolvedValue({ content: [{ type: 'text', text: 'plain' }], sources: [] });
+        await executeExternalTool({ ...(deps as object), mcpToolResultCallback } as never, 'x', {});
+        expect(mcpToolResultCallback).not.toHaveBeenCalled();
+    });
+});

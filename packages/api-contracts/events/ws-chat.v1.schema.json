@@ -57,6 +57,34 @@
       ],
       "description": "MCP 도구 결과의 resource content (백엔드 external-tool-exec 가 추출해 emit)."
     },
+    "SearchSourceRef": {
+      "type": "object",
+      "properties": {
+        "n": {
+          "type": "number"
+        },
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "snippet": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "description": "결과 도메인(표시용)"
+        }
+      },
+      "required": [
+        "n",
+        "title",
+        "url",
+        "snippet"
+      ],
+      "description": "웹검색 구조화 출처(F19.4) — 본문 [N] 인용과 같은 번호. 서버 formatSearchSources 와 같은 순서·캡"
+    },
     "WsAttachedFile": {
       "type": "object",
       "properties": {
@@ -566,6 +594,28 @@
           },
           "required": [
             "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "search_sources"
+            },
+            "messageId": {
+              "type": "string"
+            },
+            "sources": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/SearchSourceRef"
+              }
+            }
+          },
+          "required": [
+            "type",
+            "sources"
           ]
         },
         {

@@ -31,6 +31,7 @@ import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCached
 import type { PdfVisionResult } from '../services/chat-service/pdf-vision';
 import { saveAssistantMessage } from '../chat/request-persistence';
 import { buildWebSearchContext } from '../mcp/web-search/build-search-context';
+import { emitSearchSources, parseUserLocation } from './ws-chat-sources';
 import { getInFlightStreamRegistry, resolveStreamKey } from './ws-stream-registry';
 
 /**
@@ -187,7 +188,7 @@ export async function handleChatMessage(
         // 웹 검색: 사용자가 명시적으로 활성화했거나, 시사 관련 질문이 감지된 경우 수행.
         // 구조화(/structured) 경로와 동일 헬퍼를 공유해 "한 경로만 검색되는" 분기 누락·로직 드리프트를 방지한다.
         // (WS 는 기존 동작 보존을 위해 signal 미전달 — 중단 시 진행 중 검색은 메인 LLM 루프에서 정리.)
-        const { webSearchContext } = await buildWebSearchContext({
+        const { webSearchContext, sources: injectedSources } = await buildWebSearchContext({
             message: rawMessage,
             userLang,
             webSearchEnabled: msg.webSearch === true,
@@ -222,6 +223,7 @@ export async function handleChatMessage(
             : `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const { clientRequestId, priorMessageId } = claimClientRequest(extWs._authenticatedUserId ? `u:${extWs._authenticatedUserId}` : `a:${anonSessionId ?? ''}`, msg.clientRequestId, messageId);
         if (priorMessageId) { out({ type: 'done', messageId: priorMessageId, deduplicated: true, metrics: { tokensPerSec: '0.00', tokenCount: 0 } }); return; }
+        emitSearchSources(out, messageId, injectedSources); // 사전 주입 검색 출처(F19.4)
 
         // 토큰 생성 메트릭 추적 (tokenCount, partialAssistantResponse 는 catch 접근을 위해 try 외부 선언)
         tokenCount = 0;
@@ -327,13 +329,7 @@ export async function handleChatMessage(
             enabledTools: msg.enabledTools,
             notebook: notebookRef,
             userLanguagePreference: userLangPreference,
-            // 기기 GPS 위치 (옵트인) — 범위 밖/비정상 값은 무시 (fail-safe)
-            userLocation: (() => {
-                const loc = (msg as { userLocation?: { lat?: unknown; lng?: unknown } }).userLocation;
-                if (!loc || typeof loc.lat !== 'number' || typeof loc.lng !== 'number') return undefined;
-                if (loc.lat < -90 || loc.lat > 90 || loc.lng < -180 || loc.lng > 180) return undefined;
-                return { lat: loc.lat, lng: loc.lng };
-            })(),
+            userLocation: parseUserLocation(msg), // 기기 GPS 위치(옵트인)
             userContext,
             clusterManager: cluster,
             abortSignal: abortController.signal,
@@ -357,6 +353,8 @@ export async function handleChatMessage(
             // MCP tool 호출 결과의 resource content 를 frontend 로 emit
             // (예: create_skill → openmake://skill-draft/{id} → chat.js 가 인라인 카드 렌더)
             onMcpToolResult: (event) => {
+                emitSearchSources(out, messageId, event.sources); // web_search 도구 출처(F19.4)
+                if (!event.resources.length) return;
                 out({
                     type: 'mcp_tool_result',
                     toolName: event.toolName,

@@ -11,7 +11,7 @@ import { MCPToolDefinition, MCPToolResult } from '../types';
 import { TRUNCATION } from '../../config/runtime-limits';
 import { safeFetch } from '../../security/ssrf-guard';
 import { performWebSearch } from './search-orchestrator';
-import { formatSearchSources } from './format-sources';
+import { formatSearchSources, toSourceRefs } from './format-sources';
 
 /**
  * 웹 검색 MCP 도구 (web_search)
@@ -46,7 +46,7 @@ const webSearchTool: MCPToolDefinition = {
         const output = `검색 결과 (${results.length}개)\n\n` +
             formatSearchSources(results, { maxSnippetChars: 100, snippetSuffix: '...', showSource: true });
 
-        return { content: [{ type: 'text', text: output }] };
+        return { content: [{ type: 'text', text: output }], sources: toSourceRefs(results, { maxSnippetChars: 100, snippetSuffix: '...' }) };
     }
 };
 

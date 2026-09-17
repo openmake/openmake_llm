@@ -12,6 +12,7 @@
  * @module chat/request-persistence
  */
 
+import { takeMessageSources } from './message-sources';
 import { getConversationDB } from '../data/conversation-db';
 import { recordAuditLog } from '../data/conversation-audit';
 import { createLogger } from '../utils/logger';
@@ -170,6 +171,8 @@ export async function saveAssistantMessage(
             ...(thinking ? { thinking } : {}),
             ...(attribution?.agentId ? { agentId: attribution.agentId } : {}),
             ...(attribution?.clientMessageId ? { clientMessageId: attribution.clientMessageId } : {}),
+            // 스트리밍 중 search_sources 로 보낸 출처(F19.4) — 같은 messageId 로 모아 둔 것을 1회 꺼낸다
+            ...(() => { const sources = takeMessageSources(attribution?.clientMessageId); return sources ? { sources } : {}; })(),
         });
         return saved?.id ?? null;
     }
