@@ -4,7 +4,11 @@
 const addStep = jest.fn(async () => undefined);
 jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({ addAgentTaskStep: addStep }) }));
 let steeringEnabled = true;
-jest.mock('../../../config/runtime-limits', () => ({ AGENT_TASK_LIMITS: { get STEERING_ENABLED() { return steeringEnabled; } } }));
+// 나머지 export(LOG_REDACT 등 — logger 가 읽는다)는 실제 값을 유지한다
+jest.mock('../../../config/runtime-limits', () => ({
+    ...jest.requireActual('../../../config/runtime-limits'),
+    AGENT_TASK_LIMITS: { get STEERING_ENABLED() { return steeringEnabled; } },
+}));
 jest.mock('../../../prompts/agent-task-prompt', () => ({ getAgentTaskSteeringInjection: (t: string) => `[steer] ${t}` }));
 
 import { applyPendingSteering, getSteeringRegistry } from '../steering';

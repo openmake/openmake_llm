@@ -21,7 +21,9 @@ jest.mock('../../data/repositories/agent-task-repository', () => ({
         claimAgentTaskForRecovery: claim,
     })),
 }));
+// 나머지 export(LOG_REDACT 등 — logger 가 읽는다)는 실제 값을 유지한다
 jest.mock('../../config/runtime-limits', () => ({
+    ...jest.requireActual('../../config/runtime-limits'),
     AGENT_TASK_LIMITS: { BOOT_RECOVERY_ENABLED: true, BOOT_RECOVERY_WINDOW_MS: 60_000 },
 }));
 const execute = jest.fn(async () => undefined);
