@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.70.1](https://github.com/openmake/openmake_llm/compare/v1.70.0...v1.70.1) (2026-09-17)
+
+
+### 🐛 버그 수정
+
+* 라이브 검증 결함 3건 — 웹 인용 칩 라벨 마커·체크포인트 분기 턴 -1/0·분기 안내 역할 ([#925](https://github.com/openmake/openmake_llm/issues/925)) ([bbb1c1c](https://github.com/openmake/openmake_llm/commit/bbb1c1cdacbd902f7dd476a89131b87629ffb22b))
+
 ## [1.70.0](https://github.com/openmake/openmake_llm/compare/v1.69.0...v1.70.0) (2026-09-17)
 
 
