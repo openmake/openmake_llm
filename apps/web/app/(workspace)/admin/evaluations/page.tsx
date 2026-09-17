@@ -30,7 +30,7 @@ interface EvalRun {
   summary?: { failed?: Array<{ id: string; reason: string }> };
 }
 
-const RUNNERS = ["", "routing", "response", "tools", "matrix"] as const;
+const RUNNERS = ["", "routing", "response", "tools", "redteam", "matrix"] as const;
 const selectCls = "h-9 rounded-md border border-border bg-surface-2 px-2 text-sm text-fg focus:border-accent focus:outline-none";
 
 function pct(v: number): string {

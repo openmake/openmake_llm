@@ -2543,6 +2543,7 @@
       "routing": "Routing",
       "response": "Antwort",
       "tools": "Tool-Auswahl",
+      "redteam": "Red Team",
       "matrix": "Matrix"
     }
   }

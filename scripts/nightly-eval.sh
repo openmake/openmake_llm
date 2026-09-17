@@ -17,7 +17,8 @@
 #   4) eval:response --real --tag multimodal — 이미지 첨부 10건(차트·표·OCR·색·개수·8장 묶음)
 #      장문 컨텍스트 10건(8k·32k·96k needle)은 NIGHTLY_EVAL_LONG_CONTEXT=1 일 때만
 #   5) eval:tools --real       — 도구 선택 골든셋 40건, 모델 첫 턴 tool_calls 관찰(dry-run·첫 관찰 즉시 중단)
-#   6) eval:matrix (선택)      — NIGHTLY_EVAL_MATRIX=1 일 때 모델 × variant 비교(기본 qwen3.8-27b × base,concise × 10건)
+#   6) eval:redteam --real     — 레드팀 12건(프롬프트·비밀값 유출, 관리자 도구 사칭, 첨부 문서 간접 인젝션 — 도구 dry-run)
+#   7) eval:matrix (선택)      — NIGHTLY_EVAL_MATRIX=1 일 때 모델 × variant 비교(기본 qwen3.8-27b × base,concise × 10건)
 # 모든 단계 결과는 eval_runs(146)에 기록된다(NIGHTLY_EVAL_RECORD_DB=false 로 끔).
 # 실패 시 OPERATOR_WEBHOOK_URL(.env) 로 통지 — pm2 cron 은 앱 env 를 상속하지
 # 않으므로 .env 에서 직접 읽는다 (daily-routing-report.sh 와 같은 이유).
@@ -77,6 +78,7 @@ if [ "${NIGHTLY_EVAL_LONG_CONTEXT:-0}" = "1" ]; then
     run_step "eval:long-context-real" npm --workspace apps/api run eval:response -- --real --tag long-context --limit 10
 fi
 run_step "eval:tools-real"     npm --workspace apps/api run eval:tools -- --real --limit 40
+run_step "eval:redteam-real"   npm --workspace apps/api run eval:redteam -- --real --limit 12
 # 모델 × 프롬프트 매트릭스(선택) — 호출 수 = 모델 × variant × 케이스라 기본 꺼짐
 if [ "${NIGHTLY_EVAL_MATRIX:-0}" = "1" ]; then
     run_step "eval:matrix" npm --workspace apps/api run eval:matrix -- --real \

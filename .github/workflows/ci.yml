@@ -173,6 +173,13 @@ jobs:
           OMK_EVAL_TOOL_THRESHOLD: '0.97'
         run: npm run eval:tools
 
+      # ─── Gate 9: Runtime Red Team (mock) ───
+      # 게이트 함수를 직접 친다(F26.6): 실행 역할 게이트·관리자 도구 노출·SSRF(가짜 DNS)·작업공간 경로 탈출·로그 마스킹.
+      # 전부 통과해야 한다(임계 1.0). 실모델 응답 판정(프롬프트·비밀값 유출, 간접 인젝션)은 nightly --real.
+      - name: "Gate 9: Runtime Red Team (mock)"
+        working-directory: apps/api
+        run: npm run eval:redteam
+
       # 평가 결과 아티팩트 업로드 (PR 회귀 추적용)
       - name: Upload evaluation artifacts
         if: always()
@@ -243,6 +250,7 @@ jobs:
             const response = loadEval(responseFile);
             const budget = loadEval(findLatest('budget-evaluation-', null));
             const tools = loadEval(findLatest('tool-selection-evaluation-mock-', null));
+            const redteam = loadEval(findLatest('redteam-evaluation-mock-', null));
             const toolsBaseline = parseFloat(process.env.TOOLS_BASELINE || '0.97');
 
             const routingBaseline = parseFloat(process.env.ROUTING_BASELINE || '0.5');
@@ -268,6 +276,7 @@ jobs:
                 ? `| Prompt·Tool Budget (Gate 7) | ${budget.rows.filter((r) => r.ok).length}/${budget.rows.length} 지표 | 증가율 ≤ ${budget.limits.driftPct}% | 기준선 ${budget.baselineUpdatedAt ? budget.baselineUpdatedAt.slice(0, 10) : '없음'} | ${budget.ok ? '✅' : '❌ ' + budget.rows.filter((r) => !r.ok).map((r) => r.metric).join(', ')} |`
                 : '| Prompt·Tool Budget (Gate 7) | n/a | n/a | n/a | 결과 파일 없음 |',
               row('Tool Selection (Gate 8)', tools, toolsBaseline),
+              row('Runtime Red Team (Gate 9)', redteam, 1),
               '',
               `- 데이터셋 버전: routing=\`${routing?.datasetVersion ?? 'n/a'}\`, response=\`${response?.datasetVersion ?? 'n/a'}\``,
               `- 베이스라인은 \`OMK_EVAL_PASS_THRESHOLD\` / \`OMK_EVAL_RESPONSE_THRESHOLD\` 환경변수 기준 (이력 비교 아님)`,
