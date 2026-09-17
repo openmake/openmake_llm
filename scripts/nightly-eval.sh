@@ -14,6 +14,7 @@
 #   2) eval:response (mock)    — 평가기/룰셋 자가 점검 (baseline 100%)
 #   3) eval:response --real    — LiteLLM 경유 실모델 (기본 limit 30 = response 전체:
 #      applyLimit 이 앞에서부터 자르므로 limit 을 줄이면 뒤쪽 신규 케이스가 빠진다)
+#   4) eval:tools --real       — 도구 선택 골든셋 40건, 모델 첫 턴 tool_calls 관찰(dry-run·첫 관찰 즉시 중단)
 # 실패 시 OPERATOR_WEBHOOK_URL(.env) 로 통지 — pm2 cron 은 앱 env 를 상속하지
 # 않으므로 .env 에서 직접 읽는다 (daily-routing-report.sh 와 같은 이유).
 set -uo pipefail
@@ -58,6 +59,7 @@ cd "$REPO" || exit 1
 run_step "eval:routing"        npm --workspace apps/api run eval:routing
 run_step "eval:response-mock"  npm --workspace apps/api run eval:response
 run_step "eval:response-real"  npm --workspace apps/api run eval:response -- --real --limit "$REAL_LIMIT"
+run_step "eval:tools-real"     npm --workspace apps/api run eval:tools -- --real --limit 40
 
 echo >> "$OUT"
 echo "실패 단계: ${FAILED_STEPS[*]:-없음}" >> "$OUT"

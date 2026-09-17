@@ -164,6 +164,15 @@ jobs:
           OMK_EVAL_BUDGET_DRIFT_PCT: '10'
         run: npm run eval:budget
 
+      # ─── Gate 8: Tool Selection (mock) ───
+      # 운영과 같은 결정적 판정(selectTurnTools → buildExternalToolPlan)으로 골든셋 40건의 "이 턴 노출 도구"를 검사한다(F26.2).
+      # 의도 게이트·역할 게이트 변경으로 기대 도구가 빠지거나 금지 도구가 새면 실패. 실모델 호출 판정(--real)은 nightly.
+      - name: "Gate 8: Tool Selection (mock)"
+        working-directory: apps/api
+        env:
+          OMK_EVAL_TOOL_THRESHOLD: '0.97'
+        run: npm run eval:tools
+
       # 평가 결과 아티팩트 업로드 (PR 회귀 추적용)
       - name: Upload evaluation artifacts
         if: always()
@@ -184,6 +193,7 @@ jobs:
         env:
           ROUTING_BASELINE: ${{ env.OMK_EVAL_PASS_THRESHOLD || '0.5' }}
           RESPONSE_BASELINE: ${{ env.OMK_EVAL_RESPONSE_THRESHOLD || '0.5' }}
+          TOOLS_BASELINE: '0.97'
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -232,6 +242,8 @@ jobs:
             const routing = loadEval(routingFile);
             const response = loadEval(responseFile);
             const budget = loadEval(findLatest('budget-evaluation-', null));
+            const tools = loadEval(findLatest('tool-selection-evaluation-mock-', null));
+            const toolsBaseline = parseFloat(process.env.TOOLS_BASELINE || '0.97');
 
             const routingBaseline = parseFloat(process.env.ROUTING_BASELINE || '0.5');
             const responseBaseline = parseFloat(process.env.RESPONSE_BASELINE || '0.5');
@@ -255,6 +267,7 @@ jobs:
               budget
                 ? `| Prompt·Tool Budget (Gate 7) | ${budget.rows.filter((r) => r.ok).length}/${budget.rows.length} 지표 | 증가율 ≤ ${budget.limits.driftPct}% | 기준선 ${budget.baselineUpdatedAt ? budget.baselineUpdatedAt.slice(0, 10) : '없음'} | ${budget.ok ? '✅' : '❌ ' + budget.rows.filter((r) => !r.ok).map((r) => r.metric).join(', ')} |`
                 : '| Prompt·Tool Budget (Gate 7) | n/a | n/a | n/a | 결과 파일 없음 |',
+              row('Tool Selection (Gate 8)', tools, toolsBaseline),
               '',
               `- 데이터셋 버전: routing=\`${routing?.datasetVersion ?? 'n/a'}\`, response=\`${response?.datasetVersion ?? 'n/a'}\``,
               `- 베이스라인은 \`OMK_EVAL_PASS_THRESHOLD\` / \`OMK_EVAL_RESPONSE_THRESHOLD\` 환경변수 기준 (이력 비교 아님)`,

@@ -128,4 +128,12 @@ export interface ChatMessageRequest {
     clientRequestId?: string;
     /** 클라이언트 표면 — 'ios' 면 좁은 화면용 답변 형식 지시 추가 (2026-08-18) */
     client?: 'ios';
+    /**
+     * 평가 전용 도구 호출 관찰(F26.2, nightly 도구 선택 평가) — 모델이 낸 tool_calls 를 턴마다 통지한다.
+     * dryRun 이면 도구를 실행하지 않고 고정 문구를 결과로 돌려준다(비용·부작용 차단). 운영 경로는 설정하지 않는다.
+     */
+    evalToolObserver?: {
+        onToolCalls: (calls: Array<{ name: string; args: Record<string, unknown> }>, turn: number) => void;
+        dryRun?: boolean;
+    };
 }

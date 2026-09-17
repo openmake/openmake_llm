@@ -247,6 +247,8 @@ export async function runExternalStream(
                 break;
             }
 
+            req.evalToolObserver?.onToolCalls(result.toolCalls.map((tc) => ({ name: tc.name, args: tc.args as Record<string, unknown> })), turn);
+
             // 사용자 확인 질문(ask_user): 도구를 실행하지 않고 질문을 답변 본문으로 흘려보낸 뒤 턴을 끝낸다 —
             // 사용자 답은 다음 턴 history 로 이어진다. 같은 배치의 다른 도구 호출도 실행하지 않는다
             // (질문에 대한 답이 그 호출의 전제일 수 있다).

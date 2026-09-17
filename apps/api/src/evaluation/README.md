@@ -155,6 +155,21 @@ npm run eval:budget -- --update-baseline  # 정당한 증가 — 갱신된 basel
 - env: `OMK_EVAL_BUDGET_DRIFT_PCT`(기본 10), 선택 절대 상한 `OMK_EVAL_PROMPT_BUDGET_CHARS`·`OMK_EVAL_TOOL_SCHEMA_BUDGET_BYTES`.
 - 정적 prefix 가 페르소나·메모리로 바뀌면 안 된다 — `budget-evaluation.test.ts` 가 고정(prefix cache 안정성).
 
+## 도구 선택 평가 (CI Gate 8 mock · nightly real, 2026-09-17)
+
+골든셋 `golden-tool-selection.json`(v1.0.0, 40건 — web_search 10 · extract_webpage 5 · 에이전트 작업 조회/위임 5 · ops_metrics 관리자 5·사용자 5(금지) · create_plan 3 · 확장 설치 2 · 도구 불필요 5). 라벨은 사용자 의도 기준이다.
+
+```bash
+npm run eval:tools                         # mock — 운영 판정(selectTurnTools → buildExternalToolPlan)으로 노출 도구 검사
+npm run eval:tools -- --real --limit 10    # real — ChatService evalToolObserver(dry-run)로 첫 턴 tool_calls 이름·인자 판정
+```
+
+- mock 은 `.env` 를 읽지 않고 운영 플래그 프로필(`ORCHESTRATION_AUTO_DISPATCH=true`·`REPORT_PIPELINE_ENABLED=true`)을 고정한다. 운영 플래그가 바뀌면 러너의 `MOCK_PROFILE_ENV` 도 맞춘다.
+- mock 범위 밖: 토글·스킬 바인딩(DB)·사용자 MCP·이미지 첨부로만 열리는 도구(vision·load_skill 카탈로그).
+- real 은 도구를 실행하지 않고(dry-run) 첫 관찰 직후 중단해 비용이 첫 턴 1회분이다. 단 멀티모달 오케스트레이터 Planner 가 `multi` 로 판정한 턴은 도구 루프 **이전에** 웹검색 capability 를 실행한다(도구 호출이 아니라 dry-run 대상이 아니다). 2026-09-17 `--limit 3` 실측 3/3.
+- 기준선: mock 39/40(97.5%) — 실패 1건 `tool-ws-009`("Look it up online")는 영어 표현이 `WEB_SEARCH_INTENT_PATTERNS` 에 안 걸리는 **실제 노출 누락**이다(라벨을 바꾸지 말고 패턴 보강 여부를 판단할 것).
+- 민감도 확인: `CHAT_TOOL_INTENT_GATE_ENABLED=false`(과다 노출 5건)·`OPS_METRICS_TOOL_ENABLED=false`(누락 5건) 모두 실패한다.
+
 ## PoC 상태 (마지막 업데이트)
 
 | 항목 | 상태 | 비고 |

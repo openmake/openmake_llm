@@ -13,7 +13,8 @@
 export type EvaluationCategory =
     | 'routing-accuracy'        // 에이전트 라우팅 정확도
     | 'topic-classification'    // 토픽 분류 정확도
-    | 'response-pattern';       // 응답 패턴 검증 (substring 포함/제외)
+    | 'response-pattern'        // 응답 패턴 검증 (substring 포함/제외)
+    | 'tool-selection';         // 도구 노출·선택·인자 (F26.2, golden-tool-selection.json)
 
 /** 골든셋 단일 케이스 */
 export interface GoldenCase {
