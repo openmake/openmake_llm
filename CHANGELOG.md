@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.73.0](https://github.com/openmake/openmake_llm/compare/v1.72.0...v1.73.0) (2026-09-17)
+
+
+### ✨ 기능
+
+* **discord:** 봇 설정을 관리자 화면에서 관리하고 기동 시 서버에서 받아가게 ([#932](https://github.com/openmake/openmake_llm/issues/932)) ([5216439](https://github.com/openmake/openmake_llm/commit/5216439de3600688ecf70c6eb951625800a5cf49))
+
 ## [1.72.0](https://github.com/openmake/openmake_llm/compare/v1.71.0...v1.72.0) (2026-09-17)
 
 
