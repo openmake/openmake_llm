@@ -50,7 +50,7 @@
         "@types/node": "^24.0.0",
         "@types/nodemailer": "^7.0.9",
         "@types/supertest": "^7.2.1",
-        "concurrently": "^8.2.2",
+        "concurrently": "^10.0.5",
         "esbuild": "0.28.2",
         "eslint": "^9.0.0",
         "jest": "^30.5.1",

@@ -5,7 +5,7 @@
  * 응답이 섞이므로 2026-09-17 제거했다(개인화된 채팅 응답은 캐시 대상이 아니다 — 실효 캐시는 vLLM 프리픽스 캐시).
  */
 
-import LRUCache = require('lru-cache');
+import { LRUCache } from 'lru-cache';
 import { createLogger } from '../utils/logger';
 import { CACHE_CONFIG } from '../config/runtime-limits';
 

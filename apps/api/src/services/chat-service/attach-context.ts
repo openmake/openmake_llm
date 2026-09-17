@@ -10,7 +10,7 @@
  *
  * @module services/chat-service/attach-context
  */
-import LRUCache = require('lru-cache');
+import { LRUCache } from 'lru-cache';
 import { createLogger } from '../../utils/logger';
 import { FILE_ATTACH_LIMITS, URL_ANALYZE_LIMITS, ATTACH_CACHE_LIMITS, SCRAPE_ABORT_BUFFER_MS } from '../../config/runtime-limits';
 
