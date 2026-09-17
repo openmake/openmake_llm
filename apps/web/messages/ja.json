@@ -1194,6 +1194,7 @@
     "envEditTitle": "認証情報の変更",
     "envEditHint": "変更する値のみ入力してください。空欄の項目は現在の値が保持されます。",
     "envSecretHint": "暗号化して保存",
+    "envOptionalTag": "任意",
     "envUnchangedPlaceholder": "変更しない",
     "envSave": "保存",
     "envSaved": "認証情報を変更しました。",
@@ -1254,6 +1255,7 @@
     "credentialsTitle": "インストールするには認証情報を入力してください",
     "cancel": "キャンセル",
     "installAnother": "追加インストール",
+    "optionalTag": "(任意)",
     "installFormTitle": "インストール設定",
     "nameLabel": "サーバー名",
     "nameHint": "ツール名の接頭辞になります(例: mcp-postgres::query)。英数字・_・- のみ。"

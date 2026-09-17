@@ -53,6 +53,8 @@ interface McpServer {
   lastChecked: string;
   /** 편집 가능한 env 키 목록 (값은 서버가 마스킹하므로 키만 다룬다) */
   envKeys: string[];
+  /** 카탈로그로 설치한 서버면 템플릿 id — 미설정 선택 항목을 스키마에서 찾아 추가 입력으로 연다. */
+  catalogTemplateId: string | null;
   /** 그중 암호화 저장된(민감) 키 — 입력 시 password 필드로 렌더 */
   secretKeys: string[];
   /** 소유자 — 삭제/이름변경 권한 판정용(백엔드 canDeleteServer 와 같은 기준: 소유자 + admin).
@@ -83,6 +85,23 @@ interface ApiMcpServer {
   env?: Record<string, string> | null;
   /** 소유자 id — global 카탈로그 서버는 null. 삭제 권한 판정에 쓴다. */
   user_id?: string | null;
+  /** 카탈로그 설치 서버의 템플릿 id (임의 등록 서버는 null). */
+  catalog_template_id?: string | null;
+}
+
+/** 카탈로그 템플릿의 env 스키마 — 설치 후 미설정 선택 항목을 찾는 데만 쓴다. */
+interface ApiCatalogTemplate {
+  id: string;
+  env_schema?: {
+    required?: string[];
+    properties?: Record<string, { description?: string; secret?: boolean }>;
+  };
+}
+
+interface CatalogEnvField {
+  key: string;
+  secret: boolean;
+  description?: string;
 }
 
 const TRANSPORT_MAP: Record<ApiMcpServer["transport_type"], Transport> = {
@@ -125,6 +144,7 @@ function mapServer(s: ApiMcpServer, t: Translator): McpServer {
     errorDetail: s.connectionStatus === "connected" ? null : (s.connectionError ?? null),
     lastChecked: relativeTime(s.lastPing, t),
     envKeys: Object.keys(s.env ?? {}),
+    catalogTemplateId: s.catalog_template_id ?? null,
     secretKeys: Object.entries(s.env ?? {})
       .filter(([, v]) => v === "***")
       .map(([k]) => k),
@@ -287,13 +307,38 @@ function EnvEditModal({
   const [values, setValues] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** 카탈로그 스키마에는 있는데 이 서버에 아직 값이 없는 선택 항목(설치 때 비워둔 것). */
+  const [extraFields, setExtraFields] = useState<CatalogEnvField[]>([]);
 
   // 서버가 바뀌면 입력값 초기화 — 이전 서버에 입력하던 값이 남아 다른 서버로
   // 전송되는 사고를 막는다.
   useEffect(() => {
     setValues({});
     setError(null);
-  }, [server?.id]);
+    setExtraFields([]);
+    const templateId = server?.catalogTemplateId;
+    if (!templateId) return;
+    let cancelled = false;
+    // 설치 때 비워둔 선택 항목(Slack 채널 제한·CircleCI 베이스 URL 등)을 나중에 채울 수 있게
+    // 템플릿 스키마에서 미설정 키만 추가 입력으로 연다. 실패는 조용히 무시(기존 키 편집은 그대로 된다).
+    void (async () => {
+      try {
+        const res = await ApiClient.get<ApiEnvelope<{ templates: ApiCatalogTemplate[] }>>("/api/mcp/catalog");
+        if (cancelled) return;
+        const tpl = res?.data?.templates?.find((x) => x.id === templateId);
+        const props = tpl?.env_schema?.properties ?? {};
+        const known = new Set(server?.envKeys ?? []);
+        setExtraFields(
+          Object.entries(props)
+            .filter(([key]) => !known.has(key))
+            .map(([key, meta]) => ({ key, secret: meta?.secret === true, description: meta?.description })),
+        );
+      } catch {
+        /* 카탈로그 조회 실패는 무시 — 기존 키 편집 경로는 영향 없음 */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [server?.id, server?.catalogTemplateId, server?.envKeys]);
 
   const trapRef = useFocusTrap<HTMLDivElement>(!!server, onClose);
   if (!server) return null;
@@ -363,6 +408,22 @@ function EnvEditModal({
               </div>
             );
           })}
+          {extraFields.map((f) => (
+            <div key={f.key}>
+              <label className="mb-1 block font-mono text-xs font-medium text-fg-2">
+                {f.key}
+                <span className="ml-2 font-sans text-[10px] text-muted">{t("envOptionalTag")}</span>
+              </label>
+              <input
+                type={f.secret ? "password" : "text"}
+                autoComplete="off"
+                value={values[f.key] ?? ""}
+                onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                placeholder={f.description || t("envUnchangedPlaceholder")}
+                className="h-9 w-full rounded-md border border-border-strong bg-app px-3 text-sm text-fg outline-none transition focus:border-accent"
+              />
+            </div>
+          ))}
           {error && <p className="text-xs text-danger">{error}</p>}
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" size="sm" onClick={onClose}>
