@@ -32,6 +32,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 import { loadGoldenDataset, REAL_ONLY_TAG } from './dataset-loader';
 import { buildEvalRunRecord, recordEvalRuns, type CaseTiming } from './eval-run-recorder';
 import { compareLatency, latencyMetrics, renderLatencyTable, type LatencyBaseline } from './latency-regression';
+import { compareCost, costMetrics, renderCostTable, type CostBaseline } from './cost-regression';
 import { runResponseEvaluation, type ResponseGenerator } from './response-evaluator';
 import type { EvaluationSummary, GoldenDataset } from './types';
 // 주의: real-response-generator는 ChatService/LLMClient 등 무거운 의존성을
@@ -269,6 +270,8 @@ async function main() {
 
     // nightly 지연 회귀(F26.8) — real 전체 실행만. 기준선과 같은 케이스 집합·모델일 때만 비교한다
     const latencyRegressed = useReal && !tag && summary.totalCases > 0 ? checkLatencyRegression(summary, caseTimings) : false;
+    // nightly 비용 회귀(F26.8 확장, S6) — 위와 동일 조건. LLM 호출이 없는 CI(mock) 층에는 넣지 않는다
+    const costRegressed = useReal && !tag && summary.totalCases > 0 ? await checkCostRegression(summary, caseTimings) : false;
 
     if (summary.totalCases === 0) {
         console.log('\n⚠ response-pattern 카테고리 케이스 없음 — exit 0 (통과로 간주)');
@@ -284,6 +287,10 @@ async function main() {
     }
     if (latencyRegressed) {
         console.error('\n❌ 지연 회귀 — 통과율은 임계 이상이지만 기준선 대비 느려졌습니다(위 표).');
+        process.exit(1);
+    }
+    if (costRegressed) {
+        console.error('\n❌ 비용 회귀 — 통과율은 임계 이상이지만 기준선 대비 토큰 비용이 늘었습니다(위 표).');
         process.exit(1);
     }
     console.log(`\n✅ Response 평가 성공: ${(summary.passRate * 100).toFixed(1)}%`);
@@ -312,6 +319,42 @@ function checkLatencyRegression(summary: EvaluationSummary, timings: CaseTiming[
     console.log(`\n[latency] 기준선(${baseline!.updatedAt.slice(0, 10)}) 대비 — 허용 +${pct}%\n${renderLatencyTable(cmp.rows)}`);
     for (const r of cmp.rows.filter((x) => x.regressed)) {
         console.error(`[latency-regression] ${r.metric} ${r.baseline} → ${r.current} (+${r.deltaPct}%)`);
+    }
+    return !cmp.ok;
+}
+
+const COST_BASELINE_PATH = path.resolve(__dirname, 'baselines', 'cost-baseline.json');
+
+/**
+ * 비용 기준선 비교(또는 --update-baseline 저장, S6). 회귀면 true. 회귀 항목은 `[cost-regression]` 줄로
+ * 남겨 nightly 통지가 집는다. lazy require: cost-ledger-service 는 pg Pool 을 끌어오므로 --real 경로에서만
+ * 로드한다(real-response-generator 와 같은 이유 — mock 회귀에 무관한 의존성 비용 회피).
+ */
+async function checkCostRegression(summary: EvaluationSummary, timings: CaseTiming[]): Promise<boolean> {
+    const { resolveRate } = require('../services/cost/cost-ledger-service') as typeof import('../services/cost/cost-ledger-service');
+    const model = process.env.LLM_DEFAULT_MODEL ?? null;
+    const [inputPerTokenMicros, outputPerTokenMicros] = await Promise.all([
+        resolveRate('llm.local', model ?? '*', 'token_in'),
+        resolveRate('llm.local', model ?? '*', 'token_out'),
+    ]);
+    const current = costMetrics(timings, { inputPerTokenMicros, outputPerTokenMicros });
+    const cases = { datasetVersion: summary.datasetVersion, caseIds: summary.results.map((r) => r.caseId), model };
+    if (process.argv.includes('--update-baseline')) {
+        const baseline: CostBaseline = { ...cases, metrics: current, updatedAt: new Date().toISOString() };
+        fs.writeFileSync(COST_BASELINE_PATH, JSON.stringify(baseline, null, 2) + '\n');
+        console.log(`\n[cost] 기준선 갱신: ${path.relative(process.cwd(), COST_BASELINE_PATH)}`);
+        return false;
+    }
+    const baseline = fs.existsSync(COST_BASELINE_PATH) ? JSON.parse(fs.readFileSync(COST_BASELINE_PATH, 'utf8')) as CostBaseline : null;
+    const pct = Number(process.env.OMK_EVAL_COST_REGRESSION_PCT ?? '20');
+    const cmp = compareCost(current, cases, baseline, pct);
+    if (!cmp.comparable) {
+        console.log(`\n[cost] 비교 건너뜀 — ${cmp.reason}`);
+        return false;
+    }
+    console.log(`\n[cost] 기준선(${baseline!.updatedAt.slice(0, 10)}) 대비 — 허용 +${pct}%\n${renderCostTable(cmp.rows)}`);
+    for (const r of cmp.rows.filter((x) => x.regressed)) {
+        console.error(`[cost-regression] ${r.metric} ${r.baseline} → ${r.current} (+${r.deltaPct}%)`);
     }
     return !cmp.ok;
 }

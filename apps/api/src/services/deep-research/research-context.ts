@@ -85,6 +85,7 @@ export async function gatherMcpEvidence(params: {
         tools = await selectRelevantToolsEmbedding(topic, all, {
             budget: RESEARCH_CONTEXT.MCP_TOOL_BUDGET,
             exclude: new Set(RESEARCH_CONTEXT.MCP_EXCLUDED_TOOLS),
+            costUserId: userId,
         });
     } catch (e) {
         logger.debug(`도구 선별 실패 — MCP 근거 수집 생략: ${e instanceof Error ? e.message : e}`);

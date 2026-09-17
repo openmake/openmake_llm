@@ -251,9 +251,9 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
     //  · SHADOW(ENABLED off 시): fire-and-forget 로깅만(실행 무변경) — 개선폭 측정용.
     const rerankCfg = getConfig();
     if (rerankCfg.searchSemanticRerankEnabled) {
-        ranked = await rerankBySemantics(query, ranked);
+        ranked = await rerankBySemantics(query, ranked, options.costUserId);
     } else if (rerankCfg.searchSemanticRerankShadow) {
-        void logSemanticRerankShadow(query, ranked).catch(() => { /* 셰도우는 흐름을 막지 않음 */ });
+        void logSemanticRerankShadow(query, ranked, options.costUserId).catch(() => { /* 셰도우는 흐름을 막지 않음 */ });
     }
 
     // 시점 민감 쿼리(preferRecent)에서는 위키 강제 보장을 건너뛴다 — 위키 srsearch 가 과거

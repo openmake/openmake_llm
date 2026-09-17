@@ -6,7 +6,19 @@ import * as fs from 'node:fs';
 import { resolveGeneratedPath, saveGeneratedFile } from '../../mcp/generated-media';
 import { downloadProviderUrl } from './http-call';
 import { inferImageMime } from '../../utils/image-mime';
+import { recordCost } from '../cost/cost-ledger-service';
+import { COST_RATE_WILDCARD } from '../../config/cost-kinds';
 import type { OrchestratorAttachment, TaskMedia } from './types';
+
+/**
+ * /generated 저장 바이트를 storage.generated 원장(kind, gb_day)에 계상(F25 kind 배선, S6).
+ * 30일 TTL 보관 전체를 추적하는 배경 잡은 범위 밖이라 저장 시점에 "1 GB·일" 로 근사해 1회 기록한다.
+ * 단가는 cost_rates(DB) → env STORAGE_GENERATED_USD_PER_GB_DAY → 0. userId 없으면(익명/시스템) 기록 생략.
+ */
+function recordGeneratedStorageCost(userId: string | undefined, bytes: number): void {
+    if (!userId) return;
+    recordCost({ userId, kind: 'storage.generated', unit: 'gb_day', rateKey: COST_RATE_WILDCARD, quantity: bytes / 1_000_000_000, costOwner: 'server', ctx: { feature: 'generated-media' } });
+}
 
 interface LoadedMedia { bytes: Buffer; mime: string; name: string; dataUrl: string }
 
@@ -70,18 +82,21 @@ export function kindFromMime(mime: string): OrchestratorAttachment['kind'] {
     return 'other';
 }
 
-export function saveImage(buf: Buffer, alt: string, prefix = 'img'): TaskMedia {
+export function saveImage(buf: Buffer, alt: string, prefix = 'img', userId?: string): TaskMedia {
     const { urlPath } = saveGeneratedFile(prefix, 'png', buf);
+    recordGeneratedStorageCost(userId, buf.length);
     return { kind: 'image', urlPath, markdown: `![${alt.slice(0, 80).replace(/[[\]]/g, '')}](${urlPath})` };
 }
 
-export function saveAudio(buf: Buffer, ext: string, label: string): TaskMedia {
+export function saveAudio(buf: Buffer, ext: string, label: string, userId?: string): TaskMedia {
     const { urlPath } = saveGeneratedFile('tts', ext, buf);
+    recordGeneratedStorageCost(userId, buf.length);
     return { kind: 'audio', urlPath, markdown: `[🔊 ${label}](${urlPath})` };
 }
 
-export function saveVideo(buf: Buffer, ext: string, label: string): TaskMedia {
+export function saveVideo(buf: Buffer, ext: string, label: string, userId?: string): TaskMedia {
     const { urlPath } = saveGeneratedFile('video', ext, buf);
+    recordGeneratedStorageCost(userId, buf.length);
     return { kind: 'video', urlPath, markdown: `[🎬 ${label}](${urlPath})` };
 }
 

@@ -15,6 +15,7 @@ import type { ToolDefinition } from '../../llm/types';
 import { getConfig } from '../../config/env';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { selectRelevantTools, type SelectToolsOptions } from './tool-selector';
+import { recordCost } from '../cost/cost-ledger-service';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('AgentTaskToolEmbed');
@@ -59,12 +60,19 @@ export async function selectRelevantToolsEmbedding(
         const work = (async () => {
             // 캐시 미스 도구만 배치 임베딩(설명 변경 시 재임베딩).
             const misses = candidates.filter((t) => vecCache.get(t.function.name)?.desc !== toolText(t));
+            let embedCalls = 0;
             for (let i = 0; i < misses.length; i += 64) {
                 const batch = misses.slice(i, i + 64);
                 const vecs = await embedBatch(batch.map(toolText));
+                embedCalls++;
                 batch.forEach((t, j) => vecCache.set(t.function.name, { desc: toolText(t), vec: vecs[j] }));
             }
             const [goalVec] = await embedBatch([goal.slice(0, 512)]);
+            embedCalls++;
+            // 원장 적재(kind search.embed, unit call — F25 kind 배선, S6). 캐시 히트만이면 goal 임베딩 1건.
+            if (opts.costUserId) {
+                recordCost({ userId: opts.costUserId, kind: 'search.embed', unit: 'call', rateKey: getConfig().searchRerankEmbedModel, quantity: embedCalls, costOwner: 'user', ctx: { feature: 'agent_task_tool_select' } });
+            }
             return candidates
                 .map((t) => ({ t, sim: cosine(goalVec, vecCache.get(t.function.name)!.vec) }))
                 .filter((x) => x.sim >= AGENT_TASK_LIMITS.DYNAMIC_TOOLS_EMBED_MIN_SIM)

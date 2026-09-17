@@ -15,7 +15,7 @@ import { getPool } from '../../data/models/unified-database';
 import { CostRateRepository } from '../../data/repositories/cost-rate-repository';
 import { CostLedgerRepository, type CostLedgerInsert } from '../../data/repositories/cost-ledger-repository';
 import { COST_RATE_WILDCARD, isCostKind, type CostKind, type CostOwner, type CostUnit } from '../../config/cost-kinds';
-import { LOCAL_LLM_COST } from '../../config/cost-defaults';
+import { LOCAL_LLM_COST, STORAGE_GENERATED_COST } from '../../config/cost-defaults';
 import { getModelPricing } from '../../config/external-pricing';
 import { getRequestId } from '../../utils/request-context';
 import { activeOrgFor } from '../org/membership-cache';
@@ -66,6 +66,10 @@ export function fallbackRate(kind: CostKind, rateKey: string, unit: CostUnit): n
         if (unit === 'token_in') return p.input;
         if (unit === 'token_out') return p.output;
         if (unit === 'token_think') return p.thinking ?? p.output;
+    }
+    if (kind === 'storage.generated' && unit === 'gb_day') {
+        // env 는 USD/GB·일 — micros/unit 으로 환산(1 USD = 1e6 micros)
+        return STORAGE_GENERATED_COST.USD_PER_GB_DAY * 1_000_000;
     }
     return 0;
 }
