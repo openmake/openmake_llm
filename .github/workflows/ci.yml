@@ -196,7 +196,7 @@ jobs:
       # if: always() — 평가 게이트가 실패(exit 1)해도 회귀 리포트는 게시되어야 한다 (회귀 가시성 확보).
       - name: "Post evaluation pass-rate comment (PR only)"
         if: always() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           ROUTING_BASELINE: ${{ env.OMK_EVAL_PASS_THRESHOLD || '0.5' }}
           RESPONSE_BASELINE: ${{ env.OMK_EVAL_RESPONSE_THRESHOLD || '0.5' }}
