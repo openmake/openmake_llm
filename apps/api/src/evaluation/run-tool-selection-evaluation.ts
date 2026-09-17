@@ -6,7 +6,7 @@
  *
  * mock 은 .env 를 읽지 않고 도구 노출에 영향을 주는 운영 플래그 프로필(아래 MOCK_PROFILE_ENV)을 고정한다 — 로컬 .env 차이로
  * CI 와 결과가 갈리지 않게. 명시한 환경변수가 있으면 그 값이 우선한다.
- * 임계: OMK_EVAL_TOOL_THRESHOLD(기본 mock 0.97 — v1.0.0 기준선 39/40 · real 0.7). real 가드: --limit(기본 OMK_EVAL_REAL_DEFAULT_LIMIT=5)·케이스 timeout.
+ * 임계: OMK_EVAL_TOOL_THRESHOLD(기본 mock 0.97 — v1.0.0 기준선 40/40 — 도입 시 39/40 · real 0.7). real 가드: --limit(기본 OMK_EVAL_REAL_DEFAULT_LIMIT=5)·케이스 timeout.
  *
  * @module evaluation/run-tool-selection-evaluation
  */
