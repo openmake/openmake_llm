@@ -719,10 +719,6 @@ export const LANGUAGE_THRESHOLDS = {
  * CacheSystem 에서 참조 (2026-05-26 Phase B Phase 2-A: 분류 캐시 필드 제거)
  */
 export const CACHE_CONFIG = {
-    /** 쿼리 응답 캐시 TTL (ms) — 기본 10분 */
-    QUERY_CACHE_TTL_MS: 10 * 60 * 1000,
-    /** 쿼리 응답 캐시 최대 항목 수 */
-    QUERY_CACHE_MAX_SIZE: 200,
     /**
      * 라우팅 캐시 TTL (ms) — 기본 24시간 (env: OMK_ROUTING_CACHE_TTL_MS).
      *

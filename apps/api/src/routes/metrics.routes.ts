@@ -483,13 +483,12 @@ router.get('/alerts', asyncHandler(async (req: Request, res: Response) => {
  * GET /api/cache/stats
  * 캐시 통계 조회
  *
- * Phase B Phase 2-A (2026-05-26): classificationCache 항목 제거. LLM classifier
- * 가 삭제되어 분류 캐시도 미운영. queryCache (응답 캐시) 만 노출.
+ * 라우팅 캐시(에이전트 LLM 라우팅 결과)만 운영한다 — 응답 캐시는 2026-09-17 제거(사용자 간 응답 혼입 위험, 호출처 없음).
  */
 router.get('/cache/stats', asyncHandler(async (req: Request, res: Response) => {
     const cache = getCacheSystem();
     res.json(success({
-        queryCache: cache.getStats(),
+        routingCache: cache.getStats(),
     }));
 }));
 
