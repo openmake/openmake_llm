@@ -1696,7 +1696,28 @@
     "enabled": "已启用",
     "disabled": "已禁用",
     "editAction": "编辑",
-    "deleteAction": "删除"
+    "deleteAction": "删除",
+    "oauthClientAction": "OAuth 客户端",
+    "oauthClient": {
+      "title": "{name} 的 OAuth 客户端",
+      "description": "不支持动态客户端注册的服务（GitHub、Google）需要先在其控制台创建 OAuth 客户端，用户才能登录。请将下方回调 URL 注册到该控制台。",
+      "redirectUri": "回调 URL（注册到服务控制台）",
+      "clientId": "客户端 ID",
+      "clientSecret": "客户端密钥",
+      "secretKeep": "已保存 — 留空则保留",
+      "secretRemove": "删除已保存的密钥",
+      "authMethod": "令牌端点认证方式",
+      "authMethodAuto": "自动（依据服务器元数据）",
+      "scope": "请求的 scope（空格分隔）",
+      "scopeHint": "留空时会请求服务公开的全部 scope——Google 会包含邮件完全访问权限，请填写所需的最小权限。",
+      "authorizationParams": "额外授权参数（每行一个 key=value）",
+      "save": "保存",
+      "saved": "已保存",
+      "remove": "删除",
+      "close": "关闭",
+      "loadError": "无法加载设置",
+      "saveError": "无法保存"
+    }
   },
   "providerKeys": {
     "validate": "验证",

@@ -1696,7 +1696,28 @@
     "enabled": "有効",
     "disabled": "無効",
     "editAction": "編集",
-    "deleteAction": "削除"
+    "deleteAction": "削除",
+    "oauthClientAction": "OAuth クライアント",
+    "oauthClient": {
+      "title": "{name} の OAuth クライアント",
+      "description": "動的クライアント登録に対応していないサービス（GitHub・Google）は、サービスのコンソールで作成した OAuth クライアントがないとユーザーがログインできません。下のコールバック URL をそのコンソールに登録してください。",
+      "redirectUri": "コールバック URL（サービスのコンソールに登録）",
+      "clientId": "クライアント ID",
+      "clientSecret": "クライアントシークレット",
+      "secretKeep": "保存済み — 空欄なら維持",
+      "secretRemove": "保存済みのシークレットを削除",
+      "authMethod": "トークンエンドポイントの認証方式",
+      "authMethodAuto": "自動（サーバーのメタデータに従う）",
+      "scope": "要求するスコープ（スペース区切り）",
+      "scopeHint": "空欄の場合はサービスが公開する全スコープを要求します。Google ではメールの全権限も含まれるため、必要最小限を入力してください。",
+      "authorizationParams": "追加の認可パラメータ（1 行に key=value）",
+      "save": "保存",
+      "saved": "保存しました",
+      "remove": "削除",
+      "close": "閉じる",
+      "loadError": "設定を読み込めませんでした",
+      "saveError": "保存できませんでした"
+    }
   },
   "providerKeys": {
     "validate": "検証",

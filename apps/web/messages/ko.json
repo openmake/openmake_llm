@@ -1696,7 +1696,28 @@
     "enabled": "활성",
     "disabled": "비활성",
     "editAction": "편집",
-    "deleteAction": "삭제"
+    "deleteAction": "삭제",
+    "oauthClientAction": "OAuth 클라이언트",
+    "oauthClient": {
+      "title": "{name} OAuth 클라이언트",
+      "description": "동적 등록을 지원하지 않는 서비스(GitHub·Google)는 서비스 콘솔에서 만든 OAuth 클라이언트가 있어야 사용자가 로그인할 수 있습니다. 아래 콜백 URL 을 서비스 콘솔에 등록하세요.",
+      "redirectUri": "콜백 URL (서비스 콘솔에 등록)",
+      "clientId": "클라이언트 ID",
+      "clientSecret": "클라이언트 시크릿",
+      "secretKeep": "저장됨 — 비워 두면 유지",
+      "secretRemove": "저장된 시크릿 제거",
+      "authMethod": "토큰 엔드포인트 인증 방식",
+      "authMethodAuto": "자동(서버 메타데이터 기준)",
+      "scope": "요청 scope (공백 구분)",
+      "scopeHint": "비워 두면 서비스가 공개한 scope 전체를 요청합니다 — Google 은 메일 전체 권한까지 포함되니 최소 권한을 입력하세요.",
+      "authorizationParams": "추가 인가 파라미터 (줄마다 key=value)",
+      "save": "저장",
+      "saved": "저장했습니다",
+      "remove": "삭제",
+      "close": "닫기",
+      "loadError": "설정을 불러오지 못했습니다",
+      "saveError": "저장하지 못했습니다"
+    }
   },
   "providerKeys": {
     "validate": "검증",

@@ -1696,7 +1696,28 @@
     "enabled": "Aktiviert",
     "disabled": "Deaktiviert",
     "editAction": "Bearbeiten",
-    "deleteAction": "Löschen"
+    "deleteAction": "Löschen",
+    "oauthClientAction": "OAuth-Client",
+    "oauthClient": {
+      "title": "OAuth-Client für {name}",
+      "description": "Dienste ohne dynamische Client-Registrierung (GitHub, Google) benötigen einen in ihrer Konsole angelegten OAuth-Client, bevor sich Nutzer anmelden können. Tragen Sie die folgende Callback-URL dort ein.",
+      "redirectUri": "Callback-URL (in der Dienstkonsole eintragen)",
+      "clientId": "Client-ID",
+      "clientSecret": "Client-Secret",
+      "secretKeep": "Gespeichert — leer lassen zum Beibehalten",
+      "secretRemove": "Gespeichertes Secret entfernen",
+      "authMethod": "Authentifizierung am Token-Endpunkt",
+      "authMethodAuto": "Automatisch (laut Server-Metadaten)",
+      "scope": "Angeforderte Scopes (durch Leerzeichen getrennt)",
+      "scopeHint": "Leer bedeutet: alle vom Dienst angebotenen Scopes werden angefordert — bei Google inklusive vollem Mailzugriff. Geben Sie nur das Nötigste an.",
+      "authorizationParams": "Zusätzliche Autorisierungsparameter (ein key=value pro Zeile)",
+      "save": "Speichern",
+      "saved": "Gespeichert",
+      "remove": "Löschen",
+      "close": "Schließen",
+      "loadError": "Einstellungen konnten nicht geladen werden",
+      "saveError": "Speichern fehlgeschlagen"
+    }
   },
   "providerKeys": {
     "validate": "Überprüfen",

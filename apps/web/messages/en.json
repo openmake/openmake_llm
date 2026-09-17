@@ -1696,7 +1696,28 @@
     "enabled": "Enabled",
     "disabled": "Disabled",
     "editAction": "Edit",
-    "deleteAction": "Delete"
+    "deleteAction": "Delete",
+    "oauthClientAction": "OAuth client",
+    "oauthClient": {
+      "title": "{name} OAuth client",
+      "description": "Services without dynamic client registration (GitHub, Google) need an OAuth client created in their console before users can sign in. Register the callback URL below in that console.",
+      "redirectUri": "Callback URL (register in the service console)",
+      "clientId": "Client ID",
+      "clientSecret": "Client secret",
+      "secretKeep": "Saved — leave blank to keep",
+      "secretRemove": "Remove saved secret",
+      "authMethod": "Token endpoint auth method",
+      "authMethodAuto": "Automatic (from server metadata)",
+      "scope": "Requested scopes (space-separated)",
+      "scopeHint": "If blank, every scope the service advertises is requested — for Google this includes full mail access, so enter the minimum you need.",
+      "authorizationParams": "Extra authorization parameters (one key=value per line)",
+      "save": "Save",
+      "saved": "Saved",
+      "remove": "Delete",
+      "close": "Close",
+      "loadError": "Could not load the settings",
+      "saveError": "Could not save"
+    }
   },
   "providerKeys": {
     "validate": "Verify",

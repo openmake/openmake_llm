@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Boxes, Plus, Pencil, Trash2, X, Loader2 } from "lucide-react";
+import { Boxes, Plus, Pencil, Trash2, X, Loader2, KeyRound } from "lucide-react";
 import {
   PageHeader,
   Card,
@@ -17,6 +17,7 @@ import {
 import { AdminTabs } from "@/components/hub-tabs";
 import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
+import { McpOAuthClientModal } from "@/components/admin/mcp-oauth-client-modal";
 
 type TransportType = "stdio" | "sse" | "streamable-http";
 
@@ -273,6 +274,7 @@ export default function AdminMcpCatalogPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [editTemplate, setEditTemplate] = useState<CatalogTemplate | null>(null);
   const [deleteTemplate, setDeleteTemplate] = useState<CatalogTemplate | null>(null);
+  const [oauthTemplate, setOauthTemplate] = useState<CatalogTemplate | null>(null);
 
   async function loadTemplates() {
     try {
@@ -361,6 +363,18 @@ export default function AdminMcpCatalogPage() {
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
+                          {row.transport_type !== "stdio" && (
+                            // 원격 서버의 사전 등록 OAuth 클라이언트(155) — 동적 등록을 받지 않는 GitHub·Google 용
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setOauthTemplate(row)}
+                              aria-label={t("oauthClientAction")}
+                              title={t("oauthClientAction")}
+                            >
+                              <KeyRound className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="icon"
@@ -392,6 +406,13 @@ export default function AdminMcpCatalogPage() {
           initial={editTemplate}
           onClose={() => setEditTemplate(null)}
           onSaved={loadTemplates}
+        />
+      )}
+      {oauthTemplate && (
+        <McpOAuthClientModal
+          catalogId={oauthTemplate.id}
+          name={oauthTemplate.display_name}
+          onClose={() => setOauthTemplate(null)}
         />
       )}
       {deleteTemplate && (
