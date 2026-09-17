@@ -19,6 +19,8 @@ import { estimateMessageTokens, truncateMessagesPreservingSystem } from '../../l
 import { AGENT_SPAWN } from '../../config/runtime-limits';
 import { buildExternalToolPlan, detectOrchestrationIntents } from './external-tool-plan';
 import { buildExternalMessages } from './external-messages';
+import { buildChatProvenance, classifyChatOutcome, recordChatRequestFireAndForget } from './chat-request-recorder';
+import { captureReplay } from '../../observability/replay-capture';
 import { createToolBatchState, runToolCallBatch } from './external-tool-batch';
 import { applyWallClockGuard, applyToolOveruseGuard } from './external-loop-guards';
 import { isOrchestrationTool } from './orchestration-dispatch';
@@ -118,7 +120,8 @@ export async function runExternalStream(
     }
 
     // 메시지 배열 조립(시스템 프롬프트 + history + 현재 turn)은 external-messages 로 분리.
-    const messages = buildExternalMessages({ req: effectiveReq, resolved, ctx, wantsMap, orchestration, wantsSpawn });
+    let promptParts: { staticParts: string[]; dynamicParts: string[] } | undefined;
+    const messages = buildExternalMessages({ req: effectiveReq, resolved, ctx, wantsMap, orchestration, wantsSpawn, onPromptParts: (p) => { promptParts = p; } });
 
     // 도구 노출·억제·첫 턴 강제 결정은 external-tool-plan 으로 분리 (동작 동일).
     const { tools, forcedFirstTurnToolName } = buildExternalToolPlan({
@@ -143,6 +146,8 @@ export async function runExternalStream(
         };
     }
 
+    // 요청 지문(F24.2) — 조립된 프롬프트·도구 집합의 sha256. 기록은 종료 시 chat_requests 1행(fire-and-forget)
+    const provenance = buildChatProvenance({ req, ctx, promptParts, tools, flags: { map: wantsMap, orchestration: orchestration.discussion || orchestration.taskDelegate, spawn: wantsSpawn } });
     const startedAt = Date.now();
     // TTFT 분해 계측 — 구간 계산은 호출부(ws-chat-handler)가 상위 시작 시각과 함께 수행.
     const timings: ChatTimings = {
@@ -189,6 +194,8 @@ export async function runExternalStream(
                 : messages;
             if (!timings.firstLlmCallAt) timings.firstLlmCallAt = Date.now();
             timings.turns++;
+            const replayTool = turn === 0 && forcedFirstTurnToolName && turnTools.length > 0 ? { type: 'function', function: { name: forcedFirstTurnToolName } } : undefined;
+            captureReplay(req.sessionId, { requestId: provenance.requestId, provider: resolved, messages: fittedMessages, tools: turnTools, tool_choice: replayTool, thinking: resolveThinking(req, caps.thinking) }); // 재현 번들(F24.7)
             result = await resolved.provider.streamChat(
                 {
                     messages: fittedMessages,
@@ -239,6 +246,8 @@ export async function runExternalStream(
                 }
                 break;
             }
+
+            req.evalToolObserver?.onToolCalls(result.toolCalls.map((tc) => ({ name: tc.name, args: tc.args as Record<string, unknown> })), turn);
 
             // 사용자 확인 질문(ask_user): 도구를 실행하지 않고 질문을 답변 본문으로 흘려보낸 뒤 턴을 끝낸다 —
             // 사용자 답은 다음 턴 history 로 이어진다. 같은 배치의 다른 도구 호출도 실행하지 않는다
@@ -326,6 +335,7 @@ export async function runExternalStream(
             const fittedFinal = estimateMessageTokens(messages) > EXTERNAL_LLM_INPUT_TOKEN_BUDGET
                 ? truncateMessagesPreservingSystem(messages, EXTERNAL_LLM_INPUT_TOKEN_BUDGET)
                 : messages;
+            captureReplay(req.sessionId, { requestId: provenance.requestId, provider: resolved, messages: fittedFinal, thinking: resolveThinking(req, caps.thinking) });
             result = await resolved.provider.streamChat(
                 {
                     messages: fittedFinal,
@@ -379,13 +389,15 @@ export async function runExternalStream(
             errorCode,
             ...(directCostUsdMicrosTotal !== undefined ? { directCostUsdMicros: directCostUsdMicrosTotal } : {}),
         });
+        recordChatRequestFireAndForget({ provenance, req, resolved, ctx, status: classifyChatOutcome(err), errorCode, inputTokens: inputTokensTotal, outputTokens: outputTokensTotal, costUsdMicros: directCostUsdMicrosTotal });
         throw err;
     }
 
     logger.info(
         `외부 provider 호출 완료: ${resolved.fullId} ` +
-        `(in=${inputTokensTotal}, out=${outputTokensTotal}, tools=${tools.length})`,
+        `(in=${inputTokensTotal}, out=${outputTokensTotal}, tools=${tools.length}, prompt=${provenance.promptStaticHash?.slice(0, 12) ?? '-'}, toolset=${provenance.toolManifestHash.slice(0, 12)})`,
     );
+    recordChatRequestFireAndForget({ provenance, req, resolved, ctx, status: 'ok', inputTokens: inputTokensTotal, outputTokens: outputTokensTotal, costUsdMicros: directCostUsdMicrosTotal });
 
     recordExternalUsageFireAndForget(deps, {
         userId: req.userId,

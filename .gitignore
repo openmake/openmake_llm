@@ -82,6 +82,8 @@ backend/api/.ollama-cluster.json
 
 # Screenshots (may contain personal info)
 *.png
+# 평가 멀티모달 픽스처(F26.5, gen-multimodal-fixtures.ts 생성물 ~60KB) — 골든셋 로더가 존재를 검증한다
+!apps/api/src/evaluation/fixtures/images/*.png
 *.jpg
 *.jpeg
 !frontend/web/public/**/*.png

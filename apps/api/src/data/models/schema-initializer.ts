@@ -17,6 +17,7 @@ import type { Pool } from 'pg';
 import { withRetry } from '../retry-wrapper';
 import { createLogger } from '../../utils/logger';
 import { LEGACY_SCHEMA } from './legacy-schema';
+import { parkedTaskCondition } from '../repositories/agent-task-repository';
 
 const logger = createLogger('SchemaInitializer');
 
@@ -93,16 +94,26 @@ export async function initSchema(pool: Pool): Promise<void> {
     // checkpoint 가 있으면 프론트에서 '이어하기(resume)' 가능 (status=failed + error='server restarted').
     try {
         // 전이 이벤트(124)를 먼저 남긴다 — 이 마킹은 상태 머신을 거치지 않는 유일한 bulk 경로다.
+        // 질문 응답 대기로 주차된 작업(F16.7)은 좀비가 아니다 — 메모리 루프 없이 DB 상태만으로 재개된다.
+        // 이벤트 테이블이 없으면(124 이전) 주차 조건 자체가 실패하므로 종전 조건으로 마킹한다.
+        const zombie = await pool.query('SELECT 1 FROM agent_task_events LIMIT 1')
+            .then(() => `status IN ('running', 'paused') AND NOT ${parkedTaskCondition('agent_tasks')}`)
+            .catch(() => `status IN ('running', 'paused')`);
         await pool.query(
             `INSERT INTO agent_task_events (task_id, from_status, to_status, reason)
-             SELECT id, status, 'failed', 'server restarted' FROM agent_tasks WHERE status IN ('running', 'paused')`,
+             SELECT id, status, 'failed', 'server restarted' FROM agent_tasks WHERE ${zombie}`,
         ).catch(() => { /* 이벤트 테이블 미생성(마이그레이션 전) — 마킹은 그대로 진행 */ });
         await pool.query(
-            `UPDATE agent_tasks SET status = 'failed', error = 'server restarted', completed_at = NOW() WHERE status IN ('running', 'paused')`,
+            `UPDATE agent_tasks SET status = 'failed', error = 'server restarted', completed_at = NOW() WHERE ${zombie}`,
         );
     } catch {
         // 테이블 미존재(최초 부팅) 등 — 무시
     }
+    // 실패 분류(131) — 이 초기화는 마이그레이션보다 먼저 돈다. 컬럼이 아직 없으면(131 적용 전 부팅) 조용히 건너뛰고
+    // 마이그레이션 백필이 분류한다. 위 마킹과 한 문장에 넣으면 컬럼 부재로 마킹까지 실패한다.
+    await pool.query(
+        `UPDATE agent_tasks SET failure_class = 'interrupted' WHERE status = 'failed' AND error = 'server restarted' AND failure_class IS NULL`,
+    ).catch(() => { /* 131 적용 전 */ });
 
     // 좀비 리서치 정리: Deep Research 는 큐·워커 없이 in-process 파이프라인으로 돌기 때문에
     // (세션 생성 직후 같은 흐름에서 running 으로 전이) 이전 프로세스의 pending/running 세션은

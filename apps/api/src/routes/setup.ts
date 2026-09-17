@@ -45,6 +45,7 @@ import {
     mcpCatalogAdminRouter,
     mcpAdminMonitoringRouter,
     toolHealthRouter,
+    evaluationRunsRouter,
     adminModelRolesRouter,
     adminCapabilityModelsRouter,
     adminSystemSettingsRouter,
@@ -53,6 +54,7 @@ import {
     adminOrganizationPoliciesRouter,
     adminConfigExportRouter,
     adminCostRatesRouter,
+    adminGatewayRouter,
     usageQuotaRouter,
     adminQuotaOverageRouter,
     usageStatementsRouter,
@@ -72,18 +74,22 @@ import {
     agentTaskScheduleRouter,
     adminAgentTaskSchedulesRouter,
     agentTaskTemplateRouter,
+    agentTaskTriggerRouter,
+    triggerReceiverRouter,
     agentSuggestionsRouter,
     externalRouter,
     pushRouter,
     modelRouter,
     developerDocsRouter,
     chatFeedbackRouter,
+    conversationFoldersRouter,
     apiKeysRouter,
     externalKeysRouter,
     externalOAuthRouter,
     artifactsRouter,
     artifactPublicationRouter,
     artifactExportRouter,
+    artifactCommentsRouter,
 } from './index';
 import { setupSwaggerRoutes } from '../swagger';
 import { createClusterController, createHealthController, createAuthController, createAdminController, createSessionController } from '../controllers';
@@ -188,6 +194,7 @@ export function setupApiRoutes(
     // 마운트 순서 중요: 구체적인 경로를 먼저, 파라미터 경로를 나중에
     // 도구 헬스는 metricsRouter 보다 먼저 — 같은 /api/metrics 접두를 공유한다.
     app.use('/api/metrics/tools', toolHealthRouter);
+    app.use('/api/metrics/evaluations', evaluationRunsRouter);
     app.use('/api/metrics', metricsRouter);
     // 🆕 스킬 라우트 — agentRouter(/:id catch-all) 보다 먼저 마운트 필수
     // 사용 요약(/usage/summary)은 skillsRouter 의 /:skillId 보다 먼저 (skills.routes 600줄 게이트로 분리)
@@ -226,6 +233,7 @@ export function setupApiRoutes(
     app.use('/api/organizations', organizationPoliciesRouter);
     app.use('/api/admin', adminConfigExportRouter);
     app.use('/api/admin', adminCostRatesRouter);
+    app.use('/api/admin', adminGatewayRouter);
     app.use('/api/admin', adminQuotaOverageRouter);
     app.use('/api/usage', usageQuotaRouter);
     app.use('/api/usage', usageStatementsRouter);
@@ -241,6 +249,7 @@ export function setupApiRoutes(
     app.use('/api', artifactPublicationRouter);
     // Artifacts pdf/docx export (P1 Phase 3 — 동일 /api prefix)
     app.use('/api', artifactExportRouter);
+    app.use('/api', artifactCommentsRouter);   // 아티팩트 댓글(147)
 
     // 부트스트랩 서비스 초기화
     bootstrapServices();
@@ -303,6 +312,7 @@ export function setupApiRoutes(
     app.use('/api/chat/conversations', sessionController);
     // 🆕 /api/chat/feedback 는 /api/chat 보다 먼저 마운트해야 Express가 올바르게 매칭
     app.use('/api/chat/feedback', chatFeedbackRouter);
+    app.use('/api/chat/folders', conversationFoldersRouter);
     app.use('/api/chat', chatRouter);
     app.use('/api', webSearchRouter);
     app.use('/api/usage', usageRouter);
@@ -320,6 +330,8 @@ export function setupApiRoutes(
     app.use('/api/desktop', desktopUpdateRouter);
     app.use('/api/agent-task-schedules', agentTaskScheduleRouter);
     app.use('/api/agent-task-templates', agentTaskTemplateRouter);
+    app.use('/api/agent-task-triggers', agentTaskTriggerRouter);
+    app.use('/api/triggers', triggerReceiverRouter);   // 무인증 — HMAC 서명(132), 원문 파서는 middlewares/setup
     app.use('/api/external', externalRouter);
     app.use('/api/push', pushRouter);
     app.use('/api/docs', developerDocsRouter);

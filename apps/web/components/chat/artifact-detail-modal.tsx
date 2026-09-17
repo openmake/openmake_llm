@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, MessageSquare } from "lucide-react";
 import { useTranslations } from "next-intl";
 import type { ApiSuccess } from "@openmake/shared-types";
 import type { Artifact } from "@/lib/store";
 import { ApiClient } from "@/lib/api-client";
 import { ArtifactBody } from "./artifact-panel";
+import { ArtifactComments } from "./artifact-comments";
+import { useFocusTrap } from "@/components/ui/primitives";
 
 interface DetailTarget {
   sessionId: string;
@@ -39,6 +41,8 @@ export function ArtifactDetailModal({
   onCloseAction: () => void;
 }) {
   const t = useTranslations("artifacts.page");
+  const tc = useTranslations("artifacts.comments");
+  const [commentsOpen, setCommentsOpen] = useState(false); // 댓글(147)
   const [versions, setVersions] = useState<number[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [artifact, setArtifact] = useState<Artifact | null>(null);
@@ -90,6 +94,7 @@ export function ArtifactDetailModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
+  const trapRef = useFocusTrap<HTMLDivElement>(true, onCloseAction);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
@@ -97,7 +102,12 @@ export function ArtifactDetailModal({
       role="presentation"
     >
       <div
-        className="flex h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xl"
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={target.title}
+        tabIndex={-1}
+        className="flex h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xl outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 border-b border-border px-4 py-3">
@@ -124,6 +134,15 @@ export function ArtifactDetailModal({
           )}
           <button
             type="button"
+            onClick={() => setCommentsOpen((v) => !v)}
+            aria-label={tc("toggle")}
+            aria-pressed={commentsOpen}
+            className={`grid h-7 w-7 place-items-center rounded transition hover:bg-surface-3 hover:text-fg ${commentsOpen ? "text-accent" : "text-muted"}`}
+          >
+            <MessageSquare className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
             onClick={onCloseAction}
             aria-label={t("close")}
             className="grid h-7 w-7 place-items-center rounded text-muted transition hover:bg-surface-3 hover:text-fg"
@@ -146,6 +165,11 @@ export function ArtifactDetailModal({
             />
           )}
         </div>
+        {commentsOpen && (
+          <div className="h-[40%] min-h-[180px] border-t border-border">
+            <ArtifactComments sessionId={target.sessionId} artifactId={target.artifactId} title={target.title} allowApply={false} />
+          </div>
+        )}
       </div>
     </div>
   );

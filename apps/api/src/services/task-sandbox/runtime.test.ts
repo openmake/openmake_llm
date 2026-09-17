@@ -10,7 +10,9 @@ jest.mock('../../config/runtime-limits', () => {
 });
 
 import { toLLMTool, TaskRuntime } from './runtime';
+import * as approvalGate from './approval-gate';
 import { getApprovalRegistry } from './approval-gate';
+import { AgentTaskParked } from '../agent-task/types';
 import { getTaskSandboxConfig } from '../../config/task-sandbox';
 import type { MCPToolDefinition } from '../../mcp/types';
 
@@ -77,6 +79,20 @@ describe('TaskRuntime 도구/게이트 (샌드박스 미생성 — 게이트 로
         expect(out).toContain('승인');
         expect(out).toContain('계속할까요?');
         expect(out).not.toContain('__TASK_ASK_HUMAN__'); // sentinel 이 대화로 새지 않음
+    });
+
+    it('ask_human 만료가 주차(parked)면 결과 대신 AgentTaskParked 를 던진다(F16.7)', async () => {
+        const rt = new TaskRuntime('t-ask-park', 'u1', cfgNone);
+        const spy = jest.spyOn(approvalGate, 'getApprovalRegistry').mockReturnValue({
+            request: async () => ({ decision: 'rejected', reason: 'parked', waitedMs: 3 }),
+        } as unknown as ReturnType<typeof approvalGate.getApprovalRegistry>);
+        const rejected = jest.fn();
+        const waited = jest.fn();
+        await expect(rt.executeTaskTool('ask_human', { question: 'q' }, { onApprovalRejected: rejected, onApprovalWaited: waited }))
+            .rejects.toBeInstanceOf(AgentTaskParked);
+        expect(waited).toHaveBeenCalledWith(3);
+        expect(rejected).not.toHaveBeenCalled(); // 무응답 강등 카운트 대상이 아니다
+        spy.mockRestore();
     });
 
     it('ask_human 거절 시 대안 유도 메시지', async () => {

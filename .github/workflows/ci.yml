@@ -34,7 +34,9 @@ jobs:
     # 실제 실행 시간 단축(Jest 병렬화·게이트 분리)은 별도 과제.
     # 25 → 35 (2026-09-02): 총 소요가 21~24분(Jest 단독 ~19분)으로 다시 상한에 붙어
     # 게이트 16단계 전부 success 인데 25분 00초에 cancelled 된 사례 재발(#711 1차).
-    timeout-minutes: 35
+    # 35 → 50 (2026-09-17): Jest 단독 ~33분(4,000건 대)으로 마지막 게이트(Response Pattern mock)가
+    # 35분 02초에 cancelled 됐다(#912 1차 — 그 앞 게이트 전부 success). Jest 병렬화는 여전히 별도 과제.
+    timeout-minutes: 50
 
     # GITHUB_TOKEN 권한 명시 (PR 코멘트 게시용)
     # - contents: read  → 체크아웃에 필요
@@ -89,6 +91,12 @@ jobs:
           bash -n openmake_llm.sh
           shellcheck -S warning install.sh openmake_llm.sh
           echo "인스톨러 lint 통과 (bash -n + shellcheck)"
+
+      # ─── Gate 0.7: Dependency Audit ───
+      # 운영 의존성(--omit=dev)의 high 이상 npm 권고가 새로 생기면 막는다(F28.8). 기존 부채는
+      # .audit-allowlist.json 에 사유·만료일과 함께 — 만료가 지나면 다시 실패한다. 수 초짜리라 Jest 앞에 둔다.
+      - name: "Gate 0.7: Dependency Audit"
+        run: npm run audit:gate
 
       # ─── Gate 1: Jest ───
       # 로컬 `npm test` 와 **같은 러너**로 돈다. 이전에는 bun test 로 돌렸는데, 로컬은 jest 라
@@ -146,6 +154,32 @@ jobs:
           OMK_EVAL_RESPONSE_THRESHOLD: '0.5'
         run: npm run eval:response
 
+      # ─── Gate 7: Prompt·Tool Schema Budget ───
+      # CI 는 LLM 에 닿지 못해 지연을 못 잰다 — 첫 토큰 지연의 주요인인 시스템 프롬프트 정적 prefix·전체 길이와
+      # 상시 노출 도구 스키마 크기를 기준선(evaluation/baselines/budget-baseline.json) 대비 증가율로 막는다(F26.8).
+      # 정당한 증가는 `npm run eval:budget -- --update-baseline` 결과를 같은 PR 에 포함한다.
+      - name: "Gate 7: Prompt & Tool Schema Budget"
+        working-directory: apps/api
+        env:
+          OMK_EVAL_BUDGET_DRIFT_PCT: '10'
+        run: npm run eval:budget
+
+      # ─── Gate 8: Tool Selection (mock) ───
+      # 운영과 같은 결정적 판정(selectTurnTools → buildExternalToolPlan)으로 골든셋 40건의 "이 턴 노출 도구"를 검사한다(F26.2).
+      # 의도 게이트·역할 게이트 변경으로 기대 도구가 빠지거나 금지 도구가 새면 실패. 실모델 호출 판정(--real)은 nightly.
+      - name: "Gate 8: Tool Selection (mock)"
+        working-directory: apps/api
+        env:
+          OMK_EVAL_TOOL_THRESHOLD: '0.97'
+        run: npm run eval:tools
+
+      # ─── Gate 9: Runtime Red Team (mock) ───
+      # 게이트 함수를 직접 친다(F26.6): 실행 역할 게이트·관리자 도구 노출·SSRF(가짜 DNS)·작업공간 경로 탈출·로그 마스킹.
+      # 전부 통과해야 한다(임계 1.0). 실모델 응답 판정(프롬프트·비밀값 유출, 간접 인젝션)은 nightly --real.
+      - name: "Gate 9: Runtime Red Team (mock)"
+        working-directory: apps/api
+        run: npm run eval:redteam
+
       # 평가 결과 아티팩트 업로드 (PR 회귀 추적용)
       - name: Upload evaluation artifacts
         if: always()
@@ -166,6 +200,7 @@ jobs:
         env:
           ROUTING_BASELINE: ${{ env.OMK_EVAL_PASS_THRESHOLD || '0.5' }}
           RESPONSE_BASELINE: ${{ env.OMK_EVAL_RESPONSE_THRESHOLD || '0.5' }}
+          TOOLS_BASELINE: '0.97'
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -213,6 +248,10 @@ jobs:
             const responseFile = findLatest('response-evaluation-', null);
             const routing = loadEval(routingFile);
             const response = loadEval(responseFile);
+            const budget = loadEval(findLatest('budget-evaluation-', null));
+            const tools = loadEval(findLatest('tool-selection-evaluation-mock-', null));
+            const redteam = loadEval(findLatest('redteam-evaluation-mock-', null));
+            const toolsBaseline = parseFloat(process.env.TOOLS_BASELINE || '0.97');
 
             const routingBaseline = parseFloat(process.env.ROUTING_BASELINE || '0.5');
             const responseBaseline = parseFloat(process.env.RESPONSE_BASELINE || '0.5');
@@ -233,6 +272,11 @@ jobs:
               '|---|---|---|---|---|',
               row('Routing (Gate 5)', routing, routingBaseline),
               row('Response (Gate 6)', response, responseBaseline),
+              budget
+                ? `| Prompt·Tool Budget (Gate 7) | ${budget.rows.filter((r) => r.ok).length}/${budget.rows.length} 지표 | 증가율 ≤ ${budget.limits.driftPct}% | 기준선 ${budget.baselineUpdatedAt ? budget.baselineUpdatedAt.slice(0, 10) : '없음'} | ${budget.ok ? '✅' : '❌ ' + budget.rows.filter((r) => !r.ok).map((r) => r.metric).join(', ')} |`
+                : '| Prompt·Tool Budget (Gate 7) | n/a | n/a | n/a | 결과 파일 없음 |',
+              row('Tool Selection (Gate 8)', tools, toolsBaseline),
+              row('Runtime Red Team (Gate 9)', redteam, 1),
               '',
               `- 데이터셋 버전: routing=\`${routing?.datasetVersion ?? 'n/a'}\`, response=\`${response?.datasetVersion ?? 'n/a'}\``,
               `- 베이스라인은 \`OMK_EVAL_PASS_THRESHOLD\` / \`OMK_EVAL_RESPONSE_THRESHOLD\` 환경변수 기준 (이력 비교 아님)`,

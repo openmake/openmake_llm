@@ -17,7 +17,8 @@
  */
 import { performWebSearch } from './search-orchestrator';
 import { cleanSearchQuery } from './query-cleaner';
-import { formatSearchSources } from './format-sources';
+import { formatSearchSources, toSourceRefs } from './format-sources';
+import type { SearchSourceRef } from './types';
 import { WEB_SEARCH_INJECTION } from '../../config/runtime-limits';
 import { getStaleDataWarning } from '../../config/stale-data-warning';
 import {
@@ -34,6 +35,8 @@ interface BuildWebSearchContextResult {
     webSearchContext: string;
     /** 시사 질의로 감지되었는지 여부. */
     isCurrentEventsQuery: boolean;
+    /** 주입한 결과의 구조화 출처(F19.4) — 컨텍스트의 [출처 N] 과 같은 번호. 주입이 없으면 빈 배열 */
+    sources: SearchSourceRef[];
 }
 
 /**
@@ -60,6 +63,7 @@ export async function buildWebSearchContext(opts: {
     );
 
     let webSearchContext = '';
+    let sources: SearchSourceRef[] = [];
 
     if (!explicitlyDisabled && (webSearchEnabled || isCurrentEventsQuery)) {
         try {
@@ -83,6 +87,7 @@ export async function buildWebSearchContext(opts: {
                 });
                 webSearchContext = `\n\n## 🔍 ${tpl.header} (${new Date().toLocaleDateString(tpl.locale)} )\n` +
                     `${tpl.instruction}\n\n${body}\n`;
+                sources = toSourceRefs(searchResults, { maxResults: WEB_SEARCH_INJECTION.MAX_RESULTS, maxSnippetChars: WEB_SEARCH_INJECTION.MAX_SNIPPET_CHARS });
             }
         } catch (e) {
             // 클라이언트 중단(abort)은 삼키지 않고 전파 — 이미 끊긴 signal 로 LLM 을 호출해
@@ -98,5 +103,5 @@ export async function buildWebSearchContext(opts: {
         webSearchContext = `\n\n## ⚠️ ${warning.header}\n${warning.instruction}\n`;
     }
 
-    return { webSearchContext, isCurrentEventsQuery };
+    return { webSearchContext, isCurrentEventsQuery, sources };
 }

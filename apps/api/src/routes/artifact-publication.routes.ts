@@ -12,6 +12,7 @@
 
 import { Router, Request, Response } from 'express';
 import { timingSafeEqual } from 'crypto';
+import { promises as fs } from 'fs';
 import { ArtifactRepository } from '../data/repositories/artifact-repository';
 import {
     ArtifactPublicationRepository,
@@ -23,7 +24,7 @@ import { success, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { resolveUserId } from './artifact-session-access';
 import { requireAuth, optionalAuth } from '../auth';
-import { ARTIFACT_VIEWER } from '../config/artifact-viewer';
+import { ARTIFACT_VIEWER, viewerArtifactDir } from '../config/artifact-viewer';
 import {
     removePublication,
     mintAccessToken,
@@ -48,6 +49,29 @@ function safeTokenEqual(provided: string, expected: string | null | undefined): 
     const b = Buffer.from(expected);
     return a.length === b.length && timingSafeEqual(a, b);
 }
+
+/**
+ * GET /api/artifacts/publications/:pubId/bundle — 게시 뷰어가 서빙하는 self-contained index.html 을 그대로 내려받는다(F20.5 옵션).
+ * 앱 안에 외부 배포 파이프라인을 두지 않는 대신, 사용자가 이 파일을 원하는 곳에 올린다. 소유자·admin 만.
+ * 경로는 요청값이 아니라 DB 의 publication_id 로 만든다(경로 조작 차단). 파일이 없으면(뷰어 비활성·정리됨) 재게시 안내 404.
+ */
+router.get('/artifacts/publications/:pubId/bundle', requireAuth, asyncHandler(async (req: Request, res: Response) => {
+    const pub = await new ArtifactPublicationRepository(getPool()).getByPublicationId(req.params.pubId);
+    if (!pub) { res.status(404).json(notFound('publication')); return; }
+    if (!isAdminRole(req.user?.role) && pub.owner_user_id !== resolveUserId(req)) {
+        res.status(403).json({ error: 'FORBIDDEN', detail: 'not owner' });
+        return;
+    }
+    let html: string;
+    try {
+        html = await fs.readFile(`${viewerArtifactDir(pub.publication_id)}/index.html`, 'utf8');
+    } catch {
+        res.status(404).json({ error: 'BUNDLE_NOT_FOUND', detail: '뷰어 파일이 없습니다 — 다시 게시한 뒤 시도하세요' });
+        return;
+    }
+    const safeBase = (pub.title || pub.artifact_id).replace(/[\\/:*?"<>|\n\r]+/g, '_').slice(0, 80) || 'artifact';
+    res.json(success({ filename: `${safeBase}.html`, html }));
+}));
 
 /**
  * POST /api/sessions/:sid/artifacts/:aid/publish

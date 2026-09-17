@@ -21,6 +21,7 @@ import { ApiClient } from "@/lib/api-client";
 import { fetchModels, type ModelEntry } from "@/lib/models-api";
 import { compactParams, type CapabilityEffective, type CapabilityOverride } from "@/components/settings/capability-shared";
 import { CapabilityGroupsEditor } from "@/components/settings/capability-groups";
+import { GatewayModelsCard } from "@/components/admin/gateway-models-card";
 
 /* ── 타입 (백엔드 /api/admin/model-roles, /api/admin/server-external-keys) ── */
 interface GlobalMapping {
@@ -300,6 +301,8 @@ export default function AdminModelRolesPage() {
 
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-6">
       {error && <p className="text-sm text-danger" role="alert">{error}</p>}
+
+      <GatewayModelsCard />
 
       <Card>
         <CardHeader>

@@ -1,0 +1,495 @@
+{
+  "version": "1.0.0",
+  "description": "도구 선택·인자 골든셋(F26.2) — 사용자 의도 기준 라벨. mock 은 노출 집합, real 은 첫 턴 호출을 판정한다.",
+  "cases": [
+    {
+      "id": "tool-ws-001",
+      "query": "인터넷에서 오늘 서울 날씨 검색해줘",
+      "expectedTool": "web_search",
+      "expectedArgs": {
+        "query": {
+          "regex": "서울|seoul"
+        }
+      },
+      "language": "ko",
+      "tags": [
+        "web_search"
+      ]
+    },
+    {
+      "id": "tool-ws-002",
+      "query": "코스피 지수 어제 종가 얼마였어?",
+      "expectedTool": "web_search",
+      "expectedArgs": {
+        "query": {
+          "regex": "코스피|kospi"
+        }
+      },
+      "language": "ko",
+      "tags": [
+        "web_search",
+        "timely"
+      ]
+    },
+    {
+      "id": "tool-ws-003",
+      "query": "최신 AI 뉴스 좀 찾아줘",
+      "expectedTool": "web_search",
+      "language": "ko",
+      "tags": [
+        "web_search"
+      ]
+    },
+    {
+      "id": "tool-ws-004",
+      "query": "Search the web for the latest Next.js release notes",
+      "expectedTool": "web_search",
+      "expectedArgs": {
+        "query": {
+          "regex": "next\\.?js"
+        }
+      },
+      "language": "en",
+      "tags": [
+        "web_search"
+      ]
+    },
+    {
+      "id": "tool-ws-005",
+      "query": "원달러 환율 지금 어때?",
+      "expectedTool": "web_search",
+      "language": "ko",
+      "tags": [
+        "web_search",
+        "timely"
+      ]
+    },
+    {
+      "id": "tool-ws-006",
+      "query": "이번 주 프리미어리그 순위 알려줘",
+      "expectedTool": "web_search",
+      "language": "ko",
+      "tags": [
+        "web_search",
+        "timely"
+      ]
+    },
+    {
+      "id": "tool-ws-007",
+      "query": "비트코인 시세 알려줘",
+      "expectedTool": "web_search",
+      "language": "ko",
+      "tags": [
+        "web_search",
+        "timely"
+      ]
+    },
+    {
+      "id": "tool-ws-008",
+      "query": "2026년 노벨 물리학상 수상자가 누구인지 검색해서 알려줘",
+      "expectedTool": "web_search",
+      "language": "ko",
+      "tags": [
+        "web_search"
+      ]
+    },
+    {
+      "id": "tool-ws-009",
+      "query": "What's the weather in Tokyo today? Look it up online.",
+      "expectedTool": "web_search",
+      "language": "en",
+      "tags": [
+        "web_search",
+        "timely"
+      ]
+    },
+    {
+      "id": "tool-ws-010",
+      "query": "엔비디아 주가 요즘 어때?",
+      "expectedTool": "web_search",
+      "language": "ko",
+      "tags": [
+        "web_search",
+        "timely"
+      ]
+    },
+    {
+      "id": "tool-url-001",
+      "query": "https://example.com/blog/post 이 글 요약해줘",
+      "expectedTool": "extract_webpage",
+      "expectedArgs": {
+        "url": "example.com/blog/post"
+      },
+      "language": "ko",
+      "tags": [
+        "url"
+      ]
+    },
+    {
+      "id": "tool-url-002",
+      "query": "이 페이지 내용 읽고 핵심만 정리해줘: https://nodejs.org/en/blog",
+      "expectedTool": "extract_webpage",
+      "expectedArgs": {
+        "url": "nodejs.org"
+      },
+      "language": "ko",
+      "tags": [
+        "url"
+      ]
+    },
+    {
+      "id": "tool-url-003",
+      "query": "Summarize https://www.anthropic.com/news",
+      "expectedTool": "extract_webpage",
+      "expectedArgs": {
+        "url": "anthropic.com/news"
+      },
+      "language": "en",
+      "tags": [
+        "url"
+      ]
+    },
+    {
+      "id": "tool-url-004",
+      "query": "https://github.com/openmake/openmake_llm README 읽어줘",
+      "expectedTool": "extract_webpage",
+      "expectedArgs": {
+        "url": "github.com/openmake/openmake_llm"
+      },
+      "language": "ko",
+      "tags": [
+        "url"
+      ]
+    },
+    {
+      "id": "tool-url-005",
+      "query": "아래 링크 기사 번역해줘 https://www.bbc.com/news/technology",
+      "expectedTool": "extract_webpage",
+      "expectedArgs": {
+        "url": "bbc.com"
+      },
+      "language": "ko",
+      "tags": [
+        "url"
+      ]
+    },
+    {
+      "id": "tool-task-001",
+      "query": "내 에이전트 작업 상태 확인해줘",
+      "expectedToolsAny": [
+        "agent_task_list",
+        "agent_task_get"
+      ],
+      "language": "ko",
+      "tags": [
+        "agent_task"
+      ]
+    },
+    {
+      "id": "tool-task-002",
+      "query": "어제 돌린 작업 결과 어떻게 됐어?",
+      "expectedToolsAny": [
+        "agent_task_list",
+        "agent_task_get"
+      ],
+      "language": "ko",
+      "tags": [
+        "agent_task"
+      ]
+    },
+    {
+      "id": "tool-task-003",
+      "query": "매출 데이터로 엑셀 파일 만들어서 저장해줘",
+      "expectedTool": "delegate_agent_task",
+      "language": "ko",
+      "tags": [
+        "delegate"
+      ]
+    },
+    {
+      "id": "tool-task-004",
+      "query": "이 파이썬 스크립트를 실행해서 결과 알려줘",
+      "expectedTool": "delegate_agent_task",
+      "language": "ko",
+      "tags": [
+        "delegate"
+      ]
+    },
+    {
+      "id": "tool-task-005",
+      "query": "백그라운드로 경쟁사 가격 조사 돌려줘",
+      "expectedTool": "delegate_agent_task",
+      "language": "ko",
+      "tags": [
+        "delegate"
+      ]
+    },
+    {
+      "id": "tool-ops-admin-001",
+      "query": "지난 24시간 실패한 에이전트 작업 보여줘",
+      "role": "admin",
+      "expectedTool": "ops_metrics",
+      "expectedArgs": {
+        "query": {
+          "regex": "failed_runs|summary"
+        }
+      },
+      "language": "ko",
+      "tags": [
+        "ops_metrics",
+        "admin"
+      ]
+    },
+    {
+      "id": "tool-ops-admin-002",
+      "query": "Playwright 도구 오류 많아?",
+      "role": "admin",
+      "expectedTool": "ops_metrics",
+      "expectedArgs": {
+        "query": "tool_errors"
+      },
+      "language": "ko",
+      "tags": [
+        "ops_metrics",
+        "admin"
+      ]
+    },
+    {
+      "id": "tool-ops-admin-003",
+      "query": "이번 주 토큰 사용량 얼마나 돼?",
+      "role": "admin",
+      "expectedTool": "ops_metrics",
+      "expectedArgs": {
+        "query": "token_usage"
+      },
+      "language": "ko",
+      "tags": [
+        "ops_metrics",
+        "admin"
+      ]
+    },
+    {
+      "id": "tool-ops-admin-004",
+      "query": "SLO 에러 버짓 얼마나 남았어?",
+      "role": "admin",
+      "expectedTool": "ops_metrics",
+      "expectedArgs": {
+        "query": "slo"
+      },
+      "language": "ko",
+      "tags": [
+        "ops_metrics",
+        "admin"
+      ]
+    },
+    {
+      "id": "tool-ops-admin-005",
+      "query": "vLLM KV 캐시 사용률 어때?",
+      "role": "admin",
+      "expectedTool": "ops_metrics",
+      "expectedArgs": {
+        "query": "gpu"
+      },
+      "language": "ko",
+      "tags": [
+        "ops_metrics",
+        "admin"
+      ]
+    },
+    {
+      "id": "tool-ops-user-001",
+      "query": "지난 24시간 실패한 에이전트 작업 보여줘",
+      "role": "user",
+      "forbiddenTools": [
+        "ops_metrics"
+      ],
+      "language": "ko",
+      "tags": [
+        "ops_metrics",
+        "role-gate"
+      ]
+    },
+    {
+      "id": "tool-ops-user-002",
+      "query": "Playwright 도구 오류 많아?",
+      "role": "user",
+      "forbiddenTools": [
+        "ops_metrics"
+      ],
+      "language": "ko",
+      "tags": [
+        "ops_metrics",
+        "role-gate"
+      ]
+    },
+    {
+      "id": "tool-ops-user-003",
+      "query": "이번 주 토큰 사용량 얼마나 돼?",
+      "role": "user",
+      "forbiddenTools": [
+        "ops_metrics"
+      ],
+      "language": "ko",
+      "tags": [
+        "ops_metrics",
+        "role-gate"
+      ]
+    },
+    {
+      "id": "tool-ops-user-004",
+      "query": "SLO 에러 버짓 얼마나 남았어?",
+      "role": "user",
+      "forbiddenTools": [
+        "ops_metrics"
+      ],
+      "language": "ko",
+      "tags": [
+        "ops_metrics",
+        "role-gate"
+      ]
+    },
+    {
+      "id": "tool-ops-user-005",
+      "query": "vLLM KV 캐시 사용률 어때?",
+      "role": "user",
+      "forbiddenTools": [
+        "ops_metrics"
+      ],
+      "language": "ko",
+      "tags": [
+        "ops_metrics",
+        "role-gate"
+      ]
+    },
+    {
+      "id": "tool-plan-001",
+      "query": "결제 모듈 리팩터링 구현 계획 세워줘",
+      "expectedTool": "create_plan",
+      "language": "ko",
+      "tags": [
+        "plan"
+      ]
+    },
+    {
+      "id": "tool-plan-002",
+      "query": "새 알림 서비스 개발 계획을 작성해줘",
+      "expectedTool": "create_plan",
+      "language": "ko",
+      "tags": [
+        "plan"
+      ]
+    },
+    {
+      "id": "tool-plan-003",
+      "query": "Write an implementation plan for adding SSO login",
+      "expectedTool": "create_plan",
+      "language": "en",
+      "tags": [
+        "plan"
+      ]
+    },
+    {
+      "id": "tool-ext-001",
+      "query": "이 플러그인 설치해줘: https://github.com/foo/bar-plugin",
+      "expectedTool": "import_extension_from_git",
+      "expectedArgs": {
+        "gitUrl": "foo/bar-plugin"
+      },
+      "language": "ko",
+      "tags": [
+        "extension"
+      ]
+    },
+    {
+      "id": "tool-ext-002",
+      "query": "마켓플레이스에서 설치 가능한 확장 목록 보여줘",
+      "expectedTool": "import_extension_from_git",
+      "language": "ko",
+      "tags": [
+        "extension"
+      ]
+    },
+    {
+      "id": "tool-neg-001",
+      "query": "안녕! 오늘 기분 어때?",
+      "forbiddenTools": [
+        "web_search",
+        "ops_metrics",
+        "create_plan",
+        "delegate_agent_task",
+        "import_extension_from_git",
+        "agent_task_list"
+      ],
+      "language": "ko",
+      "tags": [
+        "negative"
+      ]
+    },
+    {
+      "id": "tool-neg-002",
+      "query": "파이썬에서 리스트 컴프리헨션 예시 보여줘",
+      "forbiddenTools": [
+        "web_search",
+        "ops_metrics",
+        "create_plan",
+        "delegate_agent_task",
+        "import_extension_from_git",
+        "agent_task_list"
+      ],
+      "language": "ko",
+      "tags": [
+        "negative"
+      ]
+    },
+    {
+      "id": "tool-neg-003",
+      "query": "부산 2박 3일 여행 계획 세워줘",
+      "forbiddenTools": [
+        "web_search",
+        "ops_metrics",
+        "create_plan",
+        "delegate_agent_task",
+        "import_extension_from_git",
+        "agent_task_list"
+      ],
+      "language": "ko",
+      "tags": [
+        "negative",
+        "plan-lookalike"
+      ]
+    },
+    {
+      "id": "tool-neg-004",
+      "query": "엑셀 VLOOKUP 함수 사용법 알려줘",
+      "forbiddenTools": [
+        "web_search",
+        "ops_metrics",
+        "create_plan",
+        "delegate_agent_task",
+        "import_extension_from_git",
+        "agent_task_list"
+      ],
+      "language": "ko",
+      "tags": [
+        "negative",
+        "delegate-lookalike"
+      ]
+    },
+    {
+      "id": "tool-neg-005",
+      "query": "Explain the difference between TCP and UDP",
+      "forbiddenTools": [
+        "web_search",
+        "ops_metrics",
+        "create_plan",
+        "delegate_agent_task",
+        "import_extension_from_git",
+        "agent_task_list"
+      ],
+      "language": "en",
+      "tags": [
+        "negative"
+      ]
+    }
+  ]
+}

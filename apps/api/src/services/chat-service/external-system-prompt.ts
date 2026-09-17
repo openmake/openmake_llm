@@ -17,11 +17,7 @@ import { SPAWN_PROMPT_GUIDE } from '../agent-spawn/spawn-agents';
 import { LANGUAGE_DISPLAY_NAMES, resolvePromptLocale, type SupportedLanguageCode } from '../../chat/language-policy';
 import type { StreamFromExternalContext } from './external-provider-types';
 
-/**
- * 외부 provider 요청의 시스템 프롬프트 본문을 조립해 반환. 비면 '' (호출부가 system 미주입).
- * wantsMap 은 호출부에서 계산해 전달(도구 라우팅에도 재사용되므로).
- */
-export function buildExternalSystemPrompt(params: {
+type ExternalSystemPromptParams = {
     req: ChatMessageRequest;
     resolved: ResolvedProvider;
     ctx: StreamFromExternalContext;
@@ -30,9 +26,26 @@ export function buildExternalSystemPrompt(params: {
     orchestration?: { discussion: boolean; taskDelegate: boolean };
     /** 병렬 위임 의도(SPAWN_INTENT_PATTERNS) — 매칭 턴에만 spawn_agents 가이드 주입. */
     wantsSpawn?: boolean;
-}): string {
+};
+
+/**
+ * 외부 provider 요청의 시스템 프롬프트 본문을 조립해 반환. 비면 '' (호출부가 system 미주입).
+ * wantsMap 은 호출부에서 계산해 전달(도구 라우팅에도 재사용되므로).
+ */
+export function buildExternalSystemPrompt(params: ExternalSystemPromptParams): string {
+    const { staticParts, dynamicParts } = buildExternalSystemPromptParts(params);
+    return [...staticParts, ...dynamicParts].join('\n\n');
+}
+
+/**
+ * 같은 조립을 DYNAMIC BOUNDARY 기준으로 나눠 반환 — 정적 prefix 크기·지문 관측(F24.2·F26.8 예산 게이트)용.
+ * `buildExternalSystemPrompt` 는 이 두 배열을 순서대로 이어 붙인 것과 바이트 단위로 같다.
+ */
+export function buildExternalSystemPromptParts(params: ExternalSystemPromptParams): { staticParts: string[]; dynamicParts: string[] } {
     const { req, resolved, ctx, wantsMap, orchestration, wantsSpawn } = params;
-    const systemPromptParts: string[] = [];
+    const staticParts: string[] = [];
+    const dynamicParts: string[] = [];
+    let systemPromptParts = staticParts;
 
     // ════════════════════════════════════════════════════════════════════
     // 정적 헌법 (CACHE PREFIX) — 모든 요청 공통이라 prefix caching hit 을 극대화한다.
@@ -66,6 +79,7 @@ export function buildExternalSystemPrompt(params: {
     }
 
     // ──────────────────── DYNAMIC BOUNDARY ────────────────────
+    systemPromptParts = dynamicParts;
     // 아래는 요청/사용자/세션별 가변 콘텐츠. prefix 캐시 보존을 위해 반드시 정적 헌법 뒤에 배치한다.
     // system 채널이라 위치가 뒤여도(최근일수록 attention↑) 사용자 맥락(memory/custom)의 우선순위는 유지된다.
     if (ctx.agentSystemMessage) {
@@ -180,7 +194,7 @@ export function buildExternalSystemPrompt(params: {
         systemPromptParts.push(buildLanguageDirective(langCode));
     }
 
-    return systemPromptParts.join('\n\n');
+    return { staticParts, dynamicParts };
 }
 
 /**

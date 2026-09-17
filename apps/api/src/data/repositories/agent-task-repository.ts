@@ -13,6 +13,16 @@
 import { BaseRepository, QueryParam } from './base-repository';
 import type { AgentTask, AgentTaskStatus, AgentTaskStep } from '../models/unified-database.types';
 import { allowedSources, AgentTaskTransitionError } from '../../services/agent-task/task-state';
+import { classifyAgentTaskFailure } from '../../config/agent-task-failure-class';
+
+/**
+ * 주차(F16.7) 판정 SQL — paused 이고 마지막 전이 이벤트 사유가 hitl_parked. 부팅 마킹·복구·재개 claim·스윕이 같은 조건을 쓴다.
+ * 주차는 이미 paused 인 작업에 걸리므로 paused→paused 이벤트로 표식한다(markParked).
+ */
+export function parkedTaskCondition(alias: string): string {
+    // COALESCE 필수 — 사유가 NULL 인(일반 승인 대기) paused 에서 비교가 NULL 이 되면 `NOT (…)` 도 NULL 이라 부팅 마킹·복구에서 빠진다
+    return `(${alias}.status = 'paused' AND COALESCE((SELECT e.reason FROM agent_task_events e WHERE e.task_id = ${alias}.id ORDER BY e.id DESC LIMIT 1), '') = 'hitl_parked')`;
+}
 
 export class AgentTaskRepository extends BaseRepository {
     async createAgentTask(params: {
@@ -85,6 +95,8 @@ export class AgentTaskRepository extends BaseRepository {
         judgeVerdict?: string;
         /** 상태 전이 사유(124 이벤트) — 미지정 시 error 문자열을 쓴다. */
         transitionReason?: string;
+        /** 큐 우선순위(131) */
+        priority?: number;
     }): Promise<void> {
         const sets: string[] = ['updated_at = NOW()'];
         const params: QueryParam[] = [];
@@ -96,6 +108,9 @@ export class AgentTaskRepository extends BaseRepository {
             if (updates.status === 'completed' || updates.status === 'failed' || updates.status === 'cancelled') {
                 sets.push('completed_at = NOW()');
             }
+            // 실패 분류(131) — failed 전이에서만 채우고, 다른 전이(재실행·재개)는 지운다
+            sets.push(updates.status === 'failed' ? `failure_class = $${paramIdx++}` : 'failure_class = NULL');
+            if (updates.status === 'failed') params.push(classifyAgentTaskFailure(updates.error));
         }
         if (updates.progress !== undefined) {
             sets.push(`progress = $${paramIdx++}`);
@@ -129,6 +144,7 @@ export class AgentTaskRepository extends BaseRepository {
         if (updates.plan !== undefined) {
             sets.push(`plan = $${paramIdx++}`);
             params.push(JSON.stringify(updates.plan));
+            sets.push('plan_version = plan_version + 1'); // 139 — 모든 plan 갱신에서 +1 (UI stale 감지)
         }
         if (updates.totalTokens !== undefined) {
             sets.push(`total_tokens = $${paramIdx++}`);
@@ -141,6 +157,10 @@ export class AgentTaskRepository extends BaseRepository {
         if (updates.judgeVerdict !== undefined) {
             sets.push(`judge_verdict = $${paramIdx++}`);
             params.push(updates.judgeVerdict);
+        }
+        if (updates.priority !== undefined) {
+            sets.push(`priority = $${paramIdx++}`);
+            params.push(updates.priority);
         }
 
         params.push(taskId);
@@ -167,12 +187,86 @@ export class AgentTaskRepository extends BaseRepository {
         if (prev !== updates.status) await this.recordEvent(taskId, prev, updates.status, updates.transitionReason ?? updates.error ?? undefined);
     }
 
+    /** 턴 체크포인트 이력(141) 1행 + 초과분 정리 — fail-open 은 호출부. */
+    async insertCheckpointHistory(taskId: string, turn: number, conversation: unknown[], plan: unknown | null, keep: number): Promise<void> {
+        await this.query(
+            `INSERT INTO agent_task_checkpoints (task_id, turn, conversation, plan) VALUES ($1, $2, $3::jsonb, $4::jsonb)
+             ON CONFLICT (task_id, turn) DO UPDATE SET conversation = EXCLUDED.conversation, plan = EXCLUDED.plan, created_at = NOW()`,
+            [taskId, turn, JSON.stringify(conversation), plan == null ? null : JSON.stringify(plan)],
+        );
+        await this.query(
+            `DELETE FROM agent_task_checkpoints WHERE task_id = $1 AND id NOT IN (
+                 SELECT id FROM agent_task_checkpoints WHERE task_id = $1 ORDER BY turn DESC LIMIT $2)`,
+            [taskId, keep],
+        );
+    }
+
+    async listCheckpoints(taskId: string): Promise<Array<{ turn: number; messages: number; created_at: string }>> {
+        const r = await this.query<{ turn: number; messages: string; created_at: string }>(
+            `SELECT turn, jsonb_array_length(conversation)::text AS messages, created_at FROM agent_task_checkpoints WHERE task_id = $1 ORDER BY turn ASC`, [taskId]);
+        return r.rows.map((x) => ({ turn: x.turn, messages: Number(x.messages), created_at: x.created_at }));
+    }
+
+    async getCheckpoint(taskId: string, turn: number): Promise<{ conversation: unknown[]; plan: unknown | null } | null> {
+        const r = await this.query<{ conversation: unknown[]; plan: unknown | null }>(
+            'SELECT conversation, plan FROM agent_task_checkpoints WHERE task_id = $1 AND turn = $2', [taskId, turn]);
+        return r.rows[0] ?? null;
+    }
+
+    /** fork 표시(141) — 새 작업에 원 작업·턴을 기록. */
+    async markForked(taskId: string, fromTaskId: string, fromTurn: number): Promise<void> {
+        await this.query('UPDATE agent_tasks SET forked_from_task_id = $2, forked_from_turn = $3 WHERE id = $1', [taskId, fromTaskId, fromTurn]);
+    }
+
+    /** 사용자 계획 편집(139) — expectedVersion 이 현재와 같을 때만 갱신. 반환 ok=false 면 현재 버전. */
+    async updatePlanIfVersion(taskId: string, plan: unknown[], expectedVersion: number): Promise<{ ok: boolean; version: number }> {
+        const r = await this.query<{ plan_version: number }>(
+            `UPDATE agent_tasks SET plan = $2, plan_version = plan_version + 1, updated_at = NOW()
+             WHERE id = $1 AND plan_version = $3 RETURNING plan_version`,
+            [taskId, JSON.stringify(plan), expectedVersion],
+        );
+        if (r.rows[0]) return { ok: true, version: r.rows[0].plan_version };
+        const cur = await this.query<{ plan_version: number }>('SELECT plan_version FROM agent_tasks WHERE id = $1', [taskId]);
+        return { ok: false, version: cur.rows[0]?.plan_version ?? 0 };
+    }
+
     /** 상태 전이 이벤트 1행(124) — 관측용이라 실패해도 전이를 되돌리지 않는다(fail-open). */
     async recordEvent(taskId: string, from: string | null | undefined, to: string, reason?: string): Promise<void> {
         await this.query(
             'INSERT INTO agent_task_events (task_id, from_status, to_status, reason) VALUES ($1, $2, $3, $4)',
             [taskId, from ?? null, to, reason ?? null],
         ).catch(() => { /* 이벤트 기록 실패는 작업을 막지 않는다 */ });
+    }
+
+    /** 주차 표식(F16.7) — recordEvent 와 달리 실패를 삼키지 않는다: 표식 없는 paused 는 아무도 재개하지 않는다. */
+    async markParked(taskId: string): Promise<void> {
+        await this.query(
+            `INSERT INTO agent_task_events (task_id, from_status, to_status, reason) VALUES ($1, 'paused', 'paused', 'hitl_parked')`,
+            [taskId],
+        );
+    }
+
+    /** 주차 작업 재개 claim — 주차 중일 때만 pending 으로(동시 답변·스윕 중복 재개 방지). */
+    async claimParkedTask(taskId: string): Promise<boolean> {
+        const r = await this.query(
+            `UPDATE agent_tasks t SET status = 'pending', updated_at = NOW() WHERE t.id = $1 AND ${parkedTaskCondition('t')} RETURNING t.id`,
+            [taskId],
+        );
+        if ((r.rowCount ?? 0) === 0) return false;
+        await this.recordEvent(taskId, 'paused', 'pending', 'hitl_park_resume');
+        return true;
+    }
+
+    /** 주차 중인 작업 목록 — 스윕이 결정 도착(재개)·만료(실패)·대기(워크스페이스 유지)로 나눈다. */
+    async listParkedTasks(limit = 200): Promise<Array<{ id: string; workspace_path: string | null; has_decision: boolean; has_live_pending: boolean }>> {
+        const r = await this.query<{ id: string; workspace_path: string | null; has_decision: boolean; has_live_pending: boolean }>(
+            `SELECT t.id, t.workspace_path,
+                    EXISTS (SELECT 1 FROM agent_task_approvals a WHERE a.task_id = t.id AND a.status IN ('approved', 'rejected') AND a.consumed_at IS NULL) AS has_decision,
+                    EXISTS (SELECT 1 FROM agent_task_approvals a WHERE a.task_id = t.id AND a.status = 'pending' AND a.expires_at > NOW()) AS has_live_pending
+               FROM agent_tasks t WHERE ${parkedTaskCondition('t')} ORDER BY t.updated_at ASC LIMIT $1`,
+            [limit],
+        );
+        return r.rows;
     }
 
     async getAgentTaskEvents(taskId: string, limit = 200): Promise<Array<{ id: number; from_status: string | null; to_status: string; reason: string | null; created_at: string }>> {
@@ -303,7 +397,7 @@ export class AgentTaskRepository extends BaseRepository {
     async getInterruptedAgentTasks(windowMs: number): Promise<AgentTask[]> {
         const result = await this.query<AgentTask>(
             `SELECT * FROM agent_tasks
-             WHERE status IN ('running', 'paused', 'queued')
+             WHERE (status IN ('running', 'paused', 'queued') AND NOT ${parkedTaskCondition('agent_tasks')})
                 OR (status = 'failed' AND error = 'server restarted'
                     AND completed_at > NOW() - make_interval(secs => $1))
              ORDER BY updated_at ASC`,
@@ -321,9 +415,9 @@ export class AgentTaskRepository extends BaseRepository {
     async claimAgentTaskForRecovery(taskId: string): Promise<boolean> {
         const result = await this.query<{ prev: string }>(
             `UPDATE agent_tasks t
-             SET status = 'pending', error = NULL, completed_at = NULL, updated_at = NOW()
+             SET status = 'pending', error = NULL, failure_class = NULL, completed_at = NULL, updated_at = NOW()
              FROM (SELECT id, status AS prev FROM agent_tasks WHERE id = $1 FOR UPDATE) o
-             WHERE t.id = o.id AND (o.prev IN ('running', 'paused', 'queued')
+             WHERE t.id = o.id AND ((o.prev IN ('running', 'paused', 'queued') AND NOT ${parkedTaskCondition('t')})
                 OR (o.prev = 'failed' AND t.error = 'server restarted'))
              RETURNING o.prev`,
             [taskId]
@@ -331,6 +425,31 @@ export class AgentTaskRepository extends BaseRepository {
         if ((result.rowCount ?? 0) === 0) return false;
         await this.recordEvent(taskId, result.rows[0]?.prev, 'pending', 'boot recovery claim');
         return true;
+    }
+
+    /**
+     * 실패 큐 뷰(131) — 최근 failed 작업(분류 필터 선택)과 분류별 건수. 재처리는 기존 /resume.
+     * goal 은 목록 표시용으로 앞부분만 싣는다.
+     */
+    async listFailedAgentTasks(opts: { failureClass?: string; sinceDays: number; limit: number }): Promise<{
+        items: Array<{ id: string; user_id: string; goal: string; error: string | null; failure_class: string | null; priority: number; current_turn: number; updated_at: string }>;
+        byClass: Record<string, number>;
+    }> {
+        const params: QueryParam[] = [opts.sinceDays];
+        const classFilter = opts.failureClass ? `AND failure_class = $${params.push(opts.failureClass)}` : '';
+        params.push(opts.limit);
+        const items = await this.query<{ id: string; user_id: string; goal: string; error: string | null; failure_class: string | null; priority: number; current_turn: number; updated_at: string }>(
+            `SELECT id, user_id, left(goal, 200) AS goal, error, failure_class, priority, current_turn, updated_at FROM agent_tasks
+              WHERE status = 'failed' AND updated_at > NOW() - make_interval(days => $1) ${classFilter}
+              ORDER BY updated_at DESC LIMIT $${params.length}`,
+            params,
+        );
+        const counts = await this.query<{ c: string | null; n: string }>(
+            `SELECT failure_class AS c, COUNT(*)::text AS n FROM agent_tasks
+              WHERE status = 'failed' AND updated_at > NOW() - make_interval(days => $1) GROUP BY failure_class`,
+            [opts.sinceDays],
+        );
+        return { items: items.rows, byClass: Object.fromEntries(counts.rows.map((r) => [r.c ?? 'unclassified', parseInt(r.n, 10)])) };
     }
 
     /** 활성 상태별 건수 — 큐 관측(/queue/stats) 용. 인메모리 큐 스냅샷과 대조해 재시작 고아를 드러낸다. */

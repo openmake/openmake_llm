@@ -91,6 +91,7 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
             await dispatchAgentTask({
                 taskId: task.id,
                 userId: String(task.user_id),
+                priority: task.priority, // 증발한 대기열의 순위를 그대로(131)
                 run: () => service.execute({
                     taskId: task.id,
                     goal: task.goal,
@@ -122,7 +123,7 @@ export async function recoverInterruptedAgentTasks(): Promise<{ resumed: number;
 }
 
 /** task 소유자의 역할을 조회 — 부팅 컨텍스트엔 req.user 가 없어 users 테이블에서 직접 조회. */
-async function resolveUserRole(
+export async function resolveUserRole(
     db: ReturnType<typeof getUnifiedDatabase>,
     userId: string | undefined,
 ): Promise<AgentTaskUserRole> {

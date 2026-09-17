@@ -95,6 +95,26 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/csrf-token`.
     /// - Remark: Generated from `#/paths//api/csrf-token/get`.
     func get_sol_api_sol_csrf_hyphen_token(_ input: Operations.get_sol_api_sol_csrf_hyphen_token.Input) async throws -> Operations.get_sol_api_sol_csrf_hyphen_token.Output
+    /// 대화 폴더 목록(157)
+    ///
+    /// - Remark: HTTP `GET /api/chat/folders`.
+    /// - Remark: Generated from `#/paths//api/chat/folders/get`.
+    func get_sol_api_sol_chat_sol_folders(_ input: Operations.get_sol_api_sol_chat_sol_folders.Input) async throws -> Operations.get_sol_api_sol_chat_sol_folders.Output
+    /// 대화 폴더 생성(157)
+    ///
+    /// - Remark: HTTP `POST /api/chat/folders`.
+    /// - Remark: Generated from `#/paths//api/chat/folders/post`.
+    func post_sol_api_sol_chat_sol_folders(_ input: Operations.post_sol_api_sol_chat_sol_folders.Input) async throws -> Operations.post_sol_api_sol_chat_sol_folders.Output
+    /// 대화 폴더 이름·순서 변경(157)
+    ///
+    /// - Remark: HTTP `PATCH /api/chat/folders/{id}`.
+    /// - Remark: Generated from `#/paths//api/chat/folders/{id}/patch`.
+    func patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_(_ input: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input) async throws -> Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output
+    /// 대화 폴더 삭제(157) — 안의 세션은 미분류로 남는다
+    ///
+    /// - Remark: HTTP `DELETE /api/chat/folders/{id}`.
+    /// - Remark: Generated from `#/paths//api/chat/folders/{id}/delete`.
+    func delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_(_ input: Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input) async throws -> Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output
     /// 세션 목록 조회
     ///
     /// 사용자의 채팅 세션 목록을 조회합니다. `?q=` 지정 시 제목+본문 검색 (결과에 snippet 포함). cursor 페이지네이션 없음 (limit-only).
@@ -107,7 +127,9 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /api/chat/sessions`.
     /// - Remark: Generated from `#/paths//api/chat/sessions/post`.
     func post_sol_api_sol_chat_sol_sessions(_ input: Operations.post_sol_api_sol_chat_sol_sessions.Input) async throws -> Operations.post_sol_api_sol_chat_sol_sessions.Output
-    /// 세션 제목 변경
+    /// 세션 제목·폴더·태그 변경
+    ///
+    /// title·folderId·tags 중 보낸 필드만 바꾼다. 폴더·태그(157)는 로그인한 본인 세션만, folderId 는 본인 폴더만(null 이면 미분류로).
     ///
     /// - Remark: HTTP `PATCH /api/chat/sessions/{sessionId}`.
     /// - Remark: Generated from `#/paths//api/chat/sessions/{sessionId}/patch`.
@@ -122,6 +144,18 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/chat/sessions/{sessionId}/messages`.
     /// - Remark: Generated from `#/paths//api/chat/sessions/{sessionId}/messages/get`.
     func get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_messages(_ input: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_messages.Input) async throws -> Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_messages.Output
+    /// 세션 복제(분기)
+    ///
+    /// 세션을 새 세션으로 복제합니다. `uptoMessageId` 를 주면 그 메시지까지만 복사해 "여기서 분기" 가 됩니다(F08, 2026-09-17). 원본은 바뀌지 않으며 새 세션 metadata 에 parentSessionId/parentMessageId 가 기록됩니다.
+    ///
+    /// - Remark: HTTP `POST /api/chat/sessions/{sessionId}/clone`.
+    /// - Remark: Generated from `#/paths//api/chat/sessions/{sessionId}/clone/post`.
+    func post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone(_ input: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Input) async throws -> Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output
+    /// 세션 트리(조상 체인 + 직계 자식)
+    ///
+    /// - Remark: HTTP `GET /api/chat/sessions/{sessionId}/tree`.
+    /// - Remark: Generated from `#/paths//api/chat/sessions/{sessionId}/tree/get`.
+    func get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree(_ input: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Input) async throws -> Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output
     /// 사용 가능 모델 목록
     ///
     /// 로컬 모델 카탈로그(기본 모델이 첫 entry) + 인증 사용자의 외부 provider 등록 모델을 반환합니다. 비인증도 로컬 카탈로그는 조회 가능.
@@ -284,6 +318,54 @@ extension APIProtocol {
     public func get_sol_api_sol_csrf_hyphen_token(headers: Operations.get_sol_api_sol_csrf_hyphen_token.Input.Headers = .init()) async throws -> Operations.get_sol_api_sol_csrf_hyphen_token.Output {
         try await get_sol_api_sol_csrf_hyphen_token(Operations.get_sol_api_sol_csrf_hyphen_token.Input(headers: headers))
     }
+    /// 대화 폴더 목록(157)
+    ///
+    /// - Remark: HTTP `GET /api/chat/folders`.
+    /// - Remark: Generated from `#/paths//api/chat/folders/get`.
+    public func get_sol_api_sol_chat_sol_folders(headers: Operations.get_sol_api_sol_chat_sol_folders.Input.Headers = .init()) async throws -> Operations.get_sol_api_sol_chat_sol_folders.Output {
+        try await get_sol_api_sol_chat_sol_folders(Operations.get_sol_api_sol_chat_sol_folders.Input(headers: headers))
+    }
+    /// 대화 폴더 생성(157)
+    ///
+    /// - Remark: HTTP `POST /api/chat/folders`.
+    /// - Remark: Generated from `#/paths//api/chat/folders/post`.
+    public func post_sol_api_sol_chat_sol_folders(
+        headers: Operations.post_sol_api_sol_chat_sol_folders.Input.Headers = .init(),
+        body: Operations.post_sol_api_sol_chat_sol_folders.Input.Body
+    ) async throws -> Operations.post_sol_api_sol_chat_sol_folders.Output {
+        try await post_sol_api_sol_chat_sol_folders(Operations.post_sol_api_sol_chat_sol_folders.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// 대화 폴더 이름·순서 변경(157)
+    ///
+    /// - Remark: HTTP `PATCH /api/chat/folders/{id}`.
+    /// - Remark: Generated from `#/paths//api/chat/folders/{id}/patch`.
+    public func patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_(
+        path: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input.Path,
+        headers: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input.Headers = .init(),
+        body: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input.Body
+    ) async throws -> Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output {
+        try await patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_(Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// 대화 폴더 삭제(157) — 안의 세션은 미분류로 남는다
+    ///
+    /// - Remark: HTTP `DELETE /api/chat/folders/{id}`.
+    /// - Remark: Generated from `#/paths//api/chat/folders/{id}/delete`.
+    public func delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_(
+        path: Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input.Path,
+        headers: Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input.Headers = .init()
+    ) async throws -> Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output {
+        try await delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_(Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input(
+            path: path,
+            headers: headers
+        ))
+    }
     /// 세션 목록 조회
     ///
     /// 사용자의 채팅 세션 목록을 조회합니다. `?q=` 지정 시 제목+본문 검색 (결과에 snippet 포함). cursor 페이지네이션 없음 (limit-only).
@@ -312,7 +394,9 @@ extension APIProtocol {
             body: body
         ))
     }
-    /// 세션 제목 변경
+    /// 세션 제목·폴더·태그 변경
+    ///
+    /// title·folderId·tags 중 보낸 필드만 바꾼다. 폴더·태그(157)는 로그인한 본인 세션만, folderId 는 본인 폴더만(null 이면 미분류로).
     ///
     /// - Remark: HTTP `PATCH /api/chat/sessions/{sessionId}`.
     /// - Remark: Generated from `#/paths//api/chat/sessions/{sessionId}/patch`.
@@ -352,6 +436,36 @@ extension APIProtocol {
         try await get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_messages(Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_messages.Input(
             path: path,
             query: query,
+            headers: headers
+        ))
+    }
+    /// 세션 복제(분기)
+    ///
+    /// 세션을 새 세션으로 복제합니다. `uptoMessageId` 를 주면 그 메시지까지만 복사해 "여기서 분기" 가 됩니다(F08, 2026-09-17). 원본은 바뀌지 않으며 새 세션 metadata 에 parentSessionId/parentMessageId 가 기록됩니다.
+    ///
+    /// - Remark: HTTP `POST /api/chat/sessions/{sessionId}/clone`.
+    /// - Remark: Generated from `#/paths//api/chat/sessions/{sessionId}/clone/post`.
+    public func post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone(
+        path: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Input.Path,
+        headers: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Input.Headers = .init(),
+        body: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Input.Body? = nil
+    ) async throws -> Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output {
+        try await post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone(Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// 세션 트리(조상 체인 + 직계 자식)
+    ///
+    /// - Remark: HTTP `GET /api/chat/sessions/{sessionId}/tree`.
+    /// - Remark: Generated from `#/paths//api/chat/sessions/{sessionId}/tree/get`.
+    public func get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree(
+        path: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Input.Path,
+        headers: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Input.Headers = .init()
+    ) async throws -> Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output {
+        try await get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree(Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Input(
+            path: path,
             headers: headers
         ))
     }
@@ -554,6 +668,14 @@ public enum Components {
             ///
             /// - Remark: Generated from `#/components/schemas/SessionSummary/snippet`.
             public var snippet: Swift.String?
+            /// 폴더(157) — null 이면 미분류
+            ///
+            /// - Remark: Generated from `#/components/schemas/SessionSummary/folderId`.
+            public var folderId: Swift.String?
+            /// 태그(157)
+            ///
+            /// - Remark: Generated from `#/components/schemas/SessionSummary/tags`.
+            public var tags: [Swift.String]?
             /// Creates a new `SessionSummary`.
             ///
             /// - Parameters:
@@ -567,6 +689,8 @@ public enum Components {
             ///   - messageCount:
             ///   - model: 첫 메시지의 모델명 (없으면 기본 표시명)
             ///   - snippet: 본문 검색(?q=) 매칭 발췌 — 검색 응답에만 존재
+            ///   - folderId: 폴더(157) — null 이면 미분류
+            ///   - tags: 태그(157)
             public init(
                 id: Swift.String,
                 userId: Swift.String? = nil,
@@ -577,7 +701,9 @@ public enum Components {
                 metadata: OpenAPIRuntime.OpenAPIObjectContainer? = nil,
                 messageCount: Swift.Int,
                 model: Swift.String,
-                snippet: Swift.String? = nil
+                snippet: Swift.String? = nil,
+                folderId: Swift.String? = nil,
+                tags: [Swift.String]? = nil
             ) {
                 self.id = id
                 self.userId = userId
@@ -589,6 +715,8 @@ public enum Components {
                 self.messageCount = messageCount
                 self.model = model
                 self.snippet = snippet
+                self.folderId = folderId
+                self.tags = tags
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -601,6 +729,55 @@ public enum Components {
                 case messageCount
                 case model
                 case snippet
+                case folderId
+                case tags
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/ConversationFolder`.
+        public struct ConversationFolder: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ConversationFolder/id`.
+            public var id: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ConversationFolder/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ConversationFolder/position`.
+            public var position: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/ConversationFolder/sessionCount`.
+            public var sessionCount: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/ConversationFolder/createdAt`.
+            public var createdAt: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ConversationFolder/updatedAt`.
+            public var updatedAt: Swift.String
+            /// Creates a new `ConversationFolder`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - name:
+            ///   - position:
+            ///   - sessionCount:
+            ///   - createdAt:
+            ///   - updatedAt:
+            public init(
+                id: Swift.String,
+                name: Swift.String,
+                position: Swift.Int,
+                sessionCount: Swift.Int,
+                createdAt: Swift.String,
+                updatedAt: Swift.String
+            ) {
+                self.id = id
+                self.name = name
+                self.position = position
+                self.sessionCount = sessionCount
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case name
+                case position
+                case sessionCount
+                case createdAt
+                case updatedAt
             }
         }
         /// - Remark: Generated from `#/components/schemas/ChatMessage`.
@@ -625,6 +802,10 @@ public enum Components {
             public var images: [Swift.String]?
             /// - Remark: Generated from `#/components/schemas/ChatMessage/created_at`.
             public var created_at: Swift.String?
+            /// assistant 답변의 웹검색 출처(156) — 본문 [N] 과 같은 번호
+            ///
+            /// - Remark: Generated from `#/components/schemas/ChatMessage/sources`.
+            public var sources: [Components.Schemas.SearchSourceRef]?
             /// Creates a new `ChatMessage`.
             ///
             /// - Parameters:
@@ -634,13 +815,15 @@ public enum Components {
             ///   - tokens:
             ///   - images: dataURL 이미지 목록
             ///   - created_at:
+            ///   - sources: assistant 답변의 웹검색 출처(156) — 본문 [N] 과 같은 번호
             public init(
                 role: Components.Schemas.ChatMessage.rolePayload,
                 content: Swift.String,
                 model: Swift.String? = nil,
                 tokens: Swift.Int? = nil,
                 images: [Swift.String]? = nil,
-                created_at: Swift.String? = nil
+                created_at: Swift.String? = nil,
+                sources: [Components.Schemas.SearchSourceRef]? = nil
             ) {
                 self.role = role
                 self.content = content
@@ -648,6 +831,7 @@ public enum Components {
                 self.tokens = tokens
                 self.images = images
                 self.created_at = created_at
+                self.sources = sources
             }
             public enum CodingKeys: String, CodingKey {
                 case role
@@ -656,6 +840,52 @@ public enum Components {
                 case tokens
                 case images
                 case created_at
+                case sources
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/SearchSourceRef`.
+        public struct SearchSourceRef: Codable, Hashable, Sendable {
+            /// 1부터 — 본문 [N] 번호
+            ///
+            /// - Remark: Generated from `#/components/schemas/SearchSourceRef/n`.
+            public var n: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/SearchSourceRef/title`.
+            public var title: Swift.String
+            /// - Remark: Generated from `#/components/schemas/SearchSourceRef/url`.
+            public var url: Swift.String
+            /// - Remark: Generated from `#/components/schemas/SearchSourceRef/snippet`.
+            public var snippet: Swift.String
+            /// 결과 도메인(표시용)
+            ///
+            /// - Remark: Generated from `#/components/schemas/SearchSourceRef/source`.
+            public var source: Swift.String?
+            /// Creates a new `SearchSourceRef`.
+            ///
+            /// - Parameters:
+            ///   - n: 1부터 — 본문 [N] 번호
+            ///   - title:
+            ///   - url:
+            ///   - snippet:
+            ///   - source: 결과 도메인(표시용)
+            public init(
+                n: Swift.Int,
+                title: Swift.String,
+                url: Swift.String,
+                snippet: Swift.String,
+                source: Swift.String? = nil
+            ) {
+                self.n = n
+                self.title = title
+                self.url = url
+                self.snippet = snippet
+                self.source = source
+            }
+            public enum CodingKeys: String, CodingKey {
+                case n
+                case title
+                case url
+                case snippet
+                case source
             }
         }
         /// - Remark: Generated from `#/components/schemas/ModelCapabilities`.
@@ -3858,6 +4088,1026 @@ public enum Operations {
             }
         }
     }
+    /// 대화 폴더 목록(157)
+    ///
+    /// - Remark: HTTP `GET /api/chat/folders`.
+    /// - Remark: Generated from `#/paths//api/chat/folders/get`.
+    public enum get_sol_api_sol_chat_sol_folders {
+        public static let id: Swift.String = "get/api/chat/folders"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/chat/folders/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.get_sol_api_sol_chat_sol_folders.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.get_sol_api_sol_chat_sol_folders.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.get_sol_api_sol_chat_sol_folders.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            public init(headers: Operations.get_sol_api_sol_chat_sol_folders.Input.Headers = .init()) {
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/chat/folders/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/chat/folders/GET/responses/200/content/json`.
+                    public struct jsonPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/paths/api/chat/folders/GET/responses/200/content/json/success`.
+                        public var success: Swift.Bool
+                        /// - Remark: Generated from `#/paths/api/chat/folders/GET/responses/200/content/json/data`.
+                        public struct dataPayload: Codable, Hashable, Sendable {
+                            /// - Remark: Generated from `#/paths/api/chat/folders/GET/responses/200/content/json/data/folders`.
+                            public var folders: [Components.Schemas.ConversationFolder]
+                            /// Creates a new `dataPayload`.
+                            ///
+                            /// - Parameters:
+                            ///   - folders:
+                            public init(folders: [Components.Schemas.ConversationFolder]) {
+                                self.folders = folders
+                            }
+                            public enum CodingKeys: String, CodingKey {
+                                case folders
+                            }
+                        }
+                        /// - Remark: Generated from `#/paths/api/chat/folders/GET/responses/200/content/json/data`.
+                        public var data: Operations.get_sol_api_sol_chat_sol_folders.Output.Ok.Body.jsonPayload.dataPayload
+                        /// - Remark: Generated from `#/paths/api/chat/folders/GET/responses/200/content/json/meta`.
+                        public var meta: Components.Schemas.ApiMeta
+                        /// Creates a new `jsonPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - success:
+                        ///   - data:
+                        ///   - meta:
+                        public init(
+                            success: Swift.Bool,
+                            data: Operations.get_sol_api_sol_chat_sol_folders.Output.Ok.Body.jsonPayload.dataPayload,
+                            meta: Components.Schemas.ApiMeta
+                        ) {
+                            self.success = success
+                            self.data = data
+                            self.meta = meta
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case success
+                            case data
+                            case meta
+                        }
+                    }
+                    /// - Remark: Generated from `#/paths/api/chat/folders/GET/responses/200/content/application\/json`.
+                    case json(Operations.get_sol_api_sol_chat_sol_folders.Output.Ok.Body.jsonPayload)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Operations.get_sol_api_sol_chat_sol_folders.Output.Ok.Body.jsonPayload {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.get_sol_api_sol_chat_sol_folders.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.get_sol_api_sol_chat_sol_folders.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 성공
+            ///
+            /// - Remark: Generated from `#/paths//api/chat/folders/get/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.get_sol_api_sol_chat_sol_folders.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.get_sol_api_sol_chat_sol_folders.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Unauthorized: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/chat/folders/GET/responses/401/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/chat/folders/GET/responses/401/content/application\/json`.
+                    case json(Components.Schemas.ApiFailure)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiFailure {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.get_sol_api_sol_chat_sol_folders.Output.Unauthorized.Body
+                /// Creates a new `Unauthorized`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.get_sol_api_sol_chat_sol_folders.Output.Unauthorized.Body) {
+                    self.body = body
+                }
+            }
+            /// 인증 필요
+            ///
+            /// - Remark: Generated from `#/paths//api/chat/folders/get/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Operations.get_sol_api_sol_chat_sol_folders.Output.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Operations.get_sol_api_sol_chat_sol_folders.Output.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// 대화 폴더 생성(157)
+    ///
+    /// - Remark: HTTP `POST /api/chat/folders`.
+    /// - Remark: Generated from `#/paths//api/chat/folders/post`.
+    public enum post_sol_api_sol_chat_sol_folders {
+        public static let id: Swift.String = "post/api/chat/folders"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/chat/folders/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.post_sol_api_sol_chat_sol_folders.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.post_sol_api_sol_chat_sol_folders.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.post_sol_api_sol_chat_sol_folders.Input.Headers
+            /// - Remark: Generated from `#/paths/api/chat/folders/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/chat/folders/POST/requestBody/json`.
+                public struct jsonPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/paths/api/chat/folders/POST/requestBody/json/name`.
+                    public var name: Swift.String
+                    /// Creates a new `jsonPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - name:
+                    public init(name: Swift.String) {
+                        self.name = name
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case name
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/chat/folders/POST/requestBody/content/application\/json`.
+                case json(Operations.post_sol_api_sol_chat_sol_folders.Input.Body.jsonPayload)
+            }
+            public var body: Operations.post_sol_api_sol_chat_sol_folders.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.post_sol_api_sol_chat_sol_folders.Input.Headers = .init(),
+                body: Operations.post_sol_api_sol_chat_sol_folders.Input.Body
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Created: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/chat/folders/POST/responses/201/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/chat/folders/POST/responses/201/content/json`.
+                    public struct jsonPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/paths/api/chat/folders/POST/responses/201/content/json/success`.
+                        public var success: Swift.Bool
+                        /// - Remark: Generated from `#/paths/api/chat/folders/POST/responses/201/content/json/data`.
+                        public struct dataPayload: Codable, Hashable, Sendable {
+                            /// - Remark: Generated from `#/paths/api/chat/folders/POST/responses/201/content/json/data/folder`.
+                            public var folder: Components.Schemas.ConversationFolder
+                            /// Creates a new `dataPayload`.
+                            ///
+                            /// - Parameters:
+                            ///   - folder:
+                            public init(folder: Components.Schemas.ConversationFolder) {
+                                self.folder = folder
+                            }
+                            public enum CodingKeys: String, CodingKey {
+                                case folder
+                            }
+                        }
+                        /// - Remark: Generated from `#/paths/api/chat/folders/POST/responses/201/content/json/data`.
+                        public var data: Operations.post_sol_api_sol_chat_sol_folders.Output.Created.Body.jsonPayload.dataPayload
+                        /// - Remark: Generated from `#/paths/api/chat/folders/POST/responses/201/content/json/meta`.
+                        public var meta: Components.Schemas.ApiMeta
+                        /// Creates a new `jsonPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - success:
+                        ///   - data:
+                        ///   - meta:
+                        public init(
+                            success: Swift.Bool,
+                            data: Operations.post_sol_api_sol_chat_sol_folders.Output.Created.Body.jsonPayload.dataPayload,
+                            meta: Components.Schemas.ApiMeta
+                        ) {
+                            self.success = success
+                            self.data = data
+                            self.meta = meta
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case success
+                            case data
+                            case meta
+                        }
+                    }
+                    /// - Remark: Generated from `#/paths/api/chat/folders/POST/responses/201/content/application\/json`.
+                    case json(Operations.post_sol_api_sol_chat_sol_folders.Output.Created.Body.jsonPayload)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Operations.post_sol_api_sol_chat_sol_folders.Output.Created.Body.jsonPayload {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.post_sol_api_sol_chat_sol_folders.Output.Created.Body
+                /// Creates a new `Created`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.post_sol_api_sol_chat_sol_folders.Output.Created.Body) {
+                    self.body = body
+                }
+            }
+            /// 생성됨
+            ///
+            /// - Remark: Generated from `#/paths//api/chat/folders/post/responses/201`.
+            ///
+            /// HTTP response code: `201 created`.
+            case created(Operations.post_sol_api_sol_chat_sol_folders.Output.Created)
+            /// The associated value of the enum case if `self` is `.created`.
+            ///
+            /// - Throws: An error if `self` is not `.created`.
+            /// - SeeAlso: `.created`.
+            public var created: Operations.post_sol_api_sol_chat_sol_folders.Output.Created {
+                get throws {
+                    switch self {
+                    case let .created(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "created",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct BadRequest: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/chat/folders/POST/responses/400/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/chat/folders/POST/responses/400/content/application\/json`.
+                    case json(Components.Schemas.ApiFailure)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiFailure {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.post_sol_api_sol_chat_sol_folders.Output.BadRequest.Body
+                /// Creates a new `BadRequest`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.post_sol_api_sol_chat_sol_folders.Output.BadRequest.Body) {
+                    self.body = body
+                }
+            }
+            /// 잘못된 입력
+            ///
+            /// - Remark: Generated from `#/paths//api/chat/folders/post/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Operations.post_sol_api_sol_chat_sol_folders.Output.BadRequest)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Operations.post_sol_api_sol_chat_sol_folders.Output.BadRequest {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Conflict: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/chat/folders/POST/responses/409/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/chat/folders/POST/responses/409/content/application\/json`.
+                    case json(Components.Schemas.ApiFailure)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiFailure {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.post_sol_api_sol_chat_sol_folders.Output.Conflict.Body
+                /// Creates a new `Conflict`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.post_sol_api_sol_chat_sol_folders.Output.Conflict.Body) {
+                    self.body = body
+                }
+            }
+            /// 상한 초과 또는 같은 이름
+            ///
+            /// - Remark: Generated from `#/paths//api/chat/folders/post/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Operations.post_sol_api_sol_chat_sol_folders.Output.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Operations.post_sol_api_sol_chat_sol_folders.Output.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// 대화 폴더 이름·순서 변경(157)
+    ///
+    /// - Remark: HTTP `PATCH /api/chat/folders/{id}`.
+    /// - Remark: Generated from `#/paths//api/chat/folders/{id}/patch`.
+    public enum patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_ {
+        public static let id: Swift.String = "patch/api/chat/folders/{id}"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/path`.
+            public struct Path: Sendable, Hashable {
+                /// 폴더 ID
+                ///
+                /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/path/id`.
+                public var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: 폴더 ID
+                public init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            public var path: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input.Path
+            /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input.Headers
+            /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/requestBody/json`.
+                public struct jsonPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/requestBody/json/name`.
+                    public var name: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/requestBody/json/position`.
+                    public var position: Swift.Int?
+                    /// Creates a new `jsonPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - name:
+                    ///   - position:
+                    public init(
+                        name: Swift.String? = nil,
+                        position: Swift.Int? = nil
+                    ) {
+                        self.name = name
+                        self.position = position
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case name
+                        case position
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/requestBody/content/application\/json`.
+                case json(Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input.Body.jsonPayload)
+            }
+            public var body: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            public init(
+                path: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input.Path,
+                headers: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input.Headers = .init(),
+                body: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input.Body
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/responses/200/content/json`.
+                    public struct jsonPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/responses/200/content/json/success`.
+                        public var success: Swift.Bool
+                        /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/responses/200/content/json/data`.
+                        public struct dataPayload: Codable, Hashable, Sendable {
+                            /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/responses/200/content/json/data/folder`.
+                            public var folder: Components.Schemas.ConversationFolder
+                            /// Creates a new `dataPayload`.
+                            ///
+                            /// - Parameters:
+                            ///   - folder:
+                            public init(folder: Components.Schemas.ConversationFolder) {
+                                self.folder = folder
+                            }
+                            public enum CodingKeys: String, CodingKey {
+                                case folder
+                            }
+                        }
+                        /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/responses/200/content/json/data`.
+                        public var data: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Ok.Body.jsonPayload.dataPayload
+                        /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/responses/200/content/json/meta`.
+                        public var meta: Components.Schemas.ApiMeta
+                        /// Creates a new `jsonPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - success:
+                        ///   - data:
+                        ///   - meta:
+                        public init(
+                            success: Swift.Bool,
+                            data: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Ok.Body.jsonPayload.dataPayload,
+                            meta: Components.Schemas.ApiMeta
+                        ) {
+                            self.success = success
+                            self.data = data
+                            self.meta = meta
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case success
+                            case data
+                            case meta
+                        }
+                    }
+                    /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/responses/200/content/application\/json`.
+                    case json(Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Ok.Body.jsonPayload)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Ok.Body.jsonPayload {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 성공
+            ///
+            /// - Remark: Generated from `#/paths//api/chat/folders/{id}/patch/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct NotFound: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/responses/404/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/responses/404/content/application\/json`.
+                    case json(Components.Schemas.ApiFailure)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiFailure {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.NotFound.Body
+                /// Creates a new `NotFound`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.NotFound.Body) {
+                    self.body = body
+                }
+            }
+            /// 없음
+            ///
+            /// - Remark: Generated from `#/paths//api/chat/folders/{id}/patch/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Conflict: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/responses/409/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/chat/folders/{id}/PATCH/responses/409/content/application\/json`.
+                    case json(Components.Schemas.ApiFailure)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiFailure {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Conflict.Body
+                /// Creates a new `Conflict`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Conflict.Body) {
+                    self.body = body
+                }
+            }
+            /// 같은 이름
+            ///
+            /// - Remark: Generated from `#/paths//api/chat/folders/{id}/patch/responses/409`.
+            ///
+            /// HTTP response code: `409 conflict`.
+            case conflict(Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Conflict)
+            /// The associated value of the enum case if `self` is `.conflict`.
+            ///
+            /// - Throws: An error if `self` is not `.conflict`.
+            /// - SeeAlso: `.conflict`.
+            public var conflict: Operations.patch_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Conflict {
+                get throws {
+                    switch self {
+                    case let .conflict(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "conflict",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// 대화 폴더 삭제(157) — 안의 세션은 미분류로 남는다
+    ///
+    /// - Remark: HTTP `DELETE /api/chat/folders/{id}`.
+    /// - Remark: Generated from `#/paths//api/chat/folders/{id}/delete`.
+    public enum delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_ {
+        public static let id: Swift.String = "delete/api/chat/folders/{id}"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/chat/folders/{id}/DELETE/path`.
+            public struct Path: Sendable, Hashable {
+                /// 폴더 ID
+                ///
+                /// - Remark: Generated from `#/paths/api/chat/folders/{id}/DELETE/path/id`.
+                public var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: 폴더 ID
+                public init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            public var path: Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input.Path
+            /// - Remark: Generated from `#/paths/api/chat/folders/{id}/DELETE/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input.Path,
+                headers: Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/chat/folders/{id}/DELETE/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/chat/folders/{id}/DELETE/responses/200/content/json`.
+                    public struct jsonPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/paths/api/chat/folders/{id}/DELETE/responses/200/content/json/success`.
+                        public var success: Swift.Bool
+                        /// - Remark: Generated from `#/paths/api/chat/folders/{id}/DELETE/responses/200/content/json/data`.
+                        public struct dataPayload: Codable, Hashable, Sendable {
+                            /// - Remark: Generated from `#/paths/api/chat/folders/{id}/DELETE/responses/200/content/json/data/deleted`.
+                            public var deleted: Swift.Bool
+                            /// Creates a new `dataPayload`.
+                            ///
+                            /// - Parameters:
+                            ///   - deleted:
+                            public init(deleted: Swift.Bool) {
+                                self.deleted = deleted
+                            }
+                            public enum CodingKeys: String, CodingKey {
+                                case deleted
+                            }
+                        }
+                        /// - Remark: Generated from `#/paths/api/chat/folders/{id}/DELETE/responses/200/content/json/data`.
+                        public var data: Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Ok.Body.jsonPayload.dataPayload
+                        /// - Remark: Generated from `#/paths/api/chat/folders/{id}/DELETE/responses/200/content/json/meta`.
+                        public var meta: Components.Schemas.ApiMeta
+                        /// Creates a new `jsonPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - success:
+                        ///   - data:
+                        ///   - meta:
+                        public init(
+                            success: Swift.Bool,
+                            data: Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Ok.Body.jsonPayload.dataPayload,
+                            meta: Components.Schemas.ApiMeta
+                        ) {
+                            self.success = success
+                            self.data = data
+                            self.meta = meta
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case success
+                            case data
+                            case meta
+                        }
+                    }
+                    /// - Remark: Generated from `#/paths/api/chat/folders/{id}/DELETE/responses/200/content/application\/json`.
+                    case json(Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Ok.Body.jsonPayload)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Ok.Body.jsonPayload {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 삭제됨
+            ///
+            /// - Remark: Generated from `#/paths//api/chat/folders/{id}/delete/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct NotFound: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/chat/folders/{id}/DELETE/responses/404/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/chat/folders/{id}/DELETE/responses/404/content/application\/json`.
+                    case json(Components.Schemas.ApiFailure)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiFailure {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.NotFound.Body
+                /// Creates a new `NotFound`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.NotFound.Body) {
+                    self.body = body
+                }
+            }
+            /// 없음
+            ///
+            /// - Remark: Generated from `#/paths//api/chat/folders/{id}/delete/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Operations.delete_sol_api_sol_chat_sol_folders_sol__lcub_id_rcub_.Output.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// 세션 목록 조회
     ///
     /// 사용자의 채팅 세션 목록을 조회합니다. `?q=` 지정 시 제목+본문 검색 (결과에 snippet 포함). cursor 페이지네이션 없음 (limit-only).
@@ -3877,17 +5127,31 @@ public enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/chat/sessions/GET/query/q`.
                 public var q: Swift.String?
+                /// 폴더 필터(157) — `none` 이면 미분류
+                ///
+                /// - Remark: Generated from `#/paths/api/chat/sessions/GET/query/folderId`.
+                public var folderId: Swift.String?
+                /// 태그 필터(157)
+                ///
+                /// - Remark: Generated from `#/paths/api/chat/sessions/GET/query/tag`.
+                public var tag: Swift.String?
                 /// Creates a new `Query`.
                 ///
                 /// - Parameters:
                 ///   - limit: 최대 조회 개수
                 ///   - q: 제목+메시지 본문 검색어
+                ///   - folderId: 폴더 필터(157) — `none` 이면 미분류
+                ///   - tag: 태그 필터(157)
                 public init(
                     limit: Swift.Int? = nil,
-                    q: Swift.String? = nil
+                    q: Swift.String? = nil,
+                    folderId: Swift.String? = nil,
+                    tag: Swift.String? = nil
                 ) {
                     self.limit = limit
                     self.q = q
+                    self.folderId = folderId
+                    self.tag = tag
                 }
             }
             public var query: Operations.get_sol_api_sol_chat_sol_sessions.Input.Query
@@ -4384,7 +5648,9 @@ public enum Operations {
             }
         }
     }
-    /// 세션 제목 변경
+    /// 세션 제목·폴더·태그 변경
+    ///
+    /// title·folderId·tags 중 보낸 필드만 바꾼다. 폴더·태그(157)는 로그인한 본인 세션만, folderId 는 본인 폴더만(null 이면 미분류로).
     ///
     /// - Remark: HTTP `PATCH /api/chat/sessions/{sessionId}`.
     /// - Remark: Generated from `#/paths//api/chat/sessions/{sessionId}/patch`.
@@ -4423,16 +5689,32 @@ public enum Operations {
                 /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/PATCH/requestBody/json`.
                 public struct jsonPayload: Codable, Hashable, Sendable {
                     /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/PATCH/requestBody/json/title`.
-                    public var title: Swift.String
+                    public var title: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/PATCH/requestBody/json/folderId`.
+                    public var folderId: Swift.String?
+                    /// 정규화(소문자·중복 제거·상한) 후 저장
+                    ///
+                    /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/PATCH/requestBody/json/tags`.
+                    public var tags: [Swift.String]?
                     /// Creates a new `jsonPayload`.
                     ///
                     /// - Parameters:
                     ///   - title:
-                    public init(title: Swift.String) {
+                    ///   - folderId:
+                    ///   - tags: 정규화(소문자·중복 제거·상한) 후 저장
+                    public init(
+                        title: Swift.String? = nil,
+                        folderId: Swift.String? = nil,
+                        tags: [Swift.String]? = nil
+                    ) {
                         self.title = title
+                        self.folderId = folderId
+                        self.tags = tags
                     }
                     public enum CodingKeys: String, CodingKey {
                         case title
+                        case folderId
+                        case tags
                     }
                 }
                 /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/PATCH/requestBody/content/application\/json`.
@@ -5058,6 +6340,744 @@ public enum Operations {
             /// - Throws: An error if `self` is not `.forbidden`.
             /// - SeeAlso: `.forbidden`.
             public var forbidden: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_messages.Output.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// 세션 복제(분기)
+    ///
+    /// 세션을 새 세션으로 복제합니다. `uptoMessageId` 를 주면 그 메시지까지만 복사해 "여기서 분기" 가 됩니다(F08, 2026-09-17). 원본은 바뀌지 않으며 새 세션 metadata 에 parentSessionId/parentMessageId 가 기록됩니다.
+    ///
+    /// - Remark: HTTP `POST /api/chat/sessions/{sessionId}/clone`.
+    /// - Remark: Generated from `#/paths//api/chat/sessions/{sessionId}/clone/post`.
+    public enum post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone {
+        public static let id: Swift.String = "post/api/chat/sessions/{sessionId}/clone"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/path`.
+            public struct Path: Sendable, Hashable {
+                /// 세션 ID
+                ///
+                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/path/sessionId`.
+                public var sessionId: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - sessionId: 세션 ID
+                public init(sessionId: Swift.String) {
+                    self.sessionId = sessionId
+                }
+            }
+            public var path: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Input.Path
+            /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Input.Headers
+            /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/requestBody/json`.
+                public struct jsonPayload: Codable, Hashable, Sendable {
+                    /// 이 메시지 id 까지 복사(생략 시 전체)
+                    ///
+                    /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/requestBody/json/uptoMessageId`.
+                    public var uptoMessageId: Swift.Int?
+                    /// 새 세션 제목(생략 시 원본 제목 기반)
+                    ///
+                    /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/requestBody/json/title`.
+                    public var title: Swift.String?
+                    /// Creates a new `jsonPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - uptoMessageId: 이 메시지 id 까지 복사(생략 시 전체)
+                    ///   - title: 새 세션 제목(생략 시 원본 제목 기반)
+                    public init(
+                        uptoMessageId: Swift.Int? = nil,
+                        title: Swift.String? = nil
+                    ) {
+                        self.uptoMessageId = uptoMessageId
+                        self.title = title
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case uptoMessageId
+                        case title
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/requestBody/content/application\/json`.
+                case json(Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Input.Body.jsonPayload)
+            }
+            public var body: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            public init(
+                path: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Input.Path,
+                headers: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Input.Headers = .init(),
+                body: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Input.Body? = nil
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Created: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/201/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/201/content/json`.
+                    public struct jsonPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/201/content/json/success`.
+                        public var success: Swift.Bool
+                        /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/201/content/json/data`.
+                        public struct dataPayload: Codable, Hashable, Sendable {
+                            /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/201/content/json/data/session`.
+                            public struct sessionPayload: Codable, Hashable, Sendable {
+                                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/201/content/json/data/session/id`.
+                                public var id: Swift.String
+                                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/201/content/json/data/session/title`.
+                                public var title: Swift.String
+                                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/201/content/json/data/session/parentSessionId`.
+                                public var parentSessionId: Swift.String
+                                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/201/content/json/data/session/parentMessageId`.
+                                public var parentMessageId: Swift.Int?
+                                /// Creates a new `sessionPayload`.
+                                ///
+                                /// - Parameters:
+                                ///   - id:
+                                ///   - title:
+                                ///   - parentSessionId:
+                                ///   - parentMessageId:
+                                public init(
+                                    id: Swift.String,
+                                    title: Swift.String,
+                                    parentSessionId: Swift.String,
+                                    parentMessageId: Swift.Int? = nil
+                                ) {
+                                    self.id = id
+                                    self.title = title
+                                    self.parentSessionId = parentSessionId
+                                    self.parentMessageId = parentMessageId
+                                }
+                                public enum CodingKeys: String, CodingKey {
+                                    case id
+                                    case title
+                                    case parentSessionId
+                                    case parentMessageId
+                                }
+                            }
+                            /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/201/content/json/data/session`.
+                            public var session: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.Created.Body.jsonPayload.dataPayload.sessionPayload
+                            /// 복사된 메시지 수
+                            ///
+                            /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/201/content/json/data/copied`.
+                            public var copied: Swift.Int
+                            /// Creates a new `dataPayload`.
+                            ///
+                            /// - Parameters:
+                            ///   - session:
+                            ///   - copied: 복사된 메시지 수
+                            public init(
+                                session: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.Created.Body.jsonPayload.dataPayload.sessionPayload,
+                                copied: Swift.Int
+                            ) {
+                                self.session = session
+                                self.copied = copied
+                            }
+                            public enum CodingKeys: String, CodingKey {
+                                case session
+                                case copied
+                            }
+                        }
+                        /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/201/content/json/data`.
+                        public var data: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.Created.Body.jsonPayload.dataPayload
+                        /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/201/content/json/meta`.
+                        public var meta: Components.Schemas.ApiMeta
+                        /// Creates a new `jsonPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - success:
+                        ///   - data:
+                        ///   - meta:
+                        public init(
+                            success: Swift.Bool,
+                            data: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.Created.Body.jsonPayload.dataPayload,
+                            meta: Components.Schemas.ApiMeta
+                        ) {
+                            self.success = success
+                            self.data = data
+                            self.meta = meta
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case success
+                            case data
+                            case meta
+                        }
+                    }
+                    /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/201/content/application\/json`.
+                    case json(Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.Created.Body.jsonPayload)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.Created.Body.jsonPayload {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.Created.Body
+                /// Creates a new `Created`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.Created.Body) {
+                    self.body = body
+                }
+            }
+            /// 복제 성공
+            ///
+            /// - Remark: Generated from `#/paths//api/chat/sessions/{sessionId}/clone/post/responses/201`.
+            ///
+            /// HTTP response code: `201 created`.
+            case created(Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.Created)
+            /// The associated value of the enum case if `self` is `.created`.
+            ///
+            /// - Throws: An error if `self` is not `.created`.
+            /// - SeeAlso: `.created`.
+            public var created: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.Created {
+                get throws {
+                    switch self {
+                    case let .created(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "created",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct BadRequest: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/400/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/400/content/application\/json`.
+                    case json(Components.Schemas.ApiFailure)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiFailure {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.BadRequest.Body
+                /// Creates a new `BadRequest`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.BadRequest.Body) {
+                    self.body = body
+                }
+            }
+            /// uptoMessageId 형식 오류
+            ///
+            /// - Remark: Generated from `#/paths//api/chat/sessions/{sessionId}/clone/post/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.BadRequest)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.BadRequest {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Forbidden: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/403/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/403/content/application\/json`.
+                    case json(Components.Schemas.ApiFailure)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiFailure {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.Forbidden.Body
+                /// Creates a new `Forbidden`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.Forbidden.Body) {
+                    self.body = body
+                }
+            }
+            /// 접근 권한 없음
+            ///
+            /// - Remark: Generated from `#/paths//api/chat/sessions/{sessionId}/clone/post/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.Forbidden {
+                get throws {
+                    switch self {
+                    case let .forbidden(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "forbidden",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct NotFound: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/404/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/clone/POST/responses/404/content/application\/json`.
+                    case json(Components.Schemas.ApiFailure)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiFailure {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.NotFound.Body
+                /// Creates a new `NotFound`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.NotFound.Body) {
+                    self.body = body
+                }
+            }
+            /// 세션 없음
+            ///
+            /// - Remark: Generated from `#/paths//api/chat/sessions/{sessionId}/clone/post/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Operations.post_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_clone.Output.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// 세션 트리(조상 체인 + 직계 자식)
+    ///
+    /// - Remark: HTTP `GET /api/chat/sessions/{sessionId}/tree`.
+    /// - Remark: Generated from `#/paths//api/chat/sessions/{sessionId}/tree/get`.
+    public enum get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree {
+        public static let id: Swift.String = "get/api/chat/sessions/{sessionId}/tree"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/path`.
+            public struct Path: Sendable, Hashable {
+                /// 세션 ID
+                ///
+                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/path/sessionId`.
+                public var sessionId: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - sessionId: 세션 ID
+                public init(sessionId: Swift.String) {
+                    self.sessionId = sessionId
+                }
+            }
+            public var path: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Input.Path
+            /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Input.Path,
+                headers: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json`.
+                    public struct jsonPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/success`.
+                        public var success: Swift.Bool
+                        /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/data`.
+                        public struct dataPayload: Codable, Hashable, Sendable {
+                            /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/data/self`.
+                            public struct _selfPayload: Codable, Hashable, Sendable {
+                                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/data/self/id`.
+                                public var id: Swift.String
+                                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/data/self/title`.
+                                public var title: Swift.String
+                                /// Creates a new `_selfPayload`.
+                                ///
+                                /// - Parameters:
+                                ///   - id:
+                                ///   - title:
+                                public init(
+                                    id: Swift.String,
+                                    title: Swift.String
+                                ) {
+                                    self.id = id
+                                    self.title = title
+                                }
+                                public enum CodingKeys: String, CodingKey {
+                                    case id
+                                    case title
+                                }
+                            }
+                            /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/data/self`.
+                            public var _self: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Ok.Body.jsonPayload.dataPayload._selfPayload
+                            /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/data/ancestorsPayload`.
+                            public struct ancestorsPayloadPayload: Codable, Hashable, Sendable {
+                                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/data/ancestorsPayload/id`.
+                                public var id: Swift.String
+                                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/data/ancestorsPayload/title`.
+                                public var title: Swift.String
+                                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/data/ancestorsPayload/parentMessageId`.
+                                public var parentMessageId: Swift.String?
+                                /// Creates a new `ancestorsPayloadPayload`.
+                                ///
+                                /// - Parameters:
+                                ///   - id:
+                                ///   - title:
+                                ///   - parentMessageId:
+                                public init(
+                                    id: Swift.String,
+                                    title: Swift.String,
+                                    parentMessageId: Swift.String? = nil
+                                ) {
+                                    self.id = id
+                                    self.title = title
+                                    self.parentMessageId = parentMessageId
+                                }
+                                public enum CodingKeys: String, CodingKey {
+                                    case id
+                                    case title
+                                    case parentMessageId
+                                }
+                            }
+                            /// 가까운 부모부터
+                            ///
+                            /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/data/ancestors`.
+                            public typealias ancestorsPayload = [Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Ok.Body.jsonPayload.dataPayload.ancestorsPayloadPayload]
+                            /// 가까운 부모부터
+                            ///
+                            /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/data/ancestors`.
+                            public var ancestors: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Ok.Body.jsonPayload.dataPayload.ancestorsPayload
+                            /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/data/childrenPayload`.
+                            public struct childrenPayloadPayload: Codable, Hashable, Sendable {
+                                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/data/childrenPayload/id`.
+                                public var id: Swift.String
+                                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/data/childrenPayload/title`.
+                                public var title: Swift.String
+                                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/data/childrenPayload/createdAt`.
+                                public var createdAt: Swift.String
+                                /// Creates a new `childrenPayloadPayload`.
+                                ///
+                                /// - Parameters:
+                                ///   - id:
+                                ///   - title:
+                                ///   - createdAt:
+                                public init(
+                                    id: Swift.String,
+                                    title: Swift.String,
+                                    createdAt: Swift.String
+                                ) {
+                                    self.id = id
+                                    self.title = title
+                                    self.createdAt = createdAt
+                                }
+                                public enum CodingKeys: String, CodingKey {
+                                    case id
+                                    case title
+                                    case createdAt
+                                }
+                            }
+                            /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/data/children`.
+                            public typealias childrenPayload = [Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Ok.Body.jsonPayload.dataPayload.childrenPayloadPayload]
+                            /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/data/children`.
+                            public var children: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Ok.Body.jsonPayload.dataPayload.childrenPayload
+                            /// Creates a new `dataPayload`.
+                            ///
+                            /// - Parameters:
+                            ///   - _self:
+                            ///   - ancestors: 가까운 부모부터
+                            ///   - children:
+                            public init(
+                                _self: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Ok.Body.jsonPayload.dataPayload._selfPayload,
+                                ancestors: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Ok.Body.jsonPayload.dataPayload.ancestorsPayload,
+                                children: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Ok.Body.jsonPayload.dataPayload.childrenPayload
+                            ) {
+                                self._self = _self
+                                self.ancestors = ancestors
+                                self.children = children
+                            }
+                            public enum CodingKeys: String, CodingKey {
+                                case _self = "self"
+                                case ancestors
+                                case children
+                            }
+                        }
+                        /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/data`.
+                        public var data: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Ok.Body.jsonPayload.dataPayload
+                        /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/json/meta`.
+                        public var meta: Components.Schemas.ApiMeta
+                        /// Creates a new `jsonPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - success:
+                        ///   - data:
+                        ///   - meta:
+                        public init(
+                            success: Swift.Bool,
+                            data: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Ok.Body.jsonPayload.dataPayload,
+                            meta: Components.Schemas.ApiMeta
+                        ) {
+                            self.success = success
+                            self.data = data
+                            self.meta = meta
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case success
+                            case data
+                            case meta
+                        }
+                    }
+                    /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/200/content/application\/json`.
+                    case json(Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Ok.Body.jsonPayload)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Ok.Body.jsonPayload {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 성공
+            ///
+            /// - Remark: Generated from `#/paths//api/chat/sessions/{sessionId}/tree/get/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Forbidden: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/403/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/chat/sessions/{sessionId}/tree/GET/responses/403/content/application\/json`.
+                    case json(Components.Schemas.ApiFailure)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.ApiFailure {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Forbidden.Body
+                /// Creates a new `Forbidden`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Forbidden.Body) {
+                    self.body = body
+                }
+            }
+            /// 접근 권한 없음
+            ///
+            /// - Remark: Generated from `#/paths//api/chat/sessions/{sessionId}/tree/get/responses/403`.
+            ///
+            /// HTTP response code: `403 forbidden`.
+            case forbidden(Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Forbidden)
+            /// The associated value of the enum case if `self` is `.forbidden`.
+            ///
+            /// - Throws: An error if `self` is not `.forbidden`.
+            /// - SeeAlso: `.forbidden`.
+            public var forbidden: Operations.get_sol_api_sol_chat_sol_sessions_sol__lcub_sessionId_rcub__sol_tree.Output.Forbidden {
                 get throws {
                     switch self {
                     case let .forbidden(response):

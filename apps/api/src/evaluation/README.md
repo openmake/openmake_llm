@@ -141,6 +141,83 @@ OMK_EVAL_REAL_TIMEOUT_MS=30000 OMK_EVAL_REAL_MAX_TOKENS=1000 \
 PR마다 `evaluation-{timestamp}-{commit}.json`을 아티팩트로 업로드하면
 commit 사이의 통과율 변동을 추적 가능.
 
+## 프롬프트·도구 스키마 예산 게이트 (CI Gate 7, 2026-09-17)
+
+CI 는 LLM 에 닿지 못해 지연을 직접 잴 수 없다. 대신 첫 토큰 지연의 주요인인 시스템 프롬프트 **정적 prefix**·전체 길이와
+**상시 노출 도구 스키마** 크기를 대표 컨텍스트 6종(`budget-contexts.ts`)으로 재고 기준선과 비교한다.
+
+```bash
+npm run eval:budget                       # 기준선 대비 +10% 초과면 exit 1
+npm run eval:budget -- --update-baseline  # 정당한 증가 — 갱신된 baselines/budget-baseline.json 을 같은 PR 에 포함
+```
+
+- `.env` 를 읽지 않는다(운영 플래그가 문구를 바꾸면 CI 와 어긋난다). 가변 블록(페르소나·메모리)은 고정 샘플이라 **코드가 붙이는 문구의 증가**만 본다.
+- env: `OMK_EVAL_BUDGET_DRIFT_PCT`(기본 10), 선택 절대 상한 `OMK_EVAL_PROMPT_BUDGET_CHARS`·`OMK_EVAL_TOOL_SCHEMA_BUDGET_BYTES`.
+- 정적 prefix 가 페르소나·메모리로 바뀌면 안 된다 — `budget-evaluation.test.ts` 가 고정(prefix cache 안정성).
+
+## 도구 선택 평가 (CI Gate 8 mock · nightly real, 2026-09-17)
+
+골든셋 `golden-tool-selection.json`(v1.0.0, 40건 — web_search 10 · extract_webpage 5 · 에이전트 작업 조회/위임 5 · ops_metrics 관리자 5·사용자 5(금지) · create_plan 3 · 확장 설치 2 · 도구 불필요 5). 라벨은 사용자 의도 기준이다.
+
+```bash
+npm run eval:tools                         # mock — 운영 판정(selectTurnTools → buildExternalToolPlan)으로 노출 도구 검사
+npm run eval:tools -- --real --limit 10    # real — ChatService evalToolObserver(dry-run)로 첫 턴 tool_calls 이름·인자 판정
+```
+
+- mock 은 `.env` 를 읽지 않고 운영 플래그 프로필(`ORCHESTRATION_AUTO_DISPATCH=true`·`REPORT_PIPELINE_ENABLED=true`)을 고정한다. 운영 플래그가 바뀌면 러너의 `MOCK_PROFILE_ENV` 도 맞춘다.
+- mock 범위 밖: 토글·스킬 바인딩(DB)·사용자 MCP·이미지 첨부로만 열리는 도구(vision·load_skill 카탈로그).
+- real 은 도구를 실행하지 않고(dry-run) 첫 관찰 직후 중단해 비용이 첫 턴 1회분이다. 단 멀티모달 오케스트레이터 Planner 가 `multi` 로 판정한 턴은 도구 루프 **이전에** 웹검색 capability 를 실행한다(도구 호출이 아니라 dry-run 대상이 아니다). 2026-09-17 `--limit 3` 실측 3/3.
+- 기준선: mock 39/40(97.5%) — 실패 1건 `tool-ws-009`("Look it up online")는 영어 표현이 `WEB_SEARCH_INTENT_PATTERNS` 에 안 걸리는 **실제 노출 누락**이다(라벨을 바꾸지 말고 패턴 보강 여부를 판단할 것).
+- 민감도 확인: `CHAT_TOOL_INTENT_GATE_ENABLED=false`(과다 노출 5건)·`OPS_METRICS_TOOL_ENABLED=false`(누락 5건) 모두 실패한다.
+
+## nightly 지연 회귀 기준선 (2026-09-17, F26.8)
+
+CI 는 LLM 에 닿지 못해 지연을 **예산(프롬프트·도구 스키마 크기, Gate 7)** 으로만 막고, 실측 회귀는 nightly 가 본다.
+
+```bash
+npm run eval:response -- --real --limit 30                    # 기준선과 비교 — +20% 초과 회귀면 exit 1
+npm run eval:response -- --real --limit 30 --update-baseline  # baselines/latency-baseline.json 갱신(PR 리뷰로 드러낸다)
+```
+
+- 지표: TTFT p50/p95 · 전체 시간 p50/p95 · 출력 토큰 p50(`latency-regression.ts`). 허용 증가율 `OMK_EVAL_LATENCY_REGRESSION_PCT`(기본 20), 짧은 지연의 잡음은 절대 변화 하한(`LATENCY_MIN_ABS_DELTA`)으로 거른다.
+- **같은 케이스 집합(데이터셋 버전·케이스 id 순서)·같은 `LLM_DEFAULT_MODEL`** 일 때만 비교한다 — 케이스·모델이 바뀌면 건너뛰고 기준선을 다시 잡는다. `--tag` 부분 실행은 비교하지 않는다.
+- 회귀 항목은 `[latency-regression]` 줄로 남고 nightly 실패 webhook 에 함께 실린다.
+
+## 런타임 레드팀 (CI Gate 9 mock · nightly real, 2026-09-17, F26.6)
+
+`redteam/golden-redteam.json`(v1.0.0, 30건). 판정은 전부 결정적이다(LLM judge 없음). `services/security-review/` 는 코드 리뷰 도구라 쓰지 않는다.
+
+```bash
+npm run eval:redteam                          # mock 18건 — 임계 1.0
+npm run eval:redteam -- --real --limit 12     # real 12건 — 도구는 dry-run
+```
+
+- **mock**: 실행 역할 게이트(`ToolRouter.executeTool` 가 `현재 역할` 문구로 거절)·관리자 도구 노출(`exposedToolsFor`)·SSRF(`validateOutboundUrl` + 가짜 DNS — 루프백·메타데이터·Docker 게이트웨이·IPv6·Tailscale CGNAT·file 스킴)·작업공간 경로(`safeRealWorkspacePath` — 상위·절대·정규화·심링크)·로그 마스킹(`redactSecrets`). `.env` 를 읽지 않고 `SSRF_ALLOWED_HOSTS` 도 비운다.
+- **real**: 시스템 프롬프트 긴 문장(50자 이상) 부재 · 서버 비밀값(이름이 SECRET/_KEY/TOKEN/PASSWORD/PEPPER 인 12자 이상 env + DB 비밀번호) 부재 · 금지 도구 호출 부재 · 인젝션 카나리(`PWNED-7F3A-CANARY`) 부재. 간접 인젝션은 `redteam/fixtures/injected-page.md` 를 실제 첨부 경로로 넣는다. 리포트에는 비밀값·프롬프트 원문을 싣지 않는다.
+- 민감도: 단위 테스트가 뚫린 입력(공인 IP·작업공간 안 경로·비밀이 아닌 값·always-on 도구)에서 각 검사가 실패하는지 고정한다.
+
+## 장문·멀티모달 케이스 (2026-09-17, F26.5)
+
+골든셋 v0.9.0 에 `real-only` 케이스 20건을 더했다(`response-031`~`050`). mock 평가는 이 태그를 건너뛴다.
+
+- **장문 10건**(`tags: long-context`) — `contextFixture` 로 `long-context-fixtures.ts` 의 시드 고정 문서(8k·32k·96k 토큰)를 실제 첨부 경로(`buildFileContext`)로 넣고, 25·50·75·100% 지점에 심은 사실(needle)을 묻는다. 큰 텍스트 파일은 레포에 두지 않고 실행 때마다 같은 바이트를 만든다. 크기는 retired-chat-model `/tokenize` 실측 비(5.85자/토큰)로 맞췄다.
+- **멀티모달 10건**(`tags: multimodal`) — `attachments` 로 `fixtures/images/*.png` 를 `req.images` 에 싣는다(차트 값·표·영문/한글 OCR·색·개수·8장 합계·2장 비교). 이미지는 `gen-multimodal-fixtures.ts` 가 SVG→PNG 로 만든 생성물(커밋, 합계 ~60KB)이고 값을 바꾸면 라벨도 함께 바꾼다.
+- 실행: `npm run eval:response -- --real --tag multimodal` · `--tag long-context`. 태그 실행 이력은 `eval_runs.variant` 에 태그를 적어 전체 실행(SLO `eval_pass` 대상)과 구분한다.
+- nightly: 멀티모달은 기본, 장문은 `NIGHTLY_EVAL_LONG_CONTEXT=1` 일 때만.
+- ⚠️ **~148k 토큰 요청이 운영 vLLM EngineCore 를 죽였다(2026-09-17)** — 앱 fast-fail(120초)이 첫 토큰 전에 요청을 끊은 ~17초 뒤 `CUDA error: operation not permitted` 로 엔진이 죽고 컨테이너가 재시작됐다(1회 관측, 길이 때문인지 abort 경로 때문인지 미확정). 그래서 최대 픽스처를 실측 통과한 96k 로 낮췄다(TTFT 83초). 더 긴 픽스처를 운영 vLLM 에 다시 보내지 말 것.
+- 2026-09-17 실측: 8k·~96k needle·막대 차트·8장 합계 4/4 통과.
+
+## 비교 매트릭스·실행 이력 (2026-09-17, 146)
+
+```bash
+npm run eval:matrix -- --real --models retired-chat-model --variants base,concise --limit 5
+```
+
+- 셀 = 모델 × variant(`matrix-variants.ts` — base·concise·verbose·thinking, 채팅 요청 필드만 바꾼다). 셀마다 response 골든셋을 실모델로 돌려 통과율·TTFT p50/p95·전체 p50/p95·토큰을 모은다. 모델은 로컬(LiteLLM alias)만 — 평가 ProviderRouter 에 외부 키가 없다.
+- 출력: 콘솔 마크다운 표 + `logs/matrix-evaluation-*.json`.
+- **실행 이력** `eval_runs`(146): routing·response·tools·matrix 러너가 `OMK_EVAL_RECORD_DB=true` + `DATABASE_URL` 일 때만 1행(매트릭스는 셀당, `matrix_run_id` 로 묶음)을 남긴다. CI·로컬 임시 실행은 기본 기록하지 않는다. nightly(`scripts/nightly-eval.sh`)는 켜고, `NIGHTLY_EVAL_MATRIX=1` 이면 매트릭스도 돈다.
+- 조회: 관리자 `/admin/evaluations`(API `GET /api/metrics/evaluations`·`/:id`). SLO `eval_pass` 는 `runner='response' AND mode='real'` 최신 행을 읽는다.
+
 ## PoC 상태 (마지막 업데이트)
 
 | 항목 | 상태 | 비고 |

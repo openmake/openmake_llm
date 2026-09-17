@@ -220,6 +220,8 @@ export class LocalLLMProvider implements IProvider {
                     ...(formatOption ? { format: formatOption } : {}),
                     // 첫 SSE 청크 = 업스트림 생존 — fast-fail 취소 (tool-call-only 응답 포함).
                     onActivity: clearFastFail,
+                    // 사용자가 화면에서 기다리는 채팅 — 스케줄링 우선순위 최상(PR-13, 플래그 OFF 면 계측 분류만)
+                    requestClass: 'interactive',
                     // user signal (opts.abortSignal) + self fast-fail signal 결합 전달 — 어느 쪽이
                     // abort 해도 SDK upstream 즉시 종료. catch 분기는 원본 signal 의 aborted 로 구분.
                     ...((fastFailController || opts.abortSignal)

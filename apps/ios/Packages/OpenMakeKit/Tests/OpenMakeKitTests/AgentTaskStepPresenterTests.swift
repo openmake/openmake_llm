@@ -63,5 +63,17 @@ final class AgentTaskStepPresenterTests: XCTestCase {
         """.data(using: .utf8)!
         let approval = try JSONDecoder().decode(AgentTaskApproval.self, from: json)
         XCTAssertEqual(approval.argumentSummary, "어느 리전을 쓸까요?")
+        XCTAssertTrue(approval.isQuestion)
+    }
+
+    func testMcpElicitIsQuestionWithServerMessage() throws {
+        let json = """
+        {"approvalId":"a3","taskId":"t1","toolName":"mcp_elicit","args":{"server":"open-design","question":"프로젝트 이름?","requestedSchema":{"type":"object","properties":{"name":{"type":"string"}}}}}
+        """.data(using: .utf8)!
+        let approval = try JSONDecoder().decode(AgentTaskApproval.self, from: json)
+        XCTAssertTrue(approval.isQuestion)
+        XCTAssertEqual(approval.argumentSummary, "프로젝트 이름?")
+        XCTAssertEqual(approval.args["server"], "open-design")
+        XCTAssertFalse(AgentTaskApproval(id: "a4", taskId: "t1", toolName: "bash").isQuestion)
     }
 }

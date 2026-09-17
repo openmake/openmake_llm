@@ -19,6 +19,13 @@ function fakeWs(userId: string | null = 'u1'): ExtendedWebSocket & { sent: unkno
     } as unknown as ExtendedWebSocket & { sent: unknown[] };
 }
 
+/** 순번 필드(streamId·seq)를 떼어 종전 페이로드와 비교한다 */
+function plain(ev: unknown): unknown {
+    if (!ev || typeof ev !== 'object') return ev;
+    const { streamId: _s, seq: _q, lastSeq: _l, ...rest } = ev as Record<string, unknown>;
+    return rest;
+}
+
 describe('InFlightStreamRegistry', () => {
     beforeEach(() => { jest.useFakeTimers(); });
     afterEach(() => { jest.useRealTimers(); });
@@ -28,7 +35,8 @@ describe('InFlightStreamRegistry', () => {
         const ws = fakeWs();
         const entry = reg.open('u:u1', ws, new AbortController());
         reg.send(entry, { type: 'token', token: 'ab', messageId: 'm1' });
-        expect(ws.sent).toEqual([{ type: 'token', token: 'ab', messageId: 'm1' }]);
+        expect(ws.sent.map(plain)).toEqual([{ type: 'token', token: 'ab', messageId: 'm1' }]);
+        expect(ws.sent[0]).toMatchObject({ seq: 1, streamId: entry.streamId });
         expect(entry.content).toBe('ab');
     });
 
@@ -47,10 +55,10 @@ describe('InFlightStreamRegistry', () => {
 
         const ws2 = fakeWs();
         expect(reg.attach('u:u1', ws2)).toBe(true);
-        expect(ws2.sent[0]).toEqual({
+        expect(plain(ws2.sent[0])).toEqual({
             type: 'stream_resume', messageId: 'm1', sessionId: 's1', content: '안녕하세요', finished: false,
         });
-        expect(ws2.sent.slice(1)).toEqual([
+        expect(ws2.sent.slice(1).map(plain)).toEqual([
             { type: 'session_created', sessionId: 's1' },
             { type: 'artifact_start', artifact: { id: 'a1' } },
         ]);
@@ -58,7 +66,7 @@ describe('InFlightStreamRegistry', () => {
 
         // 이어서 오는 이벤트는 새 소켓으로
         reg.send(entry, { type: 'done', messageId: 'm1' });
-        expect(ws2.sent.at(-1)).toEqual({ type: 'done', messageId: 'm1' });
+        expect(plain(ws2.sent.at(-1))).toEqual({ type: 'done', messageId: 'm1' });
     });
 
     it('유예 안에 재연결이 없으면 그때 abort 한다', () => {
@@ -125,8 +133,8 @@ describe('InFlightStreamRegistry', () => {
         expect(reg.size).toBe(0);
     });
 
-    it('버퍼 상한을 넘으면 비종료 이벤트는 버리고 종료 이벤트는 남긴다', () => {
-        const reg = new InFlightStreamRegistry(1000, 500, 100);
+    it('링 바이트 상한을 넘으면 오래된 이벤트부터 밀어내고 종료 이벤트는 남긴다 — 재생 범위와 겹치면 gap', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 260);
         const ws = fakeWs();
         const entry = reg.open('u:u1', ws, new AbortController());
         reg.detach(ws);
@@ -134,7 +142,82 @@ describe('InFlightStreamRegistry', () => {
         reg.send(entry, { type: 'artifact_chunk', id: 'a', delta: 'y'.repeat(40) });
         reg.send(entry, { type: 'done' });
         expect(entry.overflowed).toBe(true);
-        expect(entry.buffered.map((r) => (JSON.parse(r) as { type: string }).type)).toEqual(['artifact_chunk', 'done']);
+        expect(entry.ring.map((r) => (JSON.parse(r.raw) as { type: string }).type)).toEqual(['artifact_chunk', 'done']);
+        const ws2 = fakeWs();
+        reg.attach('u:u1', ws2);
+        expect(ws2.sent[0]).toMatchObject({ type: 'stream_resume', gap: true, lastSeq: 3 });
+        expect(ws2.sent.slice(1).map((e) => (e as { seq: number }).seq)).toEqual([2, 3]);
+    });
+
+    // ── 순번 이어받기 (F19.11, 2026-09-17) ──
+
+    it('attached 중 이벤트도 링에 남고, afterSeq 커서로 붙으면 그 뒤만 재생한다(중복 0)', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 1 << 20, 100);
+        const wsA = fakeWs();
+        const entry = reg.open('u:u1', wsA, new AbortController());
+        reg.send(entry, { type: 'session_created', sessionId: 's1' });      // seq 1
+        reg.send(entry, { type: 'token', token: '가' });                    // seq 2(스냅샷)
+        reg.send(entry, { type: 'artifact_start', artifact: { id: 'a' } }); // seq 3
+        reg.send(entry, { type: 'artifact_chunk', id: 'a', delta: '1' });   // seq 4
+        expect(entry.ring.map((r) => r.seq)).toEqual([1, 3, 4]);
+
+        // 탭 B 가 seq 3 까지 받은 상태로 이어받는다(A 는 아직 열려 있음 — 마지막 접속이 이긴다)
+        const wsB = fakeWs();
+        expect(reg.attach('u:u1', wsB, { streamId: entry.streamId, afterSeq: 3 })).toBe(true);
+        expect(wsB.sent[0]).toMatchObject({ type: 'stream_resume', content: '가', streamId: entry.streamId, lastSeq: 4 });
+        expect(wsB.sent[0]).not.toHaveProperty('gap');
+        expect(wsB.sent.slice(1).map((e) => (e as { seq: number }).seq)).toEqual([4]);
+
+        reg.send(entry, { type: 'done' });
+        expect(wsB.sent.at(-1)).toMatchObject({ type: 'done', seq: 5 });
+        expect(wsA.sent.at(-1)).toMatchObject({ seq: 4 }); // 옮겨 간 뒤 A 로는 보내지 않는다
+    });
+
+    it('다른 streamId·범위 밖 afterSeq 는 커서를 무시하고 미전달 이벤트만 재생한다(구 클라이언트 호환)', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 1 << 20, 100);
+        const ws1 = fakeWs();
+        const entry = reg.open('u:u1', ws1, new AbortController());
+        reg.send(entry, { type: 'session_created', sessionId: 's1' }); // 전달됨
+        reg.detach(ws1);
+        reg.send(entry, { type: 'artifact_start', artifact: { id: 'a' } }); // 미전달 seq 2
+
+        const other = fakeWs();
+        reg.attach('u:u1', other, { streamId: '00000000-0000-0000-0000-000000000000', afterSeq: 0 });
+        expect(other.sent.slice(1).map((e) => (e as { type: string }).type)).toEqual(['artifact_start']);
+
+        const future = fakeWs();
+        reg.attach('u:u1', future, { streamId: entry.streamId, afterSeq: 99 });
+        // 재부착 시 전량 전달된 것으로 본다 → 새로 재생할 것 없음
+        expect(future.sent).toHaveLength(1);
+        expect(future.sent[0]).toMatchObject({ type: 'stream_resume', lastSeq: 2 });
+    });
+
+    it('개수 상한(ringMax)을 넘으면 오래된 것부터 밀려나고, 밀려난 구간을 요구한 커서는 gap', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 1 << 20, 2);
+        const ws = fakeWs();
+        const entry = reg.open('u:u1', ws, new AbortController());
+        for (let i = 0; i < 4; i++) reg.send(entry, { type: 'artifact_chunk', id: 'a', delta: String(i) });
+        expect(entry.ring.map((r) => r.seq)).toEqual([3, 4]);
+        const ws2 = fakeWs();
+        reg.attach('u:u1', ws2, { streamId: entry.streamId, afterSeq: 1 });
+        expect(ws2.sent[0]).toMatchObject({ gap: true });
+        expect(ws2.sent.slice(1).map((e) => (e as { seq: number }).seq)).toEqual([3, 4]);
+        const ws3 = fakeWs();
+        reg.attach('u:u1', ws3, { streamId: entry.streamId, afterSeq: 2 });
+        expect(ws3.sent[0]).not.toHaveProperty('gap');
+    });
+
+    it('ringMax=0 이면 attached 중에는 링에 남기지 않는다(종전 동작 롤백 스위치)', () => {
+        const reg = new InFlightStreamRegistry(1000, 500, 1 << 20, 0);
+        const ws = fakeWs();
+        const entry = reg.open('u:u1', ws, new AbortController());
+        reg.send(entry, { type: 'artifact_start', artifact: { id: 'a' } });
+        expect(entry.ring).toHaveLength(0);
+        reg.detach(ws);
+        reg.send(entry, { type: 'artifact_chunk', id: 'a', delta: 'x' });
+        expect(entry.ring).toHaveLength(1);
+        reg.attach('u:u1', fakeWs());
+        expect(entry.ring).toHaveLength(0);
     });
 
     it('resolveStreamKey — 인증 사용자 > 게스트 anonSessionId > 없음', () => {

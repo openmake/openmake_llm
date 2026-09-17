@@ -27,6 +27,8 @@
       "approvals": "Freigaben",
       "organizationsAdmin": "Organisationen",
       "costRatesAdmin": "Kostensätze",
+      "sloAdmin": "SLO",
+      "evaluationsAdmin": "Evaluierungen",
       "quotaRequestsAdmin": "Kontingent-Freigaben"
     },
     "pendingApprovals": "{count} ausstehende Freigabe(n) — Agentenaufgaben warten auf Ihre Freigabe"
@@ -344,7 +346,10 @@
       "sendAnswer": "Antwort senden",
       "skip": "Überspringen",
       "autoApprove": "Rest freigeben",
-      "autoApproveHint": "Verbleibende Tool-Aufrufe dieser Aufgabe ohne Freigabe ausführen (Fragen ausgenommen)"
+      "autoApproveHint": "Verbleibende Tool-Aufrufe dieser Aufgabe ohne Freigabe ausführen (Fragen ausgenommen)",
+      "preview": "Änderungsvorschau",
+      "elicitHint": "Eingabeanfrage von {server} · Felder: {fields}",
+      "elicitJsonHint": "Bei mehreren Feldern bitte als JSON antworten: {example}"
     },
     "artifactFallback": "Artefakt",
     "artifactBuilding": "Artefakt wird erstellt …",
@@ -467,6 +472,18 @@
     },
     "verification": {
       "title": "Von der Prüfung gefundene Probleme"
+    },
+    "branchHere": "Ab hier verzweigen",
+    "branchFailed": "Verzweigen fehlgeschlagen: {error}",
+    "citation": {
+      "chipLabel": "Quelle {n}: {title}",
+      "popoverLabel": "Vorschau Quelle {n}",
+      "open": "Quelle öffnen"
+    },
+    "a11y": {
+      "generating": "Antwort wird erstellt",
+      "toolRunning": "{tool} wird ausgeführt",
+      "done": "Antwort fertig"
     }
   },
   "compare": {
@@ -552,7 +569,10 @@
       "copyLink": "Link kopieren",
       "unpublish": "Teilen beenden",
       "updateSettings": "Freigabeeinstellungen aktualisieren",
-      "publish": "Teilen"
+      "publish": "Teilen",
+      "downloadBundle": "Statisches HTML herunterladen",
+      "bundleMissing": "Die Viewer-Datei fehlt — bitte erneut veröffentlichen und wiederholen",
+      "bundleFailed": "HTML konnte nicht heruntergeladen werden"
     },
     "page": {
       "viewerOpenFailed": "Viewer kann nicht geöffnet werden",
@@ -574,7 +594,31 @@
       "close": "Schließen",
       "createdLabel": "Erstellt"
     },
-    "resize": "Panelgröße ändern (Doppelklick zum Zurücksetzen)"
+    "resize": "Panelgröße ändern (Doppelklick zum Zurücksetzen)",
+    "exportXlsx": "Als XLSX speichern",
+    "exportNoSourceXlsx": "XLSX-Export unterstützt nur CSV- oder Bericht-Artefakte",
+    "comments": {
+      "toggle": "Kommentare",
+      "empty": "Noch keine Kommentare.",
+      "placeholder": "Kommentar schreiben (Markdown)",
+      "submit": "Senden",
+      "reply": "Antworten",
+      "replying": "Antwort wird verfasst",
+      "cancelReply": "Abbrechen",
+      "resolve": "Erledigt",
+      "unresolve": "Wieder öffnen",
+      "resolved": "Erledigt",
+      "delete": "Löschen",
+      "deleteConfirm": "Diesen Kommentar löschen?",
+      "deletedPlaceholder": "Dieser Kommentar wurde gelöscht.",
+      "apply": "Vom Modell umsetzen lassen",
+      "applyHint": "Fügt eine Änderungsanfrage mit diesem Kommentar ins Eingabefeld ein",
+      "applyPrompt": "Bitte überarbeite das Artefakt „{title}“ in einer neuen Version gemäß dem folgenden Kommentar.",
+      "me": "Ich",
+      "user": "Nutzer {id}",
+      "loadFailed": "Kommentare konnten nicht geladen werden.",
+      "actionFailed": "Aktion fehlgeschlagen."
+    }
   },
   "history": {
     "title": "Unterhaltungsverlauf",
@@ -601,7 +645,31 @@
       "hint": "Starten Sie eine neue Unterhaltung, und sie erscheint hier."
     },
     "viewAllToggle": "Alle Nutzer",
-    "ownerBadge": "Nutzer {id}"
+    "ownerBadge": "Nutzer {id}",
+    "folders": {
+      "railLabel": "Unterhaltungsordner und Tags",
+      "all": "Alle",
+      "unfiled": "Ohne Ordner",
+      "heading": "Ordner",
+      "create": "Neuer Ordner",
+      "namePlaceholder": "Ordnername",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "rename": "Ordner umbenennen",
+      "renameAria": "{name} umbenennen",
+      "deleteAria": "{name} löschen",
+      "deleteConfirm": "Ordner „{name}“ löschen? Die Unterhaltungen darin bleiben ohne Ordner erhalten.",
+      "empty": "Noch keine Ordner",
+      "tags": "Tags",
+      "error": "Anfrage konnte nicht ausgeführt werden",
+      "organizeTitle": "Unterhaltung ordnen",
+      "organizeAria": "{title} ordnen",
+      "folderLabel": "Ordner",
+      "tagsLabel": "Tags",
+      "tagsPlaceholder": "z. B. arbeit, recherche",
+      "tagsHelp": "Mit Kommas trennen. Wird kleingeschrieben gespeichert, höchstens 8.",
+      "folderBadge": "Ordner"
+    }
   },
   "chatSocket": {
     "interceptNotice": "Ein Abfangmodus (Diskussion / Deep Research / Bild) ist aktiv, daher werden Tools (Analyse/Suche) und Artefakte in dieser Antwort nicht angewendet.",
@@ -901,7 +969,64 @@
     "noResultBody": "Es wurde keine endgültige Antwort gespeichert. Sehen Sie unten in der Ausführungs-Timeline, was passiert ist.",
     "previewTitle": "Ausgabevorschau",
     "previewEmpty": "Diese Aufgabe hat keine gespeicherte Ausgabe.",
-    "previewLoadError": "Die Ausgabe konnte nicht geladen werden."
+    "previewLoadError": "Die Ausgabe konnte nicht geladen werden.",
+    "planEdit": {
+      "open": "Bearbeiten",
+      "title": "Plan bearbeiten",
+      "nextTurn": "ab nächster Runde",
+      "stepPlaceholder": "Schrittbeschreibung",
+      "doneWhenPlaceholder": "Fertig wenn (optional)",
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "remove": "Entfernen",
+      "add": "Schritt hinzufügen",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "conflict": "Der Plan wurde anderswo geändert. Neu laden und erneut bearbeiten.",
+      "failed": "Speichern fehlgeschlagen."
+    },
+    "fork": {
+      "title": "Vom Checkpoint verzweigen",
+      "pick": "Runde wählen",
+      "turnOption": "Runde {turn} ({messages} Nachrichten)",
+      "go": "Verzweigen & starten",
+      "hint": "Führt alles nach der gewählten Runde als neue Aufgabe erneut aus (neuer Arbeitsordner).",
+      "failed": "Verzweigen fehlgeschlagen: {error}"
+    },
+    "priorityBadge": "Priorität {priority}",
+    "triggers": {
+      "title": "Webhook-Trigger",
+      "create": "Neuer Trigger",
+      "hint": "Sendet ein externes System einen signierten POST, startet eine Aufgabe aus der gewählten Vorlage. Steht {placeholder} im Vorlagenziel, wird der Request-Body dort eingefügt, sonst am Ende angehängt.",
+      "needTemplate": "Zuerst eine Aufgabenvorlage anlegen",
+      "namePlaceholder": "Name des Triggers",
+      "template": "Vorlage",
+      "templatePick": "Vorlage wählen",
+      "policy": "Freigaberichtlinie",
+      "policies": {
+        "all": "Jedes Tool freigeben",
+        "high-risk": "Nur Hochrisiko freigeben",
+        "none": "Keine Freigabe"
+      },
+      "add": "Anlegen",
+      "secretOnce": "Das Secret wird nur jetzt angezeigt — speichern Sie es beim Absender.",
+      "copy": "Kopieren",
+      "signingNote": "Der Zeitstempel muss innerhalb von ±{window} s liegen. Bei Wiederholungen denselben {delivery} senden, um doppelte Ausführung zu vermeiden.",
+      "dismiss": "Schließen",
+      "empty": "Noch keine Trigger.",
+      "enabled": "An",
+      "disabled": "Aus",
+      "templateMissing": "(Vorlage fehlt)",
+      "fired": "{count}-mal ausgeführt",
+      "failures": "{count} Fehlschläge in Folge: {error}",
+      "enable": "Einschalten",
+      "disable": "Ausschalten",
+      "rotate": "Secret neu erzeugen",
+      "rotateConfirm": "Nach dem Neuerzeugen werden mit dem alten Secret signierte Anfragen abgelehnt. Fortfahren?",
+      "delete": "Löschen",
+      "deleteConfirm": "Diesen Trigger löschen?",
+      "failed": "Fehlgeschlagen: {message}"
+    }
   },
   "customAgents": {
     "pageTitle": "Benutzerdefinierte Agenten",
@@ -1493,7 +1618,34 @@
       "spawnAdoption": "Nutzung paralleler Delegation",
       "ofSpawnIntent": "{called} von {intent} Runden mit Absicht haben es aufgerufen"
     },
-    "noNodes": "Keine Cluster-Knoten gemeldet."
+    "noNodes": "Keine Cluster-Knoten gemeldet.",
+    "nodeMetrics": {
+      "gpuTitle": "vLLM-Knoten · KV-Cache",
+      "queueTitle": "Warteschlangentiefe",
+      "disabled": "Die Erfassung von Knotenmetriken ist aus (NODE_METRICS_ENABLED=false).",
+      "noTargets": "Keine Scrape-Ziele — VLLM_METRICS_URLS oder LLM_TOKENIZE_URL setzen.",
+      "waitingFirstScrape": "Warte auf den ersten Scrape.",
+      "stale": "Veraltet",
+      "fresh": "OK",
+      "peak": "Spitze {value} in {hours} h",
+      "th": {
+        "node": "Knoten",
+        "state": "Status",
+        "kv": "KV-Cache",
+        "kvPeak": "KV-Spitze ({hours} h)",
+        "running": "Laufend",
+        "waiting": "Wartend",
+        "ttft": "Ø TTFT",
+        "gpuUtil": "GPU-Auslastung"
+      },
+      "queue": {
+        "agent_task_pending": "Aufgaben-Warteschlange",
+        "agent_task_running": "Laufende Aufgaben",
+        "agent_task_queued_db": "Queued-Aufgaben (DB)",
+        "orchestrator_jobs_pending": "Wartende Medien-Jobs",
+        "vllm_waiting": "Wartende vLLM-Anfragen"
+      }
+    }
   },
   "adminAlerts": {
     "title": "Warnungen",
@@ -1815,6 +1967,28 @@
     "advancedHide": "Details ausblenden",
     "hiddenUnsupportedNote": "Fähigkeiten ohne Ausführungspfad sind ausgeblendet: {list}"
   },
+  "adminGatewayModels": {
+    "title": "Gateway-Modellstatus",
+    "description": "Auf dem LiteLLM-Gateway (/model/info) registrierte Routen und Prüfergebnisse der lokalen Modelle.",
+    "refresh": "Aktualisieren",
+    "loadError": "Gateway-Modellstatus konnte nicht geladen werden",
+    "unreachable": "Gateway nicht erreichbar: {reason}",
+    "empty": "Auf dem Gateway sind keine Modelle registriert",
+    "default": "Standard",
+    "defaultNote": "Standard-Chatmodell: {model}",
+    "col": {
+      "name": "Route",
+      "upstream": "Upstream",
+      "mode": "Modus",
+      "status": "Status"
+    },
+    "status": {
+      "available": "Verfügbar",
+      "unavailable": "Nicht verfügbar",
+      "uncataloged": "Nicht im Katalog",
+      "external": "Extern"
+    }
+  },
   "adminSystemSettings": {
     "title": "Systemeinstellungen",
     "description": "Betriebseinstellungen verwalten (OAuth, Suche, Warnungen, Push, LLM-Gateway). Hier gespeicherte Werte (DB) haben Vorrang vor .env.",
@@ -1855,6 +2029,14 @@
       "push": {
         "title": "Web Push (VAPID)",
         "description": "VAPID-Schlüssel für Browser-Push-Benachrichtigungen. Legen Sie das öffentliche/private Schlüsselpaar zusammen fest."
+      },
+      "agent": {
+        "title": "Agent- & MCP-Laufzeit",
+        "description": "Aktualisierungsintervall externer MCP-Werkzeuglisten, Parken abgelaufener Freigaben, Obergrenze der Warteschlangenpriorität. Sofort wirksam."
+      },
+      "slo": {
+        "title": "SLO-Ziele",
+        "description": "Ziele für Chat-Verfügbarkeit, Zeit bis zum ersten Token, Erfolgsquote von Agent-Aufgaben und Eval-Bestehensquote. Ziele in Prozent (z. B. 99.5), TTFT als p95-Schwelle in ms. Wirksam ab der nächsten Auswertung (alle 5 Minuten)."
       }
     },
     "historyTitle": "Änderungsverlauf",
@@ -2186,7 +2368,24 @@
         "external": "Externes Tool",
         "control": "Steuerung",
         "sensitive": "Anmeldedatei"
-      }
+      },
+      "recentTitle": "Letzte Entscheidungen (30 Min.)",
+      "revoked": "widerrufen",
+      "consumed": "ausgeführt",
+      "approvedPending": "freigegeben · noch nicht ausgeführt",
+      "revoke": "Widerrufen",
+      "revokeHint": "Eine noch nicht ausgeführte Freigabe zurückziehen (wartet beim Fortsetzen erneut)",
+      "autoApproveOff": "Auto-Freigabe aus",
+      "autoApproveOffHint": "Auto-Freigabe für diese Aufgabe deaktivieren",
+      "preview": "Änderungen vor Ausführung ansehen",
+      "assignedToMe": "Mir zugewiesen",
+      "assignedAway": "Weitergegeben",
+      "reassign": "Weitergeben",
+      "reassignPick": "Empfänger wählen",
+      "escalate": "Eskalieren",
+      "escalateHint": "An Inhaber/Admin der Organisation übergeben",
+      "elicitHint": "Eingabeanfrage von {server} · Felder: {fields}",
+      "elicitJsonHint": "Bei mehreren Feldern bitte als JSON antworten: {example}"
     }
   },
   "marketplacePublish": {
@@ -2323,5 +2522,85 @@
     "userIdPlaceholder": "Benutzer-ID",
     "grant": "Gewähren",
     "grantDone": "Gewährt."
+  },
+  "adminSlo": {
+    "title": "SLO",
+    "description": "Aktueller Stand gegenüber Service-Level-Zielen, Fehlerbudget und Burn-Rate",
+    "computedAt": "Berechnet um {time}",
+    "openSettings": "Ziele bearbeiten",
+    "refresh": "Aktualisieren",
+    "loadError": "Laden fehlgeschlagen.",
+    "target": "Ziel {value}",
+    "budgetRemaining": "Verbleibendes Fehlerbudget",
+    "burnFast": "Burn (1 h)",
+    "burnSlow": "Burn (6 h)",
+    "samples": "Stichproben",
+    "p95": "TTFT p95",
+    "reasonLabel": "Grund",
+    "historyTitle": "Letzte 30 Tage",
+    "date": "Datum",
+    "historyEmpty": "Noch keine Snapshots — Auswertungen werden alle 5 Minuten gespeichert.",
+    "state": {
+      "ok": "OK",
+      "warning": "Warnung",
+      "critical": "Kritisch",
+      "insufficient": "Zu wenig Daten"
+    },
+    "reason": {
+      "fast_burn": "Schneller Verbrauch (≥14,4× über 1 h und 5 min)",
+      "slow_burn": "Langsamer Verbrauch (≥6× über 6 h und 30 min)",
+      "budget_exhausted": "Fehlerbudget im Zeitraum aufgebraucht",
+      "below_target": "Unter dem Ziel",
+      "few_samples": "Zu wenige Stichproben",
+      "source_unavailable": "Datenquelle nicht verfügbar"
+    },
+    "slo": {
+      "chat_availability": {
+        "name": "Chat-Verfügbarkeit",
+        "desc": "Anteil der Chat-Anfragen der letzten {window} Tage ohne Fehler (Benutzerabbrüche ausgenommen)"
+      },
+      "chat_ttft_p95": {
+        "name": "Zeit bis zum ersten Token",
+        "desc": "Anteil erfolgreicher Anfragen der letzten {window} Tage mit erstem Token innerhalb von {threshold} s (p95-Ziel)"
+      },
+      "agent_task_success": {
+        "name": "Erfolg von Agent-Aufgaben",
+        "desc": "Anteil der in den letzten {window} Tagen beendeten Aufgaben, die abgeschlossen wurden (ohne Abbrüche)"
+      },
+      "eval_pass": {
+        "name": "Eval-Bestehensquote",
+        "desc": "Bestehensquote der letzten Antwort-Auswertung innerhalb von {window} Tagen"
+      }
+    }
+  },
+  "adminEvaluations": {
+    "title": "Evaluierungen",
+    "description": "Nächtliche Evaluierungsläufe — Bestehensquote, Zeit bis zum ersten Token und fehlgeschlagene Fälle",
+    "refresh": "Aktualisieren",
+    "loadError": "Laden fehlgeschlagen.",
+    "runnerFilter": "Runner",
+    "allRunners": "Alle Runner",
+    "matrixTitle": "Letzte Matrix ({time})",
+    "modelVariant": "Modell \\ Variante",
+    "listTitle": "Läufe",
+    "empty": "Noch keine Läufe — sie erscheinen, sobald die nächtliche Evaluierung mit OMK_EVAL_RECORD_DB=true läuft.",
+    "noFailures": "Keine fehlgeschlagenen Fälle.",
+    "th": {
+      "completedAt": "Abgeschlossen",
+      "runner": "Runner",
+      "mode": "Modus",
+      "model": "Modell · Variante",
+      "passRate": "Bestehensquote",
+      "ttft": "TTFT p50",
+      "totalP95": "Gesamt p95",
+      "version": "Datensatz · Commit"
+    },
+    "runner": {
+      "routing": "Routing",
+      "response": "Antwort",
+      "tools": "Tool-Auswahl",
+      "redteam": "Red Team",
+      "matrix": "Matrix"
+    }
   }
 }

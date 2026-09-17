@@ -152,6 +152,10 @@ export interface AgentTask {
     completion_path?: string;
     /** goal judge 결과(091) — 'achieved' | 'not_achieved' | 'unknown' | 'skipped' */
     judge_verdict?: string;
+    /** 큐 우선순위(131) — 높을수록 먼저, 예약 -1, 기본 0 */
+    priority?: number;
+    /** failed 전이 시 분류(131, config/agent-task-failure-class) */
+    failure_class?: string | null;
     created_at: string;
     updated_at: string;
     completed_at?: string;

@@ -18,8 +18,10 @@ import type { TaskSandboxApprovalPolicy } from '../../config/task-sandbox';
 import { isSensitivePath } from './sensitive-paths';
 import { createLogger } from '../../utils/logger';
 import { getPool } from '../../data/models/unified-database';
-import { classifyToolRisk, policyRequiresApproval, type ToolRiskClass } from '../../config/tool-policy';
+import { classifyToolRisk, policyRequiresApproval, HITL_ALWAYS_WAIT_TOOLS, type ToolRiskClass } from '../../config/tool-policy';
 import { AgentTaskApprovalRepository, hashApprovalArgs, type ApprovalRow } from '../../data/repositories/agent-task-approval-repository';
+import { getConfig } from '../../config/env';
+import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 
 const logger = createLogger('TaskApprovalGate');
 
@@ -55,8 +57,10 @@ export function isSensitiveWrite(toolName: string, args: Record<string, unknown>
 
 type ApprovalDecision = 'approved' | 'rejected';
 /** 거절 사유 — 'timeout'(무응답 만료) 은 사용자 부재 신호로, 명시 거절('user')과 달리
- *  HITL 무응답 강등(연속 N회 시 승인 필요 도구 제거 → 산출물 유도)의 카운트 대상이다. */
-export type ApprovalRejectReason = 'timeout' | 'user' | 'abort';
+ *  HITL 무응답 강등(연속 N회 시 승인 필요 도구 제거 → 산출물 유도)의 카운트 대상이다.
+ *  'parked'(F16.7): 질문형 승인이 만료됐지만 AGENT_TASK_HITL_PARK_ON_TIMEOUT 이라 저장소에 pending 으로 남긴 경우 —
+ *  호출부는 작업을 주차(AgentTaskParked)하고, 답이 오면 재개된 작업이 같은 호출에서 결정을 이어받는다. */
+export type ApprovalRejectReason = 'timeout' | 'user' | 'abort' | 'parked';
 
 /** 승인 요청의 해소 결과 — 결정 + (ask_human 자유텍스트 응답 시) 사용자 답변 본문. */
 interface ApprovalResult {
@@ -81,7 +85,7 @@ export function stripApprovalGatedTools<T extends { function: { name: string } }
     policy: TaskSandboxApprovalPolicy,
     opts: { deviceGatesShell?: boolean } = {},
 ): T[] {
-    return tools.filter((t) => t.function.name !== 'ask_human'
+    return tools.filter((t) => !HITL_ALWAYS_WAIT_TOOLS.has(t.function.name)
         && !requiresApproval(policy, t.function.name, {}, opts));
 }
 
@@ -96,6 +100,10 @@ export interface PendingApproval {
     riskClass: ToolRiskClass;
     /** 자격증명 파일을 바꾸는 호출(high-risk 상향 사유). */
     sensitive: boolean;
+    /** 실행 전 미리보기(unified diff, 138) — 파일 도구 외 undefined */
+    preview?: string;
+    /** 현재 담당자(138) — 없으면 소유자(userId). 이관·에스컬레이션으로 바뀐다 */
+    assigneeUserId?: string;
 }
 
 interface Waiter {
@@ -106,7 +114,8 @@ interface Waiter {
 
 /** 영속 저장소 계약(124) — 테스트는 생략(메모리만), 운영은 AgentTaskApprovalRepository. */
 export type ApprovalStore = Pick<AgentTaskApprovalRepository,
-    'insertPending' | 'markDecided' | 'listPending' | 'getPending' | 'takeoverForCall' | 'expirePendingForTask'>;
+    'insertPending' | 'markDecided' | 'listPending' | 'getPending' | 'takeoverForCall' | 'expirePendingForTask'>
+    & Partial<Pick<AgentTaskApprovalRepository, 'revokeUnconsumed' | 'listRecentDecisions' | 'recordEvent' | 'reassign' | 'extendPending'>>;
 
 function rowToPending(r: ApprovalRow): PendingApproval {
     const args = r.args ?? {};
@@ -115,6 +124,8 @@ function rowToPending(r: ApprovalRow): PendingApproval {
         createdAt: new Date(r.created_at).getTime(),
         riskClass: (r.risk_class as ToolRiskClass | null) ?? classifyToolRisk(r.tool_name, args),
         sensitive: isSensitiveWrite(r.tool_name, args),
+        ...(r.preview ? { preview: r.preview } : {}),
+        ...(r.assignee_user_id ? { assigneeUserId: r.assignee_user_id } : {}),
     };
 }
 
@@ -142,7 +153,8 @@ export class ApprovalRegistry {
 
     /** 대기 중인 승인 요청 — 메모리 waiter + 저장소의 살아 있는 pending(프로세스가 내려간 작업분). */
     async list(userId: string): Promise<PendingApproval[]> {
-        const live = [...this.waiters.values()].map((w) => w.pending).filter((p) => p.userId === userId);
+        // 담당자(138)가 있으면 그 사람의 승인함에, 없으면 소유자의 승인함에 — 저장소 listPending 과 같은 규칙
+        const live = [...this.waiters.values()].map((w) => w.pending).filter((p) => (p.assigneeUserId ?? p.userId) === userId);
         const rows = (await this.persist((s) => s.listPending(userId))) ?? [];
         const seen = new Set(live.map((p) => p.approvalId));
         return [...live, ...rows.filter((r) => !seen.has(r.approval_id)).map(rowToPending)];
@@ -157,7 +169,7 @@ export class ApprovalRegistry {
 
     /**
      * task 자동승인 설정(4-2) — 이후 이 task 의 승인 요청은 즉시 approved 로 해소된다.
-     * ⚠️ ask_human 은 제외(질문의 목적 자체가 사람 응답). 현재 대기 중인 동일 task 의
+     * ⚠️ ask_human·mcp_elicit(HITL_ALWAYS_WAIT_TOOLS)은 제외(질문의 목적 자체가 사람 응답). 현재 대기 중인 동일 task 의
      * 승인들도 즉시 해소한다. task 종료 시 clearAutoApprove 로 해제(잔존 방지).
      */
     setAutoApprove(taskId: string, enabled: boolean): void {
@@ -166,31 +178,36 @@ export class ApprovalRegistry {
         // 살아 있는 waiter 는 아래서 즉시 해소되고, 저장소의 pending 도 승인으로 닫는다(승인함 잔존 방지).
         void this.persist(async (s) => {
             for (const r of await s.listPending([...this.waiters.values()].find((w) => w.pending.taskId === taskId)?.pending.userId ?? '')) {
-                if (r.task_id === taskId && r.tool_name !== 'ask_human') await s.markDecided(r.approval_id, 'approved');
+                if (r.task_id === taskId && !HITL_ALWAYS_WAIT_TOOLS.has(r.tool_name)) await s.markDecided(r.approval_id, 'approved');
             }
         });
         for (const w of [...this.waiters.values()]) {
-            if (w.pending.taskId === taskId && w.pending.toolName !== 'ask_human') {
+            if (w.pending.taskId === taskId && !HITL_ALWAYS_WAIT_TOOLS.has(w.pending.toolName)) {
                 w.resolve({ decision: 'approved', waitedMs: Date.now() - w.pending.createdAt });
             }
         }
-        logger.info(`[${taskId}] 자동승인 활성 — 이후 도구 호출은 승인 없이 진행 (ask_human 제외)`);
+        logger.info(`[${taskId}] 자동승인 활성 — 이후 도구 호출은 승인 없이 진행 (ask_human·mcp_elicit 제외)`);
     }
 
     isAutoApprove(taskId: string): boolean { return this.autoApproveTasks.has(taskId); }
+
+    /** 만료 시 주차할 수 있는가(F16.7) — 질문형 도구 + 플래그 ON + 대기 연장을 영속할 저장소(없으면 재개할 근거가 없다). */
+    private canPark(toolName: string): boolean {
+        return HITL_ALWAYS_WAIT_TOOLS.has(toolName) && getConfig().agentTaskHitlParkOnTimeout && !!this.store?.extendPending;
+    }
 
     clearAutoApprove(taskId: string): void { this.autoApproveTasks.delete(taskId); }
 
     /**
      * 승인을 요청하고 결정(approved/rejected)을 await. timeout/abort 시 'rejected'.
      * onPending 콜백으로 호출부가 알림(web-push/WS)·상태('paused')를 발행한다.
-     * 자동승인 task(ask_human 제외)는 대기 없이 즉시 approved.
+     * 자동승인 task(HITL_ALWAYS_WAIT_TOOLS 제외)는 대기 없이 즉시 approved.
      */
     async request(
-        input: { taskId: string; userId: string; toolName: string; args: Record<string, unknown> },
+        input: { taskId: string; userId: string; toolName: string; args: Record<string, unknown>; preview?: string },
         opts: { timeoutMs: number; signal?: AbortSignal; onPending?: (p: PendingApproval) => void },
     ): Promise<ApprovalResult> {
-        if (this.autoApproveTasks.has(input.taskId) && input.toolName !== 'ask_human') {
+        if (this.autoApproveTasks.has(input.taskId) && !HITL_ALWAYS_WAIT_TOOLS.has(input.toolName)) {
             return { decision: 'approved', waitedMs: 0 };
         }
         // 재시작 후 이어받기(124): 같은 호출에 이미 내려진 결정이 있으면 대기 없이 소비하고,
@@ -206,11 +223,16 @@ export class ApprovalRegistry {
         }
         const approvalId = prior?.approval_id ?? `apv_${input.taskId}_${Date.now().toString(36)}_${this.seq++}`;
         const riskClass = classifyToolRisk(input.toolName, input.args);
+        const { preview, ...core } = input;
         const pending: PendingApproval = {
-            approvalId, ...input, createdAt: prior ? new Date(prior.created_at).getTime() : Date.now(),
+            approvalId, ...core, createdAt: prior ? new Date(prior.created_at).getTime() : Date.now(),
             riskClass, sensitive: isSensitiveWrite(input.toolName, input.args),
+            ...(preview ? { preview } : prior?.preview ? { preview: prior.preview } : {}),
         };
-        if (!prior && this.store) await this.persist((s) => s.insertPending({ approvalId, ...input, argsHash, riskClass, timeoutMs: opts.timeoutMs }));
+        if (!prior && this.store) {
+            await this.persist((s) => s.insertPending({ approvalId, ...core, argsHash, riskClass, timeoutMs: opts.timeoutMs, preview }));
+            void this.event(approvalId, 'requested', null, { toolName: input.toolName, riskClass });
+        }
         return new Promise<ApprovalResult>((resolvePromise) => {
             const settle = (r: Omit<ApprovalResult, 'waitedMs'>) => {
                 const w = this.waiters.get(approvalId);
@@ -218,12 +240,15 @@ export class ApprovalRegistry {
                 clearTimeout(w.timer);
                 this.waiters.delete(approvalId);
                 if (r.decision === 'rejected') logger.info(`[${input.taskId}] 승인 거절/만료(${r.reason}): ${input.toolName}`);
-                void this.persist((s) => s.markDecided(approvalId,
+                // 주차(F16.7) — 결정이 아니라 대기 연장: 행은 pending 으로 남아 승인함에 계속 보이고, 답은 재개된 작업이 소비한다
+                if (r.reason === 'parked') void this.persist((s) => s.extendPending!(approvalId, AGENT_TASK_LIMITS.HITL_PARK_MAX_MS));
+                // 살아 있는 waiter 의 결정은 즉시 실행(소비)된다 — consumed 표시로 재시작 이어받기·철회(138) 대상에서 뺀다
+                else void this.persist((s) => s.markDecided(approvalId,
                     r.decision === 'approved' ? 'approved' : r.reason === 'timeout' ? 'expired' : r.reason === 'abort' ? 'aborted' : 'rejected',
-                    r.text));
+                    r.text, undefined, true));
                 resolvePromise({ ...r, waitedMs: Date.now() - pending.createdAt });
             };
-            const timer = setTimeout(() => settle({ decision: 'rejected', reason: 'timeout' }), opts.timeoutMs);
+            const timer = setTimeout(() => settle({ decision: 'rejected', reason: this.canPark(input.toolName) ? 'parked' : 'timeout' }), opts.timeoutMs);
             this.waiters.set(approvalId, { pending, resolve: (r) => settle(r), timer });
             if (opts.signal) {
                 if (opts.signal.aborted) { settle({ decision: 'rejected', reason: 'abort' }); return; }
@@ -243,12 +268,50 @@ export class ApprovalRegistry {
     }
 
     /** REST 승인 — owner 검증은 호출부 책임. 성공 시 true. */
-    approve(approvalId: string): Promise<boolean> {
+    approve(approvalId: string, actorId?: string): Promise<boolean> {
+        void this.event(approvalId, 'approved', actorId);
         return this.settleOrPersist(approvalId, { decision: 'approved' });
     }
 
+    /**
+     * 철회(138) — "아직 실행되지 않은 허가" 만 되돌린다: 살아 있는 waiter 는 결정 즉시 도구가 실행되므로
+     * 'consumed', 저장소의 미소비 approved 행(프로세스가 내려간 사이 내린 승인)만 'revoked'.
+     */
+    async revoke(approvalId: string, actorId: string): Promise<'revoked' | 'consumed' | 'not_found'> {
+        if (this.waiters.has(approvalId)) return 'consumed';
+        if (!this.store?.revokeUnconsumed) return 'not_found';
+        const r = (await this.persist((s) => s.revokeUnconsumed!(approvalId, actorId))) ?? 'not_found';
+        if (r === 'revoked') void this.event(approvalId, 'revoked', actorId);
+        return r;
+    }
+
+    /**
+     * 담당자 이관·에스컬레이션(138) — 살아 있는 waiter 의 pending 과 저장소 행을 함께 갱신. 권한(같은 조직·admin)은 호출부.
+     * 결정 채널(approve/reject/answer)은 그대로이므로 새 담당자가 결정하면 종전과 같이 해소된다.
+     */
+    async reassign(approvalId: string, toUserId: string, actorId: string, opts: { escalate?: boolean; reason?: string | null } = {}): Promise<boolean> {
+        const w = this.waiters.get(approvalId);
+        if (w) w.pending.assigneeUserId = toUserId;
+        const ok = this.store?.reassign ? (await this.persist((s) => s.reassign!(approvalId, toUserId, opts))) === true : false;
+        if (!w && !ok) return false;
+        void this.event(approvalId, opts.escalate ? 'escalated' : 'reassigned', actorId, { toUserId, reason: opts.reason ?? null });
+        return true;
+    }
+
+    /** 최근 결정 목록(138) — 저장소가 없으면 빈 목록. */
+    async recent(userId: string, sinceMs: number): Promise<Array<ApprovalRow & { revocable: boolean }>> {
+        if (!this.store?.listRecentDecisions) return [];
+        return (await this.persist((s) => s.listRecentDecisions!(userId, sinceMs))) ?? [];
+    }
+
+    private event(approvalId: string, kind: 'approved' | 'rejected' | 'answered' | 'revoked' | 'requested' | 'reassigned' | 'escalated', actorId?: string | null, detail?: Record<string, unknown>): Promise<void> {
+        if (!this.store?.recordEvent) return Promise.resolve();
+        return this.persist((s) => s.recordEvent!(approvalId, kind, actorId ?? null, detail)).then(() => undefined);
+    }
+
     /** REST 거절. */
-    reject(approvalId: string): Promise<boolean> {
+    reject(approvalId: string, actorId?: string): Promise<boolean> {
+        void this.event(approvalId, 'rejected', actorId);
         return this.settleOrPersist(approvalId, { decision: 'rejected', reason: 'user' });
     }
 
@@ -257,7 +320,8 @@ export class ApprovalRegistry {
      * 해소하되 답변 본문을 함께 전달해 에이전트가 실제 답을 받아 이어가게 한다.
      * (승인 게이트가 아닌 ask_human 대기에만 의미 있음 — 호출부가 owner 검증.)
      */
-    answer(approvalId: string, text: string): Promise<boolean> {
+    answer(approvalId: string, text: string, actorId?: string): Promise<boolean> {
+        void this.event(approvalId, 'answered', actorId, { chars: text.length });
         return this.settleOrPersist(approvalId, { decision: 'approved', text });
     }
 
@@ -276,11 +340,16 @@ export function getApprovalRegistry(): ApprovalRegistry {
         const lazy = (): AgentTaskApprovalRepository => (repo ??= new AgentTaskApprovalRepository(getPool()));
         registry = new ApprovalRegistry({
             insertPending: (r) => lazy().insertPending(r),
-            markDecided: (id, s, t) => lazy().markDecided(id, s, t),
+            markDecided: (id, s, t, by, c) => lazy().markDecided(id, s, t, by, c),
             listPending: (u) => lazy().listPending(u),
             getPending: (id) => lazy().getPending(id),
             takeoverForCall: (t, n, h) => lazy().takeoverForCall(t, n, h),
             expirePendingForTask: (t, s) => lazy().expirePendingForTask(t, s),
+            revokeUnconsumed: (id, a) => lazy().revokeUnconsumed(id, a),
+            listRecentDecisions: (u, ms, l) => lazy().listRecentDecisions(u, ms, l),
+            recordEvent: (id, k, a, d) => lazy().recordEvent(id, k, a, d),
+            reassign: (id, to, o) => lazy().reassign(id, to, o),
+            extendPending: (id, ms) => lazy().extendPending(id, ms),
         });
     }
     return registry;

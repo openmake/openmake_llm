@@ -16,6 +16,7 @@ import {
   Table,
   Th,
   Td,
+  useFocusTrap,
 } from "@/components/ui/primitives";
 import { ApiClient } from "@/lib/api-client";
 import { AdminTabs } from "@/components/hub-tabs";
@@ -62,14 +63,15 @@ const QUICK_LINKS = [
 function Modal({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
   const t = useTranslations("admin");
   const backdropRef = useRef<HTMLDivElement>(null);
+  const trapRef = useFocusTrap<HTMLDivElement>(true, onClose);
   return (
     <div
-      role="dialog"
+      role="presentation"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
       ref={backdropRef}
       onClick={(ev) => { if (ev.target === backdropRef.current) onClose(); }}
     >
-      <div className="relative mx-4 w-full max-w-md rounded-lg bg-surface p-6 shadow-xl">
+      <div ref={trapRef} role="dialog" aria-modal="true" tabIndex={-1} className="relative mx-4 w-full max-w-md rounded-lg bg-surface p-6 shadow-xl outline-none">
         <button
           onClick={onClose}
           className="absolute right-4 top-4 text-faint hover:text-fg"

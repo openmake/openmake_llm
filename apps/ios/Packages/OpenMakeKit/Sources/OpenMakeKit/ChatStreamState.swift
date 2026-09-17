@@ -107,6 +107,8 @@ public struct ChatStreamState: Sendable {
     /// 통째로 버려 이미지 34s·영상 수 분 동안 진행 표시가 0 이었다(2026-09-12).
     public private(set) var orchestrator: OrchestratorProgress?
     /// 본문 토큰을 한 자라도 받았는지 — "응답 작성 중" 표시 판단용
+    /// 이 답변의 웹검색 출처(F19.4) — 같은 턴에 여러 번 오면 마지막 목록(본문 [N] 번호 체계)
+    public private(set) var sources: [ChatSourceItem] = []
     public var hasStartedAnswer: Bool { !streamingText.isEmpty }
 
     public init() {}
@@ -118,6 +120,7 @@ public struct ChatStreamState: Sendable {
         activeSkillNames = []
         activityLog = []
         orchestrator = nil
+        sources = []
         setActivity(hint ?? "요청을 분석하고 있어요", kind: .preparing)
     }
 
@@ -209,6 +212,8 @@ public struct ChatStreamState: Sendable {
             isThinking = false
             statusText = nil
             activityKind = nil
+        case .searchSources:
+            if let refs = event.sources, !refs.isEmpty { sources = refs.map(ChatSourceItem.init) }
         case .tokenWarning:
             needsTokenRefresh = true
         case .streamResume:

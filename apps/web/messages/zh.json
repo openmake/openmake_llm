@@ -27,6 +27,8 @@
       "approvals": "待审批",
       "organizationsAdmin": "组织管理",
       "costRatesAdmin": "成本单价",
+      "sloAdmin": "SLO",
+      "evaluationsAdmin": "评估记录",
       "quotaRequestsAdmin": "配额审批"
     },
     "pendingApprovals": "{count} 个待批准 — 代理任务正在等待您的批准"
@@ -344,7 +346,10 @@
       "sendAnswer": "发送回答",
       "skip": "跳过",
       "autoApprove": "批准其余全部",
-      "autoApproveHint": "此任务后续的工具调用将无需批准直接执行（提问除外）"
+      "autoApproveHint": "此任务后续的工具调用将无需批准直接执行（提问除外）",
+      "preview": "变更预览",
+      "elicitHint": "{server} 服务器请求输入 · 字段: {fields}",
+      "elicitJsonHint": "字段多于一个时请用 JSON 回答: {example}"
     },
     "artifactFallback": "工件",
     "artifactBuilding": "正在生成工件…",
@@ -467,6 +472,18 @@
     },
     "verification": {
       "title": "验证发现的问题"
+    },
+    "branchHere": "从此处分支",
+    "branchFailed": "分支失败：{error}",
+    "citation": {
+      "chipLabel": "来源 {n}：{title}",
+      "popoverLabel": "来源 {n} 预览",
+      "open": "打开原文"
+    },
+    "a11y": {
+      "generating": "正在生成回答",
+      "toolRunning": "正在运行 {tool}",
+      "done": "回答已完成"
     }
   },
   "compare": {
@@ -552,7 +569,10 @@
       "copyLink": "复制链接",
       "unpublish": "停止分享",
       "updateSettings": "更新分享设置",
-      "publish": "分享"
+      "publish": "分享",
+      "downloadBundle": "下载静态 HTML",
+      "bundleMissing": "查看器文件不存在 — 请重新发布后再试",
+      "bundleFailed": "无法下载 HTML"
     },
     "page": {
       "viewerOpenFailed": "无法打开查看器",
@@ -574,7 +594,31 @@
       "close": "关闭",
       "createdLabel": "创建"
     },
-    "resize": "调整面板宽度（双击重置）"
+    "resize": "调整面板宽度（双击重置）",
+    "exportXlsx": "另存为 XLSX",
+    "exportNoSourceXlsx": "XLSX 导出仅支持 CSV 或报告类工件",
+    "comments": {
+      "toggle": "评论",
+      "empty": "还没有评论。",
+      "placeholder": "输入评论 (Markdown)",
+      "submit": "发布",
+      "reply": "回复",
+      "replying": "正在回复",
+      "cancelReply": "取消",
+      "resolve": "标记已解决",
+      "unresolve": "重新打开",
+      "resolved": "已解决",
+      "delete": "删除",
+      "deleteConfirm": "要删除这条评论吗？",
+      "deletedPlaceholder": "该评论已删除。",
+      "apply": "请模型据此修改",
+      "applyHint": "把引用此评论的修改请求放入输入框",
+      "applyPrompt": "请根据下面这条评论修改工件“{title}”，生成新版本。",
+      "me": "我",
+      "user": "用户 {id}",
+      "loadFailed": "无法加载评论。",
+      "actionFailed": "操作失败。"
+    }
   },
   "history": {
     "title": "对话历史",
@@ -601,7 +645,31 @@
       "hint": "开始新对话后将显示在此处。"
     },
     "viewAllToggle": "所有用户",
-    "ownerBadge": "用户 {id}"
+    "ownerBadge": "用户 {id}",
+    "folders": {
+      "railLabel": "对话文件夹和标签",
+      "all": "全部",
+      "unfiled": "未分类",
+      "heading": "文件夹",
+      "create": "新建文件夹",
+      "namePlaceholder": "文件夹名称",
+      "save": "保存",
+      "cancel": "取消",
+      "rename": "重命名文件夹",
+      "renameAria": "重命名 {name}",
+      "deleteAria": "删除 {name}",
+      "deleteConfirm": "删除文件夹“{name}”？其中的对话将保留为未分类。",
+      "empty": "暂无文件夹",
+      "tags": "标签",
+      "error": "无法完成请求",
+      "organizeTitle": "整理对话",
+      "organizeAria": "整理 {title} 的文件夹和标签",
+      "folderLabel": "文件夹",
+      "tagsLabel": "标签",
+      "tagsPlaceholder": "例如：工作, 研究",
+      "tagsHelp": "用逗号分隔。以小写保存，最多 8 个。",
+      "folderBadge": "文件夹"
+    }
   },
   "chatSocket": {
     "interceptNotice": "拦截模式（讨论・深度研究・图像）已开启，本次回复不会应用工具（分析・搜索）与工件。",
@@ -901,7 +969,64 @@
     "noResultBody": "没有保存的最终答复。请查看下方执行时间线了解经过。",
     "previewTitle": "产出预览",
     "previewEmpty": "该任务没有已保存的产出。",
-    "previewLoadError": "无法加载产出。"
+    "previewLoadError": "无法加载产出。",
+    "planEdit": {
+      "open": "编辑",
+      "title": "编辑计划",
+      "nextTurn": "下一轮生效",
+      "stepPlaceholder": "步骤说明",
+      "doneWhenPlaceholder": "完成条件（可选）",
+      "moveUp": "上移",
+      "moveDown": "下移",
+      "remove": "删除",
+      "add": "添加步骤",
+      "save": "保存",
+      "cancel": "取消",
+      "conflict": "计划已在别处更改，请重新加载后再编辑。",
+      "failed": "保存失败。"
+    },
+    "fork": {
+      "title": "从检查点分支",
+      "pick": "选择回合",
+      "turnOption": "回合 {turn}（{messages} 条消息）",
+      "go": "分支并运行",
+      "hint": "以新任务重新执行所选回合之后的内容（工作目录重新开始）。",
+      "failed": "分支失败：{error}"
+    },
+    "priorityBadge": "优先级 {priority}",
+    "triggers": {
+      "title": "Webhook 触发器",
+      "create": "新建触发器",
+      "hint": "外部系统发送带签名的 POST 时，会用所选模板启动任务。在模板目标中放入 {placeholder} 时请求正文会放在该位置，否则追加到末尾。",
+      "needTemplate": "请先创建任务模板",
+      "namePlaceholder": "触发器名称",
+      "template": "模板",
+      "templatePick": "选择模板",
+      "policy": "审批策略",
+      "policies": {
+        "all": "所有工具需审批",
+        "high-risk": "仅高风险需审批",
+        "none": "无需审批"
+      },
+      "add": "创建",
+      "secretOnce": "密钥只在此时显示 — 请保存到发送方的设置中。",
+      "copy": "复制",
+      "signingNote": "时间戳必须在 ±{window} 秒内。重试时发送相同的 {delivery} 可避免重复执行。",
+      "dismiss": "关闭",
+      "empty": "还没有触发器。",
+      "enabled": "已开启",
+      "disabled": "已关闭",
+      "templateMissing": "(模板不存在)",
+      "fired": "已执行 {count} 次",
+      "failures": "连续失败 {count} 次: {error}",
+      "enable": "开启",
+      "disable": "关闭",
+      "rotate": "重新生成密钥",
+      "rotateConfirm": "重新生成密钥后，用旧密钥签名的请求将被拒绝。是否继续？",
+      "delete": "删除",
+      "deleteConfirm": "要删除此触发器吗？",
+      "failed": "处理失败: {message}"
+    }
   },
   "customAgents": {
     "pageTitle": "自定义智能体",
@@ -1493,7 +1618,34 @@
       "spawnAdoption": "并行委托采用率",
       "ofSpawnIntent": "{intent} 个意图轮次中 {called} 个调用"
     },
-    "noNodes": "没有上报的集群节点。"
+    "noNodes": "没有上报的集群节点。",
+    "nodeMetrics": {
+      "gpuTitle": "vLLM 节点 · KV 缓存",
+      "queueTitle": "队列深度",
+      "disabled": "节点指标采集已关闭(NODE_METRICS_ENABLED=false)。",
+      "noTargets": "没有抓取目标 — 请设置 VLLM_METRICS_URLS 或 LLM_TOKENIZE_URL。",
+      "waitingFirstScrape": "正在等待首次抓取。",
+      "stale": "已中断",
+      "fresh": "正常",
+      "peak": "最近 {hours} 小时最大 {value}",
+      "th": {
+        "node": "节点",
+        "state": "状态",
+        "kv": "KV 缓存",
+        "kvPeak": "KV 峰值({hours}h)",
+        "running": "运行",
+        "waiting": "等待",
+        "ttft": "平均 TTFT",
+        "gpuUtil": "GPU 利用率"
+      },
+      "queue": {
+        "agent_task_pending": "任务队列等待",
+        "agent_task_running": "任务运行中",
+        "agent_task_queued_db": "DB queued 任务",
+        "orchestrator_jobs_pending": "媒体 job 等待",
+        "vllm_waiting": "vLLM 等待请求"
+      }
+    }
   },
   "adminAlerts": {
     "title": "告警",
@@ -1815,6 +1967,28 @@
     "advancedHide": "收起详细",
     "hiddenUnsupportedNote": "尚无执行路径的功能不显示: {list}"
   },
+  "adminGatewayModels": {
+    "title": "网关模型状态",
+    "description": "LiteLLM 网关(/model/info)中注册的路由及本地模型探测结果。",
+    "refresh": "刷新",
+    "loadError": "无法加载网关模型状态",
+    "unreachable": "无法连接网关：{reason}",
+    "empty": "网关中没有注册的模型",
+    "default": "默认",
+    "defaultNote": "默认聊天模型：{model}",
+    "col": {
+      "name": "路由",
+      "upstream": "上游",
+      "mode": "模式",
+      "status": "状态"
+    },
+    "status": {
+      "available": "可用",
+      "unavailable": "不可用",
+      "uncataloged": "不在目录中",
+      "external": "外部"
+    }
+  },
   "adminSystemSettings": {
     "title": "系统设置",
     "description": "管理运营设置（OAuth、搜索、通知、推送、LLM 网关）。此处保存的值（DB）优先于 .env。",
@@ -1855,6 +2029,14 @@
       "push": {
         "title": "网页推送 (VAPID)",
         "description": "浏览器推送通知的 VAPID 密钥。请同时设置公钥/私钥对。"
+      },
+      "agent": {
+        "title": "代理与 MCP 运行时",
+        "description": "外部 MCP 工具列表刷新间隔、审批超时后暂存、队列优先级上限。保存后立即生效。"
+      },
+      "slo": {
+        "title": "SLO 目标",
+        "description": "聊天可用性、首个 token 延迟、智能体任务成功率和评估通过率的目标。目标为百分比(例如 99.5),TTFT 为 p95 阈值(毫秒)。从下一次评估(每 5 分钟)起生效。"
       }
     },
     "historyTitle": "变更历史",
@@ -2186,7 +2368,24 @@
         "external": "外部工具",
         "control": "控制",
         "sensitive": "凭据文件"
-      }
+      },
+      "recentTitle": "最近决定（30 分钟）",
+      "revoked": "已撤销",
+      "consumed": "已执行",
+      "approvedPending": "已批准 · 尚未执行",
+      "revoke": "撤销",
+      "revokeHint": "撤回尚未执行的批准（恢复时将重新等待审批）",
+      "autoApproveOff": "关闭自动批准",
+      "autoApproveOffHint": "关闭此任务的自动批准",
+      "preview": "执行前变更预览",
+      "assignedToMe": "已转交给我",
+      "assignedAway": "已转交",
+      "reassign": "转交",
+      "reassignPick": "选择转交对象",
+      "escalate": "上报",
+      "escalateHint": "交给组织所有者/管理员处理",
+      "elicitHint": "{server} 服务器请求输入 · 字段: {fields}",
+      "elicitJsonHint": "字段多于一个时请用 JSON 回答: {example}"
     }
   },
   "marketplacePublish": {
@@ -2323,5 +2522,85 @@
     "userIdPlaceholder": "用户 id",
     "grant": "授予",
     "grantDone": "已授予。"
+  },
+  "adminSlo": {
+    "title": "SLO",
+    "description": "相对服务水平目标的当前状态、错误预算与消耗速率",
+    "computedAt": "计算时间 {time}",
+    "openSettings": "设置目标",
+    "refresh": "刷新",
+    "loadError": "加载失败。",
+    "target": "目标 {value}",
+    "budgetRemaining": "剩余错误预算",
+    "burnFast": "消耗(1 小时)",
+    "burnSlow": "消耗(6 小时)",
+    "samples": "样本",
+    "p95": "TTFT p95",
+    "reasonLabel": "原因",
+    "historyTitle": "最近 30 天",
+    "date": "日期",
+    "historyEmpty": "尚无快照 — 每 5 分钟记录一次评估。",
+    "state": {
+      "ok": "正常",
+      "warning": "警告",
+      "critical": "严重",
+      "insufficient": "数据不足"
+    },
+    "reason": {
+      "fast_burn": "快速消耗(1 小时与 5 分钟窗口 ≥14.4 倍)",
+      "slow_burn": "缓慢消耗(6 小时与 30 分钟窗口 ≥6 倍)",
+      "budget_exhausted": "窗口内错误预算已耗尽",
+      "below_target": "低于目标",
+      "few_samples": "样本不足",
+      "source_unavailable": "数据源不可用"
+    },
+    "slo": {
+      "chat_availability": {
+        "name": "聊天可用性",
+        "desc": "最近 {window} 天聊天请求中无错误结束的比例(不含用户中止)"
+      },
+      "chat_ttft_p95": {
+        "name": "首个 token 延迟",
+        "desc": "最近 {window} 天成功请求中首个 token 在 {threshold} 秒内的比例(p95 目标)"
+      },
+      "agent_task_success": {
+        "name": "智能体任务成功率",
+        "desc": "最近 {window} 天结束的任务中完成的比例(不含取消)"
+      },
+      "eval_pass": {
+        "name": "评估通过率",
+        "desc": "最近 {window} 天内最新一次回答评估的通过率"
+      }
+    }
+  },
+  "adminEvaluations": {
+    "title": "评估记录",
+    "description": "nightly 评估运行记录 — 通过率、首个 token 延迟与失败用例",
+    "refresh": "刷新",
+    "loadError": "加载失败。",
+    "runnerFilter": "运行器",
+    "allRunners": "全部运行器",
+    "matrixTitle": "最新矩阵 ({time})",
+    "modelVariant": "模型 \\ variant",
+    "listTitle": "运行列表",
+    "empty": "暂无记录 — nightly 评估以 OMK_EVAL_RECORD_DB=true 运行后会累积。",
+    "noFailures": "没有失败用例。",
+    "th": {
+      "completedAt": "完成时间",
+      "runner": "运行器",
+      "mode": "模式",
+      "model": "模型 · variant",
+      "passRate": "通过率",
+      "ttft": "TTFT p50",
+      "totalP95": "总耗时 p95",
+      "version": "数据集 · 提交"
+    },
+    "runner": {
+      "routing": "路由",
+      "response": "回答",
+      "tools": "工具选择",
+      "redteam": "红队",
+      "matrix": "矩阵"
+    }
   }
 }

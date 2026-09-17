@@ -13,6 +13,19 @@
  *
  * @interface SearchResult
  */
+/**
+ * 클라이언트 인용 미리보기용 구조화 출처(F19.4) — `[N]` 번호가 formatSearchSources 출력과 같도록 같은 배열·순서·캡으로 만든다.
+ */
+export interface SearchSourceRef {
+    /** 1부터 — 본문 [N] 과 같은 번호 */
+    n: number;
+    title: string;
+    url: string;
+    snippet: string;
+    /** 결과 도메인(표시용) */
+    source?: string;
+}
+
 export interface SearchResult {
     /** 검색 결과 제목 */
     title: string;

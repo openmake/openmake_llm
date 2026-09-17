@@ -1,11 +1,15 @@
 "use client";
 
-import { Fragment } from "react";
-import ReactMarkdown, { type Components } from "react-markdown";
+import { Fragment, useMemo } from "react";
+import ReactMarkdown, { type Components, type ExtraProps } from "react-markdown";
+import type { ComponentPropsWithoutRef } from "react";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { useTranslations } from "next-intl";
 import { KakaoMap } from "./kakao-map";
+import { CitationChip } from "./citation-chip";
+import { citationNumber, linkCitations } from "@/lib/citations";
+import type { SearchSourceRef } from "@openmake/shared-types";
 
 /**
  * 마크다운 렌더러. react-markdown 은 기본적으로 raw HTML 을 렌더하지 않으므로
@@ -34,38 +38,42 @@ const isGeneratedMedia = (href: string | undefined): "audio" | "video" | null =>
   return null;
 };
 
-const MD_COMPONENTS: Components = {
-  a: ({ ...props }) => {
-    const kind = isGeneratedMedia(typeof props.href === "string" ? props.href : undefined);
-    if (kind === "audio") {
-      return (
-        <span className="my-2 block">
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-          <audio controls preload="metadata" src={props.href} className="w-full max-w-md">
-            <a href={props.href}>{props.children}</a>
-          </audio>
-        </span>
-      );
-    }
-    if (kind === "video") {
-      return (
-        <span className="my-2 block">
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-          <video controls preload="metadata" src={props.href} className="max-h-[420px] w-full max-w-xl rounded-lg border border-border">
-            <a href={props.href}>{props.children}</a>
-          </video>
-        </span>
-      );
-    }
+type LinkProps = ComponentPropsWithoutRef<"a"> & ExtraProps;
+
+function MarkdownLink({ ...props }: LinkProps) {
+  const kind = isGeneratedMedia(typeof props.href === "string" ? props.href : undefined);
+  if (kind === "audio") {
     return (
-      <a
-        {...props}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="break-all text-accent underline underline-offset-2 hover:text-accent-hover"
-      />
+      <span className="my-2 block">
+        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+        <audio controls preload="metadata" src={props.href} className="w-full max-w-md">
+          <a href={props.href}>{props.children}</a>
+        </audio>
+      </span>
     );
-  },
+  }
+  if (kind === "video") {
+    return (
+      <span className="my-2 block">
+        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+        <video controls preload="metadata" src={props.href} className="max-h-[420px] w-full max-w-xl rounded-lg border border-border">
+          <a href={props.href}>{props.children}</a>
+        </video>
+      </span>
+    );
+  }
+  return (
+    <a
+      {...props}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="break-all text-accent underline underline-offset-2 hover:text-accent-hover"
+    />
+  );
+}
+
+const MD_COMPONENTS: Components = {
+  a: MarkdownLink,
   img: ({ ...props }) => (
     // eslint-disable-next-line @next/next/no-img-element
     <img
@@ -182,16 +190,28 @@ function splitSegments(content: string): (MapSegment | TextSegment)[] {
   return segments;
 }
 
-function MarkdownText({ text }: { text: string }) {
+function MarkdownText({ text, sources }: { text: string; sources?: SearchSourceRef[] }) {
+  // 인용 [N] → 칩(F19.4): 출처가 있을 때만 전처리하고 a override 가 #cite-N 을 칩으로 렌더한다
+  const components = useMemo<Components>(() => {
+    if (!sources?.length) return MD_COMPONENTS;
+    return {
+      ...MD_COMPONENTS,
+      a: (props: LinkProps) => {
+        const n = citationNumber(typeof props.href === "string" ? props.href : undefined);
+        if (n !== null) return <CitationChip n={n} source={sources[n - 1]} />;
+        return <MarkdownLink {...props} />;
+      },
+    };
+  }, [sources]);
   const cleaned = text.replace(GUIDE_MARKER_RE, "").trimEnd();
   if (!cleaned) return null;
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[rehypeHighlight]}
-      components={MD_COMPONENTS}
+      components={components}
     >
-      {cleaned}
+      {sources?.length ? linkCitations(cleaned, sources.length) : cleaned}
     </ReactMarkdown>
   );
 }
@@ -217,7 +237,7 @@ function ReportDataBlock({ seg }: { seg: ReportSegment }) {
   );
 }
 
-export function Markdown({ content }: { content: string }) {
+export function Markdown({ content, sources }: { content: string; sources?: SearchSourceRef[] }) {
   const reportSegments = splitReportSegments(content);
   return (
     <div className="prose-chat break-words">
@@ -231,7 +251,7 @@ export function Markdown({ content }: { content: string }) {
                 {seg.kind === "map" ? (
                   <KakaoMap places={seg.places} route={seg.route} />
                 ) : (
-                  <MarkdownText text={seg.text} />
+                  <MarkdownText text={seg.text} sources={sources} />
                 )}
               </Fragment>
             ))

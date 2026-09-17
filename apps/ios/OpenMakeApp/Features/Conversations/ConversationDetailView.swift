@@ -227,6 +227,7 @@ private struct ChatTranscriptView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             AssistantHead()
                             MarkdownText(content: chat.streamingText + " ▍")
+                            SourcesDisclosure(items: chat.streamingSources)
                         }
                     }
                     // 멀티모달 작업 목록 — 이미지·영상·음성 capability 작업의 상태(웹 진행 배너 대응)
@@ -364,7 +365,53 @@ private struct MessageRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 AssistantHead(pulsing: false)
                 MarkdownText(content: message.content)
+                SourcesDisclosure(items: (message.sources ?? []).map(ChatSourceItem.init))
             }
+        }
+    }
+}
+
+/// 답변 웹검색 출처(F19.4) — 본문 [N] 과 같은 번호의 접이식 목록. 웹의 인용 팝오버 대신 목록으로 보인다
+private struct SourcesDisclosure: View {
+    let items: [ChatSourceItem]
+    @State private var expanded = false
+
+    var body: some View {
+        if !items.isEmpty {
+            DisclosureGroup(isExpanded: $expanded) {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(items) { item in
+                        VStack(alignment: .leading, spacing: 2) {
+                            if let url = URL(string: item.url) {
+                                Link(destination: url) {
+                                    Text("[\(item.n)] \(item.title)")
+                                        .font(.footnote.weight(.medium))
+                                        .foregroundStyle(Instrument.accent)
+                                        .multilineTextAlignment(.leading)
+                                }
+                            } else {
+                                Text("[\(item.n)] \(item.title)").font(.footnote.weight(.medium))
+                            }
+                            Text(item.domain)
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(Instrument.muted)
+                            if !item.snippet.isEmpty {
+                                Text(item.snippet)
+                                    .font(.caption)
+                                    .foregroundStyle(Instrument.fg)
+                                    .lineLimit(3)
+                            }
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+                .padding(.top, 6)
+            } label: {
+                Label("출처 \(items.count)", systemImage: "link")
+                    .font(.caption)
+                    .foregroundStyle(Instrument.muted)
+            }
+            .tint(Instrument.muted)
         }
     }
 }

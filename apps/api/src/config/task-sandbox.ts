@@ -150,3 +150,12 @@ export function getTaskSandboxConfig(): TaskSandboxConfig {
             .split(',').map((s) => s.trim()).filter(Boolean),
     };
 }
+
+/** 승인 미리보기 diff(F18 PR-2, 138) 크기 캡. 기본 켜짐(APPROVAL_PREVIEW_ENABLED=false 로 끔). */
+export const APPROVAL_PREVIEW = {
+    ENABLED: process.env.APPROVAL_PREVIEW_ENABLED !== 'false',
+    /** 파일 내용 상한(chars) — 넘으면 미리보기 생략 */
+    FILE_MAX_CHARS: parseInt(process.env.APPROVAL_PREVIEW_FILE_MAX_CHARS || '65536', 10),
+    /** diff 상한(chars) — 넘으면 절단 표시 */
+    DIFF_MAX_CHARS: parseInt(process.env.APPROVAL_PREVIEW_DIFF_MAX_CHARS || '32768', 10),
+} as const;

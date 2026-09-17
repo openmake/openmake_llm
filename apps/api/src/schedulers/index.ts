@@ -80,6 +80,82 @@ export async function startAllSchedulers(): Promise<void> {
         logger.warn('TaskSandbox 정리 실패(무시):', err);
     }
 
+    // 7-a. 채팅 요청 사실 테이블 보존 정리(F24.2, 142) — 요청 행 90일·미사용 지문 180일
+    try {
+        const { CHAT_REQUESTS } = await import('../config/runtime-limits');
+        if (CHAT_REQUESTS.ENABLED) {
+            const { ChatRequestRepository } = await import('../data/repositories/chat-request-repository');
+            const { getPool } = await import('../data/models/unified-database');
+            const purge = () => new ChatRequestRepository(getPool()).purge(CHAT_REQUESTS.RETENTION_DAYS, CHAT_REQUESTS.FINGERPRINT_RETENTION_DAYS)
+                .then((r) => { if (r.requests || r.fingerprints) logger.info(`chat_requests 보존 정리: 요청 ${r.requests} · 지문 ${r.fingerprints}`); })
+                .catch(() => { /* 142 적용 전 등 — 다음 주기에 재시도 */ });
+            void purge();
+            setInterval(() => { void purge(); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
+        }
+    } catch (err) {
+        logger.warn('chat_requests 보존 정리 등록 실패(무시):', err);
+    }
+
+    // 7-c. 노드 지표 스크레이프·큐 깊이 샘플(F24.4, 143) — vLLM /metrics 60초·큐 깊이 30초, 14일 보존. 전부 fail-open
+    try {
+        const { NODE_METRICS } = await import('../config/runtime-limits');
+        if (NODE_METRICS.ENABLED) {
+            const { scrapeNodeMetricsOnce, currentVllmWaiting } = await import('../cluster/node-metrics-collector');
+            const { sampleQueueDepth } = await import('../monitoring/queue-depth-sampler');
+            const { NodeMetricsRepository } = await import('../data/repositories/node-metrics-repository');
+            const { getAgentTaskQueue } = await import('../services/agent-task/task-queue');
+            const { getPool } = await import('../data/models/unified-database');
+            const repo = () => new NodeMetricsRepository(getPool());
+            const scrape = () => scrapeNodeMetricsOnce().then((rows) => repo().insertSamples(rows)).catch(() => { /* 143 적용 전 등 */ });
+            const sample = () => sampleQueueDepth(getPool(), { queueStats: () => getAgentTaskQueue().stats(), vllmWaiting: () => currentVllmWaiting() })
+                .then(({ rows }) => repo().insertSamples(rows)).catch(() => { /* noop */ });
+            const purge = () => repo().purge(NODE_METRICS.RETENTION_DAYS).catch(() => 0);
+            void scrape();
+            setInterval(() => { void scrape(); }, NODE_METRICS.POLL_MS).unref();
+            setInterval(() => { void sample(); }, NODE_METRICS.QUEUE_SAMPLE_MS).unref();
+            void purge();
+            setInterval(() => { void purge(); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
+        }
+    } catch (err) {
+        logger.warn('노드 지표 수집 등록 실패(무시):', err);
+    }
+
+    // 7-d. SLO 평가(F24.8, 145) — 5분 tick: SLI·버짓·burn-rate 스냅샷 + 악화 시 알림, 스냅샷 400일 보존
+    try {
+        const { SLO_LIMITS } = await import('../config/slo');
+        const { runSloTick } = await import('../monitoring/slo-runner');
+        const { SloRepository } = await import('../data/repositories/slo-repository');
+        const { getAlertSystem } = await import('../monitoring/alerts');
+        const { getPool } = await import('../data/models/unified-database');
+        const tick = () => runSloTick(getPool(), (...a) => getAlertSystem().sendAlert(...a)).catch(() => { /* noop */ });
+        setTimeout(() => { void tick(); }, SLO_LIMITS.FIRST_TICK_DELAY_MS).unref();
+        setInterval(() => { void tick(); }, SLO_LIMITS.TICK_MS).unref();
+        setInterval(() => { void new SloRepository(getPool()).purge(SLO_LIMITS.SNAPSHOT_RETENTION_DAYS).catch(() => 0); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
+    } catch (err) {
+        logger.warn('SLO 평가 등록 실패(무시):', err);
+    }
+
+    // 7-e. LLM 요청 셰도우 계측 보존 정리(F06.2 G0, 158) — 90일
+    try {
+        const { LLM_REQUEST_METRICS } = await import('../config/runtime-limits');
+        const { getPool } = await import('../data/models/unified-database');
+        const purgeLlmMetrics = () => getPool().query('DELETE FROM llm_request_metrics WHERE created_at < NOW() - make_interval(days => $1)', [LLM_REQUEST_METRICS.RETENTION_DAYS])
+            .catch(() => undefined);
+        setInterval(() => { void purgeLlmMetrics(); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
+    } catch (err) {
+        logger.warn('LLM 요청 계측 보존 정리 등록 실패(무시):', err);
+    }
+
+    // 7-b. 질문 응답 대기 주차 스윕(F16.7) — 결정 도착분 재개·상한 초과분 실패·대기분 workspace 유지(주차가 없으면 조회 1회)
+    try {
+        const { sweepParkedTasks } = await import('../services/agent-task/hitl-park');
+        const { AGENT_TASK_LIMITS } = await import('../config/runtime-limits');
+        void sweepParkedTasks();
+        setInterval(() => { void sweepParkedTasks(); }, AGENT_TASK_LIMITS.HITL_PARK_SWEEP_MS).unref();
+    } catch (err) {
+        logger.warn('주차 스윕 등록 실패(무시):', err);
+    }
+
     // 8-B. Agent Task 부팅 자동 복구 — 재시작으로 running/paused 로 박제된 task 를 스윕.
     //      샌드박스 플래그와 무관하게 실행(비-샌드박스 task 도 좀비가 된다). 반드시 위
     //      reapOrphanTaskSandboxes() 이후 — 먼저 돌면 resume 이 만든 컨테이너를 reap 이 죽인다.

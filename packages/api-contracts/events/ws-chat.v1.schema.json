@@ -57,6 +57,34 @@
       ],
       "description": "MCP 도구 결과의 resource content (백엔드 external-tool-exec 가 추출해 emit)."
     },
+    "SearchSourceRef": {
+      "type": "object",
+      "properties": {
+        "n": {
+          "type": "number"
+        },
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "snippet": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "description": "결과 도메인(표시용)"
+        }
+      },
+      "required": [
+        "n",
+        "title",
+        "url",
+        "snippet"
+      ],
+      "description": "웹검색 구조화 출처(F19.4) — 본문 [N] 인용과 같은 번호. 서버 formatSearchSources 와 같은 순서·캡"
+    },
     "WsAttachedFile": {
       "type": "object",
       "properties": {
@@ -101,6 +129,10 @@
         },
         "message": {
           "type": "string"
+        },
+        "clientRequestId": {
+          "type": "string",
+          "description": "클라이언트 발급 멱등 키(140) — 같은 id 재전송은 새 생성 없이 이전 messageId 로 done 만 다시 온다"
         },
         "model": {
           "type": "string"
@@ -248,6 +280,35 @@
         "type",
         "message"
       ]
+    },
+    "WsResumeRequest": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "resume"
+        },
+        "anonSessionId": {
+          "type": "string",
+          "description": "게스트 스트림 키"
+        },
+        "lane": {
+          "type": "string",
+          "description": "비교 모드 레인"
+        },
+        "streamId": {
+          "type": "string",
+          "description": "마지막으로 받은 이벤트의 streamId"
+        },
+        "afterSeq": {
+          "type": "number",
+          "description": "마지막으로 받은 이벤트의 seq — 같은 스트림이면 이 뒤 이벤트만 재생"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "description": "재연결 후 끊긴 스트림 이어받기 요청 — 커서가 없거나 다른 스트림이면 서버는 미전달 이벤트만 재생한다(종전 동작)."
     },
     "WsServerEvent": {
       "anyOf": [
@@ -457,6 +518,10 @@
             "cleanedContent": {
               "type": "string",
               "description": "아티팩트가 있으면 raw 코드펜스가 placeholder 로 치환된 본문 — 클라가 누적 본문을 이걸로 reset."
+            },
+            "deduplicated": {
+              "type": "boolean",
+              "description": "같은 clientRequestId 의 재전송이라 새 생성 없이 끝냈음(140)"
             }
           },
           "required": [
@@ -499,6 +564,18 @@
             },
             "finished": {
               "type": "boolean"
+            },
+            "streamId": {
+              "type": "string",
+              "description": "이 스트림의 식별자(F19.11) — 클라이언트 커서가 다르면 새 스트림으로 본다"
+            },
+            "lastSeq": {
+              "type": "number",
+              "description": "스냅샷이 반영한 마지막 순번"
+            },
+            "gap": {
+              "type": "boolean",
+              "description": "재생해야 할 이벤트 일부가 링버퍼에서 밀려났음 — 아티팩트는 done.cleanedContent 로 재구성할 것"
             }
           },
           "required": [
@@ -517,6 +594,28 @@
           },
           "required": [
             "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "search_sources"
+            },
+            "messageId": {
+              "type": "string"
+            },
+            "sources": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/SearchSourceRef"
+              }
+            }
+          },
+          "required": [
+            "type",
+            "sources"
           ]
         },
         {
@@ -878,6 +977,18 @@
           ]
         }
       ]
+    },
+    "WsStreamEnvelope": {
+      "type": "object",
+      "properties": {
+        "streamId": {
+          "type": "string"
+        },
+        "seq": {
+          "type": "number"
+        }
+      },
+      "description": "스트림 이벤트 공통 봉투(F19.11, 2026-09-17) — 채팅 스트림 이벤트에 서버가 덧붙이는 이어받기 커서. `streamId` 는 스트림(한 번의 생성)마다 새로 발급되고 `seq` 는 그 안에서 1부터 단조 증가한다(토큰 포함). 클라이언트는 마지막으로 받은 값을 기억해 재연결 시 `resume{streamId, afterSeq}` 로 보내고, `seq <= afterSeq` 인 이벤트는 중복이므로 무시한다. 구 서버는 필드가 없다."
     }
   }
 }

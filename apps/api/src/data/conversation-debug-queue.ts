@@ -19,6 +19,7 @@
 import { getPool } from './models/unified-database';
 import { withRetry } from './retry-wrapper';
 import { createLogger } from '../utils/logger';
+import { takeReplayBundle, type ReplayBundle } from '../observability/replay-capture';
 
 const logger = createLogger('ConversationDebugQueue');
 
@@ -45,6 +46,8 @@ interface DebugQueueEntry {
     errorCode?: string;
     /** model, agent, queryType 등 운영 메타 */
     routingMetadata?: Record<string, unknown>;
+    /** 재현 번들(F24.7, 144) — 미지정이면 세션의 최근 LLM 요청 번들을 메모리에서 찾아 붙인다(마지막 user 문장이 맞을 때만) */
+    replayBundle?: ReplayBundle | null;
 }
 
 /**
@@ -61,14 +64,16 @@ export async function enqueueDebugCapture(
         const pool = getPool();
         const ttlMs = DEBUG_QUEUE_TTL_MS[entry.reason];
         const expiresAt = new Date(Date.now() + ttlMs);
+        const bundle = entry.replayBundle === undefined ? takeReplayBundle(entry.sessionId, entry.userMessage) : entry.replayBundle ?? undefined;
 
         const result = await withRetry(
             () =>
                 pool.query<{ id: string }>(
                     `INSERT INTO conversation_debug_queue
                        (session_id, user_id, expires_at, reason,
-                        user_message, assistant_message, error_code, routing_metadata)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                        user_message, assistant_message, error_code, routing_metadata,
+                        replay_bundle, request_id, replay_truncated)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                      RETURNING id`,
                     [
                         entry.sessionId,
@@ -79,6 +84,9 @@ export async function enqueueDebugCapture(
                         entry.assistantMessage,
                         entry.errorCode ?? null,
                         entry.routingMetadata ? JSON.stringify(entry.routingMetadata) : null,
+                        bundle ? JSON.stringify(bundle) : null,
+                        bundle?.requestId ?? null,
+                        bundle?.truncated ?? false,
                     ],
                 ),
             { operation: 'enqueueDebugCapture' },
@@ -87,7 +95,7 @@ export async function enqueueDebugCapture(
         const id = result.rows[0]?.id;
         if (!id) return null;
         logger.info(
-            `[DebugQueue] 본문 보존: reason=${entry.reason}, session=${entry.sessionId}, expires=${expiresAt.toISOString()}`,
+            `[DebugQueue] 본문 보존: reason=${entry.reason}, session=${entry.sessionId}, expires=${expiresAt.toISOString()}, replay=${bundle ? `${bundle.requestId}${bundle.truncated ? '(truncated)' : ''}` : 'none'}`,
         );
         return { id, expiresAt };
     } catch (err) {
@@ -122,4 +130,15 @@ export async function cleanupExpiredDebugQueue(): Promise<number> {
         logger.error(`[DebugQueue] cleanup 실패: ${msg}`);
         return 0;
     }
+}
+
+/** 관리자 재현(F24.7) — 행 1건의 번들·원문. 없으면 null. */
+export async function getDebugCaptureForReplay(id: string): Promise<{ id: string; sessionId: string; reason: string; userMessage: string; assistantMessage: string; errorCode: string | null; replayBundle: ReplayBundle | null; requestId: string | null; replayTruncated: boolean } | null> {
+    const r = await getPool().query<{ id: string; session_id: string; reason: string; user_message: string; assistant_message: string; error_code: string | null; replay_bundle: ReplayBundle | null; request_id: string | null; replay_truncated: boolean }>(
+        `SELECT id::text AS id, session_id, reason, user_message, assistant_message, error_code, replay_bundle, request_id, replay_truncated
+           FROM conversation_debug_queue WHERE id::text = $1 AND expires_at > now()`,
+        [id],
+    );
+    const x = r.rows[0];
+    return x ? { id: x.id, sessionId: x.session_id, reason: x.reason, userMessage: x.user_message, assistantMessage: x.assistant_message, errorCode: x.error_code, replayBundle: x.replay_bundle, requestId: x.request_id, replayTruncated: x.replay_truncated } : null;
 }

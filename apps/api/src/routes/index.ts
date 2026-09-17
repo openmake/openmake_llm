@@ -21,6 +21,7 @@ export { mcpServerIngestRouter } from './mcp-server-ingest.routes';
 export { mcpCatalogAdminRouter } from './mcp-catalog-admin.routes';
 export { mcpAdminMonitoringRouter } from './mcp-admin-monitoring.routes';
 export { toolHealthRouter } from './tool-health.routes';
+export { evaluationRunsRouter } from './evaluation-runs.routes';
 export { adminModelRolesRouter } from './admin-model-roles.routes';
 export { adminCapabilityModelsRouter } from './admin-capability-models.routes';
 export { adminSystemSettingsRouter } from './admin-system-settings.routes';
@@ -28,6 +29,7 @@ export { adminOrganizationsRouter } from './admin-organizations.routes';
 export { organizationPoliciesRouter, adminOrganizationPoliciesRouter } from './organization-policies.routes';
 export { adminConfigExportRouter } from './admin-config-export.routes';
 export { adminCostRatesRouter } from './admin-cost-rates.routes';
+export { adminGatewayRouter } from './admin-gateway.routes';
 export { usageQuotaRouter, adminQuotaOverageRouter } from './quota-overage.routes';
 export { usageStatementsRouter, adminBillingRouter } from './billing-statements.routes';
 export { firstRunSetupRouter } from './first-run-setup.routes';
@@ -53,6 +55,7 @@ export { default as desktopUpdateRouter } from './desktop-update.routes';
 export { default as agentTaskScheduleRouter } from './agent-task-schedule.routes';
 export { adminAgentTaskSchedulesRouter } from './admin-agent-task-schedules.routes';
 export { default as agentTaskTemplateRouter } from './agent-task-template.routes';
+export { agentTaskTriggerRouter, triggerReceiverRouter } from './agent-task-trigger.routes';
 export { default as agentSuggestionsRouter } from './agent-suggestions.routes';
 export { default as externalRouter } from './external.routes';
 // 🆕 Artifacts (2026-05-26 Phase 1): claude.ai-style 산출물 영속화
@@ -61,6 +64,7 @@ export { default as artifactsRouter } from './artifacts.routes';
 export { default as artifactPublicationRouter } from './artifact-publication.routes';
 // Artifacts pdf/docx export (P1 보고서 파이프라인 Phase 3 — 파일 크기 가드 분리)
 export { default as artifactExportRouter } from './artifact-export.routes';
+export { default as artifactCommentsRouter } from './artifact-comments.routes';
 
 // 🆕 Push 알림 라우트
 export { pushRouter } from './push.routes';
@@ -77,6 +81,7 @@ export { default as developerDocsRouter } from './developer-docs.routes';
 
 // 🆕 Chat Feedback 라우트
 export { default as chatFeedbackRouter } from './chat-feedback.routes';
+export { default as conversationFoldersRouter } from './conversation-folders.routes';
 
 // 🆕 Token Monitoring 라우트
 // (tokenMonitoringRouter 재수출 제거 — setup.ts/v1 이 token-monitoring.routes 직접 import)

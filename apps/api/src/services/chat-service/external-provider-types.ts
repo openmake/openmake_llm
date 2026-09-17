@@ -17,7 +17,7 @@ export interface ExternalProviderDeps {
     /** 현재 사용자 컨텍스트 — MCP tool 실행 sandbox 에 사용 */
     currentUserContext: UserContext | null;
     /** MCP tool 호출 결과 inline 카드 콜백 (frontend 표시용) */
-    mcpToolResultCallback?: (data: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }> }) => void;
+    mcpToolResultCallback?: (data: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }>; sources?: import('../../mcp/web-search/types').SearchSourceRef[] }) => void;
     /** MCP tool 호출 시작 콜백 (frontend "실행 중" 진행 표시용) */
     mcpToolStartCallback?: (data: { toolName: string }) => void;
     /** Provider usage 누적 — ChatService.lastProviderUsage setter */

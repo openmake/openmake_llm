@@ -27,6 +27,8 @@
       "approvals": "Approvals",
       "organizationsAdmin": "Organizations",
       "costRatesAdmin": "Cost Rates",
+      "sloAdmin": "SLO",
+      "evaluationsAdmin": "Evaluations",
       "quotaRequestsAdmin": "Quota Approvals"
     },
     "pendingApprovals": "{count} pending approval(s) — agent tasks are waiting for your approval"
@@ -344,7 +346,10 @@
       "sendAnswer": "Send answer",
       "skip": "Skip",
       "autoApprove": "Approve rest",
-      "autoApproveHint": "Run remaining tool calls of this task without approval (questions excluded)"
+      "autoApproveHint": "Run remaining tool calls of this task without approval (questions excluded)",
+      "preview": "Preview changes",
+      "elicitHint": "Input requested by {server} · fields: {fields}",
+      "elicitJsonHint": "For more than one field, answer in JSON: {example}"
     },
     "artifactFallback": "Artifact",
     "artifactBuilding": "Building artifact…",
@@ -467,6 +472,18 @@
     },
     "verification": {
       "title": "Issues found by verification"
+    },
+    "branchHere": "Branch from here",
+    "branchFailed": "Branch failed: {error}",
+    "citation": {
+      "chipLabel": "Source {n}: {title}",
+      "popoverLabel": "Source {n} preview",
+      "open": "Open source"
+    },
+    "a11y": {
+      "generating": "Generating a response",
+      "toolRunning": "Running {tool}",
+      "done": "Response complete"
     }
   },
   "compare": {
@@ -552,7 +569,10 @@
       "copyLink": "Copy link",
       "unpublish": "Stop sharing",
       "updateSettings": "Update share settings",
-      "publish": "Share"
+      "publish": "Share",
+      "downloadBundle": "Download static HTML",
+      "bundleMissing": "The viewer file is missing — publish again and retry",
+      "bundleFailed": "Couldn't download the HTML"
     },
     "page": {
       "viewerOpenFailed": "Unable to open the viewer",
@@ -574,7 +594,31 @@
       "close": "Close",
       "createdLabel": "Created"
     },
-    "resize": "Resize panel (double-click to reset)"
+    "resize": "Resize panel (double-click to reset)",
+    "exportXlsx": "Save as XLSX",
+    "exportNoSourceXlsx": "XLSX export supports CSV or report artifacts only",
+    "comments": {
+      "toggle": "Comments",
+      "empty": "No comments yet.",
+      "placeholder": "Write a comment (Markdown)",
+      "submit": "Post",
+      "reply": "Reply",
+      "replying": "Replying",
+      "cancelReply": "Cancel",
+      "resolve": "Resolve",
+      "unresolve": "Reopen",
+      "resolved": "Resolved",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this comment?",
+      "deletedPlaceholder": "This comment was deleted.",
+      "apply": "Ask the model to apply",
+      "applyHint": "Puts a revision request quoting this comment into the composer",
+      "applyPrompt": "Please revise the artifact \"{title}\" into a new version that addresses the comment below.",
+      "me": "Me",
+      "user": "User {id}",
+      "loadFailed": "Couldn't load comments.",
+      "actionFailed": "Couldn't complete the action."
+    }
   },
   "history": {
     "title": "Conversation history",
@@ -601,7 +645,31 @@
       "hint": "Start a new conversation and it will appear here."
     },
     "viewAllToggle": "All users",
-    "ownerBadge": "User {id}"
+    "ownerBadge": "User {id}",
+    "folders": {
+      "railLabel": "Conversation folders and tags",
+      "all": "All",
+      "unfiled": "Unfiled",
+      "heading": "Folders",
+      "create": "New folder",
+      "namePlaceholder": "Folder name",
+      "save": "Save",
+      "cancel": "Cancel",
+      "rename": "Rename folder",
+      "renameAria": "Rename {name}",
+      "deleteAria": "Delete {name}",
+      "deleteConfirm": "Delete the '{name}' folder? Its conversations stay as unfiled.",
+      "empty": "No folders yet",
+      "tags": "Tags",
+      "error": "Could not complete the request",
+      "organizeTitle": "Organize conversation",
+      "organizeAria": "Organize {title}",
+      "folderLabel": "Folder",
+      "tagsLabel": "Tags",
+      "tagsPlaceholder": "e.g. work, research",
+      "tagsHelp": "Separate with commas. Saved in lowercase, up to 8.",
+      "folderBadge": "Folder"
+    }
   },
   "chatSocket": {
     "interceptNotice": "An intercept mode (Discussion / Deep Research / Image) is on, so tools (analysis/search) and artifacts are not applied in this response.",
@@ -901,7 +969,64 @@
     "noResultBody": "No final answer was saved. See the execution timeline below for what happened.",
     "previewTitle": "Output preview",
     "previewEmpty": "This task has no saved output.",
-    "previewLoadError": "Could not load the output."
+    "previewLoadError": "Could not load the output.",
+    "planEdit": {
+      "open": "Edit",
+      "title": "Edit plan",
+      "nextTurn": "applies from next turn",
+      "stepPlaceholder": "Step description",
+      "doneWhenPlaceholder": "Done when (optional)",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "remove": "Remove",
+      "add": "Add step",
+      "save": "Save",
+      "cancel": "Cancel",
+      "conflict": "The plan changed elsewhere. Reload and edit again.",
+      "failed": "Failed to save."
+    },
+    "fork": {
+      "title": "Fork from checkpoint",
+      "pick": "Pick a turn",
+      "turnOption": "Turn {turn} ({messages} messages)",
+      "go": "Fork & run",
+      "hint": "Re-runs everything after the chosen turn as a new task (fresh workspace).",
+      "failed": "Fork failed: {error}"
+    },
+    "priorityBadge": "Priority {priority}",
+    "triggers": {
+      "title": "Webhook triggers",
+      "create": "New trigger",
+      "hint": "When an external system sends a signed POST, a task starts from the chosen template. Put {placeholder} in the template goal to place the request body there; otherwise it is appended.",
+      "needTemplate": "Create a task template first",
+      "namePlaceholder": "Trigger name",
+      "template": "Template",
+      "templatePick": "Choose template",
+      "policy": "Approval policy",
+      "policies": {
+        "all": "Approve every tool",
+        "high-risk": "Approve high-risk only",
+        "none": "No approval"
+      },
+      "add": "Create",
+      "secretOnce": "The secret is shown only now — store it in the sender's settings.",
+      "copy": "Copy",
+      "signingNote": "The timestamp must be within ±{window}s. Resend the same {delivery} on retries to avoid duplicate runs.",
+      "dismiss": "Close",
+      "empty": "No triggers yet.",
+      "enabled": "On",
+      "disabled": "Off",
+      "templateMissing": "(template missing)",
+      "fired": "Ran {count} times",
+      "failures": "{count} consecutive failures: {error}",
+      "enable": "Turn on",
+      "disable": "Turn off",
+      "rotate": "Rotate secret",
+      "rotateConfirm": "Rotating the secret rejects requests signed with the old one. Continue?",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this trigger?",
+      "failed": "Failed: {message}"
+    }
   },
   "customAgents": {
     "pageTitle": "Custom Agents",
@@ -1493,7 +1618,34 @@
       "spawnAdoption": "Parallel delegation adoption",
       "ofSpawnIntent": "{called} of {intent} intent turns called it"
     },
-    "noNodes": "No cluster nodes reported."
+    "noNodes": "No cluster nodes reported.",
+    "nodeMetrics": {
+      "gpuTitle": "vLLM nodes · KV cache",
+      "queueTitle": "Queue depth",
+      "disabled": "Node metrics collection is off (NODE_METRICS_ENABLED=false).",
+      "noTargets": "No scrape targets — set VLLM_METRICS_URLS or LLM_TOKENIZE_URL.",
+      "waitingFirstScrape": "Waiting for the first scrape.",
+      "stale": "Stale",
+      "fresh": "OK",
+      "peak": "Peak {value} in last {hours}h",
+      "th": {
+        "node": "Node",
+        "state": "State",
+        "kv": "KV cache",
+        "kvPeak": "KV peak ({hours}h)",
+        "running": "Running",
+        "waiting": "Waiting",
+        "ttft": "Avg TTFT",
+        "gpuUtil": "GPU util"
+      },
+      "queue": {
+        "agent_task_pending": "Task queue waiting",
+        "agent_task_running": "Tasks running",
+        "agent_task_queued_db": "Queued tasks (DB)",
+        "orchestrator_jobs_pending": "Media jobs pending",
+        "vllm_waiting": "vLLM waiting requests"
+      }
+    }
   },
   "adminAlerts": {
     "title": "Alerts",
@@ -1815,6 +1967,28 @@
     "advancedHide": "Hide details",
     "hiddenUnsupportedNote": "Capabilities without an execution path are hidden: {list}"
   },
+  "adminGatewayModels": {
+    "title": "Gateway model status",
+    "description": "Routes registered on the LiteLLM gateway (/model/info) and local model probe results.",
+    "refresh": "Refresh",
+    "loadError": "Could not load gateway model status",
+    "unreachable": "Could not reach the gateway: {reason}",
+    "empty": "No models are registered on the gateway",
+    "default": "Default",
+    "defaultNote": "Default chat model: {model}",
+    "col": {
+      "name": "Route",
+      "upstream": "Upstream",
+      "mode": "Mode",
+      "status": "Status"
+    },
+    "status": {
+      "available": "Available",
+      "unavailable": "Unavailable",
+      "uncataloged": "Not in catalog",
+      "external": "External"
+    }
+  },
   "adminSystemSettings": {
     "title": "System Settings",
     "description": "Manage operational settings (OAuth, search, alerts, push, LLM gateway). Values saved here (DB) take precedence over .env.",
@@ -1855,6 +2029,14 @@
       "push": {
         "title": "Web Push (VAPID)",
         "description": "VAPID keys for browser push notifications. Set the public/private key pair together."
+      },
+      "agent": {
+        "title": "Agent & MCP runtime",
+        "description": "External MCP tool-list refresh interval, parking approvals on timeout, queue priority cap. Applied immediately."
+      },
+      "slo": {
+        "title": "SLO targets",
+        "description": "Targets for chat availability, time to first token, agent task success and eval pass rate. Targets are percentages (e.g. 99.5); TTFT is the p95 threshold in ms. Applied from the next evaluation (every 5 minutes)."
       }
     },
     "historyTitle": "Change history",
@@ -2186,7 +2368,24 @@
         "external": "External tool",
         "control": "Control",
         "sensitive": "Credential file"
-      }
+      },
+      "recentTitle": "Recent decisions (30 min)",
+      "revoked": "revoked",
+      "consumed": "executed",
+      "approvedPending": "approved · not yet executed",
+      "revoke": "Revoke",
+      "revokeHint": "Withdraw an approval that has not been executed yet (it will wait again on resume)",
+      "autoApproveOff": "Turn off auto-approve",
+      "autoApproveOffHint": "Disable auto-approve for this task",
+      "preview": "Preview changes before running",
+      "assignedToMe": "Assigned to me",
+      "assignedAway": "Reassigned",
+      "reassign": "Reassign",
+      "reassignPick": "Pick assignee",
+      "escalate": "Escalate",
+      "escalateHint": "Hand off to an organization owner/admin",
+      "elicitHint": "Input requested by {server} · fields: {fields}",
+      "elicitJsonHint": "For more than one field, answer in JSON: {example}"
     }
   },
   "marketplacePublish": {
@@ -2323,5 +2522,85 @@
     "userIdPlaceholder": "user id",
     "grant": "Grant",
     "grantDone": "Granted."
+  },
+  "adminSlo": {
+    "title": "SLO",
+    "description": "Current state against service level objectives, error budget and burn rate",
+    "computedAt": "Computed at {time}",
+    "openSettings": "Edit targets",
+    "refresh": "Refresh",
+    "loadError": "Failed to load.",
+    "target": "target {value}",
+    "budgetRemaining": "Error budget left",
+    "burnFast": "burn (1h)",
+    "burnSlow": "burn (6h)",
+    "samples": "Samples",
+    "p95": "TTFT p95",
+    "reasonLabel": "Reason",
+    "historyTitle": "Last 30 days",
+    "date": "Date",
+    "historyEmpty": "No snapshots yet — evaluations are recorded every 5 minutes.",
+    "state": {
+      "ok": "OK",
+      "warning": "Warning",
+      "critical": "Critical",
+      "insufficient": "Insufficient data"
+    },
+    "reason": {
+      "fast_burn": "Fast burn (≥14.4× over 1h and 5m)",
+      "slow_burn": "Slow burn (≥6× over 6h and 30m)",
+      "budget_exhausted": "Error budget exhausted for the window",
+      "below_target": "Below target",
+      "few_samples": "Too few samples",
+      "source_unavailable": "Data source unavailable"
+    },
+    "slo": {
+      "chat_availability": {
+        "name": "Chat availability",
+        "desc": "Share of chat requests in the last {window} days that finished without error (user aborts excluded)"
+      },
+      "chat_ttft_p95": {
+        "name": "Time to first token",
+        "desc": "Share of successful requests in the last {window} days with first token within {threshold}s (p95 objective)"
+      },
+      "agent_task_success": {
+        "name": "Agent task success",
+        "desc": "Share of finished tasks in the last {window} days that completed (cancellations excluded)"
+      },
+      "eval_pass": {
+        "name": "Eval pass rate",
+        "desc": "Pass rate of the latest response eval within the last {window} days"
+      }
+    }
+  },
+  "adminEvaluations": {
+    "title": "Evaluations",
+    "description": "Nightly evaluation runs — pass rate, time to first token and failed cases",
+    "refresh": "Refresh",
+    "loadError": "Failed to load.",
+    "runnerFilter": "Runner",
+    "allRunners": "All runners",
+    "matrixTitle": "Latest matrix ({time})",
+    "modelVariant": "Model \\ variant",
+    "listTitle": "Runs",
+    "empty": "No runs yet — they appear once nightly evaluation runs with OMK_EVAL_RECORD_DB=true.",
+    "noFailures": "No failed cases.",
+    "th": {
+      "completedAt": "Completed",
+      "runner": "Runner",
+      "mode": "Mode",
+      "model": "Model · variant",
+      "passRate": "Pass rate",
+      "ttft": "TTFT p50",
+      "totalP95": "Total p95",
+      "version": "Dataset · commit"
+    },
+    "runner": {
+      "routing": "Routing",
+      "response": "Response",
+      "tools": "Tool selection",
+      "redteam": "Red team",
+      "matrix": "Matrix"
+    }
   }
 }

@@ -12,6 +12,7 @@ import { resolveCleanedContent } from './ws-chat-completion';
 import { ChatRequestHandler, ChatRequestError } from '../chat/request-handler';
 import { enqueueDebugCapture, DEBUG_QUEUE_TTL_MS } from '../data/conversation-debug-queue';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
+import { claimClientRequest } from '../chat/request-idempotency';
 import { QuotaUnavailableError } from '../errors/quota-unavailable.error';
 import { KeyExhaustionError } from '../errors/key-exhaustion.error';
 import { ProviderError } from '../providers/provider-errors';
@@ -30,6 +31,7 @@ import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCached
 import type { PdfVisionResult } from '../services/chat-service/pdf-vision';
 import { saveAssistantMessage } from '../chat/request-persistence';
 import { buildWebSearchContext } from '../mcp/web-search/build-search-context';
+import { emitSearchSources, parseUserLocation } from './ws-chat-sources';
 import { getInFlightStreamRegistry, resolveStreamKey } from './ws-stream-registry';
 
 /**
@@ -186,7 +188,7 @@ export async function handleChatMessage(
         // 웹 검색: 사용자가 명시적으로 활성화했거나, 시사 관련 질문이 감지된 경우 수행.
         // 구조화(/structured) 경로와 동일 헬퍼를 공유해 "한 경로만 검색되는" 분기 누락·로직 드리프트를 방지한다.
         // (WS 는 기존 동작 보존을 위해 signal 미전달 — 중단 시 진행 중 검색은 메인 LLM 루프에서 정리.)
-        const { webSearchContext } = await buildWebSearchContext({
+        const { webSearchContext, sources: injectedSources } = await buildWebSearchContext({
             message: rawMessage,
             userLang,
             webSearchEnabled: msg.webSearch === true,
@@ -215,10 +217,13 @@ export async function handleChatMessage(
         }
         const effectiveAttachContext = cachedAttachContext + attachContext;
 
-        // messageId 생성 (WS 고유: 토큰 스트리밍에 사용)
+        // messageId 생성 (WS 고유: 토큰 스트리밍에 사용) — 같은 clientRequestId 재전송이면 이전 messageId 로 done 만 다시 보낸다(멱등 140)
         const messageId = crypto.randomUUID
             ? crypto.randomUUID()
             : `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const { clientRequestId, priorMessageId } = claimClientRequest(extWs._authenticatedUserId ? `u:${extWs._authenticatedUserId}` : `a:${anonSessionId ?? ''}`, msg.clientRequestId, messageId);
+        if (priorMessageId) { out({ type: 'done', messageId: priorMessageId, deduplicated: true, metrics: { tokensPerSec: '0.00', tokenCount: 0 } }); return; }
+        emitSearchSources(out, messageId, injectedSources); // 사전 주입 검색 출처(F19.4)
 
         // 토큰 생성 메트릭 추적 (tokenCount, partialAssistantResponse 는 catch 접근을 위해 try 외부 선언)
         tokenCount = 0;
@@ -311,6 +316,7 @@ export async function handleChatMessage(
             // 이 턴에 발급한 스트리밍 messageId — assistant 행에 남겨 피드백 신호를
             // 해당 응답(및 담당 에이전트)에 되짚을 수 있게 한다(자가개선 F2 귀속).
             clientMessageId: messageId,
+            clientRequestId,
             // 좁은 화면 클라이언트(iOS 앱) — 답변 형식에 폭 제약만 덧붙인다
             client: msg.client === 'ios' ? 'ios' : undefined,
             // Phase 3.4 (2026-05-26): 메시지 편집 분기 — 새 session 생성 시 부모 추적
@@ -323,13 +329,7 @@ export async function handleChatMessage(
             enabledTools: msg.enabledTools,
             notebook: notebookRef,
             userLanguagePreference: userLangPreference,
-            // 기기 GPS 위치 (옵트인) — 범위 밖/비정상 값은 무시 (fail-safe)
-            userLocation: (() => {
-                const loc = (msg as { userLocation?: { lat?: unknown; lng?: unknown } }).userLocation;
-                if (!loc || typeof loc.lat !== 'number' || typeof loc.lng !== 'number') return undefined;
-                if (loc.lat < -90 || loc.lat > 90 || loc.lng < -180 || loc.lng > 180) return undefined;
-                return { lat: loc.lat, lng: loc.lng };
-            })(),
+            userLocation: parseUserLocation(msg), // 기기 GPS 위치(옵트인)
             userContext,
             clusterManager: cluster,
             abortSignal: abortController.signal,
@@ -353,6 +353,8 @@ export async function handleChatMessage(
             // MCP tool 호출 결과의 resource content 를 frontend 로 emit
             // (예: create_skill → openmake://skill-draft/{id} → chat.js 가 인라인 카드 렌더)
             onMcpToolResult: (event) => {
+                emitSearchSources(out, messageId, event.sources); // web_search 도구 출처(F19.4)
+                if (!event.resources.length) return;
                 out({
                     type: 'mcp_tool_result',
                     toolName: event.toolName,

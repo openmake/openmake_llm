@@ -9,6 +9,7 @@ import { Sidebar } from "./sidebar";
 import { useAppStore } from "@/lib/store";
 import { NAV_ROLE_RANK, type NavRole } from "@/lib/nav";
 import { cn } from "@/lib/utils";
+import { useFocusTrap } from "@/components/ui/primitives";
 
 /** 모바일: 하단 탭바(44px+ 터치 타깃) + "메뉴" 탭으로 전체 드로어. 데스크탑(lg)은 고정 사이드바. */
 const TABS: { labelKey: string; href: string; icon: typeof MessageSquare; minRole: NavRole }[] = [
@@ -26,6 +27,8 @@ export function MobileSidebar() {
 
   // 라우트 이동 시 드로어 자동 닫기
   useEffect(() => setOpen(false), [pathname]);
+  // 드로어 focus trap·Escape 닫기(F19.8)
+  const drawerRef = useFocusTrap<HTMLDivElement>(open, () => setOpen(false));
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -39,7 +42,7 @@ export function MobileSidebar() {
             className="absolute inset-0 bg-black/40"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute left-0 top-0 h-full w-[264px] shadow-3">
+          <div ref={drawerRef} role="dialog" aria-modal="true" aria-label={t("openMenu")} tabIndex={-1} className="absolute left-0 top-0 h-full w-[264px] shadow-3 outline-none">
             <Sidebar />
             <button
               onClick={() => setOpen(false)}

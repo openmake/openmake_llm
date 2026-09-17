@@ -435,20 +435,20 @@ private struct AgentTaskApprovalCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label(
-                approval.toolName == "ask_human" ? "에이전트 질문" : "도구 실행 승인",
-                systemImage: approval.toolName == "ask_human" ? "questionmark.bubble" : "checkmark.shield")
+                approval.isQuestion ? "에이전트 질문" : "도구 실행 승인",
+                systemImage: approval.isQuestion ? "questionmark.bubble" : "checkmark.shield")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(Instrument.warn)
             Text(approval.toolName)
                 .font(Instrument.mono(size: 12))
                 .foregroundStyle(Instrument.muted)
-            // 무엇을 승인하는지 — bash 는 실행할 명령, ask_human 은 질문 본문.
+            // 무엇을 승인하는지 — bash 는 실행할 명령, 질문(ask_human·mcp_elicit)은 질문 본문.
             if let summary = approval.argumentSummary {
                 Text(summary)
                     .font(.system(
-                        size: approval.toolName == "ask_human" ? 15 : 13,
-                        weight: approval.toolName == "ask_human" ? .semibold : .regular,
-                        design: approval.toolName == "ask_human" ? .default : .monospaced))
+                        size: approval.isQuestion ? 15 : 13,
+                        weight: approval.isQuestion ? .semibold : .regular,
+                        design: approval.isQuestion ? .default : .monospaced))
                     .foregroundStyle(Instrument.fg)
                     .lineLimit(6)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -456,7 +456,7 @@ private struct AgentTaskApprovalCard: View {
                     .background(Instrument.bg, in: RoundedRectangle(cornerRadius: 10))
                     .textSelection(.enabled)
             }
-            if approval.toolName == "ask_human" {
+            if approval.isQuestion {
                 TextField("에이전트에게 답변", text: $answer)
                     .textFieldStyle(.roundedBorder)
                 HStack {

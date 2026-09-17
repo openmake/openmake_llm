@@ -12,6 +12,7 @@
  * @module chat/request-persistence
  */
 
+import { takeMessageSources } from './message-sources';
 import { getConversationDB } from '../data/conversation-db';
 import { recordAuditLog } from '../data/conversation-audit';
 import { createLogger } from '../utils/logger';
@@ -104,6 +105,7 @@ export async function saveUserMessage(
     message: string,
     model?: string,
     saveHistory: boolean = true,
+    clientRequestId?: string,
 ): Promise<void> {
     // 1. 감사 로그 — 항상 (실패해도 채팅 흐름 유지)
     await recordAuditLog({
@@ -118,7 +120,7 @@ export async function saveUserMessage(
     // 2. 본문 저장 — saveHistory=true 일 때만
     if (saveHistory) {
         const conversationDb = getConversationDB();
-        await conversationDb.addMessage(sessionId, 'user', message, { model, tokensUsed: estimateTokens(message) });
+        await conversationDb.addMessage(sessionId, 'user', message, { model, tokensUsed: estimateTokens(message), ...(clientRequestId ? { clientMessageId: clientRequestId } : {}) });
     }
 }
 
@@ -169,6 +171,8 @@ export async function saveAssistantMessage(
             ...(thinking ? { thinking } : {}),
             ...(attribution?.agentId ? { agentId: attribution.agentId } : {}),
             ...(attribution?.clientMessageId ? { clientMessageId: attribution.clientMessageId } : {}),
+            // 스트리밍 중 search_sources 로 보낸 출처(F19.4) — 같은 messageId 로 모아 둔 것을 1회 꺼낸다
+            ...(() => { const sources = takeMessageSources(attribution?.clientMessageId); return sources ? { sources } : {}; })(),
         });
         return saved?.id ?? null;
     }

@@ -50,6 +50,11 @@ describe('stripApprovalGatedTools (HITL 무응답 강등)', () => {
         expect(names(stripApprovalGatedTools(tools, 'none'))).toEqual(['bash']);
     });
 
+    it('정책 none — mcp_elicit 도 항상 사람 대기 도구로 제거(F13.10)', async () => {
+        const tools = ['bash', 'mcp_elicit'].map(tool);
+        expect(names(stripApprovalGatedTools(tools, 'none'))).toEqual(['bash']);
+    });
+
     it('deviceGatesShell — 디바이스가 게이트하는 exec 계열은 유지', async () => {
         const tools = ['bash', 'python_execute', 'str_replace_editor'].map(tool);
         expect(names(stripApprovalGatedTools(tools, 'all', { deviceGatesShell: true })))
@@ -122,6 +127,21 @@ describe('ApprovalRegistry', () => {
             { ...baseInput, toolName: 'ask_human', args: { question: 'q' } },
             { timeoutMs: 5000, onPending: (pa) => { id = pa.approvalId; } },
         );
+        expect(await reg.list('u1')).toHaveLength(1);
+        reg.answer(id, 'ok');
+        await expect(p).resolves.toMatchObject({ decision: 'approved', text: 'ok' });
+    });
+
+    it('자동승인(4-2): mcp_elicit(F13.10)도 ask_human 처럼 대기한다', async () => {
+        const reg = new ApprovalRegistry();
+        reg.setAutoApprove('t1', true);
+        let id = '';
+        const p = reg.request(
+            { ...baseInput, toolName: 'mcp_elicit', args: { server: 's', question: 'q' } },
+            { timeoutMs: 5000, onPending: (pa) => { id = pa.approvalId; } },
+        );
+        expect(await reg.list('u1')).toHaveLength(1);
+        reg.setAutoApprove('t1', true); // 대기 중 재설정해도 해소되지 않는다
         expect(await reg.list('u1')).toHaveLength(1);
         reg.answer(id, 'ok');
         await expect(p).resolves.toMatchObject({ decision: 'approved', text: 'ok' });

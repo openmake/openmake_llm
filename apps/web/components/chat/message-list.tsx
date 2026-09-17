@@ -1,15 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import type { SearchSourceRef } from "@openmake/shared-types";
 import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown, Wrench, Pencil, AlertTriangle, Languages, Copy, Check, RefreshCw, Columns2, Workflow, Circle } from "lucide-react";
+import { Bot, MessagesSquare, Telescope, Brain, Sparkles, FileCode2, LoaderCircle, Pause, CircleCheck, CircleX, Download, FileText, ShieldCheck, ThumbsUp, ThumbsDown, Wrench, Pencil, AlertTriangle, Languages, Copy, Check, RefreshCw, Columns2, Workflow, Circle, GitBranch } from "lucide-react";
 import { ThinkingTimeline } from "@/components/chat/thinking-timeline";
 import { SteeringInput } from "@/components/chat/steering-input";
 import { DiffView } from "@/components/chat/diff-view";
+import { loadSessionIntoStore } from "@/lib/session-loader";
+import { appendAnonSessionId } from "@/lib/anon-session";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "@/lib/store";
 import { ApiClient } from "@/lib/api-client";
+import { isQuestionApproval, elicitationHint } from "@/lib/hitl-question";
 import { LiveSubagentPanel } from "@/components/agent-tasks/subagent-panel";
 import { Markdown } from "./markdown";
 import { StructuredAnswer } from "./structured-answer";
@@ -56,7 +60,7 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
   // task 자동승인(4-2) — 이후 이 작업의 도구 호출은 승인 없이 진행(ask_human 제외). 대기 중 승인도 즉시 해소.
   const autoApprove = (a: PendingApproval) =>
     run(a, () => ApiClient.post(`/api/agent-tasks/${a.taskId}/approvals/auto-approve`, {}));
-  const hasToolApproval = approvals.some((a) => a.toolName !== "ask_human");
+  const hasToolApproval = approvals.some((a) => !isQuestionApproval(a.toolName));
 
   return (
     <div className="mt-1 space-y-2 rounded-md border border-warning-soft bg-warning-soft/50 p-2.5">
@@ -67,21 +71,28 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
         {hasToolApproval && (
           <button
             disabled={busy !== null}
-            onClick={() => autoApprove(approvals.find((a) => a.toolName !== "ask_human")!)}
+            onClick={() => autoApprove(approvals.find((a) => !isQuestionApproval(a.toolName))!)}
             className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted hover:bg-surface-2 disabled:opacity-50"
             title={t("approvals.autoApproveHint")}
           >{t("approvals.autoApprove")}</button>
         )}
       </div>
       {approvals.map((a) => {
-        // ask_human 은 도구 승인이 아니라 사용자 질문 — 자유텍스트 답변 채널을 렌더.
-        if (a.toolName === "ask_human") {
+        // ask_human·mcp_elicit 은 도구 승인이 아니라 사용자 질문 — 자유텍스트 답변 채널을 렌더.
+        if (isQuestionApproval(a.toolName)) {
           const question = typeof a.args?.question === "string" ? a.args.question : "";
+          const elicit = elicitationHint(a.toolName, a.args);
           const text = answers[a.approvalId] ?? "";
           return (
             <div key={a.approvalId} className="space-y-1.5 rounded-md border border-border bg-surface-1 p-2">
               <p className="text-xs font-semibold text-fg-2">{t("approvals.question")}</p>
               {question && <p className="break-words text-xs text-fg-1">{question}</p>}
+              {elicit && (
+                <p className="break-words text-[11px] text-muted">
+                  {t("approvals.elicitHint", { server: elicit.server, fields: elicit.fields || "-" })}
+                  {elicit.jsonExample && <> · {t("approvals.elicitJsonHint", { example: elicit.jsonExample })}</>}
+                </p>
+              )}
               <textarea
                 value={text}
                 onChange={(e) => setAnswers((prev) => ({ ...prev, [a.approvalId]: e.target.value }))}
@@ -110,6 +121,12 @@ function InlineApprovals({ approvals }: { approvals: PendingApproval[] }) {
             <div className="min-w-0">
               <span className="font-mono text-xs text-fg-2">{a.toolName}</span>
               <span className="ml-2 break-all text-xs text-muted">{JSON.stringify(a.args).slice(0, 90)}</span>
+              {a.preview && (
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-[11px] text-accent">{t("approvals.preview")}</summary>
+                  <div className="mt-1"><DiffView text={a.preview} /></div>
+                </details>
+              )}
             </div>
             <div className="flex shrink-0 gap-1">
               <button
@@ -183,7 +200,7 @@ function SystemMessage({ content }: { content: string }) {
 }
 
 /** assistant 본문 — `[[artifact:id]]` placeholder 를 칩으로, 나머지는 Markdown 으로. */
-function AssistantContent({ content, streaming }: { content: string; streaming?: boolean }) {
+function AssistantContent({ content, streaming, sources }: { content: string; streaming?: boolean; sources?: SearchSourceRef[] }) {
   // 스트리밍 중 닫히지 않은(길어지는) 코드 펜스는 fence-fallback 으로 아티팩트가 될 가능성이 높다.
   // 원시 코드를 71초간 흘리는 대신 "생성 중" 인디케이터로 즉시 피드백 (완료 시 칩/패널로 교체).
   // 명시적 <artifact> 태그 경로는 ws 가 이미 라이브 패널을 열므로 여기 대상 아님.
@@ -199,14 +216,14 @@ function AssistantContent({ content, streaming }: { content: string; streaming?:
         const before = content.slice(0, lastOpen).trim();
         return (
           <>
-            {before && <Markdown content={before} />}
+            {before && <Markdown content={before} sources={sources} />}
             <ArtifactBuilding />
           </>
         );
       }
     }
   }
-  if (!content.includes("[[artifact:")) return <Markdown content={content} />;
+  if (!content.includes("[[artifact:")) return <Markdown content={content} sources={sources} />;
   const nodes: ReactNode[] = [];
   let last = 0;
   let m: RegExpExecArray | null;
@@ -215,14 +232,14 @@ function AssistantContent({ content, streaming }: { content: string; streaming?:
   while ((m = re.exec(content)) !== null) {
     if (m.index > last) {
       const text = content.slice(last, m.index).trim();
-      if (text) nodes.push(<Markdown key={`t${idx}`} content={text} />);
+      if (text) nodes.push(<Markdown key={`t${idx}`} content={text} sources={sources} />);
     }
     nodes.push(<ArtifactChip key={`a${idx}`} id={m[1]} />);
     last = m.index + m[0].length;
     idx += 1;
   }
   const tail = content.slice(last).trim();
-  if (tail) nodes.push(<Markdown key="tail" content={tail} />);
+  if (tail) nodes.push(<Markdown key="tail" content={tail} sources={sources} />);
   return <>{nodes}</>;
 }
 
@@ -504,6 +521,34 @@ function OrchestratorProgressBanner() {
   );
 }
 
+/**
+ * 스트림 상태 스크린리더 통지(F19.8) — 생성 시작·도구 실행·완료를 **이벤트 단위** 로만 알린다(토큰마다 갱신 금지).
+ * 시각적으로 숨긴 role=status(aria-live polite) 한 곳.
+ */
+function StreamStatusAnnouncer() {
+  const t = useTranslations("chat.a11y");
+  const isGenerating = useAppStore((s) => s.isGenerating);
+  const tool = useAppStore((s) => s.activeTool);
+  const [text, setText] = useState("");
+  const wasGenerating = useRef(false);
+
+  useEffect(() => {
+    if (isGenerating && !wasGenerating.current) setText(t("generating"));
+    else if (!isGenerating && wasGenerating.current) setText(t("done"));
+    wasGenerating.current = isGenerating;
+  }, [isGenerating, t]);
+
+  useEffect(() => {
+    if (tool) setText(t("toolRunning", { tool }));
+  }, [tool, t]);
+
+  return (
+    <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+      {text}
+    </div>
+  );
+}
+
 /** 도구 실행 인디케이터 — always-on tool loop 중 "실행 중" 표시(스트리밍 멈춘 듯한 혼선 해소). */
 function ToolIndicator() {
   const t = useTranslations("chat");
@@ -522,10 +567,13 @@ function MessageActions({
   content,
   canRegenerate,
   onRegenerate,
+  onBranch,
 }: {
   content: string;
   canRegenerate: boolean;
   onRegenerate: () => void;
+  /** "여기서 분기"(F08 PR-6) — 히스토리에서 불러온 메시지(dbId)에서만 제공 */
+  onBranch?: () => void;
 }) {
   const t = useTranslations("chat");
   const [copied, setCopied] = useState(false);
@@ -551,6 +599,17 @@ function MessageActions({
       >
         {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
+      {onBranch && (
+        <button
+          type="button"
+          aria-label={t("branchHere")}
+          title={t("branchHere")}
+          onClick={onBranch}
+          className="rounded-md p-1 text-muted transition hover:bg-surface-2 hover:text-fg"
+        >
+          <GitBranch className="h-3.5 w-3.5" />
+        </button>
+      )}
       {canRegenerate && (
         <button
           type="button"
@@ -695,6 +754,18 @@ export function MessageList() {
       break;
     }
   }
+  // 여기서 분기(F08 PR-6) — 이 메시지까지 복사한 새 세션을 만들고 그 세션으로 전환한다(원본은 그대로).
+  const branchHere = async (dbId: string) => {
+    const sid = useAppStore.getState().currentSessionId;
+    if (!sid) return;
+    try {
+      const r = await ApiClient.post<{ data?: { session?: { id: string } } }>(appendAnonSessionId(`/api/chat/sessions/${sid}/clone`), { uptoMessageId: Number(dbId) });
+      const newId = r?.data?.session?.id;
+      if (newId) await loadSessionIntoStore(newId);
+    } catch (err) {
+      alert(t("branchFailed", { error: err instanceof Error ? err.message : "" }));
+    }
+  };
   // 직전 사용자 질문 지점부터 히스토리를 되감고 재전송 요청(처리는 Composer).
   const regenerate = () => {
     if (regenSourceIndex < 0 || useAppStore.getState().isGenerating) return;
@@ -756,7 +827,8 @@ export function MessageList() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6">
+    <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6" aria-busy={isGenerating}>
+      <StreamStatusAnnouncer />
       {chatHistory.map((m, i) =>
         m.role === "user" ? (
           <div key={i} className="flex justify-end">
@@ -806,7 +878,7 @@ export function MessageList() {
                 ) : m.structured ? (
                   <StructuredAnswer data={m.structured} />
                 ) : (
-                  <AssistantContent content={m.content} streaming={m.streaming} />
+                  <AssistantContent content={m.content} streaming={m.streaming} sources={m.sources} />
                 )}
                 {m.streaming && !m.agentTask && (
                   <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-accent align-text-bottom" />
@@ -831,6 +903,7 @@ export function MessageList() {
                     content={m.content.replace(new RegExp(ARTIFACT_PLACEHOLDER), "").trim()}
                     canRegenerate={i === lastAssistantIndex && regenSourceIndex >= 0 && !isGenerating}
                     onRegenerate={regenerate}
+                    onBranch={m.dbId && !isGenerating ? () => void branchHere(m.dbId!) : undefined}
                   />
                   {m.id && <FeedbackButtons messageId={m.id} />}
                 </div>

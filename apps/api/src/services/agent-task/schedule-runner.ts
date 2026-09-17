@@ -71,6 +71,8 @@ async function fireSchedule(repo: AgentTaskScheduleRepository, s: AgentTaskSched
         await dispatchAgentTask({
             taskId,
             userId: String(s.user_id),
+            // 무인 예약은 사람이 기다리는 실행보다 뒤로(131)
+            priority: AGENT_TASK_LIMITS.QUEUE_PRIORITY_SCHEDULED,
             run: async () => {
                 await service.execute({
                     taskId, goal: s.goal, userId: String(s.user_id), userRole: role, maxTurns: s.max_turns,

@@ -13,7 +13,7 @@ import { getPool } from './models/unified-database';
 import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
 import { isPersistableUserId } from '../utils/user-id-validation';
-import { withRetry } from './retry-wrapper';
+import { withRetry, withTransaction } from './retry-wrapper';
 import {
     ConversationSession,
     SessionRow,
@@ -23,7 +23,7 @@ import {
     rowToSession
 } from './conversation-types';
 import { loadMessagesForSessions } from './conversation-messages';
-import { CONVERSATION_LIMITS } from '../config/runtime-limits';
+import { CONVERSATION_LIMITS, SESSION_BRANCH } from '../config/runtime-limits';
 
 const logger = createLogger('ConversationSessions');
 
@@ -139,32 +139,59 @@ export async function getSession(id: string): Promise<ConversationSession | unde
 export async function getSessionMeta(id: string): Promise<SessionMeta | undefined> {
     const pool = getPool();
     const result = await pool.query<Pick<SessionRow, 'user_id' | 'anon_session_id' | 'title' | 'metadata'>>(
-        'SELECT user_id, anon_session_id, title, metadata FROM conversation_sessions WHERE id = $1',
+        'SELECT user_id, anon_session_id, title, metadata, version FROM conversation_sessions WHERE id = $1',
         [id]
     );
-    const row = result.rows[0];
+    const row = result.rows[0] as (typeof result.rows[0] & { version?: number }) | undefined;
     if (!row) return undefined;
     return {
         userId: row.user_id,
         anonSessionId: row.anon_session_id,
         title: row.title,
         metadata: row.metadata,
+        version: typeof row.version === 'number' ? row.version : undefined,
     };
+}
+
+/** 제목 갱신(낙관적 잠금, 140) — expectedVersion 이 현재와 같을 때만. 반환 ok=false 면 현재 버전. */
+export async function updateSessionTitleIfVersion(sessionId: string, title: string, expectedVersion: number): Promise<{ ok: boolean; version: number }> {
+    const pool = getPool();
+    const r = await pool.query<{ version: number }>(
+        'UPDATE conversation_sessions SET title = $1, updated_at = NOW(), version = version + 1 WHERE id = $2 AND version = $3 RETURNING version',
+        [title, sessionId, expectedVersion],
+    );
+    if (r.rows[0]) return { ok: true, version: r.rows[0].version };
+    const cur = await pool.query<{ version: number }>('SELECT version FROM conversation_sessions WHERE id = $1', [sessionId]);
+    return { ok: false, version: cur.rows[0]?.version ?? 0 };
+}
+
+/** 폴더·태그 목록 필터(157) — folderId 'none' 은 미분류. 컬럼명은 고정, 값만 바인딩 */
+export interface SessionListFilter { folderId?: string; tag?: string }
+
+/** PURE: 필터 → 추가 WHERE 절과 파라미터(시작 번호부터) */
+export function sessionFilterClause(filter: SessionListFilter | undefined, startIndex: number): { sql: string; params: string[] } {
+    const parts: string[] = [];
+    const params: string[] = [];
+    if (filter?.folderId === 'none') parts.push('cs.folder_id IS NULL');
+    else if (filter?.folderId) { params.push(filter.folderId); parts.push(`cs.folder_id = $${startIndex + params.length - 1}`); }
+    if (filter?.tag) { params.push(filter.tag); parts.push(`$${startIndex + params.length - 1} = ANY(cs.tags)`); }
+    return { sql: parts.map((p) => ` AND ${p}`).join(''), params };
 }
 
 /**
  * 사용자 ID로 세션 목록 조회
  */
-export async function getSessionsByUserId(userId: string, limit: number = CONVERSATION_LIMITS.SESSION_LIST_DEFAULT): Promise<ConversationSession[]> {
+export async function getSessionsByUserId(userId: string, limit: number = CONVERSATION_LIMITS.SESSION_LIST_DEFAULT, filter?: SessionListFilter): Promise<ConversationSession[]> {
     const pool = getPool();
+    const f = sessionFilterClause(filter, 3);
     // 메시지 0개 세션 제외 — saveHistory:false 요청은 세션 행만 만들고 본문을 저장하지 않아
     // (멀티턴 continuation 위해 세션 자체는 유지) 최근 목록에 빈 껍데기로 뜨던 것을 차단.
     const result = await pool.query(
         `SELECT * FROM conversation_sessions cs
          WHERE cs.user_id = $1
-           AND EXISTS (SELECT 1 FROM conversation_messages m WHERE m.session_id = cs.id)
+           AND EXISTS (SELECT 1 FROM conversation_messages m WHERE m.session_id = cs.id)${f.sql}
          ORDER BY cs.updated_at DESC LIMIT $2`,
-        [userId, limit]
+        [userId, limit, ...f.params]
     );
 
     // list view: 세션당 최근 50개만 — 5K+ 메시지 사용자의 메모리 spike 방지.
@@ -201,6 +228,7 @@ export async function searchSessionsByOwner(
     owner: { userId?: string; anonSessionId?: string },
     query: string,
     limit: number = CONVERSATION_LIMITS.SESSION_LIST_DEFAULT,
+    filter?: SessionListFilter,
 ): Promise<{ sessions: ConversationSession[]; snippets: Record<string, string> }> {
     const ownerVal = owner.userId ?? owner.anonSessionId;
     if (!ownerVal || !query.trim()) return { sessions: [], snippets: {} };
@@ -208,6 +236,8 @@ export async function searchSessionsByOwner(
     const ownerClause = owner.userId ? 'cs.user_id = $1' : 'cs.anon_session_id = $1';
     // ILIKE 메타문자(\ % _) 이스케이프 — 검색어가 패턴으로 해석되는 것을 차단
     const pattern = '%' + query.trim().replace(/[\\%_]/g, (c) => '\\' + c) + '%';
+    // 폴더·태그 필터는 로그인 사용자만(익명 세션에는 폴더·태그가 없다)
+    const f = sessionFilterClause(owner.userId ? filter : undefined, 4);
 
     const pool = getPool();
     const result = await pool.query(
@@ -219,9 +249,9 @@ export async function searchSessionsByOwner(
          ) hit ON true
          WHERE ${ownerClause}
            AND (cs.title ILIKE $2 OR hit.snippet IS NOT NULL)
-           AND EXISTS (SELECT 1 FROM conversation_messages m WHERE m.session_id = cs.id)
+           AND EXISTS (SELECT 1 FROM conversation_messages m WHERE m.session_id = cs.id)${f.sql}
          ORDER BY cs.updated_at DESC LIMIT $3`,
-        [ownerVal, pattern, limit]
+        [ownerVal, pattern, limit, ...f.params]
     );
 
     const rows = result.rows as (SessionRow & { snippet: string | null })[];
@@ -301,11 +331,27 @@ export async function updateSessionTitle(sessionId: string, title: string): Prom
     const pool = getPool();
     const now = new Date().toISOString();
     const result = await pool.query(
-        'UPDATE conversation_sessions SET title = $1, updated_at = $2 WHERE id = $3',
+        'UPDATE conversation_sessions SET title = $1, updated_at = $2, version = version + 1 WHERE id = $3',
         [title, now, sessionId]
     );
 
     return (result.rowCount || 0) > 0;
+}
+
+/**
+ * 세션 폴더·태그 변경(157) — 주어진 필드만. 폴더 소유권 검증은 호출부(컨트롤러)가 한다.
+ */
+export async function updateSessionOrganization(sessionId: string, patch: { folderId?: string | null; tags?: string[] }): Promise<{ folderId: string | null; tags: string[] } | null> {
+    const sets: string[] = [];
+    const params: unknown[] = [sessionId];
+    if (patch.folderId !== undefined) { params.push(patch.folderId); sets.push(`folder_id = $${params.length}`); }
+    if (patch.tags !== undefined) { params.push(patch.tags); sets.push(`tags = $${params.length}::text[]`); }
+    if (!sets.length) return null;
+    const r = await getPool().query<{ folder_id: string | null; tags: string[] }>(
+        `UPDATE conversation_sessions SET ${sets.join(', ')} WHERE id = $1 RETURNING folder_id, tags`,
+        params,
+    );
+    return r.rows[0] ? { folderId: r.rows[0].folder_id, tags: r.rows[0].tags ?? [] } : null;
 }
 
 /**
@@ -406,4 +452,61 @@ export async function cleanupOldSessions(days: number): Promise<number> {
         logger.info(`[ConversationSessions] Cleaned ${count} old sessions (${days} days)`);
     }
     return count;
+}
+
+/** PURE: 복제 세션 metadata (140·F08 PR-6). WS branchFrom* 의 parentSessionId/parentMessageId/forkedAt 규격과 같고 kind 만 다르다. */
+export function buildCloneMetadata(parentSessionId: string, parentMessageId: string | null, now: Date = new Date()): Record<string, unknown> {
+    return { parentSessionId, ...(parentMessageId ? { parentMessageId } : {}), forkedAt: now.toISOString(), kind: 'clone' };
+}
+
+/**
+ * 세션 복제(F08 PR-6) — 부모 메시지(선택: uptoMessageId 까지)를 새 세션으로 복사한다. 단일 트랜잭션.
+ * client_message_id 는 복사하지 않는다(140 유니크는 세션 단위라 충돌은 없지만 멱등 키는 원 요청에만 의미가 있다).
+ */
+export async function cloneSession(
+    srcId: string,
+    opts: { uptoMessageId?: number | null; title?: string | null; userId?: string; anonSessionId?: string },
+): Promise<{ id: string; copied: number; title: string } | null> {
+    const pool = getPool();
+    const src = await pool.query<{ title: string }>('SELECT title FROM conversation_sessions WHERE id = $1', [srcId]);
+    if (!src.rows[0]) return null;
+    const id = uuidv4();
+    const title = (opts.title && opts.title.trim()) || `${src.rows[0].title} (분기)`;
+    const now = new Date();
+    const copied = await withRetry(() => withTransaction(pool, async (client) => {
+        await client.query(
+            `INSERT INTO conversation_sessions (id, user_id, anon_session_id, title, created_at, updated_at, metadata)
+             VALUES ($1, $2, $3, $4, $5, $5, $6)`,
+            [id, opts.userId || null, opts.anonSessionId || null, title, now.toISOString(), JSON.stringify(buildCloneMetadata(srcId, opts.uptoMessageId ? String(opts.uptoMessageId) : null, now))],
+        );
+        const r = await client.query(
+            `INSERT INTO conversation_messages (session_id, role, content, model, agent_id, thinking, tokens, response_time_ms, created_at, reasoning_summary)
+             SELECT $1, role, content, model, agent_id, thinking, tokens, response_time_ms, created_at, reasoning_summary
+             FROM (SELECT * FROM conversation_messages WHERE session_id = $2 AND ($3::int IS NULL OR id <= $3::int) ORDER BY created_at ASC, id ASC LIMIT $4) m`,
+            [id, srcId, opts.uptoMessageId ?? null, SESSION_BRANCH.CLONE_MAX_MESSAGES],
+        );
+        return r.rowCount ?? 0;
+    }), { operation: 'cloneSession' });
+    return { id, copied, title };
+}
+
+/** 세션 트리(F08 PR-6) — 조상 체인(가까운 순, 최대 TREE_MAX_DEPTH)과 직계 자식. metadata.parentSessionId 표현식 인덱스(140) 사용. */
+export async function getSessionTree(id: string): Promise<{ ancestors: Array<{ id: string; title: string; parentMessageId: string | null }>; children: Array<{ id: string; title: string; createdAt: string }> }> {
+    const pool = getPool();
+    const anc = await pool.query<{ id: string; title: string; parent_message_id: string | null }>(
+        `WITH RECURSIVE up AS (
+             SELECT s.id, s.title, s.metadata, 0 AS depth FROM conversation_sessions s WHERE s.id = $1
+             UNION ALL
+             SELECT p.id, p.title, p.metadata, up.depth + 1 FROM up JOIN conversation_sessions p ON p.id = up.metadata->>'parentSessionId'
+             WHERE up.depth < $2
+         )
+         SELECT id, title, metadata->>'parentMessageId' AS parent_message_id FROM up WHERE depth > 0 ORDER BY depth ASC`,
+        [id, SESSION_BRANCH.TREE_MAX_DEPTH],
+    );
+    const kids = await pool.query<{ id: string; title: string; created_at: string }>(
+        `SELECT id, title, created_at FROM conversation_sessions WHERE metadata->>'parentSessionId' = $1 ORDER BY created_at DESC LIMIT 100`, [id]);
+    return {
+        ancestors: anc.rows.map((r) => ({ id: r.id, title: r.title, parentMessageId: r.parent_message_id })),
+        children: kids.rows.map((r) => ({ id: r.id, title: r.title, createdAt: r.created_at })),
+    };
 }

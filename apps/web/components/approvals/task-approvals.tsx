@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * 에이전트 작업 승인 대기(HITL) — 고위험 도구 호출 · `ask_human` 질문.
+ * 에이전트 작업 승인 대기(HITL) — 고위험 도구 호출 · `ask_human` 질문 · 외부 MCP 서버 입력 요청(`mcp_elicit`).
  *
  * 채팅 인라인(`chat/message-list.tsx` InlineApprovals)에도 같은 승인 UI 가 있다. 그쪽은
  * 대화 흐름 안에서 즉시 답하는 용도라 그대로 두고, 여기서는 **작업을 떠나 있어도**
@@ -18,6 +18,19 @@ import Link from "next/link";
 import { Check, X, Loader2, MessageCircleQuestion, Wrench, ExternalLink } from "lucide-react";
 import { Button, Badge, Card } from "@/components/ui/primitives";
 import { ApiClient } from "@/lib/api-client";
+import { useAppStore } from "@/lib/store";
+import { DiffView } from "@/components/chat/diff-view";
+import { isQuestionApproval, elicitationHint } from "@/lib/hitl-question";
+
+interface RecentDecision {
+  approvalId: string;
+  taskId: string;
+  toolName: string;
+  status: "approved" | "revoked";
+  decidedAt: string | null;
+  consumedAt: string | null;
+  revocable: boolean;
+}
 
 interface PendingItem {
   approvalId: string;
@@ -28,7 +41,14 @@ interface PendingItem {
   riskClass?: "read" | "write" | "destructive" | "exec" | "network" | "external" | "control";
   /** 자격증명 파일을 바꾸는 호출. */
   sensitive?: boolean;
+  /** 실행 전 미리보기(unified diff, 138) — 파일 쓰기 도구만 */
+  preview?: string;
+  /** 소유자·현재 담당자(138) — 담당자가 있으면 이관된 항목 */
+  userId?: string;
+  assigneeUserId?: string;
 }
+
+interface OrgMember { user_id: string; role: string }
 
 /** 인자 요약 — 어떤 작업을 승인하는지 한 줄로 보인다(장문은 잘라낸다). */
 function summarizeArgs(args?: Record<string, unknown>): string {
@@ -48,6 +68,19 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  // 최근 결정(138) — 프로세스가 내려간 사이 내린 승인은 아직 실행되지 않았으므로 철회할 수 있다.
+  const [recent, setRecent] = useState<RecentDecision[]>([]);
+  // 이관 대상(138) — 활성 조직 멤버. 조직이 없으면 이관 UI 를 숨긴다.
+  const activeOrgId = useAppStore((s) => s.auth.currentUser?.activeOrgId ?? null);
+  const myId = useAppStore((s) => s.auth.currentUser?.id);
+  const [members, setMembers] = useState<OrgMember[]>([]);
+  const [reassignTo, setReassignTo] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!activeOrgId) { setMembers([]); return; }
+    ApiClient.get<{ data: { members: OrgMember[] } }>(`/api/organizations/${activeOrgId}/members`)
+      .then((r) => setMembers((r?.data?.members ?? []).filter((m) => m.user_id !== myId)))
+      .catch(() => setMembers([]));
+  }, [activeOrgId, myId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,6 +89,8 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
         "/api/agent-tasks/approvals/pending",
       );
       setItems(res?.data?.pending ?? []);
+      const rec = await ApiClient.get<{ data: { decisions: RecentDecision[] } }>("/api/agent-tasks/approvals/recent?minutes=30").catch(() => null);
+      setRecent(rec?.data?.decisions ?? []);
     } catch {
       setItems([]);
     } finally {
@@ -88,14 +123,48 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
     );
   }
 
+  const recentSection = recent.length > 0 && (
+    <div className="mt-4">
+      <p className="mb-2 text-xs font-medium text-muted">{t("tasks.recentTitle")}</p>
+      <div className="space-y-1">
+        {recent.map((d) => (
+          <div key={d.approvalId} className="flex items-center justify-between gap-2 rounded-md border border-line bg-bg-1 px-3 py-2 text-xs">
+            <span className="min-w-0 truncate">
+              <span className="font-mono">{d.toolName}</span> · {d.status === "revoked" ? t("tasks.revoked") : d.consumedAt ? t("tasks.consumed") : t("tasks.approvedPending")}
+              {d.decidedAt ? ` · ${new Date(d.decidedAt).toLocaleTimeString()}` : ""}
+            </span>
+            <div className="flex shrink-0 gap-1">
+              {d.revocable && (
+                <Button size="sm" variant="outline" disabled={busy === d.approvalId} title={t("tasks.revokeHint")}
+                  onClick={() => void run(d.approvalId, () => ApiClient.post(`/api/agent-tasks/approvals/${d.approvalId}/revoke`, {}))}>
+                  {t("tasks.revoke")}
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" disabled={busy === d.approvalId} title={t("tasks.autoApproveOffHint")}
+                onClick={() => void run(d.approvalId, () => ApiClient.post(`/api/agent-tasks/${d.taskId}/approvals/auto-approve`, { enabled: false }))}>
+                {t("tasks.autoApproveOff")}
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   if (items.length === 0) {
-    return <p className="py-6 text-center text-sm text-muted">{t("tasks.empty")}</p>;
+    return (
+      <>
+        <p className="py-6 text-center text-sm text-muted">{t("tasks.empty")}</p>
+        {recentSection}
+      </>
+    );
   }
 
   return (
     <div className="space-y-2">
       {items.map((a) => {
-        const isQuestion = a.toolName === "ask_human";
+        const isQuestion = isQuestionApproval(a.toolName);
+        const elicit = elicitationHint(a.toolName, a.args);
         const acting = busy === a.approvalId;
         return (
           <Card key={a.approvalId} className="p-4">
@@ -117,6 +186,9 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
                   {a.sensitive ? ` · ${t("tasks.risk.sensitive")}` : ""}
                 </Badge>
               )}
+              {a.assigneeUserId && a.assigneeUserId !== a.userId && (
+                <Badge tone="neutral">{a.assigneeUserId === myId ? t("tasks.assignedToMe") : t("tasks.assignedAway")}</Badge>
+              )}
               <Link
                 href={`/agent-tasks?task=${encodeURIComponent(a.taskId)}`}
                 className="inline-flex items-center gap-1 text-xs text-accent hover:underline"
@@ -127,6 +199,18 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
             </div>
 
             <p className="whitespace-pre-wrap break-words text-sm text-fg">{summarizeArgs(a.args)}</p>
+            {elicit && (
+              <p className="mt-1 text-xs text-muted">
+                {t("tasks.elicitHint", { server: elicit.server, fields: elicit.fields || "-" })}
+                {elicit.jsonExample && <> · {t("tasks.elicitJsonHint", { example: elicit.jsonExample })}</>}
+              </p>
+            )}
+            {a.preview && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs text-accent">{t("tasks.preview")}</summary>
+                <div className="mt-1"><DiffView text={a.preview} /></div>
+              </details>
+            )}
 
             {isQuestion && (
               <input
@@ -168,7 +252,7 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
                   {t("approve")}
                 </Button>
               )}
-              {/* 이 작업 자동 승인 — 이후 도구 호출은 승인 없이 진행(ask_human 제외).
+              {/* 이 작업 자동 승인 — 이후 도구 호출은 승인 없이 진행(질문형 승인 제외).
                   구 /agent-tasks 인라인 패널에만 있던 기능을 단일 창구로 옮겨 온 것 */}
               {!isQuestion && (
                 <Button
@@ -198,10 +282,32 @@ export function TaskApprovals({ onRefreshAction }: { onRefreshAction?: () => voi
                 <X className="h-3.5 w-3.5" />
                 {t("reject")}
               </Button>
+              {activeOrgId && (
+                <>
+                  <select
+                    aria-label={t("tasks.reassign")}
+                    value={reassignTo[a.approvalId] ?? ""}
+                    onChange={(e) => setReassignTo((p) => ({ ...p, [a.approvalId]: e.target.value }))}
+                    className="h-8 rounded-md border border-border bg-surface px-2 text-xs text-fg"
+                  >
+                    <option value="">{t("tasks.reassignPick")}</option>
+                    {members.map((m) => <option key={m.user_id} value={m.user_id}>{m.user_id} · {m.role}</option>)}
+                  </select>
+                  <Button size="sm" variant="outline" disabled={acting || !reassignTo[a.approvalId]}
+                    onClick={() => void run(a.approvalId, () => ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/reassign`, { toUserId: reassignTo[a.approvalId] }))}>
+                    {t("tasks.reassign")}
+                  </Button>
+                  <Button size="sm" variant="ghost" disabled={acting} title={t("tasks.escalateHint")}
+                    onClick={() => void run(a.approvalId, () => ApiClient.post(`/api/agent-tasks/approvals/${a.approvalId}/escalate`, {}))}>
+                    {t("tasks.escalate")}
+                  </Button>
+                </>
+              )}
             </div>
           </Card>
         );
       })}
+      {recentSection}
     </div>
   );
 }

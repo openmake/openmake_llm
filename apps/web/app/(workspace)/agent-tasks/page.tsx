@@ -33,6 +33,7 @@ import {
   Badge,
   PageHeader,
   Card,
+  useFocusTrap,
 } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/lib/store";
@@ -41,6 +42,8 @@ import { ApiClient } from "@/lib/api-client";
 import { SteeringInput } from "@/components/chat/steering-input";
 import { SharePanel } from "@/components/agent-tasks/share-panel";
 import { DiffView } from "@/components/chat/diff-view";
+import { PlanEditor } from "@/components/agent-tasks/plan-editor";
+import { TriggersPanel } from "@/components/agent-tasks/triggers-panel";
 
 /* ── 타입 ────────────────────────────────────────────────── */
 type TaskStatus = "running" | "completed" | "pending";
@@ -75,6 +78,8 @@ interface AgentTask {
   error?: string;
   /** 소유자 id — admin 전체 보기(viewAll)에서 타 사용자 작업 뱃지 표시용. */
   ownerId?: string;
+  /** 큐 우선순위(131) — 0 이 아니면 목록에 뱃지 */
+  priority?: number;
 }
 
 type PlanStepStatus = "not_started" | "in_progress" | "completed" | "blocked";
@@ -100,6 +105,11 @@ interface ApiAgentTask {
   completed_at?: string;
   resumable?: boolean;
   plan?: PlanStep[] | null;
+  /** 계획 낙관적 잠금 버전(139) */
+  plan_version?: number;
+  /** 분기 원천(141) */
+  forked_from_task_id?: string | null;
+  forked_from_turn?: number | null;
   total_tokens?: number | null;
   /** Cowork D2: 실행 백엔드 — 'local' 이면 데스크톱 브리지 폴더에서 실행됨 */
   executor?: "sandbox" | "local";
@@ -111,6 +121,8 @@ interface ApiAgentTask {
   result?: string | null;
   /** 소유자 (toPublicTask 가 user_id 그대로 노출 — admin viewAll 에서 소유자 뱃지용) */
   user_id?: string | number;
+  /** 큐 우선순위(131) — 예약 -1, 기본 0, 관리자 지정 >0 */
+  priority?: number;
 }
 
 type TaskFilesResponse = ApiSuccess<{ files: string[] }>;
@@ -197,6 +209,7 @@ function mapTask(tr: TFn, t: ApiAgentTask): AgentTask {
     folderRel: t.folder_rel || undefined,
     error: t.error || undefined,
     ownerId: t.user_id != null ? String(t.user_id) : undefined,
+    priority: typeof t.priority === "number" && t.priority !== 0 ? t.priority : undefined,
   };
 }
 
@@ -239,11 +252,13 @@ function Modal({
     return () => document.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
+  // focus trap(F19.8) — Escape 는 위 핸들러가 처리하므로 여기선 트랩·포커스 복귀만
+  const trapRef = useFocusTrap<HTMLDivElement>(open);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-xl max-h-[90vh] overflow-y-auto mx-4 rounded-lg border border-border bg-app shadow-xl">
+      <div ref={trapRef} role="dialog" aria-modal="true" tabIndex={-1} className="outline-none relative z-10 w-full max-w-xl max-h-[90vh] overflow-y-auto mx-4 rounded-lg border border-border bg-app shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h2 className="text-sm font-semibold text-fg">{title}</h2>
           <button onClick={onClose} className="text-muted hover:text-fg">
@@ -572,6 +587,9 @@ function TaskDetailModal({
   const [files, setFiles] = useState<string[]>([]);
   const [subagents, setSubagents] = useState<SubagentTraceView[]>([]);
   const [loading, setLoading] = useState(true);
+  // 계획 편집 저장 뒤 즉시 재조회(139) — 폴링 주기를 기다리지 않는다.
+  const [reloadTick, setReloadTick] = useState(0);
+  const reload = () => setReloadTick((n) => n + 1);
 
   // 라이브 폴링: 실행 중(running/paused)이면 주기적으로 갱신 — "컴퓨터" 패널 실시간성.
   useEffect(() => {
@@ -607,9 +625,35 @@ function TaskDetailModal({
     };
     load();
     return () => { cancelled = true; if (timer) clearTimeout(timer); };
-  }, [taskId]);
+  }, [taskId, reloadTick]);
 
   const plan = detail?.task.plan ?? [];
+  const [editingPlan, setEditingPlan] = useState(false);
+  const planEditable = !!detail && detail.task.status !== "completed";
+  // 체크포인트 분기(141) — 실행 중이 아닐 때 이력을 불러와 턴을 고른다. fork → resume → 새 작업 열기.
+  const [checkpoints, setCheckpoints] = useState<Array<{ turn: number; messages: number }>>([]);
+  const [forkTurn, setForkTurn] = useState<string>("");
+  const [forking, setForking] = useState(false);
+  const status = detail?.task.status;
+  useEffect(() => {
+    if (!status || status === "running" || status === "queued" || status === "pending") { setCheckpoints([]); return; }
+    ApiClient.get<ApiSuccess<{ checkpoints: Array<{ turn: number; messages: number }> }>>(`/api/agent-tasks/${taskId}/checkpoints`)
+      .then((r) => setCheckpoints(r?.data?.checkpoints ?? []))
+      .catch(() => setCheckpoints([]));
+  }, [taskId, status]);
+  async function forkFromCheckpoint() {
+    if (!forkTurn) return;
+    setForking(true);
+    try {
+      const r = await ApiClient.post<ApiSuccess<{ taskId: string }>>(`/api/agent-tasks/${taskId}/fork`, { fromTurn: Number(forkTurn) });
+      const newId = r?.data?.taskId;
+      if (!newId) throw new Error("fork");
+      await ApiClient.post(`/api/agent-tasks/${newId}/resume`, {});
+      window.location.assign(`/agent-tasks?task=${encodeURIComponent(newId)}`);
+    } catch (e) {
+      alert(t("fork.failed", { error: e instanceof Error ? e.message : "" }));
+    } finally { setForking(false); }
+  }
 
   return (
     <div className="space-y-4">
@@ -669,11 +713,32 @@ function TaskDetailModal({
             <SteeringInput taskId={taskId} />
           )}
 
+          {/* 체크포인트 분기(141) — 완료·실패·취소·일시정지 작업에서 지난 턴으로 갈라내기 */}
+          {checkpoints.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface-1 p-3 text-xs">
+              <span className="font-medium text-fg-2">{t("fork.title")}</span>
+              <select value={forkTurn} onChange={(e) => setForkTurn(e.target.value)} aria-label={t("fork.pick")}
+                className="h-8 rounded-md border border-border bg-surface px-2 text-xs text-fg">
+                <option value="">{t("fork.pick")}</option>
+                {checkpoints.map((c) => <option key={c.turn} value={String(c.turn)}>{t("fork.turnOption", { turn: c.turn, messages: c.messages })}</option>)}
+              </select>
+              <Button size="sm" variant="outline" disabled={!forkTurn || forking} onClick={() => void forkFromCheckpoint()}>{t("fork.go")}</Button>
+              <span className="text-[11px] text-muted">{t("fork.hint")}</span>
+            </div>
+          )}
+          {/* 계획 편집(139) — 완료 전 작업만. 실행 중이면 다음 턴부터 적용. */}
+          {editingPlan && detail && (
+            <PlanEditor taskId={taskId} plan={plan} planVersion={detail.task.plan_version ?? 1} running={detail.task.status === "running"}
+              onSaved={() => { setEditingPlan(false); void reload(); }} onCancel={() => setEditingPlan(false)} />
+          )}
           {/* 계획 패널 (G3 plan + G5 실시간 상태) */}
-          {plan.length > 0 && (
+          {!editingPlan && (plan.length > 0 || planEditable) && (
             <div className="rounded-md border border-border bg-surface-1 p-3">
-              <p className="mb-2 text-xs font-medium text-fg-2">
-                {t("planLabel", { completed: plan.filter((s) => s.status === "completed").length, total: plan.length })}
+              <p className="mb-2 flex items-center justify-between text-xs font-medium text-fg-2">
+                <span>{t("planLabel", { completed: plan.filter((s) => s.status === "completed").length, total: plan.length })}</span>
+                {planEditable && (
+                  <button type="button" className="text-[11px] text-accent hover:underline" onClick={() => setEditingPlan(true)}>{t("planEdit.open")}</button>
+                )}
               </p>
               <ul className="space-y-1">
                 {plan.map((s, i) => (
@@ -1242,6 +1307,7 @@ export default function AgentTasksPage() {
         </Card>
         <SchedulesPanel />
         <TemplatesPanel />
+        <TriggersPanel />
         {loading ? (
           <div className="grid place-items-center py-24 text-center">
             <Sparkles className="mb-3 h-8 w-8 animate-pulse text-faint" />
@@ -1291,6 +1357,9 @@ export default function AgentTasksPage() {
                       )}
                       {task.executor === "local" && (
                         <Badge tone="neutral">{t("localBadge")}</Badge>
+                      )}
+                      {task.priority !== undefined && (
+                        <Badge tone={task.priority > 0 ? "accent" : "neutral"}>{t("priorityBadge", { priority: task.priority })}</Badge>
                       )}
                     </span>
                     <button

@@ -21,7 +21,11 @@ import { saveProceduralSkill, resolveProceduralSpec } from '../agent-task/proced
 import { TaskPlan, parseGoalPlanSteps, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval, type ApprovalRejectReason } from './approval-gate';
 import { withToolNameSuggestions, detectShellToolMisuse, formatShellToolMisuseHint } from '../../mcp/tool-name-suggest';
+import { buildApprovalPreview } from './approval-preview';
+import type { PlanStepInput } from './planning';
+import { APPROVAL_PREVIEW } from '../../config/task-sandbox';
 import { createLogger } from '../../utils/logger';
+import { AgentTaskParked } from '../agent-task/types';
 
 const logger = createLogger('TaskRuntime');
 
@@ -119,6 +123,9 @@ export class TaskRuntime {
 
     /** 재개 시 체크포인트의 계획 복원(124) — goal 시드 계획을 저장본으로 교체한다. */
     restorePlan(steps: unknown): void { this.plan.restore(steps); }
+    /** 사용자 편집(139) — 같은 텍스트의 단계는 상태를 보존(TaskPlan.create 규칙). */
+    replacePlan(steps: PlanStepInput[]): void { this.plan.create(steps); }
+    renderPlan(): string { return this.plan.render(); }
 
     /** 관측/영속(sandboxContainerId)용 실행기 라벨 — docker: 컨테이너명, 원격(D1): 디바이스 라벨. */
     get containerName(): string { return this.executor.label; }
@@ -228,6 +235,7 @@ export class TaskRuntime {
                 { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending },
             );
             opts.onApprovalWaited?.(waitedMs);
+            if (reason === 'parked') throw new AgentTaskParked(); // 만료 → 주차(F16.7): 답이 오면 같은 호출로 재개
             if (decision !== 'approved') {
                 opts.onApprovalRejected?.({ toolName: name, reason: reason ?? 'user' });
                 return reason === 'timeout'
@@ -241,8 +249,12 @@ export class TaskRuntime {
         }
 
         if (requiresApproval(this.cfg.approvalPolicy, name, args, { deviceGatesShell: this.cfg.deviceGatesShell })) {
+            // 실행 전 미리보기(138) — 파일 쓰기 도구는 현재 파일과 인자로 diff 를 만들어 승인 카드에 싣는다(fail-open)
+            const preview = APPROVAL_PREVIEW.ENABLED
+                ? await buildApprovalPreview(name, args, (p) => this.executor.readFile(p)).catch(() => null)
+                : null;
             const { decision, reason, waitedMs } = await getApprovalRegistry().request(
-                { taskId: this.taskId, userId: this.userId, toolName: name, args },
+                { taskId: this.taskId, userId: this.userId, toolName: name, args, preview: preview ?? undefined },
                 { timeoutMs: this.cfg.approvalTimeoutMs, signal: opts.signal, onPending: opts.onApprovalPending },
             );
             opts.onApprovalWaited?.(waitedMs);

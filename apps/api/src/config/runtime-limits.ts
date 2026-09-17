@@ -719,10 +719,6 @@ export const LANGUAGE_THRESHOLDS = {
  * CacheSystem 에서 참조 (2026-05-26 Phase B Phase 2-A: 분류 캐시 필드 제거)
  */
 export const CACHE_CONFIG = {
-    /** 쿼리 응답 캐시 TTL (ms) — 기본 10분 */
-    QUERY_CACHE_TTL_MS: 10 * 60 * 1000,
-    /** 쿼리 응답 캐시 최대 항목 수 */
-    QUERY_CACHE_MAX_SIZE: 200,
     /**
      * 라우팅 캐시 TTL (ms) — 기본 24시간 (env: OMK_ROUTING_CACHE_TTL_MS).
      *
@@ -921,6 +917,11 @@ export const CONVERSATION_LIMITS = {
     SESSION_LIST_ALL_DEFAULT: parseInt(process.env.CONVERSATION_SESSION_LIST_ALL_DEFAULT || '100', 10),
     /** 본문 검색 발췌(snippet)의 매칭 지점 전후 문자 수 */
     SEARCH_SNIPPET_RADIUS: parseInt(process.env.CONVERSATION_SEARCH_SNIPPET_RADIUS || '60', 10),
+    /** 대화 폴더·태그(F19.5, 157) — 사용자당 폴더 수·세션당 태그 수·길이 상한 */
+    MAX_FOLDERS_PER_USER: parseInt(process.env.CONVERSATION_MAX_FOLDERS_PER_USER || '50', 10),
+    MAX_TAGS_PER_SESSION: parseInt(process.env.CONVERSATION_MAX_TAGS_PER_SESSION || '8', 10),
+    TAG_MAX_CHARS: 32,
+    FOLDER_NAME_MAX_CHARS: 64,
 } as const;
 
 // ============================================
@@ -1487,6 +1488,10 @@ export const ROUTE_INTENT_PATTERNS: readonly RegExp[] = [
  * 백그라운드 detached 실행이라 사람이 지켜보지 않으므로 토큰/시간 폭주 방지가 필수.
  */
 export const AGENT_TASK_LIMITS = {
+    /** 작업당 유지하는 턴 체크포인트 이력 수(141). AGENT_TASK_CHECKPOINT_KEEP */
+    CHECKPOINT_KEEP: parseInt(process.env.AGENT_TASK_CHECKPOINT_KEEP || '20', 10),
+    /** 실행 중 계획 편집 다음 턴 반영(139). AGENT_TASK_PLAN_EDIT_ENABLED */
+    PLAN_EDIT_ENABLED: process.env.AGENT_TASK_PLAN_EDIT_ENABLED !== 'false',
     /** 작업 생성 요청 body 상한(bytes) — /api/agent-tasks 의 express.json 파서와 validate
      *  미들웨어(maxBodySizeBytes)가 공유하는 단일 소스(정합 고정: 파서만 크고 검증이 1MB 로
      *  거부하던 불일치 방지). 첨부는 base64 로 4/3 팽창하므로 원본 파일 실효 상한은 약 3/4.
@@ -1607,6 +1612,11 @@ export const AGENT_TASK_LIMITS = {
      *  task 가 승인 대기(30분)×N 반복으로 예산만 소진하고 산출물 0 으로 종결되던 패턴 차단.
      *  0 이면 비활성. AGENT_TASK_HITL_TIMEOUT_DEGRADE_AFTER 로 오버라이드(기본 2). */
     HITL_TIMEOUT_DEGRADE_AFTER: parseInt(process.env.AGENT_TASK_HITL_TIMEOUT_DEGRADE_AFTER || '2', 10),
+    /** 주차(F16.7)된 ask_human·mcp_elicit 승인의 최대 대기(ms) — 이후 종전처럼 만료. AGENT_TASK_HITL_PARK_MAX_MS(기본 7일).
+     *  켜는 플래그는 system_settings `AGENT_TASK_HITL_PARK_ON_TIMEOUT`(getConfig().agentTaskHitlParkOnTimeout). */
+    HITL_PARK_MAX_MS: parseInt(process.env.AGENT_TASK_HITL_PARK_MAX_MS || '', 10) || 7 * 24 * 60 * 60 * 1000,
+    /** 주차 스윕 주기(ms) — 결정이 왔는데 재개되지 못한 작업(로컬 디바이스 미연결 등) 재시도·상한 초과 정리·workspace 유지. AGENT_TASK_HITL_PARK_SWEEP_MS(기본 10분) */
+    HITL_PARK_SWEEP_MS: parseInt(process.env.AGENT_TASK_HITL_PARK_SWEEP_MS || '', 10) || 10 * 60 * 1000,
     /**
      * 마무리 턴 강제(2026-08-03) — 자원 상한에 **닿기 전에** 도구를 끊고 종합 답변을 받는다.
      *
@@ -1733,6 +1743,13 @@ export const AGENT_TASK_LIMITS = {
     QUEUE_GLOBAL_MAX: parseInt(process.env.AGENT_TASK_QUEUE_GLOBAL_MAX || '4', 10),
     /** 유저별 동시 실행 상한. AGENT_TASK_QUEUE_USER_MAX 로 오버라이드(기본 2). */
     QUEUE_USER_MAX: parseInt(process.env.AGENT_TASK_QUEUE_USER_MAX || '2', 10),
+    /** 큐 우선순위(F16.6, 131) — 대기열은 높을수록 먼저, 같으면 등록순. 예약 실행은 SCHEDULED, 사용자 실행은 DEFAULT,
+     *  관리자만 DEFAULT 초과(상한은 system_settings AGENT_TASK_QUEUE_PRIORITY_MAX). */
+    QUEUE_PRIORITY_SCHEDULED: -1,
+    QUEUE_PRIORITY_DEFAULT: 0,
+    /** 실패 큐 뷰(GET /queue/dead) 기본 조회 기간(일)·최대 행 수. AGENT_TASK_DEAD_QUEUE_DAYS / AGENT_TASK_DEAD_QUEUE_LIMIT */
+    DEAD_QUEUE_DAYS: parseInt(process.env.AGENT_TASK_DEAD_QUEUE_DAYS || '7', 10),
+    DEAD_QUEUE_LIMIT: parseInt(process.env.AGENT_TASK_DEAD_QUEUE_LIMIT || '100', 10),
     /** 스케줄/반복 트리거(Phase 3-A) — cron/interval 로 task 를 반복 실행. 기본 OFF.
      *  AGENT_TASK_SCHEDULES_ENABLED=true 로 활성. 스케줄러 tick 이 due 스케줄을 큐에 제출. */
     SCHEDULES_ENABLED: process.env.AGENT_TASK_SCHEDULES_ENABLED === 'true',
@@ -2126,4 +2143,149 @@ export const QUOTA_GRANTS = {
     OVERAGE_REQUEST_TTL_MS: parseInt(process.env.QUOTA_OVERAGE_REQUEST_TTL_MS || String(7 * 24 * 60 * 60 * 1000), 10),
     /** 자동 요청 시 요청량 = 설정 한도 × 이 비율 (기본 0.5). QUOTA_OVERAGE_AUTO_REQUEST_RATIO */
     OVERAGE_AUTO_REQUEST_RATIO: parseFloat(process.env.QUOTA_OVERAGE_AUTO_REQUEST_RATIO || '0.5'),
+} as const;
+
+/** 승인함 "최근 결정" 조회 창(ms, 기본 30분) — 철회 가능한 미소비 승인을 찾는 범위. APPROVAL_RECENT_WINDOW_MS */
+export const APPROVAL_RECENT_WINDOW_MS = parseInt(process.env.APPROVAL_RECENT_WINDOW_MS || String(30 * 60 * 1000), 10);
+
+/** 채팅 요청 멱등(140) — clientRequestId 기억 TTL·사용자당 상한. IDEMPOTENCY_TTL_MS / IDEMPOTENCY_MAX_PER_OWNER */
+export const IDEMPOTENCY = {
+    TTL_MS: parseInt(process.env.IDEMPOTENCY_TTL_MS || String(10 * 60 * 1000), 10),
+    MAX_PER_OWNER: parseInt(process.env.IDEMPOTENCY_MAX_PER_OWNER || '200', 10),
+} as const;
+
+/** 세션 복제·트리(F08 PR-6) — 복제 메시지 상한·조상 탐색 깊이. SESSION_CLONE_MAX_MESSAGES / SESSION_TREE_MAX_DEPTH */
+export const SESSION_BRANCH = {
+    CLONE_MAX_MESSAGES: parseInt(process.env.SESSION_CLONE_MAX_MESSAGES || '500', 10),
+    TREE_MAX_DEPTH: parseInt(process.env.SESSION_TREE_MAX_DEPTH || '20', 10),
+} as const;
+
+/**
+ * 노드 지표 스크레이프·큐 깊이(F24.4, 143). 대상은 VLLM_METRICS_URLS(쉼표 목록) — 비어 있으면 LLM_TOKENIZE_URL 의 origin + /metrics
+ * (같은 vLLM 이 /metrics 를 노출). DCGM exporter(:9400) URL 을 목록에 더하면 GPU util·메모리·온도도 읽는다. 끄기 NODE_METRICS_ENABLED=false.
+ */
+export const NODE_METRICS = {
+    ENABLED: process.env.NODE_METRICS_ENABLED !== 'false',
+    URLS: (process.env.VLLM_METRICS_URLS || '').split(',').map((u) => u.trim()).filter(Boolean),
+    POLL_MS: parseInt(process.env.NODE_METRICS_POLL_MS || '', 10) || 60_000,
+    TIMEOUT_MS: 3_000,
+    QUEUE_SAMPLE_MS: 30_000,
+    RETENTION_DAYS: parseInt(process.env.NODE_METRICS_RETENTION_DAYS || '', 10) || 14,
+    /** 이 시간 넘게 스크레이프가 실패하면 stale 로 표시 */
+    STALE_AFTER_MS: 3 * 60_000,
+    /** 관리자 추이 조회 기간(시간) 기본·상한과 기간별 집계 버킷(분) — [기간 상한, 버킷] 오름차순 */
+    SERIES_DEFAULT_HOURS: 6,
+    SERIES_MAX_HOURS: 14 * 24,
+    SERIES_BUCKETS: [[6, 5], [48, 30], [Infinity, 180]] as ReadonlyArray<readonly [number, number]>,
+} as const;
+
+/** LLM 요청 셰도우 계측(F06.2 G0, 158) — 호출 1건당 1행(fire-and-forget), 90일 보존. 끄기 LLM_REQUEST_METRICS_ENABLED=false */
+export const LLM_REQUEST_METRICS = {
+    ENABLED: process.env.LLM_REQUEST_METRICS_ENABLED !== 'false',
+    RETENTION_DAYS: parseInt(process.env.LLM_REQUEST_METRICS_RETENTION_DAYS || '', 10) || 90,
+    ERROR_CODE_MAX_CHARS: 64,
+} as const;
+
+/** 메시지 웹검색 출처(F19.4, 156) — 스트리밍 중 모아 assistant 행 저장 때 영속. 인메모리 대기는 TTL·개수 상한 */
+export const MESSAGE_SOURCES_LIMITS = {
+    TTL_MS: 30 * 60_000,
+    MAX_PENDING: 500,
+    MAX_SOURCES: 20,
+    MAX_TITLE_CHARS: 300,
+    MAX_URL_CHARS: 2_000,
+    MAX_SNIPPET_CHARS: 400,
+} as const;
+
+/** 디버그 큐 재현 번들(F24.7, 144) — 세션별 마지막 LLM 요청 본문을 메모리에 잠깐 들고 있다가 오류·신고 시 보관. */
+export const REPLAY_CAPTURE = {
+    ENABLED: process.env.REPLAY_CAPTURE_ENABLED !== 'false',
+    /** 번들 최대 바이트 — 넘으면 도구 결과부터, 그다음 오래된 대화부터 자른다. REPLAY_BUNDLE_MAX_BYTES */
+    MAX_BYTES: parseInt(process.env.REPLAY_BUNDLE_MAX_BYTES || '', 10) || 256 * 1024,
+    /** 세션당 보관 턴 수(도구 루프 안의 마지막 LLM 호출들) */
+    TURNS_PER_SESSION: 2,
+    /** 메모리 보관 시간·세션 수 상한 — 신고는 보통 응답 직후라 짧게 */
+    TTL_MS: 30 * 60 * 1000,
+    MAX_SESSIONS: 300,
+    /** 관리자 REST 리플레이 분당 상한 — 실제 LLM 호출 비용 */
+    REPLAY_PER_MINUTE: 3,
+} as const;
+
+/** 채팅 요청 사실 테이블(F24.2, 142) — 요청당 1행 지문·결과. CHAT_REQUESTS_ENABLED=false 로 끔. */
+export const CHAT_REQUESTS = {
+    ENABLED: process.env.CHAT_REQUESTS_ENABLED !== 'false',
+    /** 요청 행 보존(일). CHAT_REQUESTS_RETENTION_DAYS */
+    RETENTION_DAYS: parseInt(process.env.CHAT_REQUESTS_RETENTION_DAYS || '90', 10),
+    /** 지문 원문 보존 — 마지막 사용 후(일) */
+    FINGERPRINT_RETENTION_DAYS: 180,
+    /** 프로세스가 이미 upsert 한 지문 기억 수 — 매 요청 원문(~10KB) 재기록을 막는다 */
+    FINGERPRINT_SEEN_MAX: 500,
+} as const;
+
+/** 로그 자격증명 마스킹(F24.6) — utils/logger 가 출력 직전에 적용. LOG_REDACT_SECRETS=false 로 끔. */
+export const LOG_REDACT = {
+    ENABLED: process.env.LOG_REDACT_SECRETS !== 'false',
+    /** 이보다 짧은 문자열은 검사하지 않는다(토큰은 12자 이상) */
+    MIN_LEN: 12,
+} as const;
+
+/** 아티팩트 댓글(F20.6, 147) — 본문 상한은 147 CHECK 와 짝. */
+export const ARTIFACT_COMMENT_LIMITS = {
+    BODY_MAX_CHARS: 4000,
+    /** 아티팩트당 목록 최대 행. ARTIFACT_COMMENT_LIST_MAX */
+    LIST_MAX: parseInt(process.env.ARTIFACT_COMMENT_LIST_MAX || '500', 10),
+    /** 작성·수정 레이트 리밋(분당). ARTIFACT_COMMENT_RATE_USER / ARTIFACT_COMMENT_RATE_IP */
+    RATE_WINDOW_MS: 60_000,
+    RATE_USER: parseInt(process.env.ARTIFACT_COMMENT_RATE_USER || '30', 10),
+    RATE_IP: parseInt(process.env.ARTIFACT_COMMENT_RATE_IP || '60', 10),
+} as const;
+
+/** 외부 MCP resources/prompts 메타 도구(F13.2) — 목록 상한. MCP_RESOURCE_LIST_MAX */
+export const MCP_RESOURCE_LIMITS = {
+    LIST_MAX: parseInt(process.env.MCP_RESOURCE_LIST_MAX || '100', 10),
+} as const;
+
+/**
+ * 외부 MCP elicitation(서버→클라이언트 사용자 입력 요청) → 에이전트 작업 승인함(F13.10, 2026-09-17).
+ * 기본 OFF — 켜면 사용자 풀 서버에만 `elicitation.form` 을 광고한다(연결 시점에 정해지므로 재기동 후 반영).
+ * 채팅 경로·작업 문맥이 모호한 호출은 decline 으로 즉시 응답한다. MCP_ELICITATION_ENABLED
+ */
+export const MCP_ELICITATION_ENABLED = process.env.MCP_ELICITATION_ENABLED === 'true';
+
+export const MCP_ELICITATION_LIMITS = {
+    /** 사용자 입력 대기가 아닐 때의 도구 호출 마감(ms) — SDK 기본 요청 타임아웃과 같다. 입력 대기 중엔 연장. MCP_ELICITATION_CALL_TIMEOUT_MS */
+    CALL_TIMEOUT_MS: parseInt(process.env.MCP_ELICITATION_CALL_TIMEOUT_MS || '60000', 10),
+    /** SDK 요청 자체의 절대 상한(ms) — 연장이 끝없이 이어지지 않게. 승인 대기 상한(TASK_SANDBOX_APPROVAL_TIMEOUT_MS)보다 커야 한다. MCP_ELICITATION_CALL_MAX_MS */
+    CALL_MAX_MS: parseInt(process.env.MCP_ELICITATION_CALL_MAX_MS || String(2 * 60 * 60 * 1000), 10),
+    /** 승인함에 싣는 서버 메시지 최대 길이(문자). MCP_ELICITATION_MESSAGE_MAX_CHARS */
+    MESSAGE_MAX_CHARS: parseInt(process.env.MCP_ELICITATION_MESSAGE_MAX_CHARS || '2000', 10),
+} as const;
+
+/** elicitation boolean 필드의 자유텍스트 답변 해석표(F13.10) — 소문자 비교. */
+export const MCP_ELICITATION_BOOLEAN_WORDS: Readonly<Record<string, boolean>> = {
+    true: true, yes: true, y: true, '1': true, '예': true, '네': true,
+    false: false, no: false, n: false, '0': false, '아니오': false, '아니요': false,
+};
+
+/** resources/prompts 메타 도구를 노출할 의도 턴 판정(F13.2) — 상시 노출 금지(프롬프트 다이어트). */
+export const MCP_RESOURCE_INTENT_PATTERNS: readonly RegExp[] = [
+    /리소스|resource|프롬프트\s*(템플릿|목록)|prompt\s*template|mcp.*(읽|read|목록|list)/i,
+];
+
+/** getAllTools 진입 시 stale 도구 재조회 동시성(F13.12). MCP_TOOL_REFRESH_CONCURRENCY */
+export const MCP_TOOL_REFRESH_CONCURRENCY = parseInt(process.env.MCP_TOOL_REFRESH_CONCURRENCY || '4', 10);
+
+/**
+ * 인바운드 웹훅 트리거(F16.5, 132) — 서명 검증·남용 방지 상한.
+ */
+export const TRIGGER_LIMITS = {
+    /** 타임스탬프 허용 창(초) — 재전송 방어. AGENT_TASK_TRIGGER_SIGNATURE_WINDOW_SEC */
+    SIGNATURE_WINDOW_SEC: parseInt(process.env.AGENT_TASK_TRIGGER_SIGNATURE_WINDOW_SEC || '300', 10),
+    /** 트리거당 분당 수신 상한. AGENT_TASK_TRIGGER_PER_MINUTE */
+    PER_MINUTE: parseInt(process.env.AGENT_TASK_TRIGGER_PER_MINUTE || '30', 10),
+    /** 수신 본문 상한(bytes). AGENT_TASK_TRIGGER_MAX_BODY_BYTES */
+    MAX_BODY_BYTES: parseInt(process.env.AGENT_TASK_TRIGGER_MAX_BODY_BYTES || '', 10) || 64 * 1024,
+    /** 유저당 트리거 수 상한. AGENT_TASK_TRIGGER_MAX_PER_USER */
+    MAX_PER_USER: parseInt(process.env.AGENT_TASK_TRIGGER_MAX_PER_USER || '20', 10),
+    /** 연속 실패 이 횟수면 자동 비활성. AGENT_TASK_TRIGGER_DISABLE_AFTER_FAILURES */
+    DISABLE_AFTER_FAILURES: parseInt(process.env.AGENT_TASK_TRIGGER_DISABLE_AFTER_FAILURES || '5', 10),
 } as const;

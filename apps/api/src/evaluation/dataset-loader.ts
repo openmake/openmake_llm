@@ -10,6 +10,7 @@ import * as path from 'path';
 import { z } from 'zod';
 import { createLogger } from '../utils/logger';
 import type { GoldenDataset, GoldenCase, EvaluationCategory } from './types';
+import { LONG_CONTEXT_FIXTURES } from './long-context-fixtures';
 
 const logger = createLogger('DatasetLoader');
 
@@ -26,6 +27,8 @@ const goldenCaseSchema = z.object({
     mustNotContain: z.array(z.string()).optional(),
     language: z.string().optional(),
     tags: z.array(z.string()).optional(),
+    attachments: z.array(z.object({ kind: z.literal('image'), fixture: z.string().regex(/^[a-z0-9-]+\.png$/) })).min(1).optional(),
+    contextFixture: z.string().min(1).optional(),
 });
 
 const goldenDatasetSchema = z.object({
@@ -35,6 +38,10 @@ const goldenDatasetSchema = z.object({
 });
 
 const DEFAULT_DATASET_PATH = path.resolve(__dirname, 'golden-dataset.json');
+/** 멀티모달 이미지 픽스처 디렉터리(F26.5) */
+export const IMAGE_FIXTURE_DIR = path.resolve(__dirname, 'fixtures', 'images');
+/** mock 평가가 건너뛰는 태그 — 첨부·실모델이 있어야 의미 있는 케이스 */
+export const REAL_ONLY_TAG = 'real-only';
 
 /**
  * 골든셋 JSON 파일을 로드하고 Zod로 검증합니다.
@@ -79,6 +86,15 @@ function validateCaseSemantics(dataset: GoldenDataset): void {
         if (c.category === 'response-pattern' && !c.mustContain?.length && !c.mustContainAny?.length && !c.mustNotContain?.length) {
             errors.push(`${c.id}: response-pattern 카테고리는 mustContain, mustContainAny 또는 mustNotContain 필요`);
         }
+    }
+
+    // 첨부 픽스처(F26.5) — 파일·생성기 id 가 실제로 있어야 하고, 첨부 케이스는 real-only 여야 한다(mock 은 첨부를 못 본다)
+    for (const c of dataset.cases) {
+        for (const a of c.attachments ?? []) {
+            if (!fs.existsSync(path.join(IMAGE_FIXTURE_DIR, a.fixture))) errors.push(`${c.id}: 이미지 픽스처 없음 ${a.fixture}`);
+        }
+        if (c.contextFixture && !LONG_CONTEXT_FIXTURES[c.contextFixture]) errors.push(`${c.id}: 알 수 없는 contextFixture ${c.contextFixture}`);
+        if ((c.attachments?.length || c.contextFixture) && !c.tags?.includes(REAL_ONLY_TAG)) errors.push(`${c.id}: 첨부 케이스는 tags 에 ${REAL_ONLY_TAG} 필요`);
     }
 
     if (errors.length > 0) {

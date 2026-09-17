@@ -22,6 +22,10 @@
  * - POST /api/metrics/cache/clear   - 캐시 초기화
  * - GET  /api/metrics/pool/stats    - 연결 풀 통계
  * - GET  /api/metrics/health        - 시스템 헬스 체크
+ * - GET  /api/metrics/gpu           - vLLM/DCGM 노드 스냅샷·추이 (143)
+ * - GET  /api/metrics/queues        - 큐 깊이 스냅샷·추이 (143)
+ * - GET  /api/metrics/slo           - SLO 상태·에러 버짓·burn-rate (145)
+ * - GET  /api/metrics/slo/history   - SLO 일별 스냅샷 (145)
  *
  * @requires requireAuth - JWT 인증 미들웨어
  * @requires requireAdmin - 관리자 권한 미들웨어
@@ -43,7 +47,13 @@ import * as os from 'os';
 import { success } from '../utils/api-response';
 import { requireAuth, requireAdmin } from '../auth';
 import { asyncHandler, AppError } from '../utils/error-handler';
-import { GATE_REPORT } from '../config/runtime-limits';
+import { GATE_REPORT, NODE_METRICS } from '../config/runtime-limits';
+import { NodeMetricsRepository, resolveSeriesWindow } from '../data/repositories/node-metrics-repository';
+import { getNodeMetricsStates, resolveNodeMetricsUrls } from '../cluster/node-metrics-collector';
+import { getLastQueueDepth, QUEUE_DEPTH_METRIC } from '../monitoring/queue-depth-sampler';
+import { SLO_LIMITS, resolveSloTargets } from '../config/slo';
+import { SloRepository } from '../data/repositories/slo-repository';
+import { computeSloEvaluations } from '../monitoring/slo-runner';
 import { getPool } from '../data/models/unified-database';
 import { ConversationRepository } from '../data/repositories/conversation-repository';
 import { AgentTaskMetricsRepository } from '../data/repositories/agent-task-metrics-repository';
@@ -473,13 +483,12 @@ router.get('/alerts', asyncHandler(async (req: Request, res: Response) => {
  * GET /api/cache/stats
  * 캐시 통계 조회
  *
- * Phase B Phase 2-A (2026-05-26): classificationCache 항목 제거. LLM classifier
- * 가 삭제되어 분류 캐시도 미운영. queryCache (응답 캐시) 만 노출.
+ * 라우팅 캐시(에이전트 LLM 라우팅 결과)만 운영한다 — 응답 캐시는 2026-09-17 제거(사용자 간 응답 혼입 위험, 호출처 없음).
  */
 router.get('/cache/stats', asyncHandler(async (req: Request, res: Response) => {
     const cache = getCacheSystem();
     res.json(success({
-        queryCache: cache.getStats(),
+        routingCache: cache.getStats(),
     }));
 }));
 
@@ -494,6 +503,45 @@ router.post('/cache/clear', requireAdmin, asyncHandler(async (req: Request, res:
 }));
 
 // 연결 풀 엔드포인트(/api/pool/stats) 제거됨 — OpenAI SDK 가 자체 connection 관리.
+
+// ================================================
+// 노드 지표·큐 깊이 (F24.4, 143)
+// ================================================
+
+/**
+ * GET /api/metrics/gpu?hours=N — vLLM(선택: DCGM) 노드별 최신 스냅샷(stale 표시)과 KV 캐시·대기·실행 요청 추이.
+ */
+router.get('/gpu', asyncHandler(async (req: Request, res: Response) => {
+    const { hours, bucketMinutes } = resolveSeriesWindow(req.query.hours);
+    const series = await new NodeMetricsRepository(getPool())
+        .series(['vllm_kv_cache_pct', 'vllm_requests_waiting', 'vllm_requests_running', 'dcgm_gpu_util'], hours, bucketMinutes)
+        .catch(() => []);
+    res.json(success({ enabled: NODE_METRICS.ENABLED, targets: resolveNodeMetricsUrls().length, nodes: getNodeMetricsStates(), hours, bucketMinutes, series }));
+}));
+
+/**
+ * GET /api/metrics/queues?hours=N — 최근 큐 깊이 샘플(작업 큐 대기·실행·DB queued·오케스트레이터 job·vLLM 대기)과 추이.
+ */
+router.get('/queues', asyncHandler(async (req: Request, res: Response) => {
+    const { hours, bucketMinutes } = resolveSeriesWindow(req.query.hours);
+    const series = await new NodeMetricsRepository(getPool()).series([QUEUE_DEPTH_METRIC], hours, bucketMinutes).catch(() => []);
+    res.json(success({ enabled: NODE_METRICS.ENABLED, current: getLastQueueDepth(), hours, bucketMinutes, series }));
+}));
+
+/**
+ * GET /api/metrics/slo — SLO 4종 즉시 계산(목표·SLI·버짓 잔량·burn fast/slow·상태). 계산 실패 소스는 insufficient.
+ * GET /api/metrics/slo/history?days=N — 일별 마지막 스냅샷(기본 30일, 상한 90일)
+ */
+router.get('/slo', asyncHandler(async (_req: Request, res: Response) => {
+    const { targets, ttftThresholdMs } = resolveSloTargets();
+    res.json(success({ computedAt: new Date().toISOString(), targets, ttftThresholdMs, evaluations: await computeSloEvaluations(getPool()) }));
+}));
+
+router.get('/slo/history', asyncHandler(async (req: Request, res: Response) => {
+    const days = Math.min(parseDays(req.query.days, 30), SLO_LIMITS.HISTORY_MAX_DAYS);
+    const rows = await new SloRepository(getPool()).dailyHistory(days).catch(() => []);
+    res.json(success({ days, rows }));
+}));
 
 // ================================================
 // 시스템 헬스

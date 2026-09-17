@@ -40,7 +40,7 @@ import {
 import { extractAttachedDocuments } from '../services/chat-service/doc-extractor';
 import { getApprovalRegistry } from '../services/task-sandbox/approval-gate';
 import { getSteeringRegistry } from '../services/agent-task/steering';
-import { dispatchAgentTask, getAgentTaskQueue } from '../services/agent-task/task-queue';
+import { dispatchAgentTask, resolveQueuePriority, getAgentTaskQueue } from '../services/agent-task/task-queue';
 import { safeRealWorkspacePath, listWorkspaceFilesAt } from '../services/task-sandbox/sandbox';
 import { basename } from 'path';
 import multer from 'multer';
@@ -54,6 +54,16 @@ import { claimUploadsAsInputFiles, ChunkStoreError } from '../services/agent-tas
 import { resolveDefaultMaxTurns } from '../services/agent-task/task-inputs';
 import { auditLocalTaskCreate, filterTaskList, loadOwnedTask, toPublicTask, validateLocalExecutorInput } from './agent-task.helpers';
 import { approvalsRouter } from './agent-task-approvals.routes';
+import { forkRouter } from './agent-task-fork.routes';
+import { getPlanEditRegistry } from '../services/agent-task/plan-edits';
+import { TaskPlan, type PlanStepInput } from '../services/task-sandbox/planning';
+import { getPool } from '../data/models/unified-database';
+import { z } from 'zod';
+
+const updatePlanSchema = z.object({
+    steps: z.array(z.union([z.string().trim().min(1).max(500), z.object({ text: z.string().trim().min(1).max(500), doneWhen: z.string().max(500).optional(), after: z.array(z.number().int().min(1)).max(20).optional() })])).min(1).max(50),
+    expectedVersion: z.number().int().min(1),
+});
 import { isAdminRole } from '../data/user-manager';
 
 const logger = createLogger('AgentTaskRoutes');
@@ -327,7 +337,7 @@ router.post('/:taskId/execute', validate(executeAgentTaskSchema), asyncHandler(a
 
     // 스킬 범위(allowedSkills, 미지정이면 전체 활성 스킬)와 승인 3모드(Manual/Auto/Skip)는
     // executeAgentTaskSchema 가 검증한다 — 잘못된 값은 여기 오기 전에 400 이다.
-    const { allowedSkills, approvalPolicy: requestedPolicy } = req.body as ExecuteAgentTaskInput;
+    const { allowedSkills, approvalPolicy: requestedPolicy, priority } = req.body as ExecuteAgentTaskInput;
     // 조직 승인 하한(129) — 활성 조직이 TOOL_APPROVAL_POLICY_MIN 을 두면 요청값과 비교해 더 엄격한 쪽을 쓴다.
     const approvalPolicy = strictestApprovalPolicy(requestedPolicy, (await resolveEffectivePolicy(String(req.user!.id))).approvalPolicyMin);
 
@@ -338,6 +348,7 @@ router.post('/:taskId/execute', validate(executeAgentTaskSchema), asyncHandler(a
     const outcome = await dispatchAgentTask({
         taskId: task.id,
         userId: String(req.user!.id),
+        priority: resolveQueuePriority(priority, role === 'admin'),
         run: () => service.execute({
             taskId: task.id,
             goal: task.goal,
@@ -379,10 +390,11 @@ router.post('/:taskId/cancel', asyncHandler(async (req: Request, res: Response) 
     // 실행 전 대기열(queued)에 있으면 큐에서 제거 후 상태 정리(아직 execute 미시작이라 AbortController 없음).
     const dequeued = getAgentTaskQueue().cancelPending(task.id);
 
-    // 레지스트리에 없음: DB 상 running/queued/pending 이면 상태 정리, 아니면 취소 대상 아님
-    if (dequeued || task.status === 'running' || task.status === 'pending' || task.status === 'queued') {
+    // 레지스트리에 없음: DB 상 running/queued/pending·paused(질문 응답 대기 주차 F16.7 — 남은 질문 승인도 만료) 이면 상태 정리
+    if (dequeued || ['running', 'pending', 'queued', 'paused'].includes(task.status)) {
         const db = getUnifiedDatabase();
         await db.updateAgentTask(task.id, { status: 'cancelled' });
+        if (task.status === 'paused') getApprovalRegistry().closeTask(task.id);
         return res.json(success({ message: '작업이 취소되었습니다.', taskId: task.id }));
     }
     return res.status(400).json(badRequest('실행 중이거나 대기 중인 작업이 아닙니다.'));
@@ -426,6 +438,7 @@ router.post('/:taskId/resume', asyncHandler(async (req: Request, res: Response) 
     const outcome = await dispatchAgentTask({
         taskId: task.id,
         userId: String(req.user!.id),
+        priority: task.priority, // 재개는 처음 실행의 우선순위를 잇는다(131)
         run: () => service.execute({
             taskId: task.id,
             goal: task.goal,
@@ -533,7 +546,31 @@ router.get('/:taskId/files/download', asyncHandler(async (req: Request, res: Res
     });
 }));
 
+/**
+ * PUT /api/agent-tasks/:taskId/plan { steps, expectedVersion } (139) — 사용자 계획 편집.
+ * pending/paused/failed/cancelled/queued: DB 갱신(재개 시 TaskPlan.restore 가 복원). running: DB 갱신 + 다음 턴 경계 적용.
+ * completed 는 400, 버전 불일치는 409 {currentVersion}. 같은 텍스트 단계의 상태는 보존.
+ */
+router.put('/:taskId/plan', validate(updatePlanSchema), asyncHandler(async (req: Request, res: Response) => {
+    const task = await loadOwnedTask(req, res, req.params.taskId);
+    if (!task) return;
+    if (task.status === 'completed') return res.status(400).json(badRequest('완료된 작업의 계획은 편집할 수 없습니다.'));
+    const { steps, expectedVersion } = req.body as { steps: PlanStepInput[]; expectedVersion: number };
+    const tp = new TaskPlan();
+    tp.restore(task.plan);
+    tp.create(steps);
+    const merged = tp.snapshot();
+    if (merged.length === 0) return res.status(400).json(badRequest('단계가 비어 있습니다.'));
+    const r = await new AgentTaskRepository(getPool()).updatePlanIfVersion(task.id, merged, expectedVersion);
+    if (!r.ok) return res.status(409).json({ success: false, error: { code: 'VERSION_CONFLICT', message: '다른 곳에서 계획이 바뀌었습니다. 다시 불러오세요.' }, currentVersion: r.version });
+    if (task.status === 'running' && AGENT_TASK_LIMITS.PLAN_EDIT_ENABLED) getPlanEditRegistry().submit(task.id, steps);
+    logger.info(`[AgentTaskRoutes] 계획 편집: ${task.id} v${r.version} (${merged.length}단계, status=${task.status})`);
+    res.json(success({ plan: merged, planVersion: r.version, appliedAt: task.status === 'running' ? 'next_turn' : 'now' }));
+}));
+
 // 승인(HITL) 라우트는 agent-task-approvals.routes.ts (600줄 게이트로 분리, 2026-09-17) — 라우트 순서(answer → :decision)는 그 파일이 지킨다.
 router.use(approvalsRouter);
+// 체크포인트 이력·분기(141)는 agent-task-fork.routes.ts
+router.use(forkRouter);
 
 export default router;

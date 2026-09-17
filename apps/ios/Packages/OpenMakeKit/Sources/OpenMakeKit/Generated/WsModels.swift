@@ -74,11 +74,20 @@ public struct WsServerEvent: Codable {
     public let payload: Payload?
     /// 아티팩트가 있으면 raw 코드펜스가 placeholder 로 치환된 본문 — 클라가 누적 본문을 이걸로 reset.
     public let cleanedContent: String?
+    /// 같은 clientRequestId 의 재전송이라 새 생성 없이 끝냈음(140)
+    public let deduplicated: Bool?
     /// 백엔드 실제 페이로드(ws-chat-handler): 스트리밍 완료 시 토큰 메트릭. tokensPerSec 는 toFixed(2) 문자열.
     public let metrics: Metrics?
     public let content: String?
     public let finished: Bool?
+    /// 재생해야 할 이벤트 일부가 링버퍼에서 밀려났음 — 아티팩트는 done.cleanedContent 로 재구성할 것
+    public let gap: Bool?
+    /// 스냅샷이 반영한 마지막 순번
+    public let lastSeq: Double?
+    /// 이 스트림의 식별자(F19.11) — 클라이언트 커서가 다르면 새 스트림으로 본다
+    public let streamID: String?
     public let thinking: String?
+    public let sources: [SearchSourceRef]?
     /// 에러 분류(quota_exceeded / api_keys_exhausted / provider code 등)
     public let errorType: String?
     public let keysInCooldown: Double?
@@ -118,10 +127,15 @@ public struct WsServerEvent: Codable {
         case ttlHours = "ttlHours"
         case payload = "payload"
         case cleanedContent = "cleanedContent"
+        case deduplicated = "deduplicated"
         case metrics = "metrics"
         case content = "content"
         case finished = "finished"
+        case gap = "gap"
+        case lastSeq = "lastSeq"
+        case streamID = "streamId"
         case thinking = "thinking"
+        case sources = "sources"
         case errorType = "errorType"
         case keysInCooldown = "keysInCooldown"
         case resetTime = "resetTime"
@@ -143,7 +157,7 @@ public struct WsServerEvent: Codable {
         case taskID = "taskId"
     }
 
-    public init(token: String?, type: WsServerEventType, messageID: String?, summary: String?, issues: String?, sessionID: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, metrics: Metrics?, content: String?, finished: Bool?, thinking: String?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, status: String?, step: Step?, taskID: String?) {
+    public init(token: String?, type: WsServerEventType, messageID: String?, summary: String?, issues: String?, sessionID: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, streamID: String?, thinking: String?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, status: String?, step: Step?, taskID: String?) {
         self.token = token
         self.type = type
         self.messageID = messageID
@@ -157,10 +171,15 @@ public struct WsServerEvent: Codable {
         self.ttlHours = ttlHours
         self.payload = payload
         self.cleanedContent = cleanedContent
+        self.deduplicated = deduplicated
         self.metrics = metrics
         self.content = content
         self.finished = finished
+        self.gap = gap
+        self.lastSeq = lastSeq
+        self.streamID = streamID
         self.thinking = thinking
+        self.sources = sources
         self.errorType = errorType
         self.keysInCooldown = keysInCooldown
         self.resetTime = resetTime
@@ -215,10 +234,15 @@ public extension WsServerEvent {
         ttlHours: Double?? = nil,
         payload: Payload?? = nil,
         cleanedContent: String?? = nil,
+        deduplicated: Bool?? = nil,
         metrics: Metrics?? = nil,
         content: String?? = nil,
         finished: Bool?? = nil,
+        gap: Bool?? = nil,
+        lastSeq: Double?? = nil,
+        streamID: String?? = nil,
         thinking: String?? = nil,
+        sources: [SearchSourceRef]?? = nil,
         errorType: String?? = nil,
         keysInCooldown: Double?? = nil,
         resetTime: String?? = nil,
@@ -253,10 +277,15 @@ public extension WsServerEvent {
             ttlHours: ttlHours ?? self.ttlHours,
             payload: payload ?? self.payload,
             cleanedContent: cleanedContent ?? self.cleanedContent,
+            deduplicated: deduplicated ?? self.deduplicated,
             metrics: metrics ?? self.metrics,
             content: content ?? self.content,
             finished: finished ?? self.finished,
+            gap: gap ?? self.gap,
+            lastSeq: lastSeq ?? self.lastSeq,
+            streamID: streamID ?? self.streamID,
             thinking: thinking ?? self.thinking,
+            sources: sources ?? self.sources,
             errorType: errorType ?? self.errorType,
             keysInCooldown: keysInCooldown ?? self.keysInCooldown,
             resetTime: resetTime ?? self.resetTime,
@@ -741,6 +770,76 @@ public extension MCPToolResource {
     }
 }
 
+/// 웹검색 구조화 출처(F19.4) — 본문 [N] 인용과 같은 번호. 서버 formatSearchSources 와 같은 순서·캡
+// MARK: - SearchSourceRef
+public struct SearchSourceRef: Codable {
+    public let n: Double
+    public let snippet: String
+    /// 결과 도메인(표시용)
+    public let source: String?
+    public let title: String
+    public let url: String
+
+    public enum CodingKeys: String, CodingKey {
+        case n = "n"
+        case snippet = "snippet"
+        case source = "source"
+        case title = "title"
+        case url = "url"
+    }
+
+    public init(n: Double, snippet: String, source: String?, title: String, url: String) {
+        self.n = n
+        self.snippet = snippet
+        self.source = source
+        self.title = title
+        self.url = url
+    }
+}
+
+// MARK: SearchSourceRef convenience initializers and mutators
+
+public extension SearchSourceRef {
+    init(data: Data) throws {
+        self = try newJSONDecoder().decode(SearchSourceRef.self, from: data)
+    }
+
+    init(_ json: String, using encoding: String.Encoding = .utf8) throws {
+        guard let data = json.data(using: encoding) else {
+            throw NSError(domain: "JSONDecoding", code: 0, userInfo: nil)
+        }
+        try self.init(data: data)
+    }
+
+    init(fromURL url: URL) throws {
+        try self.init(data: try Data(contentsOf: url))
+    }
+
+    func with(
+        n: Double? = nil,
+        snippet: String? = nil,
+        source: String?? = nil,
+        title: String? = nil,
+        url: String? = nil
+    ) -> SearchSourceRef {
+        return SearchSourceRef(
+            n: n ?? self.n,
+            snippet: snippet ?? self.snippet,
+            source: source ?? self.source,
+            title: title ?? self.title,
+            url: url ?? self.url
+        )
+    }
+
+    func jsonData() throws -> Data {
+        return try newJSONEncoder().encode(self)
+    }
+
+    func jsonString(encoding: String.Encoding = .utf8) throws -> String? {
+        return String(data: try self.jsonData(), encoding: encoding)
+    }
+}
+
 /// 방금 기록된 스텝 요약(4-5 실시간 스트림) — "현재 단계" 라이브 표시용.
 // MARK: - Step
 public struct Step: Codable {
@@ -817,6 +916,7 @@ public enum WsServerEventType: String, Codable {
     case mcpToolStart = "mcp_tool_start"
     case researchProgress = "research_progress"
     case resumeNone = "resume_none"
+    case searchSources = "search_sources"
     case sessionCreated = "session_created"
     case skillsActivated = "skills_activated"
     case streamResume = "stream_resume"
@@ -837,6 +937,8 @@ public struct WsChatRequest: Codable {
     /// 클라이언트 표면 — 좁은 화면(모바일 네이티브)에 맞는 답변 형식을 요청할 때 'ios'. 미지정은 기존 동작(데스크톱 기준). 서버는 이 값으로
     /// answer-format 에 화면 폭 지시를 덧붙일 뿐, 내용/기능 분기는 하지 않는다.
     public let client: Client?
+    /// 클라이언트 발급 멱등 키(140) — 같은 id 재전송은 새 생성 없이 이전 messageId 로 done 만 다시 온다
+    public let clientRequestID: String?
     public let deepResearchMode: Bool?
     /// 멀티 에이전트 토론 모드
     public let discussionMode: Bool?
@@ -876,6 +978,7 @@ public struct WsChatRequest: Codable {
         case anonSessionID = "anonSessionId"
         case artifactMode = "artifactMode"
         case client = "client"
+        case clientRequestID = "clientRequestId"
         case deepResearchMode = "deepResearchMode"
         case discussionMode = "discussionMode"
         case enabledTools = "enabledTools"
@@ -898,10 +1001,11 @@ public struct WsChatRequest: Codable {
         case webSearch = "webSearch"
     }
 
-    public init(anonSessionID: String?, artifactMode: Bool?, client: Client?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, lane: String?, memoryLearning: Bool?, message: String, model: String?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, userLocation: UserLocation?, webSearch: Bool?) {
+    public init(anonSessionID: String?, artifactMode: Bool?, client: Client?, clientRequestID: String?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, lane: String?, memoryLearning: Bool?, message: String, model: String?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, userLocation: UserLocation?, webSearch: Bool?) {
         self.anonSessionID = anonSessionID
         self.artifactMode = artifactMode
         self.client = client
+        self.clientRequestID = clientRequestID
         self.deepResearchMode = deepResearchMode
         self.discussionMode = discussionMode
         self.enabledTools = enabledTools
@@ -947,6 +1051,7 @@ public extension WsChatRequest {
         anonSessionID: String?? = nil,
         artifactMode: Bool?? = nil,
         client: Client?? = nil,
+        clientRequestID: String?? = nil,
         deepResearchMode: Bool?? = nil,
         discussionMode: Bool?? = nil,
         enabledTools: [String: Bool]?? = nil,
@@ -972,6 +1077,7 @@ public extension WsChatRequest {
             anonSessionID: anonSessionID ?? self.anonSessionID,
             artifactMode: artifactMode ?? self.artifactMode,
             client: client ?? self.client,
+            clientRequestID: clientRequestID ?? self.clientRequestID,
             deepResearchMode: deepResearchMode ?? self.deepResearchMode,
             discussionMode: discussionMode ?? self.discussionMode,
             enabledTools: enabledTools ?? self.enabledTools,

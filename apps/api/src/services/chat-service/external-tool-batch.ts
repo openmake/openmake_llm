@@ -26,6 +26,9 @@ import { withLanguageNote } from './tool-result-language';
 
 type ExternalToolCall = NonNullable<ChatStreamResult['toolCalls']>[number];
 
+/** 평가 dry-run 도구 결과(F26.2) */
+export const EVAL_DRY_RUN_TOOL_RESULT = '[evaluation dry-run] The tool was not executed. Answer briefly without calling more tools.';
+
 /** 도구 루프 전체에 걸쳐 누적되는 배치 상태. */
 interface ToolBatchState {
     /** 채팅 서브에이전트 호출 집계 — 메시지당 캡(CHAT_SUBAGENT.MAX_CALLS) 초과 시 위임 거부. */
@@ -84,6 +87,14 @@ export async function runToolCallBatch(params: {
     state: ToolBatchState;
 }): Promise<void> {
     const { deps, req, ctx, tools, messages, toolCalls, state } = params;
+
+    // 평가 dry-run(F26.2) — 호출은 관찰만 하고 실행하지 않는다. 결과 문구는 모델이 재호출 없이 마무리하도록 유도.
+    if (req.evalToolObserver?.dryRun) {
+        for (const tc of toolCalls) {
+            messages.push({ role: 'tool', content: EVAL_DRY_RUN_TOOL_RESULT, tool_name: tc.name, tool_call_id: tc.id });
+        }
+        return;
+    }
 
     // 읽기 전용 도구(web_search·extract_webpage …) 2건 이상이면 동시에 선실행 — 결과는 아래
     // 순차 루프가 원래 호출 순서대로 배치한다. 채팅은 승인 게이트가 없다.

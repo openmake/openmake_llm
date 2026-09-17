@@ -13,8 +13,12 @@
  * @module services/agent-task/turn-reentry
  */
 import { getUnifiedDatabase, getPool } from '../../data/models/unified-database';
+import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
+import { createLogger } from '../../utils/logger';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
 import type { ChatMessage, ToolCall } from '../../llm/types';
+
+const logger = createLogger('TurnReentry');
 import type { TaskRuntime } from '../task-sandbox/runtime';
 
 export interface DanglingTurn {
@@ -59,4 +63,10 @@ export async function writeTurnCheckpoint(taskId: string, conversation: ChatMess
         checkpoint: { conversation, completedTurn },
         ...(plan && plan.length > 0 ? { plan } : {}),
     });
+    // 이력(141) — fork 원천. 실패해도 최신 체크포인트(위)는 남는다(fail-open).
+    try {
+        await new AgentTaskRepository(getPool()).insertCheckpointHistory(taskId, completedTurn, conversation, plan && plan.length > 0 ? plan : null, AGENT_TASK_LIMITS.CHECKPOINT_KEEP);
+    } catch (e) {
+        logger.warn(`[${taskId}] 체크포인트 이력 기록 실패 (무시):`, e);
+    }
 }

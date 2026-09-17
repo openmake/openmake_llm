@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
-import type { WsChatRequest, WsServerEvent, WsAttachedFile } from "@openmake/shared-types";
+import type { WsChatRequest, WsServerEvent, WsAttachedFile, WsStreamEnvelope } from "@openmake/shared-types";
+import { acceptStreamEvent, cursorAfterResume, resumeCursorFields, EMPTY_STREAM_CURSOR, type StreamCursor } from "./ws-seq";
 import { useAppStore, type PendingApproval, type AgentTaskState } from "./store";
 import { ApiClient, csrfHeaders } from "./api-client";
 
@@ -124,6 +125,9 @@ export function useChatSocket() {
   // 스트리밍 도중 소켓이 끊겼음(탭 백그라운드·절전 등) — 재연결 직후 서버에 resume 을 보내
   // 서버가 계속 생성해 둔 답변을 이어받는다(서버 ws-stream-registry 와 페어).
   const pendingResumeRef = useRef(false);
+  // 이어받기 커서(F19.11) — 마지막으로 받은 스트림 이벤트의 streamId·seq. resume 에 실어 중복 없이 이어받고,
+  // 재생·재연결로 다시 온 seq <= lastSeq 이벤트는 무시한다(서버 ws-stream-registry 와 페어).
+  const streamCursorRef = useRef<StreamCursor>(EMPTY_STREAM_CURSOR);
   // MCP 도구 결과 resource — 스트리밍 중 append 하면 응답이 조각나므로(appendToken 이 카드를
   // 마지막 메시지로 오인) 버퍼에 모았다가 스트림 종료 시 flush 한다.
   const pendingMcpResourcesRef = useRef<McpResourcePayload[]>([]);
@@ -137,6 +141,7 @@ export function useChatSocket() {
     appendThinking,
     setThinkingSummary,
     setVerificationIssues,
+    setMessageSources,
     setStreaming,
     setCurrentSessionId,
     setActiveAgent,
@@ -171,7 +176,7 @@ export function useChatSocket() {
       reconnectRef.current = 0;
       if (pendingResumeRef.current) {
         pendingResumeRef.current = false;
-        ws.send(JSON.stringify({ type: "resume", anonSessionId: getAnonSessionId() }));
+        ws.send(JSON.stringify({ type: "resume", anonSessionId: getAnonSessionId(), ...resumeCursorFields(streamCursorRef.current) }));
       }
     };
 
@@ -305,6 +310,13 @@ export function useChatSocket() {
       } catch {
         return;
       }
+      if (data.type === "stream_resume") {
+        streamCursorRef.current = cursorAfterResume(streamCursorRef.current, data);
+      } else {
+        const accepted = acceptStreamEvent(streamCursorRef.current, data as WsServerEvent & WsStreamEnvelope);
+        if (!accepted.apply) return; // 이미 받은 이벤트(재생 중복)
+        streamCursorRef.current = accepted.cursor;
+      }
       switch (data.type) {
         case "token":
           if (data.token) appendToken(data.token);
@@ -405,6 +417,10 @@ export function useChatSocket() {
         case "mcp_tool_start":
           // 도구 실행 시작 — "🔍 {도구} 실행 중" 인디케이터(스트리밍 멈춘 듯한 혼선 해소).
           setActiveTool(data.toolName);
+          break;
+        case "search_sources":
+          // 웹검색 출처(F19.4) — 본문 [N] 인용 칩. 같은 턴에 여러 번 오면 마지막 목록이 이긴다
+          if (Array.isArray(data.sources) && data.sources.length > 0) setMessageSources(data.sources);
           break;
         case "mcp_tool_result":
           // 도구 결과 도착 — 인디케이터 해제(다음 도구 시작 시 다시 표시).
@@ -619,6 +635,8 @@ export function useChatSocket() {
       setStreaming(true); // assistant placeholder 는 첫 token 에서 생성, isGenerating=true
 
       const payload: WsChatRequest = {
+        // 멱등 키(140) — 전송마다 새로 발급. 재생성(regenerate)도 의도된 새 요청이라 새 id.
+        clientRequestId: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : undefined,
         type: "chat",
         message,
         model: s.selectedModel,

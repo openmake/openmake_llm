@@ -10,13 +10,19 @@
  * @module routes/debug-queue.routes
  * @see db/migrations/015_conversation_debug_queue.sql
  * @see data/conversation-debug-queue.ts
+ *
+ * 재현(F24.7, 144, 관리자):
+ *   GET  /api/debug-queue/:id/replay-bundle           번들·원문(다운로드용)
+ *   POST /api/debug-queue/:id/replay {model?, temperature?}  같은 입력 재전송 + 저장 응답과 유사도(분당 3회, 실제 LLM 비용)
  */
 
 import { Router, Request, Response } from 'express';
 import { success, badRequest } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
-import { requireAuth } from '../auth';
-import { enqueueDebugCapture, DEBUG_QUEUE_TTL_MS } from '../data/conversation-debug-queue';
+import { requireAuth, requireAdmin } from '../auth';
+import { enqueueDebugCapture, DEBUG_QUEUE_TTL_MS, getDebugCaptureForReplay } from '../data/conversation-debug-queue';
+import rateLimit from 'express-rate-limit';
+import { REPLAY_CAPTURE } from '../config/runtime-limits';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('DebugQueueRoutes');
@@ -83,5 +89,43 @@ router.post(
         }));
     }),
 );
+
+/** 관리자 재현 대상 로드 — 만료·없는 행·번들 없는 행은 404. */
+async function loadReplayable(id: string, res: Response) {
+    const row = await getDebugCaptureForReplay(id);
+    if (!row) { res.status(404).json(badRequest('디버그 큐 항목을 찾을 수 없습니다(만료 가능)')); return null; }
+    if (!row.replayBundle) { res.status(404).json(badRequest('이 항목에는 재현 번들이 없습니다(REPLAY_CAPTURE 비활성·세션 없음·보관 시간 초과)')); return null; }
+    return row;
+}
+
+router.get('/:id/replay-bundle', requireAuth, requireAdmin, asyncHandler(async (req: Request, res: Response) => {
+    const row = await loadReplayable(req.params.id, res);
+    if (!row) return;
+    res.json(success(row));
+}));
+
+const replayLimiter = rateLimit({
+    windowMs: 60_000,
+    limit: REPLAY_CAPTURE.REPLAY_PER_MINUTE,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (_req: Request, res: Response): void => { res.status(429).json({ success: false, error: 'REPLAY_RATE_LIMIT', message: '리플레이는 분당 3회까지입니다.' }); },
+});
+
+router.post('/:id/replay', requireAuth, requireAdmin, replayLimiter, asyncHandler(async (req: Request, res: Response) => {
+    const row = await loadReplayable(req.params.id, res);
+    if (!row) return;
+    const body = (req.body ?? {}) as { model?: unknown; temperature?: unknown };
+    const model = typeof body.model === 'string' && body.model.trim() ? body.model.trim() : undefined;
+    const temperature = typeof body.temperature === 'number' && body.temperature >= 0 && body.temperature <= 2 ? body.temperature : undefined;
+    const { runReplay } = await import('../services/replay/replay-runner');
+    try {
+        const result = await runReplay(row.replayBundle!, { model, temperature, expected: row.assistantMessage });
+        logger.info(`[Replay] ${row.id} model=${result.model} similarity=${result.similarity?.toFixed(3)} ${result.durationMs}ms`);
+        res.json(success({ id: row.id, requestId: row.requestId, ...result }));
+    } catch (e) {
+        res.status(400).json(badRequest(e instanceof Error ? e.message : String(e)));
+    }
+}));
 
 export default router;

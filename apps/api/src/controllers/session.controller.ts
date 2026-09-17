@@ -9,10 +9,12 @@ import { Request, Response, Router } from 'express';
 import { getConversationDB, ConversationSession } from '../data/conversation-db';
 import { optionalAuth, requireAuth } from '../auth';
 import { createLogger } from '../utils/logger';
-import { success, unauthorized, badRequest, forbidden } from '../utils/api-response';
+import { success, unauthorized, badRequest, forbidden, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
 import { historySummaryCache } from '../services/chat-service/history-summary-cache';
 import { isAdminRole } from '../data/user-manager';
+import { parseSessionListFilter, sessionOrganizationSchema, normalizeTags } from '../schemas/conversation-organization.schema';
+import { isFolderOwnedBy } from '../data/conversation-folders';
 
 const log = createLogger('SessionController');
 
@@ -109,6 +111,8 @@ class SessionController {
              // offset 은 관리자 전체 조회(scope 'all') 페이지네이션 전용 — 음수/비정상 입력은 0
              const offset = Math.max(0, parseInt(req.query.offset as string) || 0);
              const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+             // 폴더·태그 필터(157) — 로그인 사용자 목록·검색에만 적용
+             const listFilter = parseSessionListFilter(req.query as { folderId?: unknown; tag?: unknown });
 
              const userIdStr = user?.id ? String(user.id) : undefined;
              const scope = resolveSessionListScope({
@@ -125,7 +129,7 @@ class SessionController {
              if (q && (scope === 'user' || scope === 'anon')) {
                  const hit = await conversationDb.searchSessionsByOwner(
                      scope === 'user' ? { userId: userIdStr } : { anonSessionId },
-                     q, limit,
+                     q, limit, listFilter,
                  );
                  sessions = hit.sessions;
                  snippets = hit.snippets;
@@ -139,7 +143,7 @@ class SessionController {
                  log.info(`[Chat Sessions] 관리자 전체 조회: ${sessions.length}개 (offset=${offset}, total=${total})`);
              } else if (scope === 'user') {
                  // 🔐 로그인 사용자: 자신의 대화만 (관리자도 개인 화면에선 동일)
-                 sessions = await conversationDb.getSessionsByUserId(userIdStr!, limit);
+                 sessions = await conversationDb.getSessionsByUserId(userIdStr!, limit, listFilter);
                  log.info(`[Chat Sessions] 사용자 ${userIdStr} 조회: ${sessions.length}개`);
              } else if (scope === 'anon') {
                  // 🔒 비로그인 사용자: 해당 익명 세션만
@@ -160,6 +164,8 @@ class SessionController {
                  createdAt: s.created_at,
                  updatedAt: s.updated_at,
                  metadata: s.metadata,
+                 folderId: s.folderId ?? null,
+                 tags: s.tags ?? [],
                  messageCount: s.messages?.length || 0,
                  // 🆕 첫 번째 메시지에서 모델 정보 추출 (모델명으로 표시)
                  model: s.messages?.[0]?.model || 'OpenMake LLM Auto',
@@ -292,6 +298,30 @@ class SessionController {
               res.json(success({ message }));
           }));
 
+         // 세션 복제(F08 PR-6) — 부모 메시지를 uptoMessageId 까지 복사한 새 세션. 소유권은 요청자(로그인이면 user, 아니면 익명).
+         this.router.post('/:sessionId/clone', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
+              const { sessionId } = req.params;
+              const session = await conversationDb.getSession(sessionId);
+              if (!hasSessionAccess(session, req)) { res.status(403).json(forbidden('권한이 없습니다')); return; }
+              const body = (req.body ?? {}) as { uptoMessageId?: unknown; title?: unknown; anonSessionId?: unknown };
+              const upto = body.uptoMessageId == null ? null : Number(body.uptoMessageId);
+              if (upto !== null && (!Number.isInteger(upto) || upto < 1)) { res.status(400).json(badRequest('uptoMessageId 는 양의 정수여야 합니다')); return; }
+              const userId = req.user?.id ? String(req.user.id) : undefined;
+              const anonId = userId ? undefined : (typeof body.anonSessionId === 'string' ? body.anonSessionId : session?.anonSessionId);
+              const cloned = await conversationDb.cloneSession(sessionId, { uptoMessageId: upto, title: typeof body.title === 'string' ? body.title : null, userId, anonSessionId: anonId });
+              if (!cloned) { res.status(404).json(notFound('세션을 찾을 수 없습니다')); return; }
+              log.info(`[Chat Sessions] 복제: ${sessionId} → ${cloned.id} (${cloned.copied}개, upto=${upto ?? 'all'})`);
+              res.status(201).json(success({ session: { id: cloned.id, title: cloned.title, parentSessionId: sessionId, parentMessageId: upto }, copied: cloned.copied }));
+          }));
+
+         // 세션 트리(F08 PR-6) — 조상 체인 + 직계 자식
+         this.router.get('/:sessionId/tree', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
+              const { sessionId } = req.params;
+              const session = await conversationDb.getSession(sessionId);
+              if (!hasSessionAccess(session, req)) { res.status(403).json(forbidden('권한이 없습니다')); return; }
+              res.json(success({ self: { id: sessionId, title: session?.title ?? '' }, ...(await conversationDb.getSessionTree(sessionId)) }));
+          }));
+
          // 세션 제목 업데이트
          this.router.patch('/:sessionId', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
               const { sessionId } = req.params;
@@ -301,7 +331,28 @@ class SessionController {
                   return;
               }
 
-              const { title } = req.body;
+              const { title, expectedVersion, folderId, tags } = req.body as { title?: unknown; expectedVersion?: unknown; folderId?: unknown; tags?: unknown };
+              // 폴더·태그 정리(157) — 로그인 사용자 세션만, 폴더는 본인 소유만
+              if (folderId !== undefined || tags !== undefined) {
+                  const userIdStr = req.user?.id ? String(req.user.id) : undefined;
+                  if (!userIdStr || session?.userId !== userIdStr) { res.status(403).json(forbidden('폴더·태그는 로그인한 본인 대화에만 쓸 수 있습니다')); return; }
+                  const parsed = sessionOrganizationSchema.safeParse({ folderId, tags });
+                  if (!parsed.success) { res.status(400).json(badRequest(parsed.error.issues[0]?.message ?? '잘못된 입력입니다')); return; }
+                  if (parsed.data.folderId && !(await isFolderOwnedBy(userIdStr, parsed.data.folderId))) { res.status(403).json(forbidden('폴더에 접근할 수 없습니다')); return; }
+                  const organized = await conversationDb.updateSessionOrganization(sessionId, {
+                      ...(parsed.data.folderId !== undefined ? { folderId: parsed.data.folderId } : {}),
+                      ...(parsed.data.tags !== undefined ? { tags: normalizeTags(parsed.data.tags) } : {}),
+                  });
+                  if (typeof title !== 'string') { res.json(success({ updated: !!organized, ...(organized ?? {}) })); return; }
+              }
+              if (typeof title !== 'string') { res.status(400).json(badRequest('title 은 문자열이어야 합니다')); return; }
+              // 낙관적 잠금(140) — expectedVersion 을 보낸 클라이언트만 409 를 받는다(구 클라이언트는 종전 동작)
+              if (typeof expectedVersion === 'number') {
+                  const r = await conversationDb.updateSessionTitleIfVersion(sessionId, title, expectedVersion);
+                  if (!r.ok) { res.status(409).json({ success: false, error: { code: 'VERSION_CONFLICT', message: '다른 곳에서 세션이 바뀌었습니다. 다시 불러오세요.' }, currentVersion: r.version }); return; }
+                  res.json(success({ updated: true, version: r.version }));
+                  return;
+              }
               const updated = await conversationDb.updateSessionTitle(sessionId, title);
               res.json(success({ updated }));
           }));

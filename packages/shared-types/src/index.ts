@@ -55,9 +55,33 @@ export interface ConversationSession {
   messageCount?: number;
   created_at?: string;
   updated_at?: string;
+  /** 폴더(157) — null 이면 미분류 */
+  folderId?: string | null;
+  /** 태그(157) */
+  tags?: string[];
+}
+
+/** 대화 폴더(157) — 사용자 소유 */
+export interface ConversationFolder {
+  id: string;
+  name: string;
+  position: number;
+  sessionCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type ChatRole = "user" | "assistant" | "system";
+
+/** 웹검색 구조화 출처(F19.4) — 본문 [N] 인용과 같은 번호. 서버 formatSearchSources 와 같은 순서·캡 */
+export interface SearchSourceRef {
+  n: number;
+  title: string;
+  url: string;
+  snippet: string;
+  /** 결과 도메인(표시용) */
+  source?: string;
+}
 
 export interface ChatMessage {
   role: ChatRole;
@@ -66,6 +90,8 @@ export interface ChatMessage {
   tokens?: number;
   images?: string[];
   created_at?: string;
+  /** assistant 답변의 웹검색 출처(156) — 히스토리 payload(클라→서버)에는 싣지 않는다 */
+  sources?: SearchSourceRef[];
 }
 
 /* ── WebSocket 채팅 프로토콜 (sockets/ws-chat-handler 와 페어) ───────── */
@@ -86,6 +112,8 @@ export interface WsAttachedFile {
 export interface WsChatRequest {
   type: "chat";
   message: string;
+  /** 클라이언트 발급 멱등 키(140) — 같은 id 재전송은 새 생성 없이 이전 messageId 로 done 만 다시 온다 */
+  clientRequestId?: string;
   model?: string;
   history?: Array<{ role: ChatRole; content: string }>;
   sessionId?: string | null;
@@ -146,6 +174,30 @@ export interface McpToolResource {
   text?: string;
 }
 
+/**
+ * 스트림 이벤트 공통 봉투(F19.11, 2026-09-17) — 채팅 스트림 이벤트에 서버가 덧붙이는 이어받기 커서.
+ * `streamId` 는 스트림(한 번의 생성)마다 새로 발급되고 `seq` 는 그 안에서 1부터 단조 증가한다(토큰 포함).
+ * 클라이언트는 마지막으로 받은 값을 기억해 재연결 시 `resume{streamId, afterSeq}` 로 보내고,
+ * `seq <= afterSeq` 인 이벤트는 중복이므로 무시한다. 구 서버는 필드가 없다.
+ */
+export interface WsStreamEnvelope {
+  streamId?: string;
+  seq?: number;
+}
+
+/** 재연결 후 끊긴 스트림 이어받기 요청 — 커서가 없거나 다른 스트림이면 서버는 미전달 이벤트만 재생한다(종전 동작). */
+export interface WsResumeRequest {
+  type: "resume";
+  /** 게스트 스트림 키 */
+  anonSessionId?: string;
+  /** 비교 모드 레인 */
+  lane?: string;
+  /** 마지막으로 받은 이벤트의 streamId */
+  streamId?: string;
+  /** 마지막으로 받은 이벤트의 seq — 같은 스트림이면 이 뒤 이벤트만 재생 */
+  afterSeq?: number;
+}
+
 export type WsServerEvent =
   | { type: "token"; token: string }
   | { type: "thinking"; token: string; messageId?: string }
@@ -177,6 +229,8 @@ export type WsServerEvent =
       metrics?: { tokensPerSec: string; tokenCount: number };
       /** 아티팩트가 있으면 raw 코드펜스가 placeholder 로 치환된 본문 — 클라가 누적 본문을 이걸로 reset. */
       cleanedContent?: string;
+      /** 같은 clientRequestId 의 재전송이라 새 생성 없이 끝냈음(140) */
+      deduplicated?: boolean;
     }
   | { type: "aborted"; message?: string }
   /**
@@ -185,9 +239,27 @@ export type WsServerEvent =
    * content 는 지금까지의 답변 전체 — 클라는 마지막 assistant 본문을 이 값으로 되돌린 뒤 후속
    * token 을 이어 붙인다. finished=true 면 뒤따르는 done/error 로 곧 끝난다.
    */
-  | { type: "stream_resume"; messageId?: string; sessionId?: string; content: string; thinking?: string; finished: boolean }
+  | {
+      type: "stream_resume";
+      messageId?: string;
+      sessionId?: string;
+      content: string;
+      thinking?: string;
+      finished: boolean;
+      /** 이 스트림의 식별자(F19.11) — 클라이언트 커서가 다르면 새 스트림으로 본다 */
+      streamId?: string;
+      /** 스냅샷이 반영한 마지막 순번 */
+      lastSeq?: number;
+      /** 재생해야 할 이벤트 일부가 링버퍼에서 밀려났음 — 아티팩트는 done.cleanedContent 로 재구성할 것 */
+      gap?: boolean;
+    }
   /** resume 요청에 이어받을 스트림이 없음 — 클라는 대기 상태를 풀면 된다. */
   | { type: "resume_none" }
+  /**
+   * 이 답변의 웹검색 출처(F19.4) — 사전 주입 검색은 생성 시작 전, web_search 도구는 호출 직후 온다.
+   * 같은 턴에 여러 번 오면 마지막 목록이 본문 [N] 의 번호 체계다(서버도 마지막 목록을 저장한다).
+   */
+  | { type: "search_sources"; messageId?: string; sources: SearchSourceRef[] }
   | {
       type: "error";
       message: string;

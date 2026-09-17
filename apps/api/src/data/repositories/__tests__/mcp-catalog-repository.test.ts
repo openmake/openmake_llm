@@ -159,3 +159,25 @@ describe('McpCatalogRepository.createFromCatalog — env_schema default', () => 
         expect(JSON.parse(String(queryMock.mock.calls[0]![1]![6]))).toEqual({});
     });
 });
+
+describe('McpCatalogRepository.createFromCatalog — 원격 시드(148·149)', () => {
+    const remote = (id: string, url: string) => ({
+        id, transport_type: 'streamable-http', command_template: undefined, url_template: url,
+        args_schema: {}, env_schema: {}, is_enabled: true,
+    }) as never;
+    const payload = (id: string) => ({ template_id: id, name: 'conn', visibility: 'user_private', args: {}, env: {}, auto_spawn: true }) as never;
+
+    it.each([
+        ['mcp-atlassian-remote', 'https://mcp.atlassian.com/v1/mcp'],
+        ['mcp-linear-remote', 'https://mcp.linear.app/mcp'],
+    ])('%s — command NULL·args 빈 배열·env 빈 객체·url 고정으로 저장', async (id, url) => {
+        const queryMock = jest.fn().mockImplementation((_sql: string, params: unknown[]) => Promise.resolve({ rows: [{ id: String(params[0]), env: JSON.parse(String(params[6])) }] }));
+        await new McpCatalogRepository({ query: queryMock } as unknown as Pool).createFromCatalog(payload(id), remote(id, url), '3');
+        const params = queryMock.mock.calls[0]![1]! as unknown[];
+        expect(params[3]).toBe('streamable-http');
+        expect(params[4]).toBeNull();
+        expect(JSON.parse(String(params[5]))).toEqual([]);
+        expect(JSON.parse(String(params[6]))).toEqual({});
+        expect(params[7]).toBe(url);
+    });
+});

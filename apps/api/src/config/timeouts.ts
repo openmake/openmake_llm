@@ -74,6 +74,8 @@ export const LLM_TIMEOUTS = {
     FAST_FAIL_PREFILL_MS_PER_1K_TOKENS: Number(process.env.LLM_FAST_FAIL_PREFILL_MS_PER_1K_TOKENS) || 1000,
     /** Fast-fail 유효 타임아웃 상한 (ms) — 전역 LLM_TIMEOUT(기본 120000)과 정렬. env override: LLM_FAST_FAIL_MAX_MS */
     FAST_FAIL_MAX_MS: Number(process.env.LLM_FAST_FAIL_MAX_MS) || 120000,
+    /** 관리자 게이트웨이 모델 상태 카드의 `/model/info` 조회 타임아웃 (ms) — 느리면 카드가 실패 사유를 보인다 */
+    GATEWAY_MODEL_STATUS_TIMEOUT_MS: Number(process.env.LLM_GATEWAY_MODEL_STATUS_TIMEOUT_MS) || 5000,
 } as const;
 
 // ============================================
@@ -221,6 +223,12 @@ export const WS_LIMITS = {
     MAX_MESSAGE_CHARS: parseInt(process.env.WS_MAX_MESSAGE_CHARS || String(64 * 1024 * 1024), 10),
     /** detach 된 스트림이 재생용으로 쌓아 두는 비-토큰 이벤트 버퍼 상한 (bytes) — 기본 4MB */
     DETACHED_STREAM_BUFFER_MAX_BYTES: Number(process.env.WS_DETACHED_STREAM_BUFFER_MAX_BYTES) || 4 * 1024 * 1024,
+    /**
+     * 스트림 이벤트 링버퍼 개수 상한(F19.11) — 비-토큰 이벤트를 attached 중에도 남겨 `resume{afterSeq}` 차등 재생에 쓴다.
+     * 바이트 상한은 DETACHED_STREAM_BUFFER_MAX_BYTES 공유. 0 이면 detach 동안만 쌓는 종전 동작(롤백 스위치).
+     */
+    STREAM_EVENT_RING_MAX: process.env.WS_STREAM_EVENT_RING_MAX !== undefined && process.env.WS_STREAM_EVENT_RING_MAX !== ''
+        ? Math.max(0, Number(process.env.WS_STREAM_EVENT_RING_MAX) || 0) : 2000,
     /** 인증 완료 전(연결 콜백의 await 구간) 도착한 프레임을 모아 두는 개수 상한 — 정상 첫 프레임은 hello 처럼 작다 */
     EARLY_BUFFER_MAX_FRAMES: Number(process.env.WS_EARLY_BUFFER_MAX_FRAMES) || 8,
     /** 같은 버퍼의 총 바이트 상한 — 기본 1MB. 인증 전 연결이 메모리를 점유하지 못하게 막는다 */
@@ -267,6 +275,8 @@ export const MCP_EXTERNAL_TOOL_LIMITS = {
     MAX_OUTPUT_SIZE: Number(process.env.MCP_EXTERNAL_TOOL_MAX_OUTPUT_SIZE) || 1024 * 1024,
     /** stdio MCP 자식 stderr 보관 끝부분 (자) — 예기치 않은 종료 사유로 로그·instance 이력에 남긴다 */
     STDERR_TAIL_MAX_CHARS: Number(process.env.MCP_EXTERNAL_STDERR_TAIL_MAX_CHARS) || 2000,
+    /** 기본 post 훅(audit-timing)이 경고를 남기는 도구 호출 소요 시간(ms) — MCP_SLOW_TOOL_WARN_MS */
+    SLOW_TOOL_WARN_MS: Number(process.env.MCP_SLOW_TOOL_WARN_MS) || 15_000,
 } as const;
 
 /**

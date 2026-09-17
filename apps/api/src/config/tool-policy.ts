@@ -47,10 +47,16 @@ const TOOL_RISK: Readonly<Record<string, RiskRule>> = {
     str_replace_editor: (args) => EDITOR_RISK[String(args.command)] ?? 'write',
     grep_code: 'read',
     repo_map: 'read',
+    // 외부 MCP resources/prompts 메타 도구(F13.2) — 읽기 전용
+    mcp_list_resources: 'read',
+    mcp_read_resource: 'read',
+    mcp_get_prompt: 'read',
     skill_save: 'write',
     // 제어·플래닝·위임 — 부작용 없음
     terminate: 'control',
     ask_human: 'control',
+    // 외부 MCP 서버의 사용자 입력 요청(F13.10) — ask_human 과 같은 질문 채널
+    mcp_elicit: 'control',
     plan_create: 'control',
     plan_update: 'control',
     plan_view: 'control',
@@ -82,6 +88,12 @@ export function classifyToolRisk(toolName: string, args: Record<string, unknown>
     if (!rule) return 'external';
     return typeof rule === 'function' ? rule(args) : rule;
 }
+
+/**
+ * 승인 정책·task 자동승인과 무관하게 **항상 사람의 응답을 기다리는** 도구 — 질문 자체가 목적이다.
+ * approval-gate 의 자동승인 예외·HITL 무응답 강등 제거 대상이 이 집합을 쓴다(F13.10 에서 mcp_elicit 추가).
+ */
+export const HITL_ALWAYS_WAIT_TOOLS: ReadonlySet<string> = new Set(['ask_human', 'mcp_elicit']);
 
 /** high-risk 정책이 승인으로 올리는 등급. */
 const HIGH_RISK_CLASSES: ReadonlySet<ToolRiskClass> = new Set(['exec', 'network', 'destructive']);

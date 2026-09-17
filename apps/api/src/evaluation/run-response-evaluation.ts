@@ -11,6 +11,8 @@
  *   ts-node src/evaluation/run-response-evaluation.ts custom-dataset.json
  *   ts-node src/evaluation/run-response-evaluation.ts --real           # 실제 LLM, 기본 5건
  *   ts-node src/evaluation/run-response-evaluation.ts --real --limit 3 # 첫 3건만
+ *   ts-node src/evaluation/run-response-evaluation.ts --real --tag multimodal  # 태그 케이스만(F26.5)
+ *   ts-node src/evaluation/run-response-evaluation.ts --real --limit 30 --update-baseline  # 지연 기준선 갱신(F26.8)
  *
  * **--real 모드 운영 사고 방지 가드**:
  *   1) `--real` 명시적 플래그가 있어야만 활성 (기본은 mock)
@@ -27,7 +29,9 @@ import * as dotenv from 'dotenv';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
-import { loadGoldenDataset } from './dataset-loader';
+import { loadGoldenDataset, REAL_ONLY_TAG } from './dataset-loader';
+import { buildEvalRunRecord, recordEvalRuns, type CaseTiming } from './eval-run-recorder';
+import { compareLatency, latencyMetrics, renderLatencyTable, type LatencyBaseline } from './latency-regression';
 import { runResponseEvaluation, type ResponseGenerator } from './response-evaluator';
 import type { EvaluationSummary, GoldenDataset } from './types';
 // 주의: real-response-generator는 ChatService/LLMClient 등 무거운 의존성을
@@ -143,16 +147,26 @@ interface ParsedArgs {
     useReal: boolean;
     explicitLimit?: number;
     customPath?: string;
+    /** --tag X — 이 태그가 있는 response 케이스만(예: multimodal·long-context, F26.5) */
+    tag?: string;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
     const useReal = argv.includes('--real');
     let explicitLimit: number | undefined;
+    let tag: string | undefined;
     const positional: string[] = [];
 
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
-        if (a === '--real' || a === '--mock') continue;
+        if (a === '--real' || a === '--mock' || a === '--update-baseline') continue;
+        if (a === '--tag') {
+            const next = argv[i + 1];
+            if (!next || next.startsWith('--')) throw new Error('--tag 다음에 태그 이름이 와야 합니다');
+            tag = next;
+            i++;
+            continue;
+        }
         if (a === '--limit') {
             const next = argv[i + 1];
             if (!next || Number.isNaN(Number(next))) {
@@ -168,7 +182,7 @@ function parseArgs(argv: string[]): ParsedArgs {
         positional.push(a);
     }
 
-    return { useReal, explicitLimit, customPath: positional[0] };
+    return { useReal, explicitLimit, customPath: positional[0], ...(tag ? { tag } : {}) };
 }
 
 /**
@@ -199,13 +213,19 @@ function applyLimit(dataset: GoldenDataset, useReal: boolean, explicitLimit?: nu
 }
 
 async function main() {
-    const { useReal, explicitLimit, customPath } = parseArgs(process.argv.slice(2));
+    const { useReal, explicitLimit, customPath, tag } = parseArgs(process.argv.slice(2));
 
-    const rawDataset = loadGoldenDataset(customPath);
+    const loaded = loadGoldenDataset(customPath);
+    // mock 은 첨부·실모델이 있어야 의미 있는 real-only 케이스(장문·멀티모달, F26.5)를 건너뛴다
+    const rawDataset = {
+        ...loaded,
+        cases: loaded.cases.filter((c) => (useReal || !c.tags?.includes(REAL_ONLY_TAG)) && (!tag || c.category !== 'response-pattern' || c.tags?.includes(tag))),
+    };
     const { dataset, limitedTo } = applyLimit(rawDataset, useReal, explicitLimit);
 
     let generator: ResponseGenerator;
     let mode: 'mock' | 'real';
+    const caseTimings: CaseTiming[] = [];
 
     if (useReal) {
         // Lazy load: ChatService/LLMClient 등 LLM 의존성은 --real 모드에서만 필요
@@ -217,6 +237,7 @@ async function main() {
             timeoutMs: REAL_TIMEOUT_MS,
             maxTokensPerCase: REAL_MAX_TOKENS,
             abortOnBudgetExceed: true,
+            onCaseMetrics: (m) => caseTimings.push(m),
         });
         mode = 'real';
     } else {
@@ -240,6 +261,14 @@ async function main() {
     const summary = await runResponseEvaluation(dataset, generator);
     printSummary(summary, mode);
     saveSummaryToFile(summary, mode);
+    // eval_runs 이력(146) — OMK_EVAL_RECORD_DB=true(nightly) 일 때만. real 은 케이스 계측(TTFT·토큰) 포함
+    if (summary.totalCases > 0) {
+        // 태그 부분 실행은 variant 에 태그를 적어 전체 실행(variant NULL — SLO eval_pass 가 읽는 행)과 구분한다
+        await recordEvalRuns([buildEvalRunRecord(summary, { runner: 'response', mode, gitHash: getGitCommitHash(), ...(tag ? { variant: tag } : {}), ...(caseTimings.length ? { timings: caseTimings } : {}) })]);
+    }
+
+    // nightly 지연 회귀(F26.8) — real 전체 실행만. 기준선과 같은 케이스 집합·모델일 때만 비교한다
+    const latencyRegressed = useReal && !tag && summary.totalCases > 0 ? checkLatencyRegression(summary, caseTimings) : false;
 
     if (summary.totalCases === 0) {
         console.log('\n⚠ response-pattern 카테고리 케이스 없음 — exit 0 (통과로 간주)');
@@ -253,8 +282,38 @@ async function main() {
         );
         process.exit(1);
     }
+    if (latencyRegressed) {
+        console.error('\n❌ 지연 회귀 — 통과율은 임계 이상이지만 기준선 대비 느려졌습니다(위 표).');
+        process.exit(1);
+    }
     console.log(`\n✅ Response 평가 성공: ${(summary.passRate * 100).toFixed(1)}%`);
     process.exit(0);
+}
+
+const LATENCY_BASELINE_PATH = path.resolve(__dirname, 'baselines', 'latency-baseline.json');
+
+/** 지연 기준선 비교(또는 --update-baseline 저장). 회귀면 true. 회귀 항목은 `[latency-regression]` 줄로 남겨 nightly 통지가 집는다. */
+function checkLatencyRegression(summary: EvaluationSummary, timings: CaseTiming[]): boolean {
+    const current = latencyMetrics(timings);
+    const cases = { datasetVersion: summary.datasetVersion, caseIds: summary.results.map((r) => r.caseId), model: process.env.LLM_DEFAULT_MODEL ?? null };
+    if (process.argv.includes('--update-baseline')) {
+        const baseline: LatencyBaseline = { ...cases, metrics: current, updatedAt: new Date().toISOString() };
+        fs.writeFileSync(LATENCY_BASELINE_PATH, JSON.stringify(baseline, null, 2) + '\n');
+        console.log(`\n[latency] 기준선 갱신: ${path.relative(process.cwd(), LATENCY_BASELINE_PATH)}`);
+        return false;
+    }
+    const baseline = fs.existsSync(LATENCY_BASELINE_PATH) ? JSON.parse(fs.readFileSync(LATENCY_BASELINE_PATH, 'utf8')) as LatencyBaseline : null;
+    const pct = Number(process.env.OMK_EVAL_LATENCY_REGRESSION_PCT ?? '20');
+    const cmp = compareLatency(current, cases, baseline, pct);
+    if (!cmp.comparable) {
+        console.log(`\n[latency] 비교 건너뜀 — ${cmp.reason}`);
+        return false;
+    }
+    console.log(`\n[latency] 기준선(${baseline!.updatedAt.slice(0, 10)}) 대비 — 허용 +${pct}%\n${renderLatencyTable(cmp.rows)}`);
+    for (const r of cmp.rows.filter((x) => x.regressed)) {
+        console.error(`[latency-regression] ${r.metric} ${r.baseline} → ${r.current} (+${r.deltaPct}%)`);
+    }
+    return !cmp.ok;
 }
 
 function printSummary(summary: EvaluationSummary, mode: 'mock' | 'real'): void {

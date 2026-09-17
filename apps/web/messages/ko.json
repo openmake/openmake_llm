@@ -27,6 +27,8 @@
       "approvals": "승인 대기",
       "organizationsAdmin": "조직 관리",
       "costRatesAdmin": "비용 단가",
+      "sloAdmin": "SLO",
+      "evaluationsAdmin": "평가 이력",
       "quotaRequestsAdmin": "쿼터 승인"
     },
     "pendingApprovals": "승인 대기 {count}건 — 에이전트 작업이 사용자 승인을 기다리고 있습니다"
@@ -344,7 +346,10 @@
       "sendAnswer": "답변 전송",
       "skip": "건너뛰기",
       "autoApprove": "나머지 모두 승인",
-      "autoApproveHint": "이 작업의 이후 도구 실행을 승인 없이 진행합니다 (질문 제외)"
+      "autoApproveHint": "이 작업의 이후 도구 실행을 승인 없이 진행합니다 (질문 제외)",
+      "preview": "실행 전 변경 미리보기",
+      "elicitHint": "{server} 서버의 입력 요청 · 항목: {fields}",
+      "elicitJsonHint": "항목이 둘 이상이면 JSON 으로 답하세요: {example}"
     },
     "artifactFallback": "아티팩트",
     "artifactBuilding": "아티팩트 생성 중…",
@@ -467,6 +472,18 @@
     },
     "verification": {
       "title": "검증에서 지적된 사항"
+    },
+    "branchHere": "여기서 분기",
+    "branchFailed": "분기 실패: {error}",
+    "citation": {
+      "chipLabel": "출처 {n}: {title}",
+      "popoverLabel": "출처 {n} 미리보기",
+      "open": "원문 열기"
+    },
+    "a11y": {
+      "generating": "응답을 생성하고 있습니다",
+      "toolRunning": "{tool} 실행 중",
+      "done": "응답이 완료되었습니다"
     }
   },
   "compare": {
@@ -552,7 +569,10 @@
       "copyLink": "링크 복사",
       "unpublish": "공유 중단",
       "updateSettings": "공유 설정 갱신",
-      "publish": "공유하기"
+      "publish": "공유하기",
+      "downloadBundle": "정적 HTML 내려받기",
+      "bundleMissing": "뷰어 파일이 없습니다 — 다시 게시한 뒤 시도하세요",
+      "bundleFailed": "HTML 을 내려받지 못했습니다"
     },
     "page": {
       "viewerOpenFailed": "뷰어를 열 수 없습니다",
@@ -574,7 +594,31 @@
       "close": "닫기",
       "createdLabel": "생성"
     },
-    "resize": "패널 너비 조절 (더블클릭: 기본값)"
+    "resize": "패널 너비 조절 (더블클릭: 기본값)",
+    "exportXlsx": "XLSX로 저장",
+    "exportNoSourceXlsx": "XLSX 변환은 CSV 또는 보고서 아티팩트만 지원합니다",
+    "comments": {
+      "toggle": "댓글",
+      "empty": "아직 댓글이 없습니다.",
+      "placeholder": "댓글을 입력하세요 (마크다운)",
+      "submit": "등록",
+      "reply": "답글",
+      "replying": "답글 작성 중",
+      "cancelReply": "취소",
+      "resolve": "해결",
+      "unresolve": "다시 열기",
+      "resolved": "해결됨",
+      "delete": "삭제",
+      "deleteConfirm": "이 댓글을 삭제할까요?",
+      "deletedPlaceholder": "삭제된 댓글입니다.",
+      "apply": "모델에게 반영 요청",
+      "applyHint": "이 댓글을 인용한 수정 요청을 입력창에 넣습니다",
+      "applyPrompt": "아티팩트 \"{title}\" 에 달린 아래 댓글을 반영해서 새 버전으로 수정해 주세요.",
+      "me": "나",
+      "user": "사용자 {id}",
+      "loadFailed": "댓글을 불러오지 못했습니다.",
+      "actionFailed": "처리하지 못했습니다."
+    }
   },
   "history": {
     "title": "대화 히스토리",
@@ -601,7 +645,31 @@
       "hint": "새 대화를 시작하면 여기에 표시됩니다."
     },
     "viewAllToggle": "모든 사용자",
-    "ownerBadge": "사용자 {id}"
+    "ownerBadge": "사용자 {id}",
+    "folders": {
+      "railLabel": "대화 폴더와 태그",
+      "all": "전체",
+      "unfiled": "미분류",
+      "heading": "폴더",
+      "create": "새 폴더",
+      "namePlaceholder": "폴더 이름",
+      "save": "저장",
+      "cancel": "취소",
+      "rename": "폴더 이름 바꾸기",
+      "renameAria": "{name} 이름 바꾸기",
+      "deleteAria": "{name} 삭제",
+      "deleteConfirm": "'{name}' 폴더를 삭제할까요? 안의 대화는 미분류로 남습니다.",
+      "empty": "폴더가 없습니다",
+      "tags": "태그",
+      "error": "요청을 처리하지 못했습니다",
+      "organizeTitle": "대화 정리",
+      "organizeAria": "{title} 폴더·태그 정리",
+      "folderLabel": "폴더",
+      "tagsLabel": "태그",
+      "tagsPlaceholder": "예: 업무, 리서치",
+      "tagsHelp": "쉼표로 구분합니다. 소문자로 저장되고 최대 8개입니다.",
+      "folderBadge": "폴더"
+    }
   },
   "chatSocket": {
     "interceptNotice": "가로채기 모드(토론·딥리서치·이미지)가 켜져 있어 도구(분석·검색)·아티팩트는 이번 응답에 적용되지 않습니다.",
@@ -901,7 +969,64 @@
     "noResultBody": "저장된 최종 답변이 없습니다. 아래 실행 타임라인에서 진행 내역을 확인하세요.",
     "previewTitle": "산출물 미리보기",
     "previewEmpty": "이 작업에는 저장된 산출물이 없습니다.",
-    "previewLoadError": "산출물을 불러오지 못했습니다."
+    "previewLoadError": "산출물을 불러오지 못했습니다.",
+    "planEdit": {
+      "open": "편집",
+      "title": "계획 편집",
+      "nextTurn": "다음 턴부터 적용",
+      "stepPlaceholder": "단계 설명",
+      "doneWhenPlaceholder": "완료 기준(선택)",
+      "moveUp": "위로",
+      "moveDown": "아래로",
+      "remove": "삭제",
+      "add": "단계 추가",
+      "save": "저장",
+      "cancel": "취소",
+      "conflict": "다른 곳에서 계획이 바뀌었습니다. 다시 불러온 뒤 편집하세요.",
+      "failed": "저장에 실패했습니다."
+    },
+    "fork": {
+      "title": "체크포인트에서 분기",
+      "pick": "턴 선택",
+      "turnOption": "턴 {turn} ({messages}개 메시지)",
+      "go": "분기 실행",
+      "hint": "선택한 턴 이후를 새 작업으로 다시 진행합니다(작업 폴더는 새로 시작).",
+      "failed": "분기 실패: {error}"
+    },
+    "priorityBadge": "우선순위 {priority}",
+    "triggers": {
+      "title": "웹훅 트리거",
+      "create": "새 트리거",
+      "hint": "외부 시스템이 서명한 POST 를 보내면 선택한 템플릿으로 작업을 시작합니다. 템플릿 목표에 {placeholder} 를 넣으면 그 자리에, 없으면 끝에 요청 본문이 들어갑니다.",
+      "needTemplate": "먼저 작업 템플릿을 만드세요",
+      "namePlaceholder": "트리거 이름",
+      "template": "템플릿",
+      "templatePick": "템플릿 선택",
+      "policy": "승인 정책",
+      "policies": {
+        "all": "모든 도구 승인",
+        "high-risk": "고위험만 승인",
+        "none": "승인 없음"
+      },
+      "add": "만들기",
+      "secretOnce": "시크릿은 지금만 보입니다 — 보내는 쪽 설정에 저장하세요.",
+      "copy": "복사",
+      "signingNote": "타임스탬프는 ±{window}초 안이어야 합니다. 재시도에는 같은 {delivery} 를 보내면 중복 실행되지 않습니다.",
+      "dismiss": "닫기",
+      "empty": "등록된 트리거가 없습니다.",
+      "enabled": "켜짐",
+      "disabled": "꺼짐",
+      "templateMissing": "(템플릿 없음)",
+      "fired": "실행 {count}회",
+      "failures": "연속 실패 {count}회: {error}",
+      "enable": "켜기",
+      "disable": "끄기",
+      "rotate": "시크릿 재발급",
+      "rotateConfirm": "시크릿을 새로 발급하면 기존 시크릿으로 서명한 요청은 거부됩니다. 계속할까요?",
+      "delete": "삭제",
+      "deleteConfirm": "이 트리거를 삭제할까요?",
+      "failed": "처리 실패: {message}"
+    }
   },
   "customAgents": {
     "pageTitle": "커스텀 에이전트",
@@ -1493,7 +1618,34 @@
       "spawnAdoption": "병렬 위임 채택률",
       "ofSpawnIntent": "의도 매칭 {intent}턴 중 {called}턴 호출"
     },
-    "noNodes": "보고된 클러스터 노드가 없습니다."
+    "noNodes": "보고된 클러스터 노드가 없습니다.",
+    "nodeMetrics": {
+      "gpuTitle": "vLLM 노드 · KV 캐시",
+      "queueTitle": "큐 깊이",
+      "disabled": "노드 지표 수집이 꺼져 있습니다(NODE_METRICS_ENABLED=false).",
+      "noTargets": "스크레이프 대상이 없습니다 — VLLM_METRICS_URLS 또는 LLM_TOKENIZE_URL 을 설정하세요.",
+      "waitingFirstScrape": "첫 스크레이프를 기다리는 중입니다.",
+      "stale": "끊김",
+      "fresh": "정상",
+      "peak": "최근 {hours}시간 최대 {value}",
+      "th": {
+        "node": "노드",
+        "state": "상태",
+        "kv": "KV 캐시",
+        "kvPeak": "KV 최대({hours}h)",
+        "running": "실행",
+        "waiting": "대기",
+        "ttft": "평균 TTFT",
+        "gpuUtil": "GPU 사용률"
+      },
+      "queue": {
+        "agent_task_pending": "작업 큐 대기",
+        "agent_task_running": "작업 실행 중",
+        "agent_task_queued_db": "DB queued 작업",
+        "orchestrator_jobs_pending": "미디어 job 대기",
+        "vllm_waiting": "vLLM 대기 요청"
+      }
+    }
   },
   "adminAlerts": {
     "title": "알림",
@@ -1815,6 +1967,28 @@
     "advancedHide": "세부 설정 닫기",
     "hiddenUnsupportedNote": "아직 실행 경로가 없는 기능은 표시하지 않습니다: {list}"
   },
+  "adminGatewayModels": {
+    "title": "게이트웨이 모델 상태",
+    "description": "LiteLLM 게이트웨이(/model/info)에 등록된 라우트와 로컬 모델 프로브 결과입니다.",
+    "refresh": "새로고침",
+    "loadError": "게이트웨이 모델 상태를 불러오지 못했습니다",
+    "unreachable": "게이트웨이에 연결하지 못했습니다: {reason}",
+    "empty": "게이트웨이에 등록된 모델이 없습니다",
+    "default": "기본",
+    "defaultNote": "기본 채팅 모델: {model}",
+    "col": {
+      "name": "라우트",
+      "upstream": "업스트림",
+      "mode": "모드",
+      "status": "상태"
+    },
+    "status": {
+      "available": "가용",
+      "unavailable": "불가",
+      "uncataloged": "카탈로그 밖",
+      "external": "외부"
+    }
+  },
   "adminSystemSettings": {
     "title": "시스템 설정",
     "description": "운영 설정(OAuth·검색·알림·푸시·LLM 게이트웨이)을 관리합니다. UI 저장값(DB)이 .env 보다 우선합니다.",
@@ -1855,6 +2029,14 @@
       "push": {
         "title": "웹 푸시 (VAPID)",
         "description": "브라우저 푸시 알림용 VAPID 키. 공개키/비밀키 쌍을 함께 설정하세요."
+      },
+      "agent": {
+        "title": "에이전트·MCP 런타임",
+        "description": "외부 MCP 도구 목록 갱신 주기, 승인 만료 주차, 큐 우선순위 상한. 저장 즉시 반영됩니다."
+      },
+      "slo": {
+        "title": "SLO 목표",
+        "description": "채팅 가용성·첫 토큰 지연·에이전트 작업 성공률·평가 통과율 목표. 목표는 백분율(예: 99.5), TTFT 는 p95 임계(ms). 다음 평가(5분 주기)부터 반영됩니다."
       }
     },
     "historyTitle": "변경 이력",
@@ -2186,7 +2368,24 @@
         "external": "외부 도구",
         "control": "제어",
         "sensitive": "자격증명 파일"
-      }
+      },
+      "recentTitle": "최근 결정(30분)",
+      "revoked": "철회됨",
+      "consumed": "실행됨",
+      "approvedPending": "승인됨 · 아직 실행 전",
+      "revoke": "철회",
+      "revokeHint": "아직 실행되지 않은 승인을 되돌립니다(재개 시 다시 승인 대기)",
+      "autoApproveOff": "자동 승인 해제",
+      "autoApproveOffHint": "이 작업의 자동 승인을 끕니다",
+      "preview": "실행 전 변경 미리보기",
+      "assignedToMe": "나에게 이관됨",
+      "assignedAway": "이관됨",
+      "reassign": "이관",
+      "reassignPick": "이관 대상",
+      "escalate": "에스컬레이션",
+      "escalateHint": "조직 소유자/관리자에게 넘깁니다",
+      "elicitHint": "{server} 서버의 입력 요청 · 항목: {fields}",
+      "elicitJsonHint": "항목이 둘 이상이면 JSON 으로 답하세요: {example}"
     }
   },
   "marketplacePublish": {
@@ -2323,5 +2522,85 @@
     "userIdPlaceholder": "사용자 id",
     "grant": "부여",
     "grantDone": "부여했습니다."
+  },
+  "adminSlo": {
+    "title": "SLO",
+    "description": "서비스 수준 목표 대비 현재 상태·에러 버짓·burn-rate",
+    "computedAt": "계산 시각 {time}",
+    "openSettings": "목표 설정",
+    "refresh": "새로고침",
+    "loadError": "불러오기에 실패했습니다.",
+    "target": "목표 {value}",
+    "budgetRemaining": "에러 버짓 잔량",
+    "burnFast": "burn(1시간)",
+    "burnSlow": "burn(6시간)",
+    "samples": "표본",
+    "p95": "TTFT p95",
+    "reasonLabel": "사유",
+    "historyTitle": "최근 30일",
+    "date": "날짜",
+    "historyEmpty": "스냅샷이 아직 없습니다 — 평가는 5분마다 기록됩니다.",
+    "state": {
+      "ok": "정상",
+      "warning": "경고",
+      "critical": "위험",
+      "insufficient": "판정 보류"
+    },
+    "reason": {
+      "fast_burn": "빠른 소진(1시간·5분 창 14.4배 이상)",
+      "slow_burn": "느린 소진(6시간·30분 창 6배 이상)",
+      "budget_exhausted": "창 전체 에러 버짓 소진",
+      "below_target": "목표 미달",
+      "few_samples": "표본 부족",
+      "source_unavailable": "데이터 소스 없음"
+    },
+    "slo": {
+      "chat_availability": {
+        "name": "채팅 가용성",
+        "desc": "최근 {window}일 채팅 요청 중 오류 없이 끝난 비율(사용자 중단 제외)"
+      },
+      "chat_ttft_p95": {
+        "name": "첫 토큰 지연",
+        "desc": "최근 {window}일 성공 요청 중 첫 토큰이 {threshold}초 이내인 비율(= p95 기준)"
+      },
+      "agent_task_success": {
+        "name": "에이전트 작업 성공률",
+        "desc": "최근 {window}일 끝난 작업 중 완료 비율(취소 제외)"
+      },
+      "eval_pass": {
+        "name": "평가 통과율",
+        "desc": "최근 {window}일 안의 마지막 응답 평가 통과율"
+      }
+    }
+  },
+  "adminEvaluations": {
+    "title": "평가 이력",
+    "description": "nightly 평가 실행 기록 — 통과율·첫 토큰 지연·실패 케이스",
+    "refresh": "새로고침",
+    "loadError": "불러오기에 실패했습니다.",
+    "runnerFilter": "러너",
+    "allRunners": "전체 러너",
+    "matrixTitle": "최근 매트릭스 ({time})",
+    "modelVariant": "모델 \\ variant",
+    "listTitle": "실행 목록",
+    "empty": "기록이 없습니다 — nightly 평가가 OMK_EVAL_RECORD_DB=true 로 실행되면 쌓입니다.",
+    "noFailures": "실패 케이스가 없습니다.",
+    "th": {
+      "completedAt": "완료 시각",
+      "runner": "러너",
+      "mode": "모드",
+      "model": "모델 · variant",
+      "passRate": "통과율",
+      "ttft": "TTFT p50",
+      "totalP95": "전체 p95",
+      "version": "데이터셋 · 커밋"
+    },
+    "runner": {
+      "routing": "라우팅",
+      "response": "응답",
+      "tools": "도구 선택",
+      "redteam": "레드팀",
+      "matrix": "매트릭스"
+    }
   }
 }

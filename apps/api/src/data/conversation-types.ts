@@ -21,12 +21,18 @@ export interface ConversationSession {
     anonSessionId?: string;
     /** 대화 제목 */
     title: string;
+    /** 낙관적 잠금 버전(140) — getSession 만 채운다 */
+    version?: number;
     /** 세션 생성 일시 (ISO 8601) */
     created_at: string;
     /** 마지막 업데이트 일시 (ISO 8601) */
     updated_at: string;
     /** 세션 메타데이터 (JSONB) */
     metadata?: Record<string, unknown> | null;
+    /** 폴더(157) — 없으면 미분류 */
+    folderId?: string | null;
+    /** 태그(157) */
+    tags?: string[];
     /** 세션에 속한 메시지 목록 */
     messages: ConversationMessage[];
 }
@@ -36,6 +42,8 @@ export interface ConversationSession {
  * @interface ConversationMessage
  */
 export interface ConversationMessage {
+    /** 멱등 충돌로 기존 행을 돌려준 경우(140) */
+    deduplicated?: boolean;
     /** 메시지 고유 식별자 */
     id: string;
     /** 소속 세션 ID */
@@ -52,6 +60,8 @@ export interface ConversationMessage {
     thinking?: string;
     /** 생각 요약 헤드라인 — summary role 모델 생성 (재열람 타임라인용) */
     reasoningSummary?: string;
+    /** 웹검색 출처(F19.4, 156) — 본문 [N] 인용 미리보기 */
+    sources?: import('../mcp/web-search/types').SearchSourceRef[];
 }
 
 /**
@@ -73,6 +83,8 @@ export interface MessageOptions {
     agentId?: string;
     /** WS/REST 가 클라이언트에 발급한 message id — 피드백 신호를 이 행에 되짚기 위한 조인 키. */
     clientMessageId?: string;
+    /** 웹검색 출처(F19.4, 156) */
+    sources?: import('../mcp/web-search/types').SearchSourceRef[];
 }
 
 // Internal row types for PostgreSQL mapping
@@ -84,6 +96,9 @@ export interface SessionRow {
     created_at: string;
     updated_at: string;
     metadata: Record<string, unknown> | null;
+    /** 157 — 적용 전 DB 에는 없다 */
+    folder_id?: string | null;
+    tags?: string[] | null;
 }
 
 /**
@@ -92,6 +107,8 @@ export interface SessionRow {
  * 기존 의미를 그대로 유지하기 위함.
  */
 export interface SessionMeta {
+    /** 낙관적 잠금 버전(140) */
+    version?: number;
     userId: string | null;
     anonSessionId: string | null;
     title: string | null;
@@ -110,6 +127,8 @@ export interface MessageRow {
     tokens: number | null;
     response_time_ms: number | null;
     created_at: string;
+    /** 156 — 적용 전 DB 에는 없다 */
+    sources?: unknown;
 }
 
 /**
@@ -124,7 +143,8 @@ export function rowToMessage(row: MessageRow): ConversationMessage {
         timestamp: row.created_at,
         model: row.model || undefined,
         thinking: row.thinking || undefined,
-        reasoningSummary: row.reasoning_summary || undefined
+        reasoningSummary: row.reasoning_summary || undefined,
+        ...(Array.isArray(row.sources) && row.sources.length > 0 ? { sources: row.sources as import('../mcp/web-search/types').SearchSourceRef[] } : {}),
     };
 }
 
@@ -140,6 +160,8 @@ export function rowToSession(row: SessionRow, messages: ConversationMessage[]): 
         created_at: row.created_at,
         updated_at: row.updated_at,
         metadata: row.metadata || undefined,
+        ...(row.folder_id !== undefined ? { folderId: row.folder_id } : {}),
+        ...(Array.isArray(row.tags) ? { tags: row.tags } : {}),
         messages
     };
 }

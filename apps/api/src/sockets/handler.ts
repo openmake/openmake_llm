@@ -432,7 +432,12 @@ export class WebSocketHandler {
     private handleResume(ws: WebSocket, msg: WSMessage): void {
         const extWs = ws as ExtendedWebSocket;
         const key = resolveStreamKey(extWs, msg.anonSessionId, msg.lane);
-        const attached = key ? getInFlightStreamRegistry().attach(key, extWs) : false;
+        // 이어받기 커서(F19.11) — 형식이 틀리면 무시하고 종전(커서 없음) 재생
+        const cursor = {
+            ...(typeof msg.streamId === 'string' && /^[0-9a-f-]{36}$/i.test(msg.streamId) ? { streamId: msg.streamId } : {}),
+            ...(Number.isInteger(msg.afterSeq) && (msg.afterSeq as number) >= 0 ? { afterSeq: msg.afterSeq as number } : {}),
+        };
+        const attached = key ? getInFlightStreamRegistry().attach(key, extWs, cursor) : false;
         if (!attached) ws.send(JSON.stringify({ type: 'resume_none' }));
     }
 

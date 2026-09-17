@@ -204,6 +204,21 @@ h4 {
 }
 
 /* =========================================================================
+   움직임 줄이기 (F19.8) — OS 설정이 reduce 면 애니메이션·전환을 사실상 끈다.
+   스피너(animate-spin)도 첫 프레임에 멈춰 정적 아이콘으로 남는다(진행 문구는 그대로 보인다).
+   ========================================================================= */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* =========================================================================
    모바일·터치 대응 (unlayered 라 Tailwind 유틸리티보다 우선)
    - 입력 16px 미만이면 iOS 가 포커스 시 화면을 확대한다 → 모바일 폭에서 16px 고정
    - 터치 포인터에서는 24/28px 아이콘 버튼의 히트 영역을 36px 로 키운다

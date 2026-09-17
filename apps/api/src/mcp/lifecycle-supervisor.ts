@@ -44,7 +44,7 @@ type ClientFactory = (config: ServerSpawnConfig) => ExternalMCPClient;
 
 interface SupervisorDeps {
     userPool: UserMCPPool;
-    repo: Pick<McpCatalogRepository, 'listUserServers' | 'getServerById' | 'decryptEnvForSpawn' | 'recordInstanceTransition' | 'getCatalogToolAllowlist' | 'listAutoSpawnUserIds' | 'closeOrphanInstances'>;
+    repo: Pick<McpCatalogRepository, 'listUserServers' | 'recordToolsRefreshed' | 'getServerById' | 'decryptEnvForSpawn' | 'recordInstanceTransition' | 'getCatalogToolAllowlist' | 'listAutoSpawnUserIds' | 'closeOrphanInstances'>;
     clientFactory: ClientFactory;
 }
 
@@ -312,6 +312,10 @@ export class MCPLifecycleSupervisor implements LifecycleSupervisor {
         };
         client.on?.('exit', onExit);
         client.on?.('error', (err: unknown) => onExit(undefined, null, String(err)));
+        // 도구 목록 갱신 관측(133) — listChanged 알림·stale 재조회 결과를 instance 행에 남긴다.
+        client.on?.('tools_changed', (ev: { count: number }) => {
+            this.repo.recordToolsRefreshed(serverId, userId, ev.count).catch(() => { /* noop */ });
+        });
 
         // 연결 실패를 **영속화**한 뒤 rethrow — 실패한 client 는 풀에 등록되지 않으므로
         // 기록하지 않으면 목록 API 가 `connectionError: null` 을 돌려주고, 화면에는 원인

@@ -13,7 +13,7 @@ import * as path from 'path';
 import { envSchema } from './env.schema';
 import { parseEnvFile } from './env-file';
 import { validateConfig } from './env-validate';
-import { SERVER_CONFIG } from './constants';
+import { DEFAULT_CONFIG } from './env-defaults';
 import type { SupportedLanguageCode } from '../chat/language-policy';
 
 export interface EnvConfig {
@@ -62,6 +62,21 @@ export interface EnvConfig {
     quotaExceededAction: 'reject' | 'degrade';
     /** 사용자 월 비용 예산(USD micros, 0=무제한) — F25 PR-4 */
     userMonthlyCostBudgetMicros: number;
+    /** 외부 MCP 도구 목록 stale 판정(ms, 0=끔) — listChanged 미광고 서버의 안전망(F13.12) */
+    mcpToolListStaleMs: number;
+    /** ask_human·mcp_elicit 승인 만료를 거절 대신 주차(paused)로 — F16.7 */
+    agentTaskHitlParkOnTimeout: boolean;
+    /** 관리자가 줄 수 있는 큐 우선순위 상한 — F16.6 */
+    agentTaskQueuePriorityMax: number;
+    /** 로컬 vLLM prefix cache 격리 — off|user(사용자별 cache_salt). UX·게이트웨이 PR-13 */
+    llmPrefixCacheSaltMode: 'off' | 'user';
+    /** 로컬 vLLM 요청에 요청 클래스별 priority 싣기(DGX --scheduling-policy priority 필요) — PR-13 */
+    llmPriorityEnabled: boolean;
+    /** SLO 목표(F24.8) — 백분율(0~100, config/slo 가 비율로 환산), TTFT 는 p95 임계(ms). 미설정은 config/slo 기본값 */
+    sloChatAvailabilityTargetPct?: number;
+    sloChatTtftP95Ms: number;
+    sloAgentTaskSuccessTargetPct?: number;
+    sloEvalPassTargetPct?: number;
     /** 강등 맵 JSON (글롭 → 대체 fullId) */
     quotaDegradeModelMap: string;
     llmWeeklyTokenLimit: number;
@@ -168,131 +183,6 @@ export interface EnvConfig {
     redisUrl: string;
 }
 
-const DEFAULT_CONFIG: EnvConfig = {
-    // Node
-    nodeEnv: 'development',
-
-    // Server
-    port: SERVER_CONFIG.DEFAULT_PORT,
-    serverHost: '0.0.0.0',
-
-    // Database
-    databaseUrl: 'postgresql://localhost:5432/openmake_llm',
-    dbPoolMax: 20,
-    dbPoolMin: 5,
-
-    // Auth
-    jwtSecret: '',
-    adminPassword: '',
-    defaultAdminEmail: 'admin@example.com',
-    adminEmails: '',
-
-    // OAuth
-    googleClientId: '',
-    googleClientSecret: '',
-    githubClientId: '',
-    githubClientSecret: '',
-    kakaoClientId: '',
-    kakaoClientSecret: '',
-    oauthRedirectUri: `http://localhost:${SERVER_CONFIG.DEFAULT_PORT}/api/auth/callback/google`,
-
-    // CORS
-    corsOrigins: `http://localhost:${SERVER_CONFIG.DEFAULT_PORT}`,
-
-    // LLM Backend (vLLM via LiteLLM proxy)
-    llmBaseUrl: 'http://localhost:4000',
-    llmApiKey: 'sk-no-key',
-    llmDefaultModel: 'retired-chat-model',
-    llmTimeout: 120000,
-    llmWarmupTimeoutMs: 10000,
-    llmHourlyTokenLimit: 300000,
-    quotaFailMode: 'open',
-    quotaExceededAction: 'reject',
-    userMonthlyCostBudgetMicros: 0,
-    quotaDegradeModelMap: '',
-    llmWeeklyTokenLimit: 5000000,
-    externalModelPolicy: '',
-    llmEnableReasoningEffort: false,
-    userModelRolesEnabled: false,
-    thinkingSummaryEnabled: true,
-    tailRoutingShadowEnabled: false,
-    tailRouting2bEnabled: false,
-    searchSemanticRerankShadow: false,
-    searchSemanticRerankEnabled: false,
-    searchRerankEmbedModel: 'bge-m3',
-    llmGatewayProviders: [] as string[],
-
-    // Log
-    logLevel: 'info',
-
-    // External services
-    googleApiKey: '',
-    googleCseId: '',
-    naverClientId: '',
-    naverClientSecret: '',
-    naverApiHubKeyId: '',
-    naverApiHubKey: '',
-    naverApiDailyLimit: 25000,
-    kakaoRestApiKey: '',
-    exaApiKey: '',
-    tavilyApiKey: '',
-    githubToken: '',
-
-    // Documents
-    documentTtlHours: 1,
-    maxUploadedDocuments: 100,
-
-    // Conversations
-    maxConversationSessions: 1000,
-    sessionTtlDays: 30,
-
-    // User data
-    userDataPath: './data/users',
-
-    // VAPID
-    vapidPublicKey: '',
-    vapidPrivateKey: '',
-    vapidSubject: 'mailto:support@openmake.cc',
-    operatorWebhookUrl: '',
-    operatorWebhookUrlCritical: '',
-    operatorWebhookUrlWarning: '',
-    operatorWebhookUrlInfo: '',
-
-    // Swagger
-    swaggerBaseUrl: '',
-
-    // API Key Service
-    apiKeyPepper: '',
-    apiKeyMaxPerUser: 5,
-    tokenEncryptionKey: '',
-
-    // Cookie Security
-    cookieSecure: false,
-    allowInsecureCookies: false,
-
-    // Language Policy
-    enableDynamicResponseLanguage: true,
-    defaultResponseLanguage: 'ko',
-    languageDetectionMinConfidence: 0.7,
-    languageFallbackLanguage: 'en',
-
-    // Security — Trusted Proxies
-    trustedProxies: ['loopback', 'linklocal', 'uniquelocal'],
-
-    // Security — Blacklist Policy (additive; 'open' maintains legacy fail-open behavior)
-    blacklistFailMode: 'open' as const,
-
-    // Security — CSRF Double-Submit Cookie. 프론트(@openmake/api-client)가 mutating 요청에
-    // X-CSRF-Token 을 자동 주입하고 SSE/WS 도 csrfHeaders 를 붙이므로 기본 'enforce'.
-    // 문제 발생 시 CSRF_PROTECTION=warn 으로 즉시 완화 가능.
-    csrfProtection: 'enforce' as const,
-
-    // Storage — default memory preserves single-instance in-memory behavior
-    storageBackend: 'memory' as const,
-    redisUrl: '',
-};
-
-
 /**
  * system_settings(DB) overlay — admin 시스템 설정이 env 보다 우선한다.
  * services/system-settings-service 가 부팅 후·설정 변경 시 applySettingsOverlay 로 주입.
@@ -355,6 +245,15 @@ export function loadConfig(): EnvConfig {
         QUOTA_EXCEEDED_ACTION: env('QUOTA_EXCEEDED_ACTION'),
         USER_MONTHLY_COST_BUDGET_MICROS: env('USER_MONTHLY_COST_BUDGET_MICROS'),
         QUOTA_DEGRADE_MODEL_MAP: env('QUOTA_DEGRADE_MODEL_MAP'),
+        MCP_TOOL_LIST_STALE_MS: env('MCP_TOOL_LIST_STALE_MS'),
+        AGENT_TASK_HITL_PARK_ON_TIMEOUT: env('AGENT_TASK_HITL_PARK_ON_TIMEOUT'),
+        AGENT_TASK_QUEUE_PRIORITY_MAX: env('AGENT_TASK_QUEUE_PRIORITY_MAX'),
+        LLM_PREFIX_CACHE_SALT_MODE: env('LLM_PREFIX_CACHE_SALT_MODE'),
+        LLM_PRIORITY_ENABLED: env('LLM_PRIORITY_ENABLED'),
+        SLO_CHAT_AVAILABILITY_TARGET: env('SLO_CHAT_AVAILABILITY_TARGET'),
+        SLO_CHAT_TTFT_P95_MS: env('SLO_CHAT_TTFT_P95_MS'),
+        SLO_AGENT_TASK_SUCCESS_TARGET: env('SLO_AGENT_TASK_SUCCESS_TARGET'),
+        SLO_EVAL_PASS_TARGET: env('SLO_EVAL_PASS_TARGET'),
         LLM_WEEKLY_TOKEN_LIMIT: env('LLM_WEEKLY_TOKEN_LIMIT'),
         EXTERNAL_MODEL_POLICY: env('EXTERNAL_MODEL_POLICY'),
         LLM_ENABLE_REASONING_EFFORT: env('LLM_ENABLE_REASONING_EFFORT'),
@@ -475,6 +374,15 @@ export function loadConfig(): EnvConfig {
         quotaExceededAction: parsed.QUOTA_EXCEEDED_ACTION ?? DEFAULT_CONFIG.quotaExceededAction,
         userMonthlyCostBudgetMicros: parsed.USER_MONTHLY_COST_BUDGET_MICROS ?? DEFAULT_CONFIG.userMonthlyCostBudgetMicros,
         quotaDegradeModelMap: parsed.QUOTA_DEGRADE_MODEL_MAP ?? DEFAULT_CONFIG.quotaDegradeModelMap,
+        mcpToolListStaleMs: parsed.MCP_TOOL_LIST_STALE_MS ?? DEFAULT_CONFIG.mcpToolListStaleMs,
+        agentTaskHitlParkOnTimeout: parsed.AGENT_TASK_HITL_PARK_ON_TIMEOUT === undefined ? DEFAULT_CONFIG.agentTaskHitlParkOnTimeout : parsed.AGENT_TASK_HITL_PARK_ON_TIMEOUT === 'true',
+        agentTaskQueuePriorityMax: parsed.AGENT_TASK_QUEUE_PRIORITY_MAX ?? DEFAULT_CONFIG.agentTaskQueuePriorityMax,
+        llmPrefixCacheSaltMode: parsed.LLM_PREFIX_CACHE_SALT_MODE ?? DEFAULT_CONFIG.llmPrefixCacheSaltMode,
+        llmPriorityEnabled: parsed.LLM_PRIORITY_ENABLED === undefined ? DEFAULT_CONFIG.llmPriorityEnabled : parsed.LLM_PRIORITY_ENABLED === 'true',
+        sloChatAvailabilityTargetPct: parsed.SLO_CHAT_AVAILABILITY_TARGET,
+        sloChatTtftP95Ms: parsed.SLO_CHAT_TTFT_P95_MS ?? DEFAULT_CONFIG.sloChatTtftP95Ms,
+        sloAgentTaskSuccessTargetPct: parsed.SLO_AGENT_TASK_SUCCESS_TARGET,
+        sloEvalPassTargetPct: parsed.SLO_EVAL_PASS_TARGET,
         llmWeeklyTokenLimit: parsed.LLM_WEEKLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmWeeklyTokenLimit,
         externalModelPolicy: parsed.EXTERNAL_MODEL_POLICY ?? DEFAULT_CONFIG.externalModelPolicy,
         llmEnableReasoningEffort: (parsed.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true',

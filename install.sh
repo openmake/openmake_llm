@@ -864,6 +864,10 @@ install_deps() {
     log_step "5/8 npm 의존성 설치 (workspaces)"
     ( cd "$SCRIPT_DIR" && npm install --no-audit --no-fund ) || die "npm install 실패"
     log_ok "의존성 설치 완료"
+    # 설치 속도 때문에 install 중 audit 은 끄고, 끝에 critical 만 경고로 한 번 알린다(설치는 막지 않는다 — F28.8)
+    if ! ( cd "$SCRIPT_DIR" && npm audit --omit=dev --audit-level=critical >/dev/null 2>&1 ); then
+        log_warn "운영 의존성에 critical 보안 권고가 있습니다 — 'npm audit --omit=dev' 로 확인하세요(설치는 계속합니다)"
+    fi
 }
 
 # ── 6. 인프라 기동 + 마이그레이션 ────────────────────────────────────────────

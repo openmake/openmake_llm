@@ -1,0 +1,22 @@
+# Dependabot (F28.8, 2026-09-17) — 운영 의존성 보안·버전 갱신 PR.
+# npm workspaces 는 루트 lockfile 하나라 디렉토리는 "/" 만 둔다. minor/patch 는 묶어서 PR 수를 줄인다.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      opentelemetry:
+        patterns: ["@opentelemetry/*"]
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+        exclude-patterns: ["@opentelemetry/*"]
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3

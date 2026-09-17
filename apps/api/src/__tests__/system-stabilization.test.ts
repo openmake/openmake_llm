@@ -21,7 +21,8 @@ describe('CACHE_CONFIG 설정', () => {
     it('CACHE_CONFIG 상수가 존재해야 한다', () => {
         const { CACHE_CONFIG } = require('../config/runtime-limits');
         expect(CACHE_CONFIG).toBeDefined();
-        expect(CACHE_CONFIG.QUERY_CACHE_TTL_MS).toBeDefined();
+        expect(CACHE_CONFIG.ROUTING_CACHE_TTL_MS).toBeDefined();
+        expect(CACHE_CONFIG).not.toHaveProperty('QUERY_CACHE_TTL_MS');
     });
 });
 

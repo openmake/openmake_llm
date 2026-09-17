@@ -12,8 +12,15 @@
  *    STREAM_RESULT_RETENTION_MS 동안 보관해 늦은 재연결도 화면에 이어받게 한다.
  *
  * 사용자(키)당 1개 — 새 채팅을 시작하면 detach 된 이전 스트림은 abort 한다(사용자가 넘어감).
+ *
+ * 순번 이어받기 (2026-09-17, F19.11): 모든 이벤트에 `streamId`·`seq`(스트림 안 단조 증가)를 붙이고, 비-토큰 이벤트는
+ * attached 여부와 무관하게 링버퍼(바이트·개수 상한)에 남긴다. 클라이언트가 `resume{streamId, afterSeq}` 를 보내면
+ * 스냅샷 + `seq > afterSeq` 이벤트만 재생해 중복·유실 없이 잇는다(본문 진실은 여전히 스냅샷 — 토큰은 재생하지 않는다).
+ * 커서가 없거나 다른 스트림이면 종전대로 스냅샷 + 어느 소켓에도 전달되지 않은 이벤트만 재생한다(구 클라이언트 호환).
+ * 링에서 밀려난 이벤트가 재생 범위에 있었으면 `stream_resume.gap:true` — 클라이언트는 done.cleanedContent 로 재구성한다.
  * @module sockets/ws-stream-registry
  */
+import { randomUUID } from 'crypto';
 import { createLogger } from '../utils/logger';
 import { WEBSOCKET_TIMEOUTS, WS_LIMITS } from '../config/timeouts';
 import type { ExtendedWebSocket } from './ws-types';
@@ -25,18 +32,32 @@ const SNAPSHOT_EVENT_TYPES = new Set(['token', 'thinking']);
 /** 스트림 종료 이벤트 — 이 뒤로는 새 이벤트가 오지 않는다. */
 const TERMINAL_EVENT_TYPES = new Set(['done', 'error', 'aborted']);
 
+interface RingEvent {
+    seq: number;
+    /** 직렬화된 이벤트(streamId·seq 포함) */
+    raw: string;
+}
+
 interface StreamEntry {
     key: string;
     abortController: AbortController;
+    /** 이어받기 커서의 스트림 식별자 — open() 때 발급 */
+    streamId: string;
+    /** 마지막으로 발급한 순번(0 = 아직 없음) */
+    seq: number;
+    /** 소켓으로 전송에 성공한 마지막 순번 — 커서 없는 재부착은 이 뒤만 재생한다 */
+    deliveredSeq: number;
     messageId?: string;
     sessionId?: string;
     /** 'token' 누적 — 재부착 시 클라이언트가 마지막 assistant 본문을 이 값으로 되돌린다. */
     content: string;
     thinking: string;
-    /** detach 동안 밀린 비-토큰 이벤트(JSON 직렬화). 재부착 시 순서대로 재생. */
-    buffered: string[];
-    bufferedBytes: number;
-    /** 버퍼 상한을 넘어 artifact_chunk 를 버렸는지 — 재생 시 chunk 순서가 깨질 수 있어 로그로 남긴다. */
+    /** 비-토큰 이벤트 링버퍼 — ringMax>0 이면 상시, 0 이면 detach 동안만(종전 동작). 오래된 것부터 밀려난다. */
+    ring: RingEvent[];
+    ringBytes: number;
+    /** 링에서 밀려난 이벤트의 최대 순번(없으면 0) — 재생 범위와 겹치면 gap */
+    droppedMaxSeq: number;
+    /** 링 상한을 넘어 이벤트를 버린 적이 있는지 */
     overflowed: boolean;
     ws: ExtendedWebSocket | null;
     timer: ReturnType<typeof setTimeout> | null;
@@ -78,6 +99,7 @@ export class InFlightStreamRegistry {
         private readonly graceMs: number = WEBSOCKET_TIMEOUTS.STREAM_DETACH_GRACE_MS,
         private readonly retentionMs: number = WEBSOCKET_TIMEOUTS.STREAM_RESULT_RETENTION_MS,
         private readonly bufferMaxBytes: number = WS_LIMITS.DETACHED_STREAM_BUFFER_MAX_BYTES,
+        private readonly ringMax: number = WS_LIMITS.STREAM_EVENT_RING_MAX,
     ) {}
 
     get size(): number { return this.entries.size; }
@@ -90,15 +112,18 @@ export class InFlightStreamRegistry {
             this.dispose(previous, !previous.finished);
         }
         const entry: StreamEntry = {
-            key, abortController, content: '', thinking: '', buffered: [], bufferedBytes: 0,
-            overflowed: false, ws, timer: null, finished: false, startedAt: Date.now(),
+            key, abortController, streamId: randomUUID(), seq: 0, deliveredSeq: 0, content: '', thinking: '',
+            ring: [], ringBytes: 0, droppedMaxSeq: 0, overflowed: false, ws, timer: null, finished: false, startedAt: Date.now(),
         };
         this.entries.set(key, entry);
         this.byWs.set(ws, entry);
         return entry;
     }
 
-    /** 소켓에 보내거나(attached) 버퍼에 쌓는다(detached). 종료 이벤트면 finished 표시. */
+    /**
+     * 순번을 붙여 소켓에 보내고(attached), 비-토큰 이벤트는 링버퍼에 남긴다(ringMax>0 상시, 0 이면 전달 못 했을 때만).
+     * 종료 이벤트면 finished 표시.
+     */
     send(entry: StreamEntry, payload: Record<string, unknown>): void {
         const type = String(payload.type);
         if (type === 'session_created' && typeof payload.sessionId === 'string') entry.sessionId = payload.sessionId;
@@ -107,22 +132,36 @@ export class InFlightStreamRegistry {
         if (type === 'thinking' && typeof payload.token === 'string') entry.thinking += payload.token;
         if (TERMINAL_EVENT_TYPES.has(type)) entry.finished = true;
 
+        entry.seq += 1;
+        const seq = entry.seq;
+        const serialized = JSON.stringify({ ...payload, streamId: entry.streamId, seq });
+        let delivered = false;
         const ws = entry.ws;
         if (ws && ws.readyState === ws.OPEN) {
-            try { ws.send(JSON.stringify(payload)); } catch (e) { log.warn('[WsStream] send 실패:', e); }
-            return;
+            try {
+                ws.send(serialized);
+                delivered = true;
+                entry.deliveredSeq = seq;
+            } catch (e) { log.warn('[WsStream] send 실패:', e); }
         }
         if (SNAPSHOT_EVENT_TYPES.has(type)) return; // 스냅샷으로 대체
-        const serialized = JSON.stringify(payload);
-        if (entry.bufferedBytes + serialized.length > this.bufferMaxBytes && !TERMINAL_EVENT_TYPES.has(type)) {
+        if (this.ringMax > 0 || !delivered) this.pushRing(entry, seq, serialized);
+    }
+
+    /** 링에 넣고 상한(개수·바이트)을 넘으면 오래된 것부터 밀어낸다 — 방금 넣은 이벤트는 남긴다. */
+    private pushRing(entry: StreamEntry, seq: number, raw: string): void {
+        entry.ring.push({ seq, raw });
+        entry.ringBytes += raw.length;
+        const maxCount = this.ringMax > 0 ? this.ringMax : Number.POSITIVE_INFINITY;
+        while (entry.ring.length > 1 && (entry.ring.length > maxCount || entry.ringBytes > this.bufferMaxBytes)) {
+            const dropped = entry.ring.shift()!;
+            entry.ringBytes -= dropped.raw.length;
+            entry.droppedMaxSeq = Math.max(entry.droppedMaxSeq, dropped.seq);
             if (!entry.overflowed) {
                 entry.overflowed = true;
-                log.warn(`[WsStream] detach 버퍼 상한 초과 — 이후 비종료 이벤트 폐기: key=${entry.key}`);
+                log.warn(`[WsStream] 이벤트 링 상한 초과 — 오래된 이벤트부터 폐기: key=${entry.key}`);
             }
-            return;
         }
-        entry.buffered.push(serialized);
-        entry.bufferedBytes += serialized.length;
     }
 
     /** 소켓 종료 — 스트림이 있으면 detach 후 유예 타이머. 없으면 false(호출자가 종전 abort 경로). */
@@ -147,10 +186,12 @@ export class InFlightStreamRegistry {
     }
 
     /**
-     * 재연결한 소켓에 스트림을 다시 붙인다. 스냅샷(stream_resume) → 밀린 이벤트 재생 순.
+     * 재연결한 소켓에 스트림을 다시 붙인다. 스냅샷(stream_resume) → 이벤트 재생 순.
+     * - cursor 의 streamId 가 이 스트림이고 afterSeq 가 유효하면 `seq > afterSeq` 만 재생(중복 없음)
+     * - 아니면 어느 소켓에도 전달되지 않은 이벤트(`seq > deliveredSeq`)만 재생(종전 동작)
      * 스트림이 없으면 false — 호출자가 resume_none 을 보낸다.
      */
-    attach(key: string, ws: ExtendedWebSocket): boolean {
+    attach(key: string, ws: ExtendedWebSocket, cursor: { streamId?: string; afterSeq?: number } = {}): boolean {
         const entry = this.entries.get(key);
         if (!entry) return false;
         if (entry.ws && entry.ws !== ws && entry.ws.readyState === entry.ws.OPEN) {
@@ -162,6 +203,11 @@ export class InFlightStreamRegistry {
         entry.ws = ws;
         this.byWs.set(ws, entry);
         ws._abortController = entry.finished ? null : entry.abortController;
+        const useCursor = cursor.streamId === entry.streamId
+            && Number.isInteger(cursor.afterSeq) && (cursor.afterSeq as number) >= 0 && (cursor.afterSeq as number) <= entry.seq;
+        const threshold = useCursor ? (cursor.afterSeq as number) : entry.deliveredSeq;
+        const replay = entry.ring.filter((e) => e.seq > threshold);
+        const gap = entry.droppedMaxSeq > threshold;
         const snapshot = {
             type: 'stream_resume',
             ...(entry.messageId ? { messageId: entry.messageId } : {}),
@@ -169,16 +215,23 @@ export class InFlightStreamRegistry {
             content: entry.content,
             ...(entry.thinking ? { thinking: entry.thinking } : {}),
             finished: entry.finished,
+            streamId: entry.streamId,
+            /** 스냅샷이 반영한 마지막 순번 — 뒤이어 재생되는 이벤트는 이 이하일 수 있다(클라는 자기 afterSeq 기준으로 중복만 거른다) */
+            lastSeq: entry.seq,
+            ...(gap ? { gap: true } : {}),
         };
         try {
             ws.send(JSON.stringify(snapshot));
-            for (const raw of entry.buffered) ws.send(raw);
+            for (const e of replay) ws.send(e.raw);
+            entry.deliveredSeq = entry.seq;
         } catch (e) {
             log.warn('[WsStream] 재생 send 실패:', e);
         }
-        log.info(`[WsStream] 스트림 재부착: key=${key} replayed=${entry.buffered.length} content=${entry.content.length}자 finished=${entry.finished}`);
-        entry.buffered = [];
-        entry.bufferedBytes = 0;
+        log.info(`[WsStream] 스트림 재부착: key=${key} replayed=${replay.length} cursor=${useCursor ? threshold : 'none'} gap=${gap} content=${entry.content.length}자 finished=${entry.finished}`);
+        if (this.ringMax <= 0) {
+            entry.ring = [];
+            entry.ringBytes = 0;
+        }
         if (entry.finished) this.dispose(entry, false);
         return true;
     }
@@ -219,8 +272,8 @@ export class InFlightStreamRegistry {
             if (entry.ws._abortController === entry.abortController) entry.ws._abortController = null;
         }
         entry.ws = null;
-        entry.buffered = [];
-        entry.bufferedBytes = 0;
+        entry.ring = [];
+        entry.ringBytes = 0;
         if (this.entries.get(entry.key) === entry) this.entries.delete(entry.key);
     }
 

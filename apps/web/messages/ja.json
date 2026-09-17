@@ -27,6 +27,8 @@
       "approvals": "承認待ち",
       "organizationsAdmin": "組織管理",
       "costRatesAdmin": "コスト単価",
+      "sloAdmin": "SLO",
+      "evaluationsAdmin": "評価履歴",
       "quotaRequestsAdmin": "クォータ承認"
     },
     "pendingApprovals": "承認待ち {count}件 — エージェント作業がユーザーの承認を待っています"
@@ -344,7 +346,10 @@
       "sendAnswer": "回答を送信",
       "skip": "スキップ",
       "autoApprove": "残りをすべて承認",
-      "autoApproveHint": "このタスクの以降のツール実行を承認なしで進めます（質問は除く）"
+      "autoApproveHint": "このタスクの以降のツール実行を承認なしで進めます（質問は除く）",
+      "preview": "変更プレビュー",
+      "elicitHint": "{server} サーバーからの入力リクエスト · 項目: {fields}",
+      "elicitJsonHint": "項目が複数ある場合は JSON で回答してください: {example}"
     },
     "artifactFallback": "アーティファクト",
     "artifactBuilding": "アーティファクトを生成中…",
@@ -467,6 +472,18 @@
     },
     "verification": {
       "title": "検証で指摘された点"
+    },
+    "branchHere": "ここから分岐",
+    "branchFailed": "分岐に失敗: {error}",
+    "citation": {
+      "chipLabel": "出典 {n}: {title}",
+      "popoverLabel": "出典 {n} のプレビュー",
+      "open": "原文を開く"
+    },
+    "a11y": {
+      "generating": "応答を生成しています",
+      "toolRunning": "{tool} を実行中",
+      "done": "応答が完了しました"
     }
   },
   "compare": {
@@ -552,7 +569,10 @@
       "copyLink": "リンクをコピー",
       "unpublish": "共有を停止",
       "updateSettings": "共有設定を更新",
-      "publish": "共有する"
+      "publish": "共有する",
+      "downloadBundle": "静的 HTML をダウンロード",
+      "bundleMissing": "ビューアーファイルがありません — 再公開してから試してください",
+      "bundleFailed": "HTML をダウンロードできませんでした"
     },
     "page": {
       "viewerOpenFailed": "ビューアーを開けません",
@@ -574,7 +594,31 @@
       "close": "閉じる",
       "createdLabel": "作成"
     },
-    "resize": "パネル幅を調整 (ダブルクリックでリセット)"
+    "resize": "パネル幅を調整 (ダブルクリックでリセット)",
+    "exportXlsx": "XLSXで保存",
+    "exportNoSourceXlsx": "XLSX 変換は CSV またはレポートのアーティファクトのみ対応しています",
+    "comments": {
+      "toggle": "コメント",
+      "empty": "まだコメントはありません。",
+      "placeholder": "コメントを入力 (Markdown)",
+      "submit": "投稿",
+      "reply": "返信",
+      "replying": "返信を作成中",
+      "cancelReply": "キャンセル",
+      "resolve": "解決",
+      "unresolve": "再オープン",
+      "resolved": "解決済み",
+      "delete": "削除",
+      "deleteConfirm": "このコメントを削除しますか?",
+      "deletedPlaceholder": "削除されたコメントです。",
+      "apply": "モデルに反映を依頼",
+      "applyHint": "このコメントを引用した修正依頼を入力欄に入れます",
+      "applyPrompt": "アーティファクト「{title}」に付いた以下のコメントを反映して、新しいバージョンに修正してください。",
+      "me": "自分",
+      "user": "ユーザー {id}",
+      "loadFailed": "コメントを読み込めませんでした。",
+      "actionFailed": "処理できませんでした。"
+    }
   },
   "history": {
     "title": "会話履歴",
@@ -601,7 +645,31 @@
       "hint": "新しい会話を始めるとここに表示されます。"
     },
     "viewAllToggle": "全ユーザー",
-    "ownerBadge": "ユーザー {id}"
+    "ownerBadge": "ユーザー {id}",
+    "folders": {
+      "railLabel": "会話フォルダーとタグ",
+      "all": "すべて",
+      "unfiled": "未分類",
+      "heading": "フォルダー",
+      "create": "新しいフォルダー",
+      "namePlaceholder": "フォルダー名",
+      "save": "保存",
+      "cancel": "キャンセル",
+      "rename": "フォルダー名を変更",
+      "renameAria": "{name} の名前を変更",
+      "deleteAria": "{name} を削除",
+      "deleteConfirm": "フォルダー「{name}」を削除しますか？中の会話は未分類として残ります。",
+      "empty": "フォルダーはありません",
+      "tags": "タグ",
+      "error": "リクエストを処理できませんでした",
+      "organizeTitle": "会話を整理",
+      "organizeAria": "{title} のフォルダー・タグを整理",
+      "folderLabel": "フォルダー",
+      "tagsLabel": "タグ",
+      "tagsPlaceholder": "例: 仕事, リサーチ",
+      "tagsHelp": "カンマで区切ります。小文字で保存され、最大 8 個です。",
+      "folderBadge": "フォルダー"
+    }
   },
   "chatSocket": {
     "interceptNotice": "インターセプトモード（ディスカッション・ディープリサーチ・画像）が有効なため、ツール（分析・検索）やアーティファクトはこの応答では適用されません。",
@@ -901,7 +969,64 @@
     "noResultBody": "保存された最終回答はありません。下の実行タイムラインで経過を確認してください。",
     "previewTitle": "成果物プレビュー",
     "previewEmpty": "このタスクに保存された成果物はありません。",
-    "previewLoadError": "成果物を読み込めませんでした。"
+    "previewLoadError": "成果物を読み込めませんでした。",
+    "planEdit": {
+      "open": "編集",
+      "title": "計画を編集",
+      "nextTurn": "次のターンから適用",
+      "stepPlaceholder": "ステップの説明",
+      "doneWhenPlaceholder": "完了条件（任意）",
+      "moveUp": "上へ",
+      "moveDown": "下へ",
+      "remove": "削除",
+      "add": "ステップ追加",
+      "save": "保存",
+      "cancel": "キャンセル",
+      "conflict": "計画が別の場所で変更されました。再読み込みしてから編集してください。",
+      "failed": "保存に失敗しました。"
+    },
+    "fork": {
+      "title": "チェックポイントから分岐",
+      "pick": "ターンを選択",
+      "turnOption": "ターン {turn}（{messages} メッセージ）",
+      "go": "分岐して実行",
+      "hint": "選んだターン以降を新しい作業として再実行します（作業フォルダは新規）。",
+      "failed": "分岐に失敗: {error}"
+    },
+    "priorityBadge": "優先度 {priority}",
+    "triggers": {
+      "title": "Webhook トリガー",
+      "create": "新しいトリガー",
+      "hint": "外部システムが署名付き POST を送ると、選択したテンプレートでタスクを開始します。テンプレートの目標に {placeholder} を入れるとその位置に、なければ末尾にリクエスト本文が入ります。",
+      "needTemplate": "先にタスクテンプレートを作成してください",
+      "namePlaceholder": "トリガー名",
+      "template": "テンプレート",
+      "templatePick": "テンプレートを選択",
+      "policy": "承認ポリシー",
+      "policies": {
+        "all": "すべてのツールを承認",
+        "high-risk": "高リスクのみ承認",
+        "none": "承認なし"
+      },
+      "add": "作成",
+      "secretOnce": "シークレットは今だけ表示されます — 送信側の設定に保存してください。",
+      "copy": "コピー",
+      "signingNote": "タイムスタンプは ±{window} 秒以内である必要があります。再送時に同じ {delivery} を送ると重複実行されません。",
+      "dismiss": "閉じる",
+      "empty": "トリガーはまだありません。",
+      "enabled": "オン",
+      "disabled": "オフ",
+      "templateMissing": "(テンプレートなし)",
+      "fired": "実行 {count} 回",
+      "failures": "連続失敗 {count} 回: {error}",
+      "enable": "オンにする",
+      "disable": "オフにする",
+      "rotate": "シークレット再発行",
+      "rotateConfirm": "シークレットを再発行すると、以前のシークレットで署名したリクエストは拒否されます。続けますか?",
+      "delete": "削除",
+      "deleteConfirm": "このトリガーを削除しますか?",
+      "failed": "処理に失敗しました: {message}"
+    }
   },
   "customAgents": {
     "pageTitle": "カスタムエージェント",
@@ -1493,7 +1618,34 @@
       "spawnAdoption": "並列委任の採用率",
       "ofSpawnIntent": "意図一致 {intent}ターン中 {called}ターンで呼び出し"
     },
-    "noNodes": "報告されたクラスタノードはありません。"
+    "noNodes": "報告されたクラスタノードはありません。",
+    "nodeMetrics": {
+      "gpuTitle": "vLLM ノード · KV キャッシュ",
+      "queueTitle": "キューの深さ",
+      "disabled": "ノード指標の収集はオフです(NODE_METRICS_ENABLED=false)。",
+      "noTargets": "スクレイプ対象がありません — VLLM_METRICS_URLS または LLM_TOKENIZE_URL を設定してください。",
+      "waitingFirstScrape": "最初のスクレイプを待っています。",
+      "stale": "途絶",
+      "fresh": "正常",
+      "peak": "直近{hours}時間の最大 {value}",
+      "th": {
+        "node": "ノード",
+        "state": "状態",
+        "kv": "KV キャッシュ",
+        "kvPeak": "KV 最大({hours}h)",
+        "running": "実行",
+        "waiting": "待機",
+        "ttft": "平均 TTFT",
+        "gpuUtil": "GPU 使用率"
+      },
+      "queue": {
+        "agent_task_pending": "タスクキュー待機",
+        "agent_task_running": "タスク実行中",
+        "agent_task_queued_db": "DB queued タスク",
+        "orchestrator_jobs_pending": "メディア job 待機",
+        "vllm_waiting": "vLLM 待機リクエスト"
+      }
+    }
   },
   "adminAlerts": {
     "title": "アラート",
@@ -1815,6 +1967,28 @@
     "advancedHide": "詳細を閉じる",
     "hiddenUnsupportedNote": "実行経路のない機能は表示しません: {list}"
   },
+  "adminGatewayModels": {
+    "title": "ゲートウェイのモデル状態",
+    "description": "LiteLLM ゲートウェイ(/model/info)に登録されたルートとローカルモデルのプローブ結果です。",
+    "refresh": "更新",
+    "loadError": "ゲートウェイのモデル状態を読み込めませんでした",
+    "unreachable": "ゲートウェイに接続できませんでした: {reason}",
+    "empty": "ゲートウェイに登録されたモデルはありません",
+    "default": "既定",
+    "defaultNote": "既定のチャットモデル: {model}",
+    "col": {
+      "name": "ルート",
+      "upstream": "アップストリーム",
+      "mode": "モード",
+      "status": "状態"
+    },
+    "status": {
+      "available": "利用可",
+      "unavailable": "利用不可",
+      "uncataloged": "カタログ外",
+      "external": "外部"
+    }
+  },
   "adminSystemSettings": {
     "title": "システム設定",
     "description": "運用設定（OAuth・検索・通知・プッシュ・LLM ゲートウェイ）を管理します。ここで保存した値（DB）が .env より優先されます。",
@@ -1855,6 +2029,14 @@
       "push": {
         "title": "ウェブプッシュ (VAPID)",
         "description": "ブラウザプッシュ通知用の VAPID キー。公開鍵／秘密鍵のペアを一緒に設定してください。"
+      },
+      "agent": {
+        "title": "エージェント・MCP ランタイム",
+        "description": "外部 MCP ツール一覧の更新間隔、承認期限切れ時の保留、キュー優先度の上限。保存後すぐに反映されます。"
+      },
+      "slo": {
+        "title": "SLO 目標",
+        "description": "チャット可用性・初回トークン遅延・エージェントタスク成功率・評価合格率の目標。目標はパーセント(例: 99.5)、TTFT は p95 しきい値(ms)。次回の評価(5 分ごと)から反映されます。"
       }
     },
     "historyTitle": "変更履歴",
@@ -2186,7 +2368,24 @@
         "external": "外部ツール",
         "control": "制御",
         "sensitive": "認証情報ファイル"
-      }
+      },
+      "recentTitle": "最近の決定（30分）",
+      "revoked": "取り消し済み",
+      "consumed": "実行済み",
+      "approvedPending": "承認済み・未実行",
+      "revoke": "取り消し",
+      "revokeHint": "まだ実行されていない承認を取り消します（再開時に再度承認待ち）",
+      "autoApproveOff": "自動承認を解除",
+      "autoApproveOffHint": "この作業の自動承認を無効にします",
+      "preview": "実行前の変更プレビュー",
+      "assignedToMe": "自分に移管",
+      "assignedAway": "移管済み",
+      "reassign": "移管",
+      "reassignPick": "移管先",
+      "escalate": "エスカレーション",
+      "escalateHint": "組織のオーナー/管理者に引き継ぎます",
+      "elicitHint": "{server} サーバーからの入力リクエスト · 項目: {fields}",
+      "elicitJsonHint": "項目が複数ある場合は JSON で回答してください: {example}"
     }
   },
   "marketplacePublish": {
@@ -2323,5 +2522,85 @@
     "userIdPlaceholder": "ユーザー id",
     "grant": "付与",
     "grantDone": "付与しました。"
+  },
+  "adminSlo": {
+    "title": "SLO",
+    "description": "サービスレベル目標に対する現状・エラーバジェット・バーンレート",
+    "computedAt": "計算時刻 {time}",
+    "openSettings": "目標を設定",
+    "refresh": "更新",
+    "loadError": "読み込みに失敗しました。",
+    "target": "目標 {value}",
+    "budgetRemaining": "エラーバジェット残量",
+    "burnFast": "burn(1時間)",
+    "burnSlow": "burn(6時間)",
+    "samples": "サンプル",
+    "p95": "TTFT p95",
+    "reasonLabel": "理由",
+    "historyTitle": "直近 30 日",
+    "date": "日付",
+    "historyEmpty": "スナップショットはまだありません — 評価は 5 分ごとに記録されます。",
+    "state": {
+      "ok": "正常",
+      "warning": "警告",
+      "critical": "危険",
+      "insufficient": "判定保留"
+    },
+    "reason": {
+      "fast_burn": "高速消費(1時間・5分窓で 14.4 倍以上)",
+      "slow_burn": "低速消費(6時間・30分窓で 6 倍以上)",
+      "budget_exhausted": "期間全体のエラーバジェット枯渇",
+      "below_target": "目標未達",
+      "few_samples": "サンプル不足",
+      "source_unavailable": "データソースなし"
+    },
+    "slo": {
+      "chat_availability": {
+        "name": "チャット可用性",
+        "desc": "直近 {window} 日のチャット要求のうちエラーなく終わった割合(ユーザー中断を除く)"
+      },
+      "chat_ttft_p95": {
+        "name": "初回トークン遅延",
+        "desc": "直近 {window} 日の成功要求のうち初回トークンが {threshold} 秒以内の割合(p95 目標)"
+      },
+      "agent_task_success": {
+        "name": "エージェントタスク成功率",
+        "desc": "直近 {window} 日に終了したタスクのうち完了した割合(キャンセルを除く)"
+      },
+      "eval_pass": {
+        "name": "評価合格率",
+        "desc": "直近 {window} 日以内の最新応答評価の合格率"
+      }
+    }
+  },
+  "adminEvaluations": {
+    "title": "評価履歴",
+    "description": "nightly 評価の実行記録 — 合格率・初回トークン遅延・失敗ケース",
+    "refresh": "更新",
+    "loadError": "読み込みに失敗しました。",
+    "runnerFilter": "ランナー",
+    "allRunners": "すべてのランナー",
+    "matrixTitle": "最新マトリクス ({time})",
+    "modelVariant": "モデル \\ variant",
+    "listTitle": "実行一覧",
+    "empty": "記録はまだありません — nightly 評価が OMK_EVAL_RECORD_DB=true で実行されると蓄積されます。",
+    "noFailures": "失敗ケースはありません。",
+    "th": {
+      "completedAt": "完了時刻",
+      "runner": "ランナー",
+      "mode": "モード",
+      "model": "モデル · variant",
+      "passRate": "合格率",
+      "ttft": "TTFT p50",
+      "totalP95": "全体 p95",
+      "version": "データセット · コミット"
+    },
+    "runner": {
+      "routing": "ルーティング",
+      "response": "応答",
+      "tools": "ツール選択",
+      "redteam": "レッドチーム",
+      "matrix": "マトリクス"
+    }
   }
 }

@@ -28,9 +28,59 @@ concurrency:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  # ─── 공급망: SBOM + 빌드 증명 (F28.8) ───
+  # 릴리스가 만들어진 실행에서만 돈다. 태그 소스 아카이브와 CycloneDX SBOM 을 만들어 Sigstore 기반 GitHub 증명
+  # (빌드 출처 provenance + SBOM)을 붙이고 릴리스 자산으로 올린다. SBOM 은 package-lock 만 읽어(--package-lock-only)
+  # npm ci 없이 만든다 — 설치 스크립트를 실행하지 않는다.
+  # 검증: scripts/verify-release.sh vX.Y.Z  (= gh attestation verify <자산> --repo openmake/openmake_llm)
+  sbom-attest:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # 릴리스 자산 업로드
+      id-token: write        # Sigstore OIDC 서명
+      attestations: write    # GitHub 증명 저장
+    env:
+      TAG: ${{ needs.release-please.outputs.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.node-version'
+
+      - name: Source archive
+        run: git archive --format=tar.gz --prefix="openmake_llm-${TAG}/" -o "openmake_llm-${TAG}.tar.gz" "${TAG}"
+
+      - name: CycloneDX SBOM (package-lock)
+        run: npx --yes @cyclonedx/cyclonedx-npm@6.0.1 --package-lock-only --omit dev --output-file "sbom-${TAG}.cdx.json"
+
+      - name: Attest build provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: openmake_llm-${{ env.TAG }}.tar.gz
+
+      - name: Attest SBOM
+        uses: actions/attest@v4
+        with:
+          subject-path: openmake_llm-${{ env.TAG }}.tar.gz
+          sbom-path: sbom-${{ env.TAG }}.cdx.json
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${TAG}" "openmake_llm-${TAG}.tar.gz" "sbom-${TAG}.cdx.json" --clobber

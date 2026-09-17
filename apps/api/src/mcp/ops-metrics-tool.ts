@@ -18,7 +18,7 @@ import { TOOL_HEALTH_QUERY } from '../config/tool-health';
 
 export const OPS_METRICS_QUERIES = [
     'summary', 'failed_runs', 'slowest_runs', 'runs_by_model',
-    'tool_errors', 'token_usage', 'goal_incomplete',
+    'tool_errors', 'token_usage', 'goal_incomplete', 'prompt_versions', 'gpu', 'queue_depth', 'slo', 'llm_models',
 ] as const;
 type OpsMetricsQuery = (typeof OPS_METRICS_QUERIES)[number];
 
@@ -91,6 +91,50 @@ async function runOpsMetricsQuery(query: OpsMetricsQuery, hours: number, limit: 
             ]);
             return { completion_verdicts: verdicts, failure_reasons: reasons, runs: summary };
         }
+        case 'prompt_versions': {
+            // 채팅 요청 정적 프롬프트 지문별 분포(F24.2, 142) — 배포 사이 프롬프트 변화와 TTFT·오류율을 나란히 본다
+            const { ChatRequestRepository } = await import('../data/repositories/chat-request-repository');
+            return { prompt_versions: await new ChatRequestRepository(pool).promptVersions(hours, limit) };
+        }
+        case 'gpu': {
+            // 노드 지표(F24.4, 143) — 최신 스냅샷(메모리)과 기간 추이 최대값
+            const { getNodeMetricsStates } = await import('../cluster/node-metrics-collector');
+            const { NodeMetricsRepository, resolveSeriesWindow } = await import('../data/repositories/node-metrics-repository');
+            const metrics = ['vllm_kv_cache_pct', 'vllm_requests_waiting', 'dcgm_gpu_util'];
+            const series = await new NodeMetricsRepository(pool).series(metrics, hours, resolveSeriesWindow(hours).bucketMinutes);
+            // 모델 컨텍스트 보호 — 최근 버킷 위주로 대략 지표당 limit 개
+            return { nodes: getNodeMetricsStates(), series: series.slice(-limit * metrics.length) };
+        }
+        case 'queue_depth': {
+            const { getLastQueueDepth, QUEUE_DEPTH_METRIC, QUEUE_DEPTH_QUEUES } = await import('../monitoring/queue-depth-sampler');
+            const { NodeMetricsRepository, resolveSeriesWindow } = await import('../data/repositories/node-metrics-repository');
+            const series = await new NodeMetricsRepository(pool).series([QUEUE_DEPTH_METRIC], hours, resolveSeriesWindow(hours).bucketMinutes);
+            return { current: getLastQueueDepth(), series: series.slice(-limit * QUEUE_DEPTH_QUEUES.length) };
+        }
+        case 'slo': {
+            // SLO 4종(F24.8, 145) — 즉시 계산 + 기간 내 일별 스냅샷
+            const { computeSloEvaluations } = await import('../monitoring/slo-runner');
+            const { SloRepository } = await import('../data/repositories/slo-repository');
+            const [evaluations, history] = await Promise.all([
+                computeSloEvaluations(pool), new SloRepository(pool).dailyHistory(Math.max(1, Math.ceil(days))).catch(() => []),
+            ]);
+            return { evaluations, daily_history: history.slice(0, limit * evaluations.length) };
+        }
+        case 'llm_models': {
+            // LLM 요청 셰도우 계측(F06.2 G0, 158) — 모델·provider·요청 클래스별 호출 수·오류율·TTFT/총 시간 p50·p95
+            const r = await pool.query(
+                `SELECT model, provider_id, request_class, count(*)::int AS calls,
+                        round(avg((error_code IS NOT NULL)::int)::numeric, 4)::float8 AS error_rate,
+                        percentile_cont(0.5) WITHIN GROUP (ORDER BY ttft_ms) FILTER (WHERE ttft_ms IS NOT NULL)::float8 AS ttft_p50_ms,
+                        percentile_cont(0.95) WITHIN GROUP (ORDER BY ttft_ms) FILTER (WHERE ttft_ms IS NOT NULL)::float8 AS ttft_p95_ms,
+                        percentile_cont(0.5) WITHIN GROUP (ORDER BY total_ms)::float8 AS total_p50_ms,
+                        percentile_cont(0.95) WITHIN GROUP (ORDER BY total_ms)::float8 AS total_p95_ms
+                 FROM llm_request_metrics WHERE created_at >= NOW() - make_interval(hours => $1)
+                 GROUP BY model, provider_id, request_class ORDER BY calls DESC LIMIT $2`,
+                [hours, limit],
+            );
+            return { models: r.rows };
+        }
         default: {
             const never: never = query;
             throw new Error(`unknown query ${String(never)}`);
@@ -113,7 +157,11 @@ export const opsMetricsTool: MCPToolDefinition<OpsMetricsArgs> = {
                     type: 'string',
                     enum: [...OPS_METRICS_QUERIES],
                     description: 'summary=상태별 작업 요약+서버별 도구 호출 · failed_runs=실패 작업 목록 · slowest_runs=오래 걸린 작업 · '
-                        + 'runs_by_model=모델별 작업 · tool_errors=서버/도구/원인별 오류 · token_usage=토큰·비용 · goal_incomplete=목표 미달 판정 분포·실패 사유',
+                        + 'runs_by_model=모델별 작업 · tool_errors=서버/도구/원인별 오류 · token_usage=토큰·비용 · goal_incomplete=목표 미달 판정 분포·실패 사유'
+                        + ' · prompt_versions=채팅 시스템 프롬프트 지문별 요청 수·오류율·TTFT p50'
+                        + ' · gpu=vLLM 노드 KV 캐시·대기/실행 요청(스냅샷+추이) · queue_depth=작업 큐·오케스트레이터 job·vLLM 대기 깊이'
+                        + ' · slo=SLO(채팅 가용성·TTFT·작업 성공률·평가 통과율) 목표 대비 현재·에러 버짓 잔량·burn-rate'
+                        + ' · llm_models=모델·provider·요청 클래스별 LLM 호출 수·오류율·TTFT/총 시간 p50·p95',
                 },
                 window: {
                     type: 'string',
