@@ -1194,6 +1194,7 @@
     "envEditTitle": "Update credentials",
     "envEditHint": "Enter only the values you want to change. Fields left blank keep their current value.",
     "envSecretHint": "stored encrypted",
+    "envOptionalTag": "optional",
     "envUnchangedPlaceholder": "unchanged",
     "envSave": "Save",
     "envSaved": "Credentials updated.",
@@ -1254,6 +1255,7 @@
     "credentialsTitle": "Enter credentials to install",
     "cancel": "Cancel",
     "installAnother": "Install another",
+    "optionalTag": "(optional)",
     "installFormTitle": "Install settings",
     "nameLabel": "Server name",
     "nameHint": "Prefixes tool names (e.g. mcp-postgres::query). Letters, digits, _ and - only."

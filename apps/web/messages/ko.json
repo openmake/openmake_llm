@@ -1194,6 +1194,7 @@
     "envEditTitle": "자격증명 변경",
     "envEditHint": "변경할 값만 입력하세요. 비워 둔 항목은 기존 값이 그대로 유지됩니다.",
     "envSecretHint": "암호화 저장됨",
+    "envOptionalTag": "선택",
     "envUnchangedPlaceholder": "변경하지 않음",
     "envSave": "저장",
     "envSaved": "자격증명을 변경했습니다.",
@@ -1254,6 +1255,7 @@
     "credentialsTitle": "설치하려면 자격 증명을 입력하세요",
     "cancel": "취소",
     "installAnother": "추가 설치",
+    "optionalTag": "(선택)",
     "installFormTitle": "설치 설정",
     "nameLabel": "서버 이름",
     "nameHint": "도구 이름 앞에 붙습니다(예: mcp-postgres::query). 영숫자·_·- 만 사용."

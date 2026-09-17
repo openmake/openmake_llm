@@ -17,12 +17,14 @@ import { ApiClient } from "@/lib/api-client";
 /* ── 타입 ────────────────────────────────────────────────── */
 type CatalogKind = "server" | "skill";
 
-/** 설치 시 입력받아야 하는 필수 자격증명(env) 필드. env_schema 에서 파생. */
+/** 설치 시 입력받는 자격증명·설정(env) 필드. env_schema 에서 파생(required + 선택 항목). */
 interface EnvField {
   key: string;
   title: string;
   description?: string;
   secret: boolean;
+  /** env_schema.required 에 있으면 true — 빈 값이면 설치 버튼이 잠긴다. */
+  required: boolean;
 }
 
 interface CatalogEntry {
@@ -33,7 +35,7 @@ interface CatalogEntry {
   toolCount: number;
   kind: CatalogKind;
   installed?: boolean;
-  /** 설치 전 입력이 필요한 필수 env 필드 (없으면 즉시 설치). */
+  /** 설치 폼에 노출할 env 필드 — 필수 먼저, 선택(채널 제한·베이스 URL 등)이 뒤. */
   envFields: EnvField[];
 }
 
@@ -56,14 +58,21 @@ interface ApiCatalogTemplate {
 }
 
 function mapTemplate(t: ApiCatalogTemplate): CatalogEntry {
-  // env_schema.required 로 지정된 secret/일반 필드를 설치 폼 입력으로 노출한다.
+  // env_schema 의 모든 속성을 설치 폼에 노출한다 — required 는 필수 입력, 나머지는 선택
+  // (Slack 채널 제한·CircleCI 베이스 URL 처럼 설치 시점에만 넣을 수 있던 값이 화면에서 빠져 있었다).
   const props = t.env_schema?.properties ?? {};
-  const envFields: EnvField[] = (t.env_schema?.required ?? []).map((key) => ({
+  const required = t.env_schema?.required ?? [];
+  const toField = (key: string, isRequired: boolean): EnvField => ({
     key,
     title: props[key]?.title || key,
     description: props[key]?.description,
     secret: props[key]?.secret === true,
-  }));
+    required: isRequired,
+  });
+  const envFields: EnvField[] = [
+    ...required.map((key) => toField(key, true)),
+    ...Object.keys(props).filter((key) => !required.includes(key)).map((key) => toField(key, false)),
+  ];
   return {
     id: t.id,
     name: t.display_name,
@@ -155,10 +164,14 @@ export default function McpCatalogPage() {
       // 카탈로그 설치 전용 라우트 — 백엔드가 template_id 로 command/args/env 를 채운다.
       // (일반 POST /servers 는 stdio 시 command 필수라 400 — from-catalog 가 정답)
       // env 의 secret 필드는 백엔드 createFromCatalog 가 AES-256-GCM 으로 암호화 저장.
+      // 빈 칸은 보내지 않는다 — 선택 항목을 비워두면 서버 기본값(스키마 default)이 적용된다.
+      const filledEnv = Object.fromEntries(
+        Object.entries(env).filter(([, v]) => v.trim().length > 0),
+      );
       await ApiClient.post("/api/mcp/servers/from-catalog", {
         template_id: e.id,
         name, // 인스턴스 이름 = 도구 네임스페이스. 영숫자/_/- 만 허용.
-        ...(Object.keys(env).length > 0 ? { env } : {}),
+        ...(Object.keys(filledEnv).length > 0 ? { env: filledEnv } : {}),
       });
       setEntries((prev) =>
         prev.map((item) =>
@@ -290,7 +303,12 @@ export default function McpCatalogPage() {
                         </label>
                         {e.envFields.map((f) => (
                           <label key={f.key} className="flex flex-col gap-1">
-                            <span className="text-xs text-fg-2">{f.title}</span>
+                            <span className="text-xs text-fg-2">
+                              {f.title}
+                              {!f.required && (
+                                <span className="ml-1 text-[11px] text-muted">{t("optionalTag")}</span>
+                              )}
+                            </span>
                             <input
                               type={f.secret ? "password" : "text"}
                               autoComplete="off"
@@ -319,7 +337,7 @@ export default function McpCatalogPage() {
                             disabled={
                               installing[e.id] ||
                               !/^[A-Za-z0-9_-]+$/.test(nameDraft) ||
-                              e.envFields.some((f) => !envDraft[f.key]?.trim())
+                              e.envFields.some((f) => f.required && !envDraft[f.key]?.trim())
                             }
                             onClick={() => doInstall(e, envDraft, nameDraft)}
                           >
