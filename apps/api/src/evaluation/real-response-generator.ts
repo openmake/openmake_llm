@@ -39,6 +39,12 @@ import { LocalLLMProvider } from '../providers/local-llm-provider';
 import { createLogger } from '../utils/logger';
 import type { ChatMessageRequest } from '../services/chat-service-types';
 import type { ResponseGenerator } from './response-evaluator';
+import type { GoldenCase } from './types';
+import * as fs from 'fs';
+import * as path from 'path';
+import { buildFileContext } from '../services/chat-service/attach-context';
+import { buildLongContextFixture } from './long-context-fixtures';
+import { IMAGE_FIXTURE_DIR } from './dataset-loader';
 
 const logger = createLogger('RealResponseGenerator');
 
@@ -47,6 +53,20 @@ const logger = createLogger('RealResponseGenerator');
  * /3은 영문 평균(4)보다 작아서 추정값이 크게 나오고, 더 빨리 abort 됩니다 (안전 측면).
  */
 const TOKEN_ESTIMATION_DIVISOR = 3;
+
+const LONG_CONTEXT_TIMEOUT_MS_DEFAULT = Number(process.env.OMK_EVAL_REAL_LONG_TIMEOUT_MS ?? '600000');
+
+/** 케이스 첨부 → 요청 필드(F26.5). 첨부가 없으면 빈 객체. */
+export function buildCaseAttachments(goldenCase: GoldenCase | undefined): Pick<ChatMessageRequest, 'images' | 'fileContext'> {
+    if (!goldenCase) return {};
+    const images = (goldenCase.attachments ?? [])
+        .filter((a) => a.kind === 'image')
+        .map((a) => fs.readFileSync(path.join(IMAGE_FIXTURE_DIR, a.fixture)).toString('base64'));
+    const fileContext = goldenCase.contextFixture
+        ? buildFileContext([{ name: `${goldenCase.contextFixture}.txt`, type: 'text/plain', content: buildLongContextFixture(goldenCase.contextFixture) }])
+        : '';
+    return { ...(images.length ? { images } : {}), ...(fileContext ? { fileContext } : {}) };
+}
 
 /** createRealResponseGenerator 옵션 */
 interface RealResponseGeneratorOptions {
@@ -64,6 +84,8 @@ interface RealResponseGeneratorOptions {
     model?: string;
     /** 매트릭스 variant 요청 덮어쓰기(style·thinking 등, F26.1) */
     requestOverrides?: Partial<ChatMessageRequest>;
+    /** 장문 픽스처 케이스 timeout(ms) — 긴 prefill 여유. 기본 OMK_EVAL_REAL_LONG_TIMEOUT_MS 또는 600000 */
+    longContextTimeoutMs?: number;
     /** 케이스별 계측 통지 — 첫 토큰(ms)·전체(ms)·provider 사용량(있으면) */
     onCaseMetrics?: (m: { ttftMs: number | null; totalMs: number; inputTokens?: number; outputTokens?: number }) => void;
 }
@@ -99,10 +121,13 @@ export function createRealResponseGenerator(
     const factory = options.chatServiceFactory ?? ((c) =>
         new ChatService(c, new ProviderRouter({ localProvider: new LocalLLMProvider(c) })));
 
-    return async (query, language) => {
+    return async (query, language, goldenCase) => {
         // 케이스 간 상태 누수 방지: client/service를 새로 생성
         const client = options.llmClient ?? new LLMClient(options.model ? { model: options.model } : {});
         const chatService = factory(client);
+        // 첨부(F26.5) — 이미지 픽스처는 base64, 장문 픽스처는 실제 첨부 경로와 같은 fileContext 로
+        const attachments = buildCaseAttachments(goldenCase);
+        const caseTimeoutMs = goldenCase?.contextFixture ? Math.max(timeoutMs, options.longContextTimeoutMs ?? LONG_CONTEXT_TIMEOUT_MS_DEFAULT) : timeoutMs;
 
         // 단일 AbortController로 timeout + token-budget 두 가드를 모두 처리
         const controller = new AbortController();
@@ -113,7 +138,7 @@ export function createRealResponseGenerator(
                 triggeredGuard = 'timeout';
                 controller.abort();
             }
-        }, timeoutMs);
+        }, caseTimeoutMs);
 
         let chars = 0;
         const startedAt = Date.now();
@@ -143,6 +168,7 @@ export function createRealResponseGenerator(
             enabledTools: {},
             abortSignal: controller.signal,
             userLanguagePreference: language,
+            ...attachments,
             ...(options.requestOverrides ?? {}),
         };
 

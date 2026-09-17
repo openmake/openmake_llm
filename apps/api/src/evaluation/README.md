@@ -170,6 +170,17 @@ npm run eval:tools -- --real --limit 10    # real — ChatService evalToolObserv
 - 기준선: mock 39/40(97.5%) — 실패 1건 `tool-ws-009`("Look it up online")는 영어 표현이 `WEB_SEARCH_INTENT_PATTERNS` 에 안 걸리는 **실제 노출 누락**이다(라벨을 바꾸지 말고 패턴 보강 여부를 판단할 것).
 - 민감도 확인: `CHAT_TOOL_INTENT_GATE_ENABLED=false`(과다 노출 5건)·`OPS_METRICS_TOOL_ENABLED=false`(누락 5건) 모두 실패한다.
 
+## 장문·멀티모달 케이스 (2026-09-17, F26.5)
+
+골든셋 v0.9.0 에 `real-only` 케이스 20건을 더했다(`response-031`~`050`). mock 평가는 이 태그를 건너뛴다.
+
+- **장문 10건**(`tags: long-context`) — `contextFixture` 로 `long-context-fixtures.ts` 의 시드 고정 문서(8k·32k·96k 토큰)를 실제 첨부 경로(`buildFileContext`)로 넣고, 25·50·75·100% 지점에 심은 사실(needle)을 묻는다. 큰 텍스트 파일은 레포에 두지 않고 실행 때마다 같은 바이트를 만든다. 크기는 qwen3.8-27b `/tokenize` 실측 비(5.85자/토큰)로 맞췄다.
+- **멀티모달 10건**(`tags: multimodal`) — `attachments` 로 `fixtures/images/*.png` 를 `req.images` 에 싣는다(차트 값·표·영문/한글 OCR·색·개수·8장 합계·2장 비교). 이미지는 `gen-multimodal-fixtures.ts` 가 SVG→PNG 로 만든 생성물(커밋, 합계 ~60KB)이고 값을 바꾸면 라벨도 함께 바꾼다.
+- 실행: `npm run eval:response -- --real --tag multimodal` · `--tag long-context`. 태그 실행 이력은 `eval_runs.variant` 에 태그를 적어 전체 실행(SLO `eval_pass` 대상)과 구분한다.
+- nightly: 멀티모달은 기본, 장문은 `NIGHTLY_EVAL_LONG_CONTEXT=1` 일 때만.
+- ⚠️ **~148k 토큰 요청이 운영 vLLM EngineCore 를 죽였다(2026-09-17)** — 앱 fast-fail(120초)이 첫 토큰 전에 요청을 끊은 ~17초 뒤 `CUDA error: operation not permitted` 로 엔진이 죽고 컨테이너가 재시작됐다(1회 관측, 길이 때문인지 abort 경로 때문인지 미확정). 그래서 최대 픽스처를 실측 통과한 96k 로 낮췄다(TTFT 83초). 더 긴 픽스처를 운영 vLLM 에 다시 보내지 말 것.
+- 2026-09-17 실측: 8k·~96k needle·막대 차트·8장 합계 4/4 통과.
+
 ## 비교 매트릭스·실행 이력 (2026-09-17, 146)
 
 ```bash

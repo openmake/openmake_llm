@@ -11,6 +11,7 @@
  *   ts-node src/evaluation/run-response-evaluation.ts custom-dataset.json
  *   ts-node src/evaluation/run-response-evaluation.ts --real           # 실제 LLM, 기본 5건
  *   ts-node src/evaluation/run-response-evaluation.ts --real --limit 3 # 첫 3건만
+ *   ts-node src/evaluation/run-response-evaluation.ts --real --tag multimodal  # 태그 케이스만(F26.5)
  *
  * **--real 모드 운영 사고 방지 가드**:
  *   1) `--real` 명시적 플래그가 있어야만 활성 (기본은 mock)
@@ -27,7 +28,7 @@ import * as dotenv from 'dotenv';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
-import { loadGoldenDataset } from './dataset-loader';
+import { loadGoldenDataset, REAL_ONLY_TAG } from './dataset-loader';
 import { buildEvalRunRecord, recordEvalRuns, type CaseTiming } from './eval-run-recorder';
 import { runResponseEvaluation, type ResponseGenerator } from './response-evaluator';
 import type { EvaluationSummary, GoldenDataset } from './types';
@@ -144,16 +145,26 @@ interface ParsedArgs {
     useReal: boolean;
     explicitLimit?: number;
     customPath?: string;
+    /** --tag X — 이 태그가 있는 response 케이스만(예: multimodal·long-context, F26.5) */
+    tag?: string;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
     const useReal = argv.includes('--real');
     let explicitLimit: number | undefined;
+    let tag: string | undefined;
     const positional: string[] = [];
 
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         if (a === '--real' || a === '--mock') continue;
+        if (a === '--tag') {
+            const next = argv[i + 1];
+            if (!next || next.startsWith('--')) throw new Error('--tag 다음에 태그 이름이 와야 합니다');
+            tag = next;
+            i++;
+            continue;
+        }
         if (a === '--limit') {
             const next = argv[i + 1];
             if (!next || Number.isNaN(Number(next))) {
@@ -169,7 +180,7 @@ function parseArgs(argv: string[]): ParsedArgs {
         positional.push(a);
     }
 
-    return { useReal, explicitLimit, customPath: positional[0] };
+    return { useReal, explicitLimit, customPath: positional[0], ...(tag ? { tag } : {}) };
 }
 
 /**
@@ -200,9 +211,14 @@ function applyLimit(dataset: GoldenDataset, useReal: boolean, explicitLimit?: nu
 }
 
 async function main() {
-    const { useReal, explicitLimit, customPath } = parseArgs(process.argv.slice(2));
+    const { useReal, explicitLimit, customPath, tag } = parseArgs(process.argv.slice(2));
 
-    const rawDataset = loadGoldenDataset(customPath);
+    const loaded = loadGoldenDataset(customPath);
+    // mock 은 첨부·실모델이 있어야 의미 있는 real-only 케이스(장문·멀티모달, F26.5)를 건너뛴다
+    const rawDataset = {
+        ...loaded,
+        cases: loaded.cases.filter((c) => (useReal || !c.tags?.includes(REAL_ONLY_TAG)) && (!tag || c.category !== 'response-pattern' || c.tags?.includes(tag))),
+    };
     const { dataset, limitedTo } = applyLimit(rawDataset, useReal, explicitLimit);
 
     let generator: ResponseGenerator;
@@ -245,7 +261,8 @@ async function main() {
     saveSummaryToFile(summary, mode);
     // eval_runs 이력(146) — OMK_EVAL_RECORD_DB=true(nightly) 일 때만. real 은 케이스 계측(TTFT·토큰) 포함
     if (summary.totalCases > 0) {
-        await recordEvalRuns([buildEvalRunRecord(summary, { runner: 'response', mode, gitHash: getGitCommitHash(), ...(caseTimings.length ? { timings: caseTimings } : {}) })]);
+        // 태그 부분 실행은 variant 에 태그를 적어 전체 실행(variant NULL — SLO eval_pass 가 읽는 행)과 구분한다
+        await recordEvalRuns([buildEvalRunRecord(summary, { runner: 'response', mode, gitHash: getGitCommitHash(), ...(tag ? { variant: tag } : {}), ...(caseTimings.length ? { timings: caseTimings } : {}) })]);
     }
 
     if (summary.totalCases === 0) {

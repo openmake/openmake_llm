@@ -21,7 +21,8 @@ const logger = createLogger('ResponseEvaluator');
  * 외부 주입 가능한 응답 생성 함수 (테스트 시 mock)
  * 실제 운영에서는 ChatService.processMessage 등을 wrapping
  */
-export type ResponseGenerator = (query: string, language?: string) => Promise<string>;
+/** 세 번째 인자는 케이스 전체(첨부·장문 픽스처를 쓰는 real 생성기용, F26.5) */
+export type ResponseGenerator = (query: string, language?: string, goldenCase?: GoldenCase) => Promise<string>;
 
 /** 실패 케이스 결과에 남기는 응답 앞부분 길이 (env OMK_EVAL_RESPONSE_PREVIEW_CHARS, 기본 600). */
 const RESPONSE_PREVIEW_CHARS = Number(process.env.OMK_EVAL_RESPONSE_PREVIEW_CHARS ?? '600');
@@ -43,7 +44,7 @@ export async function evaluateResponseCase(
 ): Promise<CaseResult> {
     const start = Date.now();
     try {
-        const rawResponse = await generator(goldenCase.query, goldenCase.language);
+        const rawResponse = await generator(goldenCase.query, goldenCase.language, goldenCase);
         // 정규화 2종 — 응답·패턴 양쪽 동일 적용:
         // ① 타이포그래피 아포스트로피: 실모델(qwen)이 can't 를 can’t(U+2019)로 냄 (2026-09-01 실측 0/2)
         // ② 소문자: "```python"(소문자)·"Hello, World!"(대문자) 가 mustContain ["Python","hello"] 를

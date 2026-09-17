@@ -40,8 +40,12 @@ export interface GoldenCase {
     mustNotContain?: string[];
     /** 쿼리 언어 (다국어 분석용) */
     language?: string;
-    /** 추가 메타데이터 (디버그/필터용) */
+    /** 추가 메타데이터 (디버그/필터용) — 'real-only' 는 mock 평가에서 건너뛴다 */
     tags?: string[];
+    /** 이미지 첨부(F26.5) — fixtures/images/ 파일명. real 생성기가 req.images 로 넘긴다 */
+    attachments?: Array<{ kind: 'image'; fixture: string }>;
+    /** 장문 첨부(F26.5) — long-context-fixtures 의 id. real 생성기가 첨부 파일 컨텍스트로 넘긴다 */
+    contextFixture?: string;
 }
 
 /** 평가 데이터셋 (메타데이터 + 케이스 모음) */
