@@ -43,7 +43,7 @@ export const imageGenerateExecutor: CapabilityExecutor = async (task, ctx) => {
     const size = pickSize(task.extra, target.params);
     // response_format 미전송 — LiteLLM 이 커스텀 image 모델에서 거부(UnsupportedParamsError), vLLM-Omni 는 b64_json 기본
     const json = await callJson<ImagesResponse>(target, { body: { model: target.model, prompt, n: 1, size }, timeoutMs: CAPABILITY_LIMITS.IMAGE_GEN_TIMEOUT_MS, signal: ctx.signal });
-    const media = saveImage(await imageBytes(json, target, ctx.signal), prompt);
+    const media = saveImage(await imageBytes(json, target, ctx.signal), prompt, undefined, ctx.userId);
     return { ok: true, text: ctx.lang === 'ko' ? `이미지 생성 완료 (${size}): ${media.urlPath}` : `Image generated (${size}): ${media.urlPath}`, media: [media], model: target.fullId, usage: { units: { kind: 'images', count: 1 } } };
 };
 
@@ -69,6 +69,6 @@ export const imageEditExecutor: CapabilityExecutor = async (task, ctx) => {
         fd.append('image', new Blob([new Uint8Array(input.bytes)], { type: input.mime }), 'image.png');
         json = await callJson<ImagesResponse>(target, { body: fd, timeoutMs: CAPABILITY_LIMITS.IMAGE_GEN_TIMEOUT_MS, signal: ctx.signal });
     }
-    const media = saveImage(await imageBytes(json, target, ctx.signal), prompt, 'img-edit');
+    const media = saveImage(await imageBytes(json, target, ctx.signal), prompt, 'img-edit', ctx.userId);
     return { ok: true, text: ctx.lang === 'ko' ? `이미지 편집 완료: ${media.urlPath}` : `Image edited: ${media.urlPath}`, media: [media], model: target.fullId, usage: { units: { kind: 'images', count: 1 } } };
 };

@@ -100,7 +100,7 @@ export async function assembleAgentTools(params: {
         let dynamicExtra: ToolDefinition[] = [];
         if (AGENT_TASK_LIMITS.DYNAMIC_TOOLS_ENABLED) {
             const budget = AGENT_TASK_LIMITS.DYNAMIC_TOOLS_BUDGET - sandboxTools.length - staticExtra.length;
-            const selectOpts = { budget, exclude: new Set<string>([...sandboxNames, ...extraToolNames]) };
+            const selectOpts = { budget, exclude: new Set<string>([...sandboxNames, ...extraToolNames]), costUserId: userId };
             dynamicExtra = AGENT_TASK_LIMITS.DYNAMIC_TOOLS_MODE === 'embedding'
                 ? await selectRelevantToolsEmbedding(goal, mcpTools, selectOpts) // 실패 시 내부 키워드 폴백
                 : selectRelevantTools(goal, mcpTools, selectOpts);

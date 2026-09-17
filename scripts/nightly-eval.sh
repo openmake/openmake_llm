@@ -15,6 +15,7 @@
 #   3) eval:response --real    — LiteLLM 경유 실모델 (기본 limit 30 = response 전체:
 #      applyLimit 이 앞에서부터 자르므로 limit 을 줄이면 뒤쪽 신규 케이스가 빠진다)
 #      같은 30건이면 TTFT·전체 시간 p50/p95·출력 토큰을 baselines/latency-baseline.json 과 비교해 +20%(OMK_EVAL_LATENCY_REGRESSION_PCT) 초과 시 실패
+#      같은 조건으로 로컬 llm.local 단가 기준 추정 비용을 baselines/cost-baseline.json 과 비교해 +20%(OMK_EVAL_COST_REGRESSION_PCT) 초과 시 실패(S6, 기준선 없으면 통과)
 #   4) eval:response --real --tag multimodal — 이미지 첨부 10건(차트·표·OCR·색·개수·8장 묶음)
 #      장문 컨텍스트 10건(8k·32k·96k needle)은 NIGHTLY_EVAL_LONG_CONTEXT=1 일 때만
 #   5) eval:tools --real       — 도구 선택 골든셋 40건, 모델 첫 턴 tool_calls 관찰(dry-run·첫 관찰 즉시 중단)

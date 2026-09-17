@@ -43,6 +43,6 @@ export const audioSpeechExecutor: CapabilityExecutor = async (task, ctx) => {
         timeoutMs: CAPABILITY_LIMITS.TTS_TIMEOUT_MS, signal: ctx.signal,
     });
     if (bytes.length === 0) throw new Error('음성 합성 응답이 비어 있습니다');
-    const media = saveAudio(bytes, sniffAudioExt(bytes, format), ctx.lang === 'ko' ? '음성 듣기' : 'Listen');
+    const media = saveAudio(bytes, sniffAudioExt(bytes, format), ctx.lang === 'ko' ? '음성 듣기' : 'Listen', ctx.userId);
     return { ok: true, text: ctx.lang === 'ko' ? `음성 합성 완료 (${text.length}자): ${media.urlPath}` : `Speech synthesized (${text.length} chars): ${media.urlPath}`, media: [media], model: target.fullId, usage: { units: { kind: 'chars', count: text.length } } };
 };

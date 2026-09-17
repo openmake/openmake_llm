@@ -123,6 +123,19 @@ readonly COMPOSE_FILE="${_compose_file:-$SCRIPT_DIR/infra/docker-compose.yml}"
 readonly HEALTH_RETRIES=15
 readonly HEALTH_INTERVAL=2
 
+# canary-deploy 전용 설정 — 새 빌드를 실제 트래픽 포트에 반영하기 전에
+# 별도 포트에서 임시로 띄워 헬스체크한다 (S4 배포·운영 자동화, 아래 cmd_canary_deploy 참고).
+_canary_port="${CANARY_HEALTH_PORT:-$(env_line CANARY_HEALTH_PORT)}"
+readonly CANARY_HEALTH_PORT="${_canary_port:-$((APP_PORT + 1000))}"
+_canary_retries="${CANARY_HEALTH_RETRIES:-$(env_line CANARY_HEALTH_RETRIES)}"
+readonly CANARY_HEALTH_RETRIES="${_canary_retries:-20}"
+_canary_interval="${CANARY_HEALTH_INTERVAL:-$(env_line CANARY_HEALTH_INTERVAL)}"
+readonly CANARY_HEALTH_INTERVAL="${_canary_interval:-3}"
+_canary_release_dir="${CANARY_RELEASE_DIR:-$(env_line CANARY_RELEASE_DIR)}"
+readonly CANARY_RELEASE_DIR="${_canary_release_dir:-$SCRIPT_DIR/.releases}"
+_canary_keep="${CANARY_KEEP_RELEASES:-$(env_line CANARY_KEEP_RELEASES)}"
+readonly CANARY_KEEP_RELEASES="${_canary_keep:-3}"
+
 # ── 색상 출력 ────────────────────────────────────────────────────────────────
 if [[ -t 1 ]]; then
     readonly C_RESET=$'\033[0m'
@@ -742,6 +755,223 @@ sync_caddyfile() {
     fi
 }
 
+# ── canary-deploy: 헬스 검증 후 전환 + 실패 시 자동 롤백 ──────────────────────
+# 단일 호스트 PM2(fork, 고정 포트) 위에서 "카나리"를 흉내낸다:
+#   1) 현재 빌드 산출물(dist)을 .releases/ 에 백업(직전 커밋 롤백용)
+#   2) 새 코드 빌드 (+선택적 마이그레이션)
+#   3) 새 dist 를 **운영 포트에 붙이기 전에** CANARY_HEALTH_PORT 로 임시 기동해
+#      /health 를 확인한다 (pm2 는 아직 건드리지 않음 — 이 단계에서 실패하면
+#      운영 트래픽은 계속 이전 프로세스가 받는다)
+#   4) 통과 시에만 pm2 재시작(=실제 전환)
+#   5) 전환 후 /health 가 실패하면 백업해둔 이전 dist 로 되돌리고 pm2 를 다시 재시작한다
+#
+# ⚠ 단일 호스트 한계 (docs 참고):
+#   - PM2 fork 모드 + 고정 포트라 blue/green·무중단 트래픽 전환은 불가능하다.
+#     3)번 헬스체크는 "새 코드가 이 DB/환경에서 정상 기동하는가"만 검증하고,
+#     실제 트래픽 절체(4번)는 여전히 pm2 restart 의 짧은 다운타임을 수반한다.
+#   - DB 마이그레이션은 순방향 전용이라 롤백은 "코드"만 되돌린다 — 마이그레이션이
+#     이미 적용된 스키마에 이전 코드가 안 맞을 수 있는 조합은 이 스크립트가 막지 못한다
+#     (--no-migrate 로 분리 배포하거나, 마이그레이션 자체를 되돌리려면 db/migrations/rollbacks/ 참고).
+#   - 카나리 헬스체크 프로세스도 같은 DATABASE_URL/REDIS_URL 을 공유한다 — 부작용 없는
+#     엔드포인트(/health)만 확인하고 즉시 종료한다.
+canary_backup_dist() {
+    mkdir -p "$CANARY_RELEASE_DIR"
+    local has_backend=0 has_frontend=0
+    [[ -d "$SCRIPT_DIR/apps/api/dist" ]] && has_backend=1
+    [[ -d "$SCRIPT_DIR/apps/web/.next" ]] && has_frontend=1
+    if [[ "$has_backend" -eq 0 && "$has_frontend" -eq 0 ]]; then
+        log_warn "백업할 기존 빌드 산출물 없음 — 최초 배포로 간주, 롤백 스냅샷 생략"
+        CANARY_BACKUP_FILE=""
+        return 0
+    fi
+    local sha ts out
+    sha="$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    ts="$(date +%Y%m%d-%H%M%S)"
+    out="$CANARY_RELEASE_DIR/pre-canary-${ts}-${sha}.tar.gz"
+    log_info "롤백용 백업 생성: $out"
+    local -a targets=()
+    [[ "$has_backend" -eq 1 ]] && targets+=("apps/api/dist")
+    [[ "$has_frontend" -eq 1 ]] && targets+=("apps/web/.next")
+    ( cd "$SCRIPT_DIR" && tar -czf "$out" "${targets[@]}" ) || {
+        log_err "빌드 산출물 백업 실패 — canary-deploy 중단"; return 2;
+    }
+    log_ok "백업 완료 ($(du -h "$out" | cut -f1))"
+    CANARY_BACKUP_FILE="$out"
+
+    # 보존 개수 초과분 정리 (오래된 것부터, mtime 기준). bash 3.2(macOS 시스템 bash)에도
+    # 동작하도록 배열 적재 빌트인 대신 while-read 루프를 쓴다.
+    local -a old=()
+    local f
+    while IFS= read -r f; do
+        old+=("$f")
+    done < <(find "$CANARY_RELEASE_DIR" -maxdepth 1 -name 'pre-canary-*.tar.gz' -type f -print0 \
+        | xargs -0 ls -1t 2>/dev/null | tail -n "+$((CANARY_KEEP_RELEASES + 1))")
+    if [[ "${#old[@]}" -gt 0 ]]; then
+        rm -f "${old[@]}"
+        log_info "${#old[@]}개 오래된 릴리스 백업 정리 (보존 ${CANARY_KEEP_RELEASES}개)"
+    fi
+}
+
+canary_restore_dist() {
+    if [[ -z "${CANARY_BACKUP_FILE:-}" || ! -f "$CANARY_BACKUP_FILE" ]]; then
+        log_err "롤백할 백업 스냅샷이 없습니다 — 수동 확인 필요 (git checkout 후 재빌드)"
+        return 2
+    fi
+    log_warn "이전 빌드로 롤백: $CANARY_BACKUP_FILE"
+    rm -rf "$SCRIPT_DIR/apps/api/dist" "$SCRIPT_DIR/apps/web/.next"
+    ( cd "$SCRIPT_DIR" && tar -xzf "$CANARY_BACKUP_FILE" ) || {
+        log_err "백업 압축 해제 실패 — 수동 복구 필요: $CANARY_BACKUP_FILE"
+        return 2
+    }
+    log_ok "이전 빌드 복원 완료"
+}
+
+# 새 dist 를 운영 포트가 아닌 임시 포트에서 짧게 기동해 /health 만 확인하고 종료한다.
+canary_smoke_test() {
+    if [[ "${CANARY_DRY_RUN:-0}" -eq 1 ]]; then
+        log_info "[dry-run] 카나리 헬스체크 생략 (포트 $CANARY_HEALTH_PORT, /health)"
+        return 0
+    fi
+    log_step "카나리 헬스체크 (임시 포트 $CANARY_HEALTH_PORT, 운영 트래픽 미영향)"
+    if [[ ! -f "$SCRIPT_DIR/apps/api/dist/cli.js" ]]; then
+        log_err "빌드 산출물 없음(apps/api/dist/cli.js) — 카나리 검증 불가"
+        return 2
+    fi
+
+    local log_file
+    log_file="$(mktemp -t openmake-canary-XXXXXX.log)"
+    export_dotenv_for_pm2
+    (
+        cd "$SCRIPT_DIR" && PORT="$CANARY_HEALTH_PORT" NODE_ENV=production \
+            node apps/api/dist/cli.js cluster --port "$CANARY_HEALTH_PORT" \
+            >"$log_file" 2>&1 &
+        echo $! > "${log_file}.pid"
+    )
+    local canary_pid
+    canary_pid="$(cat "${log_file}.pid" 2>/dev/null || echo "")"
+
+    local ok=0 i
+    for ((i=1; i<=CANARY_HEALTH_RETRIES; i++)); do
+        if curl -fsS --max-time 3 "http://127.0.0.1:$CANARY_HEALTH_PORT/health" >/dev/null 2>&1; then
+            ok=1
+            break
+        fi
+        sleep "$CANARY_HEALTH_INTERVAL"
+    done
+
+    if [[ -n "$canary_pid" ]]; then
+        kill "$canary_pid" 2>/dev/null || true
+        # cluster 서브커맨드가 자식 프로세스를 띄울 수 있어 프로세스 그룹째 정리한다.
+        pkill -P "$canary_pid" 2>/dev/null || true
+        wait "$canary_pid" 2>/dev/null || true
+    fi
+
+    if [[ "$ok" -eq 1 ]]; then
+        log_ok "카나리 헬스체크 통과 (${i}회 시도) — 운영 전환 진행"
+        rm -f "$log_file" "${log_file}.pid"
+        return 0
+    fi
+
+    log_err "카나리 헬스체크 실패 (${CANARY_HEALTH_RETRIES}회 시도) — 운영 전환 중단, 로그:"
+    tail -n 50 "$log_file" 2>/dev/null || true
+    rm -f "${log_file}.pid"
+    return 3
+}
+
+# 사용법: canary-deploy [--yes] [--no-migrate] [--dry-run]
+#   --dry-run: 백업/빌드/마이그레이션/카나리 헬스체크/전환 중 실제 부작용이 있는 단계를
+#              건너뛰고 수행될 순서만 출력한다 (운영 영향 없음 확인용).
+cmd_canary_deploy() {
+    CANARY_DRY_RUN=0
+    local -a pass=()
+    for arg in "$@"; do
+        case "$arg" in
+            --dry-run) CANARY_DRY_RUN=1 ;;
+            *) pass+=("$arg") ;;
+        esac
+    done
+    parse_deploy_opts "${pass[@]+"${pass[@]}"}"
+    preflight
+
+    log_step "Canary Deploy: 백업 → 빌드 → 마이그레이션 → 카나리 헬스체크 → 전환 → (실패 시 롤백)"
+    log_warn "단일 호스트 한계: 헬스체크는 새 코드의 기동 가능성만 검증하며, 전환(pm2 restart) 자체는 짧은 다운타임을 수반합니다."
+
+    if [[ "$CANARY_DRY_RUN" -eq 1 ]]; then
+        log_info "[dry-run] 순서만 출력하고 아무 것도 실행하지 않습니다."
+        cat <<EOF
+  1) 백업: $CANARY_RELEASE_DIR/pre-canary-<timestamp>-<sha>.tar.gz (기존 apps/api/dist, apps/web/.next)
+  2) 빌드: npm run build (--no-restart)
+  3) 마이그레이션: $([[ "$DEPLOY_NO_MIGRATE" -eq 1 ]] && echo "생략(--no-migrate)" || echo "cli.ts migrate")
+  4) 카나리 헬스체크: http://127.0.0.1:$CANARY_HEALTH_PORT/health (최대 $((CANARY_HEALTH_RETRIES * CANARY_HEALTH_INTERVAL))s)
+  5) 통과 시 전환: pm2 restart $APP_NAME $FRONT_APP_NAME --update-env
+  6) 전환 후 헬스체크(포트 $APP_PORT) 실패 시: 1)의 백업으로 롤백 후 재기동
+EOF
+        return 0
+    fi
+
+    git -C "$SCRIPT_DIR" fetch --tags --quiet 2>/dev/null || log_warn "git fetch --tags 실패 — build-info gitTag 가 stale 일 수 있음"
+
+    canary_backup_dist || return 2
+
+    cmd_build --no-restart || {
+        log_err "빌드 실패 — canary-deploy 중단 (운영은 이전 버전 그대로 서비스 중)"
+        return 2
+    }
+
+    if [[ "$DEPLOY_NO_MIGRATE" -eq 1 ]]; then
+        log_info "마이그레이션 생략 (--no-migrate)"
+    else
+        confirm_or_exit "DB 마이그레이션을 진행합니다. 계속하시겠습니까?"
+        cmd_migrate || { log_err "마이그레이션 실패 — canary-deploy 중단"; return 2; }
+    fi
+
+    canary_smoke_test || {
+        log_err "카나리 검증 실패 — 운영 전환을 하지 않습니다(pm2 는 그대로 이전 버전 서비스 중)."
+        log_info "새 빌드 산출물은 apps/api/dist·apps/web/.next 에 남아 있습니다 — 원인 조사 후 재시도하세요."
+        return 3
+    }
+
+    log_step "전환: PM2 앱 재시작"
+    if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$APP_NAME\""; then
+        export_dotenv_for_pm2
+        pm2 restart "$APP_NAME" --update-env >/dev/null 2>&1 || {
+            log_err "$APP_NAME restart 실패 — 롤백 시도"
+            canary_restore_dist && restart_built_apps
+            return 2
+        }
+        if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$FRONT_APP_NAME\""; then
+            pm2 restart "$FRONT_APP_NAME" --update-env >/dev/null 2>&1 \
+                && log_ok "$FRONT_APP_NAME 재시작" \
+                || log_warn "$FRONT_APP_NAME restart 실패 — 'pm2 restart $FRONT_APP_NAME' 수동 확인 필요"
+        fi
+    else
+        log_info "$APP_NAME PM2 미등록 — 신규 시작 (ecosystem: 백엔드+프론트 함께 기동)"
+        ( cd "$SCRIPT_DIR" && pm2 start ecosystem.config.js ) || return 2
+    fi
+
+    if ! wait_for_app_with_logs "$APP_PORT" "OpenMake LLM"; then
+        log_err "전환 후 헬스체크 실패 — 자동 롤백 시작"
+        canary_restore_dist || { log_err "롤백 실패 — 즉시 수동 개입 필요"; return 2; }
+        if pm2 jlist 2>/dev/null | grep -q "\"name\":\"$APP_NAME\""; then
+            export_dotenv_for_pm2
+            pm2 restart "$APP_NAME" --update-env >/dev/null 2>&1 || log_err "롤백 후 재시작 실패 — 수동 개입 필요"
+            pm2 jlist 2>/dev/null | grep -q "\"name\":\"$FRONT_APP_NAME\"" \
+                && { pm2 restart "$FRONT_APP_NAME" --update-env >/dev/null 2>&1 || true; }
+        fi
+        wait_for_app_with_logs "$APP_PORT" "OpenMake LLM" \
+            && log_warn "롤백 완료 — 직전 커밋 빌드로 복구됨, 원인 조사 필요" \
+            || log_err "롤백 후에도 헬스체크 실패 — 즉시 수동 개입 필요"
+        return 3
+    fi
+
+    log_step "Caddy 설정 동기화"
+    sync_caddyfile
+
+    echo ""
+    log_ok "Canary Deploy 완료 — 카나리 검증을 통과한 빌드가 운영에 반영되었습니다"
+    show_status
+}
+
 # ── db-dump / db-restore: 인스턴스 DB 이관 ────────────────────────────────────
 # 운영 중인 다른 호스트의 DB 를 이 설치본으로 옮기는 표준 경로:
 #   원본:  ./openmake_llm.sh db-dump chat.dump          (pg_dump -Fc, 컨테이너 안에서 실행)
@@ -859,6 +1089,11 @@ OpenMake LLM 통합 서비스 매니저
             옵션: --yes (확인 프롬프트 skip), --no-migrate (마이그 생략)
   update    git pull(ff-only) → deploy — 설치본 표준 업데이트 경로
             미커밋 변경·비ff 이력이면 중단(덮어쓰지 않음). 옵션: deploy 와 동일 + --force
+  canary-deploy   백업 → 빌드 → 마이그레이션 → 카나리 헬스체크(임시 포트) → 통과 시 전환
+            → 전환 후 헬스체크 실패 시 직전 빌드로 자동 롤백. deploy 와 달리 새 코드가
+            임시 포트(기본 $CANARY_HEALTH_PORT)에서 기동 가능함을 먼저 확인한 뒤에만
+            pm2 를 재시작한다 — 단일 호스트 fork 모드라 전환 자체는 짧은 다운타임 수반.
+            옵션: --yes, --no-migrate, --dry-run(실제 실행 없이 수행 순서만 출력)
 
 관측:
   status    모든 계층 상태 확인 (포트 + docker + PM2)
@@ -903,6 +1138,7 @@ main() {
         build)    cmd_build "$@" ;;
         migrate)  cmd_migrate ;;
         deploy)   cmd_deploy "$@" ;;
+        canary-deploy) cmd_canary_deploy "$@" ;;
         update)   cmd_update "$@" ;;
         status)   show_status ;;
         health)   show_health ;;

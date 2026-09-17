@@ -13,6 +13,7 @@
 import OpenAI from 'openai';
 import { getConfig } from '../../config/env';
 import { createLogger } from '../../utils/logger';
+import { recordCost } from '../../services/cost/cost-ledger-service';
 import type { SearchResult } from './types';
 
 const logger = createLogger('RerankShadow');
@@ -45,14 +46,21 @@ function host(url: string): string {
     try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url.slice(0, 24); }
 }
 
+/** 임베딩 호출 1건 원장 적재(kind search.rerank, unit call — F25 kind 배선, S6). costUserId 없으면 생략. */
+function recordRerankCost(costUserId: string | undefined, embedModel: string): void {
+    if (!costUserId) return;
+    recordCost({ userId: costUserId, kind: 'search.rerank', unit: 'call', rateKey: embedModel, quantity: 1, costOwner: 'user', ctx: { feature: 'web_search_rerank' } });
+}
+
 /**
  * 의미 리랭킹 셰도우 — 기존(term/reliability) 랭킹 대비 임베딩 리랭킹 순서를 비교 로깅한다.
  * 실행은 바꾸지 않는다. 실패는 삼킨다(채팅 흐름 영향 0).
  *
  * @param query - 검색 쿼리
  * @param results - 기존 랭킹이 적용된 결과(점수 내림차순)
+ * @param costUserId - 원장 귀속 사용자(F25 PR-4, S6) — 있으면 search.rerank 1건 기록
  */
-export async function logSemanticRerankShadow(query: string, results: SearchResult[]): Promise<void> {
+export async function logSemanticRerankShadow(query: string, results: SearchResult[], costUserId?: string): Promise<void> {
     if (results.length < 3) return;
     const cfg = getConfig();
     const top = results.slice(0, SHADOW_TOP_N);
@@ -62,6 +70,7 @@ export async function logSemanticRerankShadow(query: string, results: SearchResu
     const embStart = Date.now();
     try {
         embs = await embedBatch(texts, cfg.searchRerankEmbedModel, cfg.llmBaseUrl, cfg.llmApiKey);
+        recordRerankCost(costUserId, cfg.searchRerankEmbedModel);
     } catch (e) {
         logger.warn(`임베딩 실패(셰도우 skip): ${e instanceof Error ? e.message : String(e)}`);
         return;
@@ -97,9 +106,10 @@ export async function logSemanticRerankShadow(query: string, results: SearchResu
  *
  * @param query - 검색 쿼리
  * @param results - 기존 랭킹이 적용된 결과(점수 내림차순)
+ * @param costUserId - 원장 귀속 사용자(F25 PR-4, S6) — 있으면 search.rerank 1건 기록
  * @returns 리랭킹된 결과 (실패 시 입력 그대로)
  */
-export async function rerankBySemantics(query: string, results: SearchResult[]): Promise<SearchResult[]> {
+export async function rerankBySemantics(query: string, results: SearchResult[], costUserId?: string): Promise<SearchResult[]> {
     if (results.length < 3) return results;
     const cfg = getConfig();
     const top = results.slice(0, SHADOW_TOP_N);
@@ -112,6 +122,7 @@ export async function rerankBySemantics(query: string, results: SearchResult[]):
             embedBatch(texts, cfg.searchRerankEmbedModel, cfg.llmBaseUrl, cfg.llmApiKey),
             new Promise<never>((_, rej) => setTimeout(() => rej(new Error('rerank timeout')), RERANK_TIMEOUT_MS)),
         ]);
+        recordRerankCost(costUserId, cfg.searchRerankEmbedModel);
     } catch (e) {
         logger.warn(`리랭킹 skip(기존 랭킹 유지): ${e instanceof Error ? e.message : String(e)}`);
         return results;
