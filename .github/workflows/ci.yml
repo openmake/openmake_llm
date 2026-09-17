@@ -48,7 +48,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -183,7 +183,7 @@ jobs:
       # 평가 결과 아티팩트 업로드 (PR 회귀 추적용)
       - name: Upload evaluation artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: evaluation-results-${{ github.sha }}
           path: apps/api/logs/*-evaluation-*.json
@@ -192,11 +192,11 @@ jobs:
 
       # ─── PR 평가 회귀 리포트 코멘트 (sticky) ───
       # PR 이벤트일 때만 동작. Routing/Response 평가 JSON에서 통과율을 읽어 마크다운 표 생성.
-      # actions/github-script(@v7, GitHub 공식)로 PR 코멘트 listComments → marker 검색 → update or create.
+      # actions/github-script(@v9, GitHub 공식)로 PR 코멘트 listComments → marker 검색 → update or create.
       # if: always() — 평가 게이트가 실패(exit 1)해도 회귀 리포트는 게시되어야 한다 (회귀 가시성 확보).
       - name: "Post evaluation pass-rate comment (PR only)"
         if: always() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           ROUTING_BASELINE: ${{ env.OMK_EVAL_PASS_THRESHOLD || '0.5' }}
           RESPONSE_BASELINE: ${{ env.OMK_EVAL_RESPONSE_THRESHOLD || '0.5' }}

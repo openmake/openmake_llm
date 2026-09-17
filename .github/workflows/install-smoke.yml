@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # 러너에 이미 있는 Node 가 24가 아니어도 인스톨러가 스스로 확보해야 하지만,
       # 러너의 npm 글로벌 권한·버전 관리자 상호작용 변수를 줄이기 위해 24를 미리 둔다

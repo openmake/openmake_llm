@@ -35,7 +35,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # ─── Gate 1: OpenMakeKit 단위 테스트 (macOS) ───
       # LiveSmokeTests 는 OPENMAKE_LIVE_BEARER 미설정 시 XCTSkip — CI 무영향.
