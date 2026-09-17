@@ -121,6 +121,9 @@ export const envSchema = z
         MCP_TOOL_LIST_STALE_MS: nonNegativeIntWithDefault(600_000),
         AGENT_TASK_HITL_PARK_ON_TIMEOUT: z.enum(['true', 'false']).optional(),
         AGENT_TASK_QUEUE_PRIORITY_MAX: nonNegativeIntWithDefault(10),
+        /** 로컬 vLLM 스케줄링 필드(PR-13, 기본 OFF) — 관리자 UI 그룹 llm 에서 실시간 조정 */
+        LLM_PREFIX_CACHE_SALT_MODE: z.enum(['off', 'user']).optional(),
+        LLM_PRIORITY_ENABLED: z.enum(['true', 'false']).optional(),
         /** SLO 목표(F24.8, 145) — 관리자 UI 그룹 slo 에서 실시간 조정 */
         SLO_CHAT_AVAILABILITY_TARGET: percentTargetOptional,
         SLO_CHAT_TTFT_P95_MS: nonNegativeIntWithDefault(15_000),

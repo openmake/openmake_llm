@@ -99,7 +99,7 @@ export async function chatTurnWithRoleFallback(
     // SDK 요청 타임아웃 상한은 최대 예산(예약)에 맞춘다 — 실제 한계는 p.signal(잔여 예산)이 governor.
     const call = () => state.client.derive({ timeout: AGENT_TASK_LIMITS.SCHEDULE_TOTAL_TIMEOUT_MS })
         .chat(p.conversation, undefined, p.onToken, {
-            tools: p.tools, signal: p.signal, think: false,
+            tools: p.tools, signal: p.signal, think: false, requestClass: 'agent_turn',
         });
     const maxRetries = Math.max(0, AGENT_TASK_LIMITS.TURN_RETRY_MAX);
     let attempt = 0;

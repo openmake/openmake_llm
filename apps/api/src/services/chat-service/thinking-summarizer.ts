@@ -62,7 +62,7 @@ export async function summarizeThinking(
             [{ role: 'system', content: system }, { role: 'user', content: user }],
             { num_predict: SUMMARY_MAX_OUTPUT_TOKENS },
             undefined,
-            { think: false },
+            { think: false, requestClass: 'background' },
         );
         const summary = (r.content ?? '').trim().replace(/^["'「]|["'」]$/g, '').split('\n')[0].trim();
         if (!summary) return null;

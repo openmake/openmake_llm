@@ -111,6 +111,9 @@ export const SYSTEM_SETTINGS_REGISTRY: SystemSettingDef[] = [
     { key: 'QUOTA_EXCEEDED_ACTION', group: 'llm', secret: false, requiresRestart: false, validate: z.enum(['reject', 'degrade']) },
     { key: 'QUOTA_DEGRADE_MODEL_MAP', group: 'llm', secret: false, requiresRestart: false, validate: jsonObject },
     { key: 'USER_MONTHLY_COST_BUDGET_MICROS', group: 'llm', secret: false, requiresRestart: false, validate: nonNegativeIntString },
+    // ── 로컬 vLLM 스케줄링 필드(PR-13) — LLMClient.chat 이 호출 시점에 읽는다(실시간). priority 는 DGX 정책이 켜져야 효과 ──
+    { key: 'LLM_PREFIX_CACHE_SALT_MODE', group: 'llm', secret: false, requiresRestart: false, validate: z.enum(['off', 'user']) },
+    { key: 'LLM_PRIORITY_ENABLED', group: 'llm', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
 
     // ── 에이전트·MCP 런타임(F13/F16, 2026-09-17) — 실시간 반영(getConfig 를 호출 시점에 읽는 소비자) ──
     { key: 'MCP_TOOL_LIST_STALE_MS', group: 'agent', secret: false, requiresRestart: false, validate: nonNegativeIntString },

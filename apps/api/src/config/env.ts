@@ -68,6 +68,10 @@ export interface EnvConfig {
     agentTaskHitlParkOnTimeout: boolean;
     /** 관리자가 줄 수 있는 큐 우선순위 상한 — F16.6 */
     agentTaskQueuePriorityMax: number;
+    /** 로컬 vLLM prefix cache 격리 — off|user(사용자별 cache_salt). UX·게이트웨이 PR-13 */
+    llmPrefixCacheSaltMode: 'off' | 'user';
+    /** 로컬 vLLM 요청에 요청 클래스별 priority 싣기(DGX --scheduling-policy priority 필요) — PR-13 */
+    llmPriorityEnabled: boolean;
     /** SLO 목표(F24.8) — 백분율(0~100, config/slo 가 비율로 환산), TTFT 는 p95 임계(ms). 미설정은 config/slo 기본값 */
     sloChatAvailabilityTargetPct?: number;
     sloChatTtftP95Ms: number;
@@ -224,6 +228,8 @@ const DEFAULT_CONFIG: EnvConfig = {
     mcpToolListStaleMs: 600_000,
     agentTaskHitlParkOnTimeout: false,
     agentTaskQueuePriorityMax: 10,
+    llmPrefixCacheSaltMode: 'off',
+    llmPriorityEnabled: false,
     sloChatTtftP95Ms: 15_000,
     llmWeeklyTokenLimit: 5000000,
     externalModelPolicy: '',
@@ -373,6 +379,8 @@ export function loadConfig(): EnvConfig {
         MCP_TOOL_LIST_STALE_MS: env('MCP_TOOL_LIST_STALE_MS'),
         AGENT_TASK_HITL_PARK_ON_TIMEOUT: env('AGENT_TASK_HITL_PARK_ON_TIMEOUT'),
         AGENT_TASK_QUEUE_PRIORITY_MAX: env('AGENT_TASK_QUEUE_PRIORITY_MAX'),
+        LLM_PREFIX_CACHE_SALT_MODE: env('LLM_PREFIX_CACHE_SALT_MODE'),
+        LLM_PRIORITY_ENABLED: env('LLM_PRIORITY_ENABLED'),
         SLO_CHAT_AVAILABILITY_TARGET: env('SLO_CHAT_AVAILABILITY_TARGET'),
         SLO_CHAT_TTFT_P95_MS: env('SLO_CHAT_TTFT_P95_MS'),
         SLO_AGENT_TASK_SUCCESS_TARGET: env('SLO_AGENT_TASK_SUCCESS_TARGET'),
@@ -500,6 +508,8 @@ export function loadConfig(): EnvConfig {
         mcpToolListStaleMs: parsed.MCP_TOOL_LIST_STALE_MS ?? DEFAULT_CONFIG.mcpToolListStaleMs,
         agentTaskHitlParkOnTimeout: parsed.AGENT_TASK_HITL_PARK_ON_TIMEOUT === undefined ? DEFAULT_CONFIG.agentTaskHitlParkOnTimeout : parsed.AGENT_TASK_HITL_PARK_ON_TIMEOUT === 'true',
         agentTaskQueuePriorityMax: parsed.AGENT_TASK_QUEUE_PRIORITY_MAX ?? DEFAULT_CONFIG.agentTaskQueuePriorityMax,
+        llmPrefixCacheSaltMode: parsed.LLM_PREFIX_CACHE_SALT_MODE ?? DEFAULT_CONFIG.llmPrefixCacheSaltMode,
+        llmPriorityEnabled: parsed.LLM_PRIORITY_ENABLED === undefined ? DEFAULT_CONFIG.llmPriorityEnabled : parsed.LLM_PRIORITY_ENABLED === 'true',
         sloChatAvailabilityTargetPct: parsed.SLO_CHAT_AVAILABILITY_TARGET,
         sloChatTtftP95Ms: parsed.SLO_CHAT_TTFT_P95_MS ?? DEFAULT_CONFIG.sloChatTtftP95Ms,
         sloAgentTaskSuccessTargetPct: parsed.SLO_AGENT_TASK_SUCCESS_TARGET,

@@ -33,7 +33,7 @@ export async function extractLLMMemories(client: LLMClient, text: string): Promi
         const { system, user } = getMemoryExtractionMessages(text);
         const r = await client.chat(
             [{ role: 'system', content: system }, { role: 'user', content: user }],
-            { temperature: MEMORY_EXTRACTION.temperature }, undefined, { think: false },
+            { temperature: MEMORY_EXTRACTION.temperature }, undefined, { think: false, requestClass: 'background' },
         );
         const raw = (r.content ?? '').trim();
         if (!raw || /^none$/im.test(raw)) return [];

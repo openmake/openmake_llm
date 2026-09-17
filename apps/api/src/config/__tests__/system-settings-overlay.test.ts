@@ -69,6 +69,8 @@ describe('system-settings-registry', () => {
             else if (def.key === 'MCP_TOOL_LIST_STALE_MS') sample[def.key] = '781';
             else if (def.key === 'AGENT_TASK_QUEUE_PRIORITY_MAX') sample[def.key] = '782';
             else if (def.key === 'AGENT_TASK_HITL_PARK_ON_TIMEOUT') sample[def.key] = 'true';
+            else if (def.key === 'LLM_PREFIX_CACHE_SALT_MODE') sample[def.key] = 'user';
+            else if (def.key === 'LLM_PRIORITY_ENABLED') sample[def.key] = 'true';
             // SLO 목표(F24.8) — 백분율·정수
             else if (def.key === 'SLO_CHAT_AVAILABILITY_TARGET') sample[def.key] = '97.51';
             else if (def.key === 'SLO_AGENT_TASK_SUCCESS_TARGET') sample[def.key] = '97.52';

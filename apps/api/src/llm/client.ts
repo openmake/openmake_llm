@@ -27,6 +27,7 @@ import { classifyLlmError, recordLlmRequestMetric, type LlmRequestClass } from '
 import { reserveUserQuota, settleUserQuota, type QuotaReservation } from './user-quota';
 import { streamChat, nonStreamChat } from './stream-parser';
 import { buildExtraBody } from './reasoning-adapter';
+import { buildSchedulingFields, mergeExtraBody } from './scheduling-fields';
 import { applyLocalSamplingPreset } from './sampling-preset';
 import { applyLocalToolStrict } from './tool-strict';
 import { selectModelByCapacityExact, estimateTokens } from './model-pool';
@@ -215,7 +216,15 @@ export class LLMClient {
             }),
         };
         // 실제 라우팅된 모델 기준으로 reasoning_effort 를 정규화한다(모델별 지원값 상이).
-        const extraBody = buildExtraBody(advancedOptions?.think, poolDecision.model);
+        const cfg = getConfig();
+        const extraBody = mergeExtraBody(
+            buildExtraBody(advancedOptions?.think, poolDecision.model),
+            buildSchedulingFields({
+                saltMode: cfg.llmPrefixCacheSaltMode, priorityEnabled: cfg.llmPriorityEnabled,
+                external: this.config.quotaExempt === true, userId: this.config.userId,
+                requestClass: advancedOptions?.requestClass, saltKey: cfg.apiKeyPepper,
+            }),
+        );
 
         return withSpan(
             'llm-client',

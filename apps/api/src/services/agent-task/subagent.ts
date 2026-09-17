@@ -97,6 +97,7 @@ export async function runSubagent(p: SubagentParams): Promise<string> {
                 tools: lastTurn || p.tools.length === 0 ? undefined : p.tools,
                 signal: p.signal,
                 think: false,
+                requestClass: 'fanout',
             });
             const used = (result.metrics?.prompt_tokens ?? 0) + (result.metrics?.completion_tokens ?? 0);
             tokens += used;
