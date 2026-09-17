@@ -13,6 +13,7 @@ import {
   Table,
   Th,
   Td,
+  useFocusTrap,
 } from "@/components/ui/primitives";
 import { AdminTabs } from "@/components/hub-tabs";
 import { ApiClient } from "@/lib/api-client";
@@ -140,6 +141,9 @@ export default function AdminConversationsPage() {
   const [detail, setDetail] = useState<ApiConversation | null>(null);
   const [detailMsgs, setDetailMsgs] = useState<Array<{ role: string; content: string }> | null>(null);
   const [researchDetail, setResearchDetail] = useState<ApiResearchSession | null>(null);
+  // 상세 모달 focus trap·Escape(F19.8)
+  const detailTrapRef = useFocusTrap<HTMLDivElement>(!!detail, () => setDetail(null));
+  const researchTrapRef = useFocusTrap<HTMLDivElement>(!!researchDetail, () => setResearchDetail(null));
   const [researchSteps, setResearchSteps] = useState<ApiResearchStep[] | null>(null);
 
   useEffect(() => {
@@ -502,11 +506,11 @@ export default function AdminConversationsPage() {
 
       {detail && (
         <div
-          role="dialog"
+          role="presentation"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
           onClick={(ev) => { if (ev.target === ev.currentTarget) setDetail(null); }}
         >
-          <div className="relative mx-4 flex max-h-[80vh] w-full max-w-2xl flex-col rounded-lg bg-surface shadow-xl">
+          <div ref={detailTrapRef} role="dialog" aria-modal="true" tabIndex={-1} className="relative mx-4 flex max-h-[80vh] w-full max-w-2xl flex-col rounded-lg bg-surface shadow-xl outline-none">
             <div className="flex items-start justify-between gap-4 border-b border-border p-4">
               <div className="min-w-0">
                 <h2 className="truncate text-sm font-semibold text-fg">
@@ -546,11 +550,11 @@ export default function AdminConversationsPage() {
 
       {researchDetail && (
         <div
-          role="dialog"
+          role="presentation"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
           onClick={(ev) => { if (ev.target === ev.currentTarget) setResearchDetail(null); }}
         >
-          <div className="relative mx-4 flex max-h-[80vh] w-full max-w-2xl flex-col rounded-lg bg-surface shadow-xl">
+          <div ref={researchTrapRef} role="dialog" aria-modal="true" tabIndex={-1} className="relative mx-4 flex max-h-[80vh] w-full max-w-2xl flex-col rounded-lg bg-surface shadow-xl outline-none">
             <div className="flex items-start justify-between gap-4 border-b border-border p-4">
               <div className="min-w-0">
                 <h2 className="truncate text-sm font-semibold text-fg">

@@ -14,6 +14,7 @@ import {
   Table,
   Th,
   Td,
+  useFocusTrap,
 } from "@/components/ui/primitives";
 import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
@@ -152,6 +153,7 @@ function RenameModal({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { setName(server?.name ?? ""); setError(null); }, [server]);
+  const trapRef = useFocusTrap<HTMLDivElement>(!!server, onClose);
   if (!server) return null;
 
   const valid = /^[A-Za-z0-9_-]+$/.test(name);
@@ -174,7 +176,7 @@ function RenameModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-xl">
+      <div ref={trapRef} role="dialog" aria-modal="true" tabIndex={-1} className="w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-xl outline-none">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold text-fg">{t("renameTitle")}</h2>
           <button type="button" onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-2 hover:text-fg">
@@ -227,6 +229,7 @@ function DeleteServerModal({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { setError(null); }, [server?.id]);
+  const trapRef = useFocusTrap<HTMLDivElement>(!!server, onClose);
   if (!server) return null;
 
   async function handleDelete() {
@@ -246,7 +249,7 @@ function DeleteServerModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-xl">
+      <div ref={trapRef} role="dialog" aria-modal="true" tabIndex={-1} className="w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-xl outline-none">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold text-fg">{t("deleteTitle")}</h2>
           <button type="button" onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-2 hover:text-fg">
@@ -292,6 +295,7 @@ function EnvEditModal({
     setError(null);
   }, [server?.id]);
 
+  const trapRef = useFocusTrap<HTMLDivElement>(!!server, onClose);
   if (!server) return null;
 
   // 값을 입력한 키만 전송한다(부분 갱신). 빈 칸 = 기존 값 유지.
@@ -318,7 +322,7 @@ function EnvEditModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-xl border border-border bg-surface p-6 shadow-xl">
+      <div ref={trapRef} role="dialog" aria-modal="true" tabIndex={-1} className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-xl border border-border bg-surface p-6 shadow-xl outline-none">
         <div className="mb-1 flex items-center justify-between">
           <h2 className="text-base font-semibold text-fg">{t("envEditTitle")}</h2>
           <button
@@ -391,6 +395,7 @@ function GitImportModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const trapRef = useFocusTrap<HTMLDivElement>(open, onClose);
   if (!open) return null;
 
   async function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
@@ -415,7 +420,7 @@ function GitImportModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-xl">
+      <div ref={trapRef} role="dialog" aria-modal="true" tabIndex={-1} className="w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-xl outline-none">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold text-fg">{t("importTitle")}</h2>
           <button

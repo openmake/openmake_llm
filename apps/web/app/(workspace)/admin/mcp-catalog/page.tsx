@@ -12,6 +12,7 @@ import {
   Table,
   Th,
   Td,
+  useFocusTrap,
 } from "@/components/ui/primitives";
 import { AdminTabs } from "@/components/hub-tabs";
 import type { ApiSuccess as ApiEnvelope } from "@openmake/shared-types";
@@ -45,14 +46,19 @@ const labelCls = "block text-xs font-medium text-fg-2 mb-1";
 /* ── 모달 공통 래퍼 ─────────────────────────────────────────── */
 function Modal({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
   const t = useTranslations("adminMcpCatalog");
+  const trapRef = useFocusTrap<HTMLDivElement>(true, onClose);
   return (
     <div
-      role="dialog"
+      role="presentation"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
       onClick={(ev) => { if (ev.currentTarget === ev.target) onClose(); }}
     >
       <div
-        className="relative mx-4 w-full max-w-lg rounded-lg bg-surface p-6 shadow-xl max-h-[90vh] overflow-y-auto"
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        tabIndex={-1}
+        className="relative mx-4 w-full max-w-lg rounded-lg bg-surface p-6 shadow-xl max-h-[90vh] overflow-y-auto outline-none"
         onClick={(ev) => ev.stopPropagation()}
       >
         <button

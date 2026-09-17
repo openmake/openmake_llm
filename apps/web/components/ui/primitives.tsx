@@ -176,3 +176,101 @@ export function Td({ className, ...props }: React.TdHTMLAttributes<HTMLTableCell
     <td className={cn("border-b border-border px-3 py-2.5 text-fg-2", className)} {...props} />
   );
 }
+
+/* ── 대화상자 접근성 (F19.8) ─────────────────────────────── */
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * 모달 포커스 트랩 — 열리면 안으로 포커스를 옮기고(autoFocus 가 이미 안에 있으면 유지) Tab 순환을 가두며,
+ * Escape 로 onClose, 닫히면 열기 전 포커스로 되돌린다. 반환 ref 를 모달 패널에 붙인다(패널엔 tabIndex={-1}).
+ * 키 처리는 패널 노드에서 받는다 — 중첩 모달은 안쪽이 먼저 처리하고 전파를 멈춘다.
+ */
+export function useFocusTrap<T extends HTMLElement>(active: boolean, onClose?: () => void) {
+  const ref = React.useRef<T>(null);
+  const onCloseRef = React.useRef(onClose);
+  React.useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  React.useEffect(() => {
+    if (!active) return;
+    const node = ref.current;
+    if (!node) return;
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusables = () =>
+      Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+        (el) => el.getClientRects().length > 0 || el === document.activeElement,
+      );
+    if (!node.contains(document.activeElement)) (focusables()[0] ?? node).focus({ preventScroll: true });
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && onCloseRef.current) {
+        e.stopPropagation();
+        onCloseRef.current();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const items = focusables();
+      if (items.length === 0) {
+        e.preventDefault();
+        node.focus({ preventScroll: true });
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const current = document.activeElement;
+      if (e.shiftKey && (current === first || current === node)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && current === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    node.addEventListener("keydown", onKey);
+    return () => {
+      node.removeEventListener("keydown", onKey);
+      if (previous && document.contains(previous)) previous.focus({ preventScroll: true });
+    };
+  }, [active]);
+
+  return ref;
+}
+
+/**
+ * 모달 대화상자 — 배경 클릭·Escape 닫기, focus trap, role=dialog·aria-modal. 새 모달은 이것을 쓴다.
+ */
+export function Dialog({
+  open,
+  onClose,
+  title,
+  children,
+  className,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** 스크린리더 이름(aria-label)과 머리글 */
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const panelRef = useFocusTrap<HTMLDivElement>(open, onClose);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose} role="presentation">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+        className={cn("w-full max-w-md rounded-xl border border-border bg-surface p-5 shadow-xl outline-none", className)}
+      >
+        <h2 className="mb-3 text-base font-semibold text-fg">{title}</h2>
+        {children}
+      </div>
+    </div>
+  );
+}

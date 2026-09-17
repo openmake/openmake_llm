@@ -8,6 +8,7 @@ import type { Artifact } from "@/lib/store";
 import { ApiClient } from "@/lib/api-client";
 import { ArtifactBody } from "./artifact-panel";
 import { ArtifactComments } from "./artifact-comments";
+import { useFocusTrap } from "@/components/ui/primitives";
 
 interface DetailTarget {
   sessionId: string;
@@ -93,6 +94,7 @@ export function ArtifactDetailModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
+  const trapRef = useFocusTrap<HTMLDivElement>(true, onCloseAction);
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
@@ -100,7 +102,12 @@ export function ArtifactDetailModal({
       role="presentation"
     >
       <div
-        className="flex h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xl"
+        ref={trapRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={target.title}
+        tabIndex={-1}
+        className="flex h-[80vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xl outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 border-b border-border px-4 py-3">

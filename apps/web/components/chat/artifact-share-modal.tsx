@@ -5,6 +5,7 @@ import { X, Globe, Lock, Link2, Check, Copy, Loader2, FileDown } from "lucide-re
 import { useTranslations } from "next-intl";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import type { ApiSuccess } from "@openmake/shared-types";
+import { useFocusTrap } from "@/components/ui/primitives";
 
 type Visibility = "private" | "authenticated" | "link";
 
@@ -120,6 +121,7 @@ export function ArtifactShareModal({
     }
   };
 
+  const trapRef = useFocusTrap<HTMLDivElement>(true, onClose);
   return (
     <div
       className="fixed inset-0 z-[60] grid place-items-center bg-black/40 p-4"
@@ -127,7 +129,9 @@ export function ArtifactShareModal({
       role="presentation"
     >
       <div
-        className="w-full max-w-md rounded-xl border border-border bg-surface p-5 shadow-xl"
+        ref={trapRef}
+        tabIndex={-1}
+        className="w-full max-w-md rounded-xl border border-border bg-surface p-5 shadow-xl outline-none"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

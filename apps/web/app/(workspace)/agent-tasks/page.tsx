@@ -33,6 +33,7 @@ import {
   Badge,
   PageHeader,
   Card,
+  useFocusTrap,
 } from "@/components/ui/primitives";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/lib/store";
@@ -251,11 +252,13 @@ function Modal({
     return () => document.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
+  // focus trap(F19.8) — Escape 는 위 핸들러가 처리하므로 여기선 트랩·포커스 복귀만
+  const trapRef = useFocusTrap<HTMLDivElement>(open);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-xl max-h-[90vh] overflow-y-auto mx-4 rounded-lg border border-border bg-app shadow-xl">
+      <div ref={trapRef} role="dialog" aria-modal="true" tabIndex={-1} className="outline-none relative z-10 w-full max-w-xl max-h-[90vh] overflow-y-auto mx-4 rounded-lg border border-border bg-app shadow-xl">
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h2 className="text-sm font-semibold text-fg">{title}</h2>
           <button onClick={onClose} className="text-muted hover:text-fg">
