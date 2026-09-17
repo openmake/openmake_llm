@@ -1501,6 +1501,36 @@
       "info": "총 {total}건 · {page}/{pages} 페이지",
       "prev": "이전",
       "next": "다음"
+    },
+    "debugQueue": {
+      "title": "디버그 큐",
+      "description": "오류로 자동 저장되거나(24시간) 사용자가 신고한(7일) 응답입니다. 재현 번들에는 마스킹된 마지막 LLM 요청이 들어 있습니다.",
+      "refresh": "새로고침",
+      "loadError": "디버그 큐를 불러오지 못했습니다",
+      "actionError": "요청을 처리하지 못했습니다",
+      "empty": "보관 중인 항목이 없습니다.",
+      "col": {
+        "captured": "저장 시각",
+        "reason": "사유",
+        "messages": "질문·응답",
+        "actions": "재현"
+      },
+      "reason": {
+        "autoError": "오류",
+        "userReport": "신고"
+      },
+      "downloadBundle": "재현 번들 내려받기",
+      "replay": "리플레이",
+      "truncated": "잘림",
+      "noBundle": "번들 없음",
+      "confirmTitle": "리플레이 실행",
+      "confirmBody": "같은 입력을 모델에 다시 보냅니다. 실제 LLM 호출이라 비용과 시간이 들고 분당 3회로 제한됩니다.",
+      "cancel": "취소",
+      "rateLimited": "리플레이는 분당 3회까지입니다. 잠시 후 다시 시도하세요.",
+      "resultTitle": "리플레이 결과",
+      "resultMeta": "모델 {model} · {seconds}초 · 저장 응답과 유사도 {similarity}",
+      "toolCalls": "도구 호출",
+      "close": "닫기"
     }
   },
   "adminAudit": {

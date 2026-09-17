@@ -1501,6 +1501,36 @@
       "info": "{total} gesamt · Seite {page}/{pages}",
       "prev": "Zurück",
       "next": "Weiter"
+    },
+    "debugQueue": {
+      "title": "Debug-Warteschlange",
+      "description": "Antworten, die bei Fehlern automatisch (24 Stunden) oder durch Nutzermeldungen (7 Tage) gespeichert wurden. Replay-Pakete enthalten die maskierte letzte LLM-Anfrage.",
+      "refresh": "Aktualisieren",
+      "loadError": "Debug-Warteschlange konnte nicht geladen werden",
+      "actionError": "Anfrage konnte nicht ausgeführt werden",
+      "empty": "Keine gespeicherten Einträge.",
+      "col": {
+        "captured": "Gespeichert",
+        "reason": "Grund",
+        "messages": "Frage & Antwort",
+        "actions": "Replay"
+      },
+      "reason": {
+        "autoError": "Fehler",
+        "userReport": "Meldung"
+      },
+      "downloadBundle": "Replay-Paket herunterladen",
+      "replay": "Replay",
+      "truncated": "Gekürzt",
+      "noBundle": "Kein Paket",
+      "confirmTitle": "Replay ausführen",
+      "confirmBody": "Dieselbe Eingabe wird erneut an das Modell gesendet. Das ist ein echter LLM-Aufruf mit Zeit- und Kostenaufwand, begrenzt auf 3 pro Minute.",
+      "cancel": "Abbrechen",
+      "rateLimited": "Replays sind auf 3 pro Minute begrenzt. Bitte gleich erneut versuchen.",
+      "resultTitle": "Replay-Ergebnis",
+      "resultMeta": "Modell {model} · {seconds} s · Ähnlichkeit zur gespeicherten Antwort {similarity}",
+      "toolCalls": "Tool-Aufrufe",
+      "close": "Schließen"
     }
   },
   "adminAudit": {

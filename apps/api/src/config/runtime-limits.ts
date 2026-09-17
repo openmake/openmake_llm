@@ -2214,6 +2214,9 @@ export const REPLAY_CAPTURE = {
     MAX_SESSIONS: 300,
     /** 관리자 REST 리플레이 분당 상한 — 실제 LLM 호출 비용 */
     REPLAY_PER_MINUTE: 3,
+    /** 관리자 디버그 큐 목록 — 한 번에 돌려주는 최대 행 수·본문 미리보기 글자 수 */
+    LIST_MAX: 100,
+    LIST_PREVIEW_CHARS: 160,
 } as const;
 
 /** 채팅 요청 사실 테이블(F24.2, 142) — 요청당 1행 지문·결과. CHAT_REQUESTS_ENABLED=false 로 끔. */

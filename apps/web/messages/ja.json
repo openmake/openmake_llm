@@ -1501,6 +1501,36 @@
       "info": "全{total}件 · {page}/{pages}ページ",
       "prev": "前へ",
       "next": "次へ"
+    },
+    "debugQueue": {
+      "title": "デバッグキュー",
+      "description": "エラー時に自動保存（24 時間）、またはユーザーが報告（7 日間）した応答です。再現バンドルにはマスク済みの最後の LLM リクエストが含まれます。",
+      "refresh": "更新",
+      "loadError": "デバッグキューを読み込めませんでした",
+      "actionError": "リクエストを処理できませんでした",
+      "empty": "保管中の項目はありません。",
+      "col": {
+        "captured": "保存日時",
+        "reason": "理由",
+        "messages": "質問・応答",
+        "actions": "再現"
+      },
+      "reason": {
+        "autoError": "エラー",
+        "userReport": "報告"
+      },
+      "downloadBundle": "再現バンドルをダウンロード",
+      "replay": "リプレイ",
+      "truncated": "切り詰め",
+      "noBundle": "バンドルなし",
+      "confirmTitle": "リプレイを実行",
+      "confirmBody": "同じ入力をモデルに再送信します。実際の LLM 呼び出しのため時間と費用がかかり、1 分あたり 3 回までです。",
+      "cancel": "キャンセル",
+      "rateLimited": "リプレイは 1 分あたり 3 回までです。しばらくしてから再試行してください。",
+      "resultTitle": "リプレイ結果",
+      "resultMeta": "モデル {model} · {seconds} 秒 · 保存済み応答との類似度 {similarity}",
+      "toolCalls": "ツール呼び出し",
+      "close": "閉じる"
     }
   },
   "adminAudit": {

@@ -1501,6 +1501,36 @@
       "info": "{total} total · page {page}/{pages}",
       "prev": "Previous",
       "next": "Next"
+    },
+    "debugQueue": {
+      "title": "Debug queue",
+      "description": "Responses saved automatically on errors (24 hours) or reported by users (7 days). Replay bundles contain the masked last LLM request.",
+      "refresh": "Refresh",
+      "loadError": "Could not load the debug queue",
+      "actionError": "Could not complete the request",
+      "empty": "No items are being kept.",
+      "col": {
+        "captured": "Captured",
+        "reason": "Reason",
+        "messages": "Question & answer",
+        "actions": "Replay"
+      },
+      "reason": {
+        "autoError": "Error",
+        "userReport": "Report"
+      },
+      "downloadBundle": "Download replay bundle",
+      "replay": "Replay",
+      "truncated": "Truncated",
+      "noBundle": "No bundle",
+      "confirmTitle": "Run replay",
+      "confirmBody": "The same input will be sent to the model again. This is a real LLM call that costs time and money, limited to 3 per minute.",
+      "cancel": "Cancel",
+      "rateLimited": "Replays are limited to 3 per minute. Try again shortly.",
+      "resultTitle": "Replay result",
+      "resultMeta": "Model {model} · {seconds}s · similarity to saved answer {similarity}",
+      "toolCalls": "Tool calls",
+      "close": "Close"
     }
   },
   "adminAudit": {

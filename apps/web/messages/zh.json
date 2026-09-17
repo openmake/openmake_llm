@@ -1501,6 +1501,36 @@
       "info": "共{total}条 · 第{page}/{pages}页",
       "prev": "上一页",
       "next": "下一页"
+    },
+    "debugQueue": {
+      "title": "调试队列",
+      "description": "出错时自动保存（24 小时）或用户举报（7 天）的回复。重现包包含已脱敏的最后一次 LLM 请求。",
+      "refresh": "刷新",
+      "loadError": "无法加载调试队列",
+      "actionError": "无法完成请求",
+      "empty": "没有保留的条目。",
+      "col": {
+        "captured": "保存时间",
+        "reason": "原因",
+        "messages": "问题与回复",
+        "actions": "重现"
+      },
+      "reason": {
+        "autoError": "错误",
+        "userReport": "举报"
+      },
+      "downloadBundle": "下载重现包",
+      "replay": "重放",
+      "truncated": "已截断",
+      "noBundle": "无重现包",
+      "confirmTitle": "执行重放",
+      "confirmBody": "将把相同输入再次发送给模型。这是真实的 LLM 调用，会耗费时间和费用，每分钟限 3 次。",
+      "cancel": "取消",
+      "rateLimited": "重放每分钟限 3 次，请稍后再试。",
+      "resultTitle": "重放结果",
+      "resultMeta": "模型 {model} · {seconds} 秒 · 与已保存回复的相似度 {similarity}",
+      "toolCalls": "工具调用",
+      "close": "关闭"
     }
   },
   "adminAudit": {
