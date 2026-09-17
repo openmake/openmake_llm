@@ -12,7 +12,7 @@
  *   NotebookLM RPC 왕복(2~4초)을 picker 열 때마다 반복하지 않기 위함. ?refresh=1 로 무효화.
  */
 import { Router, Request, Response } from 'express';
-import LRUCache from 'lru-cache';
+import { LRUCache } from 'lru-cache';
 import { requireAuth } from '../auth';
 import { success, notFound, error as errorResponse } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
