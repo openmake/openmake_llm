@@ -1430,7 +1430,28 @@
       "5": "금",
       "6": "토"
     },
-    "noData": "표시할 데이터가 없습니다."
+    "noData": "표시할 데이터가 없습니다.",
+    "billing": {
+      "title": "비용 원장",
+      "subtitle": "cost_ledger 기준 실제 회계 — 위 비용 분석(가상 환산)과 별개이며 단가 미등록 항목은 0 으로 기록됩니다.",
+      "scope": "범위",
+      "scopeSystem": "전체",
+      "scopeOrg": "조직",
+      "scopeUser": "사용자",
+      "scopeIdPlaceholder": "조직·사용자 ID",
+      "month": "월",
+      "apply": "조회",
+      "qty": "수량",
+      "total": "합계",
+      "final": "확정",
+      "live": "집계 중",
+      "empty": "이 달의 기록이 없습니다.",
+      "loadError": "명세서를 불러오지 못했습니다",
+      "byAgentTitle": "에이전트별 비용 (최근 30일)",
+      "byAgentEmpty": "에이전트에 귀속된 비용이 없습니다.",
+      "agent": "에이전트",
+      "noAgent": "(미지정)"
+    }
   },
   "adminConversations": {
     "title": "전체 대화 조회",

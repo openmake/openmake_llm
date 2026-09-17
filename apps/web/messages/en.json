@@ -1430,7 +1430,28 @@
       "5": "Fri",
       "6": "Sat"
     },
-    "noData": "No data to show."
+    "noData": "No data to show.",
+    "billing": {
+      "title": "Cost ledger",
+      "subtitle": "Actual accounting from cost_ledger — separate from the estimated cost analysis above; items without a registered rate are recorded as 0.",
+      "scope": "Scope",
+      "scopeSystem": "All",
+      "scopeOrg": "Organization",
+      "scopeUser": "User",
+      "scopeIdPlaceholder": "Organization or user ID",
+      "month": "Month",
+      "apply": "Show",
+      "qty": "Quantity",
+      "total": "Total",
+      "final": "Final",
+      "live": "In progress",
+      "empty": "No records for this month.",
+      "loadError": "Could not load the statement",
+      "byAgentTitle": "Cost by agent (last 30 days)",
+      "byAgentEmpty": "No costs are attributed to agents.",
+      "agent": "Agent",
+      "noAgent": "(unassigned)"
+    }
   },
   "adminConversations": {
     "title": "All Conversations",

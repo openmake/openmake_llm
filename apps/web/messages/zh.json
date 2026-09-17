@@ -1430,7 +1430,28 @@
       "5": "周五",
       "6": "周六"
     },
-    "noData": "没有可显示的数据。"
+    "noData": "没有可显示的数据。",
+    "billing": {
+      "title": "成本台账",
+      "subtitle": "基于 cost_ledger 的实际核算——与上方成本分析（估算）不同，未登记单价的项目记为 0。",
+      "scope": "范围",
+      "scopeSystem": "全部",
+      "scopeOrg": "组织",
+      "scopeUser": "用户",
+      "scopeIdPlaceholder": "组织或用户 ID",
+      "month": "月份",
+      "apply": "查看",
+      "qty": "数量",
+      "total": "合计",
+      "final": "已确定",
+      "live": "统计中",
+      "empty": "本月没有记录。",
+      "loadError": "无法加载账单",
+      "byAgentTitle": "按智能体的成本（最近 30 天）",
+      "byAgentEmpty": "没有归属到智能体的成本。",
+      "agent": "智能体",
+      "noAgent": "（未指定）"
+    }
   },
   "adminConversations": {
     "title": "全部对话查看",

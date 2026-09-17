@@ -1430,7 +1430,28 @@
       "5": "金",
       "6": "土"
     },
-    "noData": "表示するデータがありません。"
+    "noData": "表示するデータがありません。",
+    "billing": {
+      "title": "コスト台帳",
+      "subtitle": "cost_ledger に基づく実際の会計 — 上のコスト分析（推定換算）とは別で、単価未登録の項目は 0 として記録されます。",
+      "scope": "範囲",
+      "scopeSystem": "全体",
+      "scopeOrg": "組織",
+      "scopeUser": "ユーザー",
+      "scopeIdPlaceholder": "組織・ユーザー ID",
+      "month": "月",
+      "apply": "表示",
+      "qty": "数量",
+      "total": "合計",
+      "final": "確定",
+      "live": "集計中",
+      "empty": "この月の記録はありません。",
+      "loadError": "明細を読み込めませんでした",
+      "byAgentTitle": "エージェント別コスト（直近 30 日）",
+      "byAgentEmpty": "エージェントに紐づくコストはありません。",
+      "agent": "エージェント",
+      "noAgent": "（未指定）"
+    }
   },
   "adminConversations": {
     "title": "全会話の閲覧",

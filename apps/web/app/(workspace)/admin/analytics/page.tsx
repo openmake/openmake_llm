@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ApiClient } from "@/lib/api-client";
 import { AdminTabs } from "@/components/hub-tabs";
+import { BillingOverview } from "@/components/admin/billing-overview";
 
 type Period = "7d" | "30d" | "90d";
 const PERIODS: { key: Period; labelKey: string }[] = [
@@ -323,6 +324,9 @@ export default function AdminAnalyticsPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* 비용 원장 — 월 명세서(system·조직·사용자)·에이전트별 비용 (F25 PR-5) */}
+        <BillingOverview />
 
         {/* 사용자 행동 */}
         {behaviorData && (

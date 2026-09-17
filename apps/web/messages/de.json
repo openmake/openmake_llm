@@ -1430,7 +1430,28 @@
       "5": "Fr",
       "6": "Sa"
     },
-    "noData": "Keine Daten zum Anzeigen."
+    "noData": "Keine Daten zum Anzeigen.",
+    "billing": {
+      "title": "Kostenbuch",
+      "subtitle": "Tatsächliche Abrechnung aus cost_ledger — getrennt von der geschätzten Kostenanalyse oben; Posten ohne hinterlegten Tarif werden mit 0 erfasst.",
+      "scope": "Bereich",
+      "scopeSystem": "Gesamt",
+      "scopeOrg": "Organisation",
+      "scopeUser": "Benutzer",
+      "scopeIdPlaceholder": "Organisations- oder Benutzer-ID",
+      "month": "Monat",
+      "apply": "Anzeigen",
+      "qty": "Menge",
+      "total": "Summe",
+      "final": "Abgeschlossen",
+      "live": "Laufend",
+      "empty": "Keine Einträge für diesen Monat.",
+      "loadError": "Abrechnung konnte nicht geladen werden",
+      "byAgentTitle": "Kosten nach Agent (letzte 30 Tage)",
+      "byAgentEmpty": "Keine Kosten sind Agenten zugeordnet.",
+      "agent": "Agent",
+      "noAgent": "(nicht zugeordnet)"
+    }
   },
   "adminConversations": {
     "title": "Alle Unterhaltungen",
