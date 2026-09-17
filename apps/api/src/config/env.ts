@@ -13,7 +13,7 @@ import * as path from 'path';
 import { envSchema } from './env.schema';
 import { parseEnvFile } from './env-file';
 import { validateConfig } from './env-validate';
-import { SERVER_CONFIG } from './constants';
+import { DEFAULT_CONFIG } from './env-defaults';
 import type { SupportedLanguageCode } from '../chat/language-policy';
 
 export interface EnvConfig {
@@ -182,137 +182,6 @@ export interface EnvConfig {
     storageBackend: 'memory' | 'redis';
     redisUrl: string;
 }
-
-const DEFAULT_CONFIG: EnvConfig = {
-    // Node
-    nodeEnv: 'development',
-
-    // Server
-    port: SERVER_CONFIG.DEFAULT_PORT,
-    serverHost: '0.0.0.0',
-
-    // Database
-    databaseUrl: 'postgresql://localhost:5432/openmake_llm',
-    dbPoolMax: 20,
-    dbPoolMin: 5,
-
-    // Auth
-    jwtSecret: '',
-    adminPassword: '',
-    defaultAdminEmail: 'admin@example.com',
-    adminEmails: '',
-
-    // OAuth
-    googleClientId: '',
-    googleClientSecret: '',
-    githubClientId: '',
-    githubClientSecret: '',
-    kakaoClientId: '',
-    kakaoClientSecret: '',
-    oauthRedirectUri: `http://localhost:${SERVER_CONFIG.DEFAULT_PORT}/api/auth/callback/google`,
-
-    // CORS
-    corsOrigins: `http://localhost:${SERVER_CONFIG.DEFAULT_PORT}`,
-
-    // LLM Backend (vLLM via LiteLLM proxy)
-    llmBaseUrl: 'http://localhost:4000',
-    llmApiKey: 'sk-no-key',
-    llmDefaultModel: 'qwen3.8-27b',
-    llmTimeout: 120000,
-    llmWarmupTimeoutMs: 10000,
-    llmHourlyTokenLimit: 300000,
-    quotaFailMode: 'open',
-    quotaExceededAction: 'reject',
-    userMonthlyCostBudgetMicros: 0,
-    quotaDegradeModelMap: '',
-    mcpToolListStaleMs: 600_000,
-    agentTaskHitlParkOnTimeout: false,
-    agentTaskQueuePriorityMax: 10,
-    llmPrefixCacheSaltMode: 'off',
-    llmPriorityEnabled: false,
-    sloChatTtftP95Ms: 15_000,
-    llmWeeklyTokenLimit: 5000000,
-    externalModelPolicy: '',
-    llmEnableReasoningEffort: false,
-    userModelRolesEnabled: false,
-    thinkingSummaryEnabled: true,
-    tailRoutingShadowEnabled: false,
-    tailRouting2bEnabled: false,
-    searchSemanticRerankShadow: false,
-    searchSemanticRerankEnabled: false,
-    searchRerankEmbedModel: 'bge-m3',
-    llmGatewayProviders: [] as string[],
-
-    // Log
-    logLevel: 'info',
-
-    // External services
-    googleApiKey: '',
-    googleCseId: '',
-    naverClientId: '',
-    naverClientSecret: '',
-    naverApiHubKeyId: '',
-    naverApiHubKey: '',
-    naverApiDailyLimit: 25000,
-    kakaoRestApiKey: '',
-    exaApiKey: '',
-    tavilyApiKey: '',
-    githubToken: '',
-
-    // Documents
-    documentTtlHours: 1,
-    maxUploadedDocuments: 100,
-
-    // Conversations
-    maxConversationSessions: 1000,
-    sessionTtlDays: 30,
-
-    // User data
-    userDataPath: './data/users',
-
-    // VAPID
-    vapidPublicKey: '',
-    vapidPrivateKey: '',
-    vapidSubject: 'mailto:support@openmake.cc',
-    operatorWebhookUrl: '',
-    operatorWebhookUrlCritical: '',
-    operatorWebhookUrlWarning: '',
-    operatorWebhookUrlInfo: '',
-
-    // Swagger
-    swaggerBaseUrl: '',
-
-    // API Key Service
-    apiKeyPepper: '',
-    apiKeyMaxPerUser: 5,
-    tokenEncryptionKey: '',
-
-    // Cookie Security
-    cookieSecure: false,
-    allowInsecureCookies: false,
-
-    // Language Policy
-    enableDynamicResponseLanguage: true,
-    defaultResponseLanguage: 'ko',
-    languageDetectionMinConfidence: 0.7,
-    languageFallbackLanguage: 'en',
-
-    // Security — Trusted Proxies
-    trustedProxies: ['loopback', 'linklocal', 'uniquelocal'],
-
-    // Security — Blacklist Policy (additive; 'open' maintains legacy fail-open behavior)
-    blacklistFailMode: 'open' as const,
-
-    // Security — CSRF Double-Submit Cookie. 프론트(@openmake/api-client)가 mutating 요청에
-    // X-CSRF-Token 을 자동 주입하고 SSE/WS 도 csrfHeaders 를 붙이므로 기본 'enforce'.
-    // 문제 발생 시 CSRF_PROTECTION=warn 으로 즉시 완화 가능.
-    csrfProtection: 'enforce' as const,
-
-    // Storage — default memory preserves single-instance in-memory behavior
-    storageBackend: 'memory' as const,
-    redisUrl: '',
-};
-
 
 /**
  * system_settings(DB) overlay — admin 시스템 설정이 env 보다 우선한다.
