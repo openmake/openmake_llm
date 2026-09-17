@@ -248,10 +248,12 @@
       "full": "Vollzugriff",
       "bridge": "Bridge (CLI)",
       "chat": "Inferenz-API",
+      "discord": "Discord-Bot",
       "hint": {
         "full": "Zugriff auf alle APIs.",
         "bridge": "Nur für die lokale Ausführung von OpenMake Code CLI — keine Inferenz-API / Token-Nutzung.",
-        "chat": "Nur OpenAI-kompatible Inferenz-API."
+        "chat": "Nur OpenAI-kompatible Inferenz-API.",
+        "discord": "Nur für den Discord-Bot — vergibt die Bereiche Einstellungsabruf (discord) und Inferenz-API (chat) zusammen."
       }
     }
   },
@@ -2111,6 +2113,10 @@
       "slo": {
         "title": "SLO-Ziele",
         "description": "Ziele für Chat-Verfügbarkeit, Zeit bis zum ersten Token, Erfolgsquote von Agent-Aufgaben und Eval-Bestehensquote. Ziele in Prozent (z. B. 99.5), TTFT als p95-Schwelle in ms. Wirksam ab der nächsten Auswertung (alle 5 Minuten)."
+      },
+      "discord": {
+        "title": "Discord-Bot",
+        "description": "Token und Zugriffssteuerung für den Discord-Gateway-Bot. Nach dem Speichern den Bot-Prozess neu starten."
       }
     },
     "historyTitle": "Änderungsverlauf",

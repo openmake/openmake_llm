@@ -24,12 +24,18 @@ describe('apiKeyHasScope', () => {
     test('미보유 스코프는 거부', () => {
         expect(apiKeyHasScope(['bridge'], API_KEY_SCOPES.CHAT)).toBe(false); // bridge 키는 추론 API 불가
         expect(apiKeyHasScope(['chat'], API_KEY_SCOPES.BRIDGE)).toBe(false); // chat 키는 브리지 불가
+        // discord 스코프는 봇 설정 배포 전용 — 추론·브리지 키로는 봇 토큰을 못 받아간다.
+        expect(apiKeyHasScope(['chat'], API_KEY_SCOPES.DISCORD)).toBe(false);
+        expect(apiKeyHasScope(['bridge'], API_KEY_SCOPES.DISCORD)).toBe(false);
+        expect(apiKeyHasScope(['discord'], API_KEY_SCOPES.CHAT)).toBe(false);
+        expect(apiKeyHasScope(['discord'], API_KEY_SCOPES.DISCORD)).toBe(true);
     });
 
     test('허용 스코프 화이트리스트', () => {
         expect(ALLOWED_API_KEY_SCOPES.has('*')).toBe(true);
         expect(ALLOWED_API_KEY_SCOPES.has('bridge')).toBe(true);
         expect(ALLOWED_API_KEY_SCOPES.has('chat')).toBe(true);
+        expect(ALLOWED_API_KEY_SCOPES.has('discord')).toBe(true);
         expect(ALLOWED_API_KEY_SCOPES.has('admin')).toBe(false);
     });
 });

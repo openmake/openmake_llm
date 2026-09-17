@@ -12,19 +12,35 @@ import {
     Partials,
     SlashCommandBuilder,
 } from 'discord.js';
-import { config, EXIT_CODE_CONFIG, validateConfig } from './config';
+import { config, EXIT_CODE_CONFIG, loadRemoteSettings, validateConfig } from './config';
 import { isUserAllowed, shouldRespond, stripBotMention } from './access-control';
 import { appendTurns, getHistory, resetSession, sessionKey } from './session-store';
 import { requestChatCompletion, resolveModel } from './openmake-client';
 import { splitForDiscord } from './message-utils';
 import { prepareReply } from './attachments';
 
-const problems = validateConfig();
-if (problems.length > 0) {
-    console.error('[discord-bot] 설정 오류로 기동하지 않습니다:');
-    for (const p of problems) console.error(`  - ${p}`);
-    console.error('[discord-bot] 루트 .env 에 값을 설정한 뒤 pm2 start openmake-discord 로 재기동하세요.');
-    process.exit(EXIT_CODE_CONFIG);
+/**
+ * 기동 절차: 서버(관리자 화면) 설정 수신 → 검증 → Discord 로그인.
+ * CommonJS 출력이라 top-level await 을 쓸 수 없어 함수로 감싼다.
+ */
+async function bootstrap(): Promise<void> {
+    const appliedRemote = await loadRemoteSettings();
+    if (appliedRemote.length > 0) {
+        console.log(`[discord-bot] 서버 설정 적용: ${appliedRemote.join(', ')}`);
+    }
+
+    const problems = validateConfig();
+    if (problems.length > 0) {
+        console.error('[discord-bot] 설정 오류로 기동하지 않습니다:');
+        for (const p of problems) console.error(`  - ${p}`);
+        console.error('[discord-bot] 관리자 화면(시스템 설정 → Discord)에서 값을 넣거나 루트 .env 를 채운 뒤 pm2 restart openmake-discord 로 재기동하세요.');
+        process.exit(EXIT_CODE_CONFIG);
+    }
+
+    await client.login(config.botToken).catch((err) => {
+        console.error('[discord-bot] Discord 로그인 실패:', err instanceof Error ? err.message : err);
+        process.exit(1);
+    });
 }
 
 const client = new Client({
@@ -139,7 +155,4 @@ client.on('interactionCreate', async (interaction) => {
     }
 });
 
-client.login(config.botToken).catch((err) => {
-    console.error('[discord-bot] Discord 로그인 실패:', err instanceof Error ? err.message : err);
-    process.exit(1);
-});
+void bootstrap();

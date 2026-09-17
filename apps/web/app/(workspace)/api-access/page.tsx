@@ -55,6 +55,18 @@ function formatDate(iso: string | null | undefined, locale: string) {
   });
 }
 
+/* ── 스코프 프리셋 (서버 허용 목록: config/api-key-scopes.ts ALLOWED_API_KEY_SCOPES) ──
+   full=전체(*), bridge=CLI 로컬 실행 전용, chat=추론 API 전용.
+   ⚠️ discord 는 두 스코프다 — 봇이 같은 키로 설정 수신(/api/integrations/discord/runtime-config,
+   discord)과 추론 호출(/api/v1/chat/completions, chat)을 모두 하기 때문. 하나만 주면 다른 쪽이 조용히 실패한다. */
+const SCOPE_PRESETS = {
+  full: ["*"],
+  bridge: ["bridge"],
+  chat: ["chat"],
+  discord: ["chat", "discord"],
+} as const;
+type ScopePreset = keyof typeof SCOPE_PRESETS;
+
 export default function ApiAccessPage() {
   const t = useTranslations("apiAccess");
   const locale = useLocale();
@@ -63,9 +75,7 @@ export default function ApiAccessPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
-  // 스코프 프리셋 — full 은 ["*"], 나머지는 같은 이름의 단일 스코프로 발급한다(서버 허용 목록: config/api-key-scopes.ts ALLOWED_API_KEY_SCOPES).
-  // full=전체(*), bridge=CLI 로컬 실행 전용, chat=추론 API 전용.
-  const [newScope, setNewScope] = useState<"full" | "bridge" | "chat">("full");
+  const [newScope, setNewScope] = useState<ScopePreset>("full");
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   // 발급/순환 직후 평문 키 1회 노출 (재조회 불가)
@@ -94,7 +104,7 @@ export default function ApiAccessPage() {
     setCreating(true);
     setError(null);
     try {
-      const scopes = newScope === "full" ? ["*"] : [newScope];
+      const scopes = [...SCOPE_PRESETS[newScope]];
       const res = await ApiClient.post<ApiSuccess<CreatedKey>>("/api/api-keys", {
         name: newName.trim(),
         scopes,
@@ -249,13 +259,14 @@ export default function ApiAccessPage() {
               />
               <select
                 value={newScope}
-                onChange={(e) => setNewScope(e.target.value as "full" | "bridge" | "chat")}
+                onChange={(e) => setNewScope(e.target.value as ScopePreset)}
                 aria-label={t("scope.label")}
                 className="rounded-md border border-border bg-surface px-2 py-2 text-sm text-fg outline-none focus:border-accent focus:ring-2 focus:ring-[var(--accent-ring)]"
               >
                 <option value="full">{t("scope.full")}</option>
                 <option value="bridge">{t("scope.bridge")}</option>
                 <option value="chat">{t("scope.chat")}</option>
+                <option value="discord">{t("scope.discord")}</option>
               </select>
               <Button type="submit" disabled={!newName.trim() || creating}>
                 {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}

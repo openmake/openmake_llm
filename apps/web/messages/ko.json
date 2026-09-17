@@ -248,10 +248,12 @@
       "full": "전체 권한",
       "bridge": "브리지(CLI)",
       "chat": "추론 API",
+      "discord": "Discord 봇",
       "hint": {
         "full": "모든 API 에 접근합니다.",
         "bridge": "OpenMake Code CLI 의 로컬 실행 전용 — 추론 API·토큰 소비는 불가.",
-        "chat": "OpenAI 호환 추론 API 전용."
+        "chat": "OpenAI 호환 추론 API 전용.",
+        "discord": "Discord 봇 전용 — 봇 설정 수신(discord)과 추론 API(chat) 스코프를 함께 발급합니다."
       }
     }
   },
@@ -2111,6 +2113,10 @@
       "slo": {
         "title": "SLO 목표",
         "description": "채팅 가용성·첫 토큰 지연·에이전트 작업 성공률·평가 통과율 목표. 목표는 백분율(예: 99.5), TTFT 는 p95 임계(ms). 다음 평가(5분 주기)부터 반영됩니다."
+      },
+      "discord": {
+        "title": "Discord 봇",
+        "description": "Discord 게이트웨이 봇의 토큰과 접근 제어. 저장 후 봇 프로세스를 재시작해야 반영됩니다."
       }
     },
     "historyTitle": "변경 이력",

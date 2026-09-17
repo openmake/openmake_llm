@@ -15,7 +15,7 @@
  */
 import { z } from 'zod';
 
-export type SettingGroup = 'oauth' | 'search' | 'alerts' | 'push' | 'llm' | 'agent' | 'slo';
+export type SettingGroup = 'oauth' | 'search' | 'alerts' | 'push' | 'llm' | 'agent' | 'slo' | 'discord';
 
 interface SystemSettingDef {
     /** env 변수명과 동일한 설정 키 */
@@ -93,6 +93,20 @@ export const SYSTEM_SETTINGS_REGISTRY: SystemSettingDef[] = [
     { key: 'OPERATOR_WEBHOOK_URL_CRITICAL', group: 'alerts', secret: true, requiresRestart: false, validate: httpsUrl },
     { key: 'OPERATOR_WEBHOOK_URL_WARNING', group: 'alerts', secret: true, requiresRestart: false, validate: httpsUrl },
     { key: 'OPERATOR_WEBHOOK_URL_INFO', group: 'alerts', secret: true, requiresRestart: false, validate: httpsUrl },
+
+    // ── Discord 봇 ──
+    // 봇은 별도 프로세스(PM2 openmake-discord)라 DB overlay 가 자동으로 닿지 않는다 —
+    // 기동 시 GET /api/integrations/discord/runtime-config 로 받아가므로 전부 requiresRestart.
+    // DISCORD_BOT_API_KEY 는 그 요청의 자격증명이라 .env 전용(부트스트랩 순환).
+    { key: 'DISCORD_BOT_TOKEN', group: 'discord', secret: true, requiresRestart: true, validate: apiKeyLike, issueUrl: 'https://discord.com/developers/applications' },
+    { key: 'DISCORD_BOT_MODEL', group: 'discord', secret: false, requiresRestart: true, validate: nonEmpty },
+    { key: 'DISCORD_BOT_REQUEST_TIMEOUT_MS', group: 'discord', secret: false, requiresRestart: true, validate: nonNegativeIntString },
+    { key: 'DISCORD_ALLOW_ALL_USERS', group: 'discord', secret: false, requiresRestart: true, validate: z.enum(['true', 'false']) },
+    { key: 'DISCORD_ALLOWED_USERS', group: 'discord', secret: false, requiresRestart: true, validate: nonEmpty },
+    { key: 'DISCORD_ALLOWED_ROLES', group: 'discord', secret: false, requiresRestart: true, validate: nonEmpty },
+    { key: 'DISCORD_REQUIRE_MENTION', group: 'discord', secret: false, requiresRestart: true, validate: z.enum(['true', 'false']) },
+    { key: 'DISCORD_FREE_RESPONSE_CHANNELS', group: 'discord', secret: false, requiresRestart: true, validate: nonEmpty },
+    { key: 'DISCORD_SESSION_MAX_TURNS', group: 'discord', secret: false, requiresRestart: true, validate: nonNegativeIntString },
 
     // ── 웹 푸시 (VAPID) ──
     { key: 'VAPID_PUBLIC_KEY', group: 'push', secret: false, requiresRestart: false, validate: nonEmpty },

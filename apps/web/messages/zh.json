@@ -248,10 +248,12 @@
       "full": "完全访问",
       "bridge": "桥接(CLI)",
       "chat": "推理 API",
+      "discord": "Discord 机器人",
       "hint": {
         "full": "访问所有 API。",
         "bridge": "仅用于 OpenMake Code CLI 本地执行 — 无法使用推理 API / 消耗令牌。",
-        "chat": "仅限 OpenAI 兼容推理 API。"
+        "chat": "仅限 OpenAI 兼容推理 API。",
+        "discord": "仅用于 Discord 机器人 — 同时签发设置接收(discord)与推理 API(chat)两个范围。"
       }
     }
   },
@@ -2111,6 +2113,10 @@
       "slo": {
         "title": "SLO 目标",
         "description": "聊天可用性、首个 token 延迟、智能体任务成功率和评估通过率的目标。目标为百分比(例如 99.5),TTFT 为 p95 阈值(毫秒)。从下一次评估(每 5 分钟)起生效。"
+      },
+      "discord": {
+        "title": "Discord 机器人",
+        "description": "Discord 网关机器人的令牌与访问控制。保存后需重启机器人进程才能生效。"
       }
     },
     "historyTitle": "变更历史",

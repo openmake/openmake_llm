@@ -103,6 +103,7 @@ import { authLimiter } from '../middlewares/rate-limiters';
 import { GitFetcher } from '../agents/git-ingest/git-fetcher';
 import { LLMClient } from '../llm/client';
 import { MCP_INGEST } from '../config/constants';
+import { discordRuntimeRouter } from './discord-runtime.routes';
 
 
 
@@ -196,6 +197,8 @@ export function setupApiRoutes(
     app.use('/api/metrics/tools', toolHealthRouter);
     app.use('/api/metrics/evaluations', evaluationRunsRouter);
     app.use('/api/metrics', metricsRouter);
+    // Discord 봇 런타임 설정 배포 — API key(discord 스코프) 전용 (2026-09-18)
+    app.use('/api/integrations/discord', discordRuntimeRouter);
     // 🆕 스킬 라우트 — agentRouter(/:id catch-all) 보다 먼저 마운트 필수
     // 사용 요약(/usage/summary)은 skillsRouter 의 /:skillId 보다 먼저 (skills.routes 600줄 게이트로 분리)
     app.use('/api/agents/skills', skillsUsageRouter);
