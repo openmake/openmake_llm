@@ -15,6 +15,8 @@ public actor WsChatSocket {
     private let session: URLSession
     private var task: URLSessionWebSocketTask?
     private var continuation: AsyncStream<WsServerEvent>.Continuation?
+    /// 이어받기 커서(F19.11) — 재연결(connect 재호출)을 넘어 유지된다. 중복 이벤트를 거르고 resume 에 실린다.
+    private var cursor = StreamCursorTracker()
 
     /// 첫 프레임까지 대기 상한. 이미지 생성(FLUX)·딥리서치는 수십 초간 서버→클라 프레임이
     /// 전혀 없다 — URLSession 기본 60s 로는 그 구간에서 조용히 끊겨 "응답이 오지 않는" 증상이
@@ -80,10 +82,16 @@ public actor WsChatSocket {
     }
 
     /// 재연결 후 끊겼던 스트림 이어받기 요청 — 서버(ws-stream-registry)가 stream_resume(본문 스냅샷)
-    /// 뒤 후속 이벤트를 이어서 보내거나, 없으면 resume_none 으로 답한다.
+    /// 뒤 후속 이벤트를 이어서 보내거나, 없으면 resume_none 으로 답한다. 마지막으로 받은 streamId·seq 를
+    /// 함께 보내 이미 받은 이벤트는 다시 받지 않는다(F19.11).
     public func resume() async {
         guard let task else { return }
-        try? await task.send(.string(#"{"type":"resume"}"#))
+        try? await task.send(.string(cursor.resumeMessage()))
+    }
+
+    /// 수신 프레임의 이어받기 봉투를 적용 — false 면 이미 받은 이벤트(재생 중복)라 버린다.
+    private func acceptFrame(_ data: Data) -> Bool {
+        cursor.accept(data)
     }
 
     public func disconnect() {
@@ -112,7 +120,7 @@ public actor WsChatSocket {
                     @unknown default: data = nil
                     }
                     // 미지 이벤트/비정상 프레임은 규약대로 무시 (forward-compat)
-                    if let data, let event = WsEventDecoder.decode(data) {
+                    if let data, await self?.acceptFrame(data) ?? false, let event = WsEventDecoder.decode(data) {
                         await self?.yield(event)
                     }
                 } catch {

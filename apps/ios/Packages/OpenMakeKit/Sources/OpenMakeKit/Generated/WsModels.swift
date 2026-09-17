@@ -80,6 +80,12 @@ public struct WsServerEvent: Codable {
     public let metrics: Metrics?
     public let content: String?
     public let finished: Bool?
+    /// 재생해야 할 이벤트 일부가 링버퍼에서 밀려났음 — 아티팩트는 done.cleanedContent 로 재구성할 것
+    public let gap: Bool?
+    /// 스냅샷이 반영한 마지막 순번
+    public let lastSeq: Double?
+    /// 이 스트림의 식별자(F19.11) — 클라이언트 커서가 다르면 새 스트림으로 본다
+    public let streamID: String?
     public let thinking: String?
     /// 에러 분류(quota_exceeded / api_keys_exhausted / provider code 등)
     public let errorType: String?
@@ -124,6 +130,9 @@ public struct WsServerEvent: Codable {
         case metrics = "metrics"
         case content = "content"
         case finished = "finished"
+        case gap = "gap"
+        case lastSeq = "lastSeq"
+        case streamID = "streamId"
         case thinking = "thinking"
         case errorType = "errorType"
         case keysInCooldown = "keysInCooldown"
@@ -146,7 +155,7 @@ public struct WsServerEvent: Codable {
         case taskID = "taskId"
     }
 
-    public init(token: String?, type: WsServerEventType, messageID: String?, summary: String?, issues: String?, sessionID: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, content: String?, finished: Bool?, thinking: String?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, status: String?, step: Step?, taskID: String?) {
+    public init(token: String?, type: WsServerEventType, messageID: String?, summary: String?, issues: String?, sessionID: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, streamID: String?, thinking: String?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, currentTurn: Double?, status: String?, step: Step?, taskID: String?) {
         self.token = token
         self.type = type
         self.messageID = messageID
@@ -164,6 +173,9 @@ public struct WsServerEvent: Codable {
         self.metrics = metrics
         self.content = content
         self.finished = finished
+        self.gap = gap
+        self.lastSeq = lastSeq
+        self.streamID = streamID
         self.thinking = thinking
         self.errorType = errorType
         self.keysInCooldown = keysInCooldown
@@ -223,6 +235,9 @@ public extension WsServerEvent {
         metrics: Metrics?? = nil,
         content: String?? = nil,
         finished: Bool?? = nil,
+        gap: Bool?? = nil,
+        lastSeq: Double?? = nil,
+        streamID: String?? = nil,
         thinking: String?? = nil,
         errorType: String?? = nil,
         keysInCooldown: Double?? = nil,
@@ -262,6 +277,9 @@ public extension WsServerEvent {
             metrics: metrics ?? self.metrics,
             content: content ?? self.content,
             finished: finished ?? self.finished,
+            gap: gap ?? self.gap,
+            lastSeq: lastSeq ?? self.lastSeq,
+            streamID: streamID ?? self.streamID,
             thinking: thinking ?? self.thinking,
             errorType: errorType ?? self.errorType,
             keysInCooldown: keysInCooldown ?? self.keysInCooldown,
