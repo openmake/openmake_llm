@@ -120,6 +120,21 @@ export async function startAllSchedulers(): Promise<void> {
         logger.warn('노드 지표 수집 등록 실패(무시):', err);
     }
 
+    // 7-d. SLO 평가(F24.8, 145) — 5분 tick: SLI·버짓·burn-rate 스냅샷 + 악화 시 알림, 스냅샷 400일 보존
+    try {
+        const { SLO_LIMITS } = await import('../config/slo');
+        const { runSloTick } = await import('../monitoring/slo-runner');
+        const { SloRepository } = await import('../data/repositories/slo-repository');
+        const { getAlertSystem } = await import('../monitoring/alerts');
+        const { getPool } = await import('../data/models/unified-database');
+        const tick = () => runSloTick(getPool(), (...a) => getAlertSystem().sendAlert(...a)).catch(() => { /* noop */ });
+        setTimeout(() => { void tick(); }, SLO_LIMITS.FIRST_TICK_DELAY_MS).unref();
+        setInterval(() => { void tick(); }, SLO_LIMITS.TICK_MS).unref();
+        setInterval(() => { void new SloRepository(getPool()).purge(SLO_LIMITS.SNAPSHOT_RETENTION_DAYS).catch(() => 0); }, CLEANUP_INTERVALS.MAINTENANCE_SWEEP_MS).unref();
+    } catch (err) {
+        logger.warn('SLO 평가 등록 실패(무시):', err);
+    }
+
     // 7-b. 질문 응답 대기 주차 스윕(F16.7) — 결정 도착분 재개·상한 초과분 실패·대기분 workspace 유지(주차가 없으면 조회 1회)
     try {
         const { sweepParkedTasks } = await import('../services/agent-task/hitl-park');

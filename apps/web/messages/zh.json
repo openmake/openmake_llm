@@ -27,6 +27,7 @@
       "approvals": "待审批",
       "organizationsAdmin": "组织管理",
       "costRatesAdmin": "成本单价",
+      "sloAdmin": "SLO",
       "quotaRequestsAdmin": "配额审批"
     },
     "pendingApprovals": "{count} 个待批准 — 代理任务正在等待您的批准"
@@ -1975,6 +1976,10 @@
       "agent": {
         "title": "代理与 MCP 运行时",
         "description": "外部 MCP 工具列表刷新间隔、审批超时后暂存、队列优先级上限。保存后立即生效。"
+      },
+      "slo": {
+        "title": "SLO 目标",
+        "description": "聊天可用性、首个 token 延迟、智能体任务成功率和评估通过率的目标。目标为百分比(例如 99.5),TTFT 为 p95 阈值(毫秒)。从下一次评估(每 5 分钟)起生效。"
       }
     },
     "historyTitle": "变更历史",
@@ -2460,5 +2465,55 @@
     "userIdPlaceholder": "用户 id",
     "grant": "授予",
     "grantDone": "已授予。"
+  },
+  "adminSlo": {
+    "title": "SLO",
+    "description": "相对服务水平目标的当前状态、错误预算与消耗速率",
+    "computedAt": "计算时间 {time}",
+    "openSettings": "设置目标",
+    "refresh": "刷新",
+    "loadError": "加载失败。",
+    "target": "目标 {value}",
+    "budgetRemaining": "剩余错误预算",
+    "burnFast": "消耗(1 小时)",
+    "burnSlow": "消耗(6 小时)",
+    "samples": "样本",
+    "p95": "TTFT p95",
+    "reasonLabel": "原因",
+    "historyTitle": "最近 30 天",
+    "date": "日期",
+    "historyEmpty": "尚无快照 — 每 5 分钟记录一次评估。",
+    "state": {
+      "ok": "正常",
+      "warning": "警告",
+      "critical": "严重",
+      "insufficient": "数据不足"
+    },
+    "reason": {
+      "fast_burn": "快速消耗(1 小时与 5 分钟窗口 ≥14.4 倍)",
+      "slow_burn": "缓慢消耗(6 小时与 30 分钟窗口 ≥6 倍)",
+      "budget_exhausted": "窗口内错误预算已耗尽",
+      "below_target": "低于目标",
+      "few_samples": "样本不足",
+      "source_unavailable": "数据源不可用"
+    },
+    "slo": {
+      "chat_availability": {
+        "name": "聊天可用性",
+        "desc": "最近 {window} 天聊天请求中无错误结束的比例(不含用户中止)"
+      },
+      "chat_ttft_p95": {
+        "name": "首个 token 延迟",
+        "desc": "最近 {window} 天成功请求中首个 token 在 {threshold} 秒内的比例(p95 目标)"
+      },
+      "agent_task_success": {
+        "name": "智能体任务成功率",
+        "desc": "最近 {window} 天结束的任务中完成的比例(不含取消)"
+      },
+      "eval_pass": {
+        "name": "评估通过率",
+        "desc": "最近 {window} 天内最新一次回答评估的通过率"
+      }
+    }
   }
 }

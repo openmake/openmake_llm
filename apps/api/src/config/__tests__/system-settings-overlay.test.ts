@@ -69,6 +69,11 @@ describe('system-settings-registry', () => {
             else if (def.key === 'MCP_TOOL_LIST_STALE_MS') sample[def.key] = '781';
             else if (def.key === 'AGENT_TASK_QUEUE_PRIORITY_MAX') sample[def.key] = '782';
             else if (def.key === 'AGENT_TASK_HITL_PARK_ON_TIMEOUT') sample[def.key] = 'true';
+            // SLO 목표(F24.8) — 백분율·정수
+            else if (def.key === 'SLO_CHAT_AVAILABILITY_TARGET') sample[def.key] = '97.51';
+            else if (def.key === 'SLO_AGENT_TASK_SUCCESS_TARGET') sample[def.key] = '97.52';
+            else if (def.key === 'SLO_EVAL_PASS_TARGET') sample[def.key] = '97.53';
+            else if (def.key === 'SLO_CHAT_TTFT_P95_MS') sample[def.key] = '783';
             else if (def.key.startsWith('OPERATOR_WEBHOOK') || def.key === 'OAUTH_REDIRECT_URI' || def.key === 'LLM_BASE_URL')
                 sample[def.key] = 'https://example.com/wired';
             else if (def.key === 'VAPID_SUBJECT') sample[def.key] = 'mailto:wired@example.com';
@@ -94,6 +99,13 @@ describe('system-settings-registry', () => {
         const limit = SETTING_DEFS_BY_KEY.get('NAVER_API_DAILY_LIMIT')!;
         expect(limit.validate.safeParse('abc').success).toBe(false);
         expect(limit.validate.safeParse('25000').success).toBe(true);
+
+        const slo = SETTING_DEFS_BY_KEY.get('SLO_CHAT_AVAILABILITY_TARGET')!;
+        expect(slo.validate.safeParse('99.5').success).toBe(true);
+        expect(slo.validate.safeParse('100').success).toBe(false);
+        expect(slo.validate.safeParse('0').success).toBe(false);
+        expect(slo.validate.safeParse('0.99').success).toBe(true); // 0.99% — 형식은 유효(의미는 관리자 책임, UI 설명에 백분율 명시)
+        expect(slo.validate.safeParse('abc').success).toBe(false);
 
         const anyKey = SETTING_DEFS_BY_KEY.get('GOOGLE_CLIENT_ID')!;
         expect(anyKey.validate.safeParse('').success).toBe(false);

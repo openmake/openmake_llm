@@ -64,7 +64,8 @@ type AlertType =
     | 'key_exhausted'
     | 'response_time_spike'
     | 'error_rate_spike'
-    | 'minor_pending_registered';  // GDPR Phase D — 14세 미만 가입 대기
+    | 'minor_pending_registered'  // GDPR Phase D — 14세 미만 가입 대기
+    | 'slo_burn_rate';  // F24.8 — SLO 에러 버짓 burn-rate(monitoring/slo-runner)
 
 /**
  * 알림 메시지 인터페이스

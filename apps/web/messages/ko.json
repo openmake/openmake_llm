@@ -27,6 +27,7 @@
       "approvals": "승인 대기",
       "organizationsAdmin": "조직 관리",
       "costRatesAdmin": "비용 단가",
+      "sloAdmin": "SLO",
       "quotaRequestsAdmin": "쿼터 승인"
     },
     "pendingApprovals": "승인 대기 {count}건 — 에이전트 작업이 사용자 승인을 기다리고 있습니다"
@@ -1975,6 +1976,10 @@
       "agent": {
         "title": "에이전트·MCP 런타임",
         "description": "외부 MCP 도구 목록 갱신 주기, 승인 만료 주차, 큐 우선순위 상한. 저장 즉시 반영됩니다."
+      },
+      "slo": {
+        "title": "SLO 목표",
+        "description": "채팅 가용성·첫 토큰 지연·에이전트 작업 성공률·평가 통과율 목표. 목표는 백분율(예: 99.5), TTFT 는 p95 임계(ms). 다음 평가(5분 주기)부터 반영됩니다."
       }
     },
     "historyTitle": "변경 이력",
@@ -2460,5 +2465,55 @@
     "userIdPlaceholder": "사용자 id",
     "grant": "부여",
     "grantDone": "부여했습니다."
+  },
+  "adminSlo": {
+    "title": "SLO",
+    "description": "서비스 수준 목표 대비 현재 상태·에러 버짓·burn-rate",
+    "computedAt": "계산 시각 {time}",
+    "openSettings": "목표 설정",
+    "refresh": "새로고침",
+    "loadError": "불러오기에 실패했습니다.",
+    "target": "목표 {value}",
+    "budgetRemaining": "에러 버짓 잔량",
+    "burnFast": "burn(1시간)",
+    "burnSlow": "burn(6시간)",
+    "samples": "표본",
+    "p95": "TTFT p95",
+    "reasonLabel": "사유",
+    "historyTitle": "최근 30일",
+    "date": "날짜",
+    "historyEmpty": "스냅샷이 아직 없습니다 — 평가는 5분마다 기록됩니다.",
+    "state": {
+      "ok": "정상",
+      "warning": "경고",
+      "critical": "위험",
+      "insufficient": "판정 보류"
+    },
+    "reason": {
+      "fast_burn": "빠른 소진(1시간·5분 창 14.4배 이상)",
+      "slow_burn": "느린 소진(6시간·30분 창 6배 이상)",
+      "budget_exhausted": "창 전체 에러 버짓 소진",
+      "below_target": "목표 미달",
+      "few_samples": "표본 부족",
+      "source_unavailable": "데이터 소스 없음"
+    },
+    "slo": {
+      "chat_availability": {
+        "name": "채팅 가용성",
+        "desc": "최근 {window}일 채팅 요청 중 오류 없이 끝난 비율(사용자 중단 제외)"
+      },
+      "chat_ttft_p95": {
+        "name": "첫 토큰 지연",
+        "desc": "최근 {window}일 성공 요청 중 첫 토큰이 {threshold}초 이내인 비율(= p95 기준)"
+      },
+      "agent_task_success": {
+        "name": "에이전트 작업 성공률",
+        "desc": "최근 {window}일 끝난 작업 중 완료 비율(취소 제외)"
+      },
+      "eval_pass": {
+        "name": "평가 통과율",
+        "desc": "최근 {window}일 안의 마지막 응답 평가 통과율"
+      }
+    }
   }
 }

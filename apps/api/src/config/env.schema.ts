@@ -49,6 +49,12 @@ const nonNegativeIntWithDefault = (defaultValue: number) =>
 const positiveIntWithDefault = (defaultValue: number) =>
     z.coerce.number().int().positive().default(defaultValue);
 
+/** 백분율 목표(0 초과 100 미만, 소수 허용) — 미설정·빈값은 undefined(코드 기본값) */
+const percentTargetOptional = z.preprocess(
+    (v) => (v === undefined || v === '' ? undefined : Number(v)),
+    z.number().gt(0).lt(100).optional(),
+);
+
 export const envSchema = z
     .object({
         // Core
@@ -115,6 +121,11 @@ export const envSchema = z
         MCP_TOOL_LIST_STALE_MS: nonNegativeIntWithDefault(600_000),
         AGENT_TASK_HITL_PARK_ON_TIMEOUT: z.enum(['true', 'false']).optional(),
         AGENT_TASK_QUEUE_PRIORITY_MAX: nonNegativeIntWithDefault(10),
+        /** SLO 목표(F24.8, 145) — 관리자 UI 그룹 slo 에서 실시간 조정 */
+        SLO_CHAT_AVAILABILITY_TARGET: percentTargetOptional,
+        SLO_CHAT_TTFT_P95_MS: nonNegativeIntWithDefault(15_000),
+        SLO_AGENT_TASK_SUCCESS_TARGET: percentTargetOptional,
+        SLO_EVAL_PASS_TARGET: percentTargetOptional,
         LLM_WEEKLY_TOKEN_LIMIT: nonNegativeIntWithDefault(5000000),
         /** 외부 모델 정책 JSON(Control Plane 기초) — 파싱은 config/external-model-policy, 형식 검증은 registry */
         EXTERNAL_MODEL_POLICY: z.string().optional(),

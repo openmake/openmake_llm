@@ -15,7 +15,7 @@
  */
 import { z } from 'zod';
 
-export type SettingGroup = 'oauth' | 'search' | 'alerts' | 'push' | 'llm' | 'agent';
+export type SettingGroup = 'oauth' | 'search' | 'alerts' | 'push' | 'llm' | 'agent' | 'slo';
 
 interface SystemSettingDef {
     /** env 변수명과 동일한 설정 키 */
@@ -44,6 +44,8 @@ const nonNegativeIntString = z
 const jsonObject = nonEmpty.refine((v) => {
     try { const o = JSON.parse(v); return !!o && typeof o === 'object' && !Array.isArray(o); } catch { return false; }
 }, 'JSON 객체여야 합니다 (예: {"deny":["openrouter:*"]})');
+/** 백분율 목표 — 0 초과 100 미만 소수(예: 99.5) */
+const percentTarget = nonEmpty.refine((v) => /^\d{1,2}(\.\d{1,3})?$/.test(v) && Number(v) > 0 && Number(v) < 100, '0 초과 100 미만 백분율이어야 합니다 (예: 99.5)');
 const mailtoOrHttps = nonEmpty.refine(
     (v) => /^(mailto:|https:\/\/)/.test(v),
     'mailto: 또는 https:// 형식이어야 합니다',
@@ -114,6 +116,12 @@ export const SYSTEM_SETTINGS_REGISTRY: SystemSettingDef[] = [
     { key: 'MCP_TOOL_LIST_STALE_MS', group: 'agent', secret: false, requiresRestart: false, validate: nonNegativeIntString },
     { key: 'AGENT_TASK_HITL_PARK_ON_TIMEOUT', group: 'agent', secret: false, requiresRestart: false, validate: z.enum(['true', 'false']) },
     { key: 'AGENT_TASK_QUEUE_PRIORITY_MAX', group: 'agent', secret: false, requiresRestart: false, validate: nonNegativeIntString },
+
+    // ── SLO 목표(F24.8, 145) — 5분 평가 tick 이 호출 시점에 읽는다(실시간) ──
+    { key: 'SLO_CHAT_AVAILABILITY_TARGET', group: 'slo', secret: false, requiresRestart: false, validate: percentTarget },
+    { key: 'SLO_CHAT_TTFT_P95_MS', group: 'slo', secret: false, requiresRestart: false, validate: nonNegativeIntString },
+    { key: 'SLO_AGENT_TASK_SUCCESS_TARGET', group: 'slo', secret: false, requiresRestart: false, validate: percentTarget },
+    { key: 'SLO_EVAL_PASS_TARGET', group: 'slo', secret: false, requiresRestart: false, validate: percentTarget },
 
     // ── 외부 LLM provider 키 — 저장/삭제 시 "관리자 본인"의 user_external_api_keys(BYOK)로
     //    연동된다 (admin-system-settings.routes 의 syncAdminProviderKey). 런타임 키 해석 경로는

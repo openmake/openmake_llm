@@ -27,6 +27,7 @@
       "approvals": "承認待ち",
       "organizationsAdmin": "組織管理",
       "costRatesAdmin": "コスト単価",
+      "sloAdmin": "SLO",
       "quotaRequestsAdmin": "クォータ承認"
     },
     "pendingApprovals": "承認待ち {count}件 — エージェント作業がユーザーの承認を待っています"
@@ -1975,6 +1976,10 @@
       "agent": {
         "title": "エージェント・MCP ランタイム",
         "description": "外部 MCP ツール一覧の更新間隔、承認期限切れ時の保留、キュー優先度の上限。保存後すぐに反映されます。"
+      },
+      "slo": {
+        "title": "SLO 目標",
+        "description": "チャット可用性・初回トークン遅延・エージェントタスク成功率・評価合格率の目標。目標はパーセント(例: 99.5)、TTFT は p95 しきい値(ms)。次回の評価(5 分ごと)から反映されます。"
       }
     },
     "historyTitle": "変更履歴",
@@ -2460,5 +2465,55 @@
     "userIdPlaceholder": "ユーザー id",
     "grant": "付与",
     "grantDone": "付与しました。"
+  },
+  "adminSlo": {
+    "title": "SLO",
+    "description": "サービスレベル目標に対する現状・エラーバジェット・バーンレート",
+    "computedAt": "計算時刻 {time}",
+    "openSettings": "目標を設定",
+    "refresh": "更新",
+    "loadError": "読み込みに失敗しました。",
+    "target": "目標 {value}",
+    "budgetRemaining": "エラーバジェット残量",
+    "burnFast": "burn(1時間)",
+    "burnSlow": "burn(6時間)",
+    "samples": "サンプル",
+    "p95": "TTFT p95",
+    "reasonLabel": "理由",
+    "historyTitle": "直近 30 日",
+    "date": "日付",
+    "historyEmpty": "スナップショットはまだありません — 評価は 5 分ごとに記録されます。",
+    "state": {
+      "ok": "正常",
+      "warning": "警告",
+      "critical": "危険",
+      "insufficient": "判定保留"
+    },
+    "reason": {
+      "fast_burn": "高速消費(1時間・5分窓で 14.4 倍以上)",
+      "slow_burn": "低速消費(6時間・30分窓で 6 倍以上)",
+      "budget_exhausted": "期間全体のエラーバジェット枯渇",
+      "below_target": "目標未達",
+      "few_samples": "サンプル不足",
+      "source_unavailable": "データソースなし"
+    },
+    "slo": {
+      "chat_availability": {
+        "name": "チャット可用性",
+        "desc": "直近 {window} 日のチャット要求のうちエラーなく終わった割合(ユーザー中断を除く)"
+      },
+      "chat_ttft_p95": {
+        "name": "初回トークン遅延",
+        "desc": "直近 {window} 日の成功要求のうち初回トークンが {threshold} 秒以内の割合(p95 目標)"
+      },
+      "agent_task_success": {
+        "name": "エージェントタスク成功率",
+        "desc": "直近 {window} 日に終了したタスクのうち完了した割合(キャンセルを除く)"
+      },
+      "eval_pass": {
+        "name": "評価合格率",
+        "desc": "直近 {window} 日以内の最新応答評価の合格率"
+      }
+    }
   }
 }

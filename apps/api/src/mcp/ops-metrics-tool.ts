@@ -18,7 +18,7 @@ import { TOOL_HEALTH_QUERY } from '../config/tool-health';
 
 export const OPS_METRICS_QUERIES = [
     'summary', 'failed_runs', 'slowest_runs', 'runs_by_model',
-    'tool_errors', 'token_usage', 'goal_incomplete', 'prompt_versions', 'gpu', 'queue_depth',
+    'tool_errors', 'token_usage', 'goal_incomplete', 'prompt_versions', 'gpu', 'queue_depth', 'slo',
 ] as const;
 type OpsMetricsQuery = (typeof OPS_METRICS_QUERIES)[number];
 
@@ -111,6 +111,15 @@ async function runOpsMetricsQuery(query: OpsMetricsQuery, hours: number, limit: 
             const series = await new NodeMetricsRepository(pool).series([QUEUE_DEPTH_METRIC], hours, resolveSeriesWindow(hours).bucketMinutes);
             return { current: getLastQueueDepth(), series: series.slice(-limit * QUEUE_DEPTH_QUEUES.length) };
         }
+        case 'slo': {
+            // SLO 4종(F24.8, 145) — 즉시 계산 + 기간 내 일별 스냅샷
+            const { computeSloEvaluations } = await import('../monitoring/slo-runner');
+            const { SloRepository } = await import('../data/repositories/slo-repository');
+            const [evaluations, history] = await Promise.all([
+                computeSloEvaluations(pool), new SloRepository(pool).dailyHistory(Math.max(1, Math.ceil(days))).catch(() => []),
+            ]);
+            return { evaluations, daily_history: history.slice(0, limit * evaluations.length) };
+        }
         default: {
             const never: never = query;
             throw new Error(`unknown query ${String(never)}`);
@@ -135,7 +144,8 @@ export const opsMetricsTool: MCPToolDefinition<OpsMetricsArgs> = {
                     description: 'summary=상태별 작업 요약+서버별 도구 호출 · failed_runs=실패 작업 목록 · slowest_runs=오래 걸린 작업 · '
                         + 'runs_by_model=모델별 작업 · tool_errors=서버/도구/원인별 오류 · token_usage=토큰·비용 · goal_incomplete=목표 미달 판정 분포·실패 사유'
                         + ' · prompt_versions=채팅 시스템 프롬프트 지문별 요청 수·오류율·TTFT p50'
-                        + ' · gpu=vLLM 노드 KV 캐시·대기/실행 요청(스냅샷+추이) · queue_depth=작업 큐·오케스트레이터 job·vLLM 대기 깊이',
+                        + ' · gpu=vLLM 노드 KV 캐시·대기/실행 요청(스냅샷+추이) · queue_depth=작업 큐·오케스트레이터 job·vLLM 대기 깊이'
+                        + ' · slo=SLO(채팅 가용성·TTFT·작업 성공률·평가 통과율) 목표 대비 현재·에러 버짓 잔량·burn-rate',
                 },
                 window: {
                     type: 'string',

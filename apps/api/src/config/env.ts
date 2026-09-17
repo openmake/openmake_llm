@@ -68,6 +68,11 @@ export interface EnvConfig {
     agentTaskHitlParkOnTimeout: boolean;
     /** 관리자가 줄 수 있는 큐 우선순위 상한 — F16.6 */
     agentTaskQueuePriorityMax: number;
+    /** SLO 목표(F24.8) — 백분율(0~100, config/slo 가 비율로 환산), TTFT 는 p95 임계(ms). 미설정은 config/slo 기본값 */
+    sloChatAvailabilityTargetPct?: number;
+    sloChatTtftP95Ms: number;
+    sloAgentTaskSuccessTargetPct?: number;
+    sloEvalPassTargetPct?: number;
     /** 강등 맵 JSON (글롭 → 대체 fullId) */
     quotaDegradeModelMap: string;
     llmWeeklyTokenLimit: number;
@@ -219,6 +224,7 @@ const DEFAULT_CONFIG: EnvConfig = {
     mcpToolListStaleMs: 600_000,
     agentTaskHitlParkOnTimeout: false,
     agentTaskQueuePriorityMax: 10,
+    sloChatTtftP95Ms: 15_000,
     llmWeeklyTokenLimit: 5000000,
     externalModelPolicy: '',
     llmEnableReasoningEffort: false,
@@ -367,6 +373,10 @@ export function loadConfig(): EnvConfig {
         MCP_TOOL_LIST_STALE_MS: env('MCP_TOOL_LIST_STALE_MS'),
         AGENT_TASK_HITL_PARK_ON_TIMEOUT: env('AGENT_TASK_HITL_PARK_ON_TIMEOUT'),
         AGENT_TASK_QUEUE_PRIORITY_MAX: env('AGENT_TASK_QUEUE_PRIORITY_MAX'),
+        SLO_CHAT_AVAILABILITY_TARGET: env('SLO_CHAT_AVAILABILITY_TARGET'),
+        SLO_CHAT_TTFT_P95_MS: env('SLO_CHAT_TTFT_P95_MS'),
+        SLO_AGENT_TASK_SUCCESS_TARGET: env('SLO_AGENT_TASK_SUCCESS_TARGET'),
+        SLO_EVAL_PASS_TARGET: env('SLO_EVAL_PASS_TARGET'),
         LLM_WEEKLY_TOKEN_LIMIT: env('LLM_WEEKLY_TOKEN_LIMIT'),
         EXTERNAL_MODEL_POLICY: env('EXTERNAL_MODEL_POLICY'),
         LLM_ENABLE_REASONING_EFFORT: env('LLM_ENABLE_REASONING_EFFORT'),
@@ -490,6 +500,10 @@ export function loadConfig(): EnvConfig {
         mcpToolListStaleMs: parsed.MCP_TOOL_LIST_STALE_MS ?? DEFAULT_CONFIG.mcpToolListStaleMs,
         agentTaskHitlParkOnTimeout: parsed.AGENT_TASK_HITL_PARK_ON_TIMEOUT === undefined ? DEFAULT_CONFIG.agentTaskHitlParkOnTimeout : parsed.AGENT_TASK_HITL_PARK_ON_TIMEOUT === 'true',
         agentTaskQueuePriorityMax: parsed.AGENT_TASK_QUEUE_PRIORITY_MAX ?? DEFAULT_CONFIG.agentTaskQueuePriorityMax,
+        sloChatAvailabilityTargetPct: parsed.SLO_CHAT_AVAILABILITY_TARGET,
+        sloChatTtftP95Ms: parsed.SLO_CHAT_TTFT_P95_MS ?? DEFAULT_CONFIG.sloChatTtftP95Ms,
+        sloAgentTaskSuccessTargetPct: parsed.SLO_AGENT_TASK_SUCCESS_TARGET,
+        sloEvalPassTargetPct: parsed.SLO_EVAL_PASS_TARGET,
         llmWeeklyTokenLimit: parsed.LLM_WEEKLY_TOKEN_LIMIT ?? DEFAULT_CONFIG.llmWeeklyTokenLimit,
         externalModelPolicy: parsed.EXTERNAL_MODEL_POLICY ?? DEFAULT_CONFIG.externalModelPolicy,
         llmEnableReasoningEffort: (parsed.LLM_ENABLE_REASONING_EFFORT ?? 'false').toLowerCase() === 'true',

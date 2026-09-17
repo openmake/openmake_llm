@@ -27,6 +27,7 @@
       "approvals": "Freigaben",
       "organizationsAdmin": "Organisationen",
       "costRatesAdmin": "Kostensätze",
+      "sloAdmin": "SLO",
       "quotaRequestsAdmin": "Kontingent-Freigaben"
     },
     "pendingApprovals": "{count} ausstehende Freigabe(n) — Agentenaufgaben warten auf Ihre Freigabe"
@@ -1975,6 +1976,10 @@
       "agent": {
         "title": "Agent- & MCP-Laufzeit",
         "description": "Aktualisierungsintervall externer MCP-Werkzeuglisten, Parken abgelaufener Freigaben, Obergrenze der Warteschlangenpriorität. Sofort wirksam."
+      },
+      "slo": {
+        "title": "SLO-Ziele",
+        "description": "Ziele für Chat-Verfügbarkeit, Zeit bis zum ersten Token, Erfolgsquote von Agent-Aufgaben und Eval-Bestehensquote. Ziele in Prozent (z. B. 99.5), TTFT als p95-Schwelle in ms. Wirksam ab der nächsten Auswertung (alle 5 Minuten)."
       }
     },
     "historyTitle": "Änderungsverlauf",
@@ -2460,5 +2465,55 @@
     "userIdPlaceholder": "Benutzer-ID",
     "grant": "Gewähren",
     "grantDone": "Gewährt."
+  },
+  "adminSlo": {
+    "title": "SLO",
+    "description": "Aktueller Stand gegenüber Service-Level-Zielen, Fehlerbudget und Burn-Rate",
+    "computedAt": "Berechnet um {time}",
+    "openSettings": "Ziele bearbeiten",
+    "refresh": "Aktualisieren",
+    "loadError": "Laden fehlgeschlagen.",
+    "target": "Ziel {value}",
+    "budgetRemaining": "Verbleibendes Fehlerbudget",
+    "burnFast": "Burn (1 h)",
+    "burnSlow": "Burn (6 h)",
+    "samples": "Stichproben",
+    "p95": "TTFT p95",
+    "reasonLabel": "Grund",
+    "historyTitle": "Letzte 30 Tage",
+    "date": "Datum",
+    "historyEmpty": "Noch keine Snapshots — Auswertungen werden alle 5 Minuten gespeichert.",
+    "state": {
+      "ok": "OK",
+      "warning": "Warnung",
+      "critical": "Kritisch",
+      "insufficient": "Zu wenig Daten"
+    },
+    "reason": {
+      "fast_burn": "Schneller Verbrauch (≥14,4× über 1 h und 5 min)",
+      "slow_burn": "Langsamer Verbrauch (≥6× über 6 h und 30 min)",
+      "budget_exhausted": "Fehlerbudget im Zeitraum aufgebraucht",
+      "below_target": "Unter dem Ziel",
+      "few_samples": "Zu wenige Stichproben",
+      "source_unavailable": "Datenquelle nicht verfügbar"
+    },
+    "slo": {
+      "chat_availability": {
+        "name": "Chat-Verfügbarkeit",
+        "desc": "Anteil der Chat-Anfragen der letzten {window} Tage ohne Fehler (Benutzerabbrüche ausgenommen)"
+      },
+      "chat_ttft_p95": {
+        "name": "Zeit bis zum ersten Token",
+        "desc": "Anteil erfolgreicher Anfragen der letzten {window} Tage mit erstem Token innerhalb von {threshold} s (p95-Ziel)"
+      },
+      "agent_task_success": {
+        "name": "Erfolg von Agent-Aufgaben",
+        "desc": "Anteil der in den letzten {window} Tagen beendeten Aufgaben, die abgeschlossen wurden (ohne Abbrüche)"
+      },
+      "eval_pass": {
+        "name": "Eval-Bestehensquote",
+        "desc": "Bestehensquote der letzten Antwort-Auswertung innerhalb von {window} Tagen"
+      }
+    }
   }
 }

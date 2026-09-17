@@ -24,6 +24,8 @@
  * - GET  /api/metrics/health        - 시스템 헬스 체크
  * - GET  /api/metrics/gpu           - vLLM/DCGM 노드 스냅샷·추이 (143)
  * - GET  /api/metrics/queues        - 큐 깊이 스냅샷·추이 (143)
+ * - GET  /api/metrics/slo           - SLO 상태·에러 버짓·burn-rate (145)
+ * - GET  /api/metrics/slo/history   - SLO 일별 스냅샷 (145)
  *
  * @requires requireAuth - JWT 인증 미들웨어
  * @requires requireAdmin - 관리자 권한 미들웨어
@@ -49,6 +51,9 @@ import { GATE_REPORT, NODE_METRICS } from '../config/runtime-limits';
 import { NodeMetricsRepository, resolveSeriesWindow } from '../data/repositories/node-metrics-repository';
 import { getNodeMetricsStates, resolveNodeMetricsUrls } from '../cluster/node-metrics-collector';
 import { getLastQueueDepth, QUEUE_DEPTH_METRIC } from '../monitoring/queue-depth-sampler';
+import { SLO_LIMITS, resolveSloTargets } from '../config/slo';
+import { SloRepository } from '../data/repositories/slo-repository';
+import { computeSloEvaluations } from '../monitoring/slo-runner';
 import { getPool } from '../data/models/unified-database';
 import { ConversationRepository } from '../data/repositories/conversation-repository';
 import { AgentTaskMetricsRepository } from '../data/repositories/agent-task-metrics-repository';
@@ -522,6 +527,21 @@ router.get('/queues', asyncHandler(async (req: Request, res: Response) => {
     const { hours, bucketMinutes } = resolveSeriesWindow(req.query.hours);
     const series = await new NodeMetricsRepository(getPool()).series([QUEUE_DEPTH_METRIC], hours, bucketMinutes).catch(() => []);
     res.json(success({ enabled: NODE_METRICS.ENABLED, current: getLastQueueDepth(), hours, bucketMinutes, series }));
+}));
+
+/**
+ * GET /api/metrics/slo — SLO 4종 즉시 계산(목표·SLI·버짓 잔량·burn fast/slow·상태). 계산 실패 소스는 insufficient.
+ * GET /api/metrics/slo/history?days=N — 일별 마지막 스냅샷(기본 30일, 상한 90일)
+ */
+router.get('/slo', asyncHandler(async (_req: Request, res: Response) => {
+    const { targets, ttftThresholdMs } = resolveSloTargets();
+    res.json(success({ computedAt: new Date().toISOString(), targets, ttftThresholdMs, evaluations: await computeSloEvaluations(getPool()) }));
+}));
+
+router.get('/slo/history', asyncHandler(async (req: Request, res: Response) => {
+    const days = Math.min(parseDays(req.query.days, 30), SLO_LIMITS.HISTORY_MAX_DAYS);
+    const rows = await new SloRepository(getPool()).dailyHistory(days).catch(() => []);
+    res.json(success({ days, rows }));
 }));
 
 // ================================================

@@ -27,6 +27,7 @@
       "approvals": "Approvals",
       "organizationsAdmin": "Organizations",
       "costRatesAdmin": "Cost Rates",
+      "sloAdmin": "SLO",
       "quotaRequestsAdmin": "Quota Approvals"
     },
     "pendingApprovals": "{count} pending approval(s) — agent tasks are waiting for your approval"
@@ -1975,6 +1976,10 @@
       "agent": {
         "title": "Agent & MCP runtime",
         "description": "External MCP tool-list refresh interval, parking approvals on timeout, queue priority cap. Applied immediately."
+      },
+      "slo": {
+        "title": "SLO targets",
+        "description": "Targets for chat availability, time to first token, agent task success and eval pass rate. Targets are percentages (e.g. 99.5); TTFT is the p95 threshold in ms. Applied from the next evaluation (every 5 minutes)."
       }
     },
     "historyTitle": "Change history",
@@ -2460,5 +2465,55 @@
     "userIdPlaceholder": "user id",
     "grant": "Grant",
     "grantDone": "Granted."
+  },
+  "adminSlo": {
+    "title": "SLO",
+    "description": "Current state against service level objectives, error budget and burn rate",
+    "computedAt": "Computed at {time}",
+    "openSettings": "Edit targets",
+    "refresh": "Refresh",
+    "loadError": "Failed to load.",
+    "target": "target {value}",
+    "budgetRemaining": "Error budget left",
+    "burnFast": "burn (1h)",
+    "burnSlow": "burn (6h)",
+    "samples": "Samples",
+    "p95": "TTFT p95",
+    "reasonLabel": "Reason",
+    "historyTitle": "Last 30 days",
+    "date": "Date",
+    "historyEmpty": "No snapshots yet — evaluations are recorded every 5 minutes.",
+    "state": {
+      "ok": "OK",
+      "warning": "Warning",
+      "critical": "Critical",
+      "insufficient": "Insufficient data"
+    },
+    "reason": {
+      "fast_burn": "Fast burn (≥14.4× over 1h and 5m)",
+      "slow_burn": "Slow burn (≥6× over 6h and 30m)",
+      "budget_exhausted": "Error budget exhausted for the window",
+      "below_target": "Below target",
+      "few_samples": "Too few samples",
+      "source_unavailable": "Data source unavailable"
+    },
+    "slo": {
+      "chat_availability": {
+        "name": "Chat availability",
+        "desc": "Share of chat requests in the last {window} days that finished without error (user aborts excluded)"
+      },
+      "chat_ttft_p95": {
+        "name": "Time to first token",
+        "desc": "Share of successful requests in the last {window} days with first token within {threshold}s (p95 objective)"
+      },
+      "agent_task_success": {
+        "name": "Agent task success",
+        "desc": "Share of finished tasks in the last {window} days that completed (cancellations excluded)"
+      },
+      "eval_pass": {
+        "name": "Eval pass rate",
+        "desc": "Pass rate of the latest response eval within the last {window} days"
+      }
+    }
   }
 }
