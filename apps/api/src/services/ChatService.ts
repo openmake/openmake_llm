@@ -21,7 +21,7 @@
 import { createLogger } from '../utils/logger';
 import { getChatTurnIntegrations } from './chat-service/turn-integrations';
 import { AGENTS, type AgentSelection } from '../agents';
-import type { DiscussionProgress } from '../agents/discussion-engine';
+import type { DiscussionProgress } from '../addons/discussion/engine';
 import { withSpan } from '../observability/otel';
 import type { ExecutionPlan } from '../chat/profile-resolver';
 import type { UserContext } from '../mcp/user-sandbox';
@@ -31,7 +31,7 @@ import { CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, CHAT_USER_MC
 import { applySkillCatalog as applySkillCatalogShared } from './skill-catalog-tool';
 import { LLMClient } from '../llm';
 import { type ToolDefinition } from '../llm';
-import type { ResearchProgress } from './DeepResearchService';
+import type { ResearchProgress } from '../addons/deep-research/service';
 import { DeepResearchStrategy, DiscussionStrategy } from './chat-strategies';
 import { formatResearchResult, formatDiscussionResult } from './chat-service-formatters';
 import { preRequestCheck } from '../chat/security-hooks';

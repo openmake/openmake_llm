@@ -6,7 +6,7 @@
  * - formatDiscussionResult: 멀티 에이전트 토론 결과 마크다운 포맷팅
  */
 import { formatResearchResult, formatDiscussionResult } from '../services/chat-service-formatters';
-import type { DiscussionResult } from '../agents/discussion-types';
+import type { DiscussionResult } from '../addons/discussion/types';
 
 // ─────────────────────────────────────────────
 // formatResearchResult 테스트

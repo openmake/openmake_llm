@@ -32,7 +32,7 @@ import nodesRouter from '../nodes.routes';
 import agentsMonitoringRouter from '../agents-monitoring.routes';
 import { tokenMonitoringRouter } from '../token-monitoring.routes';
 import auditRouter from '../audit.routes';
-import researchRouter from '../research.routes';
+import researchRouter from '../../addons/deep-research/routes';
 import externalRouter from '../external.routes';
 import { pushRouter } from '../push.routes';
 import apiKeysRouter from '../api-keys.routes';

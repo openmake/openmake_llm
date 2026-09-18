@@ -13,7 +13,7 @@
  * @module evaluation/citation-evaluator
  */
 
-import { verifyCitations } from '../services/deep-research/citation-verifier';
+import { verifyCitations } from '../addons/deep-research/citation-verifier';
 
 /** fixture 단일 케이스 */
 export interface CitationFixtureCase {

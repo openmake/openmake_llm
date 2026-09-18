@@ -8,9 +8,9 @@
  *
  * @module services/chat-service-formatters
  */
-import type { DiscussionResult } from '../agents/discussion-engine';
+import type { DiscussionResult } from '../addons/discussion/engine';
 import { DISCUSSION_CONSISTENCY } from '../config/runtime-limits';
-import { buildDiscussionSourcesBlock } from '../agents/discussion-sources';
+import { buildDiscussionSourcesBlock } from '../addons/discussion/sources';
 
 /**
  * 심층 연구 결과를 마크다운 형식으로 포맷팅합니다.

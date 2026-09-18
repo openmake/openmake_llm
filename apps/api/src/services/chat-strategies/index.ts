@@ -10,6 +10,6 @@
  *
  * @module services/chat-strategies
  */
-export { DiscussionStrategy } from './discussion-strategy';
-export { DeepResearchStrategy } from './deep-research-strategy';
+export { DiscussionStrategy } from '../../addons/discussion/strategy';
+export { DeepResearchStrategy } from '../../addons/deep-research/strategy';
 // (타입 재수출은 배럴 경유 소비 0건으로 제거 — 소비자는 ./types 직접 import)

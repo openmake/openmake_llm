@@ -17,7 +17,7 @@ import { SPAWN_AGENTS_TOOL_NAME, runChatSpawnAgents } from '../agent-spawn/spawn
 import { isOrchestrationTool, runOrchestrationTool } from './orchestration-dispatch';
 import { executeExternalTool } from './external-tool-exec';
 import { captureOdArtifactHtml, normalizeOdToolCall, type OdArtifactCapture } from './external-deterministic-append';
-import { extractDiscussionSources } from '../../agents/discussion-sources';
+import { extractDiscussionSources } from '../../addons/discussion/sources';
 import { prefetchReadOnlyCalls } from '../tool-parallel';
 import type { ChatMessage, ToolDefinition } from '../../llm';
 import type { ChatMessageRequest } from '../chat-service-types';

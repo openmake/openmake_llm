@@ -9,9 +9,9 @@
  *
  * @module services/chat-strategies/types
  */
-import type { DiscussionProgress, DiscussionResult } from '../../agents/discussion-engine';
+import type { DiscussionProgress, DiscussionResult } from '../../addons/discussion/engine';
 import type { LLMClient } from '../../llm';
-import type { ResearchProgress } from '../DeepResearchService';
+import type { ResearchProgress } from '../../addons/deep-research/service';
 import type { ChatMessageRequest } from '../chat-service-types';
 
 /**

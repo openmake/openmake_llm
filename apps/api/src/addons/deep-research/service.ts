@@ -1,0 +1,481 @@
+/**
+ * ============================================================
+ * DeepResearchService - 심층 연구 자동화 서비스
+ * ============================================================
+ *
+ * deep-researcher 패턴과 유사한 기능 제공:
+ * - 주제 분해 → 웹 검색 → 웹 스크래핑 → 청크 합성 → 반복 루프 → 보고서 생성
+ *
+ * 각 단계의 구현은 deep-research/ 서브모듈에 위임하고,
+ * 이 클래스는 오케스트레이션과 진행 관리만 담당합니다.
+ *
+ * @module services/DeepResearchService
+ */
+
+import { LLMClient, createClient } from '../../llm';
+import type { SearchResult } from '../../mcp/web-search';
+import { getModelForRole } from '../../config/model-roles';
+import { RESEARCH_DEFAULTS } from '../../config/runtime-limits';
+import { getUnifiedDatabase } from '../../data/models/unified-database';
+import { createLogger } from '../../utils/logger';
+
+import {
+    ResearchConfig,
+    ResearchProgress,
+    ResearchResult,
+    DEFAULT_CONFIG,
+} from './types';
+
+import { deduplicateSources, getLoopProgressRange, computeResearchMetrics } from './utils';
+import { getResearchMessage } from './prompts';
+
+// Pipeline stage functions
+import { decomposeTopics } from './topic-decomposer';
+import { searchSubTopics } from './source-searcher';
+import { scrapeSources } from './content-scraper';
+import { synthesizeFindings, checkNeedsMoreInfo } from './findings-synthesizer';
+import { generateReport } from './report-generator';
+import { buildResearchSkillBlock, gatherMcpEvidence } from './research-context';
+
+// Re-export types so consumers don't break
+export type { ResearchProgress, ResearchResult };
+
+const logger = createLogger('DeepResearchService');
+
+// DeepResearchService 클래스
+// ============================================================
+
+export class DeepResearchService {
+    private client: LLMClient;
+    private config: ResearchConfig;
+    private abortController: AbortController | null = null;
+
+    constructor(config?: Partial<ResearchConfig>, client?: LLMClient) {
+        this.config = { ...DEFAULT_CONFIG, ...config };
+        if (client) {
+            // 'research' role 해석 클라이언트 주입 (외부 BYOK endpoint 포함) — research.routes 경로
+            this.client = client;
+            this.config.llmModel = client.model;
+            return;
+        }
+        // 기본 llmModel이 비어있으면 model-roles 레지스트리에서 resolve
+        // ('research' role — 채팅 진입 경로는 deep-research-strategy 가 채팅 모델을 명시 전달)
+        if (!this.config.llmModel) {
+            this.config.llmModel = getModelForRole('research');
+            logger.info(`[DeepResearch] llmModel 미지정 → ${this.config.llmModel}`);
+        }
+        this.client = createClient({ model: this.config.llmModel });
+    }
+
+    /**
+     * 리서치 실행 (메인 엔트리포인트)
+     */
+    async executeResearch(
+        sessionId: string,
+        topic: string,
+        onProgress?: (progress: ResearchProgress) => void,
+        externalSignal?: AbortSignal
+    ): Promise<ResearchResult> {
+        const startTime = Date.now();
+        const db = getUnifiedDatabase();
+        this.abortController = new AbortController();
+
+        // 외부 abort 신호(WS disconnect/명시적 stop)를 내부 컨트롤러에 연결.
+        // 미연결 시 클라이언트 종료 후에도 검색/스크래핑/합성 루프가 끝까지 리소스를 소진함.
+        if (externalSignal) {
+            if (externalSignal.aborted) {
+                this.abortController.abort();
+            } else {
+                externalSignal.addEventListener('abort', () => this.abortController?.abort(), { once: true });
+            }
+        }
+
+        logger.info(`[DeepResearch] 시작: ${topic} (세션: ${sessionId})`);
+
+        try {
+            this.throwIfAborted();
+            await db.updateResearchSession(sessionId, { status: 'running', progress: 0 });
+            this.reportProgress(onProgress, sessionId, 'running', 0, this.config.maxLoops, '초기화', 0, getResearchMessage('init', this.config.language));
+
+            // 1단계: 주제 분해 (0-5%)
+            this.throwIfAborted();
+            this.reportProgress(onProgress, sessionId, 'running', 0, this.config.maxLoops, 'decompose', 2, getResearchMessage('analyzing', this.config.language));
+            // 스킬 지식(활성 매니페스트) — 분해·합성·보고서 프롬프트에 공통 주입.
+            // 실패 시 '' 라 리서치 흐름을 막지 않는다.
+            const skillBlock = await buildResearchSkillBlock(this.config.userId);
+
+            const subTopics = await decomposeTopics({
+                skillBlock,
+                client: this.client,
+                config: this.config,
+                topic,
+                sessionId,
+                abortSignal: this.abortController?.signal,
+                throwIfAborted: () => this.throwIfAborted()
+            });
+            await db.updateResearchSession(sessionId, { progress: 5 });
+            this.reportProgress(
+                onProgress,
+                sessionId,
+                'running',
+                0,
+                this.config.maxLoops,
+                'decompose',
+                5,
+                getResearchMessage('subtopicsComplete', this.config.language, { count: subTopics.length })
+            );
+
+            // 2단계: 반복 리서치 루프 (5-85%)
+            const sourceMap = new Map<string, SearchResult>();
+            const seenUrls = new Set<string>();
+            const scrapedUrls = new Set<string>();
+            const usedQueries = new Set<string>();
+            const allFindings: string[] = [];
+            let completedLoops = 0;
+
+            for (let loop = 0; loop < this.config.maxLoops; loop++) {
+                this.throwIfAborted();
+                const loopNumber = loop + 1;
+                completedLoops = loopNumber;
+                const loopRange = getLoopProgressRange(loop, this.config.maxLoops);
+
+                this.reportProgress(
+                    onProgress,
+                    sessionId,
+                    'running',
+                    loopNumber,
+                    this.config.maxLoops,
+                    'search',
+                    loopRange.searchStart,
+                    getResearchMessage('loopSearching', this.config.language, { loop: loopNumber })
+                );
+
+                const newlyDiscovered = await searchSubTopics({
+                    client: this.client,
+                    config: this.config,
+                    subTopics,
+                    sessionId,
+                    loopNumber,
+                    sourceMap,
+                    seenUrls,
+                    usedQueries,
+                    abortSignal: this.abortController?.signal,
+                    throwIfAborted: () => this.throwIfAborted()
+                });
+                this.throwIfAborted();
+
+                // MCP 근거 수집(루프 1회) — 웹으로 닿지 않는 사내 데이터·노트북·설치 MCP
+                // 서버 자료를 소스로 합류시킨다. 스크래핑 대상에서 제외하려고 URL 을
+                // scrapedUrls 에 미리 등록한다(내용은 이미 확보).
+                if (loopNumber === 1) {
+                    const mcpSources = await gatherMcpEvidence({
+                        client: this.client,
+                        topic,
+                        ...(this.config.userId ? { userId: this.config.userId } : {}),
+                        ...(this.config.userRole ? { userRole: this.config.userRole } : {}),
+                        ...(this.abortController ? { abortSignal: this.abortController.signal } : {}),
+                    });
+                    for (const src of mcpSources) {
+                        if (sourceMap.has(src.url)) continue;
+                        sourceMap.set(src.url, src);
+                        seenUrls.add(src.url);
+                        scrapedUrls.add(src.url);
+                    }
+                    if (mcpSources.length > 0) {
+                        logger.info(`[DeepResearch] MCP 근거 ${mcpSources.length}건 합류`);
+                    }
+                }
+
+                const uniqueSources = Array.from(sourceMap.values());
+                this.reportProgress(
+                    onProgress,
+                    sessionId,
+                    'running',
+                    loopNumber,
+                    this.config.maxLoops,
+                    'search',
+                    loopRange.searchEnd,
+                    getResearchMessage('loopSearchComplete', this.config.language, {
+                        loop: loopNumber,
+                        newCount: newlyDiscovered.length,
+                        totalCount: uniqueSources.length,
+                        maxSources: this.config.maxTotalSources
+                    })
+                );
+
+                this.reportProgress(
+                    onProgress,
+                    sessionId,
+                    'running',
+                    loopNumber,
+                    this.config.maxLoops,
+                    'scrape',
+                    loopRange.scrapeStart,
+                    getResearchMessage('loopScraping', this.config.language, {
+                        loop: loopNumber,
+                        scrapedCount: scrapedUrls.size,
+                        maxSources: this.config.maxTotalSources
+                    })
+                );
+
+                await scrapeSources({
+                    sources: uniqueSources,
+                    scrapedUrls,
+                    config: this.config,
+                    sessionId,
+                    loopNumber,
+                    onProgress,
+                    progressStart: loopRange.scrapeStart,
+                    progressEnd: loopRange.scrapeEnd,
+                    abortSignal: this.abortController?.signal,
+                    throwIfAborted: () => this.throwIfAborted(),
+                    reportProgress: (cb, sid, status, curLoop, totalLoops, step, prog, msg) =>
+                        this.reportProgress(cb, sid, status, curLoop, totalLoops, step, prog, msg)
+                });
+                this.throwIfAborted();
+
+                const sourcesAfterScrape = Array.from(sourceMap.values());
+
+                this.reportProgress(
+                    onProgress,
+                    sessionId,
+                    'running',
+                    loopNumber,
+                    this.config.maxLoops,
+                    'synthesize',
+                    loopRange.synthesizeStart,
+                    getResearchMessage('loopSynthesizing', this.config.language, { loop: loopNumber })
+                );
+
+                const synthesis = await synthesizeFindings({
+                    skillBlock,
+                    client: this.client,
+                    config: this.config,
+                    topic,
+                    searchResults: sourcesAfterScrape,
+                    sessionId,
+                    loopNumber,
+                    abortSignal: this.abortController?.signal,
+                    // 합성 진행 세분화 — synthesizeStart~End 구간을 청크(85%)+병합(나머지)으로 채워
+                    // 긴 progress 공백(체감 멈춤)을 제거한다.
+                    onChunkProgress: (completed, total, phase) => {
+                        const span = loopRange.synthesizeEnd - loopRange.synthesizeStart;
+                        const prog = phase === 'merge'
+                            ? loopRange.synthesizeStart + span * 0.85
+                            : loopRange.synthesizeStart + span * 0.85 * (total > 0 ? completed / total : 1);
+                        const msg = phase === 'merge'
+                            ? getResearchMessage('loopSynthMerging', this.config.language, { loop: loopNumber })
+                            : getResearchMessage('loopSynthChunk', this.config.language, { loop: loopNumber, completed, total });
+                        this.reportProgress(onProgress, sessionId, 'running', loopNumber, this.config.maxLoops, 'synthesize', prog, msg);
+                    },
+                    throwIfAborted: () => this.throwIfAborted()
+                });
+                allFindings.push(synthesis.summary);
+                this.throwIfAborted();
+
+                this.reportProgress(
+                    onProgress,
+                    sessionId,
+                    'running',
+                    loopNumber,
+                    this.config.maxLoops,
+                    'synthesize',
+                    loopRange.synthesizeEnd,
+                    getResearchMessage('loopSynthComplete', this.config.language, {
+                        loop: loopNumber,
+                        sourceCount: sourcesAfterScrape.length
+                    })
+                );
+
+                await db.updateResearchSession(sessionId, { progress: Math.round(loopRange.synthesizeEnd) });
+
+                // 목표 소스 수 도달 시 조기 종료
+                if (sourcesAfterScrape.length >= this.config.maxTotalSources) {
+                    logger.info(`[DeepResearch] 목표 소스 수 도달 (${sourcesAfterScrape.length}/${this.config.maxTotalSources}). 조기 종료.`);
+                    break;
+                }
+
+                // 마지막 루프가 아니면 추가 필요 여부 판단
+                if (loop < this.config.maxLoops - 1) {
+                    this.throwIfAborted();
+                    const needsMore = await checkNeedsMoreInfo({
+                        client: this.client,
+                        config: this.config,
+                        topic,
+                        currentFindings: allFindings,
+                        sourceCount: sourcesAfterScrape.length,
+                        abortSignal: this.abortController?.signal,
+                        throwIfAborted: () => this.throwIfAborted()
+                    });
+                    if (!needsMore) {
+                        logger.info(`[DeepResearch] 루프 ${loopNumber}에서 충분한 정보 수집. 조기 종료.`);
+                        break;
+                    }
+                }
+            }
+
+            const finalSources = deduplicateSources(Array.from(sourceMap.values()));
+
+            // 3단계: 최종 보고서 생성 (85-100%)
+            this.throwIfAborted();
+            this.reportProgress(onProgress, sessionId, 'running', this.config.maxLoops, this.config.maxLoops, 'report', 85, getResearchMessage('generatingReport', this.config.language));
+            const report = await generateReport({
+                skillBlock,
+                client: this.client,
+                config: this.config,
+                topic,
+                findings: allFindings,
+                sources: finalSources,
+                subTopics,
+                sessionId,
+                // 보고서 생성 진행 표시 — 85~99% 구간을 누적 글자 수로 채워 report 단계 공백 제거
+                onReportProgress: (chars) => {
+                    const frac = Math.min(chars / RESEARCH_DEFAULTS.REPORT_EXPECTED_CHARS, 1);
+                    const prog = 85 + frac * 14;
+                    this.reportProgress(onProgress, sessionId, 'running', this.config.maxLoops, this.config.maxLoops, 'report', prog, getResearchMessage('reportWriting', this.config.language, { chars }));
+                },
+                abortSignal: this.abortController?.signal,
+                throwIfAborted: () => this.throwIfAborted()
+            });
+
+            // 합성이 전멸해 보고서를 못 만든 경우는 '완료'가 아니다 — 히스토리에 '완료'로 남으면
+            // 사용자가 결과가 있는 줄 알고 다시 열어본다(2026-09-13 라이브 점검에서 실제 발생).
+            const finalStatus = report.reportFailed ? 'failed' : 'completed';
+            await db.updateResearchSession(sessionId, {
+                status: finalStatus,
+                progress: 100,
+                summary: report.summary,
+                keyFindings: report.keyFindings,
+                sources: finalSources.map(source => source.url)
+            });
+
+            this.reportProgress(onProgress, sessionId, finalStatus, this.config.maxLoops, this.config.maxLoops, finalStatus, 100, getResearchMessage(report.reportFailed ? 'reportFailed' : 'completed', this.config.language));
+
+            const duration = Date.now() - startTime;
+            logger.info(`[DeepResearch] 완료: ${topic} (${duration}ms)`);
+
+            // 단계8: deep-research 결정적 메트릭 (LLM 비용 0, measure-only). 본문/결과 비변형.
+            try {
+                const metrics = computeResearchMetrics({
+                    sources: finalSources,
+                    scrapedCount: scrapedUrls.size,
+                    loopsExecuted: completedLoops,
+                    durationMs: duration
+                });
+                logger.info(
+                    `[DeepResearch] 메트릭: sources=${metrics.sourceCount} domains=${metrics.uniqueDomains} `
+                    + `diversity=${(metrics.sourceDiversity * 100).toFixed(0)}% scraped=${metrics.scrapedCount} `
+                    + `loops=${metrics.loopsExecuted} ${metrics.durationMs}ms`
+                );
+                await db.addResearchStep({
+                    sessionId,
+                    stepNumber: 2000,
+                    stepType: 'report',
+                    query: '리서치 메트릭',
+                    result: JSON.stringify(metrics),
+                    status: 'completed'
+                });
+            } catch (metricsErr) {
+                logger.warn(`[DeepResearch] 메트릭 기록 스킵(오류): ${metricsErr instanceof Error ? metricsErr.message : String(metricsErr)}`);
+            }
+
+            return {
+                sessionId,
+                topic,
+                summary: report.summary,
+                keyFindings: report.keyFindings,
+                sources: finalSources,
+                totalSteps: await this.getStepCount(sessionId),
+                duration
+            };
+        } catch (error) {
+            // 중단 판별: 명시적 RESEARCH_ABORTED 외에도, 하위 레이어가 던지는 abort 계열
+            // (parallelBatch BATCH_ABORTED / graph WORKFLOW_ABORTED)을 cancelled 로 통합한다.
+            // signal.aborted 면 메시지와 무관하게 사용자 취소로 간주 (failed 오분류 방지).
+            const aborted = this.abortController?.signal.aborted
+                || (error instanceof Error && ['RESEARCH_ABORTED', 'BATCH_ABORTED', 'WORKFLOW_ABORTED'].includes(error.message));
+            if (aborted) {
+                await db.updateResearchSession(sessionId, {
+                    status: 'cancelled',
+                    summary: '리서치가 취소되었습니다.'
+                });
+                this.reportProgress(onProgress, sessionId, 'cancelled', 0, this.config.maxLoops, 'cancelled', 0, getResearchMessage('cancelled', this.config.language));
+                throw error;
+            }
+
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            logger.error(`[DeepResearch] 실패: ${errorMessage}`);
+
+            await db.updateResearchSession(sessionId, {
+                status: 'failed',
+                summary: `리서치 실패: ${errorMessage}`
+            });
+
+            this.reportProgress(onProgress, sessionId, 'failed', 0, this.config.maxLoops, 'error', 0, `오류: ${errorMessage}`);
+
+            throw error;
+        } finally {
+            this.abortController = null;
+        }
+    }
+
+    /**
+     * 스텝 수 조회
+     */
+    private async getStepCount(sessionId: string): Promise<number> {
+        const db = getUnifiedDatabase();
+        const steps = await db.getResearchSteps(sessionId);
+        return steps.length;
+    }
+
+    /**
+     * 진행 상황 리포트
+     */
+    private reportProgress(
+        callback: ((progress: ResearchProgress) => void) | undefined,
+        sessionId: string,
+        status: ResearchProgress['status'],
+        currentLoop: number,
+        totalLoops: number,
+        currentStep: string,
+        progress: number,
+        message: string
+    ): void {
+        if (callback) {
+            callback({
+                sessionId,
+                status,
+                currentLoop,
+                totalLoops,
+                currentStep,
+                progress,
+                message
+            });
+        }
+    }
+
+    /**
+     * 리서치 취소
+     */
+    cancel(): void {
+        this.abortController?.abort();
+    }
+
+    private throwIfAborted(): void {
+        if (this.abortController?.signal.aborted) {
+            throw new Error('RESEARCH_ABORTED');
+        }
+    }
+}
+
+// ============================================================
+// 모듈 API
+// ============================================================
+
+/**
+ * 서비스 인스턴스 생성
+ */
+export function createDeepResearchService(config?: Partial<ResearchConfig>, client?: LLMClient): DeepResearchService {
+    return new DeepResearchService(config, client);
+}
+

@@ -11,8 +11,8 @@
 import type { ExecutionPlan } from './profile-resolver';
 import type { ClusterManager } from '../cluster/manager';
 import type { SystemEventCallback } from '../services/chat-service-types';
-import type { DiscussionProgress } from '../agents/discussion-engine';
-import type { ResearchProgress } from '../services/DeepResearchService';
+import type { DiscussionProgress } from '../addons/discussion/engine';
+import type { ResearchProgress } from '../addons/deep-research/service';
 import type { ToolDefinition } from '../llm';
 
 /**
