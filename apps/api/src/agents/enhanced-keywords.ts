@@ -1,6 +1,5 @@
-import industryAgentsJson from './industry-agents.json';
 import { RICH_SKILL_CONTENT } from './skill-seeder';
-import type { Agent, AgentCategory, IndustryAgentsData } from './types';
+import { getIndustryAgentsData, type Agent, type AgentCategory, type IndustryAgentsData } from './types';
 import keywordData from '../config/data/keyword-data.json';
 import { IDF_NORMALIZATION } from '../config/runtime-limits';
 
@@ -12,7 +11,7 @@ interface AgentWithCategory extends Agent {
     category: string;
 }
 
-const industryAgentsData: IndustryAgentsData = industryAgentsJson;
+const industryAgentsData: IndustryAgentsData = getIndustryAgentsData();
 
 const ALL_AGENTS: AgentWithCategory[] = Object.entries(industryAgentsData).flatMap(
     ([categoryId, category]: [string, AgentCategory]) =>

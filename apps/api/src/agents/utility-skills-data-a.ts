@@ -5,8 +5,9 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
+import { builtinAddonDir } from '../addon-host/builtin-registry';
 
-const dataDir = path.join(__dirname, 'data');
+const dataDir = path.join(builtinAddonDir('utility-pack'), 'data');
 
 function loadJson<T>(filename: string): T {
     return JSON.parse(fs.readFileSync(path.join(dataDir, filename), 'utf-8')) as T;

@@ -6,6 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from '../utils/logger';
+import { builtinAddonDir, isBuiltinAddonEnabled } from '../addon-host/builtin-registry';
 
 const logger = createLogger('Agents');
 
@@ -72,8 +73,14 @@ export function getIndustryAgentsData(): IndustryAgentsData {
         return cachedIndustryData;
     }
 
+    // 산업 팩이 꺼진 배포 — 산업 에이전트 없이 general 만으로 동작한다 (addon-host/builtin-registry)
+    if (!isBuiltinAddonEnabled('industry-pack')) {
+        cachedIndustryData = {};
+        return cachedIndustryData;
+    }
+
     try {
-        const jsonPath = path.join(__dirname, 'industry-agents.json');
+        const jsonPath = path.join(builtinAddonDir('industry-pack'), 'industry-agents.json');
         const jsonContent = fs.readFileSync(jsonPath, 'utf-8');
         cachedIndustryData = JSON.parse(jsonContent) as IndustryAgentsData;
         return cachedIndustryData;

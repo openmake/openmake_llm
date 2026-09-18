@@ -20,9 +20,8 @@
  */
 
 import { createLogger } from '../utils/logger';
-import type { Agent, AgentCategory } from './types';
+import { getIndustryAgentsData, type Agent, type AgentCategory, type IndustryAgentsData } from './types';
 import type { SkillRepository } from '../data/repositories/skill-repository';
-import industryAgentsJson from './industry-agents.json';
 import { GENERAL_SYSTEM_SKILL_NAME, industrySkillName } from './system-skill-names';
 import {
     getCategoryGuidelines,
@@ -115,10 +114,8 @@ ${outputGuidanceText}
 - 사용자가 즉시 활용할 수 있도록 마지막에 '다음 행동 3가지'를 반드시 제안합니다.`;
 }
 
-type IndustryAgentsData = Record<string, AgentCategory>;
-
 function buildRichSkillContentMap(): Record<string, string> {
-    const data = industryAgentsJson as IndustryAgentsData;
+    const data: IndustryAgentsData = getIndustryAgentsData();
     const map: Record<string, string> = {};
 
     for (const [categoryId, categoryInfo] of Object.entries(data)) {
@@ -283,15 +280,14 @@ export async function seedAgentSkills(): Promise<void> {
         // 지연 로딩: 순환 참조 및 초기화 순서 문제 방지
         const { getUnifiedDatabase } = await import('../data/models/unified-database');
         const { SkillRepository } = await import('../data/repositories/skill-repository');
-        const { getIndustryAgentsData } = await import('./types');
 
         const pool = getUnifiedDatabase().getPool();
         const repo = new SkillRepository(pool);
         const industryData = getIndustryAgentsData();
 
+        // 비어 있어도 계속한다 — 산업 팩이 꺼진 배포에서도 아래 Base 스킬(general·author-guide)은 필요하다
         if (Object.keys(industryData).length === 0) {
-            logger.warn('industry-agents.json이 비어있거나 로드 실패');
-            return;
+            logger.warn('산업 에이전트 데이터 없음(산업 팩 꺼짐 또는 로드 실패) — Base 스킬만 시드');
         }
 
         let seededCount = 0;

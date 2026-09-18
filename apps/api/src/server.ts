@@ -256,20 +256,12 @@ export class DashboardServer {
             console.error('[Server] 외부 MCP 서버 초기화 실패 (서비스 계속):', err);
         }
 
-        // 에이전트 스킬 자동 시딩 (17개 산업 분야 에이전트 전문 지침 DB 등록)
+        // 내장 콘텐츠(산업·유틸리티 스킬) 시드 — Base 는 Add-on Host 만 안다 (config/addon-boundary.ts)
         try {
-            const { seedAgentSkills } = await import('./agents/skill-seeder');
-            seedAgentSkills().catch((err: unknown) => console.error('[Server] 스킬 시딩 실패:', err));
+            const { startAddonHost } = await import('./addon-host');
+            await startAddonHost();
         } catch (err) {
-            console.error('[Server] 스킬 시더 로드 실패:', err);
-        }
-
-        // 유틸리티 스킬 자동 시딩 (40개 실용 유틸리티 스킬 DB 등록)
-        try {
-            const { seedUtilitySkills } = await import('./agents/utility-skills-seeder');
-            seedUtilitySkills().catch((err: unknown) => console.error('[Server] 유틸리티 스킬 시딩 실패:', err));
-        } catch (err) {
-            console.error('[Server] 유틸리티 스킬 시더 로드 실패:', err);
+            console.error('[Server] Add-on Host 시작 실패 (서비스 계속):', err);
         }
 
 

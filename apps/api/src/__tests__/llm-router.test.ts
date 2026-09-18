@@ -5,8 +5,7 @@
  */
 
 import { getAgentSummaries, isValidAgentId } from '../agents/llm-router';
-import industryData from '../agents/industry-agents.json';
-import { AgentCategory } from '../agents/types';
+import { getIndustryAgentsData } from '../agents/types';
 
 // ============================================================
 // getAgentSummaries() 테스트
@@ -36,7 +35,7 @@ describe('getAgentSummaries()', () => {
     test('industry-agents.json의 전체 에이전트 수와 일치한다', () => {
         const summaries = getAgentSummaries();
         let expectedCount = 0;
-        for (const [, category] of Object.entries(industryData as Record<string, AgentCategory>)) {
+        for (const [, category] of Object.entries(getIndustryAgentsData())) {
             expectedCount += category.agents.length;
         }
         expect(summaries.length).toBe(expectedCount);
@@ -58,7 +57,7 @@ describe('getAgentSummaries()', () => {
     test('category 필드는 industry-agents.json의 name 필드에서 온다', () => {
         const summaries = getAgentSummaries();
         const categoryNames = new Set(
-            Object.values(industryData as Record<string, AgentCategory>).map(c => c.name)
+            Object.values(getIndustryAgentsData()).map(c => c.name)
         );
         for (const summary of summaries) {
             expect(categoryNames).toContain(summary.category);
