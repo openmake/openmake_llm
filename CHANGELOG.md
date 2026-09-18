@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.73.1](https://github.com/openmake/openmake_llm/compare/v1.73.0...v1.73.1) (2026-09-18)
+
+
+### ♻️ 리팩터링
+
+* **cleanup:** 폐기 계층 데드코드 정리 + 정산 잡 종료 배선 누락 수정 ([#934](https://github.com/openmake/openmake_llm/issues/934)) ([bc9dd19](https://github.com/openmake/openmake_llm/commit/bc9dd190a5f993125ed6dad0256965125c519594))
+
 ## [1.73.0](https://github.com/openmake/openmake_llm/compare/v1.72.0...v1.73.0) (2026-09-17)
 
 
