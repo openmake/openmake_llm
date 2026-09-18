@@ -11,6 +11,7 @@
 #   ./uninstall.sh --yes           # 전부 자동 승인
 #   ./uninstall.sh --keep-data     # Docker 볼륨(DB 데이터)은 남김
 #   ./uninstall.sh --keep-source   # 소스 디렉터리는 남김 (.env 포함)
+#   ./uninstall.sh --instance NAME # 지울 인스턴스를 직접 지정 (.env 의 OMK_INSTANCE 보다 우선)
 #
 # 지우지 않는 것: install.sh 가 설치했을 수 있는 전역 도구(Node, Docker, PM2
 # 자체, colima). 다른 프로젝트가 쓸 수 있으므로 건드리지 않는다.
@@ -27,23 +28,32 @@ log_warn() { printf "%s[WARN]%s  %s\n" "$C_WARN" "$C_RESET" "$*"; }
 log_step() { printf "\n%s━━ %s ━━%s\n" "$C_INFO" "$*" "$C_RESET"; }
 has() { command -v "$1" >/dev/null 2>&1; }
 
-# 인스턴스 이름 — install.sh --instance NAME 이 .env 에 남긴 OMK_INSTANCE. 없으면 기본 이름.
-env_line() { [[ -f "$SCRIPT_DIR/.env" ]] && grep -E "^$1=" "$SCRIPT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d ' ' || true; }
-_inst="$(env_line OMK_INSTANCE)"; _pfx="openmake${_inst:+-$_inst}"
-readonly APP_NAME="openmake-llm${_inst:+-$_inst}" FRONT_APP_NAME="openmake-next${_inst:+-$_inst}"
-readonly PG_CONTAINER="$_pfx-postgres" RD_CONTAINER="$_pfx-redis"
-readonly PG_VOLUME="${_pfx}_pgdata" RD_VOLUME="${_pfx}_redisdata"
-
-ASSUME_YES=0; KEEP_DATA=0; KEEP_SOURCE=0
-for arg in "$@"; do
-    case "$arg" in
+# 이름 계산보다 인자 파싱이 먼저다 — --instance 가 .env 의 OMK_INSTANCE 를 덮으므로
+# 플래그를 전부 읽기 전에는 어떤 인스턴스를 지울지 확정할 수 없다.
+ASSUME_YES=0; KEEP_DATA=0; KEEP_SOURCE=0; INSTANCE=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
         --yes|-y)      ASSUME_YES=1 ;;
         --keep-data)   KEEP_DATA=1 ;;
         --keep-source) KEEP_SOURCE=1 ;;
+        # install.sh 와 같은 검증식 — 값 없이 플래그만 주면 빈 문자열이 정규식에 걸려 걸러진다.
+        --instance)    INSTANCE="${2:-}"
+                       [[ "$INSTANCE" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] \
+                           || { log_warn "인스턴스 이름이 올바르지 않습니다: '${INSTANCE}' (소문자·숫자·하이픈, 1~32자)"; exit 2; }
+                       shift ;;
         --help|-h) sed -n '2,/^[^#]/p' "${BASH_SOURCE[0]}" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
-        *) log_warn "알 수 없는 옵션: $arg (--help 참고)"; exit 2 ;;
+        *) log_warn "알 수 없는 옵션: $1 (--help 참고)"; exit 2 ;;
     esac
+    shift
 done
+
+# 인스턴스 이름 — install.sh --instance NAME 이 .env 에 남긴 OMK_INSTANCE. 없으면 기본 이름.
+# --instance 가 .env 보다 우선이다: .env 가 지워졌거나 깨진 인스턴스도 되돌릴 수 있어야 한다.
+env_line() { [[ -f "$SCRIPT_DIR/.env" ]] && grep -E "^$1=" "$SCRIPT_DIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d ' ' || true; }
+_inst="${INSTANCE:-$(env_line OMK_INSTANCE)}"; _pfx="openmake${_inst:+-$_inst}"
+readonly APP_NAME="openmake-llm${_inst:+-$_inst}" FRONT_APP_NAME="openmake-next${_inst:+-$_inst}"
+readonly PG_CONTAINER="$_pfx-postgres" RD_CONTAINER="$_pfx-redis"
+readonly PG_VOLUME="${_pfx}_pgdata" RD_VOLUME="${_pfx}_redisdata"
 
 confirm() {
     [[ $ASSUME_YES -eq 1 ]] && { log_info "$1 → 자동 승인"; return 0; }

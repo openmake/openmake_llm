@@ -165,7 +165,10 @@ up_chat.json
 up_models.json
 
 # Cloudflare Tunnel 설정 — git 커밋 금지 지침 (라이브: ~/.cloudflared/config.yml)
-scripts/cloudflared/
+# 디렉터리째 무시하면 git 이 안으로 내려가지 않아 하위 예외(!)가 먹지 않는다 — 그래서 `/*`.
+# 자격증명 없는 예시(config.yml.example)만 추적한다.
+scripts/cloudflared/*
+!scripts/cloudflared/config.yml.example
 data/desktop-updates/
 
 # 도구 세션 상태(run-continuation) — 저장소와 무관
