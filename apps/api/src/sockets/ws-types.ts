@@ -85,7 +85,9 @@ export interface WSMessage {
     /** resume 커서(F19.11) — 마지막으로 받은 스트림 식별자와 순번. 같은 스트림이면 그 뒤 이벤트만 재생받는다 */
     streamId?: string;
     afterSeq?: number;
-    /** NotebookLM 노트북 컨텍스트 — composer picker 선택. 통합(add-on)이 LLM 전용 메시지에 접두를 주입한다 */
+    /** 통합(add-on)별 외부 컨텍스트 참조 — add-on id → 참조. 컴포저의 컨텍스트 선택기가 보낸다 */
+    contextRefs?: Record<string, { id: string; title: string }>;
+    /** @deprecated contextRefs 도입 전 클라이언트용 — 통합이 선언한 구 필드로만 읽힌다(turn-integrations.collectContextRefs) */
     notebook?: { id: string; title: string } | null;
     /** Phase 3.4 (2026-05-26): 메시지 편집 분기 — 새 session 의 부모 추적 */
     branchFromSessionId?: string;

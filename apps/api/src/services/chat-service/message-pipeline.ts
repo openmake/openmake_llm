@@ -89,7 +89,7 @@ export async function runMessagePipeline(svc: ChatService,
         message: req.message,
         // API Key 요청에서 enabledTools 미전달 시 내장 MCP 도구 비활성화(외부 서비스는 자체 도구 체계 사용)
         enabledTools: req.apiKeyId && !enabledTools ? {} : enabledTools,
-        notebook: req.notebook,
+        contextRefs: req.contextRefs,
         executionPlan,
         skillBindings: [],
     };
@@ -363,7 +363,7 @@ export async function runMessagePipeline(svc: ChatService,
     );
     // 통합(add-on) 컨텍스트 접두 (예: 고정한 노트북) — LLM 전용 enhancedMessage 채널에만 주입.
     // (원문 message 는 대화 저장·말풍선·사이드바 제목에 쓰이므로 오염 금지 —
-    //  webSearchContext 와 동일한 transient 주입 원칙. 도구 노출은 reqCtx.notebook 이 담당)
+    //  webSearchContext 와 동일한 transient 주입 원칙. 도구 노출은 reqCtx.contextRefs 가 담당)
     const integrationPrefixes = getChatTurnIntegrations()
         .map((i) => i.enhancedMessagePrefix?.(req, languagePolicy?.resolvedLanguage || 'ko'))
         .filter((p): p is string => !!p);

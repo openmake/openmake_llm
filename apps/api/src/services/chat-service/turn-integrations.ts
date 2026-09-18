@@ -17,8 +17,8 @@ import { loadEnabledChatIntegrations } from '../../addon-host/chat-integrations'
 export interface TurnIntegrationRequest {
     message?: string;
     userLocation?: { lat: number; lng: number } | null;
-    /** 클라이언트가 고정한 외부 컨텍스트 참조 (컴포저의 노트북 선택 등) */
-    notebook?: { id: string; title: string } | null;
+    /** 클라이언트가 고정한 외부 컨텍스트 참조 — add-on id → 참조 (컴포저의 컨텍스트 선택기) */
+    contextRefs?: Record<string, { id: string; title: string }>;
 }
 
 export interface ChatTurnIntegration {
@@ -46,6 +46,11 @@ export interface ChatTurnIntegration {
     scrubFinalContent?(content: string): { content: string; removed: number };
     /** 첨부 로그용 이름 */
     blockLabel?: string;
+    /**
+     * 구 클라이언트 호환 — `contextRefs` 도입 전 WS chat 메시지가 이 통합의 참조를 실어 보내던 최상위 필드 이름.
+     * 서버는 그 필드의 값을 `contextRefs[<id>]` 로 옮겨 받는다(iOS·캐시된 구 웹). 새 통합은 쓰지 않는다.
+     */
+    legacyWsContextField?: string;
 }
 
 let integrations: ChatTurnIntegration[] | null = null;
@@ -83,4 +88,28 @@ export function extractIntegrationBlocks(toolResult: string, state: IntegrationB
         modelFacing = extracted.modelFacing;
     }
     return modelFacing;
+}
+
+const CONTEXT_REF_ID_MAX = 64;
+
+function sanitizeContextRef(raw: unknown): { id: string; title: string } | undefined {
+    const r = raw as { id?: unknown; title?: unknown } | null | undefined;
+    return r && typeof r.id === 'string' && r.id.trim() && typeof r.title === 'string'
+        ? { id: r.id.trim().slice(0, CONTEXT_REF_ID_MAX), title: r.title }
+        : undefined;
+}
+
+/**
+ * WS chat 메시지에서 통합 컨텍스트 참조를 모은다 — 등록된 통합의 것만 받는다(모르는 add-on id 는 버린다).
+ * 새 필드 `contextRefs` 가 우선이고, 없으면 통합이 선언한 구 최상위 필드를 본다.
+ */
+export function collectContextRefs(msg: Record<string, unknown>): Record<string, { id: string; title: string }> | undefined {
+    const incoming = (msg.contextRefs && typeof msg.contextRefs === 'object' ? msg.contextRefs : {}) as Record<string, unknown>;
+    const out: Record<string, { id: string; title: string }> = {};
+    for (const integration of getChatTurnIntegrations()) {
+        const ref = sanitizeContextRef(incoming[integration.id])
+            ?? (integration.legacyWsContextField ? sanitizeContextRef(msg[integration.legacyWsContextField]) : undefined);
+        if (ref) out[integration.id] = ref;
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
 }

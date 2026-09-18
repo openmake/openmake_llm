@@ -11,9 +11,15 @@ import { buildNotebookContextPrefix } from './notebook-context';
 
 /** tool-merger 의 서버 참조(depth) 매칭 키 — 설치된 MCP 서버 이름에 포함되는 문자열 */
 const SERVER_REFERENCE = 'notebooklm';
+const ADDON_ID = 'notebooklm';
 
 export const notebooklmChatIntegration: ChatTurnIntegration = {
-    id: 'notebooklm',
-    enhancedMessagePrefix: (req, language) => (req.notebook ? buildNotebookContextPrefix(req.notebook, language) : undefined),
-    mcpSelectionHint: (req) => (req.notebook ? SERVER_REFERENCE : undefined),
+    id: ADDON_ID,
+    // contextRefs 도입(2026-09-19) 전 클라이언트(iOS Kit·캐시된 구 웹)는 최상위 `notebook` 필드로 보낸다
+    legacyWsContextField: 'notebook',
+    enhancedMessagePrefix(req, language) {
+        const ref = req.contextRefs?.[ADDON_ID];
+        return ref ? buildNotebookContextPrefix(ref, language) : undefined;
+    },
+    mcpSelectionHint: (req) => (req.contextRefs?.[ADDON_ID] ? SERVER_REFERENCE : undefined),
 };

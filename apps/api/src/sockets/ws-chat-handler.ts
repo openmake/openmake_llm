@@ -4,6 +4,7 @@
  * @module sockets/ws-chat-handler
  */
 import { WebSocket } from 'ws';
+import { collectContextRefs } from '../services/chat-service/turn-integrations';
 import * as crypto from 'crypto';
 import { ClusterManager } from '../cluster/manager';
 import { selectOptimalModel } from '../chat/model-selector';
@@ -86,13 +87,10 @@ export async function handleChatMessage(
     const detectedLang = detectLanguage(languageDetectionInput(rawMessage, message));
     const userLang = userLangPreference || detectedLang.language;
 
-    // NotebookLM 노트북 컨텍스트 — 여기서 message 에 주입하지 않는다(주입 시 대화 저장·
-    // 재로드 말풍선·사이드바 제목에 프리픽스가 남음). message-pipeline 이 LLM 전용
-    // enhancedMessage 채널에 주입(통합 add-on 의 enhancedMessagePrefix)하도록 요청 필드로만 전달.
-    const nb = msg.notebook;
-    const notebookRef = (nb && typeof nb.id === 'string' && nb.id.trim() && typeof nb.title === 'string')
-        ? { id: nb.id.trim().slice(0, 64), title: nb.title }
-        : undefined;
+    // 통합(add-on) 컨텍스트 참조(예: 고정한 노트북) — 여기서 message 에 주입하지 않는다(주입 시 대화 저장·
+    // 재로드 말풍선·사이드바 제목에 접두가 남음). message-pipeline 이 LLM 전용 enhancedMessage 채널에
+    // 주입하도록 요청 필드로만 전달한다. 구 클라이언트의 최상위 필드 호환은 통합이 선언한다.
+    const contextRefs = collectContextRefs(msg as unknown as Record<string, unknown>);
 
     // 중단 컨트롤러 생성 + 이어받기 레지스트리 등록 — 소켓이 끊겨도 생성은 계속되고(유예),
     // 이후 모든 클라이언트 이벤트는 out() 을 거쳐 attached 소켓으로 가거나 detach 버퍼에 쌓인다.
@@ -326,7 +324,7 @@ export async function handleChatMessage(
             // 저장된 장기 메모리 주입 여부 — saveHistory 와 독립. 명시 false 만 차단, 기본 활성.
             memoryLearning: msg.memoryLearning !== false,
             enabledTools: msg.enabledTools,
-            notebook: notebookRef,
+            contextRefs,
             userLanguagePreference: userLangPreference,
             userLocation: parseUserLocation(msg), // 기기 GPS 위치(옵트인)
             userContext,

@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient, ApiError } from "@/lib/api-client";
+import { useEnabledWebAddons } from "@/addons/registry";
 import { DeveloperTabs } from "@/components/hub-tabs";
 
 /* ── 타입 (백엔드 /api/api-keys 응답) ──────────────── */
@@ -55,17 +56,15 @@ function formatDate(iso: string | null | undefined, locale: string) {
   });
 }
 
-/* ── 스코프 프리셋 (서버 허용 목록: config/api-key-scopes.ts ALLOWED_API_KEY_SCOPES) ──
-   full=전체(*), bridge=CLI 로컬 실행 전용, chat=추론 API 전용.
-   ⚠️ discord 는 두 스코프다 — 봇이 같은 키로 설정 수신(/api/integrations/discord/runtime-config,
-   discord)과 추론 호출(/api/v1/chat/completions, chat)을 모두 하기 때문. 하나만 주면 다른 쪽이 조용히 실패한다. */
-const SCOPE_PRESETS = {
+/* ── 스코프 프리셋 (서버 허용 목록: config/api-key-scopes.ts ALLOWED_API_KEY_SCOPES + add-on 기여) ──
+   full=전체(*), bridge=CLI 로컬 실행 전용, chat=추론 API 전용. 켜진 add-on 이 자기 프리셋을 더 얹는다
+   (addons/types.ts ApiKeyScopePresetExtension — 라벨·힌트는 i18n `scope.<id>`·`scope.hint.<id>`). */
+const BASE_SCOPE_PRESETS: Record<string, readonly string[]> = {
   full: ["*"],
   bridge: ["bridge"],
   chat: ["chat"],
-  discord: ["chat", "discord"],
-} as const;
-type ScopePreset = keyof typeof SCOPE_PRESETS;
+};
+type ScopePreset = string;
 
 export default function ApiAccessPage() {
   const t = useTranslations("apiAccess");
@@ -76,6 +75,11 @@ export default function ApiAccessPage() {
   const [error, setError] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [newScope, setNewScope] = useState<ScopePreset>("full");
+  const addonPresets = useEnabledWebAddons().flatMap((a) => a.apiKeyScopePresets ?? []);
+  const scopePresets: Record<string, readonly string[]> = {
+    ...BASE_SCOPE_PRESETS,
+    ...Object.fromEntries(addonPresets.map((p) => [p.id, p.scopes])),
+  };
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   // 발급/순환 직후 평문 키 1회 노출 (재조회 불가)
@@ -104,7 +108,7 @@ export default function ApiAccessPage() {
     setCreating(true);
     setError(null);
     try {
-      const scopes = [...SCOPE_PRESETS[newScope]];
+      const scopes = [...(scopePresets[newScope] ?? BASE_SCOPE_PRESETS.full)];
       const res = await ApiClient.post<ApiSuccess<CreatedKey>>("/api/api-keys", {
         name: newName.trim(),
         scopes,
@@ -266,7 +270,9 @@ export default function ApiAccessPage() {
                 <option value="full">{t("scope.full")}</option>
                 <option value="bridge">{t("scope.bridge")}</option>
                 <option value="chat">{t("scope.chat")}</option>
-                <option value="discord">{t("scope.discord")}</option>
+                {addonPresets.map((p) => (
+                  <option key={p.id} value={p.id}>{t(`scope.${p.id}`)}</option>
+                ))}
               </select>
               <Button type="submit" disabled={!newName.trim() || creating}>
                 {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}

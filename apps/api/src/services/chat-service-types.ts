@@ -52,8 +52,8 @@ export interface MediaFileInput {
 export interface ChatMessageRequest {
     /** 사용자 입력 메시지 */
     message: string;
-    /** NotebookLM 노트북 컨텍스트 — LLM 전용 enhancedMessage 에만 주입(대화 저장에는 미포함) */
-    notebook?: { id: string; title: string } | null;
+    /** 통합(add-on)별 외부 컨텍스트 참조 — add-on id → 참조. 예: 컴포저에서 고정한 노트북. LLM 전용 채널에만 쓰인다(대화 저장 미포함) */
+    contextRefs?: Record<string, { id: string; title: string }>;
     /** 이전 대화 히스토리 배열 */
     history?: Array<{ role: string; content: string; images?: string[] }>;
     /** 참조할 업로드 문서 ID */

@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ComponentType } from "react";
 import { useTranslations } from "next-intl";
-import { AlertTriangle, Bell, BellRing, Bot, Cpu, ExternalLink, Gauge, KeyRound, Loader2, MessageSquare, RotateCcw, Save, Search } from "lucide-react";
+import { AlertTriangle, Bell, BellRing, Bot, Cpu, ExternalLink, Gauge, KeyRound, Loader2, RotateCcw, Save, Search } from "lucide-react";
 import {
   PageHeader,
   Card,
@@ -15,9 +16,11 @@ import {
 import { AdminTabs } from "@/components/hub-tabs";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
+import { useEnabledWebAddons } from "@/addons/registry";
 
 /* ── 타입 (백엔드 /api/admin/system-settings) ── */
-type SettingGroup = "oauth" | "search" | "alerts" | "push" | "llm" | "agent" | "slo" | "discord";
+/** Base 그룹 또는 add-on 이 기여한 그룹 이름 (서버 config/system-settings-registry 와 같은 값) */
+type SettingGroup = string;
 interface SettingView {
   key: string;
   group: SettingGroup;
@@ -37,8 +40,8 @@ interface SettingsPayload {
   settings: SettingView[];
 }
 
-const GROUP_ORDER: SettingGroup[] = ["llm", "agent", "slo", "oauth", "search", "alerts", "push", "discord"];
-const GROUP_ICONS: Record<SettingGroup, typeof KeyRound> = {
+const BASE_GROUP_ORDER: SettingGroup[] = ["llm", "agent", "slo", "oauth", "search", "alerts", "push"];
+const BASE_GROUP_ICONS: Record<SettingGroup, ComponentType<{ className?: string }>> = {
   oauth: KeyRound,
   search: Search,
   alerts: Bell,
@@ -46,7 +49,6 @@ const GROUP_ICONS: Record<SettingGroup, typeof KeyRound> = {
   llm: Cpu,
   agent: Bot,
   slo: Gauge,
-  discord: MessageSquare,
 };
 
 const inputCls =
@@ -228,12 +230,21 @@ export default function AdminSystemSettingsPage() {
     }
   }
 
+  // 그룹 = Base 그룹 + 켜진 add-on 이 기여한 그룹 (서버도 꺼진 add-on 의 설정 키는 내려 주지 않는다)
+  const enabledAddons = useEnabledWebAddons();
+  const addonGroups = useMemo(() => enabledAddons.flatMap((a) => a.settingsGroups ?? []), [enabledAddons]);
+  const GROUP_ORDER = useMemo(() => [...BASE_GROUP_ORDER, ...addonGroups.map((g) => g.group)], [addonGroups]);
+  const GROUP_ICONS = useMemo(
+    () => ({ ...BASE_GROUP_ICONS, ...Object.fromEntries(addonGroups.map((g) => [g.group, g.Icon])) }),
+    [addonGroups],
+  );
+
   const grouped = useMemo(() => {
     const map = new Map<SettingGroup, SettingView[]>();
     for (const g of GROUP_ORDER) map.set(g, []);
     for (const s of settings) map.get(s.group)?.push(s);
     return map;
-  }, [settings]);
+  }, [settings, GROUP_ORDER]);
 
   return (
     <>

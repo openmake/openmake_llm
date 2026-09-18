@@ -15,14 +15,13 @@ import {
   Scissors,
   X,
   Lock,
-  BookOpen,
   Plus,
   FolderOpen, ShieldCheck } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { AttachedFileUI } from "@/lib/use-chat-socket";
 import { useAppStore, INTERCEPT_MODE_KEYS } from "@/lib/store";
-import { NotebookPicker } from "./notebook-picker";
+import { useEnabledWebAddons } from "@/addons/registry";
 import { useChatSocket } from "@/lib/use-chat-socket";
 import { fetchModels } from "@/lib/models-api";
 import { ApiClient } from "@/lib/api-client";
@@ -127,12 +126,15 @@ export function Composer() {
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [plusMenuOpen]);
-  // NotebookLM 노트북 컨텍스트 — 선택 시 백엔드가 메시지 앞에 grounding 프리픽스 주입,
-  // 해제 전까지 같은 대화 내에서 유지. 상태는 store(notebookContext) — 대화 전환/새 대화
-  // 리셋은 clearChat·대화 로드 지점(sidebar/history)이 담당해 다른 대화로 누수되지 않는다.
-  const notebook = useAppStore((s) => s.notebookContext);
-  const setNotebook = useAppStore((s) => s.setNotebookContext);
-  const [notebookPickerOpen, setNotebookPickerOpen] = useState(false);
+  // add-on 컨텍스트 참조(예: 고정한 노트북) — 선택 시 백엔드가 LLM 전용 메시지 앞에 접두를 주입하고,
+  // 해제 전까지 같은 대화 내에서 유지된다. 상태는 store(contextRefs) — 대화 전환/새 대화 리셋은
+  // clearChat·대화 로드 지점(sidebar/history)이 담당해 다른 대화로 누수되지 않는다.
+  const contextRefs = useAppStore((s) => s.contextRefs);
+  const setContextRef = useAppStore((s) => s.setContextRef);
+  /** 팝오버가 열린 컨텍스트 선택기의 add-on id */
+  const [openContextPicker, setOpenContextPicker] = useState<string | null>(null);
+  // 꺼진 add-on 의 진입점은 숨긴다 — 라우트가 없는 배포에서 선택기를 열면 404 가 "미설치" 설치 안내로 보인다.
+  const contextAddons = useEnabledWebAddons().filter((a) => a.composerContext);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -254,14 +256,6 @@ export function Composer() {
     enabled: slashCandidate,
     staleTime: 30_000,
   });
-  // 꺼진 add-on 의 진입점은 숨긴다(GET /api/addons). 조회 실패·로딩 중에는 종전처럼 표시한다 —
-  // 라우트가 없는 배포에서 노트북 선택기를 열면 404 가 "미설치" 설치 안내로 보여 오해를 부른다.
-  const { data: addonsData } = useQuery({
-    queryKey: ["addons"],
-    queryFn: () => ApiClient.get<{ data: { addons: { id: string; enabled: boolean }[] } }>("/api/addons"),
-    staleTime: Infinity,
-  });
-  const notebooksAvailable = addonsData?.data?.addons?.find((a) => a.id === "notebooklm")?.enabled !== false;
   // Cowork D2: 로컬 브리지(데스크톱 앱) 연결 상태 — 토글 활성 판단. 15s 갱신.
   const { data: bridgeData } = useQuery({
     queryKey: ["local-bridge-status"],
@@ -417,14 +411,14 @@ export function Composer() {
       const reportApproval = agentApprovalMode === "none" ? "none" : "high-risk";
       void startAgentTask(text.trim(), undefined, undefined, reportApproval);
     } else {
-      // NotebookLM 컨텍스트 — grounding 프리픽스는 백엔드(prompts/notebook-context)가 주입.
+      // add-on 컨텍스트 참조 — 접두 주입은 백엔드(그 add-on 의 채팅 통합)가 한다.
       // 가로채기 모드(토론/딥리서치)는 도구를 우회하므로 미전송 — 칩은 흐림 표시로 안내.
-      const nbApplies = !discussionMode && !deepResearchMode;
+      const contextApplies = !discussionMode && !deepResearchMode;
       sendChat(
         text.trim(),
         images.length ? images.map((i) => i.dataUrl) : undefined,
         files.length ? files : undefined,
-        nbApplies ? notebook : null,
+        contextApplies ? contextRefs : undefined,
       );
     }
     setText("");
@@ -556,33 +550,34 @@ export function Composer() {
                   </button>
                 );
               })}
-              {/* 노트북 선택 — 토글이 아닌 컨텍스트 선택기(2단): 시트를 닫고 picker 팝오버를 연다.
-                  선택된 노트북은 툴바의 컨텍스트 칩으로 표시·해제. */}
-              {notebooksAvailable && (
-                <>
-                  <div className="mx-2 my-1 border-t border-border" aria-hidden />
+              {/* add-on 컨텍스트 선택 — 토글이 아닌 선택기(2단): 시트를 닫고 picker 팝오버를 연다.
+                  고른 참조는 툴바의 컨텍스트 칩으로 표시·해제. */}
+              {contextAddons.length > 0 && <div className="mx-2 my-1 border-t border-border" aria-hidden />}
+              {contextAddons.map((addon) => {
+                const ext = addon.composerContext!;
+                const selected = contextRefs[addon.id];
+                return (
                   <button
+                    key={addon.id}
                     type="button"
                     onClick={() => {
                       setModeSheetOpen(false);
-                      setNotebookPickerOpen(true);
+                      setOpenContextPicker(addon.id);
                     }}
                     className={cn(
                       "flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-sm transition",
-                      notebook ? "text-accent" : "text-fg-2 hover:bg-surface-3",
+                      selected ? "text-accent" : "text-fg-2 hover:bg-surface-3",
                     )}
                   >
-                    <BookOpen className="h-[18px] w-[18px] shrink-0" />
+                    <ext.Icon className="h-[18px] w-[18px] shrink-0" />
                     <span className="flex-1 truncate text-left">
-                      {t("notebooks.select")}
-                      {notebook && (
-                        <span className="ml-1.5 text-[11px] text-faint">{notebook.title}</span>
-                      )}
+                      {t(ext.labelKey)}
+                      {selected && <span className="ml-1.5 text-[11px] text-faint">{selected.title}</span>}
                     </span>
-                    {notebook && <Check className="h-4 w-4 shrink-0 text-accent" />}
+                    {selected && <Check className="h-4 w-4 shrink-0 text-accent" />}
                   </button>
-                </>
-              )}
+                );
+              })}
             </div>
           </>
         )}
@@ -610,13 +605,19 @@ export function Composer() {
             )}
           </button>
 
-          <NotebookPicker
-            value={notebook}
-            onChange={setNotebook}
-            open={notebookPickerOpen}
-            onOpenChange={setNotebookPickerOpen}
-            suppressed={interceptActive || agentTaskMode}
-          />
+          {contextAddons.map((addon) => {
+            const Picker = addon.composerContext!.Picker;
+            return (
+              <Picker
+                key={addon.id}
+                value={contextRefs[addon.id] ?? null}
+                onChange={(ref) => setContextRef(addon.id, ref)}
+                open={openContextPicker === addon.id}
+                onOpenChange={(open) => setOpenContextPicker(open ? addon.id : null)}
+                suppressed={interceptActive || agentTaskMode}
+              />
+            );
+          })}
 
           {TOGGLES.filter((m) => m.on).map((m) => {
             // 가로채기 모드 칩은 앰버색 — 도구·아티팩트를 무시한다는 시각 신호.

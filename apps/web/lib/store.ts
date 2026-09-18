@@ -184,8 +184,8 @@ interface AppState {
   activeSkills: string[];
   /** 사용자가 채팅에 적용한 커스텀 에이전트(페르소나). 지정 시 WS userAgentId 로 전송돼 백엔드가 해당 system_prompt 를 주입. 네비게이션·재방문에 유지되도록 영속. */
   activeUserAgent: { id: string; name: string; icon?: string | null } | null;
-  /** NotebookLM 노트북 컨텍스트(composer picker) — 같은 대화 내에서만 유지. 대화 전환/새 대화 시 리셋(clearChat + 로드 지점) — 다른 대화로 누수되면 무관한 질문까지 notebook_query 로 유도된다. */
-  notebookContext: { id: string; title: string } | null;
+  /** add-on 컨텍스트 참조(컴포저 선택기, add-on id → 참조) — 같은 대화 내에서만 유지. 대화 전환/새 대화 시 리셋(clearChat + 로드 지점) — 다른 대화로 누수되면 무관한 질문까지 그 add-on 의 도구로 유도된다. */
+  contextRefs: Record<string, { id: string; title: string }>;
   /** 딥리서치 진행상황 (ws research_progress) — 스트리밍 중 상태 배너로 표시, done 시 clear. */
   researchProgress: ResearchProgressInfo | null;
   /** 토론 모드 진행상황 (ws discussion_progress) — 스트리밍 중 배너로 표시, done 시 clear. */
@@ -256,7 +256,9 @@ interface AppState {
   setActiveAgent: (a: { name: string; emoji?: string } | null) => void;
   setActiveSkills: (s: string[]) => void;
   setActiveUserAgent: (a: { id: string; name: string; icon?: string | null } | null) => void;
-  setNotebookContext: (nb: { id: string; title: string } | null) => void;
+  /** add-on 컨텍스트 참조 설정 — ref 가 null 이면 그 add-on 의 참조를 지운다 */
+  setContextRef: (addonId: string, ref: { id: string; title: string } | null) => void;
+  clearContextRefs: () => void;
   setResearchProgress: (p: ResearchProgressInfo | null) => void;
   setDiscussionProgress: (p: DiscussionProgressInfo | null) => void;
   setOrchestratorProgress: (p: OrchestratorProgressInfo | null) => void;
@@ -342,7 +344,7 @@ export const useAppStore = create<AppState>()(
   activeAgent: null,
   activeSkills: [],
   activeUserAgent: null,
-  notebookContext: null,
+  contextRefs: {},
   researchProgress: null,
   discussionProgress: null,
   orchestratorProgress: null,
@@ -493,7 +495,12 @@ export const useAppStore = create<AppState>()(
   setActiveAgent: (a) => set({ activeAgent: a }),
   setActiveSkills: (s) => set({ activeSkills: s }),
   setActiveUserAgent: (a) => set({ activeUserAgent: a }),
-  setNotebookContext: (nb) => set({ notebookContext: nb }),
+  setContextRef: (addonId, ref) => set((s) => {
+    const next = { ...s.contextRefs };
+    if (ref) next[addonId] = ref; else delete next[addonId];
+    return { contextRefs: next };
+  }),
+  clearContextRefs: () => set({ contextRefs: {} }),
   setResearchProgress: (p) => set({ researchProgress: p }),
   setDiscussionProgress: (p) => set({ discussionProgress: p }),
   setOrchestratorProgress: (p) => set({ orchestratorProgress: p }),
@@ -517,7 +524,7 @@ export const useAppStore = create<AppState>()(
       currentSessionId: null,
       activeAgent: null,
       activeSkills: [],
-      notebookContext: null,
+      contextRefs: {},
       researchProgress: null,
       discussionProgress: null,
       orchestratorProgress: null,
