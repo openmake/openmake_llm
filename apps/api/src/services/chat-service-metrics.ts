@@ -25,7 +25,6 @@ const logger = createLogger('ChatService');
  * @param params.startTime - 요청 처리 시작 시간 (Date.now() 값)
  * @param params.message - 사용자 입력 메시지
  * @param params.model - 사용된 모델 이름
- * @param params.selectedAgent - 선택된 에이전트 정보
  * @param params.agentSelection - 에이전트 라우팅 결과
  */
 export function recordChatMetrics(params: {
@@ -34,10 +33,9 @@ export function recordChatMetrics(params: {
     message: string;
     model: string;
     apiKeyId?: string;
-    selectedAgent: { name: string };
     agentSelection: { primaryAgent: string };
 }): void {
-    const { fullResponse, startTime, message, model, apiKeyId, selectedAgent, agentSelection } = params;
+    const { fullResponse, startTime, message, model, apiKeyId, agentSelection } = params;
 
     // 사용량 추적 및 모니터링 메트릭 기록 (실패해도 응답 반환에 영향 없음)
     // (구 getApiKeyManager / currentKey 추적은 제거됨 — 단일 master key 운영.)
@@ -71,12 +69,10 @@ export function recordChatMetrics(params: {
             const { getAnalyticsSystem } = require('../monitoring/analytics');
             const analytics = getAnalyticsSystem();
 
-            const agentName = selectedAgent ? selectedAgent.name : 'General Chat';
             const agentId = agentSelection?.primaryAgent || 'general';
 
             analytics.recordAgentRequest(
                 agentId,
-                agentName,
                 responseTime,
                 true,
                 tokenCount

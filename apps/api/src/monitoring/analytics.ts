@@ -196,15 +196,16 @@ export class AnalyticsSystem {
      *
      * 에이전트별 누적 통계(요청 수, 응답 시간, 성공 수, 토큰 수)를 업데이트합니다.
      *
+     * 표시 이름은 저장하지 않는다 — getAgentPerformance() 가 조회 시점에
+     * AGENTS 카탈로그(`AGENTS[agentId]?.name`)로 해석한다.
+     *
      * @param agentId - 에이전트 고유 식별자
-     * @param agentName - 에이전트 표시 이름
      * @param responseTimeMs - 응답 시간 (ms)
      * @param success - 요청 성공 여부
      * @param tokens - 사용된 토큰 수
      */
     recordAgentRequest(
         agentId: string,
-        agentName: string,
         responseTimeMs: number,
         success: boolean,
         tokens: number

@@ -9,7 +9,7 @@
  *
  * @module errors/quota-exceeded.error
  * @throws HTTP 429 Too Many Requests
- * @see api-usage-tracker.ts - 사용량 추적 및 할당량 검사
+ * @see llm/user-quota.ts - 사용량 추적 및 할당량 검사(이 에러의 유일한 throw 처)
  */
 import { QUOTA_RETRY_AFTER } from '../config/timeouts';
 

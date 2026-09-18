@@ -19,7 +19,7 @@
  * @see {@link module:agents/topic-analyzer} - 의도 기반 토픽 분류
  * @see {@link module:agents/monitor} - 에이전트 성능 모니터링
  * @see {@link module:agents/discussion-engine} - 다중 에이전트 토론 엔진
- * @see {@link module:chat/pipeline-profile} - 실행 프로파일 해석
+ * @see {@link module:chat/profile-resolver} - 실행 계획(ExecutionPlan) 해석
  */
 
 import {

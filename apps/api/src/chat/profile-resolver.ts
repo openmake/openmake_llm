@@ -10,14 +10,12 @@
  * @module chat/profile-resolver
  * @description
  * - buildExecutionPlan(): 모델명 -> ExecutionPlan 생성
- * - listAvailableModels(): 외부 API용 모델 목록 반환 (현재 빈 배열)
+ * - listAvailableModels(): 외부 API용 모델 목록 반환
  *
  * @see services/ChatService.ts - ExecutionPlan 소비자
  */
 
-import type { ExecutionStrategy } from './pipeline-profile';
 import { createLogger } from '../utils/logger';
-import type { QueryType } from './model-selector-types';
 import { getConfig } from '../config/env';
 
 const logger = createLogger('ProfileResolver');
@@ -27,27 +25,34 @@ const logger = createLogger('ProfileResolver');
 // ============================================
 
 /**
+ * 파이프라인 실행 전략 — 단일 경로만 남았다.
+ *
+ * 구 'generate-verify'·'conditional-verify' 는 2026-07-18 strategy 계층 폐기
+ * (tail 셰도우 1.9% 근거) 로 생성되지 않는다. 이 타입만 담고 있던
+ * chat/pipeline-profile.ts 는 2026-09-18 정리에서 제거하고 여기로 흡수했다.
+ */
+export type ExecutionStrategy = 'single';
+
+/**
  * 파이프라인 실행 계획
- * 
+ *
  * ChatService가 소비하는 구조체로,
  * 프로파일의 설정을 구체적인 실행 파라미터로 변환한 결과입니다.
- */
-/**
- * ExecutionPlan — 2026-05-26 #I cleanup:
- * dead 필드 6개 제거 (useToolCalling, agentLoopMax, loopStrategy,
- * promptStrategy, contextStrategy, timeBudgetMs). 외부 호출처 0 확인 후 삭제.
+ *
+ * dead 필드 정리 이력 — 외부 호출처 0 확인 후 삭제:
+ * - 2026-05-26: useToolCalling·agentLoopMax·loopStrategy·promptStrategy·
+ *   contextStrategy·timeBudgetMs (6개)
+ * - 2026-09-18: profile·classifiedQueryType·generatorModel·verifierModel (4개,
+ *   strategy 계층 폐기 잔재)
  */
 export interface ExecutionPlan {
     /** 원본 요청 모델명 */
     requestedModel: string;
 
-    /** 해석된 프로파일 (현재 항상 null — 단일 로컬 모델 환경) */
-    profile: null;
-
     /** 실제 사용할 내부 엔진 모델 ID */
     resolvedEngine: string;
 
-    /** thinking 파라미터 (Gemini think 등) */
+    /** thinking(추론) 강도 */
     thinkingLevel: 'off' | 'low' | 'medium' | 'high';
 
     /** 토론(Discussion) 활성화 */
@@ -56,17 +61,8 @@ export interface ExecutionPlan {
     /** 필수 도구 목록 */
     requiredTools: string[];
 
-    /** Auto-Routing에서 분류된 원본 QueryType */
-    classifiedQueryType?: QueryType;
-
-    /** 실행 전략 — 'single' | 'generate-verify' | 'conditional-verify' */
+    /** 실행 전략 — 단일 경로 */
     executionStrategy: ExecutionStrategy;
-
-    /** Generate-Verify 시 Generator 모델 (executionStrategy가 'single'이면 undefined) */
-    generatorModel?: string;
-
-    /** Generate-Verify 시 Verifier 모델 (executionStrategy가 'single'이면 undefined) */
-    verifierModel?: string;
 }
 
 // ============================================
@@ -93,7 +89,6 @@ export function buildExecutionPlan(
 
     return {
         requestedModel,
-        profile: null,
         resolvedEngine: config.llmDefaultModel,
         thinkingLevel: 'medium',
         useDiscussion: false,

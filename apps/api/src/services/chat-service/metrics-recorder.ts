@@ -10,7 +10,6 @@
  */
 import { createLogger } from '../../utils/logger';
 import type { AgentSelection } from '../../agents';
-import { AGENTS } from '../../agents';
 import { postResponseCheck, preRequestCheck } from '../../chat/security-hooks';
 import { logRoutingDecision, type RoutingDecisionLog } from '../../chat/routing-logger';
 import { recordChatMetrics } from '../chat-service-metrics';
@@ -35,7 +34,6 @@ interface MetricsRecordParams {
     /** 채팅 메시지 요청 객체 */
     req: ChatMessageRequest;
     /** 선택된 에이전트 정보 */
-    selectedAgent: (typeof AGENTS)[string];
     /** 에이전트 선택 결과 */
     agentSelection: AgentSelection;
     /** 보안 사전 검사 결과 */
@@ -51,7 +49,7 @@ interface MetricsRecordParams {
  */
 export function recordMetricsAndVerify(params: MetricsRecordParams): void {
     const {
-        fullResponse, startTime, message, model, req, selectedAgent,
+        fullResponse, startTime, message, model, req,
         agentSelection, securityPreCheck, routingLog,
     } = params;
 
@@ -61,7 +59,6 @@ export function recordMetricsAndVerify(params: MetricsRecordParams): void {
         message,
         model,
         apiKeyId: req.apiKeyId,
-        selectedAgent,
         agentSelection,
     });
 
