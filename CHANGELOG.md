@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.76.0](https://github.com/openmake/openmake_llm/compare/v1.75.0...v1.76.0) (2026-09-18)
+
+
+### ✨ 기능
+
+* **addon:** 토론·딥리서치를 add-on 으로 분리 — 채팅 모드 확장점 ([#942](https://github.com/openmake/openmake_llm/issues/942)) ([ba62046](https://github.com/openmake/openmake_llm/commit/ba6204660b4a4a88c85d6bef221ac6c165eb1a9c))
+
 ## [1.75.0](https://github.com/openmake/openmake_llm/compare/v1.74.0...v1.75.0) (2026-09-18)
 
 
