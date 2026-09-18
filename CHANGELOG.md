@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.75.0](https://github.com/openmake/openmake_llm/compare/v1.74.0...v1.75.0) (2026-09-18)
+
+
+### ✨ 기능
+
+* **addon:** Base(API·웹)에서 add-on 고유 이름 제거 — 산업 팩 본문 교체·통합 확장점·커넥터 팩 ([#941](https://github.com/openmake/openmake_llm/issues/941)) ([1a5d891](https://github.com/openmake/openmake_llm/commit/1a5d891f4e246ca605d28f78b65991e9fb67dbc6))
+
+
+### ♻️ 리팩터링
+
+* **addon:** 팩별 시더를 매니페스트 기반 범용 설치기로 교체 + 팩 콘텐츠를 dist 스냅샷으로 ([#939](https://github.com/openmake/openmake_llm/issues/939)) ([850557b](https://github.com/openmake/openmake_llm/commit/850557b3dc1f7a4bca516b5f9298626fb2657d05))
+
 ## [1.74.0](https://github.com/openmake/openmake_llm/compare/v1.73.1...v1.74.0) (2026-09-18)
 
 
