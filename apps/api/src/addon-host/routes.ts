@@ -25,15 +25,33 @@ const ADDON_ROUTES: Readonly<Partial<Record<BuiltinAddonId, ReadonlyArray<{ moun
     'discord': [{ mountPath: '/api/integrations/discord', load: () => (require('../addons/discord/routes') as typeof import('../addons/discord/routes')).discordRuntimeRouter }],
 };
 
+/**
+ * add-on 목록 — 매니페스트와 켜짐 여부는 프로세스 시작 시 고정이라 첫 요청에 한 번만 만든다(인증 없는 엔드포인트가
+ * 요청마다 동기 파일 I/O 를 하지 않게). 매니페스트 하나를 못 읽어도 목록 전체를 실패시키지 않는다 — 그 add-on 은
+ * id 를 이름으로 싣고 경고를 남긴다(부팅의 verifyBuiltinManifests 도 같은 문제를 경고한다).
+ */
+interface AddonListEntry { id: string; name: string; version: string; kind: 'content' | 'integration'; enabled: boolean }
+let addonListCache: AddonListEntry[] | null = null;
+
+export function listBuiltinAddons(): AddonListEntry[] {
+    addonListCache ??= BUILTIN_ADDON_IDS.map(id => {
+        const base = { id, kind: BUILTIN_ADDON_KIND[id], enabled: isBuiltinAddonEnabled(id) };
+        try {
+            const manifest = addonManifestSchema.parse(JSON.parse(fs.readFileSync(path.join(builtinAddonDir(id), 'openmake-addon.json'), 'utf-8')));
+            return { ...base, name: manifest.name, version: manifest.version };
+        } catch (err) {
+            logger.warn(`add-on '${id}' 매니페스트를 읽지 못함 — 목록에는 id 로 싣는다:`, err);
+            return { ...base, name: id, version: '0.0.0' };
+        }
+    });
+    return addonListCache;
+}
+
 /** `GET /api/addons` — 클라이언트가 꺼진 add-on 의 UI 를 숨기는 데 쓴다. 민감 정보 없음(인증 불요). */
 function createAddonListRouter(): Router {
     const router = Router();
     router.get('/', (_req, res) => {
-        const addons = BUILTIN_ADDON_IDS.map(id => {
-            const manifest = addonManifestSchema.parse(JSON.parse(fs.readFileSync(path.join(builtinAddonDir(id), 'openmake-addon.json'), 'utf-8')));
-            return { id, name: manifest.name, version: manifest.version, kind: BUILTIN_ADDON_KIND[id], enabled: isBuiltinAddonEnabled(id) };
-        });
-        res.json(success({ addons }));
+        res.json(success({ addons: listBuiltinAddons() }));
     });
     return router;
 }

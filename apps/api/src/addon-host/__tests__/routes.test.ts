@@ -36,4 +36,18 @@ describe('mountAddonRoutes', () => {
         expect(addons.find(a => a.id === 'kakao-map')).toMatchObject({ enabled: true, kind: 'integration' });
         expect(addons.find(a => a.id === 'industry-pack')).toMatchObject({ enabled: true, kind: 'content' });
     });
+
+    it('목록은 한 번만 만들어 재사용한다 (요청마다 매니페스트를 다시 읽지 않는다)', () => {
+        jest.isolateModules(() => {
+            const fsModule = require('fs');
+            const spy = jest.spyOn(fsModule, 'readFileSync');
+            const { listBuiltinAddons } = require('../routes');
+            const first = listBuiltinAddons();
+            const readsAfterFirst = spy.mock.calls.length;
+            expect(listBuiltinAddons()).toBe(first);
+            expect(spy.mock.calls.length).toBe(readsAfterFirst);
+            expect(first.map((a: { id: string }) => a.id)).toContain('industry-pack');
+            spy.mockRestore();
+        });
+    });
 });
