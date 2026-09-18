@@ -298,7 +298,11 @@ bench_build() { # $1=dir
 bench_pm2_start() { # $1=dir $2=env
     require_pm2
     local name; name="$(bench_pm2_name "$2")"
+    # 등록된 앱에 `pm2 start ecosystem` 을 하면 PM2 는 저장해 둔 옛 exec_path·설정으로 재시작할 뿐
+    # ecosystem 의 바뀐 script 를 반영하지 않는다(2026-09-18 검증: start.js 로 바꿨는데 server.js 가 계속 떴다).
+    # 지우고 새로 등록해 ecosystem 이 언제나 진실이 되게 한다 — bench 는 무상태 API 라 잠깐의 공백은 무해하다.
     if [[ -f "$1/ecosystem.config.cjs" ]]; then
+        pm2 describe "$name" >/dev/null 2>&1 && pm2 delete "$name" >/dev/null 2>&1 || true
         ( cd "$1" && pm2 start ecosystem.config.cjs --update-env >/dev/null ) || die "bench PM2 기동 실패"
     else
         # 구 브랜치(ecosystem 없음) 폴백 — `npm start` 를 거친다. dist/server.js 를 PM2 로 직접 띄우면
