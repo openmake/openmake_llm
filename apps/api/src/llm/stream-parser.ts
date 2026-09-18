@@ -29,6 +29,7 @@ import { PseudoToolCallGate, stripPseudoToolCalls } from './pseudo-tool-call-par
 import { createLogger } from '../utils/logger';
 import { capPromptImages } from './prompt-image-cap';
 import { LLM_PROMPT_IMAGE_LIMITS } from '../config/runtime-limits';
+import { resolveModelProfile } from '../config/model-profiles';
 import { LOCAL_PRESERVE_THINKING_ENABLED } from '../config/llm-parameters';
 import { FALLBACK_REASONING_ONLY_NOTICE, shouldPromoteReasoningOnly } from './reasoning-only-recovery';
 
@@ -97,9 +98,14 @@ export function toResponseFormat(f: FormatOption | undefined): Record<string, un
     };
 }
 
-export function toOpenAIMessages(messages: ChatMessage[]): unknown[] {
+export function toOpenAIMessages(messages: ChatMessage[], modelId?: string): unknown[] {
     // 로컬 vLLM `--limit-mm-per-prompt` 페어 — history 포함 총량을 상한에 맞춘다(초과 시 400).
-    const { messages: capped } = capPromptImages(messages, LLM_PROMPT_IMAGE_LIMITS.MAX_PER_REQUEST);
+    // 상한은 서빙 설정과 짝이라 모델 프로필이 적었으면 그 값, 아니면 전역 기본값.
+    // 운영자가 env 로 명시했으면 그 값이 이긴다(서빙 설정을 임시로 바꾼 경우의 즉시 대응 수단).
+    const imageCap = process.env.LLM_PROMPT_IMAGE_CAP
+        ? LLM_PROMPT_IMAGE_LIMITS.MAX_PER_REQUEST
+        : (resolveModelProfile(modelId).maxPromptImages ?? LLM_PROMPT_IMAGE_LIMITS.MAX_PER_REQUEST);
+    const { messages: capped } = capPromptImages(messages, imageCap);
     return capped.map((m, idx) => {
         if (m.role === 'tool') {
             return {
@@ -211,7 +217,7 @@ export async function streamChat(
     const requestStartedAt = Date.now();
     const stream = await openai.chat.completions.create({
         model: request.model,
-        messages: toOpenAIMessages(request.messages),
+        messages: toOpenAIMessages(request.messages, request.model),
         stream: true,
         stream_options: { include_usage: true },
         ...applyOptionsToRequest(request.options),
@@ -497,7 +503,7 @@ export async function nonStreamChat(
     const responseFormat = toResponseFormat(request.format);
     const response = await openai.chat.completions.create({
         model: request.model,
-        messages: toOpenAIMessages(request.messages),
+        messages: toOpenAIMessages(request.messages, request.model),
         stream: false,
         ...applyOptionsToRequest(request.options),
         ...(tools ? { tools, ...(request.tool_choice !== undefined && { tool_choice: request.tool_choice }) } : {}),

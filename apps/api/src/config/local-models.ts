@@ -26,11 +26,12 @@
  *
  * 새 모델 추가 가이드:
  *   1. 서버 PC 의 vLLM 에 모델 띄움 (+ LiteLLM model_list 등록) → 다음 프로브에 자동 반영
- *   2. (선택) MODEL_CAPABILITY_PRESETS (model-defaults.ts) 에 capability 추가
+ *   2. (선택) 모델 프로필 (config/model-profiles.ts) 에 능력·강도·샘플링·라이선스 추가
  *   3. 기본 모델을 바꾸려면 `LLM_DEFAULT_MODEL` — 발견 목록에 없으면 부팅 로그가 경고한다
  *
  * @module config/local-models
  */
+import { licenseBlockReason } from './model-profiles';
 import { createLogger } from '../utils/logger';
 import { MODEL_PROBE } from './model-defaults';
 import { fetchGatewayModelInfo, selectLocalEntriesFromModelInfo } from './local-models-discovery';
@@ -193,7 +194,7 @@ export function getLocalChatModels(opts: { includeUnavailable?: boolean } = {}):
 /**
  * 도구 호출 지원 실측 — 더미 도구 1개를 붙여 1-token 요청을 보낸다.
  *
- * 목적: 모델을 교체했을 때 `MODEL_CAPABILITY_PRESETS` 접두어에 안 걸리면 보수적 기본값
+ * 목적: 모델을 교체했을 때 모델 프로필(`config/model-profiles.ts`) 접두어에 안 걸리면 보수적 기본값
  * (toolCalling=false)으로 떨어져 **채팅의 MCP 도구가 통째로 사라지던** 문제(과거 실사고)를
  * 자동으로 막는다. 200 이면 지원, 도구 관련 4xx 면 미지원으로 본다.
  *
@@ -442,6 +443,14 @@ export async function probeLocalModelAvailability(
         // 재시작 전까지 영구 '사용 불가' 가 된다(2026-09-03 qwen3.8-27b 6시간 실측).
         if (m.available === false && (!m.unavailableReason || m.unavailableReason === EXPLICIT_DISABLED_REASON)) {
             m.unavailableReason = EXPLICIT_DISABLED_REASON;
+            skipped.push(m.id);
+            continue;
+        }
+        // 가중치 라이선스가 서비스 사용을 막는 모델 — ping 하지 않고 비가용으로 둔다 (config/model-profiles.ts)
+        const licenseReason = licenseBlockReason(m.id);
+        if (licenseReason) {
+            m.available = false;
+            m.unavailableReason = licenseReason;
             skipped.push(m.id);
             continue;
         }

@@ -51,7 +51,7 @@ router.get('/model', asyncHandler(async (_req: Request, res: Response) => {
  * GET /models
  * 사용 가능한 모델 목록 API
  * model-roles 레지스트리의 chat 역할 모델을 반환합니다.
- * capabilities 는 MODEL_CAPABILITY_PRESETS 의 가장 긴 prefix 매칭으로 조회합니다.
+ * capabilities 는 모델 프로필(config/model-profiles.ts)의 가장 긴 prefix 매칭으로 조회합니다.
  */
 router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
     type ModelEntry = {

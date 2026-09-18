@@ -11,12 +11,15 @@
  * @module llm/sampling-preset
  */
 import { LOCAL_SAMPLING_PRESETS } from '../config/llm-parameters';
+import { resolveModelProfile } from '../config/model-profiles';
 import { isThinkingEnabled } from './reasoning-adapter';
 import type { ModelOptions, ThinkOption } from './types';
 
 interface SamplingPresetContext {
     /** 외부 provider 클라이언트(LLMConfig.quotaExempt) — 프리셋 미적용 */
     external?: boolean;
+    /** 실제 라우팅된 모델 — 모델 프로필이 샘플링을 적었으면 전역 프리셋 위에 덮는다 */
+    modelId?: string;
 }
 
 /** 호출자가 샘플링 파라미터를 하나라도 지정했는지 — 지정했으면 프리셋을 덮지 않는다 */
@@ -37,6 +40,8 @@ export function applyLocalSamplingPreset(
     ctx: SamplingPresetContext = {},
 ): ModelOptions | undefined {
     if (!LOCAL_SAMPLING_PRESETS.ENABLED || ctx.external || hasCallerSampling(options)) return options;
-    const preset = isThinkingEnabled(think) ? LOCAL_SAMPLING_PRESETS.THINKING : LOCAL_SAMPLING_PRESETS.INSTRUCT;
-    return { ...(options ?? {}), ...preset };
+    const thinking = isThinkingEnabled(think);
+    const preset = thinking ? LOCAL_SAMPLING_PRESETS.THINKING : LOCAL_SAMPLING_PRESETS.INSTRUCT;
+    const perModel = resolveModelProfile(ctx.modelId).sampling?.[thinking ? 'thinking' : 'instruct'];
+    return { ...(options ?? {}), ...preset, ...(perModel ?? {}) };
 }

@@ -1,5 +1,6 @@
 import type { ToolDefinition } from './types';
 import { LOCAL_TOOL_STRICT_ENABLED } from '../config/llm-parameters';
+import { resolveModelProfile } from '../config/model-profiles';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ToolStrict');
@@ -7,6 +8,8 @@ const logger = createLogger('ToolStrict');
 interface ToolStrictContext {
     /** 외부 provider 클라이언트(quotaExempt) — OpenAI strict 규격이 달라 건너뛴다 */
     external?: boolean;
+    /** 실제 라우팅된 모델 — 모델 프로필의 `toolStrict` 가 전역 플래그보다 우선한다 */
+    modelId?: string;
 }
 
 /** 한 번 경고한 도구는 다시 알리지 않는다 — 턴마다 같은 줄이 쌓이는 것을 막되 존재는 남긴다. */
@@ -68,7 +71,8 @@ export function applyLocalToolStrict(
     tools: ToolDefinition[] | undefined,
     ctx: ToolStrictContext = {},
 ): ToolDefinition[] | undefined {
-    if (!tools || !LOCAL_TOOL_STRICT_ENABLED || ctx.external) return tools;
+    if (!tools || ctx.external) return tools;
+    if (!(resolveModelProfile(ctx.modelId).toolStrict ?? LOCAL_TOOL_STRICT_ENABLED)) return tools;
     return tools.map((t) => {
         if (t.function.strict !== undefined) return t;
         const cleaned = stripUnresolvableRefs(t.function.parameters);
