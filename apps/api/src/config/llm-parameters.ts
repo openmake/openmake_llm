@@ -24,16 +24,6 @@
 export const LLM_TEMPERATURES = {
     /** 웹 검색 사실 검증 (web-search.routes) */
     WEB_SEARCH: Number(process.env.LLM_TEMP_WEB_SEARCH) || 0.3,
-    /** 리서치 주제 분해 (DeepResearchService) */
-    RESEARCH_PLAN: Number(process.env.LLM_TEMP_RESEARCH_PLAN) || 0.3,
-    /** 리서치 청크 합성 (DeepResearchService) */
-    RESEARCH_SYNTHESIS: Number(process.env.LLM_TEMP_RESEARCH_SYNTHESIS) || 0.35,
-    /** 리서치 최종 보고서 / 병합 (DeepResearchService) */
-    RESEARCH_REPORT: Number(process.env.LLM_TEMP_RESEARCH_REPORT) || 0.4,
-    /** 리서치 사실 확인 (DeepResearchService) */
-    RESEARCH_FACT_CHECK: Number(process.env.LLM_TEMP_RESEARCH_FACT_CHECK) || 0.1,
-    /** Discussion 이미지 분석 (discussion-strategy) */
-    DISCUSSION: Number(process.env.LLM_TEMP_DISCUSSION) || 0.2,
     /** Semantic Compactor — 도구 결과 요약 시 결정론적 응답 강제 */
     SEMANTIC_COMPACTION: Number(process.env.LLM_TEMP_SEMANTIC_COMPACTION) || 0,
     /** 히스토리 요약 */

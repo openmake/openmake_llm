@@ -11,7 +11,8 @@ import type { ResearchConfig, ResearchProgress } from './types';
 import { scrapePage } from '../../utils/web-scraper';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
-import { RESEARCH_DEFAULTS, SCRAPE_ABORT_BUFFER_MS } from '../../config/runtime-limits';
+import { SCRAPE_ABORT_BUFFER_MS } from '../../config/runtime-limits';
+import { RESEARCH_DEFAULTS } from './config';
 import { normalizeUrl } from './utils';
 
 const logger = createLogger('DeepResearch:ContentScraper');

@@ -26,6 +26,7 @@
  * @module config/tool-policy
  */
 import type { TaskSandboxApprovalPolicy } from './task-sandbox';
+import { contributedToolRisk } from '../addon-host/contributions';
 
 export type ToolRiskClass = 'read' | 'write' | 'destructive' | 'exec' | 'network' | 'external' | 'control';
 
@@ -62,7 +63,6 @@ const TOOL_RISK: Readonly<Record<string, RiskRule>> = {
     plan_view: 'control',
     delegate: 'control',
     spawn_agents: 'control',
-    start_discussion: 'control',
 };
 
 /** env 재분류 — 잘못된 JSON·모르는 등급은 무시하고 로그 없이 표를 그대로 쓴다(부팅을 막지 않음). */
@@ -80,11 +80,20 @@ function loadOverrides(): Record<string, ToolRiskClass> {
 }
 const OVERRIDES = loadOverrides();
 
+/** add-on 이 기여한 도구 등급(addon-host/contributions) — 모르는 등급 이름은 버린다. 첫 사용 시 한 번 읽는다. */
+let contributedCache: Record<string, ToolRiskClass> | null = null;
+function contributedRisk(): Record<string, ToolRiskClass> {
+    contributedCache ??= Object.fromEntries(
+        Object.entries(contributedToolRisk()).filter(([, v]) => (TOOL_RISK_CLASSES as readonly string[]).includes(v)),
+    ) as Record<string, ToolRiskClass>;
+    return contributedCache;
+}
+
 /** PURE: 도구 호출의 위험 등급. 표 밖 도구는 external. */
 export function classifyToolRisk(toolName: string, args: Record<string, unknown> = {}): ToolRiskClass {
     const override = OVERRIDES[toolName];
     if (override) return override;
-    const rule = TOOL_RISK[toolName];
+    const rule = TOOL_RISK[toolName] ?? (contributedRisk()[toolName] as ToolRiskClass | undefined);
     if (!rule) return 'external';
     return typeof rule === 'function' ? rule(args) : rule;
 }

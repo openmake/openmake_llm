@@ -8,13 +8,17 @@
  */
 
 import type { LLMClient } from '../../llm';
+import { RESEARCH_TIMEOUTS } from './config';
+import { RESEARCH_TEMPERATURES } from './config';
+import { RESEARCH_TRUNCATION } from './config';
 import { getExternalClientHints } from '../../llm/external-throttle';
 import type { SearchResult } from '../../mcp/web-search';
 import type { ResearchConfig, SynthesisResult } from './types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { withSkillContext } from './research-context';
 import { createLogger } from '../../utils/logger';
-import { TRUNCATION, RESEARCH_DEFAULTS } from '../../config/runtime-limits';
+import { TRUNCATION } from '../../config/runtime-limits';
+import { RESEARCH_DEFAULTS } from './config';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { LLM_TIMEOUTS } from '../../config/timeouts';
 import {
@@ -110,7 +114,7 @@ export async function synthesizeFindings(params: {
                     const content = source.fullContent?.trim().length
                         ? source.fullContent
                         : source.snippet;
-                    const compactContent = content.length > TRUNCATION.RESEARCH_CONTENT_MAX ? `${content.slice(0, TRUNCATION.RESEARCH_CONTENT_MAX)}\n...(중략)` : content;
+                    const compactContent = content.length > RESEARCH_TRUNCATION.CONTENT_MAX ? `${content.slice(0, RESEARCH_TRUNCATION.CONTENT_MAX)}\n...(중략)` : content;
                     return `[출처 ${sourceIndex}] ${source.title}\nURL: ${source.url}\n내용:\n${compactContent}`;
                 })
                 .join('\n\n');
@@ -126,8 +130,8 @@ export async function synthesizeFindings(params: {
                     [{ role: 'user', content: chunkPrompt }],
                     // maxTokens 를 주지 않으면 모델이 1,400+ 토큰을 써 로컬 모델에서 청크 타임아웃에
                     // 전멸한다(2026-09-13 실측). 중간 요약이라 상한을 두는 것이 맞다.
-                    { temperature: LLM_TEMPERATURES.RESEARCH_SYNTHESIS, num_predict: RESEARCH_DEFAULTS.CHUNK_SUMMARY_MAX_TOKENS },
-                    LLM_TIMEOUTS.SYNTHESIS_PER_CHUNK_TIMEOUT_MS,
+                    { temperature: RESEARCH_TEMPERATURES.SYNTHESIS, num_predict: RESEARCH_DEFAULTS.CHUNK_SUMMARY_MAX_TOKENS },
+                    RESEARCH_TIMEOUTS.SYNTHESIS_PER_CHUNK_MS,
                     abortSignal,
                 );
                 throwIfAborted();
@@ -262,8 +266,8 @@ async function singleMerge(params: {
         const response = await chatWithAbortTimeout(
             client,
             [{ role: 'user', content: withSkillContext(mergedPrompt, params.skillBlock ?? '') }],
-            { temperature: LLM_TEMPERATURES.RESEARCH_REPORT, num_predict: RESEARCH_DEFAULTS.MERGE_MAX_TOKENS },
-            LLM_TIMEOUTS.SYNTHESIS_MERGE_TIMEOUT_MS,
+            { temperature: RESEARCH_TEMPERATURES.REPORT, num_predict: RESEARCH_DEFAULTS.MERGE_MAX_TOKENS },
+            RESEARCH_TIMEOUTS.SYNTHESIS_MERGE_MS,
             abortSignal,
         );
         throwIfAborted();
@@ -302,8 +306,8 @@ export async function checkNeedsMoreInfo(params: {
         const response = await chatWithAbortTimeout(
             client,
             [{ role: 'user', content: prompt }],
-            { temperature: LLM_TEMPERATURES.RESEARCH_FACT_CHECK, num_predict: RESEARCH_DEFAULTS.NEED_MORE_MAX_TOKENS },
-            LLM_TIMEOUTS.RESEARCH_NEED_MORE_TIMEOUT_MS,
+            { temperature: RESEARCH_TEMPERATURES.FACT_CHECK, num_predict: RESEARCH_DEFAULTS.NEED_MORE_MAX_TOKENS },
+            RESEARCH_TIMEOUTS.NEED_MORE_MS,
             abortSignal,
         );
         throwIfAborted();

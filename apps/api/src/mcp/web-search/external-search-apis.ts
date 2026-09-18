@@ -116,7 +116,7 @@ export async function searchTavily(
                 ...(item.published_date ? { date: item.published_date } : {}),
             });
         }
-        logger.info(`Tavily(deep-research): ${results.length}개`);
+        logger.info(`Tavily(${searchDepth}): ${results.length}개`);
     } catch (e) {
         logger.error('Tavily 검색 실패:', describeFetchError(e));
     }

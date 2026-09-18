@@ -23,9 +23,9 @@ import { getUnifiedMCPClient } from '../../mcp/unified-client';
 import { getSkillManager } from '../../agents/skill-manager';
 import { selectRelevantToolsEmbedding } from '../../services/agent-task/tool-selector-embedding';
 import { filterRestrictedTools } from '../../services/chat-service/tool-restrictions';
-import { RESEARCH_CONTEXT } from '../../config/runtime-limits';
+import { RESEARCH_CONTEXT } from './config';
 import { createLogger } from '../../utils/logger';
-import { DEEP_RESEARCH_MCP_EVIDENCE_SYSTEM_PROMPT } from '../../prompts/deep-research-mcp-system';
+import { DEEP_RESEARCH_MCP_EVIDENCE_SYSTEM_PROMPT } from './mcp-evidence-prompt';
 
 const logger = createLogger('DeepResearch:Context');
 

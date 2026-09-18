@@ -12,7 +12,7 @@ import { Agent } from '../../agents/types';
 import { industryData, getAgentById } from '../../agents/agent-data';
 import { analyzeTopicIntent } from '../../agents/topic-analyzer';
 import { routeToAgent } from '../../agents/keyword-router';
-import { DISCUSSION_DOMAIN_CATEGORIES, DISCUSSION_COMPLEMENTARY_AGENTS } from '../../config/runtime-limits';
+import { DISCUSSION_DOMAIN_CATEGORIES, DISCUSSION_COMPLEMENTARY_AGENTS } from './config';
 
 /**
  * 토론용 관련 에이전트 추천 (토픽+키워드 라우팅 + 컨텍스트 반영)

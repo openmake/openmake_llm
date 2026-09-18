@@ -4,7 +4,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-    ADDON_CONTENT_ASSET_PATTERNS, ADDON_NAME_ALLOWED_PREFIXES, ADDON_SPECIFIC_NAME_PATTERNS, CONTENT_REFERENCE_ALLOWLIST,
+    ADDON_CONTENT_ASSET_PATTERNS, ADDON_NAME_ALLOWED_PREFIXES, ADDON_NAME_CONTRACT_EXCEPTIONS, ADDON_SPECIFIC_NAME_PATTERNS,
+    CONTENT_REFERENCE_ALLOWLIST,
 } from '../addon-boundary';
 
 const SRC_ROOT = path.resolve(__dirname, '..', '..');
@@ -78,12 +79,20 @@ describe('Base 는 특정 add-on 의 이름을 모른다', () => {
     }
 
     it('API: add-on 고유 이름은 add-on 모듈과 addon-host 밖의 코드 줄에 나오지 않는다', () => {
-        expect(scan(SRC_ROOT, ADDON_NAME_ALLOWED_PREFIXES, ['.ts'], [SELF])).toEqual([]);
+        expect(scan(SRC_ROOT, ADDON_NAME_ALLOWED_PREFIXES, ['.ts'], [SELF, ...Object.keys(ADDON_NAME_CONTRACT_EXCEPTIONS)])).toEqual([]);
     });
 
     it('웹: add-on 고유 이름은 apps/web/addons 밖의 코드 줄에 나오지 않는다', () => {
         const webRoot = path.resolve(SRC_ROOT, '..', '..', 'web');
         // JSX 주석({/* … */})도 주석으로 본다
         expect(scan(webRoot, ['addons/', 'public/', 'scripts/'], ['.ts', '.tsx']).filter(h => !h.startsWith('next-env'))).toEqual([]);
+    });
+
+    it('계약 예외 목록에 더는 그 이름이 없는 파일이 남아 있지 않다 (예외는 줄어들기만 한다)', () => {
+        const stale = Object.keys(ADDON_NAME_CONTRACT_EXCEPTIONS).filter((rel) => {
+            const lines = fs.readFileSync(path.join(SRC_ROOT, rel), 'utf-8').split('\n');
+            return !lines.some((line) => !isComment(line) && ADDON_SPECIFIC_NAME_PATTERNS.some((p) => p.test(line)));
+        });
+        expect(stale).toEqual([]);
     });
 });

@@ -15,12 +15,15 @@
  * - 토큰 제한을 고려한 컨텍스트 우선순위 관리
  */
 import { createDiscussionEngine, type DiscussionResult, type DiscussionSearchResult } from './engine';
+import { DISCUSSION_TEMPERATURES } from './config';
+import { DISCUSSION_TRUNCATION } from './config';
 import type { ChatMessage } from '../../llm';
 import type { ChatStrategy, ChatResult } from '../../services/chat-strategies/types';
 import type { DiscussionStrategyContext } from './strategy-types';
 import { createLogger } from '../../utils/logger';
 import { sanitizePromptInput } from '../../utils/input-sanitizer';
-import { DISCUSSION_TOKEN_BUDGET, MODEL_CONTEXT_DEFAULTS, DISCUSSION_STREAM_ABORT_CHECK_INTERVAL, DISCUSSION_CONCURRENCY, DISCUSSION_FACTCHECK, TRUNCATION } from '../../config/runtime-limits';
+import { MODEL_CONTEXT_DEFAULTS, TRUNCATION } from '../../config/runtime-limits';
+import { DISCUSSION_TOKEN_BUDGET, DISCUSSION_STREAM_ABORT_CHECK_INTERVAL, DISCUSSION_CONCURRENCY, DISCUSSION_FACTCHECK } from './config';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { resolvePromptLocale, type PromptLocaleCode } from '../../chat/language-policy';
 import { withSpan } from '../../observability/otel';
@@ -286,7 +289,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
                 progress: 2,
             });
 
-            const imagePromises = allImages.slice(0, TRUNCATION.DISCUSSION_MAX_IMAGES).map(async (imageBase64, i) => {
+            const imagePromises = allImages.slice(0, DISCUSSION_TRUNCATION.MAX_IMAGES).map(async (imageBase64, i) => {
                 try {
                     checkAborted();
                     const analysisResponse = await context.client.chat(
@@ -301,7 +304,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
                                 images: [imageBase64],
                             },
                         ],
-                        { temperature: LLM_TEMPERATURES.DISCUSSION }
+                        { temperature: DISCUSSION_TEMPERATURES.IMAGE_ANALYSIS }
                     );
 
                     if (analysisResponse.content) {

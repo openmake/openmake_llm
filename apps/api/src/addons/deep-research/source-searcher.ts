@@ -13,7 +13,8 @@ import { searchTavily } from '../../mcp/web-search/external-search-apis';
 import type { ResearchConfig, SubTopic } from './types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
-import { CAPACITY, RESEARCH_DEFAULTS, RESEARCH_TAVILY } from '../../config/runtime-limits';
+import { CAPACITY } from '../../config/runtime-limits';
+import { RESEARCH_DEFAULTS, RESEARCH_TAVILY } from './config';
 import { normalizeUrl } from './utils';
 import { parallelBatch } from '../../workflow/graph-engine';
 

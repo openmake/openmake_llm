@@ -8,6 +8,7 @@
  * 다른 단계(chatWithAbortTimeout)와 같이 signal 로 걸렸는지 고정한다 — 되돌리면 실패한다.
  */
 import { generateReport } from '../report-generator';
+import { RESEARCH_TIMEOUTS } from '../config';
 import type { LLMClient } from '../../../llm';
 import { LLM_TIMEOUTS } from '../../../config/timeouts';
 
@@ -60,6 +61,6 @@ describe('보고서 생성 abort 배선', () => {
     });
 
     it('보고서 타임아웃이 라이브 실측(1,615초)보다 크다', () => {
-        expect(LLM_TIMEOUTS.REPORT_GENERATION_TIMEOUT_MS).toBeGreaterThan(1615 * 1000);
+        expect(RESEARCH_TIMEOUTS.REPORT_GENERATION_MS).toBeGreaterThan(1615 * 1000);
     });
 });

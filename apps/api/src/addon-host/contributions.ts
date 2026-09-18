@@ -23,11 +23,14 @@ export interface AddonSettingDef {
 }
 
 export interface AddonContribution {
+    /** add-on 이 기여한 도구의 승인 위험 등급 (config/tool-policy.ts 의 등급 이름) */
+    toolRisk?: Readonly<Record<string, string>>;
     settings?: readonly AddonSettingDef[];
     apiKeyScopes?: readonly string[];
 }
 
 const LOADERS: Readonly<Partial<Record<BuiltinAddonId, () => AddonContribution>>> = {
+    'discussion': () => (require('../addons/discussion/contributions') as typeof import('../addons/discussion/contributions')).discussionContribution,
     'discord': () => (require('../addons/discord/contributions') as typeof import('../addons/discord/contributions')).discordContribution,
 };
 
@@ -41,4 +44,8 @@ export function contributedSettings(): AddonSettingDef[] {
 
 export function contributedApiKeyScopes(): string[] {
     return enabledContributions().flatMap(c => [...(c.apiKeyScopes ?? [])]);
+}
+
+export function contributedToolRisk(): Record<string, string> {
+    return Object.assign({}, ...enabledContributions().map(c => c.toolRisk ?? {}));
 }

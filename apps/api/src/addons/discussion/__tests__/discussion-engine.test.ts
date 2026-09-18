@@ -52,7 +52,7 @@ jest.mock('../../../chat/language-policy', () => ({
 
 import { createDiscussionEngine } from '../engine';
 import type { DiscussionProgress } from '../engine';
-import { DISCUSSION_CONCURRENCY } from '../../../config/runtime-limits';
+import { DISCUSSION_CONCURRENCY } from '../config';
 
 // ============================================================
 // 공통 픽스처

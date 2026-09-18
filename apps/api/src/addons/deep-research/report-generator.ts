@@ -7,6 +7,8 @@
  */
 
 import { type LLMClient } from '../../llm';
+import { RESEARCH_TIMEOUTS } from './config';
+import { RESEARCH_TEMPERATURES } from './config';
 import type { SearchResult } from '../../mcp/web-search';
 import type { ResearchConfig, SubTopic } from './types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
@@ -18,7 +20,7 @@ import { LLM_TIMEOUTS } from '../../config/timeouts';
 import { deduplicateSources, extractBulletLikeFindings } from './utils';
 import { SECTION_HEADERS, getReportPrompt, getResearchMessage } from './prompts';
 import { verifyCitations } from './citation-verifier';
-import { DEEP_RESEARCH_CITATION } from '../../config/runtime-limits';
+import { DEEP_RESEARCH_CITATION } from './config';
 
 const logger = createLogger('DeepResearch:ReportGenerator');
 
@@ -176,13 +178,13 @@ export async function generateReport(params: {
     // → 전용 긴 타임아웃 파생 클라이언트. derive 는 baseUrl/apiKey 를 보존하므로
     //   role 해석된 외부 endpoint 클라이언트에서도 안전 (createClient 재파생은 외부 baseUrl 상실).
     const reportClient = client.derive({
-        timeout: LLM_TIMEOUTS.REPORT_GENERATION_TIMEOUT_MS,
+        timeout: RESEARCH_TIMEOUTS.REPORT_GENERATION_MS,
     });
 
     // SDK 의 timeout 옵션만으로는 **스트리밍이 시작된 뒤를 막지 못한다** — 2026-09-13 라이브에서
     // 15분 상한을 27분 동안 넘겨 생성이 계속됐다(중단 버튼도 호출이 끝난 뒤에야 반영됐다).
     // 다른 단계(chatWithAbortTimeout)와 같이 signal 로 걸어 upstream 요청 자체를 취소한다.
-    const timeoutSignal = AbortSignal.timeout(LLM_TIMEOUTS.REPORT_GENERATION_TIMEOUT_MS);
+    const timeoutSignal = AbortSignal.timeout(RESEARCH_TIMEOUTS.REPORT_GENERATION_MS);
     const reportSignal = abortSignal ? AbortSignal.any([abortSignal, timeoutSignal]) : timeoutSignal;
 
     try {
@@ -191,7 +193,7 @@ export async function generateReport(params: {
         let accumulatedChars = 0;
         const response = await reportClient.chat(
             [{ role: 'user', content: withSkillContext(prompt, params.skillBlock ?? '') }],
-            { temperature: LLM_TEMPERATURES.RESEARCH_SYNTHESIS },
+            { temperature: RESEARCH_TEMPERATURES.SYNTHESIS },
             (token) => {
                 accumulatedChars += token.length;
                 onReportProgress?.(accumulatedChars);

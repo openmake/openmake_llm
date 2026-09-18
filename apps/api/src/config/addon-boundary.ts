@@ -43,7 +43,25 @@ export const ADDON_SPECIFIC_NAME_PATTERNS: readonly RegExp[] = [
     /kakaomap|kakao[-_]?map|search-places|find-route/i,
     /notebooklm/i,
     /discord/i,
+    /discussion/i,
+    /deep[-_ ]?research/i,
 ];
 
 /** add-on 고유 이름이 나와도 되는 위치(`apps/api/src` 기준 접두) — add-on 모듈과 그것을 모으는 호스트뿐 */
 export const ADDON_NAME_ALLOWED_PREFIXES: readonly string[] = ['addons/', 'addon-host/'];
+
+/**
+ * 위 이름이 나와도 되는 Base 파일(`apps/api/src` 기준)과 그 사유 — **코드로는 바꿀 수 없는 외부 계약**뿐이다.
+ * DB 스키마의 컬럼·저장값, 공개 REST 응답 필드가 여기에 해당한다(이름을 바꾸려면 2단계 마이그레이션이나
+ * API 버전 변경이 필요하다). 새 항목을 더하려면 같은 수준의 사유가 있어야 한다.
+ */
+export const ADDON_NAME_CONTRACT_EXCEPTIONS: Readonly<Record<string, string>> = {
+    'services/chat-service/orchestration-shadow-recorder.ts': 'DB 컬럼 orchestration_dispatch_log.discussion_intent (086)',
+    'data/repositories/routing-metrics-repository.ts': 'DB 컬럼 discussion_intent 집계 SQL (086)',
+    'routes/metrics.routes.ts': '관리자 지표 API 응답 필드 discussionIntentTurns (웹 admin 이 읽는다)',
+    'chat/verifiability-classifier.ts': "tail 셰도우 테이블의 저장값 would_route_to='deep-research'",
+    'chat/profile-resolver.ts': '공개 REST 응답의 실행 계획 필드 useDiscussion (항상 false, 계약 유지)',
+    'routes/chat.routes.ts': '공개 REST 응답 필드 discussion (항상 false, 계약 유지)',
+    'routes/model.routes.ts': '공개 REST 응답의 모델 capability 필드 discussion (항상 false, 계약 유지)',
+    'swagger/schemas-core.ts': '위 REST 응답 필드의 OpenAPI 스키마 (iOS Kit 생성 입력)',
+};

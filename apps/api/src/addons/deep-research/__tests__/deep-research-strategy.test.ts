@@ -41,7 +41,7 @@ jest.mock('uuid', () => ({
 
 import { DeepResearchService } from '../service';
 import { getUnifiedDatabase } from '../../../data/models/unified-database';
-import { RESEARCH_STRATEGY_PARAMS } from '../../../config/runtime-limits';
+import { RESEARCH_STRATEGY_PARAMS } from '../config';
 import { v4 as uuidv4 } from 'uuid';
 
 const MockDeepResearchService = DeepResearchService as unknown as jest.Mock;

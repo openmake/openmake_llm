@@ -9,7 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 describe('토론 결과 포맷터', () => {
-    const source = fs.readFileSync(path.join(__dirname, '..', 'chat-service-formatters.ts'), 'utf-8');
+    const source = fs.readFileSync(path.join(__dirname, '..', 'format.ts'), 'utf-8');
     // 주석(설명용 언급)은 제외하고 실제 문자열 리터럴만 본다
     const code = source
         .split('\n')

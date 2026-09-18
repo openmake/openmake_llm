@@ -16,7 +16,7 @@
  */
 
 import { SECTION_HEADERS } from './prompts';
-import { DEEP_RESEARCH_CITATION } from '../../config/runtime-limits';
+import { DEEP_RESEARCH_CITATION } from './config';
 
 /** 인용 검증 결과 */
 export interface CitationReport {

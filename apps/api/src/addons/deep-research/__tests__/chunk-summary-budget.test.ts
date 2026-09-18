@@ -8,7 +8,8 @@
  *
  * 상한과 타임아웃의 관계를 고정한다 — 상한을 없애거나 타임아웃을 내리면 실패한다.
  */
-import { RESEARCH_DEFAULTS } from '../../../config/runtime-limits';
+import { RESEARCH_DEFAULTS } from '../config';
+import { RESEARCH_TIMEOUTS } from '../config';
 import { LLM_TIMEOUTS } from '../../../config/timeouts';
 
 describe('청크 요약 예산', () => {
@@ -22,20 +23,20 @@ describe('청크 요약 예산', () => {
         // 동시 실행 경합을 감안해 보수적으로 7 tok/s 로 계산한다.
         const CONSERVATIVE_TOK_PER_SEC = 7;
         const worstCaseMs = (RESEARCH_DEFAULTS.CHUNK_SUMMARY_MAX_TOKENS / CONSERVATIVE_TOK_PER_SEC) * 1000;
-        expect(worstCaseMs).toBeLessThan(LLM_TIMEOUTS.SYNTHESIS_PER_CHUNK_TIMEOUT_MS);
+        expect(worstCaseMs).toBeLessThan(RESEARCH_TIMEOUTS.SYNTHESIS_PER_CHUNK_MS);
     });
 
     it('병합 타임아웃은 청크 타임아웃보다 크다', () => {
-        expect(LLM_TIMEOUTS.SYNTHESIS_MERGE_TIMEOUT_MS).toBeGreaterThan(LLM_TIMEOUTS.SYNTHESIS_PER_CHUNK_TIMEOUT_MS);
+        expect(RESEARCH_TIMEOUTS.SYNTHESIS_MERGE_MS).toBeGreaterThan(RESEARCH_TIMEOUTS.SYNTHESIS_PER_CHUNK_MS);
     });
 
     // 같은 실패(상한 없는 출력 × 고정 타임아웃)가 분해·병합·판단 단계에도 있었다.
     // 2026-09-13 라이브에서 "주제 분해 실패: Request was aborted"(60초)로 재현됐다.
     it.each([
-        ['분해', RESEARCH_DEFAULTS.DECOMPOSE_MAX_TOKENS, LLM_TIMEOUTS.RESEARCH_DECOMPOSE_TIMEOUT_MS],
-        ['청크', RESEARCH_DEFAULTS.CHUNK_SUMMARY_MAX_TOKENS, LLM_TIMEOUTS.SYNTHESIS_PER_CHUNK_TIMEOUT_MS],
-        ['병합', RESEARCH_DEFAULTS.MERGE_MAX_TOKENS, LLM_TIMEOUTS.SYNTHESIS_MERGE_TIMEOUT_MS],
-        ['추가판단', RESEARCH_DEFAULTS.NEED_MORE_MAX_TOKENS, LLM_TIMEOUTS.RESEARCH_NEED_MORE_TIMEOUT_MS],
+        ['분해', RESEARCH_DEFAULTS.DECOMPOSE_MAX_TOKENS, RESEARCH_TIMEOUTS.DECOMPOSE_MS],
+        ['청크', RESEARCH_DEFAULTS.CHUNK_SUMMARY_MAX_TOKENS, RESEARCH_TIMEOUTS.SYNTHESIS_PER_CHUNK_MS],
+        ['병합', RESEARCH_DEFAULTS.MERGE_MAX_TOKENS, RESEARCH_TIMEOUTS.SYNTHESIS_MERGE_MS],
+        ['추가판단', RESEARCH_DEFAULTS.NEED_MORE_MAX_TOKENS, RESEARCH_TIMEOUTS.NEED_MORE_MS],
     ])('%s 단계: 출력 상한 × 보수적 속도 < 타임아웃', (_name, cap, timeoutMs) => {
         const CONSERVATIVE_TOK_PER_SEC = 7;
         expect(cap).toBeGreaterThan(0);

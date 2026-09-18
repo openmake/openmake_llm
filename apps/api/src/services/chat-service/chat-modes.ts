@@ -47,6 +47,8 @@ export interface ChatModeExtension {
     /** 이 모드의 모델을 컴포저 선택보다 먼저 찾을 역할(role) 이름 — 외부로 해석될 때만 채택 */
     modelRole?: string;
     inputPolicy: ChatModeInputPolicy;
+    /** 관련 내장 도구의 설명 끝에 덧붙일 안내 — 도구 이름 → 문장 (이 모드가 더 적합한 경우를 모델에 알린다) */
+    relatedToolHints?: Readonly<Record<string, string>>;
     /** 턴을 실행하고 최종 응답 본문을 돌려준다 */
     run(params: ChatModeRunParams): Promise<string>;
 }
@@ -93,4 +95,9 @@ export const DEFAULT_INPUT_POLICY: ChatModeInputPolicy = { pdfVision: true, urlP
 /** REST 채팅 스키마가 받을 모드 필드 이름 — 구 불리언 필드(REST 가용 모드만). 일반 필드 `modes` 는 스키마가 따로 받는다. */
 export function restLegacyModeFlags(): string[] {
     return getChatModes().filter((m) => m.availableOverRest && m.legacyRequestFlag).map((m) => m.legacyRequestFlag as string);
+}
+
+/** 내장 도구 설명에 붙일 모드 안내 — 켜진 모드가 기여한 문장을 등록 순서로 잇는다(모드가 없으면 빈 문자열). */
+export function toolDescriptionHint(toolName: string): string {
+    return getChatModes().map((m) => m.relatedToolHints?.[toolName] ?? '').join('');
 }

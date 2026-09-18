@@ -9,7 +9,7 @@
  * @module schemas/research.schema
  */
 import { z } from 'zod';
-import { secureOptionalTextSchema, secureTextSchema } from './security.schema';
+import { secureOptionalTextSchema, secureTextSchema } from '../../schemas/security.schema';
 
 /**
  * 리서치 세션 생성 스키마

@@ -13,7 +13,6 @@ export * from './chat.schema';
 export * from './skills.schema';
 export * from './agents.schema';
 // memory.schema / documents.schema: 2026-05-19 제거
-export * from './research.schema';
 
 export * from './external.schema';
 export * from './web-search.schema';

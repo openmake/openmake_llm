@@ -124,7 +124,12 @@ export const extractWebpageTool: MCPToolDefinition = {
 const researchTopicTool: MCPToolDefinition = {
     tool: {
         name: 'research_topic',
-        description: '한 주제에 대해 다출처 자료를 폭넓게 수집합니다. 개요·배경 조사가 필요한 광범위한 주제일 때 사용하세요. 단발성 사실 조회는 web_search가 더 빠릅니다. 심층 다단계 리서치가 필요하면 deep research 모드를 사용하세요.',
+        // 끝의 모드 안내는 켜진 채팅 모드(add-on)가 기여한다 — 모드가 꺼진 배포에서 없는 모드를 권하지 않게.
+        // getter 인 이유: 모듈 로드 시점에 모드 레지스트리를 끌어오면 순환이 된다(도구 목록 직렬화 시점에 평가).
+        get description(): string {
+            return '한 주제에 대해 다출처 자료를 폭넓게 수집합니다. 개요·배경 조사가 필요한 광범위한 주제일 때 사용하세요. 단발성 사실 조회는 web_search가 더 빠릅니다.'
+                + (require('../../services/chat-service/chat-modes') as typeof import('../../services/chat-service/chat-modes')).toolDescriptionHint('research_topic');
+        },
         inputSchema: {
             type: 'object',
             properties: { topic: { type: 'string', description: '연구할 주제 (예: "고체 전해질 배터리 상용화 현황")' } },

@@ -10,7 +10,7 @@
 
 import type { SearchResult } from '../../mcp/web-search';
 import { LLM_TIMEOUTS } from '../../config/timeouts';
-import { RESEARCH_DEFAULTS } from '../../config/runtime-limits';
+import { RESEARCH_DEFAULTS } from './config';
 
 // ============================================================
 // 타입 정의

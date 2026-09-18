@@ -37,14 +37,14 @@ import { createDeepResearchService } from './service';
 import { resolveRoleClientForUser } from '../../services/model-role-resolver';
 import { detectLanguage } from '../../chat/language-policy';
 import { registerActiveRun, unregisterActiveRun, abortActiveRun } from './active-runs';
-import { RESEARCH_DEPTH_LOOPS, RESEARCH_SESSION_LIST_ALL_DEFAULT } from '../../config/runtime-limits';
+import { RESEARCH_DEPTH_LOOPS, RESEARCH_SESSION_LIST_ALL_DEFAULT } from './config';
 import { isAdminRole } from '../../data/user-manager';
 import {
     createResearchSessionSchema,
     addResearchStepSchema,
     updateResearchSessionSchema,
     executeResearchSchema
-} from '../../schemas/research.schema';
+} from './schema';
 
 const logger = createLogger('ResearchRoutes');
 const router = Router();

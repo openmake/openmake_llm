@@ -4,7 +4,7 @@ jest.mock('../chat-with-timeout', () => ({ chatWithAbortTimeout: (...a: unknown[
 jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({ addResearchStep: jest.fn() }) }));
 
 import { checkNeedsMoreInfo } from '../findings-synthesizer';
-import { RESEARCH_DEFAULTS } from '../../../config/runtime-limits';
+import { RESEARCH_DEFAULTS } from '../config';
 import type { ResearchConfig } from '../types';
 
 const base = { client: {} as never, topic: 'T', currentFindings: [], throwIfAborted: () => undefined };

@@ -19,10 +19,10 @@ export interface WSMessage {
     sessionId?: string;
     anonSessionId?: string;
     userId?: string;
-    discussionMode?: boolean;
+    /** 켜진 채팅 모드(add-on) — add-on id → true. 구 클라이언트의 모드 불리언 필드는 모드가 선언한 이름으로만 읽는다(chat-modes.collectActiveModes) */
+    modes?: Record<string, boolean>;
     /** 사용자가 웹 검색을 명시적으로 활성화했는지 여부 */
     webSearch?: boolean;
-    deepResearchMode?: boolean;
     /** 이미지 생성 모드 — ON 이면 메시지를 프롬프트로 이미지를 직접 생성 (오케스트레이터 image.generate 직접 실행) */
     imageMode?: boolean;
     /** 아티팩트 모드 — ON 이면 모델이 <artifact> 산출물을 생성하도록 유도 (wantsArtifact 강제) */

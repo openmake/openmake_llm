@@ -8,7 +8,8 @@
  */
 
 import { generateReport } from '../report-generator';
-import { DEEP_RESEARCH_CITATION } from '../../../config/runtime-limits';
+import { RESEARCH_TIMEOUTS } from '../config';
+import { DEEP_RESEARCH_CITATION } from '../config';
 import { LLM_TIMEOUTS } from '../../../config/timeouts';
 import { getUnifiedDatabase } from '../../../data/models/unified-database';
 import * as citationVerifier from '../citation-verifier';
@@ -103,7 +104,7 @@ describe('generateReport — A3 인용검증 통합 (런타임)', () => {
         // REPORT_GENERATION_TIMEOUT_MS 전용 파생 클라이언트(client.derive — baseUrl/apiKey
         // 보존, role 해석 외부 endpoint 안전)로 호출돼야 함(값 튜닝과 무관하게 상수 참조).
         expect(client.derive).toHaveBeenCalledWith(
-            expect.objectContaining({ timeout: LLM_TIMEOUTS.REPORT_GENERATION_TIMEOUT_MS }),
+            expect.objectContaining({ timeout: RESEARCH_TIMEOUTS.REPORT_GENERATION_MS }),
         );
 
         const step = citationStep(db);

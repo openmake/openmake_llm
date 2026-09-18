@@ -8,10 +8,12 @@
  * @module addons/discussion/chat-integration
  */
 import { createClient } from '../../llm';
+import { INLINE_DISCUSSION } from './config';
 import type { ChatMessage } from '../../llm';
 import type { ToolDefinition } from '../../llm/types';
 import { getModelForRole } from '../../config/model-roles';
-import { ORCHESTRATION_DISPATCH, MODEL_CONTEXT_DEFAULTS, DISCUSSION_INTENT_PATTERNS } from '../../config/runtime-limits';
+import { ORCHESTRATION_DISPATCH, MODEL_CONTEXT_DEFAULTS } from '../../config/runtime-limits';
+import { DISCUSSION_INTENT_PATTERNS } from './config';
 import { createLogger } from '../../utils/logger';
 import type { ChatTurnIntegration } from '../../services/chat-service/turn-integrations';
 import { createDiscussionEngine, type DiscussionSearchResult } from './engine';
@@ -28,7 +30,7 @@ export function buildStartDiscussionTool(): ToolDefinition {
             name: START_DISCUSSION_TOOL_NAME,
             description: '여러 전문가의 서로 다른 관점을 모아 결론을 내야 하는 질문에 사용합니다. '
                 + '찬반·장단점·다각도 비교가 요구되면 이 도구로 토론을 실행하세요 — '
-                + `전문가 ${ORCHESTRATION_DISPATCH.DISCUSSION_MAX_AGENTS}명이 자동 선정되어 토론 후 합성된 결론을 반환합니다. `
+                + `전문가 ${INLINE_DISCUSSION.MAX_AGENTS}명이 자동 선정되어 토론 후 합성된 결론을 반환합니다. `
                 + '단순 사실 질문·설명 요청에는 사용하지 마세요.',
             parameters: {
                 type: 'object',
@@ -66,10 +68,10 @@ async function runStartDiscussion(params: {
     };
 
     const engine = createDiscussionEngine(generateResponse, {
-        maxAgents: ORCHESTRATION_DISPATCH.DISCUSSION_MAX_AGENTS,
+        maxAgents: INLINE_DISCUSSION.MAX_AGENTS,
         maxRounds: 1,
         enableCrossReview: false,
-        enableFactCheck: ORCHESTRATION_DISPATCH.DISCUSSION_EVIDENCE,
+        enableFactCheck: INLINE_DISCUSSION.EVIDENCE,
         enableDeepThinking: false,
         ...(params.userLanguage ? { userLanguage: params.userLanguage } : {}),
     });
@@ -77,7 +79,7 @@ async function runStartDiscussion(params: {
     // Evidence Package 수집용 검색 함수 — 토글 경로(discussion-strategy)와 대칭.
     // 미주입 시 엔진이 근거 없이 토론하므로(종전 동작) 여기서 반드시 넘긴다.
     let webSearchFn: ((q: string, opts?: { maxResults?: number }) => Promise<DiscussionSearchResult[]>) | undefined;
-    if (ORCHESTRATION_DISPATCH.DISCUSSION_EVIDENCE) {
+    if (INLINE_DISCUSSION.EVIDENCE) {
         try {
             ({ performWebSearch: webSearchFn } = await import('../../mcp/web-search'));
         } catch {
@@ -91,8 +93,8 @@ async function runStartDiscussion(params: {
         const result = await Promise.race([
             engine.startDiscussion(topic, webSearchFn),
             new Promise<never>((_, rej) => setTimeout(
-                () => rej(new Error(`토론 시간 상한(${ORCHESTRATION_DISPATCH.DISCUSSION_TIMEOUT_MS}ms) 초과`)),
-                ORCHESTRATION_DISPATCH.DISCUSSION_TIMEOUT_MS,
+                () => rej(new Error(`토론 시간 상한(${INLINE_DISCUSSION.TIMEOUT_MS}ms) 초과`)),
+                INLINE_DISCUSSION.TIMEOUT_MS,
             )),
         ]);
         logger.info(`[start_discussion] 완료 ${Date.now() - started}ms, 참여 ${result.participants.length}명`);
@@ -137,7 +139,7 @@ export const discussionChatIntegration: ChatTurnIntegration = {
     // 채팅 경로와 같은 엔진을 쓴다(Evidence Package 공유 + 출처 첨부). 한 번에 40~50초가 들고 도구 스키마도
     // 늘어나므로 전용 플래그(AGENT_TASK_DISCUSSION, 기본 OFF)일 때만 에이전트 작업 스텝에 노출한다.
     agentTaskTools() {
-        if (!ORCHESTRATION_DISPATCH.TASK_DISCUSSION) return [];
+        if (!INLINE_DISCUSSION.AGENT_TASK_ENABLED) return [];
         return [{
             tool: {
                 name: START_DISCUSSION_TOOL_NAME,

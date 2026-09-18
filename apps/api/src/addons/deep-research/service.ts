@@ -15,7 +15,7 @@
 import { LLMClient, createClient } from '../../llm';
 import type { SearchResult } from '../../mcp/web-search';
 import { getModelForRole } from '../../config/model-roles';
-import { RESEARCH_DEFAULTS } from '../../config/runtime-limits';
+import { RESEARCH_DEFAULTS } from './config';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
 

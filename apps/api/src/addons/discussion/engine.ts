@@ -35,7 +35,7 @@ import { createContextBuilder } from './context';
 import { createLogger } from '../../utils/logger';
 import { resolvePromptLocale } from '../../chat/language-policy';
 import { parallelBatch } from '../../workflow/graph-engine';
-import { DISCUSSION_CONFIDENCE, DISCUSSION_CONSISTENCY, DISCUSSION_CONCURRENCY, DISCUSSION_FACTCHECK, DISCUSSION_MIN_PROPOSERS } from '../../config/runtime-limits';
+import { DISCUSSION_CONFIDENCE, DISCUSSION_CONSISTENCY, DISCUSSION_CONCURRENCY, DISCUSSION_FACTCHECK, DISCUSSION_MIN_PROPOSERS } from './config';
 /**
  * 토론 주제 → 검색 쿼리 정규화.
  *

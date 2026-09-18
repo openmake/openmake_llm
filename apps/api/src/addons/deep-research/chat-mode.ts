@@ -28,6 +28,9 @@ export const deepResearchChatMode: ChatModeExtension = {
         rejectFileAttachmentsMessage: '딥 리서치 모드에서는 파일 첨부를 지원하지 않습니다. 첨부를 제거하거나 일반 채팅으로 질문해 주세요.',
     },
 
+    // 다출처 수집 도구를 쓰려는 모델에게, 다단계 리서치는 이 모드가 맡는다는 것을 알린다
+    relatedToolHints: { research_topic: ' 심층 다단계 리서치가 필요하면 deep research 모드를 사용하세요.' },
+
     async run({ req, client, onToken, onProgress }) {
         const result = await strategy.execute({
             req,

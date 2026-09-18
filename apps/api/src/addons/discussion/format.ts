@@ -4,7 +4,7 @@
  * @module addons/discussion/format
  */
 import type { DiscussionResult } from './engine';
-import { DISCUSSION_CONSISTENCY } from '../../config/runtime-limits';
+import { DISCUSSION_CONSISTENCY } from './config';
 import { buildDiscussionSourcesBlock } from './sources';
 
 /**

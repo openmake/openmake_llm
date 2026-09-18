@@ -5,7 +5,7 @@
  */
 
 import { verifyCitations } from '../citation-verifier';
-import { DEEP_RESEARCH_CITATION } from '../../../config/runtime-limits';
+import { DEEP_RESEARCH_CITATION } from '../config';
 
 describe('verifyCitations', () => {
     test('4개 주장 중 3개 인용 → coverage 0.75', () => {

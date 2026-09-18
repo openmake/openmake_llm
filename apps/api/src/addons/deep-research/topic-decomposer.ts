@@ -7,10 +7,13 @@
  */
 
 import type { LLMClient } from '../../llm';
+import { RESEARCH_TIMEOUTS } from './config';
+import { RESEARCH_TEMPERATURES } from './config';
 import type { ResearchConfig, SubTopic } from './types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
-import { CAPACITY, RESEARCH_DEFAULTS } from '../../config/runtime-limits';
+import { CAPACITY } from '../../config/runtime-limits';
+import { RESEARCH_DEFAULTS } from './config';
 import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { LLM_TIMEOUTS } from '../../config/timeouts';
 import { clampImportance, buildFallbackSubTopics } from './utils';
@@ -46,8 +49,8 @@ export async function decomposeTopics(params: {
             client,
             [{ role: 'user', content: prompt }],
             // 상한이 없으면 로컬 모델이 길게 써서 분해 타임아웃에 걸린다(2026-09-13 실측)
-            { temperature: LLM_TEMPERATURES.RESEARCH_PLAN, num_predict: RESEARCH_DEFAULTS.DECOMPOSE_MAX_TOKENS },
-            LLM_TIMEOUTS.RESEARCH_DECOMPOSE_TIMEOUT_MS,
+            { temperature: RESEARCH_TEMPERATURES.PLAN, num_predict: RESEARCH_DEFAULTS.DECOMPOSE_MAX_TOKENS },
+            RESEARCH_TIMEOUTS.DECOMPOSE_MS,
             abortSignal,
         );
         throwIfAborted();
