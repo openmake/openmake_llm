@@ -76,6 +76,18 @@ export default [
   // 무너지는 것을 막는다. 룰을 늘릴 때는 반드시 "현재 위반 0" 을 먼저 측정할 것
   // (routes→repository 는 이 레포의 확립된 DI 패턴이므로 금지 대상이 아니다).
   {
+    // Base ↔ Add-on 경계 (config/addon-boundary.ts) — addons/ 번들은 addon-host 만 읽는다.
+    // services 블록이 같은 룰을 다시 정의하므로(뒤 블록이 옵션을 덮는다) 거기에도 같은 patterns 를 둔다.
+    files: ["apps/api/src/**/*.ts"],
+    ignores: ["apps/api/src/addon-host/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        { patterns: [{ group: ["**/addons/**"], message: "Base 는 Add-on 콘텐츠를 직접 import 하지 않는다 — addon-host 를 경유할 것(config/addon-boundary.ts)." }] },
+      ],
+    },
+  },
+  {
     files: ["apps/api/src/services/**/*.ts"],
     rules: {
       "no-restricted-imports": [
@@ -88,6 +100,7 @@ export default [
                 "services 는 HTTP 를 알지 않는다 — req/res 는 controller 가 다루고, 에러는 throw 해 middlewares/error-handler.ts 가 상태코드로 매핑한다.",
             },
           ],
+          patterns: [{ group: ["**/addons/**"], message: "Base 는 Add-on 콘텐츠를 직접 import 하지 않는다 — addon-host 를 경유할 것(config/addon-boundary.ts)." }],
         },
       ],
     },
