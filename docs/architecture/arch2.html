@@ -12,7 +12,7 @@
   그림이 예쁜 것은 의미가 없으므로, 아이콘은 인라인 SVG 로 그리고 글자는 실제 텍스트로 둔다.
 
   실측 근거: ecosystem.config.js(openmake-llm·openmake-next·openmake-discord),
-  scripts/vllm/dgx-ecosystem.config.example.cjs(vllm-chat·vllm-embed·flux),
+  scripts/vllm/dgx-ecosystem.config.example.cjs(vllm-chat·vllm-embed),
   infra/docker-compose.yml(postgres·redis), infra/{mcp-runtime,task-runtime,
   egress-proxy,artifact-viewer}, .env(LLM_BASE_URL=127.0.0.1:13401,
   LLM_GATEWAY_PROVIDERS=openrouter,ollama-cloud,nvidia)
@@ -236,7 +236,6 @@ const D = {
   dgx: [
     [I.bubble(), 'vllm-chat', ':8002', { ko: 'qwen3.6-35b-a3b (MoE) · 262K context<br>채팅 / 추론 본진', en: 'qwen3.6-35b-a3b (MoE) · 262K context<br>the main chat and reasoning model' }],
     [I.db('#4ade80'), 'vllm-embed', ':8003', { ko: 'bge 임베딩', en: 'bge embeddings' }],
-    [I.image(), 'flux', ':8005', { ko: 'FLUX 이미지 생성 (generate_image)', en: 'FLUX image generation (generate_image)' }],
   ],
   ext: [
     [{ ko: '게이트웨이 경유', en: 'Through the gateway' }, { ko: 'openrouter · ollama-cloud<br>NVIDIA NIM (wildcard + BYOK)', en: 'openrouter · ollama-cloud<br>NVIDIA NIM (wildcard + BYOK)' }],

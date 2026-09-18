@@ -81,8 +81,8 @@ export interface LocalModelEntry {
  * 외부 OpenAI SDK 클라이언트 호환 전용이라 앱 UI 카탈로그에는 노출하지 않는다
  * (litellm.config.yaml 에만 존재 · capability preset 은 model-defaults.ts 에 유지).
  *
- * 이미지 생성 모델 flux2-klein 은 채팅 모델이 아니라 오케스트레이터 `image.generate` capability 가
- * 오케스트레이터 `image.generate` capability 배정으로만 호출되므로 본 채팅 카탈로그에 없음 (이미지 전용).
+ * 이미지 생성 모델은 채팅 모델이 아니라 오케스트레이터 `image.generate` capability 배정으로만 호출되므로
+ * 본 채팅 카탈로그에 없다 (종전 로컬 이미지 모델은 비상업 라이선스라 2026-09-18 제거 — capabilities.ts 주석 참고).
  * (embedding 모델 bge-m3 은 2026-05-29 카탈로그에서 제거 — 앱 소비처 0건.
  *  embedding 인프라는 재도입 대비 보존. 라이브 :8003 은 운영자 별도 관리.)
  */

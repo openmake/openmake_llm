@@ -18,7 +18,7 @@ public actor WsChatSocket {
     /// 이어받기 커서(F19.11) — 재연결(connect 재호출)을 넘어 유지된다. 중복 이벤트를 거르고 resume 에 실린다.
     private var cursor = StreamCursorTracker()
 
-    /// 첫 프레임까지 대기 상한. 이미지 생성(FLUX)·딥리서치는 수십 초간 서버→클라 프레임이
+    /// 첫 프레임까지 대기 상한. 이미지 생성·딥리서치는 수십 초간 서버→클라 프레임이
     /// 전혀 없다 — URLSession 기본 60s 로는 그 구간에서 조용히 끊겨 "응답이 오지 않는" 증상이
     /// 된다 (2026-08-17 실측: 이미지 생성 50s+). 넉넉히 잡되 무한 대기는 피한다.
     public static let requestTimeout: TimeInterval = 300
