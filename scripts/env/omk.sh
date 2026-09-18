@@ -236,6 +236,15 @@ clone_or_keep() { # $1=url $2=ref $3=dir $4=label
         git clone --branch "$2" "$1" "$3" || die "$4 clone 실패 ($1 @ $2)"
     fi
 }
+# npm install 이 다시 쓴 lock 을 되돌린다 — 그대로 두면 update 의 "미커밋 변경" 검사가 막는다.
+# openmake_llm.sh update 도 같은 정리를 하지만, 그 수정 이전 ref 를 설치한 환경은 스스로 못 빠져나온다.
+restore_lockfiles() { # $1=dir
+    local f
+    for f in $(git -C "$1" status --porcelain 2>/dev/null | awk '{print $2}'); do
+        case "$f" in package-lock.json|*/package-lock.json) git -C "$1" checkout -- "$f" && log_info "lock 되돌림: $1/$f" ;; esac
+    done
+    return 0
+}
 # 원격이 앞서 있는지 (fetch 포함). 0=뒤처짐(갱신 필요) 1=최신
 repo_behind() { # $1=dir
     git -C "$1" fetch -q --prune 2>/dev/null || return 0
@@ -543,6 +552,7 @@ cmd_env_update() {
         [[ $need -eq 1 ]] || { log_info "$env 최신 — 갱신 없음"; return 0; }
     fi
     log_step "환경 갱신: $env"
+    restore_lockfiles "$ldir"; [[ -d "$bdir/.git" ]] && restore_lockfiles "$bdir"
     # llm: fetch → ff-only pull → build → migrate → restart (openmake_llm.sh 가 dirty/ff 검사 포함)
     ( cd "$ldir" && ./openmake_llm.sh update --yes < /dev/null | cat ) || die "openmake_llm.sh update 실패 ($env)"
     bench_update "$env"
