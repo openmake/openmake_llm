@@ -23,8 +23,6 @@
  * @see services/ChatService.ts - 이 모듈의 출력을 소비하여 LLM에 전달
  */
 
-import { ModelOptions } from '../llm';
-import { PROMPT_TYPE_PRESETS } from '../config/llm-parameters';
 import {
     createDynamicMetadata,
     buildAssistantPrompt,
@@ -167,46 +165,25 @@ function getSystemPrompt(type: PromptType = 'assistant', userLanguage: string = 
 
 /**
  * 프롬프트 역할에 적합한 모델 옵션 프리셋을 반환합니다.
- * reasoning/researcher/consultant -> GEMINI_REASONING, coder/generator -> GEMINI_CODE 등.
- * 
- * @param type - 프롬프트 역할 유형
- * @returns 역할에 최적화된 ModelOptions
- */
-function getPresetForPromptType(type: PromptType): ModelOptions {
-    return PROMPT_TYPE_PRESETS[type] || PROMPT_TYPE_PRESETS['assistant'];
-}
-
-/**
- * 해당 역할이 Thinking 모드를 사용해야 하는지 판단합니다.
- * 현재 reasoning, reviewer 역할만 Thinking 모드가 활성화됩니다.
- * 
- * @param type - 프롬프트 역할 유형
- * @returns Thinking 모드 활성화 여부
- */
-function shouldUseThinking(type: PromptType): boolean {
-    return ['reasoning', 'reviewer'].includes(type);
-}
-
-/**
- * 질문에 대한 전체 프롬프트 설정을 한 번에 반환합니다.
- * detectPromptType() + getSystemPrompt() + getPresetForPromptType() + shouldUseThinking()을 조합합니다.
- * 
+ * 질문에 대한 프롬프트 설정을 반환합니다 — detectPromptType() + getSystemPrompt().
+ *
+ * 2026-09-18 정리: 함께 돌려주던 `options`(역할별 샘플링 프리셋)와 `enableThinking` 은
+ * 소비처가 없어 제거했다. 샘플링은 LLMClient 가 thinking 상태별 로컬 프리셋
+ * (llm/sampling-preset.ts)으로 채우고, 유일한 호출처(chat/external-tool-calling.ts)는
+ * systemPrompt 만 쓴다. 되살릴 땐 그 프리셋 경로와 충돌하지 않는지부터 확인할 것.
+ *
  * @param question - 사용자 질문 텍스트
- * @returns 역할 유형, 시스템 프롬프트, 모델 옵션, Thinking 모드 여부
+ * @returns 역할 유형, 시스템 프롬프트
  */
 export function getPromptConfig(question: string, userLanguage?: string): {
     type: PromptType;
     systemPrompt: string;
-    options: ModelOptions;
-    enableThinking: boolean;
 } {
     const type = detectPromptType(question);
     const language = userLanguage || 'en';
     return {
         type,
         systemPrompt: getSystemPrompt(type, language),
-        options: getPresetForPromptType(type),
-        enableThinking: shouldUseThinking(type)
     };
 }
 

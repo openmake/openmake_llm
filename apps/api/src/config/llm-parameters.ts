@@ -6,13 +6,12 @@
  * 사용하는 수치 파라미터를 정의합니다.
  * 환경변수로 오버라이드할 수 있습니다.
  *
- * MODEL_PRESETS: Gemini/GPT-OSS 모델별 LLM 파라미터 프리셋도
- * 이 모듈에서 중앙 관리합니다.
+ * 2026-09-18 정리: 소비처가 0이던 Gemini/GPT-OSS 모델 프리셋(MODEL_PRESETS·
+ * PROMPT_TYPE_PRESETS)과 temperature 상수 17개를 제거했다. 두 provider 는 이미
+ * 폐기됐고, 역할별 샘플링은 llm/sampling-preset.ts 가 thinking 상태로 채운다.
  *
  * @module config/llm-parameters
  */
-
-import { MODEL_CONTEXT_DEFAULTS } from './runtime-limits';
 
 // ============================================
 // Temperature 프리셋
@@ -23,12 +22,6 @@ import { MODEL_CONTEXT_DEFAULTS } from './runtime-limits';
  * 각 서비스/라우트에서 참조
  */
 export const LLM_TEMPERATURES = {
-    /** 메모리 추출 (ChatService) */
-    MEMORY_EXTRACTION: Number(process.env.LLM_TEMP_MEMORY_EXTRACTION) || 0.1,
-    /** 문서 요약 (documents.routes) */
-    DOCUMENT_SUMMARY: Number(process.env.LLM_TEMP_DOCUMENT_SUMMARY) || 0.1,
-    /** 문서 Q&A (documents.routes) */
-    DOCUMENT_QA: Number(process.env.LLM_TEMP_DOCUMENT_QA) || 0.1,
     /** 웹 검색 사실 검증 (web-search.routes) */
     WEB_SEARCH: Number(process.env.LLM_TEMP_WEB_SEARCH) || 0.3,
     /** 리서치 주제 분해 (DeepResearchService) */
@@ -41,42 +34,10 @@ export const LLM_TEMPERATURES = {
     RESEARCH_FACT_CHECK: Number(process.env.LLM_TEMP_RESEARCH_FACT_CHECK) || 0.1,
     /** Discussion 이미지 분석 (discussion-strategy) */
     DISCUSSION: Number(process.env.LLM_TEMP_DISCUSSION) || 0.2,
-    /** 에이전트 도구 호출 OCR (agent-loop-strategy) */
-    AGENT_TOOL_CALL: Number(process.env.LLM_TEMP_AGENT_TOOL_CALL) || 0.1,
-    /** 에이전트 이미지 분석 응답 (agent-loop-strategy) */
-    AGENT_RESPONSE: Number(process.env.LLM_TEMP_AGENT_RESPONSE) || 0.3,
-    /** format 지정 시 strict 모드 temperature */
-    FORMAT_STRICT: 0,
     /** Semantic Compactor — 도구 결과 요약 시 결정론적 응답 강제 */
     SEMANTIC_COMPACTION: Number(process.env.LLM_TEMP_SEMANTIC_COMPACTION) || 0,
-    /** Generate-Verify Verifier 응답 — 낮은 값으로 정확한 검증 수행 */
-    GV_VERIFIER: Number(process.env.LLM_TEMP_GV_VERIFIER) || 0.1,
-    /** Gemini 비추론 모드 */
-    GEMINI_NON_REASONING: 0.5,
-    /** Gemini 추론 모드 */
-    GEMINI_REASONING: 0.6,
-    /** Gemini 한국어 모드 */
-    GEMINI_KOREAN: 0.1,
-    /** Gemini 코드 모드 */
-    GEMINI_CODE: 0.3,
-    /** 리뷰어/보안 모드 */
-    REVIEWER: 0.4,
-    /** 설명/작문/번역 모드 */
-    EXPLAINER: 0.5,
-    /** CLI 코드 리뷰 */
-    CLI_REVIEW: Number(process.env.LLM_TEMP_CLI_REVIEW) || 0.3,
-    /** CLI 코드 설명 */
-    CLI_EXPLAIN: Number(process.env.LLM_TEMP_CLI_EXPLAIN) || 0.3,
-    /** CLI 코드 생성 */
-    CLI_GENERATE: Number(process.env.LLM_TEMP_CLI_GENERATE) || 0.5,
     /** 히스토리 요약 */
     HISTORY_SUMMARY: Number(process.env.LLM_TEMP_HISTORY_SUMMARY) || 0.3,
-    /** thinking='high' temperature */
-    THINKING_HIGH: Number(process.env.LLM_TEMP_THINKING_HIGH) || 0.3,
-    /** thinking='off' temperature */
-    THINKING_OFF: Number(process.env.LLM_TEMP_THINKING_OFF) || 0.7,
-    /** thinking 기본값 temperature */
-    THINKING_DEFAULT: Number(process.env.LLM_TEMP_THINKING_DEFAULT) || 0.5,
 } as const;
 
 /**
@@ -169,128 +130,3 @@ export const CONFIDENCE_DIVISORS = {
     /** 토픽 분석기 (topic-analyzer.ts) */
     TOPIC_ANALYZER: Number(process.env.CONFIDENCE_DIV_TOPIC) || 3,
 } as const;
-
-// ============================================
-// 모델 프리셋 (MODEL_PRESETS)
-// ============================================
-
-/**
- * 모델별 LLM 파라미터 프리셋
- *
- * temperature, top_p, top_k, 컨텍스트 크기 등의 값을 포함합니다.
- *
- * - `GEMINI_*`: Gemini 모델용 프리셋
- * - `GPT_OSS_*`: GPT-OSS 모델용 프리셋
- *
- * @constant MODEL_PRESETS
- */
-const MODEL_PRESETS = {
-    // Gemini 3 Flash Preview 프리셋
-    GEMINI_DEFAULT: {
-        temperature: 0.7,
-        top_p: 0.9,
-        top_k: 40,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        repeat_penalty: 1.1,
-    },
-    GEMINI_REASONING: {
-        temperature: 0.3,
-        top_p: 0.85,
-        top_k: 20,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        repeat_penalty: 1.05,
-    },
-    GEMINI_CREATIVE: {
-        temperature: 0.9,
-        top_p: 0.95,
-        top_k: 50,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        repeat_penalty: 1.2,
-    },
-    GEMINI_CODE: {
-        temperature: 0.2,
-        top_p: 0.8,
-        top_k: 10,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        repeat_penalty: 1.0,
-    },
-    GPT_OSS_LOW_REASONING: {
-        temperature: 0.3,
-        top_p: 0.85,
-        top_k: 30,
-        repeat_penalty: 1.1,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.LOW_NUM_CTX,
-        num_predict: MODEL_CONTEXT_DEFAULTS.LOW_NUM_PREDICT
-    },
-
-    GPT_OSS_MEDIUM_REASONING: {
-        temperature: 0.5,
-        top_p: 0.9,
-        top_k: 40,
-        repeat_penalty: 1.1,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
-    },
-
-    GPT_OSS_HIGH_REASONING: {
-        temperature: 0.7,
-        top_p: 0.95,
-        top_k: 50,
-        repeat_penalty: 1.15,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
-    },
-
-    GPT_OSS_CODE: {
-        temperature: 0.1,
-        top_p: 0.8,
-        top_k: 20,
-        repeat_penalty: 1.2,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
-    },
-
-    GPT_OSS_DOCUMENT: {
-        temperature: 0.2,
-        top_p: 0.85,
-        top_k: 25,
-        repeat_penalty: 1.15,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT
-    },
-
-    GPT_OSS_JSON: {
-        temperature: 0.05,
-        top_p: 0.75,
-        top_k: 15,
-        repeat_penalty: 1.15,
-        num_ctx: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_CTX,
-        num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT,
-        mirostat: 1,
-        mirostat_tau: 2.5,
-        mirostat_eta: 0.05
-    },
-};
-
-// ============================================
-// 프롬프트 역할별 프리셋 매핑 (Record 룩업)
-// ============================================
-
-/**
- * PromptType → ModelOptions 매핑
- * chat/prompt.ts의 getPresetForPromptType()에서 참조
- */
-export const PROMPT_TYPE_PRESETS: Record<string, typeof MODEL_PRESETS[keyof typeof MODEL_PRESETS]> = {
-    reasoning: MODEL_PRESETS.GEMINI_REASONING,
-    researcher: MODEL_PRESETS.GEMINI_REASONING,
-    consultant: MODEL_PRESETS.GEMINI_REASONING,
-    coder: MODEL_PRESETS.GEMINI_CODE,
-    generator: MODEL_PRESETS.GEMINI_CODE,
-    reviewer: { ...MODEL_PRESETS.GEMINI_CODE, temperature: LLM_TEMPERATURES.REVIEWER, repeat_penalty: 1.15 },
-    security: { ...MODEL_PRESETS.GEMINI_CODE, temperature: LLM_TEMPERATURES.REVIEWER, repeat_penalty: 1.15 },
-    explainer: { ...MODEL_PRESETS.GEMINI_DEFAULT, temperature: LLM_TEMPERATURES.EXPLAINER },
-    writer: { ...MODEL_PRESETS.GEMINI_DEFAULT, temperature: LLM_TEMPERATURES.EXPLAINER },
-    translator: { ...MODEL_PRESETS.GEMINI_DEFAULT, temperature: LLM_TEMPERATURES.EXPLAINER },
-    agent: MODEL_PRESETS.GEMINI_REASONING,
-    assistant: MODEL_PRESETS.GEMINI_REASONING,
-};

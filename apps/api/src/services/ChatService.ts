@@ -370,7 +370,6 @@ export class ChatService {
         startTime: number;
         message: string;
         req: ChatMessageRequest;
-        selectedAgent: typeof AGENTS[string];
         agentSelection: AgentSelection;
         securityPreCheck: ReturnType<typeof preRequestCheck>;
         routingLog: RoutingDecisionLog;

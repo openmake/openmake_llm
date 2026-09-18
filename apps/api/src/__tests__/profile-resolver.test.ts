@@ -31,11 +31,6 @@ describe('buildExecutionPlan', () => {
         expect(plan.resolvedEngine).toBe('gemma4:e4b');
     });
 
-    test('profile=null', () => {
-        const plan = buildExecutionPlan('any-model');
-        expect(plan.profile).toBeNull();
-    });
-
     test('executionStrategy=single', () => {
         const plan = buildExecutionPlan('some-model-id');
         expect(plan.executionStrategy).toBe('single');
@@ -53,6 +48,15 @@ describe('buildExecutionPlan', () => {
         expect(plan.thinkingLevel).toBe('medium');
         expect(plan.requiredTools).toEqual([]);
         expect(plan.useDiscussion).toBe(false);
+    });
+
+    // 2026-09-18 정리: strategy 계층(2026-07-18 폐기) 잔재 4개를 제거했다.
+    // 되살아나면 소비처 없는 필드가 다시 계약에 실리므로 여기서 고정한다.
+    test('제거된 dead 필드가 되살아나지 않는다', () => {
+        const plan = buildExecutionPlan('any-model') as unknown as Record<string, unknown>;
+        for (const dead of ['profile', 'classifiedQueryType', 'generatorModel', 'verifierModel']) {
+            expect(plan).not.toHaveProperty(dead);
+        }
     });
 });
 

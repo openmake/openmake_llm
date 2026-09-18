@@ -14,7 +14,6 @@ import { enqueueDebugCapture, DEBUG_QUEUE_TTL_MS } from '../data/conversation-de
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
 import { claimClientRequest } from '../chat/request-idempotency';
 import { QuotaUnavailableError } from '../errors/quota-unavailable.error';
-import { KeyExhaustionError } from '../errors/key-exhaustion.error';
 import { ProviderError } from '../providers/provider-errors';
 import { checkChatRateLimit } from '../middlewares/chat-rate-limiter';
 import { createLogger } from '../utils/logger';
@@ -522,18 +521,6 @@ export async function handleChatMessage(
         } else if (error instanceof QuotaUnavailableError) {
             log.error('[Chat] 쿼터 저장소 장애 (fail-closed):', error.message);
             safeSend({ type: 'error', message: `⚠️ ${error.message}`, errorType: 'quota_unavailable', retryAfter: error.retryAfterSeconds });
-        } else if (error instanceof KeyExhaustionError) {
-            // 🆕 모든 API 키 소진 에러 처리
-            log.warn('[Chat] 모든 API 키 소진:', error.message);
-            safeSend({
-                type: 'error',
-                message: error.getDisplayMessage(userLang),
-                errorType: 'api_keys_exhausted',
-                retryAfter: error.retryAfterSeconds,
-                resetTime: error.resetTime.toISOString(),
-                totalKeys: error.totalKeys,
-                keysInCooldown: error.keysInCooldown
-            });
         } else if (error instanceof ProviderError) {
             // 외부 provider(Anthropic/OpenRouter) 에러 — 코드별 사용자 친화 메시지로 분류
             // raw upstream 메시지(error.message)는 stack/credential 누출 위험으로 노출하지 않음

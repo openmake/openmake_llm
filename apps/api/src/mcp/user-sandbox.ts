@@ -46,7 +46,7 @@ const logger = createLogger('UserSandbox');
  * 사용자별 격리된 작업 환경 관리 클래스
  *
  * 모든 메서드가 static으로 정의되어 인스턴스 생성 없이 사용합니다.
- * 파일시스템 도구(filesystem.ts)와 UnifiedMCPClient에서 참조합니다.
+ * UnifiedMCPClient(mcp/unified-client.ts)가 도구 결과 경로 정규화에 사용합니다.
  *
  * @class UserSandbox
  */

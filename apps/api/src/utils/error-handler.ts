@@ -22,7 +22,6 @@ import { createLogger } from './logger';
 import { error as apiError, badRequest as apiBadRequest, ErrorCodes, ApiErrorResponse } from './api-response';
 import { QuotaExceededError } from '../errors/quota-exceeded.error';
 import { QuotaUnavailableError } from '../errors/quota-unavailable.error';
-import { KeyExhaustionError } from '../errors/key-exhaustion.error';
 import { ContextOverflowError } from '../errors/context-overflow.error';
 import { ProviderError, PROVIDER_ERROR_HTTP_STATUS } from '../providers/provider-errors';
 
@@ -154,23 +153,6 @@ export function errorHandler(
         logger.error(`Quota store unavailable: ${err.message}`, { path: req.path });
         res.set('Retry-After', String(err.retryAfterSeconds));
         res.status(503).json(apiError(ErrorCodes.SERVICE_UNAVAILABLE, err.message, { retryAfter: err.retryAfterSeconds }));
-        return;
-    }
-
-    // ── KeyExhaustionError → 503 ──
-    if (err instanceof KeyExhaustionError) {
-        logger.warn(`All API keys exhausted: ${err.message}`, { path: req.path });
-        res.set('Retry-After', String(err.retryAfterSeconds));
-        const acceptLangHeader = req.headers['accept-language']?.substring(0, 2).toLowerCase() || 'en';
-        const supportedErrorLangs = ['ko', 'en', 'ja', 'zh', 'es', 'de'];
-        const errorLang = supportedErrorLangs.includes(acceptLangHeader) ? acceptLangHeader : 'en';
-        res.status(503).json(apiError(ErrorCodes.SERVICE_UNAVAILABLE, err.getDisplayMessage(errorLang), {
-            errorType: 'api_keys_exhausted',
-            retryAfter: err.retryAfterSeconds,
-            resetTime: err.resetTime.toISOString(),
-            totalKeys: err.totalKeys,
-            keysInCooldown: err.keysInCooldown,
-        }));
         return;
     }
 

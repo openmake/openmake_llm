@@ -295,19 +295,16 @@ export const DEEP_RESEARCH_CITATION = {
 
 /**
  * 모델별 num_ctx, num_predict 기본값 (토큰 수)
- * model-selector.ts, llm/types.ts MODEL_PRESETS에서 참조
+ * config/model-presets.ts · discussion-strategy · orchestration-dispatch 에서 참조.
+ *
+ * 2026-09-18 정리: 참조가 0이던 EXTENDED_NUM_CTX(Kimi 시절)·LOW_NUM_CTX·LOW_NUM_PREDICT
+ * (구 GPT-OSS 저사양 프리셋)를 제거했다.
  */
 export const MODEL_CONTEXT_DEFAULTS = {
     /** 기본 num_ctx (일반 모델) */
     DEFAULT_NUM_CTX: 32768,
-    /** 확장 num_ctx (Kimi 등 긴 컨텍스트 모델) */
-    EXTENDED_NUM_CTX: 65536,
-    /** 저사양 모델 num_ctx */
-    LOW_NUM_CTX: 16384,
     /** 기본 num_predict (출력 최대 토큰) */
     DEFAULT_NUM_PREDICT: 8192,
-    /** 저사양 모델 num_predict */
-    LOW_NUM_PREDICT: 4096,
 } as const;
 
 // ============================================

@@ -18,7 +18,7 @@ const logger = createLogger('ExternalRepository');
  * OAuth 토큰 1개 복호화 — 실패 시 null.
  *
  * decryptToken 은 fail-open 이라 키 부재·포맷 오류 시 예외 대신 암호문을 그대로 돌려준다.
- * 그 값을 그대로 반환하면 암호문이 그대로 Bearer 토큰으로 쓰여(services/github-token.ts)
+ * 그 값을 그대로 반환하면 암호문이 그대로 Bearer 토큰으로 쓰여
  * 외부 API 가 401 을 내는 조용한 실패가 된다. null 로 내리면 소비자들이 이미 갖춘
  * "토큰 없음" 폴백(clone/push/PR skip)으로 자연스럽게 degrade 된다.
  *

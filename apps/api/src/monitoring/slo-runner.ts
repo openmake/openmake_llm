@@ -16,7 +16,6 @@ import {
 const logger = createLogger('SLO');
 const EMPTY: RatioCounts = { total: 0, bad: 0 };
 const alertMemory = new Map<SloId, SloAlertMemory>();
-let lastEvaluations: { at: string; evaluations: SloEvaluation[] } | null = null;
 
 type SendAlert = (type: 'slo_burn_rate', severity: 'warning' | 'critical', title: string, message: string, data?: Record<string, unknown>) => Promise<void>;
 
@@ -77,7 +76,6 @@ export async function computeSloEvaluations(pool: Pool): Promise<SloEvaluation[]
         });
     });
 
-    lastEvaluations = { at: new Date().toISOString(), evaluations: out };
     return out;
 }
 
@@ -115,11 +113,6 @@ export async function runSloTick(pool: Pool, sendAlert: SendAlert, now = Date.no
     return evals;
 }
 
-export function getLastSloEvaluations(): { at: string; evaluations: SloEvaluation[] } | null {
-    return lastEvaluations;
-}
-
 export function resetSloRunnerState(): void {
     alertMemory.clear();
-    lastEvaluations = null;
 }

@@ -81,8 +81,8 @@ describe('AnalyticsSystem — 초기화', () => {
 
 describe('AnalyticsSystem — recordAgentRequest()', () => {
     test('에이전트 통계가 누적된다', () => {
-        analytics.recordAgentRequest('test-agent', '테스트', 200, true, 100);
-        analytics.recordAgentRequest('test-agent', '테스트', 400, true, 200);
+        analytics.recordAgentRequest('test-agent', 200, true, 100);
+        analytics.recordAgentRequest('test-agent', 400, true, 200);
 
         const perf = analytics.getAgentPerformance();
         expect(perf).toHaveLength(1);
@@ -94,16 +94,16 @@ describe('AnalyticsSystem — recordAgentRequest()', () => {
     });
 
     test('실패 요청이 successRate에 반영된다', () => {
-        analytics.recordAgentRequest('test-agent', '테스트', 100, true, 50);
-        analytics.recordAgentRequest('test-agent', '테스트', 100, false, 50);
+        analytics.recordAgentRequest('test-agent', 100, true, 50);
+        analytics.recordAgentRequest('test-agent', 100, false, 50);
 
         const perf = analytics.getAgentPerformance();
         expect(perf[0].successRate).toBe(50);
     });
 
     test('여러 에이전트를 별도로 추적한다', () => {
-        analytics.recordAgentRequest('agent-a', 'A', 100, true, 50);
-        analytics.recordAgentRequest('agent-b', 'B', 200, true, 100);
+        analytics.recordAgentRequest('agent-a', 100, true, 50);
+        analytics.recordAgentRequest('agent-b', 200, true, 100);
 
         const perf = analytics.getAgentPerformance();
         expect(perf).toHaveLength(2);
@@ -113,9 +113,9 @@ describe('AnalyticsSystem — recordAgentRequest()', () => {
     });
 
     test('popularity는 요청 수 기준 오름차순 순위다', () => {
-        analytics.recordAgentRequest('agent-a', 'A', 100, true, 50);
-        analytics.recordAgentRequest('agent-a', 'A', 100, true, 50);
-        analytics.recordAgentRequest('agent-b', 'B', 100, true, 50);
+        analytics.recordAgentRequest('agent-a', 100, true, 50);
+        analytics.recordAgentRequest('agent-a', 100, true, 50);
+        analytics.recordAgentRequest('agent-b', 100, true, 50);
 
         const perf = analytics.getAgentPerformance();
         const agentA = perf.find(p => p.agentId === 'agent-a');
@@ -396,7 +396,7 @@ describe('AnalyticsSystem — getDashboard()', () => {
 
 describe('AnalyticsSystem — reset()', () => {
     test('reset 후 에이전트 통계가 초기화된다', () => {
-        analytics.recordAgentRequest('agent-a', 'A', 100, true, 50);
+        analytics.recordAgentRequest('agent-a', 100, true, 50);
         analytics.reset();
         expect(analytics.getAgentPerformance()).toEqual([]);
     });

@@ -504,7 +504,7 @@ export async function runMessagePipeline(svc: ChatService,
 
     svc.recordMetricsAndVerify({
         fullResponse, startTime, message: message || '', req,
-        selectedAgent, agentSelection: extAgentSelection,
+        agentSelection: extAgentSelection,
         securityPreCheck, routingLog,
     });
 

@@ -18,15 +18,18 @@ export interface RoutingQueryFeatures {
     queryLength: number;
 }
 
+/**
+ * 라우팅 결정 로그(routing_metadata JSON 으로 영속).
+ *
+ * ⚠️ GV(Generate-Verify)·executionStrategy 필드는 2026-07-18 strategy 계층 폐기 이후
+ * 채우는 경로가 없어 새 행에서는 항상 비어 있다. 과거 행을 집계하는 SQL
+ * (data/repositories/feedback-repository.ts 의 GV 통계)이 아직 살아 있어 타입만 남긴다.
+ * 2026-09-18 정리에서 대입·읽기가 모두 0이던 primaryModel·complexitySignals·
+ * domainEngine·domainKey 와 폐기 전략 이름 2개(generate-verify·agent-loop)는 제거했다.
+ */
 export interface RoutingRouteDecision {
-    strategy: 'generate-verify' | 'agent-loop' | 'direct' | 'discussion' | 'deep-research';
-    primaryModel?: string;
+    strategy: 'direct' | 'discussion' | 'deep-research';
     complexityScore?: number;
-    complexitySignals?: string[];
-    /** P2-2: 도메인 오버라이드된 엔진 */
-    domainEngine?: string;
-    /** P2-2: 매칭된 도메인 키 */
-    domainKey?: string;
     /** P1-2: 분류 신뢰도 (0.0~1.0) */
     classificationConfidence?: number;
     /** P1-2: 분류 출처 */

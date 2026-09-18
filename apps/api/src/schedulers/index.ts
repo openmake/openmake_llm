@@ -6,7 +6,7 @@
  */
 
 import { startSessionCleanupScheduler, stopSessionCleanupScheduler } from '../data/conversation-db';
-import { startQuotaReconcileJob } from '../services/cost/quota-reconcile-job';
+import { startQuotaReconcileJob, stopQuotaReconcileJob } from '../services/cost/quota-reconcile-job';
 import { startDbRetention } from '../data/db-retention';
 import { startPeriodicCleanup } from '../utils/token-cleanup';
 import { createLogger } from '../utils/logger';
@@ -359,7 +359,14 @@ export function stopAllSchedulers(): void {
         logger.error('SessionCleanupScheduler 중지 실패:', err);
     }
 
-    // 2. 타이머 기반 스케줄러 정리
+    // 2. 쿼터 정산 잡 중지 — 자체 모듈 타이머라 activeTimers 루프가 잡지 못한다.
+    try {
+        stopQuotaReconcileJob();
+    } catch (err) {
+        logger.error('QuotaReconcileJob 중지 실패:', err);
+    }
+
+    // 3. 타이머 기반 스케줄러 정리
     for (const timer of activeTimers) {
         clearInterval(timer);
     }
