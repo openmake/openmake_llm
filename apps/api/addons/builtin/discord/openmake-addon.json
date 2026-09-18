@@ -1,0 +1,11 @@
+{
+  "id": "discord",
+  "name": "Discord Bot",
+  "version": "1.0.0",
+  "description": "Discord 릴레이 봇 런타임 설정 배포 (봇 프로세스는 apps/discord-bot)",
+  "requires": {
+    "openmake": ">=1.0.0 <2.0.0"
+  },
+  "scope": "system",
+  "components": {}
+}

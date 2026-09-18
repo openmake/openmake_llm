@@ -34,8 +34,9 @@ async function installBuiltinPack(id: BuiltinAddonId): Promise<void> {
 async function archiveDisabledAddonSkills(id: BuiltinAddonId): Promise<void> {
     const { getUnifiedDatabase } = await import('../data/models/unified-database');
     const { SkillRepository } = await import('../data/repositories/skill-repository');
-    const archived = await new SkillRepository(getUnifiedDatabase().getPool())
-        .archiveSystemSkillsBySourcePath(BUILTIN_ADDON_SKILL_SOURCE_PATH[id]);
+    const sourcePathLike = BUILTIN_ADDON_SKILL_SOURCE_PATH[id];
+    if (!sourcePathLike) return; // 스킬을 싣지 않는 add-on (통합 기능)
+    const archived = await new SkillRepository(getUnifiedDatabase().getPool()).archiveSystemSkillsBySourcePath(sourcePathLike);
     logger.info(`내장 팩 '${id}' 꺼짐 — 시스템 스킬 ${archived}개 보관`);
 }
 

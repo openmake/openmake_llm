@@ -1,0 +1,11 @@
+{
+  "id": "kakao-map",
+  "name": "Kakao Map",
+  "version": "1.0.0",
+  "description": "카카오 지도 인라인 표시 — 네이티브 앱용 지도 임베드 페이지",
+  "requires": {
+    "openmake": ">=1.0.0 <2.0.0"
+  },
+  "scope": "system",
+  "components": {}
+}

@@ -1,0 +1,11 @@
+{
+  "id": "notebooklm",
+  "name": "NotebookLM",
+  "version": "1.0.0",
+  "description": "컴포저 노트북 선택기 — 사용자의 NotebookLM MCP 서버에서 노트북 목록을 가져와 대화에 고정",
+  "requires": {
+    "openmake": ">=1.0.0 <2.0.0"
+  },
+  "scope": "system",
+  "components": {}
+}

@@ -254,6 +254,14 @@ export function Composer() {
     enabled: slashCandidate,
     staleTime: 30_000,
   });
+  // 꺼진 add-on 의 진입점은 숨긴다(GET /api/addons). 조회 실패·로딩 중에는 종전처럼 표시한다 —
+  // 라우트가 없는 배포에서 노트북 선택기를 열면 404 가 "미설치" 설치 안내로 보여 오해를 부른다.
+  const { data: addonsData } = useQuery({
+    queryKey: ["addons"],
+    queryFn: () => ApiClient.get<{ data: { addons: { id: string; enabled: boolean }[] } }>("/api/addons"),
+    staleTime: Infinity,
+  });
+  const notebooksAvailable = addonsData?.data?.addons?.find((a) => a.id === "notebooklm")?.enabled !== false;
   // Cowork D2: 로컬 브리지(데스크톱 앱) 연결 상태 — 토글 활성 판단. 15s 갱신.
   const { data: bridgeData } = useQuery({
     queryKey: ["local-bridge-status"],
@@ -550,27 +558,31 @@ export function Composer() {
               })}
               {/* 노트북 선택 — 토글이 아닌 컨텍스트 선택기(2단): 시트를 닫고 picker 팝오버를 연다.
                   선택된 노트북은 툴바의 컨텍스트 칩으로 표시·해제. */}
-              <div className="mx-2 my-1 border-t border-border" aria-hidden />
-              <button
-                type="button"
-                onClick={() => {
-                  setModeSheetOpen(false);
-                  setNotebookPickerOpen(true);
-                }}
-                className={cn(
-                  "flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-sm transition",
-                  notebook ? "text-accent" : "text-fg-2 hover:bg-surface-3",
-                )}
-              >
-                <BookOpen className="h-[18px] w-[18px] shrink-0" />
-                <span className="flex-1 truncate text-left">
-                  {t("notebooks.select")}
-                  {notebook && (
-                    <span className="ml-1.5 text-[11px] text-faint">{notebook.title}</span>
-                  )}
-                </span>
-                {notebook && <Check className="h-4 w-4 shrink-0 text-accent" />}
-              </button>
+              {notebooksAvailable && (
+                <>
+                  <div className="mx-2 my-1 border-t border-border" aria-hidden />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModeSheetOpen(false);
+                      setNotebookPickerOpen(true);
+                    }}
+                    className={cn(
+                      "flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-sm transition",
+                      notebook ? "text-accent" : "text-fg-2 hover:bg-surface-3",
+                    )}
+                  >
+                    <BookOpen className="h-[18px] w-[18px] shrink-0" />
+                    <span className="flex-1 truncate text-left">
+                      {t("notebooks.select")}
+                      {notebook && (
+                        <span className="ml-1.5 text-[11px] text-faint">{notebook.title}</span>
+                      )}
+                    </span>
+                    {notebook && <Check className="h-4 w-4 shrink-0 text-accent" />}
+                  </button>
+                </>
+              )}
             </div>
           </>
         )}

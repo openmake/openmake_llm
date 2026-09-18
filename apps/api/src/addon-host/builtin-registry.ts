@@ -14,8 +14,21 @@
  */
 import * as path from 'path';
 
-export const BUILTIN_ADDON_IDS = ['industry-pack', 'utility-pack'] as const;
+export const BUILTIN_ADDON_IDS = ['industry-pack', 'utility-pack', 'notebooklm', 'kakao-map', 'discord'] as const;
 export type BuiltinAddonId = typeof BUILTIN_ADDON_IDS[number];
+
+/**
+ * content = 스킬·에이전트 정의를 싣는 팩(설치·보관 대상), integration = 코드가 레포에 있는 통합 기능
+ * (꺼지면 전용 라우트를 마운트하지 않는다 — addon-host/routes.ts). 통합 기능이 쓰는 외부 MCP 서버는
+ * 이 축과 별개로 사용자가 카탈로그에서 설치한다.
+ */
+export const BUILTIN_ADDON_KIND: Readonly<Record<BuiltinAddonId, 'content' | 'integration'>> = {
+    'industry-pack': 'content',
+    'utility-pack': 'content',
+    'notebooklm': 'integration',
+    'kakao-map': 'integration',
+    'discord': 'integration',
+};
 
 /**
  * 팩이 소유한 시스템 스킬의 `source_path` LIKE 패턴 — 팩을 끄면 여기 걸리는 시스템 스킬을 보관(archived)해
@@ -24,7 +37,7 @@ export type BuiltinAddonId = typeof BUILTIN_ADDON_IDS[number];
  * ⚠️ id 접두사(`system-skill-`)로 고르지 말 것 — Base 스킬(general·author-guide)과 수동 등록 시스템 스킬
  * (`system-skill-karpathy-guidelines`)이 같은 접두사를 쓴다.
  */
-export const BUILTIN_ADDON_SKILL_SOURCE_PATH: Readonly<Record<BuiltinAddonId, string>> = {
+export const BUILTIN_ADDON_SKILL_SOURCE_PATH: Readonly<Partial<Record<BuiltinAddonId, string>>> = {
     'industry-pack': 'agents/prompts/%/%',
     'utility-pack': 'agents/utility-skills/%',
 };
