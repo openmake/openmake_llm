@@ -626,6 +626,19 @@ cmd_update() {
     git -C "$SCRIPT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
         || { log_err "git 레포가 아닙니다 — tarball 설치본은 재설치(install.sh)로 갱신하세요"; exit 1; }
 
+    # install.sh 의 `npm install` 은 package-lock.json 을 다시 쓴다 — lock 의 워크스페이스 버전이
+    # package.json 보다 낡아 있으면(release-please 는 lock 을 갱신하지 않는다) 설치만 해도 lock 이
+    # 바뀐 채 남고, 아래 검사가 첫 update 부터 막는다(2026-09-18: 설치본 3곳 전부 이 상태였다).
+    # lock 은 설치의 부산물이지 사람의 편집이 아니므로 되돌리고 진행한다. 그 밖의 변경은 그대로 막는다.
+    local _dirty _f
+    _dirty="$(git -C "$SCRIPT_DIR" status --porcelain 2>/dev/null | awk '{print $2}')"
+    for _f in $_dirty; do
+        case "$_f" in
+            package-lock.json|*/package-lock.json)
+                git -C "$SCRIPT_DIR" checkout -- "$_f" && log_info "설치가 다시 쓴 $_f 를 되돌렸습니다 (update 전 정리)" ;;
+        esac
+    done
+
     if [[ -n "$(git -C "$SCRIPT_DIR" status --porcelain 2>/dev/null)" ]]; then
         log_err "미커밋 로컬 변경이 있어 업데이트를 중단합니다 (덮어쓰지 않음)."
         echo "  변경을 정리(commit/stash)한 뒤 다시 실행하세요: git -C \"$SCRIPT_DIR\" status"
