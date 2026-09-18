@@ -48,8 +48,14 @@ function resolveWebPort() {
     return fromUrl ? fromUrl[1] : '3000';
 }
 
-/** 백엔드(Express + WS) 포트. */
-const apiPort = pick('PORT') || '52416';
+/**
+ * 백엔드(Express + WS) 포트.
+ * OMK_API_PORT 가 먼저다 — `next dev -p <웹포트>` 는 자기 프로세스에 `process.env.PORT = <웹포트>` 를
+ * 세팅한다(next/dist/server/lib/start-server.js). 그 안에서 next.config.ts 가 이 모듈을 부르면 PORT 가
+ * 웹 포트라서, 브라우저에 내려가는 NEXT_PUBLIC_WS_PORT 가 웹 포트가 되고 채팅 소켓이 API 가 아닌 웹으로
+ * 붙는다("서버와 연결이 끊겼습니다"). 웹 포트가 3000 이 아닌 dev 에서 드러난다. PORT 는 하위호환으로 남긴다.
+ */
+const apiPort = pick('OMK_API_PORT') || pick('PORT') || '52416';
 /** 프론트(Next) 포트. */
 const webPort = resolveWebPort();
 

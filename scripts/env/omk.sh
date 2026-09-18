@@ -818,10 +818,11 @@ cmd_dev_up() {
     local names="" cmds=() api web bport=""
     api="$(llm_api_port "$DEV_LLM")"; web="$(llm_web_port "$DEV_LLM")"
     if [[ "$target" == all || "$target" == api ]]; then names="${names:+$names,}api"; cmds+=("cd '$DEV_LLM' && npm run dev:api"); fi
-    # next dev 는 루트 .env 의 웹 포트를 모른다(기본 3000) → -p 로 준다. PORT 환경변수로 주면 안 된다 —
-    # resolve-ports.cjs 가 PORT 를 "API 포트"로 읽어 채팅 소켓이 웹 포트로 붙는다.
+    # next dev 는 루트 .env 의 웹 포트를 모른다(기본 3000) → -p 로 준다. 그런데 next 는 -p 를 받으면 자기
+    # 프로세스에 PORT=<웹포트> 를 세팅하고, resolve-ports.cjs 는 PORT 를 "API 포트"로 읽는다 — 그대로 두면
+    # 채팅 소켓이 웹 포트로 붙는다. OMK_API_PORT 로 API 포트를 명시해 PORT 보다 앞서게 한다.
     # /api 프록시 대상도 기본값이 52416 고정이라, 주지 않으면 다른 인스턴스의 API 를 가리킨다.
-    if [[ "$target" == all || "$target" == web ]]; then names="${names:+$names,}web"; cmds+=("cd '$DEV_LLM/apps/web' && OMK_DEV_HOSTS='$hosts' API_PROXY_TARGET=http://localhost:$api npm run dev -- -p $web"); fi
+    if [[ "$target" == all || "$target" == web ]]; then names="${names:+$names,}web"; cmds+=("cd '$DEV_LLM/apps/web' && OMK_API_PORT=$api OMK_DEV_HOSTS='$hosts' API_PROXY_TARGET=http://localhost:$api npm run dev -- -p $web"); fi
     if [[ "$target" == all || "$target" == bench ]]; then
         if [[ -n "$DEV_BENCH" ]]; then
             [[ -f "$DEV_BENCH/.env" ]] || bench_ensure_env "$DEV_BENCH" dev "$api" "$web" 0 >/dev/null
