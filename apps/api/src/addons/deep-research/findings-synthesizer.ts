@@ -19,8 +19,6 @@ import { withSkillContext } from './research-context';
 import { createLogger } from '../../utils/logger';
 import { TRUNCATION } from '../../config/runtime-limits';
 import { RESEARCH_DEFAULTS } from './config';
-import { LLM_TEMPERATURES } from '../../config/llm-parameters';
-import { LLM_TIMEOUTS } from '../../config/timeouts';
 import {
     deduplicateSources,
     normalizeUrl,

@@ -15,8 +15,6 @@ import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { withSkillContext } from './research-context';
 import { createLogger } from '../../utils/logger';
 import { TRUNCATION } from '../../config/runtime-limits';
-import { LLM_TEMPERATURES } from '../../config/llm-parameters';
-import { LLM_TIMEOUTS } from '../../config/timeouts';
 import { deduplicateSources, extractBulletLikeFindings } from './utils';
 import { SECTION_HEADERS, getReportPrompt, getResearchMessage } from './prompts';
 import { verifyCitations } from './citation-verifier';

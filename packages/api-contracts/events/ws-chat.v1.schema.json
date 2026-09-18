@@ -182,11 +182,12 @@
           "type": "boolean"
         },
         "deepResearchMode": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "구 필드(modes 도입 2026-09-19 전) — 새 클라이언트는 modes 를 쓴다. 구 클라이언트(iOS) 호환용으로 서버가 읽는다"
         },
         "discussionMode": {
           "type": "boolean",
-          "description": "멀티 에이전트 토론 모드"
+          "description": "구 필드(modes 도입 2026-09-19 전) — 새 클라이언트는 modes 를 쓴다. 구 클라이언트(iOS) 호환용으로 서버가 읽는다"
         },
         "thinkingMode": {
           "type": "boolean",
@@ -214,6 +215,13 @@
           "additionalProperties": {
             "type": "boolean"
           }
+        },
+        "modes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "description": "켜진 채팅 모드(add-on) — add-on id → true. 서버가 일반 채팅 대신 그 모드로 턴을 처리한다"
         },
         "contextRefs": {
           "type": "object",

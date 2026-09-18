@@ -22,9 +22,8 @@ import type { ChatStrategy, ChatResult } from '../../services/chat-strategies/ty
 import type { DiscussionStrategyContext } from './strategy-types';
 import { createLogger } from '../../utils/logger';
 import { sanitizePromptInput } from '../../utils/input-sanitizer';
-import { MODEL_CONTEXT_DEFAULTS, TRUNCATION } from '../../config/runtime-limits';
+import { MODEL_CONTEXT_DEFAULTS } from '../../config/runtime-limits';
 import { DISCUSSION_TOKEN_BUDGET, DISCUSSION_STREAM_ABORT_CHECK_INTERVAL, DISCUSSION_CONCURRENCY, DISCUSSION_FACTCHECK } from './config';
-import { LLM_TEMPERATURES } from '../../config/llm-parameters';
 import { resolvePromptLocale, type PromptLocaleCode } from '../../chat/language-policy';
 import { withSpan } from '../../observability/otel';
 

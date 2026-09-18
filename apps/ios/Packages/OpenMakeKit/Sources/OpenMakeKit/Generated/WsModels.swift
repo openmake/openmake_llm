@@ -961,8 +961,9 @@ public struct WsChatRequest: Codable {
     public let clientRequestID: String?
     /// 통합(add-on)별 외부 컨텍스트 참조 — add-on id → 참조. 컴포저의 컨텍스트 선택기가 보낸다(백엔드가 LLM 전용 채널에 접두 주입)
     public let contextRefs: [String: ContextRef]?
+    /// 구 필드(modes 도입 2026-09-19 전) — 새 클라이언트는 modes 를 쓴다. 구 클라이언트(iOS) 호환용으로 서버가 읽는다
     public let deepResearchMode: Bool?
-    /// 멀티 에이전트 토론 모드
+    /// 구 필드(modes 도입 2026-09-19 전) — 새 클라이언트는 modes 를 쓴다. 구 클라이언트(iOS) 호환용으로 서버가 읽는다
     public let discussionMode: Bool?
     public let enabledTools: [String: Bool]?
     /// 첨부 텍스트 파일 — 백엔드가 fileContext 채널로 LLM 에 주입
@@ -978,6 +979,8 @@ public struct WsChatRequest: Codable {
     public let memoryLearning: Bool?
     public let message: String
     public let model: String?
+    /// 켜진 채팅 모드(add-on) — add-on id → true. 서버가 일반 채팅 대신 그 모드로 턴을 처리한다
+    public let modes: [String: Bool]?
     /// 구 필드(contextRefs 도입 2026-09-19 전) — 새 클라이언트는 보내지 않는다. 구 클라이언트 호환용으로만 서버가 읽는다
     public let notebook: Notebook?
     /// 개인정보: false 면 백엔드가 대화 기록 저장을 생략 (설정 페이지 토글). 기본 true
@@ -1013,6 +1016,7 @@ public struct WsChatRequest: Codable {
         case memoryLearning = "memoryLearning"
         case message = "message"
         case model = "model"
+        case modes = "modes"
         case notebook = "notebook"
         case saveHistory = "saveHistory"
         case sessionID = "sessionId"
@@ -1024,7 +1028,7 @@ public struct WsChatRequest: Codable {
         case webSearch = "webSearch"
     }
 
-    public init(anonSessionID: String?, artifactMode: Bool?, client: Client?, clientRequestID: String?, contextRefs: [String: ContextRef]?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, lane: String?, memoryLearning: Bool?, message: String, model: String?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, userLocation: UserLocation?, webSearch: Bool?) {
+    public init(anonSessionID: String?, artifactMode: Bool?, client: Client?, clientRequestID: String?, contextRefs: [String: ContextRef]?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, lane: String?, memoryLearning: Bool?, message: String, model: String?, modes: [String: Bool]?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, userLocation: UserLocation?, webSearch: Bool?) {
         self.anonSessionID = anonSessionID
         self.artifactMode = artifactMode
         self.client = client
@@ -1041,6 +1045,7 @@ public struct WsChatRequest: Codable {
         self.memoryLearning = memoryLearning
         self.message = message
         self.model = model
+        self.modes = modes
         self.notebook = notebook
         self.saveHistory = saveHistory
         self.sessionID = sessionID
@@ -1088,6 +1093,7 @@ public extension WsChatRequest {
         memoryLearning: Bool?? = nil,
         message: String? = nil,
         model: String?? = nil,
+        modes: [String: Bool]?? = nil,
         notebook: Notebook?? = nil,
         saveHistory: Bool?? = nil,
         sessionID: String?? = nil,
@@ -1115,6 +1121,7 @@ public extension WsChatRequest {
             memoryLearning: memoryLearning ?? self.memoryLearning,
             message: message ?? self.message,
             model: model ?? self.model,
+            modes: modes ?? self.modes,
             notebook: notebook ?? self.notebook,
             saveHistory: saveHistory ?? self.saveHistory,
             sessionID: sessionID ?? self.sessionID,

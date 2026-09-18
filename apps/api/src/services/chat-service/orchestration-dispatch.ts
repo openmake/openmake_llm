@@ -17,15 +17,12 @@
  */
 import { randomUUID } from 'crypto';
 import { getChatTurnIntegrations, type ContributedOrchestrationTool } from './turn-integrations';
-import { createClient } from '../../llm';
-import type { ChatMessage } from '../../llm';
 import type { ToolDefinition } from '../../llm/types';
 import type { UserContext } from '../../mcp/user-sandbox';
-import { getModelForRole } from '../../config/model-roles';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { AgentTaskService } from '../AgentTaskService';
 import { dispatchAgentTask } from '../agent-task/task-queue';
-import { ORCHESTRATION_DISPATCH, MODEL_CONTEXT_DEFAULTS, AGENT_TASK_LIMITS } from '../../config/runtime-limits';
+import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 import { isAdminRole } from '../../data/user-manager';
 

@@ -14,8 +14,6 @@ import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
 import { CAPACITY } from '../../config/runtime-limits';
 import { RESEARCH_DEFAULTS } from './config';
-import { LLM_TEMPERATURES } from '../../config/llm-parameters';
-import { LLM_TIMEOUTS } from '../../config/timeouts';
 import { clampImportance, buildFallbackSubTopics } from './utils';
 import { getDecomposePrompt, getResearchMessage } from './prompts';
 import { withSkillContext } from './research-context';

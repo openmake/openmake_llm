@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { WEB_CHAT_MODES } from "@/addons/registry";
 import type { SearchSourceRef } from "@openmake/shared-types";
 import Image from "next/image";
 import Link from "next/link";
@@ -395,69 +396,13 @@ function AgentTaskCard({ task, approvals, taskId }: { task: AgentTaskState; appr
   );
 }
 
-/** 딥리서치 진행 배너 — 스트리밍 중 단계/진행/루프를 라이브 표시. */
-function ResearchProgressBanner() {
-  const t = useTranslations("chat");
-  const rp = useAppStore((s) => s.researchProgress);
-  if (!rp) return null;
-  const filled = Math.round(rp.progress / 10);
-  return (
-    <div className="flex gap-3">
-      <div className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-accent-soft text-accent">
-        <Telescope className="h-4 w-4" />
-      </div>
-      <div className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2/60 p-3">
-        <div className="mb-1 flex items-center gap-2 text-xs font-medium text-fg-2">
-          <LoaderCircle className="h-3.5 w-3.5 animate-spin text-accent" />
-          {t("research.inProgress")}
-          {rp.totalLoops > 0 && (
-            <span className="text-faint">· {t("research.loop", { current: rp.currentLoop, total: rp.totalLoops })}</span>
-          )}
-        </div>
-        {rp.message && <p className="mb-1.5 text-xs text-muted">{rp.message}</p>}
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[11px] text-accent">
-            {"▓".repeat(filled)}{"░".repeat(10 - filled)}
-          </span>
-          <span className="text-[11px] text-faint">{rp.progress}%{rp.currentStep ? ` · ${rp.currentStep}` : ""}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** 토론 모드 진행 배너 — research 배너와 대칭. phase/에이전트/라운드/진행률 라이브 표시. */
-function DiscussionProgressBanner() {
-  const t = useTranslations("chat");
-  const dp = useAppStore((s) => s.discussionProgress);
-  if (!dp) return null;
-  const filled = Math.round(dp.progress / 10);
-  return (
-    <div className="flex gap-3">
-      <div className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md bg-accent-soft text-accent">
-        <MessagesSquare className="h-4 w-4" />
-      </div>
-      <div className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2/60 p-3">
-        <div className="mb-1 flex items-center gap-2 text-xs font-medium text-fg-2">
-          <LoaderCircle className="h-3.5 w-3.5 animate-spin text-accent" />
-          {t("discussion.inProgress")}
-          {dp.currentAgent && (
-            <span className="text-faint">· {dp.agentEmoji ? `${dp.agentEmoji} ` : ""}{dp.currentAgent}</span>
-          )}
-          {dp.totalRounds != null && dp.totalRounds > 0 && dp.roundNumber != null && (
-            <span className="text-faint">· {t("discussion.round", { current: dp.roundNumber, total: dp.totalRounds })}</span>
-          )}
-        </div>
-        {dp.message && <p className="mb-1.5 text-xs text-muted">{dp.message}</p>}
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[11px] text-accent">
-            {"▓".repeat(filled)}{"░".repeat(10 - filled)}
-          </span>
-          <span className="text-[11px] text-faint">{dp.progress}%</span>
-        </div>
-      </div>
-    </div>
-  );
+/** 채팅 모드(add-on) 진행 배너 — 실행 중인 모드의 웹 add-on 이 제공한 배너를 그린다. */
+function ModeProgressBanner() {
+  const mp = useAppStore((s) => s.modeProgress);
+  const mode = mp ? WEB_CHAT_MODES.find((m) => m.id === mp.modeId) : undefined;
+  if (!mp || !mode) return null;
+  const Banner = mode.ProgressBanner;
+  return <Banner progress={mp.progress} />;
 }
 
 /**
@@ -691,8 +636,7 @@ export function MessageList() {
   const isGuest = useAppStore((s) => !s.auth.currentUser);
   const activeAgent = useAppStore((s) => s.activeAgent);
   const activeSkills = useAppStore((s) => s.activeSkills);
-  const researchProgress = useAppStore((s) => s.researchProgress);
-  const discussionProgress = useAppStore((s) => s.discussionProgress);
+  const modeProgress = useAppStore((s) => s.modeProgress);
   const orchestratorProgress = useAppStore((s) => s.orchestratorProgress);
   const activeTool = useAppStore((s) => s.activeTool);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -713,9 +657,8 @@ export function MessageList() {
     activeSkills,
     activeTool,
     chatHistory,
-    discussionProgress,
+    modeProgress,
     orchestratorProgress,
-    researchProgress,
     scrollToBottom,
     showThinking,
   ]);
@@ -912,8 +855,7 @@ export function MessageList() {
           </div>
         ),
       )}
-      {researchProgress && <ResearchProgressBanner />}
-      {discussionProgress && <DiscussionProgressBanner />}
+      {modeProgress && <ModeProgressBanner />}
       {orchestratorProgress && <OrchestratorProgressBanner />}
       {activeTool && <ToolIndicator />}
       {showThinking && <ThinkingIndicator agent={activeAgent} skills={activeSkills} />}

@@ -185,6 +185,8 @@ public extension WsChatRequest {
             memoryLearning: memoryLearning,
             message: message,
             model: model,
+            // 채팅 모드의 일반 필드 — iOS 는 아직 구 불리언 필드(discussionMode·deepResearchMode)로 보낸다(서버가 둘 다 받는다).
+            modes: nil,
             notebook: nil,
             saveHistory: saveHistory,
             sessionID: sessionId,

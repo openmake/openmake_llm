@@ -10,7 +10,6 @@
 import { generateReport } from '../report-generator';
 import { RESEARCH_TIMEOUTS } from '../config';
 import type { LLMClient } from '../../../llm';
-import { LLM_TIMEOUTS } from '../../../config/timeouts';
 
 jest.mock('../../../data/models/unified-database', () => ({
     getUnifiedDatabase: () => ({ addResearchStep: jest.fn().mockResolvedValue(undefined) }),

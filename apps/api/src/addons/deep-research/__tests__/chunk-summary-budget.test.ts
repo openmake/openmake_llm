@@ -10,7 +10,6 @@
  */
 import { RESEARCH_DEFAULTS } from '../config';
 import { RESEARCH_TIMEOUTS } from '../config';
-import { LLM_TIMEOUTS } from '../../../config/timeouts';
 
 describe('청크 요약 예산', () => {
     it('출력 상한이 설정돼 있다', () => {

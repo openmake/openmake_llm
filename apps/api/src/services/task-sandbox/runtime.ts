@@ -15,7 +15,7 @@ import { TaskSandbox, type ExecResult } from './sandbox';
 import type { TaskExecutor } from './executor';
 import { createTaskTools, type DelegateFn, type SpawnFn, type ProceduralHooks } from './tools';
 import { recordBrowserMetric } from './browser-metrics';
-import { AGENT_TASK_LIMITS, ORCHESTRATION_DISPATCH, MAX_TOOL_RESULT_CHARS } from '../../config/runtime-limits';
+import { AGENT_TASK_LIMITS, MAX_TOOL_RESULT_CHARS } from '../../config/runtime-limits';
 import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
 import { saveProceduralSkill, resolveProceduralSpec } from '../agent-task/procedural-skill';
 import { TaskPlan, parseGoalPlanSteps, type PlanStep } from './planning';
