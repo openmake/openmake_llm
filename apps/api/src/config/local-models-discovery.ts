@@ -22,7 +22,7 @@ const NON_CHAT_MODES: ReadonlySet<string> = new Set([
 
 /** id 패턴만으로 역할을 정하는 안전망 — `/model/info` 가 mode 를 비워 두는 커스텀 배포용 */
 const EMBEDDING_ID_PATTERNS = ['bge', 'embed', 'embedding'];
-const NON_CHAT_ID_PATTERNS = ['rerank', 'flux', 'sdxl', 'stable-diffusion', 'dall-e', 'dalle', 'whisper', 'tts', 'clip'];
+const NON_CHAT_ID_PATTERNS = ['rerank', 'sdxl', 'stable-diffusion', 'dall-e', 'dalle', 'whisper', 'tts', 'clip'];
 
 function upstreamBasename(model: string | undefined): string | undefined {
     if (!model) return undefined;

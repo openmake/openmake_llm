@@ -6,7 +6,7 @@
 #
 # 토폴로지:
 #   앱(LLM_BASE_URL=http://127.0.0.1:13401) → 이 게이트웨이
-#     ├─ 로컬: Tailscale → DGX vLLM (:8002 qwen / :8003 bge / :8005 flux)
+#     ├─ 로컬: Tailscale → DGX vLLM (:8002 qwen / :8003 bge)
 #     └─ 외부: openrouter/* · ollama-cloud/* · nvidia/* · hasa/* · bai/* · orcarouter/* wildcard (사용자 BYOK 는 요청 헤더)
 #
 # 헤더 계약 (LiteLLM 1.89.4 라이브 검증):
@@ -37,15 +37,6 @@ model_list:
       model: openai/qwen3.8-27b
       api_base: os.environ/QWEN_VLLM_API_BASE
       api_key: os.environ/VLLM_API_KEY
-
-  # 이미지 생성 — vLLM-Omni FLUX.2-klein (/v1/images/generations)
-  - model_name: flux2-klein
-    litellm_params:
-      model: openai/flux2-klein
-      api_base: os.environ/FLUX_VLLM_API_BASE      # http://<VLLM_TAILSCALE_HOST>:8005/v1
-      api_key: os.environ/VLLM_API_KEY
-    model_info:
-      mode: image_generation
 
   # ---------- 외부 provider (사용자 BYOK — 요청 헤더 x-api-key 로 전달) ----------
   # api_key placeholder 는 config 로드용 — 실제 인증은 요청별 헤더가 우선.
@@ -92,6 +83,6 @@ general_settings:
 
 litellm_settings:
   drop_params: false
-  # 앱 최대 호출(Deep Research 900s) + FLUX 이미지 생성(실측 17s+) 커버 —
+  # 앱 최대 호출(Deep Research 900s) 커버 —
   # "프록시 timeout ≥ 앱 timeout" 정합 (채팅/서브에이전트는 LLM_TIMEOUT=120s).
   request_timeout: 900

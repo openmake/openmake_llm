@@ -11,7 +11,7 @@ const LIVE_SAMPLE: GatewayModelInfoEntry[] = [
     { model_name: 'qwen3.6-35b-a3b', litellm_params: { model: 'openai/qwen3.6-35b-a3b', api_base: QWEN_BASE }, model_info: {} },
     { model_name: 'bge-m3', litellm_params: { model: 'openai/bge-m3', api_base: 'http://vllm-host:8003/v1' }, model_info: {} },
     { model_name: 'gpt-3.5-turbo', litellm_params: { model: 'openai/qwen3.8-27b', api_base: QWEN_BASE }, model_info: {} },
-    { model_name: 'flux2-klein', litellm_params: { model: 'openai/flux2-klein', api_base: 'http://vllm-host:8005/v1' }, model_info: { mode: 'image_generation' } },
+    { model_name: 'sdxl-turbo', litellm_params: { model: 'openai/sdxl-turbo', api_base: 'http://vllm-host:8005/v1' }, model_info: { mode: 'image_generation' } },
     { model_name: 'openrouter/*', litellm_params: { model: 'openrouter/*' }, model_info: {} },
     { model_name: 'hasa/*', litellm_params: { model: 'openai/*', api_base: 'https://open.hasa.re.kr/v1' }, model_info: {} },
 ];

@@ -258,7 +258,7 @@ const D = {
   ],
   llm: [
     [I.gateway('#f97316'), { ko: 'LiteLLM 통합 게이트웨이', en: 'LiteLLM unified gateway' }, { ko: 'Mac <em>127.0.0.1:13401</em> · PM2 · master key 인증 · BYOK 는 x-api-key 헤더', en: 'Mac <em>127.0.0.1:13401</em> · PM2 · master-key auth · BYOK via x-api-key' }],
-    [I.nvidia(26), { ko: 'DGX vLLM (Tailscale 사설망)', en: 'DGX vLLM (Tailscale private network)' }, { ko: '<em>:8002</em> qwen3.6-35b-a3b chat(262K) · <em>:8003</em> bge 임베딩 · <em>:8005</em> FLUX', en: '<em>:8002</em> qwen3.6-35b-a3b chat (262K) · <em>:8003</em> bge embeddings · <em>:8005</em> FLUX' }],
+    [I.nvidia(26), { ko: 'DGX vLLM (Tailscale 사설망)', en: 'DGX vLLM (Tailscale private network)' }, { ko: '<em>:8002</em> qwen3.8-27b chat(262K) · <em>:8003</em> bge 임베딩', en: '<em>:8002</em> qwen3.8-27b chat (262K) · <em>:8003</em> bge embeddings' }],
     [I.cloud2('#f97316', 26), { ko: '외부 provider — 게이트웨이 경유', en: 'External providers — via the gateway' }, { ko: 'openrouter · ollama-cloud · NVIDIA NIM (wildcard + BYOK)', en: 'openrouter · ollama-cloud · NVIDIA NIM (wildcard + BYOK)' }],
     [I.lock('#f97316', 26), { ko: 'Direct 예외', en: 'Direct exceptions' }, { ko: 'ChatGPT OAuth 하나뿐입니다. 사용자별 세션 격리가 안 돼 영구 direct. ollama-local 은 2026-08-23 폐기돼 예외 목록이 비었습니다', en: 'ChatGPT OAuth alone. Per-user session isolation is unsolved, so it stays direct. ollama-local was retired on 2026-08-23 and the exception list emptied' }],
   ],

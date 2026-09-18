@@ -91,9 +91,9 @@ export const CAPABILITY_ENDPOINT: Record<Capability, string> = {
  */
 /**
  * env 로 코드 기본값을 덮거나 **끈다** — 미설정이면 코드값, 빈 문자열(`KEY=`)·`none` 이면 기본값 없음(=미배정 → 명시 실패).
- * DGX flux 를 내린 뒤(2026-09-12) 죽은 upstream 을 기본값으로 두지 않기 위한 스위치.
+ * `fallback` 을 생략하면 코드 기본값 자체가 없어 env 로만 켤 수 있다(image.generate — 2026-09-18).
  */
-function envDefault(name: string, fallback: string): string | undefined {
+function envDefault(name: string, fallback?: string): string | undefined {
     const raw = process.env[name];
     if (raw === undefined) return fallback;
     const v = raw.trim();
@@ -105,7 +105,9 @@ export const CAPABILITY_DEFAULTS: Partial<Record<Capability, string>> = {
     'text.embed': envDefault('CAPABILITY_DEFAULT_TEXT_EMBED', 'local-llm:bge-m3'),
     'vision.describe': envDefault('CAPABILITY_DEFAULT_VISION_DESCRIBE', 'local-llm:qwen3.8-27b'),
     'vision.ocr': envDefault('CAPABILITY_DEFAULT_VISION_OCR', 'local-llm:qwen3.8-27b'),
-    'image.generate': envDefault('CAPABILITY_DEFAULT_IMAGE_GENERATE', 'local-llm:flux2-klein'),
+    // image.generate 는 코드 기본값 없음(2026-09-18) — 종전 로컬 기본값이 비상업 라이선스(최종 사용자와의 직접
+    // 상호작용 금지)라 제거했다. 쓰려면 라이선스를 확인한 뒤 env 나 capability_models 로 명시 배정한다.
+    'image.generate': envDefault('CAPABILITY_DEFAULT_IMAGE_GENERATE'),
 };
 
 /** 사람이 읽는 라벨(ko) — Planner 프롬프트·UI 안내 공용 (i18n 은 프론트가 별도 보유) */

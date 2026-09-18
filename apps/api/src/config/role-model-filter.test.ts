@@ -49,7 +49,7 @@ describe('isRoleAssignableModel', () => {
 
     it('채팅 불가(임베딩/이미지) 제외 — 크기 무관', () => {
         expect(isRoleAssignableModel(m('local-llm:bge-m3'))).toBe(false);
-        expect(isRoleAssignableModel(m('local-llm:flux2-klein'))).toBe(false);
+        expect(isRoleAssignableModel(m('local-llm:sdxl-turbo'))).toBe(false);
         expect(isRoleAssignableModel(m('nvidia:nvidia/nv-embed-v1'))).toBe(false);
         expect(isRoleAssignableModel(m('openrouter:some/whisper-large'))).toBe(false);
     });
@@ -76,7 +76,7 @@ describe('isRoleAssignableModel', () => {
 describe('isChatCapableModel (chatOnly — 컴포저/설정 기본 모델 목록)', () => {
     it('임베딩/이미지/음성은 제외', () => {
         expect(isChatCapableModel({ modelId: 'local-llm:bge-m3' })).toBe(false);
-        expect(isChatCapableModel({ modelId: 'x:flux-2' })).toBe(false);
+        expect(isChatCapableModel({ modelId: 'x:sdxl-2' })).toBe(false);
         expect(isChatCapableModel({ modelId: 'openrouter:openai/whisper-1' })).toBe(false);
     });
     it('20B 이하 소형 채팅 모델은 유지 — usableOnly 와 다른 점', () => {
