@@ -15,6 +15,7 @@ import * as path from 'path';
 import { createLogger } from '../utils/logger';
 import { APP_VERSION } from '../config/constants';
 import { addonManifestSchema, satisfiesOpenmakeRange } from './manifest';
+import { installPackCatalog } from './pack-catalog';
 import { installPackSkills } from './pack-skills';
 import {
     BUILTIN_ADDON_IDS, BUILTIN_ADDON_SKILL_SOURCE_PATH, builtinAddonDir, isBuiltinAddonEnabled, unknownDisabledIds,
@@ -27,8 +28,13 @@ async function installBuiltinPack(id: BuiltinAddonId): Promise<void> {
     const { getUnifiedDatabase } = await import('../data/models/unified-database');
     const { SkillRepository } = await import('../data/repositories/skill-repository');
     const { installed, failed } = await installPackSkills(id, new SkillRepository(getUnifiedDatabase().getPool()));
-    logger.info(`내장 팩 '${id}' 스킬 설치: ${installed}개 성공, ${failed.length}개 실패`);
+    if (installed > 0 || failed.length > 0) logger.info(`내장 팩 '${id}' 스킬 설치: ${installed}개 성공, ${failed.length}개 실패`);
     for (const reason of failed) logger.error(`내장 팩 '${id}' 스킬 설치 실패 — ${reason}`);
+
+    const { AddonInstallRepository } = await import('../data/repositories/addon-install-repository');
+    const catalog = await installPackCatalog(id, new AddonInstallRepository(getUnifiedDatabase().getPool()));
+    if (catalog.installed.length > 0) logger.info(`내장 팩 '${id}' 카탈로그 템플릿 신규 설치: ${catalog.installed.join(', ')}`);
+    for (const reason of catalog.failed) logger.error(`내장 팩 '${id}' 카탈로그 설치 실패 — ${reason}`);
 }
 
 async function archiveDisabledAddonSkills(id: BuiltinAddonId): Promise<void> {

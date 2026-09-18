@@ -1,0 +1,13 @@
+{
+  "id": "connectors-pack",
+  "name": "OpenMake Connectors Pack",
+  "version": "1.0.0",
+  "description": "외부 서비스 MCP 커넥터 카탈로그 템플릿 (설치·활성화는 관리자·사용자가 카탈로그에서)",
+  "requires": {
+    "openmake": ">=1.0.0 <2.0.0"
+  },
+  "scope": "system",
+  "components": {
+    "mcpCatalog": "./mcp-catalog.json"
+  }
+}

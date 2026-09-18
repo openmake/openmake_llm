@@ -30,10 +30,10 @@ describe('builtin-registry', () => {
         });
     });
 
-    it('모든 콘텐츠 팩은 보관 대상 source_path 패턴을 가지며 Base 스킬 경로는 걸리지 않는다', () => {
+    it('보관 대상 source_path 패턴은 LIKE 패턴이며 Base 스킬 경로는 걸리지 않는다', () => {
         const r = require('../builtin-registry');
         const like = (pattern: string) => new RegExp('^' + pattern.split('%').map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$');
-        for (const id of r.BUILTIN_ADDON_IDS.filter((i: string) => r.BUILTIN_ADDON_KIND[i] === 'content')) expect(r.BUILTIN_ADDON_SKILL_SOURCE_PATH[id]).toContain('%');
+        for (const pattern of Object.values(r.BUILTIN_ADDON_SKILL_SOURCE_PATH)) expect(pattern).toContain('%');
         const industry = like(r.BUILTIN_ADDON_SKILL_SOURCE_PATH['industry-pack']);
         expect(industry.test('agents/prompts/technology/software-engineer.md')).toBe(true);
         expect(industry.test('agents/prompts/general-agent.md')).toBe(false);

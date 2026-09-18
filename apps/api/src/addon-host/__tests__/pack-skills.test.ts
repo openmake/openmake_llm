@@ -1,8 +1,9 @@
-import { BUILTIN_ADDON_IDS, BUILTIN_ADDON_KIND, BUILTIN_ADDON_SKILL_SOURCE_PATH } from '../builtin-registry';
+import { BUILTIN_ADDON_IDS, BUILTIN_ADDON_SKILL_SOURCE_PATH } from '../builtin-registry';
 import { installPackSkills, loadPackSkills } from '../pack-skills';
 import { getIndustryAgentsData } from '../../agents/types';
 
-const CONTENT_PACK_IDS = BUILTIN_ADDON_IDS.filter(id => BUILTIN_ADDON_KIND[id] === 'content');
+/** 스킬을 싣는 팩 — 보관용 source_path 패턴이 등록된 add-on */
+const CONTENT_PACK_IDS = BUILTIN_ADDON_IDS.filter(id => BUILTIN_ADDON_SKILL_SOURCE_PATH[id] !== undefined);
 
 function likeToRegExp(pattern: string | undefined): RegExp {
     if (!pattern) throw new Error('콘텐츠 팩에는 보관용 source_path 패턴이 있어야 한다');
@@ -58,9 +59,8 @@ describe('installPackSkills', () => {
     });
 });
 
-it('통합형 add-on 은 스킬을 싣지 않는다', () => {
-    for (const id of BUILTIN_ADDON_IDS.filter(i => BUILTIN_ADDON_KIND[i] === 'integration')) {
+it('보관 패턴이 없는 add-on 은 스킬을 싣지 않는다 (싣는다면 끌 때 주입을 멈출 방법이 없다)', () => {
+    for (const id of BUILTIN_ADDON_IDS.filter(i => BUILTIN_ADDON_SKILL_SOURCE_PATH[i] === undefined)) {
         expect(loadPackSkills(id)).toEqual([]);
-        expect(BUILTIN_ADDON_SKILL_SOURCE_PATH[id]).toBeUndefined();
     }
 });

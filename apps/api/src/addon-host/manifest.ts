@@ -25,6 +25,8 @@ export const addonManifestSchema = z.object({
         skills: z.string().optional(),
         agents: z.string().optional(),
         mcp: z.string().optional(),
+        /** MCP 카탈로그 템플릿 목록 JSON (addon-host/pack-catalog.ts) */
+        mcpCatalog: z.string().optional(),
         data: z.string().optional(),
     }).strict(),
     permissions: z.array(z.string().min(1).max(80)).max(50).optional(),

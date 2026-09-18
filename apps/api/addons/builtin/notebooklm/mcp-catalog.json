@@ -1,0 +1,32 @@
+[
+  {
+    "id": "mcp-notebooklm",
+    "displayName": "NotebookLM",
+    "description": "Google NotebookLM 연동 — 내 노트북 질의(인용 기반 Q&A)·소스 추가·오디오/비디오 생성·리서치. 연결: notebooklm.google.com 에 Google 로그인 후 DevTools > Network 요청의 Cookie 헤더 값을 붙여넣기 (수명 2~4주, 만료 시 재연결).",
+    "transportType": "stdio",
+    "commandTemplate": "notebooklm-mcp",
+    "argsSchema": {},
+    "envSchema": {
+      "type": "object",
+      "required": [
+        "NOTEBOOKLM_COOKIES"
+      ],
+      "properties": {
+        "NOTEBOOKLM_COOKIES": {
+          "type": "string",
+          "title": "NotebookLM Cookie",
+          "secret": true,
+          "description": "notebooklm.google.com 로그인 상태에서 DevTools > Network > 아무 요청 > Request Headers 의 Cookie 값 전체를 붙여넣기"
+        }
+      }
+    },
+    "toolAllowlist": [
+      "notebook_list",
+      "notebook_query",
+      "notebook_describe",
+      "source_add",
+      "research_start"
+    ],
+    "defaultEnabled": true
+  }
+]

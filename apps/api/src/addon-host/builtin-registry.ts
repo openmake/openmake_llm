@@ -14,7 +14,7 @@
  */
 import * as path from 'path';
 
-export const BUILTIN_ADDON_IDS = ['industry-pack', 'utility-pack', 'notebooklm', 'kakao-map', 'discord'] as const;
+export const BUILTIN_ADDON_IDS = ['industry-pack', 'utility-pack', 'connectors-pack', 'notebooklm', 'kakao-map', 'discord'] as const;
 export type BuiltinAddonId = typeof BUILTIN_ADDON_IDS[number];
 
 /**
@@ -25,6 +25,7 @@ export type BuiltinAddonId = typeof BUILTIN_ADDON_IDS[number];
 export const BUILTIN_ADDON_KIND: Readonly<Record<BuiltinAddonId, 'content' | 'integration'>> = {
     'industry-pack': 'content',
     'utility-pack': 'content',
+    'connectors-pack': 'content',
     'notebooklm': 'integration',
     'kakao-map': 'integration',
     'discord': 'integration',

@@ -15,10 +15,10 @@ describe('McpCatalogRepository.listCatalog', () => {
         const templates = await repo.listCatalog();
 
         expect(templates).toHaveLength(2);
-        // tier 파라미터 없이 호출 — 쿼리에 tier 바인딩 인자가 없어야 함
+        // tier 필터 없음 — 바인딩 인자는 "꺼진 add-on 의 템플릿 id" 하나뿐(기본 구성에선 빈 배열)
         const callArgs = queryMock.mock.calls[0];
-        expect(callArgs.length).toBe(1);
         expect(callArgs[0]).not.toContain('required_tier');
+        expect(callArgs[1]).toEqual([[]]);
     });
 });
 

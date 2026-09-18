@@ -7,5 +7,7 @@
     "openmake": ">=1.0.0 <2.0.0"
   },
   "scope": "system",
-  "components": {}
+  "components": {
+    "mcpCatalog": "./mcp-catalog.json"
+  }
 }
