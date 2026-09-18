@@ -39,7 +39,7 @@
 #   omk env update  <env> [--if-behind]       # llm(ff-only→build→migrate→restart) → bench → proxy
 #   omk env reset   <env> [--keep-data] [--keep-env] [--reinstall] [--yes]
 #   omk env status|start|stop|logs <env>
-#   omk env autoupdate <env> [--every 'CRON'] [--off]   # PM2 cron 앱 omk-updater-<env>
+#   omk env autoupdate <env> [--every 'CRON'] [--off]   # 선택 — 기본은 수동 배포. PM2 cron 앱 omk-updater-<env>
 #   omk proxy status|reload|render <env>
 #   omk dev setup|up|down|status|reset [api|web|bench|deps|all]
 #
@@ -528,8 +528,9 @@ cmd_env_install() {
         esac; shift
     done
     ref="${ref:-$(env_default_ref "$env")}"; bench_ref="${bench_ref:-$ref}"
-    # staging 은 기본으로 자동 갱신, 그 외(online 포함)는 사람이 update 한다.
-    [[ -n "$auto" ]] || { [[ "$env" == "staging" ]] && auto=1 || auto=0; }
+    # 배포는 수동이다 — staging·online 모두 사람이 `omk env update` 로 올린다. 자동 갱신은 명시적으로
+    # 켠 환경만(--autoupdate 또는 `omk env autoupdate <env>`).
+    [[ -n "$auto" ]] || auto=0
 
     local ldir suffix_flag=()
     ldir="$(llm_dir "$env")"
@@ -744,6 +745,12 @@ dev_locate() {
     [[ -n "$DEV_BENCH" ]] || { [[ -f "$DEV_LLM/../openmake_bench/package.json" ]] && DEV_BENCH="$( cd "$DEV_LLM/../openmake_bench" && pwd )"; }
     [[ -z "$DEV_BENCH" || -f "$DEV_BENCH/package.json" ]] || die "OMK_DEV_BENCH 가 openmake_bench 가 아닙니다: $DEV_BENCH"
 }
+# 백엔드는 CommonJS 라 워크스페이스 패키지(shared-types·config·api-client·local-bridge-core)를 dist 로
+# 소비한다 — dist 가 없으면 `npm run dev:api`(ts-node)가 모듈을 못 찾는다. 앱 빌드(--skip-build)와는 별개다.
+dev_build_packages() {
+    log_info "워크스페이스 패키지 빌드 (packages/*/dist)"
+    ( cd "$DEV_LLM" && npm run build:packages >/dev/null ) || die "build:packages 실패"
+}
 dev_compose() { ( cd "$DEV_LLM" && docker compose --env-file .env -f infra/docker-compose.yml "$@" ); }
 cmd_dev_setup() {
     dev_locate; ensure_git
@@ -751,6 +758,7 @@ cmd_dev_setup() {
     # 툴체인·.env(OMK_INSTANCE=dev)·의존성·DB·마이그레이션까지. 빌드·PM2 는 dev 에 필요 없다.
     ( cd "$DEV_LLM" && ./install.sh --yes --instance dev --skip-build --no-start ) || die "install.sh 실패"
     load_toolchain "$DEV_LLM"
+    dev_build_packages
     if [[ -n "$DEV_BENCH" ]]; then
         log_step "bench dev 준비: $DEV_BENCH"
         ( cd "$DEV_BENCH" && npm install --no-audit --no-fund && ( cd web && npm install --no-audit --no-fund ) ) || die "bench 의존성 설치 실패"
@@ -764,6 +772,7 @@ cmd_dev_up() {
     local target="${1:-all}"
     [[ -f "$DEV_LLM/.env" && -d "$DEV_LLM/node_modules" ]] || cmd_dev_setup
     load_toolchain "$DEV_LLM"
+    [[ -d "$DEV_LLM/packages/shared-types/dist" ]] || dev_build_packages
     [[ "$target" == "deps" || "$target" == "all" || "$target" == "api" ]] && { log_info "PostgreSQL/Redis 기동 (docker compose)"; dev_compose up -d; }
     [[ "$target" == "deps" ]] && { cmd_dev_status; return 0; }
 
@@ -771,7 +780,10 @@ cmd_dev_up() {
     local names="" cmds=() api web bport=""
     api="$(llm_api_port "$DEV_LLM")"; web="$(llm_web_port "$DEV_LLM")"
     if [[ "$target" == all || "$target" == api ]]; then names="${names:+$names,}api"; cmds+=("cd '$DEV_LLM' && npm run dev:api"); fi
-    if [[ "$target" == all || "$target" == web ]]; then names="${names:+$names,}web"; cmds+=("cd '$DEV_LLM' && npm run dev:frontend-next"); fi
+    # next dev 는 루트 .env 의 웹 포트를 모른다(기본 3000) → -p 로 준다. PORT 환경변수로 주면 안 된다 —
+    # resolve-ports.cjs 가 PORT 를 "API 포트"로 읽어 채팅 소켓이 웹 포트로 붙는다.
+    # /api 프록시 대상도 기본값이 52416 고정이라, 주지 않으면 다른 인스턴스의 API 를 가리킨다.
+    if [[ "$target" == all || "$target" == web ]]; then names="${names:+$names,}web"; cmds+=("cd '$DEV_LLM/apps/web' && API_PROXY_TARGET=http://localhost:$api npm run dev -- -p $web"); fi
     if [[ "$target" == all || "$target" == bench ]]; then
         if [[ -n "$DEV_BENCH" ]]; then
             [[ -f "$DEV_BENCH/.env" ]] || bench_ensure_env "$DEV_BENCH" dev "$api" "$web" 0 >/dev/null

@@ -5,10 +5,9 @@
 `openmake_llm` 과 `openmake_bench` 를 세 환경으로 나눠 운영한다. 환경은 서로 **env 파일·docker·PM2 가 분리**되어 있어, 하나가 꼬이면 그것만 지우고 다시 설치할 수 있다. 진입점은 `scripts/env/omk.sh` 하나다.
 
 ```
-feature/<주제> ──PR──▶ staging ──(10분 폴링 자동 갱신)──▶ ~/.openmake/staging   chat-staging.<도메인>
+feature/<주제> ──PR──▶ staging ──사람이 `omk env update staging`──▶ ~/.openmake/staging   chat-staging.<도메인>
                           │
-                          └──PR──▶ main ──(release-please)──▶ ~/.openmake/online    chat.<도메인>
-                                                  └ 사람이 `omk env update online`
+                          └──PR──▶ main ──(release-please)──사람이 `omk env update online`──▶ ~/.openmake/online    chat.<도메인>
 ```
 
 두 리포 모두 같은 브랜치 모델을 쓴다. CI 는 `staging`·`main` 의 push/PR 에서 돈다.
@@ -23,7 +22,7 @@ feature/<주제> ──PR──▶ staging ──(10분 폴링 자동 갱신)─
 | 포트 | install.sh 가 할당 | install.sh 가 할당 | **소스의 기본 포트** (52416 / 3000 / 5432 / 6379 / 9400 / 33000) |
 | PM2 | 없음 (포그라운드) | `openmake-{llm,next,bench}-staging` | `openmake-{llm,next,bench}` |
 | docker | `openmake-dev-*` | `openmake-staging-*` | `openmake-*` |
-| 갱신 | 직접 | PM2 cron `omk-updater-staging` (원격이 앞서면) | 수동 `omk env update online` |
+| 배포 | — | **수동** `omk env update staging` | **수동** `omk env update online` |
 
 - **online 이 기본 인스턴스인 이유** — 소스(`install.sh`·`gen-env.mjs`·`resolve-ports.cjs`·문서)의 기본 포트와 이름이 곧 운영 값이다. online 을 기본 인스턴스로 두면 포트 표를 어디에도 다시 적을 필요가 없다.
 - **이름 있는 인스턴스의 포트**는 `install.sh` 규칙(한 칸 옆 52417/3010/5433/6380, 점유 시 빈 포트로 이동)을 따른다. **omk 는 포트를 기억하지 않고 각 환경의 `.env` 를 읽는다** — 실제 값은 `omk env status <env>` 로 본다.
@@ -46,7 +45,9 @@ irm https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk
 .\omk.ps1 env install staging --public-url https://chat-staging.example.com
 ```
 
-한 번에 되는 일: git 확인 → `openmake_llm` 클론 → **`install.sh`** (Node 24·Docker·PM2 준비, `.env` 시크릿 생성, PostgreSQL·Redis, 마이그레이션, 빌드, PM2 기동, health) → `openmake_bench` 클론·빌드·`.env`·PM2 → Caddy 프록시(PM2 `omk-proxy`) → `~/.openmake/bin/omk` 래퍼 → (staging) 자동 갱신 등록.
+한 번에 되는 일: git 확인 → `openmake_llm` 클론 → **`install.sh`** (Node 24·Docker·PM2 준비, `.env` 시크릿 생성, PostgreSQL·Redis, 마이그레이션, 빌드, PM2 기동, health) → `openmake_bench` 클론·빌드·`.env`·PM2 → Caddy 프록시(PM2 `omk-proxy`) → `~/.openmake/bin/omk` 래퍼.
+
+**배포는 수동이다.** 머지만으로는 아무것도 바뀌지 않고, 사람이 `omk env update <env>` 를 실행해야 그 환경에 올라간다. 원하는 환경만 자동 갱신을 켤 수 있다(`omk env autoupdate <env>` — 원격이 앞서 있을 때만 갱신하는 PM2 cron 앱. 끄려면 `--off`).
 
 설치 후 사람이 채울 것 두 가지 — 끝에 안내가 나온다:
 1. `llm/.env` 의 `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_DEFAULT_MODEL` (또는 설치 시 `--llm-base-url …` 로 전달)
