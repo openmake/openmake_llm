@@ -1,5 +1,6 @@
-import { isBuiltinAddonEnabled } from '../addon-host/builtin-registry';
-import { loadPackSkills } from '../addon-host/pack-skills';
+import * as fs from 'fs';
+import * as path from 'path';
+import { builtinAddonDir, isBuiltinAddonEnabled } from '../addon-host/builtin-registry';
 import { getIndustryAgentsData, type Agent, type AgentCategory, type IndustryAgentsData } from './types';
 import keywordData from '../config/data/keyword-data.json';
 import { IDF_NORMALIZATION } from '../config/runtime-limits';
@@ -14,11 +15,14 @@ interface AgentWithCategory extends Agent {
 
 const industryAgentsData: IndustryAgentsData = getIndustryAgentsData();
 
-/** 에이전트 id → 산업 팩 전문 스킬 본문 (카테고리 어휘 추출용). 팩이 꺼져 있으면 비어 있다. */
-const RICH_SKILL_CONTENT: Record<string, string> = Object.fromEntries(
-    (isBuiltinAddonEnabled('industry-pack') ? loadPackSkills('industry-pack') : [])
-        .flatMap(skill => (skill.assignToAgent ? [[skill.assignToAgent, skill.content]] : [])),
-);
+/**
+ * 에이전트 id → 카테고리 어휘 추출용 텍스트 (산업 팩 `data/routing-vocabulary.json`). 팩이 꺼져 있으면 비어 있다.
+ * 스킬 본문과 분리돼 있다 — 본문을 사람이 쓴 md 로 바꿀 때(2026-09-19) 본문에서 어휘를 뽑으면 라우팅 골든셋이
+ * 120 → 116 으로 내려가, 종전 어휘를 그대로 고정했다. 라우팅 어휘 조정은 이 파일을 고치고 eval:routing 으로 확인한다.
+ */
+const ROUTING_VOCABULARY_TEXT: Record<string, string> = isBuiltinAddonEnabled('industry-pack')
+    ? JSON.parse(fs.readFileSync(path.join(builtinAddonDir('industry-pack'), 'data', 'routing-vocabulary.json'), 'utf-8')) as Record<string, string>
+    : {};
 
 const ALL_AGENTS: AgentWithCategory[] = Object.entries(industryAgentsData).flatMap(
     ([categoryId, category]: [string, AgentCategory]) =>
@@ -39,20 +43,6 @@ function normalizeKeyword(value: string): string {
     }
 
     return /[A-Za-z]/.test(cleaned) ? cleaned.toLowerCase() : cleaned;
-}
-
-function extractSection(markdown: string, heading: string): string {
-    const startMarker = `## ${heading}`;
-    const start = markdown.indexOf(startMarker);
-    if (start < 0) {
-        return '';
-    }
-
-    const contentStart = start + startMarker.length;
-    const remainder = markdown.slice(contentStart);
-    const nextHeadingIndex = remainder.search(/\n##\s+/);
-
-    return nextHeadingIndex >= 0 ? remainder.slice(0, nextHeadingIndex) : remainder;
 }
 
 function extractKeywordsFromText(text: string): Set<string> {
@@ -81,14 +71,7 @@ function buildCategoryVocabulary(): Map<string, Set<string>> {
     for (const agent of ALL_AGENTS) {
         const categoryId = agent.category;
         const existing = categoryVocabulary.get(categoryId) ?? new Set<string>();
-        const richContent = RICH_SKILL_CONTENT[agent.id] ?? '';
-
-        const extractedBlocks = [
-            extractSection(richContent, '핵심 방법론'),
-            extractSection(richContent, '주요 프레임워크/도구'),
-            extractSection(richContent, '자주 발생하는 난제와 대응'),
-            extractSection(richContent, '전문 표준과 품질 기준'),
-        ].join('\n');
+        const extractedBlocks = ROUTING_VOCABULARY_TEXT[agent.id] ?? '';
 
         const tokens = extractKeywordsFromText(extractedBlocks);
         for (const token of tokens) {

@@ -1,7 +1,7 @@
 {
   "id": "industry-pack",
   "name": "OpenMake Industry Pack",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "18개 산업 분야 100 전문 에이전트와 분야별 전문 스킬",
   "requires": {
     "openmake": ">=1.0.0 <2.0.0"
