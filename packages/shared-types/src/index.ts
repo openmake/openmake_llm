@@ -123,8 +123,9 @@ export interface WsChatRequest {
   /** 첨부 텍스트 파일 — 백엔드가 fileContext 채널로 LLM 에 주입 */
   files?: WsAttachedFile[];
   webSearch?: boolean;
+  /** 구 필드(modes 도입 2026-09-19 전) — 새 클라이언트는 modes 를 쓴다. 구 클라이언트(iOS) 호환용으로 서버가 읽는다 */
   deepResearchMode?: boolean;
-  /** 멀티 에이전트 토론 모드 */
+  /** 구 필드(modes 도입 2026-09-19 전) — 새 클라이언트는 modes 를 쓴다. 구 클라이언트(iOS) 호환용으로 서버가 읽는다 */
   discussionMode?: boolean;
   /** Sequential Thinking 모드 (UI thinkingEnabled 토글) */
   thinkingMode?: boolean;
@@ -135,6 +136,8 @@ export interface WsChatRequest {
   /** 응답 스타일 — 백엔드 chat/style.ts 가 system prompt 앞에 style guard 를 prepend (concise=간결, verbose=상세) */
   style?: "concise" | "default" | "verbose";
   enabledTools?: Record<string, boolean>;
+  /** 켜진 채팅 모드(add-on) — add-on id → true. 서버가 일반 채팅 대신 그 모드로 턴을 처리한다 */
+  modes?: Record<string, boolean>;
   /** 통합(add-on)별 외부 컨텍스트 참조 — add-on id → 참조. 컴포저의 컨텍스트 선택기가 보낸다(백엔드가 LLM 전용 채널에 접두 주입) */
   contextRefs?: Record<string, { id: string; title: string }>;
   /** 구 필드(contextRefs 도입 2026-09-19 전) — 새 클라이언트는 보내지 않는다. 구 클라이언트 호환용으로만 서버가 읽는다 */

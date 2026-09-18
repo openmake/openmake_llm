@@ -33,6 +33,8 @@ import { translateCatalogDescriptions } from './catalog-translator';
 export { buildSkillDiscoveryPattern } from './catalog-snapshot';
 import { scanForExtensionManifests, scanForMarketplaceManifests, resolveExtensionRoot, detectUnsupportedComponents, type ManifestCandidate } from './repo-scanner';
 import { validateExtensionManifest, parseMarketplaceFile } from './extension-manifest-validator';
+import { ADDON_MANIFEST_FILENAME, validateInstallableAddonManifest } from '../../addon-host/manifest';
+import { APP_VERSION } from '../../config/constants';
 import {
     findExtensionManifestPath,
     discoverSkillPaths,
@@ -222,6 +224,14 @@ export class ExtensionIngestService {
         const manifest = validation.manifest;
         const root = synthesized ? rootOfSynthesizedPath(candidate.path) : resolveExtensionRoot(candidate.path);
         if (synthesized) warnings.push('MANIFEST_SYNTHESIZED: plugin.json 이 없어 마켓플레이스 엔트리 메타로 설치');
+
+        // (4-1) 번들이 Add-on 매니페스트를 동봉했으면 내장 add-on 과 같은 계약으로 검증한다 (없으면 종전 그대로)
+        const addonManifestPath = `${root}${ADDON_MANIFEST_FILENAME}`; // root 는 '' 또는 '/' 로 끝난다
+        if (tree.entries.some(e => e.path === addonManifestPath)) {
+            const addonRaw = await fetcher.fetchFile(owner, repo, sha, addonManifestPath, EXTENSION_INGEST.manifestMaxBytes);
+            const addonErrors = validateInstallableAddonManifest(addonRaw, APP_VERSION);
+            if (addonErrors.length > 0) throw new Error(`INVALID_ADDON_MANIFEST: ${addonErrors.join('; ')}`);
+        }
 
         // (5) dedupe + 상한 + 동명 충돌
         const sourceHash = 'sha256:' + crypto.createHash('sha256')

@@ -4,10 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowUp,
-  MessagesSquare,
   Sparkles,
   Square,
-  Telescope,
   Brain,
   SlidersHorizontal,
   Check,
@@ -20,7 +18,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { AttachedFileUI } from "@/lib/use-chat-socket";
-import { useAppStore, INTERCEPT_MODE_KEYS } from "@/lib/store";
+import { useAppStore } from "@/lib/store";
 import { useEnabledWebAddons } from "@/addons/registry";
 import { useChatSocket } from "@/lib/use-chat-socket";
 import { fetchModels } from "@/lib/models-api";
@@ -134,7 +132,9 @@ export function Composer() {
   /** 팝오버가 열린 컨텍스트 선택기의 add-on id */
   const [openContextPicker, setOpenContextPicker] = useState<string | null>(null);
   // 꺼진 add-on 의 진입점은 숨긴다 — 라우트가 없는 배포에서 선택기를 열면 404 가 "미설치" 설치 안내로 보인다.
-  const contextAddons = useEnabledWebAddons().filter((a) => a.composerContext);
+  const enabledAddons = useEnabledWebAddons();
+  const contextAddons = enabledAddons.filter((a) => a.composerContext);
+  const modeAddons = enabledAddons.filter((a) => a.chatMode);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -209,8 +209,8 @@ export function Composer() {
   const {
     isGenerating,
     thinkingEnabled,
-    discussionMode,
-    deepResearchMode,
+    activeChatMode,
+    toggleChatMode,
     agentTaskMode,
     agentApprovalMode,
     agentLocalExecutor,
@@ -381,7 +381,7 @@ export function Composer() {
         agentLocalExecutor ? agentLocalFolderRel : null,
       );
     } else if (
-      !discussionMode && !deepResearchMode &&
+      !activeChatMode &&
       files.length > 0 && detectFileTaskIntent(text) && !detectPresentationChatIntent(text)
     ) {
       // 발표자료 제작 요청은 위임하지 않고 채팅 유지 — presentation-designer 스킬
@@ -401,7 +401,7 @@ export function Composer() {
         delegationApproval,
       );
     } else if (
-      !discussionMode && !deepResearchMode &&
+      !activeChatMode &&
       files.length === 0 && images.length === 0 && detectReportTaskIntent(text)
     ) {
       // 조사형 보고서 자동 위임(P1 Phase 2) — "X를 조사해서 보고서로" 류 self-contained
@@ -413,7 +413,7 @@ export function Composer() {
     } else {
       // add-on 컨텍스트 참조 — 접두 주입은 백엔드(그 add-on 의 채팅 통합)가 한다.
       // 가로채기 모드(토론/딥리서치)는 도구를 우회하므로 미전송 — 칩은 흐림 표시로 안내.
-      const contextApplies = !discussionMode && !deepResearchMode;
+      const contextApplies = !activeChatMode;
       sendChat(
         text.trim(),
         images.length ? images.map((i) => i.dataUrl) : undefined,
@@ -450,13 +450,22 @@ export function Composer() {
     return () => window.removeEventListener("keydown", onKey);
   }, [modeSheetOpen]);
 
+  // 토글 = Base 토글 + 켜진 add-on 의 채팅 모드. 모드는 가로채기(intercept) — 백엔드가 전용 파이프라인을 타며
+  // 일반 도구·아티팩트를 무시한다(앰버 신호). 자리는 order 로 정한다(모드가 Base 토글 사이에 끼어든다).
   const TOGGLES = [
-    { key: "discussionMode" as const, on: discussionMode, icon: MessagesSquare, label: t("toggle.discussion") },
-    { key: "thinkingEnabled" as const, on: thinkingEnabled, icon: Brain, label: t("toggle.thinking") },
-    { key: "answerVerification" as const, on: answerVerification, icon: ShieldCheck, label: t("toggle.verification") },
-    { key: "deepResearchMode" as const, on: deepResearchMode, icon: Telescope, label: t("toggle.deepResearch") },
-    { key: "agentTaskMode" as const, on: agentTaskMode, icon: Sparkles, label: t("toggle.agent") },
-  ];
+    { key: "thinkingEnabled", on: thinkingEnabled, icon: Brain, label: t("toggle.thinking"), order: 20, intercept: false, flip: () => toggle("thinkingEnabled") },
+    { key: "answerVerification", on: answerVerification, icon: ShieldCheck, label: t("toggle.verification"), order: 30, intercept: false, flip: () => toggle("answerVerification") },
+    { key: "agentTaskMode", on: agentTaskMode, icon: Sparkles, label: t("toggle.agent"), order: 50, intercept: false, flip: () => toggle("agentTaskMode") },
+    ...modeAddons.map((addon) => ({
+      key: `mode:${addon.id}`,
+      on: activeChatMode === addon.id,
+      icon: addon.chatMode!.Icon,
+      label: t(addon.chatMode!.labelKey),
+      order: addon.chatMode!.toggleOrder,
+      intercept: true,
+      flip: () => toggleChatMode(addon.id),
+    })),
+  ].sort((x, y) => x.order - y.order);
   const activeModeCount = TOGGLES.filter((m) => m.on).length;
 
   // 승인 3모드 세그먼트 — all=Manual, high-risk=Auto, none=Skip (에이전트 작업 위임 시 노출).
@@ -469,8 +478,7 @@ export function Composer() {
   // 가로채기(bypass) 모드: 켜지면 백엔드가 전용 파이프라인을 타며 일반 도구·아티팩트를 무시.
   // (2026-08-27: 웹·이미지·아티팩트·구조화 답변 토글은 제거 — 모델이 질의에 따라 자동으로
   //  web_search·generate_image·<artifact>·구조 가드를 쓰므로 수동 토글이 이중이었다.)
-  const INTERCEPT_KEYS = new Set<string>(INTERCEPT_MODE_KEYS);
-  const interceptActive = TOGGLES.some((m) => m.on && INTERCEPT_KEYS.has(m.key));
+  const interceptActive = TOGGLES.some((m) => m.on && m.intercept);
 
   // 외부 provider 모델 판별 — 모델 목록의 provider 필드가 SoT('local-llm' 이 로컬).
   // 목록 미로드 시 fullId prefix('provider:model', local-llm 제외)로 폴백 판별.
@@ -482,7 +490,7 @@ export function Composer() {
   })();
   // 토론·딥 리서치도 선택한 외부 모델로 실행된다(백엔드 mode-external-client). 지정 모델로
   // 돈다는 사실만 안내한다 — 로컬 강제 아님.
-  const externalModeNotice = selectedModelIsExternal && (discussionMode || deepResearchMode);
+  const externalModeNotice = selectedModelIsExternal && !!activeChatMode;
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
@@ -530,13 +538,13 @@ export function Composer() {
                 {t("modeHeading")}
               </p>
               {TOGGLES.map((m) => {
-                const isIntercept = INTERCEPT_KEYS.has(m.key);
+                const isIntercept = m.intercept;
                 const onColor = isIntercept ? "text-warn" : "text-accent";
                 return (
                   <button
                     key={m.key}
                     type="button"
-                    onClick={() => toggle(m.key)}
+                    onClick={m.flip}
                     className={cn(
                       "flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-sm transition",
                       m.on ? onColor : "text-fg-2 hover:bg-surface-3",
@@ -621,12 +629,12 @@ export function Composer() {
 
           {TOGGLES.filter((m) => m.on).map((m) => {
             // 가로채기 모드 칩은 앰버색 — 도구·아티팩트를 무시한다는 시각 신호.
-            const isIntercept = INTERCEPT_KEYS.has(m.key);
+            const isIntercept = m.intercept;
             return (
               <button
                 key={m.key}
                 type="button"
-                onClick={() => toggle(m.key)}
+                onClick={m.flip}
                 title={t("toggleOff", { label: m.label })}
                 className={cn(
                   "inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition hover:opacity-80",

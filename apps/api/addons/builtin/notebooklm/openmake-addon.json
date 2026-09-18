@@ -7,7 +7,18 @@
     "openmake": ">=1.0.0 <2.0.0"
   },
   "scope": "system",
+  "kind": "integration",
+  "order": 40,
   "components": {
     "mcpCatalog": "./mcp-catalog.json"
+  },
+  "entry": {
+    "chatIntegration": "chat-integration#notebooklmChatIntegration",
+    "routes": [
+      {
+        "mountPath": "/api/mcp",
+        "module": "routes#notebooklmRouter"
+      }
+    ]
   }
 }

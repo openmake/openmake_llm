@@ -61,7 +61,7 @@ describe('buildExternalToolPlan — create_plan 첫 턴 tool_choice 강제', () 
     const base = {
         allowedTools: [createPlanTool],
         toolCalling: true,
-        orchestration: { discussion: false, taskDelegate: false },
+        orchestration: { contributedTools: [], taskDelegate: false },
     };
     const makeReq = (message: string) => ({ message } as ChatMessageRequest);
 
@@ -89,7 +89,7 @@ describe('buildExternalSystemPrompt — spawn 가이드 주입', () => {
         req: baseReq,
         resolved,
         ctx: {} as never,
-        orchestration: { discussion: false, taskDelegate: false },
+        orchestration: { contributedTools: [], taskDelegate: false },
         wantsSpawn,
     });
 
@@ -106,7 +106,7 @@ describe('buildExternalToolPlan — spawn_agents 의도 게이팅 (프롬프트 
     const base = {
         allowedTools: [] as ToolDefinition[],
         toolCalling: true,
-        orchestration: { discussion: false, taskDelegate: false },
+        orchestration: { contributedTools: [], taskDelegate: false },
     };
     const names = (msg: string) => buildExternalToolPlan({ ...base, req: { message: msg } as ChatMessageRequest })
         .tools.map((t) => t.function.name);

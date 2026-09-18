@@ -315,8 +315,6 @@ export function useCompareLane(lane: CompareLaneId): CompareLane {
         anonSessionId: getAnonSessionId(),
         images: [],
         files: [],
-        deepResearchMode: false,
-        discussionMode: false,
         thinkingMode: opts?.thinking === true,
         // 추론 강도 — 토글이 켜진 경우에만 의미(서버가 thinkingMode=false 면 무시). 메인 훅과 동일.
         ...(opts?.thinking ? { thinkingLevel: s.thinkingLevel } : {}),

@@ -50,11 +50,32 @@ export interface ApiKeyScopePresetExtension {
   scopes: readonly string[];
 }
 
+/**
+ * 채팅 모드 — 켜면 백엔드가 일반 채팅 대신 그 모드의 전용 파이프라인으로 턴을 처리한다(일반 도구·아티팩트 미적용).
+ * 모드끼리, 그리고 에이전트 작업 모드와 상호배타다. 요청에는 `modes[<addonId>] = true` 로 실린다.
+ */
+export interface ChatModeExtension {
+  Icon: ComponentType<{ className?: string }>;
+  /** `composer` 네임스페이스의 토글 라벨 키 */
+  labelKey: string;
+  /** 토글 시트·칩에서의 자리 — Base 토글(생각 20 · 답변 검증 30 · 에이전트 50) 사이에 끼운다 */
+  toggleOrder: number;
+  /** 분석 이벤트의 chat_mode 값 */
+  analyticsName: string;
+  /** 진행 이벤트의 WS type (서버의 그 모드가 선언한 이름과 같다) */
+  progressEventType: string;
+  /** WS 진행 이벤트의 progress → 배너에 넘길 값 (범위 보정 등) */
+  toProgress(raw: Record<string, unknown>): unknown;
+  /** 생성 중 메시지 목록 아래에 뜨는 진행 배너 */
+  ProgressBanner: ComponentType<{ progress: unknown }>;
+}
+
 export interface WebAddon {
   /** 서버 add-on id (`GET /api/addons`) */
   id: string;
   messageBlocks?: readonly MessageBlockExtension[];
   composerContext?: ComposerContextExtension;
+  chatMode?: ChatModeExtension;
   settingsGroups?: readonly SettingsGroupExtension[];
   apiKeyScopePresets?: readonly ApiKeyScopePresetExtension[];
 }

@@ -76,24 +76,10 @@ export interface PendingApproval {
   preview?: string;
 }
 
-/** 딥리서치 진행상황 (백엔드 research_progress 이벤트 — DeepResearch ResearchProgress 대응). */
-interface ResearchProgressInfo {
-  currentStep: string;
-  progress: number;
-  message: string;
-  currentLoop: number;
-  totalLoops: number;
-}
-
-/** 토론 모드 진행상황 (백엔드 discussion_progress 이벤트 — DiscussionProgress 대응). */
-interface DiscussionProgressInfo {
-  phase: "selecting" | "discussing" | "reviewing" | "synthesizing" | "complete";
-  currentAgent?: string;
-  agentEmoji?: string;
-  message: string;
-  progress: number;
-  roundNumber?: number;
-  totalRounds?: number;
+/** 채팅 모드(add-on) 진행상황 — 모양은 그 모드의 웹 add-on 이 정한다(addons/types.ts ChatModeExtension.toProgress). */
+interface ModeProgressInfo {
+  modeId: string;
+  progress: unknown;
 }
 
 /** 오케스트레이터 작업 1건 (백엔드 orchestrator_plan/orchestrator_task 이벤트의 task 대응). */
@@ -186,10 +172,8 @@ interface AppState {
   activeUserAgent: { id: string; name: string; icon?: string | null } | null;
   /** add-on 컨텍스트 참조(컴포저 선택기, add-on id → 참조) — 같은 대화 내에서만 유지. 대화 전환/새 대화 시 리셋(clearChat + 로드 지점) — 다른 대화로 누수되면 무관한 질문까지 그 add-on 의 도구로 유도된다. */
   contextRefs: Record<string, { id: string; title: string }>;
-  /** 딥리서치 진행상황 (ws research_progress) — 스트리밍 중 상태 배너로 표시, done 시 clear. */
-  researchProgress: ResearchProgressInfo | null;
-  /** 토론 모드 진행상황 (ws discussion_progress) — 스트리밍 중 배너로 표시, done 시 clear. */
-  discussionProgress: DiscussionProgressInfo | null;
+  /** 실행 중인 채팅 모드의 진행상황 — 생성 중에만 값이 있다 */
+  modeProgress: ModeProgressInfo | null;
   /** 오케스트레이터 진행상황 (ws system_event orchestrator_*) — 스트리밍 중 배너로 표시, done/skipped 시 clear. */
   orchestratorProgress: OrchestratorProgressInfo | null;
   /** 현재 실행 중인 MCP/내장 도구명 (ws mcp_tool_start→표시, mcp_tool_result/done→clear). */
@@ -211,8 +195,8 @@ interface AppState {
   thinkingLevel: ThinkingLevel;
   /** 답변 검증 — 켜면 done 이후 judge 모델이 1회 점검(비용 발생). 기본 off. */
   answerVerification: boolean;
-  discussionMode: boolean;
-  deepResearchMode: boolean;
+  /** 켜진 채팅 모드의 add-on id — 모드끼리·에이전트 작업 모드와 상호배타. 요청에 modes[<id>]=true 로 실린다 */
+  activeChatMode: string | null;
   agentTaskMode: boolean;
   /** 에이전트 작업 승인 3모드 — all=Manual(전부 승인·기본)·high-risk=Auto(고위험만)·none=Skip(전부 자동). */
   agentApprovalMode: "all" | "high-risk" | "none";
@@ -259,8 +243,9 @@ interface AppState {
   /** add-on 컨텍스트 참조 설정 — ref 가 null 이면 그 add-on 의 참조를 지운다 */
   setContextRef: (addonId: string, ref: { id: string; title: string } | null) => void;
   clearContextRefs: () => void;
-  setResearchProgress: (p: ResearchProgressInfo | null) => void;
-  setDiscussionProgress: (p: DiscussionProgressInfo | null) => void;
+  setModeProgress: (p: ModeProgressInfo | null) => void;
+  /** 채팅 모드 토글 — 켜면 다른 모드와 에이전트 작업 모드는 꺼진다 */
+  toggleChatMode: (addonId: string) => void;
   setOrchestratorProgress: (p: OrchestratorProgressInfo | null) => void;
   /** orchestrator_task 이벤트 — 같은 id 의 작업 상태를 갱신(plan 을 못 받았으면 추가). */
   updateOrchestratorTask: (task: OrchestratorTaskInfo) => void;
@@ -286,8 +271,6 @@ interface AppState {
     key:
       | "thinkingEnabled"
       | "answerVerification"
-      | "discussionMode"
-      | "deepResearchMode"
       | "agentTaskMode",
   ) => void;
   setSelectedModel: (m: string) => void;
@@ -313,18 +296,7 @@ const THINKING_LEVEL_ORDER: ThinkingLevel[] = ["low", "medium", "high"];
  * 동시 활성 시 UI 에는 켜진 것처럼 보이지만 실제로는 안 먹는 착시를 제거하기 위함.
  */
 const PRIMARY_MODE_KEYS = [
-  "discussionMode",
-  "deepResearchMode",
   "agentTaskMode",
-] as const;
-
-/**
- * 가로채기(bypass) 모드 — 켜지면 백엔드가 전용 파이프라인을 타며 일반 도구(웹검색·분석)·
- * 아티팩트를 무시한다. 따라서 UI 에서 앰버 신호 + 웹/아티팩트 modifier "(미적용)" 표시에 사용.
- */
-export const INTERCEPT_MODE_KEYS = [
-  "discussionMode",
-  "deepResearchMode",
 ] as const;
 
 /** SSR(서버 평가) 시 localStorage 부재로 인한 ReferenceError 방지 — 클라에서만 실제 저장소 사용. */
@@ -345,8 +317,7 @@ export const useAppStore = create<AppState>()(
   activeSkills: [],
   activeUserAgent: null,
   contextRefs: {},
-  researchProgress: null,
-  discussionProgress: null,
+  modeProgress: null,
   orchestratorProgress: null,
   activeTool: null,
   resendRequest: null,
@@ -358,8 +329,7 @@ export const useAppStore = create<AppState>()(
   thinkingEnabled: true, // 기본 ON — tool calling 중 추론(thinking) 과정을 화면에 노출
   thinkingLevel: "medium",
   answerVerification: false,
-  discussionMode: false,
-  deepResearchMode: false,
+  activeChatMode: null,
   agentTaskMode: false,
   agentApprovalMode: "all",
   agentLocalExecutor: false,
@@ -501,8 +471,9 @@ export const useAppStore = create<AppState>()(
     return { contextRefs: next };
   }),
   clearContextRefs: () => set({ contextRefs: {} }),
-  setResearchProgress: (p) => set({ researchProgress: p }),
-  setDiscussionProgress: (p) => set({ discussionProgress: p }),
+  setModeProgress: (p) => set({ modeProgress: p }),
+  toggleChatMode: (addonId) =>
+    set((s) => (s.activeChatMode === addonId ? { activeChatMode: null } : { activeChatMode: addonId, agentTaskMode: false })),
   setOrchestratorProgress: (p) => set({ orchestratorProgress: p }),
   updateOrchestratorTask: (task) =>
     set((s) => {
@@ -525,8 +496,7 @@ export const useAppStore = create<AppState>()(
       activeAgent: null,
       activeSkills: [],
       contextRefs: {},
-      researchProgress: null,
-      discussionProgress: null,
+      modeProgress: null,
       orchestratorProgress: null,
       activeTool: null,
       resendRequest: null,
@@ -581,7 +551,8 @@ export const useAppStore = create<AppState>()(
           if (k !== key) cleared[k] = false;
         }
         cleared[key] = true;
-        return cleared as Partial<AppState>;
+        // 채팅 모드(add-on)와도 상호배타 — 백엔드는 primary 모드 하나만 실행한다
+        return { ...cleared, activeChatMode: null } as Partial<AppState>;
       }
       return { [key]: next } as Partial<AppState>;
     }),

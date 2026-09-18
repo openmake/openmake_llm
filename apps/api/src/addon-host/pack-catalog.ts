@@ -10,7 +10,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
-import { BUILTIN_ADDON_IDS, builtinAddonDir, isBuiltinAddonEnabled, type BuiltinAddonId } from './builtin-registry';
+import { builtinAddonIds, builtinAddonDir, isBuiltinAddonEnabled } from './builtin-registry';
 import { addonManifestSchema } from './manifest';
 
 const catalogTemplateSchema = z.object({
@@ -35,7 +35,7 @@ export type PackCatalogTemplate = z.infer<typeof catalogTemplateSchema>;
 const cache = new Map<string, PackCatalogTemplate[]>();
 
 /** add-on 의 카탈로그 템플릿 — 매니페스트에 `components.mcpCatalog` 가 없으면 빈 배열. 형식이 어긋나면 throw. */
-export function loadPackCatalog(id: BuiltinAddonId): PackCatalogTemplate[] {
+export function loadPackCatalog(id: string): PackCatalogTemplate[] {
     const cached = cache.get(id);
     if (cached) return cached;
     const dir = builtinAddonDir(id);
@@ -48,14 +48,14 @@ export function loadPackCatalog(id: BuiltinAddonId): PackCatalogTemplate[] {
 
 /** 꺼진 add-on 이 소유한 카탈로그 템플릿 id — 카탈로그 조회에서 제외한다. */
 export function disabledCatalogTemplateIds(): string[] {
-    return BUILTIN_ADDON_IDS.filter(id => !isBuiltinAddonEnabled(id)).flatMap(id => loadPackCatalog(id).map(t => t.id));
+    return builtinAddonIds().filter(id => !isBuiltinAddonEnabled(id)).flatMap(id => loadPackCatalog(id).map(t => t.id));
 }
 
 interface PackCatalogStore {
     installCatalogTemplateOnce(addonId: string, template: PackCatalogTemplate): Promise<boolean>;
 }
 
-export async function installPackCatalog(id: BuiltinAddonId, store: PackCatalogStore): Promise<{ installed: string[]; failed: string[] }> {
+export async function installPackCatalog(id: string, store: PackCatalogStore): Promise<{ installed: string[]; failed: string[] }> {
     const installed: string[] = [];
     const failed: string[] = [];
     for (const template of loadPackCatalog(id)) {

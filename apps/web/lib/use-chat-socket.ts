@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { WEB_CHAT_MODES } from "@/addons/registry";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocale, useTranslations } from "next-intl";
 import type { WsChatRequest, WsServerEvent, WsAttachedFile, WsStreamEnvelope } from "@openmake/shared-types";
@@ -70,7 +71,7 @@ async function uploadFileInChunks(file: File): Promise<string> {
 /**
  * 채팅 WebSocket hook — 백엔드 sockets/ws-chat-handler.ts 프로토콜.
  *
- * 송신: {type:'chat', message, model, history, sessionId, images, webSearch, deepResearchMode, enabledTools}
+ * 송신: {type:'chat', message, model, history, sessionId, images, webSearch, modes, enabledTools}
  * 수신: {type:'token'|'done'|'error'|'aborted'|'session_created'|'init'|...}
  *
  * URL: dev 는 NEXT_PUBLIC_WS_URL(ws://localhost:52416, same-site 쿠키 전송),
@@ -147,8 +148,7 @@ export function useChatSocket() {
     setCurrentSessionId,
     setActiveAgent,
     setActiveSkills,
-    setResearchProgress,
-    setDiscussionProgress,
+    setModeProgress,
     setOrchestratorProgress,
     updateOrchestratorTask,
     setActiveTool,
@@ -318,6 +318,14 @@ export function useChatSocket() {
         if (!accepted.apply) return; // 이미 받은 이벤트(재생 중복)
         streamCursorRef.current = accepted.cursor;
       }
+      // 채팅 모드(add-on)의 진행 이벤트 — 이벤트 이름과 값의 모양은 그 모드의 웹 add-on 이 정한다.
+      {
+        const progressMode = WEB_CHAT_MODES.find((m) => m.progressEventType === data.type);
+        if (progressMode) {
+          setModeProgress({ modeId: progressMode.id, progress: progressMode.toProgress((data as { progress?: Record<string, unknown> }).progress ?? {}) });
+          return;
+        }
+      }
       switch (data.type) {
         case "token":
           if (data.token) appendToken(data.token);
@@ -350,8 +358,7 @@ export function useChatSocket() {
           // cleanedContent 가 있으면 누적 본문을 placeholder 치환본으로 reset(아티팩트 이중 렌더 방지).
           if (data.messageId) finalizeLastAssistant(data.messageId, data.cleanedContent);
           setStreaming(false);
-          setResearchProgress(null);
-          setDiscussionProgress(null);
+          setModeProgress(null);
           setOrchestratorProgress(null);
           setActiveTool(null);
           flushPendingMcpResources();
@@ -359,8 +366,7 @@ export function useChatSocket() {
           break;
         case "aborted":
           setStreaming(false);
-          setResearchProgress(null);
-          setDiscussionProgress(null);
+          setModeProgress(null);
           setOrchestratorProgress(null);
           setActiveTool(null);
           flushPendingMcpResources();
@@ -382,37 +388,10 @@ export function useChatSocket() {
             notice: true,
             content: tRef.current("error", { message: errMsg }),
           });
-          setResearchProgress(null);
-          setDiscussionProgress(null);
+          setModeProgress(null);
           setOrchestratorProgress(null);
           setActiveTool(null);
           runDeferredAfterStream();
-          break;
-        }
-        case "research_progress": {
-          // 딥리서치 진행을 채팅 상태 배너로 라이브 표시(스트리밍 시작 전/중).
-          const p = data.progress ?? {};
-          setResearchProgress({
-            currentStep: p.currentStep ?? "",
-            progress: Math.max(0, Math.min(100, Math.round(p.progress ?? 0))),
-            message: p.message ?? "",
-            currentLoop: p.currentLoop ?? 0,
-            totalLoops: p.totalLoops ?? 0,
-          });
-          break;
-        }
-        case "discussion_progress": {
-          // 토론 모드 진행을 배너로 라이브 표시(research_progress 와 대칭).
-          const p = data.progress;
-          setDiscussionProgress({
-            phase: p.phase,
-            currentAgent: p.currentAgent,
-            agentEmoji: p.agentEmoji,
-            message: p.message ?? "",
-            progress: Math.max(0, Math.min(100, Math.round(p.progress ?? 0))),
-            roundNumber: p.roundNumber,
-            totalRounds: p.totalRounds,
-          });
           break;
         }
         case "mcp_tool_start":
@@ -653,8 +632,8 @@ export function useChatSocket() {
         images: images ?? [],
         // rawFile(브라우저 File)은 WS 직렬화 불가 — 계약 필드만 전송
         files: (files ?? []).map(toWireFile),
-        deepResearchMode: s.deepResearchMode,
-        discussionMode: s.discussionMode,
+        // 켜진 채팅 모드(add-on) — 서버가 그 모드로 턴을 처리한다
+        ...(s.activeChatMode ? { modes: { [s.activeChatMode]: true } } : {}),
         thinkingMode: s.thinkingEnabled,
         // 추론 강도 — 토글이 켜진 경우에만 의미(서버가 thinkingMode=false 면 무시).
         ...(s.thinkingEnabled ? { thinkingLevel: s.thinkingLevel } : {}),
@@ -674,20 +653,15 @@ export function useChatSocket() {
 
       // GA4 핵심 인게이지먼트 — 방문자의 채팅 사용을 모드/모델 차원으로 계측(PII 없음).
       gaEvent(GA_EVENTS.chatMessageSent, {
-        chat_mode: s.deepResearchMode
-          ? "deep_research"
-          : s.discussionMode
-            ? "discussion"
-            : s.thinkingEnabled
-              ? "thinking"
-              : "default",
+        chat_mode: WEB_CHAT_MODES.find((m) => m.id === s.activeChatMode)?.analyticsName
+          ?? (s.thinkingEnabled ? "thinking" : "default"),
         model_id: s.selectedModel,
         with_attachment: hasFiles || (images?.length ?? 0) > 0 ? "yes" : "no",
       });
 
       // 가로채기(bypass) 모드가 켜져 있으면 도구·아티팩트가 이번 응답에 적용되지 않으므로,
       // 스트리밍 직전에 표시 전용 안내를 삽입한다(notice: true → history payload 제외).
-      if (s.discussionMode || s.deepResearchMode) {
+      if (s.activeChatMode) {
         appendMessage({ role: "system", content: tRef.current("interceptNotice"), notice: true });
       }
       return true;

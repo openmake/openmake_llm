@@ -10,21 +10,19 @@
  *
  * @module addon-host
  */
-import * as fs from 'fs';
-import * as path from 'path';
 import { createLogger } from '../utils/logger';
 import { APP_VERSION } from '../config/constants';
-import { addonManifestSchema, satisfiesOpenmakeRange } from './manifest';
+import { satisfiesOpenmakeRange } from './manifest';
 import { installPackCatalog } from './pack-catalog';
 import { installPackSkills } from './pack-skills';
 import {
-    BUILTIN_ADDON_IDS, BUILTIN_ADDON_SKILL_SOURCE_PATH, builtinAddonDir, isBuiltinAddonEnabled, unknownDisabledIds,
-    type BuiltinAddonId,
+    builtinAddonIds, enabledBuiltinAddons, invalidBuiltinAddons, isBuiltinAddonEnabled, listBuiltinAddonDefs, unknownDisabledIds,
+    type BuiltinAddon,
 } from './builtin-registry';
 
 const logger = createLogger('AddonHost');
 
-async function installBuiltinPack(id: BuiltinAddonId): Promise<void> {
+async function installBuiltinPack(id: string): Promise<void> {
     const { getUnifiedDatabase } = await import('../data/models/unified-database');
     const { SkillRepository } = await import('../data/repositories/skill-repository');
     const { installed, failed } = await installPackSkills(id, new SkillRepository(getUnifiedDatabase().getPool()));
@@ -37,11 +35,12 @@ async function installBuiltinPack(id: BuiltinAddonId): Promise<void> {
     for (const reason of catalog.failed) logger.error(`내장 팩 '${id}' 카탈로그 설치 실패 — ${reason}`);
 }
 
-async function archiveDisabledAddonSkills(id: BuiltinAddonId): Promise<void> {
+async function archiveDisabledAddonSkills(addon: BuiltinAddon): Promise<void> {
+    const id = addon.id;
+    const sourcePathLike = addon.manifest.skillSourcePath;
+    if (!sourcePathLike) return; // 스킬을 싣지 않는 add-on (통합 기능)
     const { getUnifiedDatabase } = await import('../data/models/unified-database');
     const { SkillRepository } = await import('../data/repositories/skill-repository');
-    const sourcePathLike = BUILTIN_ADDON_SKILL_SOURCE_PATH[id];
-    if (!sourcePathLike) return; // 스킬을 싣지 않는 add-on (통합 기능)
     const archived = await new SkillRepository(getUnifiedDatabase().getPool()).archiveSystemSkillsBySourcePath(sourcePathLike);
     logger.info(`내장 팩 '${id}' 꺼짐 — 시스템 스킬 ${archived}개 보관`);
 }
@@ -51,18 +50,13 @@ async function archiveDisabledAddonSkills(id: BuiltinAddonId): Promise<void> {
  * 알아채는 방법: 부팅 로그의 `내장 팩 매니페스트` 경고, 그리고 `manifest.test.ts` 가 CI 에서 같은 검증을 한다.
  */
 function verifyBuiltinManifests(): void {
-    for (const id of BUILTIN_ADDON_IDS) {
-        if (!isBuiltinAddonEnabled(id)) continue;
-        try {
-            const manifest = addonManifestSchema.parse(JSON.parse(fs.readFileSync(path.join(builtinAddonDir(id), 'openmake-addon.json'), 'utf-8')));
-            if (!satisfiesOpenmakeRange(APP_VERSION, manifest.requires.openmake)) {
-                logger.warn(`내장 팩 매니페스트 '${id}' 호환 범위 밖: requires ${manifest.requires.openmake}, 현재 ${APP_VERSION}`);
-                continue;
-            }
-            logger.info(`내장 팩 '${id}' v${manifest.version} 활성`);
-        } catch (err) {
-            logger.warn(`내장 팩 매니페스트 '${id}' 검증 실패:`, err);
+    for (const reason of invalidBuiltinAddons()) logger.warn(`내장 add-on 매니페스트 오류 — 로드하지 않음: ${reason}`);
+    for (const addon of enabledBuiltinAddons()) {
+        if (!satisfiesOpenmakeRange(APP_VERSION, addon.manifest.requires.openmake)) {
+            logger.warn(`내장 팩 매니페스트 '${addon.id}' 호환 범위 밖: requires ${addon.manifest.requires.openmake}, 현재 ${APP_VERSION}`);
+            continue;
         }
+        logger.info(`내장 팩 '${addon.id}' v${addon.manifest.version} 활성`);
     }
 }
 
@@ -71,7 +65,7 @@ export async function startAddonHost(): Promise<void> {
 
     const unknown = unknownDisabledIds();
     if (unknown.length > 0) {
-        logger.warn(`ADDON_BUILTIN_DISABLED 에 알 수 없는 팩 id: ${unknown.join(', ')} (가능한 값: ${BUILTIN_ADDON_IDS.join(', ')})`);
+        logger.warn(`ADDON_BUILTIN_DISABLED 에 알 수 없는 팩 id: ${unknown.join(', ')} (가능한 값: ${builtinAddonIds().join(', ')})`);
     }
 
     // Base 스킬(general·author-guide) — 팩 구성과 무관하게 항상 시드
@@ -82,13 +76,12 @@ export async function startAddonHost(): Promise<void> {
         logger.error('Base 스킬 시더 로드 실패:', err);
     }
 
-    for (const id of BUILTIN_ADDON_IDS) {
-        if (!isBuiltinAddonEnabled(id)) continue;
-        installBuiltinPack(id).catch((err: unknown) => logger.error(`내장 팩 '${id}' 설치 실패:`, err));
+    for (const addon of enabledBuiltinAddons()) {
+        installBuiltinPack(addon.id).catch((err: unknown) => logger.error(`내장 팩 '${addon.id}' 설치 실패:`, err));
     }
 
-    for (const id of BUILTIN_ADDON_IDS) {
-        if (isBuiltinAddonEnabled(id)) continue;
-        archiveDisabledAddonSkills(id).catch((err: unknown) => logger.error(`내장 팩 '${id}' 스킬 보관 실패:`, err));
+    for (const addon of listBuiltinAddonDefs()) {
+        if (isBuiltinAddonEnabled(addon.id)) continue;
+        archiveDisabledAddonSkills(addon).catch((err: unknown) => logger.error(`내장 팩 '${addon.id}' 스킬 보관 실패:`, err));
     }
 }

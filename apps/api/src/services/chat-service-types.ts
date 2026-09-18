@@ -66,10 +66,8 @@ export interface ChatMessageRequest {
     fileContext?: string;
     /** 오디오·영상·이미지 첨부 원본(base64) — 멀티모달 오케스트레이터 executor 입력. doc-extractor 가 소거하기 전에 WS/REST 가 채운다 */
     mediaFiles?: MediaFileInput[];
-    /** 멀티 에이전트 토론 모드 활성화 여부 */
-    discussionMode?: boolean;
-    /** 심층 연구 모드 활성화 여부 */
-    deepResearchMode?: boolean;
+    /** 켜진 채팅 모드 — add-on id → true. 일반 채팅 대신 그 모드가 턴을 가져간다(chat-modes.ts) */
+    modes?: Record<string, boolean>;
     /** 이미지 생성 모드 — ON 이면 메시지를 프롬프트로 이미지를 직접 생성 */
     imageMode?: boolean;
     /** 이 턴의 대화 id(저장 세션) — 오케스트레이터 job 귀속용. REST/WS 모두 request-handler 가 채운다 */

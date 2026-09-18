@@ -177,8 +177,7 @@ export class ChatRequestHandler {
             webSearchContext,
             fileContext,
             mediaFiles,
-            discussionMode,
-            deepResearchMode,
+            modes,
             imageMode,
             artifactMode,
             thinkingMode,
@@ -195,8 +194,7 @@ export class ChatRequestHandler {
             abortSignal,
             onToken,
             onAgentSelected,
-            onDiscussionProgress,
-            onResearchProgress,
+            onModeProgress,
             onSkillsActivated,
             onSystemEvent,
             userLanguagePreference,
@@ -322,9 +320,7 @@ export class ChatRequestHandler {
         const chatService = new ChatService(client, providerRouter);
 
         // §9 ExecutionPlan 설정과 사용자 요청을 병합
-        // 토론 모드: 사용자 명시적 토글(discussionMode)만 반영.
-        // 프로파일의 discussion 기본값은 사용자가 직접 켜지 않는 한 적용하지 않는다.
-        const mergedDiscussionMode = discussionMode === true;
+        // 채팅 모드는 사용자 명시 토글(modes)만 반영한다 — 프로파일 기본값으로 켜지 않는다.
         // Thinking 모드 결정 우선순위:
         //   1. Fast-path 매칭 (명백한 인사·단답형) → 강제 OFF
         //   2. 사용자 명시적 토글(thinkingMode === true) → ON
@@ -353,8 +349,7 @@ export class ChatRequestHandler {
             webSearchContext,
             fileContext,
             ...(mediaFiles && mediaFiles.length > 0 ? { mediaFiles } : {}),
-            discussionMode: mergedDiscussionMode,
-            deepResearchMode,
+            modes,
             imageMode,
             artifactMode,
             thinkingMode: mergedThinkingMode,
@@ -407,8 +402,7 @@ export class ChatRequestHandler {
             chatRequest,
             onTokenWithSummary,
             onAgentSelectedCapture,
-            onDiscussionProgress,
-            onResearchProgress,
+            onModeProgress,
             plan,
             onSkillsActivated,
             onThinkingWithSummary,

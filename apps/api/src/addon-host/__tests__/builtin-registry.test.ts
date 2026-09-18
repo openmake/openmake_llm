@@ -33,8 +33,12 @@ describe('builtin-registry', () => {
     it('보관 대상 source_path 패턴은 LIKE 패턴이며 Base 스킬 경로는 걸리지 않는다', () => {
         const r = require('../builtin-registry');
         const like = (pattern: string) => new RegExp('^' + pattern.split('%').map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$');
-        for (const pattern of Object.values(r.BUILTIN_ADDON_SKILL_SOURCE_PATH)) expect(pattern).toContain('%');
-        const industry = like(r.BUILTIN_ADDON_SKILL_SOURCE_PATH['industry-pack']);
+        const patterns: Record<string, string> = Object.fromEntries(r.listBuiltinAddonDefs()
+            .filter((a: { manifest: { skillSourcePath?: string } }) => a.manifest.skillSourcePath)
+            .map((a: { id: string; manifest: { skillSourcePath: string } }) => [a.id, a.manifest.skillSourcePath]));
+        expect(Object.keys(patterns).length).toBeGreaterThan(0);
+        for (const pattern of Object.values(patterns)) expect(pattern).toContain('%');
+        const industry = like(patterns['industry-pack']);
         expect(industry.test('agents/prompts/technology/software-engineer.md')).toBe(true);
         expect(industry.test('agents/prompts/general-agent.md')).toBe(false);
         expect(industry.test('agents/prompts/skill-author-system-prompt.ts')).toBe(false);

@@ -64,7 +64,6 @@ import {
     setNodesCluster,
     agentsMonitoringRouter,
     auditRouter,
-    researchRouter,
     agentTaskRouter,
     agentTaskUploadRouter,
     localBridgeRouter,
@@ -315,7 +314,6 @@ export function setupApiRoutes(
     app.use('/api/nodes', nodesRouter);
     app.use('/api/agents-monitoring', agentsMonitoringRouter);
     app.use('/api/audit', auditRouter);
-    app.use('/api/research', researchRouter);
     app.use('/api/agent-tasks', agentTaskQueueRouter);   // /queue/stats — /:id 라우트보다 먼저
     app.use('/api/agent-tasks', agentTaskSubagentRouter); // /:id/subagents — 서브에이전트 활동(109)
     app.use('/api', agentTaskShareRouter);               // /agent-tasks/:id/share, /shared-tasks/:shareId

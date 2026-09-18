@@ -11,7 +11,7 @@
  * 프롬프트 카테고리 — 라우팅/조회 그룹.
  * 새 카테고리 추가 시 본 union을 확장한다 (DB 컬럼은 VARCHAR(32)이라 임의 값 허용).
  */
-export type PromptCategory = 'system' | 'agent' | 'discussion' | string;
+export type PromptCategory = 'system' | 'agent' | string;
 
 /**
  * 활성 프롬프트 템플릿 (prompt_templates 테이블 1행)

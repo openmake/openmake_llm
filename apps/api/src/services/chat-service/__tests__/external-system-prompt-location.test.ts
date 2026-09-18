@@ -16,7 +16,7 @@ function build(req: Partial<ChatMessageRequest>) {
         resolved,
         ctx: { resolvedLanguage: 'ko' } as never,
         integrationPromptParts: getChatTurnIntegrations().flatMap((i) => i.systemPromptParts?.({ message: '지도에서 위치 알려줘' }) ?? []),
-        orchestration: { discussion: false, taskDelegate: false },
+        orchestration: { contributedTools: [], taskDelegate: false },
     });
 }
 

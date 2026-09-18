@@ -3,10 +3,8 @@
  * 산업별 에이전트 타입 정의 (industry-agents.json — 18 카테고리 / 100 에이전트)
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
 import { createLogger } from '../utils/logger';
-import { builtinAddonDir, isBuiltinAddonEnabled } from '../addon-host/builtin-registry';
+import { loadAddonAgentCategories } from '../addon-host/pack-data';
 
 const logger = createLogger('Agents');
 
@@ -73,19 +71,12 @@ export function getIndustryAgentsData(): IndustryAgentsData {
         return cachedIndustryData;
     }
 
-    // 산업 팩이 꺼진 배포 — 산업 에이전트 없이 general 만으로 동작한다 (addon-host/builtin-registry)
-    if (!isBuiltinAddonEnabled('industry-pack')) {
-        cachedIndustryData = {};
-        return cachedIndustryData;
-    }
-
+    // 에이전트 정의는 켜진 add-on 이 싣는다(매니페스트 components.agents) — 없으면 general 만으로 동작한다
     try {
-        const jsonPath = path.join(builtinAddonDir('industry-pack'), 'industry-agents.json');
-        const jsonContent = fs.readFileSync(jsonPath, 'utf-8');
-        cachedIndustryData = JSON.parse(jsonContent) as IndustryAgentsData;
+        cachedIndustryData = loadAddonAgentCategories<AgentCategory>();
         return cachedIndustryData;
     } catch (e) {
-        logger.error('Failed to load industry-agents.json:', e);
+        logger.error('add-on 에이전트 정의 로드 실패:', e);
         return {};
     }
 }

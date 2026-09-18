@@ -5,12 +5,17 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ApiClient } from "@/lib/api-client";
+import { deepResearchAddon } from "./deep-research";
 import { discordAddon } from "./discord";
+import { discussionAddon } from "./discussion";
 import { kakaoMapAddon } from "./kakao-map";
 import { notebooklmAddon } from "./notebooklm";
 import type { WebAddon } from "./types";
 
-export const WEB_ADDONS: readonly WebAddon[] = [kakaoMapAddon, notebooklmAddon, discordAddon];
+export const WEB_ADDONS: readonly WebAddon[] = [kakaoMapAddon, notebooklmAddon, discordAddon, discussionAddon, deepResearchAddon];
+
+/** 채팅 모드를 가진 add-on — 소켓 훅처럼 React 밖에서 진행 이벤트를 매핑할 때 쓴다(꺼진 add-on 은 이벤트를 보내지 않는다) */
+export const WEB_CHAT_MODES = WEB_ADDONS.flatMap((a) => (a.chatMode ? [{ id: a.id, ...a.chatMode }] : []));
 
 /**
  * 서버에서 켜져 있는 add-on 만. 조회 실패·로딩 중에는 전부 켜진 것으로 본다(fail-open) —

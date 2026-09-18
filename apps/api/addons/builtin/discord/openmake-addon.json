@@ -7,5 +7,16 @@
     "openmake": ">=1.0.0 <2.0.0"
   },
   "scope": "system",
-  "components": {}
+  "kind": "integration",
+  "order": 60,
+  "components": {},
+  "entry": {
+    "contributions": "contributions#discordContribution",
+    "routes": [
+      {
+        "mountPath": "/api/integrations/discord",
+        "module": "routes#discordRuntimeRouter"
+      }
+    ]
+  }
 }

@@ -17,7 +17,8 @@ const logger = createLogger('OrchestrationShadow');
 
 /** 외부 스트림이 ctx 에 되돌려주는 오케스트레이션 텔레메트리. */
 export interface OrchestrationTelemetry {
-    discussionIntent: boolean;
+    /** add-on 기여 오케스트레이션 도구의 의도가 잡혔는가 — DB 컬럼은 086 스키마의 discussion_intent 에 적재한다 */
+    addonToolIntent: boolean;
     taskDelegateIntent: boolean;
     /** 병렬 위임 의도(SPAWN_INTENT_PATTERNS) — 110. 미지정=false(토글 셰도우 등). */
     spawnIntent?: boolean;
@@ -43,7 +44,8 @@ export function recordOrchestrationDispatch(params: {
     queryLength: number;
     telemetry: OrchestrationTelemetry;
     /** 같은 턴의 사용자 수동 토글 — 의도 패턴 재현율 측정용. */
-    userMode: 'discussion' | 'deep-research' | 'none';
+    /** 사용자가 켠 채팅 모드의 add-on id, 없으면 'none' */
+    userMode: string;
     /**
      * 질의 원문 — 앞 QUERY_PREVIEW_MAX_CHARS 자만 저장한다(087).
      * "노출됐는데 모델이 호출하지 않은" 반례를 봐야 도구 description 을 근거 기반으로
@@ -68,7 +70,7 @@ export function recordOrchestrationDispatch(params: {
                     requestId ?? null,
                     userId && userId !== 'guest' ? userId : null,
                     queryLength,
-                    telemetry.discussionIntent,
+                    telemetry.addonToolIntent,
                     telemetry.taskDelegateIntent,
                     telemetry.exposed,
                     telemetry.called ?? null,

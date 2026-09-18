@@ -237,21 +237,10 @@ export class DashboardServer {
             console.error('[Server] 시스템 설정 로드 실패 (env 폴백으로 계속):', err);
         }
 
-        // 외부 MCP 서버 초기화 (DB에서 설정 로드 → stdio 연결)
+        // Tool Runtime(외부 MCP 서버 연결·샌드박스 점검) 기동 — 절차는 mcp/runtime-boot.ts 한 곳
         try {
-            const { getUnifiedMCPClient } = await import('./mcp');
-            const { getUnifiedDatabase } = await import('./data/models/unified-database');
-            await getUnifiedMCPClient().initializeExternalServers(getUnifiedDatabase());
-            console.log('[Server] 외부 MCP 서버 초기화 완료');
-            // 샌드박스 자세 관측(1회) — OFF+docker 가용(격리 권장) / ON+docker 부재(fail-closed 조기 경보)
-            const { sandboxBootAdvisory, reapOrphanSandboxContainers } = await import('./mcp/sandbox-bootstrap');
-            const advisory = sandboxBootAdvisory();
-            if (advisory) console.warn(`[Server] ${advisory}`);
-            // 소유 프로세스가 죽은 MCP 샌드박스 컨테이너 정리 (라벨 pid 기준, fail-open)
-            const reap = reapOrphanSandboxContainers();
-            if (reap.reaped > 0 || reap.errors.length > 0) {
-                console.warn(`[Server] MCP 샌드박스 고아 스윕: 검사 ${reap.scanned}, 정리 ${reap.reaped}, 보류 ${reap.skipped}, 오류 ${reap.errors.length}`);
-            }
+            const { startToolRuntime } = await import('./mcp/runtime-boot');
+            await startToolRuntime();
         } catch (err) {
             console.error('[Server] 외부 MCP 서버 초기화 실패 (서비스 계속):', err);
         }
@@ -333,49 +322,8 @@ export class DashboardServer {
     }
 
     private async initLifecycleSupervisor(): Promise<void> {
-        try {
-            const [
-                { MCPLifecycleSupervisor, setLifecycleSupervisor, getLifecycleSupervisor },
-                { getUserMCPPool },
-                { McpCatalogRepository },
-                { ExternalMCPClient },
-                { getUnifiedDatabase },
-            ] = await Promise.all([
-                import('./mcp/lifecycle-supervisor'),
-                import('./mcp/user-pool'),
-                import('./data/repositories/mcp-catalog-repository'),
-                import('./mcp/external-client'),
-                import('./data/models/unified-database'),
-            ]);
-            if (getLifecycleSupervisor()) return;  // 중복 초기화 방지
-            const supervisor = new MCPLifecycleSupervisor({
-                userPool: getUserMCPPool(),
-                repo: new McpCatalogRepository(getUnifiedDatabase().getPool()),
-                clientFactory: (config) => new ExternalMCPClient({
-                    id: config.id,
-                    name: config.name ?? config.id,
-                    transport_type: config.transport_type,
-                    command: config.command ?? undefined,
-                    args: config.args as string[] | undefined,
-                    env: config.env ?? undefined,
-                    url: config.url ?? undefined,
-                    enabled: true,
-                    created_at: '',
-                    updated_at: '',
-                    catalog_template_id: config.catalog_template_id ?? undefined,
-                    sandbox_network: config.sandbox_network ?? 'full',
-                    tool_allowlist: config.tool_allowlist,
-                    user_id: config.user_id,
-                }),
-            });
-            setLifecycleSupervisor(supervisor);
-            console.log('✅ MCP Lifecycle Supervisor 초기화 완료');
-            // 재시작 후 user MCP 풀은 비어 있다 — enabled+auto_spawn 서버를 다시 띄운다.
-            // 기동을 막지 않도록 await 하지 않는다(자식 프로세스 spawn 이 수 초 걸린다).
-            void supervisor.restoreOnBoot();
-        } catch (err) {
-            console.error('⚠️  MCP Lifecycle Supervisor 초기화 실패 (graceful skip):', err);
-        }
+        const { startMcpLifecycleSupervisor } = await import('./mcp/runtime-boot');
+        await startMcpLifecycleSupervisor();
     }
 
     /**
@@ -525,48 +473,6 @@ if (require.main === module) {
         .then(async () => {
             console.log(`\n✅ OpenMake Dashboard: ${server.url}`);
             console.log('종료하려면 Ctrl+C를 누르세요\n');
-
-            // Phase 7 lifecycle supervisor 초기화 — 사용자별 MCP 프로세스 풀 관리.
-            // 부팅 시점 (DB ready 후) 에 1회 설정. setLifecycleSupervisor 가 싱글톤에 저장.
-            try {
-                const [
-                    { MCPLifecycleSupervisor, setLifecycleSupervisor },
-                    { getUserMCPPool },
-                    { McpCatalogRepository },
-                    { ExternalMCPClient },
-                    { getUnifiedDatabase },
-                ] = await Promise.all([
-                    import('./mcp/lifecycle-supervisor'),
-                    import('./mcp/user-pool'),
-                    import('./data/repositories/mcp-catalog-repository'),
-                    import('./mcp/external-client'),
-                    import('./data/models/unified-database'),
-                ]);
-                const supervisor = new MCPLifecycleSupervisor({
-                    userPool: getUserMCPPool(),
-                    repo: new McpCatalogRepository(getUnifiedDatabase().getPool()),
-                    clientFactory: (config) => new ExternalMCPClient({
-                        id: config.id,
-                        name: config.name ?? config.id,
-                        transport_type: config.transport_type,
-                        command: config.command ?? undefined,
-                        args: config.args as string[] | undefined,
-                        env: config.env ?? undefined,
-                        url: config.url ?? undefined,
-                        enabled: true,
-                        created_at: '',
-                        updated_at: '',
-                        catalog_template_id: config.catalog_template_id ?? undefined,
-                        sandbox_network: config.sandbox_network ?? 'full',
-                        tool_allowlist: config.tool_allowlist,
-                        user_id: config.user_id,
-                    }),
-                });
-                setLifecycleSupervisor(supervisor);
-                console.log('✅ MCP Lifecycle Supervisor 초기화 완료');
-            } catch (err) {
-                console.error('⚠️  MCP Lifecycle Supervisor 초기화 실패 (graceful skip):', err);
-            }
         })
         .catch((err) => {
             console.error('❌ 서버 시작 실패:', err);

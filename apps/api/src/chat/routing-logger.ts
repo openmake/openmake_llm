@@ -28,7 +28,8 @@ export interface RoutingQueryFeatures {
  * domainEngine·domainKey 와 폐기 전략 이름 2개(generate-verify·agent-loop)는 제거했다.
  */
 export interface RoutingRouteDecision {
-    strategy: 'direct' | 'discussion' | 'deep-research';
+    /** 'direct'(일반 채팅) 또는 턴을 가져간 채팅 모드의 add-on id */
+    strategy: string;
     complexityScore?: number;
     /** P1-2: 분류 신뢰도 (0.0~1.0) */
     classificationConfidence?: number;
@@ -63,10 +64,6 @@ export interface RoutingRouteDecision {
         appropriate: boolean;
         issues: string[];
     };
-    /** 토론 자동 활성화 여부 (Pro 프로파일에서 복잡도 기반으로 시스템이 결정) */
-    discussionAutoActivated?: boolean;
-    /** 토론 자동 활성화 결정 시 복잡도 점수 */
-    discussionAutoComplexity?: number;
 }
 
 export interface RoutingDecisionLog {

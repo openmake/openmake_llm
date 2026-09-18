@@ -9,7 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
-import { builtinAddonDir, type BuiltinAddonId } from './builtin-registry';
+import { builtinAddonDir } from './builtin-registry';
 import { addonManifestSchema } from './manifest';
 
 const packSkillSchema = z.object({
@@ -32,7 +32,7 @@ export type PackSkillDef = z.infer<typeof packSkillSchema>;
 const cache = new Map<string, PackSkillDef[]>();
 
 /** 팩의 스킬 정의 — 매니페스트에 `components.skills` 가 없으면 빈 배열. 형식이 어긋나면 throw. */
-export function loadPackSkills(id: BuiltinAddonId): PackSkillDef[] {
+export function loadPackSkills(id: string): PackSkillDef[] {
     const cached = cache.get(id);
     if (cached) return cached;
     const dir = builtinAddonDir(id);
@@ -52,7 +52,7 @@ interface PackSkillStore {
 }
 
 /** 팩 스킬을 시스템 스킬로 upsert + 배정. 한 건의 실패가 나머지를 막지 않는다. */
-export async function installPackSkills(id: BuiltinAddonId, store: PackSkillStore): Promise<{ installed: number; failed: string[] }> {
+export async function installPackSkills(id: string, store: PackSkillStore): Promise<{ installed: number; failed: string[] }> {
     let installed = 0;
     const failed: string[] = [];
     for (const skill of loadPackSkills(id)) {

@@ -1,0 +1,63 @@
+/**
+ * 딥리서치 청크 요약 예산 회귀 테스트.
+ *
+ * 2026-09-13 라이브: 청크 요약 호출에 출력 상한이 없어 모델이 1,400+ 토큰을 생성 →
+ * 로컬 retired-chat-model(~10.7 tok/s)에서 단일 123.5초·동시5 최대 129.7초가 걸려
+ * 청크 타임아웃(당시 120초)에 6/6 전멸 → "모든 청크 요약 실패" → 보고서 없이 종료.
+ * (같은 조건에서 상한 800 은 72.9초로 통과)
+ *
+ * 상한과 타임아웃의 관계를 고정한다 — 상한을 없애거나 타임아웃을 내리면 실패한다.
+ */
+import { RESEARCH_DEFAULTS } from '../config';
+import { RESEARCH_TIMEOUTS } from '../config';
+
+describe('청크 요약 예산', () => {
+    it('출력 상한이 설정돼 있다', () => {
+        expect(RESEARCH_DEFAULTS.CHUNK_SUMMARY_MAX_TOKENS).toBeGreaterThan(0);
+        expect(RESEARCH_DEFAULTS.CHUNK_SUMMARY_MAX_TOKENS).toBeLessThanOrEqual(1200);
+    });
+
+    it('상한 × 로컬 모델 최저 속도가 타임아웃 안에 들어간다', () => {
+        // 라이브 실측 하한 (2026-09-02 retired-chat-model 교체 후): 디코드 약 10.7 tok/s.
+        // 동시 실행 경합을 감안해 보수적으로 7 tok/s 로 계산한다.
+        const CONSERVATIVE_TOK_PER_SEC = 7;
+        const worstCaseMs = (RESEARCH_DEFAULTS.CHUNK_SUMMARY_MAX_TOKENS / CONSERVATIVE_TOK_PER_SEC) * 1000;
+        expect(worstCaseMs).toBeLessThan(RESEARCH_TIMEOUTS.SYNTHESIS_PER_CHUNK_MS);
+    });
+
+    it('병합 타임아웃은 청크 타임아웃보다 크다', () => {
+        expect(RESEARCH_TIMEOUTS.SYNTHESIS_MERGE_MS).toBeGreaterThan(RESEARCH_TIMEOUTS.SYNTHESIS_PER_CHUNK_MS);
+    });
+
+    // 같은 실패(상한 없는 출력 × 고정 타임아웃)가 분해·병합·판단 단계에도 있었다.
+    // 2026-09-13 라이브에서 "주제 분해 실패: Request was aborted"(60초)로 재현됐다.
+    it.each([
+        ['분해', RESEARCH_DEFAULTS.DECOMPOSE_MAX_TOKENS, RESEARCH_TIMEOUTS.DECOMPOSE_MS],
+        ['청크', RESEARCH_DEFAULTS.CHUNK_SUMMARY_MAX_TOKENS, RESEARCH_TIMEOUTS.SYNTHESIS_PER_CHUNK_MS],
+        ['병합', RESEARCH_DEFAULTS.MERGE_MAX_TOKENS, RESEARCH_TIMEOUTS.SYNTHESIS_MERGE_MS],
+        ['추가판단', RESEARCH_DEFAULTS.NEED_MORE_MAX_TOKENS, RESEARCH_TIMEOUTS.NEED_MORE_MS],
+    ])('%s 단계: 출력 상한 × 보수적 속도 < 타임아웃', (_name, cap, timeoutMs) => {
+        const CONSERVATIVE_TOK_PER_SEC = 7;
+        expect(cap).toBeGreaterThan(0);
+        expect((cap / CONSERVATIVE_TOK_PER_SEC) * 1000).toBeLessThan(timeoutMs);
+    });
+
+    // 분해는 **유일하게 JSON 을 파싱하는** 단계라 절단이 곧 실패다. 상한 500 으로 조였더니
+    // finish_reason=length 로 배열이 잘렸고, greedy 정규식이 중첩 searchQueries 의 닫는 `]` 까지만
+    // 잡아 파싱 실패 → 템플릿 폴백으로 엉뚱한 검색어가 나갔다 (2026-09-13 라이브).
+    describe('분해 출력 상한은 절단을 만들지 않는다', () => {
+        /** 같은 프롬프트 라이브 실측: 상한 없음 741 토큰 · 상한 1500 826 토큰(둘 다 finish=stop) */
+        const MEASURED_NATURAL_OUTPUT_TOKENS = 826;
+
+        it('실측 자연 출력 길이보다 상한이 크다', () => {
+            expect(RESEARCH_DEFAULTS.DECOMPOSE_MAX_TOKENS).toBeGreaterThan(MEASURED_NATURAL_OUTPUT_TOKENS);
+        });
+
+        it('절단된 배열은 greedy 매칭으로 복구되지 않는다 (상한이 커야 하는 이유)', () => {
+            const truncated = '[\n  {\n    "title": "보급 현황",\n    "searchQueries": ["전기버스 보급", "전기버스 대수"],\n    "importance": 9\n  },\n  {\n    "title": "정책", "searchQ';
+            const match = truncated.match(/\[[\s\S]*\]/);
+            expect(match).not.toBeNull();
+            expect(() => JSON.parse(match![0])).toThrow();
+        });
+    });
+});
