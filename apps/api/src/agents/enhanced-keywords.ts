@@ -1,4 +1,5 @@
-import { RICH_SKILL_CONTENT } from './skill-seeder';
+import { isBuiltinAddonEnabled } from '../addon-host/builtin-registry';
+import { loadPackSkills } from '../addon-host/pack-skills';
 import { getIndustryAgentsData, type Agent, type AgentCategory, type IndustryAgentsData } from './types';
 import keywordData from '../config/data/keyword-data.json';
 import { IDF_NORMALIZATION } from '../config/runtime-limits';
@@ -12,6 +13,12 @@ interface AgentWithCategory extends Agent {
 }
 
 const industryAgentsData: IndustryAgentsData = getIndustryAgentsData();
+
+/** 에이전트 id → 산업 팩 전문 스킬 본문 (카테고리 어휘 추출용). 팩이 꺼져 있으면 비어 있다. */
+const RICH_SKILL_CONTENT: Record<string, string> = Object.fromEntries(
+    (isBuiltinAddonEnabled('industry-pack') ? loadPackSkills('industry-pack') : [])
+        .flatMap(skill => (skill.assignToAgent ? [[skill.assignToAgent, skill.content]] : [])),
+);
 
 const ALL_AGENTS: AgentWithCategory[] = Object.entries(industryAgentsData).flatMap(
     ([categoryId, category]: [string, AgentCategory]) =>

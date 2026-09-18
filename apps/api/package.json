@@ -4,10 +4,12 @@
     "description": "OpenMake API Server",
     "main": "dist/server.js",
     "scripts": {
-        "build": "tsc && npm run copy-report-templates && npm run build-info",
+        "build": "tsc && npm run copy-addons && npm run copy-report-templates && npm run build-info",
         "copy-report-templates": "mkdir -p dist/report-templates && cp -R src/report-templates/. dist/report-templates/",
         "build-info": "node ../../scripts/build-info.js",
+        "copy-addons": "rm -rf dist/addons && cp -R addons dist/addons",
         "dev": "ts-node --files src/server.ts",
+        "addons:build": "ts-node --files src/addon-host/authoring/build-packs.ts",
         "start": "node dist/server.js",
         "watch": "tsc --watch",
         "test": "jest",

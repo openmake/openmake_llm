@@ -19,11 +19,7 @@ export const ADDON_CONTENT_ASSET_PATTERNS: readonly RegExp[] = [
     /category-guidelines\.json/,
     /category-knowledge\.json/,
     /agent-professional-notes\.json/,
-    /utility-skills-[ab]\.json/,
-    /\/skill-seeder'/,
-    /\/utility-skills-seeder'/,
-    /\/utility-skills-data-[ab]'/,
-    /\/skill-guidelines'/,
+    /\/pack-skills'/,
 ];
 
 /**
@@ -31,13 +27,9 @@ export const ADDON_CONTENT_ASSET_PATTERNS: readonly RegExp[] = [
  * 목표 상태는 `addon-host/` 의 내장 번들 로더 한 곳이다. 항목을 지우는 것은 언제나 환영, 추가는 금지.
  */
 export const CONTENT_REFERENCE_ALLOWLIST: readonly string[] = [
-    'addon-host/index.ts',            // 내장 콘텐츠 시드의 유일한 부팅 진입점
-    'agents/enhanced-keywords.ts',    // skill-seeder 의 RICH_SKILL_CONTENT — P2 에서 번들 로드 결과로 대체
-    'agents/skill-guidelines.ts',     // 카테고리 지침 JSON 로더 — P2 에서 번들로 이동
-    'agents/skill-seeder.ts',         // P2 에서 번들 설치기로 대체
-    'agents/system-skill-names.ts',   // 시스템 스킬 영문명 — P2
-    'agents/types.ts',                // industry-agents.json 로더 — P2
-    'agents/utility-skills-data-a.ts',
-    'agents/utility-skills-data-b.ts',
-    'agents/utility-skills-seeder.ts',
+    'addon-host/authoring/industry-pack-skills.ts',  // 저작 도구 (런타임 아님)
+    'addon-host/index.ts',            // 내장 팩 설치의 유일한 부팅 진입점
+    'agents/enhanced-keywords.ts',    // 산업 스킬 본문에서 카테고리 어휘 추출
+    'agents/system-skill-names.ts',   // 팩 스킬 영어 표시 이름
+    'agents/types.ts',                // 산업 에이전트 정의 로더
 ];
