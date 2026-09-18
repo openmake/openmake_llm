@@ -13,7 +13,7 @@ import type { DiscussionConfig, ContextPriority, TokenLimits } from './types';
 import { createLogger } from '../../utils/logger';
 import { DISCUSSION_TOKEN_BUDGET } from './config';
 import { resolvePromptLocale } from '../../chat/language-policy';
-import { DISCUSSION_CONTEXT_LABELS } from './locales';
+import { DISCUSSION_CONTEXT_LABELS } from './discussion-locales';
 
 const logger = createLogger('Discussion');
 

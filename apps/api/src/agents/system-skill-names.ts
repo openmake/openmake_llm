@@ -6,7 +6,7 @@
  * DB 이름은 그대로 두고 WS skills_activated 에 영어 표시 이름을 함께 실어 UI 가 로케일로 고른다.
  * 팩 스킬의 영어 이름은 팩의 `skills.json`(`nameEn`)이 SoT 다.
  */
-import { BUILTIN_ADDON_IDS } from '../addon-host/builtin-registry';
+import { builtinAddonIds } from '../addon-host/builtin-registry';
 import { loadPackSkills } from '../addon-host/pack-skills';
 import { AGENTS } from './agent-data';
 
@@ -18,7 +18,7 @@ let namesEn: Map<string, string> | null = null;
 function buildNamesEn(): Map<string, string> {
     const map = new Map<string, string>();
     if (AGENTS.general?.nameEn) map.set(GENERAL_SYSTEM_SKILL_NAME, `${AGENTS.general.nameEn} Skill`);
-    for (const id of BUILTIN_ADDON_IDS) {
+    for (const id of builtinAddonIds()) {
         for (const skill of loadPackSkills(id)) {
             if (skill.nameEn) map.set(skill.name, skill.nameEn);
         }

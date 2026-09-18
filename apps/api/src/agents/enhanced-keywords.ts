@@ -1,6 +1,4 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import { builtinAddonDir, isBuiltinAddonEnabled } from '../addon-host/builtin-registry';
+import { loadAddonRoutingVocabulary } from '../addon-host/pack-data';
 import { getIndustryAgentsData, type Agent, type AgentCategory, type IndustryAgentsData } from './types';
 import keywordData from '../config/data/keyword-data.json';
 import { IDF_NORMALIZATION } from '../config/runtime-limits';
@@ -16,13 +14,11 @@ interface AgentWithCategory extends Agent {
 const industryAgentsData: IndustryAgentsData = getIndustryAgentsData();
 
 /**
- * 에이전트 id → 카테고리 어휘 추출용 텍스트 (산업 팩 `data/routing-vocabulary.json`). 팩이 꺼져 있으면 비어 있다.
+ * 에이전트 id → 카테고리 어휘 추출용 텍스트 (켜진 add-on 의 매니페스트 `components.routingVocabulary`). 싣는 add-on 이 없으면 비어 있다.
  * 스킬 본문과 분리돼 있다 — 본문을 사람이 쓴 md 로 바꿀 때(2026-09-19) 본문에서 어휘를 뽑으면 라우팅 골든셋이
  * 120 → 116 으로 내려가, 종전 어휘를 그대로 고정했다. 라우팅 어휘 조정은 이 파일을 고치고 eval:routing 으로 확인한다.
  */
-const ROUTING_VOCABULARY_TEXT: Record<string, string> = isBuiltinAddonEnabled('industry-pack')
-    ? JSON.parse(fs.readFileSync(path.join(builtinAddonDir('industry-pack'), 'data', 'routing-vocabulary.json'), 'utf-8')) as Record<string, string>
-    : {};
+const ROUTING_VOCABULARY_TEXT: Record<string, string> = loadAddonRoutingVocabulary();
 
 const ALL_AGENTS: AgentWithCategory[] = Object.entries(industryAgentsData).flatMap(
     ([categoryId, category]: [string, AgentCategory]) =>

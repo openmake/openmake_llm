@@ -60,7 +60,7 @@ import {
     DISCUSSION_PROGRESS_MESSAGES,
     DISCUSSION_ERROR_MESSAGES,
     EVALUATION_CONSENSUS_PROMPT,
-} from './locales';
+} from './discussion-locales';
 
 const logger = createLogger('Discussion');
 

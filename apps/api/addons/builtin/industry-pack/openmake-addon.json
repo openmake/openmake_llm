@@ -7,9 +7,13 @@
     "openmake": ">=1.0.0 <2.0.0"
   },
   "scope": "system",
+  "kind": "content",
+  "order": 10,
+  "skillSourcePath": "agents/prompts/%/%",
   "components": {
     "skills": "./skills.json",
     "agents": "./industry-agents.json",
-    "data": "./data"
+    "data": "./data",
+    "routingVocabulary": "./data/routing-vocabulary.json"
   }
 }

@@ -4,7 +4,7 @@
  * 배경: 에이전트·시드 스킬 이름이 한국어뿐이라 영문 UI 칩에 "범용 AI 어시스턴트" 등이 그대로 나왔다.
  */
 import { AGENTS } from '../agent-data';
-import { BUILTIN_ADDON_IDS } from '../../addon-host/builtin-registry';
+import { builtinAddonIds } from '../../addon-host/builtin-registry';
 import { loadPackSkills } from '../../addon-host/pack-skills';
 import { GENERAL_SYSTEM_SKILL_NAME, systemSkillNamesEn } from '../system-skill-names';
 
@@ -14,7 +14,7 @@ describe('시스템 스킬·에이전트 영어 표시 이름', () => {
     it('모든 에이전트와 팩 스킬에 한글 없는 영어 이름이 있다', () => {
         const missing = [
             ...Object.values(AGENTS).filter((a) => !a.nameEn || HANGUL.test(a.nameEn)).map((a) => a.id),
-            ...BUILTIN_ADDON_IDS.flatMap((id) => loadPackSkills(id)).filter((s) => !s.nameEn || HANGUL.test(s.nameEn)).map((s) => s.id),
+            ...builtinAddonIds().flatMap((id) => loadPackSkills(id)).filter((s) => !s.nameEn || HANGUL.test(s.nameEn)).map((s) => s.id),
         ];
         expect(missing).toEqual([]);
     });

@@ -7,7 +7,18 @@
     "openmake": ">=1.0.0 <2.0.0"
   },
   "scope": "system",
+  "kind": "integration",
+  "order": 50,
   "components": {
     "mcpCatalog": "./mcp-catalog.json"
+  },
+  "entry": {
+    "chatIntegration": "chat-integration#kakaoMapChatIntegration",
+    "routes": [
+      {
+        "mountPath": "/api/embed",
+        "module": "embed.routes"
+      }
+    ]
   }
 }

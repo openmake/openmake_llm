@@ -7,5 +7,12 @@
     "openmake": ">=1.0.0 <2.0.0"
   },
   "scope": "system",
-  "components": {}
+  "kind": "integration",
+  "order": 70,
+  "components": {},
+  "entry": {
+    "chatIntegration": "chat-integration#discussionChatIntegration",
+    "chatMode": "chat-mode#discussionChatMode",
+    "contributions": "contributions#discussionContribution"
+  }
 }

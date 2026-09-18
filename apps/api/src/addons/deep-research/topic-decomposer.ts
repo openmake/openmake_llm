@@ -13,7 +13,7 @@ import type { ResearchConfig, SubTopic } from './types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
 import { CAPACITY } from '../../config/runtime-limits';
-import { RESEARCH_DEFAULTS } from './config';
+import { RESEARCH_DEFAULTS, RESEARCH_STEP_NUMBERS } from './config';
 import { clampImportance, buildFallbackSubTopics } from './utils';
 import { getDecomposePrompt, getResearchMessage } from './prompts';
 import { withSkillContext } from './research-context';
@@ -100,7 +100,7 @@ export async function decomposeTopics(params: {
         const db = getUnifiedDatabase();
         await db.addResearchStep({
             sessionId,
-            stepNumber: 1,
+            stepNumber: RESEARCH_STEP_NUMBERS.DECOMPOSE,
             stepType: 'decompose',
             query: topic,
             result: JSON.stringify(finalSubTopics),

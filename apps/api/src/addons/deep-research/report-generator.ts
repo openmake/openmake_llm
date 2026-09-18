@@ -18,7 +18,7 @@ import { TRUNCATION } from '../../config/runtime-limits';
 import { deduplicateSources, extractBulletLikeFindings } from './utils';
 import { SECTION_HEADERS, getReportPrompt, getResearchMessage } from './prompts';
 import { verifyCitations } from './citation-verifier';
-import { DEEP_RESEARCH_CITATION } from './config';
+import { DEEP_RESEARCH_CITATION, RESEARCH_STEP_NUMBERS } from './config';
 
 const logger = createLogger('DeepResearch:ReportGenerator');
 
@@ -147,7 +147,7 @@ export async function generateReport(params: {
         const fallbackSummary = getResearchMessage('reportFailed', config.language);
         await db.addResearchStep({
             sessionId,
-            stepNumber: 999,
+            stepNumber: RESEARCH_STEP_NUMBERS.REPORT,
             stepType: 'report',
             query: '최종 보고서 생성 (건너뜀 — 합성 데이터 없음)',
             result: fallbackSummary,
@@ -231,7 +231,7 @@ export async function generateReport(params: {
 
         await db.addResearchStep({
             sessionId,
-            stepNumber: 999,
+            stepNumber: RESEARCH_STEP_NUMBERS.REPORT,
             stepType: 'report',
             query: '최종 보고서 생성',
             result: summary.slice(0, TRUNCATION.RESEARCH_SUMMARY_MAX),
@@ -255,7 +255,7 @@ export async function generateReport(params: {
                 }
                 await db.addResearchStep({
                     sessionId,
-                    stepNumber: 1000,
+                    stepNumber: RESEARCH_STEP_NUMBERS.CITATION_CHECK,
                     stepType: 'report',
                     query: '인용 검증',
                     result: JSON.stringify({

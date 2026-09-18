@@ -14,7 +14,7 @@ import type { ResearchConfig, SubTopic } from './types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
 import { CAPACITY } from '../../config/runtime-limits';
-import { RESEARCH_DEFAULTS, RESEARCH_TAVILY } from './config';
+import { RESEARCH_DEFAULTS, RESEARCH_TAVILY, RESEARCH_STEP_NUMBERS } from './config';
 import { normalizeUrl } from './utils';
 import { parallelBatch } from '../../workflow/graph-engine';
 
@@ -117,7 +117,7 @@ export async function searchSubTopics(params: {
 
                 await db.addResearchStep({
                     sessionId,
-                    stepNumber: loopNumber * 100 + (++stepIndex),
+                    stepNumber: loopNumber * RESEARCH_STEP_NUMBERS.LOOP_STRIDE + (++stepIndex),
                     stepType: 'search',
                     query,
                     result: `${results.length}개 검색, ${uniqueForQuery.length}개 신규 확보`,

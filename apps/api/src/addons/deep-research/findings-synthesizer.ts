@@ -18,7 +18,7 @@ import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { withSkillContext } from './research-context';
 import { createLogger } from '../../utils/logger';
 import { TRUNCATION } from '../../config/runtime-limits';
-import { RESEARCH_DEFAULTS } from './config';
+import { RESEARCH_DEFAULTS, RESEARCH_STEP_NUMBERS } from './config';
 import {
     deduplicateSources,
     normalizeUrl,
@@ -171,7 +171,7 @@ export async function synthesizeFindings(params: {
     throwIfAborted();  // abort 시 합성 스텝을 completed 로 오기록하지 않음
     await db.addResearchStep({
         sessionId,
-        stepNumber: loopNumber * 100 + 100,
+        stepNumber: loopNumber * RESEARCH_STEP_NUMBERS.LOOP_STRIDE + RESEARCH_STEP_NUMBERS.LOOP_SYNTHESIZE_OFFSET,
         stepType: 'synthesize',
         query: `루프 ${loopNumber} 합성${isLightweight ? ' (경량)' : ''}`,
         result: mergedSummary.slice(0, TRUNCATION.RESEARCH_SUMMARY_MAX),

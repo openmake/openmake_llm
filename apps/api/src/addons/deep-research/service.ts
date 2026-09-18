@@ -15,7 +15,7 @@
 import { LLMClient, createClient } from '../../llm';
 import type { SearchResult } from '../../mcp/web-search';
 import { getModelForRole } from '../../config/model-roles';
-import { RESEARCH_DEFAULTS } from './config';
+import { RESEARCH_DEFAULTS, RESEARCH_STEP_NUMBERS } from './config';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
 
@@ -369,7 +369,7 @@ export class DeepResearchService {
                 );
                 await db.addResearchStep({
                     sessionId,
-                    stepNumber: 2000,
+                    stepNumber: RESEARCH_STEP_NUMBERS.METRICS,
                     stepType: 'report',
                     query: '리서치 메트릭',
                     result: JSON.stringify(metrics),

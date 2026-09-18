@@ -1,12 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { BUILTIN_ADDON_IDS } from '../builtin-registry';
+import { builtinAddonIds } from '../builtin-registry';
 import { installPackCatalog, loadPackCatalog } from '../pack-catalog';
 
 const ENV_KEY = 'ADDON_BUILTIN_DISABLED';
 
 describe('팩 MCP 카탈로그', () => {
-    const all = BUILTIN_ADDON_IDS.flatMap(id => loadPackCatalog(id).map(t => ({ addon: id, ...t })));
+    const all = builtinAddonIds().flatMap(id => loadPackCatalog(id).map(t => ({ addon: id, ...t })));
 
     it('모든 add-on 의 카탈로그가 스키마에 맞고 템플릿 id 가 add-on 사이에서 겹치지 않는다', () => {
         expect(all.length).toBeGreaterThan(0);

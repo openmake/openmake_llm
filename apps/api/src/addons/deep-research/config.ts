@@ -245,3 +245,18 @@ export const RESEARCH_TIMEOUTS = {
      */
     REPORT_GENERATION_MS: Number(process.env.DEEP_RESEARCH_REPORT_TIMEOUT_MS) || LLM_TIMEOUTS.REPORT_GENERATION_TIMEOUT_MS,
 } as const;
+
+/**
+ * 연구 스텝 번호 체계 (`research_steps.step_number`) — 화면·조회가 이 순서로 정렬한다.
+ * 분해 1 → 루프 N 은 N×LOOP_STRIDE 구간(검색 +1.., 스크래핑·합성은 구간 끝) → 보고서 → 인용 검증 → 메트릭.
+ * 값은 저장된 행과 짝이라 바꾸면 기존 세션의 정렬이 섞인다.
+ */
+export const RESEARCH_STEP_NUMBERS = {
+    DECOMPOSE: 1,
+    LOOP_STRIDE: 100,
+    LOOP_SCRAPE_OFFSET: 99,
+    LOOP_SYNTHESIZE_OFFSET: 100,
+    REPORT: 999,
+    CITATION_CHECK: 1000,
+    METRICS: 2000,
+} as const;

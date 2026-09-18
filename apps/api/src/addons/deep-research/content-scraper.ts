@@ -12,7 +12,7 @@ import { scrapePage } from '../../utils/web-scraper';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
 import { SCRAPE_ABORT_BUFFER_MS } from '../../config/runtime-limits';
-import { RESEARCH_DEFAULTS } from './config';
+import { RESEARCH_DEFAULTS, RESEARCH_STEP_NUMBERS } from './config';
 import { normalizeUrl } from './utils';
 
 const logger = createLogger('DeepResearch:ContentScraper');
@@ -156,7 +156,7 @@ export async function scrapeSources(params: {
     const db = getUnifiedDatabase();
     await db.addResearchStep({
         sessionId,
-        stepNumber: loopNumber * 100 + 99,
+        stepNumber: loopNumber * RESEARCH_STEP_NUMBERS.LOOP_STRIDE + RESEARCH_STEP_NUMBERS.LOOP_SCRAPE_OFFSET,
         stepType: 'search',
         query: `루프 ${loopNumber} 웹 스크래핑`,
         result: `${totalToScrape}개 URL 스크래핑 완료`,

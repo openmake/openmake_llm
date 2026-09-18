@@ -27,9 +27,7 @@ export const ADDON_CONTENT_ASSET_PATTERNS: readonly RegExp[] = [
 export const CONTENT_REFERENCE_ALLOWLIST: readonly string[] = [
     'addon-host/authoring/industry-pack-skills.ts',  // 저작 도구 (런타임 아님)
     'addon-host/index.ts',            // 내장 팩 설치의 유일한 부팅 진입점
-    'agents/enhanced-keywords.ts',    // 산업 팩 라우팅 어휘
     'agents/system-skill-names.ts',   // 팩 스킬 영어 표시 이름
-    'agents/types.ts',                // 산업 에이전트 정의 로더
 ];
 
 /**
