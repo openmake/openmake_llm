@@ -85,7 +85,7 @@ export interface WSMessage {
     /** resume 커서(F19.11) — 마지막으로 받은 스트림 식별자와 순번. 같은 스트림이면 그 뒤 이벤트만 재생받는다 */
     streamId?: string;
     afterSeq?: number;
-    /** NotebookLM 노트북 컨텍스트 — composer picker 선택. 백엔드가 프리픽스 주입(prompts/notebook-context) */
+    /** NotebookLM 노트북 컨텍스트 — composer picker 선택. 통합(add-on)이 LLM 전용 메시지에 접두를 주입한다 */
     notebook?: { id: string; title: string } | null;
     /** Phase 3.4 (2026-05-26): 메시지 편집 분기 — 새 session 의 부모 추적 */
     branchFromSessionId?: string;

@@ -31,3 +31,19 @@ export const CONTENT_REFERENCE_ALLOWLIST: readonly string[] = [
     'agents/system-skill-names.ts',   // 팩 스킬 영어 표시 이름
     'agents/types.ts',                // 산업 에이전트 정의 로더
 ];
+
+/**
+ * 통합형 add-on 의 고유 이름 — **Base 코드 줄에 나오면 안 된다**(2026-09-19 기준 0건, `addon-boundary.test.ts`).
+ * Base 는 일반 확장점(채팅 턴 통합·라우트 마운트·설정/스코프 기여·카탈로그 설치)만 알고, 특정 통합의 도구 이름·
+ * 블록 형식·프롬프트 문구·설정 키는 `src/addons/<id>/` 와 그것을 모아 주는 `addon-host/` 에만 둔다.
+ * 새 통합을 추가하면 그 고유 이름을 여기에 더한다. 주석은 검사하지 않는다(선례 설명은 자유).
+ * 로그인 provider 로서의 'kakao', 알림 채널 등 무관한 쓰임은 아래 패턴에 걸리지 않게 좁혀 두었다.
+ */
+export const ADDON_SPECIFIC_NAME_PATTERNS: readonly RegExp[] = [
+    /kakaomap|kakao[-_]?map|search-places|find-route/i,
+    /notebooklm/i,
+    /discord/i,
+];
+
+/** add-on 고유 이름이 나와도 되는 위치(`apps/api/src` 기준 접두) — add-on 모듈과 그것을 모으는 호스트뿐 */
+export const ADDON_NAME_ALLOWED_PREFIXES: readonly string[] = ['addons/', 'addon-host/'];

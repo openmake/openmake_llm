@@ -34,7 +34,7 @@ import { runProviderGate, servedModelLabel } from './provider-gate';
 import { checkUserQuota } from '../../llm/user-quota';
 import { QuotaExceededError } from '../../errors/quota-exceeded.error';
 import { resolveDegradeMap, resolveDegradeTarget } from '../../config/quota-degrade-policy';
-import { buildNotebookContextPrefix } from '../../prompts/notebook-context';
+import { getChatTurnIntegrations } from './turn-integrations';
 import { applyAgentModelOverride } from './agent-model-override';
 import { resolveModeExternalClient } from './mode-external-client';
 import { buildUserContextBlocks } from './user-context-blocks';
@@ -361,11 +361,14 @@ export async function runMessagePipeline(svc: ChatService,
     const { finalEnhancedMessage: builtEnhancedMessage } = await svc.buildContextForLLM(
         message || '', webSearchContext, fileContext,
     );
-    // NotebookLM 노트북 컨텍스트 — LLM 전용 enhancedMessage 채널에만 프리픽스 주입.
+    // 통합(add-on) 컨텍스트 접두 (예: 고정한 노트북) — LLM 전용 enhancedMessage 채널에만 주입.
     // (원문 message 는 대화 저장·말풍선·사이드바 제목에 쓰이므로 오염 금지 —
     //  webSearchContext 와 동일한 transient 주입 원칙. 도구 노출은 reqCtx.notebook 이 담당)
-    const finalEnhancedMessage = req.notebook
-        ? `${buildNotebookContextPrefix(req.notebook, languagePolicy?.resolvedLanguage || 'ko')}\n\n${builtEnhancedMessage}`
+    const integrationPrefixes = getChatTurnIntegrations()
+        .map((i) => i.enhancedMessagePrefix?.(req, languagePolicy?.resolvedLanguage || 'ko'))
+        .filter((p): p is string => !!p);
+    const finalEnhancedMessage = integrationPrefixes.length > 0
+        ? `${integrationPrefixes.join('\n\n')}\n\n${builtEnhancedMessage}`
         : builtEnhancedMessage;
 
     // ── Step 4: 시스템 프롬프트 조립 + dispatch (로컬/외부 단일 경로) ──

@@ -88,7 +88,7 @@ export async function handleChatMessage(
 
     // NotebookLM 노트북 컨텍스트 — 여기서 message 에 주입하지 않는다(주입 시 대화 저장·
     // 재로드 말풍선·사이드바 제목에 프리픽스가 남음). message-pipeline 이 LLM 전용
-    // enhancedMessage 채널에 주입(prompts/notebook-context)하도록 요청 필드로만 전달.
+    // enhancedMessage 채널에 주입(통합 add-on 의 enhancedMessagePrefix)하도록 요청 필드로만 전달.
     const nb = msg.notebook;
     const notebookRef = (nb && typeof nb.id === 'string' && nb.id.trim() && typeof nb.title === 'string')
         ? { id: nb.id.trim().slice(0, 64), title: nb.title }

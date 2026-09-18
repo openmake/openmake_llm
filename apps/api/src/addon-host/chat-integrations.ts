@@ -9,6 +9,7 @@ import type { ChatTurnIntegration } from '../services/chat-service/turn-integrat
 import { BUILTIN_ADDON_IDS, isBuiltinAddonEnabled, type BuiltinAddonId } from './builtin-registry';
 
 const LOADERS: Readonly<Partial<Record<BuiltinAddonId, () => ChatTurnIntegration>>> = {
+    'notebooklm': () => (require('../addons/notebooklm/chat-integration') as typeof import('../addons/notebooklm/chat-integration')).notebooklmChatIntegration,
     'kakao-map': () => (require('../addons/kakao-map/chat-integration') as typeof import('../addons/kakao-map/chat-integration')).kakaoMapChatIntegration,
 };
 

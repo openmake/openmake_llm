@@ -5,7 +5,9 @@
  * 데이터는 모듈 로드 시점에 읽히므로 DB overlay(system_settings)보다 앞선다 — 변경은 재시작으로 반영.
  * 이 모듈은 다른 앱 모듈을 import 하지 않는다(콘텐츠 로더가 순환 없이 부를 수 있어야 한다).
  *
- * 팩 콘텐츠 원본은 `apps/api/addons/builtin/<id>/` 이고, 빌드(`copy-addons`)가 `dist/addons/` 로 스냅샷을 뜬다.
+ * 팩 콘텐츠 원본은 `apps/api/addons/builtin/<id>/` 이고, 빌드(`copy-addons`)가 `dist/addon-packs/` 로 스냅샷을 뜬다
+ * (`dist/addons/` 는 add-on **코드**(`src/addons/`)의 컴파일 산출물 자리라 이름을 달리했다 — 같은 이름이면 스냅샷의
+ * `rm -rf` 가 컴파일된 add-on 코드를 지운다).
  * 빌드본은 **스냅샷만** 읽는다 — 운영 프로세스가 작업 트리를 직접 읽으면 브랜치 전환·편집이 재시작 시점에
  * 운영 콘텐츠를 바꾼다(2026-09-19, 작업 브랜치가 지운 파일을 운영 빌드가 찾지 못할 뻔했다). 스냅샷이 없으면
  * 로더가 throw 해 부팅에서 드러난다(조용한 폴백 없음). 콘텐츠 경로는 `builtinAddonDir` 로만 풀 것.
@@ -46,10 +48,10 @@ export const BUILTIN_ADDON_SKILL_SOURCE_PATH: Readonly<Partial<Record<BuiltinAdd
 /** 이 모듈이 빌드 산출물(`<outDir>/addon-host`)에서 실행 중인가 — src(ts-node·jest)면 false. */
 const RUNNING_FROM_BUILD = path.basename(path.resolve(__dirname, '..')) !== 'src';
 
-/** 팩 콘텐츠 디렉토리 — 빌드본은 `<outDir>/addons/builtin/<id>` 스냅샷, src 실행은 `apps/api/addons/builtin/<id>` 원본. */
+/** 팩 콘텐츠 디렉토리 — 빌드본은 `<outDir>/addon-packs/builtin/<id>` 스냅샷, src 실행은 `apps/api/addons/builtin/<id>` 원본. */
 export function builtinAddonDir(id: BuiltinAddonId): string {
     return RUNNING_FROM_BUILD
-        ? path.resolve(__dirname, '..', 'addons', 'builtin', id)
+        ? path.resolve(__dirname, '..', 'addon-packs', 'builtin', id)
         : path.resolve(__dirname, '..', '..', 'addons', 'builtin', id);
 }
 

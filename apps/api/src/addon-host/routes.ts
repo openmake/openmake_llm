@@ -18,11 +18,11 @@ const logger = createLogger('AddonHost');
 
 /** add-on 별 전용 라우트 — 라우터는 켜진 add-on 만 로드한다(지연 require). */
 const ADDON_ROUTES: Readonly<Partial<Record<BuiltinAddonId, ReadonlyArray<{ mountPath: string; load: () => Router }>>>> = {
-    'notebooklm': [{ mountPath: '/api/mcp', load: () => (require('../routes/notebooklm.routes') as typeof import('../routes/notebooklm.routes')).notebooklmRouter }],
+    'notebooklm': [{ mountPath: '/api/mcp', load: () => (require('../addons/notebooklm/routes') as typeof import('../addons/notebooklm/routes')).notebooklmRouter }],
     // 카카오 지도 임베드 HTML(네이티브 앱 WKWebView 전용)은 /api 하위에 둔다 — 운영 프록시(Caddy/Next)가 /api 만
     // 백엔드로 보내 그 밖이면 외부 경로에서 404 다(2026-08-18 실측). GET 이라 CSRF 는 스킵되고 인증을 강제하지 않는다.
     'kakao-map': [{ mountPath: '/api/embed', load: () => (require('../addons/kakao-map/embed.routes') as typeof import('../addons/kakao-map/embed.routes')).default }],
-    'discord': [{ mountPath: '/api/integrations/discord', load: () => (require('../routes/discord-runtime.routes') as typeof import('../routes/discord-runtime.routes')).discordRuntimeRouter }],
+    'discord': [{ mountPath: '/api/integrations/discord', load: () => (require('../addons/discord/routes') as typeof import('../addons/discord/routes')).discordRuntimeRouter }],
 };
 
 /** `GET /api/addons` — 클라이언트가 꺼진 add-on 의 UI 를 숨기는 데 쓴다. 민감 정보 없음(인증 불요). */
