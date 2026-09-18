@@ -21,7 +21,7 @@ const ADDON_ROUTES: Readonly<Partial<Record<BuiltinAddonId, ReadonlyArray<{ moun
     'notebooklm': [{ mountPath: '/api/mcp', load: () => (require('../routes/notebooklm.routes') as typeof import('../routes/notebooklm.routes')).notebooklmRouter }],
     // 카카오 지도 임베드 HTML(네이티브 앱 WKWebView 전용)은 /api 하위에 둔다 — 운영 프록시(Caddy/Next)가 /api 만
     // 백엔드로 보내 그 밖이면 외부 경로에서 404 다(2026-08-18 실측). GET 이라 CSRF 는 스킵되고 인증을 강제하지 않는다.
-    'kakao-map': [{ mountPath: '/api/embed', load: () => (require('../routes/kakao-map-embed.routes') as typeof import('../routes/kakao-map-embed.routes')).default }],
+    'kakao-map': [{ mountPath: '/api/embed', load: () => (require('../addons/kakao-map/embed.routes') as typeof import('../addons/kakao-map/embed.routes')).default }],
     'discord': [{ mountPath: '/api/integrations/discord', load: () => (require('../routes/discord-runtime.routes') as typeof import('../routes/discord-runtime.routes')).discordRuntimeRouter }],
 };
 

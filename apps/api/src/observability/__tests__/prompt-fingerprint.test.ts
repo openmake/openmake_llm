@@ -30,7 +30,8 @@ describe('fingerprintTools', () => {
 
 describe('promptBlockNames', () => {
     it('실린 블록 이름만(내용 없음), default 스타일은 제외', () => {
-        expect(promptBlockNames({ style: 'default', artifactGuideBlock: 'x', memoryBlock: 'm' }, { webSearch: true, map: false })).toEqual(['artifact', 'memory', 'webSearch']);
+        expect(promptBlockNames({ style: 'default', artifactGuideBlock: 'x', memoryBlock: 'm' }, { webSearch: true, integrations: [] })).toEqual(['artifact', 'memory', 'webSearch']);
+        expect(promptBlockNames({}, { integrations: ['kakao-map'] })).toEqual(['kakao-map']);
         expect(promptBlockNames({ style: 'concise' }, {})).toEqual(['style']);
     });
 });

@@ -7,16 +7,17 @@
  * "이 턴에 어떤 도구를 노출/억제하고 첫 턴에 무엇을 강제할지"를 한 곳에서 결정한다.
  *
  * - distractor 억제: 아티팩트/보고서 의도 → always-on 조회 도구 제외 (2026-06-23 통제실험)
- * - 지도 의도 → 카카오 도구 강제(tool_choice), 명시 검색 의도 → web_search 강제
+ * - 통합(add-on) 의도 → 그 통합의 도구 강제(tool_choice), 명시 검색 의도 → web_search 강제
  * - 서브에이전트: delegate_expert(CHAT_SUBAGENT) · spawn_agents(AGENT_SPAWN)
  * - 오케스트레이션 자동 배정(Stage 1): 토론/작업위임 의도 프리필터 매칭 시에만
  *   start_discussion / delegate_agent_task 노출 (상시 노출 금지 — 도구폭주 방지)
  *
  * @module services/chat-service/external-tool-plan
  */
+import { getChatTurnIntegrations } from './turn-integrations';
 import {
     EXTERNAL_LLM_TOOL_BLACKLIST, ARTIFACT_REQUEST_SUPPRESSED_TOOLS, ARTIFACT_INTENT_PATTERNS,
-    ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS, REPORT_PIPELINE, REPORT_INTENT_PATTERNS,
+    WEB_SEARCH_INTENT_PATTERNS, REPORT_PIPELINE, REPORT_INTENT_PATTERNS,
     CHAT_SUBAGENT, AGENT_SPAWN, ORCHESTRATION_DISPATCH, DISCUSSION_INTENT_PATTERNS, TASK_DELEGATE_INTENT_PATTERNS,
     SPAWN_INTENT_PATTERNS, CHAT_TOOL_INTENT_GATE_ENABLED,
     PLAN_INTENT_PATTERNS, CHAT_ASK_USER,
@@ -48,7 +49,7 @@ export function detectOrchestrationIntents(message: string | undefined): Orchest
 
 interface ExternalToolPlan {
     tools: ToolDefinition[];
-    /** 첫 턴 tool_choice 강제 대상 (카카오 지도 > web_search 우선순위). */
+    /** 첫 턴 tool_choice 강제 대상 (통합 의도 > web_search 우선순위). */
     forcedFirstTurnToolName?: string;
 }
 
@@ -60,13 +61,12 @@ export function buildExternalToolPlan(params: {
     allowedTools: ToolDefinition[];
     req: ChatMessageRequest;
     toolCalling: boolean;
-    wantsMap: boolean;
     tailWebGround?: boolean;
     orchestration: OrchestrationIntents;
     /** 활성 스킬이 required 로 바인딩한 도구 이름 — distractor 억제에서 면제. */
     skillRequiredToolNames?: readonly string[];
 }): ExternalToolPlan {
-    const { allowedTools, req, toolCalling, wantsMap, tailWebGround, orchestration } = params;
+    const { allowedTools, req, toolCalling, tailWebGround, orchestration } = params;
     const skillRequired = new Set(params.skillRequiredToolNames ?? []);
 
     // 명시적 아티팩트 생성 요청(사용자 아티팩트 토글 또는 메시지 패턴)이면 distractor
@@ -115,22 +115,23 @@ export function buildExternalToolPlan(params: {
     if (wantsArtifact && toolCalling) {
         logger.info(`[Artifact] 명시적 아티팩트 요청 감지 — distractor 도구 억제 (잔여 도구 ${tools.length}종)`);
     }
-    // 지도/길찾기 의도 시 첫 턴에 카카오 도구를 강제 호출(tool_choice)한다. 길찾기면 find-route,
-    // 그 외 지도면 search-places. 넛지만으론 qwen 이 web_search/자체아티팩트로 이탈 → 강제로
-    // 블록 확보 후 결정적 주입.
-    const routeIntent = ROUTE_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
-    const forcedKakaoToolName = toolCalling
-        ? (routeIntent
-            ? tools.find((t) => t.function.name.includes('find-route'))?.function.name
-            : (wantsMap ? tools.find((t) => t.function.name.includes('search-places'))?.function.name : undefined))
-        : undefined;
-    if (forcedKakaoToolName) {
-        logger.info(`[Map] 첫 턴 tool_choice 강제: ${forcedKakaoToolName}`);
+    // 통합(add-on) 의도 시 첫 턴에 그 통합의 도구를 강제 호출(tool_choice)한다 — 넛지만으론 qwen 이
+    // web_search/자체아티팩트로 이탈한다. 등록 순서대로 첫 건이 이긴다.
+    const toolNames = tools.map((t) => t.function.name);
+    let forcedIntegrationToolName: string | undefined;
+    if (toolCalling) {
+        for (const integration of getChatTurnIntegrations()) {
+            forcedIntegrationToolName = integration.forcedFirstTurnTool?.(req.message ?? '', toolNames);
+            if (forcedIntegrationToolName) {
+                logger.info(`[Integration:${integration.id}] 첫 턴 tool_choice 강제: ${forcedIntegrationToolName}`);
+                break;
+            }
+        }
     }
     // 명시적 웹 검색 요청이면 첫 턴에 web_search 를 강제한다 — 봇 히스토리에 남은
     // "검색 불가/오프라인" 자기 발언 재주입 시 qwen 이 시스템 지시로도 교정되지 않고
     // 도구 호출을 거부하는 환각의 결정적 차단 (카카오 tool_choice 강제와 동일 선례).
-    const forcedWebSearchToolName = !forcedKakaoToolName
+    const forcedWebSearchToolName = !forcedIntegrationToolName
         && (WEB_SEARCH_INTENT_PATTERNS.some((re) => re.test(req.message ?? '')) || tailWebGround === true)
         ? tools.find((t) => t.function.name === 'web_search')?.function.name
         : undefined;
@@ -142,14 +143,14 @@ export function buildExternalToolPlan(params: {
     // 명시적 계획수립 요청이면 첫 턴에 create_plan 을 강제한다 — 넛지만으론 qwen 이
     // 도구 대신 자체 계획 텍스트로 이탈해 review role(계획 모델 배정)이 발동하지 않는다
     // (web_search tool_choice 강제와 동일 선례). 도구는 getAllowedTools 강제 포함으로 실려온다.
-    const forcedPlanToolName = !forcedKakaoToolName && !forcedWebSearchToolName
+    const forcedPlanToolName = !forcedIntegrationToolName && !forcedWebSearchToolName
         && PLAN_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''))
         ? tools.find((t) => t.function.name === 'create_plan')?.function.name
         : undefined;
     if (forcedPlanToolName) {
         logger.info('[PlanMode] 계획수립 의도 — 첫 턴 tool_choice 강제: create_plan');
     }
-    const forcedFirstTurnToolName = forcedKakaoToolName ?? forcedWebSearchToolName ?? forcedPlanToolName;
+    const forcedFirstTurnToolName = forcedIntegrationToolName ?? forcedWebSearchToolName ?? forcedPlanToolName;
 
     return {
         tools,

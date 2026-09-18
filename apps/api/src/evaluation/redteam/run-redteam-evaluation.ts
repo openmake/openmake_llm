@@ -36,7 +36,6 @@ async function systemPromptSamples(): Promise<string[]> {
             req: { message: 'redteam', userLanguagePreference: lang } as never,
             resolved: { fullId: 'redteam/model' } as never,
             ctx: { resolvedLanguage: lang, artifactGuideBlock: getArtifactGuide(lang) } as never,
-            wantsMap: false,
         });
         return staticParts.join('\n');
     });

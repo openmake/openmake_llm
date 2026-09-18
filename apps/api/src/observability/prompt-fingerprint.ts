@@ -30,13 +30,14 @@ export function fingerprintPrompt(staticParts: readonly string[], dynamicParts: 
 export function promptBlockNames(ctx: {
     style?: string; answerFormatBlock?: string; artifactGuideBlock?: string; reportGuideBlock?: string;
     agentSystemMessage?: string; memoryBlock?: string; customInstructionsBlock?: string;
-}, flags: { webSearch?: boolean; location?: boolean; map?: boolean; orchestration?: boolean; spawn?: boolean }): string[] {
+}, flags: { webSearch?: boolean; location?: boolean; integrations?: readonly string[]; orchestration?: boolean; spawn?: boolean }): string[] {
     const table: Array<[string, unknown]> = [
         ['style', ctx.style && ctx.style !== 'default'], ['answerFormat', ctx.answerFormatBlock], ['artifact', ctx.artifactGuideBlock],
         ['report', ctx.reportGuideBlock], ['agent', ctx.agentSystemMessage], ['memory', ctx.memoryBlock], ['custom', ctx.customInstructionsBlock],
-        ['webSearch', flags.webSearch], ['location', flags.location], ['map', flags.map], ['orchestration', flags.orchestration], ['spawn', flags.spawn],
+        ['webSearch', flags.webSearch], ['location', flags.location], ['orchestration', flags.orchestration], ['spawn', flags.spawn],
     ];
-    return table.filter(([, v]) => !!v).map(([k]) => k);
+    // 통합(add-on) 의도 턴은 그 add-on id 가 블록 이름으로 실린다 (종전 'map' → 'kakao-map', 2026-09-19)
+    return [...table.filter(([, v]) => !!v).map(([k]) => k), ...(flags.integrations ?? [])];
 }
 
 export interface ToolManifestFingerprint {

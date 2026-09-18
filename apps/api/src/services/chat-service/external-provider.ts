@@ -14,7 +14,8 @@
  */
 import { createLogger } from '../../utils/logger';
 import { SPAWN_AGENTS_TOOL_NAME } from '../agent-spawn/spawn-agents';
-import { LOOP_DETECTION, AGENT_LOOP_LIMITS, MAP_INTENT_PATTERNS, SPAWN_INTENT_PATTERNS, EXTERNAL_LLM_INPUT_TOKEN_BUDGET } from '../../config/runtime-limits';
+import { LOOP_DETECTION, AGENT_LOOP_LIMITS, SPAWN_INTENT_PATTERNS, EXTERNAL_LLM_INPUT_TOKEN_BUDGET } from '../../config/runtime-limits';
+import { detectIntegrationIntents, getChatTurnIntegrations } from './turn-integrations';
 import { estimateMessageTokens, truncateMessagesPreservingSystem } from '../../llm/model-pool';
 import { AGENT_SPAWN } from '../../config/runtime-limits';
 import { buildExternalToolPlan, detectOrchestrationIntents } from './external-tool-plan';
@@ -75,8 +76,9 @@ export async function runExternalStream(
 ): Promise<string> {
     // TTFT 분해 계측 기준점 — 이 뒤로 프롬프트 조립·도구 계획이 진행된다.
     const enteredAtMs = Date.now();
-    // 위치/지도 의도면 카카오 도구 우선 라우팅 — 시스템 프롬프트 넛지 + 도구 강제 주입에 함께 쓰인다.
-    const wantsMap = MAP_INTENT_PATTERNS.some((re) => re.test(req.message ?? ''));
+    // 통합(add-on) 의도·프롬프트 조각 — 원 메시지 기준으로 한 번 계산해 프롬프트·관측에 함께 쓴다.
+    const integrationIntents = detectIntegrationIntents(req.message ?? '');
+    const integrationPromptParts = getChatTurnIntegrations().flatMap((i) => i.systemPromptParts?.(req) ?? []);
     // 오케스트레이션 자동 배정 의도 — 프롬프트 가이드 주입(아래)과 도구 노출(플랜)이 공유.
     const orchestration = detectOrchestrationIntents(req.message);
     // 병렬 위임 의도 — 매칭 턴에만 spawn_agents 사용 가이드를 주입한다 (도구는 상시 노출이나
@@ -121,14 +123,13 @@ export async function runExternalStream(
 
     // 메시지 배열 조립(시스템 프롬프트 + history + 현재 turn)은 external-messages 로 분리.
     let promptParts: { staticParts: string[]; dynamicParts: string[] } | undefined;
-    const messages = buildExternalMessages({ req: effectiveReq, resolved, ctx, wantsMap, orchestration, wantsSpawn, onPromptParts: (p) => { promptParts = p; } });
+    const messages = buildExternalMessages({ req: effectiveReq, resolved, ctx, integrationPromptParts, orchestration, wantsSpawn, onPromptParts: (p) => { promptParts = p; } });
 
     // 도구 노출·억제·첫 턴 강제 결정은 external-tool-plan 으로 분리 (동작 동일).
     const { tools, forcedFirstTurnToolName } = buildExternalToolPlan({
         allowedTools: deps.allowedTools,
         req,
         toolCalling: caps.toolCalling,
-        wantsMap,
         ...(ctx.tailWebGround !== undefined ? { tailWebGround: ctx.tailWebGround } : {}),
         orchestration,
         ...(deps.skillRequiredToolNames ? { skillRequiredToolNames: deps.skillRequiredToolNames } : {}),
@@ -147,7 +148,7 @@ export async function runExternalStream(
     }
 
     // 요청 지문(F24.2) — 조립된 프롬프트·도구 집합의 sha256. 기록은 종료 시 chat_requests 1행(fire-and-forget)
-    const provenance = buildChatProvenance({ req, ctx, promptParts, tools, flags: { map: wantsMap, orchestration: orchestration.discussion || orchestration.taskDelegate, spawn: wantsSpawn } });
+    const provenance = buildChatProvenance({ req, ctx, promptParts, tools, flags: { integrations: Object.keys(integrationIntents).filter((id) => integrationIntents[id]), orchestration: orchestration.discussion || orchestration.taskDelegate, spawn: wantsSpawn } });
     const startedAt = Date.now();
     // TTFT 분해 계측 — 구간 계산은 호출부(ws-chat-handler)가 상위 시작 시각과 함께 수행.
     const timings: ChatTimings = {
@@ -202,7 +203,7 @@ export async function runExternalStream(
                     modelId: resolved.modelId,
                     thinking: resolveThinking(req, caps.thinking),
                     ...(turnTools.length > 0 ? { tools: turnTools } : {}),
-                    // 첫 턴만 도구 강제(카카오 지도 또는 명시적 웹 검색) — 이후 턴은 auto(모델이 결과로 답변 작성).
+                    // 첫 턴만 도구 강제(통합 의도 또는 명시적 웹 검색) — 이후 턴은 auto(모델이 결과로 답변 작성).
                     ...(turn === 0 && forcedFirstTurnToolName && turnTools.length > 0
                         ? { tool_choice: { type: 'function' as const, function: { name: forcedFirstTurnToolName } } }
                         : {}),
@@ -409,13 +410,13 @@ export async function runExternalStream(
         ...(directCostUsdMicrosTotal !== undefined ? { directCostUsdMicros: directCostUsdMicrosTotal } : {}),
     });
 
-    // 도구 루프 중 수집한 블록(생성 미디어·카카오 지도·토론 출처·웹검색 출처·보고서)을 최종
+    // 도구 루프 중 수집한 블록(생성 미디어·통합 블록·토론 출처·웹검색 출처·보고서)을 최종
     // 응답에 결정적으로 첨부 — 상세는 external-deterministic-append (LLM 의 도구/인용 지시 누락 보정).
     const finalContent = appendDeterministicBlocks({
         finalContent: result.content || '',
         onToken,
         generatedMediaMarkdowns: state.generatedMediaMarkdowns,
-        kakaomapBlocks: state.kakaomapBlocks,
+        integrationBlocks: state.integrationBlocks,
         discussionSourceBlocks: state.discussionSourceBlocks,
         odArtifact: state.odArtifact,
         req,

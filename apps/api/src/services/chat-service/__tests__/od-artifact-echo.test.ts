@@ -70,7 +70,7 @@ describe('appendDeterministicBlocks — odArtifact 첨부', () => {
             finalContent,
             onToken: (t) => { streamed += t; },
             generatedMediaMarkdowns: [],
-            kakaomapBlocks: [],
+            integrationBlocks: {},
             discussionSourceBlocks: [],
             odArtifact,
             req: { message: 'm', userId: '3' } as unknown as ChatMessageRequest,

@@ -17,17 +17,18 @@ export function buildExternalMessages(params: {
     req: ChatMessageRequest;
     resolved: ResolvedProvider;
     ctx: StreamFromExternalContext;
-    wantsMap: boolean;
+    /** 통합(add-on)이 이 턴에 넣는 시스템 프롬프트 조각 */
+    integrationPromptParts: readonly string[];
     orchestration: OrchestrationIntents;
     wantsSpawn: boolean;
     /** 정적/가변 파트 관측(요청 지문 F24.2) — 조립 결과는 바꾸지 않는다 */
     onPromptParts?: (parts: { staticParts: string[]; dynamicParts: string[] }) => void;
 }): ChatMessage[] {
-    const { req, resolved, ctx, wantsMap, orchestration, wantsSpawn } = params;
+    const { req, resolved, ctx, integrationPromptParts, orchestration, wantsSpawn } = params;
     const messages: ChatMessage[] = [];
 
     // 시스템 프롬프트 조립(정적 헌법 → DYNAMIC → 가변)은 external-system-prompt 로 분리.
-    const parts = buildExternalSystemPromptParts({ req, resolved, ctx, wantsMap, orchestration, wantsSpawn });
+    const parts = buildExternalSystemPromptParts({ req, resolved, ctx, integrationPromptParts, orchestration, wantsSpawn });
     params.onPromptParts?.(parts);
     const systemContent = [...parts.staticParts, ...parts.dynamicParts].join('\n\n');
     if (systemContent) {

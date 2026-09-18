@@ -53,7 +53,6 @@ export function measureContext(c: BudgetContext): { staticChars: number; fullCha
         req: { message: 'budget', userLanguagePreference: c.lang } as unknown as ChatMessageRequest,
         resolved: { fullId: 'budget/model' } as unknown as ResolvedProvider,
         ctx,
-        wantsMap: false,
     });
     const staticText = staticParts.join('\n\n');
     return { staticChars: staticText.length, fullChars: [...staticParts, ...dynamicParts].join('\n\n').length };

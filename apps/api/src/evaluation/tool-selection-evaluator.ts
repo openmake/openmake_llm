@@ -75,14 +75,12 @@ export async function exposedToolsFor(c: ToolSelectionCase, builtIns: ToolDefini
     const { filterRestrictedTools } = await import('../services/chat-service/tool-restrictions');
     const { selectTurnTools } = await import('../services/chat-service/chat-tool-selection');
     const { buildExternalToolPlan, detectOrchestrationIntents } = await import('../services/chat-service/external-tool-plan');
-    const { MAP_INTENT_PATTERNS } = await import('../config/runtime-limits');
     const allTools = filterRestrictedTools(builtIns, c.role ?? 'user');
     const allowedTools = selectTurnTools({ allTools, merged: [], userMcpAutoOn: [], message: c.query });
     const plan = buildExternalToolPlan({
         allowedTools,
         req: { message: c.query } as never,
         toolCalling: true,
-        wantsMap: MAP_INTENT_PATTERNS.some((re) => re.test(c.query)),
         orchestration: detectOrchestrationIntents(c.query),
     });
     return { names: plan.tools.map((t) => t.function.name), ...(plan.forcedFirstTurnToolName ? { forced: plan.forcedFirstTurnToolName } : {}) };
