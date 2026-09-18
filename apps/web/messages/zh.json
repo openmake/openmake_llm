@@ -1231,7 +1231,7 @@
     "oauthFailed": "登录 {server} 失败（{reason}）",
     "renameTitle": "重命名",
     "renameLabel": "服务器名称",
-    "renameHint": "作为工具名前缀(如 mcp-postgres::query)。重新连接后生效。",
+    "renameHint": "作为工具名前缀(如 mcp-notion::search)。重新连接后生效。",
     "renameDone": "已重命名为“{name}”。下次连接时生效。",
     "renameError": "重命名失败",
     "save": "保存",
@@ -1260,7 +1260,7 @@
     "optionalTag": "（可选）",
     "installFormTitle": "安装设置",
     "nameLabel": "服务器名称",
-    "nameHint": "作为工具名前缀(如 mcp-postgres::query)。仅限字母、数字、_ 和 -。"
+    "nameHint": "作为工具名前缀(如 mcp-notion::search)。仅限字母、数字、_ 和 -。"
   },
   "mcpMonitoring": {
     "title": "MCP 监控",
