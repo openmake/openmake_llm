@@ -1,0 +1,25 @@
+[
+  {
+    "id": "mcp-kakao",
+    "displayName": "Kakao (Map/Search)",
+    "description": "Kakao 지도(장소검색·좌표→주소·길찾기) + Daum 검색 도구 7종. Kakao REST API 키 필요.",
+    "transportType": "stdio",
+    "commandTemplate": "node /home/node/kakao-mcp/dist/index.js --mode=stdio",
+    "argsSchema": {},
+    "envSchema": {
+      "type": "object",
+      "required": [
+        "KAKAO_REST_API_KEY"
+      ],
+      "properties": {
+        "KAKAO_REST_API_KEY": {
+          "type": "string",
+          "title": "Kakao REST API Key",
+          "secret": true,
+          "description": "developers.kakao.com 앱 > REST API 키. 카카오맵/로컬 API 사용 설정 필요"
+        }
+      }
+    },
+    "defaultEnabled": true
+  }
+]

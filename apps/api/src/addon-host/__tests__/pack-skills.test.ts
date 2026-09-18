@@ -2,12 +2,16 @@ import { BUILTIN_ADDON_IDS, BUILTIN_ADDON_SKILL_SOURCE_PATH } from '../builtin-r
 import { installPackSkills, loadPackSkills } from '../pack-skills';
 import { getIndustryAgentsData } from '../../agents/types';
 
-function likeToRegExp(pattern: string): RegExp {
+/** 스킬을 싣는 팩 — 보관용 source_path 패턴이 등록된 add-on */
+const CONTENT_PACK_IDS = BUILTIN_ADDON_IDS.filter(id => BUILTIN_ADDON_SKILL_SOURCE_PATH[id] !== undefined);
+
+function likeToRegExp(pattern: string | undefined): RegExp {
+    if (!pattern) throw new Error('콘텐츠 팩에는 보관용 source_path 패턴이 있어야 한다');
     return new RegExp('^' + pattern.split('%').map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$');
 }
 
 describe('팩 스킬 정의', () => {
-    it.each([...BUILTIN_ADDON_IDS])('%s — id 가 겹치지 않고, 모든 sourcePath 가 그 팩의 보관 패턴에 걸린다', id => {
+    it.each([...CONTENT_PACK_IDS])('%s — id 가 겹치지 않고, 모든 sourcePath 가 그 팩의 보관 패턴에 걸린다', id => {
         const skills = loadPackSkills(id);
         expect(skills.length).toBeGreaterThan(0);
         expect(new Set(skills.map(s => s.id)).size).toBe(skills.length);
@@ -16,9 +20,9 @@ describe('팩 스킬 정의', () => {
     });
 
     it('팩끼리 스킬 id·보관 패턴이 섞이지 않는다', () => {
-        const all = BUILTIN_ADDON_IDS.flatMap(id => loadPackSkills(id).map(s => ({ pack: id, ...s })));
+        const all = CONTENT_PACK_IDS.flatMap(id => loadPackSkills(id).map(s => ({ pack: id, ...s })));
         expect(new Set(all.map(s => s.id)).size).toBe(all.length);
-        for (const id of BUILTIN_ADDON_IDS) {
+        for (const id of CONTENT_PACK_IDS) {
             const pattern = likeToRegExp(BUILTIN_ADDON_SKILL_SOURCE_PATH[id]);
             expect(all.filter(s => s.pack !== id && pattern.test(s.sourcePath)).map(s => s.id)).toEqual([]);
         }
@@ -53,4 +57,10 @@ describe('installPackSkills', () => {
         const utility = await installPackSkills('utility-pack', { ...store, assignSkillToAgent: async () => { throw new Error('배정되면 안 된다'); } });
         expect(utility.failed).toEqual([]);
     });
+});
+
+it('보관 패턴이 없는 add-on 은 스킬을 싣지 않는다 (싣는다면 끌 때 주입을 멈출 방법이 없다)', () => {
+    for (const id of BUILTIN_ADDON_IDS.filter(i => BUILTIN_ADDON_SKILL_SOURCE_PATH[i] === undefined)) {
+        expect(loadPackSkills(id)).toEqual([]);
+    }
 });

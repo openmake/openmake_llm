@@ -135,7 +135,9 @@ export interface WsChatRequest {
   /** 응답 스타일 — 백엔드 chat/style.ts 가 system prompt 앞에 style guard 를 prepend (concise=간결, verbose=상세) */
   style?: "concise" | "default" | "verbose";
   enabledTools?: Record<string, boolean>;
-  /** NotebookLM 노트북 컨텍스트 — composer picker 선택. 백엔드(ws-chat-handler)가 grounding 프리픽스를 주입 */
+  /** 통합(add-on)별 외부 컨텍스트 참조 — add-on id → 참조. 컴포저의 컨텍스트 선택기가 보낸다(백엔드가 LLM 전용 채널에 접두 주입) */
+  contextRefs?: Record<string, { id: string; title: string }>;
+  /** 구 필드(contextRefs 도입 2026-09-19 전) — 새 클라이언트는 보내지 않는다. 구 클라이언트 호환용으로만 서버가 읽는다 */
   notebook?: { id: string; title: string } | null;
   /** 개인정보: false 면 백엔드가 대화 기록 저장을 생략 (설정 페이지 토글). 기본 true */
   saveHistory?: boolean;

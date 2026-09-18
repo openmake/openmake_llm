@@ -8,6 +8,7 @@
  * @module services/chat-service/external-system-prompt
  */
 import type { ChatMessageRequest } from '../chat-service-types';
+import { getChatTurnIntegrations } from './turn-integrations';
 import type { ResolvedProvider } from '../../providers/provider-router';
 import { getExternalProviderSystemGuards } from '../../chat/prompt';
 import { getCurrentDate } from '../../utils/datetime';
@@ -21,7 +22,8 @@ type ExternalSystemPromptParams = {
     req: ChatMessageRequest;
     resolved: ResolvedProvider;
     ctx: StreamFromExternalContext;
-    wantsMap: boolean;
+    /** 통합(add-on)이 이 턴에 넣는 시스템 프롬프트 조각 — 호출부가 원 메시지 기준으로 계산해 전달 */
+    integrationPromptParts?: readonly string[];
     /** 오케스트레이션 자동 배정 의도(external-tool-plan 과 공유) — 매칭 턴에만 가이드 주입. */
     orchestration?: { discussion: boolean; taskDelegate: boolean };
     /** 병렬 위임 의도(SPAWN_INTENT_PATTERNS) — 매칭 턴에만 spawn_agents 가이드 주입. */
@@ -30,7 +32,7 @@ type ExternalSystemPromptParams = {
 
 /**
  * 외부 provider 요청의 시스템 프롬프트 본문을 조립해 반환. 비면 '' (호출부가 system 미주입).
- * wantsMap 은 호출부에서 계산해 전달(도구 라우팅에도 재사용되므로).
+ * integrationPromptParts 는 호출부에서 계산해 전달(원 메시지 기준 — effectiveReq 와 다를 수 있다).
  */
 export function buildExternalSystemPrompt(params: ExternalSystemPromptParams): string {
     const { staticParts, dynamicParts } = buildExternalSystemPromptParts(params);
@@ -42,7 +44,7 @@ export function buildExternalSystemPrompt(params: ExternalSystemPromptParams): s
  * `buildExternalSystemPrompt` 는 이 두 배열을 순서대로 이어 붙인 것과 바이트 단위로 같다.
  */
 export function buildExternalSystemPromptParts(params: ExternalSystemPromptParams): { staticParts: string[]; dynamicParts: string[] } {
-    const { req, resolved, ctx, wantsMap, orchestration, wantsSpawn } = params;
+    const { req, resolved, ctx, integrationPromptParts, orchestration, wantsSpawn } = params;
     const staticParts: string[] = [];
     const dynamicParts: string[] = [];
     let systemPromptParts = staticParts;
@@ -155,22 +157,13 @@ export function buildExternalSystemPromptParts(params: ExternalSystemPromptParam
         systemPromptParts.push(
             `[사용자 현재 위치 — 기기 GPS] 위도 ${lat.toFixed(6)}, 경도 ${lng.toFixed(6)}. ` +
             '"내 주변"·"근처"·"현재 위치" 류 질문은 이 좌표를 기준으로 답하세요. ' +
-            '카카오 장소 검색(search-places)을 쓸 때는 x(경도)·y(위도)·radius 인자에 이 좌표를 전달해 ' +
-            '실제 주변 결과를 얻으세요. 좌표 값 자체를 답변 본문에 나열하지는 마세요.',
+            getChatTurnIntegrations().map((i) => i.userLocationHint?.() ?? '').join('') +
+            '좌표 값 자체를 답변 본문에 나열하지는 마세요.',
         );
     }
 
-    // 위치/지도 의도면 카카오 장소 검색 도구를 우선 쓰도록 라우팅 넛지 주입.
-    // (qwen 이 web_search 로 이탈하는 문제 보정 — 구 generate_image 도구는 2026-09-12 오케스트레이터로 대체돼 목록에 없음)
-    if (wantsMap) {
-        systemPromptParts.push(
-            '사용자가 국내(한국) 장소·위치·지도·길찾기를 묻고 있습니다. 이런 질문에는 반드시 ' +
-            '카카오 도구(장소는 search-places, 길찾기는 find-route)를 먼저 호출해 실제 데이터를 ' +
-            '얻으세요. 웹 검색이나 이미지 생성으로 좌표·위치를 추측하지 마세요. ' +
-            '⚠️ 지도는 시스템이 도구 결과로 자동 표시하니, 당신은 kakaomap 코드 블록이나 좌표(lat/lng) ' +
-            '목록을 절대 직접 작성하지 마세요. 사람이 읽을 요약(장소명·주소·거리·소요시간 등)만 작성하세요.',
-        );
-    }
+    // 통합(add-on) 넛지 — 의도 턴에 그 통합의 도구를 우선 쓰도록 하는 조각 (예: 지도 통합).
+    if (integrationPromptParts && integrationPromptParts.length > 0) systemPromptParts.push(...integrationPromptParts);
 
     // 오케스트레이션 자동 배정(Stage 1) — 해당 의도 프리필터 매칭 턴에만 배정 가이드 주입
     // (도구 노출과 동일 조건 공유 — external-tool-plan.detectOrchestrationIntents).

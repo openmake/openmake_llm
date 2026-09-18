@@ -96,7 +96,7 @@ export class SystemSettingsService {
 
     /**
      * 외부 프로세스(Discord 봇)가 기동 시 받아갈 **유효값** — DB overlay 가 있으면 그 값, 없으면 env 원값.
-     * 시크릿 평문이 섞이므로 호출부가 스코프(API_KEY_SCOPES.DISCORD)를 먼저 검사해야 한다.
+     * 시크릿 평문이 섞이므로 호출부가 API key 스코프를 먼저 검사해야 한다(예: 봇 런타임 설정 라우트의 add-on 기여 스코프).
      */
     getEffectiveValues(keys: readonly string[]): Record<string, string> {
         const out: Record<string, string> = {};

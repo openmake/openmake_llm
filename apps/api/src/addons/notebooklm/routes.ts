@@ -13,14 +13,14 @@
  */
 import { Router, Request, Response } from 'express';
 import { LRUCache } from 'lru-cache';
-import { requireAuth } from '../auth';
-import { success, notFound, error as errorResponse } from '../utils/api-response';
-import { asyncHandler } from '../utils/error-handler';
-import { getUnifiedDatabase } from '../data/models/unified-database';
-import { McpCatalogRepository } from '../data/repositories/mcp-catalog-repository';
-import { getLifecycleSupervisor } from '../mcp/lifecycle-supervisor';
-import { NOTEBOOKLM_INTEGRATION } from '../config/runtime-limits';
-import { createLogger } from '../utils/logger';
+import { requireAuth } from '../../auth';
+import { success, notFound, error as errorResponse } from '../../utils/api-response';
+import { asyncHandler } from '../../utils/error-handler';
+import { getUnifiedDatabase } from '../../data/models/unified-database';
+import { McpCatalogRepository } from '../../data/repositories/mcp-catalog-repository';
+import { getLifecycleSupervisor } from '../../mcp/lifecycle-supervisor';
+import { NOTEBOOKLM_INTEGRATION } from './config';
+import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('NotebookLMRoutes');
 

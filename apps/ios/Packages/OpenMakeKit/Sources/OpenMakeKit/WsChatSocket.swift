@@ -172,6 +172,8 @@ public extension WsChatRequest {
             client: .ios,
             // 멱등 키(140) — 재전송돼도 서버가 같은 요청으로 판정한다.
             clientRequestID: UUID().uuidString,
+            // add-on 컨텍스트 참조(웹 컴포저의 노트북 선택 등) — iOS 는 선택 UI 가 없어 보내지 않는다.
+            contextRefs: nil,
             deepResearchMode: deepResearchMode,
             discussionMode: discussionMode,
             enabledTools: nil,

@@ -40,7 +40,6 @@ import {
     skillsUsageRouter,
     mcpRouter,
     mcpCatalogRouter,
-    notebooklmRouter,
     mcpServerIngestRouter,
     mcpCatalogAdminRouter,
     mcpAdminMonitoringRouter,
@@ -60,7 +59,6 @@ import {
     usageStatementsRouter,
     adminBillingRouter,
     firstRunSetupRouter,
-    kakaoMapEmbedRouter,
     usageRouter,
     nodesRouter,
     setNodesCluster,
@@ -103,7 +101,7 @@ import { authLimiter } from '../middlewares/rate-limiters';
 import { GitFetcher } from '../agents/git-ingest/git-fetcher';
 import { LLMClient } from '../llm/client';
 import { MCP_INGEST } from '../config/constants';
-import { discordRuntimeRouter } from './discord-runtime.routes';
+import { mountAddonRoutes } from '../addon-host/routes';
 
 
 
@@ -197,8 +195,6 @@ export function setupApiRoutes(
     app.use('/api/metrics/tools', toolHealthRouter);
     app.use('/api/metrics/evaluations', evaluationRunsRouter);
     app.use('/api/metrics', metricsRouter);
-    // Discord 봇 런타임 설정 배포 — API key(discord 스코프) 전용 (2026-09-18)
-    app.use('/api/integrations/discord', discordRuntimeRouter);
     // 🆕 스킬 라우트 — agentRouter(/:id catch-all) 보다 먼저 마운트 필수
     // 사용 요약(/usage/summary)은 skillsRouter 의 /:skillId 보다 먼저 (skills.routes 600줄 게이트로 분리)
     app.use('/api/agents/skills', skillsUsageRouter);
@@ -209,7 +205,9 @@ export function setupApiRoutes(
     app.use('/api/mcp', mcpOAuthRouter);   // 원격 MCP OAuth (start/callback/logout)
     app.use('/api/marketplace', marketplacePublishRouter);   // 마켓플레이스 게시 (발행형)
     app.use('/api/mcp', mcpCatalogRouter);
-    app.use('/api/mcp', notebooklmRouter);
+    // 통합형 add-on 전용 라우트(NotebookLM·카카오 지도 임베드·Discord 런타임)와 GET /api/addons —
+    // Base 는 개별 통합 기능의 라우터를 알지 않는다 (addon-host/routes.ts).
+    mountAddonRoutes(app);
     const e2eMcpMock = process.env.MCP_INGEST_E2E_MOCK === 'true';
     // E2E 픽스처 모드 — 실제 GitHub API 호출 회피.
     // require() 로 lazy load 하여 production 번들에 mock 코드가 포함되지 않게 함.
@@ -274,11 +272,6 @@ export function setupApiRoutes(
     // 첫 실행 셋업 마법사 (admin 0명일 때만 동작하는 일회성 공개 엔드포인트, auth 계열 리미터)
     app.use('/api/setup', authLimiter, firstRunSetupRouter);
 
-    // 카카오 지도 임베드 HTML — 네이티브 앱 WKWebView 전용.
-    // /api 하위에 둔다: 운영 프록시(Caddy/Next)가 /api 만 백엔드로 보내므로 그 밖이면
-    // 외부 경로에서 404 가 된다(2026-08-18 실측). GET 이라 CSRF 는 스킵되고, /api 스코프
-    // 미들웨어는 Deprecation 헤더만 붙일 뿐 인증을 강제하지 않는다.
-    app.use('/api/embed', kakaoMapEmbedRouter);
     app.use('/api/admin', createAdminController());
     // GDPR Phase B Fix 6 (B7) — 동의 조회/철회 API
     app.use('/api/users/me/consent', createConsentController());

@@ -8,14 +8,14 @@
  * @module routes/discord-runtime
  */
 import { Router, Request, Response } from 'express';
-import { requireApiKey, requireScope } from '../middlewares/api-key-auth';
-import { API_KEY_SCOPES } from '../config/api-key-scopes';
-import { DISCORD_RUNTIME_SETTING_KEYS } from '../config/discord-runtime';
-import { getSystemSettingsService } from '../services/system-settings-service';
-import { getAuditService } from '../services/AuditService';
-import { asyncHandler } from '../utils/error-handler';
-import { success } from '../utils/api-response';
-import { createLogger } from '../utils/logger';
+import { requireApiKey, requireScope } from '../../middlewares/api-key-auth';
+import { DISCORD_API_KEY_SCOPE } from './contributions';
+import { DISCORD_RUNTIME_SETTING_KEYS } from './runtime-keys';
+import { getSystemSettingsService } from '../../services/system-settings-service';
+import { getAuditService } from '../../services/AuditService';
+import { asyncHandler } from '../../utils/error-handler';
+import { success } from '../../utils/api-response';
+import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('DiscordRuntimeRoutes');
 export const discordRuntimeRouter = Router();
@@ -24,7 +24,7 @@ export const discordRuntimeRouter = Router();
 discordRuntimeRouter.get(
     '/runtime-config',
     requireApiKey,
-    requireScope(API_KEY_SCOPES.DISCORD),
+    requireScope(DISCORD_API_KEY_SCOPE),
     asyncHandler(async (req: Request, res: Response) => {
         const settings = getSystemSettingsService().getEffectiveValues(DISCORD_RUNTIME_SETTING_KEYS);
         // 값은 남기지 않는다(토큰 평문) — 누가 어떤 키를 받아갔는지만.

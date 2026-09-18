@@ -1231,7 +1231,7 @@
     "oauthFailed": "Anmeldung bei {server} fehlgeschlagen ({reason})",
     "renameTitle": "Umbenennen",
     "renameLabel": "Servername",
-    "renameHint": "Wird Tool-Namen vorangestellt (z. B. mcp-postgres::query). Wird nach dem erneuten Verbinden des Servers wirksam.",
+    "renameHint": "Wird Tool-Namen vorangestellt (z. B. mcp-notion::search). Wird nach dem erneuten Verbinden des Servers wirksam.",
     "renameDone": "Umbenannt in „{name}“. Wird bei der nächsten Verbindung wirksam.",
     "renameError": "Umbenennen fehlgeschlagen",
     "save": "Speichern",
@@ -1260,7 +1260,7 @@
     "optionalTag": "(optional)",
     "installFormTitle": "Installationseinstellungen",
     "nameLabel": "Servername",
-    "nameHint": "Wird Tool-Namen vorangestellt (z. B. mcp-postgres::query). Nur Buchstaben, Ziffern, _ und -."
+    "nameHint": "Wird Tool-Namen vorangestellt (z. B. mcp-notion::search). Nur Buchstaben, Ziffern, _ und -."
   },
   "mcpMonitoring": {
     "title": "MCP-Überwachung",

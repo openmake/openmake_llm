@@ -13,7 +13,7 @@ export async function loadSessionIntoStore(sid: string): Promise<void> {
   const st = useAppStore.getState();
   st.setArtifacts([]);
   st.setCurrentSessionId(sid);
-  st.setNotebookContext(null);
+  st.clearContextRefs();
   try {
     const res = await ApiClient.get<ApiSuccess<{ messages?: WireMessage[] }>>(appendAnonSessionId(`/api/chat/sessions/${sid}/messages`));
     const msgs = res?.data?.messages ?? [];

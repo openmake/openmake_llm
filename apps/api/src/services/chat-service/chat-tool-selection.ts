@@ -8,10 +8,11 @@
  * @module services/chat-service/chat-tool-selection
  */
 import { CHAT_ALWAYS_ON_TOOL_NAMES } from '../../mcp/agent-task-tools';
+import { getChatTurnIntegrations } from './turn-integrations';
 import { OPS_METRICS_TOOL_ENABLED, OPS_METRICS_INTENT_PATTERNS } from '../../config/ops-metrics';
 import { MCP_META_TOOL_NAMES, MCP_RESOURCE_META_TOOL_NAMES } from '../../mcp/mcp-meta-tools';
 import {
-    MCP_PROGRESSIVE_DISCLOSURE_ENABLED, MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS, WEB_SEARCH_INTENT_PATTERNS, PLAN_INTENT_PATTERNS,
+    MCP_PROGRESSIVE_DISCLOSURE_ENABLED, WEB_SEARCH_INTENT_PATTERNS, PLAN_INTENT_PATTERNS,
     EXTENSION_IMPORT_INTENT_PATTERNS, CHAT_TOOL_INTENT_GATE_ENABLED, AGENT_TASK_INTENT_PATTERNS, MCP_RESOURCE_INTENT_PATTERNS,
 } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
@@ -51,28 +52,23 @@ export function selectTurnTools(params: {
     const combined = [...merged, ...alwaysOn, ...userMcpAutoOn.filter(t => !seen.has(t.function.name))];
     logger.debug(`MCP 도구 머지: all=${allTools.length} merged=${merged.length} alwaysOn=${alwaysOn.length} userMcpAutoOn=${userMcpAutoOn.length}`);
 
-    // 지도/위치 의도면 카카오 장소 검색 도구를, 길찾기 의도면 find-route 를 강제 포함한다.
-    // cap/relevance 선택에서 누락돼도 지도 렌더 체인(도구포함→tool_choice강제→블록주입)이
-    // 끊기지 않게 한다.
+    // 통합(add-on)이 의도 턴에 요구하는 도구를 강제 포함한다 — cap/relevance 선택에서 누락돼도
+    // 그 통합의 렌더 체인(도구포함→tool_choice강제→블록주입)이 끊기지 않게 한다.
     let finalCombined = combined;
-    const forceIncludeKakao = (needle: string, label: string) => {
-        const t = allTools.find((x) => x.function.name.includes(needle));
-        if (t && !finalCombined.some((x) => x.function.name === t.function.name)) {
-            finalCombined = [...finalCombined, t];
-            logger.info(`[Map] ${label} — 카카오 ${needle} 강제 포함`);
+    for (const integration of getChatTurnIntegrations()) {
+        for (const { nameIncludes, reason } of integration.forceIncludeTools?.(msg) ?? []) {
+            const t = allTools.find((x) => x.function.name.includes(nameIncludes));
+            if (t && !finalCombined.some((x) => x.function.name === t.function.name)) {
+                finalCombined = [...finalCombined, t];
+                logger.info(`[Integration:${integration.id}] ${reason} — ${nameIncludes} 강제 포함`);
+            }
         }
-    };
-    if (MAP_INTENT_PATTERNS.some((re) => re.test(msg))) {
-        forceIncludeKakao('search-places', '지도 의도');
-    }
-    if (ROUTE_INTENT_PATTERNS.some((re) => re.test(msg))) {
-        forceIncludeKakao('find-route', '길찾기 의도');
     }
     // 명시적 웹 검색 요청이면 web_search 를 강제 포함한다 — web_search 는 always-on 이
     // 아니라 에이전트 스킬 바인딩 경유로만 노출되므로, 에이전트 매칭이 안 되는 질문
     // (예: "인터넷 검색해서 날씨 알려줘")은 도구 자체가 목록에 없어 모델이 "검색 불가"
     // 로 답하던 결함(2026-07-17 Discord) 차단. 포함되면 외부 경로의 첫 턴 tool_choice
-    // 강제(external-provider)까지 연쇄 작동한다. (카카오 강제 포함과 동일 선례)
+    // 강제(external-provider)까지 연쇄 작동한다. (통합 도구 강제 포함과 동일 선례)
     if (WEB_SEARCH_INTENT_PATTERNS.some((re) => re.test(msg))
         || tailWebGround === true) {
         const ws = allTools.find((x) => x.function.name === 'web_search');

@@ -16,8 +16,8 @@ jest.mock('../../middlewares/api-key-auth', () => ({
     requireScope: (scope: string) => { mockScopeCalls.push(scope); return (_req: unknown, _res: unknown, next: () => void) => next(); },
 }));
 
-import { discordRuntimeRouter } from '../discord-runtime.routes';
-import { DISCORD_RUNTIME_SETTING_KEYS } from '../../config/discord-runtime';
+import { discordRuntimeRouter } from './routes';
+import { DISCORD_RUNTIME_SETTING_KEYS } from './runtime-keys';
 
 function handler(path: string) {
     const layer = (discordRuntimeRouter as any).stack.find((l: any) => l.route?.path === path && l.route.methods.get);

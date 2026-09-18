@@ -4,6 +4,7 @@
  * 결정적으로 주입되고, 없으면 흔적이 없어야 한다.
  */
 import { buildExternalSystemPrompt } from '../external-system-prompt';
+import { getChatTurnIntegrations } from '../turn-integrations';
 import type { ChatMessageRequest } from '../../chat-service-types';
 import type { ResolvedProvider } from '../../../providers/provider-router';
 
@@ -14,7 +15,7 @@ function build(req: Partial<ChatMessageRequest>) {
         req: { message: '내 주변 카페 찾아줘', ...req } as ChatMessageRequest,
         resolved,
         ctx: { resolvedLanguage: 'ko' } as never,
-        wantsMap: true,
+        integrationPromptParts: getChatTurnIntegrations().flatMap((i) => i.systemPromptParts?.({ message: '지도에서 위치 알려줘' }) ?? []),
         orchestration: { discussion: false, taskDelegate: false },
     });
 }

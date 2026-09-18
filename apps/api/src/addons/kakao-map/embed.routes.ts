@@ -8,10 +8,10 @@
  * 장소 데이터는 URL 로 넘기지 않고, 앱이 로드 후 `window.renderKakaoMap(payload)` 로
  * 주입한다(장소 수가 늘어도 URL 길이 제한에 걸리지 않는다).
  *
- * @module routes/kakao-map-embed.routes
+ * @module addons/kakao-map/embed.routes
  */
 import { Router, Request, Response } from 'express';
-import { KAKAO_MAP_EMBED } from '../config/runtime-limits';
+import { KAKAO_MAP_EMBED } from './config';
 
 const router = Router();
 

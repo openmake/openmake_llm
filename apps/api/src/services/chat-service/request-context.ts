@@ -20,8 +20,8 @@ export interface RequestContext {
     userContext: UserContext;
     /** 사용자 원문 메시지 — 의도 인식 도구 노출(특정 MCP 서버 언급 시 depth 우선)용. */
     message?: string;
-    /** NotebookLM 노트북 컨텍스트 — 도구 노출 매칭에서 notebooklm 서버를 참조된 것으로 취급 */
-    notebook?: { id: string; title: string } | null;
+    /** 통합(add-on)별 외부 컨텍스트 참조 — add-on id → 참조. 예: 컴포저에서 고정한 노트북. LLM 전용 채널에만 쓰인다(대화 저장 미포함) */
+    contextRefs?: Record<string, { id: string; title: string }>;
     /** 사용자가 활성화한 MCP 도구 (undefined면 레거시 모드: 전체 허용) */
     enabledTools?: Record<string, boolean>;
     /** 실행 계획 (requiredTools 강제 포함) */

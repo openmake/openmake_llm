@@ -612,7 +612,7 @@ export function useChatSocket() {
 
   // 반환값: 실제 전송 여부 — 재생성(resend) 경로가 히스토리 되감기 원복 판단에 사용.
   const sendChat = useCallback(
-    (message: string, images?: string[], files?: AttachedFileUI[], notebook?: { id: string; title: string } | null): boolean => {
+    (message: string, images?: string[], files?: AttachedFileUI[], contextRefs?: Record<string, { id: string; title: string }>): boolean => {
       const s = useAppStore.getState();
       const hasFiles = Array.isArray(files) && files.length > 0;
       // 텍스트가 비어도 첨부 파일만으로 전송 가능
@@ -662,8 +662,8 @@ export function useChatSocket() {
         ...(s.answerVerification ? { verifyAnswer: true } : {}),
         style: s.style,
         enabledTools: s.mcpToolsEnabled,
-        // NotebookLM 컨텍스트 — grounding 프리픽스 주입은 백엔드(prompts/notebook-context) 담당
-        notebook: notebook ?? undefined,
+        // add-on 컨텍스트 참조 — 접두 주입은 백엔드(그 add-on 의 채팅 통합) 담당
+        contextRefs: contextRefs && Object.keys(contextRefs).length > 0 ? contextRefs : undefined,
         // 개인정보 설정 — 백엔드(ws-chat-handler)가 존중: false 면 기록 저장/메모리 학습 생략.
         saveHistory: s.saveHistory,
         memoryLearning: s.memoryLearning,

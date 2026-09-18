@@ -17,7 +17,6 @@ function build(ctx: Record<string, unknown>) {
         req: baseReq,
         resolved,
         ctx: ctx as never,
-        wantsMap: false,
         orchestration: { discussion: false, taskDelegate: false },
     });
 }

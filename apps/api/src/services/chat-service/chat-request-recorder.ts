@@ -39,7 +39,7 @@ export function buildChatProvenance(p: {
     ctx: StreamFromExternalContext;
     promptParts?: { staticParts: string[]; dynamicParts: string[] };
     tools: ReadonlyArray<{ function: { name: string; parameters?: unknown } }>;
-    flags: { map: boolean; orchestration: boolean; spawn: boolean };
+    flags: { integrations: string[]; orchestration: boolean; spawn: boolean };
 }): ChatProvenance {
     const fp = p.promptParts ? fingerprintPrompt(p.promptParts.staticParts, p.promptParts.dynamicParts) : undefined;
     const tf = fingerprintTools(p.tools);

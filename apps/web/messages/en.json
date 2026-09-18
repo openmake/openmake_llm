@@ -1231,7 +1231,7 @@
     "oauthFailed": "Sign-in to {server} failed ({reason})",
     "renameTitle": "Rename",
     "renameLabel": "Server name",
-    "renameHint": "Prefixes tool names (e.g. mcp-postgres::query). Takes effect after the server reconnects.",
+    "renameHint": "Prefixes tool names (e.g. mcp-notion::search). Takes effect after the server reconnects.",
     "renameDone": "Renamed to \"{name}\". It applies on the next connection.",
     "renameError": "Rename failed",
     "save": "Save",
@@ -1260,7 +1260,7 @@
     "optionalTag": "(optional)",
     "installFormTitle": "Install settings",
     "nameLabel": "Server name",
-    "nameHint": "Prefixes tool names (e.g. mcp-postgres::query). Letters, digits, _ and - only."
+    "nameHint": "Prefixes tool names (e.g. mcp-notion::search). Letters, digits, _ and - only."
   },
   "mcpMonitoring": {
     "title": "MCP Monitoring",

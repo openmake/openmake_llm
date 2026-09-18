@@ -208,7 +208,6 @@ function applyPromptPlaceholders(template: string, values: Record<string, string
  * 스킬 주입 우선순위:
  * 1. DB 스킬 (skill-seeder로 자동 등록된 전문 지침) - 있으면 파일 로딩 생략
  * 2. 파일 기반 프롬프트 (DB 스킬 없을 때 폴백)
- *    - 카테고리별 하위 폴더: prompts/{category}/{agent-id}.md (우선)
  *    - 루트 폴더: prompts/{agent-id}.md (폴백 - 하위 호환성)
  *
  * @param selection - routeToAgent() 결과의 에이전트 선택 정보
@@ -281,22 +280,9 @@ ${applyPromptPlaceholders(promptTemplate.workingOn, { phase: getPhaseLabel(selec
 
     // 2. 파일 기반 프롬프트 로딩 (DB 스킬 없을 때만 - 중복 방지)
     if (!hasDbSkills) {
-        let promptPath = '';
-        // 1단계: 카테고리별 하위 폴더 확인 (우선)
-        if (agent.category) {
-            const categoryPath = path.join(__dirname, 'prompts', agent.category, `${agent.id}.md`);
-            if (fs.existsSync(categoryPath)) {
-                promptPath = categoryPath;
-            }
-        }
-
-        // 2단계: 루트 폴더 확인 (폴백 - 하위 호환성)
-        if (!promptPath) {
-            const rootPath = path.join(__dirname, 'prompts', `${agent.id}.md`);
-            if (fs.existsSync(rootPath)) {
-                promptPath = rootPath;
-            }
-        }
+        // 루트 폴더 프롬프트 (폴백 - 하위 호환성). 산업 에이전트 본문은 industry-pack 의 스킬로만 온다.
+        const rootPath = path.join(__dirname, 'prompts', `${agent.id}.md`);
+        const promptPath = fs.existsSync(rootPath) ? rootPath : '';
 
         try {
             if (promptPath && fs.existsSync(promptPath)) {

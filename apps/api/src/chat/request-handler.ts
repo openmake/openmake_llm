@@ -366,7 +366,7 @@ export class ChatRequestHandler {
             apiKeyId: params.apiKeyId,
             userRole: userContext.userRole,
             enabledTools,
-            notebook: params.notebook,
+            contextRefs: params.contextRefs,
             abortSignal,
             userLanguagePreference,
             // 언어 감지용 원문 — WS 는 확장 전 원문을 넘기고, REST 는 여기서 확장하므로 입력이 곧 원문

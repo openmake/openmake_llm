@@ -1231,7 +1231,7 @@
     "oauthFailed": "{server} 로그인 실패 ({reason})",
     "renameTitle": "이름 변경",
     "renameLabel": "서버 이름",
-    "renameHint": "도구 이름 앞에 붙습니다(예: mcp-postgres::query). 변경 후 재연결되어야 적용됩니다.",
+    "renameHint": "도구 이름 앞에 붙습니다(예: mcp-notion::search). 변경 후 재연결되어야 적용됩니다.",
     "renameDone": "이름을 \"{name}\" 로 바꿨습니다. 다음 연결부터 적용됩니다.",
     "renameError": "이름 변경에 실패했습니다",
     "save": "저장",
@@ -1260,7 +1260,7 @@
     "optionalTag": "(선택)",
     "installFormTitle": "설치 설정",
     "nameLabel": "서버 이름",
-    "nameHint": "도구 이름 앞에 붙습니다(예: mcp-postgres::query). 영숫자·_·- 만 사용."
+    "nameHint": "도구 이름 앞에 붙습니다(예: mcp-notion::search). 영숫자·_·- 만 사용."
   },
   "mcpMonitoring": {
     "title": "MCP 모니터링",

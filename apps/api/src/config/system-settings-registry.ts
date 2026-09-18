@@ -14,8 +14,10 @@
  * @see docs/superpowers/plans/2026-08-12-system-settings-admin-ui.md
  */
 import { z } from 'zod';
+import { contributedSettings, type AddonSettingValidator } from '../addon-host/contributions';
 
-export type SettingGroup = 'oauth' | 'search' | 'alerts' | 'push' | 'llm' | 'agent' | 'slo' | 'discord';
+/** Base 그룹 또는 add-on 이 기여한 그룹 이름 */
+export type SettingGroup = 'oauth' | 'search' | 'alerts' | 'push' | 'llm' | 'agent' | 'slo' | (string & {});
 
 interface SystemSettingDef {
     /** env 변수명과 동일한 설정 키 */
@@ -66,7 +68,7 @@ const ISSUE_URLS = {
     nvidiaNim: 'https://build.nvidia.com/settings/api-keys',
 } as const;
 
-export const SYSTEM_SETTINGS_REGISTRY: SystemSettingDef[] = [
+const BASE_SYSTEM_SETTINGS: SystemSettingDef[] = [
     // ── OAuth (소셜 로그인) — 미설정 시 해당 provider 로그인 비활성 ──
     { key: 'GOOGLE_CLIENT_ID', group: 'oauth', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.googleCloud },
     { key: 'GOOGLE_CLIENT_SECRET', group: 'oauth', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.googleCloud },
@@ -95,18 +97,6 @@ export const SYSTEM_SETTINGS_REGISTRY: SystemSettingDef[] = [
     { key: 'OPERATOR_WEBHOOK_URL_INFO', group: 'alerts', secret: true, requiresRestart: false, validate: httpsUrl },
 
     // ── Discord 봇 ──
-    // 봇은 별도 프로세스(PM2 openmake-discord)라 DB overlay 가 자동으로 닿지 않는다 —
-    // 기동 시 GET /api/integrations/discord/runtime-config 로 받아가므로 전부 requiresRestart.
-    // DISCORD_BOT_API_KEY 는 그 요청의 자격증명이라 .env 전용(부트스트랩 순환).
-    { key: 'DISCORD_BOT_TOKEN', group: 'discord', secret: true, requiresRestart: true, validate: apiKeyLike, issueUrl: 'https://discord.com/developers/applications' },
-    { key: 'DISCORD_BOT_MODEL', group: 'discord', secret: false, requiresRestart: true, validate: nonEmpty },
-    { key: 'DISCORD_BOT_REQUEST_TIMEOUT_MS', group: 'discord', secret: false, requiresRestart: true, validate: nonNegativeIntString },
-    { key: 'DISCORD_ALLOW_ALL_USERS', group: 'discord', secret: false, requiresRestart: true, validate: z.enum(['true', 'false']) },
-    { key: 'DISCORD_ALLOWED_USERS', group: 'discord', secret: false, requiresRestart: true, validate: nonEmpty },
-    { key: 'DISCORD_ALLOWED_ROLES', group: 'discord', secret: false, requiresRestart: true, validate: nonEmpty },
-    { key: 'DISCORD_REQUIRE_MENTION', group: 'discord', secret: false, requiresRestart: true, validate: z.enum(['true', 'false']) },
-    { key: 'DISCORD_FREE_RESPONSE_CHANNELS', group: 'discord', secret: false, requiresRestart: true, validate: nonEmpty },
-    { key: 'DISCORD_SESSION_MAX_TURNS', group: 'discord', secret: false, requiresRestart: true, validate: nonNegativeIntString },
 
     // ── 웹 푸시 (VAPID) ──
     { key: 'VAPID_PUBLIC_KEY', group: 'push', secret: false, requiresRestart: false, validate: nonEmpty },
@@ -146,6 +136,20 @@ export const SYSTEM_SETTINGS_REGISTRY: SystemSettingDef[] = [
     { key: 'OPENROUTER_API_KEY', group: 'llm', secret: true, requiresRestart: false, validate: apiKeyLike, issueUrl: ISSUE_URLS.openrouter },
     { key: 'OLLAMA_CLOUD_API_KEY', group: 'llm', secret: true, requiresRestart: false, validate: apiKeyLike, issueUrl: ISSUE_URLS.ollamaCloud },
     { key: 'NVIDIA_API_KEY', group: 'llm', secret: true, requiresRestart: false, validate: apiKeyLike, issueUrl: ISSUE_URLS.nvidiaNim },
+];
+
+/** add-on 기여 설정의 검증기 이름 → zod 스키마 */
+const CONTRIBUTED_VALIDATORS: Readonly<Record<AddonSettingValidator, z.ZodType<string>>> = {
+    nonEmpty,
+    apiKey: apiKeyLike,
+    nonNegativeInt: nonNegativeIntString,
+    boolean: z.enum(['true', 'false']),
+};
+
+/** Base 설정 + 켜진 add-on 이 기여한 설정 (addon-host/contributions) */
+export const SYSTEM_SETTINGS_REGISTRY: SystemSettingDef[] = [
+    ...BASE_SYSTEM_SETTINGS,
+    ...contributedSettings().map((d) => ({ ...d, validate: CONTRIBUTED_VALIDATORS[d.validate] })),
 ];
 
 export const SETTING_DEFS_BY_KEY: ReadonlyMap<string, SystemSettingDef> = new Map(

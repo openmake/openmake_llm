@@ -27,7 +27,7 @@ describe('recordChatRequestFireAndForget', () => {
     it('타이밍·지문·결과를 1행으로 넣고, 같은 지문 원문은 한 번만 upsert 한다', async () => {
         const req = { message: 'hi', userId: '3', sessionId: 's1', webSearchContext: 'ctx' } as never;
         const ctx = { artifactGuideBlock: 'ART', timings: { enteredAt: 1000, firstLlmCallAt: 1200, firstChunkAt: 3000, toolMs: 50, turns: 2 } } as never;
-        const provenance = buildChatProvenance({ req, ctx, promptParts: { staticParts: ['ART-UNIQUE-1'], dynamicParts: ['D'] }, tools: [{ function: { name: 'web_search', parameters: {} } }], flags: { map: false, orchestration: false, spawn: false } });
+        const provenance = buildChatProvenance({ req, ctx, promptParts: { staticParts: ['ART-UNIQUE-1'], dynamicParts: ['D'] }, tools: [{ function: { name: 'web_search', parameters: {} } }], flags: { integrations: [], orchestration: false, spawn: false } });
         recordChatRequestFireAndForget({ provenance, req, resolved, ctx, status: 'ok', inputTokens: 10, outputTokens: 20 });
         await flush();
         expect(insert).toHaveBeenCalledWith(expect.objectContaining({
@@ -45,7 +45,7 @@ describe('recordChatRequestFireAndForget', () => {
     it('첫 청크가 없으면 TTFT 는 null, 기록 실패는 삼킨다', async () => {
         insert.mockRejectedValueOnce(new Error('db down'));
         const ctx = { timings: { enteredAt: Date.now(), firstLlmCallAt: 0, firstChunkAt: 0, toolMs: 0, turns: 0 } } as never;
-        const provenance = buildChatProvenance({ req: { message: 'x' } as never, ctx, tools: [], flags: { map: false, orchestration: false, spawn: false } });
+        const provenance = buildChatProvenance({ req: { message: 'x' } as never, ctx, tools: [], flags: { integrations: [], orchestration: false, spawn: false } });
         expect(() => recordChatRequestFireAndForget({ provenance, req: { message: 'x' } as never, resolved, ctx, status: 'aborted', inputTokens: 0, outputTokens: 0 })).not.toThrow();
         await flush();
         expect(insert).toHaveBeenCalledWith(expect.objectContaining({ ttftMs: null, prepMs: null, status: 'aborted', promptStaticHash: undefined }));

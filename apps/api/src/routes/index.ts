@@ -16,7 +16,6 @@ export { default as skillsUsageRouter } from './skills-usage.routes';
 export { default as modelRouter } from './model.routes';
 export { mcpRouter } from './mcp.routes';
 export { mcpCatalogRouter } from './mcp-catalog.routes';
-export { notebooklmRouter } from './notebooklm.routes';
 export { mcpServerIngestRouter } from './mcp-server-ingest.routes';
 export { mcpCatalogAdminRouter } from './mcp-catalog-admin.routes';
 export { mcpAdminMonitoringRouter } from './mcp-admin-monitoring.routes';
@@ -33,7 +32,6 @@ export { adminGatewayRouter } from './admin-gateway.routes';
 export { usageQuotaRouter, adminQuotaOverageRouter } from './quota-overage.routes';
 export { usageStatementsRouter, adminBillingRouter } from './billing-statements.routes';
 export { firstRunSetupRouter } from './first-run-setup.routes';
-export { default as kakaoMapEmbedRouter } from './kakao-map-embed.routes';
 
 // 🆕 리팩토링된 라우트
 // (chatRouter/webSearchRouter 재수출 제거 — setup.ts/v1 이 각 routes 파일 직접 import)

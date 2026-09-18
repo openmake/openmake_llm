@@ -959,6 +959,8 @@ public struct WsChatRequest: Codable {
     public let client: Client?
     /// 클라이언트 발급 멱등 키(140) — 같은 id 재전송은 새 생성 없이 이전 messageId 로 done 만 다시 온다
     public let clientRequestID: String?
+    /// 통합(add-on)별 외부 컨텍스트 참조 — add-on id → 참조. 컴포저의 컨텍스트 선택기가 보낸다(백엔드가 LLM 전용 채널에 접두 주입)
+    public let contextRefs: [String: ContextRef]?
     public let deepResearchMode: Bool?
     /// 멀티 에이전트 토론 모드
     public let discussionMode: Bool?
@@ -976,7 +978,7 @@ public struct WsChatRequest: Codable {
     public let memoryLearning: Bool?
     public let message: String
     public let model: String?
-    /// NotebookLM 노트북 컨텍스트 — composer picker 선택. 백엔드(ws-chat-handler)가 grounding 프리픽스를 주입
+    /// 구 필드(contextRefs 도입 2026-09-19 전) — 새 클라이언트는 보내지 않는다. 구 클라이언트 호환용으로만 서버가 읽는다
     public let notebook: Notebook?
     /// 개인정보: false 면 백엔드가 대화 기록 저장을 생략 (설정 페이지 토글). 기본 true
     public let saveHistory: Bool?
@@ -999,6 +1001,7 @@ public struct WsChatRequest: Codable {
         case artifactMode = "artifactMode"
         case client = "client"
         case clientRequestID = "clientRequestId"
+        case contextRefs = "contextRefs"
         case deepResearchMode = "deepResearchMode"
         case discussionMode = "discussionMode"
         case enabledTools = "enabledTools"
@@ -1021,11 +1024,12 @@ public struct WsChatRequest: Codable {
         case webSearch = "webSearch"
     }
 
-    public init(anonSessionID: String?, artifactMode: Bool?, client: Client?, clientRequestID: String?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, lane: String?, memoryLearning: Bool?, message: String, model: String?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, userLocation: UserLocation?, webSearch: Bool?) {
+    public init(anonSessionID: String?, artifactMode: Bool?, client: Client?, clientRequestID: String?, contextRefs: [String: ContextRef]?, deepResearchMode: Bool?, discussionMode: Bool?, enabledTools: [String: Bool]?, files: [WsAttachedFile]?, history: [History]?, imageMode: Bool?, images: [String]?, lane: String?, memoryLearning: Bool?, message: String, model: String?, notebook: Notebook?, saveHistory: Bool?, sessionID: String?, style: Style?, thinkingMode: Bool?, type: RequestType, userAgentID: String?, userLocation: UserLocation?, webSearch: Bool?) {
         self.anonSessionID = anonSessionID
         self.artifactMode = artifactMode
         self.client = client
         self.clientRequestID = clientRequestID
+        self.contextRefs = contextRefs
         self.deepResearchMode = deepResearchMode
         self.discussionMode = discussionMode
         self.enabledTools = enabledTools
@@ -1072,6 +1076,7 @@ public extension WsChatRequest {
         artifactMode: Bool?? = nil,
         client: Client?? = nil,
         clientRequestID: String?? = nil,
+        contextRefs: [String: ContextRef]?? = nil,
         deepResearchMode: Bool?? = nil,
         discussionMode: Bool?? = nil,
         enabledTools: [String: Bool]?? = nil,
@@ -1098,6 +1103,7 @@ public extension WsChatRequest {
             artifactMode: artifactMode ?? self.artifactMode,
             client: client ?? self.client,
             clientRequestID: clientRequestID ?? self.clientRequestID,
+            contextRefs: contextRefs ?? self.contextRefs,
             deepResearchMode: deepResearchMode ?? self.deepResearchMode,
             discussionMode: discussionMode ?? self.discussionMode,
             enabledTools: enabledTools ?? self.enabledTools,
@@ -1132,6 +1138,59 @@ public extension WsChatRequest {
 
 public enum Client: String, Codable {
     case ios = "ios"
+}
+
+// MARK: - ContextRef
+public struct ContextRef: Codable {
+    public let id: String
+    public let title: String
+
+    public enum CodingKeys: String, CodingKey {
+        case id = "id"
+        case title = "title"
+    }
+
+    public init(id: String, title: String) {
+        self.id = id
+        self.title = title
+    }
+}
+
+// MARK: ContextRef convenience initializers and mutators
+
+public extension ContextRef {
+    init(data: Data) throws {
+        self = try newJSONDecoder().decode(ContextRef.self, from: data)
+    }
+
+    init(_ json: String, using encoding: String.Encoding = .utf8) throws {
+        guard let data = json.data(using: encoding) else {
+            throw NSError(domain: "JSONDecoding", code: 0, userInfo: nil)
+        }
+        try self.init(data: data)
+    }
+
+    init(fromURL url: URL) throws {
+        try self.init(data: try Data(contentsOf: url))
+    }
+
+    func with(
+        id: String? = nil,
+        title: String? = nil
+    ) -> ContextRef {
+        return ContextRef(
+            id: id ?? self.id,
+            title: title ?? self.title
+        )
+    }
+
+    func jsonData() throws -> Data {
+        return try newJSONEncoder().encode(self)
+    }
+
+    func jsonString(encoding: String.Encoding = .utf8) throws -> String? {
+        return String(data: try self.jsonData(), encoding: encoding)
+    }
 }
 
 /// 첨부 텍스트 파일 (백엔드 ws-chat-handler files[] · attach-context AttachedFileInput 호환)

@@ -1,0 +1,411 @@
+[
+  {
+    "id": "mcp-atlassian-remote",
+    "displayName": "Atlassian (Jira·Confluence)",
+    "description": "Atlassian 공식 원격 MCP — Jira 이슈·Confluence 페이지 조회·작성. 설치 후 커넥터 카드의 로그인으로 Atlassian 계정을 연결(OAuth). API 키 입력 없음.",
+    "transportType": "streamable-http",
+    "urlTemplate": "https://mcp.atlassian.com/v1/mcp",
+    "argsSchema": {},
+    "envSchema": {},
+    "defaultEnabled": false
+  },
+  {
+    "id": "mcp-circleci",
+    "displayName": "CircleCI",
+    "description": "CircleCI 파이프라인·워크플로우·잡 상태 조회, 실패 로그 분석·재실행. CircleCI Personal API 토큰 필요.",
+    "transportType": "stdio",
+    "commandTemplate": "npx -y @circleci/mcp-server-circleci@0.20.0",
+    "argsSchema": {},
+    "envSchema": {
+      "type": "object",
+      "required": [
+        "CIRCLECI_TOKEN"
+      ],
+      "properties": {
+        "CIRCLECI_TOKEN": {
+          "type": "string",
+          "title": "CircleCI Personal API Token",
+          "secret": true,
+          "description": "app.circleci.com/settings/user/tokens 에서 발급"
+        },
+        "CIRCLECI_BASE_URL": {
+          "type": "string",
+          "title": "CircleCI Base URL(선택)",
+          "description": "온프레미스/CircleCI Server 사용 시 지정. 기본값 https://circleci.com"
+        }
+      }
+    },
+    "defaultEnabled": false
+  },
+  {
+    "id": "mcp-context7",
+    "displayName": "Context7 (라이브러리 최신 문서)",
+    "description": "라이브러리·프레임워크의 최신 버전 문서와 코드 예제를 질의 시점에 조회(resolve-library-id → query-docs). 코딩 질문의 낡은 API 환각 방지. API 키 선택(없으면 rate limit 낮음).",
+    "transportType": "stdio",
+    "commandTemplate": "npx -y @upstash/context7-mcp@4.1.0",
+    "argsSchema": {},
+    "envSchema": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "CONTEXT7_API_KEY": {
+          "type": "string",
+          "title": "Context7 API Key (선택)",
+          "secret": true,
+          "description": "context7.com/dashboard 에서 무료 발급. 없어도 동작하지만 rate limit 이 낮음"
+        }
+      }
+    },
+    "defaultEnabled": true
+  },
+  {
+    "id": "mcp-datago-fsc",
+    "displayName": "공공데이터 · 금융위원회 기업 재무정보",
+    "description": "법인등록번호로 기업의 요약 재무제표·재무상태표·손익계산서를 조회(get_summary_financial_statement/get_balance_sheet/get_income_statement/search_company_financial_info). data.go.kr 인증키 + 「금융위원회_기업 재무정보」 활용신청 필요.",
+    "transportType": "stdio",
+    "commandTemplate": "uvx --with mcp<2 data-go-mcp.fsc-financial-info==0.2.0",
+    "argsSchema": {},
+    "envSchema": {
+      "type": "object",
+      "required": [
+        "API_KEY"
+      ],
+      "properties": {
+        "API_KEY": {
+          "type": "string",
+          "title": "공공데이터포털 인증키 (Decoding)",
+          "secret": true,
+          "description": "data.go.kr 마이페이지 「인증키 발급현황」의 일반 인증키(Decoding). 이 키로 「금융위원회_기업 재무정보」 API 를 활용신청해야 동작"
+        }
+      }
+    },
+    "defaultEnabled": true
+  },
+  {
+    "id": "mcp-datago-nps",
+    "displayName": "공공데이터 · 국민연금 가입 사업장",
+    "description": "국민연금 가입 사업장 검색·상세·기간별 가입자 현황(search_business/get_business_detail/get_period_status) — 회사 규모·고용 추이 확인. data.go.kr 인증키 + 「국민연금공단_국민연금 가입 사업장 내역」 활용신청 필요.",
+    "transportType": "stdio",
+    "commandTemplate": "uvx --with mcp<2 data-go-mcp.nps-business-enrollment==0.2.0",
+    "argsSchema": {},
+    "envSchema": {
+      "type": "object",
+      "required": [
+        "API_KEY"
+      ],
+      "properties": {
+        "API_KEY": {
+          "type": "string",
+          "title": "공공데이터포털 인증키 (Decoding)",
+          "secret": true,
+          "description": "data.go.kr 일반 인증키(Decoding). 「국민연금공단_국민연금 가입 사업장 내역」 활용신청 필요"
+        }
+      }
+    },
+    "defaultEnabled": true
+  },
+  {
+    "id": "mcp-datago-nts",
+    "displayName": "공공데이터 · 국세청 사업자등록 진위확인",
+    "description": "사업자등록번호 진위확인·상태(계속/휴업/폐업) 조회·일괄 확인(validate_business/check_business_status/batch_validate_businesses). data.go.kr 인증키 + 「국세청_사업자등록정보 진위확인 및 상태조회」 활용신청 필요.",
+    "transportType": "stdio",
+    "commandTemplate": "uvx --with mcp<2 data-go-mcp.nts-business-verification==0.2.0",
+    "argsSchema": {},
+    "envSchema": {
+      "type": "object",
+      "required": [
+        "API_KEY"
+      ],
+      "properties": {
+        "API_KEY": {
+          "type": "string",
+          "title": "공공데이터포털 인증키 (Decoding)",
+          "secret": true,
+          "description": "data.go.kr 일반 인증키(Decoding). 「국세청_사업자등록정보 진위확인 및 상태조회 서비스」 활용신청 필요"
+        }
+      }
+    },
+    "defaultEnabled": true
+  },
+  {
+    "id": "mcp-datago-pps",
+    "displayName": "공공데이터 · 조달청 나라장터 입찰·낙찰·계약",
+    "description": "나라장터 입찰공고·낙찰정보·계약정보 검색과 입찰공고 상세(search_bid_announcements/search_successful_bids/search_contracts/get_bid_detail). data.go.kr 인증키 + 「조달청_나라장터 공공데이터개방표준서비스」 활용신청 필요.",
+    "transportType": "stdio",
+    "commandTemplate": "uvx --with mcp<2 data-go-mcp.pps-narajangteo==0.1.1",
+    "argsSchema": {},
+    "envSchema": {
+      "type": "object",
+      "required": [
+        "API_KEY"
+      ],
+      "properties": {
+        "API_KEY": {
+          "type": "string",
+          "title": "공공데이터포털 인증키 (Decoding)",
+          "secret": true,
+          "description": "data.go.kr 일반 인증키(Decoding). 「조달청_나라장터 공공데이터개방표준서비스」 활용신청 필요"
+        }
+      }
+    },
+    "defaultEnabled": true
+  },
+  {
+    "id": "mcp-filesystem",
+    "displayName": "Filesystem (sandbox)",
+    "description": "사용자 sandbox 디렉토리 안에서 파일 읽기/쓰기. 경로는 사용자별로 자동 격리됩니다.",
+    "transportType": "stdio",
+    "commandTemplate": "npx -y @modelcontextprotocol/server-filesystem@2026.8.31",
+    "argsSchema": {
+      "type": "object",
+      "required": [
+        "root_path"
+      ],
+      "properties": {
+        "root_path": {
+          "type": "string",
+          "title": "루트 디렉토리",
+          "description": "사용자 sandbox 안의 상대경로"
+        }
+      }
+    },
+    "envSchema": {},
+    "defaultEnabled": true
+  },
+  {
+    "id": "mcp-github-remote",
+    "displayName": "GitHub",
+    "description": "GitHub 공식 원격 MCP — 저장소·이슈·PR 조회·작성. 설치 후 커넥터 카드의 로그인으로 GitHub 계정을 연결(OAuth). 관리자가 GitHub OAuth App 을 등록해야 로그인할 수 있다.",
+    "transportType": "streamable-http",
+    "urlTemplate": "https://api.githubcopilot.com/mcp/",
+    "argsSchema": {},
+    "envSchema": {},
+    "defaultEnabled": false
+  },
+  {
+    "id": "mcp-google-calendar-remote",
+    "displayName": "Google Calendar",
+    "description": "Google 공식 원격 MCP(Developer Preview) — 일정 조회·생성. 설치 후 커넥터 카드의 로그인으로 Google 계정을 연결(OAuth). 관리자가 Google Cloud OAuth 클라이언트를 등록해야 로그인할 수 있다.",
+    "transportType": "streamable-http",
+    "urlTemplate": "https://calendarmcp.googleapis.com/mcp/v1",
+    "argsSchema": {},
+    "envSchema": {},
+    "defaultEnabled": false
+  },
+  {
+    "id": "mcp-google-drive-remote",
+    "displayName": "Google Drive",
+    "description": "Google 공식 원격 MCP(Developer Preview) — 파일 검색·읽기. 설치 후 커넥터 카드의 로그인으로 Google 계정을 연결(OAuth). 관리자가 Google Cloud OAuth 클라이언트를 등록해야 로그인할 수 있다.",
+    "transportType": "streamable-http",
+    "urlTemplate": "https://drivemcp.googleapis.com/mcp/v1",
+    "argsSchema": {},
+    "envSchema": {},
+    "defaultEnabled": false
+  },
+  {
+    "id": "mcp-google-gmail-remote",
+    "displayName": "Gmail",
+    "description": "Google 공식 원격 MCP(Developer Preview) — 메일 검색·읽기·초안 작성. 설치 후 커넥터 카드의 로그인으로 Google 계정을 연결(OAuth). 관리자가 Google Cloud OAuth 클라이언트를 등록해야 로그인할 수 있다.",
+    "transportType": "streamable-http",
+    "urlTemplate": "https://gmailmcp.googleapis.com/mcp/v1",
+    "argsSchema": {},
+    "envSchema": {},
+    "defaultEnabled": false
+  },
+  {
+    "id": "mcp-hubspot",
+    "displayName": "HubSpot",
+    "description": "HubSpot CRM 컨택트·딜·컴퍼니·티켓 조회·생성·수정. HubSpot Private App Access Token 필요.",
+    "transportType": "stdio",
+    "commandTemplate": "npx -y @hubspot/mcp-server@0.4.0",
+    "argsSchema": {},
+    "envSchema": {
+      "type": "object",
+      "required": [
+        "PRIVATE_APP_ACCESS_TOKEN"
+      ],
+      "properties": {
+        "PRIVATE_APP_ACCESS_TOKEN": {
+          "type": "string",
+          "title": "HubSpot Private App Access Token",
+          "secret": true,
+          "description": "HubSpot 계정 설정 → Integrations → Private Apps 에서 발급. 필요한 CRM 스코프를 부여할 것"
+        }
+      }
+    },
+    "defaultEnabled": false
+  },
+  {
+    "id": "mcp-linear-remote",
+    "displayName": "Linear",
+    "description": "Linear 공식 원격 MCP — 이슈·프로젝트·사이클 조회와 이슈 생성·수정. 설치 후 커넥터 카드의 로그인으로 Linear 계정을 연결(OAuth). API 키 입력 없음.",
+    "transportType": "streamable-http",
+    "urlTemplate": "https://mcp.linear.app/mcp",
+    "argsSchema": {},
+    "envSchema": {},
+    "defaultEnabled": false
+  },
+  {
+    "id": "mcp-mongodb",
+    "displayName": "MongoDB",
+    "description": "MongoDB 데이터베이스 컬렉션 조회·집계·문서 CRUD, Atlas 클러스터 관리. MongoDB 연결 문자열 필요.",
+    "transportType": "stdio",
+    "commandTemplate": "npx -y mongodb-mcp-server@3.0.2",
+    "argsSchema": {},
+    "envSchema": {
+      "type": "object",
+      "required": [
+        "MDB_MCP_CONNECTION_STRING"
+      ],
+      "properties": {
+        "MDB_MCP_CONNECTION_STRING": {
+          "type": "string",
+          "title": "MongoDB Connection String",
+          "secret": true,
+          "description": "mongodb://user:pass@host:port/db 또는 Atlas SRV URI. 읽기 전용 계정 권장"
+        }
+      }
+    },
+    "defaultEnabled": false
+  },
+  {
+    "id": "mcp-notion",
+    "displayName": "Notion",
+    "description": "Notion 워크스페이스 페이지/데이터소스 조회·검색·생성·편집. Notion Integration Token 필요. (삭제는 아카이브(휴지통) 처리)",
+    "transportType": "stdio",
+    "commandTemplate": "npx -y @notionhq/notion-mcp-server",
+    "argsSchema": {},
+    "envSchema": {
+      "type": "object",
+      "required": [
+        "NOTION_TOKEN"
+      ],
+      "properties": {
+        "NOTION_TOKEN": {
+          "type": "string",
+          "title": "Notion Integration Token",
+          "secret": true,
+          "description": "notion.so/my-integrations 에서 발급(ntn_...). 편집 대상 페이지를 이 integration 에 공유 필요"
+        }
+      }
+    },
+    "defaultEnabled": true
+  },
+  {
+    "id": "mcp-opendart",
+    "displayName": "OpenDART (금융감독원 전자공시)",
+    "description": "상장기업 공시 검색·기업개황·재무제표(XBRL 주요계정/전체/재무지표)·배당·최대주주·대량보유 등 OpenDART API 83종. 조회는 corp_code(8자리 고유번호) 기준 — 회사명 검색은 미지원(dart.fss.or.kr 에서 확인). OpenDART 인증키 필요(무료, 일 20,000건).",
+    "transportType": "stdio",
+    "commandTemplate": "uvx --with mcp<2 opendart-mcp==0.1.0",
+    "argsSchema": {},
+    "envSchema": {
+      "type": "object",
+      "required": [
+        "OPENDART_API_KEY"
+      ],
+      "properties": {
+        "OPENDART_API_KEY": {
+          "type": "string",
+          "title": "OpenDART API Key",
+          "secret": true,
+          "description": "opendart.fss.or.kr 「인증키 신청/관리」에서 무료 발급(40자). 일 20,000건"
+        }
+      }
+    },
+    "toolAllowlist": [
+      "search_disclosure",
+      "get_company_info",
+      "get_single_company_accounts",
+      "get_single_financial_index",
+      "get_full_financial_statement",
+      "get_dividend_info",
+      "get_largest_shareholder",
+      "get_major_stockholding"
+    ],
+    "defaultEnabled": true
+  },
+  {
+    "id": "mcp-slack",
+    "displayName": "Slack",
+    "description": "Slack 워크스페이스 채널 목록·히스토리 조회, 메시지 게시·스레드 답글·리액션. Slack App(Bot) 생성 후 Bot User OAuth Token 필요.",
+    "transportType": "stdio",
+    "commandTemplate": "npx -y @modelcontextprotocol/server-slack@2025.4.25",
+    "argsSchema": {},
+    "envSchema": {
+      "type": "object",
+      "required": [
+        "SLACK_BOT_TOKEN",
+        "SLACK_TEAM_ID"
+      ],
+      "properties": {
+        "SLACK_TEAM_ID": {
+          "type": "string",
+          "title": "Slack Workspace ID",
+          "description": "워크스페이스 ID(T로 시작)"
+        },
+        "SLACK_BOT_TOKEN": {
+          "type": "string",
+          "title": "Slack Bot User OAuth Token",
+          "secret": true,
+          "description": "api.slack.com/apps 에서 App 생성 후 워크스페이스에 설치해 발급(xoxb-...)"
+        },
+        "SLACK_CHANNEL_IDS": {
+          "type": "string",
+          "title": "접근 허용 채널 ID 목록(선택, 쉼표 구분)",
+          "description": "비우면 봇이 속한 모든 공개 채널에 접근"
+        }
+      }
+    },
+    "defaultEnabled": false
+  },
+  {
+    "id": "mcp-tavily",
+    "displayName": "Tavily Search",
+    "description": "Tavily 실시간 웹검색·페이지 추출·사이트 맵·크롤링·종합 리서치(tavily_search/extract/map/crawl/research). Tavily API 키 필요(무료 월 1,000 크레딧).",
+    "transportType": "stdio",
+    "commandTemplate": "npx -y tavily-mcp@0.2.22",
+    "argsSchema": {},
+    "envSchema": {
+      "type": "object",
+      "required": [
+        "TAVILY_API_KEY"
+      ],
+      "properties": {
+        "TAVILY_API_KEY": {
+          "type": "string",
+          "title": "Tavily API Key",
+          "secret": true,
+          "description": "app.tavily.com 에서 발급(tvly-...). 무료 플랜 월 1,000 크레딧"
+        },
+        "DEFAULT_PARAMETERS": {
+          "type": "string",
+          "title": "기본 파라미터(JSON, 선택)",
+          "description": "모든 요청에 합칠 기본값 JSON. 예: {\"search_depth\":\"basic\",\"max_results\":10}"
+        }
+      }
+    },
+    "defaultEnabled": true
+  },
+  {
+    "id": "open-design",
+    "displayName": "Open Design",
+    "description": "로컬 디자인 워크스페이스 (Open Design). 프로젝트의 디자인 토큰·컴포넌트·아티팩트를 조회하고 HTML/JSX/CSS 디자인 산출물을 저장. UI/UX 디자인 작업 시 디자인 언어 일관성 유지에 활용.",
+    "transportType": "stdio",
+    "commandTemplate": "node <OPEN_DESIGN_HOME>/apps/daemon/dist/cli.js mcp",
+    "argsSchema": {},
+    "envSchema": {
+      "type": "object",
+      "required": [
+        "OD_DATA_DIR"
+      ],
+      "properties": {
+        "OD_DATA_DIR": {
+          "type": "string",
+          "title": "데이터 디렉토리",
+          "description": "Open Design 데이터 디렉토리 (예: <OPEN_DESIGN_HOME>/.od)"
+        }
+      }
+    },
+    "defaultEnabled": true
+  }
+]

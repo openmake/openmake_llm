@@ -653,14 +653,6 @@ export const RESEARCH_TAVILY = {
     SEARCH_DEPTH: (process.env.RESEARCH_TAVILY_DEPTH === 'basic' ? 'basic' : 'advanced') as 'basic' | 'advanced',
 } as const;
 
-/** 카카오 지도 임베드 HTML (네이티브 앱 WKWebView 용) */
-export const KAKAO_MAP_EMBED = {
-    /** 정적 HTML 이라 캐시 허용 — 장소 데이터는 앱이 주입하므로 응답에 없다 */
-    CACHE_SECONDS: Number(process.env.KAKAO_MAP_EMBED_CACHE_SECONDS) || 3600,
-    /** 단일 지점일 때의 기본 확대 레벨 (카카오 기준: 작을수록 확대) */
-    DEFAULT_LEVEL: Number(process.env.KAKAO_MAP_EMBED_DEFAULT_LEVEL) || 4,
-} as const;
-
 export const SEARXNG_CATEGORY_SCOPE = {
     /** 기술/개발 질의 → `it` 카테고리 (github·stackoverflow·mdn·pypi·docker hub).
      *  ⚠️ 단독 `코드` 같은 일반어 토큰 금지 — '할인 코드' 류 비기술 질의가 매칭돼 카테고리를 오염시킨다. */
@@ -1399,19 +1391,6 @@ export const REPORT_INTENT_PATTERNS: readonly RegExp[] = [
 ] as const;
 
 /**
- * 위치/지도 의도 판정 패턴. 매칭 시 카카오 검색 도구를 강제 포함하고 첫 턴에 강제 호출하며,
- * 시스템 프롬프트에 네이티브 지도 블록(```kakaomap) 사용을 넛지한다.
- */
-export const MAP_INTENT_PATTERNS: readonly RegExp[] = [
-    /지도/,
-    /길\s*찾기/,
-    /좌표/,
-    /위치/,
-    /근처/,
-    /어디\b/,
-] as const;
-
-/**
  * 명시적 웹 검색 요청 패턴 — 매칭 + web_search 도구 제공 시 첫 턴 tool_choice 로 web_search
  * 를 강제한다. 봇 히스토리에 남은 "검색 불가/오프라인" 자기 발언이 재주입되면 qwen 이 시스템
  * 지시로도 교정되지 않고 도구 호출 자체를 거부하는 환각(2026-07-17 Discord 사례) 의 결정적
@@ -1473,18 +1452,6 @@ export const SCRIPT_PURITY = {
         '입력과 같은 "번호. 내용" 형식으로, 입력된 줄 수만큼만 출력하세요. 설명은 붙이지 마세요.',
     ].join('\n'),
 } as const;
-
-/**
- * 길찾기(경로) 의도 판정 패턴. 매칭 시 카카오 find-route 도구를 강제 포함·호출해
- * 출발/도착 마커 + 경로를 지도에 표시한다. (MAP_INTENT 의 부분집합 — 경로 전용)
- */
-export const ROUTE_INTENT_PATTERNS: readonly RegExp[] = [
-    /길\s*찾기/,
-    /경로/,
-    /가는\s*(길|법|방법)/,
-    /어떻게\s*가/,
-    /까지\s*(가|어떻게|경로|길)/,
-] as const;
 
 /**
  * 자율 에이전트 작업 (AgentTaskService) runaway 가드 한계.
@@ -1994,22 +1961,6 @@ export const SPAWN_INTENT_PATTERNS: readonly RegExp[] = [
     /(각각|나눠서|나누어)\s*(조사|검색|분석|알아보)/i,
     /in\s+parallel|parallel\s+(research|search|tasks)/i,
 ];
-
-
-/**
- * NotebookLM composer 연동 (routes/notebooklm.routes.ts).
- *
- * TEMPLATE_ID: 카탈로그(mcp_server_catalog) 의 NotebookLM 템플릿 id — 유저의 설치 서버
- *   row 를 catalog_template_id 로 찾을 때 사용 (076 시드와 동일 값).
- * LIST_CACHE_TTL_MS: 노트북 목록 캐시 TTL. NotebookLM RPC 왕복이 2~4초라 composer
- *   picker 열 때마다 왕복하지 않도록 캐싱한다. ?refresh=1 로 무효화 가능.
- * LIST_CACHE_MAX: per-user 캐시 엔트리 상한 (LRU).
- */
-export const NOTEBOOKLM_INTEGRATION = {
-    TEMPLATE_ID: process.env.NOTEBOOKLM_CATALOG_TEMPLATE_ID || 'mcp-notebooklm',
-    LIST_CACHE_TTL_MS: parseInt(process.env.NOTEBOOKLM_LIST_CACHE_TTL_MS || '300000', 10),
-    LIST_CACHE_MAX: parseInt(process.env.NOTEBOOKLM_LIST_CACHE_MAX || '500', 10),
-} as const;
 
 
 /**

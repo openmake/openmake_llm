@@ -2,11 +2,11 @@
 
 import { Fragment, useMemo } from "react";
 import ReactMarkdown, { type Components, type ExtraProps } from "react-markdown";
-import type { ComponentPropsWithoutRef } from "react";
+import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { useTranslations } from "next-intl";
-import { KakaoMap } from "./kakao-map";
+import { WEB_ADDONS } from "@/addons/registry";
 import { CitationChip } from "./citation-chip";
 import { citationNumber, linkCitations } from "@/lib/citations";
 import type { SearchSourceRef } from "@openmake/shared-types";
@@ -16,7 +16,7 @@ import type { SearchSourceRef } from "@openmake/shared-types";
  * (rehype-raw 미사용) XSS 안전 — 기존 sanitize.js 화이트리스트 역할을 대체.
  * GFM(표/체크박스/취소선) + 코드 하이라이트 지원.
  *
- * 추가: ```kakaomap 펜스 블록(장소 좌표 JSON)은 KakaoMap 컴포넌트로 렌더한다.
+ * 추가: add-on 이 등록한 펜스 블록(예: 지도 블록)은 그 add-on 의 컴포넌트로 렌더한다 (addons/registry).
  * 카카오 도구 결과가 동봉한 블록으로, 채팅 안에 실제 카카오 지도를 표시한다.
  *
  * 추가(P1 보고서 파이프라인): ```reportdata 펜스 블록(보고서 데이터 JSON)은 대형 JSON 이
@@ -117,15 +117,12 @@ const MD_COMPONENTS: Components = {
 const REPORTDATA_CLOSED_RE = /```reportdata\s*\n([\s\S]*?)```/g;
 const REPORTDATA_OPEN_RE = /```reportdata(?:\s*\n[\s\S]*)?$/;
 
-// ```kakaomap\n{json}\n``` 블록 추출. 스트리밍 중 닫히지 않은 블록은 매칭 안 돼 원문 유지.
-const KAKAOMAP_RE = /```kakaomap\s*\n([\s\S]*?)```/g;
-// 도구가 실어보내는 안내 마커 라인 — 모델이 그대로 옮겨도 표시되지 않게 제거.
-const GUIDE_MARKER_RE = /^\s*\[지도 표시용[^\]]*\]\s*$/gm;
+/** add-on 이 가져가 직접 렌더하는 블록 (addons/types.ts MessageBlockExtension) — 예: 지도 블록 */
+const BLOCK_EXTENSIONS = WEB_ADDONS.flatMap((a) => a.messageBlocks ?? []);
 
-interface MapSegment {
-  kind: "map";
-  places: { name: string; lat: number; lng: number; address?: string; url?: string }[];
-  route?: { lat: number; lng: number }[];
+interface AddonBlockSegment {
+  kind: "addon";
+  node: ReactNode;
 }
 interface TextSegment {
   kind: "text";
@@ -163,31 +160,39 @@ function splitReportSegments(content: string): (TextSegment | ReportSegment)[] {
   return segments;
 }
 
-function splitSegments(content: string): (MapSegment | TextSegment)[] {
-  const segments: (MapSegment | TextSegment)[] = [];
+/** 한 확장의 닫힌 블록을 떼어 낸다 — render 가 null 이면(파싱 실패) 그 구간은 텍스트로 남는다. */
+function splitByExtension(content: string, ext: (typeof BLOCK_EXTENSIONS)[number]): (AddonBlockSegment | TextSegment)[] {
+  const segments: (AddonBlockSegment | TextSegment)[] = [];
   let lastIndex = 0;
   let m: RegExpExecArray | null;
-  KAKAOMAP_RE.lastIndex = 0;
-  while ((m = KAKAOMAP_RE.exec(content)) !== null) {
-    let parsed: MapSegment["places"] | null = null;
-    let parsedRoute: MapSegment["route"];
-    try {
-      const obj = JSON.parse(m[1].trim());
-      if (Array.isArray(obj?.places)) parsed = obj.places;
-      if (Array.isArray(obj?.route)) parsedRoute = obj.route;
-    } catch {
-      parsed = null;
-    }
-    if (parsed) {
+  ext.pattern.lastIndex = 0;
+  while ((m = ext.pattern.exec(content)) !== null) {
+    const node = ext.render(m);
+    if (node !== null && node !== undefined) {
       const before = content.slice(lastIndex, m.index);
       if (before.trim()) segments.push({ kind: "text", text: before });
-      segments.push({ kind: "map", places: parsed, route: parsedRoute });
-      lastIndex = KAKAOMAP_RE.lastIndex;
+      segments.push({ kind: "addon", node });
+      lastIndex = ext.pattern.lastIndex;
     }
   }
   const rest = content.slice(lastIndex);
   if (rest.trim() || segments.length === 0) segments.push({ kind: "text", text: rest });
   return segments;
+}
+
+function splitSegments(content: string): (AddonBlockSegment | TextSegment)[] {
+  let segments: (AddonBlockSegment | TextSegment)[] = [{ kind: "text", text: content }];
+  for (const ext of BLOCK_EXTENSIONS) {
+    segments = segments.flatMap((seg) => (seg.kind === "text" ? splitByExtension(seg.text, ext) : [seg]));
+  }
+  return segments;
+}
+
+/** add-on 이 지정한 안내 마커를 텍스트에서 지운다 — 모델이 그대로 옮겨도 표시되지 않게. */
+function stripAddonMarkers(text: string): string {
+  let out = text;
+  for (const ext of BLOCK_EXTENSIONS) if (ext.stripFromText) out = out.replace(ext.stripFromText, "");
+  return out;
 }
 
 function MarkdownText({ text, sources }: { text: string; sources?: SearchSourceRef[] }) {
@@ -203,7 +208,7 @@ function MarkdownText({ text, sources }: { text: string; sources?: SearchSourceR
       },
     };
   }, [sources]);
-  const cleaned = text.replace(GUIDE_MARKER_RE, "").trimEnd();
+  const cleaned = stripAddonMarkers(text).trimEnd();
   if (!cleaned) return null;
   return (
     <ReactMarkdown
@@ -248,8 +253,8 @@ export function Markdown({ content, sources }: { content: string; sources?: Sear
           ) : (
             splitSegments(rseg.text).map((seg, i) => (
               <Fragment key={i}>
-                {seg.kind === "map" ? (
-                  <KakaoMap places={seg.places} route={seg.route} />
+                {seg.kind === "addon" ? (
+                  seg.node
                 ) : (
                   <MarkdownText text={seg.text} sources={sources} />
                 )}

@@ -7,7 +7,7 @@
  */
 import { hasScriptMixing } from '../services/chat-service/script-purity';
 import { generatedLinkWasCleaned } from '../services/chat-service/generated-link-guard';
-import { citationMarkersWereCleaned, mapHtmlWasCleaned } from '../services/chat-service/external-deterministic-append';
+import { citationMarkersWereCleaned, integrationScrubWasCleaned } from '../services/chat-service/external-deterministic-append';
 
 /**
  * done 에 동봉할 cleanedContent.
@@ -29,7 +29,7 @@ export function resolveCleanedContent(params: {
     if (!finalResponse) return undefined;
     const changed = (hasScriptMixing(streamedResponse) && !hasScriptMixing(finalResponse))
         || citationMarkersWereCleaned(streamedResponse, finalResponse)
-        || mapHtmlWasCleaned(streamedResponse, finalResponse)
+        || integrationScrubWasCleaned(streamedResponse, finalResponse)
         || generatedLinkWasCleaned(streamedResponse, finalResponse);
     return changed ? finalResponse : undefined;
 }

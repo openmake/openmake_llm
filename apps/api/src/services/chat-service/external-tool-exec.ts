@@ -11,6 +11,7 @@
  * @module services/chat-service/external-tool-exec
  */
 import { createLogger } from '../../utils/logger';
+import { getChatTurnIntegrations } from './turn-integrations';
 import { recordLlmCost } from '../cost/cost-ledger-service';
 import { MAX_TOOL_RESULT_CHARS } from '../../config/runtime-limits';
 import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
@@ -68,18 +69,18 @@ export async function executeExternalTool(
             });
             return contentStr;
         }
-        // 카카오 지도 블록은 8000자 캡(slice)·JSON.stringify 이스케이프에 소실되지 않도록
-        // 원본 텍스트에서 추출해 반환 문자열 앞에 실제 개행으로 prepend 한다.
-        // (search-places 출력이 길어 블록이 끝에 있으면 캡에 잘리던 문제 — 호출부가 이 블록을 결정적 첨부)
-        let mapPrefix = '';
+        // 통합(add-on)이 지정한 블록은 길이 상한(slice)·JSON.stringify 이스케이프에 소실되지 않도록
+        // 원본 텍스트에서 뽑아 반환 문자열 앞에 붙인다 — 호출부가 이 블록을 결정적으로 첨부한다.
+        let preservedPrefix = '';
         if (Array.isArray(result.content)) {
             const rawText = result.content
                 .filter((c): c is { type: 'text'; text: string } =>
                     (c as { type?: unknown }).type === 'text' && typeof (c as { text?: unknown }).text === 'string')
                 .map((c) => c.text)
                 .join('\n');
-            const m = rawText.match(/```kakaomap[\s\S]*?```/);
-            if (m) mapPrefix = `${m[0]}\n\n`;
+            for (const integration of getChatTurnIntegrations()) {
+                preservedPrefix += integration.preserveFromRawResult?.(rawText) ?? '';
+            }
         }
         // text 항목은 그대로 잇고 비텍스트(image·resource 등)만 JSON 으로 싣는다 — 에이전트 작업 경로
         // (task-sandbox resultToString)와 같은 방식. content 배열을 통째로 JSON.stringify 하면 줄바꿈·따옴표가
@@ -96,7 +97,7 @@ export async function executeExternalTool(
         recordToolResultTruncation({
             path: 'chat', toolName, rawChars: serialized.length, capChars: MAX_TOOL_RESULT_CHARS,
         });
-        return mapPrefix + serialized.slice(0, MAX_TOOL_RESULT_CHARS);
+        return preservedPrefix + serialized.slice(0, MAX_TOOL_RESULT_CHARS);
     } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         logger.warn(`외부 LLM 도구 실행 실패 (${toolName}): ${msg}`);

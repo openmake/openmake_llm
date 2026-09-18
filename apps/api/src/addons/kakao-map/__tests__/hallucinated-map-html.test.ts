@@ -1,9 +1,10 @@
 /**
- * 지도 환각 HTML 결정적 제거 — stripHallucinatedMapHtml / mapHtmlWasCleaned.
+ * 지도 환각 HTML 결정적 제거 — stripHallucinatedMapHtml / integrationScrubWasCleaned.
  * "kakaomap 블록 직접 작성 금지" 넛지 하에서 qwen 이 존재하지 않는 lmap.kakao.com
  * 정적 이미지 <img> 링크로 우회 환각한 라이브 사례(2026-08-20)의 후처리 검증.
  */
-import { stripHallucinatedMapHtml, mapHtmlWasCleaned } from '../external-deterministic-append';
+import { stripHallucinatedMapHtml } from '../chat-integration';
+import { integrationScrubWasCleaned } from '../../../services/chat-service/external-deterministic-append';
 
 // 2026-08-20 라이브 관측 원문 그대로.
 const LIVE_HALLUCINATION = `광화문 주변 검색 결과를 표시합니다.
@@ -45,13 +46,13 @@ describe('stripHallucinatedMapHtml', () => {
     });
 });
 
-describe('mapHtmlWasCleaned', () => {
+describe('integrationScrubWasCleaned', () => {
     test('스트리밍본엔 환각 HTML 이 있고 최종본에선 제거됐으면 true', () => {
         const final = stripHallucinatedMapHtml(LIVE_HALLUCINATION).content;
-        expect(mapHtmlWasCleaned(LIVE_HALLUCINATION, final)).toBe(true);
+        expect(integrationScrubWasCleaned(LIVE_HALLUCINATION, final)).toBe(true);
     });
 
     test('환각 HTML 이 없던 턴은 false', () => {
-        expect(mapHtmlWasCleaned('일반 응답입니다.', '일반 응답입니다.')).toBe(false);
+        expect(integrationScrubWasCleaned('일반 응답입니다.', '일반 응답입니다.')).toBe(false);
     });
 });

@@ -3,7 +3,7 @@
  *
  * 한 턴의 tool_calls 를 실행해 tool 메시지로 messages 에 싣는다 — 읽기 전용 도구 병렬
  * 선실행, 위임(chat_delegate/spawn_agents)·오케스트레이션 분기와 호출 캡, 그리고 최종
- * 응답에 결정적으로 첨부할 블록(카카오 지도·토론 출처·OD 산출물) 수집까지.
+ * 응답에 결정적으로 첨부할 블록(통합 블록·토론 출처·OD 산출물) 수집까지.
  *
  * external-provider 본체(600줄 CI 가드)에서 분리. 배치가 누적하는 값은 호출부 클로저
  * 대신 ToolBatchState 한 객체로 주고받는다.
@@ -11,6 +11,7 @@
  * @module services/chat-service/external-tool-batch
  */
 import { CHAT_SUBAGENT, AGENT_SPAWN, ORCHESTRATION_DISPATCH, OD_ARTIFACT_ECHO } from '../../config/runtime-limits';
+import { extractIntegrationBlocks, type IntegrationBlocks } from './turn-integrations';
 import { CHAT_DELEGATE_TOOL_NAME, runChatDelegate } from './chat-delegate';
 import { SPAWN_AGENTS_TOOL_NAME, runChatSpawnAgents } from '../agent-spawn/spawn-agents';
 import { isOrchestrationTool, runOrchestrationTool } from './orchestration-dispatch';
@@ -43,13 +44,13 @@ interface ToolBatchState {
      */
     generatedMediaMarkdowns: string[];
     /**
-     * 카카오 지도: search-places 도구 결과가 동봉하는 ```kakaomap 블록. 로컬 모델(qwen)이
-     * 블록을 답변에 옮기지 않고 요약해버려 지도가 안 뜨는 문제를 결정적 첨부로 보정한다.
+     * 통합(add-on)별 결정적 첨부 블록 — 도구 결과에서 떼어 최종 응답에 정확히 1회 붙인다(모델 복사에 의존하지 않음).
+     * 예: 지도 통합의 지도 블록. 모델에게는 블록을 뺀 텍스트만 간다(turn-integrations.extractIntegrationBlocks).
      */
-    kakaomapBlocks: string[];
+    integrationBlocks: IntegrationBlocks;
     /**
      * 도구 경유 토론(start_discussion)의 출처 목록 — 모델이 도구 결과를 요약하며 버리므로
-     * 마커로 실려 온 블록을 모아 최종 응답에 결정적으로 첨부한다(카카오 지도와 동일 패턴).
+     * 마커로 실려 온 블록을 모아 최종 응답에 결정적으로 첨부한다(통합 블록과 동일 패턴).
      */
     discussionSourceBlocks: string[];
     /**
@@ -66,7 +67,7 @@ export function createToolBatchState(): ToolBatchState {
         spawnCalls: 0,
         orchestrationCalls: 0,
         generatedMediaMarkdowns: [],
-        kakaomapBlocks: [],
+        integrationBlocks: {},
         discussionSourceBlocks: [],
         odArtifact: null,
     };
@@ -167,22 +168,15 @@ export async function runToolCallBatch(params: {
                 if (captured) state.odArtifact = captured;
             }
         }
-        // 카카오 지도 블록 수집(도구명 무관 — 도구 결과에 블록이 있으면).
-        for (const mm of toolResult.matchAll(/```kakaomap\s*\n[\s\S]*?```/g)) {
-            if (!state.kakaomapBlocks.includes(mm[0])) state.kakaomapBlocks.push(mm[0]);
-        }
         // 토론 출처 블록 추출 — 모델에게 보낼 텍스트에서는 걷어낸다(요약 대상에서 제외).
         const extracted = extractDiscussionSources(toolResult);
         for (const b of extracted.blocks) {
             if (!state.discussionSourceBlocks.includes(b)) state.discussionSourceBlocks.push(b);
         }
         toolResult = extracted.modelFacing;
-        // 모델에게는 블록을 제거한 텍스트만 전달한다 — 큰 경로 JSON 을 컨텍스트에서 보면
-        // qwen 이 블록을 반복 복사(degeneration, 지도 수십개)하는 문제 차단. 지도는 아래
-        // 결정적 주입으로 정확히 1회만 추가한다(모델 복사에 의존하지 않음).
-        const modelFacingResult = toolResult
-            .replace(/\[지도 표시용[^\]]*\]\s*/g, '')
-            .replace(/```kakaomap\s*\n[\s\S]*?```/g, '');
+        // 통합 블록 수집 + 모델용 텍스트에서 제거 — 큰 블록 JSON 을 컨텍스트에서 보면 qwen 이 블록을 반복
+        // 복사(degeneration)한다. 블록은 최종 응답에 결정적으로 정확히 1회만 첨부한다.
+        const modelFacingResult = extractIntegrationBlocks(toolResult, state.integrationBlocks);
         // 도구 결과가 대상 언어와 다른 문자 체계(영문 문서·파일 조작 결과 등)면 말미에 언어 리마인더 —
         // 시스템 프롬프트 지시만으론 긴 영문 결과 뒤 답변이 영어로 드리프트(90일 실측 10.7%).
         const langCode = ctx.resolvedLanguage || req.userLanguagePreference;

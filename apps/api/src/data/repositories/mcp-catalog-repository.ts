@@ -12,6 +12,7 @@
  *
  */
 import type { Pool } from 'pg';
+import { disabledCatalogTemplateIds } from '../../addon-host/pack-catalog';
 import { encryptToken, decryptToken } from '../../utils/token-crypto';
 import { createLogger } from '../../utils/logger';
 import type {
@@ -51,8 +52,9 @@ export class McpCatalogRepository {
             `SELECT id, display_name, description, transport_type, command_template,
                     args_schema, env_schema, url_template, is_enabled, tool_allowlist
              FROM mcp_server_catalog
-             WHERE is_enabled = TRUE
+             WHERE is_enabled = TRUE AND NOT (id = ANY($1::text[]))
              ORDER BY display_name`,
+            [disabledCatalogTemplateIds()], // 꺼진 add-on 의 템플릿은 가린다(행은 그대로)
         );
         return result.rows;
     }
@@ -62,8 +64,8 @@ export class McpCatalogRepository {
             `SELECT id, display_name, description, transport_type, command_template,
                     args_schema, env_schema, url_template, is_enabled, tool_allowlist
              FROM mcp_server_catalog
-             WHERE id = $1 AND is_enabled = TRUE`,
-            [id],
+             WHERE id = $1 AND is_enabled = TRUE AND NOT (id = ANY($2::text[]))`,
+            [id, disabledCatalogTemplateIds()],
         );
         return result.rows[0] ?? null;
     }
