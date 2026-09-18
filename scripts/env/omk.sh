@@ -292,9 +292,11 @@ bench_pm2_start() { # $1=dir $2=env
     if [[ -f "$1/ecosystem.config.cjs" ]]; then
         ( cd "$1" && pm2 start ecosystem.config.cjs --update-env >/dev/null ) || die "bench PM2 기동 실패"
     else
-        # 구 브랜치(ecosystem 없음) 폴백 — 이름·cwd 만 맞추면 동작한다 (server 가 cwd 의 .env 를 읽음)
+        # 구 브랜치(ecosystem 없음) 폴백 — `npm start` 를 거친다. dist/server.js 를 PM2 로 직접 띄우면
+        # server.ts 의 직접 실행 판정(process.argv[1])이 PM2 컨테이너 스크립트를 보고 거짓이 되어,
+        # 서버는 안 뜨고 프로세스만 online 으로 남는다. npm 의 자식 node 는 argv[1] 이 맞다.
         if pm2 describe "$name" >/dev/null 2>&1; then pm2 restart "$name" --update-env >/dev/null
-        else ( cd "$1" && pm2 start dist/server.js --name "$name" --cwd "$1" --time >/dev/null ); fi
+        else ( cd "$1" && pm2 start npm --name "$name" --cwd "$1" --time -- start >/dev/null ); fi
     fi
     log_ok "PM2 $name"
 }
