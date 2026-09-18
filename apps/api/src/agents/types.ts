@@ -6,6 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from '../utils/logger';
+import { isBuiltinAddonEnabled } from '../addon-host/builtin-registry';
 
 const logger = createLogger('Agents');
 
@@ -69,6 +70,12 @@ let cachedIndustryData: IndustryAgentsData | null = null;
 // 에이전트 데이터 로드
 export function getIndustryAgentsData(): IndustryAgentsData {
     if (cachedIndustryData) {
+        return cachedIndustryData;
+    }
+
+    // 산업 팩이 꺼진 배포 — 산업 에이전트 없이 general 만으로 동작한다 (addon-host/builtin-registry)
+    if (!isBuiltinAddonEnabled('industry-pack')) {
+        cachedIndustryData = {};
         return cachedIndustryData;
     }
 

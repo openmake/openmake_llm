@@ -32,8 +32,7 @@ export const ADDON_CONTENT_ASSET_PATTERNS: readonly RegExp[] = [
  */
 export const CONTENT_REFERENCE_ALLOWLIST: readonly string[] = [
     'addon-host/index.ts',            // 내장 콘텐츠 시드의 유일한 부팅 진입점
-    'agents/enhanced-keywords.ts',    // 산업 키워드 — P2 에서 번들 로드 결과로 대체
-    'agents/llm-router.ts',           // 산업 agent 목록 — P2
+    'agents/enhanced-keywords.ts',    // skill-seeder 의 RICH_SKILL_CONTENT — P2 에서 번들 로드 결과로 대체
     'agents/skill-guidelines.ts',     // 카테고리 지침 JSON 로더 — P2 에서 번들로 이동
     'agents/skill-seeder.ts',         // P2 에서 번들 설치기로 대체
     'agents/system-skill-names.ts',   // 시스템 스킬 영문명 — P2

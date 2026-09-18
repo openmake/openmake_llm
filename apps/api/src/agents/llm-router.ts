@@ -22,8 +22,7 @@
 import { LLMClient } from '../llm';
 import { getModelForRole } from '../config/model-roles';
 import { sanitizePromptInput, validatePromptInput } from '../utils/input-sanitizer';
-import { AgentCategory } from './types';
-import industryData from './industry-agents.json';
+import { getIndustryAgentsData } from './types';
 import { createLogger } from '../utils/logger';
 import { extractJSONFromResponse } from '../utils/json-parser';
 import { CAPACITY, ROUTER_CONFIDENCE_FALLBACK } from '../config/runtime-limits';
@@ -101,7 +100,7 @@ function getRouterClient(): LLMClient {
 export function getAgentSummaries(): AgentSummary[] {
     const summaries: AgentSummary[] = [];
 
-    for (const [, category] of Object.entries(industryData as Record<string, AgentCategory>)) {
+    for (const [, category] of Object.entries(getIndustryAgentsData())) {
         for (const agent of category.agents) {
             summaries.push({
                 id: agent.id,
@@ -271,7 +270,7 @@ ${sanitizedMessage}
  * @returns {boolean} - 유효한 에이전트 ID이면 true
  */
 export function isValidAgentId(agentId: string): boolean {
-    for (const [, category] of Object.entries(industryData as Record<string, AgentCategory>)) {
+    for (const [, category] of Object.entries(getIndustryAgentsData())) {
         for (const agent of category.agents) {
             if (agent.id === agentId) {
                 return true;

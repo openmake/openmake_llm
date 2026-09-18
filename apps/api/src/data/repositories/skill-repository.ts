@@ -369,6 +369,16 @@ export class SkillRepository extends BaseRepository {
     }
 
     /**
+     * source_path LIKE 패턴으로 시스템 스킬(created_by IS NULL)을 일괄 보관 — 꺼진 내장 팩의 주입을 멈춘다
+     * (addon-host). 다시 켜면 upsertSystemSkill 이 active 로 되돌린다.
+     * @returns 보관된 행 수
+     */
+    async archiveSystemSkillsBySourcePath(sourcePathLike: string): Promise<number> {
+        const sql = `UPDATE agent_skills SET status = 'archived', updated_at = $1 WHERE created_by IS NULL AND status = 'active' AND source_path LIKE $2`;
+        return (await this.query(sql, [new Date().toISOString(), sourcePathLike])).rowCount ?? 0;
+    }
+
+    /**
      * 시스템 스킬 업서트 (upsert) - 결정적 ID로 생성 또는 업데이트
      * 서버 시작 시 에이전트 스킬 자동 등록에 사용됩니다.
      * source_path를 기준으로 기존 스킬을 찾아 업데이트하거나 새로 생성합니다.
