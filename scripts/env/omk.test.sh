@@ -38,6 +38,17 @@ ok "foreign: legacy layout"   'is_foreign_path "$OMK_ROOT/chat-staging/infra" "$
 ok "foreign: prefix sibling"  'is_foreign_path "$OMK_ROOT/staging2/llm" "$OMK_ROOT/staging"'
 ok "unknown owner passes"     '! is_foreign_path "" "$OMK_ROOT/staging"'
 
+# ── .env 백업 복원: 설치 전에만, 있는 .env 는 덮지 않는다 ──
+BK="$TMP/bk"; mkdir -p "$BK" "$TMP/r1" "$TMP/r2"; printf 'POSTGRES_PASSWORD=old\n' > "$BK/llm.env"
+OMK_RESTORE_ENV_FROM="$BK" restore_env_backup "$TMP/r1" llm >/dev/null
+eq "restore before install" "$(dotenv_get "$TMP/r1/.env" POSTGRES_PASSWORD)" "old"
+printf 'POSTGRES_PASSWORD=current\n' > "$TMP/r2/.env"
+OMK_RESTORE_ENV_FROM="$BK" restore_env_backup "$TMP/r2" llm >/dev/null
+eq "restore never clobbers" "$(dotenv_get "$TMP/r2/.env" POSTGRES_PASSWORD)" "current"
+OMK_RESTORE_ENV_FROM="$BK" restore_env_backup "$TMP/r1" bench >/dev/null
+ok "restore missing backup is no-op" '[[ ! -f "$TMP/r1/bench.env" ]]'
+( unset OMK_RESTORE_ENV_FROM; restore_env_backup "$TMP/none" llm ); ok "restore unset is no-op" '[[ ! -e "$TMP/none/.env" ]]'
+
 # ── .env 읽기/쓰기 ──
 F="$TMP/a.env"; printf 'A=1\nB="two words"\n# C=no\nD=x=y\n' > "$F"
 eq "get plain"   "$(dotenv_get "$F" A)" "1"

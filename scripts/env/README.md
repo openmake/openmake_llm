@@ -73,7 +73,7 @@ omk proxy status | reload | render <env>
 ```bash
 omk env reset staging --reinstall            # 전부 지우고 같은 브랜치로 재설치
 omk env reset staging --keep-env --reinstall # .env(LLM 키·API 키)는 백업했다가 복원
-omk env reset staging --keep-data            # DB 볼륨은 남김
+omk env reset staging --keep-data            # DB 볼륨은 남김 (.env 도 함께 보존 — 비밀번호·암호화 키가 데이터와 짝이다)
 ```
 
 `reset` 은 **환경 이름만으로** 지울 대상을 계산한다 — `.env` 가 깨졌어도 동작한다.

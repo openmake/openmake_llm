@@ -226,6 +226,15 @@ ensure_git() {
     fi
     has git || die "git 설치 후에도 실행 파일을 찾을 수 없습니다."
 }
+# reset --keep-env 가 남긴 .env 를 **설치 전에** 되돌린다. 설치 뒤에 되돌리면 늦다 — install.sh 가 새
+# POSTGRES_PASSWORD 로 DB 볼륨을 이미 초기화해서, 복원된 옛 비밀번호로는 다음 기동부터 인증이 실패한다
+# (2026-09-18 검증에서 실제로 "password authentication failed" 로 깨졌다). 먼저 놓아 두면 gen-env 는
+# 보수 모드로 기존 값을 지키고, 새 볼륨은 그 비밀번호로 만들어진다.
+restore_env_backup() { # $1=대상 디렉터리 $2=llm|bench
+    local src="${OMK_RESTORE_ENV_FROM:-}"
+    [[ -n "$src" && -f "$src/$2.env" && ! -f "$1/.env" ]] || return 0
+    cp "$src/$2.env" "$1/.env" && log_ok "$2 .env 복원 (설치 전) ← $src"
+}
 clone_or_keep() { # $1=url $2=ref $3=dir $4=label
     if [[ -f "$3/package.json" && -d "$3/.git" ]]; then
         log_ok "$4 소스 재사용: $3 ($(git -C "$3" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?'))"
@@ -319,6 +328,7 @@ bench_install() { # $1=env $2=ref $3=llm dir
     bdir="$(bench_dir "$env")"
     log_step "bench 설치 ($env @ $ref)"
     clone_or_keep "$OMKB_REPO_URL" "$ref" "$bdir" "openmake_bench"
+    restore_env_backup "$bdir" bench
     bench_build "$bdir"
     api="$(llm_api_port "$ldir")"; web="$(llm_web_port "$ldir")"
     mkdir -p "$(logs_dir "$env")"
@@ -524,6 +534,7 @@ cmd_env_install() {
 
     # 1) openmake_llm — 툴체인·.env·DB·마이그레이션·빌드·PM2 전부 install.sh 가 한다.
     clone_or_keep "$OMK_REPO_URL" "$ref" "$ldir" "openmake_llm"
+    restore_env_backup "$ldir" llm
     # 빈 배열 확장은 bash 4.4 미만에서 set -u 에 걸린다 — ${arr[@]+"${arr[@]}"} 관용구로 피한다.
     ( cd "$ldir" && OMK_LOG_DIR="$(logs_dir "$env")" ./install.sh --yes ${suffix_flag[@]+"${suffix_flag[@]}"} \
         ${public_url:+--public-url "$public_url"} ${llm_args[@]+"${llm_args[@]}"} ) || die "install.sh 실패 ($env)"
@@ -571,6 +582,9 @@ cmd_env_reset() {
     done
     local edir ldir bdir ref="" bref=""
     edir="$(env_dir "$env")"; ldir="$(llm_dir "$env")"; bdir="$(bench_dir "$env")"
+    # 데이터만 남기고 .env 를 버리면 쓸 수 없다 — 볼륨은 옛 POSTGRES_PASSWORD 로, DB 안의 암호화된 값은
+    # 옛 TOKEN_ENCRYPTION_KEY 로 묶여 있다. 그래서 --keep-data 는 .env 보존을 함의한다.
+    if [[ $keep_data -eq 1 && $keep_env -eq 0 ]]; then keep_env=1; log_info "--keep-data → .env 도 함께 보존합니다 (DB 비밀번호·암호화 키가 데이터와 짝)"; fi
     log_step "환경 리셋: $env"
     load_toolchain "$ldir"; assert_env_owned "$env"
     echo "  PM2      $(pm2_names "$env")"
@@ -608,12 +622,9 @@ cmd_env_reset() {
     log_ok "$env 리셋 완료"
 
     if [[ $reinstall -eq 1 ]]; then
-        cmd_env_install "$env" ${ref:+--ref "$ref"} ${bref:+--bench-ref "$bref"} --yes
-        if [[ -n "$bk" ]]; then
-            [[ -f "$bk/llm.env" ]]   && cp "$bk/llm.env"   "$ldir/.env" && log_ok "llm .env 복원"
-            [[ -f "$bk/bench.env" ]] && cp "$bk/bench.env" "$bdir/.env" && log_ok "bench .env 복원"
-            log_info "복원된 .env 를 반영하려면: omk env start $env"
-        fi
+        OMK_RESTORE_ENV_FROM="$bk" cmd_env_install "$env" ${ref:+--ref "$ref"} ${bref:+--bench-ref "$bref"} --yes
+    elif [[ -n "$bk" ]]; then
+        log_info "보존한 .env 로 다시 설치하려면: OMK_RESTORE_ENV_FROM=\"$bk\" omk env install $env"
     fi
 }
 
