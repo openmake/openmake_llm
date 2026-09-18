@@ -12,13 +12,13 @@ jest.mock('../../../config/runtime-limits', () => {
     };
 });
 
-import { detectOrchestrationIntents, buildExternalToolPlan } from '../external-tool-plan';
+import { START_DISCUSSION_TOOL_NAME } from '../chat-integration';
+import { detectOrchestrationIntents, buildExternalToolPlan } from '../../../services/chat-service/external-tool-plan';
 import {
-    START_DISCUSSION_TOOL_NAME,
     DELEGATE_AGENT_TASK_TOOL_NAME,
     isOrchestrationTool,
-} from '../orchestration-dispatch';
-import type { ChatMessageRequest } from '../../chat-service-types';
+} from '../../../services/chat-service/orchestration-dispatch';
+import type { ChatMessageRequest } from '../../../services/chat-service-types';
 
 function makeReq(message: string): ChatMessageRequest {
     return { message } as ChatMessageRequest;
@@ -27,7 +27,7 @@ function makeReq(message: string): ChatMessageRequest {
 describe('detectOrchestrationIntents (프리필터)', () => {
     it('토론 의도 매칭 — "찬반 토론해줘"', () => {
         const r = detectOrchestrationIntents('원격근무 찬반 토론해줘');
-        expect(r.discussion).toBe(true);
+        expect(r.contributedTools).toContain(START_DISCUSSION_TOOL_NAME);
         expect(r.taskDelegate).toBe(false);
     });
 
@@ -38,7 +38,7 @@ describe('detectOrchestrationIntents (프리필터)', () => {
 
     it('단순 질문은 미매칭 — 오케스트레이션 도구 미노출 경로', () => {
         const r = detectOrchestrationIntents('오늘 날씨 어때?');
-        expect(r.discussion).toBe(false);
+        expect(r.contributedTools).toEqual([]);
         expect(r.taskDelegate).toBe(false);
     });
 
@@ -54,7 +54,7 @@ describe('detectOrchestrationIntents (프리필터)', () => {
         '최저임금 인상의 장단점을 여러 시각에서 논의해줘',
         '원전 확대와 재생에너지 전환 중 어느 쪽이 나은지 알려줘',
     ])('토론 표현 변형 매칭: %s', (q) => {
-        expect(detectOrchestrationIntents(q).discussion).toBe(true);
+        expect(detectOrchestrationIntents(q).contributedTools).toContain(START_DISCUSSION_TOOL_NAME);
     });
 
     it.each([
@@ -76,7 +76,7 @@ describe('detectOrchestrationIntents (프리필터)', () => {
         '깃 브랜치 전략 중 git flow가 뭐야?',
     ])('일반 질의는 미노출 유지: %s', (q) => {
         const r = detectOrchestrationIntents(q);
-        expect(r.discussion || r.taskDelegate).toBe(false);
+        expect(r.contributedTools.length > 0 || r.taskDelegate).toBe(false);
     });
 });
 
@@ -84,14 +84,13 @@ describe('buildExternalToolPlan (노출 게이트)', () => {
     const base = {
         allowedTools: [],
         toolCalling: true,
-        wantsMap: false,
     };
 
     it('의도 매칭 시에만 오케스트레이션 도구 노출', () => {
         const plan = buildExternalToolPlan({
             ...base,
             req: makeReq('찬반 토론해줘'),
-            orchestration: { discussion: true, taskDelegate: false },
+            orchestration: { contributedTools: [START_DISCUSSION_TOOL_NAME], taskDelegate: false },
         });
         const names = plan.tools.map((t) => t.function.name);
         expect(names).toContain(START_DISCUSSION_TOOL_NAME);
@@ -102,7 +101,7 @@ describe('buildExternalToolPlan (노출 게이트)', () => {
         const plan = buildExternalToolPlan({
             ...base,
             req: makeReq('안녕'),
-            orchestration: { discussion: false, taskDelegate: false },
+            orchestration: { contributedTools: [], taskDelegate: false },
         });
         const names = plan.tools.map((t) => t.function.name);
         expect(names).not.toContain(START_DISCUSSION_TOOL_NAME);
@@ -114,7 +113,7 @@ describe('buildExternalToolPlan (노출 게이트)', () => {
             ...base,
             toolCalling: false,
             req: makeReq('찬반 토론해줘'),
-            orchestration: { discussion: true, taskDelegate: true },
+            orchestration: { contributedTools: [START_DISCUSSION_TOOL_NAME], taskDelegate: true },
         });
         expect(plan.tools).toHaveLength(0);
     });
@@ -125,5 +124,19 @@ describe('isOrchestrationTool', () => {
         expect(isOrchestrationTool(START_DISCUSSION_TOOL_NAME)).toBe(true);
         expect(isOrchestrationTool(DELEGATE_AGENT_TASK_TOOL_NAME)).toBe(true);
         expect(isOrchestrationTool('web_search')).toBe(false);
+    });
+});
+
+describe('배정 가이드 문구', () => {
+    it('기여 도구와 위임 도구의 절을 이어 종전(v1.75)과 같은 문구를 만든다', () => {
+        const { buildOrchestrationPromptGuide } = require('../../../services/chat-service/orchestration-dispatch');
+        expect(buildOrchestrationPromptGuide()).toBe(
+            '\n\n[오케스트레이션 배정]\n'
+            + '- 이 턴에 제공된 오케스트레이션 도구는 사용자 요청 유형과 이미 일치한다고 판단되어 노출된 것입니다. '
+            + '해당 도구가 다루는 작업이면 그 도구로 처리하고, 결과를 사용자에게 정리해 전달하세요.\n'
+            + '- start_discussion 은 관점이 갈리는 주제의 결론을 만들 때, delegate_agent_task 는 파일 산출·코드 실행이 '
+            + '필요할 때 사용합니다.\n'
+            + '- 도구가 다루지 않는 요청이면 평소처럼 직접 답하세요.',
+        );
     });
 });

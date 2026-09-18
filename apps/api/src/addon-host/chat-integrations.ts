@@ -10,6 +10,7 @@ import { BUILTIN_ADDON_IDS, isBuiltinAddonEnabled, type BuiltinAddonId } from '.
 
 const LOADERS: Readonly<Partial<Record<BuiltinAddonId, () => ChatTurnIntegration>>> = {
     'notebooklm': () => (require('../addons/notebooklm/chat-integration') as typeof import('../addons/notebooklm/chat-integration')).notebooklmChatIntegration,
+    'discussion': () => (require('../addons/discussion/chat-integration') as typeof import('../addons/discussion/chat-integration')).discussionChatIntegration,
     'kakao-map': () => (require('../addons/kakao-map/chat-integration') as typeof import('../addons/kakao-map/chat-integration')).kakaoMapChatIntegration,
 };
 

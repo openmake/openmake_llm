@@ -18,14 +18,14 @@ import { getChatTurnIntegrations } from './turn-integrations';
 import {
     EXTERNAL_LLM_TOOL_BLACKLIST, ARTIFACT_REQUEST_SUPPRESSED_TOOLS, ARTIFACT_INTENT_PATTERNS,
     WEB_SEARCH_INTENT_PATTERNS, REPORT_PIPELINE, REPORT_INTENT_PATTERNS,
-    CHAT_SUBAGENT, AGENT_SPAWN, ORCHESTRATION_DISPATCH, DISCUSSION_INTENT_PATTERNS, TASK_DELEGATE_INTENT_PATTERNS,
+    CHAT_SUBAGENT, AGENT_SPAWN, ORCHESTRATION_DISPATCH, TASK_DELEGATE_INTENT_PATTERNS,
     SPAWN_INTENT_PATTERNS, CHAT_TOOL_INTENT_GATE_ENABLED,
     PLAN_INTENT_PATTERNS, CHAT_ASK_USER,
 } from '../../config/runtime-limits';
 import { buildChatDelegateTool } from './chat-delegate';
 import { buildAskUserTool } from './ask-user';
 import { buildSpawnAgentsTool } from '../agent-spawn/spawn-agents';
-import { buildStartDiscussionTool, buildDelegateAgentTaskTool } from './orchestration-dispatch';
+import { buildDelegateAgentTaskTool, contributedOrchestrationTools } from './orchestration-dispatch';
 import type { ToolDefinition } from '../../llm';
 import type { ChatMessageRequest } from '../chat-service-types';
 import { createLogger } from '../../utils/logger';
@@ -33,16 +33,22 @@ import { createLogger } from '../../utils/logger';
 const logger = createLogger('ChatExternalProvider');
 
 export interface OrchestrationIntents {
-    discussion: boolean;
+    /** 의도 프리필터에 걸린 add-on 기여 도구 이름 (등록 순서) */
+    contributedTools: string[];
     taskDelegate: boolean;
+}
+
+/** 이 턴에 오케스트레이션 의도가 하나라도 있는가 — 배정 가이드 주입·관측 플래그가 공유 */
+export function hasOrchestrationIntent(o: OrchestrationIntents | undefined): boolean {
+    return !!o && (o.contributedTools.length > 0 || o.taskDelegate);
 }
 
 /** PURE: 오케스트레이션 자동 배정 의도 감지 — 프롬프트 가이드 주입과 도구 노출이 공유. */
 export function detectOrchestrationIntents(message: string | undefined): OrchestrationIntents {
-    if (!ORCHESTRATION_DISPATCH.ENABLED) return { discussion: false, taskDelegate: false };
+    if (!ORCHESTRATION_DISPATCH.ENABLED) return { contributedTools: [], taskDelegate: false };
     const msg = message ?? '';
     return {
-        discussion: DISCUSSION_INTENT_PATTERNS.some((re) => re.test(msg)),
+        contributedTools: contributedOrchestrationTools().filter((t) => t.detectIntent(msg)).map((t) => t.name),
         taskDelegate: TASK_DELEGATE_INTENT_PATTERNS.some((re) => re.test(msg)),
     };
 }
@@ -99,9 +105,12 @@ export function buildExternalToolPlan(params: {
         tools.push(buildSpawnAgentsTool());
     }
     // 오케스트레이션 자동 배정(Stage 1): 의도 프리필터 매칭 턴에만 노출.
-    if (orchestration.discussion && toolCalling) {
-        tools.push(buildStartDiscussionTool());
-        logger.info('[Orchestration] 토론 의도 감지 — start_discussion 노출');
+    if (toolCalling) {
+        for (const t of contributedOrchestrationTools()) {
+            if (!orchestration.contributedTools.includes(t.name)) continue;
+            tools.push(t.buildTool());
+            logger.info(`[Orchestration] ${t.exposureLog} — ${t.name} 노출`);
+        }
     }
     if (orchestration.taskDelegate && toolCalling) {
         tools.push(buildDelegateAgentTaskTool());

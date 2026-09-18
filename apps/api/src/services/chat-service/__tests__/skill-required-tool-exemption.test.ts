@@ -23,8 +23,7 @@ describe('buildExternalToolPlan — 스킬 required 도구 억제 면제', () =>
     const base = {
         allowedTools: [agentTaskList, odCreate],
         toolCalling: true,
-        wantsMap: false,
-        orchestration: { discussion: false, taskDelegate: false },
+        orchestration: { contributedTools: [], taskDelegate: false },
     };
     // ARTIFACT_INTENT_PATTERNS 매칭 문구 ("html ... 만들어줘")
     const artifactReq = { message: 'html 페이지로 만들어줘' } as ChatMessageRequest;

@@ -18,7 +18,7 @@ import { LOOP_DETECTION, AGENT_LOOP_LIMITS, SPAWN_INTENT_PATTERNS, EXTERNAL_LLM_
 import { detectIntegrationIntents, getChatTurnIntegrations } from './turn-integrations';
 import { estimateMessageTokens, truncateMessagesPreservingSystem } from '../../llm/model-pool';
 import { AGENT_SPAWN } from '../../config/runtime-limits';
-import { buildExternalToolPlan, detectOrchestrationIntents } from './external-tool-plan';
+import { buildExternalToolPlan, detectOrchestrationIntents, hasOrchestrationIntent } from './external-tool-plan';
 import { buildExternalMessages } from './external-messages';
 import { buildChatProvenance, classifyChatOutcome, recordChatRequestFireAndForget } from './chat-request-recorder';
 import { captureReplay } from '../../observability/replay-capture';
@@ -136,9 +136,9 @@ export async function runExternalStream(
     });
     // Stage 2 셰도우 계측 — 의도 매칭 턴만 텔레메트리를 초기화(호출 시 아래 루프가 갱신).
     // 병렬 위임(spawn) 의도 턴도 적재 — 노출→채택률을 재야 설명문·가이드 조정의 효과를 안다(110).
-    if (orchestration.discussion || orchestration.taskDelegate || wantsSpawn) {
+    if (hasOrchestrationIntent(orchestration) || wantsSpawn) {
         ctx.orchestrationTelemetry = {
-            discussionIntent: orchestration.discussion,
+            addonToolIntent: orchestration.contributedTools.length > 0,
             taskDelegateIntent: orchestration.taskDelegate,
             spawnIntent: wantsSpawn,
             exposed: tools
@@ -148,7 +148,7 @@ export async function runExternalStream(
     }
 
     // 요청 지문(F24.2) — 조립된 프롬프트·도구 집합의 sha256. 기록은 종료 시 chat_requests 1행(fire-and-forget)
-    const provenance = buildChatProvenance({ req, ctx, promptParts, tools, flags: { integrations: Object.keys(integrationIntents).filter((id) => integrationIntents[id]), orchestration: orchestration.discussion || orchestration.taskDelegate, spawn: wantsSpawn } });
+    const provenance = buildChatProvenance({ req, ctx, promptParts, tools, flags: { integrations: Object.keys(integrationIntents).filter((id) => integrationIntents[id]), orchestration: hasOrchestrationIntent(orchestration), spawn: wantsSpawn } });
     const startedAt = Date.now();
     // TTFT 분해 계측 — 구간 계산은 호출부(ws-chat-handler)가 상위 시작 시각과 함께 수행.
     const timings: ChatTimings = {
@@ -410,14 +410,13 @@ export async function runExternalStream(
         ...(directCostUsdMicrosTotal !== undefined ? { directCostUsdMicros: directCostUsdMicrosTotal } : {}),
     });
 
-    // 도구 루프 중 수집한 블록(생성 미디어·통합 블록·토론 출처·웹검색 출처·보고서)을 최종
+    // 도구 루프 중 수집한 블록(생성 미디어·통합 블록·웹검색 출처·보고서)을 최종
     // 응답에 결정적으로 첨부 — 상세는 external-deterministic-append (LLM 의 도구/인용 지시 누락 보정).
     const finalContent = appendDeterministicBlocks({
         finalContent: result.content || '',
         onToken,
         generatedMediaMarkdowns: state.generatedMediaMarkdowns,
         integrationBlocks: state.integrationBlocks,
-        discussionSourceBlocks: state.discussionSourceBlocks,
         odArtifact: state.odArtifact,
         req,
         ctx,

@@ -4,8 +4,8 @@
  * ============================================================
  *
  * 사용법:
- *   ts-node src/evaluation/run-citation-evaluation.ts                      # 기본 fixture 코퍼스
- *   ts-node src/evaluation/run-citation-evaluation.ts custom.json          # 사용자 지정 코퍼스
+ *   ts-node src/addons/deep-research/evaluation/run-citation-evaluation.ts                      # 기본 fixture 코퍼스
+ *   ts-node src/addons/deep-research/evaluation/run-citation-evaluation.ts custom.json          # 사용자 지정 코퍼스
  *
  * 결과:
  *   - 콘솔에 회귀 + 집계(mean coverage / invalid-rate / skip) 출력

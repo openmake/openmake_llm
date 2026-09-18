@@ -211,7 +211,7 @@ export async function runMessagePipeline(svc: ChatService,
             recordOrchestrationDispatch({
                 userId, queryLength: (message || '').length,
                 telemetry: {
-                    discussionIntent: intents.discussion,
+                    addonToolIntent: intents.contributedTools.length > 0,
                     taskDelegateIntent: intents.taskDelegate,
                     exposed: [],
                 },

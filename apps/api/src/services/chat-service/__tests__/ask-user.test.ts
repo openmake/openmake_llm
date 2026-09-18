@@ -23,8 +23,7 @@ describe('buildExternalToolPlan — ask_user 노출 게이팅', () => {
     const base = {
         allowedTools: [webSearchTool],
         toolCalling: true,
-        wantsMap: false,
-        orchestration: { discussion: false, taskDelegate: false },
+        orchestration: { contributedTools: [], taskDelegate: false },
     };
     const names = (msg: string, toolCalling = true) => buildExternalToolPlan({
         ...base, toolCalling, req: { message: msg } as ChatMessageRequest,

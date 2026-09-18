@@ -4,25 +4,24 @@
  * ============================================================
  *
  * 채팅 도구 루프에 두 도구를 의도 프리필터 게이트로 노출한다:
- *  - start_discussion: 다각 관점 토론(discussion engine 축소 프로파일)을 인라인 실행
+ *  - add-on 이 기여한 도구(예: 인라인 다각 관점 토론) — turn-integrations 의 orchestrationTool
  *  - delegate_agent_task: 장시간·파일 산출 작업을 백그라운드 에이전트 작업으로 위임
  *
  * 설계 원칙 (오케스트레이션은 앱 자체 구현 유지 — 게이트웨이는 모델 호출만 담당):
  *  - 별도 라우터 LLM 없음 — 메인 모델의 tool_choice:auto 가 같은 턴에 결정.
- *  - 상시 노출 금지 — DISCUSSION/TASK_DELEGATE_INTENT_PATTERNS 매칭 시에만 노출(도구폭주 방지).
- *  - 비용 가드 — 토론은 전문가·시간 캡, 위임 작업은 기존 승인 정책(HITL)·큐·goal judge 를 그대로 탄다.
+ *  - 상시 노출 금지 — 도구별 의도 프리필터 매칭 시에만 노출(도구폭주 방지).
+ *  - 비용 가드 — 기여 도구는 자체 캡(전문가·시간), 위임 작업은 기존 승인 정책(HITL)·큐·goal judge 를 그대로 탄다.
  *  - 실행 주체는 앱 — LiteLLM 게이트웨이는 모델 호출만 담당(이중 라우팅 없음).
  *
  * @module services/chat-service/orchestration-dispatch
  */
 import { randomUUID } from 'crypto';
+import { getChatTurnIntegrations, type ContributedOrchestrationTool } from './turn-integrations';
 import { createClient } from '../../llm';
 import type { ChatMessage } from '../../llm';
 import type { ToolDefinition } from '../../llm/types';
 import type { UserContext } from '../../mcp/user-sandbox';
 import { getModelForRole } from '../../config/model-roles';
-import { createDiscussionEngine, type DiscussionSearchResult } from '../../addons/discussion/engine';
-import { buildDiscussionSourcesBlock, wrapDiscussionSources } from '../../addons/discussion/sources';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { AgentTaskService } from '../AgentTaskService';
 import { dispatchAgentTask } from '../agent-task/task-queue';
@@ -32,40 +31,31 @@ import { isAdminRole } from '../../data/user-manager';
 
 const logger = createLogger('OrchestrationDispatch');
 
-export const START_DISCUSSION_TOOL_NAME = 'start_discussion';
 export const DELEGATE_AGENT_TASK_TOOL_NAME = 'delegate_agent_task';
 
-export function isOrchestrationTool(name: string): boolean {
-    return name === START_DISCUSSION_TOOL_NAME || name === DELEGATE_AGENT_TASK_TOOL_NAME;
+/** add-on 이 기여한 오케스트레이션 도구 (예: 인라인 토론) — turn-integrations 의 orchestrationTool */
+export function contributedOrchestrationTools(): ContributedOrchestrationTool[] {
+    return getChatTurnIntegrations().flatMap((i) => (i.orchestrationTool ? [i.orchestrationTool] : []));
 }
 
-/** 시스템 프롬프트에 주입하는 배정 가이드 — 해당 의도 프리필터 매칭 턴에만 주입된다. */
-export const ORCHESTRATION_PROMPT_GUIDE =
-    '\n\n[오케스트레이션 배정]\n'
-    + '- 이 턴에 제공된 오케스트레이션 도구는 사용자 요청 유형과 이미 일치한다고 판단되어 노출된 것입니다. '
-    + '해당 도구가 다루는 작업이면 그 도구로 처리하고, 결과를 사용자에게 정리해 전달하세요.\n'
-    + '- start_discussion 은 관점이 갈리는 주제의 결론을 만들 때, delegate_agent_task 는 파일 산출·코드 실행이 '
-    + '필요할 때 사용합니다.\n'
-    + '- 도구가 다루지 않는 요청이면 평소처럼 직접 답하세요.';
+export function isOrchestrationTool(name: string): boolean {
+    return name === DELEGATE_AGENT_TASK_TOOL_NAME || contributedOrchestrationTools().some((t) => t.name === name);
+}
 
-export function buildStartDiscussionTool(): ToolDefinition {
-    return {
-        type: 'function',
-        function: {
-            name: START_DISCUSSION_TOOL_NAME,
-            description: '여러 전문가의 서로 다른 관점을 모아 결론을 내야 하는 질문에 사용합니다. '
-                + '찬반·장단점·다각도 비교가 요구되면 이 도구로 토론을 실행하세요 — '
-                + `전문가 ${ORCHESTRATION_DISPATCH.DISCUSSION_MAX_AGENTS}명이 자동 선정되어 토론 후 합성된 결론을 반환합니다. `
-                + '단순 사실 질문·설명 요청에는 사용하지 마세요.',
-            parameters: {
-                type: 'object',
-                properties: {
-                    topic: { type: 'string', description: '토론 주제 (사용자 질문을 구체적 쟁점으로 정리)' },
-                },
-                required: ['topic'],
-            },
-        },
-    };
+/** 배정 가이드에서 위임 도구를 설명하는 절 */
+const DELEGATE_GUIDE_CLAUSE = 'delegate_agent_task 는 파일 산출·코드 실행이 필요할 때';
+
+/**
+ * 시스템 프롬프트에 주입하는 배정 가이드 — 해당 의도 프리필터 매칭 턴에만 주입된다.
+ * 도구별 설명 절은 기여 도구(등록 순서) → 위임 도구 순으로 잇는다.
+ */
+export function buildOrchestrationPromptGuide(): string {
+    const clauses = [...contributedOrchestrationTools().map((t) => t.promptGuideClause), DELEGATE_GUIDE_CLAUSE];
+    return '\n\n[오케스트레이션 배정]\n'
+        + '- 이 턴에 제공된 오케스트레이션 도구는 사용자 요청 유형과 이미 일치한다고 판단되어 노출된 것입니다. '
+        + '해당 도구가 다루는 작업이면 그 도구로 처리하고, 결과를 사용자에게 정리해 전달하세요.\n'
+        + `- ${clauses.join(', ')} 사용합니다.\n`
+        + '- 도구가 다루지 않는 요청이면 평소처럼 직접 답하세요.';
 }
 
 export function buildDelegateAgentTaskTool(): ToolDefinition {
@@ -87,82 +77,6 @@ export function buildDelegateAgentTaskTool(): ToolDefinition {
             },
         },
     };
-}
-
-/** start_discussion 실행 — 축소 프로파일(전문가·라운드 캡) 토론을 동기 실행해 합성 결과를 반환. */
-async function runStartDiscussion(params: {
-    args: Record<string, unknown>;
-    userLanguage?: string;
-    signal?: AbortSignal;
-}): Promise<string> {
-    const topic = String(params.args.topic ?? '').trim();
-    if (!topic) return 'Error: topic 이 필요합니다.';
-
-    const client = createClient({ model: getModelForRole('chat') });
-    const generateResponse = async (systemPrompt: string, userMessage: string): Promise<string> => {
-        if (params.signal?.aborted) throw new Error('aborted');
-        let response = '';
-        const chatMessages: ChatMessage[] = [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userMessage },
-        ];
-        await client.chat(chatMessages, { num_predict: MODEL_CONTEXT_DEFAULTS.DEFAULT_NUM_PREDICT }, (token, thinking) => {
-            if (!thinking) response += token;
-            if (params.signal?.aborted) throw new Error('aborted');
-        });
-        return response;
-    };
-
-    const engine = createDiscussionEngine(generateResponse, {
-        maxAgents: ORCHESTRATION_DISPATCH.DISCUSSION_MAX_AGENTS,
-        maxRounds: 1,
-        enableCrossReview: false,
-        enableFactCheck: ORCHESTRATION_DISPATCH.DISCUSSION_EVIDENCE,
-        enableDeepThinking: false,
-        ...(params.userLanguage ? { userLanguage: params.userLanguage } : {}),
-    });
-
-    // Evidence Package 수집용 검색 함수 — 토글 경로(discussion-strategy)와 대칭.
-    // 미주입 시 엔진이 근거 없이 토론하므로(종전 동작) 여기서 반드시 넘긴다.
-    let webSearchFn: ((q: string, opts?: { maxResults?: number }) => Promise<DiscussionSearchResult[]>) | undefined;
-    if (ORCHESTRATION_DISPATCH.DISCUSSION_EVIDENCE) {
-        try {
-            ({ performWebSearch: webSearchFn } = await import('../../mcp/web-search'));
-        } catch {
-            // fail-open — 검색 모듈이 없어도 토론 자체는 진행한다.
-            logger.warn('[start_discussion] 웹 검색 모듈 로드 실패 — 근거 없이 진행');
-        }
-    }
-
-    const started = Date.now();
-    try {
-        const result = await Promise.race([
-            engine.startDiscussion(topic, webSearchFn),
-            new Promise<never>((_, rej) => setTimeout(
-                () => rej(new Error(`토론 시간 상한(${ORCHESTRATION_DISPATCH.DISCUSSION_TIMEOUT_MS}ms) 초과`)),
-                ORCHESTRATION_DISPATCH.DISCUSSION_TIMEOUT_MS,
-            )),
-        ]);
-        logger.info(`[start_discussion] 완료 ${Date.now() - started}ms, 참여 ${result.participants.length}명`);
-        // 출처는 마커로 감싸 전달한다 — 모델이 도구 결과를 요약하며 버리므로,
-        // external-provider 가 이를 뽑아 최종 응답에 결정적으로 1회 붙인다.
-        const sourcesBlock = wrapDiscussionSources(
-            buildDiscussionSourcesBlock(result.finalAnswer, result.sources, params.userLanguage),
-        );
-        // 축소 완료(최소 인원 미달)면 모델에게 알린다 — 복수 관점이 성립하지 않았으므로
-        // "전문가들이 합의했다" 식으로 단정하지 않도록.
-        const degradedNote = result.degraded
-            ? `\n(주의: 참여 전문가가 ${result.participants.length}명뿐이라 복수 관점 비교가 제한적입니다. 합의로 단정하지 마세요.)`
-            : '';
-        const body = `참여 전문가: ${result.participants.join(', ')}${degradedNote}\n\n${result.finalAnswer}${sourcesBlock}`;
-        return body.length > ORCHESTRATION_DISPATCH.RESULT_CAP_CHARS
-            ? `${body.slice(0, ORCHESTRATION_DISPATCH.RESULT_CAP_CHARS)}\n...(길이 상한으로 잘림)`
-            : body;
-    } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        logger.warn(`[start_discussion] 실패: ${msg}`);
-        return `Error: 토론 실행 실패 — ${msg}. 지금까지의 지식으로 직접 답변하세요.`;
-    }
 }
 
 /** delegate_agent_task 실행 — 작업 생성 + 백그라운드 디스패치(즉시 반환, HITL·큐는 기존 경로). */
@@ -218,8 +132,9 @@ export async function runOrchestrationTool(params: {
     userLanguage?: string;
     signal?: AbortSignal;
 }): Promise<string> {
-    if (params.name === START_DISCUSSION_TOOL_NAME) {
-        return runStartDiscussion({
+    const contributed = contributedOrchestrationTools().find((t) => t.name === params.name);
+    if (contributed) {
+        return contributed.run({
             args: params.args,
             ...(params.userLanguage ? { userLanguage: params.userLanguage } : {}),
             ...(params.signal ? { signal: params.signal } : {}),

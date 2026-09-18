@@ -18,7 +18,7 @@
         "eval:routing": "ts-node src/evaluation/run-evaluation.ts",
         "eval:routing:strict": "OMK_EVAL_PASS_THRESHOLD=1.0 ts-node src/evaluation/run-evaluation.ts",
         "eval:response": "ts-node src/evaluation/run-response-evaluation.ts",
-        "eval:citation": "ts-node src/evaluation/run-citation-evaluation.ts",
+        "eval:citation": "ts-node src/addons/deep-research/evaluation/run-citation-evaluation.ts",
         "eval:budget": "ts-node src/evaluation/run-budget-evaluation.ts",
         "eval:tools": "ts-node src/evaluation/run-tool-selection-evaluation.ts",
         "eval:matrix": "ts-node src/evaluation/run-matrix-evaluation.ts",

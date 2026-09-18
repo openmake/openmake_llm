@@ -13,7 +13,8 @@ import type { ResolvedProvider } from '../../providers/provider-router';
 import { getExternalProviderSystemGuards } from '../../chat/prompt';
 import { getCurrentDate } from '../../utils/datetime';
 import { getStyleGuard, normalizeStyle } from '../../chat/style';
-import { ORCHESTRATION_PROMPT_GUIDE } from './orchestration-dispatch';
+import { buildOrchestrationPromptGuide } from './orchestration-dispatch';
+import { hasOrchestrationIntent, type OrchestrationIntents } from './external-tool-plan';
 import { SPAWN_PROMPT_GUIDE } from '../agent-spawn/spawn-agents';
 import { LANGUAGE_DISPLAY_NAMES, resolvePromptLocale, type SupportedLanguageCode } from '../../chat/language-policy';
 import type { StreamFromExternalContext } from './external-provider-types';
@@ -25,7 +26,7 @@ type ExternalSystemPromptParams = {
     /** 통합(add-on)이 이 턴에 넣는 시스템 프롬프트 조각 — 호출부가 원 메시지 기준으로 계산해 전달 */
     integrationPromptParts?: readonly string[];
     /** 오케스트레이션 자동 배정 의도(external-tool-plan 과 공유) — 매칭 턴에만 가이드 주입. */
-    orchestration?: { discussion: boolean; taskDelegate: boolean };
+    orchestration?: OrchestrationIntents;
     /** 병렬 위임 의도(SPAWN_INTENT_PATTERNS) — 매칭 턴에만 spawn_agents 가이드 주입. */
     wantsSpawn?: boolean;
 };
@@ -167,8 +168,8 @@ export function buildExternalSystemPromptParts(params: ExternalSystemPromptParam
 
     // 오케스트레이션 자동 배정(Stage 1) — 해당 의도 프리필터 매칭 턴에만 배정 가이드 주입
     // (도구 노출과 동일 조건 공유 — external-tool-plan.detectOrchestrationIntents).
-    if (orchestration && (orchestration.discussion || orchestration.taskDelegate)) {
-        systemPromptParts.push(ORCHESTRATION_PROMPT_GUIDE.trim());
+    if (hasOrchestrationIntent(orchestration)) {
+        systemPromptParts.push(buildOrchestrationPromptGuide().trim());
     }
 
     // 병렬 위임 의도 — 매칭 턴에만 spawn_agents 사용 가이드 주입 (오케스트레이션 가이드와

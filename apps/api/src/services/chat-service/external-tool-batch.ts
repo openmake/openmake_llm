@@ -17,7 +17,6 @@ import { SPAWN_AGENTS_TOOL_NAME, runChatSpawnAgents } from '../agent-spawn/spawn
 import { isOrchestrationTool, runOrchestrationTool } from './orchestration-dispatch';
 import { executeExternalTool } from './external-tool-exec';
 import { captureOdArtifactHtml, normalizeOdToolCall, type OdArtifactCapture } from './external-deterministic-append';
-import { extractDiscussionSources } from '../../addons/discussion/sources';
 import { prefetchReadOnlyCalls } from '../tool-parallel';
 import type { ChatMessage, ToolDefinition } from '../../llm';
 import type { ChatMessageRequest } from '../chat-service-types';
@@ -49,11 +48,6 @@ interface ToolBatchState {
      */
     integrationBlocks: IntegrationBlocks;
     /**
-     * 도구 경유 토론(start_discussion)의 출처 목록 — 모델이 도구 결과를 요약하며 버리므로
-     * 마커로 실려 온 블록을 모아 최종 응답에 결정적으로 첨부한다(통합 블록과 동일 패턴).
-     */
-    discussionSourceBlocks: string[];
-    /**
      * 오픈디자인 산출물(HTML) — create_artifact/write_file 인자에서 캡처, 마지막 저장본 유지.
      * 모델이 최종 응답에 <artifact> 를 생략하면 결정적 첨부한다(위 블록들과 동일 패턴).
      */
@@ -68,7 +62,6 @@ export function createToolBatchState(): ToolBatchState {
         orchestrationCalls: 0,
         generatedMediaMarkdowns: [],
         integrationBlocks: {},
-        discussionSourceBlocks: [],
         odArtifact: null,
     };
 }
@@ -168,12 +161,6 @@ export async function runToolCallBatch(params: {
                 if (captured) state.odArtifact = captured;
             }
         }
-        // 토론 출처 블록 추출 — 모델에게 보낼 텍스트에서는 걷어낸다(요약 대상에서 제외).
-        const extracted = extractDiscussionSources(toolResult);
-        for (const b of extracted.blocks) {
-            if (!state.discussionSourceBlocks.includes(b)) state.discussionSourceBlocks.push(b);
-        }
-        toolResult = extracted.modelFacing;
         // 통합 블록 수집 + 모델용 텍스트에서 제거 — 큰 블록 JSON 을 컨텍스트에서 보면 qwen 이 블록을 반복
         // 복사(degeneration)한다. 블록은 최종 응답에 결정적으로 정확히 1회만 첨부한다.
         const modelFacingResult = extractIntegrationBlocks(toolResult, state.integrationBlocks);

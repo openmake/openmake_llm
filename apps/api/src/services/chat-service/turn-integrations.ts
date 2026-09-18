@@ -21,6 +21,25 @@ export interface TurnIntegrationRequest {
     contextRefs?: Record<string, { id: string; title: string }>;
 }
 
+/** add-on 이 기여하는 오케스트레이션 도구 — 의도 프리필터에 걸린 턴에만 노출되고 같은 턴에 모델이 호출을 결정한다 */
+export interface ContributedOrchestrationTool {
+    name: string;
+    detectIntent(message: string): boolean;
+    buildTool(): import('../../llm/types').ToolDefinition;
+    /** 배정 가이드의 한 절 — "<도구> 은 ~할 때" (여러 도구의 절을 이어 한 문장으로 만든다) */
+    promptGuideClause: string;
+    /** 노출 로그 문구 */
+    exposureLog: string;
+    /** 실패는 'Error: …' 문자열로 돌려준다(채팅 루프를 죽이지 않는다) */
+    run(params: { args: Record<string, unknown>; userLanguage?: string; signal?: AbortSignal }): Promise<string>;
+}
+
+/** add-on 이 에이전트 작업 스텝에 기여하는 도구 */
+export interface ContributedAgentTaskTool {
+    tool: { name: string; description: string; inputSchema: { type: 'object'; properties: Record<string, unknown>; required?: string[] } };
+    run(args: Record<string, unknown>, ctx: { userId: string }): Promise<{ text: string; isError?: boolean }>;
+}
+
 export interface ChatTurnIntegration {
     /** add-on id */
     id: string;
@@ -46,6 +65,10 @@ export interface ChatTurnIntegration {
     scrubFinalContent?(content: string): { content: string; removed: number };
     /** 첨부 로그용 이름 */
     blockLabel?: string;
+    /** 채팅 도구 루프에 기여하는 오케스트레이션 도구 */
+    orchestrationTool?: ContributedOrchestrationTool;
+    /** 에이전트 작업 스텝에 기여하는 도구 — 노출 여부(플래그)는 add-on 이 판단해 빈 배열로 끈다 */
+    agentTaskTools?(): ContributedAgentTaskTool[];
     /**
      * 구 클라이언트 호환 — `contextRefs` 도입 전 WS chat 메시지가 이 통합의 참조를 실어 보내던 최상위 필드 이름.
      * 서버는 그 필드의 값을 `contextRefs[<id>]` 로 옮겨 받는다(iOS·캐시된 구 웹). 새 통합은 쓰지 않는다.

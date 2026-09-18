@@ -1,7 +1,7 @@
 /**
  * 외부 provider 응답의 결정적 첨부 후처리 — external-provider.ts 에서 분리 (600줄 CI 가드).
  *
- * 도구 루프 중 수집한 블록(생성 이미지·통합 블록·토론 출처·웹검색 출처·보고서)을 최종
+ * 도구 루프 중 수집한 블록(생성 이미지·통합 블록·웹검색 출처·보고서)을 최종
  * 응답 끝에 1회 붙인다. LLM(특히 qwen)이 도구 지시("마크다운 그대로 포함")나 인용 지시를
  * 자주 무시해 산출물/근거가 답변에 안 드러나던 문제를 결정적으로 보정한다. onToken =
  * 라이브 스트림, 반환값 = 저장 히스토리 — 양쪽에 반영해 reload 후에도 유지.
@@ -93,8 +93,6 @@ interface DeterministicAppendInput {
     generatedMediaMarkdowns: string[];
     /** 통합(add-on)별 결정적 첨부 블록 — 도구 결과에서 떼어 둔 것. */
     integrationBlocks: IntegrationBlocks;
-    /** start_discussion 출처 블록. */
-    discussionSourceBlocks: string[];
     /** 오픈디자인 도구로 저장한 HTML 산출물 (마지막 저장본 — captureOdArtifactHtml 참고). */
     odArtifact?: OdArtifactCapture | null;
     req: ChatMessageRequest;
@@ -152,7 +150,7 @@ export function captureOdArtifactHtml(
  * 수집된 블록을 최종 응답에 결정적으로 첨부하고 갱신된 본문을 반환한다.
  */
 export function appendDeterministicBlocks(input: DeterministicAppendInput): string {
-    const { onToken, generatedMediaMarkdowns, integrationBlocks, discussionSourceBlocks, req, ctx } = input;
+    const { onToken, generatedMediaMarkdowns, integrationBlocks, req, ctx } = input;
     let finalContent = input.finalContent;
 
     // 생성 미디어 마크다운을 LLM 이 최종 응답에서 누락한 경우 결정적 첨부 — 미디어 링크는 모델 본문이
@@ -193,16 +191,6 @@ export function appendDeterministicBlocks(input: DeterministicAppendInput): stri
         onToken(appended, undefined);
         finalContent += appended;
         logger.info(`${integration.blockLabel ?? integration.id} ${missing.length}개 자동 첨부 (LLM 응답 누락 보정)`);
-    }
-
-    // 토론 출처 목록 결정적 첨부 — 도구 결과에 실려 온 블록을 모델이 옮기지 않으므로
-    // (요약 과정에서 유실) 최종 응답에 1회 붙인다. URL 이 이미 본문에 있으면 건너뛴다.
-    const missingSources = discussionSourceBlocks.filter((b) => !finalContent.includes(b));
-    if (missingSources.length > 0) {
-        const appended = (finalContent.trim() ? '\n\n' : '') + missingSources.join('\n\n');
-        onToken(appended, undefined);
-        finalContent += appended;
-        logger.info(`🔗 토론 출처 ${missingSources.length}블록 자동 첨부 (LLM 요약 누락 보정)`);
     }
 
     // 웹검색 출처 목록 결정적 첨부 (서버 canonical 출처, 2026-08-14 강화) — 출처 목록의
