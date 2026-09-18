@@ -174,6 +174,14 @@ pm2_app_cwd() { # $1=name
         const n=process.argv[1]; let l=[]; try{l=JSON.parse(require("fs").readFileSync(0,"utf8"))}catch{}
         const p=l.find(x=>x.name===n); process.stdout.write(p?String(p.pm2_env.pm_cwd||""):"")' "$1" 2>/dev/null || true
 }
+pm2_dump_has_any() { # $1="name name …" → 0 이면 dump 에 그중 하나가 저장돼 있다
+    local dump="${PM2_HOME:-$HOME/.pm2}/dump.pm2"
+    [[ -f "$dump" ]] && has node || return 1
+    node -e '
+        const names=new Set(process.argv[2].split(/\s+/).filter(Boolean)); let l=[];
+        try{l=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))}catch{}
+        process.exit(l.some(p=>names.has(p.name))?0:1)' "$dump" "$1" 2>/dev/null
+}
 assert_env_owned() { # $1=env
     [[ "${OMK_FORCE_FOREIGN:-}" == "1" ]] && return 0
     local env="$1" edir c n owner; edir="$(env_dir "$1")"
@@ -608,7 +616,12 @@ cmd_env_reset() {
         local n; for n in $(pm2_names "$env"); do
             pm2 describe "$n" >/dev/null 2>&1 && { pm2 delete "$n" >/dev/null 2>&1 && log_ok "PM2 $n 삭제" || log_warn "PM2 $n 삭제 실패"; }
         done
-        pm2 save --force >/dev/null 2>&1 || true
+        # pm2 save 는 호스트 전체의 부팅 복구 목록(~/.pm2/dump.pm2)을 통째로 다시 쓴다 — 이 환경과
+        # 무관한 저장 항목까지 바뀐다. 그래서 지운 앱이 그 목록에 들어 있을 때만(안 지우면 재부팅 때
+        # 되살아난다) 다시 저장하고, 아니면 건드리지 않는다.
+        if pm2_dump_has_any "$(pm2_names "$env")"; then
+            pm2 save --force >/dev/null 2>&1 && log_info "PM2 부팅 복구 목록 갱신 (지운 앱이 저장돼 있었음)" || true
+        fi
     fi
     if has docker; then
         local c v

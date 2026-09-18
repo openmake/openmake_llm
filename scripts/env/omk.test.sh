@@ -49,6 +49,14 @@ OMK_RESTORE_ENV_FROM="$BK" restore_env_backup "$TMP/r1" bench >/dev/null
 ok "restore missing backup is no-op" '[[ ! -f "$TMP/r1/bench.env" ]]'
 ( unset OMK_RESTORE_ENV_FROM; restore_env_backup "$TMP/none" llm ); ok "restore unset is no-op" '[[ ! -e "$TMP/none/.env" ]]'
 
+# ── PM2 dump 검사: 이 환경의 앱이 저장돼 있을 때만 pm2 save 를 한다 ──
+export PM2_HOME="$TMP/pm2"; mkdir -p "$PM2_HOME"
+printf '[{"name":"other-app"},{"name":"openmake-llm-staging"}]' > "$PM2_HOME/dump.pm2"
+ok "dump has env app"      'pm2_dump_has_any "$(pm2_names staging)"'
+ok "dump lacks other env"  '! pm2_dump_has_any "$(pm2_names qa)"'
+rm -f "$PM2_HOME/dump.pm2"; ok "no dump → false" '! pm2_dump_has_any "$(pm2_names staging)"'
+unset PM2_HOME
+
 # ── .env 읽기/쓰기 ──
 F="$TMP/a.env"; printf 'A=1\nB="two words"\n# C=no\nD=x=y\n' > "$F"
 eq "get plain"   "$(dotenv_get "$F" A)" "1"
