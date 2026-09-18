@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.74.0](https://github.com/openmake/openmake_llm/compare/v1.73.1...v1.74.0) (2026-09-18)
+
+
+### ✨ 기능
+
+* **addon:** Base↔Add-on 경계 고정 + Add-on Host·내장 팩 분리 ([#937](https://github.com/openmake/openmake_llm/issues/937)) ([c8e719c](https://github.com/openmake/openmake_llm/commit/c8e719c8aace89d68e986e2fa25e68af10d4f3b6))
+
 ## [1.73.1](https://github.com/openmake/openmake_llm/compare/v1.73.0...v1.73.1) (2026-09-18)
 
 
