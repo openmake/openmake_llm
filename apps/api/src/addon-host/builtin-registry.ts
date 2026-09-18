@@ -5,8 +5,12 @@
  * 데이터는 모듈 로드 시점에 읽히므로 DB overlay(system_settings)보다 앞선다 — 변경은 재시작으로 반영.
  * 이 모듈은 다른 앱 모듈을 import 하지 않는다(콘텐츠 로더가 순환 없이 부를 수 있어야 한다).
  *
+ * 팩 콘텐츠는 `apps/api/addons/builtin/<id>/` 에 있다 — src 밖이라 tsc 산출물에 의존하지 않고, src·dist
+ * 어느 쪽에서 실행해도 같은 경로로 풀린다(`builtinAddonDir`). 콘텐츠 경로를 직접 조립하지 말 것.
+ *
  * @module addon-host/builtin-registry
  */
+import * as path from 'path';
 
 export const BUILTIN_ADDON_IDS = ['industry-pack', 'utility-pack'] as const;
 export type BuiltinAddonId = typeof BUILTIN_ADDON_IDS[number];
@@ -22,6 +26,11 @@ export const BUILTIN_ADDON_SKILL_SOURCE_PATH: Readonly<Record<BuiltinAddonId, st
     'industry-pack': 'agents/prompts/%/%',
     'utility-pack': 'agents/utility-skills/%',
 };
+
+/** 팩 콘텐츠 디렉토리 — `apps/api/{src|dist}/addon-host` 기준 두 단계 위의 `addons/builtin/<id>`. */
+export function builtinAddonDir(id: BuiltinAddonId): string {
+    return path.resolve(__dirname, '..', '..', 'addons', 'builtin', id);
+}
 
 function disabledIds(): Set<string> {
     return new Set((process.env.ADDON_BUILTIN_DISABLED ?? '').split(',').map(s => s.trim()).filter(Boolean));

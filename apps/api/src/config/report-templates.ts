@@ -42,7 +42,7 @@ interface ReportTemplateSpec {
 
 /**
  * 템플릿 HTML 디렉토리 — 소스와 함께 버전관리되는 src/report-templates/ (빌드 시
- * copy-report-templates 로 dist/report-templates/ 에 복사 — copy-agent-data 선례).
+ * copy-report-templates 로 dist/report-templates/ 에 복사).
  * __dirname 기준이라 src(ts-node 개발)·dist(운영) 모두 동일 상대 경로로 해석된다.
  * (레포 루트 /data/ 는 gitignore 된 런타임 데이터 영역이라 템플릿을 둘 수 없다.)
  */

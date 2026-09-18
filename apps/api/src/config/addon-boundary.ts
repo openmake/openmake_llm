@@ -2,7 +2,7 @@
  * Base ↔ Add-on 경계 분류표 (Add-on 전환 P0, 2026-09-18).
  *
  * Base = mechanism(런타임), Add-on = capability(콘텐츠·기능). 폴더를 옮기지 않고 의존 방향부터 고정한다.
- * 여기 적힌 "콘텐츠 자산"은 앞으로 `addons/builtin/*` 번들로 나갈 대상이고, Base 코드가 그것을 직접
+ * 여기 적힌 "콘텐츠 자산"은 `apps/api/addons/builtin/*` 팩의 파일과 그것을 읽는 로더·시더이고, Base 코드가 그것을 직접
  * 참조하는 지점은 `CONTENT_REFERENCE_ALLOWLIST` 로 동결한다 — **목록은 줄어들기만 한다**(래칫).
  * 새 참조가 필요해 보이면 Base 에 콘텐츠를 더 묶는 대신 Add-on Host 경유를 검토할 것.
  * 판정은 `config/__tests__/addon-boundary.test.ts` 가 고정한다.

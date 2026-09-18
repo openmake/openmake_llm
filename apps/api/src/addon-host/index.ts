@@ -9,9 +9,13 @@
  *
  * @module addon-host
  */
+import * as fs from 'fs';
+import * as path from 'path';
 import { createLogger } from '../utils/logger';
+import { APP_VERSION } from '../config/constants';
+import { addonManifestSchema, satisfiesOpenmakeRange } from './manifest';
 import {
-    BUILTIN_ADDON_IDS, BUILTIN_ADDON_SKILL_SOURCE_PATH, isBuiltinAddonEnabled, unknownDisabledIds,
+    BUILTIN_ADDON_IDS, BUILTIN_ADDON_SKILL_SOURCE_PATH, builtinAddonDir, isBuiltinAddonEnabled, unknownDisabledIds,
     type BuiltinAddonId,
 } from './builtin-registry';
 
@@ -25,7 +29,29 @@ async function archiveDisabledAddonSkills(id: BuiltinAddonId): Promise<void> {
     logger.info(`내장 팩 '${id}' 꺼짐 — 시스템 스킬 ${archived}개 보관`);
 }
 
+/**
+ * 켜진 내장 팩의 매니페스트를 검증한다 — 실패해도 팩은 계속 동작하고(fail-open) 경고만 남긴다.
+ * 알아채는 방법: 부팅 로그의 `내장 팩 매니페스트` 경고, 그리고 `manifest.test.ts` 가 CI 에서 같은 검증을 한다.
+ */
+function verifyBuiltinManifests(): void {
+    for (const id of BUILTIN_ADDON_IDS) {
+        if (!isBuiltinAddonEnabled(id)) continue;
+        try {
+            const manifest = addonManifestSchema.parse(JSON.parse(fs.readFileSync(path.join(builtinAddonDir(id), 'openmake-addon.json'), 'utf-8')));
+            if (!satisfiesOpenmakeRange(APP_VERSION, manifest.requires.openmake)) {
+                logger.warn(`내장 팩 매니페스트 '${id}' 호환 범위 밖: requires ${manifest.requires.openmake}, 현재 ${APP_VERSION}`);
+                continue;
+            }
+            logger.info(`내장 팩 '${id}' v${manifest.version} 활성`);
+        } catch (err) {
+            logger.warn(`내장 팩 매니페스트 '${id}' 검증 실패:`, err);
+        }
+    }
+}
+
 export async function startAddonHost(): Promise<void> {
+    verifyBuiltinManifests();
+
     const unknown = unknownDisabledIds();
     if (unknown.length > 0) {
         logger.warn(`ADDON_BUILTIN_DISABLED 에 알 수 없는 팩 id: ${unknown.join(', ')} (가능한 값: ${BUILTIN_ADDON_IDS.join(', ')})`);

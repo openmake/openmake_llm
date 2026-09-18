@@ -5,9 +5,10 @@
  */
 import * as path from 'path';
 import * as fs from 'fs';
+import { builtinAddonDir } from '../addon-host/builtin-registry';
 
 function loadJson<T>(filename: string): T {
-    const filePath = path.join(__dirname, 'data', filename);
+    const filePath = path.join(builtinAddonDir('industry-pack'), 'data', filename);
     return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as T;
 }
 

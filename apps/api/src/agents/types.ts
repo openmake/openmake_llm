@@ -6,7 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createLogger } from '../utils/logger';
-import { isBuiltinAddonEnabled } from '../addon-host/builtin-registry';
+import { builtinAddonDir, isBuiltinAddonEnabled } from '../addon-host/builtin-registry';
 
 const logger = createLogger('Agents');
 
@@ -80,7 +80,7 @@ export function getIndustryAgentsData(): IndustryAgentsData {
     }
 
     try {
-        const jsonPath = path.join(__dirname, 'industry-agents.json');
+        const jsonPath = path.join(builtinAddonDir('industry-pack'), 'industry-agents.json');
         const jsonContent = fs.readFileSync(jsonPath, 'utf-8');
         cachedIndustryData = JSON.parse(jsonContent) as IndustryAgentsData;
         return cachedIndustryData;

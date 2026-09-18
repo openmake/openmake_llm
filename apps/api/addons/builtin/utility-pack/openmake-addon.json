@@ -1,0 +1,13 @@
+{
+  "id": "utility-pack",
+  "name": "OpenMake Utility Pack",
+  "version": "1.0.0",
+  "description": "범용 실용 유틸리티 스킬",
+  "requires": {
+    "openmake": ">=1.0.0 <2.0.0"
+  },
+  "scope": "system",
+  "components": {
+    "data": "./data"
+  }
+}
