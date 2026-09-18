@@ -57,6 +57,18 @@ ok "dump lacks other env"  '! pm2_dump_has_any "$(pm2_names qa)"'
 rm -f "$PM2_HOME/dump.pm2"; ok "no dump → false" '! pm2_dump_has_any "$(pm2_names staging)"'
 unset PM2_HOME
 
+# ── dev 호스트: CORS_ORIGINS 에 호스트별 웹·API origin 을 더한다(멱등, 기존 값 보존) ──
+eq "csv union keeps order" "$(csv_union "a,b" "b,c")" "a,b,c"
+eq "csv union empty left"  "$(csv_union "" "x,y")" "x,y"
+DL="$TMP/devllm"; mkdir -p "$DL"; printf 'PORT=52417\nOMK_WEB_PORT=3010\nCORS_ORIGINS=http://localhost:3010\n' > "$DL/.env"
+dev_apply_hosts "$DL" "tom,100.1.2.3"
+eq "cors gets host origins" "$(dotenv_get "$DL/.env" CORS_ORIGINS)" "http://localhost:3010,http://tom:3010,http://tom:52417,http://100.1.2.3:3010,http://100.1.2.3:52417"
+eq "hosts remembered"       "$(dotenv_get "$DL/.env" OMK_DEV_HOSTS)" "tom,100.1.2.3"
+C1="$(dotenv_get "$DL/.env" CORS_ORIGINS)"; dev_apply_hosts "$DL" "tom,100.1.2.3"
+eq "cors idempotent"        "$(dotenv_get "$DL/.env" CORS_ORIGINS)" "$C1"
+C0="$(dotenv_get "$DL/.env" CORS_ORIGINS)"; dev_apply_hosts "$DL" ""
+eq "no hosts is no-op"      "$(dotenv_get "$DL/.env" CORS_ORIGINS)" "$C0"
+
 # ── .env 읽기/쓰기 ──
 F="$TMP/a.env"; printf 'A=1\nB="two words"\n# C=no\nD=x=y\n' > "$F"
 eq "get plain"   "$(dotenv_get "$F" A)" "1"

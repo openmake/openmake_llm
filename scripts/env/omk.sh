@@ -42,6 +42,7 @@
 #   omk env autoupdate <env> [--every 'CRON'] [--off]   # 선택 — 기본은 수동 배포. PM2 cron 앱 omk-updater-<env>
 #   omk proxy status|reload|render <env>
 #   omk dev setup|up|down|status|reset [api|web|bench|deps|all]
+#   omk dev up [대상] [--tailscale] [--host H]…   # 다른 기기에서 보기 — 호스트를 CORS·Next·vite 에 허용(.env 에 기억)
 #
 # 환경변수:
 #   OMK_ROOT(~/.openmake)  OMK_REPO_URL  OMKB_REPO_URL  OMK_CADDY_VERSION  OMK_CADDY_ADMIN(localhost:2019)
@@ -751,6 +752,30 @@ dev_build_packages() {
     log_info "워크스페이스 패키지 빌드 (packages/*/dist)"
     ( cd "$DEV_LLM" && npm run build:packages >/dev/null ) || die "build:packages 실패"
 }
+# ── dev 를 다른 기기에서 보기 ───────────────────────────────────────────────
+# 웹 클라이언트는 채팅 소켓을 "접속한 호스트명:API 포트"로 붙이고(use-chat-socket.ts), 서버는 Origin 이
+# CORS_ORIGINS 와 정확히 일치할 때만 받는다(security/cors-policy.ts — REST·WS 공통). 그래서 접속에 쓸
+# 호스트마다 웹·API origin 을 CORS_ORIGINS 에 넣어야 하고, Next dev(allowedDevOrigins)와 vite(allowedHosts)도
+# 그 호스트를 알아야 한다(모르면 HMR 이 막혀 hydration 이 죽는다). 호스트 목록은 .env 의 OMK_DEV_HOSTS 가 진실.
+tailscale_hosts() { # → "짧은이름,FQDN,IPv4" (MagicDNS 기준. OS 호스트명은 쓰지 않는다)
+    has tailscale && has node || return 0
+    tailscale status --json 2>/dev/null | node -e '
+        let j={}; try{j=JSON.parse(require("fs").readFileSync(0,"utf8"))}catch{}
+        const s=j.Self||{}; const fqdn=String(s.DNSName||"").replace(/\.$/,"");
+        const ip=(s.TailscaleIPs||[]).find(x=>/^\d+\.\d+\.\d+\.\d+$/.test(x))||"";
+        process.stdout.write([fqdn.split(".")[0],fqdn,ip].filter(Boolean).join(","))' 2>/dev/null || true
+}
+csv_union() { # $1,$2 = CSV → 순서 유지 합집합
+    printf '%s,%s' "$1" "$2" | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd, -
+}
+dev_apply_hosts() { # $1=llm dir $2=hosts CSV — CORS_ORIGINS 에 호스트별 웹·API origin 을 더한다(있는 것은 그대로)
+    local envf="$1/.env" hosts="$2" api web h add=""
+    [[ -n "$hosts" ]] || return 0
+    api="$(llm_api_port "$1")"; web="$(llm_web_port "$1")"
+    for h in $(printf '%s' "$hosts" | tr ',' ' '); do add="${add:+$add,}http://$h:$web,http://$h:$api"; done
+    dotenv_set "$envf" CORS_ORIGINS "$(csv_union "$(dotenv_get "$envf" CORS_ORIGINS)" "$add")"
+    dotenv_set "$envf" OMK_DEV_HOSTS "$hosts"
+}
 dev_compose() { ( cd "$DEV_LLM" && docker compose --env-file .env -f infra/docker-compose.yml "$@" ); }
 cmd_dev_setup() {
     dev_locate; ensure_git
@@ -769,10 +794,23 @@ cmd_dev_setup() {
 }
 cmd_dev_up() {
     dev_locate
-    local target="${1:-all}"
+    local target="all" hosts_arg="" use_ts=0
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --tailscale) use_ts=1 ;;
+            --host)      hosts_arg="$(csv_union "$hosts_arg" "${2:-}")"; shift ;;
+            -*)          usage_die "알 수 없는 옵션: $1" ;;
+            *)           target="$1" ;;
+        esac; shift
+    done
     [[ -f "$DEV_LLM/.env" && -d "$DEV_LLM/node_modules" ]] || cmd_dev_setup
     load_toolchain "$DEV_LLM"
     [[ -d "$DEV_LLM/packages/shared-types/dist" ]] || dev_build_packages
+    # 접속 호스트 — 이번에 준 것(--host·--tailscale)을 .env 에 기억된 것과 합친다. 한 번 주면 다음부터는 생략 가능.
+    local hosts; hosts="$(dotenv_get "$DEV_LLM/.env" OMK_DEV_HOSTS)"
+    [[ $use_ts -eq 1 ]] && { local ts; ts="$(tailscale_hosts)"; [[ -n "$ts" ]] || die "tailscale 주소를 읽을 수 없습니다 (tailscale CLI·로그인 확인)"; hosts="$(csv_union "$hosts" "$ts")"; }
+    hosts="$(csv_union "$hosts" "$hosts_arg")"
+    dev_apply_hosts "$DEV_LLM" "$hosts"
     [[ "$target" == "deps" || "$target" == "all" || "$target" == "api" ]] && { log_info "PostgreSQL/Redis 기동 (docker compose)"; dev_compose up -d; }
     [[ "$target" == "deps" ]] && { cmd_dev_status; return 0; }
 
@@ -783,19 +821,22 @@ cmd_dev_up() {
     # next dev 는 루트 .env 의 웹 포트를 모른다(기본 3000) → -p 로 준다. PORT 환경변수로 주면 안 된다 —
     # resolve-ports.cjs 가 PORT 를 "API 포트"로 읽어 채팅 소켓이 웹 포트로 붙는다.
     # /api 프록시 대상도 기본값이 52416 고정이라, 주지 않으면 다른 인스턴스의 API 를 가리킨다.
-    if [[ "$target" == all || "$target" == web ]]; then names="${names:+$names,}web"; cmds+=("cd '$DEV_LLM/apps/web' && API_PROXY_TARGET=http://localhost:$api npm run dev -- -p $web"); fi
+    if [[ "$target" == all || "$target" == web ]]; then names="${names:+$names,}web"; cmds+=("cd '$DEV_LLM/apps/web' && OMK_DEV_HOSTS='$hosts' API_PROXY_TARGET=http://localhost:$api npm run dev -- -p $web"); fi
     if [[ "$target" == all || "$target" == bench ]]; then
         if [[ -n "$DEV_BENCH" ]]; then
             [[ -f "$DEV_BENCH/.env" ]] || bench_ensure_env "$DEV_BENCH" dev "$api" "$web" 0 >/dev/null
             bport="$(dotenv_get "$DEV_BENCH/.env" OMKB_PORT)"
             names="${names:+$names,}bench,bench-web"
-            cmds+=("cd '$DEV_BENCH' && npm run dev" "cd '$DEV_BENCH' && OMKB_API_TARGET=http://localhost:$bport npm run dev:web")
+            cmds+=("cd '$DEV_BENCH' && npm run dev" "cd '$DEV_BENCH' && OMKB_DEV_HOSTS='$hosts' OMKB_API_TARGET=http://localhost:$bport npm run dev:web")
         elif [[ "$target" == bench ]]; then die "openmake_bench 클론이 없습니다 (OMK_DEV_BENCH)"; fi
     fi
     [[ ${#cmds[@]} -gt 0 ]] || usage_die "omk dev up [all|deps|api|web|bench]"
     local conc=("$DEV_LLM/node_modules/.bin/concurrently")
     [[ -x "${conc[0]}" ]] || conc=(npx --yes concurrently)
     echo ""; log_info "web http://localhost:$web  api http://localhost:$api${bport:+  bench http://localhost:$bport (vite 는 web/vite.config.ts 의 port)}"
+    if [[ -n "$hosts" ]]; then
+        local h; for h in $(printf '%s' "$hosts" | tr ',' ' '); do log_info "다른 기기에서:  web http://$h:$web${bport:+   bench http://$h:9401}"; done
+    fi
     log_info "Ctrl+C 로 전부 종료. DB/Redis 는 남는다 → 'omk dev down'"
     "${conc[@]}" -k --prefix-colors auto -n "$names" "${cmds[@]}"
 }

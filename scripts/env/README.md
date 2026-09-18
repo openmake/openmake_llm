@@ -101,10 +101,13 @@ cd openmake_llm && git checkout -b feature/<주제>
 scripts/env/omk.sh dev setup          # 최초 1회: 툴체인·.env(OMK_INSTANCE=dev)·의존성·DB·마이그레이션
 scripts/env/omk.sh dev up             # 전부: DB/Redis + api + web + bench (Ctrl+C 로 종료)
 scripts/env/omk.sh dev up api         # 개별: deps | api | web | bench
+scripts/env/omk.sh dev up --tailscale     # 다른 기기에서 보기 (또는 --host <이름|IP> 를 여러 번)
 scripts/env/omk.sh dev status
 scripts/env/omk.sh dev down           # DB/Redis 정지 (데이터 유지)
 scripts/env/omk.sh dev reset          # 컨테이너·볼륨 삭제 (소스·.env 유지)
 ```
+
+**다른 기기에서 보기.** 웹은 채팅 소켓을 "접속한 호스트명:API 포트"로 붙이고, 서버는 Origin 이 `CORS_ORIGINS` 와 정확히 일치할 때만 받는다(REST·WS 공통). 그래서 접속에 쓸 호스트를 알려줘야 한다 — `--tailscale` 은 `tailscale status` 에서 MagicDNS 짧은 이름·FQDN·IPv4 를 읽고, `--host` 는 직접 준다. omk 는 그 호스트를 세 곳에 넣는다: API 의 `CORS_ORIGINS`(호스트별 웹·API origin), Next dev 의 `allowedDevOrigins`(모르면 HMR 이 막혀 hydration 이 죽는다), bench vite 의 `allowedHosts`. 목록은 `.env` 의 `OMK_DEV_HOSTS` 에 기억되어 다음 `dev up` 부터는 옵션 없이도 유지된다. 허용하지 않은 호스트·Origin 은 계속 거부된다.
 
 dev 는 PM2 를 쓰지 않는다 — `tsx`/`next dev`/`vite` 가 포그라운드에서 돈다. 인스턴스 이름이 `dev` 라서 같은 호스트의 staging·online 과 컨테이너·볼륨·포트가 겹치지 않는다.
 
