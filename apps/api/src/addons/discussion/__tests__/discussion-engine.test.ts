@@ -14,8 +14,11 @@ const mockGetRelatedAgentsForDiscussion = jest.fn();
 const mockGetAgentById = jest.fn();
 const mockRouteToAgent = jest.fn();
 
-jest.mock('../../../agents/index', () => ({
+jest.mock('../recommender', () => ({
     getRelatedAgentsForDiscussion: (...args: unknown[]) => mockGetRelatedAgentsForDiscussion(...args),
+}));
+
+jest.mock('../../../agents/index', () => ({
     getAgentById: (...args: unknown[]) => mockGetAgentById(...args),
     routeToAgent: (...args: unknown[]) => mockRouteToAgent(...args),
     AGENTS: {}

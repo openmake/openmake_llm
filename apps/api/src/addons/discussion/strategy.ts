@@ -6,7 +6,7 @@
  * 여러 전문가 에이전트가 사용자 질문에 대해 교차 검토하고
  * 팩트체킹을 수행하여 고품질의 종합 응답을 생성합니다.
  *
- * @module services/chat-strategies/discussion-strategy
+ * @module addons/discussion/strategy
  * @description
  * - 문서, 대화 이력, 웹검색, 사용자 메모리 등 다중 컨텍스트 통합
  * - 이미지 분석 및 텍스트 추출 (비전 모델 활용)
@@ -16,7 +16,8 @@
  */
 import { createDiscussionEngine, type DiscussionResult, type DiscussionSearchResult } from './engine';
 import type { ChatMessage } from '../../llm';
-import type { ChatStrategy, ChatResult, DiscussionStrategyContext } from '../../services/chat-strategies/types';
+import type { ChatStrategy, ChatResult } from '../../services/chat-strategies/types';
+import type { DiscussionStrategyContext } from './strategy-types';
 import { createLogger } from '../../utils/logger';
 import { sanitizePromptInput } from '../../utils/input-sanitizer';
 import { DISCUSSION_TOKEN_BUDGET, MODEL_CONTEXT_DEFAULTS, DISCUSSION_STREAM_ABORT_CHECK_INTERVAL, DISCUSSION_CONCURRENCY, DISCUSSION_FACTCHECK, TRUNCATION } from '../../config/runtime-limits';

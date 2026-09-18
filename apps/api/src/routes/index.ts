@@ -45,7 +45,6 @@ export { default as agentsMonitoringRouter } from './agents-monitoring.routes';
 
 // 🆕 신규 도메인 라우트
 export { default as auditRouter } from './audit.routes';
-export { default as researchRouter } from '../addons/deep-research/routes';
 export { default as agentTaskRouter } from './agent-task.routes';
 export { default as agentTaskUploadRouter } from './agent-task-upload.routes';
 export { default as localBridgeRouter } from './local-bridge.routes';

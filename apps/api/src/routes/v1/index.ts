@@ -18,6 +18,7 @@
  * @requires apiKeyTPMLimiter - TPM(Tokens Per Minute) 이중 제한
  */
 import { Router } from 'express';
+import { mountAddonV1Routes } from '../../addon-host/routes';
 import { API_KEY_LIMITS } from '../../data/models/unified-database';
 
 // Import existing routers
@@ -32,7 +33,6 @@ import nodesRouter from '../nodes.routes';
 import agentsMonitoringRouter from '../agents-monitoring.routes';
 import { tokenMonitoringRouter } from '../token-monitoring.routes';
 import auditRouter from '../audit.routes';
-import researchRouter from '../../addons/deep-research/routes';
 import externalRouter from '../external.routes';
 import { pushRouter } from '../push.routes';
 import apiKeysRouter from '../api-keys.routes';
@@ -150,7 +150,7 @@ v1Router.use('/nodes', nodesRouter);
 v1Router.use('/monitoring', tokenMonitoringRouter);
 v1Router.use('/agents-monitoring', agentsMonitoringRouter);
 v1Router.use('/audit', auditRouter);
-v1Router.use('/research', researchRouter);
+mountAddonV1Routes(v1Router); // add-on 의 v1 라우트 — 위 인증·스코프 미들웨어 뒤
 v1Router.use('/external', externalRouter);
 v1Router.use('/push', pushRouter);
 v1Router.use('/api-keys', apiKeysRouter);

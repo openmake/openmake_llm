@@ -16,6 +16,8 @@
  * @module services/chat-service/mode-external-client
  */
 import type { ResolvedProvider } from '../../providers/provider-router';
+import type { ModelRole } from '../../config/model-roles';
+import type { ChatModeExtension } from './chat-modes';
 import type { LLMClient } from '../../llm';
 import { createLogger } from '../../utils/logger';
 
@@ -24,27 +26,28 @@ const logger = createLogger('ModeExternalClient');
 export async function resolveModeExternalClient(
     externalResolved: ResolvedProvider | null,
     userId: string | number | undefined,
-    modeLabel: 'Discussion' | 'DeepResearch',
+    /** 활성 모드 — role 우선 해석 여부와 로그 이름에 쓴다 */
+    mode: Pick<ChatModeExtension, 'label' | 'modelRole'>,
 ): Promise<LLMClient | undefined> {
     if (!userId || String(userId) === 'guest') return undefined;
 
     // ① Deep Research 는 'research' role 배정을 최우선으로 따른다 (REST /api/research 와 동작 일치).
     //    role 이 외부로 해석될 때만 채택하고, 로컬 해석/미배정이면 ② 로 내려가 기존 동작을 유지한다.
     //    (Discussion 은 대응 role 이 없어 해당 없음.)
-    if (modeLabel === 'DeepResearch') {
+    if (mode.modelRole) {
         try {
             const { resolveRoleClientForUser } = await import('../model-role-resolver');
-            const resolved = await resolveRoleClientForUser('research', String(userId));
+            const resolved = await resolveRoleClientForUser(mode.modelRole as ModelRole, String(userId));
             if (resolved.providerId !== 'local-llm') {
                 if (resolved.degraded) {
-                    logger.warn(`[Mode] research role 해석 폴백 (${resolved.fullId}): ${resolved.degraded}`);
+                    logger.warn(`[Mode] ${mode.modelRole} role 해석 폴백 (${resolved.fullId}): ${resolved.degraded}`);
                 } else {
-                    logger.info(`[Mode] DeepResearch research role 모델 사용: ${resolved.fullId} (source=${resolved.source})`);
+                    logger.info(`[Mode] ${mode.label} ${mode.modelRole} role 모델 사용: ${resolved.fullId} (source=${resolved.source})`);
                 }
                 return resolved.client;
             }
         } catch (e) {
-            logger.warn('[Mode] research role 해석 실패 (컴포저 선택으로 폴백):', e);
+            logger.warn(`[Mode] ${mode.modelRole} role 해석 실패 (컴포저 선택으로 폴백):`, e);
         }
     }
 
@@ -65,7 +68,7 @@ export async function resolveModeExternalClient(
         if (resolved.degraded) {
             logger.warn(`[Mode] 선택 모델 해석 폴백 (${externalResolved.fullId}): ${resolved.degraded}`);
         } else {
-            logger.info(`[Mode] ${modeLabel} 선택 모델 사용: ${externalResolved.fullId}`);
+            logger.info(`[Mode] ${mode.label} 선택 모델 사용: ${externalResolved.fullId}`);
         }
         return resolved.client;
     } catch (e) {

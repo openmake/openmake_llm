@@ -11,8 +11,6 @@
 import type { ExecutionPlan } from './profile-resolver';
 import type { ClusterManager } from '../cluster/manager';
 import type { SystemEventCallback } from '../services/chat-service-types';
-import type { DiscussionProgress } from '../addons/discussion/engine';
-import type { ResearchProgress } from '../addons/deep-research/service';
 import type { ToolDefinition } from '../llm';
 
 /**
@@ -65,10 +63,8 @@ export interface ChatRequestParams {
     fileContext?: string;
     /** 오디오·영상·이미지 첨부 원본(base64) — 멀티모달 오케스트레이터 executor 입력 */
     mediaFiles?: import('../services/chat-service-types').MediaFileInput[];
-    /** 토론 모드 */
-    discussionMode?: boolean;
-    /** 딥 리서치 모드 */
-    deepResearchMode?: boolean;
+    /** 켜진 채팅 모드 — add-on id → true. 일반 채팅 대신 그 모드가 턴을 가져간다(chat-modes.ts) */
+    modes?: Record<string, boolean>;
     /** 이미지 생성 모드 — ON 이면 메시지를 프롬프트로 이미지를 직접 생성 */
     imageMode?: boolean;
     /** 아티팩트 모드 — ON 이면 <artifact> 산출물 생성 유도 */
@@ -141,10 +137,8 @@ export interface ChatRequestParams {
     onThinkingSummary?: (summary: string) => void;
     /** 에이전트 선택 콜백 */
     onAgentSelected?: (agent: { type: string; name: string; nameEn?: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void;
-    /** 토론 진행 콜백 */
-    onDiscussionProgress?: (progress: DiscussionProgress) => void;
-    /** 딥 리서치 진행 콜백 */
-    onResearchProgress?: (progress: ResearchProgress) => void;
+    /** 채팅 모드 진행 콜백 — (모드 id, 진행 상황). 모양은 그 모드가 정한다 */
+    onModeProgress?: (modeId: string, progress: unknown) => void;
     /** 스킬 활성화 콜백 - 에이전트에 주입된 스킬 이름 목록 */
     onSkillsActivated?: (skillNames: string[]) => void;
     /** 시스템 이벤트 콜백 - 자동 토론 활성화 등 메타 알림 (UI에서 토스트로 표시) */

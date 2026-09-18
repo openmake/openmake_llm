@@ -1,0 +1,11 @@
+{
+  "id": "discussion",
+  "name": "Multi-Agent Discussion",
+  "version": "1.0.0",
+  "description": "여러 전문가 에이전트가 토론해 결론을 만드는 채팅 모드와 인라인 토론 도구",
+  "requires": {
+    "openmake": ">=1.0.0 <2.0.0"
+  },
+  "scope": "system",
+  "components": {}
+}

@@ -11,7 +11,7 @@
  * - 에러 전파
  */
 import { DeepResearchStrategy } from '../strategy';
-import type { DeepResearchStrategyContext } from '../../../services/chat-strategies/types';
+import type { DeepResearchStrategyContext } from '../strategy-types';
 import type { LLMClient } from '../../../llm';
 import type { ChatMessageRequest } from '../../../services/ChatService';
 

@@ -17,11 +17,17 @@ import { BUILTIN_ADDON_IDS, BUILTIN_ADDON_KIND, builtinAddonDir, isBuiltinAddonE
 const logger = createLogger('AddonHost');
 
 /** add-on 별 전용 라우트 — 라우터는 켜진 add-on 만 로드한다(지연 require). */
-const ADDON_ROUTES: Readonly<Partial<Record<BuiltinAddonId, ReadonlyArray<{ mountPath: string; load: () => Router }>>>> = {
+const ADDON_ROUTES: Readonly<Partial<Record<BuiltinAddonId, ReadonlyArray<{ mountPath: string; load: () => Router; within?: 'v1' }>>>> = {
     'notebooklm': [{ mountPath: '/api/mcp', load: () => (require('../addons/notebooklm/routes') as typeof import('../addons/notebooklm/routes')).notebooklmRouter }],
     // 카카오 지도 임베드 HTML(네이티브 앱 WKWebView 전용)은 /api 하위에 둔다 — 운영 프록시(Caddy/Next)가 /api 만
     // 백엔드로 보내 그 밖이면 외부 경로에서 404 다(2026-08-18 실측). GET 이라 CSRF 는 스킵되고 인증을 강제하지 않는다.
     'kakao-map': [{ mountPath: '/api/embed', load: () => (require('../addons/kakao-map/embed.routes') as typeof import('../addons/kakao-map/embed.routes')).default }],
+    // 딥리서치 전용 REST API — 채팅 모드와 별개로 장시간 리서치를 시작·조회한다(v1 경로 포함)
+    'deep-research': [
+        { mountPath: '/api/research', load: () => (require('../addons/deep-research/routes') as typeof import('../addons/deep-research/routes')).default },
+        // v1 은 API 키 인증·스코프·rate limit 이 걸린 v1 라우터 **안에** 마운트한다 — 앱에 직접 걸면 인증을 우회한다
+        { within: 'v1', mountPath: '/research', load: () => (require('../addons/deep-research/routes') as typeof import('../addons/deep-research/routes')).default },
+    ],
     'discord': [{ mountPath: '/api/integrations/discord', load: () => (require('../addons/discord/routes') as typeof import('../addons/discord/routes')).discordRuntimeRouter }],
 };
 
@@ -65,6 +71,16 @@ export function mountAddonRoutes(app: Application): void {
             logger.info(`add-on '${id}' 꺼짐 — 전용 라우트 미마운트`);
             continue;
         }
-        for (const route of routes) app.use(route.mountPath, route.load());
+        for (const route of routes) if (!route.within) app.use(route.mountPath, route.load());
+    }
+}
+
+/**
+ * v1 라우터(`/api/v1/*`) 안에 걸리는 add-on 라우트 — v1 의 API 키 인증·스코프·rate limit 미들웨어 **뒤에서** 호출할 것.
+ */
+export function mountAddonV1Routes(v1Router: Router): void {
+    for (const id of BUILTIN_ADDON_IDS) {
+        if (!isBuiltinAddonEnabled(id)) continue;
+        for (const route of ADDON_ROUTES[id] ?? []) if (route.within === 'v1') v1Router.use(route.mountPath, route.load());
     }
 }

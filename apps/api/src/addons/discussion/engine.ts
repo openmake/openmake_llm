@@ -27,7 +27,8 @@
  * @see agents/llm-router.ts - LLM 기반 에이전트 선택
  */
 
-import { getAgentById, Agent, getRelatedAgentsForDiscussion } from '../../agents/index';
+import { getAgentById, Agent } from '../../agents/index';
+import { getRelatedAgentsForDiscussion } from './recommender';
 import { sanitizePromptInput } from '../../utils/input-sanitizer';
 import type { DiscussionConfig, DiscussionProgress, AgentOpinion, DiscussionResult } from './types';
 import { createContextBuilder } from './context';

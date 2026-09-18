@@ -38,9 +38,6 @@ import { AGENTS, industryData } from './agent-data';
 // Re-export from keyword-router
 export { routeToAgent, detectPhase } from './keyword-router';
 
-// Re-export from discussion-recommender
-export { getRelatedAgentsForDiscussion } from '../addons/discussion/recommender';
-
 // Re-export from system-prompt
 export { getAgentSystemMessage } from './system-prompt';
 

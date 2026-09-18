@@ -1,0 +1,11 @@
+{
+  "id": "deep-research",
+  "name": "Deep Research",
+  "version": "1.0.0",
+  "description": "자율 다단계 웹 리서치로 종합 보고서를 만드는 채팅 모드와 전용 REST API",
+  "requires": {
+    "openmake": ">=1.0.0 <2.0.0"
+  },
+  "scope": "system",
+  "components": {}
+}

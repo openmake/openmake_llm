@@ -9,6 +9,7 @@
  * @module schemas/chat.schema
  */
 import { z } from 'zod';
+import { restLegacyModeFlags } from '../services/chat-service/chat-modes';
 import { secureOptionalTextSchema, secureTextSchema } from './security.schema';
 import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
 
@@ -97,7 +98,7 @@ const toolChoiceSchema = z.union([
  * @property {string} [anonSessionId] - 비로그인 브라우저 소유자 ID
  * @property {string} [docId] - 문서 컨텍스트 ID (문서 Q&A 시)
  * @property {string[]} [images] - Base64 인코딩된 이미지 목록 (Vision 모델용)
- * @property {boolean} [discussionMode] - 다중 모델 토론 모드 활성화
+ * @property {Record<string, boolean>} [modes] - 채팅 모드(add-on id → true). 구 불리언 필드도 모드가 선언한 이름이면 받는다
  * @property {boolean} [thinkingMode] - Native Thinking 활성화
  * @property {string} [thinkingLevel] - 사고 깊이 수준 (low/medium/high)
  * @property {boolean} [webSearch] - 웹 검색 컨텍스트 주입 활성화
@@ -121,7 +122,10 @@ export const chatRequestSchema = z.object({
         type: z.string().max(100),
         data: z.string().max(FILE_ATTACH_LIMITS.MAX_IMAGE_DATAURL_CHARS * 4),
     })).max(FILE_ATTACH_LIMITS.MAX_FILES).optional(),
-    discussionMode: z.boolean().optional(),
+    /** 채팅 모드(add-on) — add-on id → true */
+    modes: z.record(z.string().max(80), z.boolean()).optional(),
+    // 구 클라이언트의 모드 불리언 필드 — REST 에서 쓸 수 있는 모드가 선언한 이름만 받는다(그 밖은 strip)
+    ...Object.fromEntries(restLegacyModeFlags().map((flag) => [flag, z.boolean().optional()])),
     thinkingMode: z.boolean().optional(),
     thinkingLevel: z.enum(['low', 'medium', 'high']).optional(),
     webSearch: z.boolean().optional(),

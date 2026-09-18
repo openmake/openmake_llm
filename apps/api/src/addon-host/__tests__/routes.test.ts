@@ -25,13 +25,13 @@ function mountWith(disabled: string | undefined): { paths: string[]; addons: Add
 }
 
 describe('mountAddonRoutes', () => {
-    it('기본은 세 통합 라우트가 모두 마운트된다', () => {
-        expect(mountWith(undefined).paths).toEqual(['/api/addons', '/api/mcp', '/api/embed', '/api/integrations/discord']);
+    it('기본은 통합 라우트가 모두 마운트된다 (v1 안에 걸리는 라우트는 여기서 걸지 않는다)', () => {
+        expect(mountWith(undefined).paths).toEqual(['/api/addons', '/api/mcp', '/api/embed', '/api/integrations/discord', '/api/research']);
     });
 
     it('꺼진 add-on 의 라우트는 마운트되지 않고, 목록 API 는 항상 마운트된다', () => {
         const { paths, addons } = mountWith('notebooklm,discord');
-        expect(paths).toEqual(['/api/addons', '/api/embed']);
+        expect(paths).toEqual(['/api/addons', '/api/embed', '/api/research']);
         expect(addons.find(a => a.id === 'notebooklm')).toMatchObject({ enabled: false, kind: 'integration' });
         expect(addons.find(a => a.id === 'kakao-map')).toMatchObject({ enabled: true, kind: 'integration' });
         expect(addons.find(a => a.id === 'industry-pack')).toMatchObject({ enabled: true, kind: 'content' });
@@ -49,5 +49,18 @@ describe('mountAddonRoutes', () => {
             expect(first.map((a: { id: string }) => a.id)).toContain('industry-pack');
             spy.mockRestore();
         });
+    });
+
+    it('v1 라우트는 v1 라우터에만 걸린다 — 앱에 직접 걸면 API 키 인증을 우회한다', () => {
+        const before = process.env[ENV_KEY];
+        delete process.env[ENV_KEY];
+        try {
+            const v1: string[] = [];
+            jest.isolateModules(() => { require('../routes').mountAddonV1Routes({ use: (p: string) => { v1.push(p); } }); });
+            expect(v1).toEqual(['/research']);
+            expect(mountWith(undefined).paths).not.toContain('/api/v1/research');
+        } finally {
+            if (before !== undefined) process.env[ENV_KEY] = before;
+        }
     });
 });

@@ -43,7 +43,8 @@ export function recordOrchestrationDispatch(params: {
     queryLength: number;
     telemetry: OrchestrationTelemetry;
     /** 같은 턴의 사용자 수동 토글 — 의도 패턴 재현율 측정용. */
-    userMode: 'discussion' | 'deep-research' | 'none';
+    /** 사용자가 켠 채팅 모드의 add-on id, 없으면 'none' */
+    userMode: string;
     /**
      * 질의 원문 — 앞 QUERY_PREVIEW_MAX_CHARS 자만 저장한다(087).
      * "노출됐는데 모델이 호출하지 않은" 반례를 봐야 도구 description 을 근거 기반으로

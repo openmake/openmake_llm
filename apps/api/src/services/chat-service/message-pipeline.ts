@@ -9,16 +9,15 @@
  * @module services/chat-service/message-pipeline
  */
 import type { ChatService } from '../ChatService';
+import { resolveActiveMode } from './chat-modes';
 import { createLogger } from '../../utils/logger';
 import { getConfig } from '../../config/env';
 import { AGENTS, getAgentById, type AgentSelection } from '../../agents';
-import type { DiscussionProgress } from '../../addons/discussion/engine';
 import { detectFastPath } from '../../chat/fast-path-detector';
 import { classifyQuery } from '../../chat/query-classifier';
 import { generateImageInline } from './image-mode';
 import { buildArtifactGuideBlock } from './artifact-guide-block';
 import type { ExecutionPlan } from '../../chat/profile-resolver';
-import type { ResearchProgress } from '../../addons/deep-research/service';
 import { preRequestCheck } from '../../chat/security-hooks';
 import { createRoutingLogEntry } from '../../chat/routing-logger';
 import { evaluateTailGate } from '../../chat/tail-gate';
@@ -63,8 +62,7 @@ export async function runMessagePipeline(svc: ChatService,
     req: ChatMessageRequest,
     onToken: (token: string) => void,
     onAgentSelected?: (agent: { type: string; name: string; nameEn?: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
-    onDiscussionProgress?: (progress: DiscussionProgress) => void,
-    onResearchProgress?: (progress: ResearchProgress) => void,
+    onModeProgress?: (modeId: string, progress: unknown) => void,
     executionPlan?: ExecutionPlan,
     onSkillsActivated?: (skillNames: string[]) => void,
     onThinking?: (thinking: string) => void,
@@ -75,8 +73,6 @@ export async function runMessagePipeline(svc: ChatService,
         images,
         webSearchContext,
         fileContext,
-        discussionMode,
-        deepResearchMode,
         userId,
         userRole,
         enabledTools,
@@ -194,9 +190,9 @@ export async function runMessagePipeline(svc: ChatService,
         logger.info(`[legacy-model-id] '${reqModel}' → default fallback (구 brand alias). 동작은 직교 축 토글로만 제어.`);
     }
 
-    // 동작은 직교 축(Discussion 토글)으로만 제어 — 사용자 명시 토글만 신뢰.
+    // 채팅 모드(add-on)는 사용자 명시 토글만 신뢰한다 — 켜진 모드가 있으면 그 모드가 턴을 가져간다.
     // (thinking 토글은 req.thinkingMode 그대로 external-provider 가 소비.)
-    const effectiveDiscussionMode = discussionMode === true;
+    const activeMode = resolveActiveMode(req.modes);
 
     // 이미지 생성 모드: 토글 ON 이면 메시지를 프롬프트로 이미지를 직접 생성한다 (결정적 경로 —
     // LLM 의 도구 호출 결정에 의존하지 않아 일부 모델이 이미지를 안 그리는 문제를 회피).
@@ -204,42 +200,33 @@ export async function runMessagePipeline(svc: ChatService,
         return generateImageInline((req.message ?? '').trim(), onToken, { userId, lang: languagePolicy?.resolvedLanguage, signal: req.abortSignal, sessionId: req.sessionId });
     }
 
-    // Discussion / Deep Research 모드의 모델 해석 — 상세는 mode-external-client
-    // (① 컴포저의 명시적 외부 선택 → ② Deep Research 면 'research' role 배정.
-    //  어느 쪽도 외부가 아니면 undefined → 로컬 svc.client).
-    const modeExternalClient = (effectiveDiscussionMode || deepResearchMode)
-        ? await resolveModeExternalClient(externalResolved, req.userId, effectiveDiscussionMode ? 'Discussion' : 'DeepResearch')
-        : undefined;
+    if (activeMode) {
+        // 모드의 모델 해석 — 상세는 mode-external-client (① 모드가 선언한 role 배정이 외부면 채택 →
+        // ② 컴포저의 명시적 선택. 어느 쪽도 아니면 undefined → 로컬 svc.client).
+        const modeExternalClient = await resolveModeExternalClient(externalResolved, req.userId, activeMode);
 
-    // Stage 2 셰도우 — 사용자 토글 턴에서 의도 패턴이 잡히는지(재현율 프록시) 적재.
-    const recordToggleShadow = (userMode: 'discussion' | 'deep-research') => {
-        if (!ORCHESTRATION_DISPATCH.ENABLED) return;
-        const intents = detectOrchestrationIntents(message);
-        recordOrchestrationDispatch({
-            userId, queryLength: (message || '').length,
-            telemetry: {
-                discussionIntent: intents.discussion,
-                taskDelegateIntent: intents.taskDelegate,
-                exposed: [],
-            },
-            userMode,
-            ...(message ? { message } : {}),
-        });
-    };
+        // Stage 2 셰도우 — 사용자 토글 턴에서 의도 패턴이 잡히는지(재현율 프록시) 적재.
+        if (ORCHESTRATION_DISPATCH.ENABLED) {
+            const intents = detectOrchestrationIntents(message);
+            recordOrchestrationDispatch({
+                userId, queryLength: (message || '').length,
+                telemetry: {
+                    discussionIntent: intents.discussion,
+                    taskDelegateIntent: intents.taskDelegate,
+                    exposed: [],
+                },
+                userMode: activeMode.id,
+                ...(message ? { message } : {}),
+            });
+        }
 
-    // 토론 모드: 사용자 명시 토글.
-    if (effectiveDiscussionMode) {
-        recordToggleShadow('discussion');
-        return applyResultProcessors(
-            await svc.processMessageWithDiscussion(req, onToken, onDiscussionProgress, modeExternalClient),
-        );
-    }
-
-    if (deepResearchMode) {
-        recordToggleShadow('deep-research');
-        return applyResultProcessors(
-            await svc.processMessageWithDeepResearch(req, onToken, onResearchProgress, modeExternalClient),
-        );
+        return applyResultProcessors(await activeMode.run({
+            req,
+            client: modeExternalClient ?? svc.client,
+            onToken,
+            onProgress: (progress) => onModeProgress?.(activeMode.id, progress),
+            ...(req.abortSignal ? { abortSignal: req.abortSignal } : {}),
+        }));
     }
 
     const startTime = Date.now();

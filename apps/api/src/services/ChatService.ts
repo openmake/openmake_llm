@@ -21,7 +21,6 @@
 import { createLogger } from '../utils/logger';
 import { getChatTurnIntegrations } from './chat-service/turn-integrations';
 import { AGENTS, type AgentSelection } from '../agents';
-import type { DiscussionProgress } from '../addons/discussion/engine';
 import { withSpan } from '../observability/otel';
 import type { ExecutionPlan } from '../chat/profile-resolver';
 import type { UserContext } from '../mcp/user-sandbox';
@@ -31,9 +30,6 @@ import { CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, CHAT_USER_MC
 import { applySkillCatalog as applySkillCatalogShared } from './skill-catalog-tool';
 import { LLMClient } from '../llm';
 import { type ToolDefinition } from '../llm';
-import type { ResearchProgress } from '../addons/deep-research/service';
-import { DeepResearchStrategy, DiscussionStrategy } from './chat-strategies';
-import { formatResearchResult, formatDiscussionResult } from './chat-service-formatters';
 import { preRequestCheck } from '../chat/security-hooks';
 import type { LanguagePolicyDecision } from '../chat/language-policy';
 import { type RoutingDecisionLog } from '../chat/routing-logger';
@@ -104,9 +100,7 @@ export class ChatService {
     private currentSystemEventCallback?: SystemEventCallback;
 
     /** 멀티 에이전트 토론 전략 */
-    private readonly discussionStrategy: DiscussionStrategy;
     /** 심층 연구 오케스트레이션 전략 */
-    private readonly deepResearchStrategy: DeepResearchStrategy;
 
     /**
      * ChatService 인스턴스를 생성합니다.
@@ -117,8 +111,6 @@ export class ChatService {
     constructor(client: LLMClient, providerRouter?: ProviderRouter) {
         this.client = client;
         this.providerRouter = providerRouter;
-        this.discussionStrategy = new DiscussionStrategy();
-        this.deepResearchStrategy = new DeepResearchStrategy();
     }
 
     /**
@@ -251,8 +243,7 @@ export class ChatService {
      * @param req - 채팅 메시지 요청 객체
      * @param onToken - 스트리밍 토큰 콜백 (SSE 전송용)
      * @param onAgentSelected - 에이전트 선택 결과 콜백
-     * @param onDiscussionProgress - 토론 진행 상황 콜백
-     * @param onResearchProgress - 연구 진행 상황 콜백
+     * @param onModeProgress - 채팅 모드(add-on) 진행 상황 콜백 (모드 id, 진행 상황)
      * @param executionPlan - 실행 계획 (ExecutionPlan)
      * @param onSkillsActivated - 에이전트에 주입된 스킬 목록 콜백
      * @param onThinking - Thinking 토큰 콜백 (추론 과정 실시간 전달)
@@ -263,8 +254,7 @@ export class ChatService {
         req: ChatMessageRequest,
         onToken: (token: string) => void,
         onAgentSelected?: (agent: { type: string; name: string; nameEn?: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
-        onDiscussionProgress?: (progress: DiscussionProgress) => void,
-        onResearchProgress?: (progress: ResearchProgress) => void,
+        onModeProgress?: (modeId: string, progress: unknown) => void,
         executionPlan?: ExecutionPlan,
         onSkillsActivated?: (skillNames: string[]) => void,
         onThinking?: (thinking: string) => void,
@@ -285,7 +275,7 @@ export class ChatService {
             async (rootSpan) => {
                 const result = await this.processMessageInternal(
                     req, onToken,
-                    onAgentSelected, onDiscussionProgress, onResearchProgress,
+                    onAgentSelected, onModeProgress,
                     executionPlan, onSkillsActivated, onThinking, onSystemEvent,
                 );
                 rootSpan.setAttribute('chat.response_chars', result.length);
@@ -299,8 +289,7 @@ export class ChatService {
                     'chat.has_images': (req.images?.length ?? 0) > 0,
                     'chat.history_length': req.history?.length ?? 0,
                     'chat.requested_model': executionPlan?.requestedModel || 'none',
-                    'chat.discussion_mode': req.discussionMode === true,
-                    'chat.deep_research_mode': req.deepResearchMode === true,
+                    'chat.modes': Object.keys(req.modes ?? {}).join(','),
                     'chat.thinking_mode': req.thinkingMode === true,
                 },
             }
@@ -312,15 +301,14 @@ export class ChatService {
         req: ChatMessageRequest,
         onToken: (token: string) => void,
         onAgentSelected?: (agent: { type: string; name: string; nameEn?: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void,
-        onDiscussionProgress?: (progress: DiscussionProgress) => void,
-        onResearchProgress?: (progress: ResearchProgress) => void,
+        onModeProgress?: (modeId: string, progress: unknown) => void,
         executionPlan?: ExecutionPlan,
         onSkillsActivated?: (skillNames: string[]) => void,
         onThinking?: (thinking: string) => void,
         _onSystemEvent?: SystemEventCallback,
     ): Promise<string> {
         return runMessagePipeline(
-            this, req, onToken, onAgentSelected, onDiscussionProgress, onResearchProgress,
+            this, req, onToken, onAgentSelected, onModeProgress,
             executionPlan, onSkillsActivated, onThinking, _onSystemEvent,
         );
     }
@@ -380,73 +368,6 @@ export class ChatService {
             ...params,
             model: this.client.model,
         });
-    }
-
-    /**
-     * 멀티 에이전트 토론 모드로 메시지를 처리합니다.
-     *
-     * DiscussionStrategy를 통해 여러 전문가 에이전트가 교차 검토하고
-     * 팩트체킹을 수행하여 고품질 종합 응답을 생성합니다.
-     *
-     * @param req - 채팅 메시지 요청 객체
-     * @param uploadedDocuments - 업로드된 문서 저장소
-     * @param onToken - 스트리밍 토큰 콜백
-     * @param onProgress - 토론 진행 상황 콜백
-     * @returns 포맷팅된 토론 결과 응답 문자열
-     */
-    async processMessageWithDiscussion(
-        req: ChatMessageRequest,
-        onToken: (token: string) => void,
-        onProgress?: (progress: DiscussionProgress) => void,
-        /** 외부 모델 선택 시 해석된 LLMClient — 미지정 시 로컬 this.client */
-        externalClient?: LLMClient,
-    ): Promise<string> {
-        const abortSignal = req.abortSignal;
-        const checkAborted = () => {
-            if (abortSignal?.aborted) {
-                throw new Error('ABORTED');
-            }
-        };
-        const result = await this.discussionStrategy.execute({
-            req,
-            client: externalClient ?? this.client,
-            onProgress,
-            formatDiscussionResult: (discussionResult) => formatDiscussionResult(discussionResult, req.userLanguagePreference),
-            onToken,
-            abortSignal,
-            checkAborted,
-        });
-
-        return result.response;
-    }
-
-    /**
-     * 심층 연구 모드로 메시지를 처리합니다.
-     *
-     * DeepResearchStrategy를 통해 자율적 다단계 리서치를 수행하고,
-     * 웹 검색, 소스 수집, 종합 보고서를 생성합니다.
-     *
-     * @param req - 채팅 메시지 요청 객체
-     * @param onToken - 스트리밍 토큰 콜백
-     * @param onProgress - 연구 진행 상황 콜백
-     * @returns 포맷팅된 연구 보고서 응답 문자열
-     */
-    async processMessageWithDeepResearch(
-        req: ChatMessageRequest,
-        onToken: (token: string) => void,
-        onProgress?: (progress: ResearchProgress) => void,
-        /** 외부 모델 선택 시 해석된 LLMClient — 미지정 시 로컬 this.client */
-        externalClient?: LLMClient,
-    ): Promise<string> {
-        const result = await this.deepResearchStrategy.execute({
-            req,
-            client: externalClient ?? this.client,
-            onProgress,
-            formatResearchResult: (researchResult) => formatResearchResult(researchResult),
-            onToken,
-        });
-
-        return result.response;
     }
 
     /**

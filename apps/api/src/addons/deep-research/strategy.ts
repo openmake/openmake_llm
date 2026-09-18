@@ -6,7 +6,7 @@
  * 사용자 질문에 대해 자율적 다단계 리서치를 수행하여
  * 주제 분해, 웹 검색, 소스 수집, 종합 보고서를 생성합니다.
  *
- * @module services/chat-strategies/deep-research-strategy
+ * @module addons/deep-research/strategy
  * @description
  * - DeepResearchService를 통한 자율적 다단계 리서치 실행
  * - 연구 세션 DB 저장 (추후 조회/이어하기 지원)
@@ -16,7 +16,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { DeepResearchService, type ResearchResult } from './service';
-import type { ChatStrategy, ChatResult, DeepResearchStrategyContext } from '../../services/chat-strategies/types';
+import type { ChatStrategy, ChatResult } from '../../services/chat-strategies/types';
+import type { DeepResearchStrategyContext } from './strategy-types';
 import { createLogger } from '../../utils/logger';
 import { isPersistableUserId } from '../../utils/user-id-validation';
 import { detectLanguage } from '../../chat/language-policy';

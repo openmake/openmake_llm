@@ -16,6 +16,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { collectActiveModes } from '../services/chat-service/chat-modes';
 import { ClusterManager } from '../cluster/manager';
 import { success, serviceUnavailable, unauthorized, forbidden } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
@@ -192,8 +193,7 @@ router.post('/stream', optionalApiKey, optionalAuth, chatRateLimiter, validateWi
             images: req.body.images,
             mediaFiles: req.body.mediaFiles,
             webSearchContext: req.body.webSearchContext,
-            discussionMode: req.body.discussionMode,
-            deepResearchMode: req.body.deepResearchMode,
+            modes: collectActiveModes(req.body as Record<string, unknown>, 'rest'),
             thinkingMode: req.body.thinkingMode,
             thinkingLevel: req.body.thinkingLevel,
             style: req.body.style,

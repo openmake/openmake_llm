@@ -4,6 +4,7 @@
  * @module sockets/ws-chat-handler
  */
 import { WebSocket } from 'ws';
+import { collectActiveModes, DEFAULT_INPUT_POLICY, getChatModes, resolveActiveMode } from '../services/chat-service/chat-modes';
 import { collectContextRefs } from '../services/chat-service/turn-integrations';
 import * as crypto from 'crypto';
 import { ClusterManager } from '../cluster/manager';
@@ -153,10 +154,13 @@ export async function handleChatMessage(
         // 레이트 리밋 통과 후 조립 — 거부될 요청에 최대 300k 자 문자열 조립 비용을 쓰지 않는다.
         // 바이너리 문서(PDF/docx/xlsx/pptx 등)는 base64(data)를 텍스트로 추출해 content 를 채운다.
         // (무거운 파서는 첨부가 있을 때만 lazy 로딩)
-        // PDF 하이브리드(2026-08-19): 추출(data 소거) 전 앞쪽 페이지 vision 렌더 주입 — 특수 모드(딥리서치·이미지생성·토론) 제외
+        // PDF 하이브리드(2026-08-19): 추출(data 소거) 전 앞쪽 페이지 vision 렌더 주입 — 이미지 생성과 채팅 모드(add-on, 입력 정책 pdfVision=false) 제외
+        // 켜진 채팅 모드(add-on)와 그 입력 정책 — 구 클라이언트의 모드 불리언 필드도 모드가 선언한 이름으로 받는다.
+        const activeModes = collectActiveModes(msg as unknown as Record<string, unknown>);
+        const inputPolicy = resolveActiveMode(activeModes)?.inputPolicy ?? DEFAULT_INPUT_POLICY;
         let mediaFiles: import('../services/chat-service-types').MediaFileInput[] = [];
         let pdfVision: PdfVisionResult = { images: [], note: '' };
-        if (hasFiles && msg.deepResearchMode !== true && msg.imageMode !== true && msg.discussionMode !== true) {
+        if (hasFiles && inputPolicy.pdfVision && msg.imageMode !== true) {
             const { buildPdfVisionAttachment } = await import('../services/chat-service/pdf-vision');
             pdfVision = await buildPdfVisionAttachment(msg.files, images?.length ?? 0);
         }
@@ -168,19 +172,18 @@ export async function handleChatMessage(
         }
         const fileContext = buildFileContext(msg.files);
 
-        // 딥 리서치 파이프라인은 fileContext 를 소비하지 않음 (research 전략은 message 만 사용).
-        // 무음 폐기 대신 명시 거부 — 첨부가 반영된 것처럼 보이는 UX 기만 방지 (2026-06-13)
-        if (msg.deepResearchMode === true && fileContext) {
-            out({ type: 'error', message: '딥 리서치 모드에서는 파일 첨부를 지원하지 않습니다. 첨부를 제거하거나 일반 채팅으로 질문해 주세요.' });
+        // 첨부를 소비하지 않는 모드는 무음 폐기 대신 명시 거부한다 — 첨부가 반영된 것처럼 보이는 UX 기만 방지 (2026-06-13)
+        if (inputPolicy.rejectFileAttachmentsMessage && fileContext) {
+            out({ type: 'error', message: inputPolicy.rejectFileAttachmentsMessage });
             return;
         }
 
         // 메시지 내 URL 결정적 사전 분석 (2026-06-13) — 웹검색과 독립 I/O 이므로 병렬 시작.
         // 모델의 web_scrape 도구 호출에만 맡기면 비결정적(미호출 시 환각) — 사전 주입으로 보장.
-        // 딥 리서치는 자체 검색·스크래핑 파이프라인이 URL 을 다루므로 사전 분석 생략.
-        const urlContextPromise = msg.deepResearchMode === true
-            ? Promise.resolve('')
-            : buildUrlContext(rawMessage);
+        // 자체 검색·스크래핑으로 URL 을 다루는 모드는 사전 분석을 생략한다(입력 정책 urlPreanalysis=false).
+        const urlContextPromise = inputPolicy.urlPreanalysis
+            ? buildUrlContext(rawMessage)
+            : Promise.resolve('');
 
         // 웹 검색: 사용자가 명시적으로 활성화했거나, 시사 관련 질문이 감지된 경우 수행.
         // 구조화(/structured) 경로와 동일 헬퍼를 공유해 "한 경로만 검색되는" 분기 누락·로직 드리프트를 방지한다.
@@ -205,8 +208,8 @@ export async function handleChatMessage(
 
         // 멀티턴 재주입 (2026-06-13): fileContext 는 transient(DB 미저장)라 다음 턴 히스토리에
         // 없음 — 세션 캐시의 이전 턴 첨부/링크 컨텍스트를 앞에 합류해 후속 질문 근거를 유지.
-        // 딥 리서치는 fileContext 미소비라 제외.
-        const cachedAttachContext = (validSessionId && msg.deepResearchMode !== true)
+        // 첨부 컨텍스트를 소비하지 않는 모드는 제외(입력 정책 reuseAttachContext=false).
+        const cachedAttachContext = (validSessionId && inputPolicy.reuseAttachContext)
             ? getCachedAttachContext(validSessionId)
             : '';
         if (cachedAttachContext) {
@@ -302,8 +305,7 @@ export async function handleChatMessage(
             webSearchContext,
             fileContext: (effectiveAttachContext + pdfVision.note) || undefined,
             ...(mediaFiles.length > 0 ? { mediaFiles } : {}),
-            discussionMode: msg.discussionMode === true,
-            deepResearchMode: msg.deepResearchMode === true,
+            modes: activeModes,
             imageMode: msg.imageMode === true,
             artifactMode: msg.artifactMode === true,
             thinkingMode: msg.thinkingMode === true,
@@ -341,8 +343,11 @@ export async function handleChatMessage(
             },
             format: msg.format as import('../llm').FormatOption,
             onAgentSelected: (agent) => out({ type: 'agent_selected', agent }),
-            onDiscussionProgress: (progress) => out({ type: 'discussion_progress', progress }),
-            onResearchProgress: (progress) => out({ type: 'research_progress', progress }),
+            // 진행 이벤트의 type 은 그 모드가 정한다(클라이언트의 모드 UI 가 구독하는 이름)
+            onModeProgress: (modeId, progress) => {
+                const mode = getChatModes().find((m) => m.id === modeId);
+                if (mode) out({ type: mode.progressEventType, progress } as never);
+            },
             onSkillsActivated: (skillNames) => {
                 const names = mergeActivatedSkillNames(explicitSkillNames, skillNames);
                 out({ type: 'skills_activated', skillNames: names, skillNamesEn: systemSkillNamesEn(names) });
