@@ -194,7 +194,7 @@ export class LLMClient {
         // 로컬 모델 샘플링 프리셋 — 호출자가 샘플링을 지정하지 않았을 때만 thinking ON/OFF 권장값을 채운다.
         // 외부 provider 클라이언트(quotaExempt)는 각자 기본값을 쓰므로 건너뛴다.
         const effectiveOptions = applyLocalSamplingPreset(
-            fitOptions, advancedOptions?.think, { external: this.config.quotaExempt === true },
+            fitOptions, advancedOptions?.think, { external: this.config.quotaExempt === true, modelId: poolDecision.model },
         );
 
         const request: ChatRequest = {
@@ -211,7 +211,7 @@ export class LLMClient {
             // 생략 — 도구 없는 요청에 tool_choice 만 남으면 같은 계열의 거절을 부른다.
             ...(advancedOptions?.tools?.length && {
                 // 로컬 도구엔 strict 를 채워 vLLM 이 인자 스키마를 디코딩 단계에서 강제하게 한다(외부는 skip).
-                tools: applyLocalToolStrict(advancedOptions.tools, { external: this.config.quotaExempt === true }),
+                tools: applyLocalToolStrict(advancedOptions.tools, { external: this.config.quotaExempt === true, modelId: poolDecision.model }),
                 ...(advancedOptions.tool_choice !== undefined && { tool_choice: advancedOptions.tool_choice }),
             }),
         };

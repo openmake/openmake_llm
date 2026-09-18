@@ -10,64 +10,18 @@
  * @module config/reasoning-effort
  */
 
-/** 강도 사다리 — 낮은 것부터. 정규화 시 인접값 탐색 기준. */
-export const REASONING_EFFORT_LADDER = ['low', 'medium', 'high', 'xhigh'] as const;
+import { REASONING_EFFORT_LADDER, resolveModelProfile, resetModelProfileCache, type ReasoningEffort } from './model-profiles';
 
-export type ReasoningEffort = typeof REASONING_EFFORT_LADDER[number];
+/** 강도 사다리 — 낮은 것부터. 정규화 시 인접값 탐색 기준. */
+export { REASONING_EFFORT_LADDER };
+export type { ReasoningEffort };
 
 /** 지원 목록 미상 모델의 보수적 기본값 — OpenAI 표준 3단만 가정(xhigh 는 벤더 확장). */
 const FALLBACK_SUPPORTED: readonly ReasoningEffort[] = ['low', 'medium', 'high'];
 
-/**
- * 모델 id 접두어 → 지원 강도 목록. `matchCapabilityPreset` 과 동일한
- * startsWith-longest 규칙을 쓴다(중간 substring 오매칭 배제).
- * env `LLM_REASONING_EFFORTS_JSON` 은 **항목 단위로 기본값 위에 merge** 된다 — 새 모델 도입 시
- * 배포 없이 대응하되, 기본값에 새로 들어온 항목을 env 가 지우지는 못한다.
- * (2026-09-04 운영: pm2 가 옛 .env 의 qwen 항목만 든 JSON 을 물고 있어 통째 대체 시
- *  `bai:glm-5.3` 이 사라지고 FALLBACK 의 medium 이 나가 B.AI 400 — dotenv 는 기존 env 를
- *  덮어쓰지 않으므로 stale env 는 재시작으로 안 풀린다.)
- */
-const DEFAULT_MODEL_EFFORTS: Readonly<Record<string, readonly ReasoningEffort[]>> = {
-    'qwen3.6': ['low', 'medium', 'high', 'xhigh'],
-    // 실측 거절값(high)을 제외 — 사용자가 '높음'을 고르면 아래 정규화가 xhigh 로 올린다.
-    'qwen3.8': ['low', 'medium', 'xhigh'],
-    // B.AI GLM 5.3 은 항상 사고 모델이라 low/high/max 만 받고 medium 을 400 으로 거절한다
-    // (2026-09-03 레벨 실측: 12건 중 medium 간헐 400 "该模型始终思考，不支持关闭思考；请使用 low、high 或 max").
-    // 사다리에 max 는 없으므로 low/high — UI '보통' 은 동률 상위 규칙으로 high 가 된다.
-    'bai:glm-5.3': ['low', 'high'],
-};
-
-let _cached: Readonly<Record<string, readonly ReasoningEffort[]>> | null = null;
-
-function isEffort(v: unknown): v is ReasoningEffort {
-    return typeof v === 'string' && (REASONING_EFFORT_LADDER as readonly string[]).includes(v);
-}
-
-function getModelEfforts(): Readonly<Record<string, readonly ReasoningEffort[]>> {
-    if (_cached) return _cached;
-    const raw = process.env.LLM_REASONING_EFFORTS_JSON;
-    if (raw) {
-        try {
-            const parsed = JSON.parse(raw) as Record<string, unknown>;
-            const out: Record<string, readonly ReasoningEffort[]> = {};
-            for (const [prefix, list] of Object.entries(parsed)) {
-                if (Array.isArray(list) && list.every(isEffort) && list.length > 0) {
-                    out[prefix.toLowerCase()] = list as ReasoningEffort[];
-                }
-            }
-            if (Object.keys(out).length > 0) {
-                _cached = { ...DEFAULT_MODEL_EFFORTS, ...out };
-                return _cached;
-            }
-        } catch { /* 형식 오류는 기본값으로 폴백 */ }
-    }
-    _cached = DEFAULT_MODEL_EFFORTS;
-    return _cached;
-}
-
-/** 테스트 훅 — env 변경 후 캐시 리셋. */
+/** 테스트 훅 — env 변경 후 캐시 리셋. 모델별 지원 목록은 모델 프로필(config/model-profiles.ts)이 가진다. */
 export function resetReasoningEffortCache(): void {
-    _cached = null;
+    resetModelProfileCache();
 }
 
 /**
@@ -79,20 +33,7 @@ export function resetReasoningEffortCache(): void {
  * (2026-09-03 라이브: B.AI glm/qwen 은 low·medium·high 를 모두 200 으로 받는다.)
  */
 export function supportedEfforts(modelId: string | undefined, providerId?: string): readonly ReasoningEffort[] {
-    if (!modelId) return FALLBACK_SUPPORTED;
-    const external = !!providerId && providerId !== 'local-llm';
-    const lower = (external ? `${providerId}:${modelId}` : modelId).toLowerCase();
-    let best: readonly ReasoningEffort[] | null = null;
-    let bestLen = -1;
-    for (const [prefix, list] of Object.entries(getModelEfforts())) {
-        // 외부는 provider 한정 키만, 로컬은 bare 키만 매칭 — 서로 새어 나가지 않는다.
-        if (external !== prefix.includes(':')) continue;
-        if (lower.startsWith(prefix) && prefix.length > bestLen) {
-            best = list;
-            bestLen = prefix.length;
-        }
-    }
-    return best ?? FALLBACK_SUPPORTED;
+    return resolveModelProfile(modelId, providerId).reasoningEfforts ?? FALLBACK_SUPPORTED;
 }
 
 /**
