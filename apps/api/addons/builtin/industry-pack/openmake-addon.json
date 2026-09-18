@@ -8,6 +8,7 @@
   },
   "scope": "system",
   "components": {
+    "skills": "./skills.json",
     "agents": "./industry-agents.json",
     "data": "./data"
   }
