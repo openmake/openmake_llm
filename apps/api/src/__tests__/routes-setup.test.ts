@@ -47,11 +47,13 @@ jest.mock('../bootstrap', () => ({
     bootstrapServices: jest.fn().mockResolvedValue(undefined)
 }));
 
-// auth 미들웨어 mock (JWT 검증 우회)
+// auth 미들웨어 mock (JWT 검증 우회) — 실제 시그니처(`(req, res, next)` 미들웨어)와 같은 모양이어야 한다.
+// 종전엔 팩토리(`() => middleware`)로 잘못 mock 돼 있어, 미들웨어로 직접 불리면 next 가 호출되지 않았다
+// (add-on 라우트 게이트가 optionalAuth 를 직접 부르면서 /api/agents 요청이 멈춰 드러남, 2026-09-20).
 jest.mock('../auth/middleware', () => ({
-    requireAuth: () => (_req: unknown, _res: unknown, next: () => void) => next(),
-    optionalAuth: () => (_req: unknown, _res: unknown, next: () => void) => next(),
-    requireAdmin: () => (_req: unknown, _res: unknown, next: () => void) => next()
+    requireAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
+    optionalAuth: (_req: unknown, _res: unknown, next: () => void) => next(),
+    requireAdmin: (_req: unknown, _res: unknown, next: () => void) => next()
 }));
 
 import express from 'express';
