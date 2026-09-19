@@ -80,7 +80,8 @@ ok "restore missing backup is no-op" '[[ ! -f "$TMP/r1/bench.env" ]]'
 # ── PM2 dump 검사: 이 환경의 앱이 저장돼 있을 때만 pm2 save 를 한다 ──
 export PM2_HOME="$TMP/pm2"; mkdir -p "$PM2_HOME"
 printf '[{"name":"other-app"},{"name":"openmake-llm-staging"}]' > "$PM2_HOME/dump.pm2"
-ok "dump has env app"      'pm2_dump_has_any "$(pm2_names staging)"'
+# dump 판독은 node 로 한다(설치본에는 install.sh 가 항상 깔아 둔다) — 맨 컨테이너처럼 node 가 없으면 건너뛴다.
+if has node; then ok "dump has env app" 'pm2_dump_has_any "$(pm2_names staging)"'; else echo "SKIP dump has env app (node 없음)"; fi
 ok "dump lacks other env"  '! pm2_dump_has_any "$(pm2_names qa)"'
 rm -f "$PM2_HOME/dump.pm2"; ok "no dump → false" '! pm2_dump_has_any "$(pm2_names staging)"'
 unset PM2_HOME

@@ -48,7 +48,7 @@
 ## 3. omk 미검증 항목 (2026-09-19)
 
 실제로 돌려 본 것은 macOS 한 대에서의 `env install/update/reset`(`omktest`)과 `dev setup/up` 뿐이다.
-- Linux · Windows(WSL2, `omk.ps1`) 미실행
+- Linux — 순수 함수 테스트는 Ubuntu 24.04 · Debian 12 · Fedora 41 컨테이너에서 통과(2026-09-19, bash 5.2·GNU coreutils). **실설치(`env install`)는 여전히 미실행.** Windows(WSL2, `omk.ps1`) 미실행
 - 빈 PC — 검증 호스트에 Node 24·Docker·PM2·Caddy 가 이미 있어 툴체인 설치·Caddy 다운로드 경로를 타지 않았다
 - `online`(기본 인스턴스) 설치, GitHub 에서 받아 설치(검증은 로컬 경로 클론), `--public-url`, `--keep-data`, `autoupdate`, 마이그레이션이 있는 `update`
 - SearXNG 기본 설치는 `dev` 실기동과 함수 단위(오프라인→복구→멱등→기동 실패 정리)로만 확인했다 — `env install` 안에서의 흐름(설치 후 API 재시작)과 Linux 의 파일 마운트 권한은 미실행
