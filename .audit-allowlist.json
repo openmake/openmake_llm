@@ -8,6 +8,12 @@
       "expires": "2026-10-17"
     },
     {
+      "id": "GHSA-7q85-xj36-vmfc",
+      "package": "adm-zip",
+      "reason": "kordoc 4.13.1 → onnxruntime-node(1.24.3·1.29.0) → adm-zip 0.5.18·0.6.0(전이, 패치는 0.6.1). 2026-09-19 신규 공개 — 노출 경로는 모델 파일 설치/해제뿐이고 사용자 업로드 zip 은 이 경로를 타지 않는다(같은 체인의 GHSA-xcpc-8h2w-3j85 와 동일). 해소는 kordoc 상향 또는 adm-zip overrides — 문서 추출(HWP) 회귀 검증이 필요해 별건으로 분리",
+      "expires": "2026-10-17"
+    },
+    {
       "id": "GHSA-hq66-cqwq-w95j",
       "package": "pdfjs-dist",
       "reason": "officeparser 7.8.0 → pdfjs-dist 6.1.200(전이). 해소는 officeparser 8.x 메이저 상향 — 문서 추출 회귀 검증 필요",
