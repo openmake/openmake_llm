@@ -15,7 +15,7 @@ import { getChatTurnIntegrations } from './turn-integrations';
 import { recordLlmCost } from '../cost/cost-ledger-service';
 import { MAX_TOOL_RESULT_CHARS } from '../../config/runtime-limits';
 import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
-import { getUnifiedMCPClient } from '../../mcp/unified-client';
+import { getToolRuntime } from '../../runtime-ports/tool-runtime';
 import { isPersistableUserId } from '../../utils/user-id-validation';
 import type { ResolvedProvider } from '../../providers/provider-router';
 import type { ExternalProviderDeps } from './external-provider-types';
@@ -31,7 +31,7 @@ export async function executeExternalTool(
     toolArgs: Record<string, unknown>,
 ): Promise<string> {
     try {
-        const mcpClient = getUnifiedMCPClient();
+        const mcpClient = getToolRuntime();
         const userCtx = deps.currentUserContext || {
             userId: 'guest',
             role: 'guest' as const,
@@ -43,7 +43,7 @@ export async function executeExternalTool(
             catch (e) { logger.warn(`onMcpToolStart 콜백 실패: ${e instanceof Error ? e.message : String(e)}`); }
         }
 
-        const result = await mcpClient.executeToolWithContext(toolName, toolArgs, userCtx);
+        const result = await mcpClient.executeTool(toolName, toolArgs, userCtx);
 
         if (deps.mcpToolResultCallback && Array.isArray(result.content)) {
             const resources = result.content

@@ -14,9 +14,21 @@ jest.mock('../utils/logger', () => ({
     createLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }),
 }));
 jest.mock('../chat/prompt', () => ({ getExternalProviderSystemGuards: () => '[GUARD]' }));
-jest.mock('../mcp/unified-client', () => ({
-    getUnifiedMCPClient: () => ({
-        executeToolWithContext: jest.fn().mockResolvedValue({ content: '검색 결과', isError: false }),
+jest.mock('../runtime-ports/tool-runtime', () => ({
+    ...jest.requireActual('../runtime-ports/tool-runtime'),
+    getToolRuntime: () => ({
+        listLLMTools: jest.fn().mockResolvedValue([
+            { type: 'function', function: { name: 'web_search', description: '', parameters: {} } },
+        ]),
+        listTools: jest.fn().mockResolvedValue([]),
+        executeTool: jest.fn().mockResolvedValue({ content: [{ type: 'text', text: '결과' }] }),
+        getUserToolGroups: () => [],
+        normalizeToolCall: (name: string, args: Record<string, unknown>) => ({ name, args }),
+        callUserServerTool: jest.fn().mockResolvedValue(null),
+        runWithUserInputContext: (_c: unknown, fn: () => unknown) => fn(),
+        ensureUserToolsForTask: jest.fn().mockResolvedValue(undefined),
+        onUserLogin: jest.fn(), onUserLogout: jest.fn(), onChatStart: jest.fn(), onChatEnd: jest.fn(),
+        onServerReady: jest.fn(), shutdown: jest.fn(),
     }),
 }));
 jest.mock('../config/runtime-limits', () => {

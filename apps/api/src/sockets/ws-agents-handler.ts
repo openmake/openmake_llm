@@ -4,7 +4,7 @@
  * @module sockets/ws-agents-handler
  */
 import { WebSocket } from 'ws';
-import { getUnifiedMCPClient } from '../mcp';
+import { getToolRuntime } from '../runtime-ports/tool-runtime';
 import { createLogger } from '../utils/logger';
 import { ExtendedWebSocket } from './ws-types';
 
@@ -19,17 +19,15 @@ export async function handleRequestAgents(
     log: ReturnType<typeof createLogger>
 ): Promise<void> {
     try {
-        const mcpClient = getUnifiedMCPClient();
-        const toolRouter = mcpClient.getToolRouter();
         const extWs = ws as ExtendedWebSocket;
         const userId = extWs._authenticatedUserId;
         const allTools = userId
-            ? await toolRouter.getAllTools({ userId })
-            : await toolRouter.getAllTools();
+            ? await getToolRuntime().listTools({ userId })
+            : await getToolRuntime().listTools();
 
         const agents = allTools.map(tool => {
             // 외부 도구: mcp://serverName/toolName
-            if (toolRouter.isExternalTool(tool.name)) {
+            if (tool.external) {
                 const [serverName, ...rest] = tool.name.split('::');
                 const originalName = rest.join('::');
                 return {

@@ -11,8 +11,7 @@ import type { ToolDefinition } from '../../llm/types';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
-import { applySkillCatalog } from '../skill-catalog-tool';
-import { LOAD_SKILL_TOOL_NAME } from '../../mcp/load-skill-tool';
+import { getSkillRuntime, LOAD_SKILL_TOOL_NAME } from '../../runtime-ports/skill-runtime';
 import { selectRelevantTools } from './tool-selector';
 import { selectRelevantToolsEmbedding } from './tool-selector-embedding';
 import { createLogger } from '../../utils/logger';
@@ -57,7 +56,7 @@ export async function assembleAgentTools(params: {
      */
     const withSkillCatalog = async (tools: ToolDefinition[]): Promise<ToolDefinition[]> => {
         const before = tools.length;
-        const next = await applySkillCatalog(tools, mcpTools, {
+        const next = await getSkillRuntime().applyCatalogToTools(tools, mcpTools, {
             ...(injectedSkillIds ? { excludeIds: injectedSkillIds } : {}),
             ...(userId ? { userId } : {}),
         });

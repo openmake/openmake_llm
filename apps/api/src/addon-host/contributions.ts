@@ -24,7 +24,22 @@ export interface AddonSettingDef {
     issueUrl?: string;
 }
 
+/** add-on 이 더하는 CLI 서브커맨드 — 핸들러는 `entry` 참조로 실행 시점에 로드된다(부팅 비용 0) */
+export interface AddonCliCommand {
+    name: string;
+    description: string;
+    /** `<모듈>#<export>` — add-on 코드 디렉토리 기준. 시그니처는 `(version: string) => Promise<void>` */
+    entry: string;
+}
+
 export interface AddonContribution {
+    /** CLI 서브커맨드 (`apps/api/src/cli.ts` 가 켜진 add-on 의 것만 등록한다) */
+    cliCommands?: readonly AddonCliCommand[];
+    /**
+     * 첫 실행 셋업 직후 돌릴 훅 — `<모듈>#<export>`, 시그니처는
+     * `(envPath: string) => { label: string; applied: boolean; reason: string }`.
+     */
+    firstRunHooks?: readonly string[];
     /** add-on 이 기여한 도구의 승인 위험 등급 (config/tool-policy.ts 의 등급 이름) */
     toolRisk?: Readonly<Record<string, string>>;
     settings?: readonly AddonSettingDef[];
@@ -43,6 +58,40 @@ export function contributedSettings(): AddonSettingDef[] {
 
 export function contributedApiKeyScopes(): string[] {
     return enabledContributions().flatMap(c => [...(c.apiKeyScopes ?? [])]);
+}
+
+/** 켜진 add-on 이 더한 CLI 서브커맨드 — 핸들러는 호출 시점에 로드한다. */
+export function contributedCliCommands(): Array<{ name: string; description: string; run: (version: string) => Promise<void> }> {
+    return enabledBuiltinAddons().flatMap(addon => {
+        const ref = addon.manifest.entry?.contributions;
+        if (!ref) return [];
+        const contribution = loadAddonEntry<AddonContribution>(addon, ref);
+        return (contribution.cliCommands ?? []).map(cmd => ({
+            name: cmd.name,
+            description: cmd.description,
+            run: (version: string) => loadAddonEntry<(v: string) => Promise<void>>(addon, cmd.entry)(version),
+        }));
+    });
+}
+
+/**
+ * 첫 실행 셋업 훅 — 각 훅은 자기 결과를 돌려주고, 실패해도 셋업을 죽이지 않는다(fail-open).
+ * Base 는 어떤 add-on 이 무엇을 하는지 모르고 결과 문구만 로그로 남긴다.
+ */
+export function runFirstRunHooks(envPath: string): Array<{ label: string; applied: boolean; reason: string }> {
+    const out: Array<{ label: string; applied: boolean; reason: string }> = [];
+    for (const addon of enabledBuiltinAddons()) {
+        const ref = addon.manifest.entry?.contributions;
+        if (!ref) continue;
+        for (const hookRef of loadAddonEntry<AddonContribution>(addon, ref).firstRunHooks ?? []) {
+            try {
+                out.push(loadAddonEntry<(p: string) => { label: string; applied: boolean; reason: string }>(addon, hookRef)(envPath));
+            } catch (err) {
+                out.push({ label: `${addon.id}:${hookRef}`, applied: false, reason: err instanceof Error ? err.message : String(err) });
+            }
+        }
+    }
+    return out;
 }
 
 export function contributedToolRisk(): Record<string, string> {

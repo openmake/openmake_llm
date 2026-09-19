@@ -37,7 +37,7 @@ import { WebSocket, WebSocketServer, type RawData } from 'ws';
 import { IncomingMessage } from 'http';
 import crypto from 'node:crypto';
 import { ClusterManager } from '../cluster/manager';
-import { getUnifiedMCPClient } from '../mcp';
+import { getToolRuntime } from '../runtime-ports/tool-runtime';
 import { createLogger } from '../utils/logger';
 import { WSMessage, ExtendedWebSocket } from './ws-types';
 import { authenticateWebSocket, refreshWebSocketAuthentication } from './ws-auth';
@@ -227,8 +227,7 @@ export class WebSocketHandler {
             }));
 
             // 초기 데이터 전송 (MCP)
-            const mcpClient = getUnifiedMCPClient();
-            const stats = mcpClient.getStats();
+            const stats = { tools: (await getToolRuntime().listTools()).length };
             ws.send(JSON.stringify({ type: 'stats', stats }));
 
             // Build ID handshake — 클라이언트가 자신의 build ID(meta[name=build-id])와 비교해

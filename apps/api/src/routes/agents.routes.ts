@@ -3,9 +3,8 @@
  * Agent Routes - AI 에이전트 관리 API 라우트
  * ============================================================
  *
- * 시스템/커스텀 에이전트 CRUD, RLHF 피드백 수집, 품질 분석,
- * A/B 테스트, 에이전트-스킬 연결 관리를 담당하는 REST API입니다.
- * 스킬 CRUD 라우트는 skills.routes.ts로 분리되었습니다.
+ * 시스템/커스텀 에이전트 CRUD, RLHF 피드백 수집, 품질 분석, A/B 테스트를 담당하는 REST API입니다.
+ * 스킬 CRUD 와 에이전트-스킬 연결 라우트는 skill-runtime add-on 으로 분리되었습니다 (2026-09-19).
  *
  * @module routes/agents.routes
  */
@@ -16,14 +15,12 @@ import { getAgentLearningSystem } from '../agents/learning';
 import { getCustomAgentBuilder } from '../agents/custom-builder';
 import { success, notFound } from '../utils/api-response';
 import { asyncHandler } from '../utils/error-handler';
-import { getSkillManager } from '../agents/skill-manager';
 import { requireAuth, requireAdmin } from '../auth';
 import { unauthorized } from '../utils/api-response';
 import { validate } from '../middlewares/validation';
 import {
     agentFeedbackSchema,
-    abTestStartSchema,
-    assignSkillSchema
+    abTestStartSchema
 } from '../schemas/agents.schema';
 import { importAgentFromGitSchema } from '../schemas/agent-ingest.schema';
 import { AgentIngestService } from '../agents/git-ingest/agent-ingest-service';
@@ -195,54 +192,6 @@ router.get('/abtest/:testId', asyncHandler(async (req: Request, res: Response) =
     res.json(success(result));
 }));
 
-
-// ================================================
-// 에이전트-스킬 연결 (에이전트 스코프 라우트)
-// 스킬 CRUD는 skills.routes.ts로 분리됨
-// ================================================
-
-/**
- * GET /api/agents/:agentId/skills
- * 에이전트에 연결된 스킬 목록
- */
-router.get('/:agentId/skills', requireAuth, asyncHandler(async (req: Request, res: Response) => {
-    const { agentId } = req.params;
-    const skills = await getSkillManager().getSkillsForAgent(agentId);
-    res.json(success(skills));
-}));
-
-/**
- * POST /api/agents/:agentId/skills/:skillId
- * 에이전트에 스킬 연결 — 공유(산업) 에이전트 배정은 관리자만 (2026-09-02 보안 리뷰 H2:
- * 종전엔 아무 인증 사용자가 자기 스킬을 공유 에이전트에 배정해 전 사용자 프롬프트에 주입 가능했다).
- * 개인 배정은 /api/agents/skills/:skillId/user-assign 을 쓴다.
- */
-router.post('/:agentId/skills/:skillId', requireAuth, requireAdmin, validate(assignSkillSchema), asyncHandler(async (req: Request, res: Response) => {
-    const { agentId, skillId } = req.params;
-    // status 가드: 활성 스킬만 할당 허용 (draft/archived 차단)
-    const skill = await getSkillManager().getSkillById(skillId);
-    if (!skill) {
-        res.status(404).json(notFound('스킬'));
-        return;
-    }
-    if (skill.status && skill.status !== 'active') {
-        res.status(409).json({ error: 'SKILL_NOT_ACTIVE', detail: `status=${skill.status} 인 스킬은 할당할 수 없습니다.` });
-        return;
-    }
-    const priority = Number(req.body.priority ?? 0);
-    await getSkillManager().assignSkillToAgent(agentId, skillId, priority);
-    res.json(success({ assigned: true }));
-}));
-
-/**
- * DELETE /api/agents/:agentId/skills/:skillId
- * 에이전트에서 스킬 해제
- */
-router.delete('/:agentId/skills/:skillId', requireAuth, requireAdmin, asyncHandler(async (req: Request, res: Response) => {
-    const { agentId, skillId } = req.params;
-    await getSkillManager().removeSkillFromAgent(agentId, skillId);
-    res.json(success({ removed: true }));
-}));
 
 /**
  * GET /api/agents/:id

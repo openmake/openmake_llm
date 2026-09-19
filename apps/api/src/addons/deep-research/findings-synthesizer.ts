@@ -12,7 +12,7 @@ import { RESEARCH_TIMEOUTS } from './config';
 import { RESEARCH_TEMPERATURES } from './config';
 import { RESEARCH_TRUNCATION } from './config';
 import { getExternalClientHints } from '../../llm/external-throttle';
-import type { SearchResult } from '../../mcp/web-search';
+import type { SearchResult } from '../../tools/web-search';
 import type { ResearchConfig, SynthesisResult } from './types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { withSkillContext } from './research-context';

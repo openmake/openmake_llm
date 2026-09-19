@@ -9,7 +9,7 @@
 import { type LLMClient } from '../../llm';
 import { RESEARCH_TIMEOUTS } from './config';
 import { RESEARCH_TEMPERATURES } from './config';
-import type { SearchResult } from '../../mcp/web-search';
+import type { SearchResult } from '../../tools/web-search';
 import type { ResearchConfig, SubTopic } from './types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { withSkillContext } from './research-context';

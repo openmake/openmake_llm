@@ -13,7 +13,7 @@ import { DEEP_RESEARCH_CITATION } from '../config';
 import { getUnifiedDatabase } from '../../../data/models/unified-database';
 import * as citationVerifier from '../citation-verifier';
 import { type LLMClient, createClient } from '../../../llm';
-import type { SearchResult } from '../../../mcp/web-search';
+import type { SearchResult } from '../../../tools/web-search';
 import type { ResearchConfig, SubTopic } from '../types';
 
 jest.mock('../../../data/models/unified-database', () => ({

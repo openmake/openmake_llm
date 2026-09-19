@@ -1,0 +1,21 @@
+{
+  "id": "skill-runtime",
+  "name": "OpenMake Skill Runtime",
+  "version": "1.0.0",
+  "description": "스킬 매니페스트 주입·트리거 매칭·카탈로그·사용 기록 런타임과 스킬 관리 API",
+  "requires": {
+    "openmake": ">=1.0.0 <2.0.0"
+  },
+  "scope": "system",
+  "kind": "runtime",
+  "order": 1,
+  "components": {},
+  "entry": {
+    "runtime": "index#startSkillRuntime",
+    "routes": [
+      { "mountPath": "/api/agents/skills", "module": "routes/skills-usage.routes" },
+      { "mountPath": "/api/agents/skills", "module": "routes/skills.routes" },
+      { "mountPath": "/api/agents", "module": "routes/agent-skill-assign.routes" }
+    ]
+  }
+}

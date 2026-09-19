@@ -9,9 +9,9 @@
  * @module services/deep-research-utils
  */
 
-import type { SearchResult } from '../../mcp/web-search';
+import type { SearchResult } from '../../tools/web-search';
 import type { SubTopic } from './types';
-import { cleanSearchQuery } from '../../mcp/web-search/query-cleaner';
+import { cleanSearchQuery } from '../../tools/web-search/query-cleaner';
 
 /**
  * 중복 소스 제거

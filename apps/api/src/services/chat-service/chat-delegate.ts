@@ -16,7 +16,7 @@
  */
 import { createClient } from '../../llm';
 import type { ToolDefinition } from '../../llm/types';
-import type { UserContext } from '../../mcp/user-sandbox';
+import type { UserContext } from '../../tool-contract/types';
 import { getModelForRole } from '../../config/model-roles';
 import { routeToAgent } from '../../agents/keyword-router';
 import { getAgentSystemMessage } from '../../agents/system-prompt';

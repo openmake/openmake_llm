@@ -6,7 +6,7 @@
  */
 
 import { computeResearchMetrics, extractDomain } from '../utils';
-import type { SearchResult } from '../../../mcp/web-search';
+import type { SearchResult } from '../../../tools/web-search';
 
 const src = (url: string): SearchResult => ({ title: url, url, snippet: '' }) as unknown as SearchResult;
 

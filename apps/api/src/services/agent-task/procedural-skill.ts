@@ -17,7 +17,7 @@ import { getPool } from '../../data/models/unified-database';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { goalSimilarity } from './task-learning';
 import { createLogger } from '../../utils/logger';
-import { recordSkillUsage } from '../../agents/skill-usage-log';
+import { getSkillRuntime } from '../../runtime-ports/skill-runtime';
 
 const logger = createLogger('ProceduralSkill');
 
@@ -111,7 +111,7 @@ async function loadProceduralSpec(userId: string, skillId: string): Promise<Proc
     if (skill.createdBy && skill.createdBy !== userId && !skill.isPublic) return null;
     const spec = parseSpec(skill.content);
     // 재생 시도 기록 — skill_run 도구의 load 훅이 이 경로로 들어온다 (skill_audit_log)
-    if (spec) recordSkillUsage([{ skillId: skill.id, kind: 'skill_run', userId, args: { kind: spec.kind } }]);
+    if (spec) getSkillRuntime().recordUsage([{ skillId: skill.id, kind: 'skill_run', userId, args: { kind: spec.kind } }]);
     return spec;
 }
 

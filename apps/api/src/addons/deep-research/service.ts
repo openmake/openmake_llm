@@ -13,7 +13,7 @@
  */
 
 import { LLMClient, createClient } from '../../llm';
-import type { SearchResult } from '../../mcp/web-search';
+import type { SearchResult } from '../../tools/web-search';
 import { getModelForRole } from '../../config/model-roles';
 import { RESEARCH_DEFAULTS, RESEARCH_STEP_NUMBERS } from './config';
 import { getUnifiedDatabase } from '../../data/models/unified-database';

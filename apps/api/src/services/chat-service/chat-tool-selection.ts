@@ -7,13 +7,12 @@
  *
  * @module services/chat-service/chat-tool-selection
  */
-import { CHAT_ALWAYS_ON_TOOL_NAMES } from '../../mcp/agent-task-tools';
+import { CHAT_ALWAYS_ON_TOOL_NAMES } from '../../tools/agent-task-tools';
 import { getChatTurnIntegrations } from './turn-integrations';
 import { OPS_METRICS_TOOL_ENABLED, OPS_METRICS_INTENT_PATTERNS } from '../../config/ops-metrics';
-import { MCP_META_TOOL_NAMES, MCP_RESOURCE_META_TOOL_NAMES } from '../../mcp/mcp-meta-tools';
 import {
-    MCP_PROGRESSIVE_DISCLOSURE_ENABLED, WEB_SEARCH_INTENT_PATTERNS, PLAN_INTENT_PATTERNS,
-    EXTENSION_IMPORT_INTENT_PATTERNS, CHAT_TOOL_INTENT_GATE_ENABLED, AGENT_TASK_INTENT_PATTERNS, MCP_RESOURCE_INTENT_PATTERNS,
+    WEB_SEARCH_INTENT_PATTERNS, PLAN_INTENT_PATTERNS,
+    EXTENSION_IMPORT_INTENT_PATTERNS, CHAT_TOOL_INTENT_GATE_ENABLED, AGENT_TASK_INTENT_PATTERNS,
 } from '../../config/runtime-limits';
 import { createLogger } from '../../utils/logger';
 import type { ToolDefinition } from '../../llm';
@@ -40,11 +39,9 @@ export function selectTurnTools(params: {
     const baseAlwaysOn = agentTaskWanted
         ? CHAT_ALWAYS_ON_TOOL_NAMES
         : CHAT_ALWAYS_ON_TOOL_NAMES.filter((n) => !n.startsWith('agent_task_'));
-    // resources/prompts 메타 도구(F13.2)는 의도 턴에만 — 상시 노출은 프롬프트 팽창(게이트 OFF 면 의도 판정 없이 포함).
-    const resourceWanted = MCP_PROGRESSIVE_DISCLOSURE_ENABLED
-        && (!CHAT_TOOL_INTENT_GATE_ENABLED || MCP_RESOURCE_INTENT_PATTERNS.some((re) => re.test(msg)));
-    const alwaysOnNames: string[] = MCP_PROGRESSIVE_DISCLOSURE_ENABLED
-        ? [...baseAlwaysOn, ...MCP_META_TOOL_NAMES, ...(resourceWanted ? MCP_RESOURCE_META_TOOL_NAMES : [])] : baseAlwaysOn;
+    // MCP 메타 도구(F13.2 진행적 공개)는 MCP 런타임 add-on 이 `forceIncludeTools` 로 실어 준다 —
+    // Base 는 그 도구 이름도, 노출 조건도 알지 않는다 (2026-09-19).
+    const alwaysOnNames: string[] = baseAlwaysOn;
     const alwaysOn = allTools.filter(t =>
         alwaysOnNames.includes(t.function.name) && !merged.some(m => m.function.name === t.function.name));
     // merged ∪ alwaysOn ∪ userMcpAutoOn — 이름 기준 중복 제거.

@@ -23,7 +23,7 @@ import type { GitFetcher } from './git-fetcher';
 import type { GitIngestService } from './git-ingest-service';
 import { commandFileToSkillMarkdown, agentFileToCustomAgent } from './plugin-component-compat';
 import { parseMcpJsonFile, type NormalizedMcpServer } from './extension-manifest-validator';
-import { collectPlaceholderEnvKeys, buildEnvInputHints, type UserConfigEntry } from '../../mcp/env-placeholder';
+import { collectPlaceholderEnvKeys, buildEnvInputHints, type UserConfigEntry } from '../../tool-contract/env-placeholder';
 import { ConventionChecker, isBlockedByConvention } from './convention-checker';
 import { McpServerDraftRepository } from '../../data/repositories/mcp-server-draft-repository';
 import { UserAgentRepository } from '../../data/repositories/user-agent-repository';

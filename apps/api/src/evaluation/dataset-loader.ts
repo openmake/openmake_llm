@@ -62,9 +62,27 @@ export function loadGoldenDataset(filePath: string = DEFAULT_DATASET_PATH): Gold
     }
 
     const dataset = result.data as GoldenDataset;
+    // 켜진 add-on 이 동봉한 케이스 합류 (id 는 `<addonId>:<caseId>`) — Base 는 어떤 팩이 있는지 모른다.
+    const packCases = loadPackCases();
+    if (packCases.length > 0) {
+        const merged = goldenDatasetSchema.safeParse({ ...dataset, cases: [...dataset.cases, ...packCases] });
+        if (merged.success) dataset.cases = (merged.data as GoldenDataset).cases;
+        else logger.warn(`팩 eval 케이스 형식 오류 — 제외하고 진행: ${merged.error.issues[0]?.message ?? ''}`);
+    }
     validateCaseSemantics(dataset);
-    logger.info(`골든셋 로드 완료: v${dataset.version}, 케이스 ${dataset.cases.length}건`);
+    logger.info(`골든셋 로드 완료: v${dataset.version}, 케이스 ${dataset.cases.length}건${packCases.length > 0 ? ` (팩 ${packCases.length}건 포함)` : ''}`);
     return dataset;
+}
+
+/** 팩 케이스 로드 — add-on 이 없거나 읽기에 실패하면 빈 배열(평가를 막지 않는다). */
+function loadPackCases(): GoldenCase[] {
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { loadEnabledPackEvalCases } = require('../addon-host/pack-evals') as typeof import('../addon-host/pack-evals');
+        return loadEnabledPackEvalCases() as unknown as GoldenCase[];
+    } catch {
+        return [];
+    }
 }
 
 /**

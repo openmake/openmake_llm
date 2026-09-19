@@ -1,0 +1,49 @@
+{
+  "id": "mcp-runtime",
+  "name": "OpenMake MCP Runtime",
+  "version": "1.0.0",
+  "description": "외부 MCP 서버 연결·수명주기·샌드박스·사용자 풀과 MCP 관리 API",
+  "requires": {
+    "openmake": ">=1.0.0 <2.0.0"
+  },
+  "scope": "system",
+  "kind": "runtime",
+  "order": 2,
+  "components": {},
+  "entry": {
+    "runtime": "boot#startMcpRuntime",
+    "chatIntegration": "chat-integration#mcpRuntimeChatIntegration",
+    "contributions": "contributions#mcpRuntimeContributions",
+    "routes": [
+      {
+        "mountPath": "/api/mcp",
+        "module": "routes/mcp.routes#mcpRouter"
+      },
+      {
+        "mountPath": "/api/mcp",
+        "module": "routes/mcp-oauth.routes#mcpOAuthRouter"
+      },
+      {
+        "mountPath": "/api/mcp",
+        "module": "routes/mcp-catalog.routes#mcpCatalogRouter"
+      },
+      {
+        "mountPath": "/api/mcp/servers",
+        "module": "routes/mcp-server-ingest.mounted"
+      },
+      {
+        "mountPath": "/api/admin/mcp",
+        "module": "routes/mcp-catalog-admin.routes#mcpCatalogAdminRouter"
+      },
+      {
+        "mountPath": "/api/admin/mcp",
+        "module": "routes/mcp-admin-monitoring.routes#mcpAdminMonitoringRouter"
+      },
+      {
+        "mountPath": "/mcp",
+        "module": "routes/mcp.routes#mcpRouter",
+        "within": "v1"
+      }
+    ]
+  }
+}

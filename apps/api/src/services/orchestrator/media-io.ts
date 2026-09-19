@@ -3,7 +3,7 @@
  * @description executor 공용 미디어 입출력 — 첨부(base64 / `/generated` 경로 / https) 로드, dataURL 변환, 결과 저장.
  */
 import * as fs from 'node:fs';
-import { resolveGeneratedPath, saveGeneratedFile } from '../../mcp/generated-media';
+import { resolveGeneratedPath, saveGeneratedFile } from '../../tools/generated-media';
 import { downloadProviderUrl } from './http-call';
 import { inferImageMime } from '../../utils/image-mime';
 import { recordCost } from '../cost/cost-ledger-service';

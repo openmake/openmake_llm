@@ -11,7 +11,7 @@ import * as approvalGate from './approval-gate';
 import { getApprovalRegistry } from './approval-gate';
 import { AgentTaskParked } from '../agent-task/types';
 import { getTaskSandboxConfig } from '../../config/task-sandbox';
-import type { MCPToolDefinition } from '../../mcp/types';
+import type { MCPToolDefinition } from '../../tool-contract/types';
 
 describe('toLLMTool 어댑터', () => {
     it('MCPToolDefinition → LLM ToolDefinition 변환', () => {

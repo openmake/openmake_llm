@@ -13,7 +13,7 @@
  *
  * @module services/task-sandbox/tools
  */
-import type { MCPToolDefinition, MCPToolResult } from '../../mcp/types';
+import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
 import type { ContributedAgentTaskTool } from '../chat-service/turn-integrations';
 import type { TaskExecutor, ExecResult } from './executor';
 import { withDiagnostics } from './diagnostics-attach';

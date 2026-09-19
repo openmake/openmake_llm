@@ -44,7 +44,7 @@ import { toResponseFormat } from '../llm/stream-parser';
  * 상한이 낮으면 finish_reason=length 로 잘려 JSON 파싱이 실패한다(실측 2026-08-24: 1200 부족).
  */
 const STRUCTURED_MAX_OUTPUT_TOKENS = parseInt(process.env.STRUCTURED_MAX_OUTPUT_TOKENS || '4096', 10);
-import { buildWebSearchContext } from '../mcp/web-search/build-search-context';
+import { buildWebSearchContext } from '../tools/web-search/build-search-context';
 import { detectLanguage } from '../chat/language-policy';
 import { getCurrentDate } from '../utils/datetime';
 import { getConversationDB } from '../data/conversation-db';

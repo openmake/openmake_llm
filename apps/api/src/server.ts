@@ -237,15 +237,8 @@ export class DashboardServer {
             console.error('[Server] 시스템 설정 로드 실패 (env 폴백으로 계속):', err);
         }
 
-        // Tool Runtime(외부 MCP 서버 연결·샌드박스 점검) 기동 — 절차는 mcp/runtime-boot.ts 한 곳
-        try {
-            const { startToolRuntime } = await import('./mcp/runtime-boot');
-            await startToolRuntime();
-        } catch (err) {
-            console.error('[Server] 외부 MCP 서버 초기화 실패 (서비스 계속):', err);
-        }
-
-        // 내장 콘텐츠(산업·유틸리티 스킬) 시드 — Base 는 Add-on Host 만 안다 (config/addon-boundary.ts)
+        // 런타임 add-on(도구·스킬)과 내장 콘텐츠 시드 — Base 는 Add-on Host 만 안다
+        // (§10-2: 개별 기능의 부팅 절차를 server.ts 가 알지 않는다, config/addon-boundary.ts)
         try {
             const { startAddonHost } = await import('./addon-host');
             await startAddonHost();
@@ -313,17 +306,17 @@ export class DashboardServer {
             });
 
             this.server.listen(this.port, '0.0.0.0', () => {
-                // Phase 7 lifecycle supervisor 초기화 — listen 완료 후 1회.
+                // 도구 런타임의 프로세스 감독 시작 — listen 완료 후 1회.
                 // cli.ts (cluster) 와 server.ts (직접 실행) 모두 동작 보장.
-                void this.initLifecycleSupervisor();
+                void this.notifyToolRuntimeReady();
                 resolve();
             });
         });
     }
 
-    private async initLifecycleSupervisor(): Promise<void> {
-        const { startMcpLifecycleSupervisor } = await import('./mcp/runtime-boot');
-        await startMcpLifecycleSupervisor();
+    private async notifyToolRuntimeReady(): Promise<void> {
+        const { getToolRuntime } = await import('./runtime-ports/tool-runtime');
+        await getToolRuntime().onServerReady();
     }
 
     /**
@@ -369,14 +362,13 @@ if (require.main === module) {
         console.log(`\n👋 ${signal} 수신 — 서버 종료 중...`);
 
         const shutdownWork = async () => {
-            // 외부 MCP 서버 프로세스 정리
+            // 도구 런타임 정리 — 외부 MCP 서버 연결 해제와 사용자 풀 graceful kill
             try {
-                const { getUnifiedMCPClient } = await import('./mcp');
-                const registry = getUnifiedMCPClient().getServerRegistry();
-                await registry.disconnectAll();
-                console.log('[Shutdown] 모든 외부 MCP 서버 연결 해제 완료');
+                const { getToolRuntime } = await import('./runtime-ports/tool-runtime');
+                await getToolRuntime().shutdown();
+                console.log('[Shutdown] 도구 런타임 정리 완료');
             } catch (error) {
-                console.error('[Shutdown] 외부 MCP 서버 정리 중 오류:', error);
+                console.error('[Shutdown] 도구 런타임 정리 중 오류:', error);
             }
 
             // DB 커넥션 풀 정상 종료
@@ -427,17 +419,6 @@ if (require.main === module) {
                 console.error('[Shutdown] OpenTelemetry 종료 중 오류:', error);
             }
 
-            // Phase 7 lifecycle supervisor 정리 — 모든 사용자 MCP 서버 graceful kill
-            try {
-                const { getLifecycleSupervisor } = await import('./mcp/lifecycle-supervisor');
-                const sv = getLifecycleSupervisor();
-                if (sv) {
-                    console.log('[Shutdown] MCP 사용자 풀 정리 중...');
-                    await sv.shutdownAll();
-                }
-            } catch (error) {
-                console.error('[Shutdown] MCP supervisor 정리 중 오류:', error);
-            }
 
             server.stop();
         };

@@ -10,7 +10,7 @@
  */
 import type { LLMClient } from '../../llm';
 import type { ToolDefinition } from '../../llm/types';
-import type { UserContext } from '../../mcp/user-sandbox';
+import type { UserContext } from '../../tool-contract/types';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import type { DelegateFn } from '../task-sandbox/tools';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';

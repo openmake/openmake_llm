@@ -22,7 +22,7 @@ jest.mock('child_process', () => ({
         return child;
     }),
 }));
-jest.mock('../../../mcp/sandbox-docker', () => ({ resolveDocker: () => '/usr/bin/docker' }));
+jest.mock('../../../utils/docker-path', () => ({ resolveDocker: () => '/usr/bin/docker' }));
 jest.mock('../../../config/artifact-export', () => {
     const actual = jest.requireActual('../../../config/artifact-export');
     return { ARTIFACT_EXPORT: { ...actual.ARTIFACT_EXPORT, enabled: true } };

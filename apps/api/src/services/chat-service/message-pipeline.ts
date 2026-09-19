@@ -390,8 +390,8 @@ export async function runMessagePipeline(svc: ChatService,
                 let extSkillPrompt = '';
                 if (userAgent.allowedSkills.length > 0) {
                     try {
-                        const { getSkillManager } = await import('../../agents/skill-manager');
-                        extSkillPrompt = await getSkillManager().buildSkillPromptForIds(
+                        const { getSkillRuntime } = await import('../../runtime-ports/skill-runtime');
+                        extSkillPrompt = await getSkillRuntime().buildSkillPromptForIds(
                             userAgent.allowedSkills,
                             userId,
                         );

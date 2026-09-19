@@ -3,8 +3,8 @@
  * @module services/agent-task/task-steps
  */
 import { getUnifiedDatabase } from '../../data/models/unified-database';
-import { getUnifiedMCPClient } from '../../mcp/unified-client';
-import type { UserContext } from '../../mcp/user-sandbox';
+import type { ToolRuntime } from '../../runtime-ports/tool-runtime';
+import type { UserContext } from '../../tool-contract/types';
 import type { ExtractedArtifact } from '../../llm/artifact-parser';
 import type { ArtifactKind } from '../../data/repositories/artifact-repository';
 import { takeReportSource } from '../chat-service/report-block';
@@ -98,13 +98,13 @@ export async function persistArtifactSteps(
 
 /** 단일 도구 실행 — sandbox 는 executeToolWithContext 가 처리. 실패는 문자열로 흡수 */
 export async function runTool(
-    mcp: ReturnType<typeof getUnifiedMCPClient>,
+    mcp: ToolRuntime,
     name: string,
     args: Record<string, unknown>,
     userCtx: UserContext,
 ): Promise<string> {
     try {
-        const r = await mcp.executeToolWithContext(name, args, userCtx);
+        const r = await mcp.executeTool(name, args, userCtx);
         // 문자열/JSON 양쪽 모두 캡 적용 — 대형 결과가 통째로 대화에 들어가면
         // 컨텍스트·체크포인트가 부풀어 token_limit abort 로 작업이 실패한다.
         const raw = typeof r.content === 'string' ? r.content : JSON.stringify(r.content);

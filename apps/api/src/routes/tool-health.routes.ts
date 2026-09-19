@@ -24,7 +24,7 @@ import { success } from '../utils/api-response';
 import { getPool } from '../data/models/unified-database';
 import { ToolHealthRepository } from '../data/repositories/tool-health-repository';
 import { TOOL_HEALTH_QUERY, TOOL_CIRCUIT } from '../config/tool-health';
-import { getCircuitSnapshot, resetToolCircuit } from '../mcp/tool-health';
+import { getCircuitSnapshot, resetToolCircuit } from '../tool-contract/tool-health';
 import { getAuditService } from '../services/AuditService';
 import { badRequest, notFound } from '../utils/api-response';
 import { createLogger } from '../utils/logger';

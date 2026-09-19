@@ -1,0 +1,196 @@
+/**
+ * @module mcp/ops-metrics-tool
+ * @description 운영 지표 읽기 전용 내장 도구 `ops_metrics` (2026-09-07, Phase 1)
+ *
+ * 관리자가 채팅에서 "지난 24시간 실패한 작업", "Playwright 오류 늘었어?" 처럼 물으면 모델이
+ * 운영 DB 집계를 근거로 답하게 한다. 자유 SQL 은 받지 않고 **명명 질의 enum + 기간 창 + limit**
+ * 만 받는다. 데이터 소스·근거는 `config/ops-metrics.ts` 참고.
+ *
+ * 역할: 노출·실행 게이트는 `BUILTIN_TOOL_REQUIRED_ROLE`(tool-role-gate) 가 맡고, 여기서는
+ * 핸들러 안에서 한 번 더 확인한다(기존 ingest 도구와 같은 심층 방어).
+ */
+import { MCPToolDefinition, MCPToolResult } from '../tool-contract/types';
+import { isAdminRole } from '../data/user-manager';
+import {
+    OPS_METRICS_LIMITS, OPS_METRICS_TOOL_ENABLED, OPS_METRICS_WINDOWS,
+} from '../config/ops-metrics';
+import { TOOL_HEALTH_QUERY } from '../config/tool-health';
+
+export const OPS_METRICS_QUERIES = [
+    'summary', 'failed_runs', 'slowest_runs', 'runs_by_model',
+    'tool_errors', 'token_usage', 'goal_incomplete', 'prompt_versions', 'gpu', 'queue_depth', 'slo', 'llm_models',
+] as const;
+type OpsMetricsQuery = (typeof OPS_METRICS_QUERIES)[number];
+
+interface OpsMetricsArgs extends Record<string, unknown> {
+    query?: string;
+    window?: string;
+    limit?: number;
+}
+
+function textResult(text: string, isError = false): MCPToolResult {
+    return { content: [{ type: 'text', text }], isError };
+}
+
+function resolveWindowHours(window: unknown): { key: string; hours: number } | null {
+    const key = typeof window === 'string' && window ? window : OPS_METRICS_LIMITS.DEFAULT_WINDOW;
+    const hours = OPS_METRICS_WINDOWS[key];
+    return hours ? { key, hours } : null;
+}
+
+function resolveLimit(limit: unknown): number {
+    const n = Number(limit);
+    if (!Number.isFinite(n) || n <= 0) return OPS_METRICS_LIMITS.DEFAULT_LIMIT;
+    return Math.min(Math.floor(n), OPS_METRICS_LIMITS.MAX_LIMIT);
+}
+
+/**
+ * 질의 실행 — 저장소는 지연 import(부팅 시 DB 결합 회피, 기존 ingest 도구 패턴).
+ * 도구 단위 건전성·판정 분포·실패 사유는 기존 저장소를 재사용한다.
+ */
+async function runOpsMetricsQuery(query: OpsMetricsQuery, hours: number, limit: number): Promise<unknown> {
+    const { getPool } = await import('../data/models/unified-database');
+    const { OpsMetricsRepository } = await import('../data/repositories/ops-metrics-repository');
+    const pool = getPool();
+    const ops = new OpsMetricsRepository(pool);
+    const { GOAL_SNIPPET_CHARS, ERROR_SNIPPET_CHARS } = OPS_METRICS_LIMITS;
+    const days = hours / 24;
+
+    switch (query) {
+        case 'summary': {
+            const [runs, servers] = await Promise.all([ops.getRunsSummary(hours), ops.getToolCallsByServer(hours)]);
+            return { runs, tool_calls_by_server: servers };
+        }
+        case 'failed_runs':
+            return { runs: await ops.getFailedRuns(hours, limit, GOAL_SNIPPET_CHARS, ERROR_SNIPPET_CHARS) };
+        case 'slowest_runs':
+            return { runs: await ops.getSlowestRuns(hours, limit, GOAL_SNIPPET_CHARS, ERROR_SNIPPET_CHARS) };
+        case 'runs_by_model':
+            return { models: await ops.getRunsByModel(hours) };
+        case 'tool_errors': {
+            const { ToolHealthRepository } = await import('../data/repositories/tool-health-repository');
+            const th = new ToolHealthRepository(pool);
+            const [servers, tools, categories] = await Promise.all([
+                ops.getToolCallsByServer(hours),
+                th.getToolHealth(days, TOOL_HEALTH_QUERY.DEFAULT_MIN_CALLS, limit),
+                th.getErrorCategories(days),
+            ]);
+            return { by_server: servers, failing_tools: tools, error_categories: categories };
+        }
+        case 'token_usage': {
+            const [byUser, providers] = await Promise.all([
+                ops.getTaskTokensByUser(hours, limit), ops.getProviderUsage(hours, limit),
+            ]);
+            return { agent_task_tokens_by_user: byUser, external_provider_usage: providers };
+        }
+        case 'goal_incomplete': {
+            const { AgentTaskMetricsRepository } = await import('../data/repositories/agent-task-metrics-repository');
+            const atm = new AgentTaskMetricsRepository(pool);
+            const [verdicts, reasons, summary] = await Promise.all([
+                atm.getCompletionVerdictDistribution(days), atm.getFailureReasons(days, limit), ops.getRunsSummary(hours),
+            ]);
+            return { completion_verdicts: verdicts, failure_reasons: reasons, runs: summary };
+        }
+        case 'prompt_versions': {
+            // 채팅 요청 정적 프롬프트 지문별 분포(F24.2, 142) — 배포 사이 프롬프트 변화와 TTFT·오류율을 나란히 본다
+            const { ChatRequestRepository } = await import('../data/repositories/chat-request-repository');
+            return { prompt_versions: await new ChatRequestRepository(pool).promptVersions(hours, limit) };
+        }
+        case 'gpu': {
+            // 노드 지표(F24.4, 143) — 최신 스냅샷(메모리)과 기간 추이 최대값
+            const { getNodeMetricsStates } = await import('../cluster/node-metrics-collector');
+            const { NodeMetricsRepository, resolveSeriesWindow } = await import('../data/repositories/node-metrics-repository');
+            const metrics = ['vllm_kv_cache_pct', 'vllm_requests_waiting', 'dcgm_gpu_util'];
+            const series = await new NodeMetricsRepository(pool).series(metrics, hours, resolveSeriesWindow(hours).bucketMinutes);
+            // 모델 컨텍스트 보호 — 최근 버킷 위주로 대략 지표당 limit 개
+            return { nodes: getNodeMetricsStates(), series: series.slice(-limit * metrics.length) };
+        }
+        case 'queue_depth': {
+            const { getLastQueueDepth, QUEUE_DEPTH_METRIC, QUEUE_DEPTH_QUEUES } = await import('../monitoring/queue-depth-sampler');
+            const { NodeMetricsRepository, resolveSeriesWindow } = await import('../data/repositories/node-metrics-repository');
+            const series = await new NodeMetricsRepository(pool).series([QUEUE_DEPTH_METRIC], hours, resolveSeriesWindow(hours).bucketMinutes);
+            return { current: getLastQueueDepth(), series: series.slice(-limit * QUEUE_DEPTH_QUEUES.length) };
+        }
+        case 'slo': {
+            // SLO 4종(F24.8, 145) — 즉시 계산 + 기간 내 일별 스냅샷
+            const { computeSloEvaluations } = await import('../monitoring/slo-runner');
+            const { SloRepository } = await import('../data/repositories/slo-repository');
+            const [evaluations, history] = await Promise.all([
+                computeSloEvaluations(pool), new SloRepository(pool).dailyHistory(Math.max(1, Math.ceil(days))).catch(() => []),
+            ]);
+            return { evaluations, daily_history: history.slice(0, limit * evaluations.length) };
+        }
+        case 'llm_models': {
+            // LLM 요청 셰도우 계측(F06.2 G0, 158) — 모델·provider·요청 클래스별 호출 수·오류율·TTFT/총 시간 p50·p95
+            const r = await pool.query(
+                `SELECT model, provider_id, request_class, count(*)::int AS calls,
+                        round(avg((error_code IS NOT NULL)::int)::numeric, 4)::float8 AS error_rate,
+                        percentile_cont(0.5) WITHIN GROUP (ORDER BY ttft_ms) FILTER (WHERE ttft_ms IS NOT NULL)::float8 AS ttft_p50_ms,
+                        percentile_cont(0.95) WITHIN GROUP (ORDER BY ttft_ms) FILTER (WHERE ttft_ms IS NOT NULL)::float8 AS ttft_p95_ms,
+                        percentile_cont(0.5) WITHIN GROUP (ORDER BY total_ms)::float8 AS total_p50_ms,
+                        percentile_cont(0.95) WITHIN GROUP (ORDER BY total_ms)::float8 AS total_p95_ms
+                 FROM llm_request_metrics WHERE created_at >= NOW() - make_interval(hours => $1)
+                 GROUP BY model, provider_id, request_class ORDER BY calls DESC LIMIT $2`,
+                [hours, limit],
+            );
+            return { models: r.rows };
+        }
+        default: {
+            const never: never = query;
+            throw new Error(`unknown query ${String(never)}`);
+        }
+    }
+}
+
+export const opsMetricsTool: MCPToolDefinition<OpsMetricsArgs> = {
+    tool: {
+        name: 'ops_metrics',
+        description:
+            '[관리자 전용] 이 배포의 운영 지표를 DB 에서 집계해 돌려줍니다 — 에이전트 작업 실패/느린 작업/모델별, ' +
+            'MCP·내장 도구 호출·오류율(서버·도구·원인 카테고리), 토큰·외부 provider 사용량·비용, 목표 미달(goal judge) 분포. ' +
+            '"지난 24시간 실패한 작업", "Playwright 오류 많아?", "이번 주 토큰 많이 쓴 작업" 같은 운영 질문에 이 도구 결과를 근거로 답하세요. ' +
+            '읽기 전용이며 자유 SQL 은 받지 않습니다. 숫자 필드는 문자열로 올 수 있습니다.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                query: {
+                    type: 'string',
+                    enum: [...OPS_METRICS_QUERIES],
+                    description: 'summary=상태별 작업 요약+서버별 도구 호출 · failed_runs=실패 작업 목록 · slowest_runs=오래 걸린 작업 · '
+                        + 'runs_by_model=모델별 작업 · tool_errors=서버/도구/원인별 오류 · token_usage=토큰·비용 · goal_incomplete=목표 미달 판정 분포·실패 사유'
+                        + ' · prompt_versions=채팅 시스템 프롬프트 지문별 요청 수·오류율·TTFT p50'
+                        + ' · gpu=vLLM 노드 KV 캐시·대기/실행 요청(스냅샷+추이) · queue_depth=작업 큐·오케스트레이터 job·vLLM 대기 깊이'
+                        + ' · slo=SLO(채팅 가용성·TTFT·작업 성공률·평가 통과율) 목표 대비 현재·에러 버짓 잔량·burn-rate'
+                        + ' · llm_models=모델·provider·요청 클래스별 LLM 호출 수·오류율·TTFT/총 시간 p50·p95',
+                },
+                window: {
+                    type: 'string',
+                    enum: Object.keys(OPS_METRICS_WINDOWS),
+                    description: `집계 기간 (기본 ${OPS_METRICS_LIMITS.DEFAULT_WINDOW})`,
+                },
+                limit: { type: 'number', description: `목록 최대 행 수 (기본 ${OPS_METRICS_LIMITS.DEFAULT_LIMIT}, 최대 ${OPS_METRICS_LIMITS.MAX_LIMIT})` },
+            },
+            required: ['query'],
+        },
+    },
+    handler: async (args, context): Promise<MCPToolResult> => {
+        if (!OPS_METRICS_TOOL_ENABLED) return textResult('ops_metrics 도구가 비활성화되어 있습니다(OPS_METRICS_TOOL_ENABLED=false).', true);
+        if (!context?.userId || !isAdminRole(context.role)) {
+            return textResult('ops_metrics 는 관리자 전용 도구입니다.', true);
+        }
+        const query = String(args.query ?? '') as OpsMetricsQuery;
+        if (!OPS_METRICS_QUERIES.includes(query)) {
+            return textResult(`알 수 없는 query: ${query} — 가능한 값: ${OPS_METRICS_QUERIES.join(', ')}`, true);
+        }
+        const win = resolveWindowHours(args.window);
+        if (!win) return textResult(`알 수 없는 window: ${String(args.window)} — 가능한 값: ${Object.keys(OPS_METRICS_WINDOWS).join(', ')}`, true);
+        const limit = resolveLimit(args.limit);
+        try {
+            const data = await runOpsMetricsQuery(query, win.hours, limit);
+            return textResult(JSON.stringify({ query, window: win.key, limit, generated_at: new Date().toISOString(), data }));
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return textResult(`운영 지표 조회 실패 (${query}): ${message}`, true);
+        }
+    },
+};

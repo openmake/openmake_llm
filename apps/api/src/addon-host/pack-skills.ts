@@ -47,6 +47,8 @@ export function loadPackSkills(id: string): PackSkillDef[] {
 interface PackSkillStore {
     upsertSystemSkill(id: string, input: {
         name: string; description?: string; content: string; category?: string; isPublic?: boolean; sourcePath?: string;
+        /** 소유 add-on — 사용권으로 주입을 거르는 기준(165) */
+        addonId?: string;
     }): Promise<unknown>;
     assignSkillToAgent(agentId: string, skillId: string, priority?: number): Promise<void>;
 }
@@ -64,6 +66,7 @@ export async function installPackSkills(id: string, store: PackSkillStore): Prom
                 category: skill.category,
                 isPublic: true,
                 sourcePath: skill.sourcePath,
+                addonId: id,
             });
             if (skill.assignToAgent) await store.assignSkillToAgent(skill.assignToAgent, skill.id, 0);
             installed++;

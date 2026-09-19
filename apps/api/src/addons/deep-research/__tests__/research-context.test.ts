@@ -10,13 +10,23 @@ const getLLMToolsMock = jest.fn();
 const executeToolMock = jest.fn();
 const selectToolsMock = jest.fn();
 
-jest.mock('../../../agents/skill-manager', () => ({
-    getSkillManager: () => ({ buildManifestPrompt: buildManifestPromptMock }),
+jest.mock('../../../runtime-ports/skill-runtime', () => ({
+    ...jest.requireActual('../../../runtime-ports/skill-runtime'),
+    getSkillRuntime: () => ({ buildManifestPrompt: buildManifestPromptMock }),
 }));
-jest.mock('../../../mcp/unified-client', () => ({
-    getUnifiedMCPClient: () => ({
-        getToolRouter: () => ({ getLLMTools: getLLMToolsMock }),
-        executeToolWithContext: executeToolMock,
+jest.mock('../../../runtime-ports/tool-runtime', () => ({
+    ...jest.requireActual('../../../runtime-ports/tool-runtime'),
+    getToolRuntime: () => ({
+        listLLMTools: (...args: unknown[]) => getLLMToolsMock(...args),
+        listTools: jest.fn().mockResolvedValue([]),
+        executeTool: (...args: unknown[]) => executeToolMock(...args),
+        getUserToolGroups: () => [],
+        normalizeToolCall: (name: string, args: Record<string, unknown>) => ({ name, args }),
+        callUserServerTool: jest.fn().mockResolvedValue(null),
+        runWithUserInputContext: (_c: unknown, fn: () => unknown) => fn(),
+        ensureUserToolsForTask: jest.fn().mockResolvedValue(undefined),
+        onUserLogin: jest.fn(), onUserLogout: jest.fn(), onChatStart: jest.fn(), onChatEnd: jest.fn(),
+        onServerReady: jest.fn(), shutdown: jest.fn(),
     }),
 }));
 jest.mock('../../../services/agent-task/tool-selector-embedding', () => ({

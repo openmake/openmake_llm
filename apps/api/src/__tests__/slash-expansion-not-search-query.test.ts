@@ -16,15 +16,15 @@
  * 스킬 컨텍스트는 모델에게 주는 **지시**이지 사용자의 질문이 아니다. 검색 대상은 언제나
  * 사용자가 실제로 친 문장이어야 한다.
  */
-import { buildWebSearchContext } from '../mcp/web-search/build-search-context';
-import { cleanSearchQuery } from '../mcp/web-search/query-cleaner';
+import { buildWebSearchContext } from '../tools/web-search/build-search-context';
+import { cleanSearchQuery } from '../tools/web-search/query-cleaner';
 import { stripSlashEnvelope } from '../chat/slash-command';
 
-jest.mock('../mcp/web-search/search-orchestrator', () => ({
+jest.mock('../tools/web-search/search-orchestrator', () => ({
     performWebSearch: jest.fn(async () => []),
 }));
 
-import { performWebSearch } from '../mcp/web-search/search-orchestrator';
+import { performWebSearch } from '../tools/web-search/search-orchestrator';
 
 /** 실제 결함을 낸 형태 그대로 — slash-command.ts 의 증강 포맷 */
 const SKILL_BODY = [

@@ -29,7 +29,8 @@
       "costRatesAdmin": "成本单价",
       "sloAdmin": "SLO",
       "evaluationsAdmin": "评估记录",
-      "quotaRequestsAdmin": "配额审批"
+      "quotaRequestsAdmin": "配额审批",
+      "addonsAdmin": "插件"
     },
     "pendingApprovals": "{count} 个待批准 — 代理任务正在等待您的批准"
   },
@@ -2682,5 +2683,40 @@
       "redteam": "红队",
       "matrix": "矩阵"
     }
+  },
+  "adminAddons": {
+    "title": "插件",
+    "description": "已安装的插件及其状态。禁用后其专用 API 立即返回 404；运行时注册（工具、技能注入、聊天模式）需重启后生效。",
+    "loadError": "加载失败。",
+    "saveFailed": "更新失败。",
+    "listTitle": "安装列表",
+    "empty": "未发现插件。",
+    "addon": "插件",
+    "kind": "类型",
+    "source": "安装来源",
+    "state": "状态",
+    "entitlement": "使用权 (SKU)",
+    "entitlementFree": "无限制",
+    "modelRequirement": "模型要求",
+    "modelOk": "{count} 个模型满足",
+    "envDisabled": "已通过 env (ADDON_BUILTIN_DISABLED) 禁用 — 需重启",
+    "enable": "启用",
+    "disable": "禁用",
+    "states": {
+      "installed": "已安装",
+      "enabled": "已启用",
+      "disabled": "已禁用",
+      "failed": "失败"
+    },
+    "profilesTitle": "模型配置",
+    "profilesHelp": "来自声明表 (config/model-profiles.ts) 与 env (LLM_MODEL_PROFILES_JSON) 的解析结果。此处只读 — 引入新模型需新增条目 → 通过 eval:matrix → 切换。",
+    "model": "模型",
+    "context": "上下文",
+    "capabilities": "能力",
+    "efforts": "推理强度",
+    "license": "许可证",
+    "probed": "实测",
+    "unavailable": "不可用",
+    "nonCommercial": "非商用"
   }
 }

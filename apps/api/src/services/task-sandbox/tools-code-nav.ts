@@ -14,7 +14,7 @@
  *
  * @module services/task-sandbox/tools-code-nav
  */
-import type { MCPToolDefinition, MCPToolResult } from '../../mcp/types';
+import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
 import type { TaskExecutor, ExecResult, CodeNavSpec } from './executor';
 import { TASK_CODE_NAV } from '../../config/runtime-limits';
 

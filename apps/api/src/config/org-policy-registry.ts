@@ -6,6 +6,7 @@
  *   - EXTERNAL_MODEL_POLICY   deny = 글로벌 ∪ 조직, allow = 둘 다 있으면 교집합 · 한쪽만 있으면 그쪽
  *   - TOOL_APPROVAL_POLICY_MIN 에이전트 작업 승인 정책 하한 — 요청값과 하한 중 더 엄격한 쪽
  *   - MCP_ALLOWED_SERVERS     카탈로그 템플릿 id 허용 목록(빈 목록 = 제한 없음) — from-catalog 설치 시 검사
+ *   - ADDON_ALLOWLIST         이 조직이 쓸 수 있는 add-on id 목록(빈 목록 = 제한 없음) — 유료 팩 사용권(entitlement)
  *
  * @module config/org-policy-registry
  */
@@ -16,6 +17,7 @@ export const ORG_POLICY_KEYS = {
     EXTERNAL_MODEL_POLICY: 'EXTERNAL_MODEL_POLICY',
     TOOL_APPROVAL_POLICY_MIN: 'TOOL_APPROVAL_POLICY_MIN',
     MCP_ALLOWED_SERVERS: 'MCP_ALLOWED_SERVERS',
+    ADDON_ALLOWLIST: 'ADDON_ALLOWLIST',
 } as const;
 export type OrgPolicyKey = typeof ORG_POLICY_KEYS[keyof typeof ORG_POLICY_KEYS];
 
@@ -25,6 +27,7 @@ export const ORG_POLICY_SCHEMAS: Record<OrgPolicyKey, z.ZodTypeAny> = {
     EXTERNAL_MODEL_POLICY: z.object({ allow: patternList.optional(), deny: patternList.optional() }).strict(),
     TOOL_APPROVAL_POLICY_MIN: z.enum(['none', 'high-risk', 'all']),
     MCP_ALLOWED_SERVERS: z.array(z.string().trim().min(1).max(64)).max(200),
+    ADDON_ALLOWLIST: z.array(z.string().trim().min(1).max(120)).max(200),
 };
 
 export function isOrgPolicyKey(key: string): key is OrgPolicyKey {

@@ -4,7 +4,6 @@
  */
 const addAgentTaskStep = jest.fn(async () => undefined);
 jest.mock('../../../data/models/unified-database', () => ({ getUnifiedDatabase: () => ({ addAgentTaskStep, updateAgentTask: async () => undefined }), getPool: () => ({}) }));
-jest.mock('../../../mcp/unified-client', () => ({ getUnifiedMCPClient: jest.fn() }));
 jest.mock('../../PushService', () => ({ getPushService: () => ({ sendPush: async () => undefined }) }));
 jest.mock('../../task-sandbox/tools', () => ({ TASK_TERMINATE_SENTINEL: '__TERMINATE__' }));
 const request = jest.fn();
@@ -14,10 +13,13 @@ const runTool = jest.fn();
 jest.mock('../task-steps', () => ({ runTool: (...a: unknown[]) => runTool(...a), isSearchTool: () => false }));
 jest.mock('../tool-args', () => ({ prepareToolArgs: (a: unknown) => a }));
 jest.mock('../../tool-parallel', () => ({ prefetchReadOnlyCalls: async () => new Map() }));
+// 도구가 사용자에게 묻는 문맥(구 MCP elicitation)은 이제 도구 런타임 포트가 연다 — 그 문맥을 낚아챈다.
 let elicitCtx: { ask(args: Record<string, unknown>): Promise<unknown> } | undefined;
-jest.mock('../../../mcp/elicitation-bridge', () => ({
-    MCP_ELICIT_TOOL_NAME: 'mcp_elicit',
-    runWithElicitationContext: (ctx: typeof elicitCtx, fn: () => Promise<unknown>) => { elicitCtx = ctx; return fn(); },
+jest.mock('../../../runtime-ports/tool-runtime', () => ({
+    ...jest.requireActual('../../../runtime-ports/tool-runtime'),
+    getToolRuntime: () => ({
+        runWithUserInputContext: (ctx: typeof elicitCtx, fn: () => Promise<unknown>) => { elicitCtx = ctx; return fn(); },
+    }),
 }));
 const writeTurnCheckpoint = jest.fn(async () => undefined);
 jest.mock('../turn-reentry', () => ({ writeTurnCheckpoint: (...a: unknown[]) => writeTurnCheckpoint(...(a as [])) }));

@@ -18,7 +18,7 @@ import { success, notFound, error as errorResponse } from '../../utils/api-respo
 import { asyncHandler } from '../../utils/error-handler';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { McpCatalogRepository } from '../../data/repositories/mcp-catalog-repository';
-import { getLifecycleSupervisor } from '../../mcp/lifecycle-supervisor';
+import { getToolRuntime } from '../../runtime-ports/tool-runtime';
 import { NOTEBOOKLM_INTEGRATION } from './config';
 import { createLogger } from '../../utils/logger';
 
@@ -81,20 +81,15 @@ notebooklmRouter.get('/notebooklm/notebooks', requireAuth, asyncHandler(async (r
         return;
     }
 
-    const supervisor = getLifecycleSupervisor();
-    if (!supervisor) {
-        res.status(503).json(errorResponse('SUPERVISOR_UNAVAILABLE', 'MCP supervisor 미초기화'));
-        return;
-    }
-
     // spawn·도구호출·파싱 실패는 전부 502(NOTEBOOKLM_UPSTREAM)로 수렴 — 프론트 picker 가
     // "재연결(쿠키 갱신)/이미지 리빌드" 안내를 띄우는 경로. generic 500 으로 새면 안 된다.
     // (spawn throw 예: mcp-runtime 이미지 미리빌드로 baked 바이너리 부재, 컨테이너 기동 실패)
     let text = '';
     let notebooks: NotebookSummary[];
     try {
-        const client = await supervisor.spawnUserServer(userId, server.id);
-        const result = await client.callTool('notebook_list', {});
+        // MCP 런타임 add-on 이 없으면 null — 아래 catch 가 502 로 수렴시킨다(종전 503 SUPERVISOR_UNAVAILABLE 대체).
+        const result = await getToolRuntime().callUserServerTool(userId, server.id, 'notebook_list', {});
+        if (!result) throw new Error('MCP 런타임이 없어 NotebookLM 서버를 호출할 수 없습니다');
         text = result.content?.find((c) => c.type === 'text')?.text ?? '';
         if (result.isError || !text) throw new Error(text || 'notebook_list 빈 응답');
         // 쿠키 만료 시 isError=false 로 로그인 HTML/에러 문자열이 올 수 있음 — 파싱 실패도 업스트림 오류

@@ -8,7 +8,7 @@
  * @module services/deep-research-types
  */
 
-import type { SearchResult } from '../../mcp/web-search';
+import type { SearchResult } from '../../tools/web-search';
 import { LLM_TIMEOUTS } from '../../config/timeouts';
 import { RESEARCH_DEFAULTS } from './config';
 

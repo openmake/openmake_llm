@@ -24,7 +24,6 @@ import { API_KEY_LIMITS } from '../../data/models/unified-database';
 // Import existing routers
 import chatRouter from '../chat.routes';
 import agentRouter from '../agents.routes';
-import { mcpRouter } from '../mcp.routes';
 import usageRouter from '../usage.routes';
 import metricsRouter from '../metrics.routes';
 // documentsRouter / memoryRouter: 2026-05-19 제거
@@ -142,7 +141,6 @@ v1Router.get('/usage/daily', requireApiKey, asyncHandler(async (req, res) => {
 v1Router.use('/', openaiCompatRouter);
 v1Router.use('/chat', chatRouter);
 v1Router.use('/agents', agentRouter);
-v1Router.use('/mcp', mcpRouter);
 v1Router.use('/usage', usageRouter);
 v1Router.use('/metrics', metricsRouter);
 v1Router.use('/search', webSearchRouter);

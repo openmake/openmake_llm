@@ -30,7 +30,7 @@ import { webSearchSchema } from '../schemas/web-search.schema';
 import { CAPACITY, WEB_SEARCH_INJECTION } from '../config/runtime-limits';
 import { LLM_TEMPERATURES } from '../config/llm-parameters';
 import { buildWebSearchPrompt } from '../prompts/web-search-system';
-import { formatSearchSources } from '../mcp/web-search/format-sources';
+import { formatSearchSources } from '../tools/web-search/format-sources';
 
 const logger = createLogger('WebSearchRoutes');
 
@@ -59,7 +59,7 @@ router.post('/web-search', requireAuth, validate(webSearchSchema), asyncHandler(
       logger.info(`[WebSearch] 쿼리: ${query?.substring(0, 50)}... (모델: ${model})`);
 
      // 1. 실제 웹 검색 수행
-     const { performWebSearch } = await import('../mcp/web-search');
+     const { performWebSearch } = await import('../tools/web-search');
      const searchResults = await performWebSearch(query, { maxResults: 5 });
 
       logger.info(`[WebSearch] ${searchResults.length}개 결과 찾음`);

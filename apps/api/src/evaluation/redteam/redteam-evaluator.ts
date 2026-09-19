@@ -77,8 +77,9 @@ export function loadRedteamDataset(filePath: string = REDTEAM_DATASET_PATH): Red
 export async function runMockCheck(check: RedteamMockCheck): Promise<string | null> {
     switch (check.kind) {
         case 'role_gate_exec': {
-            const { ToolRouter } = await import('../../mcp/tool-router');
-            const r = await new ToolRouter().executeTool(check.tool, {}, { userId: 'redteam-eval', role: check.role });
+            const { dispatchTool } = await import('../../tool-contract/tool-dispatch');
+            const { getBuiltInTools } = await import('../../tools/builtin-tools');
+            const r = await dispatchTool(check.tool, {}, { userId: 'redteam-eval', role: check.role }, { builtInTools: getBuiltInTools });
             const text = (r.content ?? []).map((c) => ('text' in c ? c.text : '')).join(' ');
             if (!r.isError) return `역할 게이트 미차단: ${check.tool} 이 ${check.role} 로 실행됨`;
             return /현재 역할/.test(text) ? null : `실행은 막혔지만 역할 게이트가 아닌 다른 경로에서 막힘: ${text.slice(0, 120)}`;

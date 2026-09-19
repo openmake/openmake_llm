@@ -8,7 +8,7 @@
  *
  * @module services/task-sandbox/tools-plan
  */
-import type { MCPToolDefinition, MCPToolResult } from '../../mcp/types';
+import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
 import { TaskPlan, type PlanStepStatus } from './planning';
 
 function textResult(text: string, isError = false): MCPToolResult {

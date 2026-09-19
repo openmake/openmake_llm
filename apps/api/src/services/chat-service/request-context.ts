@@ -11,7 +11,7 @@
  * @module services/chat-service/request-context
  */
 
-import type { UserContext } from '../../mcp/user-sandbox';
+import type { UserContext } from '../../tool-contract/types';
 import type { ExecutionPlan } from '../../chat/profile-resolver';
 import type { ActiveSkillBinding } from './tool-merger';
 

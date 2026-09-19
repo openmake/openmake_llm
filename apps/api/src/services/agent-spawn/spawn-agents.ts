@@ -23,7 +23,7 @@
 import { z } from 'zod';
 import { type LLMClient } from '../../llm';
 import type { ToolDefinition } from '../../llm/types';
-import type { UserContext } from '../../mcp/user-sandbox';
+import type { UserContext } from '../../tool-contract/types';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import { AGENT_SPAWN } from '../../config/runtime-limits';
 import { resolveRoleClientForUser } from '../model-role-resolver';
