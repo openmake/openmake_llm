@@ -83,7 +83,7 @@ export function generateToken(user: PublicUser): string {
     // Phase 7 lifecycle hook — per_session MCP 서버 자동 spawn.
     // fire-and-forget (await 안 함) — 토큰 발급 응답을 막지 않음.
     // supervisor 미초기화 시 silent skip (graceful).
-    void import('../mcp/lifecycle-hooks').then(m => m.emitUserLogin(user.id)).catch(() => { /* noop */ });
+    void import('../runtime-ports/tool-runtime').then(m => m.getToolRuntime().onUserLogin(user.id)).catch(() => { /* noop */ });
 
     return token;
 }

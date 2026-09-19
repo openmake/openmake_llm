@@ -13,7 +13,6 @@ import { Application, Request, Response } from 'express';
 import { agentTaskQueueRouter } from './agent-task-queue.routes';
 import { agentTaskShareRouter } from './agent-task-share.routes';
 import { agentTaskSubagentRouter } from './agent-task-subagent.routes';
-import { mcpOAuthRouter } from './mcp-oauth.routes';
 import { marketplacePublishRouter } from './marketplace-publish.routes';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -36,11 +35,6 @@ import {
     metricsRouter,
     setClusterManager as setMetricsCluster,
     agentRouter,
-    mcpRouter,
-    mcpCatalogRouter,
-    mcpServerIngestRouter,
-    mcpCatalogAdminRouter,
-    mcpAdminMonitoringRouter,
     toolHealthRouter,
     evaluationRunsRouter,
     adminModelRolesRouter,
@@ -95,9 +89,6 @@ import { success } from '../utils/api-response';
 import { getPool } from '../data/models/unified-database';
 import { csrfProtectionMiddleware, csrfTokenIssuer } from '../middlewares/csrf-protection';
 import { authLimiter } from '../middlewares/rate-limiters';
-import { GitFetcher } from '../agents/git-ingest/git-fetcher';
-import { LLMClient } from '../llm/client';
-import { MCP_INGEST } from '../config/constants';
 import { mountAddonRoutes } from '../addon-host/routes';
 
 
@@ -199,28 +190,7 @@ export function setupApiRoutes(
     mountAddonRoutes(app);
     app.use('/api/agents', agentRouter);
     app.use('/api/monitoring', tokenMonitoringRouter);
-    app.use('/api/mcp', mcpRouter);
-    app.use('/api/mcp', mcpOAuthRouter);   // 원격 MCP OAuth (start/callback/logout)
     app.use('/api/marketplace', marketplacePublishRouter);   // 마켓플레이스 게시 (발행형)
-    app.use('/api/mcp', mcpCatalogRouter);
-    const e2eMcpMock = process.env.MCP_INGEST_E2E_MOCK === 'true';
-    // E2E 픽스처 모드 — 실제 GitHub API 호출 회피.
-    // require() 로 lazy load 하여 production 번들에 mock 코드가 포함되지 않게 함.
-    const mcpFetcherFactory = e2eMcpMock
-        ? (() => {
-            const { MockGitFetcher } = require('../agents/git-ingest/__mocks__/mock-git-fetcher');
-            return () => new MockGitFetcher();
-        })()
-        : (opts: { accessToken?: string }) => new GitFetcher({
-            accessToken: opts.accessToken,
-            timeoutMs: MCP_INGEST.gitFetchTimeoutMs,
-        });
-    app.use('/api/mcp/servers', mcpServerIngestRouter({
-        pool: getPool(),
-        fetcherFactory: mcpFetcherFactory,
-        llmClientFactory: (model: string) => new LLMClient(model ? { model } : {}),
-    }));
-    app.use('/api/admin/mcp', mcpCatalogAdminRouter);
     app.use('/api/admin', adminModelRolesRouter);
     app.use('/api/admin', adminCapabilityModelsRouter);
     app.use('/api/admin', adminSystemSettingsRouter);
@@ -234,7 +204,6 @@ export function setupApiRoutes(
     app.use('/api/usage', usageQuotaRouter);
     app.use('/api/usage', usageStatementsRouter);
     app.use('/api/admin', adminBillingRouter);
-    app.use('/api/admin/mcp', mcpAdminMonitoringRouter);
     app.use('/api/admin/agent-task-schedules', adminAgentTaskSchedulesRouter);
     // F2 자가개선 — 프롬프트 제안 검토/승인 (관리자)
     app.use('/api/admin/agent-suggestions', agentSuggestionsRouter);

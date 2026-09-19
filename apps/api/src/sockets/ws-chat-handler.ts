@@ -31,7 +31,7 @@ import { ArtifactStreamParser, type ArtifactInfo } from '../llm/artifact-parser'
 import { buildFileContext, buildUrlContext, getCachedAttachContext, appendCachedAttachContext, collectMediaFiles } from '../services/chat-service/attach-context';
 import type { PdfVisionResult } from '../services/chat-service/pdf-vision';
 import { saveAssistantMessage } from '../chat/request-persistence';
-import { buildWebSearchContext } from '../mcp/web-search/build-search-context';
+import { buildWebSearchContext } from '../tools/web-search/build-search-context';
 import { emitSearchSources, parseUserLocation } from './ws-chat-sources';
 import { getInFlightStreamRegistry, resolveStreamKey } from './ws-stream-registry';
 
@@ -110,7 +110,7 @@ export async function handleChatMessage(
     const chatHookUserId = extWs._authenticatedUserId !== undefined ? String(extWs._authenticatedUserId) : undefined;
     const chatHookId = sessionId || anonSessionId || `ws-${Date.now()}`;
     if (chatHookUserId) {
-        void import('../mcp/lifecycle-hooks').then(m => m.emitChatStart(chatHookUserId, chatHookId)).catch(() => { /* noop */ });
+        void import('../runtime-ports/tool-runtime').then(m => m.getToolRuntime().onChatStart(chatHookUserId, chatHookId)).catch(() => { /* noop */ });
     }
 
     // catch 블록(B4 디버그 큐)에서 접근하기 위해 try 외부에 선언.
@@ -581,7 +581,7 @@ export async function handleChatMessage(
         // Phase 7 lifecycle hook — per_chat MCP 서버 graceful kill.
         // try/finally 안 보장 — 에러 발생해도 누락 없이 정리 (P7-D4).
         if (chatHookUserId) {
-            void import('../mcp/lifecycle-hooks').then(m => m.emitChatEnd(chatHookUserId, chatHookId)).catch(() => { /* noop */ });
+            void import('../runtime-ports/tool-runtime').then(m => m.getToolRuntime().onChatEnd(chatHookUserId, chatHookId)).catch(() => { /* noop */ });
         }
     }
 }

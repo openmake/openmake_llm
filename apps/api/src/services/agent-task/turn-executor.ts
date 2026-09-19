@@ -8,7 +8,7 @@
  * @module services/agent-task/turn-executor
  */
 import { getUnifiedDatabase, getPool } from '../../data/models/unified-database';
-import { getUnifiedMCPClient } from '../../mcp/unified-client';
+import { getToolRuntime, TOOL_USER_INPUT_APPROVAL_NAME, type ToolRuntime, type ToolUserInputContext } from '../../runtime-ports/tool-runtime';
 import { getPushService } from '../PushService';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { TASK_TERMINATE_SENTINEL } from '../task-sandbox/tools';
@@ -17,13 +17,13 @@ import { currentPlanStepIndex } from '../task-sandbox/planning';
 import { runTool, isSearchTool } from './task-steps';
 import { prepareToolArgs } from './tool-args';
 import { prefetchReadOnlyCalls } from '../tool-parallel';
-import { runWithElicitationContext, MCP_ELICIT_TOOL_NAME, type ElicitationContext } from '../../mcp/elicitation-bridge';
+
 import { AgentTaskAbort, AgentTaskParked } from './types';
 import { writeTurnCheckpoint } from './turn-reentry';
 import { AgentTaskRepository } from '../../data/repositories/agent-task-repository';
 import type { TaskRuntime } from '../task-sandbox/runtime';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
-import type { UserContext } from '../../mcp/user-sandbox';
+import type { UserContext } from '../../tool-contract/types';
 import type { ChatMessage, ToolCall } from '../../llm/types';
 
 type UnifiedDb = ReturnType<typeof getUnifiedDatabase>;
@@ -36,7 +36,7 @@ interface TurnToolExecInput {
     sandboxCfg: TaskSandboxConfig;
     /** 샌드박스 밖 호스트에서 실행되는 화이트리스트 도구 이름. */
     extraToolNames: Set<string>;
-    mcp: ReturnType<typeof getUnifiedMCPClient>;
+    mcp: ToolRuntime;
     userCtx: UserContext;
     userId: string;
     taskId: string;
@@ -111,22 +111,22 @@ export async function executeTurnToolCalls(input: TurnToolExecInput): Promise<Tu
         throw new AgentTaskParked();
     };
     // 외부 MCP 서버의 사용자 입력 요청(F13.10) — ask_human 과 같은 채널로 묻는다(자동승인·정책 무관, 대기는 pause-aware).
-    const elicitCtx: ElicitationContext = {
+    const elicitCtx: ToolUserInputContext = {
         taskId,
         ask: async (args) => {
             const r = await getApprovalRegistry().request(
-                { taskId, userId, toolName: MCP_ELICIT_TOOL_NAME, args },
+                { taskId, userId, toolName: TOOL_USER_INPUT_APPROVAL_NAME, args },
                 { timeoutMs: sandboxCfg.approvalTimeoutMs, signal, onPending: (p) => onApprovalPending(p.toolName) },
             );
             pausedMs += r.waitedMs;
             if (r.reason === 'parked') { parkRequested = true; return r; } // 서버엔 cancel, 도구가 끝나면 주차
-            if (r.decision === 'rejected') onApprovalRejected({ toolName: MCP_ELICIT_TOOL_NAME, reason: r.reason ?? 'user' });
+            if (r.decision === 'rejected') onApprovalRejected({ toolName: TOOL_USER_INPUT_APPROVAL_NAME, reason: r.reason ?? 'user' });
             if (getCurStatus() === 'paused') await update({ status: 'running' }).catch(() => { /* noop */ });
             return r;
         },
     };
     const execTool = (name: string, args: Record<string, unknown>): Promise<string> =>
-        runWithElicitationContext(elicitCtx, () => runTool(mcp, name, args, userCtx));
+        getToolRuntime().runWithUserInputContext(elicitCtx, () => runTool(mcp, name, args, userCtx));
     // 읽기 전용 extra 도구(web_search 등) 병렬 선실행. 승인이 필요한 호출은 **자동 승인 작업에서만**
     // 포함한다 — 아니면 승인 창이 동시에 N개 뜬다(HITL fan-in). 결과·스텝 영속은 아래 루프가
     // 원래 순서로 처리하므로 체크포인트 계약은 그대로다.

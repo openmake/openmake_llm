@@ -81,7 +81,7 @@ async function runStartDiscussion(params: {
     let webSearchFn: ((q: string, opts?: { maxResults?: number }) => Promise<DiscussionSearchResult[]>) | undefined;
     if (INLINE_DISCUSSION.EVIDENCE) {
         try {
-            ({ performWebSearch: webSearchFn } = await import('../../mcp/web-search'));
+            ({ performWebSearch: webSearchFn } = await import('../../tools/web-search'));
         } catch {
             // fail-open — 검색 모듈이 없어도 토론 자체는 진행한다.
             logger.warn('[start_discussion] 웹 검색 모듈 로드 실패 — 근거 없이 진행');

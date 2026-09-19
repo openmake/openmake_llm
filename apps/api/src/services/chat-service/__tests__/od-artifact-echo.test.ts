@@ -45,23 +45,14 @@ describe('captureOdArtifactHtml', () => {
 });
 
 describe('normalizeOdToolCall', () => {
-    it('mcp_call 간접 호출을 server::tool 로 정규화한다', () => {
-        const eff = normalizeOdToolCall('mcp_call', {
-            server: 'open-design',
-            tool: 'create_artifact',
-            args: { name: 'deck.html', content: DECK_HTML },
-        });
-        expect(eff.name).toBe('open-design::create_artifact');
-        expect(eff.args.content).toBe(DECK_HTML);
-    });
-
-    it('직접 호출은 그대로 반환한다', () => {
+    it('도구 런타임이 없으면 이름·인자를 그대로 돌려준다 (메타 도구 해석은 MCP 런타임의 몫)', () => {
         const args = { name: 'deck.html', content: DECK_HTML };
         const eff = normalizeOdToolCall('open-design::create_artifact', args);
         expect(eff.name).toBe('open-design::create_artifact');
         expect(eff.args).toBe(args);
     });
 });
+
 
 describe('appendDeterministicBlocks — odArtifact 첨부', () => {
     function run(finalContent: string, odArtifact: OdArtifactCapture | null): { out: string; streamed: string } {

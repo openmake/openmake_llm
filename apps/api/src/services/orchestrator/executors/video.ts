@@ -12,7 +12,7 @@ import { resolveCapabilityTarget, type CapabilityTarget } from '../capability-re
 import { callJson, downloadProviderUrl } from '../http-call';
 import { saveVideo } from '../media-io';
 import { refsRawText, type CapabilityExecutor, type ExecutorOutput, type OrchestratorAttachment, type TaskMedia } from '../types';
-import { resolveGeneratedPath } from '../../../mcp/generated-media';
+import { resolveGeneratedPath } from '../../../tools/generated-media';
 import { createLogger } from '../../../utils/logger';
 
 const logger = createLogger('VideoExecutor');

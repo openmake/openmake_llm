@@ -4,8 +4,8 @@
  * applyPerDomainCap — 도메인당 상한으로 소스 다양성 보호 (단계4 품질 개선).
  * news.google.com RSS 도배로 diversity 가 붕괴(3.8%)하던 라이브 문제 대응.
  */
-import { applyPerDomainCap } from '../mcp/web-search/search-orchestrator';
-import type { SearchResult } from '../mcp/web-search/types';
+import { applyPerDomainCap } from '../tools/web-search/search-orchestrator';
+import type { SearchResult } from '../tools/web-search/types';
 
 const r = (url: string): SearchResult => ({ title: url, url, snippet: '' }) as unknown as SearchResult;
 

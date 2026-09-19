@@ -14,10 +14,7 @@ import { REPORT_PIPELINE } from '../../config/runtime-limits';
 import { tryRenderReportBlock } from './report-block';
 import { stripMissingGeneratedLinks } from './generated-link-guard';
 import { basename } from 'path';
-import { MCP_NAMESPACE_SEPARATOR } from '../../mcp/types';
-import { MCP_META_TOOL_NAMES } from '../../mcp/mcp-meta-tools';
-
-const MCP_CALL_TOOL_NAME = MCP_META_TOOL_NAMES[1]; // 'mcp_call'
+import { getToolRuntime } from '../../runtime-ports/tool-runtime';
 import { WEB_SEARCH_TEMPLATES, getLocalizedTemplate } from '../../sockets/ws-chat-locales';
 import type { ChatMessageRequest } from '../chat-service-types';
 import type { StreamFromExternalContext } from './external-provider-types';
@@ -115,13 +112,8 @@ export function normalizeOdToolCall(
     name: string,
     args: Record<string, unknown>,
 ): { name: string; args: Record<string, unknown> } {
-    if (name !== MCP_CALL_TOOL_NAME) return { name, args };
-    const inner = args.args && typeof args.args === 'object'
-        ? args.args as Record<string, unknown> : {};
-    return {
-        name: `${String(args.server ?? '')}${MCP_NAMESPACE_SEPARATOR}${String(args.tool ?? '')}`,
-        args: inner,
-    };
+    // 메타 도구(`mcp_call`) 를 실제 대상으로 푸는 규칙은 도구 런타임이 안다 — Base 는 정규화만 요청한다.
+    return getToolRuntime().normalizeToolCall(name, args);
 }
 
 /**

@@ -40,15 +40,22 @@ jest.mock('../data/models/unified-database', () => ({
         deleteAgentTaskSteps: jest.fn().mockResolvedValue(undefined), // fresh 재실행 스텝 정리
     }),
 }));
-jest.mock('../mcp/unified-client', () => ({
-    getUnifiedMCPClient: () => ({
-        getToolRouter: () => ({
-            getLLMTools: jest.fn().mockResolvedValue([
-                { type: 'function', function: { name: 'web_search', description: '', parameters: {} } },
-                { type: 'function', function: { name: 'analyze_image', description: '', parameters: {} } },
-            ]),
-        }),
-        executeToolWithContext: jest.fn(),
+jest.mock('../runtime-ports/tool-runtime', () => ({
+    ...jest.requireActual('../runtime-ports/tool-runtime'),
+    getToolRuntime: () => ({
+        listLLMTools: jest.fn().mockResolvedValue([
+            { type: 'function', function: { name: 'web_search', description: '', parameters: {} } },
+            { type: 'function', function: { name: 'analyze_image', description: '', parameters: {} } },
+        ]),
+        listTools: jest.fn().mockResolvedValue([]),
+        executeTool: jest.fn().mockResolvedValue({ content: [{ type: 'text', text: '결과' }] }),
+        getUserToolGroups: () => [],
+        normalizeToolCall: (name: string, args: Record<string, unknown>) => ({ name, args }),
+        callUserServerTool: jest.fn().mockResolvedValue(null),
+        runWithUserInputContext: (_c: unknown, fn: () => unknown) => fn(),
+        ensureUserToolsForTask: jest.fn().mockResolvedValue(undefined),
+        onUserLogin: jest.fn(), onUserLogout: jest.fn(), onChatStart: jest.fn(), onChatEnd: jest.fn(),
+        onServerReady: jest.fn(), shutdown: jest.fn(),
     }),
 }));
 

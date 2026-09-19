@@ -2,7 +2,7 @@
  * detectSearxngCategories — 질의 성격별 SearXNG 카테고리 스코프 (결정적 regex).
  * 기술 질의 → it, 학술 질의 → science, 일반 질의 → undefined (기존 동작 무변경).
  */
-import { detectSearxngCategories } from '../mcp/web-search/search-orchestrator';
+import { detectSearxngCategories } from '../tools/web-search/search-orchestrator';
 
 describe('detectSearxngCategories', () => {
     test('기술/개발 질의 → general,it', () => {

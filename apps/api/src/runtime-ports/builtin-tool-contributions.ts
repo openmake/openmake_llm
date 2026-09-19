@@ -10,7 +10,7 @@
  *
  * @module runtime-ports/builtin-tool-contributions
  */
-import type { MCPToolDefinition } from '../mcp/types';
+import type { MCPToolDefinition } from '../tool-contract/types';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('BuiltinToolContributions');

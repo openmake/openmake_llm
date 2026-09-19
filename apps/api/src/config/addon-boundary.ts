@@ -7,8 +7,10 @@
  * 새 참조가 필요해 보이면 Base 에 콘텐츠를 더 묶는 대신 Add-on Host 경유를 검토할 것.
  * 판정은 `config/__tests__/addon-boundary.test.ts` 가 고정한다.
  *
- * MCP·Skill **런타임**(tool router·external-client·skill-manager·manifest-injection)은 Base 다 —
- * 채팅·에이전트 작업 루프의 일부라 여기 대상이 아니다.
+ * ⚠️ 2026-09-19 (§10 문자 이행): MCP·Skill **런타임도 add-on 으로 나갔다**(`addons/mcp-runtime`·`addons/skill-runtime`).
+ * Base 에 남은 것은 **계약과 거버넌스**뿐이다 — 도구 계약·디스패처·실행 가드(`tool-contract/`), 내장 도구(`tools/`),
+ * 포트(`runtime-ports/`). Base 코드가 add-on 모듈을 직접 import 하지 못하게 하는 것은 eslint
+ * `no-restricted-imports`(`**/addons/**`)이고, 아래 목록은 **콘텐츠 자산**(팩 데이터) 참조만 다룬다.
  *
  * @module config/addon-boundary
  */

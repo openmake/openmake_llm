@@ -4,7 +4,7 @@
  * 모델 배정 없음(capability_models 대상 아님).
  */
 import { ORCHESTRATOR } from '../../../config/capabilities';
-import { performWebSearch } from '../../../mcp/web-search/search-orchestrator';
+import { performWebSearch } from '../../../tools/web-search/search-orchestrator';
 import type { CapabilityExecutor } from '../types';
 
 const MAX_RESULTS = 8;

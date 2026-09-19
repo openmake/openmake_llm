@@ -31,7 +31,7 @@ import { parseSkillFile, validateManifest } from '../../../agents/manifest-valid
 import { adaptSkillContent } from '../../../agents/git-ingest/skill-compat';
 import { ManifestImporter } from '../manifest-importer';
 import { getUnifiedDatabase } from '../../../data/models/unified-database';
-import { getUnifiedMCPClient } from '../../../mcp/unified-client';
+import { getToolRuntime } from '../../../runtime-ports/tool-runtime';
 import { requireAuth } from '../../../auth';
 import { assertResourceOwnerOrAdmin } from '../../../auth/ownership';
 import { exportSkill } from './skills-export';
@@ -215,8 +215,7 @@ router.post('/upload', requireAuth, skillUpload.single('file'), asyncHandler(asy
         return;
     }
 
-    const toolRouter = getUnifiedMCPClient().getToolRouter();
-    const availableTools = (await toolRouter.getLLMTools({ userId })).map((t: { function: { name: string } }) => t.function.name);
+    const availableTools = (await getToolRuntime().listLLMTools({ userId })).map((t: { function: { name: string } }) => t.function.name);
     const availableToolNames = new Set<string>(availableTools);
 
     const validation = await validateManifest(parsed, { availableToolNames });

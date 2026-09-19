@@ -16,8 +16,8 @@
  */
 import type { LLMClient } from '../../llm';
 import type { ChatMessage, ToolDefinition } from '../../llm/types';
-import { getUnifiedMCPClient } from '../../mcp/unified-client';
-import type { UserContext } from '../../mcp/user-sandbox';
+import { getToolRuntime } from '../../runtime-ports/tool-runtime';
+import type { UserContext } from '../../tool-contract/types';
 import type { TaskSandboxConfig } from '../../config/task-sandbox';
 import { AGENT_TASK_LIMITS } from '../../config/runtime-limits';
 import { requiresApproval, getApprovalRegistry } from '../task-sandbox/approval-gate';
@@ -61,7 +61,7 @@ interface SubagentParams {
  */
 export async function runSubagent(p: SubagentParams): Promise<string> {
     const maxTurns = AGENT_TASK_LIMITS.SUBAGENT_MAX_TURNS;
-    const mcp = getUnifiedMCPClient();
+    const mcp = getToolRuntime();
     let tokens = 0;
 
     // role-client.ts 의 부모 턴과 같은 이유 — 기본 LLM_TIMEOUT(120s)은 채팅용이라,

@@ -12,7 +12,7 @@ import {
     extractBulletLikeFindings,
     getLoopProgressRange,
 } from '../utils';
-import type { SearchResult } from '../../../mcp/web-search';
+import type { SearchResult } from '../../../tools/web-search';
 
 // ===== normalizeUrl =====
 

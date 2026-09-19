@@ -1,5 +1,5 @@
 import { buildManifestYaml, extractPreservedManifestYaml, skillContentChecksum, upsertSkillManifest, DEFAULT_SKILL_MANIFEST_VERSION, SKILL_VERSION_LATEST_ORDER_SQL } from '../skill-manifest-sync';
-import { parseManifestTriggers } from '../../../addons/skill-runtime/skill-triggers';
+import { parseManifestTriggers } from '../../../agents/manifest-triggers';
 
 // 2026-08-29: createSkill/upsertSystemSkill/skill-creator 가 manifest 를 안 만들어 배정돼도
 // 주입되지 않던 갭 — 모든 생성 경로가 이 헬퍼로 manifest 를 동반한다.

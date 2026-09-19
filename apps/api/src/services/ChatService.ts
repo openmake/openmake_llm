@@ -23,8 +23,8 @@ import { getChatTurnIntegrations } from './chat-service/turn-integrations';
 import { AGENTS, type AgentSelection } from '../agents';
 import { withSpan } from '../observability/otel';
 import type { ExecutionPlan } from '../chat/profile-resolver';
-import type { UserContext } from '../mcp/user-sandbox';
-import { getUnifiedMCPClient } from '../mcp/unified-client';
+import type { UserContext } from '../tool-contract/types';
+import { getToolRuntime } from '../runtime-ports/tool-runtime';
 import { selectTurnTools } from './chat-service/chat-tool-selection';
 import { CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, CHAT_USER_MCP_BREADTH_SLOTS } from '../config/runtime-limits';
 import { LLMClient } from '../llm';
@@ -82,7 +82,7 @@ export class ChatService {
      * processMessage 진입 시 저장, executeExternalTool / agent-loop-strategy 가 공유.
      * tool 결과에 type='resource' content 가 있으면 invoke → ws-chat-handler 가 frontend 로 emit.
      */
-    private currentMcpToolResultCallback?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }>; sources?: import('../mcp/web-search/types').SearchSourceRef[] }) => void;
+    private currentMcpToolResultCallback?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }>; sources?: import('../tools/web-search/types').SearchSourceRef[] }) => void;
 
     /**
      * 현재 채팅의 MCP tool 시작 콜백.
@@ -135,12 +135,12 @@ export class ChatService {
      * @returns 사용 가능한 도구 정의 배열
      */
     private async getAllowedTools(reqCtx: RequestContext): Promise<ToolDefinition[]> {
-        const toolRouter = getUnifiedMCPClient().getToolRouter();
+        const toolRuntime = getToolRuntime();
         const rawUserId = reqCtx.userContext.userId;
         const userIdStr = rawUserId !== undefined && rawUserId !== null ? String(rawUserId) : undefined;
         const rawTools = userIdStr
-            ? await toolRouter.getLLMTools({ userId: userIdStr }) as ToolDefinition[]
-            : await toolRouter.getLLMTools() as ToolDefinition[];
+            ? await toolRuntime.listLLMTools({ userId: userIdStr })
+            : await toolRuntime.listLLMTools();
 
         // 🔒 고위험 도구 접근통제 — Python REPL(임의코드)·Playwright 등 위험 서버의 도구는
         //   역할 미달(게스트 등) 사용자에게 노출하지 않는다(공개 인스턴스 과노출 차단).
@@ -155,7 +155,7 @@ export class ChatService {
 
         // 설치한 user MCP 서버 도구는 "설치=기본 ON" — 채팅 토글 없이 자동 노출(cap 적용).
         // global 외부 도구는 자동 노출 대상 아님(opt-in 유지). 끄려면 /mcp-servers 서버 disable.
-        const toolGroups = userIdStr ? toolRouter.getUserPoolToolGroups(userIdStr) : [];
+        const toolGroups = userIdStr ? toolRuntime.getUserToolGroups(userIdStr) : [];
         // 통합(add-on)이 고정한 외부 컨텍스트가 있으면 그 MCP 서버를 참조된 것으로 취급 —
         // 접두는 LLM 전용 enhancedMessage 에만 실리므로(reqCtx.message 는 원문)
         // depth 매칭 힌트를 여기서 보강한다.
@@ -258,7 +258,7 @@ export class ChatService {
         onSkillsActivated?: (skillNames: string[]) => void,
         onThinking?: (thinking: string) => void,
         onSystemEvent?: SystemEventCallback,
-        onMcpToolResult?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }>; sources?: import('../mcp/web-search/types').SearchSourceRef[] }) => void,
+        onMcpToolResult?: (event: { toolName: string; resources: Array<{ uri: string; mimeType?: string; text?: string }>; sources?: import('../tools/web-search/types').SearchSourceRef[] }) => void,
         onMcpToolStart?: (event: { toolName: string }) => void,
     ): Promise<string> {
         // MCP tool resource content 콜백을 인스턴스 상태로 저장 — executeExternalTool 및 strategy 가 공유

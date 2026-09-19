@@ -14,8 +14,8 @@
  *
  * @module mcp/load-skill-tool
  */
-import type { MCPToolDefinition, MCPToolResult } from '../../mcp/types';
-import type { UserContext } from '../../mcp/user-sandbox';
+import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
+import type { UserContext } from '../../tool-contract/types';
 import { createLogger } from '../../utils/logger';
 import { recordSkillUsage } from './skill-usage-log';
 

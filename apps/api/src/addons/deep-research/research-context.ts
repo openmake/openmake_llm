@@ -18,8 +18,8 @@
  * @module services/deep-research/research-context
  */
 import type { LLMClient, ToolDefinition } from '../../llm';
-import type { SearchResult } from '../../mcp/web-search';
-import { getUnifiedMCPClient } from '../../mcp/unified-client';
+import type { SearchResult } from '../../tools/web-search';
+import { getToolRuntime } from '../../runtime-ports/tool-runtime';
 import { getSkillRuntime } from '../../runtime-ports/skill-runtime';
 import { selectRelevantToolsEmbedding } from '../../services/agent-task/tool-selector-embedding';
 import { filterRestrictedTools } from '../../services/chat-service/tool-restrictions';
@@ -78,7 +78,7 @@ export async function gatherMcpEvidence(params: {
     let tools: ToolDefinition[] = [];
     try {
         const all = filterRestrictedTools(
-            (await getUnifiedMCPClient().getToolRouter().getLLMTools({ userId })) as unknown as ToolDefinition[],
+            await getToolRuntime().listLLMTools({ userId }),
             userRole ?? 'user',
         );
         // 목표 관련성 top-K 만 — 전체 카탈로그 전달은 문법 컴파일 폭주를 유발한다.
@@ -116,11 +116,11 @@ export async function gatherMcpEvidence(params: {
         }
 
         const results: SearchResult[] = [];
-        const mcp = getUnifiedMCPClient();
+        const mcp = getToolRuntime();
         for (const [i, call] of calls.slice(0, RESEARCH_CONTEXT.MCP_MAX_CALLS).entries()) {
             const name = call.function.name;
             try {
-                const out = await mcp.executeToolWithContext(
+                const out = await mcp.executeTool(
                     name,
                     (call.function.arguments ?? {}) as Record<string, unknown>,
                     { userId, role: userRole ?? 'user' },

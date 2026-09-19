@@ -11,8 +11,8 @@
  *
  * @module mcp/skill-creator-tool
  */
-import type { MCPToolDefinition, MCPToolResult } from '../../mcp/types';
-import type { UserContext } from '../../mcp/user-sandbox';
+import type { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
+import type { UserContext } from '../../tool-contract/types';
 import { createLogger } from '../../utils/logger';
 import { isAdminRole } from '../../data/user-manager';
 

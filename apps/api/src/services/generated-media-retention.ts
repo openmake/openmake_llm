@@ -6,7 +6,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { GENERATED_MEDIA_RETENTION } from '../config/capabilities';
-import { resolveGeneratedDir } from '../mcp/generated-media';
+import { resolveGeneratedDir } from '../tools/generated-media';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('GeneratedMediaRetention');

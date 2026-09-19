@@ -18,7 +18,7 @@
 import { z } from 'zod';
 import { UNSUPPORTED_MCP_FIELDS } from '../../config/skill-compat';
 import { EXTENSION_INGEST } from '../../config/constants';
-import type { UserConfigEntry } from '../../mcp/env-placeholder';
+import type { UserConfigEntry } from '../../tool-contract/env-placeholder';
 
 const NAME_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 

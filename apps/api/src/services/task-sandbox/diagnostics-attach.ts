@@ -15,7 +15,7 @@
  * @module services/task-sandbox/diagnostics-attach
  */
 import type { TaskExecutor } from './executor';
-import type { MCPToolResult } from '../../mcp/types';
+import type { MCPToolResult } from '../../tool-contract/types';
 
 function textResult(text: string): MCPToolResult {
     return { content: [{ type: 'text', text }], isError: false };

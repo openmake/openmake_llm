@@ -12,11 +12,6 @@
 export { default as metricsRouter, setClusterManager } from './metrics.routes';
 export { default as agentRouter } from './agents.routes';
 export { default as modelRouter } from './model.routes';
-export { mcpRouter } from './mcp.routes';
-export { mcpCatalogRouter } from './mcp-catalog.routes';
-export { mcpServerIngestRouter } from './mcp-server-ingest.routes';
-export { mcpCatalogAdminRouter } from './mcp-catalog-admin.routes';
-export { mcpAdminMonitoringRouter } from './mcp-admin-monitoring.routes';
 export { toolHealthRouter } from './tool-health.routes';
 export { evaluationRunsRouter } from './evaluation-runs.routes';
 export { adminModelRolesRouter } from './admin-model-roles.routes';

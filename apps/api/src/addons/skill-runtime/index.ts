@@ -9,7 +9,7 @@
  */
 import { registerSkillRuntime } from '../../runtime-ports/skill-runtime';
 import { contributeBuiltInTools } from '../../runtime-ports/builtin-tool-contributions';
-import type { MCPToolDefinition } from '../../mcp/types';
+import type { MCPToolDefinition } from '../../tool-contract/types';
 import { createLogger } from '../../utils/logger';
 import { skillRuntime } from './runtime';
 import { loadSkillTool } from './load-skill-tool';
