@@ -1,0 +1,38 @@
+# ==============================================================
+# Cloudflare Tunnel (cloudflared) 설정 — 예시
+# ==============================================================
+# 외부 공개는 Cloudflare Tunnel 단일 경로다 (scripts/caddy/Caddyfile 주석 참고).
+# edge 가 공개 443 에서 TLS 를 종단하고, cloudflared 가 호스트 안의 인스턴스별
+# 리버스 프록시로 평문 전달한다. 인스턴스가 여럿이면 호스트 이름으로 갈라 보낸다:
+#
+#   chat.openmake.cc          → online  (기본·이름 없는 인스턴스)
+#   chat-staging.openmake.cc  → staging (install.sh --instance staging)
+#
+# 포트를 여기에 박지 않는 이유: 인스턴스마다 다르고, 각 인스턴스의 .env 가 단일 출처다.
+#   OMK_PROXY_PORT  채팅 프론트+API 를 묶는 프록시 포트
+#   OMKB_PORT       벤치 포트
+# 현재 값은 `omk env status <env>` (scripts/env/omk.sh) 가 출력한다 — 그 값을 아래
+# <...> 자리에 채워 넣는다.
+#
+# ⚠️ 이 파일은 예시다. 터널 ID·자격증명이 들어가는 실제 설정은 git 밖에 둔다
+#    (~/.cloudflared/config.yml). 여기 내용을 복사해 채운 뒤 그 경로에 저장한다.
+# ==============================================================
+
+tunnel: <TUNNEL_ID>
+credentials-file: ~/.cloudflared/<TUNNEL_ID>.json
+
+ingress:
+  # ── online (기본 인스턴스) ──
+  - hostname: chat.openmake.cc
+    service: http://localhost:<ONLINE_PROXY_PORT>
+  - hostname: bench.openmake.cc
+    service: http://localhost:<ONLINE_BENCH_PORT>
+
+  # ── staging (이름 있는 인스턴스) ──
+  - hostname: chat-staging.openmake.cc
+    service: http://localhost:<STAGING_PROXY_PORT>
+  - hostname: bench-staging.openmake.cc
+    service: http://localhost:<STAGING_BENCH_PORT>
+
+  # cloudflared 규칙: 마지막은 hostname 없는 catch-all 이어야 한다. 없으면 설정 자체가 거부된다.
+  - service: http_status:404

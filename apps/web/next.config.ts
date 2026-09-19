@@ -44,7 +44,12 @@ const nextConfig: NextConfig = {
   // Next 16 dev: 외부 origin(rasplay) 에서 /_next/* (HMR 등) 접근을 기본 차단 → HMR WS 실패로
   // 클라이언트 hydration 이 죽어 게스트로 표시됨. 외부 공개 dev 접속을 허용한다.
   // (운영은 next build + next start 권장 — production 은 HMR 자체가 없어 이 문제 무관.)
-  allowedDevOrigins: ["rasplay.tplinkdns.com", "localhost", "127.0.0.1"],
+  // 다른 기기(Tailscale·LAN)에서 dev 를 볼 때는 그 호스트를 OMK_DEV_HOSTS(CSV)로 준다 —
+  // `scripts/env/omk.sh dev up --tailscale` 이 채운다. 여기에 호스트를 더 하드코딩하지 말 것.
+  allowedDevOrigins: [
+    "rasplay.tplinkdns.com", "localhost", "127.0.0.1",
+    ...(process.env.OMK_DEV_HOSTS ?? "").split(",").map((h) => h.trim()).filter(Boolean),
+  ],
   async rewrites() {
     return [
       { source: "/api/:path*", destination: `${API_PROXY_TARGET}/api/:path*` },
