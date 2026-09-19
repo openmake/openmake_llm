@@ -2,12 +2,6 @@
   "$comment": "npm audit 게이트(scripts/audit-gate.cjs) 허용 목록 — 운영 의존성의 high 이상 권고 중 당장 올릴 수 없는 것. 만료일이 지나면 게이트가 다시 실패한다. 2026-09-17 게이트 도입 시점의 기존 부채를 기록했다.",
   "advisories": [
     {
-      "id": "GHSA-xcpc-8h2w-3j85",
-      "package": "adm-zip",
-      "reason": "kordoc 4.12.0 → @huggingface/transformers 4.2.0 → onnxruntime-node 1.24.3 → adm-zip 0.5.18(전이). 모델 파일 설치 시 쓰는 경로 — kordoc 상향으로 해소 필요",
-      "expires": "2026-10-17"
-    },
-    {
       "id": "GHSA-hq66-cqwq-w95j",
       "package": "pdfjs-dist",
       "reason": "officeparser 7.8.0 → pdfjs-dist 6.1.200(전이). 해소는 officeparser 8.x 메이저 상향 — 문서 추출 회귀 검증 필요",
