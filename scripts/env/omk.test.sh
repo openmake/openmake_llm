@@ -46,7 +46,14 @@ eq "line: 미설정"    "$(search_line "$SX")" "SearXNG 없음 (키 없는 기�
 eq "offline: 대기 시간 단축"    "$(dotenv_get "$SX/.env" WEB_SEARCH_FETCH_TIMEOUT_MS)|$(dotenv_get "$SX/.env" OMK_SEARCH_OFFLINE)|$(cat "$SX/changed")" "2000|1|1"
 ok "line: 오프라인 표시"        '[[ "$(search_line "$SX")" == 꺼짐*외부* ]]'
 printf 'WEB_SEARCH_FETCH_TIMEOUT_MS=9000\n' > "$SX/.env"; search_mark_offline "$SX/.env" >/dev/null
-eq "offline: 사용자 값 존중"    "$(dotenv_get "$SX/.env" WEB_SEARCH_FETCH_TIMEOUT_MS)|$(dotenv_get "$SX/.env" OMK_SEARCH_OFFLINE)" "9000|"
+eq "offline: 사용자 값 존중"    "$(dotenv_get "$SX/.env" WEB_SEARCH_FETCH_TIMEOUT_MS)|$(dotenv_get "$SX/.env" OMK_SEARCH_OFFLINE)" "9000|1"
+printf 'SEARXNG_URL=http://127.0.0.1:8888\nOMK_SEARXNG_PORT=8888\n' > "$SX/.env"; SEARCH_CHANGED=0; search_forget "$SX/.env"
+eq "forget: omk 주소를 걷어낸다" "$(cat "$SX/.env")|$SEARCH_CHANGED" "|1"
+printf 'SEARXNG_URL=http://search.internal:8080\n' > "$SX/.env"; SEARCH_CHANGED=0; search_forget "$SX/.env"
+eq "forget: 사용자 주소는 남긴다" "$(dotenv_get "$SX/.env" SEARXNG_URL)|$SEARCH_CHANGED" "http://search.internal:8080|0"
+# omk 가 띄운 뒤 사용자가 주소만 바꾼 경우(OMK_SEARXNG_PORT 는 남아 있다) — 되돌리지 않는다
+printf 'SEARXNG_URL=http://search.internal:8080\nOMK_SEARXNG_PORT=8888\n' > "$SX/.env"; searxng_ensure "$SX" t "$SX/c" "$SX" >/dev/null
+eq "ensure: 바꾼 URL 을 되돌리지 않음" "$(dotenv_get "$SX/.env" SEARXNG_URL)|$(dotenv_get "$SX/.env" OMK_SEARXNG_PORT)" "http://search.internal:8080|"
 printf 'OMK_SEARXNG=off\n' > "$SX/.env"; SEARCH_CHANGED=9; searxng_ensure "$SX" t "$SX/c" "$SX"
 eq "ensure: off 면 아무것도 안 함" "$SEARCH_CHANGED|$([[ -d "$SX/c" ]] && echo made)" "0|"
 printf 'SEARXNG_URL=http://search.internal:8080\n' > "$SX/.env"; searxng_ensure "$SX" t "$SX/c" "$SX" >/dev/null

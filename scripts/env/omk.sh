@@ -71,7 +71,7 @@ OMK_AUTOUPDATE_CRON="${OMK_AUTOUPDATE_CRON:-*/10 * * * *}"
 OMK_SEARXNG_IMAGE="${OMK_SEARXNG_IMAGE:-searxng/searxng:latest}"
 OMK_SEARXNG_PORT_BASE="${OMK_SEARXNG_PORT_BASE:-8888}"   # .env.example 의 SEARXNG_URL 예시 포트. 점유 시 다음 빈 포트
 # 외부 연결 점검 대상(하나라도 열리면 온라인) · 검색 동작 확인용 질의
-OMK_NET_PROBE_URLS="${OMK_NET_PROBE_URLS:-https://duckduckgo.com https://www.wikipedia.org}"
+OMK_NET_PROBE_URLS="${OMK_NET_PROBE_URLS:-https://duckduckgo.com https://www.bing.com https://www.wikipedia.org}"
 OMK_SEARCH_PROBE_QUERY="${OMK_SEARCH_PROBE_QUERY:-wikipedia}"
 
 # curl | bash 에서는 BASH_SOURCE 가 비어 있다 — 그때는 "레포 밖" 으로 취급한다.
@@ -553,54 +553,80 @@ EOF
     chmod 644 "$1"   # 컨테이너 안의 비루트 사용자가 읽어야 한다
 }
 search_mark_offline() { # $1=.env — Base 에는 웹 검색 스위치가 없다. 제공자별 대기(기본 12초)만이라도 줄인다.
+    [[ "$(dotenv_get "$1" OMK_SEARCH_OFFLINE)" == "1" ]] && return 0          # 이미 꺼 둔 상태 — 매번 경고하지 않는다
     log_warn "외부 연결이 없습니다 — 웹 검색을 꺼 둡니다 (연결되면 'omk env update' 가 다시 켭니다)"
-    [[ "$(dotenv_get "$1" OMK_SEARCH_OFFLINE)" == "1" ]] && return 0
-    [[ -z "$(dotenv_get "$1" WEB_SEARCH_FETCH_TIMEOUT_MS)" ]] || return 0      # 사용자가 정한 값은 존중
-    dotenv_set "$1" WEB_SEARCH_FETCH_TIMEOUT_MS 2000; dotenv_set "$1" OMK_SEARCH_OFFLINE 1; SEARCH_CHANGED=1
+    dotenv_set "$1" OMK_SEARCH_OFFLINE 1; SEARCH_CHANGED=1
+    [[ -n "$(dotenv_get "$1" WEB_SEARCH_FETCH_TIMEOUT_MS)" ]] || dotenv_set "$1" WEB_SEARCH_FETCH_TIMEOUT_MS 2000   # 사용자가 정한 값은 존중
 }
+search_forget() { # $1=.env — omk 가 적은 주소를 걷어낸다. 컨테이너가 없는데 주소만 남으면 Base 가 죽은 주소를 두드린다.
+    [[ -n "$(dotenv_get "$1" OMK_SEARXNG_PORT)" ]] || return 0
+    dotenv_unset "$1" SEARXNG_URL; dotenv_unset "$1" OMK_SEARXNG_PORT; SEARCH_CHANGED=1
+}
+# SearXNG 컨테이너는 omk 만 만든다 — omk.owner_dir 라벨이 이 설치본을 가리킬 때만 우리 것(라벨 없음 = 남의 것).
+searxng_owned() { # $1=name $2=소유 디렉터리
+    local own; own="$(container_workdir "$1")"
+    [[ -n "$own" ]] && ! is_foreign_path "$own" "$2"
+}
+searxng_wait() { # $1=url → 0 이면 응답
+    local i; for ((i = 0; i < 30; i++)); do curl -fsS --max-time 2 -o /dev/null "$1/healthz" 2>/dev/null && return 0; sleep 2; done; return 1
+}
+# 검색 기능의 실패는 설치를 멈추지 않는다 — 이 함수의 모든 실패 경로는 경고 후 return 0 이다.
 searxng_ensure() { # $1=llm dir $2=env $3=설정 디렉터리 $4=소유 디렉터리(가드 라벨)
-    local envf="$1/.env" env="$2" conf="$3" owner="$4" name port="" url i created=0 healthy=0
+    local envf="$1/.env" env="$2" conf="$3" owner="$4" name port="" url="" murl mport
     SEARCH_CHANGED=0
-    [[ "$(dotenv_get "$envf" OMK_SEARXNG)" == "off" ]] && return 0
-    if [[ -n "$(dotenv_get "$envf" SEARXNG_URL)" && -z "$(dotenv_get "$envf" OMK_SEARXNG_PORT)" ]]; then
-        log_info "SEARXNG_URL 이 이미 지정돼 있습니다 — 그대로 씁니다"; return 0
-    fi
-    has docker || { log_warn "docker 가 없어 SearXNG 를 띄우지 못했습니다 — 웹 검색 제한"; return 0; }
     name="$(searxng_name "$env")"
+    if [[ "$(dotenv_get "$envf" OMK_SEARXNG)" == "off" ]]; then            # 뺀 환경 — 전에 띄운 것이 있으면 치운다
+        if has docker && docker inspect "$name" >/dev/null 2>&1 && searxng_owned "$name" "$owner"; then docker rm -f "$name" >/dev/null 2>&1 || true; fi
+        search_forget "$envf"; return 0
+    fi
+    # omk 것인 주소는 "비어 있거나 http://127.0.0.1:<OMK_SEARXNG_PORT>" 뿐이다. 그 밖은 사용자가 넣은 것 — 손대지 않는다.
+    murl="$(dotenv_get "$envf" SEARXNG_URL)"; mport="$(dotenv_get "$envf" OMK_SEARXNG_PORT)"
+    if [[ -n "$murl" && "$murl" != "http://127.0.0.1:$mport" ]]; then
+        [[ -z "$mport" ]] || dotenv_unset "$envf" OMK_SEARXNG_PORT
+        log_info "SEARXNG_URL 이 직접 지정돼 있습니다 ($murl) — 그대로 씁니다"; return 0
+    fi
+    has docker || { log_warn "docker 가 없어 SearXNG 를 띄우지 못했습니다 — 웹 검색 제한"; search_forget "$envf"; return 0; }
+
     if docker inspect "$name" >/dev/null 2>&1; then
+        searxng_owned "$name" "$owner" || { log_warn "컨테이너 $name 은 다른 설치본의 것입니다 — 손대지 않습니다 (웹 검색 제한)"; search_forget "$envf"; return 0; }
         docker start "$name" >/dev/null 2>&1 || true
-        port="$(docker port "$name" 8080/tcp 2>/dev/null | head -1 | sed -E 's/.*:([0-9]+)$/\1/')"
-    else
-        net_online || { search_mark_offline "$envf"; return 0; }
+        # 정지·재시작 루프 중인 컨테이너에는 docker port 가 실패한다 — pipefail 로 설치가 죽지 않게 한다.
+        port="$(docker port "$name" 8080/tcp 2>/dev/null | head -1 | sed -E 's/.*:([0-9]+)$/\1/' || true)"
+        if [[ -z "$port" ]] || ! searxng_wait "http://127.0.0.1:$port"; then
+            log_warn "기존 SearXNG 컨테이너가 응답하지 않습니다 — 지우고 새로 만듭니다"
+            docker rm -f "$name" >/dev/null 2>&1 || true; port=""
+        fi
+    fi
+    if [[ -z "$port" ]]; then
+        net_online || { search_mark_offline "$envf"; search_forget "$envf"; return 0; }
         # 심볼릭 링크를 푼 실제 경로로 마운트한다 (macOS 의 /var→/private/var 처럼 docker 가 공유하지 않는 별칭 회피)
-        mkdir -p "$conf"; conf="$( cd "$conf" && pwd -P )"
-        [[ -f "$conf/settings.yml" ]] || searxng_write_settings "$conf/settings.yml"
-        port="$(dotenv_get "$envf" OMK_SEARXNG_PORT)"
-        { [[ -n "$port" ]] && ! port_in_use "$port"; } || port="$(find_free_port "$OMK_SEARXNG_PORT_BASE")" || die "SearXNG 용 빈 포트를 찾지 못했습니다"
+        { mkdir -p "$conf" && conf="$( cd "$conf" && pwd -P )"; } || { log_warn "SearXNG 설정 디렉터리를 만들지 못했습니다: $conf"; search_forget "$envf"; return 0; }
+        [[ -f "$conf/settings.yml" ]] || searxng_write_settings "$conf/settings.yml" || { log_warn "SearXNG 설정을 쓰지 못했습니다"; search_forget "$envf"; return 0; }
+        port="$mport"
+        { [[ -n "$port" ]] && ! port_in_use "$port"; } || port="$(find_free_port "$OMK_SEARXNG_PORT_BASE")" \
+            || { log_warn "SearXNG 용 빈 포트를 찾지 못했습니다 — 웹 검색 없이 계속합니다"; search_forget "$envf"; return 0; }
         log_info "SearXNG 기동: $name → 127.0.0.1:$port  ($OMK_SEARXNG_IMAGE)"
         docker image inspect "$OMK_SEARXNG_IMAGE" >/dev/null 2>&1 || docker pull -q "$OMK_SEARXNG_IMAGE" >/dev/null \
-            || { log_warn "SearXNG 이미지를 받지 못했습니다 — 웹 검색 없이 계속합니다"; return 0; }
+            || { log_warn "SearXNG 이미지를 받지 못했습니다 — 웹 검색 없이 계속합니다"; search_forget "$envf"; return 0; }
+        # :z — SELinux(Fedora·RHEL) 에서 컨테이너가 설정 파일을 읽게 한다. 다른 플랫폼에서는 무해.
         docker run -d --name "$name" --restart unless-stopped -p "127.0.0.1:$port:8080" \
-            -v "$conf/settings.yml:/etc/searxng/settings.yml:ro" --label "omk.owner_dir=$owner" \
-            "$OMK_SEARXNG_IMAGE" >/dev/null || { log_warn "SearXNG 기동 실패 — 웹 검색 없이 계속합니다"; return 0; }
-        created=1
+            -v "$conf/settings.yml:/etc/searxng/settings.yml:ro,z" --label "omk.owner_dir=$owner" \
+            "$OMK_SEARXNG_IMAGE" >/dev/null || { log_warn "SearXNG 기동 실패 — 웹 검색 없이 계속합니다"; docker rm -f "$name" >/dev/null 2>&1 || true; search_forget "$envf"; return 0; }
+        if ! searxng_wait "http://127.0.0.1:$port"; then
+            log_warn "SearXNG 가 응답하지 않습니다 ($name) — 웹 검색 없이 계속합니다. 마지막 로그:"
+            docker logs --tail 5 "$name" 2>&1 | sed 's/^/         /' || true
+            docker rm -f "$name" >/dev/null 2>&1 || true; search_forget "$envf"; return 0
+        fi
     fi
-    [[ -n "$port" ]] || { log_warn "SearXNG 포트를 알 수 없습니다 ($name)"; return 0; }
     url="http://127.0.0.1:$port"
-    for ((i = 0; i < 30; i++)); do curl -fsS --max-time 2 -o /dev/null "$url/healthz" 2>/dev/null && { healthy=1; break; }; sleep 2; done
-    # 뜨지 않는 컨테이너의 주소를 .env 에 적으면 Base 는 매번 죽은 주소를 두드린다 — 적지 않고, 방금 만든 것이면 치운다.
-    if [[ $healthy -eq 0 ]]; then
-        log_warn "SearXNG 가 응답하지 않습니다 ($name) — 웹 검색 없이 계속합니다. 마지막 로그:"
-        docker logs --tail 5 "$name" 2>&1 | sed 's/^/         /' || true
-        [[ $created -eq 1 ]] && docker rm -f "$name" >/dev/null 2>&1
-        return 0
-    fi
-    if [[ "$(dotenv_get "$envf" SEARXNG_URL)" != "$url" ]]; then
+    if [[ "$murl" != "$url" || "$mport" != "$port" ]]; then
         dotenv_set "$envf" SEARXNG_URL "$url"; dotenv_set "$envf" OMK_SEARXNG_PORT "$port"; SEARCH_CHANGED=1
     fi
-    if [[ "$(dotenv_get "$envf" OMK_SEARCH_OFFLINE)" == "1" ]]; then
-        dotenv_unset "$envf" OMK_SEARCH_OFFLINE; dotenv_unset "$envf" WEB_SEARCH_FETCH_TIMEOUT_MS; SEARCH_CHANGED=1
+    if [[ "$(dotenv_get "$envf" OMK_SEARCH_OFFLINE)" == "1" ]]; then       # 연결 복구 — omk 가 낮춘 값(2000)일 때만 걷어낸다
+        dotenv_unset "$envf" OMK_SEARCH_OFFLINE; SEARCH_CHANGED=1
+        [[ "$(dotenv_get "$envf" WEB_SEARCH_FETCH_TIMEOUT_MS)" != "2000" ]] || dotenv_unset "$envf" WEB_SEARCH_FETCH_TIMEOUT_MS
     fi
+    return 0
 }
 search_line() { # $1=llm dir → 상태 한 줄 (실제로 검색을 한 번 돌려 본다)
     local envf="$1/.env" url n
@@ -960,7 +986,7 @@ cmd_dev_up() {
     log_info "Ctrl+C 로 전부 종료. DB/Redis 는 남는다 → 'omk dev down'"
     "${conc[@]}" -k --prefix-colors auto -n "$names" "${cmds[@]}"
 }
-cmd_dev_down()   { dev_locate; dev_compose stop; docker stop "$(searxng_name dev)" >/dev/null 2>&1 || true; log_ok "dev DB/Redis/SearXNG 정지 (데이터 유지)"; }
+cmd_dev_down()   { dev_locate; dev_compose stop; if searxng_owned "$(searxng_name dev)" "$DEV_LLM"; then docker stop "$(searxng_name dev)" >/dev/null 2>&1 || true; fi; log_ok "dev DB/Redis/SearXNG 정지 (데이터 유지)"; }
 cmd_dev_status() {
     dev_locate; load_toolchain "$DEV_LLM"
     echo "dev  llm=$DEV_LLM  bench=${DEV_BENCH:-없음}"
@@ -974,7 +1000,8 @@ cmd_dev_reset() {
     if [[ "${1:-}" == "--keep-data" ]]; then keep_data=1; flags+=(--keep-data); what="컨테이너"; fi
     confirm "dev 의 ${what}를 지웁니다 (소스·.env 유지). 계속할까요?" || return 0
     ( cd "$DEV_LLM" && ./uninstall.sh "${flags[@]}" ) || die "uninstall.sh 실패"
-    docker rm -f "$(searxng_name dev)" >/dev/null 2>&1 && log_ok "컨테이너 $(searxng_name dev) 제거" || true   # uninstall.sh 는 compose 것만 안다
+    # uninstall.sh 는 compose 것만 안다. 이름이 호스트에 하나뿐이라 다른 작업 클론의 것일 수 있다 — 라벨로 확인한다.
+    if searxng_owned "$(searxng_name dev)" "$DEV_LLM"; then docker rm -f "$(searxng_name dev)" >/dev/null 2>&1 && log_ok "컨테이너 $(searxng_name dev) 제거" || true; fi
     log_ok "dev 리셋 완료 — 'omk dev up' 으로 다시 준비"
 }
 cmd_dev() {

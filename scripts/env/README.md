@@ -80,10 +80,12 @@ Postgres·Redis 와 같은 급의 **환경 인프라**로 기본 설치한다 (`
 | 외부 연결 없음 | 컨테이너를 만들지 않고, 제공자별 대기(기본 12초)를 2초로 낮춘다(`WEB_SEARCH_FETCH_TIMEOUT_MS` — 이미 값이 있으면 존중) | `꺼짐 (외부 연결 없음 — 연결 후 omk env update)` |
 | 나중에 연결됨 | `omk env update` 가 다시 점검해 컨테이너를 띄우고 위 임시값을 걷어낸다 | `동작 확인 …` |
 | 컨테이너가 안 뜸 | 로그 5줄을 보여 주고 치운다. **죽은 주소는 `.env` 에 적지 않는다** | `SearXNG 없음 …` |
-| `SEARXNG_URL` 을 직접 넣어 둠 | 손대지 않는다 (`OMK_SEARXNG_PORT` 가 없으면 사용자 것) | `동작 확인 …` / `결과 0건 …` |
+| `SEARXNG_URL` 을 직접 넣어 둠 | 손대지 않는다 — omk 것은 `http://127.0.0.1:<OMK_SEARXNG_PORT>` 뿐. omk 가 띄운 뒤 주소만 바꿔도 되돌리지 않는다 | `동작 확인 …` / `결과 0건 …` |
 
 설정은 `<env>/searxng/settings.yml`(dev: `.openmake/searxng/`) — 기본 설정 위에 `formats: json`(없으면 Base 호출이 403),
 `limiter: false`, 무작위 `secret_key` 만 덮는다. `omk env reset` 은 이 컨테이너도 함께 지운다.
+검색 쪽 실패는 설치를 멈추지 않는다(경고 후 계속). 컨테이너는 `omk.owner_dir` 라벨이 이 설치본을 가리킬 때만 건드린다 —
+같은 이름을 다른 설치본·작업 클론이 쓰고 있으면 손대지 않는다. 뺀 뒤 다시 켜려면 `.env` 의 `OMK_SEARXNG=off` 줄을 지우고 `omk env update`.
 
 Base 에는 웹 검색을 끄는 스위치가 아직 없다(모델은 오프라인에서도 검색을 시도한다) — 제안은 BACKLOG §4.
 
