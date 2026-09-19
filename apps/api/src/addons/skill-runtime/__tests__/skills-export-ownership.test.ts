@@ -3,10 +3,10 @@
  * getSkillById 는 id 만으로 조회하므로 비공개 타인 스킬 본문이 id 만 알면 내려가던 갭.
  * 형제 라우트(PUT/DELETE/rewrite-proposal)와 같은 assertResourceOwnerOrAdmin 을 요구한다.
  */
-jest.mock('../../agents/skill-manager', () => ({ getSkillManager: jest.fn() }));
+jest.mock('../skill-manager', () => ({ getSkillManager: jest.fn() }));
 
-import { exportSkill } from '../skills-export';
-import { getSkillManager } from '../../agents/skill-manager';
+import { exportSkill } from '../routes/skills-export';
+import { getSkillManager } from '../skill-manager';
 
 function fakeRes() {
     const res: Record<string, unknown> & { statusCode?: number; body?: unknown; sent?: unknown } = {};

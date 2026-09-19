@@ -16,8 +16,8 @@
  *
  */
 import type { Pool, PoolClient } from 'pg';
-import type { SkillManifestFrontmatter } from '../schemas/skill-manifest.schema';
-import { createLogger } from '../utils/logger';
+import type { SkillManifestFrontmatter } from '../../schemas/skill-manifest.schema';
+import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('ManifestImporter');
 

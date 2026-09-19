@@ -5,7 +5,7 @@
  */
 import { Pool } from 'pg';
 import { SkillRepository } from '../skill-repository';
-import { parseManifestTriggers } from '../../../agents/skill-triggers';
+import { parseManifestTriggers } from '../../../addons/skill-runtime/skill-triggers';
 
 jest.mock('../../retry-wrapper', () => ({
     withRetry: (fn: () => unknown) => fn(),

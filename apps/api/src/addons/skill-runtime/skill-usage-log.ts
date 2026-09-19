@@ -18,8 +18,8 @@
  * @module agents/skill-usage-log
  */
 import * as crypto from 'crypto';
-import { createLogger } from '../utils/logger';
-import { SKILL_USAGE_LOG } from '../config/constants';
+import { createLogger } from '../../utils/logger';
+import { SKILL_USAGE_LOG } from '../../config/constants';
 
 const logger = createLogger('SkillUsageLog');
 
@@ -60,7 +60,7 @@ export function recordSkillUsage(events: SkillUsageEvent[]): void {
 }
 
 async function insertRows(rows: SkillUsageEvent[]): Promise<void> {
-    const { getUnifiedDatabase } = await import('../data/models/unified-database');
+    const { getUnifiedDatabase } = await import('../../data/models/unified-database');
     const pool = getUnifiedDatabase().getPool();
     await pool.query(
         `INSERT INTO skill_audit_log (user_id, skill_id, skill_version, tool_called, args_hash, result_status, duration_ms)
@@ -92,7 +92,7 @@ interface SkillUsageSummaryRow {
  * 삭제된 스킬의 이벤트도 남아 있으므로 name/status 는 null 일 수 있다.
  */
 export async function getSkillUsageSummary(opts: { days: number; ownerUserId?: string }): Promise<SkillUsageSummaryRow[]> {
-    const { getUnifiedDatabase } = await import('../data/models/unified-database');
+    const { getUnifiedDatabase } = await import('../../data/models/unified-database');
     const pool = getUnifiedDatabase().getPool();
     const params: unknown[] = [opts.days];
     const ownerClause = opts.ownerUserId ? ` AND (s.created_by = $2 OR s.created_by IS NULL)` : '';

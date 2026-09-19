@@ -18,6 +18,7 @@
  */
 
 import { MCPToolDefinition, MCPToolResult } from './types';
+import { contributedBuiltInTools } from '../runtime-ports/builtin-tool-contributions';
 import { agentTaskTools } from './agent-task-tools';
 
 // ============================================
@@ -119,8 +120,6 @@ const analyzeImageTool: MCPToolDefinition = {
 import { webSearchTools } from './web-search';
 // 웹 스크래핑 MCP 도구 가져오기 (Firecrawl 대체 — API 키 불필요, 항상 활성)
 import { webScraperTools } from './web-scraper-tools';
-// Skill Creator 도구 (Phase 1) — 자연어 purpose → LLM 매니페스트 → draft
-import { createSkillTool } from './skill-creator-tool';
 // Git URL → Skill 매니페스트 ingest (Phase 2.5) — GitHub URL → draft
 import { importSkillFromGitTool } from './git-ingest-tool';
 // Git URL → Agent 매니페스트 ingest (Phase 3.5) — chained skill ingest 포함
@@ -135,8 +134,6 @@ import { securityReviewTool } from './security-review-tool';
 import { createPlanTool } from './plan-tool';
 // 코드 리뷰 (P-1) — 다각도 코드 검토 (읽기 전용)
 import { codeReviewTool } from './code-review-tool';
-// 스킬 자동 호출 (LLM self-select) — 카탈로그는 getAllowedTools 가 description 에 주입
-import { loadSkillTool } from './load-skill-tool';
 // MCP 진행적 공개 메타 도구 (B) — 노출은 getAllowedTools 가 플래그로 게이트, 등록은 실행 라우팅용
 import { mcpMetaTools } from './mcp-meta-tools';
 // 운영 지표 (관리자 전용, 읽기 전용) — 노출은 getAllowedTools 가 관리자+의도 턴에만, 실행은 tool-role-gate
@@ -155,13 +152,12 @@ import { opsMetricsTool } from './ops-metrics-tool';
  *
  * @security 2026-02-07 보안 패치: runCommandTool(RCE), readFileTool/writeFileTool(샌드박스 미적용) 제거
  */
-export const builtInTools: MCPToolDefinition[] = [
+const baseBuiltInTools: MCPToolDefinition[] = [
     visionOcrTool,
     analyzeImageTool,
     ...webSearchTools,
     ...webScraperTools,
     ...agentTaskTools,
-    createSkillTool as MCPToolDefinition,
     importSkillFromGitTool as MCPToolDefinition,
     importAgentFromGitTool as MCPToolDefinition,
     importMcpServerFromGitTool as MCPToolDefinition,
@@ -169,7 +165,16 @@ export const builtInTools: MCPToolDefinition[] = [
     securityReviewTool,
     createPlanTool,
     codeReviewTool,
-    loadSkillTool as MCPToolDefinition,
     ...mcpMetaTools,
     opsMetricsTool as MCPToolDefinition,
 ];
+
+/**
+ * 전체 내장 도구 — Base 도구 + add-on 이 기여한 도구(`runtime-ports/builtin-tool-contributions`).
+ *
+ * ⚠️ 상수 배열이 아니라 함수인 이유: add-on 의 기여는 **부팅 시점**에 등록되므로 import 시점 스냅샷으로는
+ * 잡히지 않는다(스킬 도구 `load_skill`·`create_skill`, MCP 메타 도구가 그렇다). 호출할 때마다 합친다.
+ */
+export function getBuiltInTools(): MCPToolDefinition[] {
+    return [...baseBuiltInTools, ...contributedBuiltInTools()];
+}

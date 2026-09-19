@@ -2,8 +2,8 @@
  * POST/DELETE /api/agents/:agentId/skills/:skillId 관리자 게이트 회귀 테스트 (2026-09-02 보안 리뷰 H2)
  * 라우터 스택을 직접 검사해 requireAdmin 이 두 라우트에 배선돼 있는지 확인한다.
  */
-import agentsRouter from '../agents.routes';
-import { requireAdmin } from '../../auth';
+import agentsRouter from '../routes/agent-skill-assign.routes';
+import { requireAdmin } from '../../../auth';
 
 interface Layer { route?: { path: string; methods: Record<string, boolean>; stack: Array<{ handle: unknown }> } }
 

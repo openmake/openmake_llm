@@ -54,8 +54,15 @@ jest.mock('../mcp/unified-client', () => ({
 
 const buildManifestPrompt = jest.fn();
 const getActiveSkillBindings = jest.fn();
-jest.mock('../agents/skill-manager', () => ({
-    getSkillManager: () => ({ buildManifestPrompt, getActiveSkillBindings }),
+// 스킬은 이제 add-on 런타임이고 Base 는 포트만 안다 — 포트에 가짜 구현을 꽂는다.
+jest.mock('../runtime-ports/skill-runtime', () => ({
+    ...jest.requireActual('../runtime-ports/skill-runtime'),
+    getSkillRuntime: () => ({
+        buildManifestPrompt, getActiveSkillBindings,
+        applyCatalogToTools: async (tools: unknown) => tools,
+        recordUsage: () => { /* no-op */ },
+        isOfferEnabled: () => false,
+    }),
 }));
 
 import { AgentTaskService } from '../services/AgentTaskService';

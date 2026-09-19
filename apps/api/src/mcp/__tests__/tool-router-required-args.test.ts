@@ -10,8 +10,7 @@
 const fakeHandler = jest.fn(async () => ({ content: [{ type: 'text', text: 'ok' }] }));
 const noReqHandler = jest.fn(async () => ({ content: [{ type: 'text', text: 'ok' }] }));
 
-jest.mock('../tools', () => ({
-    builtInTools: [
+const mockTools = [
         {
             tool: {
                 name: 'fake_search',
@@ -28,8 +27,9 @@ jest.mock('../tools', () => ({
             },
             handler: (...a: unknown[]) => noReqHandler(...a as []),
         },
-    ],
-}));
+];
+
+jest.mock('../tools', () => ({ getBuiltInTools: () => mockTools }));
 
 import { ToolRouter } from '../tool-router';
 

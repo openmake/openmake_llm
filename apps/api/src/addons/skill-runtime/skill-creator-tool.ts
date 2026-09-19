@@ -11,10 +11,10 @@
  *
  * @module mcp/skill-creator-tool
  */
-import type { MCPToolDefinition, MCPToolResult } from './types';
-import type { UserContext } from './user-sandbox';
-import { createLogger } from '../utils/logger';
-import { isAdminRole } from '../data/user-manager';
+import type { MCPToolDefinition, MCPToolResult } from '../../mcp/types';
+import type { UserContext } from '../../mcp/user-sandbox';
+import { createLogger } from '../../utils/logger';
+import { isAdminRole } from '../../data/user-manager';
 
 const logger = createLogger('CreateSkillTool');
 
@@ -70,9 +70,9 @@ export const createSkillTool: MCPToolDefinition<CreateSkillArgs> = {
         const isAdmin = isAdminRole(context.role);
 
         try {
-            const { SkillCreatorService } = await import('../agents/skill-creator');
-            const { LLMClient } = await import('../llm/client');
-            const { getUnifiedDatabase } = await import('../data/models/unified-database');
+            const { SkillCreatorService } = await import('./skill-creator');
+            const { LLMClient } = await import('../../llm/client');
+            const { getUnifiedDatabase } = await import('../../data/models/unified-database');
 
             const service = new SkillCreatorService({
                 pool: getUnifiedDatabase().getPool(),

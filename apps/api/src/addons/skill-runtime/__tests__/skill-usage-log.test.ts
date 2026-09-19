@@ -1,7 +1,7 @@
 import { recordSkillUsage, hashArgs, getSkillUsageSummary, GUEST_USER_ID, UNKNOWN_SKILL_VERSION } from '../skill-usage-log';
 
 const mockQuery = jest.fn();
-jest.mock('../../data/models/unified-database', () => ({
+jest.mock('../../../data/models/unified-database', () => ({
     getUnifiedDatabase: () => ({ getPool: () => ({ query: mockQuery }) }),
 }));
 

@@ -32,7 +32,7 @@ import type { MCPTool, MCPToolResult, ExternalToolEntry } from './types';
 import { isToolRestrictedForRole } from './tool-role-gate';
 import { MCP_NAMESPACE_SEPARATOR } from './types';
 import type { MCPToolDefinition } from './types';
-import { builtInTools } from './tools';
+import { getBuiltInTools } from './tools';
 import type { UserContext } from './user-sandbox';
 import { createLogger } from '../utils/logger';
 import { MCP_EXTERNAL_TOOL_LIMITS } from '../config/timeouts';
@@ -136,7 +136,7 @@ export class ToolRouter {
         const tools: MCPTool[] = [];
 
         // 내장 도구
-        for (const def of builtInTools) {
+        for (const def of getBuiltInTools()) {
             tools.push(def.tool);
         }
 
@@ -229,7 +229,7 @@ export class ToolRouter {
      * 이름 교정 후보 계산에만 쓰이며, 사용자 풀 조회가 실패해도 내장·전역만으로 진행한다.
      */
     private async knownToolNamesFor(userId?: string): Promise<string[]> {
-        const names: string[] = builtInTools.map((d: MCPToolDefinition) => d.tool.name);
+        const names: string[] = getBuiltInTools().map((d: MCPToolDefinition) => d.tool.name);
         for (const key of this.externalTools.keys()) names.push(key);
         if (userId) {
             try {
@@ -426,7 +426,7 @@ export class ToolRouter {
             }
 
             // 2. 내장 도구 확인
-            const builtIn = builtInTools.find((def: MCPToolDefinition) => def.tool.name === name);
+            const builtIn = getBuiltInTools().find((def: MCPToolDefinition) => def.tool.name === name);
             if (builtIn) {
                 // 실행 시점 required 인자 검증 — 지금까지 inputSchema.required 는 LLM 노출용으로만
                 // 쓰여, 모델이 인자 JSON 을 누락/절단해 보내면 핸들러 깊숙이 undefined 가 흘러들어
@@ -557,7 +557,7 @@ export class ToolRouter {
      * @returns builtInTools 배열의 길이
      */
     getBuiltInToolCount(): number {
-        return builtInTools.length;
+        return getBuiltInTools().length;
     }
 
     /**

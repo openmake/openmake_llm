@@ -22,33 +22,33 @@
 
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
-import { createLogger } from '../utils/logger';
-import { success, notFound, unauthorized } from '../utils/api-response';
-import { asyncHandler } from '../utils/error-handler';
-import { getSkillManager } from '../agents/skill-manager';
+import { createLogger } from '../../../utils/logger';
+import { success, notFound, unauthorized } from '../../../utils/api-response';
+import { asyncHandler } from '../../../utils/error-handler';
+import { getSkillManager } from '../skill-manager';
 import { createHash } from 'crypto';
-import { parseSkillFile, validateManifest } from '../agents/manifest-validator';
-import { adaptSkillContent } from '../agents/git-ingest/skill-compat';
-import { ManifestImporter } from '../agents/manifest-importer';
-import { getUnifiedDatabase } from '../data/models/unified-database';
-import { getUnifiedMCPClient } from '../mcp/unified-client';
-import { requireAuth } from '../auth';
-import { assertResourceOwnerOrAdmin } from '../auth/ownership';
+import { parseSkillFile, validateManifest } from '../../../agents/manifest-validator';
+import { adaptSkillContent } from '../../../agents/git-ingest/skill-compat';
+import { ManifestImporter } from '../manifest-importer';
+import { getUnifiedDatabase } from '../../../data/models/unified-database';
+import { getUnifiedMCPClient } from '../../../mcp/unified-client';
+import { requireAuth } from '../../../auth';
+import { assertResourceOwnerOrAdmin } from '../../../auth/ownership';
 import { exportSkill } from './skills-export';
-import { validate, validateQuery, validateWithSecurity } from '../middlewares/validation';
+import { validate, validateQuery, validateWithSecurity } from '../../../middlewares/validation';
 import {
     createSkillSchema,
     updateSkillSchema,
     searchSkillsQuerySchema,
     autoCreateSkillSchema,
-} from '../schemas/skills.schema';
-import { SkillCreatorService } from '../agents/skill-creator';
-import { LLMClient } from '../llm/client';
-import { SKILL_CREATOR } from '../config/constants';
-import { importFromGitSchema } from '../schemas/git-ingest.schema';
-import { GitIngestService } from '../agents/git-ingest/git-ingest-service';
-import { GitFetcher } from '../agents/git-ingest/git-fetcher';
-import { RL_SKILL_CREATE, RL_SKILL_CREATE_SHORT } from '../config/rate-limits';
+} from '../../../schemas/skills.schema';
+import { SkillCreatorService } from '../skill-creator';
+import { LLMClient } from '../../../llm/client';
+import { SKILL_CREATOR } from '../../../config/constants';
+import { importFromGitSchema } from '../../../schemas/git-ingest.schema';
+import { GitIngestService } from '../../../agents/git-ingest/git-ingest-service';
+import { GitFetcher } from '../../../agents/git-ingest/git-fetcher';
+import { RL_SKILL_CREATE, RL_SKILL_CREATE_SHORT } from '../../../config/rate-limits';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 // ────────────────────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ router.use('/', skillsDraftsRouter);
 
 // 사용자 개인 스킬 할당 (GET /user-assigned, POST/DELETE /:skillId/user-assign)
 import skillsUserAssignRouter from './skills-user-assign.routes';
-import { isAdminRole } from '../data/user-manager';
+import { isAdminRole } from '../../../data/user-manager';
 router.use('/', skillsUserAssignRouter);
 
 // .SKILL 업로드 multer (memoryStorage, 256KB 제한, P5-D7)
@@ -469,8 +469,8 @@ router.post('/:skillId/rewrite-proposal', requireAuth, asyncHandler(async (req: 
         assertResourceOwnerOrAdmin(String(skill.createdBy), String(userId), req.user?.role || 'user');
     }
 
-    const { proposeSkillRewrite } = await import('../agents/git-ingest/skill-rewriter');
-    const { buildUnifiedDiff, diffStats } = await import('../utils/unified-diff');
+    const { proposeSkillRewrite } = await import('../../../agents/git-ingest/skill-rewriter');
+    const { buildUnifiedDiff, diffStats } = await import('../../../utils/unified-diff');
     const model = SKILL_CREATOR.authorModel;
     const proposal = await proposeSkillRewrite(
         new LLMClient(model ? { model } : {}),

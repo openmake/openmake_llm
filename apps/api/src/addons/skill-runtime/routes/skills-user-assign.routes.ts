@@ -13,13 +13,13 @@
  * @module routes/skills-user-assign.routes
  */
 import { Router, type Request, type Response } from 'express';
-import { requireAuth } from '../auth';
-import { validate } from '../middlewares/validation';
-import { asyncHandler } from '../utils/error-handler';
-import { success, notFound, unauthorized } from '../utils/api-response';
-import { assignSkillSchema } from '../schemas/agents.schema';
-import { getSkillManager } from '../agents/skill-manager';
-import { createLogger } from '../utils/logger';
+import { requireAuth } from '../../../auth';
+import { validate } from '../../../middlewares/validation';
+import { asyncHandler } from '../../../utils/error-handler';
+import { success, notFound, unauthorized } from '../../../utils/api-response';
+import { assignSkillSchema } from '../../../schemas/agents.schema';
+import { getSkillManager } from '../skill-manager';
+import { createLogger } from '../../../utils/logger';
 
 const logger = createLogger('SkillsUserAssignRoutes');
 

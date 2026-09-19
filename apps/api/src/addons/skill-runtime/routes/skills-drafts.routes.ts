@@ -14,14 +14,14 @@
  * @module routes/skills-drafts.routes
  */
 import { Router, type Request, type Response } from 'express';
-import { requireAuth } from '../auth';
-import { validate, validateQuery } from '../middlewares/validation';
-import { asyncHandler } from '../utils/error-handler';
-import { success, notFound, unauthorized } from '../utils/api-response';
-import { draftsQuerySchema, bulkDraftActionSchema } from '../schemas/skills.schema';
-import { getSkillManager } from '../agents/skill-manager';
-import { createLogger } from '../utils/logger';
-import { isAdminRole } from '../data/user-manager';
+import { requireAuth } from '../../../auth';
+import { validate, validateQuery } from '../../../middlewares/validation';
+import { asyncHandler } from '../../../utils/error-handler';
+import { success, notFound, unauthorized } from '../../../utils/api-response';
+import { draftsQuerySchema, bulkDraftActionSchema } from '../../../schemas/skills.schema';
+import { getSkillManager } from '../skill-manager';
+import { createLogger } from '../../../utils/logger';
+import { isAdminRole } from '../../../data/user-manager';
 
 const logger = createLogger('SkillsDraftsRoutes');
 

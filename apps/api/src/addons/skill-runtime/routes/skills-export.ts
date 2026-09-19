@@ -10,9 +10,9 @@
  * @module routes/skills-export
  */
 import type { Request, Response } from 'express';
-import { getSkillManager } from '../agents/skill-manager';
-import { assertResourceOwnerOrAdmin } from '../auth/ownership';
-import { notFound } from '../utils/api-response';
+import { getSkillManager } from '../skill-manager';
+import { assertResourceOwnerOrAdmin } from '../../../auth/ownership';
+import { notFound } from '../../../utils/api-response';
 
 export async function exportSkill(req: Request, res: Response): Promise<void> {
     const { skillId } = req.params;

@@ -6,19 +6,19 @@
  * @module agents/skill-creator
  */
 
-import { upsertSkillManifest } from '../data/repositories/skill-manifest-sync';
+import { upsertSkillManifest } from '../../data/repositories/skill-manifest-sync';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import type { Pool } from 'pg';
-import { createLogger } from '../utils/logger';
+import { createLogger } from '../../utils/logger';
 import {
     llmSkillManifestSchema,
     type LlmSkillManifest,
-} from '../schemas/skills.schema';
-import SKILL_AUTHOR_SYSTEM_PROMPT from './prompts/skill-author-system-prompt';
-import { SKILL_CREATOR } from '../config/constants';
-import type { LLMClient } from '../llm/client';
-import type { ChatMessage } from '../llm/types';
+} from '../../schemas/skills.schema';
+import SKILL_AUTHOR_SYSTEM_PROMPT from './skill-author-system-prompt';
+import { SKILL_CREATOR } from '../../config/constants';
+import type { LLMClient } from '../../llm/client';
+import type { ChatMessage } from '../../llm/types';
 
 const logger = createLogger('SkillCreator');
 

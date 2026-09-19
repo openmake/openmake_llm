@@ -63,8 +63,8 @@ export function loadToolSelectionDataset(filePath: string = DEFAULT_TOOL_SELECTI
 
 /** 내장 도구 → 채팅 경로와 같은 OpenAI 호환 정의. */
 export async function builtinToolDefinitions(): Promise<ToolDefinition[]> {
-    const { builtInTools } = await import('../mcp/tools');
-    return builtInTools.map((d) => ({
+    const { getBuiltInTools } = await import('../mcp/tools');
+    return getBuiltInTools().map((d) => ({
         type: 'function' as const,
         function: { name: d.tool.name, description: d.tool.description ?? '', parameters: d.tool.inputSchema as ToolDefinition['function']['parameters'] },
     }));

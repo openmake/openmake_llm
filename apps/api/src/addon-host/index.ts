@@ -13,6 +13,7 @@
 import { createLogger } from '../utils/logger';
 import { APP_VERSION } from '../config/constants';
 import { satisfiesOpenmakeRange } from './manifest';
+import { loadAddonEntry } from './entry-loader';
 import { installPackCatalog } from './pack-catalog';
 import { installPackSkills } from './pack-skills';
 import {
@@ -60,6 +61,23 @@ function verifyBuiltinManifests(): void {
     }
 }
 
+/**
+ * 런타임 구현 add-on(매니페스트 `entry.runtime`)을 먼저 세운다 — 스킬·도구 런타임이 Base 포트에 꽂혀야
+ * 뒤따르는 팩 설치와 채팅 경로가 의미를 갖는다. 하나가 실패해도 나머지는 계속 세우고(fail-open),
+ * 꽂히지 않은 포트는 NULL 구현으로 남는다(그 기능만 비활성).
+ */
+async function startRuntimeAddons(): Promise<void> {
+    for (const addon of enabledBuiltinAddons()) {
+        const ref = addon.manifest.entry?.runtime;
+        if (!ref) continue;
+        try {
+            await loadAddonEntry<() => Promise<void>>(addon, ref)();
+        } catch (err) {
+            logger.error(`add-on '${addon.id}' 런타임 등록 실패 — 해당 기능 비활성:`, err);
+        }
+    }
+}
+
 export async function startAddonHost(): Promise<void> {
     verifyBuiltinManifests();
 
@@ -68,13 +86,7 @@ export async function startAddonHost(): Promise<void> {
         logger.warn(`ADDON_BUILTIN_DISABLED 에 알 수 없는 팩 id: ${unknown.join(', ')} (가능한 값: ${builtinAddonIds().join(', ')})`);
     }
 
-    // Base 스킬(general·author-guide) — 팩 구성과 무관하게 항상 시드
-    try {
-        const { seedBaseSkills } = await import('../agents/skill-seeder');
-        seedBaseSkills().catch((err: unknown) => logger.error('Base 스킬 시딩 실패:', err));
-    } catch (err) {
-        logger.error('Base 스킬 시더 로드 실패:', err);
-    }
+    await startRuntimeAddons();
 
     for (const addon of enabledBuiltinAddons()) {
         installBuiltinPack(addon.id).catch((err: unknown) => logger.error(`내장 팩 '${addon.id}' 설치 실패:`, err));

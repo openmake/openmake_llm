@@ -3,7 +3,7 @@
  * private repo 를 가짜 구현으로 주입해 DB 없이 순수 로직(포맷·매칭·dedup·권한·topK)을 검증.
  */
 import { SkillManager } from '../skill-manager';
-import type { AgentSkill } from '../../data/repositories/skill-repository';
+import type { AgentSkill } from '../../../data/repositories/skill-repository';
 
 function skill(partial: Partial<AgentSkill> & { id: string; name: string }): AgentSkill {
     return {

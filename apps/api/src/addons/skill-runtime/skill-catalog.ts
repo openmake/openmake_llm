@@ -2,8 +2,8 @@
  * load_skill 카탈로그 — 설정·직렬화·상한 경고.
  * skill-manager.ts 가 Gate 3(600줄)에 닿아 분리했다 (2026-09-11). 조회는 SkillManager.buildSkillCatalog 가 한다.
  */
-import type { AgentSkill, SkillSearchResult } from '../data/repositories/skill-repository';
-import { createLogger } from '../utils/logger';
+import type { AgentSkill, SkillSearchResult } from '../../data/repositories/skill-repository';
+import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('SkillCatalog');
 

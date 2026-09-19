@@ -7,8 +7,8 @@
  */
 import { SkillManager } from '../skill-manager';
 
-jest.mock('../../config/runtime-limits', () => ({
-    ...jest.requireActual('../../config/runtime-limits'),
+jest.mock('../../../config/runtime-limits', () => ({
+    ...jest.requireActual('../../../config/runtime-limits'),
     SKILL_MANIFEST_INJECT_MAX_CHARS: 1000,
     SKILL_MANIFEST_PER_SKILL_MAX_CHARS: 700,
 }));
@@ -20,7 +20,7 @@ const row = (id: string, chars: number) => ({
 });
 
 let rows: ReturnType<typeof row>[] = [];
-jest.mock('../../data/models/unified-database', () => ({
+jest.mock('../../../data/models/unified-database', () => ({
     getUnifiedDatabase: () => ({ getPool: () => ({ query: async () => ({ rows }) }) }),
 }));
 

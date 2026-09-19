@@ -36,8 +36,6 @@ import {
     metricsRouter,
     setClusterManager as setMetricsCluster,
     agentRouter,
-    skillsRouter,
-    skillsUsageRouter,
     mcpRouter,
     mcpCatalogRouter,
     mcpServerIngestRouter,
@@ -194,19 +192,17 @@ export function setupApiRoutes(
     app.use('/api/metrics/tools', toolHealthRouter);
     app.use('/api/metrics/evaluations', evaluationRunsRouter);
     app.use('/api/metrics', metricsRouter);
-    // 🆕 스킬 라우트 — agentRouter(/:id catch-all) 보다 먼저 마운트 필수
-    // 사용 요약(/usage/summary)은 skillsRouter 의 /:skillId 보다 먼저 (skills.routes 600줄 게이트로 분리)
-    app.use('/api/agents/skills', skillsUsageRouter);
-    app.use('/api/agents/skills', skillsRouter);
+    // Add-on 라우트 — Base 는 개별 add-on 을 모르고 이 한 줄만 부른다(§10-1).
+    // agentRouter(/:id catch-all) 보다 **먼저** 마운트해야 한다: 스킬 라우트(/api/agents/skills)와
+    // 에이전트-스킬 배정(/api/agents/:id/skills)이 skill-runtime add-on 소유라, 뒤에 걸면
+    // Base 의 파라미터 라우트가 먼저 먹는다. GET /api/addons 와 통합형 add-on 라우트도 여기서 걸린다.
+    mountAddonRoutes(app);
     app.use('/api/agents', agentRouter);
     app.use('/api/monitoring', tokenMonitoringRouter);
     app.use('/api/mcp', mcpRouter);
     app.use('/api/mcp', mcpOAuthRouter);   // 원격 MCP OAuth (start/callback/logout)
     app.use('/api/marketplace', marketplacePublishRouter);   // 마켓플레이스 게시 (발행형)
     app.use('/api/mcp', mcpCatalogRouter);
-    // 통합형 add-on 전용 라우트(NotebookLM·카카오 지도 임베드·Discord 런타임)와 GET /api/addons —
-    // Base 는 개별 통합 기능의 라우터를 알지 않는다 (addon-host/routes.ts).
-    mountAddonRoutes(app);
     const e2eMcpMock = process.env.MCP_INGEST_E2E_MOCK === 'true';
     // E2E 픽스처 모드 — 실제 GitHub API 호출 회피.
     // require() 로 lazy load 하여 production 번들에 mock 코드가 포함되지 않게 함.

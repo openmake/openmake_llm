@@ -5,15 +5,15 @@
  * ~2.2K 토큰(101줄)을 먹었다. 카탈로그는 이름순 상한(200)에 199 로 닿아 있어, 초과분이 경고 없이
  * 빠질 참이었다.
  */
-jest.mock('../../utils/logger', () => {
+jest.mock('../../../utils/logger', () => {
     const shared = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
     return { createLogger: () => shared, __shared: shared };
 });
 
 import { SkillManager } from '../skill-manager';
-import type { AgentSkill } from '../../data/repositories/skill-repository';
+import type { AgentSkill } from '../../../data/repositories/skill-repository';
 
-const logger = (jest.requireMock('../../utils/logger') as { __shared: { warn: jest.Mock } }).__shared;
+const logger = (jest.requireMock('../../../utils/logger') as { __shared: { warn: jest.Mock } }).__shared;
 
 function skill(id: string, name: string): AgentSkill {
     return {

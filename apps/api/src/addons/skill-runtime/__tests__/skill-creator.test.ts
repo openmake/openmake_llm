@@ -1,6 +1,6 @@
 import { SkillCreatorService } from '../skill-creator';
 import { Pool } from 'pg';
-import type { LLMClient } from '../../llm/client';
+import type { LLMClient } from '../../../llm/client';
 
 describe('SkillCreatorService', () => {
     const mockLLM = { chat: jest.fn() } as unknown as Pick<LLMClient, 'chat'>;

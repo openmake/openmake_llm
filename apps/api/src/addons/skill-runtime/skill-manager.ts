@@ -19,8 +19,8 @@
  * - 싱글톤: getSkillManager()
  */
 
-import { createLogger } from '../utils/logger';
-import { SkillRepository, AGENT_PERSONA_SKILL_ID_PREFIX } from '../data/repositories/skill-repository';
+import { createLogger } from '../../utils/logger';
+import { SkillRepository, AGENT_PERSONA_SKILL_ID_PREFIX } from '../../data/repositories/skill-repository';
 import type { Pool } from 'pg';
 
 import type {
@@ -32,13 +32,13 @@ import type {
     SkillStatus,
     DraftListOptions,
     DraftListResult,
-} from '../data/repositories/skill-repository';
-import { slugify } from '../chat/slash-command';
+} from '../../data/repositories/skill-repository';
+import { slugify } from '../../chat/slash-command';
 import { recordSkillUsage } from './skill-usage-log';
 import { shouldInjectManifestSkill } from './manifest-injection-filter';
 import { planManifestInjection, buildManifestOfferBlock } from './manifest-injection-plan';
-import { SKILL_VERSION_LATEST_ORDER_SQL } from '../data/repositories/skill-manifest-sync';
-import { SKILL_MANIFEST_INJECT_MAX_CHARS, SKILL_MANIFEST_PER_SKILL_MAX_CHARS } from '../config/runtime-limits';
+import { SKILL_VERSION_LATEST_ORDER_SQL } from '../../data/repositories/skill-manifest-sync';
+import { SKILL_MANIFEST_INJECT_MAX_CHARS, SKILL_MANIFEST_PER_SKILL_MAX_CHARS } from '../../config/runtime-limits';
 import { SKILL_CATALOG_MAX_ITEMS, SKILL_CATALOG_EXCLUDE_PERSONAS, formatSkillCatalog, warnIfCatalogTruncated } from './skill-catalog';
 
 const logger = createLogger('SkillManager');
@@ -119,7 +119,7 @@ export class SkillManager {
 
     private async doInit(): Promise<void> {
         // 지연 로딩: 순환 참조 방지를 위해 동적 import 사용
-        const { getUnifiedDatabase } = await import('../data/models/unified-database');
+        const { getUnifiedDatabase } = await import('../../data/models/unified-database');
         const pool: Pool = getUnifiedDatabase().getPool();
         this.repo = new SkillRepository(pool);
         logger.info('📋 SkillManager 초기화 완료 (SkillRepository 연결)');
@@ -408,7 +408,7 @@ export class SkillManager {
         let pool: Pool;
         try {
             await this.ensureInitialized();
-            const { getUnifiedDatabase } = await import('../data/models/unified-database');
+            const { getUnifiedDatabase } = await import('../../data/models/unified-database');
             pool = getUnifiedDatabase().getPool();
         } catch (e) {
             logger.debug('manifest prompt — DB 미초기화', e);
@@ -529,7 +529,7 @@ export class SkillManager {
         let pool: Pool;
         try {
             await this.ensureInitialized();
-            const { getUnifiedDatabase } = await import('../data/models/unified-database');
+            const { getUnifiedDatabase } = await import('../../data/models/unified-database');
             pool = getUnifiedDatabase().getPool();
         } catch (e) {
             logger.debug('skill binding \uc870\ud68c \u2014 DB \ubbf8\ucd08\uae30\ud654', e);

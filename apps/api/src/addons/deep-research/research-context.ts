@@ -20,7 +20,7 @@
 import type { LLMClient, ToolDefinition } from '../../llm';
 import type { SearchResult } from '../../mcp/web-search';
 import { getUnifiedMCPClient } from '../../mcp/unified-client';
-import { getSkillManager } from '../../agents/skill-manager';
+import { getSkillRuntime } from '../../runtime-ports/skill-runtime';
 import { selectRelevantToolsEmbedding } from '../../services/agent-task/tool-selector-embedding';
 import { filterRestrictedTools } from '../../services/chat-service/tool-restrictions';
 import { RESEARCH_CONTEXT } from './config';
@@ -44,7 +44,7 @@ const MCP_SOURCE_SCHEME = 'mcp://';
 export async function buildResearchSkillBlock(userId?: string): Promise<string> {
     if (!userId || userId === 'guest') return '';
     try {
-        const block = await getSkillManager().buildManifestPrompt(RESEARCH_SKILL_AGENT_ID, userId);
+        const block = await getSkillRuntime().buildManifestPrompt(RESEARCH_SKILL_AGENT_ID, userId);
         if (block) logger.info(`[DeepResearch] 스킬 지식 주입 [${block.skillNames.join(', ')}]`);
         return block?.prompt ?? '';
     } catch (e) {

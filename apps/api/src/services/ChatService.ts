@@ -27,7 +27,6 @@ import type { UserContext } from '../mcp/user-sandbox';
 import { getUnifiedMCPClient } from '../mcp/unified-client';
 import { selectTurnTools } from './chat-service/chat-tool-selection';
 import { CHAT_USER_MCP_TOOL_CAP, CHAT_USER_MCP_SCHEMA_BUDGET_BYTES, CHAT_USER_MCP_BREADTH_SLOTS } from '../config/runtime-limits';
-import { applySkillCatalog as applySkillCatalogShared } from './skill-catalog-tool';
 import { LLMClient } from '../llm';
 import { type ToolDefinition } from '../llm';
 import { preRequestCheck } from '../chat/security-hooks';
@@ -43,7 +42,7 @@ import { ProviderRouter } from '../providers/provider-router';
 import { mergeToolsWithSkills, selectUserMcpAutoOn } from './chat-service/tool-merger';
 import type { RequestContext } from './chat-service/request-context';
 import { runMessagePipeline } from './chat-service/message-pipeline';
-import { getSkillManager } from '../agents/skill-manager';
+import { getSkillRuntime } from '../runtime-ports/skill-runtime';
 import {
     streamFromExternalProvider as streamFromExternalProviderFn,
     type ExternalProviderDeps,
@@ -207,7 +206,7 @@ export class ChatService {
     ): Promise<ToolDefinition[]> {
         // 구현은 services/skill-catalog-tool 로 추출 (에이전트 작업 경로와 공용 — SSoT)
         const rawUserId = reqCtx.userContext.userId;
-        return applySkillCatalogShared(tools, allTools, {
+        return getSkillRuntime().applyCatalogToTools(tools, allTools, {
             excludeIds: new Set(reqCtx.skillBindings.map((b) => b.skill_id)),
             ...(rawUserId !== undefined && rawUserId !== null ? { userId: String(rawUserId) } : {}),
         });
@@ -222,7 +221,7 @@ export class ChatService {
         const rawUserId = reqCtx.userContext.userId;
         const userId = rawUserId !== undefined ? String(rawUserId) : undefined;
         try {
-            reqCtx.skillBindings = await getSkillManager().getActiveSkillBindings(agentId, userId);
+            reqCtx.skillBindings = await getSkillRuntime().getActiveSkillBindings(agentId, userId);
         } catch (e) {
             logger.debug('skill bindings 로드 실패 — 빈 배열 사용', e);
             reqCtx.skillBindings = [];

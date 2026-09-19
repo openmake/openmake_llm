@@ -3,7 +3,7 @@
  * 무엇을 불러올지는 모델이 같은 턴에 load_skill 로 판단한다 (agents/manifest-injection-plan 참고).
  * @module prompts/skill-offer
  */
-import { LOAD_SKILL_TOOL_NAME } from '../mcp/load-skill-tool';
+import { LOAD_SKILL_TOOL_NAME } from './load-skill-tool';
 
 interface SkillOfferItem {
     name: string;

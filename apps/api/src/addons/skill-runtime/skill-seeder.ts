@@ -7,9 +7,9 @@
  * @module agents/skill-seeder
  */
 
-import { createLogger } from '../utils/logger';
-import type { SkillRepository } from '../data/repositories/skill-repository';
-import { GENERAL_SYSTEM_SKILL_NAME } from './system-skill-names';
+import { createLogger } from '../../utils/logger';
+import type { SkillRepository } from '../../data/repositories/skill-repository';
+import { GENERAL_SYSTEM_SKILL_NAME } from '../../agents/system-skill-names';
 
 const logger = createLogger('SkillSeeder');
 
@@ -21,8 +21,8 @@ export async function seedBaseSkills(): Promise<void> {
 
     try {
         // 지연 로딩: 순환 참조 및 초기화 순서 문제 방지
-        const { getUnifiedDatabase } = await import('../data/models/unified-database');
-        const { SkillRepository } = await import('../data/repositories/skill-repository');
+        const { getUnifiedDatabase } = await import('../../data/models/unified-database');
+        const { SkillRepository } = await import('../../data/repositories/skill-repository');
         const repo = new SkillRepository(getUnifiedDatabase().getPool());
 
         let seededCount = 0;

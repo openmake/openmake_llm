@@ -26,12 +26,18 @@ function mountWith(disabled: string | undefined): { paths: string[]; addons: Add
 
 describe('mountAddonRoutes', () => {
     it('기본은 통합 라우트가 모두 마운트된다 (v1 안에 걸리는 라우트는 여기서 걸지 않는다)', () => {
-        expect(mountWith(undefined).paths).toEqual(['/api/addons', '/api/mcp', '/api/embed', '/api/integrations/discord', '/api/research']);
+        // skill-runtime(order 1)이 가장 먼저 — 스킬 라우트는 Base 의 /api/agents/:id 보다 앞에 걸려야 한다.
+        expect(mountWith(undefined).paths).toEqual([
+            '/api/addons',
+            '/api/agents/skills', '/api/agents/skills', '/api/agents',
+            '/api/mcp', '/api/embed', '/api/integrations/discord', '/api/research',
+        ]);
     });
 
     it('꺼진 add-on 의 라우트는 마운트되지 않고, 목록 API 는 항상 마운트된다', () => {
-        const { paths, addons } = mountWith('notebooklm,discord');
+        const { paths, addons } = mountWith('notebooklm,discord,skill-runtime');
         expect(paths).toEqual(['/api/addons', '/api/embed', '/api/research']);
+        expect(addons.find(a => a.id === 'skill-runtime')).toMatchObject({ enabled: false, kind: 'runtime' });
         expect(addons.find(a => a.id === 'notebooklm')).toMatchObject({ enabled: false, kind: 'integration' });
         expect(addons.find(a => a.id === 'kakao-map')).toMatchObject({ enabled: true, kind: 'integration' });
         expect(addons.find(a => a.id === 'industry-pack')).toMatchObject({ enabled: true, kind: 'content' });

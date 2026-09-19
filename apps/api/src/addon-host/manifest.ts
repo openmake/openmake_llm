@@ -15,7 +15,7 @@ export const ADDON_MANIFEST_FILENAME = 'openmake-addon.json';
 const ADDON_ID_PATTERN = /^[a-z0-9][a-z0-9.-]*$/;
 
 export const ADDON_SCOPES = ['system', 'organization', 'user'] as const;
-export const ADDON_KINDS = ['content', 'integration'] as const;
+export const ADDON_KINDS = ['content', 'integration', 'runtime'] as const;
 
 /**
  * 코드 진입점 참조 — `<모듈 경로>#<export 이름>`(export 생략 시 default). 모듈 경로는 add-on 코드 디렉토리
@@ -26,6 +26,11 @@ export const ADDON_KINDS = ['content', 'integration'] as const;
 const entryRefSchema = z.string().max(200).regex(/^[a-z0-9-]+(\.[a-z0-9-]+)*(\/[a-z0-9-]+(\.[a-z0-9-]+)*)*(#[A-Za-z_][A-Za-z0-9_]*)?$/);
 
 const addonEntrySchema = z.object({
+    /**
+     * 런타임 구현 등록 — Base 포트(`runtime-ports/*`)에 구현을 꽂는 부팅 함수(`() => Promise<void>`).
+     * 호스트가 팩 설치보다 **먼저** 부른다(스킬·도구 런타임이 서야 그 뒤 단계가 의미를 갖는다).
+     */
+    runtime: entryRefSchema.optional(),
     /** 채팅 턴 통합 (services/chat-service/turn-integrations.ts `ChatTurnIntegration`) */
     chatIntegration: entryRefSchema.optional(),
     /** 채팅 모드 (services/chat-service/chat-modes.ts `ChatModeExtension`) */
@@ -47,7 +52,10 @@ export const addonManifestSchema = z.object({
     description: z.string().max(500).optional(),
     requires: z.object({ openmake: z.string().min(1).max(80) }),
     scope: z.enum(ADDON_SCOPES),
-    /** content = 스킬·에이전트 정의를 싣는 팩, integration = 코드가 레포에 있는 통합 기능. 생략하면 content */
+    /**
+     * content = 스킬·에이전트 정의를 싣는 팩, integration = 코드가 레포에 있는 통합 기능,
+     * runtime = Base 포트에 구현을 꽂는 실행 런타임(스킬·도구). 생략하면 content
+     */
     kind: z.enum(ADDON_KINDS).optional(),
     /** 로드 순서(작을수록 먼저) — "첫 건이 이기는" 확장점(첫 턴 도구 강제·모드 선점)의 우선순위. 같으면 id 순 */
     order: z.number().int().min(0).max(100000).optional(),

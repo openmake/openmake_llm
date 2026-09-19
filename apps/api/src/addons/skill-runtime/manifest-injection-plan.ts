@@ -9,7 +9,7 @@
  *
  * @module agents/manifest-injection-plan
  */
-import { buildSkillOfferBlock } from '../prompts/skill-offer';
+import { buildSkillOfferBlock } from './skill-offer';
 import { SKILL_CATALOG_DESC_MAX } from './skill-catalog';
 
 interface PlanRow {

@@ -14,10 +14,10 @@
  *
  * @module mcp/load-skill-tool
  */
-import type { MCPToolDefinition, MCPToolResult } from './types';
-import type { UserContext } from './user-sandbox';
-import { createLogger } from '../utils/logger';
-import { recordSkillUsage } from '../agents/skill-usage-log';
+import type { MCPToolDefinition, MCPToolResult } from '../../mcp/types';
+import type { UserContext } from '../../mcp/user-sandbox';
+import { createLogger } from '../../utils/logger';
+import { recordSkillUsage } from './skill-usage-log';
 
 const logger = createLogger('LoadSkillTool');
 
@@ -40,9 +40,9 @@ async function loadSkillAssets(
     matchedNames: string[], relPaths: string[], userId?: string,
 ): Promise<string> {
     try {
-        const { getSkillManager } = await import('../agents/skill-manager');
-        const { SkillAssetRepository } = await import('../data/repositories/skill-asset-repository');
-        const { getPool } = await import('../data/models/unified-database');
+        const { getSkillManager } = await import('./skill-manager');
+        const { SkillAssetRepository } = await import('../../data/repositories/skill-asset-repository');
+        const { getPool } = await import('../../data/models/unified-database');
         const repo = new SkillAssetRepository(getPool());
 
         const blocks: string[] = [];
@@ -108,7 +108,7 @@ export const loadSkillTool: MCPToolDefinition<LoadSkillArgs> = {
         const userId = context?.userId !== undefined ? String(context.userId) : undefined;
         const startedAt = Date.now();
         try {
-            const { getSkillManager } = await import('../agents/skill-manager');
+            const { getSkillManager } = await import('./skill-manager');
             const { prompt, matched, matchedIds } = await getSkillManager().buildSkillPromptForNames(names, userId);
             if (!prompt || matched.length === 0) {
                 return { content: [{ type: 'text', text: `요청한 스킬을 찾지 못했습니다: ${names.join(', ')}` }] };

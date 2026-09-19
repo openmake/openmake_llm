@@ -28,7 +28,7 @@ import {
     MCPServerInfo,
     MCPTool
 } from './types';
-import { builtInTools } from './tools';
+import { getBuiltInTools } from './tools';
 import { negotiateProtocolVersion } from '../config/mcp-protocol';
 
 /**
@@ -74,7 +74,7 @@ export class MCPServer {
         };
 
         // 내장 도구 등록
-        for (const tool of builtInTools) {
+        for (const tool of getBuiltInTools()) {
             this.registerTool(tool);
         }
     }

@@ -5,12 +5,12 @@
  * 호출이 0건이었다. 채팅·에이전트 공용 SSoT 로 추출하면서 규칙을 고정한다.
  */
 const buildSkillCatalogMock = jest.fn();
-jest.mock('../../agents/skill-manager', () => ({
+jest.mock('../skill-manager', () => ({
     getSkillManager: () => ({ buildSkillCatalog: buildSkillCatalogMock }),
 }));
 
 import { applySkillCatalog } from '../skill-catalog-tool';
-import type { ToolDefinition } from '../../llm/types';
+import type { ToolDefinition } from '../../../llm/types';
 
 const loadSkillTool: ToolDefinition = {
     type: 'function',

@@ -10,8 +10,9 @@ const getLLMToolsMock = jest.fn();
 const executeToolMock = jest.fn();
 const selectToolsMock = jest.fn();
 
-jest.mock('../../../agents/skill-manager', () => ({
-    getSkillManager: () => ({ buildManifestPrompt: buildManifestPromptMock }),
+jest.mock('../../../runtime-ports/skill-runtime', () => ({
+    ...jest.requireActual('../../../runtime-ports/skill-runtime'),
+    getSkillRuntime: () => ({ buildManifestPrompt: buildManifestPromptMock }),
 }));
 jest.mock('../../../mcp/unified-client', () => ({
     getUnifiedMCPClient: () => ({

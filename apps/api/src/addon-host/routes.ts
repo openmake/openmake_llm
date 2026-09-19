@@ -10,15 +10,18 @@ import { Router, type Application, type IRouter } from 'express';
 import { success } from '../utils/api-response';
 import { createLogger } from '../utils/logger';
 import { enabledBuiltinAddons, isBuiltinAddonEnabled, listBuiltinAddonDefs } from './builtin-registry';
+import type { ADDON_KINDS } from './manifest';
 import { loadAddonEntry } from './entry-loader';
 
 const logger = createLogger('AddonHost');
+
+type AddonKind = (typeof ADDON_KINDS)[number];
 
 /**
  * add-on 목록 — 매니페스트와 켜짐 여부는 프로세스 시작 시 고정이라 첫 요청에 한 번만 만든다. 매니페스트를 못 읽은
  * add-on 은 발견 단계에서 빠진다(부팅 로그의 `매니페스트 오류` 경고로 드러난다).
  */
-interface AddonListEntry { id: string; name: string; version: string; kind: 'content' | 'integration'; enabled: boolean }
+interface AddonListEntry { id: string; name: string; version: string; kind: AddonKind; enabled: boolean }
 let addonListCache: AddonListEntry[] | null = null;
 
 export function listBuiltinAddons(): AddonListEntry[] {

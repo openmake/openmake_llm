@@ -13,10 +13,10 @@
  *
  * @module services/skill-catalog-tool
  */
-import type { ToolDefinition } from '../llm/types';
-import { getSkillManager } from '../agents/skill-manager';
-import { LOAD_SKILL_TOOL_NAME } from '../mcp/load-skill-tool';
-import { createLogger } from '../utils/logger';
+import type { ToolDefinition } from '../../llm/types';
+import { getSkillManager } from './skill-manager';
+import { LOAD_SKILL_TOOL_NAME } from './load-skill-tool';
+import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('SkillCatalogTool');
 
