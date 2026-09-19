@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.77.1](https://github.com/openmake/openmake_llm/compare/v1.77.0...v1.77.1) (2026-09-19)
+
+
+### 🐛 버그 수정
+
+* **addon:** 라우트 게이트가 인증 문맥 없이 돌아 조직 사용권(403)이 적용되지 않던 결함 ([#953](https://github.com/openmake/openmake_llm/issues/953)) ([7ca465c](https://github.com/openmake/openmake_llm/commit/7ca465c008eb94df0ea107547947b3e78b3f0e28))
+* **deps:** adm-zip 0.6.1 로 고정 — 새 high 권고로 main CI 가 막히던 문제 ([#947](https://github.com/openmake/openmake_llm/issues/947)) ([ebddd13](https://github.com/openmake/openmake_llm/commit/ebddd13f6fb5e3d0676237d0c5d1860a93d12f25))
+
 ## [1.77.0](https://github.com/openmake/openmake_llm/compare/v1.76.0...v1.77.0) (2026-09-19)
 
 
