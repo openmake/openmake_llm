@@ -51,6 +51,7 @@
 - Linux · Windows(WSL2, `omk.ps1`) 미실행
 - 빈 PC — 검증 호스트에 Node 24·Docker·PM2·Caddy 가 이미 있어 툴체인 설치·Caddy 다운로드 경로를 타지 않았다
 - `online`(기본 인스턴스) 설치, GitHub 에서 받아 설치(검증은 로컬 경로 클론), `--public-url`, `--keep-data`, `autoupdate`, 마이그레이션이 있는 `update`
+- SearXNG 기본 설치는 `dev` 실기동과 함수 단위(오프라인→복구→멱등→기동 실패 정리)로만 확인했다 — `env install` 안에서의 흐름(설치 후 API 재시작)과 Linux 의 파일 마운트 권한은 미실행
 - **CI 에 omk 실설치 job 이 없다** — `install-smoke` 는 `install.sh` 만 본다. 깨끗한 Ubuntu 러너에서 `omk env install → status → update → reset` 을 돌리면 Linux·빈 PC·자동 반복이 한 번에 해결된다
 
 ## 4. 업스트림에 알릴 것
@@ -58,3 +59,16 @@
 - `package-lock.json` 이 낡아 있다(워크스페이스 버전 1.70.0 vs package.json 1.74.0 — release-please 가 lock 을 갱신하지 않는다). 설치만 해도 lock 이 바뀌어 `update` 가 막혔다. `openmake_llm.sh update` 에 우회를 넣었지만 근본 수정은 릴리스 파이프라인 쪽이다
 - 모델이 URL 을 받고도 페이지 추출이 아니라 웹 검색을 골랐다 (위 1번의 사례)
 - `[LocalModels] probe … http://localhost:11434/v1/v1/models → 404` — Ollama base URL 에 `/v1` 이 있으면 경로가 중복된다
+- **웹 검색 스위치가 없다** (2026-09-19) — 외부 연결이 없는 설치본에서도 모델에 검색 도구가 노출돼, 질문마다
+  제공자별 `WEB_SEARCH_FETCH_TIMEOUT_MS`(기본 12초)를 기다린 뒤 0건이 된다. 제안: `WEB_SEARCH_ENABLED=false` 면
+  검색·팩트체크 도구를 모델에 노출하지 않고 `performWebSearch` 는 즉시 `[]` — `DISCUSSION_FACTCHECK_ENABLED` 와 같은
+  kill-switch 패턴. 그때까지 omk 는 오프라인 설치본의 대기를 2초로 낮추는 것으로 버틴다(README "웹 검색").
+- **`.env.example` 은 "docker compose 로 기동"이라 하지만 `infra/docker-compose.yml` 에 searxng 서비스가 없다** —
+  omk 가 `docker run` 으로 메운다. 업스트림이 compose 서비스(프로필)로 넣으면 omk 쪽은 그걸 쓰도록 바꾼다.
+
+## 5. 완전 오프라인 설치 (기록만, 2026-09-19)
+
+`install.sh` 는 git clone·npm·docker pull 을 하므로 인터넷이 전혀 없는 PC 에는 설치 자체가 안 된다. 지금 다루는
+"오프라인"은 *설치 후 외부망 차단* 또는 *내부 미러로 설치* 다. 폐쇄망 번들(소스 tarball + npm 캐시 + `docker save`
+이미지: postgres·redis·searxng·샌드박스)은 별도 작업.
+

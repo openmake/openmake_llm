@@ -34,19 +34,20 @@
 #   curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk.sh \
 #     | bash -s -- env install staging --public-url https://chat-staging.example.com
 #
-#   omk env install <env> [--ref BR] [--bench-ref BR] [--public-url URL] [--no-bench] [--no-proxy]
+#   omk env install <env> [--ref BR] [--bench-ref BR] [--public-url URL] [--no-bench] [--no-proxy] [--no-searxng]
 #                         [--llm-base-url U --llm-api-key K --llm-model M] [--autoupdate|--no-autoupdate]
 #   omk env update  <env> [--if-behind]       # llm(ff-only→build→migrate→restart) → bench → proxy
 #   omk env reset   <env> [--keep-data] [--keep-env] [--reinstall] [--yes]
 #   omk env status|start|stop|logs <env>
 #   omk env autoupdate <env> [--every 'CRON'] [--off]   # 선택 — 기본은 수동 배포. PM2 cron 앱 omk-updater-<env>
 #   omk proxy status|reload|render <env>
-#   omk dev setup|up|down|status|reset [api|web|bench|deps|all]
+#   omk dev setup [--no-searxng] · omk dev up|down|status|reset [api|web|bench|deps|all]
 #   omk dev up [대상] [--tailscale] [--host H]…   # 다른 기기에서 보기 — 호스트를 CORS·Next·vite 에 허용(.env 에 기억)
 #
 # 환경변수:
 #   OMK_ROOT(~/.openmake)  OMK_REPO_URL  OMKB_REPO_URL  OMK_CADDY_VERSION  OMK_CADDY_ADMIN(localhost:2019)
 #   OMK_AUTOUPDATE_CRON('*/10 * * * *')  OMK_DEV_LLM  OMK_DEV_BENCH  OMKB_PORT_BASE(9400)  OMK_PROXY_PORT_BASE(33000)
+#   OMK_SEARXNG_IMAGE(searxng/searxng:latest)  OMK_SEARXNG_PORT_BASE(8888)  OMK_NET_PROBE_URLS  OMK_SEARCH_PROBE_QUERY
 #   OMK_FORCE_FOREIGN=1   같은 인스턴스 이름을 쓰는 다른 설치본의 컨테이너·PM2 앱도 건드린다 (기본: 거부)
 #
 # 종료 코드: 0 성공 / 1 사용법·전제조건 / 2 단계 실패 / 3 health check 실패
@@ -67,6 +68,11 @@ OMKB_PORT_BASE="${OMKB_PORT_BASE:-9400}"          # bench 빈 포트 탐색 시�
 OMK_PROXY_PORT_BASE="${OMK_PROXY_PORT_BASE:-33000}"
 OMK_CADDY_ADMIN="${OMK_CADDY_ADMIN:-localhost:2019}"
 OMK_AUTOUPDATE_CRON="${OMK_AUTOUPDATE_CRON:-*/10 * * * *}"
+OMK_SEARXNG_IMAGE="${OMK_SEARXNG_IMAGE:-searxng/searxng:latest}"
+OMK_SEARXNG_PORT_BASE="${OMK_SEARXNG_PORT_BASE:-8888}"   # .env.example 의 SEARXNG_URL 예시 포트. 점유 시 다음 빈 포트
+# 외부 연결 점검 대상(하나라도 열리면 온라인) · 검색 동작 확인용 질의
+OMK_NET_PROBE_URLS="${OMK_NET_PROBE_URLS:-https://duckduckgo.com https://www.wikipedia.org}"
+OMK_SEARCH_PROBE_QUERY="${OMK_SEARCH_PROBE_QUERY:-wikipedia}"
 
 # curl | bash 에서는 BASH_SOURCE 가 비어 있다 — 그때는 "레포 밖" 으로 취급한다.
 SCRIPT_PATH="${BASH_SOURCE[0]:-}"
@@ -133,6 +139,10 @@ dotenv_set() { # $1=file $2=key $3=value
         printf '%s=%s\n' "$key" "$val" >> "$file"
     fi
 }
+dotenv_unset() { # $1=file $2=key
+    [[ -f "$1" ]] && grep -qE "^${2}=" "$1" || return 0
+    local tmp; tmp="$(mktemp)"; grep -vE "^${2}=" "$1" > "$tmp" || true; mv "$tmp" "$1"
+}
 dotenv_ensure() { # $1=file $2=key $3=default — 없을 때만 붙인다 (기존 값 존중)
     [[ -n "$(dotenv_get "$1" "$2")" ]] || dotenv_set "$1" "$2" "$3"
 }
@@ -156,7 +166,8 @@ pm2_names() { # $1=env → llm next discord bench updater
     local s; s="$(env_suffix "$1")"
     printf 'openmake-llm%s openmake-next%s openmake-discord%s openmake-bench%s omk-updater-%s' "$s" "$s" "$s" "$s" "$1"
 }
-docker_containers() { local s; s="$(env_suffix "$1")"; printf 'openmake%s-postgres openmake%s-redis' "$s" "$s"; }
+docker_containers() { local s; s="$(env_suffix "$1")"; printf 'openmake%s-postgres openmake%s-redis openmake%s-searxng' "$s" "$s" "$s"; }
+searxng_name()      { printf 'openmake%s-searxng' "$(env_suffix "$1")"; }
 docker_volumes()    { local s; s="$(env_suffix "$1")"; printf 'openmake%s_pgdata openmake%s_redisdata' "$s" "$s"; }
 
 # ── 소유권 가드 ──────────────────────────────────────────────────────────────
@@ -168,7 +179,8 @@ is_foreign_path() { # $1=실제 소유 경로 $2=이 환경의 디렉터리 → 
     [[ -n "$1" ]] || return 1
     case "$1" in "$2"|"$2"/*) return 1 ;; *) return 0 ;; esac
 }
-container_workdir() { docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$1" 2>/dev/null || true; }
+# compose 가 띄운 것은 compose 라벨로, omk 가 docker run 으로 띄운 것(SearXNG)은 omk.owner_dir 라벨로 주인을 안다.
+container_workdir() { docker inspect -f '{{ or (index .Config.Labels "com.docker.compose.project.working_dir") (index .Config.Labels "omk.owner_dir") }}' "$1" 2>/dev/null || true; }
 pm2_app_cwd() { # $1=name
     has pm2 && has node || return 0
     pm2 jlist 2>/dev/null | node -e '
@@ -509,11 +521,105 @@ cmd_env_autoupdate() { # env [--every CRON] [--off]
 }
 
 # ==============================================================================
+# 웹 검색 (SearXNG) — 설치하면 바로 검색이 되게, 외부 연결이 없으면 조용히 꺼 둔다
+# ==============================================================================
+# 키 없는 기본 제공자(Wikipedia·뉴스·DDG)만으로는 일반 웹 검색이 거의 0건이다. 그래서 SearXNG 를
+# Postgres·Redis 와 같은 급의 환경 인프라로 기본 설치한다. Base 는 .env 의 SEARXNG_URL 만 본다
+# (mcp/web-search/providers.ts) — omk 는 컨테이너를 띄우고 그 한 줄을 적는다.
+#   .env 키:  SEARXNG_URL            Base 가 읽는 값
+#            OMK_SEARXNG_PORT       omk 가 띄웠다는 표시 겸 포트 (없는데 SEARXNG_URL 이 있으면 사용자 것 — 손대지 않음)
+#            OMK_SEARXNG=off        --no-searxng 로 뺀 환경 (update 때도 다시 켜지 않음)
+#            OMK_SEARCH_OFFLINE=1   외부 연결이 없어 꺼 둔 상태 (WEB_SEARCH_FETCH_TIMEOUT_MS 를 omk 가 낮춰 둠)
+SEARCH_CHANGED=0   # searxng_ensure 가 .env 를 바꿨으면 1 — 호출자가 API 를 재시작한다
+net_online() { local u; for u in $OMK_NET_PROBE_URLS; do curl -fsS --max-time 6 -o /dev/null "$u" 2>/dev/null && return 0; done; return 1; }
+searxng_count() { # $1=url → 실제 검색 결과 건수 (실패 0)
+    local n; n="$(curl -fsS --max-time 20 "$1/search?q=$OMK_SEARCH_PROBE_QUERY&format=json" 2>/dev/null | grep -o '"url": *"' | wc -l | tr -d ' ' || true)"
+    printf '%s' "${n:-0}"
+}
+searxng_write_settings() { # $1=settings.yml — 기본 설정 위에 필요한 것만 덮는다
+    local key; key="$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')"
+    # formats 에 json 이 없으면 Base 의 호출(/search?format=json)이 403 이다. limiter 는 loopback 전용이라 끈다.
+    cat > "$1" <<EOF
+use_default_settings: true
+server:
+  secret_key: "$key"
+  limiter: false
+  image_proxy: false
+search:
+  formats:
+    - html
+    - json
+EOF
+    chmod 644 "$1"   # 컨테이너 안의 비루트 사용자가 읽어야 한다
+}
+search_mark_offline() { # $1=.env — Base 에는 웹 검색 스위치가 없다. 제공자별 대기(기본 12초)만이라도 줄인다.
+    log_warn "외부 연결이 없습니다 — 웹 검색을 꺼 둡니다 (연결되면 'omk env update' 가 다시 켭니다)"
+    [[ "$(dotenv_get "$1" OMK_SEARCH_OFFLINE)" == "1" ]] && return 0
+    [[ -z "$(dotenv_get "$1" WEB_SEARCH_FETCH_TIMEOUT_MS)" ]] || return 0      # 사용자가 정한 값은 존중
+    dotenv_set "$1" WEB_SEARCH_FETCH_TIMEOUT_MS 2000; dotenv_set "$1" OMK_SEARCH_OFFLINE 1; SEARCH_CHANGED=1
+}
+searxng_ensure() { # $1=llm dir $2=env $3=설정 디렉터리 $4=소유 디렉터리(가드 라벨)
+    local envf="$1/.env" env="$2" conf="$3" owner="$4" name port="" url i created=0 healthy=0
+    SEARCH_CHANGED=0
+    [[ "$(dotenv_get "$envf" OMK_SEARXNG)" == "off" ]] && return 0
+    if [[ -n "$(dotenv_get "$envf" SEARXNG_URL)" && -z "$(dotenv_get "$envf" OMK_SEARXNG_PORT)" ]]; then
+        log_info "SEARXNG_URL 이 이미 지정돼 있습니다 — 그대로 씁니다"; return 0
+    fi
+    has docker || { log_warn "docker 가 없어 SearXNG 를 띄우지 못했습니다 — 웹 검색 제한"; return 0; }
+    name="$(searxng_name "$env")"
+    if docker inspect "$name" >/dev/null 2>&1; then
+        docker start "$name" >/dev/null 2>&1 || true
+        port="$(docker port "$name" 8080/tcp 2>/dev/null | head -1 | sed -E 's/.*:([0-9]+)$/\1/')"
+    else
+        net_online || { search_mark_offline "$envf"; return 0; }
+        # 심볼릭 링크를 푼 실제 경로로 마운트한다 (macOS 의 /var→/private/var 처럼 docker 가 공유하지 않는 별칭 회피)
+        mkdir -p "$conf"; conf="$( cd "$conf" && pwd -P )"
+        [[ -f "$conf/settings.yml" ]] || searxng_write_settings "$conf/settings.yml"
+        port="$(dotenv_get "$envf" OMK_SEARXNG_PORT)"
+        { [[ -n "$port" ]] && ! port_in_use "$port"; } || port="$(find_free_port "$OMK_SEARXNG_PORT_BASE")" || die "SearXNG 용 빈 포트를 찾지 못했습니다"
+        log_info "SearXNG 기동: $name → 127.0.0.1:$port  ($OMK_SEARXNG_IMAGE)"
+        docker image inspect "$OMK_SEARXNG_IMAGE" >/dev/null 2>&1 || docker pull -q "$OMK_SEARXNG_IMAGE" >/dev/null \
+            || { log_warn "SearXNG 이미지를 받지 못했습니다 — 웹 검색 없이 계속합니다"; return 0; }
+        docker run -d --name "$name" --restart unless-stopped -p "127.0.0.1:$port:8080" \
+            -v "$conf/settings.yml:/etc/searxng/settings.yml:ro" --label "omk.owner_dir=$owner" \
+            "$OMK_SEARXNG_IMAGE" >/dev/null || { log_warn "SearXNG 기동 실패 — 웹 검색 없이 계속합니다"; return 0; }
+        created=1
+    fi
+    [[ -n "$port" ]] || { log_warn "SearXNG 포트를 알 수 없습니다 ($name)"; return 0; }
+    url="http://127.0.0.1:$port"
+    for ((i = 0; i < 30; i++)); do curl -fsS --max-time 2 -o /dev/null "$url/healthz" 2>/dev/null && { healthy=1; break; }; sleep 2; done
+    # 뜨지 않는 컨테이너의 주소를 .env 에 적으면 Base 는 매번 죽은 주소를 두드린다 — 적지 않고, 방금 만든 것이면 치운다.
+    if [[ $healthy -eq 0 ]]; then
+        log_warn "SearXNG 가 응답하지 않습니다 ($name) — 웹 검색 없이 계속합니다. 마지막 로그:"
+        docker logs --tail 5 "$name" 2>&1 | sed 's/^/         /' || true
+        [[ $created -eq 1 ]] && docker rm -f "$name" >/dev/null 2>&1
+        return 0
+    fi
+    if [[ "$(dotenv_get "$envf" SEARXNG_URL)" != "$url" ]]; then
+        dotenv_set "$envf" SEARXNG_URL "$url"; dotenv_set "$envf" OMK_SEARXNG_PORT "$port"; SEARCH_CHANGED=1
+    fi
+    if [[ "$(dotenv_get "$envf" OMK_SEARCH_OFFLINE)" == "1" ]]; then
+        dotenv_unset "$envf" OMK_SEARCH_OFFLINE; dotenv_unset "$envf" WEB_SEARCH_FETCH_TIMEOUT_MS; SEARCH_CHANGED=1
+    fi
+}
+search_line() { # $1=llm dir → 상태 한 줄 (실제로 검색을 한 번 돌려 본다)
+    local envf="$1/.env" url n
+    url="$(dotenv_get "$envf" SEARXNG_URL)"
+    if   [[ "$(dotenv_get "$envf" OMK_SEARXNG)" == "off" ]];        then printf '꺼짐 (--no-searxng — 키 없는 기본 제공자만)'
+    elif [[ "$(dotenv_get "$envf" OMK_SEARCH_OFFLINE)" == "1" ]];   then printf '꺼짐 (외부 연결 없음 — 연결 후 omk env update)'
+    elif [[ -z "$url" ]];                                           then printf 'SearXNG 없음 (키 없는 기본 제공자만 — 일반 웹 검색은 거의 0건)'
+    else n="$(searxng_count "$url")"
+        if [[ "$n" -gt 0 ]]; then printf '동작 확인 (SearXNG %s · %s건)' "$url" "$n"
+        else printf '결과 0건 (SearXNG %s) — 컨테이너·외부 연결 확인: docker logs …-searxng' "$url"; fi
+    fi
+}
+
+# ==============================================================================
 # env install / update / reset / status / start / stop / logs
 # ==============================================================================
 cmd_env_install() {
     local env="$1"; shift
-    local ref="" bench_ref="" public_url="" no_bench=0 no_proxy=0 auto="" llm_args=()
+    local ref="" bench_ref="" public_url="" no_bench=0 no_proxy=0 no_searxng=0 auto="" llm_args=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --ref)          ref="${2:-}"; shift ;;
@@ -521,6 +627,7 @@ cmd_env_install() {
             --public-url)   public_url="${2:-}"; shift ;;
             --no-bench)     no_bench=1 ;;
             --no-proxy)     no_proxy=1 ;;
+            --no-searxng)   no_searxng=1 ;;
             --autoupdate)   auto=1 ;;
             --no-autoupdate) auto=0 ;;
             --llm-base-url|--llm-api-key|--llm-model) llm_args+=("$1" "${2:-}"); shift ;;
@@ -551,6 +658,11 @@ cmd_env_install() {
     dotenv_ensure "$ldir/.env" OMK_LOG_DIR "$(logs_dir "$env")"
     load_toolchain "$ldir"
 
+    # 1.5) 웹 검색 — .env 는 install.sh 가 만든 뒤에야 있다. 값이 바뀌면 API 만 다시 띄운다.
+    [[ $no_searxng -eq 1 ]] && dotenv_set "$ldir/.env" OMK_SEARXNG off
+    searxng_ensure "$ldir" "$env" "$(env_dir "$env")/searxng" "$(env_dir "$env")"
+    [[ $SEARCH_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
+
     # 2) openmake_bench
     [[ $no_bench -eq 1 ]] || bench_install "$env" "$bench_ref" "$ldir"
 
@@ -578,6 +690,7 @@ cmd_env_update() {
     fi
     log_step "환경 갱신: $env"
     restore_lockfiles "$ldir"; [[ -d "$bdir/.git" ]] && restore_lockfiles "$bdir"
+    searxng_ensure "$ldir" "$env" "$(env_dir "$env")/searxng" "$(env_dir "$env")"   # 뒤의 update 가 재시작하며 반영
     # llm: fetch → ff-only pull → build → migrate → restart (openmake_llm.sh 가 dirty/ff 검사 포함)
     ( cd "$ldir" && ./openmake_llm.sh update --yes < /dev/null | cat ) || die "openmake_llm.sh update 실패 ($env)"
     bench_update "$env"
@@ -662,6 +775,7 @@ env_summary() { # $1=env
     [[ -d "$bdir" ]] && echo "  bench     $bdir  → http://localhost:${bport:-?}"
     [[ -n "$pport" ]] && echo "  proxy     http://localhost:$pport  (외부 공개는 터널/DNS 를 이 포트로: scripts/cloudflared/config.yml.example)"
     [[ -n "$(dotenv_get "$ldir/.env" OMK_APP_URL | grep -E '^https?://' | grep -v localhost || true)" ]] && echo "  공개 주소  $(dotenv_get "$ldir/.env" OMK_APP_URL)"
+    echo "  웹 검색   $(search_line "$ldir")"
     echo ""
     if [[ -d "$bdir" && -z "$(dotenv_get "$bdir/.env" OMK_API_KEY)" ]]; then
         printf "  %s[할 일]%s bench 가 llm 모델을 부르려면 API 키가 필요합니다 (자동 발급 불가):\n" "$C_WARN" "$C_RESET"
@@ -689,6 +803,7 @@ cmd_env_status() {
     curl -fsS --max-time 3 "http://localhost:$(llm_api_port "$ldir")/health" >/dev/null 2>&1 && printf 'llm=OK ' || printf 'llm=FAIL '
     [[ -d "$bdir" ]] && { curl -fsS --max-time 3 "http://localhost:$(dotenv_get "$bdir/.env" OMKB_PORT)/api/health" >/dev/null 2>&1 && printf 'bench=OK ' || printf 'bench=FAIL '; }
     echo ""
+    echo "  검색  $(search_line "$ldir")"
 }
 cmd_env_start() {
     local env="$1" ldir bdir; ldir="$(llm_dir "$env")"; bdir="$(bench_dir "$env")"
@@ -777,13 +892,17 @@ dev_apply_hosts() { # $1=llm dir $2=hosts CSV — CORS_ORIGINS 에 호스트별 
     dotenv_set "$envf" OMK_DEV_HOSTS "$hosts"
 }
 dev_compose() { ( cd "$DEV_LLM" && docker compose --env-file .env -f infra/docker-compose.yml "$@" ); }
+dev_searxng() { searxng_ensure "$DEV_LLM" dev "$DEV_LLM/.openmake/searxng" "$DEV_LLM"; }
 cmd_dev_setup() {
     dev_locate; ensure_git
+    local no_searxng=0; [[ "${1:-}" == "--no-searxng" ]] && no_searxng=1
     log_step "dev 준비: $DEV_LLM"
     # 툴체인·.env(OMK_INSTANCE=dev)·의존성·DB·마이그레이션까지. 빌드·PM2 는 dev 에 필요 없다.
     ( cd "$DEV_LLM" && ./install.sh --yes --instance dev --skip-build --no-start ) || die "install.sh 실패"
     load_toolchain "$DEV_LLM"
     dev_build_packages
+    [[ $no_searxng -eq 1 ]] && dotenv_set "$DEV_LLM/.env" OMK_SEARXNG off
+    dev_searxng
     if [[ -n "$DEV_BENCH" ]]; then
         log_step "bench dev 준비: $DEV_BENCH"
         ( cd "$DEV_BENCH" && npm install --no-audit --no-fund && ( cd web && npm install --no-audit --no-fund ) ) || die "bench 의존성 설치 실패"
@@ -811,7 +930,7 @@ cmd_dev_up() {
     [[ $use_ts -eq 1 ]] && { local ts; ts="$(tailscale_hosts)"; [[ -n "$ts" ]] || die "tailscale 주소를 읽을 수 없습니다 (tailscale CLI·로그인 확인)"; hosts="$(csv_union "$hosts" "$ts")"; }
     hosts="$(csv_union "$hosts" "$hosts_arg")"
     dev_apply_hosts "$DEV_LLM" "$hosts"
-    [[ "$target" == "deps" || "$target" == "all" || "$target" == "api" ]] && { log_info "PostgreSQL/Redis 기동 (docker compose)"; dev_compose up -d; }
+    [[ "$target" == "deps" || "$target" == "all" || "$target" == "api" ]] && { log_info "PostgreSQL/Redis 기동 (docker compose)"; dev_compose up -d; dev_searxng; }
     [[ "$target" == "deps" ]] && { cmd_dev_status; return 0; }
 
     # macOS 기본 bash 3.2 에는 case 의 ;;& 가 없어 if 로 나열한다.
@@ -841,12 +960,13 @@ cmd_dev_up() {
     log_info "Ctrl+C 로 전부 종료. DB/Redis 는 남는다 → 'omk dev down'"
     "${conc[@]}" -k --prefix-colors auto -n "$names" "${cmds[@]}"
 }
-cmd_dev_down()   { dev_locate; dev_compose stop; log_ok "dev DB/Redis 정지 (데이터 유지)"; }
+cmd_dev_down()   { dev_locate; dev_compose stop; docker stop "$(searxng_name dev)" >/dev/null 2>&1 || true; log_ok "dev DB/Redis/SearXNG 정지 (데이터 유지)"; }
 cmd_dev_status() {
     dev_locate; load_toolchain "$DEV_LLM"
     echo "dev  llm=$DEV_LLM  bench=${DEV_BENCH:-없음}"
     echo "  포트  api $(llm_api_port "$DEV_LLM")  web $(llm_web_port "$DEV_LLM")  pg $(dotenv_get "$DEV_LLM/.env" POSTGRES_PORT)  redis $(dotenv_get "$DEV_LLM/.env" REDIS_PORT)  bench $(dotenv_get "${DEV_BENCH:-/nonexistent}/.env" OMKB_PORT)"
     has docker && { printf "  docker "; docker ps --format '{{.Names}}={{.Status}}' 2>/dev/null | grep -E "^($(docker_containers dev | tr ' ' '|'))=" | tr '\n' ' ' || true; echo ""; }
+    echo "  검색  $(search_line "$DEV_LLM")"
 }
 cmd_dev_reset() {
     dev_locate
@@ -854,12 +974,13 @@ cmd_dev_reset() {
     if [[ "${1:-}" == "--keep-data" ]]; then keep_data=1; flags+=(--keep-data); what="컨테이너"; fi
     confirm "dev 의 ${what}를 지웁니다 (소스·.env 유지). 계속할까요?" || return 0
     ( cd "$DEV_LLM" && ./uninstall.sh "${flags[@]}" ) || die "uninstall.sh 실패"
+    docker rm -f "$(searxng_name dev)" >/dev/null 2>&1 && log_ok "컨테이너 $(searxng_name dev) 제거" || true   # uninstall.sh 는 compose 것만 안다
     log_ok "dev 리셋 완료 — 'omk dev up' 으로 다시 준비"
 }
 cmd_dev() {
     local sub="${1:-}"; shift || true
     case "$sub" in
-        setup)  cmd_dev_setup ;;
+        setup)  cmd_dev_setup "$@" ;;
         up)     cmd_dev_up "$@" ;;
         down)   cmd_dev_down ;;
         status) cmd_dev_status ;;

@@ -69,6 +69,24 @@ omk proxy status | reload | render <env>
 
 `staging`/`online` 외의 이름도 된다(`omk env install qa --ref feature/x`) — 이름 있는 인스턴스가 하나 더 생길 뿐이다.
 
+## 웹 검색 — 설치하면 바로 된다
+
+키 없는 기본 제공자(Wikipedia·뉴스·DDG)만으로는 일반 웹 검색이 거의 0건이다. 그래서 omk 는 SearXNG 를
+Postgres·Redis 와 같은 급의 **환경 인프라**로 기본 설치한다 (`env install`·`dev setup` 모두. 빼려면 `--no-searxng`).
+
+| 상황 | omk 가 하는 일 | 요약·`status` 에 보이는 줄 |
+|---|---|---|
+| 보통 | `openmake[-<env>]-searxng` 컨테이너(127.0.0.1 전용, 포트 자동)를 띄우고 `.env` 에 `SEARXNG_URL` 기록 → API 재시작 → **실제 검색 1회로 확인** | `웹 검색  동작 확인 (SearXNG http://127.0.0.1:8888 · 32건)` |
+| 외부 연결 없음 | 컨테이너를 만들지 않고, 제공자별 대기(기본 12초)를 2초로 낮춘다(`WEB_SEARCH_FETCH_TIMEOUT_MS` — 이미 값이 있으면 존중) | `꺼짐 (외부 연결 없음 — 연결 후 omk env update)` |
+| 나중에 연결됨 | `omk env update` 가 다시 점검해 컨테이너를 띄우고 위 임시값을 걷어낸다 | `동작 확인 …` |
+| 컨테이너가 안 뜸 | 로그 5줄을 보여 주고 치운다. **죽은 주소는 `.env` 에 적지 않는다** | `SearXNG 없음 …` |
+| `SEARXNG_URL` 을 직접 넣어 둠 | 손대지 않는다 (`OMK_SEARXNG_PORT` 가 없으면 사용자 것) | `동작 확인 …` / `결과 0건 …` |
+
+설정은 `<env>/searxng/settings.yml`(dev: `.openmake/searxng/`) — 기본 설정 위에 `formats: json`(없으면 Base 호출이 403),
+`limiter: false`, 무작위 `secret_key` 만 덮는다. `omk env reset` 은 이 컨테이너도 함께 지운다.
+
+Base 에는 웹 검색을 끄는 스위치가 아직 없다(모델은 오프라인에서도 검색을 시도한다) — 제안은 BACKLOG §4.
+
 ## 꼬였을 때 — 지우고 다시
 
 ```bash

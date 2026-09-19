@@ -19,8 +19,8 @@ eq "suffix online"  "$(env_suffix online)"  ""
 eq "suffix staging" "$(env_suffix staging)" "-staging"
 eq "pm2 online"     "$(pm2_names online)"   "openmake-llm openmake-next openmake-discord openmake-bench omk-updater-online"
 eq "pm2 staging"    "$(pm2_names staging)"  "openmake-llm-staging openmake-next-staging openmake-discord-staging openmake-bench-staging omk-updater-staging"
-eq "docker online"  "$(docker_containers online)"  "openmake-postgres openmake-redis"
-eq "docker staging" "$(docker_containers staging)" "openmake-staging-postgres openmake-staging-redis"
+eq "docker online"  "$(docker_containers online)"  "openmake-postgres openmake-redis openmake-searxng"
+eq "docker staging" "$(docker_containers staging)" "openmake-staging-postgres openmake-staging-redis openmake-staging-searxng"
 eq "volumes online" "$(docker_volumes online)"     "openmake_pgdata openmake_redisdata"
 eq "volumes staging" "$(docker_volumes staging)"   "openmake-staging_pgdata openmake-staging_redisdata"
 eq "bench pm2"      "$(bench_pm2_name staging)" "openmake-bench-staging"
@@ -30,6 +30,27 @@ eq "ref online"     "$(env_default_ref online)"  "main"
 ok "validate rejects dev"   '! ( validate_env dev ) >/dev/null 2>&1'
 ok "validate rejects Upper" '! ( validate_env Staging ) >/dev/null 2>&1'
 ok "validate accepts qa-1"  '( validate_env qa-1 ) >/dev/null 2>&1'
+
+# ── 웹 검색: 이름·설정 파일·.env 표시 (docker·네트워크는 건드리지 않는다) ──
+eq "searxng online"  "$(searxng_name online)"  "openmake-searxng"
+eq "searxng dev"     "$(searxng_name dev)"     "openmake-dev-searxng"
+SX="$TMP/sx"; mkdir -p "$SX"; searxng_write_settings "$SX/settings.yml"
+ok "settings: json 포맷 허용"   'grep -qE "^    - json$" "$SX/settings.yml"'
+ok "settings: limiter 끔"       'grep -qE "^  limiter: false$" "$SX/settings.yml"'
+ok "settings: secret 64 hex"    'grep -qE "secret_key: \"[0-9a-f]{64}\"" "$SX/settings.yml"'
+printf 'A=1\nB=2\nA2=3\n' > "$SX/.env"; dotenv_unset "$SX/.env" A
+eq "unset: 그 키만 지운다"       "$(tr '\n' ' ' < "$SX/.env")" "B=2 A2=3 "
+dotenv_unset "$SX/.env" NOPE; eq "unset: 없는 키는 무해" "$(tr '\n' ' ' < "$SX/.env")" "B=2 A2=3 "
+eq "line: 미설정"    "$(search_line "$SX")" "SearXNG 없음 (키 없는 기본 제공자만 — 일반 웹 검색은 거의 0건)"
+( SEARCH_CHANGED=0; search_mark_offline "$SX/.env" >/dev/null; echo "$SEARCH_CHANGED" > "$SX/changed" )
+eq "offline: 대기 시간 단축"    "$(dotenv_get "$SX/.env" WEB_SEARCH_FETCH_TIMEOUT_MS)|$(dotenv_get "$SX/.env" OMK_SEARCH_OFFLINE)|$(cat "$SX/changed")" "2000|1|1"
+ok "line: 오프라인 표시"        '[[ "$(search_line "$SX")" == 꺼짐*외부* ]]'
+printf 'WEB_SEARCH_FETCH_TIMEOUT_MS=9000\n' > "$SX/.env"; search_mark_offline "$SX/.env" >/dev/null
+eq "offline: 사용자 값 존중"    "$(dotenv_get "$SX/.env" WEB_SEARCH_FETCH_TIMEOUT_MS)|$(dotenv_get "$SX/.env" OMK_SEARCH_OFFLINE)" "9000|"
+printf 'OMK_SEARXNG=off\n' > "$SX/.env"; SEARCH_CHANGED=9; searxng_ensure "$SX" t "$SX/c" "$SX"
+eq "ensure: off 면 아무것도 안 함" "$SEARCH_CHANGED|$([[ -d "$SX/c" ]] && echo made)" "0|"
+printf 'SEARXNG_URL=http://search.internal:8080\n' > "$SX/.env"; searxng_ensure "$SX" t "$SX/c" "$SX" >/dev/null
+eq "ensure: 사용자 URL 은 그대로" "$(dotenv_get "$SX/.env" SEARXNG_URL)|$SEARCH_CHANGED" "http://search.internal:8080|0"
 
 # ── 소유권 가드: 환경 디렉터리 밖의 경로는 남의 것 ──
 ok "own: infra under env"     '! is_foreign_path "$OMK_ROOT/staging/llm/infra" "$OMK_ROOT/staging"'
