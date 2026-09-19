@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.77.0](https://github.com/openmake/openmake_llm/compare/v1.76.0...v1.77.0) (2026-09-19)
+
+
+### ✨ 기능
+
+* **addon:** MCP·Skill 런타임을 add-on 으로 분리 + 선언형 Add-on 완성(상태·사용권·스키마·모델 요구) ([#950](https://github.com/openmake/openmake_llm/issues/950)) ([6ca9859](https://github.com/openmake/openmake_llm/commit/6ca9859931afe82f281c8d29358202621f44ef2f))
+* **llm:** 모델 프로필 — 모델마다 다른 값을 선언 테이블 하나로 ([#944](https://github.com/openmake/openmake_llm/issues/944)) ([5921e29](https://github.com/openmake/openmake_llm/commit/5921e29134ab3948f2630d098b02da0fd8106530))
+
 ## [1.76.0](https://github.com/openmake/openmake_llm/compare/v1.75.0...v1.76.0) (2026-09-18)
 
 
