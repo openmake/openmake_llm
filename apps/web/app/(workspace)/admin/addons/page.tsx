@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Blocks, Power, PowerOff, AlertTriangle } from "lucide-react";
+import { Blocks, Power, PowerOff, AlertTriangle, Cpu } from "lucide-react";
 import { PageHeader, Card, CardHeader, CardTitle, CardContent, Button, Table, Th, Td, Badge } from "@/components/ui/primitives";
 import { AdminTabs } from "@/components/hub-tabs";
 import type { ApiSuccess } from "@openmake/shared-types";
@@ -30,6 +30,23 @@ interface AddonRow {
 }
 type Payload = ApiSuccess<{ addons: AddonRow[]; restartNote: string }>;
 
+interface ProfileRow {
+  id: string;
+  displayName: string;
+  contextLength: number | null;
+  contextLengthProbed: boolean;
+  available: boolean;
+  licenseBlockReason: string | null;
+  profile: {
+    capabilities?: { toolCalling?: boolean; thinking?: boolean; vision?: boolean };
+    reasoningEfforts?: string[];
+    toolStrict?: boolean;
+    maxPromptImages?: number;
+    license?: { id: string; commercialUse: boolean };
+  };
+}
+type ProfilePayload = ApiSuccess<{ profiles: ProfileRow[] }>;
+
 const STATE_TONE: Record<AddonState, "success" | "warn" | "danger" | "neutral"> = {
   enabled: "success",
   installed: "neutral",
@@ -43,12 +60,17 @@ export default function AdminAddonsPage() {
   const [restartNote, setRestartNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [profiles, setProfiles] = useState<ProfileRow[]>([]);
 
   const load = useCallback(async () => {
     try {
-      const r = await ApiClient.get<Payload>("/api/admin/addons");
+      const [r, p] = await Promise.all([
+        ApiClient.get<Payload>("/api/admin/addons"),
+        ApiClient.get<ProfilePayload>("/api/admin/model-profiles"),
+      ]);
       setAddons(r?.data?.addons ?? []);
       setRestartNote(r?.data?.restartNote ?? "");
+      setProfiles(p?.data?.profiles ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("loadError"));
     }
@@ -118,6 +140,46 @@ export default function AdminAddonsPage() {
                                 <Power className="h-3.5 w-3.5" /> {t("enable")}
                               </Button>
                             )}
+                          </Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle className="flex items-center gap-2"><Cpu className="h-4 w-4" /> {t("profilesTitle")}</CardTitle></CardHeader>
+            <CardContent>
+              <p className="mb-2 text-[11px] text-muted">{t("profilesHelp")}</p>
+              {profiles.length === 0 ? <p className="text-xs text-muted">{t("empty")}</p> : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <thead>
+                      <tr><Th>{t("model")}</Th><Th>{t("context")}</Th><Th>{t("capabilities")}</Th><Th>{t("efforts")}</Th><Th>{t("license")}</Th></tr>
+                    </thead>
+                    <tbody>
+                      {profiles.map((p) => (
+                        <tr key={p.id}>
+                          <Td>
+                            <div className="font-mono text-xs">{p.id}</div>
+                            {!p.available && <div className="text-[11px] text-warn">{t("unavailable")}</div>}
+                          </Td>
+                          <Td className="text-xs">
+                            {p.contextLength ? p.contextLength.toLocaleString() : "—"}
+                            {p.contextLengthProbed && <span className="ml-1 text-[11px] text-muted">{t("probed")}</span>}
+                          </Td>
+                          <Td className="text-xs">
+                            {[p.profile.capabilities?.toolCalling && "tools", p.profile.capabilities?.thinking && "thinking", p.profile.capabilities?.vision && "vision"]
+                              .filter(Boolean).join(" · ") || "—"}
+                            {p.profile.toolStrict !== undefined && <span className="ml-1 text-muted">· strict={String(p.profile.toolStrict)}</span>}
+                            {p.profile.maxPromptImages !== undefined && <span className="ml-1 text-muted">· img≤{p.profile.maxPromptImages}</span>}
+                          </Td>
+                          <Td className="font-mono text-[11px]">{p.profile.reasoningEfforts?.join(", ") ?? "—"}</Td>
+                          <Td className="text-xs">
+                            {p.profile.license ? `${p.profile.license.id}${p.profile.license.commercialUse ? "" : ` (${t("nonCommercial")})`}` : "—"}
+                            {p.licenseBlockReason && <div className="text-[11px] text-danger">{p.licenseBlockReason}</div>}
                           </Td>
                         </tr>
                       ))}

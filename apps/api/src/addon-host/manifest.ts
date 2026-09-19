@@ -95,6 +95,11 @@ export const addonManifestSchema = z.object({
          * add-on 이 설치되지 않은 DB 에는 그 테이블이 아예 없다. **코어 테이블은 여기 두지 않는다.**
          */
         migrations: z.string().optional(),
+        /**
+         * 이 add-on 의 골든 eval 케이스 JSON(기본 `./evals.json`) — 켜졌을 때만 Base 골든셋에 합류한다.
+         * "이 팩은 이 모델에서 검증됨" 을 팩과 함께 다니게 하려는 것이다 (2026-09-19, S3).
+         */
+        evals: z.string().optional(),
     }).strict(),
     entry: addonEntrySchema.optional(),
     permissions: z.array(z.string().min(1).max(80)).max(50).optional(),

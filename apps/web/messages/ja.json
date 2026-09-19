@@ -2707,6 +2707,16 @@
       "enabled": "有効",
       "disabled": "無効",
       "failed": "失敗"
-    }
+    },
+    "profilesTitle": "モデルプロファイル",
+    "profilesHelp": "宣言テーブル(config/model-profiles.ts)と env(LLM_MODEL_PROFILES_JSON)から解決された値です。ここでは変更しません — 新モデル導入は項目追加 → eval:matrix → 切替。",
+    "model": "モデル",
+    "context": "コンテキスト",
+    "capabilities": "能力",
+    "efforts": "推論強度",
+    "license": "ライセンス",
+    "probed": "実測",
+    "unavailable": "利用不可",
+    "nonCommercial": "非商用"
   }
 }

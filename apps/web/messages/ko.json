@@ -2707,6 +2707,16 @@
       "enabled": "사용 중",
       "disabled": "꺼짐",
       "failed": "실패"
-    }
+    },
+    "profilesTitle": "모델 프로필",
+    "profilesHelp": "선언 테이블(config/model-profiles.ts)과 env(LLM_MODEL_PROFILES_JSON)로 해석된 값입니다. 여기서는 바꾸지 않습니다 — 새 모델 도입은 항목 추가 → eval:matrix → 전환.",
+    "model": "모델",
+    "context": "컨텍스트",
+    "capabilities": "능력",
+    "efforts": "추론 강도",
+    "license": "라이선스",
+    "probed": "실측",
+    "unavailable": "비가용",
+    "nonCommercial": "비상업"
   }
 }

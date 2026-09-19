@@ -83,3 +83,26 @@ adminAddonsRouter.patch('/addons/:addonId/state', requireAuth, requireAdmin, val
     });
     res.json(success({ addon: updated, restartRequired: true, restartNote: RESTART_REQUIRED_NOTE }));
 }));
+
+/**
+ * GET /api/admin/model-profiles
+ * 로컬 채팅 모델별로 **해석된** 모델 프로필(능력·강도·샘플링·strict·이미지 상한·라이선스)을 읽기 전용으로 보여 준다.
+ *
+ * S2 잔여 중 "관리자 UI 노출" — 값의 authority 는 선언 테이블(`config/model-profiles.ts`)과
+ * env `LLM_MODEL_PROFILES_JSON` 이다(여기서 바꾸지 않는다). 새 모델 도입 = 항목 추가 → eval:matrix → 전환.
+ */
+adminAddonsRouter.get('/model-profiles', requireAuth, requireAdmin, asyncHandler(async (_req: Request, res: Response) => {
+    const { getLocalChatModels } = await import('../config/local-models');
+    const { resolveModelProfile, licenseBlockReason } = await import('../config/model-profiles');
+    const profiles = getLocalChatModels({ includeUnavailable: true }).map(m => ({
+        id: m.id,
+        displayName: m.displayName,
+        contextLength: m.contextLength ?? null,
+        contextLengthProbed: m.contextLengthProbed ?? false,
+        available: m.available !== false,
+        unavailableReason: m.unavailableReason ?? null,
+        profile: resolveModelProfile(m.id),
+        licenseBlockReason: licenseBlockReason(m.id),
+    }));
+    res.json(success({ profiles }));
+}));

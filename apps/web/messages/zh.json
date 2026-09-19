@@ -2707,6 +2707,16 @@
       "enabled": "已启用",
       "disabled": "已禁用",
       "failed": "失败"
-    }
+    },
+    "profilesTitle": "模型配置",
+    "profilesHelp": "来自声明表 (config/model-profiles.ts) 与 env (LLM_MODEL_PROFILES_JSON) 的解析结果。此处只读 — 引入新模型需新增条目 → 通过 eval:matrix → 切换。",
+    "model": "模型",
+    "context": "上下文",
+    "capabilities": "能力",
+    "efforts": "推理强度",
+    "license": "许可证",
+    "probed": "实测",
+    "unavailable": "不可用",
+    "nonCommercial": "非商用"
   }
 }

@@ -2707,6 +2707,16 @@
       "enabled": "Aktiv",
       "disabled": "Deaktiviert",
       "failed": "Fehlgeschlagen"
-    }
+    },
+    "profilesTitle": "Modellprofile",
+    "profilesHelp": "Aufgelöst aus der Deklarationstabelle (config/model-profiles.ts) und env (LLM_MODEL_PROFILES_JSON). Hier nur lesend — ein neues Modell heißt: Eintrag ergänzen, eval:matrix bestehen, umschalten.",
+    "model": "Modell",
+    "context": "Kontext",
+    "capabilities": "Fähigkeiten",
+    "efforts": "Reasoning-Stufen",
+    "license": "Lizenz",
+    "probed": "gemessen",
+    "unavailable": "nicht verfügbar",
+    "nonCommercial": "nicht kommerziell"
   }
 }

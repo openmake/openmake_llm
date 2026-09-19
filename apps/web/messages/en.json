@@ -2707,6 +2707,16 @@
       "enabled": "Enabled",
       "disabled": "Disabled",
       "failed": "Failed"
-    }
+    },
+    "profilesTitle": "Model profiles",
+    "profilesHelp": "Resolved from the declaration table (config/model-profiles.ts) and env (LLM_MODEL_PROFILES_JSON). Read-only here — adopting a model means adding an entry, passing eval:matrix, then switching.",
+    "model": "Model",
+    "context": "Context",
+    "capabilities": "Capabilities",
+    "efforts": "Reasoning efforts",
+    "license": "License",
+    "probed": "probed",
+    "unavailable": "unavailable",
+    "nonCommercial": "non-commercial"
   }
 }

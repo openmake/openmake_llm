@@ -24,6 +24,7 @@ import type { Pool } from 'pg';
 import type { LLMClient } from '../../llm/client';
 import { createLogger } from '../../utils/logger';
 import { recordExtensionInstallation } from '../../services/addon/addon-state';
+import { LocalDirectoryFetcher, isLocalSourceUrl } from './local-directory-fetcher';
 import { parseGitUrl } from '../../schemas/git-ingest.schema';
 import { GitFetcher } from './git-fetcher';
 import { ArchiveFetcher } from './archive-fetcher';
@@ -81,8 +82,16 @@ interface ExtensionIngestOptions {
 export class ExtensionIngestService {
     constructor(private opts: ExtensionIngestOptions) {}
 
-    /** git 이 아닌 소스(.zip 아카이브 · 내부 번들) fetcher 생성 — GitFetcher 동형 (duck-typed). */
+    /** git 이 아닌 소스(.zip 아카이브 · 내부 번들 · 로컬 디렉터리) fetcher 생성 — GitFetcher 동형 (duck-typed). */
     private makeArchiveFetcher(url: string): GitFetcher {
+        if (isLocalSourceUrl(url)) {
+            // 서버 파일시스템을 읽는 소스 — 루트 고정(realpath)·관리자 전용(import 에서 게이트).
+            return new LocalDirectoryFetcher(url, {
+                root: EXTENSION_INGEST.localSourceRoot,
+                maxEntries: EXTENSION_INGEST.localSourceMaxEntries,
+                maxTotalBytes: EXTENSION_INGEST.localSourceMaxTotalBytes,
+            }) as unknown as GitFetcher;
+        }
         if (isInternalBundleUrl(url)) {
             const loader = this.opts.internalBundleLoader;
             if (!loader) throw new Error('INTERNAL_BUNDLE_UNSUPPORTED: internalBundleLoader 미주입');
@@ -99,6 +108,11 @@ export class ExtensionIngestService {
     async import(input: ImportInput): Promise<ImportResult | CandidateListResult> {
         if (!EXTENSION_INGEST.enabled) {
             throw new Error('EXTENSION_INGEST_DISABLED');
+        }
+
+        // 로컬 디렉터리 소스는 관리자만 — 임의 서버 경로 읽기를 일반 사용자에게 열지 않는다(에어갭 운영용).
+        if (isLocalSourceUrl(input.gitUrl) && !input.isAdmin) {
+            throw new Error('LOCAL_SOURCE_ADMIN_ONLY: 로컬 디렉터리 설치는 관리자만 가능합니다');
         }
 
         // (1) URL parse — .zip 아카이브 URL 은 pseudo repo (ArchiveFetcher 가 owner/repo 무시)
@@ -418,7 +432,9 @@ export class ExtensionIngestService {
         await recordExtensionInstallation({
             extensionId: row.id, name: manifest.name, version: manifest.version,
             // 소스 구분: internal://bundle(마켓 게시분) · zip/tar 아카이브 · 그 외 Git
-            source: input.gitUrl.startsWith('internal://') ? 'marketplace' : (isArchive ? 'zip' : 'git'),
+            source: input.gitUrl.startsWith('internal://') ? 'marketplace'
+                : isLocalSourceUrl(input.gitUrl) ? 'local'
+                : (isArchive ? 'zip' : 'git'),
         });
 
         logger.info(`extension-ingest ${updateTarget ? 'updated' : 'created'}: ${row.id} "${manifest.name}@${manifest.version}"${previousVersion ? ` (from ${previousVersion})` : ''} (${owner}/${repo}@${sha.slice(0, 7)}, skills=${okSkills.length}, mcp=${okServers.length}, agents=${okAgentResults.length})`);
