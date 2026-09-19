@@ -9,7 +9,7 @@
  * @module services/task-sandbox/runtime
  */
 import type { ToolDefinition } from '../../llm/types';
-import type { MCPToolDefinition } from '../../mcp/types';
+import type { MCPToolDefinition } from '../../tool-contract/types';
 import { getTaskSandboxConfig, type TaskSandboxConfig } from '../../config/task-sandbox';
 import { TaskSandbox, type ExecResult } from './sandbox';
 import type { TaskExecutor } from './executor';
@@ -20,7 +20,7 @@ import { recordToolResultTruncation } from '../tool-result-truncation-recorder';
 import { saveProceduralSkill, resolveProceduralSpec } from '../agent-task/procedural-skill';
 import { TaskPlan, parseGoalPlanSteps, type PlanStep } from './planning';
 import { requiresApproval, getApprovalRegistry, type PendingApproval, type ApprovalRejectReason } from './approval-gate';
-import { withToolNameSuggestions, detectShellToolMisuse, formatShellToolMisuseHint } from '../../mcp/tool-name-suggest';
+import { withToolNameSuggestions, detectShellToolMisuse, formatShellToolMisuseHint } from '../../tool-contract/tool-name-suggest';
 import { buildApprovalPreview } from './approval-preview';
 import type { PlanStepInput } from './planning';
 import { APPROVAL_PREVIEW } from '../../config/task-sandbox';

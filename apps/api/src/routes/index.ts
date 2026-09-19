@@ -11,14 +11,7 @@
 
 export { default as metricsRouter, setClusterManager } from './metrics.routes';
 export { default as agentRouter } from './agents.routes';
-export { default as skillsRouter } from './skills.routes';
-export { default as skillsUsageRouter } from './skills-usage.routes';
 export { default as modelRouter } from './model.routes';
-export { mcpRouter } from './mcp.routes';
-export { mcpCatalogRouter } from './mcp-catalog.routes';
-export { mcpServerIngestRouter } from './mcp-server-ingest.routes';
-export { mcpCatalogAdminRouter } from './mcp-catalog-admin.routes';
-export { mcpAdminMonitoringRouter } from './mcp-admin-monitoring.routes';
 export { toolHealthRouter } from './tool-health.routes';
 export { evaluationRunsRouter } from './evaluation-runs.routes';
 export { adminModelRolesRouter } from './admin-model-roles.routes';
@@ -84,3 +77,5 @@ export { default as conversationFoldersRouter } from './conversation-folders.rou
 // (tokenMonitoringRouter 재수출 제거 — setup.ts/v1 이 token-monitoring.routes 직접 import)
 
 // Knowledge Base 라우트: 2026-05-19 제거 (메타데이터 CRUD만, 채팅 미연결 — dead code)
+
+export { adminAddonsRouter } from './admin-addons.routes';

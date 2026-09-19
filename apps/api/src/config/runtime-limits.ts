@@ -1710,6 +1710,12 @@ export const TASK_CODE_NAV = {
  * 조직·테넌트 컨텍스트 (F22 Phase A, 2026-09-17).
  * 멤버십·활성 조직·예산 조직 조회 캐시 TTL — 변경 REST 는 clearOrgMembershipCache 로 즉시 무효화한다.
  */
+/**
+ * Add-on 상태 캐시 보존(ms) — 관리자 토글이 다른 프로세스에서 일어나도 이 시간 안에 반영된다.
+ * 같은 프로세스의 쓰기는 캐시를 즉시 비운다. `ADDON_STATE_CACHE_TTL_MS` 로 오버라이드.
+ */
+export const ADDON_STATE_CACHE_TTL_MS = parseInt(process.env.ADDON_STATE_CACHE_TTL_MS || '30000', 10);
+
 export const ORG_CONTEXT = {
     /** 사용자별 멤버십·활성 조직 캐시 보존(ms). ORG_CONTEXT_CACHE_TTL_MS 로 오버라이드. */
     CACHE_TTL_MS: parseInt(process.env.ORG_CONTEXT_CACHE_TTL_MS || '60000', 10),

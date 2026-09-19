@@ -20,7 +20,7 @@ const logger = createLogger('LLMWebSearchAdapter');
 
 export async function webSearch(query: string, maxResults = 5): Promise<WebSearchResponse> {
     try {
-        const { performWebSearch } = await import('../mcp/web-search/search-orchestrator');
+        const { performWebSearch } = await import('../tools/web-search/search-orchestrator');
         const results = await performWebSearch(query, { maxResults });
         return {
             results: results.map((r) => ({
@@ -40,7 +40,7 @@ export async function webSearch(query: string, maxResults = 5): Promise<WebSearc
 
 export async function webFetch(url: string): Promise<WebFetchResponse> {
     try {
-        const { extractWebpageTool } = await import('../mcp/web-search/tools');
+        const { extractWebpageTool } = await import('../tools/web-search/tools');
         const result = await extractWebpageTool.handler({ url });
         const text = result.content?.[0]?.type === 'text' ? result.content[0].text : '';
         return {

@@ -10,9 +10,11 @@
  *
  * @module addon-host
  */
+import * as path from 'path';
 import { createLogger } from '../utils/logger';
 import { APP_VERSION } from '../config/constants';
 import { satisfiesOpenmakeRange } from './manifest';
+import { loadAddonEntry } from './entry-loader';
 import { installPackCatalog } from './pack-catalog';
 import { installPackSkills } from './pack-skills';
 import {
@@ -60,21 +62,115 @@ function verifyBuiltinManifests(): void {
     }
 }
 
+/**
+ * 모델 요구(`requires.model`) 정적 대조 — 충족 후보를 안내하고, 없으면 명시적으로 경고한다.
+ * 조용히 외부 모델로 넘어가지 않는다(폐쇄망 배포에서 그 대체는 존재하지 않는다).
+ */
+async function verifyAddonModelRequirements(): Promise<void> {
+    const targets = enabledBuiltinAddons().filter(a => a.manifest.requires.model);
+    if (targets.length === 0) return;
+    try {
+        const { availableChatModelFacts, checkModelRequirement } = await import('../services/addon/model-requirements');
+        const models = await availableChatModelFacts();
+        for (const addon of targets) {
+            const verdict = checkModelRequirement(addon.manifest.requires.model, models);
+            if (verdict.ok) logger.info(`add-on '${addon.id}' 모델 요구 충족 — 후보 ${verdict.satisfiedBy.length}개: ${verdict.satisfiedBy.slice(0, 5).join(', ')}`);
+            else logger.warn(`add-on '${addon.id}' 모델 요구 미충족 — ${verdict.reason}`);
+        }
+    } catch (err) {
+        logger.debug('모델 요구 대조 실패(무시):', err);
+    }
+}
+
+/**
+ * 켜진 add-on 의 전용 스키마 적용 — 매니페스트 `components.migrations` 를 선언한 add-on 만.
+ * 코어 마이그레이션은 이미 부팅 초기에 끝났고, 여기는 add-on 네임스페이스(`addon:<id>:NNN`)다.
+ * 실패한 add-on 은 로그만 남기고 나머지는 계속한다(fail-open) — 그 add-on 의 기능만 비게 된다.
+ */
+async function applyEnabledAddonMigrations(): Promise<void> {
+    const targets = enabledBuiltinAddons()
+        .filter(a => a.manifest.components.migrations)
+        .map(a => ({ id: a.id, dir: path.resolve(a.dir, a.manifest.components.migrations!) }));
+    if (targets.length === 0) return;
+    try {
+        const { applyAddonMigrationsWithLock } = await import('../data/migrations/runner');
+        const { getUnifiedDatabase } = await import('../data/models/unified-database');
+        for (const r of await applyAddonMigrationsWithLock(getUnifiedDatabase().getPool(), targets)) {
+            if (r.error) logger.error(`add-on '${r.id}' 마이그레이션 실패 — 해당 기능 비활성: ${r.error}`);
+            else if (r.applied.length > 0) logger.info(`add-on '${r.id}' 마이그레이션 ${r.applied.length}건 적용: ${r.applied.join(', ')}`);
+        }
+    } catch (err) {
+        logger.error('add-on 마이그레이션 실행 실패:', err);
+    }
+}
+
+/**
+ * 런타임 구현 add-on(매니페스트 `entry.runtime`)을 먼저 세운다 — 스킬·도구 런타임이 Base 포트에 꽂혀야
+ * 뒤따르는 팩 설치와 채팅 경로가 의미를 갖는다. 하나가 실패해도 나머지는 계속 세우고(fail-open),
+ * 꽂히지 않은 포트는 NULL 구현으로 남는다(그 기능만 비활성).
+ */
+async function startRuntimeAddons(): Promise<void> {
+    for (const addon of enabledBuiltinAddons()) {
+        const ref = addon.manifest.entry?.runtime;
+        if (!ref) continue;
+        try {
+            await loadAddonEntry<() => Promise<void>>(addon, ref)();
+        } catch (err) {
+            logger.error(`add-on '${addon.id}' 런타임 등록 실패 — 해당 기능 비활성:`, err);
+            await markAddonFailed(addon.id, err instanceof Error ? err.message : String(err));
+        }
+    }
+}
+
+/**
+ * 발견된 내장 add-on 을 설치 표(`addon_installations`)에 반영한다 — 내장과 설치형이 같은 상태 모델을 쓴다.
+ * **state 는 건드리지 않는다**: 관리자가 끈 add-on 이 재부팅으로 되살아나면 안 된다.
+ */
+async function syncAddonInstallations(): Promise<void> {
+    try {
+        const { getUnifiedDatabase } = await import('../data/models/unified-database');
+        const { AddonStateRepository } = await import('../data/repositories/addon-state-repository');
+        const { clearAddonStateCache } = await import('../services/addon/addon-state');
+        const repo = new AddonStateRepository(getUnifiedDatabase().getPool());
+        for (const addon of listBuiltinAddonDefs()) {
+            await repo.upsertDiscovered({
+                addonId: addon.id,
+                name: addon.manifest.name,
+                version: addon.manifest.version,
+                kind: addon.manifest.kind ?? 'content',
+                source: 'builtin',
+                entitlementSku: addon.manifest.entitlement?.sku ?? null,
+            });
+        }
+        clearAddonStateCache();
+    } catch (err) {
+        logger.error('add-on 설치 표 동기화 실패 (env 판정으로 계속):', err);
+    }
+}
+
+/** 런타임 등록이 실패한 add-on 을 failed 로 기록한다 — 관리자 화면이 사유를 보여 준다. */
+async function markAddonFailed(addonId: string, reason: string): Promise<void> {
+    try {
+        const { getUnifiedDatabase } = await import('../data/models/unified-database');
+        const { AddonStateRepository } = await import('../data/repositories/addon-state-repository');
+        const { clearAddonStateCache } = await import('../services/addon/addon-state');
+        await new AddonStateRepository(getUnifiedDatabase().getPool()).setState(addonId, 'failed', reason.slice(0, 2000));
+        clearAddonStateCache();
+    } catch { /* 기록 실패는 무시 — 로그가 이미 남았다 */ }
+}
+
 export async function startAddonHost(): Promise<void> {
     verifyBuiltinManifests();
+    await syncAddonInstallations();
+    await verifyAddonModelRequirements();
 
     const unknown = unknownDisabledIds();
     if (unknown.length > 0) {
         logger.warn(`ADDON_BUILTIN_DISABLED 에 알 수 없는 팩 id: ${unknown.join(', ')} (가능한 값: ${builtinAddonIds().join(', ')})`);
     }
 
-    // Base 스킬(general·author-guide) — 팩 구성과 무관하게 항상 시드
-    try {
-        const { seedBaseSkills } = await import('../agents/skill-seeder');
-        seedBaseSkills().catch((err: unknown) => logger.error('Base 스킬 시딩 실패:', err));
-    } catch (err) {
-        logger.error('Base 스킬 시더 로드 실패:', err);
-    }
+    await applyEnabledAddonMigrations();
+    await startRuntimeAddons();
 
     for (const addon of enabledBuiltinAddons()) {
         installBuiltinPack(addon.id).catch((err: unknown) => logger.error(`내장 팩 '${addon.id}' 설치 실패:`, err));

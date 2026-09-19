@@ -29,7 +29,8 @@
       "costRatesAdmin": "Kostensätze",
       "sloAdmin": "SLO",
       "evaluationsAdmin": "Evaluierungen",
-      "quotaRequestsAdmin": "Kontingent-Freigaben"
+      "quotaRequestsAdmin": "Kontingent-Freigaben",
+      "addonsAdmin": "Add-ons"
     },
     "pendingApprovals": "{count} ausstehende Freigabe(n) — Agentenaufgaben warten auf Ihre Freigabe"
   },
@@ -2682,5 +2683,40 @@
       "redteam": "Red Team",
       "matrix": "Matrix"
     }
+  },
+  "adminAddons": {
+    "title": "Add-ons",
+    "description": "Installierte Add-ons und ihr Status. Beim Deaktivieren liefern ihre APIs sofort 404; die Laufzeit-Registrierung (Tools, Skill-Injektion, Chat-Modi) greift erst nach einem Neustart.",
+    "loadError": "Laden fehlgeschlagen.",
+    "saveFailed": "Änderung fehlgeschlagen.",
+    "listTitle": "Installiert",
+    "empty": "Keine Add-ons gefunden.",
+    "addon": "Add-on",
+    "kind": "Art",
+    "source": "Quelle",
+    "state": "Status",
+    "entitlement": "Nutzungsrecht (SKU)",
+    "entitlementFree": "Unbeschränkt",
+    "modelRequirement": "Modellanforderung",
+    "modelOk": "{count} Modell(e) erfüllen",
+    "envDisabled": "Per env (ADDON_BUILTIN_DISABLED) deaktiviert — Neustart nötig",
+    "enable": "Aktivieren",
+    "disable": "Deaktivieren",
+    "states": {
+      "installed": "Installiert",
+      "enabled": "Aktiv",
+      "disabled": "Deaktiviert",
+      "failed": "Fehlgeschlagen"
+    },
+    "profilesTitle": "Modellprofile",
+    "profilesHelp": "Aufgelöst aus der Deklarationstabelle (config/model-profiles.ts) und env (LLM_MODEL_PROFILES_JSON). Hier nur lesend — ein neues Modell heißt: Eintrag ergänzen, eval:matrix bestehen, umschalten.",
+    "model": "Modell",
+    "context": "Kontext",
+    "capabilities": "Fähigkeiten",
+    "efforts": "Reasoning-Stufen",
+    "license": "Lizenz",
+    "probed": "gemessen",
+    "unavailable": "nicht verfügbar",
+    "nonCommercial": "nicht kommerziell"
   }
 }

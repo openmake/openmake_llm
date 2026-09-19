@@ -4,7 +4,10 @@
  */
 jest.mock('../utils/logger', () => ({ createLogger: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }) }));
 jest.mock('../chat/prompt', () => ({ getExternalProviderSystemGuards: () => '[GUARD]' }));
-jest.mock('../mcp/unified-client', () => ({ getUnifiedMCPClient: () => ({ executeToolWithContext: jest.fn().mockResolvedValue({ content: '결과', isError: false }) }) }));
+jest.mock('../runtime-ports/tool-runtime', () => ({
+    ...jest.requireActual('../runtime-ports/tool-runtime'),
+    getToolRuntime: () => ({ executeTool: jest.fn().mockResolvedValue({ content: '결과', isError: false }) }),
+}));
 
 import { streamFromExternalProvider } from '../services/chat-service/external-fallback';
 

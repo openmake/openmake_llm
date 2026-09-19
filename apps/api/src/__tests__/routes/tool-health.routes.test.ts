@@ -33,7 +33,7 @@ jest.mock('../../services/AuditService', () => ({ getAuditService: () => ({ logA
 
 import { toolHealthRouter } from '../../routes/tool-health.routes';
 import { TOOL_CIRCUIT } from '../../config/tool-health';
-import { recordToolResult, __resetCircuitsForTest } from '../../mcp/tool-health';
+import { recordToolResult, __resetCircuitsForTest } from '../../tool-contract/tool-health';
 
 const mutableCircuit = TOOL_CIRCUIT as unknown as Record<string, unknown>;
 const originalCircuit = { ...TOOL_CIRCUIT };

@@ -39,16 +39,35 @@ jest.mock('../data/models/unified-database', () => ({
         deleteAgentTaskSteps: jest.fn().mockResolvedValue(undefined),
     }),
 }));
-jest.mock('../mcp/unified-client', () => ({
-    getUnifiedMCPClient: () => ({
-        getToolRouter: () => ({ getLLMTools: jest.fn().mockResolvedValue([]) }),
-        executeToolWithContext: jest.fn(),
+jest.mock('../runtime-ports/tool-runtime', () => ({
+    ...jest.requireActual('../runtime-ports/tool-runtime'),
+    getToolRuntime: () => ({
+        listLLMTools: jest.fn().mockResolvedValue([
+            { type: 'function', function: { name: 'web_search', description: '', parameters: {} } },
+        ]),
+        listTools: jest.fn().mockResolvedValue([]),
+        executeTool: jest.fn().mockResolvedValue({ content: [{ type: 'text', text: '결과' }] }),
+        getUserToolGroups: () => [],
+        normalizeToolCall: (name: string, args: Record<string, unknown>) => ({ name, args }),
+        callUserServerTool: jest.fn().mockResolvedValue(null),
+        runWithUserInputContext: (_c: unknown, fn: () => unknown) => fn(),
+        ensureUserToolsForTask: jest.fn().mockResolvedValue(undefined),
+        onUserLogin: jest.fn(), onUserLogout: jest.fn(), onChatStart: jest.fn(), onChatEnd: jest.fn(),
+        onServerReady: jest.fn(), shutdown: jest.fn(),
     }),
 }));
-jest.mock('../agents/skill-manager', () => ({
-    getSkillManager: () => ({
+jest.mock('../runtime-ports/skill-runtime', () => ({
+    ...jest.requireActual('../runtime-ports/skill-runtime'),
+    getSkillRuntime: () => ({
         buildManifestPrompt: jest.fn().mockResolvedValue(null),
         getActiveSkillBindings: jest.fn().mockResolvedValue([]),
+        getSkillsForAgent: jest.fn().mockResolvedValue([]),
+        buildSkillPrompt: jest.fn().mockResolvedValue(''),
+        buildSkillPromptForIds: jest.fn().mockResolvedValue(''),
+        searchActiveSkills: jest.fn().mockResolvedValue([]),
+        applyCatalogToTools: async (tools: unknown) => tools,
+        recordUsage: () => { /* no-op */ },
+        isOfferEnabled: () => false,
     }),
 }));
 

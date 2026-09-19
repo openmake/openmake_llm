@@ -16,7 +16,7 @@
 import * as crypto from 'crypto';
 import { BaseRepository } from './base-repository';
 import { encryptToken } from '../../utils/token-crypto';
-import type { EnvInputHint } from '../../mcp/env-placeholder';
+import type { EnvInputHint } from '../../tool-contract/env-placeholder';
 
 /**
  * manifest_meta.envHints 에서 시크릿으로 선언된 env 키를 추린다.

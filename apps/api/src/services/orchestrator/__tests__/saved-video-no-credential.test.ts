@@ -4,7 +4,7 @@ jest.mock('../capability-resolver', () => ({
     ...jest.requireActual('../capability-resolver'),
     resolveCapabilityTarget: async () => { const { CapabilityUnavailableError } = jest.requireActual('../capability-resolver'); throw new CapabilityUnavailableError('키 없음', 'CAPABILITY_KEY_MISSING'); },
 }));
-jest.mock('../../../mcp/generated-media', () => ({ resolveGeneratedPath: (p: string) => (p === '/generated/ok.webm' ? '/abs/ok.webm' : null) }));
+jest.mock('../../../tools/generated-media', () => ({ resolveGeneratedPath: (p: string) => (p === '/generated/ok.webm' ? '/abs/ok.webm' : null) }));
 jest.mock('../../../llm/user-quota', () => ({ checkUserQuota: async () => undefined }));
 
 import { videoGenerateExecutor } from '../executors/video';

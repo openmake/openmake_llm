@@ -29,7 +29,8 @@
       "costRatesAdmin": "비용 단가",
       "sloAdmin": "SLO",
       "evaluationsAdmin": "평가 이력",
-      "quotaRequestsAdmin": "쿼터 승인"
+      "quotaRequestsAdmin": "쿼터 승인",
+      "addonsAdmin": "Add-on"
     },
     "pendingApprovals": "승인 대기 {count}건 — 에이전트 작업이 사용자 승인을 기다리고 있습니다"
   },
@@ -2682,5 +2683,40 @@
       "redteam": "레드팀",
       "matrix": "매트릭스"
     }
+  },
+  "adminAddons": {
+    "title": "Add-on",
+    "description": "설치된 add-on 과 상태. 끄면 전용 API 는 즉시 404 가 되고, 런타임 등록(도구·스킬 주입·채팅 모드)은 재시작 후 반영됩니다.",
+    "loadError": "불러오기에 실패했습니다.",
+    "saveFailed": "변경에 실패했습니다.",
+    "listTitle": "설치 목록",
+    "empty": "발견된 add-on 이 없습니다.",
+    "addon": "Add-on",
+    "kind": "종류",
+    "source": "설치 소스",
+    "state": "상태",
+    "entitlement": "사용권(SKU)",
+    "entitlementFree": "제한 없음",
+    "modelRequirement": "모델 요구",
+    "modelOk": "충족 모델 {count}개",
+    "envDisabled": "env(ADDON_BUILTIN_DISABLED)로 꺼짐 — 재시작 필요",
+    "enable": "켜기",
+    "disable": "끄기",
+    "states": {
+      "installed": "설치됨",
+      "enabled": "사용 중",
+      "disabled": "꺼짐",
+      "failed": "실패"
+    },
+    "profilesTitle": "모델 프로필",
+    "profilesHelp": "선언 테이블(config/model-profiles.ts)과 env(LLM_MODEL_PROFILES_JSON)로 해석된 값입니다. 여기서는 바꾸지 않습니다 — 새 모델 도입은 항목 추가 → eval:matrix → 전환.",
+    "model": "모델",
+    "context": "컨텍스트",
+    "capabilities": "능력",
+    "efforts": "추론 강도",
+    "license": "라이선스",
+    "probed": "실측",
+    "unavailable": "비가용",
+    "nonCommercial": "비상업"
   }
 }

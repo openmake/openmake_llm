@@ -20,6 +20,7 @@ export interface OrgPolicySet {
     externalModel?: ExternalModelPolicy;
     approvalPolicyMin?: TaskSandboxApprovalPolicy;
     mcpAllowedServers?: string[];
+    addonAllowlist?: string[];
 }
 
 export interface EffectivePolicy {
@@ -28,6 +29,8 @@ export interface EffectivePolicy {
     approvalPolicyMin?: TaskSandboxApprovalPolicy;
     /** undefined = 제한 없음 */
     mcpAllowedServers?: string[];
+    /** undefined = 제한 없음(전 add-on 사용 가능). 값이 있으면 그 목록만 사용권이 있다. */
+    addonAllowlist?: string[];
     orgId: string | null;
 }
 
@@ -47,6 +50,9 @@ export function parseOrgPolicyRows(rows: Array<{ key: string; value: unknown }>)
         } else if (row.key === ORG_POLICY_KEYS.MCP_ALLOWED_SERVERS) {
             const list = parsed.data as string[];
             if (list.length > 0) out.mcpAllowedServers = list;
+        } else if (row.key === ORG_POLICY_KEYS.ADDON_ALLOWLIST) {
+            const list = parsed.data as string[];
+            if (list.length > 0) out.addonAllowlist = list;
         }
     }
     return out;
@@ -112,6 +118,7 @@ export async function resolveEffectivePolicy(userId: string | undefined, now: nu
         externalModel: mergeExternalModelPolicy(global, set.externalModel),
         approvalPolicyMin: set.approvalPolicyMin,
         mcpAllowedServers: set.mcpAllowedServers,
+        addonAllowlist: set.addonAllowlist,
         orgId: org.orgId,
     };
 }

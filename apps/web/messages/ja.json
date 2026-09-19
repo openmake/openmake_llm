@@ -29,7 +29,8 @@
       "costRatesAdmin": "コスト単価",
       "sloAdmin": "SLO",
       "evaluationsAdmin": "評価履歴",
-      "quotaRequestsAdmin": "クォータ承認"
+      "quotaRequestsAdmin": "クォータ承認",
+      "addonsAdmin": "アドオン"
     },
     "pendingApprovals": "承認待ち {count}件 — エージェント作業がユーザーの承認を待っています"
   },
@@ -2682,5 +2683,40 @@
       "redteam": "レッドチーム",
       "matrix": "マトリクス"
     }
+  },
+  "adminAddons": {
+    "title": "アドオン",
+    "description": "インストール済みアドオンと状態。無効化すると専用 API は即座に 404 になり、ランタイム登録（ツール・スキル注入・チャットモード）は再起動後に反映されます。",
+    "loadError": "読み込みに失敗しました。",
+    "saveFailed": "変更に失敗しました。",
+    "listTitle": "インストール一覧",
+    "empty": "検出されたアドオンがありません。",
+    "addon": "アドオン",
+    "kind": "種類",
+    "source": "インストール元",
+    "state": "状態",
+    "entitlement": "利用権 (SKU)",
+    "entitlementFree": "制限なし",
+    "modelRequirement": "モデル要件",
+    "modelOk": "適合モデル {count} 件",
+    "envDisabled": "env (ADDON_BUILTIN_DISABLED) で無効 — 再起動が必要",
+    "enable": "有効化",
+    "disable": "無効化",
+    "states": {
+      "installed": "インストール済み",
+      "enabled": "有効",
+      "disabled": "無効",
+      "failed": "失敗"
+    },
+    "profilesTitle": "モデルプロファイル",
+    "profilesHelp": "宣言テーブル(config/model-profiles.ts)と env(LLM_MODEL_PROFILES_JSON)から解決された値です。ここでは変更しません — 新モデル導入は項目追加 → eval:matrix → 切替。",
+    "model": "モデル",
+    "context": "コンテキスト",
+    "capabilities": "能力",
+    "efforts": "推論強度",
+    "license": "ライセンス",
+    "probed": "実測",
+    "unavailable": "利用不可",
+    "nonCommercial": "非商用"
   }
 }

@@ -5,7 +5,7 @@
  * (`…_east_asian.png`) 답한 라이브 사례(2026-09-12, nvidia gemma-4-31b-it) 차단. 결정적 후처리(LLM 없음).
  * 이전 턴 파일(디스크 존재)은 그대로 둔다.
  */
-import { resolveGeneratedPath } from '../../mcp/generated-media';
+import { resolveGeneratedPath } from '../../tools/generated-media';
 
 const GENERATED_LINK_RE = /!?\[([^\]]*)\]\((\/generated\/[A-Za-z0-9._-]+)\)/g;
 

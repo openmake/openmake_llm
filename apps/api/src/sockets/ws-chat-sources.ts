@@ -5,7 +5,7 @@
  */
 import { recordMessageSources } from '../chat/message-sources';
 import { createLogger } from '../utils/logger';
-import type { SearchSourceRef } from '../mcp/web-search/types';
+import type { SearchSourceRef } from '../tools/web-search/types';
 import type { WSMessage } from './ws-types';
 
 const log = createLogger('SearchSources');

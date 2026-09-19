@@ -3,8 +3,8 @@
  *
  * 지금 소비처는 내장 팩 부팅 검증뿐이다. 구성요소(skills·mcp·agents) 해석은 기존 Agent Plugins v1 경로
  * (`agents/git-ingest/extension-manifest-validator.ts` 의 plugin.json)가 맡고, 이 파일은 그 위에 얹는
- * 식별·호환·범위 축만 정의한다. `server`·`ui`·`migrations` 구성요소는 받지 않는다 — 인프로세스 코드
- * 로딩과 add-on 별 스키마는 열지 않았다(strict 로 거절).
+ * 식별·호환·범위 축만 정의한다. `server`·`ui` 구성요소는 받지 않는다 — 설치형의 인프로세스 코드 로딩은
+ * 열지 않았다(strict 로 거절). `migrations` 는 2026-09-19 부터 받는다(add-on 전용 스키마, 네임스페이스 분리).
  *
  * @module addon-host/manifest
  */
@@ -15,7 +15,7 @@ export const ADDON_MANIFEST_FILENAME = 'openmake-addon.json';
 const ADDON_ID_PATTERN = /^[a-z0-9][a-z0-9.-]*$/;
 
 export const ADDON_SCOPES = ['system', 'organization', 'user'] as const;
-export const ADDON_KINDS = ['content', 'integration'] as const;
+export const ADDON_KINDS = ['content', 'integration', 'runtime'] as const;
 
 /**
  * 코드 진입점 참조 — `<모듈 경로>#<export 이름>`(export 생략 시 default). 모듈 경로는 add-on 코드 디렉토리
@@ -26,6 +26,11 @@ export const ADDON_KINDS = ['content', 'integration'] as const;
 const entryRefSchema = z.string().max(200).regex(/^[a-z0-9-]+(\.[a-z0-9-]+)*(\/[a-z0-9-]+(\.[a-z0-9-]+)*)*(#[A-Za-z_][A-Za-z0-9_]*)?$/);
 
 const addonEntrySchema = z.object({
+    /**
+     * 런타임 구현 등록 — Base 포트(`runtime-ports/*`)에 구현을 꽂는 부팅 함수(`() => Promise<void>`).
+     * 호스트가 팩 설치보다 **먼저** 부른다(스킬·도구 런타임이 서야 그 뒤 단계가 의미를 갖는다).
+     */
+    runtime: entryRefSchema.optional(),
     /** 채팅 턴 통합 (services/chat-service/turn-integrations.ts `ChatTurnIntegration`) */
     chatIntegration: entryRefSchema.optional(),
     /** 채팅 모드 (services/chat-service/chat-modes.ts `ChatModeExtension`) */
@@ -45,9 +50,27 @@ export const addonManifestSchema = z.object({
     name: z.string().min(1).max(120),
     version: z.string().min(1).max(40),
     description: z.string().max(500).optional(),
-    requires: z.object({ openmake: z.string().min(1).max(80) }),
+    requires: z.object({
+        openmake: z.string().min(1).max(80),
+        /**
+         * 이 add-on 이 제대로 도는 데 필요한 **모델 역량** (2026-09-19, S3). 모델 프로필
+         * (`config/model-profiles.ts`)과 정적으로 대조한다 — 턴마다 LLM 에게 묻지 않는다(A형 금지).
+         * 미충족이면 부팅 로그·관리자 화면이 충족 후보를 안내하고, 후보가 없으면 명시적으로 알린다.
+         */
+        model: z.object({
+            /** 최소 컨텍스트 토큰 */
+            minContext: z.number().int().min(1).max(10_000_000).optional(),
+            /** 도구 호출 필요 */
+            tools: z.boolean().optional(),
+            /** 비전(이미지 입력) 필요 */
+            vision: z.boolean().optional(),
+        }).strict().optional(),
+    }),
     scope: z.enum(ADDON_SCOPES),
-    /** content = 스킬·에이전트 정의를 싣는 팩, integration = 코드가 레포에 있는 통합 기능. 생략하면 content */
+    /**
+     * content = 스킬·에이전트 정의를 싣는 팩, integration = 코드가 레포에 있는 통합 기능,
+     * runtime = Base 포트에 구현을 꽂는 실행 런타임(스킬·도구). 생략하면 content
+     */
     kind: z.enum(ADDON_KINDS).optional(),
     /** 로드 순서(작을수록 먼저) — "첫 건이 이기는" 확장점(첫 턴 도구 강제·모드 선점)의 우선순위. 같으면 id 순 */
     order: z.number().int().min(0).max(100000).optional(),
@@ -66,6 +89,17 @@ export const addonManifestSchema = z.object({
         data: z.string().optional(),
         /** 에이전트 id → 키워드 라우팅 어휘 텍스트 JSON (agents/enhanced-keywords.ts) */
         routingVocabulary: z.string().optional(),
+        /**
+         * 이 add-on 전용 스키마의 마이그레이션 디렉토리(기본 `./migrations`) — 켜졌을 때만 적용되고
+         * `migration_versions.version` 은 `addon:<id>:NNN` 네임스페이스를 쓴다 (2026-09-19, §10-5).
+         * add-on 이 설치되지 않은 DB 에는 그 테이블이 아예 없다. **코어 테이블은 여기 두지 않는다.**
+         */
+        migrations: z.string().optional(),
+        /**
+         * 이 add-on 의 골든 eval 케이스 JSON(기본 `./evals.json`) — 켜졌을 때만 Base 골든셋에 합류한다.
+         * "이 팩은 이 모델에서 검증됨" 을 팩과 함께 다니게 하려는 것이다 (2026-09-19, S3).
+         */
+        evals: z.string().optional(),
     }).strict(),
     entry: addonEntrySchema.optional(),
     permissions: z.array(z.string().min(1).max(80)).max(50).optional(),

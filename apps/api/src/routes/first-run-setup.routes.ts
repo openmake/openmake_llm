@@ -22,7 +22,7 @@ import { FIRST_RUN_SETUP_ADVISORY_LOCK_KEY } from '../config/constants';
 import { getSystemSettingsService } from '../services/system-settings-service';
 import { SETTING_DEFS_BY_KEY } from '../config/system-settings-registry';
 import { getAuditService } from '../services/AuditService';
-import { ensureSandboxDefaultOnSetup } from '../mcp/sandbox-bootstrap';
+import { runFirstRunHooks } from '../addon-host/contributions';
 import { getConfig } from '../config/env';
 import { createLogger } from '../utils/logger';
 
@@ -96,14 +96,10 @@ async function runSetup(req: Request, res: Response): Promise<void> {
         await getSystemSettingsService().update(llmEntries, String(admin.id));
     }
 
-    // MCP 샌드박스 secure-by-default — MCP_SANDBOX_ENABLED 미설정 + docker·런타임 이미지
-    // 가용일 때만 .env 영속 + 즉시 반영. 전 경로 fail-open(셋업을 죽이지 않음) — 미적용이면
-    // 다음 부팅의 sandboxBootAdvisory 경고가 OFF 상태를 다시 드러낸다.
-    const sandboxDefault = ensureSandboxDefaultOnSetup(path.resolve(__dirname, '../../../../.env'));
-    if (sandboxDefault.applied) {
-        logger.info('MCP 샌드박스 기본 활성화 (docker + 런타임 이미지 감지 → MCP_SANDBOX_ENABLED=true 영속)');
-    } else if (sandboxDefault.reason !== 'explicit') {
-        logger.info(`MCP 샌드박스 자동 활성화 건너뜀: ${sandboxDefault.reason}`);
+    // 켜진 add-on 의 첫 실행 훅 — 어떤 add-on 이 무엇을 하는지 Base 는 모르고 결과만 남긴다(전 경로 fail-open).
+    for (const hook of runFirstRunHooks(path.resolve(__dirname, '../../../../.env'))) {
+        if (hook.applied) logger.info(`첫 실행 훅 적용: ${hook.label}`);
+        else if (hook.reason !== 'explicit') logger.info(`첫 실행 훅 건너뜀: ${hook.label} (${hook.reason})`);
     }
 
     try {

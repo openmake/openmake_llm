@@ -7,7 +7,7 @@
  * @module chat/message-sources
  */
 import { MESSAGE_SOURCES_LIMITS } from '../config/runtime-limits';
-import type { SearchSourceRef } from '../mcp/web-search/types';
+import type { SearchSourceRef } from '../tools/web-search/types';
 
 const pending = new Map<string, { sources: SearchSourceRef[]; at: number }>();
 

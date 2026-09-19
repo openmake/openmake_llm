@@ -275,6 +275,13 @@ export const EXTENSION_INGEST = {
     archiveMaxBytes: parseInt(process.env.EXTENSION_INGEST_ARCHIVE_MAX_BYTES || String(10 * 1024 * 1024), 10),
     archiveMaxEntries: parseInt(process.env.EXTENSION_INGEST_ARCHIVE_MAX_ENTRIES || '2000', 10),
     archiveMaxTotalBytes: parseInt(process.env.EXTENSION_INGEST_ARCHIVE_MAX_TOTAL_BYTES || String(50 * 1024 * 1024), 10),
+    /**
+     * `local://` 소스의 허용 루트(절대경로). **빈 값이면 기능 off** — 서버 파일시스템을 읽는 소스라
+     * 명시 설정 + 관리자 권한을 모두 요구한다(에어갭 번들 설치용, 2026-09-19).
+     */
+    localSourceRoot: (process.env.ADDON_LOCAL_INSTALL_ROOT || '').trim(),
+    localSourceMaxEntries: parseInt(process.env.ADDON_LOCAL_INSTALL_MAX_ENTRIES || '2000', 10),
+    localSourceMaxTotalBytes: parseInt(process.env.ADDON_LOCAL_INSTALL_MAX_TOTAL_BYTES || String(50 * 1024 * 1024), 10),
 } as const;
 
 /**
