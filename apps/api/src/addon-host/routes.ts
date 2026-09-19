@@ -48,10 +48,18 @@ function createAddonListRouter(): Router {
  * 재시작 없이 즉시 404 가 된다. 조직 정책 `ADDON_ALLOWLIST` 에 없으면 403(유료 팩 미구매).
  * 판정 실패는 통과시킨다(fail-open) — 정책 조회 장애가 기능을 막지 않는다.
  */
-function addonGuard(addonId: string) {
+export function addonGuard(addonId: string) {
     return (req: Request, res: Response, next: NextFunction): void => {
         void (async () => {
             try {
+                // ⚠️ 이 게이트는 add-on 라우터의 자체 인증(requireAuth 등)보다 **먼저** 돌고, 앱에는 전역 인증
+                // 미들웨어가 없다 — 그대로 두면 req.user 가 늘 비어 조직 사용권 축이 통째로 건너뛰어진다
+                // (2026-09-20 라이브 검증에서 발견: allowlist 밖 add-on 이 403 이 아니라 200). 거절하지 않는
+                // optionalAuth 로 문맥만 채운다. v1 라우터 안에서는 앞선 인증이 이미 채워 두었으므로 건너뛴다.
+                if (!req.user) {
+                    const { optionalAuth } = await import('../auth');
+                    await new Promise<void>((resolve) => { void optionalAuth(req, res, () => resolve()); });
+                }
                 const { checkAddonEntitlement } = await import('../services/addon/entitlement');
                 const userId = req.user?.id !== undefined ? String(req.user.id) : undefined;
                 const verdict = await checkAddonEntitlement(addonId, userId);
