@@ -35,6 +35,7 @@ import type {
 } from '../../data/repositories/skill-repository';
 import { slugify } from '../../chat/slash-command';
 import { recordSkillUsage } from './skill-usage-log';
+import { filterByAddonEntitlement } from './skill-entitlement-filter';
 import { shouldInjectManifestSkill } from './manifest-injection-filter';
 import { planManifestInjection, buildManifestOfferBlock } from './manifest-injection-plan';
 import { SKILL_VERSION_LATEST_ORDER_SQL } from '../../data/repositories/skill-manifest-sync';
@@ -460,22 +461,10 @@ export class SkillManager {
         }
         if (rows.length === 0) return null;
 
-        // 사용권(entitlement) 게이트 — 팩 스킬(addon_id 보유)은 그 add-on 이 켜져 있고 조직 정책
-        // `ADDON_ALLOWLIST` 에 들어 있을 때만 주입한다. 유료 팩 미구매 조직에는 아예 실리지 않는다.
-        // Base 스킬(addon_id NULL)은 대상이 아니다. 판정 실패는 fail-open(주입 유지).
-        const addonIds = [...new Set(rows.map(r => r.addon_id).filter((x): x is string => !!x))];
-        if (addonIds.length > 0) {
-            try {
-                const { entitledAddonIds } = await import('../../services/addon/entitlement');
-                const allowed = await entitledAddonIds(addonIds, userId);
-                const before = rows.length;
-                rows = rows.filter(r => !r.addon_id || allowed.has(r.addon_id));
-                if (rows.length !== before) logger.debug(`스킬 사용권 필터: ${before} → ${rows.length} (user=${userId ?? '-'})`);
-                if (rows.length === 0) return null;
-            } catch (e) {
-                logger.debug('스킬 사용권 판정 실패 — 주입 유지(fail-open)', e);
-            }
-        }
+        // 사용권(entitlement) 게이트 — 팩 스킬은 그 add-on 이 켜져 있고 조직 정책 `ADDON_ALLOWLIST` 에
+        // 들어 있을 때만 주입한다(유료 팩 미구매 조직에는 아예 실리지 않는다). 판정은 분리 모듈에.
+        rows = await filterByAddonEntitlement(rows, userId);
+        if (rows.length === 0) return null;
 
         // 주입 필터 — manifest-injection-filter.ts (순수): triggers 게이트 + `__global__` 배정만
         // 카테고리 필터. 에이전트/개인 명시 배정은 카테고리와 무관하게 주입한다 (2026-08-29 정정 —
