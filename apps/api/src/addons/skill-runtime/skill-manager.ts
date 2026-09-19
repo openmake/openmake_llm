@@ -432,11 +432,11 @@ export class SkillManager {
         // 필터가 다시 걸려 명시 배정이 무시된다. LIMIT 은 dedupe 뒤에 걸어 중복 행이 15 슬롯을
         // 소모하지 않게 한다 (2026-08-30 — 종전엔 JS dedupe 가 priority 순 첫 행을 남겼고 LIMIT 이 먼저였다).
         const sql = `
-            SELECT id, version, prompt_md, manifest_yaml, assigned_to
+            SELECT id, version, prompt_md, manifest_yaml, assigned_to, addon_id
             FROM (
                 SELECT DISTINCT ON (sm.id)
                     sm.id, sm.version, sm.prompt_md, sm.manifest_yaml,
-                    asa.agent_id AS assigned_to, asa.priority
+                    asa.agent_id AS assigned_to, asa.priority, ags.addon_id
                 FROM skill_manifests sm
                 INNER JOIN agent_skill_assignments asa ON asa.skill_id = sm.id
                 INNER JOIN agent_skills ags ON ags.id = sm.id AND ags.status = 'active'
@@ -450,15 +450,32 @@ export class SkillManager {
             ORDER BY priority DESC NULLS LAST, id ASC
             LIMIT 15
         `;
-        let rows: Array<{ id: string; version: string; prompt_md: string; manifest_yaml: string; assigned_to: string }>;
+        let rows: Array<{ id: string; version: string; prompt_md: string; manifest_yaml: string; assigned_to: string; addon_id: string | null }>;
         try {
-            const result = await pool.query<{ id: string; version: string; prompt_md: string; manifest_yaml: string; assigned_to: string }>(sql, params);
+            const result = await pool.query<{ id: string; version: string; prompt_md: string; manifest_yaml: string; assigned_to: string; addon_id: string | null }>(sql, params);
             rows = result.rows;
         } catch (e) {
             logger.debug('skill_manifests 조회 실패 (021 마이그레이션 미적용?) — null', e);
             return null;
         }
         if (rows.length === 0) return null;
+
+        // 사용권(entitlement) 게이트 — 팩 스킬(addon_id 보유)은 그 add-on 이 켜져 있고 조직 정책
+        // `ADDON_ALLOWLIST` 에 들어 있을 때만 주입한다. 유료 팩 미구매 조직에는 아예 실리지 않는다.
+        // Base 스킬(addon_id NULL)은 대상이 아니다. 판정 실패는 fail-open(주입 유지).
+        const addonIds = [...new Set(rows.map(r => r.addon_id).filter((x): x is string => !!x))];
+        if (addonIds.length > 0) {
+            try {
+                const { entitledAddonIds } = await import('../../services/addon/entitlement');
+                const allowed = await entitledAddonIds(addonIds, userId);
+                const before = rows.length;
+                rows = rows.filter(r => !r.addon_id || allowed.has(r.addon_id));
+                if (rows.length !== before) logger.debug(`스킬 사용권 필터: ${before} → ${rows.length} (user=${userId ?? '-'})`);
+                if (rows.length === 0) return null;
+            } catch (e) {
+                logger.debug('스킬 사용권 판정 실패 — 주입 유지(fail-open)', e);
+            }
+        }
 
         // 주입 필터 — manifest-injection-filter.ts (순수): triggers 게이트 + `__global__` 배정만
         // 카테고리 필터. 에이전트/개인 명시 배정은 카테고리와 무관하게 주입한다 (2026-08-29 정정 —

@@ -77,3 +77,5 @@ export { default as conversationFoldersRouter } from './conversation-folders.rou
 // (tokenMonitoringRouter 재수출 제거 — setup.ts/v1 이 token-monitoring.routes 직접 import)
 
 // Knowledge Base 라우트: 2026-05-19 제거 (메타데이터 CRUD만, 채팅 미연결 — dead code)
+
+export { adminAddonsRouter } from './admin-addons.routes';

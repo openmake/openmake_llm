@@ -29,8 +29,26 @@ interface MigrationStatus {
     checksum: string | null;
 }
 
+/**
+ * 마이그레이션 실행기.
+ *
+ * 기본은 코어 스키마(`db/migrations`)이고, add-on 은 자기 패키지 안의 `migrations/` 를 **자기 네임스페이스**로
+ * 적용한다(2026-09-19, §10-5). 네임스페이스가 있으면 `migration_versions.version` 이 `addon:<id>:NNN` 이 되어
+ * 코어 순번과 절대 충돌하지 않고, add-on 이 설치되지 않은 DB 에는 그 테이블이 아예 없다.
+ */
 export class MigrationRunner {
-    constructor(private pool: Pool) {}
+    private readonly namespace?: string;
+    private readonly dirOverride?: string;
+
+    constructor(private pool: Pool, opts: { namespace?: string; dir?: string } = {}) {
+        this.namespace = opts.namespace;
+        this.dirOverride = opts.dir;
+    }
+
+    /** 이 실행기가 관리하는 version 접두 — 코어는 없음(기존 행 호환), add-on 은 `addon:<id>:` */
+    private versionKey(fileVersion: string): string {
+        return this.namespace ? `${this.namespace}:${fileVersion}` : fileVersion;
+    }
 
     async ensureMigrationTable(): Promise<void> {
         await this.pool.query(`
@@ -141,7 +159,7 @@ export class MigrationRunner {
         return files.map((filename) => {
             const absolutePath = path.join(migrationsDir, filename);
             const sql = fs.readFileSync(absolutePath, 'utf8');
-            const version = filename.split('_')[0];
+            const version = this.versionKey(filename.split('_')[0]);
 
             return {
                 version,
@@ -165,6 +183,12 @@ export class MigrationRunner {
     }
 
     private resolveMigrationsDir(): string {
+        if (this.dirOverride) {
+            if (!fs.existsSync(this.dirOverride) || !fs.statSync(this.dirOverride).isDirectory()) {
+                throw new Error(`Migrations directory not found: ${this.dirOverride}`);
+            }
+            return this.dirOverride;
+        }
         const candidates = [
             path.resolve(process.cwd(), 'db/migrations'),
             path.resolve(__dirname, '../../../../../db/migrations'),
@@ -181,6 +205,41 @@ export class MigrationRunner {
             `Unable to locate migrations directory. Checked: ${candidates.join(', ')}`
         );
     }
+}
+
+/**
+ * add-on 마이그레이션 적용 — 켜진 add-on 이 자기 패키지의 `migrations/` 를 자기 네임스페이스로 적용한다.
+ *
+ * 코어 마이그레이션 **뒤에**, 팩 콘텐츠 설치 **앞에** 돈다(테이블이 있어야 시드가 들어간다).
+ * 한 add-on 의 실패는 그 add-on 만 막고 나머지는 계속한다 — 부팅을 죽이지 않는다(fail-open).
+ * 코어와 같은 advisory lock 을 쓰므로 다중 인스턴스에서도 직렬화된다.
+ */
+export async function applyAddonMigrationsWithLock(
+    pool: Pool,
+    addons: ReadonlyArray<{ id: string; dir: string }>,
+): Promise<Array<{ id: string; applied: string[]; error?: string }>> {
+    if (addons.length === 0) return [];
+    const out: Array<{ id: string; applied: string[]; error?: string }> = [];
+    const lockClient = await pool.connect();
+    try {
+        await lockClient.query('SELECT pg_advisory_lock($1)', [MIGRATION_ADVISORY_LOCK_KEY]);
+        try {
+            for (const addon of addons) {
+                try {
+                    const runner = new MigrationRunner(pool, { namespace: `addon:${addon.id}`, dir: addon.dir });
+                    const { applied } = await runner.applyPending();
+                    out.push({ id: addon.id, applied });
+                } catch (err) {
+                    out.push({ id: addon.id, applied: [], error: err instanceof Error ? err.message : String(err) });
+                }
+            }
+        } finally {
+            await lockClient.query('SELECT pg_advisory_unlock($1)', [MIGRATION_ADVISORY_LOCK_KEY]);
+        }
+    } finally {
+        lockClient.release();
+    }
+    return out;
 }
 
 /** 마이그레이션 직렬화용 전역 advisory lock 키 (앱 전역 유일 고정값 — "omlm" 의 hex). */

@@ -23,6 +23,7 @@ import * as crypto from 'crypto';
 import type { Pool } from 'pg';
 import type { LLMClient } from '../../llm/client';
 import { createLogger } from '../../utils/logger';
+import { recordExtensionInstallation } from '../../services/addon/addon-state';
 import { parseGitUrl } from '../../schemas/git-ingest.schema';
 import { GitFetcher } from './git-fetcher';
 import { ArchiveFetcher } from './archive-fetcher';
@@ -412,6 +413,13 @@ export class ExtensionIngestService {
             okServers.map(r => r.serverId!),
             okAgentResults.map(r => r.agentId!),
         );
+
+        // 내장 add-on 과 같은 설치 표에 남긴다 — 관리 화면이 내장/설치형을 한 목록으로 본다(S3).
+        await recordExtensionInstallation({
+            extensionId: row.id, name: manifest.name, version: manifest.version,
+            // 소스 구분: internal://bundle(마켓 게시분) · zip/tar 아카이브 · 그 외 Git
+            source: input.gitUrl.startsWith('internal://') ? 'marketplace' : (isArchive ? 'zip' : 'git'),
+        });
 
         logger.info(`extension-ingest ${updateTarget ? 'updated' : 'created'}: ${row.id} "${manifest.name}@${manifest.version}"${previousVersion ? ` (from ${previousVersion})` : ''} (${owner}/${repo}@${sha.slice(0, 7)}, skills=${okSkills.length}, mcp=${okServers.length}, agents=${okAgentResults.length})`);
         return {

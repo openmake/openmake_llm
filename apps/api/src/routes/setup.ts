@@ -40,6 +40,7 @@ import {
     adminModelRolesRouter,
     adminCapabilityModelsRouter,
     adminSystemSettingsRouter,
+    adminAddonsRouter,
     adminOrganizationsRouter,
     organizationPoliciesRouter,
     adminOrganizationPoliciesRouter,
@@ -194,6 +195,7 @@ export function setupApiRoutes(
     app.use('/api/admin', adminModelRolesRouter);
     app.use('/api/admin', adminCapabilityModelsRouter);
     app.use('/api/admin', adminSystemSettingsRouter);
+    app.use('/api/admin', adminAddonsRouter);   // add-on 목록·상태 토글 (S3)
     app.use('/api/admin', adminOrganizationsRouter);
     app.use('/api/admin', adminOrganizationPoliciesRouter);
     app.use('/api/organizations', organizationPoliciesRouter);
