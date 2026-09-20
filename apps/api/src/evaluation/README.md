@@ -218,6 +218,24 @@ npm run eval:matrix -- --real --models qwen3.8-27b --variants base,concise --lim
 - **실행 이력** `eval_runs`(146): routing·response·tools·matrix 러너가 `OMK_EVAL_RECORD_DB=true` + `DATABASE_URL` 일 때만 1행(매트릭스는 셀당, `matrix_run_id` 로 묶음)을 남긴다. CI·로컬 임시 실행은 기본 기록하지 않는다. nightly(`scripts/nightly-eval.sh`)는 켜고, `NIGHTLY_EVAL_MATRIX=1` 이면 매트릭스도 돈다.
 - 조회: 관리자 `/admin/evaluations`(API `GET /api/metrics/evaluations`·`/:id`). SLO `eval_pass` 는 `runner='response' AND mode='real'` 최신 행을 읽는다.
 
+## 모델 도입 절차 — 실측 프로브 → 프로필 → 전환 게이트 (2026-09-20, 오픈웨이트 전환 S2)
+
+```bash
+# ① 실측 — 모델당 소형 요청 8회, 순차. 외부 모델은 그 사용자의 등록 키로 provider 직결
+npm run eval:probe -- --model qwen3.8-27b
+npm run eval:probe -- --user 3 --model hasa:qwen2.5-vl-72b,hasa:gpt-oss-120b
+# ② 출력 조각을 config/model-profiles.ts 항목(또는 배포 없이 env LLM_MODEL_PROFILES_JSON)으로
+# ③ 전환 판정 — 같은 실행 안에서 현행 모델과 비교, 미달이면 exit 1
+npm run eval:matrix -- --real --models qwen3.8-27b,<후보> --gate <후보> --limit 30
+```
+
+- **프로브는 확정한 것만 낸다**(`model-probe.ts` `judgeProbe`). 도구를 안 부른 200·정답을 못 맞힌 비전·429 가 섞인 강도는 *미확정* 이고 프로필에 들어가지 않는다. capabilities 는 네 값이 전부 확정일 때만 나온다. 기본 호출이 실패하면(키·잔액·없는 모델) 나머지 요청은 보내지 않고 exit 2.
+- thinking 은 "추론을 별도 필드로 받는가" 다 — 강도 요청이 전부 결판났는데 추론 필드가 0건이면 false. ⚠️ **`reasoning_effort` 수락은 증거가 아니다**: 추론을 하지 않는 모델도 파라미터를 받고 무시한다(hasa qwen2.5-vl 실측). 강도 목록은 thinking=true 일 때만 낸다.
+- ⚠️ 프로브는 앱의 provider 어댑터를 거치지 않는다 — 어댑터가 프로필을 읽어 강도를 정규화하므로 그 경로로 재면 순환이다. 대신 로컬은 LiteLLM 통과 힌트(`allowed_openai_params`)를 직접 싣는다: 없으면 게이트웨이가 파라미터 자체를 400 으로 막아 "모델이 전부 거절" 로 읽힌다(첫 실행에서 실제로 그렇게 나왔다 — 지금은 사유와 함께 미확정으로 남는다).
+- 무료 티어는 연속 호출을 429 로 막는다 — `OMK_EVAL_PROBE_DELAY_MS`(기본 3000, hasa 는 7000 에서 깨끗했다), 타임아웃 `OMK_EVAL_PROBE_TIMEOUT_MS`(120000).
+- **전환 게이트**(`model-switch-gate.ts`)는 variant 마다 따로 본다(평균이 thinking 에서만 무너지는 모델을 가린다): 절대 하한 `OMK_EVAL_SWITCH_MIN_PASS_RATE`(0.8) · 현행 대비 하락 `OMK_EVAL_SWITCH_MAX_PASS_DROP`(0.05) · p95 지연 `OMK_EVAL_SWITCH_MAX_LATENCY_REGRESSION_PCT`(50, 절대 +`OMK_EVAL_SWITCH_MIN_LATENCY_ABS_DELTA_MS` 4000 도 넘어야). `--incumbent` 미지정이면 `LLM_DEFAULT_MODEL`, 후보가 곧 기본 모델이면 절대 하한만.
+- 매트릭스는 케이스를 순차로 보낸다 — 운영 vLLM 은 새 요청 여러 개가 한 스텝에 prefill 될 때 죽은 선례가 있다(2026-09-19). 병렬화하지 말 것.
+
 ## PoC 상태 (마지막 업데이트)
 
 | 항목 | 상태 | 비고 |

@@ -38,6 +38,25 @@ function makeRepo(cached: unknown[] | null) {
 }
 
 describe('resolveModelCapabilities', () => {
+    it('모델 프로필의 실측 capability 가 큐레이션 카탈로그·휴리스틱보다 먼저다 (source=profile)', async () => {
+        const { resetModelProfileCache } = await import('../../../config/model-profiles');
+        process.env.LLM_MODEL_PROFILES_JSON = JSON.stringify({
+            'nvidia:acme/new-vlm': { capabilities: { toolCalling: false, thinking: true, vision: true, streaming: true } },
+        });
+        resetModelProfileCache();
+        try {
+            const r = await resolveModelCapabilities(makeResolved('nvidia', 'acme/new-vlm-8b'));
+            expect(r.source).toBe('profile');
+            expect(r.caps).toEqual({ toolCalling: false, thinking: true, vision: true, streaming: true });
+            // provider 한정 키는 다른 provider 의 같은 이름 모델로 새지 않는다
+            const other = await resolveModelCapabilities(makeResolved('hasa', 'acme/new-vlm-8b'));
+            expect(other.source).toBe('heuristic');
+        } finally {
+            delete process.env.LLM_MODEL_PROFILES_JSON;
+            resetModelProfileCache();
+        }
+    });
+
     it('로컬은 프리셋을 그대로 신뢰한다 (source=local)', async () => {
         const r = await resolveModelCapabilities(makeResolved('local-llm', 'qwen3.6-35b-a3b'));
         expect(r.source).toBe('local');

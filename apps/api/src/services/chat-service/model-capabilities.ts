@@ -17,7 +17,9 @@
  *   1. local      — 로컬 provider 프리셋 (model-presets, 명시 관리)
  *   2. catalog    — 사용자별 라이브 모델 캐시 (OpenRouter 는 architecture.input_modalities
  *                   등 API 응답 기반이라 정확)
- *   3. config     — EXTERNAL_PROVIDER_CATALOG.fallbackModels (운영자 큐레이션)
+ *   3. profile    — 모델 프로필 `<provider>:<model>` 항목의 실측 capability (config/model-profiles,
+ *                   배포 없이 env `LLM_MODEL_PROFILES_JSON` 로 추가 — 프로브 `npm run eval:probe` 의 출력)
+ *   3'. config    — EXTERNAL_PROVIDER_CATALOG.fallbackModels (운영자 큐레이션)
  *   4. heuristic  — provider.getCapabilities() 문자열 추론 (최후, 부정 신뢰 불가)
  *
  * @module services/chat-service/model-capabilities
@@ -26,12 +28,13 @@ import type { ProviderCapabilities, ProviderModel } from '../../providers/i-prov
 import type { ResolvedProvider } from '../../providers/provider-router';
 import type { ExternalKeysRepository } from '../../data/repositories/external-keys-repo';
 import { getProviderCatalogEntry } from '../../config/external-providers';
+import { resolveModelProfile } from '../../config/model-profiles';
 import { createLogger } from '../../utils/logger';
 
 const logger = createLogger('ModelCapabilities');
 
 /** capability 출처 — 'heuristic' 만 신뢰도가 낮아 차단 근거로 쓰지 않는다. */
-type CapabilitySource = 'local' | 'catalog' | 'config' | 'heuristic';
+type CapabilitySource = 'local' | 'catalog' | 'profile' | 'config' | 'heuristic';
 
 interface ResolvedCapabilities {
     caps: ProviderCapabilities;
@@ -123,7 +126,14 @@ export async function resolveModelCapabilities(
         }
     }
 
-    // ③ 운영자 큐레이션 카탈로그 (config — 실측 기반)
+    // ③ 모델 프로필의 실측 capability — 프로필이 모델별 값의 단일 테이블이다(큐레이션 카탈로그보다 먼저:
+    //    env 로 얹은 새 실측값이 코드에 박힌 옛 카탈로그 값을 이긴다)
+    const profiled = resolveModelProfile(resolved.modelId, resolved.providerId).capabilities;
+    if (profiled) {
+        return { caps: fromPartial(profiled, heuristic), source: 'profile' };
+    }
+
+    // ③' 운영자 큐레이션 카탈로그 (config — 실측 기반)
     const entry = getProviderCatalogEntry(resolved.providerId);
     const known = entry?.fallbackModels?.find((m) => m.id === resolved.modelId);
     if (known?.capabilities) {

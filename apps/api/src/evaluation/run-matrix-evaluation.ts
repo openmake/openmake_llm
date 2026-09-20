@@ -5,6 +5,8 @@
  *
  * 셀마다 response 골든셋(response-pattern)을 실모델로 돌려 통과율·TTFT p50/p95·전체 p50/p95·토큰을 모은다.
  * 가드: --real 필수, --limit(기본 OMK_EVAL_REAL_DEFAULT_LIMIT=5), 케이스 timeout·토큰 한도(real-response-generator 4중 가드 상속).
+ * 전환 게이트(S2): `--gate <후보> [--incumbent <현행>]` — 같은 실행의 현행 셀과 비교해 미달이면 exit 1 (model-switch-gate.ts).
+ *   npm run eval:matrix -- --real --models qwen3.8-27b,<후보> --gate <후보> --limit 30
  * 모델은 로컬(LiteLLM alias)만 — 평가 ProviderRouter 에 외부 키가 없다. 결과: 콘솔 표 + logs/matrix-evaluation-*.json + eval_runs(OMK_EVAL_RECORD_DB=true).
  *
  * @module evaluation/run-matrix-evaluation
@@ -22,6 +24,7 @@ import { loadGoldenDataset } from './dataset-loader';
 import { runResponseEvaluation, type ResponseGenerator } from './response-evaluator';
 import { MATRIX_DEFAULT_VARIANTS, MATRIX_VARIANTS } from './matrix-variants';
 import { parseListArg, renderMatrixTable } from './matrix-reporter';
+import { judgeModelSwitch, modelSwitchThresholds, renderModelSwitchVerdict } from './model-switch-gate';
 import { buildEvalRunRecord, currentGitHash, recordEvalRuns, type CaseTiming } from './eval-run-recorder';
 import type { EvalRunRecord } from '../data/repositories/eval-run-repository';
 import type { GoldenDataset } from './types';
@@ -65,6 +68,12 @@ async function main(): Promise<void> {
     const limit = Number(argValue('--limit') ?? process.env.OMK_EVAL_REAL_DEFAULT_LIMIT ?? '5');
     const models = parseListArg(argValue('--models'), [process.env.LLM_DEFAULT_MODEL ?? 'default']);
     const variants = parseListArg(argValue('--variants'), MATRIX_DEFAULT_VARIANTS);
+    const gateCandidate = argValue('--gate');
+    // 현행 미지정이면 운영 기본 모델 — 후보와 같으면(=기본 모델 자체를 검증) 절대 하한만 본다
+    const defaultIncumbent = process.env.LLM_DEFAULT_MODEL && process.env.LLM_DEFAULT_MODEL !== gateCandidate ? process.env.LLM_DEFAULT_MODEL : undefined;
+    const gateIncumbent = argValue('--incumbent') ?? defaultIncumbent;
+    if (gateCandidate && gateIncumbent && !models.includes(gateIncumbent)) models.unshift(gateIncumbent);
+    if (gateCandidate && !models.includes(gateCandidate)) models.push(gateCandidate);
     const raw = loadGoldenDataset(process.argv.slice(2).find((a) => a.endsWith('.json')));
     const responseCases = raw.cases.filter((c) => c.category === 'response-pattern').slice(0, limit);
     const dataset: GoldenDataset = { ...raw, cases: responseCases };
@@ -87,9 +96,14 @@ async function main(): Promise<void> {
     const logsDir = path.resolve(__dirname, '../../logs');
     fs.mkdirSync(logsDir, { recursive: true });
     const out = path.join(logsDir, `matrix-evaluation-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
-    fs.writeFileSync(out, JSON.stringify({ matrixRunId, models, variants, limit, cells }, null, 2));
+    const verdict = gateCandidate ? judgeModelSwitch(cells, { candidate: gateCandidate, incumbent: gateIncumbent ?? null }, modelSwitchThresholds()) : null;
+    fs.writeFileSync(out, JSON.stringify({ matrixRunId, models, variants, limit, cells, ...(verdict ? { gate: verdict } : {}) }, null, 2));
     const ids = await recordEvalRuns(cells);
     console.log(`결과 저장: ${path.relative(process.cwd(), out)}${ids ? ` · eval_runs ${ids.length}행` : ''}`);
+    if (verdict) {
+        console.log(`\n${renderModelSwitchVerdict(verdict)}`);
+        if (!verdict.ok) process.exit(1);
+    }
 }
 
 if (require.main === module) {

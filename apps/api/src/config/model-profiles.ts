@@ -62,6 +62,8 @@ export interface ModelProfile {
  *  - qwen3.6-35b-a3b: 구 기본 모델. low~xhigh 모두 200(2026-08-23).
  *  - gpt-3.5-turbo: LiteLLM 의 OpenAI 호환 alias → qwen3.8-27b. 능력은 라우팅 대상과 같게 둔다
  *    (vision:false 면 실제 모델은 받는 이미지 요청을 앱이 400 으로 거절한다, 2026-09-03 정정).
+ *  - hasa:* (2026-09-20, `npm run eval:probe` 실측): qwen2.5-vl-72b 는 도구 호출·비전 가능, 추론 필드 없음(종전 카탈로그의
+ *    toolCalling:false 는 낡은 값). gpt-oss 는 low/medium/high 만 받고 xhigh 를 400 으로 거절.
  *  - bai:glm-5.3: 항상 사고 모델 — low/high/max 만 받고 medium 을 400 으로 거절(2026-09-03). 사다리에 max 는 없다.
  */
 const DEFAULT_MODEL_PROFILES: Readonly<Record<string, ModelProfile>> = {
@@ -90,6 +92,12 @@ const DEFAULT_MODEL_PROFILES: Readonly<Record<string, ModelProfile>> = {
     },
     'bai:glm-5.3': {
         reasoningEfforts: ['low', 'high'],
+    },
+    'hasa:qwen2.5-vl-72b': {
+        capabilities: { toolCalling: true, thinking: false, vision: true, streaming: true },
+    },
+    'hasa:gpt-oss': {
+        reasoningEfforts: ['low', 'medium', 'high'],
     },
 };
 
