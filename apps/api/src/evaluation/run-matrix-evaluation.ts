@@ -20,7 +20,7 @@ if (require.main === module) {
     require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
 }
 
-import { loadGoldenDataset } from './dataset-loader';
+import { loadGoldenDataset, selectResponseEvalCases } from './dataset-loader';
 import { runResponseEvaluation, type ResponseGenerator } from './response-evaluator';
 import { MATRIX_DEFAULT_VARIANTS, MATRIX_VARIANTS } from './matrix-variants';
 import { parseListArg, renderMatrixTable } from './matrix-reporter';
@@ -75,7 +75,10 @@ async function main(): Promise<void> {
     if (gateCandidate && gateIncumbent && !models.includes(gateIncumbent)) models.unshift(gateIncumbent);
     if (gateCandidate && !models.includes(gateCandidate)) models.push(gateCandidate);
     const raw = loadGoldenDataset(process.argv.slice(2).find((a) => a.endsWith('.json')));
-    const responseCases = raw.cases.filter((c) => c.category === 'response-pattern').slice(0, limit);
+    // 팩의 response 케이스는 `--tag addon:<id>` 로 지목했을 때만(dataset-loader.selectResponseEvalCases)
+    const tag = argValue('--tag');
+    const responseCases = selectResponseEvalCases(raw.cases, { useReal: true, ...(tag ? { tag } : {}) })
+        .filter((c) => c.category === 'response-pattern').slice(0, limit);
     const dataset: GoldenDataset = { ...raw, cases: responseCases };
     const timeoutMs = Number(process.env.OMK_EVAL_REAL_TIMEOUT_MS ?? '60000');
     const maxTokens = Number(process.env.OMK_EVAL_REAL_MAX_TOKENS ?? '2000');

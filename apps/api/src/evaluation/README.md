@@ -207,6 +207,18 @@ npm run eval:redteam -- --real --limit 12     # real 12건 — 도구는 dry-run
 - ⚠️ **~148k 토큰 요청이 운영 vLLM EngineCore 를 죽였다(2026-09-17)** — 앱 fast-fail(120초)이 첫 토큰 전에 요청을 끊은 ~17초 뒤 `CUDA error: operation not permitted` 로 엔진이 죽고 컨테이너가 재시작됐다(1회 관측, 길이 때문인지 abort 경로 때문인지 미확정). 그래서 최대 픽스처를 실측 통과한 96k 로 낮췄다(TTFT 83초). 더 긴 픽스처를 운영 vLLM 에 다시 보내지 말 것.
 - 2026-09-17 실측: 8k·~96k needle·막대 차트·8장 합계 4/4 통과.
 
+## 팩 eval — 케이스는 팩과 함께 다닌다 (2026-09-20, 오픈웨이트 전환 S3)
+
+```bash
+npm run eval:packs -- --real --models retired-chat-model            # 켜진 팩 전부
+npm run eval:packs -- --real --models a,b --packs industry-pack
+```
+
+- 팩은 `components.evals`(기본 `./evals.json`)로 케이스를 동봉한다. id 는 `<addonId>:<caseId>`, 태그 `addon:<id>` 가 자동으로 붙는다(`addon-host/pack-evals.ts`).
+- **라우팅 120건은 industry-pack 소유다**(에이전트 id 가 팩 콘텐츠라서). Base `golden-dataset.json` 에는 response 케이스만 있다. `eval:routing` 은 종전대로 120건을 돌린다 — 팩이 꺼져 선언한 add-on 이 없으면 건너뛰고(exit 0), 선언했는데 0건이면 읽기 실패로 exit 1.
+- ⚠️ **팩의 response 케이스는 기본 실행에 섞이지 않는다**(`selectResponseEvalCases`) — 섞이면 케이스 집합이 바뀌어 지연·비용 기준선 비교가 조용히 건너뛰어진다. `--tag addon:<id>` 또는 `eval:packs` 로만 돈다. 그래서 팩 response 케이스는 `real-only` 로 쓴다(mock 생성기는 전문 분야 답을 못 낸다).
+- `eval:packs` 는 (팩 × 모델) 1행을 `eval_runs`(runner=`pack`, variant=`addon:<id>`)에 남기고(`OMK_EVAL_RECORD_DB=true`), 관리 화면 `/admin/addons` 의 **검증된 모델** 배지가 (팩, 모델) **최신 실행**을 읽는다 — 하한 `OMK_EVAL_PACK_MIN_PASS_RATE`(0.8). 기록이 없으면 "검증 안 됨" 이지 실패가 아니다. nightly 가 기본 모델로 매일 돌린다(`NIGHTLY_EVAL_PACK_MODELS`).
+
 ## 비교 매트릭스·실행 이력 (2026-09-17, 146)
 
 ```bash

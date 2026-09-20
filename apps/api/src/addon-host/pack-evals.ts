@@ -42,3 +42,11 @@ export function loadEnabledPackEvalCases(): PackEvalCase[] {
     if (out.length > 0) logger.info(`팩 eval 케이스 ${out.length}건 합류`);
     return out;
 }
+
+/**
+ * 켜진 add-on 중 eval 세트를 **선언한** 것의 id — "케이스 0건" 을 두 경우로 가르는 데 쓴다:
+ * 선언한 팩이 없으면 평가할 대상이 없는 것(건너뜀), 선언했는데 0건이면 읽기 실패(실패로 알린다).
+ */
+export function addonsDeclaringEvals(): string[] {
+    return enabledBuiltinAddons().filter(a => a.manifest.components.evals).map(a => a.id);
+}

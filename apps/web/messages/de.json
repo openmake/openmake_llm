@@ -2718,6 +2718,8 @@
     "probed": "gemessen",
     "unavailable": "nicht verfügbar",
     "nonCommercial": "nicht kommerziell",
-    "permissions": "Berechtigungen"
+    "permissions": "Berechtigungen",
+    "verifiedModels": "Verifizierte Modelle",
+    "verifiedDetail": "Erfolgsquote {rate}% · {cases} Fälle · {date}"
   }
 }

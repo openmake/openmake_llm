@@ -43,6 +43,23 @@ export const IMAGE_FIXTURE_DIR = path.resolve(__dirname, 'fixtures', 'images');
 /** mock 평가가 건너뛰는 태그 — 첨부·실모델이 있어야 의미 있는 케이스 */
 export const REAL_ONLY_TAG = 'real-only';
 
+/** 팩이 동봉한 케이스에 붙는 태그 접두어(addon-host/pack-evals 가 `addon:<id>` 를 붙인다) */
+export const ADDON_TAG_PREFIX = 'addon:';
+
+/**
+ * PURE: response 평가 대상 고르기. 팩의 **response** 케이스는 그 팩 태그(`--tag addon:<id>`)로 지목했을 때만 들어온다 —
+ * 기본 실행에 섞이면 케이스 집합이 바뀌어 지연·비용 기준선 비교가 조용히 건너뛰어진다(latency-regression 은 같은 케이스 집합만 비교한다).
+ * 팩의 routing 케이스는 기본 실행에 그대로 합류한다(결정적 라우터라 기준선이 없다).
+ */
+export function selectResponseEvalCases(cases: GoldenCase[], opts: { useReal: boolean; tag?: string }): GoldenCase[] {
+    return cases.filter((c) => {
+        if (!opts.useReal && c.tags?.includes(REAL_ONLY_TAG)) return false;
+        if (c.category !== 'response-pattern') return true;
+        if (opts.tag) return !!c.tags?.includes(opts.tag);
+        return !c.tags?.some((t) => t.startsWith(ADDON_TAG_PREFIX));
+    });
+}
+
 /**
  * 골든셋 JSON 파일을 로드하고 Zod로 검증합니다.
  * 검증 실패 시 명확한 에러 throw — CI에서 즉시 감지 가능.
@@ -63,7 +80,8 @@ export function loadGoldenDataset(filePath: string = DEFAULT_DATASET_PATH): Gold
 
     const dataset = result.data as GoldenDataset;
     // 켜진 add-on 이 동봉한 케이스 합류 (id 는 `<addonId>:<caseId>`) — Base 는 어떤 팩이 있는지 모른다.
-    const packCases = loadPackCases();
+    // 합류는 **기본 골든셋**에만 — 경로를 지정해 부른 파일은 그대로 읽는다(그 파일이 평가 대상 전부다)
+    const packCases = path.resolve(filePath) === DEFAULT_DATASET_PATH ? loadPackCases() : [];
     if (packCases.length > 0) {
         const merged = goldenDatasetSchema.safeParse({ ...dataset, cases: [...dataset.cases, ...packCases] });
         if (merged.success) dataset.cases = (merged.data as GoldenDataset).cases;

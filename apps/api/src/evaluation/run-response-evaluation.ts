@@ -29,7 +29,7 @@ import * as dotenv from 'dotenv';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
-import { loadGoldenDataset, REAL_ONLY_TAG } from './dataset-loader';
+import { loadGoldenDataset, selectResponseEvalCases } from './dataset-loader';
 import { buildEvalRunRecord, recordEvalRuns, type CaseTiming } from './eval-run-recorder';
 import { compareLatency, latencyMetrics, renderLatencyTable, type LatencyBaseline } from './latency-regression';
 import { compareCost, costMetrics, renderCostTable, type CostBaseline } from './cost-regression';
@@ -220,7 +220,7 @@ async function main() {
     // mock 은 첨부·실모델이 있어야 의미 있는 real-only 케이스(장문·멀티모달, F26.5)를 건너뛴다
     const rawDataset = {
         ...loaded,
-        cases: loaded.cases.filter((c) => (useReal || !c.tags?.includes(REAL_ONLY_TAG)) && (!tag || c.category !== 'response-pattern' || c.tags?.includes(tag))),
+        cases: selectResponseEvalCases(loaded.cases, { useReal, ...(tag ? { tag } : {}) }),
     };
     const { dataset, limitedTo } = applyLimit(rawDataset, useReal, explicitLimit);
 

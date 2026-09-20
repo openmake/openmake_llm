@@ -2718,6 +2718,8 @@
     "probed": "실측",
     "unavailable": "비가용",
     "nonCommercial": "비상업",
-    "permissions": "권한"
+    "permissions": "권한",
+    "verifiedModels": "검증된 모델",
+    "verifiedDetail": "통과율 {rate}% · {cases}건 · {date}"
   }
 }

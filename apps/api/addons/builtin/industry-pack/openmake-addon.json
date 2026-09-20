@@ -14,6 +14,7 @@
     "skills": "./skills.json",
     "agents": "./industry-agents.json",
     "data": "./data",
-    "routingVocabulary": "./data/routing-vocabulary.json"
+    "routingVocabulary": "./data/routing-vocabulary.json",
+    "evals": "./evals.json"
   }
 }
