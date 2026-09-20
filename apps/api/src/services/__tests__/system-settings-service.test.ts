@@ -2,7 +2,7 @@
  * SystemSettingsService — DB overlay 적용·갱신·조회 뷰 검증 (repo mock, 무DB).
  */
 import { SystemSettingsService } from '../system-settings-service';
-import { applySettingsOverlay, getConfig } from '../../config/env';
+import { applySettingsOverlay, getConfig, readSettingValue } from '../../config/env';
 import type { SystemSettingsRepository, SystemSettingRow } from '../../data/repositories/system-settings-repo';
 
 const reloadWebhookChannels = jest.fn();
@@ -53,8 +53,8 @@ describe('loadAndApply', () => {
         const svc = new SystemSettingsService(repo);
         await svc.loadAndApply();
 
-        const cfg = getConfig();
-        expect(cfg.naverClientId).toBe('db-naver-id');
+        // add-on 이 기여한 키는 typed config 가 아니라 일반 설정 읽기로 닿는다 (overlay > env)
+        expect(readSettingValue('NAVER_CLIENT_ID')).toBe('db-naver-id');
         // 복호화 실패 키는 overlay 미포함 → env/기본값 유지 (db 값 'null' 문자열 아님)
         const view = svc.describe().find((v) => v.key === 'NAVER_API_HUB_KEY')!;
         expect(view.source).not.toBe('db');

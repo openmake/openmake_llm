@@ -73,14 +73,6 @@ export const DEFAULT_CONFIG: EnvConfig = {
     // External services
     googleApiKey: '',
     googleCseId: '',
-    naverClientId: '',
-    naverClientSecret: '',
-    naverApiHubKeyId: '',
-    naverApiHubKey: '',
-    naverApiDailyLimit: 25000,
-    kakaoRestApiKey: '',
-    exaApiKey: '',
-    tavilyApiKey: '',
     githubToken: '',
 
     // Documents

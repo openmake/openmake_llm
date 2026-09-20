@@ -1,36 +1,21 @@
 /**
  * naver-client — legacy ↔ NAVER API HUB 듀얼 경로 + 일일 한도 가드 단위 테스트.
- * env 파생 상수는 getConfig mock 으로 고정 (project_jest_env_dependent_tests 관용구).
+ * 설정은 add-on 의 searchProviderSettings mock 으로 고정 (project_jest_env_dependent_tests 관용구).
  */
 import { buildNaverSearchRequest } from '../naver-client';
-import { getConfig } from '../../../config';
+import { searchProviderSettings } from '../settings';
 import { getKeyValueStore } from '../../../storage';
 
-jest.mock('../../../config', () => ({
-    ...jest.requireActual('../../../config'),
-    getConfig: jest.fn(),
-}));
+jest.mock('../settings', () => ({ searchProviderSettings: jest.fn() }));
 jest.mock('../../../storage', () => ({
     getKeyValueStore: jest.fn(),
 }));
-// env 파생 상수 고정 (project_jest_env_dependent_tests 관용구)
-jest.mock('../../../config/runtime-limits', () => ({
-    ...jest.requireActual('../../../config/runtime-limits'),
-    NAVER_QUOTA: { SUPPLEMENTARY_RATIO: 0.9 },
-}));
 
-const mockGetConfig = getConfig as jest.Mock;
+const mockGetConfig = searchProviderSettings as jest.Mock;
 const mockGetStore = getKeyValueStore as jest.Mock;
 
 function setConfig(partial: Record<string, unknown>) {
-    mockGetConfig.mockReturnValue({
-        naverClientId: '',
-        naverClientSecret: '',
-        naverApiHubKeyId: '',
-        naverApiHubKey: '',
-        naverApiDailyLimit: 25000,
-        ...partial,
-    });
+    mockGetConfig.mockReturnValue({ ...{ naverClientId: '', naverClientSecret: '', naverApiHubKeyId: '', naverApiHubKey: '', naverApiDailyLimit: 25000, naverSupplementaryRatio: 0.9, kakaoRestApiKey: '', exaApiKey: '', tavilyApiKey: '' }, ...partial });
 }
 
 function setStoreCount(used: number) {

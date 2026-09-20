@@ -1,29 +1,18 @@
 /**
  * Web Search 오케스트레이터
  *
- * 다중 검색 프로바이더를 조율하여 통합 웹 검색을 수행합니다.
- * Google CSE / Wikipedia / Google News / DuckDuckGo / Naver News 병렬 수집 후
- * 신뢰도 스코어링 으로 통합.
+ * 등록된 검색 provider(provider-registry)를 병렬로 돌려 group 우선순위로 합치고 신뢰도 스코어링으로 통합한다.
+ * Base 는 기본 provider(default-providers)만 알고, 지역·유료 공급원은 add-on 이 레지스트리에 꽂는다.
  *
  * @module mcp/web-search/search-orchestrator
  */
 
 import { SearchResult } from './types';
-import {
-    searchGoogle,
-    searchWikipedia,
-    searchGoogleNews,
-    searchDuckDuckGoAPI,
-    searchNaverNews,
-    searchNaverWeb,
-    searchNaverEncyc,
-    searchDaumWeb,
-    searchSearxng
-} from './providers';
-import { searchExa } from './external-search-apis';
+import { ensureDefaultSearchProviders } from './default-providers';
+import { listSearchEscalations, listSearchProviders, type SearchProviderContext } from './provider-registry';
 import { createLogger } from '../../utils/logger';
 import { recordCost } from '../../services/cost/cost-ledger-service';
-import { SEARCH_ESCALATION, SEARCH_RELIABILITY, SEARXNG_CATEGORY_SCOPE, WEB_SEARCH_INJECTION } from '../../config/runtime-limits';
+import { SEARCH_ESCALATION, SEARCH_RELIABILITY, WEB_SEARCH_INJECTION } from '../../config/runtime-limits';
 import { resolveSearchLanguage } from './search-language';
 import { getConfig } from '../../config/env';
 import { logSemanticRerankShadow, rerankBySemantics } from './semantic-reranker';
@@ -54,19 +43,8 @@ const QUERY_STOPWORDS = new Set<string>([
     'me', 'a', 'an', 'of', 'in', 'on', 'and', 'to', 'search', 'web', 'result', 'results',
 ]);
 
-/**
- * 질의 성격에 맞는 SearXNG 카테고리를 결정한다 (결정적 regex — LLM 판단 아님).
- * 기술/학술 패턴 매칭 시 `it`/`science` 를 general 에 추가해 github·arxiv 등 권위 소스를 유입시킨다.
- * 비매칭 시 undefined (기본 general — 기존 동작 무변경).
- */
-export function detectSearxngCategories(query: string): string | undefined {
-    const it = SEARXNG_CATEGORY_SCOPE.IT_PATTERN.test(query);
-    const science = SEARXNG_CATEGORY_SCOPE.SCIENCE_PATTERN.test(query);
-    if (it && science) return 'general,it,science';
-    if (it) return 'general,it';
-    if (science) return 'general,science';
-    return undefined;
-}
+// SearXNG 카테고리 판정은 searxng-categories.ts (기본 provider 가 쓴다) — 종전 import 경로를 위해 재수출
+export { detectSearxngCategories } from './searxng-categories';
 
 /** 쿼리를 콘텐츠 단어로 토큰화 — 2자 이상, 불용어 제외, 중복 제거. */
 function tokenizeQueryTerms(query: string): string[] {
@@ -119,42 +97,22 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
 
     // 모든 소스에서 병렬 검색 — 각 provider 는 자체 fetch timeout + 외부 abort signal 로
     // hang 을 방지하므로 Promise.all 이 무한정 멈추지 않는다.
-    const searchPromises: Promise<SearchResult[]>[] = [
-        searchGoogle(query, 10, globalSearch, language, signal),
-        searchWikipedia(query, language, signal),
-        searchGoogleNews(query, language, signal),
-        searchDuckDuckGoAPI(query, signal),
-        searchSearxng(query, 15, language, signal, detectSearxngCategories(query)),   // SearXNG 메타검색 (항상, index 4)
-        // 한국어 쿼리: 네이버(뉴스+웹문서+백과) + 카카오 Daum 웹문서(색인이 다른 2공급원) 병렬 수집
-        ...(language === 'ko'
-            ? [
-                searchNaverNews(query, 5, signal),
-                searchNaverWeb(query, 10, signal),
-                searchNaverEncyc(query, 5, signal),
-                searchDaumWeb(query, 10, signal),
-            ]
-            : [])
-    ];
-
-    const allSearchResults = await Promise.all(searchPromises);
+    // provider 목록은 이미 병합 우선순위(group → 등록 순서)로 정렬돼 있다 — 메타 > 뉴스 > 지역 > 웹 > 참고 > 폴백.
+    // 지역 provider(add-on)는 applies 로 언어를 거른다(한국어 질의에만 참여).
+    ensureDefaultSearchProviders();
+    const ctx: SearchProviderContext = { query, language, globalSearch, ...(signal ? { signal } : {}) };
+    const active = listSearchProviders().filter((p) => !p.applies || p.applies(ctx));
+    const settled = await Promise.all(active.map((p) => p.search(ctx).catch((e: unknown) => {
+        // provider 는 자체적으로 빈 배열을 돌려주는 계약이지만, 어긴 하나가 전체 검색을 죽이지 않게 한 번 더 막는다
+        logger.error(`검색 provider '${p.id}' 예외:`, e);
+        return [] as SearchResult[];
+    })));
     if (options.costUserId) recordCost({ userId: options.costUserId, kind: 'tool.web_search', unit: 'call', rateKey: language === 'ko' ? 'ko' : 'global', quantity: 1, costOwner: 'server', ctx: { feature: 'web_search' } });
-    const googleResults = allSearchResults[0] || [];
-    const wikiResults = allSearchResults[1] || [];
-    const newsResults = allSearchResults[2] || [];
-    const ddgResults = allSearchResults[3] || [];
-    const searxngResults = allSearchResults[4] || [];
-    // index 5 이후는 전부 한국어 소스(네이버 뉴스/웹문서/백과 + Daum 웹문서) — 개수 변동에 견고하게 합산
-    const naverResults = allSearchResults.slice(5).flat();
-
-    // 결과 합치기 (우선순위: SearXNG 메타 > 뉴스 > Naver > Google > Wikipedia > DDG)
-    const allResults = [
-        ...searxngResults,         // SearXNG 메타검색 (70+ 엔진 집계, 관련도 높음)
-        ...newsResults,            // 뉴스 (최신 사실 정보)
-        ...naverResults,           // 네이버 뉴스 (한국어만)
-        ...googleResults,          // Google 검색
-        ...wikiResults,            // Wikipedia (배경 지식)
-        ...ddgResults              // DuckDuckGo
-    ];
+    // 결과 합치기 — active 가 우선순위 순이라 그대로 이어 붙이면 된다
+    const allResults = settled.flat();
+    const countsByLabel = new Map<string, number>();
+    active.forEach((p, i) => countsByLabel.set(p.logLabel, (countsByLabel.get(p.logLabel) ?? 0) + settled[i].length));
+    const newsResults = settled.filter((_, i) => active[i].countsAsNews).flat();
 
     // 중복 제거 (URL 정규화)
     const seen = new Set<string>();
@@ -165,7 +123,7 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
         return true;
     });
 
-    logger.info(`총 ${uniqueResults.length}개 (SearXNG:${searxngResults.length}, Google:${googleResults.length}, Wiki:${wikiResults.length}, News:${newsResults.length}, DDG:${ddgResults.length}, Naver:${naverResults.length})`);
+    logger.info(`총 ${uniqueResults.length}개 (${[...countsByLabel].map(([label, n]) => `${label}:${n}`).join(', ')})`);
 
     // Tier 1 escalation — 무료(Tier 0) 수집이 부족할 때만 Exa 공식 API 로 보강한다.
     // 결정적 개수 비교뿐(LLM 판단 아님), EXA_API_KEY 미설정이면 searchExa 가 즉시 빈 배열.
@@ -173,7 +131,9 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
     // (초과 시 보강 포기, Tier 0 결과만으로 진행. 뒤늦게 도착한 결과는 버려질 뿐 무해).
     if (SEARCH_ESCALATION.MIN_RESULTS > 0 && uniqueResults.length < SEARCH_ESCALATION.MIN_RESULTS) {
         const tier0Count = uniqueResults.length;
-        const exaPromise = searchExa(query, SEARCH_ESCALATION.EXA_NUM_RESULTS, signal);
+        // 보강 provider 는 add-on 이 등록한다 — 없으면 Tier 0 결과만으로 진행
+        const exaPromise = Promise.all(listSearchEscalations().map((p) => p.search(query, SEARCH_ESCALATION.EXA_NUM_RESULTS, signal).catch(() => [] as SearchResult[])))
+            .then((lists) => lists.flat());
         const exaResults = SEARCH_ESCALATION.TIMEOUT_MS > 0
             ? await Promise.race([
                 exaPromise,
@@ -189,13 +149,13 @@ export async function performWebSearch(query: string, options: { maxResults?: nu
             uniqueResults.push(r);
         }
         if (exaResults.length > 0) {
-            logger.info(`Tier1 escalation: Tier0 ${tier0Count}개 부족 → Exa ${exaResults.length}개 보강 (총 ${uniqueResults.length}개)`);
+            logger.info(`Tier1 escalation: Tier0 ${tier0Count}개 부족 → ${exaResults.length}개 보강 (총 ${uniqueResults.length}개)`);
         }
     }
 
     // 시점 민감 쿼리(preferRecent) 랭킹 보정용 — 뉴스 소스(News/Naver) URL 집합.
     const newsUrlSet = preferRecent
-        ? new Set([...newsResults, ...naverResults].map(r => r.url))
+        ? new Set(newsResults.map(r => r.url))
         : null;
 
     // 쿼리 단어 토큰화 (관련성 매칭용) — 지시/불용어 제거 후 콘텐츠 단어만.

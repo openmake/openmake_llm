@@ -1,16 +1,13 @@
 /**
  * searchExa / searchTavily — Tier1 escalation·Deep Research 전용 provider 단위 테스트.
- * getConfig 는 실제 구현 위임 + mockReturnValue 덮기(daum-provider 관용구), fetch 는 global mock.
+ * 설정은 add-on 의 searchProviderSettings mock(daum-provider 관용구), fetch 는 global mock.
  */
 import { searchExa, searchTavily } from '../external-search-apis';
-import { getConfig } from '../../../config/env';
+import { searchProviderSettings } from '../settings';
 
-jest.mock('../../../config/env', () => {
-    const actual = jest.requireActual('../../../config/env');
-    return { ...actual, getConfig: jest.fn(actual.getConfig) };
-});
+jest.mock('../settings', () => ({ searchProviderSettings: jest.fn() }));
 
-const mockGetConfig = getConfig as jest.Mock;
+const mockGetConfig = searchProviderSettings as jest.Mock;
 const mockFetch = jest.fn();
 
 beforeEach(() => {
@@ -20,13 +17,13 @@ beforeEach(() => {
 
 describe('searchExa', () => {
     it('키 미설정이면 빈 배열 + fetch 미호출 (graceful)', async () => {
-        mockGetConfig.mockReturnValue({ exaApiKey: '' });
+        mockGetConfig.mockReturnValue({ ...{ naverClientId: '', naverClientSecret: '', naverApiHubKeyId: '', naverApiHubKey: '', naverApiDailyLimit: 25000, naverSupplementaryRatio: 0.9, kakaoRestApiKey: '', exaApiKey: '', tavilyApiKey: '' }, exaApiKey: '' });
         expect(await searchExa('q', 10)).toEqual([]);
         expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('정상 응답 — x-api-key 헤더, POST body, publishedDate→date 매핑', async () => {
-        mockGetConfig.mockReturnValue({ exaApiKey: 'exa-key' });
+        mockGetConfig.mockReturnValue({ ...{ naverClientId: '', naverClientSecret: '', naverApiHubKeyId: '', naverApiHubKey: '', naverApiDailyLimit: 25000, naverSupplementaryRatio: 0.9, kakaoRestApiKey: '', exaApiKey: '', tavilyApiKey: '' }, exaApiKey: 'exa-key' });
         mockFetch.mockResolvedValue({
             ok: true,
             json: async () => ({
@@ -51,7 +48,7 @@ describe('searchExa', () => {
     });
 
     it('API 오류(402 크레딧 소진)면 빈 배열 graceful', async () => {
-        mockGetConfig.mockReturnValue({ exaApiKey: 'exa-key' });
+        mockGetConfig.mockReturnValue({ ...{ naverClientId: '', naverClientSecret: '', naverApiHubKeyId: '', naverApiHubKey: '', naverApiDailyLimit: 25000, naverSupplementaryRatio: 0.9, kakaoRestApiKey: '', exaApiKey: '', tavilyApiKey: '' }, exaApiKey: 'exa-key' });
         mockFetch.mockResolvedValue({ ok: false, status: 402 });
         expect(await searchExa('q', 10)).toEqual([]);
     });
@@ -59,13 +56,13 @@ describe('searchExa', () => {
 
 describe('searchTavily', () => {
     it('키 미설정이면 빈 배열 + fetch 미호출 (graceful)', async () => {
-        mockGetConfig.mockReturnValue({ tavilyApiKey: '' });
+        mockGetConfig.mockReturnValue({ ...{ naverClientId: '', naverClientSecret: '', naverApiHubKeyId: '', naverApiHubKey: '', naverApiDailyLimit: 25000, naverSupplementaryRatio: 0.9, kakaoRestApiKey: '', exaApiKey: '', tavilyApiKey: '' }, tavilyApiKey: '' });
         expect(await searchTavily('q', 5)).toEqual([]);
         expect(mockFetch).not.toHaveBeenCalled();
     });
 
     it('정상 응답 — Bearer 헤더, search_depth 전달, content→snippet 매핑', async () => {
-        mockGetConfig.mockReturnValue({ tavilyApiKey: 'tvly-key' });
+        mockGetConfig.mockReturnValue({ ...{ naverClientId: '', naverClientSecret: '', naverApiHubKeyId: '', naverApiHubKey: '', naverApiDailyLimit: 25000, naverSupplementaryRatio: 0.9, kakaoRestApiKey: '', exaApiKey: '', tavilyApiKey: '' }, tavilyApiKey: 'tvly-key' });
         mockFetch.mockResolvedValue({
             ok: true,
             json: async () => ({
@@ -88,7 +85,7 @@ describe('searchTavily', () => {
     });
 
     it('API 오류면 빈 배열 graceful', async () => {
-        mockGetConfig.mockReturnValue({ tavilyApiKey: 'tvly-key' });
+        mockGetConfig.mockReturnValue({ ...{ naverClientId: '', naverClientSecret: '', naverApiHubKeyId: '', naverApiHubKey: '', naverApiDailyLimit: 25000, naverSupplementaryRatio: 0.9, kakaoRestApiKey: '', exaApiKey: '', tavilyApiKey: '' }, tavilyApiKey: 'tvly-key' });
         mockFetch.mockResolvedValue({ ok: false, status: 401 });
         expect(await searchTavily('q', 5)).toEqual([]);
     });

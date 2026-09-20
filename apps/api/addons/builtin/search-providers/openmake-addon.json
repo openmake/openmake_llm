@@ -1,0 +1,18 @@
+{
+  "id": "search-providers",
+  "name": "Regional & Premium Search Providers",
+  "version": "1.0.0",
+  "description": "지역(한국어)·유료 검색 공급원 — 네이버 뉴스·웹문서·백과, 카카오(Daum) 웹문서, Exa 보강. 키가 없는 공급원은 조용히 빠진다",
+  "requires": {
+    "openmake": ">=1.0.0 <2.0.0"
+  },
+  "scope": "system",
+  "kind": "integration",
+  "order": 45,
+  "permissions": ["network:internet"],
+  "components": {},
+  "entry": {
+    "runtime": "index#startSearchProviders",
+    "contributions": "contributions#searchProvidersContribution"
+  }
+}

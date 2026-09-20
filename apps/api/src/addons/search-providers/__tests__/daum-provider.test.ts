@@ -1,22 +1,17 @@
 /**
  * searchDaumWeb — 카카오(Daum) 웹문서 검색 provider 단위 테스트.
- * getConfig 는 mock 으로 고정(project_jest_env_dependent_tests 관용구), fetch 는 global mock.
+ * 설정은 add-on 의 searchProviderSettings mock 으로 고정(project_jest_env_dependent_tests 관용구), fetch 는 global mock.
  */
-import { searchDaumWeb } from '../providers';
-import { getConfig } from '../../../config/env';
+import { searchDaumWeb } from '../regional-providers';
+import { searchProviderSettings } from '../settings';
 
-// getConfig 를 통째로 비우면 모듈 로드 시점의 logger(getConfig().logLevel)가 죽으므로
-// 기본 구현은 실제 getConfig 로 위임하고, 각 테스트에서 mockReturnValue 로 덮는다.
-jest.mock('../../../config/env', () => {
-    const actual = jest.requireActual('../../../config/env');
-    return { ...actual, getConfig: jest.fn(actual.getConfig) };
-});
+jest.mock('../settings', () => ({ searchProviderSettings: jest.fn() }));
 
-const mockGetConfig = getConfig as jest.Mock;
+const mockGetConfig = searchProviderSettings as jest.Mock;
 const mockFetch = jest.fn();
 
 function setKey(key: string) {
-    mockGetConfig.mockReturnValue({ kakaoRestApiKey: key });
+    mockGetConfig.mockReturnValue({ ...{ naverClientId: '', naverClientSecret: '', naverApiHubKeyId: '', naverApiHubKey: '', naverApiDailyLimit: 25000, naverSupplementaryRatio: 0.9, kakaoRestApiKey: '', exaApiKey: '', tavilyApiKey: '' }, kakaoRestApiKey: key });
 }
 
 beforeEach(() => {
