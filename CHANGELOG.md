@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.79.0](https://github.com/openmake/openmake_llm/compare/v1.78.0...v1.79.0) (2026-09-20)
+
+
+### ✨ 기능
+
+* **env:** dev·staging·online 환경 매니저 omk + 설치 직후 웹 검색(SearXNG) ([#946](https://github.com/openmake/openmake_llm/issues/946)) ([74ea322](https://github.com/openmake/openmake_llm/commit/74ea322cd07e884bb841fbe3f41e76c41676c691))
+
 ## [1.78.0](https://github.com/openmake/openmake_llm/compare/v1.77.1...v1.78.0) (2026-09-20)
 
 
