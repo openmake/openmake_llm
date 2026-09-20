@@ -14,10 +14,9 @@
  * (llm/user-quota 관용구) — 멀티프로세스 정합, KVStore 장애 시 fail-open(호출 허용).
  * 버킷 경계는 KST 자정(네이버 한도 리셋 기준) 정렬.
  *
- * @module mcp/web-search/naver-client
+ * @module addons/search-providers/naver-client
  */
-import { getConfig } from '../../config';
-import { NAVER_QUOTA } from '../../config/runtime-limits';
+import { searchProviderSettings } from './settings';
 import { getKeyValueStore } from '../../storage';
 import { createLogger } from '../../utils/logger';
 
@@ -56,7 +55,7 @@ interface NaverSearchRequest {
  * 잔여 쿼터 집계를 실제 발신 요청 수와 일치시킨다.
  */
 async function underDailyLimit(now: number, supplementary: boolean): Promise<boolean> {
-    const limit = getConfig().naverApiDailyLimit;
+    const limit = searchProviderSettings().naverApiDailyLimit;
     if (limit <= 0) return true; // 0 = 무제한 (가드 해제)
     try {
         const store = getKeyValueStore();
@@ -64,7 +63,7 @@ async function underDailyLimit(now: number, supplementary: boolean): Promise<boo
         const used = await store.incrBy(key, 1);
         void store.expire(key, DAY_TTL_MS);
         const effectiveLimit = supplementary
-            ? Math.floor(limit * NAVER_QUOTA.SUPPLEMENTARY_RATIO)
+            ? Math.floor(limit * searchProviderSettings().naverSupplementaryRatio)
             : limit;
         if (used > effectiveLimit) {
             if (supplementary) {
@@ -93,7 +92,7 @@ export async function buildNaverSearchRequest(
     queryString: string,
     now: number = Date.now(),
 ): Promise<NaverSearchRequest | null> {
-    const cfg = getConfig();
+    const cfg = searchProviderSettings();
 
     let req: NaverSearchRequest;
     if (cfg.naverApiHubKeyId && cfg.naverApiHubKey) {

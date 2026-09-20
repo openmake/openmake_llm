@@ -59,10 +59,6 @@ const ISSUE_URLS = {
     googleCse: 'https://programmablesearchengine.google.com/controlpanel/all',
     github: 'https://github.com/settings/developers',
     kakao: 'https://developers.kakao.com/console/app',
-    naverDev: 'https://developers.naver.com/apps',
-    ncpHub: 'https://console.ncloud.com/naver-api-hub/application',
-    exa: 'https://dashboard.exa.ai/api-keys',
-    tavily: 'https://app.tavily.com/home',
     openrouter: 'https://openrouter.ai/settings/keys',
     ollamaCloud: 'https://ollama.com/settings/keys',
     nvidiaNim: 'https://build.nvidia.com/settings/api-keys',
@@ -78,17 +74,9 @@ const BASE_SYSTEM_SETTINGS: SystemSettingDef[] = [
     { key: 'KAKAO_CLIENT_ID', group: 'oauth', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.kakao },
     { key: 'KAKAO_CLIENT_SECRET', group: 'oauth', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.kakao },
 
-    // ── 웹 검색 (Google CSE / Naver) — 미설정 시 해당 검색 소스만 비활성 ──
+    // ── 웹 검색 (Google CSE) — 미설정 시 해당 검색 소스만 비활성. 지역·유료 공급원의 키는 그 add-on 이 기여한다 ──
     { key: 'GOOGLE_API_KEY', group: 'search', secret: true, requiresRestart: false, validate: apiKeyLike, issueUrl: ISSUE_URLS.googleCloud },
     { key: 'GOOGLE_CSE_ID', group: 'search', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.googleCse },
-    { key: 'NAVER_CLIENT_ID', group: 'search', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.naverDev },
-    { key: 'NAVER_CLIENT_SECRET', group: 'search', secret: true, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.naverDev },
-    { key: 'NAVER_API_HUB_KEY_ID', group: 'search', secret: false, requiresRestart: false, validate: nonEmpty, issueUrl: ISSUE_URLS.ncpHub },
-    { key: 'NAVER_API_HUB_KEY', group: 'search', secret: true, requiresRestart: false, validate: apiKeyLike, issueUrl: ISSUE_URLS.ncpHub },
-    { key: 'NAVER_API_DAILY_LIMIT', group: 'search', secret: false, requiresRestart: false, validate: nonNegativeIntString },
-    { key: 'KAKAO_REST_API_KEY', group: 'search', secret: true, requiresRestart: false, validate: apiKeyLike, issueUrl: ISSUE_URLS.kakao },
-    { key: 'EXA_API_KEY', group: 'search', secret: true, requiresRestart: false, validate: apiKeyLike, issueUrl: ISSUE_URLS.exa },
-    { key: 'TAVILY_API_KEY', group: 'search', secret: true, requiresRestart: false, validate: apiKeyLike, issueUrl: ISSUE_URLS.tavily },
 
     // ── 운영 알림 webhook — URL 자체가 발송 자격증명이라 전부 secret ──
     { key: 'OPERATOR_WEBHOOK_URL', group: 'alerts', secret: true, requiresRestart: false, validate: httpsUrl },

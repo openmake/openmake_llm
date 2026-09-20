@@ -9,7 +9,7 @@
 import type { LLMClient } from '../../llm';
 import type { SearchResult } from '../../tools/web-search';
 import { performWebSearch } from '../../tools/web-search';
-import { searchTavily } from '../../tools/web-search/external-search-apis';
+import { searchContentProviders } from '../../tools/web-search/provider-registry';
 import type { ResearchConfig, SubTopic } from './types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';
@@ -93,7 +93,7 @@ export async function searchSubTopics(params: {
                         signal: abortSignal
                     }),
                     RESEARCH_TAVILY.MAX_RESULTS > 0
-                        ? searchTavily(query, RESEARCH_TAVILY.MAX_RESULTS, RESEARCH_TAVILY.SEARCH_DEPTH, abortSignal)
+                        ? searchContentProviders(query, RESEARCH_TAVILY.MAX_RESULTS, RESEARCH_TAVILY.SEARCH_DEPTH, abortSignal)
                         : Promise.resolve([]),
                 ]);
                 const results = [...tavilyResults, ...webResults];

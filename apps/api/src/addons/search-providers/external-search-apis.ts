@@ -8,10 +8,10 @@
  *
  * @module mcp/web-search/external-search-apis
  */
-import { SearchResult } from './types';
-import { getConfig } from '../../config/env';
+import type { SearchResult } from '../../tools/web-search/types';
+import { searchProviderSettings } from './settings';
 import { createLogger } from '../../utils/logger';
-import { searchFetch, describeFetchError } from './providers';
+import { searchFetch, describeFetchError } from '../../tools/web-search/providers';
 
 const logger = createLogger('WebSearch');
 
@@ -31,7 +31,7 @@ const EXA_SEARCH_URL = 'https://api.exa.ai/search';
  */
 export async function searchExa(query: string, maxResults: number, signal?: AbortSignal): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
-    const { exaApiKey } = getConfig();
+    const { exaApiKey } = searchProviderSettings();
     if (!exaApiKey) return results;
 
     try {
@@ -88,7 +88,7 @@ export async function searchTavily(
     signal?: AbortSignal,
 ): Promise<SearchResult[]> {
     const results: SearchResult[] = [];
-    const { tavilyApiKey } = getConfig();
+    const { tavilyApiKey } = searchProviderSettings();
     if (!tavilyApiKey) return results;
 
     try {

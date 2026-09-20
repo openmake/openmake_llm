@@ -45,6 +45,9 @@ export const ADDON_SPECIFIC_NAME_PATTERNS: readonly RegExp[] = [
     /discord/i,
     /discussion/i,
     /deep[-_ ]?research/i,
+    // search-providers add-on — 지역·유료 검색 공급원의 이름과 그 설정 키.
+    // 결과 URL 의 도메인 표기(`terms.naver.com` 같은 랭킹용 도메인 목록)는 공급원 통합이 아니라 걸리지 않게 좁혔다.
+    /naver(?!\.com)|\bdaum(?!\.net)|tavily|searchExa|EXA_API/i,
 ];
 
 /** add-on 고유 이름이 나와도 되는 위치(`apps/api/src` 기준 접두) — add-on 모듈과 그것을 모으는 호스트뿐 */
