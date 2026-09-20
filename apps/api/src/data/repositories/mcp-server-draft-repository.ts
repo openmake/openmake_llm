@@ -39,6 +39,8 @@ interface InsertDraftInput {
     url?: string | null;
     createdBy: string;
     manifestMeta: Record<string, unknown>;
+    /** docker 샌드박스 네트워크 — 미지정이면 컬럼 기본값(full). add-on 권한 집행이 'none' 을 넘긴다 */
+    sandboxNetwork?: 'full' | 'none';
 }
 
 interface ApproveInput {
@@ -75,11 +77,11 @@ export class McpServerDraftRepository extends BaseRepository {
             `INSERT INTO mcp_servers (
                 id, name, transport_type, command, args, env, url,
                 enabled, visibility, user_id, status, manifest_meta,
-                catalog_template_id, auto_spawn, created_at, updated_at
+                catalog_template_id, auto_spawn, sandbox_network, created_at, updated_at
              ) VALUES (
                 $1, $2, $3, $4, $5::jsonb, $6::jsonb, $7,
                 FALSE, 'user_private', $8, 'draft', $9::jsonb,
-                NULL, FALSE, NOW(), NOW()
+                NULL, FALSE, COALESCE($10, 'full'), NOW(), NOW()
              ) RETURNING *`,
             [
                 id,
@@ -91,6 +93,7 @@ export class McpServerDraftRepository extends BaseRepository {
                 input.url ?? null,
                 input.createdBy,
                 JSON.stringify(input.manifestMeta),
+                input.sandboxNetwork ?? null,
             ]
         );
         return r.rows[0];

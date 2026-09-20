@@ -2717,6 +2717,7 @@
     "license": "Lizenz",
     "probed": "gemessen",
     "unavailable": "nicht verfügbar",
-    "nonCommercial": "nicht kommerziell"
+    "nonCommercial": "nicht kommerziell",
+    "permissions": "Berechtigungen"
   }
 }

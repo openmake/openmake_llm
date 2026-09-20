@@ -31,6 +31,13 @@ describe('내장 팩 매니페스트', () => {
         }
     });
 
+    it('permissions 는 집행 지점이 있는 어휘만 받는다 (선언만 있는 권한은 거짓 안심)', () => {
+        const base = { id: 'x', name: 'x', version: '1.0.0', requires: { openmake: '>=1.0.0' }, scope: 'user', components: {} };
+        expect(addonManifestSchema.safeParse({ ...base, permissions: ['network:internet', 'database:addon'] }).success).toBe(true);
+        expect(addonManifestSchema.safeParse({ ...base, permissions: ['files:read'] }).success).toBe(false);
+        expect(addonManifestSchema.safeParse({ ...base, permissions: ['root'] }).success).toBe(false);
+    });
+
     it('requires.model 은 정적 대조용 필드만 받는다', () => {
         const base = { id: 'x', name: 'x', version: '1.0.0', scope: 'user', components: {} };
         expect(addonManifestSchema.safeParse({ ...base, requires: { openmake: '>=1.0.0', model: { minContext: 131072, tools: true } } }).success).toBe(true);

@@ -14,6 +14,7 @@ import * as path from 'path';
 import { createLogger } from '../utils/logger';
 import { APP_VERSION } from '../config/constants';
 import { satisfiesOpenmakeRange } from './manifest';
+import { ADDON_PERMISSIONS, hasAddonPermission } from '../config/addon-permissions';
 import { loadAddonEntry } from './entry-loader';
 import { installPackCatalog } from './pack-catalog';
 import { installPackSkills } from './pack-skills';
@@ -83,14 +84,26 @@ async function verifyAddonModelRequirements(): Promise<void> {
 }
 
 /**
+ * PURE: 스키마를 적용할 add-on 을 고른다 — `components.migrations` 를 선언했고 **`database:addon` 권한도 있는** 것만.
+ * 권한 없이 선언한 add-on 은 `denied` 로 돌려 호출부가 경고를 남긴다(선언만으로 DB 를 바꾸지 못한다).
+ */
+export function selectMigrationTargets(addons: readonly BuiltinAddon[]): { targets: Array<{ id: string; dir: string }>; denied: string[] } {
+    const declared = addons.filter(a => a.manifest.components.migrations);
+    const allowed = declared.filter(a => hasAddonPermission(a.manifest.permissions, ADDON_PERMISSIONS.DATABASE_ADDON));
+    return {
+        targets: allowed.map(a => ({ id: a.id, dir: path.resolve(a.dir, a.manifest.components.migrations!) })),
+        denied: declared.filter(a => !allowed.includes(a)).map(a => a.id),
+    };
+}
+
+/**
  * 켜진 add-on 의 전용 스키마 적용 — 매니페스트 `components.migrations` 를 선언한 add-on 만.
  * 코어 마이그레이션은 이미 부팅 초기에 끝났고, 여기는 add-on 네임스페이스(`addon:<id>:NNN`)다.
  * 실패한 add-on 은 로그만 남기고 나머지는 계속한다(fail-open) — 그 add-on 의 기능만 비게 된다.
  */
 async function applyEnabledAddonMigrations(): Promise<void> {
-    const targets = enabledBuiltinAddons()
-        .filter(a => a.manifest.components.migrations)
-        .map(a => ({ id: a.id, dir: path.resolve(a.dir, a.manifest.components.migrations!) }));
+    const { targets, denied } = selectMigrationTargets(enabledBuiltinAddons());
+    for (const id of denied) logger.warn(`add-on '${id}' 마이그레이션 건너뜀 — 매니페스트에 '${ADDON_PERMISSIONS.DATABASE_ADDON}' 권한이 없습니다`);
     if (targets.length === 0) return;
     try {
         const { applyAddonMigrationsWithLock } = await import('../data/migrations/runner');

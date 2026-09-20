@@ -23,6 +23,7 @@ import type { GitFetcher } from './git-fetcher';
 import type { GitIngestService } from './git-ingest-service';
 import { commandFileToSkillMarkdown, agentFileToCustomAgent } from './plugin-component-compat';
 import { parseMcpJsonFile, type NormalizedMcpServer } from './extension-manifest-validator';
+import { ADDON_PERMISSIONS, hasAddonPermission } from '../../config/addon-permissions';
 import { collectPlaceholderEnvKeys, buildEnvInputHints, type UserConfigEntry } from '../../tool-contract/env-placeholder';
 import { ConventionChecker, isBlockedByConvention } from './convention-checker';
 import { McpServerDraftRepository } from '../../data/repositories/mcp-server-draft-repository';
@@ -94,6 +95,11 @@ export interface ComponentContext {
     extensionName: string;
     /** 설치 리포트 — 각 갈래가 사유를 push 한다 */
     warnings: string[];
+    /**
+     * 번들이 동봉한 `openmake-addon.json` 의 permissions. **undefined = 매니페스트 미동봉**(종전 확장 —
+     * 권한 집행 없이 기존 동작), 배열이면 deny-by-default 로 집행한다(`config/addon-permissions.ts`).
+     */
+    addonPermissions?: readonly string[];
     /** plugin.json `commands` 경로 필드 (없으면 commands/ 디렉토리만) */
     commandPaths?: string[];
     /** plugin.json `mcpServers` 가 파일 경로 문자열일 때 */
@@ -340,7 +346,16 @@ export async function collectMcpDrafts(
     const results: McpServerInstallResult[] = [];
     const checker = new ConventionChecker(llmClientFactory(SKILL_CREATOR.authorModel));
     const draftRepo = new McpServerDraftRepository(ctx.pool);
+    // add-on 권한 집행 — 매니페스트를 동봉한 번들만(deny by default). 네트워크 권한이 없으면
+    // stdio 서버는 `--network none` 샌드박스로 저장하고, 원격(HTTP) 서버는 성립할 수 없어 제외한다.
+    const enforcePermissions = ctx.addonPermissions !== undefined;
+    const networkAllowed = !enforcePermissions || hasAddonPermission(ctx.addonPermissions, ADDON_PERMISSIONS.NETWORK_INTERNET);
     for (const entry of mcpEntries) {
+        if (!networkAllowed && entry.transportType !== 'stdio') {
+            ctx.warnings.push(`MCP_NETWORK_PERMISSION_MISSING: 원격 MCP 서버 '${entry.name}' 제외 — 매니페스트에 '${ADDON_PERMISSIONS.NETWORK_INTERNET}' 권한이 없습니다`);
+            results.push({ name: entry.name, error: `PERMISSION_DENIED: ${ADDON_PERMISSIONS.NETWORK_INTERNET} 권한 없음` });
+            continue;
+        }
         try {
             const conv = await checker.checkMcpServer(
                 JSON.stringify(entry, null, 2),
@@ -357,6 +372,7 @@ export async function collectMcpDrafts(
                 env: entry.env ?? null,
                 url: entry.url ?? null,
                 createdBy: ctx.userId,
+                ...(networkAllowed ? {} : { sandboxNetwork: 'none' as const }),
                 manifestMeta: {
                     version: '1.0',
                     source: 'extension',

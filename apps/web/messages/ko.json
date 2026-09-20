@@ -2717,6 +2717,7 @@
     "license": "라이선스",
     "probed": "실측",
     "unavailable": "비가용",
-    "nonCommercial": "비상업"
+    "nonCommercial": "비상업",
+    "permissions": "권한"
   }
 }
