@@ -67,7 +67,10 @@ jobs:
         run: git archive --format=tar.gz --prefix="openmake_llm-${TAG}/" -o "openmake_llm-${TAG}.tar.gz" "${TAG}"
 
       - name: CycloneDX SBOM (package-lock)
-        run: npx --yes @cyclonedx/cyclonedx-npm@6.0.1 --package-lock-only --omit dev --output-file "sbom-${TAG}.cdx.json"
+        # --ignore-npm-errors: 루트 overrides(보안 패치로 강제한 adm-zip ^0.6.1)를 `npm ls` 가 "invalid" 로 보고해 exit 254 가 난다
+        # (onnxruntime-node 가 ^0.5.16 을 요구). 의도한 override 라 오류가 아니다 — SBOM 에는 실제 해석된 버전(0.6.1)이 실린다.
+        # v1.78.0·v1.79.0 릴리스가 이 단계에서 실패해 SBOM·증명이 빠졌다(2026-09-20).
+        run: npx --yes @cyclonedx/cyclonedx-npm@6.0.1 --package-lock-only --omit dev --ignore-npm-errors --output-file "sbom-${TAG}.cdx.json"
 
       - name: Attest build provenance
         uses: actions/attest@v4
