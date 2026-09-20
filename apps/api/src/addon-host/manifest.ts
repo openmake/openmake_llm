@@ -9,6 +9,7 @@
  * @module addon-host/manifest
  */
 import { z } from 'zod';
+import { ADDON_PERMISSION_VALUES } from '../config/addon-permissions';
 
 export const ADDON_MANIFEST_FILENAME = 'openmake-addon.json';
 
@@ -102,7 +103,11 @@ export const addonManifestSchema = z.object({
         evals: z.string().optional(),
     }).strict(),
     entry: addonEntrySchema.optional(),
-    permissions: z.array(z.string().min(1).max(80)).max(50).optional(),
+    /**
+     * 이 add-on 이 요구하는 권한 — 어휘는 `config/addon-permissions.ts`(집행 지점이 있는 값만).
+     * 모르는 값은 거절한다: 선언만 있고 아무것도 막지 않는 권한을 받아 주면 거짓 안심이 된다.
+     */
+    permissions: z.array(z.enum(ADDON_PERMISSION_VALUES)).max(20).optional(),
     entitlement: z.object({ sku: z.string().min(1).max(120) }).optional(),
 }).strict();
 
@@ -113,18 +118,23 @@ export type AddonManifest = z.infer<typeof addonManifestSchema>;
  * 구성요소 해석은 기존 plugin.json 경로가 그대로 맡고, 여기서는 호환 범위와 설치형에 허용되지 않는 선언만 본다:
  * 코드 진입점(`entry`)과 system 범위는 레포에 코드가 있는 내장 add-on 만 가질 수 있다. 반환값은 거절 사유(빈 배열 = 통과).
  */
-export function validateInstallableAddonManifest(jsonText: string, appVersion: string): string[] {
+export function parseInstallableAddonManifest(jsonText: string, appVersion: string): { errors: string[]; manifest?: AddonManifest } {
     let raw: unknown;
-    try { raw = JSON.parse(jsonText); } catch { return ['JSON 파싱 실패']; }
+    try { raw = JSON.parse(jsonText); } catch { return { errors: ['JSON 파싱 실패'] }; }
     const parsed = addonManifestSchema.safeParse(raw);
-    if (!parsed.success) return parsed.error.issues.map(i => `${i.path.join('.') || '(root)'} ${i.message}`);
+    if (!parsed.success) return { errors: parsed.error.issues.map(i => `${i.path.join('.') || '(root)'} ${i.message}`) };
     const errors: string[] = [];
     if (parsed.data.entry) errors.push('entry: 설치형 add-on 은 인프로세스 코드 진입점을 선언할 수 없다 (코드 확장은 MCP 서버로)');
     if (parsed.data.scope === 'system') errors.push('scope: 설치형 add-on 은 system 범위를 가질 수 없다');
     if (!satisfiesOpenmakeRange(appVersion, parsed.data.requires.openmake)) {
         errors.push(`requires.openmake: 현재 버전 ${appVersion} 이 요구 범위 '${parsed.data.requires.openmake}' 밖`);
     }
-    return errors;
+    return { errors, ...(errors.length === 0 ? { manifest: parsed.data } : {}) };
+}
+
+/** 종전 시그니처 — 거절 사유만 필요할 때. */
+export function validateInstallableAddonManifest(jsonText: string, appVersion: string): string[] {
+    return parseInstallableAddonManifest(jsonText, appVersion).errors;
 }
 
 /**

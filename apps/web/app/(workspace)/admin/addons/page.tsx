@@ -26,6 +26,7 @@ interface AddonRow {
   source: string;
   entitlementSku: string | null;
   failureReason: string | null;
+  permissions?: string[];
   modelRequirement?: { ok: boolean; satisfiedBy: string[]; reason?: string };
 }
 type Payload = ApiSuccess<{ addons: AddonRow[]; restartNote: string }>;
@@ -116,6 +117,11 @@ export default function AdminAddonsPage() {
                           <Td>
                             <div className="font-medium">{a.name}</div>
                             <div className="font-mono text-[11px] text-muted">{a.id} · v{a.version}</div>
+                            {(a.permissions?.length ?? 0) > 0 && (
+                              <div className="mt-1 flex flex-wrap gap-1" aria-label={t("permissions")}>
+                                {a.permissions!.map((p) => <Badge key={p} tone="accent" className="font-mono text-[10px]">{p}</Badge>)}
+                              </div>
+                            )}
                           </Td>
                           <Td className="text-xs">{a.kind}</Td>
                           <Td className="text-xs">{a.source}</Td>

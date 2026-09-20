@@ -54,6 +54,8 @@ adminAddonsRouter.get('/addons', requireAuth, requireAdmin, asyncHandler(async (
             entitlementSku: row?.entitlement_sku ?? null,
             failureReason: row?.failure_reason ?? null,
             updatedAt: row?.updated_at ?? null,
+            /** 매니페스트가 선언한 권한 — 집행 어휘는 config/addon-permissions.ts */
+            permissions: manifests.get(a.id)?.permissions ?? [],
             /** 모델 요구 정적 판정 — 요구가 없으면 ok, 미충족이면 사유를 그대로 보여 준다 */
             modelRequirement: checkModelRequirement(manifests.get(a.id)?.requires.model, models),
         };

@@ -2717,6 +2717,7 @@
     "license": "许可证",
     "probed": "实测",
     "unavailable": "不可用",
-    "nonCommercial": "非商用"
+    "nonCommercial": "非商用",
+    "permissions": "权限"
   }
 }

@@ -35,7 +35,7 @@ import { translateCatalogDescriptions } from './catalog-translator';
 export { buildSkillDiscoveryPattern } from './catalog-snapshot';
 import { scanForExtensionManifests, scanForMarketplaceManifests, resolveExtensionRoot, detectUnsupportedComponents, type ManifestCandidate } from './repo-scanner';
 import { validateExtensionManifest, parseMarketplaceFile } from './extension-manifest-validator';
-import { ADDON_MANIFEST_FILENAME, validateInstallableAddonManifest } from '../../addon-host/manifest';
+import { ADDON_MANIFEST_FILENAME, parseInstallableAddonManifest } from '../../addon-host/manifest';
 import { APP_VERSION } from '../../config/constants';
 import {
     findExtensionManifestPath,
@@ -242,10 +242,13 @@ export class ExtensionIngestService {
 
         // (4-1) 번들이 Add-on 매니페스트를 동봉했으면 내장 add-on 과 같은 계약으로 검증한다 (없으면 종전 그대로)
         const addonManifestPath = `${root}${ADDON_MANIFEST_FILENAME}`; // root 는 '' 또는 '/' 로 끝난다
+        // 동봉했으면 permissions 를 deny-by-default 로 집행한다(미동봉 = undefined = 종전 동작).
+        let addonPermissions: readonly string[] | undefined;
         if (tree.entries.some(e => e.path === addonManifestPath)) {
             const addonRaw = await fetcher.fetchFile(owner, repo, sha, addonManifestPath, EXTENSION_INGEST.manifestMaxBytes);
-            const addonErrors = validateInstallableAddonManifest(addonRaw, APP_VERSION);
-            if (addonErrors.length > 0) throw new Error(`INVALID_ADDON_MANIFEST: ${addonErrors.join('; ')}`);
+            const parsedAddon = parseInstallableAddonManifest(addonRaw, APP_VERSION);
+            if (parsedAddon.errors.length > 0) throw new Error(`INVALID_ADDON_MANIFEST: ${parsedAddon.errors.join('; ')}`);
+            addonPermissions = parsedAddon.manifest?.permissions ?? [];
         }
 
         // (5) dedupe + 상한 + 동명 충돌
@@ -355,6 +358,7 @@ export class ExtensionIngestService {
             manifestPath: candidate.path,
             extensionName: manifest.name,
             warnings,
+            ...(addonPermissions !== undefined ? { addonPermissions } : {}),
             commandPaths: manifest.commandPaths,
             mcpServersPath: manifest.mcpServersPath,
         };
