@@ -1,6 +1,10 @@
 # ============================================================
 # OpenMake LLM — 외부 공개용 리버스 프록시 (Caddy)
 # ============================================================
+# ⚠️ scripts/env/omk.sh 가 관리하는 멀티 인스턴스 호스트는 이 파일을 쓰지 않는다.
+#    omk 는 scripts/caddy/instance.caddy.tmpl 을 $OMK_ROOT/caddy/caddy.d/<env>.caddy 로
+#    렌더하고 Caddy 를 PM2(omk-proxy)로 띄운다. 이 파일은 레거시 단일 인스턴스 SoT 로 남는다.
+#
 # 목적: 프론트 + REST + WebSocket 을 단일 origin(:33000)으로 묶는다.
 #       백엔드(52416)는 직접 노출하지 않는다.
 #

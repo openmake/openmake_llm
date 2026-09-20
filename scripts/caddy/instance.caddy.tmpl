@@ -1,0 +1,27 @@
+# ============================================================
+# OpenMake — 환경별 리버스 프록시 블록 (omk 가 렌더링)
+# ============================================================
+# `omk proxy render <env>` 가 이중 중괄호 자리표시자를 그 환경의 .env 값으로 치환해
+# $OMK_ROOT/caddy/caddy.d/<env>.caddy 로 쓴다. 값은 전부 .env 가 진실이고 이 파일에는 없다.
+#
+# 목적: 프론트 + REST + WebSocket 을 단일 origin(:{{PROXY_PORT}})으로 묶는다 — 백엔드는 직접 노출하지 않는다.
+# TLS 는 앞단(Cloudflare Tunnel·외부 LB 등)이 종단한다 → 평문 포트로 명시해 Caddy 자동 HTTPS 를 끈다.
+# 외부 공개: 터널/DNS 를 이 포트로 향하게 한다 (scripts/cloudflared/config.yml.example).
+#
+# env={{ENV}}  api=:{{API_PORT}}  web=:{{WEB_PORT}}  bench=:{{BENCH_PORT}} (bench 는 자기 포트로 직접 공개 — 쿠키가 host-only 라 같은 origin 에 두지 않는다)
+
+:{{PROXY_PORT}} {
+	# 채팅 WebSocket upgrade → 백엔드. Next dev 의 HMR(/_next/*)은 제외 — 백엔드로 보내면 HMR 이 깨진다.
+	@chatws {
+		header Connection *Upgrade*
+		header Upgrade    websocket
+		not path /_next/*
+	}
+	reverse_proxy @chatws localhost:{{API_PORT}}
+
+	# REST API → 백엔드 (same-origin, X-Forwarded-* 자동 전달 → OAuth redirect host 인식)
+	reverse_proxy /api/* localhost:{{API_PORT}}
+
+	# 그 외(Next 페이지·정적 자산)
+	reverse_proxy localhost:{{WEB_PORT}}
+}

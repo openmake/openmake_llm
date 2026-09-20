@@ -73,6 +73,7 @@ readonly PG_CONTAINER="openmake${INSTANCE:+-$INSTANCE}-postgres"
 # ⚠️ 운영 경로(/opt/homebrew/etc/Caddyfile)는 원래 이 파일로의 심링크였으나, launchd
 # 서비스가 외장 볼륨(/Volumes/...)을 읽지 못해(TCC: "operation not permitted") 실파일로
 # 교체했다. 그래서 레포 변경이 더는 자동 반영되지 않는다 — 배포마다 여기서 복사한다.
+# 단, .env 에 OMK_PROXY_DIR 이 있으면(scripts/env/omk.sh 가 관리하는 인스턴스) 이 동기화는 건너뛴다 — sync_caddyfile 참고.
 readonly CADDYFILE_SRC_REL="scripts/caddy/Caddyfile"
 CADDYFILE_DEST="${CADDYFILE_DEST:-/opt/homebrew/etc/Caddyfile}"
 
@@ -625,6 +626,19 @@ cmd_update() {
     git -C "$SCRIPT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
         || { log_err "git 레포가 아닙니다 — tarball 설치본은 재설치(install.sh)로 갱신하세요"; exit 1; }
 
+    # install.sh 의 `npm install` 은 package-lock.json 을 다시 쓴다 — lock 의 워크스페이스 버전이
+    # package.json 보다 낡아 있으면(release-please 는 lock 을 갱신하지 않는다) 설치만 해도 lock 이
+    # 바뀐 채 남고, 아래 검사가 첫 update 부터 막는다(2026-09-18: 설치본 3곳 전부 이 상태였다).
+    # lock 은 설치의 부산물이지 사람의 편집이 아니므로 되돌리고 진행한다. 그 밖의 변경은 그대로 막는다.
+    local _dirty _f
+    _dirty="$(git -C "$SCRIPT_DIR" status --porcelain 2>/dev/null | awk '{print $2}')"
+    for _f in $_dirty; do
+        case "$_f" in
+            package-lock.json|*/package-lock.json)
+                git -C "$SCRIPT_DIR" checkout -- "$_f" && log_info "설치가 다시 쓴 $_f 를 되돌렸습니다 (update 전 정리)" ;;
+        esac
+    done
+
     if [[ -n "$(git -C "$SCRIPT_DIR" status --porcelain 2>/dev/null)" ]]; then
         log_err "미커밋 로컬 변경이 있어 업데이트를 중단합니다 (덮어쓰지 않음)."
         echo "  변경을 정리(commit/stash)한 뒤 다시 실행하세요: git -C \"$SCRIPT_DIR\" status"
@@ -709,6 +723,14 @@ cmd_deploy() {
 # 갱신되고 다음 기동 때 반영되므로 경고만 남긴다.
 sync_caddyfile() {
     local src="$SCRIPT_DIR/$CADDYFILE_SRC_REL"
+
+    # omk 가 관리하는 인스턴스는 자기 몫의 caddy.d/<env>.caddy 를 직접 렌더해 쓴다
+    # (scripts/env/omk.sh proxy render). 여기서 레거시 호스트 Caddyfile 을 덮어쓰면 같은
+    # Caddy 설정을 두 곳에서 다투게 되므로, OMK_PROXY_DIR 이 있으면 손대지 않는다.
+    if [[ -n "$(env_line OMK_PROXY_DIR)" ]]; then
+        log_info "omk proxy 관리 인스턴스 — 호스트 Caddyfile 동기화 생략 (scripts/env/omk.sh proxy render)"
+        return 0
+    fi
 
     # 호스트의 Caddyfile 은 하나뿐이다 — 이름 있는 인스턴스가 기본 인스턴스의 설정을 덮어쓰지 않게 한다.
     if [[ -n "$INSTANCE" ]]; then
