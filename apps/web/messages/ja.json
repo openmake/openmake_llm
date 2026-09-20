@@ -2340,7 +2340,12 @@
     },
     "share": {
       "toggleAria": "ワークスペース共有を切替",
-      "shared": "共有中"
+      "shared": "共有中",
+      "organization": "組織に公開",
+      "visibilityAria": "公開範囲",
+      "optPrivate": "非公開",
+      "optShared": "ワークスペース全体",
+      "optOrganization": "自分の組織"
     },
     "gallery": {
       "title": "ワークスペースギャラリー",

@@ -36,6 +36,7 @@ import { UserExtensionRepository, type UserExtensionRow } from '../data/reposito
 import { ExtensionCatalogRepository } from '../data/repositories/extension-catalog-repository';
 import { createLogger } from '../utils/logger';
 import { removeExtensionInstallation } from '../services/addon/addon-state';
+import { activeOrgFor, membershipsFor } from '../services/org/membership-cache';
 import { success, internalError, unauthorized, notFound, badRequest } from '../utils/api-response';
 
 const updateCheckSchema = z.object({
@@ -44,7 +45,7 @@ const updateCheckSchema = z.object({
 });
 
 const visibilitySchema = z.object({
-    visibility: z.enum(['private', 'shared']),
+    visibility: z.enum(['private', 'shared', 'organization']),
 });
 
 const galleryInstallSchema = z.object({
@@ -78,6 +79,15 @@ function getUserId(req: Request): string | null {
 function toPublic(row: UserExtensionRow) {
     const { source_hash: _hash, user_id: _uid, ...rest } = row;
     return rest;
+}
+
+/** 요청자가 멤버인 조직 id — 조직에 공개된 확장의 갤러리 노출·설치 판정에 쓴다 (조회 실패는 빈 목록 = 조직 공개분만 안 보인다) */
+async function memberOrgIds(userId: string): Promise<string[]> {
+    try {
+        return (await membershipsFor(userId)).map((m) => m.orgId);
+    } catch {
+        return [];
+    }
 }
 
 /** ExtensionIngestService 조립 (동적 import — update-check/gallery install 공용). */
@@ -122,7 +132,7 @@ export function createUserExtensionsController(): Router {
         if (!userId) { res.status(401).json(unauthorized()); return; }
         try {
             const repo = new UserExtensionRepository(getPool());
-            const rows = await repo.listShared();
+            const rows = await repo.listShared(undefined, await memberOrgIds(userId));
             // 타인 user_id 는 노출하지 않고 owned 플래그만 제공 (user_agents 관용구 동형)
             const extensions = rows.map((r) => ({ ...toPublic(r), owned: r.user_id === userId }));
             // admin 큐레이션 카탈로그 (enabled 소스만) — 실패해도 갤러리 자체는 응답 (fail-open)
@@ -148,7 +158,7 @@ export function createUserExtensionsController(): Router {
         if (!userId) { res.status(401).json(unauthorized()); return; }
         try {
             const repo = new UserExtensionRepository(getPool());
-            const shared = await repo.getInstallableById(req.params.id, userId);
+            const shared = await repo.getInstallableById(req.params.id, userId, await memberOrgIds(userId));
             if (!shared) { res.status(404).json(notFound('공유 확장 없음')); return; }
 
             const body = req.body as z.infer<typeof galleryInstallSchema>;
@@ -332,7 +342,13 @@ export function createUserExtensionsController(): Router {
         try {
             const body = req.body as z.infer<typeof visibilitySchema>;
             const repo = new UserExtensionRepository(getPool());
-            const row = await repo.setVisibility(req.params.id, userId, body.visibility);
+            // organization 공개는 요청자의 활성 조직(멤버십 검증 완료)에만 — 임의 org_id 를 받지 않는다 (user_agents 와 같은 규칙)
+            const activeOrg = body.visibility === 'organization' ? await activeOrgFor(userId) : null;
+            if (body.visibility === 'organization' && !activeOrg) {
+                res.status(400).json(badRequest('활성 조직이 없습니다. 먼저 조직을 선택하세요.'));
+                return;
+            }
+            const row = await repo.setVisibility(req.params.id, userId, body.visibility, activeOrg?.orgId ?? null);
             if (!row) { res.status(404).json(notFound('확장 없음')); return; }
             log.info(`확장 visibility 변경: ${row.id} → ${body.visibility} (user=${userId})`);
             res.json(success({ extension: toPublic(row) }));

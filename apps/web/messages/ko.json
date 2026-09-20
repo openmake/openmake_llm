@@ -2340,7 +2340,12 @@
     },
     "share": {
       "toggleAria": "워크스페이스 공유 전환",
-      "shared": "공유됨"
+      "shared": "공유됨",
+      "organization": "조직에 공개",
+      "visibilityAria": "공개범위",
+      "optPrivate": "비공개",
+      "optShared": "워크스페이스 전체",
+      "optOrganization": "내 조직"
     },
     "gallery": {
       "title": "워크스페이스 갤러리",

@@ -244,11 +244,13 @@ export class ExtensionIngestService {
         const addonManifestPath = `${root}${ADDON_MANIFEST_FILENAME}`; // root 는 '' 또는 '/' 로 끝난다
         // 동봉했으면 permissions 를 deny-by-default 로 집행한다(미동봉 = undefined = 종전 동작).
         let addonPermissions: readonly string[] | undefined;
+        let addonScope: string | undefined;
         if (tree.entries.some(e => e.path === addonManifestPath)) {
             const addonRaw = await fetcher.fetchFile(owner, repo, sha, addonManifestPath, EXTENSION_INGEST.manifestMaxBytes);
             const parsedAddon = parseInstallableAddonManifest(addonRaw, APP_VERSION);
             if (parsedAddon.errors.length > 0) throw new Error(`INVALID_ADDON_MANIFEST: ${parsedAddon.errors.join('; ')}`);
             addonPermissions = parsedAddon.manifest?.permissions ?? [];
+            addonScope = parsedAddon.manifest?.scope;
         }
 
         // (5) dedupe + 상한 + 동명 충돌
@@ -428,6 +430,19 @@ export class ExtensionIngestService {
                 manifest: componentManifest,
             });
         }
+        // 매니페스트 scope=organization — **새 설치**만 설치자의 활성 조직 갤러리에 공개한다(업데이트는 소유자가 정한 공개범위를 건드리지 않는다).
+        // 구성원은 갤러리에서 각자 설치·승인한다 — 소유권 경계는 user_id 그대로다(조직은 공유 범위를 덧씌우는 축).
+        if (!updateTarget && addonScope === 'organization') {
+            const { activeOrgFor } = await import('../../services/org/membership-cache');
+            const org = await activeOrgFor(input.userId);
+            if (org) {
+                row = (await extRepo.setVisibility(row.id, input.userId, 'organization', org.orgId)) ?? row;
+                warnings.push('ORG_SCOPE_PUBLISHED: 조직 범위 add-on 이라 활성 조직의 갤러리에 공개했습니다. 구성원은 갤러리에서 각자 설치합니다(설정에서 비공개로 바꿀 수 있습니다).');
+            } else {
+                warnings.push('ORG_SCOPE_NO_ACTIVE_ORG: 조직 범위 add-on 이지만 활성 조직이 없어 개인 설치로 두었습니다. 조직을 선택한 뒤 공개범위를 "조직" 으로 바꾸면 구성원 갤러리에 나옵니다.');
+            }
+        }
+
         // 사용법 안내 — 설치한 스킬은 매 턴 자동 주입되지 않는다(프롬프트 팽창·무관한 질의 오염 방지, 2026-08-18).
         // 안내가 없으면 "설치했는데 왜 안 되지" 가 된다(2026-09-20 법무 팩 실전 검증).
         if (!updateTarget && okSkills.length > 0) {

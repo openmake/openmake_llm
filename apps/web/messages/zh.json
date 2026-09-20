@@ -2340,7 +2340,12 @@
     },
     "share": {
       "toggleAria": "切换工作区共享",
-      "shared": "已共享"
+      "shared": "已共享",
+      "organization": "已向组织公开",
+      "visibilityAria": "可见范围",
+      "optPrivate": "私有",
+      "optShared": "整个工作区",
+      "optOrganization": "我的组织"
     },
     "gallery": {
       "title": "工作区画廊",

@@ -16,11 +16,13 @@ interface UserExtension {
   description: string | null;
   source_url: string;
   source_ref: string;
-  visibility?: "private" | "shared";
+  visibility?: ExtensionVisibility;
   created_at?: string;
   /** 설치 리포트 — 미지원 구성요소·건너뛴 MCP 항목·스킬 호환 적응 (ingest 가 기록) */
   manifest?: { warnings?: string[] };
 }
+
+type ExtensionVisibility = "private" | "shared" | "organization";
 
 interface GalleryExtension extends UserExtension {
   owned: boolean;
@@ -102,6 +104,8 @@ export function ExtensionsSection() {
   const [catalogSearch, setCatalogSearch] = useState("");
   const [catalogPage, setCatalogPage] = useState(0);
   const isAdmin = useAppStore((s) => s.auth.currentUser?.role === "admin");
+  // 활성 조직이 있을 때만 "조직" 공개를 고를 수 있다(서버도 활성 조직에만 공개한다 — custom-agents 와 같은 규칙)
+  const activeOrgId = useAppStore((s) => s.auth.currentUser?.activeOrgId ?? null);
   const locale = useLocale();
 
   // 파생값: 설치 가능 항목 평면화 → 소스 필터 → 카테고리 필터 → 페이지
@@ -204,9 +208,12 @@ export function ExtensionsSection() {
   }
 
   async function toggleShare(ext: UserExtension) {
-    if (sharing) return;
+    return setVisibility(ext, ext.visibility === "shared" ? "private" : "shared");
+  }
+
+  async function setVisibility(ext: UserExtension, next: ExtensionVisibility) {
+    if (sharing || next === (ext.visibility ?? "private")) return;
     setSharing(ext.id);
-    const next = ext.visibility === "shared" ? "private" : "shared";
     try {
       await ApiClient.patch(`/api/users/me/extensions/${ext.id}/visibility`, { visibility: next });
       setExtensions((list) => list.map((e) => (e.id === ext.id ? { ...e, visibility: next } : e)));
@@ -379,19 +386,39 @@ export function ExtensionsSection() {
                     {ext.visibility === "shared" && (
                       <span className="shrink-0 whitespace-nowrap text-xs text-accent">{t("share.shared")}</span>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={t("share.toggleAria")}
-                      disabled={sharing === ext.id}
-                      onClick={() => void toggleShare(ext)}
-                    >
-                      {sharing === ext.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Share2 className={`h-4 w-4 ${ext.visibility === "shared" ? "text-accent" : ""}`} />
-                      )}
-                    </Button>
+                    {ext.visibility === "organization" && (
+                      <span className="shrink-0 whitespace-nowrap text-xs text-accent">{t("share.organization")}</span>
+                    )}
+                    {activeOrgId || ext.visibility === "organization" ? (
+                      <select
+                        aria-label={t("share.visibilityAria")}
+                        value={ext.visibility ?? "private"}
+                        disabled={sharing === ext.id}
+                        onChange={(e) => void setVisibility(ext, e.target.value as ExtensionVisibility)}
+                        className="h-8 rounded-md border border-line bg-bg-1 px-2 text-xs text-fg"
+                      >
+                        <option value="private">{t("share.optPrivate")}</option>
+                        <option value="shared">{t("share.optShared")}</option>
+                        {/* 활성 조직이 없으면 새로 고를 수 없다 — 이미 조직 공개인 행은 현재 값을 보여 주기 위해 남긴다 */}
+                        {(activeOrgId || ext.visibility === "organization") && (
+                          <option value="organization" disabled={!activeOrgId}>{t("share.optOrganization")}</option>
+                        )}
+                      </select>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={t("share.toggleAria")}
+                        disabled={sharing === ext.id}
+                        onClick={() => void toggleShare(ext)}
+                      >
+                        {sharing === ext.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Share2 className={`h-4 w-4 ${ext.visibility === "shared" ? "text-accent" : ""}`} />
+                        )}
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="icon"
