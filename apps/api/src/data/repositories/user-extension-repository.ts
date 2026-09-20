@@ -100,6 +100,59 @@ export class UserExtensionRepository extends BaseRepository {
     }
 
     /** 링크 구성요소 archive (업데이트 시 구버전 정리 — remove 와 동일 규칙, 링크는 해제). */
+    /**
+     * 업데이트 전 스냅샷 — 이 확장의 **승인된(active) 스킬** 이름과 그 스킬의 배정(agent_id·priority).
+     * `archiveLinkedComponents` 가 구 행을 회수하기 **전에** 불러야 한다(회수 후엔 extension_id 가 NULL 이다).
+     */
+    async snapshotApprovedSkills(extensionId: string): Promise<Array<{ name: string; assignments: Array<{ agentId: string; priority: number }> }>> {
+        const r = await this.query<{ name: string; agent_id: string | null; priority: number | null }>(
+            `SELECT s.name, a.agent_id, a.priority
+               FROM agent_skills s
+               LEFT JOIN agent_skill_assignments a ON a.skill_id = s.id
+              WHERE s.extension_id = $1 AND s.status = 'active'`,
+            [extensionId]
+        );
+        const byName = new Map<string, Array<{ agentId: string; priority: number }>>();
+        for (const row of r.rows) {
+            const list = byName.get(row.name) ?? [];
+            if (row.agent_id) list.push({ agentId: row.agent_id, priority: row.priority ?? 0 });
+            byName.set(row.name, list);
+        }
+        return [...byName.entries()].map(([name, assignments]) => ({ name, assignments }));
+    }
+
+    /**
+     * 업데이트 후 승인 이어주기 — 같은 소스의 새 버전에 **같은 이름**으로 다시 들어온 스킬만 active 로 올리고
+     * 종전 배정을 새 id 로 옮긴다. 새로 추가된 스킬은 draft 로 남아 사용자가 본다.
+     * (2026-09-20: 업데이트하면 승인한 스킬이 전부 draft 로 돌아가 재승인 전까지 팩이 꺼지던 문제)
+     * ⚠️ 대상은 스킬(프롬프트 텍스트)뿐이다 — MCP 서버는 실행 코드라 업데이트마다 재승인을 받는다.
+     * @returns 승인을 이어받은 스킬 id
+     */
+    async carryOverSkillApprovals(
+        installed: ReadonlyArray<{ skillId: string; name: string }>,
+        snapshot: ReadonlyArray<{ name: string; assignments: ReadonlyArray<{ agentId: string; priority: number }> }>,
+    ): Promise<string[]> {
+        const prev = new Map(snapshot.map(s => [s.name, s.assignments]));
+        const carried: string[] = [];
+        for (const skill of installed) {
+            const assignments = prev.get(skill.name);
+            if (!assignments) continue;
+            await this.query(
+                `UPDATE agent_skills SET status='active', updated_at=$2 WHERE id=$1 AND status='draft'`,
+                [skill.skillId, new Date().toISOString()]
+            );
+            for (const a of assignments) {
+                await this.query(
+                    `INSERT INTO agent_skill_assignments (agent_id, skill_id, priority) VALUES ($1, $2, $3)
+                     ON CONFLICT DO NOTHING`,
+                    [a.agentId, skill.skillId, a.priority]
+                );
+            }
+            carried.push(skill.skillId);
+        }
+        return carried;
+    }
+
     async archiveLinkedComponents(extensionId: string): Promise<void> {
         await this.query(
             `UPDATE agent_skills SET status='archived', extension_id=NULL WHERE extension_id=$1`,

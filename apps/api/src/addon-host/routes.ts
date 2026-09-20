@@ -45,7 +45,7 @@ function createAddonListRouter(): Router {
  * add-on 전용 라우트의 게이트 — 요청마다 상태와 사용권을 본다 (2026-09-19, S3).
  *
  * env 로 끈 add-on 은 아예 마운트되지 않지만(코드도 로드하지 않는다), **관리자가 DB 에서 끈** add-on 은
- * 재시작 없이 즉시 404 가 된다. 조직 정책 `ADDON_ALLOWLIST` 에 없으면 403(유료 팩 미구매).
+ * 재시작 없이 즉시 404 가 된다. 조직 정책 `ADDON_ALLOWLIST` 를 둔 조직에서 목록 밖이면 403(조직 관리자의 통제 — 과금 아님).
  * 판정 실패는 통과시킨다(fail-open) — 정책 조회 장애가 기능을 막지 않는다.
  */
 export function addonGuard(addonId: string) {
