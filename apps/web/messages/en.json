@@ -2718,6 +2718,8 @@
     "probed": "probed",
     "unavailable": "unavailable",
     "nonCommercial": "non-commercial",
-    "permissions": "Permissions"
+    "permissions": "Permissions",
+    "verifiedModels": "Verified models",
+    "verifiedDetail": "Pass rate {rate}% · {cases} cases · {date}"
   }
 }

@@ -19,6 +19,7 @@ import { listBuiltinAddons } from '../addon-host/routes';
 import { listBuiltinAddonDefs } from '../addon-host/builtin-registry';
 import { availableChatModelFacts, checkModelRequirement } from '../services/addon/model-requirements';
 import { clearAddonStateCache } from '../services/addon/addon-state';
+import { loadPackVerifications } from '../services/addon/pack-verification';
 import { getAuditService } from '../services/AuditService';
 
 export const adminAddonsRouter = Router();
@@ -40,6 +41,7 @@ adminAddonsRouter.get('/addons', requireAuth, requireAdmin, asyncHandler(async (
     const byId = new Map(rows.map(r => [r.addon_id, r]));
     const models = await availableChatModelFacts();
     const manifests = new Map(listBuiltinAddonDefs().map(a => [a.id, a.manifest]));
+    const verifications = await loadPackVerifications(getPool());
     const addons = listBuiltinAddons().map(a => {
         const row = byId.get(a.id);
         return {
@@ -58,6 +60,8 @@ adminAddonsRouter.get('/addons', requireAuth, requireAdmin, asyncHandler(async (
             permissions: manifests.get(a.id)?.permissions ?? [],
             /** 모델 요구 정적 판정 — 요구가 없으면 ok, 미충족이면 사유를 그대로 보여 준다 */
             modelRequirement: checkModelRequirement(manifests.get(a.id)?.requires.model, models),
+            /** 팩 검증 실행(`npm run eval:packs`)의 모델별 최신 결과 — 기록이 없으면 빈 배열 */
+            verifiedModels: verifications.get(a.id) ?? [],
         };
     });
     res.json(success({ addons, restartNote: RESTART_REQUIRED_NOTE }));

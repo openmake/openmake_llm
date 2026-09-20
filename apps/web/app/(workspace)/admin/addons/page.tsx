@@ -28,6 +28,7 @@ interface AddonRow {
   failureReason: string | null;
   permissions?: string[];
   modelRequirement?: { ok: boolean; satisfiedBy: string[]; reason?: string };
+  verifiedModels?: Array<{ model: string; passRate: number; totalCases: number; verified: boolean; evaluatedAt: string }>;
 }
 type Payload = ApiSuccess<{ addons: AddonRow[]; restartNote: string }>;
 
@@ -117,6 +118,16 @@ export default function AdminAddonsPage() {
                           <Td>
                             <div className="font-medium">{a.name}</div>
                             <div className="font-mono text-[11px] text-muted">{a.id} · v{a.version}</div>
+                            {(a.verifiedModels?.length ?? 0) > 0 && (
+                              <div className="mt-1 flex flex-wrap gap-1" aria-label={t("verifiedModels")}>
+                                {a.verifiedModels!.map((v) => (
+                                  <Badge key={v.model} tone={v.verified ? "success" : "warn"} className="font-mono text-[10px]"
+                                    title={t("verifiedDetail", { rate: Math.round(v.passRate * 100), cases: v.totalCases, date: v.evaluatedAt.slice(0, 10) })}>
+                                    {v.verified ? "✓" : "✕"} {v.model}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
                             {(a.permissions?.length ?? 0) > 0 && (
                               <div className="mt-1 flex flex-wrap gap-1" aria-label={t("permissions")}>
                                 {a.permissions!.map((p) => <Badge key={p} tone="accent" className="font-mono text-[10px]">{p}</Badge>)}

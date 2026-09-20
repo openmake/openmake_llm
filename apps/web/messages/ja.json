@@ -2718,6 +2718,8 @@
     "probed": "実測",
     "unavailable": "利用不可",
     "nonCommercial": "非商用",
-    "permissions": "権限"
+    "permissions": "権限",
+    "verifiedModels": "検証済みモデル",
+    "verifiedDetail": "合格率 {rate}% · {cases}件 · {date}"
   }
 }

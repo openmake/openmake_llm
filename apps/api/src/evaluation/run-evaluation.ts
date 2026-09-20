@@ -50,6 +50,19 @@ async function main() {
     console.log(`\n[Evaluation] 데이터셋: v${dataset.version}, 총 ${dataset.cases.length}개 케이스`);
     console.log(`[Evaluation] 통과 임계값: ${(PASS_RATE_THRESHOLD * 100).toFixed(0)}%\n`);
 
+    // 라우팅 케이스는 에이전트를 가진 팩이 소유한다(addon-host/pack-evals). 0건을 두 경우로 가른다 —
+    // eval 을 선언한 팩이 없으면 라우팅할 에이전트도 없으니 건너뛰고, 선언했는데 0건이면 읽기 실패라 실패로 끝낸다.
+    if (!customPath && !dataset.cases.some((c) => c.category === 'routing-accuracy')) {
+        const { addonsDeclaringEvals } = await import('../addon-host/pack-evals');
+        const declaring = addonsDeclaringEvals();
+        if (declaring.length === 0) {
+            console.log('[Evaluation] 라우팅 케이스를 가진 add-on 이 켜져 있지 않습니다 — 건너뜀');
+            process.exit(0);
+        }
+        console.error(`\n❌ 평가 실패: ${declaring.join(', ')} 이(가) eval 세트를 선언했는데 라우팅 케이스가 0건입니다 — 팩 evals.json 읽기 실패를 확인하세요`);
+        process.exit(1);
+    }
+
     const summary = await runRoutingEvaluation(dataset);
 
     printSummary(summary);

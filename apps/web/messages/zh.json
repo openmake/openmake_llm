@@ -2718,6 +2718,8 @@
     "probed": "实测",
     "unavailable": "不可用",
     "nonCommercial": "非商用",
-    "permissions": "权限"
+    "permissions": "权限",
+    "verifiedModels": "已验证模型",
+    "verifiedDetail": "通过率 {rate}% · {cases} 项 · {date}"
   }
 }

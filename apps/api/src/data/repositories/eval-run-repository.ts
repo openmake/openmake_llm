@@ -77,6 +77,20 @@ export class EvalRunRepository extends BaseRepository {
         return r.rows;
     }
 
+    /**
+     * (variant, model) 별 **최신** 실모델 실행 — 팩 검증 표시용. 옛 통과가 최신 미달을 가리지 않게 최신 행만 본다.
+     */
+    async latestByVariantAndModel(runner: string): Promise<Array<{ variant: string; model: string; pass_rate: number; total_cases: number; completed_at: string }>> {
+        const r = await this.query<{ variant: string; model: string; pass_rate: number; total_cases: number; completed_at: string }>(
+            `SELECT DISTINCT ON (variant, model) variant, model, pass_rate, total_cases, completed_at
+             FROM eval_runs
+             WHERE runner = $1 AND mode = 'real' AND variant IS NOT NULL AND model IS NOT NULL
+             ORDER BY variant, model, completed_at DESC`,
+            [runner],
+        );
+        return r.rows;
+    }
+
     async get(id: string): Promise<EvalRunRow | undefined> {
         const r = await this.query<EvalRunRow>(`SELECT ${LIST_COLUMNS}, summary FROM eval_runs WHERE id = $1`, [id]);
         return r.rows[0];

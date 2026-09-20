@@ -218,6 +218,18 @@ npm run eval:matrix -- --real --models qwen3.8-27b --variants base,concise --lim
 - **실행 이력** `eval_runs`(146): routing·response·tools·matrix 러너가 `OMK_EVAL_RECORD_DB=true` + `DATABASE_URL` 일 때만 1행(매트릭스는 셀당, `matrix_run_id` 로 묶음)을 남긴다. CI·로컬 임시 실행은 기본 기록하지 않는다. nightly(`scripts/nightly-eval.sh`)는 켜고, `NIGHTLY_EVAL_MATRIX=1` 이면 매트릭스도 돈다.
 - 조회: 관리자 `/admin/evaluations`(API `GET /api/metrics/evaluations`·`/:id`). SLO `eval_pass` 는 `runner='response' AND mode='real'` 최신 행을 읽는다.
 
+## 팩 eval — 케이스는 팩과 함께 다닌다 (2026-09-20, 오픈웨이트 전환 S3)
+
+```bash
+npm run eval:packs -- --real --models qwen3.8-27b            # 켜진 팩 전부
+npm run eval:packs -- --real --models a,b --packs industry-pack
+```
+
+- 팩은 `components.evals`(기본 `./evals.json`)로 케이스를 동봉한다. id 는 `<addonId>:<caseId>`, 태그 `addon:<id>` 가 자동으로 붙는다(`addon-host/pack-evals.ts`).
+- **라우팅 120건은 industry-pack 소유다**(에이전트 id 가 팩 콘텐츠라서). Base `golden-dataset.json` 에는 response 케이스만 있다. `eval:routing` 은 종전대로 120건을 돌린다 — 팩이 꺼져 선언한 add-on 이 없으면 건너뛰고(exit 0), 선언했는데 0건이면 읽기 실패로 exit 1.
+- ⚠️ **팩의 response 케이스는 기본 실행에 섞이지 않는다**(`selectResponseEvalCases`) — 섞이면 케이스 집합이 바뀌어 지연·비용 기준선 비교가 조용히 건너뛰어진다. `--tag addon:<id>` 또는 `eval:packs` 로만 돈다. 그래서 팩 response 케이스는 `real-only` 로 쓴다(mock 생성기는 전문 분야 답을 못 낸다).
+- `eval:packs` 는 (팩 × 모델) 1행을 `eval_runs`(runner=`pack`, variant=`addon:<id>`)에 남기고(`OMK_EVAL_RECORD_DB=true`), 관리 화면 `/admin/addons` 의 **검증된 모델** 배지가 (팩, 모델) **최신 실행**을 읽는다 — 하한 `OMK_EVAL_PACK_MIN_PASS_RATE`(0.8). 기록이 없으면 "검증 안 됨" 이지 실패가 아니다. nightly 가 기본 모델로 매일 돌린다(`NIGHTLY_EVAL_PACK_MODELS`).
+
 ## PoC 상태 (마지막 업데이트)
 
 | 항목 | 상태 | 비고 |
