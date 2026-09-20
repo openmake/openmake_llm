@@ -154,6 +154,12 @@ export class UserExtensionRepository extends BaseRepository {
     }
 
     async archiveLinkedComponents(extensionId: string): Promise<void> {
+        // 배정도 함께 걷는다 — 남겨 두면 archived 스킬의 배정이 쌓이고(업데이트마다 1행), 도구 바인딩
+        // 조회가 status 를 보지 않던 시절엔 지운 스킬의 denied 바인딩이 계속 먹었다(2026-09-20).
+        await this.query(
+            `DELETE FROM agent_skill_assignments WHERE skill_id IN (SELECT id FROM agent_skills WHERE extension_id=$1)`,
+            [extensionId]
+        );
         await this.query(
             `UPDATE agent_skills SET status='archived', extension_id=NULL WHERE extension_id=$1`,
             [extensionId]
@@ -320,6 +326,11 @@ export class UserExtensionRepository extends BaseRepository {
         const existing = await this.getByIdForUser(id, userId, isAdmin);
         if (!existing || existing.status !== 'active') return null;
 
+        // 배정도 함께 걷는다 — archived 스킬에 배정이 남으면 도구 바인딩이 계속 따라온다(2026-09-20).
+        await this.query(
+            `DELETE FROM agent_skill_assignments WHERE skill_id IN (SELECT id FROM agent_skills WHERE extension_id=$1)`,
+            [id]
+        );
         await this.query(
             `UPDATE agent_skills SET status='archived' WHERE extension_id=$1`,
             [id]

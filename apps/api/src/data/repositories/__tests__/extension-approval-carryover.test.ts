@@ -40,6 +40,21 @@ describe('snapshotApprovedSkills', () => {
     });
 });
 
+describe('archiveLinkedComponents', () => {
+    it('스킬 배정도 함께 지운다 — archived 스킬에 배정이 남으면 도구 바인딩이 계속 따라온다', async () => {
+        const { pool, calls } = fakePool();
+
+        await new UserExtensionRepository(pool).archiveLinkedComponents('ext-1');
+
+        const del = calls.find(c => c.sql.startsWith('DELETE FROM agent_skill_assignments'));
+        expect(del).toBeDefined();
+        expect(del!.params).toEqual(['ext-1']);
+        // 배정 삭제가 스킬 archive 보다 **먼저** 와야 한다(archive 가 extension_id 를 NULL 로 만든다)
+        const archiveIdx = calls.findIndex(c => c.sql.includes("UPDATE agent_skills SET status='archived'"));
+        expect(calls.indexOf(del!)).toBeLessThan(archiveIdx);
+    });
+});
+
 describe('carryOverSkillApprovals', () => {
     it('같은 이름의 스킬만 active 로 올리고 배정을 새 id 로 옮긴다', async () => {
         const { pool, calls } = fakePool();

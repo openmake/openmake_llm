@@ -553,6 +553,9 @@ export class SkillManager {
             SELECT stb.skill_id, stb.skill_version, stb.tool_name, stb.binding_mode
             FROM skill_tool_bindings stb
             INNER JOIN agent_skill_assignments asa ON asa.skill_id = stb.skill_id
+            -- ⚠️ status 게이트 필수 — 확장을 지우거나 업데이트하면 구 스킬은 archived 가 되지만 배정 행은 남는다.
+            -- 이 조인이 없으면 지운 스킬의 denied 바인딩이 계속 도구를 막는다 (2026-09-20 발견).
+            INNER JOIN agent_skills ags ON ags.id = stb.skill_id AND ags.status = 'active'
             WHERE (asa.agent_id = $1 OR asa.agent_id = $2${userClause})
             ORDER BY stb.skill_id, stb.tool_name
         `;
