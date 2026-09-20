@@ -264,7 +264,7 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             { id: 'gpt-oss-120b',         displayName: 'GPT-OSS 120B',         isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: false, thinking: true  } },
             { id: 'hyperclovax-seed-32b', displayName: 'HyperCLOVA X SEED 32B', isFree: true, capabilities: { streaming: true, toolCalling: false, vision: false, thinking: true  } },
             { id: 'kanana-2-30b-a3b',     displayName: 'Kanana 2 30B A3B',     isFree: true, capabilities: { streaming: true, toolCalling: false, vision: false, thinking: false } },
-            { id: 'qwen2.5-vl-72b',       displayName: 'Qwen2.5 VL 72B',       isFree: true, capabilities: { streaming: true, toolCalling: false, vision: true,  thinking: false } },
+            { id: 'qwen2.5-vl-72b',       displayName: 'Qwen2.5 VL 72B',       isFree: true, capabilities: { streaming: true, toolCalling: true , vision: true,  thinking: false } },
         ],
     },
     {
