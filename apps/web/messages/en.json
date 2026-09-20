@@ -2340,7 +2340,12 @@
     },
     "share": {
       "toggleAria": "Toggle workspace sharing",
-      "shared": "Shared"
+      "shared": "Shared",
+      "organization": "Shared with organization",
+      "visibilityAria": "Visibility",
+      "optPrivate": "Private",
+      "optShared": "Whole workspace",
+      "optOrganization": "My organization"
     },
     "gallery": {
       "title": "Workspace gallery",

@@ -2340,7 +2340,12 @@
     },
     "share": {
       "toggleAria": "Arbeitsbereich-Freigabe umschalten",
-      "shared": "Geteilt"
+      "shared": "Geteilt",
+      "organization": "Für Organisation freigegeben",
+      "visibilityAria": "Sichtbarkeit",
+      "optPrivate": "Privat",
+      "optShared": "Gesamter Workspace",
+      "optOrganization": "Meine Organisation"
     },
     "gallery": {
       "title": "Arbeitsbereich-Galerie",

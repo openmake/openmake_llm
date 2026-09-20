@@ -26,10 +26,15 @@ export interface UserExtensionRow {
     tracking_ref: string | null;
     manifest: Record<string, unknown>;
     status: 'active' | 'removed';
-    visibility: 'private' | 'shared';
+    visibility: ExtensionVisibility;
+    /** visibility='organization' 일 때 대상 조직 (166) */
+    org_id: string | null;
     created_at: Date;
     updated_at: Date;
 }
+
+/** private(소유자 전용) | shared(워크스페이스 갤러리 전원) | organization(org_id 조직 멤버의 갤러리) — 095·166 */
+export type ExtensionVisibility = 'private' | 'shared' | 'organization';
 
 interface InsertExtensionInput {
     userId: string;
@@ -262,36 +267,41 @@ export class UserExtensionRepository extends BaseRepository {
         }
     }
 
-    /** visibility 변경 — 소유자 한정 (Phase 3 공유). */
-    async setVisibility(id: string, userId: string, visibility: 'private' | 'shared'): Promise<UserExtensionRow | null> {
+    /**
+     * visibility 변경 — 소유자 한정 (Phase 3 공유). `orgId` 는 organization 일 때만 남고 그 밖엔 NULL 로 지운다
+     * (호출부가 요청자의 **활성 조직**을 넘긴다 — 임의 org_id 를 받지 않는다).
+     */
+    async setVisibility(id: string, userId: string, visibility: ExtensionVisibility, orgId: string | null = null): Promise<UserExtensionRow | null> {
         const r = await this.query<UserExtensionRow>(
-            `UPDATE user_extensions SET visibility=$1, updated_at=NOW()
+            `UPDATE user_extensions SET visibility=$1, org_id=$4, updated_at=NOW()
               WHERE id=$2 AND user_id=$3 AND status='active'
               RETURNING *`,
-            [visibility, id, userId]
+            [visibility, id, userId, visibility === 'organization' ? orgId : null]
         );
         return r.rows[0] ?? null;
     }
 
-    /** 워크스페이스 갤러리 — shared + active 전체 (소유자 무관). */
-    async listShared(limit: number = 100): Promise<UserExtensionRow[]> {
+    /** 워크스페이스 갤러리 — shared 전체 + 요청자가 멤버인 조직(`orgIds`)에 공개된 것 (소유자 무관, active 만). */
+    async listShared(limit: number = 100, orgIds: readonly string[] = []): Promise<UserExtensionRow[]> {
         const r = await this.query<UserExtensionRow>(
             `SELECT * FROM user_extensions
-              WHERE visibility='shared' AND status='active'
+              WHERE status='active'
+                AND (visibility='shared' OR (visibility='organization' AND org_id = ANY($2::text[])))
               ORDER BY updated_at DESC
               LIMIT $1`,
-            [limit]
+            [limit, [...orgIds]]
         );
         return r.rows;
     }
 
-    /** 갤러리 설치 대상 조회 — shared 이거나 본인 소유인 active row. */
-    async getInstallableById(id: string, userId: string): Promise<UserExtensionRow | null> {
+    /** 갤러리 설치 대상 조회 — shared·본인 소유·요청자가 멤버인 조직에 공개된 active row. 목록(listShared)과 같은 조건이어야 한다. */
+    async getInstallableById(id: string, userId: string, orgIds: readonly string[] = []): Promise<UserExtensionRow | null> {
         const r = await this.query<UserExtensionRow>(
             `SELECT * FROM user_extensions
-              WHERE id=$1 AND status='active' AND (visibility='shared' OR user_id=$2)
+              WHERE id=$1 AND status='active'
+                AND (visibility='shared' OR user_id=$2 OR (visibility='organization' AND org_id = ANY($3::text[])))
               LIMIT 1`,
-            [id, userId]
+            [id, userId, [...orgIds]]
         );
         return r.rows[0] ?? null;
     }
