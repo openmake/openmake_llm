@@ -462,7 +462,7 @@ export class SkillManager {
         if (rows.length === 0) return null;
 
         // 사용권(entitlement) 게이트 — 팩 스킬은 그 add-on 이 켜져 있고 조직 정책 `ADDON_ALLOWLIST` 에
-        // 들어 있을 때만 주입한다(유료 팩 미구매 조직에는 아예 실리지 않는다). 판정은 분리 모듈에.
+        // 들어 있을 때만 주입한다(조직이 허용 목록을 둔 경우에만 걸린다 — add-on 은 전부 무료). 판정은 분리 모듈에.
         rows = await filterByAddonEntitlement(rows, userId);
         if (rows.length === 0) return null;
 

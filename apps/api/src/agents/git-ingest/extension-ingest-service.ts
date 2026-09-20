@@ -266,6 +266,7 @@ export class ExtensionIngestService {
         // 동일 이름 active 설치: 같은 소스(같은 repo 또는 같은 아카이브 URL)면 업데이트 모드, 다른 소스면 충돌
         const sameName = await extRepo.findActiveByName(input.userId, manifest.name);
         let updateTarget: typeof sameName = null;
+        let approvedBefore: Awaited<ReturnType<typeof extRepo.snapshotApprovedSkills>> = [];
         if (sameName) {
             const prevParsed = isArchive ? null : parseGitUrl(sameName.source_url);
             const sameSource = isArchive
@@ -277,6 +278,8 @@ export class ExtensionIngestService {
                     return { ...this.shapeFromRow(sameName, false), upToDate: true };
                 }
                 updateTarget = sameName;
+                // 회수 전에 승인 상태를 기억한다 — 같은 이름으로 다시 들어온 스킬은 승인·배정을 이어받는다.
+                approvedBefore = await extRepo.snapshotApprovedSkills(sameName.id);
                 // ⚠️ 구 구성요소 회수는 **신규 생성 전에** 해야 한다. Custom Agent 는
                 // UNIQUE(user_id, name) 이라 구 행이 살아 있으면 신규가 랜덤 suffix 를 달고
                 // 생성돼 이름이 업데이트마다 표류한다(사용자가 고르던 에이전트를 잃는다).
@@ -425,6 +428,21 @@ export class ExtensionIngestService {
                 manifest: componentManifest,
             });
         }
+        // 사용법 안내 — 설치한 스킬은 매 턴 자동 주입되지 않는다(프롬프트 팽창·무관한 질의 오염 방지, 2026-08-18).
+        // 안내가 없으면 "설치했는데 왜 안 되지" 가 된다(2026-09-20 법무 팩 실전 검증).
+        if (!updateTarget && okSkills.length > 0) {
+            warnings.push("SKILLS_ON_DEMAND: 설치한 스킬은 승인 후 필요할 때 모델이 불러옵니다. '/스킬이름' 으로 직접 호출할 수 있고, 항상 적용하려면 스킬 화면에서 '내게 배정' 하세요.");
+        }
+
+        // 업데이트 — 종전에 승인돼 있던 스킬(같은 이름)은 승인·배정을 이어받는다. MCP 서버는 재승인 대상.
+        if (updateTarget && approvedBefore.length > 0) {
+            const carried = await extRepo.carryOverSkillApprovals(
+                okSkills.filter(r => r.skillId && r.name).map(r => ({ skillId: r.skillId!, name: r.name! })),
+                approvedBefore,
+            );
+            if (carried.length > 0) warnings.push(`SKILL_APPROVAL_CARRIED: 종전 승인을 이어받은 스킬 ${carried.length}개 (새로 추가된 스킬과 MCP 서버는 승인 대기)`);
+        }
+
         await extRepo.linkComponents(
             row.id,
             okSkills.map(r => r.skillId!),

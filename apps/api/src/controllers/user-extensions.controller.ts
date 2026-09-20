@@ -35,6 +35,7 @@ import { getPool } from '../data/models/unified-database';
 import { UserExtensionRepository, type UserExtensionRow } from '../data/repositories/user-extension-repository';
 import { ExtensionCatalogRepository } from '../data/repositories/extension-catalog-repository';
 import { createLogger } from '../utils/logger';
+import { removeExtensionInstallation } from '../services/addon/addon-state';
 import { success, internalError, unauthorized, notFound, badRequest } from '../utils/api-response';
 
 const updateCheckSchema = z.object({
@@ -374,6 +375,8 @@ export function createUserExtensionsController(): Router {
             const repo = new UserExtensionRepository(getPool());
             const removed = await repo.remove(req.params.id, userId, false);
             if (!removed) { res.status(404).json(notFound('확장 없음 또는 이미 제거됨')); return; }
+            // 설치 상태 표에서도 지운다 — 남겨 두면 관리 화면이 지운 확장을 계속 보여 준다.
+            await removeExtensionInstallation(removed.id);
             log.info(`확장 제거: userId=${userId} id=${removed.id} name=${removed.name}`);
             res.json(success({ extension: toPublic(removed) }));
         } catch (err) {

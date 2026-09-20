@@ -1,7 +1,7 @@
 /**
  * Add-on 사용권(entitlement) — 켜짐 상태 × 조직 allowlist 의 AND (2026-09-19, S3).
  *
- * 유료 팩의 계약이 여기 있다: 구매하지 않은 조직(allowlist 에 없는 add-on)은 전용 라우트 403,
+ * 조직 허용 목록의 계약이 여기 있다: allowlist 에 없는 add-on 은 전용 라우트 403,
  * 팩 스킬 주입 제외. 판정 실패는 fail-open(막지 않는다).
  */
 const resolveEffectivePolicy = jest.fn();
@@ -43,7 +43,7 @@ describe('checkAddonEntitlement', () => {
         expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('disabled');
     });
 
-    it('조직 allowlist 에 없으면 not-entitled (유료 팩 미구매)', async () => {
+    it('조직 allowlist 에 없으면 not-entitled (조직 허용 목록 밖)', async () => {
         resolveEffectivePolicy.mockResolvedValue({ orgId: 'org1', addonAllowlist: ['other-pack'] });
         expect(await checkAddonEntitlement('industry-pack', 'u1')).toBe('not-entitled');
     });

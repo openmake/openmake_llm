@@ -5,8 +5,10 @@
  *   ① 배포 차원 켜짐 — env override + `addon_installations.state`(`services/addon/addon-state`)
  *   ② 조직 사용권 — 조직 정책 `ADDON_ALLOWLIST`(빈 값/미설정 = 제한 없음)
  *
- * 유료 팩은 ②로 표현한다: 구매하지 않은 조직의 allowlist 에는 그 add-on id 가 없고, 그러면
- * 전용 라우트는 403, 팩 스킬은 주입에서 빠진다. **가격·결제는 이 계층 밖**이다(관리자가 allowlist 를 준다).
+ * ②는 **조직 관리자의 통제 수단**이다 — 조직이 allowlist 를 두면 목록 밖 add-on 은 그 조직에서
+ * 전용 라우트 403, 팩 스킬 주입 제외가 된다(예: "우리 조직은 Discord 연동을 쓰지 않는다").
+ * ⚠️ OpenMake 의 add-on 은 **전부 무료**다(2026-09-20 방침) — 이 계층은 과금이 아니라 거버넌스다.
+ * allowlist 를 두지 않으면(기본) 모든 add-on 이 모든 사용자에게 열려 있다.
  *
  * 조회 실패는 fail-open(제한 없음) — 정책 조회 장애가 기본 기능을 막지 않는다.
  *

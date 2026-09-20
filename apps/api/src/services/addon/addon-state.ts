@@ -91,3 +91,17 @@ export async function recordExtensionInstallation(input: {
         logger.debug(`확장 설치 기록 실패(무시): ${err instanceof Error ? err.message : String(err)}`);
     }
 }
+
+/**
+ * 확장 제거를 상태 표에 반영한다 — 행을 지운다(상태 4종에 "removed" 는 없다).
+ * (2026-09-20: 제거해도 `ext:<id>` 행이 enabled 로 남아 관리 화면이 지운 팩을 계속 보여 주던 누락)
+ */
+export async function removeExtensionInstallation(extensionId: string): Promise<void> {
+    try {
+        const { getUnifiedDatabase } = await import('../../data/models/unified-database');
+        await getUnifiedDatabase().getPool().query('DELETE FROM addon_installations WHERE addon_id = $1', [`ext:${extensionId}`]);
+        clearAddonStateCache();
+    } catch (err) {
+        logger.debug(`확장 제거 기록 실패(무시): ${err instanceof Error ? err.message : String(err)}`);
+    }
+}

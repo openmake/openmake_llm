@@ -1,5 +1,5 @@
 /**
- * 팩 스킬의 사용권 게이트 — 유료 팩 시뮬레이션 (2026-09-19, S3·S4).
+ * 팩 스킬의 사용권 게이트 — 조직 허용 목록 시뮬레이션 (2026-09-19, S3·S4).
  *
  * 계약: 조직이 add-on 사용권을 갖지 못하면 그 팩의 스킬은 **시스템 프롬프트에 실리지 않는다**.
  * Base 스킬(addon_id NULL)은 영향받지 않고, 판정 실패는 주입을 막지 않는다(fail-open).
@@ -42,7 +42,7 @@ describe('buildManifestPrompt — add-on 사용권', () => {
         expect(entitledAddonIds).toHaveBeenCalledWith(['industry-pack'], 'u1');
     });
 
-    it('사용권 없는 팩의 스킬은 빠진다 — 남은 게 없으면 주입 자체가 없다(유료 팩 미구매)', async () => {
+    it('사용권 없는 팩의 스킬은 빠진다 — 남은 게 없으면 주입 자체가 없다(조직 허용 목록 밖)', async () => {
         rows = [row('industry-a', 'industry-pack')];
         entitledAddonIds.mockResolvedValue(new Set<string>());
 
