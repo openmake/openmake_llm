@@ -17,8 +17,7 @@ import * as path from 'path';
 import { AgentSelection, AgentPhase } from './types';
 import { AGENTS } from './agent-data';
 import { createLogger } from '../utils/logger';
-import { getSkillManager } from './skill-manager';
-import { isSkillOfferEnabled } from './skill-catalog';
+import { getSkillRuntime } from '../runtime-ports/skill-runtime';
 import { getLanguageTemplate, type SupportedLanguageCode } from '../chat/language-policy';
 const logger = createLogger('AgentSystem');
 
@@ -253,7 +252,7 @@ ${applyPromptPlaceholders(promptTemplate.workingOn, { phase: getPhaseLabel(selec
     const skillNames: string[] = [];
     try {
         // 상한을 넘는 턴은 후보 목록만 싣고 모델이 load_skill 로 고른다 (load_skill 노출 시)
-        const manifest = await getSkillManager().buildManifestPrompt(agent.id, userId, agent.category, query, { offerOnOverflow: isSkillOfferEnabled() });
+        const manifest = await getSkillRuntime().buildManifestPrompt(agent.id, userId, agent.category, query, { offerOnOverflow: getSkillRuntime().isOfferEnabled() });
         if (manifest) {
             result += manifest.prompt;
             hasDbSkills = true;
@@ -263,10 +262,10 @@ ${applyPromptPlaceholders(promptTemplate.workingOn, { phase: getPhaseLabel(selec
             logger.info(`Manifest 스킬 주입됨: ${agent.name} (${agent.id}) [${manifest.skillNames.join(', ')}]`);
         } else {
             // legacy fallback
-            const skills = await getSkillManager().getSkillsForAgent(agent.id, userId, agent.category);
+            const skills = await getSkillRuntime().getSkillsForAgent(agent.id, userId, agent.category);
             if (skills.length > 0) {
                 for (const s of skills) skillNames.push(s.name);
-                const skillPrompt = await getSkillManager().buildSkillPrompt(agent.id, userId, agent.category);
+                const skillPrompt = await getSkillRuntime().buildSkillPrompt(agent.id, userId, agent.category);
                 if (skillPrompt) {
                     result += skillPrompt;
                     hasDbSkills = true;

@@ -18,7 +18,7 @@
 import { randomUUID } from 'crypto';
 import { getChatTurnIntegrations, type ContributedOrchestrationTool } from './turn-integrations';
 import type { ToolDefinition } from '../../llm/types';
-import type { UserContext } from '../../mcp/user-sandbox';
+import type { UserContext } from '../../tool-contract/types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { AgentTaskService } from '../AgentTaskService';
 import { dispatchAgentTask } from '../agent-task/task-queue';

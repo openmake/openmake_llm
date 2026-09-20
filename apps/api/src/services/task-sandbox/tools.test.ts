@@ -1,6 +1,6 @@
 import { createTaskTools, TASK_TERMINATE_SENTINEL, TASK_ASK_HUMAN_SENTINEL } from './tools';
 import type { TaskSandbox, ExecResult } from './sandbox';
-import type { MCPToolResult } from '../../mcp/types';
+import type { MCPToolResult } from '../../tool-contract/types';
 
 /** 인메모리 가짜 샌드박스 — docker 없이 도구 로직만 검증. */
 function fakeSandbox({ browserEnabled = true }: { browserEnabled?: boolean } = {}): TaskSandbox & { files: Map<string, string>; lastCmd: string; lastBrowser: string } {

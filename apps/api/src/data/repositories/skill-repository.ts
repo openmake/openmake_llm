@@ -383,13 +383,13 @@ export class SkillRepository extends BaseRepository {
      * 서버 시작 시 에이전트 스킬 자동 등록에 사용됩니다.
      * source_path를 기준으로 기존 스킬을 찾아 업데이트하거나 새로 생성합니다.
      */
-    async upsertSystemSkill(id: string, input: CreateSkillInput): Promise<AgentSkill> {
+    async upsertSystemSkill(id: string, input: CreateSkillInput & { addonId?: string }): Promise<AgentSkill> {
         const nowIso = new Date().toISOString();
         // 시스템 스킬 재시드 = active 강제. 누군가 system skill 을 archived 로 바꿔도
         // 부트스트랩 재실행 시 자동 복구됨 (시스템 스킬은 늘 active 가 invariant).
         const result = await this.query(
-            `INSERT INTO agent_skills (id, name, description, content, category, is_public, created_by, created_at, updated_at, source_repo, source_path, status)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'active')
+            `INSERT INTO agent_skills (id, name, description, content, category, is_public, created_by, created_at, updated_at, source_repo, source_path, status, addon_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'active', $12)
              ON CONFLICT (id) DO UPDATE
              SET name = EXCLUDED.name,
                  description = EXCLUDED.description,
@@ -398,7 +398,8 @@ export class SkillRepository extends BaseRepository {
                  is_public = EXCLUDED.is_public,
                  updated_at = EXCLUDED.updated_at,
                  source_path = EXCLUDED.source_path,
-                 status = 'active'
+                 status = 'active',
+                 addon_id = EXCLUDED.addon_id
              RETURNING id, name, description, content, category, is_public, created_by, created_at, updated_at, source_repo, source_path, status, manifest_meta`,
             [
                 id,
@@ -412,6 +413,8 @@ export class SkillRepository extends BaseRepository {
                 nowIso,
                 input.sourceRepo ?? null,
                 input.sourcePath ?? null,
+                // 소유 add-on — 사용권(entitlement) 으로 주입을 거르는 기준 (165)
+                input.addonId ?? null,
             ]
         );
         await this.syncManifest({ id, name: input.name, description: input.description, category: input.category ?? 'general',

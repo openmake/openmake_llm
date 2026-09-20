@@ -7,7 +7,7 @@ jest.mock('../http-call', () => ({ callJson: (...a: unknown[]) => callJson(...a)
 const saveVideo = jest.fn(() => ({ kind: 'video', urlPath: '/generated/video-new.webm', markdown: '[🎬 영상 보기](/generated/video-new.webm)' }));
 jest.mock('../media-io', () => ({ saveVideo: () => saveVideo() }));
 const exists = jest.fn();
-jest.mock('../../../mcp/generated-media', () => ({ resolveGeneratedPath: (p: string) => exists(p) }));
+jest.mock('../../../tools/generated-media', () => ({ resolveGeneratedPath: (p: string) => exists(p) }));
 jest.mock('../../../config/capabilities', () => ({
     ...jest.requireActual('../../../config/capabilities'),
     CAPABILITY_LIMITS: { ...jest.requireActual('../../../config/capabilities').CAPABILITY_LIMITS, VIDEO_WAIT_MS: 0, VIDEO_POLL_INTERVAL_MS: 1, VIDEO_DOWNLOAD_ATTEMPTS: 2 },

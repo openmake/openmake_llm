@@ -67,8 +67,8 @@ export function toolSchemaBytes(defs: Array<{ tool: { name: string; description?
 export async function measureBudget(): Promise<BudgetMeasurement> {
     const contexts: BudgetMeasurement['contexts'] = {};
     for (const c of BUDGET_CONTEXTS) contexts[c.id] = measureContext(c);
-    const { builtInTools } = await import('../mcp/tools');
-    const { CHAT_ALWAYS_ON_TOOL_NAMES } = await import('../mcp/agent-task-tools');
-    const alwaysOn = builtInTools.filter((d) => CHAT_ALWAYS_ON_TOOL_NAMES.includes(d.tool.name));
+    const { getBuiltInTools } = await import('../tools/builtin-tools');
+    const { CHAT_ALWAYS_ON_TOOL_NAMES } = await import('../tools/agent-task-tools');
+    const alwaysOn = getBuiltInTools().filter((d) => CHAT_ALWAYS_ON_TOOL_NAMES.includes(d.tool.name));
     return { contexts, alwaysOnToolSchemaBytes: toolSchemaBytes(alwaysOn) };
 }

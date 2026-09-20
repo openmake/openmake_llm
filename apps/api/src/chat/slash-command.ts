@@ -15,7 +15,7 @@
  */
 
 import { createLogger } from '../utils/logger';
-import { recordSkillUsage } from '../agents/skill-usage-log';
+import { getSkillRuntime } from '../runtime-ports/skill-runtime';
 
 const logger = createLogger('SlashCommand');
 
@@ -160,11 +160,10 @@ export function mergeActivatedSkillNames(...groups: string[][]): string[] {
  *  userId 를 전달해야 본인 소유 비공개 스킬이 검색됨 — 미전달 시 public 전용이라
  *  확장 설치 스킬(전부 비공개)의 슬래시 호출이 불가능하던 결함 (2026-08-16). */
 async function defaultFindSkillBySlug(slug: string, userId?: string): Promise<SlashSkill | null> {
-    const { getSkillManager } = await import('../agents/skill-manager');
-    const manager = getSkillManager();
+    const runtime = getSkillRuntime();
     for (const { search, limit } of buildSlugSearchAttempts(slug)) {
-        const result = await manager.searchSkills({ search, status: 'active', limit, userId });
-        const matched = result.skills.find((s) => matchesSlug(s.name, slug));
+        const candidates = await runtime.searchActiveSkills({ search, limit, ...(userId ? { userId } : {}) });
+        const matched = candidates.find((s) => matchesSlug(s.name, slug));
         if (matched) return { id: matched.id, name: matched.name, content: matched.content };
     }
     return null;
@@ -208,7 +207,7 @@ export async function applySlashCommand(message: string, deps: ApplySlashDeps = 
         if (!skill) return message; // 미매칭 — 원문 유지(일반 텍스트로 취급)
         logger.info(`슬래시 명령 적용: /${parsed.slug} → 스킬 "${skill.name}"`);
         deps.onSkillApplied?.(skill.name);
-        if (skill.id) recordSkillUsage([{ skillId: skill.id, kind: 'slash', userId: deps.userId, args: { slug: parsed.slug, rest: parsed.rest } }]);
+        if (skill.id) getSkillRuntime().recordUsage([{ skillId: skill.id, kind: 'slash', userId: deps.userId, args: { slug: parsed.slug, rest: parsed.rest } }]);
         return buildAugmentedMessage(skill, parsed.rest);
     } catch (e) {
         logger.warn(`슬래시 명령 처리 실패 (원문 유지): ${e instanceof Error ? e.message : String(e)}`);

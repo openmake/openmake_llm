@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.77.1](https://github.com/openmake/openmake_llm/compare/v1.77.0...v1.77.1) (2026-09-19)
+
+
+### 🐛 버그 수정
+
+* **addon:** 라우트 게이트가 인증 문맥 없이 돌아 조직 사용권(403)이 적용되지 않던 결함 ([#953](https://github.com/openmake/openmake_llm/issues/953)) ([7ca465c](https://github.com/openmake/openmake_llm/commit/7ca465c008eb94df0ea107547947b3e78b3f0e28))
+* **deps:** adm-zip 0.6.1 로 고정 — 새 high 권고로 main CI 가 막히던 문제 ([#947](https://github.com/openmake/openmake_llm/issues/947)) ([ebddd13](https://github.com/openmake/openmake_llm/commit/ebddd13f6fb5e3d0676237d0c5d1860a93d12f25))
+
+## [1.77.0](https://github.com/openmake/openmake_llm/compare/v1.76.0...v1.77.0) (2026-09-19)
+
+
+### ✨ 기능
+
+* **addon:** MCP·Skill 런타임을 add-on 으로 분리 + 선언형 Add-on 완성(상태·사용권·스키마·모델 요구) ([#950](https://github.com/openmake/openmake_llm/issues/950)) ([6ca9859](https://github.com/openmake/openmake_llm/commit/6ca9859931afe82f281c8d29358202621f44ef2f))
+* **llm:** 모델 프로필 — 모델마다 다른 값을 선언 테이블 하나로 ([#944](https://github.com/openmake/openmake_llm/issues/944)) ([5921e29](https://github.com/openmake/openmake_llm/commit/5921e29134ab3948f2630d098b02da0fd8106530))
+
 ## [1.76.0](https://github.com/openmake/openmake_llm/compare/v1.75.0...v1.76.0) (2026-09-18)
 
 

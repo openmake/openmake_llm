@@ -35,9 +35,9 @@ for (const envPath of envPaths) {
 
 import { Command } from 'commander';
 import chalk from 'chalk';
+import { contributedCliCommands } from './addon-host/contributions';
 import { showBanner } from './ui/banner';
 import { createSpinner } from './ui/spinner';
-import { createMCPServer } from './mcp/server';
 import { getConfig, APP_VERSION } from './config';
 
 const VERSION = APP_VERSION;
@@ -135,14 +135,14 @@ program
         cluster.stop();
     });
 
-// mcp 명령어 (MCP 서버 모드)
-program
-    .command('mcp')
-    .description('MCP 서버 모드로 실행')
-    .action(async () => {
-        const server = createMCPServer('openmake-coder', VERSION);
-        await server.start();
-    });
+// add-on 이 기여한 서브커맨드 — Base CLI 는 어떤 명령이 있는지 매니페스트로만 안다(예: mcp 서버 모드).
+// 꺼진 add-on 의 명령은 등록되지 않는다(`openmake --help` 에도 보이지 않는다).
+for (const cmd of contributedCliCommands()) {
+    program
+        .command(cmd.name)
+        .description(cmd.description)
+        .action(async () => { await cmd.run(VERSION); });
+}
 
 // backfill-memories 명령어 — 과거 대화(#3 c)에서 사용자 메모리 일회성 추출/저장
 program

@@ -382,7 +382,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
         let webSearchFn: ((q: string, opts?: { maxResults?: number }) => Promise<DiscussionSearchResult[]>) | undefined;
         if (DISCUSSION_FACTCHECK.ENABLED) {
             try {
-                const { performWebSearch } = await import('../../mcp/web-search');
+                const { performWebSearch } = await import('../../tools/web-search');
                 webSearchFn = performWebSearch;
                 logger.info('🔍 웹 검색 사실 검증 활성화');
             } catch {

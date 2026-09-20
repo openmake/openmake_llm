@@ -23,6 +23,8 @@ import * as crypto from 'crypto';
 import type { Pool } from 'pg';
 import type { LLMClient } from '../../llm/client';
 import { createLogger } from '../../utils/logger';
+import { recordExtensionInstallation } from '../../services/addon/addon-state';
+import { LocalDirectoryFetcher, isLocalSourceUrl } from './local-directory-fetcher';
 import { parseGitUrl } from '../../schemas/git-ingest.schema';
 import { GitFetcher } from './git-fetcher';
 import { ArchiveFetcher } from './archive-fetcher';
@@ -33,7 +35,7 @@ import { translateCatalogDescriptions } from './catalog-translator';
 export { buildSkillDiscoveryPattern } from './catalog-snapshot';
 import { scanForExtensionManifests, scanForMarketplaceManifests, resolveExtensionRoot, detectUnsupportedComponents, type ManifestCandidate } from './repo-scanner';
 import { validateExtensionManifest, parseMarketplaceFile } from './extension-manifest-validator';
-import { ADDON_MANIFEST_FILENAME, validateInstallableAddonManifest } from '../../addon-host/manifest';
+import { ADDON_MANIFEST_FILENAME, parseInstallableAddonManifest } from '../../addon-host/manifest';
 import { APP_VERSION } from '../../config/constants';
 import {
     findExtensionManifestPath,
@@ -80,8 +82,16 @@ interface ExtensionIngestOptions {
 export class ExtensionIngestService {
     constructor(private opts: ExtensionIngestOptions) {}
 
-    /** git 이 아닌 소스(.zip 아카이브 · 내부 번들) fetcher 생성 — GitFetcher 동형 (duck-typed). */
+    /** git 이 아닌 소스(.zip 아카이브 · 내부 번들 · 로컬 디렉터리) fetcher 생성 — GitFetcher 동형 (duck-typed). */
     private makeArchiveFetcher(url: string): GitFetcher {
+        if (isLocalSourceUrl(url)) {
+            // 서버 파일시스템을 읽는 소스 — 루트 고정(realpath)·관리자 전용(import 에서 게이트).
+            return new LocalDirectoryFetcher(url, {
+                root: EXTENSION_INGEST.localSourceRoot,
+                maxEntries: EXTENSION_INGEST.localSourceMaxEntries,
+                maxTotalBytes: EXTENSION_INGEST.localSourceMaxTotalBytes,
+            }) as unknown as GitFetcher;
+        }
         if (isInternalBundleUrl(url)) {
             const loader = this.opts.internalBundleLoader;
             if (!loader) throw new Error('INTERNAL_BUNDLE_UNSUPPORTED: internalBundleLoader 미주입');
@@ -98,6 +108,11 @@ export class ExtensionIngestService {
     async import(input: ImportInput): Promise<ImportResult | CandidateListResult> {
         if (!EXTENSION_INGEST.enabled) {
             throw new Error('EXTENSION_INGEST_DISABLED');
+        }
+
+        // 로컬 디렉터리 소스는 관리자만 — 임의 서버 경로 읽기를 일반 사용자에게 열지 않는다(에어갭 운영용).
+        if (isLocalSourceUrl(input.gitUrl) && !input.isAdmin) {
+            throw new Error('LOCAL_SOURCE_ADMIN_ONLY: 로컬 디렉터리 설치는 관리자만 가능합니다');
         }
 
         // (1) URL parse — .zip 아카이브 URL 은 pseudo repo (ArchiveFetcher 가 owner/repo 무시)
@@ -227,10 +242,13 @@ export class ExtensionIngestService {
 
         // (4-1) 번들이 Add-on 매니페스트를 동봉했으면 내장 add-on 과 같은 계약으로 검증한다 (없으면 종전 그대로)
         const addonManifestPath = `${root}${ADDON_MANIFEST_FILENAME}`; // root 는 '' 또는 '/' 로 끝난다
+        // 동봉했으면 permissions 를 deny-by-default 로 집행한다(미동봉 = undefined = 종전 동작).
+        let addonPermissions: readonly string[] | undefined;
         if (tree.entries.some(e => e.path === addonManifestPath)) {
             const addonRaw = await fetcher.fetchFile(owner, repo, sha, addonManifestPath, EXTENSION_INGEST.manifestMaxBytes);
-            const addonErrors = validateInstallableAddonManifest(addonRaw, APP_VERSION);
-            if (addonErrors.length > 0) throw new Error(`INVALID_ADDON_MANIFEST: ${addonErrors.join('; ')}`);
+            const parsedAddon = parseInstallableAddonManifest(addonRaw, APP_VERSION);
+            if (parsedAddon.errors.length > 0) throw new Error(`INVALID_ADDON_MANIFEST: ${parsedAddon.errors.join('; ')}`);
+            addonPermissions = parsedAddon.manifest?.permissions ?? [];
         }
 
         // (5) dedupe + 상한 + 동명 충돌
@@ -340,6 +358,7 @@ export class ExtensionIngestService {
             manifestPath: candidate.path,
             extensionName: manifest.name,
             warnings,
+            ...(addonPermissions !== undefined ? { addonPermissions } : {}),
             commandPaths: manifest.commandPaths,
             mcpServersPath: manifest.mcpServersPath,
         };
@@ -412,6 +431,15 @@ export class ExtensionIngestService {
             okServers.map(r => r.serverId!),
             okAgentResults.map(r => r.agentId!),
         );
+
+        // 내장 add-on 과 같은 설치 표에 남긴다 — 관리 화면이 내장/설치형을 한 목록으로 본다(S3).
+        await recordExtensionInstallation({
+            extensionId: row.id, name: manifest.name, version: manifest.version,
+            // 소스 구분: internal://bundle(마켓 게시분) · zip/tar 아카이브 · 그 외 Git
+            source: input.gitUrl.startsWith('internal://') ? 'marketplace'
+                : isLocalSourceUrl(input.gitUrl) ? 'local'
+                : (isArchive ? 'zip' : 'git'),
+        });
 
         logger.info(`extension-ingest ${updateTarget ? 'updated' : 'created'}: ${row.id} "${manifest.name}@${manifest.version}"${previousVersion ? ` (from ${previousVersion})` : ''} (${owner}/${repo}@${sha.slice(0, 7)}, skills=${okSkills.length}, mcp=${okServers.length}, agents=${okAgentResults.length})`);
         return {

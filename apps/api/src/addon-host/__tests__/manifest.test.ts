@@ -21,12 +21,27 @@ describe('내장 팩 매니페스트', () => {
         }
     });
 
-    it('인프로세스 코드·스키마 구성요소는 거절한다', () => {
+    it('인프로세스 코드 구성요소는 거절하고, add-on 전용 스키마(migrations)는 받는다', () => {
         const base = { id: 'x', name: 'x', version: '1.0.0', requires: { openmake: '>=1.0.0' }, scope: 'user' };
         expect(addonManifestSchema.safeParse({ ...base, components: { skills: './skills' } }).success).toBe(true);
-        for (const key of ['server', 'ui', 'migrations']) {
+        // 2026-09-19 (§10-5): add-on 전용 마이그레이션은 네임스페이스 분리로 허용됐다.
+        expect(addonManifestSchema.safeParse({ ...base, components: { migrations: './migrations' } }).success).toBe(true);
+        for (const key of ['server', 'ui']) {
             expect(addonManifestSchema.safeParse({ ...base, components: { [key]: './x' } }).success).toBe(false);
         }
+    });
+
+    it('permissions 는 집행 지점이 있는 어휘만 받는다 (선언만 있는 권한은 거짓 안심)', () => {
+        const base = { id: 'x', name: 'x', version: '1.0.0', requires: { openmake: '>=1.0.0' }, scope: 'user', components: {} };
+        expect(addonManifestSchema.safeParse({ ...base, permissions: ['network:internet', 'database:addon'] }).success).toBe(true);
+        expect(addonManifestSchema.safeParse({ ...base, permissions: ['files:read'] }).success).toBe(false);
+        expect(addonManifestSchema.safeParse({ ...base, permissions: ['root'] }).success).toBe(false);
+    });
+
+    it('requires.model 은 정적 대조용 필드만 받는다', () => {
+        const base = { id: 'x', name: 'x', version: '1.0.0', scope: 'user', components: {} };
+        expect(addonManifestSchema.safeParse({ ...base, requires: { openmake: '>=1.0.0', model: { minContext: 131072, tools: true } } }).success).toBe(true);
+        expect(addonManifestSchema.safeParse({ ...base, requires: { openmake: '>=1.0.0', model: { gpu: 'h100' } } }).success).toBe(false);
     });
 });
 

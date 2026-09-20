@@ -11,7 +11,7 @@
  */
 import { spawn } from 'child_process';
 import { createLogger } from '../utils/logger';
-import { resolveDocker } from '../mcp/sandbox-docker';
+import { resolveDocker } from '../utils/docker-path';
 import { ARTIFACT_EXEC, ARTIFACT_EXEC_RUNTIMES } from '../config/artifact-exec';
 
 const log = createLogger('ArtifactExec');

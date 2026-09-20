@@ -6,7 +6,7 @@
  * @module services/deep-research/content-scraper
  */
 
-import type { SearchResult } from '../../mcp/web-search';
+import type { SearchResult } from '../../tools/web-search';
 import type { ResearchConfig, ResearchProgress } from './types';
 import { scrapePage } from '../../utils/web-scraper';
 import { getUnifiedDatabase } from '../../data/models/unified-database';

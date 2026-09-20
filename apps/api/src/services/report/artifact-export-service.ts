@@ -15,7 +15,7 @@
  */
 import { spawn } from 'child_process';
 import { createLogger } from '../../utils/logger';
-import { resolveDocker } from '../../mcp/sandbox-docker';
+import { resolveDocker } from '../../utils/docker-path';
 import { ARTIFACT_EXPORT } from '../../config/artifact-export';
 import { REPORT_DOCX_SCRIPT } from './docx-script';
 import { REPORT_XLSX_SCRIPT } from './xlsx-script';

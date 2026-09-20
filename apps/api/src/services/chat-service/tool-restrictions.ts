@@ -7,7 +7,7 @@
  * @module services/chat-service/tool-restrictions
  */
 import { type ToolDefinition } from '../../llm';
-import { isToolRestrictedForRole } from '../../mcp/tool-role-gate';
+import { isToolRestrictedForRole } from '../../tool-contract/tool-role-gate';
 
 /**
  * 고위험 서버 도구(네임스페이스 "서버명::도구")를 역할 미달 사용자에게서 제거.

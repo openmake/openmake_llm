@@ -17,8 +17,8 @@
 import { type LLMClient } from '../llm';
 import type { ChatMessage, ToolDefinition } from '../llm/types';
 import { initAgentRoleState, defaultAgentClient } from './agent-task/role-client';
-import { getUnifiedMCPClient } from '../mcp/unified-client';
-import { ensureUserMcpForTask } from '../mcp/lifecycle-hooks';
+import { getToolRuntime } from '../runtime-ports/tool-runtime';
+
 import { getUnifiedDatabase } from '../data/models/unified-database';
 import { AGENT_TASK_LIMITS, AGENT_SPAWN } from '../config/runtime-limits';
 import { emitAgentTaskProgress } from '../utils/event-bus';
@@ -27,7 +27,7 @@ import { extractAndStripArtifacts } from '../llm/artifact-parser';
 import { applyReportRender } from './chat-service/report-block';
 import { getPushService } from './PushService';
 import { createLogger } from '../utils/logger';
-import type { UserContext } from '../mcp/user-sandbox';
+import type { UserContext } from '../tool-contract/types';
 import { buildDelegateFn } from './agent-task/delegate';
 import { buildTaskSpawnFn } from './agent-spawn/spawn-agents';
 import { filterRestrictedTools } from './chat-service/tool-restrictions';
@@ -94,7 +94,7 @@ export class AgentTaskService {
     async execute(input: AgentTaskRunInput): Promise<void> {
         const { taskId, goal, userId, userRole, maxTurns, allowedSkills } = input;
         const db = getUnifiedDatabase();
-        const mcp = getUnifiedMCPClient();
+        const mcp = getToolRuntime();
         const signal = this.abortController.signal;
         const startedAt = Date.now();
         // 총 타임아웃 예산 — 예약(무인) task 는 input.totalTimeoutMs 로 더 긴 예산을 받는다(기본 전역값).
@@ -200,10 +200,10 @@ export class AgentTaskService {
             // user MCP 풀 보장 — 도구를 모으기 **전에** await 해야 한다. 채팅 경로만 풀을 채우던
             // 탓에, 프로세스 재시작 후 채팅 없이 바로 실행한 작업은 user MCP 도구가 0개인 채로
             // 돌아 모델이 "MCP 서버 미설치"로 오판하고 포기했다. 멱등이라 재실행 비용은 없다.
-            await ensureUserMcpForTask(userId, taskId);
+            await getToolRuntime().ensureUserToolsForTask(userId, taskId);
 
             // 역할 게이팅(채팅 경로와 동일) — 고위험 전역 도구(Python REPL 등)를 역할 미달 user 에게서 제거.
-            const allTools = filterRestrictedTools((await mcp.getToolRouter().getLLMTools({
+            const allTools = filterRestrictedTools((await mcp.listLLMTools({
                 userId,
             })) as unknown as ToolDefinition[], userRole);
 

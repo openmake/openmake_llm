@@ -6,19 +6,22 @@
  *
  * @module addon-host/routes
  */
-import { Router, type Application, type IRouter } from 'express';
+import { Router, type Application, type IRouter, type NextFunction, type Request, type Response } from 'express';
 import { success } from '../utils/api-response';
 import { createLogger } from '../utils/logger';
 import { enabledBuiltinAddons, isBuiltinAddonEnabled, listBuiltinAddonDefs } from './builtin-registry';
+import type { ADDON_KINDS } from './manifest';
 import { loadAddonEntry } from './entry-loader';
 
 const logger = createLogger('AddonHost');
+
+type AddonKind = (typeof ADDON_KINDS)[number];
 
 /**
  * add-on 목록 — 매니페스트와 켜짐 여부는 프로세스 시작 시 고정이라 첫 요청에 한 번만 만든다. 매니페스트를 못 읽은
  * add-on 은 발견 단계에서 빠진다(부팅 로그의 `매니페스트 오류` 경고로 드러난다).
  */
-interface AddonListEntry { id: string; name: string; version: string; kind: 'content' | 'integration'; enabled: boolean }
+interface AddonListEntry { id: string; name: string; version: string; kind: AddonKind; enabled: boolean }
 let addonListCache: AddonListEntry[] | null = null;
 
 export function listBuiltinAddons(): AddonListEntry[] {
@@ -38,12 +41,53 @@ function createAddonListRouter(): Router {
     return router;
 }
 
-/** 매니페스트 `entry.routes` 가 선언한 전용 라우트 — 켜진 add-on 의 라우터만 로드한다(꺼지면 404). */
+/**
+ * add-on 전용 라우트의 게이트 — 요청마다 상태와 사용권을 본다 (2026-09-19, S3).
+ *
+ * env 로 끈 add-on 은 아예 마운트되지 않지만(코드도 로드하지 않는다), **관리자가 DB 에서 끈** add-on 은
+ * 재시작 없이 즉시 404 가 된다. 조직 정책 `ADDON_ALLOWLIST` 에 없으면 403(유료 팩 미구매).
+ * 판정 실패는 통과시킨다(fail-open) — 정책 조회 장애가 기능을 막지 않는다.
+ */
+export function addonGuard(addonId: string) {
+    return (req: Request, res: Response, next: NextFunction): void => {
+        void (async () => {
+            try {
+                // ⚠️ 이 게이트는 add-on 라우터의 자체 인증(requireAuth 등)보다 **먼저** 돌고, 앱에는 전역 인증
+                // 미들웨어가 없다 — 그대로 두면 req.user 가 늘 비어 조직 사용권 축이 통째로 건너뛰어진다
+                // (2026-09-20 라이브 검증에서 발견: allowlist 밖 add-on 이 403 이 아니라 200). 거절하지 않는
+                // optionalAuth 로 문맥만 채운다. v1 라우터 안에서는 앞선 인증이 이미 채워 두었으므로 건너뛴다.
+                if (!req.user) {
+                    const { optionalAuth } = await import('../auth');
+                    await new Promise<void>((resolve) => { void optionalAuth(req, res, () => resolve()); });
+                }
+                const { checkAddonEntitlement } = await import('../services/addon/entitlement');
+                const userId = req.user?.id !== undefined ? String(req.user.id) : undefined;
+                const verdict = await checkAddonEntitlement(addonId, userId);
+                if (verdict === 'disabled') {
+                    res.status(404).json({ success: false, error: { code: 'ADDON_DISABLED', message: `add-on '${addonId}' 이 비활성 상태입니다.` } });
+                    return;
+                }
+                if (verdict === 'not-entitled') {
+                    res.status(403).json({ success: false, error: { code: 'ADDON_NOT_ENTITLED', message: `add-on '${addonId}' 사용권이 없습니다. 관리자에게 문의하세요.` } });
+                    return;
+                }
+            } catch (err) {
+                logger.debug(`add-on '${addonId}' 게이트 판정 실패(통과): ${err instanceof Error ? err.message : String(err)}`);
+            }
+            next();
+        })();
+    };
+}
+
+/**
+ * 매니페스트 `entry.routes` 가 선언한 전용 라우트.
+ * env 로 끈 add-on 의 코드는 로드하지 않고, 나머지는 게이트 뒤에 건다(관리자 토글·사용권은 요청 시 판정).
+ */
 function mountDeclaredRoutes(target: IRouter, within: 'v1' | undefined): void {
     for (const addon of enabledBuiltinAddons()) {
         for (const route of addon.manifest.entry?.routes ?? []) {
             if (route.within !== within) continue;
-            target.use(route.mountPath, loadAddonEntry<Router>(addon, route.module));
+            target.use(route.mountPath, addonGuard(addon.id), loadAddonEntry<Router>(addon, route.module));
         }
     }
 }

@@ -29,7 +29,8 @@
       "costRatesAdmin": "Cost Rates",
       "sloAdmin": "SLO",
       "evaluationsAdmin": "Evaluations",
-      "quotaRequestsAdmin": "Quota Approvals"
+      "quotaRequestsAdmin": "Quota Approvals",
+      "addonsAdmin": "Add-ons"
     },
     "pendingApprovals": "{count} pending approval(s) — agent tasks are waiting for your approval"
   },
@@ -2682,5 +2683,41 @@
       "redteam": "Red team",
       "matrix": "Matrix"
     }
+  },
+  "adminAddons": {
+    "title": "Add-ons",
+    "description": "Installed add-ons and their state. Disabling returns 404 for their APIs immediately; runtime registration (tools, skill injection, chat modes) applies after a restart.",
+    "loadError": "Failed to load.",
+    "saveFailed": "Failed to update.",
+    "listTitle": "Installed",
+    "empty": "No add-ons discovered.",
+    "addon": "Add-on",
+    "kind": "Kind",
+    "source": "Source",
+    "state": "State",
+    "entitlement": "Entitlement (SKU)",
+    "entitlementFree": "Unrestricted",
+    "modelRequirement": "Model requirement",
+    "modelOk": "{count} model(s) satisfy",
+    "envDisabled": "Disabled via env (ADDON_BUILTIN_DISABLED) — restart required",
+    "enable": "Enable",
+    "disable": "Disable",
+    "states": {
+      "installed": "Installed",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "failed": "Failed"
+    },
+    "profilesTitle": "Model profiles",
+    "profilesHelp": "Resolved from the declaration table (config/model-profiles.ts) and env (LLM_MODEL_PROFILES_JSON). Read-only here — adopting a model means adding an entry, passing eval:matrix, then switching.",
+    "model": "Model",
+    "context": "Context",
+    "capabilities": "Capabilities",
+    "efforts": "Reasoning efforts",
+    "license": "License",
+    "probed": "probed",
+    "unavailable": "unavailable",
+    "nonCommercial": "non-commercial",
+    "permissions": "Permissions"
   }
 }

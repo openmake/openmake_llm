@@ -2,7 +2,7 @@
  * Agent Task 스킬 프롬프트 블록 — AgentTaskService 에서 분리 (파일 크기 가드).
  * @module services/agent-task/skill-block
  */
-import { getSkillManager, type ActiveSkillBinding } from '../../agents/skill-manager';
+import { getSkillRuntime, type ActiveSkillBinding } from '../../runtime-ports/skill-runtime';
 import type { ToolDefinition } from '../../llm/types';
 import { mergeToolsWithSkills } from '../chat-service/tool-merger';
 import { getAgentTaskSystemPrompt, getAgentTaskParallelGuide } from '../../prompts/agent-task-prompt';
@@ -31,7 +31,7 @@ const AGENT_TASK_SKILL_AGENT_ID = '__agent_task__';
  */
 async function buildSkillPromptBlock(userId: string): Promise<string> {
     try {
-        const block = await getSkillManager().buildManifestPrompt(AGENT_TASK_SKILL_AGENT_ID, userId);
+        const block = await getSkillRuntime().buildManifestPrompt(AGENT_TASK_SKILL_AGENT_ID, userId);
         return block?.prompt ?? '';
     } catch (e) {
         logger.debug('[AgentTask] 스킬 프롬프트 주입 실패 — 무시', e);
@@ -88,7 +88,7 @@ export async function resolveSkillToolBindings(params: {
     const { userId, allTools, allowedSkills } = params;
     let skillBindings: ActiveSkillBinding[] = [];
     try {
-        skillBindings = await getSkillManager().getActiveSkillBindings(AGENT_TASK_SKILL_AGENT_ID, userId);
+        skillBindings = await getSkillRuntime().getActiveSkillBindings(AGENT_TASK_SKILL_AGENT_ID, userId);
     } catch (e) {
         logger.debug('[AgentTask] 스킬 도구 바인딩 조회 실패 — 빈 배열', e);
     }

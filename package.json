@@ -1,6 +1,6 @@
 {
     "name": "openmake",
-    "version": "1.76.0",
+    "version": "1.77.1",
     "description": "OpenMake - AI Assistant Platform",
     "main": "apps/api/dist/server.js",
     "scripts": {
@@ -61,6 +61,7 @@
         "typescript-eslint": "^8.70.0"
     },
     "overrides": {
-        "js-yaml": "^4.2.0"
+        "js-yaml": "^4.2.0",
+        "adm-zip": "^0.6.1"
     }
 }

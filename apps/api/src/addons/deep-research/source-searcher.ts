@@ -7,9 +7,9 @@
  */
 
 import type { LLMClient } from '../../llm';
-import type { SearchResult } from '../../mcp/web-search';
-import { performWebSearch } from '../../mcp/web-search';
-import { searchTavily } from '../../mcp/web-search/external-search-apis';
+import type { SearchResult } from '../../tools/web-search';
+import { performWebSearch } from '../../tools/web-search';
+import { searchTavily } from '../../tools/web-search/external-search-apis';
 import type { ResearchConfig, SubTopic } from './types';
 import { getUnifiedDatabase } from '../../data/models/unified-database';
 import { createLogger } from '../../utils/logger';

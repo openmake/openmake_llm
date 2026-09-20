@@ -25,7 +25,7 @@ jest.mock('../../services/answer-composer', () => ({
     composeStructuredAnswer: (...a: unknown[]) => composeStructuredAnswer(...a),
 }));
 
-jest.mock('../../mcp/web-search/build-search-context', () => ({
+jest.mock('../../tools/web-search/build-search-context', () => ({
     buildWebSearchContext: jest.fn().mockResolvedValue({ webSearchContext: '' }),
 }));
 
