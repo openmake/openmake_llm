@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.78.0](https://github.com/openmake/openmake_llm/compare/v1.77.1...v1.78.0) (2026-09-20)
+
+
+### ✨ 기능
+
+* **addon:** 매니페스트 permissions 를 실제로 집행한다 — 선언만 있던 권한 ([#954](https://github.com/openmake/openmake_llm/issues/954)) ([098a5ee](https://github.com/openmake/openmake_llm/commit/098a5ee98b36cf608571b448c4565d8a94faf5d3))
+
+
+### 🐛 버그 수정
+
+* **extension:** 업데이트가 승인을 이어받고, 제거가 상태 표에 반영된다 + 무료 방침 표현 정리 ([#956](https://github.com/openmake/openmake_llm/issues/956)) ([48447d0](https://github.com/openmake/openmake_llm/commit/48447d068e0b94ae13c0f91443704573f3dba9f1))
+* **skill:** archived 스킬의 도구 바인딩이 계속 따라오던 문제 + 회수 시 배정 정리 ([#957](https://github.com/openmake/openmake_llm/issues/957)) ([7b6509b](https://github.com/openmake/openmake_llm/commit/7b6509ba41219323576f510666dd68c6020e862e))
+
 ## [1.77.1](https://github.com/openmake/openmake_llm/compare/v1.77.0...v1.77.1) (2026-09-19)
 
 
