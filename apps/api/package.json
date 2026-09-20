@@ -22,8 +22,8 @@
         "eval:budget": "ts-node src/evaluation/run-budget-evaluation.ts",
         "eval:tools": "ts-node src/evaluation/run-tool-selection-evaluation.ts",
         "eval:matrix": "ts-node src/evaluation/run-matrix-evaluation.ts",
-        "eval:packs": "ts-node src/evaluation/run-pack-evaluation.ts",
         "eval:redteam": "ts-node src/evaluation/redteam/run-redteam-evaluation.ts",
+        "eval:packs": "ts-node src/evaluation/run-pack-evaluation.ts",
         "replay:request": "ts-node src/scripts/replay-request.ts",
         "eval:all": "npm run eval:routing && npm run eval:response && npm run eval:citation && npm run eval:tools && npm run eval:redteam"
     },
