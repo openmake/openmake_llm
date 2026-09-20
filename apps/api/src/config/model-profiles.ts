@@ -64,6 +64,8 @@ export interface ModelProfile {
  *    (vision:false 면 실제 모델은 받는 이미지 요청을 앱이 400 으로 거절한다, 2026-09-03 정정).
  *  - hasa:* (2026-09-20, `npm run eval:probe` 실측): qwen2.5-vl-72b 는 도구 호출·비전 가능, 추론 필드 없음(종전 카탈로그의
  *    toolCalling:false 는 낡은 값). gpt-oss 는 low/medium/high 만 받고 xhigh 를 400 으로 거절.
+ *  - nvidia:nvidia/nemotron-3.5-lightning (2026-09-20 프로브): low~xhigh 전부 200 — 표준 3단 폴백이면 xhigh 요청이 high 로 깎인다.
+ *    같은 날 kimi-k3·gemma-4-31b 는 목록엔 있으나 60~120초 무응답이라 재지 못했다(모델별 가용성 문제, 키는 정상).
  *  - bai:glm-5.3: 항상 사고 모델 — low/high/max 만 받고 medium 을 400 으로 거절(2026-09-03). 사다리에 max 는 없다.
  */
 const DEFAULT_MODEL_PROFILES: Readonly<Record<string, ModelProfile>> = {
@@ -95,6 +97,10 @@ const DEFAULT_MODEL_PROFILES: Readonly<Record<string, ModelProfile>> = {
     },
     'hasa:qwen2.5-vl-72b': {
         capabilities: { toolCalling: true, thinking: false, vision: true, streaming: true },
+    },
+    'nvidia:nvidia/nemotron-3.5-lightning': {
+        capabilities: { toolCalling: true, thinking: true, vision: false, streaming: true },
+        reasoningEfforts: ['low', 'medium', 'high', 'xhigh'],
     },
     'hasa:gpt-oss': {
         reasoningEfforts: ['low', 'medium', 'high'],
