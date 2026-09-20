@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.80.0](https://github.com/openmake/openmake_llm/compare/v1.79.0...v1.80.0) (2026-09-20)
+
+
+### ✨ 기능
+
+* **addon:** 팩 eval — 라우팅 케이스 팩 소유·팩 검증 러너·검증된 모델 표시 (S3 잔여) ([#960](https://github.com/openmake/openmake_llm/issues/960)) ([38112be](https://github.com/openmake/openmake_llm/commit/38112beaddb6a2c84988ffa1d5e0a6bdd218abfd))
+* **eval:** 모델 도입 절차 — 실측 프로브·전환 게이트·프로필 capability 배선 (S2 잔여) ([#959](https://github.com/openmake/openmake_llm/issues/959)) ([a1467df](https://github.com/openmake/openmake_llm/commit/a1467dffbf677f6992ee7774b312ce2c92afd78a))
+* **extension:** 확장의 조직 공개 — 매니페스트 scope=organization 반영 (166) ([#961](https://github.com/openmake/openmake_llm/issues/961)) ([c7c5d5a](https://github.com/openmake/openmake_llm/commit/c7c5d5ab8de31abf4ee12c44af1c55283bf9bd7d))
+
+
+### 🐛 버그 수정
+
+* **ci:** 릴리스 SBOM 생성이 overrides 때문에 실패하던 문제 — cyclonedx --ignore-npm-errors ([#963](https://github.com/openmake/openmake_llm/issues/963)) ([a23fdfc](https://github.com/openmake/openmake_llm/commit/a23fdfcfabd37f4c8f135877ebcfa44c3c0c4fd3))
+
+
+### ♻️ 리팩터링
+
+* **search:** 검색 provider 레지스트리 — 네이버·다음·Exa·Tavily 를 search-providers add-on 으로 ([#962](https://github.com/openmake/openmake_llm/issues/962)) ([451e78b](https://github.com/openmake/openmake_llm/commit/451e78b21f4776d3d316a1a849a218c95a3cf1b6))
+
 ## [1.79.0](https://github.com/openmake/openmake_llm/compare/v1.78.0...v1.79.0) (2026-09-20)
 
 
