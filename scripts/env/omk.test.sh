@@ -74,6 +74,12 @@ printf 'CORS_ORIGINS=x\n' > "$OX/.env"; env_apply_origins "$OX"; eq "origins: �
 ok "proxy: 남의 OMK_ROOT 프록시는 우리 것이 아니다" '! ( proxy_running() { return 0; }; pm2_app_cwd() { printf /somewhere/else/caddy; }; proxy_is_ours )'
 ok "proxy: 이 OMK_ROOT 의 프록시는 우리 것"          '( proxy_running() { return 0; }; pm2_app_cwd() { proxy_dir; }; proxy_is_ours )'
 
+# ── 런타임 이미지 태그: 환경별, 기본 인스턴스는 소스 기본값(:latest) ──
+eq "images dev"    "$(runtime_image_names dev)"    "openmake-mcp-runtime:dev openmake-task-runtime:dev"
+eq "images online" "$(runtime_image_names online)" "openmake-mcp-runtime:latest openmake-task-runtime:latest"
+RX="$TMP/rx"; mkdir -p "$RX"; printf 'OMK_RUNTIME_IMAGES=off\n' > "$RX/.env"
+runtime_images_ensure "$RX" dev >/dev/null; eq "images: off 면 아무것도 안 함" "$RUNTIME_CHANGED|$(dotenv_get "$RX/.env" MCP_SANDBOX_IMAGE)" "0|"
+
 # ── 소유권 가드: 환경 디렉터리 밖의 경로는 남의 것 ──
 ok "own: infra under env"     '! is_foreign_path "$OMK_ROOT/staging/llm/infra" "$OMK_ROOT/staging"'
 ok "own: env dir itself"      '! is_foreign_path "$OMK_ROOT/staging" "$OMK_ROOT/staging"'

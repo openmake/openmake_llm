@@ -9,7 +9,9 @@
 #
 # 빌드 (사용자 직접 — 호스트에서 1회, chromium 다운로드로 수 분 소요):
 #   docker build -t openmake-task-runtime:latest infra/task-runtime
-FROM openmake-mcp-runtime:latest
+# 베이스 태그를 바꾸려면 (omk 의 환경별 태그 등): --build-arg BASE_IMAGE=openmake-mcp-runtime:<태그>
+ARG BASE_IMAGE=openmake-mcp-runtime:latest
+FROM ${BASE_IMAGE}
 
 USER root
 # 브라우저는 /opt 에 self-contained 설치(node uid 1000 도 읽기 가능). 캐시 분리.

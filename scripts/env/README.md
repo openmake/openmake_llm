@@ -99,6 +99,17 @@ Base 에는 웹 검색을 끄는 스위치가 아직 없다(모델은 오프라�
 `localhost` 주소는 설치 때 자동으로 허용된다. 웹·REST·채팅 소켓이 전부 프록시 한 주소로 다니므로 그 주소 하나만 허용하면 된다.
 평문 HTTP 라 **신뢰하는 망(Tailscale·사내망)에서만** 쓴다 — 밖으로 공개할 때는 `--public-url` + 터널.
 
+## 런타임 이미지 — 에이전트 작업·아티팩트 내보내기·외부 MCP 격리
+
+레포에는 Dockerfile(`infra/mcp-runtime` ~1GB, `infra/task-runtime` ~6GB)만 있고 이미지는 호스트에서 빌드해야 한다 —
+없으면 에이전트 작업과 아티팩트 내보내기가 동작하지 않고, 외부 MCP 서버는 비격리로 돈다. `env install`·`env update` 가
+**환경별 태그**(`openmake-mcp-runtime:<env>` · `openmake-task-runtime:<env>`, online 은 소스 기본값 `:latest`)로 빌드하고
+`.env` 의 `MCP_SANDBOX_IMAGE`·`TASK_SANDBOX_IMAGE`·`ARTIFACT_EXEC_IMAGE`·`ARTIFACT_EXPORT_IMAGE` 를 적는다. 같은 호스트의
+dev·staging 이 서로의 이미지를 덮어쓰지 않는다. `MCP_SANDBOX_ENABLED`·`TASK_SANDBOX_ENABLED` 는 값이 없을 때만 `true` 로 둔다.
+
+첫 빌드는 수 분이다. 빼려면 `--no-runtime-images` (`.env` 의 `OMK_RUNTIME_IMAGES=off` 로 기억 — 다시 켜려면 그 줄을 지우고
+`omk env update`). 빌드 실패는 설치를 멈추지 않는다. `omk env reset` 은 환경별 태그를 지우고(`:latest` 는 남긴다) 빌드 캐시는 남는다.
+
 ## 꼬였을 때 — 지우고 다시
 
 ```bash

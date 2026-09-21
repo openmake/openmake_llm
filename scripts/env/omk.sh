@@ -34,7 +34,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk.sh \
 #     | bash -s -- env install staging --public-url https://staging-chat.example.com
 #
-#   omk env install <env> [--ref BR] [--bench-ref BR] [--public-url URL] [--no-bench] [--no-proxy] [--no-searxng]
+#   omk env install <env> [--ref BR] [--bench-ref BR] [--public-url URL] [--no-bench] [--no-proxy] [--no-searxng] [--no-runtime-images]
 #                         [--llm-base-url U --llm-api-key K --llm-model M] [--autoupdate|--no-autoupdate]
 #   omk env update  <env> [--if-behind]       # llm(ff-only→build→migrate→restart) → bench → proxy
 #   omk env reset   <env> [--keep-data] [--keep-env] [--reinstall] [--yes]
@@ -664,9 +664,42 @@ search_line() { # $1=llm dir → 상태 한 줄 (실제로 검색을 한 번 돌
 # ==============================================================================
 # env install / update / reset / status / start / stop / logs
 # ==============================================================================
+# ── 런타임 이미지 (외부 MCP 격리 · 에이전트 작업 · 아티팩트 실행/내보내기) ─────────────
+# 레포에는 Dockerfile 만 있고 빌드는 "사용자 직접"이라, 설치 직후에는 에이전트 작업과 아티팩트 내보내기가
+# 동작하지 않는다. omk 가 환경별 태그로 빌드하고 .env 에 이미지 이름을 적는다 — 같은 호스트의 dev·staging 이
+# 서로의 이미지를 덮어쓰지 않는다. 기본 인스턴스(online)는 소스의 기본 태그 :latest 를 그대로 쓴다.
+# 크다(mcp ~1GB, task ~6GB · 첫 빌드 수 분) — --no-runtime-images 로 뺀다(.env 의 OMK_RUNTIME_IMAGES=off 로 기억).
+# 빌드 실패는 설치를 멈추지 않는다. 켜기/끄기 스위치(*_ENABLED)는 이미 값이 있으면 존중한다.
+runtime_image_tag()   { [[ "$1" == "$OMK_DEFAULT_ENV" ]] && printf 'latest' || printf '%s' "$1"; }
+runtime_image_names() { local t; t="$(runtime_image_tag "$1")"; printf 'openmake-mcp-runtime:%s openmake-task-runtime:%s' "$t" "$t"; }
+RUNTIME_CHANGED=0
+runtime_images_ensure() { # $1=llm dir $2=env
+    local ldir="$1" env="$2" envf="$1/.env" mcp task before after
+    RUNTIME_CHANGED=0
+    [[ "$(dotenv_get "$envf" OMK_RUNTIME_IMAGES)" != "off" ]] || { log_info "런타임 이미지 생략 (OMK_RUNTIME_IMAGES=off)"; return 0; }
+    has docker && docker info >/dev/null 2>&1 || { log_warn "docker 를 쓸 수 없어 런타임 이미지를 건너뜁니다"; return 0; }
+    mcp="openmake-mcp-runtime:$(runtime_image_tag "$env")"; task="openmake-task-runtime:$(runtime_image_tag "$env")"
+    log_step "런타임 이미지 빌드: $mcp · $task (첫 빌드는 수 분)"
+    docker build -q -t "$mcp" "$ldir/infra/mcp-runtime" >/dev/null \
+        || { log_warn "$mcp 빌드 실패 — 건너뜁니다 (나중에 'omk env update $env')"; return 0; }
+    docker build -q -t "$task" --build-arg "BASE_IMAGE=$mcp" "$ldir/infra/task-runtime" >/dev/null \
+        || { log_warn "$task 빌드 실패 — 건너뜁니다 (나중에 'omk env update $env')"; return 0; }
+    before="$(grep -E '^(MCP_SANDBOX|TASK_SANDBOX|ARTIFACT_EXEC|ARTIFACT_EXPORT)_(IMAGE|ENABLED)=' "$envf" 2>/dev/null | sort || true)"
+    dotenv_set "$envf" MCP_SANDBOX_IMAGE "$mcp";    dotenv_set "$envf" ARTIFACT_EXEC_IMAGE "$mcp"
+    dotenv_set "$envf" TASK_SANDBOX_IMAGE "$task";  dotenv_set "$envf" ARTIFACT_EXPORT_IMAGE "$task"
+    dotenv_ensure "$envf" MCP_SANDBOX_ENABLED true; dotenv_ensure "$envf" TASK_SANDBOX_ENABLED true
+    after="$(grep -E '^(MCP_SANDBOX|TASK_SANDBOX|ARTIFACT_EXEC|ARTIFACT_EXPORT)_(IMAGE|ENABLED)=' "$envf" | sort)"
+    [[ "$before" == "$after" ]] || RUNTIME_CHANGED=1
+    log_ok "런타임 이미지 준비: $mcp · $task"
+}
+runtime_images_remove() { # $1=env — 환경별 태그만 지운다. :latest 는 omk 밖에서도 쓰므로 남긴다.
+    [[ "$1" != "$OMK_DEFAULT_ENV" ]] && has docker || return 0
+    local i; for i in $(runtime_image_names "$1"); do docker rmi "$i" >/dev/null 2>&1 && log_ok "이미지 $i 삭제" || true; done
+}
+
 cmd_env_install() {
     local env="$1"; shift
-    local ref="" bench_ref="" public_url="" no_bench=0 no_proxy=0 no_searxng=0 auto="" llm_args=()
+    local ref="" bench_ref="" public_url="" no_bench=0 no_proxy=0 no_searxng=0 no_images=0 auto="" llm_args=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --ref)          ref="${2:-}"; shift ;;
@@ -675,6 +708,7 @@ cmd_env_install() {
             --no-bench)     no_bench=1 ;;
             --no-proxy)     no_proxy=1 ;;
             --no-searxng)   no_searxng=1 ;;
+            --no-runtime-images) no_images=1 ;;
             --autoupdate)   auto=1 ;;
             --no-autoupdate) auto=0 ;;
             --llm-base-url|--llm-api-key|--llm-model) llm_args+=("$1" "${2:-}"); shift ;;
@@ -708,7 +742,10 @@ cmd_env_install() {
     # 1.5) 웹 검색 — .env 는 install.sh 가 만든 뒤에야 있다. 값이 바뀌면 API 만 다시 띄운다.
     [[ $no_searxng -eq 1 ]] && dotenv_set "$ldir/.env" OMK_SEARXNG off
     searxng_ensure "$ldir" "$env" "$(env_dir "$env")/searxng" "$(env_dir "$env")"
-    [[ $SEARCH_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
+    # 1.6) 런타임 이미지 — 에이전트 작업·아티팩트 내보내기·외부 MCP 격리의 전제.
+    [[ $no_images -eq 1 ]] && dotenv_set "$ldir/.env" OMK_RUNTIME_IMAGES off
+    runtime_images_ensure "$ldir" "$env"
+    [[ $SEARCH_CHANGED -eq 0 && $RUNTIME_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
 
     # 2) openmake_bench
     [[ $no_bench -eq 1 ]] || bench_install "$env" "$bench_ref" "$ldir"
@@ -740,6 +777,9 @@ cmd_env_update() {
     searxng_ensure "$ldir" "$env" "$(env_dir "$env")/searxng" "$(env_dir "$env")"   # 뒤의 update 가 재시작하며 반영
     # llm: fetch → ff-only pull → build → migrate → restart (openmake_llm.sh 가 dirty/ff 검사 포함)
     ( cd "$ldir" && ./openmake_llm.sh update --yes < /dev/null | cat ) || die "openmake_llm.sh update 실패 ($env)"
+    # 새로 받은 Dockerfile 로 빌드한다(안 바뀌었으면 캐시로 수 초). .env 가 바뀐 경우에만 한 번 더 재시작.
+    runtime_images_ensure "$ldir" "$env"
+    [[ $RUNTIME_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
     bench_update "$env"
     [[ -f "$(proxy_dir)/caddy.d/$env.caddy" ]] && { proxy_render "$env"; proxy_start_or_reload; }
     log_ok "$env 갱신 완료"
@@ -791,6 +831,7 @@ cmd_env_reset() {
         if [[ $keep_data -eq 0 ]]; then
             for v in $(docker_volumes "$env"); do docker volume rm "$v" >/dev/null 2>&1 && log_ok "볼륨 $v 삭제" || true; done
         fi
+        runtime_images_remove "$env"   # 빌드 캐시는 남으므로 재설치 때 다시 빌드해도 빠르다
     fi
     proxy_remove "$env"
     [[ -d "$edir" ]] && { rm -rf "$edir"; log_ok "삭제: $edir"; }
