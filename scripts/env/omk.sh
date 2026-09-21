@@ -35,10 +35,10 @@
 #     | bash -s -- env install staging --public-url https://staging-chat.example.com
 #
 #   omk env install <env> [--ref BR] [--bench-ref BR] [--public-url URL] [--no-bench] [--no-proxy] [--no-searxng] [--no-runtime-images]
-#                         [--no-litellm] [--qwen-vllm-base U --bge-vllm-base U --vllm-api-key K]
+#                         [--no-litellm] [--no-default-model] [--qwen-vllm-base U --bge-vllm-base U --vllm-api-key K]
 #                         [--llm-base-url U --llm-api-key K --llm-model M] [--autoupdate|--no-autoupdate]
 #   omk env update  <env> [--if-behind]       # llm(ff-only→build→migrate→restart) → bench → proxy
-#   omk env reset   <env> [--keep-data] [--keep-env] [--reinstall] [--yes]
+#   omk env reset   <env> [--keep-data] [--keep-env] [--purge-images] [--reinstall] [--yes]
 #   omk env status|start|stop|logs <env>
 #   omk env expose <env> [--tailscale] [--host H]…      # 다른 기기에서 프록시 포트로 보기 — 호스트를 CORS 에 허용(.env 에 기억)
 #   omk env autoupdate <env> [--every 'CRON'] [--off]   # 선택 — 기본은 수동 배포. PM2 cron 앱 omk-updater-<env>
@@ -74,6 +74,13 @@ OMK_SEARXNG_IMAGE="${OMK_SEARXNG_IMAGE:-searxng/searxng:latest}"
 OMK_SEARXNG_PORT_BASE="${OMK_SEARXNG_PORT_BASE:-8888}"   # .env.example 의 SEARXNG_URL 예시 포트. 점유 시 다음 빈 포트
 OMK_LITELLM_PORT_BASE="${OMK_LITELLM_PORT_BASE:-13401}"  # LiteLLM 게이트웨이 빈 포트 탐색 시작점
 OMK_LITELLM_SPEC="${OMK_LITELLM_SPEC:-litellm[proxy]}"    # pip 설치 대상 — 버전 고정: 'litellm[proxy]==X.Y.Z'
+# 기본 모델 — 업스트림을 주지 않은 설치본도 바로 채팅이 되게 하는 최소 모델. 호스트당 llama.cpp 서버 하나(PM2), 환경들이 공유한다.
+OMK_LLAMACPP_APP="omk-llamacpp"
+OMK_LLAMACPP_TAG="${OMK_LLAMACPP_TAG:-b10964}"                          # llama.cpp 릴리스 태그 (v0.4.1 에 대응)
+OMK_LLAMACPP_PORT_BASE="${OMK_LLAMACPP_PORT_BASE:-18080}"
+OMK_DEFAULT_MODEL_HF="${OMK_DEFAULT_MODEL_HF:-Qwen/Qwen3-1.7B-GGUF:Q8_0}"  # HuggingFace GGUF (repo:quant) — 도구 호출이 되는 가장 작은 선(1.8GB)
+OMK_DEFAULT_MODEL_NAME="${OMK_DEFAULT_MODEL_NAME:-qwen3-1.7b}"            # 앱·게이트웨이에 보이는 모델 이름
+OMK_DEFAULT_MODEL_CTX="${OMK_DEFAULT_MODEL_CTX:-16384}"
 # 외부 연결 점검 대상(하나라도 열리면 온라인) · 검색 동작 확인용 질의
 OMK_NET_PROBE_URLS="${OMK_NET_PROBE_URLS:-https://duckduckgo.com https://www.bing.com https://www.wikipedia.org}"
 OMK_SEARCH_PROBE_QUERY="${OMK_SEARCH_PROBE_QUERY:-wikipedia}"
@@ -667,6 +674,65 @@ search_line() { # $1=llm dir → 상태 한 줄 (실제로 검색을 한 번 돌
 # ==============================================================================
 # env install / update / reset / status / start / stop / logs
 # ==============================================================================
+# ── 기본 모델 (llama.cpp) ─────────────────────────────────────────────────────
+# 업스트림(--llm-base-url·--qwen-vllm-base)을 주지 않아도 앱 → 게이트웨이 → 모델이 끝까지 돌게 한다. vLLM 은 GPU 가 필요하므로
+# 저사양·macOS 에서도 도는 llama.cpp 의 llama-server(OpenAI 호환)를 쓴다 — 게이트웨이 입장에서는 vLLM 과 같은 종류의 업스트림이다.
+# 호스트당 하나(PM2 omk-llamacpp, 127.0.0.1 전용), $OMK_ROOT/llamacpp/{bin,models,start.sh,port}. 환경을 reset 해도 남는다.
+# 작은 모델이다 — 배선 확인·가벼운 대화용. 에이전트 작업·검색 품질은 더 큰 업스트림을 지정해야 한다.
+llamacpp_dir() { printf '%s/llamacpp' "$OMK_ROOT"; }
+llamacpp_platform() {
+    case "$(uname -s)/$(uname -m)" in
+        Darwin/arm64) printf 'macos-arm64' ;; Darwin/x86_64) printf 'macos-x64' ;;
+        Linux/x86_64|Linux/amd64) printf 'ubuntu-x64' ;; Linux/aarch64|Linux/arm64) printf 'ubuntu-arm64' ;; *) return 1 ;;
+    esac
+}
+LLAMA_SERVER_BIN=""
+llamacpp_ensure_binary() {
+    if has llama-server; then LLAMA_SERVER_BIN="$(command -v llama-server)"; return 0; fi
+    local d plat url tmp; d="$(llamacpp_dir)/bin/$OMK_LLAMACPP_TAG"
+    LLAMA_SERVER_BIN="$d/llama-server"; [[ -x "$LLAMA_SERVER_BIN" ]] && return 0
+    plat="$(llamacpp_platform)" || { log_warn "이 플랫폼용 llama.cpp 바이너리가 없습니다 — llama-server 를 PATH 에 두세요"; return 1; }
+    url="https://github.com/ggml-org/llama.cpp/releases/download/$OMK_LLAMACPP_TAG/llama-$OMK_LLAMACPP_TAG-bin-$plat.tar.gz"
+    log_info "llama.cpp $OMK_LLAMACPP_TAG 다운로드 ($plat)"
+    tmp="$(mktemp -d)"; mkdir -p "$d"
+    curl -fsSL "$url" | tar -xz -C "$tmp" || { rm -rf "$tmp"; log_warn "llama.cpp 다운로드 실패: $url"; return 1; }
+    # 아카이브는 llama-<tag>/ 한 디렉터리 — 공유 라이브러리가 실행 파일 옆에 있어야 하므로 통째로 옮긴다.
+    cp -R "$tmp"/*/. "$d/" && rm -rf "$tmp"
+    [[ -x "$LLAMA_SERVER_BIN" ]] || { log_warn "llama-server 를 찾을 수 없습니다: $d"; return 1; }
+}
+DEFAULT_MODEL_BASE=""
+default_model_ensure() { # 성공하면 DEFAULT_MODEL_BASE 에 OpenAI 호환 주소(/v1)
+    local d port i; d="$(llamacpp_dir)"; DEFAULT_MODEL_BASE=""
+    require_pm2
+    if pm2 describe "$OMK_LLAMACPP_APP" >/dev/null 2>&1 && [[ "$(pm2_app_cwd "$OMK_LLAMACPP_APP")" != "$d" ]]; then
+        log_warn "기본 모델 서버($OMK_LLAMACPP_APP)가 다른 OMK_ROOT 에서 돌고 있습니다 — 건드리지 않습니다"; return 1
+    fi
+    log_step "기본 모델: $OMK_DEFAULT_MODEL_NAME ($OMK_DEFAULT_MODEL_HF · llama.cpp)"
+    llamacpp_ensure_binary || return 1
+    mkdir -p "$d/models"
+    port="$(cat "$d/port" 2>/dev/null || true)"
+    if [[ -z "$port" ]]; then port="$(find_free_port "$OMK_LLAMACPP_PORT_BASE")" || return 1; printf '%s' "$port" > "$d/port"; fi
+    cat > "$d/start.sh" <<LLAMA_START
+#!/usr/bin/env bash
+# omk 가 만든 파일 — 모델·컨텍스트는 OMK_DEFAULT_MODEL_* 로 바꾸고 다시 설치한다.
+export LLAMA_CACHE="$d/models"
+exec "$LLAMA_SERVER_BIN" -hf "$OMK_DEFAULT_MODEL_HF" --alias "$OMK_DEFAULT_MODEL_NAME" --jinja \\
+    --host 127.0.0.1 --port $port -c $OMK_DEFAULT_MODEL_CTX
+LLAMA_START
+    chmod 700 "$d/start.sh"
+    if [[ "$(curl -s -m 3 "http://127.0.0.1:$port/health" 2>/dev/null)" != *'"ok"'* ]]; then
+        pm2 describe "$OMK_LLAMACPP_APP" >/dev/null 2>&1 && pm2 delete "$OMK_LLAMACPP_APP" >/dev/null 2>&1 || true
+        pm2 start "$d/start.sh" --name "$OMK_LLAMACPP_APP" --cwd "$d" --interpreter bash --time >/dev/null || { log_warn "PM2 $OMK_LLAMACPP_APP 기동 실패"; return 1; }
+        log_info "모델을 받는 중일 수 있습니다 (첫 실행 · 약 2GB) — 최대 20분 기다립니다"
+        for ((i = 0; i < 400; i++)); do
+            [[ "$(curl -s -m 3 "http://127.0.0.1:$port/health" 2>/dev/null)" == *'"ok"'* ]] && break; sleep 3
+        done
+        [[ $i -lt 400 ]] || { log_warn "기본 모델 서버가 응답하지 않습니다 — 'pm2 logs $OMK_LLAMACPP_APP'"; return 1; }
+    fi
+    DEFAULT_MODEL_BASE="http://127.0.0.1:$port/v1"
+    log_ok "기본 모델 준비: $OMK_DEFAULT_MODEL_NAME → $DEFAULT_MODEL_BASE (PM2 $OMK_LLAMACPP_APP)"
+}
+
 # ── LiteLLM 게이트웨이 (환경별) ──────────────────────────────────────────────
 # 앱은 LLM_BASE_URL 하나만 본다. 그 뒤에서 로컬 vLLM·BYOK 업스트림을 묶는 게이트웨이를 환경마다 따로 띄운다 —
 # <env>/litellm/{venv,litellm.config.yaml,litellm.env,start_litellm.sh}, PM2 openmake-litellm[-env], 127.0.0.1 전용.
@@ -789,7 +855,7 @@ runtime_images_remove() { # $1=env — 환경별 태그만 지운다. :latest �
 
 cmd_env_install() {
     local env="$1"; shift
-    local ref="" bench_ref="" public_url="" no_bench=0 no_proxy=0 no_searxng=0 no_images=0 no_litellm=0 qwen_base="" bge_base="" vllm_key="" up_base="" up_key="" up_model="" auto="" llm_args=()
+    local ref="" bench_ref="" public_url="" no_bench=0 no_proxy=0 no_searxng=0 no_images=0 no_litellm=0 no_default_model=0 qwen_base="" bge_base="" vllm_key="" up_base="" up_key="" up_model="" auto="" llm_args=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --ref)          ref="${2:-}"; shift ;;
@@ -800,6 +866,7 @@ cmd_env_install() {
             --no-searxng)   no_searxng=1 ;;
             --no-runtime-images) no_images=1 ;;
             --no-litellm)   no_litellm=1 ;;
+            --no-default-model) no_default_model=1 ;;
             --qwen-vllm-base) qwen_base="${2:-}"; shift ;;
             --bge-vllm-base)  bge_base="${2:-}"; shift ;;
             --vllm-api-key)   vllm_key="${2:-}"; shift ;;
@@ -844,6 +911,16 @@ cmd_env_install() {
     runtime_images_ensure "$ldir" "$env"
     # 1.7) LiteLLM 게이트웨이 — 앱의 LLM_BASE_URL·LLM_API_KEY 를 채운다.
     [[ $no_litellm -eq 1 ]] && dotenv_set "$ldir/.env" OMK_LITELLM off
+    # 업스트림을 주지 않았고 이 환경에 기억된 업스트림도 없으면 기본 모델(llama.cpp)을 게이트웨이 뒤에 둔다.
+    # 나중에 --llm-base-url/--qwen-vllm-base 로 다시 설치하거나 litellm.env 를 채우면 그쪽을 따른다.
+    local lenv_prev; lenv_prev="$(litellm_dir "$env")/litellm.env"
+    if [[ $no_litellm -eq 0 && $no_default_model -eq 0 && -z "$up_base$qwen_base" \
+          && -z "$(dotenv_get "$lenv_prev" OMK_UPSTREAM_MODEL)$(dotenv_get "$lenv_prev" QWEN_VLLM_API_BASE)" ]]; then
+        if default_model_ensure; then
+            up_base="$DEFAULT_MODEL_BASE"; up_key="none"; up_model="$OMK_DEFAULT_MODEL_NAME"
+            dotenv_set "$ldir/.env" LLM_DEFAULT_MODEL "$up_model"
+        else log_warn "기본 모델을 준비하지 못했습니다 — 업스트림을 직접 지정하세요 (--llm-base-url … --llm-model …)"; fi
+    fi
     litellm_ensure "$ldir" "$env" "$qwen_base" "$bge_base" "$vllm_key" "$up_base" "$up_key" "$up_model"
     [[ $SEARCH_CHANGED -eq 0 && $RUNTIME_CHANGED -eq 0 && $LITELLM_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
 
@@ -889,9 +966,9 @@ cmd_env_update() {
 }
 
 cmd_env_reset() {
-    local env="$1"; shift; local keep_data=0 keep_env=0 reinstall=0
+    local env="$1"; shift; local keep_data=0 keep_env=0 reinstall=0 purge_images=0
     while [[ $# -gt 0 ]]; do
-        case "$1" in --keep-data) keep_data=1 ;; --keep-env) keep_env=1 ;; --reinstall) reinstall=1 ;; -y|--yes) ASSUME_YES=1 ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift
+        case "$1" in --purge-images) purge_images=1 ;; --keep-data) keep_data=1 ;; --keep-env) keep_env=1 ;; --reinstall) reinstall=1 ;; -y|--yes) ASSUME_YES=1 ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift
     done
     local edir ldir bdir ref="" bref=""
     edir="$(env_dir "$env")"; ldir="$(llm_dir "$env")"; bdir="$(bench_dir "$env")"
@@ -934,7 +1011,8 @@ cmd_env_reset() {
         if [[ $keep_data -eq 0 ]]; then
             for v in $(docker_volumes "$env"); do docker volume rm "$v" >/dev/null 2>&1 && log_ok "볼륨 $v 삭제" || true; done
         fi
-        runtime_images_remove "$env"   # 빌드 캐시는 남으므로 재설치 때 다시 빌드해도 빠르다
+        # 런타임 이미지(약 7GB)는 기본으로 남긴다 — 구형 docker 빌더는 이미지를 지우면 캐시도 사라져 재설치마다 수 분이 든다.
+        [[ $purge_images -eq 0 ]] || runtime_images_remove "$env"
     fi
     proxy_remove "$env"
     [[ -d "$edir" ]] && { rm -rf "$edir"; log_ok "삭제: $edir"; }
@@ -968,6 +1046,9 @@ env_summary() { # $1=env
     [[ -n "$(dotenv_get "$ldir/.env" OMK_APP_URL | grep -E '^https?://' | grep -v localhost || true)" ]] && echo "  공개 주소  $(dotenv_get "$ldir/.env" OMK_APP_URL)"
     echo "  웹 검색   $(search_line "$ldir")"
     [[ -z "$(litellm_line "$env" "$ldir")" ]] || echo "  LiteLLM   $(litellm_line "$env" "$ldir")"
+    if [[ "$(dotenv_get "$(litellm_dir "$env")/litellm.env" OMK_UPSTREAM_MODEL)" == "$OMK_DEFAULT_MODEL_NAME" ]]; then
+        echo "  모델      $OMK_DEFAULT_MODEL_NAME (기본 최소 모델 · llama.cpp) — 배선 확인·가벼운 대화용. 더 큰 모델: --llm-base-url … --llm-model … 로 재설치"
+    fi
     echo ""
     if [[ -n "$(dotenv_get "$ldir/.env" OMK_LITELLM_PORT)" && -z "$(dotenv_get "$(litellm_dir "$env")/litellm.env" QWEN_VLLM_API_BASE)$(dotenv_get "$(litellm_dir "$env")/litellm.env" OMK_UPSTREAM_MODEL)" ]]; then
         printf "  %s[할 일]%s 로컬 모델 업스트림이 비어 있습니다 — $(litellm_dir "$env")/litellm.env 의\n" "$C_WARN" "$C_RESET"

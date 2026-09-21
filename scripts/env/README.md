@@ -116,6 +116,19 @@ Base 에는 웹 검색을 끄는 스위치가 아직 없다(모델은 오프라�
 - `env update` 는 **이미 게이트웨이가 있는 환경만** 갱신한다 — 기존 환경의 `LLM_BASE_URL` 을 가로채지 않는다.
 - python 은 `uv` 가 있으면 `uv venv --python 3.12`, 없으면 `python3 -m venv`. 버전 고정은 `OMK_LITELLM_SPEC='litellm[proxy]==X.Y.Z'`.
 
+## 기본 모델 — 아무것도 주지 않아도 채팅이 된다
+
+업스트림(`--llm-base-url`·`--qwen-vllm-base`)을 주지 않고 설치하면 omk 가 **최소 모델**을 게이트웨이 뒤에 둔다:
+llama.cpp 의 `llama-server`(OpenAI 호환 · CPU·Metal 에서 돈다 — vLLM 은 GPU 가 필요해 저사양·macOS 에서 못 쓴다) +
+`Qwen/Qwen3-1.7B-GGUF:Q8_0`(1.8GB, 도구 호출이 되는 가장 작은 선). 경로는 언제나 **앱 → 환경의 LiteLLM → 업스트림**이다.
+
+- 호스트당 하나: PM2 `omk-llamacpp`, `127.0.0.1` 전용, `~/.openmake/llamacpp/{bin,models,start.sh,port}`. 환경들이 공유하고 `env reset` 에도 남는다.
+  `llama-server` 가 PATH 에 있으면 그것을 쓰고, 없으면 공식 릴리스(`OMK_LLAMACPP_TAG`)를 받는다.
+- **환경을 설정하면 그 모델을 따른다** — `--llm-base-url … --llm-model …` 또는 `--qwen-vllm-base …` 로 다시 설치하거나 `litellm.env` 를 채우면
+  기본 모델은 쓰이지 않는다. 이미 업스트림이 기억된 환경은 재설치해도 기본 모델로 돌아가지 않는다. 빼려면 `--no-default-model`.
+- 작은 모델이다 — **배선 확인과 가벼운 대화용**. 에이전트 작업·검색 품질을 보려면 더 큰 업스트림을 지정한다.
+- 바꾸기: `OMK_DEFAULT_MODEL_HF`(HuggingFace `repo:quant`) · `OMK_DEFAULT_MODEL_NAME` · `OMK_DEFAULT_MODEL_CTX`(16384).
+
 ## 런타임 이미지 — 에이전트 작업·아티팩트 내보내기·외부 MCP 격리
 
 레포에는 Dockerfile(`infra/mcp-runtime` ~1GB, `infra/task-runtime` ~6GB)만 있고 이미지는 호스트에서 빌드해야 한다 —
@@ -125,7 +138,7 @@ Base 에는 웹 검색을 끄는 스위치가 아직 없다(모델은 오프라�
 dev·staging 이 서로의 이미지를 덮어쓰지 않는다. `MCP_SANDBOX_ENABLED`·`TASK_SANDBOX_ENABLED`·`ARTIFACT_EXPORT_ENABLED` 는 값이 없을 때만 `true` 로 둔다.
 
 첫 빌드는 수 분이다. 빼려면 `--no-runtime-images` (`.env` 의 `OMK_RUNTIME_IMAGES=off` 로 기억 — 다시 켜려면 그 줄을 지우고
-`omk env update`). 빌드 실패는 설치를 멈추지 않는다. `omk env reset` 은 환경별 태그를 지우고(`:latest` 는 남긴다) 빌드 캐시는 남는다.
+`omk env update`). 빌드 실패는 설치를 멈추지 않는다. `omk env reset` 은 이미지를 **남긴다**(약 7GB 재빌드를 피하려고) — 지우려면 `--purge-images`(환경별 태그만, `:latest` 는 남긴다).
 
 ## 꼬였을 때 — 지우고 다시
 
