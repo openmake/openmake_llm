@@ -78,9 +78,10 @@ OMK_LITELLM_SPEC="${OMK_LITELLM_SPEC:-litellm[proxy]}"    # pip 설치 대상 �
 OMK_LLAMACPP_APP="omk-llamacpp"
 OMK_LLAMACPP_TAG="${OMK_LLAMACPP_TAG:-b10964}"                          # llama.cpp 릴리스 태그 (v0.4.1 에 대응)
 OMK_LLAMACPP_PORT_BASE="${OMK_LLAMACPP_PORT_BASE:-18080}"
-OMK_DEFAULT_MODEL_HF="${OMK_DEFAULT_MODEL_HF:-Qwen/Qwen3-1.7B-GGUF:Q8_0}"  # HuggingFace GGUF (repo:quant) — 도구 호출이 되는 가장 작은 선(1.8GB)
-OMK_DEFAULT_MODEL_NAME="${OMK_DEFAULT_MODEL_NAME:-qwen3-1.7b}"            # 앱·게이트웨이에 보이는 모델 이름
-OMK_DEFAULT_MODEL_CTX="${OMK_DEFAULT_MODEL_CTX:-16384}"
+# 모델 선택: 명시한 환경변수 > 호스트에 기억된 값($OMK_ROOT/llamacpp/model.conf) > 아래 기본값. default_model_resolve 가 채운다.
+OMK_DEFAULT_MODEL_HF="${OMK_DEFAULT_MODEL_HF:-}"       # HuggingFace GGUF (repo:quant). 기본 Qwen/Qwen3-1.7B-GGUF:Q8_0 — 도구 호출이 되는 가장 작은 선(1.8GB)
+OMK_DEFAULT_MODEL_NAME="${OMK_DEFAULT_MODEL_NAME:-}"   # 앱·게이트웨이에 보이는 모델 이름. 기본 qwen3-1.7b
+OMK_DEFAULT_MODEL_CTX="${OMK_DEFAULT_MODEL_CTX:-}"     # 기본 16384
 # 외부 연결 점검 대상(하나라도 열리면 온라인) · 검색 동작 확인용 질의
 OMK_NET_PROBE_URLS="${OMK_NET_PROBE_URLS:-https://duckduckgo.com https://www.bing.com https://www.wikipedia.org}"
 OMK_SEARCH_PROBE_QUERY="${OMK_SEARCH_PROBE_QUERY:-wikipedia}"
@@ -700,9 +701,20 @@ llamacpp_ensure_binary() {
     cp -R "$tmp"/*/. "$d/" && rm -rf "$tmp"
     [[ -x "$LLAMA_SERVER_BIN" ]] || { log_warn "llama-server 를 찾을 수 없습니다: $d"; return 1; }
 }
+default_model_resolve() { # 호스트에 하나뿐인 서버라 선택을 기억한다 — 옵션 없이 다시 설치해도 고른 모델이 유지된다
+    local conf; conf="$(llamacpp_dir)/model.conf"
+    [[ -n "$OMK_DEFAULT_MODEL_HF" ]]   || OMK_DEFAULT_MODEL_HF="$(dotenv_get "$conf" HF)"
+    [[ -n "$OMK_DEFAULT_MODEL_NAME" ]] || OMK_DEFAULT_MODEL_NAME="$(dotenv_get "$conf" NAME)"
+    [[ -n "$OMK_DEFAULT_MODEL_CTX" ]]  || OMK_DEFAULT_MODEL_CTX="$(dotenv_get "$conf" CTX)"
+    OMK_DEFAULT_MODEL_HF="${OMK_DEFAULT_MODEL_HF:-Qwen/Qwen3-1.7B-GGUF:Q8_0}"
+    OMK_DEFAULT_MODEL_NAME="${OMK_DEFAULT_MODEL_NAME:-qwen3-1.7b}"
+    OMK_DEFAULT_MODEL_CTX="${OMK_DEFAULT_MODEL_CTX:-16384}"
+}
+default_model_base() { local p; p="$(cat "$(llamacpp_dir)/port" 2>/dev/null || true)"; [[ -z "$p" ]] || printf 'http://127.0.0.1:%s/v1' "$p"; }
 DEFAULT_MODEL_BASE=""
 default_model_ensure() { # 성공하면 DEFAULT_MODEL_BASE 에 OpenAI 호환 주소(/v1)
-    local d port i; d="$(llamacpp_dir)"; DEFAULT_MODEL_BASE=""
+    local d port i before; d="$(llamacpp_dir)"; DEFAULT_MODEL_BASE=""
+    default_model_resolve
     require_pm2
     if pm2 describe "$OMK_LLAMACPP_APP" >/dev/null 2>&1 && [[ "$(pm2_app_cwd "$OMK_LLAMACPP_APP")" != "$d" ]]; then
         log_warn "기본 모델 서버($OMK_LLAMACPP_APP)가 다른 OMK_ROOT 에서 돌고 있습니다 — 건드리지 않습니다"; return 1
@@ -712,6 +724,8 @@ default_model_ensure() { # 성공하면 DEFAULT_MODEL_BASE 에 OpenAI 호환 주
     mkdir -p "$d/models"
     port="$(cat "$d/port" 2>/dev/null || true)"
     if [[ -z "$port" ]]; then port="$(find_free_port "$OMK_LLAMACPP_PORT_BASE")" || return 1; printf '%s' "$port" > "$d/port"; fi
+    printf 'HF=%s\nNAME=%s\nCTX=%s\n' "$OMK_DEFAULT_MODEL_HF" "$OMK_DEFAULT_MODEL_NAME" "$OMK_DEFAULT_MODEL_CTX" > "$d/model.conf"
+    before="$(cat "$d/start.sh" 2>/dev/null || true)"
     cat > "$d/start.sh" <<LLAMA_START
 #!/usr/bin/env bash
 # omk 가 만든 파일 — 모델·컨텍스트는 OMK_DEFAULT_MODEL_* 로 바꾸고 다시 설치한다.
@@ -720,10 +734,11 @@ exec "$LLAMA_SERVER_BIN" -hf "$OMK_DEFAULT_MODEL_HF" --alias "$OMK_DEFAULT_MODEL
     --host 127.0.0.1 --port $port -c $OMK_DEFAULT_MODEL_CTX
 LLAMA_START
     chmod 700 "$d/start.sh"
-    if [[ "$(curl -s -m 3 "http://127.0.0.1:$port/health" 2>/dev/null)" != *'"ok"'* ]]; then
+    # 떠 있어도 모델·옵션이 바뀌었으면 다시 띄운다 — 같은 서버를 쓰는 다른 환경의 게이트웨이는 'omk env install <env>' 로 이름을 맞춘다.
+    if [[ "$before" != "$(cat "$d/start.sh")" || "$(curl -s -m 3 "http://127.0.0.1:$port/health" 2>/dev/null)" != *'"ok"'* ]]; then
         pm2 describe "$OMK_LLAMACPP_APP" >/dev/null 2>&1 && pm2 delete "$OMK_LLAMACPP_APP" >/dev/null 2>&1 || true
         pm2 start "$d/start.sh" --name "$OMK_LLAMACPP_APP" --cwd "$d" --interpreter bash --time >/dev/null || { log_warn "PM2 $OMK_LLAMACPP_APP 기동 실패"; return 1; }
-        log_info "모델을 받는 중일 수 있습니다 (첫 실행 · 약 2GB) — 최대 20분 기다립니다"
+        log_info "모델을 받는 중일 수 있습니다 (첫 실행 · 수 GB) — 최대 20분 기다립니다"
         for ((i = 0; i < 400; i++)); do
             [[ "$(curl -s -m 3 "http://127.0.0.1:$port/health" 2>/dev/null)" == *'"ok"'* ]] && break; sleep 3
         done
@@ -915,7 +930,8 @@ cmd_env_install() {
     # 나중에 --llm-base-url/--qwen-vllm-base 로 다시 설치하거나 litellm.env 를 채우면 그쪽을 따른다.
     local lenv_prev; lenv_prev="$(litellm_dir "$env")/litellm.env"
     if [[ $no_litellm -eq 0 && $no_default_model -eq 0 && -z "$up_base$qwen_base" \
-          && -z "$(dotenv_get "$lenv_prev" OMK_UPSTREAM_MODEL)$(dotenv_get "$lenv_prev" QWEN_VLLM_API_BASE)" ]]; then
+          && -z "$(dotenv_get "$lenv_prev" QWEN_VLLM_API_BASE)" ]] \
+       && { [[ -z "$(dotenv_get "$lenv_prev" OMK_UPSTREAM_MODEL)" ]] || [[ "$(dotenv_get "$lenv_prev" OMK_UPSTREAM_API_BASE)" == "$(default_model_base)" ]]; }; then
         if default_model_ensure; then
             up_base="$DEFAULT_MODEL_BASE"; up_key="none"; up_model="$OMK_DEFAULT_MODEL_NAME"
             dotenv_set "$ldir/.env" LLM_DEFAULT_MODEL "$up_model"
@@ -1046,8 +1062,8 @@ env_summary() { # $1=env
     [[ -n "$(dotenv_get "$ldir/.env" OMK_APP_URL | grep -E '^https?://' | grep -v localhost || true)" ]] && echo "  공개 주소  $(dotenv_get "$ldir/.env" OMK_APP_URL)"
     echo "  웹 검색   $(search_line "$ldir")"
     [[ -z "$(litellm_line "$env" "$ldir")" ]] || echo "  LiteLLM   $(litellm_line "$env" "$ldir")"
-    if [[ "$(dotenv_get "$(litellm_dir "$env")/litellm.env" OMK_UPSTREAM_MODEL)" == "$OMK_DEFAULT_MODEL_NAME" ]]; then
-        echo "  모델      $OMK_DEFAULT_MODEL_NAME (기본 최소 모델 · llama.cpp) — 배선 확인·가벼운 대화용. 더 큰 모델: --llm-base-url … --llm-model … 로 재설치"
+    if [[ -n "$(default_model_base)" && "$(dotenv_get "$(litellm_dir "$env")/litellm.env" OMK_UPSTREAM_API_BASE)" == "$(default_model_base)" ]]; then
+        echo "  모델      $(dotenv_get "$(litellm_dir "$env")/litellm.env" OMK_UPSTREAM_MODEL) (호스트 기본 모델 · llama.cpp) — 배선 확인·가벼운 대화용. 더 큰 모델: --llm-base-url … --llm-model … 로 재설치"
     fi
     echo ""
     if [[ -n "$(dotenv_get "$ldir/.env" OMK_LITELLM_PORT)" && -z "$(dotenv_get "$(litellm_dir "$env")/litellm.env" QWEN_VLLM_API_BASE)$(dotenv_get "$(litellm_dir "$env")/litellm.env" OMK_UPSTREAM_MODEL)" ]]; then

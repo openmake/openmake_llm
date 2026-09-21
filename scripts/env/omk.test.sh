@@ -85,6 +85,11 @@ printf 'OMK_UPSTREAM_MODEL=qwen3.5:397b-cloud\n' > "$LX/l.env"; litellm_render_c
 eq "litellm config: 업스트림 모델 한 항목 추가" "$(grep -c 'model_name' "$LX/out.yaml")|$(grep -c 'openai/qwen3.5:397b-cloud' "$LX/out.yaml")|$(grep -c 'os.environ/OMK_UPSTREAM_API_BASE' "$LX/out.yaml")" "2|1|1"
 
 ok "llamacpp: 이 플랫폼의 릴리스 이름" '[[ "$(llamacpp_platform)" =~ ^(macos|ubuntu)-(arm64|x64)$ ]]'
+( default_model_resolve; [[ "$OMK_DEFAULT_MODEL_NAME|$OMK_DEFAULT_MODEL_CTX" == "qwen3-1.7b|16384" ]] ) && ok "default model: 기본값" true || ok "default model: 기본값" false
+mkdir -p "$(llamacpp_dir)"; printf 'HF=a/b:Q4\nNAME=mine\nCTX=8192\n' > "$(llamacpp_dir)/model.conf"
+eq "default model: 기억된 선택" "$( default_model_resolve; echo "$OMK_DEFAULT_MODEL_HF|$OMK_DEFAULT_MODEL_NAME|$OMK_DEFAULT_MODEL_CTX" )" "a/b:Q4|mine|8192"
+eq "default model: 명시가 우선" "$( OMK_DEFAULT_MODEL_NAME=x; default_model_resolve; echo "$OMK_DEFAULT_MODEL_NAME|$OMK_DEFAULT_MODEL_HF" )" "x|a/b:Q4"
+rm -rf "$(llamacpp_dir)"
 eq "llamacpp dir" "$(llamacpp_dir)" "$OMK_ROOT/llamacpp"
 
 # ── 런타임 이미지 태그: 환경별, 기본 인스턴스는 소스 기본값(:latest) ──

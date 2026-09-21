@@ -127,7 +127,10 @@ llama.cpp 의 `llama-server`(OpenAI 호환 · CPU·Metal 에서 돈다 — vLLM 
 - **환경을 설정하면 그 모델을 따른다** — `--llm-base-url … --llm-model …` 또는 `--qwen-vllm-base …` 로 다시 설치하거나 `litellm.env` 를 채우면
   기본 모델은 쓰이지 않는다. 이미 업스트림이 기억된 환경은 재설치해도 기본 모델로 돌아가지 않는다. 빼려면 `--no-default-model`.
 - 작은 모델이다 — **배선 확인과 가벼운 대화용**. 에이전트 작업·검색 품질을 보려면 더 큰 업스트림을 지정한다.
-- 바꾸기: `OMK_DEFAULT_MODEL_HF`(HuggingFace `repo:quant`) · `OMK_DEFAULT_MODEL_NAME` · `OMK_DEFAULT_MODEL_CTX`(16384).
+- **호스트에 맞는 모델로 바꾸기**: `OMK_DEFAULT_MODEL_HF`(HuggingFace `repo:quant`) · `OMK_DEFAULT_MODEL_NAME` · `OMK_DEFAULT_MODEL_CTX`(16384) 를 주고
+  `omk env install <env>` 를 다시 실행한다 — 예: 16GB Mac 은 `OMK_DEFAULT_MODEL_HF=Qwen/Qwen3-4B-GGUF:Q4_K_M OMK_DEFAULT_MODEL_NAME=qwen3-4b`.
+  선택은 `~/.openmake/llamacpp/model.conf` 에 기억되어 다음부터는 옵션 없이도 유지되고, 서버는 새 모델로 다시 뜬다. 같은 서버를 쓰는
+  다른 환경은 `omk env install <env>` 를 한 번 다시 돌려 게이트웨이의 모델 이름을 맞춘다.
 
 ## 런타임 이미지 — 에이전트 작업·아티팩트 내보내기·외부 MCP 격리
 
