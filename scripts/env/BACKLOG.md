@@ -66,6 +66,11 @@
 - **`.env.example` 은 "docker compose 로 기동"이라 하지만 `infra/docker-compose.yml` 에 searxng 서비스가 없다** —
   omk 가 `docker run` 으로 메운다. 업스트림이 compose 서비스(프로필)로 넣으면 omk 쪽은 그걸 쓰도록 바꾼다.
 
+- **기본 MCP 서버가 새 설치본에서 항상 연결 실패한다** (2026-09-21) — `db/init/003-seed.sql` 이 `noapi-google-search`
+  (command `noapi-google-search-mcp`)를 enabled 로 심지만, 그 실행 파일은 호스트에도 `openmake-mcp-runtime` 이미지에도 없다.
+  기동 때마다 `[ExternalMCP] Failed to connect` 가 남는다(이유 문자열도 비어 있다). 웹 검색은 SearXNG 로 되므로 기능 공백은 없다.
+  선택지: 이미지에 bake(`uv tool install --with 'mcp<2' …` + chromium) / 시드를 disabled 로 / 설치기가 호스트에 설치하고 `sandbox_network=host`.
+
 ## 5. 완전 오프라인 설치 (기록만, 2026-09-19)
 
 `install.sh` 는 git clone·npm·docker pull 을 하므로 인터넷이 전혀 없는 PC 에는 설치 자체가 안 된다. 지금 다루는
