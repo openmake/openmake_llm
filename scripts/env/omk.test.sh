@@ -22,8 +22,8 @@ ok() { if eval "$2"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); printf 'FAIL 
 # ── 이름 파생: online 은 기본(무접미사), 그 외는 -<env> ──
 eq "suffix online"  "$(env_suffix online)"  ""
 eq "suffix staging" "$(env_suffix staging)" "-staging"
-eq "pm2 online"     "$(pm2_names online)"   "openmake-llm openmake-next openmake-discord openmake-bench openmake-litellm omk-updater-online"
-eq "pm2 staging"    "$(pm2_names staging)"  "openmake-llm-staging openmake-next-staging openmake-discord-staging openmake-bench-staging openmake-litellm-staging omk-updater-staging"
+eq "pm2 online"     "$(pm2_names online)"   "openmake-llm openmake-next openmake-discord openmake-bench openmake-litellm omk-updater-online omk-backup-online"
+eq "pm2 staging"    "$(pm2_names staging)"  "openmake-llm-staging openmake-next-staging openmake-discord-staging openmake-bench-staging openmake-litellm-staging omk-updater-staging omk-backup-staging"
 eq "docker online"  "$(docker_containers online)"  "openmake-postgres openmake-redis openmake-searxng"
 eq "docker staging" "$(docker_containers staging)" "openmake-staging-postgres openmake-staging-redis openmake-staging-searxng"
 eq "volumes online" "$(docker_volumes online)"     "openmake_pgdata openmake_redisdata"
@@ -90,6 +90,12 @@ eq "release: 로컬 브랜치 release" "$(git -C "$TMP/relc" rev-parse --abbrev-
 ok "release: 최신이면 behind 아님" '! release_behind "$TMP/relc"'
 ( cd "$GR" || exit; git -c user.email=t@t -c user.name=t commit -q --allow-empty -m b; git tag v1.11.0 )
 ok "release: 새 태그가 생기면 behind" 'release_behind "$TMP/relc" && [[ "$RELEASE_TAG" == "v1.11.0" ]]'
+
+# ── 백업 위치: 환경 디렉터리 밖이 기본, .env 의 BACKUP_DIR 이 있으면 그쪽 ──
+eq "backup dir 기본" "$(backup_dir staging)" "$OMK_ROOT/backups/staging"
+ok "backup dir 는 환경 밖" '[[ "$(backup_dir staging)" != "$(env_dir staging)"/* ]]'
+mkdir -p "$(llm_dir bk)"; printf 'BACKUP_DIR=/mnt/backup/omk\n' > "$(llm_dir bk)/.env"
+eq "backup dir: .env 우선" "$(backup_dir bk)" "/mnt/backup/omk"; rm -rf "$(env_dir bk)"
 
 # ── LiteLLM: 환경별 이름·위치, off 면 아무것도 안 함 ──
 eq "litellm names" "$(litellm_pm2_name staging)|$(litellm_pm2_name online)|$(litellm_dir dev)" "openmake-litellm-staging|openmake-litellm|$OMK_ROOT/dev/litellm"

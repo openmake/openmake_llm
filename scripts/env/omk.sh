@@ -37,10 +37,11 @@
 #   omk env install <env> [--ref BR] [--bench-ref BR] [--public-url URL] [--no-bench] [--no-proxy] [--no-searxng] [--no-runtime-images] [--tailscale] [--host H]…
 #                         [--no-litellm] [--no-default-model] [--qwen-vllm-base U --bge-vllm-base U --vllm-api-key K]
 #                         [--llm-base-url U --llm-api-key K --llm-model M] [--autoupdate|--no-autoupdate]
-#   omk env update  <env> [--if-behind]       # llm(ff-only→build→migrate→restart) → bench → proxy
+#   omk env update  <env> [--if-behind] [--no-backup]       # llm(ff-only→build→migrate→restart) → bench → proxy
 #   omk env reset   <env> [--keep-data] [--keep-env] [--purge-images] [--reinstall] [--yes]
 #   omk env status|start|stop|logs <env>
 #   omk env expose <env> [--tailscale] [--host H]…      # 다른 기기에서 프록시 포트로 보기 — 호스트를 CORS 에 허용(.env 에 기억)
+#   omk env backup  <env> [--schedule ['CRON']] [--off] [--list] [--dry-run]   # DB 덤프 → $OMK_ROOT/backups/<env> (reset 에도 남는다)
 #   omk env autoupdate <env> [--every 'CRON'] [--off]   # 선택 — 기본은 수동 배포. PM2 cron 앱 omk-updater-<env>
 #   omk proxy status|reload|render <env>
 #   omk dev setup [--no-searxng] · omk dev up|down|status|reset [api|web|bench|deps|all]
@@ -72,6 +73,7 @@ OMK_CADDY_ADMIN="${OMK_CADDY_ADMIN:-localhost:2019}"
 OMK_AUTOUPDATE_CRON="${OMK_AUTOUPDATE_CRON:-*/10 * * * *}"
 OMK_SEARXNG_IMAGE="${OMK_SEARXNG_IMAGE:-searxng/searxng:latest}"
 OMK_SEARXNG_PORT_BASE="${OMK_SEARXNG_PORT_BASE:-8888}"   # .env.example 의 SEARXNG_URL 예시 포트. 점유 시 다음 빈 포트
+OMK_BACKUP_CRON="${OMK_BACKUP_CRON:-30 3 * * *}"          # omk env backup --schedule 의 기본 주기 (매일 03:30)
 OMK_LITELLM_PORT_BASE="${OMK_LITELLM_PORT_BASE:-13401}"  # LiteLLM 게이트웨이 빈 포트 탐색 시작점
 OMK_LITELLM_SPEC="${OMK_LITELLM_SPEC:-litellm[proxy]}"    # pip 설치 대상 — 버전 고정: 'litellm[proxy]==X.Y.Z'
 # 기본 모델 — 업스트림을 주지 않은 설치본도 바로 채팅이 되게 하는 최소 모델. 호스트당 llama.cpp 서버 하나(PM2), 환경들이 공유한다.
@@ -193,9 +195,9 @@ release_behind() { # $1=dir → 새 릴리스가 있으면 0. RELEASE_TAG 에 �
 RELEASE_TAG=""
 
 # 이름 규칙은 install.sh / ecosystem.config.js / infra/docker-compose.yml 과 같다.
-pm2_names() { # $1=env → llm next discord bench litellm updater
+pm2_names() { # $1=env → llm next discord bench litellm updater backup
     local s; s="$(env_suffix "$1")"
-    printf 'openmake-llm%s openmake-next%s openmake-discord%s openmake-bench%s openmake-litellm%s omk-updater-%s' "$s" "$s" "$s" "$s" "$s" "$1"
+    printf 'openmake-llm%s openmake-next%s openmake-discord%s openmake-bench%s openmake-litellm%s omk-updater-%s omk-backup-%s' "$s" "$s" "$s" "$s" "$s" "$1" "$1"
 }
 docker_containers() { local s; s="$(env_suffix "$1")"; printf 'openmake%s-postgres openmake%s-redis openmake%s-searxng' "$s" "$s" "$s"; }
 searxng_name()      { printf 'openmake%s-searxng' "$(env_suffix "$1")"; }
@@ -555,6 +557,44 @@ EOF
 # env autoupdate — PM2 cron 앱 (OS 스케줄러 대신 PM2 로 3 OS 동일)
 # ==============================================================================
 updater_name() { printf 'omk-updater-%s' "$1"; }
+# ── DB 백업 ───────────────────────────────────────────────────────────────────
+# 기준은 레포의 scripts/backups/db-backup.sh 다(pg_dump -Fc · 보존기간 정리 · 무결성 확인 · --dry-run). omk 는 "어느 환경의
+# 것을 어디에"만 정한다: 기본 위치는 **환경 디렉터리 밖** $OMK_ROOT/backups/<env> — `env reset` 으로 환경을 지워도 남는다.
+# 그 환경의 .env 에 BACKUP_DIR 이 있으면 그쪽을 따른다. 매일 돌리려면 --schedule(PM2 cron 앱 omk-backup-<env>).
+backup_dir()  { local v; v="$(dotenv_get "$(llm_dir "$1")/.env" BACKUP_DIR)"; printf '%s' "${v:-$OMK_ROOT/backups/$1}"; }
+backup_name() { printf 'omk-backup-%s' "$1"; }
+env_backup_run() { # $1=env [추가 인자…]
+    local env="$1" ldir; shift; ldir="$(llm_dir "$env")"
+    [[ -x "$ldir/scripts/backups/db-backup.sh" ]] || { log_warn "$ldir 에 db-backup.sh 가 없습니다"; return 1; }
+    ( cd "$ldir" && BACKUP_DIR="$(backup_dir "$env")" ./scripts/backups/db-backup.sh "$@" )
+}
+cmd_env_backup() { # env [--schedule ['CRON']] [--off] [--list] [--dry-run]
+    local env="$1"; shift; local mode="run" cron="$OMK_BACKUP_CRON" ldir name
+    ldir="$(llm_dir "$env")"; name="$(backup_name "$env")"
+    [[ -f "$ldir/.env" ]] || die "$ldir/.env 없음 — 'omk env install $env' 먼저"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --schedule) mode="schedule"; if [[ -n "${2:-}" && "${2:-}" != --* ]]; then cron="$2"; shift; fi ;;
+            --off) mode="off" ;; --list) mode="list" ;; --dry-run) mode="dry" ;;
+            *) usage_die "알 수 없는 옵션: $1" ;;
+        esac; shift
+    done
+    load_toolchain "$ldir"
+    case "$mode" in
+        run)  env_backup_run "$env" || die "백업 실패 ($env)"; log_ok "백업 위치: $(backup_dir "$env")" ;;
+        dry)  env_backup_run "$env" --dry-run ;;
+        list) ls -lh "$(backup_dir "$env")" 2>/dev/null || log_info "백업 없음: $(backup_dir "$env")" ;;
+        off)  require_pm2; pm2 describe "$name" >/dev/null 2>&1 && pm2 delete "$name" >/dev/null && log_ok "$name 제거" || log_info "$name 없음" ;;
+        schedule)
+            require_pm2
+            [[ -f "$ldir/scripts/env/omk.sh" ]] || die "$ldir 에 omk.sh 가 없습니다 (브랜치가 오래됐을 수 있음)"
+            pm2 describe "$name" >/dev/null 2>&1 && pm2 delete "$name" >/dev/null 2>&1 || true
+            ( cd "$ldir" && pm2 start "$ldir/scripts/env/omk.sh" --name "$name" --interpreter bash --no-autorestart \
+                --cron-restart "$cron" --time -- env backup "$env" >/dev/null ) || die "$name 등록 실패"
+            log_ok "$name 등록 — '$cron' 마다 백업 → $(backup_dir "$env") (pm2 logs $name)" ;;
+    esac
+}
+
 cmd_env_autoupdate() { # env [--every CRON] [--off]
     local env="$1"; shift; local cron="$OMK_AUTOUPDATE_CRON" off=0
     while [[ $# -gt 0 ]]; do case "$1" in --every) cron="${2:-}"; shift ;; --off) off=1 ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift; done
@@ -993,8 +1033,8 @@ cmd_env_install() {
 }
 
 cmd_env_update() {
-    local env="$1"; shift; local if_behind=0
-    while [[ $# -gt 0 ]]; do case "$1" in --if-behind) if_behind=1 ;; -y|--yes) ASSUME_YES=1 ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift; done
+    local env="$1"; shift; local if_behind=0 no_backup=0
+    while [[ $# -gt 0 ]]; do case "$1" in --no-backup) no_backup=1 ;; --if-behind) if_behind=1 ;; -y|--yes) ASSUME_YES=1 ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift; done
     local ldir bdir; ldir="$(llm_dir "$env")"; bdir="$(bench_dir "$env")"
     [[ -d "$ldir/.git" ]] || die "$ldir 가 없습니다 — 'omk env install $env' 먼저"
     load_toolchain "$ldir"
@@ -1012,6 +1052,10 @@ cmd_env_update() {
     if [[ "$track" == "release" ]]; then
         if release_behind "$ldir"; then
             [[ -z "$(git -C "$ldir" status --porcelain)" ]] || die "$ldir 에 커밋되지 않은 변경이 있습니다 — 정리한 뒤 다시 실행하세요"
+            # 릴리스를 따르는 환경은 실사용 데이터를 갖는다 — 새 버전(마이그레이션)을 올리기 전에 덤프를 떠 둔다.
+            if [[ $no_backup -eq 0 ]]; then
+                env_backup_run "$env" || die "올리기 전 백업 실패 — 고친 뒤 다시 실행하세요 (건너뛰려면 --no-backup)"
+            fi
             git -C "$ldir" merge -q --ff-only "$RELEASE_TAG" || die "릴리스 $RELEASE_TAG 로 fast-forward 할 수 없습니다 ($ldir)"
             log_ok "릴리스 $RELEASE_TAG 로 갱신"
             ( cd "$ldir" && ./openmake_llm.sh deploy --yes < /dev/null | cat ) || die "openmake_llm.sh deploy 실패 ($env)"
@@ -1201,6 +1245,7 @@ cmd_env() {
         stop)       cmd_env_stop "$env" ;;
         logs)       cmd_env_logs "$env" ;;
         autoupdate) cmd_env_autoupdate "$env" "$@" ;;
+        backup)     cmd_env_backup "$env" "$@" ;;
         expose)     cmd_env_expose "$env" "$@" ;;
         *) usage_die "알 수 없는 env 명령: $sub" ;;
     esac

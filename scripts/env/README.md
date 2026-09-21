@@ -79,7 +79,7 @@ feature/<주제> ──PR(squash · CI 필수)──▶ main ──사람이 `om
 |---|---|
 | 릴리스 직후 `omk env update online` — **최신 릴리스 태그**로만 올라간다(새 태그가 없으면 아무 일도 하지 않는다) | main HEAD·`feature/*` 를 올리지 않는다 (`--ref` 로 브랜치를 주지 않는다) |
 | **스모크만**: 접속 200 · 로그인 · 채팅 1회 · `omk env status online` | 부하 시험·대량 평가·동시 다발 요청 같은 **무거운 검증을 하지 않는다** — 운영 모델 서버를 공유한다. 그런 것은 CI 와 staging 에서 끝낸다 |
-| 올리기 전에 DB 백업이 돌고 있는지 확인한다 | `omk env reset online` 을 하지 않는다 — 볼륨(DB)까지 지운다. 옮길 때는 `db-dump` → `db-restore` |
+| 매일 백업을 걸어 둔다(`omk env backup online --schedule`). `update` 는 올리기 직전에 한 번 더 뜬다 | `omk env reset online` 을 하지 않는다 — 볼륨(DB)까지 지운다. 옮길 때는 `db-dump` → `db-restore` |
 | 문제가 나면 수정 → 새 릴리스 → update. 급하면 이전 태그로 되돌리고 `./openmake_llm.sh deploy` | online 에서 실험·설정 시험·모델 교체 시험을 하지 않는다 |
 | 호스트별 값(도메인·모델 서버 주소·키)은 그 환경의 `.env`·`litellm.env` 에만 둔다 | 저장소에 호스트 경로·주소·키를 적지 않는다 |
 
@@ -202,6 +202,23 @@ dev·staging 이 서로의 이미지를 덮어쓰지 않는다. `MCP_SANDBOX_ENA
 
 첫 빌드는 수 분이다. 빼려면 `--no-runtime-images` (`.env` 의 `OMK_RUNTIME_IMAGES=off` 로 기억 — 다시 켜려면 그 줄을 지우고
 `omk env update`). 빌드 실패는 설치를 멈추지 않는다. `omk env reset` 은 이미지를 **남긴다**(약 7GB 재빌드를 피하려고) — 지우려면 `--purge-images`(환경별 태그만, `:latest` 는 남긴다).
+
+## DB 백업
+
+기준은 레포의 [`scripts/backups/db-backup.sh`](../backups/db-backup.sh)(`pg_dump -Fc` · 보존기간 정리 · 무결성 확인)다. omk 는 "어느 환경의 것을 어디에"만 정한다.
+
+```bash
+omk env backup <env>                 # 지금 한 번 → ~/.openmake/backups/<env>/
+omk env backup <env> --dry-run       # 무엇을 할지만 출력
+omk env backup <env> --list
+omk env backup <env> --schedule      # 매일 03:30 (PM2 cron 앱 omk-backup-<env>). 주기: --schedule '0 */6 * * *'
+omk env backup <env> --off
+```
+
+- 백업은 **환경 디렉터리 밖**에 쌓인다 — `omk env reset <env>` 로 환경을 지워도 남는다. 다른 곳에 두려면 그 환경 `.env` 의 `BACKUP_DIR`. 보존 기간은 `BACKUP_RETENTION_DAYS`(14).
+- **릴리스를 따르는 환경(online)은 `omk env update` 가 새 버전을 올리기 직전에 백업을 한 번 뜬다.** 백업이 실패하면 올리지 않는다(`--no-backup` 로 건너뜀).
+- 스케줄 잡은 **그 환경에 설치된 omk**(`<env>/llm/scripts/env/omk.sh`)를 실행한다 — `backup` 명령이 없는 옛 버전의 환경에서는 먼저 `omk env update`.
+- 복원은 그 환경 디렉터리에서 `./openmake_llm.sh db-restore <파일>`.
 
 ## 꼬였을 때 — 지우고 다시
 
