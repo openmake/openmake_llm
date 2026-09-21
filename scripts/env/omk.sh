@@ -688,6 +688,7 @@ runtime_images_ensure() { # $1=llm dir $2=env
     dotenv_set "$envf" MCP_SANDBOX_IMAGE "$mcp";    dotenv_set "$envf" ARTIFACT_EXEC_IMAGE "$mcp"
     dotenv_set "$envf" TASK_SANDBOX_IMAGE "$task";  dotenv_set "$envf" ARTIFACT_EXPORT_IMAGE "$task"
     dotenv_ensure "$envf" MCP_SANDBOX_ENABLED true; dotenv_ensure "$envf" TASK_SANDBOX_ENABLED true
+    dotenv_ensure "$envf" ARTIFACT_EXPORT_ENABLED true   # 내보내기(PDF·DOCX 등)는 task-runtime 이미지에서 돈다 — 이미지가 있어야 켤 수 있다
     after="$(grep -E '^(MCP_SANDBOX|TASK_SANDBOX|ARTIFACT_EXEC|ARTIFACT_EXPORT)_(IMAGE|ENABLED)=' "$envf" | sort)"
     [[ "$before" == "$after" ]] || RUNTIME_CHANGED=1
     log_ok "런타임 이미지 준비: $mcp · $task"
