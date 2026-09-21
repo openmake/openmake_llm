@@ -672,7 +672,8 @@ search_line() { # $1=llm dir → 상태 한 줄 (실제로 검색을 한 번 돌
 # <env>/litellm/{venv,litellm.config.yaml,litellm.env,start_litellm.sh}, PM2 openmake-litellm[-env], 127.0.0.1 전용.
 # config 는 레포의 scripts/vllm/litellm.config.yaml 그대로다(호스트별 값은 전부 os.environ) — 호스트마다 다른 것은
 # litellm.env(600) 뿐이다: QWEN_VLLM_API_BASE · BGE_VLLM_API_BASE · VLLM_API_KEY · LITELLM_MASTER_KEY(=앱의 LLM_API_KEY).
-# --llm-base-url 을 직접 주면(다른 엔드포인트를 쓰겠다는 뜻) 설치하지 않는다. 실패는 설치를 멈추지 않는다.
+# --llm-base-url/--llm-api-key/--llm-model 은 "게이트웨이 뒤의 업스트림"이다 — 앱은 언제나 자기 환경의 게이트웨이만 본다.
+# 빼려면 --no-litellm. 실패는 설치를 멈추지 않는다.
 litellm_dir()      { printf '%s/%s/litellm' "$OMK_ROOT" "$1"; }
 litellm_pm2_name() { printf 'openmake-litellm%s' "$(env_suffix "$1")"; }
 gen_secret()       { if has openssl; then openssl rand -hex 24; else LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom | head -c 48; fi; }
@@ -685,8 +686,22 @@ litellm_pm2_start() { # $1=env
         -o "$(logs_dir "$1")/$n-out.log" -e "$(logs_dir "$1")/$n-error.log" >/dev/null || { log_warn "PM2 $n 기동 실패"; return 1; }
     log_ok "PM2 $n"
 }
+# 환경의 config = 레포 config 그대로 + (litellm.env 에 OMK_UPSTREAM_MODEL 이 있으면) 그 모델 한 항목.
+# vLLM 이 없는 호스트(예: Ollama 만 있는 개발 PC)도 자기 게이트웨이를 거쳐 쓰게 한다. 주소·키는 os.environ 참조라 config 에 값이 남지 않는다.
+litellm_render_config() { # $1=레포 config $2=litellm.env $3=출력
+    local model; model="$(dotenv_get "$2" OMK_UPSTREAM_MODEL)"
+    [[ -n "$model" ]] || { cp "$1" "$3"; return 0; }
+    awk -v m="$model" '{ print } /^model_list:[[:space:]]*$/ && !done {
+        print "  # ── omk: 이 환경의 업스트림 (litellm.env 의 OMK_UPSTREAM_*) ──"
+        print "  - model_name: \"" m "\""
+        print "    litellm_params:"
+        print "      model: \"openai/" m "\""
+        print "      api_base: os.environ/OMK_UPSTREAM_API_BASE"
+        print "      api_key: os.environ/OMK_UPSTREAM_API_KEY"
+        done = 1 }' "$1" > "$3"
+}
 LITELLM_CHANGED=0
-litellm_ensure() { # $1=llm dir $2=env [$3=QWEN base $4=BGE base $5=vLLM key]
+litellm_ensure() { # $1=llm dir $2=env [$3=QWEN base $4=BGE base $5=vLLM key $6=업스트림 base $7=업스트림 key $8=업스트림 model]
     local ldir="$1" env="$2" envf="$1/.env" d lenv port key url i
     LITELLM_CHANGED=0
     [[ "$(dotenv_get "$envf" OMK_LITELLM)" != "off" ]] || { log_info "LiteLLM 생략 (OMK_LITELLM=off)"; return 0; }
@@ -698,7 +713,6 @@ litellm_ensure() { # $1=llm dir $2=env [$3=QWEN base $4=BGE base $5=vLLM key]
         else python3 -m venv "$d/venv" && "$d/venv/bin/pip" install -q --upgrade pip "$OMK_LITELLM_SPEC"; fi \
             || { log_warn "LiteLLM 설치 실패 — 건너뜁니다 (나중에 'omk env update $env')"; rm -rf "$d/venv"; return 0; }
     fi
-    cp "$ldir/scripts/vllm/litellm.config.yaml" "$d/litellm.config.yaml"
     [[ -f "$lenv" ]] || { : > "$lenv"; }
     chmod 600 "$lenv"
     dotenv_ensure "$lenv" LITELLM_MASTER_KEY "sk-$(gen_secret)"
@@ -706,6 +720,10 @@ litellm_ensure() { # $1=llm dir $2=env [$3=QWEN base $4=BGE base $5=vLLM key]
     [[ -z "${3:-}" ]] || dotenv_set "$lenv" QWEN_VLLM_API_BASE "$3"
     [[ -z "${4:-}" ]] || dotenv_set "$lenv" BGE_VLLM_API_BASE "$4"
     [[ -z "${5:-}" ]] || dotenv_set "$lenv" VLLM_API_KEY "$5"
+    if [[ -n "${6:-}" && -n "${8:-}" ]]; then
+        dotenv_set "$lenv" OMK_UPSTREAM_API_BASE "$6"; dotenv_set "$lenv" OMK_UPSTREAM_API_KEY "${7:-none}"; dotenv_set "$lenv" OMK_UPSTREAM_MODEL "$8"
+    fi
+    litellm_render_config "$ldir/scripts/vllm/litellm.config.yaml" "$lenv" "$d/litellm.config.yaml"
     port="$(dotenv_get "$envf" OMK_LITELLM_PORT)"
     if [[ -z "$port" ]]; then port="$(find_free_port "$OMK_LITELLM_PORT_BASE")" || { log_warn "LiteLLM 빈 포트 탐색 실패"; return 0; }; fi
     cat > "$d/start_litellm.sh" <<LITELLM_START
@@ -732,7 +750,7 @@ litellm_line() { # $1=env $2=llm dir
     local port lenv; port="$(dotenv_get "$2/.env" OMK_LITELLM_PORT)"; lenv="$(litellm_dir "$1")/litellm.env"
     [[ -n "$port" ]] || return 0
     printf 'http://127.0.0.1:%s  (%s)' "$port" "$(litellm_dir "$1")"
-    [[ -n "$(dotenv_get "$lenv" QWEN_VLLM_API_BASE)" ]] || printf '  ※ 업스트림 미설정'
+    [[ -n "$(dotenv_get "$lenv" QWEN_VLLM_API_BASE)$(dotenv_get "$lenv" OMK_UPSTREAM_MODEL)" ]] || printf '  ※ 업스트림 미설정'
 }
 
 # ── 런타임 이미지 (외부 MCP 격리 · 에이전트 작업 · 아티팩트 실행/내보내기) ─────────────
@@ -771,7 +789,7 @@ runtime_images_remove() { # $1=env — 환경별 태그만 지운다. :latest �
 
 cmd_env_install() {
     local env="$1"; shift
-    local ref="" bench_ref="" public_url="" no_bench=0 no_proxy=0 no_searxng=0 no_images=0 no_litellm=0 qwen_base="" bge_base="" vllm_key="" auto="" llm_args=()
+    local ref="" bench_ref="" public_url="" no_bench=0 no_proxy=0 no_searxng=0 no_images=0 no_litellm=0 qwen_base="" bge_base="" vllm_key="" up_base="" up_key="" up_model="" auto="" llm_args=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --ref)          ref="${2:-}"; shift ;;
@@ -787,8 +805,10 @@ cmd_env_install() {
             --vllm-api-key)   vllm_key="${2:-}"; shift ;;
             --autoupdate)   auto=1 ;;
             --no-autoupdate) auto=0 ;;
-            --llm-base-url) no_litellm=1; llm_args+=("$1" "${2:-}"); shift ;;   # 엔드포인트를 직접 주면 게이트웨이를 두지 않는다
-            --llm-api-key|--llm-model) llm_args+=("$1" "${2:-}"); shift ;;
+            # 게이트웨이 뒤에 둘 업스트림(OpenAI 호환 — Ollama·vLLM·외부 API). install.sh 에도 넘겨 LLM_DEFAULT_MODEL 을 맞춘다.
+            --llm-base-url) up_base="${2:-}"; llm_args+=("$1" "${2:-}"); shift ;;
+            --llm-api-key)  up_key="${2:-}";  llm_args+=("$1" "${2:-}"); shift ;;
+            --llm-model)    up_model="${2:-}"; llm_args+=("$1" "${2:-}"); shift ;;
             -y|--yes)       ASSUME_YES=1 ;;
             *) usage_die "알 수 없는 옵션: $1" ;;
         esac; shift
@@ -824,7 +844,7 @@ cmd_env_install() {
     runtime_images_ensure "$ldir" "$env"
     # 1.7) LiteLLM 게이트웨이 — 앱의 LLM_BASE_URL·LLM_API_KEY 를 채운다.
     [[ $no_litellm -eq 1 ]] && dotenv_set "$ldir/.env" OMK_LITELLM off
-    litellm_ensure "$ldir" "$env" "$qwen_base" "$bge_base" "$vllm_key"
+    litellm_ensure "$ldir" "$env" "$qwen_base" "$bge_base" "$vllm_key" "$up_base" "$up_key" "$up_model"
     [[ $SEARCH_CHANGED -eq 0 && $RUNTIME_CHANGED -eq 0 && $LITELLM_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
 
     # 2) openmake_bench
@@ -949,9 +969,9 @@ env_summary() { # $1=env
     echo "  웹 검색   $(search_line "$ldir")"
     [[ -z "$(litellm_line "$env" "$ldir")" ]] || echo "  LiteLLM   $(litellm_line "$env" "$ldir")"
     echo ""
-    if [[ -n "$(dotenv_get "$ldir/.env" OMK_LITELLM_PORT)" && -z "$(dotenv_get "$(litellm_dir "$env")/litellm.env" QWEN_VLLM_API_BASE)" ]]; then
+    if [[ -n "$(dotenv_get "$ldir/.env" OMK_LITELLM_PORT)" && -z "$(dotenv_get "$(litellm_dir "$env")/litellm.env" QWEN_VLLM_API_BASE)$(dotenv_get "$(litellm_dir "$env")/litellm.env" OMK_UPSTREAM_MODEL)" ]]; then
         printf "  %s[할 일]%s 로컬 모델 업스트림이 비어 있습니다 — $(litellm_dir "$env")/litellm.env 의\n" "$C_WARN" "$C_RESET"
-        echo "         QWEN_VLLM_API_BASE / BGE_VLLM_API_BASE / VLLM_API_KEY 를 넣고 'omk env start $env'"
+        echo "         QWEN_VLLM_API_BASE / BGE_VLLM_API_BASE / VLLM_API_KEY 를 넣고 'omk env start $env' (또는 --llm-base-url … --llm-model … 로 재설치)"
     fi
     if [[ -d "$bdir" && -z "$(dotenv_get "$bdir/.env" OMK_API_KEY)" ]]; then
         printf "  %s[할 일]%s bench 가 llm 모델을 부르려면 API 키가 필요합니다 (자동 발급 불가):\n" "$C_WARN" "$C_RESET"

@@ -109,7 +109,10 @@ Base 에는 웹 검색을 끄는 스위치가 아직 없다(모델은 오프라�
 - **config 는 레포의 `scripts/vllm/litellm.config.yaml` 그대로** 복사한다(`update` 때마다). 호스트마다 다른 값은 `litellm.env`(600) 뿐이다 —
   `QWEN_VLLM_API_BASE` · `BGE_VLLM_API_BASE` · `VLLM_API_KEY`. 설치 때 `--qwen-vllm-base U --bge-vllm-base U --vllm-api-key K` 로 주거나,
   나중에 파일에 넣고 `omk env start <env>`. 비어 있어도 게이트웨이는 뜨고 BYOK 경로는 동작한다(요약에 `[할 일]` 이 나온다).
-- `--llm-base-url` 을 직접 주면(다른 엔드포인트를 쓰겠다는 뜻) 또는 `--no-litellm` 이면 설치하지 않는다(`.env` 의 `OMK_LITELLM=off`).
+- **vLLM 이 없는 호스트**(Ollama 만 있는 개발 PC 등)도 자기 게이트웨이를 거친다: `--llm-base-url U --llm-api-key K --llm-model M` 은
+  "게이트웨이 뒤의 업스트림"이다. 값은 `litellm.env` 의 `OMK_UPSTREAM_*` 에 기억되고, 환경의 config 사본에 그 모델 한 항목이 추가된다
+  (레포 config 는 그대로, 주소·키는 `os.environ` 참조). 앱의 `LLM_BASE_URL` 은 언제나 자기 환경의 게이트웨이다.
+- 빼려면 `--no-litellm` (`.env` 의 `OMK_LITELLM=off`).
 - `env update` 는 **이미 게이트웨이가 있는 환경만** 갱신한다 — 기존 환경의 `LLM_BASE_URL` 을 가로채지 않는다.
 - python 은 `uv` 가 있으면 `uv venv --python 3.12`, 없으면 `python3 -m venv`. 버전 고정은 `OMK_LITELLM_SPEC='litellm[proxy]==X.Y.Z'`.
 
