@@ -96,7 +96,7 @@ Base 에는 웹 검색을 끄는 스위치가 아직 없다(모델은 오프라�
 
 `omk env expose <env> --tailscale` (또는 `--host <이름>`) — 그 호스트의 **프록시 주소**(`http://<호스트>:<OMK_PROXY_PORT>`)를
 `CORS_ORIGINS` 에 허용하고 API 를 재시작한다. 호스트 목록은 `.env` 의 `OMK_ENV_HOSTS` 에 기억된다. 프록시의
-`localhost` 주소는 설치 때 자동으로 허용된다. 웹·REST·채팅 소켓이 전부 프록시 한 주소로 다니므로 그 주소 하나만 허용하면 된다.
+`localhost` 주소는 설치 때 자동으로 허용된다. 설치할 때 같이 하려면 `omk env install <env> --tailscale`(또는 `--host`) — `reset` 후 재설치해도 유지된다. 웹·REST·채팅 소켓이 전부 프록시 한 주소로 다니므로 그 주소 하나만 허용하면 된다.
 평문 HTTP 라 **신뢰하는 망(Tailscale·사내망)에서만** 쓴다 — 밖으로 공개할 때는 `--public-url` + 터널.
 
 ## LiteLLM 게이트웨이 — 환경마다 하나

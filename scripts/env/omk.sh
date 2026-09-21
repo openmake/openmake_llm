@@ -34,7 +34,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk.sh \
 #     | bash -s -- env install staging --public-url https://staging-chat.example.com
 #
-#   omk env install <env> [--ref BR] [--bench-ref BR] [--public-url URL] [--no-bench] [--no-proxy] [--no-searxng] [--no-runtime-images]
+#   omk env install <env> [--ref BR] [--bench-ref BR] [--public-url URL] [--no-bench] [--no-proxy] [--no-searxng] [--no-runtime-images] [--tailscale] [--host H]…
 #                         [--no-litellm] [--no-default-model] [--qwen-vllm-base U --bge-vllm-base U --vllm-api-key K]
 #                         [--llm-base-url U --llm-api-key K --llm-model M] [--autoupdate|--no-autoupdate]
 #   omk env update  <env> [--if-behind]       # llm(ff-only→build→migrate→restart) → bench → proxy
@@ -870,7 +870,7 @@ runtime_images_remove() { # $1=env — 환경별 태그만 지운다. :latest �
 
 cmd_env_install() {
     local env="$1"; shift
-    local ref="" bench_ref="" public_url="" no_bench=0 no_proxy=0 no_searxng=0 no_images=0 no_litellm=0 no_default_model=0 qwen_base="" bge_base="" vllm_key="" up_base="" up_key="" up_model="" auto="" llm_args=()
+    local ref="" bench_ref="" public_url="" no_bench=0 no_proxy=0 no_searxng=0 no_images=0 no_litellm=0 no_default_model=0 qwen_base="" bge_base="" vllm_key="" up_base="" up_key="" up_model="" auto="" llm_args=() expose_args=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --ref)          ref="${2:-}"; shift ;;
@@ -882,6 +882,8 @@ cmd_env_install() {
             --no-runtime-images) no_images=1 ;;
             --no-litellm)   no_litellm=1 ;;
             --no-default-model) no_default_model=1 ;;
+            --tailscale)    expose_args+=(--tailscale) ;;          # 설치 끝에 'omk env expose' — reset 후 재설치해도 다른 기기에서 보인다
+            --host)         expose_args+=(--host "${2:-}"); shift ;;
             --qwen-vllm-base) qwen_base="${2:-}"; shift ;;
             --bge-vllm-base)  bge_base="${2:-}"; shift ;;
             --vllm-api-key)   vllm_key="${2:-}"; shift ;;
@@ -945,6 +947,9 @@ cmd_env_install() {
 
     # 3) 리버스 프록시
     [[ $no_proxy -eq 1 ]] || { proxy_render "$env"; proxy_start_or_reload; }
+
+    # 3.5) 다른 기기에서 보기 — 프록시가 있어야 의미가 있다.
+    if [[ ${#expose_args[@]} -gt 0 && $no_proxy -eq 0 ]]; then cmd_env_expose "$env" "${expose_args[@]}" || log_warn "expose 실패 — 'omk env expose $env --tailscale'"; fi
 
     # 4) 래퍼 + 자동 갱신
     install_wrapper
@@ -1059,6 +1064,7 @@ env_summary() { # $1=env
     echo "            web http://localhost:$web   api http://localhost:$api"
     [[ -d "$bdir" ]] && echo "  bench     $bdir  → http://localhost:${bport:-?}"
     [[ -n "$pport" ]] && echo "  proxy     http://localhost:$pport  (외부 공개는 터널/DNS 를 이 포트로: scripts/cloudflared/config.yml.example)"
+    local eh; for eh in $(dotenv_get "$ldir/.env" OMK_ENV_HOSTS | tr ',' ' '); do [[ -z "$pport" ]] || echo "  다른 기기  http://$eh:$pport"; done
     [[ -n "$(dotenv_get "$ldir/.env" OMK_APP_URL | grep -E '^https?://' | grep -v localhost || true)" ]] && echo "  공개 주소  $(dotenv_get "$ldir/.env" OMK_APP_URL)"
     echo "  웹 검색   $(search_line "$ldir")"
     [[ -z "$(litellm_line "$env" "$ldir")" ]] || echo "  LiteLLM   $(litellm_line "$env" "$ldir")"
