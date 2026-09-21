@@ -68,7 +68,7 @@
         "turndown": "^7.2.4",
         "turndown-plugin-gfm": "^1.0.2",
         "undici": "^7.24.5",
-        "uuid": "^13.0.0",
+        "uuid": "^14.0.2",
         "web-push": "^3.6.7",
         "winston": "^3.19.0",
         "ws": "^8.21.3",
