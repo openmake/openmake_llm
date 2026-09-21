@@ -151,7 +151,6 @@ dotenv_ensure() { # $1=file $2=key $3=default — 없을 때만 붙인다 (기�
 # ── 환경 이름 → 경로/이름 파생 ──────────────────────────────────────────────
 validate_env() {
     [[ "$1" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] || usage_die "환경 이름은 소문자·숫자·하이픈 1~32자: '$1'"
-    [[ "$1" != "dev" ]] || usage_die "'dev' 는 작업 클론에서 'omk dev …' 로 씁니다 (~/.openmake 아래에 설치하지 않음)"
 }
 env_dir()    { printf '%s/%s' "$OMK_ROOT" "$1"; }
 llm_dir()    { printf '%s/%s/llm' "$OMK_ROOT" "$1"; }
