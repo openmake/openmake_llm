@@ -937,6 +937,10 @@ cmd_env_install() {
         if default_model_ensure; then
             up_base="$DEFAULT_MODEL_BASE"; up_key="none"; up_model="$OMK_DEFAULT_MODEL_NAME"
             dotenv_set "$ldir/.env" LLM_DEFAULT_MODEL "$up_model"
+            # CPU·Metal 의 작은 모델은 앱의 큰 프롬프트(수천 토큰)를 읽는 데만 10~20초가 든다 — 기본 fast-fail(5초+보정)에 걸려
+            # "LLM 호출 실패"가 된다. 값이 없을 때만 넉넉히 둔다(.env.example 도 단일 모델 운영에 30초 이상을 권장).
+            dotenv_ensure "$ldir/.env" LLM_FAST_FAIL_TIMEOUT_MS 60000
+            dotenv_ensure "$ldir/.env" LLM_FAST_FAIL_PREFILL_MS_PER_1K_TOKENS 4000
         else log_warn "기본 모델을 준비하지 못했습니다 — 업스트림을 직접 지정하세요 (--llm-base-url … --llm-model …)"; fi
     fi
     litellm_ensure "$ldir" "$env" "$qwen_base" "$bge_base" "$vllm_key" "$up_base" "$up_key" "$up_model"
