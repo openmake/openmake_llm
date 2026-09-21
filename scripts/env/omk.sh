@@ -169,8 +169,24 @@ bench_dir()  { printf '%s/%s/bench' "$OMK_ROOT" "$1"; }
 logs_dir()   { printf '%s/%s/logs' "$OMK_ROOT" "$1"; }
 proxy_dir()  { printf '%s/caddy' "$OMK_ROOT"; }
 env_suffix() { [[ "$1" == "$OMK_DEFAULT_ENV" ]] && printf '' || printf -- '-%s' "$1"; }
-# 브랜치 기본값 — 장수 브랜치는 main 하나다. staging·online 은 환경 이름일 뿐이고, dev 는 --ref 로 feature/* 를 준다.
-env_default_ref() { printf 'main'; }
+# 기본 ref — 장수 브랜치는 main 하나다. staging 은 main HEAD 를, dev 는 --ref 로 feature/* 를 따른다.
+# online(기본 인스턴스)은 **최신 릴리스 태그**를 따른다('release') — main 은 개발이 모이는 곳이고, staging 에서 확인하기 전의
+# main 을 운영·외부 설치자가 받지 않게 한다. 어느 환경이든 --ref release 로 같은 방식을 고를 수 있다.
+env_default_ref() { [[ "$1" == "$OMK_DEFAULT_ENV" ]] && printf 'release' || printf 'main'; }
+latest_release_tag() { # $1=리포 URL 또는 클론 경로 → vX.Y.Z 중 가장 높은 것
+    git ls-remote --tags --refs "$1" 2>/dev/null | sed 's#.*refs/tags/##' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1
+}
+# 릴리스를 따르는 클론은 upstream 없는 로컬 브랜치 'release' 에 있다(.env 의 OMK_TRACK=release). openmake_llm.sh update 의
+# `git pull --ff-only` 는 브랜치 upstream 이 있어야 하므로, omk 가 태그까지 fast-forward 한 뒤 같은 체인의 뒷부분(deploy)을 부른다.
+release_checkout() { # $1=dir $2=tag
+    git -C "$1" checkout -q -B release "$2" || die "릴리스 $2 체크아웃 실패: $1"
+}
+release_behind() { # $1=dir → 새 릴리스가 있으면 0. RELEASE_TAG 에 최신 태그
+    git -C "$1" fetch -q --tags --prune 2>/dev/null || return 1
+    RELEASE_TAG="$(latest_release_tag "$1")"; [[ -n "$RELEASE_TAG" ]] || return 1
+    [[ "$(git -C "$1" rev-parse HEAD)" != "$(git -C "$1" rev-parse "$RELEASE_TAG^{commit}")" ]]
+}
+RELEASE_TAG=""
 
 # 이름 규칙은 install.sh / ecosystem.config.js / infra/docker-compose.yml 과 같다.
 pm2_names() { # $1=env → llm next discord bench litellm updater
@@ -897,7 +913,12 @@ cmd_env_install() {
             *) usage_die "알 수 없는 옵션: $1" ;;
         esac; shift
     done
-    ref="${ref:-$(env_default_ref "$env")}"; bench_ref="${bench_ref:-$ref}"
+    ref="${ref:-$(env_default_ref "$env")}"
+    local track="" ; if [[ "$ref" == "release" ]]; then
+        track="release"; ref="$(latest_release_tag "$OMK_REPO_URL")"; [[ -n "$ref" ]] || die "릴리스 태그(vX.Y.Z)를 찾을 수 없습니다: $OMK_REPO_URL — --ref main 으로 설치하세요"
+        bench_ref="${bench_ref:-main}"   # openmake_bench 는 릴리스 태그가 없다
+    fi
+    bench_ref="${bench_ref:-$ref}"
     # 배포는 수동이다 — staging·online 모두 사람이 `omk env update` 로 올린다. 자동 갱신은 명시적으로
     # 켠 환경만(--autoupdate 또는 `omk env autoupdate <env>`).
     [[ -n "$auto" ]] || auto=0
@@ -913,11 +934,13 @@ cmd_env_install() {
 
     # 1) openmake_llm — 툴체인·.env·DB·마이그레이션·빌드·PM2 전부 install.sh 가 한다.
     clone_or_keep "$OMK_REPO_URL" "$ref" "$ldir" "openmake_llm"
+    [[ -z "$track" ]] || [[ "$(git -C "$ldir" rev-parse --abbrev-ref HEAD)" == "release" ]] || release_checkout "$ldir" "$ref"
     restore_env_backup "$ldir" llm
     # 빈 배열 확장은 bash 4.4 미만에서 set -u 에 걸린다 — ${arr[@]+"${arr[@]}"} 관용구로 피한다.
     ( cd "$ldir" && OMK_LOG_DIR="$(logs_dir "$env")" ./install.sh --yes ${suffix_flag[@]+"${suffix_flag[@]}"} \
         ${public_url:+--public-url "$public_url"} ${llm_args[@]+"${llm_args[@]}"} ) || die "install.sh 실패 ($env)"
     dotenv_ensure "$ldir/.env" OMK_LOG_DIR "$(logs_dir "$env")"
+    [[ -z "$track" ]] || dotenv_set "$ldir/.env" OMK_TRACK release
     load_toolchain "$ldir"
 
     # 1.5~1.7 은 .env 를 고친다 — 어느 단계든 내용이 바뀌었으면 끝에 API 를 한 번 재시작한다(단계별 플래그는 빠뜨리기 쉽다).
@@ -971,9 +994,10 @@ cmd_env_update() {
     local ldir bdir; ldir="$(llm_dir "$env")"; bdir="$(bench_dir "$env")"
     [[ -d "$ldir/.git" ]] || die "$ldir 가 없습니다 — 'omk env install $env' 먼저"
     load_toolchain "$ldir"
+    local track; track="$(dotenv_get "$ldir/.env" OMK_TRACK)"
     if [[ $if_behind -eq 1 ]]; then
         local need=0
-        repo_behind "$ldir" && need=1
+        if [[ "$track" == "release" ]]; then release_behind "$ldir" && need=1; else repo_behind "$ldir" && need=1; fi
         [[ -d "$bdir/.git" ]] && repo_behind "$bdir" && need=1
         [[ $need -eq 1 ]] || { log_info "$env 최신 — 갱신 없음"; return 0; }
     fi
@@ -981,7 +1005,16 @@ cmd_env_update() {
     restore_lockfiles "$ldir"; [[ -d "$bdir/.git" ]] && restore_lockfiles "$bdir"
     searxng_ensure "$ldir" "$env" "$(env_dir "$env")/searxng" "$(env_dir "$env")"   # 뒤의 update 가 재시작하며 반영
     # llm: fetch → ff-only pull → build → migrate → restart (openmake_llm.sh 가 dirty/ff 검사 포함)
-    ( cd "$ldir" && ./openmake_llm.sh update --yes < /dev/null | cat ) || die "openmake_llm.sh update 실패 ($env)"
+    if [[ "$track" == "release" ]]; then
+        if release_behind "$ldir"; then
+            [[ -z "$(git -C "$ldir" status --porcelain)" ]] || die "$ldir 에 커밋되지 않은 변경이 있습니다 — 정리한 뒤 다시 실행하세요"
+            git -C "$ldir" merge -q --ff-only "$RELEASE_TAG" || die "릴리스 $RELEASE_TAG 로 fast-forward 할 수 없습니다 ($ldir)"
+            log_ok "릴리스 $RELEASE_TAG 로 갱신"
+            ( cd "$ldir" && ./openmake_llm.sh deploy --yes < /dev/null | cat ) || die "openmake_llm.sh deploy 실패 ($env)"
+        else log_info "$env 는 최신 릴리스입니다 (${RELEASE_TAG:-?})"; fi
+    else
+        ( cd "$ldir" && ./openmake_llm.sh update --yes < /dev/null | cat ) || die "openmake_llm.sh update 실패 ($env)"
+    fi
     # 새로 받은 Dockerfile 로 빌드한다(안 바뀌었으면 캐시로 수 초). .env 가 바뀐 경우에만 한 번 더 재시작.
     runtime_images_ensure "$ldir" "$env"
     # 이미 게이트웨이가 있는 환경만 갱신한다(새 config 복사 + 재기동, litellm.env 는 그대로) — update 가 기존 환경의

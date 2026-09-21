@@ -31,7 +31,8 @@ eq "volumes staging" "$(docker_volumes staging)"   "openmake-staging_pgdata open
 eq "bench pm2"      "$(bench_pm2_name staging)" "openmake-bench-staging"
 eq "dirs"           "$(llm_dir staging)|$(bench_dir staging)" "$OMK_ROOT/staging/llm|$OMK_ROOT/staging/bench"
 eq "ref staging"    "$(env_default_ref staging)" "main"
-eq "ref online"     "$(env_default_ref online)"  "main"
+eq "ref online"     "$(env_default_ref online)"  "release"
+eq "ref dev"        "$(env_default_ref dev)"     "main"
 ok "validate accepts dev"   '( validate_env dev ) >/dev/null 2>&1'
 ok "validate rejects Upper" '! ( validate_env Staging ) >/dev/null 2>&1'
 ok "validate accepts qa-1"  '( validate_env qa-1 ) >/dev/null 2>&1'
@@ -73,6 +74,15 @@ printf 'CORS_ORIGINS=x\n' > "$OX/.env"; env_apply_origins "$OX"; eq "origins: �
 
 ok "proxy: 남의 OMK_ROOT 프록시는 우리 것이 아니다" '! ( proxy_running() { return 0; }; pm2_app_cwd() { printf /somewhere/else/caddy; }; proxy_is_ours )'
 ok "proxy: 이 OMK_ROOT 의 프록시는 우리 것"          '( proxy_running() { return 0; }; pm2_app_cwd() { proxy_dir; }; proxy_is_ours )'
+
+# ── 릴리스 추종: 가장 높은 vX.Y.Z, 새 태그가 생기면 behind ──
+GR="$TMP/rel"; git init -q "$GR"; ( cd "$GR" || exit; git -c user.email=t@t -c user.name=t commit -q --allow-empty -m a; git tag v1.9.0; git tag v1.10.0; git tag not-a-release; git tag v1.10.0-rc1 )
+eq "release: 가장 높은 태그" "$(latest_release_tag "$GR")" "v1.10.0"
+git clone -q "$GR" "$TMP/relc" 2>/dev/null; release_checkout "$TMP/relc" v1.10.0
+eq "release: 로컬 브랜치 release" "$(git -C "$TMP/relc" rev-parse --abbrev-ref HEAD)" "release"
+ok "release: 최신이면 behind 아님" '! release_behind "$TMP/relc"'
+( cd "$GR" || exit; git -c user.email=t@t -c user.name=t commit -q --allow-empty -m b; git tag v1.11.0 )
+ok "release: 새 태그가 생기면 behind" 'release_behind "$TMP/relc" && [[ "$RELEASE_TAG" == "v1.11.0" ]]'
 
 # ── LiteLLM: 환경별 이름·위치, off 면 아무것도 안 함 ──
 eq "litellm names" "$(litellm_pm2_name staging)|$(litellm_pm2_name online)|$(litellm_dir dev)" "openmake-litellm-staging|openmake-litellm|$OMK_ROOT/dev/litellm"

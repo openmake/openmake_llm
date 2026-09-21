@@ -13,6 +13,14 @@ feature/<주제> ──PR(squash · CI 필수)──▶ main ──사람이 `om
 
 장수 브랜치는 **`main` 하나**다. `dev`·`staging`·`online` 은 브랜치가 아니라 **환경 이름**이다 — staging 은 main 최신을, online 은 릴리스 직후의 main 을 사람이 올린다. 무거운 검증은 GitHub 러너의 CI 와 staging 에서 하고, online 에서는 스모크만 한다.
 
+**online 과 외부 설치는 main 이 아니라 최신 릴리스 태그를 따른다.** main 은 공개 저장소이지만 개발이 모이는 곳이다 — staging 에서 확인하기
+전의 main 을 운영이나 외부 설치자가 받으면 안 된다. `omk env install online` 의 기본 ref 는 `release`(가장 높은 `vX.Y.Z` 태그)이고,
+`omk env update online` 은 새 릴리스 태그가 있을 때만 그 태그까지 fast-forward 한 뒤 `openmake_llm.sh deploy` 를 부른다. 어느 환경이든
+`--ref release` 로 같은 방식을 고를 수 있다(`.env` 의 `OMK_TRACK=release`). `openmake_bench` 는 릴리스 태그가 없어 main 을 쓴다.
+
+**PR 을 시험하는 곳은 dev 다** — 머지 전에 `omk env install dev --ref <브랜치>`(또는 임시 환경 `omk env install pr-123 --ref <브랜치>`)로
+실제 설치를 확인하고, GitHub CI 가 같은 PR 을 검사한다. staging 은 PR 이 아니라 **머지된 main** 을 본다(여러 PR 이 합쳐진 결과, update·마이그레이션 경로).
+
 두 리포 모두 같은 브랜치 모델을 쓴다. CI 는 `main` 의 push/PR 에서 돈다.
 
 ## 환경 규칙
@@ -20,7 +28,7 @@ feature/<주제> ──PR(squash · CI 필수)──▶ main ──사람이 `om
 | | dev | staging | online |
 |---|---|---|---|
 | 위치 | 각자의 작업 클론 | `~/.openmake/staging/{llm,bench}` | `~/.openmake/online/{llm,bench}` |
-| 브랜치 | `feature/*` (`--ref`) | `main` 최신 | `main` (릴리스 직후) |
+| 따르는 것 | `feature/*` (`--ref`) | `main` 최신 | **최신 릴리스 태그** (`release`) |
 | 인스턴스 | `dev` (이름 있음) | `staging` (이름 있음) | **기본(무접미사)** |
 | 포트 | install.sh 가 할당 | install.sh 가 할당 | **소스의 기본 포트** (52416 / 3000 / 5432 / 6379 / 9400 / 33000) |
 | PM2 | 없음 (포그라운드) | `openmake-{llm,next,bench}-staging` | `openmake-{llm,next,bench}` |
@@ -39,7 +47,7 @@ curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/
   | bash -s -- env install staging --public-url https://staging-chat.example.com
 
 curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk.sh \
-  | bash -s -- env install online  --public-url https://chat.example.com
+  | bash -s -- env install online  --public-url https://chat.example.com     # 최신 릴리스 태그를 설치한다
 ```
 
 ```powershell
