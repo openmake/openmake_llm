@@ -3,9 +3,10 @@
 # 외부 CDN 0 (라이브러리를 뷰어 오리진에서 직접 서빙) 을 위해 1회 다운로드.
 set -euo pipefail
 
-DATA_DIR="${ARTIFACT_VIEWER_DATA_DIR:-/Volumes/MAC_APP/docker/openmake_llm/artifact-viewer/data}"
-VENDOR="$DATA_DIR/vendor"
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# 기본값은 백엔드(config/artifact-viewer.ts)·docker-compose.yml 과 같은 <repo>/data/artifact-viewer
+DATA_DIR="${ARTIFACT_VIEWER_DATA_DIR:-$HERE/../../data/artifact-viewer}"
+VENDOR="$DATA_DIR/vendor"
 
 mkdir -p "$VENDOR"
 

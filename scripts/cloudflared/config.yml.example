@@ -6,7 +6,7 @@
 # 리버스 프록시로 평문 전달한다. 인스턴스가 여럿이면 호스트 이름으로 갈라 보낸다:
 #
 #   chat.openmake.cc          → online  (기본·이름 없는 인스턴스)
-#   chat-staging.openmake.cc  → staging (install.sh --instance staging)
+#   staging-chat.openmake.cc  → staging (install.sh --instance staging)
 #
 # 포트를 여기에 박지 않는 이유: 인스턴스마다 다르고, 각 인스턴스의 .env 가 단일 출처다.
 #   OMK_PROXY_PORT  채팅 프론트+API 를 묶는 프록시 포트
@@ -29,7 +29,7 @@ ingress:
     service: http://localhost:<ONLINE_BENCH_PORT>
 
   # ── staging (이름 있는 인스턴스) ──
-  - hostname: chat-staging.openmake.cc
+  - hostname: staging-chat.openmake.cc
     service: http://localhost:<STAGING_PROXY_PORT>
   - hostname: bench-staging.openmake.cc
     service: http://localhost:<STAGING_BENCH_PORT>

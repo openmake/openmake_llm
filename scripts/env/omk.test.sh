@@ -25,7 +25,7 @@ eq "volumes online" "$(docker_volumes online)"     "openmake_pgdata openmake_red
 eq "volumes staging" "$(docker_volumes staging)"   "openmake-staging_pgdata openmake-staging_redisdata"
 eq "bench pm2"      "$(bench_pm2_name staging)" "openmake-bench-staging"
 eq "dirs"           "$(llm_dir staging)|$(bench_dir staging)" "$OMK_ROOT/staging/llm|$OMK_ROOT/staging/bench"
-eq "ref staging"    "$(env_default_ref staging)" "staging"
+eq "ref staging"    "$(env_default_ref staging)" "main"
 eq "ref online"     "$(env_default_ref online)"  "main"
 ok "validate rejects dev"   '! ( validate_env dev ) >/dev/null 2>&1'
 ok "validate rejects Upper" '! ( validate_env Staging ) >/dev/null 2>&1'

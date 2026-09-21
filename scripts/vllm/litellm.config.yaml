@@ -1,7 +1,7 @@
 # ============================================================
 # LiteLLM 통합 게이트웨이 config — Mac mini 운영 기준 (2026-07-31 DGX→Mac 이전)
 # ============================================================
-# 배포 위치: 운영 Mac 의 /Volumes/MAC_APP/litellm/litellm.config.yaml
+# 배포 위치: 레포 밖, 호스트마다 다르다 (litellm.env 와 같은 디렉터리에 둔다)
 # 실행: PM2 `litellm` (start_litellm.sh 가 litellm.env 를 source 후 127.0.0.1:13401 바인딩)
 #
 # 토폴로지:

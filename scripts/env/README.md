@@ -5,19 +5,22 @@
 `openmake_llm` 과 `openmake_bench` 를 세 환경으로 나눠 운영한다. 환경은 서로 **env 파일·docker·PM2 가 분리**되어 있어, 하나가 꼬이면 그것만 지우고 다시 설치할 수 있다. 진입점은 `scripts/env/omk.sh` 하나다.
 
 ```
-feature/<주제> ──PR──▶ staging ──사람이 `omk env update staging`──▶ ~/.openmake/staging   chat-staging.<도메인>
-                          │
-                          └──PR──▶ main ──(release-please)──사람이 `omk env update online`──▶ ~/.openmake/online    chat.<도메인>
+feature/<주제> ──PR(squash · CI 필수)──▶ main ──사람이 `omk env update staging`──▶ ~/.openmake/staging   staging-chat.<도메인>
+                                           │                     (기능 확인)
+                                           └──(release-please 릴리스 직후) 사람이 `omk env update online`──▶ ~/.openmake/online   chat.<도메인>
+                                                                 (스모크만)
 ```
 
-두 리포 모두 같은 브랜치 모델을 쓴다. CI 는 `staging`·`main` 의 push/PR 에서 돈다.
+장수 브랜치는 **`main` 하나**다. `dev`·`staging`·`online` 은 브랜치가 아니라 **환경 이름**이다 — staging 은 main 최신을, online 은 릴리스 직후의 main 을 사람이 올린다. 무거운 검증은 GitHub 러너의 CI 와 staging 에서 하고, online 에서는 스모크만 한다.
+
+두 리포 모두 같은 브랜치 모델을 쓴다. CI 는 `main` 의 push/PR 에서 돈다.
 
 ## 환경 규칙
 
 | | dev | staging | online |
 |---|---|---|---|
 | 위치 | 각자의 작업 클론 | `~/.openmake/staging/{llm,bench}` | `~/.openmake/online/{llm,bench}` |
-| 브랜치 | `feature/*` | `staging` | `main` |
+| 브랜치 | `feature/*` (`--ref`) | `main` 최신 | `main` (릴리스 직후) |
 | 인스턴스 | `dev` (이름 있음) | `staging` (이름 있음) | **기본(무접미사)** |
 | 포트 | install.sh 가 할당 | install.sh 가 할당 | **소스의 기본 포트** (52416 / 3000 / 5432 / 6379 / 9400 / 33000) |
 | PM2 | 없음 (포그라운드) | `openmake-{llm,next,bench}-staging` | `openmake-{llm,next,bench}` |
@@ -33,7 +36,7 @@ feature/<주제> ──PR──▶ staging ──사람이 `omk env update stagi
 ```bash
 # macOS / Linux / WSL2
 curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk.sh \
-  | bash -s -- env install staging --public-url https://chat-staging.example.com
+  | bash -s -- env install staging --public-url https://staging-chat.example.com
 
 curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk.sh \
   | bash -s -- env install online  --public-url https://chat.example.com
@@ -42,7 +45,7 @@ curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/
 ```powershell
 # Windows — WSL2(Ubuntu) 를 확인하고 그 안에서 같은 스크립트를 실행한다
 irm https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk.ps1 -OutFile omk.ps1
-.\omk.ps1 env install staging --public-url https://chat-staging.example.com
+.\omk.ps1 env install staging --public-url https://staging-chat.example.com
 ```
 
 한 번에 되는 일: git 확인 → `openmake_llm` 클론 → **`install.sh`** (Node 24·Docker·PM2 준비, `.env` 시크릿 생성, PostgreSQL·Redis, 마이그레이션, 빌드, PM2 기동, health) → `openmake_bench` 클론·빌드·`.env`·PM2 → Caddy 프록시(PM2 `omk-proxy`) → `~/.openmake/bin/omk` 래퍼.
@@ -131,7 +134,7 @@ scripts/env/omk.sh dev reset          # 컨테이너·볼륨 삭제 (소스·.en
 
 dev 는 PM2 를 쓰지 않는다 — `tsx`/`next dev`/`vite` 가 포그라운드에서 돈다. 인스턴스 이름이 `dev` 라서 같은 호스트의 staging·online 과 컨테이너·볼륨·포트가 겹치지 않는다.
 
-흐름: 클론 → 개발 → 주제별 `feature/*` 브랜치 → 테스트(`npm test`, `npm run lint`, `bash scripts/env/omk.test.sh`) → 원격 `feature/*` push → `staging` 으로 PR.
+흐름: 클론 → 개발 → 주제별 `feature/*` 브랜치 → 테스트(`npm test`, `npm run lint`, `bash scripts/env/omk.test.sh`) → 원격 `feature/*` push → `main` 으로 PR.
 
 ## 프록시와 도메인
 
@@ -139,7 +142,7 @@ Caddy 는 시스템 서비스가 아니라 **PM2 앱 `omk-proxy`** 로 돈다 (�
 
 도메인은 스크립트 어디에도 없다 — `--public-url` 로 받아 llm `.env`(`OMK_APP_URL`·`CORS_ORIGINS`·secure cookie)에 반영한다. 외부 공개는 터널/DNS 를 **그 환경의 프록시 포트**(`OMK_PROXY_PORT`)로 향하게 한다: [`scripts/cloudflared/config.yml.example`](../cloudflared/config.yml.example).
 
-bench 는 프록시 뒤에 두지 않고 자기 포트(`OMKB_PORT`)로 직접 공개한다. llm 의 로그인 쿠키가 host-only 라서 `chat-staging.…` 의 로그인이 `bench-staging.…` 으로 넘어가지 않는다 — 공개 도메인에서는 bench 에 API 키 또는 초대 코드로 로그인하고, SSO 는 같은 호스트명(예: Tailscale 호스트명 + 포트)으로 접속할 때만 동작한다.
+bench 는 프록시 뒤에 두지 않고 자기 포트(`OMKB_PORT`)로 직접 공개한다. llm 의 로그인 쿠키가 host-only 라서 `staging-chat.…` 의 로그인이 `bench-staging.…` 으로 넘어가지 않는다 — 공개 도메인에서는 bench 에 API 키 또는 초대 코드로 로그인하고, SSO 는 같은 호스트명(예: Tailscale 호스트명 + 포트)으로 접속할 때만 동작한다.
 
 이 방식으로 관리되는 인스턴스는 `.env` 에 `OMK_PROXY_DIR` 이 있고, `openmake_llm.sh deploy` 는 이를 보고 예전의 호스트 Caddyfile 복사(`/opt/homebrew/etc/Caddyfile`)를 건너뛴다.
 

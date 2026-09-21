@@ -32,7 +32,7 @@
 # 사용:
 #   # 아무것도 없는 PC 에서 한 줄 (macOS / Linux / Windows→WSL2 안에서)
 #   curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk.sh \
-#     | bash -s -- env install staging --public-url https://chat-staging.example.com
+#     | bash -s -- env install staging --public-url https://staging-chat.example.com
 #
 #   omk env install <env> [--ref BR] [--bench-ref BR] [--public-url URL] [--no-bench] [--no-proxy] [--no-searxng]
 #                         [--llm-base-url U --llm-api-key K --llm-model M] [--autoupdate|--no-autoupdate]
@@ -158,8 +158,8 @@ bench_dir()  { printf '%s/%s/bench' "$OMK_ROOT" "$1"; }
 logs_dir()   { printf '%s/%s/logs' "$OMK_ROOT" "$1"; }
 proxy_dir()  { printf '%s/caddy' "$OMK_ROOT"; }
 env_suffix() { [[ "$1" == "$OMK_DEFAULT_ENV" ]] && printf '' || printf -- '-%s' "$1"; }
-# 브랜치 기본값 — online 은 main, staging 은 staging, 그 외는 main. --ref 로 언제든 덮어쓴다.
-env_default_ref() { case "$1" in staging) printf 'staging' ;; *) printf 'main' ;; esac; }
+# 브랜치 기본값 — 장수 브랜치는 main 하나다. staging·online 은 환경 이름일 뿐이고, dev 는 --ref 로 feature/* 를 준다.
+env_default_ref() { printf 'main'; }
 
 # 이름 규칙은 install.sh / ecosystem.config.js / infra/docker-compose.yml 과 같다.
 pm2_names() { # $1=env → llm next discord bench updater

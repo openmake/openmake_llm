@@ -21,7 +21,8 @@ publish 된 artifact 를 **self-contained HTML** 로 export → **별도 오리�
 ```bash
 ARTIFACT_VIEWER_ENABLED=true
 ARTIFACT_VIEWER_ORIGIN=http://localhost:8088          # 외부공개 시 전용 서브도메인 URL 로 교체
-ARTIFACT_VIEWER_DATA_DIR=/Volumes/MAC_APP/docker/openmake_llm/artifact-viewer/data
+# ARTIFACT_VIEWER_DATA_DIR=/path/to/data            # 미설정 시 <repo>/data/artifact-viewer — compose·fetch-vendor.sh 도 같은 기본값
+# ARTIFACT_VIEWER_PORT=8088                         # 뷰어 컨테이너의 호스트 포트 (compose 전용)
 ARTIFACT_VIEWER_SIGNING_KEY=<운영 랜덤키>              # 미설정 시 JWT_SECRET 재사용
 # ARTIFACT_VIEWER_TOKEN_TTL_SEC=3600
 ```
