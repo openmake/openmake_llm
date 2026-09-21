@@ -39,6 +39,7 @@
 #   omk env update  <env> [--if-behind]       # llm(ff-only→build→migrate→restart) → bench → proxy
 #   omk env reset   <env> [--keep-data] [--keep-env] [--reinstall] [--yes]
 #   omk env status|start|stop|logs <env>
+#   omk env expose <env> [--tailscale] [--host H]…      # 다른 기기에서 프록시 포트로 보기 — 호스트를 CORS 에 허용(.env 에 기억)
 #   omk env autoupdate <env> [--every 'CRON'] [--off]   # 선택 — 기본은 수동 배포. PM2 cron 앱 omk-updater-<env>
 #   omk proxy status|reload|render <env>
 #   omk dev setup [--no-searxng] · omk dev up|down|status|reset [api|web|bench|deps|all]
@@ -440,14 +441,35 @@ proxy_render() { # $1=env
     sed -e "s|{{ENV}}|$env|g" -e "s|{{PROXY_PORT}}|$pport|g" -e "s|{{API_PORT}}|$api|g" \
         -e "s|{{WEB_PORT}}|$web|g" -e "s|{{BENCH_PORT}}|${bench_port:-0}|g" "$tmpl" > "$out"
     log_ok "프록시 설정 → $out (:$pport → api :$api / web :$web)"
+    env_apply_origins "$ldir"
+}
+# 프록시 포트로 접속하면 브라우저의 Origin 은 http://<호스트>:<프록시포트> 이고 채팅 소켓도 그 주소로 붙는다
+# (use-chat-socket.ts). 서버는 CORS_ORIGINS 와 정확히 일치하는 Origin 만 받으므로 그 주소를 넣어 둔다 —
+# localhost 는 항상, 다른 기기용 호스트는 .env 의 OMK_ENV_HOSTS(CSV · `omk env expose`)에서.
+ORIGINS_CHANGED=0
+env_apply_origins() { # $1=llm dir
+    local envf="$1/.env" pport hosts h add before after
+    ORIGINS_CHANGED=0
+    pport="$(dotenv_get "$envf" OMK_PROXY_PORT)"; [[ -n "$pport" ]] || return 0
+    hosts="$(csv_union "localhost,127.0.0.1" "$(dotenv_get "$envf" OMK_ENV_HOSTS)")"
+    add=""; for h in $(printf '%s' "$hosts" | tr ',' ' '); do add="${add:+$add,}http://$h:$pport"; done
+    before="$(dotenv_get "$envf" CORS_ORIGINS)"; after="$(csv_union "$before" "$add")"
+    [[ "$before" == "$after" ]] || { dotenv_set "$envf" CORS_ORIGINS "$after"; ORIGINS_CHANGED=1; }
+    return 0
 }
 proxy_running() { has pm2 && pm2 describe "$OMK_PROXY_APP" >/dev/null 2>&1; }
+# 프록시는 호스트당 하나(PM2 앱 이름·admin 포트가 고정)다. 다른 OMK_ROOT 에서 띄운 것에 이쪽 설정을 reload 하면
+# 그쪽 환경들의 라우팅이 통째로 사라진다 — PM2 앱의 cwd 가 이 OMK_ROOT 의 caddy 디렉터리일 때만 우리 것이다.
+proxy_is_ours() { proxy_running && [[ "$(pm2_app_cwd "$OMK_PROXY_APP")" == "$(proxy_dir)" ]]; }
 proxy_start_or_reload() {
     require_pm2; proxy_ensure_binary
     local dir; dir="$(proxy_dir)"
     "$CADDY_BIN" validate --config "$dir/Caddyfile" --adapter caddyfile >/dev/null 2>&1 \
         || die "Caddyfile 검증 실패: $dir/Caddyfile"
-    if proxy_running; then
+    if proxy_running && ! proxy_is_ours; then
+        die "프록시($OMK_PROXY_APP)가 다른 OMK_ROOT($(pm2_app_cwd "$OMK_PROXY_APP"))에서 돌고 있습니다 — 이쪽 설정으로 덮어쓰지 않습니다."
+    fi
+    if proxy_is_ours; then
         "$CADDY_BIN" reload --config "$dir/Caddyfile" --adapter caddyfile --address "$OMK_CADDY_ADMIN" >/dev/null 2>&1 \
             && { log_ok "프록시 reload"; return 0; }
         log_warn "reload 실패 — PM2 재시작으로 대체"; pm2 restart "$OMK_PROXY_APP" >/dev/null; return 0
@@ -465,7 +487,7 @@ proxy_remove() { # $1=env
     local f; f="$(proxy_dir)/caddy.d/$1.caddy"
     [[ -f "$f" ]] || return 0
     rm -f "$f"; log_ok "프록시 설정 제거: $f"
-    proxy_running && { proxy_ensure_binary; "$CADDY_BIN" reload --config "$(proxy_dir)/Caddyfile" --adapter caddyfile --address "$OMK_CADDY_ADMIN" >/dev/null 2>&1 || true; }
+    proxy_is_ours && { proxy_ensure_binary; "$CADDY_BIN" reload --config "$(proxy_dir)/Caddyfile" --adapter caddyfile --address "$OMK_CADDY_ADMIN" >/dev/null 2>&1 || true; }
     return 0
 }
 cmd_proxy() {
@@ -851,6 +873,23 @@ cmd_env_logs() {
     # pm2 logs 는 /regex/ 로 여러 앱을 한 번에 본다.
     pm2 logs "/^($(pm2_names "$env" | tr ' ' '|'))$/" --lines 50
 }
+cmd_env_expose() { # env [--tailscale] [--host H]… — 다른 기기에서 프록시 포트로 접속할 호스트를 허용한다
+    local env="$1"; shift; local ldir hosts add="" use_ts=0 pport h
+    ldir="$(llm_dir "$env")"; [[ -f "$ldir/.env" ]] || die "$ldir/.env 없음 — 'omk env install $env' 먼저"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in --tailscale) use_ts=1 ;; --host) add="$(csv_union "$add" "${2:-}")"; shift ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift
+    done
+    load_toolchain "$ldir"
+    hosts="$(dotenv_get "$ldir/.env" OMK_ENV_HOSTS)"
+    if [[ $use_ts -eq 1 ]]; then local ts; ts="$(tailscale_hosts)"; [[ -n "$ts" ]] || die "tailscale 주소를 읽을 수 없습니다"; hosts="$(csv_union "$hosts" "$ts")"; fi
+    hosts="$(csv_union "$hosts" "$add")"
+    [[ -n "$hosts" ]] || usage_die "omk env expose <env> --tailscale | --host <이름>"
+    dotenv_set "$ldir/.env" OMK_ENV_HOSTS "$hosts"
+    env_apply_origins "$ldir"
+    [[ $ORIGINS_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
+    pport="$(dotenv_get "$ldir/.env" OMK_PROXY_PORT)"
+    for h in $(printf '%s' "$hosts" | tr ',' ' '); do log_info "다른 기기에서:  http://$h:$pport"; done
+}
 cmd_env() {
     local sub="${1:-}" env="${2:-}"
     [[ -n "$sub" && -n "$env" ]] || usage_die "omk env <install|update|reset|status|start|stop|logs|autoupdate> <env>"
@@ -864,6 +903,7 @@ cmd_env() {
         stop)       cmd_env_stop "$env" ;;
         logs)       cmd_env_logs "$env" ;;
         autoupdate) cmd_env_autoupdate "$env" "$@" ;;
+        expose)     cmd_env_expose "$env" "$@" ;;
         *) usage_die "알 수 없는 env 명령: $sub" ;;
     esac
 }
