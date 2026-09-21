@@ -224,7 +224,7 @@ omk env reset staging --keep-data            # DB 볼륨은 남김 (.env 도 함
 
 손으로 하려면 위 표 그대로 `pm2 delete …` → `docker rm -f …` → `docker volume rm …` → `rm -rf ~/.openmake/staging`. 전역 도구(Node·Docker·PM2·Caddy)는 다른 환경이 쓰므로 건드리지 않는다.
 
-## dev
+## 개발 서버 — `omk dev` (작업 클론 · 핫 리로드)
 
 작업 클론 안에서 쓴다. `openmake_bench` 가 옆 디렉터리(`../openmake_bench`)에 있으면 같이 띄운다 (`OMK_DEV_LLM` / `OMK_DEV_BENCH` 로 지정 가능).
 
@@ -232,7 +232,7 @@ omk env reset staging --keep-data            # DB 볼륨은 남김 (.env 도 함
 git clone https://github.com/openmake/openmake_llm.git && git clone https://github.com/openmake/openmake_bench.git
 cd openmake_llm && git checkout -b feature/<주제>
 
-scripts/env/omk.sh dev setup          # 최초 1회: 툴체인·.env(OMK_INSTANCE=dev)·의존성·DB·마이그레이션
+scripts/env/omk.sh dev setup          # 최초 1회: 툴체인·.env(OMK_INSTANCE=local)·의존성·DB·마이그레이션
 scripts/env/omk.sh dev up             # 전부: DB/Redis + api + web + bench (Ctrl+C 로 종료)
 scripts/env/omk.sh dev up api         # 개별: deps | api | web | bench
 scripts/env/omk.sh dev up --tailscale     # 다른 기기에서 보기 (또는 --host <이름|IP> 를 여러 번)
@@ -243,7 +243,10 @@ scripts/env/omk.sh dev reset          # 컨테이너·볼륨 삭제 (소스·.en
 
 **다른 기기에서 보기.** 웹은 채팅 소켓을 "접속한 호스트명:API 포트"로 붙이고, 서버는 Origin 이 `CORS_ORIGINS` 와 정확히 일치할 때만 받는다(REST·WS 공통). 그래서 접속에 쓸 호스트를 알려줘야 한다 — `--tailscale` 은 `tailscale status` 에서 MagicDNS 짧은 이름·FQDN·IPv4 를 읽고, `--host` 는 직접 준다. omk 는 그 호스트를 세 곳에 넣는다: API 의 `CORS_ORIGINS`(호스트별 웹·API origin), Next dev 의 `allowedDevOrigins`(모르면 HMR 이 막혀 hydration 이 죽는다), bench vite 의 `allowedHosts`. 목록은 `.env` 의 `OMK_DEV_HOSTS` 에 기억되어 다음 `dev up` 부터는 옵션 없이도 유지된다. 허용하지 않은 호스트·Origin 은 계속 거부된다.
 
-dev 는 PM2 를 쓰지 않는다 — `tsx`/`next dev`/`vite` 가 포그라운드에서 돈다. 인스턴스 이름이 `dev` 라서 같은 호스트의 staging·online 과 컨테이너·볼륨·포트가 겹치지 않는다.
+개발 서버는 PM2 를 쓰지 않는다 — `tsx`/`next dev`/`vite` 가 포그라운드에서 돈다. 인스턴스 이름은 **`local`**(컨테이너 `openmake-local-*`)이라
+같은 호스트의 **환경 `dev`**(`~/.openmake/dev` — 빌드된 배포본으로 브랜치를 확인하는 곳)·staging·online 과 컨테이너·볼륨·포트가 겹치지 않는다.
+둘은 용도가 다르다: `omk dev up` 은 고치면서 바로 보는 핫 리로드, `omk env install dev --ref …` 는 "실제로 설치해도 도는가".
+예전에 `dev` 이름으로 준비한 작업 클론은 그대로 동작하지만 환경 dev 와 겹친다 — `omk dev reset` 이 이름을 `local` 로 옮겨 준다(그 뒤 `omk dev setup`).
 
 흐름: 클론 → 개발 → 주제별 `feature/*` 브랜치 → 테스트(`npm test`, `npm run lint`, `bash scripts/env/omk.test.sh`) → 원격 `feature/*` push → `main` 으로 PR.
 

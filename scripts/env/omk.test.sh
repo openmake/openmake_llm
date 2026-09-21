@@ -33,6 +33,13 @@ eq "dirs"           "$(llm_dir staging)|$(bench_dir staging)" "$OMK_ROOT/staging
 eq "ref staging"    "$(env_default_ref staging)" "main"
 eq "ref online"     "$(env_default_ref online)"  "release"
 eq "ref dev"        "$(env_default_ref dev)"     "main"
+ok "validate rejects local" '! ( validate_env local ) >/dev/null 2>&1'
+DV="$TMP/devclone"; mkdir -p "$DV"
+# shellcheck disable=SC2034  # dev_instance 가 읽는다
+eq "dev server: 새 클론은 local"  "$( DEV_LLM="$DV"; dev_instance )" "local"
+printf 'OMK_INSTANCE=dev\n' > "$DV/.env"
+# shellcheck disable=SC2034
+eq "dev server: 준비된 클론은 .env 를 따른다" "$( DEV_LLM="$DV"; dev_instance )" "dev"
 ok "validate accepts dev"   '( validate_env dev ) >/dev/null 2>&1'
 ok "validate rejects Upper" '! ( validate_env Staging ) >/dev/null 2>&1'
 ok "validate accepts qa-1"  '( validate_env qa-1 ) >/dev/null 2>&1'

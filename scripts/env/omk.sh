@@ -75,6 +75,9 @@ OMK_SEARXNG_PORT_BASE="${OMK_SEARXNG_PORT_BASE:-8888}"   # .env.example 의 SEAR
 OMK_LITELLM_PORT_BASE="${OMK_LITELLM_PORT_BASE:-13401}"  # LiteLLM 게이트웨이 빈 포트 탐색 시작점
 OMK_LITELLM_SPEC="${OMK_LITELLM_SPEC:-litellm[proxy]}"    # pip 설치 대상 — 버전 고정: 'litellm[proxy]==X.Y.Z'
 # 기본 모델 — 업스트림을 주지 않은 설치본도 바로 채팅이 되게 하는 최소 모델. 호스트당 llama.cpp 서버 하나(PM2), 환경들이 공유한다.
+# 작업 클론의 핫 리로드 개발 서버('omk dev up')가 쓰는 인스턴스 이름 — 환경 'dev'(~/.openmake/dev)와 컨테이너·볼륨·포트가
+# 겹치지 않게 따로 둔다. 같은 호스트에서 개발 서버와 환경 dev 를 동시에 쓸 수 있다.
+OMK_LOCAL_INSTANCE="local"
 OMK_LLAMACPP_APP="omk-llamacpp"
 OMK_LLAMACPP_TAG="${OMK_LLAMACPP_TAG:-b10964}"                          # llama.cpp 릴리스 태그 (v0.4.1 에 대응)
 OMK_LLAMACPP_PORT_BASE="${OMK_LLAMACPP_PORT_BASE:-18080}"
@@ -162,6 +165,7 @@ dotenv_ensure() { # $1=file $2=key $3=default — 없을 때만 붙인다 (기�
 # ── 환경 이름 → 경로/이름 파생 ──────────────────────────────────────────────
 validate_env() {
     [[ "$1" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] || usage_die "환경 이름은 소문자·숫자·하이픈 1~32자: '$1'"
+    [[ "$1" != "$OMK_LOCAL_INSTANCE" ]] || usage_die "'$1' 은 작업 클론의 개발 서버('omk dev …')가 쓰는 이름입니다 — 다른 환경 이름을 고르세요"
 }
 env_dir()    { printf '%s/%s' "$OMK_ROOT" "$1"; }
 llm_dir()    { printf '%s/%s/llm' "$OMK_ROOT" "$1"; }
@@ -1251,14 +1255,22 @@ dev_apply_hosts() { # $1=llm dir $2=hosts CSV — CORS_ORIGINS 에 호스트별 
     dotenv_set "$envf" CORS_ORIGINS "$(csv_union "$(dotenv_get "$envf" CORS_ORIGINS)" "$add")"
     dotenv_set "$envf" OMK_DEV_HOSTS "$hosts"
 }
+dev_instance() { local v; v="$(dotenv_get "$DEV_LLM/.env" OMK_INSTANCE)"; printf '%s' "${v:-$OMK_LOCAL_INSTANCE}"; }
+dev_warn_legacy() { # 예전에 'dev' 로 준비한 작업 클론 — 동작은 하지만 환경 dev 와 이름이 겹친다
+    [[ "$(dev_instance)" == "dev" ]] || return 0
+    log_warn "이 작업 클론은 옛 인스턴스 이름 'dev' 를 씁니다 — 환경 dev(~/.openmake/dev)와 컨테이너·포트가 겹칩니다."
+    log_warn "옮기기: 'omk dev reset'(컨테이너·볼륨 삭제, 이름을 '$OMK_LOCAL_INSTANCE' 로 바꿈) → 'omk dev setup'"
+}
 dev_compose() { ( cd "$DEV_LLM" && docker compose --env-file .env -f infra/docker-compose.yml "$@" ); }
-dev_searxng() { searxng_ensure "$DEV_LLM" dev "$DEV_LLM/.openmake/searxng" "$DEV_LLM"; }
+dev_searxng() { searxng_ensure "$DEV_LLM" "$(dev_instance)" "$DEV_LLM/.openmake/searxng" "$DEV_LLM"; }
 cmd_dev_setup() {
     dev_locate; ensure_git
     local no_searxng=0; [[ "${1:-}" == "--no-searxng" ]] && no_searxng=1
     log_step "dev 준비: $DEV_LLM"
-    # 툴체인·.env(OMK_INSTANCE=dev)·의존성·DB·마이그레이션까지. 빌드·PM2 는 dev 에 필요 없다.
-    ( cd "$DEV_LLM" && ./install.sh --yes --instance dev --skip-build --no-start ) || die "install.sh 실패"
+    # 툴체인·.env(OMK_INSTANCE=local)·의존성·DB·마이그레이션까지. 빌드·PM2 는 개발 서버에 필요 없다.
+    # 이미 준비된 클론은 .env 의 이름을 그대로 쓴다(install.sh 는 .env 와 다른 --instance 를 거부한다).
+    dev_warn_legacy
+    ( cd "$DEV_LLM" && ./install.sh --yes --instance "$(dev_instance)" --skip-build --no-start ) || die "install.sh 실패"
     load_toolchain "$DEV_LLM"
     dev_build_packages
     [[ $no_searxng -eq 1 ]] && dotenv_set "$DEV_LLM/.env" OMK_SEARXNG off
@@ -1267,12 +1279,12 @@ cmd_dev_setup() {
         log_step "bench dev 준비: $DEV_BENCH"
         ( cd "$DEV_BENCH" && npm install --no-audit --no-fund && ( cd web && npm install --no-audit --no-fund ) ) || die "bench 의존성 설치 실패"
         mkdir -p "$DEV_BENCH/data"
-        bench_ensure_env "$DEV_BENCH" dev "$(llm_api_port "$DEV_LLM")" "$(llm_web_port "$DEV_LLM")" 0 >/dev/null
+        bench_ensure_env "$DEV_BENCH" "$(dev_instance)" "$(llm_api_port "$DEV_LLM")" "$(llm_web_port "$DEV_LLM")" 0 >/dev/null
     fi
     log_ok "dev 준비 완료 — 'omk dev up' 으로 기동"
 }
 cmd_dev_up() {
-    dev_locate
+    dev_locate; dev_warn_legacy
     local target="all" hosts_arg="" use_ts=0
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -1320,7 +1332,7 @@ cmd_dev_up() {
     log_info "Ctrl+C 로 전부 종료. DB/Redis 는 남는다 → 'omk dev down'"
     "${conc[@]}" -k --prefix-colors auto -n "$names" "${cmds[@]}"
 }
-cmd_dev_down()   { dev_locate; dev_compose stop; if searxng_owned "$(searxng_name dev)" "$DEV_LLM"; then docker stop "$(searxng_name dev)" >/dev/null 2>&1 || true; fi; log_ok "dev DB/Redis/SearXNG 정지 (데이터 유지)"; }
+cmd_dev_down()   { dev_locate; dev_compose stop; if searxng_owned "$(searxng_name "$(dev_instance)")" "$DEV_LLM"; then docker stop "$(searxng_name "$(dev_instance)")" >/dev/null 2>&1 || true; fi; log_ok "dev DB/Redis/SearXNG 정지 (데이터 유지)"; }
 cmd_dev_status() {
     dev_locate; load_toolchain "$DEV_LLM"
     echo "dev  llm=$DEV_LLM  bench=${DEV_BENCH:-없음}"
@@ -1335,7 +1347,9 @@ cmd_dev_reset() {
     confirm "dev 의 ${what}를 지웁니다 (소스·.env 유지). 계속할까요?" || return 0
     ( cd "$DEV_LLM" && ./uninstall.sh "${flags[@]}" ) || die "uninstall.sh 실패"
     # uninstall.sh 는 compose 것만 안다. 이름이 호스트에 하나뿐이라 다른 작업 클론의 것일 수 있다 — 라벨로 확인한다.
-    if searxng_owned "$(searxng_name dev)" "$DEV_LLM"; then docker rm -f "$(searxng_name dev)" >/dev/null 2>&1 && log_ok "컨테이너 $(searxng_name dev) 제거" || true; fi
+    if searxng_owned "$(searxng_name "$(dev_instance)")" "$DEV_LLM"; then docker rm -f "$(searxng_name "$(dev_instance)")" >/dev/null 2>&1 && log_ok "컨테이너 $(searxng_name "$(dev_instance)") 제거" || true; fi
+    # 옛 이름 'dev' 는 환경 dev 와 겹친다 — 컨테이너·볼륨을 지운 김에 이름을 옮긴다(데이터는 어차피 방금 지웠다).
+    if [[ "$(dev_instance)" == "dev" && $keep_data -eq 0 ]]; then dotenv_set "$DEV_LLM/.env" OMK_INSTANCE "$OMK_LOCAL_INSTANCE"; log_ok "인스턴스 이름: dev → $OMK_LOCAL_INSTANCE — 'omk dev setup' 으로 다시 준비하세요"; fi
     log_ok "dev 리셋 완료 — 'omk dev up' 으로 다시 준비"
 }
 cmd_dev() {
