@@ -920,6 +920,9 @@ cmd_env_install() {
     dotenv_ensure "$ldir/.env" OMK_LOG_DIR "$(logs_dir "$env")"
     load_toolchain "$ldir"
 
+    # 1.5~1.7 은 .env 를 고친다 — 어느 단계든 내용이 바뀌었으면 끝에 API 를 한 번 재시작한다(단계별 플래그는 빠뜨리기 쉽다).
+    local env_before; env_before="$(cksum < "$ldir/.env")"
+
     # 1.5) 웹 검색 — .env 는 install.sh 가 만든 뒤에야 있다. 값이 바뀌면 API 만 다시 띄운다.
     [[ $no_searxng -eq 1 ]] && dotenv_set "$ldir/.env" OMK_SEARXNG off
     searxng_ensure "$ldir" "$env" "$(env_dir "$env")/searxng" "$(env_dir "$env")"
@@ -944,7 +947,7 @@ cmd_env_install() {
         else log_warn "기본 모델을 준비하지 못했습니다 — 업스트림을 직접 지정하세요 (--llm-base-url … --llm-model …)"; fi
     fi
     litellm_ensure "$ldir" "$env" "$qwen_base" "$bge_base" "$vllm_key" "$up_base" "$up_key" "$up_model"
-    [[ $SEARCH_CHANGED -eq 0 && $RUNTIME_CHANGED -eq 0 && $LITELLM_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
+    [[ "$env_before" == "$(cksum < "$ldir/.env")" && $SEARCH_CHANGED -eq 0 && $RUNTIME_CHANGED -eq 0 && $LITELLM_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
 
     # 2) openmake_bench
     [[ $no_bench -eq 1 ]] || bench_install "$env" "$bench_ref" "$ldir"
