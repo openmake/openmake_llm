@@ -99,6 +99,20 @@ Base 에는 웹 검색을 끄는 스위치가 아직 없다(모델은 오프라�
 `localhost` 주소는 설치 때 자동으로 허용된다. 웹·REST·채팅 소켓이 전부 프록시 한 주소로 다니므로 그 주소 하나만 허용하면 된다.
 평문 HTTP 라 **신뢰하는 망(Tailscale·사내망)에서만** 쓴다 — 밖으로 공개할 때는 `--public-url` + 터널.
 
+## LiteLLM 게이트웨이 — 환경마다 하나
+
+앱은 `LLM_BASE_URL` 하나만 본다. 그 뒤에서 로컬 vLLM 과 BYOK 업스트림을 묶는 LiteLLM 을 환경마다 따로 띄운다:
+`~/.openmake/<env>/litellm/{venv, litellm.config.yaml, litellm.env, start_litellm.sh}`, PM2 `openmake-litellm[-<env>]`, `127.0.0.1` 전용,
+포트는 `OMK_LITELLM_PORT_BASE`(13401)부터 빈 포트. 설치가 끝나면 llm `.env` 의 `LLM_BASE_URL`·`LLM_API_KEY`(= 새로 만든
+`LITELLM_MASTER_KEY`)·`OMK_LITELLM_PORT` 가 채워진다.
+
+- **config 는 레포의 `scripts/vllm/litellm.config.yaml` 그대로** 복사한다(`update` 때마다). 호스트마다 다른 값은 `litellm.env`(600) 뿐이다 —
+  `QWEN_VLLM_API_BASE` · `BGE_VLLM_API_BASE` · `VLLM_API_KEY`. 설치 때 `--qwen-vllm-base U --bge-vllm-base U --vllm-api-key K` 로 주거나,
+  나중에 파일에 넣고 `omk env start <env>`. 비어 있어도 게이트웨이는 뜨고 BYOK 경로는 동작한다(요약에 `[할 일]` 이 나온다).
+- `--llm-base-url` 을 직접 주면(다른 엔드포인트를 쓰겠다는 뜻) 또는 `--no-litellm` 이면 설치하지 않는다(`.env` 의 `OMK_LITELLM=off`).
+- `env update` 는 **이미 게이트웨이가 있는 환경만** 갱신한다 — 기존 환경의 `LLM_BASE_URL` 을 가로채지 않는다.
+- python 은 `uv` 가 있으면 `uv venv --python 3.12`, 없으면 `python3 -m venv`. 버전 고정은 `OMK_LITELLM_SPEC='litellm[proxy]==X.Y.Z'`.
+
 ## 런타임 이미지 — 에이전트 작업·아티팩트 내보내기·외부 MCP 격리
 
 레포에는 Dockerfile(`infra/mcp-runtime` ~1GB, `infra/task-runtime` ~6GB)만 있고 이미지는 호스트에서 빌드해야 한다 —
@@ -189,7 +203,7 @@ omk env status online
 | `OMK_AUTOUPDATE_CRON` | `*/10 * * * *` | 자동 갱신 주기 |
 | `OMK_CADDY_VERSION` | 최신 릴리스 | caddy 버전 고정 (폐쇄망) |
 | `OMK_CADDY_ADMIN` | `localhost:2019` | caddy admin 주소 |
-| `OMKB_PORT_BASE` / `OMK_PROXY_PORT_BASE` | `9400` / `33000` | bench·프록시 빈 포트 탐색 시작점 |
+| `OMKB_PORT_BASE` / `OMK_PROXY_PORT_BASE` / `OMK_LITELLM_PORT_BASE` | `9400` / `33000` / `13401` | bench·프록시·LiteLLM 빈 포트 탐색 시작점 |
 | `OMK_DEV_LLM` / `OMK_DEV_BENCH` | 자동 탐지 | dev 작업 클론 위치 |
 
 스크립트에 남은 하드코딩은 다섯 가지뿐이다: 두 리포의 기본 URL, 루트 디렉터리 이름, 기본 인스턴스로 매핑되는 환경 이름(`online`), PM2 프록시 앱 이름, 그리고 GitHub API 가 막힌 환경에서만 쓰는 caddy 폴백 버전.

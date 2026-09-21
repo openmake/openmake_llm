@@ -35,6 +35,7 @@
 #     | bash -s -- env install staging --public-url https://staging-chat.example.com
 #
 #   omk env install <env> [--ref BR] [--bench-ref BR] [--public-url URL] [--no-bench] [--no-proxy] [--no-searxng] [--no-runtime-images]
+#                         [--no-litellm] [--qwen-vllm-base U --bge-vllm-base U --vllm-api-key K]
 #                         [--llm-base-url U --llm-api-key K --llm-model M] [--autoupdate|--no-autoupdate]
 #   omk env update  <env> [--if-behind]       # llm(ff-only→build→migrate→restart) → bench → proxy
 #   omk env reset   <env> [--keep-data] [--keep-env] [--reinstall] [--yes]
@@ -71,6 +72,8 @@ OMK_CADDY_ADMIN="${OMK_CADDY_ADMIN:-localhost:2019}"
 OMK_AUTOUPDATE_CRON="${OMK_AUTOUPDATE_CRON:-*/10 * * * *}"
 OMK_SEARXNG_IMAGE="${OMK_SEARXNG_IMAGE:-searxng/searxng:latest}"
 OMK_SEARXNG_PORT_BASE="${OMK_SEARXNG_PORT_BASE:-8888}"   # .env.example 의 SEARXNG_URL 예시 포트. 점유 시 다음 빈 포트
+OMK_LITELLM_PORT_BASE="${OMK_LITELLM_PORT_BASE:-13401}"  # LiteLLM 게이트웨이 빈 포트 탐색 시작점
+OMK_LITELLM_SPEC="${OMK_LITELLM_SPEC:-litellm[proxy]}"    # pip 설치 대상 — 버전 고정: 'litellm[proxy]==X.Y.Z'
 # 외부 연결 점검 대상(하나라도 열리면 온라인) · 검색 동작 확인용 질의
 OMK_NET_PROBE_URLS="${OMK_NET_PROBE_URLS:-https://duckduckgo.com https://www.bing.com https://www.wikipedia.org}"
 OMK_SEARCH_PROBE_QUERY="${OMK_SEARCH_PROBE_QUERY:-wikipedia}"
@@ -162,9 +165,9 @@ env_suffix() { [[ "$1" == "$OMK_DEFAULT_ENV" ]] && printf '' || printf -- '-%s' 
 env_default_ref() { printf 'main'; }
 
 # 이름 규칙은 install.sh / ecosystem.config.js / infra/docker-compose.yml 과 같다.
-pm2_names() { # $1=env → llm next discord bench updater
+pm2_names() { # $1=env → llm next discord bench litellm updater
     local s; s="$(env_suffix "$1")"
-    printf 'openmake-llm%s openmake-next%s openmake-discord%s openmake-bench%s omk-updater-%s' "$s" "$s" "$s" "$s" "$1"
+    printf 'openmake-llm%s openmake-next%s openmake-discord%s openmake-bench%s openmake-litellm%s omk-updater-%s' "$s" "$s" "$s" "$s" "$s" "$1"
 }
 docker_containers() { local s; s="$(env_suffix "$1")"; printf 'openmake%s-postgres openmake%s-redis openmake%s-searxng' "$s" "$s" "$s"; }
 searxng_name()      { printf 'openmake%s-searxng' "$(env_suffix "$1")"; }
@@ -664,6 +667,74 @@ search_line() { # $1=llm dir → 상태 한 줄 (실제로 검색을 한 번 돌
 # ==============================================================================
 # env install / update / reset / status / start / stop / logs
 # ==============================================================================
+# ── LiteLLM 게이트웨이 (환경별) ──────────────────────────────────────────────
+# 앱은 LLM_BASE_URL 하나만 본다. 그 뒤에서 로컬 vLLM·BYOK 업스트림을 묶는 게이트웨이를 환경마다 따로 띄운다 —
+# <env>/litellm/{venv,litellm.config.yaml,litellm.env,start_litellm.sh}, PM2 openmake-litellm[-env], 127.0.0.1 전용.
+# config 는 레포의 scripts/vllm/litellm.config.yaml 그대로다(호스트별 값은 전부 os.environ) — 호스트마다 다른 것은
+# litellm.env(600) 뿐이다: QWEN_VLLM_API_BASE · BGE_VLLM_API_BASE · VLLM_API_KEY · LITELLM_MASTER_KEY(=앱의 LLM_API_KEY).
+# --llm-base-url 을 직접 주면(다른 엔드포인트를 쓰겠다는 뜻) 설치하지 않는다. 실패는 설치를 멈추지 않는다.
+litellm_dir()      { printf '%s/%s/litellm' "$OMK_ROOT" "$1"; }
+litellm_pm2_name() { printf 'openmake-litellm%s' "$(env_suffix "$1")"; }
+gen_secret()       { if has openssl; then openssl rand -hex 24; else LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom | head -c 48; fi; }
+litellm_pm2_start() { # $1=env
+    local d n; d="$(litellm_dir "$1")"; n="$(litellm_pm2_name "$1")"
+    [[ -x "$d/start_litellm.sh" ]] || return 0
+    require_pm2
+    pm2 describe "$n" >/dev/null 2>&1 && pm2 delete "$n" >/dev/null 2>&1 || true
+    pm2 start "$d/start_litellm.sh" --name "$n" --cwd "$d" --interpreter bash --time \
+        -o "$(logs_dir "$1")/$n-out.log" -e "$(logs_dir "$1")/$n-error.log" >/dev/null || { log_warn "PM2 $n 기동 실패"; return 1; }
+    log_ok "PM2 $n"
+}
+LITELLM_CHANGED=0
+litellm_ensure() { # $1=llm dir $2=env [$3=QWEN base $4=BGE base $5=vLLM key]
+    local ldir="$1" env="$2" envf="$1/.env" d lenv port key url i
+    LITELLM_CHANGED=0
+    [[ "$(dotenv_get "$envf" OMK_LITELLM)" != "off" ]] || { log_info "LiteLLM 생략 (OMK_LITELLM=off)"; return 0; }
+    [[ -f "$ldir/scripts/vllm/litellm.config.yaml" ]] || { log_warn "litellm.config.yaml 없음 — LiteLLM 을 건너뜁니다"; return 0; }
+    d="$(litellm_dir "$env")"; lenv="$d/litellm.env"; mkdir -p "$d"; chmod 700 "$d"
+    log_step "LiteLLM 게이트웨이: $d"
+    if [[ ! -x "$d/venv/bin/litellm" ]]; then
+        if has uv; then uv venv -q --python 3.12 "$d/venv" && uv pip install -q --python "$d/venv/bin/python" "$OMK_LITELLM_SPEC"
+        else python3 -m venv "$d/venv" && "$d/venv/bin/pip" install -q --upgrade pip "$OMK_LITELLM_SPEC"; fi \
+            || { log_warn "LiteLLM 설치 실패 — 건너뜁니다 (나중에 'omk env update $env')"; rm -rf "$d/venv"; return 0; }
+    fi
+    cp "$ldir/scripts/vllm/litellm.config.yaml" "$d/litellm.config.yaml"
+    [[ -f "$lenv" ]] || { : > "$lenv"; }
+    chmod 600 "$lenv"
+    dotenv_ensure "$lenv" LITELLM_MASTER_KEY "sk-$(gen_secret)"
+    dotenv_ensure "$lenv" DUMMY_UPSTREAM_KEY "sk-byok-forwarded-per-request"
+    [[ -z "${3:-}" ]] || dotenv_set "$lenv" QWEN_VLLM_API_BASE "$3"
+    [[ -z "${4:-}" ]] || dotenv_set "$lenv" BGE_VLLM_API_BASE "$4"
+    [[ -z "${5:-}" ]] || dotenv_set "$lenv" VLLM_API_KEY "$5"
+    port="$(dotenv_get "$envf" OMK_LITELLM_PORT)"
+    if [[ -z "$port" ]]; then port="$(find_free_port "$OMK_LITELLM_PORT_BASE")" || { log_warn "LiteLLM 빈 포트 탐색 실패"; return 0; }; fi
+    cat > "$d/start_litellm.sh" <<LITELLM_START
+#!/usr/bin/env bash
+# omk 가 만든 파일 — 직접 고치지 말 것 ('omk env update $env' 가 다시 쓴다). 값은 litellm.env 에.
+set -euo pipefail
+set -a; . "$lenv"; set +a
+: "\${QWEN_VLLM_API_BASE:=http://127.0.0.1:9/v1}" "\${BGE_VLLM_API_BASE:=http://127.0.0.1:9/v1}" "\${VLLM_API_KEY:=unset}"
+export QWEN_VLLM_API_BASE BGE_VLLM_API_BASE VLLM_API_KEY
+exec "$d/venv/bin/litellm" --config "$d/litellm.config.yaml" --host 127.0.0.1 --port $port
+LITELLM_START
+    chmod 700 "$d/start_litellm.sh"
+    litellm_pm2_start "$env" || return 0
+    for ((i = 0; i < 45; i++)); do
+        [[ "$(curl -s -o /dev/null -w '%{http_code}' -m 3 "http://127.0.0.1:$port/health/liveliness" 2>/dev/null)" == "200" ]] && break; sleep 2
+    done
+    [[ $i -lt 45 ]] && log_ok "LiteLLM liveliness 200 (:$port)" || log_warn "LiteLLM 이 응답하지 않습니다 — 'omk env logs $env'"
+    key="$(dotenv_get "$lenv" LITELLM_MASTER_KEY)"; url="http://127.0.0.1:$port"
+    if [[ "$(dotenv_get "$envf" LLM_BASE_URL)|$(dotenv_get "$envf" LLM_API_KEY)|$(dotenv_get "$envf" OMK_LITELLM_PORT)" != "$url|$key|$port" ]]; then
+        dotenv_set "$envf" LLM_BASE_URL "$url"; dotenv_set "$envf" LLM_API_KEY "$key"; dotenv_set "$envf" OMK_LITELLM_PORT "$port"; LITELLM_CHANGED=1
+    fi
+}
+litellm_line() { # $1=env $2=llm dir
+    local port lenv; port="$(dotenv_get "$2/.env" OMK_LITELLM_PORT)"; lenv="$(litellm_dir "$1")/litellm.env"
+    [[ -n "$port" ]] || return 0
+    printf 'http://127.0.0.1:%s  (%s)' "$port" "$(litellm_dir "$1")"
+    [[ -n "$(dotenv_get "$lenv" QWEN_VLLM_API_BASE)" ]] || printf '  ※ 업스트림 미설정'
+}
+
 # ── 런타임 이미지 (외부 MCP 격리 · 에이전트 작업 · 아티팩트 실행/내보내기) ─────────────
 # 레포에는 Dockerfile 만 있고 빌드는 "사용자 직접"이라, 설치 직후에는 에이전트 작업과 아티팩트 내보내기가
 # 동작하지 않는다. omk 가 환경별 태그로 빌드하고 .env 에 이미지 이름을 적는다 — 같은 호스트의 dev·staging 이
@@ -700,7 +771,7 @@ runtime_images_remove() { # $1=env — 환경별 태그만 지운다. :latest �
 
 cmd_env_install() {
     local env="$1"; shift
-    local ref="" bench_ref="" public_url="" no_bench=0 no_proxy=0 no_searxng=0 no_images=0 auto="" llm_args=()
+    local ref="" bench_ref="" public_url="" no_bench=0 no_proxy=0 no_searxng=0 no_images=0 no_litellm=0 qwen_base="" bge_base="" vllm_key="" auto="" llm_args=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --ref)          ref="${2:-}"; shift ;;
@@ -710,9 +781,14 @@ cmd_env_install() {
             --no-proxy)     no_proxy=1 ;;
             --no-searxng)   no_searxng=1 ;;
             --no-runtime-images) no_images=1 ;;
+            --no-litellm)   no_litellm=1 ;;
+            --qwen-vllm-base) qwen_base="${2:-}"; shift ;;
+            --bge-vllm-base)  bge_base="${2:-}"; shift ;;
+            --vllm-api-key)   vllm_key="${2:-}"; shift ;;
             --autoupdate)   auto=1 ;;
             --no-autoupdate) auto=0 ;;
-            --llm-base-url|--llm-api-key|--llm-model) llm_args+=("$1" "${2:-}"); shift ;;
+            --llm-base-url) no_litellm=1; llm_args+=("$1" "${2:-}"); shift ;;   # 엔드포인트를 직접 주면 게이트웨이를 두지 않는다
+            --llm-api-key|--llm-model) llm_args+=("$1" "${2:-}"); shift ;;
             -y|--yes)       ASSUME_YES=1 ;;
             *) usage_die "알 수 없는 옵션: $1" ;;
         esac; shift
@@ -746,7 +822,10 @@ cmd_env_install() {
     # 1.6) 런타임 이미지 — 에이전트 작업·아티팩트 내보내기·외부 MCP 격리의 전제.
     [[ $no_images -eq 1 ]] && dotenv_set "$ldir/.env" OMK_RUNTIME_IMAGES off
     runtime_images_ensure "$ldir" "$env"
-    [[ $SEARCH_CHANGED -eq 0 && $RUNTIME_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
+    # 1.7) LiteLLM 게이트웨이 — 앱의 LLM_BASE_URL·LLM_API_KEY 를 채운다.
+    [[ $no_litellm -eq 1 ]] && dotenv_set "$ldir/.env" OMK_LITELLM off
+    litellm_ensure "$ldir" "$env" "$qwen_base" "$bge_base" "$vllm_key"
+    [[ $SEARCH_CHANGED -eq 0 && $RUNTIME_CHANGED -eq 0 && $LITELLM_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
 
     # 2) openmake_bench
     [[ $no_bench -eq 1 ]] || bench_install "$env" "$bench_ref" "$ldir"
@@ -780,7 +859,10 @@ cmd_env_update() {
     ( cd "$ldir" && ./openmake_llm.sh update --yes < /dev/null | cat ) || die "openmake_llm.sh update 실패 ($env)"
     # 새로 받은 Dockerfile 로 빌드한다(안 바뀌었으면 캐시로 수 초). .env 가 바뀐 경우에만 한 번 더 재시작.
     runtime_images_ensure "$ldir" "$env"
-    [[ $RUNTIME_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
+    # 이미 게이트웨이가 있는 환경만 갱신한다(새 config 복사 + 재기동, litellm.env 는 그대로) — update 가 기존 환경의
+    # LLM_BASE_URL 을 가로채지 않게. 새로 붙이려면 'omk env install <env>' 를 다시 실행한다(멱등).
+    LITELLM_CHANGED=0; [[ ! -d "$(litellm_dir "$env")" ]] || litellm_ensure "$ldir" "$env"
+    [[ $RUNTIME_CHANGED -eq 0 && $LITELLM_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
     bench_update "$env"
     [[ -f "$(proxy_dir)/caddy.d/$env.caddy" ]] && { proxy_render "$env"; proxy_start_or_reload; }
     log_ok "$env 갱신 완료"
@@ -865,7 +947,12 @@ env_summary() { # $1=env
     [[ -n "$pport" ]] && echo "  proxy     http://localhost:$pport  (외부 공개는 터널/DNS 를 이 포트로: scripts/cloudflared/config.yml.example)"
     [[ -n "$(dotenv_get "$ldir/.env" OMK_APP_URL | grep -E '^https?://' | grep -v localhost || true)" ]] && echo "  공개 주소  $(dotenv_get "$ldir/.env" OMK_APP_URL)"
     echo "  웹 검색   $(search_line "$ldir")"
+    [[ -z "$(litellm_line "$env" "$ldir")" ]] || echo "  LiteLLM   $(litellm_line "$env" "$ldir")"
     echo ""
+    if [[ -n "$(dotenv_get "$ldir/.env" OMK_LITELLM_PORT)" && -z "$(dotenv_get "$(litellm_dir "$env")/litellm.env" QWEN_VLLM_API_BASE)" ]]; then
+        printf "  %s[할 일]%s 로컬 모델 업스트림이 비어 있습니다 — $(litellm_dir "$env")/litellm.env 의\n" "$C_WARN" "$C_RESET"
+        echo "         QWEN_VLLM_API_BASE / BGE_VLLM_API_BASE / VLLM_API_KEY 를 넣고 'omk env start $env'"
+    fi
     if [[ -d "$bdir" && -z "$(dotenv_get "$bdir/.env" OMK_API_KEY)" ]]; then
         printf "  %s[할 일]%s bench 가 llm 모델을 부르려면 API 키가 필요합니다 (자동 발급 불가):\n" "$C_WARN" "$C_RESET"
         echo "         llm 웹 → 설정 → API 키 → chat 스코프 키 발급 → $bdir/.env 의 OMK_API_KEY 에 넣고 'omk env start $env'"
@@ -899,6 +986,7 @@ cmd_env_start() {
     load_toolchain "$ldir"
     # openmake_llm.sh start 는 tty 면 로그를 계속 스트리밍한다 — 파이프로 끊는다.
     ( cd "$ldir" && ./openmake_llm.sh start < /dev/null | cat ) || die "llm 기동 실패"
+    litellm_pm2_start "$env" || true
     [[ -d "$bdir" ]] && bench_pm2_start "$bdir" "$env"
     [[ -f "$(proxy_dir)/caddy.d/$env.caddy" ]] && proxy_start_or_reload
     return 0
@@ -906,7 +994,9 @@ cmd_env_start() {
 cmd_env_stop() {
     local env="$1" ldir n; ldir="$(llm_dir "$env")"
     load_toolchain "$ldir"; require_pm2
-    n="$(bench_pm2_name "$env")"; pm2 describe "$n" >/dev/null 2>&1 && pm2 stop "$n" >/dev/null && log_ok "PM2 $n 정지" || true
+    for n in "$(bench_pm2_name "$env")" "$(litellm_pm2_name "$env")"; do
+        pm2 describe "$n" >/dev/null 2>&1 && pm2 stop "$n" >/dev/null && log_ok "PM2 $n 정지" || true
+    done
     ( cd "$ldir" && ./openmake_llm.sh stop < /dev/null | cat ) || die "llm 정지 실패"
 }
 cmd_env_logs() {

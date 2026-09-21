@@ -22,8 +22,8 @@ ok() { if eval "$2"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); printf 'FAIL 
 # ── 이름 파생: online 은 기본(무접미사), 그 외는 -<env> ──
 eq "suffix online"  "$(env_suffix online)"  ""
 eq "suffix staging" "$(env_suffix staging)" "-staging"
-eq "pm2 online"     "$(pm2_names online)"   "openmake-llm openmake-next openmake-discord openmake-bench omk-updater-online"
-eq "pm2 staging"    "$(pm2_names staging)"  "openmake-llm-staging openmake-next-staging openmake-discord-staging openmake-bench-staging omk-updater-staging"
+eq "pm2 online"     "$(pm2_names online)"   "openmake-llm openmake-next openmake-discord openmake-bench openmake-litellm omk-updater-online"
+eq "pm2 staging"    "$(pm2_names staging)"  "openmake-llm-staging openmake-next-staging openmake-discord-staging openmake-bench-staging openmake-litellm-staging omk-updater-staging"
 eq "docker online"  "$(docker_containers online)"  "openmake-postgres openmake-redis openmake-searxng"
 eq "docker staging" "$(docker_containers staging)" "openmake-staging-postgres openmake-staging-redis openmake-staging-searxng"
 eq "volumes online" "$(docker_volumes online)"     "openmake_pgdata openmake_redisdata"
@@ -73,6 +73,11 @@ printf 'CORS_ORIGINS=x\n' > "$OX/.env"; env_apply_origins "$OX"; eq "origins: �
 
 ok "proxy: 남의 OMK_ROOT 프록시는 우리 것이 아니다" '! ( proxy_running() { return 0; }; pm2_app_cwd() { printf /somewhere/else/caddy; }; proxy_is_ours )'
 ok "proxy: 이 OMK_ROOT 의 프록시는 우리 것"          '( proxy_running() { return 0; }; pm2_app_cwd() { proxy_dir; }; proxy_is_ours )'
+
+# ── LiteLLM: 환경별 이름·위치, off 면 아무것도 안 함 ──
+eq "litellm names" "$(litellm_pm2_name staging)|$(litellm_pm2_name online)|$(litellm_dir dev)" "openmake-litellm-staging|openmake-litellm|$OMK_ROOT/dev/litellm"
+LX="$TMP/lx"; mkdir -p "$LX"; printf 'OMK_LITELLM=off\nLLM_BASE_URL=http://x\n' > "$LX/.env"
+litellm_ensure "$LX" dev >/dev/null; eq "litellm: off 면 그대로" "$LITELLM_CHANGED|$(dotenv_get "$LX/.env" LLM_BASE_URL)|$([[ -d "$OMK_ROOT/dev/litellm" ]] && echo y || echo n)" "0|http://x|n"
 
 # ── 런타임 이미지 태그: 환경별, 기본 인스턴스는 소스 기본값(:latest) ──
 eq "images dev"    "$(runtime_image_names dev)"    "openmake-mcp-runtime:dev openmake-task-runtime:dev"
