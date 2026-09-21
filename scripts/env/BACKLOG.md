@@ -70,7 +70,6 @@
 - 구형 docker 빌더(buildx 없음)는 이미지를 지우면 빌드 캐시도 사라진다 — 그래서 `reset` 이 런타임 이미지를 남긴다(`--purge-images`). 환경을 많이 만들면 환경당 약 7GB 가 쌓인다
 - 기본 모델 서버는 호스트당 하나다 — 모델을 바꾸면 그 서버를 쓰는 다른 환경은 `omk env install <env>` 를 다시 돌려야 게이트웨이의 모델 이름이 맞는다
 - `omk dev up`(작업 클론·포그라운드)과 환경 `dev` 가 같은 인스턴스 이름을 쓴다 — 한 호스트에서 동시에 쓸 수 없다(나중 것을 소유권 가드가 거부). 이름을 나눌지 미결정
-- 런타임 이미지가 준비되면 `MCP_SANDBOX_ENABLED`·`TASK_SANDBOX_ENABLED`·`ARTIFACT_EXPORT_ENABLED` 를 값이 없을 때 `true` 로 둔다 — 소스 주석은 "운영 활성화는 사용자 직접". online 에서도 자동으로 켤지 미결정
 - `scripts/backups/db-backup.sh` 와 운영이 쓰는 레포 밖 백업 스크립트의 통일 방향 미결정
 
 ## 4. 업스트림에 알릴 것
