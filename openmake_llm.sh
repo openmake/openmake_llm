@@ -132,6 +132,8 @@ _canary_retries="${CANARY_HEALTH_RETRIES:-$(env_line CANARY_HEALTH_RETRIES)}"
 readonly CANARY_HEALTH_RETRIES="${_canary_retries:-20}"
 _canary_interval="${CANARY_HEALTH_INTERVAL:-$(env_line CANARY_HEALTH_INTERVAL)}"
 readonly CANARY_HEALTH_INTERVAL="${_canary_interval:-3}"
+_canary_stop_grace="${CANARY_STOP_GRACE_SEC:-$(env_line CANARY_STOP_GRACE_SEC)}"
+readonly CANARY_STOP_GRACE_SEC="${_canary_stop_grace:-15}"   # 카나리 정상 종료 유예, 초과 시 SIGKILL
 _canary_release_dir="${CANARY_RELEASE_DIR:-$(env_line CANARY_RELEASE_DIR)}"
 readonly CANARY_RELEASE_DIR="${_canary_release_dir:-$SCRIPT_DIR/.releases}"
 _canary_keep="${CANARY_KEEP_RELEASES:-$(env_line CANARY_KEEP_RELEASES)}"
@@ -881,12 +883,40 @@ canary_smoke_test() {
         sleep "$CANARY_HEALTH_INTERVAL"
     done
 
-    if [[ -n "$canary_pid" ]]; then
-        kill "$canary_pid" 2>/dev/null || true
-        # cluster 서브커맨드가 자식 프로세스를 띄울 수 있어 프로세스 그룹째 정리한다.
-        pkill -P "$canary_pid" 2>/dev/null || true
-        wait "$canary_pid" 2>/dev/null || true
-    fi
+    # pid 파일과 별개로 카나리 포트의 리스너도 대상에 넣는다 — 2026-09-18 카나리가 종료되지 않고
+    # 5일간 옛 코드로 주기 프로브를 돌린 선례(ACE-Step 이 5분마다 곡을 생성). 정상 종료를 기다린 뒤
+    # 살아 있으면 SIGKILL 로 올리고, 실제로 사라졌는지 확인한다(wait 는 서브셸 자식이라 무의미).
+    local -a canary_pids=()
+    [[ -n "$canary_pid" ]] && canary_pids+=("$canary_pid")
+    local port_pid
+    for port_pid in $(lsof -t -iTCP:"$CANARY_HEALTH_PORT" -sTCP:LISTEN 2>/dev/null); do
+        [[ "$port_pid" != "$canary_pid" ]] && canary_pids+=("$port_pid")
+    done
+    local p
+    for p in "${canary_pids[@]}"; do
+        # cluster 서브커맨드가 자식 프로세스를 띄울 수 있어 자식부터 정리한다.
+        pkill -P "$p" 2>/dev/null || true
+        kill "$p" 2>/dev/null || true
+    done
+    local grace
+    for ((grace=0; grace<CANARY_STOP_GRACE_SEC; grace++)); do
+        local alive=0
+        for p in "${canary_pids[@]}"; do kill -0 "$p" 2>/dev/null && alive=1; done
+        [[ "$alive" -eq 0 ]] && break
+        sleep 1
+    done
+    for p in "${canary_pids[@]}"; do
+        if kill -0 "$p" 2>/dev/null; then
+            log_warn "카나리 pid $p 가 ${CANARY_STOP_GRACE_SEC}s 안에 종료되지 않음 — SIGKILL"
+            kill -KILL "$p" 2>/dev/null || true
+        fi
+    done
+    sleep 1
+    for p in "${canary_pids[@]}"; do
+        if kill -0 "$p" 2>/dev/null; then
+            log_err "카나리 pid $p 가 남아 있음 — 수동 정리 필요 (옛 코드로 주기 작업을 계속 돌린다)"
+        fi
+    done
 
     if [[ "$ok" -eq 1 ]]; then
         log_ok "카나리 헬스체크 통과 (${i}회 시도) — 운영 전환 진행"
