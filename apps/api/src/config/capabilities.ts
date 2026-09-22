@@ -113,7 +113,7 @@ export const CAPABILITY_DEFAULTS: Partial<Record<Capability, string>> = {
     'image.generate': envDefault('CAPABILITY_DEFAULT_IMAGE_GENERATE'),
     // music.generate — DGX ACE-Step 1.5(MIT, 생성 음악 상업 이용 허용). 다른 로컬 capability 와 같이 LiteLLM alias 다
     // (게이트웨이에 그 이름이 없으면 호출이 명시 실패한다 — 끄려면 `CAPABILITY_DEFAULT_MUSIC_GENERATE=`).
-    'music.generate': envDefault('CAPABILITY_DEFAULT_MUSIC_GENERATE', 'local-llm:acestep-v15-turbo'),
+    'music.generate': envDefault('CAPABILITY_DEFAULT_MUSIC_GENERATE', 'local-llm:acestep-v15-xl-turbo'),
 };
 
 /** 사람이 읽는 라벨(ko) — Planner 프롬프트·UI 안내 공용 (i18n 은 프론트가 별도 보유) */

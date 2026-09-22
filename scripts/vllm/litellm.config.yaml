@@ -36,9 +36,9 @@ model_list:
   # 이 라우트로 부르면 역직렬화 500). 여기 두는 이유는 /model/info 에 떠야 앱이 로컬 카탈로그에
   # 담고, 설정의 '기능별 모델 배정' 드롭다운에 선택지로 나오기 때문이다. 앱은 이 모델을
   # role='capability' 로 분류해 주기 프로브의 ping 대상에서 제외한다(ping 1회 = 곡 1개 생성).
-  - model_name: acestep-v15-turbo
+  - model_name: acestep-v15-xl-turbo
     litellm_params:
-      model: openai/acestep/acestep-v15-turbo
+      model: openai/acestep/acestep-v15-xl-turbo
       api_base: os.environ/ACESTEP_API_BASE        # http://<VLLM_TAILSCALE_HOST>:8005/v1
       api_key: os.environ/VLLM_API_KEY
 

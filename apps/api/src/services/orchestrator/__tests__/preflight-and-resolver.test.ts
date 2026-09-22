@@ -66,9 +66,9 @@ describe('resolveCapabilityTarget', () => {
     });
 
     it('음악 생성: 게이트웨이 base + master key, 경로만 pass-through (전용 주소·겉키 없음, 2026-09-23)', async () => {
-        const t = await resolveCapabilityTarget('music.generate', undefined, deps({ global: [row('__global__', 'music.generate', 'local-llm:acestep-v15-turbo')] }));
+        const t = await resolveCapabilityTarget('music.generate', undefined, deps({ global: [row('__global__', 'music.generate', 'local-llm:acestep-v15-xl-turbo')] }));
         expect(t).toMatchObject({
-            providerId: 'local-llm', model: 'acestep-v15-turbo',
+            providerId: 'local-llm', model: 'acestep-v15-xl-turbo',
             baseUrl: 'http://127.0.0.1:13401', endpoint: '/music/v1/chat/completions',
             transport: 'gateway', costOwner: 'local',
         });
@@ -80,7 +80,7 @@ describe('resolveCapabilityTarget', () => {
         expect(await validateCapabilityAssignment('u1', 'openrouter:m', deps({ userKey: null, keyRow: null }))).toMatch(/키를 먼저 등록/);
         expect(await validateCapabilityAssignment('u1', 'local-llm:img-gen')).toBeNull();
         expect(await validateCapabilityAssignment('u1', 'openrouter:m', deps({ userKey: 'k' }), 'music.generate')).toMatch(/로컬 음악 서버/);
-        expect(await validateCapabilityAssignment('u1', 'local-llm:acestep-v15-turbo', {}, 'music.generate')).toBeNull();
+        expect(await validateCapabilityAssignment('u1', 'local-llm:acestep-v15-xl-turbo', {}, 'music.generate')).toBeNull();
     });
 });
 
