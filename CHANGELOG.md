@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.82.0](https://github.com/openmake/openmake_llm/compare/v1.81.0...v1.82.0) (2026-09-22)
+
+
+### ✨ 기능
+
+* **orchestrator:** 음악 생성(music.generate) — DGX ACE-Step 1.5 를 LiteLLM 게이트웨이로 ([#977](https://github.com/openmake/openmake_llm/issues/977)) ([4710ffc](https://github.com/openmake/openmake_llm/commit/4710ffcca1bbe741c1023ada060646a41b2679b7))
+
 ## [1.81.0](https://github.com/openmake/openmake_llm/compare/v1.80.1...v1.81.0) (2026-09-22)
 
 
