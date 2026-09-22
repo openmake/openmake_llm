@@ -21,7 +21,7 @@ const LOCAL_ENTRIES = [
     { id: 'test-model', displayName: 'Test Model', description: '테스트 로컬 모델', role: 'chat', contextLength: 262144 },
     { id: 'down-model', displayName: 'Down', description: '비가용', role: 'chat', available: false, unavailableReason: 'probe 실패' },
     { id: 'bge-m3', displayName: 'bge-m3', description: '임베딩', role: 'embedding' },
-    { id: 'acestep-v15-turbo', displayName: 'acestep-v15-turbo', description: '음악 생성', role: 'capability' },
+    { id: 'acestep-v15-xl-turbo', displayName: 'acestep-v15-xl-turbo', description: '음악 생성', role: 'capability' },
 ];
 jest.mock('../../config/local-models', () => ({
     getLocalModels: () => LOCAL_ENTRIES,
@@ -88,16 +88,16 @@ describe('Models 응답 계약', () => {
 
         const all = await request(app).get('/api/models');
         expect(ids(all)).toEqual(expect.arrayContaining([
-            'local-llm:test-model', 'local-llm:bge-m3', 'local-llm:acestep-v15-turbo',
+            'local-llm:test-model', 'local-llm:bge-m3', 'local-llm:acestep-v15-xl-turbo',
         ]));
 
         const chat = await request(app).get('/api/models').query({ chatOnly: '1' });
         expect(ids(chat)).toContain('local-llm:test-model');
         expect(ids(chat)).not.toContain('local-llm:bge-m3');
-        expect(ids(chat)).not.toContain('local-llm:acestep-v15-turbo');
+        expect(ids(chat)).not.toContain('local-llm:acestep-v15-xl-turbo');
 
         const usable = await request(app).get('/api/models').query({ usableOnly: '1' });
         expect(ids(usable)).not.toContain('local-llm:bge-m3');
-        expect(ids(usable)).not.toContain('local-llm:acestep-v15-turbo');
+        expect(ids(usable)).not.toContain('local-llm:acestep-v15-xl-turbo');
     });
 });

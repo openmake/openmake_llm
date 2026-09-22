@@ -24,9 +24,9 @@ describe('selectLocalEntriesFromModelInfo', () => {
 
     it('음악 생성(acestep)은 chat/completions 를 받아도 role=capability — 프로브 ping 대상에서 빠져야 한다', () => {
         const out = selectLocalEntriesFromModelInfo([
-            { model_name: 'acestep-v15-turbo', litellm_params: { model: 'openai/acestep/acestep-v15-turbo', api_base: 'http://vllm-host:8005/v1' }, model_info: {} },
+            { model_name: 'acestep-v15-xl-turbo', litellm_params: { model: 'openai/acestep/acestep-v15-xl-turbo', api_base: 'http://vllm-host:8005/v1' }, model_info: {} },
         ]);
-        expect(out.map((m) => `${m.id}:${m.role}`)).toEqual(['acestep-v15-turbo:capability']);
+        expect(out.map((m) => `${m.id}:${m.role}`)).toEqual(['acestep-v15-xl-turbo:capability']);
     });
 
     it('vLLM 이 두 이름을 서빙해도 LiteLLM upstream 이 다르면 별개 항목 — 접는 기준은 upstream 동일성', () => {
