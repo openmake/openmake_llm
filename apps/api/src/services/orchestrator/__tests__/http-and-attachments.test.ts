@@ -134,3 +134,28 @@ describe('coerceJobFollowup — Planner 가 simple 로 답해도 영상 job 첨�
         expect(coerceJobFollowup(orphan(), new Map(), '아까 만든 영상 다시 보여줘').tasks[0].attachments).toEqual([]);
     });
 });
+
+describe('applyStatedVideoParams — 사용자 원문의 영상 길이·비율이 계획값보다 우선 (2026-09-22)', () => {
+    const { applyStatedVideoParams } = jest.requireActual('../orchestrate') as typeof import('../orchestrate');
+    const { validatePlan } = jest.requireActual('../plan-schema') as typeof import('../plan-schema');
+    const plan = (input: Record<string, unknown>) => {
+        const v = validatePlan({ complexity: 'multi', tasks: [{ id: 't1', capability: 'video.generate', input: { instruction: 'x', ...input } }] }, new Set(['j1']));
+        if (!v.ok) throw new Error(v.reason);
+        return v.plan;
+    };
+    const extra = (message: string, input: Record<string, unknown> = {}) => applyStatedVideoParams(plan(input), message).tasks[0].extra;
+
+    it('Planner 가 빠뜨린 길이·비율을 원문에서 채운다', () => {
+        expect(extra('세로 쇼츠용으로 고양이가 뛰는 8초 영상 만들어줘', { size: '720x1280' })).toEqual({ seconds: '8', size: '720x1280' });
+        expect(extra('Make a 6-second square video of a spinning cup')).toEqual({ seconds: '6', size: '720x720' });
+        expect(extra('가로 16:9 로 5초짜리')).toEqual({ seconds: '5', size: '1280x720' });
+    });
+    it('원문 값이 계획값을 이긴다 — 길이가 여러 개면 가장 큰 값', () => {
+        expect(extra('3초 뒤에 로고가 뜨는 10초 영상', { seconds: '3' }).seconds).toBe('10');
+    });
+    it('원문에 없으면 계획값 그대로, job 재조회 작업은 건드리지 않는다', () => {
+        expect(extra('도시 야경 타임랩스 영상 만들어줘', { seconds: '10', size: '1280x720' })).toEqual({ seconds: '10', size: '1280x720' });
+        expect(extra('도시 야경 영상 만들어줘')).toEqual({});
+        expect(extra('아까 그 5초 영상 보여줘', { attachments: ['j1'] })).toEqual({});
+    });
+});

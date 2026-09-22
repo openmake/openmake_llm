@@ -70,6 +70,11 @@ export const PLAN_JSON_SCHEMA = {
                             text: { type: 'string' },
                             attachments: { type: 'array', items: { type: 'string' } },
                             refs: { type: 'array', items: { type: 'string' } },
+                            // 인자 키도 선언해야 한다 — 스키마 강제 디코딩(vLLM xgrammar 등)은 선언 안 된 키를 만들지 않아
+                            // 영상 길이·크기가 한 번도 전달되지 않았다(구조화 출력 planner 의 작업 904개 중 extra 0건, 2026-09-22)
+                            seconds: { type: 'string' },
+                            size: { type: 'string' },
+                            negative_prompt: { type: 'string' },
                         },
                     },
                     depends_on: { type: 'array', items: { type: 'string' } },

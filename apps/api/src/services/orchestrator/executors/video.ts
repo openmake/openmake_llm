@@ -5,7 +5,7 @@
  *  - 상한 안에 안 끝나면 **pending**(ok=false, 실패 아님) — job 을 orchestrator_jobs 에 보존해 후속 턴이 새 제출 없이
  *    같은 job 만 재조회한다(task.attachments 의 kind=job). 완료 전엔 의존 자식이 실행되지 않는다.
  */
-import { CAPABILITY_LIMITS, VIDEO_DONE_STATUSES, VIDEO_GEN_DEFAULT_SECONDS, VIDEO_GEN_DEFAULT_SIZE, VIDEO_TERMINAL_STATUSES, videoAdapterFor, type VideoProviderAdapter } from '../../../config/capabilities';
+import { CAPABILITY_LIMITS, VIDEO_DONE_STATUSES, VIDEO_GEN_DEFAULT_NEGATIVE_PROMPT, VIDEO_GEN_DEFAULT_SECONDS, VIDEO_GEN_DEFAULT_SIZE, VIDEO_NEGATABLE_TERM_PATTERN, VIDEO_PROMPT_NEGATION_PATTERN, VIDEO_TERMINAL_STATUSES, videoAdapterFor, type VideoProviderAdapter } from '../../../config/capabilities';
 import { getPool } from '../../../data/models/unified-database';
 import { OrchestratorJobsRepository } from '../../../data/repositories/orchestrator-jobs-repo';
 import { resolveCapabilityTarget, type CapabilityTarget } from '../capability-resolver';
@@ -43,6 +43,20 @@ function contentUrl(t: CapabilityTarget, a: VideoProviderAdapter, v: JobView): s
     return `${t.baseUrl}/v1/videos/${encodeURIComponent(v.id)}/content`;
 }
 function sameOrigin(a: string, b: string): boolean { try { return new URL(a).origin === new URL(b).origin; } catch { return false; } }
+/** 기본 제외 목록 + 계획이 더한 제외 요소 + 프롬프트에서 걷어낸 요소(중복 제거) */
+function negativePrompt(extra: unknown, excluded: string[]): string {
+    const terms = [VIDEO_GEN_DEFAULT_NEGATIVE_PROMPT, typeof extra === 'string' ? extra : '', ...excluded]
+        .flatMap((s) => s.split(',')).map((s) => s.trim()).filter(Boolean);
+    return [...new Set(terms.map((s) => s.toLowerCase()))].join(', ');
+}
+/** 프롬프트의 "no text" 류 부정 표현을 걷어내고 그 대상을 돌려준다 — 부정어가 오히려 글자를 불러온다(config 실측 주석) */
+export function splitVideoNegations(prompt: string): { prompt: string; excluded: string[] } {
+    const excluded: string[] = [];
+    const cleaned = prompt
+        .replace(VIDEO_PROMPT_NEGATION_PATTERN, (_m, target: string) => { excluded.push(...(target.match(VIDEO_NEGATABLE_TERM_PATTERN) ?? [])); return ''; })
+        .replace(/\s{2,}/g, ' ').replace(/\s+([,.;])/g, '$1').replace(/^[\s,;]+|[\s,;]+$/g, '');
+    return { prompt: cleaned || prompt, excluded };
+}
 
 /** abort 시 즉시 reject, 정상 종료 시 리스너 정리 */
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -115,12 +129,16 @@ export const videoGenerateExecutor: CapabilityExecutor = async (task, ctx) => {
         logger.info(`[Video] 기존 job 재조회 ${jobId} status=${view.status}`);
     } else {
         const refs = refsRawText(task, ctx, 600);
-        const prompt = [task.text || task.instruction, refs ? `Context: ${refs}` : ''].filter(Boolean).join('\n').trim();
+        // negative_prompt 를 모르는 provider 는 부정 표현이 유일한 제외 수단이라 그대로 둔다
+        const scene = adapter.negativePrompt ? splitVideoNegations(task.text || task.instruction) : { prompt: task.text || task.instruction, excluded: [] };
+        const prompt = [scene.prompt, refs ? `Context: ${refs}` : ''].filter(Boolean).join('\n').trim();
         if (!prompt) throw new Error('video.generate: instruction(프롬프트)이 비어 있습니다');
         const seconds = String(task.extra.seconds || target.params.seconds || VIDEO_GEN_DEFAULT_SECONDS);
         const size = String(task.extra.size || target.params.size || VIDEO_GEN_DEFAULT_SIZE);
+        const body: Record<string, unknown> = { model: target.model, prompt, seconds, size };
+        if (adapter.negativePrompt) body.negative_prompt = negativePrompt(task.extra.negative_prompt, scene.excluded);
         view = toJobView(await callJson<Record<string, unknown>>(target, {
-            body: { model: target.model, prompt, seconds, size }, timeoutMs: CAPABILITY_LIMITS.VIDEO_SUBMIT_TIMEOUT_MS, signal: ctx.signal,
+            body, timeoutMs: CAPABILITY_LIMITS.VIDEO_SUBMIT_TIMEOUT_MS, signal: ctx.signal,
         }), adapter);
         if (!view.id) throw new Error('영상 생성 응답에 작업 id 가 없습니다');
         jobId = view.id;
