@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.83.0](https://github.com/openmake/openmake_llm/compare/v1.82.0...v1.83.0) (2026-09-22)
+
+
+### ✨ 기능
+
+* **models:** 기능별 모델 배정에 로컬 비채팅 모델(임베딩·음악) 노출 ([#979](https://github.com/openmake/openmake_llm/issues/979)) ([01befcc](https://github.com/openmake/openmake_llm/commit/01befcc8d150ce6e20d8f73e84ec9c22fb2437fe))
+* **music:** ACE-Step XL turbo 로 교체 + canary-deploy 카나리 종료 보강 ([#981](https://github.com/openmake/openmake_llm/issues/981)) ([e818bcf](https://github.com/openmake/openmake_llm/commit/e818bcf9d55be654a308b41f9c0770eba50beca5))
+
 ## [1.82.0](https://github.com/openmake/openmake_llm/compare/v1.81.0...v1.82.0) (2026-09-22)
 
 
