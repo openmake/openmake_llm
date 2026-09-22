@@ -55,7 +55,6 @@ const CAPABILITY_PARAM_KEYS: Record<string, readonly string[]> = {
 export const UNSUPPORTED_CAPABILITIES: ReadonlySet<string> = new Set([
   "audio.analyze",
   "music.analyze",
-  "music.generate",
   "video.analyze",
 ]);
 

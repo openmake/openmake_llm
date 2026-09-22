@@ -75,6 +75,8 @@ export const PLAN_JSON_SCHEMA = {
                             seconds: { type: 'string' },
                             size: { type: 'string' },
                             negative_prompt: { type: 'string' },
+                            duration: { type: 'string' },
+                            lyrics: { type: 'string' },
                         },
                     },
                     depends_on: { type: 'array', items: { type: 'string' } },
