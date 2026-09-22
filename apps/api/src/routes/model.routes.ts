@@ -19,7 +19,7 @@ import { asyncHandler } from '../utils/error-handler';
 import { createLogger } from '../utils/logger';
 import { getModelForRole } from '../config/model-roles';
 import { resolveLocalCapabilities } from '../config/model-defaults';
-import { getLocalChatModels, findLocalModel } from '../config/local-models';
+import { getLocalModels, findLocalModel } from '../config/local-models';
 import { requireAuth, requireAdmin, optionalAuth } from '../auth';
 import { getModelHealthMonitor } from '../services/model-health-monitor';
 import { ExternalKeysRepository } from '../data/repositories/external-keys-repo';
@@ -84,13 +84,16 @@ router.get('/models', optionalAuth, asyncHandler(async (req: Request, res: Respo
     }
 
     // Local models catalog — config/local-models.ts (서버 proxy 가 model 명으로 라우팅)
-    // 기본 chat 모델 (OMK_CHAT_MODEL 또는 LLM_DEFAULT_MODEL) 을 첫 entry 로 (UI 정렬 호환).
-    // includeUnavailable=true: probe 결과 unavailable 모델도 응답에 포함 (UI dimmed 표시).
+    // 채팅 모델뿐 아니라 로컬 **전체**(임베딩·capability 전용 포함)를 싣는다 — 기능별 모델 배정
+    // 드롭다운이 무필터 목록을 써야 하기 때문. 채팅용 화면은 아래 usableOnly/chatOnly 가 거른다.
+    // 정렬: 기본 chat 모델 → 나머지 chat → 비채팅 (UI 정렬 호환).
+    // unavailable 모델도 포함한다 — UI 가 dimmed 로 표시한다.
     const defaultChat = getModelForRole('chat');
-    const chatModels = getLocalChatModels({ includeUnavailable: true });
+    const localModels = getLocalModels();
     const ordered = [
-        ...chatModels.filter(m => m.id === defaultChat),
-        ...chatModels.filter(m => m.id !== defaultChat),
+        ...localModels.filter(m => m.id === defaultChat),
+        ...localModels.filter(m => m.id !== defaultChat && m.role === 'chat'),
+        ...localModels.filter(m => m.id !== defaultChat && m.role !== 'chat'),
     ];
 
     const models: ModelEntry[] = ordered.map((m): ModelEntry => {

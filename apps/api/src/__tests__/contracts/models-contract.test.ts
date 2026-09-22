@@ -15,12 +15,16 @@ jest.mock('../../auth', () => ({
 jest.mock('../../config/model-roles', () => ({
     getModelForRole: () => 'test-model',
 }));
+// 라우트는 로컬 **전체**(chat + embedding + capability)를 싣는다 — 기능별 모델 배정 드롭다운이
+// 무필터 목록을 쓰기 때문. 채팅용 화면은 usableOnly/chatOnly 쿼리가 거른다.
 const LOCAL_ENTRIES = [
-    { id: 'test-model', displayName: 'Test Model', description: '테스트 로컬 모델', contextLength: 262144 },
-    { id: 'down-model', displayName: 'Down', description: '비가용', available: false, unavailableReason: 'probe 실패' },
+    { id: 'test-model', displayName: 'Test Model', description: '테스트 로컬 모델', role: 'chat', contextLength: 262144 },
+    { id: 'down-model', displayName: 'Down', description: '비가용', role: 'chat', available: false, unavailableReason: 'probe 실패' },
+    { id: 'bge-m3', displayName: 'bge-m3', description: '임베딩', role: 'embedding' },
+    { id: 'acestep-v15-turbo', displayName: 'acestep-v15-turbo', description: '음악 생성', role: 'capability' },
 ];
 jest.mock('../../config/local-models', () => ({
-    getLocalChatModels: () => LOCAL_ENTRIES,
+    getLocalModels: () => LOCAL_ENTRIES,
     // 능력 해석이 프로브 실측치를 참조하므로 라우트가 이 조회를 함께 쓴다.
     findLocalModel: (id: string) => LOCAL_ENTRIES.find((m) => m.id === id),
 }));
@@ -49,9 +53,8 @@ jest.mock('../../providers/i-provider', () => ({
 jest.mock('../../config/external-providers', () => ({
     getProviderCatalogEntry: jest.fn(),
 }));
-jest.mock('../../config/role-model-filter', () => ({
-    isRoleAssignableModel: () => true,
-}));
+// role-model-filter 는 순수 함수(id 패턴 + 파라미터 파싱)라 mock 하지 않는다 —
+// chatOnly/usableOnly 가 비채팅 로컬 모델을 실제로 거르는지까지 이 테스트가 고정한다.
 
 import modelRouter from '../../routes/model.routes';
 
@@ -75,5 +78,26 @@ describe('Models 응답 계약', () => {
         const r = await request(app).get('/api/models').query({ usableOnly: '1' });
         expect(r.status).toBe(200);
         expectContract('/api/models', 'get', '200', r.body);
+    });
+
+    // 기능별 모델 배정(capability) 드롭다운은 이 무필터 목록을 그대로 쓴다 — 임베딩·음악처럼
+    // 채팅이 안 되는 로컬 모델도 배정 대상이므로 반드시 실려야 한다(2026-09-23).
+    test('무필터 목록엔 임베딩·capability 로컬 모델이 실리고, chatOnly/usableOnly 는 그것을 제외한다', async () => {
+        const ids = (r: { body: { data: { models: Array<{ modelId: string }> } } }) =>
+            r.body.data.models.map((m) => m.modelId);
+
+        const all = await request(app).get('/api/models');
+        expect(ids(all)).toEqual(expect.arrayContaining([
+            'local-llm:test-model', 'local-llm:bge-m3', 'local-llm:acestep-v15-turbo',
+        ]));
+
+        const chat = await request(app).get('/api/models').query({ chatOnly: '1' });
+        expect(ids(chat)).toContain('local-llm:test-model');
+        expect(ids(chat)).not.toContain('local-llm:bge-m3');
+        expect(ids(chat)).not.toContain('local-llm:acestep-v15-turbo');
+
+        const usable = await request(app).get('/api/models').query({ usableOnly: '1' });
+        expect(ids(usable)).not.toContain('local-llm:bge-m3');
+        expect(ids(usable)).not.toContain('local-llm:acestep-v15-turbo');
     });
 });
