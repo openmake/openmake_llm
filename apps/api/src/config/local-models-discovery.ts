@@ -15,7 +15,7 @@ export interface GatewayModelInfoEntry {
     model_info?: { mode?: string };
 }
 
-/** 채팅 목록에서 제외하는 LiteLLM `model_info.mode` */
+/** role='capability'(채팅 아님) 로 분류하는 LiteLLM `model_info.mode` */
 const NON_CHAT_MODES: ReadonlySet<string> = new Set([
     'image_generation', 'embedding', 'rerank', 'audio_transcription', 'audio_speech', 'moderation',
 ]);
@@ -23,8 +23,7 @@ const NON_CHAT_MODES: ReadonlySet<string> = new Set([
 /** id 패턴만으로 역할을 정하는 안전망 — `/model/info` 가 mode 를 비워 두는 커스텀 배포용 */
 const EMBEDDING_ID_PATTERNS = ['bge', 'embed', 'embedding'];
 // ⚠️ acestep(음악 생성)은 `/v1/chat/completions` 를 받지만 호출 한 번이 곧 음악 생성이다 —
-//    카탈로그에 들어오면 주기 프로브의 ping 이 매번 GPU 작업을 만든다. capability 배정은 카탈로그를
-//    거치지 않으므로(`toLocalModelTag` 는 순수 문자열) 여기서 빼도 music.generate 는 정상 동작한다.
+//    role='capability' 로 분류해 프로브 ping 대상에서 빼야 한다(`local-models.ts` 프로브 루프).
 const NON_CHAT_ID_PATTERNS = ['rerank', 'sdxl', 'stable-diffusion', 'dall-e', 'dalle', 'whisper', 'tts', 'clip', 'acestep'];
 
 function upstreamBasename(model: string | undefined): string | undefined {
@@ -36,7 +35,9 @@ function upstreamBasename(model: string | undefined): string | undefined {
 /**
  * `/model/info` 응답에서 로컬 카탈로그 엔트리를 고른다 (순수 함수).
  *   - provider prefix(`openrouter/*` 등) 가 있는 항목 제외 → 로컬만
- *   - `mode` 또는 id 패턴이 비채팅이면 제외 (임베딩은 role='embedding' 으로 유지)
+ *   - `mode`/id 패턴으로 role 을 정한다: 임베딩 → 'embedding', 그 밖의 비채팅(음악·이미지·STT 등)
+ *     → 'capability'(기능별 배정 전용, 프로브 ping 제외), 나머지 → 'chat'. **버리지 않는다** —
+ *     채팅 목록에서 빼는 일은 `getLocalChatModels()` 와 `role-model-filter` 가 맡는다.
  *   - 같은 upstream(`litellm_params.model` + `api_base`) 을 가리키는 alias 는 하나로 접는다.
  *     정식 이름 = upstream 모델명과 같은 model_name (없으면 첫 항목)
  *   - `prev` 에 같은 id 가 있으면 프로브 실측치(가용성·능력·컨텍스트)를 보존한다
@@ -50,10 +51,6 @@ export function selectLocalEntriesFromModelInfo(
     for (const e of data) {
         const name = e.model_name;
         if (!name || name.includes('/')) continue;
-        const mode = e.model_info?.mode;
-        if (mode && NON_CHAT_MODES.has(mode) && mode !== 'embedding') continue;
-        const lower = name.toLowerCase();
-        if (NON_CHAT_ID_PATTERNS.some((p) => lower.includes(p))) continue;
         const key = `${e.litellm_params?.model ?? name}|${e.litellm_params?.api_base ?? ''}`;
         const g = groups.get(key);
         if (g) g.push(e); else groups.set(key, [e]);
@@ -63,14 +60,20 @@ export function selectLocalEntriesFromModelInfo(
         const canonical = g.find((e) => e.model_name === upstreamBasename(e.litellm_params?.model)) ?? g[0];
         const id = canonical.model_name;
         const lower = id.toLowerCase();
-        const isEmbedding = canonical.model_info?.mode === 'embedding'
-            || EMBEDDING_ID_PATTERNS.some((p) => lower.includes(p));
+        const mode = canonical.model_info?.mode;
+        const isEmbedding = mode === 'embedding' || EMBEDDING_ID_PATTERNS.some((p) => lower.includes(p));
+        // 채팅도 임베딩도 아닌 로컬 모델(음악·이미지·STT 등)은 버리지 않고 capability 전용으로 싣는다 —
+        // 기능별 모델 배정 드롭다운의 선택지가 되어야 하기 때문. 채팅 목록에서 빼는 일은
+        // getLocalChatModels() 와 role-model-filter 가 맡는다.
+        const isCapabilityOnly = !isEmbedding && (
+            (!!mode && NON_CHAT_MODES.has(mode)) || NON_CHAT_ID_PATTERNS.some((p) => lower.includes(p))
+        );
         const old = prev.find((m) => m.id === id);
         out.push({
             id,
             displayName: id,
             description: old?.description ?? `로컬 vLLM (${id})`,
-            role: isEmbedding ? 'embedding' : 'chat',
+            role: isEmbedding ? 'embedding' : isCapabilityOnly ? 'capability' : 'chat',
             contextLength: old?.contextLength,
             contextLengthProbed: old?.contextLengthProbed,
             available: old?.available,

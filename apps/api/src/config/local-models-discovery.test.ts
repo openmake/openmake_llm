@@ -17,9 +17,16 @@ const LIVE_SAMPLE: GatewayModelInfoEntry[] = [
 ];
 
 describe('selectLocalEntriesFromModelInfo', () => {
-    it('provider prefix 항목·이미지 모델 제외, alias(gpt-3.5-turbo→qwen3.8-27b) 는 정식 이름 하나로 접는다', () => {
+    it('provider prefix 항목만 제외, 비채팅은 role=capability 로 싣고, alias(gpt-3.5-turbo→qwen3.8-27b) 는 정식 이름 하나로 접는다', () => {
         const ids = selectLocalEntriesFromModelInfo(LIVE_SAMPLE).map((m) => `${m.id}:${m.role}`);
-        expect(ids).toEqual(['qwen3.8-27b:chat', 'qwen3.6-35b-a3b:chat', 'bge-m3:embedding']);
+        expect(ids).toEqual(['qwen3.8-27b:chat', 'qwen3.6-35b-a3b:chat', 'bge-m3:embedding', 'sdxl-turbo:capability']);
+    });
+
+    it('음악 생성(acestep)은 chat/completions 를 받아도 role=capability — 프로브 ping 대상에서 빠져야 한다', () => {
+        const out = selectLocalEntriesFromModelInfo([
+            { model_name: 'acestep-v15-turbo', litellm_params: { model: 'openai/acestep/acestep-v15-turbo', api_base: 'http://vllm-host:8005/v1' }, model_info: {} },
+        ]);
+        expect(out.map((m) => `${m.id}:${m.role}`)).toEqual(['acestep-v15-turbo:capability']);
     });
 
     it('vLLM 이 두 이름을 서빙해도 LiteLLM upstream 이 다르면 별개 항목 — 접는 기준은 upstream 동일성', () => {
@@ -37,13 +44,13 @@ describe('selectLocalEntriesFromModelInfo', () => {
         expect(out.map((m) => m.id)).toEqual(['chat-default']);
     });
 
-    it('mode 가 비어 있어도 id 패턴으로 임베딩/비채팅을 가른다', () => {
+    it('mode 가 비어 있어도 id 패턴으로 embedding/capability/chat 을 가른다', () => {
         const out = selectLocalEntriesFromModelInfo([
             { model_name: 'nomic-embed-text', litellm_params: { model: 'openai/nomic-embed-text', api_base: QWEN_BASE } },
             { model_name: 'whisper-large', litellm_params: { model: 'openai/whisper-large', api_base: QWEN_BASE } },
             { model_name: 'llama-x', litellm_params: { model: 'openai/llama-x', api_base: QWEN_BASE } },
         ]);
-        expect(out.map((m) => `${m.id}:${m.role}`)).toEqual(['nomic-embed-text:embedding', 'llama-x:chat']);
+        expect(out.map((m) => `${m.id}:${m.role}`)).toEqual(['nomic-embed-text:embedding', 'whisper-large:capability', 'llama-x:chat']);
     });
 
     it('이전 카탈로그의 프로브 실측치(가용성·능력·컨텍스트)를 같은 id 에 보존한다', () => {

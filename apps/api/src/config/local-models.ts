@@ -41,7 +41,13 @@ const logger = createLogger('LocalModels');
 /** 카탈로그(또는 LLM_LOCAL_MODELS_JSON)가 명시적으로 비활성한 모델의 사유 — 프로브가 ping 을 건너뛰는 유일한 조건 */
 export const EXPLICIT_DISABLED_REASON = 'explicit disabled';
 
-export type LocalModelRole = 'chat' | 'embedding';
+/**
+ * chat: 일반 채팅 / embedding: `/v1/embeddings` 전용 /
+ * capability: 채팅이 아닌 기능 전용(음악·이미지·STT 등) — capability 배정에서만 고른다.
+ * ⚠️ capability 모델은 **프로브 ping 대상이 아니다**: 호출 한 번이 곧 생성 작업이라
+ * (ACE-Step 은 ping 1회 = 곡 1개) 주기 프로브가 GPU 작업을 만들어 버린다.
+ */
+export type LocalModelRole = 'chat' | 'embedding' | 'capability';
 
 export interface LocalModelEntry {
     /** model ID — proxy 가 라우팅 key 로 사용 (LLM_BASE_URL 의 body.model 필드) */
@@ -443,6 +449,13 @@ export async function probeLocalModelAvailability(
         // 재시작 전까지 영구 '사용 불가' 가 된다(2026-09-03 qwen3.8-27b 6시간 실측).
         if (m.available === false && (!m.unavailableReason || m.unavailableReason === EXPLICIT_DISABLED_REASON)) {
             m.unavailableReason = EXPLICIT_DISABLED_REASON;
+            skipped.push(m.id);
+            continue;
+        }
+        // capability 전용 모델(음악·이미지 등) — ping 이 곧 생성 작업이라 프로브 대상이 아니다.
+        // 가용성은 건드리지 않는다: 게이트웨이 라우트 존재 여부로 판단할 수 없고(pass-through 는
+        // /v1/models 에 안 뜬다), 실패는 실행 시점에 명시적으로 드러난다.
+        if (m.role === 'capability') {
             skipped.push(m.id);
             continue;
         }
