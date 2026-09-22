@@ -80,7 +80,9 @@ export const CAPABILITY_ENDPOINT: Record<Capability, string> = {
     'audio.speech': '/v1/audio/speech',
     'audio.analyze': '/v1/chat/completions',
     'music.analyze': '/v1/chat/completions',
-    'music.generate': '/v1/chat/completions',
+    // ⚠️ 음악만 게이트웨이의 pass-through 경로다 — ACE-Step 이 `message.audio` 를 배열로 주는데
+    // LiteLLM 의 Message 타입은 단일 객체를 기대해 일반 model_list 라우트에선 역직렬화가 500 난다.
+    'music.generate': '/music/v1/chat/completions',
     'video.generate': '/v1/videos',
     'video.analyze': '/v1/chat/completions',
     'web.search': '',
@@ -289,8 +291,12 @@ export function videoAdapterFor(providerId: string): VideoProviderAdapter {
 
 /**
  * 음악 생성 — DGX ACE-Step 1.5 의 **OpenRouter 호환** `POST /v1/chat/completions`(2026-09-23).
- * 다른 로컬 capability 와 똑같이 LiteLLM 게이트웨이를 지난다 — 종전 `/release_task`→`/query_result` 폴링과
- * 전용 주소(`MUSIC_GEN_BASE_URL`)는 없앴다. 길이·형식·언어는 `audio_config`, 가사는 최상위 `lyrics`.
+ * LiteLLM 게이트웨이를 지나되 **pass-through 경로**(`/music/v1/chat/completions`)를 쓴다 — ACE-Step 이
+ * `message.audio` 를 배열로 주는데 LiteLLM 의 `Message` 타입은 단일 `ChatCompletionAudioResponse` 를
+ * 기대해, 일반 model_list 라우트로 태우면 오디오는 정상 생성되고 역직렬화에서만 500 이 난다(실측).
+ * pass-through 는 응답을 파싱하지 않으므로 게이트웨이 경유(앱은 `LLM_BASE_URL` 하나만 안다)를 유지한다.
+ * 종전 `/release_task`→`/query_result` 폴링과 전용 주소(`MUSIC_GEN_BASE_URL`)는 없앴다.
+ * 길이·형식·언어는 `audio_config`, 가사는 최상위 `lyrics`.
  * 산출물은 응답 본문의 base64 data URL(`message.audio[0].audio_url.url`)이라 별도 내려받기가 없다.
  */
 export const MUSIC_GEN_DEFAULT_DURATION_SEC = 30;

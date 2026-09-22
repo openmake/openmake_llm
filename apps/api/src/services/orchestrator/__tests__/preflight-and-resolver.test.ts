@@ -65,11 +65,11 @@ describe('resolveCapabilityTarget', () => {
         expect(o).toMatchObject({ transport: 'gateway', endpoint: '/v1/videos', model: 'openrouter/sora' });
     });
 
-    it('음악 생성: 다른 로컬 capability 와 같은 게이트웨이 경로 (전용 주소 없음, 2026-09-23)', async () => {
+    it('음악 생성: 게이트웨이 base + master key, 경로만 pass-through (전용 주소·겉키 없음, 2026-09-23)', async () => {
         const t = await resolveCapabilityTarget('music.generate', undefined, deps({ global: [row('__global__', 'music.generate', 'local-llm:acestep-v15-turbo')] }));
         expect(t).toMatchObject({
             providerId: 'local-llm', model: 'acestep-v15-turbo',
-            baseUrl: 'http://127.0.0.1:13401', endpoint: '/v1/chat/completions',
+            baseUrl: 'http://127.0.0.1:13401', endpoint: '/music/v1/chat/completions',
             transport: 'gateway', costOwner: 'local',
         });
         expect(t.headers).toEqual({ Authorization: 'Bearer master' });

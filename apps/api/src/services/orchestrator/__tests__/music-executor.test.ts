@@ -1,5 +1,5 @@
 /** music.generate 실행기 — ACE-Step OpenRouter 호환 단일 호출·가사/연주곡·base64 디코드·실패 (2026-09-23) */
-const target = { capability: 'music.generate', fullId: 'local-llm:acestep-v15-turbo', providerId: 'local-llm', model: 'acestep-v15-turbo', baseUrl: 'http://127.0.0.1:13401', endpoint: '/v1/chat/completions', headers: { Authorization: 'Bearer master' }, params: {}, source: 'default', costOwner: 'local', transport: 'gateway' };
+const target = { capability: 'music.generate', fullId: 'local-llm:acestep-v15-turbo', providerId: 'local-llm', model: 'acestep-v15-turbo', baseUrl: 'http://127.0.0.1:13401', endpoint: '/music/v1/chat/completions', headers: { Authorization: 'Bearer master' }, params: {}, source: 'default', costOwner: 'local', transport: 'gateway' };
 jest.mock('../capability-resolver', () => ({ resolveCapabilityTarget: async () => target }));
 const callJson = jest.fn();
 jest.mock('../http-call', () => ({ callJson: (...a: unknown[]) => callJson(...a) }));
