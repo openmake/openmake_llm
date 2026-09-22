@@ -65,10 +65,30 @@ describe('resolveCapabilityTarget', () => {
         expect(o).toMatchObject({ transport: 'gateway', endpoint: '/v1/videos', model: 'openrouter/sora' });
     });
 
+    it('음악 생성: 로컬 배정은 LiteLLM 이 아니라 MUSIC_GEN_BASE_URL(겉키 Bearer), 주소가 없으면 명시 실패', async () => {
+        const prev = { url: process.env.MUSIC_GEN_BASE_URL, key: process.env.MUSIC_GEN_API_KEY };
+        try {
+            process.env.MUSIC_GEN_BASE_URL = 'http://dgx:13401/music/';
+            process.env.MUSIC_GEN_API_KEY = 'outer';
+            const t = await resolveCapabilityTarget('music.generate', undefined, deps({ global: [row('__global__', 'music.generate', 'local-llm:acestep-v15-turbo')] }));
+            expect(t).toMatchObject({ providerId: 'local-llm', model: 'acestep-v15-turbo', baseUrl: 'http://dgx:13401/music', endpoint: '/release_task', transport: 'gateway', costOwner: 'local' });
+            expect(t.headers).toEqual({ Authorization: 'Bearer outer' });
+            delete process.env.MUSIC_GEN_BASE_URL;
+            clearGlobalCapabilityCache();
+            await expect(resolveCapabilityTarget('music.generate', undefined, deps({ global: [row('__global__', 'music.generate', 'local-llm:acestep-v15-turbo')] })))
+                .rejects.toMatchObject({ code: 'CAPABILITY_UNSUPPORTED' });
+        } finally {
+            if (prev.url === undefined) delete process.env.MUSIC_GEN_BASE_URL; else process.env.MUSIC_GEN_BASE_URL = prev.url;
+            if (prev.key === undefined) delete process.env.MUSIC_GEN_API_KEY; else process.env.MUSIC_GEN_API_KEY = prev.key;
+        }
+    });
+
     it('validateCapabilityAssignment — 게이트웨이 미편입·키 없음 거절', async () => {
         expect(await validateCapabilityAssignment('u1', 'nvidia:m', deps({ userKey: 'k' }))).toMatch(/LLM_GATEWAY_PROVIDERS/);
         expect(await validateCapabilityAssignment('u1', 'openrouter:m', deps({ userKey: null, keyRow: null }))).toMatch(/키를 먼저 등록/);
         expect(await validateCapabilityAssignment('u1', 'local-llm:img-gen')).toBeNull();
+        expect(await validateCapabilityAssignment('u1', 'openrouter:m', deps({ userKey: 'k' }), 'music.generate')).toMatch(/로컬 음악 서버/);
+        expect(await validateCapabilityAssignment('u1', 'local-llm:acestep-v15-turbo', {}, 'music.generate')).toBeNull();
     });
 });
 
@@ -76,7 +96,7 @@ describe('preflightPlan — 실행 승인 경계', () => {
     const ctx = (o: Partial<ExecContext> = {}): ExecContext => ({ lang: 'ko', userMessage: 'q', attachments: new Map(), results: new Map(), userId: 'u1', ...o });
     it('미지원·입력 누락·미배정을 실행 전에 거절하고 나머지는 통과', async () => {
         const p = validatePlan({ complexity: 'multi', tasks: [
-            { id: 'm', capability: 'music.generate', input: { instruction: 'x' } },
+            { id: 'm', capability: 'video.analyze', input: { instruction: 'x' } },
             { id: 'v', capability: 'vision.describe', input: { instruction: 'x' } },
             { id: 't', capability: 'audio.speech', input: { text: 'hi' } },
             { id: 'i', capability: 'image.generate', input: { instruction: 'x' } },

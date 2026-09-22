@@ -49,6 +49,7 @@ ${caps}
 - 크기·음성·형식·길이 같은 인자는 문장에 섞지 말고 input 의 키로 적습니다(예: "size":"${landscape}", "voice":"KR", "seconds":"4").
 - video.generate: 사용자가 길이를 말하면 input.seconds 에 초 숫자를(예: "5"), 가로·세로·정사각·비율을 말하면 input.size 에 가로 "${landscape}"·세로 "${portrait}"·정사각 "${square}" 중 하나를 넣습니다. 말하지 않은 인자는 적지 않습니다.
 - video.generate 의 instruction 에는 화면에 나올 것만 묘사하고 "no text"·"without …" 같은 부정 표현을 쓰지 마세요 — 부정어가 오히려 그 요소를 불러옵니다. 빼야 할 요소(글자·자막·로고 등)는 input.negative_prompt 에 영어 쉼표 목록으로 적습니다(예: "text, subtitles").
+- music.generate: instruction 에는 장르·분위기·악기·템포를 영어로 씁니다. 부를 가사가 정해져 있으면 input.lyrics 에 원문 그대로 넣고, 가사를 새로 지어야 하면 먼저 text.reason 작업이 가사만 쓰게 한 뒤 input.refs 로 넘깁니다. 연주곡이면 lyrics 를 비웁니다. 사용자가 길이를 말하면 input.duration 에 초 숫자를 넣습니다(예: "60").
 - 모델명·파일명을 지어내지 마세요. 기능 목록에 없는 capability 는 쓰지 마세요.
 - JSON 외 다른 텍스트를 출력하지 마세요.
 
@@ -72,6 +73,7 @@ ${caps}
 - Put parameters such as size/voice/format/duration as input keys (e.g. "size":"${landscape}", "voice":"KR", "seconds":"4"), not inside sentences.
 - video.generate: if the user states a length, put the number of seconds in input.seconds (e.g. "5"); if they state landscape/portrait/square or an aspect ratio, put input.size as landscape "${landscape}", portrait "${portrait}" or square "${square}". Omit parameters the user did not state.
 - A video.generate instruction describes only what should appear — never write negations such as "no text" or "without …" (negations summon the very thing). Put elements to exclude (text, subtitles, logos …) in input.negative_prompt as a comma-separated English list (e.g. "text, subtitles").
+- music.generate: the instruction describes genre, mood, instruments and tempo in English. If the lyrics to sing are given, put them verbatim in input.lyrics; if lyrics must be written, first have a text.reason task write only the lyrics and pass it via input.refs. Leave lyrics empty for instrumentals. If the user states a length, put the number of seconds in input.duration (e.g. "60").
 - Never invent model names or file names. Never use a capability not listed.
 - Output nothing but JSON.
 

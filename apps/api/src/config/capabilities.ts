@@ -8,7 +8,7 @@
  * 텍스트 종합(text.synthesize)은 사용자가 고른 채팅 모델이 맡으므로 배정 대상이 아니다.
  *
  * 호출은 전부 LiteLLM 게이트웨이 하나(로컬 alias·외부 `<provider>/<model>` + BYOK 헤더). 예외는 게이트웨이가
- * 프록시 못 하는 커스텀 API(hasa 영상 jobs-v1)뿐 — `VIDEO_PROVIDER_ADAPTERS` 참고.
+ * 프록시 못 하는 커스텀 API 둘 — hasa 영상 jobs-v1(`VIDEO_PROVIDER_ADAPTERS`)과 DGX 음악 생성(`musicGenEndpoint`).
  *
  * 구 모달리티 축(config/modality.ts, 2026-09-12 v1.58.x)을 일반화한 후속 — 행 이관은 마이그레이션 118.
  *
@@ -47,9 +47,10 @@ export const PLANNABLE_CAPABILITIES: ReadonlyArray<Capability> = CAPABILITIES.fi
 /**
  * 검증된 provider 어댑터가 아직 없는 capability — 배정과 무관하게 실행 단계가 `unsupported` 로 명시 실패한다
  * (미배정 `unassigned` 와 구분). 편입 provider 5개 실측(2026-09-12)에 제공처 없음. 어댑터가 생기면 여기서 뺀다.
+ * (music.generate 는 2026-09-22 DGX ACE-Step 어댑터로 빠졌다 — `musicGenEndpoint`)
  */
 export const UNSUPPORTED_CAPABILITIES: ReadonlySet<Capability> = new Set<Capability>([
-    'audio.analyze', 'music.analyze', 'music.generate', 'video.analyze',
+    'audio.analyze', 'music.analyze', 'video.analyze',
 ]);
 
 export const GLOBAL_CAPABILITY_SCOPE = '__global__';
@@ -65,7 +66,7 @@ const LEGACY_MODALITY_TO_CAPABILITY: Record<string, Capability> = {
     embedding: 'text.embed',
 };
 
-/** capability 가 쓰는 LiteLLM OpenAI 호환 엔드포인트 (게이트웨이 base 뒤). text.* 는 chat/completions */
+/** capability 가 쓰는 LiteLLM OpenAI 호환 엔드포인트 (게이트웨이 base 뒤). text.* 는 chat/completions. music.generate 만 음악 서버 base 뒤 */
 export const CAPABILITY_ENDPOINT: Record<Capability, string> = {
     'text.reason': '/v1/chat/completions',
     'text.code': '/v1/chat/completions',
@@ -79,7 +80,7 @@ export const CAPABILITY_ENDPOINT: Record<Capability, string> = {
     'audio.speech': '/v1/audio/speech',
     'audio.analyze': '/v1/chat/completions',
     'music.analyze': '/v1/chat/completions',
-    'music.generate': '/v1/audio/speech',
+    'music.generate': '/release_task',
     'video.generate': '/v1/videos',
     'video.analyze': '/v1/chat/completions',
     'web.search': '',
@@ -108,6 +109,9 @@ export const CAPABILITY_DEFAULTS: Partial<Record<Capability, string>> = {
     // image.generate 는 코드 기본값 없음(2026-09-18) — 종전 로컬 기본값이 비상업 라이선스(최종 사용자와의 직접
     // 상호작용 금지)라 제거했다. 쓰려면 라이선스를 확인한 뒤 env 나 capability_models 로 명시 배정한다.
     'image.generate': envDefault('CAPABILITY_DEFAULT_IMAGE_GENERATE'),
+    // music.generate — DGX ACE-Step 1.5(MIT, 생성 음악 상업 이용 허용). LiteLLM 이 아니라 MUSIC_GEN_BASE_URL 로 직결하므로
+    // 그 주소가 없으면 기본값도 없다(미배정 → 명시 실패). 모델명은 ACE-Step `/v1/models` 의 default_model.
+    'music.generate': envDefault('CAPABILITY_DEFAULT_MUSIC_GENERATE', process.env.MUSIC_GEN_BASE_URL?.trim() ? 'local-llm:acestep-v15-turbo' : undefined),
 };
 
 /** 사람이 읽는 라벨(ko) — Planner 프롬프트·UI 안내 공용 (i18n 은 프론트가 별도 보유) */
@@ -144,7 +148,7 @@ export const CAPABILITY_PLANNER_HINTS: Record<Capability, string> = {
     'audio.speech': '텍스트를 음성으로 읽어 달라고 할 때',
     'audio.analyze': '오디오의 분위기·특징(전사 외)을 분석해야 할 때',
     'music.analyze': '음악의 장르·템포·분위기를 분석해야 할 때',
-    'music.generate': '음악을 만들어 달라고 할 때',
+    'music.generate': '노래·배경음악을 만들어 달라고 할 때 (가사는 input.lyrics, 길이는 input.duration)',
     'video.generate': '짧은 영상을 만들어 달라고 할 때',
     'video.analyze': '첨부 영상의 장면을 이해해야 할 때',
     'web.search': '최신 정보·사실 확인·외부 자료가 필요할 때',
@@ -170,6 +174,12 @@ export const CAPABILITY_LIMITS = {
     VIDEO_DOWNLOAD_TIMEOUT_MS: parseInt(process.env.CAPABILITY_VIDEO_DOWNLOAD_TIMEOUT_MS || '600000', 10),
     /** 완성 산출물 내려받기 시도 횟수 — hasa 가 전송 중 연결을 끊는 실측(`terminated`, 2026-09-12)에 대비 */
     VIDEO_DOWNLOAD_ATTEMPTS: parseInt(process.env.CAPABILITY_VIDEO_DOWNLOAD_ATTEMPTS || '2', 10),
+    /** 음악 생성 — 제출·상태 조회 1회 상한 / 완료 대기 상한(넘으면 실패, 영상과 달리 다음 턴으로 넘기지 않는다) / 폴링 간격 / 파일 내려받기 */
+    MUSIC_REQUEST_TIMEOUT_MS: parseInt(process.env.CAPABILITY_MUSIC_REQUEST_TIMEOUT_MS || '30000', 10),
+    MUSIC_WAIT_MS: parseInt(process.env.CAPABILITY_MUSIC_WAIT_MS || '300000', 10),
+    MUSIC_POLL_INTERVAL_MS: parseInt(process.env.CAPABILITY_MUSIC_POLL_INTERVAL_MS || '3000', 10),
+    MUSIC_DOWNLOAD_TIMEOUT_MS: parseInt(process.env.CAPABILITY_MUSIC_DOWNLOAD_TIMEOUT_MS || '120000', 10),
+    MUSIC_LYRICS_MAX_CHARS: parseInt(process.env.CAPABILITY_MUSIC_LYRICS_MAX_CHARS || '4000', 10),
     /** params JSONB 허용 키 — capability 별 화이트리스트 */
     PARAM_KEYS: {
         'text.reason': ['temperature'], 'text.code': ['temperature'], 'text.synthesize': [], 'text.embed': ['dimensions'],
@@ -277,6 +287,30 @@ const VIDEO_PROVIDER_ADAPTERS: Record<string, VideoProviderAdapter> = {
 };
 export function videoAdapterFor(providerId: string): VideoProviderAdapter {
     return VIDEO_PROVIDER_ADAPTERS[providerId] ?? { kind: 'openai-videos' };
+}
+
+/**
+ * 음악 생성 — DGX ACE-Step 1.5 REST(`POST /release_task` → `POST /query_result` 폴링 → 결과 `file`=`/v1/audio?path=…`).
+ * OpenAI 호환이 아니라 LiteLLM 이 프록시하지 못해 DGX 게이트웨이(nginx `/music/*`)로 직결한다 — 주소·키가 운영자 설정값
+ * (`MUSIC_GEN_BASE_URL`·`MUSIC_GEN_API_KEY`)이라 BYOK·SSRF 고정 경로가 아니다. 문서화된 예외.
+ */
+/** 제출 경로는 `CAPABILITY_ENDPOINT['music.generate']`, 상태 조회 경로는 이것 */
+export const MUSIC_GEN_QUERY_PATH = '/query_result';
+/** ACE-Step `status` — 작업·결과 공통(0 대기·진행 / 1 성공 / 2 실패) */
+export const MUSIC_GEN_STATUS = { succeeded: 1, failed: 2 } as const;
+export const MUSIC_GEN_DEFAULT_DURATION_SEC = 30;
+/** ACE-Step `audio_duration` 허용 범위(초) */
+export const MUSIC_GEN_DURATION_RANGE = { min: 10, max: 600 } as const;
+export const MUSIC_GEN_FORMAT = 'mp3';
+/** 가사가 없을 때 — ACE-Step 문서의 연주곡 지정 방식 */
+export const MUSIC_GEN_INSTRUMENTAL_LYRICS = '[Instrumental]';
+
+/** 음악 서버 주소·키 — 호출 시점에 읽는다(미설정이면 null → 음악 배정은 해석 단계에서 명시 실패) */
+export function musicGenEndpoint(): { baseUrl: string; apiKey?: string } | null {
+    const baseUrl = process.env.MUSIC_GEN_BASE_URL?.trim().replace(/\/+$/, '');
+    if (!baseUrl) return null;
+    const apiKey = process.env.MUSIC_GEN_API_KEY?.trim();
+    return apiKey ? { baseUrl, apiKey } : { baseUrl };
 }
 
 /** 이미지 편집 어댑터 — hasa Qwen-Image-Edit 는 `/v1/images/generations` JSON `reference`(dataURL), LiteLLM 통과 */

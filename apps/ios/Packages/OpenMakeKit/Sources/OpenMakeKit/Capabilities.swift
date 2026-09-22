@@ -26,7 +26,7 @@ public enum CapabilityCatalog {
 
     /// 검증된 provider 어댑터가 없는 capability — 배정과 무관하게 실행이 `unsupported` 로 끝난다
     public static let unsupported: Set<String> = [
-        "audio.analyze", "music.analyze", "music.generate", "video.analyze",
+        "audio.analyze", "music.analyze", "video.analyze",
     ]
 
     public static func label(_ capability: String) -> String {
@@ -69,7 +69,7 @@ public enum CapabilityCatalog {
               members: ["image.generate", "image.edit"], adminOnly: false),
         Group(id: "audio", title: "음성", description: "음성 인식(STT)과 합성(TTS)",
               members: ["audio.transcribe", "audio.speech"], adminOnly: false),
-        Group(id: "music", title: "음악", description: "음악 생성 — 아직 실행 경로가 없어 배정만 저장됩니다",
+        Group(id: "music", title: "음악", description: "노래·배경음악 생성 — 기본값은 로컬 음악 서버(ACE-Step)입니다",
               members: ["music.generate"], adminOnly: false),
         Group(id: "video", title: "영상", description: "영상 생성(작업 제출 후 완료 시 결과 수령)",
               members: ["video.generate"], adminOnly: false),
@@ -77,8 +77,8 @@ public enum CapabilityCatalog {
               members: ["text.embed"], adminOnly: true),
     ]
 
-    /// 그룹 안에 남겨 두는 미지원 capability(배지로 표시) — 나머지 미지원은 숨긴다
-    static let groupedUnsupported: Set<String> = ["music.generate"]
+    /// 그룹 안에 남겨 두는 미지원 capability(배지로 표시) — 나머지 미지원은 숨긴다 (현재 없음)
+    static let groupedUnsupported: Set<String> = []
 
     /// 서버가 준 배정 가능 목록을 화면 그룹으로 나눈다. 웹 resolveCapabilityGroups 와 같은 규칙:
     /// 관리자 전용 그룹은 admin 이 아니면 제외, 미지원은 groupedUnsupported 만 남기고 숨김,
