@@ -356,6 +356,7 @@
     },
     "artifactFallback": "アーティファクト",
     "artifactBuilding": "アーティファクトを生成中…",
+    "mediaDownload": "ダウンロード",
     "reportBuilding": "レポートを生成中…",
     "reportData": "レポートデータ",
     "reasoningLabel": "思考プロセス",
