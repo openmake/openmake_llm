@@ -202,7 +202,42 @@ export const VIDEO_JOB_RESULT_INTENT_PATTERN = /다\s*됐|됐어|됐나|완성|�
 /** 새 생성·설명 요청은 보정 금지 — Planner 판단(simple/새 video.generate)을 그대로 둔다 */
 export const VIDEO_JOB_NOT_FOLLOWUP_PATTERN = /만들어|생성|제작|새로|다시\s*(만|그)|설명|원리|뭐야|이란|란\s|무엇|어떻게\s*(하|만)|(make|create|generate|explain|what is|how to)/i;
 export const VIDEO_GEN_DEFAULT_SECONDS = '4';
-export const VIDEO_GEN_DEFAULT_SIZE = '720x1280';
+/**
+ * 비율을 말하지 않은 요청의 기본은 가로 — hasa 영상 모델의 규격이 가로다(LTX-2 1280x704, wan2.2-i2v 832x480 —
+ * 공개 카탈로그 `video_spec.sizes`, 2026-09-22). 종전 세로 기본값은 바닷가 장면도 세로로 만들었다.
+ */
+export const VIDEO_GEN_DEFAULT_SIZE = '1280x720';
+/** Planner 가 사용자가 말한 비율을 `size` 로 옮길 때 쓰는 값 */
+export const VIDEO_GEN_ASPECT_SIZES = { landscape: '1280x720', portrait: '720x1280', square: '720x720' } as const;
+/**
+ * 사용자 원문에 적힌 영상 길이·비율 — 원문에 있으면 계획값보다 우선한다(결정적 보정). 실측(2026-09-22, hasa nemotron-super-120b):
+ * 스키마에 인자 키를 선언한 뒤에도 "8초"·"6-second" 를 2/2 누락했다. 길이는 여러 개면 가장 큰 값(장면 전환 시각 < 전체 길이).
+ */
+export const VIDEO_SECONDS_PATTERN = /(\d+(?:\.\d+)?)\s*(?:초|秒|-?\s*sec(?:ond)?s?\b)/gi;
+export const VIDEO_ASPECT_PATTERNS: ReadonlyArray<readonly [keyof typeof VIDEO_GEN_ASPECT_SIZES, RegExp]> = [
+    ['portrait', /세로|쇼츠|숏츠|릴스|9\s*:\s*16|\bportrait\b|\bvertical\b|\bshorts\b|\breels\b/i],
+    ['square', /정사각|1\s*:\s*1|\bsquare\b/i],
+    ['landscape', /가로|16\s*:\s*9|\blandscape\b|\bhorizontal\b|\bwidescreen\b/i],
+];
+/**
+ * 영상 모델이 스스로 넣는 가짜 자막·워터마크 억제 — negative_prompt 를 받는 provider 에만 싣는다(어댑터 `negativePrompt`).
+ * 'text' 는 넣지 않는다: 제목 글자를 요청한 영상까지 막는다. 글자를 빼 달라는 요청은 Planner 가 계획의 negative_prompt 로 더한다.
+ * 보조 방어다 — 깨진 자막의 주 원인은 프롬프트의 부정 표현(VIDEO_PROMPT_NEGATION_PATTERN). hasa 플레이그라운드도 기본값을 싣는다.
+ */
+export const VIDEO_GEN_DEFAULT_NEGATIVE_PROMPT = 'subtitles, captions, watermark';
+/** 영상 프롬프트에서 "빼 달라" 는 대상이 되는 화면 요소 */
+export const VIDEO_NEGATABLE_TERM_PATTERN = /\b(?:text|subtitles?|captions?|words?|letters?|logos?|watermarks?|titles?|typography)\b/gi;
+const VIDEO_NEGATABLE = String.raw`(?:on[- ]?screen\s+)?(?:text|subtitles?|captions?|words?|letters?|logos?|watermarks?|titles?|typography)`;
+/**
+ * 영상 프롬프트의 부정 표현("no text on screen", "without subtitles or logos") — negative_prompt 를 받는 provider 면 실행기가
+ * 프롬프트에서 걷어내 negative_prompt 로 옮긴다. Planner 에 쓰지 말라고 해도 8회 중 5회 적었다.
+ * 실측(2026-09-22, hasa LTX-2 4초·같은 장면): "no text on screen" 이 든 프롬프트는 깨진 자막 3/4(negative_prompt 유무 무관),
+ * 뺀 프롬프트는 0/4(negative_prompt 유무 무관) — 부정어가 오히려 글자를 불러온다.
+ */
+export const VIDEO_PROMPT_NEGATION_PATTERN = new RegExp(
+    String.raw`[,;]?\s*\b(?:with\s+)?(?:no|without)\s+(?:any\s+)?(${VIDEO_NEGATABLE}(?:\s*(?:,|\bor\b|\band\b)\s*${VIDEO_NEGATABLE})*)(?:\s+(?:on[- ]?screen|overlays?|visible))?`,
+    'gi',
+);
 export const VIDEO_TERMINAL_STATUSES: ReadonlySet<string> = new Set(['completed', 'succeeded', 'failed', 'cancelled', 'canceled', 'error']);
 export const VIDEO_DONE_STATUSES: ReadonlySet<string> = new Set(['completed', 'succeeded']);
 
@@ -229,11 +264,15 @@ export interface VideoProviderAdapter {
     artifactField?: string;
     doneStatuses?: readonly string[];
     failStatuses?: readonly string[];
+    /** 제출 본문에 `negative_prompt` 를 받는지 — OpenAI `/v1/videos` 에는 없는 필드라 모르는 provider 엔 싣지 않는다 */
+    negativePrompt?: boolean;
 }
 const VIDEO_PROVIDER_ADAPTERS: Record<string, VideoProviderAdapter> = {
     hasa: {
         kind: 'jobs-v1', submitPath: '/videos/generations', statusPath: '/jobs/{id}', artifactField: 'artifact_url',
         doneStatuses: ['COMPLETED', 'DONE', 'SUCCEEDED'], failStatuses: ['FAILED', 'ERROR', 'CANCELLED', 'CANCELED'],
+        // hasa 포털 플레이그라운드가 같은 엔드포인트에 negative_prompt 를 보낸다(portal-model-playground.js, 2026-09-22)
+        negativePrompt: true,
     },
 };
 export function videoAdapterFor(providerId: string): VideoProviderAdapter {

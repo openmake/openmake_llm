@@ -9,7 +9,7 @@
  *  - `cancelled`: 사용자 취소 → 호출부가 종전 경로도 시작하지 않는다
  * 셰도우(orchestrator_runs)는 fire-and-forget.
  */
-import { ORCHESTRATOR, CAPABILITY_LABELS_KO, VIDEO_JOB_FOLLOWUP_PATTERN, VIDEO_JOB_RESULT_INTENT_PATTERN, VIDEO_JOB_NOT_FOLLOWUP_PATTERN, type Capability } from '../../config/capabilities';
+import { ORCHESTRATOR, CAPABILITY_LABELS_KO, VIDEO_JOB_FOLLOWUP_PATTERN, VIDEO_JOB_RESULT_INTENT_PATTERN, VIDEO_JOB_NOT_FOLLOWUP_PATTERN, VIDEO_SECONDS_PATTERN, VIDEO_ASPECT_PATTERNS, VIDEO_GEN_ASPECT_SIZES, type Capability } from '../../config/capabilities';
 import { getPool } from '../../data/models/unified-database';
 import { OrchestratorRunsRepository } from '../../data/repositories/orchestrator-runs-repo';
 import type { ChatMessageRequest } from '../chat-service-types';
@@ -132,6 +132,25 @@ export function coerceJobFollowup(plan: ValidatedPlan, attachments: Map<string, 
     return v.plan;
 }
 
+/**
+ * 사용자 원문에 적힌 영상 길이·비율을 새 video.generate 작업의 인자로 확정한다 — Planner 가 빠뜨리거나 다르게 적어도 원문이 우선.
+ * 원문에 없으면 계획값(직전 대화에서 추론한 값일 수 있다)을 그대로 둔다. job 재조회 작업은 새로 제출하지 않으므로 건드리지 않는다.
+ */
+export function applyStatedVideoParams(plan: ValidatedPlan, message: string): ValidatedPlan {
+    const seconds = [...message.matchAll(VIDEO_SECONDS_PATTERN)].map((m) => Number(m[1])).filter((n) => n > 0);
+    const aspect = VIDEO_ASPECT_PATTERNS.find(([, re]) => re.test(message))?.[0];
+    if (seconds.length === 0 && !aspect) return plan;
+    for (const t of plan.tasks) {
+        if (t.capability !== 'video.generate' || t.attachments.length > 0) continue;
+        const before = `${String(t.extra.seconds ?? '-')}/${String(t.extra.size ?? '-')}`;
+        if (seconds.length > 0) t.extra.seconds = String(Math.max(...seconds));
+        if (aspect) t.extra.size = VIDEO_GEN_ASPECT_SIZES[aspect];
+        const after = `${String(t.extra.seconds ?? '-')}/${String(t.extra.size ?? '-')}`;
+        if (after !== before) logger.info(`[Orchestrator] ${t.id} 영상 인자를 원문 기준으로 보정 ${before} → ${after}`);
+    }
+    return plan;
+}
+
 function toPlannerMeta(atts: Map<string, OrchestratorAttachment>): PlannerAttachmentMeta[] {
     return [...atts.values()].map((a) => ({ id: a.id, kind: a.kind, name: a.name, ...(a.urlPath ? { urlPath: a.urlPath } : {}) }));
 }
@@ -236,7 +255,7 @@ export async function runOrchestrator(input: RunOrchestratorInput): Promise<Orch
         record({ requestId: input.requestId, userId, plannerModel: planned.model, plannerMs: planned.ms, plannerOk: false, plannerError: planned.error, outcome: 'fallback' });
         return { mode: 'fallback', contextBlock: fallbackNote(lang, planned.error ?? 'unknown'), mediaMarkdowns: [], plannerMs: planned.ms };
     }
-    const plan = coerceJobFollowup(planned.plan, attachments, req.message ?? '');
+    const plan = applyStatedVideoParams(coerceJobFollowup(planned.plan, attachments, req.message ?? ''), req.message ?? '');
     onProgress?.({ type: 'orchestrator_plan', complexity: plan.complexity, tasks: plan.tasks.map((t) => ({ id: t.id, capability: t.capability, instruction: t.instruction.slice(0, 160) })) });
 
     if (plan.complexity === 'simple') {

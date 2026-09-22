@@ -1,4 +1,4 @@
-import { validatePlan, extractPlanJson } from '../plan-schema';
+import { validatePlan, extractPlanJson, PLAN_JSON_SCHEMA } from '../plan-schema';
 
 const known = new Set(['a1', 'a2', 'm1']);
 
@@ -47,6 +47,15 @@ describe('validatePlan — 구조·의미 검증', () => {
         expect(tts.extra).toEqual({ voice: 'KR' });
         expect(r.plan.tasks.find((t) => t.id === 'img')!.dependsOn.sort()).toEqual(['s', 'v']);
         expect(r.plan.synthesis).toBe(true);
+    });
+
+    it('강제 디코딩 스키마가 영상 인자 키를 선언한다 — 선언 안 된 키는 구조화 출력 planner 가 만들지 못한다', () => {
+        const input = PLAN_JSON_SCHEMA.properties.tasks.items.properties.input.properties;
+        expect(Object.keys(input)).toEqual(expect.arrayContaining(['seconds', 'size', 'negative_prompt']));
+        const r = validatePlan({ complexity: 'multi', tasks: [
+            { id: 't1', capability: 'video.generate', input: { instruction: 'sunset beach', seconds: '5', size: '1280x720', negative_prompt: 'text' } },
+        ] }, known);
+        expect(r.ok && r.plan.tasks[0].extra).toEqual({ seconds: '5', size: '1280x720', negative_prompt: 'text' });
     });
 
     it('extractPlanJson — 원문·펜스·앞뒤 잡음', () => {
