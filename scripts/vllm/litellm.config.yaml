@@ -31,6 +31,18 @@ model_list:
       api_base: os.environ/BGE_VLLM_API_BASE       # http://<VLLM_TAILSCALE_HOST>:8003/v1
       api_key: os.environ/VLLM_API_KEY
 
+  # 음악 생성 (ACE-Step 1.5, :8004) — OpenRouter 호환 /v1/chat/completions 로 오디오를 낸다.
+  # upstream model id 는 ACE-Step /v1/models 의 `acestep/acestep-v15-turbo`(슬래시 포함) 그대로.
+  # ⚠️ 앱이 audio_config·lyrics·modalities 를 싣는다 — drop_params:false 로 통과시키되, LiteLLM 이
+  #    버전에 따라 미지원 키를 떨구면 allowed_openai_params 로 명시한다.
+  # ⚠️ 호출 1회 = GPU 음악 생성이라 헬스체크·프로브 대상으로 삼지 말 것(앱은 카탈로그 발견에서 제외한다).
+  - model_name: acestep-v15-turbo
+    litellm_params:
+      model: openai/acestep/acestep-v15-turbo
+      api_base: os.environ/ACESTEP_API_BASE        # http://<VLLM_TAILSCALE_HOST>:8004/v1
+      api_key: os.environ/VLLM_API_KEY
+      allowed_openai_params: ["audio_config", "lyrics", "modalities"]
+
   # OpenAI 호환 alias — 표준 model ID 로 호출 시 qwen3.8 라우팅
   - model_name: gpt-3.5-turbo
     litellm_params:

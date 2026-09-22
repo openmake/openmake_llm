@@ -16,8 +16,8 @@
  *  - direct 전용 provider(chatgpt OAuth 등)는 배정 자체를 거부한다.
  *  - 예외: jobs-v1 영상(config/capabilities VIDEO_PROVIDER_ADAPTERS — hasa)은 게이트웨이가 프록시하지
  *    못하는 커스텀 API 라 사용자 키로 provider 직결(`transport: 'direct'`, 도구가 SSRF 고정 fetch 사용).
- *  - 예외: 로컬 음악 생성(ACE-Step REST)은 운영자가 설정한 DGX 음악 게이트웨이(`MUSIC_GEN_BASE_URL`)로 — 로컬 전용이라
- *    외부 모델은 배정 단계에서 거절한다.
+ *  - 로컬 음악 생성(ACE-Step)은 2026-09-23 부터 다른 로컬 capability 와 같은 LiteLLM 경로다(전용 주소 없음).
+ *    다만 로컬 전용 모델이라 외부 모델 배정은 배정 단계에서 거절한다.
  *
  * 실패는 조용히 폴백하지 않고 CapabilityUnavailableError(code) 로 명시한다 — 도구가
  * 사용자에게 사유를 안내해야 "이미지가 안 나온다" 가 설정 문제임을 알 수 있다.
@@ -29,7 +29,6 @@ import {
     CAPABILITY_ENDPOINT,
     CAPABILITY_LIMITS,
     videoAdapterFor,
-    musicGenEndpoint,
     providerParamDefaults,
     type Capability,
 } from '../../config/capabilities';
@@ -148,17 +147,6 @@ function gatewayBase(): string {
 function localTarget(capability: Capability, fullId: string, params: Record<string, string>, source: CapabilityTarget['source']): CapabilityTarget {
     const cfg = getConfig();
     const tag = toLocalModelTag(fullId) ?? fullId;
-    if (capability === 'music.generate') {
-        // LiteLLM 이 아니라 DGX 음악 게이트웨이 — 주소가 없으면 LiteLLM 으로 보내지 않고 명시 실패
-        const music = musicGenEndpoint();
-        if (!music) throw new CapabilityUnavailableError('음악 생성 서버 주소(MUSIC_GEN_BASE_URL)가 설정되지 않아 music.generate 를 실행할 수 없습니다', 'CAPABILITY_UNSUPPORTED');
-        return {
-            capability, fullId, providerId: 'local-llm', model: tag,
-            baseUrl: music.baseUrl, endpoint: CAPABILITY_ENDPOINT[capability],
-            headers: music.apiKey ? { Authorization: `Bearer ${music.apiKey}` } : {},
-            params, source, costOwner: 'local', transport: 'gateway',
-        };
-    }
     return {
         capability, fullId, providerId: 'local-llm', model: tag,
         baseUrl: gatewayBase(), endpoint: CAPABILITY_ENDPOINT[capability],

@@ -30,7 +30,9 @@ const ROLE_MODEL_EXCLUDE_PATTERNS: readonly string[] = (
            'image', 'video', 't2v', 'i2v', 'ltx-', 'ocr', 'nemotron-parse', 'detector',
            'content-safety', 'moderation', 'pii-', 'transcribe', 'realtime', 'melotts', 'cuquantum',
            // 2026-09-22 logfare 카탈로그 — 이미지(FLUX·Leonardo)·음성(Deepgram Aura·Nova) 모델
-           'flux', 'phoenix-1', 'lucid-origin', 'aura-2', 'nova-3']
+           'flux', 'phoenix-1', 'lucid-origin', 'aura-2', 'nova-3',
+           // 2026-09-23 DGX 음악 생성 — chat/completions 를 받지만 응답이 오디오다
+           'acestep']
 );
 
 /**

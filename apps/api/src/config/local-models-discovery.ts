@@ -22,7 +22,10 @@ const NON_CHAT_MODES: ReadonlySet<string> = new Set([
 
 /** id 패턴만으로 역할을 정하는 안전망 — `/model/info` 가 mode 를 비워 두는 커스텀 배포용 */
 const EMBEDDING_ID_PATTERNS = ['bge', 'embed', 'embedding'];
-const NON_CHAT_ID_PATTERNS = ['rerank', 'sdxl', 'stable-diffusion', 'dall-e', 'dalle', 'whisper', 'tts', 'clip'];
+// ⚠️ acestep(음악 생성)은 `/v1/chat/completions` 를 받지만 호출 한 번이 곧 음악 생성이다 —
+//    카탈로그에 들어오면 주기 프로브의 ping 이 매번 GPU 작업을 만든다. capability 배정은 카탈로그를
+//    거치지 않으므로(`toLocalModelTag` 는 순수 문자열) 여기서 빼도 music.generate 는 정상 동작한다.
+const NON_CHAT_ID_PATTERNS = ['rerank', 'sdxl', 'stable-diffusion', 'dall-e', 'dalle', 'whisper', 'tts', 'clip', 'acestep'];
 
 function upstreamBasename(model: string | undefined): string | undefined {
     if (!model) return undefined;

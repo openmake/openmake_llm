@@ -65,22 +65,14 @@ describe('resolveCapabilityTarget', () => {
         expect(o).toMatchObject({ transport: 'gateway', endpoint: '/v1/videos', model: 'openrouter/sora' });
     });
 
-    it('음악 생성: 로컬 배정은 LiteLLM 이 아니라 MUSIC_GEN_BASE_URL(겉키 Bearer), 주소가 없으면 명시 실패', async () => {
-        const prev = { url: process.env.MUSIC_GEN_BASE_URL, key: process.env.MUSIC_GEN_API_KEY };
-        try {
-            process.env.MUSIC_GEN_BASE_URL = 'http://dgx:13401/music/';
-            process.env.MUSIC_GEN_API_KEY = 'outer';
-            const t = await resolveCapabilityTarget('music.generate', undefined, deps({ global: [row('__global__', 'music.generate', 'local-llm:acestep-v15-turbo')] }));
-            expect(t).toMatchObject({ providerId: 'local-llm', model: 'acestep-v15-turbo', baseUrl: 'http://dgx:13401/music', endpoint: '/release_task', transport: 'gateway', costOwner: 'local' });
-            expect(t.headers).toEqual({ Authorization: 'Bearer outer' });
-            delete process.env.MUSIC_GEN_BASE_URL;
-            clearGlobalCapabilityCache();
-            await expect(resolveCapabilityTarget('music.generate', undefined, deps({ global: [row('__global__', 'music.generate', 'local-llm:acestep-v15-turbo')] })))
-                .rejects.toMatchObject({ code: 'CAPABILITY_UNSUPPORTED' });
-        } finally {
-            if (prev.url === undefined) delete process.env.MUSIC_GEN_BASE_URL; else process.env.MUSIC_GEN_BASE_URL = prev.url;
-            if (prev.key === undefined) delete process.env.MUSIC_GEN_API_KEY; else process.env.MUSIC_GEN_API_KEY = prev.key;
-        }
+    it('음악 생성: 다른 로컬 capability 와 같은 게이트웨이 경로 (전용 주소 없음, 2026-09-23)', async () => {
+        const t = await resolveCapabilityTarget('music.generate', undefined, deps({ global: [row('__global__', 'music.generate', 'local-llm:acestep-v15-turbo')] }));
+        expect(t).toMatchObject({
+            providerId: 'local-llm', model: 'acestep-v15-turbo',
+            baseUrl: 'http://127.0.0.1:13401', endpoint: '/v1/chat/completions',
+            transport: 'gateway', costOwner: 'local',
+        });
+        expect(t.headers).toEqual({ Authorization: 'Bearer master' });
     });
 
     it('validateCapabilityAssignment — 게이트웨이 미편입·키 없음 거절', async () => {
