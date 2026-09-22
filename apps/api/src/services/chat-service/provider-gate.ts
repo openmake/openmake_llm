@@ -47,6 +47,7 @@ const KNOWN_FULLID_PREFIXES: readonly string[] = [
     'hasa',
     'bai',
     'orcarouter',
+    'logfare',
 ];
 
 interface ProviderGateInput {

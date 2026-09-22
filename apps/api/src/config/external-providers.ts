@@ -333,6 +333,42 @@ export const EXTERNAL_PROVIDER_CATALOG: ReadonlyArray<ExternalProviderCatalogEnt
             { id: 'deepseek/deepseek-chat',          displayName: 'DeepSeek V3',                   isFree: false, capabilities: { streaming: true, toolCalling: true, vision: false, thinking: true  } },
         ],
     },
+    {
+        id: 'logfare',
+        displayName: 'Logfare',
+        sdkType: 'openai-compatible',
+        // 계정 단위 분당 한도가 낮다(2026-09-22 실측: 연속 3회에 429 "Rate limit exceeded for this account")
+        maxConcurrentRequests: 1,
+        defaultBaseUrl: 'https://logfare.ai/v1',
+        keyPrefixPattern: 'lfu_',
+        validatePath: '/models',
+        enabled: true,
+        sortOrder: 90,
+        helpText:
+            'Logfare (https://logfare.ai/dashboard) 의 API 키(lfu_*)를 입력하세요. OpenAI 호환 무료 게이트웨이로 ' +
+            'Gemma·Step·Qwen·GLM·Kimi·DeepSeek 등을 제공합니다. 모델 ID 는 "gemma-4-26b" 처럼 접두사 없는 형식이고 ' +
+            '"logfare/auto" 는 자동 선택입니다. ⚠️ 무료의 대가로 모든 요청(프롬프트·시스템 프롬프트·응답)이 기록되고, ' +
+            '정규식 개인정보 제거 후 내부 평가 데이터셋에 쓰입니다(이름·주소는 걸러지지 않음) — 민감한 대화에는 쓰지 마세요. ' +
+            '대부분의 모델은 계정에서 모델 학습 동의(/consent)를 해야 호출되며(미동의 시 403), 학습에 쓰인 내용은 되돌릴 수 없습니다. ' +
+            '연속 호출 시 429 가 잦고, 모델 목록 API 는 인증이 없어 키 유효성은 첫 채팅에서 확인됩니다.',
+        homepage: 'https://logfare.ai',
+        keyUrl: 'https://logfare.ai/dashboard',
+        logo: '/images/providers/logfare.svg',
+        authMethods: ['api_key'] as const,
+        // 2026-09-22 실측(chat·tools·64px 이미지·한국어, 전부 reasoning 필드 반환) — 측정한 모델만 수록.
+        // 학습 동의 없이 쓰는 표준 모델 3종 + 동의가 필요한 프리미엄 4종. qwen-3.8-max·glm-5.3-flash·
+        // deepseek-v4-pro-0813·moondream3.1 은 503·동의 잠금으로 측정하지 못해 뺐다(라이브 목록에는 나온다).
+        fallbackModels: [
+            { id: 'gemma-4-26b',    displayName: 'Gemma 4 26B',              isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: true,  thinking: true  } },
+            { id: 'step-3.7-flash', displayName: 'Step 3.7 Flash',           isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: true,  thinking: true  } },
+            { id: 'logfare/auto',   displayName: 'Logfare Auto',             isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: true,  thinking: true  } },
+            { id: 'qwen-3.8-27b',   displayName: 'Qwen 3.8 27B (opt-in)',    isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: true,  thinking: true  } },
+            { id: 'glm-5.3',        displayName: 'GLM 5.3 (opt-in)',         isFree: true, capabilities: { streaming: true, toolCalling: true,  vision: false, thinking: true  } },
+            // kimi 2종은 tools 를 주면 호출 대신 "No tool was run" 을 답한다 — vision 은 503 으로 미확인이라 false
+            { id: 'kimi-k2.6',      displayName: 'Kimi K2.6 (opt-in)',       isFree: true, capabilities: { streaming: true, toolCalling: false, vision: false, thinking: false } },
+            { id: 'kimi-k2.7-code', displayName: 'Kimi K2.7 Code (opt-in)',  isFree: true, capabilities: { streaming: true, toolCalling: false, vision: false, thinking: false } },
+        ],
+    },
 ] as const;
 
 /**
