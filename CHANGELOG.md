@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.81.0](https://github.com/openmake/openmake_llm/compare/v1.80.1...v1.81.0) (2026-09-22)
+
+
+### ✨ 기능
+
+* **providers:** Logfare 외부 provider 추가 — BYOK + LiteLLM 게이트웨이 wildcard ([#975](https://github.com/openmake/openmake_llm/issues/975)) ([503d8f8](https://github.com/openmake/openmake_llm/commit/503d8f8fb45a1a6104685f09fcb488051edaff53))
+
 ## [1.80.1](https://github.com/openmake/openmake_llm/compare/v1.80.0...v1.80.1) (2026-09-22)
 
 
