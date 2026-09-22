@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.80.1](https://github.com/openmake/openmake_llm/compare/v1.80.0...v1.80.1) (2026-09-22)
+
+
+### 🐛 버그 수정
+
+* **orchestrator:** 영상 길이·비율 전달과 깨진 자막 억제 ([#973](https://github.com/openmake/openmake_llm/issues/973)) ([b25b7fd](https://github.com/openmake/openmake_llm/commit/b25b7fdbd6eca165c485b32ae6a39354217880f3))
+
 ## [1.80.0](https://github.com/openmake/openmake_llm/compare/v1.79.0...v1.80.0) (2026-09-20)
 
 
