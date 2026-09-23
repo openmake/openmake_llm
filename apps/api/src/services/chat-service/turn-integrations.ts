@@ -12,6 +12,10 @@
  * @module services/chat-service/turn-integrations
  */
 import { loadEnabledChatIntegrations } from '../../addon-host/chat-integrations';
+import { TURN_CONTEXT_TIMEOUT_MS } from '../../config/service-limits';
+import { createLogger } from '../../utils/logger';
+
+const turnContextLog = createLogger('TurnContext');
 
 /** 요청에서 통합이 볼 수 있는 부분 — 필요한 필드만 좁혀 둔다. */
 export interface TurnIntegrationRequest {
@@ -40,9 +44,35 @@ export interface ContributedAgentTaskTool {
     run(args: Record<string, unknown>, ctx: { userId: string }): Promise<{ text: string; isError?: boolean }>;
 }
 
+/** 턴 전 컨텍스트 준비 입력 — 세션·사용자 문맥이 필요한 통합(문서 검색 등)이 쓴다 */
+export interface TurnContextInput {
+    /** 인증 사용자 — 게스트면 없다 */
+    userId?: string;
+    /** 기존 대화의 세션 — 새 대화의 첫 턴이면 없다 */
+    sessionId?: string;
+    message: string;
+    userLang: string;
+    /** 이 통합이 붙일 출처 번호의 시작 오프셋 — 앞서 붙은 출처(웹검색 등)가 N 개면 N+1 부터 쓴다 */
+    sourceOffset: number;
+    signal?: AbortSignal;
+}
+
+/** 턴 전 컨텍스트 기여 — 컨텍스트 블록은 이 턴에만 실리고(다음 턴 재주입 없음) 출처는 기존 출처 계약으로 간다 */
+export interface TurnContextContribution {
+    /** 사용자 메시지 쪽 컨텍스트 채널(첨부와 같은 채널)에 붙일 블록 */
+    contextBlock?: string;
+    /** 이 턴의 출처 — 번호(n)는 sourceOffset+1 부터 연속이어야 한다 */
+    sources?: import('../../tools/web-search/types').SearchSourceRef[];
+}
+
 export interface ChatTurnIntegration {
     /** add-on id */
     id: string;
+    /**
+     * 턴 전 비동기 컨텍스트 준비 — 순수 훅과 달리 세션·사용자 문맥을 받고 I/O 를 할 수 있다.
+     * 실패는 통합 스스로 처리해 안내 블록으로 돌려주는 것이 원칙이며, 던지면 Base 가 그 통합만 건너뛴다.
+     */
+    prepareTurnContext?(input: TurnContextInput): Promise<TurnContextContribution | undefined>;
     /** 이 턴이 통합의 의도 턴인가 — 프롬프트 지문·관측 플래그에 그대로 실린다 */
     detectIntent?(message: string): boolean;
     /** cap·relevance 선택과 무관하게 포함할 도구 (이름 부분 일치). 의도와 무관하게 메시지로 판정한다. */
@@ -135,4 +165,36 @@ export function collectContextRefs(msg: Record<string, unknown>): Record<string,
         if (ref) out[integration.id] = ref;
     }
     return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * 모든 통합의 턴 전 컨텍스트를 모은다 — 통합마다 시간 상한을 두고, 실패·초과한 통합은 건너뛴다(채팅은 계속).
+ * 출처 번호는 통합 순서대로 이어 붙도록 각 통합에 오프셋을 넘긴다.
+ */
+export async function collectTurnContexts(
+    input: Omit<TurnContextInput, 'sourceOffset'> & { sourceOffset?: number },
+): Promise<{ contextBlock: string; sources: import('../../tools/web-search/types').SearchSourceRef[] }> {
+    const sources: import('../../tools/web-search/types').SearchSourceRef[] = [];
+    const blocks: string[] = [];
+    let offset = input.sourceOffset ?? 0;
+    for (const integration of getChatTurnIntegrations()) {
+        if (!integration.prepareTurnContext) continue;
+        try {
+            const r = await withTurnContextTimeout(integration.prepareTurnContext({ ...input, sourceOffset: offset }), integration.id);
+            if (r?.contextBlock) blocks.push(r.contextBlock);
+            const own = (r?.sources ?? []).filter((s) => s.n > offset);
+            sources.push(...own);
+            offset = Math.max(offset, ...own.map((s) => s.n));
+        } catch (err) {
+            turnContextLog.warn(`[TurnContext] '${integration.id}' 컨텍스트 준비 실패 — 이 통합 없이 진행: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+    return { contextBlock: blocks.join('\n\n'), sources };
+}
+
+function withTurnContextTimeout<T>(p: Promise<T>, id: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`시간 초과(${TURN_CONTEXT_TIMEOUT_MS}ms, ${id})`)), TURN_CONTEXT_TIMEOUT_MS);
+        p.then((v) => { clearTimeout(timer); resolve(v); }, (e) => { clearTimeout(timer); reject(e); });
+    });
 }

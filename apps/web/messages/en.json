@@ -2762,5 +2762,112 @@
       "ready": "ready",
       "failed": "runtime failed"
     }
+  },
+  "knowledge": {
+    "serverError": "A server error occurred",
+    "cancel": "Cancel",
+    "close": "Close",
+    "save": "Save",
+    "back": "Back",
+    "rename": "Rename",
+    "loading": "Loading…",
+    "untitledConversation": "Untitled conversation",
+    "noConversations": "No linked conversations",
+    "newConversation": "New chat",
+    "sectionTitle": "Knowledge",
+    "sidebarEmpty": "No Knowledge yet",
+    "viewAll": "View all Knowledge",
+    "listSubtitle": "Add materials and conversations will answer grounded in them",
+    "newSpace": "New Knowledge",
+    "searchPlaceholder": "Search Knowledge",
+    "empty": "No Knowledge yet",
+    "noResults": "No results",
+    "notFound": "Not found",
+    "notReadyNotice": "Embedding is not ready yet; processing new materials may be delayed",
+    "noDescription": "No description",
+    "editDescription": "Edit description",
+    "deleteSpace": "Delete Knowledge",
+    "deleteSpaceConfirm": "Delete '{name}'? All materials and links will be removed.",
+    "create": {
+      "title": "Create Knowledge",
+      "nameRequired": "Enter a name",
+      "nameLabel": "Name",
+      "namePlaceholder": "e.g. Product docs",
+      "descLabel": "Description (optional)",
+      "descPlaceholder": "What this Knowledge is for",
+      "submit": "Create"
+    },
+    "card": {
+      "documents": "{count} documents",
+      "conversations": "{count} chats",
+      "lastUsed": "Last used {date}",
+      "processing": "{count} processing",
+      "failed": "{count} failed"
+    },
+    "status": {
+      "uploaded": "Uploaded",
+      "validating": "Validating",
+      "extracting": "Extracting",
+      "chunking": "Chunking",
+      "embedding": "Embedding",
+      "verifying": "Verifying",
+      "ready": "Ready",
+      "failed": "Failed"
+    },
+    "failure": {
+      "validation": "Could not validate the file",
+      "scannedPdf": "Scanned PDFs are not supported (no text layer)",
+      "extraction": "Could not extract text",
+      "embedding": "Embedding failed",
+      "unknown": "Processing failed"
+    },
+    "doc": {
+      "section": "{count} documents",
+      "empty": "No materials yet. Add a file.",
+      "deleteConfirm": "Delete '{name}'?",
+      "pages": "{count} pages",
+      "retry": "Retry",
+      "delete": "Delete"
+    },
+    "upload": {
+      "add": "Add material",
+      "tooLarge": "File exceeds the allowed size",
+      "duplicate": "A document with the same content already exists"
+    },
+    "conv": {
+      "section": "{count} chats",
+      "bindExisting": "Add existing chat",
+      "unbind": "Unlink",
+      "unbindConfirm": "Unlink this conversation?"
+    },
+    "bind": {
+      "title": "Add existing chat",
+      "hint": "Choose a conversation to link to this Knowledge",
+      "noChats": "No recent chats"
+    },
+    "banner": {
+      "text": "This conversation can use materials from this Knowledge"
+    },
+    "citation": {
+      "title": "Citation",
+      "page": "Page {page}",
+      "pages": "Pages {start}–{end}",
+      "loadFailed": "Could not load the chunk"
+    },
+    "admin": {
+      "title": "Admin",
+      "reindex": "Reindex",
+      "reindexConfirmTitle": "Reindex",
+      "reindexConfirmBody": "This rebuilds the embedding index. It may take a while.",
+      "ready": "Available",
+      "notReady": "Unavailable",
+      "embeddingIndex": "Embedding index",
+      "jobs": "Jobs",
+      "noJobs": "No active jobs",
+      "profiles": "Profiles",
+      "active": "Active",
+      "saveProfile": "Save",
+      "invalidJson": "Invalid JSON"
+    }
   }
 }

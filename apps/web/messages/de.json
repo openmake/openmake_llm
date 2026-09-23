@@ -2762,5 +2762,112 @@
       "ready": "bereit",
       "failed": "Laufzeitfehler"
     }
+  },
+  "knowledge": {
+    "serverError": "Ein Serverfehler ist aufgetreten",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "save": "Speichern",
+    "back": "Zurück",
+    "rename": "Umbenennen",
+    "loading": "Wird geladen…",
+    "untitledConversation": "Unbenannte Unterhaltung",
+    "noConversations": "Keine verknüpften Unterhaltungen",
+    "newConversation": "Neuer Chat",
+    "sectionTitle": "Knowledge",
+    "sidebarEmpty": "Noch kein Knowledge",
+    "viewAll": "Alle Knowledge anzeigen",
+    "listSubtitle": "Füge Materialien hinzu, dann antworten Unterhaltungen darauf gestützt",
+    "newSpace": "Neues Knowledge",
+    "searchPlaceholder": "Knowledge suchen",
+    "empty": "Noch kein Knowledge",
+    "noResults": "Keine Ergebnisse",
+    "notFound": "Nicht gefunden",
+    "notReadyNotice": "Das Embedding ist noch nicht bereit; die Verarbeitung neuer Materialien kann sich verzögern",
+    "noDescription": "Keine Beschreibung",
+    "editDescription": "Beschreibung bearbeiten",
+    "deleteSpace": "Knowledge löschen",
+    "deleteSpaceConfirm": "„{name}“ löschen? Alle Materialien und Verknüpfungen werden entfernt.",
+    "create": {
+      "title": "Knowledge erstellen",
+      "nameRequired": "Namen eingeben",
+      "nameLabel": "Name",
+      "namePlaceholder": "z. B. Produktdokumentation",
+      "descLabel": "Beschreibung (optional)",
+      "descPlaceholder": "Wofür dieses Knowledge dient",
+      "submit": "Erstellen"
+    },
+    "card": {
+      "documents": "{count} Dokumente",
+      "conversations": "{count} Chats",
+      "lastUsed": "Zuletzt verwendet {date}",
+      "processing": "{count} in Bearbeitung",
+      "failed": "{count} fehlgeschlagen"
+    },
+    "status": {
+      "uploaded": "Hochgeladen",
+      "validating": "Wird geprüft",
+      "extracting": "Text wird extrahiert",
+      "chunking": "Wird aufgeteilt",
+      "embedding": "Wird eingebettet",
+      "verifying": "Wird verifiziert",
+      "ready": "Bereit",
+      "failed": "Fehlgeschlagen"
+    },
+    "failure": {
+      "validation": "Datei konnte nicht geprüft werden",
+      "scannedPdf": "Gescannte PDFs werden nicht unterstützt (keine Textebene)",
+      "extraction": "Text konnte nicht extrahiert werden",
+      "embedding": "Embedding fehlgeschlagen",
+      "unknown": "Verarbeitung fehlgeschlagen"
+    },
+    "doc": {
+      "section": "{count} Dokumente",
+      "empty": "Noch keine Materialien. Füge eine Datei hinzu.",
+      "deleteConfirm": "„{name}“ löschen?",
+      "pages": "{count} Seiten",
+      "retry": "Erneut versuchen",
+      "delete": "Löschen"
+    },
+    "upload": {
+      "add": "Material hinzufügen",
+      "tooLarge": "Datei überschreitet die zulässige Größe",
+      "duplicate": "Ein Dokument mit gleichem Inhalt existiert bereits"
+    },
+    "conv": {
+      "section": "{count} Chats",
+      "bindExisting": "Vorhandenen Chat hinzufügen",
+      "unbind": "Verknüpfung lösen",
+      "unbindConfirm": "Verknüpfung dieser Unterhaltung lösen?"
+    },
+    "bind": {
+      "title": "Vorhandenen Chat hinzufügen",
+      "hint": "Wähle eine Unterhaltung zum Verknüpfen mit diesem Knowledge",
+      "noChats": "Keine aktuellen Chats"
+    },
+    "banner": {
+      "text": "Diese Unterhaltung kann Materialien aus diesem Knowledge nutzen"
+    },
+    "citation": {
+      "title": "Zitat",
+      "page": "Seite {page}",
+      "pages": "Seiten {start}–{end}",
+      "loadFailed": "Abschnitt konnte nicht geladen werden"
+    },
+    "admin": {
+      "title": "Verwaltung",
+      "reindex": "Neu indexieren",
+      "reindexConfirmTitle": "Neu indexieren",
+      "reindexConfirmBody": "Der Embedding-Index wird neu aufgebaut. Das kann eine Weile dauern.",
+      "ready": "Verfügbar",
+      "notReady": "Nicht verfügbar",
+      "embeddingIndex": "Embedding-Index",
+      "jobs": "Jobs",
+      "noJobs": "Keine aktiven Jobs",
+      "profiles": "Profile",
+      "active": "Aktiv",
+      "saveProfile": "Speichern",
+      "invalidJson": "Ungültiges JSON"
+    }
   }
 }

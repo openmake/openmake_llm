@@ -2762,5 +2762,112 @@
       "ready": "準備完了",
       "failed": "ランタイム失敗"
     }
+  },
+  "knowledge": {
+    "serverError": "サーバーエラーが発生しました",
+    "cancel": "キャンセル",
+    "close": "閉じる",
+    "save": "保存",
+    "back": "戻る",
+    "rename": "名前を変更",
+    "loading": "読み込み中…",
+    "untitledConversation": "無題の会話",
+    "noConversations": "紐づく会話がありません",
+    "newConversation": "新しいチャット",
+    "sectionTitle": "Knowledge",
+    "sidebarEmpty": "まだ Knowledge がありません",
+    "viewAll": "すべての Knowledge を表示",
+    "listSubtitle": "資料を追加すると、会話がそれを根拠に回答します",
+    "newSpace": "新しい Knowledge",
+    "searchPlaceholder": "Knowledge を検索",
+    "empty": "まだ Knowledge がありません",
+    "noResults": "結果がありません",
+    "notFound": "見つかりません",
+    "notReadyNotice": "埋め込みが未準備のため、新しい資料の処理が遅れる場合があります",
+    "noDescription": "説明なし",
+    "editDescription": "説明を編集",
+    "deleteSpace": "Knowledge を削除",
+    "deleteSpaceConfirm": "'{name}' を削除しますか？資料と紐づけがすべて削除されます。",
+    "create": {
+      "title": "Knowledge を作成",
+      "nameRequired": "名前を入力してください",
+      "nameLabel": "名前",
+      "namePlaceholder": "例: 製品ドキュメント",
+      "descLabel": "説明（任意）",
+      "descPlaceholder": "この Knowledge の用途",
+      "submit": "作成"
+    },
+    "card": {
+      "documents": "ドキュメント {count} 件",
+      "conversations": "会話 {count} 件",
+      "lastUsed": "最終使用 {date}",
+      "processing": "処理中 {count}",
+      "failed": "失敗 {count}"
+    },
+    "status": {
+      "uploaded": "アップロード済み",
+      "validating": "検証中",
+      "extracting": "本文を抽出中",
+      "chunking": "分割中",
+      "embedding": "埋め込み中",
+      "verifying": "確認中",
+      "ready": "準備完了",
+      "failed": "失敗"
+    },
+    "failure": {
+      "validation": "ファイルを検証できませんでした",
+      "scannedPdf": "スキャンした PDF は非対応です（テキスト層なし）",
+      "extraction": "本文を抽出できませんでした",
+      "embedding": "埋め込みに失敗しました",
+      "unknown": "処理に失敗しました"
+    },
+    "doc": {
+      "section": "ドキュメント {count} 件",
+      "empty": "資料がまだありません。ファイルを追加してください。",
+      "deleteConfirm": "'{name}' を削除しますか？",
+      "pages": "{count} ページ",
+      "retry": "再試行",
+      "delete": "削除"
+    },
+    "upload": {
+      "add": "資料を追加",
+      "tooLarge": "ファイルが許容サイズを超えています",
+      "duplicate": "同じ内容のドキュメントが既にあります"
+    },
+    "conv": {
+      "section": "会話 {count} 件",
+      "bindExisting": "既存の会話を追加",
+      "unbind": "解除",
+      "unbindConfirm": "この会話の紐づけを解除しますか？"
+    },
+    "bind": {
+      "title": "既存の会話を追加",
+      "hint": "この Knowledge に紐づける会話を選択",
+      "noChats": "最近の会話がありません"
+    },
+    "banner": {
+      "text": "この会話ではこの Knowledge の資料を利用できます"
+    },
+    "citation": {
+      "title": "引用",
+      "page": "{page} ページ",
+      "pages": "{start}–{end} ページ",
+      "loadFailed": "チャンクを読み込めませんでした"
+    },
+    "admin": {
+      "title": "管理",
+      "reindex": "再インデックス",
+      "reindexConfirmTitle": "再インデックス",
+      "reindexConfirmBody": "埋め込みインデックスを再構築します。時間がかかる場合があります。",
+      "ready": "利用可能",
+      "notReady": "利用不可",
+      "embeddingIndex": "埋め込みインデックス",
+      "jobs": "ジョブ",
+      "noJobs": "実行中のジョブなし",
+      "profiles": "プロファイル",
+      "active": "有効",
+      "saveProfile": "保存",
+      "invalidJson": "JSON の形式が正しくありません"
+    }
   }
 }

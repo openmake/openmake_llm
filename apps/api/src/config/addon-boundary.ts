@@ -51,6 +51,8 @@ export const ADDON_SPECIFIC_NAME_PATTERNS: readonly RegExp[] = [
     // 미디어 runtime add-on(P10) — capability ID(image.generate 등)·MIME·공통 필드의 'image/video' 는 금지 대상이 아니다.
     // 금지 대상은 **개별 구현에 대한 직접 의존**이라 add-on 이름만 막는다(계획서 15.3).
     /image-runtime|music-runtime|video-runtime/i,
+    // knowledge-runtime add-on — 일반 단어 'knowledge' 는 막지 않는다(Base 에 knowledge-cutoff 가 있다). 도메인 고유 이름만.
+    /knowledge[-_]?runtime|knowledge_space|knowledgeSpace|knowledge_conversation/i,
 ];
 
 /** add-on 고유 이름이 나와도 되는 위치(`apps/api/src` 기준 접두) — add-on 모듈과 그것을 모으는 호스트뿐 */

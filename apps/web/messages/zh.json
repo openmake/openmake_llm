@@ -2762,5 +2762,112 @@
       "ready": "就绪",
       "failed": "运行时失败"
     }
+  },
+  "knowledge": {
+    "serverError": "发生服务器错误",
+    "cancel": "取消",
+    "close": "关闭",
+    "save": "保存",
+    "back": "返回",
+    "rename": "重命名",
+    "loading": "加载中…",
+    "untitledConversation": "未命名对话",
+    "noConversations": "没有关联的对话",
+    "newConversation": "新对话",
+    "sectionTitle": "Knowledge",
+    "sidebarEmpty": "还没有 Knowledge",
+    "viewAll": "查看全部 Knowledge",
+    "listSubtitle": "添加资料后，对话将基于这些资料作答",
+    "newSpace": "新建 Knowledge",
+    "searchPlaceholder": "搜索 Knowledge",
+    "empty": "还没有 Knowledge",
+    "noResults": "没有结果",
+    "notFound": "未找到",
+    "notReadyNotice": "嵌入尚未就绪，新资料的处理可能会延迟",
+    "noDescription": "暂无描述",
+    "editDescription": "编辑描述",
+    "deleteSpace": "删除 Knowledge",
+    "deleteSpaceConfirm": "删除“{name}”？所有资料和关联都会被移除。",
+    "create": {
+      "title": "创建 Knowledge",
+      "nameRequired": "请输入名称",
+      "nameLabel": "名称",
+      "namePlaceholder": "例如：产品文档",
+      "descLabel": "描述（可选）",
+      "descPlaceholder": "此 Knowledge 的用途",
+      "submit": "创建"
+    },
+    "card": {
+      "documents": "{count} 个文档",
+      "conversations": "{count} 个对话",
+      "lastUsed": "最近使用 {date}",
+      "processing": "处理中 {count}",
+      "failed": "失败 {count}"
+    },
+    "status": {
+      "uploaded": "已上传",
+      "validating": "校验中",
+      "extracting": "正在提取正文",
+      "chunking": "分块中",
+      "embedding": "嵌入中",
+      "verifying": "核对中",
+      "ready": "就绪",
+      "failed": "失败"
+    },
+    "failure": {
+      "validation": "无法校验文件",
+      "scannedPdf": "不支持扫描版 PDF（无文本层）",
+      "extraction": "无法提取正文",
+      "embedding": "嵌入失败",
+      "unknown": "处理失败"
+    },
+    "doc": {
+      "section": "{count} 个文档",
+      "empty": "还没有资料，请添加文件。",
+      "deleteConfirm": "删除“{name}”？",
+      "pages": "{count} 页",
+      "retry": "重试",
+      "delete": "删除"
+    },
+    "upload": {
+      "add": "添加资料",
+      "tooLarge": "文件超过允许的大小",
+      "duplicate": "已存在内容相同的文档"
+    },
+    "conv": {
+      "section": "{count} 个对话",
+      "bindExisting": "添加已有对话",
+      "unbind": "取消关联",
+      "unbindConfirm": "取消此对话的关联？"
+    },
+    "bind": {
+      "title": "添加已有对话",
+      "hint": "选择要关联到此 Knowledge 的对话",
+      "noChats": "没有最近的对话"
+    },
+    "banner": {
+      "text": "此对话可使用该 Knowledge 中的资料"
+    },
+    "citation": {
+      "title": "引用",
+      "page": "第 {page} 页",
+      "pages": "第 {start}–{end} 页",
+      "loadFailed": "无法加载片段"
+    },
+    "admin": {
+      "title": "管理",
+      "reindex": "重建索引",
+      "reindexConfirmTitle": "重建索引",
+      "reindexConfirmBody": "将重建嵌入索引，可能需要一些时间。",
+      "ready": "可用",
+      "notReady": "不可用",
+      "embeddingIndex": "嵌入索引",
+      "jobs": "任务",
+      "noJobs": "没有进行中的任务",
+      "profiles": "配置",
+      "active": "启用",
+      "saveProfile": "保存",
+      "invalidJson": "JSON 格式无效"
+    }
   }
 }

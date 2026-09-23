@@ -33,13 +33,13 @@ describe('mountAddonRoutes', () => {
             '/api/addons',
             '/api/agents/skills', '/api/agents/skills', '/api/agents',
             '/api/mcp', '/api/mcp', '/api/mcp', '/api/mcp/servers', '/api/admin/mcp', '/api/admin/mcp',
-            '/api/mcp', '/api/embed', '/api/integrations/discord', '/api/research',
+            '/api/knowledge', '/api/mcp', '/api/embed', '/api/integrations/discord', '/api/research',
         ]);
     });
 
     it('꺼진 add-on 의 라우트는 마운트되지 않고, 목록 API 는 항상 마운트된다', () => {
         const { paths, addons } = mountWith('notebooklm,discord,skill-runtime,mcp-runtime');
-        expect(paths).toEqual(['/api/addons', '/api/embed', '/api/research']);
+        expect(paths).toEqual(['/api/addons', '/api/knowledge', '/api/embed', '/api/research']);
         expect(addons.find(a => a.id === 'mcp-runtime')).toMatchObject({ enabled: false, kind: 'runtime' });
         expect(addons.find(a => a.id === 'skill-runtime')).toMatchObject({ enabled: false, kind: 'runtime' });
         expect(addons.find(a => a.id === 'notebooklm')).toMatchObject({ enabled: false, kind: 'integration' });

@@ -47,3 +47,9 @@ export const HISTORY_SUMMARY_LIMITS = {
     /** 유효한 요약으로 인정할 최소 길이(자) — 이보다 짧으면 원본 유지 */
     MIN_VALID_SUMMARY_CHARS: 20,
 } as const;
+
+/** 채팅 통합의 턴 전 컨텍스트 준비(문서 검색 등) 통합당 시간 상한(ms) — 넘기면 그 통합 없이 답한다 */
+export const TURN_CONTEXT_TIMEOUT_MS = Number(process.env.CHAT_TURN_CONTEXT_TIMEOUT_MS) || 20_000;
+
+/** 첫 메시지로 대화 제목을 만들 때 쓰는 앞부분 글자 수 */
+export const SESSION_TITLE_FROM_MESSAGE_CHARS = 30;
