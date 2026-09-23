@@ -2762,5 +2762,112 @@
       "ready": "준비됨",
       "failed": "런타임 실패"
     }
+  },
+  "knowledge": {
+    "serverError": "서버 오류가 발생했습니다",
+    "cancel": "취소",
+    "close": "닫기",
+    "save": "저장",
+    "back": "뒤로",
+    "rename": "이름 변경",
+    "loading": "불러오는 중…",
+    "untitledConversation": "제목 없는 대화",
+    "noConversations": "연결된 대화가 없습니다",
+    "newConversation": "새 대화",
+    "sectionTitle": "Knowledge",
+    "sidebarEmpty": "아직 Knowledge 가 없습니다",
+    "viewAll": "모든 Knowledge 보기",
+    "listSubtitle": "자료를 올려 두면 대화에서 그 근거로 답합니다",
+    "newSpace": "새 Knowledge",
+    "searchPlaceholder": "Knowledge 검색",
+    "empty": "아직 Knowledge 가 없습니다",
+    "noResults": "검색 결과가 없습니다",
+    "notFound": "찾을 수 없음",
+    "notReadyNotice": "임베딩이 아직 준비되지 않아 새 자료 처리가 지연될 수 있습니다",
+    "noDescription": "설명 없음",
+    "editDescription": "설명 편집",
+    "deleteSpace": "Knowledge 삭제",
+    "deleteSpaceConfirm": "'{name}' 을(를) 삭제할까요? 자료와 연결이 모두 사라집니다.",
+    "create": {
+      "title": "새 Knowledge 만들기",
+      "nameRequired": "이름을 입력하세요",
+      "nameLabel": "이름",
+      "namePlaceholder": "예: 제품 문서",
+      "descLabel": "설명 (선택)",
+      "descPlaceholder": "이 Knowledge 의 용도",
+      "submit": "만들기"
+    },
+    "card": {
+      "documents": "문서 {count}개",
+      "conversations": "대화 {count}개",
+      "lastUsed": "최근 사용 {date}",
+      "processing": "처리 중 {count}",
+      "failed": "실패 {count}"
+    },
+    "status": {
+      "uploaded": "업로드됨",
+      "validating": "검증 중",
+      "extracting": "본문 추출 중",
+      "chunking": "청크 분할 중",
+      "embedding": "임베딩 중",
+      "verifying": "확인 중",
+      "ready": "준비됨",
+      "failed": "실패"
+    },
+    "failure": {
+      "validation": "파일을 검증하지 못했습니다",
+      "scannedPdf": "스캔된 PDF 는 지원하지 않습니다(텍스트층 없음)",
+      "extraction": "본문을 추출하지 못했습니다",
+      "embedding": "임베딩에 실패했습니다",
+      "unknown": "처리에 실패했습니다"
+    },
+    "doc": {
+      "section": "문서 {count}개",
+      "empty": "아직 자료가 없습니다. 파일을 추가하세요.",
+      "deleteConfirm": "'{name}' 을(를) 삭제할까요?",
+      "pages": "{count}페이지",
+      "retry": "다시 시도",
+      "delete": "삭제"
+    },
+    "upload": {
+      "add": "자료 추가",
+      "tooLarge": "파일이 허용 크기를 초과합니다",
+      "duplicate": "이미 같은 내용의 문서가 있습니다"
+    },
+    "conv": {
+      "section": "대화 {count}개",
+      "bindExisting": "기존 대화 추가",
+      "unbind": "연결 해제",
+      "unbindConfirm": "이 대화의 연결을 해제할까요?"
+    },
+    "bind": {
+      "title": "기존 대화 추가",
+      "hint": "이 Knowledge 에 연결할 대화를 고르세요",
+      "noChats": "최근 대화가 없습니다"
+    },
+    "banner": {
+      "text": "이 대화에서는 이 Knowledge 자료를 사용할 수 있습니다"
+    },
+    "citation": {
+      "title": "인용",
+      "page": "{page}페이지",
+      "pages": "{start}–{end}페이지",
+      "loadFailed": "청크를 불러오지 못했습니다"
+    },
+    "admin": {
+      "title": "관리",
+      "reindex": "재색인",
+      "reindexConfirmTitle": "재색인",
+      "reindexConfirmBody": "임베딩 인덱스를 다시 만듭니다. 시간이 걸릴 수 있습니다.",
+      "ready": "사용 가능",
+      "notReady": "사용 불가",
+      "embeddingIndex": "임베딩 인덱스",
+      "jobs": "작업",
+      "noJobs": "진행 중인 작업 없음",
+      "profiles": "프로파일",
+      "active": "활성",
+      "saveProfile": "저장",
+      "invalidJson": "JSON 형식이 올바르지 않습니다"
+    }
   }
 }

@@ -70,6 +70,24 @@ async function enforceMaxSessions(userId?: string, anonSessionId?: string): Prom
     logger.info(`[ConversationSessions] Cleaned ${excess} sessions (owner-scoped, limit: ${MAX_SESSIONS})`);
 }
 
+/** 제목 없이 만든 세션의 기본 제목 — 첫 메시지가 오면 그 메시지로 바뀐다(`adoptFirstMessageTitle`) */
+export const DEFAULT_SESSION_TITLE = '새 대화';
+
+/**
+ * 미리 만든 빈 세션(기본 제목·메시지 0건)에 첫 메시지로 제목을 붙인다 — 조건부 한 문장이라 경합에도 한 번만 바뀐다.
+ * 일반 새 대화는 첫 메시지 때 세션을 만들며 제목을 붙이지만, REST 로 먼저 만든 세션(예: add-on 이 만든 대화)은
+ * 이 단계가 없으면 기본 제목에 머문다.
+ */
+export async function adoptFirstMessageTitle(sessionId: string, title: string): Promise<boolean> {
+    const r = await getPool().query(
+        `UPDATE conversation_sessions SET title = $2, updated_at = NOW()
+          WHERE id = $1 AND title = $3
+            AND NOT EXISTS (SELECT 1 FROM conversation_messages m WHERE m.session_id = $1)`,
+        [sessionId, title, DEFAULT_SESSION_TITLE],
+    );
+    return (r.rowCount ?? 0) > 0;
+}
+
 /**
  * 새 세션 생성
  */
@@ -82,7 +100,7 @@ export async function createSession(
     const pool = getPool();
     const id = uuidv4();
     const now = new Date().toISOString();
-    const resolvedTitle = title || '새 대화';
+    const resolvedTitle = title || DEFAULT_SESSION_TITLE;
 
     await withRetry(() => pool.query(`
         INSERT INTO conversation_sessions (id, user_id, anon_session_id, title, created_at, updated_at, metadata)

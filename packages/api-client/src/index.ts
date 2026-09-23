@@ -161,6 +161,13 @@ async function requestBlob(endpoint: string, _isRetry = false): Promise<Blob> {
   return res.blob();
 }
 
+
+/** 본문 직렬화 — FormData(멀티파트 업로드)는 그대로 보내고(경계 헤더는 브라우저가 붙인다) 나머지는 JSON */
+function serializeBody(body: unknown): BodyInit | undefined {
+  if (body === undefined) return undefined;
+  return body instanceof FormData ? body : JSON.stringify(body);
+}
+
 export const ApiClient = {
   get: <T>(endpoint: string, options: ApiRequestOptions = {}) =>
     request<T>(endpoint, { ...options, method: "GET" }),
@@ -180,19 +187,19 @@ export const ApiClient = {
     request<T>(endpoint, {
       ...options,
       method: "POST",
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: serializeBody(body),
     }),
   put: <T>(endpoint: string, body?: unknown, options: ApiRequestOptions = {}) =>
     request<T>(endpoint, {
       ...options,
       method: "PUT",
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: serializeBody(body),
     }),
   patch: <T>(endpoint: string, body?: unknown, options: ApiRequestOptions = {}) =>
     request<T>(endpoint, {
       ...options,
       method: "PATCH",
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: serializeBody(body),
     }),
   del: <T>(endpoint: string, options: ApiRequestOptions = {}) =>
     request<T>(endpoint, { ...options, method: "DELETE" }),

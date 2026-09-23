@@ -29,6 +29,7 @@ import { onAgentTaskChange } from "@/lib/agent-task-change";
 import Image from "next/image";
 import { ThemeToggle } from "./theme-toggle";
 import { cn } from "@/lib/utils";
+import { useEnabledWebAddons } from "@/addons/registry";
 
 interface SessionRow {
   id?: string;
@@ -201,6 +202,13 @@ export function Sidebar() {
     retry: false,
   });
 
+  // add-on 사이드바 섹션 — 주요 메뉴와 최근 대화 사이 (Base 는 어떤 add-on 인지 모른다)
+  const enabledAddons = useEnabledWebAddons();
+  const sidebarSections = enabledAddons
+    .flatMap((a) => a.sidebarSections ?? [])
+    .slice()
+    .sort((a, b) => a.order - b.order);
+
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
@@ -281,6 +289,15 @@ export function Sidebar() {
             </li>
           ))}
         </ul>
+
+        {sidebarSections.map((section) => (
+          <section.Component
+            key={section.id}
+            query={query}
+            currentSessionId={currentSessionId}
+            openSession={(sid) => void openSession(sid)}
+          />
+        ))}
 
         {sessions.length > 0 && (
           <div className="pt-3">

@@ -372,3 +372,4 @@ export interface MePayload {
   /** F22 Phase A: 활성 조직(없으면 null). 구 서버는 필드 자체가 없다. */
   activeOrganization?: ActiveOrganization | null;
 }
+export * from "./knowledge";

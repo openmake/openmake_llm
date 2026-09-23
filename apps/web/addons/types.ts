@@ -70,6 +70,30 @@ export interface ChatModeExtension {
   ProgressBanner: ComponentType<{ progress: unknown }>;
 }
 
+/**
+ * 사이드바 섹션 — 주요 메뉴와 최근 대화 사이에 add-on 이 동적 목록을 끼운다(메뉴 항목 추가가 아니다).
+ * 여러 add-on 이 기여하면 order 오름차순으로 쌓는다.
+ */
+export interface SidebarSectionProps {
+  /** 사이드바 검색어(정규화 전 원문) — 섹션이 자기 항목을 거를 때 쓴다 */
+  query: string;
+  /** 지금 열린 대화 */
+  currentSessionId: string | null;
+  /** Base 의 대화 열기(메시지 로드 + 채팅 화면 전환)를 그대로 쓴다 */
+  openSession(sessionId: string): void;
+}
+export interface SidebarSectionExtension {
+  id: string;
+  order: number;
+  Component: ComponentType<SidebarSectionProps>;
+}
+
+/** 대화 상단 배너 — 열린 대화의 서버 측 연결 상태를 보여 준다(표시일 뿐 권한 근거가 아니다) */
+export interface ChatContextBannerExtension {
+  order: number;
+  Component: ComponentType<{ sessionId: string | null }>;
+}
+
 export interface WebAddon {
   /** 서버 add-on id (`GET /api/addons`) */
   id: string;
@@ -78,4 +102,6 @@ export interface WebAddon {
   chatMode?: ChatModeExtension;
   settingsGroups?: readonly SettingsGroupExtension[];
   apiKeyScopePresets?: readonly ApiKeyScopePresetExtension[];
+  sidebarSections?: readonly SidebarSectionExtension[];
+  chatContextBanners?: readonly ChatContextBannerExtension[];
 }
