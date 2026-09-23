@@ -8,7 +8,7 @@
  * 텍스트 종합(text.synthesize)은 사용자가 고른 채팅 모델이 맡으므로 배정 대상이 아니다.
  *
  * 호출은 전부 LiteLLM 게이트웨이 하나(로컬 alias·외부 `<provider>/<model>` + BYOK 헤더). 예외는 게이트웨이가
- * 프록시 못 하는 커스텀 API(hasa 영상 jobs-v1)뿐 — `VIDEO_PROVIDER_ADAPTERS` 참고.
+ * 프록시 못 하는 커스텀 API 하나 — hasa 영상 jobs-v1(`VIDEO_PROVIDER_ADAPTERS`).
  *
  * 구 모달리티 축(config/modality.ts, 2026-09-12 v1.58.x)을 일반화한 후속 — 행 이관은 마이그레이션 118.
  *
@@ -47,9 +47,10 @@ export const PLANNABLE_CAPABILITIES: ReadonlyArray<Capability> = CAPABILITIES.fi
 /**
  * 검증된 provider 어댑터가 아직 없는 capability — 배정과 무관하게 실행 단계가 `unsupported` 로 명시 실패한다
  * (미배정 `unassigned` 와 구분). 편입 provider 5개 실측(2026-09-12)에 제공처 없음. 어댑터가 생기면 여기서 뺀다.
+ * (music.generate 는 2026-09-22 DGX ACE-Step 으로 빠졌다 — 2026-09-23 부터 LiteLLM 경유 OpenAI 호환)
  */
 export const UNSUPPORTED_CAPABILITIES: ReadonlySet<Capability> = new Set<Capability>([
-    'audio.analyze', 'music.analyze', 'music.generate', 'video.analyze',
+    'audio.analyze', 'music.analyze', 'video.analyze',
 ]);
 
 export const GLOBAL_CAPABILITY_SCOPE = '__global__';
@@ -79,7 +80,9 @@ export const CAPABILITY_ENDPOINT: Record<Capability, string> = {
     'audio.speech': '/v1/audio/speech',
     'audio.analyze': '/v1/chat/completions',
     'music.analyze': '/v1/chat/completions',
-    'music.generate': '/v1/audio/speech',
+    // ⚠️ 음악만 게이트웨이의 pass-through 경로다 — ACE-Step 이 `message.audio` 를 배열로 주는데
+    // LiteLLM 의 Message 타입은 단일 객체를 기대해 일반 model_list 라우트에선 역직렬화가 500 난다.
+    'music.generate': '/music/v1/chat/completions',
     'video.generate': '/v1/videos',
     'video.analyze': '/v1/chat/completions',
     'web.search': '',
@@ -108,6 +111,9 @@ export const CAPABILITY_DEFAULTS: Partial<Record<Capability, string>> = {
     // image.generate 는 코드 기본값 없음(2026-09-18) — 종전 로컬 기본값이 비상업 라이선스(최종 사용자와의 직접
     // 상호작용 금지)라 제거했다. 쓰려면 라이선스를 확인한 뒤 env 나 capability_models 로 명시 배정한다.
     'image.generate': envDefault('CAPABILITY_DEFAULT_IMAGE_GENERATE'),
+    // music.generate — DGX ACE-Step 1.5(MIT, 생성 음악 상업 이용 허용). 다른 로컬 capability 와 같이 LiteLLM alias 다
+    // (게이트웨이에 그 이름이 없으면 호출이 명시 실패한다 — 끄려면 `CAPABILITY_DEFAULT_MUSIC_GENERATE=`).
+    'music.generate': envDefault('CAPABILITY_DEFAULT_MUSIC_GENERATE', 'local-llm:acestep-v15-xl-turbo'),
 };
 
 /** 사람이 읽는 라벨(ko) — Planner 프롬프트·UI 안내 공용 (i18n 은 프론트가 별도 보유) */
@@ -144,7 +150,7 @@ export const CAPABILITY_PLANNER_HINTS: Record<Capability, string> = {
     'audio.speech': '텍스트를 음성으로 읽어 달라고 할 때',
     'audio.analyze': '오디오의 분위기·특징(전사 외)을 분석해야 할 때',
     'music.analyze': '음악의 장르·템포·분위기를 분석해야 할 때',
-    'music.generate': '음악을 만들어 달라고 할 때',
+    'music.generate': '노래·배경음악을 만들어 달라고 할 때 (가사는 input.lyrics, 길이는 input.duration)',
     'video.generate': '짧은 영상을 만들어 달라고 할 때',
     'video.analyze': '첨부 영상의 장면을 이해해야 할 때',
     'web.search': '최신 정보·사실 확인·외부 자료가 필요할 때',
@@ -170,6 +176,10 @@ export const CAPABILITY_LIMITS = {
     VIDEO_DOWNLOAD_TIMEOUT_MS: parseInt(process.env.CAPABILITY_VIDEO_DOWNLOAD_TIMEOUT_MS || '600000', 10),
     /** 완성 산출물 내려받기 시도 횟수 — hasa 가 전송 중 연결을 끊는 실측(`terminated`, 2026-09-12)에 대비 */
     VIDEO_DOWNLOAD_ATTEMPTS: parseInt(process.env.CAPABILITY_VIDEO_DOWNLOAD_ATTEMPTS || '2', 10),
+    /** 음악 생성 — ACE-Step 은 생성이 끝날 때까지 응답을 잡고 있으므로(동기) 이 값이 곧 완료 대기 상한이다.
+     *  넘으면 실패 — 영상과 달리 job 을 다음 턴으로 넘기지 않는다. */
+    MUSIC_WAIT_MS: parseInt(process.env.CAPABILITY_MUSIC_WAIT_MS || '300000', 10),
+    MUSIC_LYRICS_MAX_CHARS: parseInt(process.env.CAPABILITY_MUSIC_LYRICS_MAX_CHARS || '4000', 10),
     /** params JSONB 허용 키 — capability 별 화이트리스트 */
     PARAM_KEYS: {
         'text.reason': ['temperature'], 'text.code': ['temperature'], 'text.synthesize': [], 'text.embed': ['dimensions'],
@@ -202,7 +212,44 @@ export const VIDEO_JOB_RESULT_INTENT_PATTERN = /다\s*됐|됐어|됐나|완성|�
 /** 새 생성·설명 요청은 보정 금지 — Planner 판단(simple/새 video.generate)을 그대로 둔다 */
 export const VIDEO_JOB_NOT_FOLLOWUP_PATTERN = /만들어|생성|제작|새로|다시\s*(만|그)|설명|원리|뭐야|이란|란\s|무엇|어떻게\s*(하|만)|(make|create|generate|explain|what is|how to)/i;
 export const VIDEO_GEN_DEFAULT_SECONDS = '4';
-export const VIDEO_GEN_DEFAULT_SIZE = '720x1280';
+/**
+ * 비율을 말하지 않은 요청의 기본은 가로 — hasa 영상 모델의 규격이 가로다(LTX-2 1280x704, wan2.2-i2v 832x480 —
+ * 공개 카탈로그 `video_spec.sizes`, 2026-09-22). 종전 세로 기본값은 바닷가 장면도 세로로 만들었다.
+ */
+export const VIDEO_GEN_DEFAULT_SIZE = '1280x720';
+/** Planner 가 사용자가 말한 비율을 `size` 로 옮길 때 쓰는 값 */
+export const VIDEO_GEN_ASPECT_SIZES = { landscape: '1280x720', portrait: '720x1280', square: '720x720' } as const;
+/**
+ * 사용자 원문에 적힌 영상·음악 길이 — 원문에 있으면 계획값보다 우선한다(결정적 보정). 실측(2026-09-22, hasa nemotron-super-120b):
+ * 스키마에 인자 키를 선언한 뒤에도 "8초"·"6-second" 를 2/2 누락했다. 음악도 같다 — qwen3.8-27b Planner 가 music.generate 6건 중
+ * 5건에서 duration 을 비워 전부 기본 30초가 됐다(2026-09-23). 길이는 여러 개면 가장 큰 값(장면 전환 시각 < 전체 길이).
+ * 그룹: 1 = 분, 2 = 분 뒤의 초("3분 30초"), 3 = 초만.
+ */
+export const MEDIA_DURATION_PATTERN = /(\d+(?:\.\d+)?)\s*(?:분|-?\s*min(?:ute)?s?\b)(?:\s*(\d+(?:\.\d+)?)\s*(?:초|-?\s*sec(?:ond)?s?\b))?|(\d+(?:\.\d+)?)\s*(?:초|秒|-?\s*sec(?:ond)?s?\b)/gi;
+export const VIDEO_ASPECT_PATTERNS: ReadonlyArray<readonly [keyof typeof VIDEO_GEN_ASPECT_SIZES, RegExp]> = [
+    ['portrait', /세로|쇼츠|숏츠|릴스|9\s*:\s*16|\bportrait\b|\bvertical\b|\bshorts\b|\breels\b/i],
+    ['square', /정사각|1\s*:\s*1|\bsquare\b/i],
+    ['landscape', /가로|16\s*:\s*9|\blandscape\b|\bhorizontal\b|\bwidescreen\b/i],
+];
+/**
+ * 영상 모델이 스스로 넣는 가짜 자막·워터마크 억제 — negative_prompt 를 받는 provider 에만 싣는다(어댑터 `negativePrompt`).
+ * 'text' 는 넣지 않는다: 제목 글자를 요청한 영상까지 막는다. 글자를 빼 달라는 요청은 Planner 가 계획의 negative_prompt 로 더한다.
+ * 보조 방어다 — 깨진 자막의 주 원인은 프롬프트의 부정 표현(VIDEO_PROMPT_NEGATION_PATTERN). hasa 플레이그라운드도 기본값을 싣는다.
+ */
+export const VIDEO_GEN_DEFAULT_NEGATIVE_PROMPT = 'subtitles, captions, watermark';
+/** 영상 프롬프트에서 "빼 달라" 는 대상이 되는 화면 요소 */
+export const VIDEO_NEGATABLE_TERM_PATTERN = /\b(?:text|subtitles?|captions?|words?|letters?|logos?|watermarks?|titles?|typography)\b/gi;
+const VIDEO_NEGATABLE = String.raw`(?:on[- ]?screen\s+)?(?:text|subtitles?|captions?|words?|letters?|logos?|watermarks?|titles?|typography)`;
+/**
+ * 영상 프롬프트의 부정 표현("no text on screen", "without subtitles or logos") — negative_prompt 를 받는 provider 면 실행기가
+ * 프롬프트에서 걷어내 negative_prompt 로 옮긴다. Planner 에 쓰지 말라고 해도 8회 중 5회 적었다.
+ * 실측(2026-09-22, hasa LTX-2 4초·같은 장면): "no text on screen" 이 든 프롬프트는 깨진 자막 3/4(negative_prompt 유무 무관),
+ * 뺀 프롬프트는 0/4(negative_prompt 유무 무관) — 부정어가 오히려 글자를 불러온다.
+ */
+export const VIDEO_PROMPT_NEGATION_PATTERN = new RegExp(
+    String.raw`[,;]?\s*\b(?:with\s+)?(?:no|without)\s+(?:any\s+)?(${VIDEO_NEGATABLE}(?:\s*(?:,|\bor\b|\band\b)\s*${VIDEO_NEGATABLE})*)(?:\s+(?:on[- ]?screen|overlays?|visible))?`,
+    'gi',
+);
 export const VIDEO_TERMINAL_STATUSES: ReadonlySet<string> = new Set(['completed', 'succeeded', 'failed', 'cancelled', 'canceled', 'error']);
 export const VIDEO_DONE_STATUSES: ReadonlySet<string> = new Set(['completed', 'succeeded']);
 
@@ -229,16 +276,40 @@ export interface VideoProviderAdapter {
     artifactField?: string;
     doneStatuses?: readonly string[];
     failStatuses?: readonly string[];
+    /** 제출 본문에 `negative_prompt` 를 받는지 — OpenAI `/v1/videos` 에는 없는 필드라 모르는 provider 엔 싣지 않는다 */
+    negativePrompt?: boolean;
 }
 const VIDEO_PROVIDER_ADAPTERS: Record<string, VideoProviderAdapter> = {
     hasa: {
         kind: 'jobs-v1', submitPath: '/videos/generations', statusPath: '/jobs/{id}', artifactField: 'artifact_url',
         doneStatuses: ['COMPLETED', 'DONE', 'SUCCEEDED'], failStatuses: ['FAILED', 'ERROR', 'CANCELLED', 'CANCELED'],
+        // hasa 포털 플레이그라운드가 같은 엔드포인트에 negative_prompt 를 보낸다(portal-model-playground.js, 2026-09-22)
+        negativePrompt: true,
     },
 };
 export function videoAdapterFor(providerId: string): VideoProviderAdapter {
     return VIDEO_PROVIDER_ADAPTERS[providerId] ?? { kind: 'openai-videos' };
 }
+
+/**
+ * 음악 생성 — DGX ACE-Step 1.5 의 **OpenRouter 호환** `POST /v1/chat/completions`(2026-09-23).
+ * LiteLLM 게이트웨이를 지나되 **pass-through 경로**(`/music/v1/chat/completions`)를 쓴다 — ACE-Step 이
+ * `message.audio` 를 배열로 주는데 LiteLLM 의 `Message` 타입은 단일 `ChatCompletionAudioResponse` 를
+ * 기대해, 일반 model_list 라우트로 태우면 오디오는 정상 생성되고 역직렬화에서만 500 이 난다(실측).
+ * pass-through 는 응답을 파싱하지 않으므로 게이트웨이 경유(앱은 `LLM_BASE_URL` 하나만 안다)를 유지한다.
+ * 종전 `/release_task`→`/query_result` 폴링과 전용 주소(`MUSIC_GEN_BASE_URL`)는 없앴다.
+ * 길이·형식·언어는 `audio_config`, 가사는 최상위 `lyrics`.
+ * 산출물은 응답 본문의 base64 data URL(`message.audio[0].audio_url.url`)이라 별도 내려받기가 없다.
+ */
+export const MUSIC_GEN_DEFAULT_DURATION_SEC = 30;
+/** ACE-Step `audio_config.duration` 허용 범위(초) */
+export const MUSIC_GEN_DURATION_RANGE = { min: 10, max: 600 } as const;
+export const MUSIC_GEN_FORMAT = 'mp3';
+/**
+ * Planner 가 가사 자리에 앞 작업 참조를 적는 경우("REFS:t1"·"(lyrics from t1)" — 2026-09-22~23 실측 2건)를 가려내는 길이 상한.
+ * 이보다 짧고 다른 작업 id 를 담은 lyrics 는 가사가 아니라 참조로 보고 refs 로 옮긴다(그대로 두면 그 문자열을 노래한다).
+ */
+export const PLAN_LYRICS_REF_MAX_CHARS = 60;
 
 /** 이미지 편집 어댑터 — hasa Qwen-Image-Edit 는 `/v1/images/generations` JSON `reference`(dataURL), LiteLLM 통과 */
 interface ImageEditProviderAdapter { kind: 'openai-edits' | 'generations-reference' }

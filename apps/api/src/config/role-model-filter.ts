@@ -28,7 +28,11 @@ const ROLE_MODEL_EXCLUDE_PATTERNS: readonly string[] = (
            // 2026-09-16 라이브에서 역할 드롭다운에 노출된 비채팅 모델군 — 영상·이미지·OCR·
            // 문서 파서·분류기·음성·양자 시뮬레이터 (hasa·nvidia·chatgpt 카탈로그 실측)
            'image', 'video', 't2v', 'i2v', 'ltx-', 'ocr', 'nemotron-parse', 'detector',
-           'content-safety', 'moderation', 'pii-', 'transcribe', 'realtime', 'melotts', 'cuquantum']
+           'content-safety', 'moderation', 'pii-', 'transcribe', 'realtime', 'melotts', 'cuquantum',
+           // 2026-09-22 logfare 카탈로그 — 이미지(FLUX·Leonardo)·음성(Deepgram Aura·Nova) 모델
+           'flux', 'phoenix-1', 'lucid-origin', 'aura-2', 'nova-3',
+           // 2026-09-23 DGX 음악 생성 — chat/completions 를 받지만 응답이 오디오다
+           'acestep']
 );
 
 /**

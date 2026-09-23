@@ -34,6 +34,11 @@ describe('mapOpenAIError — 잔액 부족 분류', () => {
         expect(e.code).toBe('MODEL_ACCESS_RESTRICTED');
     });
 
+    it('403 학습 동의 필요 (Logfare premium) → MODEL_ACCESS_RESTRICTED (인증 오류 아님)', () => {
+        const e = mapOpenAIError(httpErr(403, "Model 'qwen-3.8-27b' is a premium model that requires model-training opt-in. The API key you sent authenticates as account 'x', which is NOT opted in."));
+        expect(e.code).toBe('MODEL_ACCESS_RESTRICTED');
+    });
+
     it('403 구독 문구는 여전히 SUBSCRIPTION_REQUIRED, 일반 403 은 INVALID_API_KEY', () => {
         expect(mapOpenAIError(httpErr(403, 'this model requires a subscription, upgrade for access')).code).toBe('SUBSCRIPTION_REQUIRED');
         expect(mapOpenAIError(httpErr(403, 'forbidden')).code).toBe('INVALID_API_KEY');

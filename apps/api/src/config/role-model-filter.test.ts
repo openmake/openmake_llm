@@ -79,6 +79,14 @@ describe('isChatCapableModel (chatOnly — 컴포저/설정 기본 모델 목록
         expect(isChatCapableModel({ modelId: 'x:sdxl-2' })).toBe(false);
         expect(isChatCapableModel({ modelId: 'openrouter:openai/whisper-1' })).toBe(false);
     });
+    it('logfare 비채팅 모델(이미지·음성)은 제외하고 채팅·비전 모델은 유지', () => {
+        for (const id of ['flux-2-klein-4b', 'flux-1-schnell', 'phoenix-1.0', 'lucid-origin', 'aura-2-en', 'nova-3', 'melotts', 'whisper-large-v3-turbo', 'sdxl-lightning']) {
+            expect(isChatCapableModel({ modelId: `logfare:${id}` })).toBe(false);
+        }
+        for (const id of ['gemma-4-26b', 'logfare/auto', 'step-3.7-flash', 'kimi-k2.6', 'moondream3.1', 'qwen-3.8-27b', 'deepseek-v4-pro-0813']) {
+            expect(isChatCapableModel({ modelId: `logfare:${id}` })).toBe(true);
+        }
+    });
     it('20B 이하 소형 채팅 모델은 유지 — usableOnly 와 다른 점', () => {
         expect(isChatCapableModel({ modelId: 'openrouter:meta-llama/llama-3.2-1b-instruct' })).toBe(true);
         expect(isChatCapableModel({ modelId: 'bai:qwen3.8-flash' })).toBe(true);

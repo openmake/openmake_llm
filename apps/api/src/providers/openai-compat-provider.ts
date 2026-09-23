@@ -125,9 +125,11 @@ const INSUFFICIENT_CREDIT_PATTERN = /insufficient[_ ]user[_ ]quota|insufficient 
 /**
  * 403 중 키·플랜이 아니라 provider 정책이 호출 경로 자체를 막는 응답 (2026-09-04 OpenRouter 실측):
  *   `thinkingmachines/inkling:free is only available on agentic harnesses. Try plugging it into a coding agent...`
+ *   Logfare(2026-09-22): `Model 'qwen-3.8-27b' is a premium model that requires model-training opt-in. ... NOT opted in.`
+ *   — 키가 아니라 계정의 학습 동의 설정 문제라 인증 오류로 안내하면 안 된다.
  * 충전·업그레이드로 풀리지 않으므로 SUBSCRIPTION_REQUIRED 와 구분한다.
  */
-const MODEL_ACCESS_RESTRICTED_PATTERN = /only available (on|to|for|via)|not available (on|to|for|via) (this|your)/i;
+const MODEL_ACCESS_RESTRICTED_PATTERN = /only available (on|to|for|via)|not available (on|to|for|via) (this|your)|requires model-training opt-in|not opted in/i;
 
 /**
  * 400 중 우리가 보낸 도구 정의(함수 이름 규약)를 provider 가 거절한 응답 (2026-09-04·06 NVIDIA NIM 실측):

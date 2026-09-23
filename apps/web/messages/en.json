@@ -356,6 +356,7 @@
     },
     "artifactFallback": "Artifact",
     "artifactBuilding": "Building artifact…",
+    "mediaDownload": "Download",
     "reportBuilding": "Building report…",
     "reportData": "Report data",
     "reasoningLabel": "Reasoning",
@@ -1936,7 +1937,7 @@
       "code": "Dedicated model for writing/editing code (falls back to the text model)",
       "image": "Image generation and editing",
       "audio": "Speech-to-text and text-to-speech",
-      "music": "Music generation — no execution path yet, the assignment is stored only",
+      "music": "Songs and background music — the default is the local music server (ACE-Step)",
       "video": "Video generation (submitted as a job; result fetched when done)",
       "embed": "Infrastructure model for search/embeddings (admin only)",
       "other": "Capabilities outside any group"
@@ -2034,7 +2035,7 @@
       "code": "Dedicated model for writing/editing code (falls back to the text model)",
       "image": "Image generation and editing",
       "audio": "Speech-to-text and text-to-speech",
-      "music": "Music generation — no execution path yet, the assignment is stored only",
+      "music": "Songs and background music — the default is the local music server (ACE-Step)",
       "video": "Video generation (submitted as a job; result fetched when done)",
       "embed": "Infrastructure model for search/embeddings (admin only)",
       "other": "Capabilities outside any group"

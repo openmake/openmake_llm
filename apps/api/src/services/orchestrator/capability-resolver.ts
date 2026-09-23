@@ -16,6 +16,8 @@
  *  - direct 전용 provider(chatgpt OAuth 등)는 배정 자체를 거부한다.
  *  - 예외: jobs-v1 영상(config/capabilities VIDEO_PROVIDER_ADAPTERS — hasa)은 게이트웨이가 프록시하지
  *    못하는 커스텀 API 라 사용자 키로 provider 직결(`transport: 'direct'`, 도구가 SSRF 고정 fetch 사용).
+ *  - 로컬 음악 생성(ACE-Step)은 2026-09-23 부터 다른 로컬 capability 와 같은 LiteLLM 경로다(전용 주소 없음).
+ *    다만 로컬 전용 모델이라 외부 모델 배정은 배정 단계에서 거절한다.
  *
  * 실패는 조용히 폴백하지 않고 CapabilityUnavailableError(code) 로 명시한다 — 도구가
  * 사용자에게 사유를 안내해야 "이미지가 안 나온다" 가 설정 문제임을 알 수 있다.
@@ -73,7 +75,7 @@ export interface CapabilityTarget {
     source: 'user' | 'global' | 'default';
     /** 비용 주체 — user: 사용자 BYOK(external_provider_usage) · server: 운영자 공용 키(server_external_key_usage + 일/월 상한) · local: 로컬 vLLM(사용자 토큰 쿼터) */
     costOwner: 'user' | 'server' | 'local';
-    /** 'gateway'(기본) | 'direct' — jobs-v1 영상처럼 게이트웨이가 프록시 못 하는 경우만 provider 직결 */
+    /** 'gateway'(기본 — 운영자가 정한 주소로 일반 fetch, 로컬 음악 서버 포함) | 'direct' — jobs-v1 영상처럼 사용자 키로 provider 직결(SSRF 고정 fetch) */
     transport: 'gateway' | 'direct';
 }
 
@@ -82,8 +84,11 @@ export async function validateCapabilityAssignment(
     scope: string,
     fullId: string,
     deps: { userKeys?: ExternalKeysRepository; serverKeys?: ServerExternalKeysRepository } = {},
-    _capability?: Capability,
+    capability?: Capability,
 ): Promise<string | null> {
+    if (capability === 'music.generate' && isExternalFullId(fullId)) {
+        return `음악 생성은 로컬 음악 서버(ACE-Step)만 지원합니다 — '${fullId}' 는 배정할 수 없습니다`;
+    }
     if (!isExternalFullId(fullId)) {
         return toLocalModelTag(fullId) ? null : `해석 불가한 모델 id: '${fullId}'`;
     }

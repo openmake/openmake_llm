@@ -10,6 +10,7 @@ import { visionExecutor } from './vision';
 import { imageGenerateExecutor, imageEditExecutor } from './image';
 import { audioTranscribeExecutor, audioSpeechExecutor } from './audio';
 import { videoGenerateExecutor } from './video';
+import { musicGenerateExecutor } from './music';
 import { webSearchExecutor } from './web';
 
 export class UnsupportedCapabilityError extends Error {
@@ -27,6 +28,7 @@ const REGISTRY: Partial<Record<Capability, CapabilityExecutor>> = {
     'image.edit': imageEditExecutor,
     'audio.transcribe': audioTranscribeExecutor,
     'audio.speech': audioSpeechExecutor,
+    'music.generate': musicGenerateExecutor,
     'video.generate': videoGenerateExecutor,
     'web.search': webSearchExecutor,
 };

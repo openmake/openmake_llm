@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.83.0](https://github.com/openmake/openmake_llm/compare/v1.82.0...v1.83.0) (2026-09-22)
+
+
+### ✨ 기능
+
+* **models:** 기능별 모델 배정에 로컬 비채팅 모델(임베딩·음악) 노출 ([#979](https://github.com/openmake/openmake_llm/issues/979)) ([01befcc](https://github.com/openmake/openmake_llm/commit/01befcc8d150ce6e20d8f73e84ec9c22fb2437fe))
+* **music:** ACE-Step XL turbo 로 교체 + canary-deploy 카나리 종료 보강 ([#981](https://github.com/openmake/openmake_llm/issues/981)) ([e818bcf](https://github.com/openmake/openmake_llm/commit/e818bcf9d55be654a308b41f9c0770eba50beca5))
+
+## [1.82.0](https://github.com/openmake/openmake_llm/compare/v1.81.0...v1.82.0) (2026-09-22)
+
+
+### ✨ 기능
+
+* **orchestrator:** 음악 생성(music.generate) — DGX ACE-Step 1.5 를 LiteLLM 게이트웨이로 ([#977](https://github.com/openmake/openmake_llm/issues/977)) ([4710ffc](https://github.com/openmake/openmake_llm/commit/4710ffcca1bbe741c1023ada060646a41b2679b7))
+
+## [1.81.0](https://github.com/openmake/openmake_llm/compare/v1.80.1...v1.81.0) (2026-09-22)
+
+
+### ✨ 기능
+
+* **providers:** Logfare 외부 provider 추가 — BYOK + LiteLLM 게이트웨이 wildcard ([#975](https://github.com/openmake/openmake_llm/issues/975)) ([503d8f8](https://github.com/openmake/openmake_llm/commit/503d8f8fb45a1a6104685f09fcb488051edaff53))
+
+## [1.80.1](https://github.com/openmake/openmake_llm/compare/v1.80.0...v1.80.1) (2026-09-22)
+
+
+### 🐛 버그 수정
+
+* **orchestrator:** 영상 길이·비율 전달과 깨진 자막 억제 ([#973](https://github.com/openmake/openmake_llm/issues/973)) ([b25b7fd](https://github.com/openmake/openmake_llm/commit/b25b7fdbd6eca165c485b32ae6a39354217880f3))
+
 ## [1.80.0](https://github.com/openmake/openmake_llm/compare/v1.79.0...v1.80.0) (2026-09-20)
 
 

@@ -20,7 +20,7 @@ import {
  * 16종을 그대로 나열하던 화면이 과하게 세분화됐다는 지적(2026-09-12)에 따른 것으로, 백엔드 capability 는 그대로다.
  * - text: 텍스트 추론·이미지 이해·OCR 은 같은 VLM 하나가 처리한다(같은 모델을 세 번 고르게 하지 않는다)
  * - embed: 사용자가 고를 일이 없는 인프라 값이라 관리자 전역 화면에만
- * - 분석 계열(audio/music/video.analyze)은 실행 경로가 없어 숨긴다. music.generate 는 사용자 요청으로 그룹을 두되 "현재 미지원" 배지
+ * - 분석 계열(audio/music/video.analyze)은 실행 경로가 없어 숨긴다. music.generate 는 2026-09-22 로컬 음악 서버 어댑터로 실행된다
  */
 interface CapabilityGroupDef {
   id: string;
@@ -36,8 +36,8 @@ const CAPABILITY_GROUPS: readonly CapabilityGroupDef[] = [
   { id: "video", members: ["video.generate"] },
   { id: "embed", members: ["text.embed"], adminOnly: true },
 ];
-/** 그룹 안에 두는 미지원 capability — 배정은 저장되지만 실행 경로가 없다(배지로 표시). 나머지 미지원은 숨긴다 */
-const GROUPED_UNSUPPORTED: ReadonlySet<string> = new Set(["music.generate"]);
+/** 그룹 안에 두는 미지원 capability — 배정은 저장되지만 실행 경로가 없다(배지로 표시). 나머지 미지원은 숨긴다 (현재 없음) */
+const GROUPED_UNSUPPORTED: ReadonlySet<string> = new Set<string>();
 /** 그룹 select 의 "개별 설정" 표시값 — 하위 배정이 서로 다를 때 */
 const MIXED_VALUE = "__mixed__";
 

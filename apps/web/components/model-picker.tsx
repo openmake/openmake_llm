@@ -29,6 +29,7 @@ const EXTERNAL_PROVIDER_LABELS: Record<string, string> = {
   hasa: "🌐 Open AI Service Hub",
   bai: "🌐 B.AI",
   orcarouter: "🌐 OrcaRouter",
+  logfare: "🌐 Logfare",
 };
 
 export function ModelPicker({

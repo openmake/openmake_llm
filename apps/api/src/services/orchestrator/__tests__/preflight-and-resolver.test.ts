@@ -65,10 +65,22 @@ describe('resolveCapabilityTarget', () => {
         expect(o).toMatchObject({ transport: 'gateway', endpoint: '/v1/videos', model: 'openrouter/sora' });
     });
 
+    it('음악 생성: 게이트웨이 base + master key, 경로만 pass-through (전용 주소·겉키 없음, 2026-09-23)', async () => {
+        const t = await resolveCapabilityTarget('music.generate', undefined, deps({ global: [row('__global__', 'music.generate', 'local-llm:acestep-v15-xl-turbo')] }));
+        expect(t).toMatchObject({
+            providerId: 'local-llm', model: 'acestep-v15-xl-turbo',
+            baseUrl: 'http://127.0.0.1:13401', endpoint: '/music/v1/chat/completions',
+            transport: 'gateway', costOwner: 'local',
+        });
+        expect(t.headers).toEqual({ Authorization: 'Bearer master' });
+    });
+
     it('validateCapabilityAssignment — 게이트웨이 미편입·키 없음 거절', async () => {
         expect(await validateCapabilityAssignment('u1', 'nvidia:m', deps({ userKey: 'k' }))).toMatch(/LLM_GATEWAY_PROVIDERS/);
         expect(await validateCapabilityAssignment('u1', 'openrouter:m', deps({ userKey: null, keyRow: null }))).toMatch(/키를 먼저 등록/);
         expect(await validateCapabilityAssignment('u1', 'local-llm:img-gen')).toBeNull();
+        expect(await validateCapabilityAssignment('u1', 'openrouter:m', deps({ userKey: 'k' }), 'music.generate')).toMatch(/로컬 음악 서버/);
+        expect(await validateCapabilityAssignment('u1', 'local-llm:acestep-v15-xl-turbo', {}, 'music.generate')).toBeNull();
     });
 });
 
@@ -76,7 +88,7 @@ describe('preflightPlan — 실행 승인 경계', () => {
     const ctx = (o: Partial<ExecContext> = {}): ExecContext => ({ lang: 'ko', userMessage: 'q', attachments: new Map(), results: new Map(), userId: 'u1', ...o });
     it('미지원·입력 누락·미배정을 실행 전에 거절하고 나머지는 통과', async () => {
         const p = validatePlan({ complexity: 'multi', tasks: [
-            { id: 'm', capability: 'music.generate', input: { instruction: 'x' } },
+            { id: 'm', capability: 'video.analyze', input: { instruction: 'x' } },
             { id: 'v', capability: 'vision.describe', input: { instruction: 'x' } },
             { id: 't', capability: 'audio.speech', input: { text: 'hi' } },
             { id: 'i', capability: 'image.generate', input: { instruction: 'x' } },

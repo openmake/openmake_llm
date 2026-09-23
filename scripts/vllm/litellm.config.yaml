@@ -7,7 +7,7 @@
 # 토폴로지:
 #   앱(LLM_BASE_URL=http://127.0.0.1:13401) → 이 게이트웨이
 #     ├─ 로컬: Tailscale → DGX vLLM (:8002 qwen / :8003 bge)
-#     └─ 외부: openrouter/* · ollama-cloud/* · nvidia/* · hasa/* · bai/* · orcarouter/* wildcard (사용자 BYOK 는 요청 헤더)
+#     └─ 외부: openrouter/* · ollama-cloud/* · nvidia/* · hasa/* · bai/* · orcarouter/* · logfare/* wildcard (사용자 BYOK 는 요청 헤더)
 #
 # 헤더 계약 (LiteLLM 1.89.4 라이브 검증):
 #   Authorization: Bearer <LITELLM_MASTER_KEY>  → 게이트웨이 인증 (upstream 미전달)
@@ -29,6 +29,17 @@ model_list:
     litellm_params:
       model: openai/bge-m3
       api_base: os.environ/BGE_VLLM_API_BASE       # http://<VLLM_TAILSCALE_HOST>:8003/v1
+      api_key: os.environ/VLLM_API_KEY
+
+  # 음악 생성 (ACE-Step 1.5, DGX :8005) — **카탈로그 발견용 항목**.
+  # 실제 호출은 general_settings.pass_through_endpoints 로 간다(응답이 OpenAI 스펙과 달라
+  # 이 라우트로 부르면 역직렬화 500). 여기 두는 이유는 /model/info 에 떠야 앱이 로컬 카탈로그에
+  # 담고, 설정의 '기능별 모델 배정' 드롭다운에 선택지로 나오기 때문이다. 앱은 이 모델을
+  # role='capability' 로 분류해 주기 프로브의 ping 대상에서 제외한다(ping 1회 = 곡 1개 생성).
+  - model_name: acestep-v15-xl-turbo
+    litellm_params:
+      model: openai/acestep/acestep-v15-xl-turbo
+      api_base: os.environ/ACESTEP_API_BASE        # http://<VLLM_TAILSCALE_HOST>:8005/v1
       api_key: os.environ/VLLM_API_KEY
 
   # OpenAI 호환 alias — 표준 model ID 로 호출 시 qwen3.8 라우팅
@@ -75,11 +86,30 @@ model_list:
       api_base: https://api.orcarouter.ai/v1
       api_key: os.environ/DUMMY_UPSTREAM_KEY
 
+  - model_name: logfare/*
+    litellm_params:
+      model: openai/*
+      api_base: https://logfare.ai/v1
+      api_key: os.environ/DUMMY_UPSTREAM_KEY
+
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   # 사용자 BYOK 를 요청 헤더에서 upstream 인증으로 전달 (BYOK 를 config 에 저장 금지)
   # ⚠️ database_url 미주입 — 앱 DB 오상속 방지 (arch.md §7-3)
   forward_llm_provider_auth_headers: true
+
+  # 음악 생성 (ACE-Step 1.5, DGX :8005) — 2026-09-23
+  # model_list 로는 못 태운다: ACE-Step 이 message.audio 를 **배열**로 주는데 LiteLLM 의 Message
+  # 타입은 단일 ChatCompletionAudioResponse 를 기대해 역직렬화에서 500 이 난다(오디오 자체는 정상
+  # 생성됨 — 파싱만 실패). pass-through 는 응답을 건드리지 않아 게이트웨이 경유를 유지할 수 있다.
+  # auth:true → 앱은 다른 호출과 똑같이 master key 로 부르고, upstream 실키는 headers 로 주입한다.
+  pass_through_endpoints:
+    - path: "/music/v1/chat/completions"
+      target: os.environ/ACESTEP_CHAT_URL      # http://<VLLM_TAILSCALE_HOST>:8005/v1/chat/completions
+      headers:
+        Authorization: "Bearer os.environ/VLLM_API_KEY"
+      auth: true
+      timeout: 600
 
 litellm_settings:
   drop_params: false

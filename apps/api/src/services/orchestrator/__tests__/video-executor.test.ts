@@ -13,7 +13,7 @@ jest.mock('../../../config/capabilities', () => ({
     CAPABILITY_LIMITS: { ...jest.requireActual('../../../config/capabilities').CAPABILITY_LIMITS, VIDEO_WAIT_MS: 0, VIDEO_POLL_INTERVAL_MS: 1, VIDEO_DOWNLOAD_ATTEMPTS: 2 },
 }));
 
-import { videoGenerateExecutor } from '../executors/video';
+import { videoGenerateExecutor, splitVideoNegations } from '../executors/video';
 import type { ExecContext } from '../types';
 import type { PlanTask } from '../plan-schema';
 
@@ -52,5 +52,49 @@ describe('3·4. job 저장 보장 · 저장본은 자격증명 없이 반환', (
         const r = await videoGenerateExecutor(task([]), { ...ctx({}), attachments: new Map() } as never);
         expect(r.status).toBe('pending'); expect(r.text).toMatch(/저장하지 못했습니다|could not be saved/); expect(r.text).toMatch(/vid_new/);
         expect(callJson).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('제출 인자 — 계획의 길이·크기·제외 요소 (2026-09-22)', () => {
+    const submitBody = () => (callJson.mock.calls[0][1] as { body: Record<string, unknown> }).body;
+    const newTask = (extra: Record<string, unknown>) => ({ ...task([]), extra } as PlanTask);
+    const noAtt = { ...ctx({}), attachments: new Map() } as never;
+
+    it('계획의 seconds·size 를 싣고, negative_prompt 는 기본 제외 목록과 합쳐 중복 없이', async () => {
+        callJson.mockResolvedValue({ job_id: 'vid_a', status: 'GENERATING' });
+        await videoGenerateExecutor(newTask({ seconds: '5', size: '720x1280', negative_prompt: 'text, Subtitles' }), noAtt);
+        expect(submitBody()).toMatchObject({ seconds: '5', size: '720x1280', negative_prompt: 'subtitles, captions, watermark, text' });
+    });
+
+    it('인자가 없으면 기본 4초·가로 크기', async () => {
+        callJson.mockResolvedValue({ job_id: 'vid_b', status: 'GENERATING' });
+        await videoGenerateExecutor(newTask({}), noAtt);
+        expect(submitBody()).toMatchObject({ seconds: '4', size: '1280x720', negative_prompt: 'subtitles, captions, watermark' });
+    });
+
+    it('negative_prompt 를 모르는 provider(OpenAI /v1/videos)엔 싣지 않고 부정 표현도 그대로 둔다', async () => {
+        callJson.mockResolvedValue({ id: 'vid_c', status: 'queued' });
+        const openai = { ...target, fullId: 'openrouter:sora', providerId: 'openrouter', model: 'openrouter/sora' };
+        await videoGenerateExecutor({ ...newTask({ negative_prompt: 'text' }), instruction: 'Sunset beach, no text on screen' } as PlanTask, { ...ctx({}), attachments: new Map(), targets: new Map([['t1', openai]]) } as never);
+        expect(submitBody()).not.toHaveProperty('negative_prompt');
+        expect(submitBody().prompt).toBe('Sunset beach, no text on screen');
+    });
+
+    it('negative_prompt 를 받는 provider 면 프롬프트의 부정 표현을 걷어내 제외 목록으로 옮긴다', async () => {
+        callJson.mockResolvedValue({ job_id: 'vid_d', status: 'GENERATING' });
+        await videoGenerateExecutor({ ...newTask({}), instruction: 'A serene sunset over the ocean with gentle waves lapping the shore, no text on screen' } as PlanTask, noAtt);
+        expect(submitBody()).toMatchObject({ prompt: 'A serene sunset over the ocean with gentle waves lapping the shore', negative_prompt: 'subtitles, captions, watermark, text' });
+    });
+});
+
+describe('splitVideoNegations', () => {
+    it.each([
+        ['Sunset beach, warm light, no text', 'Sunset beach, warm light', ['text']],
+        ['A cat on snow, vertical format, without subtitles or logos.', 'A cat on snow, vertical format.', ['subtitles', 'logos']],
+        ['City at night with no on-screen text, cinematic', 'City at night, cinematic', ['text']],
+        ['A piano on a stage, casino lights', 'A piano on a stage, casino lights', []],
+        ['no text', 'no text', ['text']],
+    ])('%s', (input, prompt, excluded) => {
+        expect(splitVideoNegations(input)).toEqual({ prompt, excluded });
     });
 });

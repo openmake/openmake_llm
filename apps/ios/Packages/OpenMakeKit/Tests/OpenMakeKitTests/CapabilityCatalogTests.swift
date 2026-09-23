@@ -13,7 +13,7 @@ final class CapabilityCatalogTests: XCTestCase {
         let r = CapabilityCatalog.resolveGroups(assignable: assignable, admin: false)
         XCTAssertEqual(r.groups.map(\.id), ["text", "code", "image", "audio", "music", "video"])
         XCTAssertEqual(r.hiddenUnsupported, ["audio.analyze", "music.analyze", "video.analyze"])
-        XCTAssertTrue(r.groups.first { $0.id == "music" }!.isUnsupported)
+        XCTAssertFalse(r.groups.first { $0.id == "music" }!.isUnsupported)
         XCTAssertFalse(r.groups.first { $0.id == "image" }!.isUnsupported)
     }
 

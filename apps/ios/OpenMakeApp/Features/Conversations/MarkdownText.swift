@@ -362,11 +362,20 @@ private struct GeneratedImageView: View {
                     .aspectRatio(4 / 3, contentMode: .fit)
                     .overlay { ProgressView().tint(Instrument.accent) }
             case .success(let image):
-                image
-                    .resizable()
-                    .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Instrument.border))
+                VStack(alignment: .leading, spacing: 6) {
+                    image
+                        .resizable()
+                        .scaledToFit()
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Instrument.border))
+                    if let imageURL {
+                        GeneratedMediaSaveButton(url: imageURL) {
+                            Label("다운로드", systemImage: "arrow.down.circle")
+                                .font(.system(size: 12.5, weight: .medium))
+                                .foregroundStyle(Instrument.muted)
+                        }
+                    }
+                }
             case .failure:
                 ContentUnavailableView(
                     "이미지를 불러오지 못했습니다",
