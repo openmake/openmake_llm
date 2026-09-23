@@ -18,6 +18,7 @@ function deps(driver: Partial<JobDriver> | null, over: Partial<PollerDeps> = {})
         owner: 'w1',
         repo: {
             claimDue: async () => [],
+            renewLease: async () => true,
             transition: async (_id, to, patch, token) => { writes.push({ to, patch: (patch ?? {}) as Record<string, unknown>, token }); return token === 3 ? ({ ...baseJob(), state: to } as JobRecord) : null; },
         },
         invokerFor: async () => ({ describe: () => { throw new Error(); }, invokeJson: async () => ({}) as never, invokeBinary: async () => ({ bytes: Buffer.alloc(0), contentType: '' }), download: async () => ({ bytes: Buffer.alloc(0), contentType: '' }) }),
@@ -59,6 +60,17 @@ describe('advanceJob', () => {
         expect(poll).toHaveBeenCalledTimes(1);
     });
 
+    it('수집 재시도 예산은 수집 단계 것만 — 폴링 단계에서 쌓인 실패 횟수로 곧바로 소진하지 않는다', async () => {
+        const { d, writes } = deps({ poll: async () => ({ status: 'done' as const }), collect: async () => { throw new Error('terminated'); } });
+        expect(await advanceJob(baseJob({ retryCount: 106 }), 3, d)).toBe('collect_failed');
+        expect(writes[0]).toMatchObject({ to: 'collecting', patch: { stage: 'collect', resetRetry: true } });
+        expect(writes.at(-1)).toMatchObject({ patch: { stage: 'collect_failed' } });
+        // 수집 단계에서 예산을 다 쓰면 소진으로 보존
+        const b = deps({ collect: async () => { throw new Error('terminated'); } });
+        await advanceJob(baseJob({ state: 'collecting', retryCount: 4 }), 3, b.d);
+        expect(b.writes.at(-1)).toMatchObject({ patch: { stage: 'collect_exhausted', nextPollAt: null } });
+    });
+
     it('취소 요청 + driver 취소 미지원이면 running 으로 되돌리고 poll 을 이어 간다 · 취소 지원이면 cancelled', async () => {
         const a = deps({ poll: async () => ({ status: 'running' }) });
         expect(await advanceJob(baseJob({ state: 'cancel_requested' }), 3, a.d)).toBe('running');
@@ -92,6 +104,24 @@ describe('advanceJob', () => {
         const { d, writes } = deps({});
         expect(await advanceJob(baseJob({ deadline: new Date(10) }), 3, d)).toBe('deadline_exceeded');
         expect(writes[0]).toMatchObject({ to: 'failed', patch: { errorCode: 'deadline_exceeded' } });
+    });
+
+    it('runPollerTick 은 job 을 병렬로 진행한다 — 느린 수집이 다른 job 폴링을 막지 않는다', async () => {
+        let release!: () => void;
+        const gate = new Promise<void>((r) => { release = r; });
+        const order: string[] = [];
+        const { d } = deps({
+            poll: async (io) => {
+                if (io.externalJobId === 'ext-1') { await gate; order.push('slow'); } else order.push('fast');
+                return { status: 'running' };
+            },
+        });
+        d.repo.claimDue = async () => [{ job: baseJob({ id: '1', externalJobId: 'ext-1' }), token: 3 }, { job: baseJob({ id: '2', externalJobId: 'ext-2' }), token: 3 }];
+        const tick = runPollerTick(d);
+        await new Promise((r) => setImmediate(r));
+        expect(order).toEqual(['fast']); // 느린 job 1 이 끝나기 전에 job 2 가 진행됐다
+        release();
+        expect(await tick).toEqual(['running', 'running']);
     });
 
     it('runPollerTick 은 선점한 job 만 진행한다', async () => {
