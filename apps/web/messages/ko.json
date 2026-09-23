@@ -1945,7 +1945,21 @@
     "mixedOption": "(개별 설정)",
     "advancedShow": "세부 설정",
     "advancedHide": "세부 설정 닫기",
-    "hiddenUnsupportedNote": "아직 실행 경로가 없는 기능은 표시하지 않습니다: {list}"
+    "hiddenUnsupportedNote": "아직 실행 경로가 없는 기능은 표시하지 않습니다: {list}",
+    "availability": {
+      "disabled": "중지됨",
+      "not_ready": "재시작 필요",
+      "failed": "add-on 실패",
+      "incompatible": "버전 불일치",
+      "state_unknown": "상태 확인 불가"
+    },
+    "availabilityHint": {
+      "disabled": "제공하는 add-on 이 꺼져 있어 실행되지 않습니다. 배정은 보존되며 다시 켜면 그대로 쓰입니다",
+      "not_ready": "add-on 이 켜졌지만 이 서버 프로세스에 아직 올라오지 않았습니다 — 재시작 후 사용 가능",
+      "failed": "add-on 부팅이 실패했습니다 — 관리자 add-on 화면의 사유를 확인하세요",
+      "incompatible": "add-on 이 요구하는 앱 버전 범위 밖입니다",
+      "state_unknown": "상태 저장소를 읽지 못해 일시적으로 사용할 수 없습니다"
+    }
   },
   "adminModelRoles": {
     "title": "역할 모델 관리",
@@ -2043,7 +2057,21 @@
     "mixedOption": "(개별 설정)",
     "advancedShow": "세부 설정",
     "advancedHide": "세부 설정 닫기",
-    "hiddenUnsupportedNote": "아직 실행 경로가 없는 기능은 표시하지 않습니다: {list}"
+    "hiddenUnsupportedNote": "아직 실행 경로가 없는 기능은 표시하지 않습니다: {list}",
+    "availability": {
+      "disabled": "중지됨",
+      "not_ready": "재시작 필요",
+      "failed": "add-on 실패",
+      "incompatible": "버전 불일치",
+      "state_unknown": "상태 확인 불가"
+    },
+    "availabilityHint": {
+      "disabled": "제공하는 add-on 이 꺼져 있어 실행되지 않습니다. 배정은 보존되며 다시 켜면 그대로 쓰입니다",
+      "not_ready": "add-on 이 켜졌지만 이 서버 프로세스에 아직 올라오지 않았습니다 — 재시작 후 사용 가능",
+      "failed": "add-on 부팅이 실패했습니다 — 관리자 add-on 화면의 사유를 확인하세요",
+      "incompatible": "add-on 이 요구하는 앱 버전 범위 밖입니다",
+      "state_unknown": "상태 저장소를 읽지 못해 일시적으로 사용할 수 없습니다"
+    }
   },
   "adminGatewayModels": {
     "title": "게이트웨이 모델 상태",

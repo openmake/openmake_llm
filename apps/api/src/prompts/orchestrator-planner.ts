@@ -28,8 +28,12 @@ function capabilityLines(exclude: ReadonlySet<Capability>): string {
 /** 계획에서 직접 쓰지 않는 capability (종합은 자동, 임베딩은 도구용) */
 const NOT_PLANNABLE: ReadonlySet<Capability> = new Set(['text.synthesize', 'text.embed']);
 
-export function getPlannerSystemPrompt(lang: string): string {
-    const caps = capabilityLines(NOT_PLANNABLE);
+/**
+ * @param capabilityLinesOverride Registry 스냅샷에서 만든 기능 목록(P03, `plannerCapabilityLines`) — 같은 요청의 schema·검증과 같은
+ *        스냅샷을 쓰기 위해 호출부(planner)가 넘긴다. 생략하면 정적 목록(호환).
+ */
+export function getPlannerSystemPrompt(lang: string, capabilityLinesOverride?: string): string {
+    const caps = capabilityLinesOverride ?? capabilityLines(NOT_PLANNABLE);
     const { landscape, portrait, square } = VIDEO_GEN_ASPECT_SIZES;
     if (lang === 'ko') {
         return `당신은 멀티모달 요청 계획기입니다. 사용자 요청과 첨부를 보고 어떤 기능(capability)이 필요한지 JSON 으로만 답하세요.

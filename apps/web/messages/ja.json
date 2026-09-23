@@ -1945,7 +1945,21 @@
     "mixedOption": "(個別設定)",
     "advancedShow": "詳細設定",
     "advancedHide": "詳細を閉じる",
-    "hiddenUnsupportedNote": "実行経路のない機能は表示しません: {list}"
+    "hiddenUnsupportedNote": "実行経路のない機能は表示しません: {list}",
+    "availability": {
+      "disabled": "停止中",
+      "not_ready": "再起動が必要",
+      "failed": "アドオン失敗",
+      "incompatible": "バージョン不一致",
+      "state_unknown": "状態不明"
+    },
+    "availabilityHint": {
+      "disabled": "この機能を提供するアドオンがオフです。割り当ては保持され、再度有効化すると使われます",
+      "not_ready": "アドオンは有効ですがこのプロセスにまだ読み込まれていません — 再起動後に利用可能",
+      "failed": "アドオンの起動に失敗しました — 管理者アドオン画面で理由を確認してください",
+      "incompatible": "アドオンが要求するアプリのバージョン範囲外です",
+      "state_unknown": "状態ストアを読めないため一時的に利用できません"
+    }
   },
   "adminModelRoles": {
     "title": "ロールモデル管理",
@@ -2043,7 +2057,21 @@
     "mixedOption": "(個別設定)",
     "advancedShow": "詳細設定",
     "advancedHide": "詳細を閉じる",
-    "hiddenUnsupportedNote": "実行経路のない機能は表示しません: {list}"
+    "hiddenUnsupportedNote": "実行経路のない機能は表示しません: {list}",
+    "availability": {
+      "disabled": "停止中",
+      "not_ready": "再起動が必要",
+      "failed": "アドオン失敗",
+      "incompatible": "バージョン不一致",
+      "state_unknown": "状態不明"
+    },
+    "availabilityHint": {
+      "disabled": "この機能を提供するアドオンがオフです。割り当ては保持され、再度有効化すると使われます",
+      "not_ready": "アドオンは有効ですがこのプロセスにまだ読み込まれていません — 再起動後に利用可能",
+      "failed": "アドオンの起動に失敗しました — 管理者アドオン画面で理由を確認してください",
+      "incompatible": "アドオンが要求するアプリのバージョン範囲外です",
+      "state_unknown": "状態ストアを読めないため一時的に利用できません"
+    }
   },
   "adminGatewayModels": {
     "title": "ゲートウェイのモデル状態",

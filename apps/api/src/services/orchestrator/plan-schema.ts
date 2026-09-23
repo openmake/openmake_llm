@@ -4,7 +4,9 @@
  * 순수 모듈(LLM·DB 없음) — 테스트로 고정한다.
  */
 import { z } from 'zod';
-import { isCapability, PLANNABLE_CAPABILITIES, ORCHESTRATOR, PLAN_LYRICS_REF_MAX_CHARS, type Capability } from '../../config/capabilities';
+import { isCapability, ORCHESTRATOR, PLAN_LYRICS_REF_MAX_CHARS, type Capability } from '../../config/capabilities';
+import { snapshotForExecution } from '../../runtime-ports/capability-runtime';
+import { ensureLegacyCapabilityBridge } from '../../addon-host/legacy-capability-bridge';
 
 const PLAN_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
 
@@ -102,8 +104,17 @@ export function extractPlanJson(text: string): unknown | null {
 
 type PlanValidation = { ok: true; plan: ValidatedPlan } | { ok: false; reason: string };
 
-/** 구조 + 의미 검증. 실패 사유는 Planner 재시도 프롬프트에 그대로 싣는다 */
-export function validatePlan(raw: unknown, knownAttachmentIds: ReadonlySet<string>): PlanValidation {
+/** 기본 plannable 집합 — Registry 스냅샷(호출부가 같은 요청의 스냅샷을 넘기지 않았을 때) */
+function defaultPlannable(): ReadonlySet<string> {
+    ensureLegacyCapabilityBridge();
+    return snapshotForExecution().plannable;
+}
+
+/**
+ * 구조 + 의미 검증. 실패 사유는 Planner 재시도 프롬프트에 그대로 싣는다.
+ * `plannable` 은 Planner 가 프롬프트·schema 에 쓴 **같은 스냅샷**의 집합(P03) — 생략하면 현재 Registry 스냅샷.
+ */
+export function validatePlan(raw: unknown, knownAttachmentIds: ReadonlySet<string>, plannable: ReadonlySet<string> = defaultPlannable()): PlanValidation {
     const parsed = planSchema.safeParse(raw);
     if (!parsed.success) return { ok: false, reason: `schema: ${parsed.error.issues.map((i) => `${i.path.join('.')} ${i.message}`).slice(0, 3).join('; ')}` };
     const p = parsed.data;
@@ -114,7 +125,7 @@ export function validatePlan(raw: unknown, knownAttachmentIds: ReadonlySet<strin
         if (ids.has(t.id)) return { ok: false, reason: `duplicate task id '${t.id}'` };
         ids.add(t.id);
         if (!isCapability(t.capability)) return { ok: false, reason: `unknown capability '${t.capability}'` };
-        if (!PLANNABLE_CAPABILITIES.includes(t.capability)) return { ok: false, reason: `capability '${t.capability}' is not plannable` };
+        if (!plannable.has(t.capability)) return { ok: false, reason: `capability '${t.capability}' is not plannable` };
         const { instruction, text, attachments, refs, ...extra } = t.input ?? {};
         for (const a of attachments ?? []) {
             if (!knownAttachmentIds.has(a)) return { ok: false, reason: `unknown attachment '${a}' in task '${t.id}'` };

@@ -12,7 +12,9 @@
  *  변경한 정책: 종전 미디어 tool 은 역할 게이트 없이 전 사용자에게 열려 있었다 — 그대로(추가 권한 체계 없음).
  *  인증 컨텍스트는 호출부(message-pipeline)가 req.userId 로 넘기며, userId 없는 게스트는 외부 BYOK 가 없어 로컬 기본값만 쓴다.
  */
-import { UNSUPPORTED_CAPABILITIES, type Capability } from '../../config/capabilities';
+import { UNSUPPORTED_CAPABILITIES, ORCHESTRATOR, type Capability } from '../../config/capabilities';
+import { admitCapability, ADMISSION_LABEL, type ApprovedInvocationHandle } from '../../capability-contract/admission';
+import { ensureLegacyCapabilityBridge } from '../../addon-host/legacy-capability-bridge';
 import { checkUserQuota } from '../../llm/user-quota';
 import { QuotaExceededError } from '../../errors/quota-exceeded.error';
 import { resolveCapabilityTarget, CapabilityUnavailableError, type CapabilityTarget } from './capability-resolver';
@@ -30,6 +32,8 @@ interface PreflightResult {
     targets: Map<string, CapabilityTarget>;
     /** 로컬 대상 작업 존재 여부(쿼터·사용량 기록 대상) */
     hasLocal: boolean;
+    /** 작업별 승인 handle(P03) — 실행기는 이것이 있는 작업만, 실행 직전 재검사 후 실행한다 */
+    handles: Map<string, ApprovedInvocationHandle>;
 }
 
 /** capability 별 필수 첨부 종류 — 계획에 없으면 실행하지 않는다(모델 호출·과금 전에 거절) */
@@ -65,18 +69,30 @@ function inputProblem(task: PlanTask, ctx: ExecContext): string | null {
 export async function preflightPlan(plan: ValidatedPlan, ctx: ExecContext): Promise<PreflightResult> {
     const rejected = new Map<string, string>();
     const targets = new Map<string, CapabilityTarget>();
+    const handles = new Map<string, ApprovedInvocationHandle>();
     let hasLocal = false;
+    ensureLegacyCapabilityBridge();
+    const now = Date.now();
 
     for (const task of plan.tasks) {
+        // ① Registry 등록·소유 add-on 의도(관리자 중지)·상태 저장소 조회 실패 — 배정·키보다 먼저, Planner 없는 직접 경로(T23)도 같은 문
+        const admission = await admitCapability(task.capability);
+        if (!admission.ok) { rejected.set(task.id, `[${ADMISSION_LABEL[admission.code]}] ${admission.reason}`); continue; }
         if (UNSUPPORTED_CAPABILITIES.has(task.capability)) { rejected.set(task.id, `[unsupported] ${task.capability}: 검증된 provider 어댑터가 아직 없습니다`); continue; }
         const inputErr = inputProblem(task, ctx);
         if (inputErr) { rejected.set(task.id, `[input] ${inputErr}`); continue; }
-        if (task.capability === 'web.search') continue; // 모델 배정 없음
+        const handle: ApprovedInvocationHandle = {
+            taskId: task.id, capability: task.capability, userId: ctx.userId, sessionId: ctx.sessionId,
+            owner: admission.owner, registryRevision: admission.registryRevision, stateRevision: admission.stateRevision,
+            issuedAt: now, deadline: now + ORCHESTRATOR.TURN_DEADLINE_MS,
+        };
+        if (task.capability === 'web.search') { handles.set(task.id, handle); continue; } // 모델 배정 없음
         // 완료·저장된 영상 job 조회는 외부 키 없이 반환되므로 배정·키 검사를 요구하지 않는다(Codex 검토 4)
-        if (task.capability === 'video.generate' && task.attachments.some((id) => savedVideoPath(ctx.attachments.get(id)))) continue;
+        if (task.capability === 'video.generate' && task.attachments.some((id) => savedVideoPath(ctx.attachments.get(id)))) { handles.set(task.id, handle); continue; }
         try {
             const target = await resolveCapabilityTarget(task.capability, ctx.userId);
             targets.set(task.id, target);
+            handles.set(task.id, handle);
             if (target.providerId === 'local-llm') hasLocal = true;
         } catch (err) {
             if (err instanceof CapabilityUnavailableError) {
@@ -100,5 +116,6 @@ export async function preflightPlan(plan: ValidatedPlan, ctx: ExecContext): Prom
             }
         }
     }
-    return { rejected, targets, hasLocal };
+    for (const id of rejected.keys()) handles.delete(id);
+    return { rejected, targets, hasLocal, handles };
 }

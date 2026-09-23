@@ -11,6 +11,7 @@ import { CapabilityUnavailableError } from './capability-resolver';
 import { executorFor, UnsupportedCapabilityError } from './executors';
 import { combineSignals, HttpCallError } from './http-call';
 import { CapabilityNotRegisteredError } from '../../capability-contract/errors';
+import { recheckHandle, ADMISSION_LABEL, CapabilityAdmissionError } from '../../capability-contract/admission';
 import type { PlanTask, ValidatedPlan } from './plan-schema';
 import type { ExecContext, TaskResult } from './types';
 import { createLogger } from '../../utils/logger';
@@ -57,9 +58,10 @@ class Gate {
 }
 const globalGate = new Gate(Math.max(1, ORCHESTRATOR.GLOBAL_MAX_INFLIGHT));
 
-function classify(err: unknown): { error: string; kind: 'unsupported' | 'unassigned' | 'disabled' | 'cancelled' | 'failed' } {
+function classify(err: unknown): { error: string; kind: string } {
     if (err instanceof UnsupportedCapabilityError) return { error: err.message, kind: 'unsupported' };
     if (err instanceof CapabilityNotRegisteredError) return { error: err.message, kind: 'disabled' };
+    if (err instanceof CapabilityAdmissionError) return { error: err.message, kind: err.label };
     if (err instanceof CapabilityUnavailableError) return { error: err.message, kind: err.code === 'CAPABILITY_UNASSIGNED' ? 'unassigned' : 'failed' };
     if (err instanceof HttpCallError && err.kind === 'aborted') return { error: '취소됨', kind: 'cancelled' };
     const msg = err instanceof Error ? err.message : String(err);
@@ -74,6 +76,13 @@ async function runTask(task: PlanTask, ctx: ExecContext, turnSignal: AbortSignal
     let release: (() => void) | undefined;
     try {
         release = await globalGate.acquire(signal);
+        // 승인 handle 재검사(P03) — 계획·승인 뒤 관리자가 소유 add-on 을 껐거나 상태를 알 수 없으면 유료 요청 전송 전에 거절(T03)
+        if (ctx.handles) {
+            const handle = ctx.handles.get(task.id);
+            if (!handle) throw new CapabilityAdmissionError('unapproved', `${task.capability}: 실행 승인(handle)이 없습니다`);
+            const re = await recheckHandle(handle);
+            if (!re.ok) throw new CapabilityAdmissionError(re.code === 'HANDLE_EXPIRED' ? 'expired' : ADMISSION_LABEL[re.code], re.reason);
+        }
         const out = await executorFor(task.capability)(task, taskCtx);
         const status = out.status ?? (out.ok ? 'completed' : 'failed');
         const { job: _job, ...rest } = out;

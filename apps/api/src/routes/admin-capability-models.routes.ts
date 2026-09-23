@@ -22,6 +22,7 @@ import {
     GLOBAL_CAPABILITY_SCOPE, CAPABILITIES, ASSIGNABLE_CAPABILITIES, CAPABILITY_DEFAULTS, CAPABILITY_LIMITS,
     normalizeCapability, sanitizeCapabilityParams,
 } from '../config/capabilities';
+import { buildCapabilityCatalog } from '../services/capability-catalog';
 import { clearGlobalCapabilityCache, validateCapabilityAssignment } from '../services/orchestrator/capability-resolver';
 import { describeEffectiveCapabilities } from '../controllers/capability-models.controller';
 import { getConfig } from '../config';
@@ -53,7 +54,9 @@ adminCapabilityModelsRouter.use(requireAuth, requireAdmin);
 adminCapabilityModelsRouter.get('/capability-models', asyncHandler(async (_req: Request, res: Response) => {
     const repo = new CapabilityModelsRepository(getPool());
     const [mappings, effective] = await Promise.all([repo.listGlobal(), describeEffectiveCapabilities(undefined)]);
+    const catalog = await buildCapabilityCatalog();
     res.json(success({
+        catalog,
         mappings,
         effective,
         capabilities: CAPABILITIES,

@@ -6,12 +6,14 @@ import { ChevronDown, ChevronRight, Loader2, RotateCcw } from "lucide-react";
 import { Badge, Button } from "@/components/ui/primitives";
 import type { ModelEntry } from "@/lib/models-api";
 import {
+  CapabilityAvailabilityBadge,
   CapabilityEffectiveLine,
   CapabilityParamsInputs,
   CapabilityUnsupportedBadge,
   DEFAULT_VALUE,
   UNSUPPORTED_CAPABILITIES,
   type CapabilityEffective,
+  type CatalogMap,
 } from "./capability-shared";
 
 /**
@@ -46,8 +48,11 @@ interface ResolvedGroup {
   members: string[];
 }
 
-/** 배정 가능 목록을 그룹으로 나눈다 — 어느 그룹에도 없는 capability 는 'other' 로 모아 잃어버리지 않는다 */
-function resolveCapabilityGroups(assignable: readonly string[], admin: boolean): { groups: ResolvedGroup[]; hiddenUnsupported: string[] } {
+/**
+ * 배정 가능 목록을 그룹으로 나눈다 — 어느 그룹에도 없는 capability 는 서버 카탈로그의 `group`(있으면) 또는 'other' 로 모아
+ * 잃어버리지 않는다. 카탈로그가 주는 알 수 없는 그룹은 일반 그룹으로 그린다(라벨은 그룹 키 그대로).
+ */
+function resolveCapabilityGroups(assignable: readonly string[], admin: boolean, catalog: CatalogMap | undefined): { groups: ResolvedGroup[]; hiddenUnsupported: string[] } {
   const visible = (c: string) => !UNSUPPORTED_CAPABILITIES.has(c) || GROUPED_UNSUPPORTED.has(c);
   const placed = new Set<string>();
   const groups: ResolvedGroup[] = [];
@@ -57,8 +62,13 @@ function resolveCapabilityGroups(assignable: readonly string[], admin: boolean):
     def.members.forEach((m) => placed.add(m));
     if (members.length > 0) groups.push({ id: def.id, members });
   }
-  const other = assignable.filter((c) => !placed.has(c) && visible(c));
-  if (other.length > 0) groups.push({ id: "other", members: other });
+  const rest = assignable.filter((c) => !placed.has(c) && visible(c));
+  const byServerGroup = new Map<string, string[]>();
+  for (const c of rest) {
+    const g = catalog?.get(c)?.group ?? "other";
+    byServerGroup.set(g, [...(byServerGroup.get(g) ?? []), c]);
+  }
+  for (const [id, members] of byServerGroup) groups.push({ id, members });
   const hiddenUnsupported = assignable.filter((c) => UNSUPPORTED_CAPABILITIES.has(c) && !GROUPED_UNSUPPORTED.has(c));
   return { groups, hiddenUnsupported };
 }
@@ -70,7 +80,8 @@ function groupSelectValue(members: readonly string[], mapped: ReadonlyMap<string
 }
 
 function capabilityLabel(t: ReturnType<typeof useTranslations>, capability: string): string {
-  return t(`capabilities.${capability.replace(/\./g, "_")}`);
+  const key = `capabilities.${capability.replace(/\./g, "_")}`;
+  return t.has(key) ? t(key) : capability;
 }
 
 interface ModelSelectProps {
@@ -125,13 +136,17 @@ interface CapabilityGroupsEditorProps {
   onParamChange: (capability: string, key: string, value: string) => void;
   onParamApply: (capability: string) => void;
   labels: { assigned: string };
+  /** 서버 Registry 카탈로그(P03) — 없으면(구서버) 정적 표로 그린다 */
+  catalog?: CatalogMap;
 }
 
 /** 그룹 단위 배정 편집기 — 사용자 설정·관리자 전역 공용 */
 export function CapabilityGroupsEditor(props: CapabilityGroupsEditorProps) {
-  const { t, admin = false, capabilities, mapped, savedParams, effectiveMap, models, busy, paramDrafts, codeDefaults, onAssign, onParamChange, onParamApply, labels } = props;
+  const { t, admin = false, capabilities, mapped, savedParams, effectiveMap, models, busy, paramDrafts, codeDefaults, onAssign, onParamChange, onParamApply, labels, catalog } = props;
   const [open, setOpen] = useState<Record<string, boolean>>({});
-  const { groups, hiddenUnsupported } = resolveCapabilityGroups(capabilities, admin);
+  const { groups, hiddenUnsupported } = resolveCapabilityGroups(capabilities, admin, catalog);
+  const groupLabelOf = (id: string) => (t.has(`groups.${id}`) ? t(`groups.${id}`) : id);
+  const groupDescOf = (id: string) => (t.has(`groupDesc.${id}`) ? t(`groupDesc.${id}`) : "");
   const disabled = busy !== null;
 
   return (
@@ -142,7 +157,8 @@ export function CapabilityGroupsEditor(props: CapabilityGroupsEditorProps) {
         const assigned = g.members.some((m) => (mapped.get(m) ?? DEFAULT_VALUE) !== DEFAULT_VALUE);
         const expanded = open[g.id] ?? mixed; // 섞여 있으면 펼쳐서 어디가 다른지 바로 보이게
         const unsupported = g.members.every((m) => UNSUPPORTED_CAPABILITIES.has(m));
-        const groupLabel = t(`groups.${g.id}`);
+        const groupLabel = groupLabelOf(g.id);
+        const groupDesc = groupDescOf(g.id);
         return (
           <div key={g.id} className="rounded-lg border">
             <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -152,8 +168,9 @@ export function CapabilityGroupsEditor(props: CapabilityGroupsEditorProps) {
                   {assigned && <Badge tone="accent" className="shrink-0 whitespace-nowrap">{labels.assigned}</Badge>}
                   {mixed && <Badge tone="neutral" className="shrink-0 whitespace-nowrap">{t("mixedOption")}</Badge>}
                   {unsupported && <CapabilityUnsupportedBadge capability={g.members[0]} t={t} />}
+                  {g.members.length === 1 && <CapabilityAvailabilityBadge capability={g.members[0]} catalog={catalog} t={t} />}
                 </div>
-                <p className="text-xs text-muted">{t(`groupDesc.${g.id}`)}</p>
+                {groupDesc && <p className="text-xs text-muted">{groupDesc}</p>}
                 {!expanded && g.members.length === 1 && <CapabilityEffectiveLine eff={effectiveMap.get(g.members[0])} t={t} />}
               </div>
               <div className="flex shrink-0 items-center gap-2">
@@ -186,6 +203,7 @@ export function CapabilityGroupsEditor(props: CapabilityGroupsEditorProps) {
                           <span className="font-mono text-xs text-muted">{capability}</span>
                           {current !== DEFAULT_VALUE && <Badge tone="accent" className="shrink-0 whitespace-nowrap">{labels.assigned}</Badge>}
                           <CapabilityUnsupportedBadge capability={capability} t={t} />
+                          <CapabilityAvailabilityBadge capability={capability} catalog={catalog} t={t} />
                         </div>
                         <CapabilityEffectiveLine eff={effectiveMap.get(capability)} t={t} />
                         {codeDefaults && <p className="text-xs text-muted">{t("codeDefault", { model: codeDefaults[capability] || "—" })}</p>}
@@ -198,6 +216,7 @@ export function CapabilityGroupsEditor(props: CapabilityGroupsEditorProps) {
                           onChange={(key, v) => onParamChange(capability, key, v)}
                           onApply={() => onParamApply(capability)}
                           t={t}
+                          catalog={catalog}
                         />
                       </div>
                       <div className="flex shrink-0 items-center gap-2">

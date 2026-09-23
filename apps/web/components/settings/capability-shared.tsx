@@ -30,9 +30,41 @@ export interface CapabilityEffective {
 /** 배정 미지정 select 값 — 전역/기본값으로 자동 해석됨 */
 export const DEFAULT_VALUE = "";
 
+/** 서버 Registry 카탈로그(P03, `catalog` 필드) — 있으면 정적 표 대신 이것으로 그룹·입력 키·가용성을 그린다 */
+export type CapabilityAvailability = "available" | "disabled" | "not_ready" | "failed" | "incompatible" | "state_unknown";
+export interface CapabilityCatalogEntry {
+  id: string;
+  label: string;
+  group: string;
+  order: number;
+  assignable: boolean;
+  plannable: boolean;
+  inputSchema: { properties?: Record<string, unknown> };
+  settingsSchema: { properties?: Record<string, unknown> };
+  executionMode: "sync" | "job";
+  owner: string;
+  availability: CapabilityAvailability;
+}
+export interface CapabilityCatalog {
+  registryRevision: number;
+  entries: CapabilityCatalogEntry[];
+}
+export type CatalogMap = ReadonlyMap<string, CapabilityCatalogEntry>;
+
+export function catalogMap(catalog: CapabilityCatalog | undefined): CatalogMap | undefined {
+  return catalog ? new Map(catalog.entries.map((e) => [e.id, e])) : undefined;
+}
+
+/** 배정 params 입력 키 — 카탈로그의 settingsSchema 가 있으면 그것(서버 화이트리스트와 같은 원천), 없으면 정적 표(구서버 호환) */
+export function paramKeysFor(capability: string, catalog: CatalogMap | undefined): readonly string[] {
+  const entry = catalog?.get(capability);
+  if (entry) return Object.keys(entry.settingsSchema?.properties ?? {});
+  return CAPABILITY_PARAM_KEYS[capability] ?? [];
+}
+
 /**
- * capability 별 params 화이트리스트 — 백엔드 capability 설정의 PARAM_KEYS 와
- * 동일하게 유지할 것(서버는 이 키 밖의 값을 조용히 버린다).
+ * capability 별 params 화이트리스트 — **구서버 호환 폴백**. 서버가 `catalog` 를 주면 그 settingsSchema 를 쓴다(P03).
+ * 백엔드 PARAM_KEYS 와 동일하게 유지할 것(서버는 이 키 밖의 값을 조용히 버린다).
  */
 const CAPABILITY_PARAM_KEYS: Record<string, readonly string[]> = {
   "text.reason": ["temperature"],
@@ -94,6 +126,7 @@ export function CapabilityParamsInputs({
   onChange,
   onApply,
   t,
+  catalog,
 }: {
   capability: string;
   draft: Record<string, string>;
@@ -103,8 +136,9 @@ export function CapabilityParamsInputs({
   onChange: (key: string, value: string) => void;
   onApply: () => void;
   t: ReturnType<typeof useTranslations>;
+  catalog?: CatalogMap;
 }) {
-  const keys = CAPABILITY_PARAM_KEYS[capability] ?? [];
+  const keys = paramKeysFor(capability, catalog);
   if (keys.length === 0) return null;
   const dirty = !disabled && !paramsEqual(saved, draft);
   return (
@@ -168,6 +202,29 @@ export function CapabilityEffectiveLine({
         </Badge>
       )}
     </div>
+  );
+}
+
+const AVAILABILITY_TONE: Record<Exclude<CapabilityAvailability, "available">, "warn" | "neutral"> = {
+  disabled: "neutral", not_ready: "warn", failed: "warn", incompatible: "warn", state_unknown: "warn",
+};
+
+/** 소유 add-on 가용성 배지 — available 이면 아무것도 그리지 않는다(카탈로그 없는 구서버도 동일) */
+export function CapabilityAvailabilityBadge({
+  capability,
+  catalog,
+  t,
+}: {
+  capability: string;
+  catalog: CatalogMap | undefined;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const availability = catalog?.get(capability)?.availability;
+  if (!availability || availability === "available") return null;
+  return (
+    <Badge tone={AVAILABILITY_TONE[availability]} className="shrink-0 whitespace-nowrap" title={t(`availabilityHint.${availability}`)}>
+      {t(`availability.${availability}`)}
+    </Badge>
   );
 }
 

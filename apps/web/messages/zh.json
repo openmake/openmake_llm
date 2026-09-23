@@ -1945,7 +1945,21 @@
     "mixedOption": "(单独设置)",
     "advancedShow": "详细设置",
     "advancedHide": "收起详细",
-    "hiddenUnsupportedNote": "尚无执行路径的功能不显示: {list}"
+    "hiddenUnsupportedNote": "尚无执行路径的功能不显示: {list}",
+    "availability": {
+      "disabled": "已停用",
+      "not_ready": "需要重启",
+      "failed": "插件失败",
+      "incompatible": "版本不匹配",
+      "state_unknown": "状态不可用"
+    },
+    "availabilityHint": {
+      "disabled": "提供此功能的插件已关闭。分配会保留，重新启用后继续使用",
+      "not_ready": "插件已启用但尚未加载到此服务器进程 — 重启后可用",
+      "failed": "插件启动失败 — 请在管理员插件页面查看原因",
+      "incompatible": "超出插件要求的应用版本范围",
+      "state_unknown": "无法读取状态存储，暂时不可用"
+    }
   },
   "adminModelRoles": {
     "title": "角色模型管理",
@@ -2043,7 +2057,21 @@
     "mixedOption": "(单独设置)",
     "advancedShow": "详细设置",
     "advancedHide": "收起详细",
-    "hiddenUnsupportedNote": "尚无执行路径的功能不显示: {list}"
+    "hiddenUnsupportedNote": "尚无执行路径的功能不显示: {list}",
+    "availability": {
+      "disabled": "已停用",
+      "not_ready": "需要重启",
+      "failed": "插件失败",
+      "incompatible": "版本不匹配",
+      "state_unknown": "状态不可用"
+    },
+    "availabilityHint": {
+      "disabled": "提供此功能的插件已关闭。分配会保留，重新启用后继续使用",
+      "not_ready": "插件已启用但尚未加载到此服务器进程 — 重启后可用",
+      "failed": "插件启动失败 — 请在管理员插件页面查看原因",
+      "incompatible": "超出插件要求的应用版本范围",
+      "state_unknown": "无法读取状态存储，暂时不可用"
+    }
   },
   "adminGatewayModels": {
     "title": "网关模型状态",

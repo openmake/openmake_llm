@@ -1945,7 +1945,21 @@
     "mixedOption": "(einzeln festgelegt)",
     "advancedShow": "Details",
     "advancedHide": "Details ausblenden",
-    "hiddenUnsupportedNote": "Fähigkeiten ohne Ausführungspfad sind ausgeblendet: {list}"
+    "hiddenUnsupportedNote": "Fähigkeiten ohne Ausführungspfad sind ausgeblendet: {list}",
+    "availability": {
+      "disabled": "deaktiviert",
+      "not_ready": "Neustart erforderlich",
+      "failed": "Add-on fehlgeschlagen",
+      "incompatible": "Versionskonflikt",
+      "state_unknown": "Status unbekannt"
+    },
+    "availabilityHint": {
+      "disabled": "Das Add-on für diese Funktion ist aus. Die Zuweisung bleibt erhalten und wird nach dem Einschalten wieder verwendet",
+      "not_ready": "Das Add-on ist aktiviert, aber in diesem Serverprozess noch nicht geladen — nach Neustart verfügbar",
+      "failed": "Das Add-on konnte nicht starten — Grund auf der Admin-Add-on-Seite",
+      "incompatible": "Außerhalb des vom Add-on geforderten App-Versionsbereichs",
+      "state_unknown": "Vorübergehend nicht verfügbar: Statusspeicher nicht lesbar"
+    }
   },
   "adminModelRoles": {
     "title": "Modellrollen-Admin",
@@ -2043,7 +2057,21 @@
     "mixedOption": "(einzeln festgelegt)",
     "advancedShow": "Details",
     "advancedHide": "Details ausblenden",
-    "hiddenUnsupportedNote": "Fähigkeiten ohne Ausführungspfad sind ausgeblendet: {list}"
+    "hiddenUnsupportedNote": "Fähigkeiten ohne Ausführungspfad sind ausgeblendet: {list}",
+    "availability": {
+      "disabled": "deaktiviert",
+      "not_ready": "Neustart erforderlich",
+      "failed": "Add-on fehlgeschlagen",
+      "incompatible": "Versionskonflikt",
+      "state_unknown": "Status unbekannt"
+    },
+    "availabilityHint": {
+      "disabled": "Das Add-on für diese Funktion ist aus. Die Zuweisung bleibt erhalten und wird nach dem Einschalten wieder verwendet",
+      "not_ready": "Das Add-on ist aktiviert, aber in diesem Serverprozess noch nicht geladen — nach Neustart verfügbar",
+      "failed": "Das Add-on konnte nicht starten — Grund auf der Admin-Add-on-Seite",
+      "incompatible": "Außerhalb des vom Add-on geforderten App-Versionsbereichs",
+      "state_unknown": "Vorübergehend nicht verfügbar: Statusspeicher nicht lesbar"
+    }
   },
   "adminGatewayModels": {
     "title": "Gateway-Modellstatus",

@@ -14,6 +14,7 @@ import { CapabilityRegistry } from '../capability-contract/registry';
 import type { CapabilityHandler, CapabilityId, CapabilityOwner, CapabilityRegistration } from '../capability-contract/types';
 import type { CapabilityDefinition } from '../capability-contract/types';
 import { CapabilityNotRegisteredError } from '../capability-contract/errors';
+import { buildExecutionSnapshot, type ExecutionSnapshot } from '../capability-contract/plan-schema';
 
 const registry = new CapabilityRegistry();
 
@@ -38,6 +39,14 @@ export function registerCapabilities(
         tx.rollback();
         throw err;
     }
+}
+
+/**
+ * 한 요청이 Planner 프롬프트·schema·검증에 함께 쓰는 스냅샷(계획서 8.1). Registry 에 없는 capability(꺼진 add-on)는
+ * 여기 없으므로 Planner 에 노출되지 않는다. 사용자별 배정·권한은 preflight 가 실행 전에 따로 판정한다.
+ */
+export function snapshotForExecution(): ExecutionSnapshot {
+    return buildExecutionSnapshot(registry.snapshot());
 }
 
 /** 실행 직전 조회 — 없으면 명시 실패(소유 add-on 이 꺼졌거나 부팅 실패) */

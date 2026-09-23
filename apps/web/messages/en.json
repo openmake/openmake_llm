@@ -1945,7 +1945,21 @@
     "mixedOption": "(set individually)",
     "advancedShow": "Details",
     "advancedHide": "Hide details",
-    "hiddenUnsupportedNote": "Capabilities without an execution path are hidden: {list}"
+    "hiddenUnsupportedNote": "Capabilities without an execution path are hidden: {list}",
+    "availability": {
+      "disabled": "disabled",
+      "not_ready": "restart required",
+      "failed": "add-on failed",
+      "incompatible": "version mismatch",
+      "state_unknown": "state unavailable"
+    },
+    "availabilityHint": {
+      "disabled": "The add-on providing this capability is off. Your assignment is kept and reused when it is enabled again",
+      "not_ready": "The add-on is enabled but not loaded in this server process yet — available after restart",
+      "failed": "The add-on failed to boot — see the reason on the admin add-on page",
+      "incompatible": "Outside the app version range the add-on requires",
+      "state_unknown": "Temporarily unavailable: the state store could not be read"
+    }
   },
   "adminModelRoles": {
     "title": "Model Roles Admin",
@@ -2043,7 +2057,21 @@
     "mixedOption": "(set individually)",
     "advancedShow": "Details",
     "advancedHide": "Hide details",
-    "hiddenUnsupportedNote": "Capabilities without an execution path are hidden: {list}"
+    "hiddenUnsupportedNote": "Capabilities without an execution path are hidden: {list}",
+    "availability": {
+      "disabled": "disabled",
+      "not_ready": "restart required",
+      "failed": "add-on failed",
+      "incompatible": "version mismatch",
+      "state_unknown": "state unavailable"
+    },
+    "availabilityHint": {
+      "disabled": "The add-on providing this capability is off. Your assignment is kept and reused when it is enabled again",
+      "not_ready": "The add-on is enabled but not loaded in this server process yet — available after restart",
+      "failed": "The add-on failed to boot — see the reason on the admin add-on page",
+      "incompatible": "Outside the app version range the add-on requires",
+      "state_unknown": "Temporarily unavailable: the state store could not be read"
+    }
   },
   "adminGatewayModels": {
     "title": "Gateway model status",

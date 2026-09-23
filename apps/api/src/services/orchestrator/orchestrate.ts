@@ -17,6 +17,7 @@ import { planRequest } from './planner';
 import { validatePlan, type ValidatedPlan } from './plan-schema';
 import { executePlan } from './executor';
 import { preflightPlan } from './preflight';
+import { admitCapability, ADMISSION_LABEL } from '../../capability-contract/admission';
 import { OrchestratorJobsRepository } from '../../data/repositories/orchestrator-jobs-repo';
 import { ExternalKeysRepository } from '../../data/repositories/external-keys-repo';
 import { ServerExternalKeysRepository } from '../../data/repositories/server-external-keys-repo';
@@ -284,6 +285,7 @@ export async function runOrchestrator(input: RunOrchestratorInput): Promise<Orch
     // 실행 승인 경계 — 배정·키·어댑터·입력 종류·로컬 쿼터를 실행 전에 확정(거절 작업은 호출·과금 없음). 승인된 대상은 그대로 실행 대상
     const pre = await preflightPlan(plan, ctx);
     ctx.targets = pre.targets;
+    ctx.handles = pre.handles;
     for (const [id, reason] of pre.rejected) {
         const t = plan.tasks.find((x) => x.id === id)!;
         ctx.results.set(id, { taskId: id, capability: t.capability, ok: false, status: 'failed', text: reason, media: [], ms: 0, error: reason });
@@ -308,6 +310,9 @@ export async function runOrchestrator(input: RunOrchestratorInput): Promise<Orch
  * 이미지 모드 토글처럼 사용자가 명시한 단일 작업용 — Planner 만 생략하고 실행 정책은 자동 경로와 같다(Codex 검토 5).
  */
 export async function runSingleCapabilityTask(input: { capability: Capability; instruction: string; userId?: string; lang: string; sessionId?: string; signal?: AbortSignal }): Promise<TaskResult> {
+    // 승인 판정을 먼저 — Registry 에 없으면(소유 add-on OFF) 계획 검증 이전에 같은 사유([disabled])로 거절한다(T23)
+    const admission = await admitCapability(input.capability);
+    if (!admission.ok) throw new Error(`[${ADMISSION_LABEL[admission.code]}] ${admission.reason}`);
     const v = validatePlan({ complexity: 'multi', synthesis: false, tasks: [{ id: 't1', capability: input.capability, input: { instruction: input.instruction } }] }, new Set());
     if (!v.ok) throw new Error(`계획 검증 실패: ${v.reason}`);
     const ctx: ExecContext = { userId: input.userId, lang: input.lang, userMessage: input.instruction, attachments: new Map(), results: new Map(), signal: input.signal, sessionId: input.sessionId };
@@ -315,6 +320,7 @@ export async function runSingleCapabilityTask(input: { capability: Capability; i
     const rejected = pre.rejected.get('t1');
     if (rejected) throw new Error(rejected);
     ctx.targets = pre.targets;
+    ctx.handles = pre.handles;
     const summary = await executePlan(v.plan, ctx);
     recordUsage(input.userId, summary.results, pre.targets);
     const r = summary.results[0];
