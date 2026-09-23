@@ -10,6 +10,7 @@ import { ORCHESTRATOR } from '../../config/capabilities';
 import { CapabilityUnavailableError } from './capability-resolver';
 import { executorFor, UnsupportedCapabilityError } from './executors';
 import { combineSignals, HttpCallError } from './http-call';
+import { CapabilityNotRegisteredError } from '../../capability-contract/errors';
 import type { PlanTask, ValidatedPlan } from './plan-schema';
 import type { ExecContext, TaskResult } from './types';
 import { createLogger } from '../../utils/logger';
@@ -56,8 +57,9 @@ class Gate {
 }
 const globalGate = new Gate(Math.max(1, ORCHESTRATOR.GLOBAL_MAX_INFLIGHT));
 
-function classify(err: unknown): { error: string; kind: 'unsupported' | 'unassigned' | 'cancelled' | 'failed' } {
+function classify(err: unknown): { error: string; kind: 'unsupported' | 'unassigned' | 'disabled' | 'cancelled' | 'failed' } {
     if (err instanceof UnsupportedCapabilityError) return { error: err.message, kind: 'unsupported' };
+    if (err instanceof CapabilityNotRegisteredError) return { error: err.message, kind: 'disabled' };
     if (err instanceof CapabilityUnavailableError) return { error: err.message, kind: err.code === 'CAPABILITY_UNASSIGNED' ? 'unassigned' : 'failed' };
     if (err instanceof HttpCallError && err.kind === 'aborted') return { error: '취소됨', kind: 'cancelled' };
     const msg = err instanceof Error ? err.message : String(err);

@@ -6,17 +6,28 @@
  */
 import { bootAddons, type AddonBootDeps } from '../index';
 import { getAddonRuntimeStatus, resetAddonRuntimeStatusesForTest, resolveAddonActivation } from '../activation';
+import { getCapabilityRegistry, resetCapabilityRuntimeForTest } from '../../runtime-ports/capability-runtime';
+import { resetLegacyCapabilityBridgeForTest } from '../legacy-capability-bridge';
 import type { BuiltinAddon } from '../builtin-registry';
+import type { CapabilityDefinition, CapabilityHandler } from '../../capability-contract/types';
 
-const addon = (id: string, extra: Partial<{ migrations: string; permissions: string[]; runtime: string; requires: string }> = {}): BuiltinAddon => ({
+const addon = (id: string, extra: Partial<{ migrations: string; permissions: string[]; runtime: string; requires: string; provides: string[]; contract: number }> = {}): BuiltinAddon => ({
     id, dir: `/packs/${id}`,
     manifest: {
-        id, name: id, version: '1.0.0', requires: { openmake: extra.requires ?? '>=1.0.0 <2.0.0' }, scope: 'system',
+        id, name: id, version: '1.0.0', requires: { openmake: extra.requires ?? '>=1.0.0 <2.0.0', ...(extra.contract !== undefined ? { capabilityContract: extra.contract } : {}) }, scope: 'system',
         components: { ...(extra.migrations ? { migrations: extra.migrations } : {}) },
         ...(extra.permissions ? { permissions: extra.permissions } : {}),
         ...(extra.runtime ? { entry: { runtime: extra.runtime } } : {}),
+        ...(extra.provides ? { provides: { capabilities: extra.provides } } : {}),
     },
 } as unknown as BuiltinAddon);
+
+const capDef = (id: string): CapabilityDefinition => ({
+    id, contractVersion: 1, assignable: true, plannable: true, display: { label: id, group: 'x', order: 0 }, plannerHint: '',
+    inputSchema: { type: 'object', properties: {} }, settingsSchema: { type: 'object', properties: {} },
+    execution: { mode: 'sync', timeoutMs: 1000, supportsCancellation: true }, output: { mimeTypes: [] },
+});
+const capHandler: CapabilityHandler = { execute: async () => ({ ok: true, text: '', media: [] }) };
 
 function deps(over: Partial<AddonBootDeps> = {}): AddonBootDeps & { started: string[]; failed: Array<[string, string]>; succeeded: string[] } {
     const started: string[] = []; const failed: Array<[string, string]> = []; const succeeded: string[] = [];
@@ -32,7 +43,7 @@ function deps(over: Partial<AddonBootDeps> = {}): AddonBootDeps & { started: str
     };
 }
 
-beforeEach(() => resetAddonRuntimeStatusesForTest());
+beforeEach(() => { resetAddonRuntimeStatusesForTest(); resetCapabilityRuntimeForTest(); resetLegacyCapabilityBridgeForTest(); });
 
 describe('bootAddons', () => {
     it('T04: migration 실패 add-on 은 런타임을 시작하지 않고, 다른 add-on 은 정상 시작한다', async () => {
@@ -98,6 +109,56 @@ describe('bootAddons', () => {
         ], d);
         expect(r[0]).toMatchObject({ id: 'm', stage: 'migration_failed', reason: 'lock timeout' });
         expect(d.started).toEqual(['n']);
+    });
+});
+
+describe('bootAddons — capability 게시 (P02)', () => {
+    it('T29: 같은 capability 를 두 add-on 이 선언하면 양쪽 다 게시 차단, Base 예약 ID 는 그 add-on 만 거절되고 Base 등록은 유지', async () => {
+        const d = deps();
+        const r = await bootAddons([
+            addon('img-a', { runtime: 'boot#start', provides: ['knowledge.retrieve'] }),
+            addon('img-b', { runtime: 'boot#start', provides: ['knowledge.retrieve'] }),
+            addon('txt', { runtime: 'boot#start', provides: ['text.reason'] }),
+            addon('plain', { runtime: 'boot#start' }),
+        ], d);
+        expect(r.map(x => x.stage)).toEqual(['ownership_conflict', 'ownership_conflict', 'ownership_conflict', 'ready']);
+        expect(d.started).toEqual(['plain']);
+        expect(d.failed.map(f => f[1])).toEqual(['registration_failed', 'registration_failed', 'registration_failed']);
+        expect(getCapabilityRegistry().get('text.reason')?.owner.addonId).toBe('base');
+    });
+
+    it('런타임이 호스트 문맥으로 게시하면 manifest 선언과 일치할 때만 ready', async () => {
+        const d = deps({ async startRuntime(_a, _ref, host) { host.registerCapabilities([{ definition: capDef('knowledge.retrieve'), handler: capHandler }]); } });
+        const r = await bootAddons([addon('kn', { runtime: 'boot#start', provides: ['knowledge.retrieve'] })], d);
+        expect(r[0].stage).toBe('ready');
+        expect(getCapabilityRegistry().get('knowledge.retrieve')?.owner).toEqual({ addonId: 'kn', addonVersion: '1.0.0', source: 'builtin' });
+    });
+
+    it('T05: 선언만 하고 등록하지 않으면 실패로 기록되고 부분 등록은 Registry 에 남지 않는다', async () => {
+        const d = deps({ async startRuntime(_a, _ref, host) {
+            host.registerCapabilities([{ definition: capDef('knowledge.retrieve'), handler: capHandler }]);
+            throw new Error('후반 초기화 실패');
+        } });
+        const r = await bootAddons([addon('kn', { runtime: 'boot#start', provides: ['knowledge.retrieve'] })], d);
+        expect(r[0]).toMatchObject({ stage: 'runtime_failed', reason: '후반 초기화 실패' });
+        expect(getCapabilityRegistry().has('knowledge.retrieve')).toBe(false);
+        expect(d.failed).toEqual([['kn', 'runtime_failed']]);
+    });
+
+    it('게시 결과가 manifest 와 다르면(선언 2·등록 1) 게시되지 않고 실패', async () => {
+        const d = deps({ async startRuntime(_a, _ref, host) {
+            expect(() => host.registerCapabilities([{ definition: capDef('knowledge.retrieve'), handler: capHandler }])).toThrow(/다릅니다/);
+        } });
+        const r = await bootAddons([addon('kn', { runtime: 'boot#start', provides: ['knowledge.retrieve', 'knowledge.ingest'] })], d);
+        expect(r[0].stage).toBe('runtime_failed');
+        expect(getCapabilityRegistry().has('knowledge.retrieve')).toBe(false);
+    });
+
+    it('capabilityContract 버전이 다르면 version_mismatch 로 제외', async () => {
+        const d = deps();
+        const r = await bootAddons([addon('kn', { runtime: 'boot#start', contract: 2 })], d);
+        expect(r[0].stage).toBe('version_mismatch');
+        expect(d.started).toEqual([]);
     });
 });
 

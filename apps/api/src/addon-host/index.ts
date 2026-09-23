@@ -24,6 +24,10 @@ import { loadAddonEntry } from './entry-loader';
 import { installPackCatalog } from './pack-catalog';
 import { installPackSkills } from './pack-skills';
 import { setAddonRuntimeStatus } from './activation';
+import { ensureLegacyCapabilityBridge, LEGACY_BRIDGE_CAPABILITIES } from './legacy-capability-bridge';
+import { checkCapabilityOwnership } from '../capability-contract/registry';
+import { CAPABILITY_CONTRACT_VERSION, type CapabilityDefinition, type CapabilityHandler, type CapabilityOwner } from '../capability-contract/types';
+import { getCapabilityRegistry, registerCapabilities } from '../runtime-ports/capability-runtime';
 import type { AddonFailureCode, AddonInstallationRow } from '../data/repositories/addon-state-repository';
 import {
     builtinAddonIds, enabledBuiltinAddons, invalidBuiltinAddons, listBuiltinAddonDefs, unknownDisabledIds,
@@ -35,7 +39,7 @@ const logger = createLogger('AddonHost');
 /** 부팅 한 번의 add-on 별 결과 — 테스트와 부팅 로그가 읽는다 */
 export interface AddonBootResult {
     id: string;
-    stage: 'excluded' | 'version_mismatch' | 'migration_failed' | 'runtime_failed' | 'ready';
+    stage: 'excluded' | 'version_mismatch' | 'ownership_conflict' | 'migration_failed' | 'runtime_failed' | 'ready';
     reason?: string;
 }
 
@@ -96,6 +100,25 @@ export function selectMigrationTargets(addons: readonly BuiltinAddon[]): { targe
 }
 
 /**
+ * 런타임 진입점(`entry.runtime`)이 받는 호스트 문맥 — add-on 은 이것으로만 capability 를 게시한다(P02).
+ * 소유자(addonId·version·source)는 호스트가 채우고, 게시는 manifest `provides` 와 정확히 일치해야 한다.
+ * 종전 런타임(mcp·skill·search-providers)은 인자를 무시해도 된다.
+ */
+export interface AddonRuntimeHost {
+    owner: CapabilityOwner;
+    /** 한 트랜잭션으로 등록·게시 — 실패하면 아무것도 게시되지 않는다 */
+    registerCapabilities(entries: ReadonlyArray<{ definition: CapabilityDefinition; handler: CapabilityHandler }>): void;
+}
+
+function runtimeHostFor(addon: BuiltinAddon): AddonRuntimeHost {
+    const owner: CapabilityOwner = { addonId: addon.id, addonVersion: addon.manifest.version, source: 'builtin' };
+    return {
+        owner,
+        registerCapabilities: (entries) => registerCapabilities(owner, entries, addon.manifest.provides?.capabilities ?? []),
+    };
+}
+
+/**
  * 부팅 절차가 의존하는 외부 효과 — 테스트가 통째로 주입한다(DB·require 없이 절차만 검증).
  * 운영 구현은 `defaultBootDeps()`.
  */
@@ -103,7 +126,7 @@ export interface AddonBootDeps {
     /** DB 의도 조회 — 실패는 throw (호출부가 env 판정으로 계속하며 경고) */
     readInstallations(): Promise<Map<string, Pick<AddonInstallationRow, 'desired_state' | 'state'>>>;
     applyMigrations(targets: Array<{ id: string; dir: string }>): Promise<Array<{ id: string; applied: string[]; error?: string }>>;
-    startRuntime(addon: BuiltinAddon, ref: string): Promise<void>;
+    startRuntime(addon: BuiltinAddon, ref: string, host: AddonRuntimeHost): Promise<void>;
     markFailed(addonId: string, code: AddonFailureCode, reason: string): Promise<void>;
     markSucceeded(addonId: string): Promise<void>;
     appVersion: string;
@@ -127,8 +150,8 @@ function defaultBootDeps(): AddonBootDeps {
             const { getUnifiedDatabase } = await import('../data/models/unified-database');
             return applyAddonMigrationsWithLock(getUnifiedDatabase().getPool(), targets);
         },
-        async startRuntime(addon, ref) {
-            await loadAddonEntry<() => Promise<void>>(addon, ref)();
+        async startRuntime(addon, ref, host) {
+            await loadAddonEntry<(host: AddonRuntimeHost) => Promise<void>>(addon, ref)(host);
         },
         async markFailed(addonId, code, reason) {
             try { await (await repo()).markBootFailure(addonId, code, reason); await invalidate(); } catch { /* 로그가 이미 남았다 */ }
@@ -164,15 +187,33 @@ export async function bootAddons(candidates: readonly BuiltinAddon[], deps: Addo
             logger.info(`add-on '${addon.id}' 관리자 의도 ${row.desired_state} — 부팅 대상에서 제외`);
             continue;
         }
-        // ② 버전 불일치는 경고 후 계속 실행하지 않고 그 add-on 을 제외한다(계획서 7.4)
+        // ② 버전 불일치는 경고 후 계속 실행하지 않고 그 add-on 을 제외한다(계획서 7.4) — capability 계약 버전도 같다
         if (!satisfiesOpenmakeRange(deps.appVersion, addon.manifest.requires.openmake)) {
             const reason = `requires ${addon.manifest.requires.openmake}, 현재 ${deps.appVersion}`;
             logger.warn(`내장 add-on '${addon.id}' 호환 범위 밖 — 제외: ${reason}`);
             await fail(addon, 'version_mismatch', 'version_mismatch', reason);
             continue;
         }
+        const contract = addon.manifest.requires.capabilityContract;
+        if (contract !== undefined && contract !== CAPABILITY_CONTRACT_VERSION) {
+            await fail(addon, 'version_mismatch', 'version_mismatch', `capabilityContract ${String(contract)} ≠ ${CAPABILITY_CONTRACT_VERSION}`);
+            continue;
+        }
         active.push(addon);
     }
+
+    // capability 소유권 사전 검사 — 같은 ID 를 두 add-on 이 선언하면 양쪽 다, Base 예약 ID 면 그 add-on 만 게시를 막는다(T06·T29)
+    ensureLegacyCapabilityBridge();
+    const { rejected } = checkCapabilityOwnership(
+        active.map(a => ({ addonId: a.id, provides: a.manifest.provides?.capabilities ?? [] })),
+        new Set(LEGACY_BRIDGE_CAPABILITIES),
+    );
+    for (const [id, reason] of rejected) {
+        const addon = active.find(a => a.id === id)!;
+        logger.error(`add-on '${id}' capability 소유권 충돌 — 게시 차단: ${reason}`);
+        await fail(addon, 'ownership_conflict', 'registration_failed', reason);
+    }
+    active = active.filter(a => !rejected.has(a.id));
 
     // ④ migration — 실패한 add-on 은 런타임을 시작하지 않는다(그 테이블을 전제한 코드가 부분 서비스를 만들지 않게)
     const { targets, denied } = selectMigrationTargets(active);
@@ -201,9 +242,17 @@ export async function bootAddons(candidates: readonly BuiltinAddon[], deps: Addo
         if (ref) {
             setAddonRuntimeStatus(addon.id, 'registering');
             try {
-                await deps.startRuntime(addon, ref);
+                await deps.startRuntime(addon, ref, runtimeHostFor(addon));
+                // 게시 결과 ↔ manifest 선언 대조 — 선언만 하고 등록하지 않은 add-on 은 실패(부분 등록은 회수)
+                const declared = [...(addon.manifest.provides?.capabilities ?? [])].sort();
+                const published = getCapabilityRegistry().list().filter(r => r.owner.addonId === addon.id).map(r => r.definition.id).sort();
+                if (declared.length !== published.length || declared.some((c, i) => c !== published[i])) {
+                    throw new Error(`manifest provides [${declared.join(', ')}] 와 게시 결과 [${published.join(', ')}] 불일치`);
+                }
             } catch (err) {
                 const reason = err instanceof Error ? err.message : String(err);
+                const removed = getCapabilityRegistry().unregisterOwner(addon.id);
+                if (removed.length > 0) logger.warn(`add-on '${addon.id}' 부분 등록 회수: ${removed.join(', ')}`);
                 logger.error(`add-on '${addon.id}' 런타임 등록 실패 — 해당 기능 비활성: ${reason}`);
                 await fail(addon, 'runtime_failed', 'runtime_failed', reason);
                 continue;
