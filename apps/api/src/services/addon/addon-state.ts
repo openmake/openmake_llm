@@ -16,7 +16,7 @@
 import { createLogger } from '../../utils/logger';
 import { isBuiltinAddonEnabled } from '../../addon-host/builtin-registry';
 import { ADDON_STATE_CACHE_TTL_MS } from '../../config/runtime-limits';
-import type { AddonState } from '../../data/repositories/addon-state-repository';
+import type { AddonDesiredState, AddonFailureCode, AddonState } from '../../data/repositories/addon-state-repository';
 
 const logger = createLogger('AddonState');
 
@@ -39,6 +39,27 @@ export async function ensureAddonStates(): Promise<void> {
         .catch(err => { logger.debug(`add-on 상태 적재 실패(무시): ${err instanceof Error ? err.message : String(err)}`); })
         .finally(() => { inflight = null; });
     await inflight;
+}
+
+/**
+ * strict 조회 — 오류를 삼키지 않는다(P01, 계획서 7.1). '행 없음'(= 미등록, 기본 의도 enabled)과 '조회 실패'(`known:false`)를
+ * 구분해 돌려준다. capability 실행 승인처럼 **fail-closed 여야 하는 경로**가 쓴다 — 기존 `ensureAddonStates()` 는
+ * 라우트 노출·사용권의 fail-open 경로로 그대로 둔다(한 번에 확산하지 않는다).
+ */
+export type StrictAddonState =
+    | { known: true; registered: boolean; state: AddonState; desiredState: AddonDesiredState; stateRevision: number; lastFailureCode: AddonFailureCode | null }
+    | { known: false; reason: string };
+
+export async function readAddonStateStrict(addonId: string): Promise<StrictAddonState> {
+    try {
+        const { getUnifiedDatabase } = await import('../../data/models/unified-database');
+        const { AddonStateRepository } = await import('../../data/repositories/addon-state-repository');
+        const row = await new AddonStateRepository(getUnifiedDatabase().getPool()).get(addonId);
+        if (!row) return { known: true, registered: false, state: 'enabled', desiredState: 'enabled', stateRevision: 0, lastFailureCode: null };
+        return { known: true, registered: true, state: row.state, desiredState: row.desired_state, stateRevision: row.state_revision, lastFailureCode: row.last_failure_code };
+    } catch (err) {
+        return { known: false, reason: err instanceof Error ? err.message : String(err) };
+    }
 }
 
 /** 쓰기 직후 호출 — 다음 조회가 DB 를 다시 읽는다. */

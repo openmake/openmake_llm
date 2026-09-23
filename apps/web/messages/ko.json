@@ -2726,6 +2726,13 @@
     "nonCommercial": "비상업",
     "permissions": "권한",
     "verifiedModels": "검증된 모델",
-    "verifiedDetail": "통과율 {rate}% · {cases}건 · {date}"
+    "verifiedDetail": "통과율 {rate}% · {cases}건 · {date}",
+    "restartRequired": "재시작 필요",
+    "runtime": {
+      "not_loaded": "런타임 미적재",
+      "registering": "등록 중",
+      "ready": "준비됨",
+      "failed": "런타임 실패"
+    }
   }
 }

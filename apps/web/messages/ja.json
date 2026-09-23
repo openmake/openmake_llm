@@ -2726,6 +2726,13 @@
     "nonCommercial": "非商用",
     "permissions": "権限",
     "verifiedModels": "検証済みモデル",
-    "verifiedDetail": "合格率 {rate}% · {cases}件 · {date}"
+    "verifiedDetail": "合格率 {rate}% · {cases}件 · {date}",
+    "restartRequired": "再起動が必要",
+    "runtime": {
+      "not_loaded": "ランタイム未読込",
+      "registering": "登録中",
+      "ready": "準備完了",
+      "failed": "ランタイム失敗"
+    }
   }
 }

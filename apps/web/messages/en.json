@@ -2726,6 +2726,13 @@
     "nonCommercial": "non-commercial",
     "permissions": "Permissions",
     "verifiedModels": "Verified models",
-    "verifiedDetail": "Pass rate {rate}% · {cases} cases · {date}"
+    "verifiedDetail": "Pass rate {rate}% · {cases} cases · {date}",
+    "restartRequired": "restart required",
+    "runtime": {
+      "not_loaded": "runtime not loaded",
+      "registering": "registering",
+      "ready": "ready",
+      "failed": "runtime failed"
+    }
   }
 }

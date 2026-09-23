@@ -2726,6 +2726,13 @@
     "nonCommercial": "nicht kommerziell",
     "permissions": "Berechtigungen",
     "verifiedModels": "Verifizierte Modelle",
-    "verifiedDetail": "Erfolgsquote {rate}% · {cases} Fälle · {date}"
+    "verifiedDetail": "Erfolgsquote {rate}% · {cases} Fälle · {date}",
+    "restartRequired": "Neustart erforderlich",
+    "runtime": {
+      "not_loaded": "Laufzeit nicht geladen",
+      "registering": "Registrierung",
+      "ready": "bereit",
+      "failed": "Laufzeitfehler"
+    }
   }
 }

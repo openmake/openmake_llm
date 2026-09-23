@@ -2726,6 +2726,13 @@
     "nonCommercial": "非商用",
     "permissions": "权限",
     "verifiedModels": "已验证模型",
-    "verifiedDetail": "通过率 {rate}% · {cases} 项 · {date}"
+    "verifiedDetail": "通过率 {rate}% · {cases} 项 · {date}",
+    "restartRequired": "需要重启",
+    "runtime": {
+      "not_loaded": "运行时未加载",
+      "registering": "注册中",
+      "ready": "就绪",
+      "failed": "运行时失败"
+    }
   }
 }
