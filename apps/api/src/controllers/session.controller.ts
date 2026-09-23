@@ -15,6 +15,7 @@ import { historySummaryCache } from '../services/chat-service/history-summary-ca
 import { isAdminRole } from '../data/user-manager';
 import { parseSessionListFilter, sessionOrganizationSchema, normalizeTags } from '../schemas/conversation-organization.schema';
 import { isFolderOwnedBy } from '../data/conversation-folders';
+import { PAGINATION } from '../config/http-data-limits';
 
 const log = createLogger('SessionController');
 
@@ -107,9 +108,9 @@ class SessionController {
          this.router.get('/', optionalAuth, asyncHandler(async (req: Request, res: Response) => {
              const user = req.user;
              const anonSessionId = req.query.anonSessionId as string;
-             const limit = parseInt(req.query.limit as string) || 50;
+             const limit = parseInt(req.query.limit as string) || PAGINATION.DEFAULT_LIMIT;
              // offset 은 관리자 전체 조회(scope 'all') 페이지네이션 전용 — 음수/비정상 입력은 0
-             const offset = Math.max(0, parseInt(req.query.offset as string) || 0);
+             const offset = Math.max(0, parseInt(req.query.offset as string) || PAGINATION.DEFAULT_OFFSET);
              const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
              // 폴더·태그 필터(157) — 로그인 사용자 목록·검색에만 적용
              const listFilter = parseSessionListFilter(req.query as { folderId?: unknown; tag?: unknown });
@@ -256,7 +257,7 @@ class SessionController {
                   return;
               }
 
-              const limit = parseInt(req.query.limit as string) || 100;
+              const limit = parseInt(req.query.limit as string) || PAGINATION.SESSION_DEFAULT_LIMIT;
               const messages = await conversationDb.getMessages(sessionId, limit);
               res.json(success({ messages }));
           }));

@@ -85,6 +85,9 @@ function refreshOnce(): Promise<boolean> {
  */
 const PUBLIC_PATH_PREFIXES = ["/shared/"];
 
+/** 다운로드 트리거 후 Blob object URL 해제까지 대기(ms). */
+const OBJECT_URL_REVOKE_DELAY_MS = 10_000;
+
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATH_PREFIXES.some((p) => pathname.startsWith(p));
 }
@@ -171,7 +174,7 @@ export const ApiClient = {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    setTimeout(() => URL.revokeObjectURL(url), OBJECT_URL_REVOKE_DELAY_MS);
   },
   post: <T>(endpoint: string, body?: unknown, options: ApiRequestOptions = {}) =>
     request<T>(endpoint, {

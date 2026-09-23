@@ -25,6 +25,7 @@ import { clearOrgPolicyCache } from '../services/org/effective-policy';
 import { getAuditService } from '../services/AuditService';
 import { PolicyHistoryRepository } from '../data/repositories/policy-history-repository';
 import { createLogger } from '../utils/logger';
+import { PAGINATION } from '../config/http-data-limits';
 
 const logger = createLogger('OrgPolicies');
 const historyRepo = () => new PolicyHistoryRepository(getPool());
@@ -60,7 +61,7 @@ function attach(router: Router, prefix: string, gate: 'admin' | 'org'): void {
     router.get(`${prefix}/:id/policies/history`, ...guard, asyncHandler(async (req: Request, res: Response) => {
         if (!(await orgRepo().get(req.params.id))) return res.status(404).json(notFound('조직을 찾을 수 없습니다.'));
         if (gate === 'org') await assertOrgAdmin(req, req.params.id);
-        const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '100'), 10) || 100, 1), 500);
+        const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? String(PAGINATION.ADMIN_DEFAULT_LIMIT)), 10) || PAGINATION.ADMIN_DEFAULT_LIMIT, 1), PAGINATION.ADMIN_MAX_LIMIT);
         res.json(success({ history: await historyRepo().listOrgPolicies(req.params.id, limit) }));
     }));
 

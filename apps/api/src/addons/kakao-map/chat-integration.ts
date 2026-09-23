@@ -9,6 +9,7 @@
  */
 import type { ChatTurnIntegration } from '../../services/chat-service/turn-integrations';
 import { MAP_INTENT_PATTERNS, ROUTE_INTENT_PATTERNS } from './config';
+import { KAKAO_MAP_SYSTEM_PROMPT, KAKAO_MAP_USER_LOCATION_HINT } from './prompts';
 
 const PLACE_SEARCH_TOOL = 'search-places';
 const ROUTE_TOOL = 'find-route';
@@ -74,18 +75,10 @@ export const kakaoMapChatIntegration: ChatTurnIntegration = {
     // (qwen 이 web_search 로 이탈하는 문제 보정 — 구 generate_image 도구는 2026-09-12 오케스트레이터로 대체돼 목록에 없음)
     systemPromptParts(req) {
         if (!isMapIntent(req.message ?? '')) return [];
-        return [
-            '사용자가 국내(한국) 장소·위치·지도·길찾기를 묻고 있습니다. 이런 질문에는 반드시 ' +
-            '카카오 도구(장소는 search-places, 길찾기는 find-route)를 먼저 호출해 실제 데이터를 ' +
-            '얻으세요. 웹 검색이나 이미지 생성으로 좌표·위치를 추측하지 마세요. ' +
-            '⚠️ 지도는 시스템이 도구 결과로 자동 표시하니, 당신은 kakaomap 코드 블록이나 좌표(lat/lng) ' +
-            '목록을 절대 직접 작성하지 마세요. 사람이 읽을 요약(장소명·주소·거리·소요시간 등)만 작성하세요.',
-        ];
+        return [KAKAO_MAP_SYSTEM_PROMPT];
     },
 
-    userLocationHint: () =>
-        '카카오 장소 검색(search-places)을 쓸 때는 x(경도)·y(위도)·radius 인자에 이 좌표를 전달해 ' +
-        '실제 주변 결과를 얻으세요. ',
+    userLocationHint: () => KAKAO_MAP_USER_LOCATION_HINT,
 
     // search-places 출력이 길어 블록이 끝에 있으면 길이 상한에 잘리던 문제 — 원문에서 뽑아 앞에 붙인다.
     preserveFromRawResult(rawText) {

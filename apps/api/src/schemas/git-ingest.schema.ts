@@ -5,14 +5,17 @@
  */
 import { z } from 'zod';
 import { SKILL_CATEGORIES } from './skills.schema';
+import { SCHEMA_LIMITS } from '../config/http-data-limits';
+
+const { ingest: I } = SCHEMA_LIMITS;
 
 export const importFromGitSchema = z.object({
-    gitUrl: z.string().min(3).max(500),
-    gitRef: z.string().max(200).optional(),
-    gitPath: z.string().max(500)
+    gitUrl: z.string().min(I.GIT_URL_MIN).max(I.GIT_URL_MAX),
+    gitRef: z.string().max(I.GIT_REF_MAX).optional(),
+    gitPath: z.string().max(I.GIT_PATH_MAX)
         .refine(p => !p.includes('..'), 'path traversal 차단 — .. 미허용')
         .optional(),
-    accessToken: z.string().max(200).optional(),  // 요청 한정, DB 미저장
+    accessToken: z.string().max(I.ACCESS_TOKEN_MAX).optional(),  // 요청 한정, DB 미저장
     target: z.enum(['user', 'system']).default('user'),
     category: z.enum(SKILL_CATEGORIES).optional(),
 });

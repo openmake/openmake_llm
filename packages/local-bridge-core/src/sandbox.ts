@@ -9,7 +9,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { CACHE_SUBPATHS, SECRET_SUBPATHS, sbq, sbSub } from './constants';
+import { CACHE_SUBPATHS, GIT_PROBE_TIMEOUT_MS, SECRET_SUBPATHS, sbq, sbSub } from './constants';
 
 /**
  * 연결 폴더가 git 레포(하위 폴더 포함)면 레포의 .git 절대경로, 아니면 null.
@@ -21,7 +21,7 @@ import { CACHE_SUBPATHS, SECRET_SUBPATHS, sbq, sbSub } from './constants';
 export function detectGitDir(root: string): string | null {
     try {
         return execFileSync('git', ['rev-parse', '--absolute-git-dir'],
-            { cwd: root, encoding: 'utf8', timeout: 5000 }).trim() || null;
+            { cwd: root, encoding: 'utf8', timeout: GIT_PROBE_TIMEOUT_MS }).trim() || null;
     } catch { return null; }
 }
 

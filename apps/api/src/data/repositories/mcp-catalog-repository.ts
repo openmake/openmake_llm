@@ -15,6 +15,7 @@ import type { Pool } from 'pg';
 import { disabledCatalogTemplateIds } from '../../addon-host/pack-catalog';
 import { encryptToken, decryptToken } from '../../utils/token-crypto';
 import { createLogger } from '../../utils/logger';
+import { SQL_RESULT_LIMITS } from '../../config/http-data-limits';
 import type {
     McpCatalogTemplate,
     McpFromCatalogPayload,
@@ -245,8 +246,8 @@ export class McpCatalogRepository {
              FROM mcp_server_instances
              WHERE user_id = $1
              ORDER BY started_at DESC
-             LIMIT 100`,
-            [userId],
+             LIMIT $2`,
+            [userId, SQL_RESULT_LIMITS.MCP_INSTANCE_LIST],
         );
         return result.rows;
     }

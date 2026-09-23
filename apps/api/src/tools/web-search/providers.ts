@@ -11,6 +11,7 @@ import { SearchResult } from './types';
 import { getConfig } from '../../config/env';
 import { createLogger } from '../../utils/logger';
 import { CAPACITY } from '../../config/runtime-limits';
+import { WEB_SEARCH_TOOL_LIMITS } from '../../config/addon-tool-limits';
 import { LLM_TIMEOUTS } from '../../config/timeouts';
 import { getSearchLocale } from '../../i18n/search-locale';
 
@@ -145,7 +146,7 @@ export async function searchWikipedia(query: string, language: string = 'en', si
     try {
         // Wikipedia 검색 API
         const wikiDomain = getSearchLocale(language).wikiDomain;
-        const url = `https://${wikiDomain}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&srlimit=5&origin=*`;
+        const url = `https://${wikiDomain}.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&srlimit=${WEB_SEARCH_TOOL_LIMITS.WIKIPEDIA_MAX_RESULTS}&origin=*`;
 
         const response = await searchFetch(url, signal);
         if (!response.ok) return results;
@@ -204,7 +205,7 @@ export async function searchGoogleNews(query: string, language: string = 'en', s
         let itemMatch;
         let count = 0;
 
-        while ((itemMatch = itemRegex.exec(xml)) !== null && count < 10) {
+        while ((itemMatch = itemRegex.exec(xml)) !== null && count < WEB_SEARCH_TOOL_LIMITS.GOOGLE_NEWS_MAX_ITEMS) {
             const itemContent = itemMatch[1];
 
             try {
@@ -289,7 +290,7 @@ export async function searchDuckDuckGoAPI(query: string, signal?: AbortSignal): 
             for (const topic of data.RelatedTopics.slice(0, CAPACITY.DDG_MAX_RELATED_TOPICS)) {
                 if (topic.Text && topic.FirstURL) {
                     results.push({
-                        title: topic.Text.split(' - ')[0] || topic.Text.substring(0, 80),
+                        title: topic.Text.split(' - ')[0] || topic.Text.substring(0, WEB_SEARCH_TOOL_LIMITS.DDG_TITLE_MAX_CHARS),
                         url: topic.FirstURL,
                         snippet: topic.Text,
                         source: 'duckduckgo.com'

@@ -24,6 +24,7 @@ import { ExternalKeysRepository } from '../data/repositories/external-keys-repo'
 import { getPool } from '../data/models/unified-database';
 import { getAuditService } from '../services/AuditService';
 import { createLogger } from '../utils/logger';
+import { PAGINATION } from '../config/http-data-limits';
 
 const logger = createLogger('AdminSystemSettingsRoutes');
 
@@ -174,7 +175,7 @@ adminSystemSettingsRouter.put('/system-settings', validate(putSettingsSchema), a
 /** GET /api/admin/system-settings/history?key=&limit= — 변경 이력(130). 시크릿 값은 마스크된 채 저장돼 있다. */
 adminSystemSettingsRouter.get('/system-settings/history', asyncHandler(async (req: Request, res: Response) => {
     const key = typeof req.query.key === 'string' && req.query.key ? req.query.key : undefined;
-    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? '100'), 10) || 100, 1), 500);
+    const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? String(PAGINATION.ADMIN_DEFAULT_LIMIT)), 10) || PAGINATION.ADMIN_DEFAULT_LIMIT, 1), PAGINATION.ADMIN_MAX_LIMIT);
     const { PolicyHistoryRepository } = await import('../data/repositories/policy-history-repository');
     res.json(success({ history: await new PolicyHistoryRepository(getPool()).listSettings(key, limit) }));
 }));

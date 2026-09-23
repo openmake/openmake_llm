@@ -12,7 +12,7 @@ import { Agent } from '../../agents/types';
 import { industryData, getAgentById } from '../../agents/agent-data';
 import { analyzeTopicIntent } from '../../agents/topic-analyzer';
 import { routeToAgent } from '../../agents/keyword-router';
-import { DISCUSSION_DOMAIN_CATEGORIES, DISCUSSION_COMPLEMENTARY_AGENTS } from './config';
+import { DISCUSSION_DOMAIN_CATEGORIES, DISCUSSION_COMPLEMENTARY_AGENTS, DISCUSSION_DIVERSE_FALLBACK } from './config';
 
 /**
  * 토론용 관련 에이전트 추천 (토픽+키워드 라우팅 + 컨텍스트 반영)
@@ -104,7 +104,7 @@ export async function getRelatedAgentsForDiscussion(
         addComplementary(DISCUSSION_COMPLEMENTARY_AGENTS.BUSINESS);
     } else if (isSocialQuestion) {
         addComplementary(DISCUSSION_COMPLEMENTARY_AGENTS.SOCIAL);
-    } else if (result.length < 3) {
+    } else if (result.length < DISCUSSION_DIVERSE_FALLBACK.MIN_RESULTS) {
         for (const agentId of DISCUSSION_COMPLEMENTARY_AGENTS.DIVERSE) {
             if (usedIds.has(agentId)) continue;
             const agent = getAgentById(agentId);
@@ -112,7 +112,7 @@ export async function getRelatedAgentsForDiscussion(
                 result.push(agent);
                 usedIds.add(agentId);
             }
-            if (result.length >= 5) break;
+            if (result.length >= DISCUSSION_DIVERSE_FALLBACK.MAX_RESULTS) break;
         }
     }
 

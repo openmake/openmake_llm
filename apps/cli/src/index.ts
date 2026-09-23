@@ -21,6 +21,13 @@ import { loadConfig, saveConfig, deviceId } from './config';
 import { CliBridge, type ConfirmFn } from './bridge';
 import { ApiClient, type ApiTask, type ApiTaskStep, type ShareDocument } from './api';
 
+/** 브리지 등록 확인 폴링 간격(ms). */
+const BRIDGE_REGISTER_POLL_MS = 500;
+/** 브리지 등록 확인 최대 시도 횟수(간격 × 횟수 ≈ 대기 상한). */
+const BRIDGE_REGISTER_MAX_ATTEMPTS = 20;
+/** 작업 진행 상태 폴링 간격(ms). */
+const TASK_POLL_INTERVAL_MS = 2000;
+
 function prompt(q: string): Promise<string> {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     return new Promise((resolve) => rl.question(q, (a) => { rl.close(); resolve(a.trim()); }));
@@ -118,8 +125,8 @@ async function connectAndRegister(cfg: { serverUrl: string; apiKey: string }, ap
     const bridge = connectBridge(cfg, folder);
     const myId = deviceId();
     let registered = false;
-    for (let i = 0; i < 20; i++) {
-        await new Promise((r) => setTimeout(r, 500));
+    for (let i = 0; i < BRIDGE_REGISTER_MAX_ATTEMPTS; i++) {
+        await new Promise((r) => setTimeout(r, BRIDGE_REGISTER_POLL_MS));
         try {
             const s = await api.bridgeStatus();
             if (!s.enabled) { console.error('서버에서 로컬 실행 기능이 비활성화되어 있습니다.'); bridge.disconnect(); process.exit(1); }
@@ -167,7 +174,7 @@ async function followTask(api: ApiClient, bridge: CliBridge, taskId: string): Pr
             bridge.disconnect();
             process.exit(1);
         }
-        await new Promise((r) => setTimeout(r, 2000));
+        await new Promise((r) => setTimeout(r, TASK_POLL_INTERVAL_MS));
         // 이 작업의 승인 대기 처리 (confirmExec 은 브리지가 별도로 처리 — 여기선 서버 HITL 게이트).
         try {
             const { pending } = await api.listPending();

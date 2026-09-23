@@ -15,6 +15,7 @@
 
 import { MCPToolDefinition, MCPToolResult } from '../tool-contract/types';
 import { TRUNCATION, TOOL_RESULT_COMPACTION } from '../config/runtime-limits';
+import { WEB_SCRAPER_TOOL_DEFAULTS } from '../config/addon-tool-limits';
 import { LLM_TIMEOUTS } from '../config/timeouts';
 import { scrapePage, mapSiteUrls, crawlSite } from '../utils/web-scraper';
 import { validateOutboundUrl } from '../security/ssrf-guard';
@@ -111,7 +112,7 @@ export const webMapTool: MCPToolDefinition = {
 
             const urls = await mapSiteUrls(url, {
                 search: args.search as string,
-                limit: (args.limit as number) || 100,
+                limit: (args.limit as number) || WEB_SCRAPER_TOOL_DEFAULTS.MAP_URL_LIMIT,
             });
 
             let output = `**${url}** URL 매핑 결과 (${urls.length}개 발견)\n\n`;
@@ -174,8 +175,8 @@ export const webCrawlTool: MCPToolDefinition = {
             await validateOutboundUrl(url);
 
             const pages = await crawlSite(url, {
-                limit: (args.limit as number) || 10,
-                maxDepth: (args.maxDepth as number) || 2,
+                limit: (args.limit as number) || WEB_SCRAPER_TOOL_DEFAULTS.CRAWL_PAGE_LIMIT,
+                maxDepth: (args.maxDepth as number) || WEB_SCRAPER_TOOL_DEFAULTS.CRAWL_MAX_DEPTH,
                 excludePaths: args.excludePaths as string[],
             });
 

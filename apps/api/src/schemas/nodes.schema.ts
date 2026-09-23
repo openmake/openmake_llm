@@ -9,16 +9,19 @@
  * @module schemas/nodes.schema
  */
 import { z } from 'zod';
+import { SCHEMA_LIMITS } from '../config/http-data-limits';
+
+const { nodes: N } = SCHEMA_LIMITS;
 
 /**
  * 클러스터 노드 추가 스키마
- * @property {string} host - 노드 호스트 주소 (필수, 1~253자)
- * @property {number} port - 노드 포트 번호 (필수, 1~65535)
+ * @property {string} host - 노드 호스트 주소 (필수, 1~253자 — RFC 1035 FQDN 상한)
+ * @property {number} port - 노드 포트 번호 (필수, 1~65535 — TCP 포트 범위)
  * @property {string} [name] - 노드 식별 이름 (선택)
  */
 export const addClusterNodeSchema = z.object({
     host: z.string().min(1, 'host는 필수입니다').max(253),
     port: z.number().int('port는 정수여야 합니다').min(1).max(65535),
-    name: z.string().max(100).optional()
+    name: z.string().max(N.NAME_MAX).optional()
 });
 

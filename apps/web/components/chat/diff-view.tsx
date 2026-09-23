@@ -9,6 +9,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { ChevronRight, ChevronDown, Copy, Check, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DIFF_COPY_FEEDBACK_RESET_MS } from "@/lib/constants/ui-limits";
 
 interface DiffFile {
   path: string;
@@ -95,7 +96,7 @@ export function DiffView({ text }: { text: string }) {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopied(false), DIFF_COPY_FEEDBACK_RESET_MS);
     } catch { /* clipboard 미허용 환경 — 무시 */ }
   };
   const download = () => {

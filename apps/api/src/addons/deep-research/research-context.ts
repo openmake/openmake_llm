@@ -135,7 +135,7 @@ export async function gatherMcpEvidence(params: {
                     title: `MCP 도구 결과: ${name}`,
                     // 스크래핑 대상에서 제외되도록 별도 스킴을 쓴다 (호출자가 scrapedUrls 에 등록)
                     url: `${MCP_SOURCE_SCHEME}${name}/${i + 1}`,
-                    snippet: text.slice(0, 300),
+                    snippet: text.slice(0, RESEARCH_CONTEXT.MCP_SNIPPET_CHARS),
                     fullContent: text.slice(0, RESEARCH_CONTEXT.MCP_RESULT_CHAR_CAP),
                     source: `mcp/${name}`,
                 });

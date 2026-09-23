@@ -58,6 +58,7 @@ import { getPool } from '../data/models/unified-database';
 import { ConversationRepository } from '../data/repositories/conversation-repository';
 import { AgentTaskMetricsRepository } from '../data/repositories/agent-task-metrics-repository';
 import { RoutingMetricsRepository } from '../data/repositories/routing-metrics-repository';
+import { PAGINATION } from '../config/http-data-limits';
 
 /** days 쿼리 파라미터 정수 파싱 + clamp(1~365). interval 인젝션 방지를 위해 항상 정수 반환. */
 function parseDays(raw: unknown, fallback = 7): number {
@@ -193,7 +194,7 @@ router.get('/usage', asyncHandler(async (req: Request, res: Response) => {
  */
 router.get('/usage/daily', asyncHandler(async (req: Request, res: Response) => {
     const tracker = getApiUsageTracker();
-    const days = parseInt(req.query.days as string, 10) || 7;
+    const days = parseInt(req.query.days as string, 10) || PAGINATION.DEFAULT_STATS_DAYS;
     res.json(success(tracker.getDailyStats(days)));
 }));
 
@@ -471,7 +472,7 @@ router.get('/analytics/cost', asyncHandler(async (req: Request, res: Response) =
  */
 router.get('/alerts', asyncHandler(async (req: Request, res: Response) => {
     const alerts = getAlertSystem();
-    const limit = parseInt(req.query.limit as string, 10) || 50;
+    const limit = parseInt(req.query.limit as string, 10) || PAGINATION.DEFAULT_LIMIT;
     res.json(success({ status: alerts.getStatus(), history: alerts.getAlertHistory(limit) }));
 }));
 

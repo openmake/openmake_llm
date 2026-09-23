@@ -308,7 +308,7 @@ export class DiscussionStrategy implements ChatStrategy<DiscussionStrategyContex
 
                     if (analysisResponse.content) {
                         logger.info(`✅ 이미지 ${i + 1} 분석 완료`);
-                        return analysisResponse.content.substring(0, 500);
+                        return analysisResponse.content.substring(0, DISCUSSION_TRUNCATION.IMAGE_ANALYSIS_MAX);
                     }
 
                     return localized.imageFallback(i + 1);

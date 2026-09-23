@@ -5,6 +5,8 @@ export const EXEC_TIMEOUT_MS = 120000;
 export const MAX_BUFFER = 1024 * 1024;
 export const RECONNECT_MS = 10000;
 export const PATH_PROBE_TIMEOUT_MS = 5000;
+/** git 디렉터리 탐지(rev-parse) 프로브 타임아웃(ms). */
+export const GIT_PROBE_TIMEOUT_MS = 5000;
 
 export const SANDBOX_BIN = '/usr/bin/sandbox-exec';
 /** sandbox-exec 는 macOS 전용 — 타 플랫폼은 게이트 자체가 꺼진다(데스크톱은 mac 전용 앱이라 등가). */

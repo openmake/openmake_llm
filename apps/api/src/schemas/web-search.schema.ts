@@ -9,6 +9,9 @@
  * @module schemas/web-search.schema
  */
 import { z } from 'zod';
+import { SCHEMA_LIMITS } from '../config/http-data-limits';
+
+const { webSearch: W } = SCHEMA_LIMITS;
 
 /**
  * 웹 검색 요청 스키마
@@ -16,7 +19,7 @@ import { z } from 'zod';
  * @property {string} [model] - 사용할 모델 (기본값: default)
  */
 export const webSearchSchema = z.object({
-    query: z.string().min(1, '검색 쿼리를 입력하세요').max(1000, '검색 쿼리가 너무 깁니다 (최대 1000자)'),
-    model: z.string().max(100).optional()
+    query: z.string().min(1, '검색 쿼리를 입력하세요').max(W.QUERY_MAX, `검색 쿼리가 너무 깁니다 (최대 ${W.QUERY_MAX}자)`),
+    model: z.string().max(W.MODEL_MAX).optional()
 });
 

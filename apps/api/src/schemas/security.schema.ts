@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SECURE_TEXT_DEFAULTS } from '../config/http-data-limits';
 
 interface SecureTextOptions {
     minLength?: number;
@@ -113,11 +114,11 @@ export function hasExcessiveSpecialCharacters(input: string, ratioLimit: number 
 
 export function secureTextSchema(options: SecureTextOptions = {}) {
     const minLength = options.minLength ?? 0;
-    const maxLength = options.maxLength ?? 10000;
+    const maxLength = options.maxLength ?? SECURE_TEXT_DEFAULTS.MAX_LENGTH;
     const allowNewLines = options.allowNewLines ?? true;
     const fieldName = options.fieldName ?? '입력값';
     const allowHtmlLikeContent = options.allowHtmlLikeContent ?? false;
-    const specialCharacterRatioLimit = options.specialCharacterRatioLimit ?? 0.65;
+    const specialCharacterRatioLimit = options.specialCharacterRatioLimit ?? SECURE_TEXT_DEFAULTS.SPECIAL_CHAR_RATIO_LIMIT;
     const detectPatterns = options.detectMaliciousPatterns ?? true;
     const preserveWhitespace = options.preserveWhitespace ?? false;
 

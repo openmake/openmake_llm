@@ -9,6 +9,9 @@
  * @module schemas/agents.schema
  */
 import { z } from 'zod';
+import { SCHEMA_LIMITS } from '../config/http-data-limits';
+
+const { agents: AG } = SCHEMA_LIMITS;
 
 /**
  * 에이전트 피드백 제출 스키마
@@ -19,11 +22,11 @@ import { z } from 'zod';
  * @property {string[]} [tags] - 피드백 태그
  */
 export const agentFeedbackSchema = z.object({
-    rating: z.number().int().min(1, 'rating은 1 이상이어야 합니다').max(5, 'rating은 5 이하여야 합니다'),
-    query: z.string().min(1, 'query는 필수입니다').max(5000),
-    response: z.string().min(1, 'response는 필수입니다').max(10000),
-    comment: z.string().max(2000).optional(),
-    tags: z.array(z.string().max(50)).max(20).optional(),
+    rating: z.number().int().min(AG.RATING_MIN, 'rating은 1 이상이어야 합니다').max(AG.RATING_MAX, 'rating은 5 이하여야 합니다'),
+    query: z.string().min(1, 'query는 필수입니다').max(AG.QUERY_MAX),
+    response: z.string().min(1, 'response는 필수입니다').max(AG.RESPONSE_MAX),
+    comment: z.string().max(AG.COMMENT_MAX).optional(),
+    tags: z.array(z.string().max(AG.TAG_MAX)).max(AG.TAGS_COUNT_MAX).optional(),
 });
 
 /**
@@ -41,6 +44,6 @@ export const abTestStartSchema = z.object({
  * @property {number} [priority] - 스킬 우선순위 (0~100, 기본값 0)
  */
 export const assignSkillSchema = z.object({
-    priority: z.number().int().min(0).max(100).optional(),
+    priority: z.number().int().min(AG.PRIORITY_MIN).max(AG.PRIORITY_MAX).optional(),
 });
 

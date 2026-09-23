@@ -21,6 +21,7 @@ import nodemailer, { type Transporter } from 'nodemailer';
 import type { Pool } from 'pg';
 import { createLogger } from '../utils/logger';
 import { ALERT_THRESHOLDS } from '../config/timeouts';
+import { ALERT_DEFAULTS } from '../config/core-runtime-limits';
 import { getConfig } from '../config/env';
 
 const logger = createLogger('AlertSystem');
@@ -189,12 +190,12 @@ export class AlertSystem {
             enabled: config?.enabled ?? true,
             channels: config?.channels ?? defaultChannels,
             thresholds: {
-                quotaWarningPercent: config?.thresholds?.quotaWarningPercent ?? 70,
-                quotaCriticalPercent: config?.thresholds?.quotaCriticalPercent ?? 90,
+                quotaWarningPercent: config?.thresholds?.quotaWarningPercent ?? ALERT_DEFAULTS.QUOTA_WARNING_PERCENT,
+                quotaCriticalPercent: config?.thresholds?.quotaCriticalPercent ?? ALERT_DEFAULTS.QUOTA_CRITICAL_PERCENT,
                 responseTimeMs: config?.thresholds?.responseTimeMs ?? ALERT_THRESHOLDS.RESPONSE_TIME_MS,
-                errorRatePercent: config?.thresholds?.errorRatePercent ?? 10
+                errorRatePercent: config?.thresholds?.errorRatePercent ?? ALERT_DEFAULTS.ERROR_RATE_PERCENT
             },
-            cooldownMinutes: config?.cooldownMinutes ?? 15,
+            cooldownMinutes: config?.cooldownMinutes ?? ALERT_DEFAULTS.COOLDOWN_MINUTES,
             emailConfig: config?.emailConfig,
             webhookUrl: config?.webhookUrl ?? hooks.url,
             webhookUrlBySeverity: config?.webhookUrlBySeverity ?? hooks.bySeverity,
@@ -312,7 +313,7 @@ export class AlertSystem {
 
         // 히스토리 저장
         this.alertHistory.push(alert);
-        if (this.alertHistory.length > 100) {
+        if (this.alertHistory.length > ALERT_DEFAULTS.HISTORY_MAX_ENTRIES) {
             this.alertHistory.shift();
         }
 

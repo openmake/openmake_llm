@@ -20,6 +20,7 @@ import { createLogger } from '../utils/logger';
 import { getEnhancedKeywords, getKeywordIDF, getSynonyms, getCategoryWeight } from './enhanced-keywords';
 import { CATEGORY_BOOST, EXPANDED_DAMPING } from '../config/routing-config';
 import { CONFIDENCE_DIVISORS } from '../config/llm-parameters';
+import { ROUTER_DEFAULT_CONFIDENCE } from '../config/core-runtime-limits';
 import { PHASE_KEYWORDS } from '../config/runtime-limits';
 
 const logger = createLogger('AgentRouter');
@@ -79,7 +80,7 @@ export async function routeToAgent(message: string): Promise<AgentSelection> {
         category: 'general',
         phase: 'planning',
         reason: '기본 범용 에이전트',
-        confidence: 0.3,
+        confidence: ROUTER_DEFAULT_CONFIDENCE,
         matchedKeywords: []
     };
 

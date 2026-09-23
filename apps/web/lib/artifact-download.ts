@@ -2,6 +2,7 @@
  * 아티팩트 본문을 종류/언어에 맞는 확장자로 파일 다운로드.
  * Claude Code Artifacts 의 "파일로 받기" 동등 — 외부 공유/보관용.
  */
+import { OBJECT_URL_REVOKE_DELAY_MS } from "@/lib/constants/ui-limits";
 
 const KIND_EXT: Record<string, string> = {
   html: "html",
@@ -69,7 +70,7 @@ export function triggerBlobDownload(blob: Blob, filename: string) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setTimeout(() => URL.revokeObjectURL(url), OBJECT_URL_REVOKE_DELAY_MS);
 }
 
 /** 게시 아티팩트의 정적 HTML(뷰어 index.html) 내려받기 — 외부 호스팅에 그대로 올릴 수 있다(F20.5 옵션). */

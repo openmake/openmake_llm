@@ -9,6 +9,9 @@
  * @module schemas/audit.schema
  */
 import { z } from 'zod';
+import { SCHEMA_LIMITS } from '../config/http-data-limits';
+
+const { audit: A } = SCHEMA_LIMITS;
 
 /**
  * 감사 로그 생성 스키마
@@ -18,9 +21,9 @@ import { z } from 'zod';
  * @property {object} [details] - 추가 세부정보
  */
 export const createAuditSchema = z.object({
-    action: z.string().min(1, 'action은 필수입니다').max(100),
-    resourceType: z.string().max(200).optional(),
-    resourceId: z.string().max(500).optional(),
+    action: z.string().min(1, 'action은 필수입니다').max(A.ACTION_MAX),
+    resourceType: z.string().max(A.RESOURCE_TYPE_MAX).optional(),
+    resourceId: z.string().max(A.RESOURCE_ID_MAX).optional(),
     details: z.record(z.string(), z.unknown()).optional(),
 });
 

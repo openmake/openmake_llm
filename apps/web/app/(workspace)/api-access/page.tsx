@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient, ApiError } from "@/lib/api-client";
+import { COPY_FEEDBACK_RESET_MS } from "@/lib/constants/ui-limits";
 import { useEnabledWebAddons } from "@/addons/registry";
 import { DeveloperTabs } from "@/components/hub-tabs";
 
@@ -170,7 +171,7 @@ export default function ApiAccessPage() {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(tag);
-      setTimeout(() => setCopied((c) => (c === tag ? null : c)), 1500);
+      setTimeout(() => setCopied((c) => (c === tag ? null : c)), COPY_FEEDBACK_RESET_MS);
     } catch {
       /* clipboard 미허용 환경 — 무시 */
     }

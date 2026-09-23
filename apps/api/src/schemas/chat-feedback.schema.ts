@@ -9,6 +9,9 @@
  * @module schemas/chat-feedback.schema
  */
 import { z } from 'zod';
+import { SCHEMA_LIMITS } from '../config/http-data-limits';
+
+const { chatFeedback: F } = SCHEMA_LIMITS;
 
 /**
  * 채팅 피드백 기록 스키마
@@ -18,8 +21,8 @@ import { z } from 'zod';
  * @property {object} [routingMetadata] - 라우팅 메타데이터 (선택)
  */
 export const chatFeedbackSchema = z.object({
-    messageId: z.string().min(1, 'messageId는 필수입니다').max(255),
-    sessionId: z.string().min(1, 'sessionId는 필수입니다').max(255),
+    messageId: z.string().min(1, 'messageId는 필수입니다').max(F.MESSAGE_ID_MAX),
+    sessionId: z.string().min(1, 'sessionId는 필수입니다').max(F.SESSION_ID_MAX),
     signal: z.enum(['thumbs_up', 'thumbs_down', 'regenerate'], {
         message: "signal은 'thumbs_up', 'thumbs_down', 'regenerate' 중 하나여야 합니다"
     }),

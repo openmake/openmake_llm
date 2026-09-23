@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { badRequest } from '../utils/api-response';
 import { detectMaliciousPatterns, sanitizeTextInput, stripControlChars, hasExcessiveSpecialCharacters } from '../schemas/security.schema';
+import { VALIDATION_DEFAULTS } from '../config/http-data-limits';
 
 interface SecurityValidationOptions {
     allowedContentTypes?: string[];
@@ -30,18 +31,18 @@ interface FileUploadValidationOptions {
 
 const DEFAULT_SECURITY_OPTIONS: Required<SecurityValidationOptions> = {
     allowedContentTypes: ['application/json'],
-    maxBodySizeBytes: 1 * 1024 * 1024,
+    maxBodySizeBytes: VALIDATION_DEFAULTS.BODY_MAX_BYTES,
     sanitizeInput: true,
     preserveFormattingFields: [],
     detectMaliciousInput: false,
-    specialCharacterRatioLimit: 0.7,
+    specialCharacterRatioLimit: VALIDATION_DEFAULTS.SPECIAL_CHAR_RATIO_LIMIT,
 };
 
 const DEFAULT_FILE_OPTIONS: Required<FileUploadValidationOptions> = {
     allowedMimeTypes: [],   // 빈 배열 = 모든 MIME 타입 허용
     allowedExtensions: [],  // 빈 배열 = 모든 확장자 허용
-    blockedExtensions: ['.exe', '.dll', '.bat', '.cmd', '.ps1'],  // 실행 파일만 차단
-    maxFileSizeBytes: 300 * 1024 * 1024,  // 300MB
+    blockedExtensions: [...VALIDATION_DEFAULTS.BLOCKED_UPLOAD_EXTENSIONS],  // 실행 파일만 차단
+    maxFileSizeBytes: VALIDATION_DEFAULTS.FILE_MAX_BYTES,
 };
 
 function getContentLength(req: Request): number | null {
@@ -262,7 +263,7 @@ export function validateQueryWithSecurity<T extends object>(schema: ZodSchema<T>
 /**
  * Multipart upload 요청 헤더 검사
  */
-export function validateUploadContentType(maxBodySizeBytes: number = 100 * 1024 * 1024) {
+export function validateUploadContentType(maxBodySizeBytes: number = VALIDATION_DEFAULTS.UPLOAD_BODY_MAX_BYTES) {
     return (req: Request, res: Response, next: NextFunction) => {
         const contentType = req.headers['content-type'] || '';
         if (!contentType.toLowerCase().includes('multipart/form-data')) {

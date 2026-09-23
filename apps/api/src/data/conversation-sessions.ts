@@ -24,6 +24,7 @@ import {
 } from './conversation-types';
 import { loadMessagesForSessions } from './conversation-messages';
 import { CONVERSATION_LIMITS, SESSION_BRANCH } from '../config/runtime-limits';
+import { SQL_RESULT_LIMITS } from '../config/http-data-limits';
 
 const logger = createLogger('ConversationSessions');
 
@@ -504,7 +505,8 @@ export async function getSessionTree(id: string): Promise<{ ancestors: Array<{ i
         [id, SESSION_BRANCH.TREE_MAX_DEPTH],
     );
     const kids = await pool.query<{ id: string; title: string; created_at: string }>(
-        `SELECT id, title, created_at FROM conversation_sessions WHERE metadata->>'parentSessionId' = $1 ORDER BY created_at DESC LIMIT 100`, [id]);
+        `SELECT id, title, created_at FROM conversation_sessions WHERE metadata->>'parentSessionId' = $1 ORDER BY created_at DESC LIMIT $2`,
+        [id, SQL_RESULT_LIMITS.SESSION_TREE_CHILDREN]);
     return {
         ancestors: anc.rows.map((r) => ({ id: r.id, title: r.title, parentMessageId: r.parent_message_id })),
         children: kids.rows.map((r) => ({ id: r.id, title: r.title, createdAt: r.created_at })),

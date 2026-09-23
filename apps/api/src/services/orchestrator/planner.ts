@@ -8,6 +8,7 @@
  *  - 계획 시간·결과를 orchestrator_runs 에 적재(비용 재판정 근거)
  */
 import { ORCHESTRATOR } from '../../config/capabilities';
+import { ORCHESTRATOR_PLANNER } from '../../config/service-limits';
 import { resolveRoleClientForUser } from '../model-role-resolver';
 import { getPlannerSystemPrompt, buildPlannerUserPrompt, type PlannerAttachmentMeta } from '../../prompts/orchestrator-planner';
 import { extractPlanJson, validatePlan, type ValidatedPlan } from './plan-schema';
@@ -49,7 +50,7 @@ async function defaultLlmCall(userId: string | undefined): Promise<{ call: Plann
     const call: PlannerLlmCall = async (messages, format, signal) => {
         const r = await resolved.client.chat(
             messages,
-            { num_predict: ORCHESTRATOR.PLANNER_MAX_TOKENS, temperature: 0 },
+            { num_predict: ORCHESTRATOR.PLANNER_MAX_TOKENS, temperature: ORCHESTRATOR_PLANNER.TEMPERATURE },
             undefined,
             { think: false, format, signal },
         );

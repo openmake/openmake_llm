@@ -11,6 +11,7 @@ import { loadAttachment } from '../../services/orchestrator/media-io';
 import { refsRawText, resolveTaskAttachments, type TaskMedia } from '../../services/orchestrator/types';
 import type { PlanTask } from '../../services/orchestrator/plan-schema';
 import { buildEditRequest, pickSize, type ImagesResponse } from './providers/hasa';
+import { IMAGE_REFS_MAX_CHARS } from './constants';
 
 async function imageBytes(json: ImagesResponse, ctx: CapabilityContext): Promise<Buffer> {
     const first = json.data?.[0];
@@ -30,7 +31,7 @@ async function saveImage(ctx: CapabilityContext, bytes: Buffer, alt: string, pre
 
 export const imageGenerateHandler: CapabilityHandler = {
     async execute(task: PlanTask, ctx: CapabilityContext) {
-        const refs = refsRawText(task, ctx, 600);
+        const refs = refsRawText(task, ctx, IMAGE_REFS_MAX_CHARS);
         const prompt = [task.text || task.instruction, refs ? `Context: ${refs}` : ''].filter(Boolean).join('\n').trim();
         if (!prompt) throw new Error('image.generate: instruction(프롬프트)이 비어 있습니다');
         const target = ctx.model.describe();

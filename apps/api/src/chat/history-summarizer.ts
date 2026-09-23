@@ -14,6 +14,7 @@
 import { LLMClient, createClient } from '../llm';
 import { createLogger } from '../utils/logger';
 import { HISTORY_SUMMARIZER } from '../config/runtime-limits';
+import { HISTORY_SUMMARY_LIMITS } from '../config/service-limits';
 import { estimateTokens } from '../llm/model-pool';
 import { LLM_TEMPERATURES } from '../config/llm-parameters';
 import { SUMMARY_SYSTEM_PROMPT } from './prompt-templates';
@@ -131,7 +132,7 @@ export async function summarizeHistory(
 
         SUMMARIZE_BREAKER.failures = 0; // LLM 호출 성공 → circuit 복구
         const summary = result.content?.trim();
-        if (!summary || summary.length < 20) {
+        if (!summary || summary.length < HISTORY_SUMMARY_LIMITS.MIN_VALID_SUMMARY_CHARS) {
             logger.warn('히스토리 요약 결과가 너무 짧음 — 원본 유지');
             return {
                 messages: history,

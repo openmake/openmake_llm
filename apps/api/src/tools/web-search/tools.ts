@@ -9,6 +9,7 @@
 
 import { MCPToolDefinition, MCPToolResult } from '../../tool-contract/types';
 import { TRUNCATION } from '../../config/runtime-limits';
+import { WEB_SEARCH_TOOL_LIMITS } from '../../config/addon-tool-limits';
 import { safeFetch } from '../../security/ssrf-guard';
 import { performWebSearch } from './search-orchestrator';
 import { formatSearchSources, toSourceRefs } from './format-sources';
@@ -44,9 +45,9 @@ const webSearchTool: MCPToolDefinition = {
         // MCP 도구 출력(사용자 직접 표시) — 주입 캡 미적용, snippet 100자 요약만 유지.
         // showSource: 결과가 어느 검색엔진(naver.com·google.com 등)에서 왔는지 제목 옆에 표시.
         const output = `검색 결과 (${results.length}개)\n\n` +
-            formatSearchSources(results, { maxSnippetChars: 100, snippetSuffix: '...', showSource: true });
+            formatSearchSources(results, { maxSnippetChars: WEB_SEARCH_TOOL_LIMITS.SNIPPET_CHARS, snippetSuffix: '...', showSource: true });
 
-        return { content: [{ type: 'text', text: output }], sources: toSourceRefs(results, { maxSnippetChars: 100, snippetSuffix: '...' }) };
+        return { content: [{ type: 'text', text: output }], sources: toSourceRefs(results, { maxSnippetChars: WEB_SEARCH_TOOL_LIMITS.SNIPPET_CHARS, snippetSuffix: '...' }) };
     }
 };
 
@@ -70,7 +71,7 @@ const factCheckTool: MCPToolDefinition = {
     },
     handler: async (args): Promise<MCPToolResult> => {
         const claim = args.claim as string;
-        const results = await performWebSearch(claim, { maxResults: 5 });
+        const results = await performWebSearch(claim, { maxResults: WEB_SEARCH_TOOL_LIMITS.FACT_CHECK_MAX_RESULTS });
 
         let output = `사실 검증: "${claim}"\n\n`;
         for (const r of results) {

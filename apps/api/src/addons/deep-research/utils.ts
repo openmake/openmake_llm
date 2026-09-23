@@ -12,6 +12,7 @@
 import type { SearchResult } from '../../tools/web-search';
 import type { SubTopic } from './types';
 import { cleanSearchQuery } from '../../tools/web-search/query-cleaner';
+import { RESEARCH_TRUNCATION } from './config';
 
 /**
  * 중복 소스 제거
@@ -173,7 +174,7 @@ export function extractBulletLikeFindings(text: string): string[] {
         .filter(line => line.startsWith('- ') || /^\d+\./.test(line))
         .map(line => line.replace(/^[-\d.\s]+/, '').trim())
         .filter(line => line.length > 0)
-        .slice(0, 20);
+        .slice(0, RESEARCH_TRUNCATION.BULLET_FINDINGS_MAX);
 }
 
 export function getLoopProgressRange(loopIndex: number, maxLoops: number): {

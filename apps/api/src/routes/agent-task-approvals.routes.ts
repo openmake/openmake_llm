@@ -28,6 +28,7 @@ import { AuthorizationError } from '../utils/error-handler';
 import type { PendingApproval } from '../services/task-sandbox/approval-gate';
 import { resumeParkedTask } from '../services/agent-task/hitl-park';
 import { notifyApprovalChange } from '../services/agent-task/approval-change-notify';
+import { PAGINATION } from '../config/http-data-limits';
 
 /** 결정·이관 권한(138): 소유자 OR 현재 담당자 OR 시스템 admin. */
 function assertApprovalActor(pending: PendingApproval, user: { id?: string | number; role?: string }): void {
@@ -114,7 +115,7 @@ router.post('/approvals/:approvalId/revoke', asyncHandler(async (req: Request, r
 
 /** GET /api/agent-tasks/approvals/recent?minutes=30 (138) — 최근 승인 결정(철회 가능 여부 포함). */
 router.get('/approvals/recent', asyncHandler(async (req: Request, res: Response) => {
-    const minutes = Math.min(Math.max(parseInt(String(req.query.minutes ?? '30'), 10) || 30, 1), 24 * 60);
+    const minutes = Math.min(Math.max(parseInt(String(req.query.minutes ?? String(PAGINATION.APPROVAL_DEFAULT_MINUTES)), 10) || PAGINATION.APPROVAL_DEFAULT_MINUTES, 1), PAGINATION.APPROVAL_MAX_MINUTES);
     const rows = await getApprovalRegistry().recent(String(req.user!.id), minutes * 60_000);
     res.json(success({ decisions: rows.map((r) => ({ approvalId: r.approval_id, taskId: r.task_id, toolName: r.tool_name, status: r.status, decidedAt: r.decided_at, consumedAt: r.consumed_at, revocable: r.revocable })) }));
 }));
