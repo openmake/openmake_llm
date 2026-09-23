@@ -58,6 +58,27 @@ describe('validatePlan — 구조·의미 검증', () => {
         expect(r.ok && r.plan.tasks[0].extra).toEqual({ seconds: '5', size: '1280x720', negative_prompt: 'text' });
     });
 
+    it('가사 자리의 앞 작업 참조("REFS:t1"·"(lyrics from t1)")는 refs·의존으로 옮긴다 — 실측 2건(2026-09-22~23)', () => {
+        for (const lyrics of ['REFS:t1', '(lyrics from t1)']) {
+            const v = validatePlan({ complexity: 'multi', tasks: [
+                { id: 't1', capability: 'text.reason', input: { instruction: '가사 써줘' } },
+                { id: 't2', capability: 'music.generate', input: { instruction: 'ballad', lyrics } },
+            ] }, known);
+            expect(v.ok).toBe(true);
+            if (!v.ok) continue;
+            const t2 = v.plan.tasks[1];
+            expect(t2.extra.lyrics).toBeUndefined();
+            expect(t2.refs).toEqual(['t1']);
+            expect(v.plan.levels.map((l) => l.map((t) => t.id))).toEqual([['t1'], ['t2']]);
+        }
+        // 실제 가사는 건드리지 않는다 — 작업 id 가 없거나 길면 가사다
+        const real = validatePlan({ complexity: 'multi', tasks: [
+            { id: 't1', capability: 'text.reason', input: { instruction: 'x' } },
+            { id: 't2', capability: 'music.generate', input: { instruction: 'ballad', lyrics: '막차는 이미 떠나고' } },
+        ] }, known);
+        expect(real.ok && real.plan.tasks[1].extra.lyrics).toBe('막차는 이미 떠나고');
+    });
+
     it('extractPlanJson — 원문·펜스·앞뒤 잡음', () => {
         expect(extractPlanJson('{"a":1}')).toEqual({ a: 1 });
         expect(extractPlanJson('```json\n{"a":2}\n```')).toEqual({ a: 2 });

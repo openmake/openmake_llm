@@ -158,4 +158,33 @@ describe('applyStatedVideoParams — 사용자 원문의 영상 길이·비율�
         expect(extra('도시 야경 영상 만들어줘')).toEqual({});
         expect(extra('아까 그 5초 영상 보여줘', { attachments: ['j1'] })).toEqual({});
     });
+    it('분 단위 길이도 초로 옮긴다', () => {
+        expect(extra('2분짜리 영상')).toEqual({ seconds: '120' });
+        expect(extra('Make a 1-minute video')).toEqual({ seconds: '60' });
+    });
+});
+
+describe('statedDurationSec·음악 길이 보정 — Planner 가 duration 을 비워 전부 30초가 되던 결함 (2026-09-23)', () => {
+    const { applyStatedVideoParams, statedDurationSec } = jest.requireActual('../orchestrate') as typeof import('../orchestrate');
+    const { validatePlan } = jest.requireActual('../plan-schema') as typeof import('../plan-schema');
+    const music = (message: string, input: Record<string, unknown> = {}) => {
+        const v = validatePlan({ complexity: 'multi', tasks: [{ id: 't1', capability: 'music.generate', input: { instruction: 'x', ...input } }] }, new Set());
+        if (!v.ok) throw new Error(v.reason);
+        return applyStatedVideoParams(v.plan, message).tasks[0].extra;
+    };
+
+    it('분·분초·초·영문 표기를 초로 읽고 여러 개면 가장 큰 값', () => {
+        expect(statedDurationSec('5분짜리 노래')).toBe(300);
+        expect(statedDurationSec('3분 30초 길이')).toBe(210);
+        expect(statedDurationSec('5~6분 정도 전체곡')).toBe(360);
+        expect(statedDurationSec('90초')).toBe(90);
+        expect(statedDurationSec('a 4 minute song')).toBe(240);
+        expect(statedDurationSec('intro 10 seconds, total 3 mins')).toBe(180);
+        expect(statedDurationSec('신나는 노래 만들어줘')).toBeUndefined();
+    });
+    it('원문 길이가 음악 계획값을 이기고, 없으면 계획값 그대로', () => {
+        expect(music('5분짜리 발라드 만들어줘')).toEqual({ duration: '300' });
+        expect(music('3분 곡', { duration: '30' })).toEqual({ duration: '180' });
+        expect(music('발라드 만들어줘', { duration: '60' })).toEqual({ duration: '60' });
+    });
 });

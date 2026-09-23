@@ -220,10 +220,12 @@ export const VIDEO_GEN_DEFAULT_SIZE = '1280x720';
 /** Planner 가 사용자가 말한 비율을 `size` 로 옮길 때 쓰는 값 */
 export const VIDEO_GEN_ASPECT_SIZES = { landscape: '1280x720', portrait: '720x1280', square: '720x720' } as const;
 /**
- * 사용자 원문에 적힌 영상 길이·비율 — 원문에 있으면 계획값보다 우선한다(결정적 보정). 실측(2026-09-22, hasa nemotron-super-120b):
- * 스키마에 인자 키를 선언한 뒤에도 "8초"·"6-second" 를 2/2 누락했다. 길이는 여러 개면 가장 큰 값(장면 전환 시각 < 전체 길이).
+ * 사용자 원문에 적힌 영상·음악 길이 — 원문에 있으면 계획값보다 우선한다(결정적 보정). 실측(2026-09-22, hasa nemotron-super-120b):
+ * 스키마에 인자 키를 선언한 뒤에도 "8초"·"6-second" 를 2/2 누락했다. 음악도 같다 — qwen3.8-27b Planner 가 music.generate 6건 중
+ * 5건에서 duration 을 비워 전부 기본 30초가 됐다(2026-09-23). 길이는 여러 개면 가장 큰 값(장면 전환 시각 < 전체 길이).
+ * 그룹: 1 = 분, 2 = 분 뒤의 초("3분 30초"), 3 = 초만.
  */
-export const VIDEO_SECONDS_PATTERN = /(\d+(?:\.\d+)?)\s*(?:초|秒|-?\s*sec(?:ond)?s?\b)/gi;
+export const MEDIA_DURATION_PATTERN = /(\d+(?:\.\d+)?)\s*(?:분|-?\s*min(?:ute)?s?\b)(?:\s*(\d+(?:\.\d+)?)\s*(?:초|-?\s*sec(?:ond)?s?\b))?|(\d+(?:\.\d+)?)\s*(?:초|秒|-?\s*sec(?:ond)?s?\b)/gi;
 export const VIDEO_ASPECT_PATTERNS: ReadonlyArray<readonly [keyof typeof VIDEO_GEN_ASPECT_SIZES, RegExp]> = [
     ['portrait', /세로|쇼츠|숏츠|릴스|9\s*:\s*16|\bportrait\b|\bvertical\b|\bshorts\b|\breels\b/i],
     ['square', /정사각|1\s*:\s*1|\bsquare\b/i],
@@ -303,6 +305,11 @@ export const MUSIC_GEN_DEFAULT_DURATION_SEC = 30;
 /** ACE-Step `audio_config.duration` 허용 범위(초) */
 export const MUSIC_GEN_DURATION_RANGE = { min: 10, max: 600 } as const;
 export const MUSIC_GEN_FORMAT = 'mp3';
+/**
+ * Planner 가 가사 자리에 앞 작업 참조를 적는 경우("REFS:t1"·"(lyrics from t1)" — 2026-09-22~23 실측 2건)를 가려내는 길이 상한.
+ * 이보다 짧고 다른 작업 id 를 담은 lyrics 는 가사가 아니라 참조로 보고 refs 로 옮긴다(그대로 두면 그 문자열을 노래한다).
+ */
+export const PLAN_LYRICS_REF_MAX_CHARS = 60;
 
 /** 이미지 편집 어댑터 — hasa Qwen-Image-Edit 는 `/v1/images/generations` JSON `reference`(dataURL), LiteLLM 통과 */
 interface ImageEditProviderAdapter { kind: 'openai-edits' | 'generations-reference' }
