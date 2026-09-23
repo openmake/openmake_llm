@@ -88,8 +88,13 @@ export async function validateCapabilityAssignment(
     deps: { userKeys?: ExternalKeysRepository; serverKeys?: ServerExternalKeysRepository } = {},
     capability?: Capability,
 ): Promise<string | null> {
-    if (capability === 'music.generate' && isExternalFullId(fullId)) {
-        return `음악 생성은 로컬 음악 서버(ACE-Step)만 지원합니다 — '${fullId}' 는 배정할 수 없습니다`;
+    // 소유 handler 의 provider 지원 판정(P06 `describeProviderSupport`) — 기능별 제약은 그 add-on 이 선언한다
+    if (capability) {
+        const { getCapabilityRegistry } = await import('../../runtime-ports/capability-runtime');
+        const support = getCapabilityRegistry().get(capability)?.handler.describeProviderSupport?.({
+            fullId, providerId: isExternalFullId(fullId) ? splitFullId(fullId).providerId : 'local-llm', isExternal: isExternalFullId(fullId),
+        });
+        if (support && !support.supported) return support.reason;
     }
     if (!isExternalFullId(fullId)) {
         return toLocalModelTag(fullId) ? null : `해석 불가한 모델 id: '${fullId}'`;

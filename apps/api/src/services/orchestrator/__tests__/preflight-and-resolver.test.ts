@@ -10,8 +10,8 @@ jest.mock('../../../llm/user-quota', () => ({
     settleUserQuota: async () => undefined,
     recordUserUsage: async () => undefined,
 }));
-import { registerImageStubForTest } from './helpers/image-stub';
-beforeAll(() => registerImageStubForTest());
+import { registerMediaStubForTest } from './helpers/media-stub';
+beforeAll(() => registerMediaStubForTest());
 
 import { resolveCapabilityTarget, validateCapabilityAssignment, clearGlobalCapabilityCache } from '../capability-resolver';
 import { preflightPlan } from '../preflight';

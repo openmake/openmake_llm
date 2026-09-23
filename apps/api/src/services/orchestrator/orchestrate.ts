@@ -18,6 +18,7 @@ import { validatePlan, type ValidatedPlan } from './plan-schema';
 import { executePlan } from './executor';
 import { preflightPlan } from './preflight';
 import { admitCapability, ADMISSION_LABEL } from '../../capability-contract/admission';
+import { getCapabilityRegistry } from '../../runtime-ports/capability-runtime';
 import { OrchestratorJobsRepository } from '../../data/repositories/orchestrator-jobs-repo';
 import { ExternalKeysRepository } from '../../data/repositories/external-keys-repo';
 import { ServerExternalKeysRepository } from '../../data/repositories/server-external-keys-repo';
@@ -143,21 +144,30 @@ export function statedDurationSec(message: string): number | undefined {
 }
 
 /**
- * 사용자 원문에 적힌 영상 길이·비율, 음악 길이를 새 생성 작업의 인자로 확정한다 — Planner 가 빠뜨리거나 다르게 적어도 원문이 우선.
+ * capability 소유자의 계획 인자 정규화 hook(`normalizePlanInput`, P06) — 원문 우선 보정 등 기능별 규칙은 Base 가 아니라 그 handler 가 갖는다.
+ * 순수 함수라 실패는 그 작업만 원래대로 둔다.
+ */
+export function applyPlanInputHooks(plan: ValidatedPlan, message: string): ValidatedPlan {
+    const registry = getCapabilityRegistry();
+    plan.tasks = plan.tasks.map((t) => {
+        const hook = registry.get(t.capability)?.handler.normalizePlanInput;
+        if (!hook) return t;
+        try { return hook(t, message); } catch (err) { logger.warn(`[Orchestrator] ${t.id} 계획 인자 hook 실패(무시): ${err instanceof Error ? err.message : String(err)}`); return t; }
+    });
+    plan.levels = plan.levels.map((level) => level.map((t) => plan.tasks.find((x) => x.id === t.id) ?? t));
+    return plan;
+}
+
+/**
+ * 사용자 원문에 적힌 영상 길이·비율을 새 생성 작업의 인자로 확정한다 — Planner 가 빠뜨리거나 다르게 적어도 원문이 우선.
  * 원문에 없으면 계획값(직전 대화에서 추론한 값일 수 있다)을 그대로 둔다. job 재조회 작업은 새로 제출하지 않으므로 건드리지 않는다.
- * 길이 상한은 각 실행기가 자른다(음악 `musicDuration`).
+ * 음악 길이 보정은 music-runtime 의 `normalizePlanInput` hook 으로 옮겼다(P06) — P08 에서 영상도 같은 hook 으로 간다.
  */
 export function applyStatedVideoParams(plan: ValidatedPlan, message: string): ValidatedPlan {
     const seconds = statedDurationSec(message);
     const aspect = VIDEO_ASPECT_PATTERNS.find(([, re]) => re.test(message))?.[0];
     if (seconds === undefined && !aspect) return plan;
     for (const t of plan.tasks) {
-        if (t.capability === 'music.generate' && seconds !== undefined) {
-            const before = String(t.extra.duration ?? '-');
-            t.extra.duration = String(seconds);
-            if (t.extra.duration !== before) logger.info(`[Orchestrator] ${t.id} 음악 길이를 원문 기준으로 보정 ${before} → ${t.extra.duration}`);
-            continue;
-        }
         if (t.capability !== 'video.generate' || t.attachments.length > 0) continue;
         const before = `${String(t.extra.seconds ?? '-')}/${String(t.extra.size ?? '-')}`;
         if (seconds !== undefined) t.extra.seconds = String(seconds);
@@ -283,7 +293,7 @@ export async function runOrchestrator(input: RunOrchestratorInput): Promise<Orch
         record({ requestId: input.requestId, userId, plannerModel: planned.model, plannerMs: planned.ms, plannerOk: false, plannerError: planned.error, outcome: 'fallback' });
         return { mode: 'fallback', contextBlock: fallbackNote(lang, planned.error ?? 'unknown'), mediaMarkdowns: [], plannerMs: planned.ms };
     }
-    const plan = applyStatedVideoParams(coerceJobFollowup(planned.plan, attachments, req.message ?? ''), req.message ?? '');
+    const plan = applyPlanInputHooks(applyStatedVideoParams(coerceJobFollowup(planned.plan, attachments, req.message ?? ''), req.message ?? ''), req.message ?? '');
     onProgress?.({ type: 'orchestrator_plan', complexity: plan.complexity, tasks: plan.tasks.map((t) => ({ id: t.id, capability: t.capability, instruction: t.instruction.slice(0, 160) })) });
 
     if (plan.complexity === 'simple') {

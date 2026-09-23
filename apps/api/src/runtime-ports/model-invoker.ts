@@ -22,6 +22,8 @@ const OPERATIONS = {
     'audio.speech': { path: '/v1/audio/speech', body: 'json', response: 'binary' },
     'audio.transcriptions': { path: '/v1/audio/transcriptions', body: 'form', response: 'json' },
     'chat.completions': { path: '/v1/chat/completions', body: 'json', response: 'json' },
+    /** 게이트웨이 pass-through — ACE-Step 이 `message.audio` 를 배열로 줘 LiteLLM model_list 로는 역직렬화가 500 난다(2026-09-23) */
+    'music.chat_completions': { path: '/music/v1/chat/completions', body: 'json', response: 'json' },
 } as const;
 export type InvokeOperation = keyof typeof OPERATIONS;
 

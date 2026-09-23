@@ -21,7 +21,6 @@ import { textExecutor } from '../services/orchestrator/executors/text';
 import { visionExecutor } from '../services/orchestrator/executors/vision';
 import { audioTranscribeExecutor, audioSpeechExecutor } from '../services/orchestrator/executors/audio';
 import { videoGenerateExecutor } from '../services/orchestrator/executors/video';
-import { musicGenerateExecutor } from '../services/orchestrator/executors/music';
 import { webSearchExecutor } from '../services/orchestrator/executors/web';
 
 /** 종전 `executors/index.ts` 의 정적 표 그대로 */
@@ -32,7 +31,6 @@ const LEGACY_EXECUTORS: Partial<Record<Capability, CapabilityExecutor>> = {
     'vision.ocr': visionExecutor,
     'audio.transcribe': audioTranscribeExecutor,
     'audio.speech': audioSpeechExecutor,
-    'music.generate': musicGenerateExecutor,
     'video.generate': videoGenerateExecutor,
     'web.search': webSearchExecutor,
 };
@@ -93,9 +91,10 @@ function legacyHandler(id: Capability): CapabilityHandler {
 
 /**
  * Base 가 소유하는 capability — 전환이 끝난 미디어 생성 ID 는 여기서 빠진다(그 소유 add-on 만 등록한다).
- * P04 부터 image.generate·image.edit 은 image-runtime add-on 소유다 — 그 add-on 이 꺼지면 Registry 에 없어 세 경로 모두 거절된다.
+ * P04 부터 image.generate·image.edit 은 image-runtime, P06 부터 music.generate 는 music-runtime 소유다(music.analyze 는 남는다) —
+ * 그 add-on 이 꺼지면 Registry 에 없어 세 경로 모두 거절된다.
  */
-export const LEGACY_BRIDGE_CAPABILITIES: readonly Capability[] = CAPABILITIES.filter(c => !c.startsWith('image.'));
+export const LEGACY_BRIDGE_CAPABILITIES: readonly Capability[] = CAPABILITIES.filter(c => !c.startsWith('image.') && c !== 'music.generate');
 
 let bridged = false;
 

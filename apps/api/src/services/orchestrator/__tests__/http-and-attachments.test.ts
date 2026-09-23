@@ -164,13 +164,27 @@ describe('applyStatedVideoParams — 사용자 원문의 영상 길이·비율�
     });
 });
 
-describe('statedDurationSec·음악 길이 보정 — Planner 가 duration 을 비워 전부 30초가 되던 결함 (2026-09-23)', () => {
-    const { applyStatedVideoParams, statedDurationSec } = jest.requireActual('../orchestrate') as typeof import('../orchestrate');
+describe('statedDurationSec·계획 인자 hook — Planner 가 duration 을 비워 전부 30초가 되던 결함 (2026-09-23)', () => {
+    const { applyPlanInputHooks, statedDurationSec } = jest.requireActual('../orchestrate') as typeof import('../orchestrate');
     const { validatePlan } = jest.requireActual('../plan-schema') as typeof import('../plan-schema');
+    const { getCapabilityRegistry } = jest.requireActual('../../../runtime-ports/capability-runtime') as typeof import('../../../runtime-ports/capability-runtime');
+    // Base 테스트는 add-on 을 import 하지 않는다 — 소유 handler 의 normalizePlanInput hook 이 계획에 적용되는 배선만 검증(규칙 자체는 music-runtime 테스트)
+    const stubMusic = () => {
+        const registry = getCapabilityRegistry();
+        if (registry.has('music.generate')) registry.unregisterOwner('test-music');
+        const tx = registry.beginRegistration({ addonId: 'test-music', addonVersion: '1', source: 'builtin' });
+        const base = registry.list()[0].definition;
+        tx.register({ ...base, id: 'music.generate', plannable: true }, {
+            execute: async () => ({ ok: true, text: '', media: [] }),
+            normalizePlanInput: (t, msg) => { const s = statedDurationSec(msg); return s === undefined ? t : { ...t, extra: { ...t.extra, duration: String(s) } }; },
+        });
+        tx.commit(['music.generate']);
+    };
     const music = (message: string, input: Record<string, unknown> = {}) => {
+        stubMusic();
         const v = validatePlan({ complexity: 'multi', tasks: [{ id: 't1', capability: 'music.generate', input: { instruction: 'x', ...input } }] }, new Set());
         if (!v.ok) throw new Error(v.reason);
-        return applyStatedVideoParams(v.plan, message).tasks[0].extra;
+        return applyPlanInputHooks(v.plan, message).tasks[0].extra;
     };
 
     it('분·분초·초·영문 표기를 초로 읽고 여러 개면 가장 큰 값', () => {
@@ -182,7 +196,7 @@ describe('statedDurationSec·음악 길이 보정 — Planner 가 duration 을 �
         expect(statedDurationSec('intro 10 seconds, total 3 mins')).toBe(180);
         expect(statedDurationSec('신나는 노래 만들어줘')).toBeUndefined();
     });
-    it('원문 길이가 음악 계획값을 이기고, 없으면 계획값 그대로', () => {
+    it('소유 handler 의 hook 이 계획 인자에 적용된다 — 원문 길이 우선, 없으면 계획값 그대로', () => {
         expect(music('5분짜리 발라드 만들어줘')).toEqual({ duration: '300' });
         expect(music('3분 곡', { duration: '30' })).toEqual({ duration: '180' });
         expect(music('발라드 만들어줘', { duration: '60' })).toEqual({ duration: '60' });
