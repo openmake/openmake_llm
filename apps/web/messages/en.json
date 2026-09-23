@@ -356,6 +356,7 @@
     },
     "artifactFallback": "Artifact",
     "artifactBuilding": "Building artifact…",
+    "mediaDownload": "Download",
     "reportBuilding": "Building report…",
     "reportData": "Report data",
     "reasoningLabel": "Reasoning",

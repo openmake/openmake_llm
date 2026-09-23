@@ -4,7 +4,7 @@
  * 순수 모듈(LLM·DB 없음) — 테스트로 고정한다.
  */
 import { z } from 'zod';
-import { isCapability, PLANNABLE_CAPABILITIES, ORCHESTRATOR, type Capability } from '../../config/capabilities';
+import { isCapability, PLANNABLE_CAPABILITIES, ORCHESTRATOR, PLAN_LYRICS_REF_MAX_CHARS, type Capability } from '../../config/capabilities';
 
 const PLAN_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
 
@@ -125,6 +125,15 @@ export function validatePlan(raw: unknown, knownAttachmentIds: ReadonlySet<strin
         });
     }
     for (const t of tasks) {
+        // 가사 자리에 앞 작업 참조("REFS:t1"·"(lyrics from t1)")를 적은 경우 — 그 작업을 refs 로 옮긴다(그대로면 그 문자열을 노래한다)
+        const lyrics = typeof t.extra.lyrics === 'string' ? t.extra.lyrics.trim() : '';
+        if (lyrics && lyrics.length <= PLAN_LYRICS_REF_MAX_CHARS) {
+            const named = [...ids].filter((id) => id !== t.id && new RegExp(`(^|[^A-Za-z0-9_-])${id}($|[^A-Za-z0-9_-])`).test(lyrics));
+            if (named.length > 0) {
+                delete t.extra.lyrics;
+                for (const id of named) if (!t.refs.includes(id)) t.refs.push(id);
+            }
+        }
         for (const d of [...t.dependsOn, ...t.refs]) {
             if (!ids.has(d)) return { ok: false, reason: `task '${t.id}' references unknown task '${d}'` };
             if (d === t.id) return { ok: false, reason: `task '${t.id}' depends on itself` };

@@ -61,6 +61,21 @@ function staticHeaders(res: ServerResponse, filePath: string): void {
     }
 }
 
+/** 오케스트레이터 생성 미디어의 공개 경로 접두 */
+const GENERATED_PATH_PREFIX = '/generated';
+
+/**
+ * `/generated/*?download=1` 요청은 첨부(attachment)로 내려 브라우저가 재생 대신 저장하게 한다.
+ * `express.static` 의 setHeaders 는 요청을 받지 않아 쿼리를 볼 수 없으므로 앞단 미들웨어로 둔다.
+ * 파일 존재·경로 검증은 뒤따르는 static 이 한다(없는 파일이면 헤더와 무관하게 404).
+ */
+export function generatedDownloadHeader(req: Request, res: Response, next: NextFunction): void {
+    if (req.query.download === '1') {
+        res.attachment(path.basename(req.path));
+    }
+    next();
+}
+
 /**
  * API JSON Content-Type 헤더를 강제하고, 민감 응답의 브라우저 캐시를 차단합니다.
  *
@@ -188,6 +203,7 @@ export function setupStaticFiles(app: Application, dirname: string): void {
     // 항상 등록해 /generated/*.png 가 외부 프록시 라우팅에 의존하지 않고 백엔드에서 직접 도달하게 한다.
     // (브라우저는 Next origin 에 있으므로 apps/web/next.config.ts 의 /generated rewrite 가 이 마운트로 프록시한다.)
     const legacyAssetsPath = path.join(dirname, '../../../apps/legacy-web/public');
+    app.use(GENERATED_PATH_PREFIX, generatedDownloadHeader);
     app.use(express.static(legacyAssetsPath, {
         etag: true,
         lastModified: true,

@@ -356,6 +356,7 @@
     },
     "artifactFallback": "Artefakt",
     "artifactBuilding": "Artefakt wird erstellt …",
+    "mediaDownload": "Herunterladen",
     "reportBuilding": "Bericht wird erstellt …",
     "reportData": "Berichtsdaten",
     "reasoningLabel": "Reasoning",

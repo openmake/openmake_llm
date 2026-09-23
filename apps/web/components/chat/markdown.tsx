@@ -6,6 +6,7 @@ import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { useTranslations } from "next-intl";
+import { Download } from "lucide-react";
 import { WEB_ADDONS } from "@/addons/registry";
 import { CitationChip } from "./citation-chip";
 import { citationNumber, linkCitations } from "@/lib/citations";
@@ -40,25 +41,44 @@ const isGeneratedMedia = (href: string | undefined): "audio" | "video" | null =>
 
 type LinkProps = ComponentPropsWithoutRef<"a"> & ExtraProps;
 
+/** 생성 미디어 저장 링크 — 서버가 `?download=1` 이면 attachment 로 내려준다(`generatedDownloadHeader`).
+ *  `download` 속성만으로는 Safari 인라인 재생·새 탭 열기 경로가 저장을 보장하지 않아 서버 헤더와 함께 쓴다. */
+function MediaDownloadLink({ href }: { href: string }) {
+  const t = useTranslations("chat");
+  const url = href + (href.includes("?") ? "&" : "?") + "download=1";
+  const name = href.split("?")[0].split("/").pop() || undefined;
+  return (
+    <a
+      href={url}
+      download={name}
+      className="mt-1 inline-flex items-center gap-1 text-xs text-muted hover:text-accent"
+    >
+      <Download className="h-3 w-3" aria-hidden="true" /> {t("mediaDownload")}
+    </a>
+  );
+}
+
 function MarkdownLink({ ...props }: LinkProps) {
   const kind = isGeneratedMedia(typeof props.href === "string" ? props.href : undefined);
-  if (kind === "audio") {
+  if (kind === "audio" && props.href) {
     return (
       <span className="my-2 block">
         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
         <audio controls preload="metadata" src={props.href} className="w-full max-w-md">
           <a href={props.href}>{props.children}</a>
         </audio>
+        <MediaDownloadLink href={props.href} />
       </span>
     );
   }
-  if (kind === "video") {
+  if (kind === "video" && props.href) {
     return (
       <span className="my-2 block">
         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
         <video controls preload="metadata" src={props.href} className="max-h-[420px] w-full max-w-xl rounded-lg border border-border">
           <a href={props.href}>{props.children}</a>
         </video>
+        <MediaDownloadLink href={props.href} />
       </span>
     );
   }
@@ -72,9 +92,10 @@ function MarkdownLink({ ...props }: LinkProps) {
   );
 }
 
-const MD_COMPONENTS: Components = {
-  a: MarkdownLink,
-  img: ({ ...props }) => (
+type ImageProps = ComponentPropsWithoutRef<"img"> & ExtraProps;
+
+function MarkdownImage({ ...props }: ImageProps) {
+  const img = (
     // eslint-disable-next-line @next/next/no-img-element
     <img
       {...props}
@@ -82,7 +103,20 @@ const MD_COMPONENTS: Components = {
       loading="lazy"
       className="my-2 max-w-full rounded-lg border border-border"
     />
-  ),
+  );
+  // 저장 링크는 서버 소유 생성물에만 — 외부 이미지 URL 은 서버 헤더 경로가 아니다.
+  if (typeof props.src !== "string" || !props.src.startsWith("/generated/")) return img;
+  return (
+    <span className="block">
+      {img}
+      <MediaDownloadLink href={props.src} />
+    </span>
+  );
+}
+
+const MD_COMPONENTS: Components = {
+  a: MarkdownLink,
+  img: MarkdownImage,
   table: ({ children }) => (
     <div className="my-3 overflow-x-auto">
       <table className="w-full border-collapse text-sm">{children}</table>

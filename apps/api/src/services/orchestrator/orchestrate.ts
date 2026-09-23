@@ -9,7 +9,7 @@
  *  - `cancelled`: 사용자 취소 → 호출부가 종전 경로도 시작하지 않는다
  * 셰도우(orchestrator_runs)는 fire-and-forget.
  */
-import { ORCHESTRATOR, CAPABILITY_LABELS_KO, VIDEO_JOB_FOLLOWUP_PATTERN, VIDEO_JOB_RESULT_INTENT_PATTERN, VIDEO_JOB_NOT_FOLLOWUP_PATTERN, VIDEO_SECONDS_PATTERN, VIDEO_ASPECT_PATTERNS, VIDEO_GEN_ASPECT_SIZES, type Capability } from '../../config/capabilities';
+import { ORCHESTRATOR, CAPABILITY_LABELS_KO, VIDEO_JOB_FOLLOWUP_PATTERN, VIDEO_JOB_RESULT_INTENT_PATTERN, VIDEO_JOB_NOT_FOLLOWUP_PATTERN, MEDIA_DURATION_PATTERN, VIDEO_ASPECT_PATTERNS, VIDEO_GEN_ASPECT_SIZES, type Capability } from '../../config/capabilities';
 import { getPool } from '../../data/models/unified-database';
 import { OrchestratorRunsRepository } from '../../data/repositories/orchestrator-runs-repo';
 import type { ChatMessageRequest } from '../chat-service-types';
@@ -132,18 +132,33 @@ export function coerceJobFollowup(plan: ValidatedPlan, attachments: Map<string, 
     return v.plan;
 }
 
+/** 원문에 적힌 길이(초) 중 가장 큰 값 — "5분"·"3분 30초"·"90초"·"6-second"·"5 minutes". 없으면 undefined */
+export function statedDurationSec(message: string): number | undefined {
+    const secs = [...message.matchAll(MEDIA_DURATION_PATTERN)]
+        .map((m) => (m[1] !== undefined ? Number(m[1]) * 60 + Number(m[2] ?? 0) : Number(m[3])))
+        .filter((n) => Number.isFinite(n) && n > 0);
+    return secs.length > 0 ? Math.round(Math.max(...secs)) : undefined;
+}
+
 /**
- * 사용자 원문에 적힌 영상 길이·비율을 새 video.generate 작업의 인자로 확정한다 — Planner 가 빠뜨리거나 다르게 적어도 원문이 우선.
+ * 사용자 원문에 적힌 영상 길이·비율, 음악 길이를 새 생성 작업의 인자로 확정한다 — Planner 가 빠뜨리거나 다르게 적어도 원문이 우선.
  * 원문에 없으면 계획값(직전 대화에서 추론한 값일 수 있다)을 그대로 둔다. job 재조회 작업은 새로 제출하지 않으므로 건드리지 않는다.
+ * 길이 상한은 각 실행기가 자른다(음악 `musicDuration`).
  */
 export function applyStatedVideoParams(plan: ValidatedPlan, message: string): ValidatedPlan {
-    const seconds = [...message.matchAll(VIDEO_SECONDS_PATTERN)].map((m) => Number(m[1])).filter((n) => n > 0);
+    const seconds = statedDurationSec(message);
     const aspect = VIDEO_ASPECT_PATTERNS.find(([, re]) => re.test(message))?.[0];
-    if (seconds.length === 0 && !aspect) return plan;
+    if (seconds === undefined && !aspect) return plan;
     for (const t of plan.tasks) {
+        if (t.capability === 'music.generate' && seconds !== undefined) {
+            const before = String(t.extra.duration ?? '-');
+            t.extra.duration = String(seconds);
+            if (t.extra.duration !== before) logger.info(`[Orchestrator] ${t.id} 음악 길이를 원문 기준으로 보정 ${before} → ${t.extra.duration}`);
+            continue;
+        }
         if (t.capability !== 'video.generate' || t.attachments.length > 0) continue;
         const before = `${String(t.extra.seconds ?? '-')}/${String(t.extra.size ?? '-')}`;
-        if (seconds.length > 0) t.extra.seconds = String(Math.max(...seconds));
+        if (seconds !== undefined) t.extra.seconds = String(seconds);
         if (aspect) t.extra.size = VIDEO_GEN_ASPECT_SIZES[aspect];
         const after = `${String(t.extra.seconds ?? '-')}/${String(t.extra.size ?? '-')}`;
         if (after !== before) logger.info(`[Orchestrator] ${t.id} 영상 인자를 원문 기준으로 보정 ${before} → ${after}`);
