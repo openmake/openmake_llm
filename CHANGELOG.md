@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.84.0](https://github.com/openmake/openmake_llm/compare/v1.83.0...v1.84.0) (2026-09-23)
+
+
+### ✨ 기능
+
+* **chat:** 생성 미디어 다운로드 + 음악·영상 길이 원문 보정 ([#982](https://github.com/openmake/openmake_llm/issues/982)) ([e91d6bf](https://github.com/openmake/openmake_llm/commit/e91d6bf3e6165437b1ffdc6539f64660eec098ee))
+
 ## [1.83.0](https://github.com/openmake/openmake_llm/compare/v1.82.0...v1.83.0) (2026-09-22)
 
 
