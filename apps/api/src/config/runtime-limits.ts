@@ -1881,3 +1881,18 @@ export const TRIGGER_LIMITS = {
     /** 연속 실패 이 횟수면 자동 비활성. AGENT_TASK_TRIGGER_DISABLE_AFTER_FAILURES */
     DISABLE_AFTER_FAILURES: parseInt(process.env.AGENT_TASK_TRIGGER_DISABLE_AFTER_FAILURES || '5', 10),
 } as const;
+
+/**
+ * 생성 산출물(Artifact Store, P04) — 파일 크기 상한과 전달 티켓 수명.
+ * 티켓은 bearer 전용 클라이언트(iOS)가 `<img>` 로 쿠키 없이 받을 때 쓰는 짧은 수명·파일명 고정 HMAC 이다.
+ */
+export const GENERATED_ARTIFACT_LIMITS = {
+    MAX_BYTES: parseInt(process.env.GENERATED_ARTIFACT_MAX_BYTES || String(64 * 1024 * 1024), 10),
+    TICKET_TTL_MS: parseInt(process.env.GENERATED_ARTIFACT_TICKET_TTL_MS || String(10 * 60 * 1000), 10),
+} as const;
+
+/**
+ * 서버 공용 키로 나가는 미디어 호출의 예약 토큰 추정치(P04, 계획서 9.2). 이미지·영상은 토큰을 돌려주지 않으므로 이 값을
+ * **선예약**하고, provider 가 usage 를 주면 그 값으로 정산한다. 주지 않으면 예약분이 남는다 — unknown 을 0(무료)으로 정산하지 않는다.
+ */
+export const SERVER_KEY_MEDIA_RESERVE_TOKENS = parseInt(process.env.SERVER_KEY_MEDIA_RESERVE_TOKENS || '1000', 10);

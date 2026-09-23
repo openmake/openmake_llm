@@ -18,5 +18,6 @@ export function executorFor(capability: Capability): CapabilityExecutor {
     ensureLegacyCapabilityBridge();
     const reg = getCapabilityRegistry().get(capability);
     if (!reg) return async () => { throw new CapabilityNotRegisteredError(capability); };
-    return (task, ctx) => reg.handler.execute(task, ctx);
+    // executor.ts 가 CapabilityContext(+Base 소유면 targets)를 만들어 넘긴다 — 여기서는 시그니처만 맞춘다
+    return (task, ctx) => reg.handler.execute(task, ctx as unknown as import('../../../capability-contract/types').CapabilityContext);
 }

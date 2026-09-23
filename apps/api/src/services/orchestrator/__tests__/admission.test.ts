@@ -6,7 +6,7 @@ jest.mock('../../../config', () => ({ getConfig: () => ({ llmBaseUrl: 'http://gw
 jest.mock('../../../data/models/unified-database', () => ({ getPool: () => ({}), getUnifiedDatabase: () => ({ getPool: () => ({}) }) }));
 jest.mock('../../../config/capabilities', () => ({ ...jest.requireActual('../../../config/capabilities'), CAPABILITY_DEFAULTS: { ...jest.requireActual('../../../config/capabilities').CAPABILITY_DEFAULTS, 'image.generate': 'local-llm:img-gen' } }));
 jest.mock('../../../data/repositories/capability-models-repo', () => ({ CapabilityModelsRepository: class { get = async () => null; listGlobal = async () => []; } }));
-jest.mock('../../../llm/user-quota', () => ({ checkUserQuota: async () => undefined, recordUserUsage: async () => undefined }));
+jest.mock('../../../llm/user-quota', () => ({ checkUserQuota: async () => undefined, recordUserUsage: async () => undefined, reserveUserQuota: async () => null, settleUserQuota: async () => undefined }));
 jest.mock('../../../data/repositories/orchestrator-runs-repo', () => ({ OrchestratorRunsRepository: class { insert = async () => undefined; } }));
 jest.mock('../../../data/repositories/orchestrator-jobs-repo', () => ({ OrchestratorJobsRepository: class { listRecent = async () => []; } }));
 jest.mock('../../../services/cost/cost-ledger-service', () => ({ recordLlmCost: () => undefined, recordCost: () => undefined }));

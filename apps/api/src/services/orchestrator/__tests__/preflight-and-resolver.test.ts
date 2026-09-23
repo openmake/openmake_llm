@@ -6,8 +6,12 @@ jest.mock('../../../data/models/unified-database', () => ({ getPool: () => ({}) 
 const quota = { exceeded: false };
 jest.mock('../../../llm/user-quota', () => ({
     checkUserQuota: async () => { if (quota.exceeded) { const { QuotaExceededError } = jest.requireActual('../../../errors/quota-exceeded.error'); throw new QuotaExceededError('hourly', 10, 5); } },
+    reserveUserQuota: async () => { if (quota.exceeded) { const { QuotaExceededError } = jest.requireActual('../../../errors/quota-exceeded.error'); throw new QuotaExceededError('hourly', 10, 5); } return null; },
+    settleUserQuota: async () => undefined,
     recordUserUsage: async () => undefined,
 }));
+import { registerImageStubForTest } from './helpers/image-stub';
+beforeAll(() => registerImageStubForTest());
 
 import { resolveCapabilityTarget, validateCapabilityAssignment, clearGlobalCapabilityCache } from '../capability-resolver';
 import { preflightPlan } from '../preflight';

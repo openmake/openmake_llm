@@ -43,7 +43,7 @@ export const imageGenerateExecutor: CapabilityExecutor = async (task, ctx) => {
     const size = pickSize(task.extra, target.params);
     // response_format 미전송 — LiteLLM 이 커스텀 image 모델에서 거부(UnsupportedParamsError), vLLM-Omni 는 b64_json 기본
     const json = await callJson<ImagesResponse>(target, { body: { model: target.model, prompt, n: 1, size }, timeoutMs: CAPABILITY_LIMITS.IMAGE_GEN_TIMEOUT_MS, signal: ctx.signal });
-    const media = saveImage(await imageBytes(json, target, ctx.signal), prompt, undefined, ctx.userId);
+    const media = await saveImage(await imageBytes(json, target, ctx.signal), prompt, undefined, { userId: ctx.userId, sessionId: ctx.sessionId, capability: 'image.generate' });
     return { ok: true, text: ctx.lang === 'ko' ? `이미지 생성 완료 (${size}): ${media.urlPath}` : `Image generated (${size}): ${media.urlPath}`, media: [media], model: target.fullId, usage: { units: { kind: 'images', count: 1 } } };
 };
 
@@ -53,7 +53,7 @@ export const imageEditExecutor: CapabilityExecutor = async (task, ctx) => {
     const [source] = resolveTaskAttachments(task, ctx, new Set(['image']));
     if (!source) throw new Error('image.edit: 원본 이미지(attachments 또는 refs)가 없습니다');
     const target = ctx.targets?.get(task.id) ?? await resolveCapabilityTarget('image.edit', ctx.userId);
-    const input = await loadAttachment(source, { timeoutMs: CAPABILITY_LIMITS.IMAGE_GEN_TIMEOUT_MS, signal: ctx.signal, maxBytes: CAPABILITY_LIMITS.IMAGE_EDIT_MAX_INPUT_BYTES, allowTypes: ['image/'] });
+    const input = await loadAttachment(source, { timeoutMs: CAPABILITY_LIMITS.IMAGE_GEN_TIMEOUT_MS, signal: ctx.signal, maxBytes: CAPABILITY_LIMITS.IMAGE_EDIT_MAX_INPUT_BYTES, allowTypes: ['image/'], userId: ctx.userId });
     const size = pickSize(task.extra, target.params);
     const adapter = imageEditAdapterFor(target.providerId);
     let json: ImagesResponse;
@@ -69,6 +69,6 @@ export const imageEditExecutor: CapabilityExecutor = async (task, ctx) => {
         fd.append('image', new Blob([new Uint8Array(input.bytes)], { type: input.mime }), 'image.png');
         json = await callJson<ImagesResponse>(target, { body: fd, timeoutMs: CAPABILITY_LIMITS.IMAGE_GEN_TIMEOUT_MS, signal: ctx.signal });
     }
-    const media = saveImage(await imageBytes(json, target, ctx.signal), prompt, 'img-edit', ctx.userId);
+    const media = await saveImage(await imageBytes(json, target, ctx.signal), prompt, 'img-edit', { userId: ctx.userId, sessionId: ctx.sessionId, capability: 'image.edit' });
     return { ok: true, text: ctx.lang === 'ko' ? `이미지 편집 완료: ${media.urlPath}` : `Image edited: ${media.urlPath}`, media: [media], model: target.fullId, usage: { units: { kind: 'images', count: 1 } } };
 };

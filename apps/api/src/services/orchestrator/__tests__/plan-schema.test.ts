@@ -1,4 +1,6 @@
 import { validatePlan, extractPlanJson, PLAN_JSON_SCHEMA } from '../plan-schema';
+import { registerImageStubForTest } from './helpers/image-stub';
+beforeAll(() => registerImageStubForTest());
 
 const known = new Set(['a1', 'a2', 'm1']);
 

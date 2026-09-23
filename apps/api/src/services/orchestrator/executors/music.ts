@@ -80,7 +80,7 @@ export const musicGenerateExecutor: CapabilityExecutor = async (task, ctx) => {
         const hint = (message?.content ?? '').trim().slice(0, 160);
         throw new Error(`음악 생성 응답에 오디오가 없습니다${hint ? ` — ${hint}` : ''}`);
     }
-    const media = saveAudio(bytes, sniffAudioExt(bytes, MUSIC_GEN_FORMAT), ko ? '음악 듣기' : 'Listen', ctx.userId);
+    const media = await saveAudio(bytes, sniffAudioExt(bytes, MUSIC_GEN_FORMAT), ko ? '음악 듣기' : 'Listen', { userId: ctx.userId, sessionId: ctx.sessionId, capability: 'music.generate' });
     const kind = lyrics ? '' : (ko ? ', 연주곡' : ', instrumental');
     return {
         ok: true, media: [media], model: target.fullId,

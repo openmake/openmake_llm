@@ -77,6 +77,8 @@ export interface CapabilityTarget {
     costOwner: 'user' | 'server' | 'local';
     /** 'gateway'(기본 — 운영자가 정한 주소로 일반 fetch, 로컬 음악 서버 포함) | 'direct' — jobs-v1 영상처럼 사용자 키로 provider 직결(SSRF 고정 fetch) */
     transport: 'gateway' | 'direct';
+    /** costOwner=server 일 때 그 키의 상한 — preflight 가 원자적 예약(P04)에 쓴다 */
+    serverBudget?: { dailyTokenLimit: number; monthlyTokenLimit: number | null };
 }
 
 /** 배정 시점 검증 — 저장 전에 같은 규칙을 적용해 해석 시점 실패를 앞당긴다 */
@@ -174,6 +176,7 @@ async function externalTarget(
 
     let apiKey: string | null = null;
     let userBaseUrl: string | null = null;
+    let serverBudget: CapabilityTarget['serverBudget'];
     if (source === 'user' && userId) {
         // 실행 직전 BYOK 상태 검증 — 누락·비활성·OAuth(direct 전용) 는 각각 명시 실패. 전역/서버 키로 전환하지 않는다.
         const keyRow = await deps.userKeys.getByUserAndProvider(userId, providerId);
@@ -191,6 +194,7 @@ async function externalTarget(
         if (budget) throw new CapabilityUnavailableError(budget, 'CAPABILITY_KEY_BUDGET');
         apiKey = await deps.serverKeys.decryptKey(providerId);
         userBaseUrl = row.baseUrl ?? null;
+        serverBudget = { dailyTokenLimit: row.dailyTokenLimit, monthlyTokenLimit: row.monthlyTokenLimit };
     }
     const costOwner: CapabilityTarget['costOwner'] = source === 'user' ? 'user' : 'server';
     if (!apiKey) {
@@ -207,14 +211,14 @@ async function externalTarget(
             baseUrl: (userBaseUrl || entry.defaultBaseUrl).replace(/\/+$/, ''),
             endpoint: adapter.submitPath ?? CAPABILITY_ENDPOINT[capability],
             headers: { Authorization: `Bearer ${apiKey}` },
-            params, source, costOwner, transport: 'direct',
+            params, source, costOwner, transport: 'direct', ...(serverBudget ? { serverBudget } : {}),
         };
     }
     return {
         capability, fullId, providerId, model: `${providerId}/${modelId}`,
         baseUrl: gatewayBase(), endpoint: CAPABILITY_ENDPOINT[capability],
         headers: { Authorization: `Bearer ${cfg.llmApiKey}`, 'x-api-key': apiKey },
-        params, source, costOwner, transport: 'gateway',
+        params, source, costOwner, transport: 'gateway', ...(serverBudget ? { serverBudget } : {}),
     };
 }
 

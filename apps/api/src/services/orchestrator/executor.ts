@@ -11,7 +11,12 @@ import { CapabilityUnavailableError } from './capability-resolver';
 import { executorFor, UnsupportedCapabilityError } from './executors';
 import { combineSignals, HttpCallError } from './http-call';
 import { CapabilityNotRegisteredError } from '../../capability-contract/errors';
-import { recheckHandle, ADMISSION_LABEL, CapabilityAdmissionError } from '../../capability-contract/admission';
+import { recheckHandle, ADMISSION_LABEL, CapabilityAdmissionError, type ApprovedInvocationHandle } from '../../capability-contract/admission';
+import { BASE_CAPABILITY_OWNER, type CapabilityContext } from '../../capability-contract/types';
+import { getCapabilityRegistry } from '../../runtime-ports/capability-runtime';
+import { createRestrictedInvoker, type RestrictedModelInvoker } from '../../runtime-ports/model-invoker';
+import { scopedArtifactStore } from '../../runtime-ports/artifact-store';
+import * as crypto from 'node:crypto';
 import type { PlanTask, ValidatedPlan } from './plan-schema';
 import type { ExecContext, TaskResult } from './types';
 import { createLogger } from '../../utils/logger';
@@ -68,6 +73,29 @@ function classify(err: unknown): { error: string; kind: string } {
     return { error: msg, kind: /취소됨|aborted/i.test(msg) ? 'cancelled' : 'failed' };
 }
 
+/** 실행 대상이 없는 작업(web.search·저장본 재조회)의 포트 — 호출하면 명시 실패 */
+function noTargetInvoker(capability: string): RestrictedModelInvoker {
+    const deny = () => { throw new Error(`${capability}: 이 작업에는 승인된 모델 호출 대상이 없습니다`); };
+    return { describe: deny, invokeJson: async () => deny(), invokeBinary: async () => deny(), download: async () => deny() };
+}
+
+/**
+ * handler 에 넘길 문맥(P04) — `targets`(헤더·키)·`handles` 를 뺀 CapabilityContext. Base 소유(legacy bridge) 실행기만 전환 기간 동안
+ * `targets` 를 덧붙여 받는다. add-on 은 `model` 포트로만 호출한다(T08).
+ */
+function buildHandlerContext(task: PlanTask, ctx: ExecContext, handle: ApprovedInvocationHandle, ownerAddonId: string): CapabilityContext {
+    const { targets, handles: _handles, ...rest } = ctx;
+    const target = targets?.get(task.id);
+    const base: CapabilityContext = {
+        ...rest,
+        invocation: handle,
+        model: target ? createRestrictedInvoker(handle, target) : noTargetInvoker(task.capability),
+        artifacts: scopedArtifactStore({ userId: ctx.userId, sessionId: ctx.sessionId, capability: task.capability }),
+        traceId: crypto.randomUUID(),
+    };
+    return ownerAddonId === BASE_CAPABILITY_OWNER.addonId ? Object.assign(base, { targets }) : base;
+}
+
 async function runTask(task: PlanTask, ctx: ExecContext, turnSignal: AbortSignal): Promise<TaskResult> {
     const startedAt = Date.now();
     ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'running' });
@@ -77,13 +105,17 @@ async function runTask(task: PlanTask, ctx: ExecContext, turnSignal: AbortSignal
     try {
         release = await globalGate.acquire(signal);
         // 승인 handle 재검사(P03) — 계획·승인 뒤 관리자가 소유 add-on 을 껐거나 상태를 알 수 없으면 유료 요청 전송 전에 거절(T03)
+        let handle = ctx.handles?.get(task.id);
         if (ctx.handles) {
-            const handle = ctx.handles.get(task.id);
             if (!handle) throw new CapabilityAdmissionError('unapproved', `${task.capability}: 실행 승인(handle)이 없습니다`);
             const re = await recheckHandle(handle);
             if (!re.ok) throw new CapabilityAdmissionError(re.code === 'HANDLE_EXPIRED' ? 'expired' : ADMISSION_LABEL[re.code], re.reason);
         }
-        const out = await executorFor(task.capability)(task, taskCtx);
+        const owner = getCapabilityRegistry().get(task.capability)?.owner ?? BASE_CAPABILITY_OWNER;
+        // preflight 없이 온 호출(테스트·레거시)은 Base 소유로 간주한 handle 을 만든다 — 승인 경계는 ctx.handles 가 있을 때만 강제한다
+        handle ??= { taskId: task.id, capability: task.capability, userId: ctx.userId, sessionId: ctx.sessionId, owner, registryRevision: 0, stateRevision: 0, issuedAt: startedAt, deadline: startedAt + ORCHESTRATOR.TURN_DEADLINE_MS };
+        const handlerCtx = buildHandlerContext(task, taskCtx, handle, owner.addonId);
+        const out = await executorFor(task.capability)(task, handlerCtx as unknown as ExecContext);
         const status = out.status ?? (out.ok ? 'completed' : 'failed');
         const { job: _job, ...rest } = out;
         // pending(제출됐지만 미완료)은 ok=false — 자식 실행 금지·성공 집계 제외. 실패로도 단정하지 않는다.

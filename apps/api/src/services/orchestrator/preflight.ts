@@ -12,10 +12,12 @@
  *  변경한 정책: 종전 미디어 tool 은 역할 게이트 없이 전 사용자에게 열려 있었다 — 그대로(추가 권한 체계 없음).
  *  인증 컨텍스트는 호출부(message-pipeline)가 req.userId 로 넘기며, userId 없는 게스트는 외부 BYOK 가 없어 로컬 기본값만 쓴다.
  */
-import { UNSUPPORTED_CAPABILITIES, ORCHESTRATOR, type Capability } from '../../config/capabilities';
+import { UNSUPPORTED_CAPABILITIES, ORCHESTRATOR, CAPABILITY_LIMITS, type Capability } from '../../config/capabilities';
 import { admitCapability, ADMISSION_LABEL, type ApprovedInvocationHandle } from '../../capability-contract/admission';
 import { ensureLegacyCapabilityBridge } from '../../addon-host/legacy-capability-bridge';
-import { checkUserQuota } from '../../llm/user-quota';
+import { reserveUserQuota, type QuotaReservation } from '../../llm/user-quota';
+import { reserveServerKeyBudget, type ServerKeyReservation } from '../server-key-quota';
+import { SERVER_KEY_MEDIA_RESERVE_TOKENS } from '../../config/runtime-limits';
 import { QuotaExceededError } from '../../errors/quota-exceeded.error';
 import { resolveCapabilityTarget, CapabilityUnavailableError, type CapabilityTarget } from './capability-resolver';
 import { savedVideoPath } from './executors/video';
@@ -34,6 +36,15 @@ interface PreflightResult {
     hasLocal: boolean;
     /** 작업별 승인 handle(P03) — 실행기는 이것이 있는 작업만, 실행 직전 재검사 후 실행한다 */
     handles: Map<string, ApprovedInvocationHandle>;
+    /** 원자적 예약(P04) — 실행 후 orchestrate 가 실측으로 정산한다. 승인 전 거절은 예약 없음 */
+    reservations: PreflightReservations;
+}
+
+export interface PreflightReservations {
+    /** 로컬 vLLM 토큰 쿼터(per-user) — 로컬 대상 작업이 있을 때 한 번 */
+    user: QuotaReservation | null;
+    /** 서버 공용 키 예산 — 작업별(taskId → 예약) */
+    serverKeys: Map<string, ServerKeyReservation>;
 }
 
 /** capability 별 필수 첨부 종류 — 계획에 없으면 실행하지 않는다(모델 호출·과금 전에 거절) */
@@ -70,6 +81,7 @@ export async function preflightPlan(plan: ValidatedPlan, ctx: ExecContext): Prom
     const rejected = new Map<string, string>();
     const targets = new Map<string, CapabilityTarget>();
     const handles = new Map<string, ApprovedInvocationHandle>();
+    const reservations: PreflightReservations = { user: null, serverKeys: new Map() };
     let hasLocal = false;
     ensureLegacyCapabilityBridge();
     const now = Date.now();
@@ -91,6 +103,12 @@ export async function preflightPlan(plan: ValidatedPlan, ctx: ExecContext): Prom
         if (task.capability === 'video.generate' && task.attachments.some((id) => savedVideoPath(ctx.attachments.get(id)))) { handles.set(task.id, handle); continue; }
         try {
             const target = await resolveCapabilityTarget(task.capability, ctx.userId);
+            // 서버 공용 키는 check-only 가 아니라 **원자적 예약**(T24) — 동시 요청이 각각 통과해 총한도를 넘지 못한다
+            if (target.costOwner === 'server' && target.serverBudget) {
+                const r = await reserveServerKeyBudget(target.providerId, SERVER_KEY_MEDIA_RESERVE_TOKENS, target.serverBudget.dailyTokenLimit, target.serverBudget.monthlyTokenLimit, now);
+                if ('rejected' in r) { rejected.set(task.id, `[budget] ${r.rejected}`); continue; }
+                reservations.serverKeys.set(task.id, r.reservation);
+            }
             targets.set(task.id, target);
             handles.set(task.id, handle);
             if (target.providerId === 'local-llm') hasLocal = true;
@@ -104,10 +122,11 @@ export async function preflightPlan(plan: ValidatedPlan, ctx: ExecContext): Prom
         }
     }
 
-    // 로컬 vLLM 용량 보호 — per-user 토큰 쿼터(종전 LLMClient 경로와 같은 정책)
+    // 로컬 vLLM 용량 보호 — per-user 토큰 쿼터를 **선예약**(종전 check-only → reserve/settle, 계획서 9.2). 실측은 orchestrate 가 정산
     if (hasLocal && ctx.userId) {
+        const localTasks = [...targets.values()].filter((t) => t.providerId === 'local-llm').length;
         try {
-            await checkUserQuota(ctx.userId, Date.now());
+            reservations.user = await reserveUserQuota(ctx.userId, localTasks * CAPABILITY_LIMITS.TEXT_MAX_TOKENS, now);
         } catch (err) {
             if (err instanceof QuotaExceededError) {
                 for (const [id, t] of targets) if (t.providerId === 'local-llm' && !rejected.has(id)) rejected.set(id, `[quota] ${err.message}`);
@@ -117,5 +136,5 @@ export async function preflightPlan(plan: ValidatedPlan, ctx: ExecContext): Prom
         }
     }
     for (const id of rejected.keys()) handles.delete(id);
-    return { rejected, targets, hasLocal, handles };
+    return { rejected, targets, hasLocal, handles, reservations };
 }

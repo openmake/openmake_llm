@@ -12,6 +12,9 @@
  */
 import type { PlanTask } from '../services/orchestrator/plan-schema';
 import type { ExecContext, ExecutorOutput } from '../services/orchestrator/types';
+import type { ApprovedInvocationHandle } from './admission';
+import type { RestrictedModelInvoker } from '../runtime-ports/model-invoker';
+import type { ScopedArtifactStore } from '../runtime-ports/artifact-store';
 
 export type CapabilityId = string;
 export type AddonId = string;
@@ -55,9 +58,21 @@ export interface ModelDescriptor {
 
 export type SupportVerdict = { supported: true } | { supported: false; reason: string };
 
+/**
+ * Add-on handler 가 받는 실행 문맥(P04) — 승인 handle · 제한 호출 포트 · scoped Artifact 포트. 종전 `ExecContext` 에서
+ * **`targets`(헤더·키 포함)·`handles` 를 뺀** 것이다: raw 자격증명은 `model` 포트 안에만 있다(T08).
+ * Base 소유(legacy bridge) 실행기는 전환 기간 동안 `targets` 를 덧붙여 받는다(executor.ts).
+ */
+export interface CapabilityContext extends Omit<ExecContext, 'targets' | 'handles'> {
+    invocation: ApprovedInvocationHandle;
+    model: RestrictedModelInvoker;
+    artifacts: ScopedArtifactStore;
+    traceId: string;
+}
+
 export interface CapabilityHandler {
-    /** 실행 — P02 는 기존 실행기 시그니처 그대로. ctx.targets 의 승인 대상만 쓴다(재해석 금지) */
-    execute(task: PlanTask, ctx: ExecContext): Promise<ExecutorOutput>;
+    /** 실행 — ctx 는 승인 handle 기반 문맥. 임의 모델·Provider·URL 을 고를 수 없다(포트가 거절) */
+    execute(task: PlanTask, ctx: CapabilityContext): Promise<ExecutorOutput>;
     /** 계획 인자 정규화 hook(원문 우선 보정 등). 원문 의미를 조용히 바꾸지 않는다 — 진단은 로그로 */
     normalizePlanInput?(task: PlanTask, userMessage: string): PlanTask;
     /** 이 driver 가 배정된 모델을 지원하는가 — 배정 저장·실행 전 검사 */

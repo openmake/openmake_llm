@@ -2,8 +2,7 @@
  * @module services/orchestrator/media-io
  * @description executor 공용 미디어 입출력 — 첨부(base64 / `/generated` 경로 / https) 로드, dataURL 변환, 결과 저장.
  */
-import * as fs from 'node:fs';
-import { resolveGeneratedPath, saveGeneratedFile } from '../../tools/generated-media';
+import { saveGeneratedArtifact, scopedArtifactStore } from '../../runtime-ports/artifact-store';
 import { downloadProviderUrl } from './http-call';
 import { inferImageMime } from '../../utils/image-mime';
 import { recordCost } from '../cost/cost-ledger-service';
@@ -29,6 +28,8 @@ interface LoadOptions {
     maxBytes: number;
     /** 허용 content-type 접두(https 다운로드 검증) */
     allowTypes: readonly string[];
+    /** `/generated/<name>` 을 읽는 주체 — 소유자만 자기 산출물을 읽는다(P04). 없으면 게스트 공개분만 */
+    userId?: string;
 }
 
 export async function loadAttachment(a: OrchestratorAttachment, opts: LoadOptions): Promise<LoadedMedia> {
@@ -44,13 +45,10 @@ export async function loadAttachment(a: OrchestratorAttachment, opts: LoadOption
     }
     if (a.urlPath) {
         if (a.urlPath.startsWith('/generated/')) {
-            const abs = resolveGeneratedPath(a.urlPath);
-            if (!abs) throw new Error(`찾을 수 없는 파일: ${a.urlPath}`);
-            const size = fs.statSync(abs).size;
-            if (size > opts.maxBytes) throw new Error(`파일 '${a.urlPath}' 가 너무 큽니다 (${size}B > ${opts.maxBytes}B)`);
-            const bytes = fs.readFileSync(abs);
-            const mime = a.mime || mimeFromName(a.urlPath) || inferImageMime(bytes.toString('base64', 0, 64));
-            return { bytes, mime, name: a.urlPath.split('/').pop() ?? a.name, dataUrl: `data:${mime};base64,${bytes.toString('base64')}` };
+            // 소유권 판정을 지나는 읽기(P04) — 다른 사용자의 산출물·삭제본·격리본은 여기서 거절된다
+            const loaded = await scopedArtifactStore({ userId: opts.userId }).read(a.urlPath, opts.maxBytes);
+            const mime = a.mime || loaded.mime || mimeFromName(a.urlPath) || inferImageMime(loaded.bytes.toString('base64', 0, 64));
+            return { bytes: loaded.bytes, mime, name: loaded.name, dataUrl: `data:${mime};base64,${loaded.bytes.toString('base64')}` };
         }
         if (/^https?:\/\//i.test(a.urlPath)) {
             // SSRF 고정 fetch + content-type·크기 검증 (공통 호출 경계)
@@ -82,21 +80,27 @@ export function kindFromMime(mime: string): OrchestratorAttachment['kind'] {
     return 'other';
 }
 
-export function saveImage(buf: Buffer, alt: string, prefix = 'img', userId?: string): TaskMedia {
-    const { urlPath } = saveGeneratedFile(prefix, 'png', buf);
-    recordGeneratedStorageCost(userId, buf.length);
+/** 저장 scope — 소유자·대화·capability. 신규 파일은 전부 비공개 디렉토리 + 소유 레코드(P04) */
+export interface SaveScope { userId?: string; sessionId?: string; capability?: string }
+
+export async function saveImage(buf: Buffer, alt: string, prefix = 'img', scope: SaveScope | string = {}): Promise<TaskMedia> {
+    const s = typeof scope === 'string' ? { userId: scope } : scope;
+    const { urlPath } = await saveGeneratedArtifact(s, { kind: 'image', prefix, ext: 'png', bytes: buf, mime: 'image/png' });
+    recordGeneratedStorageCost(s.userId, buf.length);
     return { kind: 'image', urlPath, markdown: `![${alt.slice(0, 80).replace(/[[\]]/g, '')}](${urlPath})` };
 }
 
-export function saveAudio(buf: Buffer, ext: string, label: string, userId?: string): TaskMedia {
-    const { urlPath } = saveGeneratedFile('tts', ext, buf);
-    recordGeneratedStorageCost(userId, buf.length);
+export async function saveAudio(buf: Buffer, ext: string, label: string, scope: SaveScope | string = {}): Promise<TaskMedia> {
+    const s = typeof scope === 'string' ? { userId: scope } : scope;
+    const { urlPath } = await saveGeneratedArtifact(s, { kind: 'audio', prefix: 'tts', ext, bytes: buf, mime: mimeFromName(`x.${ext}`) });
+    recordGeneratedStorageCost(s.userId, buf.length);
     return { kind: 'audio', urlPath, markdown: `[🔊 ${label}](${urlPath})` };
 }
 
-export function saveVideo(buf: Buffer, ext: string, label: string, userId?: string): TaskMedia {
-    const { urlPath } = saveGeneratedFile('video', ext, buf);
-    recordGeneratedStorageCost(userId, buf.length);
+export async function saveVideo(buf: Buffer, ext: string, label: string, scope: SaveScope | string = {}): Promise<TaskMedia> {
+    const s = typeof scope === 'string' ? { userId: scope } : scope;
+    const { urlPath } = await saveGeneratedArtifact(s, { kind: 'video', prefix: 'video', ext, bytes: buf, mime: mimeFromName(`x.${ext}`) });
+    recordGeneratedStorageCost(s.userId, buf.length);
     return { kind: 'video', urlPath, markdown: `[🎬 ${label}](${urlPath})` };
 }
 

@@ -23,7 +23,7 @@ export const visionExecutor: CapabilityExecutor = async (task, ctx) => {
         { type: 'text', text: task.instruction || (ctx.lang === 'ko' ? '첨부 이미지를 서술하세요.' : 'Describe the attached image.') },
     ];
     for (const a of atts) {
-        const loaded = await loadAttachment(a, { timeoutMs: CAPABILITY_LIMITS.VISION_TIMEOUT_MS, signal: ctx.signal, maxBytes: CAPABILITY_LIMITS.IMAGE_EDIT_MAX_INPUT_BYTES, allowTypes: ['image/'] });
+        const loaded = await loadAttachment(a, { timeoutMs: CAPABILITY_LIMITS.VISION_TIMEOUT_MS, signal: ctx.signal, maxBytes: CAPABILITY_LIMITS.IMAGE_EDIT_MAX_INPUT_BYTES, allowTypes: ['image/'], userId: ctx.userId });
         content.push({ type: 'image_url', image_url: { url: loaded.dataUrl, ...(target.params.detail ? { detail: target.params.detail } : {}) } });
     }
     const system = task.capability === 'vision.ocr' ? (ctx.lang === 'ko' ? OCR_KO : OCR_EN) : getVisionBridgeSystemPrompt(ctx.lang);

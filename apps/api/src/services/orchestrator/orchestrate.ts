@@ -21,7 +21,8 @@ import { admitCapability, ADMISSION_LABEL } from '../../capability-contract/admi
 import { OrchestratorJobsRepository } from '../../data/repositories/orchestrator-jobs-repo';
 import { ExternalKeysRepository } from '../../data/repositories/external-keys-repo';
 import { ServerExternalKeysRepository } from '../../data/repositories/server-external-keys-repo';
-import { recordServerKeyUsage } from '../server-key-quota';
+import { recordServerKeyUsage, settleServerKeyReservation } from '../server-key-quota';
+import type { PreflightReservations } from './preflight';
 import { recordLlmCost, recordCost } from '../cost/cost-ledger-service';
 import type { CostKind, CostUnit } from '../../config/cost-kinds';
 
@@ -32,7 +33,7 @@ const UNIT_COST_KIND: Partial<Record<'images' | 'chars' | 'audio_bytes' | 'video
     video_seconds: { kind: 'media.video.generate', unit: 'second' },
 };
 import type { CapabilityTarget } from './capability-resolver';
-import { recordUserUsage } from '../../llm/user-quota';
+import { recordUserUsage, settleUserQuota } from '../../llm/user-quota';
 import { isExternalFullId } from '../../config/model-roles';
 import { kindFromMime, mimeFromName } from './media-io';
 import type { PlannerAttachmentMeta } from '../../prompts/orchestrator-planner';
@@ -204,10 +205,19 @@ function fallbackNote(lang: string, reason: string): string {
  * 사용량 관측 — 외부 BYOK 는 기존 external_provider_usage(비용 대시보드), 로컬은 per-user 토큰 쿼터에 누적.
  * provider 가 usage 를 안 주면 기록하지 않는다(0 으로 간주 금지). 비토큰 단위(이미지 수 등)는 셰도우 task_results 에만.
  */
-export function recordUsage(userId: string | undefined, results: TaskResult[], targets?: Map<string, CapabilityTarget>): void {
+export function recordUsage(userId: string | undefined, results: TaskResult[], targets?: Map<string, CapabilityTarget>, reservations?: PreflightReservations): void {
     if (!userId) return;
     const now = Date.now();
     let localTokens = 0;
+    // 예약(P04) 정산 — 서버 키: usage 를 준 작업만 실측으로 보정(없으면 예약분 유지 = unknown 을 무료로 정산하지 않는다)
+    for (const r of results) {
+        const res = reservations?.serverKeys.get(r.taskId);
+        if (!res) continue;
+        const u = r.usage;
+        const tokens = u && (u.promptTokens !== undefined || u.completionTokens !== undefined) ? (u.promptTokens ?? 0) + (u.completionTokens ?? 0) : null;
+        // 전송 전 실패(skipped·승인 거절)는 전액 환불, 응답 유실·usage 없음은 예약 유지(T25)
+        void settleServerKeyReservation(res, r.status === 'skipped' || (r.status === 'failed' && /^\[(disabled|state_unknown|unapproved|expired|not_ready|unassigned|quota|budget|input)\]/.test(r.text)) ? 0 : tokens).catch(() => undefined);
+    }
     for (const r of results) {
         const u = r.usage;
         // 비토큰 산출 단위(이미지 장수·합성 글자·영상 초) — 원장(F25 PR-4). 단가는 cost_rates(kind×모델), 없으면 0 으로 기록만.
@@ -226,7 +236,8 @@ export function recordUsage(userId: string | undefined, results: TaskResult[], t
             recordLlmCost({ userId, model: r.model, external: true, costOwner: owner, promptTokens: inTok, completionTokens: outTok, ctx: { feature: `orchestrator:${r.capability}` } });
             if (owner === 'server') {
                 void new ServerExternalKeysRepository(getPool()).recordUsage({ providerId, modelId, role: `capability:${r.capability}`, callerUserId: userId, inputTokens: inTok, outputTokens: outTok });
-                void recordServerKeyUsage(providerId, inTok + outTok, now).catch(() => undefined);
+                // 예약이 있으면 위에서 정산했다 — 이중 계상 금지
+                if (!reservations?.serverKeys.has(r.taskId)) void recordServerKeyUsage(providerId, inTok + outTok, now).catch(() => undefined);
             } else {
                 void new ExternalKeysRepository(getPool()).recordUsage({ userId, providerId, modelId, inputTokens: inTok, outputTokens: outTok, durationMs: r.ms }).catch(() => undefined);
             }
@@ -235,7 +246,8 @@ export function recordUsage(userId: string | undefined, results: TaskResult[], t
             recordLlmCost({ userId, model: r.model, external: false, costOwner: 'user', promptTokens: inTok, completionTokens: outTok, ctx: { feature: `orchestrator:${r.capability}` } });
         }
     }
-    if (localTokens > 0) void recordUserUsage(userId, localTokens, now).catch(() => undefined);
+    if (reservations?.user) void settleUserQuota(reservations.user, localTokens).catch(() => undefined);
+    else if (localTokens > 0) void recordUserUsage(userId, localTokens, now).catch(() => undefined);
 }
 
 interface RunOrchestratorInput {
@@ -292,7 +304,7 @@ export async function runOrchestrator(input: RunOrchestratorInput): Promise<Orch
     }
     const summary = await executePlan(plan, ctx);
     const media: TaskMedia[] = summary.results.filter((r) => r.ok).flatMap((r) => r.media);
-    recordUsage(userId, summary.results, pre.targets);
+    recordUsage(userId, summary.results, pre.targets, pre.reservations);
     onProgress?.({ type: 'orchestrator_status', phase: summary.cancelled ? 'skipped' : 'synthesizing', detail: `${summary.ok}/${summary.results.length}` });
     record({
         requestId: input.requestId, userId, plannerModel: planned.model, plannerMs: planned.ms, plannerOk: true, complexity: 'multi', plan,
@@ -322,7 +334,7 @@ export async function runSingleCapabilityTask(input: { capability: Capability; i
     ctx.targets = pre.targets;
     ctx.handles = pre.handles;
     const summary = await executePlan(v.plan, ctx);
-    recordUsage(input.userId, summary.results, pre.targets);
+    recordUsage(input.userId, summary.results, pre.targets, pre.reservations);
     const r = summary.results[0];
     if (!r) throw new Error('실행 결과가 없습니다');
     return r;

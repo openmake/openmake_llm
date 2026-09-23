@@ -11,7 +11,7 @@ jest.mock('../../server-key-quota', () => ({
 const serverUsage = jest.fn(async (_i: Record<string, unknown>) => undefined); const userUsage = jest.fn(async (_i: Record<string, unknown>) => undefined);
 jest.mock('../../../data/repositories/server-external-keys-repo', () => ({ ServerExternalKeysRepository: class { recordUsage = serverUsage; } }));
 jest.mock('../../../data/repositories/external-keys-repo', () => ({ ExternalKeysRepository: class { recordUsage = userUsage; } }));
-jest.mock('../../../llm/user-quota', () => ({ checkUserQuota: async () => undefined, recordUserUsage: async () => undefined }));
+jest.mock('../../../llm/user-quota', () => ({ checkUserQuota: async () => undefined, recordUserUsage: async () => undefined, reserveUserQuota: async () => null, settleUserQuota: async () => undefined }));
 
 import { resolveCapabilityTarget, clearGlobalCapabilityCache } from '../capability-resolver';
 import { coerceJobFollowup, recordUsage } from '../orchestrate';

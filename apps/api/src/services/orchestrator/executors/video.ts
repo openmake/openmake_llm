@@ -180,7 +180,7 @@ export const videoGenerateExecutor: CapabilityExecutor = async (task, ctx) => {
         }
         const { bytes, contentType } = downloaded;
         const ext = contentType.includes('webm') || url.toLowerCase().endsWith('.webm') ? 'webm' : 'mp4';
-        const media = saveVideo(bytes, ext, ctx.lang === 'ko' ? '영상 보기' : 'Watch', ctx.userId);
+        const media = await saveVideo(bytes, ext, ctx.lang === 'ko' ? '영상 보기' : 'Watch', { userId: ctx.userId, sessionId: ctx.sessionId, capability: 'video.generate' });
         // 완료 표시는 응답을 막지 않는다(결과를 쓰지 않음 — 실패해도 다음 요청이 재다운로드로 자기 복구). 제출 시 upsertPending 만 await(persisted 판정).
         if (repo && ctx.userId) void repo.markDone(ctx.userId, target.providerId, jobId, 'completed', media.urlPath).catch((err) => logger.warn(`[Video] 완료 저장 실패 ${jobId}(다음 요청은 재다운로드): ${err instanceof Error ? err.message : String(err)}`));
         return { ok: true, status: 'completed', text: ctx.lang === 'ko' ? `영상 생성 완료: ${media.urlPath}` : `Video generated: ${media.urlPath}`, media: [media], model: target.fullId, job, usage: { units: { kind: 'video_seconds', count: Number(view.raw.seconds ?? 0) || 0 } } } satisfies ExecutorOutput;

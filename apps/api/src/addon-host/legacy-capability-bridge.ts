@@ -15,11 +15,10 @@ import {
 } from '../config/capabilities';
 import { BASE_CAPABILITY_OWNER, type CapabilityDefinition, type CapabilityHandler } from '../capability-contract/types';
 import { getCapabilityRegistry, registerCapabilities } from '../runtime-ports/capability-runtime';
-import type { CapabilityExecutor } from '../services/orchestrator/types';
+import type { CapabilityExecutor, ExecContext } from '../services/orchestrator/types';
 import { UnsupportedCapabilityError } from '../services/orchestrator/executors/unsupported-error';
 import { textExecutor } from '../services/orchestrator/executors/text';
 import { visionExecutor } from '../services/orchestrator/executors/vision';
-import { imageGenerateExecutor, imageEditExecutor } from '../services/orchestrator/executors/image';
 import { audioTranscribeExecutor, audioSpeechExecutor } from '../services/orchestrator/executors/audio';
 import { videoGenerateExecutor } from '../services/orchestrator/executors/video';
 import { musicGenerateExecutor } from '../services/orchestrator/executors/music';
@@ -31,8 +30,6 @@ const LEGACY_EXECUTORS: Partial<Record<Capability, CapabilityExecutor>> = {
     'text.code': textExecutor,
     'vision.describe': visionExecutor,
     'vision.ocr': visionExecutor,
-    'image.generate': imageGenerateExecutor,
-    'image.edit': imageEditExecutor,
     'audio.transcribe': audioTranscribeExecutor,
     'audio.speech': audioSpeechExecutor,
     'music.generate': musicGenerateExecutor,
@@ -90,14 +87,15 @@ export function legacyCapabilityDefinition(id: Capability): CapabilityDefinition
 
 function legacyHandler(id: Capability): CapabilityHandler {
     const ex = UNSUPPORTED_CAPABILITIES.has(id) ? undefined : LEGACY_EXECUTORS[id];
-    return { execute: ex ?? (async () => { throw new UnsupportedCapabilityError(id); }) };
+    // legacy 실행기는 ExecContext(+targets)를 받는다 — executor.ts 가 Base 소유에 한해 targets 를 덧붙인다
+    return { execute: ex ? (task, ctx) => ex(task, ctx as unknown as ExecContext) : (async () => { throw new UnsupportedCapabilityError(id); }) };
 }
 
 /**
  * Base 가 소유하는 capability — 전환이 끝난 미디어 생성 ID 는 여기서 빠진다(그 소유 add-on 만 등록한다).
- * P02 시점: 전부 Base(16개). P04 부터 image.generate·image.edit 제외.
+ * P04 부터 image.generate·image.edit 은 image-runtime add-on 소유다 — 그 add-on 이 꺼지면 Registry 에 없어 세 경로 모두 거절된다.
  */
-export const LEGACY_BRIDGE_CAPABILITIES: readonly Capability[] = CAPABILITIES;
+export const LEGACY_BRIDGE_CAPABILITIES: readonly Capability[] = CAPABILITIES.filter(c => !c.startsWith('image.'));
 
 let bridged = false;
 
