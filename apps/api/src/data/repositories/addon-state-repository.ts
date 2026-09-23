@@ -96,10 +96,11 @@ export class AddonStateRepository {
         const desired = desiredStateFor(state);
         const r = await this.pool.query<AddonInstallationRow>(
             `UPDATE addon_installations
-                SET state = $2,
-                    desired_state = COALESCE($4, desired_state),
+                SET state = $2::varchar,
+                    desired_state = COALESCE($4::varchar, desired_state),
                     failure_reason = $3,
-                    last_failure_code = CASE WHEN $2 = 'failed' THEN last_failure_code ELSE NULL END,
+                    -- $2 를 컬럼 값과 비교식에 함께 쓰면 pg 가 타입을 하나로 추론하지 못한다(varchar vs text) — 명시 캐스트
+                    last_failure_code = CASE WHEN $2::varchar = 'failed' THEN last_failure_code ELSE NULL END,
                     state_revision = state_revision + 1,
                     updated_at = NOW()
               WHERE addon_id = $1
