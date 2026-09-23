@@ -7,6 +7,74 @@ import OpenMakeKit
 /// AVPlayer 가 재생하는 컨테이너 — WebM(VP8/VP9)은 iOS 네이티브 재생이 불가하므로 Safari/공유로 넘긴다.
 private let nativePlayableVideo: Set<String> = ["mp4", "mov", "m4v"]
 
+/// 공유 시트로 넘길 내려받은 파일 — `.sheet(item:)` 식별용
+struct DownloadedMediaFile: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+/// 생성 미디어 저장 — `ShareLink(item: url)` 은 **URL** 을 공유해 "파일에 저장" 이 링크만 남긴다.
+/// 파일을 임시 디렉토리로 내려받아 공유 시트에 넘겨 파일·사진 앱 저장이 실제 파일로 되게 한다.
+struct GeneratedMediaSaveButton<Label: View>: View {
+    let url: URL
+    @ViewBuilder let label: () -> Label
+    @State private var downloading = false
+    @State private var file: DownloadedMediaFile?
+    @State private var failed = false
+
+    var body: some View {
+        Button {
+            Task { await download() }
+        } label: {
+            if downloading {
+                ProgressView().tint(Instrument.accent)
+            } else {
+                label()
+            }
+        }
+        .disabled(downloading)
+        .accessibilityLabel("다운로드")
+        .sheet(item: $file) { item in
+            ActivityShareSheet(items: [item.url])
+        }
+        .alert("다운로드하지 못했습니다", isPresented: $failed) {
+            Button("확인", role: .cancel) {}
+        }
+    }
+
+    private func download() async {
+        downloading = true
+        defer { downloading = false }
+        do {
+            let (temp, response) = try await URLSession.shared.download(from: url)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                failed = true
+                return
+            }
+            // 원래 파일명·확장자를 유지해야 공유 시트가 형식(이미지·영상·음원)에 맞는 저장 동작을 보여준다.
+            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("generated-media", isDirectory: true)
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let dest = dir.appendingPathComponent(url.lastPathComponent)
+            try? FileManager.default.removeItem(at: dest)
+            try FileManager.default.moveItem(at: temp, to: dest)
+            file = DownloadedMediaFile(url: dest)
+        } catch {
+            failed = true
+        }
+    }
+}
+
+/// UIActivityViewController 래퍼 — SwiftUI ShareLink 는 비동기로 준비한 파일을 바로 띄우지 못한다.
+struct ActivityShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+
 struct GeneratedVideoCard: View {
     let title: String
     let source: String
@@ -48,8 +116,8 @@ struct GeneratedVideoCard: View {
                     } label: {
                         Label("Safari 에서 열기", systemImage: "safari")
                     }
-                    ShareLink(item: url) {
-                        Label("공유", systemImage: "square.and.arrow.up")
+                    GeneratedMediaSaveButton(url: url) {
+                        Label("다운로드", systemImage: "arrow.down.circle")
                     }
                 }
                 .font(.system(size: 12.5, weight: .medium))
@@ -107,13 +175,12 @@ struct GeneratedAudioCard: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
-                ShareLink(item: url) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 14))
+                GeneratedMediaSaveButton(url: url) {
+                    Image(systemName: "arrow.down.circle")
+                        .font(.system(size: 16))
                         .foregroundStyle(Instrument.muted)
                         .frame(width: 36, height: 36)
                 }
-                .accessibilityLabel("음성 공유")
             }
             .padding(12)
             .background(Instrument.surface, in: RoundedRectangle(cornerRadius: 14))
