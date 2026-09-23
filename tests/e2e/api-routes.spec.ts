@@ -5,16 +5,10 @@
 
 import { test, expect } from '@playwright/test';
 
+// 구 /api/memories·/api/documents·/api/kb 는 RAG·MemoryService 폐기로 제거됐다 — 메모리는 /api/users/me/memories
 test.describe('메모리 API', () => {
     test('메모리 목록 조회 — 인증 없으면 401 반환', async ({ request }) => {
-        const response = await request.get('/api/memories');
-        expect([401, 403]).toContain(response.status());
-    });
-});
-
-test.describe('문서 API', () => {
-    test('문서 목록 조회 — 인증 없으면 401/403 반환', async ({ request }) => {
-        const response = await request.get('/api/documents');
+        const response = await request.get('/api/users/me/memories');
         expect([401, 403]).toContain(response.status());
     });
 });
@@ -22,13 +16,6 @@ test.describe('문서 API', () => {
 test.describe('감사 로그 API', () => {
     test('감사 로그 조회 — 인증 없으면 401/403 반환', async ({ request }) => {
         const response = await request.get('/api/audit');
-        expect([401, 403]).toContain(response.status());
-    });
-});
-
-test.describe('지식베이스 API', () => {
-    test('KB 목록 조회 — 인증 없으면 401/403 반환', async ({ request }) => {
-        const response = await request.get('/api/kb');
         expect([401, 403]).toContain(response.status());
     });
 });
