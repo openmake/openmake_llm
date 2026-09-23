@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.85.0](https://github.com/openmake/openmake_llm/compare/v1.84.0...v1.85.0) (2026-09-23)
+
+
+### ✨ 기능
+
+* **capability:** Base·Add-on 통합 P01–P10 — Capability Registry·실행 승인·Artifact 소유권·Job Runtime·미디어 runtime add-on ([#984](https://github.com/openmake/openmake_llm/issues/984)) ([aba3b4a](https://github.com/openmake/openmake_llm/commit/aba3b4a1305e5c1ba14116e896b1660986b4da4c))
+
 ## [1.84.0](https://github.com/openmake/openmake_llm/compare/v1.83.0...v1.84.0) (2026-09-23)
 
 
