@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.85.1](https://github.com/openmake/openmake_llm/compare/v1.85.0...v1.85.1) (2026-09-23)
+
+
+### 🐛 버그 수정
+
+* **addon:** 관리자 add-on 토글 SQL 파라미터 타입 추론 실패 — setState 명시 캐스트 ([#986](https://github.com/openmake/openmake_llm/issues/986)) ([673b9a4](https://github.com/openmake/openmake_llm/commit/673b9a4a7cc07cbbb9ffe9edfd3e26c1335792ae))
+
 ## [1.85.0](https://github.com/openmake/openmake_llm/compare/v1.84.0...v1.85.0) (2026-09-23)
 
 
