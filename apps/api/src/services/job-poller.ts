@@ -26,7 +26,7 @@ import { createLogger } from '../utils/logger';
 const logger = createLogger('JobPoller');
 
 export interface PollerDeps {
-    repo: Pick<JobRuntimeRepository, 'claimDue' | 'transition'>;
+    repo: Pick<JobRuntimeRepository, 'claimDue' | 'transition' | 'renewLease'>;
     owner: string;
     /** job scope 의 실행 대상 해석 — 현재 배정·키로 포트를 만든다. 해석 불가·provider 불일치는 사유 문자열 */
     invokerFor(job: JobRecord, handle: ApprovedInvocationHandle): Promise<RestrictedModelInvoker | string>;
@@ -95,7 +95,9 @@ export async function advanceJob(job: JobRecord, token: number, deps: PollerDeps
         return 'failed';
     }
     // done → collecting(같은 token) → 결과 저장 → completed. 수집 실패는 생성 실패가 아니다
-    if (job.state !== 'collecting') await deps.repo.transition(job.id, 'collecting', { stage: 'collect' }, token);
+    // 수집 재시도 예산은 수집 단계 것만 센다 — 진입 시 폴링 단계의 실패 횟수를 비운다(일시 장애 동안 쌓인 폴링 실패가 수집을 곧바로 소진시켰다)
+    const collectRetries = job.state === 'collecting' ? job.retryCount : 0;
+    if (job.state !== 'collecting') await deps.repo.transition(job.id, 'collecting', { stage: 'collect', resetRetry: true }, token);
     try {
         const file = await found.driver.collect(io, result);
         const saved = await deps.saveResult(job, file);
@@ -103,23 +105,31 @@ export async function advanceJob(job: JobRecord, token: number, deps: PollerDeps
         if (!done) { logger.warn(`job ${job.id} 완료 쓰기 거절(fencing) — 다른 실행자가 이미 처리`); return 'fenced'; }
         return 'completed';
     } catch (err) {
-        const exhausted = job.retryCount + 1 >= JOB_RUNTIME.COLLECT_MAX_RETRIES;
+        const exhausted = collectRetries + 1 >= JOB_RUNTIME.COLLECT_MAX_RETRIES;
         await t('collecting', { stage: exhausted ? 'collect_exhausted' : 'collect_failed', errorCode: 'collect_failed', incrementRetry: true, nextPollAt: exhausted ? null : later(deps) });
-        logger.warn(`job ${job.id} 결과 수집 실패(${job.retryCount + 1}회): ${err instanceof Error ? err.message : String(err)}`);
+        logger.warn(`job ${job.id} 결과 수집 실패(${collectRetries + 1}회): ${err instanceof Error ? err.message : String(err)}`);
         return 'collect_failed';
     }
 }
 
 export async function runPollerTick(deps: PollerDeps): Promise<string[]> {
     const claimed = await deps.repo.claimDue(deps.owner, JOB_RUNTIME.LEASE_TTL_MS, JOB_RUNTIME.BATCH);
-    const out: string[] = [];
-    for (const { job, token } of claimed) {
-        try { out.push(await advanceJob(job, token, deps)); } catch (err) {
+    // job 끼리는 독립이라 병렬로 진행한다 — 한 job 의 긴 결과 내려받기(최대 수 분)가 다른 job 의 폴링을 막지 않게.
+    // 진행 중엔 TTL 의 1/3 마다 lease 를 연장한다(연장이 없으면 긴 수집 도중 lease 가 만료된다, 2026-09-24 운영 관측).
+    return Promise.all(claimed.map(async ({ job, token }) => {
+        const heartbeat = setInterval(() => {
+            void deps.repo.renewLease(job.id, deps.owner, token, JOB_RUNTIME.LEASE_TTL_MS)
+                .then((ok) => { if (!ok) logger.warn(`job ${job.id} lease 연장 실패 — 다른 실행자가 선점했을 수 있음`); })
+                .catch((err: unknown) => logger.warn(`job ${job.id} lease 연장 오류: ${err instanceof Error ? err.message : String(err)}`));
+        }, Math.max(1_000, Math.floor(JOB_RUNTIME.LEASE_TTL_MS / 3)));
+        heartbeat.unref();
+        try { return await advanceJob(job, token, deps); } catch (err) {
             logger.error(`job ${job.id} 진행 실패: ${err instanceof Error ? err.message : String(err)}`);
-            out.push('error');
+            return 'error';
+        } finally {
+            clearInterval(heartbeat);
         }
-    }
-    return out;
+    }));
 }
 
 function defaultDeps(): PollerDeps {

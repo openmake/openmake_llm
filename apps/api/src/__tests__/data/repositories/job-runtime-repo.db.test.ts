@@ -78,6 +78,28 @@ describeOrSkip('JobRuntimeRepository (TEMP orchestrator_jobs)', () => {
         expect((await repo.transition(job.id, 'collecting', { releaseLease: true }, second!.token))?.state).toBe('collecting');
     });
 
+    it('renewLease: 같은 실행자·같은 token 만 lease 를 연장하고, 연장된 lease 는 다른 실행자가 못 잡는다', async () => {
+        const { job } = await intent('k7');
+        await repo.transition(job.id, 'running', { externalJobId: 'ext-7' });
+        const first = await repo.acquireLease(job.id, 'w1', 1);
+        expect(await repo.renewLease(job.id, 'w2', first!.token, 60_000)).toBe(false);
+        expect(await repo.renewLease(job.id, 'w1', first!.token + 1, 60_000)).toBe(false);
+        expect(await repo.renewLease(job.id, 'w1', first!.token, 60_000)).toBe(true);
+        await new Promise((r) => setTimeout(r, 20));
+        expect(await repo.acquireLease(job.id, 'w2', 60_000)).toBeNull(); // 연장 없었다면 1ms 만료로 잡혔다
+    });
+
+    it('수집 소진 job 은 claimDue 가 다시 잡지 않고, resetRetry 는 재시도 횟수를 비운다', async () => {
+        await client.query(`UPDATE orchestrator_jobs SET state = 'failed' WHERE state IN ('running','collecting','cancel_requested')`);
+        const { job } = await intent('k8');
+        await repo.transition(job.id, 'running', { externalJobId: 'ext-8', incrementRetry: true });
+        expect((await repo.transition(job.id, 'collecting', { stage: 'collect', resetRetry: true }))?.retryCount).toBe(0);
+        await repo.transition(job.id, 'collecting', { stage: 'collect_exhausted', nextPollAt: null, releaseLease: true });
+        expect(await repo.claimDue('w1', 60_000, 10)).toEqual([]);
+        await repo.transition(job.id, 'collecting', { stage: 'collect_failed' });
+        expect((await repo.claimDue('w1', 60_000, 10)).map((x) => x.job.id)).toEqual([job.id]);
+    });
+
     it('T14: 두 실행자의 claimDue 는 같은 job 을 중복 선점하지 않는다', async () => {
         await client.query(`UPDATE orchestrator_jobs SET state = 'failed' WHERE state IN ('running','collecting','cancel_requested')`);
         const { job } = await intent('k6');

@@ -90,6 +90,8 @@ export interface TransitionPatch {
     errorCode?: string | null;
     nextPollAt?: Date | null;
     incrementRetry?: boolean;
+    /** 재시도 횟수를 0 으로 — 단계가 바뀔 때(running→collecting) 앞 단계의 폴링 실패가 수집 예산을 먹지 않게 */
+    resetRetry?: boolean;
     releaseLease?: boolean;
 }
 
@@ -127,7 +129,7 @@ export class JobRuntimeRepository extends BaseRepository {
                 artifact_ids = COALESCE($11, artifact_ids),
                 error_code = CASE WHEN $12::boolean THEN $13 ELSE error_code END,
                 next_poll_at = CASE WHEN $14::boolean THEN $15::timestamptz ELSE next_poll_at END,
-                retry_count = retry_count + CASE WHEN $16::boolean THEN 1 ELSE 0 END,
+                retry_count = CASE WHEN $20::boolean THEN 0 ELSE retry_count END + CASE WHEN $16::boolean THEN 1 ELSE 0 END,
                 lease_owner = CASE WHEN $17::boolean THEN NULL ELSE lease_owner END,
                 lease_expires_at = CASE WHEN $17::boolean THEN NULL ELSE lease_expires_at END,
                 updated_at = NOW()
@@ -142,7 +144,7 @@ export class JobRuntimeRepository extends BaseRepository {
                 'errorCode' in patch, patch.errorCode ?? null,
                 'nextPollAt' in patch, patch.nextPollAt ? patch.nextPollAt.toISOString() : null,
                 patch.incrementRetry === true, patch.releaseLease === true,
-                from, fencingToken ?? null],
+                from, fencingToken ?? null, patch.resetRetry === true],
         );
         return r.rows[0] ? map(r.rows[0]) : null;
     }
@@ -206,6 +208,19 @@ export class JobRuntimeRepository extends BaseRepository {
         return { job, token: job.fencingToken };
     }
 
+    /**
+     * lease 연장(heartbeat) — 같은 실행자·같은 token 일 때만 만료 시각을 민다. 영상 내려받기처럼 한 걸음이 TTL 보다 길 때
+     * lease 가 만료돼 다른 실행자가 같은 job 을 잡는(중복 다운로드·완료 거절) 것을 막는다. 연장 실패(false)는 lease 를 잃었다는 뜻.
+     */
+    async renewLease(id: string, owner: string, token: number, ttlMs: number): Promise<boolean> {
+        const r = await this.query(
+            `UPDATE orchestrator_jobs SET lease_expires_at = NOW() + ($4 || ' milliseconds')::interval
+              WHERE id = $1 AND lease_owner = $2 AND fencing_token = $3::bigint`,
+            [id, owner, token, String(ttlMs)],
+        );
+        return (r.rowCount ?? 0) > 0;
+    }
+
     /** 폴링 대상 선점(P07b) — 기한이 된 실행 중 job 을 lease 와 함께 가져온다(다중 실행자 SKIP LOCKED) */
     async claimDue(owner: string, ttlMs: number, limit: number): Promise<Array<{ job: JobRecord; token: number }>> {
         const r = await this.query(
@@ -216,6 +231,9 @@ export class JobRuntimeRepository extends BaseRepository {
                      WHERE state IN ('running', 'collecting', 'cancel_requested') AND job_id IS NOT NULL
                        AND (next_poll_at IS NULL OR next_poll_at <= NOW())
                        AND (lease_expires_at IS NULL OR lease_expires_at < NOW())
+                       -- 수집 재시도를 다 쓴 job 은 보존만 한다(provider 결과는 남아 있을 수 있다) — null next_poll_at 을
+                       -- "즉시 기한" 으로 읽어 매 tick 재다운로드하던 루프 방지(2026-09-24 운영 관측)
+                       AND stage IS DISTINCT FROM 'collect_exhausted'
                      ORDER BY next_poll_at NULLS FIRST, id
                      LIMIT $3
                      FOR UPDATE SKIP LOCKED)
