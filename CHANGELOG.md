@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.85.4](https://github.com/openmake/openmake_llm/compare/v1.85.3...v1.85.4) (2026-09-23)
+
+
+### ♻️ 리팩터링
+
+* 하드코딩 전수 제거 — 프롬프트·LLM 파라미터·임계값·타이머를 config/prompts 로 외부화 ([#994](https://github.com/openmake/openmake_llm/issues/994)) ([714a32e](https://github.com/openmake/openmake_llm/commit/714a32efcac59b7882c4b2195407bfe5ed30f655))
+
 ## [1.85.3](https://github.com/openmake/openmake_llm/compare/v1.85.2...v1.85.3) (2026-09-23)
 
 
