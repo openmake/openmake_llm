@@ -7,13 +7,15 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/primit
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { fetchModels, type ModelEntry } from "@/lib/models-api";
-import { compactParams, DEFAULT_VALUE, type CapabilityEffective, type CapabilityOverride } from "./capability-shared";
+import { catalogMap, compactParams, DEFAULT_VALUE, type CapabilityCatalog, type CapabilityEffective, type CapabilityOverride } from "./capability-shared";
 import { CapabilityGroupsEditor } from "./capability-groups";
 
 interface CapabilityModelsPayload {
   overrides: CapabilityOverride[];
   effective: CapabilityEffective[];
   assignableCapabilities: string[];
+  /** Registry 카탈로그(P03) — 구서버 응답에는 없다 */
+  catalog?: CapabilityCatalog;
 }
 
 /**
@@ -28,6 +30,7 @@ export function CapabilityModelsSection() {
   const [overrides, setOverrides] = useState<CapabilityOverride[]>([]);
   const [effective, setEffective] = useState<CapabilityEffective[]>([]);
   const [capabilities, setCapabilities] = useState<string[]>([]);
+  const [catalog, setCatalog] = useState<CapabilityCatalog | undefined>(undefined);
   const [models, setModels] = useState<ModelEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -51,6 +54,7 @@ export function CapabilityModelsSection() {
       setParamDrafts(drafts);
       setEffective(res?.data?.effective ?? []);
       setCapabilities(res?.data?.assignableCapabilities ?? []);
+      setCatalog(res?.data?.catalog);
       setModels(modelsRes.models);
     } catch (e) {
       setError(e instanceof Error ? e.message : t("loadError"));
@@ -133,6 +137,7 @@ export function CapabilityModelsSection() {
             onParamChange={setParam}
             onParamApply={(capability) => void assign([capability], mapped.get(capability) ?? DEFAULT_VALUE, capability)}
             labels={{ assigned: t("assignedBadge") }}
+            catalog={catalogMap(catalog)}
           />
         )}
         {!loading && capabilities.length === 0 && !error && (

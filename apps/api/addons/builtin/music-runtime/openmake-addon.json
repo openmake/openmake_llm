@@ -1,0 +1,20 @@
+{
+  "id": "music-runtime",
+  "name": "OpenMake Music Runtime",
+  "version": "1.0.0",
+  "description": "음악 생성(music.generate) — DGX ACE-Step 1.5, LiteLLM pass-through(/music/v1/chat/completions)",
+  "requires": {
+    "openmake": ">=1.84.0 <2.0.0",
+    "capabilityContract": 1
+  },
+  "scope": "system",
+  "kind": "runtime",
+  "order": 4,
+  "components": {},
+  "provides": {
+    "capabilities": ["music.generate"]
+  },
+  "entry": {
+    "runtime": "boot#startMusicRuntime"
+  }
+}

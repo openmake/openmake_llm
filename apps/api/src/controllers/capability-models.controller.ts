@@ -27,6 +27,7 @@ import {
     resolveCapabilityTarget, validateCapabilityAssignment, CapabilityUnavailableError,
 } from '../services/orchestrator/capability-resolver';
 import { getAuditService } from '../services/AuditService';
+import { buildCapabilityCatalog } from '../services/capability-catalog';
 import { createLogger } from '../utils/logger';
 import { success, internalError, unauthorized, badRequest, notFound } from '../utils/api-response';
 
@@ -83,11 +84,13 @@ export function createCapabilityModelsController(): Router {
         if (!userId) { res.status(401).json(unauthorized()); return; }
         try {
             const repo = new CapabilityModelsRepository(getPool());
-            const [overrides, effective] = await Promise.all([
+            const [overrides, effective, catalog] = await Promise.all([
                 repo.listByScope(userId),
                 describeEffectiveCapabilities(userId),
+                buildCapabilityCatalog(),
             ]);
-            res.json(success({ overrides, effective, assignableCapabilities: ASSIGNABLE_CAPABILITIES }));
+            // catalog(P03): Registry metadata + 소유 add-on 가용성 — 웹이 그룹·입력 키를 정적 표 대신 이것으로 그린다. 기존 필드는 유지
+            res.json(success({ overrides, effective, assignableCapabilities: ASSIGNABLE_CAPABILITIES, catalog }));
         } catch (err) {
             log.error('list 실패:', err);
             res.status(500).json(internalError('capability 배정 목록 조회 실패'));

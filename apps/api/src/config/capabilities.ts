@@ -8,7 +8,8 @@
  * 텍스트 종합(text.synthesize)은 사용자가 고른 채팅 모델이 맡으므로 배정 대상이 아니다.
  *
  * 호출은 전부 LiteLLM 게이트웨이 하나(로컬 alias·외부 `<provider>/<model>` + BYOK 헤더). 예외는 게이트웨이가
- * 프록시 못 하는 커스텀 API 하나 — hasa 영상 jobs-v1(`VIDEO_PROVIDER_ADAPTERS`).
+ * 프록시 못 하는 커스텀 API 하나 — hasa 영상 jobs-v1(video-runtime add-on 이 `describeProviderSupport().direct` 로 선언).
+ * 이미지·음악·영상 **전용** 규칙(어댑터·기본값·부정 표현)은 각 runtime add-on 이 갖는다(P10) — 여기엔 공통 한도·ID·호환 alias 만.
  *
  * 구 모달리티 축(config/modality.ts, 2026-09-12 v1.58.x)을 일반화한 후속 — 행 이관은 마이그레이션 118.
  *
@@ -195,28 +196,14 @@ export const CAPABILITY_LIMITS = {
     GLOBAL_CACHE_TTL_MS: 60_000,
 } as const;
 
-/** 이미지 생성 허용 size (OpenAI images 규격) */
-export const IMAGE_GEN_ALLOWED_SIZES: ReadonlySet<string> = new Set(['1024x1024', '768x1024', '1024x768', '512x512']);
-export const IMAGE_GEN_DEFAULT_SIZE = '1024x1024';
 export const TTS_ALLOWED_FORMATS: ReadonlySet<string> = new Set(['mp3', 'wav', 'opus', 'aac', 'flac']);
 export const TTS_DEFAULT_FORMAT = 'mp3';
 export const TTS_DEFAULT_VOICE = 'alloy';
 export const STT_ALLOWED_EXTS: ReadonlySet<string> = new Set(['mp3', 'wav', 'm4a', 'ogg', 'opus', 'flac', 'webm', 'mp4']);
-/**
- * 영상 후속 발화 판정 — Planner 가 저장·진행 중인 영상 job 첨부를 두고도 `simple` 로 답하면(실측: bai qwen3.8-flash 가
- * "완료·저장됨" 을 "할 일 없음" 으로 읽음, 2026-09-12) 결정적으로 job 재조회 1작업으로 보정한다. 사용자 발화에만 적용.
- */
-export const VIDEO_JOB_FOLLOWUP_PATTERN = /영상|비디오|동영상|\bvideo\b|\bclip\b/i;
-/** 기존 결과를 묻는 발화 — 이것까지 맞아야 보정한다("다 됐어·완성·보여줘·어떻게 됐·결과·진행") */
-export const VIDEO_JOB_RESULT_INTENT_PATTERN = /다\s*됐|됐어|됐나|완성|끝났|보여|어떻게\s*됐|진행|결과|받아|확인|(is it|are they)\s+(done|ready|finished)|show\s+(me\s+)?(it|the)|status/i;
-/** 새 생성·설명 요청은 보정 금지 — Planner 판단(simple/새 video.generate)을 그대로 둔다 */
-export const VIDEO_JOB_NOT_FOLLOWUP_PATTERN = /만들어|생성|제작|새로|다시\s*(만|그)|설명|원리|뭐야|이란|란\s|무엇|어떻게\s*(하|만)|(make|create|generate|explain|what is|how to)/i;
-export const VIDEO_GEN_DEFAULT_SECONDS = '4';
-/**
- * 비율을 말하지 않은 요청의 기본은 가로 — hasa 영상 모델의 규격이 가로다(LTX-2 1280x704, wan2.2-i2v 832x480 —
- * 공개 카탈로그 `video_spec.sizes`, 2026-09-22). 종전 세로 기본값은 바닷가 장면도 세로로 만들었다.
- */
-export const VIDEO_GEN_DEFAULT_SIZE = '1280x720';
+/** 기존 결과를 묻는 발화 — 이것까지 맞아야 보정한다("다 됐어·완성·보여줘·어떻게 됐·결과·진행"). 언어 공통이라 모든 job capability 가 쓴다 */
+export const JOB_RESULT_INTENT_PATTERN = /다\s*됐|됐어|됐나|완성|끝났|보여|어떻게\s*됐|진행|결과|받아|확인|(is it|are they)\s+(done|ready|finished)|show\s+(me\s+)?(it|the)|status/i;
+/** 새 생성·설명 요청은 보정 금지 — Planner 판단(simple/새 생성)을 그대로 둔다. 언어 공통 */
+export const JOB_NOT_FOLLOWUP_PATTERN = /만들어|생성|제작|새로|다시\s*(만|그)|설명|원리|뭐야|이란|란\s|무엇|어떻게\s*(하|만)|(make|create|generate|explain|what is|how to)/i;
 /** Planner 가 사용자가 말한 비율을 `size` 로 옮길 때 쓰는 값 */
 export const VIDEO_GEN_ASPECT_SIZES = { landscape: '1280x720', portrait: '720x1280', square: '720x720' } as const;
 /**
@@ -226,32 +213,6 @@ export const VIDEO_GEN_ASPECT_SIZES = { landscape: '1280x720', portrait: '720x12
  * 그룹: 1 = 분, 2 = 분 뒤의 초("3분 30초"), 3 = 초만.
  */
 export const MEDIA_DURATION_PATTERN = /(\d+(?:\.\d+)?)\s*(?:분|-?\s*min(?:ute)?s?\b)(?:\s*(\d+(?:\.\d+)?)\s*(?:초|-?\s*sec(?:ond)?s?\b))?|(\d+(?:\.\d+)?)\s*(?:초|秒|-?\s*sec(?:ond)?s?\b)/gi;
-export const VIDEO_ASPECT_PATTERNS: ReadonlyArray<readonly [keyof typeof VIDEO_GEN_ASPECT_SIZES, RegExp]> = [
-    ['portrait', /세로|쇼츠|숏츠|릴스|9\s*:\s*16|\bportrait\b|\bvertical\b|\bshorts\b|\breels\b/i],
-    ['square', /정사각|1\s*:\s*1|\bsquare\b/i],
-    ['landscape', /가로|16\s*:\s*9|\blandscape\b|\bhorizontal\b|\bwidescreen\b/i],
-];
-/**
- * 영상 모델이 스스로 넣는 가짜 자막·워터마크 억제 — negative_prompt 를 받는 provider 에만 싣는다(어댑터 `negativePrompt`).
- * 'text' 는 넣지 않는다: 제목 글자를 요청한 영상까지 막는다. 글자를 빼 달라는 요청은 Planner 가 계획의 negative_prompt 로 더한다.
- * 보조 방어다 — 깨진 자막의 주 원인은 프롬프트의 부정 표현(VIDEO_PROMPT_NEGATION_PATTERN). hasa 플레이그라운드도 기본값을 싣는다.
- */
-export const VIDEO_GEN_DEFAULT_NEGATIVE_PROMPT = 'subtitles, captions, watermark';
-/** 영상 프롬프트에서 "빼 달라" 는 대상이 되는 화면 요소 */
-export const VIDEO_NEGATABLE_TERM_PATTERN = /\b(?:text|subtitles?|captions?|words?|letters?|logos?|watermarks?|titles?|typography)\b/gi;
-const VIDEO_NEGATABLE = String.raw`(?:on[- ]?screen\s+)?(?:text|subtitles?|captions?|words?|letters?|logos?|watermarks?|titles?|typography)`;
-/**
- * 영상 프롬프트의 부정 표현("no text on screen", "without subtitles or logos") — negative_prompt 를 받는 provider 면 실행기가
- * 프롬프트에서 걷어내 negative_prompt 로 옮긴다. Planner 에 쓰지 말라고 해도 8회 중 5회 적었다.
- * 실측(2026-09-22, hasa LTX-2 4초·같은 장면): "no text on screen" 이 든 프롬프트는 깨진 자막 3/4(negative_prompt 유무 무관),
- * 뺀 프롬프트는 0/4(negative_prompt 유무 무관) — 부정어가 오히려 글자를 불러온다.
- */
-export const VIDEO_PROMPT_NEGATION_PATTERN = new RegExp(
-    String.raw`[,;]?\s*\b(?:with\s+)?(?:no|without)\s+(?:any\s+)?(${VIDEO_NEGATABLE}(?:\s*(?:,|\bor\b|\band\b)\s*${VIDEO_NEGATABLE})*)(?:\s+(?:on[- ]?screen|overlays?|visible))?`,
-    'gi',
-);
-export const VIDEO_TERMINAL_STATUSES: ReadonlySet<string> = new Set(['completed', 'succeeded', 'failed', 'cancelled', 'canceled', 'error']);
-export const VIDEO_DONE_STATUSES: ReadonlySet<string> = new Set(['completed', 'succeeded']);
 
 /**
  * provider 별 capability params 기본값 — 배정 params 가 없을 때. 실측 규격 차이 흡수
@@ -265,60 +226,10 @@ export function providerParamDefaults(providerId: string, capability: Capability
 }
 
 /**
- * 영상 생성 provider 어댑터 — OpenAI `/v1/videos` 가 아닌 커스텀 API(hasa: `POST /videos/generations` → `GET /jobs/{id}`
- * → `artifact_url`)는 LiteLLM 이 프록시하지 못하고 hasa 는 `Authorization: Bearer` 만 받아 사용자 키를 게이트웨이로 실을
- * 수 없다(2026-09-12 실측) → 이 부류만 앱이 BYOK 로 provider 직결(SSRF 고정 fetch). 문서화된 예외.
- */
-export interface VideoProviderAdapter {
-    kind: 'openai-videos' | 'jobs-v1';
-    submitPath?: string;
-    statusPath?: string;
-    artifactField?: string;
-    doneStatuses?: readonly string[];
-    failStatuses?: readonly string[];
-    /** 제출 본문에 `negative_prompt` 를 받는지 — OpenAI `/v1/videos` 에는 없는 필드라 모르는 provider 엔 싣지 않는다 */
-    negativePrompt?: boolean;
-}
-const VIDEO_PROVIDER_ADAPTERS: Record<string, VideoProviderAdapter> = {
-    hasa: {
-        kind: 'jobs-v1', submitPath: '/videos/generations', statusPath: '/jobs/{id}', artifactField: 'artifact_url',
-        doneStatuses: ['COMPLETED', 'DONE', 'SUCCEEDED'], failStatuses: ['FAILED', 'ERROR', 'CANCELLED', 'CANCELED'],
-        // hasa 포털 플레이그라운드가 같은 엔드포인트에 negative_prompt 를 보낸다(portal-model-playground.js, 2026-09-22)
-        negativePrompt: true,
-    },
-};
-export function videoAdapterFor(providerId: string): VideoProviderAdapter {
-    return VIDEO_PROVIDER_ADAPTERS[providerId] ?? { kind: 'openai-videos' };
-}
-
-/**
- * 음악 생성 — DGX ACE-Step 1.5 의 **OpenRouter 호환** `POST /v1/chat/completions`(2026-09-23).
- * LiteLLM 게이트웨이를 지나되 **pass-through 경로**(`/music/v1/chat/completions`)를 쓴다 — ACE-Step 이
- * `message.audio` 를 배열로 주는데 LiteLLM 의 `Message` 타입은 단일 `ChatCompletionAudioResponse` 를
- * 기대해, 일반 model_list 라우트로 태우면 오디오는 정상 생성되고 역직렬화에서만 500 이 난다(실측).
- * pass-through 는 응답을 파싱하지 않으므로 게이트웨이 경유(앱은 `LLM_BASE_URL` 하나만 안다)를 유지한다.
- * 종전 `/release_task`→`/query_result` 폴링과 전용 주소(`MUSIC_GEN_BASE_URL`)는 없앴다.
- * 길이·형식·언어는 `audio_config`, 가사는 최상위 `lyrics`.
- * 산출물은 응답 본문의 base64 data URL(`message.audio[0].audio_url.url`)이라 별도 내려받기가 없다.
- */
-export const MUSIC_GEN_DEFAULT_DURATION_SEC = 30;
-/** ACE-Step `audio_config.duration` 허용 범위(초) */
-export const MUSIC_GEN_DURATION_RANGE = { min: 10, max: 600 } as const;
-export const MUSIC_GEN_FORMAT = 'mp3';
-/**
  * Planner 가 가사 자리에 앞 작업 참조를 적는 경우("REFS:t1"·"(lyrics from t1)" — 2026-09-22~23 실측 2건)를 가려내는 길이 상한.
  * 이보다 짧고 다른 작업 id 를 담은 lyrics 는 가사가 아니라 참조로 보고 refs 로 옮긴다(그대로 두면 그 문자열을 노래한다).
  */
 export const PLAN_LYRICS_REF_MAX_CHARS = 60;
-
-/** 이미지 편집 어댑터 — hasa Qwen-Image-Edit 는 `/v1/images/generations` JSON `reference`(dataURL), LiteLLM 통과 */
-interface ImageEditProviderAdapter { kind: 'openai-edits' | 'generations-reference' }
-const IMAGE_EDIT_PROVIDER_ADAPTERS: Record<string, ImageEditProviderAdapter> = {
-    hasa: { kind: 'generations-reference' },
-};
-export function imageEditAdapterFor(providerId: string): ImageEditProviderAdapter {
-    return IMAGE_EDIT_PROVIDER_ADAPTERS[providerId] ?? { kind: 'openai-edits' };
-}
 
 export function isCapability(value: string): value is Capability {
     return (CAPABILITIES as readonly string[]).includes(value);

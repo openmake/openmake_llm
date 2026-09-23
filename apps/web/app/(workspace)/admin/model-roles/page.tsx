@@ -19,7 +19,7 @@ import { AdminTabs } from "@/components/hub-tabs";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { fetchModels, type ModelEntry } from "@/lib/models-api";
-import { compactParams, type CapabilityEffective, type CapabilityOverride } from "@/components/settings/capability-shared";
+import { catalogMap, compactParams, type CapabilityCatalog, type CapabilityEffective, type CapabilityOverride } from "@/components/settings/capability-shared";
 import { CapabilityGroupsEditor } from "@/components/settings/capability-groups";
 import { GatewayModelsCard } from "@/components/admin/gateway-models-card";
 
@@ -52,6 +52,8 @@ interface CapabilityPayload {
   effective: CapabilityEffective[];
   capabilities: string[];
   assignableCapabilities: string[];
+  /** Registry 카탈로그(P03) — 구서버 응답에는 없다 */
+  catalog?: CapabilityCatalog;
   defaults: Record<string, string>;
   gatewayProviders: string[];
 }
@@ -220,6 +222,7 @@ function GlobalCapabilityModelsCard() {
           onParamChange={setParam}
           onParamApply={(capability) => void assign([capability], mapped.get(capability) ?? "", capability)}
           labels={{ assigned: t("assigned") }}
+          catalog={catalogMap(payload?.catalog)}
         />
         <p className="text-xs text-muted">{t("cacheNote")}</p>
       </CardContent>

@@ -13,6 +13,8 @@ jest.mock('../executors', () => ({
 import { executePlan } from '../executor';
 import { validatePlan } from '../plan-schema';
 import type { ExecContext } from '../types';
+import { registerMediaStubForTest } from './helpers/media-stub';
+beforeAll(() => registerMediaStubForTest());
 
 function plan(raw: unknown) {
     const v = validatePlan(raw, new Set(['a1']));

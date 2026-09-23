@@ -26,6 +26,10 @@ interface AddonRow {
   source: string;
   entitlementSku: string | null;
   failureReason: string | null;
+  desiredState?: "enabled" | "disabled" | null;
+  runtimeStatus?: "not_loaded" | "registering" | "ready" | "failed";
+  restartRequired?: boolean;
+  lastFailureCode?: string | null;
   permissions?: string[];
   modelRequirement?: { ok: boolean; satisfiedBy: string[]; reason?: string };
   verifiedModels?: Array<{ model: string; passRate: number; totalCases: number; verified: boolean; evaluatedAt: string }>;
@@ -139,6 +143,11 @@ export default function AdminAddonsPage() {
                           <Td>
                             <Badge tone={STATE_TONE[a.state]}>{t(`states.${a.state}`)}</Badge>
                             {!a.enabledByEnv && <div className="mt-1 text-[11px] text-warn">{t("envDisabled")}</div>}
+                            {a.runtimeStatus && a.runtimeStatus !== "ready" && (
+                              <div className="mt-1 font-mono text-[11px] text-muted" title={a.lastFailureCode ?? undefined}>
+                                {t(`runtime.${a.runtimeStatus}`)}{a.restartRequired ? ` · ${t("restartRequired")}` : ""}
+                              </div>
+                            )}
                             {a.failureReason && <div className="mt-1 max-w-[22rem] truncate text-[11px] text-danger" title={a.failureReason}>{a.failureReason}</div>}
                           </Td>
                           <Td className="text-xs text-muted">{a.entitlementSku ?? t("entitlementFree")}</Td>

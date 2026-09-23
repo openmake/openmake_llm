@@ -2,6 +2,8 @@
 jest.mock('../../../data/models/unified-database', () => ({ getPool: () => ({}) }));
 
 import { planRequest, type PlannerLlmCall } from '../planner';
+import { registerMediaStubForTest } from './helpers/media-stub';
+beforeAll(() => registerMediaStubForTest());
 
 const input = { message: '이미지 그려줘', attachments: [{ id: 'a1', kind: 'image' as const, name: 'x.png' }], recentTurns: [], lang: 'ko' };
 

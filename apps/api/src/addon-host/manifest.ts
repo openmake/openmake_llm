@@ -66,6 +66,8 @@ export const addonManifestSchema = z.object({
             /** 비전(이미지 입력) 필요 */
             vision: z.boolean().optional(),
         }).strict().optional(),
+        /** 요구하는 capability 계약 버전(P02) — Registry 가 지원하는 버전과 다르면 그 add-on 을 제외한다 */
+        capabilityContract: z.literal(1).optional(),
     }),
     scope: z.enum(ADDON_SCOPES),
     /**
@@ -103,6 +105,13 @@ export const addonManifestSchema = z.object({
         evals: z.string().optional(),
     }).strict(),
     entry: addonEntrySchema.optional(),
+    /**
+     * 이 add-on 이 Registry 에 게시하는 capability ID 목록(P02). 호스트가 부팅 전 소유권을 사전 검사하고(같은 ID 두 add-on
+     * → 양쪽 거절, Base 예약 ID → 그 add-on 거절), 런타임 등록 결과가 이 목록과 정확히 일치해야 게시된다.
+     */
+    provides: z.object({
+        capabilities: z.array(z.string().min(3).max(64).regex(/^[a-z][a-z0-9]*(\.[a-z][a-z0-9_]*)+$/)).max(32),
+    }).strict().optional(),
     /**
      * 이 add-on 이 요구하는 권한 — 어휘는 `config/addon-permissions.ts`(집행 지점이 있는 값만).
      * 모르는 값은 거절한다: 선언만 있고 아무것도 막지 않는 권한을 받아 주면 거짓 안심이 된다.

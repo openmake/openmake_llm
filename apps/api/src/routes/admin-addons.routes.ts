@@ -17,6 +17,9 @@ import { getPool } from '../data/models/unified-database';
 import { AddonStateRepository, ADDON_STATES, type AddonState } from '../data/repositories/addon-state-repository';
 import { listBuiltinAddons } from '../addon-host/routes';
 import { listBuiltinAddonDefs } from '../addon-host/builtin-registry';
+import { resolveAddonActivation } from '../addon-host/activation';
+import { satisfiesOpenmakeRange } from '../addon-host/manifest';
+import { APP_VERSION } from '../config/constants';
 import { availableChatModelFacts, checkModelRequirement } from '../services/addon/model-requirements';
 import { clearAddonStateCache } from '../services/addon/addon-state';
 import { loadPackVerifications } from '../services/addon/pack-verification';
@@ -44,6 +47,16 @@ adminAddonsRouter.get('/addons', requireAuth, requireAdmin, asyncHandler(async (
     const verifications = await loadPackVerifications(getPool());
     const addons = listBuiltinAddons().map(a => {
         const row = byId.get(a.id);
+        const manifest = manifests.get(a.id);
+        // 원하는 상태(DB 의도)와 실제 런타임 준비 상태(이 프로세스)를 분리해 응답한다(P01) — 기존 `state` 는 호환용으로 유지
+        const activation = resolveAddonActivation({
+            addonId: a.id,
+            hasRuntimeEntry: !!manifest?.entry?.runtime,
+            versionCompatible: manifest ? satisfiesOpenmakeRange(APP_VERSION, manifest.requires.openmake) : true,
+            row: row
+                ? { known: true, desiredState: row.desired_state, state: row.state, stateRevision: row.state_revision, lastFailureCode: row.last_failure_code }
+                : { known: true, desiredState: 'enabled', state: 'enabled', stateRevision: 0, lastFailureCode: null },
+        });
         return {
             id: a.id,
             name: a.name,
@@ -52,6 +65,14 @@ adminAddonsRouter.get('/addons', requireAuth, requireAdmin, asyncHandler(async (
             /** env 로 끈 경우 false — DB 토글보다 우선하는 비상 override */
             enabledByEnv: a.enabled,
             state: (row?.state ?? 'enabled') as AddonState,
+            /** 관리자의 사용 의도 — 부팅 실패가 바꾸지 않는다 */
+            desiredState: activation.desiredState,
+            /** 이 프로세스의 코드 로드 상태 — 전역 값이 아니다 */
+            runtimeStatus: activation.runtimeStatus,
+            restartRequired: activation.restartRequired,
+            stateRevision: activation.stateRevision,
+            lastFailureCode: activation.lastFailureCode,
+            effectiveAvailability: activation.effectiveAvailability,
             source: row?.source ?? 'builtin',
             entitlementSku: row?.entitlement_sku ?? null,
             failureReason: row?.failure_reason ?? null,

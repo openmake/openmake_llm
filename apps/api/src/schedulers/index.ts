@@ -66,6 +66,14 @@ export async function startAllSchedulers(): Promise<void> {
         logger.warn('생성 미디어 스윕 등록 실패 (계속):', err);
     }
 
+    // 6-c. 공통 Job Runtime — 중단된 제출 복구(항상) + 백그라운드 poller(CAPABILITY_JOB_POLLER_ENABLED 일 때만)
+    try {
+        const { startJobRuntime } = await import('../services/job-poller');
+        await startJobRuntime();
+    } catch (err) {
+        logger.warn('Job Runtime 시작 실패 (계속):', err);
+    }
+
     // 7. Task 샌드박스 정리 (플래그 ON 시) — 고아 컨테이너(부팅 1회) + stale workspace(부팅 + 6h 주기).
     try {
         const { getTaskSandboxConfig } = await import('../config/task-sandbox');

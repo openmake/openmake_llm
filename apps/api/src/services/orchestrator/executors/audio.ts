@@ -14,7 +14,7 @@ export const audioTranscribeExecutor: CapabilityExecutor = async (task, ctx) => 
     if (!source) throw new Error('audio.transcribe: 오디오/영상 첨부(attachments 또는 refs)가 없습니다');
     const target = ctx.targets?.get(task.id) ?? await resolveCapabilityTarget('audio.transcribe', ctx.userId);
     const input = await loadAttachment(source, {
-        timeoutMs: CAPABILITY_LIMITS.STT_TIMEOUT_MS, signal: ctx.signal, maxBytes: CAPABILITY_LIMITS.STT_MAX_BYTES, allowTypes: ['audio/', 'video/'],
+        timeoutMs: CAPABILITY_LIMITS.STT_TIMEOUT_MS, signal: ctx.signal, maxBytes: CAPABILITY_LIMITS.STT_MAX_BYTES, allowTypes: ['audio/', 'video/'], userId: ctx.userId,
     });
     const ext = (input.name.split('.').pop() ?? '').toLowerCase();
     if (!STT_ALLOWED_EXTS.has(ext)) throw new Error(`허용되지 않는 오디오 형식: ${input.name}`);
@@ -43,6 +43,6 @@ export const audioSpeechExecutor: CapabilityExecutor = async (task, ctx) => {
         timeoutMs: CAPABILITY_LIMITS.TTS_TIMEOUT_MS, signal: ctx.signal,
     });
     if (bytes.length === 0) throw new Error('음성 합성 응답이 비어 있습니다');
-    const media = saveAudio(bytes, sniffAudioExt(bytes, format), ctx.lang === 'ko' ? '음성 듣기' : 'Listen', ctx.userId);
+    const media = await saveAudio(bytes, sniffAudioExt(bytes, format), ctx.lang === 'ko' ? '음성 듣기' : 'Listen', { userId: ctx.userId, sessionId: ctx.sessionId, capability: 'audio.speech' });
     return { ok: true, text: ctx.lang === 'ko' ? `음성 합성 완료 (${text.length}자): ${media.urlPath}` : `Speech synthesized (${text.length} chars): ${media.urlPath}`, media: [media], model: target.fullId, usage: { units: { kind: 'chars', count: text.length } } };
 };

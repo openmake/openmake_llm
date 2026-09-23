@@ -13,6 +13,7 @@
  *
  * @module agents/git-ingest/extension-components
  */
+import { posix } from 'path';
 import { discoverMarkdownComponents, findMcpConfigPath } from './extension-discovery';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
@@ -227,7 +228,30 @@ export async function collectPluginAgents(ctx: ComponentContext): Promise<AgentI
 }
 
 /**
- * 스킬 번들 파일 수집 — SKILL.md 와 같은 디렉토리의 `scripts/`·`references/`·`assets/`.
+ * 본문이 가리키는 번들 안 파일(P09, 2026-09-21 조사 ②③) — 마크다운 링크·백틱·`./`·`../` 상대 경로를 스킬 파일 기준으로 풀어
+ * **번들 루트 안에 실재하는 파일만** 돌려준다(루트 밖·절대 경로·URL·`..` 탈출은 버린다 — path traversal 차단).
+ * 반환 경로는 스킬 파일 디렉토리 기준 상대 경로(본문에 적힌 그대로라 모델이 load_skill asset_paths 로 요청할 수 있다).
+ */
+export function referencedBundlePaths(content: string, filePath: string, root: string, entries: ReadonlyArray<{ path: string }>): Array<{ repoPath: string; relPath: string }> {
+    const dir = posix.dirname(filePath);
+    const exists = new Set(entries.map(e => e.path));
+    const refs = new Set<string>();
+    for (const m of content.matchAll(/\]\(([^)\s#?]+)(?:[#?][^)]*)?\)/g)) refs.add(m[1]);
+    for (const m of content.matchAll(/`((?:\.{1,2}\/)?[\w./-]+\.(?:md|txt|json|ya?ml|sh|py|js|ts|toml|csv))`/g)) refs.add(m[1]);
+    for (const m of content.matchAll(/(?:^|[\s(])((?:\.{1,2}\/)+[\w./-]+\.[A-Za-z0-9]{1,5})\b/gm)) refs.add(m[1]);
+    const out: Array<{ repoPath: string; relPath: string }> = [];
+    for (const ref of refs) {
+        if (/^[a-z][a-z0-9+.-]*:/i.test(ref) || ref.startsWith('/')) continue;
+        const repoPath = posix.normalize(posix.join(dir === '.' ? '' : dir, ref));
+        if (repoPath.startsWith('..') || (root && !repoPath.startsWith(root)) || repoPath === filePath) continue;
+        if (!exists.has(repoPath)) continue;
+        out.push({ repoPath, relPath: posix.relative(dir === '.' ? '' : dir, repoPath) });
+    }
+    return out;
+}
+
+/**
+ * 스킬 번들 파일 수집 — SKILL.md 와 같은 디렉토리의 `scripts/`·`references/`·`assets/` + 본문이 가리키는 번들 안 파일.
  *
  * 외부 스킬 본문은 "see references/rules.md" 처럼 딸린 파일을 참조하는데 ingest 는
  * SKILL.md 한 장만 가져와 참조 대상이 없었다. 원본 바이트를 skill_assets 에 보존해
@@ -240,15 +264,25 @@ export async function collectSkillAssets(
     const assetRepo = new SkillAssetRepository(ctx.pool);
     for (const result of skillResults) {
         if (!result.skillId) continue;
-        // SKILL.md 의 디렉토리 (commands/ 변환분은 번들 개념이 없어 건너뜀)
-        if (result.fromCommand) continue;
         const dir = result.path.slice(0, result.path.lastIndexOf('/') + 1);
-        if (!dir) continue;
-        const candidates = ctx.tree.entries.filter(e =>
+        // ① SKILL.md 형제 디렉토리(commands/ 변환분은 commands/ 를 여러 명령이 공유하므로 해당 없음)
+        const siblings = result.fromCommand || !dir ? [] : ctx.tree.entries.filter(e =>
             e.path.startsWith(dir)
             && e.path !== result.path
             && /^(scripts|references|assets)\//.test(e.path.slice(dir.length))
-        );
+        ).map(e => ({ entry: e, relPath: e.path.slice(dir.length) }));
+        // ② 본문이 가리키는 번들 안 파일(`../../CONNECTORS.md` 등) — SKILL.md·commands 공통
+        let referenced: typeof siblings = [];
+        try {
+            const body = await ctx.fetcher.fetchFile(ctx.owner, ctx.repo, ctx.sha, result.path, SKILL_CREATOR.gitMaxFileSize ?? 262144);
+            const known = new Set(siblings.map(c => c.entry.path));
+            referenced = referencedBundlePaths(body, result.path, ctx.root, ctx.tree.entries)
+                .filter(r => !known.has(r.repoPath))
+                .map(r => ({ entry: ctx.tree.entries.find(e => e.path === r.repoPath)!, relPath: r.relPath }));
+        } catch (e) {
+            logger.debug(`참조 파일 탐색 실패(형제 디렉토리만 수집): ${e instanceof Error ? e.message : String(e)}`);
+        }
+        const candidates = [...siblings, ...referenced];
         if (candidates.length === 0) continue;
 
         let picked = candidates;
@@ -258,8 +292,7 @@ export async function collectSkillAssets(
         }
         const stored: string[] = [];
         let total = 0;
-        for (const entry of picked) {
-            const relPath = entry.path.slice(dir.length);
+        for (const { entry, relPath } of picked) {
             if (!isStorableAsset(entry.path)) {
                 // fetcher 가 UTF-8 문자열만 주므로 바이너리는 저장 시 원본이 깨진다 — 건너뛴다
                 ctx.warnings.push(`ASSET_BINARY_SKIPPED: ${relPath} — 텍스트가 아닌 파일은 보존하지 않습니다`);
