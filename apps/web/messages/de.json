@@ -2868,6 +2868,10 @@
       "active": "Aktiv",
       "saveProfile": "Speichern",
       "invalidJson": "Ungültiges JSON"
+    },
+    "sidebar": {
+      "expandSpace": "{name} aufklappen",
+      "collapseSpace": "{name} zuklappen"
     }
   }
 }

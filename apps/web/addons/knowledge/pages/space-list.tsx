@@ -7,6 +7,7 @@
  */
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Plus, Search, FileText, MessageSquare, AlertTriangle, Loader2, Library } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
@@ -69,6 +70,7 @@ function SpaceCard({ space }: { space: KnowledgeSpaceSummary }) {
 }
 
 export function SpaceListView() {
+  const router = useRouter();
   const t = useTranslations("knowledge");
   const isAdmin = useAppStore((s) => s.auth.currentUser?.role === "admin");
   const [query, setQuery] = useState("");
@@ -132,7 +134,11 @@ export function SpaceListView() {
         )}
       </div>
 
-      <CreateSpaceDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      <CreateSpaceDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(id) => router.push(`/knowledge/${id}`)}
+      />
     </>
   );
 }
