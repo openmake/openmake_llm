@@ -14,7 +14,7 @@
  *  - 외부: `LLM_GATEWAY_PROVIDERS` 편입 provider 만. model = `<provider>/<model>`,
  *    Authorization = master, `x-api-key` = 사용자/서버 키 (openai-compat-provider 의 헤더 계약과 동일)
  *  - direct 전용 provider(chatgpt OAuth 등)는 배정 자체를 거부한다.
- *  - 예외: jobs-v1 영상(config/capabilities VIDEO_PROVIDER_ADAPTERS — hasa)은 게이트웨이가 프록시하지
+ *  - 예외: jobs-v1 영상(video-runtime 이 describeProviderSupport().direct 로 선언 — hasa)은 게이트웨이가 프록시하지
  *    못하는 커스텀 API 라 사용자 키로 provider 직결(`transport: 'direct'`, 도구가 SSRF 고정 fetch 사용).
  *  - 로컬 음악 생성(ACE-Step)은 2026-09-23 부터 다른 로컬 capability 와 같은 LiteLLM 경로다(전용 주소 없음).
  *    다만 로컬 전용 모델이라 외부 모델 배정은 배정 단계에서 거절한다.

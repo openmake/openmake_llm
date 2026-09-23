@@ -9,10 +9,11 @@
  *    **같은 externalJobId** 를 다시 수집한다(T12). 상한을 넘기면 pending(다음 요청·백그라운드 poller 가 이어 간다)
  * @module addons/video-runtime/generate
  */
+import { CAPABILITY_LIMITS } from '../../config/capabilities';
 import {
-    CAPABILITY_LIMITS, VIDEO_GEN_DEFAULT_NEGATIVE_PROMPT, VIDEO_GEN_DEFAULT_SECONDS, VIDEO_GEN_DEFAULT_SIZE,
+    VIDEO_GEN_DEFAULT_NEGATIVE_PROMPT, VIDEO_GEN_DEFAULT_SECONDS, VIDEO_GEN_DEFAULT_SIZE,
     VIDEO_JOB_FOLLOWUP_PATTERN, VIDEO_NEGATABLE_TERM_PATTERN, VIDEO_PROMPT_NEGATION_PATTERN,
-} from '../../config/capabilities';
+} from './constants';
 import type { CapabilityContext, CapabilityHandler } from '../../capability-contract/types';
 import type { JobRecord } from '../../data/repositories/job-runtime-repo';
 import { savedJobResultPath } from '../../services/orchestrator/media-io';

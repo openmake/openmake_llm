@@ -3,7 +3,7 @@
  * 응답 유실은 재제출 없이 pending(T13)·hasa 직결 선언·원문 길이·비율 hook.
  */
 jest.mock('../../../tools/generated-media', () => ({ resolveGeneratedPath: (p: string) => (p === '/generated/ok.webm' ? '/abs/ok.webm' : null) }));
-jest.mock('../../../config/capabilities', () => ({ ...jest.requireActual('../../../config/capabilities'), CAPABILITY_LIMITS: { ...jest.requireActual('../../../config/capabilities').CAPABILITY_LIMITS, VIDEO_WAIT_MS: 0, VIDEO_DOWNLOAD_ATTEMPTS: 1 } }));
+jest.mock('../../../config/capabilities', () => ({ ...jest.requireActual('../../../config/capabilities'), CAPABILITY_LIMITS: { ...jest.requireActual('../../../config/capabilities').CAPABILITY_LIMITS, VIDEO_WAIT_MS: 0, VIDEO_DOWNLOAD_ATTEMPTS: 2 } }));
 
 import { videoGenerateHandler, splitVideoNegations } from '../generate';
 import { normalizeVideoPlanInput } from '../plan-input';
@@ -21,6 +21,7 @@ const downloads: string[] = [];
 const advances: Array<[string, string, unknown]> = [];
 let statusResponse: Record<string, unknown> = { id: 'ext-1', status: 'completed', seconds: 4 };
 let downloadFails = false;
+let downloadFailCount = 0;
 let submitOutcome: (send: () => Promise<{ externalJobId: string }>) => Promise<SubmitOutcome>;
 const describeCalls = { n: 0 };
 
@@ -32,7 +33,7 @@ function ctx(providerId = 'openrouter', over: Partial<CapabilityContext> = {}): 
             describe: () => { describeCalls.n++; return { providerId, model: `${providerId}/wan`, fullId: `${providerId}:wan`, source: 'user', costOwner: 'user', transport: 'gateway', params: {} }; },
             invokeJson: async (req) => { calls.push({ operation: req.operation, payload: req.payload, pathParams: req.pathParams as Record<string, string> }); return (req.operation.endsWith('.submit') ? { id: 'ext-1', status: 'queued' } : statusResponse) as never; },
             invokeBinary: async () => { throw new Error('unused'); },
-            download: async (url) => { downloads.push(url); if (downloadFails) throw new Error('terminated'); return { bytes: Buffer.from('VID'), contentType: 'video/mp4' }; },
+            download: async (url) => { downloads.push(url); if (downloadFails || downloadFailCount-- > 0) throw new Error('terminated'); return { bytes: Buffer.from('VID'), contentType: 'video/mp4' }; },
         },
         artifacts: { save: async (i) => ({ id: '42', mimeType: i.mime, fileName: `video-1.${i.ext}`, sizeBytes: i.bytes.length, urlPath: `/generated/video-1.${i.ext}` }), read: async () => { throw new Error('unused'); } },
         jobs: {
@@ -47,7 +48,7 @@ function ctx(providerId = 'openrouter', over: Partial<CapabilityContext> = {}): 
 const task = (o: Partial<PlanTask> = {}): PlanTask => ({ id: 't1', capability: 'video.generate', instruction: 'a cat running on the beach, no text on screen', text: '', attachments: [], refs: [], dependsOn: [], extra: {}, ...o });
 
 beforeEach(() => {
-    calls.length = 0; downloads.length = 0; advances.length = 0; describeCalls.n = 0; downloadFails = false;
+    calls.length = 0; downloads.length = 0; advances.length = 0; describeCalls.n = 0; downloadFails = false; downloadFailCount = 0;
     statusResponse = { id: 'ext-1', status: 'completed', seconds: 4 };
     submitOutcome = async (send) => { const { externalJobId } = await send(); return { kind: 'submitted', job: { id: '9', externalJobId, state: 'running' } as never, externalJobId, persisted: true }; };
 });
@@ -100,6 +101,7 @@ describe('videoGenerateHandler', () => {
         const r = await videoGenerateHandler.execute(task(), ctx());
         expect(r.status).toBe('pending');
         expect(r.text).toMatch(/내려받기가 실패/);
+        expect(downloads).toHaveLength(2); // 시도 상한만큼
         expect(calls.filter((c) => c.operation.endsWith('.submit'))).toHaveLength(1);
         expect(advances.at(-1)).toEqual(['9', 'collecting', { errorCode: 'collect_failed', stage: 'collect_failed', incrementRetry: true }]);
     });
@@ -112,6 +114,27 @@ describe('videoGenerateHandler', () => {
         expect(calls).toHaveLength(0);
         submitOutcome = async () => ({ kind: 'rejected', error: 'HTTP 400' });
         await expect(videoGenerateHandler.execute(task(), ctx())).rejects.toThrow(/거절/);
+    });
+
+    it('기본 인자는 4초·가로 1280x720 · OpenAI 는 부정 표현을 걷지 않는다(유일한 제외 수단)', async () => {
+        await videoGenerateHandler.execute(task(), ctx());
+        expect(calls[0].payload).toMatchObject({ seconds: '4', size: '1280x720', prompt: 'a cat running on the beach, no text on screen' });
+    });
+
+    it('첫 내려받기 실패 후 재시도로 성공하면 completed', async () => {
+        downloadFailCount = 1;
+        const r = await videoGenerateHandler.execute(task(), ctx());
+        expect(r.status).toBe('completed');
+        expect(downloads).toHaveLength(2);
+    });
+
+    it('제출 의도를 저장하지 못했으면(unpersisted) "보존됨" 대신 id 보관 안내 — 재제출 없음', async () => {
+        submitOutcome = async (send) => { const { externalJobId } = await send(); return { kind: 'unpersisted', externalJobId, persisted: false }; };
+        statusResponse = { id: 'ext-1', status: 'running' };
+        const r = await videoGenerateHandler.execute(task(), ctx());
+        expect(r.status).toBe('pending');
+        expect(r.text).toMatch(/저장하지 못했습니다/);
+        expect(advances).toHaveLength(0);
     });
 
     it('provider 실패 상태는 failed 로 기록하고 throw', async () => {

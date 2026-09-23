@@ -5,7 +5,9 @@
  *
  * @module addons/image-runtime/providers/hasa
  */
-import { IMAGE_GEN_ALLOWED_SIZES, IMAGE_GEN_DEFAULT_SIZE } from '../../../config/capabilities';
+/** 이미지 생성 허용 size (OpenAI images 규격) — 종전 config/capabilities 에서 옮겼다(P10) */
+export const IMAGE_GEN_ALLOWED_SIZES: ReadonlySet<string> = new Set(['1024x1024', '768x1024', '1024x768', '512x512']);
+export const IMAGE_GEN_DEFAULT_SIZE = '1024x1024';
 import type { InvokeOperation } from '../../../runtime-ports/model-invoker';
 
 export interface ImagesResponse { data?: Array<{ b64_json?: string; url?: string }> }

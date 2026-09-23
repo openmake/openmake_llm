@@ -4,7 +4,8 @@
  * 건드리지 않는다. 종전 Base `applyStatedVideoParams` 를 옮겼다.
  * @module addons/video-runtime/plan-input
  */
-import { VIDEO_ASPECT_PATTERNS, VIDEO_GEN_ASPECT_SIZES } from '../../config/capabilities';
+import { VIDEO_GEN_ASPECT_SIZES } from '../../config/capabilities';
+import { VIDEO_ASPECT_PATTERNS } from './constants';
 import { statedDurationSec } from '../../services/orchestrator/orchestrate';
 import type { PlanTask } from '../../services/orchestrator/plan-schema';
 import { createLogger } from '../../utils/logger';

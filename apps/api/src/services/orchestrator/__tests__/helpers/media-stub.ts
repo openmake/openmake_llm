@@ -1,36 +1,30 @@
 /**
- * 테스트 전용 — add-on 으로 옮긴 미디어 capability(image.generate·image.edit·music.generate·video.generate)를 Base 소유로 Registry 에 세운다.
- * P04·P06 부터 이 ID 들은 image-runtime·music-runtime 소유라 Base bridge 에 없다. Base 테스트는 add-on 모듈을 import 하지 않으므로
- * (eslint no-restricted-imports) 종전 Base 실행기(`executors/{image,music}.ts`, P10 에서 삭제 예정)를 스텁으로 등록해 종전 기대값을 유지한다.
- * music 의 로컬 전용 제약은 add-on 과 같은 `describeProviderSupport` 로 선언한다(배정 검증 경로가 Registry 를 읽는다).
+ * 테스트 전용 — add-on 소유 미디어 capability(image.generate·image.edit·music.generate·video.generate)를 Base 스텁으로 Registry 에 세운다.
+ * P04·P06·P08 부터 이 ID 들은 각 runtime add-on 소유라 Base bridge 에 없고, Base 테스트는 add-on 모듈을 import 하지 않는다
+ * (eslint no-restricted-imports). 실행 결과는 각 add-on 테스트가 검증하고, 여기서는 Base 가 읽는 계약 필드만 흉내 낸다:
+ * 로컬 전용 음악 제약·hasa 영상 직결(describeProviderSupport)과 영상 결과 조회 주제어(jobFollowupTopic).
  */
 import { getCapabilityRegistry, resetCapabilityRuntimeForTest } from '../../../../runtime-ports/capability-runtime';
 import { ensureLegacyCapabilityBridge, legacyCapabilityDefinition, resetLegacyCapabilityBridgeForTest } from '../../../../addon-host/legacy-capability-bridge';
-import { BASE_CAPABILITY_OWNER } from '../../../../capability-contract/types';
-import { imageEditExecutor, imageGenerateExecutor } from '../../executors/image';
-import { musicGenerateExecutor } from '../../executors/music';
-import { videoGenerateExecutor } from '../../executors/video';
-import { VIDEO_JOB_FOLLOWUP_PATTERN, videoAdapterFor } from '../../../../config/capabilities';
-import type { ExecContext } from '../../types';
+import { BASE_CAPABILITY_OWNER, type CapabilityHandler } from '../../../../capability-contract/types';
+
+const stubExecute: CapabilityHandler['execute'] = async (task) => ({ ok: true, text: `stub ${task.capability}`, media: [] });
 
 export function registerMediaStubForTest(): void {
     resetCapabilityRuntimeForTest(); resetLegacyCapabilityBridgeForTest(); ensureLegacyCapabilityBridge();
     const tx = getCapabilityRegistry().beginRegistration(BASE_CAPABILITY_OWNER);
-    tx.register(legacyCapabilityDefinition('image.generate'), { execute: (t, c) => imageGenerateExecutor(t, c as unknown as ExecContext) });
-    tx.register(legacyCapabilityDefinition('image.edit'), { execute: (t, c) => imageEditExecutor(t, c as unknown as ExecContext) });
+    tx.register(legacyCapabilityDefinition('image.generate'), { execute: stubExecute });
+    tx.register(legacyCapabilityDefinition('image.edit'), { execute: stubExecute });
     tx.register(legacyCapabilityDefinition('music.generate'), {
-        execute: (t, c) => musicGenerateExecutor(t, c as unknown as ExecContext),
+        execute: stubExecute,
         describeProviderSupport: (m) => (m.isExternal
             ? { supported: false, reason: `음악 생성은 로컬 음악 서버(ACE-Step)만 지원합니다 — '${m.fullId}' 는 배정할 수 없습니다` }
             : { supported: true }),
     });
     tx.register(legacyCapabilityDefinition('video.generate'), {
-        execute: (t, c) => videoGenerateExecutor(t, c as unknown as ExecContext),
-        jobFollowupTopic: VIDEO_JOB_FOLLOWUP_PATTERN,
-        describeProviderSupport: (m) => {
-            const a = m.isExternal ? videoAdapterFor(m.providerId) : null;
-            return a?.kind === 'jobs-v1' && a.submitPath ? { supported: true, direct: { endpoint: a.submitPath } } : { supported: true };
-        },
+        execute: stubExecute,
+        jobFollowupTopic: /영상|비디오|동영상|\bvideo\b|\bclip\b/i,
+        describeProviderSupport: (m) => (m.isExternal && m.providerId === 'hasa' ? { supported: true, direct: { endpoint: '/videos/generations' } } : { supported: true }),
     });
     tx.commit();
 }

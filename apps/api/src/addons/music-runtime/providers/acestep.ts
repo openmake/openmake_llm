@@ -5,7 +5,10 @@
  *  - 산출물은 `message.audio[0].audio_url.url` 의 base64 data URL — 외부 URL 을 뒤따라가지 않는다
  * @module addons/music-runtime/providers/acestep
  */
-import { MUSIC_GEN_DEFAULT_DURATION_SEC, MUSIC_GEN_DURATION_RANGE, MUSIC_GEN_FORMAT } from '../../../config/capabilities';
+/** 기본 길이(초) · ACE-Step `audio_config.duration` 허용 범위 · 출력 형식 — 종전 config/capabilities 에서 옮겼다(P10) */
+export const MUSIC_GEN_DEFAULT_DURATION_SEC = 30;
+export const MUSIC_GEN_DURATION_RANGE = { min: 10, max: 600 } as const;
+export const MUSIC_GEN_FORMAT = 'mp3';
 
 /** OpenRouter 호환 응답 — 오디오는 `message.audio[]`, 캡션·BPM 등 메타데이터는 `message.content` */
 export interface AceChatResponse {
@@ -36,4 +39,3 @@ export function buildAceRequest(model: string, prompt: string, lyrics: string, d
     return body;
 }
 
-export { MUSIC_GEN_FORMAT };
