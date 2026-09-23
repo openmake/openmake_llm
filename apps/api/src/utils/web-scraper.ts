@@ -21,6 +21,7 @@ import { getKeyValueStore } from '../storage';
 import { createLogger } from './logger';
 import { LLM_TIMEOUTS } from '../config/timeouts';
 import { SCRAPER_CONFIG, browserHeaders } from '../config/web-scraper';
+import { WEB_SCRAPE_LIMITS } from '../config/core-runtime-limits';
 import { resolveStructuredSource, resolveBlockedSource, tryRssFallback } from './web-scraper-handlers';
 import { impersonateFetch } from './impersonate-fetch';
 
@@ -435,7 +436,7 @@ export async function mapSiteUrls(url: string, options: MapOptions = {}): Promis
     checkCircuitBreaker();
     await validateOutboundUrl(url);
 
-    const limit = options.limit ?? 100;
+    const limit = options.limit ?? WEB_SCRAPE_LIMITS.MAP_DEFAULT_MAX_URLS;
     const urls = new Set<string>();
 
     const parsedUrl = new URL(url);
@@ -510,8 +511,8 @@ export async function crawlSite(
     checkCircuitBreaker();
     await validateOutboundUrl(url);
 
-    const maxDepth = options.maxDepth ?? 2;
-    const limit = options.limit ?? 10;
+    const maxDepth = options.maxDepth ?? WEB_SCRAPE_LIMITS.CRAWL_DEFAULT_MAX_DEPTH;
+    const limit = options.limit ?? WEB_SCRAPE_LIMITS.CRAWL_DEFAULT_MAX_PAGES;
     const timeoutMs = options.timeoutMs ?? LLM_TIMEOUTS.WEB_SCRAPE_TIMEOUT_MS;
     const excludePaths = options.excludePaths ?? [];
 

@@ -29,6 +29,7 @@ import { success } from '../utils/api-response';
 import { requireAuth, requireAdmin } from '../auth';
 import { asyncHandler } from '../utils/error-handler';
 import { MODEL_PRICING, TOKEN_COST } from '../config/pricing';
+import { PAGINATION } from '../config/http-data-limits';
 
 
 const router = Router();
@@ -45,7 +46,7 @@ router.use(requireAuth, requireAdmin);
  */
 router.get('/usage/daily', asyncHandler(async (req: Request, res: Response) => {
     const usageTracker = getApiUsageTracker();
-    const days = parseInt(req.query.days as string, 10) || 7;
+    const days = parseInt(req.query.days as string, 10) || PAGINATION.DEFAULT_STATS_DAYS;
     const dailyStats = usageTracker.getDailyStats(days);
 
     // 차트 데이터 형식으로 변환

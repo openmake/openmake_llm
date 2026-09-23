@@ -10,6 +10,9 @@
  */
 import { z } from 'zod';
 import { secureTextSchema } from './security.schema';
+import { SCHEMA_LIMITS } from '../config/http-data-limits';
+
+const { auth: AU } = SCHEMA_LIMITS;
 
 /**
  * 로그인 요청 스키마
@@ -33,13 +36,13 @@ export const loginSchema = z.object({
 export const registerSchema = z.object({
     username: secureTextSchema({ minLength: 3, maxLength: 50, fieldName: '사용자명', allowNewLines: false }),
     email: z.string().trim().email('유효한 이메일 주소를 입력하세요'),
-    password: z.string().min(8, '새 비밀번호는 8자 이상이어야 합니다'),
+    password: z.string().min(AU.PASSWORD_MIN, '새 비밀번호는 8자 이상이어야 합니다'),
     // 보안: role 은 클라이언트가 지정할 수 없다 (권한 상승 방지). 서버가 ADMIN_EMAILS allowlist 로만 결정.
     // GDPR Phase A Fix 4 — Article 7 affirmative consent. literal(true) 강제 — false/누락 시 validation fail.
     agreedToTerms: z.literal(true, { message: '이용약관에 동의해야 합니다' }),
     agreedToPrivacy: z.literal(true, { message: '개인정보 처리방침에 동의해야 합니다' }),
     // 동의 시점의 사용자 locale (consent_logs 저장용). 미지정 시 'ko' 폴백.
-    consentLocale: z.string().min(2).max(10).optional().default('ko'),
+    consentLocale: z.string().min(AU.CONSENT_LOCALE_MIN).max(AU.CONSENT_LOCALE_MAX).optional().default('ko'),
     // GDPR Phase D — 14세 미만 셀프 동의 흐름. 필수.
     birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '생년월일은 YYYY-MM-DD 형식이어야 합니다'),
     // 14세 미만 시 server-side enforce — locale 별 임계값 미달 시 필수.
@@ -61,6 +64,6 @@ export const mobileExchangeSchema = z.object({
  */
 export const changePasswordSchema = z.object({
     currentPassword: z.string().min(1, '현재 비밀번호를 입력하세요'),
-    newPassword: z.string().min(8, '새 비밀번호는 8자 이상이어야 합니다')
+    newPassword: z.string().min(AU.PASSWORD_MIN, '새 비밀번호는 8자 이상이어야 합니다')
 });
 

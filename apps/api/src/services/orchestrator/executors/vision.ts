@@ -8,11 +8,9 @@ import { CAPABILITY_LIMITS } from '../../../config/capabilities';
 import { resolveCapabilityTarget } from '../capability-resolver';
 import { callJson, extractChatText, extractUsage } from '../http-call';
 import { getVisionBridgeSystemPrompt } from '../../../prompts/vision-bridge';
+import { getOcrSystemPrompt, getVisionDescribeDefaultInstruction } from '../../../prompts/svc-orchestrator-executors';
 import { loadAttachment } from '../media-io';
 import { resolveTaskAttachments, type CapabilityExecutor } from '../types';
-
-const OCR_KO = '당신은 OCR 기록자입니다. 이미지 속 글자·표·코드를 보이는 그대로, 순서대로, 빠짐없이 전사하세요. 해석·요약 금지. 표는 마크다운 표로.';
-const OCR_EN = 'You are an OCR transcriber. Transcribe all text, tables, and code exactly as shown, in order, without interpretation. Render tables as markdown.';
 
 export const visionExecutor: CapabilityExecutor = async (task, ctx) => {
     const atts = resolveTaskAttachments(task, ctx, new Set(['image'])).slice(0, CAPABILITY_LIMITS.VISION_MAX_IMAGES);
@@ -20,13 +18,13 @@ export const visionExecutor: CapabilityExecutor = async (task, ctx) => {
     const target = ctx.targets?.get(task.id) ?? await resolveCapabilityTarget(task.capability, ctx.userId);
 
     const content: Array<Record<string, unknown>> = [
-        { type: 'text', text: task.instruction || (ctx.lang === 'ko' ? '첨부 이미지를 서술하세요.' : 'Describe the attached image.') },
+        { type: 'text', text: task.instruction || getVisionDescribeDefaultInstruction(ctx.lang) },
     ];
     for (const a of atts) {
         const loaded = await loadAttachment(a, { timeoutMs: CAPABILITY_LIMITS.VISION_TIMEOUT_MS, signal: ctx.signal, maxBytes: CAPABILITY_LIMITS.IMAGE_EDIT_MAX_INPUT_BYTES, allowTypes: ['image/'], userId: ctx.userId });
         content.push({ type: 'image_url', image_url: { url: loaded.dataUrl, ...(target.params.detail ? { detail: target.params.detail } : {}) } });
     }
-    const system = task.capability === 'vision.ocr' ? (ctx.lang === 'ko' ? OCR_KO : OCR_EN) : getVisionBridgeSystemPrompt(ctx.lang);
+    const system = task.capability === 'vision.ocr' ? getOcrSystemPrompt(ctx.lang) : getVisionBridgeSystemPrompt(ctx.lang);
     const json = await callJson<unknown>(target, {
         body: { model: target.model, messages: [{ role: 'system', content: system }, { role: 'user', content }], max_tokens: CAPABILITY_LIMITS.VISION_MAX_TOKENS, stream: false },
         timeoutMs: CAPABILITY_LIMITS.VISION_TIMEOUT_MS, signal: ctx.signal,

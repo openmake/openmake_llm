@@ -12,7 +12,7 @@
 import { CAPABILITY_LIMITS } from '../../config/capabilities';
 import {
     VIDEO_GEN_DEFAULT_NEGATIVE_PROMPT, VIDEO_GEN_DEFAULT_SECONDS, VIDEO_GEN_DEFAULT_SIZE,
-    VIDEO_JOB_FOLLOWUP_PATTERN, VIDEO_NEGATABLE_TERM_PATTERN, VIDEO_PROMPT_NEGATION_PATTERN,
+    VIDEO_JOB_FOLLOWUP_PATTERN, VIDEO_NEGATABLE_TERM_PATTERN, VIDEO_PROMPT_NEGATION_PATTERN, VIDEO_REFS_MAX_CHARS,
 } from './constants';
 import type { CapabilityContext, CapabilityHandler } from '../../capability-contract/types';
 import type { JobRecord } from '../../data/repositories/job-runtime-repo';
@@ -93,7 +93,7 @@ export const videoGenerateHandler: CapabilityHandler = {
             logger.info(`[Video] 기존 job 재조회 ${externalJobId}${record ? ` (state=${record.state})` : ''}`);
         } else {
             // ③ 새 제출 — Base Job Runtime 이 의도를 먼저 저장한다
-            const refs = refsRawText(task, ctx, 600);
+            const refs = refsRawText(task, ctx, VIDEO_REFS_MAX_CHARS);
             const scene = adapter.negativePrompt ? splitVideoNegations(task.text || task.instruction) : { prompt: task.text || task.instruction, excluded: [] };
             const prompt = [scene.prompt, refs ? `Context: ${refs}` : ''].filter(Boolean).join('\n').trim();
             if (!prompt) throw new Error('video.generate: instruction(프롬프트)이 비어 있습니다');

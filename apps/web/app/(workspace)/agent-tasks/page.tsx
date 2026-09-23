@@ -39,6 +39,7 @@ import { cn } from "@/lib/utils";
 import { useAppStore } from "@/lib/store";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
+import { AGENT_TASK_DETAIL_POLL_MS, AGENT_TASK_REFRESH_DELAY_MS } from "@/lib/constants/ui-limits";
 import { SteeringInput } from "@/components/chat/steering-input";
 import { SharePanel } from "@/components/agent-tasks/share-panel";
 import { DiffView } from "@/components/chat/diff-view";
@@ -616,7 +617,7 @@ function TaskDetailModal({
         }
         // 진행 중(또는 대기 중)이면 계속 폴링.
         if (!cancelled && (st === "running" || st === "paused" || st === "pending" || st === "queued")) {
-          timer = setTimeout(load, 2500);
+          timer = setTimeout(load, AGENT_TASK_DETAIL_POLL_MS);
         }
       } catch {
         // detail 유지
@@ -1232,7 +1233,7 @@ export default function AgentTasksPage() {
             : x,
         ),
       );
-      setTimeout(() => void loadTasks(), 2000);
+      setTimeout(() => void loadTasks(), AGENT_TASK_REFRESH_DELAY_MS);
     } catch (err) {
       alert(t("resumeFailed", { message: err instanceof Error ? err.message : t("error") }));
     } finally {
@@ -1257,7 +1258,7 @@ export default function AgentTasksPage() {
             : x,
         ),
       );
-      setTimeout(() => void loadTasks(), 2000);
+      setTimeout(() => void loadTasks(), AGENT_TASK_REFRESH_DELAY_MS);
     } catch (err) {
       alert(t("retryFailed", { message: err instanceof Error ? err.message : t("error") }));
     } finally {

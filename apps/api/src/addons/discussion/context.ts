@@ -11,7 +11,7 @@
 
 import type { DiscussionConfig, ContextPriority, TokenLimits } from './types';
 import { createLogger } from '../../utils/logger';
-import { DISCUSSION_TOKEN_BUDGET } from './config';
+import { DISCUSSION_TOKEN_BUDGET, DISCUSSION_TRUNCATION } from './config';
 import { resolvePromptLocale } from '../../chat/language-policy';
 import { DISCUSSION_CONTEXT_LABELS } from './discussion-locales';
 
@@ -119,9 +119,9 @@ export function createContextBuilder(config: DiscussionConfig): {
         
         // 1. 대화 히스토리
         if (conversationHistory && conversationHistory.length > 0) {
-            const recentHistory = conversationHistory.slice(-5);
+            const recentHistory = conversationHistory.slice(-DISCUSSION_TRUNCATION.RECENT_HISTORY_COUNT);
             const historyText = recentHistory
-                .map(h => `${h.role}: ${h.content.substring(0, 300)}`)
+                .map(h => `${h.role}: ${h.content.substring(0, DISCUSSION_TRUNCATION.HISTORY_ITEM_MAX)}`)
                 .join('\n');
             contextItems.push({
                 priority: priority.conversationHistory,
@@ -178,7 +178,7 @@ export function createContextBuilder(config: DiscussionConfig): {
             // 전체 제한 체크
             if (totalChars + truncated.length > maxTotalChars) {
                 const remaining = maxTotalChars - totalChars;
-                if (remaining > 100) { // 최소 100자는 있어야 추가
+                if (remaining > DISCUSSION_TRUNCATION.MIN_APPEND_CHARS) { // 최소 글자 수 이상일 때만 추가
                     parts.push(`## ${item.label}\n${truncated.substring(0, remaining)}...`);
                 }
                 logger.info(`⚠️ 토큰 제한 도달, ${item.label} 일부 생략`);

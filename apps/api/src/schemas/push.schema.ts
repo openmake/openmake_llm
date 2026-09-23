@@ -9,6 +9,9 @@
  * @module schemas/push.schema
  */
 import { z } from 'zod';
+import { SCHEMA_LIMITS } from '../config/http-data-limits';
+
+const { push: P } = SCHEMA_LIMITS;
 
 /**
  * Push 구독 등록 스키마
@@ -21,7 +24,7 @@ export const pushSubscribeSchema = z.object({
     // 구독 소유자는 항상 req.user — body 의 userId 는 받지 않는다 (2026-09-02 보안 리뷰 H3:
     // 종전엔 body.userId 로 타인 userId 에 공격자 endpoint 를 등록해 알림 사본을 받을 수 있었다).
     // endpoint 는 https URL 만 — 사설/loopback 대역 차단은 라우트의 assertPushEndpointAllowed(DNS 해석 필요).
-    endpoint: z.string().min(1, 'endpoint는 필수입니다').max(2048).url('endpoint는 URL이어야 합니다')
+    endpoint: z.string().min(1, 'endpoint는 필수입니다').max(P.ENDPOINT_MAX).url('endpoint는 URL이어야 합니다')
         .refine((u) => u.startsWith('https://'), { message: 'endpoint는 https URL이어야 합니다' }),
     keys: z.object({
         p256dh: z.string().min(1, 'keys.p256dh는 필수입니다'),
@@ -34,16 +37,16 @@ export const pushSubscribeSchema = z.object({
  * @property {string} endpoint - 해제할 Push 서비스 엔드포인트 URL (필수)
  */
 export const pushUnsubscribeSchema = z.object({
-    endpoint: z.string().min(1, 'endpoint는 필수입니다').max(2048)
+    endpoint: z.string().min(1, 'endpoint는 필수입니다').max(P.ENDPOINT_MAX)
 });
 
 export const nativePushSubscribeSchema = z.strictObject({
-    deviceToken: z.string().min(16).max(512).regex(/^[a-fA-F0-9]+$/),
+    deviceToken: z.string().min(P.DEVICE_TOKEN_MIN).max(P.DEVICE_TOKEN_MAX).regex(/^[a-fA-F0-9]+$/),
     environment: z.enum(['development', 'production']),
-    bundleId: z.string().min(3).max(255).regex(/^[A-Za-z0-9.-]+$/),
+    bundleId: z.string().min(P.BUNDLE_ID_MIN).max(P.BUNDLE_ID_MAX).regex(/^[A-Za-z0-9.-]+$/),
 });
 
 export const nativePushUnsubscribeSchema = z.strictObject({
-    deviceToken: z.string().min(16).max(512).regex(/^[a-fA-F0-9]+$/),
+    deviceToken: z.string().min(P.DEVICE_TOKEN_MIN).max(P.DEVICE_TOKEN_MAX).regex(/^[a-fA-F0-9]+$/),
 });
 

@@ -11,6 +11,8 @@ import { VIDEO_GEN_ASPECT_SIZES } from '../../config/capabilities';
  */
 export const VIDEO_JOB_FOLLOWUP_PATTERN = /영상|비디오|동영상|\bvideo\b|\bclip\b/i;
 export const VIDEO_GEN_DEFAULT_SECONDS = '4';
+/** 프롬프트에 덧붙일 참조(refs) 컨텍스트 최대 글자 수 */
+export const VIDEO_REFS_MAX_CHARS = 600;
 /**
  * 비율을 말하지 않은 요청의 기본은 가로 — hasa 영상 모델의 규격이 가로다(LTX-2 1280x704, wan2.2-i2v 832x480 —
  * 공개 카탈로그 `video_spec.sizes`, 2026-09-22). 종전 세로 기본값은 바닷가 장면도 세로로 만들었다.

@@ -46,6 +46,7 @@ const KEY_VALIDATION_TIMEOUT_MS = parseInt(
 import type { IProvider } from '../providers/i-provider';
 import { probeProviderModels } from '../services/model-availability-probe';
 import { createLogger } from '../utils/logger';
+import { PAGINATION } from '../config/http-data-limits';
 
 const router = Router();
 const logger = createLogger('ExternalKeysRoutes');
@@ -283,7 +284,7 @@ router.get('/usage/recent',
             res.status(401).json(unauthorized('User ID not found.'));
             return;
         }
-        const limit = Math.min(parseInt(req.query.limit as string, 10) || 50, 200);
+        const limit = Math.min(parseInt(req.query.limit as string, 10) || PAGINATION.DEFAULT_LIMIT, PAGINATION.LIST_MAX_LIMIT);
         const recent = await getRepo().listRecentUsage(userId, limit);
         res.json(success({
             usage: recent.map((r) => ({
@@ -308,7 +309,7 @@ router.get('/usage/summary',
             res.status(401).json(unauthorized('User ID not found.'));
             return;
         }
-        const days = Math.min(parseInt(req.query.days as string, 10) || 30, 90);
+        const days = Math.min(parseInt(req.query.days as string, 10) || PAGINATION.DEFAULT_MONTH_DAYS, PAGINATION.MAX_STATS_DAYS_QUARTER);
         const rows = await getRepo().listDailyUsage(userId, days);
 
         // provider별 누계

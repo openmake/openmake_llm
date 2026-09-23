@@ -33,6 +33,7 @@ import { SlashSkillMenu } from "@/components/chat/slash-skill-menu";
 import { cn } from "@/lib/utils";
 import { detectFileTaskIntent, detectPresentationChatIntent } from "@/lib/file-task-intent";
 import { detectReportTaskIntent } from "@/lib/report-task-intent";
+import { SLASH_COMMAND_DEBOUNCE_MS } from "@/lib/constants/ui-limits";
 
 // 슬래시 스킬 호출: "/" + 공백없는 단일 토큰일 때만 드롭다운 표시.
 const SLASH_PATTERN = /^\/(\S*)$/;
@@ -246,7 +247,7 @@ export function Composer() {
   const [slashDebounced, setSlashDebounced] = useState("");
   useEffect(() => {
     if (!slashCandidate) return;
-    const timer = setTimeout(() => setSlashDebounced(slashQuery), 150);
+    const timer = setTimeout(() => setSlashDebounced(slashQuery), SLASH_COMMAND_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [slashQuery, slashCandidate]);
 

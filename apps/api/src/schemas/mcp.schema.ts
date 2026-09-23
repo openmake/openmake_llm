@@ -10,6 +10,9 @@
  */
 import { z } from 'zod';
 import { secureOptionalTextSchema, secureTextSchema } from './security.schema';
+import { SCHEMA_LIMITS } from '../config/http-data-limits';
+
+const { mcp: M } = SCHEMA_LIMITS;
 
 /**
  * MCP 도구 실행 스키마
@@ -34,14 +37,14 @@ export const mcpServerCreateSchema = z.object({
     transport_type: z.enum(['stdio', 'sse', 'streamable-http'], {
         message: "transport_type은 'stdio', 'sse', 'streamable-http' 중 하나여야 합니다"
     }),
-    command: secureOptionalTextSchema({ minLength: 1, maxLength: 1000, fieldName: 'command', allowNewLines: false, detectMaliciousPatterns: false, specialCharacterRatioLimit: 0.95 }),
-    args: z.array(secureTextSchema({ maxLength: 500, fieldName: 'args', allowNewLines: false, detectMaliciousPatterns: false, specialCharacterRatioLimit: 0.95 })).max(50).optional(),
+    command: secureOptionalTextSchema({ minLength: 1, maxLength: M.COMMAND_MAX, fieldName: 'command', allowNewLines: false, detectMaliciousPatterns: false, specialCharacterRatioLimit: 0.95 }),
+    args: z.array(secureTextSchema({ maxLength: M.ARG_MAX, fieldName: 'args', allowNewLines: false, detectMaliciousPatterns: false, specialCharacterRatioLimit: 0.95 })).max(M.ARGS_COUNT_MAX).optional(),
     env: z.record(z.string(), z.string()).optional(),
     url: z.url('유효한 URL을 입력하세요').optional(),
     enabled: z.boolean().optional().default(true),
     // visibility 분기 — 미포함 시 Zod 가 strip 하여 핸들러가 항상 global 로 생성(private 요청 무력화) 하던 결함 수정
     visibility: z.enum(['global', 'user_private', 'user_shared']).optional(),
-    catalog_template_id: z.string().max(200).optional()
+    catalog_template_id: z.string().max(M.CATALOG_TEMPLATE_ID_MAX).optional()
 }).superRefine((data, ctx) => {
     if (data.transport_type === 'stdio' && !data.command) {
         ctx.addIssue({
@@ -68,10 +71,10 @@ export const mcpServerCreateSchema = z.object({
  */
 export const mcpServerEnvUpdateSchema = z.object({
     env: z.record(
-        z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, '환경변수 키 형식이 올바르지 않습니다').max(100),
-        z.string().min(1, '값은 비울 수 없습니다').max(10000),
+        z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, '환경변수 키 형식이 올바르지 않습니다').max(M.ENV_KEY_MAX),
+        z.string().min(1, '값은 비울 수 없습니다').max(M.ENV_VALUE_MAX),
     ).refine((v) => Object.keys(v).length > 0, { message: '변경할 환경변수를 1개 이상 지정하세요' })
-        .refine((v) => Object.keys(v).length <= 30, { message: '한 번에 최대 30개까지 변경할 수 있습니다' }),
+        .refine((v) => Object.keys(v).length <= M.ENV_COUNT_MAX, { message: `한 번에 최대 ${M.ENV_COUNT_MAX}개까지 변경할 수 있습니다` }),
 });
 
 /**
@@ -103,7 +106,7 @@ export const mcpServerAutoSpawnUpdateSchema = z.object({
  * 네임스페이스 구분자·셸 인자 오염을 막기 위함.
  */
 export const mcpServerRenameSchema = z.object({
-    name: z.string().min(1).max(128).regex(/^[a-zA-Z0-9_-]+$/, {
+    name: z.string().min(1).max(M.NAME_MAX).regex(/^[a-zA-Z0-9_-]+$/, {
         message: 'name 은 영숫자/언더스코어/하이픈만 허용',
     }),
 });

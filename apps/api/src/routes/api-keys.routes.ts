@@ -35,6 +35,7 @@ import { asyncHandler } from '../utils/error-handler';
 import { success, notFound, badRequest, unauthorized, rateLimited } from '../utils/api-response';
 import { getApiKeyService, ApiKeyError } from '../services/ApiKeyService';
 import { ALLOWED_API_KEY_SCOPES } from '../config/api-key-scopes';
+import { PAGINATION } from '../config/http-data-limits';
 
 /** 발급/수정 시 허용 스코프 화이트리스트 검증 — 미지 스코프(오타·권한 오해)를 거부. */
 const scopesSchema = z.array(z.string().refine((s) => ALLOWED_API_KEY_SCOPES.has(s), {
@@ -159,8 +160,8 @@ router.get('/',
 
         const service = getApiKeyService();
         const includeInactive = req.query.include_inactive === 'true';
-        const limit = parseInt(req.query.limit as string, 10) || 50;
-        const offset = parseInt(req.query.offset as string, 10) || 0;
+        const limit = parseInt(req.query.limit as string, 10) || PAGINATION.DEFAULT_LIMIT;
+        const offset = parseInt(req.query.offset as string, 10) || PAGINATION.DEFAULT_OFFSET;
 
         const keys = await service.listKeys(userId, { includeInactive, limit, offset });
 

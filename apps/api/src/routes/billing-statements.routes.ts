@@ -12,6 +12,7 @@ import { getPool } from '../data/models/unified-database';
 import { CostLedgerRepository } from '../data/repositories/cost-ledger-repository';
 import { getStatement, currentMonth, statementToCsv, type StatementSubject } from '../services/cost/statement-service';
 import { csvCell } from '../utils/csv';
+import { PAGINATION } from '../config/http-data-limits';
 
 const monthOf = (req: Request): string => (typeof req.query.month === 'string' && req.query.month) ? req.query.month : currentMonth();
 
@@ -47,7 +48,7 @@ adminBillingRouter.get('/billing/statements', asyncHandler(async (req: Request, 
 }));
 
 adminBillingRouter.get('/billing/by-agent', asyncHandler(async (req: Request, res: Response) => {
-    const days = Math.min(Math.max(parseInt(String(req.query.days ?? '30'), 10) || 30, 1), 365);
+    const days = Math.min(Math.max(parseInt(String(req.query.days ?? String(PAGINATION.DEFAULT_MONTH_DAYS)), 10) || PAGINATION.DEFAULT_MONTH_DAYS, 1), PAGINATION.MAX_STATS_DAYS_YEAR);
     const to = new Date(); const from = new Date(to.getTime() - days * 86_400_000);
     const rows = await new CostLedgerRepository(getPool()).costByAgent(from, to);
     const total = rows.reduce((n, r) => n + Number(r.cost_usd_micros), 0) || 1;

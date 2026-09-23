@@ -29,6 +29,7 @@ import { PseudoToolCallGate, stripPseudoToolCalls } from './pseudo-tool-call-par
 import { createLogger } from '../utils/logger';
 import { capPromptImages } from './prompt-image-cap';
 import { LLM_PROMPT_IMAGE_LIMITS } from '../config/runtime-limits';
+import { STREAM_TTFC_WARN_MS } from '../config/core-runtime-limits';
 import { resolveModelProfile } from '../config/model-profiles';
 import { LOCAL_PRESERVE_THINKING_ENABLED } from '../config/llm-parameters';
 import { FALLBACK_REASONING_ONLY_NOTICE, shouldPromoteReasoningOnly } from './reasoning-only-recovery';
@@ -299,7 +300,7 @@ export async function streamChat(
             activityFired = true;
             // TTFC(first-chunk) 관측 — fast-fail 진단용. 임계 초과 시에만 warn.
             const ttfcMs = Date.now() - requestStartedAt;
-            if (ttfcMs > 3000) {
+            if (ttfcMs > STREAM_TTFC_WARN_MS) {
                 log.warn(`[TTFC] 첫 SSE 청크 ${ttfcMs}ms — model=${request.model} msgs=${request.messages.length} tools=${request.tools?.length ?? 0}`);
             }
             onActivity?.();

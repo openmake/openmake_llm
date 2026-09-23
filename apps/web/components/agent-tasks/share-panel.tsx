@@ -15,6 +15,7 @@ import {
   getShareState, previewShare, publishShare, unshareTask,
   type ShareDocument, type ShareState, type ShareVisibility,
 } from "@/lib/share-task";
+import { SHARE_LINK_COPY_RESET_MS } from "@/lib/constants/ui-limits";
 
 export function SharePanel({ taskId }: { taskId: string }) {
   const t = useTranslations("agentTasks.share");
@@ -82,7 +83,7 @@ export function SharePanel({ taskId }: { taskId: string }) {
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
+      setTimeout(() => setCopied(false), SHARE_LINK_COPY_RESET_MS);
     } catch { /* 클립보드 거부 — URL 은 화면에 그대로 보인다 */ }
   };
 

@@ -187,6 +187,8 @@ export const RESEARCH_CONTEXT = {
     /** 수집 턴의 출력 토큰 상한 (도구 호출 인자만 필요). RESEARCH_MCP_MAX_TOKENS */
     MCP_MAX_TOKENS: parseInt(process.env.RESEARCH_MCP_MAX_TOKENS || '1024', 10),
     MCP_MIN_RESULT_CHARS: parseInt(process.env.RESEARCH_MCP_MIN_RESULT_CHARS || '40', 10),
+    /** 소스 목록에 노출할 도구 결과 스니펫 길이 */
+    MCP_SNIPPET_CHARS: 300,
     /** 도구 결과 본문 캡 — 합성 컨텍스트 팽창 방지 */
     MCP_RESULT_CHAR_CAP: parseInt(process.env.RESEARCH_MCP_RESULT_CHAR_CAP || '8000', 10),
     /** 리서치에 부적합해 제외하는 도구 (웹검색은 파이프라인이 이미 수행) */
@@ -199,6 +201,8 @@ export const RESEARCH_CONTEXT = {
 export const RESEARCH_TRUNCATION = {
     /** Deep Research 소스 콘텐츠 최대 길이 */
     CONTENT_MAX: 5000,
+    /** bullet 형식 findings 추출 시 최대 항목 수 */
+    BULLET_FINDINGS_MAX: 20,
 } as const;
 
 /** 리서치 단계별 LLM temperature */

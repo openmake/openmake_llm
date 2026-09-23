@@ -20,6 +20,7 @@ import { Markdown } from "./markdown";
 import { StructuredAnswer } from "./structured-answer";
 import { McpResourceCard, decodeMcpResources } from "@/components/chat/mcp-resource-card";
 import { cn } from "@/lib/utils";
+import { COPY_FEEDBACK_RESET_MS } from "@/lib/constants/ui-limits";
 
 const ARTIFACT_PLACEHOLDER = /\[\[artifact:([^\]]+)\]\]/g;
 
@@ -529,7 +530,7 @@ function MessageActions({
       .writeText(content)
       .then(() => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
+        setTimeout(() => setCopied(false), COPY_FEEDBACK_RESET_MS);
       })
       .catch(() => {});
   };
