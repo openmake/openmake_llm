@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.86.0](https://github.com/openmake/openmake_llm/compare/v1.85.4...v1.86.0) (2026-09-23)
+
+
+### ✨ 기능
+
+* **knowledge:** Knowledge Space — 문서 기반 작업공간(pgvector RAG) + Base 일반 확장점 ([#996](https://github.com/openmake/openmake_llm/issues/996)) ([7895faa](https://github.com/openmake/openmake_llm/commit/7895faa6c24a35296fd7c7c7b70f0fbe4b3aea41))
+
 ## [1.85.4](https://github.com/openmake/openmake_llm/compare/v1.85.3...v1.85.4) (2026-09-23)
 
 
