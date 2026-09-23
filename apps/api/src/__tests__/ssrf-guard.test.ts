@@ -1,3 +1,10 @@
+// safeFetch 는 undici 의 fetch 를 쓴다 — 여기선 globalThis.fetch 스텁으로 흘려 호출 인자만 본다
+// (실제 연결 경로는 security/__tests__/safe-fetch-real-connection.test.ts 가 고정)
+jest.mock('undici', () => ({
+    ...jest.requireActual('undici'),
+    fetch: (...args: Parameters<typeof fetch>) => globalThis.fetch(...args),
+}));
+
 import { isBlockedIP, safeFetch, validateOutboundUrl } from '../security/ssrf-guard';
 
 describe('isBlockedIP', () => {
