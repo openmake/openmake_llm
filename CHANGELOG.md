@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.85.3](https://github.com/openmake/openmake_llm/compare/v1.85.2...v1.85.3) (2026-09-23)
+
+
+### 🐛 버그 수정
+
+* **job-runtime:** poller lease heartbeat·병렬 진행·수집 소진 재선점 루프·폴링 실패의 수집 예산 소진 ([#992](https://github.com/openmake/openmake_llm/issues/992)) ([acc13c0](https://github.com/openmake/openmake_llm/commit/acc13c097c4ea049ad0f04504a8c1c1b61c4bf9f))
+
 ## [1.85.2](https://github.com/openmake/openmake_llm/compare/v1.85.1...v1.85.2) (2026-09-23)
 
 
