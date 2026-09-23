@@ -15,6 +15,8 @@ import type { ExecContext, ExecutorOutput } from '../services/orchestrator/types
 import type { ApprovedInvocationHandle } from './admission';
 import type { RestrictedModelInvoker } from '../runtime-ports/model-invoker';
 import type { ScopedArtifactStore } from '../runtime-ports/artifact-store';
+import type { JobDriver, ScopedJobRuntime } from '../runtime-ports/job-runtime';
+import type { OperationSpec } from '../runtime-ports/model-invoker';
 
 export type CapabilityId = string;
 export type AddonId = string;
@@ -67,6 +69,8 @@ export interface CapabilityContext extends Omit<ExecContext, 'targets' | 'handle
     invocation: ApprovedInvocationHandle;
     model: RestrictedModelInvoker;
     artifacts: ScopedArtifactStore;
+    /** 장시간 작업의 소유·상태·중복 제출 방지(P07) — 저장소는 Base */
+    jobs: ScopedJobRuntime;
     traceId: string;
 }
 
@@ -77,6 +81,10 @@ export interface CapabilityHandler {
     normalizePlanInput?(task: PlanTask, userMessage: string): PlanTask;
     /** 이 driver 가 배정된 모델을 지원하는가 — 배정 저장·실행 전 검사 */
     describeProviderSupport?(model: ModelDescriptor): SupportVerdict;
+    /** execution.mode='job' capability 의 provider 작업 driver — 백그라운드 poller(P07b)가 재시작 뒤에도 이것으로 이어 간다 */
+    jobDriver?: JobDriver;
+    /** driver 가 쓰는 추가 provider 연산(경로 템플릿) — 등록 시 검증, 포트가 origin·자격증명을 붙인다 */
+    operations?: Readonly<Record<string, OperationSpec>>;
 }
 
 /** 소유자는 Host 가 채운다 — 외부 입력을 신뢰하지 않는다 */

@@ -24,6 +24,7 @@ function ctx(providerId = 'openrouter', response: unknown = { data: [{ b64_json:
             save: async (input) => { saved.push({ prefix: input.prefix, bytes: input.bytes }); return { id: '1', mimeType: 'image/png', fileName: `${input.prefix}-1.png`, sizeBytes: input.bytes.length, urlPath: `/generated/${input.prefix}-1.png` }; },
             read: async () => { throw new Error('unused'); },
         },
+        jobs: { submit: async () => { throw new Error('unused'); }, get: async () => null, advance: async () => null },
         traceId: 'trace',
     };
 }

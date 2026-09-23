@@ -16,6 +16,7 @@ import { BASE_CAPABILITY_OWNER, type CapabilityContext } from '../../capability-
 import { getCapabilityRegistry } from '../../runtime-ports/capability-runtime';
 import { createRestrictedInvoker, type RestrictedModelInvoker } from '../../runtime-ports/model-invoker';
 import { scopedArtifactStore } from '../../runtime-ports/artifact-store';
+import { scopedJobRuntime } from '../../runtime-ports/job-runtime';
 import * as crypto from 'node:crypto';
 import type { PlanTask, ValidatedPlan } from './plan-schema';
 import type { ExecContext, TaskResult } from './types';
@@ -89,8 +90,9 @@ function buildHandlerContext(task: PlanTask, ctx: ExecContext, handle: ApprovedI
     const base: CapabilityContext = {
         ...rest,
         invocation: handle,
-        model: target ? createRestrictedInvoker(handle, target) : noTargetInvoker(task.capability),
+        model: target ? createRestrictedInvoker(handle, target, getCapabilityRegistry().get(task.capability)?.handler.operations) : noTargetInvoker(task.capability),
         artifacts: scopedArtifactStore({ userId: ctx.userId, sessionId: ctx.sessionId, capability: task.capability }),
+        jobs: scopedJobRuntime(handle),
         traceId: crypto.randomUUID(),
     };
     return ownerAddonId === BASE_CAPABILITY_OWNER.addonId ? Object.assign(base, { targets }) : base;

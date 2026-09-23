@@ -11,6 +11,7 @@
  * @module capability-contract/registry
  */
 import { CapabilityRegistryError } from './errors';
+import { validateOperationSpecs } from '../runtime-ports/model-invoker';
 import type { CapabilityDefinition, CapabilityHandler, CapabilityId, CapabilityOwner, CapabilityRegistration, JsonSchema } from './types';
 
 const CAPABILITY_ID_PATTERN = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9_]*)+$/;
@@ -66,6 +67,9 @@ export class CapabilityRegistry {
                 assertOpen();
                 validateCapabilityDefinition(definition);
                 if (typeof handler?.execute !== 'function') throw new CapabilityRegistryError(`${definition.id}: handler.execute 가 없습니다`, 'CAPABILITY_ID_INVALID');
+                try { validateOperationSpecs(handler.operations); } catch (err) {
+                    throw new CapabilityRegistryError(`${definition.id}: ${err instanceof Error ? err.message : String(err)}`, 'CAPABILITY_ID_INVALID');
+                }
                 if (staged.has(definition.id)) throw new CapabilityRegistryError(`${definition.id}: 같은 트랜잭션에 중복 등록`, 'CAPABILITY_DUPLICATE');
                 const existing = this.published.get(definition.id);
                 if (existing && existing.owner.addonId !== owner.addonId) {

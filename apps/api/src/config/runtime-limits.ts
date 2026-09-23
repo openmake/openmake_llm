@@ -1896,3 +1896,18 @@ export const GENERATED_ARTIFACT_LIMITS = {
  * **선예약**하고, provider 가 usage 를 주면 그 값으로 정산한다. 주지 않으면 예약분이 남는다 — unknown 을 0(무료)으로 정산하지 않는다.
  */
 export const SERVER_KEY_MEDIA_RESERVE_TOKENS = parseInt(process.env.SERVER_KEY_MEDIA_RESERVE_TOKENS || '1000', 10);
+
+/**
+ * 공통 Job Runtime(P07/P07b) — 백그라운드 poller 는 기본 OFF(lease·재시작·중복 실행자 시험을 통과한 뒤 켠다).
+ * 꺼져 있으면 종전처럼 다음 요청이 같은 job 을 재조회한다. 부팅 복구(submitting → submission_unknown)는 항상 돈다.
+ */
+export const JOB_RUNTIME = {
+    POLLER_ENABLED: process.env.CAPABILITY_JOB_POLLER_ENABLED === 'true',
+    POLL_INTERVAL_MS: parseInt(process.env.CAPABILITY_JOB_POLL_INTERVAL_MS || '30000', 10),
+    LEASE_TTL_MS: parseInt(process.env.CAPABILITY_JOB_LEASE_TTL_MS || '120000', 10),
+    BATCH: parseInt(process.env.CAPABILITY_JOB_POLL_BATCH || '5', 10),
+    /** 이보다 오래된 submitting 만 부팅 복구 대상 — 다른 프로세스가 지금 보내는 중일 수 있다 */
+    SUBMIT_RECOVERY_GRACE_MS: parseInt(process.env.CAPABILITY_JOB_SUBMIT_RECOVERY_GRACE_MS || '300000', 10),
+    /** 결과 수집 연속 실패 상한 — 넘으면 collecting 에 멈춰 errorCode 만 남긴다(생성 실패로 닫지 않는다, 수동 재요청 가능) */
+    COLLECT_MAX_RETRIES: parseInt(process.env.CAPABILITY_JOB_COLLECT_MAX_RETRIES || '5', 10),
+} as const;
