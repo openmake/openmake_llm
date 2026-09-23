@@ -57,6 +57,8 @@ export interface ScopedJobRuntime {
     submit(input: { providerId: string; modelId: string; credentialRef: string; request: unknown }, send: () => Promise<{ externalJobId: string }>): Promise<SubmitOutcome>;
     /** 이 사용자 소유의 job(없거나 남의 것이면 null) */
     get(jobId: string): Promise<JobRecord | null>;
+    /** 이 사용자 소유의 job 을 provider 의 외부 job id 로 — 재조회 첨부(legacy 행 포함)를 공통 상태에 잇는다 */
+    findByExternal(providerId: string, externalJobId: string): Promise<JobRecord | null>;
     /** 이 사용자 소유 job 의 조건부 전이 — 전이표 밖이면 null */
     advance(jobId: string, to: JobState, patch?: TransitionPatch): Promise<JobRecord | null>;
 }
@@ -116,6 +118,10 @@ export function scopedJobRuntime(handle: ApprovedInvocationHandle, deps: { repo?
         },
         async get(jobId) {
             return userId ? r().getForOwner(userId, jobId) : null;
+        },
+        async findByExternal(providerId, externalJobId) {
+            if (!userId) return null;
+            try { return await r().getByExternal(userId, providerId, externalJobId); } catch { return null; }
         },
         async advance(jobId, to, patch) {
             if (!userId) return null;

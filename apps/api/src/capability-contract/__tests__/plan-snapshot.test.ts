@@ -22,10 +22,9 @@ describe('ExecutionSnapshot', () => {
         const schema = planJsonSchemaFor(snap) as { properties: { tasks: { items: { properties: { input: { properties: Record<string, unknown> } } } } } };
         const keys = Object.keys(schema.properties.tasks.items.properties.input.properties);
         // T07: 종전 정적 schema 가 싣던 인자 키(영상·음악)가 빠지지 않는다 — 구조화 출력은 선언 안 된 키를 만들지 않는다
-        for (const k of Object.keys(PLAN_JSON_SCHEMA.properties.tasks.items.properties.input.properties).filter(k => k !== 'duration' && k !== 'lyrics')) expect(keys).toContain(k);
-        // Base 스냅샷엔 Base 소유 capability 의 인자 키만 — 음악(duration·lyrics)·이미지 키는 그 add-on 이 게시할 때 합류한다
-        expect(keys).toEqual(expect.arrayContaining(['seconds', 'size', 'negative_prompt', 'voice', 'format']));
-        expect(keys).not.toContain('lyrics');
+        // Base 스냅샷엔 Base 소유 capability 의 인자 키만(음성 voice·format) — 영상·음악·이미지 키는 그 add-on 이 게시할 때 합류한다
+        expect(keys).toEqual(['instruction', 'text', 'attachments', 'refs', 'voice', 'format']);
+        void PLAN_JSON_SCHEMA;
         expect(snap.schemaHash).toHaveLength(16);
     });
 

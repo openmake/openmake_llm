@@ -9,7 +9,7 @@
  *  - `cancelled`: 사용자 취소 → 호출부가 종전 경로도 시작하지 않는다
  * 셰도우(orchestrator_runs)는 fire-and-forget.
  */
-import { ORCHESTRATOR, CAPABILITY_LABELS_KO, VIDEO_JOB_FOLLOWUP_PATTERN, VIDEO_JOB_RESULT_INTENT_PATTERN, VIDEO_JOB_NOT_FOLLOWUP_PATTERN, MEDIA_DURATION_PATTERN, VIDEO_ASPECT_PATTERNS, VIDEO_GEN_ASPECT_SIZES, type Capability } from '../../config/capabilities';
+import { ORCHESTRATOR, CAPABILITY_LABELS_KO, JOB_RESULT_INTENT_PATTERN, JOB_NOT_FOLLOWUP_PATTERN, MEDIA_DURATION_PATTERN, type Capability } from '../../config/capabilities';
 import { getPool } from '../../data/models/unified-database';
 import { OrchestratorRunsRepository } from '../../data/repositories/orchestrator-runs-repo';
 import type { ChatMessageRequest } from '../chat-service-types';
@@ -110,28 +110,34 @@ async function collectPendingJobs(userId: string | undefined, sessionId: string 
 }
 
 /**
- * 영상 job 첨부가 있고 사용자가 그 영상을 묻는 발화일 때 Planner 계획을 재조회로 보정한다. 그 외엔 계획 그대로.
+ * 공통 Job 참조 보정(P08) — job 첨부가 있고 사용자가 **그 결과**를 묻는 발화일 때 Planner 계획을 재조회로 보정한다. 그 외엔 계획 그대로.
+ * 주제어는 job capability 소유 handler 의 `jobFollowupTopic`(영상이면 "영상·video" 등), 결과 의도·새 생성 제외 패턴은 언어 공통.
  * - `simple` 을 냈으면 가장 최근 job 을 재조회하는 1작업 multi 로 바꾼다(저장본은 실행기가 즉시 반환 — provider 호출 없음).
- * - `multi` 로 video.generate 를 골랐는데 job 첨부 id 를 빠뜨렸으면 그 작업에 job 을 붙인다 — 그대로 두면 지시문으로 **새 영상을
+ * - `multi` 로 그 capability 를 골랐는데 job 첨부 id 를 빠뜨렸으면 그 작업에 job 을 붙인다 — 그대로 두면 지시문으로 **새 작업을
  *   제출**한다(2026-09-15 실측: hasa exaone-4.0-32b planner 가 "아까 만든 영상 다시 보여줘" 에 attachments:[] 를 냈다).
  */
 export function coerceJobFollowup(plan: ValidatedPlan, attachments: Map<string, OrchestratorAttachment>, message: string): ValidatedPlan {
     // 보정은 "기존 결과 조회" 의도에만 — 새 생성("만들어줘")·설명("압축 원리")·다른 대화의 job 은 Planner 판단을 그대로 둔다(Codex 검토 2)
-    if (!VIDEO_JOB_FOLLOWUP_PATTERN.test(message)) return plan;
-    if (!VIDEO_JOB_RESULT_INTENT_PATTERN.test(message) || VIDEO_JOB_NOT_FOLLOWUP_PATTERN.test(message)) return plan;
-    const job = [...attachments.values()].find((a) => a.kind === 'job' && a.job?.capability === 'video.generate' && a.job.sameConversation !== false);
-    if (!job) return plan;
+    if (!JOB_RESULT_INTENT_PATTERN.test(message) || JOB_NOT_FOLLOWUP_PATTERN.test(message)) return plan;
+    const registry = getCapabilityRegistry();
+    const job = [...attachments.values()].find((a) => {
+        if (a.kind !== 'job' || !a.job || a.job.sameConversation === false) return false;
+        const topic = registry.get(a.job.capability)?.handler.jobFollowupTopic;
+        return !!topic && topic.test(message);
+    });
+    if (!job?.job) return plan;
+    const capability = job.job.capability;
     if (plan.complexity !== 'simple') {
-        const orphan = plan.tasks.filter((t) => t.capability === 'video.generate' && t.attachments.length === 0 && t.refs.length === 0);
+        const orphan = plan.tasks.filter((t) => t.capability === capability && t.attachments.length === 0 && t.refs.length === 0);
         if (orphan.length === 1) {
             orphan[0].attachments = [job.id];
-            logger.info(`[Orchestrator] video.generate 에 빠진 영상 job 첨부 보정 (${job.job?.jobId})`);
+            logger.info(`[Orchestrator] ${capability} 에 빠진 job 첨부 보정 (${job.job.jobId})`);
         }
         return plan;
     }
-    const v = validatePlan({ complexity: 'multi', language: plan.language, synthesis: true, tasks: [{ id: 't1', capability: 'video.generate', input: { instruction: message.slice(0, 400), attachments: [job.id] } }] }, new Set(attachments.keys()));
+    const v = validatePlan({ complexity: 'multi', language: plan.language, synthesis: true, tasks: [{ id: 't1', capability, input: { instruction: message.slice(0, 400), attachments: [job.id] } }] }, new Set(attachments.keys()));
     if (!v.ok) return plan;
-    logger.info(`[Orchestrator] simple → 영상 job 재조회로 보정 (${job.job?.jobId})`);
+    logger.info(`[Orchestrator] simple → ${capability} job 재조회로 보정 (${job.job.jobId})`);
     return v.plan;
 }
 
@@ -155,26 +161,6 @@ export function applyPlanInputHooks(plan: ValidatedPlan, message: string): Valid
         try { return hook(t, message); } catch (err) { logger.warn(`[Orchestrator] ${t.id} 계획 인자 hook 실패(무시): ${err instanceof Error ? err.message : String(err)}`); return t; }
     });
     plan.levels = plan.levels.map((level) => level.map((t) => plan.tasks.find((x) => x.id === t.id) ?? t));
-    return plan;
-}
-
-/**
- * 사용자 원문에 적힌 영상 길이·비율을 새 생성 작업의 인자로 확정한다 — Planner 가 빠뜨리거나 다르게 적어도 원문이 우선.
- * 원문에 없으면 계획값(직전 대화에서 추론한 값일 수 있다)을 그대로 둔다. job 재조회 작업은 새로 제출하지 않으므로 건드리지 않는다.
- * 음악 길이 보정은 music-runtime 의 `normalizePlanInput` hook 으로 옮겼다(P06) — P08 에서 영상도 같은 hook 으로 간다.
- */
-export function applyStatedVideoParams(plan: ValidatedPlan, message: string): ValidatedPlan {
-    const seconds = statedDurationSec(message);
-    const aspect = VIDEO_ASPECT_PATTERNS.find(([, re]) => re.test(message))?.[0];
-    if (seconds === undefined && !aspect) return plan;
-    for (const t of plan.tasks) {
-        if (t.capability !== 'video.generate' || t.attachments.length > 0) continue;
-        const before = `${String(t.extra.seconds ?? '-')}/${String(t.extra.size ?? '-')}`;
-        if (seconds !== undefined) t.extra.seconds = String(seconds);
-        if (aspect) t.extra.size = VIDEO_GEN_ASPECT_SIZES[aspect];
-        const after = `${String(t.extra.seconds ?? '-')}/${String(t.extra.size ?? '-')}`;
-        if (after !== before) logger.info(`[Orchestrator] ${t.id} 영상 인자를 원문 기준으로 보정 ${before} → ${after}`);
-    }
     return plan;
 }
 
@@ -293,7 +279,7 @@ export async function runOrchestrator(input: RunOrchestratorInput): Promise<Orch
         record({ requestId: input.requestId, userId, plannerModel: planned.model, plannerMs: planned.ms, plannerOk: false, plannerError: planned.error, outcome: 'fallback' });
         return { mode: 'fallback', contextBlock: fallbackNote(lang, planned.error ?? 'unknown'), mediaMarkdowns: [], plannerMs: planned.ms };
     }
-    const plan = applyPlanInputHooks(applyStatedVideoParams(coerceJobFollowup(planned.plan, attachments, req.message ?? ''), req.message ?? ''), req.message ?? '');
+    const plan = applyPlanInputHooks(coerceJobFollowup(planned.plan, attachments, req.message ?? ''), req.message ?? '');
     onProgress?.({ type: 'orchestrator_plan', complexity: plan.complexity, tasks: plan.tasks.map((t) => ({ id: t.id, capability: t.capability, instruction: t.instruction.slice(0, 160) })) });
 
     if (plan.complexity === 'simple') {

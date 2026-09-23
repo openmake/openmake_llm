@@ -20,7 +20,7 @@ import { reserveServerKeyBudget, type ServerKeyReservation } from '../server-key
 import { SERVER_KEY_MEDIA_RESERVE_TOKENS } from '../../config/runtime-limits';
 import { QuotaExceededError } from '../../errors/quota-exceeded.error';
 import { resolveCapabilityTarget, CapabilityUnavailableError, type CapabilityTarget } from './capability-resolver';
-import { savedVideoPath } from './executors/video';
+import { savedJobResultPath } from './media-io';
 import type { PlanTask, ValidatedPlan } from './plan-schema';
 import { resolveTaskAttachments, type AttachmentKind, type ExecContext } from './types';
 import { createLogger } from '../../utils/logger';
@@ -65,7 +65,6 @@ function inputProblem(task: PlanTask, ctx: ExecContext): string | null {
     const direct = resolveTaskAttachments({ ...task, refs: [] }, ctx, need);
     if (direct.length > 0) return null;
     if (task.refs.length > 0) return null;
-    if (task.capability === 'video.generate') return null;
     // Planner 가 첨부 id 를 빠뜨린 계획 — 이 종류 첨부가 정확히 하나면 그것을 채운다(여러 개면 어느 것인지 몰라 거절 유지).
     // 실측(2026-09-15): hasa exaone-4.0-32b planner 가 이미지 이해·OCR·전사 계획에서 attachments:[] 를 냈다.
     const candidates = [...ctx.attachments.values()].filter((a) => need.has(a.kind));
@@ -99,8 +98,8 @@ export async function preflightPlan(plan: ValidatedPlan, ctx: ExecContext): Prom
             issuedAt: now, deadline: now + ORCHESTRATOR.TURN_DEADLINE_MS,
         };
         if (task.capability === 'web.search') { handles.set(task.id, handle); continue; } // 모델 배정 없음
-        // 완료·저장된 영상 job 조회는 외부 키 없이 반환되므로 배정·키 검사를 요구하지 않는다(Codex 검토 4)
-        if (task.capability === 'video.generate' && task.attachments.some((id) => savedVideoPath(ctx.attachments.get(id)))) { handles.set(task.id, handle); continue; }
+        // 완료·저장된 job 결과 조회는 외부 키 없이 반환되므로 배정·키 검사를 요구하지 않는다(Codex 검토 4 — T15)
+        if (task.attachments.some((id) => savedJobResultPath(ctx.attachments.get(id), task.capability))) { handles.set(task.id, handle); continue; }
         try {
             const target = await resolveCapabilityTarget(task.capability, ctx.userId);
             // 서버 공용 키는 check-only 가 아니라 **원자적 예약**(T24) — 동시 요청이 각각 통과해 총한도를 넘지 못한다

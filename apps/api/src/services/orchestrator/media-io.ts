@@ -3,6 +3,7 @@
  * @description executor 공용 미디어 입출력 — 첨부(base64 / `/generated` 경로 / https) 로드, dataURL 변환, 결과 저장.
  */
 import { saveGeneratedArtifact, scopedArtifactStore } from '../../runtime-ports/artifact-store';
+import { resolveGeneratedPath } from '../../tools/generated-media';
 import { downloadProviderUrl } from './http-call';
 import { inferImageMime } from '../../utils/image-mime';
 import { recordCost } from '../cost/cost-ledger-service';
@@ -60,6 +61,16 @@ export async function loadAttachment(a: OrchestratorAttachment, opts: LoadOption
         }
     }
     throw new Error(`첨부 '${a.id}' 에 데이터가 없습니다`);
+}
+
+/**
+ * job 첨부에 이미 받아둔 결과가 실재하면 그 경로(P08, 종전 영상 전용 `savedVideoPath` 의 일반화) — capability 를 주면 그 job 만.
+ * 사용자 소유 job(listRecent 가 user_id 로 조회)만 첨부에 실리고, 파일 전달은 artifact-store 가 다시 소유권을 본다.
+ */
+export function savedJobResultPath(att: OrchestratorAttachment | undefined, capability?: string): string | null {
+    const p = att?.job?.resultPath;
+    if (!p || (capability && att?.job?.capability !== capability)) return null;
+    return resolveGeneratedPath(p) ? p : null;
 }
 
 export function mimeFromName(name: string): string {

@@ -153,6 +153,11 @@ export class JobRuntimeRepository extends BaseRepository {
         return r.rows[0] ? map(r.rows[0]) : null;
     }
 
+    async getByExternal(userId: string, providerId: string, externalJobId: string): Promise<JobRecord | null> {
+        const r = await this.query('SELECT * FROM orchestrator_jobs WHERE user_id = $1 AND provider_id = $2 AND job_id = $3', [userId, providerId, externalJobId]);
+        return r.rows[0] ? map(r.rows[0]) : null;
+    }
+
     async getById(id: string): Promise<JobRecord | null> {
         const r = await this.query('SELECT * FROM orchestrator_jobs WHERE id = $1', [id]);
         return r.rows[0] ? map(r.rows[0]) : null;

@@ -124,9 +124,10 @@ export function createRestrictedInvoker(handle: ApprovedInvocationHandle, target
         describe: () => ({ providerId: target.providerId, model: target.model, fullId: target.fullId, source: target.source, costOwner: target.costOwner, transport: target.transport, params: { ...target.params } }),
         invokeJson: async (req) => callJson(target, call(req, 'json')),
         invokeBinary: async (req) => callBinary(target, call(req, 'binary')),
-        download: async (url, opts) => downloadProviderUrl(url, {
+        // 루트 상대 경로(`/v1/videos/{id}/content`·jobs-v1 의 상대 artifact_url)는 대상 origin 기준으로 푼다
+        download: async (rawUrl, opts) => { const url = rawUrl.startsWith('/') ? new URL(rawUrl, `${target.baseUrl}/`).toString() : rawUrl; return downloadProviderUrl(url, {
             timeoutMs: cap(opts.timeoutMs), signal: opts.signal, allowTypes: opts.allowTypes, maxBytes: opts.maxBytes ?? HTTP_CALL_LIMITS.BINARY_MAX_BYTES,
             headers: sameOrigin(url, target.baseUrl) ? target.headers : undefined,
-        }),
+        }); },
     };
 }

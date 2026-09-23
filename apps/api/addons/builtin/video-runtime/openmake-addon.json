@@ -1,0 +1,20 @@
+{
+  "id": "video-runtime",
+  "name": "OpenMake Video Runtime",
+  "version": "1.0.0",
+  "description": "영상 생성(video.generate) — OpenAI 호환 /v1/videos 와 hasa jobs-v1 driver, 공통 Job Runtime 위에서 제출·재조회·수집",
+  "requires": {
+    "openmake": ">=1.84.0 <2.0.0",
+    "capabilityContract": 1
+  },
+  "scope": "system",
+  "kind": "runtime",
+  "order": 5,
+  "components": {},
+  "provides": {
+    "capabilities": ["video.generate"]
+  },
+  "entry": {
+    "runtime": "boot#startVideoRuntime"
+  }
+}

@@ -28,7 +28,6 @@ import {
     CAPABILITY_DEFAULTS,
     CAPABILITY_ENDPOINT,
     CAPABILITY_LIMITS,
-    videoAdapterFor,
     providerParamDefaults,
     type Capability,
 } from '../../config/capabilities';
@@ -142,6 +141,13 @@ async function getGlobalRow(repo: CapabilityModelsRepository, capability: Capabi
     return globalCache.map.get(capability) ?? null;
 }
 
+/** capability 소유 handler 가 선언한 direct transport(P08) — 없으면 게이트웨이 경로 */
+async function directTransportFor(capability: Capability, fullId: string, providerId: string): Promise<{ endpoint: string } | null> {
+    const { getCapabilityRegistry } = await import('../../runtime-ports/capability-runtime');
+    const verdict = getCapabilityRegistry().get(capability)?.handler.describeProviderSupport?.({ fullId, providerId, isExternal: true });
+    return verdict?.supported && verdict.direct ? verdict.direct : null;
+}
+
 function splitFullId(fullId: string): { providerId: string; modelId: string } {
     const idx = fullId.indexOf(':');
     return { providerId: fullId.slice(0, idx), modelId: fullId.slice(idx + 1) };
@@ -208,13 +214,13 @@ async function externalTarget(
             'CAPABILITY_KEY_MISSING',
         );
     }
-    if (capability === 'video.generate' && videoAdapterFor(providerId).kind === 'jobs-v1') {
-        // 게이트웨이가 프록시 못 하는 커스텀 영상 API — 사용자 키로 provider 직결(도구는 SSRF 고정 fetch 사용)
-        const adapter = videoAdapterFor(providerId);
+    const direct = await directTransportFor(capability, fullId, providerId);
+    if (direct) {
+        // 게이트웨이가 프록시 못 하는 provider API(소유 handler 가 선언) — 사용자/서버 키로 provider 직결(SSRF 고정 fetch)
         return {
             capability, fullId, providerId, model: modelId,
             baseUrl: (userBaseUrl || entry.defaultBaseUrl).replace(/\/+$/, ''),
-            endpoint: adapter.submitPath ?? CAPABILITY_ENDPOINT[capability],
+            endpoint: direct.endpoint,
             headers: { Authorization: `Bearer ${apiKey}` },
             params, source, costOwner, transport: 'direct', ...(serverBudget ? { serverBudget } : {}),
         };

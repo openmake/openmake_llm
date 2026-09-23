@@ -15,6 +15,8 @@ jest.mock('../../../llm/user-quota', () => ({ checkUserQuota: async () => undefi
 
 import { resolveCapabilityTarget, clearGlobalCapabilityCache } from '../capability-resolver';
 import { coerceJobFollowup, recordUsage } from '../orchestrate';
+import { registerMediaStubForTest } from './helpers/media-stub';
+beforeAll(() => registerMediaStubForTest());
 import type { CapabilityModelRow } from '../../../data/repositories/capability-models-repo';
 import type { ValidatedPlan } from '../plan-schema';
 import type { OrchestratorAttachment, TaskResult } from '../types';

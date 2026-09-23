@@ -110,7 +110,12 @@ describe('첨부 계약', () => {
 });
 
 describe('coerceJobFollowup — Planner 가 simple 로 답해도 영상 job 첨부 + 영상 발화면 재조회 1작업으로 보정', () => {
-    const { coerceJobFollowup } = jest.requireActual('../orchestrate') as typeof import('../orchestrate');
+    // 주제어는 소유 handler 의 jobFollowupTopic(P08) — Base 스텁으로 video.generate 를 세운다. 이 파일은 중간에 resetModules 를 하므로
+    // Registry·orchestrate 를 호출 시점에 같은 모듈 세대에서 불러온다
+    const coerceJobFollowup: typeof import('../orchestrate').coerceJobFollowup = (...a) => {
+        (jest.requireActual('./helpers/media-stub') as typeof import('./helpers/media-stub')).registerMediaStubForTest();
+        return (jest.requireActual('../orchestrate') as typeof import('../orchestrate')).coerceJobFollowup(...a);
+    };
     const simple = { complexity: 'simple' as const, synthesis: false, tasks: [], levels: [] } as unknown as import('../plan-schema').ValidatedPlan;
     const jobAtt = new Map([['j1', { id: 'j1', kind: 'job' as const, name: 'video.generate 완료·저장됨', mime: '', job: { capability: 'video.generate' as const, providerId: 'hasa', jobId: 'vid_1', resultPath: '/generated/v.webm' } }]]);
     it('영상 발화 + job 첨부 → multi/video.generate(job id 첨부)', () => {
@@ -122,8 +127,9 @@ describe('coerceJobFollowup — Planner 가 simple 로 답해도 영상 job 첨�
         expect(coerceJobFollowup(simple, new Map(), '영상 보여줘')).toBe(simple);
     });
     it('multi 로 video.generate 를 골랐는데 job 첨부를 빠뜨렸으면 그 작업에 job 을 붙인다 (새 영상 제출 방지)', () => {
-        const { validatePlan } = jest.requireActual('../plan-schema') as typeof import('../plan-schema');
         const orphan = () => {
+            (jest.requireActual('./helpers/media-stub') as typeof import('./helpers/media-stub')).registerMediaStubForTest();
+            const { validatePlan } = jest.requireActual('../plan-schema') as typeof import('../plan-schema');
             const v = validatePlan({ complexity: 'multi', tasks: [{ id: 't1', capability: 'video.generate', input: { instruction: 'Show the previously created video' } }] }, new Set(['j1']));
             if (!v.ok) throw new Error(v.reason);
             return v.plan;
@@ -135,43 +141,20 @@ describe('coerceJobFollowup — Planner 가 simple 로 답해도 영상 job 첨�
     });
 });
 
-describe('applyStatedVideoParams — 사용자 원문의 영상 길이·비율이 계획값보다 우선 (2026-09-22)', () => {
-    const { applyStatedVideoParams } = jest.requireActual('../orchestrate') as typeof import('../orchestrate');
-    const { validatePlan } = jest.requireActual('../plan-schema') as typeof import('../plan-schema');
-    const plan = (input: Record<string, unknown>) => {
-        const v = validatePlan({ complexity: 'multi', tasks: [{ id: 't1', capability: 'video.generate', input: { instruction: 'x', ...input } }] }, new Set(['j1']));
-        if (!v.ok) throw new Error(v.reason);
-        return v.plan;
-    };
-    const extra = (message: string, input: Record<string, unknown> = {}) => applyStatedVideoParams(plan(input), message).tasks[0].extra;
-
-    it('Planner 가 빠뜨린 길이·비율을 원문에서 채운다', () => {
-        expect(extra('세로 쇼츠용으로 고양이가 뛰는 8초 영상 만들어줘', { size: '720x1280' })).toEqual({ seconds: '8', size: '720x1280' });
-        expect(extra('Make a 6-second square video of a spinning cup')).toEqual({ seconds: '6', size: '720x720' });
-        expect(extra('가로 16:9 로 5초짜리')).toEqual({ seconds: '5', size: '1280x720' });
-    });
-    it('원문 값이 계획값을 이긴다 — 길이가 여러 개면 가장 큰 값', () => {
-        expect(extra('3초 뒤에 로고가 뜨는 10초 영상', { seconds: '3' }).seconds).toBe('10');
-    });
-    it('원문에 없으면 계획값 그대로, job 재조회 작업은 건드리지 않는다', () => {
-        expect(extra('도시 야경 타임랩스 영상 만들어줘', { seconds: '10', size: '1280x720' })).toEqual({ seconds: '10', size: '1280x720' });
-        expect(extra('도시 야경 영상 만들어줘')).toEqual({});
-        expect(extra('아까 그 5초 영상 보여줘', { attachments: ['j1'] })).toEqual({});
-    });
-    it('분 단위 길이도 초로 옮긴다', () => {
-        expect(extra('2분짜리 영상')).toEqual({ seconds: '120' });
-        expect(extra('Make a 1-minute video')).toEqual({ seconds: '60' });
-    });
-});
-
 describe('statedDurationSec·계획 인자 hook — Planner 가 duration 을 비워 전부 30초가 되던 결함 (2026-09-23)', () => {
-    const { applyPlanInputHooks, statedDurationSec } = jest.requireActual('../orchestrate') as typeof import('../orchestrate');
-    const { validatePlan } = jest.requireActual('../plan-schema') as typeof import('../plan-schema');
-    const { getCapabilityRegistry } = jest.requireActual('../../../runtime-ports/capability-runtime') as typeof import('../../../runtime-ports/capability-runtime');
+    const { statedDurationSec } = jest.requireActual('../orchestrate') as typeof import('../orchestrate');
+    // 이 파일은 중간에 resetModules 를 한다 — Registry·orchestrate·plan-schema 를 호출 시점의 같은 모듈 세대에서 불러온다
+    const mods = () => ({
+        ...(jest.requireActual('../orchestrate') as typeof import('../orchestrate')),
+        ...(jest.requireActual('../plan-schema') as typeof import('../plan-schema')),
+        ...(jest.requireActual('../../../runtime-ports/capability-runtime') as typeof import('../../../runtime-ports/capability-runtime')),
+        ...(jest.requireActual('../../../addon-host/legacy-capability-bridge') as typeof import('../../../addon-host/legacy-capability-bridge')),
+    });
     // Base 테스트는 add-on 을 import 하지 않는다 — 소유 handler 의 normalizePlanInput hook 이 계획에 적용되는 배선만 검증(규칙 자체는 music-runtime 테스트)
     const stubMusic = () => {
+        const { getCapabilityRegistry, ensureLegacyCapabilityBridge, resetCapabilityRuntimeForTest, resetLegacyCapabilityBridgeForTest } = mods();
+        resetCapabilityRuntimeForTest(); resetLegacyCapabilityBridgeForTest(); ensureLegacyCapabilityBridge();
         const registry = getCapabilityRegistry();
-        if (registry.has('music.generate')) registry.unregisterOwner('test-music');
         const tx = registry.beginRegistration({ addonId: 'test-music', addonVersion: '1', source: 'builtin' });
         const base = registry.list()[0].definition;
         tx.register({ ...base, id: 'music.generate', plannable: true }, {
@@ -182,6 +165,7 @@ describe('statedDurationSec·계획 인자 hook — Planner 가 duration 을 비
     };
     const music = (message: string, input: Record<string, unknown> = {}) => {
         stubMusic();
+        const { validatePlan, applyPlanInputHooks } = mods();
         const v = validatePlan({ complexity: 'multi', tasks: [{ id: 't1', capability: 'music.generate', input: { instruction: 'x', ...input } }] }, new Set());
         if (!v.ok) throw new Error(v.reason);
         return applyPlanInputHooks(v.plan, message).tasks[0].extra;

@@ -58,7 +58,11 @@ export interface ModelDescriptor {
     isExternal: boolean;
 }
 
-export type SupportVerdict = { supported: true } | { supported: false; reason: string };
+/**
+ * provider 지원 판정. `direct` 는 게이트웨이가 프록시하지 못하는 provider API 라 앱이 사용자/서버 키로 provider 에 직결해야 함을
+ * 선언한다(P08 — 종전 resolver 의 영상 전용 분기를 driver descriptor 로). 주소는 서버 통제 값(카탈로그 기본 URL·등록 base URL)뿐이다.
+ */
+export type SupportVerdict = { supported: true; direct?: { endpoint: string } } | { supported: false; reason: string };
 
 /**
  * Add-on handler 가 받는 실행 문맥(P04) — 승인 handle · 제한 호출 포트 · scoped Artifact 포트. 종전 `ExecContext` 에서
@@ -81,6 +85,11 @@ export interface CapabilityHandler {
     normalizePlanInput?(task: PlanTask, userMessage: string): PlanTask;
     /** 이 driver 가 배정된 모델을 지원하는가 — 배정 저장·실행 전 검사 */
     describeProviderSupport?(model: ModelDescriptor): SupportVerdict;
+    /**
+     * job capability 의 "기존 결과 조회" 발화 주제어(P08) — Base 의 공통 Job 참조 보정(`coerceJobFollowup`)이 이 주제어와
+     * 언어 공통의 결과 의도 패턴이 함께 맞을 때만 Planner 계획을 재조회로 보정한다(새 생성·설명 요청은 보정하지 않는다).
+     */
+    jobFollowupTopic?: RegExp;
     /** execution.mode='job' capability 의 provider 작업 driver — 백그라운드 poller(P07b)가 재시작 뒤에도 이것으로 이어 간다 */
     jobDriver?: JobDriver;
     /** driver 가 쓰는 추가 provider 연산(경로 템플릿) — 등록 시 검증, 포트가 origin·자격증명을 붙인다 */

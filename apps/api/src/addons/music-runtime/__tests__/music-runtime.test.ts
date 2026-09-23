@@ -23,7 +23,7 @@ function ctx(providerId = 'local-llm', over: Partial<CapabilityContext> = {}): C
             invokeBinary: async () => { throw new Error('unused'); }, download: async () => { throw new Error('unused'); },
         },
         artifacts: { save: async (i) => { saved.push({ ext: i.ext, bytes: i.bytes }); return { id: '1', mimeType: i.mime, fileName: `tts-1.${i.ext}`, sizeBytes: i.bytes.length, urlPath: `/generated/tts-1.${i.ext}` }; }, read: async () => { throw new Error('unused'); } },
-        jobs: { submit: async () => { throw new Error('unused'); }, get: async () => null, advance: async () => null },
+        jobs: { submit: async () => { throw new Error('unused'); }, get: async () => null, findByExternal: async () => null, advance: async () => null },
         traceId: 't', ...over,
     };
 }

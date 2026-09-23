@@ -11,6 +11,8 @@ import { videoGenerateExecutor } from '../executors/video';
 import { preflightPlan } from '../preflight';
 import { validatePlan } from '../plan-schema';
 import type { ExecContext } from '../types';
+import { registerMediaStubForTest } from './helpers/media-stub';
+beforeAll(() => registerMediaStubForTest());
 
 const ctx = (): ExecContext => ({ lang: 'ko', userMessage: 'q', results: new Map(), userId: 'u1', attachments: new Map([['j1', { id: 'j1', kind: 'job', name: 'n', mime: '', job: { capability: 'video.generate', providerId: 'hasa', jobId: 'vid_1', resultPath: '/generated/ok.webm', sameConversation: true } }]]) } as unknown as ExecContext);
 
