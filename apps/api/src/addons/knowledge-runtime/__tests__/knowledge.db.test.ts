@@ -5,6 +5,9 @@
  * `../db` 를 K01 풀로, conversation-sessions·membership-cache 를 mock 해 서비스가 K01 만 만지게 한다.
  * (repository 들은 module-level kdb() 를 쓰므로 주입 대신 모듈 mock 으로 라우팅한다.)
  */
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 
@@ -77,7 +80,11 @@ async function insertSession(id: string, userId: string): Promise<void> {
 }
 
 describeOrSkip('Knowledge 실 DB (K01)', () => {
+    // 업로드 원본은 임시 디렉터리에 쓴다 — 레포 트리에 파일을 남기지 않는다
+    const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'knowledge-test-'));
+    const prevStorageDir = process.env.KNOWLEDGE_STORAGE_DIR;
     beforeAll(async () => {
+        process.env.KNOWLEDGE_STORAGE_DIR = storageDir;
         await insertUser(userA);
         await insertUser(userB);
         (createSession as jest.Mock).mockImplementation(async (uid: string) => {
@@ -92,6 +99,8 @@ describeOrSkip('Knowledge 실 DB (K01)', () => {
         await pool.query(`DELETE FROM knowledge_spaces WHERE scope_id = ANY($1::text[]) OR created_by = ANY($1::text[])`, [[userA, userB]]);
         await pool.query(`DELETE FROM users WHERE id = ANY($1::text[])`, [[userA, userB]]);
         await pool.end();
+        if (prevStorageDir === undefined) delete process.env.KNOWLEDGE_STORAGE_DIR; else process.env.KNOWLEDGE_STORAGE_DIR = prevStorageDir;
+        fs.rmSync(storageDir, { recursive: true, force: true });
     });
 
     it('cross-user: B 는 A 의 Space 를 목록·상세·바인딩에서 볼 수 없다(누출 0)', async () => {

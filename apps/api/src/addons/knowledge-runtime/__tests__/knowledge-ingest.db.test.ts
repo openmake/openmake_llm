@@ -56,7 +56,13 @@ async function insertUser(id: string): Promise<void> {
     );
 }
 
+/** 이미 활성인 index(평가 하네스·실사용이 만든 것)가 있으면 잠시 비활성화했다가 끝나면 되돌린다 — 활성은 하나뿐(유니크) */
+let displacedActiveIndexId: string | null = null;
+
 async function insertActiveIndex(): Promise<void> {
+    const prev = await pool.query<{ id: string }>('SELECT id FROM knowledge_embedding_indexes WHERE is_active');
+    displacedActiveIndexId = prev.rows[0]?.id ?? null;
+    if (displacedActiveIndexId) await pool.query('UPDATE knowledge_embedding_indexes SET is_active = FALSE WHERE id = $1', [displacedActiveIndexId]);
     indexId = randomUUID();
     await pool.query(
         `INSERT INTO knowledge_embedding_indexes (id, provider_ref, model_id, dimension, distance_metric, status, is_active, activated_at)
@@ -104,6 +110,7 @@ describeOrSkip('Knowledge 수집·검색 실 DB (K01)', () => {
     afterAll(async () => {
         await pool.query(`DELETE FROM knowledge_spaces WHERE created_by = ANY($1::text[])`, [[userA, userB]]);
         await pool.query(`DELETE FROM knowledge_embedding_indexes WHERE provider_ref = 'fake:embed'`);
+        if (displacedActiveIndexId) await pool.query('UPDATE knowledge_embedding_indexes SET is_active = TRUE WHERE id = $1', [displacedActiveIndexId]);
         await pool.query(`DELETE FROM users WHERE id = ANY($1::text[])`, [[userA, userB]]);
         await pool.end();
     });

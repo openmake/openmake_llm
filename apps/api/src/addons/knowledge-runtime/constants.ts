@@ -9,8 +9,8 @@ export const KNOWLEDGE_RUNTIME = {
     PROFILE_CACHE_TTL_MS: Number(process.env.KNOWLEDGE_PROFILE_CACHE_TTL_MS) || 30_000,
     /** 수집 작업 폴링 주기(ms) */
     JOB_POLL_INTERVAL_MS: Number(process.env.KNOWLEDGE_JOB_POLL_INTERVAL_MS) || 5_000,
-    /** 원본 파일 저장 디렉터리(비공개) — 미설정 시 앱 데이터 디렉터리 아래 */
-    STORAGE_DIR: process.env.KNOWLEDGE_STORAGE_DIR || '',
+    /** 원본 파일 저장 디렉터리(비공개) — 미설정 시 앱 데이터 디렉터리 아래. 호출 시점에 읽는다(테스트·평가가 임시 경로로 바꿀 수 있게) */
+    get STORAGE_DIR(): string { return process.env.KNOWLEDGE_STORAGE_DIR || ''; },
     /** 문서 텍스트 추출(파서) 상한(ms) */
     EXTRACT_TIMEOUT_MS: Number(process.env.KNOWLEDGE_EXTRACT_TIMEOUT_MS) || 120_000,
     /** 임베딩 배치 호출 1회 상한(ms) */
