@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.85.2](https://github.com/openmake/openmake_llm/compare/v1.85.1...v1.85.2) (2026-09-23)
+
+
+### 🐛 버그 수정
+
+* **security:** safeFetch undici 8 비호환으로 외부 연결 전면 실패 — undici fetch 로 통일 ([#990](https://github.com/openmake/openmake_llm/issues/990)) ([94dee5a](https://github.com/openmake/openmake_llm/commit/94dee5acfa098d1c44a8b5ccae9b837cb0664b30))
+
 ## [1.85.1](https://github.com/openmake/openmake_llm/compare/v1.85.0...v1.85.1) (2026-09-23)
 
 
