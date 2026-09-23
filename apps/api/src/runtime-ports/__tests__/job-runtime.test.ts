@@ -8,7 +8,7 @@ import type { JobRecord, JobRuntimeRepository } from '../../data/repositories/jo
 import type { ApprovedInvocationHandle } from '../../capability-contract/admission';
 
 const handle: ApprovedInvocationHandle = { taskId: 't1', capability: 'video.generate', userId: 'A', sessionId: 's1', owner: { addonId: 'video-runtime', addonVersion: '1.0.0', source: 'builtin' }, registryRevision: 1, stateRevision: 1, issuedAt: 1000, deadline: 1e15 };
-const job = (over: Partial<JobRecord> = {}): JobRecord => ({ id: '1', userId: 'A', state: 'submitting', requestDigest: 'd' } as JobRecord);
+const job = (): JobRecord => ({ id: '1', userId: 'A', state: 'submitting', requestDigest: 'd' } as JobRecord);
 
 function fakeRepo(intent: 'created' | 'existing' | 'conflict' = 'created') {
     const calls: Array<[string, string, unknown]> = [];

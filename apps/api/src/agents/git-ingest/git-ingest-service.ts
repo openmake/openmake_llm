@@ -212,6 +212,16 @@ export class GitIngestService {
             conventionFindings: conv.findings,
             tokensUsed: conv.tokensUsed,
             ...(adapted.compat ? { compat: adapted.compat } : {}),
+            // 설치 metadata(계획서 13.5) — 출처 commit·원문 해시·적응 규칙 버전·지원 수준·요청/허용 권한·필수 도구·미지원 항목.
+            // installable 은 검증·정책을 통과해 여기까지 왔다는 뜻이고, 실행 불가면 adapted 에 머문다. verified 는 시험을 통과했을 때만 올린다.
+            compatibility: {
+                ...adapted.report,
+                // 필수 도구가 없으면 installable 이 아니다(adapted/parsed 에 머문다)
+                supportLevel: adapted.report.blockedReason ? adapted.report.supportLevel : 'installable',
+                sourceSha256: crypto.createHash('sha256').update(validation.prompt_md).digest('hex'),
+                sourceCommit: sha,
+                verified: null,
+            },
         };
         await this.opts.pool.query(
             `INSERT INTO agent_skills
