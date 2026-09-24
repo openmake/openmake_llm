@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { CalendarClock, RefreshCw, Loader2 } from "lucide-react";
 import {
   PageHeader,
+  PageBody,
   Card,
   CardHeader,
   CardTitle,
@@ -88,7 +89,7 @@ export default function AdminSchedulesPage() {
 
       <AdminTabs />
 
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-6">
+      <PageBody className="space-y-6">
       {error && <p className="text-sm text-danger" role="alert">{error}</p>}
 
       <Card>
@@ -156,7 +157,7 @@ export default function AdminSchedulesPage() {
           )}
         </CardContent>
       </Card>
-      </div>
+      </PageBody>
     </>
   );
 }

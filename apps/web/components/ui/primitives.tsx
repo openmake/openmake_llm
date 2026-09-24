@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 /* ── Button ─────────────────────────────────────────────── */
 type ButtonVariant = "default" | "outline" | "ghost" | "danger";
-type ButtonSize = "sm" | "md" | "icon";
+type ButtonSize = "sm" | "md" | "icon" | "icon-sm";
 
 const BTN_VARIANT: Record<ButtonVariant, string> = {
   default:
@@ -17,6 +17,7 @@ const BTN_SIZE: Record<ButtonSize, string> = {
   sm: "h-8 px-3 text-xs",
   md: "h-9 px-4 text-sm",
   icon: "h-9 w-9",
+  "icon-sm": "h-8 w-8",
 };
 
 export function Button({
@@ -38,6 +39,69 @@ export function Button({
       )}
       {...props}
     />
+  );
+}
+
+/* ── Form controls (Input · Textarea · NativeSelect) ────── */
+/** 폼 컨트롤 공통 크기 — md(h-9, text-sm)는 일반, sm(h-8, text-xs)은 표/툴바 등 조밀한 맥락. */
+type ControlSize = "sm" | "md";
+const CONTROL_SIZE: Record<ControlSize, string> = {
+  md: "h-9 px-3 text-sm",
+  sm: "h-8 px-2.5 text-xs",
+};
+const CONTROL_BASE =
+  "w-full rounded-md border border-border-strong bg-surface text-fg outline-none transition placeholder:text-muted focus:border-accent disabled:opacity-50";
+
+export function Input({
+  inputSize = "md",
+  className,
+  ...props
+}: React.InputHTMLAttributes<HTMLInputElement> & { inputSize?: ControlSize }) {
+  return (
+    <input className={cn(CONTROL_BASE, CONTROL_SIZE[inputSize], className)} {...props} />
+  );
+}
+
+export function Textarea({
+  className,
+  ...props
+}: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      className={cn(CONTROL_BASE, "resize-y px-3 py-2 text-sm", className)}
+      {...props}
+    />
+  );
+}
+
+export function NativeSelect({
+  selectSize = "md",
+  className,
+  ...props
+}: React.SelectHTMLAttributes<HTMLSelectElement> & { selectSize?: ControlSize }) {
+  return (
+    <select className={cn(CONTROL_BASE, CONTROL_SIZE[selectSize], className)} {...props} />
+  );
+}
+
+/* ── PageBody ───────────────────────────────────────────── */
+/**
+ * 워크스페이스 페이지의 스크롤 컨테이너 — layout.tsx 계약(각 페이지가 스크롤 영역을 직접 만든다)에
+ * 맞춰 `min-h-0 flex-1 overflow-y-auto p-6` 로 세우고 본문을 `mx-auto w-full max-w-6xl`(1152px)로 가운데 정렬한다.
+ * 전 페이지가 같은 최대 폭·24px 패딩을 공유하도록 이 하나를 쓴다(채팅·비교 등 full-bleed 화면 제외).
+ * className 은 안쪽 폭 컨테이너에 붙는다(space-y-* 등 본문 간격 지정용).
+ */
+export function PageBody({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <div className={cn("mx-auto w-full max-w-6xl", className)}>{children}</div>
+    </div>
   );
 }
 

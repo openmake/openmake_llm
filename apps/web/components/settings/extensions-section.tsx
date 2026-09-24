@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Package, Trash2, Loader2, ChevronDown, ChevronLeft, ChevronRight, Puzzle, Server, RefreshCw, Share2, Download, Store, Plus, AlertTriangle, Bot } from "lucide-react";
-import { Button, Card, CardHeader, CardTitle, CardContent } from "@/components/ui/primitives";
+import { Button, Card, CardHeader, CardTitle, CardContent, Input } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { MarketplacePublishSection } from "@/components/settings/marketplace-publish-section";
@@ -55,7 +55,7 @@ const CATALOG_PAGE_SIZE = 20;
 /** category 미보유 플러그인의 필터 버킷 키 */
 const UNCATEGORIZED = "__none__";
 const CATALOG_SELECT_CLS =
-  "min-w-0 flex-1 rounded-lg border border-border bg-surface px-2 py-1.5 text-xs text-fg outline-none focus:border-border-strong sm:max-w-[240px]";
+  "min-w-0 h-8 flex-1 rounded-md border border-border-strong bg-surface px-2.5 text-xs text-fg outline-none transition focus:border-accent sm:max-w-[240px]";
 
 interface CatalogSource {
   id: string;
@@ -349,7 +349,7 @@ export function ExtensionsSection() {
               const check = updateChecks[ext.id];
               return (
                 <li key={ext.id} className="rounded-lg border border-border">
-                  <div className="flex items-center gap-3 p-3.5">
+                  <div className="flex items-center gap-3 px-4 py-3">
                     <Package className="h-4 w-4 shrink-0 text-accent" />
                     <button
                       type="button"
@@ -395,7 +395,7 @@ export function ExtensionsSection() {
                         value={ext.visibility ?? "private"}
                         disabled={sharing === ext.id}
                         onChange={(e) => void setVisibility(ext, e.target.value as ExtensionVisibility)}
-                        className="h-8 rounded-md border border-line bg-bg-1 px-2 text-xs text-fg"
+                        className="h-8 rounded-md border border-border-strong bg-surface px-2 text-xs text-fg outline-none transition focus:border-accent"
                       >
                         <option value="private">{t("share.optPrivate")}</option>
                         <option value="shared">{t("share.optShared")}</option>
@@ -508,15 +508,15 @@ export function ExtensionsSection() {
                               </p>
                               <ul className="space-y-1">
                                 {ext.manifest!.warnings!.map((w, i) => (
-                                  <li key={i} className="break-words text-[11px] leading-relaxed text-fg-2">
+                                  <li key={i} className="break-words text-xs leading-relaxed text-fg-2">
                                     · {w}
                                   </li>
                                 ))}
                               </ul>
-                              <p className="mt-1 text-[11px] text-muted">{t("report.hint")}</p>
+                              <p className="mt-1 text-xs text-muted">{t("report.hint")}</p>
                             </div>
                           )}
-                          <p className="text-[11px] text-muted">{t("approvalHint")}</p>
+                          <p className="text-xs text-muted">{t("approvalHint")}</p>
                         </>
                       ) : (
                         <p className="text-xs text-muted">{t("detailFailed")}</p>
@@ -597,11 +597,11 @@ export function ExtensionsSection() {
 
           {isAdmin && (
             <div className="mb-3 flex items-center gap-2">
-              <input
+              <Input
                 value={catalogUrl}
                 onChange={(e) => setCatalogUrl(e.target.value)}
                 placeholder={t("catalog.urlPlaceholder")}
-                className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none placeholder:text-muted focus:border-border-strong"
+                className="min-w-0 flex-1"
               />
               <Button
                 size="sm"
@@ -692,7 +692,7 @@ export function ExtensionsSection() {
                 )}
               </div>
               {selectedSource && (
-                <p className="truncate border-b border-border px-3.5 py-1.5 font-mono text-[11px] text-muted">
+                <p className="truncate border-b border-border px-3.5 py-1.5 font-mono text-xs text-muted">
                   {selectedSource.url}
                   <span className="ml-1.5 font-sans">
                     {t("catalog.installableCount", {
@@ -717,7 +717,7 @@ export function ExtensionsSection() {
                             {p.name}
                             {p.version && <span className="ml-1.5 font-mono text-xs text-muted">v{p.version}</span>}
                             {!catalogSource && (
-                              <span className="ml-1.5 rounded bg-surface px-1.5 py-0.5 text-[11px] text-muted">
+                              <span className="ml-1.5 rounded bg-surface px-1.5 py-0.5 text-xs text-muted">
                                 {e.srcName}
                               </span>
                             )}

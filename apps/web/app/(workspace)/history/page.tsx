@@ -384,6 +384,7 @@ export default function HistoryPage() {
         </aside>
       )}
       <div className="min-h-0 flex-1 overflow-y-auto p-6">
+        <div className="mx-auto w-full max-w-6xl">
         {/* 검색 + 전체 삭제 */}
         <div className="mb-5 flex items-center gap-2">
           <div className="flex flex-1 items-center gap-2 rounded-md border border-border-strong bg-surface-2 px-3">
@@ -527,6 +528,7 @@ export default function HistoryPage() {
             ))}
           </div>
         )}
+        </div>
       </div>
       </div>
       <SessionOrganizeDialog

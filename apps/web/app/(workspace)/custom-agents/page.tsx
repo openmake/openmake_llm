@@ -8,6 +8,7 @@ import {
   Button,
   Badge,
   PageHeader,
+  PageBody,
   Card,
   useFocusTrap,
 } from "@/components/ui/primitives";
@@ -438,7 +439,7 @@ export default function CustomAgentsPage() {
       />
       <AgentsTabs />
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <PageBody>
         {loading ? (
           <div className="grid place-items-center py-24 text-center">
             <Bot className="mb-3 h-8 w-8 animate-pulse text-faint" />
@@ -549,7 +550,7 @@ export default function CustomAgentsPage() {
             ))}
           </div>
         )}
-      </div>
+      </PageBody>
 
       {/* 모달들 */}
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title={t("createModalTitle")}>

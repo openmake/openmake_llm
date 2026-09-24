@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Coins, Plus, Trash2 } from "lucide-react";
-import { PageHeader, Card, CardHeader, CardTitle, CardContent, Button, Table, Th, Td } from "@/components/ui/primitives";
+import { PageHeader, PageBody, Card, CardHeader, CardTitle, CardContent, Button, Table, Th, Td } from "@/components/ui/primitives";
 import { AdminTabs } from "@/components/hub-tabs";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
@@ -58,7 +58,7 @@ export default function AdminCostRatesPage() {
     <>
       <PageHeader title={t("title")} description={t("description")} />
       <AdminTabs />
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <PageBody>
         <div className="space-y-6">
           {error && <p className="text-sm text-danger" role="alert">{error}</p>}
           <Card>
@@ -99,7 +99,7 @@ export default function AdminCostRatesPage() {
             </CardContent>
           </Card>
         </div>
-      </div>
+      </PageBody>
     </>
   );
 }

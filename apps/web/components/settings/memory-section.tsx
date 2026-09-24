@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Brain, Plus, Trash2, Loader2 } from "lucide-react";
-import { Button, Card, CardHeader, CardTitle, CardContent } from "@/components/ui/primitives";
+import { Button, Card, CardHeader, CardTitle, CardContent, Textarea } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 
@@ -109,13 +109,13 @@ export function MemorySection() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="rounded-lg border border-border p-3">
-          <textarea
+          <Textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             maxLength={maxContent}
             rows={3}
             placeholder={t("addPlaceholder")}
-            className="w-full resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-fg outline-none placeholder:text-muted focus:border-border-strong"
+            className="resize-none"
           />
           <div className="mt-2 flex items-center justify-between">
             <span className="text-xs text-muted">
@@ -142,25 +142,25 @@ export function MemorySection() {
           <ul className="space-y-2">
             {memories.map((m) => (
               <li key={m.id}>
-                <div className="flex items-start gap-3 rounded-lg border border-border p-3.5">
+                <div className="flex items-start gap-3 rounded-lg border border-border px-4 py-3">
                   <Brain className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
                   <div className="min-w-0 flex-1">
                     <p className="whitespace-pre-wrap break-words text-sm text-fg">{m.content}</p>
                     {m.source && m.source !== "explicit" && (
-                      <span className="mt-1 inline-block rounded border border-border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">
+                      <span className="mt-1 inline-block rounded border border-border px-1.5 py-0.5 font-mono text-xs uppercase tracking-[0.14em] text-muted">
                         {m.source === "candidate" ? t("sourceCandidate") : t("sourceBatch")}
                       </span>
                     )}
                     {m.sensitivity === "sensitive" && (
-                      <span className="ml-1 mt-1 inline-block rounded border border-warn px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] text-warn">
+                      <span className="ml-1 mt-1 inline-block rounded border border-warn px-1.5 py-0.5 font-mono text-xs uppercase tracking-[0.14em] text-warn">
                         {t("sensitive")}
                       </span>
                     )}
                     {m.expires_at && (
-                      <p className="mt-1 text-[11px] text-muted">{t("expiresOn", { date: new Date(m.expires_at).toLocaleDateString() })}</p>
+                      <p className="mt-1 text-xs text-muted">{t("expiresOn", { date: new Date(m.expires_at).toLocaleDateString() })}</p>
                     )}
                   </div>
-                  <Button variant="ghost" size="icon" aria-label={t("deleteAria")} onClick={() => void remove(m.id)}>
+                  <Button variant="ghost" size="icon-sm" aria-label={t("deleteAria")} onClick={() => void remove(m.id)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>

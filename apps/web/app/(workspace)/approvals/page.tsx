@@ -15,7 +15,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { Puzzle, Server, Bot, ExternalLink, ShieldQuestion } from "lucide-react";
-import { PageHeader } from "@/components/ui/primitives";
+import { PageHeader, PageBody } from "@/components/ui/primitives";
 import { SkillDrafts } from "@/components/approvals/skill-drafts";
 import { McpDrafts } from "@/components/approvals/mcp-drafts";
 import { TaskApprovals } from "@/components/approvals/task-approvals";
@@ -31,7 +31,7 @@ export default function ApprovalsPage() {
     <div className="flex h-full flex-col">
       <PageHeader title={t("title")} description={t("description")} />
 
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-6">
+      <PageBody className="space-y-6">
         {/* 에이전트 작업 HITL — 작업이 실제로 멈춰 대기 중이라 맨 위에 둔다 */}
         <section className="space-y-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
@@ -81,7 +81,7 @@ export default function ApprovalsPage() {
           </div>
           <CustomAgentDrafts onRefreshAction={refresh} />
         </section>
-      </div>
+      </PageBody>
     </div>
   );
 }

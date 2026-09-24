@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Boxes, Plus, Pencil, Trash2, X, Loader2, KeyRound } from "lucide-react";
 import {
   PageHeader,
+  PageBody,
   Card,
   CardContent,
   Badge,
@@ -307,7 +308,7 @@ export default function AdminMcpCatalogPage() {
       />
       <AdminTabs />
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <PageBody>
         <Card className="overflow-hidden">
           <CardContent className="p-0">
             <Table>
@@ -393,7 +394,7 @@ export default function AdminMcpCatalogPage() {
             </Table>
           </CardContent>
         </Card>
-      </div>
+      </PageBody>
 
       {showCreate && (
         <TemplateFormModal

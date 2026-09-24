@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Shield, Boxes, Gauge, ArrowRight, Pencil, Trash2, Plus, X, Loader2 } from "lucide-react";
 import {
   PageHeader,
+  PageBody,
   StatCard,
   Card,
   CardHeader,
@@ -377,7 +378,7 @@ export default function AdminPage() {
       />
       <AdminTabs />
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <PageBody>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {/* 값은 실데이터. 트렌드 델타(+12/+5.2%/+18.4%)는 실 비교 소스가 없어 제거(가짜 표시 방지).
               시스템 상태의 "모든 노드 정상"은 트렌드가 아니라 실 상태 라벨이라 유지. */}
@@ -510,7 +511,7 @@ export default function AdminPage() {
             </CardContent>
           </Card>
         )}
-      </div>
+      </PageBody>
 
       {showCreate && (
         <CreateUserModal

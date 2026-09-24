@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import { Save } from "lucide-react";
-import { Button, Badge } from "@/components/ui/primitives";
+import { Button, Badge, Input } from "@/components/ui/primitives";
 
 /**
  * capability 배정 UI 공용 조각 — 사용자 설정(capability-models-section)과 관리자(admin/model-roles)가 같이 쓴다.
@@ -144,10 +144,11 @@ export function CapabilityParamsInputs({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {keys.map((key) => (
-        <input
+        <Input
           key={key}
+          inputSize="sm"
           type="text"
-          className="h-8 w-28 rounded-md border border-border bg-surface-2 px-2 font-mono text-xs text-fg placeholder:text-muted focus:border-accent focus:outline-none disabled:opacity-50"
+          className="w-28 bg-surface-2 font-mono"
           placeholder={key}
           title={key}
           aria-label={`${t(`capabilities.${capability.replace(/\./g, '_')}`)} ${key}`}

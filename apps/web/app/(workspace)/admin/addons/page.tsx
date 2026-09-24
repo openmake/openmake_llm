@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Blocks, Power, PowerOff, AlertTriangle, Cpu } from "lucide-react";
-import { PageHeader, Card, CardHeader, CardTitle, CardContent, Button, Table, Th, Td, Badge } from "@/components/ui/primitives";
+import { PageHeader, PageBody, Card, CardHeader, CardTitle, CardContent, Button, Table, Th, Td, Badge } from "@/components/ui/primitives";
 import { AdminTabs } from "@/components/hub-tabs";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
@@ -100,7 +100,7 @@ export default function AdminAddonsPage() {
     <>
       <PageHeader title={t("title")} description={t("description")} />
       <AdminTabs />
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <PageBody>
         <div className="space-y-6">
           {error && <p className="text-sm text-danger" role="alert">{error}</p>}
           {restartNote && <p className="text-xs text-muted">{restartNote}</p>}
@@ -216,7 +216,7 @@ export default function AdminAddonsPage() {
             </CardContent>
           </Card>
         </div>
-      </div>
+      </PageBody>
     </>
   );
 }

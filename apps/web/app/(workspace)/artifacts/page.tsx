@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Boxes, Share2, ExternalLink, Lock, Globe, Link2 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import type { ApiSuccess } from "@openmake/shared-types";
-import { PageHeader, Card, Badge } from "@/components/ui/primitives";
+import { PageHeader, PageBody, Card, Badge } from "@/components/ui/primitives";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import { ArtifactShareModal } from "@/components/chat/artifact-share-modal";
 import { ArtifactDetailModal } from "@/components/chat/artifact-detail-modal";
@@ -82,7 +82,7 @@ export default function ArtifactsGalleryPage() {
     <>
       <PageHeader title={t("title")} description={t("description")} />
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <PageBody>
         {loading ? (
           <div className="grid place-items-center py-24 text-center">
             <Boxes className="mb-3 h-8 w-8 animate-pulse text-faint" />
@@ -164,7 +164,7 @@ export default function ArtifactsGalleryPage() {
             })}
           </div>
         )}
-      </div>
+      </PageBody>
 
       {share && (
         <ArtifactShareModal

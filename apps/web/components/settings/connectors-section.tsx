@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
   CardContent,
+  Input,
   Table,
   Th,
   Td,
@@ -206,14 +207,14 @@ function RenameModal({
         <form onSubmit={(e) => void submit(e)} className="space-y-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-fg-2">{t("renameLabel")}</label>
-            <input
+            <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               pattern="[A-Za-z0-9_-]+"
               required
-              className="h-9 w-full rounded-md border border-border-strong bg-app px-3 font-mono text-sm text-fg outline-none transition focus:border-accent"
+              className="bg-app font-mono"
             />
-            <p className="mt-1 text-[11px] text-muted">{t("renameHint")}</p>
+            <p className="mt-1 text-xs text-muted">{t("renameHint")}</p>
           </div>
           {error && <p className="rounded-md bg-danger-soft px-3 py-2 text-xs text-danger">{error}</p>}
           <div className="flex justify-end gap-2">
@@ -390,12 +391,12 @@ function EnvEditModal({
                 <label className="mb-1 block font-mono text-xs font-medium text-fg-2">
                   {key}
                   {isSecret && (
-                    <span className="ml-2 font-sans text-[10px] text-faint">
+                    <span className="ml-2 font-sans text-xs text-faint">
                       {t("envSecretHint")}
                     </span>
                   )}
                 </label>
-                <input
+                <Input
                   type={isSecret ? "password" : "text"}
                   autoComplete="off"
                   value={values[key] ?? ""}
@@ -403,7 +404,7 @@ function EnvEditModal({
                     setValues((prev) => ({ ...prev, [key]: e.target.value }))
                   }
                   placeholder={t("envUnchangedPlaceholder")}
-                  className="h-9 w-full rounded-md border border-border-strong bg-app px-3 text-sm text-fg outline-none transition focus:border-accent"
+                  className="bg-app"
                 />
               </div>
             );
@@ -412,15 +413,15 @@ function EnvEditModal({
             <div key={f.key}>
               <label className="mb-1 block font-mono text-xs font-medium text-fg-2">
                 {f.key}
-                <span className="ml-2 font-sans text-[10px] text-muted">{t("envOptionalTag")}</span>
+                <span className="ml-2 font-sans text-xs text-muted">{t("envOptionalTag")}</span>
               </label>
-              <input
+              <Input
                 type={f.secret ? "password" : "text"}
                 autoComplete="off"
                 value={values[f.key] ?? ""}
                 onChange={(e) => setValues((prev) => ({ ...prev, [f.key]: e.target.value }))}
                 placeholder={f.description || t("envUnchangedPlaceholder")}
-                className="h-9 w-full rounded-md border border-border-strong bg-app px-3 text-sm text-fg outline-none transition focus:border-accent"
+                className="bg-app"
               />
             </div>
           ))}
@@ -497,25 +498,25 @@ function GitImportModal({
             <label className="mb-1 block text-xs font-medium text-fg-2">
               Git URL <span className="text-danger">*</span>
             </label>
-            <input
+            <Input
               type="url"
               required
               value={gitUrl}
               onChange={(e) => setGitUrl(e.target.value)}
               placeholder="https://github.com/org/repo"
-              className="h-9 w-full rounded-md border border-border-strong bg-app px-3 text-sm text-fg outline-none transition focus:border-accent"
+              className="bg-app"
             />
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-fg-2">
               {t("accessTokenLabel")}
             </label>
-            <input
+            <Input
               type="password"
               value={accessToken}
               onChange={(e) => setAccessToken(e.target.value)}
               placeholder="ghp_xxxx"
-              className="h-9 w-full rounded-md border border-border-strong bg-app px-3 text-sm text-fg outline-none transition focus:border-accent"
+              className="bg-app"
             />
           </div>
           {error && (
@@ -908,60 +909,62 @@ export function ConnectorsSection() {
                       </Td>
                       <Td className="whitespace-nowrap text-faint">{s.lastChecked}</Td>
                       <Td className="whitespace-nowrap">
-                        {/* 폭이 모자라면 버튼 글자를 꺾는 대신 버튼 단위로 다음 줄에 감싼다 */}
-                        <div className="flex flex-wrap items-center gap-1">
+                        {/* 보조 동작은 아이콘 버튼(icon-sm)으로 접어 한 줄에 담고, 상태 주동작(연결/해제)만
+                            라벨 버튼으로 남긴다 — 폭이 모자라면 Table 의 가로 스크롤에 맡긴다(줄바꿈 없음) */}
+                        <div className="flex items-center gap-1">
                           <Button
                             variant="outline"
-                            size="sm"
+                            size="icon-sm"
                             onClick={() => setRenameTarget(s)}
+                            aria-label={t("renameTitle")}
                             title={t("renameTitle")}
                           >
-                            <Pencil className="h-3 w-3" />
+                            <Pencil className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="outline"
-                            size="sm"
+                            size="icon-sm"
                             disabled={isActing}
                             onClick={() => void handleToggleEnabled(s.id, !s.enabled)}
+                            aria-label={s.enabled ? t("disable") : t("enable")}
                             title={s.enabled ? t("disableTitle") : t("enableTitle")}
                           >
-                            {s.enabled ? <PowerOff className="h-3 w-3" /> : <Power className="h-3 w-3" />}
-                            {s.enabled ? t("disable") : t("enable")}
+                            {s.enabled ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
                           </Button>
                           {/* 전역 서버는 부팅 시 registry 가 띄우므로 이 축이 없다 */}
                           {!s.isGlobal && (
                             <Button
                               variant="outline"
-                              size="sm"
+                              size="icon-sm"
                               disabled={isActing || !s.enabled}
                               onClick={() => void handleToggleAutoSpawn(s.id, !s.autoSpawn)}
+                              aria-label={s.autoSpawn ? t("autoSpawnOn") : t("autoSpawnOff")}
                               title={s.autoSpawn ? t("autoSpawnOffTitle") : t("autoSpawnOnTitle")}
                             >
-                              {s.autoSpawn ? <Zap className="h-3 w-3" /> : <ZapOff className="h-3 w-3" />}
-                              {s.autoSpawn ? t("autoSpawnOn") : t("autoSpawnOff")}
+                              {s.autoSpawn ? <Zap className="h-4 w-4" /> : <ZapOff className="h-4 w-4" />}
                             </Button>
                           )}
                           {s.oauthConnected && (
                             <Button
                               variant="outline"
-                              size="sm"
+                              size="icon-sm"
                               disabled={isActing}
                               onClick={() => void handleOAuthLogout(s.id)}
+                              aria-label={t("oauthLogout")}
                               title={t("oauthLogoutTitle")}
                             >
-                              <LogOut className="h-3 w-3" />
-                              {t("oauthLogout")}
+                              <LogOut className="h-4 w-4" />
                             </Button>
                           )}
                           {s.envKeys.length > 0 && (
                             <Button
                               variant="outline"
-                              size="sm"
+                              size="icon-sm"
                               onClick={() => setEnvEditTarget(s)}
+                              aria-label={t("envEdit")}
                               title={t("envEditTitle")}
                             >
-                              <KeyRound className="h-3 w-3" />
-                              {t("envEdit")}
+                              <KeyRound className="h-4 w-4" />
                             </Button>
                           )}
                           {s.status === "connected" ? (
@@ -1008,13 +1011,14 @@ export function ConnectorsSection() {
                           {canDelete(s) && (
                             <Button
                               variant="outline"
-                              size="sm"
+                              size="icon-sm"
                               disabled={isActing}
                               onClick={() => setDeleteTarget(s)}
+                              aria-label={t("deleteTitle")}
                               title={t("deleteTitle")}
                               className="text-danger hover:bg-danger-soft"
                             >
-                              <Trash2 className="h-3 w-3" />
+                              <Trash2 className="h-4 w-4" />
                             </Button>
                           )}
                         </div>

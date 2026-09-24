@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { RefreshCw, Settings2 } from "lucide-react";
-import { PageHeader, Card, CardHeader, CardTitle, CardContent, Badge, Button, Table, Th, Td } from "@/components/ui/primitives";
+import { PageHeader, PageBody, Card, CardHeader, CardTitle, CardContent, Badge, Button, Table, Th, Td } from "@/components/ui/primitives";
 import { AdminTabs } from "@/components/hub-tabs";
 import { ApiClient } from "@/lib/api-client";
 
@@ -92,7 +92,7 @@ export default function AdminSloPage() {
         }
       />
       <AdminTabs />
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <PageBody>
         {error && <p className="mb-4 text-sm text-danger" role="alert">{error}</p>}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {evals.map((e) => (
@@ -167,7 +167,7 @@ export default function AdminSloPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </PageBody>
     </>
   );
 }

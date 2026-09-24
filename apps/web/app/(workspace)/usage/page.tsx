@@ -11,6 +11,7 @@ import {
   CardContent,
   StatCard,
   PageHeader,
+  PageBody,
   Table,
   Th,
   Td,
@@ -635,8 +636,7 @@ export default function UsagePage() {
         }
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-5xl space-y-6">
+      <PageBody className="space-y-6">
           {loading && !summary ? (
             <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -769,8 +769,7 @@ export default function UsagePage() {
               </Card>
             </>
           )}
-        </div>
-      </div>
+      </PageBody>
     </>
   );
 }
