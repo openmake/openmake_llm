@@ -32,13 +32,16 @@
 # 사용:
 #   # 아무것도 없는 PC 에서 한 줄 (macOS / Linux / Windows→WSL2 안에서)
 #   curl -fsSL https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk.sh \
-#     | bash -s -- env install staging --public-url https://chat-staging.example.com
+#     | bash -s -- env install staging --public-url https://staging-chat.example.com
 #
-#   omk env install <env> [--ref BR] [--bench-ref BR] [--public-url URL] [--no-bench] [--no-proxy] [--no-searxng]
+#   omk env install <env> [--ref BR] [--bench-ref BR] [--public-url URL] [--no-bench] [--no-proxy] [--no-searxng] [--no-runtime-images] [--tailscale] [--host H]…
+#                         [--no-litellm] [--no-default-model] [--qwen-vllm-base U --bge-vllm-base U --vllm-api-key K]
 #                         [--llm-base-url U --llm-api-key K --llm-model M] [--autoupdate|--no-autoupdate]
-#   omk env update  <env> [--if-behind]       # llm(ff-only→build→migrate→restart) → bench → proxy
-#   omk env reset   <env> [--keep-data] [--keep-env] [--reinstall] [--yes]
+#   omk env update  <env> [--if-behind] [--no-backup]       # llm(ff-only→build→migrate→restart) → bench → proxy
+#   omk env reset   <env> [--keep-data] [--keep-env] [--purge-images] [--reinstall] [--yes]
 #   omk env status|start|stop|logs <env>
+#   omk env expose <env> [--tailscale] [--host H]…      # 다른 기기에서 프록시 포트로 보기 — 호스트를 CORS 에 허용(.env 에 기억)
+#   omk env backup  <env> [--schedule ['CRON']] [--off] [--list] [--dry-run]   # DB 덤프 → $OMK_ROOT/backups/<env> (reset 에도 남는다)
 #   omk env autoupdate <env> [--every 'CRON'] [--off]   # 선택 — 기본은 수동 배포. PM2 cron 앱 omk-updater-<env>
 #   omk proxy status|reload|render <env>
 #   omk dev setup [--no-searxng] · omk dev up|down|status|reset [api|web|bench|deps|all]
@@ -70,6 +73,20 @@ OMK_CADDY_ADMIN="${OMK_CADDY_ADMIN:-localhost:2019}"
 OMK_AUTOUPDATE_CRON="${OMK_AUTOUPDATE_CRON:-*/10 * * * *}"
 OMK_SEARXNG_IMAGE="${OMK_SEARXNG_IMAGE:-searxng/searxng:latest}"
 OMK_SEARXNG_PORT_BASE="${OMK_SEARXNG_PORT_BASE:-8888}"   # .env.example 의 SEARXNG_URL 예시 포트. 점유 시 다음 빈 포트
+OMK_BACKUP_CRON="${OMK_BACKUP_CRON:-30 3 * * *}"          # omk env backup --schedule 의 기본 주기 (매일 03:30)
+OMK_LITELLM_PORT_BASE="${OMK_LITELLM_PORT_BASE:-13401}"  # LiteLLM 게이트웨이 빈 포트 탐색 시작점
+OMK_LITELLM_SPEC="${OMK_LITELLM_SPEC:-litellm[proxy]}"    # pip 설치 대상 — 버전 고정: 'litellm[proxy]==X.Y.Z'
+# 기본 모델 — 업스트림을 주지 않은 설치본도 바로 채팅이 되게 하는 최소 모델. 호스트당 llama.cpp 서버 하나(PM2), 환경들이 공유한다.
+# 작업 클론의 핫 리로드 개발 서버('omk dev up')가 쓰는 인스턴스 이름 — 환경 'dev'(~/.openmake/dev)와 컨테이너·볼륨·포트가
+# 겹치지 않게 따로 둔다. 같은 호스트에서 개발 서버와 환경 dev 를 동시에 쓸 수 있다.
+OMK_LOCAL_INSTANCE="local"
+OMK_LLAMACPP_APP="omk-llamacpp"
+OMK_LLAMACPP_TAG="${OMK_LLAMACPP_TAG:-b10964}"                          # llama.cpp 릴리스 태그 (v0.4.1 에 대응)
+OMK_LLAMACPP_PORT_BASE="${OMK_LLAMACPP_PORT_BASE:-18080}"
+# 모델 선택: 명시한 환경변수 > 호스트에 기억된 값($OMK_ROOT/llamacpp/model.conf) > 아래 기본값. default_model_resolve 가 채운다.
+OMK_DEFAULT_MODEL_HF="${OMK_DEFAULT_MODEL_HF:-}"       # HuggingFace GGUF (repo:quant). 기본 Qwen/Qwen3-1.7B-GGUF:Q8_0 — 도구 호출이 되는 가장 작은 선(1.8GB)
+OMK_DEFAULT_MODEL_NAME="${OMK_DEFAULT_MODEL_NAME:-}"   # 앱·게이트웨이에 보이는 모델 이름. 기본 qwen3-1.7b
+OMK_DEFAULT_MODEL_CTX="${OMK_DEFAULT_MODEL_CTX:-}"     # 기본 16384
 # 외부 연결 점검 대상(하나라도 열리면 온라인) · 검색 동작 확인용 질의
 OMK_NET_PROBE_URLS="${OMK_NET_PROBE_URLS:-https://duckduckgo.com https://www.bing.com https://www.wikipedia.org}"
 OMK_SEARCH_PROBE_QUERY="${OMK_SEARCH_PROBE_QUERY:-wikipedia}"
@@ -150,7 +167,7 @@ dotenv_ensure() { # $1=file $2=key $3=default — 없을 때만 붙인다 (기�
 # ── 환경 이름 → 경로/이름 파생 ──────────────────────────────────────────────
 validate_env() {
     [[ "$1" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]] || usage_die "환경 이름은 소문자·숫자·하이픈 1~32자: '$1'"
-    [[ "$1" != "dev" ]] || usage_die "'dev' 는 작업 클론에서 'omk dev …' 로 씁니다 (~/.openmake 아래에 설치하지 않음)"
+    [[ "$1" != "$OMK_LOCAL_INSTANCE" ]] || usage_die "'$1' 은 작업 클론의 개발 서버('omk dev …')가 쓰는 이름입니다 — 다른 환경 이름을 고르세요"
 }
 env_dir()    { printf '%s/%s' "$OMK_ROOT" "$1"; }
 llm_dir()    { printf '%s/%s/llm' "$OMK_ROOT" "$1"; }
@@ -158,13 +175,29 @@ bench_dir()  { printf '%s/%s/bench' "$OMK_ROOT" "$1"; }
 logs_dir()   { printf '%s/%s/logs' "$OMK_ROOT" "$1"; }
 proxy_dir()  { printf '%s/caddy' "$OMK_ROOT"; }
 env_suffix() { [[ "$1" == "$OMK_DEFAULT_ENV" ]] && printf '' || printf -- '-%s' "$1"; }
-# 브랜치 기본값 — online 은 main, staging 은 staging, 그 외는 main. --ref 로 언제든 덮어쓴다.
-env_default_ref() { case "$1" in staging) printf 'staging' ;; *) printf 'main' ;; esac; }
+# 기본 ref — 장수 브랜치는 main 하나다. staging 은 main HEAD 를, dev 는 --ref 로 feature/* 를 따른다.
+# online(기본 인스턴스)은 **최신 릴리스 태그**를 따른다('release') — main 은 개발이 모이는 곳이고, staging 에서 확인하기 전의
+# main 을 운영·외부 설치자가 받지 않게 한다. 어느 환경이든 --ref release 로 같은 방식을 고를 수 있다.
+env_default_ref() { [[ "$1" == "$OMK_DEFAULT_ENV" ]] && printf 'release' || printf 'main'; }
+latest_release_tag() { # $1=리포 URL 또는 클론 경로 → vX.Y.Z 중 가장 높은 것
+    git ls-remote --tags --refs "$1" 2>/dev/null | sed 's#.*refs/tags/##' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1
+}
+# 릴리스를 따르는 클론은 upstream 없는 로컬 브랜치 'release' 에 있다(.env 의 OMK_TRACK=release). openmake_llm.sh update 의
+# `git pull --ff-only` 는 브랜치 upstream 이 있어야 하므로, omk 가 태그까지 fast-forward 한 뒤 같은 체인의 뒷부분(deploy)을 부른다.
+release_checkout() { # $1=dir $2=tag
+    git -C "$1" checkout -q -B release "$2" || die "릴리스 $2 체크아웃 실패: $1"
+}
+release_behind() { # $1=dir → 새 릴리스가 있으면 0. RELEASE_TAG 에 최신 태그
+    git -C "$1" fetch -q --tags --prune 2>/dev/null || return 1
+    RELEASE_TAG="$(latest_release_tag "$1")"; [[ -n "$RELEASE_TAG" ]] || return 1
+    [[ "$(git -C "$1" rev-parse HEAD)" != "$(git -C "$1" rev-parse "$RELEASE_TAG^{commit}")" ]]
+}
+RELEASE_TAG=""
 
 # 이름 규칙은 install.sh / ecosystem.config.js / infra/docker-compose.yml 과 같다.
-pm2_names() { # $1=env → llm next discord bench updater
+pm2_names() { # $1=env → llm next discord bench litellm updater backup
     local s; s="$(env_suffix "$1")"
-    printf 'openmake-llm%s openmake-next%s openmake-discord%s openmake-bench%s omk-updater-%s' "$s" "$s" "$s" "$s" "$1"
+    printf 'openmake-llm%s openmake-next%s openmake-discord%s openmake-bench%s openmake-litellm%s omk-updater-%s omk-backup-%s' "$s" "$s" "$s" "$s" "$s" "$1" "$1"
 }
 docker_containers() { local s; s="$(env_suffix "$1")"; printf 'openmake%s-postgres openmake%s-redis openmake%s-searxng' "$s" "$s" "$s"; }
 searxng_name()      { printf 'openmake%s-searxng' "$(env_suffix "$1")"; }
@@ -440,14 +473,35 @@ proxy_render() { # $1=env
     sed -e "s|{{ENV}}|$env|g" -e "s|{{PROXY_PORT}}|$pport|g" -e "s|{{API_PORT}}|$api|g" \
         -e "s|{{WEB_PORT}}|$web|g" -e "s|{{BENCH_PORT}}|${bench_port:-0}|g" "$tmpl" > "$out"
     log_ok "프록시 설정 → $out (:$pport → api :$api / web :$web)"
+    env_apply_origins "$ldir"
+}
+# 프록시 포트로 접속하면 브라우저의 Origin 은 http://<호스트>:<프록시포트> 이고 채팅 소켓도 그 주소로 붙는다
+# (use-chat-socket.ts). 서버는 CORS_ORIGINS 와 정확히 일치하는 Origin 만 받으므로 그 주소를 넣어 둔다 —
+# localhost 는 항상, 다른 기기용 호스트는 .env 의 OMK_ENV_HOSTS(CSV · `omk env expose`)에서.
+ORIGINS_CHANGED=0
+env_apply_origins() { # $1=llm dir
+    local envf="$1/.env" pport hosts h add before after
+    ORIGINS_CHANGED=0
+    pport="$(dotenv_get "$envf" OMK_PROXY_PORT)"; [[ -n "$pport" ]] || return 0
+    hosts="$(csv_union "localhost,127.0.0.1" "$(dotenv_get "$envf" OMK_ENV_HOSTS)")"
+    add=""; for h in $(printf '%s' "$hosts" | tr ',' ' '); do add="${add:+$add,}http://$h:$pport"; done
+    before="$(dotenv_get "$envf" CORS_ORIGINS)"; after="$(csv_union "$before" "$add")"
+    [[ "$before" == "$after" ]] || { dotenv_set "$envf" CORS_ORIGINS "$after"; ORIGINS_CHANGED=1; }
+    return 0
 }
 proxy_running() { has pm2 && pm2 describe "$OMK_PROXY_APP" >/dev/null 2>&1; }
+# 프록시는 호스트당 하나(PM2 앱 이름·admin 포트가 고정)다. 다른 OMK_ROOT 에서 띄운 것에 이쪽 설정을 reload 하면
+# 그쪽 환경들의 라우팅이 통째로 사라진다 — PM2 앱의 cwd 가 이 OMK_ROOT 의 caddy 디렉터리일 때만 우리 것이다.
+proxy_is_ours() { proxy_running && [[ "$(pm2_app_cwd "$OMK_PROXY_APP")" == "$(proxy_dir)" ]]; }
 proxy_start_or_reload() {
     require_pm2; proxy_ensure_binary
     local dir; dir="$(proxy_dir)"
     "$CADDY_BIN" validate --config "$dir/Caddyfile" --adapter caddyfile >/dev/null 2>&1 \
         || die "Caddyfile 검증 실패: $dir/Caddyfile"
-    if proxy_running; then
+    if proxy_running && ! proxy_is_ours; then
+        die "프록시($OMK_PROXY_APP)가 다른 OMK_ROOT($(pm2_app_cwd "$OMK_PROXY_APP"))에서 돌고 있습니다 — 이쪽 설정으로 덮어쓰지 않습니다."
+    fi
+    if proxy_is_ours; then
         "$CADDY_BIN" reload --config "$dir/Caddyfile" --adapter caddyfile --address "$OMK_CADDY_ADMIN" >/dev/null 2>&1 \
             && { log_ok "프록시 reload"; return 0; }
         log_warn "reload 실패 — PM2 재시작으로 대체"; pm2 restart "$OMK_PROXY_APP" >/dev/null; return 0
@@ -465,7 +519,7 @@ proxy_remove() { # $1=env
     local f; f="$(proxy_dir)/caddy.d/$1.caddy"
     [[ -f "$f" ]] || return 0
     rm -f "$f"; log_ok "프록시 설정 제거: $f"
-    proxy_running && { proxy_ensure_binary; "$CADDY_BIN" reload --config "$(proxy_dir)/Caddyfile" --adapter caddyfile --address "$OMK_CADDY_ADMIN" >/dev/null 2>&1 || true; }
+    proxy_is_ours && { proxy_ensure_binary; "$CADDY_BIN" reload --config "$(proxy_dir)/Caddyfile" --adapter caddyfile --address "$OMK_CADDY_ADMIN" >/dev/null 2>&1 || true; }
     return 0
 }
 cmd_proxy() {
@@ -503,6 +557,44 @@ EOF
 # env autoupdate — PM2 cron 앱 (OS 스케줄러 대신 PM2 로 3 OS 동일)
 # ==============================================================================
 updater_name() { printf 'omk-updater-%s' "$1"; }
+# ── DB 백업 ───────────────────────────────────────────────────────────────────
+# 기준은 레포의 scripts/backups/db-backup.sh 다(pg_dump -Fc · 보존기간 정리 · 무결성 확인 · --dry-run). omk 는 "어느 환경의
+# 것을 어디에"만 정한다: 기본 위치는 **환경 디렉터리 밖** $OMK_ROOT/backups/<env> — `env reset` 으로 환경을 지워도 남는다.
+# 그 환경의 .env 에 BACKUP_DIR 이 있으면 그쪽을 따른다. 매일 돌리려면 --schedule(PM2 cron 앱 omk-backup-<env>).
+backup_dir()  { local v; v="$(dotenv_get "$(llm_dir "$1")/.env" BACKUP_DIR)"; printf '%s' "${v:-$OMK_ROOT/backups/$1}"; }
+backup_name() { printf 'omk-backup-%s' "$1"; }
+env_backup_run() { # $1=env [추가 인자…]
+    local env="$1" ldir; shift; ldir="$(llm_dir "$env")"
+    [[ -x "$ldir/scripts/backups/db-backup.sh" ]] || { log_warn "$ldir 에 db-backup.sh 가 없습니다"; return 1; }
+    ( cd "$ldir" && BACKUP_DIR="$(backup_dir "$env")" ./scripts/backups/db-backup.sh "$@" )
+}
+cmd_env_backup() { # env [--schedule ['CRON']] [--off] [--list] [--dry-run]
+    local env="$1"; shift; local mode="run" cron="$OMK_BACKUP_CRON" ldir name
+    ldir="$(llm_dir "$env")"; name="$(backup_name "$env")"
+    [[ -f "$ldir/.env" ]] || die "$ldir/.env 없음 — 'omk env install $env' 먼저"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --schedule) mode="schedule"; if [[ -n "${2:-}" && "${2:-}" != --* ]]; then cron="$2"; shift; fi ;;
+            --off) mode="off" ;; --list) mode="list" ;; --dry-run) mode="dry" ;;
+            *) usage_die "알 수 없는 옵션: $1" ;;
+        esac; shift
+    done
+    load_toolchain "$ldir"
+    case "$mode" in
+        run)  env_backup_run "$env" || die "백업 실패 ($env)"; log_ok "백업 위치: $(backup_dir "$env")" ;;
+        dry)  env_backup_run "$env" --dry-run ;;
+        list) ls -lh "$(backup_dir "$env")" 2>/dev/null || log_info "백업 없음: $(backup_dir "$env")" ;;
+        off)  require_pm2; pm2 describe "$name" >/dev/null 2>&1 && pm2 delete "$name" >/dev/null && log_ok "$name 제거" || log_info "$name 없음" ;;
+        schedule)
+            require_pm2
+            [[ -f "$ldir/scripts/env/omk.sh" ]] || die "$ldir 에 omk.sh 가 없습니다 (브랜치가 오래됐을 수 있음)"
+            pm2 describe "$name" >/dev/null 2>&1 && pm2 delete "$name" >/dev/null 2>&1 || true
+            ( cd "$ldir" && pm2 start "$ldir/scripts/env/omk.sh" --name "$name" --interpreter bash --no-autorestart \
+                --cron-restart "$cron" --time -- env backup "$env" >/dev/null ) || die "$name 등록 실패"
+            log_ok "$name 등록 — '$cron' 마다 백업 → $(backup_dir "$env") (pm2 logs $name)" ;;
+    esac
+}
+
 cmd_env_autoupdate() { # env [--every CRON] [--off]
     local env="$1"; shift; local cron="$OMK_AUTOUPDATE_CRON" off=0
     while [[ $# -gt 0 ]]; do case "$1" in --every) cron="${2:-}"; shift ;; --off) off=1 ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift; done
@@ -643,9 +735,202 @@ search_line() { # $1=llm dir → 상태 한 줄 (실제로 검색을 한 번 돌
 # ==============================================================================
 # env install / update / reset / status / start / stop / logs
 # ==============================================================================
+# ── 기본 모델 (llama.cpp) ─────────────────────────────────────────────────────
+# 업스트림(--llm-base-url·--qwen-vllm-base)을 주지 않아도 앱 → 게이트웨이 → 모델이 끝까지 돌게 한다. vLLM 은 GPU 가 필요하므로
+# 저사양·macOS 에서도 도는 llama.cpp 의 llama-server(OpenAI 호환)를 쓴다 — 게이트웨이 입장에서는 vLLM 과 같은 종류의 업스트림이다.
+# 호스트당 하나(PM2 omk-llamacpp, 127.0.0.1 전용), $OMK_ROOT/llamacpp/{bin,models,start.sh,port}. 환경을 reset 해도 남는다.
+# 작은 모델이다 — 배선 확인·가벼운 대화용. 에이전트 작업·검색 품질은 더 큰 업스트림을 지정해야 한다.
+llamacpp_dir() { printf '%s/llamacpp' "$OMK_ROOT"; }
+llamacpp_platform() {
+    case "$(uname -s)/$(uname -m)" in
+        Darwin/arm64) printf 'macos-arm64' ;; Darwin/x86_64) printf 'macos-x64' ;;
+        Linux/x86_64|Linux/amd64) printf 'ubuntu-x64' ;; Linux/aarch64|Linux/arm64) printf 'ubuntu-arm64' ;; *) return 1 ;;
+    esac
+}
+LLAMA_SERVER_BIN=""
+llamacpp_ensure_binary() {
+    if has llama-server; then LLAMA_SERVER_BIN="$(command -v llama-server)"; return 0; fi
+    local d plat url tmp; d="$(llamacpp_dir)/bin/$OMK_LLAMACPP_TAG"
+    LLAMA_SERVER_BIN="$d/llama-server"; [[ -x "$LLAMA_SERVER_BIN" ]] && return 0
+    plat="$(llamacpp_platform)" || { log_warn "이 플랫폼용 llama.cpp 바이너리가 없습니다 — llama-server 를 PATH 에 두세요"; return 1; }
+    url="https://github.com/ggml-org/llama.cpp/releases/download/$OMK_LLAMACPP_TAG/llama-$OMK_LLAMACPP_TAG-bin-$plat.tar.gz"
+    log_info "llama.cpp $OMK_LLAMACPP_TAG 다운로드 ($plat)"
+    tmp="$(mktemp -d)"; mkdir -p "$d"
+    curl -fsSL "$url" | tar -xz -C "$tmp" || { rm -rf "$tmp"; log_warn "llama.cpp 다운로드 실패: $url"; return 1; }
+    # 아카이브는 llama-<tag>/ 한 디렉터리 — 공유 라이브러리가 실행 파일 옆에 있어야 하므로 통째로 옮긴다.
+    cp -R "$tmp"/*/. "$d/" && rm -rf "$tmp"
+    [[ -x "$LLAMA_SERVER_BIN" ]] || { log_warn "llama-server 를 찾을 수 없습니다: $d"; return 1; }
+}
+default_model_resolve() { # 호스트에 하나뿐인 서버라 선택을 기억한다 — 옵션 없이 다시 설치해도 고른 모델이 유지된다
+    local conf; conf="$(llamacpp_dir)/model.conf"
+    [[ -n "$OMK_DEFAULT_MODEL_HF" ]]   || OMK_DEFAULT_MODEL_HF="$(dotenv_get "$conf" HF)"
+    [[ -n "$OMK_DEFAULT_MODEL_NAME" ]] || OMK_DEFAULT_MODEL_NAME="$(dotenv_get "$conf" NAME)"
+    [[ -n "$OMK_DEFAULT_MODEL_CTX" ]]  || OMK_DEFAULT_MODEL_CTX="$(dotenv_get "$conf" CTX)"
+    OMK_DEFAULT_MODEL_HF="${OMK_DEFAULT_MODEL_HF:-Qwen/Qwen3-1.7B-GGUF:Q8_0}"
+    OMK_DEFAULT_MODEL_NAME="${OMK_DEFAULT_MODEL_NAME:-qwen3-1.7b}"
+    OMK_DEFAULT_MODEL_CTX="${OMK_DEFAULT_MODEL_CTX:-16384}"
+}
+default_model_base() { local p; p="$(cat "$(llamacpp_dir)/port" 2>/dev/null || true)"; [[ -z "$p" ]] || printf 'http://127.0.0.1:%s/v1' "$p"; }
+DEFAULT_MODEL_BASE=""
+default_model_ensure() { # 성공하면 DEFAULT_MODEL_BASE 에 OpenAI 호환 주소(/v1)
+    local d port i before; d="$(llamacpp_dir)"; DEFAULT_MODEL_BASE=""
+    default_model_resolve
+    require_pm2
+    if pm2 describe "$OMK_LLAMACPP_APP" >/dev/null 2>&1 && [[ "$(pm2_app_cwd "$OMK_LLAMACPP_APP")" != "$d" ]]; then
+        log_warn "기본 모델 서버($OMK_LLAMACPP_APP)가 다른 OMK_ROOT 에서 돌고 있습니다 — 건드리지 않습니다"; return 1
+    fi
+    log_step "기본 모델: $OMK_DEFAULT_MODEL_NAME ($OMK_DEFAULT_MODEL_HF · llama.cpp)"
+    llamacpp_ensure_binary || return 1
+    mkdir -p "$d/models"
+    port="$(cat "$d/port" 2>/dev/null || true)"
+    if [[ -z "$port" ]]; then port="$(find_free_port "$OMK_LLAMACPP_PORT_BASE")" || return 1; printf '%s' "$port" > "$d/port"; fi
+    printf 'HF=%s\nNAME=%s\nCTX=%s\n' "$OMK_DEFAULT_MODEL_HF" "$OMK_DEFAULT_MODEL_NAME" "$OMK_DEFAULT_MODEL_CTX" > "$d/model.conf"
+    before="$(cat "$d/start.sh" 2>/dev/null || true)"
+    cat > "$d/start.sh" <<LLAMA_START
+#!/usr/bin/env bash
+# omk 가 만든 파일 — 모델·컨텍스트는 OMK_DEFAULT_MODEL_* 로 바꾸고 다시 설치한다.
+export LLAMA_CACHE="$d/models"
+exec "$LLAMA_SERVER_BIN" -hf "$OMK_DEFAULT_MODEL_HF" --alias "$OMK_DEFAULT_MODEL_NAME" --jinja \\
+    --host 127.0.0.1 --port $port -c $OMK_DEFAULT_MODEL_CTX
+LLAMA_START
+    chmod 700 "$d/start.sh"
+    # 떠 있어도 모델·옵션이 바뀌었으면 다시 띄운다 — 같은 서버를 쓰는 다른 환경의 게이트웨이는 'omk env install <env>' 로 이름을 맞춘다.
+    if [[ "$before" != "$(cat "$d/start.sh")" || "$(curl -s -m 3 "http://127.0.0.1:$port/health" 2>/dev/null)" != *'"ok"'* ]]; then
+        pm2 describe "$OMK_LLAMACPP_APP" >/dev/null 2>&1 && pm2 delete "$OMK_LLAMACPP_APP" >/dev/null 2>&1 || true
+        pm2 start "$d/start.sh" --name "$OMK_LLAMACPP_APP" --cwd "$d" --interpreter bash --time >/dev/null || { log_warn "PM2 $OMK_LLAMACPP_APP 기동 실패"; return 1; }
+        log_info "모델을 받는 중일 수 있습니다 (첫 실행 · 수 GB) — 최대 20분 기다립니다"
+        for ((i = 0; i < 400; i++)); do
+            [[ "$(curl -s -m 3 "http://127.0.0.1:$port/health" 2>/dev/null)" == *'"ok"'* ]] && break; sleep 3
+        done
+        [[ $i -lt 400 ]] || { log_warn "기본 모델 서버가 응답하지 않습니다 — 'pm2 logs $OMK_LLAMACPP_APP'"; return 1; }
+    fi
+    DEFAULT_MODEL_BASE="http://127.0.0.1:$port/v1"
+    log_ok "기본 모델 준비: $OMK_DEFAULT_MODEL_NAME → $DEFAULT_MODEL_BASE (PM2 $OMK_LLAMACPP_APP)"
+}
+
+# ── LiteLLM 게이트웨이 (환경별) ──────────────────────────────────────────────
+# 앱은 LLM_BASE_URL 하나만 본다. 그 뒤에서 로컬 vLLM·BYOK 업스트림을 묶는 게이트웨이를 환경마다 따로 띄운다 —
+# <env>/litellm/{venv,litellm.config.yaml,litellm.env,start_litellm.sh}, PM2 openmake-litellm[-env], 127.0.0.1 전용.
+# config 는 레포의 scripts/vllm/litellm.config.yaml 그대로다(호스트별 값은 전부 os.environ) — 호스트마다 다른 것은
+# litellm.env(600) 뿐이다: QWEN_VLLM_API_BASE · BGE_VLLM_API_BASE · VLLM_API_KEY · LITELLM_MASTER_KEY(=앱의 LLM_API_KEY).
+# --llm-base-url/--llm-api-key/--llm-model 은 "게이트웨이 뒤의 업스트림"이다 — 앱은 언제나 자기 환경의 게이트웨이만 본다.
+# 빼려면 --no-litellm. 실패는 설치를 멈추지 않는다.
+litellm_dir()      { printf '%s/%s/litellm' "$OMK_ROOT" "$1"; }
+litellm_pm2_name() { printf 'openmake-litellm%s' "$(env_suffix "$1")"; }
+gen_secret()       { if has openssl; then openssl rand -hex 24; else LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom | head -c 48; fi; }
+litellm_pm2_start() { # $1=env
+    local d n; d="$(litellm_dir "$1")"; n="$(litellm_pm2_name "$1")"
+    [[ -x "$d/start_litellm.sh" ]] || return 0
+    require_pm2
+    pm2 describe "$n" >/dev/null 2>&1 && pm2 delete "$n" >/dev/null 2>&1 || true
+    pm2 start "$d/start_litellm.sh" --name "$n" --cwd "$d" --interpreter bash --time \
+        -o "$(logs_dir "$1")/$n-out.log" -e "$(logs_dir "$1")/$n-error.log" >/dev/null || { log_warn "PM2 $n 기동 실패"; return 1; }
+    log_ok "PM2 $n"
+}
+# 환경의 config = 레포 config 그대로 + (litellm.env 에 OMK_UPSTREAM_MODEL 이 있으면) 그 모델 한 항목.
+# vLLM 이 없는 호스트(예: Ollama 만 있는 개발 PC)도 자기 게이트웨이를 거쳐 쓰게 한다. 주소·키는 os.environ 참조라 config 에 값이 남지 않는다.
+litellm_render_config() { # $1=레포 config $2=litellm.env $3=출력
+    local model; model="$(dotenv_get "$2" OMK_UPSTREAM_MODEL)"
+    [[ -n "$model" ]] || { cp "$1" "$3"; return 0; }
+    awk -v m="$model" '{ print } /^model_list:[[:space:]]*$/ && !done {
+        print "  # ── omk: 이 환경의 업스트림 (litellm.env 의 OMK_UPSTREAM_*) ──"
+        print "  - model_name: \"" m "\""
+        print "    litellm_params:"
+        print "      model: \"openai/" m "\""
+        print "      api_base: os.environ/OMK_UPSTREAM_API_BASE"
+        print "      api_key: os.environ/OMK_UPSTREAM_API_KEY"
+        done = 1 }' "$1" > "$3"
+}
+LITELLM_CHANGED=0
+litellm_ensure() { # $1=llm dir $2=env [$3=QWEN base $4=BGE base $5=vLLM key $6=업스트림 base $7=업스트림 key $8=업스트림 model]
+    local ldir="$1" env="$2" envf="$1/.env" d lenv port key url i
+    LITELLM_CHANGED=0
+    [[ "$(dotenv_get "$envf" OMK_LITELLM)" != "off" ]] || { log_info "LiteLLM 생략 (OMK_LITELLM=off)"; return 0; }
+    [[ -f "$ldir/scripts/vllm/litellm.config.yaml" ]] || { log_warn "litellm.config.yaml 없음 — LiteLLM 을 건너뜁니다"; return 0; }
+    d="$(litellm_dir "$env")"; lenv="$d/litellm.env"; mkdir -p "$d"; chmod 700 "$d"
+    log_step "LiteLLM 게이트웨이: $d"
+    if [[ ! -x "$d/venv/bin/litellm" ]]; then
+        if has uv; then uv venv -q --python 3.12 "$d/venv" && uv pip install -q --python "$d/venv/bin/python" "$OMK_LITELLM_SPEC"
+        else python3 -m venv "$d/venv" && "$d/venv/bin/pip" install -q --upgrade pip "$OMK_LITELLM_SPEC"; fi \
+            || { log_warn "LiteLLM 설치 실패 — 건너뜁니다 (나중에 'omk env update $env')"; rm -rf "$d/venv"; return 0; }
+    fi
+    [[ -f "$lenv" ]] || { : > "$lenv"; }
+    chmod 600 "$lenv"
+    dotenv_ensure "$lenv" LITELLM_MASTER_KEY "sk-$(gen_secret)"
+    dotenv_ensure "$lenv" DUMMY_UPSTREAM_KEY "sk-byok-forwarded-per-request"
+    [[ -z "${3:-}" ]] || dotenv_set "$lenv" QWEN_VLLM_API_BASE "$3"
+    [[ -z "${4:-}" ]] || dotenv_set "$lenv" BGE_VLLM_API_BASE "$4"
+    [[ -z "${5:-}" ]] || dotenv_set "$lenv" VLLM_API_KEY "$5"
+    if [[ -n "${6:-}" && -n "${8:-}" ]]; then
+        dotenv_set "$lenv" OMK_UPSTREAM_API_BASE "$6"; dotenv_set "$lenv" OMK_UPSTREAM_API_KEY "${7:-none}"; dotenv_set "$lenv" OMK_UPSTREAM_MODEL "$8"
+    fi
+    litellm_render_config "$ldir/scripts/vllm/litellm.config.yaml" "$lenv" "$d/litellm.config.yaml"
+    port="$(dotenv_get "$envf" OMK_LITELLM_PORT)"
+    if [[ -z "$port" ]]; then port="$(find_free_port "$OMK_LITELLM_PORT_BASE")" || { log_warn "LiteLLM 빈 포트 탐색 실패"; return 0; }; fi
+    cat > "$d/start_litellm.sh" <<LITELLM_START
+#!/usr/bin/env bash
+# omk 가 만든 파일 — 직접 고치지 말 것 ('omk env update $env' 가 다시 쓴다). 값은 litellm.env 에.
+set -euo pipefail
+set -a; . "$lenv"; set +a
+: "\${QWEN_VLLM_API_BASE:=http://127.0.0.1:9/v1}" "\${BGE_VLLM_API_BASE:=http://127.0.0.1:9/v1}" "\${VLLM_API_KEY:=unset}"
+export QWEN_VLLM_API_BASE BGE_VLLM_API_BASE VLLM_API_KEY
+exec "$d/venv/bin/litellm" --config "$d/litellm.config.yaml" --host 127.0.0.1 --port $port
+LITELLM_START
+    chmod 700 "$d/start_litellm.sh"
+    litellm_pm2_start "$env" || return 0
+    for ((i = 0; i < 45; i++)); do
+        [[ "$(curl -s -o /dev/null -w '%{http_code}' -m 3 "http://127.0.0.1:$port/health/liveliness" 2>/dev/null)" == "200" ]] && break; sleep 2
+    done
+    [[ $i -lt 45 ]] && log_ok "LiteLLM liveliness 200 (:$port)" || log_warn "LiteLLM 이 응답하지 않습니다 — 'omk env logs $env'"
+    key="$(dotenv_get "$lenv" LITELLM_MASTER_KEY)"; url="http://127.0.0.1:$port"
+    if [[ "$(dotenv_get "$envf" LLM_BASE_URL)|$(dotenv_get "$envf" LLM_API_KEY)|$(dotenv_get "$envf" OMK_LITELLM_PORT)" != "$url|$key|$port" ]]; then
+        dotenv_set "$envf" LLM_BASE_URL "$url"; dotenv_set "$envf" LLM_API_KEY "$key"; dotenv_set "$envf" OMK_LITELLM_PORT "$port"; LITELLM_CHANGED=1
+    fi
+}
+litellm_line() { # $1=env $2=llm dir
+    local port lenv; port="$(dotenv_get "$2/.env" OMK_LITELLM_PORT)"; lenv="$(litellm_dir "$1")/litellm.env"
+    [[ -n "$port" ]] || return 0
+    printf 'http://127.0.0.1:%s  (%s)' "$port" "$(litellm_dir "$1")"
+    [[ -n "$(dotenv_get "$lenv" QWEN_VLLM_API_BASE)$(dotenv_get "$lenv" OMK_UPSTREAM_MODEL)" ]] || printf '  ※ 업스트림 미설정'
+}
+
+# ── 런타임 이미지 (외부 MCP 격리 · 에이전트 작업 · 아티팩트 실행/내보내기) ─────────────
+# 레포에는 Dockerfile 만 있고 빌드는 "사용자 직접"이라, 설치 직후에는 에이전트 작업과 아티팩트 내보내기가
+# 동작하지 않는다. omk 가 환경별 태그로 빌드하고 .env 에 이미지 이름을 적는다 — 같은 호스트의 dev·staging 이
+# 서로의 이미지를 덮어쓰지 않는다. 기본 인스턴스(online)는 소스의 기본 태그 :latest 를 그대로 쓴다.
+# 크다(mcp ~1GB, task ~6GB · 첫 빌드 수 분) — --no-runtime-images 로 뺀다(.env 의 OMK_RUNTIME_IMAGES=off 로 기억).
+# 빌드 실패는 설치를 멈추지 않는다. 켜기/끄기 스위치(*_ENABLED)는 이미 값이 있으면 존중한다.
+runtime_image_tag()   { [[ "$1" == "$OMK_DEFAULT_ENV" ]] && printf 'latest' || printf '%s' "$1"; }
+runtime_image_names() { local t; t="$(runtime_image_tag "$1")"; printf 'openmake-mcp-runtime:%s openmake-task-runtime:%s' "$t" "$t"; }
+RUNTIME_CHANGED=0
+runtime_images_ensure() { # $1=llm dir $2=env
+    local ldir="$1" env="$2" envf="$1/.env" mcp task before after
+    RUNTIME_CHANGED=0
+    [[ "$(dotenv_get "$envf" OMK_RUNTIME_IMAGES)" != "off" ]] || { log_info "런타임 이미지 생략 (OMK_RUNTIME_IMAGES=off)"; return 0; }
+    has docker && docker info >/dev/null 2>&1 || { log_warn "docker 를 쓸 수 없어 런타임 이미지를 건너뜁니다"; return 0; }
+    mcp="openmake-mcp-runtime:$(runtime_image_tag "$env")"; task="openmake-task-runtime:$(runtime_image_tag "$env")"
+    log_step "런타임 이미지 빌드: $mcp · $task (첫 빌드는 수 분)"
+    docker build -q -t "$mcp" "$ldir/infra/mcp-runtime" >/dev/null \
+        || { log_warn "$mcp 빌드 실패 — 건너뜁니다 (나중에 'omk env update $env')"; return 0; }
+    docker build -q -t "$task" --build-arg "BASE_IMAGE=$mcp" "$ldir/infra/task-runtime" >/dev/null \
+        || { log_warn "$task 빌드 실패 — 건너뜁니다 (나중에 'omk env update $env')"; return 0; }
+    before="$(grep -E '^(MCP_SANDBOX|TASK_SANDBOX|ARTIFACT_EXEC|ARTIFACT_EXPORT)_(IMAGE|ENABLED)=' "$envf" 2>/dev/null | sort || true)"
+    dotenv_set "$envf" MCP_SANDBOX_IMAGE "$mcp";    dotenv_set "$envf" ARTIFACT_EXEC_IMAGE "$mcp"
+    dotenv_set "$envf" TASK_SANDBOX_IMAGE "$task";  dotenv_set "$envf" ARTIFACT_EXPORT_IMAGE "$task"
+    dotenv_ensure "$envf" MCP_SANDBOX_ENABLED true; dotenv_ensure "$envf" TASK_SANDBOX_ENABLED true
+    dotenv_ensure "$envf" ARTIFACT_EXPORT_ENABLED true   # 내보내기(PDF·DOCX 등)는 task-runtime 이미지에서 돈다 — 이미지가 있어야 켤 수 있다
+    after="$(grep -E '^(MCP_SANDBOX|TASK_SANDBOX|ARTIFACT_EXEC|ARTIFACT_EXPORT)_(IMAGE|ENABLED)=' "$envf" | sort)"
+    [[ "$before" == "$after" ]] || RUNTIME_CHANGED=1
+    log_ok "런타임 이미지 준비: $mcp · $task"
+}
+runtime_images_remove() { # $1=env — 환경별 태그만 지운다. :latest 는 omk 밖에서도 쓰므로 남긴다.
+    [[ "$1" != "$OMK_DEFAULT_ENV" ]] && has docker || return 0
+    local i; for i in $(runtime_image_names "$1"); do docker rmi "$i" >/dev/null 2>&1 && log_ok "이미지 $i 삭제" || true; done
+}
+
 cmd_env_install() {
     local env="$1"; shift
-    local ref="" bench_ref="" public_url="" no_bench=0 no_proxy=0 no_searxng=0 auto="" llm_args=()
+    local ref="" bench_ref="" public_url="" no_bench=0 no_proxy=0 no_searxng=0 no_images=0 no_litellm=0 no_default_model=0 qwen_base="" bge_base="" vllm_key="" up_base="" up_key="" up_model="" auto="" llm_args=() expose_args=()
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --ref)          ref="${2:-}"; shift ;;
@@ -654,14 +939,30 @@ cmd_env_install() {
             --no-bench)     no_bench=1 ;;
             --no-proxy)     no_proxy=1 ;;
             --no-searxng)   no_searxng=1 ;;
+            --no-runtime-images) no_images=1 ;;
+            --no-litellm)   no_litellm=1 ;;
+            --no-default-model) no_default_model=1 ;;
+            --tailscale)    expose_args+=(--tailscale) ;;          # 설치 끝에 'omk env expose' — reset 후 재설치해도 다른 기기에서 보인다
+            --host)         expose_args+=(--host "${2:-}"); shift ;;
+            --qwen-vllm-base) qwen_base="${2:-}"; shift ;;
+            --bge-vllm-base)  bge_base="${2:-}"; shift ;;
+            --vllm-api-key)   vllm_key="${2:-}"; shift ;;
             --autoupdate)   auto=1 ;;
             --no-autoupdate) auto=0 ;;
-            --llm-base-url|--llm-api-key|--llm-model) llm_args+=("$1" "${2:-}"); shift ;;
+            # 게이트웨이 뒤에 둘 업스트림(OpenAI 호환 — Ollama·vLLM·외부 API). install.sh 에도 넘겨 LLM_DEFAULT_MODEL 을 맞춘다.
+            --llm-base-url) up_base="${2:-}"; llm_args+=("$1" "${2:-}"); shift ;;
+            --llm-api-key)  up_key="${2:-}";  llm_args+=("$1" "${2:-}"); shift ;;
+            --llm-model)    up_model="${2:-}"; llm_args+=("$1" "${2:-}"); shift ;;
             -y|--yes)       ASSUME_YES=1 ;;
             *) usage_die "알 수 없는 옵션: $1" ;;
         esac; shift
     done
-    ref="${ref:-$(env_default_ref "$env")}"; bench_ref="${bench_ref:-$ref}"
+    ref="${ref:-$(env_default_ref "$env")}"
+    local track="" ; if [[ "$ref" == "release" ]]; then
+        track="release"; ref="$(latest_release_tag "$OMK_REPO_URL")"; [[ -n "$ref" ]] || die "릴리스 태그(vX.Y.Z)를 찾을 수 없습니다: $OMK_REPO_URL — --ref main 으로 설치하세요"
+        bench_ref="${bench_ref:-main}"   # openmake_bench 는 릴리스 태그가 없다
+    fi
+    bench_ref="${bench_ref:-$ref}"
     # 배포는 수동이다 — staging·online 모두 사람이 `omk env update` 로 올린다. 자동 갱신은 명시적으로
     # 켠 환경만(--autoupdate 또는 `omk env autoupdate <env>`).
     [[ -n "$auto" ]] || auto=0
@@ -677,23 +978,52 @@ cmd_env_install() {
 
     # 1) openmake_llm — 툴체인·.env·DB·마이그레이션·빌드·PM2 전부 install.sh 가 한다.
     clone_or_keep "$OMK_REPO_URL" "$ref" "$ldir" "openmake_llm"
+    [[ -z "$track" ]] || [[ "$(git -C "$ldir" rev-parse --abbrev-ref HEAD)" == "release" ]] || release_checkout "$ldir" "$ref"
     restore_env_backup "$ldir" llm
     # 빈 배열 확장은 bash 4.4 미만에서 set -u 에 걸린다 — ${arr[@]+"${arr[@]}"} 관용구로 피한다.
     ( cd "$ldir" && OMK_LOG_DIR="$(logs_dir "$env")" ./install.sh --yes ${suffix_flag[@]+"${suffix_flag[@]}"} \
         ${public_url:+--public-url "$public_url"} ${llm_args[@]+"${llm_args[@]}"} ) || die "install.sh 실패 ($env)"
     dotenv_ensure "$ldir/.env" OMK_LOG_DIR "$(logs_dir "$env")"
+    [[ -z "$track" ]] || dotenv_set "$ldir/.env" OMK_TRACK release
     load_toolchain "$ldir"
+
+    # 1.5~1.7 은 .env 를 고친다 — 어느 단계든 내용이 바뀌었으면 끝에 API 를 한 번 재시작한다(단계별 플래그는 빠뜨리기 쉽다).
+    local env_before; env_before="$(cksum < "$ldir/.env")"
 
     # 1.5) 웹 검색 — .env 는 install.sh 가 만든 뒤에야 있다. 값이 바뀌면 API 만 다시 띄운다.
     [[ $no_searxng -eq 1 ]] && dotenv_set "$ldir/.env" OMK_SEARXNG off
     searxng_ensure "$ldir" "$env" "$(env_dir "$env")/searxng" "$(env_dir "$env")"
-    [[ $SEARCH_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
+    # 1.6) 런타임 이미지 — 에이전트 작업·아티팩트 내보내기·외부 MCP 격리의 전제.
+    [[ $no_images -eq 1 ]] && dotenv_set "$ldir/.env" OMK_RUNTIME_IMAGES off
+    runtime_images_ensure "$ldir" "$env"
+    # 1.7) LiteLLM 게이트웨이 — 앱의 LLM_BASE_URL·LLM_API_KEY 를 채운다.
+    [[ $no_litellm -eq 1 ]] && dotenv_set "$ldir/.env" OMK_LITELLM off
+    # 업스트림을 주지 않았고 이 환경에 기억된 업스트림도 없으면 기본 모델(llama.cpp)을 게이트웨이 뒤에 둔다.
+    # 나중에 --llm-base-url/--qwen-vllm-base 로 다시 설치하거나 litellm.env 를 채우면 그쪽을 따른다.
+    local lenv_prev; lenv_prev="$(litellm_dir "$env")/litellm.env"
+    if [[ $no_litellm -eq 0 && $no_default_model -eq 0 && -z "$up_base$qwen_base" \
+          && -z "$(dotenv_get "$lenv_prev" QWEN_VLLM_API_BASE)" ]] \
+       && { [[ -z "$(dotenv_get "$lenv_prev" OMK_UPSTREAM_MODEL)" ]] || [[ "$(dotenv_get "$lenv_prev" OMK_UPSTREAM_API_BASE)" == "$(default_model_base)" ]]; }; then
+        if default_model_ensure; then
+            up_base="$DEFAULT_MODEL_BASE"; up_key="none"; up_model="$OMK_DEFAULT_MODEL_NAME"
+            dotenv_set "$ldir/.env" LLM_DEFAULT_MODEL "$up_model"
+            # CPU·Metal 의 작은 모델은 앱의 큰 프롬프트(수천 토큰)를 읽는 데만 10~20초가 든다 — 기본 fast-fail(5초+보정)에 걸려
+            # "LLM 호출 실패"가 된다. 값이 없을 때만 넉넉히 둔다(.env.example 도 단일 모델 운영에 30초 이상을 권장).
+            dotenv_ensure "$ldir/.env" LLM_FAST_FAIL_TIMEOUT_MS 60000
+            dotenv_ensure "$ldir/.env" LLM_FAST_FAIL_PREFILL_MS_PER_1K_TOKENS 4000
+        else log_warn "기본 모델을 준비하지 못했습니다 — 업스트림을 직접 지정하세요 (--llm-base-url … --llm-model …)"; fi
+    fi
+    litellm_ensure "$ldir" "$env" "$qwen_base" "$bge_base" "$vllm_key" "$up_base" "$up_key" "$up_model"
+    [[ "$env_before" == "$(cksum < "$ldir/.env")" && $SEARCH_CHANGED -eq 0 && $RUNTIME_CHANGED -eq 0 && $LITELLM_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
 
     # 2) openmake_bench
     [[ $no_bench -eq 1 ]] || bench_install "$env" "$bench_ref" "$ldir"
 
     # 3) 리버스 프록시
     [[ $no_proxy -eq 1 ]] || { proxy_render "$env"; proxy_start_or_reload; }
+
+    # 3.5) 다른 기기에서 보기 — 프록시가 있어야 의미가 있다.
+    if [[ ${#expose_args[@]} -gt 0 && $no_proxy -eq 0 ]]; then cmd_env_expose "$env" "${expose_args[@]}" || log_warn "expose 실패 — 'omk env expose $env --tailscale'"; fi
 
     # 4) 래퍼 + 자동 갱신
     install_wrapper
@@ -703,14 +1033,15 @@ cmd_env_install() {
 }
 
 cmd_env_update() {
-    local env="$1"; shift; local if_behind=0
-    while [[ $# -gt 0 ]]; do case "$1" in --if-behind) if_behind=1 ;; -y|--yes) ASSUME_YES=1 ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift; done
+    local env="$1"; shift; local if_behind=0 no_backup=0
+    while [[ $# -gt 0 ]]; do case "$1" in --no-backup) no_backup=1 ;; --if-behind) if_behind=1 ;; -y|--yes) ASSUME_YES=1 ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift; done
     local ldir bdir; ldir="$(llm_dir "$env")"; bdir="$(bench_dir "$env")"
     [[ -d "$ldir/.git" ]] || die "$ldir 가 없습니다 — 'omk env install $env' 먼저"
     load_toolchain "$ldir"
+    local track; track="$(dotenv_get "$ldir/.env" OMK_TRACK)"
     if [[ $if_behind -eq 1 ]]; then
         local need=0
-        repo_behind "$ldir" && need=1
+        if [[ "$track" == "release" ]]; then release_behind "$ldir" && need=1; else repo_behind "$ldir" && need=1; fi
         [[ -d "$bdir/.git" ]] && repo_behind "$bdir" && need=1
         [[ $need -eq 1 ]] || { log_info "$env 최신 — 갱신 없음"; return 0; }
     fi
@@ -718,16 +1049,35 @@ cmd_env_update() {
     restore_lockfiles "$ldir"; [[ -d "$bdir/.git" ]] && restore_lockfiles "$bdir"
     searxng_ensure "$ldir" "$env" "$(env_dir "$env")/searxng" "$(env_dir "$env")"   # 뒤의 update 가 재시작하며 반영
     # llm: fetch → ff-only pull → build → migrate → restart (openmake_llm.sh 가 dirty/ff 검사 포함)
-    ( cd "$ldir" && ./openmake_llm.sh update --yes < /dev/null | cat ) || die "openmake_llm.sh update 실패 ($env)"
+    if [[ "$track" == "release" ]]; then
+        if release_behind "$ldir"; then
+            [[ -z "$(git -C "$ldir" status --porcelain)" ]] || die "$ldir 에 커밋되지 않은 변경이 있습니다 — 정리한 뒤 다시 실행하세요"
+            # 릴리스를 따르는 환경은 실사용 데이터를 갖는다 — 새 버전(마이그레이션)을 올리기 전에 덤프를 떠 둔다.
+            if [[ $no_backup -eq 0 ]]; then
+                env_backup_run "$env" || die "올리기 전 백업 실패 — 고친 뒤 다시 실행하세요 (건너뛰려면 --no-backup)"
+            fi
+            git -C "$ldir" merge -q --ff-only "$RELEASE_TAG" || die "릴리스 $RELEASE_TAG 로 fast-forward 할 수 없습니다 ($ldir)"
+            log_ok "릴리스 $RELEASE_TAG 로 갱신"
+            ( cd "$ldir" && ./openmake_llm.sh deploy --yes < /dev/null | cat ) || die "openmake_llm.sh deploy 실패 ($env)"
+        else log_info "$env 는 최신 릴리스입니다 (${RELEASE_TAG:-?})"; fi
+    else
+        ( cd "$ldir" && ./openmake_llm.sh update --yes < /dev/null | cat ) || die "openmake_llm.sh update 실패 ($env)"
+    fi
+    # 새로 받은 Dockerfile 로 빌드한다(안 바뀌었으면 캐시로 수 초). .env 가 바뀐 경우에만 한 번 더 재시작.
+    runtime_images_ensure "$ldir" "$env"
+    # 이미 게이트웨이가 있는 환경만 갱신한다(새 config 복사 + 재기동, litellm.env 는 그대로) — update 가 기존 환경의
+    # LLM_BASE_URL 을 가로채지 않게. 새로 붙이려면 'omk env install <env>' 를 다시 실행한다(멱등).
+    LITELLM_CHANGED=0; [[ ! -d "$(litellm_dir "$env")" ]] || litellm_ensure "$ldir" "$env"
+    [[ $RUNTIME_CHANGED -eq 0 && $LITELLM_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
     bench_update "$env"
     [[ -f "$(proxy_dir)/caddy.d/$env.caddy" ]] && { proxy_render "$env"; proxy_start_or_reload; }
     log_ok "$env 갱신 완료"
 }
 
 cmd_env_reset() {
-    local env="$1"; shift; local keep_data=0 keep_env=0 reinstall=0
+    local env="$1"; shift; local keep_data=0 keep_env=0 reinstall=0 purge_images=0
     while [[ $# -gt 0 ]]; do
-        case "$1" in --keep-data) keep_data=1 ;; --keep-env) keep_env=1 ;; --reinstall) reinstall=1 ;; -y|--yes) ASSUME_YES=1 ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift
+        case "$1" in --purge-images) purge_images=1 ;; --keep-data) keep_data=1 ;; --keep-env) keep_env=1 ;; --reinstall) reinstall=1 ;; -y|--yes) ASSUME_YES=1 ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift
     done
     local edir ldir bdir ref="" bref=""
     edir="$(env_dir "$env")"; ldir="$(llm_dir "$env")"; bdir="$(bench_dir "$env")"
@@ -770,6 +1120,8 @@ cmd_env_reset() {
         if [[ $keep_data -eq 0 ]]; then
             for v in $(docker_volumes "$env"); do docker volume rm "$v" >/dev/null 2>&1 && log_ok "볼륨 $v 삭제" || true; done
         fi
+        # 런타임 이미지(약 7GB)는 기본으로 남긴다 — 구형 docker 빌더는 이미지를 지우면 캐시도 사라져 재설치마다 수 분이 든다.
+        [[ $purge_images -eq 0 ]] || runtime_images_remove "$env"
     fi
     proxy_remove "$env"
     [[ -d "$edir" ]] && { rm -rf "$edir"; log_ok "삭제: $edir"; }
@@ -800,9 +1152,18 @@ env_summary() { # $1=env
     echo "            web http://localhost:$web   api http://localhost:$api"
     [[ -d "$bdir" ]] && echo "  bench     $bdir  → http://localhost:${bport:-?}"
     [[ -n "$pport" ]] && echo "  proxy     http://localhost:$pport  (외부 공개는 터널/DNS 를 이 포트로: scripts/cloudflared/config.yml.example)"
+    local eh; for eh in $(dotenv_get "$ldir/.env" OMK_ENV_HOSTS | tr ',' ' '); do [[ -z "$pport" ]] || echo "  다른 기기  http://$eh:$pport"; done
     [[ -n "$(dotenv_get "$ldir/.env" OMK_APP_URL | grep -E '^https?://' | grep -v localhost || true)" ]] && echo "  공개 주소  $(dotenv_get "$ldir/.env" OMK_APP_URL)"
     echo "  웹 검색   $(search_line "$ldir")"
+    [[ -z "$(litellm_line "$env" "$ldir")" ]] || echo "  LiteLLM   $(litellm_line "$env" "$ldir")"
+    if [[ -n "$(default_model_base)" && "$(dotenv_get "$(litellm_dir "$env")/litellm.env" OMK_UPSTREAM_API_BASE)" == "$(default_model_base)" ]]; then
+        echo "  모델      $(dotenv_get "$(litellm_dir "$env")/litellm.env" OMK_UPSTREAM_MODEL) (호스트 기본 모델 · llama.cpp) — 배선 확인·가벼운 대화용. 더 큰 모델: --llm-base-url … --llm-model … 로 재설치"
+    fi
     echo ""
+    if [[ -n "$(dotenv_get "$ldir/.env" OMK_LITELLM_PORT)" && -z "$(dotenv_get "$(litellm_dir "$env")/litellm.env" QWEN_VLLM_API_BASE)$(dotenv_get "$(litellm_dir "$env")/litellm.env" OMK_UPSTREAM_MODEL)" ]]; then
+        printf "  %s[할 일]%s 로컬 모델 업스트림이 비어 있습니다 — $(litellm_dir "$env")/litellm.env 의\n" "$C_WARN" "$C_RESET"
+        echo "         QWEN_VLLM_API_BASE / BGE_VLLM_API_BASE / VLLM_API_KEY 를 넣고 'omk env start $env' (또는 --llm-base-url … --llm-model … 로 재설치)"
+    fi
     if [[ -d "$bdir" && -z "$(dotenv_get "$bdir/.env" OMK_API_KEY)" ]]; then
         printf "  %s[할 일]%s bench 가 llm 모델을 부르려면 API 키가 필요합니다 (자동 발급 불가):\n" "$C_WARN" "$C_RESET"
         echo "         llm 웹 → 설정 → API 키 → chat 스코프 키 발급 → $bdir/.env 의 OMK_API_KEY 에 넣고 'omk env start $env'"
@@ -836,6 +1197,7 @@ cmd_env_start() {
     load_toolchain "$ldir"
     # openmake_llm.sh start 는 tty 면 로그를 계속 스트리밍한다 — 파이프로 끊는다.
     ( cd "$ldir" && ./openmake_llm.sh start < /dev/null | cat ) || die "llm 기동 실패"
+    litellm_pm2_start "$env" || true
     [[ -d "$bdir" ]] && bench_pm2_start "$bdir" "$env"
     [[ -f "$(proxy_dir)/caddy.d/$env.caddy" ]] && proxy_start_or_reload
     return 0
@@ -843,13 +1205,32 @@ cmd_env_start() {
 cmd_env_stop() {
     local env="$1" ldir n; ldir="$(llm_dir "$env")"
     load_toolchain "$ldir"; require_pm2
-    n="$(bench_pm2_name "$env")"; pm2 describe "$n" >/dev/null 2>&1 && pm2 stop "$n" >/dev/null && log_ok "PM2 $n 정지" || true
+    for n in "$(bench_pm2_name "$env")" "$(litellm_pm2_name "$env")"; do
+        pm2 describe "$n" >/dev/null 2>&1 && pm2 stop "$n" >/dev/null && log_ok "PM2 $n 정지" || true
+    done
     ( cd "$ldir" && ./openmake_llm.sh stop < /dev/null | cat ) || die "llm 정지 실패"
 }
 cmd_env_logs() {
     local env="$1"; load_toolchain "$(llm_dir "$env")"; require_pm2
     # pm2 logs 는 /regex/ 로 여러 앱을 한 번에 본다.
     pm2 logs "/^($(pm2_names "$env" | tr ' ' '|'))$/" --lines 50
+}
+cmd_env_expose() { # env [--tailscale] [--host H]… — 다른 기기에서 프록시 포트로 접속할 호스트를 허용한다
+    local env="$1"; shift; local ldir hosts add="" use_ts=0 pport h
+    ldir="$(llm_dir "$env")"; [[ -f "$ldir/.env" ]] || die "$ldir/.env 없음 — 'omk env install $env' 먼저"
+    while [[ $# -gt 0 ]]; do
+        case "$1" in --tailscale) use_ts=1 ;; --host) add="$(csv_union "$add" "${2:-}")"; shift ;; *) usage_die "알 수 없는 옵션: $1" ;; esac; shift
+    done
+    load_toolchain "$ldir"
+    hosts="$(dotenv_get "$ldir/.env" OMK_ENV_HOSTS)"
+    if [[ $use_ts -eq 1 ]]; then local ts; ts="$(tailscale_hosts)"; [[ -n "$ts" ]] || die "tailscale 주소를 읽을 수 없습니다"; hosts="$(csv_union "$hosts" "$ts")"; fi
+    hosts="$(csv_union "$hosts" "$add")"
+    [[ -n "$hosts" ]] || usage_die "omk env expose <env> --tailscale | --host <이름>"
+    dotenv_set "$ldir/.env" OMK_ENV_HOSTS "$hosts"
+    env_apply_origins "$ldir"
+    [[ $ORIGINS_CHANGED -eq 0 ]] || ( cd "$ldir" && ./openmake_llm.sh restart < /dev/null | cat ) || log_warn "API 재시작 실패 — 'omk env start $env'"
+    pport="$(dotenv_get "$ldir/.env" OMK_PROXY_PORT)"
+    for h in $(printf '%s' "$hosts" | tr ',' ' '); do log_info "다른 기기에서:  http://$h:$pport"; done
 }
 cmd_env() {
     local sub="${1:-}" env="${2:-}"
@@ -864,6 +1245,8 @@ cmd_env() {
         stop)       cmd_env_stop "$env" ;;
         logs)       cmd_env_logs "$env" ;;
         autoupdate) cmd_env_autoupdate "$env" "$@" ;;
+        backup)     cmd_env_backup "$env" "$@" ;;
+        expose)     cmd_env_expose "$env" "$@" ;;
         *) usage_die "알 수 없는 env 명령: $sub" ;;
     esac
 }
@@ -917,14 +1300,22 @@ dev_apply_hosts() { # $1=llm dir $2=hosts CSV — CORS_ORIGINS 에 호스트별 
     dotenv_set "$envf" CORS_ORIGINS "$(csv_union "$(dotenv_get "$envf" CORS_ORIGINS)" "$add")"
     dotenv_set "$envf" OMK_DEV_HOSTS "$hosts"
 }
+dev_instance() { local v; v="$(dotenv_get "$DEV_LLM/.env" OMK_INSTANCE)"; printf '%s' "${v:-$OMK_LOCAL_INSTANCE}"; }
+dev_warn_legacy() { # 예전에 'dev' 로 준비한 작업 클론 — 동작은 하지만 환경 dev 와 이름이 겹친다
+    [[ "$(dev_instance)" == "dev" ]] || return 0
+    log_warn "이 작업 클론은 옛 인스턴스 이름 'dev' 를 씁니다 — 환경 dev(~/.openmake/dev)와 컨테이너·포트가 겹칩니다."
+    log_warn "옮기기: 'omk dev reset'(컨테이너·볼륨 삭제, 이름을 '$OMK_LOCAL_INSTANCE' 로 바꿈) → 'omk dev setup'"
+}
 dev_compose() { ( cd "$DEV_LLM" && docker compose --env-file .env -f infra/docker-compose.yml "$@" ); }
-dev_searxng() { searxng_ensure "$DEV_LLM" dev "$DEV_LLM/.openmake/searxng" "$DEV_LLM"; }
+dev_searxng() { searxng_ensure "$DEV_LLM" "$(dev_instance)" "$DEV_LLM/.openmake/searxng" "$DEV_LLM"; }
 cmd_dev_setup() {
     dev_locate; ensure_git
     local no_searxng=0; [[ "${1:-}" == "--no-searxng" ]] && no_searxng=1
     log_step "dev 준비: $DEV_LLM"
-    # 툴체인·.env(OMK_INSTANCE=dev)·의존성·DB·마이그레이션까지. 빌드·PM2 는 dev 에 필요 없다.
-    ( cd "$DEV_LLM" && ./install.sh --yes --instance dev --skip-build --no-start ) || die "install.sh 실패"
+    # 툴체인·.env(OMK_INSTANCE=local)·의존성·DB·마이그레이션까지. 빌드·PM2 는 개발 서버에 필요 없다.
+    # 이미 준비된 클론은 .env 의 이름을 그대로 쓴다(install.sh 는 .env 와 다른 --instance 를 거부한다).
+    dev_warn_legacy
+    ( cd "$DEV_LLM" && ./install.sh --yes --instance "$(dev_instance)" --skip-build --no-start ) || die "install.sh 실패"
     load_toolchain "$DEV_LLM"
     dev_build_packages
     [[ $no_searxng -eq 1 ]] && dotenv_set "$DEV_LLM/.env" OMK_SEARXNG off
@@ -933,12 +1324,12 @@ cmd_dev_setup() {
         log_step "bench dev 준비: $DEV_BENCH"
         ( cd "$DEV_BENCH" && npm install --no-audit --no-fund && ( cd web && npm install --no-audit --no-fund ) ) || die "bench 의존성 설치 실패"
         mkdir -p "$DEV_BENCH/data"
-        bench_ensure_env "$DEV_BENCH" dev "$(llm_api_port "$DEV_LLM")" "$(llm_web_port "$DEV_LLM")" 0 >/dev/null
+        bench_ensure_env "$DEV_BENCH" "$(dev_instance)" "$(llm_api_port "$DEV_LLM")" "$(llm_web_port "$DEV_LLM")" 0 >/dev/null
     fi
     log_ok "dev 준비 완료 — 'omk dev up' 으로 기동"
 }
 cmd_dev_up() {
-    dev_locate
+    dev_locate; dev_warn_legacy
     local target="all" hosts_arg="" use_ts=0
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -986,7 +1377,7 @@ cmd_dev_up() {
     log_info "Ctrl+C 로 전부 종료. DB/Redis 는 남는다 → 'omk dev down'"
     "${conc[@]}" -k --prefix-colors auto -n "$names" "${cmds[@]}"
 }
-cmd_dev_down()   { dev_locate; dev_compose stop; if searxng_owned "$(searxng_name dev)" "$DEV_LLM"; then docker stop "$(searxng_name dev)" >/dev/null 2>&1 || true; fi; log_ok "dev DB/Redis/SearXNG 정지 (데이터 유지)"; }
+cmd_dev_down()   { dev_locate; dev_compose stop; if searxng_owned "$(searxng_name "$(dev_instance)")" "$DEV_LLM"; then docker stop "$(searxng_name "$(dev_instance)")" >/dev/null 2>&1 || true; fi; log_ok "dev DB/Redis/SearXNG 정지 (데이터 유지)"; }
 cmd_dev_status() {
     dev_locate; load_toolchain "$DEV_LLM"
     echo "dev  llm=$DEV_LLM  bench=${DEV_BENCH:-없음}"
@@ -1001,7 +1392,9 @@ cmd_dev_reset() {
     confirm "dev 의 ${what}를 지웁니다 (소스·.env 유지). 계속할까요?" || return 0
     ( cd "$DEV_LLM" && ./uninstall.sh "${flags[@]}" ) || die "uninstall.sh 실패"
     # uninstall.sh 는 compose 것만 안다. 이름이 호스트에 하나뿐이라 다른 작업 클론의 것일 수 있다 — 라벨로 확인한다.
-    if searxng_owned "$(searxng_name dev)" "$DEV_LLM"; then docker rm -f "$(searxng_name dev)" >/dev/null 2>&1 && log_ok "컨테이너 $(searxng_name dev) 제거" || true; fi
+    if searxng_owned "$(searxng_name "$(dev_instance)")" "$DEV_LLM"; then docker rm -f "$(searxng_name "$(dev_instance)")" >/dev/null 2>&1 && log_ok "컨테이너 $(searxng_name "$(dev_instance)") 제거" || true; fi
+    # 옛 이름 'dev' 는 환경 dev 와 겹친다 — 컨테이너·볼륨을 지운 김에 이름을 옮긴다(데이터는 어차피 방금 지웠다).
+    if [[ "$(dev_instance)" == "dev" && $keep_data -eq 0 ]]; then dotenv_set "$DEV_LLM/.env" OMK_INSTANCE "$OMK_LOCAL_INSTANCE"; log_ok "인스턴스 이름: dev → $OMK_LOCAL_INSTANCE — 'omk dev setup' 으로 다시 준비하세요"; fi
     log_ok "dev 리셋 완료 — 'omk dev up' 으로 다시 준비"
 }
 cmd_dev() {

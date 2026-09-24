@@ -12,7 +12,7 @@
 .EXAMPLE
   # PowerShell
   irm https://raw.githubusercontent.com/openmake/openmake_llm/main/scripts/env/omk.ps1 -OutFile omk.ps1
-  .\omk.ps1 env install staging --public-url https://chat-staging.example.com
+  .\omk.ps1 env install staging --public-url https://staging-chat.example.com
   .\omk.ps1 env status staging
 
 .NOTES

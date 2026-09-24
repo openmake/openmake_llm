@@ -8,6 +8,11 @@ TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 export OMK_ROOT="$TMP/root" OMK_SOURCE_ONLY=1
 # shellcheck source=/dev/null
 . "$HERE/omk.sh"
+# 안전장치 — 이 테스트는 실제 프록시·PM2 를 절대 건드리지 않는다. (2026-09-19: proxy_remove 가 돌고 있는
+# 실제 프록시에 임시 폴더의 빈 설정을 reload 해 staging 라우팅을 날린 사고가 있었다.)
+proxy_running() { return 1; }
+# shellcheck disable=SC2034  # omk.sh 의 caddy reload 가 읽는다
+OMK_CADDY_ADMIN="127.0.0.1:1"
 set +e   # omk.sh 의 set -e 를 끈다 — 실패를 세어서 보고한다
 
 PASS=0; FAIL=0
@@ -17,17 +22,25 @@ ok() { if eval "$2"; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); printf 'FAIL 
 # ── 이름 파생: online 은 기본(무접미사), 그 외는 -<env> ──
 eq "suffix online"  "$(env_suffix online)"  ""
 eq "suffix staging" "$(env_suffix staging)" "-staging"
-eq "pm2 online"     "$(pm2_names online)"   "openmake-llm openmake-next openmake-discord openmake-bench omk-updater-online"
-eq "pm2 staging"    "$(pm2_names staging)"  "openmake-llm-staging openmake-next-staging openmake-discord-staging openmake-bench-staging omk-updater-staging"
+eq "pm2 online"     "$(pm2_names online)"   "openmake-llm openmake-next openmake-discord openmake-bench openmake-litellm omk-updater-online omk-backup-online"
+eq "pm2 staging"    "$(pm2_names staging)"  "openmake-llm-staging openmake-next-staging openmake-discord-staging openmake-bench-staging openmake-litellm-staging omk-updater-staging omk-backup-staging"
 eq "docker online"  "$(docker_containers online)"  "openmake-postgres openmake-redis openmake-searxng"
 eq "docker staging" "$(docker_containers staging)" "openmake-staging-postgres openmake-staging-redis openmake-staging-searxng"
 eq "volumes online" "$(docker_volumes online)"     "openmake_pgdata openmake_redisdata"
 eq "volumes staging" "$(docker_volumes staging)"   "openmake-staging_pgdata openmake-staging_redisdata"
 eq "bench pm2"      "$(bench_pm2_name staging)" "openmake-bench-staging"
 eq "dirs"           "$(llm_dir staging)|$(bench_dir staging)" "$OMK_ROOT/staging/llm|$OMK_ROOT/staging/bench"
-eq "ref staging"    "$(env_default_ref staging)" "staging"
-eq "ref online"     "$(env_default_ref online)"  "main"
-ok "validate rejects dev"   '! ( validate_env dev ) >/dev/null 2>&1'
+eq "ref staging"    "$(env_default_ref staging)" "main"
+eq "ref online"     "$(env_default_ref online)"  "release"
+eq "ref dev"        "$(env_default_ref dev)"     "main"
+ok "validate rejects local" '! ( validate_env local ) >/dev/null 2>&1'
+DV="$TMP/devclone"; mkdir -p "$DV"
+# shellcheck disable=SC2034  # dev_instance 가 읽는다
+eq "dev server: 새 클론은 local"  "$( DEV_LLM="$DV"; dev_instance )" "local"
+printf 'OMK_INSTANCE=dev\n' > "$DV/.env"
+# shellcheck disable=SC2034
+eq "dev server: 준비된 클론은 .env 를 따른다" "$( DEV_LLM="$DV"; dev_instance )" "dev"
+ok "validate accepts dev"   '( validate_env dev ) >/dev/null 2>&1'
 ok "validate rejects Upper" '! ( validate_env Staging ) >/dev/null 2>&1'
 ok "validate accepts qa-1"  '( validate_env qa-1 ) >/dev/null 2>&1'
 
@@ -59,6 +72,55 @@ eq "ensure: off 면 아무것도 안 함" "$SEARCH_CHANGED|$([[ -d "$SX/c" ]] &&
 printf 'SEARXNG_URL=http://search.internal:8080\n' > "$SX/.env"; searxng_ensure "$SX" t "$SX/c" "$SX" >/dev/null
 eq "ensure: 사용자 URL 은 그대로" "$(dotenv_get "$SX/.env" SEARXNG_URL)|$SEARCH_CHANGED" "http://search.internal:8080|0"
 
+# ── 프록시 주소(origin) 허용 ──
+OX="$TMP/ox"; mkdir -p "$OX"; printf 'CORS_ORIGINS=http://localhost:13000\nOMK_PROXY_PORT=33000\nOMK_ENV_HOSTS=stage-box\n' > "$OX/.env"
+env_apply_origins "$OX"
+eq "origins: 프록시 포트의 localhost·호스트 추가" "$(dotenv_get "$OX/.env" CORS_ORIGINS)|$ORIGINS_CHANGED" "http://localhost:13000,http://localhost:33000,http://127.0.0.1:33000,http://stage-box:33000|1"
+env_apply_origins "$OX"; eq "origins: 멱등" "$ORIGINS_CHANGED" "0"
+printf 'CORS_ORIGINS=x\n' > "$OX/.env"; env_apply_origins "$OX"; eq "origins: 프록시 없으면 그대로" "$(dotenv_get "$OX/.env" CORS_ORIGINS)" "x"
+
+ok "proxy: 남의 OMK_ROOT 프록시는 우리 것이 아니다" '! ( proxy_running() { return 0; }; pm2_app_cwd() { printf /somewhere/else/caddy; }; proxy_is_ours )'
+ok "proxy: 이 OMK_ROOT 의 프록시는 우리 것"          '( proxy_running() { return 0; }; pm2_app_cwd() { proxy_dir; }; proxy_is_ours )'
+
+# ── 릴리스 추종: 가장 높은 vX.Y.Z, 새 태그가 생기면 behind ──
+GR="$TMP/rel"; git init -q "$GR"; ( cd "$GR" || exit; git -c user.email=t@t -c user.name=t commit -q --allow-empty -m a; git tag v1.9.0; git tag v1.10.0; git tag not-a-release; git tag v1.10.0-rc1 )
+eq "release: 가장 높은 태그" "$(latest_release_tag "$GR")" "v1.10.0"
+git clone -q "$GR" "$TMP/relc" 2>/dev/null; release_checkout "$TMP/relc" v1.10.0
+eq "release: 로컬 브랜치 release" "$(git -C "$TMP/relc" rev-parse --abbrev-ref HEAD)" "release"
+ok "release: 최신이면 behind 아님" '! release_behind "$TMP/relc"'
+( cd "$GR" || exit; git -c user.email=t@t -c user.name=t commit -q --allow-empty -m b; git tag v1.11.0 )
+ok "release: 새 태그가 생기면 behind" 'release_behind "$TMP/relc" && [[ "$RELEASE_TAG" == "v1.11.0" ]]'
+
+# ── 백업 위치: 환경 디렉터리 밖이 기본, .env 의 BACKUP_DIR 이 있으면 그쪽 ──
+eq "backup dir 기본" "$(backup_dir staging)" "$OMK_ROOT/backups/staging"
+ok "backup dir 는 환경 밖" '[[ "$(backup_dir staging)" != "$(env_dir staging)"/* ]]'
+mkdir -p "$(llm_dir bk)"; printf 'BACKUP_DIR=/mnt/backup/omk\n' > "$(llm_dir bk)/.env"
+eq "backup dir: .env 우선" "$(backup_dir bk)" "/mnt/backup/omk"; rm -rf "$(env_dir bk)"
+
+# ── LiteLLM: 환경별 이름·위치, off 면 아무것도 안 함 ──
+eq "litellm names" "$(litellm_pm2_name staging)|$(litellm_pm2_name online)|$(litellm_dir dev)" "openmake-litellm-staging|openmake-litellm|$OMK_ROOT/dev/litellm"
+LX="$TMP/lx"; mkdir -p "$LX"; printf 'OMK_LITELLM=off\nLLM_BASE_URL=http://x\n' > "$LX/.env"
+litellm_ensure "$LX" dev >/dev/null; eq "litellm: off 면 그대로" "$LITELLM_CHANGED|$(dotenv_get "$LX/.env" LLM_BASE_URL)|$([[ -d "$OMK_ROOT/dev/litellm" ]] && echo y || echo n)" "0|http://x|n"
+
+printf 'model_list:\n  - model_name: a\n' > "$LX/repo.yaml"; : > "$LX/l.env"
+litellm_render_config "$LX/repo.yaml" "$LX/l.env" "$LX/out.yaml"; ok "litellm config: 업스트림 없으면 레포 것 그대로" 'cmp -s "$LX/repo.yaml" "$LX/out.yaml"'
+printf 'OMK_UPSTREAM_MODEL=qwen3.5:397b-cloud\n' > "$LX/l.env"; litellm_render_config "$LX/repo.yaml" "$LX/l.env" "$LX/out.yaml"
+eq "litellm config: 업스트림 모델 한 항목 추가" "$(grep -c 'model_name' "$LX/out.yaml")|$(grep -c 'openai/qwen3.5:397b-cloud' "$LX/out.yaml")|$(grep -c 'os.environ/OMK_UPSTREAM_API_BASE' "$LX/out.yaml")" "2|1|1"
+
+ok "llamacpp: 이 플랫폼의 릴리스 이름" '[[ "$(llamacpp_platform)" =~ ^(macos|ubuntu)-(arm64|x64)$ ]]'
+( default_model_resolve; [[ "$OMK_DEFAULT_MODEL_NAME|$OMK_DEFAULT_MODEL_CTX" == "qwen3-1.7b|16384" ]] ) && ok "default model: 기본값" true || ok "default model: 기본값" false
+mkdir -p "$(llamacpp_dir)"; printf 'HF=a/b:Q4\nNAME=mine\nCTX=8192\n' > "$(llamacpp_dir)/model.conf"
+eq "default model: 기억된 선택" "$( default_model_resolve; echo "$OMK_DEFAULT_MODEL_HF|$OMK_DEFAULT_MODEL_NAME|$OMK_DEFAULT_MODEL_CTX" )" "a/b:Q4|mine|8192"
+eq "default model: 명시가 우선" "$( OMK_DEFAULT_MODEL_NAME=x; default_model_resolve; echo "$OMK_DEFAULT_MODEL_NAME|$OMK_DEFAULT_MODEL_HF" )" "x|a/b:Q4"
+rm -rf "$(llamacpp_dir)"
+eq "llamacpp dir" "$(llamacpp_dir)" "$OMK_ROOT/llamacpp"
+
+# ── 런타임 이미지 태그: 환경별, 기본 인스턴스는 소스 기본값(:latest) ──
+eq "images dev"    "$(runtime_image_names dev)"    "openmake-mcp-runtime:dev openmake-task-runtime:dev"
+eq "images online" "$(runtime_image_names online)" "openmake-mcp-runtime:latest openmake-task-runtime:latest"
+RX="$TMP/rx"; mkdir -p "$RX"; printf 'OMK_RUNTIME_IMAGES=off\n' > "$RX/.env"
+runtime_images_ensure "$RX" dev >/dev/null; eq "images: off 면 아무것도 안 함" "$RUNTIME_CHANGED|$(dotenv_get "$RX/.env" MCP_SANDBOX_IMAGE)" "0|"
+
 # ── 소유권 가드: 환경 디렉터리 밖의 경로는 남의 것 ──
 ok "own: infra under env"     '! is_foreign_path "$OMK_ROOT/staging/llm/infra" "$OMK_ROOT/staging"'
 ok "own: env dir itself"      '! is_foreign_path "$OMK_ROOT/staging" "$OMK_ROOT/staging"'
@@ -80,7 +142,8 @@ ok "restore missing backup is no-op" '[[ ! -f "$TMP/r1/bench.env" ]]'
 # ── PM2 dump 검사: 이 환경의 앱이 저장돼 있을 때만 pm2 save 를 한다 ──
 export PM2_HOME="$TMP/pm2"; mkdir -p "$PM2_HOME"
 printf '[{"name":"other-app"},{"name":"openmake-llm-staging"}]' > "$PM2_HOME/dump.pm2"
-ok "dump has env app"      'pm2_dump_has_any "$(pm2_names staging)"'
+# dump 판독은 node 로 한다(설치본에는 install.sh 가 항상 깔아 둔다) — 맨 컨테이너처럼 node 가 없으면 건너뛴다.
+if has node; then ok "dump has env app" 'pm2_dump_has_any "$(pm2_names staging)"'; else echo "SKIP dump has env app (node 없음)"; fi
 ok "dump lacks other env"  '! pm2_dump_has_any "$(pm2_names qa)"'
 rm -f "$PM2_HOME/dump.pm2"; ok "no dump → false" '! pm2_dump_has_any "$(pm2_names staging)"'
 unset PM2_HOME

@@ -45,14 +45,32 @@
 
 **결론: C.** 억지로 붙이지 않는다. 이 확장점은 설계 리뷰의 C4(Base 가 `web-search` 를 정적으로 import — `routes/chat.routes.ts:46`, `sockets/ws-chat-handler.ts:32`, `services/orchestrator/executors/web.ts:7`)를 푸는 자연스러운 첫 단계이고, SearXNG 가 그 요구사항을 정하는 첫 사례다: 제공자 등록 · 설정(URL·키) 주입 · 컨테이너 서비스 동반 여부 · 비활성 시 graceful · `process.env` 직접 read 제거.
 
-## 3. omk 미검증 항목 (2026-09-19)
+## 3. omk 검증 현황 (2026-09-21 갱신)
 
-실제로 돌려 본 것은 macOS 한 대에서의 `env install/update/reset`(`omktest`)과 `dev setup/up` 뿐이다.
-- Linux · Windows(WSL2, `omk.ps1`) 미실행
-- 빈 PC — 검증 호스트에 Node 24·Docker·PM2·Caddy 가 이미 있어 툴체인 설치·Caddy 다운로드 경로를 타지 않았다
-- `online`(기본 인스턴스) 설치, GitHub 에서 받아 설치(검증은 로컬 경로 클론), `--public-url`, `--keep-data`, `autoupdate`, 마이그레이션이 있는 `update`
-- SearXNG 기본 설치는 `dev` 실기동과 함수 단위(오프라인→복구→멱등→기동 실패 정리)로만 확인했다 — `env install` 안에서의 흐름(설치 후 API 재시작)과 Linux 의 파일 마운트 권한은 미실행
-- **CI 에 omk 실설치 job 이 없다** — `install-smoke` 는 `install.sh` 만 본다. 깨끗한 Ubuntu 러너에서 `omk env install → status → update → reset` 을 돌리면 Linux·빈 PC·자동 반복이 한 번에 해결된다
+**실제로 돌려 본 것** — macOS(arm64, 16GB) 한 대, GitHub 에서 받아 설치:
+- `env install dev --ref feature/*` → `reset` → 재설치 → 같은 환경에 다시 `install`(멱등) → `env update`(커밋 4개 · 마이그레이션 포함)
+- dev·staging **공존**: 포트(api·web·proxy·bench·LiteLLM·SearXNG·DB)·PM2·컨테이너·볼륨·이미지 태그 무충돌, 한쪽 `reset` 이 다른 쪽을 건드리지 않음
+- `env install` 안에서의 SearXNG·런타임 이미지·LiteLLM·기본 모델(llama.cpp 다운로드 포함) 흐름, 옵션 없는 설치에서 앱 → 게이트웨이 → 모델 채팅
+- 업스트림 지정(`--llm-base-url … --llm-model …` → 게이트웨이 뒤), 기본 모델 교체(1.7B → 4B)와 선택 기억
+- `--ref release`: 최신 태그 설치 → 이전 태그로 되돌린 뒤 `update` 가 새 태그로 ff + deploy → 최신이면 no-op
+- `--tailscale` / `env expose`: Tailscale 주소로 웹·로그인·웹소켓·채팅
+- 기능: 채팅 · 웹 검색 · 에이전트 작업(샌드박스 컨테이너) · 아티팩트 PDF 내보내기 — **API 호출로만**. 브라우저 화면은 사람이 확인해야 한다
+
+**아직 안 돌려 본 것**
+- Linux 실설치(순수 함수 테스트만 Ubuntu 24.04 · Debian 12 · Fedora 41 컨테이너에서 통과) · Windows(WSL2, `omk.ps1`)
+- 빈 PC — 검증 호스트에 Node·Docker·PM2·Caddy·uv 가 이미 있어 툴체인 설치·Caddy 다운로드·`python3 -m venv` 폴백 경로를 타지 않았다
+- **`online`(기본 인스턴스) 설치와 "기존 운영본을 online 으로 옮기기"** — 한 번도 실행하지 않았다. `--public-url`, `--keep-data`, `--keep-env`, `autoupdate` 도 미실행
+- vLLM 업스트림(`--qwen-vllm-base` …)으로 실제 추론 — 검증 호스트에 vLLM 이 없다. 게이트웨이가 요청을 업스트림까지 넘기는 것만 확인
+- **CI 에 omk 실설치 job 이 없다** — Gate 0.5 는 문법·shellcheck·순수 테스트만 본다. 깨끗한 Ubuntu 러너에서
+  `omk env install → status → update → reset` 을 돌리면 Linux·빈 PC·자동 반복이 한 번에 해결된다(이미지·기본 모델은 `--no-runtime-images --no-default-model`)
+
+**알려진 빈틈**
+- 한 줄 설치는 `omk.sh` 자체를 main 에서 받는다 — 설치되는 앱 소스는 릴리스 태그지만 부트스트랩 스크립트는 main HEAD 다. 막으려면 URL 을 태그로 고정(릴리스마다 README 갱신)
+- online 롤백이 omk 명령으로 없다 — 지금은 손으로 이전 태그 체크아웃 → `./openmake_llm.sh deploy`
+- 구형 docker 빌더(buildx 없음)는 이미지를 지우면 빌드 캐시도 사라진다 — 그래서 `reset` 이 런타임 이미지를 남긴다(`--purge-images`). 환경을 많이 만들면 환경당 약 7GB 가 쌓인다
+- 기본 모델 서버는 호스트당 하나다 — 모델을 바꾸면 그 서버를 쓰는 다른 환경은 `omk env install <env>` 를 다시 돌려야 게이트웨이의 모델 이름이 맞는다
+- `omk dev setup|up` 을 인스턴스 이름 `local` 로 바꾼 뒤 **실기동은 아직 안 했다**(순수 테스트만) — 검증 호스트의 작업 클론에 `openmake_bench` 가 없고 환경 dev 가 떠 있어 미뤘다
+- 백업은 레포의 `db-backup.sh` 로 통일했다(`omk env backup`). 운영 호스트가 쓰던 레포 밖 스크립트가 더 하던 일(원격 복사·알림 등)이 있는지는 **확인하지 못했다** — 있으면 레포 쪽에 합친다
 
 ## 4. 업스트림에 알릴 것
 
@@ -65,6 +83,11 @@
   kill-switch 패턴. 그때까지 omk 는 오프라인 설치본의 대기를 2초로 낮추는 것으로 버틴다(README "웹 검색").
 - **`.env.example` 은 "docker compose 로 기동"이라 하지만 `infra/docker-compose.yml` 에 searxng 서비스가 없다** —
   omk 가 `docker run` 으로 메운다. 업스트림이 compose 서비스(프로필)로 넣으면 omk 쪽은 그걸 쓰도록 바꾼다.
+
+- **기본 MCP 서버가 새 설치본에서 항상 연결 실패한다** (2026-09-21) — `db/init/003-seed.sql` 이 `noapi-google-search`
+  (command `noapi-google-search-mcp`)를 enabled 로 심지만, 그 실행 파일은 호스트에도 `openmake-mcp-runtime` 이미지에도 없다.
+  기동 때마다 `[ExternalMCP] Failed to connect` 가 남는다(이유 문자열도 비어 있다). 웹 검색은 SearXNG 로 되므로 기능 공백은 없다.
+  선택지: 이미지에 bake(`uv tool install --with 'mcp<2' …` + chromium) / 시드를 disabled 로 / 설치기가 호스트에 설치하고 `sandbox_network=host`.
 
 ## 5. 완전 오프라인 설치 (기록만, 2026-09-19)
 
