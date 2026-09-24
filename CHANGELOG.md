@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.88.0](https://github.com/openmake/openmake_llm/compare/v1.87.0...v1.88.0) (2026-09-24)
+
+
+### ✨ 기능
+
+* **env:** 환경 모델 정리 — main 하나·online 은 릴리스 태그, 환경별 LiteLLM·기본 모델·런타임 이미지 ([#965](https://github.com/openmake/openmake_llm/issues/965)) ([ce0f222](https://github.com/openmake/openmake_llm/commit/ce0f222e2ba27e38d656bec948866c9f5a262fc0))
+
+
+### 🐛 버그 수정
+
+* **infra:** DB 기본 이미지를 pgvector PG16 으로 — Knowledge add-on 의 vector 확장 전제 ([#1007](https://github.com/openmake/openmake_llm/issues/1007)) ([f7ceb41](https://github.com/openmake/openmake_llm/commit/f7ceb41d38513105c72805d9dabb28d2b399d134))
+
 ## [1.87.0](https://github.com/openmake/openmake_llm/compare/v1.86.3...v1.87.0) (2026-09-24)
 
 
