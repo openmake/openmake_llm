@@ -22,6 +22,8 @@ import {
   CardTitle,
   CardContent,
   Badge,
+  Input,
+  NativeSelect,
   Table,
   Th,
   Td,
@@ -353,7 +355,7 @@ export function ProviderKeysSection() {
                               </Button>
                               <Button
                                 variant="ghost"
-                                size="icon"
+                                size="icon-sm"
                                 aria-label={t("deleteAria")}
                                 onClick={() =>
                                   handleDelete(p.provider_id, p.display_name)
@@ -477,17 +479,16 @@ function AddKeyForm({
               <span className="mb-1 block text-xs font-medium text-fg-2">
                 {t("col.provider")}
               </span>
-              <select
+              <NativeSelect
                 value={providerId}
                 onChange={(e) => setProviderId(e.target.value)}
-                className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm text-fg outline-none focus:border-accent"
               >
                 {providers.map((p) => (
                   <option key={p.provider_id} value={p.provider_id}>
                     {p.display_name} ({t(SDK_LABEL_KEY[p.sdk_type])})
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
               {selected && (
                 <span className="mt-1 block">
                   <ProviderSiteLink provider={selected} withLabel />
@@ -503,11 +504,10 @@ function AddKeyForm({
               <span className="mb-1 block text-xs font-medium text-fg-2">
                 {t("col.name")}
               </span>
-              <input
+              <Input
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder={t("namePlaceholder")}
-                className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm text-fg outline-none focus:border-accent"
               />
             </label>
           </div>
@@ -519,23 +519,23 @@ function AddKeyForm({
                 <span className="mb-1 block text-xs font-medium text-fg-2">
                   {t("apiKeyLabel")}
                 </span>
-                <input
+                <Input
                   type="password"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder="sk-..."
-                  className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 font-mono text-sm text-fg outline-none focus:border-accent"
+                  className="font-mono"
                 />
               </label>
               <label className="block">
                 <span className="mb-1 block text-xs font-medium text-fg-2">
                   {t("baseUrlLabel")}
                 </span>
-                <input
+                <Input
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
                   placeholder={selected?.default_base_url ?? "https://..."}
-                  className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 font-mono text-sm text-fg outline-none focus:border-accent"
+                  className="font-mono"
                 />
               </label>
             </>
@@ -733,7 +733,7 @@ function ProviderStrip({
   const pt = useTranslations("providerKeys");
   return (
     <div>
-      <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.14em] text-muted">
+      <p className="mb-2 text-xs text-muted">
         {pt("stripLabel")}
       </p>
       <ul className="flex flex-wrap gap-2">
@@ -743,8 +743,9 @@ function ProviderStrip({
             !!p.auth_methods?.includes("oauth") && !p.auth_methods.includes("api_key");
           return (
             <li key={p.provider_id}>
+              {/* Button size sm 스케일에 맞춘 조밀한 연결 칩 — h-8·text-xs·로고 16px */}
               <div
-                className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${
+                className={`inline-flex h-8 items-center gap-2 rounded-md border px-3 ${
                   connected ? "border-accent/40 bg-accent/5" : "border-border bg-surface"
                 }`}
               >
@@ -752,12 +753,12 @@ function ProviderStrip({
                   type="button"
                   onClick={() => onConnect(p.provider_id)}
                   title={isOAuth ? pt("connectOAuth") : pt("connect")}
-                  className="flex items-center gap-2 text-left"
+                  className="inline-flex items-center gap-1.5 text-left"
                 >
                   {p.logo && (
-                    <Image src={p.logo} alt="" width={24} height={24} className="h-6 w-6 shrink-0" />
+                    <Image src={p.logo} alt="" width={16} height={16} className="h-4 w-4 shrink-0" />
                   )}
-                  <span className="text-sm font-medium text-fg">{p.display_name}</span>
+                  <span className="text-xs font-medium text-fg">{p.display_name}</span>
                   {connected ? (
                     <Badge tone="success">{pt("connected")}</Badge>
                   ) : (

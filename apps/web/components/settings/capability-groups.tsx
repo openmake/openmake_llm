@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { useTranslations } from "next-intl";
 import { ChevronDown, ChevronRight, Loader2, RotateCcw } from "lucide-react";
-import { Badge, Button } from "@/components/ui/primitives";
+import { Badge, Button, NativeSelect } from "@/components/ui/primitives";
 import type { ModelEntry } from "@/lib/models-api";
 import {
   CapabilityAvailabilityBadge,
@@ -96,8 +96,8 @@ interface ModelSelectProps {
 
 function ModelSelect({ value, models, disabled, ariaLabel, t, mixed, onChange }: ModelSelectProps) {
   return (
-    <select
-      className="h-9 min-w-52 rounded-md border border-border-strong bg-surface px-2 text-sm text-fg outline-none focus:border-accent"
+    <NativeSelect
+      className="w-auto min-w-52"
       value={value}
       disabled={disabled}
       aria-label={ariaLabel}
@@ -114,7 +114,7 @@ function ModelSelect({ value, models, disabled, ariaLabel, t, mixed, onChange }:
           {m.name}{m.provider !== "local-llm" ? ` (${m.provider})` : ""}
         </option>
       ))}
-    </select>
+    </NativeSelect>
   );
 }
 

@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Building2 } from "lucide-react";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/primitives";
+import { Card, CardHeader, CardTitle, CardContent, NativeSelect } from "@/components/ui/primitives";
 import type { ApiSuccess, OrgMembership } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
 import { useAppStore } from "@/lib/store";
@@ -60,12 +60,12 @@ export function OrganizationSection() {
       <CardContent className="py-0">
         <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-muted">{t("description")}</p>
-          <select
+          <NativeSelect
             aria-label={t("title")}
             value={activeOrgId ?? ""}
             disabled={busy}
             onChange={(e) => void change(e.target.value)}
-            className="h-9 rounded-md border border-border-strong bg-surface px-3 text-sm text-fg outline-none transition focus:border-accent sm:max-w-xs sm:flex-1"
+            className="sm:max-w-xs sm:flex-1"
           >
             <option value="">{t("personal")}</option>
             {orgs.map((o) => (
@@ -73,7 +73,7 @@ export function OrganizationSection() {
                 {o.name} · {roleLabel(o.role)}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
       </CardContent>
     </Card>

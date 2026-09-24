@@ -18,6 +18,7 @@ import {
   Button,
   Badge,
   PageHeader,
+  PageBody,
   Card,
   CardHeader,
   CardTitle,
@@ -305,7 +306,7 @@ export default function ResearchPage() {
       />
       <HistoryTabs />
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <PageBody>
         {/* 실행 안내 배너 — 생성/실행은 채팅 인라인으로 일원화 */}
         <Card className="mb-6 flex flex-wrap items-center justify-between gap-3 p-4">
           <p className="text-sm text-muted">
@@ -529,7 +530,7 @@ export default function ResearchPage() {
             </Card>
           </div>
         </div>
-      </div>
+      </PageBody>
     </>
   );
 }

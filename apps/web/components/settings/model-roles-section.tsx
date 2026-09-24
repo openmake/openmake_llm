@@ -10,6 +10,7 @@ import {
   CardContent,
   Button,
   Badge,
+  NativeSelect,
 } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient } from "@/lib/api-client";
@@ -145,8 +146,8 @@ export function ModelRolesSection() {
                     {saving && (
                       <Loader2 className="h-4 w-4 animate-spin text-muted" aria-hidden />
                     )}
-                    <select
-                      className="h-9 min-w-52 rounded-md border border-border-strong bg-surface px-2 text-sm text-fg outline-none focus:border-accent"
+                    <NativeSelect
+                      className="w-auto min-w-52"
                       value={current}
                       disabled={saving}
                       aria-label={t(`roles.${role}.label`)}
@@ -169,7 +170,7 @@ export function ModelRolesSection() {
                           {m.provider !== "local-llm" ? ` (${m.provider})` : ""}
                         </option>
                       ))}
-                    </select>
+                    </NativeSelect>
                     {current !== DEFAULT_VALUE && !saving && (
                       <Button
                         variant="ghost"

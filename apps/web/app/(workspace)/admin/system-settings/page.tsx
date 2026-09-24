@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { AlertTriangle, Bell, BellRing, Bot, Cpu, ExternalLink, Gauge, KeyRound, Loader2, RotateCcw, Save, Search } from "lucide-react";
 import {
   PageHeader,
+  PageBody,
   Card,
   CardHeader,
   CardTitle,
@@ -253,7 +254,7 @@ export default function AdminSystemSettingsPage() {
       <AdminTabs />
       {/* workspace layout(main)이 overflow-hidden 이라 페이지가 자체 스크롤 컨테이너를 가져야 함
           (admin/alerts 등과 동일 관용구 — 누락 시 뷰포트 아래 내용 접근 불가) */}
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <PageBody>
         <div className="space-y-6">
       {error && <p className="text-sm text-danger" role="alert">{error}</p>}
       {restartKeys.length > 0 && (
@@ -288,7 +289,7 @@ export default function AdminSystemSettingsPage() {
       <p className="text-xs text-muted">{t("priorityNote")}</p>
       <SettingsHistory />
         </div>
-      </div>
+      </PageBody>
     </>
   );
 }

@@ -11,7 +11,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Search, FileText, MessageSquare, AlertTriangle, Loader2, Library } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { Badge, Button, Card, PageHeader } from "@/components/ui/primitives";
+import { Badge, Button, Card, PageHeader, PageBody } from "@/components/ui/primitives";
 import { useAppStore } from "@/lib/store";
 import type { KnowledgeSpaceSummary } from "@openmake/shared-types";
 import { knowledgeApi } from "../api";
@@ -99,7 +99,7 @@ export function SpaceListView() {
           </Button>
         }
       />
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-6">
+      <PageBody className="space-y-6">
         {isAdmin && <KnowledgeAdminPanel />}
 
         <div className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 sm:max-w-sm">
@@ -132,7 +132,7 @@ export function SpaceListView() {
             ))}
           </div>
         )}
-      </div>
+      </PageBody>
 
       <CreateSpaceDialog
         open={createOpen}

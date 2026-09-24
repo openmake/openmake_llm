@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { UploadCloud, Loader2, Check } from "lucide-react";
-import { Button, Card, CardHeader, CardTitle, CardContent } from "@/components/ui/primitives";
+import { Button, Card, CardHeader, CardTitle, CardContent, Input } from "@/components/ui/primitives";
 import { ApiClient } from "@/lib/api-client";
 import type { ApiSuccess } from "@openmake/shared-types";
 
@@ -84,10 +84,8 @@ export function MarketplacePublishSection({ onPublishedAction }: { onPublishedAc
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
-          <input value={pluginName} onChange={(e) => setPluginName(e.target.value)} placeholder={t("namePlaceholder")}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-accent" />
-          <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("descPlaceholder")}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-fg outline-none focus:border-accent" />
+          <Input value={pluginName} onChange={(e) => setPluginName(e.target.value)} placeholder={t("namePlaceholder")} />
+          <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("descPlaceholder")} />
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
           {list("skills", cands.skills, t("skills"), (s) => s.category ?? "")}

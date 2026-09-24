@@ -32,6 +32,7 @@ import {
   Button,
   Badge,
   PageHeader,
+  PageBody,
   Card,
   useFocusTrap,
 } from "@/components/ui/primitives";
@@ -1286,7 +1287,7 @@ export default function AgentTasksPage() {
         description={t("pageDescription")}
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <PageBody>
         {/* 실행 안내 배너 — 생성/실행은 채팅 인라인으로 일원화 */}
         <Card className="mb-4 flex flex-wrap items-center justify-between gap-3 p-4">
           <p className="text-sm text-muted">
@@ -1525,7 +1526,7 @@ export default function AgentTasksPage() {
             })}
           </div>
         )}
-      </div>
+      </PageBody>
 
       {/* 작업 상세 모달 */}
       {detailTaskId && (

@@ -9,6 +9,7 @@ import {
   Button,
   Badge,
   PageHeader,
+  PageBody,
   StatCard,
   Card,
   CardHeader,
@@ -219,7 +220,7 @@ export default function McpMonitoringPage() {
       />
       <AdminTabs />
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <PageBody>
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatCard
             label={t("activeServers")}
@@ -408,7 +409,7 @@ export default function McpMonitoringPage() {
             </CardContent>
           </Card>
         </div>
-      </div>
+      </PageBody>
     </>
   );
 }

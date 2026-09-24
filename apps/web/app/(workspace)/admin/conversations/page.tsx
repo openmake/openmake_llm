@@ -7,6 +7,7 @@ import { MessagesSquare, Search, X, Loader2 } from "lucide-react";
 import type { ApiSuccess } from "@openmake/shared-types";
 import {
   PageHeader,
+  PageBody,
   Card,
   CardContent,
   Badge,
@@ -299,7 +300,7 @@ export default function AdminConversationsPage() {
       />
       <AdminTabs />
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <PageBody>
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <div className="flex gap-1 rounded-md border border-border bg-surface p-1">
             {tabDefs.map((d) => (
@@ -505,7 +506,7 @@ export default function AdminConversationsPage() {
         </Card>
         {/* 디버그 큐 — 오류 자동 저장·사용자 신고의 재현 번들·리플레이 (F24.7) */}
         <DebugQueuePanel />
-      </div>
+      </PageBody>
 
       {detail && (
         <div
