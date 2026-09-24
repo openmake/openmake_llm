@@ -1862,8 +1862,8 @@
     }
   },
   "adminModelRoles": {
-    "title": "Model Roles Admin",
-    "description": "Manage global role→model mappings (defaults for all users) and server-shared external keys.",
+    "title": "Model Assignments Admin",
+    "description": "Manage global model assignments (defaults for all users) and server-shared external keys.",
     "loadError": "Failed to load.",
     "saveFailed": "Failed to save.",
     "keyDeleteConfirm": "Delete the server key for '{provider}'? Global mappings for this provider will fall back to the local model.",

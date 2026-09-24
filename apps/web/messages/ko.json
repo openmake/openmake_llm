@@ -1862,8 +1862,8 @@
     }
   },
   "adminModelRoles": {
-    "title": "역할 모델 관리",
-    "description": "전역 역할→모델 매핑(모든 사용자 기본값)과 서버 공용 외부 키를 관리합니다.",
+    "title": "모델 배정 관리",
+    "description": "전역 모델 배정(모든 사용자 기본값)과 서버 공용 외부 키를 관리합니다.",
     "loadError": "불러오기에 실패했습니다.",
     "saveFailed": "저장에 실패했습니다.",
     "keyDeleteConfirm": "'{provider}' 서버 공용 키를 삭제할까요? 해당 provider 의 전역 매핑은 로컬 모델로 폴백됩니다.",

@@ -1862,8 +1862,8 @@
     }
   },
   "adminModelRoles": {
-    "title": "角色模型管理",
-    "description": "管理全局角色→模型映射(所有用户的默认值)和服务器共享外部密钥。",
+    "title": "模型分配管理",
+    "description": "管理全局模型分配(所有用户的默认值)和服务器共享外部密钥。",
     "loadError": "加载失败。",
     "saveFailed": "保存失败。",
     "keyDeleteConfirm": "删除 '{provider}' 的服务器密钥?该提供商的全局映射将回退到本地模型。",

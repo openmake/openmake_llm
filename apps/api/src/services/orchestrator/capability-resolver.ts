@@ -290,7 +290,7 @@ export async function resolveCapabilityTarget(
     if (fallback) return localTarget(capability, fallback, {}, 'default');
 
     throw new CapabilityUnavailableError(
-        `${capability} 모델이 배정되어 있지 않습니다. 설정 → 모델 & 응답 → capability에서 배정하세요.`,
+        `${capability} 모델이 배정되어 있지 않습니다. 설정 → 모델 & 응답 → 모델 배정에서 배정하세요.`,
         'CAPABILITY_UNASSIGNED',
     );
 }
