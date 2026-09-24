@@ -193,8 +193,8 @@ function buildResultBlock(results: TaskResult[], lang: string): string {
 
 function fallbackNote(lang: string, reason: string): string {
     return lang === 'ko'
-        ? `[시스템: 이번 턴에는 이미지·오디오·영상 등 미디어 기능이 실행되지 않았습니다(계획 단계 실패: ${reason.slice(0, 120)}). 텍스트로만 답하고, 미디어를 만들었다고 말하거나 파일 링크를 지어내지 마세요.]`
-        : `[System: media capabilities (image/audio/video) did not run this turn (planning failed: ${reason.slice(0, 120)}). Answer in text only; do not claim media was generated or invent file links.]`;
+        ? `[시스템: 이번 턴에는 이미지·오디오·영상 등 미디어 기능이 실행되지 않았습니다(계획 단계 실패: ${reason.slice(0, 120)}). 텍스트로만 답하고, 미디어를 만들었다고 말하거나 파일 링크를 지어내지 마세요. 기능 자체는 있으니 "생성할 수 없다"고 말하지 말고, 다시 요청하면 된다고 안내하세요.]`
+        : `[System: media capabilities (image/audio/video) did not run this turn (planning failed: ${reason.slice(0, 120)}). Answer in text only; do not claim media was generated or invent file links. The capability itself exists — do not say it cannot be done; tell the user they can ask again.]`;
 }
 
 /**
