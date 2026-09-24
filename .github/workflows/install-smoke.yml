@@ -33,7 +33,7 @@ jobs:
       # 러너의 npm 글로벌 권한·버전 관리자 상호작용 변수를 줄이기 위해 24를 미리 둔다
       # (인스톨러의 ensure_node 는 "이미 24면 통과" 경로 — 자체 설치 경로는 lint 가 지킨다).
       - name: Setup Node.js 24
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version-file: '.node-version'
 
