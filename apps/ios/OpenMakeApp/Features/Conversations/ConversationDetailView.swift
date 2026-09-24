@@ -243,6 +243,7 @@ private struct ChatTranscriptView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             AssistantHead()
                             MarkdownText(content: chat.streamingText + " ▍")
+                            if let served = chat.streamingModel { ServedModelCaption(model: served) }
                             SourcesDisclosure(items: chat.streamingSources)
                         }
                     }
@@ -395,6 +396,8 @@ private struct MessageRow: View {
             VStack(alignment: .leading, spacing: 6) {
                 AssistantHead(pulsing: false)
                 MarkdownText(content: message.content)
+                // 이 답변을 실제로 생성한 모델(히스토리는 저장된 응답 model, 방금 받은 답은 served_model)
+                if let served = message.model, !served.isEmpty { ServedModelCaption(model: served) }
                 SourcesDisclosure(items: (message.sources ?? []).map(ChatSourceItem.init))
                 // 본문은 길게 누르면 텍스트 선택이라 메뉴를 겹치지 않고 답변 아래 작은 메뉴로 둔다
                 if let onBranch {

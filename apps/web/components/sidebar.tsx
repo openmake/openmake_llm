@@ -144,7 +144,7 @@ export function Sidebar() {
     useAppStore.getState().clearContextRefs();
     try {
       const res = await ApiClient.get<
-        ApiSuccess<{ messages?: Array<{ id?: string | number; role: string; content: string; images?: string[]; thinking?: string; reasoningSummary?: string; sources?: SearchSourceRef[] }> }>
+        ApiSuccess<{ messages?: Array<{ id?: string | number; role: string; content: string; images?: string[]; thinking?: string; reasoningSummary?: string; sources?: SearchSourceRef[]; model?: string }> }>
       >(appendAnonSessionId(`/api/chat/sessions/${sid}/messages`));
       const msgs = res?.data?.messages ?? [];
       setChatHistory(() =>
@@ -158,6 +158,8 @@ export function Sidebar() {
             reasoning: m.thinking || undefined,
             reasoningSummary: m.reasoningSummary || undefined,
             ...(m.sources?.length ? { sources: m.sources } : {}),
+            // 이 답변을 실제로 생성한 모델(저장된 served model) — 사용자 행의 model 은 요청 모델이라 쓰지 않는다
+            ...(m.role === "assistant" && m.model ? { servedModel: m.model } : {}),
             dbId: m.id !== undefined ? String(m.id) : undefined,
           })),
       );

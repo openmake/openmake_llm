@@ -419,7 +419,8 @@
         "ok": "Fertig",
         "failed": "Fehlgeschlagen"
       },
-      "tasksCount": "{count} Aufgaben"
+      "tasksCount": "{count} Aufgaben",
+      "taskModel": "Verarbeitet von: {model}"
     },
     "tool": {
       "running": "{tool} wird ausgeführt"
@@ -464,6 +465,7 @@
       "copied": "Kopiert",
       "download": ".patch herunterladen"
     },
+    "servedModel": "Antwortmodell: {model}",
     "modelFallbackNotice": "Das ausgewählte Modell ({from}) hat nicht geantwortet, daher hat stattdessen das Standardmodell ({to}) geantwortet.",
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "Nutzungslimit erreicht",
@@ -1860,8 +1862,8 @@
     }
   },
   "adminModelRoles": {
-    "title": "Modellrollen-Admin",
-    "description": "Globale Zuordnungen Rolle→Modell (Standardwerte für alle Nutzer) und servergeteilte externe Schlüssel verwalten.",
+    "title": "Modellzuweisungs-Admin",
+    "description": "Globale Modellzuweisungen (Standardwerte für alle Nutzer) und servergeteilte externe Schlüssel verwalten.",
     "loadError": "Laden fehlgeschlagen.",
     "saveFailed": "Speichern fehlgeschlagen.",
     "keyDeleteConfirm": "Server-Schlüssel für „{provider}“ löschen? Globale Zuordnungen für diesen Anbieter fallen auf das lokale Modell zurück.",

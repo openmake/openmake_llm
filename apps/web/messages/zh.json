@@ -419,7 +419,8 @@
         "ok": "完成",
         "failed": "失败"
       },
-      "tasksCount": "{count} 个任务"
+      "tasksCount": "{count} 个任务",
+      "taskModel": "处理模型：{model}"
     },
     "tool": {
       "running": "正在运行 {tool}"
@@ -464,6 +465,7 @@
       "copied": "已复制",
       "download": "下载 .patch"
     },
+    "servedModel": "回答模型：{model}",
     "modelFallbackNotice": "所选模型（{from}）未响应，已由默认模型（{to}）作答。",
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "已达使用上限",
@@ -1860,8 +1862,8 @@
     }
   },
   "adminModelRoles": {
-    "title": "角色模型管理",
-    "description": "管理全局角色→模型映射(所有用户的默认值)和服务器共享外部密钥。",
+    "title": "模型分配管理",
+    "description": "管理全局模型分配(所有用户的默认值)和服务器共享外部密钥。",
     "loadError": "加载失败。",
     "saveFailed": "保存失败。",
     "keyDeleteConfirm": "删除 '{provider}' 的服务器密钥?该提供商的全局映射将回退到本地模型。",

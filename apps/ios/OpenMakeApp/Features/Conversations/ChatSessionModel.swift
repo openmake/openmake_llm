@@ -15,6 +15,8 @@ final class ChatSessionModel {
     private(set) var streamingText = ""
     /// 스트리밍 중 답변의 웹검색 출처(F19.4) — 확정 시 메시지에 싣는다
     private(set) var streamingSources: [ChatSourceItem] = []
+    /// 스트리밍 중 답변을 실제로 생성하는 모델(served_model) — 폴백이면 바뀐다. 확정 시 메시지 model 에 싣는다
+    private(set) var streamingModel: String?
     private(set) var isThinking = false
     private(set) var isStreaming = false
     private(set) var errorMessage: String?
@@ -209,6 +211,7 @@ final class ChatSessionModel {
     private func apply(_ state: ChatStreamState) {
         streamingText = state.streamingText
         streamingSources = state.sources
+        streamingModel = state.servedModel
         isThinking = state.isThinking
         statusText = state.statusText
         activityKind = state.activityKind ?? .preparing
@@ -310,11 +313,12 @@ final class ChatSessionModel {
         if !streamingText.isEmpty {
             messages.append(.init(
                 role: .assistant, content: streamingText,
-                model: nil, tokens: nil, images: nil, created_at: nil,
+                model: streamingModel, tokens: nil, images: nil, created_at: nil,
                 sources: streamingSources.isEmpty ? nil : streamingSources.map(\.contractRef)))
         }
         streamingText = ""
         streamingSources = []
+        streamingModel = nil
         isThinking = false
         statusText = nil
         orchestrator = nil

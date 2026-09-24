@@ -33,7 +33,7 @@ import type { PdfVisionResult } from '../services/chat-service/pdf-vision';
 import { saveAssistantMessage } from '../chat/request-persistence';
 import { buildWebSearchContext } from '../tools/web-search/build-search-context';
 import { emitSearchSources, parseUserLocation } from './ws-chat-sources';
-import { getInFlightStreamRegistry, resolveStreamKey } from './ws-stream-registry';
+import { createServedModelEmitter, getInFlightStreamRegistry, resolveStreamKey } from './ws-stream-registry';
 
 /**
  * AI 채팅 메시지를 처리합니다.
@@ -355,6 +355,7 @@ export async function handleChatMessage(
             },
             format: msg.format as import('../llm').FormatOption,
             onAgentSelected: (agent) => out({ type: 'agent_selected', agent }),
+            onServedModel: createServedModelEmitter(out), // 실제 응답 모델 — 바뀔 때만(폴백 시 재발행)
             // 진행 이벤트의 type 은 그 모드가 정한다(클라이언트의 모드 UI 가 구독하는 이름)
             onModeProgress: (modeId, progress) => {
                 const mode = getChatModes().find((m) => m.id === modeId);

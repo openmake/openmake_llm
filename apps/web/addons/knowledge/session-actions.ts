@@ -23,6 +23,8 @@ interface LoadedMessage {
   thinking?: string;
   reasoningSummary?: string;
   sources?: SearchSourceRef[];
+  /** 응답 모델(assistant 행은 실제로 답한 모델) */
+  model?: string;
 }
 
 export function useSessionActions() {
@@ -49,6 +51,8 @@ export function useSessionActions() {
             reasoning: m.thinking || undefined,
             reasoningSummary: m.reasoningSummary || undefined,
             ...(m.sources?.length ? { sources: m.sources } : {}),
+            // 이 답변을 실제로 생성한 모델(저장된 served model) — 사용자 행의 model 은 요청 모델이라 쓰지 않는다
+            ...(m.role === "assistant" && m.model ? { servedModel: m.model } : {}),
             dbId: m.id !== undefined ? String(m.id) : undefined,
           })),
       );

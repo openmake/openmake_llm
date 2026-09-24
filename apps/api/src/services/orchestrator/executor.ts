@@ -98,9 +98,17 @@ function buildHandlerContext(task: PlanTask, ctx: ExecContext, handle: ApprovedI
     return ownerAddonId === BASE_CAPABILITY_OWNER.addonId ? Object.assign(base, { targets }) : base;
 }
 
+/** 진행 이벤트의 model 필드 — 승인된 실행 대상의 표기(채팅 served_model 과 같은 규칙: 로컬 bare id, 외부 fullId). 대상이 없으면 생략 */
+function taskModelField(task: PlanTask, ctx: ExecContext): { model?: string } {
+    const target = ctx.targets?.get(task.id);
+    if (!target) return {};
+    return { model: target.providerId === 'local-llm' ? target.model : target.fullId };
+}
+
 async function runTask(task: PlanTask, ctx: ExecContext, turnSignal: AbortSignal): Promise<TaskResult> {
     const startedAt = Date.now();
-    ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'running' });
+    const modelField = taskModelField(task, ctx);
+    ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'running', ...modelField });
     const signal = combineSignals(turnSignal, AbortSignal.timeout(ORCHESTRATOR.TASK_TIMEOUT_MS));
     const taskCtx: ExecContext = { ...ctx, signal };
     let release: (() => void) | undefined;
@@ -122,13 +130,13 @@ async function runTask(task: PlanTask, ctx: ExecContext, turnSignal: AbortSignal
         const { job: _job, ...rest } = out;
         // pending(제출됐지만 미완료)은 ok=false — 자식 실행 금지·성공 집계 제외. 실패로도 단정하지 않는다.
         const result: TaskResult = { taskId: task.id, capability: task.capability, ms: Date.now() - startedAt, ...rest, ok: status === 'completed', status };
-        ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: status === 'completed' ? 'ok' : status === 'pending' ? 'pending' : 'failed', summary: result.text.slice(0, 120), ms: result.ms });
+        ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: status === 'completed' ? 'ok' : status === 'pending' ? 'pending' : 'failed', summary: result.text.slice(0, 120), ms: result.ms, ...modelField });
         return result;
     } catch (err) {
         const c = classify(err);
         const result: TaskResult = { taskId: task.id, capability: task.capability, ok: false, status: 'failed', text: `[${c.kind}] ${c.error}`, media: [], ms: Date.now() - startedAt, error: c.error };
         logger.warn(`[Executor] ${task.id} ${task.capability} ${c.kind}: ${c.error.slice(0, 200)}`);
-        ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'failed', summary: c.error.slice(0, 120), ms: result.ms });
+        ctx.onProgress?.({ type: 'orchestrator_task', id: task.id, capability: task.capability, status: 'failed', summary: c.error.slice(0, 120), ms: result.ms, ...modelField });
         return result;
     } finally {
         release?.();

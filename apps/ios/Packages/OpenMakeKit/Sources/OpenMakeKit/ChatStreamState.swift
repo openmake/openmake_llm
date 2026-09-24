@@ -67,6 +67,8 @@ public struct OrchestratorTask: Identifiable, Equatable, Sendable {
     public var status: Status
     public var summary: String?
     public var ms: Double?
+    /// 이 작업을 실제로 처리한 모델(서버가 실행 대상을 알 때만 — web.search·거절 작업은 nil)
+    public var model: String? = nil
 
     public var label: String { CapabilityCatalog.label(capability) }
 }
@@ -109,6 +111,9 @@ public struct ChatStreamState: Sendable {
     /// 본문 토큰을 한 자라도 받았는지 — "응답 작성 중" 표시 판단용
     /// 이 답변의 웹검색 출처(F19.4) — 같은 턴에 여러 번 오면 마지막 목록(본문 [N] 번호 체계)
     public private(set) var sources: [ChatSourceItem] = []
+    /// 이 답변을 실제로 생성하는 모델(served_model) — 선택 모델이 아니라 자동 선택·쿼터 강등·폴백을 거친 결과.
+    /// 폴백이면 새 값으로 바뀐다. 형식은 응답 model 과 같다(로컬 bare id, 외부 `<provider>:<model>`).
+    public private(set) var servedModel: String?
     public var hasStartedAnswer: Bool { !streamingText.isEmpty }
 
     public init() {}
@@ -121,6 +126,7 @@ public struct ChatStreamState: Sendable {
         activityLog = []
         orchestrator = nil
         sources = []
+        servedModel = nil
         setActivity(hint ?? "요청을 분석하고 있어요", kind: .preparing)
     }
 
@@ -215,6 +221,8 @@ public struct ChatStreamState: Sendable {
             isThinking = false
             statusText = nil
             activityKind = nil
+        case .servedModel:
+            if let model = event.model, !model.isEmpty { servedModel = model }
         case .searchSources:
             if let refs = event.sources, !refs.isEmpty { sources = refs.map(ChatSourceItem.init) }
         case .tokenWarning:
@@ -223,6 +231,8 @@ public struct ChatStreamState: Sendable {
             // 끊긴 사이 서버가 계속 만든 답변 스냅샷 — 본문을 통째로 되돌리고 스트리밍 상태로 복귀.
             // 뒤따르는 token/done 이 그대로 이어진다(웹 use-chat-socket 과 같은 규약).
             streamingText = event.content ?? streamingText
+            // 링에서 밀려났을 수 있는 served_model 을 스냅샷으로 복원
+            if let model = event.servedModel, !model.isEmpty { servedModel = model }
             isThinking = false
             isDone = false
             setActivity(streamingText.isEmpty ? "답변을 이어받고 있어요" : Self.writingText, kind: .finalizing)
@@ -289,8 +299,9 @@ public struct ChatStreamState: Sendable {
                 progress.tasks[index].status = status
                 progress.tasks[index].summary = md.string("summary") ?? progress.tasks[index].summary
                 progress.tasks[index].ms = md.double("ms") ?? progress.tasks[index].ms
+                progress.tasks[index].model = md.string("model") ?? progress.tasks[index].model
             } else {
-                progress.tasks.append(OrchestratorTask(id: id, capability: capability, instruction: nil, status: status, summary: md.string("summary"), ms: md.double("ms")))
+                progress.tasks.append(OrchestratorTask(id: id, capability: capability, instruction: nil, status: status, summary: md.string("summary"), ms: md.double("ms"), model: md.string("model")))
             }
             orchestrator = progress
             switch status {

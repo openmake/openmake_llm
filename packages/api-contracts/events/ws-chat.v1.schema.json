@@ -433,6 +433,22 @@
           "properties": {
             "type": {
               "type": "string",
+              "const": "served_model"
+            },
+            "model": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "model"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
               "const": "build_id"
             },
             "buildId": {
@@ -603,6 +619,10 @@
             "gap": {
               "type": "boolean",
               "description": "재생해야 할 이벤트 일부가 링버퍼에서 밀려났음 — 아티팩트는 done.cleanedContent 로 재구성할 것"
+            },
+            "servedModel": {
+              "type": "string",
+              "description": "마지막으로 발행한 served_model 값 — 링에서 밀려났어도 답하는 모델을 알 수 있게 스냅샷에 싣는다"
             }
           },
           "required": [
