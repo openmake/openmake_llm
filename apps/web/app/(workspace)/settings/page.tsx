@@ -260,6 +260,8 @@ export default function SettingsPage() {
   const [pwMessage, setPwMessage] = useState<{ text: string; ok: boolean } | null>(null);
 
   const [loading, setLoading] = useState(true);
+  // 설정 조회가 실패(429·네트워크)하면 화면은 기본값이다 — 그 상태로 저장하면 저장값을 덮어쓰므로 막는다.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -355,7 +357,8 @@ export default function SettingsPage() {
         const ci = res?.data?.customInstructions;
         if (alive && typeof ci === "string") setCustomInstructions(ci);
       } catch {
-        // 비로그인/네트워크 실패 — 무시하고 빈 값 유지
+        // 비로그인/네트워크 실패 — 빈 값 유지, 저장은 막는다
+        if (alive) setLoadFailed(true);
       }
       try {
         const pres = await ApiClient.get<ApiSuccess<{ preferences: Record<string, unknown> }>>(
@@ -373,7 +376,8 @@ export default function SettingsPage() {
           setPrivacyPrefs({ saveHistory: sh, memoryLearning: ml });
         }
       } catch {
-        // 미설정/실패 — 기본값 유지
+        // 실패 — 기본값 유지, 저장은 막는다
+        if (alive) setLoadFailed(true);
       } finally {
         if (alive) setLoading(false);
       }
@@ -517,17 +521,23 @@ export default function SettingsPage() {
         description={tSettings("pageDescription")}
         actions={
           <div className="flex items-center gap-3">
+            {loadFailed && tab !== "connectors" && (
+              <span className="text-xs text-danger">{tSettings("loadFailedSaveBlocked")}</span>
+            )}
             {savedAt && (
               <span className="text-xs text-muted">{tSettings("savedAt", { time: savedAt })}</span>
             )}
-            <Button onClick={handleSave} disabled={saving || loading}>
-              {saving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              {tSettings("saveButton")}
-            </Button>
+            {/* 커넥터 탭은 행별 버튼이 즉시 저장한다 — 이 버튼은 그 탭의 내용을 저장하지 않아 숨긴다 */}
+            {tab !== "connectors" && (
+              <Button onClick={handleSave} disabled={saving || loading || loadFailed}>
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                {tSettings("saveButton")}
+              </Button>
+            )}
           </div>
         }
       />

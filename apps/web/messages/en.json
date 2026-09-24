@@ -72,6 +72,7 @@
     "pageTitle": "Settings",
     "pageDescription": "Configure app preferences and AI model behavior.",
     "saveButton": "Save settings",
+    "loadFailedSaveBlocked": "Could not load your settings, so saving is disabled to avoid overwriting them with defaults. Refresh in a moment.",
     "savedAt": "Saved at {time}",
     "freeSuffix": " · Free",
     "notConfigured": "Not set",

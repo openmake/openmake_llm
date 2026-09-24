@@ -72,6 +72,7 @@
     "pageTitle": "Einstellungen",
     "pageDescription": "App-Einstellungen und Verhalten des KI-Modells konfigurieren.",
     "saveButton": "Einstellungen speichern",
+    "loadFailedSaveBlocked": "Einstellungen konnten nicht geladen werden; Speichern ist deaktiviert, damit sie nicht mit Standardwerten überschrieben werden. Bitte gleich neu laden.",
     "savedAt": "Gespeichert um {time}",
     "freeSuffix": " · Kostenlos",
     "notConfigured": "Nicht festgelegt",
