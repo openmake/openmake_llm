@@ -27,7 +27,9 @@ const WINDOW_1M = 60 * 1000;
 export const RL_GENERAL = {
     windowMs: WINDOW_15M,
     ipLimit: Number(process.env.RL_GENERAL_IP) || 100,
-    userLimit: Number(process.env.RL_GENERAL_USER) || 200,
+    // 로그인 사용자 예산. 웹은 화면 로드마다 ~20건 + 열린 탭마다 배지 폴링 ~8건/분을 쓰므로
+    // 200 이면 탭 두세 개로 소진돼 설정 조회가 429 로 실패하고 빈 화면(기본값)이 보였다.
+    userLimit: Number(process.env.RL_GENERAL_USER) || 1000,
     chatLimit: Number(process.env.RL_GENERAL_CHAT) || 60,
     chatStreamLimit: Number(process.env.RL_GENERAL_CHAT_STREAM) || 40,
     researchLimit: Number(process.env.RL_GENERAL_RESEARCH) || 15,

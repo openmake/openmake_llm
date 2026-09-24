@@ -72,6 +72,7 @@
     "pageTitle": "설정",
     "pageDescription": "앱 환경과 AI 모델 동작을 구성합니다.",
     "saveButton": "설정 저장",
+    "loadFailedSaveBlocked": "설정을 불러오지 못해 저장을 막았습니다(기본값으로 덮어쓰기 방지). 잠시 후 새로고침하세요.",
     "savedAt": "{time} 저장됨",
     "freeSuffix": " · 무료",
     "notConfigured": "미설정",

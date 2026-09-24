@@ -72,6 +72,7 @@
     "pageTitle": "設定",
     "pageDescription": "アプリ環境とAIモデルの動作を構成します。",
     "saveButton": "設定を保存",
+    "loadFailedSaveBlocked": "設定を読み込めなかったため、既定値での上書きを防ぐため保存を無効にしました。しばらくしてから再読み込みしてください。",
     "savedAt": "{time} に保存しました",
     "freeSuffix": " · 無料",
     "notConfigured": "未設定",

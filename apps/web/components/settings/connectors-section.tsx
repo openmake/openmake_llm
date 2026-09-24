@@ -58,6 +58,8 @@ interface McpServer {
   catalogTemplateId: string | null;
   /** 그중 암호화 저장된(민감) 키 — 입력 시 password 필드로 렌더 */
   secretKeys: string[];
+  /** 민감하지 않은 키의 저장값(서버가 평문으로 준다) — 변경 모달에 채워 보여준다 */
+  envValues: Record<string, string>;
   /** 소유자 — 삭제/이름변경 권한 판정용(백엔드 canDeleteServer 와 같은 기준: 소유자 + admin).
    *  global 서버는 null 이라 admin 만 지울 수 있다. */
   ownerId: string | null;
@@ -149,6 +151,7 @@ function mapServer(s: ApiMcpServer, t: Translator): McpServer {
     secretKeys: Object.entries(s.env ?? {})
       .filter(([, v]) => v === "***")
       .map(([k]) => k),
+    envValues: Object.fromEntries(Object.entries(s.env ?? {}).filter(([, v]) => v !== "***")),
     ownerId: s.user_id ?? null,
   };
 }
@@ -314,7 +317,7 @@ function EnvEditModal({
   // 서버가 바뀌면 입력값 초기화 — 이전 서버에 입력하던 값이 남아 다른 서버로
   // 전송되는 사고를 막는다.
   useEffect(() => {
-    setValues({});
+    setValues(server?.envValues ?? {});
     setError(null);
     setExtraFields([]);
     const templateId = server?.catalogTemplateId;
@@ -339,13 +342,15 @@ function EnvEditModal({
       }
     })();
     return () => { cancelled = true; };
-  }, [server?.id, server?.catalogTemplateId, server?.envKeys]);
+  }, [server?.id, server?.catalogTemplateId, server?.envKeys, server?.envValues]);
 
   const trapRef = useFocusTrap<HTMLDivElement>(!!server, onClose);
   if (!server) return null;
 
-  // 값을 입력한 키만 전송한다(부분 갱신). 빈 칸 = 기존 값 유지.
-  const filled = Object.entries(values).filter(([, v]) => v.trim().length > 0);
+  // 바뀐 값만 전송한다(부분 갱신). 빈 칸 = 기존 값 유지, 저장값을 채워 둔 칸은 그대로면 보내지 않는다.
+  const filled = Object.entries(values).filter(
+    ([k, v]) => v.trim().length > 0 && v !== server.envValues[k],
+  );
 
   async function handleSubmit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();

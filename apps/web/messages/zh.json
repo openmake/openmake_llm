@@ -72,6 +72,7 @@
     "pageTitle": "设置",
     "pageDescription": "配置应用环境和 AI 模型行为。",
     "saveButton": "保存设置",
+    "loadFailedSaveBlocked": "无法加载设置，为避免被默认值覆盖已禁用保存。请稍后刷新。",
     "savedAt": "已于 {time} 保存",
     "freeSuffix": " · 免费",
     "notConfigured": "未设置",
