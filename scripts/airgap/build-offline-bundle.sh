@@ -5,7 +5,8 @@
 # 인터넷이 없는 호스트에 이 레포를 설치하기 위해 필요한 것들을 한 디렉터리로 묶는다:
 #   1) 레포 소스 아카이브    (git archive HEAD — .git 제외)
 #   2) node_modules 캐시    (루트 + 각 workspace, npm workspaces hoist 구조 그대로)
-#   3) docker 이미지        (infra/docker-compose.yml 의 image: 목록 — 기본 postgres:16, redis:7-alpine)
+#   3) docker 이미지        (infra/docker-compose.yml 의 image: 목록 — 기본 pgvector/pgvector:*-pg16, redis:7-alpine.
+#                            \${VAR:-기본값} 표기는 셸 환경의 VAR, 없으면 기본값으로 푼다)
 #   4) (있으면) 빌드 산출물  apps/api/dist, apps/web/.next — 대상 호스트가 devDependencies
 #                            없이도 바로 기동할 수 있게 함
 #   5) MANIFEST.txt         커밋 SHA·Node/npm 버전·각 파일 sha256·크기
@@ -77,8 +78,16 @@ OUT_DIR="$BUNDLE_ROOT/openmake-llm-airgap-${TS}-${SHA}"
 # infra/docker-compose.yml 에서 image: 목록을 뽑는다 (하드코딩 대신 compose 파일이 SoT).
 list_compose_images() {
     # \s 는 BSD sed(macOS 기본)에 없다 — POSIX [[:space:]] 로 크로스플랫폼 대응.
+    # compose 처럼 ${VAR:-기본값} 을 푼다(예: POSTGRES_IMAGE) — 그대로 두면 docker save 가 이름을 못 읽는다.
+    local img var
     grep -E '^[[:space:]]*image:[[:space:]]*' "$REPO_ROOT/infra/docker-compose.yml" \
-        | sed -E 's/^[[:space:]]*image:[[:space:]]*//' | tr -d '"'"'"''
+        | sed -E 's/^[[:space:]]*image:[[:space:]]*//' | tr -d '"'"'"'' \
+        | while IFS= read -r img; do
+            if [[ "$img" =~ ^\$\{([A-Za-z_][A-Za-z0-9_]*):-(.+)\}$ ]]; then
+                var="${BASH_REMATCH[1]}"; img="${!var:-${BASH_REMATCH[2]}}"
+            fi
+            printf '%s\n' "$img"
+        done
 }
 IMAGES="$(list_compose_images)"
 [[ -n "${AIRGAP_EXTRA_IMAGES:-}" ]] && IMAGES="$IMAGES $AIRGAP_EXTRA_IMAGES"

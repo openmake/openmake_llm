@@ -32,7 +32,11 @@
 
 services:
   postgres:
-    image: postgres:16
+    # pgvector 가 든 PG16 — Knowledge Space(knowledge-runtime add-on)의 `CREATE EXTENSION vector` 가 필요로 한다.
+    # 공식 postgres:16 과 같은 데이터 디렉터리·메이저 버전이라 기존 볼륨에 그대로 교체된다(2026-09-24 운영 전환 실측).
+    # 태그만 둔다 — digest 로 고정하면 오프라인 번들(docker save/load)에서 참조가 복원되지 않는다.
+    # 호스트별 고정(digest 등)은 .env 의 POSTGRES_IMAGE 로 한다.
+    image: ${POSTGRES_IMAGE:-pgvector/pgvector:0.8.3-pg16-trixie}
     container_name: openmake${OMK_INSTANCE:+-${OMK_INSTANCE}}-postgres
     restart: unless-stopped
     environment:
