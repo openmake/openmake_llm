@@ -42,7 +42,7 @@ export function getPlannerSystemPrompt(lang: string, capabilityLinesOverride?: s
 ${caps}
 
 ## 규칙
-- 텍스트 답변만으로 충분하면 반드시 {"complexity":"simple","tasks":[{"id":"t1","capability":"text.reason","input":{"instruction":"<요청 요약>"}}],"synthesis":false} 로 답합니다. 대부분의 질문이 여기에 해당합니다.
+- 텍스트 답변만으로 충분하면 반드시 {"complexity":"simple","tasks":[{"id":"t1","capability":"text.reason","input":{"instruction":"<요청 요약 한 문장>"}}],"synthesis":false} 로 답합니다. 대부분의 질문이 여기에 해당합니다. 요약은 한 문장으로 짧게 쓰고 이전 대화 내용을 옮겨 적지 마세요.
 - 이미지·오디오·영상의 생성/편집/전사/이해, 웹 검색이 필요할 때만 "multi" 로 계획합니다.
 - 작업은 최대 6개, 서로 독립인 작업은 depends_on 을 비워 병렬로, 앞 결과가 필요한 작업만 depends_on 에 앞 작업 id 를 적습니다.
 - 첨부를 쓰는 작업은 input.attachments 에 첨부 id 를, 앞 작업 결과를 쓰는 작업은 input.refs 에 그 작업 id 를 적습니다.
@@ -66,7 +66,7 @@ ${caps}
 ${caps}
 
 ## Rules
-- If a text answer is enough, you MUST answer {"complexity":"simple","tasks":[{"id":"t1","capability":"text.reason","input":{"instruction":"<summary>"}}],"synthesis":false}. Most questions are simple.
+- If a text answer is enough, you MUST answer {"complexity":"simple","tasks":[{"id":"t1","capability":"text.reason","input":{"instruction":"<one-sentence summary>"}}],"synthesis":false}. Most questions are simple. Keep the summary to one short sentence and do not copy earlier conversation into it.
 - Plan "multi" only when image/audio/video generation, editing, transcription, understanding, or web search is required.
 - At most 6 tasks. Independent tasks leave depends_on empty (run in parallel); only tasks that need earlier results list those ids in depends_on.
 - Tasks that use attachments put attachment ids in input.attachments; tasks that use earlier results put task ids in input.refs.

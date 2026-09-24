@@ -13,6 +13,7 @@ import { platformPaths } from './paths-platform';
 import { authPaths } from './paths-auth';
 import { sessionPaths } from './paths-sessions';
 import { modelPaths } from './paths-models';
+import { modelAssignmentPaths } from './paths-model-assignments';
 import { userAgentPaths } from './paths-user-agents';
 import { coreSchemas } from './schemas-core';
 
@@ -48,6 +49,7 @@ export const specTags = [
     { name: 'System', description: '시스템 정보 및 상태' },
     { name: 'API Keys', description: 'API Key 관리 (외부 개발자용)' },
     { name: 'Models', description: '모델 목록' },
+    { name: 'Model Assignments', description: '통합 모델 배정 (슬롯 — 역할·기능)' },
     { name: 'User Agents', description: '커스텀 에이전트 (user_agents)' }
 ];
 
@@ -57,6 +59,7 @@ export const specPaths = {
     ...authPaths,
     ...sessionPaths,
     ...modelPaths,
+    ...modelAssignmentPaths,
     ...userAgentPaths,
 };
 

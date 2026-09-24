@@ -155,6 +155,58 @@ export const coreSchemas = {
             created_at: { type: 'string' },
             updated_at: { type: 'string' }
         }
+    },
+    // ── 통합 모델 배정(슬롯) — packages/shared-types/src/model-assignments.ts 계약과 짝 (2026-09-24) ──
+    ModelSlotInfo: {
+        type: 'object',
+        required: ['id', 'group', 'kind', 'roles', 'capabilities', 'paramKeys', 'available'],
+        properties: {
+            id: { type: 'string' },
+            group: { type: 'string', enum: ['agents', 'quality', 'multimodal'] },
+            kind: { type: 'string', enum: ['text', 'modality'], description: 'text=채팅 가능 모델 · modality=전체 모델' },
+            roles: { type: 'array', items: { type: 'string' }, description: '이 슬롯을 읽는 역할' },
+            capabilities: { type: 'array', items: { type: 'string' }, description: '이 슬롯을 읽는 기능' },
+            paramKeys: { type: 'array', items: { type: 'string' }, description: '저장 가능한 params 키(없으면 빈 배열)' },
+            available: { type: 'boolean', description: '실행 가능 여부 — 어댑터 없음/소유 add-on 꺼짐이면 false' }
+        }
+    },
+    ModelSlotAssignment: {
+        type: 'object',
+        required: ['slot', 'fullId', 'params', 'updatedAt'],
+        properties: {
+            slot: { type: 'string' },
+            fullId: { type: 'string' },
+            params: { type: 'object', additionalProperties: true },
+            updatedAt: { type: 'string', format: 'date-time' }
+        }
+    },
+    ModelSlotEffective: {
+        type: 'object',
+        required: ['slot', 'fullId', 'source'],
+        properties: {
+            slot: { type: 'string' },
+            fullId: { type: 'string', nullable: true, description: '지금 실제로 쓰이는 모델 — 해석 실패면 null' },
+            source: { type: 'string', enum: ['user', 'global', 'default', 'none'] },
+            error: { type: 'string' },
+            code: { type: 'string' }
+        }
+    },
+    ModelAssignmentsResponse: {
+        type: 'object',
+        required: ['slots', 'assignments', 'effective'],
+        properties: {
+            slots: { type: 'array', items: { $ref: '#/components/schemas/ModelSlotInfo' } },
+            assignments: { type: 'array', items: { $ref: '#/components/schemas/ModelSlotAssignment' } },
+            effective: { type: 'array', items: { $ref: '#/components/schemas/ModelSlotEffective' } }
+        }
+    },
+    ModelAssignmentInput: {
+        type: 'object',
+        required: ['model'],
+        properties: {
+            model: { type: 'string', description: 'provider:model 또는 로컬 태그' },
+            params: { type: 'object', additionalProperties: true }
+        }
     }
 };
 

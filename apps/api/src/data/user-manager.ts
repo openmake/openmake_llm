@@ -467,9 +467,9 @@ class UserManagerImpl {
 
             // ── 2. 사용자 데이터 정리 ──
             await client.query('DELETE FROM user_memories WHERE user_id = $1', [userId]);
-            // capability 배정 — scope 가 '__global__' 도 담아 FK 를 못 걸므로 여기서 정리
-            // (구 modality_models 는 120 에서 DROP — 118 이 capability_models 로 이관했다)
-            await client.query('DELETE FROM capability_models WHERE scope = $1', [userId]);
+            // 모델 배정(역할·기능 통합) — scope 가 '__global__' 도 담아 FK 를 못 걸므로 여기서 정리
+            // (2026-09-24 170 이 user_model_roles·capability_models 를 model_assignments 로 합쳤다 — 사용자 배정은 scope=userId)
+            await client.query('DELETE FROM model_assignments WHERE scope = $1', [userId]);
             // 오케스트레이터 셰도우(계획 원문·user_id) — 계정 삭제 시 함께 제거
             await client.query('DELETE FROM orchestrator_runs WHERE user_id = $1', [userId]);
             await client.query('DELETE FROM orchestrator_jobs WHERE user_id = $1', [userId]);

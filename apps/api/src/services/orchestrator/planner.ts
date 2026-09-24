@@ -11,7 +11,7 @@ import { ORCHESTRATOR } from '../../config/capabilities';
 import { ORCHESTRATOR_PLANNER } from '../../config/service-limits';
 import { resolveRoleClientForUser } from '../model-role-resolver';
 import { getPlannerSystemPrompt, buildPlannerUserPrompt, type PlannerAttachmentMeta } from '../../prompts/orchestrator-planner';
-import { extractPlanJson, validatePlan, type ValidatedPlan } from './plan-schema';
+import { extractPlanJson, salvageTruncatedSimplePlan, validatePlan, type ValidatedPlan } from './plan-schema';
 import { snapshotForExecution } from '../../runtime-ports/capability-runtime';
 import { ensureLegacyCapabilityBridge } from '../../addon-host/legacy-capability-bridge';
 import { planJsonSchemaFor, plannerCapabilityLines, type ExecutionSnapshot } from '../../capability-contract/plan-schema';
@@ -101,7 +101,16 @@ export async function planRequest(input: PlannerInput, llm?: { call: PlannerLlmC
         try {
             const text = await resolved.call(messages, format, signal);
             const json = extractPlanJson(text);
-            if (json === null) { lastError = `JSON 파싱 실패: ${text.slice(0, 120)}`; }
+            if (json === null) {
+                // 출력 상한에 잘린 단순 계획은 재시도하지 않고 살린다(단순은 작업 목록을 쓰지 않는다)
+                const salvaged = salvageTruncatedSimplePlan(text, input.message, known, snap.plannable);
+                if (salvaged) {
+                    const ms = Date.now() - startedAt;
+                    logger.info(`[Planner] simple (잘린 출력 ${text.length}자에서 복구) (${resolved.model}, ${ms}ms, attempt ${attempts})`);
+                    return { plan: salvaged, model: resolved.model, ms, attempts, ...meta };
+                }
+                lastError = `JSON 파싱 실패(출력 ${text.length}자): ${text.slice(0, 120)}`;
+            }
             else {
                 const v = validatePlan(json, known, snap.plannable);
                 if (v.ok) {

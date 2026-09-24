@@ -20,7 +20,7 @@
       "metrics": "メトリクス",
       "alerts": "アラート",
       "mcpCatalogAdmin": "MCPカタログ管理",
-      "modelRolesAdmin": "ロールモデル管理",
+      "modelRolesAdmin": "モデル割り当て管理",
       "systemSettingsAdmin": "システム設定",
       "developer": "開発者",
       "schedulesAdmin": "タスクスケジュール",
@@ -1841,71 +1841,7 @@
     "oauthFailed": "ログイン失敗: {error}",
     "oauthAccount": "アカウント"
   },
-  "modelRoles": {
-    "title": "ロール別モデル割り当て",
-    "description": "登録済みモデル(ローカル・外部APIキー)を機能ロールごとに割り当てます。未割り当てのロールはサーバー既定モデルを使用します。",
-    "externalNote": "外部モデルは該当プロバイダーのAPIキーが登録・有効である必要があります。呼び出しに失敗した場合はローカル既定モデルへ自動フォールバックします。",
-    "loading": "ロール設定を読み込み中…",
-    "loadError": "ロール設定の読み込みに失敗しました。",
-    "saveFailed": "ロール設定の保存に失敗しました。",
-    "defaultOption": "既定(自動)",
-    "assignedBadge": "割り当て済み",
-    "resetLabel": "既定に戻す",
-    "empty": "割り当て可能なロールがありません。",
-    "roles": {
-      "agent": {
-        "label": "エージェントタスク",
-        "description": "バックグラウンドエージェントタスクの実行モデル"
-      },
-      "judge": {
-        "label": "ゴール判定",
-        "description": "エージェントタスクの目標達成を判定するモデル"
-      },
-      "research": {
-        "label": "ディープリサーチ",
-        "description": "リサーチパイプラインとレポート生成のモデル"
-      },
-      "spawn": {
-        "label": "並列サブエージェント",
-        "description": "並列に分岐するサブエージェントのモデル"
-      },
-      "review": {
-        "label": "コード・セキュリティレビュー",
-        "description": "コードレビュー、セキュリティ分析、実装計画のモデル"
-      },
-      "summary": {
-        "label": "思考要約",
-        "description": "思考プロセスのヘッドラインを生成するモデル"
-      },
-      "planner": {
-        "label": "Planner(質問分析・作業計画)",
-        "description": "毎ターン1回、短い JSON 計画を作るモデル — 小さく速いモデル推奨(ローカル 27B は約15秒)"
-      }
-    },
-    "notInList": "（一覧にない）"
-  },
   "capabilityModels": {
-    "title": "機能別モデル割り当て",
-    "description": "質問を分析した Planner が計画した機能(capability)をどのモデルが処理するかを決めます。上の役割割り当て(どのテキストモデルが回答するか)とは別で、呼び出しは単一の LiteLLM ゲートウェイを経由します。",
-    "gatewayNote": "外部モデルはゲートウェイに登録された provider のみ割り当てられます。未設定の項目はグローバル設定またはデフォルトに従います。",
-    "loading": "機能設定を読み込み中…",
-    "loadError": "機能設定を読み込めませんでした。",
-    "saveFailed": "機能設定の保存に失敗しました。",
-    "defaultOption": "デフォルト(自動)",
-    "assignedBadge": "割り当て済み",
-    "unavailableBadge": "利用不可",
-    "unsupportedBadge": "現在未対応",
-    "unsupportedHint": "provider アダプターが未実装のため、割り当てのみ保存されます。",
-    "resetLabel": "デフォルトに戻す",
-    "empty": "割り当て可能な機能がありません。",
-    "notInList": "(一覧にありません)",
-    "paramsHint": "provider 規格の引数 — 空欄ならデフォルト",
-    "paramsApply": "引数を適用",
-    "source": {
-      "user": "自分の設定",
-      "global": "グローバル",
-      "default": "デフォルト"
-    },
     "capabilities": {
       "text_reason": "テキスト推論・分析",
       "text_code": "コード",
@@ -1921,44 +1857,6 @@
       "music_generate": "音楽生成",
       "video_generate": "動画生成",
       "video_analyze": "動画理解"
-    },
-    "groups": {
-      "text": "テキスト・ビジョン",
-      "code": "コード",
-      "image": "画像",
-      "audio": "音声",
-      "music": "音楽",
-      "video": "動画",
-      "embed": "埋め込み(インフラ)",
-      "other": "その他"
-    },
-    "groupDesc": {
-      "text": "推論・分析と画像理解・OCR — ビジョン対応のテキストモデル1つが担当",
-      "code": "コード作成・修正専用モデル(空ならテキストモデル)",
-      "image": "画像生成と編集",
-      "audio": "音声認識(STT)と合成(TTS)",
-      "music": "歌・BGMの生成 — 既定はローカル音楽サーバー(ACE-Step)です",
-      "video": "動画生成(ジョブ提出後、完了時に結果取得)",
-      "embed": "検索・埋め込み用インフラモデル(管理者のみ)",
-      "other": "グループに属さない機能"
-    },
-    "mixedOption": "(個別設定)",
-    "advancedShow": "詳細設定",
-    "advancedHide": "詳細を閉じる",
-    "hiddenUnsupportedNote": "実行経路のない機能は表示しません: {list}",
-    "availability": {
-      "disabled": "停止中",
-      "not_ready": "再起動が必要",
-      "failed": "アドオン失敗",
-      "incompatible": "バージョン不一致",
-      "state_unknown": "状態不明"
-    },
-    "availabilityHint": {
-      "disabled": "この機能を提供するアドオンがオフです。割り当ては保持され、再度有効化すると使われます",
-      "not_ready": "アドオンは有効ですがこのプロセスにまだ読み込まれていません — 再起動後に利用可能",
-      "failed": "アドオンの起動に失敗しました — 管理者アドオン画面で理由を確認してください",
-      "incompatible": "アドオンが要求するアプリのバージョン範囲外です",
-      "state_unknown": "状態ストアを読めないため一時的に利用できません"
     }
   },
   "adminModelRoles": {
@@ -1992,85 +1890,6 @@
       "save": "保存",
       "placeholder": "空 = フォールバック ({fallback})",
       "cacheNote": "変更は再起動なしで最大60秒以内に反映されます。"
-    }
-  },
-  "adminCapabilityModels": {
-    "title": "グローバル機能別割り当て",
-    "description": "Planner が計画した機能(capability)ごとのグローバル既定モデルを設定します。ユーザー個別の割り当てが優先され、解除するとコードの既定値に戻ります。",
-    "axisNote": "上の「グローバル役割マッピング」(どのテキストLLMが回答するか)とは別の軸で、呼び出しは単一の LiteLLM ゲートウェイを経由します。",
-    "gatewayNote": "外部モデルはゲートウェイ登録済み provider({providers})のみ割り当てられます。",
-    "gatewayNone": "なし",
-    "loadError": "機能設定を読み込めませんでした。",
-    "saveFailed": "機能設定の保存に失敗しました。",
-    "defaultOption": "デフォルト(コード既定値)",
-    "assigned": "割り当て済み",
-    "unavailableBadge": "利用不可",
-    "unsupportedBadge": "現在未対応",
-    "unsupportedHint": "provider アダプターが未実装のため、割り当てのみ保存されます。",
-    "resetLabel": "デフォルトに戻す",
-    "codeDefault": "コード既定値: {model}",
-    "notInList": "(一覧にありません)",
-    "cacheNote": "変更は再起動なしで最大60秒以内に反映されます。",
-    "paramsHint": "provider 規格の引数 — 空欄ならデフォルト",
-    "paramsApply": "引数を適用",
-    "source": {
-      "user": "自分の設定",
-      "global": "グローバル",
-      "default": "デフォルト"
-    },
-    "capabilities": {
-      "text_reason": "テキスト推論・分析",
-      "text_code": "コード",
-      "text_embed": "埋め込み",
-      "vision_describe": "画像理解",
-      "vision_ocr": "OCR",
-      "image_generate": "画像生成",
-      "image_edit": "画像編集",
-      "audio_transcribe": "音声認識(STT)",
-      "audio_speech": "音声合成(TTS)",
-      "audio_analyze": "オーディオ分析",
-      "music_analyze": "音楽分析",
-      "music_generate": "音楽生成",
-      "video_generate": "動画生成",
-      "video_analyze": "動画理解"
-    },
-    "groups": {
-      "text": "テキスト・ビジョン",
-      "code": "コード",
-      "image": "画像",
-      "audio": "音声",
-      "music": "音楽",
-      "video": "動画",
-      "embed": "埋め込み(インフラ)",
-      "other": "その他"
-    },
-    "groupDesc": {
-      "text": "推論・分析と画像理解・OCR — ビジョン対応のテキストモデル1つが担当",
-      "code": "コード作成・修正専用モデル(空ならテキストモデル)",
-      "image": "画像生成と編集",
-      "audio": "音声認識(STT)と合成(TTS)",
-      "music": "歌・BGMの生成 — 既定はローカル音楽サーバー(ACE-Step)です",
-      "video": "動画生成(ジョブ提出後、完了時に結果取得)",
-      "embed": "検索・埋め込み用インフラモデル(管理者のみ)",
-      "other": "グループに属さない機能"
-    },
-    "mixedOption": "(個別設定)",
-    "advancedShow": "詳細設定",
-    "advancedHide": "詳細を閉じる",
-    "hiddenUnsupportedNote": "実行経路のない機能は表示しません: {list}",
-    "availability": {
-      "disabled": "停止中",
-      "not_ready": "再起動が必要",
-      "failed": "アドオン失敗",
-      "incompatible": "バージョン不一致",
-      "state_unknown": "状態不明"
-    },
-    "availabilityHint": {
-      "disabled": "この機能を提供するアドオンがオフです。割り当ては保持され、再度有効化すると使われます",
-      "not_ready": "アドオンは有効ですがこのプロセスにまだ読み込まれていません — 再起動後に利用可能",
-      "failed": "アドオンの起動に失敗しました — 管理者アドオン画面で理由を確認してください",
-      "incompatible": "アドオンが要求するアプリのバージョン範囲外です",
-      "state_unknown": "状態ストアを読めないため一時的に利用できません"
     }
   },
   "adminGatewayModels": {
@@ -2588,8 +2407,8 @@
     "importApply": "適用",
     "importConfirm": "検証済みの設定を適用しますか？システム設定と組織ポリシーが上書きされます。",
     "importProblems": "問題 {count} 件 — 適用できません。",
-    "importDryRun": "検証 OK — 設定 {systemSettings}・capability {capabilityModels}・組織 {organizations}・ポリシー {policies}。適用で反映されます。",
-    "importApplied": "適用完了 — 設定 {systemSettings}・capability {capabilityModels}・組織 {organizations}・ポリシー {policies}。",
+    "importDryRun": "検証 OK — 設定 {systemSettings}・モデル割り当て {modelAssignments}・組織 {organizations}・ポリシー {policies}。適用で反映されます。",
+    "importApplied": "適用完了 — 設定 {systemSettings}・モデル割り当て {modelAssignments}・組織 {organizations}・ポリシー {policies}。",
     "costBudget": "月間コスト予算(USD)"
   },
   "adminCostRates": {
@@ -2872,6 +2691,118 @@
     "sidebar": {
       "expandSpace": "{name} を展開",
       "collapseSpace": "{name} を折りたたむ"
+    }
+  },
+  "modelAssignments": {
+    "title": "モデル割り当て",
+    "description": "役割と機能を一つにまとめたスロット単位の割り当てです。各スロットにローカル・外部モデルを割り当て、未割り当てのスロットはグローバル設定または既定値に従います。",
+    "descriptionGlobal": "グローバル既定のモデル割り当てです。ユーザー個人の割り当てが優先され、解除するとコード既定値に戻ります。",
+    "externalNote": "外部モデルはゲートウェイに組み込まれた provider のみ割り当てでき、呼び出し失敗時は既定モデルに自動フォールバックします。",
+    "cacheNote": "変更は再起動なしで最大60秒以内に反映されます。",
+    "loading": "モデル割り当てを読み込み中…",
+    "loadError": "モデル割り当てを読み込めませんでした。",
+    "saveFailed": "モデル割り当ての保存に失敗しました。",
+    "empty": "割り当て可能なスロットがありません。",
+    "defaultOption": "既定（自動）",
+    "assignedBadge": "割り当て済み",
+    "unavailableBadge": "利用不可",
+    "resetLabel": "既定値に戻す",
+    "notInList": "（一覧にありません）",
+    "paramsApply": "パラメータ適用",
+    "paramsHint": "provider 規格のパラメータ — 空欄で既定値",
+    "groups": {
+      "agents": "会話・エージェント",
+      "quality": "検証・要約・コード",
+      "multimodal": "計画・メディア"
+    },
+    "groupDesc": {
+      "agents": "会話とエージェント作業を行うテキストモデル",
+      "quality": "判定・要約・コード作業に使うテキストモデル",
+      "multimodal": "計画立案と画像・音声・映像などメディア処理のモデル"
+    },
+    "source": {
+      "user": "自分の割り当て",
+      "global": "グローバル",
+      "default": "既定値",
+      "none": "なし"
+    },
+    "slots": {
+      "agent": {
+        "title": "エージェント作業",
+        "description": "バックグラウンドのエージェント作業を実行するモデル"
+      },
+      "spawn": {
+        "title": "並列サブエージェント",
+        "description": "並列に分岐するサブエージェントのモデル"
+      },
+      "reasoning": {
+        "title": "推論・ディープリサーチ",
+        "description": "ディープリサーチのパイプライン・レポートと複雑な推論に使うモデル"
+      },
+      "judge": {
+        "title": "目標判定",
+        "description": "エージェント作業の完了可否を判定するモデル"
+      },
+      "code": {
+        "title": "コード・レビュー",
+        "description": "コードの作成・修正、コード/セキュリティレビュー、実装計画に使うモデル"
+      },
+      "summary": {
+        "title": "思考の要約",
+        "description": "思考プロセスの見出しを生成するモデル"
+      },
+      "planner": {
+        "title": "Planner（質問分析・計画）",
+        "description": "毎ターン1回、短いJSON計画を作るモデル — 小さく速いモデルを推奨"
+      },
+      "vision_describe": {
+        "title": "画像理解",
+        "description": "画像内容を説明・分析するビジョンモデル"
+      },
+      "vision_ocr": {
+        "title": "OCR",
+        "description": "画像内のテキストを認識するモデル"
+      },
+      "image_generate": {
+        "title": "画像生成",
+        "description": "テキストから画像を生成するモデル"
+      },
+      "image_edit": {
+        "title": "画像編集",
+        "description": "既存の画像を編集するモデル"
+      },
+      "audio_transcribe": {
+        "title": "音声認識（STT）",
+        "description": "音声をテキストに書き起こすモデル"
+      },
+      "audio_speech": {
+        "title": "音声合成（TTS）",
+        "description": "テキストを音声に合成するモデル"
+      },
+      "audio_analyze": {
+        "title": "音声分析",
+        "description": "音声内容を分析するモデル"
+      },
+      "music_generate": {
+        "title": "音楽生成",
+        "description": "楽曲・BGMを生成するモデル（既定はローカル ACE-Step）"
+      },
+      "music_analyze": {
+        "title": "音楽分析",
+        "description": "音楽を分析するモデル"
+      },
+      "video_generate": {
+        "title": "映像生成",
+        "description": "映像を生成するモデル（ジョブ送信後、完了時に結果を受領）"
+      },
+      "video_analyze": {
+        "title": "映像理解",
+        "description": "映像内容を分析するモデル"
+      },
+      "text_embed": {
+        "title": "埋め込み",
+        "description": "検索・埋め込み用のインフラモデル"
+      }
     }
   }
 }

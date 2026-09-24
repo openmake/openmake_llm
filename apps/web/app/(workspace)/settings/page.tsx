@@ -42,8 +42,7 @@ import { MemorySection } from "@/components/settings/memory-section";
 import { OrganizationSection } from "@/components/settings/organization-section";
 import { ConnectorsSection } from "@/components/settings/connectors-section";
 import { ProviderKeysSection } from "@/components/settings/provider-keys-section";
-import { ModelRolesSection } from "@/components/settings/model-roles-section";
-import { CapabilityModelsSection } from "@/components/settings/capability-models-section";
+import { ModelAssignmentsSection } from "@/components/settings/model-assignments-section";
 import { ExtensionsSection } from "@/components/settings/extensions-section";
 
 /* ── 탭 정의 ────────────────────────────────────────────── */
@@ -685,8 +684,7 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
               <ProviderKeysSection />
-              <ModelRolesSection />
-              <CapabilityModelsSection />
+              <ModelAssignmentsSection scope="user" />
               </>
             )}
 
