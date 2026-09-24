@@ -10,6 +10,7 @@ import type { PoolClient } from 'pg';
 import { createLogger } from '../../../utils/logger';
 import { kdb, inTransaction } from '../db';
 import { enqueueJob } from '../jobs/queue';
+import { INDEX_PUBLISH_LOCK_KEY } from '../constants';
 import { describeEmbeddingProvider, embedTexts, type EmbedFn } from './provider';
 
 const logger = createLogger('KnowledgeIndex');
@@ -194,8 +195,22 @@ export async function runReindexJob(indexId: string, deps: { embed?: EmbedFn } =
         throw new Error(`reindex 검증 실패 — 청크 ${expected.rows[0].n} vs 임베딩 ${got.rows[0].n}`);
     }
 
-    // 원자 전환 — 이전 활성을 먼저 내려(부분 유니크 충돌 방지) 새 index 를 올린다
+    // 원자 전환 — 게시와 같은 잠금 아래에서 빠진 청크가 없음을 다시 확인한 뒤(검증~전환 사이에 ready 가 된 문서 방지)
+    // 이전 활성을 먼저 내리고(부분 유니크 충돌 방지) 새 index 를 올린다. 빠진 게 있으면 작업 재시도가 채운다.
     await inTransaction(async (client) => {
+        await client.query('SELECT pg_advisory_xact_lock($1)', [INDEX_PUBLISH_LOCK_KEY]);
+        const missing = await client.query<{ n: string }>(
+            `SELECT COUNT(*)::text AS n
+               FROM knowledge_chunks c
+               JOIN knowledge_document_versions v ON v.id = c.document_version_id
+               JOIN knowledge_documents d ON d.id = v.document_id
+              WHERE v.status = 'ready' AND d.deleted_at IS NULL AND d.current_version_id = v.id
+                AND NOT EXISTS (SELECT 1 FROM knowledge_chunk_embeddings e WHERE e.chunk_id = c.id AND e.embedding_index_id = $1)`,
+            [indexId],
+        );
+        if (Number(missing.rows[0].n) > 0) {
+            throw new Error(`reindex 전환 보류 — 새 index 에 없는 청크 ${missing.rows[0].n}개(재시도가 채운다)`);
+        }
         await client.query(
             `UPDATE knowledge_embedding_indexes SET is_active = FALSE, status = 'retired', retired_at = NOW()
               WHERE is_active = TRUE AND id <> $1`,

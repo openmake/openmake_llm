@@ -233,7 +233,8 @@ export async function handleChatMessage(
             : `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const { clientRequestId, priorMessageId } = claimClientRequest(extWs._authenticatedUserId ? `u:${extWs._authenticatedUserId}` : `a:${anonSessionId ?? ''}`, msg.clientRequestId, messageId);
         if (priorMessageId) { out({ type: 'done', messageId: priorMessageId, deduplicated: true, metrics: { tokensPerSec: '0.00', tokenCount: 0 } }); return; }
-        emitSearchSources(out, messageId, [...(injectedSources ?? []), ...turnContexts.sources]); // 사전 주입 검색·통합 출처(F19.4)
+        const turnStartSources = [...(injectedSources ?? []), ...turnContexts.sources]; // 도구 출처는 이 뒤 번호로 이어 붙는다
+        emitSearchSources(out, messageId, turnStartSources); // 사전 주입 검색·통합 출처(F19.4)
 
         // 토큰 생성 메트릭 추적 (tokenCount, partialAssistantResponse 는 catch 접근을 위해 try 외부 선언)
         tokenCount = 0;
@@ -314,6 +315,7 @@ export async function handleChatMessage(
             sessionId: validSessionId,
             webSearchContext,
             fileContext: [effectiveAttachContext + pdfVision.note, turnContexts.contextBlock].filter(Boolean).join('\n\n') || undefined,
+            sourceNumberBase: turnStartSources.length || undefined,
             ...(mediaFiles.length > 0 ? { mediaFiles } : {}),
             modes: activeModes,
             imageMode: msg.imageMode === true,
@@ -365,7 +367,7 @@ export async function handleChatMessage(
             // MCP tool 호출 결과의 resource content 를 frontend 로 emit
             // (예: create_skill → openmake://skill-draft/{id} → chat.js 가 인라인 카드 렌더)
             onMcpToolResult: (event) => {
-                emitSearchSources(out, messageId, event.sources); // web_search 도구 출처(F19.4)
+                emitSearchSources(out, messageId, [...turnStartSources, ...(event.sources ?? [])]); // web_search 도구 출처(F19.4)
                 if (!event.resources.length) return;
                 out({
                     type: 'mcp_tool_result',

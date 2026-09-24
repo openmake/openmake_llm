@@ -187,6 +187,11 @@ export interface UserContext {
     role: 'admin' | 'user' | 'guest';
     /** 조직 ID (선택적, 멀티 테넌트용) */
     orgId?: string;
+    /**
+     * 이 턴에 이미 붙은 출처 수(사전 주입 웹검색·통합 출처) — 출처를 내는 도구는 번호를 그 뒤(N+1)부터 매긴다.
+     * 없으면 0. 본문 [N] 인용이 턴 시작 출처와 겹치지 않게 하는 채팅 전용 값이다.
+     */
+    sourceNumberBase?: number;
 }
 
 export type MCPToolHandler<T extends Record<string, unknown> = Record<string, unknown>> = (args: T, context?: UserContext) => Promise<MCPToolResult>;

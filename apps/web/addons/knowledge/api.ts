@@ -8,6 +8,7 @@ import type {
   KnowledgeBindingResponse,
   KnowledgeChunkPreview,
   KnowledgeProfile,
+  KnowledgeProfileUpdateInput,
   KnowledgeCapabilities,
   KnowledgeConversation,
   KnowledgeDocument,
@@ -109,11 +110,11 @@ export const knowledgeApi = {
       (r) => r.data.profiles,
     ),
 
-  adminUpdateProfile: (profileId: string, config: unknown) =>
-    ApiClient.put<Envelope<{ profile: KnowledgeProfile }>>(
-      `${base}/admin/profiles/${profileId}`,
-      config,
-    ),
+  adminUpdateProfile: (profileId: string, config: Record<string, unknown>) => {
+    // 서버 스키마는 { config } 봉투를 요구한다 — config 를 맨몸으로 보내면 400(2026-09-24 코드 리뷰)
+    const body: KnowledgeProfileUpdateInput = { config };
+    return ApiClient.put<Envelope<{ profile: KnowledgeProfile }>>(`${base}/admin/profiles/${profileId}`, body);
+  },
 
   adminReindex: () => ApiClient.post<Envelope<unknown>>(`${base}/admin/reindex`),
 

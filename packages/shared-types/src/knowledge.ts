@@ -119,3 +119,9 @@ export interface KnowledgeProfile {
   isDefault: boolean;
   updatedAt: string;
 }
+
+/** PUT /api/knowledge/admin/profiles/:id 입력 — config 는 반드시 이 키로 감싼다 */
+export interface KnowledgeProfileUpdateInput {
+  name?: string;
+  config: Record<string, unknown>;
+}

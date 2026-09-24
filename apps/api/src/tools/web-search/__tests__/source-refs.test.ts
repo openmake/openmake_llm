@@ -30,3 +30,13 @@ describe('toSourceRefs — formatSearchSources 와 같은 번호·캡', () => {
         expect(refs.map((r) => r.source)).toEqual(['a.example', 'naver.com', 'google.com']);
     });
 });
+
+describe('번호 오프셋 — 같은 턴에 먼저 붙은 출처 뒤로 잇는다', () => {
+    it('numberOffset 만큼 본문 [N] 과 출처 n 이 함께 밀린다', () => {
+        const text = formatSearchSources(results, { numberOffset: 2 });
+        const refs = toSourceRefs(results, { numberOffset: 2 });
+        expect(refs.map((r) => r.n)).toEqual([3, 4, 5]);
+        expect(text).toContain('[3] 첫째');
+        expect(text).not.toContain('[1] ');
+    });
+});

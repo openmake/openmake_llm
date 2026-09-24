@@ -176,6 +176,40 @@ describeOrSkip('Knowledge 수집·검색 실 DB (K01)', () => {
         expect(second).toBe(first);
     });
 
+    it('임베딩 직후 활성 index 가 바뀌면 옛 index 로 게시하지 않고 새 활성 index 로 다시 임베딩해 게시한다', async () => {
+        const spaceId = await makeSpace(userA);
+        const { verId } = await makeVersion(spaceId, userA);
+        const current = await getActiveIndex();
+        const oldIdx = current!;
+        const newIndexId = randomUUID();
+        await pool.query(
+            `INSERT INTO knowledge_embedding_indexes (id, provider_ref, model_id, dimension, distance_metric, status, is_active)
+             VALUES ($1, 'fake:embed', 'fake', $2, 'cosine', 'ready', FALSE)`, [newIndexId, DIM]);
+        const newIdx: KnowledgeIndex = { ...oldIdx, id: newIndexId };
+        let calls = 0;
+        // 첫 호출: 옛 index 를 돌려준 직후 활성이 새 index 로 바뀐다(동시 reindex 전환을 흉내)
+        const ensureIndex = async (): Promise<KnowledgeIndex> => {
+            calls++;
+            if (calls === 1) {
+                await pool.query('UPDATE knowledge_embedding_indexes SET is_active = FALSE WHERE id = $1', [oldIdx.id]);
+                await pool.query('UPDATE knowledge_embedding_indexes SET is_active = TRUE WHERE id = $1', [newIndexId]);
+                return oldIdx;
+            }
+            return newIdx;
+        };
+        const res = await ingestVersion(verId, { embed: fakeEmbed, ensureIndex, readFile: async () => Buffer.from(text) });
+        expect(res.status).toBe('ready');
+        expect(calls).toBe(2);
+        const chunks = Number((await pool.query('SELECT COUNT(*) FROM knowledge_chunks WHERE document_version_id = $1', [verId])).rows[0].count);
+        const inNew = Number((await pool.query(
+            `SELECT COUNT(*) FROM knowledge_chunk_embeddings e JOIN knowledge_chunks c ON c.id = e.chunk_id
+              WHERE c.document_version_id = $1 AND e.embedding_index_id = $2`, [verId, newIndexId])).rows[0].count);
+        expect(inNew).toBe(chunks);
+        // 원상복구(다른 테스트가 쓰는 활성 index)
+        await pool.query('UPDATE knowledge_embedding_indexes SET is_active = FALSE WHERE id = $1', [newIndexId]);
+        await pool.query('UPDATE knowledge_embedding_indexes SET is_active = TRUE WHERE id = $1', [oldIdx.id]);
+    });
+
     it('reindex 는 활성 index 를 원자적으로 교체한다', async () => {
         const spaceId = await makeSpace(userA);
         const { verId } = await makeVersion(spaceId, userA);

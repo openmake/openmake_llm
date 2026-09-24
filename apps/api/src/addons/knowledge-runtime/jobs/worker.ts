@@ -61,6 +61,17 @@ const HANDLERS: Readonly<Record<JobRow['kind'], Handler>> = {
     },
 };
 
+
+/**
+ * PURE: 실패한 작업의 다음 처리 — `attempts` 는 claim 이 이미 +1 해 돌려준 "이번이 몇 번째 시도" 값이다(다시 더하지 않는다).
+ * 시도 수가 상한에 닿으면 최종 실패, 아니면 지수 백오프(상한 있음)로 재시도한다.
+ */
+export function retryPlan(attempts: number, maxAttempts: number): { attempts: number; final: boolean; backoffMs: number } {
+    const final = attempts >= maxAttempts;
+    const backoffMs = Math.min(KNOWLEDGE_RUNTIME.JOB_BACKOFF_MAX_MS, KNOWLEDGE_RUNTIME.JOB_BACKOFF_BASE_MS * 2 ** Math.max(0, attempts - 1));
+    return { attempts, final, backoffMs };
+}
+
 export class KnowledgeWorker {
     private readonly owner = `${hostname()}#${process.pid}#${randomUUID().slice(0, 8)}`;
     private running = false;
@@ -137,8 +148,9 @@ export class KnowledgeWorker {
     }
 
     private async failOrRetry(job: JobRow, token: number, maxAttempts: number, error: string): Promise<void> {
-        const attempts = Number(job.attempts) + 1; // claim 에서 이미 +1 된 값
-        if (attempts >= maxAttempts) {
+        const plan = retryPlan(Number(job.attempts), maxAttempts);
+        const attempts = plan.attempts;
+        if (plan.final) {
             await kdb().query(
                 `UPDATE knowledge_ingestion_jobs SET state = 'failed', lease_owner = NULL, lease_expires_at = NULL, last_error = $3, updated_at = NOW()
                   WHERE id = $1 AND fencing_token = $2`,
@@ -147,7 +159,7 @@ export class KnowledgeWorker {
             logger.warn(`작업 최종 실패: ${job.kind} ${job.id} (${attempts}회) — ${error}`);
             return;
         }
-        const backoff = Math.min(KNOWLEDGE_RUNTIME.JOB_BACKOFF_MAX_MS, KNOWLEDGE_RUNTIME.JOB_BACKOFF_BASE_MS * 2 ** (attempts - 1));
+        const backoff = plan.backoffMs;
         await kdb().query(
             `UPDATE knowledge_ingestion_jobs
                 SET state = 'queued', lease_owner = NULL, lease_expires_at = NULL, last_error = $3,
