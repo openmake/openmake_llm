@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.88.2](https://github.com/openmake/openmake_llm/compare/v1.88.1...v1.88.2) (2026-09-24)
+
+
+### 🐛 버그 수정
+
+* **music:** 음표 길이를 곡 길이로 읽던 문제와 가사 작업 결과가 음악에 전달되지 않던 문제 ([#1011](https://github.com/openmake/openmake_llm/issues/1011)) ([db71bb3](https://github.com/openmake/openmake_llm/commit/db71bb38adf72e83cd2a3f9c8ba38fcf65e39fd7))
+
 ## [1.88.1](https://github.com/openmake/openmake_llm/compare/v1.88.0...v1.88.1) (2026-09-24)
 
 
