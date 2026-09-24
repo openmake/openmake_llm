@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.88.1](https://github.com/openmake/openmake_llm/compare/v1.88.0...v1.88.1) (2026-09-24)
+
+
+### 🐛 버그 수정
+
+* **orchestrator:** 긴 multi 계획이 Planner 출력 상한에서 잘려 음악 등 미디어가 실행되지 않던 문제 ([#1009](https://github.com/openmake/openmake_llm/issues/1009)) ([8ed5e4b](https://github.com/openmake/openmake_llm/commit/8ed5e4b41a067d16ba2fe0c9f38b5718208aa165))
+
 ## [1.88.0](https://github.com/openmake/openmake_llm/compare/v1.87.0...v1.88.0) (2026-09-24)
 
 
