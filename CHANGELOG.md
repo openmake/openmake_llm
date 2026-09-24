@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.88.3](https://github.com/openmake/openmake_llm/compare/v1.88.2...v1.88.3) (2026-09-24)
+
+
+### 🐛 버그 수정
+
+* **settings:** 요청 한도 소진 시 설정이 기본값으로 보이고 저장하면 덮어써지던 문제 ([#1013](https://github.com/openmake/openmake_llm/issues/1013)) ([f599429](https://github.com/openmake/openmake_llm/commit/f599429924f9bdb00829fc6d561e8eacc8ed4e3f))
+
 ## [1.88.2](https://github.com/openmake/openmake_llm/compare/v1.88.1...v1.88.2) (2026-09-24)
 
 
