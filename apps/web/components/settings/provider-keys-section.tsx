@@ -339,7 +339,7 @@ export function ProviderKeysSection() {
                             )}
                           </Td>
                           <Td className="whitespace-nowrap text-right">
-                            <div className="flex flex-wrap items-center justify-end gap-1">
+                            <div className="flex flex-nowrap items-center justify-end gap-1">
                               <Button
                                 variant="ghost"
                                 size="sm"
