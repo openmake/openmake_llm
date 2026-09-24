@@ -4,7 +4,10 @@
  */
 import { ApiClient, ApiError } from "@/lib/api-client";
 import type {
+  KnowledgeAdminStatus,
   KnowledgeBindingResponse,
+  KnowledgeChunkPreview,
+  KnowledgeProfile,
   KnowledgeCapabilities,
   KnowledgeConversation,
   KnowledgeDocument,
@@ -14,32 +17,9 @@ import type {
   KnowledgeSpaceUpdateInput,
 } from "@openmake/shared-types";
 
+export type { KnowledgeAdminStatus, KnowledgeChunkPreview, KnowledgeProfile };
+
 type Envelope<T> = { success: boolean; data: T };
-
-/** 인용 미리보기용 청크 조각(GET /spaces/:id/chunks/:chunkId) */
-export interface KnowledgeChunkPreview {
-  documentId: string;
-  documentName: string;
-  pageStart: number | null;
-  pageEnd: number | null;
-  content: string;
-}
-
-/** 관리 상태(GET /admin/status) — 서버 계약이 확정 전이라 방어적으로 optional 로 읽는다. */
-export interface KnowledgeAdminStatus {
-  capabilities: KnowledgeCapabilities;
-  activeIndex: { providerRef: string; modelId: string; dimension: number; status: string } | null;
-  jobs: Record<string, number>;
-}
-
-/** 처리 프로파일(GET /admin/profiles) */
-export interface KnowledgeProfile {
-  id: string;
-  name: string;
-  kind?: string;
-  isActive?: boolean;
-  config: unknown;
-}
 
 /** 서버가 바인딩에 쓰는 최근 대화(공용 /api/chat/conversations) */
 export interface RecentChat {

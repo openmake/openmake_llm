@@ -2868,6 +2868,10 @@
       "active": "有効",
       "saveProfile": "保存",
       "invalidJson": "JSON の形式が正しくありません"
+    },
+    "sidebar": {
+      "expandSpace": "{name} を展開",
+      "collapseSpace": "{name} を折りたたむ"
     }
   }
 }

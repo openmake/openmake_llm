@@ -76,3 +76,46 @@ export interface KnowledgeCapabilities {
   maxFileBytes: number;
   embedding: { providerRef: string; modelId: string; dimension: number } | null;
 }
+
+/** POST·PATCH /api/knowledge/spaces[/:id] 응답 */
+export interface KnowledgeSpaceResponse { space: KnowledgeSpaceSummary }
+/** GET /api/knowledge/spaces/:id 응답 */
+export interface KnowledgeSpaceDetailResponse { space: KnowledgeSpaceDetail }
+/** POST /api/knowledge/spaces/:id/documents 응답 (중복 원본은 409 DUPLICATE_DOCUMENT) */
+export interface KnowledgeDocumentResponse { document: KnowledgeDocument }
+
+/** GET /api/knowledge/spaces/:id/chunks/:chunkId — 인용 미리보기 */
+export interface KnowledgeChunkPreview {
+  documentId: string;
+  documentName: string;
+  pageStart: number | null;
+  pageEnd: number | null;
+  content: string;
+}
+
+/** GET /api/knowledge/admin/status (관리자) */
+export interface KnowledgeAdminStatus {
+  capabilities: KnowledgeCapabilities;
+  embeddingIndex: {
+    id: string;
+    providerRef: string;
+    modelId: string;
+    dimension: number;
+    distanceMetric: string;
+    status: string;
+    activatedAt: string | null;
+  } | null;
+  /** 수집 작업 상태별 건수 */
+  jobCounts: Record<string, number>;
+  pgvectorVersion: string | null;
+}
+
+/** 정책 프로필 — 청크·검색·한도 설정 데이터 (GET /admin/profiles → { profiles }, PUT /admin/profiles/:id → { profile }) */
+export interface KnowledgeProfile {
+  id: string;
+  kind: "space" | "chunker" | "retrieval" | "limits";
+  name: string;
+  config: Record<string, unknown>;
+  isDefault: boolean;
+  updatedAt: string;
+}

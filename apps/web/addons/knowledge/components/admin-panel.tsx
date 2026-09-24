@@ -47,9 +47,9 @@ function ProfileEditor({ profile }: { profile: KnowledgeProfile }) {
       <div className="mb-2 flex items-center justify-between gap-2">
         <span className="text-sm font-medium text-fg">
           {profile.name}
-          {profile.kind && <span className="ml-1.5 text-xs text-faint">{profile.kind}</span>}
+          <span className="ml-1.5 text-xs text-faint">{profile.kind}</span>
         </span>
-        {profile.isActive && <Badge tone="success">{t("admin.active")}</Badge>}
+        {profile.isDefault && <Badge tone="success">{t("admin.active")}</Badge>}
       </div>
       <textarea
         value={text}
@@ -96,7 +96,7 @@ export function KnowledgeAdminPanel() {
   };
 
   const cap = status?.capabilities;
-  const jobEntries = Object.entries(status?.jobs ?? {});
+  const jobEntries = Object.entries(status?.jobCounts ?? {});
 
   return (
     <Card className="border-accent/30 bg-accent-soft/20 p-4">
@@ -126,11 +126,11 @@ export function KnowledgeAdminPanel() {
               {r}
             </p>
           ))}
-          {status?.activeIndex ? (
+          {status?.embeddingIndex ? (
             <p className="text-muted">
               {t("admin.embeddingIndex")}:{" "}
               <span className="font-mono text-fg-2">
-                {status.activeIndex.modelId} · {status.activeIndex.dimension}d
+                {status.embeddingIndex.modelId} · {status.embeddingIndex.dimension}d
               </span>
             </p>
           ) : (

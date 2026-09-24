@@ -8,18 +8,10 @@ import { kdb } from '../db';
 import { enqueueJob } from '../jobs/queue';
 import { clearProfileCache } from '../config/profiles';
 import { PROFILE_CONFIG_SCHEMAS } from '../schemas';
-import { pgvectorVersion } from '../capabilities';
+import type { KnowledgeAdminStatus, KnowledgeProfile } from '@openmake/shared-types';
+import { getCapabilities, pgvectorVersion } from '../capabilities';
 
-export interface AdminStatus {
-    embeddingIndex: {
-        id: string; providerRef: string; modelId: string; dimension: number;
-        distanceMetric: string; status: string; activatedAt: string | null;
-    } | null;
-    jobCounts: Record<string, number>;
-    pgvectorVersion: string | null;
-}
-
-export async function getAdminStatus(): Promise<AdminStatus> {
+export async function getAdminStatus(): Promise<KnowledgeAdminStatus> {
     const idx = await kdb().query<{
         id: string; provider_ref: string; model_id: string; dimension: number;
         distance_metric: string; status: string; activated_at: string | null;
@@ -32,6 +24,7 @@ export async function getAdminStatus(): Promise<AdminStatus> {
     for (const r of jobs.rows) jobCounts[r.state] = parseInt(r.n, 10);
     const row = idx.rows[0];
     return {
+        capabilities: await getCapabilities(),
         embeddingIndex: row
             ? {
                 id: row.id, providerRef: row.provider_ref, modelId: row.model_id, dimension: row.dimension,
@@ -43,17 +36,21 @@ export async function getAdminStatus(): Promise<AdminStatus> {
     };
 }
 
-export interface ProfileRow { id: string; kind: string; name: string; config: unknown; is_default: boolean; updated_at: string }
+interface ProfileRow { id: string; kind: KnowledgeProfile['kind']; name: string; config: Record<string, unknown>; is_default: boolean; updated_at: Date | string }
 
-export async function listProfiles(): Promise<ProfileRow[]> {
+function toProfile(r: ProfileRow): KnowledgeProfile {
+    return { id: r.id, kind: r.kind, name: r.name, config: r.config, isDefault: r.is_default, updatedAt: new Date(r.updated_at).toISOString() };
+}
+
+export async function listProfiles(): Promise<KnowledgeProfile[]> {
     const r = await kdb().query<ProfileRow>(
         `SELECT id, kind, name, config, is_default, updated_at FROM knowledge_profiles ORDER BY kind, id`,
     );
-    return r.rows;
+    return r.rows.map(toProfile);
 }
 
 /** 프로필 갱신 — kind 별 Zod 스키마로 config 를 검증한 뒤 저장하고 캐시를 비운다. */
-export async function updateProfile(id: string, body: { name?: string; config: Record<string, unknown> }): Promise<ProfileRow> {
+export async function updateProfile(id: string, body: { name?: string; config: Record<string, unknown> }): Promise<KnowledgeProfile> {
     const existing = await kdb().query<{ kind: string }>(`SELECT kind FROM knowledge_profiles WHERE id = $1`, [id]);
     const kind = existing.rows[0]?.kind;
     if (!kind) throw new AppError('프로필', 404, true, 'NOT_FOUND');
@@ -73,7 +70,7 @@ export async function updateProfile(id: string, body: { name?: string; config: R
         params,
     );
     clearProfileCache();
-    return r.rows[0];
+    return toProfile(r.rows[0]);
 }
 
 /** 관리자 재청킹 — 존재하는(미삭제) Space 만. 청크 정책 변경은 재수집이므로 rechunk 작업을 큐잉. */

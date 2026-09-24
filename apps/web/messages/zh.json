@@ -2868,6 +2868,10 @@
       "active": "启用",
       "saveProfile": "保存",
       "invalidJson": "JSON 格式无效"
+    },
+    "sidebar": {
+      "expandSpace": "展开 {name}",
+      "collapseSpace": "折叠 {name}"
     }
   }
 }

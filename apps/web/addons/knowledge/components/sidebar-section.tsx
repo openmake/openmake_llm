@@ -6,6 +6,7 @@
  */
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronDown, ChevronRight, Library, Plus, MessageSquarePlus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
@@ -46,6 +47,7 @@ function SpaceRow({
           type="button"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
+          aria-label={t(expanded ? "sidebar.collapseSpace" : "sidebar.expandSpace", { name })}
           className="grid h-6 w-5 shrink-0 place-items-center rounded text-faint hover:text-fg"
         >
           {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
@@ -102,6 +104,7 @@ function SpaceRow({
 }
 
 export function KnowledgeSidebarSection({ query, currentSessionId, openSession }: SidebarSectionProps) {
+  const router = useRouter();
   const t = useTranslations("knowledge");
   const user = useAppStore((s) => s.auth.currentUser);
   const [createOpen, setCreateOpen] = useState(false);
@@ -170,7 +173,11 @@ export function KnowledgeSidebarSection({ query, currentSessionId, openSession }
         </Link>
       )}
 
-      <CreateSpaceDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      <CreateSpaceDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(id) => router.push(`/knowledge/${id}`)}
+      />
     </div>
   );
 }

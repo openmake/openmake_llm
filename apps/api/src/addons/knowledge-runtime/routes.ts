@@ -60,16 +60,16 @@ knowledgeRouter.get('/spaces', requireAuth, asyncHandler(async (req, res) => {
 knowledgeRouter.post('/spaces', requireAuth, asyncHandler(async (req, res) => {
     const body = parse<import('./schemas').CreateSpaceBody>(createSpaceSchema, req.body);
     const created = await spaces.createSpace(resolveUserId(req), body);
-    res.status(201).json(success(created));
+    res.status(201).json(success({ space: created }));
 }));
 
 knowledgeRouter.get('/spaces/:id', requireAuth, asyncHandler(async (req, res) => {
-    res.json(success(await spaces.getSpaceDetail(resolveUserId(req), req.params.id)));
+    res.json(success({ space: await spaces.getSpaceDetail(resolveUserId(req), req.params.id) }));
 }));
 
 knowledgeRouter.patch('/spaces/:id', requireAuth, asyncHandler(async (req, res) => {
     const body = parse<import('./schemas').UpdateSpaceBody>(updateSpaceSchema, req.body);
-    res.json(success(await spaces.updateSpace(resolveUserId(req), req.params.id, body)));
+    res.json(success({ space: await spaces.updateSpace(resolveUserId(req), req.params.id, body) }));
 }));
 
 knowledgeRouter.delete('/spaces/:id', requireAuth, asyncHandler(async (req, res) => {
@@ -84,7 +84,7 @@ knowledgeRouter.post('/spaces/:id/documents', requireAuth, uploadMiddleware, asy
     const doc = await documents.uploadDocument(resolveUserId(req), req.params.id, {
         buffer: file.buffer, originalname: file.originalname, mimetype: file.mimetype, size: file.size,
     });
-    res.status(201).json(success(doc));
+    res.status(201).json(success({ document: doc }));
 }));
 
 knowledgeRouter.delete('/spaces/:id/documents/:docId', requireAuth, asyncHandler(async (req, res) => {
@@ -136,7 +136,7 @@ knowledgeRouter.get('/admin/profiles', requireAuth, asyncHandler(async (req, res
 knowledgeRouter.put('/admin/profiles/:id', requireAuth, asyncHandler(async (req, res) => {
     assertAdmin(req);
     const body = parse<import('./schemas').UpdateProfileBody>(updateProfileSchema, req.body);
-    res.json(success(await admin.updateProfile(req.params.id, body)));
+    res.json(success({ profile: await admin.updateProfile(req.params.id, body) }));
 }));
 
 knowledgeRouter.post('/admin/reindex', requireAuth, asyncHandler(async (req, res) => {

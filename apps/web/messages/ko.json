@@ -2868,6 +2868,10 @@
       "active": "활성",
       "saveProfile": "저장",
       "invalidJson": "JSON 형식이 올바르지 않습니다"
+    },
+    "sidebar": {
+      "expandSpace": "{name} 펼치기",
+      "collapseSpace": "{name} 접기"
     }
   }
 }
