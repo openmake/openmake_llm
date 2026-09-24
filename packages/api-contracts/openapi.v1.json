@@ -51,6 +51,10 @@
       "description": "모델 목록"
     },
     {
+      "name": "Model Assignments",
+      "description": "통합 모델 배정 (슬롯 — 역할·기능)"
+    },
+    {
       "name": "User Agents",
       "description": "커스텀 에이전트 (user_agents)"
     }
@@ -2871,6 +2875,466 @@
         }
       }
     },
+    "/api/users/me/model-assignments": {
+      "get": {
+        "tags": [
+          "Model Assignments"
+        ],
+        "summary": "내 모델 배정 목록",
+        "description": "슬롯 목록 + 본인 배정 + 실효(effective) 해석을 반환합니다.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ModelAssignmentsResponse"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 필요",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/me/model-assignments/{slot}": {
+      "put": {
+        "tags": [
+          "Model Assignments"
+        ],
+        "summary": "슬롯 배정",
+        "description": "text 슬롯은 역할 규칙(BYOK·채팅 가능 모델), modality 슬롯은 기능 규칙으로 검증합니다.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slot",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "슬롯 id (config/model-slots)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelAssignmentInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "assignment"
+                      ],
+                      "properties": {
+                        "assignment": {
+                          "$ref": "#/components/schemas/ModelSlotAssignment"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "검증 실패(슬롯·모델·키)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 필요",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Model Assignments"
+        ],
+        "summary": "슬롯 배정 해제",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slot",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "슬롯 id (config/model-slots)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "deleted"
+                      ],
+                      "properties": {
+                        "deleted": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 필요",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "배정 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/model-assignments": {
+      "get": {
+        "tags": [
+          "Model Assignments"
+        ],
+        "summary": "전역 모델 배정 목록 (admin)",
+        "description": "scope=__global__. 슬롯 목록 + 전역 배정 + 전역 티어 실효 해석.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ModelAssignmentsResponse"
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 필요",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/model-assignments/{slot}": {
+      "put": {
+        "tags": [
+          "Model Assignments"
+        ],
+        "summary": "전역 슬롯 배정 (admin)",
+        "description": "전역은 서버 공용 키 규칙으로 검증. 비배정 슬롯(chat·router)도 허용.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slot",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "슬롯 id (config/model-slots)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelAssignmentInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "assignment"
+                      ],
+                      "properties": {
+                        "assignment": {
+                          "$ref": "#/components/schemas/ModelSlotAssignment"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "검증 실패(슬롯·모델·키)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 필요",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Model Assignments"
+        ],
+        "summary": "전역 슬롯 배정 해제 (admin)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slot",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "슬롯 id (config/model-slots)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "success",
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "deleted"
+                      ],
+                      "properties": {
+                        "deleted": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/ApiMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 필요",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "배정 없음",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/users/me/agents": {
       "get": {
         "tags": [
@@ -3346,6 +3810,166 @@
           },
           "updated_at": {
             "type": "string"
+          }
+        }
+      },
+      "ModelSlotInfo": {
+        "type": "object",
+        "required": [
+          "id",
+          "group",
+          "kind",
+          "roles",
+          "capabilities",
+          "paramKeys",
+          "available"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "group": {
+            "type": "string",
+            "enum": [
+              "agents",
+              "quality",
+              "multimodal"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "text",
+              "modality"
+            ],
+            "description": "text=채팅 가능 모델 · modality=전체 모델"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "이 슬롯을 읽는 역할"
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "이 슬롯을 읽는 기능"
+          },
+          "paramKeys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "저장 가능한 params 키(없으면 빈 배열)"
+          },
+          "available": {
+            "type": "boolean",
+            "description": "실행 가능 여부 — 어댑터 없음/소유 add-on 꺼짐이면 false"
+          }
+        }
+      },
+      "ModelSlotAssignment": {
+        "type": "object",
+        "required": [
+          "slot",
+          "fullId",
+          "params",
+          "updatedAt"
+        ],
+        "properties": {
+          "slot": {
+            "type": "string"
+          },
+          "fullId": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ModelSlotEffective": {
+        "type": "object",
+        "required": [
+          "slot",
+          "fullId",
+          "source"
+        ],
+        "properties": {
+          "slot": {
+            "type": "string"
+          },
+          "fullId": {
+            "type": "string",
+            "nullable": true,
+            "description": "지금 실제로 쓰이는 모델 — 해석 실패면 null"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "user",
+              "global",
+              "default",
+              "none"
+            ]
+          },
+          "error": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        }
+      },
+      "ModelAssignmentsResponse": {
+        "type": "object",
+        "required": [
+          "slots",
+          "assignments",
+          "effective"
+        ],
+        "properties": {
+          "slots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelSlotInfo"
+            }
+          },
+          "assignments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelSlotAssignment"
+            }
+          },
+          "effective": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelSlotEffective"
+            }
+          }
+        }
+      },
+      "ModelAssignmentInput": {
+        "type": "object",
+        "required": [
+          "model"
+        ],
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "provider:model 또는 로컬 태그"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": true
           }
         }
       }

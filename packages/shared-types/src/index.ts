@@ -373,3 +373,4 @@ export interface MePayload {
   activeOrganization?: ActiveOrganization | null;
 }
 export * from "./knowledge";
+export * from "./model-assignments";

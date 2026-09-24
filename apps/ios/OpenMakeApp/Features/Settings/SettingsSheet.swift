@@ -29,11 +29,11 @@ struct SettingsSheet: View {
 
                 Section("기능") {
                     NavigationLink {
-                        CapabilityModelsView()
+                        ModelAssignmentsView()
                     } label: {
-                        Label("기능별 모델 배정", systemImage: "square.grid.2x2")
+                        Label("모델 배정", systemImage: "square.grid.2x2")
                     }
-                    Text("이미지·영상·음성 등 멀티모달 기능을 어느 모델이 처리할지 정합니다. 웹 설정과 같은 값입니다.")
+                    Text("에이전트·코드·Planner·이미지·영상·음성 등 작업별로 어느 모델이 처리할지 정합니다. 웹 설정과 같은 값입니다.")
                         .font(.footnote)
                         .foregroundStyle(Instrument.muted)
                 }

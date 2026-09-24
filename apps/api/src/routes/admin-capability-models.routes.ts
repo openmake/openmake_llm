@@ -23,7 +23,8 @@ import {
     normalizeCapability, sanitizeCapabilityParams,
 } from '../config/capabilities';
 import { buildCapabilityCatalog } from '../services/capability-catalog';
-import { clearGlobalCapabilityCache, validateCapabilityAssignment } from '../services/orchestrator/capability-resolver';
+import { validateCapabilityAssignment } from '../services/orchestrator/capability-resolver';
+import { invalidateGlobalAssignmentCaches } from '../services/model-assignment-cache';
 import { describeEffectiveCapabilities } from '../controllers/capability-models.controller';
 import { getConfig } from '../config';
 import { getAuditService } from '../services/AuditService';
@@ -79,7 +80,7 @@ adminCapabilityModelsRouter.put('/capability-models/:capability', validate(putSc
 
     const repo = new CapabilityModelsRepository(getPool());
     const { row, previous } = await repo.upsert(GLOBAL_CAPABILITY_SCOPE, capability, fullId, sanitizeCapabilityParams(capability, body.params));
-    clearGlobalCapabilityCache();
+    invalidateGlobalAssignmentCaches();
     await auditChange(req, 'admin_global_capability_model_set', { capability, model: fullId, previous });
     logger.info(`전역 capability 배정 저장: capability=${capability} model=${fullId}`);
     res.json(success({ mapping: row }));
@@ -92,7 +93,7 @@ adminCapabilityModelsRouter.delete('/capability-models/:capability', asyncHandle
     const previous = (await repo.get(GLOBAL_CAPABILITY_SCOPE, capability))?.fullId ?? null;
     const deleted = await repo.delete(GLOBAL_CAPABILITY_SCOPE, capability);
     if (!deleted) { res.status(404).json(notFound('전역 배정 없음')); return; }
-    clearGlobalCapabilityCache();
+    invalidateGlobalAssignmentCaches();
     await auditChange(req, 'admin_global_capability_model_unset', { capability, previous });
     logger.info(`전역 capability 배정 해제: capability=${capability}`);
     res.json(success({ deleted: true }));

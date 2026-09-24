@@ -1,13 +1,21 @@
 /**
  * @module data/repositories/capability-models-repo
- * @description capability→모델 배정(capability_models) 저장소 — 멀티모달 오케스트레이터 — 전역('__global__')·사용자 scope 공용.
+ * @description capability→모델 배정 저장소 — 멀티모달 오케스트레이터 — 전역('__global__')·사용자 scope 공용.
+ *
+ * 2026-09-24 부터 이 저장소는 통합 테이블 `model_assignments`(config/model-slots 슬롯)를 감싸는 **어댑터**다 —
+ * capability 는 CAPABILITY_SLOT 으로 슬롯에 대응하고, 돌려주는 row 는 요청한 capability 이름을 그대로 유지한다.
+ * 옛 capability_models 테이블은 더 읽지·쓰지 않는다(다음 배포에서 DROP — 2단계 삭제).
+ *
+ * 합쳐진 슬롯: text.code ↔ 'code'(역할 review 와 공유), text.reason ↔ 'reasoning'(역할 research 와 공유).
  *
  * "역할&모델"과 별개 축. 해석은 services/capability-resolver.
  *
- * @see db/migrations/118_capability_models.sql
+ * @see data/repositories/model-assignments-repo · config/model-slots · db/migrations/170_model_assignments.sql
  */
 import { BaseRepository } from './base-repository';
 import { GLOBAL_CAPABILITY_SCOPE, type Capability } from '../../config/capabilities';
+import { CAPABILITY_SLOT, getModelSlot } from '../../config/model-slots';
+import { ModelAssignmentsRepository, type ModelAssignmentRow } from './model-assignments-repo';
 
 export interface CapabilityModelRow {
     scope: string;
@@ -17,32 +25,26 @@ export interface CapabilityModelRow {
     updatedAt: Date;
 }
 
-interface DbRow {
-    scope: string;
-    capability: Capability;
-    full_id: string;
-    params: Record<string, string> | null;
-    updated_at: Date;
-    [key: string]: unknown;
-}
-
-function toRow(row: DbRow): CapabilityModelRow {
-    return {
-        scope: row.scope,
-        capability: row.capability,
-        fullId: row.full_id,
-        params: row.params ?? {},
-        updatedAt: row.updated_at,
-    };
+/** 슬롯 배정 row 를 요청 capability 이름을 유지한 capability row 로 변환 */
+function toCapabilityRow(capability: Capability, row: ModelAssignmentRow): CapabilityModelRow {
+    return { scope: row.scope, capability, fullId: row.fullId, params: row.params, updatedAt: row.updatedAt };
 }
 
 export class CapabilityModelsRepository extends BaseRepository {
+    private get assignments(): ModelAssignmentsRepository {
+        return new ModelAssignmentsRepository(this.pool);
+    }
+
     async listByScope(scope: string): Promise<CapabilityModelRow[]> {
-        const result = await this.query<DbRow>(
-            `SELECT * FROM capability_models WHERE scope = $1 ORDER BY capability`,
-            [scope],
-        );
-        return result.rows.map(toRow);
+        const rows = await this.assignments.listByScope(scope);
+        // 슬롯 → 그 슬롯을 읽는 capability(들). capability 를 안 가진 슬롯(순수 역할)은 목록에서 빠진다.
+        const out: CapabilityModelRow[] = [];
+        for (const row of rows) {
+            for (const capability of getModelSlot(row.slot)?.capabilities ?? []) {
+                out.push(toCapabilityRow(capability, row));
+            }
+        }
+        return out.sort((a, b) => a.capability.localeCompare(b.capability));
     }
 
     async listGlobal(): Promise<CapabilityModelRow[]> {
@@ -50,64 +52,35 @@ export class CapabilityModelsRepository extends BaseRepository {
     }
 
     async get(scope: string, capability: Capability): Promise<CapabilityModelRow | null> {
-        const result = await this.query<DbRow>(
-            `SELECT * FROM capability_models WHERE scope = $1 AND capability = $2`,
-            [scope, capability],
-        );
-        return result.rows[0] ? toRow(result.rows[0]) : null;
+        const slot = CAPABILITY_SLOT[capability];
+        if (!slot) return null;
+        const row = await this.assignments.get(scope, slot);
+        return row ? toCapabilityRow(capability, row) : null;
     }
 
-    /** 배정/변경 — 직전 fullId 를 같은 트랜잭션에서 캡처해 감사 로그용으로 함께 돌려준다 */
+    /** 배정/변경 — 직전 fullId 를 함께 돌려준다(감사 로그용) */
     async upsert(
         scope: string,
         capability: Capability,
         fullId: string,
         params: Record<string, string>,
     ): Promise<{ row: CapabilityModelRow; previous: string | null }> {
-        const client = await this.pool.connect();
-        try {
-            await client.query('BEGIN');
-            await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`cm:${scope}:${capability}`]);
-            const prev = await client.query<DbRow>(
-                `SELECT full_id FROM capability_models WHERE scope = $1 AND capability = $2`,
-                [scope, capability],
-            );
-            const upserted = await client.query<DbRow>(
-                `INSERT INTO capability_models (scope, capability, full_id, params)
-                 VALUES ($1, $2, $3, $4::jsonb)
-                 ON CONFLICT (scope, capability) DO UPDATE SET
-                    full_id = EXCLUDED.full_id,
-                    params = EXCLUDED.params,
-                    updated_at = NOW()
-                 RETURNING *`,
-                [scope, capability, fullId, JSON.stringify(params)],
-            );
-            await client.query('COMMIT');
-            return { row: toRow(upserted.rows[0]), previous: prev.rows[0]?.full_id ?? null };
-        } catch (err) {
-            await client.query('ROLLBACK').catch(() => undefined);
-            throw err;
-        } finally {
-            client.release();
-        }
+        const slot = CAPABILITY_SLOT[capability];
+        if (!slot) throw new Error(`capability '${capability}' 에 대응하는 슬롯이 없습니다`);
+        const { row, previous } = await this.assignments.upsert(scope, slot, fullId, params);
+        return { row: toCapabilityRow(capability, row), previous };
     }
 
     /** 미존재 시에만 삽입(시더용) — 이미 있으면 false */
     async insertIfAbsent(scope: string, capability: Capability, fullId: string): Promise<boolean> {
-        const result = await this.query(
-            `INSERT INTO capability_models (scope, capability, full_id)
-             VALUES ($1, $2, $3)
-             ON CONFLICT (scope, capability) DO NOTHING`,
-            [scope, capability, fullId],
-        );
-        return (result.rowCount ?? 0) > 0;
+        const slot = CAPABILITY_SLOT[capability];
+        if (!slot) return false;
+        return this.assignments.insertIfAbsent(scope, slot, fullId);
     }
 
     async delete(scope: string, capability: Capability): Promise<boolean> {
-        const result = await this.query(
-            `DELETE FROM capability_models WHERE scope = $1 AND capability = $2`,
-            [scope, capability],
-        );
-        return (result.rowCount ?? 0) > 0;
+        const slot = CAPABILITY_SLOT[capability];
+        if (!slot) return false;
+        return (await this.assignments.delete(scope, slot)).deleted;
     }
 }
