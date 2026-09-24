@@ -18,6 +18,7 @@ import { isQuestionApproval, elicitationHint } from "@/lib/hitl-question";
 import { LiveSubagentPanel } from "@/components/agent-tasks/subagent-panel";
 import { Markdown } from "./markdown";
 import { StructuredAnswer } from "./structured-answer";
+import { ServedModelBadge } from "./served-model-badge";
 import { McpResourceCard, decodeMcpResources } from "@/components/chat/mcp-resource-card";
 import { cn } from "@/lib/utils";
 import { COPY_FEEDBACK_RESET_MS } from "@/lib/constants/ui-limits";
@@ -257,6 +258,8 @@ function ThinkingIndicator({
   skills: string[];
 }) {
   const t = useTranslations("chat");
+  // 첫 토큰 전에 확정된 실제 응답 모델(served_model) — 답변이 시작되기 전부터 보인다
+  const servedModel = useAppStore((s) => s.pendingServedModel);
   // 에이전트 라벨은 이모지 대신 lucide Bot 아이콘으로 표기 (active-context 바와 일관, 2026-07-04).
   const label = agent
     ? t("thinking.agentAnalyzing", { agent: agent.name })
@@ -267,7 +270,10 @@ function ThinkingIndicator({
     <div className="flex gap-3">
       <Image src="/logo.svg" alt="OpenMake" width={28} height={28} className="mt-0.5 h-7 w-7 shrink-0 rounded-md object-contain" />
       <div className="min-w-0 flex-1">
-        <p className="mb-1 text-xs font-medium text-muted">OpenMake</p>
+        <p className="mb-1 flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted">
+          OpenMake
+          {servedModel && <ServedModelBadge model={servedModel} />}
+        </p>
         <div className="flex items-center gap-2 text-sm text-muted">
           <span className="flex gap-1" aria-hidden>
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted [animation-delay:0ms]" />
@@ -455,6 +461,7 @@ function OrchestratorProgressBanner() {
                 ) : task.instruction ? (
                   <span className="truncate text-faint">{task.instruction}</span>
                 ) : null}
+                {task.model && <ServedModelBadge model={task.model} kind="task" />}
                 {typeof task.ms === "number" && task.status !== "running" && task.status !== "pending" && (
                   <span className="ml-auto shrink-0 font-mono text-[11px] text-faint">{(task.ms / 1000).toFixed(1)}s</span>
                 )}
@@ -786,7 +793,11 @@ export function MessageList() {
           <div key={i} className="flex gap-3">
             <Image src="/logo.svg" alt="OpenMake" width={28} height={28} className="mt-0.5 h-7 w-7 shrink-0 rounded-md object-contain" />
             <div className="min-w-0 flex-1">
-              <p className="mb-1 text-xs font-medium text-muted">OpenMake</p>
+              {/* 실제로 답한 모델 — 스트리밍 중 즉시 보이고 폴백이면 바뀐다(아래 폴백 고지는 "왜" 를 설명) */}
+              <p className="mb-1 flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted">
+                OpenMake
+                {m.servedModel && <ServedModelBadge model={m.servedModel} />}
+              </p>
               {m.modelFallback && (
                 /* 폴백 고지 — 어느 모델이 실제로 답했는지 알리는 유일한 표시라 본문과 같은 대비로 둔다
                    (text-muted 로는 흘려보게 된다). 사유는 코드→번역 매핑, 원문은 title 로 유지. */

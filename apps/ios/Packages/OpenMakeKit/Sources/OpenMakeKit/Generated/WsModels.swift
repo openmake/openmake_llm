@@ -66,6 +66,7 @@ public struct WsServerEvent: Codable {
     public let summary: String?
     public let issues: String?
     public let sessionID: String?
+    public let model: String?
     public let buildID: String?
     public let message: String?
     public let captureID: String?
@@ -84,6 +85,8 @@ public struct WsServerEvent: Codable {
     public let gap: Bool?
     /// 스냅샷이 반영한 마지막 순번
     public let lastSeq: Double?
+    /// 마지막으로 발행한 served_model 값 — 링에서 밀려났어도 답하는 모델을 알 수 있게 스냅샷에 싣는다
+    public let servedModel: String?
     /// 이 스트림의 식별자(F19.11) — 클라이언트 커서가 다르면 새 스트림으로 본다
     public let streamID: String?
     public let thinking: String?
@@ -124,6 +127,7 @@ public struct WsServerEvent: Codable {
         case summary = "summary"
         case issues = "issues"
         case sessionID = "sessionId"
+        case model = "model"
         case buildID = "buildId"
         case message = "message"
         case captureID = "captureId"
@@ -137,6 +141,7 @@ public struct WsServerEvent: Codable {
         case finished = "finished"
         case gap = "gap"
         case lastSeq = "lastSeq"
+        case servedModel = "servedModel"
         case streamID = "streamId"
         case thinking = "thinking"
         case sources = "sources"
@@ -163,13 +168,14 @@ public struct WsServerEvent: Codable {
         case taskID = "taskId"
     }
 
-    public init(token: String?, type: WsServerEventType, messageID: String?, summary: String?, issues: String?, sessionID: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, streamID: String?, thinking: String?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, approvalID: String?, currentTurn: Double?, reason: Reason?, status: String?, step: Step?, taskID: String?) {
+    public init(token: String?, type: WsServerEventType, messageID: String?, summary: String?, issues: String?, sessionID: String?, model: String?, buildID: String?, message: String?, captureID: String?, expiresAt: String?, ttlHours: Double?, payload: Payload?, cleanedContent: String?, deduplicated: Bool?, metrics: Metrics?, content: String?, finished: Bool?, gap: Bool?, lastSeq: Double?, servedModel: String?, streamID: String?, thinking: String?, sources: [SearchSourceRef]?, errorType: String?, keysInCooldown: Double?, resetTime: String?, retryAfter: Double?, totalKeys: Double?, data: JSONAny?, agent: Agent?, skillNames: [String]?, skillNamesEn: [String: String]?, toolName: String?, resources: [MCPToolResource]?, progress: ProgressUnion?, artifact: ArtifactMeta?, delta: String?, id: String?, approvalID: String?, currentTurn: Double?, reason: Reason?, status: String?, step: Step?, taskID: String?) {
         self.token = token
         self.type = type
         self.messageID = messageID
         self.summary = summary
         self.issues = issues
         self.sessionID = sessionID
+        self.model = model
         self.buildID = buildID
         self.message = message
         self.captureID = captureID
@@ -183,6 +189,7 @@ public struct WsServerEvent: Codable {
         self.finished = finished
         self.gap = gap
         self.lastSeq = lastSeq
+        self.servedModel = servedModel
         self.streamID = streamID
         self.thinking = thinking
         self.sources = sources
@@ -235,6 +242,7 @@ public extension WsServerEvent {
         summary: String?? = nil,
         issues: String?? = nil,
         sessionID: String?? = nil,
+        model: String?? = nil,
         buildID: String?? = nil,
         message: String?? = nil,
         captureID: String?? = nil,
@@ -248,6 +256,7 @@ public extension WsServerEvent {
         finished: Bool?? = nil,
         gap: Bool?? = nil,
         lastSeq: Double?? = nil,
+        servedModel: String?? = nil,
         streamID: String?? = nil,
         thinking: String?? = nil,
         sources: [SearchSourceRef]?? = nil,
@@ -280,6 +289,7 @@ public extension WsServerEvent {
             summary: summary ?? self.summary,
             issues: issues ?? self.issues,
             sessionID: sessionID ?? self.sessionID,
+            model: model ?? self.model,
             buildID: buildID ?? self.buildID,
             message: message ?? self.message,
             captureID: captureID ?? self.captureID,
@@ -293,6 +303,7 @@ public extension WsServerEvent {
             finished: finished ?? self.finished,
             gap: gap ?? self.gap,
             lastSeq: lastSeq ?? self.lastSeq,
+            servedModel: servedModel ?? self.servedModel,
             streamID: streamID ?? self.streamID,
             thinking: thinking ?? self.thinking,
             sources: sources ?? self.sources,
@@ -937,6 +948,7 @@ public enum WsServerEventType: String, Codable {
     case researchProgress = "research_progress"
     case resumeNone = "resume_none"
     case searchSources = "search_sources"
+    case servedModel = "served_model"
     case sessionCreated = "session_created"
     case skillsActivated = "skills_activated"
     case streamResume = "stream_resume"

@@ -49,6 +49,8 @@ interface StreamEntry {
     deliveredSeq: number;
     messageId?: string;
     sessionId?: string;
+    /** 마지막 served_model 값 — stream_resume 스냅샷에 실어 링이 밀려도 답하는 모델을 잃지 않게 한다 */
+    servedModel?: string;
     /** 'token' 누적 — 재부착 시 클라이언트가 마지막 assistant 본문을 이 값으로 되돌린다. */
     content: string;
     thinking: string;
@@ -128,6 +130,7 @@ export class InFlightStreamRegistry {
         const type = String(payload.type);
         if (type === 'session_created' && typeof payload.sessionId === 'string') entry.sessionId = payload.sessionId;
         if (typeof payload.messageId === 'string' && !entry.messageId) entry.messageId = payload.messageId;
+        if (type === 'served_model' && typeof payload.model === 'string') entry.servedModel = payload.model;
         if (type === 'token' && typeof payload.token === 'string') entry.content += payload.token;
         if (type === 'thinking' && typeof payload.token === 'string') entry.thinking += payload.token;
         if (TERMINAL_EVENT_TYPES.has(type)) entry.finished = true;
@@ -219,6 +222,7 @@ export class InFlightStreamRegistry {
             /** 스냅샷이 반영한 마지막 순번 — 뒤이어 재생되는 이벤트는 이 이하일 수 있다(클라는 자기 afterSeq 기준으로 중복만 거른다) */
             lastSeq: entry.seq,
             ...(gap ? { gap: true } : {}),
+            ...(entry.servedModel ? { servedModel: entry.servedModel } : {}),
         };
         try {
             ws.send(JSON.stringify(snapshot));
@@ -280,6 +284,19 @@ export class InFlightStreamRegistry {
     private clearTimer(entry: StreamEntry): void {
         if (entry.timer) { clearTimeout(entry.timer); entry.timer = null; }
     }
+}
+
+/**
+ * 실제 응답 모델 알림(`served_model`) 발행기 — 값이 바뀔 때만 보낸다(provider gate 확정 1회 + 폴백 갱신).
+ * 같은 값의 중복 콜백(요청 해석 단계가 여러 번 알려도)은 삼킨다.
+ */
+export function createServedModelEmitter(out: (payload: Record<string, unknown>) => void): (model: string) => void {
+    let last: string | undefined;
+    return (model: string): void => {
+        if (!model || model === last) return;
+        last = model;
+        out({ type: 'served_model', model });
+    };
 }
 
 let singleton: InFlightStreamRegistry | null = null;

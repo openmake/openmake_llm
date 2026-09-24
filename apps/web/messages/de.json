@@ -419,7 +419,8 @@
         "ok": "Fertig",
         "failed": "Fehlgeschlagen"
       },
-      "tasksCount": "{count} Aufgaben"
+      "tasksCount": "{count} Aufgaben",
+      "taskModel": "Verarbeitet von: {model}"
     },
     "tool": {
       "running": "{tool} wird ausgeführt"
@@ -464,6 +465,7 @@
       "copied": "Kopiert",
       "download": ".patch herunterladen"
     },
+    "servedModel": "Antwortmodell: {model}",
     "modelFallbackNotice": "Das ausgewählte Modell ({from}) hat nicht geantwortet, daher hat stattdessen das Standardmodell ({to}) geantwortet.",
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "Nutzungslimit erreicht",

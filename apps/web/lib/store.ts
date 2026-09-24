@@ -44,6 +44,11 @@ interface ChatMessage extends Pick<SharedChatMessage, "role" | "content" | "imag
    * 표시가 없으면 사용자가 "선택한 모델이 답했다"고 오인한다(실측).
    */
   modelFallback?: { from: string; to: string; reason?: string; code?: string };
+  /**
+   * 이 답변을 실제로 생성한 모델(ws served_model·stream_resume.servedModel, 히스토리는 DB model).
+   * 선택 모델과 다를 수 있다(자동 선택·쿼터 강등·외부→로컬 폴백). 히스토리 payload 에는 싣지 않는다.
+   */
+  servedModel?: string;
   /** 웹검색 출처(F19.4) — 본문 [N] 인용 칩. ws search_sources 또는 히스토리 로드. 히스토리 payload 에는 싣지 않는다 */
   sources?: SearchSourceRef[];
 }
@@ -90,6 +95,8 @@ interface OrchestratorTaskInfo {
   status: "pending" | "running" | "ok" | "failed";
   summary?: string;
   ms?: number;
+  /** 이 작업을 실제로 처리한 모델(서버가 실행 대상을 알 때만) */
+  model?: string;
 }
 
 /**
@@ -176,6 +183,8 @@ interface AppState {
   modeProgress: ModeProgressInfo | null;
   /** 오케스트레이터 진행상황 (ws system_event orchestrator_*) — 스트리밍 중 배너로 표시, done/skipped 시 clear. */
   orchestratorProgress: OrchestratorProgressInfo | null;
+  /** 스트리밍 assistant 가 생기기 전에 도착한 served_model — 첫 자리표시가 생길 때 싣고 비운다(그 전엔 "분석 중" 표시에 노출) */
+  pendingServedModel: string | null;
   /** 현재 실행 중인 MCP/내장 도구명 (ws mcp_tool_start→표시, mcp_tool_result/done→clear). */
   activeTool: string | null;
   /**
@@ -230,6 +239,8 @@ interface AppState {
   resumeAssistant: (content: string, reasoning?: string) => void;
   /** 진행 중(또는 마지막) assistant 메시지에 모델 폴백 고지를 부착 */
   setModelFallback: (info: { from: string; to: string; reason?: string }) => void;
+  /** 실제 응답 모델 — 스트리밍 assistant 에 기록(첫 토큰 전이면 자리표시 assistant 를 만든다) */
+  setServedModel: (model: string) => void;
   appendThinking: (token: string) => void;
   setThinkingSummary: (summary: string) => void;
   setVerificationIssues: (issues: string) => void;
@@ -306,6 +317,11 @@ const noopStorage: StateStorage = {
   removeItem: () => {},
 };
 
+/** 새 스트리밍 assistant 자리표시 — 먼저 도착해 보류된 served_model 을 함께 싣는다(호출자가 보류값을 비운다). */
+function newStreamingAssistant(s: { pendingServedModel: string | null }, fields: Omit<ChatMessage, "role">): ChatMessage {
+  return { role: "assistant", streaming: true, ...(s.pendingServedModel ? { servedModel: s.pendingServedModel } : {}), ...fields };
+}
+
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
@@ -319,6 +335,7 @@ export const useAppStore = create<AppState>()(
   contextRefs: {},
   modeProgress: null,
   orchestratorProgress: null,
+  pendingServedModel: null,
   activeTool: null,
   resendRequest: null,
 
@@ -375,9 +392,19 @@ export const useAppStore = create<AppState>()(
       if (last && last.role === "assistant" && last.streaming) {
         hist[hist.length - 1] = { ...last, modelFallback: info };
       } else {
-        hist.push({ role: "assistant", content: "", streaming: true, modelFallback: info });
+        hist.push(newStreamingAssistant(s, { content: "", modelFallback: info }));
       }
-      return { chatHistory: hist };
+      return { chatHistory: hist, pendingServedModel: null };
+    }),
+  setServedModel: (model) =>
+    set((s) => {
+      // 보통 첫 토큰보다 먼저 온다 — 자리표시를 여기서 만들면 "분석 중" 인디케이터(에이전트·스킬)가 곧바로
+      // 사라지므로, 스트리밍 assistant 가 없으면 보류했다가 첫 자리표시에 싣는다. 폴백 갱신은 기존 메시지에 바로 반영.
+      const hist = [...s.chatHistory];
+      const last = hist[hist.length - 1];
+      if (!(last && last.role === "assistant" && last.streaming)) return { pendingServedModel: model };
+      hist[hist.length - 1] = { ...last, servedModel: model };
+      return { chatHistory: hist, pendingServedModel: null };
     }),
   appendToken: (token) =>
     set((s) => {
@@ -386,9 +413,9 @@ export const useAppStore = create<AppState>()(
       if (last && last.role === "assistant" && last.streaming) {
         hist[hist.length - 1] = { ...last, content: last.content + token };
       } else {
-        hist.push({ role: "assistant", content: token, streaming: true });
+        hist.push(newStreamingAssistant(s, { content: token }));
       }
-      return { chatHistory: hist };
+      return { chatHistory: hist, pendingServedModel: null };
     }),
   resumeAssistant: (content, reasoning) =>
     set((s) => {
@@ -402,9 +429,9 @@ export const useAppStore = create<AppState>()(
           streaming: true,
         };
       } else {
-        hist.push({ role: "assistant", content, ...(reasoning ? { reasoning } : {}), streaming: true });
+        hist.push(newStreamingAssistant(s, { content, ...(reasoning ? { reasoning } : {}) }));
       }
-      return { chatHistory: hist, isGenerating: true };
+      return { chatHistory: hist, isGenerating: true, pendingServedModel: null };
     }),
   appendThinking: (token) =>
     set((s) => {
@@ -414,9 +441,9 @@ export const useAppStore = create<AppState>()(
         hist[hist.length - 1] = { ...last, reasoning: (last.reasoning || "") + token };
       } else {
         // thinking 은 보통 답변 토큰보다 먼저 도착 — assistant placeholder 를 생성해 누적
-        hist.push({ role: "assistant", content: "", reasoning: token, streaming: true });
+        hist.push(newStreamingAssistant(s, { content: "", reasoning: token }));
       }
-      return { chatHistory: hist };
+      return { chatHistory: hist, pendingServedModel: null };
     }),
   setMessageSources: (sources) =>
     set((s) => {
@@ -424,8 +451,8 @@ export const useAppStore = create<AppState>()(
       const hist = [...s.chatHistory];
       const last = hist[hist.length - 1];
       if (last && last.role === "assistant" && last.streaming) hist[hist.length - 1] = { ...last, sources };
-      else hist.push({ role: "assistant", content: "", sources, streaming: true });
-      return { chatHistory: hist };
+      else hist.push(newStreamingAssistant(s, { content: "", sources }));
+      return { chatHistory: hist, pendingServedModel: null };
     }),
   setVerificationIssues: (issues) =>
     set((s) => {
@@ -458,7 +485,8 @@ export const useAppStore = create<AppState>()(
       if (last && last.role === "assistant") {
         hist[hist.length - 1] = { ...last, streaming: v };
       }
-      return { chatHistory: hist, isGenerating: v };
+      // 스트림 종료 — 소비되지 못한 보류 모델(첫 토큰 전 오류 등)이 다음 턴 메시지에 붙지 않게 비운다
+      return { chatHistory: hist, isGenerating: v, ...(v ? {} : { pendingServedModel: null }) };
     }),
   setCurrentSessionId: (id) => set({ currentSessionId: id }),
   setInputDraft: (t) => set({ inputDraft: t }),
@@ -498,6 +526,7 @@ export const useAppStore = create<AppState>()(
       contextRefs: {},
       modeProgress: null,
       orchestratorProgress: null,
+      pendingServedModel: null,
       activeTool: null,
       resendRequest: null,
       artifacts: [],

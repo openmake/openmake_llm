@@ -370,7 +370,7 @@ export class ChatRequestHandler {
             originalMessage: originalMessage ?? rawMessage,
             userLocation: params.userLocation,
             format: params.format,
-            onServedModel: (fullId) => { servedModel = fullId; },
+            onServedModel: (fullId) => { servedModel = fullId; params.onServedModel?.(fullId); },
         };
 
         // 생각 요약 세션 (클로드 웹식 헤드라인): 중간(진행형)·최종(과거형) 요약을

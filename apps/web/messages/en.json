@@ -419,7 +419,8 @@
         "ok": "Done",
         "failed": "Failed"
       },
-      "tasksCount": "{count} tasks"
+      "tasksCount": "{count} tasks",
+      "taskModel": "Processed by: {model}"
     },
     "tool": {
       "running": "Running {tool}"
@@ -464,6 +465,7 @@
       "copied": "Copied",
       "download": "Download .patch"
     },
+    "servedModel": "Answered by: {model}",
     "modelFallbackNotice": "The selected model ({from}) did not respond, so the default model ({to}) answered instead.",
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "usage limit reached",

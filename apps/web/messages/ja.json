@@ -419,7 +419,8 @@
         "ok": "完了",
         "failed": "失敗"
       },
-      "tasksCount": "タスク {count} 件"
+      "tasksCount": "タスク {count} 件",
+      "taskModel": "処理モデル: {model}"
     },
     "tool": {
       "running": "{tool} を実行中"
@@ -464,6 +465,7 @@
       "copied": "コピー済み",
       "download": ".patch をダウンロード"
     },
+    "servedModel": "回答モデル: {model}",
     "modelFallbackNotice": "選択したモデル({from})が応答しなかったため、既定のモデル({to})が回答しました。",
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "利用上限に到達",

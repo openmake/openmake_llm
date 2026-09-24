@@ -419,7 +419,8 @@
         "ok": "完成",
         "failed": "失败"
       },
-      "tasksCount": "{count} 个任务"
+      "tasksCount": "{count} 个任务",
+      "taskModel": "处理模型：{model}"
     },
     "tool": {
       "running": "正在运行 {tool}"
@@ -464,6 +465,7 @@
       "copied": "已复制",
       "download": "下载 .patch"
     },
+    "servedModel": "回答模型：{model}",
     "modelFallbackNotice": "所选模型（{from}）未响应，已由默认模型（{to}）作答。",
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "已达使用上限",

@@ -140,6 +140,7 @@ export function useChatSocket() {
     appendToken,
     resumeAssistant,
     setModelFallback,
+    setServedModel,
     appendThinking,
     setThinkingSummary,
     setVerificationIssues,
@@ -207,6 +208,7 @@ export function useChatSocket() {
         status?: string;
         summary?: string;
         ms?: number;
+        model?: string;
       };
       const prev = useAppStore.getState().orchestratorProgress;
       if (type === "orchestrator_status") {
@@ -256,6 +258,7 @@ export function useChatSocket() {
           status,
           ...(md.summary ? { summary: String(md.summary) } : {}),
           ...(typeof md.ms === "number" ? { ms: md.ms } : {}),
+          ...(typeof md.model === "string" && md.model ? { model: md.model } : {}),
         });
       }
     };
@@ -348,6 +351,12 @@ export function useChatSocket() {
           // 다시 스트리밍 상태로 둔다(후속 token/done 이 그대로 이어진다).
           if (data.sessionId) setCurrentSessionId(data.sessionId);
           resumeAssistant(data.content, data.thinking);
+          // 링에서 밀려났을 수 있는 served_model 을 스냅샷으로 복원
+          if (typeof data.servedModel === "string" && data.servedModel) setServedModel(data.servedModel);
+          break;
+        // 이 답변을 실제로 생성하는 모델 — 값이 바뀔 때만 온다(폴백 시 재발행)
+        case "served_model":
+          if (typeof data.model === "string" && data.model) setServedModel(data.model);
           break;
         case "resume_none":
           // 이어받을 스트림 없음(보관 만료 등) — 답변은 히스토리에 저장돼 있으니 안내만 남긴다.

@@ -419,7 +419,8 @@
         "ok": "완료",
         "failed": "실패"
       },
-      "tasksCount": "작업 {count}개"
+      "tasksCount": "작업 {count}개",
+      "taskModel": "처리 모델: {model}"
     },
     "tool": {
       "running": "{tool} 실행 중"
@@ -464,6 +465,7 @@
       "copied": "복사됨",
       "download": ".patch 다운로드"
     },
+    "servedModel": "답변 모델: {model}",
     "modelFallbackNotice": "선택한 모델({from})이 응답하지 않아 기본 모델({to})로 답변했습니다.",
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "사용량 한도 초과",
