@@ -12,13 +12,14 @@ import { Request, Response } from 'express';
 import { csvCell } from '../utils/csv';
 import { success, badRequest, internalError } from '../utils/api-response';
 import { createLogger } from '../utils/logger';
+import { PAGINATION } from '../config/http-data-limits';
 
 const log = createLogger('AdminAlerts');
 
 export async function listAlertHistory(req: Request, res: Response): Promise<void> {
     try {
-        const limit = Math.min(parseInt(String(req.query.limit ?? '50'), 10) || 50, 500);
-        const offset = parseInt(String(req.query.offset ?? '0'), 10) || 0;
+        const limit = Math.min(parseInt(String(req.query.limit ?? String(PAGINATION.DEFAULT_LIMIT)), 10) || PAGINATION.DEFAULT_LIMIT, PAGINATION.ADMIN_MAX_LIMIT);
+        const offset = parseInt(String(req.query.offset ?? String(PAGINATION.DEFAULT_OFFSET)), 10) || PAGINATION.DEFAULT_OFFSET;
         const type = req.query.type ? String(req.query.type) : null;
         const severity = req.query.severity ? String(req.query.severity) : null;
         const startDate = req.query.startDate ? String(req.query.startDate) : null;

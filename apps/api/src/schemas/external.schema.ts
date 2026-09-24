@@ -9,6 +9,9 @@
  * @module schemas/external.schema
  */
 import { z } from 'zod';
+import { SCHEMA_LIMITS } from '../config/http-data-limits';
+
+const { external: EX } = SCHEMA_LIMITS;
 
 const VALID_SERVICE_TYPES = ['google_drive', 'notion', 'github', 'slack', 'dropbox'] as const;
 
@@ -26,11 +29,11 @@ export const createExternalConnectionSchema = z.object({
     serviceType: z.enum(VALID_SERVICE_TYPES, {
         message: `serviceType은 ${VALID_SERVICE_TYPES.join(', ')} 중 하나여야 합니다`,
     }),
-    accessToken: z.string().max(2000).optional(),
-    refreshToken: z.string().max(2000).optional(),
+    accessToken: z.string().max(EX.TOKEN_MAX).optional(),
+    refreshToken: z.string().max(EX.TOKEN_MAX).optional(),
     tokenExpiresAt: z.string().datetime({ offset: true }).optional(),
     accountEmail: z.string().email().max(254).optional(),
-    accountName: z.string().max(200).optional(),
+    accountName: z.string().max(EX.ACCOUNT_NAME_MAX).optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -41,8 +44,8 @@ export const createExternalConnectionSchema = z.object({
  * @property {string} [expiresAt] - 새 만료 시각 (ISO8601)
  */
 export const updateExternalTokensSchema = z.object({
-    accessToken: z.string().min(1, 'accessToken은 필수입니다').max(2000),
-    refreshToken: z.string().max(2000).optional(),
+    accessToken: z.string().min(1, 'accessToken은 필수입니다').max(EX.TOKEN_MAX),
+    refreshToken: z.string().max(EX.TOKEN_MAX).optional(),
     expiresAt: z.string().datetime({ offset: true }).optional(),
 });
 
@@ -56,11 +59,11 @@ export const updateExternalTokensSchema = z.object({
  * @property {string} [cachedContent] - 캐시된 텍스트 내용
  */
 export const addExternalFileSchema = z.object({
-    externalId: z.string().min(1, 'externalId는 필수입니다').max(500),
-    fileName: z.string().min(1, 'fileName은 필수입니다').max(500),
-    fileType: z.string().max(100).optional(),
+    externalId: z.string().min(1, 'externalId는 필수입니다').max(EX.EXTERNAL_ID_MAX),
+    fileName: z.string().min(1, 'fileName은 필수입니다').max(EX.FILE_NAME_MAX),
+    fileType: z.string().max(EX.FILE_TYPE_MAX).optional(),
     fileSize: z.number().int().min(0).optional(),
-    webUrl: z.url().max(2000).optional(),
-    cachedContent: z.string().max(1_000_000).optional(),
+    webUrl: z.url().max(EX.WEB_URL_MAX).optional(),
+    cachedContent: z.string().max(EX.CACHED_CONTENT_MAX).optional(),
 });
 

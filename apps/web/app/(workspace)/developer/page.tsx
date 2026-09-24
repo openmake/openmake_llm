@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { ScrollText, KeyRound, MessageSquare, Sparkles } from "lucide-react";
 import {
   PageHeader,
+  PageBody,
   Card,
   CardHeader,
   CardTitle,
@@ -108,8 +109,7 @@ export default function DeveloperPage() {
       />
       <DeveloperTabs />
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        <div className="mx-auto max-w-3xl space-y-6">
+      <PageBody className="space-y-6">
           {/* API 기본 정보 */}
           <Card>
             <CardHeader className="flex items-center gap-2">
@@ -231,8 +231,7 @@ export default function DeveloperPage() {
               ))}
             </CardContent>
           </Card>
-        </div>
-      </div>
+      </PageBody>
     </>
   );
 }

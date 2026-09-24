@@ -1,41 +1,23 @@
 /**
  * @module services/orchestrator/executors
- * @description capability → executor 레지스트리. 검증된 어댑터가 없는 capability(UNSUPPORTED_CAPABILITIES)는
- * 배정과 무관하게 `unsupported` 로 명시 실패한다(미배정 `unassigned` 와 구분 — 둘 다 종합 답변에 사유로 실린다).
+ * @description capability → 실행기 조회 **shim** (P02, 2026-09-23). 정적 import 표는 없어졌다 — 실행기는 Capability Registry
+ * (`runtime-ports/capability-runtime`)에 등록된 handler 이고, 텍스트·비전·오디오·웹·분석 계열은 legacy bridge 가 Base 소유로
+ * 등록한다. 시그니처는 종전과 같다(`executor.ts` 무변경).
+ *  - Registry 에 없음 → `CapabilityNotRegisteredError`(소유 add-on 꺼짐·부팅 실패 = disabled)
+ *  - 등록됐지만 어댑터 없음 → `UnsupportedCapabilityError`(handler 가 던진다)
  */
-import { UNSUPPORTED_CAPABILITIES, type Capability } from '../../../config/capabilities';
+import type { Capability } from '../../../config/capabilities';
 import type { CapabilityExecutor } from '../types';
-import { textExecutor } from './text';
-import { visionExecutor } from './vision';
-import { imageGenerateExecutor, imageEditExecutor } from './image';
-import { audioTranscribeExecutor, audioSpeechExecutor } from './audio';
-import { videoGenerateExecutor } from './video';
-import { musicGenerateExecutor } from './music';
-import { webSearchExecutor } from './web';
+import { getCapabilityRegistry } from '../../../runtime-ports/capability-runtime';
+import { CapabilityNotRegisteredError } from '../../../capability-contract/errors';
+import { ensureLegacyCapabilityBridge } from '../../../addon-host/legacy-capability-bridge';
 
-export class UnsupportedCapabilityError extends Error {
-    constructor(public readonly capability: Capability) {
-        super(`${capability}: 검증된 provider 어댑터가 아직 없습니다 (unsupported)`);
-    }
-}
-
-const REGISTRY: Partial<Record<Capability, CapabilityExecutor>> = {
-    'text.reason': textExecutor,
-    'text.code': textExecutor,
-    'vision.describe': visionExecutor,
-    'vision.ocr': visionExecutor,
-    'image.generate': imageGenerateExecutor,
-    'image.edit': imageEditExecutor,
-    'audio.transcribe': audioTranscribeExecutor,
-    'audio.speech': audioSpeechExecutor,
-    'music.generate': musicGenerateExecutor,
-    'video.generate': videoGenerateExecutor,
-    'web.search': webSearchExecutor,
-};
+export { UnsupportedCapabilityError } from './unsupported-error';
 
 export function executorFor(capability: Capability): CapabilityExecutor {
-    if (UNSUPPORTED_CAPABILITIES.has(capability)) return async () => { throw new UnsupportedCapabilityError(capability); };
-    const ex = REGISTRY[capability];
-    if (!ex) return async () => { throw new UnsupportedCapabilityError(capability); };
-    return ex;
+    ensureLegacyCapabilityBridge();
+    const reg = getCapabilityRegistry().get(capability);
+    if (!reg) return async () => { throw new CapabilityNotRegisteredError(capability); };
+    // executor.ts 가 CapabilityContext(+Base 소유면 targets)를 만들어 넘긴다 — 여기서는 시그니처만 맞춘다
+    return (task, ctx) => reg.handler.execute(task, ctx as unknown as import('../../../capability-contract/types').CapabilityContext);
 }

@@ -1,31 +1,16 @@
-// capability 그룹 해석 + 서브에이전트 응답 디코딩 테스트
+// 모델 배정 응답 디코딩·슬롯 그룹 + 서브에이전트 응답 디코딩 테스트
 import XCTest
 @testable import OpenMakeKit
 
 final class CapabilityCatalogTests: XCTestCase {
-    private let assignable = [
-        "text.reason", "text.code", "text.embed", "vision.describe", "vision.ocr",
-        "image.generate", "image.edit", "audio.transcribe", "audio.speech", "audio.analyze",
-        "music.analyze", "music.generate", "video.generate", "video.analyze",
-    ]
-
-    func testGroupsForUserHideAdminAndUnsupported() {
-        let r = CapabilityCatalog.resolveGroups(assignable: assignable, admin: false)
-        XCTAssertEqual(r.groups.map(\.id), ["text", "code", "image", "audio", "music", "video"])
-        XCTAssertEqual(r.hiddenUnsupported, ["audio.analyze", "music.analyze", "video.analyze"])
-        XCTAssertFalse(r.groups.first { $0.id == "music" }!.isUnsupported)
-        XCTAssertFalse(r.groups.first { $0.id == "image" }!.isUnsupported)
-    }
-
-    func testAdminSeesEmbedGroup() {
-        let r = CapabilityCatalog.resolveGroups(assignable: assignable, admin: true)
-        XCTAssertTrue(r.groups.contains { $0.id == "embed" && $0.members == ["text.embed"] })
-    }
-
-    func testUnknownCapabilityFallsToOther() {
-        let r = CapabilityCatalog.resolveGroups(assignable: ["text.reason", "future.thing"], admin: false)
-        XCTAssertEqual(r.groups.last?.id, "other")
-        XCTAssertEqual(r.groups.last?.members, ["future.thing"])
+    func testModelAssignmentsDecodeAndGroup() throws {
+        let json = #"{"slots":[{"id":"planner","group":"multimodal","kind":"text","roles":["planner"],"capabilities":[],"paramKeys":[],"available":true},{"id":"agent","group":"agents","kind":"text","roles":["agent"],"capabilities":[],"paramKeys":[],"available":true},{"id":"code","group":"quality","kind":"text","roles":["review"],"capabilities":["text.code"],"paramKeys":["temperature"],"available":true}],"assignments":[{"slot":"code","fullId":"hasa:glm-4.7-flash","params":{},"updatedAt":"2026-09-24T00:00:00Z"}],"effective":[{"slot":"code","fullId":"hasa:glm-4.7-flash","source":"user"},{"slot":"agent","fullId":null,"source":"none","error":"x"}]}"#
+        let data = try JSONDecoder().decode(ModelAssignments.self, from: json.data(using: .utf8)!)
+        XCTAssertEqual(data.grouped().map(\.group), ["agents", "quality", "multimodal"])
+        XCTAssertEqual(data.assignment(for: "code")?.fullId, "hasa:glm-4.7-flash")
+        XCTAssertEqual(data.effective(for: "agent")?.error, "x")
+        XCTAssertEqual(ModelSlotCatalog.title("code"), "코드·리뷰")
+        XCTAssertEqual(ModelSlotCatalog.title("future.slot"), "future.slot")
         XCTAssertEqual(CapabilityCatalog.label("future.thing"), "future.thing")
     }
 

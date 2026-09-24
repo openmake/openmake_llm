@@ -151,6 +151,24 @@ export const DISCUSSION_TRUNCATION = {
     HISTORY_ITEM_MAX: 300,
     /** Discussion 최대 이미지 수 */
     MAX_IMAGES: 3,
+    /** 컨텍스트에 포함할 최근 대화 히스토리 항목 수 */
+    RECENT_HISTORY_COUNT: 5,
+    /** 전체 토큰 상한 도달 시 마지막 항목을 덧붙이는 최소 잔여 글자 수 */
+    MIN_APPEND_CHARS: 100,
+} as const;
+
+/** maxAgents 미지정(0) 시 전문가 선택 기본 상한 */
+export const DISCUSSION_MAX_AGENTS_DEFAULT = 20;
+
+/** 최소 제안자 수 미달 시 채워 넣는 보완 에이전트 — 도메인 무관 범용 폴백 */
+export const DISCUSSION_FALLBACK_AGENTS = ['business-strategist', 'data-analyst', 'project-manager', 'general'];
+
+/** 도메인 미분류(DIVERSE) 시 보완 에이전트 채움 범위 */
+export const DISCUSSION_DIVERSE_FALLBACK = {
+    /** 이 수 미만이면 DIVERSE 목록으로 채운다 */
+    MIN_RESULTS: 3,
+    /** 채우다 이 수에 도달하면 중단 */
+    MAX_RESULTS: 5,
 } as const;
 
 /** 토론의 LLM temperature */

@@ -1,7 +1,7 @@
 /**
  * 운영 구성 내보내기/가져오기 (F22 Phase E-1, 2026-09-17).
  *
- *   GET  /api/admin/config/export                — { version, exportedAt, systemSettings, capabilityModels, organizations }
+ *   GET  /api/admin/config/export                — { version, exportedAt, systemSettings, modelAssignments, capabilityModels(구버전 호환), organizations }
  *   POST /api/admin/config/import { config, apply? } — 기본 dry-run(검증·변경 요약만), apply=true 면 적용 + 이력·감사
  *
  * 대상은 운영 설정뿐이다: 시스템 설정(시크릿 제외 — describe() 가 값을 싣지 않는다), 전역 capability 배정,
@@ -21,7 +21,10 @@ import { getPool } from '../data/models/unified-database';
 import { getSystemSettingsService } from '../services/system-settings-service';
 import { SETTING_DEFS_BY_KEY } from '../config/system-settings-registry';
 import { CapabilityModelsRepository } from '../data/repositories/capability-models-repo';
+import { ModelAssignmentsRepository } from '../data/repositories/model-assignments-repo';
 import { CAPABILITIES, GLOBAL_CAPABILITY_SCOPE, type Capability } from '../config/capabilities';
+import { getModelSlot, CAPABILITY_SLOT } from '../config/model-slots';
+import { invalidateGlobalAssignmentCaches } from '../services/model-assignment-cache';
 import { OrganizationRepository } from '../data/repositories/organization-repository';
 import { OrganizationPolicyRepository } from '../data/repositories/organization-policy-repository';
 import { isOrgPolicyKey, ORG_POLICY_SCHEMAS } from '../config/org-policy-registry';
@@ -36,6 +39,9 @@ export const CONFIG_EXPORT_VERSION = 1;
 const configSchema = z.object({
     version: z.literal(CONFIG_EXPORT_VERSION),
     systemSettings: z.record(z.string(), z.string()).default({}),
+    // 통합 모델 배정(슬롯) — 새 정본. 가져오기는 이것을 우선한다(2026-09-24, 170).
+    modelAssignments: z.array(z.object({ slot: z.string(), fullId: z.string().min(1), params: z.record(z.string(), z.string()).default({}) })).default([]),
+    // 구 키 — modelAssignments 가 없는 옛 내보내기 호환용(capability → 슬롯 매핑으로 읽는다).
     capabilityModels: z.array(z.object({ capability: z.string(), fullId: z.string().min(1), params: z.record(z.string(), z.string()).default({}) })).default([]),
     organizations: z.array(z.object({
         slug: z.string().trim().min(2).max(64).regex(/^[a-z0-9][a-z0-9-]*$/),
@@ -57,6 +63,9 @@ export function validateImportedConfig(cfg: ExportedConfig): string[] {
         if (def.secret) { problems.push(`systemSettings: 시크릿 키는 가져오기 대상이 아닙니다 ${key}`); continue; }
         const r = def.validate.safeParse(value);
         if (!r.success) problems.push(`systemSettings: ${key} 값 형식 오류`);
+    }
+    for (const a of cfg.modelAssignments) {
+        if (!getModelSlot(a.slot)) problems.push(`modelAssignments: 모르는 슬롯 ${a.slot}`);
     }
     for (const c of cfg.capabilityModels) {
         if (!(CAPABILITIES as readonly string[]).includes(c.capability)) problems.push(`capabilityModels: 모르는 capability ${c.capability}`);
@@ -82,6 +91,9 @@ adminConfigExportRouter.get('/config/export', asyncHandler(async (req: Request, 
     for (const s of getSystemSettingsService().describe()) {
         if (!s.secret && s.source === 'db' && typeof s.value === 'string') systemSettings[s.key] = s.value;
     }
+    const modelAssignments = (await new ModelAssignmentsRepository(pool).listByScope(GLOBAL_CAPABILITY_SCOPE))
+        .map((r) => ({ slot: r.slot, fullId: r.fullId, params: r.params }));
+    // 구 키도 함께 실어 옛 버전 가져오기와 호환 유지(어댑터가 같은 통합 테이블을 읽는다)
     const capabilityModels = (await new CapabilityModelsRepository(pool).listGlobal())
         .map((r) => ({ capability: r.capability, fullId: r.fullId, params: r.params }));
     const orgRepo = new OrganizationRepository(pool);
@@ -96,7 +108,7 @@ adminConfigExportRouter.get('/config/export', asyncHandler(async (req: Request, 
             policies,
         });
     }
-    const config: ExportedConfig = { version: CONFIG_EXPORT_VERSION, systemSettings, capabilityModels: capabilityModels as ExportedConfig['capabilityModels'], organizations };
+    const config: ExportedConfig = { version: CONFIG_EXPORT_VERSION, systemSettings, modelAssignments, capabilityModels: capabilityModels as ExportedConfig['capabilityModels'], organizations };
     await getAuditService().logAudit({ action: 'config.exported', userId: String(req.user!.id), resourceType: 'config', details: { settings: Object.keys(systemSettings).length, organizations: organizations.length } });
     res.setHeader('Content-Disposition', `attachment; filename="openmake-config-${new Date().toISOString().slice(0, 10)}.json"`);
     res.json({ ...config, exportedAt: new Date().toISOString() });
@@ -107,9 +119,15 @@ adminConfigExportRouter.post('/config/import', asyncHandler(async (req: Request,
     if (!parsed.success) return res.status(400).json(badRequest(`구성 형식 오류: ${parsed.error.issues[0]?.path.join('.') ?? ''}`));
     const { config, apply } = parsed.data;
     const problems = validateImportedConfig(config);
+    // modelAssignments 가 있으면 그것이 정본, 없으면 구 capabilityModels 를 슬롯으로 매핑해 읽는다(옛 내보내기 호환)
+    const assignmentRows = config.modelAssignments.length > 0
+        ? config.modelAssignments
+        : config.capabilityModels
+            .map((c) => ({ slot: CAPABILITY_SLOT[c.capability as Capability], fullId: c.fullId, params: c.params }))
+            .filter((a): a is { slot: string; fullId: string; params: Record<string, string> } => !!a.slot);
     const summary = {
         systemSettings: Object.keys(config.systemSettings).length,
-        capabilityModels: config.capabilityModels.length,
+        modelAssignments: assignmentRows.length,
         organizations: config.organizations.length,
         policies: config.organizations.reduce((n, o) => n + Object.keys(o.policies).length, 0),
     };
@@ -119,8 +137,9 @@ adminConfigExportRouter.post('/config/import', asyncHandler(async (req: Request,
     const pool = getPool();
     const actor = String(req.user!.id);
     if (summary.systemSettings > 0) await getSystemSettingsService().update(config.systemSettings, actor);
-    const capRepo = new CapabilityModelsRepository(pool);
-    for (const c of config.capabilityModels) await capRepo.upsert(GLOBAL_CAPABILITY_SCOPE, c.capability as Capability, c.fullId, c.params);
+    const assignRepo = new ModelAssignmentsRepository(pool);
+    for (const a of assignmentRows) await assignRepo.upsert(GLOBAL_CAPABILITY_SCOPE, a.slot, a.fullId, a.params);
+    if (assignmentRows.length > 0) invalidateGlobalAssignmentCaches();
     const orgRepo = new OrganizationRepository(pool);
     const policyRepo = new OrganizationPolicyRepository(pool);
     const existing = new Map((await orgRepo.list()).map((o) => [o.slug, o]));

@@ -5,7 +5,7 @@
  */
 import { WebSocket } from 'ws';
 import { collectActiveModes, DEFAULT_INPUT_POLICY, getChatModes, resolveActiveMode } from '../services/chat-service/chat-modes';
-import { collectContextRefs } from '../services/chat-service/turn-integrations';
+import { collectContextRefs, collectTurnContexts } from '../services/chat-service/turn-integrations';
 import * as crypto from 'crypto';
 import { ClusterManager } from '../cluster/manager';
 import { selectOptimalModel } from '../chat/model-selector';
@@ -33,7 +33,7 @@ import type { PdfVisionResult } from '../services/chat-service/pdf-vision';
 import { saveAssistantMessage } from '../chat/request-persistence';
 import { buildWebSearchContext } from '../tools/web-search/build-search-context';
 import { emitSearchSources, parseUserLocation } from './ws-chat-sources';
-import { getInFlightStreamRegistry, resolveStreamKey } from './ws-stream-registry';
+import { createServedModelEmitter, getInFlightStreamRegistry, resolveStreamKey } from './ws-stream-registry';
 
 /**
  * AI 채팅 메시지를 처리합니다.
@@ -217,13 +217,24 @@ export async function handleChatMessage(
         }
         const effectiveAttachContext = cachedAttachContext + attachContext;
 
+        // 채팅 통합의 턴 전 컨텍스트(세션에 연결된 문서 검색 등) — 이 턴에만 싣고 첨부 캐시에 넣지 않는다.
+        // 출처 번호는 사전 주입 웹검색 출처 뒤로 이어 붙는다.
+        const turnContexts = await collectTurnContexts({
+            userId: extWs._authenticatedUserId ?? undefined,
+            sessionId: validSessionId,
+            message: rawMessage,
+            userLang,
+            sourceOffset: injectedSources?.length ?? 0,
+        });
+
         // messageId 생성 (WS 고유: 토큰 스트리밍에 사용) — 같은 clientRequestId 재전송이면 이전 messageId 로 done 만 다시 보낸다(멱등 140)
         const messageId = crypto.randomUUID
             ? crypto.randomUUID()
             : `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const { clientRequestId, priorMessageId } = claimClientRequest(extWs._authenticatedUserId ? `u:${extWs._authenticatedUserId}` : `a:${anonSessionId ?? ''}`, msg.clientRequestId, messageId);
         if (priorMessageId) { out({ type: 'done', messageId: priorMessageId, deduplicated: true, metrics: { tokensPerSec: '0.00', tokenCount: 0 } }); return; }
-        emitSearchSources(out, messageId, injectedSources); // 사전 주입 검색 출처(F19.4)
+        const turnStartSources = [...(injectedSources ?? []), ...turnContexts.sources]; // 도구 출처는 이 뒤 번호로 이어 붙는다
+        emitSearchSources(out, messageId, turnStartSources); // 사전 주입 검색·통합 출처(F19.4)
 
         // 토큰 생성 메트릭 추적 (tokenCount, partialAssistantResponse 는 catch 접근을 위해 try 외부 선언)
         tokenCount = 0;
@@ -303,7 +314,8 @@ export async function handleChatMessage(
             images: pdfVision.images.length > 0 ? [...(images ?? []), ...pdfVision.images] : images,
             sessionId: validSessionId,
             webSearchContext,
-            fileContext: (effectiveAttachContext + pdfVision.note) || undefined,
+            fileContext: [effectiveAttachContext + pdfVision.note, turnContexts.contextBlock].filter(Boolean).join('\n\n') || undefined,
+            sourceNumberBase: turnStartSources.length || undefined,
             ...(mediaFiles.length > 0 ? { mediaFiles } : {}),
             modes: activeModes,
             imageMode: msg.imageMode === true,
@@ -343,6 +355,7 @@ export async function handleChatMessage(
             },
             format: msg.format as import('../llm').FormatOption,
             onAgentSelected: (agent) => out({ type: 'agent_selected', agent }),
+            onServedModel: createServedModelEmitter(out), // 실제 응답 모델 — 바뀔 때만(폴백 시 재발행)
             // 진행 이벤트의 type 은 그 모드가 정한다(클라이언트의 모드 UI 가 구독하는 이름)
             onModeProgress: (modeId, progress) => {
                 const mode = getChatModes().find((m) => m.id === modeId);
@@ -355,7 +368,7 @@ export async function handleChatMessage(
             // MCP tool 호출 결과의 resource content 를 frontend 로 emit
             // (예: create_skill → openmake://skill-draft/{id} → chat.js 가 인라인 카드 렌더)
             onMcpToolResult: (event) => {
-                emitSearchSources(out, messageId, event.sources); // web_search 도구 출처(F19.4)
+                emitSearchSources(out, messageId, [...turnStartSources, ...(event.sources ?? [])]); // web_search 도구 출처(F19.4)
                 if (!event.resources.length) return;
                 out({
                     type: 'mcp_tool_result',

@@ -6,6 +6,7 @@ import { toBcp47 } from "@/i18n/config";
 import { RefreshCw } from "lucide-react";
 import {
   PageHeader,
+  PageBody,
   StatCard,
   Card,
   CardHeader,
@@ -357,7 +358,7 @@ export default function AdminMetricsPage() {
       />
       <AdminTabs />
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <PageBody>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {/* CPU·메모리는 실 시스템 지표. 요청률/에러율 타일과 24h 요청률 차트는 백엔드 시계열이
               없어 "—"·사인파 목업이었으므로 제거 — 소스가 생기면 그때 되살린다. */}
@@ -867,7 +868,7 @@ export default function AdminMetricsPage() {
             </CardContent>
           </Card>
         )}
-      </div>
+      </PageBody>
     </>
   );
 }

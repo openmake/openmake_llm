@@ -8,6 +8,9 @@
 import { z } from 'zod';
 import { secureTextSchema } from './security.schema';
 import { AGENT_TASK_LIMITS, FILE_ATTACH_LIMITS } from '../config/runtime-limits';
+import { SCHEMA_LIMITS } from '../config/http-data-limits';
+
+const { agentTask: AT } = SCHEMA_LIMITS;
 
 /**
  * 작업 입력 첨부 파일 — 채팅 WS files[](WsAttachedFile) 와 동일 계약.
@@ -15,9 +18,9 @@ import { AGENT_TASK_LIMITS, FILE_ATTACH_LIMITS } from '../config/runtime-limits'
  * (라우트가 doc-extractor 로 content 추출 후 폐기). 캡은 채팅 첨부와 동일 상수 재사용.
  */
 const taskInputFileSchema = z.object({
-    id: z.string().max(100).optional(),
+    id: z.string().max(AT.FILE_ID_MAX).optional(),
     name: z.string().min(1).max(FILE_ATTACH_LIMITS.MAX_NAME_LENGTH),
-    type: z.string().max(100).optional(),
+    type: z.string().max(AT.FILE_TYPE_MAX).optional(),
     content: z.string().max(FILE_ATTACH_LIMITS.MAX_CHARS_PER_FILE).optional(),
     // 전송 캡은 요청 body 상한과 정합(base64 문자열은 body 보다 클 수 없음) — 텍스트 추출
     // 가능 여부는 DOC_EXTRACT_LIMITS.MAX_BYTES_PER_FILE 가 별도 결정(초과 시 추출만 생략,
@@ -36,7 +39,7 @@ const taskInputFileSchema = z.object({
  */
 export const chunkedUploadInitSchema = z.strictObject({
     name: z.string().min(1).max(FILE_ATTACH_LIMITS.MAX_NAME_LENGTH),
-    type: z.string().max(100).optional(),
+    type: z.string().max(AT.FILE_TYPE_MAX).optional(),
     size: z.number().int().positive().max(AGENT_TASK_LIMITS.REQUEST_BODY_MAX_BYTES),
     totalChunks: z.number().int().min(1).max(AGENT_TASK_LIMITS.CHUNK_MAX_COUNT),
 });
@@ -60,10 +63,10 @@ export const createAgentTaskSchema = z.strictObject({
     // Cowork D1a: 실행 백엔드 — 'local' 은 LOCAL_EXECUTOR_ENABLED + 디바이스 연결 필요(라우트가 검증).
     executor: z.enum(['sandbox', 'local']).optional(),
     // 다중 디바이스(101): 로컬 실행 대상 브리지 디바이스. 미지정은 최근 접속 디바이스 폴백.
-    deviceId: z.string().min(1).max(64).optional(),
+    deviceId: z.string().min(1).max(AT.DEVICE_ID_MAX).optional(),
     // 폴더 선택(102): 연결 루트 기준 상대경로 — deviceId 지정 시에만 유효, 디바이스가 folders
     // 열거로 보고한 값만 라우트가 통과시킨다(세션 캐시 검증). 형식만 여기서 차단.
-    folderRel: z.string().min(1).max(512)
+    folderRel: z.string().min(1).max(AT.FOLDER_REL_MAX)
         .refine((v) => !v.startsWith('/') && !v.includes('\\') && !v.includes('\0')
             && v.split('/').every((seg) => seg !== '' && seg !== '.' && seg !== '..'),
             { error: 'folderRel 은 루트 기준 상대경로여야 합니다 (선행 /·빈 세그먼트·.. 금지)' })
@@ -95,7 +98,7 @@ export type CreateAgentTaskInput = z.infer<typeof createAgentTaskSchema>;
 export const executeAgentTaskSchema = z.strictObject({
     approvalPolicy: z.enum(['all', 'high-risk', 'none']).optional(),
     /** 이 실행에서 쓸 skill_id 목록 — 미지정이면 전체 활성 스킬. */
-    allowedSkills: z.array(z.string().min(1).max(200)).max(AGENT_TASK_LIMITS.EXECUTE_MAX_ALLOWED_SKILLS).optional(),
+    allowedSkills: z.array(z.string().min(1).max(AT.ALLOWED_SKILL_MAX)).max(AGENT_TASK_LIMITS.EXECUTE_MAX_ALLOWED_SKILLS).optional(),
     /** 큐 우선순위(131) — 정수만 받고 범위는 라우트가 역할로 조정(관리자만 0 초과). 큐 OFF 면 기록만 된다. */
     priority: z.number().int().optional(),
 });
@@ -108,8 +111,8 @@ export type ExecuteAgentTaskInput = z.infer<typeof executeAgentTaskSchema>;
  */
 export const createAgentTaskScheduleSchema = z.object({
     goal: secureTextSchema({ minLength: 1, maxLength: AGENT_TASK_LIMITS.GOAL_MAX_CHARS, fieldName: 'goal', allowHtmlLikeContent: true, detectMaliciousPatterns: false, preserveWhitespace: true }),
-    cron: z.string().min(1).max(120).optional(),
-    intervalSeconds: z.number().int().min(AGENT_TASK_LIMITS.SCHEDULE_MIN_INTERVAL_SEC).max(365 * 24 * 3600).optional(),
+    cron: z.string().min(1).max(AT.CRON_MAX).optional(),
+    intervalSeconds: z.number().int().min(AGENT_TASK_LIMITS.SCHEDULE_MIN_INTERVAL_SEC).max(AT.INTERVAL_SECONDS_MAX).optional(),
     maxTurns: z.number().int().min(1).max(AGENT_TASK_LIMITS.MAX_TURNS_CEILING).optional(),
     /** 생성 직후 활성 여부 — 미지정이면 활성(종전 동작). false 를 보내면 꺼진 채로 만든다. */
     enabled: z.boolean().optional(),
@@ -120,8 +123,8 @@ export const createAgentTaskScheduleSchema = z.object({
 /** 스케줄 부분 수정 스키마 — 제공된 필드만 갱신. */
 export const updateAgentTaskScheduleSchema = z.object({
     goal: secureTextSchema({ minLength: 1, maxLength: AGENT_TASK_LIMITS.GOAL_MAX_CHARS, fieldName: 'goal', allowHtmlLikeContent: true, detectMaliciousPatterns: false, preserveWhitespace: true }).optional(),
-    cron: z.string().min(1).max(120).nullable().optional(),
-    intervalSeconds: z.number().int().min(AGENT_TASK_LIMITS.SCHEDULE_MIN_INTERVAL_SEC).max(365 * 24 * 3600).nullable().optional(),
+    cron: z.string().min(1).max(AT.CRON_MAX).nullable().optional(),
+    intervalSeconds: z.number().int().min(AGENT_TASK_LIMITS.SCHEDULE_MIN_INTERVAL_SEC).max(AT.INTERVAL_SECONDS_MAX).nullable().optional(),
     maxTurns: z.number().int().min(1).max(AGENT_TASK_LIMITS.MAX_TURNS_CEILING).optional(),
     enabled: z.boolean().optional(),
 });
@@ -131,16 +134,16 @@ export type UpdateAgentTaskScheduleInput = z.infer<typeof updateAgentTaskSchedul
 
 /** 템플릿 파라미터 정의(6-1) — {{name}} 자리 치환. */
 const templateParamSchema = z.object({
-    name: z.string().min(1).max(50).regex(/^[A-Za-z0-9_가-힣-]+$/, '파라미터 이름은 영숫자·한글·_·- 만 허용'),
-    description: z.string().max(200).optional(),
-    default: z.string().max(500).optional(),
+    name: z.string().min(1).max(AT.PARAM_NAME_MAX).regex(/^[A-Za-z0-9_가-힣-]+$/, '파라미터 이름은 영숫자·한글·_·- 만 허용'),
+    description: z.string().max(AT.PARAM_DESCRIPTION_MAX).optional(),
+    default: z.string().max(AT.PARAM_DEFAULT_MAX).optional(),
 });
 
 /** 작업 템플릿 생성 스키마(6-1). goal_template 은 secureText(HTML 태그 금지 등) 적용. */
 export const createAgentTaskTemplateSchema = z.object({
-    name: z.string().min(1).max(100),
+    name: z.string().min(1).max(AT.TEMPLATE_NAME_MAX),
     goalTemplate: secureTextSchema({ minLength: 1, maxLength: AGENT_TASK_LIMITS.GOAL_MAX_CHARS, fieldName: 'goalTemplate', allowHtmlLikeContent: true, detectMaliciousPatterns: false, preserveWhitespace: true }),
-    params: z.array(templateParamSchema).max(10).optional(),
+    params: z.array(templateParamSchema).max(AT.PARAMS_COUNT_MAX).optional(),
     maxTurns: z.number().int().min(1).max(AGENT_TASK_LIMITS.MAX_TURNS_CEILING).optional(),
 });
 
@@ -148,7 +151,7 @@ export const updateAgentTaskTemplateSchema = createAgentTaskTemplateSchema.parti
 
 /** 템플릿 instantiate 입력 — 파라미터 값 맵. */
 export const instantiateTemplateSchema = z.object({
-    values: z.record(z.string(), z.string().max(2000)).optional(),
+    values: z.record(z.string(), z.string().max(AT.PARAM_VALUE_MAX)).optional(),
     /** true(기본): 생성 즉시 실행(큐 경유). false: 생성만. */
     execute: z.boolean().optional(),
 });

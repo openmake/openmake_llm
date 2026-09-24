@@ -1,0 +1,26 @@
+{
+  "id": "knowledge-runtime",
+  "name": "Knowledge",
+  "version": "1.0.0",
+  "description": "문서 기반 작업공간(Knowledge Space) — 문서 업로드·색인(pgvector)·대화 연결·근거 인용 검색",
+  "requires": {
+    "openmake": ">=1.0.0 <2.0.0"
+  },
+  "scope": "system",
+  "kind": "integration",
+  "order": 35,
+  "permissions": ["database:addon"],
+  "components": {
+    "migrations": "./migrations"
+  },
+  "entry": {
+    "runtime": "index#startKnowledgeRuntime",
+    "chatIntegration": "chat-integration#knowledgeChatIntegration",
+    "routes": [
+      {
+        "mountPath": "/api/knowledge",
+        "module": "routes#knowledgeRouter"
+      }
+    ]
+  }
+}

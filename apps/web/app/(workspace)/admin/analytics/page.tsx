@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { LineChart } from "lucide-react";
 import {
   PageHeader,
+  PageBody,
   StatCard,
   Card,
   CardHeader,
@@ -223,7 +224,7 @@ export default function AdminAnalyticsPage() {
       />
       <AdminTabs />
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <PageBody>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {/* 값은 실데이터만. 총 대화·평균 응답은 실 소스가 없어 타일 자체를 뺐다(항상 목업이었음). */}
           <StatCard label={t("stats.activeUsers")} value={liveUsers ?? "—"} />
@@ -414,7 +415,7 @@ export default function AdminAnalyticsPage() {
             </CardContent>
           </Card>
         )}
-      </div>
+      </PageBody>
     </>
   );
 }

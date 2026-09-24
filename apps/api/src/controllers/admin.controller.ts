@@ -15,6 +15,7 @@ import { success, badRequest, notFound, internalError } from '../utils/api-respo
 import { CAPACITY } from '../config/runtime-limits';
 import { validatePasswordComplexity } from '../services/AuthService';
 import { listAlertHistory, exportAlertHistoryCsv, getAlertStats, getLlmPoolStats, acknowledgeAlert } from './admin-alerts.controller';
+import { PAGINATION } from '../config/http-data-limits';
 
 const log = createLogger('AdminController');
 
@@ -81,7 +82,7 @@ class AdminController {
         try {
             const pool = getPool();
             const page = Math.max(1, parseInt(req.query.page as string) || 1);
-            const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+            const limit = Math.min(parseInt(req.query.limit as string) || PAGINATION.USERS_DEFAULT_LIMIT, PAGINATION.USERS_MAX_LIMIT);
             const offset = (page - 1) * limit;
             const startDate = req.query.startDate as string | undefined;
             const endDate = req.query.endDate as string | undefined;

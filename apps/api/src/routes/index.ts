@@ -16,6 +16,7 @@ export { toolHealthRouter } from './tool-health.routes';
 export { evaluationRunsRouter } from './evaluation-runs.routes';
 export { adminModelRolesRouter } from './admin-model-roles.routes';
 export { adminCapabilityModelsRouter } from './admin-capability-models.routes';
+export { adminModelAssignmentsRouter } from './admin-model-assignments.routes';
 export { adminSystemSettingsRouter } from './admin-system-settings.routes';
 export { adminOrganizationsRouter } from './admin-organizations.routes';
 export { organizationPoliciesRouter, adminOrganizationPoliciesRouter } from './organization-policies.routes';

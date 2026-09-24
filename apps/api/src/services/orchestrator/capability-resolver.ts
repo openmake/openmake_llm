@@ -14,7 +14,7 @@
  *  - 외부: `LLM_GATEWAY_PROVIDERS` 편입 provider 만. model = `<provider>/<model>`,
  *    Authorization = master, `x-api-key` = 사용자/서버 키 (openai-compat-provider 의 헤더 계약과 동일)
  *  - direct 전용 provider(chatgpt OAuth 등)는 배정 자체를 거부한다.
- *  - 예외: jobs-v1 영상(config/capabilities VIDEO_PROVIDER_ADAPTERS — hasa)은 게이트웨이가 프록시하지
+ *  - 예외: jobs-v1 영상(video-runtime 이 describeProviderSupport().direct 로 선언 — hasa)은 게이트웨이가 프록시하지
  *    못하는 커스텀 API 라 사용자 키로 provider 직결(`transport: 'direct'`, 도구가 SSRF 고정 fetch 사용).
  *  - 로컬 음악 생성(ACE-Step)은 2026-09-23 부터 다른 로컬 capability 와 같은 LiteLLM 경로다(전용 주소 없음).
  *    다만 로컬 전용 모델이라 외부 모델 배정은 배정 단계에서 거절한다.
@@ -28,7 +28,6 @@ import {
     CAPABILITY_DEFAULTS,
     CAPABILITY_ENDPOINT,
     CAPABILITY_LIMITS,
-    videoAdapterFor,
     providerParamDefaults,
     type Capability,
 } from '../../config/capabilities';
@@ -77,6 +76,8 @@ export interface CapabilityTarget {
     costOwner: 'user' | 'server' | 'local';
     /** 'gateway'(기본 — 운영자가 정한 주소로 일반 fetch, 로컬 음악 서버 포함) | 'direct' — jobs-v1 영상처럼 사용자 키로 provider 직결(SSRF 고정 fetch) */
     transport: 'gateway' | 'direct';
+    /** costOwner=server 일 때 그 키의 상한 — preflight 가 원자적 예약(P04)에 쓴다 */
+    serverBudget?: { dailyTokenLimit: number; monthlyTokenLimit: number | null };
 }
 
 /** 배정 시점 검증 — 저장 전에 같은 규칙을 적용해 해석 시점 실패를 앞당긴다 */
@@ -86,8 +87,13 @@ export async function validateCapabilityAssignment(
     deps: { userKeys?: ExternalKeysRepository; serverKeys?: ServerExternalKeysRepository } = {},
     capability?: Capability,
 ): Promise<string | null> {
-    if (capability === 'music.generate' && isExternalFullId(fullId)) {
-        return `음악 생성은 로컬 음악 서버(ACE-Step)만 지원합니다 — '${fullId}' 는 배정할 수 없습니다`;
+    // 소유 handler 의 provider 지원 판정(P06 `describeProviderSupport`) — 기능별 제약은 그 add-on 이 선언한다
+    if (capability) {
+        const { getCapabilityRegistry } = await import('../../runtime-ports/capability-runtime');
+        const support = getCapabilityRegistry().get(capability)?.handler.describeProviderSupport?.({
+            fullId, providerId: isExternalFullId(fullId) ? splitFullId(fullId).providerId : 'local-llm', isExternal: isExternalFullId(fullId),
+        });
+        if (support && !support.supported) return support.reason;
     }
     if (!isExternalFullId(fullId)) {
         return toLocalModelTag(fullId) ? null : `해석 불가한 모델 id: '${fullId}'`;
@@ -135,6 +141,13 @@ async function getGlobalRow(repo: CapabilityModelsRepository, capability: Capabi
     return globalCache.map.get(capability) ?? null;
 }
 
+/** capability 소유 handler 가 선언한 direct transport(P08) — 없으면 게이트웨이 경로 */
+async function directTransportFor(capability: Capability, fullId: string, providerId: string): Promise<{ endpoint: string } | null> {
+    const { getCapabilityRegistry } = await import('../../runtime-ports/capability-runtime');
+    const verdict = getCapabilityRegistry().get(capability)?.handler.describeProviderSupport?.({ fullId, providerId, isExternal: true });
+    return verdict?.supported && verdict.direct ? verdict.direct : null;
+}
+
 function splitFullId(fullId: string): { providerId: string; modelId: string } {
     const idx = fullId.indexOf(':');
     return { providerId: fullId.slice(0, idx), modelId: fullId.slice(idx + 1) };
@@ -174,6 +187,7 @@ async function externalTarget(
 
     let apiKey: string | null = null;
     let userBaseUrl: string | null = null;
+    let serverBudget: CapabilityTarget['serverBudget'];
     if (source === 'user' && userId) {
         // 실행 직전 BYOK 상태 검증 — 누락·비활성·OAuth(direct 전용) 는 각각 명시 실패. 전역/서버 키로 전환하지 않는다.
         const keyRow = await deps.userKeys.getByUserAndProvider(userId, providerId);
@@ -191,6 +205,7 @@ async function externalTarget(
         if (budget) throw new CapabilityUnavailableError(budget, 'CAPABILITY_KEY_BUDGET');
         apiKey = await deps.serverKeys.decryptKey(providerId);
         userBaseUrl = row.baseUrl ?? null;
+        serverBudget = { dailyTokenLimit: row.dailyTokenLimit, monthlyTokenLimit: row.monthlyTokenLimit };
     }
     const costOwner: CapabilityTarget['costOwner'] = source === 'user' ? 'user' : 'server';
     if (!apiKey) {
@@ -199,22 +214,22 @@ async function externalTarget(
             'CAPABILITY_KEY_MISSING',
         );
     }
-    if (capability === 'video.generate' && videoAdapterFor(providerId).kind === 'jobs-v1') {
-        // 게이트웨이가 프록시 못 하는 커스텀 영상 API — 사용자 키로 provider 직결(도구는 SSRF 고정 fetch 사용)
-        const adapter = videoAdapterFor(providerId);
+    const direct = await directTransportFor(capability, fullId, providerId);
+    if (direct) {
+        // 게이트웨이가 프록시 못 하는 provider API(소유 handler 가 선언) — 사용자/서버 키로 provider 직결(SSRF 고정 fetch)
         return {
             capability, fullId, providerId, model: modelId,
             baseUrl: (userBaseUrl || entry.defaultBaseUrl).replace(/\/+$/, ''),
-            endpoint: adapter.submitPath ?? CAPABILITY_ENDPOINT[capability],
+            endpoint: direct.endpoint,
             headers: { Authorization: `Bearer ${apiKey}` },
-            params, source, costOwner, transport: 'direct',
+            params, source, costOwner, transport: 'direct', ...(serverBudget ? { serverBudget } : {}),
         };
     }
     return {
         capability, fullId, providerId, model: `${providerId}/${modelId}`,
         baseUrl: gatewayBase(), endpoint: CAPABILITY_ENDPOINT[capability],
         headers: { Authorization: `Bearer ${cfg.llmApiKey}`, 'x-api-key': apiKey },
-        params, source, costOwner, transport: 'gateway',
+        params, source, costOwner, transport: 'gateway', ...(serverBudget ? { serverBudget } : {}),
     };
 }
 
@@ -275,7 +290,7 @@ export async function resolveCapabilityTarget(
     if (fallback) return localTarget(capability, fallback, {}, 'default');
 
     throw new CapabilityUnavailableError(
-        `${capability} 모델이 배정되어 있지 않습니다. 설정 → 모델 & 응답 → capability에서 배정하세요.`,
+        `${capability} 모델이 배정되어 있지 않습니다. 설정 → 모델 & 응답 → 모델 배정에서 배정하세요.`,
         'CAPABILITY_UNASSIGNED',
     );
 }

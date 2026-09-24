@@ -9,7 +9,7 @@
  *  - `cancelled`: 사용자 취소 → 호출부가 종전 경로도 시작하지 않는다
  * 셰도우(orchestrator_runs)는 fire-and-forget.
  */
-import { ORCHESTRATOR, CAPABILITY_LABELS_KO, VIDEO_JOB_FOLLOWUP_PATTERN, VIDEO_JOB_RESULT_INTENT_PATTERN, VIDEO_JOB_NOT_FOLLOWUP_PATTERN, MEDIA_DURATION_PATTERN, VIDEO_ASPECT_PATTERNS, VIDEO_GEN_ASPECT_SIZES, type Capability } from '../../config/capabilities';
+import { ORCHESTRATOR, CAPABILITY_LABELS_KO, JOB_RESULT_INTENT_PATTERN, JOB_NOT_FOLLOWUP_PATTERN, MEDIA_DURATION_PATTERN, type Capability } from '../../config/capabilities';
 import { getPool } from '../../data/models/unified-database';
 import { OrchestratorRunsRepository } from '../../data/repositories/orchestrator-runs-repo';
 import type { ChatMessageRequest } from '../chat-service-types';
@@ -17,10 +17,13 @@ import { planRequest } from './planner';
 import { validatePlan, type ValidatedPlan } from './plan-schema';
 import { executePlan } from './executor';
 import { preflightPlan } from './preflight';
+import { admitCapability, ADMISSION_LABEL } from '../../capability-contract/admission';
+import { getCapabilityRegistry } from '../../runtime-ports/capability-runtime';
 import { OrchestratorJobsRepository } from '../../data/repositories/orchestrator-jobs-repo';
 import { ExternalKeysRepository } from '../../data/repositories/external-keys-repo';
 import { ServerExternalKeysRepository } from '../../data/repositories/server-external-keys-repo';
-import { recordServerKeyUsage } from '../server-key-quota';
+import { recordServerKeyUsage, settleServerKeyReservation } from '../server-key-quota';
+import type { PreflightReservations } from './preflight';
 import { recordLlmCost, recordCost } from '../cost/cost-ledger-service';
 import type { CostKind, CostUnit } from '../../config/cost-kinds';
 
@@ -31,7 +34,7 @@ const UNIT_COST_KIND: Partial<Record<'images' | 'chars' | 'audio_bytes' | 'video
     video_seconds: { kind: 'media.video.generate', unit: 'second' },
 };
 import type { CapabilityTarget } from './capability-resolver';
-import { recordUserUsage } from '../../llm/user-quota';
+import { recordUserUsage, settleUserQuota } from '../../llm/user-quota';
 import { isExternalFullId } from '../../config/model-roles';
 import { kindFromMime, mimeFromName } from './media-io';
 import type { PlannerAttachmentMeta } from '../../prompts/orchestrator-planner';
@@ -107,28 +110,34 @@ async function collectPendingJobs(userId: string | undefined, sessionId: string 
 }
 
 /**
- * 영상 job 첨부가 있고 사용자가 그 영상을 묻는 발화일 때 Planner 계획을 재조회로 보정한다. 그 외엔 계획 그대로.
+ * 공통 Job 참조 보정(P08) — job 첨부가 있고 사용자가 **그 결과**를 묻는 발화일 때 Planner 계획을 재조회로 보정한다. 그 외엔 계획 그대로.
+ * 주제어는 job capability 소유 handler 의 `jobFollowupTopic`(영상이면 "영상·video" 등), 결과 의도·새 생성 제외 패턴은 언어 공통.
  * - `simple` 을 냈으면 가장 최근 job 을 재조회하는 1작업 multi 로 바꾼다(저장본은 실행기가 즉시 반환 — provider 호출 없음).
- * - `multi` 로 video.generate 를 골랐는데 job 첨부 id 를 빠뜨렸으면 그 작업에 job 을 붙인다 — 그대로 두면 지시문으로 **새 영상을
+ * - `multi` 로 그 capability 를 골랐는데 job 첨부 id 를 빠뜨렸으면 그 작업에 job 을 붙인다 — 그대로 두면 지시문으로 **새 작업을
  *   제출**한다(2026-09-15 실측: hasa exaone-4.0-32b planner 가 "아까 만든 영상 다시 보여줘" 에 attachments:[] 를 냈다).
  */
 export function coerceJobFollowup(plan: ValidatedPlan, attachments: Map<string, OrchestratorAttachment>, message: string): ValidatedPlan {
     // 보정은 "기존 결과 조회" 의도에만 — 새 생성("만들어줘")·설명("압축 원리")·다른 대화의 job 은 Planner 판단을 그대로 둔다(Codex 검토 2)
-    if (!VIDEO_JOB_FOLLOWUP_PATTERN.test(message)) return plan;
-    if (!VIDEO_JOB_RESULT_INTENT_PATTERN.test(message) || VIDEO_JOB_NOT_FOLLOWUP_PATTERN.test(message)) return plan;
-    const job = [...attachments.values()].find((a) => a.kind === 'job' && a.job?.capability === 'video.generate' && a.job.sameConversation !== false);
-    if (!job) return plan;
+    if (!JOB_RESULT_INTENT_PATTERN.test(message) || JOB_NOT_FOLLOWUP_PATTERN.test(message)) return plan;
+    const registry = getCapabilityRegistry();
+    const job = [...attachments.values()].find((a) => {
+        if (a.kind !== 'job' || !a.job || a.job.sameConversation === false) return false;
+        const topic = registry.get(a.job.capability)?.handler.jobFollowupTopic;
+        return !!topic && topic.test(message);
+    });
+    if (!job?.job) return plan;
+    const capability = job.job.capability;
     if (plan.complexity !== 'simple') {
-        const orphan = plan.tasks.filter((t) => t.capability === 'video.generate' && t.attachments.length === 0 && t.refs.length === 0);
+        const orphan = plan.tasks.filter((t) => t.capability === capability && t.attachments.length === 0 && t.refs.length === 0);
         if (orphan.length === 1) {
             orphan[0].attachments = [job.id];
-            logger.info(`[Orchestrator] video.generate 에 빠진 영상 job 첨부 보정 (${job.job?.jobId})`);
+            logger.info(`[Orchestrator] ${capability} 에 빠진 job 첨부 보정 (${job.job.jobId})`);
         }
         return plan;
     }
-    const v = validatePlan({ complexity: 'multi', language: plan.language, synthesis: true, tasks: [{ id: 't1', capability: 'video.generate', input: { instruction: message.slice(0, 400), attachments: [job.id] } }] }, new Set(attachments.keys()));
+    const v = validatePlan({ complexity: 'multi', language: plan.language, synthesis: true, tasks: [{ id: 't1', capability, input: { instruction: message.slice(0, 400), attachments: [job.id] } }] }, new Set(attachments.keys()));
     if (!v.ok) return plan;
-    logger.info(`[Orchestrator] simple → 영상 job 재조회로 보정 (${job.job?.jobId})`);
+    logger.info(`[Orchestrator] simple → ${capability} job 재조회로 보정 (${job.job.jobId})`);
     return v.plan;
 }
 
@@ -141,28 +150,17 @@ export function statedDurationSec(message: string): number | undefined {
 }
 
 /**
- * 사용자 원문에 적힌 영상 길이·비율, 음악 길이를 새 생성 작업의 인자로 확정한다 — Planner 가 빠뜨리거나 다르게 적어도 원문이 우선.
- * 원문에 없으면 계획값(직전 대화에서 추론한 값일 수 있다)을 그대로 둔다. job 재조회 작업은 새로 제출하지 않으므로 건드리지 않는다.
- * 길이 상한은 각 실행기가 자른다(음악 `musicDuration`).
+ * capability 소유자의 계획 인자 정규화 hook(`normalizePlanInput`, P06) — 원문 우선 보정 등 기능별 규칙은 Base 가 아니라 그 handler 가 갖는다.
+ * 순수 함수라 실패는 그 작업만 원래대로 둔다.
  */
-export function applyStatedVideoParams(plan: ValidatedPlan, message: string): ValidatedPlan {
-    const seconds = statedDurationSec(message);
-    const aspect = VIDEO_ASPECT_PATTERNS.find(([, re]) => re.test(message))?.[0];
-    if (seconds === undefined && !aspect) return plan;
-    for (const t of plan.tasks) {
-        if (t.capability === 'music.generate' && seconds !== undefined) {
-            const before = String(t.extra.duration ?? '-');
-            t.extra.duration = String(seconds);
-            if (t.extra.duration !== before) logger.info(`[Orchestrator] ${t.id} 음악 길이를 원문 기준으로 보정 ${before} → ${t.extra.duration}`);
-            continue;
-        }
-        if (t.capability !== 'video.generate' || t.attachments.length > 0) continue;
-        const before = `${String(t.extra.seconds ?? '-')}/${String(t.extra.size ?? '-')}`;
-        if (seconds !== undefined) t.extra.seconds = String(seconds);
-        if (aspect) t.extra.size = VIDEO_GEN_ASPECT_SIZES[aspect];
-        const after = `${String(t.extra.seconds ?? '-')}/${String(t.extra.size ?? '-')}`;
-        if (after !== before) logger.info(`[Orchestrator] ${t.id} 영상 인자를 원문 기준으로 보정 ${before} → ${after}`);
-    }
+export function applyPlanInputHooks(plan: ValidatedPlan, message: string): ValidatedPlan {
+    const registry = getCapabilityRegistry();
+    plan.tasks = plan.tasks.map((t) => {
+        const hook = registry.get(t.capability)?.handler.normalizePlanInput;
+        if (!hook) return t;
+        try { return hook(t, message); } catch (err) { logger.warn(`[Orchestrator] ${t.id} 계획 인자 hook 실패(무시): ${err instanceof Error ? err.message : String(err)}`); return t; }
+    });
+    plan.levels = plan.levels.map((level) => level.map((t) => plan.tasks.find((x) => x.id === t.id) ?? t));
     return plan;
 }
 
@@ -203,10 +201,19 @@ function fallbackNote(lang: string, reason: string): string {
  * 사용량 관측 — 외부 BYOK 는 기존 external_provider_usage(비용 대시보드), 로컬은 per-user 토큰 쿼터에 누적.
  * provider 가 usage 를 안 주면 기록하지 않는다(0 으로 간주 금지). 비토큰 단위(이미지 수 등)는 셰도우 task_results 에만.
  */
-export function recordUsage(userId: string | undefined, results: TaskResult[], targets?: Map<string, CapabilityTarget>): void {
+export function recordUsage(userId: string | undefined, results: TaskResult[], targets?: Map<string, CapabilityTarget>, reservations?: PreflightReservations): void {
     if (!userId) return;
     const now = Date.now();
     let localTokens = 0;
+    // 예약(P04) 정산 — 서버 키: usage 를 준 작업만 실측으로 보정(없으면 예약분 유지 = unknown 을 무료로 정산하지 않는다)
+    for (const r of results) {
+        const res = reservations?.serverKeys.get(r.taskId);
+        if (!res) continue;
+        const u = r.usage;
+        const tokens = u && (u.promptTokens !== undefined || u.completionTokens !== undefined) ? (u.promptTokens ?? 0) + (u.completionTokens ?? 0) : null;
+        // 전송 전 실패(skipped·승인 거절)는 전액 환불, 응답 유실·usage 없음은 예약 유지(T25)
+        void settleServerKeyReservation(res, r.status === 'skipped' || (r.status === 'failed' && /^\[(disabled|state_unknown|unapproved|expired|not_ready|unassigned|quota|budget|input)\]/.test(r.text)) ? 0 : tokens).catch(() => undefined);
+    }
     for (const r of results) {
         const u = r.usage;
         // 비토큰 산출 단위(이미지 장수·합성 글자·영상 초) — 원장(F25 PR-4). 단가는 cost_rates(kind×모델), 없으면 0 으로 기록만.
@@ -225,7 +232,8 @@ export function recordUsage(userId: string | undefined, results: TaskResult[], t
             recordLlmCost({ userId, model: r.model, external: true, costOwner: owner, promptTokens: inTok, completionTokens: outTok, ctx: { feature: `orchestrator:${r.capability}` } });
             if (owner === 'server') {
                 void new ServerExternalKeysRepository(getPool()).recordUsage({ providerId, modelId, role: `capability:${r.capability}`, callerUserId: userId, inputTokens: inTok, outputTokens: outTok });
-                void recordServerKeyUsage(providerId, inTok + outTok, now).catch(() => undefined);
+                // 예약이 있으면 위에서 정산했다 — 이중 계상 금지
+                if (!reservations?.serverKeys.has(r.taskId)) void recordServerKeyUsage(providerId, inTok + outTok, now).catch(() => undefined);
             } else {
                 void new ExternalKeysRepository(getPool()).recordUsage({ userId, providerId, modelId, inputTokens: inTok, outputTokens: outTok, durationMs: r.ms }).catch(() => undefined);
             }
@@ -234,7 +242,8 @@ export function recordUsage(userId: string | undefined, results: TaskResult[], t
             recordLlmCost({ userId, model: r.model, external: false, costOwner: 'user', promptTokens: inTok, completionTokens: outTok, ctx: { feature: `orchestrator:${r.capability}` } });
         }
     }
-    if (localTokens > 0) void recordUserUsage(userId, localTokens, now).catch(() => undefined);
+    if (reservations?.user) void settleUserQuota(reservations.user, localTokens).catch(() => undefined);
+    else if (localTokens > 0) void recordUserUsage(userId, localTokens, now).catch(() => undefined);
 }
 
 interface RunOrchestratorInput {
@@ -270,7 +279,7 @@ export async function runOrchestrator(input: RunOrchestratorInput): Promise<Orch
         record({ requestId: input.requestId, userId, plannerModel: planned.model, plannerMs: planned.ms, plannerOk: false, plannerError: planned.error, outcome: 'fallback' });
         return { mode: 'fallback', contextBlock: fallbackNote(lang, planned.error ?? 'unknown'), mediaMarkdowns: [], plannerMs: planned.ms };
     }
-    const plan = applyStatedVideoParams(coerceJobFollowup(planned.plan, attachments, req.message ?? ''), req.message ?? '');
+    const plan = applyPlanInputHooks(coerceJobFollowup(planned.plan, attachments, req.message ?? ''), req.message ?? '');
     onProgress?.({ type: 'orchestrator_plan', complexity: plan.complexity, tasks: plan.tasks.map((t) => ({ id: t.id, capability: t.capability, instruction: t.instruction.slice(0, 160) })) });
 
     if (plan.complexity === 'simple') {
@@ -284,13 +293,14 @@ export async function runOrchestrator(input: RunOrchestratorInput): Promise<Orch
     // 실행 승인 경계 — 배정·키·어댑터·입력 종류·로컬 쿼터를 실행 전에 확정(거절 작업은 호출·과금 없음). 승인된 대상은 그대로 실행 대상
     const pre = await preflightPlan(plan, ctx);
     ctx.targets = pre.targets;
+    ctx.handles = pre.handles;
     for (const [id, reason] of pre.rejected) {
         const t = plan.tasks.find((x) => x.id === id)!;
         ctx.results.set(id, { taskId: id, capability: t.capability, ok: false, status: 'failed', text: reason, media: [], ms: 0, error: reason });
     }
     const summary = await executePlan(plan, ctx);
     const media: TaskMedia[] = summary.results.filter((r) => r.ok).flatMap((r) => r.media);
-    recordUsage(userId, summary.results, pre.targets);
+    recordUsage(userId, summary.results, pre.targets, pre.reservations);
     onProgress?.({ type: 'orchestrator_status', phase: summary.cancelled ? 'skipped' : 'synthesizing', detail: `${summary.ok}/${summary.results.length}` });
     record({
         requestId: input.requestId, userId, plannerModel: planned.model, plannerMs: planned.ms, plannerOk: true, complexity: 'multi', plan,
@@ -308,6 +318,9 @@ export async function runOrchestrator(input: RunOrchestratorInput): Promise<Orch
  * 이미지 모드 토글처럼 사용자가 명시한 단일 작업용 — Planner 만 생략하고 실행 정책은 자동 경로와 같다(Codex 검토 5).
  */
 export async function runSingleCapabilityTask(input: { capability: Capability; instruction: string; userId?: string; lang: string; sessionId?: string; signal?: AbortSignal }): Promise<TaskResult> {
+    // 승인 판정을 먼저 — Registry 에 없으면(소유 add-on OFF) 계획 검증 이전에 같은 사유([disabled])로 거절한다(T23)
+    const admission = await admitCapability(input.capability);
+    if (!admission.ok) throw new Error(`[${ADMISSION_LABEL[admission.code]}] ${admission.reason}`);
     const v = validatePlan({ complexity: 'multi', synthesis: false, tasks: [{ id: 't1', capability: input.capability, input: { instruction: input.instruction } }] }, new Set());
     if (!v.ok) throw new Error(`계획 검증 실패: ${v.reason}`);
     const ctx: ExecContext = { userId: input.userId, lang: input.lang, userMessage: input.instruction, attachments: new Map(), results: new Map(), signal: input.signal, sessionId: input.sessionId };
@@ -315,8 +328,9 @@ export async function runSingleCapabilityTask(input: { capability: Capability; i
     const rejected = pre.rejected.get('t1');
     if (rejected) throw new Error(rejected);
     ctx.targets = pre.targets;
+    ctx.handles = pre.handles;
     const summary = await executePlan(v.plan, ctx);
-    recordUsage(input.userId, summary.results, pre.targets);
+    recordUsage(input.userId, summary.results, pre.targets, pre.reservations);
     const r = summary.results[0];
     if (!r) throw new Error('실행 결과가 없습니다');
     return r;

@@ -13,6 +13,7 @@
  */
 
 import { createLogger } from '../utils/logger';
+import { SECURITY_HOOK_LIMITS } from '../config/service-limits';
 
 const logger = createLogger('SecurityHooks');
 
@@ -161,7 +162,7 @@ export function preRequestCheck(userMessage: string): SecurityCheckResult {
                 type: 'pii',
                 severity: 'warn',
                 detail: `PII detected: ${label}`,
-                matchedPattern: match[0].substring(0, 20) + (match[0].length > 20 ? '...' : ''),
+                matchedPattern: match[0].substring(0, SECURITY_HOOK_LIMITS.PII_PREVIEW_CHARS) + (match[0].length > SECURITY_HOOK_LIMITS.PII_PREVIEW_CHARS ? '...' : ''),
             };
             violations.push(violation);
             logger.warn(`PII detected in user message: ${label}`);
@@ -218,12 +219,12 @@ export function postResponseCheck(
     // Verbatim 시스템 프롬프트 포함 여부 검사 (30자 이상 프래그먼트만)
     if (systemPromptFragments && systemPromptFragments.length > 0) {
         for (const fragment of systemPromptFragments) {
-            if (fragment.length >= 30 && response.includes(fragment)) {
+            if (fragment.length >= SECURITY_HOOK_LIMITS.VERBATIM_MIN_FRAGMENT_CHARS && response.includes(fragment)) {
                 const violation: SecurityViolation = {
                     type: 'system_prompt_leak',
                     severity: 'warn',
                     detail: `Verbatim system prompt fragment found in response`,
-                    matchedPattern: fragment.substring(0, 40) + (fragment.length > 40 ? '...' : ''),
+                    matchedPattern: fragment.substring(0, SECURITY_HOOK_LIMITS.FRAGMENT_PREVIEW_CHARS) + (fragment.length > SECURITY_HOOK_LIMITS.FRAGMENT_PREVIEW_CHARS ? '...' : ''),
                 };
                 violations.push(violation);
                 logger.warn(`Verbatim system prompt fragment leaked in response`, {

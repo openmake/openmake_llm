@@ -35,7 +35,7 @@ import { createContextBuilder } from './context';
 import { createLogger } from '../../utils/logger';
 import { resolvePromptLocale } from '../../chat/language-policy';
 import { parallelBatch } from '../../workflow/graph-engine';
-import { DISCUSSION_CONFIDENCE, DISCUSSION_CONSISTENCY, DISCUSSION_CONCURRENCY, DISCUSSION_FACTCHECK, DISCUSSION_MIN_PROPOSERS } from './config';
+import { DISCUSSION_CONFIDENCE, DISCUSSION_CONSISTENCY, DISCUSSION_CONCURRENCY, DISCUSSION_FACTCHECK, DISCUSSION_MIN_PROPOSERS, DISCUSSION_MAX_AGENTS_DEFAULT, DISCUSSION_FALLBACK_AGENTS } from './config';
 /**
  * 토론 주제 → 검색 쿼리 정규화.
  *
@@ -134,7 +134,7 @@ export function createDiscussionEngine(
 
         // 🆕 컨텍스트를 포함하여 더 정확한 에이전트 선택
         const fullContext = buildFullContext();
-        const agentLimit = maxAgents === 0 ? 20 : maxAgents;
+        const agentLimit = maxAgents === 0 ? DISCUSSION_MAX_AGENTS_DEFAULT : maxAgents;
         
         // 🆕 컨텍스트를 전달하여 에이전트 선택 정확도 향상
         const experts = await getRelatedAgentsForDiscussion(topic, agentLimit, fullContext);
@@ -144,11 +144,11 @@ export function createDiscussionEngine(
             logger.info(`컨텍스트 적용됨 (${fullContext.length}자)`);
         }
 
-        // 최소 2명 보장
-        if (experts.length < 2) {
-            const fallbackAgents = ['business-strategist', 'data-analyst', 'project-manager', 'general'];
+        // 최소 제안자 수 보장
+        if (experts.length < DISCUSSION_MIN_PROPOSERS) {
+            const fallbackAgents = DISCUSSION_FALLBACK_AGENTS;
             for (const id of fallbackAgents) {
-                if (experts.length >= 2) break;
+                if (experts.length >= DISCUSSION_MIN_PROPOSERS) break;
                 const agent = getAgentById(id);
                 if (agent && !experts.find(e => e.id === id)) {
                     experts.push(agent);

@@ -18,6 +18,7 @@ import * as crypto from 'crypto';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { createLogger } from '../../utils/logger';
+import { buildPdfVisionNote } from '../../prompts/svc-pdf-vision-note';
 import { DOC_EXTRACT_LIMITS, PDF_VISION_LIMITS } from '../../config/runtime-limits';
 import type { AttachedFileInput } from './attach-context';
 
@@ -155,8 +156,6 @@ export async function buildPdfVisionAttachment(
         }
     }
     if (images.length === 0) return EMPTY;
-    const note = '\n\n[첨부 PDF 페이지 이미지] 아래 PDF 는 본문 텍스트 추출과 별도로 앞쪽 페이지가 이미지로도 첨부되어 있다. '
-        + '표·차트·레이아웃이 필요한 판독은 이미지를 근거로 할 것.\n'
-        + noteLines.join('\n');
+    const note = buildPdfVisionNote(noteLines);
     return { images, note };
 }

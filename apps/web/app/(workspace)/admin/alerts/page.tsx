@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Bell, AlertTriangle, AlertCircle, Info, Check, ExternalLink } from "lucide-react";
 import {
   PageHeader,
+  PageBody,
   Card,
   CardHeader,
   CardTitle,
@@ -125,7 +126,7 @@ export default function AdminAlertsPage() {
       />
 
       <AdminTabs />
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <PageBody>
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card>
             <CardHeader className="flex items-center gap-2">
@@ -197,7 +198,7 @@ export default function AdminAlertsPage() {
             </CardContent>
           </Card>
         </div>
-      </div>
+      </PageBody>
     </>
   );
 }

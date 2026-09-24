@@ -85,6 +85,9 @@ function refreshOnce(): Promise<boolean> {
  */
 const PUBLIC_PATH_PREFIXES = ["/shared/"];
 
+/** 다운로드 트리거 후 Blob object URL 해제까지 대기(ms). */
+const OBJECT_URL_REVOKE_DELAY_MS = 10_000;
+
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATH_PREFIXES.some((p) => pathname.startsWith(p));
 }
@@ -158,6 +161,13 @@ async function requestBlob(endpoint: string, _isRetry = false): Promise<Blob> {
   return res.blob();
 }
 
+
+/** 본문 직렬화 — FormData(멀티파트 업로드)는 그대로 보내고(경계 헤더는 브라우저가 붙인다) 나머지는 JSON */
+function serializeBody(body: unknown): BodyInit | undefined {
+  if (body === undefined) return undefined;
+  return body instanceof FormData ? body : JSON.stringify(body);
+}
+
 export const ApiClient = {
   get: <T>(endpoint: string, options: ApiRequestOptions = {}) =>
     request<T>(endpoint, { ...options, method: "GET" }),
@@ -171,25 +181,25 @@ export const ApiClient = {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    setTimeout(() => URL.revokeObjectURL(url), OBJECT_URL_REVOKE_DELAY_MS);
   },
   post: <T>(endpoint: string, body?: unknown, options: ApiRequestOptions = {}) =>
     request<T>(endpoint, {
       ...options,
       method: "POST",
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: serializeBody(body),
     }),
   put: <T>(endpoint: string, body?: unknown, options: ApiRequestOptions = {}) =>
     request<T>(endpoint, {
       ...options,
       method: "PUT",
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: serializeBody(body),
     }),
   patch: <T>(endpoint: string, body?: unknown, options: ApiRequestOptions = {}) =>
     request<T>(endpoint, {
       ...options,
       method: "PATCH",
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: serializeBody(body),
     }),
   del: <T>(endpoint: string, options: ApiRequestOptions = {}) =>
     request<T>(endpoint, { ...options, method: "DELETE" }),

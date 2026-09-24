@@ -21,12 +21,14 @@ import {
   CardContent,
   Badge,
   PageHeader,
+  PageBody,
   Table,
   Th,
   Td,
 } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { ApiClient, ApiError } from "@/lib/api-client";
+import { COPY_FEEDBACK_RESET_MS } from "@/lib/constants/ui-limits";
 import { useEnabledWebAddons } from "@/addons/registry";
 import { DeveloperTabs } from "@/components/hub-tabs";
 
@@ -170,7 +172,7 @@ export default function ApiAccessPage() {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(tag);
-      setTimeout(() => setCopied((c) => (c === tag ? null : c)), 1500);
+      setTimeout(() => setCopied((c) => (c === tag ? null : c)), COPY_FEEDBACK_RESET_MS);
     } catch {
       /* clipboard 미허용 환경 — 무시 */
     }
@@ -183,7 +185,7 @@ export default function ApiAccessPage() {
       <PageHeader title={t("title")} description={t("subtitle")} />
       <DeveloperTabs />
 
-      <div className="mx-auto min-h-0 w-full max-w-4xl flex-1 space-y-5 overflow-y-auto px-6 py-6">
+      <PageBody className="space-y-5">
         {error && (
           <div className="flex items-center gap-2 rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">
             <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -363,7 +365,7 @@ export default function ApiAccessPage() {
             )}
           </CardContent>
         </Card>
-      </div>
+      </PageBody>
     </>
   );
 }

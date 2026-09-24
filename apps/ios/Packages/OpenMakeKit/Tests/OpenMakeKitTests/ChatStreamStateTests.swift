@@ -38,6 +38,38 @@ final class ChatStreamStateTests: XCTestCase {
         XCTAssertNil(state.errorMessage)
     }
 
+    func testServedModelTracksActualModelAndFallback() {
+        // 선택 모델이 아니라 실제로 답하는 모델 — 폴백이면 새 값으로 바뀐다
+        var state = ChatStreamState()
+        state.begin()
+        XCTAssertNil(state.servedModel)
+        state.apply(event(#"{"type":"served_model","model":"chatgpt:gpt-5.5"}"#))
+        XCTAssertEqual(state.servedModel, "chatgpt:gpt-5.5")
+        state.apply(event(#"{"type":"served_model","model":"qwen3.8-27b"}"#))
+        XCTAssertEqual(state.servedModel, "qwen3.8-27b")
+        state.begin()
+        XCTAssertNil(state.servedModel)
+    }
+
+    func testStreamResumeRestoresServedModel() {
+        var state = ChatStreamState()
+        state.begin()
+        state.apply(event(#"{"type":"stream_resume","content":"이어","finished":false,"servedModel":"qwen3.8-27b"}"#))
+        XCTAssertEqual(state.servedModel, "qwen3.8-27b")
+        XCTAssertEqual(state.streamingText, "이어")
+    }
+
+    func testOrchestratorTaskCarriesModel() {
+        var state = ChatStreamState()
+        state.begin()
+        state.apply(event(#"{"type":"system_event","payload":{"type":"orchestrator_plan","message":"","metadata":{"complexity":"multi","tasks":[{"id":"t1","capability":"image.generate"}]}}}"#))
+        XCTAssertNil(state.orchestrator?.tasks.first?.model)
+        state.apply(event(#"{"type":"system_event","payload":{"type":"orchestrator_task","message":"","metadata":{"id":"t1","capability":"image.generate","status":"running","model":"hasa:flux-2"}}}"#))
+        XCTAssertEqual(state.orchestrator?.tasks.first?.model, "hasa:flux-2")
+        state.apply(event(#"{"type":"system_event","payload":{"type":"orchestrator_task","message":"","metadata":{"id":"t1","capability":"image.generate","status":"ok","ms":1200}}}"#))
+        XCTAssertEqual(state.orchestrator?.tasks.first?.model, "hasa:flux-2")
+    }
+
     func testSessionCreatedAdoptsId() {
         var state = ChatStreamState()
         state.apply(event(#"{"type":"session_created","sessionId":"s-new"}"#))

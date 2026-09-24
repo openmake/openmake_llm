@@ -20,7 +20,7 @@
       "metrics": "메트릭",
       "alerts": "알림",
       "mcpCatalogAdmin": "MCP 카탈로그 관리",
-      "modelRolesAdmin": "역할 모델 관리",
+      "modelRolesAdmin": "모델 배정 관리",
       "systemSettingsAdmin": "시스템 설정",
       "developer": "개발자",
       "schedulesAdmin": "작업 스케줄",
@@ -419,7 +419,8 @@
         "ok": "완료",
         "failed": "실패"
       },
-      "tasksCount": "작업 {count}개"
+      "tasksCount": "작업 {count}개",
+      "taskModel": "처리 모델: {model}"
     },
     "tool": {
       "running": "{tool} 실행 중"
@@ -464,6 +465,7 @@
       "copied": "복사됨",
       "download": ".patch 다운로드"
     },
+    "servedModel": "답변 모델: {model}",
     "modelFallbackNotice": "선택한 모델({from})이 응답하지 않아 기본 모델({to})로 답변했습니다.",
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "사용량 한도 초과",
@@ -1841,71 +1843,7 @@
     "oauthFailed": "로그인 실패: {error}",
     "oauthAccount": "계정"
   },
-  "modelRoles": {
-    "title": "역할별 모델 배정",
-    "description": "등록된 모델(로컬·외부 API 키)을 기능 역할별로 다르게 배정합니다. 미배정 역할은 서버 기본 모델을 사용합니다.",
-    "externalNote": "외부 모델은 해당 공급자 API 키가 등록·활성 상태여야 하며, 호출 실패 시 로컬 기본 모델로 자동 폴백됩니다.",
-    "loading": "역할 매핑 불러오는 중…",
-    "loadError": "역할 매핑을 불러오지 못했습니다.",
-    "saveFailed": "역할 매핑 저장에 실패했습니다.",
-    "defaultOption": "기본(자동)",
-    "assignedBadge": "배정됨",
-    "resetLabel": "기본값으로 되돌리기",
-    "empty": "배정 가능한 역할이 없습니다.",
-    "roles": {
-      "agent": {
-        "label": "에이전트 작업",
-        "description": "백그라운드 에이전트 작업의 실행 모델"
-      },
-      "judge": {
-        "label": "목표 판정",
-        "description": "에이전트 작업 완료 여부를 판정하는 모델"
-      },
-      "research": {
-        "label": "딥 리서치",
-        "description": "리서치 파이프라인·보고서 생성 모델"
-      },
-      "spawn": {
-        "label": "병렬 서브에이전트",
-        "description": "병렬로 분기되는 서브에이전트 모델"
-      },
-      "review": {
-        "label": "코드·보안 리뷰",
-        "description": "코드 리뷰, 보안 분석, 구현 계획 모델"
-      },
-      "summary": {
-        "label": "생각 요약",
-        "description": "생각 과정 헤드라인을 생성하는 모델"
-      },
-      "planner": {
-        "label": "Planner(질문 분석·작업 계획)",
-        "description": "매 턴 1회 짧은 JSON 계획을 만드는 모델 — 작고 빠른 모델 권장(로컬 27B 는 ~15초)"
-      }
-    },
-    "notInList": "(목록에 없음)"
-  },
   "capabilityModels": {
-    "title": "기능별 모델 배정",
-    "description": "질문을 분석한 Planner 가 계획한 기능(capability)을 어느 모델이 처리할지 정합니다. 위의 역할 배정(어떤 텍스트 모델이 답하는가)과는 별개이며, 호출은 LiteLLM 게이트웨이 하나로 갑니다.",
-    "gatewayNote": "외부 모델은 게이트웨이에 편입된 provider 만 배정할 수 있습니다. 미배정 항목은 전역 설정 또는 기본값을 따릅니다.",
-    "loading": "기능 배정 불러오는 중…",
-    "loadError": "기능 배정을 불러오지 못했습니다.",
-    "saveFailed": "기능 배정 저장에 실패했습니다.",
-    "defaultOption": "기본(자동)",
-    "assignedBadge": "배정됨",
-    "unavailableBadge": "사용 불가",
-    "unsupportedBadge": "현재 미지원",
-    "unsupportedHint": "provider 어댑터가 아직 없어 배정만 저장됩니다.",
-    "resetLabel": "기본값으로 되돌리기",
-    "empty": "배정 가능한 기능이 없습니다.",
-    "notInList": "(목록에 없음)",
-    "paramsHint": "provider 규격 인자 — 비우면 기본값",
-    "paramsApply": "인자 적용",
-    "source": {
-      "user": "내 설정",
-      "global": "전역",
-      "default": "기본값"
-    },
     "capabilities": {
       "text_reason": "텍스트 추론·분석",
       "text_code": "코드",
@@ -1921,35 +1859,11 @@
       "music_generate": "음악 생성",
       "video_generate": "영상 생성",
       "video_analyze": "영상 이해"
-    },
-    "groups": {
-      "text": "텍스트·비전",
-      "code": "코드",
-      "image": "이미지",
-      "audio": "음성",
-      "music": "음악",
-      "video": "영상",
-      "embed": "임베딩(인프라)",
-      "other": "기타"
-    },
-    "groupDesc": {
-      "text": "추론·분석과 이미지 이해·OCR — 비전을 지원하는 텍스트 모델 하나가 맡습니다",
-      "code": "코드 작성·수정 전용 모델(비우면 텍스트 모델이 처리)",
-      "image": "이미지 생성과 편집",
-      "audio": "음성 인식(STT)과 합성(TTS)",
-      "music": "노래·배경음악 생성 — 기본값은 로컬 음악 서버(ACE-Step)입니다",
-      "video": "영상 생성(작업 제출 후 완료 시 결과 수령)",
-      "embed": "검색·임베딩용 인프라 모델(관리자 전용)",
-      "other": "그룹에 속하지 않은 기능"
-    },
-    "mixedOption": "(개별 설정)",
-    "advancedShow": "세부 설정",
-    "advancedHide": "세부 설정 닫기",
-    "hiddenUnsupportedNote": "아직 실행 경로가 없는 기능은 표시하지 않습니다: {list}"
+    }
   },
   "adminModelRoles": {
-    "title": "역할 모델 관리",
-    "description": "전역 역할→모델 매핑(모든 사용자 기본값)과 서버 공용 외부 키를 관리합니다.",
+    "title": "모델 배정 관리",
+    "description": "전역 모델 배정(모든 사용자 기본값)과 서버 공용 외부 키를 관리합니다.",
     "loadError": "불러오기에 실패했습니다.",
     "saveFailed": "저장에 실패했습니다.",
     "keyDeleteConfirm": "'{provider}' 서버 공용 키를 삭제할까요? 해당 provider 의 전역 매핑은 로컬 모델로 폴백됩니다.",
@@ -1979,71 +1893,6 @@
       "placeholder": "비움 = 폴백 ({fallback})",
       "cacheNote": "변경은 재시작 없이 최대 60초 내에 반영됩니다."
     }
-  },
-  "adminCapabilityModels": {
-    "title": "전역 기능별 모델 배정",
-    "description": "Planner 가 계획한 기능(capability)별 전역 기본 모델을 정합니다. 사용자 개인 배정이 우선하며, 해제하면 코드 기본값으로 돌아갑니다.",
-    "axisNote": "위 \"전역 역할 매핑\"(어떤 텍스트 LLM 이 답하는가)과는 별개의 축이며, 호출은 LiteLLM 게이트웨이 하나로 갑니다.",
-    "gatewayNote": "외부 모델은 게이트웨이 편입 provider({providers})만 배정할 수 있습니다.",
-    "gatewayNone": "없음",
-    "loadError": "기능 배정을 불러오지 못했습니다.",
-    "saveFailed": "기능 배정 저장에 실패했습니다.",
-    "defaultOption": "기본(코드 기본값)",
-    "assigned": "배정됨",
-    "unavailableBadge": "사용 불가",
-    "unsupportedBadge": "현재 미지원",
-    "unsupportedHint": "provider 어댑터가 아직 없어 배정만 저장됩니다.",
-    "resetLabel": "기본값으로 되돌리기",
-    "codeDefault": "코드 기본값: {model}",
-    "notInList": "(목록에 없음)",
-    "cacheNote": "변경은 재시작 없이 최대 60초 내 반영됩니다.",
-    "paramsHint": "provider 규격 인자 — 비우면 기본값",
-    "paramsApply": "인자 적용",
-    "source": {
-      "user": "내 설정",
-      "global": "전역",
-      "default": "기본값"
-    },
-    "capabilities": {
-      "text_reason": "텍스트 추론·분석",
-      "text_code": "코드",
-      "text_embed": "임베딩",
-      "vision_describe": "이미지 이해",
-      "vision_ocr": "OCR",
-      "image_generate": "이미지 생성",
-      "image_edit": "이미지 편집",
-      "audio_transcribe": "음성 인식(STT)",
-      "audio_speech": "음성 합성(TTS)",
-      "audio_analyze": "오디오 분석",
-      "music_analyze": "음악 분석",
-      "music_generate": "음악 생성",
-      "video_generate": "영상 생성",
-      "video_analyze": "영상 이해"
-    },
-    "groups": {
-      "text": "텍스트·비전",
-      "code": "코드",
-      "image": "이미지",
-      "audio": "음성",
-      "music": "음악",
-      "video": "영상",
-      "embed": "임베딩(인프라)",
-      "other": "기타"
-    },
-    "groupDesc": {
-      "text": "추론·분석과 이미지 이해·OCR — 비전을 지원하는 텍스트 모델 하나가 맡습니다",
-      "code": "코드 작성·수정 전용 모델(비우면 텍스트 모델이 처리)",
-      "image": "이미지 생성과 편집",
-      "audio": "음성 인식(STT)과 합성(TTS)",
-      "music": "노래·배경음악 생성 — 기본값은 로컬 음악 서버(ACE-Step)입니다",
-      "video": "영상 생성(작업 제출 후 완료 시 결과 수령)",
-      "embed": "검색·임베딩용 인프라 모델(관리자 전용)",
-      "other": "그룹에 속하지 않은 기능"
-    },
-    "mixedOption": "(개별 설정)",
-    "advancedShow": "세부 설정",
-    "advancedHide": "세부 설정 닫기",
-    "hiddenUnsupportedNote": "아직 실행 경로가 없는 기능은 표시하지 않습니다: {list}"
   },
   "adminGatewayModels": {
     "title": "게이트웨이 모델 상태",
@@ -2560,8 +2409,8 @@
     "importApply": "적용",
     "importConfirm": "검증된 구성을 적용할까요? 시스템 설정과 조직 정책이 덮어써집니다.",
     "importProblems": "문제 {count}건 — 적용할 수 없습니다.",
-    "importDryRun": "검증 통과 — 설정 {systemSettings} · capability {capabilityModels} · 조직 {organizations} · 정책 {policies}. 적용을 누르면 반영됩니다.",
-    "importApplied": "적용 완료 — 설정 {systemSettings} · capability {capabilityModels} · 조직 {organizations} · 정책 {policies}.",
+    "importDryRun": "검증 통과 — 설정 {systemSettings} · 모델 배정 {modelAssignments} · 조직 {organizations} · 정책 {policies}. 적용을 누르면 반영됩니다.",
+    "importApplied": "적용 완료 — 설정 {systemSettings} · 모델 배정 {modelAssignments} · 조직 {organizations} · 정책 {policies}.",
     "costBudget": "월 비용 예산(USD)"
   },
   "adminCostRates": {
@@ -2726,6 +2575,236 @@
     "nonCommercial": "비상업",
     "permissions": "권한",
     "verifiedModels": "검증된 모델",
-    "verifiedDetail": "통과율 {rate}% · {cases}건 · {date}"
+    "verifiedDetail": "통과율 {rate}% · {cases}건 · {date}",
+    "restartRequired": "재시작 필요",
+    "runtime": {
+      "not_loaded": "런타임 미적재",
+      "registering": "등록 중",
+      "ready": "준비됨",
+      "failed": "런타임 실패"
+    }
+  },
+  "knowledge": {
+    "serverError": "서버 오류가 발생했습니다",
+    "cancel": "취소",
+    "close": "닫기",
+    "save": "저장",
+    "back": "뒤로",
+    "rename": "이름 변경",
+    "loading": "불러오는 중…",
+    "untitledConversation": "제목 없는 대화",
+    "noConversations": "연결된 대화가 없습니다",
+    "newConversation": "새 대화",
+    "sectionTitle": "Knowledge",
+    "sidebarEmpty": "아직 Knowledge 가 없습니다",
+    "viewAll": "모든 Knowledge 보기",
+    "listSubtitle": "자료를 올려 두면 대화에서 그 근거로 답합니다",
+    "newSpace": "새 Knowledge",
+    "searchPlaceholder": "Knowledge 검색",
+    "empty": "아직 Knowledge 가 없습니다",
+    "noResults": "검색 결과가 없습니다",
+    "notFound": "찾을 수 없음",
+    "notReadyNotice": "임베딩이 아직 준비되지 않아 새 자료 처리가 지연될 수 있습니다",
+    "noDescription": "설명 없음",
+    "editDescription": "설명 편집",
+    "deleteSpace": "Knowledge 삭제",
+    "deleteSpaceConfirm": "'{name}' 을(를) 삭제할까요? 자료와 연결이 모두 사라집니다.",
+    "create": {
+      "title": "새 Knowledge 만들기",
+      "nameRequired": "이름을 입력하세요",
+      "nameLabel": "이름",
+      "namePlaceholder": "예: 제품 문서",
+      "descLabel": "설명 (선택)",
+      "descPlaceholder": "이 Knowledge 의 용도",
+      "submit": "만들기"
+    },
+    "card": {
+      "documents": "문서 {count}개",
+      "conversations": "대화 {count}개",
+      "lastUsed": "최근 사용 {date}",
+      "processing": "처리 중 {count}",
+      "failed": "실패 {count}"
+    },
+    "status": {
+      "uploaded": "업로드됨",
+      "validating": "검증 중",
+      "extracting": "본문 추출 중",
+      "chunking": "청크 분할 중",
+      "embedding": "임베딩 중",
+      "verifying": "확인 중",
+      "ready": "준비됨",
+      "failed": "실패"
+    },
+    "failure": {
+      "validation": "파일을 검증하지 못했습니다",
+      "scannedPdf": "스캔된 PDF 는 지원하지 않습니다(텍스트층 없음)",
+      "extraction": "본문을 추출하지 못했습니다",
+      "embedding": "임베딩에 실패했습니다",
+      "unknown": "처리에 실패했습니다"
+    },
+    "doc": {
+      "section": "문서 {count}개",
+      "empty": "아직 자료가 없습니다. 파일을 추가하세요.",
+      "deleteConfirm": "'{name}' 을(를) 삭제할까요?",
+      "pages": "{count}페이지",
+      "retry": "다시 시도",
+      "delete": "삭제"
+    },
+    "upload": {
+      "add": "자료 추가",
+      "tooLarge": "파일이 허용 크기를 초과합니다",
+      "duplicate": "이미 같은 내용의 문서가 있습니다"
+    },
+    "conv": {
+      "section": "대화 {count}개",
+      "bindExisting": "기존 대화 추가",
+      "unbind": "연결 해제",
+      "unbindConfirm": "이 대화의 연결을 해제할까요?"
+    },
+    "bind": {
+      "title": "기존 대화 추가",
+      "hint": "이 Knowledge 에 연결할 대화를 고르세요",
+      "noChats": "최근 대화가 없습니다"
+    },
+    "banner": {
+      "text": "이 대화에서는 이 Knowledge 자료를 사용할 수 있습니다"
+    },
+    "citation": {
+      "title": "인용",
+      "page": "{page}페이지",
+      "pages": "{start}–{end}페이지",
+      "loadFailed": "청크를 불러오지 못했습니다"
+    },
+    "admin": {
+      "title": "관리",
+      "reindex": "재색인",
+      "reindexConfirmTitle": "재색인",
+      "reindexConfirmBody": "임베딩 인덱스를 다시 만듭니다. 시간이 걸릴 수 있습니다.",
+      "ready": "사용 가능",
+      "notReady": "사용 불가",
+      "embeddingIndex": "임베딩 인덱스",
+      "jobs": "작업",
+      "noJobs": "진행 중인 작업 없음",
+      "profiles": "프로파일",
+      "active": "활성",
+      "saveProfile": "저장",
+      "invalidJson": "JSON 형식이 올바르지 않습니다"
+    },
+    "sidebar": {
+      "expandSpace": "{name} 펼치기",
+      "collapseSpace": "{name} 접기"
+    }
+  },
+  "modelAssignments": {
+    "title": "모델 배정",
+    "description": "역할과 기능을 하나로 합친 슬롯 단위 배정입니다. 각 슬롯에 로컬·외부 모델을 배정하며, 미배정 슬롯은 전역 설정 또는 기본값을 따릅니다.",
+    "descriptionGlobal": "전역 기본 모델 배정입니다. 사용자 개인 배정이 우선하며, 해제하면 코드 기본값으로 돌아갑니다.",
+    "externalNote": "외부 모델은 게이트웨이에 편입된 provider 만 배정할 수 있으며, 호출 실패 시 기본 모델로 자동 폴백됩니다.",
+    "cacheNote": "변경은 재시작 없이 최대 60초 내 반영됩니다.",
+    "loading": "모델 배정 불러오는 중…",
+    "loadError": "모델 배정을 불러오지 못했습니다.",
+    "saveFailed": "모델 배정 저장에 실패했습니다.",
+    "empty": "배정 가능한 슬롯이 없습니다.",
+    "defaultOption": "기본(자동)",
+    "assignedBadge": "배정됨",
+    "unavailableBadge": "사용 불가",
+    "resetLabel": "기본값으로 되돌리기",
+    "notInList": "(목록에 없음)",
+    "paramsApply": "인자 적용",
+    "paramsHint": "provider 규격 인자 — 비우면 기본값",
+    "groups": {
+      "agents": "대화·에이전트",
+      "quality": "검증·요약·코드",
+      "multimodal": "계획·미디어"
+    },
+    "groupDesc": {
+      "agents": "대화와 에이전트 작업을 수행하는 텍스트 모델",
+      "quality": "판정·요약·코드 작업에 쓰는 텍스트 모델",
+      "multimodal": "계획 수립과 이미지·음성·영상 등 미디어 처리 모델"
+    },
+    "source": {
+      "user": "내 배정",
+      "global": "전역",
+      "default": "기본값",
+      "none": "없음"
+    },
+    "slots": {
+      "agent": {
+        "title": "에이전트 작업",
+        "description": "백그라운드 에이전트 작업의 실행 모델"
+      },
+      "spawn": {
+        "title": "병렬 서브에이전트",
+        "description": "병렬로 분기되는 서브에이전트 모델"
+      },
+      "reasoning": {
+        "title": "추론·딥리서치",
+        "description": "딥리서치 파이프라인·보고서와 복잡한 추론에 쓰는 모델"
+      },
+      "judge": {
+        "title": "목표 판정",
+        "description": "에이전트 작업 완료 여부를 판정하는 모델"
+      },
+      "code": {
+        "title": "코드·리뷰",
+        "description": "코드 작성·수정, 코드·보안 리뷰, 구현 계획에 쓰는 모델"
+      },
+      "summary": {
+        "title": "생각 요약",
+        "description": "생각 과정 헤드라인을 생성하는 모델"
+      },
+      "planner": {
+        "title": "Planner(질문 분석·계획)",
+        "description": "매 턴 1회 짧은 JSON 계획을 만드는 모델 — 작고 빠른 모델 권장"
+      },
+      "vision_describe": {
+        "title": "이미지 이해",
+        "description": "이미지 내용을 설명·분석하는 비전 모델"
+      },
+      "vision_ocr": {
+        "title": "OCR",
+        "description": "이미지 속 텍스트를 인식하는 모델"
+      },
+      "image_generate": {
+        "title": "이미지 생성",
+        "description": "텍스트로 이미지를 생성하는 모델"
+      },
+      "image_edit": {
+        "title": "이미지 편집",
+        "description": "기존 이미지를 편집하는 모델"
+      },
+      "audio_transcribe": {
+        "title": "음성 인식(STT)",
+        "description": "음성을 텍스트로 옮기는 모델"
+      },
+      "audio_speech": {
+        "title": "음성 합성(TTS)",
+        "description": "텍스트를 음성으로 합성하는 모델"
+      },
+      "audio_analyze": {
+        "title": "오디오 분석",
+        "description": "오디오 내용을 분석하는 모델"
+      },
+      "music_generate": {
+        "title": "음악 생성",
+        "description": "노래·배경음악을 생성하는 모델(기본값은 로컬 ACE-Step)"
+      },
+      "music_analyze": {
+        "title": "음악 분석",
+        "description": "음악을 분석하는 모델"
+      },
+      "video_generate": {
+        "title": "영상 생성",
+        "description": "영상을 생성하는 모델(작업 제출 후 완료 시 결과 수령)"
+      },
+      "video_analyze": {
+        "title": "영상 이해",
+        "description": "영상 내용을 분석하는 모델"
+      },
+      "text_embed": {
+        "title": "임베딩",
+        "description": "검색·임베딩용 인프라 모델"
+      }
+    }
   }
 }

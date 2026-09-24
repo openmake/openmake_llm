@@ -29,6 +29,7 @@ import { onAgentTaskChange } from "@/lib/agent-task-change";
 import Image from "next/image";
 import { ThemeToggle } from "./theme-toggle";
 import { cn } from "@/lib/utils";
+import { useEnabledWebAddons } from "@/addons/registry";
 
 interface SessionRow {
   id?: string;
@@ -143,7 +144,7 @@ export function Sidebar() {
     useAppStore.getState().clearContextRefs();
     try {
       const res = await ApiClient.get<
-        ApiSuccess<{ messages?: Array<{ id?: string | number; role: string; content: string; images?: string[]; thinking?: string; reasoningSummary?: string; sources?: SearchSourceRef[] }> }>
+        ApiSuccess<{ messages?: Array<{ id?: string | number; role: string; content: string; images?: string[]; thinking?: string; reasoningSummary?: string; sources?: SearchSourceRef[]; model?: string }> }>
       >(appendAnonSessionId(`/api/chat/sessions/${sid}/messages`));
       const msgs = res?.data?.messages ?? [];
       setChatHistory(() =>
@@ -157,6 +158,8 @@ export function Sidebar() {
             reasoning: m.thinking || undefined,
             reasoningSummary: m.reasoningSummary || undefined,
             ...(m.sources?.length ? { sources: m.sources } : {}),
+            // 이 답변을 실제로 생성한 모델(저장된 served model) — 사용자 행의 model 은 요청 모델이라 쓰지 않는다
+            ...(m.role === "assistant" && m.model ? { servedModel: m.model } : {}),
             dbId: m.id !== undefined ? String(m.id) : undefined,
           })),
       );
@@ -200,6 +203,13 @@ export function Sidebar() {
     },
     retry: false,
   });
+
+  // add-on 사이드바 섹션 — 주요 메뉴와 최근 대화 사이 (Base 는 어떤 add-on 인지 모른다)
+  const enabledAddons = useEnabledWebAddons();
+  const sidebarSections = enabledAddons
+    .flatMap((a) => a.sidebarSections ?? [])
+    .slice()
+    .sort((a, b) => a.order - b.order);
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
@@ -281,6 +291,15 @@ export function Sidebar() {
             </li>
           ))}
         </ul>
+
+        {sidebarSections.map((section) => (
+          <section.Component
+            key={section.id}
+            query={query}
+            currentSessionId={currentSessionId}
+            openSession={(sid) => void openSession(sid)}
+          />
+        ))}
 
         {sessions.length > 0 && (
           <div className="pt-3">

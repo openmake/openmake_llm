@@ -10,6 +10,7 @@ import { useTranslations } from "next-intl";
 import { Send } from "lucide-react";
 import { ApiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
+import { STEERING_SENT_RESET_MS } from "@/lib/constants/ui-limits";
 
 export function SteeringInput({ taskId }: { taskId?: string }) {
   const t = useTranslations("chat");
@@ -25,7 +26,7 @@ export function SteeringInput({ taskId }: { taskId?: string }) {
       await ApiClient.post(`/api/agent-tasks/${taskId}/steer`, { message });
       setText("");
       setSent(true);
-      setTimeout(() => setSent(false), 2500);
+      setTimeout(() => setSent(false), STEERING_SENT_RESET_MS);
     } catch (e) {
       alert(t("steering.failed", { error: e instanceof Error ? e.message : "error" }));
     } finally {

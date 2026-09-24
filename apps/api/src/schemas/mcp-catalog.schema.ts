@@ -3,14 +3,17 @@
  *
  */
 import { z } from 'zod';
+import { SCHEMA_LIMITS } from '../config/http-data-limits';
+
+const { mcpCatalog: C } = SCHEMA_LIMITS;
 
 export const McpVisibilitySchema = z.enum(['global', 'user_private', 'user_shared']);
 export type McpVisibility = z.infer<typeof McpVisibilitySchema>;
 
 export const McpCatalogTemplateSchema = z.object({
-    id: z.string().min(1).max(64),
-    display_name: z.string().min(1).max(128),
-    description: z.string().max(512).optional(),
+    id: z.string().min(1).max(C.ID_MAX),
+    display_name: z.string().min(1).max(C.DISPLAY_NAME_MAX),
+    description: z.string().max(C.DESCRIPTION_MAX).optional(),
     transport_type: z.enum(['stdio', 'sse', 'streamable-http']),
     command_template: z.string().optional(),
     args_schema: z.record(z.string(), z.unknown()),
@@ -23,8 +26,8 @@ export const McpCatalogTemplateSchema = z.object({
 export type McpCatalogTemplate = z.infer<typeof McpCatalogTemplateSchema>;
 
 export const McpFromCatalogPayloadSchema = z.object({
-    template_id: z.string().min(1).max(64),
-    name: z.string().min(1).max(128).regex(/^[a-zA-Z0-9_-]+$/, {
+    template_id: z.string().min(1).max(C.TEMPLATE_ID_MAX),
+    name: z.string().min(1).max(C.NAME_MAX).regex(/^[a-zA-Z0-9_-]+$/, {
         message: 'name 은 영숫자/언더스코어/하이픈만 허용',
     }),
     visibility: McpVisibilitySchema.default('user_private'),

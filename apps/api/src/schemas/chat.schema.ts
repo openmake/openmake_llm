@@ -12,6 +12,9 @@ import { z } from 'zod';
 import { restLegacyModeFlags } from '../services/chat-service/chat-modes';
 import { secureOptionalTextSchema, secureTextSchema } from './security.schema';
 import { FILE_ATTACH_LIMITS } from '../config/runtime-limits';
+import { SCHEMA_LIMITS } from '../config/http-data-limits';
+
+const { chat: CH } = SCHEMA_LIMITS;
 
 /**
  * OpenAI 호환 tool_call 스키마 (히스토리 메시지 내 assistant의 tool_calls)
@@ -117,13 +120,13 @@ export const chatRequestSchema = z.object({
     images: z.array(z.string().max(FILE_ATTACH_LIMITS.MAX_IMAGE_DATAURL_CHARS)).max(FILE_ATTACH_LIMITS.MAX_IMAGES).optional(),
     /** 오디오·영상·이미지 첨부 원본(base64) — 멀티모달 오케스트레이터 입력 (WS 의 files.data 와 대칭) */
     mediaFiles: z.array(z.object({
-        id: z.string().max(200),
-        name: z.string().max(255),
-        type: z.string().max(100),
+        id: z.string().max(CH.ATTACHMENT_ID_MAX),
+        name: z.string().max(CH.ATTACHMENT_NAME_MAX),
+        type: z.string().max(CH.ATTACHMENT_TYPE_MAX),
         data: z.string().max(FILE_ATTACH_LIMITS.MAX_IMAGE_DATAURL_CHARS * 4),
     })).max(FILE_ATTACH_LIMITS.MAX_FILES).optional(),
     /** 채팅 모드(add-on) — add-on id → true */
-    modes: z.record(z.string().max(80), z.boolean()).optional(),
+    modes: z.record(z.string().max(CH.MODE_KEY_MAX), z.boolean()).optional(),
     // 구 클라이언트의 모드 불리언 필드 — REST 에서 쓸 수 있는 모드가 선언한 이름만 받는다(그 밖은 strip)
     ...Object.fromEntries(restLegacyModeFlags().map((flag) => [flag, z.boolean().optional()])),
     thinkingMode: z.boolean().optional(),
@@ -136,7 +139,7 @@ export const chatRequestSchema = z.object({
     /** Phase A (2026-05-26): 응답 스타일 (concise/default/verbose). 미지정 시 'default' */
     style: z.enum(['concise', 'default', 'verbose']).optional(),
     /** Phase 2 Custom Agent (2026-05-26): 사용자 정의 agent id (claude.ai Projects / ChatGPT Custom GPTs 동등) */
-    userAgentId: z.string().max(64).optional(),
+    userAgentId: z.string().max(CH.USER_AGENT_ID_MAX).optional(),
     /** 클라이언트 표면 — 'ios' 면 좁은 화면용 답변 형식 지시 추가 (REST 경로 대비) */
     client: z.enum(['ios']).optional(),
     /** 기기 GPS 현재 위치 (옵트인, 턴 단위) — 위경도 범위 검증 */

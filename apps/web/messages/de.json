@@ -20,7 +20,7 @@
       "metrics": "Metriken",
       "alerts": "Warnungen",
       "mcpCatalogAdmin": "MCP-Katalog-Admin",
-      "modelRolesAdmin": "Modellrollen-Admin",
+      "modelRolesAdmin": "Modellzuweisungs-Admin",
       "systemSettingsAdmin": "Systemeinstellungen",
       "developer": "Entwickler",
       "schedulesAdmin": "Aufgaben-Zeitpläne",
@@ -419,7 +419,8 @@
         "ok": "Fertig",
         "failed": "Fehlgeschlagen"
       },
-      "tasksCount": "{count} Aufgaben"
+      "tasksCount": "{count} Aufgaben",
+      "taskModel": "Verarbeitet von: {model}"
     },
     "tool": {
       "running": "{tool} wird ausgeführt"
@@ -464,6 +465,7 @@
       "copied": "Kopiert",
       "download": ".patch herunterladen"
     },
+    "servedModel": "Antwortmodell: {model}",
     "modelFallbackNotice": "Das ausgewählte Modell ({from}) hat nicht geantwortet, daher hat stattdessen das Standardmodell ({to}) geantwortet.",
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "Nutzungslimit erreicht",
@@ -1841,71 +1843,7 @@
     "oauthFailed": "Anmeldung fehlgeschlagen: {error}",
     "oauthAccount": "Konto"
   },
-  "modelRoles": {
-    "title": "Modellrollen",
-    "description": "Weisen Sie Ihre registrierten Modelle (lokal oder externe API-Schlüssel) funktionalen Rollen zu. Nicht zugewiesene Rollen verwenden das Standardmodell des Servers.",
-    "externalNote": "Externe Modelle erfordern einen aktiven Anbieter-API-Schlüssel; fehlgeschlagene Aufrufe greifen automatisch auf das lokale Standardmodell zurück.",
-    "loading": "Rollenzuordnungen werden geladen…",
-    "loadError": "Rollenzuordnungen konnten nicht geladen werden.",
-    "saveFailed": "Rollenzuordnung konnte nicht gespeichert werden.",
-    "defaultOption": "Standard (automatisch)",
-    "assignedBadge": "Zugewiesen",
-    "resetLabel": "Auf Standard zurücksetzen",
-    "empty": "Keine zuweisbaren Rollen.",
-    "roles": {
-      "agent": {
-        "label": "Agentenaufgaben",
-        "description": "Ausführungsmodell für Agentenaufgaben im Hintergrund"
-      },
-      "judge": {
-        "label": "Zielbewerter",
-        "description": "Modell, das bewertet, ob eine Agentenaufgabe ihr Ziel erreicht hat"
-      },
-      "research": {
-        "label": "Deep Research",
-        "description": "Modell für die Recherche-Pipeline und die Berichterstellung"
-      },
-      "spawn": {
-        "label": "Parallele Subagenten",
-        "description": "Modell für parallele Fan-out-Subagenten"
-      },
-      "review": {
-        "label": "Code- & Sicherheitsprüfung",
-        "description": "Modell für Code-Prüfung, Sicherheitsanalyse und Planung"
-      },
-      "summary": {
-        "label": "Denkzusammenfassung",
-        "description": "Modell, das Überschriften-Zusammenfassungen zum Nachdenken generiert"
-      },
-      "planner": {
-        "label": "Planer (Fragenanalyse & Aufgabenplanung)",
-        "description": "Erstellt pro Runde einen kurzen JSON-Plan — ein kleines, schnelles Modell wird empfohlen (lokales 27B benötigt ~15 Sek.)"
-      }
-    },
-    "notInList": "(nicht in der Liste)"
-  },
   "capabilityModels": {
-    "title": "Modell pro Fähigkeit",
-    "description": "Wählen Sie, welches Modell jede Fähigkeit übernimmt, die der Planner nach der Analyse Ihrer Frage einplant. Dies ist unabhängig von den Rollenzuordnungen oben (welches Textmodell antwortet); alle Aufrufe laufen über das eine LiteLLM-Gateway.",
-    "gatewayNote": "Externe Modelle können nur von Anbietern zugewiesen werden, die im Gateway registriert sind. Nicht zugewiesene Elemente folgen der globalen Einstellung oder dem Standard.",
-    "loading": "Fähigkeitszuordnungen werden geladen…",
-    "loadError": "Fähigkeitszuordnungen konnten nicht geladen werden.",
-    "saveFailed": "Fähigkeitszuordnung konnte nicht gespeichert werden.",
-    "defaultOption": "Standard (automatisch)",
-    "assignedBadge": "Zugewiesen",
-    "unavailableBadge": "Nicht verfügbar",
-    "unsupportedBadge": "Noch nicht unterstützt",
-    "unsupportedHint": "Noch kein Anbieter-Adapter — die Zuweisung wird nur gespeichert.",
-    "resetLabel": "Auf Standard zurücksetzen",
-    "empty": "Keine zuweisbaren Fähigkeiten.",
-    "notInList": "(nicht in der Liste)",
-    "paramsHint": "Anbieterspezifische Parameter — leer = Standard",
-    "paramsApply": "Parameter anwenden",
-    "source": {
-      "user": "Meine Einstellung",
-      "global": "Global",
-      "default": "Standard"
-    },
     "capabilities": {
       "text_reason": "Textanalyse & Schlussfolgern",
       "text_code": "Code",
@@ -1921,35 +1859,11 @@
       "music_generate": "Musikgenerierung",
       "video_generate": "Videogenerierung",
       "video_analyze": "Videoverständnis"
-    },
-    "groups": {
-      "text": "Text & Vision",
-      "code": "Code",
-      "image": "Bild",
-      "audio": "Sprache",
-      "music": "Musik",
-      "video": "Video",
-      "embed": "Embedding (Infrastruktur)",
-      "other": "Sonstige"
-    },
-    "groupDesc": {
-      "text": "Schlussfolgern/Analyse sowie Bildverständnis und OCR — ein Textmodell mit Vision-Fähigkeit",
-      "code": "Dediziertes Modell zum Schreiben/Bearbeiten von Code (fällt auf das Textmodell zurück)",
-      "image": "Bildgenerierung und -bearbeitung",
-      "audio": "Sprache-zu-Text und Text-zu-Sprache",
-      "music": "Songs und Hintergrundmusik — Standard ist der lokale Musikserver (ACE-Step)",
-      "video": "Videogenerierung (als Aufgabe eingereicht; Ergebnis wird nach Fertigstellung abgerufen)",
-      "embed": "Infrastrukturmodell für Suche/Embeddings (nur Admin)",
-      "other": "Fähigkeiten außerhalb jeder Gruppe"
-    },
-    "mixedOption": "(einzeln festgelegt)",
-    "advancedShow": "Details",
-    "advancedHide": "Details ausblenden",
-    "hiddenUnsupportedNote": "Fähigkeiten ohne Ausführungspfad sind ausgeblendet: {list}"
+    }
   },
   "adminModelRoles": {
-    "title": "Modellrollen-Admin",
-    "description": "Globale Zuordnungen Rolle→Modell (Standardwerte für alle Nutzer) und servergeteilte externe Schlüssel verwalten.",
+    "title": "Modellzuweisungs-Admin",
+    "description": "Globale Modellzuweisungen (Standardwerte für alle Nutzer) und servergeteilte externe Schlüssel verwalten.",
     "loadError": "Laden fehlgeschlagen.",
     "saveFailed": "Speichern fehlgeschlagen.",
     "keyDeleteConfirm": "Server-Schlüssel für „{provider}“ löschen? Globale Zuordnungen für diesen Anbieter fallen auf das lokale Modell zurück.",
@@ -1979,71 +1893,6 @@
       "placeholder": "Leer = Rückfall ({fallback})",
       "cacheNote": "Änderungen werden ohne Neustart innerhalb von 60 Sekunden wirksam."
     }
-  },
-  "adminCapabilityModels": {
-    "title": "Globale Fähigkeitszuordnungen",
-    "description": "Legen Sie das globale Standardmodell pro Fähigkeit fest, die der Planner einplant. Zuordnungen pro Nutzer haben Vorrang; beim Leeren wird auf den Code-Standard zurückgegriffen.",
-    "axisNote": "Dies ist eine von den „Globalen Rollenzuordnungen“ oben getrennte Achse (welches Text-LLM antwortet); alle Aufrufe laufen über das eine LiteLLM-Gateway.",
-    "gatewayNote": "Externe Modelle können nur von im Gateway registrierten Anbietern zugewiesen werden ({providers}).",
-    "gatewayNone": "keine",
-    "loadError": "Fähigkeitszuordnungen konnten nicht geladen werden.",
-    "saveFailed": "Fähigkeitszuordnung konnte nicht gespeichert werden.",
-    "defaultOption": "Standard (Code-Standard)",
-    "assigned": "Zugewiesen",
-    "unavailableBadge": "Nicht verfügbar",
-    "unsupportedBadge": "Noch nicht unterstützt",
-    "unsupportedHint": "Noch kein Anbieter-Adapter — die Zuweisung wird nur gespeichert.",
-    "resetLabel": "Auf Standard zurücksetzen",
-    "codeDefault": "Code-Standard: {model}",
-    "notInList": "(nicht in der Liste)",
-    "cacheNote": "Änderungen werden ohne Neustart innerhalb von 60 Sekunden wirksam.",
-    "paramsHint": "Anbieterspezifische Parameter — leer = Standard",
-    "paramsApply": "Parameter anwenden",
-    "source": {
-      "user": "Meine Einstellung",
-      "global": "Global",
-      "default": "Standard"
-    },
-    "capabilities": {
-      "text_reason": "Textanalyse & Schlussfolgern",
-      "text_code": "Code",
-      "text_embed": "Embedding",
-      "vision_describe": "Bildverständnis",
-      "vision_ocr": "OCR",
-      "image_generate": "Bildgenerierung",
-      "image_edit": "Bildbearbeitung",
-      "audio_transcribe": "Sprache-zu-Text (STT)",
-      "audio_speech": "Text-zu-Sprache (TTS)",
-      "audio_analyze": "Audioanalyse",
-      "music_analyze": "Musikanalyse",
-      "music_generate": "Musikgenerierung",
-      "video_generate": "Videogenerierung",
-      "video_analyze": "Videoverständnis"
-    },
-    "groups": {
-      "text": "Text & Vision",
-      "code": "Code",
-      "image": "Bild",
-      "audio": "Sprache",
-      "music": "Musik",
-      "video": "Video",
-      "embed": "Embedding (Infrastruktur)",
-      "other": "Sonstige"
-    },
-    "groupDesc": {
-      "text": "Schlussfolgern/Analyse sowie Bildverständnis und OCR — ein Textmodell mit Vision-Fähigkeit",
-      "code": "Dediziertes Modell zum Schreiben/Bearbeiten von Code (fällt auf das Textmodell zurück)",
-      "image": "Bildgenerierung und -bearbeitung",
-      "audio": "Sprache-zu-Text und Text-zu-Sprache",
-      "music": "Songs und Hintergrundmusik — Standard ist der lokale Musikserver (ACE-Step)",
-      "video": "Videogenerierung (als Aufgabe eingereicht; Ergebnis wird nach Fertigstellung abgerufen)",
-      "embed": "Infrastrukturmodell für Suche/Embeddings (nur Admin)",
-      "other": "Fähigkeiten außerhalb jeder Gruppe"
-    },
-    "mixedOption": "(einzeln festgelegt)",
-    "advancedShow": "Details",
-    "advancedHide": "Details ausblenden",
-    "hiddenUnsupportedNote": "Fähigkeiten ohne Ausführungspfad sind ausgeblendet: {list}"
   },
   "adminGatewayModels": {
     "title": "Gateway-Modellstatus",
@@ -2560,8 +2409,8 @@
     "importApply": "Anwenden",
     "importConfirm": "Geprüfte Konfiguration anwenden? Systemeinstellungen und Organisationsrichtlinien werden überschrieben.",
     "importProblems": "{count} Problem(e) — kann nicht angewendet werden.",
-    "importDryRun": "Geprüft — Einstellungen {systemSettings} · Capabilities {capabilityModels} · Organisationen {organizations} · Richtlinien {policies}. Mit „Anwenden“ übernehmen.",
-    "importApplied": "Angewendet — Einstellungen {systemSettings} · Capabilities {capabilityModels} · Organisationen {organizations} · Richtlinien {policies}.",
+    "importDryRun": "Geprüft — Einstellungen {systemSettings} · Modellzuweisungen {modelAssignments} · Organisationen {organizations} · Richtlinien {policies}. Mit „Anwenden“ übernehmen.",
+    "importApplied": "Angewendet — Einstellungen {systemSettings} · Modellzuweisungen {modelAssignments} · Organisationen {organizations} · Richtlinien {policies}.",
     "costBudget": "Monatliches Kostenbudget (USD)"
   },
   "adminCostRates": {
@@ -2726,6 +2575,236 @@
     "nonCommercial": "nicht kommerziell",
     "permissions": "Berechtigungen",
     "verifiedModels": "Verifizierte Modelle",
-    "verifiedDetail": "Erfolgsquote {rate}% · {cases} Fälle · {date}"
+    "verifiedDetail": "Erfolgsquote {rate}% · {cases} Fälle · {date}",
+    "restartRequired": "Neustart erforderlich",
+    "runtime": {
+      "not_loaded": "Laufzeit nicht geladen",
+      "registering": "Registrierung",
+      "ready": "bereit",
+      "failed": "Laufzeitfehler"
+    }
+  },
+  "knowledge": {
+    "serverError": "Ein Serverfehler ist aufgetreten",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "save": "Speichern",
+    "back": "Zurück",
+    "rename": "Umbenennen",
+    "loading": "Wird geladen…",
+    "untitledConversation": "Unbenannte Unterhaltung",
+    "noConversations": "Keine verknüpften Unterhaltungen",
+    "newConversation": "Neuer Chat",
+    "sectionTitle": "Knowledge",
+    "sidebarEmpty": "Noch kein Knowledge",
+    "viewAll": "Alle Knowledge anzeigen",
+    "listSubtitle": "Füge Materialien hinzu, dann antworten Unterhaltungen darauf gestützt",
+    "newSpace": "Neues Knowledge",
+    "searchPlaceholder": "Knowledge suchen",
+    "empty": "Noch kein Knowledge",
+    "noResults": "Keine Ergebnisse",
+    "notFound": "Nicht gefunden",
+    "notReadyNotice": "Das Embedding ist noch nicht bereit; die Verarbeitung neuer Materialien kann sich verzögern",
+    "noDescription": "Keine Beschreibung",
+    "editDescription": "Beschreibung bearbeiten",
+    "deleteSpace": "Knowledge löschen",
+    "deleteSpaceConfirm": "„{name}“ löschen? Alle Materialien und Verknüpfungen werden entfernt.",
+    "create": {
+      "title": "Knowledge erstellen",
+      "nameRequired": "Namen eingeben",
+      "nameLabel": "Name",
+      "namePlaceholder": "z. B. Produktdokumentation",
+      "descLabel": "Beschreibung (optional)",
+      "descPlaceholder": "Wofür dieses Knowledge dient",
+      "submit": "Erstellen"
+    },
+    "card": {
+      "documents": "{count} Dokumente",
+      "conversations": "{count} Chats",
+      "lastUsed": "Zuletzt verwendet {date}",
+      "processing": "{count} in Bearbeitung",
+      "failed": "{count} fehlgeschlagen"
+    },
+    "status": {
+      "uploaded": "Hochgeladen",
+      "validating": "Wird geprüft",
+      "extracting": "Text wird extrahiert",
+      "chunking": "Wird aufgeteilt",
+      "embedding": "Wird eingebettet",
+      "verifying": "Wird verifiziert",
+      "ready": "Bereit",
+      "failed": "Fehlgeschlagen"
+    },
+    "failure": {
+      "validation": "Datei konnte nicht geprüft werden",
+      "scannedPdf": "Gescannte PDFs werden nicht unterstützt (keine Textebene)",
+      "extraction": "Text konnte nicht extrahiert werden",
+      "embedding": "Embedding fehlgeschlagen",
+      "unknown": "Verarbeitung fehlgeschlagen"
+    },
+    "doc": {
+      "section": "{count} Dokumente",
+      "empty": "Noch keine Materialien. Füge eine Datei hinzu.",
+      "deleteConfirm": "„{name}“ löschen?",
+      "pages": "{count} Seiten",
+      "retry": "Erneut versuchen",
+      "delete": "Löschen"
+    },
+    "upload": {
+      "add": "Material hinzufügen",
+      "tooLarge": "Datei überschreitet die zulässige Größe",
+      "duplicate": "Ein Dokument mit gleichem Inhalt existiert bereits"
+    },
+    "conv": {
+      "section": "{count} Chats",
+      "bindExisting": "Vorhandenen Chat hinzufügen",
+      "unbind": "Verknüpfung lösen",
+      "unbindConfirm": "Verknüpfung dieser Unterhaltung lösen?"
+    },
+    "bind": {
+      "title": "Vorhandenen Chat hinzufügen",
+      "hint": "Wähle eine Unterhaltung zum Verknüpfen mit diesem Knowledge",
+      "noChats": "Keine aktuellen Chats"
+    },
+    "banner": {
+      "text": "Diese Unterhaltung kann Materialien aus diesem Knowledge nutzen"
+    },
+    "citation": {
+      "title": "Zitat",
+      "page": "Seite {page}",
+      "pages": "Seiten {start}–{end}",
+      "loadFailed": "Abschnitt konnte nicht geladen werden"
+    },
+    "admin": {
+      "title": "Verwaltung",
+      "reindex": "Neu indexieren",
+      "reindexConfirmTitle": "Neu indexieren",
+      "reindexConfirmBody": "Der Embedding-Index wird neu aufgebaut. Das kann eine Weile dauern.",
+      "ready": "Verfügbar",
+      "notReady": "Nicht verfügbar",
+      "embeddingIndex": "Embedding-Index",
+      "jobs": "Jobs",
+      "noJobs": "Keine aktiven Jobs",
+      "profiles": "Profile",
+      "active": "Aktiv",
+      "saveProfile": "Speichern",
+      "invalidJson": "Ungültiges JSON"
+    },
+    "sidebar": {
+      "expandSpace": "{name} aufklappen",
+      "collapseSpace": "{name} zuklappen"
+    }
+  },
+  "modelAssignments": {
+    "title": "Modellzuweisungen",
+    "description": "Slot-basierte Zuweisungen, die Rollen und Fähigkeiten zusammenführen. Weise jedem Slot ein lokales oder externes Modell zu; nicht zugewiesene Slots greifen auf die globale Einstellung oder den Standard zurück.",
+    "descriptionGlobal": "Globale Standard-Modellzuweisungen. Die eigene Zuweisung einer Person hat Vorrang; beim Zurücksetzen gilt wieder der Code-Standard.",
+    "externalNote": "Externe Modelle können nur zugewiesen werden, wenn ihr Provider im Gateway eingebunden ist; bei einem Fehlschlag wird automatisch auf das Standardmodell zurückgegriffen.",
+    "cacheNote": "Änderungen werden ohne Neustart innerhalb von 60 Sekunden wirksam.",
+    "loading": "Modellzuweisungen werden geladen…",
+    "loadError": "Modellzuweisungen konnten nicht geladen werden.",
+    "saveFailed": "Die Modellzuweisung konnte nicht gespeichert werden.",
+    "empty": "Keine zuweisbaren Slots.",
+    "defaultOption": "Standard (automatisch)",
+    "assignedBadge": "Zugewiesen",
+    "unavailableBadge": "Nicht verfügbar",
+    "resetLabel": "Auf Standard zurücksetzen",
+    "notInList": "(nicht in der Liste)",
+    "paramsApply": "Parameter anwenden",
+    "paramsHint": "Provider-spezifische Parameter — leer lassen für Standard",
+    "groups": {
+      "agents": "Chat & Agenten",
+      "quality": "Prüfung, Zusammenfassung & Code",
+      "multimodal": "Planung & Medien"
+    },
+    "groupDesc": {
+      "agents": "Textmodelle für Chat und Agentenaufgaben",
+      "quality": "Textmodelle für Bewertung, Zusammenfassung und Code-Arbeit",
+      "multimodal": "Modelle für Planung und Medien (Bilder, Audio, Video)"
+    },
+    "source": {
+      "user": "Meine Zuweisung",
+      "global": "Global",
+      "default": "Standard",
+      "none": "Keine"
+    },
+    "slots": {
+      "agent": {
+        "title": "Agentenaufgaben",
+        "description": "Modell, das Agentenaufgaben im Hintergrund ausführt"
+      },
+      "spawn": {
+        "title": "Parallele Sub-Agenten",
+        "description": "Modell für parallel abgezweigte Sub-Agenten"
+      },
+      "reasoning": {
+        "title": "Reasoning & Deep Research",
+        "description": "Modell für die Deep-Research-Pipeline, Berichte und komplexes Reasoning"
+      },
+      "judge": {
+        "title": "Zielbewertung",
+        "description": "Modell, das beurteilt, ob eine Agentenaufgabe abgeschlossen ist"
+      },
+      "code": {
+        "title": "Code & Review",
+        "description": "Modell für Code schreiben/ändern, Code- und Sicherheitsreview sowie Implementierungsplanung"
+      },
+      "summary": {
+        "title": "Denk-Zusammenfassung",
+        "description": "Modell, das Überschriften des Denkprozesses erzeugt"
+      },
+      "planner": {
+        "title": "Planner (Analyse & Plan)",
+        "description": "Modell, das pro Turn einen kurzen JSON-Plan erstellt — ein kleines, schnelles Modell wird empfohlen"
+      },
+      "vision_describe": {
+        "title": "Bildverständnis",
+        "description": "Vision-Modell, das Bildinhalte beschreibt und analysiert"
+      },
+      "vision_ocr": {
+        "title": "OCR",
+        "description": "Modell, das Text in Bildern erkennt"
+      },
+      "image_generate": {
+        "title": "Bildgenerierung",
+        "description": "Modell, das Bilder aus Text erzeugt"
+      },
+      "image_edit": {
+        "title": "Bildbearbeitung",
+        "description": "Modell, das vorhandene Bilder bearbeitet"
+      },
+      "audio_transcribe": {
+        "title": "Spracherkennung (STT)",
+        "description": "Modell, das Sprache in Text transkribiert"
+      },
+      "audio_speech": {
+        "title": "Sprachsynthese (TTS)",
+        "description": "Modell, das Sprache aus Text synthetisiert"
+      },
+      "audio_analyze": {
+        "title": "Audioanalyse",
+        "description": "Modell, das Audioinhalte analysiert"
+      },
+      "music_generate": {
+        "title": "Musikgenerierung",
+        "description": "Modell, das Songs und Hintergrundmusik erzeugt (Standard ist lokales ACE-Step)"
+      },
+      "music_analyze": {
+        "title": "Musikanalyse",
+        "description": "Modell, das Musik analysiert"
+      },
+      "video_generate": {
+        "title": "Videogenerierung",
+        "description": "Modell, das Video erzeugt (reicht einen Job ein und liefert das Ergebnis bei Fertigstellung)"
+      },
+      "video_analyze": {
+        "title": "Videoverständnis",
+        "description": "Modell, das Videoinhalte analysiert"
+      },
+      "text_embed": {
+        "title": "Embeddings",
+        "description": "Infrastrukturmodell für Suche und Embeddings"
+      }
+    }
   }
 }

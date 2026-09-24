@@ -1,5 +1,83 @@
 # Changelog
 
+## [1.87.0](https://github.com/openmake/openmake_llm/compare/v1.86.3...v1.87.0) (2026-09-24)
+
+
+### ✨ 기능
+
+* **chat:** 답변하는 모델을 실시간으로 표시 ([#1005](https://github.com/openmake/openmake_llm/issues/1005)) ([5beb89d](https://github.com/openmake/openmake_llm/commit/5beb89d616fbe45fde4db8a66b347c84ed0194ad))
+
+## [1.86.3](https://github.com/openmake/openmake_llm/compare/v1.86.2...v1.86.3) (2026-09-24)
+
+
+### ♻️ 리팩터링
+
+* **models:** 역할별·기능별 모델 배정을 슬롯 단위 모델 배정으로 통합 + Planner 잘린 simple 계획 복구 ([#1003](https://github.com/openmake/openmake_llm/issues/1003)) ([496078a](https://github.com/openmake/openmake_llm/commit/496078a90ec63e3cb8f2938704fd19d47eb0588a))
+
+## [1.86.2](https://github.com/openmake/openmake_llm/compare/v1.86.1...v1.86.2) (2026-09-24)
+
+
+### 🐛 버그 수정
+
+* **knowledge:** 코드 리뷰 결함 4건 — 프로필 저장 400·재시도 횟수·출처 번호 충돌·재색인 전환 경합 ([#1001](https://github.com/openmake/openmake_llm/issues/1001)) ([fc7831c](https://github.com/openmake/openmake_llm/commit/fc7831c3c0bdb33e4b561792cf22bfff3bf98c84))
+* **web:** 페이지 본문 폭 통일(max-w-6xl) + 설정 화면 컨트롤·글자 크기 스케일 통일 ([#1000](https://github.com/openmake/openmake_llm/issues/1000)) ([2391ac6](https://github.com/openmake/openmake_llm/commit/2391ac67710bed51fca38d8abf507723f80390fb))
+
+## [1.86.1](https://github.com/openmake/openmake_llm/compare/v1.86.0...v1.86.1) (2026-09-24)
+
+
+### 🐛 버그 수정
+
+* **knowledge:** 라우트 응답을 공유 계약에 맞춤 — Space 상세가 "찾을 수 없음"으로 뜨던 결함 + 라이브 검증 UI 보완 ([#998](https://github.com/openmake/openmake_llm/issues/998)) ([4d929cb](https://github.com/openmake/openmake_llm/commit/4d929cb7e147b51dea32c99f7f99c5dcbd2cea59))
+
+## [1.86.0](https://github.com/openmake/openmake_llm/compare/v1.85.4...v1.86.0) (2026-09-23)
+
+
+### ✨ 기능
+
+* **knowledge:** Knowledge Space — 문서 기반 작업공간(pgvector RAG) + Base 일반 확장점 ([#996](https://github.com/openmake/openmake_llm/issues/996)) ([7895faa](https://github.com/openmake/openmake_llm/commit/7895faa6c24a35296fd7c7c7b70f0fbe4b3aea41))
+
+## [1.85.4](https://github.com/openmake/openmake_llm/compare/v1.85.3...v1.85.4) (2026-09-23)
+
+
+### ♻️ 리팩터링
+
+* 하드코딩 전수 제거 — 프롬프트·LLM 파라미터·임계값·타이머를 config/prompts 로 외부화 ([#994](https://github.com/openmake/openmake_llm/issues/994)) ([714a32e](https://github.com/openmake/openmake_llm/commit/714a32efcac59b7882c4b2195407bfe5ed30f655))
+
+## [1.85.3](https://github.com/openmake/openmake_llm/compare/v1.85.2...v1.85.3) (2026-09-23)
+
+
+### 🐛 버그 수정
+
+* **job-runtime:** poller lease heartbeat·병렬 진행·수집 소진 재선점 루프·폴링 실패의 수집 예산 소진 ([#992](https://github.com/openmake/openmake_llm/issues/992)) ([acc13c0](https://github.com/openmake/openmake_llm/commit/acc13c097c4ea049ad0f04504a8c1c1b61c4bf9f))
+
+## [1.85.2](https://github.com/openmake/openmake_llm/compare/v1.85.1...v1.85.2) (2026-09-23)
+
+
+### 🐛 버그 수정
+
+* **security:** safeFetch undici 8 비호환으로 외부 연결 전면 실패 — undici fetch 로 통일 ([#990](https://github.com/openmake/openmake_llm/issues/990)) ([94dee5a](https://github.com/openmake/openmake_llm/commit/94dee5acfa098d1c44a8b5ccae9b837cb0664b30))
+
+## [1.85.1](https://github.com/openmake/openmake_llm/compare/v1.85.0...v1.85.1) (2026-09-23)
+
+
+### 🐛 버그 수정
+
+* **addon:** 관리자 add-on 토글 SQL 파라미터 타입 추론 실패 — setState 명시 캐스트 ([#986](https://github.com/openmake/openmake_llm/issues/986)) ([673b9a4](https://github.com/openmake/openmake_llm/commit/673b9a4a7cc07cbbb9ffe9edfd3e26c1335792ae))
+
+## [1.85.0](https://github.com/openmake/openmake_llm/compare/v1.84.0...v1.85.0) (2026-09-23)
+
+
+### ✨ 기능
+
+* **capability:** Base·Add-on 통합 P01–P10 — Capability Registry·실행 승인·Artifact 소유권·Job Runtime·미디어 runtime add-on ([#984](https://github.com/openmake/openmake_llm/issues/984)) ([aba3b4a](https://github.com/openmake/openmake_llm/commit/aba3b4a1305e5c1ba14116e896b1660986b4da4c))
+
+## [1.84.0](https://github.com/openmake/openmake_llm/compare/v1.83.0...v1.84.0) (2026-09-23)
+
+
+### ✨ 기능
+
+* **chat:** 생성 미디어 다운로드 + 음악·영상 길이 원문 보정 ([#982](https://github.com/openmake/openmake_llm/issues/982)) ([e91d6bf](https://github.com/openmake/openmake_llm/commit/e91d6bf3e6165437b1ffdc6539f64660eec098ee))
+
 ## [1.83.0](https://github.com/openmake/openmake_llm/compare/v1.82.0...v1.83.0) (2026-09-22)
 
 

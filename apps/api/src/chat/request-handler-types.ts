@@ -61,6 +61,8 @@ export interface ChatRequestParams {
     webSearchContext?: string;
     /** 첨부 파일 컨텍스트 (텍스트 파일 내용/바이너리 메타 — transient, DB 미저장) */
     fileContext?: string;
+    /** 이 턴 시작 때 이미 붙은 출처 수 — 도구 출처 번호의 기준(UserContext.sourceNumberBase) */
+    sourceNumberBase?: number;
     /** 오디오·영상·이미지 첨부 원본(base64) — 멀티모달 오케스트레이터 executor 입력 */
     mediaFiles?: import('../services/chat-service-types').MediaFileInput[];
     /** 켜진 채팅 모드 — add-on id → true. 일반 채팅 대신 그 모드가 턴을 가져간다(chat-modes.ts) */
@@ -137,6 +139,11 @@ export interface ChatRequestParams {
     onThinkingSummary?: (summary: string) => void;
     /** 에이전트 선택 콜백 */
     onAgentSelected?: (agent: { type: string; name: string; nameEn?: string; emoji?: string; phase?: string; reason?: string; confidence?: number }) => void;
+    /**
+     * 실제 응답 모델 콜백 — provider gate·쿼터 강등으로 확정될 때, 외부→로컬 폴백으로 바뀔 때 호출된다.
+     * 값은 응답 model 과 같은 형식(servedModelLabel). 같은 값이 여러 번 올 수 있으니 수신자가 거른다.
+     */
+    onServedModel?: (model: string) => void;
     /** 채팅 모드 진행 콜백 — (모드 id, 진행 상황). 모양은 그 모드가 정한다 */
     onModeProgress?: (modeId: string, progress: unknown) => void;
     /** 스킬 활성화 콜백 - 에이전트에 주입된 스킬 이름 목록 */

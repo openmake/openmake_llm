@@ -29,6 +29,8 @@ interface FormatSourcesOptions {
     /** true: 제목 뒤에 검색 소스 도메인 표시 (예: `제목 · naver.com`) — 결과가 어느 엔진에서
      *  왔는지 구분용. 기본 false (프롬프트 주입 경로의 기존 포맷·인용 파서 영향 없음). */
     showSource?: boolean;
+    /** 번호 시작 오프셋 — 같은 턴에 먼저 붙은 출처가 N 개면 N 을 넘겨 [N+1] 부터 매긴다(기본 0) */
+    numberOffset?: number;
 }
 
 type SourceLike = Pick<SearchResult, 'title' | 'url' | 'snippet'> & Partial<Pick<SearchResult, 'source'>>;
@@ -57,12 +59,12 @@ function capSnippet(snippet: string, maxSnippetChars: number, suffix: string): s
 /**
  * 구조화 출처(F19.4) — formatSearchSources 에 준 것과 **같은 결과 배열·maxResults·snippet 캡** 을 넘겨야 [N] 번호가 맞는다.
  */
-export function toSourceRefs(results: SourceLike[], opts: Pick<FormatSourcesOptions, 'maxResults' | 'maxSnippetChars' | 'snippetSuffix'> = {}): SearchSourceRef[] {
-    const { maxResults = 0, maxSnippetChars = 0, snippetSuffix = '' } = opts;
+export function toSourceRefs(results: SourceLike[], opts: Pick<FormatSourcesOptions, 'maxResults' | 'maxSnippetChars' | 'snippetSuffix' | 'numberOffset'> = {}): SearchSourceRef[] {
+    const { maxResults = 0, maxSnippetChars = 0, snippetSuffix = '', numberOffset = 0 } = opts;
     const limited = maxResults > 0 ? results.slice(0, maxResults) : results;
     return limited.map((r, i) => {
         const source = displaySourceLabel(r.source, r.url);
-        return { n: i + 1, title: r.title, url: r.url, snippet: capSnippet(r.snippet || '', maxSnippetChars, snippetSuffix), ...(source ? { source } : {}) };
+        return { n: numberOffset + i + 1, title: r.title, url: r.url, snippet: capSnippet(r.snippet || '', maxSnippetChars, snippetSuffix), ...(source ? { source } : {}) };
     });
 }
 
@@ -78,6 +80,7 @@ export function formatSearchSources(results: SourceLike[], opts: FormatSourcesOp
         emptySnippet = '',
         snippetSuffix = '',
         showSource = false,
+        numberOffset = 0,
     } = opts;
 
     const limited = maxResults > 0 ? results.slice(0, maxResults) : results;
@@ -85,7 +88,8 @@ export function formatSearchSources(results: SourceLike[], opts: FormatSourcesOp
         // code point 기준 컷 — UTF-16 code unit slice 는 이모지(surrogate pair) 중간을
         // 잘라 lone surrogate/replacement char 를 남긴다. [...str] 는 code point 이터레이터.
         const snip = capSnippet(r.snippet || '', maxSnippetChars, snippetSuffix);
-        const tag = labeled ? `[${sourceWord} ${i + 1}]` : `[${i + 1}]`;
+        const n = numberOffset + i + 1;
+        const tag = labeled ? `[${sourceWord} ${n}]` : `[${n}]`;
         const sourceLabel = showSource ? displaySourceLabel(r.source, r.url) : undefined;
         const title = sourceLabel ? `${r.title} · ${sourceLabel}` : r.title;
         const urlLine = labeled ? `   URL: ${r.url}` : `   ${r.url}`;

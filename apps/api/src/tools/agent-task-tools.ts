@@ -14,6 +14,7 @@
  */
 import { MCPToolDefinition, MCPToolResult } from '../tool-contract/types';
 import { getUnifiedDatabase } from '../data/models/unified-database';
+import { AGENT_TASK_LIST_LIMITS } from '../config/addon-tool-limits';
 
 /** 아티팩트 content 응답 상한 — 채팅 컨텍스트 폭주 방지 */
 const MAX_ARTIFACT_CONTENT_CHARS = 100_000;
@@ -39,7 +40,7 @@ const agentTaskListTool: MCPToolDefinition = {
     handler: async (args, context): Promise<MCPToolResult> => {
         const userId = context?.userId ? String(context.userId) : null;
         if (!userId) return textResult('로그인된 사용자만 에이전트 작업을 조회할 수 있습니다.', true);
-        const limit = Math.min(Math.max(Number(args.limit) || 10, 1), 30);
+        const limit = Math.min(Math.max(Number(args.limit) || AGENT_TASK_LIST_LIMITS.DEFAULT, 1), AGENT_TASK_LIST_LIMITS.MAX);
         const db = getUnifiedDatabase();
         const tasks = await db.getUserAgentTasks(userId);
         const rows = tasks.slice(0, limit).map((t) => ({

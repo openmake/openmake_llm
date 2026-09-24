@@ -24,7 +24,11 @@ import {
   CardHeader,
   CardTitle,
   CardContent,
+  Input,
+  NativeSelect,
+  PageBody,
   PageHeader,
+  Textarea,
 } from "@/components/ui/primitives";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { useQuery } from "@tanstack/react-query";
@@ -38,15 +42,11 @@ import { MemorySection } from "@/components/settings/memory-section";
 import { OrganizationSection } from "@/components/settings/organization-section";
 import { ConnectorsSection } from "@/components/settings/connectors-section";
 import { ProviderKeysSection } from "@/components/settings/provider-keys-section";
-import { ModelRolesSection } from "@/components/settings/model-roles-section";
-import { CapabilityModelsSection } from "@/components/settings/capability-models-section";
+import { ModelAssignmentsSection } from "@/components/settings/model-assignments-section";
 import { ExtensionsSection } from "@/components/settings/extensions-section";
 
 /* ── 탭 정의 ────────────────────────────────────────────── */
 type TabId = "general" | "model" | "interface" | "notifications" | "memory" | "extensions" | "connectors" | "privacy" | "security";
-
-/** 넓은 표를 품은 탭 — 본문 폭을 6xl 로 넓힌다(그 외 탭은 4xl 유지). */
-const TABLE_TABS = new Set<TabId>(["connectors", "model"]);
 
 const TABS: { id: TabId; labelKey: string; icon: LucideIcon }[] = [
   { id: "general", labelKey: "tabs.general", icon: Settings },
@@ -133,11 +133,7 @@ function Select({
   groups?: SelectGroup[];
 }) {
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm text-fg outline-none transition focus:border-accent"
-    >
+    <NativeSelect value={value} onChange={(e) => onChange(e.target.value)}>
       {groups
         ? groups.map((g) => (
             <optgroup key={g.label} label={g.label}>
@@ -153,7 +149,7 @@ function Select({
               {o.label}
             </option>
           ))}
-    </select>
+    </NativeSelect>
   );
 }
 
@@ -536,10 +532,7 @@ export default function SettingsPage() {
         }
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        {/* 표가 있는 탭(커넥터=서버 6열, 모델=API 키 6열)은 4xl(896px) 안에서 좌측 탭 내비와 폭을
-            나누면 열이 글자 단위로 꺾인다 — 그 탭만 넓힌다 */}
-        <div className={cn("mx-auto flex flex-col gap-6 lg:flex-row", TABLE_TABS.has(tab) ? "max-w-6xl" : "max-w-4xl")}>
+      <PageBody className="flex flex-col gap-6 lg:flex-row">
           {/* 좌측 세로 탭 */}
           <nav className="flex shrink-0 gap-1 overflow-x-auto lg:w-48 lg:flex-col">
             {TABS.map((t) => {
@@ -670,7 +663,7 @@ export default function SettingsPage() {
                     <p className="mt-0.5 text-xs text-muted">
                       {tSettings("customInstructions.description")}
                     </p>
-                    <textarea
+                    <Textarea
                       value={customInstructions}
                       onChange={(e) =>
                         setCustomInstructions(
@@ -679,7 +672,7 @@ export default function SettingsPage() {
                       }
                       rows={6}
                       placeholder={tSettings("customInstructions.placeholder")}
-                      className="mt-3 w-full resize-y rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-fg outline-none transition focus:border-accent"
+                      className="mt-3"
                     />
                     <p className="mt-1 text-right text-xs text-faint">
                       {tSettings("customInstructions.charCount", {
@@ -691,8 +684,7 @@ export default function SettingsPage() {
                 </CardContent>
               </Card>
               <ProviderKeysSection />
-              <ModelRolesSection />
-              <CapabilityModelsSection />
+              <ModelAssignmentsSection scope="user" />
               </>
             )}
 
@@ -786,14 +778,9 @@ export default function SettingsPage() {
                     title={tSettings("dataExport.title")}
                     description={tSettings("dataExport.description")}
                   >
-                    <button
-                      type="button"
-                      onClick={handleExport}
-                      disabled={exporting}
-                      className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-fg transition hover:bg-surface-2 disabled:opacity-50"
-                    >
+                    <Button variant="outline" onClick={handleExport} disabled={exporting}>
                       {exporting ? tSettings("dataExport.exporting") : tSettings("dataExport.button")}
-                    </button>
+                    </Button>
                   </FieldRow>
                   {consents.map((c) => (
                     <FieldRow
@@ -802,23 +789,22 @@ export default function SettingsPage() {
                       description={c.granted ? tSettings("consent.granted") : tSettings("consent.withdrawn")}
                     >
                       {c.granted ? (
-                        <button
-                          type="button"
+                        <Button
+                          variant="outline"
                           onClick={() => void handleWithdraw(c)}
                           disabled={consentBusy === c.type}
-                          className="rounded-md border border-danger/40 px-3 py-1.5 text-sm font-medium text-danger transition hover:bg-danger-soft disabled:opacity-50"
+                          className="border-danger/40 text-danger hover:bg-danger-soft"
                         >
                           {consentBusy === c.type ? tSettings("consent.withdrawing") : tSettings("consent.withdraw")}
-                        </button>
+                        </Button>
                       ) : (
-                        <button
-                          type="button"
+                        <Button
+                          variant="outline"
                           onClick={() => void handleGrant(c)}
                           disabled={consentBusy === c.type}
-                          className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-fg transition hover:bg-surface-2 disabled:opacity-50"
                         >
                           {consentBusy === c.type ? tSettings("consent.granting") : tSettings("consent.regrant")}
-                        </button>
+                        </Button>
                       )}
                     </FieldRow>
                   ))}
@@ -848,30 +834,27 @@ export default function SettingsPage() {
                     </div>
                   )}
                   <FieldRow title={tSettings("password.current")}>
-                    <input
+                    <Input
                       type="password"
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm text-fg outline-none transition focus:border-accent"
                     />
                   </FieldRow>
                   <FieldRow title={tSettings("password.new")} description={tSettings("password.newHint")}>
-                    <input
+                    <Input
                       type="password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm text-fg outline-none transition focus:border-accent"
                     />
                   </FieldRow>
                   <FieldRow title={tSettings("password.confirm")}>
-                    <input
+                    <Input
                       type="password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="h-9 w-full rounded-md border border-border-strong bg-surface px-3 text-sm text-fg outline-none transition focus:border-accent"
                     />
                   </FieldRow>
                   <div className="py-4">
@@ -891,8 +874,7 @@ export default function SettingsPage() {
               </Card>
             )}
           </div>
-        </div>
-      </div>
+      </PageBody>
     </>
   );
 }

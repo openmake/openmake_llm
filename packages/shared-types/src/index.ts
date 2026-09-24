@@ -210,6 +210,11 @@ export type WsServerEvent =
   /** 답변 검증 지적 — done 이후 judge 모델 1회 점검 결과. 지적이 없으면 이 이벤트는 오지 않는다. */
   | { type: "answer_verification"; issues: string; messageId?: string }
   | { type: "session_created"; sessionId: string }
+  /**
+   * 이 답변을 **실제로** 생성하는 모델 — 선택 모델이 아니라 자동 선택·쿼터 강등·외부→로컬 폴백을 거친 결과.
+   * 값이 바뀔 때만 온다(첫 확정 1회 + 폴백 시 1회). 형식은 응답 model 과 같다(로컬은 bare id, 외부는 `<provider>:<model>`).
+   */
+  | { type: "served_model"; model: string }
   /** 연결 직후 서버 build id — 클라가 기억해 두고 다른 build 재수신 시 배포로 간주(reload). */
   | { type: "build_id"; buildId: string }
   /**
@@ -257,6 +262,8 @@ export type WsServerEvent =
       lastSeq?: number;
       /** 재생해야 할 이벤트 일부가 링버퍼에서 밀려났음 — 아티팩트는 done.cleanedContent 로 재구성할 것 */
       gap?: boolean;
+      /** 마지막으로 발행한 served_model 값 — 링에서 밀려났어도 답하는 모델을 알 수 있게 스냅샷에 싣는다 */
+      servedModel?: string;
     }
   /** resume 요청에 이어받을 스트림이 없음 — 클라는 대기 상태를 풀면 된다. */
   | { type: "resume_none" }
@@ -372,3 +379,5 @@ export interface MePayload {
   /** F22 Phase A: 활성 조직(없으면 null). 구 서버는 필드 자체가 없다. */
   activeOrganization?: ActiveOrganization | null;
 }
+export * from "./knowledge";
+export * from "./model-assignments";

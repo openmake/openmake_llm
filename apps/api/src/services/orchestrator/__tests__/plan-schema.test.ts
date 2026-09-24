@@ -1,4 +1,6 @@
 import { validatePlan, extractPlanJson, PLAN_JSON_SCHEMA } from '../plan-schema';
+import { registerMediaStubForTest } from './helpers/media-stub';
+beforeAll(() => registerMediaStubForTest());
 
 const known = new Set(['a1', 'a2', 'm1']);
 

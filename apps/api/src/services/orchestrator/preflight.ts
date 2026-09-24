@@ -12,11 +12,15 @@
  *  변경한 정책: 종전 미디어 tool 은 역할 게이트 없이 전 사용자에게 열려 있었다 — 그대로(추가 권한 체계 없음).
  *  인증 컨텍스트는 호출부(message-pipeline)가 req.userId 로 넘기며, userId 없는 게스트는 외부 BYOK 가 없어 로컬 기본값만 쓴다.
  */
-import { UNSUPPORTED_CAPABILITIES, type Capability } from '../../config/capabilities';
-import { checkUserQuota } from '../../llm/user-quota';
+import { UNSUPPORTED_CAPABILITIES, ORCHESTRATOR, CAPABILITY_LIMITS, type Capability } from '../../config/capabilities';
+import { admitCapability, ADMISSION_LABEL, type ApprovedInvocationHandle } from '../../capability-contract/admission';
+import { ensureLegacyCapabilityBridge } from '../../addon-host/legacy-capability-bridge';
+import { reserveUserQuota, type QuotaReservation } from '../../llm/user-quota';
+import { reserveServerKeyBudget, type ServerKeyReservation } from '../server-key-quota';
+import { SERVER_KEY_MEDIA_RESERVE_TOKENS } from '../../config/runtime-limits';
 import { QuotaExceededError } from '../../errors/quota-exceeded.error';
 import { resolveCapabilityTarget, CapabilityUnavailableError, type CapabilityTarget } from './capability-resolver';
-import { savedVideoPath } from './executors/video';
+import { savedJobResultPath } from './media-io';
 import type { PlanTask, ValidatedPlan } from './plan-schema';
 import { resolveTaskAttachments, type AttachmentKind, type ExecContext } from './types';
 import { createLogger } from '../../utils/logger';
@@ -30,6 +34,17 @@ interface PreflightResult {
     targets: Map<string, CapabilityTarget>;
     /** 로컬 대상 작업 존재 여부(쿼터·사용량 기록 대상) */
     hasLocal: boolean;
+    /** 작업별 승인 handle(P03) — 실행기는 이것이 있는 작업만, 실행 직전 재검사 후 실행한다 */
+    handles: Map<string, ApprovedInvocationHandle>;
+    /** 원자적 예약(P04) — 실행 후 orchestrate 가 실측으로 정산한다. 승인 전 거절은 예약 없음 */
+    reservations: PreflightReservations;
+}
+
+export interface PreflightReservations {
+    /** 로컬 vLLM 토큰 쿼터(per-user) — 로컬 대상 작업이 있을 때 한 번 */
+    user: QuotaReservation | null;
+    /** 서버 공용 키 예산 — 작업별(taskId → 예약) */
+    serverKeys: Map<string, ServerKeyReservation>;
 }
 
 /** capability 별 필수 첨부 종류 — 계획에 없으면 실행하지 않는다(모델 호출·과금 전에 거절) */
@@ -50,7 +65,6 @@ function inputProblem(task: PlanTask, ctx: ExecContext): string | null {
     const direct = resolveTaskAttachments({ ...task, refs: [] }, ctx, need);
     if (direct.length > 0) return null;
     if (task.refs.length > 0) return null;
-    if (task.capability === 'video.generate') return null;
     // Planner 가 첨부 id 를 빠뜨린 계획 — 이 종류 첨부가 정확히 하나면 그것을 채운다(여러 개면 어느 것인지 몰라 거절 유지).
     // 실측(2026-09-15): hasa exaone-4.0-32b planner 가 이미지 이해·OCR·전사 계획에서 attachments:[] 를 냈다.
     const candidates = [...ctx.attachments.values()].filter((a) => need.has(a.kind));
@@ -65,18 +79,37 @@ function inputProblem(task: PlanTask, ctx: ExecContext): string | null {
 export async function preflightPlan(plan: ValidatedPlan, ctx: ExecContext): Promise<PreflightResult> {
     const rejected = new Map<string, string>();
     const targets = new Map<string, CapabilityTarget>();
+    const handles = new Map<string, ApprovedInvocationHandle>();
+    const reservations: PreflightReservations = { user: null, serverKeys: new Map() };
     let hasLocal = false;
+    ensureLegacyCapabilityBridge();
+    const now = Date.now();
 
     for (const task of plan.tasks) {
+        // ① Registry 등록·소유 add-on 의도(관리자 중지)·상태 저장소 조회 실패 — 배정·키보다 먼저, Planner 없는 직접 경로(T23)도 같은 문
+        const admission = await admitCapability(task.capability);
+        if (!admission.ok) { rejected.set(task.id, `[${ADMISSION_LABEL[admission.code]}] ${admission.reason}`); continue; }
         if (UNSUPPORTED_CAPABILITIES.has(task.capability)) { rejected.set(task.id, `[unsupported] ${task.capability}: 검증된 provider 어댑터가 아직 없습니다`); continue; }
         const inputErr = inputProblem(task, ctx);
         if (inputErr) { rejected.set(task.id, `[input] ${inputErr}`); continue; }
-        if (task.capability === 'web.search') continue; // 모델 배정 없음
-        // 완료·저장된 영상 job 조회는 외부 키 없이 반환되므로 배정·키 검사를 요구하지 않는다(Codex 검토 4)
-        if (task.capability === 'video.generate' && task.attachments.some((id) => savedVideoPath(ctx.attachments.get(id)))) continue;
+        const handle: ApprovedInvocationHandle = {
+            taskId: task.id, capability: task.capability, userId: ctx.userId, sessionId: ctx.sessionId,
+            owner: admission.owner, registryRevision: admission.registryRevision, stateRevision: admission.stateRevision,
+            issuedAt: now, deadline: now + ORCHESTRATOR.TURN_DEADLINE_MS,
+        };
+        if (task.capability === 'web.search') { handles.set(task.id, handle); continue; } // 모델 배정 없음
+        // 완료·저장된 job 결과 조회는 외부 키 없이 반환되므로 배정·키 검사를 요구하지 않는다(Codex 검토 4 — T15)
+        if (task.attachments.some((id) => savedJobResultPath(ctx.attachments.get(id), task.capability))) { handles.set(task.id, handle); continue; }
         try {
             const target = await resolveCapabilityTarget(task.capability, ctx.userId);
+            // 서버 공용 키는 check-only 가 아니라 **원자적 예약**(T24) — 동시 요청이 각각 통과해 총한도를 넘지 못한다
+            if (target.costOwner === 'server' && target.serverBudget) {
+                const r = await reserveServerKeyBudget(target.providerId, SERVER_KEY_MEDIA_RESERVE_TOKENS, target.serverBudget.dailyTokenLimit, target.serverBudget.monthlyTokenLimit, now);
+                if ('rejected' in r) { rejected.set(task.id, `[budget] ${r.rejected}`); continue; }
+                reservations.serverKeys.set(task.id, r.reservation);
+            }
             targets.set(task.id, target);
+            handles.set(task.id, handle);
             if (target.providerId === 'local-llm') hasLocal = true;
         } catch (err) {
             if (err instanceof CapabilityUnavailableError) {
@@ -88,10 +121,11 @@ export async function preflightPlan(plan: ValidatedPlan, ctx: ExecContext): Prom
         }
     }
 
-    // 로컬 vLLM 용량 보호 — per-user 토큰 쿼터(종전 LLMClient 경로와 같은 정책)
+    // 로컬 vLLM 용량 보호 — per-user 토큰 쿼터를 **선예약**(종전 check-only → reserve/settle, 계획서 9.2). 실측은 orchestrate 가 정산
     if (hasLocal && ctx.userId) {
+        const localTasks = [...targets.values()].filter((t) => t.providerId === 'local-llm').length;
         try {
-            await checkUserQuota(ctx.userId, Date.now());
+            reservations.user = await reserveUserQuota(ctx.userId, localTasks * CAPABILITY_LIMITS.TEXT_MAX_TOKENS, now);
         } catch (err) {
             if (err instanceof QuotaExceededError) {
                 for (const [id, t] of targets) if (t.providerId === 'local-llm' && !rejected.has(id)) rejected.set(id, `[quota] ${err.message}`);
@@ -100,5 +134,6 @@ export async function preflightPlan(plan: ValidatedPlan, ctx: ExecContext): Prom
             }
         }
     }
-    return { rejected, targets, hasLocal };
+    for (const id of rejected.keys()) handles.delete(id);
+    return { rejected, targets, hasLocal, handles, reservations };
 }

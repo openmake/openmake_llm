@@ -48,6 +48,7 @@ struct OrchestratorProgressCard: View {
                                     .foregroundStyle(Instrument.muted)
                             }
                         }
+                        if let model = task.model { ServedModelCaption(model: model, prefix: "처리 모델") }
                         if let detail = task.summary ?? task.instruction, !detail.isEmpty {
                             Text(detail)
                                 .font(.system(size: 11.5))

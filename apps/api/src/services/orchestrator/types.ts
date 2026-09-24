@@ -69,6 +69,8 @@ export interface ExecContext {
     sessionId?: string;
     /** preflight 가 승인한 작업별 실행 대상 — executor 는 재해석하지 않고 이것을 쓴다(승인 대상 = 실행 대상) */
     targets?: Map<string, import('./capability-resolver').CapabilityTarget>;
+    /** preflight 가 발급한 작업별 승인 handle(P03) — 있으면 실행기는 handle 없는 작업을 실행하지 않고, 실행 직전 재검사한다 */
+    handles?: Map<string, import('../../capability-contract/admission').ApprovedInvocationHandle>;
     /** 진행 이벤트(WS) — 없으면 무시 */
     onProgress?: (event: OrchestratorProgressEvent) => void;
 }
@@ -76,7 +78,8 @@ export interface ExecContext {
 export type OrchestratorProgressEvent =
     | { type: 'orchestrator_status'; phase: 'planning' | 'executing' | 'synthesizing' | 'done' | 'skipped'; detail?: string }
     | { type: 'orchestrator_plan'; complexity: 'simple' | 'multi'; tasks: Array<{ id: string; capability: Capability; instruction: string }> }
-    | { type: 'orchestrator_task'; id: string; capability: Capability; status: 'running' | 'ok' | 'pending' | 'failed'; summary?: string; ms?: number };
+    /** model — 이 작업을 실제로 처리한(하는) 모델(preflight 가 승인한 실행 대상, 로컬 bare id·외부 `<provider>:<model>`). 대상이 없는 작업(web.search·저장본 재조회·거절)은 생략 */
+    | { type: 'orchestrator_task'; id: string; capability: Capability; status: 'running' | 'ok' | 'pending' | 'failed'; summary?: string; ms?: number; model?: string };
 
 export type ExecutorOutput = Omit<TaskResult, 'taskId' | 'capability' | 'ms' | 'status'> & { status?: TaskStatus; job?: { providerId: string; jobId: string } };
 export type CapabilityExecutor = (task: PlanTask, ctx: ExecContext) => Promise<ExecutorOutput>;

@@ -6,15 +6,14 @@
 import { CAPABILITY_LIMITS, ORCHESTRATOR } from '../../../config/capabilities';
 import { resolveCapabilityTarget } from '../capability-resolver';
 import { callJson, extractChatText, extractUsage } from '../http-call';
+import { getTextWorkerSystemPrompt } from '../../../prompts/svc-orchestrator-executors';
 import { refsText, type CapabilityExecutor } from '../types';
 
 export const textExecutor: CapabilityExecutor = async (task, ctx) => {
     const target = ctx.targets?.get(task.id) ?? await resolveCapabilityTarget(task.capability, ctx.userId);
     const refs = refsText(task, ctx, ORCHESTRATOR.RESULT_MAX_CHARS);
     const ko = ctx.lang === 'ko';
-    const system = ko
-        ? '당신은 오케스트레이터의 하위 작업자입니다. 주어진 지시만 수행하고 결과를 간결한 텍스트로 돌려주세요. 인사·서두 없이 본문만.'
-        : 'You are a sub-task worker of an orchestrator. Do only what the instruction says and return a concise plain-text result without preamble.';
+    const system = getTextWorkerSystemPrompt(ctx.lang);
     // 머리글도 응답 언어로 — 영어 턴에 한국어 머리글이 섞이면 결과가 한국어로 나오고, 그 결과가
     // image.generate refs 로 들어가 이미지 안에 깨진 한글이 그려졌다(2026-09-14).
     const user = [

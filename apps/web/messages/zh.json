@@ -20,7 +20,7 @@
       "metrics": "指标",
       "alerts": "告警",
       "mcpCatalogAdmin": "MCP目录管理",
-      "modelRolesAdmin": "角色模型管理",
+      "modelRolesAdmin": "模型分配管理",
       "systemSettingsAdmin": "系统设置",
       "developer": "开发者",
       "schedulesAdmin": "任务计划",
@@ -419,7 +419,8 @@
         "ok": "完成",
         "failed": "失败"
       },
-      "tasksCount": "{count} 个任务"
+      "tasksCount": "{count} 个任务",
+      "taskModel": "处理模型：{model}"
     },
     "tool": {
       "running": "正在运行 {tool}"
@@ -464,6 +465,7 @@
       "copied": "已复制",
       "download": "下载 .patch"
     },
+    "servedModel": "回答模型：{model}",
     "modelFallbackNotice": "所选模型（{from}）未响应，已由默认模型（{to}）作答。",
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "已达使用上限",
@@ -1841,71 +1843,7 @@
     "oauthFailed": "登录失败：{error}",
     "oauthAccount": "账户"
   },
-  "modelRoles": {
-    "title": "按角色分配模型",
-    "description": "将已注册的模型(本地或外部API密钥)分配给不同功能角色。未分配的角色将使用服务器默认模型。",
-    "externalNote": "外部模型需要已注册且有效的提供商API密钥;调用失败时会自动回退到本地默认模型。",
-    "loading": "正在加载角色映射…",
-    "loadError": "加载角色映射失败。",
-    "saveFailed": "保存角色映射失败。",
-    "defaultOption": "默认(自动)",
-    "assignedBadge": "已分配",
-    "resetLabel": "恢复默认",
-    "empty": "没有可分配的角色。",
-    "roles": {
-      "agent": {
-        "label": "智能体任务",
-        "description": "后台智能体任务的执行模型"
-      },
-      "judge": {
-        "label": "目标判定",
-        "description": "判定智能体任务是否达成目标的模型"
-      },
-      "research": {
-        "label": "深度研究",
-        "description": "研究流程与报告生成的模型"
-      },
-      "spawn": {
-        "label": "并行子智能体",
-        "description": "并行分支子智能体的模型"
-      },
-      "review": {
-        "label": "代码与安全审查",
-        "description": "代码审查、安全分析与实现计划的模型"
-      },
-      "summary": {
-        "label": "思考摘要",
-        "description": "生成思考过程标题摘要的模型"
-      },
-      "planner": {
-        "label": "Planner(问题分析与任务规划)",
-        "description": "每轮生成一次简短的 JSON 计划 — 建议使用小而快的模型(本地 27B 约需 15 秒)"
-      }
-    },
-    "notInList": "（不在列表中）"
-  },
   "capabilityModels": {
-    "title": "按功能分配模型",
-    "description": "决定由哪个模型处理 Planner 在分析问题后规划的功能(capability)。这与上方的角色分配(哪个文本模型作答)相互独立,所有调用都经由单一的 LiteLLM 网关。",
-    "gatewayNote": "外部模型只能分配已接入网关的 provider。未分配的项目遵循全局设置或默认值。",
-    "loading": "正在加载功能分配…",
-    "loadError": "无法加载功能分配。",
-    "saveFailed": "保存功能分配失败。",
-    "defaultOption": "默认(自动)",
-    "assignedBadge": "已分配",
-    "unavailableBadge": "不可用",
-    "unsupportedBadge": "暂不支持",
-    "unsupportedHint": "尚无 provider 适配器,仅保存分配。",
-    "resetLabel": "恢复默认",
-    "empty": "没有可分配的功能。",
-    "notInList": "(不在列表中)",
-    "paramsHint": "provider 规格参数 — 留空则为默认值",
-    "paramsApply": "应用参数",
-    "source": {
-      "user": "我的设置",
-      "global": "全局",
-      "default": "默认"
-    },
     "capabilities": {
       "text_reason": "文本推理与分析",
       "text_code": "代码",
@@ -1921,35 +1859,11 @@
       "music_generate": "音乐生成",
       "video_generate": "视频生成",
       "video_analyze": "视频理解"
-    },
-    "groups": {
-      "text": "文本·视觉",
-      "code": "代码",
-      "image": "图像",
-      "audio": "语音",
-      "music": "音乐",
-      "video": "视频",
-      "embed": "嵌入(基础设施)",
-      "other": "其他"
-    },
-    "groupDesc": {
-      "text": "推理/分析以及图像理解·OCR — 由一个支持视觉的文本模型负责",
-      "code": "专用于编写/修改代码的模型(留空则由文本模型处理)",
-      "image": "图像生成与编辑",
-      "audio": "语音识别(STT)与合成(TTS)",
-      "music": "歌曲与背景音乐生成 — 默认使用本地音乐服务器(ACE-Step)",
-      "video": "视频生成(提交任务后完成时获取结果)",
-      "embed": "搜索/嵌入用基础设施模型(仅管理员)",
-      "other": "不属于任何分组的功能"
-    },
-    "mixedOption": "(单独设置)",
-    "advancedShow": "详细设置",
-    "advancedHide": "收起详细",
-    "hiddenUnsupportedNote": "尚无执行路径的功能不显示: {list}"
+    }
   },
   "adminModelRoles": {
-    "title": "角色模型管理",
-    "description": "管理全局角色→模型映射(所有用户的默认值)和服务器共享外部密钥。",
+    "title": "模型分配管理",
+    "description": "管理全局模型分配(所有用户的默认值)和服务器共享外部密钥。",
     "loadError": "加载失败。",
     "saveFailed": "保存失败。",
     "keyDeleteConfirm": "删除 '{provider}' 的服务器密钥?该提供商的全局映射将回退到本地模型。",
@@ -1979,71 +1893,6 @@
       "placeholder": "留空 = 回退 ({fallback})",
       "cacheNote": "更改无需重启,最多60秒内生效。"
     }
-  },
-  "adminCapabilityModels": {
-    "title": "全局功能分配",
-    "description": "设置 Planner 规划的各功能(capability)的全局默认模型。用户个人分配优先;清除后回退到代码默认值。",
-    "axisNote": "这与上方的“全局角色映射”(哪个文本 LLM 作答)是相互独立的维度,所有调用都经由单一的 LiteLLM 网关。",
-    "gatewayNote": "外部模型只能分配已接入网关的 provider({providers})。",
-    "gatewayNone": "无",
-    "loadError": "无法加载功能分配。",
-    "saveFailed": "保存功能分配失败。",
-    "defaultOption": "默认(代码默认值)",
-    "assigned": "已分配",
-    "unavailableBadge": "不可用",
-    "unsupportedBadge": "暂不支持",
-    "unsupportedHint": "尚无 provider 适配器,仅保存分配。",
-    "resetLabel": "恢复默认",
-    "codeDefault": "代码默认值:{model}",
-    "notInList": "(不在列表中)",
-    "cacheNote": "更改无需重启,最多 60 秒内生效。",
-    "paramsHint": "provider 规格参数 — 留空则为默认值",
-    "paramsApply": "应用参数",
-    "source": {
-      "user": "我的设置",
-      "global": "全局",
-      "default": "默认"
-    },
-    "capabilities": {
-      "text_reason": "文本推理与分析",
-      "text_code": "代码",
-      "text_embed": "嵌入",
-      "vision_describe": "图像理解",
-      "vision_ocr": "OCR",
-      "image_generate": "图像生成",
-      "image_edit": "图像编辑",
-      "audio_transcribe": "语音识别(STT)",
-      "audio_speech": "语音合成(TTS)",
-      "audio_analyze": "音频分析",
-      "music_analyze": "音乐分析",
-      "music_generate": "音乐生成",
-      "video_generate": "视频生成",
-      "video_analyze": "视频理解"
-    },
-    "groups": {
-      "text": "文本·视觉",
-      "code": "代码",
-      "image": "图像",
-      "audio": "语音",
-      "music": "音乐",
-      "video": "视频",
-      "embed": "嵌入(基础设施)",
-      "other": "其他"
-    },
-    "groupDesc": {
-      "text": "推理/分析以及图像理解·OCR — 由一个支持视觉的文本模型负责",
-      "code": "专用于编写/修改代码的模型(留空则由文本模型处理)",
-      "image": "图像生成与编辑",
-      "audio": "语音识别(STT)与合成(TTS)",
-      "music": "歌曲与背景音乐生成 — 默认使用本地音乐服务器(ACE-Step)",
-      "video": "视频生成(提交任务后完成时获取结果)",
-      "embed": "搜索/嵌入用基础设施模型(仅管理员)",
-      "other": "不属于任何分组的功能"
-    },
-    "mixedOption": "(单独设置)",
-    "advancedShow": "详细设置",
-    "advancedHide": "收起详细",
-    "hiddenUnsupportedNote": "尚无执行路径的功能不显示: {list}"
   },
   "adminGatewayModels": {
     "title": "网关模型状态",
@@ -2560,8 +2409,8 @@
     "importApply": "应用",
     "importConfirm": "应用已校验的配置？系统设置和组织策略将被覆盖。",
     "importProblems": "{count} 个问题 — 无法应用。",
-    "importDryRun": "校验通过 — 设置 {systemSettings} · capability {capabilityModels} · 组织 {organizations} · 策略 {policies}。按“应用”生效。",
-    "importApplied": "已应用 — 设置 {systemSettings} · capability {capabilityModels} · 组织 {organizations} · 策略 {policies}。",
+    "importDryRun": "校验通过 — 设置 {systemSettings} · 模型分配 {modelAssignments} · 组织 {organizations} · 策略 {policies}。按“应用”生效。",
+    "importApplied": "已应用 — 设置 {systemSettings} · 模型分配 {modelAssignments} · 组织 {organizations} · 策略 {policies}。",
     "costBudget": "每月成本预算(USD)"
   },
   "adminCostRates": {
@@ -2726,6 +2575,236 @@
     "nonCommercial": "非商用",
     "permissions": "权限",
     "verifiedModels": "已验证模型",
-    "verifiedDetail": "通过率 {rate}% · {cases} 项 · {date}"
+    "verifiedDetail": "通过率 {rate}% · {cases} 项 · {date}",
+    "restartRequired": "需要重启",
+    "runtime": {
+      "not_loaded": "运行时未加载",
+      "registering": "注册中",
+      "ready": "就绪",
+      "failed": "运行时失败"
+    }
+  },
+  "knowledge": {
+    "serverError": "发生服务器错误",
+    "cancel": "取消",
+    "close": "关闭",
+    "save": "保存",
+    "back": "返回",
+    "rename": "重命名",
+    "loading": "加载中…",
+    "untitledConversation": "未命名对话",
+    "noConversations": "没有关联的对话",
+    "newConversation": "新对话",
+    "sectionTitle": "Knowledge",
+    "sidebarEmpty": "还没有 Knowledge",
+    "viewAll": "查看全部 Knowledge",
+    "listSubtitle": "添加资料后，对话将基于这些资料作答",
+    "newSpace": "新建 Knowledge",
+    "searchPlaceholder": "搜索 Knowledge",
+    "empty": "还没有 Knowledge",
+    "noResults": "没有结果",
+    "notFound": "未找到",
+    "notReadyNotice": "嵌入尚未就绪，新资料的处理可能会延迟",
+    "noDescription": "暂无描述",
+    "editDescription": "编辑描述",
+    "deleteSpace": "删除 Knowledge",
+    "deleteSpaceConfirm": "删除“{name}”？所有资料和关联都会被移除。",
+    "create": {
+      "title": "创建 Knowledge",
+      "nameRequired": "请输入名称",
+      "nameLabel": "名称",
+      "namePlaceholder": "例如：产品文档",
+      "descLabel": "描述（可选）",
+      "descPlaceholder": "此 Knowledge 的用途",
+      "submit": "创建"
+    },
+    "card": {
+      "documents": "{count} 个文档",
+      "conversations": "{count} 个对话",
+      "lastUsed": "最近使用 {date}",
+      "processing": "处理中 {count}",
+      "failed": "失败 {count}"
+    },
+    "status": {
+      "uploaded": "已上传",
+      "validating": "校验中",
+      "extracting": "正在提取正文",
+      "chunking": "分块中",
+      "embedding": "嵌入中",
+      "verifying": "核对中",
+      "ready": "就绪",
+      "failed": "失败"
+    },
+    "failure": {
+      "validation": "无法校验文件",
+      "scannedPdf": "不支持扫描版 PDF（无文本层）",
+      "extraction": "无法提取正文",
+      "embedding": "嵌入失败",
+      "unknown": "处理失败"
+    },
+    "doc": {
+      "section": "{count} 个文档",
+      "empty": "还没有资料，请添加文件。",
+      "deleteConfirm": "删除“{name}”？",
+      "pages": "{count} 页",
+      "retry": "重试",
+      "delete": "删除"
+    },
+    "upload": {
+      "add": "添加资料",
+      "tooLarge": "文件超过允许的大小",
+      "duplicate": "已存在内容相同的文档"
+    },
+    "conv": {
+      "section": "{count} 个对话",
+      "bindExisting": "添加已有对话",
+      "unbind": "取消关联",
+      "unbindConfirm": "取消此对话的关联？"
+    },
+    "bind": {
+      "title": "添加已有对话",
+      "hint": "选择要关联到此 Knowledge 的对话",
+      "noChats": "没有最近的对话"
+    },
+    "banner": {
+      "text": "此对话可使用该 Knowledge 中的资料"
+    },
+    "citation": {
+      "title": "引用",
+      "page": "第 {page} 页",
+      "pages": "第 {start}–{end} 页",
+      "loadFailed": "无法加载片段"
+    },
+    "admin": {
+      "title": "管理",
+      "reindex": "重建索引",
+      "reindexConfirmTitle": "重建索引",
+      "reindexConfirmBody": "将重建嵌入索引，可能需要一些时间。",
+      "ready": "可用",
+      "notReady": "不可用",
+      "embeddingIndex": "嵌入索引",
+      "jobs": "任务",
+      "noJobs": "没有进行中的任务",
+      "profiles": "配置",
+      "active": "启用",
+      "saveProfile": "保存",
+      "invalidJson": "JSON 格式无效"
+    },
+    "sidebar": {
+      "expandSpace": "展开 {name}",
+      "collapseSpace": "折叠 {name}"
+    }
+  },
+  "modelAssignments": {
+    "title": "模型分配",
+    "description": "将角色与功能合并为按插槽的分配。为每个插槽分配本地或外部模型；未分配的插槽将回退到全局设置或默认值。",
+    "descriptionGlobal": "全局默认模型分配。用户个人分配优先，解除后回退到代码默认值。",
+    "externalNote": "外部模型仅当其 provider 已并入网关时才能分配，调用失败时会自动回退到默认模型。",
+    "cacheNote": "更改无需重启，最多 60 秒内生效。",
+    "loading": "正在加载模型分配…",
+    "loadError": "无法加载模型分配。",
+    "saveFailed": "保存模型分配失败。",
+    "empty": "没有可分配的插槽。",
+    "defaultOption": "默认（自动）",
+    "assignedBadge": "已分配",
+    "unavailableBadge": "不可用",
+    "resetLabel": "恢复默认",
+    "notInList": "（不在列表中）",
+    "paramsApply": "应用参数",
+    "paramsHint": "provider 规格参数 — 留空则使用默认值",
+    "groups": {
+      "agents": "对话·智能体",
+      "quality": "评审·摘要·代码",
+      "multimodal": "规划·媒体"
+    },
+    "groupDesc": {
+      "agents": "处理对话与智能体任务的文本模型",
+      "quality": "用于判定、摘要、代码工作的文本模型",
+      "multimodal": "用于规划与图像·音频·视频等媒体处理的模型"
+    },
+    "source": {
+      "user": "我的分配",
+      "global": "全局",
+      "default": "默认值",
+      "none": "无"
+    },
+    "slots": {
+      "agent": {
+        "title": "智能体任务",
+        "description": "运行后台智能体任务的模型"
+      },
+      "spawn": {
+        "title": "并行子智能体",
+        "description": "并行分支的子智能体模型"
+      },
+      "reasoning": {
+        "title": "推理·深度研究",
+        "description": "用于深度研究流程·报告与复杂推理的模型"
+      },
+      "judge": {
+        "title": "目标判定",
+        "description": "判定智能体任务是否完成的模型"
+      },
+      "code": {
+        "title": "代码·评审",
+        "description": "用于编写/修改代码、代码与安全评审、实现规划的模型"
+      },
+      "summary": {
+        "title": "思考摘要",
+        "description": "生成思考过程标题的模型"
+      },
+      "planner": {
+        "title": "Planner（问题分析·计划）",
+        "description": "每轮生成一次简短 JSON 计划的模型 — 建议使用小而快的模型"
+      },
+      "vision_describe": {
+        "title": "图像理解",
+        "description": "描述与分析图像内容的视觉模型"
+      },
+      "vision_ocr": {
+        "title": "OCR",
+        "description": "识别图像中文字的模型"
+      },
+      "image_generate": {
+        "title": "图像生成",
+        "description": "根据文本生成图像的模型"
+      },
+      "image_edit": {
+        "title": "图像编辑",
+        "description": "编辑现有图像的模型"
+      },
+      "audio_transcribe": {
+        "title": "语音识别（STT）",
+        "description": "将语音转写为文本的模型"
+      },
+      "audio_speech": {
+        "title": "语音合成（TTS）",
+        "description": "将文本合成为语音的模型"
+      },
+      "audio_analyze": {
+        "title": "音频分析",
+        "description": "分析音频内容的模型"
+      },
+      "music_generate": {
+        "title": "音乐生成",
+        "description": "生成歌曲·背景音乐的模型（默认使用本地 ACE-Step）"
+      },
+      "music_analyze": {
+        "title": "音乐分析",
+        "description": "分析音乐的模型"
+      },
+      "video_generate": {
+        "title": "视频生成",
+        "description": "生成视频的模型（提交任务后在完成时接收结果）"
+      },
+      "video_analyze": {
+        "title": "视频理解",
+        "description": "分析视频内容的模型"
+      },
+      "text_embed": {
+        "title": "嵌入",
+        "description": "用于搜索与嵌入的基础设施模型"
+      }
+    }
   }
 }

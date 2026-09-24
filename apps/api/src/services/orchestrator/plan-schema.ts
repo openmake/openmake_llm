@@ -4,7 +4,9 @@
  * 순수 모듈(LLM·DB 없음) — 테스트로 고정한다.
  */
 import { z } from 'zod';
-import { isCapability, PLANNABLE_CAPABILITIES, ORCHESTRATOR, PLAN_LYRICS_REF_MAX_CHARS, type Capability } from '../../config/capabilities';
+import { isCapability, ORCHESTRATOR, PLAN_LYRICS_REF_MAX_CHARS, type Capability } from '../../config/capabilities';
+import { snapshotForExecution } from '../../runtime-ports/capability-runtime';
+import { ensureLegacyCapabilityBridge } from '../../addon-host/legacy-capability-bridge';
 
 const PLAN_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
 
@@ -90,6 +92,27 @@ export const PLAN_JSON_SCHEMA = {
 } as const;
 
 /** 모델 출력에서 JSON 객체를 뽑는다 — 펜스·앞뒤 잡음 허용(전체 파싱 먼저, 실패 시 첫 `{`~마지막 `}`) */
+/** 잘린 출력의 머리에서 단순 계획 여부·언어를 읽는 구조 패턴(JSON 키 형태) */
+const TRUNCATED_SIMPLE_HEAD_RE = /^\s*(?:```(?:json)?\s*)?\{\s*"complexity"\s*:\s*"simple"/i;
+const TRUNCATED_LANGUAGE_RE = /"language"\s*:\s*"([A-Za-z-]{2,16})"/;
+
+/**
+ * 출력 상한에 잘려 JSON 이 닫히지 않았지만 머리가 `{"complexity":"simple"` 인 계획을 단순 계획으로 살린다.
+ * 단순 계획은 작업 목록을 쓰지 않고 종전 채팅 경로로 가므로(orchestrate.ts) 잘린 작업 설명을 잃어도 결과가 같다 —
+ * 재시도(수 초~수십 초)를 아낀다. 단순이 아니면 null(종전대로 재시도·폴백).
+ */
+export function salvageTruncatedSimplePlan(text: string, message: string, knownAttachmentIds?: ReadonlySet<string>, plannable?: ReadonlySet<string>): ValidatedPlan | null {
+    if (!TRUNCATED_SIMPLE_HEAD_RE.test(text)) return null;
+    const language = TRUNCATED_LANGUAGE_RE.exec(text)?.[1];
+    const v = validatePlan({
+        complexity: 'simple',
+        ...(language ? { language } : {}),
+        synthesis: false,
+        tasks: [{ id: 't1', capability: 'text.reason', input: { instruction: message.slice(0, ORCHESTRATOR.PLANNER_MESSAGE_MAX_CHARS) } }],
+    }, knownAttachmentIds ?? new Set(), plannable);
+    return v.ok ? v.plan : null;
+}
+
 export function extractPlanJson(text: string): unknown | null {
     const t = text.trim();
     try { return JSON.parse(t); } catch { /* fallthrough */ }
@@ -102,8 +125,17 @@ export function extractPlanJson(text: string): unknown | null {
 
 type PlanValidation = { ok: true; plan: ValidatedPlan } | { ok: false; reason: string };
 
-/** 구조 + 의미 검증. 실패 사유는 Planner 재시도 프롬프트에 그대로 싣는다 */
-export function validatePlan(raw: unknown, knownAttachmentIds: ReadonlySet<string>): PlanValidation {
+/** 기본 plannable 집합 — Registry 스냅샷(호출부가 같은 요청의 스냅샷을 넘기지 않았을 때) */
+function defaultPlannable(): ReadonlySet<string> {
+    ensureLegacyCapabilityBridge();
+    return snapshotForExecution().plannable;
+}
+
+/**
+ * 구조 + 의미 검증. 실패 사유는 Planner 재시도 프롬프트에 그대로 싣는다.
+ * `plannable` 은 Planner 가 프롬프트·schema 에 쓴 **같은 스냅샷**의 집합(P03) — 생략하면 현재 Registry 스냅샷.
+ */
+export function validatePlan(raw: unknown, knownAttachmentIds: ReadonlySet<string>, plannable: ReadonlySet<string> = defaultPlannable()): PlanValidation {
     const parsed = planSchema.safeParse(raw);
     if (!parsed.success) return { ok: false, reason: `schema: ${parsed.error.issues.map((i) => `${i.path.join('.')} ${i.message}`).slice(0, 3).join('; ')}` };
     const p = parsed.data;
@@ -114,7 +146,7 @@ export function validatePlan(raw: unknown, knownAttachmentIds: ReadonlySet<strin
         if (ids.has(t.id)) return { ok: false, reason: `duplicate task id '${t.id}'` };
         ids.add(t.id);
         if (!isCapability(t.capability)) return { ok: false, reason: `unknown capability '${t.capability}'` };
-        if (!PLANNABLE_CAPABILITIES.includes(t.capability)) return { ok: false, reason: `capability '${t.capability}' is not plannable` };
+        if (!plannable.has(t.capability)) return { ok: false, reason: `capability '${t.capability}' is not plannable` };
         const { instruction, text, attachments, refs, ...extra } = t.input ?? {};
         for (const a of attachments ?? []) {
             if (!knownAttachmentIds.has(a)) return { ok: false, reason: `unknown attachment '${a}' in task '${t.id}'` };

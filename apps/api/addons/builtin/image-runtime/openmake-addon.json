@@ -1,0 +1,20 @@
+{
+  "id": "image-runtime",
+  "name": "OpenMake Image Runtime",
+  "version": "1.0.0",
+  "description": "이미지 생성·편집(image.generate · image.edit) — OpenAI 호환 images API 와 hasa reference 어댑터",
+  "requires": {
+    "openmake": ">=1.84.0 <2.0.0",
+    "capabilityContract": 1
+  },
+  "scope": "system",
+  "kind": "runtime",
+  "order": 3,
+  "components": {},
+  "provides": {
+    "capabilities": ["image.generate", "image.edit"]
+  },
+  "entry": {
+    "runtime": "boot#startImageRuntime"
+  }
+}

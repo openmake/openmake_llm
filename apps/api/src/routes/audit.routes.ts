@@ -27,6 +27,7 @@ import { validate } from '../middlewares/validation';
 import { createAuditSchema } from '../schemas/audit.schema';
 import { requireAuth, requireAdmin } from '../auth';
 import { getAuditService } from '../services/AuditService';
+import { PAGINATION } from '../config/http-data-limits';
 
 const router = Router();
 const auditService = getAuditService();
@@ -43,8 +44,8 @@ router.use(requireAuth, requireAdmin);
  * 감사 로그 목록 조회 (관리자 전용)
  */
 router.get('/', asyncHandler(async (req: Request, res: Response) => {
-     const limit = parseInt(req.query.limit as string, 10) || 100;
-     const offset = parseInt(req.query.offset as string, 10) || 0;
+     const limit = parseInt(req.query.limit as string, 10) || PAGINATION.ADMIN_DEFAULT_LIMIT;
+     const offset = parseInt(req.query.offset as string, 10) || PAGINATION.DEFAULT_OFFSET;
      const startDate = req.query.startDate as string | undefined;
      const endDate = req.query.endDate as string | undefined;
      const action = req.query.action as string | undefined;
@@ -128,7 +129,7 @@ router.get('/actions', asyncHandler(async (req: Request, res: Response) => {
  */
 router.get('/user/:userId', asyncHandler(async (req: Request, res: Response) => {
      const { userId } = req.params;
-     const limit = parseInt(req.query.limit as string, 10) || 100;
+     const limit = parseInt(req.query.limit as string, 10) || PAGINATION.ADMIN_DEFAULT_LIMIT;
      const { logs, total } = await auditService.getAuditLogs({ userId, limit });
      res.json(success({ logs, total, userId }));
 }));

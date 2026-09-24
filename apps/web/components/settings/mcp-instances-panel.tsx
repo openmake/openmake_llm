@@ -6,6 +6,7 @@ import { Play, Square, Activity, RefreshCw, Loader2 } from "lucide-react";
 import {
   Button,
   Badge,
+  NativeSelect,
   Table,
   Th,
   Td,
@@ -163,17 +164,18 @@ export function McpInstancesPanel({ servers }: { servers: Array<{ id: string; na
     <div className="space-y-4">
       {/* 툴바 — 서버 선택 + lifecycle 액션 */}
       <div className="flex flex-wrap items-center gap-2">
-        <select
+        <NativeSelect
+          selectSize="sm"
           value={selected}
           onChange={(e) => setSelected(e.target.value)}
           aria-label={t("selectServer")}
-          className="rounded-md border border-border bg-surface-2 px-2.5 py-1.5 text-sm text-fg"
+          className="w-auto bg-surface-2"
         >
           <option value="">{t("selectServer")}</option>
           {servers.map((s) => (
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
-        </select>
+        </NativeSelect>
         <Button size="sm" disabled={!selected || acting} onClick={() => void lifecycle("start")}>
           {acting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
           {t("start")}
@@ -224,14 +226,14 @@ export function McpInstancesPanel({ servers }: { servers: Array<{ id: string; na
             ["metricUptime", metrics.avgUptimeSec != null ? `${Math.round(metrics.avgUptimeSec)}s` : "—"],
           ] as const).map(([key, value]) => (
             <div key={key} className="rounded-md border border-border bg-surface-2 px-3 py-2">
-              <p className="text-[11px] text-muted">{t(key)}</p>
+              <p className="text-xs text-muted">{t(key)}</p>
               <p className="font-mono text-lg text-fg">{value}</p>
             </div>
           ))}
         </div>
       )}
       {metrics?.lastErrorMessage && (
-        <p className="text-[11px] text-faint">
+        <p className="text-xs text-faint">
           {t("lastError", {
             at: fmtDateTime(metrics.lastErrorAt),
             message: metrics.lastErrorMessage,

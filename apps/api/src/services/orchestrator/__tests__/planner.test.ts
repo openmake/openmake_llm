@@ -2,6 +2,8 @@
 jest.mock('../../../data/models/unified-database', () => ({ getPool: () => ({}) }));
 
 import { planRequest, type PlannerLlmCall } from '../planner';
+import { registerMediaStubForTest } from './helpers/media-stub';
+beforeAll(() => registerMediaStubForTest());
 
 const input = { message: '이미지 그려줘', attachments: [{ id: 'a1', kind: 'image' as const, name: 'x.png' }], recentTurns: [], lang: 'ko' };
 
@@ -49,4 +51,24 @@ it('모델이 계속 잘못 답하면 재시도 상한 뒤 plan=null (fail-open 
     const call: PlannerLlmCall = async () => 'not json at all';
     const r = await planRequest(input, { call, model: 'm' });
     expect(r.plan).toBeNull(); expect(r.error).toMatch(/JSON 파싱 실패/); expect(r.attempts).toBe(2);
+});
+
+describe('출력 상한에 잘린 계획 (2026-09-24 — logfare:gemma-4-26b 파싱 실패 82%)', () => {
+    const truncatedSimple = '{"complexity":"simple","language":"ko","tasks":[{"capability":"text.reason","id":"t1","input":{"instruction":"제공된 이전 대화 내용을 바탕으로';
+
+    it('머리가 simple 이면 재시도 없이 단순 계획으로 복구한다', async () => {
+        const call = jest.fn(async () => truncatedSimple);
+        const r = await planRequest(input, { call, model: 'm' });
+        expect(call).toHaveBeenCalledTimes(1);
+        expect(r.plan?.complexity).toBe('simple');
+        expect(r.plan?.language).toBe('ko');
+        expect(r.error).toBeUndefined();
+    });
+
+    it('잘린 multi 는 복구하지 않고 종전대로 실패(출력 길이 기록)', async () => {
+        const call = jest.fn(async () => '{"complexity":"multi","tasks":[{"id":"t1","capability":"image.generate","input":{"instruction":"a very long');
+        const r = await planRequest(input, { call, model: 'm' });
+        expect(r.plan).toBeNull();
+        expect(r.error).toMatch(/JSON 파싱 실패\(출력 \d+자\)/);
+    });
 });

@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import type { ApiSuccess } from "@openmake/shared-types";
 import { useFocusTrap } from "@/components/ui/primitives";
+import { COPY_FEEDBACK_RESET_MS } from "@/lib/constants/ui-limits";
 
 type Visibility = "private" | "authenticated" | "link";
 
@@ -115,7 +116,7 @@ export function ArtifactShareModal({
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      setTimeout(() => setCopied(false), COPY_FEEDBACK_RESET_MS);
     } catch {
       /* noop */
     }

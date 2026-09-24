@@ -20,7 +20,7 @@
       "metrics": "Metrics",
       "alerts": "Alerts",
       "mcpCatalogAdmin": "MCP Catalog Admin",
-      "modelRolesAdmin": "Model Roles Admin",
+      "modelRolesAdmin": "Model Assignments Admin",
       "systemSettingsAdmin": "System Settings",
       "developer": "Developer",
       "schedulesAdmin": "Task Schedules",
@@ -419,7 +419,8 @@
         "ok": "Done",
         "failed": "Failed"
       },
-      "tasksCount": "{count} tasks"
+      "tasksCount": "{count} tasks",
+      "taskModel": "Processed by: {model}"
     },
     "tool": {
       "running": "Running {tool}"
@@ -464,6 +465,7 @@
       "copied": "Copied",
       "download": "Download .patch"
     },
+    "servedModel": "Answered by: {model}",
     "modelFallbackNotice": "The selected model ({from}) did not respond, so the default model ({to}) answered instead.",
     "modelFallbackReasons": {
       "QUOTA_EXCEEDED": "usage limit reached",
@@ -1841,71 +1843,7 @@
     "oauthFailed": "Sign-in failed: {error}",
     "oauthAccount": "Account"
   },
-  "modelRoles": {
-    "title": "Model Roles",
-    "description": "Assign your registered models (local or external API keys) to functional roles. Unassigned roles use the server default model.",
-    "externalNote": "External models require an active provider API key; failed calls automatically fall back to the local default model.",
-    "loading": "Loading role mappings…",
-    "loadError": "Failed to load role mappings.",
-    "saveFailed": "Failed to save role mapping.",
-    "defaultOption": "Default (auto)",
-    "assignedBadge": "Assigned",
-    "resetLabel": "Reset to default",
-    "empty": "No assignable roles.",
-    "roles": {
-      "agent": {
-        "label": "Agent Tasks",
-        "description": "Execution model for background agent tasks"
-      },
-      "judge": {
-        "label": "Goal Judge",
-        "description": "Model that judges whether an agent task achieved its goal"
-      },
-      "research": {
-        "label": "Deep Research",
-        "description": "Model for the research pipeline and report generation"
-      },
-      "spawn": {
-        "label": "Parallel Subagents",
-        "description": "Model for parallel fan-out subagents"
-      },
-      "review": {
-        "label": "Code & Security Review",
-        "description": "Model for code review, security analysis, and planning"
-      },
-      "summary": {
-        "label": "Thinking Summary",
-        "description": "Model that generates thinking headline summaries"
-      },
-      "planner": {
-        "label": "Planner (question analysis & task planning)",
-        "description": "Produces one short JSON plan per turn — a small, fast model is recommended (local 27B takes ~15s)"
-      }
-    },
-    "notInList": "(not in list)"
-  },
   "capabilityModels": {
-    "title": "Model per Capability",
-    "description": "Choose which model handles each capability the Planner schedules after analyzing your question. This is separate from the role mappings above (which text model answers); all calls go through the single LiteLLM gateway.",
-    "gatewayNote": "External models can only be assigned from providers enrolled in the gateway. Unassigned items follow the global setting or the default.",
-    "loading": "Loading capability mappings…",
-    "loadError": "Failed to load capability mappings.",
-    "saveFailed": "Failed to save capability mapping.",
-    "defaultOption": "Default (auto)",
-    "assignedBadge": "Assigned",
-    "unavailableBadge": "Unavailable",
-    "unsupportedBadge": "Not supported yet",
-    "unsupportedHint": "No provider adapter yet — the assignment is stored only.",
-    "resetLabel": "Reset to default",
-    "empty": "No assignable capabilities.",
-    "notInList": "(not in list)",
-    "paramsHint": "Provider-specific params — empty = default",
-    "paramsApply": "Apply params",
-    "source": {
-      "user": "My setting",
-      "global": "Global",
-      "default": "Default"
-    },
     "capabilities": {
       "text_reason": "Text reasoning & analysis",
       "text_code": "Code",
@@ -1921,35 +1859,11 @@
       "music_generate": "Music generation",
       "video_generate": "Video generation",
       "video_analyze": "Video understanding"
-    },
-    "groups": {
-      "text": "Text & vision",
-      "code": "Code",
-      "image": "Image",
-      "audio": "Speech",
-      "music": "Music",
-      "video": "Video",
-      "embed": "Embedding (infra)",
-      "other": "Other"
-    },
-    "groupDesc": {
-      "text": "Reasoning/analysis plus image understanding and OCR — one vision-capable text model",
-      "code": "Dedicated model for writing/editing code (falls back to the text model)",
-      "image": "Image generation and editing",
-      "audio": "Speech-to-text and text-to-speech",
-      "music": "Songs and background music — the default is the local music server (ACE-Step)",
-      "video": "Video generation (submitted as a job; result fetched when done)",
-      "embed": "Infrastructure model for search/embeddings (admin only)",
-      "other": "Capabilities outside any group"
-    },
-    "mixedOption": "(set individually)",
-    "advancedShow": "Details",
-    "advancedHide": "Hide details",
-    "hiddenUnsupportedNote": "Capabilities without an execution path are hidden: {list}"
+    }
   },
   "adminModelRoles": {
-    "title": "Model Roles Admin",
-    "description": "Manage global role→model mappings (defaults for all users) and server-shared external keys.",
+    "title": "Model Assignments Admin",
+    "description": "Manage global model assignments (defaults for all users) and server-shared external keys.",
     "loadError": "Failed to load.",
     "saveFailed": "Failed to save.",
     "keyDeleteConfirm": "Delete the server key for '{provider}'? Global mappings for this provider will fall back to the local model.",
@@ -1979,71 +1893,6 @@
       "placeholder": "Empty = fallback ({fallback})",
       "cacheNote": "Changes take effect within 60 seconds without a restart."
     }
-  },
-  "adminCapabilityModels": {
-    "title": "Global Capability Mappings",
-    "description": "Set the global default model per capability scheduled by the Planner. Per-user mappings take precedence; clearing falls back to the code default.",
-    "axisNote": "This is a separate axis from \"Global Role Mappings\" above (which text LLM answers); all calls go through the single LiteLLM gateway.",
-    "gatewayNote": "External models can only be assigned from gateway-enrolled providers ({providers}).",
-    "gatewayNone": "none",
-    "loadError": "Failed to load capability mappings.",
-    "saveFailed": "Failed to save capability mapping.",
-    "defaultOption": "Default (code default)",
-    "assigned": "Assigned",
-    "unavailableBadge": "Unavailable",
-    "unsupportedBadge": "Not supported yet",
-    "unsupportedHint": "No provider adapter yet — the assignment is stored only.",
-    "resetLabel": "Reset to default",
-    "codeDefault": "Code default: {model}",
-    "notInList": "(not in list)",
-    "cacheNote": "Changes take effect within 60 seconds without a restart.",
-    "paramsHint": "Provider-specific params — empty = default",
-    "paramsApply": "Apply params",
-    "source": {
-      "user": "My setting",
-      "global": "Global",
-      "default": "Default"
-    },
-    "capabilities": {
-      "text_reason": "Text reasoning & analysis",
-      "text_code": "Code",
-      "text_embed": "Embedding",
-      "vision_describe": "Image understanding",
-      "vision_ocr": "OCR",
-      "image_generate": "Image generation",
-      "image_edit": "Image editing",
-      "audio_transcribe": "Speech-to-text (STT)",
-      "audio_speech": "Text-to-speech (TTS)",
-      "audio_analyze": "Audio analysis",
-      "music_analyze": "Music analysis",
-      "music_generate": "Music generation",
-      "video_generate": "Video generation",
-      "video_analyze": "Video understanding"
-    },
-    "groups": {
-      "text": "Text & vision",
-      "code": "Code",
-      "image": "Image",
-      "audio": "Speech",
-      "music": "Music",
-      "video": "Video",
-      "embed": "Embedding (infra)",
-      "other": "Other"
-    },
-    "groupDesc": {
-      "text": "Reasoning/analysis plus image understanding and OCR — one vision-capable text model",
-      "code": "Dedicated model for writing/editing code (falls back to the text model)",
-      "image": "Image generation and editing",
-      "audio": "Speech-to-text and text-to-speech",
-      "music": "Songs and background music — the default is the local music server (ACE-Step)",
-      "video": "Video generation (submitted as a job; result fetched when done)",
-      "embed": "Infrastructure model for search/embeddings (admin only)",
-      "other": "Capabilities outside any group"
-    },
-    "mixedOption": "(set individually)",
-    "advancedShow": "Details",
-    "advancedHide": "Hide details",
-    "hiddenUnsupportedNote": "Capabilities without an execution path are hidden: {list}"
   },
   "adminGatewayModels": {
     "title": "Gateway model status",
@@ -2560,8 +2409,8 @@
     "importApply": "Apply",
     "importConfirm": "Apply the validated configuration? System settings and organization policies will be overwritten.",
     "importProblems": "{count} problem(s) — cannot apply.",
-    "importDryRun": "Validated — settings {systemSettings} · capabilities {capabilityModels} · organizations {organizations} · policies {policies}. Press Apply to commit.",
-    "importApplied": "Applied — settings {systemSettings} · capabilities {capabilityModels} · organizations {organizations} · policies {policies}.",
+    "importDryRun": "Validated — settings {systemSettings} · model assignments {modelAssignments} · organizations {organizations} · policies {policies}. Press Apply to commit.",
+    "importApplied": "Applied — settings {systemSettings} · model assignments {modelAssignments} · organizations {organizations} · policies {policies}.",
     "costBudget": "Monthly cost budget (USD)"
   },
   "adminCostRates": {
@@ -2726,6 +2575,236 @@
     "nonCommercial": "non-commercial",
     "permissions": "Permissions",
     "verifiedModels": "Verified models",
-    "verifiedDetail": "Pass rate {rate}% · {cases} cases · {date}"
+    "verifiedDetail": "Pass rate {rate}% · {cases} cases · {date}",
+    "restartRequired": "restart required",
+    "runtime": {
+      "not_loaded": "runtime not loaded",
+      "registering": "registering",
+      "ready": "ready",
+      "failed": "runtime failed"
+    }
+  },
+  "knowledge": {
+    "serverError": "A server error occurred",
+    "cancel": "Cancel",
+    "close": "Close",
+    "save": "Save",
+    "back": "Back",
+    "rename": "Rename",
+    "loading": "Loading…",
+    "untitledConversation": "Untitled conversation",
+    "noConversations": "No linked conversations",
+    "newConversation": "New chat",
+    "sectionTitle": "Knowledge",
+    "sidebarEmpty": "No Knowledge yet",
+    "viewAll": "View all Knowledge",
+    "listSubtitle": "Add materials and conversations will answer grounded in them",
+    "newSpace": "New Knowledge",
+    "searchPlaceholder": "Search Knowledge",
+    "empty": "No Knowledge yet",
+    "noResults": "No results",
+    "notFound": "Not found",
+    "notReadyNotice": "Embedding is not ready yet; processing new materials may be delayed",
+    "noDescription": "No description",
+    "editDescription": "Edit description",
+    "deleteSpace": "Delete Knowledge",
+    "deleteSpaceConfirm": "Delete '{name}'? All materials and links will be removed.",
+    "create": {
+      "title": "Create Knowledge",
+      "nameRequired": "Enter a name",
+      "nameLabel": "Name",
+      "namePlaceholder": "e.g. Product docs",
+      "descLabel": "Description (optional)",
+      "descPlaceholder": "What this Knowledge is for",
+      "submit": "Create"
+    },
+    "card": {
+      "documents": "{count} documents",
+      "conversations": "{count} chats",
+      "lastUsed": "Last used {date}",
+      "processing": "{count} processing",
+      "failed": "{count} failed"
+    },
+    "status": {
+      "uploaded": "Uploaded",
+      "validating": "Validating",
+      "extracting": "Extracting",
+      "chunking": "Chunking",
+      "embedding": "Embedding",
+      "verifying": "Verifying",
+      "ready": "Ready",
+      "failed": "Failed"
+    },
+    "failure": {
+      "validation": "Could not validate the file",
+      "scannedPdf": "Scanned PDFs are not supported (no text layer)",
+      "extraction": "Could not extract text",
+      "embedding": "Embedding failed",
+      "unknown": "Processing failed"
+    },
+    "doc": {
+      "section": "{count} documents",
+      "empty": "No materials yet. Add a file.",
+      "deleteConfirm": "Delete '{name}'?",
+      "pages": "{count} pages",
+      "retry": "Retry",
+      "delete": "Delete"
+    },
+    "upload": {
+      "add": "Add material",
+      "tooLarge": "File exceeds the allowed size",
+      "duplicate": "A document with the same content already exists"
+    },
+    "conv": {
+      "section": "{count} chats",
+      "bindExisting": "Add existing chat",
+      "unbind": "Unlink",
+      "unbindConfirm": "Unlink this conversation?"
+    },
+    "bind": {
+      "title": "Add existing chat",
+      "hint": "Choose a conversation to link to this Knowledge",
+      "noChats": "No recent chats"
+    },
+    "banner": {
+      "text": "This conversation can use materials from this Knowledge"
+    },
+    "citation": {
+      "title": "Citation",
+      "page": "Page {page}",
+      "pages": "Pages {start}–{end}",
+      "loadFailed": "Could not load the chunk"
+    },
+    "admin": {
+      "title": "Admin",
+      "reindex": "Reindex",
+      "reindexConfirmTitle": "Reindex",
+      "reindexConfirmBody": "This rebuilds the embedding index. It may take a while.",
+      "ready": "Available",
+      "notReady": "Unavailable",
+      "embeddingIndex": "Embedding index",
+      "jobs": "Jobs",
+      "noJobs": "No active jobs",
+      "profiles": "Profiles",
+      "active": "Active",
+      "saveProfile": "Save",
+      "invalidJson": "Invalid JSON"
+    },
+    "sidebar": {
+      "expandSpace": "Expand {name}",
+      "collapseSpace": "Collapse {name}"
+    }
+  },
+  "modelAssignments": {
+    "title": "Model assignments",
+    "description": "Slot-based assignments that merge roles and capabilities. Assign a local or external model to each slot; unassigned slots fall back to the global setting or the default.",
+    "descriptionGlobal": "Global default model assignments. A user's own assignment takes precedence; clearing one reverts to the code default.",
+    "externalNote": "External models can only be assigned when their provider is on the gateway, and calls fall back to the default model on failure.",
+    "cacheNote": "Changes apply within 60 seconds without a restart.",
+    "loading": "Loading model assignments…",
+    "loadError": "Failed to load model assignments.",
+    "saveFailed": "Failed to save the model assignment.",
+    "empty": "No assignable slots.",
+    "defaultOption": "Default (auto)",
+    "assignedBadge": "Assigned",
+    "unavailableBadge": "Unavailable",
+    "resetLabel": "Reset to default",
+    "notInList": "(not in list)",
+    "paramsApply": "Apply params",
+    "paramsHint": "Provider-spec params — leave empty for defaults",
+    "groups": {
+      "agents": "Chat & agents",
+      "quality": "Review, summary & code",
+      "multimodal": "Planning & media"
+    },
+    "groupDesc": {
+      "agents": "Text models that handle chat and agent tasks",
+      "quality": "Text models for judging, summarizing, and code work",
+      "multimodal": "Models for planning and media (images, audio, video)"
+    },
+    "source": {
+      "user": "My assignment",
+      "global": "Global",
+      "default": "Default",
+      "none": "None"
+    },
+    "slots": {
+      "agent": {
+        "title": "Agent tasks",
+        "description": "Model that runs background agent tasks"
+      },
+      "spawn": {
+        "title": "Parallel sub-agents",
+        "description": "Model for sub-agents spawned in parallel"
+      },
+      "reasoning": {
+        "title": "Reasoning & deep research",
+        "description": "Model for the deep-research pipeline, reports, and complex reasoning"
+      },
+      "judge": {
+        "title": "Goal judgment",
+        "description": "Model that judges whether an agent task is complete"
+      },
+      "code": {
+        "title": "Code & review",
+        "description": "Model for writing/editing code, code and security review, and implementation planning"
+      },
+      "summary": {
+        "title": "Thinking summary",
+        "description": "Model that generates thinking-process headlines"
+      },
+      "planner": {
+        "title": "Planner (analyze & plan)",
+        "description": "Model that makes one short JSON plan per turn — a small, fast model is recommended"
+      },
+      "vision_describe": {
+        "title": "Image understanding",
+        "description": "Vision model that describes and analyzes image content"
+      },
+      "vision_ocr": {
+        "title": "OCR",
+        "description": "Model that recognizes text inside images"
+      },
+      "image_generate": {
+        "title": "Image generation",
+        "description": "Model that generates images from text"
+      },
+      "image_edit": {
+        "title": "Image editing",
+        "description": "Model that edits existing images"
+      },
+      "audio_transcribe": {
+        "title": "Speech-to-text (STT)",
+        "description": "Model that transcribes speech to text"
+      },
+      "audio_speech": {
+        "title": "Text-to-speech (TTS)",
+        "description": "Model that synthesizes speech from text"
+      },
+      "audio_analyze": {
+        "title": "Audio analysis",
+        "description": "Model that analyzes audio content"
+      },
+      "music_generate": {
+        "title": "Music generation",
+        "description": "Model that generates songs and background music (default is local ACE-Step)"
+      },
+      "music_analyze": {
+        "title": "Music analysis",
+        "description": "Model that analyzes music"
+      },
+      "video_generate": {
+        "title": "Video generation",
+        "description": "Model that generates video (submits a job and returns the result on completion)"
+      },
+      "video_analyze": {
+        "title": "Video understanding",
+        "description": "Model that analyzes video content"
+      },
+      "text_embed": {
+        "title": "Embeddings",
+        "description": "Infrastructure model for search and embeddings"
+      }
+    }
   }
 }

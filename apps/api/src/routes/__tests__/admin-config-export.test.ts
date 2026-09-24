@@ -3,7 +3,7 @@
  */
 import { validateImportedConfig, CONFIG_EXPORT_VERSION } from '../admin-config-export.routes';
 
-const base = { version: CONFIG_EXPORT_VERSION as 1, systemSettings: {}, capabilityModels: [], organizations: [] };
+const base = { version: CONFIG_EXPORT_VERSION as 1, systemSettings: {}, modelAssignments: [], capabilityModels: [], organizations: [] };
 
 describe('validateImportedConfig', () => {
     test('빈 구성은 통과', () => {

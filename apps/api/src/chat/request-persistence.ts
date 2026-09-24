@@ -14,6 +14,8 @@
 
 import { takeMessageSources } from './message-sources';
 import { getConversationDB } from '../data/conversation-db';
+import { adoptFirstMessageTitle, DEFAULT_SESSION_TITLE } from '../data/conversation-sessions';
+import { SESSION_TITLE_FROM_MESSAGE_CHARS } from '../config/service-limits';
 import { recordAuditLog } from '../data/conversation-audit';
 import { createLogger } from '../utils/logger';
 
@@ -40,15 +42,20 @@ export async function ensureSession(
     const conversationDb = getConversationDB();
 
     if (sessionId) {
-        if (userRole === 'admin') {
+        const session = await conversationDb.getSession(sessionId);
+        if (userRole !== 'admin') {
+            const ownsAuthenticatedSession = !!authenticatedUserId && session?.userId === authenticatedUserId;
+            const ownsAnonymousSession = !authenticatedUserId && !!anonSessionId && session?.anonSessionId === anonSessionId;
+            if (!session || (!ownsAuthenticatedSession && !ownsAnonymousSession)) {
+                throw new Error('SESSION_ACCESS_DENIED');
+            }
+        } else if (!session) {
             return sessionId;
         }
-
-        const session = await conversationDb.getSession(sessionId);
-        const ownsAuthenticatedSession = !!authenticatedUserId && session?.userId === authenticatedUserId;
-        const ownsAnonymousSession = !authenticatedUserId && !!anonSessionId && session?.anonSessionId === anonSessionId;
-        if (!session || (!ownsAuthenticatedSession && !ownsAnonymousSession)) {
-            throw new Error('SESSION_ACCESS_DENIED');
+        // 미리 만든 빈 세션이면 첫 메시지로 제목을 붙인다(새로 만드는 경로와 같은 규칙)
+        if (session?.title === DEFAULT_SESSION_TITLE) {
+            await adoptFirstMessageTitle(sessionId, message.substring(0, SESSION_TITLE_FROM_MESSAGE_CHARS))
+                .catch((e) => log.warn(`첫 메시지 제목 반영 실패(무시): ${e instanceof Error ? e.message : String(e)}`));
         }
         return sessionId;
     }
@@ -63,7 +70,7 @@ export async function ensureSession(
 
     const session = await conversationDb.createSession(
         authenticatedUserId || undefined,
-        message.substring(0, 30),
+        message.substring(0, SESSION_TITLE_FROM_MESSAGE_CHARS),
         metadata,
         anonSessionId,
     );

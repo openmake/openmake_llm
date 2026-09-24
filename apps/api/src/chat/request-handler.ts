@@ -176,6 +176,7 @@ export class ChatRequestHandler {
             sessionId,
             webSearchContext,
             fileContext,
+            sourceNumberBase,
             mediaFiles,
             modes,
             imageMode,
@@ -348,6 +349,7 @@ export class ChatRequestHandler {
             images,
             webSearchContext,
             fileContext,
+            ...(sourceNumberBase ? { sourceNumberBase } : {}),
             ...(mediaFiles && mediaFiles.length > 0 ? { mediaFiles } : {}),
             modes,
             imageMode,
@@ -368,7 +370,7 @@ export class ChatRequestHandler {
             originalMessage: originalMessage ?? rawMessage,
             userLocation: params.userLocation,
             format: params.format,
-            onServedModel: (fullId) => { servedModel = fullId; },
+            onServedModel: (fullId) => { servedModel = fullId; params.onServedModel?.(fullId); },
         };
 
         // 생각 요약 세션 (클로드 웹식 헤드라인): 중간(진행형)·최종(과거형) 요약을

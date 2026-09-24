@@ -9,6 +9,7 @@
  * @module middlewares/setup
  */
 
+import { generatedArtifactsRouter } from '../routes/generated-artifacts.routes';
 import express, { Application, Request, Response, NextFunction } from 'express';
 import { ServerResponse } from 'http';
 import * as path from 'path';
@@ -204,6 +205,8 @@ export function setupStaticFiles(app: Application, dirname: string): void {
     // (브라우저는 Next origin 에 있으므로 apps/web/next.config.ts 의 /generated rewrite 가 이 마운트로 프록시한다.)
     const legacyAssetsPath = path.join(dirname, '../../../apps/legacy-web/public');
     app.use(GENERATED_PATH_PREFIX, generatedDownloadHeader);
+    // 소유권 판정 핸들러(P04) — static 보다 앞. 레코드 없는 종전 파일은 격리(403), reports/ 는 static 으로 통과
+    app.use(GENERATED_PATH_PREFIX, generatedArtifactsRouter);
     app.use(express.static(legacyAssetsPath, {
         etag: true,
         lastModified: true,

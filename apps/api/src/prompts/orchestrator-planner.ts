@@ -28,8 +28,12 @@ function capabilityLines(exclude: ReadonlySet<Capability>): string {
 /** 계획에서 직접 쓰지 않는 capability (종합은 자동, 임베딩은 도구용) */
 const NOT_PLANNABLE: ReadonlySet<Capability> = new Set(['text.synthesize', 'text.embed']);
 
-export function getPlannerSystemPrompt(lang: string): string {
-    const caps = capabilityLines(NOT_PLANNABLE);
+/**
+ * @param capabilityLinesOverride Registry 스냅샷에서 만든 기능 목록(P03, `plannerCapabilityLines`) — 같은 요청의 schema·검증과 같은
+ *        스냅샷을 쓰기 위해 호출부(planner)가 넘긴다. 생략하면 정적 목록(호환).
+ */
+export function getPlannerSystemPrompt(lang: string, capabilityLinesOverride?: string): string {
+    const caps = capabilityLinesOverride ?? capabilityLines(NOT_PLANNABLE);
     const { landscape, portrait, square } = VIDEO_GEN_ASPECT_SIZES;
     if (lang === 'ko') {
         return `당신은 멀티모달 요청 계획기입니다. 사용자 요청과 첨부를 보고 어떤 기능(capability)이 필요한지 JSON 으로만 답하세요.
@@ -38,7 +42,7 @@ export function getPlannerSystemPrompt(lang: string): string {
 ${caps}
 
 ## 규칙
-- 텍스트 답변만으로 충분하면 반드시 {"complexity":"simple","tasks":[{"id":"t1","capability":"text.reason","input":{"instruction":"<요청 요약>"}}],"synthesis":false} 로 답합니다. 대부분의 질문이 여기에 해당합니다.
+- 텍스트 답변만으로 충분하면 반드시 {"complexity":"simple","tasks":[{"id":"t1","capability":"text.reason","input":{"instruction":"<요청 요약 한 문장>"}}],"synthesis":false} 로 답합니다. 대부분의 질문이 여기에 해당합니다. 요약은 한 문장으로 짧게 쓰고 이전 대화 내용을 옮겨 적지 마세요.
 - 이미지·오디오·영상의 생성/편집/전사/이해, 웹 검색이 필요할 때만 "multi" 로 계획합니다.
 - 작업은 최대 6개, 서로 독립인 작업은 depends_on 을 비워 병렬로, 앞 결과가 필요한 작업만 depends_on 에 앞 작업 id 를 적습니다.
 - 첨부를 쓰는 작업은 input.attachments 에 첨부 id 를, 앞 작업 결과를 쓰는 작업은 input.refs 에 그 작업 id 를 적습니다.
@@ -62,7 +66,7 @@ ${caps}
 ${caps}
 
 ## Rules
-- If a text answer is enough, you MUST answer {"complexity":"simple","tasks":[{"id":"t1","capability":"text.reason","input":{"instruction":"<summary>"}}],"synthesis":false}. Most questions are simple.
+- If a text answer is enough, you MUST answer {"complexity":"simple","tasks":[{"id":"t1","capability":"text.reason","input":{"instruction":"<one-sentence summary>"}}],"synthesis":false}. Most questions are simple. Keep the summary to one short sentence and do not copy earlier conversation into it.
 - Plan "multi" only when image/audio/video generation, editing, transcription, understanding, or web search is required.
 - At most 6 tasks. Independent tasks leave depends_on empty (run in parallel); only tasks that need earlier results list those ids in depends_on.
 - Tasks that use attachments put attachment ids in input.attachments; tasks that use earlier results put task ids in input.refs.

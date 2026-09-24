@@ -8,6 +8,7 @@ import {
   Button,
   Badge,
   PageHeader,
+  PageBody,
   Card,
   CardContent,
 } from "@/components/ui/primitives";
@@ -215,7 +216,7 @@ export default function McpCatalogPage() {
         }
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <PageBody>
         <div className="relative mb-5 max-w-md">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-faint" />
           <input
@@ -361,7 +362,7 @@ export default function McpCatalogPage() {
             ))}
           </div>
         )}
-      </div>
+      </PageBody>
     </>
   );
 }

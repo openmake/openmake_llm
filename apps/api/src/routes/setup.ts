@@ -9,6 +9,7 @@
  * @module routes/setup
  */
 
+import { generatedTicketRouter } from './generated-artifacts.routes';
 import { Application, Request, Response } from 'express';
 import { agentTaskQueueRouter } from './agent-task-queue.routes';
 import { agentTaskShareRouter } from './agent-task-share.routes';
@@ -27,6 +28,7 @@ import { createUserExtensionsController } from '../controllers/user-extensions.c
 import { createUserMemoriesController } from '../controllers/user-memories.controller';
 import { createUserModelRolesController } from '../controllers/user-model-roles.controller';
 import { createCapabilityModelsController } from '../controllers/capability-models.controller';
+import { createModelAssignmentsController } from '../controllers/model-assignments.controller';
 import debugQueueRouter from './debug-queue.routes';
 import { default as chatRouter, setClusterManager as setChatCluster } from './chat.routes';
 import { setClusterManager as setOpenAICompatCluster } from './openai-compat.routes';
@@ -39,6 +41,7 @@ import {
     evaluationRunsRouter,
     adminModelRolesRouter,
     adminCapabilityModelsRouter,
+    adminModelAssignmentsRouter,
     adminSystemSettingsRouter,
     adminAddonsRouter,
     adminOrganizationsRouter,
@@ -194,6 +197,7 @@ export function setupApiRoutes(
     app.use('/api/marketplace', marketplacePublishRouter);   // 마켓플레이스 게시 (발행형)
     app.use('/api/admin', adminModelRolesRouter);
     app.use('/api/admin', adminCapabilityModelsRouter);
+    app.use('/api/admin', adminModelAssignmentsRouter);   // 통합 모델 배정(슬롯) 전역 (2026-09-24)
     app.use('/api/admin', adminSystemSettingsRouter);
     app.use('/api/admin', adminAddonsRouter);   // add-on 목록·상태 토글 (S3)
     app.use('/api/admin', adminOrganizationsRouter);
@@ -212,6 +216,8 @@ export function setupApiRoutes(
     app.use('/api/debug-queue', debugQueueRouter);
     // Artifacts (2026-05-26 Phase 1): GET/DELETE /api/sessions/:sid/artifacts/*
     app.use('/api', artifactsRouter);
+    // 생성 산출물 전달 티켓(P04) — bearer 전용 클라이언트용
+    app.use('/api/generated', generatedTicketRouter);
     // Artifacts 공유/퍼블리시·뷰어·갤러리 (파일 크기 가드로 분리 — 동일 /api prefix)
     app.use('/api', artifactPublicationRouter);
     // Artifacts pdf/docx export (P1 Phase 3 — 동일 /api prefix)
@@ -256,6 +262,8 @@ export function setupApiRoutes(
     // 모달리티(이미지·비전·영상·오디오·임베딩)→모델 오버라이드 — 역할 배정과 별개 축 (2026-09-12)
     // capability(멀티모달 오케스트레이터 기능)→모델 오버라이드 — 모달리티 축의 후속 (2026-09-12)
     app.use('/api/users/me/capability-models', createCapabilityModelsController());
+    // 통합 모델 배정(슬롯) — 역할·기능을 합친 배정. 구 두 엔드포인트는 어댑터로 같은 테이블을 계속 읽는다 (2026-09-24)
+    app.use('/api/users/me/model-assignments', createModelAssignmentsController());
 
     // 클러스터 의존성 주입
     setChatCluster(cluster);

@@ -7,7 +7,7 @@ import { ApiClient } from "./api-client";
 import { appendAnonSessionId } from "./anon-session";
 import { useAppStore } from "./store";
 
-interface WireMessage { id?: string | number; role: string; content: string; images?: string[]; thinking?: string; reasoningSummary?: string; sources?: SearchSourceRef[] }
+interface WireMessage { id?: string | number; role: string; content: string; images?: string[]; thinking?: string; reasoningSummary?: string; sources?: SearchSourceRef[]; model?: string }
 
 export async function loadSessionIntoStore(sid: string): Promise<void> {
   const st = useAppStore.getState();
@@ -27,6 +27,8 @@ export async function loadSessionIntoStore(sid: string): Promise<void> {
           reasoning: m.thinking || undefined,
           reasoningSummary: m.reasoningSummary || undefined,
           ...(m.sources?.length ? { sources: m.sources } : {}),
+          // 이 답변을 실제로 생성한 모델(저장된 served model) — 사용자 행의 model 은 요청 모델이라 쓰지 않는다
+          ...(m.role === "assistant" && m.model ? { servedModel: m.model } : {}),
           dbId: m.id !== undefined ? String(m.id) : undefined,
         })),
     );

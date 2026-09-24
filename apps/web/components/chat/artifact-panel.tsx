@@ -16,6 +16,7 @@ import { ArtifactComments } from "./artifact-comments";
 import { downloadArtifact } from "@/lib/artifact-download";
 import { Markdown } from "./markdown";
 import { cn } from "@/lib/utils";
+import { COPY_FEEDBACK_RESET_MS } from "@/lib/constants/ui-limits";
 
 type ExportFormat = "pdf" | "docx" | "xlsx";
 /** 서버 변환 포맷(kind 별) — 서버 exportByFormat 규칙과 짝. docx·xlsx 는 보고서(source_data) 가 아니면 서버가 409. */
@@ -418,7 +419,7 @@ export function ArtifactPanel() {
     try {
       await navigator.clipboard.writeText(shown.content);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      setTimeout(() => setCopied(false), COPY_FEEDBACK_RESET_MS);
     } catch {
       /* clipboard 불가 무시 */
     }

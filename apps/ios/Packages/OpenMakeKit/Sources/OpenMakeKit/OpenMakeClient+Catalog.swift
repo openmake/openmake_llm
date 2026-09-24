@@ -5,6 +5,11 @@ public struct ModelCatalog: Sendable {
     public let defaultModel: String
     public let models: [Components.Schemas.ModelEntry]
     public let imageModel: String?
+
+    /// 모델 id(served model·작업 모델) → 카탈로그 표시 이름. 목록에 없으면 id 그대로.
+    public func displayName(for modelId: String) -> String {
+        models.first { $0.modelId == modelId }?.name ?? modelId
+    }
 }
 
 public extension OpenMakeClient {

@@ -1,6 +1,8 @@
 import dns from 'node:dns/promises';
 import { isIP } from 'node:net';
-import { Agent } from 'undici';
+// Agent 와 fetch 를 **같은 undici 패키지**에서 가져온다 — Node 내장 fetch(내부 undici)에 npm undici 의 Agent 를
+// dispatcher 로 넘기면 메이저가 다를 때 UND_ERR_INVALID_ARG 로 모든 연결이 실패한다(undici 8 업그레이드, 2026-09-23).
+import { Agent, fetch as undiciFetch } from 'undici';
 import { createLogger } from '../utils/logger';
 import { SSRF_LIMITS } from '../config/security';
 
@@ -418,12 +420,12 @@ export async function safeFetch(
         const ipFamily: 4 | 6 = isIP(address) === 6 ? 6 : 4;
         const dispatcher = createPinnedAgent(address, ipFamily);
 
-        const response = await fetch(currentUrl, {
-            ...init,
+        // undici 의 fetch 는 DOM 타입과 선언이 달라 호출 경계에서만 맞춘다 — 런타임 객체는 표준 Fetch API 와 같다
+        const response = await undiciFetch(currentUrl, {
+            ...(init as Parameters<typeof undiciFetch>[1]),
             redirect: 'manual',
-            // @ts-expect-error undici-specific dispatcher option supported by Node 22 fetch
             dispatcher,
-        });
+        }) as unknown as Response;
 
         const location = response.headers.get('location');
         if (REDIRECT_STATUS_CODES.has(response.status) && location) {

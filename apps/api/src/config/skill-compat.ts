@@ -18,7 +18,18 @@ export const SKILL_COMPAT = {
     enabled: process.env.SKILL_COMPAT_ADAPT_ENABLED !== 'false',
     /** 호환 안내 노트 최대 길이 (본문 앞 prepend) */
     noteMaxChars: parseInt(process.env.SKILL_COMPAT_NOTE_MAX_CHARS || '1200', 10),
+    /**
+     * 적응 규칙 버전 — 설치 레코드(manifest_meta.compatibility.adapterVersion)에 남긴다. 규칙이 바뀌면 올린다
+     * (2: 지원 수준·필수 도구 차단·인자 제한 검토·mcp__ 별칭, P09 2026-09-23)
+     */
+    adapterVersion: '2',
 } as const;
+
+/**
+ * Claude Code 의 MCP 도구 표기 `mcp__<server>__<tool>` — 이 환경은 `<server>::<tool>` (P09, 2026-09-21 조사 ①).
+ * 서버 이름에 `_` 가 들어갈 수 있어 **첫** `__` 뒤를 서버, 마지막 `__` 뒤를 도구로 읽는다.
+ */
+export const MCP_TOOL_ALIAS_PATTERN = /\bmcp__([A-Za-z0-9_-]+?)__([A-Za-z0-9_-]+)\b/g;
 
 /**
  * Claude Code 도구 이름 → openmake_llm 등가 도구.

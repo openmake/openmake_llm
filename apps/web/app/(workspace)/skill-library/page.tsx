@@ -22,6 +22,7 @@ import {
   Button,
   Badge,
   PageHeader,
+  PageBody,
   Card,
   useFocusTrap,
 } from "@/components/ui/primitives";
@@ -762,7 +763,7 @@ export default function SkillLibraryPage() {
         ))}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <PageBody>
         {(
           <>
             {/* 카테고리 필터 */}
@@ -801,7 +802,7 @@ export default function SkillLibraryPage() {
             )}
           </>
         )}
-      </div>
+      </PageBody>
 
       {/* 모달들 */}
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title={t("modal.create")}>
