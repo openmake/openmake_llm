@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.86.2](https://github.com/openmake/openmake_llm/compare/v1.86.1...v1.86.2) (2026-09-24)
+
+
+### 🐛 버그 수정
+
+* **knowledge:** 코드 리뷰 결함 4건 — 프로필 저장 400·재시도 횟수·출처 번호 충돌·재색인 전환 경합 ([#1001](https://github.com/openmake/openmake_llm/issues/1001)) ([fc7831c](https://github.com/openmake/openmake_llm/commit/fc7831c3c0bdb33e4b561792cf22bfff3bf98c84))
+* **web:** 페이지 본문 폭 통일(max-w-6xl) + 설정 화면 컨트롤·글자 크기 스케일 통일 ([#1000](https://github.com/openmake/openmake_llm/issues/1000)) ([2391ac6](https://github.com/openmake/openmake_llm/commit/2391ac67710bed51fca38d8abf507723f80390fb))
+
 ## [1.86.1](https://github.com/openmake/openmake_llm/compare/v1.86.0...v1.86.1) (2026-09-24)
 
 
