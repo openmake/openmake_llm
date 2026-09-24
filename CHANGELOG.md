@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.87.0](https://github.com/openmake/openmake_llm/compare/v1.86.3...v1.87.0) (2026-09-24)
+
+
+### ✨ 기능
+
+* **chat:** 답변하는 모델을 실시간으로 표시 ([#1005](https://github.com/openmake/openmake_llm/issues/1005)) ([5beb89d](https://github.com/openmake/openmake_llm/commit/5beb89d616fbe45fde4db8a66b347c84ed0194ad))
+
 ## [1.86.3](https://github.com/openmake/openmake_llm/compare/v1.86.2...v1.86.3) (2026-09-24)
 
 
